@@ -17,7 +17,7 @@
 %    dead rule attributes (UNUSED, UPD),
 %    dead constants (IWS)
 %    dead fields (Job.nproc)
-%    TODO useless code (head.n=node, ...)
+%    useless code (head.n = node, ...)
 % - cleaned up code:
 %    SEMI renamed variables, was abusing head/tail for too many things 
 %    (target vs prerequisites, but also head vs tail of lists of arcs, 
@@ -3222,6 +3222,7 @@ enum Rule_attr {
 %chunks: 
 I will describe gradually the other rule attributes in the following chapters.
 \l users can add explicit attributes also to a rule
+\l actually all in adv topics section
 
 
 
@@ -3577,7 +3578,8 @@ newnode(char *name)
     node->name = name;
     // call to timeof()! 
     node->time = timeof(name, false);
-    <<[[newnode()]] set flags of node>>
+    node->flags = 0;
+    <<[[newnode()]] adjust flags of node>>
 
     node->arcs = nil;
     node->next = nil;
@@ -3595,6 +3597,7 @@ newnode(char *name)
 A node is also labeled with a set of {\em node attributes}:
 \n seen rule attributes before
 
+\label{sec:node-flags}
 <<[[Node]] other fields>>=
 // bitset<enum<Node_flag>>
 ushort		flags;
@@ -3617,6 +3620,7 @@ BEINGMADE  = 0x0040,
 MADE       = 0x0080,
 @
 %ocaml: should be different field than other node flags
+\l could use instead (1 < < 2) (1 < < 3) etc
 
 
 %chunks: 
@@ -3717,7 +3721,7 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     a->stem = strdup(stem);
 
     a->next = nil;
-    a->flag = 0;
+    a->remove = false;
     <<[[newarc()]] set other fields>>
     return a;
 }
@@ -6336,6 +6340,7 @@ for instance, the presence of cycles in the graph.
 \l Will see [[mk()]] later. But will call [[graph(target)]].
 
 \section{[[graph()]] and [[applyrules()]]}
+\label{sec:graph}
 
 [[graph()]] is mostly a wrapper around [[applyrules()]], which is
 the function containing the logic to build the graph of dependencies.
@@ -6466,6 +6471,7 @@ for(; r; r = r->chain){
     <<[[applyrules()]] skip this rule and continue if some conditions>>
     <<[[applyrules()]] infinite rule detection part1>>
     <<[[applyrules()]] when found a regular rule for target [[node]], set flags>>
+
     <<[[applyrules()]] if no prerequistes in rule r>>
     else
         for(pre = r->prereqs; pre; pre = pre->next){
@@ -6513,7 +6519,7 @@ if(empty_recipe(r) && empty_prereqs(r))
 %dead? bug? how can be in S_TARGET and not strcmp?
 % if(strcmp(target, r->target)) continue; 
 
-The code above relies on two macros that factorize the check
+The code above relies on two macros that factorize the checks
 for empty recipe and empty prerequistes:
 
 <<macro empty_recipe>>=
@@ -6570,7 +6576,7 @@ if(empty_prereqs(r)) {
 The other step to find the dependencies of a node is to look for metarules
 containing a target that {matches} the node.
 %
-This time, [[applyrules]] needs to go through
+This time, [[applyrules()]] needs to go through
 all the meta rules stored in the global [[metarules]]:
 
 <<[[applyrules()]] apply meta rules>>=
@@ -6610,7 +6616,9 @@ as explained in Section~\ref{sec:pattern}.
 %
 If the template matches the string, [[match()]] then stores the
 string matched by the pattern character, called the {\em stem},
-in the last parameter.
+in a buffer passed in its last parameter.
+%
+Here is the stem buffer passed to [[match()]]:
 
 <<[[applyrules]] other locals>>=
 char stem[NAMEBLOCK];
@@ -6621,14 +6629,16 @@ char stem[NAMEBLOCK];
 
 [[subst()]] then substitutes the stem in another template 
 (e.g., [[foo%.c]])
-and stores the result in a buffer passed as a parameter.
+and stores the result in another buffer passed as a parameter.
+%
+Here is the output buffer passed to [[subst()]]:
 
 <<[[applyrules]] other locals>>=
 char buf[NAMEBLOCK];
 @
 
 
-Just like for the simple rules, certain rules can be ignored:
+Just like for the simple rules, [[mk]] can ignore certain meta rules:
 
 <<[[applyrules()]] skip this meta rule and continue if some conditions>>=
 if(empty_recipe(r) && empty_prereqs(r)) 
@@ -6648,24 +6658,26 @@ if(empty_prereqs(r)) {
 } 
 @
 
-This code is almost identical to code in Section~\ref{sec:finding-simple-rules},
-except [[applyrules()]] passes the [[stem]] buffer instead
-of the empty string.
+The code above is almost identical to code 
+in Section~\ref{sec:finding-simple-rules},
+except [[applyrules()]] passes here the [[stem]] buffer 
+to [[newarc()]] instead of the empty string.
 \l why? need store stem in arc! otherwise lose information for jobs
 %pad: use empty_prereqs() again
 
 \subsection{Matching, [[match()]]}
 
-[[match()]] below iterates over two string parameters at the same
-time by incrementing both pointers until it finds the special
-pattern character ([[%]] or [[&]]) in the template parameter.
+[[match()]] below iterates over two string parameters
+([[name]] and [[template]])
+at the same time by incrementing both pointers until it finds the special
+pattern character ([['%']] or [['&']]) in the [[template]] parameter.
 %
 Once it found the pattern character, it computes the length of
-the string matched by the pattern character and makes sure the rest
+the string matched by the pattern character and it makes sure the rest
 of the template also matches the end of the name.
 %
 Finally it modifies the [[stem]] buffer passed
-from [[applyrules]].
+from [[applyrules()]].
 \l stem is OUT. pointer to array to modify.
 Figure~\ref{fig:mk-match} illustrates how [[match()]] works
 on a simple example.
@@ -6677,7 +6689,7 @@ match(char *name, char *template,    char *stem)
     Rune r;
     int n;
 
-    // Before pattern character
+    // Before the pattern character
     while(*name && *template){
         n = chartorune(&r, template);
         if (PERCENT(r))
@@ -6695,7 +6707,7 @@ match(char *name, char *template,    char *stem)
     if (n < 0)
         return false;
 
-    // After pattern character
+    // After the pattern character
     if (strcmp(template+1, name+n))
         return false;
 
@@ -6708,7 +6720,7 @@ match(char *name, char *template,    char *stem)
 }
 @
 \l return false many times
-
+\l unicode and variable-length characters makes the code harder to read
 
 \begin{figure}[!]\centering
 \begin{verbatim}
@@ -6735,14 +6747,15 @@ match(char *name, char *template,    char *stem)
     start of match()     end of match()
 
 \end{verbatim}
-\caption{[[match()]] simple example.}\label{fig:mk-match}
+\caption{[[match("foobar.5", "foo\%.5", ...)]].}\label{fig:mk-match}
 \end{figure}
+
 
 %dup: ds/rules/metarules
 As I mentioned in Section~\ref{sec:PERCENT}, 
-[[mk]] supports two kinds of pattern characters: [[%]] and [[&]].
+[[mk]] supports two kinds of pattern characters: [['%']] and [['&']].
 %
-The [[&]] pattern can not match filenames containing a dot or
+The [['&']] pattern can not match filenames containing a dot or
 a slash:
 
 <<[[match()]] if ampersand template>>=
@@ -6804,7 +6817,7 @@ subst(char *stem, char *template,   char *dest, int dlen)
 ----------------------------------------
     start of subst()     end of subst()
 \end{verbatim}
-\caption{[[subst()]] simple example.}\label{fig:mk-subst}
+\caption{[[subst("bar", "foo\%.c", ...)]].}\label{fig:mk-subst}
 \end{figure}
 
 
@@ -6836,7 +6849,7 @@ symlook(name, S_NODE, (void *)node);
 @
 
 Finally, [[applyrules()]] can consult the symbol table and 
-possibly return a pointer to a previously created node instead
+possibly returns a pointer to a previously created node instead
 of recomputing the substree for this node (by calling
 again [[applyrules()]]).
 
@@ -6846,7 +6859,7 @@ if(sym)
     return sym->u.ptr;
 @
 
-Creating a simple node per file is important not only to avoid unecessary
+Creating a single node per file is important not only to avoid unecessary
 calls to [[applyrules()]]. Indeed, once [[mk]] finished
 executing a recipe, it can update the time of the target
 created by the recipe by modifying a single node.
@@ -6922,41 +6935,121 @@ if(d == nil)
 
 
 
-\section{Checking the rules and the graph}
+\section{Checking the graph and the rules}
 \label{sec:check-graph}
 \n was 'checking the rules', but really it is more checking the graph
 
 %trans:
 Once [[applyrules()]] returned the graph of dependencies,
-[[graph()]] can check for errors in the graph.
+%
+[[graph()]] can check for special properties of the graph
+that are signs of mistakes in the [[mkfile]]:
+
+<<[[graph()]] checking the graph>>=
+cyclechk(root);
+
+<<[[graph()]] before [[ambiguous()]]>>
+ambiguous(root);
+@
+\l can vacuous after ambiguous? NO! cos goal of vacuous is
+\l to delete some nodes and arcs that would generate ambiguity (said later?)
+
 %toc:
-There a few errors [[mk]] can statically detect, as explained
+There a few mistakes [[mk]] can detect, as explained
 in the following sections.
 \l Also simplify the graph by removing some arcs (see togo()).
 % Give priority for instance to specialized over meta rules. So
 % important calls below.
+\l detect statically vs dynamically? important?
 
-<<[[graph()]] checking the graph>>=
-cyclechk(root);
-<<[[graph()]] set root flags before [[vacuous()]]>>
-vacuous(root);
-ambiguous(root);
-@
-\l can do vacuous after ambiguous? NO! cos whole point of vacuous is
-% to delete some nodes and arcs that would generate ambiguity!
 
 
 \subsection{Cycle detection}
 \label{sec:cycle-check}
 
 %trans:
-The first error [[mk]] can detect is the presence of {\em cycles}
-in the graph, as shown in Figure~\ref{fig:mk-cycles}.
-\t error in mkfile?
+The first error [[mk]] can detect is the presence of a {\em cycle}
+in the graph, as shown in Figure~\ref{fig:graph-cycle}.
+\l need explain why bad? because then would loop forever?
+%
+Here is an example of an [[mkfile]] that leads to the graph 
+in Figure~\ref{fig:graph-cycle}:
+
+<<tests/mk/mkfile-with-cycle>>=
+foo: foo.5 bar.5
+    5l -o foo foo.5 bar.5
+%.5: %.c
+    5c -c $stem
+foo.5: foo.h
+bar.5: foo.h
+
+VERSION=2
+foo.h: foo    # typo, should be foo.x
+    cat foo.x | sed -e s/VERSION/$VERSION/ > foo.h
+@
+%$
+
+In the [[mkfile]] above, the user made a typo and added a dependency
+from [[foo.h]] to [[foo]] instead of [[foo.x]].
+%
+Here is the error message displayed by [[mk]] for this mkfile:
+
+\begin{verbatim}
+$ mk -f mkfile-with-cycle
+mk: cycle in graph detected at target foo
+\end{verbatim}
+%ocaml: better error message with full trace
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+           +-------+
+           |  foo  |<---------------+
+           +-------+                |
+               X                    |
+              / \                   |
+       /-----/   \-------\          |
+      /                   \         |
+     v                     v        |
++--------+            +--------+    |
+| foo.5  |            | bar.5  |    |
++--------+            +--------+    |
+     |                     |        |
+     | \                  /|        |
+     |  \------\ /-------/ |        |
+     |          v          |        |
+     v     +--------+      v        |
++--------+ | foo.h  | +--------+    |
+| foo.c  | +--------+ | bar.c  |    |
++--------+      |     +--------+    |
+                |                   |
+                |                   |
+                +-------------------+
+\end{verbatim}
+\caption{A cycle in a graph of dependencies.}
+\label{fig:graph-cycle}
+\end{figure}
+
+To detect the mistake above, [[mk]] performs a DFS on the graph
+\l actually not really DFS, performs multiple times the same thing
+\l Could optimize and have both a visited field and cycle field
+\l  so dont explore twice the same already checked subtree?
+\l  NO, cos context might be different and we might have a loop.
+\l tarjan?
+and marks nodes with the special flag below when it visits a node:
 
 <<[[Node_flag]] cases>>=
 CYCLE      = 0x0002,
 @
+
+This flag is stored in a unique bit in the [[Node.flag]] field;
+it will not conflict with the other node flags I introduced
+in Section~\ref{sec:node-flags} (e.g., [[NOTMADE]] is [[0x0020]]).
+
+The function below assumes it is called with
+the [[CYCLE]] flag unset for every nodes, 
+which is true because [[newnode()]] set
+[[Node.flag]] to [[0]] (see Section~\ref{sec:newnode}).
+\n actually to PROBABLY sometimes (said later)
 
 <<function cyclechk>>=
 static void
@@ -6964,7 +7057,7 @@ cyclechk(Node *n)
 {
     Arc *a;
 
-    if((n->flags&CYCLE) && n->arcs){
+    if((n->flags&CYCLE)){
         fprint(STDERR, "mk: cycle in graph detected at target %s\n", n->name);
         Exit();
     }
@@ -6975,62 +7068,92 @@ cyclechk(Node *n)
     n->flags &= ~CYCLE;
 }
 @
-% important to restore back flags as they were before?
-% YES because graph is a DAG, so might encounter another time the same
-%  note but that's ok.
-% Could optimize and have both a visited field and cycle field
-%  so dont explore twice the same already checked subtree?
-%  NO, cos context might be different and we might have a loop.
+%ocaml: sucks that does not show trace, so hard to debug => I give a trace!
+%dead? bug?
+%  if((n->flags&CYCLE && n->arcs)) ????? why n->arcs check?
 
-% FIGURE
+Note that it is important for [[cyclechk()]] to remove
+the [[CYCLE]] flag at the very end before returning.
+%
+Indeed, the graph of dependencies can be a DAG, in which case the same node
+may be referenced from multiple parents 
+(e.g., [[foo.h]] in Figure~\ref{fig:graph-cycle}).
+%
+Without the last instruction in [[cyclechk()]], 
+[[mk]] would report another (wrong) cycle when visiting
+[[foo.h]] for the second time from [[bar.5]] instead of [[foo.5]].
 
-
-% possible because constraints on variables.
+\l static detection of cycle. possible only because restriction on
+\l  variables and time of evaluation of those variables.
 % Need to be known at parsing-time. Static cycle detection check.
 % (but dynamic could be ok too).
 
-% sucks a bit that does not show trace, so hard to debug.
-%ocaml: give a trace!
-
-% static detection of cycle. possible only because restriction on
-%  variables and time of evaluation of those variables.
-
 %real-world:
-% Make does detection dynamically I think.
+% Make drops the circular dependency 
+%   make: Circular foo.h <- foo dependency dropped.
 
-\subsection{Infinite rule detection and [[$NREP]]}%$
+\subsection{Infinite rule detection}%$
 
-% to manage bad rules like %: %.c that can be executed multiple times
+%trans:
+The second mistake [[mk]] can detect is the use of
+meta rules that [[mk]] could instantiate infinitely.
+%
+Here is an example of an [[mkfile]] illustrating the issue:
 
-<<[[graph()]] other locals>>=
-// map<ruleid, int>
-char *cnt;
+<<tests/mk/mkfile-infinite>>=
+all: foo bar
+
+%: %.5
+   5l $stem.5 -o $stem
+%.5: %.c
+	5c -c $stem.c
 @
+%$
+
+When building the graph for [[foo]], [[applyrules()]]
+can instantiate first the meta rule [[%: %.5]] with [[% = foo]].
+%
+However, [[applyrules()]] when called recursively
+with [[foo.5]] as a target could again
+instantiate the meta rule [[%: %.5]], this time with [[% = foo.5]]
+\footnote{This is one of the motivation for the [[&]] 
+special pattern character.}.
+This process could go forever, which would stuck [[mk]].
+
+
+
+To avoid this infinite process, [[mk]] still allows the use of
+the meta rules above, but severly restricts their applications.
+%
+Indeed, [[mk]] allows to apply a specific rule only once during
+the building of a branch in the graph of dependencies.
+%
+To do so, each rule gets first a unique {\em rule identifier}:
+\l useful to do check rulecnt for simple rules? mk does but why?
 
 <<[[Rule]] other fields>>=
 int 		rule;		/* rule number */
 @
 
 
-% incremented by addrule()
 <<global nrules>>=
 static int nrules = 0;
 @
-% used by rulecnt() later
 <<[[addrule()]] set more fields>>=
 r->rule = nrules++;
 @
 
+Then, before calling [[applyrules()]], [[graph()]] initializes
+a map that will count how many times [[applyrules()]] used a rule:
 
+<<[[graph()]] other locals>>=
+// map<ruleid, int>
+char *cnt;
+@
 <<[[graph()]] set cnt for infinite rule detection>>=
 cnt = rulecnt();
 @
 
-<<[[graph()]] free cnt>>=
-free(cnt);
-@
-
-% statistic on how much a rule was fired? for infinite detection?
 <<function rulecnt>>=
 char*
 rulecnt(void)
@@ -7042,16 +7165,22 @@ rulecnt(void)
     return s;
 }
 @
-\l mv Profiling? or used also for checking?
-\l but hard to move profiling, passed around a lot
-% nrules modified by addrule
+\n this is not for Profiling.
+
+<<[[graph()]] free cnt>>=
+free(cnt);
+@
+
+[[graph()]] then passes around this map as the second argument
+to [[applyrules()]] (see Section~\ref{sec:graph}).
 
 
+Finally, [[applyrules()]] can modify [[cnt]]
+when it uses a rule {before} possibly calling itself recursively.
+%
+[[applyrules()]] can then skip the rule if it already used the rule
+in a parent call to [[applyrules()]]:
 
-
-
-
-% n reps, to manage bad rules like %: %.c that can be executed multiple times
 <<global nreps>>=
 int nreps = 1;
 @
@@ -7061,56 +7190,69 @@ int nreps = 1;
 <<[[applyrules()]] infinite rule detection part1>>=
 if(cnt[r->rule] >= nreps) 
     continue;
+
 cnt[r->rule]++;
 @
+
+Note that [[applyrules()]] must decrement the rule counter
+{after} the recursive call to itself. 
+%
+Indeed, it is ok to instantiate multiple times the same meta rule
+in independent branches of the graph of dependencies, for instance,
+the meta rule [[%.5: %.c]]
+with the [[foo.5]] and [[bar.5]] nodes in Figure~\ref{fig:graph-cycle}.
 
 <<[[applyrules()]] infinite rule detection part2>>=
 cnt[r->rule]--;
 @
-% restore back because want to allow to apply the same metarules
-% multiple time. We just dont want to forbid it when call
-% applyrules recursively with the prereqs as the new targets.
+\l We just dont want to forbid it when call
+\l applyrules recursively with the prereqs as the new targets.
 
+\l can change nrep dynamically, see adv topics
 
-
-<<[[mk()]] initialisation>>=
-nrep();		/* it can be updated dynamically */
-@
-
-% mk -> nrep
-<<function nrep>>=
-void
-nrep(void)
-{
-    Symtab *sym;
-    Word *w;
-
-    sym = symlook("NREP", S_VAR, nil);
-    if(sym){
-        w = sym->u.ptr;
-        if (w && w->s && *w->s)
-            nreps = atoi(w->s);
-    }
-    if(nreps < 1)
-        nreps = 1;
-    <<[[nrep()]] if DEBUG(D_GRAPH)>>
-}
-@
-\t mv to graph.c? or check.c?
 
 
 \subsection{Ambiguous rules detection}
-% also modify graph to fix things.
+\l also modify graph to fix things.
 
-% help to understand subtelities of multiple targets, multiple prereqs,
-%  multiple rules ?
+%trans:
+The third error [[mk]] can detect is the use of {\em ambiguous rules}.
+%
+For example, in the [[mkfile]] below, if both [[foo.c]] and [[foo.h]]
+are more recent than [[foo.5]], [[mk]] can not decide
+which recipe to run to update [[foo.5]].
 
-\l seems that rely on TOGO field, so assume vacuous has been called before?
+<<tests/mk/mkfile-ambiguous>>=
+all: foo
 
-%nice output:
+foo: foo.5
+    5l -o foo foo.5
+
+foo.5: foo.c
+    5c -c foo.c
+foo.5: foo.h
+    5c -g -c foo.c
+@
+
+Here is the error message displayed by [[mk]] for this mkfile:
+
+\begin{verbatim}
+$ mk -f mkfile-ambiguous
+mk: ambiguous recipes for foo.5:
+	foo.5 <-(mk-ambiguous-simple:7)- foo.c
+	foo.5 <-(mk-ambiguous-simple:9)- foo.h
+\end{verbatim}
+%other real example:
 %mk: ambiguous recipes for install:
 %	install <-(/sys/src/cmd/mklib:28)- libthreads.a <-(/sys/src/cmd/mklib:12)- libthreads.a(scheduler.8)
 %	install <-(mkfile:19)- 
+
+To check for ambiguities, [[mk]] goes through every nodes and checks
+whether a node has two arcs with different recipes.
+%
+As I said in Section~\ref{sec:master-rule}, [[mk]] allows to write
+multiple rules involving the same target as long as only one rule,
+the {master rule}, has a recipe.
 
 
 <<function ambiguous>>=
@@ -7118,59 +7260,63 @@ static void
 ambiguous(Node *n)
 {
     Arc *a;
-    Rule *r = nil;
-    Arc *la = nil;
-    bool bad = false;
+    Rule *master_rule = nil;
+    Arc *master_arc = nil;
+    bool error_reported = false;
 
     for(a = n->arcs; a; a = a->next){
         // recurse
         if(a->n)
             ambiguous(a->n);
 
-        // rules without any recipe do not generate ambiguity
-        if(*a->r->recipe == '\0') continue;
+        // arcs without any recipe do not generate ambiguity
+        if(empty_recipe(a->r)) 
+            continue;
         // else
 
-        // first rule with recipe (so no ambiguity)
-        if(r == nil) {
-            r = a->r;
-            la = a;
+        // first arc with a recipe (so no ambiguity)
+        if(master_rule == nil) {
+            master_rule = a->r;
+            master_arc = a;
         }
         else{
             <<[[ambiguous()]] give priority to simple rules over meta rules>>
-            if(r->recipe != a->r->recipe){
-                if(!bad){
+            if(master_rule->recipe != a->r->recipe){
+                if(!error_reported){
                     fprint(STDERR, "mk: ambiguous recipes for %s:\n", n->name);
-                    bad = true;
-                    trace(n->name, la);
+                    error_reported = true;
+                    trace(n->name, master_arc);
                 }
                 trace(n->name, a);
             }
         }
     }
-    if(bad)
+    if(error_reported)
         Exit();
     <<[[ambiguous()]] get rid of all skipped arcs>>
 }
 @
-\t rename r to master_rule ? and la to master_arc ?
-\t use empty_recipe() (and assert != nil)
+%old: r -> master_rule, la -> master_arc, bad -> error_reported
+%old: *a->r->recipe == '\0' -> empty_recipe() (and assert != nil)
 \l could optimize again and avoid visiting node already visited
 
 %ocaml-found:
-% use != to compare recipe? string address comparison? not strcmp?
-%  when can have 2 arcs with same recipe pointer?
-% all the time, because in foo.exe: foo.o bar.o\n gcc foo.o bar.o -o foo.exe
-%  you will have multiple arcs with recipe, but always same recipe so it's ok.
-%  When we build the graph we splitted such single rule in multiple arcs,
-%  but we need to remember they come from the same rule after.
-  
+Note that before reporting an ambiguity, the code above checks
+whether the recipes in the two different arcs are different
+(using a simple pointer comparison, not [[strcmp()]]).
+\l why not? could.
+Having a node with multiple arcs does not necessarily mean ambiguity.
+For example, [[foo]] in Figure~\ref{fig:graph-cycle} has arcs to
+[[foo.5]] and [[bar.5]]. 
+However all those arcs share the same recipe (the linking command),
+so there is no ambiguity in building [[foo]].
+%
+When [[mk]] builds the graph, it splits simple rules
+such as [[foo: foo.5 bar.5 ...]] in multiple arcs, but it
+remembers also that all those arcs come from the same rule.
 
-% why not mark TOGO for rule without recipe? because we still want this
-% arc for outdated check! this arc does not contain a recipe, but it
-% is still important, e.g. dependencies like foo.o: foo.h
 
-\l can have target with no recipe arc at all?
+[[ambiguous()]] calls [[trace()]] below for each ambiguous arc:
 
 <<function trace>>=
 static void
@@ -7193,144 +7339,245 @@ trace(char *s, Arc *a)
 
 \subsubsection{Specialized versus generic rules}
 
-% seems fair, can write general rules and then add specific ones.
+It is common to want to write a generic meta rule that can
+handle most files and some {specialized rules} for a few files. 
+%
+For example, a few files may require to be compiled with special flags, 
+as in the following example:
+
+<<tests/mk/mk-generic-specialized>>=
+foo: foo.5 bar.5 foobar.5
+
+%.5: %.c
+    5c -c $stem.c
+
+foobar.5: foobar.c
+    5c -c -D VERSION=1 foobar.c
+@
+%$
+
+Normally, [[mk]] would report an ambiguity with the previous [[mkfile]].
+%
+Indeed, [[foobar.5]] matches also the meta rule,
+which would lead to a second arc from [[foobar.5]] to [[foobar.c]]
+in the graph of dependencies with the recipe of the meta rule.
+%
+However, [[mk]] allows ambiguity between two rules 
+when one of the two rules is a simple rule.
+%
+Simples rules have priority over meta rules, thanks to the code
+below:
 
 <<[[ambiguous()]] give priority to simple rules over meta rules>>=
-if(r->recipe != a->r->recipe){
-    if((r->attr&META) && !(a->r->attr&META)){
-        la->flag |= TOGO;
-        r = a->r;
-        la = a;
-    } else if(!(r->attr&META) && (a->r->attr&META)){
-        a->flag |= TOGO;
+if(master_rule->recipe != a->r->recipe){
+    if((master_rule->attr&META) && !(a->r->attr&META)){
+        master_arc->remove = true;
+        master_rule = a->r;
+        master_arc = a;
+    } else if(!(master_rule->attr&META) && (a->r->attr&META)){
+        a->remove = true;
         continue;
     }
 }
 @
+%old: was using TOGO
+\l mk allows also to overwrite a previous simple rule, but this is done
+\l  at parsing time
+
+[[ambiguous()]] not only adjusts the master rule to be the
+specialized rule above, it also marks the arc containing
+the meta rule as to-be-removed, thanks to the following field:
+
+<<[[Arc]] other fields>>=
+short remove;
+@
+%old: was flag, like Node.flag, but used only for removing
+% <<constant TOGO>>=
+% /* Arc.flag */
+% #define		TOGO		true
+% @
+
 
 \subsubsection{Adjusting the graph, [[togo()]]}
 
-<<[[Arc]] other fields>>=
-// bool (TOGO)
-short flag;
-@
-\t rename toremove?
-
-<<constant TOGO>>=
-/* Arc.flag */
-#define		TOGO		true
-@
-% mark arc as to be removed
-\t remove, just use better field name for arc.flag.
+[[ambiguous()]] calls itself recursively, but before returning
+it removes all the arcs marked as to-be-removed on the current node:
 
 <<[[ambiguous()]] get rid of all skipped arcs>>=
 togo(n);
 @
 
-
 <<function togo>>=
 static void
 togo(Node *node)
 {
-    Arc *a, *la;
+    Arc *a; 
+    Arc *lasta = nil;
 
     /* delete them now */
-    la = nil;
-    for(a = node->arcs; a; la = a, a = a->next)
-        if(a->flag&TOGO){
-            //remove_list(a, node->prereqs)
+    for(a = node->arcs; a; lasta = a, a = a->next)
+        if(a->remove){
+
+            //remove_list(a, node->arcs)
             if(a == node->arcs)
                 node->arcs = a->next;
-            else
-                la->next = a->next, a = la;
+            else {
+                lasta->next = a->next;
+                a = lasta;
+            }
         }
 }
 @
-%pad: I've added the warning, BUT ACTUALLY I should not!
+%old: la -> lasta
+%pad: I orginally added a warning, but actually we should not!
 %            fprint(STDERR, "mk: vacuous arc found %s->%s\n", 
 %                     node->name, a->n->name);
 \l could do it for explain mode
-
-% la = last a
-% leak! 
-% should we remove all children of this node? no because DAG so potentially
-%  referenced elsewhere
-
 %ocaml: useful only for ambiguous for specialized vs generic so do
 % adjustments there by resetting the list of prereqs
 
+\l is there a leak! should remove all children of this arc? 
+% No because DAG so potentially referenced elsewhere
 
-\subsection{Vacuous node detection}
-% def of vacuous =~ stupid
+\l why not mark TOGO for rule without recipe? because we still want this
+% arc for outdated check! this arc does not contain a recipe, but it
+% is still important, e.g. dependencies like foo.o: foo.h
 
+
+\subsubsection{Vacuous nodes removal}
+\n def of vacuous =~ stupid
+
+%trans: 
+As we have just seen before,
+%dup: graph/check/ambiguous/sepecialised
+the use of specialized simple rules and a generic meta rule can lead to 
+unfortunate ambiguities. 
+%
+[[mk]] handles some ambiguities by giving priorities to specialized rules,
+which is convenient.
+% 
+The use of multiple meta rules can also lead to unfortunate ambiguities.
 %ocaml-found:
-% without this check and graph adjustment, generic rules such as
-% %.o: %.c; CC ...  and %.o: %.s; AS ... would conflict with each other
-% (as in plan9/sys/src/cmd/mkone)
-% and generate ambiguity. Of course if an object foo.o is requested
-% and the directory contain foo.c, obviously we do not want the
-% rule foo.o: foo.s. 
-% We can mark as PROBABLY node with files that already exist and
-% detect VACUOUS node that would generate ambiguity by looking
-% if the file in the node does not exist and the node was generated
-% from a metarule!
+For example, in the [[mkfile]] below, [[foo.5]] could be generated
+either from a [[foo.c]] C file or from a [[foo.s]] assembly file.
 
+<<tests/mk/mkfile-vacuous>>=
+all: foo
 
-
-% goal is to mark certain nodes as VACUOUS.
-<<[[Node_flag]] cases>>=
-VACUOUS    = 0x0200,
+foo: foo.5 bar.5
+   5l foo.5 bar.5 -o foo
+%.5: %.c
+   5c -c $stem.c
+%.5: %.s
+   5a $stem.s
 @
-\l but not sure this flag is needed as it is used only inside
-\l  vacuous. If got rid of READY, then no need for VACUOUS
+\l (as in plan9/sys/src/cmd/mkone)
 
-% before, mark a few nodes as PROBABLE
+Again, [[mk]] would normally report an ambiguity with the previous
+[[mkfile]] because there will be two arcs from [[foo.5]]
+with two different recipes in the graph of dependencies.
+%
+However, it is convenient to factorize rules for different
+programming languages with different meta rules.
+%
+In practice, only one of the two meta rules above should apply
+for each source file in a project. The directory of the project above
+should contain either [[foo.c]] or [[foo.s]], but not both.
+
+
+This is why [[mk]] allows the use of multiple meta rules
+that can conflict with each other if it can detect that certain nodes
+instantiated from certain meta rules (e.g., [[foo.c]], [[foo.s]]) are
+{\em vacuous} because they do not correspond to existing files.
+%
+To detect and remove vacuous nodes, [[mk]] relies first on
+the following new node flag:
+
 <<[[Node_flag]] cases>>=
 PROBABLE   = 0x0100,
 @
-% not very clear name, but means file exist so probably
-% a good node
+\l not very clear name, but means file exist so probably a good node
+
+[[mk]] marks first nodes as [[PROBABLE]] when they contain
+an existing file, which can be checked by looking at the
+modification time of the file in [[newnode()]]:
 
 
-<<[[newnode()]] set flags of node>>=
-node->flags = (node->time? PROBABLE : 0);
+<<[[newnode()]] adjust flags of node>>=
+if(node->time)
+    node->flags = PROBABLE;
 @
-% so if file exists, then PROBABLE.
+%old: node->flags = (node->time? PROBABLE : 0);
+% but then cant say newnode initialize flags to 0 without speaking
+% about PROBABLE
+
+In the example above, [[mk]] would mark [[foo.c]] as [[PROBABLE]]
+but not [[foo.s]] if the directory contains only [[foo.c]].
+
+
+Moreover, [[mk]] marks also nodes resulting fron the application of a simple
+rules as [[PROBABLE]]:
 
 <<[[applyrules()]] when found a regular rule for target [[node]], set flags>>=
 node->flags |= PROBABLE;
 @
-% make sense, even if file does not exist, probably a node we
-% are interested in.
+\l make sense, even if file does not exist, probably node we are interested in?
 
-<<[[graph()]] set root flags before [[vacuous()]]>>=
+Finally, the root node is also marked as [[PROBABLE]]
+because it is not a node we want [[mk]] to remove,
+even if it does not correspond yet to an existing file:
+
+<<[[graph()]] before [[ambiguous()]]>>=
 root->flags |= PROBABLE;	/* make sure it doesn't get deleted */
 @
 
 
+Once [[mk]] initialized the nodes in the graph of dependencies,
+[[graph()]] calls [[vacuous()]] to explore the graph to
+detect and remove vacuous nodes.
+
+<<[[graph()]] before [[ambiguous()]]>>=
+vacuous(root);
+@
+
+Note that [[graph()]] must call [[vacuous()]] before [[ambiguous()]],
+to remove the vacuous nodes and arcs,
+otherwise [[ambiguous()]] would report ambiguities.
+
+[[vacuous()]] relies on two extra node flags to operate:
+
+<<[[Node_flag]] cases>>=
+VACUOUS    = 0x0200,
+@
+\l goal is to mark certain nodes as VACUOUS.
+
 <<[[Node_flag]] cases>>=
 READY      = 0x0004,
 @
-% for what? not very clear name
-% Seems just because graph is a DAG so avoid redo work.
-% also marked node as vacuous_checked; used later in mk()
+\l for what? not very clear name. rename DONE? VISITED?
+\l also marked node as vacuous_checked; used later in mk()
 
+[[VACUOUS]] marks vacuous nodes and [[READY]] marks nodes
+[[vacuous()]] already visited (the graph can be a DAG).
 
+Here is finally the code of [[vacuous()]]:
 
 <<function vacuous>>=
 static bool
 vacuous(Node *node)
 {
-    Arc *la, *a;
+    Arc *a;
     bool vac = !(node->flags&PROBABLE);
+    <<[[vacuous()]] other locals>>
 
     if(node->flags&READY)
         return node->flags&VACUOUS;
+
     node->flags |= READY;
 
     for(a = node->arcs; a; a = a->next)
         if(a->n && vacuous(a->n) && (a->r->attr&META))
-            a->flag |= TOGO;
+            a->remove = true;
         else
             vac = false;
     <<[[vacuous]] possibly undelete some arcs>>
@@ -7342,54 +7589,27 @@ vacuous(Node *node)
     return vac;
 }
 @
-% pad: I've originally added the warning
+%pad: I've originally added the warning
 %        fprint(STDERR, "mk: vacuous node found %s\n", node->name);
-% but this is wrong. a vacuous node is ok.
+%   but this is wrong. a vacuous node is ok.
+
+<<[[vacuous()]] other locals>>=
+Arc *a2;
+@
+%old: la -> a2
 
 <<[[vacuous]] possibly undelete some arcs>>=
 /* if a rule generated arcs that DON'T go; no others from that rule go */
 for(a = node->arcs; a; a = a->next)
-    if(!(a->flag&TOGO))
-        for(la = node->arcs; la; la = la->next)
-            if((la->flag&TOGO) && (la->r == a->r)){
-                la->flag &= ~TOGO;
+    if(!(a->remove))
+        for(a2 = node->arcs; a2; a2 = a2->next)
+            if((a2->remove) && (a2->r == a->r)){
+                a2->remove = false;
             }
 @
 \l when this matter?
 
-\section{Rule attributes propagation}
 
-<<[[graph()]] propagate attributes>>=
-// propagate attributes in rules to their node
-attribute(root);
-@
-
-% need attribute? anyway can access rule of node each time
-% or probably because it is a union of attr for all matching rules.
-%  not just the master rule.
-% But in which situation it matters? for Virtual! because timeof
-% may have been wrong and considered a file with the same name of
-% a target. When we find out it is a virtual node, we need to reset
-% the time of this node.
-
-% propagate from rule to node
-\t why? just for the union of virtual?
-
-<<function attribute>>=
-static void
-attribute(Node *n)
-{
-    Arc *a;
-
-    for(a = n->arcs; a; a = a->next){
-        <<[[attribute()]] propagate rule attribute to node cases>>
-        // recurse
-        if(a->n)
-            attribute(a->n);
-    }
-    <<[[attribute()]] if virtual node>>
-}
-@
 
 
 
@@ -9657,7 +9877,7 @@ if(r->attr&REGEXP){
 
 <<[[applyrules()]] if regexp rule, adjust buf and rmatch>>=
 if(r->attr&REGEXP)
-    regsub(w->s, buf, sizeof(buf), rmatch, NREGEXP);
+    regsub(pre->s, buf, sizeof(buf), rmatch, NREGEXP);
 @
 
 \section{Dynamic [[mkfile]], [[<|]]{\em prog}}
@@ -9858,7 +10078,7 @@ if(buf){
 if(buf)
     close(out[1]);
 @
-%bug: %pad: was not guared by if(buf), but was bug I think
+%bug: %pad: was not guarded by if(buf), but was bug I think
 
 
 
@@ -10153,7 +10373,48 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 @
 
 
-\section{Advanced rule attributes}
+\section{Rule attributes}
+\n Advanced? well I know explain all rule attributes here except fake one
+\n  like META or REGEXP.
+
+
+
+%\section{Rule attributes propagation}
+% mv with adv topics? anyway, not much used otherwise
+
+<<[[graph()]] propagate attributes>>=
+// propagate attributes in rules to their node
+attribute(root);
+@
+
+% need attribute? anyway can access rule of node each time
+% or probably because it is a union of attr for all matching rules.
+%  not just the master rule.
+% But in which situation it matters? for Virtual! because timeof
+% may have been wrong and considered a file with the same name of
+% a target. When we find out it is a virtual node, we need to reset
+% the time of this node.
+
+% propagate from rule to node
+\t why? just for the union of virtual?
+
+<<function attribute>>=
+static void
+attribute(Node *n)
+{
+    Arc *a;
+
+    for(a = n->arcs; a; a = a->next){
+        <<[[attribute()]] propagate rule attribute to node cases>>
+        // recurse
+        if(a->n)
+            attribute(a->n);
+    }
+    <<[[attribute()]] if virtual node>>
+}
+@
+
+
 
 \subsection{Virtual target, [[:V:]]}
 \label{sec:virtual}
@@ -10324,7 +10585,7 @@ if(a->r->attr&NOREC)
 %" the rule is a meta-rule that cannot be a target of a virtual rule,
 % only files match the pattern in the target"
 
-% when want that?
+% when want that? git grep :n:
 
 <<[[Rule_attr]] cases>>=
 NOVIRT = 0x0100,
@@ -10336,7 +10597,7 @@ case 'n':
 @
 
 <<[[applyrules()]] skip this meta rule and continue if some conditions>>=
-if ((r->attr&NOVIRT) && a != &head && (a->r->attr&VIR))
+if ((r->attr&NOVIRT) && lasta != &head && (lasta->r->attr&VIR))
     continue;
 @
 % really useful?
@@ -10608,7 +10869,7 @@ expunge(int pid, char *msg)
 
 
 
-\section{Advanced variable attributes}
+\section{Variable attributes}
 % constant with attributes?? just private var
 %  to not transmit to recipe process?
 
@@ -10678,6 +10939,35 @@ envupd("newprereq", wdup(j->np));
 % related to aggregates?
 
 \t code dealing with newprereq in work here.
+
+\subsection{[[$NREP]]}
+%$
+
+<<[[mk()]] initialisation>>=
+nrep();		/* it can be updated dynamically */
+@
+
+% mk -> nrep
+<<function nrep>>=
+void
+nrep(void)
+{
+    Symtab *sym;
+    Word *w;
+
+    sym = symlook("NREP", S_VAR, nil);
+    if(sym){
+        w = sym->u.ptr;
+        if (w && w->s && *w->s)
+            nreps = atoi(w->s);
+    }
+    if(nreps < 1)
+        nreps = 1;
+    <<[[nrep()]] if DEBUG(D_GRAPH)>>
+}
+@
+\t mv to graph.c? or check.c?
+
 
 \subsection{[[$pid]]}
 %$
@@ -11584,7 +11874,7 @@ dumpa(char *s, Arc *a)
     char buf[1024];
 
     Bprint(&bout, "%sArc@%p: n=%p r=%p flag=0x%x stem='%s'",
-        s, a, a->n, a->r, a->flag, a->stem);
+        s, a, a->n, a->r, a->remove, a->stem);
     if(a->prog)
         Bprint(&bout, " prog='%s'", a->prog);
     Bprint(&bout, "\n");

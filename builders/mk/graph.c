@@ -36,15 +36,18 @@ graph(char *target)
 
     /*s: [[graph()]] checking the graph */
     cyclechk(root);
-    /*s: [[graph()]] set root flags before [[vacuous()]] */
+
+    /*s: [[graph()]] before [[ambiguous()]] */
     root->flags |= PROBABLE;	/* make sure it doesn't get deleted */
-    /*e: [[graph()]] set root flags before [[vacuous()]] */
+    /*x: [[graph()]] before [[ambiguous()]] */
     vacuous(root);
+    /*e: [[graph()]] before [[ambiguous()]] */
     ambiguous(root);
     /*e: [[graph()]] checking the graph */
-
+    /*s: [[graph()]] propagate attributes */
     // propagate attributes in rules to their node
     attribute(root);
+    /*e: [[graph()]] propagate attributes */
 
     return root;
 }
@@ -55,15 +58,19 @@ static Node*
 applyrules(char *target, char *cnt)
 {
     Node *node;
+    // list<ref<Arc> (next = Arc.next, last = lasta)
     Arc head;
-    Arc *a = &head;
+    // ref<Arc>
+    Arc *lasta = &head;
     /*s: [[applyrules]] other locals */
     Symtab *sym;
     Rule *r;
-    Word *w;
+    Word *pre;
+    Arc *arc;
+    /*x: [[applyrules]] other locals */
+    char stem[NAMEBLOCK];
     /*x: [[applyrules]] other locals */
     char buf[NAMEBLOCK];
-    char stem[NAMEBLOCK];
     /*x: [[applyrules]] other locals */
     Resub rmatch[NREGEXP];
     /*e: [[applyrules]] other locals */
@@ -80,64 +87,62 @@ applyrules(char *target, char *cnt)
     // else
 
     target = strdup(target);
-    // calls timeof()
-    node = newnode(target);
-
-    head.n = nil;
+    node = newnode(target); // calls timeof() internally
     head.next = nil;
-
-    /*s: [[applyrules]] set rmatch */
+    /*s: [[applyrules]] other initializations */
     memset((char*)rmatch, 0, sizeof(rmatch));
-    /*e: [[applyrules]] set rmatch */
+    /*e: [[applyrules]] other initializations */
 
-    // apply regular rules with target as a head (modify node, head, a)
+    // apply regular rules with target as a head (modifies lasta)
     /*s: [[applyrules()]] apply regular rules */
     sym = symlook(target, S_TARGET, nil);
-    for(r = (sym? sym->u.ptr : nil); r; r = r->chain){
+    r = sym? sym->u.ptr : nil;
+    for(; r; r = r->chain){
         /*s: [[applyrules()]] skip this rule and continue if some conditions */
-        if(r->attr&META) continue;
-        if(strcmp(target, r->target)) continue; // how can happen??
-        if((!r->recipe || !*r->recipe)
-           && (!r->prereqs || !r->prereqs->s || !*r->prereqs->s)) 
+        if(empty_recipe(r) && empty_prereqs(r))
               continue;	/* no effect; ignore */
         /*e: [[applyrules()]] skip this rule and continue if some conditions */
         /*s: [[applyrules()]] infinite rule detection part1 */
         if(cnt[r->rule] >= nreps) 
             continue;
+
         cnt[r->rule]++;
         /*e: [[applyrules()]] infinite rule detection part1 */
         /*s: [[applyrules()]] when found a regular rule for target [[node]], set flags */
         node->flags |= PROBABLE;
         /*e: [[applyrules()]] when found a regular rule for target [[node]], set flags */
+
         /*s: [[applyrules()]] if no prerequistes in rule r */
         // no prerequistes, a leaf, still create fake arc
-        if(!r->prereqs || !r->prereqs->s || !*r->prereqs->s) {
-            a->next = newarc((Node *)nil, r, "", rmatch);
-            a = a->next;
+        if(empty_prereqs(r)) {
+            arc = newarc((Node *)nil, r, "", rmatch);
+            // add_list(head, arc)
+            lasta->next = arc;
+            lasta = lasta->next;
         } 
         /*e: [[applyrules()]] if no prerequistes in rule r */
         else
-            for(w = r->prereqs; w; w = w->next){
+            for(pre = r->prereqs; pre; pre = pre->next){
                 // recursive call!
-                a->next = newarc(applyrules(w->s, cnt), r, "", rmatch);
-                a = a->next;
+                arc = newarc(applyrules(pre->s, cnt), r, "", rmatch);
+                // add_list(head, arc)
+                lasta->next = arc;
+                lasta = lasta->next;
         }
         /*s: [[applyrules()]] infinite rule detection part2 */
         cnt[r->rule]--;
         /*e: [[applyrules()]] infinite rule detection part2 */
-        head.n = node;
     }
     /*e: [[applyrules()]] apply regular rules */
 
-    // apply meta rules
+    // apply meta rules (modifies lasta)
     /*s: [[applyrules()]] apply meta rules */
     for(r = metarules; r; r = r->next){
         /*s: [[applyrules()]] skip this meta rule and continue if some conditions */
-        if((!r->recipe || !*r->recipe) 
-           && (!r->prereqs || !r->prereqs->s || !*r->prereqs->s)) 
+        if(empty_recipe(r) && empty_prereqs(r)) 
             continue;	/* no effect; ignore */
         /*x: [[applyrules()]] skip this meta rule and continue if some conditions */
-        if ((r->attr&NOVIRT) && a != &head && (a->r->attr&VIR))
+        if ((r->attr&NOVIRT) && lasta != &head && (lasta->r->attr&VIR))
             continue;
         /*e: [[applyrules()]] skip this meta rule and continue if some conditions */
         /*s: [[applyrules()]] if regexp rule then continue if some conditions */
@@ -150,40 +155,44 @@ applyrules(char *target, char *cnt)
         }
         /*e: [[applyrules()]] if regexp rule then continue if some conditions */
         else {
-            if(!match(node->name, r->target, stem)) continue;
-        }
-        /*s: [[applyrules()]] infinite rule detection part1 */
-        if(cnt[r->rule] >= nreps) 
-            continue;
-        cnt[r->rule]++;
-        /*e: [[applyrules()]] infinite rule detection part1 */
+            if(match(node->name, r->target, stem)) {
+                /*s: [[applyrules()]] infinite rule detection part1 */
+                if(cnt[r->rule] >= nreps) 
+                    continue;
 
-        /*s: [[applyrules()]] if no prerequistes in meta rule r */
-        if(!r->prereqs || !r->prereqs->s || !*r->prereqs->s) {
-            a->next = newarc((Node *)nil, r, stem, rmatch);
-            a = a->next;
-        } 
-        /*e: [[applyrules()]] if no prerequistes in meta rule r */
-        else
-            for(w = r->prereqs; w; w = w->next){
-                /*s: [[applyrules()]] if regexp rule, adjust buf and rmatch */
-                if(r->attr&REGEXP)
-                    regsub(w->s, buf, sizeof(buf), rmatch, NREGEXP);
-                /*e: [[applyrules()]] if regexp rule, adjust buf and rmatch */
+                cnt[r->rule]++;
+                /*e: [[applyrules()]] infinite rule detection part1 */
+
+                /*s: [[applyrules()]] if no prerequistes in meta rule r */
+                if(empty_prereqs(r)) {
+                    arc = newarc((Node *)nil, r, stem, rmatch);
+                    // add_list(head, arc)
+                    lasta->next = arc;
+                    lasta = lasta->next;
+                } 
+                /*e: [[applyrules()]] if no prerequistes in meta rule r */
                 else
-                    subst(stem, w->s, buf, sizeof(buf));
-                // recursive call!
-                a->next = newarc(applyrules(buf, cnt), r, stem, rmatch);
-                a = a->next;
-            }
-        /*s: [[applyrules()]] infinite rule detection part2 */
-        cnt[r->rule]--;
-        /*e: [[applyrules()]] infinite rule detection part2 */
+                    for(pre = r->prereqs; pre; pre = pre->next) {
+                        /*s: [[applyrules()]] if regexp rule, adjust buf and rmatch */
+                        if(r->attr&REGEXP)
+                            regsub(pre->s, buf, sizeof(buf), rmatch, NREGEXP);
+                        /*e: [[applyrules()]] if regexp rule, adjust buf and rmatch */
+                        else
+                            subst(stem, pre->s, buf, sizeof(buf));
+                        // recursive call!
+                        arc = newarc(applyrules(buf, cnt), r, stem, rmatch);
+                        // add_list(head, arc)
+                        lasta->next = arc;
+                        lasta = lasta->next;
+                    }
+                 /*s: [[applyrules()]] infinite rule detection part2 */
+                 cnt[r->rule]--;
+                 /*e: [[applyrules()]] infinite rule detection part2 */
+           }
+        }
     }
     /*e: [[applyrules()]] apply meta rules */
 
-    // ???
-    a->next = node->arcs;
     node->arcs = head.next;
 
     return node;
@@ -216,17 +225,20 @@ nrep(void)
 static void
 togo(Node *node)
 {
-    Arc *a, *la;
+    Arc *a; 
+    Arc *lasta = nil;
 
     /* delete them now */
-    la = nil;
-    for(a = node->arcs; a; la = a, a = a->next)
-        if(a->flag&TOGO){
-            //remove_list(a, node->prereqs)
+    for(a = node->arcs; a; lasta = a, a = a->next)
+        if(a->remove){
+
+            //remove_list(a, node->arcs)
             if(a == node->arcs)
                 node->arcs = a->next;
-            else
-                la->next = a->next, a = la;
+            else {
+                lasta->next = a->next;
+                a = lasta;
+            }
         }
 }
 /*e: function togo */
@@ -235,25 +247,29 @@ togo(Node *node)
 static bool
 vacuous(Node *node)
 {
-    Arc *la, *a;
+    Arc *a;
     bool vac = !(node->flags&PROBABLE);
+    /*s: [[vacuous()]] other locals */
+    Arc *a2;
+    /*e: [[vacuous()]] other locals */
 
     if(node->flags&READY)
         return node->flags&VACUOUS;
+
     node->flags |= READY;
 
     for(a = node->arcs; a; a = a->next)
         if(a->n && vacuous(a->n) && (a->r->attr&META))
-            a->flag |= TOGO;
+            a->remove = true;
         else
             vac = false;
     /*s: [[vacuous]] possibly undelete some arcs */
     /* if a rule generated arcs that DON'T go; no others from that rule go */
     for(a = node->arcs; a; a = a->next)
-        if(!(a->flag&TOGO))
-            for(la = node->arcs; la; la = la->next)
-                if((la->flag&TOGO) && (la->r == a->r)){
-                    la->flag &= ~TOGO;
+        if(!(a->remove))
+            for(a2 = node->arcs; a2; a2 = a2->next)
+                if((a2->remove) && (a2->r == a->r)){
+                    a2->remove = false;
                 }
     /*e: [[vacuous]] possibly undelete some arcs */
 
@@ -279,9 +295,11 @@ newnode(char *name)
     node->name = name;
     // call to timeof()! 
     node->time = timeof(name, false);
-    /*s: [[newnode()]] set flags of node */
-    node->flags = (node->time? PROBABLE : 0);
-    /*e: [[newnode()]] set flags of node */
+    node->flags = 0;
+    /*s: [[newnode()]] adjust flags of node */
+    if(node->time)
+        node->flags = PROBABLE;
+    /*e: [[newnode()]] adjust flags of node */
 
     node->arcs = nil;
     node->next = nil;
@@ -305,7 +323,7 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     a->stem = strdup(stem);
 
     a->next = nil;
-    a->flag = 0;
+    a->remove = false;
     /*s: [[newarc()]] set other fields */
     rcopy(a->match, match, NREGEXP);
     /*x: [[newarc()]] set other fields */
@@ -340,7 +358,7 @@ cyclechk(Node *n)
 {
     Arc *a;
 
-    if((n->flags&CYCLE) && n->arcs){
+    if((n->flags&CYCLE)){
         fprint(STDERR, "mk: cycle in graph detected at target %s\n", n->name);
         Exit();
     }
@@ -357,48 +375,49 @@ static void
 ambiguous(Node *n)
 {
     Arc *a;
-    Rule *r = nil;
-    Arc *la = nil;
-    bool bad = false;
+    Rule *master_rule = nil;
+    Arc *master_arc = nil;
+    bool error_reported = false;
 
     for(a = n->arcs; a; a = a->next){
         // recurse
         if(a->n)
             ambiguous(a->n);
 
-        // rules without any recipe do not generate ambiguity
-        if(*a->r->recipe == '\0') continue;
+        // arcs without any recipe do not generate ambiguity
+        if(empty_recipe(a->r)) 
+            continue;
         // else
 
-        // first rule with recipe (so no ambiguity)
-        if(r == nil) {
-            r = a->r;
-            la = a;
+        // first arc with a recipe (so no ambiguity)
+        if(master_rule == nil) {
+            master_rule = a->r;
+            master_arc = a;
         }
         else{
             /*s: [[ambiguous()]] give priority to simple rules over meta rules */
-            if(r->recipe != a->r->recipe){
-                if((r->attr&META) && !(a->r->attr&META)){
-                    la->flag |= TOGO;
-                    r = a->r;
-                    la = a;
-                } else if(!(r->attr&META) && (a->r->attr&META)){
-                    a->flag |= TOGO;
+            if(master_rule->recipe != a->r->recipe){
+                if((master_rule->attr&META) && !(a->r->attr&META)){
+                    master_arc->remove = true;
+                    master_rule = a->r;
+                    master_arc = a;
+                } else if(!(master_rule->attr&META) && (a->r->attr&META)){
+                    a->remove = true;
                     continue;
                 }
             }
             /*e: [[ambiguous()]] give priority to simple rules over meta rules */
-            if(r->recipe != a->r->recipe){
-                if(!bad){
+            if(master_rule->recipe != a->r->recipe){
+                if(!error_reported){
                     fprint(STDERR, "mk: ambiguous recipes for %s:\n", n->name);
-                    bad = true;
-                    trace(n->name, la);
+                    error_reported = true;
+                    trace(n->name, master_arc);
                 }
                 trace(n->name, a);
             }
         }
     }
-    if(bad)
+    if(error_reported)
         Exit();
     /*s: [[ambiguous()]] get rid of all skipped arcs */
     togo(n);

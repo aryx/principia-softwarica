@@ -26,7 +26,7 @@ dumpa(char *s, Arc *a)
     char buf[1024];
 
     Bprint(&bout, "%sArc@%p: n=%p r=%p flag=0x%x stem='%s'",
-        s, a, a->n, a->r, a->flag, a->stem);
+        s, a, a->n, a->r, a->remove, a->stem);
     if(a->prog)
         Bprint(&bout, " prog='%s'", a->prog);
     Bprint(&bout, "\n");

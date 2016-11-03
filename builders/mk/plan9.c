@@ -496,6 +496,7 @@ bulkmtime(char *dir)
     }
     if(symlook(sym, S_BULKED, 0))
         return;
+    // else
     ss = strdup(sym);
     symlook(ss, S_BULKED, (void*)ss);
     dirtime(s, buf);
@@ -507,19 +508,21 @@ ulong
 mkmtime(char *name, bool force)
 {
     Dir *d;
-    char buf[4096];
     ulong t;
     /*s: [[mkmtime]] locals */
     //char *s, *ss;
     //char carry;
     //Symtab *sym;
+    /*x: [[mkmtime]] locals */
+    char buf[4096];
     /*e: [[mkmtime]] locals */
 
+    /*s: [[mkmtime()]] bulk dir optimisation */
+    /*s: [[mkmtime()]] cleanup name */
     strecpy(buf, buf + sizeof buf - 1, name);
     cleanname(buf);
     name = buf;
-
-    /*s: [[mkmtime()]] bulk dir optimisation */
+    /*e: [[mkmtime()]] cleanup name */
     USED(force);
     //TODO    s = utfrrune(name, '/');
     //TODO    if(s == name)
@@ -530,7 +533,7 @@ mkmtime(char *name, bool force)
     //TODO        *s = '\0';
     //TODO    }else{
     //TODO        ss = nil;
-    //TODO        carry = 0;
+    //TODO        carry = '\0';
     //TODO    }
     //TODO    if(carry)
     //TODO        *s = carry;
@@ -543,10 +546,11 @@ mkmtime(char *name, bool force)
     //TODO     return 0;
     //TODO }
     /*e: [[mkmtime()]] bulk dir optimisation */
-
-    if((d = dirstat(name)) == nil)
+    d = dirstat(name);
+    /*s: [[mkmtime()]] check if inexistent file */
+    if(d == nil)
         return 0;
-
+    /*e: [[mkmtime()]] check if inexistent file */
     t = d->mtime;
     free(d);
 

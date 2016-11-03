@@ -8,6 +8,7 @@ match(char *name, char *template,    char *stem)
     Rune r;
     int n;
 
+    // Before the pattern character
     while(*name && *template){
         n = chartorune(&r, template);
         if (PERCENT(r))
@@ -16,14 +17,16 @@ match(char *name, char *template,    char *stem)
             if(*name++ != *template++)
                 return false;
     }
+
+    // On pattern character
     if(!PERCENT(*template))
         return false;
-
     // how many characters % is matching
     n = strlen(name) - strlen(template+1);
-
     if (n < 0)
         return false;
+
+    // After the pattern character
     if (strcmp(template+1, name+n))
         return false;
 

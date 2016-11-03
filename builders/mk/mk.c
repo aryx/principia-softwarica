@@ -18,11 +18,11 @@ mk(char *target)
     int res;
 
     /*s: [[mk()]] initialisation */
-    nrep();		/* it can be updated dynamically */
-    /*x: [[mk()]] initialisation */
     nproc();	/* it can be updated dynamically */
     /*x: [[mk()]] initialisation */
     runerrs = 0;
+    /*x: [[mk()]] initialisation */
+    nrep();		/* it can be updated dynamically */
     /*e: [[mk()]] initialisation */
 
     root = graph(target);

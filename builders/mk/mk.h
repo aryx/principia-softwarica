@@ -116,6 +116,13 @@ enum Rule_attr {
 };
 /*e: enum Rule_attr */
 
+/*s: macro empty_recipe */
+#define empty_recipe(r) (!r->recipe || !*r->recipe)
+/*e: macro empty_recipe */
+/*s: macro empty_prereqs */
+#define empty_prereqs(r) (!r->prereqs || !r->prereqs->s || !*r->prereqs->s)
+/*e: macro empty_prereqs */
+
 /*s: constant NREGEXP */
 #define		NREGEXP		10
 /*e: constant NREGEXP */
@@ -132,8 +139,7 @@ struct Arc
     // option<ref_own<string>>, what '%' matched?
     char		*stem;
     /*x: [[Arc]] other fields */
-    // bool (TOGO)
-    short flag;
+    short remove;
     /*x: [[Arc]] other fields */
     char		*match[NREGEXP];
     /*x: [[Arc]] other fields */
@@ -147,11 +153,6 @@ struct Arc
     /*e: [[Arc]] extra fields */
 };
 /*e: struct Arc */
-
-/*s: constant TOGO */
-/* Arc.flag */
-#define		TOGO		true
-/*e: constant TOGO */
 
 /*s: struct Node */
 struct Node
@@ -187,9 +188,9 @@ enum Node_flag {
     /*x: [[Node_flag]] cases */
     CYCLE      = 0x0002,
     /*x: [[Node_flag]] cases */
-    VACUOUS    = 0x0200,
-    /*x: [[Node_flag]] cases */
     PROBABLE   = 0x0100,
+    /*x: [[Node_flag]] cases */
+    VACUOUS    = 0x0200,
     /*x: [[Node_flag]] cases */
     READY      = 0x0004,
     /*x: [[Node_flag]] cases */
@@ -280,8 +281,6 @@ enum Namespace {
     /*x: [[Sxxx]] cases */
     S_NODE,		/* target name -> node */
     /*x: [[Sxxx]] cases */
-    S_TIME,		/* file -> time */
-    /*x: [[Sxxx]] cases */
     S_WESET,	/* variable; we set in the mkfile */
     /*x: [[Sxxx]] cases */
     S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
@@ -291,6 +290,8 @@ enum Namespace {
     S_AGG,		/* aggregate -> time */
     /*x: [[Sxxx]] cases */
     S_BITCH,	/* bitched about aggregate not there */
+    /*x: [[Sxxx]] cases */
+    S_TIME,		/* file -> time */
     /*x: [[Sxxx]] cases */
     S_BULKED,	/* we have bulked this dir */
     /*e: [[Sxxx]] cases */
