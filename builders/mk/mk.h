@@ -35,6 +35,7 @@ struct Word
     // ref_own<string>
     char 		*s;
 
+    // Extra
     struct Word 	*next;
 };
 /*e: struct Word */
@@ -148,7 +149,7 @@ struct Arc
     
     //Extra
     /*s: [[Arc]] extra fields */
-    // list<ref_own<arc> (head = Node.prereqs)
+    // list<ref_own<arc> (head = Node.arcs)
     struct Arc	*next;
     /*e: [[Arc]] extra fields */
 };

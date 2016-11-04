@@ -226,18 +226,18 @@ static void
 togo(Node *node)
 {
     Arc *a; 
-    Arc *lasta = nil;
+    Arc *preva = nil;
 
     /* delete them now */
-    for(a = node->arcs; a; lasta = a, a = a->next)
+    for(a = node->arcs; a; preva = a, a = a->next)
         if(a->remove){
 
             //remove_list(a, node->arcs)
             if(a == node->arcs)
                 node->arcs = a->next;
             else {
-                lasta->next = a->next;
-                a = lasta;
+                preva->next = a->next;
+                a = preva;
             }
         }
 }
@@ -323,8 +323,9 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     a->stem = strdup(stem);
 
     a->next = nil;
-    a->remove = false;
     /*s: [[newarc()]] set other fields */
+    a->remove = false;
+    /*x: [[newarc()]] set other fields */
     rcopy(a->match, match, NREGEXP);
     /*x: [[newarc()]] set other fields */
     a->prog = r->prog;

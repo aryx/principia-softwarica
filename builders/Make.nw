@@ -1162,7 +1162,6 @@ hello: $OBJS
 
 %.5: %.c
     5c -c $stem.c
-
 @
 %$
 \l CFLAGS=-g -x -...and then can use in many rules CFLAGS. easier to modify too.
@@ -2706,7 +2705,7 @@ symlook(char *sym, int space, void *install)
 %ocaml: just use Hashtbl.find
 %compiler: called lookup in 5c (and 5a)
 \t define symexists() that uses install == nil, cleaner?
-\t  and return bool
+\t  and return bool? #define symexists(sym, space) symlook(sym, space, nil) != nil
 
 
 
@@ -2904,6 +2903,7 @@ struct Word
     // ref_own<string>
     char 		*s;
 
+    // Extra
     struct Word 	*next;
 };
 @
@@ -2966,7 +2966,6 @@ addw(Word *w, char *s)
     lw->next = newword(s);
 }
 @
-\t mv in words.c ?
 %ocaml-found: but can not use Set, because then order
 % may not be the order of insertion, and it is important
 % since $prereq must be the same than the order in the prereq in the mkfile.
@@ -3078,6 +3077,7 @@ struct Rule
 \t recipe can also just be '\0' ? ugly.
 \t  can be nil? sometimes seems assume cannot, and sometimes can. fix it!
 \t  according to rbody(), it cant be nil, at least it is empty string
+\t see empty_recipe() macro
 
 [[Rule.prereqs]] contains a list of words, hence the use of a pointer
 to a [[Word]] (I described [[Word]] in Section~\ref{sec:word}).
@@ -3188,7 +3188,7 @@ except period or slash
 \end{itemize}
 \t example of filename would match &.c but not percent.c and vice versa
 \t example why you want to use & in a meta rule, because using percent
-\t  would lead to bugs?
+\t  would lead to bugs? [[&: %.c]] is useful for example
  
 In addition to being stored in [[metarules]] instead of [[rules]],
 a meta rule contains also the [[META]] {\em rule attribute} in 
@@ -3217,7 +3217,7 @@ enum Rule_attr {
 % @
 % "the targets are considered to have been updated even if recipe did not do so"
 
-\l META is for % metarule (and also regexp rules :R:)
+\l META is for metarule (and also regexp rules :R:)
 
 %chunks: 
 I will describe gradually the other rule attributes in the following chapters.
@@ -3328,7 +3328,7 @@ such information in the symbol table.
 <<[[Sxxx]] cases>>=
 S_TARGET,		/* target -> rules */ 
 @
-%old: rule,  but really it is -> rules
+%old: was 'target -> rule' but really it is -> rules
 %ocaml: build hash in separate phase
 
 In fact, as I mentioned in Section~\ref{sec:master-rule}, [[mk]]
@@ -3370,6 +3370,7 @@ if(!reuse){
 @
 %old: rr = symlook(head, S_TARGET, r)->u.ptr;
 \t why add in S_TARGET if meta rule? anyway skipped after in applyrules
+\t  and this forces some extra check in applyrules actually
 
 Remember from Section~\ref{sec:symlook} that the last parameter
 of [[symlook()]], called [[install]] (and here set to the argument [[r]]),
@@ -3675,7 +3676,7 @@ The head of the list of arcs of a node is stored in [[Node.arcs]],
 and the arcs are chained together with the following field:
 
 <<[[Arc]] extra fields>>=
-// list<ref_own<arc> (head = Node.prereqs)
+// list<ref_own<arc> (head = Node.arcs)
 struct Arc	*next;
 @
 
@@ -3721,7 +3722,6 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     a->stem = strdup(stem);
 
     a->next = nil;
-    a->remove = false;
     <<[[newarc()]] set other fields>>
     return a;
 }
@@ -3744,6 +3744,7 @@ the graph of dependencies: a rule (and its recipe),
 a list of nodes to update, and the value of special
 variables such as [[$target]], [[$prereq]], or
 [[$stem]]:
+
 
 <<struct Job>>=
 struct Job
@@ -3772,7 +3773,7 @@ struct Job
 \l why need targets? info is already in node. To ease envupd?
 \l why so short field names suddenly? avoid confusion with the one in Rule? meh
 \l not owned, ref to words in rules or the graph
-
+%$
 
 % reference rule, node (so Arc) (and Word but less important)
 
@@ -3824,7 +3825,7 @@ newjob(Rule *r, Node *nlist, char *stem, char **match,
 @
 %old: tar -> targets
 \t rename fields, aspectize setting certain fields
-
+\t npre, atar, p, t, rename all fields and parameters
 
 This job can then be added in the job queue, which is stored in the
 global [[jobs]]:
@@ -4302,7 +4303,7 @@ else {
 @
 \l why not call addrule() directly? why addrules? because addrules set target1
 \l confusing that tail is actually the head of the prereqs
-\t tail -> prereqs, t -> eprereqs, head -> targets
+\t tail -> prereqs, t -> lastprereqs, head -> targets
 
 You can see in the code above a few calls to functions 
 I described in Chapter~\ref{chap:core-ds},
@@ -4560,7 +4561,7 @@ eof:
 }
 @
 \l int -> Rune?
-%old: I introduced and use resetbuf(), isempty(), and bufcontent()
+%pad: I introduced and use resetbuf(), isempty(), and bufcontent()
 %ocaml: use Buffer too
 \l superior or equal zero here? why diff with escapetoken later?
 
@@ -4756,7 +4757,7 @@ if (!isempty(buf)) {
      return true;
  }
 @
-%old: I now use empty()
+%pad: I now use empty()
 \n like '\n' case 
 
 
@@ -5046,7 +5047,8 @@ if(*((*h)->s) == '\0' && sep != '<' && sep != '|') {
     Exit();
 }
 @
-%pad: I added the (or target) in error message and replaced w by *h
+%pad: I added the (or target) in error message 
+%old: w -> *h (less clear, but avoid introduce an extra local var)
 \l explain pipe, advanced feature
 \l could have an if sep == '=' and give precise error message for the 2 cases
 
@@ -5215,10 +5217,10 @@ stow(char *s)
     return head;
 }
 @
-%old: I renamed w to lastw
+%old: w -> lastw
 \l return always a list with 1 element at least (which can be the empty string)
-\t rename newword -> new_singleword
-\t rename nextword to nextwords?
+\t rename newword() -> new_singleword()
+\t rename nextword() to nextwords()?
 %ocaml: expanding is done later in eval.ml instead, but 
 % the splitting is done at lexing/parsing time.
 
@@ -5299,9 +5301,8 @@ out:
 }
 @
 %$
-%old: I renamed tail to lastw
-%old: use empty()
-%old: b -> buf
+%old: tail -> lastw, b -> buf
+%pad: use empty()
 
 
 The presence of the [[restart]] label above, as well as the local
@@ -5595,7 +5596,7 @@ if(!isempty(buf)){
     resetbuf(buf);
 }
 @
-%old: use isempty() and resetuf
+%pad: use isempty() and resetuf()
 %ocaml: I actually forbid that if variable is not a scalar
 
 \begin{figure}[!]\centering
@@ -5653,7 +5654,7 @@ if(head){
 }
 @
 %ocaml: I actually forbid that if variable is not a scalar
-%old: use resetbuf()
+%pad: use resetbuf()
 
 
 Finally, if a variable is followed directly by non-space
@@ -6140,7 +6141,7 @@ when the special character returned by [[rhead()]] is [['=']].
 <<[[parse()]] other locals>>=
 bool set = true;
 @
-%old: not set initially, but clearer that way
+%pad: not set initially, but clearer that way
 
 <<[[parse()]] switch rhead cases>>=
 case '=':
@@ -6363,7 +6364,7 @@ graph(char *target)
     return root;
 }
 @
-%pad: node -> root, clearer I think
+%old: node -> root, clearer I think
 
 I will present the code to check the graph in Section~\ref{sec:check-graph}.
 
@@ -6412,12 +6413,12 @@ applyrules(char *target, char *cnt)
     return node;
 }
 @
+%old: a -> lasta, far clearer!
+\l confusing again to use head, this time for head of arcs. head -> arcs?
 %dead? bug? node->arcs should be nil no at this point? assert?
 %    a->next = node->arcs;
 %dead? bug? useless, it is never used anyway
 %    head.n = nil;
-%old: a -> lasta, far clearer!
-\l confusing again to use head, this time for head of arcs.
 %old: in comment in the original code!
 %/*		if(r->attr&VIR)
 % *			node->flags |= VIRTUAL;
@@ -7397,6 +7398,9 @@ short remove;
 % #define		TOGO		true
 % @
 
+<<[[newarc()]] set other fields>>=
+a->remove = false;
+@
 
 \subsubsection{Adjusting the graph, [[togo()]]}
 
@@ -7412,23 +7416,23 @@ static void
 togo(Node *node)
 {
     Arc *a; 
-    Arc *lasta = nil;
+    Arc *preva = nil;
 
     /* delete them now */
-    for(a = node->arcs; a; lasta = a, a = a->next)
+    for(a = node->arcs; a; preva = a, a = a->next)
         if(a->remove){
 
             //remove_list(a, node->arcs)
             if(a == node->arcs)
                 node->arcs = a->next;
             else {
-                lasta->next = a->next;
-                a = lasta;
+                preva->next = a->next;
+                a = preva;
             }
         }
 }
 @
-%old: la -> lasta
+%old: la -> preva
 %pad: I orginally added a warning, but actually we should not!
 %            fprint(STDERR, "mk: vacuous arc found %s->%s\n", 
 %                     node->name, a->n->name);
@@ -7498,7 +7502,7 @@ PROBABLE   = 0x0100,
 @
 \l not very clear name, but means file exist so probably a good node
 
-[[mk]] marks first nodes as [[PROBABLE]] when they contain
+[[mk]] marks nodes as [[PROBABLE]] when they contain
 an existing file, which can be checked by looking at the
 modification time of the file in [[newnode()]]:
 
@@ -7607,7 +7611,7 @@ for(a = node->arcs; a; a = a->next)
                 a2->remove = false;
             }
 @
-\l when this matter?
+\t when this matter? example?
 
 
 
@@ -7725,12 +7729,6 @@ mk(char *target)
 
 \section{[[clrmade()]]}
 
-<<function MADESET>>=
-#define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
-@
-% keep flags as they were, except for the made stuff
-%ocaml: use a separate field than the other node attributes
-
 <<function clrmade>>=
 void
 clrmade(Node *n)
@@ -7747,6 +7745,14 @@ clrmade(Node *n)
 @
 %bug? DAG? should avoid repetitive work too there?
 %ocaml: no need, do that in newnode() thx to another field.
+
+<<function MADESET>>=
+#define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
+@
+% keep flags as they were, except for the made stuff
+%ocaml: use a separate field than the other node attributes
+
+
 
 \section{[[work()]]}
 

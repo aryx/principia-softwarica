@@ -87,6 +87,4 @@ addw(Word *w, char *s)
 }
 /*e: function addw */
 
-
-
 /*e: mk/word.c */
