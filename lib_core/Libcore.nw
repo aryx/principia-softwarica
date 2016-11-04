@@ -27,6 +27,7 @@
 %thx to this manual, better understand libc:
 % - TODO errno global
 % - SEMI malloc vs brk internals
+% - floor and ceil :) I never remembered
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -354,6 +355,8 @@ union FPdbleword
 
 \subsubsection{ASCII characters}
 
+% type (unsigned) char
+
 <<type Ctype_flag>>=
 #define	_U	01 // upper
 #define	_L	02 // lower
@@ -446,12 +449,34 @@ tolower(int c)
 
 \subsubsection{Runes}
 
+% aka code points in unicode terminology? 32 bits integers.
+% or rune is already smaller?
 
 % char =~ byte
 
 <<type Rune>>=
 typedef uint        Rune;
 @
+
+<<constant Runemax>>=
+Runemax     = 0x10FFFF, /* 21-bit rune */
+@
+% see limit at https://en.wikipedia.org/wiki/Code_point
+
+<<constant Runemask>>=
+Runemask    = 0x1FFFFF, /* bits used by runes (see grep) */
+@
+
+\subsubsection{UTF}
+
+% utf(6)
+% rune(2)
+
+% typedef char* utf; ?
+
+% diff with Rune? why we have some utfxxx and runexxx functions/?
+% utf-8 is compact encoding of unicode characters (runes).
+
 
 <<constant UTFmax>>=
 UTFmax      = 4,        /* maximum bytes per rune */
@@ -462,19 +487,10 @@ Runesync    = 0x80,     /* cannot represent part of a UTF sequence (<) */
 <<constant Runeself>>=
 Runeself    = 0x80,     /* rune and UTF sequences are the same (<) */
 @
+
 <<constant Runeerror>>=
 Runeerror   = 0xFFFD,   /* decoding error in UTF */
 @
-<<constant Runemax>>=
-Runemax     = 0x10FFFF, /* 21-bit rune */
-@
-<<constant Runemask>>=
-Runemask    = 0x1FFFFF, /* bits used by runes (see grep) */
-@
-
-\subsubsection{UTF}
-
-% diff with Rune? why we have some utfxxx and runexxx functions/
 
 \section{Complex types}
 
@@ -735,6 +751,9 @@ struct Tm {
 % This is why lots of \plan programs have duplicate code to
 % represent hash table, growing arrays, lists, queues, etc.
 
+% array and pointers are enough to encode most things
+% (but because array is a form of pointer, really it's pointers)
+
 % No collection but with arrays, pointers, structures, and union, flexible,
 % can do a lot.
 
@@ -913,7 +932,8 @@ memset(void *ap, int c, ulong n)
 % memset(,255,) and memset(,-1,) should be equivalent.
 % Why pass an int and not a char? Because passing 32 bits arguments
 % is faster! Accessing full words is faster.
-% This is why not optimal code below, and real memset is written in
+
+% This is why not optimal code above, and real memset is written in
 % assembly and tries to move by blocks of 32 bits chunk, not 
 % 8 bits.
 
@@ -1033,6 +1053,7 @@ memchr(void *ap, int c, ulong n)
 // starting point for the heap, after the text, data, and bss.
 static  char    *bloc = { end };
 @
+% [[end]], see \book{Linker}
 
 <<function sbrk>>=
 void*
@@ -1047,6 +1068,8 @@ sbrk(ulong n)
     return (void*)bl;
 }
 @
+% classic idiom x + Y & ~Y.
+% use macro? roundup?
 
 <<enum _anon_ (9sys/sbrk.c)>>=
 enum
@@ -1331,17 +1354,18 @@ free(void *v)
 
 \chapter{Strings}
 
-%todo: rename strcmp, or at least have
-% a string_equal, and most of the time rewrite
-% strncmp as !string_equal, far more readable.
-% look at go or rust stdlibs
+%todo: introduce a string_equal, and most of the time rewrite
+% strcmp as !string_equal; far more readable!
+% look at go or rust stdlibs for inspiration for good names.
 
-% there is also a libstring/ but seems unused.
+% Note that there is also a libstring/ but seems unused.
 
 %\section{Conversions}
 % see Mathematics section and Parsing subsections
 
 \section{Basics}
+
+% C strings. end of string marked with null character.
 
 % copy, search, len, etc.
 
@@ -1428,7 +1452,7 @@ strcpy(char *s1, char *s2)
     return os1;
 }
 @
-
+% ???
 
 % used by strcpy and clones
 <<function memccpy>>=
@@ -1459,8 +1483,8 @@ strdup(char *s)
     char *ns;
 
     ns = malloc(strlen(s) + 1);
-    if(ns == 0)
-        return 0;
+    if(ns == nil)
+        return nil;
     setmalloctag(ns, getcallerpc(&s));
 
     return strcpy(ns, s);
@@ -1577,6 +1601,8 @@ _runebsearch(Rune c, Rune *t, int n, int ne)
 @
 % >> >> 
 
+% assume str can be utf string!
+
 <<function chartorune>>=
 int
 chartorune(Rune *rune, char *str)
@@ -1629,6 +1655,7 @@ bad:
 @
 % >> >> >> >> >>
 
+% should rename runetobytes or runetoutf
 <<function runetochar>>=
 int
 runetochar(char *str, Rune *rune)
@@ -1677,6 +1704,17 @@ runetochar(char *str, Rune *rune)
 
 \subsection{Basics}
 
+<<function runestrlen>>=
+long
+runestrlen(Rune *s)
+{
+
+    return runestrchr(s, 0) - s;
+}
+@
+% this time I prefer 0 not '\0' because runes are really an
+% array of integers (not chars)
+
 <<function runestrcpy>>=
 Rune*
 runestrcpy(Rune *s1, Rune *s2)
@@ -1710,14 +1748,6 @@ runestrcmp(Rune *s1, Rune *s2)
 }
 @
 
-<<function runestrlen>>=
-long
-runestrlen(Rune *s)
-{
-
-    return runestrchr(s, 0) - s;
-}
-@
 
 <<function runestrchr>>=
 Rune*
@@ -1735,7 +1765,7 @@ runestrchr(Rune *s, Rune c)
     while(c1 = *s++)
         if(c1 == c0)
             return s-1;
-    return 0;
+    return nil;
 }
 @
 
@@ -1749,8 +1779,8 @@ runestrdup(Rune *s)
     Rune *ns;
 
     ns = malloc(sizeof(Rune)*(runestrlen(s) + 1));
-    if(ns == 0)
-        return 0;
+    if(ns == nil)
+        return nil;
     setmalloctag(ns, getcallerpc(&s));
 
     return runestrcpy(ns, s);
@@ -1794,15 +1824,14 @@ runestrstr(Rune *s1, Rune *s2)
                 break;
         }
     }
-    return 0;
+    return nil;
 }
 @
 
 
 \section{UTF}
 
-
-
+% use typedef utf here? utf* s?
 <<function utflen>>=
 int
 utflen(char *s)
@@ -1815,7 +1844,7 @@ utflen(char *s)
     for(;;) {
         c = *(uchar*)s;
         if(c < Runeself) {
-            if(c == 0)
+            if(c == '\0')
                 return n;
             s++;
         } else
@@ -1824,7 +1853,10 @@ utflen(char *s)
     }
 }
 @
+% strlen will not work on utf char?
 
+% look if a character in a set of chars in s (can be utf chars)
+% is equal to the rune C
 
 <<function utfrune>>=
 char*
@@ -1841,7 +1873,7 @@ utfrune(char *s, long c)
         c1 = *(uchar*)s;
         if(c1 < Runeself) { /* one byte rune */
             if(c1 == 0)
-                return 0;
+                return nil;
             if(c1 == c)
                 return s;
             s++;
@@ -1854,8 +1886,9 @@ utfrune(char *s, long c)
     }
 }
 @
+\t long c -> Rune c? why long?
 
-
+% look if rune C is inside utf sequence s
 <<function utfrrune>>=
 char*
 utfrrune(char *s, long c)
@@ -1885,6 +1918,7 @@ utfrrune(char *s, long c)
     }
 }
 @
+\t utfr ?? r stands for?
 
 \section{Formatted Output}
 
@@ -2002,11 +2036,14 @@ enum Seek_cursor {
 % sysopen(), sysclose(), sysread(), syswrite(), sysseek(), etc
 % file, directory, namespace
 
+% why pread? does seek and read at the same time, so atomic,
+% which is useful for servers.
+
 \section{[[read()]], [[write()]]}
 
 <<function read>>=
 long
-read(int fd, void *buf, long n)
+read(fdt fd, void *buf, long n)
 {
     return pread(fd, buf, n, -1LL);
 }
@@ -2014,7 +2051,7 @@ read(int fd, void *buf, long n)
 
 <<function write>>=
 long
-write(int fd, void *buf, long n)
+write(fdt fd, void *buf, long n)
 {
     return pwrite(fd, buf, n, -1LL);
 }
@@ -2024,7 +2061,7 @@ write(int fd, void *buf, long n)
 
 <<function readn>>=
 long
-readn(int f, void *av, long n)
+readn(fdt f, void *av, long n)
 {
     char *a;
     long m, t;
@@ -2044,6 +2081,7 @@ readn(int f, void *av, long n)
 }
 @
 
+\t why need that? read not good?
 
 \chapter{Directory}
 
@@ -2104,7 +2142,8 @@ struct Dir {
 char*
 getwd(char *buf, int nbuf)
 {
-    int n, fd;
+    int n;
+    fdt fd;
 
     fd = open(".", OREAD);
     if(fd < 0)
@@ -2116,6 +2155,7 @@ getwd(char *buf, int nbuf)
     return buf;
 }
 @
+% how can be nil?
 
 \section{[[mktemp()]]}
 
@@ -2159,14 +2199,14 @@ mktemp(char *as)
 
 
 <<macro SEP>>=
-/*
- * In place, rewrite name to compress multiple /, eliminate ., and process ..
- */
-#define SEP(x)  ((x)=='/' || (x) == 0)
+#define SEP(x)  ((x)=='/' || (x) == '\0')
 @
 
 % called also from kernel! in fixdotdotname
 <<function cleanname>>=
+/*
+ * In place, rewrite name to compress multiple /, eliminate ., and process ..
+ */
 char*
 cleanname(char *name)
 {
@@ -2268,7 +2308,7 @@ cleanname(char *name)
 int
 access(char *name, int mode)
 {
-    int fd;
+    fdt fd;
     Dir *db;
     static char omode[] = {
         0,
@@ -2296,7 +2336,9 @@ access(char *name, int mode)
     return -1;
 }
 @
-
+\t bad to return 0 when can actually access.
+\t at least put errorneg1 type
+\t but really should return a bool
 
 \section{Path manipulation}
 
@@ -2398,10 +2440,10 @@ int
 getpid(void)
 {
     char b[20];
-    int f;
+    fdt f;
 
     memset(b, 0, sizeof(b));
-    f = open("#c/pid", 0);
+    f = open("#c/pid", OREAD);
     if(f >= 0) {
         read(f, b, sizeof(b));
         close(f);
@@ -2418,7 +2460,7 @@ getppid(void)
     int f;
 
     memset(b, 0, sizeof(b));
-    f = open("/dev/ppid", 0);
+    f = open("/dev/ppid", OREAD);
     if(f >= 0) {
         read(f, b, sizeof(b));
         close(f);
@@ -2442,6 +2484,7 @@ lock(Lock *l)
 {
     if(ainc(&l->key) == 1)
         return; /* changed from 0 -> 1: we hold lock */
+
     /* otherwise wait in kernel */
     while(semacquire(&l->sem, 1) < 0){
         /* interrupted; try again */
@@ -2460,16 +2503,17 @@ unlock(Lock *l)
 @
 
 <<function canlock>>=
-int
+bool
 canlock(Lock *l)
 {
     if(ainc(&l->key) == 1)
-        return 1;   /* changed from 0 -> 1: success */
+        return true;   /* changed from 0 -> 1: success */
+
     /* Undo increment (but don't miss wakeup) */
     if(adec(&l->key) == 0)
-        return 0;   /* changed from 1 -> 0: no contention */
+        return false;   /* changed from 1 -> 0: no contention */
     semrelease(&l->sem, 1);
-    return 0;
+    return false;
 }
 @
 
@@ -2480,6 +2524,7 @@ canlock(Lock *l)
 struct QLock {
     Lock    lock;
     int locked;
+
     QLp *head;
     QLp     *tail;
 };
@@ -2488,6 +2533,7 @@ struct QLock {
 <<type QLp>>=
 struct QLp {
     int inuse;
+
     QLp *next;
     char    state;
 };
@@ -2500,6 +2546,7 @@ struct RWLock {
     Lock    lock;
     int readers;    /* number of readers */
     int writer;     /* number of writers */
+
     QLp *head;      /* list of waiting processes */
     QLp *tail;
 };
@@ -2510,6 +2557,7 @@ struct RWLock {
 <<type Rendez>>=
 struct Rendez {
     QLock   *l;
+
     QLp *head;
     QLp *tail;
 };
@@ -2543,6 +2591,7 @@ typedef long    jmp_buf[2];
 struct Waitmsg {
  int	pid;		/* of loved one */
  ulong	time[3];	/* of loved one & descendants */
+ // ref_own?<string>?
  char	*msg;
 };
 @
@@ -2553,7 +2602,8 @@ Waitmsg*
 wait(void)
 {
     int n, l;
-    char buf[512], *fld[5];
+    char buf[512];
+    char *fld[5];
     Waitmsg *w;
 
     n = await(buf, sizeof buf-1);
@@ -2583,7 +2633,8 @@ int
 waitpid(void)
 {
     int n;
-    char buf[512], *fld[5];
+    char buf[512];
+    char *fld[5];
 
     n = await(buf, sizeof buf-1);
     if(n <= 0)
@@ -2604,7 +2655,8 @@ waitpid(void)
 char*
 getenv(char *name)
 {
-    int r, f;
+    int r;
+    fdt f;
     long s;
     char *ans;
     char *p, *ep, ename[100];
@@ -2640,7 +2692,7 @@ getenv(char *name)
 int
 putenv(char *name, char *val)
 {
-    int f;
+    fdt f;
     char ename[100];
     long s;
 
@@ -2687,7 +2739,8 @@ int
 postnote(int group, int pid, char *note)
 {
     char file[128];
-    int f, r;
+    fdt f;
+    int r;
 
     switch(group) {
     case PNPROC:
@@ -6446,13 +6499,13 @@ fabs(double arg)
 %}
 %@
 
+% floor and ceiling in an appartment :)
 
 <<function floor>>=
 /*
  * floor and ceil-- greatest integer <= arg
  * (resp least >=)
  */
-
 double
 floor(double d)
 {
@@ -6494,6 +6547,8 @@ atoi(char *s)
 }
 @
 
+% support hexa, octal, decimal notations! handle whitespace,
+% handle signs!
 <<function atol>>=
 long
 atol(char *s)
@@ -6657,11 +6712,6 @@ Return:
 
 \subsection{Special numbers}
 
-<<constant NANEXP>>=
-#define NANEXP  (2047<<20)
-@
-% >>
-
 
 <<function NaN>>=
 double
@@ -6675,20 +6725,26 @@ NaN(void)
 }
 @
 
+<<constant NANEXP>>=
+#define NANEXP  (2047<<20)
+@
+% >>
+% what is the meaning of those numbers? wikipedia?
+
 <<constant NANMASK>>=
 #define NANMASK (2047<<20)
 @
 % >>
 
 <<function isNaN>>=
-int
+bool
 isNaN(double d)
 {
     FPdbleword a;
 
     a.x = d;
     if((a.hi & NANMASK) != NANEXP)
-        return 0;
+        return false;
     return !isInf(d, 0);
 }
 @
@@ -6714,19 +6770,19 @@ Inf(int sign)
 @
 
 <<function isInf>>=
-int
+bool
 isInf(double d, int sign)
 {
     FPdbleword a;
 
     a.x = d;
     if(a.lo != 0)
-        return 0;
+        return false;
     if(a.hi == NANEXP)
         return sign >= 0;
     if(a.hi == (NANEXP|NANSIGN))
         return sign <= 0;
-    return 0;
+    return false;
 }
 @
 
@@ -6766,7 +6822,7 @@ isInf(double d, int sign)
 double
 atof(char *cp)
 {
-    return strtod(cp, 0);
+    return strtod(cp, nil);
 }
 @
 
@@ -7368,6 +7424,8 @@ sqrt(double arg)
 \subsection{[[modf()]]}
 
 
+% used by floor, ceil
+
 <<function modf>>=
 double
 modf(double d, double *ip)
@@ -7897,6 +7955,7 @@ exp(double arg)
 @
 
 
+% called by fmod
 
 <<function ldexp>>=
 double
@@ -8190,8 +8249,9 @@ rerrstr(char *buf, uint nbuf)
 {
     char tmp[ERRMAX];
 
-    tmp[0] = 0;
+    tmp[0] = '\0';
     errstr(tmp, sizeof tmp);
+
     utfecpy(buf, buf+nbuf, tmp);
     errstr(tmp, sizeof tmp);
 }
@@ -8207,10 +8267,10 @@ werrstr(char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+ERRMAX, fmt, arg);
     va_end(arg);
-    errstr(buf, ERRMAX);
+    errstr(buf, sizeof buf);
 }
 @
-
+%old: ERRMAX -> sizeof tmp so more consistent with rerrstr
 
 \section{[[perror()]]}
 
@@ -8299,6 +8359,7 @@ abort(void)
 
 \section{[[sysfatal()]]}
 
+% wrapper around exits that can format; also use argv0 in output
 <<function sysfatal>>=
 void
 sysfatal(char *fmt, ...)
@@ -8707,12 +8768,14 @@ cputime(void)
 
 \chapter{Security}
 
+% ref_own<string> returned
+
 <<function getuser>>=
-char *
+char*
 getuser(void)
 {
     static char user[64];
-    int fd;
+    fdt fd;
     int n;
 
     fd = open("/dev/user", OREAD);
@@ -8723,7 +8786,7 @@ getuser(void)
     if(n <= 0)
         strcpy(user, "none");
     else
-        user[n] = 0;
+        user[n] = '\0';
     return user;
 }
 @
@@ -8834,6 +8897,8 @@ struct IOchunk {
 \section{Extra functions}
 
 \subsection{Strings}
+
+
 
 \chapter{Conclusion}
 
