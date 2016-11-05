@@ -742,6 +742,8 @@ struct Tm {
 
 %\subsection{Channels}
 
+\section{[[Fcall]]}
+
 
 \section{Collections}
 
@@ -1363,7 +1365,7 @@ free(void *v)
 %\section{Conversions}
 % see Mathematics section and Parsing subsections
 
-\section{Basics}
+\section{Plain C strings}
 
 % C strings. end of string marked with null character.
 
@@ -1409,6 +1411,23 @@ strchr(char *s, int c)
     return nil;
 }
 @
+
+<<function strrchr>>=
+char*
+strrchr(char *s, int c)
+{
+    char *r;
+
+    if(c == '\0')
+        return strchr(s, '\0');
+
+    r = 0;
+    while(s = strchr(s, c))
+        r = s++;
+    return r;
+}
+@
+
 
 %todo: rename temporarily to _strcmp and have a string_equal wrapper 
 % and refactor code using spatch!
@@ -1602,6 +1621,7 @@ _runebsearch(Rune c, Rune *t, int n, int ne)
 % >> >> 
 
 % assume str can be utf string!
+% so it is really more utftorune
 
 <<function chartorune>>=
 int
@@ -1769,6 +1789,21 @@ runestrchr(Rune *s, Rune c)
 }
 @
 
+<<function runestrrchr>>=
+Rune*
+runestrrchr(Rune *s, Rune c)
+{
+    Rune *r;
+
+    if(c == 0)
+        return runestrchr(s, 0);
+    r = 0;
+    while(s = runestrchr(s, c))
+        r = s++;
+    return r;
+}
+@
+
 
 
 
@@ -1888,7 +1923,7 @@ utfrune(char *s, long c)
 @
 \t long c -> Rune c? why long?
 
-% look if rune C is inside utf sequence s
+% look if rune C is inside utf sequence s, in reverse (hence strrchr below)
 <<function utfrrune>>=
 char*
 utfrrune(char *s, long c)
@@ -1918,7 +1953,33 @@ utfrrune(char *s, long c)
     }
 }
 @
-\t utfr ?? r stands for?
+
+
+
+<<function utfutf>>=
+/*
+ * Return pointer to first occurrence of s2 in s1,
+ * 0 if none
+ */
+char*
+utfutf(char *s1, char *s2)
+{
+    char *p;
+    long f, n1, n2;
+    Rune r;
+
+    n1 = chartorune(&r, s2);
+    f = r;
+    if(f <= Runesync)       /* represents self */
+        return strstr(s1, s2);
+
+    n2 = strlen(s2);
+    for(p=s1; p=utfrune(p, f); p+=n1)
+        if(strncmp(p, s2, n2) == 0)
+            return p;
+    return 0;
+}
+@
 
 \section{Formatted Output}
 
@@ -2132,9 +2193,138 @@ struct Dir {
 #define	STATMAX	65535U	/* max length of machine-independent stat structure */
 @
 
+
+<<function nulldir>>=
+void
+nulldir(Dir *d)
+{
+    memset(d, ~0, sizeof(Dir));
+    d->name = d->uid = d->gid = d->muid = "";
+}
+@
+
 \section{Syscalls: [[create()]], [[chdir()]], etc}
 
+\section{[[xxxfstat()]]}
+
+<<enum _anon_ (9sys/dirfstat.c)>>=
+enum
+{
+    DIRSIZE = STATFIXLEN + 16 * 4       /* enough for encoded stat buf + some reasonable strings */
+};
+@
+
+<<function dirfstat>>=
+Dir*
+dirfstat(int fd)
+{
+    Dir *d;
+    uchar *buf;
+    int n, nd, i;
+
+    nd = DIRSIZE;
+    for(i=0; i<2; i++){ /* should work by the second try */
+        d = malloc(sizeof(Dir) + BIT16SZ + nd);
+        if(d == nil)
+            return nil;
+        buf = (uchar*)&d[1];
+        n = fstat(fd, buf, BIT16SZ+nd);
+        if(n < BIT16SZ){
+            free(d);
+            return nil;
+        }
+        nd = GBIT16(buf);   /* upper bound on size of Dir + strings */
+        if(nd <= n){
+            convM2D(buf, n, d, (char*)&d[1]);
+            return d;
+        }
+        /* else sizeof(Dir)+BIT16SZ+nd is plenty */
+        free(d);
+    }
+    return nil;
+}
+@
+
+
+<<function dirfwstat>>=
+int
+dirfwstat(int fd, Dir *d)
+{
+    uchar *buf;
+    int r;
+
+    r = sizeD2M(d);
+    buf = malloc(r);
+    if(buf == nil)
+        return -1;
+    convD2M(d, buf, r);
+    r = fwstat(fd, buf, r);
+    free(buf);
+    return r;
+}
+@
+
 \section{[[xxxstat()]]}
+
+% those one take a name, not a fd
+% seems a bit redundant.
+
+<<enum _anon_ (9sys/dirstat.c)>>=
+enum
+{
+    DIRSIZE = STATFIXLEN + 16 * 4       /* enough for encoded stat buf + some reasonable strings */
+};
+@
+
+<<function dirstat>>=
+Dir*
+dirstat(char *name)
+{
+    Dir *d;
+    uchar *buf;
+    int n, nd, i;
+
+    nd = DIRSIZE;
+    for(i=0; i<2; i++){ /* should work by the second try */
+        d = malloc(sizeof(Dir) + BIT16SZ + nd);
+        if(d == nil)
+            return nil;
+        buf = (uchar*)&d[1];
+        n = stat(name, buf, BIT16SZ+nd);
+        if(n < BIT16SZ){
+            free(d);
+            return nil;
+        }
+        nd = GBIT16((uchar*)buf);   /* upper bound on size of Dir + strings */
+        if(nd <= n){
+            convM2D(buf, n, d, (char*)&d[1]);
+            return d;
+        }
+        /* else sizeof(Dir)+BIT16SZ+nd is plenty */
+        free(d);
+    }
+    return nil;
+}
+@
+
+
+<<function dirwstat>>=
+int
+dirwstat(char *name, Dir *d)
+{
+    uchar *buf;
+    int r;
+
+    r = sizeD2M(d);
+    buf = malloc(r);
+    if(buf == nil)
+        return -1;
+    convD2M(d, buf, r);
+    r = wstat(name, buf, r);
+    free(buf);
+    return r;
+}
+@
 
 \section{[[getwd()]]}
 
@@ -2366,11 +2556,195 @@ access(char *name, int mode)
 
 % see TM in core DS now
 
-
 \section{Syscalls: [[sleep()]], [[alarm()]], etc}
 
 \section{Time and day}
 % called Time-of-day, not sure  why
+
+
+\section{[[localtime()]]}
+
+<<function localtime>>=
+Tm*
+localtime(long tim)
+{
+    Tm *ct;
+    long t, *p;
+    int dlflag;
+
+    if(timezone.stname[0] == 0)
+        readtimezone();
+    t = tim + timezone.stdiff;
+    dlflag = 0;
+    for(p = timezone.dlpairs; *p; p += 2)
+        if(t >= p[0])
+        if(t < p[1]) {
+            t = tim + timezone.dldiff;
+            dlflag++;
+            break;
+        }
+    ct = gmtime(t);
+    if(dlflag){
+        strcpy(ct->zone, timezone.dlname);
+        ct->tzoff = timezone.dldiff;
+    } else {
+        strcpy(ct->zone, timezone.stname);
+        ct->tzoff = timezone.stdiff;
+    }
+    return ct;
+}
+@
+
+
+% to output time string
+
+<<function asctime>>=
+char*
+asctime(Tm *t)
+{
+    char *ncp;
+    static char cbuf[30];
+
+    strcpy(cbuf, "Thu Jan 01 00:00:00 GMT 1970\n");
+    ncp = &"SunMonTueWedThuFriSat"[t->wday*3];
+    cbuf[0] = *ncp++;
+    cbuf[1] = *ncp++;
+    cbuf[2] = *ncp;
+    ncp = &"JanFebMarAprMayJunJulAugSepOctNovDec"[t->mon*3];
+    cbuf[4] = *ncp++;
+    cbuf[5] = *ncp++;
+    cbuf[6] = *ncp;
+    ct_numb(cbuf+8, t->mday);
+    ct_numb(cbuf+11, t->hour+100);
+    ct_numb(cbuf+14, t->min+100);
+    ct_numb(cbuf+17, t->sec+100);
+    ncp = t->zone;
+    cbuf[20] = *ncp++;
+    cbuf[21] = *ncp++;
+    cbuf[22] = *ncp;
+    if(t->year >= 100) {
+        cbuf[24] = '2';
+        cbuf[25] = '0';
+    }
+    ct_numb(cbuf+26, t->year+100);
+    return cbuf;
+}
+@
+
+\section{[[time()]]}
+
+<<function time>>=
+long
+time(long *tp)
+{
+    vlong t;
+
+    t = nsec()/1000000000LL;
+    if(t == 0)
+        t = oldtime(0);
+    if(tp != nil)
+        *tp = t;
+    return t;
+}
+@
+
+<<function oldtime>>=
+/*
+ *  After a fork with fd's copied, both fd's are pointing to
+ *  the same Chan structure.  Since the offset is kept in the Chan
+ *  structure, the seek's and read's in the two processes can
+ *  compete at moving the offset around.  Hence the unusual loop
+ *  in the middle of this routine.
+ */
+static long
+oldtime(long *tp)
+{
+    char b[20];
+    static int f = -1;
+    int i, retries;
+    long t;
+
+    memset(b, 0, sizeof(b));
+    for(retries = 0; retries < 100; retries++){
+        if(f < 0)
+            f = open("/dev/time", OREAD|OCEXEC);
+        if(f < 0)
+            break;
+        if(seek(f, 0, 0) < 0 || (i = read(f, b, sizeof(b))) < 0){
+            close(f);
+            f = -1;
+        } else {
+            if(i != 0)
+                break;
+        }
+    }
+    t = atol(b);
+    if(tp)
+        *tp = t;
+    return t;
+}
+@
+
+\section{Conversions}
+
+<<function tm2sec>>=
+/*
+ * compute seconds since Jan 1 1970 GMT
+ * and convert to our timezone.
+ */
+long
+tm2sec(Tm *tm)
+{
+    long secs;
+    int i, yday, year, *d2m;
+
+    if(strcmp(tm->zone, "GMT") != 0 && timezone.stname[0] == 0)
+        readtimezone();
+    secs = 0;
+
+    /*
+     *  seconds per year
+     */
+    year = tm->year + 1900;
+    for(i = 1970; i < year; i++){
+        d2m = yrsize(i);
+        secs += d2m[0] * SEC2DAY;
+    }
+
+    /*
+     *  if mday is set, use mon and mday to compute yday
+     */
+    if(tm->mday){
+        yday = 0;
+        d2m = yrsize(year);
+        for(i=0; i<tm->mon; i++)
+            yday += d2m[i+1];
+        yday += tm->mday-1;
+    }else{
+        yday = tm->yday;
+    }
+    secs += yday * SEC2DAY;
+
+    /*
+     * hours, minutes, seconds
+     */
+    secs += tm->hour * SEC2HOUR;
+    secs += tm->min * SEC2MIN;
+    secs += tm->sec;
+
+    /*
+     * Only handles zones mentioned in /env/timezone,
+     * but things get too ambiguous otherwise.
+     */
+    if(strcmp(tm->zone, timezone.stname) == 0)
+        secs -= timezone.stdiff;
+    else if(strcmp(tm->zone, timezone.dlname) == 0)
+        secs -= timezone.dldiff;
+    if(secs < 0)
+        secs = 0;
+    return secs;
+}
+@
 
 
 \chapter{Concurrency}
@@ -2539,6 +2913,83 @@ struct QLp {
 };
 @
 
+
+<<function qlock>>=
+void
+qlock(QLock *q)
+{
+    QLp *p, *mp;
+
+    lock(&q->lock);
+    if(!q->locked){
+        q->locked = 1;
+        unlock(&q->lock);
+        return;
+    }
+
+
+    /* chain into waiting list */
+    mp = getqlp();
+    p = q->tail;
+    if(p == nil)
+        q->head = mp;
+    else
+        p->next = mp;
+    q->tail = mp;
+    mp->state = Queuing;
+    unlock(&q->lock);
+
+    /* wait */
+    while((*_rendezvousp)(mp, (void*)1) == (void*)~0)
+        ;
+    mp->inuse = 0;
+}
+@
+
+<<function qunlock>>=
+void
+qunlock(QLock *q)
+{
+    QLp *p;
+
+    lock(&q->lock);
+    if (q->locked == 0)
+        fprint(2, "qunlock called with qlock not held, from %#p\n",
+            getcallerpc(&q));
+    p = q->head;
+    if(p != nil){
+        /* wakeup head waiting process */
+        q->head = p->next;
+        if(q->head == nil)
+            q->tail = nil;
+        unlock(&q->lock);
+        while((*_rendezvousp)(p, (void*)0x12345) == (void*)~0)
+            ;
+        return;
+    }
+    q->locked = 0;
+    unlock(&q->lock);
+}
+@
+
+<<function canqlock>>=
+int
+canqlock(QLock *q)
+{
+    if(!canlock(&q->lock))
+        return 0;
+    if(!q->locked){
+        q->locked = 1;
+        unlock(&q->lock);
+        return 1;
+    }
+    unlock(&q->lock);
+    return 0;
+}
+@
+
+
+
 \section{Read-write locks}
 
 <<type RWLock>>=
@@ -2552,6 +3003,178 @@ struct RWLock {
 };
 @
 
+<<function rlock>>=
+void
+rlock(RWLock *q)
+{
+    QLp *p, *mp;
+
+    lock(&q->lock);
+    if(q->writer == 0 && q->head == nil){
+        /* no writer, go for it */
+        q->readers++;
+        unlock(&q->lock);
+        return;
+    }
+
+    mp = getqlp();
+    p = q->tail;
+    if(p == 0)
+        q->head = mp;
+    else
+        p->next = mp;
+    q->tail = mp;
+    mp->next = nil;
+    mp->state = QueuingR;
+    unlock(&q->lock);
+
+    /* wait in kernel */
+    while((*_rendezvousp)(mp, (void*)1) == (void*)~0)
+        ;
+    mp->inuse = 0;
+}
+@
+
+<<function canrlock>>=
+int
+canrlock(RWLock *q)
+{
+    lock(&q->lock);
+    if (q->writer == 0 && q->head == nil) {
+        /* no writer; go for it */
+        q->readers++;
+        unlock(&q->lock);
+        return 1;
+    }
+    unlock(&q->lock);
+    return 0;
+}
+@
+
+<<function runlock>>=
+void
+runlock(RWLock *q)
+{
+    QLp *p;
+
+    lock(&q->lock);
+    if(q->readers <= 0)
+        abort();
+    p = q->head;
+    if(--(q->readers) > 0 || p == nil){
+        unlock(&q->lock);
+        return;
+    }
+
+    /* start waiting writer */
+    if(p->state != QueuingW)
+        abort();
+    q->head = p->next;
+    if(q->head == 0)
+        q->tail = 0;
+    q->writer = 1;
+    unlock(&q->lock);
+
+    /* wakeup waiter */
+    while((*_rendezvousp)(p, 0) == (void*)~0)
+        ;
+}
+@
+
+<<function wlock>>=
+void
+wlock(RWLock *q)
+{
+    QLp *p, *mp;
+
+    lock(&q->lock);
+    if(q->readers == 0 && q->writer == 0){
+        /* noone waiting, go for it */
+        q->writer = 1;
+        unlock(&q->lock);
+        return;
+    }
+
+    /* wait */
+    p = q->tail;
+    mp = getqlp();
+    if(p == nil)
+        q->head = mp;
+    else
+        p->next = mp;
+    q->tail = mp;
+    mp->next = nil;
+    mp->state = QueuingW;
+    unlock(&q->lock);
+
+    /* wait in kernel */
+    while((*_rendezvousp)(mp, (void*)1) == (void*)~0)
+        ;
+    mp->inuse = 0;
+}
+@
+
+<<function canwlock>>=
+int
+canwlock(RWLock *q)
+{
+    lock(&q->lock);
+    if (q->readers == 0 && q->writer == 0) {
+        /* no one waiting; go for it */
+        q->writer = 1;
+        unlock(&q->lock);
+        return 1;
+    }
+    unlock(&q->lock);
+    return 0;
+}
+@
+
+<<function wunlock>>=
+void
+wunlock(RWLock *q)
+{
+    QLp *p;
+
+    lock(&q->lock);
+    if(q->writer == 0)
+        abort();
+    p = q->head;
+    if(p == nil){
+        q->writer = 0;
+        unlock(&q->lock);
+        return;
+    }
+    if(p->state == QueuingW){
+        /* start waiting writer */
+        q->head = p->next;
+        if(q->head == nil)
+            q->tail = nil;
+        unlock(&q->lock);
+        while((*_rendezvousp)(p, 0) == (void*)~0)
+            ;
+        return;
+    }
+
+    if(p->state != QueuingR)
+        abort();
+
+    /* wake waiting readers */
+    while(q->head != nil && q->head->state == QueuingR){
+        p = q->head;
+        q->head = p->next;
+        q->readers++;
+        while((*_rendezvousp)(p, 0) == (void*)~0)
+            ;
+    }
+    if(q->head == nil)
+        q->tail = nil;
+    q->writer = 0;
+    unlock(&q->lock);
+}
+@
+
+
 \section{Rendez-vous}
 
 <<type Rendez>>=
@@ -2562,6 +3185,102 @@ struct Rendez {
     QLp *tail;
 };
 @
+
+<<function rsleep>>=
+void
+rsleep(Rendez *r)
+{
+    QLp *t, *me;
+
+    if(!r->l)
+        abort();
+    lock(&r->l->lock);
+    /* we should hold the qlock */
+    if(!r->l->locked)
+        abort();
+
+    /* add ourselves to the wait list */
+    me = getqlp();
+    me->state = Sleeping;
+    if(r->head == nil)
+        r->head = me;
+    else
+        r->tail->next = me;
+    me->next = nil;
+    r->tail = me;
+
+    /* pass the qlock to the next guy */
+    t = r->l->head;
+    if(t){
+        r->l->head = t->next;
+        if(r->l->head == nil)
+            r->l->tail = nil;
+        unlock(&r->l->lock);
+        while((*_rendezvousp)(t, (void*)0x12345) == (void*)~0)
+            ;
+    }else{
+        r->l->locked = 0;
+        unlock(&r->l->lock);
+    }
+
+    /* wait for a wakeup */
+    while((*_rendezvousp)(me, (void*)1) == (void*)~0)
+        ;
+    me->inuse = 0;
+}
+@
+
+<<function rwakeup>>=
+int
+rwakeup(Rendez *r)
+{
+    QLp *t;
+
+    /*
+     * take off wait and put on front of queue
+     * put on front so guys that have been waiting will not get starved
+     */
+    
+    if(!r->l)
+        abort();
+    lock(&r->l->lock);
+    if(!r->l->locked)
+        abort();
+
+    t = r->head;
+    if(t == nil){
+        unlock(&r->l->lock);
+        return 0;
+    }
+
+    r->head = t->next;
+    if(r->head == nil)
+        r->tail = nil;
+
+    t->next = r->l->head;
+    r->l->head = t;
+    if(r->l->tail == nil)
+        r->l->tail = t;
+
+    t->state = Queuing;
+    unlock(&r->l->lock);
+    return 1;
+}
+@
+
+<<function rwakeupall>>=
+int
+rwakeupall(Rendez *r)
+{
+    int i;
+
+    for(i=0; rwakeup(r); i++)
+        ;
+    return i;
+}
+@
+
+
 
 \section{Coroutines}
 
@@ -2890,6 +3609,696 @@ notifier(void *v, char *s)
 #define	SG_RONLY	0040	/* read only */
 #define	SG_CEXEC	0100	/* detach on exec */
 @
+
+\section{Fileserver}
+
+\subsection{Dumping}
+% in appendix?
+
+
+<<constant QIDFMT>>=
+#define QIDFMT  "(%.16llux %lud %s)"
+@
+
+<<function fcallfmt>>=
+int
+fcallfmt(Fmt *fmt)
+{
+    Fcall *f;
+    int fid, type, tag, i;
+    char buf[512], tmp[200];
+    char *p, *e;
+    Dir *d;
+    Qid *q;
+
+    e = buf+sizeof(buf);
+    f = va_arg(fmt->args, Fcall*);
+    type = f->type;
+    fid = f->fid;
+    tag = f->tag;
+    switch(type){
+    case Tversion:  /* 100 */
+        seprint(buf, e, "Tversion tag %ud msize %ud version '%s'", tag, f->msize, f->version);
+        break;
+    case Rversion:
+        seprint(buf, e, "Rversion tag %ud msize %ud version '%s'", tag, f->msize, f->version);
+        break;
+    case Tauth: /* 102 */
+        seprint(buf, e, "Tauth tag %ud afid %d uname %s aname %s", tag,
+            f->afid, f->uname, f->aname);
+        break;
+    case Rauth:
+        seprint(buf, e, "Rauth tag %ud qid " QIDFMT, tag,
+            f->aqid.path, f->aqid.vers, qidtype(tmp, f->aqid.type));
+        break;
+    case Tattach:   /* 104 */
+        seprint(buf, e, "Tattach tag %ud fid %d afid %d uname %s aname %s", tag,
+            fid, f->afid, f->uname, f->aname);
+        break;
+    case Rattach:
+        seprint(buf, e, "Rattach tag %ud qid " QIDFMT, tag,
+            f->qid.path, f->qid.vers, qidtype(tmp, f->qid.type));
+        break;
+    case Rerror:    /* 107; 106 (Terror) illegal */
+        seprint(buf, e, "Rerror tag %ud ename %s", tag, f->ename);
+        break;
+    case Tflush:    /* 108 */
+        seprint(buf, e, "Tflush tag %ud oldtag %ud", tag, f->oldtag);
+        break;
+    case Rflush:
+        seprint(buf, e, "Rflush tag %ud", tag);
+        break;
+    case Twalk: /* 110 */
+        p = seprint(buf, e, "Twalk tag %ud fid %d newfid %d nwname %d ", tag, fid, f->newfid, f->nwname);
+        if(f->nwname <= MAXWELEM)
+            for(i=0; i<f->nwname; i++)
+                p = seprint(p, e, "%d:%s ", i, f->wname[i]);
+        break;
+    case Rwalk:
+        p = seprint(buf, e, "Rwalk tag %ud nwqid %ud ", tag, f->nwqid);
+        if(f->nwqid <= MAXWELEM)
+            for(i=0; i<f->nwqid; i++){
+                q = &f->wqid[i];
+                p = seprint(p, e, "%d:" QIDFMT " ", i,
+                    q->path, q->vers, qidtype(tmp, q->type));
+            }
+        break;
+    case Topen: /* 112 */
+        seprint(buf, e, "Topen tag %ud fid %ud mode %d", tag, fid, f->mode);
+        break;
+    case Ropen:
+        seprint(buf, e, "Ropen tag %ud qid " QIDFMT " iounit %ud ", tag,
+            f->qid.path, f->qid.vers, qidtype(tmp, f->qid.type), f->iounit);
+        break;
+    case Tcreate:   /* 114 */
+        seprint(buf, e, "Tcreate tag %ud fid %ud name %s perm %M mode %d", tag, fid, f->name, (ulong)f->perm, f->mode);
+        break;
+    case Rcreate:
+        seprint(buf, e, "Rcreate tag %ud qid " QIDFMT " iounit %ud ", tag,
+            f->qid.path, f->qid.vers, qidtype(tmp, f->qid.type), f->iounit);
+        break;
+    case Tread: /* 116 */
+        seprint(buf, e, "Tread tag %ud fid %d offset %lld count %ud",
+            tag, fid, f->offset, f->count);
+        break;
+    case Rread:
+        p = seprint(buf, e, "Rread tag %ud count %ud ", tag, f->count);
+            dumpsome(p, e, f->data, f->count);
+        break;
+    case Twrite:    /* 118 */
+        p = seprint(buf, e, "Twrite tag %ud fid %d offset %lld count %ud ",
+            tag, fid, f->offset, f->count);
+        dumpsome(p, e, f->data, f->count);
+        break;
+    case Rwrite:
+        seprint(buf, e, "Rwrite tag %ud count %ud", tag, f->count);
+        break;
+    case Tclunk:    /* 120 */
+        seprint(buf, e, "Tclunk tag %ud fid %ud", tag, fid);
+        break;
+    case Rclunk:
+        seprint(buf, e, "Rclunk tag %ud", tag);
+        break;
+    case Tremove:   /* 122 */
+        seprint(buf, e, "Tremove tag %ud fid %ud", tag, fid);
+        break;
+    case Rremove:
+        seprint(buf, e, "Rremove tag %ud", tag);
+        break;
+    case Tstat: /* 124 */
+        seprint(buf, e, "Tstat tag %ud fid %ud", tag, fid);
+        break;
+    case Rstat:
+        p = seprint(buf, e, "Rstat tag %ud ", tag);
+        if(f->nstat > sizeof tmp)
+            seprint(p, e, " stat(%d bytes)", f->nstat);
+        else{
+            d = (Dir*)tmp;
+            convM2D(f->stat, f->nstat, d, (char*)(d+1));
+            seprint(p, e, " stat ");
+            fdirconv(p+6, e, d);
+        }
+        break;
+    case Twstat:    /* 126 */
+        p = seprint(buf, e, "Twstat tag %ud fid %ud", tag, fid);
+        if(f->nstat > sizeof tmp)
+            seprint(p, e, " stat(%d bytes)", f->nstat);
+        else{
+            d = (Dir*)tmp;
+            convM2D(f->stat, f->nstat, d, (char*)(d+1));
+            seprint(p, e, " stat ");
+            fdirconv(p+6, e, d);
+        }
+        break;
+    case Rwstat:
+        seprint(buf, e, "Rwstat tag %ud", tag);
+        break;
+    default:
+        seprint(buf, e,  "unknown type %d", type);
+    }
+    return fmtstrcpy(fmt, buf);
+}
+@
+
+<<function qidtype>>=
+static char*
+qidtype(char *s, uchar t)
+{
+    char *p;
+
+    p = s;
+    if(t & QTDIR)
+        *p++ = 'd';
+    if(t & QTAPPEND)
+        *p++ = 'a';
+    if(t & QTEXCL)
+        *p++ = 'l';
+    if(t & QTAUTH)
+        *p++ = 'A';
+    *p = '\0';
+    return s;
+}
+@
+
+\subsection{P9msg}
+
+% called from rio
+
+<<function read9pmsg>>=
+int
+read9pmsg(fdt fd, void *abuf, uint n)
+{
+    int m, len;
+    uchar *buf;
+
+    buf = abuf;
+
+    /* read count */
+    m = readn(fd, buf, BIT32SZ);
+    if(m != BIT32SZ){
+        if(m < 0)
+            return -1;
+        return 0;
+    }
+
+    len = GBIT32(buf);
+    if(len <= BIT32SZ || len > n){
+        werrstr("bad length in 9P2000 message header");
+        return -1;
+    }
+    len -= BIT32SZ;
+    m = readn(fd, buf+BIT32SZ, len);
+    if(m < len)
+        return 0;
+    return BIT32SZ+m;
+}
+@
+
+\subsection{Conversion}
+
+% ConvD2M stuff
+
+
+<<function convM2S>>=
+/*
+ * no syntactic checks.
+ * three causes for error:
+ *  1. message size field is incorrect
+ *  2. input buffer too short for its own data (counts too long, etc.)
+ *  3. too many names or qids
+ * gqid() and gstring() return nil if they would reach beyond buffer.
+ * main switch statement checks range and also can fall through
+ * to test at end of routine.
+ */
+uint
+convM2S(uchar *ap, uint nap, Fcall *f)
+{
+    uchar *p, *ep;
+    uint i, size;
+
+    p = ap;
+    ep = p + nap;
+
+    if(p+BIT32SZ+BIT8SZ+BIT16SZ > ep)
+        return 0;
+    size = GBIT32(p);
+    p += BIT32SZ;
+
+    if(size < BIT32SZ+BIT8SZ+BIT16SZ)
+        return 0;
+
+    f->type = GBIT8(p);
+    p += BIT8SZ;
+    f->tag = GBIT16(p);
+    p += BIT16SZ;
+
+    switch(f->type)
+    {
+    default:
+        return 0;
+
+    case Tversion:
+        if(p+BIT32SZ > ep)
+            return 0;
+        f->msize = GBIT32(p);
+        p += BIT32SZ;
+        p = gstring(p, ep, &f->version);
+        break;
+
+    case Tflush:
+        if(p+BIT16SZ > ep)
+            return 0;
+        f->oldtag = GBIT16(p);
+        p += BIT16SZ;
+        break;
+
+    case Tauth:
+        if(p+BIT32SZ > ep)
+            return 0;
+        f->afid = GBIT32(p);
+        p += BIT32SZ;
+        p = gstring(p, ep, &f->uname);
+        if(p == nil)
+            break;
+        p = gstring(p, ep, &f->aname);
+        if(p == nil)
+            break;
+        break;
+
+    case Tattach:
+        if(p+BIT32SZ > ep)
+            return 0;
+        f->fid = GBIT32(p);
+        p += BIT32SZ;
+        if(p+BIT32SZ > ep)
+            return 0;
+        f->afid = GBIT32(p);
+        p += BIT32SZ;
+        p = gstring(p, ep, &f->uname);
+        if(p == nil)
+            break;
+        p = gstring(p, ep, &f->aname);
+        if(p == nil)
+            break;
+        break;
+
+    case Twalk:
+        if(p+BIT32SZ+BIT32SZ+BIT16SZ > ep)
+            return 0;
+        f->fid = GBIT32(p);
+        p += BIT32SZ;
+        f->newfid = GBIT32(p);
+        p += BIT32SZ;
+        f->nwname = GBIT16(p);
+        p += BIT16SZ;
+        if(f->nwname > MAXWELEM)
+            return 0;
+        for(i=0; i<f->nwname; i++){
+            p = gstring(p, ep, &f->wname[i]);
+            if(p == nil)
+                break;
+        }
+        break;
+
+    case Topen:
+        if(p+BIT32SZ+BIT8SZ > ep)
+            return 0;
+        f->fid = GBIT32(p);
+        p += BIT32SZ;
+        f->mode = GBIT8(p);
+        p += BIT8SZ;
+        break;
+
+    case Tcreate:
+        if(p+BIT32SZ > ep)
+            return 0;
+        f->fid = GBIT32(p);
+        p += BIT32SZ;
+        p = gstring(p, ep, &f->name);
+        if(p == nil)
+            break;
+        if(p+BIT32SZ+BIT8SZ > ep)
+            return 0;
+        f->perm = GBIT32(p);
+        p += BIT32SZ;
+        f->mode = GBIT8(p);
+        p += BIT8SZ;
+        break;
+
+    case Tread:
+        if(p+BIT32SZ+BIT64SZ+BIT32SZ > ep)
+            return 0;
+        f->fid = GBIT32(p);
+        p += BIT32SZ;
+        f->offset = GBIT64(p);
+        p += BIT64SZ;
+        f->count = GBIT32(p);
+        p += BIT32SZ;
+        break;
+
+    case Twrite:
+        if(p+BIT32SZ+BIT64SZ+BIT32SZ > ep)
+            return 0;
+        f->fid = GBIT32(p);
+        p += BIT32SZ;
+        f->offset = GBIT64(p);
+        p += BIT64SZ;
+        f->count = GBIT32(p);
+        p += BIT32SZ;
+        if(p+f->count > ep)
+            return 0;
+        f->data = (char*)p;
+        p += f->count;
+        break;
+
+    case Tclunk:
+    case Tremove:
+        if(p+BIT32SZ > ep)
+            return 0;
+        f->fid = GBIT32(p);
+        p += BIT32SZ;
+        break;
+
+    case Tstat:
+        if(p+BIT32SZ > ep)
+            return 0;
+        f->fid = GBIT32(p);
+        p += BIT32SZ;
+        break;
+
+    case Twstat:
+        if(p+BIT32SZ+BIT16SZ > ep)
+            return 0;
+        f->fid = GBIT32(p);
+        p += BIT32SZ;
+        f->nstat = GBIT16(p);
+        p += BIT16SZ;
+        if(p+f->nstat > ep)
+            return 0;
+        f->stat = p;
+        p += f->nstat;
+        break;
+
+/*
+ */
+    case Rversion:
+        if(p+BIT32SZ > ep)
+            return 0;
+        f->msize = GBIT32(p);
+        p += BIT32SZ;
+        p = gstring(p, ep, &f->version);
+        break;
+
+    case Rerror:
+        p = gstring(p, ep, &f->ename);
+        break;
+
+    case Rflush:
+        break;
+
+    case Rauth:
+        p = gqid(p, ep, &f->aqid);
+        if(p == nil)
+            break;
+        break;
+
+    case Rattach:
+        p = gqid(p, ep, &f->qid);
+        if(p == nil)
+            break;
+        break;
+
+    case Rwalk:
+        if(p+BIT16SZ > ep)
+            return 0;
+        f->nwqid = GBIT16(p);
+        p += BIT16SZ;
+        if(f->nwqid > MAXWELEM)
+            return 0;
+        for(i=0; i<f->nwqid; i++){
+            p = gqid(p, ep, &f->wqid[i]);
+            if(p == nil)
+                break;
+        }
+        break;
+
+    case Ropen:
+    case Rcreate:
+        p = gqid(p, ep, &f->qid);
+        if(p == nil)
+            break;
+        if(p+BIT32SZ > ep)
+            return 0;
+        f->iounit = GBIT32(p);
+        p += BIT32SZ;
+        break;
+
+    case Rread:
+        if(p+BIT32SZ > ep)
+            return 0;
+        f->count = GBIT32(p);
+        p += BIT32SZ;
+        if(p+f->count > ep)
+            return 0;
+        f->data = (char*)p;
+        p += f->count;
+        break;
+
+    case Rwrite:
+        if(p+BIT32SZ > ep)
+            return 0;
+        f->count = GBIT32(p);
+        p += BIT32SZ;
+        break;
+
+    case Rclunk:
+    case Rremove:
+        break;
+
+    case Rstat:
+        if(p+BIT16SZ > ep)
+            return 0;
+        f->nstat = GBIT16(p);
+        p += BIT16SZ;
+        if(p+f->nstat > ep)
+            return 0;
+        f->stat = p;
+        p += f->nstat;
+        break;
+
+    case Rwstat:
+        break;
+    }
+
+    if(p==nil || p>ep)
+        return 0;
+    if(ap+size == p)
+        return size;
+    return 0;
+}
+@
+
+
+
+<<function convS2M>>=
+uint
+convS2M(Fcall *f, uchar *ap, uint nap)
+{
+    uchar *p;
+    uint i, size;
+
+    size = sizeS2M(f);
+    if(size == 0)
+        return 0;
+    if(size > nap)
+        return 0;
+
+    p = (uchar*)ap;
+
+    PBIT32(p, size);
+    p += BIT32SZ;
+    PBIT8(p, f->type);
+    p += BIT8SZ;
+    PBIT16(p, f->tag);
+    p += BIT16SZ;
+
+    switch(f->type)
+    {
+    default:
+        return 0;
+
+    case Tversion:
+        PBIT32(p, f->msize);
+        p += BIT32SZ;
+        p = pstring(p, f->version);
+        break;
+
+    case Tflush:
+        PBIT16(p, f->oldtag);
+        p += BIT16SZ;
+        break;
+
+    case Tauth:
+        PBIT32(p, f->afid);
+        p += BIT32SZ;
+        p  = pstring(p, f->uname);
+        p  = pstring(p, f->aname);
+        break;
+
+    case Tattach:
+        PBIT32(p, f->fid);
+        p += BIT32SZ;
+        PBIT32(p, f->afid);
+        p += BIT32SZ;
+        p  = pstring(p, f->uname);
+        p  = pstring(p, f->aname);
+        break;
+
+    case Twalk:
+        PBIT32(p, f->fid);
+        p += BIT32SZ;
+        PBIT32(p, f->newfid);
+        p += BIT32SZ;
+        PBIT16(p, f->nwname);
+        p += BIT16SZ;
+        if(f->nwname > MAXWELEM)
+            return 0;
+        for(i=0; i<f->nwname; i++)
+            p = pstring(p, f->wname[i]);
+        break;
+
+    case Topen:
+        PBIT32(p, f->fid);
+        p += BIT32SZ;
+        PBIT8(p, f->mode);
+        p += BIT8SZ;
+        break;
+
+    case Tcreate:
+        PBIT32(p, f->fid);
+        p += BIT32SZ;
+        p = pstring(p, f->name);
+        PBIT32(p, f->perm);
+        p += BIT32SZ;
+        PBIT8(p, f->mode);
+        p += BIT8SZ;
+        break;
+
+    case Tread:
+        PBIT32(p, f->fid);
+        p += BIT32SZ;
+        PBIT64(p, f->offset);
+        p += BIT64SZ;
+        PBIT32(p, f->count);
+        p += BIT32SZ;
+        break;
+
+    case Twrite:
+        PBIT32(p, f->fid);
+        p += BIT32SZ;
+        PBIT64(p, f->offset);
+        p += BIT64SZ;
+        PBIT32(p, f->count);
+        p += BIT32SZ;
+        memmove(p, f->data, f->count);
+        p += f->count;
+        break;
+
+    case Tclunk:
+    case Tremove:
+        PBIT32(p, f->fid);
+        p += BIT32SZ;
+        break;
+
+    case Tstat:
+        PBIT32(p, f->fid);
+        p += BIT32SZ;
+        break;
+
+    case Twstat:
+        PBIT32(p, f->fid);
+        p += BIT32SZ;
+        PBIT16(p, f->nstat);
+        p += BIT16SZ;
+        memmove(p, f->stat, f->nstat);
+        p += f->nstat;
+        break;
+/*
+ */
+
+    case Rversion:
+        PBIT32(p, f->msize);
+        p += BIT32SZ;
+        p = pstring(p, f->version);
+        break;
+
+    case Rerror:
+        p = pstring(p, f->ename);
+        break;
+
+    case Rflush:
+        break;
+
+    case Rauth:
+        p = pqid(p, &f->aqid);
+        break;
+
+    case Rattach:
+        p = pqid(p, &f->qid);
+        break;
+
+    case Rwalk:
+        PBIT16(p, f->nwqid);
+        p += BIT16SZ;
+        if(f->nwqid > MAXWELEM)
+            return 0;
+        for(i=0; i<f->nwqid; i++)
+            p = pqid(p, &f->wqid[i]);
+        break;
+
+    case Ropen:
+    case Rcreate:
+        p = pqid(p, &f->qid);
+        PBIT32(p, f->iounit);
+        p += BIT32SZ;
+        break;
+
+    case Rread:
+        PBIT32(p, f->count);
+        p += BIT32SZ;
+        memmove(p, f->data, f->count);
+        p += f->count;
+        break;
+
+    case Rwrite:
+        PBIT32(p, f->count);
+        p += BIT32SZ;
+        break;
+
+    case Rclunk:
+        break;
+
+    case Rremove:
+        break;
+
+    case Rstat:
+        PBIT16(p, f->nstat);
+        p += BIT16SZ;
+        memmove(p, f->stat, f->nstat);
+        p += f->nstat;
+        break;
+
+    case Rwstat:
+        break;
+    }
+    if(size != p-ap)
+        return 0;
+    return size;
+}
+@
+
+
+
 
 \chapter{Channels and Cooperative Threads}
 
@@ -6499,6 +7908,69 @@ reject(int ctl, char *dir, char *cause)
 @
 
 
+\section{[[dial()]]}
+
+<<function dial>>=
+int
+dial(char *dest, char *local, char *dir, int *cfdp)
+{
+    return (*_dial)(dest, local, dir, cfdp);
+}
+@
+
+<<global _dial>>=
+/*
+ * the thread library can't cope with rfork(RFMEM|RFPROC),
+ * so it must override this with a private version of dial.
+ */
+int (*_dial)(char *, char *, char *, int *) = dialimpl;
+@
+
+
+<<function dialimpl>>=
+/*
+ *  the dialstring is of the form '[/net/]proto!dest'
+ */
+static int
+dialimpl(char *dest, char *local, char *dir, int *cfdp)
+{
+    DS ds;
+    int rv;
+    char err[ERRMAX], alterr[ERRMAX];
+
+    ds.local = local;
+    ds.dir = dir;
+    ds.cfdp = cfdp;
+
+    _dial_string_parse(dest, &ds);
+    if(ds.netdir)
+        return csdial(&ds);
+
+    ds.netdir = "/net";
+    rv = csdial(&ds);
+    if(rv >= 0)
+        return rv;
+    err[0] = '\0';
+    errstr(err, sizeof err);
+    if(strstr(err, "refused") != 0){
+        werrstr("%s", err);
+        return rv;
+    }
+    ds.netdir = "/net.alt";
+    rv = csdial(&ds);
+    if(rv >= 0)
+        return rv;
+
+    alterr[0] = 0;
+    errstr(alterr, sizeof alterr);
+    if(strstr(alterr, "translate") || strstr(alterr, "does not exist"))
+        werrstr("%s", err);
+    else
+        werrstr("%s", alterr);
+    return rv;
+}
+@
+
 
 \chapter{Mathematics}
 %http://developerblog.redhat.com/2015/01/02/improving-math-performance-in-glibc/
@@ -8221,6 +9693,27 @@ static  ulong*  rng_feed = 0;
 @
 
 
+<<function truerand>>=
+ulong
+truerand(void)
+{
+    ulong x;
+    static fdt randfd = -1;
+
+    if(randfd < 0)
+        randfd = open("/dev/random", OREAD|OCEXEC);
+    if(randfd < 0)
+        sysfatal("can't open /dev/random");
+    if(read(randfd, &x, sizeof(x)) != sizeof(x))
+        sysfatal("can't read /dev/random");
+
+    return x;
+}
+@
+
+
+
+
 
 \section{muldiv}
 
@@ -8812,6 +10305,8 @@ cputime(void)
 
 % ref_own<string> returned
 
+\section{[[getuser()]]}
+
 <<function getuser>>=
 char*
 getuser(void)
@@ -8914,6 +10409,115 @@ netcrypt(void *key, void *chal)
     return 1;
 }
 @
+
+\section{SSL/TLS}
+
+<<function pushssl>>=
+/*
+ * Since the SSL device uses decimal file descriptors to name channels,
+ * it is impossible for a user-level file server to stand in for the kernel device.
+ * Thus we hard-code #D rather than use /net/ssl.
+ */
+
+int
+pushssl(int fd, char *alg, char *secin, char *secout, int *cfd)
+{
+    char buf[8];
+    char dname[64];
+    int n, data, ctl;
+
+    ctl = open("#D/ssl/clone", ORDWR);
+    if(ctl < 0)
+        return -1;
+    n = read(ctl, buf, sizeof(buf)-1);
+    if(n < 0)
+        goto error;
+    buf[n] = 0;
+    sprint(dname, "#D/ssl/%s/data", buf);
+    data = open(dname, ORDWR);
+    if(data < 0)
+        goto error;
+    if(fprint(ctl, "fd %d", fd) < 0 ||
+       fprint(ctl, "secretin %s", secin) < 0 ||
+       fprint(ctl, "secretout %s", secout) < 0 ||
+       fprint(ctl, "alg %s", alg) < 0){
+        close(data);
+        goto error;
+    }
+    close(fd);
+    if(cfd != 0)
+        *cfd = ctl;
+    else
+        close(ctl);
+    return data;
+error:
+    close(ctl);
+    return -1;
+}
+@
+
+<<function pushtls>>=
+// given a plain fd and secrets established beforehand, return encrypted connection
+int
+pushtls(int fd, char *hashalg, char *encalg, int isclient, char *secret, char *dir)
+{
+    char buf[8];
+    char dname[64];
+    int n, data, ctl, hand;
+
+    // open a new filter; get ctl fd
+    data = hand = -1;
+    // /net/tls uses decimal file descriptors to name channels, hence a
+    // user-level file server can't stand in for #a; may as well hard-code it.
+    ctl = open("#a/tls/clone", ORDWR);
+    if(ctl < 0)
+        goto error;
+    n = read(ctl, buf, sizeof(buf)-1);
+    if(n < 0)
+        goto error;
+    buf[n] = 0;
+    if(dir)
+        sprint(dir, "#a/tls/%s", buf);
+
+    // get application fd
+    sprint(dname, "#a/tls/%s/data", buf);
+    data = open(dname, ORDWR);
+    if(data < 0)
+        goto error;
+
+    // get handshake fd
+    sprint(dname, "#a/tls/%s/hand", buf);
+    hand = open(dname, ORDWR);
+    if(hand < 0)
+        goto error;
+
+    // speak a minimal handshake
+    if(fprint(ctl, "fd %d 0x301", fd) < 0 ||
+       fprint(ctl, "version 0x301") < 0 ||
+       fprint(ctl, "secret %s %s %d %s", hashalg, encalg, isclient, secret) < 0 ||
+       fprint(ctl, "changecipher") < 0 ||
+       finished(hand, isclient) < 0 ||
+       fprint(ctl, "opened") < 0){
+        close(hand);
+        hand = -1;
+        goto error;
+    }
+    close(ctl);
+    close(hand);
+    close(fd);
+    return data;
+
+error:
+    if(data>=0)
+        close(data);
+    if(ctl>=0)
+        close(ctl);
+    if(hand>=0)
+        close(hand);
+    return -1;
+}
+@
+
 
 
 \chapter{Advanced Topics}
