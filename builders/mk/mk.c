@@ -2,7 +2,7 @@
 #include	"mk.h"
 
 void clrmade(Node*);
-int	 work(Node*, Node*, Arc*);
+void work(Node*, bool*, Node*, Arc*);
 
 /*s: global runerrs */
 int runerrs;
@@ -13,17 +13,18 @@ void
 mk(char *target)
 {
     Node *root;
+    bool everdid = false;
     bool did = false;
     // enum<WaitupResult>
     int res;
 
-    /*s: [[mk()]] initialisation */
+    /*s: [[mk()]] initializations */
     nproc();	/* it can be updated dynamically */
-    /*x: [[mk()]] initialisation */
+    /*x: [[mk()]] initializations */
     runerrs = 0;
-    /*x: [[mk()]] initialisation */
+    /*x: [[mk()]] initializations */
     nrep();		/* it can be updated dynamically */
-    /*e: [[mk()]] initialisation */
+    /*e: [[mk()]] initializations */
 
     root = graph(target);
     /*s: [[mk()]] if DEBUG(D_GRAPH) */
@@ -35,10 +36,12 @@ mk(char *target)
     clrmade(root);
 
     while(root->flags&NOTMADE){
-        if(work(root, (Node *)nil, (Arc *)nil))
-            did = true;	/* found something to do */
+        did = false;
+        work(root, &did,   (Node *)nil, (Arc *)nil);
+        if(did)
+            everdid = true;	/* found something to do */
         else {
-            res = waitup(1, (int *)nil);
+            res = waitup(EMPTY_CHILDREN_IS_OK, (int *)nil);
             /*s: [[mk()]] if no child to waitup and root not MADE, possibly break */
             if(res > 0){
                 if(root->flags&(NOTMADE|BEINGMADE)){
@@ -50,15 +53,14 @@ mk(char *target)
         }
     }
     if(root->flags&BEINGMADE)
-        waitup(-1, (int *)nil);
+        waitup(EMPTY_CHILDREN_IS_ERROR, (int *)nil);
 
     /*s: [[mk()]] before returning, more [[waitup()]] if there was an error */
     while(jobs)
         waitup(-2, (int *)nil);
-
     assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
     /*e: [[mk()]] before returning, more [[waitup()]] if there was an error */
-    if(!did)
+    if(!everdid)
         Bprint(&bout, "mk: '%s' is up to date\n", root->name);
     return;
 }
@@ -94,16 +96,15 @@ unpretend(Node *n)
 /*e: function unpretend */
 
 /*s: function work */
-bool
-work(Node *node,   Node *p, Arc *parc)
+void
+work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
 {
     /*s: [[work()]] locals */
-    bool did = false;
-    /*x: [[work()]] locals */
     char cwd[256];
     /*x: [[work()]] locals */
     bool weoutofdate = false;
     bool ready = true;
+    /*x: [[work()]] locals */
     Arc *a;
     /*x: [[work()]] locals */
     Arc *ra = nil;
@@ -114,13 +115,13 @@ work(Node *node,   Node *p, Arc *parc)
         print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);
     /*e: [[work()]] debug */
     if(node->flags&BEINGMADE)
-        return did;
+        return;
     /*s: [[work()]] possibly unpretending node */
-    if((node->flags&MADE) && (node->flags&PRETENDING) && p
-        && outofdate(p, parc, false)){
+    if((node->flags&MADE) && (node->flags&PRETENDING) && parent_node
+        && outofdate(parent_node, parent_arc, false)){
         if(explain)
             fprint(STDOUT, "unpretending %s(%lud) because %s is out of date(%lud)\n",
-                node->name, node->time, p->name, p->time);
+                node->name, node->time, parent_node->name, parent_node->time);
         unpretend(node);
     }
     /*
@@ -131,113 +132,112 @@ work(Node *node,   Node *p, Arc *parc)
         if(node->flags&PRETENDING){
             node->time = 0;
         }else
-            return did;
+            return;
     }
     /*e: [[work()]] possibly unpretending node */
 
-    // Leaf case
-    /*s: [[work()]] no prerequisite, a leaf */
-    /* consider no prerequisite case */
     if(node->arcs == nil){
-        if(node->time == 0){
-            /*s: [[work()]] print error when inexistent file without prerequisites */
-            if(getwd(cwd, sizeof cwd))
-                fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
-            else
-                fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
-
-            /*s: [[work()]] when inexistent target without prerequisites, if kflag */
-            if(kflag){
-                node->flags |= BEINGMADE;
-                runerrs++;
-            }
-            /*e: [[work()]] when inexistent target without prerequisites, if kflag */
-            else
-                Exit();
-            /*e: [[work()]] print error when inexistent file without prerequisites */
-        } else
-            MADESET(node, MADE);
-        return did;
-    }
-    /*e: [[work()]] no prerequisite, a leaf */
-    // else
-    // Node case
-    /*s: [[work()]] some prerequisites, a node */
-    /*s: [[work()]] adjust weoutofdate if aflag */
-    if(aflag)
-        weoutofdate = true;
-    /*e: [[work()]] adjust weoutofdate if aflag */
-    /*
-     *   now see if we are out of date or what
-     */
-    for(a = node->arcs; a; a = a->next)
-        if(a->n){
-            // recursive call! go in depth
-            did = work(a->n, node, a) || did;
-
-            if(a->n->flags&(NOTMADE|BEINGMADE))
-                ready = false;
-            if(outofdate(node, a, false)){
-                weoutofdate = true;
-                /*s: [[work()]] update [[ra]] when outofdate [[node]] with arc [[a]] */
-                if((ra == nil) || (ra->n == nil) || (ra->n->time < a->n->time))
-                    ra = a;
-                /*e: [[work()]] update [[ra]] when outofdate [[node]] with arc [[a]] */
-            }
-        } else {
+        /*s: [[work()]] no prerequisite, a leaf */
+        /* consider no prerequisite case */
             if(node->time == 0){
-                weoutofdate = true;
-                /*s: [[work()]] update [[ra]] when no dest in arc and no src */
-                if(ra == nil)
-                    ra = a;
-                /*e: [[work()]] update [[ra]] when no dest in arc and no src */
+                /*s: [[work()]] print error when inexistent file without prerequisites */
+                if(getwd(cwd, sizeof cwd))
+                    fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
+                else
+                    fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
+
+                /*s: [[work()]] when inexistent target without prerequisites, if kflag */
+                if(kflag){
+                    node->flags |= BEINGMADE;
+                    runerrs++;
+                }
+                /*e: [[work()]] when inexistent target without prerequisites, if kflag */
+                else
+                    Exit();
+                /*e: [[work()]] print error when inexistent file without prerequisites */
+            } else
+                MADESET(node, MADE);
+        /*e: [[work()]] no prerequisite, a leaf */
+    } else {
+        /*s: [[work()]] some prerequisites, a node */
+        /*s: [[work()]] adjust weoutofdate if aflag */
+        if(aflag)
+            weoutofdate = true;
+        /*e: [[work()]] adjust weoutofdate if aflag */
+        /*
+         *   now see if we are out of date or what
+         */
+        for(a = node->arcs; a; a = a->next) {
+            if(a->n){
+                // recursive call! go in depth
+                work(a->n, did,  node, a);
+
+                if(a->n->flags&(NOTMADE|BEINGMADE))
+                    ready = false;
+                if(outofdate(node, a, false)){
+                    weoutofdate = true;
+                    /*s: [[work()]] update [[ra]] when outofdate [[node]] with arc [[a]] */
+                    if((ra == nil) || (ra->n == nil) || (ra->n->time < a->n->time))
+                        ra = a;
+                    /*e: [[work()]] update [[ra]] when outofdate [[node]] with arc [[a]] */
+                }
+            } else {
+                if(node->time == 0){
+                    weoutofdate = true;
+                    /*s: [[work()]] update [[ra]] when no dest in arc and no src */
+                    if(ra == nil)
+                        ra = a;
+                    /*e: [[work()]] update [[ra]] when no dest in arc and no src */
+                }
             }
         }
 
-    if(!ready)	/* can't do anything now */
-        return did;
-    if(!weoutofdate){
-        MADESET(node, MADE);
-        return did;
-    }
-    /*s: [[work()]] possibly pretending node */
-    /*
-     *   can we pretend to be made?
-     */
-    if((!iflag) && (node->time == 0) 
-            && (node->flags&(PRETENDING|CANPRETEND))
-            && p && ra->n && !outofdate(p, ra, false)){
-        node->flags &= ~CANPRETEND;
-        MADESET(node, MADE);
-        if(explain && ((node->flags&PRETENDING) == 0))
-            fprint(STDOUT, "pretending %s has time %lud\n", node->name, node->time);
-        node->flags |= PRETENDING;
-        return did;
-    }
-    /*
-     *   node is out of date and we REALLY do have to do something.
-     *   quickly rescan for pretenders
-     */
-    for(a = node->arcs; a; a = a->next)
-        if(a->n && (a->n->flags&PRETENDING)){
-            if(explain)
-                Bprint(&bout, "unpretending %s because of %s because of %s\n",
-                a->n->name, node->name, 
-                ra->n? ra->n->name : "rule with no prerequisites");
-
-            unpretend(a->n);
-            did = work(a->n, node, a) || did;
-            ready = false;
+        if(!ready)	/* can't do anything now */
+            return;
+        if(!weoutofdate){
+            MADESET(node, MADE);
+            return;
         }
-    if(!ready)/* try later unless nothing has happened for -k's sake */
-        return did || work(node, p, parc);
-    /*e: [[work()]] possibly pretending node */
+        /*s: [[work()]] possibly pretending node */
+        /*
+         *   can we pretend to be made?
+         */
+        if((!iflag) && (node->time == 0) 
+                && (node->flags&(PRETENDING|CANPRETEND))
+                && parent_node && ra->n && !outofdate(parent_node, ra, false)){
+            node->flags &= ~CANPRETEND;
+            MADESET(node, MADE);
+            if(explain && ((node->flags&PRETENDING) == 0))
+                fprint(STDOUT, "pretending %s has time %lud\n", node->name, node->time);
+            node->flags |= PRETENDING;
+            return;
+        }
+        /*
+         *   node is out of date and we REALLY do have to do something.
+         *   quickly rescan for pretenders
+         */
+        for(a = node->arcs; a; a = a->next)
+            if(a->n && (a->n->flags&PRETENDING)){
+                if(explain)
+                    Bprint(&bout, "unpretending %s because of %s because of %s\n",
+                    a->n->name, node->name, 
+                    ra->n? ra->n->name : "rule with no prerequisites");
 
-    // else, out of date
+                unpretend(a->n);
+                work(a->n, did, node, a);
+                ready = false;
+            }
+        if(!ready) { /* try later unless nothing has happened for -k's sake */
+            work(node, did, parent_node, parent_arc);
+            return;
+        }
+        /*e: [[work()]] possibly pretending node */
+        // else, out of date
 
-    did = dorecipe(node) || did;
-    return did;
-    /*e: [[work()]] some prerequisites, a node */
+        dorecipe(node, did);
+        return;
+        /*e: [[work()]] some prerequisites, a node */
+    }
 }
 /*e: function work */
 

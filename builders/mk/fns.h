@@ -83,7 +83,7 @@ int		outofdate(Node*, Arc*, int);
 void	update(bool, Node*);
 
 // recipe.c
-int		dorecipe(Node*);
+void		dorecipe(Node*, bool*);
 
 // run.c
 void	run(Job*);

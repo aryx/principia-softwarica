@@ -299,6 +299,21 @@ enum Namespace {
 };
 /*e: enum Namespace */
 
+/*s: type WaitupParam */
+enum WaitupParam { 
+  EMPTY_CHILDREN_IS_OK = 1, 
+  EMPTY_CHILDREN_IS_ERROR = -1, 
+  EMPTY_CHILDREN_IS_ERROR2 = -2,
+};
+/*e: type WaitupParam */
+/*s: type WaitupResult */
+enum WaitupResult { 
+  EMPTY_CHILDREN =1, 
+  JOB_ENDED = 0, 
+  NOT_A_JOB_PROCESS = -1 
+};
+/*e: type WaitupResult */
+
 extern	int	debug;
 extern	bool	nflag, tflag, iflag, kflag, aflag;
 extern	int	mkinline;

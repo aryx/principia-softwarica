@@ -1918,8 +1918,8 @@ the recipes with the [[lex]] and [[yacc]] commands can be run in parallel.
 %
 However, if only the [[lex]] recipe finished, it is not possible
 to run [[5c -c lexer.c]] in parallel with [[yacc]] since
-there is an arc between [[lexer.5]] and [[parser.h]] in the graph.
-You must also wait for the [[yacc]] recipe to finish.
+there is an arc between [[lexer.5]] and [[parser.h]] in the graph;
+you must also wait for the [[yacc]] recipe to finish.
 
 
 To run recipes in parallel, a build system should not 
@@ -1953,6 +1953,7 @@ Then, when the DFS backtracks on the root node at step~8,
 the modification time of the root node may still be more
 recent than all its prerequistes 
 (as shown in Figure~\ref{fig:graph-hello-labels}).
+%
 However, [[mk]] should not stop there and declares
 that [[hello]] is up-to-date. Once the job to
 generate [[world.5]] has finished, [[hello]] will not be up-to-date.
@@ -1960,6 +1961,7 @@ generate [[world.5]] has finished, [[hello]] will not be up-to-date.
 This is why the modification time of nodes associated with a job
 should be marked specially in the graph.
 
+%coupling: same figure in chapter on findint outdated files
 \begin{figure}[!]\centering
 \begin{verbatim}
                 +-------+ NotMade
@@ -1984,6 +1986,7 @@ Made +------+-+     Made +------+-+
 \caption{Graph of dependencies with progress-status labels.}
 \label{fig:graph-being-made}
 \end{figure}
+
 
 \label{sec:build-status}
 To keep track of the nodes involved in a job, [[mk]] uses
@@ -3206,6 +3209,7 @@ enum Rule_attr {
     <<[[Rule_attr]] cases>>
 };
 @
+\l could do RA_META? more consistent with S_VAR ?
 %dead: indeed, unused :)
 % UNUSED = 0x0002,
 %dead:
@@ -3609,6 +3613,7 @@ enum Node_flag {
 };
 @
 %old: used to be a set of #define
+\l add N_ as a prefix? consistent with S_ for namespace
 
 The build status of a node ([[Made]], [[NotMade]], and [[BeingMade]]),
 which I mentioned in Section~\ref{sec:build-status}, 
@@ -3787,6 +3792,8 @@ struct Job
 
 The list of target nodes of a job are chained together through
 an extra field in [[Node]]:
+\t list because rules may have multiple targers, as in Figure X
+\t  and important modify time of all nodes!
 
 <<[[Node]] extra fields>>=
 // list<ref<Node>> (head = Job.n)
@@ -3860,9 +3867,9 @@ struct Job	*next;
 
 %trans: %dup: (and adapted) from Assembler.nw
 I now switch from a bottom-up approach in Chapter~\ref{chap:core-ds},
-to a top-down approach in this chapter;
+to a top-down approach;
 %toc:
-I will describe the main functions of [[mk]], 
+I will describe in the following chapters the main functions of [[mk]], 
 starting in this chapter with [[main()]], the entry point of [[mk]].
 
 \section{[[main()]] skeleton}
@@ -4446,7 +4453,7 @@ parse(char *f, fdt fd, bool varoverride)
 @
 \l leak strdup for infile? when free?
 
-The code of [[parse()]] operates in four steps:
+The code of [[parse()]] operates in 4 steps:
 
 \begin{enumerate}
 
@@ -6834,6 +6841,8 @@ Thus, before creating a new node for a target, [[applyrules()]]
 makes sure the target node does not exist already.
 %
 To do so, it relies on the new namespace below:
+\l realpath issues? should always use same path to reference same file
+\l  in the mkfile (if multiple mkfiles, then anyway recursive mk)
 
 <<[[Sxxx]] cases>>=
 S_NODE,		/* target name -> node */
@@ -7620,20 +7629,144 @@ for(a = node->arcs; a; a = a->next)
 \chapter{Finding Outdated Files}
 \label{chap:finding-outdated}
 
-% the core algorithm.
-% main idea = 
-%  construct dependency graph for target root (previous chapter)
-%  set all nodes to NOTMADE.
-%    Then ask to build root which will recurse. 
-%    If leaf then node MADE if exist
-%    Otherwise look at time 
-%     if file > time of all children then MADE, 
-%     otherwise run recipe job in parallel, return and wait it's MADE (so loop).
-%    if error in any recipe, then Exit.
-
-% while(root not finished) { run wave of jobs and update graph }
+%trans:
+The next component in the building pipeline is responsible for 
+%
+finding outdated files in the graph of dependencies built 
+in Chapter~\ref{chap:graph}.
+%toc:
+In this chapter, you will see the function containing the core algorithm
+behind [[mk]].
+%
+This function, appropriately named [[mk()]], 
+takes a target as a parameter, 
+builds the graph of dependencies for this target (with [[graph()]]), 
+explores the graph to find outdated files, 
+with a function called [[work()]],
+and schedules recipes to be executed to update those outdated files,
+with a function called [[dorecipe()]].
+%toc:
+The following sections explain the code of [[mk()]], [[work()]], and
+[[dorecipe()]].
 
 \section{[[mk()]]}
+
+[[mk()]] is arguably the most important function in [[mk]].
+%
+I outlined its core algorithm 
+in Section~\ref{sec:job} when I introduced the principles of a job scheduler, 
+and in Section~\ref{sec:soft-archi} when I presented the software architecture
+of [[mk]].
+%dup: overview/principles/scheduler
+Figure~\ref{fig:graph-being-made2} is a copy of 
+Figure~\ref{fig:graph-being-made}.
+%
+The goal is just to remind you of the order in which [[mk]] visits
+the nodes of a graph with the DFS, and of the changes to the 
+building status label of nodes ([[NOTMADE]], [[BEINGMADE]], and [[MADE]])
+during the DFS.
+%
+In the scenario of Figure~\ref{fig:graph-being-made2}, the user
+modified [[world.c]], which should trigger a compilation to regenerate
+[[world.5]] and a linking command to regenerate [[hello]].
+
+
+%dup: overview/principles/scheduler
+\begin{figure}[!]\centering
+\begin{verbatim}
+                +-------+ NotMade
+            (1) | hello | (8)
+                +--X--^-+
+                    X  \
+                 / / \  \
+           / - -  /   \  \----\
+            /----/     \----\  \
+         / /                 \  \
+        v v                   v  \
+     +--------+          +--------+ BeingMade
+ (2) |hello.5 + - - - - >|world.5 | (7)
+     +--+-----+(4)    (5)+--+-----+
+          | ^ Made            | ^
+        | | |               | | |
+        v v                 v v
+Made +------+-+     Made +------+-+
+ (3) |hello.c |      (6) |world.c |
+     +--------+          +--------+
+\end{verbatim}
+\caption{Graph of dependencies with progress-status labels.}
+\label{fig:graph-being-made2}
+\end{figure}
+
+Here is the code of [[mk()]]:
+
+% FIGURE displaying a tree of files and
+%  see how mk is running some waves of jobs, and how at each node
+% there is a ready or outofdate boolean value.
+
+% main -> <> -> graph() ; clrmade(); work()
+<<function mk>>=
+void
+mk(char *target)
+{
+    Node *root;
+    bool everdid = false;
+    bool did = false;
+    // enum<WaitupResult>
+    int res;
+
+    <<[[mk()]] initializations>>
+
+    root = graph(target);
+    <<[[mk()]] if DEBUG(D_GRAPH)>>
+    clrmade(root);
+
+    while(root->flags&NOTMADE){
+        did = false;
+        work(root, &did,   (Node *)nil, (Arc *)nil);
+        if(did)
+            everdid = true;	/* found something to do */
+        else {
+            res = waitup(EMPTY_CHILDREN_IS_OK, (int *)nil);
+            <<[[mk()]] if no child to waitup and root not MADE, possibly break>>
+        }
+    }
+    if(root->flags&BEINGMADE)
+        waitup(EMPTY_CHILDREN_IS_ERROR, (int *)nil);
+
+    <<[[mk()]] before returning, more [[waitup()]] if there was an error>>
+    if(!everdid)
+        Bprint(&bout, "mk: '%s' is up to date\n", root->name);
+    return;
+}
+@
+%old: 
+% - node -> root
+% - was if(waitup(1, (int *)nil) > 0) but hard to read, I introduced res
+% - the code was threading a 'did' local variable in work and dorecipe and doing
+%   code like did = foo() || did; which was ugly. I thought of introducing
+%   a global 'did' instead. Then in mk-ocaml I instead pass a 'did' local
+%   by reference. cleaner. This changes the interface of work, dorecipe,
+%   they dont return a bool anymore.
+% - '1' '-1' -> EMPTY_CHILDREN_IS_XXX
+%pad:
+% - I added an everdid
+% - I added the return
+%ocaml: When can have did==false so print 'xx is up to date'?
+% when did nothing, because prog was _already_ up to date.
+% in mk-ocaml I changed the message.
+
+[[mk()]] operates in 4 steps:
+
+\begin{enumerate}
+
+\item [[mk()]] builds the graph of dependencies with [[graph()]]
+(see Chapter~\ref{chap:graph}).
+
+\item [[mk()]] sets the {building status} of all nodes in the graph
+to [[NOTMADE]] 
+(see Section~\ref{sec:build-status} and Section~\ref{sec:node-flags}),
+with [[clrmade()]] 
+(see Section~\ref{sec:clrmade}).
 
 %<<[[Node_flag]] cases>>=
 %NOTMADE    = 0x0020,
@@ -7648,86 +7781,102 @@ for(a = node->arcs; a; a = a->next)
 %   2 files with deps on same Node, because of the DAG
 % MADE finally when recipe done! (or time was already good, so no need update)
 
-% FIGURE displaying a tree of files and
-% see how mk is running some waves of jobs, and how at each node
-% there is a ready or outofdate boolean value.
+\item [[mk()]] explores the graph of dependencies repeatedly,
+in successive {waves}, to find outdated files with [[work()]] 
+(see Section~\ref{sec:work}).
+%
+When [[work()]] finds up-to-date files, it marks them as [[MADE]],
+for instance, [[hello.c]] in Figure~\ref{fig:graph-being-made2}.
+%
+When it finds outdated files, [[work()]] schedules a recipe to be executed
+with [[dorecipe()]] 
+(see Section~\ref{sec:dorecipe}), 
+and marks the node as [[BEINGMADE]].
+%
+For example, in Figure~\ref{fig:graph-being-made2}, [[work()]]
+discovers that [[world.5]] is older than [[world.c]]
+and so schedules a recipe to update [[world.5]] and marks
+[[world.5]] as [[BEINGMADE]].
+%
+[[work()]] also sets to true the [[did]] boolean passed by reference
+when it schedules a job. 
+%That way, [[mk()]] can know if ??
 
-\t put global did here, but then need to reset it each time before work
-\t  and so need also to have a local did in mk
-\t make did a global because was always threading it
-% everywhere and doing did = foo () || did;   
-% possible? change semantic?
+
+Sometimes, [[work()]] does not schedule any new job and [[did]] stays false.
+%
+One reason might be that there is nothing to build because everything
+is already up-to-date.
+%
+Another reason is that [[work()]] may need to wait for some processes
+to finish. For example, in Figure~\ref{fig:graph-being-made2}, 
+if a previous wave of [[work()]] scheduled [[world.5]] to be built
+(hence the [[BEINGMADE]] flag), another wave of [[work()]]
+might not schedule anything because [[hello]] can be built only if
+all the object files are [[MADE]].
+%
+In that case, [[mk()]] calls [[waitup()]] (see Section~\ref{sec:waitup})
+to wait for some user processes executing recipes to finish.
+%
+[[waitup()]] will wait for a job to finish and will set as [[MADE]]
+the nodes that were the targets of the job.
+%
+Thus, the next wave of [[work()]] will be able to progress.
 
 
-% main -> <> -> graph() ; clrmade(); work()
-<<function mk>>=
-void
-mk(char *target)
-{
-    Node *root;
-    bool did = false;
-    // enum<WaitupResult>
-    int res;
-
-    <<[[mk()]] initialisation>>
-
-    root = graph(target);
-    <<[[mk()]] if DEBUG(D_GRAPH)>>
-    clrmade(root);
-
-    while(root->flags&NOTMADE){
-        if(work(root, (Node *)nil, (Arc *)nil))
-            did = true;	/* found something to do */
-        else {
-            res = waitup(1, (int *)nil);
-            <<[[mk()]] if no child to waitup and root not MADE, possibly break>>
-        }
-    }
-    if(root->flags&BEINGMADE)
-        waitup(-1, (int *)nil);
-
-    <<[[mk()]] before returning, more [[waitup()]] if there was an error>>
-    if(!did)
-        Bprint(&bout, "mk: '%s' is up to date\n", root->name);
-    return;
-}
-@
-%old: was called node, but root is better.
-%old: was if(waitup(1, (int *)nil) > 0) but hard to read
-%pad: I added the return
-
-% pass nil, nil to pass previous node and previous arc, but used only
-% for pretending stuff.
-
+\item At some point, [[work()]] will schedule a job for the root target
+in which case its building status will switch from [[NOTMADE]] to [[BEINGMADE]].
+\l can be to MADE directly?
 %ocaml-found:
-% waitup take 1 to say 'ok to not have children'.
-% when can be the case? when top is virtual target with no recipe
-% e.g., all: prog,
+[[mk()]] will then wait one more time for
+the children process responsible for building the root target to finish,
+and then [[mk()]] will finally return.
+
+
+\end{enumerate}
+\t why not waitup after work anyway even if did = true?
+\t  when can you schedule jobs, and then do another wave that can find more?
+\t  anyway you need to waitup for update() to be called
+
+
+The code of [[mk()]] is small, but subtle.
+%Here are a few additional notes on [[mk()]]:
+For example, the first call to [[waitup()]] in [[work()]] 
+uses the [[EMPTY_CHILDREN_IS_OK]] flag (see Section~\ref{sec:waitup})
+to indicate that it is ok if [[waitup()]] does not find any children
+process to wait for.
+%
+Indeed, everything was maybe already up-to-date in which case
+[[work()]] will not schedule any job, [[work()]] will have marked the 
+root node as [[MADE]], and [[did]] will stay false.
+%
+However, the second call to [[waitup()]] in [[work()]] uses
+the [[EMPTY_CHILDREN_IS_ERROR]] flag because [[mk]] knows
+there is still the process responsible to update the root target
+to wait for.
+%ocaml-found:
+% Also when top is virtual target with no recipe e.g., all: prog,
 % and previous round built prog and updated to MADE the prog node.
 % Still the root node is not made, and work will not trigger
 % any new process; it will update though all to MADE but we should
-% not waitup().
+% not waitup() and expect children.
 
-%ocaml-found:
-% why extra waitup after? because last work round may have put
-% root as BeingMade and so will go out of the loop,
-% but we still need to wait!
+The last two parameters of [[work()]] contains the parent
+node and parent arc of the current node. Here in [[mk()]] we
+start from the root node, so both arguments are [[nil]].
+%
+You will see in Section~\ref{sec:pretending} why [[work()]]
+needs such information.
 
-%note: subtle, important while loop! because of mk // so run some jobs
-% but then later another job might depend on the end of this one,
-% so have BEINGMADE flag and waitup??
-
-% can have runerrs only when use mk -k ? so could put that in assert too?
+\l can have runerrs only when use mk -k ? so could put that in assert too?
 % NO, can have it also when C-c.
 
-% When can have did==false so print 'xx is up to date'?
-% when did nothing, because prog was _already_ up to date.
-\l maybe change message.
 
 
+\section{Initializing nodes, [[clrmade()]]}
+\label{sec:clrmade}
 
-
-\section{[[clrmade()]]}
+[[clrmade()]] below simply marks all nodes as [[NOTMADE]]:
 
 <<function clrmade>>=
 void
@@ -7746,80 +7895,86 @@ clrmade(Node *n)
 %bug? DAG? should avoid repetitive work too there?
 %ocaml: no need, do that in newnode() thx to another field.
 
+Note that [[Node.flag]] does not contain only the building status of a node.
+\l ex? virtual attribute?
+This is why the macro below makes sure it resets only the bits
+in [[Node.flag]] that contain the building status:
+
 <<function MADESET>>=
 #define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
 @
-% keep flags as they were, except for the made stuff
 %ocaml: use a separate field than the other node attributes
 
 
 
-\section{[[work()]]}
+\section{Exploring the graph, [[work()]]}
+\label{sec:work}
 
-% have to do transitive closure of dependencies ... when
-% "making" node, look at is prerequistes, and check if they need
-% work too, because maybe a leaf was modified!
-
-
-<<[[work()]] locals>>=
-bool did = false;
-@
-\t move as a global! so no need return bool in work() also.
-
-
-\t parent_node, prev_arc, TODO rename parameters?
-% extra params for advanced functionality not needed
+[[work()]] below performs a DFS on the graph while looking for
+outdated [[NOTMADE]] nodes:
 
 % main -> mk -> <> -> outofdate(); dorecipe()
 <<function work>>=
-bool
-work(Node *node,   Node *p, Arc *parc)
+void
+work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
 {
     <<[[work()]] locals>>
 
     <<[[work()]] debug>>
     if(node->flags&BEINGMADE)
-        return did;
+        return;
     <<[[work()]] possibly unpretending node>>
 
-    // Leaf case
-    <<[[work()]] no prerequisite, a leaf>>
-    // else
-    // Node case
-    <<[[work()]] some prerequisites, a node>>
+    if(node->arcs == nil){
+        <<[[work()]] no prerequisite, a leaf>>
+    } else {
+        <<[[work()]] some prerequisites, a node>>
+    }
 }
 @
-% can refactor in did ||= foo(); ? hmm maybe not, we actually want the
-% side effect!
-\t maybe can rewrite with skeleton of if(node->prereqs == nil)
-\t  and use else instead of ugly return shortcut.
+%old: 
+% - <<[[work()]] locals>>=
+%   bool did = false;
+%   @
+%   I now pass it as a reference! so no need return bool in work() also.
+% - I remove some return in leaf case so and rewrite with cleaner if then else
+% - p -> parent_node, parc -> parent_arc
+% extra params for advanced functionality not needed
+\l BEINGMADE test because DAG? No, because previous round may have not
+\l   waitup the process for this node.
+\t should also return if MADE no? faster then
 
-\t can refactor did in a global? dangerous ... but would clarify I think
-
-% BEINGMADE test because DAG.
+%toc:
+The following two sections explain the code of [[work()]] when
+the node is a leaf and when it has children.
 
 \subsection{Leaf case}
 
-% a leaf!
+%trans:
+The leaf case is easy.
+%
+If a node has no prerequisites and contains an existing file,
+for instance, [[hello.c]] in Figure~\ref{fig:graph-being-made2},
+then this node is already [[MADE]].
+
 <<[[work()]] no prerequisite, a leaf>>=
 /* consider no prerequisite case */
-if(node->arcs == nil){
     if(node->time == 0){
         <<[[work()]] print error when inexistent file without prerequisites>>
     } else
         MADESET(node, MADE);
-    return did;
-}
 @
-% if no prereqs, then no arcs, then no rule with recipe
-\t why not use update(false, node) here?
+%old: was return did; 
+% - but actually there 'did' was always true
+% - clearer to remove return so can rewrite work skeleton
+\l why not use update(false, node) here?
+\l remember that virtual rules have an arc
 
-% remember that virtual rules have an arc
+Otherwise, [[mk]] should report an error:
 
 <<[[work()]] locals>>=
 char cwd[256];
 @
-
 <<[[work()]] print error when inexistent file without prerequisites>>=
 if(getwd(cwd, sizeof cwd))
     fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
@@ -7830,29 +7985,43 @@ else
 else
     Exit();
 @
-% the directory part is useful in recursive mk context
+\l the directory part is useful in recursive mk context
 \l aspectize that part and put in recursive mk section?
+\l when getwd can fail? should never fail ...
 
 \subsection{Node case}
+
+%trans:
+The non-leaf case is more complex.
+%
+
+
+
+% have to do transitive closure of dependencies ... when
+% "making" node, look at is prerequistes, and check if they need
+% work too, because maybe a leaf was modified!
 
 <<[[work()]] locals>>=
 bool weoutofdate = false;
 bool ready = true;
-Arc *a;
 @
-%old: used to be done later, and weoutofdate used to be aflag
-%old: initialization was done later
+%old: initialization used to be done later, and weoutofdate used to be aflag
 \n called weoutofdate to avoid conflict with outofdate function
 
+Here is the code in [[work()]] handling nodes with children:
+
+<<[[work()]] locals>>=
+Arc *a;
+@
 <<[[work()]] some prerequisites, a node>>=
 <<[[work()]] adjust weoutofdate if aflag>>
 /*
  *   now see if we are out of date or what
  */
-for(a = node->arcs; a; a = a->next)
+for(a = node->arcs; a; a = a->next) {
     if(a->n){
         // recursive call! go in depth
-        did = work(a->n, node, a) || did;
+        work(a->n, did,  node, a);
 
         if(a->n->flags&(NOTMADE|BEINGMADE))
             ready = false;
@@ -7866,25 +8035,27 @@ for(a = node->arcs; a; a = a->next)
             <<[[work()]] update [[ra]] when no dest in arc and no src>>
         }
     }
+}
 
 if(!ready)	/* can't do anything now */
-    return did;
+    return;
 if(!weoutofdate){
     MADESET(node, MADE);
-    return did;
+    return;
 }
 <<[[work()]] possibly pretending node>>
-
 // else, out of date
 
-did = dorecipe(node) || did;
-return did;
+dorecipe(node, did);
+return;
 @
+%old: changed lots of code because I now thread did
+% could refactor in did ||= foo(); ? no, we actually want the side effect!
+
+
 
 \t why not remove ready=false and just return earlier? do side effects
-\t  in loop for other stuff? for pretending stuff?
-\t  also could rewrite code with cleaner if then else instead of those
-\t  ugly return shortcut
+\t  in loop for other stuff? YES! we schedule jobs in other branches!
 
 % when can happen have no node attached to an arc? virtual targets
 %  or when file does not exist, so for sure we are out of date.
@@ -7913,7 +8084,7 @@ outofdate(Node *node, Arc *arc, bool eval)
 % inexistent file has zero time (like very very old time)
 %old: was <=, but annoying, so I ignored the comment
 
-% eval argument? seems used only for :P: prog stuff
+\l eval argument? seems used only for :P: prog stuff
 
 %note: on very fast machine the <= above test can be actually annoying.
 % For instance in ocaml both the .cmo and .cmi may have
@@ -7926,180 +8097,103 @@ outofdate(Node *node, Arc *arc, bool eval)
 
 
 
-\section{[[dorecipe()]]}
-
-%bool dorecipe(Node *node)
-
-% will iterate over arcs, node in args, words, and symbols.
+\section{Scheduling recipes, [[dorecipe()]]}
+\label{sec:dorecipe}
 
 % find right arc with recipe, find master rule
 
 <<[[dorecipe()]] other locals>>=
-Arc *aa = nil; // arc with recipe
-Rule *r = nil; // rule with recipe
+Rule *master_rule = nil;
+Arc *master_arc = nil;
 @
-\t rename aa to arc or master_arc
+%old: aa -> master_ arc, r -> master_rule
 
 % set list of targets (most of the time single one)
-% and have alltargets and only-old-targets (outofdate)
+<<[[dorecipe()]] other locals>>=
+Word alltargets;
+@
+%old: ahead -> alltargets (and head -> oldtargets)
 
 <<[[dorecipe()]] other locals>>=
-Word head, ahead; // out of date targets,   all targets
+Word allprereqs;
 @
-\t rename head ahead
+%old: l (for list) -> allprereqs
 
-% set list of prereqs (most of the time single one)
-% and have allprereqs and only-new-prereqs (causing outofdate target)
-
-<<[[dorecipe()]] other locals>>=
-Word lp, ln; // all prereqs, prereqs making target out of date
-@
-\t rename lp ln
-%old: l for list?
-
-<<[[dorecipe()]] other locals>>=
-bool did = false;
-@
-%dead, always false (maybe use [[did]] instead of false cos clearer)
-
+Here is finally the code of [[dorecipe()]]:
+% will iterate over arcs, node in args, words, and symbols.
 
 % main -> mk -> work -> ... -> run(newjob())
 <<function dorecipe>>=
-bool
-dorecipe(Node *node)
+void
+dorecipe(Node *node, bool *did)
 {
     // iterators
     Arc *a;
     Node *n;
     Word *w;
-    Symtab *s;
+    Symtab *s; 
+    // alias
+    Node *nlist = node;
     <<[[dorecipe()]] other locals>>
 
     /*
-     *   pick up the rule
+     *   pick up the master rule
      */
     for(a = node->arcs; a; a = a->next)
         if(*a->r->recipe) {
-            aa = a;
-            r = a->r;
+            master_arc = a;
+            master_rule = a->r;
         }
+
     <<[[dorecipe()]] if no recipe found>>
     // else
 
     /*
      *   build the node list
      */
-    node->next = nil;
-    head.next = ahead.next = nil;
     <<[[dorecipe()]] build lists of targets and node list>>
-    <<[[dorecipe()]] return if one target not READY>>
 
     /*
      *   gather the params for the job
      */
-    lp.next = ln.next = nil;
-    for(n = node; n; n = n->next){
+    allprereqs.next = newprereqs.next = nil;
+    for(n = nlist; n; n = n->next){
         <<[[dorecipe()]] build lists of prerequisites>>
         MADESET(n, BEINGMADE);
     }
 
     // run the job
-    run(newjob(r, node, aa->stem, aa->match, 
-               lp.next, ln.next, 
-               head.next, ahead.next));
-    return true;
+    run(newjob(master_rule, nlist, master_arc->stem, master_arc->match, 
+               allprereqs.next, newprereqs.next, 
+               oldtargets.next, alltargets.next));
+    *did = true; // finally
+    return;
 }
 @
 %/*print("lt=%s ln=%s lp=%s\n",wtos(head.next, ' '),wtos(ln.next, ' '),wtos(lp.next, ' '));
-\t remove local did?
-\t replace return true by did=true; return;
+%old: 
+%  <<[[dorecipe()]] other locals>>=
+%  bool did = false;
+%  @
+%dead? bug?
+%  <<[[dorecipe()]] return if one target not READY>>=
+%  for(n = node; n; n = n->next)
+%      if(!(n->flags&READY))
+%          return did;
+%  @
+%  did was always false I think
+%  and look vacuous(), READY is always set ... 
+%pad: 
+% - I added 'master' in comment about picking up the rule
+% - I added nlist alias, was ugly to modify node
 
-% if return error code, then should stop mk right?
+% set as BEINGMADE all nodes! all target nodes! important in FigureX
+% otherwise would launch another yacc command.
 
+% newjob Section X
 
-<<[[dorecipe()]] other locals>>=
-Word *ww, *aw;
-char buf[BIGBLOCK];
-@
-
-
-<<[[dorecipe()]] build lists of targets and node list>>=
-ww = &head;
-aw = &ahead;
-<<[[dorecipe()]] if regexp rule>>
-else {
-    for(w = r->alltargets; w; w = w->next){
-        if(r->attr&META)
-            subst(aa->stem, w->s, buf, sizeof(buf));
-        else
-            strecpy(buf, buf + sizeof buf - 1, w->s);
-
-        aw->next = newword(buf);
-        aw = aw->next;
-
-        s = symlook(buf, S_NODE, nil);
-        if(s == nil)
-            continue;	/* not a node we are interested in */
-        // else
-        n = s->u.ptr;
-
-        <<[[dorecipe()]] update list of outdated targets>>
-
-        if(n == node) continue;
-
-        n->next = node->next;
-        node->next = n;
-    }
-}
-@
-%ocaml: can do the subst once and for all and have a better rule_exec!
-\t but then need to have talked about S_NODE before? so cant aspectize
-\t  node cache?
-
-% when can have the case of node not found in S_NODE? because
-%  when we build the graph we start from one target which may
-%  be part of a multi-target rule, e.g. parser.ml parser.mli: parser.mly
-%  and if we did mk parser.mli, then parser.ml will not be in
-%  the graph even though we want to add it for the alltargets variable
-
-<<[[dorecipe()]] update list of outdated targets>>=
-if(!aflag && n->time) {
-    for(a = n->arcs; a; a = a->next)
-        if(a->n && outofdate(n, a, false))
-            break;
-    // no out of date arc, node does not need to be regenerated
-    if(a == nil)
-        continue; 
-    // else, find an outdated arc for node of target
-}
-ww->next = newword(buf);
-ww = ww->next;
-@
-
-
-<<[[dorecipe()]] return if one target not READY>>=
-for(n = node; n; n = n->next)
-    if(!(n->flags&READY))
-        return did;
-@
-% did always false here no?
-% and look vacuous(), READY is always set ...
-\t ???? remove code?
-
-<<[[dorecipe()]] build lists of prerequisites>>=
-for(a = n->arcs; a; a = a->next){
-    if(a->n){
-        addw(&lp, a->n->name);
-        if(outofdate(n, a, false)){
-            addw(&ln, a->n->name);
-            <<[[dorecipe()]] explain when found arc [[a]] making target [[n]] out of date>>
-        }
-    } else {
-        <<[[dorecipe()]] explain when found target [[n]] with no prerequisite>>
-    }
-}
-@
-\l why arc without a node??
+If [[work()]] found an outdated file but [[dorecipe()]] can not
+find any recipe to update the file, [[mk]] should report an error:
 
 <<[[dorecipe()]] other locals>>=
 char cwd[256];
@@ -8109,24 +8203,102 @@ char cwd[256];
 /*
  *   no recipe? go to buggery!
  */
-if(r == nil){
-    if(!(node->flags&VIRTUAL) && !(node->flags&NORECIPE)){
+if(master_rule == nil){
+    <<[[dorecipe()]] when no recipe found, if virtual or norecipe node>>
+    else {
         if(getwd(cwd, sizeof cwd))
-            fprint(STDERR, "mk: no recipe to make '%s' in directory %s\n", node->name, cwd);
+            fprint(STDERR, "mk: no recipe to make '%s' in directory %s\n", 
+                   node->name, cwd);
         else
             fprint(STDERR, "mk: no recipe to make '%s'\n", node->name);
         Exit();
     }
-    // else
-    <<[[dorecipe()]] when no recipe found, if archive name>>
-    else
-        update(false, node);
-
-    <<[[dorecipe()]] when no recipe found, if tflag>>
-    return did;
 }
 @
-\t change !X && !Y  to X || Y   so easier to aspectize
+
+
+\subsection{Building the list of target nodes}
+
+% In practice, only one target.
+
+<<[[dorecipe()]] other locals>>=
+Word *last_alltargets = &alltargets;
+char buf[BIGBLOCK];
+@
+%old: aw -> last_alltargets;
+
+% classic idiom again (as in Section X)
+% to add to list without having to worry if empty list.
+
+
+<<[[dorecipe()]] build lists of targets and node list>>=
+nlist->next = nil;
+alltargets.next = oldtargets.next = nil;
+<<[[dorecipe()]] if regexp rule>>
+else {
+    for(w = master_rule->alltargets; w; w = w->next){
+        if(master_rule->attr&META)
+            subst(master_arc->stem, w->s, buf, sizeof(buf));
+        else
+            strecpy(buf, buf + sizeof buf - 1, w->s);
+
+        //add_list(newword(buf), alltargets)
+        last_alltargets->next = newword(buf);
+        last_alltargets = last_alltargets->next;
+
+        s = symlook(buf, S_NODE, nil);
+        <<[[dorecipe()]] sanity check s>>
+        n = s->u.ptr;
+
+        <<[[dorecipe()]] update list of outdated targets>>
+
+        // add_list(n, node)
+        if(n == node) 
+            continue;
+        n->next = nlist->next;
+        nlist->next = n;
+    }
+}
+@
+%ocaml: can do the subst once and for all and have a better rule_exec!
+%old: was initializing w, aw here, but I prefer earlier, easier to aspectize
+
+<<[[dorecipe()]] sanity check s>>=
+if(s == nil)
+    continue;	/* not a node we are interested in */
+@
+
+\t but then need to have talked about S_NODE before? so cant aspectize
+\t  node cache?
+
+% when can have the case of node not found in S_NODE? because
+%  when we build the graph we start from one target which may
+%  be part of a multi-target rule, e.g. parser.ml parser.mli: parser.mly
+%  and if we did mk parser.mli, then parser.ml will not be in
+%  the graph even though we want to add it for the alltargets variable
+
+
+
+\subsection{Building the list of prerequisites}
+
+<<[[dorecipe()]] build lists of prerequisites>>=
+for(a = n->arcs; a; a = a->next){
+    if(a->n){
+        addw(&allprereqs, a->n->name);
+
+        if(outofdate(n, a, false)){
+            <<[[dorecipe()]] when outofdate node, update list of newprereqs>>
+            <<[[dorecipe()]] explain when found arc [[a]] making target [[n]] out of date>>
+        }
+    } else {
+        <<[[dorecipe()]] explain when found target [[n]] with no prerequisite>>
+    }
+}
+@
+
+
+
+
 
 
 
@@ -8188,7 +8360,7 @@ run(Job *j)
 \subsection{[[$NPROC]]}%$
 % export NPROC=...
 
-<<[[mk()]] initialisation>>=
+<<[[mk()]] initializations>>=
 nproc();	/* it can be updated dynamically */
 @
 
@@ -8507,6 +8679,7 @@ if(err < 0){
 \section{Waiting for jobs to finish}
 
 \subsection{[[waitup()]]}
+\label{sec:waitup}
 
 % wait user processes?
 
@@ -8516,8 +8689,23 @@ if(err < 0){
 %  indiscrimently, so have to centralize in one place.
 % For more info, see Section X.
 
-\t enum WaitupResult { WEmptyChild=1, WJobEnded=0, WNotJobProcess=-1 }
-\t enum WaitupParam { EmptyChildOk, EmptyChildError1 =-1, EmptyChildError2 =-2}
+<<type WaitupParam>>=
+enum WaitupParam { 
+  EMPTY_CHILDREN_IS_OK = 1, 
+  EMPTY_CHILDREN_IS_ERROR = -1, 
+  EMPTY_CHILDREN_IS_ERROR2 = -2,
+};
+@
+%pad: I added that, those 1, -1 was cryptic
+
+<<type WaitupResult>>=
+enum WaitupResult { 
+  JOB_ENDED = 0, 
+  EMPTY_CHILDREN = 1, 
+  NOT_A_JOB_PROCESS = -1 
+};
+@
+%pad: I added that, those 1, -1 was cryptic
 
 % mk -> work; <>
 <<function waitup>>=
@@ -8583,7 +8771,7 @@ waitfor(char *msg)
     w = wait();
     // no more children
     if(w == nil)
-        return -1;
+        return ERROR_NEG1;
     strecpy(msg, msg+ERRMAX, w->msg);
     pid = w->pid;
     free(w);
@@ -8595,8 +8783,6 @@ waitfor(char *msg)
 
 % echildok -1, -2, -3?? just to help debug which one of the waitup?
 %alt: could use __LINE__ instead
-\t introduce enum? ERROR_CHILD_OK, ERROR_CHILD_NOTOK1, ERROR_CHILD_NOTOK2
-\t  or is it EMPTY_CHILD_OK?
 
 <<[[waitup()]] if no more children>>=
 if(pid == -1){
@@ -8671,7 +8857,7 @@ front(char *s)
     free(q);
 }
 @
-\t ??? getfields?
+\t ??? getfields? Libcore
 
 
 \subsection{[[update()]]}
@@ -8841,7 +9027,7 @@ case 'k':
 <<global runerrs>>=
 int runerrs;
 @
-<<[[mk()]] initialisation>>=
+<<[[mk()]] initializations>>=
 runerrs = 0;
 @
 
@@ -8881,7 +9067,6 @@ if(res > 0){
 <<[[mk()]] before returning, more [[waitup()]] if there was an error>>=
 while(jobs)
     waitup(-2, (int *)nil);
-
 assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
 @
 \t when do we have this? really need that?
@@ -9763,11 +9948,14 @@ if(attr&REGEXP){
 
 
 <<[[dorecipe()]] if regexp rule>>=
-if(r->attr&REGEXP){
-    ww->next = newword(node->name);
-    aw->next = newword(node->name);
+if(master_rule->attr&REGEXP){
+    last_oldtargets->next = newword(node->name);
+    last_alltargets->next = newword(node->name);
 }
 @
+% seems to do very little compared to the meta rule case
+% where we update the node list. Because cant have multiple targets
+% with regexp rule?
 
 <<[[buildenv()]] if regexp rule>>=
 if(j->r->attr&REGEXP)
@@ -10462,6 +10650,17 @@ if(n->flags&VIRTUAL)
 % date was very recent, more recent than the prereqs and
 % so the recipe will not have been triggered.
 
+
+<<[[dorecipe()]] when no recipe found, if virtual or norecipe node>>=
+if((node->flags&VIRTUAL) || (node->flags&NORECIPE)){
+    <<[[dorecipe()]] when no recipe found, if archive name>>
+    else
+        update(false, node);
+    <<[[dorecipe()]] when no recipe found, if tflag>>
+}
+@
+%old: change !X && !Y  to X || Y   so easier to aspectize
+
 \subsection{Deleting a target when the recipe returns an error, [[:D:]]}
 
 % seems safe, but really the tool involved should not generate
@@ -10907,11 +11106,38 @@ if(symlook(s->name, S_NOEXPORT, nil))
 \section{Advanced [[mk]] variables}
 
 \subsection{[[$target]] versus [[$alltargets]]}
+% should be oldtargets vs targets, would be more consistent
+% with prereqs vs newprereqs
+
+
+<<[[dorecipe()]] other locals>>=
+Word oldtargets;
+Word *last_oldtargets = &oldtargets;
+@
+%old: head -> oldtargets, ww -> last_oldtargets
+
+<<[[dorecipe()]] update list of outdated targets>>=
+if(!aflag && n->time) {
+    for(a = n->arcs; a; a = a->next)
+        if(a->n && outofdate(n, a, false))
+            break;
+    // no out of date arc, node does not need to be regenerated
+    if(a == nil)
+        continue; 
+    // else, find an outdated arc for node of target
+}
+last_oldtargets->next = newword(buf);
+last_oldtargets = last_oldtargets->next;
+@
+
+
+
 
 
 <<[[myenv]] other array elements>>=
 "alltarget",
 @
+% alltargets? 
 
 <<[[Job]] other fields>>=
 Word		*at;	/* all targets */
@@ -10921,11 +11147,23 @@ Word		*at;	/* all targets */
 envupd("alltarget", wdup(j->at));
 @
 
-\t code dealing with alltargets in work here.
+
+
+
 
 \subsection{[[$prereq]] versus [[$newprereq]]}
 
+<<[[dorecipe()]] other locals>>=
+Word newprereqs; 
+@
+%old: ln -> newprereqs, 
+
 % seems used only for aggregate rules to optimize library building.
+
+<<[[dorecipe()]] when outofdate node, update list of newprereqs>>=
+addw(&newprereqs, a->n->name);
+@
+
 
 <<[[myenv]] other array elements>>=
 "newprereq",
@@ -10944,12 +11182,11 @@ envupd("newprereq", wdup(j->np));
 
 % related to aggregates?
 
-\t code dealing with newprereq in work here.
 
 \subsection{[[$NREP]]}
 %$
 
-<<[[mk()]] initialisation>>=
+<<[[mk()]] initializations>>=
 nrep();		/* it can be updated dynamically */
 @
 
@@ -11261,6 +11498,8 @@ if(strchr(arc->n->name, '(') && arc->n->time == 0)
 %\subsection{Time cache}
 
 \subsection{Missing-intermediates optimization, [[mk -I]]}
+\label{sec:pretending}
+
 % mk -i suppress this behavior
 % pad: mk -I! new mode :) because I don't like the default mode!
 
@@ -11306,13 +11545,13 @@ if(strchr(n->name, '(') == 0 || n->time)
  */
 if((!iflag) && (node->time == 0) 
         && (node->flags&(PRETENDING|CANPRETEND))
-        && p && ra->n && !outofdate(p, ra, false)){
+        && parent_node && ra->n && !outofdate(parent_node, ra, false)){
     node->flags &= ~CANPRETEND;
     MADESET(node, MADE);
     if(explain && ((node->flags&PRETENDING) == 0))
         fprint(STDOUT, "pretending %s has time %lud\n", node->name, node->time);
     node->flags |= PRETENDING;
-    return did;
+    return;
 }
 /*
  *   node is out of date and we REALLY do have to do something.
@@ -11326,21 +11565,23 @@ for(a = node->arcs; a; a = a->next)
             ra->n? ra->n->name : "rule with no prerequisites");
 
         unpretend(a->n);
-        did = work(a->n, node, a) || did;
+        work(a->n, did, node, a);
         ready = false;
     }
-if(!ready)/* try later unless nothing has happened for -k's sake */
-    return did || work(node, p, parc);
+if(!ready) { /* try later unless nothing has happened for -k's sake */
+    work(node, did, parent_node, parent_arc);
+    return;
+}
 @
 
 
 
 <<[[work()]] possibly unpretending node>>=
-if((node->flags&MADE) && (node->flags&PRETENDING) && p
-    && outofdate(p, parc, false)){
+if((node->flags&MADE) && (node->flags&PRETENDING) && parent_node
+    && outofdate(parent_node, parent_arc, false)){
     if(explain)
         fprint(STDOUT, "unpretending %s(%lud) because %s is out of date(%lud)\n",
-            node->name, node->time, p->name, p->time);
+            node->name, node->time, parent_node->name, parent_node->time);
     unpretend(node);
 }
 /*
@@ -11351,7 +11592,7 @@ if(node->flags&MADE){
     if(node->flags&PRETENDING){
         node->time = 0;
     }else
-        return did;
+        return;
 }
 @
 

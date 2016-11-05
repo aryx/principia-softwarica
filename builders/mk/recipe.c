@@ -27,67 +27,75 @@ newjob(Rule *r, Node *nlist, char *stem, char **match,
 /*e: constructor newjob */
 
 /*s: function dorecipe */
-bool
-dorecipe(Node *node)
+void
+dorecipe(Node *node, bool *did)
 {
     // iterators
     Arc *a;
     Node *n;
     Word *w;
-    Symtab *s;
+    Symtab *s; 
+    // alias
+    Node *nlist = node;
     /*s: [[dorecipe()]] other locals */
-    Arc *aa = nil; // arc with recipe
-    Rule *r = nil; // rule with recipe
+    Rule *master_rule = nil;
+    Arc *master_arc = nil;
     /*x: [[dorecipe()]] other locals */
-    Word head, ahead; // out of date targets,   all targets
+    Word alltargets;
     /*x: [[dorecipe()]] other locals */
-    Word lp, ln; // all prereqs, prereqs making target out of date
-    /*x: [[dorecipe()]] other locals */
-    bool did = false;
-    /*x: [[dorecipe()]] other locals */
-    Word *ww, *aw;
-    char buf[BIGBLOCK];
+    Word allprereqs;
     /*x: [[dorecipe()]] other locals */
     char cwd[256];
+    /*x: [[dorecipe()]] other locals */
+    Word *last_alltargets = &alltargets;
+    char buf[BIGBLOCK];
+    /*x: [[dorecipe()]] other locals */
+    Word oldtargets;
+    Word *last_oldtargets = &oldtargets;
+    /*x: [[dorecipe()]] other locals */
+    Word newprereqs; 
     /*e: [[dorecipe()]] other locals */
 
     /*
-     *   pick up the rule
+     *   pick up the master rule
      */
     for(a = node->arcs; a; a = a->next)
         if(*a->r->recipe) {
-            aa = a;
-            r = a->r;
+            master_arc = a;
+            master_rule = a->r;
         }
+
     /*s: [[dorecipe()]] if no recipe found */
     /*
      *   no recipe? go to buggery!
      */
-    if(r == nil){
-        if(!(node->flags&VIRTUAL) && !(node->flags&NORECIPE)){
+    if(master_rule == nil){
+        /*s: [[dorecipe()]] when no recipe found, if virtual or norecipe node */
+        if((node->flags&VIRTUAL) || (node->flags&NORECIPE)){
+            /*s: [[dorecipe()]] when no recipe found, if archive name */
+            if(strchr(node->name, '(') && node->time == 0)
+                MADESET(node, MADE);
+            /*e: [[dorecipe()]] when no recipe found, if archive name */
+            else
+                update(false, node);
+            /*s: [[dorecipe()]] when no recipe found, if tflag */
+            if(tflag){
+                if(!(node->flags&VIRTUAL))
+                    touch(node->name);
+                else if(explain)
+                    Bprint(&bout, "no touch of virtual '%s'\n", node->name);
+            }
+            /*e: [[dorecipe()]] when no recipe found, if tflag */
+        }
+        /*e: [[dorecipe()]] when no recipe found, if virtual or norecipe node */
+        else {
             if(getwd(cwd, sizeof cwd))
-                fprint(STDERR, "mk: no recipe to make '%s' in directory %s\n", node->name, cwd);
+                fprint(STDERR, "mk: no recipe to make '%s' in directory %s\n", 
+                       node->name, cwd);
             else
                 fprint(STDERR, "mk: no recipe to make '%s'\n", node->name);
             Exit();
         }
-        // else
-        /*s: [[dorecipe()]] when no recipe found, if archive name */
-        if(strchr(node->name, '(') && node->time == 0)
-            MADESET(node, MADE);
-        /*e: [[dorecipe()]] when no recipe found, if archive name */
-        else
-            update(false, node);
-
-        /*s: [[dorecipe()]] when no recipe found, if tflag */
-        if(tflag){
-            if(!(node->flags&VIRTUAL))
-                touch(node->name);
-            else if(explain)
-                Bprint(&bout, "no touch of virtual '%s'\n", node->name);
-        }
-        /*e: [[dorecipe()]] when no recipe found, if tflag */
-        return did;
     }
     /*e: [[dorecipe()]] if no recipe found */
     // else
@@ -95,31 +103,31 @@ dorecipe(Node *node)
     /*
      *   build the node list
      */
-    node->next = nil;
-    head.next = ahead.next = nil;
     /*s: [[dorecipe()]] build lists of targets and node list */
-    ww = &head;
-    aw = &ahead;
+    nlist->next = nil;
+    alltargets.next = oldtargets.next = nil;
     /*s: [[dorecipe()]] if regexp rule */
-    if(r->attr&REGEXP){
-        ww->next = newword(node->name);
-        aw->next = newword(node->name);
+    if(master_rule->attr&REGEXP){
+        last_oldtargets->next = newword(node->name);
+        last_alltargets->next = newword(node->name);
     }
     /*e: [[dorecipe()]] if regexp rule */
     else {
-        for(w = r->alltargets; w; w = w->next){
-            if(r->attr&META)
-                subst(aa->stem, w->s, buf, sizeof(buf));
+        for(w = master_rule->alltargets; w; w = w->next){
+            if(master_rule->attr&META)
+                subst(master_arc->stem, w->s, buf, sizeof(buf));
             else
                 strecpy(buf, buf + sizeof buf - 1, w->s);
 
-            aw->next = newword(buf);
-            aw = aw->next;
+            //add_list(newword(buf), alltargets)
+            last_alltargets->next = newword(buf);
+            last_alltargets = last_alltargets->next;
 
             s = symlook(buf, S_NODE, nil);
+            /*s: [[dorecipe()]] sanity check s */
             if(s == nil)
                 continue;	/* not a node we are interested in */
-            // else
+            /*e: [[dorecipe()]] sanity check s */
             n = s->u.ptr;
 
             /*s: [[dorecipe()]] update list of outdated targets */
@@ -132,34 +140,33 @@ dorecipe(Node *node)
                     continue; 
                 // else, find an outdated arc for node of target
             }
-            ww->next = newword(buf);
-            ww = ww->next;
+            last_oldtargets->next = newword(buf);
+            last_oldtargets = last_oldtargets->next;
             /*e: [[dorecipe()]] update list of outdated targets */
 
-            if(n == node) continue;
-
-            n->next = node->next;
-            node->next = n;
+            // add_list(n, node)
+            if(n == node) 
+                continue;
+            n->next = nlist->next;
+            nlist->next = n;
         }
     }
     /*e: [[dorecipe()]] build lists of targets and node list */
-    /*s: [[dorecipe()]] return if one target not READY */
-    for(n = node; n; n = n->next)
-        if(!(n->flags&READY))
-            return did;
-    /*e: [[dorecipe()]] return if one target not READY */
 
     /*
      *   gather the params for the job
      */
-    lp.next = ln.next = nil;
-    for(n = node; n; n = n->next){
+    allprereqs.next = newprereqs.next = nil;
+    for(n = nlist; n; n = n->next){
         /*s: [[dorecipe()]] build lists of prerequisites */
         for(a = n->arcs; a; a = a->next){
             if(a->n){
-                addw(&lp, a->n->name);
+                addw(&allprereqs, a->n->name);
+
                 if(outofdate(n, a, false)){
-                    addw(&ln, a->n->name);
+                    /*s: [[dorecipe()]] when outofdate node, update list of newprereqs */
+                    addw(&newprereqs, a->n->name);
+                    /*e: [[dorecipe()]] when outofdate node, update list of newprereqs */
                     /*s: [[dorecipe()]] explain when found arc [[a]] making target [[n]] out of date */
                     if(explain)
                         fprint(STDOUT, "%s(%ld) < %s(%ld)\n",
@@ -178,10 +185,11 @@ dorecipe(Node *node)
     }
 
     // run the job
-    run(newjob(r, node, aa->stem, aa->match, 
-               lp.next, ln.next, 
-               head.next, ahead.next));
-    return true;
+    run(newjob(master_rule, nlist, master_arc->stem, master_arc->match, 
+               allprereqs.next, newprereqs.next, 
+               oldtargets.next, alltargets.next));
+    *did = true; // finally
+    return;
 }
 /*e: function dorecipe */
 
