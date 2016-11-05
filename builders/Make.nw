@@ -7781,21 +7781,20 @@ with [[clrmade()]]
 %   2 files with deps on same Node, because of the DAG
 % MADE finally when recipe done! (or time was already good, so no need update)
 
-\item [[mk()]] explores the graph of dependencies repeatedly,
-in successive {waves}, to find outdated files with [[work()]] 
-(see Section~\ref{sec:work}).
+\item [[mk()]] explores the graph of dependencies repeatedly
+with [[work()]] (see Section~\ref{sec:work}), in successive {waves}, 
+to find outdated files.
 %
 When [[work()]] finds up-to-date files, it marks them as [[MADE]],
-for instance, [[hello.c]] in Figure~\ref{fig:graph-being-made2}.
+(e.g., [[hello.c]] in Figure~\ref{fig:graph-being-made2}).
 %
 When it finds outdated files, [[work()]] schedules a recipe to be executed
-with [[dorecipe()]] 
-(see Section~\ref{sec:dorecipe}), 
+with [[dorecipe()]] (see Section~\ref{sec:dorecipe}), 
 and marks the node as [[BEINGMADE]].
 %
 For example, in Figure~\ref{fig:graph-being-made2}, [[work()]]
-discovers that [[world.5]] is older than [[world.c]]
-and so schedules a recipe to update [[world.5]] and marks
+discovered that [[world.5]] was older than [[world.c]]
+and so scheduled a recipe to update [[world.5]] and marked
 [[world.5]] as [[BEINGMADE]].
 %
 [[work()]] also sets to true the [[did]] boolean passed by reference
@@ -7832,7 +7831,6 @@ in which case its building status will switch from [[NOTMADE]] to [[BEINGMADE]].
 the children process responsible for building the root target to finish,
 and then [[mk()]] will finally return.
 
-
 \end{enumerate}
 \t why not waitup after work anyway even if did = true?
 \t  when can you schedule jobs, and then do another wave that can find more?
@@ -7846,7 +7844,7 @@ uses the [[EMPTY_CHILDREN_IS_OK]] flag (see Section~\ref{sec:waitup})
 to indicate that it is ok if [[waitup()]] does not find any children
 process to wait for.
 %
-Indeed, everything was maybe already up-to-date in which case
+Indeed, everything was maybe already up-to-date, in which case
 [[work()]] will not schedule any job, [[work()]] will have marked the 
 root node as [[MADE]], and [[did]] will stay false.
 %
@@ -8307,7 +8305,8 @@ for(a = n->arcs; a; a = a->next){
 \label{chap:scheduling}
 \l Fixing outdated files
 
-%trans: remaining things to see: run(), waitup()
+%trans: remaining things to see: run() (from dorecipe()), 
+% and waitup() from mk().
 % seen Job and jobs before.
 % will see a few more globals: nproclimit, nevent, nrunning
 
@@ -8356,35 +8355,6 @@ run(Job *j)
 % if no more processor free, then just enqueued. next round
 %  will pop this one.
 
-
-\subsection{[[$NPROC]]}%$
-% export NPROC=...
-
-<<[[mk()]] initializations>>=
-nproc();	/* it can be updated dynamically */
-@
-
-% like nrep()
-
-<<function nproc>>=
-void
-nproc(void)
-{
-    Symtab *sym;
-    Word *w;
-
-    if(sym = symlook("NPROC", S_VAR, nil)) {
-        w = sym->u.ptr;
-        if (w && w->s && w->s[0])
-            nproclimit = atoi(w->s);
-    }
-    if(nproclimit < 1)
-        nproclimit = 1;
-    <<[[nproc()]] if DEBUG(D_EXEC)>>
-
-    <<[[nproc()]] grow nevents if necessary>>
-}
-@
 
 
 \section{Scheduling jobs}
@@ -8904,7 +8874,7 @@ update(bool fake, Node *node)
 
 
 
-\section{Process management}
+\section{Process management, [[Exit()]]}
 
 % cant just exit with processes hanging out.
 % wait at least until job finished.
@@ -8917,7 +8887,7 @@ update(bool fake, Node *node)
 % See pb with mk-rc.byte when didnt implement that?
 % got corrupted cmo all the time.
 
-\subsection{[[Exit()]]}
+%\subsection{[[Exit()]]}
 
 <<function Exit>>=
 void
@@ -8936,142 +8906,8 @@ Exit(void)
 % good to wait, but what if too long recipe? % enter C-c!
 
 
-\subsection{Notes (signals) management}
-% [[C-c]]
-
-<<[[main()]] initializations before building>>=
-catchnotes();
-@
-%old: argv processing part 3 was there before, in the middle
-
-
-% main -> <>
-<<function catchnotes>>=
-void
-catchnotes()
-{
-    atnotify(notifyf, 1);
-}
-@
-
-<<function notifyf>>=
-int
-notifyf(void *a, char *msg)
-{
-    <<[[notifyf()]] sanity check not too many notes>>
-    if(strcmp(msg, "interrupt")!=0 && strcmp(msg, "hangup")!=0)
-        return 0;
-    killchildren(msg);
-    return -1;
-}
-@
-% 0 -> IGNORE_NOTE?
-
-
-<<[[notifyf()]] sanity check not too many notes>>=
-static int nnote;
-
-USED(a);
-if(++nnote > 100){	/* until andrew fixes his program */
-    fprint(STDERR, "mk: too many notes\n");
-    notify(0);
-    abort();
-}
-@
-
-\subsection{Killing all children}
-
-\subsubsection{[[killchildren()]]}
-
-<<function killchildren>>=
-void
-killchildren(char *msg)
-{
-    <<[[killchildren()]] locals>>
-
-    kflag = true;	/* to make sure waitup doesn't exit */
-    jobs = nil;		/* make sure no more get scheduled */
-
-    <<[[killchildren()]] expunge not-job processes>>
-
-    while(waitup(1, (int *)nil) == 0)
-        ;
-    Bprint(&bout, "mk: %s\n", msg);
-    Exit();
-}
-@
-\t 0 -> WJobEnded
-\t 1 -> EmptyChildOk
-
-% so at some point should get WEmptyChild
-% (or WNotJobProcessDone but would be weird)
-
-\l why not send also postnote to job child process?
-
-\subsubsection{[[kflag]] and [[runerrs]]}
-
-% kflag also used for mk -k, but does not make much sense I think.
-
-<<global kflag>>=
-bool kflag = false;
-@
-% continue even if errors.
-% not so useful in general, but useful for killchildren when get a C-c ???
-<<[[main()]] -xxx switch cases>>=
-case 'k':
-    kflag = true;
-    break;
-@
-
-
-<<global runerrs>>=
-int runerrs;
-@
-<<[[mk()]] initializations>>=
-runerrs = 0;
-@
-
-
-
-\subsubsection{Adjusting [[mk()]], [[work()]], and [[waitup()]]}
-
-% instead of Exit
-<<[[work()]] when inexistent target without prerequisites, if kflag>>=
-if(kflag){
-    node->flags |= BEINGMADE;
-    runerrs++;
-}
-@
-
-% instead of Exit again
-<<[[waitup()]] when error in child process, if kflag>>=
-if(kflag){
-    runerrs++;
-    fake = true;
-}
-@
-% fake so BEINGMADE instead of MADE
-
-
-<<[[mk()]] if no child to waitup and root not MADE, possibly break>>=
-if(res > 0){
-    if(root->flags&(NOTMADE|BEINGMADE)){
-        assert(/*must be run errors*/ runerrs);
-        break;	/* nothing more waiting */
-    }
-}
-@
-\t res == WEmptyChild ?
-
-% subtle
-<<[[mk()]] before returning, more [[waitup()]] if there was an error>>=
-while(jobs)
-    waitup(-2, (int *)nil);
-assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
-@
-\t when do we have this? really need that?
-
-
+%\subsection{Notes (signals) management}
+% now in adv topics
 
 
 
@@ -11255,6 +11091,37 @@ envupd("nproc", newword(buf));
 % in newjob()
 %    j->nproc = -1;
 
+
+\subsection{[[$NPROC]]}%$
+% export NPROC=...
+
+<<[[mk()]] initializations>>=
+nproc();	/* it can be updated dynamically */
+@
+
+% like nrep()
+
+<<function nproc>>=
+void
+nproc(void)
+{
+    Symtab *sym;
+    Word *w;
+
+    if(sym = symlook("NPROC", S_VAR, nil)) {
+        w = sym->u.ptr;
+        if (w && w->s && w->s[0])
+            nproclimit = atoi(w->s);
+    }
+    if(nproclimit < 1)
+        nproclimit = 1;
+    <<[[nproc()]] if DEBUG(D_EXEC)>>
+
+    <<[[nproc()]] grow nevents if necessary>>
+}
+@
+
+
 \section{Aggregates, archives}
 % meh
 
@@ -11935,6 +11802,146 @@ symlook("MKARGS", S_VAR, (void *) stow(buf->start));
 
 freebuf(buf);
 @
+
+
+
+
+\section{[[mk -k]]}
+
+\subsection{Notes (signals) management}
+% [[C-c]]
+
+<<[[main()]] initializations before building>>=
+catchnotes();
+@
+%old: argv processing part 3 was there before, in the middle
+
+
+% main -> <>
+<<function catchnotes>>=
+void
+catchnotes()
+{
+    atnotify(notifyf, 1);
+}
+@
+
+<<function notifyf>>=
+int
+notifyf(void *a, char *msg)
+{
+    <<[[notifyf()]] sanity check not too many notes>>
+    if(strcmp(msg, "interrupt")!=0 && strcmp(msg, "hangup")!=0)
+        return 0;
+    killchildren(msg);
+    return -1;
+}
+@
+% 0 -> IGNORE_NOTE?
+
+
+<<[[notifyf()]] sanity check not too many notes>>=
+static int nnote;
+
+USED(a);
+if(++nnote > 100){	/* until andrew fixes his program */
+    fprint(STDERR, "mk: too many notes\n");
+    notify(0);
+    abort();
+}
+@
+
+\subsection{Killing all children}
+
+\subsubsection{[[killchildren()]]}
+
+<<function killchildren>>=
+void
+killchildren(char *msg)
+{
+    <<[[killchildren()]] locals>>
+
+    kflag = true;	/* to make sure waitup doesn't exit */
+    jobs = nil;		/* make sure no more get scheduled */
+
+    <<[[killchildren()]] expunge not-job processes>>
+
+    while(waitup(1, (int *)nil) == 0)
+        ;
+    Bprint(&bout, "mk: %s\n", msg);
+    Exit();
+}
+@
+\t 0 -> WJobEnded
+\t 1 -> EmptyChildOk
+
+% so at some point should get WEmptyChild
+% (or WNotJobProcessDone but would be weird)
+
+\l why not send also postnote to job child process?
+
+\subsubsection{[[kflag]] and [[runerrs]]}
+
+% kflag also used for mk -k, but does not make much sense I think.
+
+<<global kflag>>=
+bool kflag = false;
+@
+% continue even if errors.
+% not so useful in general, but useful for killchildren when get a C-c ???
+<<[[main()]] -xxx switch cases>>=
+case 'k':
+    kflag = true;
+    break;
+@
+
+
+<<global runerrs>>=
+int runerrs;
+@
+<<[[mk()]] initializations>>=
+runerrs = 0;
+@
+
+
+
+\subsubsection{Adjusting [[mk()]], [[work()]], and [[waitup()]]}
+
+% instead of Exit
+<<[[work()]] when inexistent target without prerequisites, if kflag>>=
+if(kflag){
+    node->flags |= BEINGMADE;
+    runerrs++;
+}
+@
+
+% instead of Exit again
+<<[[waitup()]] when error in child process, if kflag>>=
+if(kflag){
+    runerrs++;
+    fake = true;
+}
+@
+% fake so BEINGMADE instead of MADE
+
+
+<<[[mk()]] if no child to waitup and root not MADE, possibly break>>=
+if(res > 0){
+    if(root->flags&(NOTMADE|BEINGMADE)){
+        assert(/*must be run errors*/ runerrs);
+        break;	/* nothing more waiting */
+    }
+}
+@
+\t res == WEmptyChild ?
+
+% subtle
+<<[[mk()]] before returning, more [[waitup()]] if there was an error>>=
+while(jobs)
+    waitup(-2, (int *)nil);
+assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
+@
+\t when do we have this? really need that?
 
 
 
