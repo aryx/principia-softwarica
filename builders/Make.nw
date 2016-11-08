@@ -14,12 +14,13 @@
 %thx to LP, I changed for the better a few things:
 % - removed dead code:
 %    dead namespaces (S_PID, S_MAKEFILE, S_EXPORTED, S_MAKEVAR),
+%    (apparently some were also removed in mk of kencc)
 %    dead rule attributes (UNUSED, UPD),
 %    dead constants (IWS)
 %    dead fields (Job.nproc)
 %    useless code (head.n = node, ...)
 % - cleaned up code:
-%    SEMI renamed variables, was abusing head/tail for too many things 
+%    renamed variables, was abusing head/tail for too many things 
 %    (target vs prerequisites, but also head vs tail of lists of arcs, 
 %    head and tail of rule/assignement, tail for last word, ...)
 % - reorganized the files (removed arc.c, job.c, introduced dumpers.c, mv
@@ -241,7 +242,7 @@ or on many files (many-to-many)?
 \l can have mutual dependencies? self dependency? tree? graph? DAG?
 
 %dup: above
-\item What is the minimal syntax one needs to describe dependencies,
+\item What is the minimal syntax you need to describe dependencies,
 and to describe the {commands} to maintain those dependencies?
 \n :, space, newline
 If this syntax uses special symbols, how do you reference
@@ -302,7 +303,7 @@ those programs are simple, small, elegant, open source, and they form together
 a coherent set.
 %history:
 Moreover, [[mk]] is the ``spiritual successor''~\cite{mk-successor} 
-to Make~\cite{make}.
+to Make. % ~\cite{make}.
 \l not as popular as make, but better variant
 \n even shorter to type (said later)
 Indeed, it was designed in the same lab (Bell Labs), 
@@ -7646,7 +7647,7 @@ with a function called [[work()]],
 and schedules recipes to be executed to update those outdated files,
 with a function called [[dorecipe()]].
 %toc:
-The following sections explain the code of [[mk()]], [[work()]], and
+The following sections will explain the code of [[mk()]], [[work()]], and
 [[dorecipe()]].
 
 \section{[[mk()]]}
@@ -7693,7 +7694,7 @@ Made +------+-+     Made +------+-+
  (3) |hello.c |      (6) |world.c |
      +--------+          +--------+
 \end{verbatim}
-\caption{Graph of dependencies with progress-status labels.}
+\caption{Graph of dependencies with building-status labels.}
 \label{fig:graph-being-made2}
 \end{figure}
 
@@ -7825,7 +7826,7 @@ Thus, the next wave of [[work()]] will be able to progress.
 
 \item At some point, [[work()]] will schedule a job for the root target
 in which case its building status will switch from [[NOTMADE]] to [[BEINGMADE]].
-\l can be to MADE directly?
+\l can be to MADE directly? yes if virtual target (hmm or BEINGMADE cos fake?)
 %ocaml-found:
 [[mk()]] will then wait one more time for
 the children process responsible for building the root target to finish,
@@ -7845,8 +7846,8 @@ to indicate that it is ok if [[waitup()]] does not find any children
 process to wait for.
 %
 Indeed, everything was maybe already up-to-date, in which case
-[[work()]] will not schedule any job, [[work()]] will have marked the 
-root node as [[MADE]], and [[did]] will stay false.
+[[work()]] will not schedule any job ([[work()]] will have marked the 
+root node as [[MADE]]) and [[did]] will stay false.
 %
 However, the second call to [[waitup()]] in [[work()]] uses
 the [[EMPTY_CHILDREN_IS_ERROR]] flag because [[mk]] knows
@@ -7864,7 +7865,7 @@ node and parent arc of the current node. Here in [[mk()]] we
 start from the root node, so both arguments are [[nil]].
 %
 You will see in Section~\ref{sec:pretending} why [[work()]]
-needs such information.
+needs such information for advanced features of [[mk]].
 
 \l can have runerrs only when use mk -k ? so could put that in assert too?
 % NO, can have it also when C-c.
@@ -7896,7 +7897,8 @@ clrmade(Node *n)
 Note that [[Node.flag]] does not contain only the building status of a node.
 \l ex? virtual attribute?
 This is why the macro below makes sure it resets only the bits
-in [[Node.flag]] that contain the building status:
+in [[Node.flag]] that contain the building status, and leaves unchanged
+the other bits.
 
 <<function MADESET>>=
 #define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
@@ -7992,12 +7994,7 @@ else
 %trans:
 The non-leaf case is more complex.
 %
-
-
-
-% have to do transitive closure of dependencies ... when
-% "making" node, look at is prerequistes, and check if they need
-% work too, because maybe a leaf was modified!
+For the node case, [[work()]] relies on the two important booleans below:
 
 <<[[work()]] locals>>=
 bool weoutofdate = false;
@@ -8006,7 +8003,13 @@ bool ready = true;
 %old: initialization used to be done later, and weoutofdate used to be aflag
 \n called weoutofdate to avoid conflict with outofdate function
 
-Here is the code in [[work()]] handling nodes with children:
+[[weoutofdate]] checks whether the current node is out-of-date
+with one of its chuldren.
+%
+[[ready]] checks whether the node is ready to be built because all
+its children are [[MADE]].
+
+Here is finally the code of [[work()]] handling nodes with children:
 
 <<[[work()]] locals>>=
 Arc *a;
@@ -8050,6 +8053,10 @@ return;
 %old: changed lots of code because I now thread did
 % could refactor in did ||= foo(); ? no, we actually want the side effect!
 
+
+% have to do transitive closure of dependencies ... when
+% "making" node, look at is prerequistes, and check if they need
+% work too, because maybe a leaf was modified!
 
 
 \t why not remove ready=false and just return earlier? do side effects
