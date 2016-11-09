@@ -1008,8 +1008,8 @@ Indeed, the targets and prerequisites are similar to the sources and
 destinations of {\em arcs} in a graph. The recipe corresponds to the 
 {\em label} on an arc.
 %
-In fact, as you will see in Section~\ref{sec:graph}, [[mk]] internally
-uses a graph to represent the dependencies between files.
+In fact, as you will see in Section~\ref{sec:graph-principles}, 
+[[mk]] internally uses a graph to represent the dependencies between files.
 
 
 
@@ -1375,7 +1375,7 @@ constructs supported by [[mk]].
 
 
 \subsection{A graph of dependencies}
-\label{sec:graph}
+\label{sec:graph-principles}
 \label{sec:rule-essence}
 
 
@@ -1987,6 +1987,7 @@ Made +------+-+     Made +------+-+
 \caption{Graph of dependencies with progress-status labels.}
 \label{fig:graph-being-made}
 \end{figure}
+\t progress -> building, so more consitent with later?
 
 
 \label{sec:build-status}
@@ -2391,7 +2392,8 @@ the name of a target as an argument (the name stored in [[target1]] by default).
 [[mk()]] then calls [[graph()]] to build the {graph of dependencies}
 for this target given the rules and metarules extracted during parsing.
 %dup: overview/principles/graph
-This graph contains nodes and arcs, as explained in Section~\ref{sec:graph}.
+This graph contains nodes and arcs, as explained 
+in Section~\ref{sec:graph-principles}.
 The {nodes} correspond to concrete files
 (e.g., [[hello.5]], [[hello.c]]),
 \n unless virtual targets (said later)
@@ -2413,7 +2415,7 @@ It then calls recursively [[applyrules()]] on those new nodes.
 \l at some point leaf cos existing file with no matching rule for target
 %
 Note that as opposed to Make,
-in [[mk]] the graph of dependency is computed statically once and for all
+in [[mk]] the graph of dependencies is computed statically once and for all
 at the very beginning.
 \t so? better?
 
@@ -2440,7 +2442,7 @@ with the recipe to regenerate the file in the node.
 %
 [[dorecipe()]] then calls [[run()]] to add in a queue the job to 
 run the recipe. 
-[[run()]] possibly calls [[sched()]] to schedule the job, if there was
+[[run()]] possibly calls [[sched()]] to schedule the job if there was
 a free processor to run the job in parallel.
 %
 [[sched()]] then calls [[execsh()]] to fork and execute in a shell the recipe.
@@ -2644,7 +2646,7 @@ pointer (in [[Symtab.u.ptr]]).
 
 %dup: from Assembler
 The symbol table itself is represented by a global 
-{\em hash table} called [[hash]].
+{hash table} called [[hash]].
 It makes sense to use a global because the symbol table will be accessed
 by different components of the building pipeline.
 %
@@ -2672,7 +2674,7 @@ struct Symtab	*next;
 @
 
 %dup:
-The end of the list is represented by the null pointer.
+The end of the list is represented by the null pointer ([[nil]] in \plan).
 % but no S in mk
 
 % FIGURE? or too simple? does not hurt maybe, so can also see
@@ -2816,8 +2818,8 @@ setvar(char *name, void *value)
 \subsection{Namespaces}
 
 %trans:
-[[mk]] allows the user define variables. [[mk]] also defines
-special variables such as [[$stem]] or [[$target]].
+[[mk]] allows the user to define variables. [[mk]] also defines
+{special variables} such as [[$stem]] or [[$target]].
 %
 To clearly separate those two kinds of variables, [[mk]] stores
 them in different {namespaces}:
@@ -3029,7 +3031,7 @@ described in Section~\ref{sec:bufblock}.
 %
 [[Bufblock]] is an implementation of a {\em string buffer}.
 It implements efficiently string concatenation, to avoid quadratic
-complexity when contenating a set of strings together.
+complexity when concatenating a set of strings together.
 \l will use Bufblock many times. 
 %ocaml: use Buffer.insert
 The code for [[Bufblock]] is in [[mk/bufblock.c]], but 
@@ -3193,6 +3195,7 @@ except period or slash
 \t example of filename would match &.c but not percent.c and vice versa
 \t example why you want to use & in a meta rule, because using percent
 \t  would lead to bugs? [[&: %.c]] is useful for example
+\l maybe just put \ref{} to explanation later on & vs percent
  
 In addition to being stored in [[metarules]] instead of [[rules]],
 a meta rule contains also the [[META]] {\em rule attribute} in 
@@ -3250,7 +3253,7 @@ I will explain later the code to support rules with multiple targets.
 <<function addrule>>=
 void
 addrule(char *head, Word *tail, char *body, 
-        Word *ahead, int attr, int hline, char *prog)
+        Word *alltargets, int attr, int hline, char *prog)
 {
     Rule *r = nil;
     <<[[addrule()]] other locals>>
@@ -3288,7 +3291,8 @@ addrule(char *head, Word *tail, char *body,
     }
 }
 @
-\t rename arguments! target, prereqs, alltargets, etc
+\l rename more? target, prereqs
+%old: ahead -> alltargets
 \l r->pat ?? Malloc does not memset zero anyway?
 %ocaml: use record, and no need wrapper constructor, construct directly with
 % the fields
@@ -3313,7 +3317,9 @@ if(charin(head, "%&") || (attr&REGEXP)){
 I will describe the function [[charin()]] later in Section~\ref{sec:charin}.
 %
 Note that [[charin()]] does not just search for a set of character 
-in a string (here [[head]], the target). Indeed, [[charin()]] must
+in a string.
+% (here [[head]], the target). 
+Indeed, [[charin()]] must
 also handle {\em escaped characters}, for instance, when the target name
 is put inside a quote as in [['myfile%has%weird%characters.doc']],
 in which case the target should not be considered a pattern.
@@ -3492,7 +3498,7 @@ DFS traversal of the graph of dependencies;
 [[mk]] needs to remember the other targets associated with a rule.
 %
 This is why in addition to passing [[w->s]] above, [[addrules()]]
-passes also set the of targets in the fourth argument to [[addrule()]].
+passes also the set of targets in the fourth argument to [[addrule()]].
 %
 This argument is then stored in a special field in the rule:
 
@@ -3507,9 +3513,8 @@ Word 		*alltargets;	/* all the targets */
 %ocaml: merge with Rule.target, and make it a list instead of char*
 
 <<[[addrule()]] set more fields>>=
-r->alltargets = ahead;
+r->alltargets = alltargets;
 @
-\t rename ahead -> alltargets
 
 % thus even if add a rule with one target (in Rule.target),
 % mk remembers other targets in the rule:
@@ -3616,7 +3621,7 @@ enum Node_flag {
 %old: used to be a set of #define
 \l add N_ as a prefix? consistent with S_ for namespace
 
-The build status of a node ([[Made]], [[NotMade]], and [[BeingMade]]),
+The building status of a node ([[Made]], [[NotMade]], and [[BeingMade]]),
 which I mentioned in Section~\ref{sec:build-status}, 
 is stored in [[Node.flags]], as well
 as other information used for advanced features of [[mk]].
@@ -3693,7 +3698,7 @@ the nodes [[hello.5]] and [[hello.c]] could come from
 a meta rule such as [[%.5: %.c ...]].
 %
 In that case, [[mk]] needs to remember in the arc 
-connecting [[hello.5]] to [[hello.c]] the {stem}
+connecting [[hello.5]] to [[hello.c]] the {\em stem}
 that was used to instantiate the meta rule (here [[hello]]):
 
 % so can set $stem for the actual value for the recipe to run
@@ -3709,7 +3714,8 @@ char		*stem;
 %ocaml: do a rule_exec containing all necessary information
 
 The function below builds a new arc to connect 
-to a node [[n]], with the rule [[r]], possibly instantiated
+a source node to a destination node [[n]], 
+with the rule [[r]], possibly instantiated
 with the stem [[stem]] if the rule was a meta rule
 (the last parameter [[match]] is used for regexp rules,
 as explained in Section~\ref{sec:regexp}):
@@ -3924,7 +3930,7 @@ Biobuf bout;
 @
 %ocaml: stdlib already buffer output
 
-[[mk]] uses this global to print message to the user (errors, job progress,
+[[mk]] uses this global to print messages to the user (errors, job progress,
 profiling information, etc). 
 [[bout]] is a buffer connected to the standard output:
 
@@ -4024,8 +4030,8 @@ then simply call [[parse()]] on this temporary file to load those definitions.
 
 The temporary file is first 
 a filename ([[temp]]), then 
-a file descriptor ([[tfd]]) once opened, and finally 
-an output buffer ([[tb]]) once initialized:
+a file descriptor once opened ([[tfd]]), and finally 
+an output buffer once initialized ([[tb]]):
 
 <<[[main()]] locals>>=
 char *temp = nil;
@@ -4058,16 +4064,16 @@ if(tfd >= 0){
 [[utfrune()]] called above is a function looking for a certain character
 in a string.
 %
-This string can contain Unicode characters in \plan
+This string can contain Unicode characters.
 \l cite, and talk about UTF?
-because \plan supports filenames using Unicode characters, as well
+Indeed, \plan supports filenames using Unicode characters, as well
 as command-line arguments using Unicode characters
 (see the \book{Libcore} for more information on unicode and [[utfrune()]]).
 
 
 The last argument to [[parse()]] above is a boolean indicating
 whether [[parse()]] should accept definitions overwriting
-previous definitions. Obviously, here [[true]] is passed to [[parse()]].
+previous definitions. Obviously, here [[main()]] passes [[true]] to [[parse()]].
 
 
 <<[[main()]] create temporary file if not exist yet and set [[tb]]>>=
@@ -4168,10 +4174,10 @@ if(f == nil){
 % because target will be empty
 
 The [[parse()]] function called above will process the [[mkfile]]
-(or another file if [[-f]] was used), modify the globals
-[[rules]], [[metarules]], and a few other globals.
+(or another file if [[-f]] was used) and modify
+[[rules]], [[metarules]], as well as a few other globals.
 %
-Note that this time [[false]] is passed to [[parse()]], so overwriting
+Note that this time [[main()]] passes [[false]] to [[parse()]], so overwriting
 variable definitions is forbidden.
 \l is it actually? or it is just not processed and silently passed over?
 \l and why want that? give example?
@@ -4233,7 +4239,7 @@ else {
 }
 @
 
-Note that first simple rule can contain multiple targets, which
+Note that the first simple rule can contain multiple targets, which
 is why the code above iterates over the list of words in [[target1]].
 \l The function [[Exit]] called above is
 % will see later that Exit is special, but here could be just exits I think.
@@ -4330,14 +4336,14 @@ The arbitrary string used in the first argument to [[newword()]] above
 is a virtual target because it does not correspond to a file. 
 %
 In that case, it is not an error if the target does not exist 
-after the recipe has run.
+after [[mk]] ran the recipe.
 \l Virtual targets are often used for targets such as [[mk clean]] (said later)
 \n but actually mk does not really check that, the virtual tag is more
 \n  to skip files in the current dir that may have the same filename
 
 
 The last two arguments to [[addrules()]] above
-are the line and file location of the rule. This is used
+are the line and file location of the rule, which are used
 for error reporting. Because here the rule was created artificially
 by [[mk]], the file location is set to [[nil]].
 \l mkinline, meh. could pass -1 or 0 instead
@@ -6331,9 +6337,9 @@ MYVAR= U=a b c d # MYVAR contains the list: U=a b c d
 
 %trans:
 The next component in the building pipeline is the construction of
-the {graph of dependencies}. Section~\ref{sec:graph} showed
+the {graph of dependencies}. Section~\ref{sec:graph-principles} showed
 a few examples of graph of dependencies for small projects.
-You will see in this chapter how to build those graphs.
+You will see in this chapter how does [[mk]] build those graphs.
 
 %toc:
 The most important function in this chapter is [[graph()]],
@@ -6353,7 +6359,7 @@ for instance, the presence of cycles in the graph.
 \l Will see [[mk()]] later. But will call [[graph(target)]].
 
 \section{[[graph()]] and [[applyrules()]]}
-\label{sec:graph}
+\label{sec:graph-applyrules}
 
 [[graph()]] is mostly a wrapper around [[applyrules()]], which is
 the function containing the logic to build the graph of dependencies.
@@ -6632,7 +6638,7 @@ If the template matches the string, [[match()]] then stores the
 string matched by the pattern character, called the {\em stem},
 in a buffer passed in its last parameter.
 %
-Here is the stem buffer passed to [[match()]]:
+Here is the stem buffer [[applyrules()]] passes to [[match()]]:
 
 <<[[applyrules]] other locals>>=
 char stem[NAMEBLOCK];
@@ -6645,7 +6651,7 @@ char stem[NAMEBLOCK];
 (e.g., [[foo%.c]])
 and stores the result in another buffer passed as a parameter.
 %
-Here is the output buffer passed to [[subst()]]:
+Here is the output buffer [[applyrules()]] passes to [[subst()]]:
 
 <<[[applyrules]] other locals>>=
 char buf[NAMEBLOCK];
@@ -6877,7 +6883,7 @@ if(sym)
 
 Creating a single node per file is important not only to avoid unecessary
 calls to [[applyrules()]]. Indeed, once [[mk]] finished
-executing a recipe, [[mk]] can update the time of the target
+executing a recipe, [[mk]] can update the modification time of the target
 created by the recipe by modifying a single node.
 \l also otherwise you will run multiple times the same recipe, you will
 \l  not realize it is the same node
@@ -6890,6 +6896,7 @@ created by the recipe by modifying a single node.
 The last important function to build the graph of dependencies
 is the call to [[timeof()]] in [[newnode()]] (see Section~\ref{sec:newnode})
 to {label} a node.
+% with its modification time.
 %dup: overview/principles/graph/labeled-tree
 Indeed, as I explained in Section~\ref{sec:labeled-tree}, each node
 is labeled with the modification time of the file it represents.
@@ -7096,7 +7103,7 @@ may be referenced from multiple parents
 (e.g., [[foo.h]] in Figure~\ref{fig:graph-cycle}).
 %
 Without the last instruction in [[cyclechk()]], 
-[[mk]] would report another (wrong) cycle when visiting
+[[mk]] would report another (this time wrong) cycle when visiting
 [[foo.h]] for the second time from [[bar.5]] instead of [[foo.5]].
 
 \l static detection of cycle. possible only because restriction on
@@ -7111,7 +7118,7 @@ Without the last instruction in [[cyclechk()]],
 \subsection{Infinite rule detection}%$
 
 %trans:
-The second mistake [[mk]] can detect is the use of
+The second mistake [[mk]] can detect is the presence of
 meta rules that [[mk]] could instantiate infinitely.
 %
 Here is an example of an [[mkfile]] illustrating the issue:
@@ -7132,25 +7139,26 @@ can instantiate first the meta rule [[%: %.5]] with [[% = foo]].
 However, [[applyrules()]] when called recursively
 with [[foo.5]] as a target could again
 instantiate the meta rule [[%: %.5]], this time with [[% = foo.5]]
-\footnote{This is one of the motivation for the [[&]] 
-special pattern character.}.
+\footnote{This is one of the motivation for the  
+special pattern character [['&']].}.
 This process could go forever, which would stuck [[mk]].
 
 
 
 To avoid this infinite process, [[mk]] still allows the use of
-the meta rules above, but severly restricts their applications.
+the meta rule above, but severly restricts its application.
 %
 Indeed, [[mk]] allows to apply a specific rule only once during
 the building of a branch in the graph of dependencies.
 %
-To do so, each rule gets first a unique {\em rule identifier}:
+To do so, each rule gets first a unique {\em rule identifier}
+stored in [[Rule.rule]]:
 \l useful to do check rulecnt for simple rules? mk does but why?
 
 <<[[Rule]] other fields>>=
 int 		rule;		/* rule number */
 @
-
+\l rule -> ruleid
 
 <<global nrules>>=
 static int nrules = 0;
@@ -7187,11 +7195,10 @@ rulecnt(void)
 free(cnt);
 @
 
-[[graph()]] then passes around this map as the second argument
-to [[applyrules()]] (see Section~\ref{sec:graph}).
-
-
-Finally, [[applyrules()]] can modify [[cnt]]
+[[graph()]] then passes this map as the second argument
+to [[applyrules()]] (see Section~\ref{sec:graph-applyrules}).
+%
+Finally, [[applyrules()]] modifies [[cnt]]
 when it uses a rule {before} possibly calling itself recursively.
 %
 [[applyrules()]] can then skip the rule if it already used the rule
@@ -7324,7 +7331,7 @@ whether the recipes in the two different arcs are different
 Having a node with multiple arcs does not necessarily mean ambiguity.
 For example, [[foo]] in Figure~\ref{fig:graph-cycle} has arcs to
 [[foo.5]] and [[bar.5]]. 
-However all those arcs share the same recipe (the linking command),
+However those two arcs share the same recipe (the linking command),
 so there is no ambiguity in building [[foo]].
 %
 When [[mk]] builds the graph, it splits simple rules
@@ -7358,7 +7365,7 @@ trace(char *s, Arc *a)
 It is common to want to write a generic meta rule that can
 handle most files and some {specialized rules} for a few files. 
 %
-For example, a few files may require to be compiled with special flags, 
+For example, only a few files may require to be compiled with special flags, 
 as in the following example:
 
 <<tests/mk/mk-generic-specialized>>=
@@ -7381,14 +7388,14 @@ in the graph of dependencies with the recipe of the meta rule.
 However, [[mk]] allows ambiguity between two rules 
 when one of the two rules is a simple rule.
 %
-Simples rules have priority over meta rules, thanks to the code
+{\em Simples rules have priority over meta rules}, thanks to the code
 below:
 
 <<[[ambiguous()]] give priority to simple rules over meta rules>>=
 if(master_rule->recipe != a->r->recipe){
     if((master_rule->attr&META) && !(a->r->attr&META)){
-        master_arc->remove = true;
         master_rule = a->r;
+        master_arc->remove = true;
         master_arc = a;
     } else if(!(master_rule->attr&META) && (a->r->attr&META)){
         a->remove = true;
@@ -7400,9 +7407,9 @@ if(master_rule->recipe != a->r->recipe){
 \l mk allows also to overwrite a previous simple rule, but this is done
 \l  at parsing time
 
-[[ambiguous()]] not only adjusts the master rule to be the
-specialized rule above, it also marks the arc containing
-the meta rule as to-be-removed, thanks to the following field:
+The code above not only adjusts the master rule to be the
+specialized rule, it also marks the arc containing
+the meta rule as ``to-be-removed'', thanks to the following field:
 
 <<[[Arc]] other fields>>=
 short remove;
@@ -7419,8 +7426,10 @@ a->remove = false;
 
 \subsubsection{Adjusting the graph, [[togo()]]}
 
-[[ambiguous()]] calls itself recursively, but before returning
-it removes all the arcs marked as to-be-removed on the current node:
+[[ambiguous()]],
+%calls itself recursively, but 
+before returning, removes all the arcs marked as to-be-removed 
+on the current node:
 
 <<[[ambiguous()]] get rid of all skipped arcs>>=
 togo(n);
@@ -7436,7 +7445,6 @@ togo(Node *node)
     /* delete them now */
     for(a = node->arcs; a; preva = a, a = a->next)
         if(a->remove){
-
             //remove_list(a, node->arcs)
             if(a == node->arcs)
                 node->arcs = a->next;
@@ -7469,7 +7477,7 @@ togo(Node *node)
 %trans: 
 As we have just seen before,
 %dup: graph/check/ambiguous/sepecialised
-the use of specialized simple rules and a generic meta rule can lead to 
+the use of a specialized simple rule and a generic meta rule can lead to 
 unfortunate ambiguities. 
 %
 [[mk]] handles some ambiguities by giving priorities to specialized rules,
@@ -7510,7 +7518,7 @@ instantiated from certain meta rules (e.g., [[foo.c]], [[foo.s]]) are
 {\em vacuous} because they do not correspond to existing files.
 %
 To detect and remove vacuous nodes, [[mk]] relies first on
-the following new node flag:
+the following node flag:
 
 <<[[Node_flag]] cases>>=
 PROBABLE   = 0x0100,
@@ -7656,7 +7664,9 @@ The following sections will explain the code of [[mk()]], [[work()]], and
 [[dorecipe()]].
 
 \section{[[mk()]]}
+\label{sec:mk}
 
+%dup: main/parallel
 [[mk()]] is arguably the most important function in [[mk]].
 %
 I outlined its core algorithm 
@@ -7841,7 +7851,7 @@ in which case its building status will switch from [[NOTMADE]] to [[BEINGMADE]].
 [[mk()]] will then wait one more time for
 the children process responsible for building the root target to finish.
 
-\item Finally, [[mk()]] returns.
+\item [[mk()]] returns.
 
 \end{enumerate}
 
@@ -8337,10 +8347,10 @@ else {
 %old: was initializing w, aw here, but I prefer earlier, easier to aspectize
 
 Again, [[mk]] uses a pointer ([[last_alltargets]]) to point to
-the head of a list allocated in the stack. 
+the head of a list allocated in the stack ([[alltargets]]).
 %dup: ??
 This is the same C idiom I introduced in Section~\ref{sec:idiom-easy-add-list}
-that allows to add an element in a list without having whether
+that allows to add an element in a list without having to worry whether
 the list is empty.
 
 [[dorecipe()]] stores the set of target names in the list [[alltargets]].
@@ -8352,7 +8362,9 @@ and then chains together all the nodes with the [[Node.next]] field
 [[alltargets]] will be used when exporting the special [[mk]] variable
 [[$target]] %$
 \l actually target and alltarget
-to the process executing the recipe. The node list will be used by [[waitup()]] 
+to the process executing the recipe. 
+%dup: (but changed) outdated/?
+The node list will be used by [[waitup()]] 
 \l and update
 to update the modification time and building status of those nodes in the graph.
 
@@ -8361,7 +8373,7 @@ to update the modification time and building status of those nodes in the graph.
 if(s == nil)
     continue;	/* not a node we are interested in */
 @
-\l when can have the case of node not found in S_NODE? because
+\t when can have the case of node not found in S_NODE? because
 %  when we build the graph we start from one target which may
 %  be part of a multi-target rule, e.g. parser.ml parser.mli: parser.mly
 %  and if we did mk parser.mli, then parser.ml will not be in
@@ -8375,9 +8387,9 @@ To build the list of prerequisites, [[dorecipe()]] does not use
 the master rule but instead go through all the arcs.
 %
 Indeed, many arcs do not contain a recipe but still contributes
-a new dependency.
+a dependency.
 \t ex foo.5 foo.h, but then why want add this prerequisites?
-This is also why th code below uses [[addw()]], which
+This is also why the code below uses [[addw()]], which
 treats the list of words as a set and avoids adding duplicates:
 
 <<[[dorecipe()]] build lists of prerequisites>>=
@@ -8394,7 +8406,7 @@ for(a = n->arcs; a; a = a->next){
     }
 }
 @
-
+\l false param for eval?
 
 
 
@@ -8404,30 +8416,38 @@ for(a = n->arcs; a; a = a->next){
 
 \chapter{Scheduling Jobs}
 \label{chap:scheduling}
-\l Fixing outdated files
+\l Fixing outdated files (after finding outdated files)
 
-%trans: remaining things to see: run() (from dorecipe()), 
-% and waitup() from mk().
-% seen Job and jobs before.
-% will see a few more globals: nproclimit, nevent, nrunning
+%trans:
+In this chapter, you will see the remaining important functions
+of [[mk]] I introduced in Figure~\ref{fig:controlflow}.
+%trans: 
+I mentioned in Section~\ref{sec:dorecipe}
+[[run()]], called from [[dorecipe()]],
+which {enqueues} a job, and in Section~\ref{sec:mk}
+[[waitup()]], called from [[mk()]],
+which {waits} for a job to finish.
+\l (and which calls updated to change the building status of a node to MADE)
+%
+Both functions eventually call [[sched()]], which takes a job from
+the job queue and {schedules} it for execution by a shell 
+with [[execsh()]].
+\l seen Job and jobs before. see a few more globals: nproclimit/nevent/nrunning
+The following sections will explain the code of
+[[run()]],
+[[waitup()]],
+\l update
+[[sched()]], 
+and [[execsh()]].
+%This will complete the presentation of the main control flow of mk
+%in Figure~\ref{fig:controlflow}.
 
-% can do stuff in //. Make originally didn't (apparently).
+\section{Enqueuing jobs, [[run()]]}
 
-\section{Enqueuing jobs}
+%\subsection{[[run()]]}
 
-\subsection{[[nrunning]] and [[nproclimit]]}
-
-<<global nrunning>>=
-static int nrunning;
-@
-
-<<global nproclimit>>=
-static int nproclimit;
-@
-% can be set in env (readenv) $NPROC, see below
-\l put code setting up nproclimit here?
-
-\subsection{[[run()]]}
+[[run()]] simply adds a job in the global job queue [[jobs]]
+(see Section~\ref{sec:job}) and run the scheduler:
 
 % main -> mk -> work -> dorecipe -> <> (-> sched())
 <<function run>>=
@@ -8453,8 +8473,64 @@ run(Job *j)
 %ocaml: use Queue.add
 \l j->next = nil  redundant since does it already in newjob
 
-% if no more processor free, then just enqueued. next round
-%  will pop this one.
+%\subsection{[[nrunning]] and [[nproclimit]]}
+
+[[run()]] relies on the two globals below:
+
+<<global nrunning>>=
+static int nrunning;
+@
+
+<<global nproclimit>>=
+static int nproclimit;
+@
+% can be set in env (readenv) $NPROC, see below
+
+[[nrunning]] counts the number of processes currently running a recipe
+while
+[[nproclimit]] sets a limit on the number of processes to run at the same time.
+\l that mk should not go over
+%
+This last global usually corresponds to the number of processors on the machine.
+%
+If there are no more free processors, then [[run()]] just enqueues the job.
+Hopefully at some point [[mk]] will call [[waitup()]], which will
+wait for some process to finish, and which will call [[sched()]] to
+schedule one of the enqueued job.
+
+
+You can modify [[nproclimit]] by modifying the [[NPROC]] environment variable.
+%
+Indeed, [[mk]] at startup time reads the environment 
+(with [[readenv()]]) and looks for this variable to setup [[nproclimit]]
+with the code below:
+
+<<[[mk()]] initializations>>=
+nproc();	/* it can be updated dynamically */
+@
+
+% like nrep()
+<<function nproc>>=
+void
+nproc(void)
+{
+    Symtab *sym;
+    Word *w;
+
+    if(sym = symlook("NPROC", S_VAR, nil)) {
+        w = sym->u.ptr;
+        if (w && w->s && w->s[0])
+            nproclimit = atoi(w->s);
+    }
+    if(nproclimit < 1)
+        nproclimit = 1;
+    <<[[nproc()]] if DEBUG(D_EXEC)>>
+
+    <<[[nproc()]] grow nevents if necessary>>
+}
+@
+\l can also be modifed in mkfile, by doing NPROC=xxx but stupid.
+\l is it setup by \plan by default at init time? after kernel boots?
 
 
 
@@ -8636,6 +8712,10 @@ char	*shflags = "-I";	/* rc flag to force non-interactive mode */
 % do that in another process.
 
 \subsection{[[execsh()]]}
+
+
+% can do stuff in //. Make originally didn't (apparently).
+
 
 %plan9.c 
 <<function execsh>>=
@@ -11194,34 +11274,8 @@ envupd("nproc", newword(buf));
 %    j->nproc = -1;
 
 
-\subsection{[[$NPROC]]}%$
-% export NPROC=...
-
-<<[[mk()]] initializations>>=
-nproc();	/* it can be updated dynamically */
-@
-
-% like nrep()
-
-<<function nproc>>=
-void
-nproc(void)
-{
-    Symtab *sym;
-    Word *w;
-
-    if(sym = symlook("NPROC", S_VAR, nil)) {
-        w = sym->u.ptr;
-        if (w && w->s && w->s[0])
-            nproclimit = atoi(w->s);
-    }
-    if(nproclimit < 1)
-        nproclimit = 1;
-    <<[[nproc()]] if DEBUG(D_EXEC)>>
-
-    <<[[nproc()]] grow nevents if necessary>>
-}
-@
+%\subsection{[[$NPROC]]}%$
+% now before
 
 
 \section{Aggregates, archives}
