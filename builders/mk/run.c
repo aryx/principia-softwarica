@@ -82,20 +82,20 @@ sched(void)
 {
     Job *j;
     int slot;
-    Envy *e;
     char *flags;
+    ShellEnvVar *e;
     /*s: [[sched()]] other locals */
     Bufblock *buf;
     /*x: [[sched()]] other locals */
     Node *n;
     /*e: [[sched()]] other locals */
 
-    /*s: [[sched()]] sanity check jobs */
+    /*s: [[sched()]] return if no jobs */
     if(jobs == nil){
         usage();
         return;
     }
-    /*e: [[sched()]] sanity check jobs */
+    /*e: [[sched()]] return if no jobs */
 
     // j = pop(jobs)
     j = jobs;
@@ -170,11 +170,13 @@ waitup(int echildok, int *retstatus)
     int slot;
     Job *j;
     Symtab *sym;
+    Node *node;
     Word *w;
     bool fake = false;
     /*s: [[waitup()]] other locals */
-    Envy *e;
     Bufblock *bp;
+    /*x: [[waitup()]] other locals */
+    ShellEnvVar *e;
     /*x: [[waitup()]] other locals */
     Node *n;
     bool done;
@@ -197,8 +199,8 @@ again:		/* rogue processes */
     pid = waitfor(buf);
     /*s: [[waitup()]] if no more children */
     if(pid == -1){
-        if(echildok > 0)
-            return 1;
+        if(echildok == EMPTY_CHILDREN_IS_OK)
+            return EMPTY_CHILDREN;
         else {
             fprint(STDERR, "mk: (waitup %d) ", echildok);
             perror("mk wait");
@@ -237,13 +239,14 @@ again:		/* rogue processes */
 
     /*s: [[waitup()]] if error in child process, possibly set fake or exit */
     if(buf[0]){
-        e = buildenv(j, slot);
         bp = newbuf();
+        /*s: [[waitup()]] if error in child process, print recipe in [[bp]] */
+        e = buildenv(j, slot);
         shprint(j->r->recipe, e, bp);
         front(bp->start);
+        /*e: [[waitup()]] if error in child process, print recipe in [[bp]] */
         fprint(STDERR, "mk: %s: exit status=%s", bp->start, buf);
         freebuf(bp);
-
         /*s: [[waitup()]] when error in child process, delete if DELETE node */
         for(n = j->n, done = false; n; n = n->next)
             if(n->flags&DELETE){
@@ -273,16 +276,17 @@ again:		/* rogue processes */
 
     for(w = j->t; w; w = w->next){
         sym = symlook(w->s, S_NODE, nil);
+        node = (Node*) sym->u.ptr;
         /*s: [[waitup()]] skip if node not found */
         if(sym == nil)
             continue;	/* not interested in this node */
         /*e: [[waitup()]] skip if node not found */
-        update(fake, (Node*) sym->u.ptr);
+        update(node, fake);
     }
 
     if(nrunning < nproclimit)
         sched();
-    return 0;
+    return JOB_ENDED;
 }
 /*e: function waitup */
 
@@ -342,6 +346,7 @@ pidslot(int pid)
     for(i = 0; i < nevents; i++)
         if(events[i].pid == pid) 
             return i;
+    // else
     /*s: [[pidslot()]] if DEBUG(D_EXEC) */
     if(DEBUG(D_EXEC))
         fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
@@ -408,7 +413,7 @@ killchildren(char *msg)
         expunge(p->pid, msg);
     /*e: [[killchildren()]] expunge not-job processes */
 
-    while(waitup(1, (int *)nil) == 0)
+    while(waitup(EMPTY_CHILDREN_IS_OK, (int *)nil) == 0)
         ;
     Bprint(&bout, "mk: %s\n", msg);
     Exit();

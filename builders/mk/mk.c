@@ -21,9 +21,9 @@ mk(char *target)
     /*s: [[mk()]] initializations */
     nproc();	/* it can be updated dynamically */
     /*x: [[mk()]] initializations */
-    runerrs = 0;
-    /*x: [[mk()]] initializations */
     nrep();		/* it can be updated dynamically */
+    /*x: [[mk()]] initializations */
+    runerrs = 0;
     /*e: [[mk()]] initializations */
 
     root = graph(target);
@@ -57,7 +57,7 @@ mk(char *target)
 
     /*s: [[mk()]] before returning, more [[waitup()]] if there was an error */
     while(jobs)
-        waitup(-2, (int *)nil);
+        waitup(EMPTY_CHILDREN_IS_ERROR2, (int *)nil);
     assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
     /*e: [[mk()]] before returning, more [[waitup()]] if there was an error */
     if(!everdid)
@@ -137,29 +137,29 @@ work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
     /*e: [[work()]] possibly unpretending node */
 
     if(node->arcs == nil){
-        /*s: [[work()]] no prerequisite, a leaf */
+        /*s: [[work()]] no arcs, a leaf */
         /* consider no prerequisite case */
-            if(node->time == 0){
-                /*s: [[work()]] print error when inexistent file without prerequisites */
-                if(getwd(cwd, sizeof cwd))
-                    fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
-                else
-                    fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
+        if(node->time == 0){
+            /*s: [[work()]] print error when inexistent file without prerequisites */
+            if(getwd(cwd, sizeof cwd))
+                fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
+            else
+                fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
 
-                /*s: [[work()]] when inexistent target without prerequisites, if kflag */
-                if(kflag){
-                    node->flags |= BEINGMADE;
-                    runerrs++;
-                }
-                /*e: [[work()]] when inexistent target without prerequisites, if kflag */
-                else
-                    Exit();
-                /*e: [[work()]] print error when inexistent file without prerequisites */
-            } else
-                MADESET(node, MADE);
-        /*e: [[work()]] no prerequisite, a leaf */
+            /*s: [[work()]] when inexistent target without prerequisites, if kflag */
+            if(kflag){
+                node->flags |= BEINGMADE;
+                runerrs++;
+            }
+            /*e: [[work()]] when inexistent target without prerequisites, if kflag */
+            else
+                Exit();
+            /*e: [[work()]] print error when inexistent file without prerequisites */
+        } else
+            MADESET(node, MADE);
+        /*e: [[work()]] no arcs, a leaf */
     } else {
-        /*s: [[work()]] some prerequisites, a node */
+        /*s: [[work()]] some arcs, a node */
         /*s: [[work()]] adjust weoutofdate if aflag */
         if(aflag)
             weoutofdate = true;
@@ -236,25 +236,37 @@ work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
 
         dorecipe(node, did);
         return;
-        /*e: [[work()]] some prerequisites, a node */
+        /*e: [[work()]] some arcs, a node */
     }
 }
 /*e: function work */
 
 /*s: function update */
 void
-update(bool fake, Node *node)
+update(Node *node, bool fake)
 {
     Arc *a;
 
-    MADESET(node, fake? BEINGMADE : MADE);
+    /*s: [[update()]] if fake */
+    if(fake)
+        MADESET(node, BEINGMADE);
+    /*e: [[update()]] if fake */
+    else
+       MADESET(node, MADE);
     /*s: [[update()]] debug */
     if(DEBUG(D_TRACE))
         print("update(): node %s time=%lud flags=0x%x\n", node->name, node->time, node->flags);
     /*e: [[update()]] debug */
 
-
-    if((!(node->flags&VIRTUAL)) && (access(node->name, AEXIST) == 0)){
+    /*s: [[update()]] if virtual node or inexistent file */
+    if((node->flags&VIRTUAL) || (access(node->name, AEXIST) != OK_0)){
+        node->time = 1;
+        for(a = node->arcs; a; a = a->next)
+            if(a->n && outofdate(node, a, true))
+                node->time = a->n->time;
+    }
+    /*e: [[update()]] if virtual node or inexistent file */
+    else {
         node->time = timeof(node->name, true);
         /*s: [[update()]] unpretend node */
         node->flags &= ~(CANPRETEND|PRETENDING);
@@ -264,13 +276,6 @@ update(bool fake, Node *node)
             if(a->prog)
                 outofdate(node, a, true);
         /*e: [[update()]] set outofdate prereqs if arc prog */
-    } 
-    else {
-        // virtual target or target still does not exist (but marked as MADE)
-        node->time = 1;
-        for(a = node->arcs; a; a = a->next)
-            if(a->n && outofdate(node, a, true))
-                node->time = a->n->time;
     }
 }
 /*e: function update */
@@ -285,7 +290,7 @@ pcmp(char *prog, char *p, char *q)
     Bflush(&bout);
     snprint(buf, sizeof buf, "%s '%s' '%s'\n", prog, p, q);
     pid = pipecmd(buf, 0, 0);
-    while(waitup(-3, &pid) >= 0)
+    while(waitup(EMPTY_CHILDREN_IS_ERROR3, &pid) >= 0)
         ;
     return (pid? 2:1);
 }

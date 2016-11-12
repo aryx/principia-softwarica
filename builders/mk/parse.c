@@ -127,14 +127,15 @@ parse(char *f, fdt fd, bool varoverride)
                 Exit();
             }
 
-            execinit();
-            pid = pipecmd(p, envy, &newfd);
+            initshellenv();
+            pid = pipecmd(p, shellenv, &newfd);
             if(newfd < 0){
                 fprint(STDERR, "warning: skipping missing program file: ");
                 perror(p);
             } else
                 parse(p, newfd, 0);
-            while(waitup(-3, &pid) >= 0)
+
+            while(waitup(EMPTY_CHILDREN_IS_ERROR3, &pid) >= 0)
                 ;
             if(pid != 0){
                 fprint(STDERR, "bad include program status\n");

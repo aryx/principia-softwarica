@@ -11,7 +11,7 @@ typedef struct Word Word;
 typedef struct Rule Rule;
 typedef struct Node Node;
 typedef struct Arc Arc;
-typedef struct Envy Envy;
+typedef struct ShellEnvVar ShellEnvVar;
 typedef struct Job Job;
 typedef struct Bufblock Bufblock;
 
@@ -45,7 +45,7 @@ extern Word *target1;
 
 
 /*s: struct Envy */
-struct Envy
+struct ShellEnvVar
 {
     // ref<string>, the key
     char 		*name;
@@ -55,7 +55,7 @@ struct Envy
 };
 /*e: struct Envy */
 
-extern Envy *envy;
+extern ShellEnvVar *shellenv;
 
 /*s: struct Rule */
 struct Rule
@@ -123,6 +123,9 @@ enum Rule_attr {
 /*s: macro empty_prereqs */
 #define empty_prereqs(r) (!r->prereqs || !r->prereqs->s || !*r->prereqs->s)
 /*e: macro empty_prereqs */
+/*s: macro empty_words */
+#define empty_words(w) (w == nil || w->s == nil || w->s[0] == '\0')
+/*e: macro empty_words */
 
 /*s: constant NREGEXP */
 #define		NREGEXP		10
@@ -303,13 +306,16 @@ enum Namespace {
 enum WaitupParam { 
   EMPTY_CHILDREN_IS_OK = 1, 
   EMPTY_CHILDREN_IS_ERROR = -1, 
+  /*s: [[WaitupParam]] other cases */
   EMPTY_CHILDREN_IS_ERROR2 = -2,
+  EMPTY_CHILDREN_IS_ERROR3 = -3,
+  /*e: [[WaitupParam]] other cases */
 };
 /*e: type WaitupParam */
 /*s: type WaitupResult */
 enum WaitupResult { 
-  EMPTY_CHILDREN =1, 
   JOB_ENDED = 0, 
+  EMPTY_CHILDREN = 1, 
   NOT_A_JOB_PROCESS = -1 
 };
 /*e: type WaitupResult */

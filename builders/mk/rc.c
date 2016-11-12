@@ -112,7 +112,7 @@ expandquote(char *s, Rune r, Bufblock *buf)
         if(r == '\'') {
             /*s: [[expandquote()]] return, unless double quote */
             if(*s == '\'')
-                s++; // skip one of the double quote
+                s++; // skip one of the double quotes
             else
                 return s;
             /*e: [[expandquote()]] return, unless double quote */

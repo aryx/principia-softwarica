@@ -20,7 +20,7 @@ static int rcmp(Rule *r, char *target, Word *tail);
 /*s: function addrule */
 void
 addrule(char *head, Word *tail, char *body, 
-        Word *ahead, int attr, int hline, char *prog)
+        Word *alltargets, int attr, int hline, char *prog)
 {
     Rule *r = nil;
     /*s: [[addrule()]] other locals */
@@ -57,7 +57,7 @@ addrule(char *head, Word *tail, char *body,
         r->next = nil;
     }
     /*x: [[addrule()]] set more fields */
-    r->alltargets = ahead;
+    r->alltargets = alltargets;
     /*x: [[addrule()]] set more fields */
     r->rule = nrules++;
     /*x: [[addrule()]] set more fields */

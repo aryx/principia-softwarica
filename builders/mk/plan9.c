@@ -14,22 +14,22 @@ static	Word	*encodenulls(char*, int);
 void
 readenv(void)
 {
-    fdt envf; // envdir
-    fdt f; // envfile
+    fdt envdir;
+    fdt envfile;
     Dir *e;
     int i, n, len, len2;
     char *p;
-    char nam[1024];
+    char name[1024];
     Word *w;
 
     rfork(RFENVG);	/*  use copy of the current environment variables */
 
-    envf = open("/env", OREAD);
-    /*s: [[readenv()]] sanity check envf */
-    if(envf < 0)
+    envdir = open("/env", OREAD);
+    /*s: [[readenv()]] sanity check envdir */
+    if(envdir < 0)
         return;
-    /*e: [[readenv()]] sanity check envf */
-    while((n = dirread(envf, &e)) > 0){
+    /*e: [[readenv()]] sanity check envdir */
+    while((n = dirread(envdir, &e)) > 0){
         for(i = 0; i < n; i++){
             len = e[i].length;
             /*s: [[readenv()]] skip some names */
@@ -42,22 +42,22 @@ readenv(void)
                 continue;
             /*e: [[readenv()]] skip some names */
 
-            snprint(nam, sizeof nam, "/env/%s", e[i].name);
-            f = open(nam, OREAD);
-            /*s: [[readenv()]] sanity check f */
-            if(f < 0)
+            snprint(name, sizeof name, "/env/%s", e[i].name);
+            envfile = open(name, OREAD);
+            /*s: [[readenv()]] sanity check envfile */
+            if(envfile < 0)
                 continue;
-            /*e: [[readenv()]] sanity check f */
+            /*e: [[readenv()]] sanity check envfile */
             p = Malloc(len+1);
-            len2 = read(f, p, len);
+            len2 = read(envfile, p, len);
             /*s: [[readenv()]] sanity check len2 */
             if(len2 != len){
-                perror(nam);
-                close(f);
+                perror(name);
+                close(envfile);
                 continue;
             }
             /*e: [[readenv()]] sanity check len2 */
-            close(f);
+            close(envfile);
             /*s: [[readenv()]] add null terminator character at end of [[p]] */
             if (p[len-1] == '\0')
                 len--;
@@ -73,7 +73,7 @@ readenv(void)
         }
         free(e);
     }
-    close(envf);
+    close(envdir);
 }
 /*e: function readenv */
 
@@ -82,21 +82,21 @@ readenv(void)
 static Word *
 encodenulls(char *s, int n)
 {
-    Word *w, *head;
+    Word *head, *lastw;
     char *cp;
 
-    head = w = nil;
+    head = lastw = nil;
     while (n-- > 0) {
         for (cp = s; *cp && *cp != '\0'; cp++)
                 n--;
         *cp = '\0';
 
-        // add_list(newword(s), w)
-        if (w) {
-            w->next = newword(s);
-            w = w->next;
+        // add_list(newword(s), head)
+        if (lastw) {
+            lastw->next = newword(s);
+            lastw = lastw->next;
         } else
-            head = w = newword(s);
+            head = lastw = newword(s);
 
         s = cp+1;
     }
@@ -111,46 +111,45 @@ encodenulls(char *s, int n)
  * treat the words as separate arguments
  */
 void
-exportenv(Envy *e)
+exportenv(ShellEnvVar *e)
 {
-    Symtab *sy;
     int n;
     fdt f;
-    bool hasvalue;
     bool first;
     Word *w;
-    char nam[256];
+    char name[256];
+    /*s: [[exportenv()]] other locals */
+    Symtab *sym;
+    bool hasvalue;
+    /*e: [[exportenv()]] other locals */
 
     for(;e->name; e++){
-        sy = symlook(e->name, S_VAR, nil);
-        if (e->values == nil || e->values->s == nil || e->values->s[0] == '\0')
-            hasvalue = false;
-        else
-            hasvalue = true;
-        if(sy == nil && !hasvalue)	/* non-existant null symbol */
+        /*s: [[exportenv()]] skip entry if not a user variable and no value */
+        sym = symlook(e->name, S_VAR, nil);
+        hasvalue = !empty_words(e->values);
+        if(sym == nil && !hasvalue)	/* non-existant null symbol */
             continue;
+        /*e: [[exportenv()]] skip entry if not a user variable and no value */
         // else
-
-        snprint(nam, sizeof nam, "/env/%s", e->name);
+        snprint(name, sizeof name, "/env/%s", e->name);
         /*s: [[exportenv()]] if existing symbol but not value, remove from env */
-        if (sy != nil && !hasvalue) {	/* Remove from environment */
+        if (sym != nil && !hasvalue) {	/* Remove from environment */
             /* we could remove it from the symbol table
              * too, but we're in the child copy, and it
              * would still remain in the parent's table.
              */
-            remove(nam);
+            remove(name);
             freewords(e->values);
             e->values = nil;		/* memory leak */
             continue;
         }
         /*e: [[exportenv()]] if existing symbol but not value, remove from env */
         // else
-    
-        f = create(nam, OWRITE, 0666L);
+        f = create(name, OWRITE, 0666L);
         /*s: [[exportenv()]] sanity check f */
         if(f < 0) {
-            fprint(STDERR, "can't create %s, f=%d\n", nam, f);
-            perror(nam);
+            fprint(STDERR, "can't create %s, f=%d\n", name, f);
+            perror(name);
             continue;
         }
         /*e: [[exportenv()]] sanity check f */
@@ -163,11 +162,11 @@ exportenv(Envy *e)
                     first = false;
                 else{
                     if (write (f, "\000", 1) != 1)
-                        perror(nam);
+                        perror(name);
                 }
                 /*e: [[exportenv()]] write null separator */
                 if (write(f, w->s, n) != n)
-                    perror(nam);
+                    perror(name);
             }
         }
         close(f);
@@ -204,13 +203,13 @@ expunge(int pid, char *msg)
 
 /*s: function execsh */
 int
-execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
+execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
 {
-    int pid;
-    fdt in[2];
+    int pid1, pid2;
+    fdt in[2]; // pipe descriptors
     int err;
     /*s: [[execsh()]] other locals */
-    char *p;
+    char *endshinput;
     /*x: [[execsh()]] other locals */
     fdt out[2];
     /*x: [[execsh()]] other locals */
@@ -224,19 +223,19 @@ execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
     }
     /*e: [[execsh()]] if buf then create pipe to save output */
 
-    pid = rfork(RFPROC|RFFDG|RFENVG);
+    pid1 = rfork(RFPROC|RFFDG|RFENVG);
     /*s: [[execsh()]] sanity check pid rfork */
-    if(pid < 0){
+    if(pid1 < 0){
         perror("mk rfork");
         Exit();
     }
     /*e: [[execsh()]] sanity check pid rfork */
-    // children
-    if(pid == 0){
-        /*s: [[execsh()]] in children, if buf, close one side of pipe */
+    // child
+    if(pid1 == 0){
+        /*s: [[execsh()]] in child, if buf, close one side of pipe */
         if(buf)
             close(out[0]);
-        /*e: [[execsh()]] in children, if buf, close one side of pipe */
+        /*e: [[execsh()]] in child, if buf, close one side of pipe */
         err = pipe(in);
         /*s: [[execsh()]] sanity check err pipe */
         if(err < 0){
@@ -244,52 +243,54 @@ execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
             Exit();
         }
         /*e: [[execsh()]] sanity check err pipe */
-        pid = fork();
+        pid2 = fork();
         /*s: [[execsh()]] sanity check pid fork */
-        if(pid < 0){
+        if(pid2 < 0){
             perror("mk fork");
             Exit();
         }
         /*e: [[execsh()]] sanity check pid fork */
-        // child 1, the shell interpreter
-        if(pid != 0){
-            // input now comes from the pipe
+        // parent of grandchild, the shell interpreter
+        if(pid2 != 0){
+            // input must come from the pipe
             dup(in[0], STDIN);
-            /*s: [[execsh()]] in child 1, if buf, dup and close */
+            /*s: [[execsh()]] in child, if buf, dup and close */
             if(buf){
                 // output now goes in the pipe
                 dup(out[1], STDOUT);
                 close(out[1]);
             }
-            /*e: [[execsh()]] in child 1, if buf, dup and close */
+            /*e: [[execsh()]] in child, if buf, dup and close */
             close(in[0]);
             close(in[1]);
+            /*s: [[execsh()]] in child, export environment before exec */
             if (e)
                 exportenv(e);
+            /*e: [[execsh()]] in child, export environment before exec */
             if(shflags)
-                execl(shell, shellname, shflags, args, nil);
+                execl(shell, shellname, shflags, shargs, nil);
             else
-                execl(shell, shellname, args, nil);
+                execl(shell, shellname, shargs, nil);
             // should not be reached
             perror(shell);
             _exits("exec");
         }
-        // child 2, feeding the shell with recipe, through a pipe
-        /*s: [[execsh()]] in child 2, if buf, close other side of pipe */
+        // else, grandchild, feeding the shell with recipe, through a pipe
+        /*s: [[execsh()]] in grandchild, if buf, close other side of pipe */
         if(buf)
             close(out[1]);
-        /*e: [[execsh()]] in child 2, if buf, close other side of pipe */
+        /*e: [[execsh()]] in grandchild, if buf, close other side of pipe */
         close(in[0]);
         // feed the shell
-        /*s: [[execsh()]] in child 2, write cmd in pipe */
-        p = cmd+strlen(cmd);
-        while(cmd < p){
-            n = write(in[1], cmd, p-cmd);
+        /*s: [[execsh()]] in grandchild, write cmd in pipe */
+        endshinput = shinput + strlen(shinput);
+        while(shinput < endshinput){
+            n = write(in[1], shinput, endshinput - shinput);
             if(n < 0)
                 break;
-            cmd += n;
+            shinput += n;
         }
-        /*e: [[execsh()]] in child 2, write cmd in pipe */
+        /*e: [[execsh()]] in grandchild, write cmd in pipe */
         close(in[1]); // will flush
         _exits(nil);
     }
@@ -312,13 +313,13 @@ execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
         close(out[0]);
     }
     /*e: [[execsh()]] in parent, if buf, close other side of pipe and read output */
-    return pid;
+    return pid1;
 }
 /*e: function execsh */
 
 /*s: function pipecmd */
 int
-pipecmd(char *cmd, Envy *e, int *fd)
+pipecmd(char *cmd, ShellEnvVar *e, int *fd)
 {
     int pid;
     fdt pfd[2];

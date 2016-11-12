@@ -100,9 +100,9 @@ bquote(Biobuf *bp, Bufblock *buf)
             insert(buf, '\0');
             buf->current = buf->start + start;
 
-            execinit();
+            initshellenv();
             // running the command, passing a buf argument
-            execsh(nil, buf->current, buf, envy);
+            execsh(nil, buf->current, buf, shellenv);
 
             return OK_1;
         }

@@ -43,9 +43,9 @@ char*	rulecnt(void);
 
 
 // env.c
-void	initenv(void);
-void	execinit(void);
-Envy*	buildenv(Job*, int);
+void	inithash(void);
+void	initshellenv(void);
+ShellEnvVar*	buildenv(Job*, int);
 
 
 
@@ -80,7 +80,7 @@ void	subst(char*, char*, char*, int);
 // mk.c
 void	mk(char*);
 int		outofdate(Node*, Arc*, int);
-void	update(bool, Node*);
+void	update(Node*, bool);
 
 // recipe.c
 void		dorecipe(Node*, bool*);
@@ -95,14 +95,14 @@ void	prusage(void);
 void	usage(void);
 
 // shprint.c
-void	shprint(char*, Envy*, Bufblock*);
+void	shprint(char*, ShellEnvVar*, Bufblock*);
 void	front(char*);
 
 
 
 // plan9.c
-int		execsh(char*, char*, Bufblock*, Envy*);
-int		pipecmd(char*, Envy*, int*);
+int		execsh(char*, char*, Bufblock*, ShellEnvVar*);
+int		pipecmd(char*, ShellEnvVar*, int*);
 int		waitfor(char*);
 void	catchnotes(void);
 void	readenv(void);

@@ -60,6 +60,7 @@
 % - to not use ';' but instead && for eflag -e to work
 % - scope and life of variables (still dont understand in GNU make, = vs := )
 %   whether can use $xx in target, in prereqs, in includes, etc
+% - wait and parent/children relation, wait reports also already finished child
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -364,7 +365,7 @@ and which often use the same command-line program name: [[make]].
 \n actually there is pmake, bmake, gmake, but often aliased as make
 
 
-One of the latest version of \unix Make,
+One of the latest versions of \unix Make,
 Make 2.58\footnote{See \url{http://minnie.tuhs.org/cgi-bin/utree.pl?file=V7/usr/src/cmd/make/ident.c}.}
 in the seventh edition of \unix in 1979,
 contains less than 2500 LOC.
@@ -707,7 +708,7 @@ a {prerequisite}, or
 a {shell command}.
 \n called recipe in mk, by shell command easier (said later)
 %
-If not, I suggest you to read one of the book about
+If not, I suggest you to read one of the books about
 GNU Make~\cite{managing-make, programming-with-gnu-software, gnu-make-manual}.
 
 %dup: (and adapted) from Windows.nw
@@ -1106,6 +1107,7 @@ can be used from the shell command to access the matched string.
 \t maybe just footonote that sas explain later why different mechanism
 \t  (if choose percent, then need process string, need escape mechanism
 \t  complicated).
+\l special variable good name?
 
 The use of [['%']] to match any sequence of characters
 is similar to the use of [[.*]] in a {\em regular expression}.
@@ -1273,7 +1275,7 @@ previously in the [[mkfile]] (or in the environment).
 Here, [[$objtype]] %$
 is a special \plan environment variable containing the
 type of architecture of the current machine (e.g., [[arm]], [[386]]).
-\t cite? plan9 article? one of my book?
+\t cite? plan9 article? one of my books?
 %
 You can then define for each architecture a specific [[mkfile]] with
 variables such as [[CC]] or [[LD]]
@@ -1887,7 +1889,7 @@ a reference to the [[parser.c]] node.
 
 
 \subsection{A job scheduler}
-\label{sec:job}
+\label{sec:job-scheduler-principles}
 
 %trans: 
 I have described the main features of the DSL of a build system,
@@ -2121,6 +2123,7 @@ static char *version = "@(#)mk general release 4 (plan 9)";
 \n [[hello.mk]] so consistent with my other books.
 \l A simple [[mkfile]]
 
+%trans:
 Here is finally the content of the [[hello.mk]] file
 mentioned in Section~\ref{sec:getting-started}:
 
@@ -2243,8 +2246,8 @@ building a job                    & \ref{chap:finding-outdated}  & [[recipe.c]] 
 
 scheduling jobs                   & \ref{chap:scheduling}        & [[run.c]]      & [[run()]] [[sched()]] [[waitup()]] [[RunEvent]]       & 0 \\ % Process pnew pdelete nproc killchildren usage
 
-shell environment                 & \ref{chap:interacting}       & [[env.c]]      & [[buildenv()]] [[envy]] [[envinsert()]]               & 0 \\ %execinit initenv envupd
-environment and process methods for \plan         & \ref{chap:interacting}       & [[plan9.c]]    & [[readenv()]] [[exportenv()]] [[execsh()]]            & 0 \\ %waitfor pipecmd Exit catchnotes
+shell environment                 & \ref{chap:shellenv}       & [[env.c]]      & [[buildenv()]] [[envy]] [[envinsert()]]               & 0 \\ %execinit initenv envupd
+environment and process methods for \plan         & \ref{chap:shellenv}       & [[plan9.c]]    & [[readenv()]] [[exportenv()]] [[execsh()]]            & 0 \\ %waitfor pipecmd Exit catchnotes
 
 \midrule
 printing shell commands           & \ref{chap:debugging-support} & [[shprint.c]]  & [[shprint()]]                                         & 0 \\ %mygetenv vexpand front?
@@ -2489,7 +2492,7 @@ Chapter~\ref{chap:parsing} will present the code to parse an [[mkfile]],
 Chapter~\ref{chap:graph} the code to build the graph of dependencies,
 Chapter~\ref{chap:finding-outdated} the code to find outdated files in the graph,
 Chapter~\ref{chap:scheduling} the code to schedule jobs, and finally
-Chapter~\ref{chap:interacting} the code to interact with the shell.
+Chapter~\ref{chap:shellenv} the code to interact with the shell.
 %
 In Chapter~\ref{chap:debugging-support}, I will present code to help you
 debug and profile your [[mkfile]].
@@ -2757,6 +2760,7 @@ In addition to [[symlook()]], [[mk]] relies also on the
 generic function [[symtraverse()]] below to apply a function [[fn]]
 to all elements in a specific namespace:
 
+\label{sec:symtraverse}
 % execinit -> <>
 <<function symtraverse>>=
 void
@@ -2826,6 +2830,7 @@ them in different {namespaces}:
 [[S_VAR]] for the user (and environment) variables, and
 [[S_INTERNAL]] for the special (internal) variables.
 \l can be in conflict with user variable  so multiple namespaces?
+\l actually mk does not store value of special var in symbol table. just set.
 
 <<[[Sxxx]] cases>>=
 S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
@@ -2834,14 +2839,14 @@ S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
 \l diff with S_VAR? not set by user! set by mk automatically
 \l those one are really variables (maybe that's why they are in lowercase)
 
-To access the value of the [[$stem]] variable, call %$
+To know whether [[stem]] is the name of a special variable, call %$
 the [[symlook()]] function with the pair [[("stem", S_INTERNAL)]].
+\l can not used it to get the value of stem though! envy for that.
 
-
-The {private global} [[myenv]] below stores the list of special variables:
+The {private global} [[specialvars]] below stores the list of special variables:
 
 <<global myenv>>=
-static char	*myenv[] =
+static char	*specialvars[] =
 {
     "target",
     "prereq",
@@ -2853,6 +2858,7 @@ static char	*myenv[] =
 @
 \l $stem $prereq (better than $@, $^ )
 \l but actually can be multiple targets, and prereqs!
+%old: myenv -> specialvars, not an environment!
 
 %chunks:
 I will gradually describe the other internal variables used by [[mk]]
@@ -2860,24 +2866,24 @@ in the following chapters.
 %chunks:
 I will also gradually describe more namespaces.
 
-[[myenv]] is used to initialize entries in the symbol table
-in [[initenv()]] called from [[main()]]:
+[[specialvars]] is used to initialize entries in the symbol table
+in [[inithash()]] called from [[main()]]:
 
-\label{sec:initenv}
+\label{sec:inithash}
 % main -> <>
 <<function initenv>>=
 void
-initenv(void)
+inithash(void)
 {
     char **p;
 
-    for(p = myenv; *p; p++)
+    for(p = specialvars; *p; p++)
         symlook(*p, S_INTERNAL, (void *)"");
 
     readenv();				/* o.s. dependent */
 }
 @
-\t call initsyms() or inithash() (or rename Envy to Shellenv)
+%old: initenv -> inithash, cos confusing with execinit (renamed initshellenv)
 %bug? it is supposed to be words no? so at least newword("") ?
 
 Moreover, [[readenv()]] called above, and described in 
@@ -3751,7 +3757,7 @@ Finally, the last core data structure of [[mk]] is the
 %
 description of a job.
 %
-As I mentioned in Section~\ref{sec:job}, a job must contain
+As I mentioned in Section~\ref{sec:job-scheduler-principles}, a job must contain
 all the information needed to run a recipe and to update
 the graph of dependencies: a rule (and its recipe), 
 a list of nodes to update, and the value of special
@@ -3952,7 +3958,7 @@ as hinted in the code below, and as explained in the following sections.
 <<[[main()]] initializations>>=
 <<[[main()]] argv processing part 1, -xxx>>
 <<[[main()]] setup profiling>>
-initenv();
+inithash();
 <<[[main()]] argv processing part 2, xxx=yyy>>
 <<[[main()]] set variables for recursive mk>>
 <<[[main()]] argv processing part 3, skip xxx=yyy>>
@@ -3970,7 +3976,7 @@ initenv();
 % */
 \t for execinit?? for initenv/
 
-As I explained in Section~\ref{sec:initenv}, [[initenv()]] called above
+As I explained in Section~\ref{sec:inithash}, [[inithash()]] called above
 initializes certain variables in the symbol table 
 (e.g., [[$target]], [[$prereqs]]),
 and {imports} variables from the environment in the symbol table 
@@ -4243,7 +4249,7 @@ Note that the first simple rule can contain multiple targets, which
 is why the code above iterates over the list of words in [[target1]].
 \l The function [[Exit]] called above is
 % will see later that Exit is special, but here could be just exits I think.
-\n actually you could call exit here 
+\l actually you could call exit here I think
 
 \subsection{Sequential mode}
 
@@ -4422,6 +4428,7 @@ errors to the user:
 \l note that useful to put mk: before, to indicate errors comes from mk,
 %  not one of its subprocess (and there may be many)
 
+%trans:
 Here is finally the code of [[parse()]]:
 
 <<function parse>>=
@@ -4517,6 +4524,7 @@ if(fd < 0){
     Exit();
 }
 @
+\l Exit cos parse can create children
 
 <<[[parse()]] switch rhead cases>>=
 default:
@@ -4724,7 +4732,7 @@ character (to check whether this character was a newline).
 This is why [[libbio]] provides the function [[Bungetrune()]] called above
 to go back in the input buffer.
 %
-This is one of the reason [[mk]] uses [[libbio]] instead
+This is one of the reasons [[mk]] uses [[libbio]] instead
 of the reading and seeking functions of the C library.
 
 % FIGURE? with going to far and so going back?
@@ -5080,7 +5088,7 @@ if(*((*h)->s) == '\0' && sep != '<' && sep != '|') {
 [[charin()]] below essentially iterates over the characters
 \l actually rune
 in [[cp]] by incrementing [[cp]] until the start of [[cp]] points
-to one of the character in [[pat]]:
+to one of the characters in [[pat]]:
 
 % addrule | rhead -> <>
 <<function charin>>=
@@ -5400,7 +5408,7 @@ expandquote(char *s, Rune r, Bufblock *buf)
 
 <<[[expandquote()]] return, unless double quote>>=
 if(*s == '\'')
-    s++; // skip one of the double quote
+    s++; // skip one of the double quotes
 else
     return s;
 @
@@ -6339,7 +6347,7 @@ MYVAR= U=a b c d # MYVAR contains the list: U=a b c d
 The next component in the building pipeline is the construction of
 the {graph of dependencies}. Section~\ref{sec:graph-principles} showed
 a few examples of graph of dependencies for small projects.
-You will see in this chapter how does [[mk]] build those graphs.
+You will see in this chapter how [[mk]] builds those graphs.
 
 %toc:
 The most important function in this chapter is [[graph()]],
@@ -7065,7 +7073,7 @@ CYCLE      = 0x0002,
 @
 
 This flag is stored in a unique bit in the [[Node.flag]] field;
-it will not conflict with the other node flags I introduced
+it will not conflict with the other node flags that I introduced
 in Section~\ref{sec:node-flags} (e.g., [[NOTMADE]] is [[0x0020]]).
 
 The function below assumes it is called with
@@ -7139,7 +7147,7 @@ can instantiate first the meta rule [[%: %.5]] with [[% = foo]].
 However, [[applyrules()]] when called recursively
 with [[foo.5]] as a target could again
 instantiate the meta rule [[%: %.5]], this time with [[% = foo.5]]
-\footnote{This is one of the motivation for the  
+\footnote{This is one of the motivations for the  
 special pattern character [['&']].}.
 This process could go forever, which would stuck [[mk]].
 
@@ -7587,6 +7595,7 @@ READY      = 0x0004,
 [[VACUOUS]] marks vacuous nodes and [[READY]] marks nodes
 [[vacuous()]] already visited (the graph can be a DAG).
 
+%trans:
 Here is finally the code of [[vacuous()]]:
 
 <<function vacuous>>=
@@ -7670,9 +7679,10 @@ The following sections will explain the code of [[mk()]], [[work()]], and
 [[mk()]] is arguably the most important function in [[mk]].
 %
 I outlined its core algorithm 
-in Section~\ref{sec:job} when I introduced the principles of a job scheduler, 
-and in Section~\ref{sec:soft-archi} when I presented the software architecture
-of [[mk]].
+in Section~\ref{sec:job-scheduler-principles} when I introduced 
+the principles of a job scheduler, 
+and in Section~\ref{sec:soft-archi} when I presented 
+the software architecture of [[mk]].
 %dup: overview/principles/scheduler
 Figure~\ref{fig:graph-being-made2} is a copy of 
 Figure~\ref{fig:graph-being-made}.
@@ -7716,6 +7726,7 @@ Made +------+-+     Made +------+-+
 % FIGURE displaying a tree of files and see how mk is running some waves 
 % of jobs, and how at each node there is a ready or outofdate boolean value.
 
+%trans:
 Here is the code of [[mk()]]:
 
 % main -> <> -> graph() ; clrmade(); work()
@@ -7836,11 +7847,15 @@ all the object files are [[MADE]].
 %
 In that case, [[mk()]] calls [[waitup()]] (see Section~\ref{sec:waitup})
 to wait for some user processes executing recipes to finish.
+\n waitup, wait user process?
 %
 [[waitup()]] will wait for a job to finish and will set as [[MADE]]
 the nodes that were the targets of the job.
 %
 Thus, the next wave of [[work()]] will be able to progress.
+\l note that waitup waits for only 1 child, and schedules possibly
+\l  only one child, so really you call work() a lot! after each process
+\l  finishes you try to find more opportunities.
 
 
 \item At some point, [[work()]] will schedule a job for the root target
@@ -7960,7 +7975,7 @@ work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
 % extra params for advanced functionality not needed
 \l BEINGMADE test because DAG? No, because previous round may have not
 \l   waitup the process for this node.
-\t should also return if MADE no? faster then
+\t should also return if MADE no? faster then!
 
 %toc:
 The following two sections explain the code of [[work()]] when
@@ -8029,6 +8044,7 @@ with one of its children.
 [[ready]] checks whether the node is ready to be built because all
 its children are [[MADE]].
 
+%trans:
 Here is finally the code of [[work()]] handling nodes with children
 and using the locals above:
 
@@ -8201,6 +8217,7 @@ This set will be used when exporting the special [[mk]] variable
 
 \l other locals. will iterate over arcs, node in args, words, and symbols.
 
+%trans:
 Here is finally the code of [[dorecipe()]] leveraging the locals above:
 
 % main -> mk -> work -> ... -> run(newjob())
@@ -8420,34 +8437,31 @@ for(a = n->arcs; a; a = a->next){
 
 %trans:
 In this chapter, you will see the remaining important functions
-of [[mk]] I introduced in Figure~\ref{fig:controlflow}.
+of [[mk]] that I introduced in Figure~\ref{fig:controlflow}.
 %trans: 
-I mentioned in Section~\ref{sec:dorecipe}
-[[run()]], called from [[dorecipe()]],
-which {enqueues} a job, and in Section~\ref{sec:mk}
-[[waitup()]], called from [[mk()]],
+I mentioned 
+[[run()]] in Section~\ref{sec:dorecipe}, called from [[dorecipe()]],
+which {enqueues} a job, and 
+[[waitup()]] in Section~\ref{sec:mk}, called from [[mk()]],
 which {waits} for a job to finish.
-\l (and which calls updated to change the building status of a node to MADE)
+\l (and which calls update() to change the building status of a node to MADE)
 %
 Both functions eventually call [[sched()]], which takes a job from
-the job queue and {schedules} it for execution by a shell 
-with [[execsh()]].
-\l seen Job and jobs before. see a few more globals: nproclimit/nevent/nrunning
+the job queue and {schedules} it for execution by a shell with [[execsh()]].
+%toc:
 The following sections will explain the code of
 [[run()]],
 [[waitup()]],
 \l update
-[[sched()]], 
-and [[execsh()]].
-%This will complete the presentation of the main control flow of mk
-%in Figure~\ref{fig:controlflow}.
+[[sched()]], and 
+[[execsh()]].
 
 \section{Enqueuing jobs, [[run()]]}
 
 %\subsection{[[run()]]}
 
 [[run()]] simply adds a job in the global job queue [[jobs]]
-(see Section~\ref{sec:job}) and run the scheduler:
+(see Section~\ref{sec:job}) and runs the scheduler:
 
 % main -> mk -> work -> dorecipe -> <> (-> sched())
 <<function run>>=
@@ -8470,7 +8484,7 @@ run(Job *j)
         sched();
 }
 @
-%ocaml: use Queue.add
+%ocaml: use Queue.add, faster, at least he should have a ljob ...
 \l j->next = nil  redundant since does it already in newjob
 
 %\subsection{[[nrunning]] and [[nproclimit]]}
@@ -8484,19 +8498,18 @@ static int nrunning;
 <<global nproclimit>>=
 static int nproclimit;
 @
-% can be set in env (readenv) $NPROC, see below
 
-[[nrunning]] counts the number of processes currently running a recipe
-while
+[[nrunning]] counts the number of processes currently running a recipe, while
 [[nproclimit]] sets a limit on the number of processes to run at the same time.
 \l that mk should not go over
 %
 This last global usually corresponds to the number of processors on the machine.
 %
 If there are no more free processors, then [[run()]] just enqueues the job.
+%
 Hopefully at some point [[mk]] will call [[waitup()]], which will
 wait for some process to finish, and which will call [[sched()]] to
-schedule one of the enqueued job.
+schedule one of the enqueued jobs.
 
 
 You can modify [[nproclimit]] by modifying the [[NPROC]] environment variable.
@@ -8508,8 +8521,9 @@ with the code below:
 <<[[mk()]] initializations>>=
 nproc();	/* it can be updated dynamically */
 @
+\n mk not main, so run for each mkfile, but not a big difference, could be
+\n  in main honestly, but must be after parsing the mkfile
 
-% like nrep()
 <<function nproc>>=
 void
 nproc(void)
@@ -8529,6 +8543,7 @@ nproc(void)
     <<[[nproc()]] grow nevents if necessary>>
 }
 @
+\n like [[nrep()]]
 \l can also be modifed in mkfile, by doing NPROC=xxx but stupid.
 \l is it setup by \plan by default at init time? after kernel boots?
 
@@ -8536,11 +8551,27 @@ nproc(void)
 
 \section{Scheduling jobs}
 
-%trans: if processor free, then run job, and keep track of it.
+%trans:
+Before showing the code of [[sched()]], 
+I need to present an important data structure used by [[sched()]].
 
 \subsection{[[RunEvent]] and [[events]]}
 
-% to keep track of children process, what they were supposed to do.
+%dup: (but extended) scheduling
+[[sched()]] takes a job from the job queue and creates a process
+to execute a shell that will interpret shell commands from a recipe.
+%
+This same process will be waited for later by [[waitup()]].
+%
+However, [[waitup()]] needs to know which job corresponds to which process,
+so it can know which nodes in the graph of dependencies to update
+once a process finished.
+%
+This is why [[sched()]], in addition to executing new processes, 
+needs also to remember the mapping between a process and a job.
+%
+[[RunEvent]] below records a single mapping between a process id and a job:
+\l see \book{Kernel}, process identifier
 
 <<struct RunEvent>>=
 struct RunEvent {
@@ -8553,22 +8584,47 @@ struct RunEvent {
 @
 %bug? seems that job never freed
 
+The list of mappings is stored in the following global:
+
 <<global events>>=
 // growing_array<Runevent> (size = nevents (== nproclimit))
 static RunEvent *events;
 @
 %ocaml: use instead map (e.g., hash) from pid to job.
-
-
 <<global nevents>>=
 static int nevents;
 @
-\t should be == nproclimit, so maybe can remove it
+\t should be always == nproclimit, so maybe can remove it
 \l  or sometimes nproclimit can go down, in which case we dont really
 \l  but useless opti
 \t  just remember old_nproclimit in nproc() so know if need realloc
+\t  but anyway should not call nproc, and realloc does not matter.
 
-% the slaves processors! called a slot.
+[[events]] is a {growing array}. The index of a mapping in this
+array is called a {\em slot}.
+%
+The growing array is initialized in [[nproc()]]:
+
+<<[[nproc()]] grow nevents if necessary>>=
+if(nproclimit > nevents){
+    if(nevents)
+        events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
+    else
+        events = (RunEvent *)Malloc(nproclimit*sizeof(RunEvent));
+
+    while(nevents < nproclimit)
+        events[nevents++].pid = 0;
+}
+@
+%ocaml: no need, Hashtbl.t grows as needed
+\t replace nproclimit by != nevents
+\t nproc called from mk, so code above should never call the Realloc part.
+\l so nevents should be = to nproclimit at the end
+
+
+[[sched()]] relies on a few helper functions to operate on [[events]].
+%
+[[nextslot()]] below finds an available slot in [[events]]:
 
 % sched -> <>
 <<function nextslot>>=
@@ -8586,6 +8642,9 @@ nextslot(void)
 @
 %ocaml: no need growing_array, just use hash
 
+[[pidslot()]] below finds the slot of the mapping for
+a certain process id:
+
 % waitup -> <>
 <<function pidslot>>=
 int
@@ -8596,35 +8655,23 @@ pidslot(int pid)
     for(i = 0; i < nevents; i++)
         if(events[i].pid == pid) 
             return i;
+    // else
     <<[[pidslot()]] if DEBUG(D_EXEC)>>
     return -1;
 }
 @
-% this one iterate on all nevents, not just nproclimit
+\t this one iterate on all nevents, not just nproclimit
 % but should be the same between two runs of mk
 % so maybe could simplify.
 \t use nproclimit, not nevents above, more consistent
 %ocaml: use Hashtbl.find
 
 
-<<[[nproc()]] grow nevents if necessary>>=
-if(nproclimit > nevents){
-    if(nevents)
-        events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
-    else
-        events = (RunEvent *)Malloc(nproclimit*sizeof(RunEvent));
-
-    while(nevents < nproclimit)
-        events[nevents++].pid = 0;
-}
-@
-\t replace nproclimit by != nevents
-%ocaml: no need, Hashtbl.t grows as needed
-
-% so nevents should be = to nproclimit at the end
-
 
 \subsection{[[sched()]]}
+
+%trans:
+Here is finally the code of [[sched()]]:
 
 % main -> mk -> work -> dorecipe -> run -> sched()
 <<function sched>>=
@@ -8633,11 +8680,11 @@ sched(void)
 {
     Job *j;
     int slot;
-    Envy *e;
     char *flags;
+    ShellEnvVar *e;
     <<[[sched()]] other locals>>
 
-    <<[[sched()]] sanity check jobs>>
+    <<[[sched()]] return if no jobs>>
 
     // j = pop(jobs)
     j = jobs;
@@ -8665,24 +8712,63 @@ sched(void)
     }
 }
 @
-% -e is important!! want any error in the subshell command
-% to abort the whole thing
 
-<<[[sched()]] sanity check jobs>>=
+The most important call in the code above is the call to [[execsh()]].
+%dup: (but extended) scheduling scheduling/scheduling/runevent
+[[execsh()]] will create a new shell process that will interpret the 
+commands from the recipe of a job (stored in [[j->r>recipe]]).
+%
+This is why [[sched()]] above increments [[nrunning]] after the
+call to [[execsh()]].
+%
+[[execsh()]] will return the process id of this newly created process
+and [[sched()]] associates this id with the dequeued job in [[events]].
+
+
+[[execsh()]] takes also as a first parameter a string containing a set of flags
+to pass to the shell as shell arguments.
+%
+[[mk]] passes the [[-e]] flag so that every commands from the recipe returning
+an error will abort the whole execution of the recipe (see the \book{Shell}).
+\l why this is good? safe
+\l what is third parameter of execsh? buf, for backquote exec to capture output
+
+
+The last argument to [[execsh()]] ([[e]]) contains the {environment}
+in which to execute the shell.
+%
+This environment will contain the values for the special [[mk]] variables
+(e.g., [[$target]], [[$prereq]], [[$stem]]) and user variables. %$
+%
+This environment is built by [[buildenv()]] called above, which I will present
+in Chapter~\ref{chap:shellenv}.
+\l it is the function using most of the fields in j;
+Thanks to this environment, the shell process executing the recipe
+will be able to get the values for the [[mk]] variables referenced 
+in this recipe.
+
+
+As you will see soon, [[sched()]] is also called from [[waitup()]], in which
+case the job queue may be empty. In that case, [[sched()]] simply returns.
+
+<<[[sched()]] return if no jobs>>=
 if(jobs == nil){
     usage();
     return;
 }
 @
-\t how can have jobs == nil?
-% should issue an error here, assert!
-\t actually usage is for profiling
+\n usage() is for profiling
+\l explain usage?
+\t usage -> processor_usage_profile()
 
-% buildenv is important; it is the function using most of the fields in j;
 
-\section{Executing Jobs}
+\section{Executing Jobs, [[execsh()]]}
 
-\subsection{Shell configuration}
+[[execsh()]] relies on the global below to know which shell to execute.
+%
+Under \plan, [[mk]] uses the shell [[rc]] (see the \book{Shell}):
+
+%\subsection{Shell configuration}
 
 <<global shell>>=
 char 	*shell =	"/bin/rc";
@@ -8691,124 +8777,161 @@ char 	*shell =	"/bin/rc";
 char 	*shellname =	"rc";
 @
 
+We do not want the shell to print a {prompt} before each command
+from the recipe, so [[execsh()]] adds the [[-I]] flag as a shell argument
+(in addition to [[-e]] added by [[sched()]]):
+\l unless you added :E: for NOMINUSE
+
 <<global shflags>>=
 char	*shflags = "-I";	/* rc flag to force non-interactive mode */
 @
-\t need that ? does not repeat on stdout the command
 
-% pad: should add also -e!! actually -e is added by default
-%  unless you added :E: for NOMINUSE
+%\subsection{[[execsh()]]}
 
-% will fork, exec shell, and pass as stdin input in pipe 
-% to the shell the recipe string.
-%alt: sh -e '' ? but then need escape mess?
-
-% can also pass a buf for bquote (backquote execution), to store
-%  stdout instead of just displaying it gradually
-
-% FIGURE? cos 2 forks below.
-% 2 fork trick for what? because dont want current
-% process to be blocked on feeding input to shell. Instead
-% do that in another process.
-
-\subsection{[[execsh()]]}
-
-
-% can do stuff in //. Make originally didn't (apparently).
-
+[[execsh()]] below essentially forks a shell interpreter, creates a pipe, 
+and feeds this shell with commands from the recipe through this pipe
+(via another forked process):
 
 %plan9.c 
 <<function execsh>>=
 int
-execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
+execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
 {
-    int pid;
-    fdt in[2];
+    int pid1, pid2;
+    fdt in[2]; // pipe descriptors
     int err;
     <<[[execsh()]] other locals>>
 
     <<[[execsh()]] if buf then create pipe to save output>>
 
-    pid = rfork(RFPROC|RFFDG|RFENVG);
+    pid1 = rfork(RFPROC|RFFDG|RFENVG);
     <<[[execsh()]] sanity check pid rfork>>
-    // children
-    if(pid == 0){
-        <<[[execsh()]] in children, if buf, close one side of pipe>>
+    // child
+    if(pid1 == 0){
+        <<[[execsh()]] in child, if buf, close one side of pipe>>
         err = pipe(in);
         <<[[execsh()]] sanity check err pipe>>
-        pid = fork();
+        pid2 = fork();
         <<[[execsh()]] sanity check pid fork>>
-        // child 1, the shell interpreter
-        if(pid != 0){
-            // input now comes from the pipe
+        // parent of grandchild, the shell interpreter
+        if(pid2 != 0){
+            // input must come from the pipe
             dup(in[0], STDIN);
-            <<[[execsh()]] in child 1, if buf, dup and close>>
+            <<[[execsh()]] in child, if buf, dup and close>>
             close(in[0]);
             close(in[1]);
-            if (e)
-                exportenv(e);
+            <<[[execsh()]] in child, export environment before exec>>
             if(shflags)
-                execl(shell, shellname, shflags, args, nil);
+                execl(shell, shellname, shflags, shargs, nil);
             else
-                execl(shell, shellname, args, nil);
+                execl(shell, shellname, shargs, nil);
             // should not be reached
             perror(shell);
             _exits("exec");
         }
-        // child 2, feeding the shell with recipe, through a pipe
-        <<[[execsh()]] in child 2, if buf, close other side of pipe>>
+        // else, grandchild, feeding the shell with recipe, through a pipe
+        <<[[execsh()]] in grandchild, if buf, close other side of pipe>>
         close(in[0]);
         // feed the shell
-        <<[[execsh()]] in child 2, write cmd in pipe>>
+        <<[[execsh()]] in grandchild, write cmd in pipe>>
         close(in[1]); // will flush
         _exits(nil);
     }
     // parent
     <<[[execsh()]] in parent, if buf, close other side of pipe and read output>>
-    return pid;
+    return pid1;
 }
 @
-%pad: I introduced int err; so can better aspectize sanity checks
+%pad: 
+% - I introduced int err; so can better aspectize sanity checks
+% - I added pid2 (and the pid -> pid1), so better see subtelity of
+%   shell must be in child1
+%old: 
+% - args -> shargs, cmd -> shinput
 \n put flags after cmd in argument of execsh, more logical? no! cmd is input!
-\t rename cmd to input ?
+
+
+[[execsh()]] relies on the 
+[[rfork()]], 
+[[pipe()]], 
+[[dup()]],
+[[close()]], and 
+[[_exits()]] 
+functions, which are syscalls to the kernel (see the \book{Kernel}),
+as well as on the 
+[[fork()]],
+[[execl()]], and 
+[[perror()]] 
+functions from the C library (see the \book{Libcore}), which are
+thin wrappers around syscalls.
+\t diff rfork and fork, RFENVG vs RFREND ??? RFENVG so not share env var
+\t  and good because will modify those vars in the child! based on
+\t  modif in mkfile (hmm but ENV anyway done by /env/ no?)
+\t  but anyway call rfork(RFENVG) in readenv, so does not matter no?
+\t and why call _exits instead of exits?
+
+%dup: (a bit different) scheduling/execsh
+[[execsh()]] creates two processes: one for the shell, and one
+whose only job is to feed the shell through a pipe.
+%alt: sh -e 'cmd' ? but then need escape mess?
+\t why this approach? for escaping mess? simpler design?
+\l good, but then pb with :I:
+\l  because feed stdin and then close, that means programs called from
+%   shell can not read from stdin :( for instance make sync works but
+%   mk sync does not. so added :I: in mk-ocaml
+\l FIGURE? cos 2 forks below.
+%
+By relying on this last process, [[mk]] can continue to schedule
+jobs without having to wait for the shell to finish reading
+the commands from the recipe.
+\l can do stuff in //. Make originally didn't (apparently).
+\l and sometimes multiple lines and stop before each line so bad
+\l can also pass a buf for bquote (backquote execution), to store
+%  stdout instead of just displaying it gradually
+
 
 %ocaml-found:
-% important for second fork to do the code of the shell in the case where
-%  pid <> 0!!
-% otherwise, would wait for wrong process! would wait for
-% child2 that feeds the shell which returns very quickly!
-% Also wait for could possibly capture child2.
+Note that it is important for [[execsh()]] to execute the
+shell interpreter in the direct child, not the grandchild.
+%
+Indeed, the parent process of the child, the [[mk]] process,
+knows only about the process id of the child. It is this process id
+that is stored later in [[events]] and looked for by [[waitup()]].
+\t also not child of mk, grandchild, so does not interfere with waitup!
+%
+The parent process does not know about the process id of the grandchild.
+Moreover, this grandchild will terminate quickly, before the shell finishes
+executing the recipe.
+\l exportenv! so set in child the variables in environment
 
-% because feed stdin and then close, that means programs called from
-% shell can not read from stdin :( for instance make sync works but
-% mk sync does not.
-
-
-% exportenv! so set in child the variables in environment
+Here is the code to feed the shell in the grandchild:
 
 <<[[execsh()]] other locals>>=
-char *p;
+char *endshinput;
 @
-<<[[execsh()]] in child 2, write cmd in pipe>>=
-p = cmd+strlen(cmd);
-while(cmd < p){
-    n = write(in[1], cmd, p-cmd);
+<<[[execsh()]] in grandchild, write cmd in pipe>>=
+endshinput = shinput + strlen(shinput);
+while(shinput < endshinput){
+    n = write(in[1], shinput, endshinput - shinput);
     if(n < 0)
         break;
-    cmd += n;
+    shinput += n;
 }
 @
+%old: p -> endshinput (and before cmd -> shinput)
+
+
 
 
 
 <<[[execsh()]] sanity check pid rfork>>=
-if(pid < 0){
+if(pid1 < 0){
     perror("mk rfork");
     Exit();
 }
 @
 <<[[execsh()]] sanity check pid fork>>=
-if(pid < 0){
+if(pid2 < 0){
     perror("mk fork");
     Exit();
 }
@@ -8824,39 +8947,27 @@ if(err < 0){
 
 
 
-
-
-
 \section{Waiting for jobs to finish}
+
+%trans:
+The interface of [[waitup()]] is complex.
+%toc:
+I will focus first on the easy case where I do not care
+about the arguments passed to [[waitup()]],
+and describe later the use of those arguments and the 
+different edge cases of [[waitup()]].
 
 \subsection{[[waitup()]]}
 \label{sec:waitup}
+\l wait user process?
 
-% wait user processes?
-
-% retstatus param mostly not used. used for <| and :P: so can aspectize it
-% INOUT. for IN it is a pid and OUT it is the return status (ugly)
-% put here because can have only one call to wait. wait is waiting
-%  indiscrimently, so have to centralize in one place.
-% For more info, see Section X.
-
-<<type WaitupParam>>=
-enum WaitupParam { 
-  EMPTY_CHILDREN_IS_OK = 1, 
-  EMPTY_CHILDREN_IS_ERROR = -1, 
-  EMPTY_CHILDREN_IS_ERROR2 = -2,
-};
-@
-%pad: I added that, those 1, -1 was cryptic
-
-<<type WaitupResult>>=
-enum WaitupResult { 
-  JOB_ENDED = 0, 
-  EMPTY_CHILDREN = 1, 
-  NOT_A_JOB_PROCESS = -1 
-};
-@
-%pad: I added that, those 1, -1 was cryptic
+%trans: %dup: scheduling/scheduling/sched
+Once [[sched()]] scheduled a job and modified [[events]],
+[[mk()]] can call [[waitup()]] to wait for a job to finish.
+%
+Indeed, [[waitup()]] can now rely on [[events]] to know which job is associated
+with the waited process. Then, [[waitup()]] can call [[update()]] to update
+the graph of dependencies and [[sched()]] to schedule more jobs:
 
 % mk -> work; <>
 <<function waitup>>=
@@ -8871,6 +8982,7 @@ waitup(int echildok, int *retstatus)
     int slot;
     Job *j;
     Symtab *sym;
+    Node *node;
     Word *w;
     bool fake = false;
     <<[[waitup()]] other locals>>
@@ -8897,18 +9009,24 @@ again:		/* rogue processes */
 
     for(w = j->t; w; w = w->next){
         sym = symlook(w->s, S_NODE, nil);
+        node = (Node*) sym->u.ptr;
         <<[[waitup()]] skip if node not found>>
-        update(fake, (Node*) sym->u.ptr);
+        update(node, fake);
     }
 
     if(nrunning < nproclimit)
         sched();
-    return 0;
+    return JOB_ENDED;
 }
 @
 %bug? could free job in events[i] too
-%old: fake was called [[uarg]] (for update arg)
-\t return value used?
+%old: 
+% - fake was called [[uarg]] (for update arg)
+%pad: I added node local.
+
+[[waitup()]] above relies on the helper function [[waitfor()]] below,
+which calls itself [[wait()]] from the C library (see the \book{Libcore}),
+which itself relies on the [[await()]] system call (see the \book{Kernel}).
 
 %plan9.c
 <<function waitfor>>=
@@ -8922,7 +9040,7 @@ waitfor(char *msg)
     w = wait();
     // no more children
     if(w == nil)
-        return ERROR_NEG1;
+        return -1;
     strecpy(msg, msg+ERRMAX, w->msg);
     pid = w->pid;
     free(w);
@@ -8931,14 +9049,123 @@ waitfor(char *msg)
 @
 % strecpy set msg[0] to \0 if nothing?
 
+[[wait()]] provides an easier interface than [[await()]] to
+wait for a child. Indeed, [[wait()]] returns a [[Waitmsg]] data structure
+(see the \book{Libcore}), which allows easy access to the
+pid and returned string of the child process.
+\l await just store information in buffer string, so need parse it
 
-% echildok -1, -2, -3?? just to help debug which one of the waitup?
-%alt: could use __LINE__ instead
+
+\subsection{[[update()]]}
+
+[[update()]], called in [[waitup()]], 
+marks the target nodes of a job as [[MADE]]
+and updates the modification time of those nodes.
+
+% mk -> waitup -> <>
+<<function update>>=
+void
+update(Node *node, bool fake)
+{
+    Arc *a;
+
+    <<[[update()]] if fake>>
+    else
+       MADESET(node, MADE);
+    <<[[update()]] debug>>
+
+    <<[[update()]] if virtual node or inexistent file>>
+    else {
+        node->time = timeof(node->name, true);
+        <<[[update()]] unpretend node>>
+        <<[[update()]] set outofdate prereqs if arc prog>>
+    }
+}
+@
+%old: 
+% - I changed the order of the parameter, better put node before
+% - I reorg code so easier to aspectize fake and virtual
+
+\l pass true to timeof, to force, to not use the cache because indeed
+%  time probably changed
+
+I will present the use of the [[fake]] parameter later in
+Section~\ref{sec:fake-update}.
+
+
+\subsection{[[waitup()]] edge cases}
+
+%dup: scheduling/waitup
+As I mentioned before, the interface of [[waitup()]] is complex:
+
+<<signature waitup>>=
+int waitup(int echildok, int *retstatus);
+@
+%syncweb: not included anywhere, it is normal
+
+The first parameter of [[waitup()]], of the type below, 
+encodes whether it is ok or not for [[mk]] to have children to wait for.
+
+<<type WaitupParam>>=
+enum WaitupParam { 
+  EMPTY_CHILDREN_IS_OK = 1, 
+  EMPTY_CHILDREN_IS_ERROR = -1, 
+  <<[[WaitupParam]] other cases>>
+};
+@
+%pad: I added the enum above; use of 1 and -1, -2, -3 was cryptic
+\l could transform in a bool, and get rid of the ERROR2 ERROR3, unify
+
+The return value of [[waitup()]], of the type below, describes
+a few possible scenarios:
+
+<<type WaitupResult>>=
+enum WaitupResult { 
+  JOB_ENDED = 0, 
+  EMPTY_CHILDREN = 1, 
+  NOT_A_JOB_PROCESS = -1 
+};
+@
+%pad: I added that, those 1, -1 was cryptic
+
+To understand [[NOT_A_JOB_PROCESS]] above, it is important
+to understand that under \plan, with the system call [[await()]]
+called from [[wait()]], you can not specify which child
+you are interested in to wait for. 
+%
+You can just wait for any children to finish.
+%because you do not have control usually on which children will finish first.
+%
+In fact, [[await()]] will also report {children that already finished}.
+%
+This is partly the reason for the complexity of [[waitup()]]. Indeed,
+certain advanced features of [[mk]] (see Section~\ref{sec:dynamic-mkfile},
+Section~\ref{sec:backquotes}, and Section~\ref{sec:custom-comparison})
+will create processes that are not related to a job.
+\l but they will popup in waitup (unless you called waitpid yourself before)
+%alt: could have another waitxx function, to not interfere with job processes
+%
+The second parameter of [[waitup()]] is used only by those
+advanced features.
+\l used for <| and :P:
+% INOUT. for IN it is a pid and OUT it is the return status (ugly)
+% put here because can have only one call to wait. wait is waiting
+%  indiscrimently, so have to centralize in one place.
+% For more info, see Section X.
+
+
+%trans:
+I can now describe the code to handle the edge cases of [[waitup()]].
+%
+As I showed in Section~\ref{sec:mk}, [[mk()]] calls [[waitup()]]
+in different contexts and the presence or not 
+of a child can trigger an error or be perfectly ok depending on the context:
+
 
 <<[[waitup()]] if no more children>>=
 if(pid == -1){
-    if(echildok > 0)
-        return 1;
+    if(echildok == EMPTY_CHILDREN_IS_OK)
+        return EMPTY_CHILDREN;
     else {
         fprint(STDERR, "mk: (waitup %d) ", echildok);
         perror("mk wait");
@@ -8946,23 +9173,23 @@ if(pid == -1){
     }
 }
 @
+%old: echildok > 0
 
-
+If a child returns an error string, for example by doing
+[[exits("error")]] instead of [[exits(nil)]], then this error
+string will be captured by [[wait()]] and stored in the
+local buffer [[buf]] of [[waitup()]], hence the condition below:
 
 <<[[waitup()]] other locals>>=
-Envy *e;
 Bufblock *bp;
 @
 
 <<[[waitup()]] if error in child process, possibly set fake or exit>>=
 if(buf[0]){
-    e = buildenv(j, slot);
     bp = newbuf();
-    shprint(j->r->recipe, e, bp);
-    front(bp->start);
+    <<[[waitup()]] if error in child process, print recipe in [[bp]]>>
     fprint(STDERR, "mk: %s: exit status=%s", bp->start, buf);
     freebuf(bp);
-
     <<[[waitup()]] when error in child process, delete if DELETE node>>
     fprint(STDERR, "\n");
 
@@ -8973,7 +9200,6 @@ if(buf[0]){
     }
 }
 @
-% nice shprint! see final command with expanded variables!
 
 <<[[waitup()]] skip if node not found>>=
 if(sym == nil)
@@ -8983,6 +9209,678 @@ if(sym == nil)
 \t  node we are interested in
 
 % because up to date target anyway?
+
+\section{Process management, [[Exit()]]}
+
+When one of the children of [[mk]] returns an error,
+for example, a syntax error in one of the C files of a project,
+\l or when [[mk]] detects an error
+[[mk]] can not just exit. Indeed, there may still be other
+jobs running in parallel, for example, compiling other C files in
+the same project.
+\t sure that children are killed under plan9? maybe just unix?
+If [[mk]] was exiting, those other jobs may get a signal
+that abruptly interrupts them. In those cases, the files generated
+by those jobs (e.g., object files for a compiler or assembler) 
+may become corrupted.
+\l  or source file if interrupt yacc or lex (or ocamllex!)
+\n Saw pb with mk-rc.byte when didnt implement that; I got many corrupted cmo.
+%
+Thus, is is important before exiting to let those other
+jobs finish quietly.
+%
+This is why [[mk]] calls [[Exit()]] below instead of
+calling directly [[exits()]]:
+
+%\subsection{[[Exit()]]}
+
+<<function Exit>>=
+void
+Exit(void)
+{
+    while(waitpid() >= 0)
+        ;
+    exits("error");
+}
+@
+\l Malloc, Realloc, they call Exit in case of error.
+% there should be no calls directly to exits (except in main
+% when everything went fine)
+
+
+%\subsection{Notes (signals) management}
+% now in adv topics
+
+
+
+
+\chapter{The Shell Environment}
+\label{chap:shellenv}
+
+%toc:
+In this chapter, you will see the functions to
+initialize,
+import,
+adjust, and
+export the {environment} to the shell processes launched from [[mk]].
+%
+Indeed, it is through the environment that [[mk]] communicates
+to the shell interpreter
+the values of [[mk]]'s special variables (e.g., [[$target]], [[$stem]]) or
+user variables (e.g., [[$CFLAGS]]) %$
+used in the recipes.
+
+
+%\section{Interacting with the shell}
+
+% main strategy/approach of mk for interacting with shell is to
+% pass variable value through environment! (simple)
+% and to pass recipe through stdin (simpler than through -c, no
+% need quote escaping)
+
+%real-world:
+% mk simpler than make on this. no Make variables vs shell variables.
+% (but then stronger coupling with the shell language? portable?)
+% Just reuse mechanism of variables from the shell, and syntax!
+
+% as opposed to make, no $(XX), no $$i, the string is passed
+% as is to shell! less escaping need!
+
+% The recipe is a shell command (or multiple commands).
+% Seen execsh() above with global shell, shellname stuff. 
+%  (already plan9 specific and some stuff rc specific)
+% was taking an Envy because recipe can contain variables.
+% buildenv() in sched() before execsh, passing an Envy.
+
+%\section{Variables expansion (part 3)}
+% not done actually! shell does it!  simpler! no $$i mess. simplify some things.
+
+% variables, different occurences: in rule target, prerequistes,
+% or in recipe. Different handling depending on context.
+% See quote from mk manual.
+
+\section{[[Shellenv]] and [[shellenv]]}
+\label{sec:shellenv}
+\n could be in core DS, but used just here, and outside, S_VAR is good enough.
+
+The symbol table of [[mk]] contains already 
+in the [[S_VAR]] namespace the values of user variables,
+as well as the values of the variables in the environment of [[mk]] itself.
+\l good for recursive mk, readenv
+[[mk]] also stores the set of special variables in the symbol table
+in the [[S_INTERNAL]] namespace, but without any value.
+%
+However, [[mk]] uses another data structure to communicate
+the value of all those variables to the shell.
+\t why? faster? because anyway exec excepts an array? not really.
+%
+The structure below maps a variable name to a list of words.
+
+<<struct Envy>>=
+struct ShellEnvVar
+{
+    // ref<string>, the key
+    char 		*name;
+
+    // list<ref_own<string>>, the value
+    Word 		*values;
+};
+@
+%old: was Envy, but why y?
+%ocaml: just use env, no need for extra data structure.
+% update: I use env env and shellenv type, but really shellenv is just
+% because exec requires an array.
+
+All the variables and their values are stored in the following global:
+
+<<global envy>>=
+// growing_array<ShellEnvVar> (endmarker = (nil,nil), size = envinsert.envsize)
+ShellEnvVar	*shellenv;
+@
+%old: envy -> shellenv
+%ocaml: shellenv_of_env
+
+The size of this array is stored in a static local variable 
+in [[envinsert()]] below. However, you can iterate over [[shellenv]]
+without having to know the value of this static variable. 
+%
+Indeed, [[mk]] uses a special marker, [[(nil, nil)]], for 
+the last [[ShellEnvVar]] entry in [[shellenv]].
+\l why this design choice? 
+
+
+Here is the function to add an entry in [[shellenv]]:
+
+<<global nextv>>=
+// idx for next free entry in shellenv array
+static int nextv;
+@
+\l why not put envsize here too?
+
+% envupd | ecopy | execinit -> <>
+<<function envinsert>>=
+static void
+envinsert(char *name, Word *value)
+{
+    <<[[envinsert()]] locals>>
+
+    <<[[envinsert()]] grow array if necessary>>
+    shellenv[nextv].name = name;
+    shellenv[nextv].values = value;
+    nextv++;
+}
+@
+%old: I put the increment of nextv after, more symetric
+%ocaml: just Hashtbl.add
+
+
+<<[[envinsert()]] locals>>=
+static int envsize = 0;
+@
+%pad: I added the =0
+<<[[envinsert()]] grow array if necessary>>=
+if (nextv >= envsize) {
+    envsize += ENVQUANTA;
+    shellenv = (ShellEnvVar *) Realloc((char *) shellenv, 
+                                       envsize*sizeof(ShellEnvVar));
+}
+@
+<<constant ENVQUANTA>>=
+#define ENVQUANTA 10
+@
+
+The execution of each recipe requires a specific shell environment.
+%
+Indeed, the values for [[$target]], [[$stem]], and other special variables
+are different in each rule. However, the values of the user variables
+are always the same.
+%
+To avoid allocating a new shell environment for each execution,
+\t but could just modify the symbol table, hmmm
+[[mk]] reuses [[shellenv]] for all executions,
+but relies on the function below to adjust the values of a few variables:
+
+<<function envupd>>=
+static void
+envupd(char *name, Word *value)
+{
+    ShellEnvVar *e;
+
+    for(e = shellenv; e->name; e++)
+        if(strcmp(name, e->name) == 0){
+            freewords(e->values);
+            e->values = value;
+            return;
+        }
+    <<[[envupd()]] if variable not found>>
+}
+@
+%ocaml: just Hashtbl.replace
+
+
+<<[[envupd()]] if variable not found>>=
+// else
+e->name = name;
+e->values = value;
+envinsert(nil,nil);
+@
+\t else if not found, should generate error! 
+
+
+\section{Initializing the shell environment, [[initshellenv()]]}
+
+To initialize [[shellenv]], [[main()]] calls [[initshellenv()]]
+before calling [[mk()]]:
+
+<<[[main()]] initializations before building>>=
+initshellenv();
+@
+%ocaml: just reuse env, no need for another environment-like data structure.
+
+% main -> parse; mk; <>
+<<function execinit>>=
+void
+initshellenv(void)
+{
+    char **p;
+
+    nextv = 0; // reset envy
+
+    // internal mk variables
+    for(p = specialvars; *p; p++)
+        envinsert(*p, stow(""));
+
+    // user variables in mkfiles, or mk process environment
+    symtraverse(S_VAR, ecopy);
+
+    // end marker
+    envinsert(nil, nil);
+}
+@
+\l potential leak when reset on Envy.values?
+%old: execinit -> initshellenv
+
+I described in Section~\ref{sec:symtraverse} [[symtraverse()]].
+It allows to iterate over a namespace while applying
+a function, here [[ecopy]]:
+
+% execinit -> symtraverse -> <> (as x <- symtraverse(..., <>) <- execinit)
+<<function ecopy>>=
+static void
+ecopy(Symtab *s)
+{
+    char **p;
+
+    <<[[ecopy()]] return and do not copy if S_NOEXPORT symbol>>
+    <<[[ecopy()]] return and do not copy if conflict with mk internal variable>>
+     // else
+     envinsert(s->name, s->u.ptr);
+}
+@
+%ocaml: just Hashtbl.copy, but not even sure we need that
+
+Note that [[initshellenv()]] calls [[envinsert()]] to
+create first the entries for the special [[mk]] variables.
+%
+It is those variables that [[mk]] needs to adjust for each shell execution. 
+%
+By adding those entries first
+in [[shellenv]], [[envupd()]] will be slightly faster because
+[[envupd()]] tries to find the variable to update by starting from the
+start of the [[shellenv]] array.
+\l use myenv also in initenv(inithash), but it is for the S_INTERNAL stuff and
+%  used later for readenv
+
+
+<<[[ecopy()]] return and do not copy if conflict with mk internal variable>>=
+for(p = specialvars; *p; p++)
+    if(strcmp(*p, s->name) == 0)
+        return;
+@
+\l could also symlook in S_INTERNAL instead of iterating on specialvars
+\l maybe should issue a warning? anyway it is only for user variables
+%  because for readenv(), those variables are skipped.
+
+
+%ocaml-found:
+% when use mk recursively, you will get a $stem in the environment! and
+% you need to filter it otherwise in exportenv you would need to take care
+% of duplicate and give priority to the fresh $stem
+
+
+\section{Importing the environment, [[readenv()]]}
+\label{sec:readenv}
+
+%trans:
+[[initshellenv()]] iterates over the [[S_VAR]] namespace with
+[[symtraverse()]] to add in [[shellenv]] the user variables,
+for instance, a variable [[$CFLAGS]] defined in the [[mkfile]]. %$
+%
+In fact, the [[S_VAR]] namespace contains also the variables
+from the environement of [[mk]] itself.
+%
+Indeed, as I mentioned in Section~\ref{sec:inithash}, [[main()]]
+calls [[inithash()]] to initialize the symbol table, and
+[[inithash()]] calls [[readenv()]] below to populate the symbol table
+with variables from the environment (e.g., [[$HOME]], [[$objtype]], [[$CC]]). %$
+
+Under \plan, the environment variables of a process are accessible
+through the filesystem under [[/env/]] (see the \book{Kernel}).
+%
+[[readenv()]] below simply iterates over all the files under [[/env/]].
+
+% plan9 specific, in plan9.c
+% inithash -> <>
+<<function readenv>>=
+void
+readenv(void)
+{
+    fdt envdir;
+    fdt envfile;
+    Dir *e;
+    int i, n, len, len2;
+    char *p;
+    char name[1024];
+    Word *w;
+
+    rfork(RFENVG);	/*  use copy of the current environment variables */
+
+    envdir = open("/env", OREAD);
+    <<[[readenv()]] sanity check envdir>>
+    while((n = dirread(envdir, &e)) > 0){
+        for(i = 0; i < n; i++){
+            len = e[i].length;
+            <<[[readenv()]] skip some names>>
+
+            snprint(name, sizeof name, "/env/%s", e[i].name);
+            envfile = open(name, OREAD);
+            <<[[readenv()]] sanity check envfile>>
+            p = Malloc(len+1);
+            len2 = read(envfile, p, len);
+            <<[[readenv()]] sanity check len2>>
+            close(envfile);
+            <<[[readenv()]] add null terminator character at end of [[p]]>>
+            w = encodenulls(p, len);
+            free(p);
+            p = strdup(e[i].name);
+
+            // populating symbol table
+            setvar(p, (void *) w);
+        }
+        free(e);
+    }
+    close(envdir);
+}
+@
+%old: envf -> envdir, f -> envfile, nam -> name
+%dead: 
+% <<[[Sxxx]] cases>>=
+% S_EXPORTED,	/* var -> current exported value */
+% @
+%  symlook(p, S_EXPORTED, (void*)"")->u.ptr = "";
+\t rfork RFENVG?
+
+[[readenv()]] skips entries under [[/env/]] that would
+lead to empty variables or variables that would conflict
+with one of [[mk]]'s special variables:
+
+<<[[readenv()]] skip some names>>=
+/* don't import funny names, NULL values,
+ * or internal mk variables
+ */
+if(len <= 0 || *shname(e[i].name) != '\0')
+    continue;
+if (symlook(e[i].name, S_INTERNAL, nil))
+    continue;
+@
+%alt: could import variables with same name, just give priority to
+% S_INTERNAL when symlook
+\t shname??
+
+<<[[readenv()]] sanity check envdir>>=
+if(envdir < 0)
+    return;
+@
+<<[[readenv()]] sanity check envfile>>=
+if(envfile < 0)
+    continue;
+@
+
+<<[[readenv()]] sanity check len2>>=
+if(len2 != len){
+    perror(name);
+    close(envfile);
+    continue;
+}
+@
+
+
+Under \plan, environment variables can contain a list of words,
+just like [[mk]]'s variables (and [[rc]]'s variables).
+%
+The format of this list uses the null character, not to
+mark the end of a string, but as a {word separator}.
+%alt:
+An alternative would be to use the space character to separate words.
+However, because under \plan certain filenames can contain spaces (but not
+null characters), and because ertain environment variables reference
+a list of filenames (e.g., [[$PATH]]), %$
+it is more convenient to use the null character as a separator.
+%
+This avoids the need to escape space characters (and later to parse escaped
+characters).
+
+
+The function below called from [[readenv()]] recognizes the
+null character as a word separator and split the string [[s]]
+in a list of words:
+
+\label{sec:encodenulls}
+<<function encodenulls>>=
+/* break string of values into words at 01's or nulls*/
+static Word *
+encodenulls(char *s, int n)
+{
+    Word *head, *lastw;
+    char *cp;
+
+    head = lastw = nil;
+    while (n-- > 0) {
+        for (cp = s; *cp && *cp != '\0'; cp++)
+                n--;
+        *cp = '\0';
+
+        // add_list(newword(s), head)
+        if (lastw) {
+            lastw->next = newword(s);
+            lastw = lastw->next;
+        } else
+            head = lastw = newword(s);
+
+        s = cp+1;
+    }
+    if (!head)
+        head = newword("");
+    return head;
+}
+@
+%old: w -> lastw
+
+<<[[readenv()]] add null terminator character at end of [[p]]>>=
+if (p[len-1] == '\0')
+    len--;
+else
+    p[len] = '\0';
+@
+% why? some variable have and some have not? not specified in plan9?
+
+
+
+\section{Adjusting the shell environment, [[buildenv()]]}
+\label{sec:buildenv}
+
+%trans:
+Once [[shellenv]] has been initialized, [[sched()]] can call
+[[buildenv()]] to adjust the environment with the specific
+values of [[mk]]'s special variable for a specific job:
+
+% ->  run -> sched -> <>
+<<function buildenv>>=
+ShellEnvVar*
+buildenv(Job *j, int slot)
+{
+    <<[[buildenv()]] locals>>
+
+    // main variables 
+    envupd("target", wdup(j->t));
+    <<[[buildenv()]] if regexp rule>>
+    else
+        envupd("stem", newword(j->stem));
+    envupd("prereq", wdup(j->p));
+
+    // advanced variables 
+    <<[[buildenv()]] envupd some variables>>
+
+    return shellenv;
+}
+@
+\l rename adjustenv? or instantiate_env? no because would leak that
+\l  reuse shellenv. it is an implementation opti, not part of the interface.
+
+Note that as I mentioned in Section~\ref{sec:shellenv}, [[buildenv()]]
+above reuses [[shellenv]]. [[buildenv()]] does not allocate
+each time a new environment.
+%
+Note also that some rules do not have prerequistes, or a stem, 
+in which case [[buildenv() ]] will store the empty list for those entries
+in [[shellenv]].
+
+
+
+\section{Exporting the shell environment, [[exportenv()]]}
+
+%trans:
+Once [[sched()]] updated [[shellenv]] with [[buildenv()]]
+and called [[execsh()]] with it, 
+%
+[[execsh()]] forks a shell interpreter and calls [[exportenv()]]
+in the child process to modify its own environment:
+
+<<[[execsh()]] in child, export environment before exec>>=
+if (e)
+    exportenv(e);
+@
+
+Under \plan, a process can modify its environment
+\l and this environment is preserves through exec and inhited through fork
+by writing in files under [[/env/]].
+%
+[[exportenv()]] below iterates over the entries in [[shellenv]]
+(bound to the [[e]] parameter), and writes into [[/env/]]:
+
+% execsh -> <>
+<<function exportenv>>=
+/* as well as 01's, change blanks to nulls, so that rc will
+ * treat the words as separate arguments
+ */
+void
+exportenv(ShellEnvVar *e)
+{
+    int n;
+    fdt f;
+    bool first;
+    Word *w;
+    char name[256];
+    <<[[exportenv()]] other locals>>
+
+    for(;e->name; e++){
+        <<[[exportenv()]] skip entry if not a user variable and no value>>
+        // else
+        snprint(name, sizeof name, "/env/%s", e->name);
+        <<[[exportenv()]] if existing symbol but not value, remove from env>>
+        // else
+        f = create(name, OWRITE, 0666L);
+        <<[[exportenv()]] sanity check f>>
+        first = true;
+        for (w = e->values; w; w = w->next) {
+            n = strlen(w->s);
+            if (n) {
+                <<[[exportenv()]] write null separator>>
+                if (write(f, w->s, n) != n)
+                    perror(name);
+            }
+        }
+        close(f);
+    }
+}
+@
+%old: sy -> sym, nam -> name
+
+As I mentioned in Section~\ref{sec:encodenulls}, the files
+in [[/env/]] uses the null character as a word separator:
+
+<<[[exportenv()]] write null separator>>=
+if(first)
+    first = false;
+else{
+    if (write (f, "\000", 1) != 1)
+        perror(name);
+}
+@
+
+There are a few situations where it is useless to wrote in [[/env/]].
+Indeed, certain entries in [[shellenv]] might not contain any value
+because the variable is undefined for a job, for instance, [[$stem]] %$ 
+in a non-meta rule.
+[[exportenv()]] can skip those entries:
+
+<<[[exportenv()]] other locals>>=
+Symtab *sym;
+bool hasvalue;
+@
+
+<<[[exportenv()]] skip entry if not a user variable and no value>>=
+sym = symlook(e->name, S_VAR, nil);
+hasvalue = !empty_words(e->values);
+if(sym == nil && !hasvalue)	/* non-existant null symbol */
+    continue;
+@
+
+<<macro empty_words>>=
+#define empty_words(w) (w == nil || w->s == nil || w->s[0] == '\0')
+@
+%pad: I introduced that
+\t should never be nil! should always contain at list an empty first word
+\n actually might be equivalent to empty_prereqs
+
+However, if you defined a variable but assigned it the empty list,
+[[exportenv()]] must delete this environment variable:
+
+<<[[exportenv()]] if existing symbol but not value, remove from env>>=
+if (sym != nil && !hasvalue) {	/* Remove from environment */
+    /* we could remove it from the symbol table
+     * too, but we're in the child copy, and it
+     * would still remain in the parent's table.
+     */
+    remove(name);
+    freewords(e->values);
+    e->values = nil;		/* memory leak */
+    continue;
+}
+@
+\t useful for ?
+
+<<[[exportenv()]] sanity check f>>=
+if(f < 0) {
+    fprint(STDERR, "can't create %s, f=%d\n", name, f);
+    perror(name);
+    continue;
+}
+@
+
+
+
+
+
+\chapter{Debugging and Profiling Support TODO}
+\label{chap:debugging-support}
+
+
+% seen file/line fields in Rule, so can report error accurately.
+
+\section{Printing jobs, [[shprint()]]}
+\l not sure it can be considered a debugging facility, more mandatory
+
+% With use of variables, can be hard to know what was actually executed
+% so when there is an error, useful to expand those vars.
+
+% There are some bugs though, so do not trust completely.
+
+<<[[sched()]] other locals>>=
+Bufblock *buf;
+@
+
+<<[[sched()]] print recipe command on stdout>>=
+buf = newbuf();
+shprint(j->r->recipe, e, buf);
+if(!tflag && (nflag || !(j->r->attr&QUIET)))
+    Bwrite(&bout, buf->start, (long)strlen(buf->start));
+freebuf(buf);
+@
+\t should do shprint inside the if, useless otherwise
+
+
+
+<<[[waitup()]] other locals>>=
+ShellEnvVar *e;
+@
+<<[[waitup()]] if error in child process, print recipe in [[bp]]>>=
+e = buildenv(j, slot);
+shprint(j->r->recipe, e, bp);
+front(bp->start);
+@
+% nice shprint! see final command with expanded variables!
+
 
 <<function front>>=
 void
@@ -9011,530 +9909,6 @@ front(char *s)
 \t ??? getfields? Libcore
 
 
-\subsection{[[update()]]}
-
-% mk -> waitup -> <>
-<<function update>>=
-void
-update(bool fake, Node *node)
-{
-    Arc *a;
-
-    MADESET(node, fake? BEINGMADE : MADE);
-    <<[[update()]] debug>>
-
-
-    if((!(node->flags&VIRTUAL)) && (access(node->name, AEXIST) == 0)){
-        node->time = timeof(node->name, true);
-        <<[[update()]] unpretend node>>
-        <<[[update()]] set outofdate prereqs if arc prog>>
-    } 
-    else {
-        // virtual target or target still does not exist (but marked as MADE)
-        node->time = 1;
-        for(a = node->arcs; a; a = a->next)
-            if(a->n && outofdate(node, a, true))
-                node->time = a->n->time;
-    }
-}
-@
-% pass true to outofdate here!!
-% pass true to timeof, to force, to not use the cache because indeed
-%  time probably changed
-% what if it did not change? return an error? No! it can happen legitimely
-%  in some cases, like when do x.tab.h: y.tab.h (see plan9/shell/rc/mkfile).
-% why set time to 1 for virtual node? just to be different than None
-%  and then anway later take latest time of one of the prereq
-\t but then what if no prereq? then time is 1. important?
-
-% so if target not exist, still put MADE for node
-% because anyway, otherwise would loop infinitely.
-% and set date of newest prereq.
-
-
-
-
-
-\section{Process management, [[Exit()]]}
-
-% cant just exit with processes hanging out.
-% wait at least until job finished.
-% Because do things in parallel, if one command
-%  returns an error, because syntax error in a file,
-%  we do not want to abruptly kill and stop the other 
-%  commands because we may endup with corrupted object file
-%  (or source file if interrupt yacc or lex)
-
-% See pb with mk-rc.byte when didnt implement that?
-% got corrupted cmo all the time.
-
-%\subsection{[[Exit()]]}
-
-<<function Exit>>=
-void
-Exit(void)
-{
-    while(waitpid() >= 0)
-        ;
-    exits("error");
-}
-@
-
-% Malloc, Realloc, they call Exit in case of error.
-% there should be no calls directly to exits
-
-%trans:
-% good to wait, but what if too long recipe? % enter C-c!
-
-
-%\subsection{Notes (signals) management}
-% now in adv topics
-
-
-
-
-\chapter{Interacting with the Shell}
-\label{chap:interacting}
-
-% main strategy of mk for interacting with shell is to
-% pass variable value through environment! (simple)
-% and to pass recipe through stdin (simpler than through -c, no
-% need quote escaping)
-
-%real-world:
-% mk simpler than make on this. no Make variables vs shell variables.
-% (but then stronger coupling with the shell language? portable?)
-
-
-% The recipe is a shell command (or multiple commands).
-% Seen execsh() above with global shell, shellname stuff. 
-%  (already plan9 specific and some stuff rc specific)
-% was taking an Envy because recipe can contain variables.
-% buildenv() in sched() before execsh, passing an Envy.
-
-%\section{Variables expansion (part 3)}
-% not done actually! shell does it!  simpler! no $$i mess. simplify some things.
-
-
-% variables, different occurences: in rule target, prerequistes,
-% or in recipe. Different handling depending on context.
-% See quote from mk manual.
-
-\section{[[Envy]] and [[envy]]}
-%\section{Environment Variables, [[Envy]] and [[envy]]}
-% could be in core DS, but used just here, and outside S_VAR is good enough.
-
-\t Not envy :) just environment variable stuff, rename? Env and env?
-<<struct Envy>>=
-struct Envy
-{
-    // ref<string>, the key
-    char 		*name;
-
-    // list<ref_own<string>>, the value
-    Word 		*values;
-};
-@
-\l why y?
-
-
-<<global envy>>=
-// growing_array<Envy> (endmarker = nil,nil)
-Envy	*envy;
-@
-%ocaml: just use a hashtbl and reuse env (hash). useless I think to optimize.
-
-%use special data structure with special marks because used in
-% special way. Have first full static environment and then
-% each time different value for special mk variables ($stem, $target).
-
-<<constant ENVQUANTA>>=
-#define ENVQUANTA 10
-@
-
-<<global nextv>>=
-// idx for next free entry in envy array
-static int nextv;
-@
-
-% envupd | ecopy | execinit -> <>
-<<function envinsert>>=
-static void
-envinsert(char *name, Word *value)
-{
-    static int envsize;
-
-    // grow array if necessary
-    if (nextv >= envsize) {
-        envsize += ENVQUANTA;
-        envy = (Envy *) Realloc((char *) envy, envsize*sizeof(Envy));
-    }
-
-    envy[nextv].name = name;
-    envy[nextv++].values = value;
-}
-@
-%ocaml: just Hashtbl.add
-
-
-<<function envupd>>=
-static void
-envupd(char *name, Word *value)
-{
-    Envy *e;
-
-    for(e = envy; e->name; e++)
-        if(strcmp(name, e->name) == 0){
-            freewords(e->values);
-            e->values = value;
-            return;
-        }
-    e->name = name;
-    e->values = value;
-    envinsert(nil,nil); // ???
-}
-@
-\t else if not found, generate error! 
-\t could also just call simply envinsert(e->name, value) instead
-\t of this envinsert(nil,nil), but then this would require
-\t  to have access to nextv in envupd too.
-%ocaml: just Hashtbl.replace
-
-% what is this nil,nil? to make a special mark in envy.
-%  because then use e->name termination condition.
-%  because growing array and special end marker!
-
-\section{Initializing the shell environment, [[execinit()]]}
-% as opposed to make, no $(XX), no $$i, the string is passed
-% as is to shell! less escaping need!
-
-<<[[main()]] initializations before building>>=
-execinit();
-@
-%ocaml: just reuse env, no need for another environment-like data structure.
-
-
-% main -> parse; mk; <>
-<<function execinit>>=
-void
-execinit(void)
-{
-    char **p;
-
-    nextv = 0; // reset envy
-
-    // internal mk variables
-    for(p = myenv; *p; p++)
-        envinsert(*p, stow(""));
-
-    // user variables in mkfile or process shell environment
-    symtraverse(S_VAR, ecopy);
-
-    // end marker
-    envinsert(nil, nil);
-}
-@
-\l potential leak when reset on Envy.values ?
-\t again nil,nil insert because nextv is static. Should be global!
-\t rename initenv() for that!
-
-%note that internal vars are put first in Envy because they are the one
-% that will be updated! so want fast iteration there.
-
-% use myenv also in initenv(inithash), but it is for the S_INTERNAL stuff and
-%  used later for readenv
-
-% execinit -> symtraverse -> <> (as x <- symtraverse(..., <>) <- execinit)
-<<function ecopy>>=
-static void
-ecopy(Symtab *s)
-{
-    char **p;
-
-    <<[[ecopy()]] return and do not copy if S_NOEXPORT symbol>>
-    <<[[ecopy()]] return and do not copy if conflict with mk internal variable>>
-     // else
-     envinsert(s->name, s->u.ptr);
-}
-@
-%ocaml: just Hashtbl.copy, but not even sure we need that
-
-<<[[ecopy()]] return and do not copy if conflict with mk internal variable>>=
-for(p = myenv; *p; p++)
-    if(strcmp(*p, s->name) == 0)
-        return;
-@
-% maybe should issue a warning? anyway it is only for user variables
-%  because for readenv(), those variables are skipped.
-%ocaml-found:
-% when use mk recursively, you will get a $stem in the environment! and
-% you need to filter it otherwise in exportenv you would need to take care
-% of duplicate and give priority to the fresh $stem
-
-
-\section{Importing the external environment, [[readenv()]]}
-\label{sec:readenv}
-
-% popupate symbol table, but by transitivity it populates
-% also envy at some point because of execinit
-
-% plan9 specific, in plan9.c
-% initenv -> <>
-<<function readenv>>=
-void
-readenv(void)
-{
-    fdt envf; // envdir
-    fdt f; // envfile
-    Dir *e;
-    int i, n, len, len2;
-    char *p;
-    char nam[1024];
-    Word *w;
-
-    rfork(RFENVG);	/*  use copy of the current environment variables */
-
-    envf = open("/env", OREAD);
-    <<[[readenv()]] sanity check envf>>
-    while((n = dirread(envf, &e)) > 0){
-        for(i = 0; i < n; i++){
-            len = e[i].length;
-            <<[[readenv()]] skip some names>>
-
-            snprint(nam, sizeof nam, "/env/%s", e[i].name);
-            f = open(nam, OREAD);
-            <<[[readenv()]] sanity check f>>
-            p = Malloc(len+1);
-            len2 = read(f, p, len);
-            <<[[readenv()]] sanity check len2>>
-            close(f);
-            <<[[readenv()]] add null terminator character at end of [[p]]>>
-            w = encodenulls(p, len);
-            free(p);
-            p = strdup(e[i].name);
-
-            // populating symbol table
-            setvar(p, (void *) w);
-        }
-        free(e);
-    }
-    close(envf);
-}
-@
-
-%dead: 
-% <<[[Sxxx]] cases>>=
-% S_EXPORTED,	/* var -> current exported value */
-% @
-%  symlook(p, S_EXPORTED, (void*)"")->u.ptr = "";
-
-
-<<[[readenv()]] skip some names>>=
-/* don't import funny names, NULL values,
- * or internal mk variables
- */
-if(len <= 0 || *shname(e[i].name) != '\0')
-    continue;
-if (symlook(e[i].name, S_INTERNAL, nil))
-    continue;
-@
-%alt: could import variables with same name, just give priority to
-% S_INTERNAL when symlook
-
-<<[[readenv()]] add null terminator character at end of [[p]]>>=
-if (p[len-1] == '\0')
-    len--;
-else
-    p[len] = '\0';
-@
-% why? some variable have and some have not? not specified in plan9?
-
-<<[[readenv()]] sanity check envf>>=
-if(envf < 0)
-    return;
-@
-<<[[readenv()]] sanity check f>>=
-if(f < 0)
-    continue;
-@
-
-<<[[readenv()]] sanity check len2>>=
-if(len2 != len){
-    perror(nam);
-    close(f);
-    continue;
-}
-@
-
-
-<<function encodenulls>>=
-/* break string of values into words at 01's or nulls*/
-static Word *
-encodenulls(char *s, int n)
-{
-    Word *w, *head;
-    char *cp;
-
-    head = w = nil;
-    while (n-- > 0) {
-        for (cp = s; *cp && *cp != '\0'; cp++)
-                n--;
-        *cp = '\0';
-
-        // add_list(newword(s), w)
-        if (w) {
-            w->next = newword(s);
-            w = w->next;
-        } else
-            head = w = newword(s);
-
-        s = cp+1;
-    }
-    if (!head)
-        head = newword("");
-    return head;
-}
-@
-
-
-\section{Adjusting the shell environment, [[buildenv()]]}
-\label{sec:buildenv}
-
-% ->  run -> sched -> <>
-<<function buildenv>>=
-Envy*
-buildenv(Job *j, int slot)
-{
-    <<[[buildenv()]] locals>>
-
-    // main variables 
-    envupd("target", wdup(j->t));
-    <<[[buildenv()]] if regexp rule>>
-    else
-        envupd("stem", newword(j->stem));
-    envupd("prereq", wdup(j->p));
-
-    // advanced variables 
-    <<[[buildenv()]] envupd some variables>>
-
-    return envy;
-}
-@
-\t rename adjustenv? or instantiate_env?
-
-
-
-
-\section{Exporting the shell environment, [[exportenv()]]}
-
-% execsh -> <>
-<<function exportenv>>=
-/* as well as 01's, change blanks to nulls, so that rc will
- * treat the words as separate arguments
- */
-void
-exportenv(Envy *e)
-{
-    Symtab *sy;
-    int n;
-    fdt f;
-    bool hasvalue;
-    bool first;
-    Word *w;
-    char nam[256];
-
-    for(;e->name; e++){
-        sy = symlook(e->name, S_VAR, nil);
-        if (e->values == nil || e->values->s == nil || e->values->s[0] == '\0')
-            hasvalue = false;
-        else
-            hasvalue = true;
-        if(sy == nil && !hasvalue)	/* non-existant null symbol */
-            continue;
-        // else
-
-        snprint(nam, sizeof nam, "/env/%s", e->name);
-        <<[[exportenv()]] if existing symbol but not value, remove from env>>
-        // else
-    
-        f = create(nam, OWRITE, 0666L);
-        <<[[exportenv()]] sanity check f>>
-        first = true;
-        for (w = e->values; w; w = w->next) {
-            n = strlen(w->s);
-            if (n) {
-                <<[[exportenv()]] write null separator>>
-                if (write(f, w->s, n) != n)
-                    perror(nam);
-            }
-        }
-        close(f);
-    }
-}
-@
-\t rename sy to sym, more consistent
-
-<<[[exportenv()]] write null separator>>=
-if(first)
-    first = false;
-else{
-    if (write (f, "\000", 1) != 1)
-        perror(nam);
-}
-@
-
-<<[[exportenv()]] if existing symbol but not value, remove from env>>=
-if (sy != nil && !hasvalue) {	/* Remove from environment */
-    /* we could remove it from the symbol table
-     * too, but we're in the child copy, and it
-     * would still remain in the parent's table.
-     */
-    remove(nam);
-    freewords(e->values);
-    e->values = nil;		/* memory leak */
-    continue;
-}
-@
-
-<<[[exportenv()]] sanity check f>>=
-if(f < 0) {
-    fprint(STDERR, "can't create %s, f=%d\n", nam, f);
-    perror(nam);
-    continue;
-}
-@
-
-
-
-
-
-\chapter{Debugging and Profiling Support}
-\label{chap:debugging-support}
-
-
-% seen file/line fields in Rule, so can report error accurately.
-
-\section{Printing jobs, [[shprint()]]}
-\l not sure it can be considered a debugging facility, more mandatory
-
-% With use of variables, can be hard to know what was actually executed
-% so when there is an error, useful to expand those vars.
-
-% There are some bugs though, so do not trust completely.
-
-<<[[sched()]] other locals>>=
-Bufblock *buf;
-@
-
-<<[[sched()]] print recipe command on stdout>>=
-buf = newbuf();
-shprint(j->r->recipe, e, buf);
-if(!tflag && (nflag || !(j->r->attr&QUIET)))
-    Bwrite(&bout, buf->start, (long)strlen(buf->start));
-freebuf(buf);
-@
-\t should do shprint inside the if, useless otherwise
-
 %\subsection{[[shprint()]]}
 
 % called to print what mk is executing, and also when error in a child.
@@ -9542,7 +9916,7 @@ freebuf(buf);
 % sched | update -> <> 
 <<function shprint>>=
 void
-shprint(char *s, Envy *env, Bufblock *buf)
+shprint(char *s, ShellEnvVar *env, Bufblock *buf)
 {
     Rune r;
     int n;
@@ -9568,7 +9942,7 @@ shprint(char *s, Envy *env, Bufblock *buf)
 
 <<function vexpand>>=
 static char*
-vexpand(char *w, Envy *env, Bufblock *buf)
+vexpand(char *w, ShellEnvVar *env, Bufblock *buf)
 {
     char *s;
     char *p, *q;
@@ -9628,7 +10002,7 @@ shname(char *a)
 
 <<function mygetenv>>=
 static char*
-mygetenv(char *name, Envy *env)
+mygetenv(char *name, ShellEnvVar *env)
 {
     if (!env)
         return nil;
@@ -9871,8 +10245,7 @@ usage();
 <<[[main()]] profile initializations>>=
 usage();
 @
-%old: used to be just after initenv() (=~ inithash()), but I think ok 
-% to do after.
+%old: used to be just after inithash()
 
 % called from many places
 <<function usage>>=
@@ -10058,7 +10431,7 @@ int i;
 
 <<[[buildenv()]] envupd some variables>>=
 /* update stem0 -> stem9 */
-for(p = myenv; *p; p++)
+for(p = specialvars; *p; p++)
     if(strcmp(*p, "stem0") == 0)
         break;
 for(i = 0; *p; i++, p++){
@@ -10093,6 +10466,7 @@ if(r->attr&REGEXP)
 @
 
 \section{Dynamic [[mkfile]], [[<|]]{\em prog}}
+\label{sec:dynamic-mkfile}
 
 % How to do the ifdef I use in pfff's makefiles?
 
@@ -10115,6 +10489,14 @@ int pid;
 @
 % abused to store pid and later return status
 
+<<[[WaitupParam]] other cases>>=
+EMPTY_CHILDREN_IS_ERROR2 = -2,
+EMPTY_CHILDREN_IS_ERROR3 = -3,
+@
+%old:   
+%  could use __LINE__ instead of those ERROR and ERROR2
+
+
 <<[[parse()]] switch rhead cases>>=
 case '|':
     p = wtos(tail, ' ');
@@ -10124,14 +10506,15 @@ case '|':
         Exit();
     }
 
-    execinit();
-    pid = pipecmd(p, envy, &newfd);
+    initshellenv();
+    pid = pipecmd(p, shellenv, &newfd);
     if(newfd < 0){
         fprint(STDERR, "warning: skipping missing program file: ");
         perror(p);
     } else
         parse(p, newfd, 0);
-    while(waitup(-3, &pid) >= 0)
+
+    while(waitup(EMPTY_CHILDREN_IS_ERROR3, &pid) >= 0)
         ;
     if(pid != 0){
         fprint(STDERR, "bad include program status\n");
@@ -10147,7 +10530,7 @@ case '|':
 %plan9.c
 <<function pipecmd>>=
 int
-pipecmd(char *cmd, Envy *e, int *fd)
+pipecmd(char *cmd, ShellEnvVar *e, int *fd)
 {
     int pid;
     fdt pfd[2];
@@ -10233,9 +10616,9 @@ bquote(Biobuf *bp, Bufblock *buf)
             insert(buf, '\0');
             buf->current = buf->start + start;
 
-            execinit();
+            initshellenv();
             // running the command, passing a buf argument
-            execsh(nil, buf->current, buf, envy);
+            execsh(nil, buf->current, buf, shellenv);
 
             return OK_1;
         }
@@ -10254,6 +10637,7 @@ bquote(Biobuf *bp, Bufblock *buf)
     return ERROR_0;
 }
 @
+\l should waitup here? to consume the Wait records
 
 % pass false to nextrune, so do not elide
 
@@ -10273,12 +10657,12 @@ if(buf && pipe(out) < 0){
 }
 @
 
-<<[[execsh()]] in children, if buf, close one side of pipe>>=
+<<[[execsh()]] in child, if buf, close one side of pipe>>=
 if(buf)
     close(out[0]);
 @
 
-<<[[execsh()]] in child 1, if buf, dup and close>>=
+<<[[execsh()]] in child, if buf, dup and close>>=
 if(buf){
     // output now goes in the pipe
     dup(out[1], STDOUT);
@@ -10286,7 +10670,7 @@ if(buf){
 }
 @
 
-<<[[execsh()]] in child 2, if buf, close other side of pipe>>=
+<<[[execsh()]] in grandchild, if buf, close other side of pipe>>=
 if(buf)
     close(out[1]);
 @
@@ -10316,6 +10700,11 @@ if(buf){
     close(out[0]);
 }
 @
+
+% note that child process, but not a job, but still will
+% be returned in waitup. No choice. But to avoid interference,
+% we could call wait() in a loop to discards all those processes
+% until no children process.
 
 \section{Substitution variables, [[${]]{\em name}[[:]]{\em pattern}[[=]]{\em subst}[[}]]}
 %$
@@ -10673,11 +11062,34 @@ if(n->flags&VIRTUAL)
 if((node->flags&VIRTUAL) || (node->flags&NORECIPE)){
     <<[[dorecipe()]] when no recipe found, if archive name>>
     else
-        update(false, node);
+        update(node, false);
     <<[[dorecipe()]] when no recipe found, if tflag>>
 }
 @
 %old: change !X && !Y  to X || Y   so easier to aspectize
+
+
+
+<<[[update()]] if virtual node or inexistent file>>=
+if((node->flags&VIRTUAL) || (access(node->name, AEXIST) != OK_0)){
+    node->time = 1;
+    for(a = node->arcs; a; a = a->next)
+        if(a->n && outofdate(node, a, true))
+            node->time = a->n->time;
+}
+@
+% pass true to outofdate here!!
+
+% so if target not exist, still put MADE for node
+% because anyway, otherwise would loop infinitely.
+% and set date of newest prereq.
+
+% what if it did not change? return an error? No! it can happen legitimely
+%  in some cases, like when do x.tab.h: y.tab.h (see plan9/shell/rc/mkfile).
+% why set time to 1 for virtual node? just to be different than None
+%  and then anway later take latest time of one of the prereqs
+\t but then what if no prereq? then time is 1. important?
+
 
 \subsection{Deleting a target when the recipe returns an error, [[:D:]]}
 
@@ -10826,6 +11238,7 @@ if ((r->attr&NOVIRT) && lasta != &head && (lasta->r->attr&VIR))
 % really useful?
 
 \subsection{Custom dependency comparison program, [[:P:]]}
+\label{sec:custom-comparison}
 % big one
 
 % "the characters after the P until terminating : are taken as a program name.
@@ -10939,12 +11352,12 @@ pcmp(char *prog, char *p, char *q)
     Bflush(&bout);
     snprint(buf, sizeof buf, "%s '%s' '%s'\n", prog, p, q);
     pid = pipecmd(buf, 0, 0);
-    while(waitup(-3, &pid) >= 0)
+    while(waitup(EMPTY_CHILDREN_IS_ERROR3, &pid) >= 0)
         ;
     return (pid? 2:1);
 }
 @
-
+\l could call a different waitup, so no interference with job
 
 
 
@@ -11907,7 +12320,7 @@ if(aflag)
 
 \section{Recursive [[mk]]}
 
-% if one of the mk return error code, then should stop mk right?
+% if one of the mk return error codes, then should stop mk right?
 % convenient then.
 % TODO: this is not the case right now!!
 
@@ -11967,6 +12380,9 @@ freebuf(buf);
 \subsection{Notes (signals) management}
 % [[C-c]]
 
+%trans:
+% good to wait in Exit, but what if too long recipe? % enter C-c!
+
 <<[[main()]] initializations before building>>=
 catchnotes();
 @
@@ -12022,7 +12438,7 @@ killchildren(char *msg)
 
     <<[[killchildren()]] expunge not-job processes>>
 
-    while(waitup(1, (int *)nil) == 0)
+    while(waitup(EMPTY_CHILDREN_IS_OK, (int *)nil) == 0)
         ;
     Bprint(&bout, "mk: %s\n", msg);
     Exit();
@@ -12078,7 +12494,14 @@ if(kflag){
     fake = true;
 }
 @
-% fake so BEINGMADE instead of MADE
+
+\label{sec:fake-update}
+<<[[update()]] if fake>>=
+if(fake)
+    MADESET(node, BEINGMADE);
+@
+%old: I reorged th ecode so can aspectize it, was
+% MADESET(node, fake? BEINGMADE : MADE);
 
 
 <<[[mk()]] if no child to waitup and root not MADE, possibly break>>=
@@ -12094,7 +12517,7 @@ if(res > 0){
 % subtle
 <<[[mk()]] before returning, more [[waitup()]] if there was an error>>=
 while(jobs)
-    waitup(-2, (int *)nil);
+    waitup(EMPTY_CHILDREN_IS_ERROR2, (int *)nil);
 assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
 @
 \t when do we have this? really need that?
@@ -12107,10 +12530,21 @@ assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
 \chapter{Conclusion}
 \label{chap:conclusion}
 
+%dup: (and adapted) from Assembler.nw
+You now know how the \plan build system [[mk]] works, 
+to the smallest details, and more generally how many
+build systems work.
+
+Because [[mk]] relies heavily on the shell [[rc]], 
+the \book{Shell} is the next logical step after this book.
+%
+Many features of [[mk]] are inspired from features of the shell.
+\l ability to do loops, calls programs easily, redirection, pipe, etc.
+% Reuse everything.
+
 % could be nice to have a mk -d session at the end
 % where see how all make sense, the flag values of nodes with 0x4
 % because all are READY, etc.
-
 
 % Note that did not cover much automatic dependencies.
 % Also tricky when change flags, flag should also be source
@@ -12118,10 +12552,6 @@ assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
 
 % how to allow :: of GNU make? bad to allow :: in the end? can generate
 %  ambiguity? just agglomerate recipe?
-
-% next book: Shell.nw!! many of the features of mk, are features
-%  of Shell! ability to do loops, calls programs easily, redirection,
-%  pipe, etc. Reuse everything.
 
 % related futur work? Cargo, Yarn, and other package-manager/build-system?
 

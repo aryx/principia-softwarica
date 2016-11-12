@@ -6,16 +6,16 @@
 /*e: constant ENVQUANTA */
 
 /*s: global envy */
-// growing_array<Envy> (endmarker = nil,nil)
-Envy	*envy;
+// growing_array<ShellEnvVar> (endmarker = (nil,nil), size = envinsert.envsize)
+ShellEnvVar	*shellenv;
 /*e: global envy */
 /*s: global nextv */
-// idx for next free entry in envy array
+// idx for next free entry in shellenv array
 static int nextv;
 /*e: global nextv */
 
 /*s: global myenv */
-static char	*myenv[] =
+static char	*specialvars[] =
 {
     "target",
     "prereq",
@@ -49,11 +49,11 @@ static char	*myenv[] =
 
 /*s: function initenv */
 void
-initenv(void)
+inithash(void)
 {
     char **p;
 
-    for(p = myenv; *p; p++)
+    for(p = specialvars; *p; p++)
         symlook(*p, S_INTERNAL, (void *)"");
 
     readenv();				/* o.s. dependent */
@@ -64,16 +64,20 @@ initenv(void)
 static void
 envinsert(char *name, Word *value)
 {
-    static int envsize;
+    /*s: [[envinsert()]] locals */
+    static int envsize = 0;
+    /*e: [[envinsert()]] locals */
 
-    // grow array if necessary
+    /*s: [[envinsert()]] grow array if necessary */
     if (nextv >= envsize) {
         envsize += ENVQUANTA;
-        envy = (Envy *) Realloc((char *) envy, envsize*sizeof(Envy));
+        shellenv = (ShellEnvVar *) Realloc((char *) shellenv, 
+                                           envsize*sizeof(ShellEnvVar));
     }
-
-    envy[nextv].name = name;
-    envy[nextv++].values = value;
+    /*e: [[envinsert()]] grow array if necessary */
+    shellenv[nextv].name = name;
+    shellenv[nextv].values = value;
+    nextv++;
 }
 /*e: function envinsert */
 
@@ -81,17 +85,20 @@ envinsert(char *name, Word *value)
 static void
 envupd(char *name, Word *value)
 {
-    Envy *e;
+    ShellEnvVar *e;
 
-    for(e = envy; e->name; e++)
+    for(e = shellenv; e->name; e++)
         if(strcmp(name, e->name) == 0){
             freewords(e->values);
             e->values = value;
             return;
         }
+    /*s: [[envupd()]] if variable not found */
+    // else
     e->name = name;
     e->values = value;
-    envinsert(nil,nil); // ???
+    envinsert(nil,nil);
+    /*e: [[envupd()]] if variable not found */
 }
 /*e: function envupd */
 
@@ -106,7 +113,7 @@ ecopy(Symtab *s)
         return;
     /*e: [[ecopy()]] return and do not copy if S_NOEXPORT symbol */
     /*s: [[ecopy()]] return and do not copy if conflict with mk internal variable */
-    for(p = myenv; *p; p++)
+    for(p = specialvars; *p; p++)
         if(strcmp(*p, s->name) == 0)
             return;
     /*e: [[ecopy()]] return and do not copy if conflict with mk internal variable */
@@ -117,17 +124,17 @@ ecopy(Symtab *s)
 
 /*s: function execinit */
 void
-execinit(void)
+initshellenv(void)
 {
     char **p;
 
     nextv = 0; // reset envy
 
     // internal mk variables
-    for(p = myenv; *p; p++)
+    for(p = specialvars; *p; p++)
         envinsert(*p, stow(""));
 
-    // user variables in mkfile or process shell environment
+    // user variables in mkfiles, or mk process environment
     symtraverse(S_VAR, ecopy);
 
     // end marker
@@ -136,7 +143,7 @@ execinit(void)
 /*e: function execinit */
 
 /*s: function buildenv */
-Envy*
+ShellEnvVar*
 buildenv(Job *j, int slot)
 {
     /*s: [[buildenv()]] locals */
@@ -162,7 +169,7 @@ buildenv(Job *j, int slot)
     // advanced variables 
     /*s: [[buildenv()]] envupd some variables */
     /* update stem0 -> stem9 */
-    for(p = myenv; *p; p++)
+    for(p = specialvars; *p; p++)
         if(strcmp(*p, "stem0") == 0)
             break;
     for(i = 0; *p; i++, p++){
@@ -205,7 +212,7 @@ buildenv(Job *j, int slot)
     envupd("newmember", v);
     /*e: [[buildenv()]] envupd some variables */
 
-    return envy;
+    return shellenv;
 }
 /*e: function buildenv */
 /*e: mk/env.c */

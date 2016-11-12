@@ -76,10 +76,6 @@ main(int argc, char **argv)
             sflag = true;
             break;
         /*x: [[main()]] -xxx switch cases */
-        case 'k':
-            kflag = true;
-            break;
-        /*x: [[main()]] -xxx switch cases */
         case 'e':
             explain = true;
             break;
@@ -119,6 +115,10 @@ main(int argc, char **argv)
             iflag = true;
             break;
         /*x: [[main()]] -xxx switch cases */
+        case 'k':
+            kflag = true;
+            break;
+        /*x: [[main()]] -xxx switch cases */
         case 'd':
             if(*(s = &argv[0][2]))
                 while(*s) 
@@ -146,7 +146,7 @@ main(int argc, char **argv)
         }
     #endif
     /*e: [[main()]] setup profiling */
-    initenv();
+    inithash();
     /*s: [[main()]] argv processing part 2, xxx=yyy */
     for(i = 0; argv[i]; i++) 
       if(utfrune(argv[i], '=')){
@@ -244,15 +244,15 @@ main(int argc, char **argv)
     // Building the graph, finding out-of-date files
 
     /*s: [[main()]] initializations before building */
-    catchnotes();
-    /*x: [[main()]] initializations before building */
-    execinit();
+    initshellenv();
     /*x: [[main()]] initializations before building */
     if(whatif){
         insert(whatif, '\0');
         timeinit(whatif->start);
         freebuf(whatif);
     }
+    /*x: [[main()]] initializations before building */
+    catchnotes();
     /*e: [[main()]] initializations before building */
     /*s: [[main()]] setting the targets, call [[mk()]] */
     if(*argv == nil){

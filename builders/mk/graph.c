@@ -231,7 +231,6 @@ togo(Node *node)
     /* delete them now */
     for(a = node->arcs; a; preva = a, a = a->next)
         if(a->remove){
-
             //remove_list(a, node->arcs)
             if(a == node->arcs)
                 node->arcs = a->next;
@@ -399,8 +398,8 @@ ambiguous(Node *n)
             /*s: [[ambiguous()]] give priority to simple rules over meta rules */
             if(master_rule->recipe != a->r->recipe){
                 if((master_rule->attr&META) && !(a->r->attr&META)){
-                    master_arc->remove = true;
                     master_rule = a->r;
+                    master_arc->remove = true;
                     master_arc = a;
                 } else if(!(master_rule->attr&META) && (a->r->attr&META)){
                     a->remove = true;

@@ -4,22 +4,22 @@
 /*s: constructor newjob */
 Job*
 newjob(Rule *r, Node *nlist, char *stem, char **match, 
-       Word *pre, Word *npre, 
-       Word *targets, Word *atar)
+       Word *allprereqs, Word *newprereqs, 
+       Word *alltargets, Word *oldtargets)
 {
     Job *j;
 
     j = (Job *)Malloc(sizeof(Job));
     j->r = r;
     j->n = nlist;
-    j->p = pre;
-    j->t = targets;
+    j->p = allprereqs;
+    j->t = oldtargets;
 
     j->stem = stem;
     j->match = match;
 
-    j->np = npre;
-    j->at = atar;
+    j->np = newprereqs;
+    j->at = alltargets;
 
     j->next = nil;
     return j;
@@ -35,13 +35,14 @@ dorecipe(Node *node, bool *did)
     Node *n;
     Word *w;
     Symtab *s; 
-    // alias
-    Node *nlist = node;
     /*s: [[dorecipe()]] other locals */
     Rule *master_rule = nil;
     Arc *master_arc = nil;
     /*x: [[dorecipe()]] other locals */
     Word alltargets;
+    /*x: [[dorecipe()]] other locals */
+    // list<ref<Node>> (next = Node.next)
+    Node *nlist = node;
     /*x: [[dorecipe()]] other locals */
     Word allprereqs;
     /*x: [[dorecipe()]] other locals */
@@ -60,7 +61,7 @@ dorecipe(Node *node, bool *did)
      *   pick up the master rule
      */
     for(a = node->arcs; a; a = a->next)
-        if(*a->r->recipe) {
+        if(!empty_recipe(a->r)) {
             master_arc = a;
             master_rule = a->r;
         }
@@ -77,7 +78,7 @@ dorecipe(Node *node, bool *did)
                 MADESET(node, MADE);
             /*e: [[dorecipe()]] when no recipe found, if archive name */
             else
-                update(false, node);
+                update(node, false);
             /*s: [[dorecipe()]] when no recipe found, if tflag */
             if(tflag){
                 if(!(node->flags&VIRTUAL))
@@ -144,7 +145,7 @@ dorecipe(Node *node, bool *did)
             last_oldtargets = last_oldtargets->next;
             /*e: [[dorecipe()]] update list of outdated targets */
 
-            // add_list(n, node)
+            // add_set(n, nlist)
             if(n == node) 
                 continue;
             n->next = nlist->next;
@@ -187,7 +188,7 @@ dorecipe(Node *node, bool *did)
     // run the job
     run(newjob(master_rule, nlist, master_arc->stem, master_arc->match, 
                allprereqs.next, newprereqs.next, 
-               oldtargets.next, alltargets.next));
+               alltargets.next, oldtargets.next));
     *did = true; // finally
     return;
 }

@@ -1,13 +1,13 @@
 /*s: mk/shprint.c */
 #include	"mk.h"
 
-static char *vexpand(char*, Envy*, Bufblock*);
+static char *vexpand(char*, ShellEnvVar*, Bufblock*);
 static char *shquote(char*, Rune, Bufblock*);
 static char *shbquote(char*, Bufblock*);
 
 /*s: function shprint */
 void
-shprint(char *s, Envy *env, Bufblock *buf)
+shprint(char *s, ShellEnvVar *env, Bufblock *buf)
 {
     Rune r;
     int n;
@@ -28,7 +28,7 @@ shprint(char *s, Envy *env, Bufblock *buf)
 
 /*s: function mygetenv */
 static char*
-mygetenv(char *name, Envy *env)
+mygetenv(char *name, ShellEnvVar *env)
 {
     if (!env)
         return nil;
@@ -48,7 +48,7 @@ mygetenv(char *name, Envy *env)
 
 /*s: function vexpand */
 static char*
-vexpand(char *w, Envy *env, Bufblock *buf)
+vexpand(char *w, ShellEnvVar *env, Bufblock *buf)
 {
     char *s;
     char *p, *q;
