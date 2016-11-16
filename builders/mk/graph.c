@@ -112,15 +112,15 @@ applyrules(char *target, char *cnt)
         node->flags |= PROBABLE;
         /*e: [[applyrules()]] when found a regular rule for target [[node]], set flags */
 
-        /*s: [[applyrules()]] if no prerequistes in rule r */
-        // no prerequistes, a leaf, still create fake arc
+        /*s: [[applyrules()]] if no prerequisites in rule r */
+        // no prerequisites, a leaf, still create fake arc
         if(empty_prereqs(r)) {
             arc = newarc((Node *)nil, r, "", rmatch);
             // add_list(head, arc)
             lasta->next = arc;
             lasta = lasta->next;
         } 
-        /*e: [[applyrules()]] if no prerequistes in rule r */
+        /*e: [[applyrules()]] if no prerequisites in rule r */
         else
             for(pre = r->prereqs; pre; pre = pre->next){
                 // recursive call!
@@ -163,14 +163,14 @@ applyrules(char *target, char *cnt)
                 cnt[r->rule]++;
                 /*e: [[applyrules()]] infinite rule detection part1 */
 
-                /*s: [[applyrules()]] if no prerequistes in meta rule r */
+                /*s: [[applyrules()]] if no prerequisites in meta rule r */
                 if(empty_prereqs(r)) {
                     arc = newarc((Node *)nil, r, stem, rmatch);
                     // add_list(head, arc)
                     lasta->next = arc;
                     lasta = lasta->next;
                 } 
-                /*e: [[applyrules()]] if no prerequistes in meta rule r */
+                /*e: [[applyrules()]] if no prerequisites in meta rule r */
                 else
                     for(pre = r->prereqs; pre; pre = pre->next) {
                         /*s: [[applyrules()]] if regexp rule, adjust buf and rmatch */

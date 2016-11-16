@@ -237,7 +237,7 @@ struct Job
     /*x: [[Job]] other fields */
     Word		*at;	/* all targets */
     /*x: [[Job]] other fields */
-    Word		*np;	/* new prerequistes */
+    Word		*np;	/* new prerequisites */
     /*e: [[Job]] other fields */
 
     // Extra
