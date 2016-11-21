@@ -100,7 +100,7 @@ bquote(Biobuf *bp, Bufblock *buf)
             insert(buf, '\0');
             buf->current = buf->start + start;
 
-            initshellenv();
+            initenv();
             // running the command, passing a buf argument
             execsh(nil, buf->current, buf, shellenv);
 

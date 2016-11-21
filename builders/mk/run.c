@@ -299,7 +299,7 @@ nproc(void)
 
     if(sym = symlook("NPROC", S_VAR, nil)) {
         w = sym->u.ptr;
-        if (w && w->s && w->s[0])
+        if (!empty_words(w))
             nproclimit = atoi(w->s);
     }
     if(nproclimit < 1)
@@ -312,7 +312,8 @@ nproc(void)
     /*s: [[nproc()]] grow nevents if necessary */
     if(nproclimit > nevents){
         if(nevents)
-            events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
+            events = (RunEvent *)Realloc((char *)events, 
+                                         nproclimit*sizeof(RunEvent));
         else
             events = (RunEvent *)Malloc(nproclimit*sizeof(RunEvent));
 

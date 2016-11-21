@@ -124,7 +124,7 @@ ecopy(Symtab *s)
 
 /*s: function execinit */
 void
-initshellenv(void)
+initenv(void)
 {
     char **p;
 

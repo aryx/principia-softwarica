@@ -31,7 +31,7 @@ symlook(char *sym, int space, void *install)
     h %= NHASH;
     /*e: [[symlook()]] compute hash value [[h]] of [[sym]] */
 
-    // hash_lookup((sym, space), h, hash)
+    // s = hash_lookup((sym, space), h, hash)
     for(s = hash[h]; s; s = s->next)
         if((s->space == space) && (strcmp(s->name, sym) == 0))
             return s;
@@ -41,8 +41,8 @@ symlook(char *sym, int space, void *install)
         return nil;
 
     s = (Symtab *)Malloc(sizeof(Symtab));
-    s->space = space;
     s->name = sym;
+    s->space = space;
     s->u.ptr = install;
 
     // add_list(s, hash)

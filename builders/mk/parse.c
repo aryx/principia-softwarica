@@ -127,7 +127,7 @@ parse(char *f, fdt fd, bool varoverride)
                 Exit();
             }
 
-            initshellenv();
+            initenv();
             pid = pipecmd(p, shellenv, &newfd);
             if(newfd < 0){
                 fprint(STDERR, "warning: skipping missing program file: ");
@@ -155,24 +155,25 @@ parse(char *f, fdt fd, bool varoverride)
 
 /*s: function addrules */
 void
-addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
+addrules(Word *targets, Word *prereqs, char *recipe, 
+         int attr, int hline, char *prog)
 {
     Word *w;
 
-    assert(/*addrules args*/ head && body);
+    assert(/*addrules args*/ targets && recipe);
 
     /*s: [[addrules()]] set [[target1]] */
     /* tuck away first non-meta rule as default target*/
     if(target1 == nil && !(attr&REGEXP)){
-        for(w = head; w; w = w->next)
+        for(w = targets; w; w = w->next)
             if(charin(w->s, "%&"))
                 break;
         if(w == nil) // head does not contain any pattern
-            target1 = wdup(head);
+            target1 = wdup(targets);
     }
     /*e: [[addrules()]] set [[target1]] */
-    for(w = head; w; w = w->next)
-        addrule(w->s, tail, body, head, attr, hline, prog);
+    for(w = targets; w; w = w->next)
+        addrule(w->s, prereqs, recipe, targets, attr, hline, prog);
 }
 /*e: function addrules */
 
@@ -297,9 +298,10 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     // potentially expand variables in head
     *h = stow(line);
     /*s: [[rhead()]] sanity check h */
-    if(*((*h)->s) == '\0' && sep != '<' && sep != '|') {
+    if(empty_words(*h) && sep != '<' && sep != '|') {
         SYNERR(mkinline-1);
-        fprint(STDERR, "no var (or target) on left side of assignment (or rule)\n");
+        fprint(STDERR, 
+               "no var (or target) on left side of assignment (or rule)\n");
         Exit();
     }
     /*e: [[rhead()]] sanity check h */
@@ -325,7 +327,7 @@ rbody(Biobuf *in)
         r = Bgetrune(in);
         if (r < 0)
             break; // eof
-        // in first column
+        // in first column?
         if (lastr == '\n') {
             /*s: [[rbody()]] if comment in first column */
             if (r == '#')
@@ -362,7 +364,10 @@ struct Input
     int line;
 
     // Extra
+    /*s: [[Input]] extra fields */
+    // list<ref_own<Input>> (head = inputs)
     struct Input *next;
+    /*e: [[Input]] extra fields */
 };
 /*e: struct input */
 /*s: global inputs */

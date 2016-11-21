@@ -36,9 +36,9 @@ readenv(void)
             /* don't import funny names, NULL values,
              * or internal mk variables
              */
-            if(len <= 0 || *shname(e[i].name) != '\0')
-                continue;
-            if (symlook(e[i].name, S_INTERNAL, nil))
+            if(len <= 0 
+               || *shname(e[i].name) != '\0' 
+               || symlook(e[i].name, S_INTERNAL, nil))
                 continue;
             /*e: [[readenv()]] skip some names */
 
@@ -125,14 +125,14 @@ exportenv(ShellEnvVar *e)
 
     for(;e->name; e++){
         /*s: [[exportenv()]] skip entry if not a user variable and no value */
-        sym = symlook(e->name, S_VAR, nil);
         hasvalue = !empty_words(e->values);
+        sym = symlook(e->name, S_VAR, nil);
         if(sym == nil && !hasvalue)	/* non-existant null symbol */
             continue;
         /*e: [[exportenv()]] skip entry if not a user variable and no value */
         // else
         snprint(name, sizeof name, "/env/%s", e->name);
-        /*s: [[exportenv()]] if existing symbol but not value, remove from env */
+        /*s: [[exportenv()]] if existing symbol but no value, remove from env */
         if (sym != nil && !hasvalue) {	/* Remove from environment */
             /* we could remove it from the symbol table
              * too, but we're in the child copy, and it
@@ -143,7 +143,7 @@ exportenv(ShellEnvVar *e)
             e->values = nil;		/* memory leak */
             continue;
         }
-        /*e: [[exportenv()]] if existing symbol but not value, remove from env */
+        /*e: [[exportenv()]] if existing symbol but no value, remove from env */
         // else
         f = create(name, OWRITE, 0666L);
         /*s: [[exportenv()]] sanity check f */

@@ -145,7 +145,6 @@ work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
                 fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
             else
                 fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
-
             /*s: [[work()]] when inexistent target without prerequisites, if kflag */
             if(kflag){
                 node->flags |= BEINGMADE;

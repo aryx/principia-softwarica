@@ -41,19 +41,19 @@ wtos(Word *w, int sep)
 Word*
 wdup(Word *w)
 {
-    Word *v, *new, *base;
+    Word *lastw, *new, *head;
 
-    v = base = nil;
+    head = lastw = nil;
     while(w){
         new = newword(w->s);
-        if(v)
-            v->next = new;
+        if(lastw)
+            lastw->next = new;
         else
-            base = new;
-        v = new;
+            head = new;
+        lastw = new;
         w = w->next;
     }
-    return base;
+    return head;
 }
 /*e: function wdup */
 
@@ -77,13 +77,13 @@ freewords(Word *w)
 void
 addw(Word *w, char *s)
 {
-    Word *lw;
+    Word *lastw;
 
-    for(lw = w; w = w->next; lw = w){
+    for(lastw = w; w = w->next; lastw = w){
         if(strcmp(s, w->s) == 0)
             return;
     }
-    lw->next = newword(s);
+    lastw->next = newword(s);
 }
 /*e: function addw */
 

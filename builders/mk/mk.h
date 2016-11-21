@@ -36,7 +36,10 @@ struct Word
     char 		*s;
 
     // Extra
+    /*s: [[Word]] Extra fields */
+    // list<ref_own<Word>>
     struct Word 	*next;
+    /*e: [[Word]] Extra fields */
 };
 /*e: struct Word */
 
@@ -124,7 +127,7 @@ enum Rule_attr {
 #define empty_prereqs(r) (!r->prereqs || !r->prereqs->s || !*r->prereqs->s)
 /*e: macro empty_prereqs */
 /*s: macro empty_words */
-#define empty_words(w) (w == nil || w->s == nil || w->s[0] == '\0')
+#define empty_words(w) ((w) == nil || (w)->s == nil || (w)->s[0] == '\0')
 /*e: macro empty_words */
 
 /*s: constant NREGEXP */
@@ -242,6 +245,7 @@ struct Job
 
     // Extra
     /*s: [[Job]] extra fields */
+    // list<ref_own<Job>> (head = jobs)
     struct Job	*next;
     /*e: [[Job]] extra fields */
 };
@@ -268,6 +272,7 @@ struct Symtab
 
     // Extra
     /*s: [[Symtab]] extra fields */
+    // list<ref_own<Symtab>> (head = hash)
     struct Symtab	*next;
     /*e: [[Symtab]] extra fields */
 };

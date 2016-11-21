@@ -254,7 +254,6 @@ vacuous(Node *node)
 
     if(node->flags&READY)
         return node->flags&VACUOUS;
-
     node->flags |= READY;
 
     for(a = node->arcs; a; a = a->next)
@@ -342,10 +341,14 @@ trace(char *s, Arc *a)
     while(a){
         fprint(STDERR, " <-(%s:%d)- %s", a->r->file, a->r->line,
             a->n? a->n->name:"");
+        /*s: [[trace()]] possibly continue if prereq is also a target */
         if(a->n){
             for(a = a->n->arcs; a; a = a->next)
-                if(*a->r->recipe) break;
-        } else
+                if(*a->r->recipe) 
+                    break;
+        }
+        /*e: [[trace()]] possibly continue if prereq is also a target */
+        else
             a = nil;
     }
     fprint(STDERR, "\n");

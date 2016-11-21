@@ -39,11 +39,13 @@ dorecipe(Node *node, bool *did)
     Rule *master_rule = nil;
     Arc *master_arc = nil;
     /*x: [[dorecipe()]] other locals */
+    // list<string> (last = last_alltargets)
     Word alltargets;
     /*x: [[dorecipe()]] other locals */
     // list<ref<Node>> (next = Node.next)
     Node *nlist = node;
     /*x: [[dorecipe()]] other locals */
+    // list<string> (last = last_allprereqs)
     Word allprereqs;
     /*x: [[dorecipe()]] other locals */
     char cwd[256];
@@ -62,8 +64,8 @@ dorecipe(Node *node, bool *did)
      */
     for(a = node->arcs; a; a = a->next)
         if(!empty_recipe(a->r)) {
-            master_arc = a;
             master_rule = a->r;
+            master_arc = a;
         }
 
     /*s: [[dorecipe()]] if no recipe found */
@@ -186,7 +188,8 @@ dorecipe(Node *node, bool *did)
     }
 
     // run the job
-    run(newjob(master_rule, nlist, master_arc->stem, master_arc->match, 
+    run(newjob(master_rule, nlist, 
+               master_arc->stem, master_arc->match, 
                allprereqs.next, newprereqs.next, 
                alltargets.next, oldtargets.next));
     *did = true; // finally

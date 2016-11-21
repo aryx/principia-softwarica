@@ -19,7 +19,7 @@ static int rcmp(Rule *r, char *target, Word *tail);
 
 /*s: function addrule */
 void
-addrule(char *head, Word *tail, char *body, 
+addrule(char *target, Word *prereqs, char *recipe, 
         Word *alltargets, int attr, int hline, char *prog)
 {
     Rule *r = nil;
@@ -32,9 +32,9 @@ addrule(char *head, Word *tail, char *body,
 
     /*s: [[addrule()]] find if rule already exists, set reuse */
     reuse = false;
-    if(sym = symlook(head, S_TARGET, nil)){
+    if(sym = symlook(target, S_TARGET, nil)){
         for(r = sym->u.ptr; r; r = r->chain)
-            if(rcmp(r, head, tail) == 0){
+            if(rcmp(r, target, prereqs) == 0){
                 reuse = true;
                 break;
             }
@@ -44,20 +44,20 @@ addrule(char *head, Word *tail, char *body,
     if(r == nil)
         r = (Rule *)Malloc(sizeof(Rule));
 
-    r->target = head;
-    r->prereqs = tail;
-    r->recipe = body;
-
-    r->line = hline;
-    r->file = infile;
+    r->target = target;
+    r->prereqs = prereqs;
+    r->recipe = recipe;
 
     r->attr = attr;
+    r->line = hline;
     /*s: [[addrule()]] set more fields */
     if(!reuse){
         r->next = nil;
     }
     /*x: [[addrule()]] set more fields */
     r->alltargets = alltargets;
+    /*x: [[addrule()]] set more fields */
+    r->file = infile;
     /*x: [[addrule()]] set more fields */
     r->rule = nrules++;
     /*x: [[addrule()]] set more fields */
@@ -66,7 +66,7 @@ addrule(char *head, Word *tail, char *body,
 
     /*s: [[addrule()]] indexing [[r]] by target in [[S_TARGET]] */
     if(!reuse){
-        sym = symlook(head, S_TARGET, r);
+        sym = symlook(target, S_TARGET, r);
         rr = sym->u.ptr;
         if(rr != r){ // target had already a rule
             r->chain = rr->chain;
@@ -77,7 +77,7 @@ addrule(char *head, Word *tail, char *body,
     /*e: [[addrule()]] indexing [[r]] by target in [[S_TARGET]] */
 
     /*s: [[addrule()]] if meta rule */
-    if(charin(head, "%&") || (attr&REGEXP)){
+    if(charin(target, "%&") || (attr&REGEXP)){
         r->attr |= META;
         /*s: [[addrule()]] return if reuse, to not add the rule in a list */
         if(reuse)
@@ -87,7 +87,7 @@ addrule(char *head, Word *tail, char *body,
         /*s: [[addrule()]] if REGEXP attribute */
         if(attr&REGEXP){
             patrule = r;
-            r->pat = regcomp(head);
+            r->pat = regcomp(target);
         }
         /*e: [[addrule()]] if REGEXP attribute */
 
@@ -101,12 +101,12 @@ addrule(char *head, Word *tail, char *body,
     }
     /*e: [[addrule()]] if meta rule */
     else {
+        /*s: [[addrule()]] if simple rule */
         /*s: [[addrule()]] return if reuse, to not add the rule in a list */
         if(reuse)
             return;
         /*e: [[addrule()]] return if reuse, to not add the rule in a list */
         // else
-        r->pat = nil;
 
         // add_list(r, rules, lr)
         if(rules == nil)
@@ -115,6 +115,7 @@ addrule(char *head, Word *tail, char *body,
             lr->next = r;
             lr = r;
         }
+        /*e: [[addrule()]] if simple rule */
     }
 }
 /*e: function addrule */
@@ -122,16 +123,16 @@ addrule(char *head, Word *tail, char *body,
 
 /*s: function rcmp */
 static int
-rcmp(Rule *r, char *target, Word *tail)
+rcmp(Rule *r, char *target, Word *prereqs)
 {
     Word *w;
 
     if(strcmp(r->target, target))
         return 1;
-    for(w = r->prereqs; w && tail; w = w->next, tail = tail->next)
-        if(strcmp(w->s, tail->s))
+    for(w = r->prereqs; w && prereqs; w = w->next, prereqs = prereqs->next)
+        if(strcmp(w->s, prereqs->s))
             return 1;
-    return (w || tail);
+    return (w || prereqs);
 }
 /*e: function rcmp */
 

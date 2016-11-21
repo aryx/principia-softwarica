@@ -46,7 +46,6 @@ varname(char **s)
     int n;
 
     buf = newbuf();
-
     for(;;){
         n = chartorune(&r, cp);
         if (!WORDCHR(r))
@@ -300,8 +299,7 @@ nextword(char **s)
     buf = newbuf();
 
 restart:
-    head = nil;
-    lastw = nil;
+    head = lastw = nil;
     empty = true;
     /*s: [[nextword()]] skipping leading white space */
     while(*cp == ' ' || *cp == '\t')		/* leading white space */
@@ -413,8 +411,7 @@ stow(char *s)
     // option<ref<Word>>
     Word *lastw;
 
-    head = nil;
-    lastw = nil;
+    head = lastw = nil;
     while(*s){
         new = nextword(&s);
         if(new == nil)
@@ -430,8 +427,10 @@ stow(char *s)
             lastw = lastw->next;
         
     }
+    /*s: [[stow()]] if head still nil */
     if (!head)
         head = newword("");
+    /*e: [[stow()]] if head still nil */
     return head;
 }
 /*e: function stow */

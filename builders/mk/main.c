@@ -244,15 +244,15 @@ main(int argc, char **argv)
     // Building the graph, finding out-of-date files
 
     /*s: [[main()]] initializations before building */
-    initshellenv();
+    catchnotes();
+    /*x: [[main()]] initializations before building */
+    initenv();
     /*x: [[main()]] initializations before building */
     if(whatif){
         insert(whatif, '\0');
         timeinit(whatif->start);
         freebuf(whatif);
     }
-    /*x: [[main()]] initializations before building */
-    catchnotes();
     /*e: [[main()]] initializations before building */
     /*s: [[main()]] setting the targets, call [[mk()]] */
     if(*argv == nil){
