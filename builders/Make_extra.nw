@@ -44,7 +44,7 @@ char*	rulecnt(void);
 
 // env.c
 void	inithash(void);
-void	initshellenv(void);
+void	initenv(void);
 ShellEnvVar*	buildenv(Job*, int);
 
 
