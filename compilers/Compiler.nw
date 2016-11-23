@@ -12,9 +12,10 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, I changed for the better a few things:
-% - deadcode (TFILE, OFAS, OTST, OENUM, CSELEM, CLABEL)
-% - rename more consistently things (thisfn->thisfntype, lastdcl->lastdcltype)
-% - TODO D_CONST -> D_ADDR
+% - deadcode (TFILE, OFAS/OTST/OENUM, CSELEM, CLABEL)
+% - rename more consistently things 
+%   (thisfn -> thisfntype, lastdcl -> lastdcltype)
+% - TODO? D_CONST -> D_ADDR
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -29,7 +30,7 @@
 
 %thx to this manual, better understand compilers and C:
 % - TODO assignment of structures? deep copy?
-% - SEMI initialisation of complex globals, e.g. znode, all fields set to 0?
+% - initialisation of complex globals, e.g. znode, all fields set to 0?
 %   it's a kernel loader issue, BSS is zeroe'd
 % - TODO x++ and ++x in complex situations
 % - TODO what happen if pass array in func? int foo(int arr[4]), pass
@@ -136,12 +137,13 @@ Ken Thompson
 
 \chapter{Introduction}
 
-The goal of this book is to present in full details the source code of
+The goal of this book is to explain with full details the source code of
 a C {compiler}.
 
 \section{Motivations}
 
-Why a C compiler? Because I think you are a better programmer if
+Why a C compiler?
+Because I think you are a better programmer if
 you fully understand how things work under the hood, and
 understanding how high-level C code gets translated in low-level
 assembly, and ultimately machine code, is essential.
@@ -227,17 +229,17 @@ which I ultimately discarded:
 \item tinycc, fbcc
 % cool maybe
 
-\item cminusminus
+\end{itemize}
+
+%\item cminusminus
 % maybe a good idea to also present c--
 % just for backend.
 
-\item rust
+%\item rust
 % Maybe rust could replace C one day, but we are not there yet
 % and Rust is more complicated than C. Actually rust
 % uses C :)
 % use SSA and MIR now (middleend intermediate IR)
-
-\end{itemize}
 
 %\item Tiger
 % not real, not C, but more educatif and better written for teaching purpose
@@ -271,18 +273,17 @@ which I ultimately discarded:
 % - C in 4 functions: https://github.com/rswier/c4/blob/master/c4.c
 % - mini C compiler generating code for ARM (use C4)
 %   https://github.com/jserv/amacc
+%other teaching pl:
+% - pl/0, Wirth
+% - Cool, Aiken?
+% - Tiger, Appel
 %modern:
-% - .NET? mono?
+% - .NET? mono? roslyn?
 
 % TODO bench 5c vs gcc and clang on benchmarks!
 
 %with flex/bison/llvm
 %http://gnuu.org/2009/09/18/writing-your-own-toy-compiler/all/1/
-
-% other teaching pl:
-% - pl/0, Wirth
-% - Cool, Aiken?
-% - Tiger, Appel
 
 % more recently:
 % - JIT
@@ -347,40 +348,52 @@ who wrote in some sense most of this book.
 % Many books on compiler. I will be short here.
 
 % Assembly is essentially:
-%  - simple arith and memory instructions 
+%  - simple arith with registers and memory instructions 
 %  - labels and jmps
 %  - simple stack when you have to manually handle locals, params, and calls
 %  - simple data structure, bytes
 % The goal of the C compiler is to translate in this simpler language
 % the more complex construct of C.
 
-% - expression like x+y*z decomposed into multi mov, add, etc. Fortran!
-% - same for data, complex decomposed into smaller bytes, with symbolic names
-%   for subparts, e.g. fields.
-% - statements, more structured forms than jmp.
+\subsection{Frontend and backend}
+
+% principles also of frontend and backend.
+% We will present below mostly the backend. Frontend
+% is classic and present in other books like Assembler, or Make, or Shell.
+% Lexing, parsing, AST.
+
+\subsection{Typechecking}
+
+% A more unusual part of frontend is typechecking! and annotate AST
+% with types. C not a dynamic language.
+
 % - types! typechecking! (5c even adds some simple dataflow checks!)
 %   so can type check arguments vs parameters, their numbers, array access,
 %   field access, more restricted register indexing (xxx) -> *xxx but only 
 %   if makes sense.
 %   (still have lots of room to improve even more, C could be more typed!
 %    see rust, and ocaml).
+
+\subsection{Linearization}
+
+% backend now.
+
+% - expression like x+y*z decomposed into multi mov, add, etc. Fortran!
+% - same for data, complex decomposed into smaller bytes, with symbolic names
+%   for subparts, e.g. fields.
+
+\subsection{Labelization}
+
+% - statements, more structured forms than jmp.
+
+\subsection{Frameization}
+
 % - parameters, arguments, locals, more structured forms than just plain stack
 % => see codegen: tag
 
-% innovation of C vs fortran/pascal/algol? 
-%  - pointer arithmetic? (but also a bad thing to have such wild pointers)
-%    in some sense compilers such as Tiger are using pointers, but internally,
-%    and C exposed them to the language while also providing some form
-%    of algrebra around them (pointer arithmetic)
-%  - simpler?
-%  - bitfields? so can match more directly hardware specifics?
-%  - in the end pretty good DSL for bit manipulations, &, |, ^, &=, <<, etc
-%    are quite nice. See Linker.nw, Machine.nw, Assembler.nw.
 
-% principles also of frontend and backend.
-% We will present below both the frontend and backend.
 
-\section{[[5c]] command line interface}
+\section{[[5c]] command-line interface}
 
 % see all the flags, put here main flags
 
@@ -475,6 +488,21 @@ who wrote in some sense most of this book.
 
 % lvalue, rvalue (lvalue = location value? expression resulting into a location
 % where something can be stored?)
+% Stratchey introduced those terms?
+
+
+\subsection{C innovations}
+
+% innovation of C vs fortran/pascal/algol? 
+%  - pointer arithmetic? (but also a bad thing to have such wild pointers)
+%    in some sense compilers such as Tiger are using pointers, but internally,
+%    and C exposed them to the language while also providing some form
+%    of algrebra around them (pointer arithmetic)
+%  - simpler?
+%  - bitfields? so can match more directly hardware specifics?
+%  - in the end pretty good DSL for bit manipulations, &, |, ^, &=, <<, etc
+%    are quite nice. See Linker.nw, Machine.nw, Assembler.nw.
+
 
 \section{Output object format}
 
@@ -555,6 +583,7 @@ who wrote in some sense most of this book.
 %                            -> codgen (portable) -> gen(stmt) -> cgen(expr)
 %                                                 -> regopt -> peep
 %                 -> gclean -> outcode
+% toplevel globals are managed by gclean (which also adds last AEND)
 
 % AST level opti, assembly level opti
 
@@ -650,7 +679,9 @@ enum node_kind
 %ocaml: use ADT.
 
 % each time OXXX TXXX for start and end. Sentinel.
-% But OXXX to mark as wront value?
+% But OXXX to mark as wrong value? 
+% (used for labels, but just as a dumb value because what is 
+%  interesting is the sym connected to the node)
 %ocaml: just use precise AST. no need OXXX and OEND.
 
 <<struct Node>>=
@@ -771,6 +802,7 @@ enum storage_class
 // also (ab)used as a bool to mark label uses (true = used in a goto)
 char	addable;
 @
+\t use another field? at least a union, otherwise ugly
 
 % for expression nodes?
 <<[[Node]] code generation fields>>=
@@ -919,7 +951,7 @@ TENUM,
 %IND for indirect probably, meaning pointer. C power!
 %Note that even if array access are unsugar in pointer arithmetic access, 
 % type declarations are not; we keep the array vs pointer info here.
-%Note that no TYPEDEF!
+%Note that no TYPEDEF here!
 %note that originally if you changed the order above then you 
 % would get some segfaults in tests/5c and mk testall. This was
 % because the code was using simple initialisers instead of array
@@ -939,7 +971,7 @@ struct	Type
     // option<list<ref_own<Type>>, next = Type.down, just for OFUNC params
     Type*	down;
 
-    long	lineno;
+    long	lineno; // ??
 
     <<[[Type]] value fields>>
 
@@ -977,6 +1009,7 @@ struct	Type
 <<[[Type]] value fields>>=
 Sym*	sym; // for TSTRUCT/TUNION/TENUM
 @
+% then how get fields given a struct name?
 
 % Ok now let's see the link between Node and Type
 % (for expression nodes only).
@@ -1285,6 +1318,7 @@ lookup(void)
         if(strcmp(s->name, symb) == 0)
             return s;
     }
+
     // else
     s = alloc(sizeof(*s));
     s->name = alloc(n);
@@ -1321,6 +1355,7 @@ char	class;
 % similar to Node.type, Decl.type (below), and now Sym.type
 % note that this class field is then used by the lexer
 % for the typedef trick!
+%ocaml: use only as environment when typechecking?
 
 <<[[Sym]] identifier value, scope fields>>=
 ushort	block;
@@ -1328,10 +1363,13 @@ ushort	block;
 % see also Decl.block (below)
 %ocaml: do naming phase or do it in parsing. embed blockid in fullname type.
 
+
+
 <<[[Sym]] macro value fields>>=
 char*	macro;
 @
-%ocaml: have separate cpp
+%ocaml: have separate cpp? no, but at least separate different kinds of symbols
+% in different tables
 
 % for labels?
 %  see later labels
@@ -1489,7 +1527,7 @@ blockno = 0;
 autobn = 0;
 autoffset = 0;
 @
-%what about autoffset?
+%what about autoffset? what is it used for?
 
 <<function markdcl>>=
 //@Scheck: used by cc.y
@@ -1556,7 +1594,7 @@ Node* revertdcl(void)
 % what is this Node n? why return a node? because when we revert
 % a local volatile we actually generate some fake nodes USED(&local_volatile)
 % so we need to return this OLIST of hidden generated nodes.
-%ocaml: just pop
+%ocaml: just pop (actually need also Hashtbl.remove in globals.hids)
 
 <<[[revertdcl()]] switch declaration type cases>>=
 case DMARK:
@@ -1581,6 +1619,9 @@ case DSUE:
     break;
 @
 %ugly: abuse of type and block a bit
+%symbol has info about block of variable but also block of tag.
+% two different namespaces but use the same symbol; just use different
+% fields of those symbols.
 
 <<[[revertdcl()]] switch declaration type cases>>=
 case DLABEL:
@@ -1663,7 +1704,7 @@ d->varlineno = s->varlineno;
    <<[[union yacc]] other fields>>
 }
 @
-%ocaml: dont do symbol table and naming in parsing. Do that later.
+%ocaml: more precise token type directly in parser.mly
 
 % from cc.y
 <<token declarations>>=
@@ -2161,9 +2202,10 @@ gclean(void)
     outcode();
 }
 @
-%ocaml: lift up outcode; not very visible inside gclean
+%ocaml: lift up outcode; not very visible inside gclean, and also
+% no need for AEND
 
-
+% generate AGLOBL and AEND
 
 
 \section{Initializations}
@@ -2533,6 +2575,9 @@ pop:
 char*	p;
 short	c;
 @
+
+
+
 
 
 \chapter{Lexing}
@@ -3564,7 +3609,7 @@ case '"':
     return LSTRING;
 @
 
-\subsection{Unicode}
+\subsection{Unicode strings}
 % long strings
 
 <<[[yylex()]] switch c cases>>=
@@ -5158,16 +5203,15 @@ getnsn(void)
 
 
 \chapter{Parsing}
-% and typechecking
+% and naming (and typechecking?)
 
 \section{Overview}
 
 % I assume you understand Yacc! if not read the O'Reilly book on Lex&Yacc
-%  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.nw :) )
+%  or docs/doc/unix/yacc.pdf (or read \book{CompilerGenerator} :) )
 %(compared to ocamlyacc can have actions in the middle, and they count
 % as indexable elements for the $xxx ($1, $2, etc))
-%todo: how can have action in the middle? when shift you don't know
-% yet i
+%todo: how can have action in the middle? when shift you don't know yet
 
 <<cc/cc.y>>=
 %{
@@ -5436,7 +5480,6 @@ loop:
 % does actually nothing? it just sets lastdcltype
 % with lastype, but is this useful?
 
-% hmm why Type* and not Decl*? rename lastdcltype?
 <<global lastdcl>>=
 Type*	lastdcltype;
 @
@@ -5610,7 +5653,10 @@ Type*	thisfntype;
     }
 @
 %$
-
+% markdcl and reverdcl are for the parameters too! not just for the block
+% (the 'block' does not do its own markdcl and reverdcl).
+%ocaml: I do also a generic new_scope/pop_scope for block, so I have
+% a separate scope just for the parameters
 
 <<xdecl rule, debug function body>>=
 if(debug['x']) {
@@ -5658,6 +5704,8 @@ slist:
 @
 %$
 % adecl! for locals
+%ocaml: I do the new_scope/pop_env here, so I factorize code related
+% to hidden nodes
 
 % Note that no reverdecl or markdecl here. done in caller!
 % See also ulstmnt and Blocks below.
@@ -5800,7 +5848,7 @@ OFOR,
         $$ = new(OFOR, new(OLIST, $6, new(OLIST, $4, $8)), $10);
     }
 @
-% markdecl because forexpr allow local declaration ext, as in C++
+% markdcl() because forexpr allow local declaration ext, as in C++
 %ocaml: OFOR(l=OLIST(forcond, OLIST(forinit, forend)), r=body)
 
 % C extension for(int i; ... ?) hence the markdcl, for scope.
@@ -5913,7 +5961,8 @@ OGOTO,
 <<[[Sym]] label value fields>>=
 Node*	label;
 @
-% can then access pc via s->label->pc?
+% can then access pc via s->label->pc? meh, node attached
+%  here seems to be an OXXX so not really useful.
 
 % flag is true for label definition context, false for use (e.g. in goto)
 <<function dcllabel>>=
@@ -5926,6 +5975,7 @@ Node* dcllabel(Sym *s, bool defcontext)
 
     n = s->label;
     <<[[dcllabel()]] if n not null, mark node as declared or used>>
+    // else
 
     d = push();
     d->sym = s;
@@ -5952,11 +6002,11 @@ Node* dcllabel(Sym *s, bool defcontext)
     return n;
 }
 @
-% The first occurence of a label adds it to the symbol table.
-% So can do goto of a label defined later. Its label field will be set. 
+% The first occurence of a label (def or use) adds it to the symbol table.
+%  So can do goto of a label defined later. Its label field will be set.
 % We use firstdcl because we want to add label at function scope,
-% not in nested latest scope, because revertdcl() should
-% not revert nested labels.
+%  not in nested latest scope, because revertdcl() should
+%  not revert nested labels.
 %less: means a local var can hide a nested label? I think so :)
 %  hmmm maybe not as namespace different and so label will still
 %  be in the field of the symbol of the local var.
@@ -5978,6 +6028,9 @@ if(n != Z) {
 %less: cleanup abuse of complex/addable, do like in scheck field for used
 
 %codegen: really match assembly here, labels and AB.
+
+% where check that all labels were used? it is not checked!
+%ocaml: do the check!
 
 \section{Expressions}
 
@@ -6351,6 +6404,7 @@ name:
         $$ = new(ONAME, Z, Z);
         <<name rule, if local static variable>>
         $$->sym = $1;
+
         $$->type = $1->type;
         $$->etype = ($1->type != T) ? $1->type->etype : TVOID;
         $$->xoffset = $1->offset;
@@ -7721,6 +7775,7 @@ OUNION,
 
 
 \subsubsection{Structure/union uses}
+% or forward decl?
 
 
 %use
@@ -9013,15 +9068,15 @@ abdecor3:
 
 \section{Overview}
 
-% 5c/8c/... don't have an intermediate language :( not even an RTL :(
-% They generate directly arch-specific assembly.
+% 5c/8c/... do not have an intermediate language :( not even an RTL :(
+% They generate directly (arch-specific) assembly.
 % But they have kinda factorized a few things behind some
 % common interface: gpseudo(), gins(), gmove(), gbranch(), as well
-% as some REGRET, REGARG
-% so at least some of the statement code generator is portable.
+% as some REGRET, REGARG.
+% So at least some of the statement code generator is portable.
 % (but probably lcc backend part is cleaner)
 
-% gbranch(), gmove(), are archi independent interface.
+% gbranch(), gmove(), are arch-independent interfaces.
 %  cc2/pgen.c include gc.h where all archi define some kinda archi independent
 %  stuff like ATEXT, ANOP, etc
 % gins() seems more archi dependent but can also do arch independent
@@ -9035,6 +9090,7 @@ abdecor3:
 %            codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
 
 % main -> compile -> yyparse -> codgen (func) -> gen (statement) -> cgen (expr)
+\t where is the code to handle toplevel globals? 
 
 % will visit the AST and generate recursively the code mostly.
 
@@ -9099,12 +9155,12 @@ Prog*	p;
 
 % like in Linker.nw
 <<global firstp>>=
-// list<ref_own<Prog>, next = Prog.link
+// list<ref_own<Prog> (next = Prog.link, last = lastp)
 Prog*	firstp;
 @
 
 <<[[Prog]] extra fields(arm)>>=
-// list<ref<Prog>> from firstp
+// list<ref<Prog>> (head = firstp)
 Prog*	link;
 @
 
@@ -9113,7 +9169,7 @@ Prog*	link;
 @
 
 <<global lastp>>=
-// ref<Prog>, last elt of firstp list
+// ref<Prog> (head = firstp)
 Prog*	lastp;
 @
 
@@ -9130,6 +9186,7 @@ lastp = P;
 nextpc();
 p->as = AEND;
 @
+%ocaml: no need AEND, boundary between objects in archive is clear.
 
 
 \section{[[gxxx()]]}
@@ -9176,6 +9233,7 @@ gextern(Sym *s, Node *a, long o, long w)
 @
 %less: += o? why not just = o?
 %pad: was D_CONST
+\t what is this D_OREG special code?
 
 \subsection{[[gbranch()]]}
 
@@ -9961,9 +10019,12 @@ complex(Node *n)
 
 \section{Functions, [[codgen()]]}
 
+% Finally! codgen! called from yyparse.
+
 % n = node of the blocks OLIST, nn = node of the xdecor (should be ONAME)
+%  (nn = name node, sp = saved p)
 % cc2/pgen.c  
-% ?? -> <>
+% main -> compile -> yyparse -> <>
 <<function codgen>>=
 //@Scheck: used by cc.y
 void codgen(Node *n, Node *nn)
@@ -10017,7 +10078,6 @@ void codgen(Node *n, Node *nn)
 <<[[codgen()]] locals>>=
 Node *n1;
 @
-
 <<[[codgen()]] set n1 node to node in nn where have ONAME>>=
 /*
  * isolate name
@@ -10053,7 +10113,7 @@ nodconst(long v)
     return &constnode;
 }
 @
-% it's because gpseudo except a Node and call naddr(&p->to)
+% it's because gpseudo expect a Node and call naddr(&p->to)
 
 
 
@@ -10245,7 +10305,7 @@ if(err) {
          * reachability warnings.
          */
         if(!canreach && oldreach && debug['w'] < 2)
-            warnreach = 0;
+            warnreach = false;
     } else {
         canreach = true;
         gen(n->right->left);
@@ -10257,7 +10317,7 @@ if(err) {
          * reachability warnings.
          */
         if(!oldreach && canreach && debug['w'] < 2)
-            warnreach = 0;
+            warnreach = false;
         canreach = oldreach;
     }
 }
@@ -10301,6 +10361,7 @@ supgen(Node *n)
 long	breakpc;
 @
 % for break to branch at the right place
+% global!
 
 <<global continpc>>=
 // option<pc>, None = -1
@@ -10332,6 +10393,7 @@ long sbc, scc;
 int snbreak, sncontin;
 @
 % saved prog continue, saved prog break
+% Local to gen, so recursivity will provide a stack of saved continue and break
 
 <<[[gen()]] switch node kind cases>>=
 case OWHILE:
@@ -10374,19 +10436,22 @@ case ODWHILE:
 
     continpc = scc;
     breakpc = sbc;
+
     canreach = nbreak!=0;
     if(canreach == false)
         warnreach = !suppress;
+
     nbreak = snbreak;
     break;
 @
+
 
 <<[[gen()]] switch node kind cases>>=
 case OFOR:
     l = n->left;
     if(!canreach && l->right->left && warnreach) {
         warn(n, "unreachable code FOR");
-        warnreach = 0;
+        warnreach = false;
     }
     gen(l->right->left);	/* init */
 
@@ -10399,7 +10464,7 @@ case OFOR:
      */
     if(!canreach && warnreach && deadheads(n)) {
         warn(n, "unreachable code %O", o);
-        warnreach = 0;
+        warnreach = false;
     }
 
     scc = continpc;
@@ -10437,15 +10502,17 @@ case OFOR:
     }
     if(!ncontin && l->right->right && warnreach) {
         warn(l->right->right, "unreachable FOR inc");
-        warnreach = 0;
+        warnreach = false;
     }
 
     patch(spb, pc);
     continpc = scc;
     breakpc = sbc;
+
     canreach = nbreak!=0;
     if(canreach == false)
         warnreach = !suppress;
+
     nbreak = snbreak;
     ncontin = sncontin;
     break;
@@ -10531,6 +10598,7 @@ case OCONTINUE:
     ncontin++;
     canreach = false;
     warnreach = !suppress;
+
     break;
 @
 
@@ -12878,10 +12946,7 @@ pre:
 
 \subsection{[[sizeof()]]}
 
-\section{XXX}
-
-
-\subsection{The globals}
+\section{Toplevel globals}
 
 <<[[gclean()]] generate all AGLOBL pseudo opcodes>>=
 for(i=0; i<NHASH; i++)
@@ -12894,10 +12959,292 @@ for(i=0; i<NHASH; i++)
         continue;
     if(s->type == types[TENUM])
         continue;
+    // else
     gpseudo(AGLOBL, s, nodconst(s->type->width));
 }
 @
 
+% the ADATA is done when process initializer.
+
+\section{Sizes}
+
+<<global ewidth>>=
+schar	ewidth[NTYPE] =
+{
+    [TXXX] = -1,		
+    [TCHAR] = SZ_CHAR,	
+    [TUCHAR] = SZ_CHAR,	
+    [TSHORT] = SZ_SHORT,	
+    [TUSHORT] = SZ_SHORT,	
+    [TINT] = SZ_INT,		
+    [TUINT] = SZ_INT,		
+    [TLONG] = SZ_LONG,	
+    [TULONG] = SZ_LONG,	
+    [TVLONG] = SZ_VLONG,	
+    [TUVLONG] = SZ_VLONG,	
+    [TFLOAT] = SZ_FLOAT,	
+    [TDOUBLE] = SZ_DOUBLE,	
+    [TIND] = SZ_IND,		
+    [TFUNC] = 0,		
+    [TARRAY] = -1,		
+    [TVOID] = 0,		
+    [TSTRUCT] = -1,		
+    [TUNION] = -1,		
+    [TENUM] = SZ_INT,		
+};
+@
+%old: the designator used to be in comment, but then there is 
+% a strong coupling with the enum order, and actually I got
+% some regressions when I tried to reorder things in type_kind,
+% so better to use a designator.
+%cons? can be more complicated to bootstrap with other C compiler, but
+% I don't care
+
+
+<<constant SZ_CHAR(arm)>>=
+#define	SZ_CHAR		1
+@
+
+<<constant SZ_SHORT(arm)>>=
+#define	SZ_SHORT	2
+@
+
+<<constant SZ_INT(arm)>>=
+#define	SZ_INT		4
+@
+
+<<constant SZ_LONG(arm)>>=
+#define	SZ_LONG		4
+@
+
+<<constant SZ_IND(arm)>>=
+#define	SZ_IND		4
+@
+
+<<constant SZ_FLOAT(arm)>>=
+#define	SZ_FLOAT	4
+@
+
+<<constant SZ_VLONG(arm)>>=
+#define	SZ_VLONG	8
+@
+
+<<constant SZ_DOUBLE(arm)>>=
+#define	SZ_DOUBLE	8
+@
+
+
+
+
+\section{Alignment}
+
+<<function align(arm)>>=
+long
+align(long i, Type *t, int op)
+{
+    long o;
+    Type *v;
+    int w;
+
+    o = i;
+    w = 1;
+    switch(op) {
+    default:
+        diag(Z, "unknown align opcode %d", op);
+        break;
+
+    case Asu2:	/* padding at end of a struct */
+        w = SZ_LONG;
+        if(packflg)
+            w = packflg;
+        break;
+
+    case Ael1:	/* initial align of struct element */
+        for(v=t; v->etype==TARRAY; v=v->link)
+            ;
+        w = ewidth[v->etype];
+        if(w <= 0 || w >= SZ_LONG)
+            w = SZ_LONG;
+        if(packflg)
+            w = packflg;
+        break;
+
+    case Ael2:	/* width of a struct element */
+        o += t->width;
+        break;
+
+    case Aarg0:	/* initial passbyptr argument in arg list */
+        if(typesuv[t->etype]) {
+            o = align(o, types[TIND], Aarg1);
+            o = align(o, types[TIND], Aarg2);
+        }
+        break;
+
+    case Aarg1:	/* initial align of parameter */
+        w = ewidth[t->etype];
+        if(w <= 0 || w >= SZ_LONG) {
+            w = SZ_LONG;
+            break;
+        }
+        w = 1;		/* little endian no adjustment */
+        break;
+
+    case Aarg2:	/* width of a parameter */
+        o += t->width;
+        w = SZ_LONG;
+        break;
+
+    case Aaut3:	/* total align of automatic */
+        o = align(o, t, Ael2);
+        o = align(o, t, Ael1);
+        w = SZ_LONG;	/* because of a pun in cc/dcl.c:contig() */
+        break;
+    }
+    o = round(o, w);
+    if(debug['A'])
+        print("align %s %ld %T = %ld\n", bnames[op], i, t, o);
+    return o;
+}
+@
+% mostly identical to 386 except for Aaut3 case, not sure why
+
+<<function maxround>>=
+long
+maxround(long max, long v)
+{
+    v = round(v, SZ_LONG);
+    if(v > max)
+        return v;
+    return max;
+}
+@
+
+
+
+
+<<enum align>>=
+enum align
+{
+    Axxx,
+
+    Ael1,
+    Ael2,
+    Asu2,
+    Aarg0,
+    Aarg1,
+    Aarg2,
+    Aaut3,
+
+    NALIGN,
+};
+@
+
+<<global bnames>>=
+char*	bnames[NALIGN];
+@
+
+<<global bnamesinit>>=
+Init	bnamesinit[] =
+{
+    Axxx,	0,	"Axxx",
+
+    Ael1,	0,	"el1",
+    Ael2,	0,	"el2",
+    Asu2,	0,	"su2",
+    Aarg0,	0,	"arg0",
+    Aarg1,	0,	"arg1",
+    Aarg2,	0,	"arg2",
+    Aaut3,	0,	"aut3",
+    -1,	0,	0,
+};
+@
+
+
+
+% called for fields of structures/unions
+
+<<[[Type]] code generation fields>>=
+long	offset;
+@
+
+
+% complex rule for struct/union definition -> <>
+<<function sualign>>=
+//@Scheck: not dead, used by cc.y
+void sualign(Type *t)
+{
+    Type *l;
+    long o, w;
+
+    o = 0;
+    switch(t->etype) {
+
+    case TSTRUCT:
+        t->offset = 0;
+        w = 0;
+        for(l = t->link; l != T; l = l->down) {
+            if(l->nbits) {
+                if(l->shift <= 0) {
+                    l->shift = -l->shift;
+                    w = round(w, tfield->width);
+                    o = w;
+                    w += tfield->width;
+                }
+                l->offset = o;
+            } else {
+                if(l->width < 0 ||
+                   l->width == 0 && l->down != T)
+                    if(l->sym)
+                        diag(Z, "incomplete structure element: %s",
+                            l->sym->name);
+                    else
+                        diag(Z, "incomplete structure element");
+                w = align(w, l, Ael1);
+                l->offset = w;
+                w = align(w, l, Ael2);
+            }
+        }
+        w = align(w, t, Asu2);
+        t->width = w;
+        acidtype(t);
+        pickletype(t);
+        return;
+
+    case TUNION:
+        t->offset = 0;
+        w = 0;
+        for(l = t->link; l != T; l = l->down) {
+            if(l->width <= 0)
+                if(l->sym)
+                    diag(Z, "incomplete union element: %s",
+                        l->sym->name);
+                else
+                    diag(Z, "incomplete union element");
+            l->offset = 0;
+            l->shift = 0;
+            o = align(align(0, l, Ael1), l, Ael2);
+            if(o > w)
+                w = o;
+        }
+        w = align(w, t, Asu2);
+        t->width = w;
+        acidtype(t);
+        pickletype(t);
+        return;
+
+    default:
+        diag(Z, "unknown type in sualign: %T", t);
+        break;
+    }
+}
+@
+
+
+
+
+
+
+\section{XXX}
 
 \subsection{Multiplication}
 % is this an optimisation? move?
@@ -13746,284 +14093,6 @@ if(n->complex >= FNX)
 
 
 
-\section{Sizes}
-
-<<global ewidth>>=
-schar	ewidth[NTYPE] =
-{
-    [TXXX] = -1,		
-    [TCHAR] = SZ_CHAR,	
-    [TUCHAR] = SZ_CHAR,	
-    [TSHORT] = SZ_SHORT,	
-    [TUSHORT] = SZ_SHORT,	
-    [TINT] = SZ_INT,		
-    [TUINT] = SZ_INT,		
-    [TLONG] = SZ_LONG,	
-    [TULONG] = SZ_LONG,	
-    [TVLONG] = SZ_VLONG,	
-    [TUVLONG] = SZ_VLONG,	
-    [TFLOAT] = SZ_FLOAT,	
-    [TDOUBLE] = SZ_DOUBLE,	
-    [TIND] = SZ_IND,		
-    [TFUNC] = 0,		
-    [TARRAY] = -1,		
-    [TVOID] = 0,		
-    [TSTRUCT] = -1,		
-    [TUNION] = -1,		
-    [TENUM] = SZ_INT,		
-};
-@
-%old: the designator used to be in comment, but then there is 
-% a strong coupling with the enum order, and actually I got
-% some regressions when I tried to reorder things in type_kind,
-% so better to use a designator.
-%cons? can be more complicated to bootstrap with other C compiler, but
-% I don't care
-
-
-<<constant SZ_CHAR(arm)>>=
-#define	SZ_CHAR		1
-@
-
-<<constant SZ_SHORT(arm)>>=
-#define	SZ_SHORT	2
-@
-
-<<constant SZ_INT(arm)>>=
-#define	SZ_INT		4
-@
-
-<<constant SZ_LONG(arm)>>=
-#define	SZ_LONG		4
-@
-
-<<constant SZ_IND(arm)>>=
-#define	SZ_IND		4
-@
-
-<<constant SZ_FLOAT(arm)>>=
-#define	SZ_FLOAT	4
-@
-
-<<constant SZ_VLONG(arm)>>=
-#define	SZ_VLONG	8
-@
-
-<<constant SZ_DOUBLE(arm)>>=
-#define	SZ_DOUBLE	8
-@
-
-
-
-
-\section{Alignment}
-
-<<function align(arm)>>=
-long
-align(long i, Type *t, int op)
-{
-    long o;
-    Type *v;
-    int w;
-
-    o = i;
-    w = 1;
-    switch(op) {
-    default:
-        diag(Z, "unknown align opcode %d", op);
-        break;
-
-    case Asu2:	/* padding at end of a struct */
-        w = SZ_LONG;
-        if(packflg)
-            w = packflg;
-        break;
-
-    case Ael1:	/* initial align of struct element */
-        for(v=t; v->etype==TARRAY; v=v->link)
-            ;
-        w = ewidth[v->etype];
-        if(w <= 0 || w >= SZ_LONG)
-            w = SZ_LONG;
-        if(packflg)
-            w = packflg;
-        break;
-
-    case Ael2:	/* width of a struct element */
-        o += t->width;
-        break;
-
-    case Aarg0:	/* initial passbyptr argument in arg list */
-        if(typesuv[t->etype]) {
-            o = align(o, types[TIND], Aarg1);
-            o = align(o, types[TIND], Aarg2);
-        }
-        break;
-
-    case Aarg1:	/* initial align of parameter */
-        w = ewidth[t->etype];
-        if(w <= 0 || w >= SZ_LONG) {
-            w = SZ_LONG;
-            break;
-        }
-        w = 1;		/* little endian no adjustment */
-        break;
-
-    case Aarg2:	/* width of a parameter */
-        o += t->width;
-        w = SZ_LONG;
-        break;
-
-    case Aaut3:	/* total align of automatic */
-        o = align(o, t, Ael2);
-        o = align(o, t, Ael1);
-        w = SZ_LONG;	/* because of a pun in cc/dcl.c:contig() */
-        break;
-    }
-    o = round(o, w);
-    if(debug['A'])
-        print("align %s %ld %T = %ld\n", bnames[op], i, t, o);
-    return o;
-}
-@
-% mostly identical to 386 except for Aaut3 case, not sure why
-
-<<function maxround>>=
-long
-maxround(long max, long v)
-{
-    v = round(v, SZ_LONG);
-    if(v > max)
-        return v;
-    return max;
-}
-@
-
-
-
-
-<<enum align>>=
-enum align
-{
-    Axxx,
-
-    Ael1,
-    Ael2,
-    Asu2,
-    Aarg0,
-    Aarg1,
-    Aarg2,
-    Aaut3,
-
-    NALIGN,
-};
-@
-
-<<global bnames>>=
-char*	bnames[NALIGN];
-@
-
-<<global bnamesinit>>=
-Init	bnamesinit[] =
-{
-    Axxx,	0,	"Axxx",
-
-    Ael1,	0,	"el1",
-    Ael2,	0,	"el2",
-    Asu2,	0,	"su2",
-    Aarg0,	0,	"arg0",
-    Aarg1,	0,	"arg1",
-    Aarg2,	0,	"arg2",
-    Aaut3,	0,	"aut3",
-    -1,	0,	0,
-};
-@
-
-
-
-% called for fields of structures/unions
-
-<<[[Type]] code generation fields>>=
-long	offset;
-@
-
-
-% complex rule for struct/union definition -> <>
-<<function sualign>>=
-//@Scheck: not dead, used by cc.y
-void sualign(Type *t)
-{
-    Type *l;
-    long o, w;
-
-    o = 0;
-    switch(t->etype) {
-
-    case TSTRUCT:
-        t->offset = 0;
-        w = 0;
-        for(l = t->link; l != T; l = l->down) {
-            if(l->nbits) {
-                if(l->shift <= 0) {
-                    l->shift = -l->shift;
-                    w = round(w, tfield->width);
-                    o = w;
-                    w += tfield->width;
-                }
-                l->offset = o;
-            } else {
-                if(l->width < 0 ||
-                   l->width == 0 && l->down != T)
-                    if(l->sym)
-                        diag(Z, "incomplete structure element: %s",
-                            l->sym->name);
-                    else
-                        diag(Z, "incomplete structure element");
-                w = align(w, l, Ael1);
-                l->offset = w;
-                w = align(w, l, Ael2);
-            }
-        }
-        w = align(w, t, Asu2);
-        t->width = w;
-        acidtype(t);
-        pickletype(t);
-        return;
-
-    case TUNION:
-        t->offset = 0;
-        w = 0;
-        for(l = t->link; l != T; l = l->down) {
-            if(l->width <= 0)
-                if(l->sym)
-                    diag(Z, "incomplete union element: %s",
-                        l->sym->name);
-                else
-                    diag(Z, "incomplete union element");
-            l->offset = 0;
-            l->shift = 0;
-            o = align(align(0, l, Ael1), l, Ael2);
-            if(o > w)
-                w = o;
-        }
-        w = align(w, t, Asu2);
-        t->width = w;
-        acidtype(t);
-        pickletype(t);
-        return;
-
-    default:
-        diag(Z, "unknown type in sualign: %T", t);
-        break;
-    }
-}
-@
-
-
-
-
-
-
 \chapter{Object Generation}
 % Dupe with Assembler.nw. Quite simple.
 
@@ -14130,7 +14199,7 @@ char*	anames[] =
     "LAST",
 };
 @
-
+%ocaml: use ocamltarzan
 
 \section{Object format}
 
@@ -14146,7 +14215,7 @@ struct Htab {
 // index in h when the Sym is really a symbol, 0 when not a symbol
 char	symidx;
 @
-
+%ocaml: use Marshall
 
 
 % main -> compile -> yyparse; gclean -> <>
@@ -14226,6 +14295,7 @@ outcode(void)
     lastp = P;
 }
 @
+%ocaml: use Marshall
 
 <<function zwrite(arm)>>=
 void
@@ -14318,6 +14388,7 @@ zaddr(char *bp, Adr *a, int s)
 }
 @
 %pad: I added D_ADDR and sanity check D_CONST
+%ocaml: use Marshall
 
 
 
@@ -14346,6 +14417,7 @@ zname(Biobuf *b, Sym *s, int t)
     Bwrite(b, n, strlen(n)+1);
 }
 @
+%ocaml: use Marshall
 
 
 \section{File and line information, [[outhist()]]}
