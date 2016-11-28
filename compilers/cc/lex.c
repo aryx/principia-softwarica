@@ -61,12 +61,12 @@ void main(int argc, char *argv[])
     int err;
     int c;
     /*x: [[main()]] locals */
+    // growing_array<string>
     char **defs = nil;
     int ndef = 0;
     /*x: [[main()]] locals */
     char *p;
     /*x: [[main()]] locals */
-    // growing_array<string>
     char **np;
     int maxdef = 0;
     /*x: [[main()]] locals */
@@ -84,9 +84,9 @@ void main(int argc, char *argv[])
     /*s: [[main()]] remaining initialisation */
     setinclude(".");
     /*x: [[main()]] remaining initialisation */
-    tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
-    /*x: [[main()]] remaining initialisation */
     profileflg = true;	/* #pragma can turn it off */
+    /*x: [[main()]] remaining initialisation */
+    tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
     /*e: [[main()]] remaining initialisation */
 
     ARGBEGIN {
@@ -224,7 +224,7 @@ compile(char *infile, char **defs, int ndef)
         if(outfile) {
             if(p = utfrrune(outfile, '.'))
                 if(p[1] == 'c' && p[2] == 0)
-                    p[0] = 0;
+                    p[0] = '\0';
             p = utfrune(outfile, 0);
             /*s: [[compile()]] adjust p for outfile if acid option */
             if(debug['a'] && debug['n'])
@@ -388,13 +388,16 @@ newio(void)
 
     i = iofree;
     if(i == I) {
+        /*s: [[newio()]] sanity check depth of macro expansion */
         pushdepth++;
         if(pushdepth > 1000) {
             yyerror("macro/io expansion too deep");
             errorexit();
         }
+        /*e: [[newio()]] sanity check depth of macro expansion */
         i = alloc(sizeof(*i));
     } else
+        // pop(iofree)
         iofree = i->link;
     /*e: [[newio()]] allocate a new Io in [[i]] or find a free one */
     i->c = 0;
@@ -472,8 +475,9 @@ lookup(void)
         if(strcmp(s->name, symb) == 0)
             return s;
     }
+
     // else
-    s = alloc(sizeof(*s));
+    s = alloc(sizeof(Sym));
     s->name = alloc(n);
     memmove(s->name, symb, n);
 
@@ -481,6 +485,7 @@ lookup(void)
 
     s->link = hash[h];
     hash[h] = s;
+
     syminit(s);
 
     return s;
@@ -781,7 +786,7 @@ l1:
         return LCONST;
     /*x: [[yylex()]] switch c cases */
     case '"':
-        strcpy(symb, "\"<string>\"");
+        strcpy(symb, "\"<string>\""); // for error reporting
         cp = alloc(0);
         c1 = 0;
 
@@ -883,8 +888,8 @@ talph:
         newio();
         cp = ionext->b;
         macexpand(s, cp);
-        pushio();
 
+        pushio();
         // push_list(ionext, iostack)
         ionext->link = iostack;
         iostack = ionext;
@@ -892,11 +897,13 @@ talph:
         fi.p = cp;
         fi.c = strlen(cp);
 
+        /*s: [[yylex()]] in talph case, when macro symbol, peekc handling */
         if(peekc != IGN) {
             cp[fi.c++] = peekc;
             cp[fi.c] = '\0';
             peekc = IGN;
         }
+        /*e: [[yylex()]] in talph case, when macro symbol, peekc handling */
         goto l0;
     }
     /*e: [[yylex()]] in talph case, if macro symbol */
@@ -1228,6 +1235,7 @@ getnsc(void)
             lineno++;
             return c;
         }
+        // else, was a space, so continue
         c = GETC();
     }
 }
@@ -1322,7 +1330,8 @@ loop:
     /*e: [[escchar()]] if octal character */
     switch(c)
     {
-    case '\n':	goto loop;
+    case '\n':	goto loop; // escaped newline
+
     case 'n':	return '\n';
     case 't':	return '\t';
     case 'b':	return '\b';
@@ -1456,7 +1465,8 @@ cinit(void)
     /*e: [[cinit()]] symbol table initialization */
     /*s: [[cinit()]] namespace globals initialization */
     blockno = 0;
-    autobn = 0;
+    autobn = blockno;
+    /*x: [[cinit()]] namespace globals initialization */
     autoffset = 0;
     /*e: [[cinit()]] namespace globals initialization */
     /*s: [[cinit()]] dclstack initialization */
@@ -1775,7 +1785,7 @@ setinclude(char *p)
         for(i=0; i < ninclude; i++)
             if(strcmp(p, include[i]) == 0)
                 break;
-
+        // else
         if(i >= ninclude){
             /*s: [[setinclude()]] grow the array if necessary */
             // grow the array

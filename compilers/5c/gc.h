@@ -67,7 +67,7 @@ struct	Adr
     char	reg;
     /*x: [[Adr]] other fields(arm) */
     Sym*	sym;
-    // enum<sym_kind>
+    // enum<Sym_kind>
     char	symkind;
     /*e: [[Adr]] other fields(arm) */
     /*s: [[Adr]] type fields(arm) */
@@ -105,7 +105,7 @@ struct	Prog
 
     // Extra
     /*s: [[Prog]] extra fields(arm) */
-    // list<ref<Prog>> from firstp
+    // list<ref<Prog>> (head = firstp)
     Prog*	link;
     /*e: [[Prog]] extra fields(arm) */
 };

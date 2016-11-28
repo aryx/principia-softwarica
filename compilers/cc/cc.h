@@ -83,7 +83,7 @@ struct	Node
     long	lineno; 
 
     /*s: [[Node]] value fields */
-    Sym*	sym; // for ONAME, ODOT/OELEM, OSTRUCT/OUNION
+    Sym*	sym; // for ONAME, ODOT/OELEM, OXXX of OLABEL/OGOTO
     /*x: [[Node]] value fields */
     vlong	vconst; /* non fp const */ // for OCONST
     /*x: [[Node]] value fields */
@@ -101,13 +101,13 @@ struct	Node
     // Post parsing annotations
     // ----------------------------------------------------------------------
     /*s: [[Node]] type and storage fields */
-    // enum<storage_class>
-    char	class;
-    /*x: [[Node]] type and storage fields */
     Type*	type;
     /*x: [[Node]] type and storage fields */
     // enum<type_kind>, inline of Node.type->etype?
     char	etype;
+    /*x: [[Node]] type and storage fields */
+    // enum<storage_class>
+    char	class;
     /*e: [[Node]] type and storage fields */
 
     /*s: [[Node]] code generation fields */
@@ -121,12 +121,12 @@ struct	Node
     // also (ab)used as a bool to mark label definitions (true = already defined)
     char	complex; 
     /*x: [[Node]] code generation fields */
-    long	xoffset;
-    /*x: [[Node]] code generation fields */
     long	pc;
     /*x: [[Node]] code generation fields */
     // ref<Prog>, but use void to be archi independent
     void*	label;
+    /*x: [[Node]] code generation fields */
+    long	xoffset;
     /*x: [[Node]] code generation fields */
     char	scale; // x86 only
     /*e: [[Node]] code generation fields */
@@ -173,9 +173,9 @@ struct	Sym
     // ----------------------------------------------------------------------
     /*s: [[Sym]] identifier value fields */
     /*s: [[Sym]] identifier value, type and storage fields */
-    // ref<Type> ?
+    // ref<Type>
     Type*	type;
-    // enum<storage_class>
+    // enum<Storage_class>
     char	class;
     /*e: [[Sym]] identifier value, type and storage fields */
     /*s: [[Sym]] identifier value, scope fields */
@@ -193,13 +193,15 @@ struct	Sym
     // enum<signature>
     char	sig;
     /*e: [[Sym]] identifier value, code generation fields */
+    /*x: [[Sym]] identifier value fields */
+    long	varlineno;
     /*e: [[Sym]] identifier value fields */
     /*s: [[Sym]] enum value fields */
-    vlong	vconst;
-    double	fconst;
-    /*x: [[Sym]] enum value fields */
     // ref<Type>
     Type*	tenum;
+    /*x: [[Sym]] enum value fields */
+    vlong	vconst;
+    double	fconst;
     /*e: [[Sym]] enum value fields */
     /*s: [[Sym]] tag value fields */
     Type*	suetag;
@@ -217,11 +219,6 @@ struct	Sym
     // enum<lexeme>
     ushort	lexical;
     /*e: [[Sym]] lexeme value fields */
-
-    // ----------------------------------------------------------------------
-    // Misc
-    // ----------------------------------------------------------------------
-    long	varlineno;
 
     // ----------------------------------------------------------------------
     // Extra
@@ -257,6 +254,7 @@ struct	Decl
     /*s: [[Decl]] sym copy fields */
     Type*	type;  // for Sym.type and Sym.suetag
     ushort	block; // for Sym.block and Sym.sueblock and autobn
+    /*x: [[Decl]] sym copy fields */
     long	offset; // for Sym.offset and autoffset
     /*x: [[Decl]] sym copy fields */
     char	class;
@@ -284,13 +282,13 @@ struct	Type
 
     // option<ref_own<Type>, e.g. for '*int' have TIND -link-> TINT
     Type*	link;
-    // option<list<ref_own<Type>>, next = Type.down, just for OFUNC params
+    // option<list<ref_own<Type>>, next = Type.down, for TFUNC and TSTRUCT
     Type*	down;
 
-    long	lineno;
+    long	lineno; // ??
 
     /*s: [[Type]] value fields */
-    Sym*	sym; // for TSTRUCT/TUNION/TENUM
+    Sym*	tag;
     /*e: [[Type]] value fields */
 
     /*s: [[Type]] qualifier fields */
@@ -304,14 +302,14 @@ struct	Type
     /*s: [[Type]] code generation fields */
     long	width; // ewidth[Type.etype]
     /*x: [[Type]] code generation fields */
+    long	offset;
+    /*x: [[Type]] code generation fields */
     schar	shift;
     char	nbits;
-    /*x: [[Type]] code generation fields */
-    long	offset;
     /*e: [[Type]] code generation fields */
 
     /*s: [[Type]] other fields */
-    Sym*	tag;
+    Sym*	sym; // for fields in structures
     /*x: [[Type]] other fields */
     Funct*	funct;
     /*e: [[Type]] other fields */
@@ -563,10 +561,6 @@ enum node_kind
     // Post parsing nodes
     // ----------------------------------------------------------------------
     /*s: after parsing nodes */
-    OREGISTER, // via regalloc()
-    /*x: after parsing nodes */
-    OINDREG,
-    /*x: after parsing nodes */
     OASLMUL,
     OASLDIV,
     OASLMOD,
@@ -576,6 +570,10 @@ enum node_kind
     OLDIV,
     OLMOD,
     OLSHR,
+    /*x: after parsing nodes */
+    OREGISTER, // via regalloc()
+    /*x: after parsing nodes */
+    OINDREG,
     /*x: after parsing nodes */
     OHI,
     OHS,
@@ -589,11 +587,11 @@ enum node_kind
 };
 /*e: enum node_kind */
 /*s: enum type_kind */
-enum type_kind
+enum Type_kind
 {
     TXXX,
 
-    /*s: type cases */
+    /*s: [[Type_kind]] integer cases */
     TCHAR,
     TUCHAR,
 
@@ -608,21 +606,25 @@ enum type_kind
 
     TVLONG,
     TUVLONG,
-    /*x: type cases */
+    /*e: [[Type_kind]] integer cases */
+    /*s: [[Type_kind]] float cases */
     TFLOAT,
     TDOUBLE,
-    /*x: type cases */
+    /*e: [[Type_kind]] float cases */
+    /*s: [[Type_kind]] void case */
     TVOID,
-    /*x: type cases */
+    /*e: [[Type_kind]] void case */
+    /*s: [[Type_kind]] composite cases */
     TIND,
     TARRAY,
     TFUNC,
     TSTRUCT,
     TUNION,
     TENUM,
-    /*x: type cases */
+    /*e: [[Type_kind]] composite cases */
+    /*s: [[Type_kind]] other cases */
     TDOT, // ... in function types
-    /*e: type cases */
+    /*e: [[Type_kind]] other cases */
 
     NTYPE,
 };
@@ -693,7 +695,7 @@ enum align
 /*s: enum dxxx */
 enum namespace
 {
-    DMARK, // special mark to help separate the different lists
+    DMARK, // special mark to help separate the different scopes
 
     DAUTO, // locals/parameters/globals/typedefs/functions identifiers
     DSUE,  // struct/union/enum tags
@@ -701,7 +703,7 @@ enum namespace
 };
 /*e: enum dxxx */
 /*s: enum storage_class */
-enum storage_class
+enum Storage_class
 {
     CXXX,
 
@@ -803,9 +805,10 @@ struct En
 {
     Type*	tenum;		/* type of entire enum */
     Type*	cenum;		/* type of current enum run */
-
+    /*s: [[En]] value fields */
     vlong	lastenum;	/* value of current enum */
     double	floatenum;	/* value of current enum */ // for floats enums
+    /*e: [[En]] value fields */
 };
 /*e: struct En */
 extern struct En en;
@@ -816,7 +819,7 @@ extern	int	blockno;
 extern	Decl*	dclstack;
 extern	char	debug[256];
 extern	Hist*	ehist;
-extern	long	firstbit;
+extern	bool	firstbit;
 extern	Sym*	firstarg;
 extern	Type*	firstargtype;
 extern	Decl*	firstdcl;

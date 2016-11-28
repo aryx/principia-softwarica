@@ -157,8 +157,8 @@ dodefine(char *cp)
             l++;
         while(nhunk < l)
             gethunk();
-        *hunk = '\0'; // 0 nargs
 
+        *hunk = '\0'; // 0 nargs
         strcpy(hunk+1, p);
         s->macro = hunk;
 
@@ -186,14 +186,14 @@ struct
     "ifdef",    nil,    /* macif(0) */
     "ifndef",   nil,    /* macif(1) */
     "else",     nil,    /* macif(2) */
+    "endif",    macend,
 
+    "include",  macinc,
     "line",     maclin,
     "define",   macdef,
-    "include",  macinc,
     "undef",    macund,
 
     "pragma",   macprag,
-    "endif",    macend,
     0
 };
 /*e: global mactab */
@@ -202,8 +202,8 @@ struct
 void
 domacro(void)
 {
-    int i;
     Sym *s;
+    int i;
 
     s = getsym();
     /*s: [[domacro()]] set s to endif symbol if no symbol */
@@ -252,28 +252,32 @@ macund(void)
 void
 macdef(void)
 {
+    Sym *s;
     char *args[NARG]; // parameters
     // option<int> (None = -1), size of parameters
     int n;
     bool dots;
     char *base; // body
     /*s: [[macdef()]] other locals */
-    Sym *s;
+    int c;
     Sym *a;
-    char *np;
-    int i, c, len;
+    /*x: [[macdef()]] other locals */
     int ischr; // quote character
+    int len;
+    /*x: [[macdef()]] other locals */
+    char *np;
+    int i;
     /*e: [[macdef()]] other locals */
 
     // lexing 
-    /*s: [[macdef]] lexing the macro name */
+    /*s: [[macdef]] lexing the macro name, set [[s]] */
     s = getsym();
     if(s == S)
         goto bad;
     if(s->macro)
         yyerror("macro redefined: %s", s->name);
-    /*e: [[macdef]] lexing the macro name */
-    /*s: [[macdef]] lexing the parameters */
+    /*e: [[macdef]] lexing the macro name, set [[s]] */
+    /*s: [[macdef]] lexing the parameters, set [[args]], [[n]], and [[dots]] */
     c = getc();
     n = -1; // no parameter (which is different than 0 argument)
     dots = false;
@@ -292,6 +296,7 @@ macdef(void)
                     goto bad;
                 }
                 args[n++] = a->name;
+
                 c = getnsc();
                 if(c == ')')
                     break;
@@ -304,8 +309,8 @@ macdef(void)
     if(isspace(c))
         if(c != '\n')
             c = getnsc();
-    /*e: [[macdef]] lexing the parameters */
-    /*s: [[macdef]] lexing the body */
+    /*e: [[macdef]] lexing the parameters, set [[args]], [[n]], and [[dots]] */
+    /*s: [[macdef]] lexing the body, set [[base]] */
     base = hunk;
     len = 1;
     ischr = 0;
@@ -398,7 +403,7 @@ macdef(void)
             /*e: [[macdef()]] if comment */
         }
         /*e: [[macdef()]] when lexing the body, if string or character or comment */
-
+        /*s: [[macdef()]] when lexing the body, if antislash outside a string */
         // antislash outside a string
         if(c == '\\') {
             c = getc();
@@ -406,27 +411,23 @@ macdef(void)
                 c = getc();
                 continue;
             }
-            // windows
-            else if(c == '\r') {
-                c = getc();
-                if(c == '\n') {
-                    c = getc();
-                    continue;
-                }
-            }
             // else
             base = allocn(base, len, 1);
             base[len++] = '\\';
             continue;
         }
+        /*e: [[macdef()]] when lexing the body, if antislash outside a string */
         if(c == '\n')
             break;
-
+        /*s: [[macdef()]] when lexing the body, if sharp character, escape it */
         if(c == '#') // escape # by adding an extra #
           if(n > 0) {
             base = allocn(base, len, 1);
             base[len++] = c;
         }
+        /*e: [[macdef()]] when lexing the body, if sharp character, escape it */
+
+        // else, a regular character (space, punctuation, etc)
         base = allocn(base, len, 1);
         base[len++] = c;
 
@@ -441,9 +442,9 @@ macdef(void)
     }
     do {
         base = allocn(base, len, 1);
-        base[len++] = 0;
+        base[len++] = '\0';
     } while(len & 3);
-    /*e: [[macdef]] lexing the body */
+    /*e: [[macdef]] lexing the body, set [[base]] */
 
     // action
 
@@ -475,9 +476,9 @@ macexpand(Sym *s, char *b)
     int  c;
     /*s: [[macexpand()]] other locals */
     char buf[2000];
-    int n;
     int l; // depth
     char *arg[NARG]; // the arguments
+    int n;
     char *cp, *ecp;
     char *ob = b;
     /*e: [[macexpand()]] other locals */
@@ -568,7 +569,7 @@ macexpand(Sym *s, char *b)
                                 break;
                         }
                     }
-                    *cp++ = ' ';
+                    *cp++ = ' '; // ???
                     continue;
                 case '/':
                     while((c = getc()) != '\n')
@@ -616,22 +617,23 @@ macexpand(Sym *s, char *b)
     cp = s->macro+1;
     for(;;) {
         c = *cp++;
-        if(c == '\n')
+        if(c == '\n') // can happen?
             c = ' ';
         if(c != '#') {
             *b++ = c;
-            if(c == 0)
+            if(c == '\0')
                 break;
             continue;
         }
-        // else
+        // else, a #
         c = *cp++;
-        if(c == 0)
+        if(c == '\0')
             goto bad;
         if(c == '#') { // # are escaped as double ##
             *b++ = c;
             continue;
         }
+        // else, a #a to #z
         c -= 'a';
         if(c < 0 || c >= n)
             continue;
@@ -666,10 +668,10 @@ macinc(void)
     char str[STRINGSZ];
     char *hp = str;
     int i;
+    fdt f = -1;
     /*s: [[macinc()]] other locals */
     int c0, c;
     /*e: [[macinc()]] other locals */
-    fdt f;
 
     // lexing
 
@@ -698,8 +700,7 @@ macinc(void)
 
     // action
 
-    /*s: [[macinc()]] finding the included filename full path */
-    f = -1;
+    /*s: [[macinc()]] find and store the included filename full path in [[symb]] */
     for(i=0; i<ninclude; i++) {
         if(i == 0 && c0 == '>') // do not look in '.' for system headers
             continue;
@@ -717,10 +718,11 @@ macinc(void)
     }
     if(f < 0)
         strcpy(symb, str);
-    /*e: [[macinc()]] finding the included filename full path */
+    /*e: [[macinc()]] find and store the included filename full path in [[symb]] */
 
     c = strlen(symb) + 1; 
 
+    // hp = malloc(c);
     while(c & 3)
         c++;
     while(nhunk < c)
@@ -840,6 +842,7 @@ macif(int f)
     skip:
         bol = true;
         l = 0;
+
         for(;;) {
             c = getc();
             if(c != '#') {
@@ -861,6 +864,7 @@ macif(int f)
                     l--;
                     continue;
                 }
+                // else l == 0
                 macend();
                 return;
             }

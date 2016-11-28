@@ -32,38 +32,47 @@ dodecl(void (*f)(int,Type*,Sym*), int class, Type *t, Node *n)
     /*e: [[dodecl()]] locals */
 
     nearln = lineno;
+    /*s: [[dodecl()]] other initializations */
     lastfield = 0;
+    /*e: [[dodecl()]] other initializations */
 
 loop:
     if(n != Z)
      switch(n->op) {
-     // can adjust t using information from node n
+     // can adjust t using information from node n (type information part2)
      /*s: [[dodecl()]] switch node kind cases */
      case ONAME:
+         /*s: [[dodecl()]] in ONAME case, break if empty callback */
          if(f == NODECL)
              break;
+         /*e: [[dodecl()]] in ONAME case, break if empty callback */
          s = n->sym;
 
-         // callback! should set s->type
+         // callback! should set s->type, s->class, etc.
          (*f)(class, t, s);
 
          /*s: [[dodecl()]] case ONAME, if local static variable */
          if(s->class == CLOCAL)
              s = mkstatic(s);
          /*e: [[dodecl()]] case ONAME, if local static variable */
-         firstbit = 0;
+         /*s: [[dodecl()]] case ONAME, other initializations */
+         firstbit = false;
+         /*e: [[dodecl()]] case ONAME, other initializations */
 
-         n->sym = s;
+         // propagate symbol information to node
+         n->sym = s; //?? dead?
          n->type = s->type;
          n->etype = (s->type != T) ? s->type->etype : TVOID;
-         n->xoffset = s->offset;
          n->class = s->class;
+         n->xoffset = s->offset;
 
          /*s: [[dodecl()]] debug declaration */
          if(debug['d'])
              dbgdecl(s);
          /*e: [[dodecl()]] debug declaration */
+         /*s: [[dodecl()]] case ONAME, debugging support */
          acidvar(s);
+         /*e: [[dodecl()]] case ONAME, debugging support */
 
          s->varlineno = lineno;
          break;
@@ -78,8 +87,8 @@ loop:
          t = typ(TARRAY, t);
          n1 = n->right; // possible size
          n = n->left;
-         t->width = 0; // array[], size could be set by doinit (or specified in n1)
          /*s: [[dodecl()]] switch node kind cases, case OARRAY, if array has a size */
+         t->width = 0; // array[], size could be set by doinit (or specified in n1)
          if(n1 != Z) {
              complex(n1); // will call evconst()
              v = (n1->op == OCONST) ? n1->vconst : -1;
@@ -101,16 +110,18 @@ loop:
      case OBIT:
          n1 = n->right;
          complex(n1);
-         lastfield = -1;
+
+         lastfield = -1; // None
          if(n1->op == OCONST)
              lastfield = n1->vconst;
          if(lastfield < 0) {
              diag(n, "field width must be non-negative constant");
              lastfield = 1;
          }
+
          if(lastfield == 0) {
              lastbit = 0;
-             firstbit = 1;
+             firstbit = true;
              if(n->left != Z) {
                  diag(n, "zero width named field");
                  lastfield = 1;
@@ -125,10 +136,11 @@ loop:
              diag(n, "field width larger than field unit");
              lastfield = 1;
          }
+
          lastbit += lastfield;
          if(lastbit > tfield->width*8) {
              lastbit = lastfield;
-             firstbit = 1;
+             firstbit = true;
          }
          n = n->left;
          goto loop;
@@ -149,9 +161,10 @@ mkstatic(Sym *s)
 {
     Sym *s1;
 
+    /*s: [[mkstatic()]] sanity check s */
     if(s->class != CLOCAL) // should never happen, use errorexit()?
         return s;
-
+    /*e: [[mkstatic()]] sanity check s */
     snprint(symb, NSYMB, "%s$%d", s->name, s->block);
     s1 = lookup();
 
@@ -200,8 +213,12 @@ doinit(Sym *s, Type *t, long o, Node *a)
 {
     Node *n;
 
-    if(t == T)
+    /*s: [[doinit()]] sanity check t */
+    if(t == T) //??? when this happens?
         return Z;
+    /*e: [[doinit()]] sanity check t */
+
+    /*s: [[doinit()]] possibly adjust class */
     if(s->class == CEXTERN) {
         s->class = CGLOBL;
         /*s: [[doinit()]] debug declaration */
@@ -215,8 +232,10 @@ doinit(Sym *s, Type *t, long o, Node *a)
         prtree(a, "doinit value");
     }
     /*e: [[doinit()]] debug initialization */
+    /*e: [[doinit()]] possibly adjust class */
 
     n = initlist;
+
     if(a->op == OINIT)
         a = a->left;
     initlist = a;
@@ -225,6 +244,7 @@ doinit(Sym *s, Type *t, long o, Node *a)
     if(initlist != Z)
         diag(initlist, "more initializers than structure: %s",
             s->name);
+
     initlist = n;
 
     return a;
@@ -701,11 +721,15 @@ void argmark(Node *n, int pass)
 {
     Type *t;
 
+    /*s: [[argmark()]] initializations */
     autoffset = align(0, thisfntype->link, Aarg0);
     stkoff = 0;
+    /*e: [[argmark()]] initializations */
+
     for(; n->left != Z; n = n->left) {
         if(n->op != OFUNC || n->left->op != ONAME)
             continue;
+        // else, OFUNC
         walkparam(n->right, pass);
         /*s: [[argmark()]] if old proto style */
         if(pass != 0 && anyproto(n->right) == OLDPROTO) {
@@ -718,8 +742,11 @@ void argmark(Node *n, int pass)
         /*e: [[argmark()]] if old proto style */
         break;
     }
+
+    /*s: [[argmark()]] finalizations */
     autoffset = 0;
     stkoff = 0;
+    /*e: [[argmark()]] finalizations */
 }
 /*e: function argmark */
 
@@ -754,8 +781,11 @@ loop:
                 dodecl(pdecl, CPARAM, n->type, n->left);
                 break;
             }
+
         if(n1)
             break;
+        // else no name found
+        /*s: [[walkparam()]] when OPROTO case, if no name found */
         if(pass == 0) {
             /*
              * extension:
@@ -764,10 +794,15 @@ loop:
              */
             break;
         }
+        // else pass == 1
+        /*s: [[walkparam()]] when OPROTO case, if no name found and old style decl */
         dodecl(NODECL, CPARAM, n->type, n->left);
         pdecl(CPARAM, lastdcltype, S);
+        /*e: [[walkparam()]] when OPROTO case, if no name found and old style decl */
+        /*e: [[walkparam()]] when OPROTO case, if no name found */
         break;
 
+    /*s: [[walkparam()]] switch op cases */
     case ONAME:
         s = n->sym;
         if(pass == 0) {
@@ -786,6 +821,7 @@ loop:
         } else
             dodecl(pdecl, CXXX, types[TINT], n);
         break;
+    /*e: [[walkparam()]] switch op cases */
 
     case ODOTDOT:
         break;
@@ -809,8 +845,9 @@ void markdcl(void)
     d = push();
     d->val = DMARK;
 
-    d->offset = autoffset;
+    // saving current values
     d->block = autobn;
+    d->offset = autoffset;
 
     autobn = blockno;
 }
@@ -829,12 +866,12 @@ Node* revertdcl(void)
 
     n = Z;
     for(;;) {
+        // d = pop(dclstack)
         d = dclstack;
         if(d == D) {
             diag(Z, "pop off dcl stack");
             break;
         }
-        // pop(declstack)
         dclstack = d->link;
 
         s = d->sym;
@@ -842,8 +879,8 @@ Node* revertdcl(void)
         /*s: [[revertdcl()]] switch declaration type cases */
         case DMARK:
             // restore info previous block
-            autoffset = d->offset;
             autobn = d->block;
+            autoffset = d->offset;
             // we popped everything, exit loop and return
             return n;
         /*x: [[revertdcl()]] switch declaration type cases */
@@ -891,6 +928,7 @@ Node* revertdcl(void)
             if(s->type && (s->type->garb & GVOLATILE)) {
                 // add USED(&local_volatile);
                 n1 = new(ONAME, Z, Z);
+
                 n1->sym = s;
                 n1->type = s->type;
                 n1->etype = (s->type != T) ? s->type->etype : TVOID;
@@ -899,6 +937,8 @@ Node* revertdcl(void)
 
                 n1 = new(OADDR, n1, Z);
                 n1 = new(OUSED, n1, Z);
+
+                // add_list(n1, n)
                 if(n == Z)
                     n = n1;
                 else
@@ -978,16 +1018,14 @@ fnproto1(Node *n)
 
     switch(n->op) {
     /*s: [[fnproto1()]] switch node kind cases */
-    case ONAME:
-        diag(n, "incomplete argument prototype");
-        return typ(TINT, T);
-    /*x: [[fnproto1()]] switch node kind cases */
     case OPROTO:
         lastdcltype = T;
         dodecl(NODECL, CXXX, n->type, n->left);
         t = typ(TXXX, T);
+        /*s: [[fnproto1()]] when OPROTO case, adjust parameter type */
         if(lastdcltype != T)
             *t = *paramconv(lastdcltype, true);
+        /*e: [[fnproto1()]] when OPROTO case, adjust parameter type */
         return t;
     /*x: [[fnproto1()]] switch node kind cases */
     case OLIST:
@@ -998,6 +1036,10 @@ fnproto1(Node *n)
     /*x: [[fnproto1()]] switch node kind cases */
     case ODOTDOT:
         return typ(TDOT, T);
+    /*x: [[fnproto1()]] switch node kind cases */
+    case ONAME:
+        diag(n, "incomplete argument prototype");
+        return typ(TINT, T);
     /*e: [[fnproto1()]] switch node kind cases */
     }
     diag(n, "unknown op in fnproto");
@@ -1021,8 +1063,10 @@ push(void)
     Decl *d;
 
     d = alloc(sizeof(Decl));
+    // add_stack(d, dclstack)
     d->link = dclstack;
     dclstack = d;
+
     return d;
 }
 /*e: function push */
@@ -1270,18 +1314,23 @@ snap(Type *t)
 //@Scheck: used by cc.y
 Type* dotag(Sym *s, int et, int bn)
 {
-    /*s: [[dotag()]] if bn not null and bn not sueblock */
+    /*s: [[dotag()]] locals */
     Decl *d;
+    /*e: [[dotag()]] locals */
 
+    /*s: [[dotag()]] if bn not zero and bn not sueblock */
     if(bn != 0 && bn != s->sueblock) {
         d = push();
         d->sym = s;
         d->val = DSUE;
+        // save old values
         d->type = s->suetag;
         d->block = s->sueblock;
+        // prepare for new value
         s->suetag = T;
     }
-    /*e: [[dotag()]] if bn not null and bn not sueblock */
+    /*e: [[dotag()]] if bn not zero and bn not sueblock */
+    // never defined before, return a new (incomplete) Type
     if(s->suetag == T) {
         s->suetag = typ(et, T); // link is null for now
         s->sueblock = autobn;
@@ -1318,14 +1367,14 @@ Node* dcllabel(Sym *s, bool defcontext)
         return n;
     }
     /*e: [[dcllabel()]] if n not null, mark node as declared or used */
+    // else
 
     d = push();
     d->sym = s;
     d->val = DLABEL;
 
-    //pop(dclstack)
+    //pop_stack(dclstack) (we add the label to the function scope instead)
     dclstack = d->link;
-
     //add_list(d, firstdcl)
     d1 = *firstdcl;
     *firstdcl = *d;
@@ -1335,9 +1384,10 @@ Node* dcllabel(Sym *s, bool defcontext)
 
     n = new(OXXX, Z, Z);
     n->sym = s;
+    /*s: [[dcllabel()]] set def and use fields */
     n->complex = defcontext;
     n->addable = !defcontext;
-
+    /*e: [[dcllabel()]] set def and use fields */
     s->label = n;
 
     /*s: [[dcllabel()]] debug declaration */
@@ -1394,6 +1444,7 @@ adecl(int c, Type *t, Sym *s)
     if(c == CSTATIC)
         c = CLOCAL;
     /*e: [[adecl()]] adjust storage to CLOCAL if static local variable */
+    /*s: [[adecl()]] adjust storage if function type */
     if(t->etype == TFUNC) {
         if(c == CXXX)
             c = CEXTERN;
@@ -1402,9 +1453,14 @@ adecl(int c, Type *t, Sym *s)
         if(c == CAUTO || c == CEXREG)
             diag(Z, "function cannot be %s %s", cnames[c], s->name);
     }
+    /*e: [[adecl()]] adjust storage if function type */
+    /*s: [[adecl()]] adjust storage */
     if(c == CXXX)
         c = CAUTO;
+    /*e: [[adecl()]] adjust storage */
+
     if(s) {
+        /*s: [[adecl()]] adjust storage if symbol */
         if(s->class == CSTATIC)
             if(c == CEXTERN || c == CGLOBL) {
                 warn(Z, "just say static: %s", s->name);
@@ -1413,22 +1469,28 @@ adecl(int c, Type *t, Sym *s)
         if(s->class == CAUTO || s->class == CPARAM || s->class == CLOCAL)
         if(s->block == autobn)
             diag(Z, "auto redeclaration of: %s", s->name);
+        /*e: [[adecl()]] adjust storage if symbol */
+
         if(c != CPARAM)
-            push1(s);
+            push1(s); // CPARAM pushed already in walkparam()
+
         s->block = autobn;
-        s->offset = 0;
         s->type = t;
         s->class = c;
+        s->offset = 0;
+        /*s: [[adecl()]] initialize symbol */
         s->aused = false;
+        /*e: [[adecl()]] initialize symbol */
     }
 
     switch(c) {
+    /*s: [[adecl()]] switch class cases */
     case CAUTO:
         autoffset = align(autoffset, t, Aaut3);
         stkoff = maxround(stkoff, autoffset);
         s->offset = -autoffset;
         break;
-
+    /*x: [[adecl()]] switch class cases */
     case CPARAM:
         if(autoffset == 0) {
             firstarg = s;
@@ -1439,6 +1501,7 @@ adecl(int c, Type *t, Sym *s)
             s->offset = autoffset;
         autoffset = align(autoffset, t, Aarg2);
         break;
+    /*e: [[adecl()]] switch class cases */
     }
 }
 /*e: function adecl */
@@ -1447,19 +1510,25 @@ adecl(int c, Type *t, Sym *s)
 void
 pdecl(int class, Type *t, Sym *s)
 {
+    /*s: [[pdecl()]] sanity check s */
     if(s && s->offset != -1) {
         diag(Z, "not a parameter: %s", s->name);
         return;
     }
+    /*e: [[pdecl()]] sanity check s */
     t = paramconv(t, class==CPARAM);
+    /*s: [[pdecl()]] adjust class */
     if(class == CXXX)
         class = CPARAM;
     if(class != CPARAM) {
         diag(Z, "parameter cannot have class: %s", s->name);
         class = CPARAM;
     }
+    /*e: [[pdecl()]] adjust class */
+    /*s: [[pdecl()]] sanity check type */
     if(typesu[t->etype] && t->width <= 0)
         diag(Z, "incomplete structure: %s", t->tag->name);
+    /*e: [[pdecl()]] sanity check type */
     adecl(class, t, s);
 }
 /*e: function pdecl */
@@ -1506,23 +1575,25 @@ xdecl(int class, Type *t, Sym *s)
         break;
     /*e: [[xdecl()]] switch class cases */
     }
-
-    /*s: [[xdecl()]] sanity checks */
+    /*s: [[xdecl()]] sanity check class after switch class */
     if(s->class == CSTATIC)
         if(class == CEXTERN || class == CGLOBL) {
             warn(Z, "overspecified class: %s %s %s", s->name, cnames[class], cnames[s->class]);
             class = CSTATIC;
         }
-
+    /*e: [[xdecl()]] sanity check class after switch class */
+    /*s: [[xdecl()]] sanity checks type after switch class */
     if(s->type != T)
         if(s->class != class || !sametype(t, s->type) || t->etype == TENUM) {
             diag(Z, "external redeclaration of: %s", s->name);
             Bprint(&diagbuf, "	%s %T %L\n", cnames[class], t, nearln);
             Bprint(&diagbuf, "	%s %T %L\n", cnames[s->class], s->type, s->varlineno);
         }
-    /*e: [[xdecl()]] sanity checks */
-
+    /*e: [[xdecl()]] sanity checks type after switch class */
+    /*s: [[xdecl()]] merge type declarations */
     tmerge(t, s);
+    /*e: [[xdecl()]] merge type declarations */
+
     s->type = t;
     s->class = class;
     s->block = 0;
@@ -1609,28 +1680,38 @@ void edecl(int c, Type *t, Sym *s)
 {
     Type *t1;
 
+    /*s: [[edecl()]] if unnamed structure element */
     if(s == S) {
         if(!typesu[t->etype])
             diag(Z, "unnamed structure element must be struct/union");
         if(c != CXXX)
             diag(Z, "unnamed structure element cannot have class");
-    } else
+    } 
+    /*e: [[edecl()]] if unnamed structure element */
+    else
         if(c != CXXX)
             diag(Z, "structure element cannot have class: %s", s->name);
+
     t1 = t;
     t = copytyp(t1);
     t->sym = s;
     t->down = T;
+
+    /*s: [[edecl()]] if lastfield */
     if(lastfield) {
         t->shift = lastbit - lastfield;
         t->nbits = lastfield;
         if(firstbit)
             t->shift = -t->shift;
+
         if(typeu[t->etype])
             t->etype = tufield->etype;
         else
             t->etype = tfield->etype;
     }
+    /*e: [[edecl()]] if lastfield */
+
+    // add_list(t, strf, strl)
     if(strf == T)
         strf = t;
     else
@@ -1669,22 +1750,25 @@ void doenum(Sym *s, Node *n)
 {
 
     if(n) {
+        /*s: [[doenum()]] typecheck and evaluate expression */
         complex(n); // will call evconst()
+        /*e: [[doenum()]] typecheck and evaluate expression */
         if(n->op != OCONST) {
             diag(n, "enum not a constant: %s", s->name);
             return;
         }
 
-        en.cenum = n->type;
+        en.cenum = n->type; // inferred type
         en.tenum = maxtype(en.cenum, en.tenum);
-
+        /*s: [[doenum()]] save current value of enumeration */
         if(typefd[en.cenum->etype])
             en.floatenum = n->fconst;
         else
             en.lastenum = n->vconst;
+        /*e: [[doenum()]] save current value of enumeration */
     }
     if(dclstack)
-        push1(s);
+        push1(s); // will be reverted once out of scope
 
     xdecl(CXXX, types[TENUM], s);
 
@@ -1693,8 +1777,9 @@ void doenum(Sym *s, Node *n)
         en.cenum = types[TINT];
         en.lastenum = 0;
     }
-    s->tenum = en.cenum;
+    s->tenum = en.cenum; // Sym.tenum, not En.tenum here
 
+    /*s: [[doenum()]] set value for symbol */
     if(typefd[s->tenum->etype]) {
         s->fconst = en.floatenum;
         en.floatenum++;
@@ -1703,11 +1788,15 @@ void doenum(Sym *s, Node *n)
         en.lastenum++;
     }
 
+    /*e: [[doenum()]] set value for symbol */
+
     /*s: [[doenum()]] debug declaration */
     if(debug['d'])
         dbgdecl(s);
     /*e: [[doenum()]] debug declaration */
+    /*s: [[doenum()]] debugging support */
     acidvar(s);
+    /*e: [[doenum()]] debugging support */
 }
 /*e: function doenum */
 

@@ -32,11 +32,11 @@ long	cursafe;
 /*e: global cursafe */
 
 /*s: global firstp */
-// list<ref_own<Prog>, next = Prog.link
+// list<ref_own<Prog> (next = Prog.link, last = lastp)
 Prog*	firstp;
 /*e: global firstp */
 /*s: global lastp */
-// ref<Prog>, last elt of firstp list
+// ref<Prog> (head = firstp)
 Prog*	lastp;
 /*e: global lastp */
 

@@ -1305,7 +1305,8 @@ warn(Node *n, char *fmt, ...)
         }
 
         Bprint(&diagbuf, "warning: %L %s\n", 
-                 (n==Z) ? nearln : n->lineno, buf);
+                 (n==Z) ? nearln : n->lineno, 
+                 buf);
 
         if(n != Z)
           if(debug['v'])

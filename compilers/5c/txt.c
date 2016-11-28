@@ -15,7 +15,8 @@ ginit(void)
     thechar = '5';
     thestring = "arm";
     /*x: [[ginit()]] initialisation */
-    tfield = types[TLONG];
+    nstring = 0;
+    mnstring = 0;
     /*x: [[ginit()]] initialisation */
     pc = 0;
     /*x: [[ginit()]] initialisation */
@@ -29,8 +30,7 @@ ginit(void)
     /*x: [[ginit()]] initialisation */
     nrathole = 0;
     /*x: [[ginit()]] initialisation */
-    nstring = 0;
-    mnstring = 0;
+    tfield = types[TLONG];
     /*x: [[ginit()]] initialisation */
     exregoffset = REGEXT;
     exfregoffset = FREGEXT;
@@ -151,6 +151,7 @@ gclean(void)
             continue;
         if(s->type == types[TENUM])
             continue;
+        // else
         gpseudo(AGLOBL, s, nodconst(s->type->width));
     }
     /*e: [[gclean()]] generate all AGLOBL pseudo opcodes */
@@ -1415,6 +1416,7 @@ schar	ewidth[NTYPE] =
 {
     [TXXX] = -1,		
     [TCHAR] = SZ_CHAR,	
+
     [TUCHAR] = SZ_CHAR,	
     [TSHORT] = SZ_SHORT,	
     [TUSHORT] = SZ_SHORT,	
@@ -1426,6 +1428,7 @@ schar	ewidth[NTYPE] =
     [TUVLONG] = SZ_VLONG,	
     [TFLOAT] = SZ_FLOAT,	
     [TDOUBLE] = SZ_DOUBLE,	
+
     [TIND] = SZ_IND,		
     [TFUNC] = 0,		
     [TARRAY] = -1,		

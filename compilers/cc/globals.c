@@ -5,6 +5,7 @@
 struct Fi fi;
 /*e: global fi */
 /*s: global hist */
+// list<ref_own<Hist>> (next = Hist.link)
 Hist*	hist;
 /*e: global hist */
 /*s: global en */
@@ -31,7 +32,7 @@ char	debug[256];
 Hist*	ehist;
 /*e: global ehist */
 /*s: global firstbit */
-long	firstbit;
+bool	firstbit;
 /*e: global firstbit */
 /*s: global firstarg */
 Sym*	firstarg;
@@ -69,17 +70,16 @@ long	lastbit;
 /*e: global lastbit */
 /*s: global lastclass */
 // enum<storage_class>
-//@Scheck: y.tab.c
 char	lastclass;
 /*e: global lastclass */
 /*s: global lastdcl */
 Type*	lastdcltype;
 /*e: global lastdcl */
 /*s: global lastfield */
+// option<long> None = -1 | 0
 long	lastfield;
 /*e: global lastfield */
 /*s: global lasttype */
-//@Scheck: y.tab.c
 Type*	lasttype;
 /*e: global lasttype */
 /*s: global lineno */
@@ -128,9 +128,11 @@ int	peekc;
 long	stkoff;
 /*e: global stkoff */
 /*s: global strf */
+// list<ref_own<Type>> (next = Type.down, last = strl)
 Type*	strf;
 /*e: global strf */
 /*s: global strl */
+// ref<Type> (head = strf)
 Type*	strl;
 /*e: global strl */
 /*s: global symb */

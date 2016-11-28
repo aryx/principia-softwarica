@@ -29,10 +29,10 @@
    /*x: [[union yacc]] other fields */
    struct
    {
-       Type*   t1;
-       Type*   t2;
-       Type*   t3;
-       uchar   c;
+       Type*   t1; // save strf
+       Type*   t2; // save strl
+       Type*   t3; // save lastype
+       uchar   c;  // save lastclass
    } tyty;
    /*e: [[union yacc]] other fields */
 }
@@ -120,8 +120,10 @@ xdecl:
 /*x: xdecl rule */
 |   zctlist xdecor
     {
-        lastdcltype = T;
-        firstarg = S;
+        lastdcltype = T; //dead??
+        /*s: xdecl rule, initializations before processing a function */
+        firstarg = S; // can mv after call to dodecl? No I think.
+        /*e: xdecl rule, initializations before processing a function */
         dodecl(xdecl, lastclass, lasttype, $2);
         /*s: xdecl rule, sanity check lastdcltype is a function type */
         if(lastdcltype == T || lastdcltype->etype != TFUNC) {
@@ -146,10 +148,12 @@ xdecl:
         if(n)
             $6 = new(OLIST, n, $6);
         /*e: xdecl rule, adjust block body with possible hidden generated nodes */
+        /*s: xdecl rule, debug function body */
         if(debug['x']) {
             prtree($2, "func");
             prtree($6, "body");
         }
+        /*e: xdecl rule, debug function body */
         if(!debug['a'] && !debug['Z'])
             codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
     }
@@ -212,7 +216,9 @@ adlist:
 
         w = $1->sym->type->width;
         $$ = doinit($1->sym, $1->type, 0L, $4);
+        /*s: adlist rule, after doinit */
         $$ = contig($1->sym, $$, w);
+        /*e: adlist rule, after doinit */
     }
 |   adlist ',' adlist
     {
@@ -230,9 +236,6 @@ zarglist:
 |   arglist     { $$ = invert($1); }
 /*x: parameter declarator rules */
 /*s: arglist rule */
-arglist:
-    name
-/*x: arglist rule */
 |   tlist xdecor
     {
         $$ = new(OPROTO, $2, Z);
@@ -247,6 +250,9 @@ arglist:
 |   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
 /*x: arglist rule */
 |   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
+/*x: arglist rule */
+arglist:
+    name
 /*e: arglist rule */
 /*x: parameter declarator rules */
 /*
@@ -307,6 +313,7 @@ edecl:
     }
     zedlist ';'
 
+/*s: zedlist rule */
 zedlist:                    /* extension */
  /* empty */
     {
@@ -314,6 +321,7 @@ zedlist:                    /* extension */
         edecl(CXXX, lasttype, S);
     }
 |   edlist
+/*e: zedlist rule */
 
 edlist:
     edecor            { dodecl(edecl, CXXX, lasttype, $1); }
@@ -323,8 +331,10 @@ edlist:
 edecor:
     xdecor
     {
+        /*s: edecor rule, set fields after parsed a field declarator */
         lastbit = 0;
-        firstbit = 1;
+        firstbit = true;
+        /*e: edecor rule, set fields after parsed a field declarator */
     }
 /*x: edecor rule */
 |   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
@@ -808,8 +818,8 @@ gcnlist:
 types:
    tname
     {
-        $$.t = simplet($1);
         $$.c = CXXX;
+        $$.t = simplet($1);
     }
 /*x: types rule */
 |   gcnlist
@@ -839,8 +849,8 @@ types:
 /*x: types rule */
 |  complex
     {
-        $$.t = $1;
         $$.c = CXXX;
+        $$.t = $1;
     }
 |  complex gctnlist
     {
@@ -885,7 +895,9 @@ complex:
         if($$->link != T)
             diag(Z, "redeclare tag: %s", $2->name);
         $$->link = $4;
+        /*s: complex rule, when parse a structure definition, align the struct */
         sualign($$);
+        /*e: complex rule, when parse a structure definition, align the struct */
     }
 |   LUNION ltag
     {
@@ -897,7 +909,9 @@ complex:
         if($$->link != T)
             diag(Z, "redeclare tag: %s", $2->name);
         $$->link = $4;
+        /*s: complex rule, when parse a structure definition, align the struct */
         sualign($$);
+        /*e: complex rule, when parse a structure definition, align the struct */
     }
 /*x: complex rule */
 |   LSTRUCT sbody
@@ -906,7 +920,9 @@ complex:
         sprint(symb, "_%d_", taggen);
         $$ = dotag(lookup(), TSTRUCT, autobn);
         $$->link = $2;
+        /*s: complex rule, when parse a structure definition, align the struct */
         sualign($$);
+        /*e: complex rule, when parse a structure definition, align the struct */
     }
 |   LUNION sbody
     {
@@ -914,7 +930,9 @@ complex:
         sprint(symb, "_%d_", taggen);
         $$ = dotag(lookup(), TUNION, autobn);
         $$->link = $2;
+        /*s: complex rule, when parse a structure definition, align the struct */
         sualign($$);
+        /*e: complex rule, when parse a structure definition, align the struct */
     }
 /*x: complex rule */
 |   LENUM ltag
@@ -935,24 +953,28 @@ complex:
         en.cenum = T;
     }
     enum 
-     '}'
+    '}'
     {
         $$ = $2->suetag;
         if($$->link != T)
             diag(Z, "redeclare tag: %s", $2->name);
+        /*s: complex rule, after processed an enum, sanity check tenum */
         if(en.tenum == T) {
             diag(Z, "enum type ambiguous: %s", $2->name);
             en.tenum = types[TINT];
         }
+        /*e: complex rule, after processed an enum, sanity check tenum */
         $$->link = en.tenum;
         $$ = en.tenum;
     }
-|   LENUM '{'
+|   LENUM 
+    '{'
     {
         en.tenum = T;
         en.cenum = T;
     }
-    enum '}'
+    enum 
+    '}'
     {
         $$ = en.tenum;
     }
@@ -963,14 +985,18 @@ complex:
 sbody:
     '{'
     {
+        // save
         $<tyty>$.t1 = strf;
         $<tyty>$.t2 = strl;
         $<tyty>$.t3 = lasttype;
         $<tyty>$.c = lastclass;
+
         strf = T;
         strl = T;
+        /*s: sbody rule, initializations before parsing the fields */
         lastbit = 0;
-        firstbit = 1;
+        firstbit = true;
+        /*e: sbody rule, initializations before parsing the fields */
         lastclass = CXXX;
         lasttype = T;
     }
@@ -978,6 +1004,8 @@ sbody:
     '}'
     {
         $$ = strf;
+
+        // restore
         strf = $<tyty>2.t1;
         strl = $<tyty>2.t2;
         lasttype = $<tyty>2.t3;
@@ -1000,9 +1028,9 @@ tag:
 
         $$->type = $1->type;
         $$->etype = ($1->type != T) ? $1->type->etype : TVOID;
+        $$->class = $1->class;
 
         $$->xoffset = $1->offset;
-        $$->class = $1->class;
     }
 /*x: names rules */
 ltag:
@@ -1018,6 +1046,8 @@ name:
             $1 = mkstatic($1);
         /*e: name rule, if local static variable */
         $$->sym = $1;
+
+        // propagate symbol information to node
         $$->type = $1->type;
         $$->etype = ($1->type != T) ? $1->type->etype : TVOID;
         $$->xoffset = $1->offset;
@@ -1032,8 +1062,8 @@ name:
 ctlist:
     types
     {
-        lasttype = $1.t;
         lastclass = $1.c;
+        lasttype = $1.t;
     }
 /*e: extra grammar rules */
 /*s: ebnf grammar rules */

@@ -205,6 +205,11 @@ loop:
 
     switch(o) {
     /*s: [[gen()]] switch node kind cases */
+    case OSET:
+    case OUSED:
+        usedset(n->left, o);
+        break;
+    /*x: [[gen()]] switch node kind cases */
     case OLIST:
     case OCOMMA:
         gen(n->left);
@@ -236,7 +241,7 @@ loop:
                  * reachability warnings.
                  */
                 if(!canreach && oldreach && debug['w'] < 2)
-                    warnreach = 0;
+                    warnreach = false;
             } else {
                 canreach = true;
                 gen(n->right->left);
@@ -248,7 +253,7 @@ loop:
                  * reachability warnings.
                  */
                 if(!oldreach && canreach && debug['w'] < 2)
-                    warnreach = 0;
+                    warnreach = false;
                 canreach = oldreach;
             }
         }
@@ -318,9 +323,11 @@ loop:
 
         continpc = scc;
         breakpc = sbc;
+
         canreach = nbreak!=0;
         if(canreach == false)
             warnreach = !suppress;
+
         nbreak = snbreak;
         break;
     /*x: [[gen()]] switch node kind cases */
@@ -328,7 +335,7 @@ loop:
         l = n->left;
         if(!canreach && l->right->left && warnreach) {
             warn(n, "unreachable code FOR");
-            warnreach = 0;
+            warnreach = false;
         }
         gen(l->right->left);	/* init */
 
@@ -341,7 +348,7 @@ loop:
          */
         if(!canreach && warnreach && deadheads(n)) {
             warn(n, "unreachable code %O", o);
-            warnreach = 0;
+            warnreach = false;
         }
 
         scc = continpc;
@@ -379,15 +386,17 @@ loop:
         }
         if(!ncontin && l->right->right && warnreach) {
             warn(l->right->right, "unreachable FOR inc");
-            warnreach = 0;
+            warnreach = false;
         }
 
         patch(spb, pc);
         continpc = scc;
         breakpc = sbc;
+
         canreach = nbreak!=0;
         if(canreach == false)
             warnreach = !suppress;
+
         nbreak = snbreak;
         ncontin = sncontin;
         break;
@@ -447,6 +456,7 @@ loop:
         ncontin++;
         canreach = false;
         warnreach = !suppress;
+
         break;
     /*x: [[gen()]] switch node kind cases */
     case OBREAK:
@@ -592,11 +602,6 @@ loop:
     default:
         complex(n);
         cgen(n, Z);
-        break;
-    /*x: [[gen()]] switch node kind cases */
-    case OSET:
-    case OUSED:
-        usedset(n->left, o);
         break;
     /*e: [[gen()]] switch node kind cases */
     }
