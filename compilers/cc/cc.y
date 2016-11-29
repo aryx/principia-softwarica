@@ -1016,6 +1016,7 @@ sbody:
 enum:
     LNAME           { doenum($1, Z); }
 |   LNAME '=' expr  { doenum($1, $3); }
+
 |   enum ',' enum
 |   enum ','
 /*e: types, storage classes, qualifiers rules */

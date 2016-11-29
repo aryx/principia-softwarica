@@ -12,7 +12,7 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, I changed for the better a few things:
-% - deadcode (TFILE, OFAS/OTST/OENUM, CSELEM, CLABEL)
+% - removed deadcode (TFILE, OFAS/OTST/OENUM, CSELEM, CLABEL)
 % - rename more consistently things 
 %   (thisfn -> thisfntype, lastdcl -> lastdcltype)
 % - TODO? D_CONST -> D_ADDR
@@ -47,8 +47,8 @@
 %thx to ocaml:
 % - clarify all the things that are done at parsing time, and see that
 %   many could be done later to better separate concerns
-% - that parsing, naming, type checking could be done as a single pass!
-%   call code generation after each function.
+% - that parsing, naming, type checking can be done as a single pass!
+%   5c calls the code generation after each function.
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -172,23 +172,23 @@ assembly, and ultimately machine code, is essential.
 Here are a few questions I hope this book will answer:
 \begin{itemize}
 
-\item How does the compiler parse a complex language?
+\item How does a compiler parse a complex language?
 \n Lexing, (preprocessing), parsing
 
-\item How does the compiler manage the scope of variables,
+\item How does a compiler manage the scope of variables,
 structures, enumerations, or typedefs?
 \n symbol table
 
 \item How does a typechecker work?
 
-\item How does the compiler translate 
+\item How does a compiler translate 
 conditionals, loops, and other control-flow constructs
 in basic assembly jumps?
 %codegen: labelize
 
-\item How does the compiler translate a switch?
+\item How does a compiler translate a switch?
 
-\item How does the compiler convert arbitrary complex expressions 
+\item How does a compiler convert arbitrary complex expressions 
 into simpler assembly instructions using a small set of registers?
 %codegen: linearize
 
@@ -229,7 +229,7 @@ which I ultimately discarded:
 \begin{itemize}
 
 \item gcc
-%big
+%big. Lots of input languages. Lots of output targets.
 
 \item clang
 %cleaner but still very big
@@ -307,8 +307,6 @@ which I ultimately discarded:
 % more recently:
 % - JIT
 
-
-%http://icube-icps.unistra.fr/img_auth.php/d/db/ModernC.pdf
 
 \section{Getting started}
 
@@ -419,6 +417,8 @@ who wrote in some sense most of this book.
 %    see rust, and ocaml).
 
 % type annotating also.
+
+% lvalue/rvalue annotating here?
 
 \subsection{Backend}
 
@@ -546,9 +546,13 @@ who wrote in some sense most of this book.
 % ugly C syntax
 %http://blog.robertelder.org/weird-c-syntax/
 
+%http://icube-icps.unistra.fr/img_auth.php/d/db/ModernC.pdf
+
+
 % lvalue, rvalue (lvalue = location value? expression resulting into a location
 % where something can be stored?)
 % Stratchey introduced those terms?
+
 
 
 \subsection{C innovations}
@@ -588,7 +592,7 @@ who wrote in some sense most of this book.
 % no lex (handcrafted lex.c), yacc (cc.y, y.tab.h, y.tab.c)
 %  (why no lex? to avoid bootstrapping issues? they don't like lex?
 %   because of unicode which lex does not handle well anyway?)
-%  mac.c = macro (included cpp)
+%  mac.c = macro (embedded cpp)
 % globals.c, utils.c, compat.c
 
 % sub.c = subroutines, helpers to build ast (and more?)
@@ -612,7 +616,7 @@ who wrote in some sense most of this book.
 
 % gc.h (g? [code] generation?)
 % globals2.c (but actually many of them seems generic and could be in globals.c)
-% list.c = fmt.c (TODO rename)
+% list.c (= fmt.c) (TODO rename)
 % machcap.c, omachcap.c = machine capability (attempt to have interface)
 %  but for ARM it's empty.
 
@@ -651,8 +655,8 @@ who wrote in some sense most of this book.
 % Really do things gradually, like a stream. Generate code after
 % each function. Kinda a one-pass compiler.
 
-% Key data structure is symbol table! Used to hold definitions.
-% Hold the definitions in the current scope! Manage scope.
+% Key data structure is symbol table! Used to hold declarations.
+% Hold the declarations in the current scope! Manage scope.
 % label use/def, struct use/def, var use/def, types, offsets, 
 % everything (too much in my opinion).
 
@@ -702,7 +706,7 @@ enum node_kind
     // ----------------------------------------------------------------------
     // Names
     // ----------------------------------------------------------------------
-    ONAME, // for defs and uses
+    ONAME, // for uses and declarations
 
     // ----------------------------------------------------------------------
     // Expressions
@@ -715,7 +719,7 @@ enum node_kind
     <<statement nodes>>
 
     // ----------------------------------------------------------------------
-    // Variables (locals, globals, parameters)
+    // Variables (parameters, initializers)
     // ----------------------------------------------------------------------
     <<variable declaration nodes>>
 
@@ -750,11 +754,12 @@ enum node_kind
 %  interesting is the sym connected to the node)
 %ocaml: just use precise AST. no need OXXX and OEND.
 
-% = expr + stmt + decl + func def.
+% = expr + stmt + initializer + func def.
 % The type definitions and type uses are in another DS (Type).
 % (and annotates some nodes)
 % The storage is in another DS (Storage_class).
 % (and annotates some nodes)
+% The declaration is stored in another DS (the symbol table)
 
 <<struct Node>>=
 struct	Node
@@ -813,6 +818,7 @@ struct	Node
 % - blocks? left/right used for many things, for left/right branch in e.g.
 %   arithmetic trees (a+b), but also for linked list (e.g. OLIST) with
 %   double chaining
+% - a local declaration? not in AST, in symbol table
 % Most of those nodes will also get a type later.
 %ocaml: ADT more precise again.
 
@@ -837,7 +843,9 @@ Sym*	sym; // for ONAME, ODOT/OELEM, OXXX of OLABEL/OGOTO
 % so better separate concerns. 5c does too many things at the same time.
 
 % see Sym in next section. Very important. 
-
+% Used only temporariliy for declaration ONAME nodes (which are temporary
+% nodes because they are not in the final AST). After dodecl, Node.sym
+% is useless I think.
 
 
 %less: int -> char ... for op, hmmm
@@ -858,7 +866,7 @@ new(int t, Node *l, Node *r)
 }
 @
 
-%less: why this special thing about OGOTO? becaus goto take a symbol
+%less: why this special thing about OGOTO? because goto take a symbol
 % and don't want the line of the symbol?
 %ocaml: build directly AST
 
@@ -1047,6 +1055,7 @@ struct	Type
 %  - TFUNC: the return is in the Type.link, the parameters in the Type.down
 %  - TYPEDEF? they are not in enum type_kind! they are substitued
 %    at use time? where?
+%  - TENUM points to final type via Type.link
 
 
 % when type involves a symbol, e.g. for tags in struct/union/enum
@@ -1126,6 +1135,7 @@ typ(int et, Type *d)
     t = alloc(sizeof(Type));
     t->etype = et;
     t->link = d;
+
     t->down = T;
     t->garb = GXXX;
     t->sym = S;
@@ -1142,24 +1152,6 @@ typ(int et, Type *d)
 % see Size section for ewidth, LP split!
 % lineno not set?
 
-<<function copytyp>>=
-Type*
-copytyp(Type *t)
-{
-    Type *nt;
-
-    nt = typ(TXXX, T); // could just do alloc(sizeof(Type))
-    *nt = *t;
-    return nt;
-}
-@
-%ocaml: just share
-
-% when do you need to copy? it's not a deep copy.
-% If want deep copy then will need to also call copytyp recursively
-% on Type.link.
-% typ will copy. actually they will share their down and link field!
-%  not a deep copy.
 
 %Why see that global? because often used?
 <<global types>>=
@@ -1266,6 +1258,7 @@ enum Storage_class
 % see also cnames[] in debugging section
 % strings are also using CSTATIC!
 % have also CTYPEDEF here, so can have typedef trick in yylex().
+\l could reorder, put CGLOBL first
 
 % Note that some symbols get assigned a storage class first, and then
 %  this storage class gets adjusted.
@@ -1288,7 +1281,7 @@ char	class;
 
 %trans:
 % Saw Node.type (and Node.etype), 
-% Node.storage
+% Node.class
 % (Saw Node.sym).
 % 5c use node attributes for many things! For everything actually.
 %ocaml: I prefer use separate phases and separate external hashtbl or
@@ -1771,7 +1764,7 @@ push1(Sym *s)
 @
 % usage should be d = push1(s); and adjust s fields now that
 % the old values of s has been saved??
-
+\l rename push_DAUTO?
 
 % nested language! block number, to allow multiple blocks to use
 % similar local names
@@ -1854,10 +1847,7 @@ Node* revertdcl(void)
     for(;;) {
         // d = pop(dclstack)
         d = dclstack;
-        if(d == D) {
-            diag(Z, "pop off dcl stack");
-            break;
-        }
+        <<[[revertdcl()]] sanity check d>>
         dclstack = d->link;
 
         s = d->sym;
@@ -1872,6 +1862,13 @@ Node* revertdcl(void)
 % a local volatile we actually generate some fake nodes USED(&local_volatile)
 % so we need to return this OLIST of hidden generated nodes.
 %ocaml: just pop (actually need also Hashtbl.remove in globals.hids)
+
+<<[[revertdcl()]] sanity check d>>=
+if(d == D) {
+    diag(Z, "pop off dcl stack");
+    break;
+}
+@
 
 <<[[revertdcl()]] switch declaration type cases>>=
 case DMARK:
@@ -1889,7 +1886,7 @@ case DMARK:
 case DSUE:
     <<[[revertdcl()]] debug revert DSUE>>
 
-    // retore info previous tag
+    // retore info from previous tag
     s->suetag = d->type;
     s->sueblock = d->block;
 
@@ -1910,7 +1907,7 @@ case DLABEL:
     s->label = Z;
     break;
 @
-%less: no restore? probably because labels are at function scope
+%no restore? because labels are at function scope
 % and there is no global labels, so safe to set to Z.
 % see dcllabels(), they are not added in the current scope but in function scope
 %lint: start to to do lint check at parsing time :)
@@ -1934,7 +1931,6 @@ char	class;
 long	varlineno;
 @
 \l rename old_class, old_varlineno?
-
 <<[[Decl]] sym copy fields>>=
 bool	aused;
 @
@@ -2180,7 +2176,6 @@ void main(int argc, char *argv[])
     <<[[main()]] locals>>
 
     memset(debug, 0, sizeof(debug));
-
     <<[[main()]] xxxinit()>>
     <<[[main()]] remaining initialisation>>
 
@@ -2286,6 +2281,7 @@ setinclude(".");
 % (will be overwritten later)
 %ocaml: use a pair for the local dir and system paths, clearer
 
+
 <<[[main()]] command line processing>>=
 default:
     c = ARGC();
@@ -2322,6 +2318,8 @@ char *p;
 fdt ofd;
 static bool first = true;
 @
+% first useful only because can compile multiple files with 5c,
+% but useless features. mk can handle that!
 
 % main -> <> (can be called multiple times because of multifile parallel option)
 <<function compile>>=
@@ -2345,11 +2343,7 @@ compile(char *infile, char **defs, int ndef)
     <<[[compile()]] if writing acid to standard output>>
     else {
         ofd = mycreat(outfile, 0664);
-        if(ofd < 0) {
-            diag(Z, "cannot open %s - %r", outfile);
-            outfile = nil;
-            errorexit();
-        }
+        <<[[compile()]] sanity check ofd>>
         Binit(&outbuf, ofd, OWRITE);
     }
 
@@ -2382,6 +2376,15 @@ compile(char *infile, char **defs, int ndef)
 %                 -> gclean -> outcode
 % gclean handle code generation for toplevel globals! (at least the AGLOBL)
 
+
+
+<<[[compile()]] sanity check ofd>>=
+if(ofd < 0) {
+    diag(Z, "cannot open %s - %r", outfile);
+    outfile = nil;
+    errorexit();
+}
+@
 
 <<[[cinit()]] lexing globals initialization>>=
 nerrors = 0;
@@ -2492,7 +2495,8 @@ gclean(void)
 %ocaml: lift up outcode; not very visible inside gclean, and also
 % no need for AEND
 
-% generate AGLOBL and AEND
+% generate AGLOBL! (the ADATA are done in doinit)
+% generate AEND
 
 
 \section{Initializations}
@@ -2605,7 +2609,7 @@ ginit(void)
     <<[[ginit()]] initialisation>>
     <<[[ginit()]] zprog initialisation>>
     <<[[ginit()]] special nodes initialisation>>
-    com64init();
+    <<[[ginit()]] com64init initialisation>>
     <<[[ginit()]] reg and resvreg initialisation>>
 }
 @
@@ -3403,7 +3407,7 @@ convvtox(vlong c, int et)
     return c;
 }
 @
-
+% ???? used a lot later
 
 % yylex()#ncu -> <>
 <<function mpatov>>=
@@ -5566,7 +5570,7 @@ Node*   node;
 %type   <node>  xdecor xdecor2 edecor  abdecor abdecor1 abdecor2 abdecor3
 %type   <node>  zexpr zelist zcexpr zarglist
 @
-% xdecl, pdecl are not here, because do side effects I think.
+% xdecl, pdecl are not here, because do side effects on symbol table.
 % ltag is a sym. 
 %note that name and tag are nodes here, convenient so can use diag($xx) on
 % them. 
@@ -5597,6 +5601,10 @@ prog:
 <<extra grammar rules>>
 <<ebnf grammar rules>>
 @
+
+% prog does not return anything. Do things in function body,
+% in initializers, or in gclean at the very end.
+
 
 %FIGURE: show peigne of prog when have multiple xdecl and the derivation
 % tree.
@@ -5738,10 +5746,11 @@ xdlist:
 % x decorated with more type info (left pointer, right array and func).
 % but for now xdecor =~ identifier, which is ONAME.
 
+% We do not return an AST here. We modify instead the symbol table.
 
 
-
-% dodecl() modify especially the lastdcltype global.
+% dodecl() modify especially the lastdcltype global (and symbol table via
+%  its callback)
 % its main role is to possibly compose the part one (type t) and two (node n)
 % of the type that is spreaded around the identifier (or abstract declarator).
 % note that the node n is Z or a symbol with also the type part two info,
@@ -5832,7 +5841,7 @@ tag:
 % prototypes anyway.
 %todo: but same for offset?? it can have one already?
 
-% Not sure we need here to propagate type info from sym to node.
+\l Not sure we need here to propagate type info from sym to node.
 % Those fields will be overwritten by xdecl.
 
 % note that when symbol saw for the first time, call syminit,
@@ -6276,6 +6285,7 @@ Node*	label;
 @
 % can then access pc via s->label->pc? meh, node attached
 %  here seems to be an OXXX so not really useful.
+% Another namespace!
 
 
 % flag is true for label definition context, false for use (e.g. in goto)
@@ -6687,6 +6697,7 @@ ODOT,
 
 
 \subsection{Entity uses}
+% important!
 
 <<pexpr rule>>=
 |   name
@@ -7195,6 +7206,10 @@ if(t == T) //??? when this happens?
 <<enum type_kind_bis>>=
 enum type_kind_bis {
     // ----------------------------------------------------------------------
+    // Type (see separate Type_kind)
+    // ----------------------------------------------------------------------
+
+    // ----------------------------------------------------------------------
     // Class storage (temporary, see CAUTO/CEXTERN/... for final storage)
     // ----------------------------------------------------------------------
     <<[[Type_kind_bis]] storage cases>>
@@ -7227,11 +7242,13 @@ enum type_kind_bis {
 % no need for those set union operations
 
 % enum bxxx is used mainly in the grammar
-% and is a 64 bits bitset of the types above.
+% and is a 32 (long) bits bitset of the types above.
 %  (use of 1L, not just 1)
 % bitset, because need to aggregate keywords to form the final thing.
 % to do 'unsigned char' -> TUCHAR
-% pre: Txxx must have less than 64 cases? 1L => long => long enum
+% pre: Txxx must have less than 32 cases (seems to have 30 cases right now,
+%  tight)
+%  1L => long => long enum
 <<enum bxxx>>=
 enum bxxx
 {
@@ -7551,7 +7568,9 @@ simplet(long b)
     return types[TINT];
 }
 @
-
+% simplet return pointers to shared basic types.
+% If then you add a qualifier, then this type will be copied
+% before being adjusted.
 
 
 
@@ -7649,6 +7668,28 @@ Type* garbt(Type *t, long b)
     return t;
 }
 @
+
+<<function copytyp>>=
+Type*
+copytyp(Type *t)
+{
+    Type *nt;
+
+    nt = typ(TXXX, T); // could just do alloc(sizeof(Type))
+    *nt = *t;
+    return nt;
+}
+@
+%ocaml: just share
+
+% when do you need to copy? it's not a deep copy.
+% If want deep copy then will need to also call copytyp recursively
+% on Type.link.
+% typ will copy. actually they will share their down and link field!
+%  not a deep copy.
+
+
+
 
 <<function simpleg>>=
 int
@@ -7750,7 +7791,7 @@ Type* dotag(Sym *s, int et, int bn)
     <<[[dotag()]] locals>>
 
     <<[[dotag()]] if bn not zero and bn not sueblock>>
-    // never defined before, return a new (incomplete) Type
+    // never defined before, return a newly allocated (but incomplete) Type
     if(s->suetag == T) {
         s->suetag = typ(et, T); // link is null for now
         s->sueblock = autobn;
@@ -8030,6 +8071,8 @@ void edecl(int c, Type *t, Sym *s)
 @
 % fields are chained together through down!
 
+% call copytyp here too, because add a sym to it and will chain
+% them together with Type.down.
 
 \subsection{Enums}
 
@@ -8051,6 +8094,8 @@ void edecl(int c, Type *t, Sym *s)
 % To compute type of enum, need union of all types of enumeration constants.
 % TINT by default but if use floats, or if use big integers, then it can
 % change.
+% Sometimes use big integers, for instance in 5c itself the bxxx enum
+% is a 64 bits enum!
 
 <<struct En>>=
 struct En
@@ -8132,12 +8177,13 @@ if(en.tenum == T) {
 Type*	tenum;
 @
 % other fields in Sym for enumeration constants with vconst and vfconst
-\t Why not reuse Sym.type of identifiers?
+\t Why not reuse Sym.type of identifiers? anyway same namespace.
 
 <<types, storage classes, qualifiers rules>>=
 enum:
     LNAME           { doenum($1, Z); }
 |   LNAME '=' expr  { doenum($1, $3); }
+
 |   enum ',' enum
 |   enum ','
 @
@@ -8161,7 +8207,7 @@ void doenum(Sym *s, Node *n)
 
         en.cenum = n->type; // inferred type
         en.tenum = maxtype(en.cenum, en.tenum);
-        <<[[doenum()]] save current value of enumeration>>
+        <<[[doenum()]] save current value of enumeration constant>>
     }
     if(dclstack)
         push1(s); // will be reverted once out of scope
@@ -8227,7 +8273,7 @@ CTYPEDEF,
 @
 %$
 % tricky! not copytyp here, but tcopy
-% why want to tcopy?? see code tcopy
+\t why want to tcopy?? see code tcopy
 
 
 \subsection{Pointer and array types}
@@ -8283,6 +8329,7 @@ case OARRAY:
     goto loop;
 @
 
+%XXX
 <<[[dodecl()]] locals>>=
 long v;
 @
@@ -8291,6 +8338,8 @@ long v;
 \subsection{Function types, parameter types}
 
 % OFUNC used also for function calls and introduced before.
+% But used temporarily here because dodecl will parse it and
+% transform in a TFUNC
 
 <<xdecor2 rule>>=
 |   xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
@@ -8377,7 +8426,7 @@ OPROTO,
 
 <<[[fnproto1()]] switch node kind cases>>=
 case OPROTO:
-    lastdcltype = T;
+    lastdcltype = T; // dead?
     dodecl(NODECL, CXXX, n->type, n->left);
     t = typ(TXXX, T);
     <<[[fnproto1()]] when OPROTO case, adjust parameter type>>
@@ -8453,8 +8502,8 @@ void argmark(Node *n, int pass)
     <<[[argmark()]] finalizations>>
 }
 @
-% should be OFUNC immediately no?
-% left op != ONAME? when?
+\t should be OFUNC immediately no?
+\t left op != ONAME? when?
 
 
 <<function walkparam>>=
@@ -8496,16 +8545,17 @@ loop:
         break;
 
     <<[[walkparam()]] switch op cases>>
-
-    case ODOTDOT:
-        break;
-    
     default:
         diag(n, "argument not a name/prototype: %O", n->op);
         break;
 
     }
 }
+@
+
+<<[[walkparam()]] switch op cases>>=
+case ODOTDOT:
+    break;
 @
 
 
@@ -8531,7 +8581,7 @@ void
 pdecl(int class, Type *t, Sym *s)
 {
     <<[[pdecl()]] sanity check s>>
-    t = paramconv(t, class==CPARAM);
+    <<[[pdecl()]] adjust type>>
     <<[[pdecl()]] adjust class>>
     <<[[pdecl()]] sanity check type>>
     adecl(class, t, s);
@@ -8547,6 +8597,7 @@ if(s && s->offset != -1) {
 }
 @
 % offset set to -1 in walkparam()
+
 
 
 \subsection{Locals, automatic declarator}
@@ -11334,7 +11385,7 @@ double	floatenum;	/* value of current enum */ // for floats enums
 complex(n); // will call evconst()
 @
 
-<<[[doenum()]] save current value of enumeration>>=
+<<[[doenum()]] save current value of enumeration constant>>=
 if(typefd[en.cenum->etype])
     en.floatenum = n->fconst;
 else
@@ -11410,6 +11461,11 @@ if(n1 != Z) {
 if(lastdcltype != T)
     *t = *paramconv(lastdcltype, true);
 @
+
+<<[[pdecl()]] adjust type>>=
+t = paramconv(t, class==CPARAM);
+@
+
 
 % fnproto1 | pdecl -> <>
 % f is for parameter context (class==CPARAM)
@@ -26411,6 +26467,10 @@ fvn(char *name, int type)
     n->complex = 0;
     return n;
 }
+@
+
+<<[[ginit()]] com64init initialisation>>=
+com64init();
 @
 
 <<function com64init>>=

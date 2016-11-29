@@ -803,6 +803,9 @@ loop:
         break;
 
     /*s: [[walkparam()]] switch op cases */
+    case ODOTDOT:
+        break;
+    /*x: [[walkparam()]] switch op cases */
     case ONAME:
         s = n->sym;
         if(pass == 0) {
@@ -822,10 +825,6 @@ loop:
             dodecl(pdecl, CXXX, types[TINT], n);
         break;
     /*e: [[walkparam()]] switch op cases */
-
-    case ODOTDOT:
-        break;
-    
     default:
         diag(n, "argument not a name/prototype: %O", n->op);
         break;
@@ -868,10 +867,12 @@ Node* revertdcl(void)
     for(;;) {
         // d = pop(dclstack)
         d = dclstack;
+        /*s: [[revertdcl()]] sanity check d */
         if(d == D) {
             diag(Z, "pop off dcl stack");
             break;
         }
+        /*e: [[revertdcl()]] sanity check d */
         dclstack = d->link;
 
         s = d->sym;
@@ -890,7 +891,7 @@ Node* revertdcl(void)
                 print("revert2 \"%s\"\n", s->name);
             /*e: [[revertdcl()]] debug revert DSUE */
 
-            // retore info previous tag
+            // retore info from previous tag
             s->suetag = d->type;
             s->sueblock = d->block;
 
@@ -1019,7 +1020,7 @@ fnproto1(Node *n)
     switch(n->op) {
     /*s: [[fnproto1()]] switch node kind cases */
     case OPROTO:
-        lastdcltype = T;
+        lastdcltype = T; // dead?
         dodecl(NODECL, CXXX, n->type, n->left);
         t = typ(TXXX, T);
         /*s: [[fnproto1()]] when OPROTO case, adjust parameter type */
@@ -1330,7 +1331,7 @@ Type* dotag(Sym *s, int et, int bn)
         s->suetag = T;
     }
     /*e: [[dotag()]] if bn not zero and bn not sueblock */
-    // never defined before, return a new (incomplete) Type
+    // never defined before, return a newly allocated (but incomplete) Type
     if(s->suetag == T) {
         s->suetag = typ(et, T); // link is null for now
         s->sueblock = autobn;
@@ -1516,7 +1517,9 @@ pdecl(int class, Type *t, Sym *s)
         return;
     }
     /*e: [[pdecl()]] sanity check s */
+    /*s: [[pdecl()]] adjust type */
     t = paramconv(t, class==CPARAM);
+    /*e: [[pdecl()]] adjust type */
     /*s: [[pdecl()]] adjust class */
     if(class == CXXX)
         class = CPARAM;
@@ -1760,12 +1763,12 @@ void doenum(Sym *s, Node *n)
 
         en.cenum = n->type; // inferred type
         en.tenum = maxtype(en.cenum, en.tenum);
-        /*s: [[doenum()]] save current value of enumeration */
+        /*s: [[doenum()]] save current value of enumeration constant */
         if(typefd[en.cenum->etype])
             en.floatenum = n->fconst;
         else
             en.lastenum = n->vconst;
-        /*e: [[doenum()]] save current value of enumeration */
+        /*e: [[doenum()]] save current value of enumeration constant */
     }
     if(dclstack)
         push1(s); // will be reverted once out of scope

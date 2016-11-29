@@ -74,7 +74,6 @@ void main(int argc, char *argv[])
     /*e: [[main()]] locals */
 
     memset(debug, 0, sizeof(debug));
-
     /*s: [[main()]] xxxinit() */
     tinit(); // type globals initialisation
     cinit(); // C lexing/parsing globals initialisation
@@ -275,11 +274,13 @@ compile(char *infile, char **defs, int ndef)
     /*e: [[compile()]] if writing acid to standard output */
     else {
         ofd = mycreat(outfile, 0664);
+        /*s: [[compile()]] sanity check ofd */
         if(ofd < 0) {
             diag(Z, "cannot open %s - %r", outfile);
             outfile = nil;
             errorexit();
         }
+        /*e: [[compile()]] sanity check ofd */
         Binit(&outbuf, ofd, OWRITE);
     }
 

@@ -95,7 +95,9 @@ ginit(void)
     nodret = new(OIND, nodret, Z);
     complex(nodret);
     /*e: [[ginit()]] special nodes initialisation */
+    /*s: [[ginit()]] com64init initialisation */
     com64init();
+    /*e: [[ginit()]] com64init initialisation */
     /*s: [[ginit()]] reg and resvreg initialisation */
     memset(reg, 0, sizeof(reg));
 

@@ -153,6 +153,7 @@ typ(int et, Type *d)
     t = alloc(sizeof(Type));
     t->etype = et;
     t->link = d;
+
     t->down = T;
     t->garb = GXXX;
     t->sym = S;
