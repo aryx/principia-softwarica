@@ -12,8 +12,10 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, I changed for the better a few things:
-% - removed deadcode (TFILE, OFAS/OTST/OENUM, CSELEM, CLABEL)
-% - rename more consistently things 
+% - removed deadcode 
+%    * TFILE, OFAS/OTST/OENUM, CSELEM/CLABEL
+%    * Type.lineno
+% - renamed more consistently things 
 %   (thisfn -> thisfntype, lastdcl -> lastdcltype)
 % - TODO? D_CONST -> D_ADDR
 
@@ -172,11 +174,12 @@ assembly, and ultimately machine code, is essential.
 Here are a few questions I hope this book will answer:
 \begin{itemize}
 
-\item How does a compiler parse a complex language?
+\item How does a compiler parse a complex programming language?
 \n Lexing, (preprocessing), parsing
 
 \item How does a compiler manage the scope of variables,
 structures, enumerations, or typedefs?
+\l forward declaration, implicit declaration, nested scopes and shadowing, 
 \n symbol table
 
 \item How does a typechecker work?
@@ -235,6 +238,7 @@ which I ultimately discarded:
 %cleaner but still very big
 % nice to have single binary that can cross compile for multiple targets, nice
 % interface (cleaner than 5c/vc/...; interfaces are better!)
+%good error messages.
 
 \item lcc 
 %maybe better actually, but already a book on it, 
@@ -247,7 +251,7 @@ which I ultimately discarded:
 \item bcc
 % bruce evans, code used by linus at the beginning?
 
-\item tinycc, fbcc
+\item fbcc and tcc
 % cool maybe
 
 \end{itemize}
@@ -376,11 +380,13 @@ who wrote in some sense most of this book.
 % or Make, or Shell.
 % Lexing (regexps), (preprocessing), parsing (grammar), AST.
 % (even though 5c does a lot in parsing; does not separate concern so well).
+% Tracking position for good error reports.
 
 \subsection{Scope resolution}
 % Resolving, naming.
 
-% C has nested blocks, and can shadow variables, forward decls.
+% C has nested blocks, and can shadow variables.
+% Can also forward decls.
 % C has also type aliases (typedefs). Lots of names.
 % Have even ambiguity between typedef and var.
 % When see an identifier, hard to know to what it refers too
@@ -719,14 +725,9 @@ enum node_kind
     <<statement nodes>>
 
     // ----------------------------------------------------------------------
-    // Variables (parameters, initializers)
+    // Declarations (parameters, initializers, bit fields)
     // ----------------------------------------------------------------------
-    <<variable declaration nodes>>
-
-    // ----------------------------------------------------------------------
-    // Definitions
-    // ----------------------------------------------------------------------
-    <<definition nodes>>
+    <<declaration nodes>>
 
     // ----------------------------------------------------------------------
     // Misc
@@ -746,7 +747,8 @@ enum node_kind
 % which is a bit more difficult)
 %dead: OTST,		/* used in some compilers */
 %dead: OFAS
-%ocaml: use ADT.
+%ocaml: use ADT, and represents also type and storage in AST (resolve later).
+% I also do not abuse expressions to represent types (OIND != TIND).
 
 % each time OXXX TXXX for start and end. Sentinel.
 % But OXXX to mark as wrong value? 
@@ -754,12 +756,14 @@ enum node_kind
 %  interesting is the sym connected to the node)
 %ocaml: just use precise AST. no need OXXX and OEND.
 
-% = expr + stmt + initializer + func def.
+% = expr + stmt essentially.
 % The type definitions and type uses are in another DS (Type).
 % (and annotates some nodes)
 % The storage is in another DS (Storage_class).
 % (and annotates some nodes)
-% The declaration is stored in another DS (the symbol table)
+% The declaration is stored in another DS (the symbol table).
+% The parser abuses AST constructs of expressions to represent type
+% declarations. The 'declaration nodes' category above is really temporary.
 
 <<struct Node>>=
 struct	Node
@@ -781,9 +785,7 @@ struct	Node
     // Post parsing annotations
     // ----------------------------------------------------------------------
     <<[[Node]] type and storage fields>>
-
     <<[[Node]] code generation fields>>
-
     <<[[Node]] origin tracking fields>>
 
     // ----------------------------------------------------------------------
@@ -792,16 +794,17 @@ struct	Node
     <<[[Node]] parsing helper fields>>
 };
 @
-%see also prtree() in debugging section to dump the AST, useful
-% to understand which fields make sense for which node_kind!
-% all the nodes with value fields have a case in prtree().
 %less: char -> ushort? or actually char sometimes when use '+' ?
 % hmm get some warnings though when do that, but maybe should fix those 
 % warnings anyway
-%still?: different split? identifier field where have sym and storage? 
-%ocaml: use ADT, and mv semantic fields to another phase?
-% but cons is that have to duplicate lineno, have complex dumper, visitor
-% compare to this generic binary tree.
+%ocaml: use ADT, and mv semantic fields to another phase.
+% Precise AST has some disadvantage. I have to duplicate lineno, and 
+% have complex dumper and visitor compare to this generic binary tree
+% (but at least I can autogenerate this dumper and visitor)
+
+%see also prtree() in debugging section to dump the AST, useful
+% to understand which fields make sense for which node_kind!
+% all the nodes with value fields have a case in prtree().
 
 %FIGURE AST with stmt
 %FIGURE AST with func, globals.
@@ -865,10 +868,7 @@ new(int t, Node *l, Node *r)
     return n;
 }
 @
-
-%less: why this special thing about OGOTO? because goto take a symbol
-% and don't want the line of the symbol?
-%ocaml: build directly AST
+%ocaml: build directly precise (but need mk_e, mk_st, mk_t)
 
 <<[[new()]] set lineno>>=
 if(l && t != OGOTO)
@@ -881,6 +881,10 @@ else
 %ocaml: difficult do that in ocaml cos not generic left/right trees, so
 % easier add location info in lexer in each token. Will even get more precise
 % line location then!
+
+%less: why this special thing about OGOTO? because goto take a symbol
+% and don't want the line of the symbol?
+
 
 <<global lineno>>=
 long	lineno;
@@ -916,6 +920,7 @@ new1(int o, Node *l, Node *r)
     return n;
 }
 @
+
 % when needs this one? when create new intermediate node, e.g.
 % in tcomo() during typechecking to make more explicit certain
 % cast for instance, and when we are not sure there is something
@@ -953,7 +958,7 @@ enum Type_kind
 @
 %ocaml: I have an ADT for the type system and another one for the AST
 % of a type because I prefer to do typedef expansion, struct resolution,
-% constant expression, and more after parsing.
+% constant expression evaluation, and more after parsing.
 
 <<[[Type_kind]] integer cases>>=
 TCHAR,
@@ -971,12 +976,14 @@ TULONG,
 TVLONG,
 TUVLONG,
 @
+%coupling: with the global 'tab' which use initialisers that
+% assumes a certain order
+%ocaml: I factorized the Signed vs Unsigned
+
 % C syntax for types is ugly, and allows many different schemes
 % such as signed int; int; int signed; ... but in the end
 % just have those 10 basic types! (and the floats below)
-%coupling: with the global 'tab' which use initialisers that
-% assumes a certain order
-%ocaml: can factorize the Signed vs Unsigned
+
 
 <<[[Type_kind]] float cases>>=
 TFLOAT,
@@ -996,6 +1003,7 @@ TSTRUCT,
 TUNION,
 TENUM,
 @
+
 %IND for indirect probably, meaning pointer. C power!
 %Note that even if array access are unsugar in pointer arithmetic access, 
 % type declarations are not; we keep the array vs pointer info here.
@@ -1020,10 +1028,7 @@ struct	Type
     // option<list<ref_own<Type>>, next = Type.down, for TFUNC and TSTRUCT
     Type*	down;
 
-    long	lineno; // ??
-
     <<[[Type]] value fields>>
-
     <<[[Type]] qualifier fields>>
 
     // ----------------------------------------------------------------------
@@ -1035,10 +1040,10 @@ struct	Type
 };
 @
 %less: char -> ushort? but get some warnings (but we should fix that too)
-%ocaml: ADT better again here.
-
-\t lineno of what here? of def? of use? so if two vars use int type,
-\l will get same lineno or 2 different?
+%dead: long lineno;
+%ocaml: ADT better again here, but can not handle the incomplete
+% structure via empty pointer and later mutually recursive structures directly
+% via pointer. I have to use an extra tagdef environment.
 
 % Here are how things are represented for the different composed types:
 %  - TVOID, simple, should actually be in the simple case
@@ -1076,6 +1081,8 @@ Sym*	tag;
 <<[[Type]] other fields>>=
 Sym*	sym; // for fields in structures
 @
+%ocaml: put 'string' directly in AST, no need abuse symbol table
+
 % have a Type.tag a Type.sym! Type.sym is for the fields 
 %  (could merge, but that would be ugly)
 
@@ -1102,10 +1109,11 @@ Sym*	sym; // for fields in structures
 <<[[Node]] type and storage fields>>=
 Type*	type;
 @
-% so it's more than an AST actually, there is semantic info attached to it
-% by other phases.
 %ocaml: separate AST? or have generic AST? 'a xxx ? need that just for expr
 % but because of mutual recursivity, might need that for stmt too.
+
+% so it's more than an AST actually, there is semantic info attached to it
+% by other phases.
 
 
 % seems mostly inline of type->etype, except in fvn() and ccom()
@@ -1115,7 +1123,9 @@ char	etype;
 @
 %less: could remove? redundant no? annoying to maintain?
 % annoying those n->etype = (s->type?): s->type->etype: TVOID;
-%ocaml: remove
+%ocaml: remove, etype used to quickly write code checking highlevel
+% category of a type, but with ADT of ocaml I can match conveniently
+% complex type too.
 
 
 
@@ -1150,7 +1160,6 @@ typ(int et, Type *d)
 }
 @
 % see Size section for ewidth, LP split!
-% lineno not set?
 
 
 %Why see that global? because often used?
@@ -1254,6 +1263,8 @@ enum Storage_class
     NCTYPES,
 };
 @
+%ocaml: CXXX represented by None. no need NCTYPES
+
 % CSTATIC vs LSTATIC(lexeme) TSTATIC(temporary) vs BSTATIC(bitset of TSTATIC)
 % see also cnames[] in debugging section
 % strings are also using CSTATIC!
@@ -1298,6 +1309,7 @@ char	addable;
 @
 \t use another field? at least a union, otherwise ugly
 \t mv later?
+%ocaml: attribute in extra phase? or embed in AST? like the type?
 
 % for expression nodes?
 <<[[Node]] code generation fields>>=
@@ -1317,7 +1329,7 @@ long	width; // ewidth[Type.etype]
 % semantic phase? for codegen? 
 % this is adjusted later for struct when have full struct def. At first
 %  it is -1 (see ewidth[TSTRUCT])
-%ocaml: separate
+%ocaml: separate hash to go from type to width? slower? (who care)
 
 \t maybe Node.xoffset here? used a lot. Also Sym.offset and Type.offset
 \t  (and autoffset)
@@ -1390,12 +1402,10 @@ struct	Sym
 % same for Sym.sueblock vs Sym.block.
 
 
-
-%HERE
 % This is a key data structure. Many things are done through the symbol table
-% (too much in my opinion). All use/def links go through this symbol table.
-% - identifiers (globals, locals, parameters, enum?):
-%   * scope (resolve to right def, complex cos nested blocks, shadow, fwd dcl)
+% (too much in my opinion). All decl/use links go through this symbol table.
+% - identifiers (globals, locals, parameters, enum):
+%   * scope (resolve to right decl, complex cos nested blocks, shadow, fwd dcl)
 %     %ocaml: parsing time; ambiguity with typedef and because we lift up enums
 %   * type 
 %      - and type width
@@ -1405,12 +1415,11 @@ struct	Sym
 %   * offset in stack
 %   * addable?
 %   * complex
-%   * use/def checks
+%   * use/decl checks
 %   * corresponding definition location (varlineno)
 %   * first argument optimization?
 % - labels:
 %   * use/def checks (use of undefined, unused, redefinition)
-%   * ??
 % - typedef:
 %   * ambiguity resolution with lexer
 %     %ocaml: parsing time; cant escape it, otherwise ambiguity
@@ -1541,7 +1550,8 @@ lookup(void)
 <<[[Sym]] identifier value, checking fields>>
 <<[[Sym]] identifier value, code generation fields>>
 @
-%ocaml: actually too many concerns at once I think, could be better to separate
+%ocaml: actually too many concerns at once I think, better to separate
+% in different environment in different modules
 
 % 5c can know the type, the offset, the storage,
 % the kind, of the variable currently in scope thanks to the symbol table.
@@ -1560,16 +1570,17 @@ Type*	type;
 // enum<Storage_class>
 char	class;
 @
+%ocaml: use only as environment when typechecking
+
 % similar to Node.type, Decl.type (below), and now Sym.type
 % note that this class field is then used by the lexer
 % for the typedef trick!
-%ocaml: use only as environment when typechecking?
 
 <<[[Sym]] identifier value, scope fields>>=
 ushort	block;
 @
 % see also Decl.block (below)
-%ocaml: do naming phase or do it in parsing. embed blockid in fullname type.
+%ocaml: do naming phase or do it in parsing. embed blockid in 'fullname' type.
 % and check if redeclare later in an extra check phase.
 
 % Why need block in Sym? for sue? no there is sueblock already.
@@ -1583,11 +1594,10 @@ ushort	block;
 <<[[Sym]] identifier value fields>>=
 long	varlineno;
 @
-
-\t varlineno? why not simply lineno? To help indicate
-% that it references the place where the symbol is defined?
-% so for a struct xxx, it's the varlineno of the corresponding
-% struct definition? for an identifier it is the def??
+% this references the place where the symbol is defined.
+% when do int x; .... return x; we can print a good error message
+% if type inferered for x does not match the decl and report the
+% location where x is defined.
 
 
 \subsection{Tag symbols}
@@ -1598,7 +1608,9 @@ long	varlineno;
 <<[[Sym]] tag value fields>>=
 Type*	suetag;
 @
-% rename sue_tag_type?
+%less: rename sue_tag_type?
+
+
 % restored in revertdcl()
 % mutual ref, s->suetag->tag = s;
 % Then can go through the fields in suetag->link!
@@ -1621,17 +1633,13 @@ ushort	sueblock;
 
 \subsection{Other symbols}
 
+% for labels?
+%  see later labels
+
 <<[[Sym]] macro value fields>>=
 char*	macro;
 @
-%ocaml: have separate cpp? no, but at least separate different kinds of symbols
-% in different tables
-
-% for labels?
-%  see later labels
-% for tags?
-%  see later suetag, sueblock
-
+%ocaml: separate different kinds of symbols in different hash tables
 
 <<[[Sym]] lexeme value fields>>=
 // enum<lexeme>
@@ -1674,16 +1682,19 @@ enum namespace
     DLABEL,// labels, goto
 };
 @
-% this type is for the different C namespaces which are
-%  identifier, sue tags, and labels. See K&R book?
 %todo: DAUTO is a bad name, DIDENT would be better no? and SUE -> DTAG?
+%ocaml: DMARK is ugly; use a list of lists so clear boundaries
+% between different scopes
+
 %Lots of XAUTO:
 % - DAUTO(declaration?), 
 % - TAUTO(temporary), 
 % - LAUTO(lexeme), 
 % - CAUTO(class), 
 % hmmm that's a lot.
-%ocaml: DMARK is ugly, we should just use a list of list.
+
+% this type is for the different C namespaces which are
+%  identifier, sue tags, and labels. See K&R book?
 
 <<struct Decl>>=
 struct	Decl
@@ -1701,21 +1712,22 @@ struct	Decl
 %less: rename val? to kind? or namespace?
 % this val will help to know then which 'xxx value field' makes sense
 % in this context for this symbol.
-%ocaml: if had cleaner ADT would not need to overload Sym.
+%ocaml: if had cleaner ADT, you not need to overload Sym.
 
 % have this 'sym copy fields' above, because when add an ident in a scope,
 % we mask the previous one, but we want to remember the previous
 % one when we exit the scope to restore it in the global symbol
 % table.
-%ocaml: should not use global symbol table maybe.
+%ocaml: use lists of lists in env itself.
 
 % stack because nested scopes
 <<global dclstack>>=
 // list<list<ref_own<Decl>>> (next = Decl.link, nested lists via DMARK)
 Decl*	dclstack;
 @
-%ocaml: but should have a list of list? ugly but do ia via DMARK
-%see also firstdcl when parsing
+%ocaml: have a list of list, and separate fields for the separate
+% namespaces (id vs tags (labels are done later in check.ml))
+
 <<[[Decl]] extra fields>>=
 // list<ref_own<Decl> of dclstack
 Decl*	link;
@@ -1776,9 +1788,11 @@ int	blockno;
 <<global autobn>>=
 int	autobn;
 @
-% managed in a stack
 %ocaml: put in env stack like other things instead of abusing fields
 % to save old value
+
+% managed in a stack
+
 
 <<[[cinit()]] namespace globals initialization>>=
 blockno = 0;
@@ -1790,6 +1804,8 @@ autobn = blockno;
 <<[[cinit()]] namespace globals initialization>>=
 autoffset = 0;
 @
+%ocaml: can put in a separate environment? local to separate module?
+
 %what about autoffset? what is it used for? for params and locals
 % in assembly? to automatically add each time space for new locals?
 % but then why need to restore??
@@ -1812,18 +1828,23 @@ void markdcl(void)
     autobn = blockno;
 }
 @
-% save current scope autobn, so can restore it when pop DMARK.
 %ocaml: just introduce a new list, no need DMARK
+
+% save current scope autobn, so can restore it when pop DMARK.
 % does not change autoffset?
 
 <<[[Decl]] sym copy fields>>=
 Type*	type;  // for Sym.type and Sym.suetag
 ushort	block; // for Sym.block and Sym.sueblock and autobn
 @
+%ocaml: ugly abuse of same field for many different things
 
 <<[[Decl]] sym copy fields>>=
 long	offset; // for Sym.offset and autoffset
 @
+%ocaml: do in separate phase, and pass proper env in separate analysis
+% so no need to save/restore it
+
 % this are sym copy fields and also copy of autobn and autooffset
 % actually.
 \l rename old_type, old_block, old_offset?
@@ -1858,10 +1879,12 @@ Node* revertdcl(void)
     return n;
 }
 @
+%ocaml: pop, but also need Hashtbl.remove in globals.hids for typedefs
+% and for env.ids and env.tags.
+
 % what is this Node n? why return a node? because when we revert
 % a local volatile we actually generate some fake nodes USED(&local_volatile)
 % so we need to return this OLIST of hidden generated nodes.
-%ocaml: just pop (actually need also Hashtbl.remove in globals.hids)
 
 <<[[revertdcl()]] sanity check d>>=
 if(d == D) {
@@ -1869,6 +1892,7 @@ if(d == D) {
     break;
 }
 @
+%ocaml: raise Impossible, every revertdcl is paired with a markdcl
 
 <<[[revertdcl()]] switch declaration type cases>>=
 case DMARK:
@@ -2040,11 +2064,13 @@ struct	Prog
     <<[[Prog]] extra fields(arm)>>
 };
 @
+%linker: same?
+%ocaml: just reuse same type; use Ast_asm5.ml, precise AST.
+
 % lineno! for debugger! so generated object file will contain
 % line information of the C code.
 % 'char' is enough, less than 255 ARM opcodes :)
-%linker: same?
-%ocaml: just reuse same type; use Ast_asm5.ml, precise AST.
+
 
 % really ARM specific
 <<[[Prog]] other fields(arm)>>=
@@ -2385,6 +2411,7 @@ if(ofd < 0) {
     errorexit();
 }
 @
+%ocaml: Sys_error exception message is clear enough
 
 <<[[cinit()]] lexing globals initialization>>=
 nerrors = 0;
@@ -2728,6 +2755,7 @@ if(pushdepth > 1000) {
     errorexit();
 }
 @
+%ocaml: should do too
 
 % remember in compile():
 %            newfile(infile, -1);
@@ -5601,6 +5629,7 @@ prog:
 <<extra grammar rules>>
 <<ebnf grammar rules>>
 @
+%ocaml: return AST here, do not process AST of func during yyparse.
 
 % prog does not return anything. Do things in function body,
 % in initializers, or in gclean at the very end.
@@ -5657,6 +5686,9 @@ prog:
 xdecl:
     zctlist ';'          { dodecl(xdecl, lastclass, lasttype, Z); }
 @
+%ocaml: I check if got struct or enum def here, otherwise
+% no sense to have no identifier here. Also I returned an AST for those defs.
+
 % This declaration covers actually definitions as
 % can have complex struct/union def, or enum, inside the t or zct_list.
 % recall that ct means class_storage and type, z means zero.
@@ -5668,8 +5700,6 @@ xdecl:
 %  - struct x { ... }; (ok something kinda useful).
 %todo: effect of dodecl when pass Z? xdecl will not be called anyway ...
 % just to set nearln? 
-%ocaml: I check if got struct or enum def here, otherwise
-% no sense to have no identifier here.
 
 
 <<global lastclass>>=
@@ -5677,11 +5707,14 @@ xdecl:
 char	lastclass;
 @
 %ugly? do that because C sucks? 
-%ocaml: my parser_c.mly was also complicated when it come to decl handling ...
+%ocaml: my parser_c.mly was also complicated when it come to decl handling,
+% but I return a quadruple instead of using globals.
 
 <<global lasttype>>=
 Type*	lasttype;
 @
+%ocaml: use closures to handle the typ1 vs typ2 composition
+
 % really lastype_partone.
 
 <<ebnf grammar rules>>=
@@ -5693,10 +5726,11 @@ zctlist:
     }
 |   ctlist
 @
-% so no type means int by default, as in 'x;' really means 'int x;'
-% can even have ';' which is not very useful (and equivalent to 'int;')
 %ocaml: return a pair instead of modifying globals. Also forbid
 % empty declaration without any type or storage.
+
+% so no type means int by default, as in 'x;' really means 'int x;'
+% can even have ';' which is not very useful (and equivalent to 'int;')
 
 <<extra grammar rules>>=
 ctlist:
@@ -5742,12 +5776,13 @@ xdlist:
 |   xdlist ',' xdlist
 @
 %$
+%ocaml: return AST, do not resolve class, types, and more here.
+
 % will see xdecor below, essentially a (decorated) name.
 % x decorated with more type info (left pointer, right array and func).
 % but for now xdecor =~ identifier, which is ONAME.
 
 % We do not return an AST here. We modify instead the symbol table.
-
 
 % dodecl() modify especially the lastdcltype global (and symbol table via
 %  its callback)
@@ -5781,6 +5816,8 @@ loop:
     return n;
 }
 @
+\l when can have unknown declarator message? impossible?
+
 % why set nearln? we will construct some new nodes? yes, can do
 % during revertdcl() for volatiles hidden instructions USED(&local_volatile)
 % why return n?
@@ -5995,6 +6032,11 @@ if(lastdcltype == T || lastdcltype->etype != TFUNC) {
 }
 @
 %$
+%ocaml: same error, but stop there, no implicit declaration
+
+%corner: note that 5c resolve typedefs during parsing, so
+% see in plan9-ml/compiler/tests/function_typedef.c weird case
+% that is allowed by 5c (and not clang!)
 
 % lots of things happen in xdecor actually as the parameters
 % will be there.
@@ -6299,7 +6341,7 @@ Node* dcllabel(Sym *s, bool defcontext)
 
     n = s->label;
     <<[[dcllabel()]] if n not null, mark node as declared or used>>
-    // else
+    // else, new label
 
     d = push();
     d->sym = s;
@@ -6316,7 +6358,7 @@ Node* dcllabel(Sym *s, bool defcontext)
 
     n = new(OXXX, Z, Z);
     n->sym = s;
-    <<[[dcllabel()]] set def and use fields>>
+    <<[[dcllabel()]] when new label, set def and use fields>>
     s->label = n;
 
     <<[[dcllabel()]] debug declaration>>
@@ -6613,7 +6655,7 @@ OADDR,
 
 \subsection{Function calls}
 
-<<misc nodes>>=
+<<expression nodes>>=
 OFUNC, // used for uses (calls) but also defs (and decls)
 @
 % should split? have a OCALL?
@@ -6647,10 +6689,9 @@ if(($1->op == ONAME) && ($1->type == T))
     dodecl(xdecl, CXXX, types[TINT], $$);
 @
 %less: should be a flag honestly ...
-% no forward decl of entity name, so assumes return an int?
-% should warn instead about undeclared symbol? cleaner
+% no forward decl of entity name, so assumes return an int? ugly.
+%ocaml: forbid it. warn about undeclared symbol. cleaner
 % than this implicit prototype declaration where return an int.
-%ocaml: forbid it
 \t should not be a TFUNC declaration here?
 
 % this is why later when do tmerge get a warning
@@ -6720,12 +6761,14 @@ name:
         <<name rule, LNAME case, adjust more fields>>
     }
 @
+%ocaml: forbid implicit declarations of functions so can warn early.
+
 % similar to tag rule, but no LTYPE here!
 %$
-\t no warning if not defined here?? 
-% let the caller decide, so when in a funcall, it is just declared implicitely
-%ocaml: forbid implicit declarations of functions
-\t but then where is the code to warn if use of undeclared?? in hidden chunks?
+% no warning if not defined here. This id done in tcomo() instead.
+% We let the caller decide, so when in a funcall, it is just declared 
+% implicitely
+
 
 % Very important to propagate information from symbol to node!
 % Because when revertdcl, information will be lost and codegen
@@ -7089,7 +7132,7 @@ OSIZE,
 % doinit is now in code generation part
 \t why make dodecl return something? anyway it is the same thing than last param
 
-<<variable declaration nodes>>=
+<<declaration nodes>>=
 OINIT,
 @
 % but just for list! otherwise it's really OASI.
@@ -7117,13 +7160,13 @@ qlist:
 %$
 % why not OLIST also for the first one?
 
-<<variable declaration nodes>>=
+<<declaration nodes>>=
 OELEM,  // field designator
 @
 % for regular access it's TDOT, could have been marged
 %less: rename OINITFIELD?
 
-<<misc nodes>>=
+<<expression nodes>>=
 OARRAY, // used for uses (designator) and defs (and decl)
 @
 %less: could be renamed no? OINITARRAY
@@ -7168,10 +7211,7 @@ doinit(Sym *s, Type *t, long o, Node *a)
     initlist = a;
 
     a = init1(s, t, o, 0);
-    if(initlist != Z)
-        diag(initlist, "more initializers than structure: %s",
-            s->name);
-
+    <<[[doinit()]] sanity check initlist after init1>>
     initlist = n;
 
     return a;
@@ -7181,10 +7221,10 @@ doinit(Sym *s, Type *t, long o, Node *a)
 % return value used???
 
 <<[[doinit()]] sanity check t>>=
-if(t == T) //??? when this happens?
+if(t == T)
     return Z;
 @
-
+\t when this happens?
 
 
 \section{Types and storage classes}
@@ -7353,9 +7393,11 @@ tlist:
             diag(Z, "illegal combination of class 4: %s", cnames[$1.c]);
     }
 @
-% do not allow to specify storage class
+%ocaml: I rewrote grammar to disallow this by construction (but then
+% error message is not as good?)
 %less: hmmm could have done via grammar no?
-%ocaml: should rewrite grammar to disallow this by construction
+
+% do not allow to specify storage class
 
 
 
@@ -7409,7 +7451,7 @@ long typebitor(long a, long b)
     return c;
 }
 @
-%ocaml: do via grammar, allow long long in basic type.
+%ocaml: do via grammar, allow long long in basic type, rest is syntax error
 
 \subsection{Basic types}
 % types part1
@@ -7568,6 +7610,8 @@ simplet(long b)
     return types[TINT];
 }
 @
+%ocaml: illegal combination done via syntax error instead
+
 % simplet return pointers to shared basic types.
 % If then you add a qualifier, then this type will be copied
 % before being adjusted.
@@ -7630,6 +7674,8 @@ int simplec(long b)
     return CXXX;
 }
 @
+%ocaml: again disallow combination via grammar
+
 % ugly that typedef if considered a storage class ...
 
 % A few places where 5c adjusts the storage, because
@@ -7711,10 +7757,8 @@ simpleg(long b)
 
 % Not so simple when need to handle scope.
 
-<<definition nodes>>=
-OSTRUCT, // used for defs, decls, and for struct constructors
-OUNION,
-@
+% There is OSTRUCT and OUNION but it's for struct constructor!
+
 
 % Explained Sym.suetag before, and Type.tag (and Type.sym for fields)
 % And Sym.sueblock. And Type.link.
@@ -7744,6 +7788,7 @@ OUNION,
     }
 @
 %$
+%ocaml: again disallow by grammar
 
 <<types, storage classes, qualifiers rules>>=
 <<complex rule>>
@@ -7772,6 +7817,7 @@ complex:
         $$ = $2->suetag;
     }
 @
+
 % 0 for None. It means dotag will not create a new sym for it.
 % If the tag was already defined, then we reuse the tag, otherwise
 % we introduce a new incomplete type (that will be filled later) and
@@ -7829,9 +7875,11 @@ Type* dotag(Sym *s, int et, int bn)
 % cant use for TSTRUCT and TUNION
 <<[[dotag()]] sanity check tag redeclaration>>=
 if(s->suetag->etype != et)
-    diag(Z, "tag used for more than one type: %s",
-        s->name);
+    diag(Z, "tag used for more than one type: %s", s->name);
 @
+%less: mv later in Checking?
+%ocaml: do in separate phase; also give better location, not end
+% of struct but start! (like in clang)
 
 
 \subsubsection{Structure/union definitions}
@@ -7864,6 +7912,9 @@ if(s->suetag->etype != et)
     }
 @
 %$
+%ocaml: do check in check.ml, not parsing, and give better error message
+% a la clang
+
 % could factorize in a su: TSTRUCT { $$ = TSTRUCT } TUNION ...
 
 % set link!!!
@@ -7993,7 +8044,6 @@ sbody:
 
 @
 %$
-% ????
 
 
 
@@ -8069,6 +8119,9 @@ void edecl(int c, Type *t, Sym *s)
     strl = t;
 }
 @
+%ocaml: syntax error instead of error message. Also I detect
+% duplicate member (a la clang)
+
 % fields are chained together through down!
 
 % call copytyp here too, because add a sym to it and will chain
@@ -8078,9 +8131,7 @@ void edecl(int c, Type *t, Sym *s)
 
 % I explained Type.TENUM, and Type.link of it point to actual type.
 
-%<<definition nodes>>=
-%OENUM,
-%@
+%dead: OENUM
 
 % There are two different types: 
 %   - the type of the enum declaration itself, when do  enum x foo;
@@ -8120,7 +8171,7 @@ struct En en;
     {
         dotag($2, TENUM, 0);
         $$ = $2->suetag;
-        if($$->link == T)
+        if($$->link == T) // default type
             $$->link = types[TINT];
         $$ = $$->link;
     }
@@ -8155,7 +8206,7 @@ struct En en;
         $$ = en.tenum;
     }
 @
-
+%ocaml: again, better error message a la clang
 
 <<complex rule, after processed an enum, sanity check tenum>>=
 if(en.tenum == T) {
@@ -8165,6 +8216,7 @@ if(en.tenum == T) {
 @
 \t this can never happen? tenum always set, and grammar imposes
 \t  at least one enum element
+%ocaml: can happen???
 
 % So type of enum is Sym.suetag->link
 
@@ -8227,8 +8279,9 @@ void doenum(Sym *s, Node *n)
     <<[[doenum()]] debugging support>>
 }
 @
-% xdecl so check if redeclaration!
+%ocaml: constant evaluation done in separate phase in typecheck.ml
 
+% xdecl so check if redeclaration!
 %enum_redeclare.c:1 external redeclaration of: Foo
 %	GLOBL ENUM enum_redeclare.c:1
 %	GLOBL INT enum_redeclare.c:1
@@ -8396,7 +8449,7 @@ fnproto1(Node *n)
 }
 @
 % NODECL =~ (complex function type cast) nil
-
+%ocaml: should not get error by construction
 
 
 <<parameter declarator rules>>=
@@ -8404,7 +8457,7 @@ fnproto1(Node *n)
 @
 
 
-<<variable declaration nodes>>=
+<<declaration nodes>>=
 OPROTO,
 @
 % ?? rename OPARAM?
@@ -8451,7 +8504,7 @@ case OLIST:
 
 
 
-<<variable declaration nodes>>=
+<<declaration nodes>>=
 ODOTDOT,
 @
 
@@ -8552,6 +8605,7 @@ loop:
     }
 }
 @
+%ocaml: error can happen? by construction?
 
 <<[[walkparam()]] switch op cases>>=
 case ODOTDOT:
@@ -8596,6 +8650,8 @@ if(s && s->offset != -1) {
     return;
 }
 @
+%ocaml: impossible by construction I think
+
 % offset set to -1 in walkparam()
 
 
@@ -8778,10 +8834,9 @@ warn(Node *n, char *fmt, ...)
             diag(n, "%s", buf);
             return;
         }
+        // else
 
-        Bprint(&diagbuf, "warning: %L %s\n", 
-                 (n==Z) ? nearln : n->lineno, 
-                 buf);
+        Bprint(&diagbuf, "warning: %L %s\n", (n==Z) ? nearln : n->lineno, buf);
 
         if(n != Z)
           if(debug['v'])
@@ -8789,7 +8844,9 @@ warn(Node *n, char *fmt, ...)
     }
 }
 @
+% -w -v to print AST too!
 
+% ?? -> <>
 <<function fatal>>=
 void
 fatal(Node *n, char *fmt, ...)
@@ -8800,8 +8857,7 @@ fatal(Node *n, char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
-    Bprint(&diagbuf, "%L %s\n", 
-              (n==Z)? nearln: n->lineno, buf);
+    Bprint(&diagbuf, "%L %s\n", (n==Z)? nearln: n->lineno, buf);
 
     if(debug['X']){
         Bflush(&diagbuf);
@@ -8910,6 +8966,20 @@ if(s->class == CEXTERN) {
 @
 %ocaml: should report! why would you do extern int x = 1; ?
 
+\subsection{pdecl}
+
+<<[[pdecl()]] adjust class>>=
+if(class == CXXX)
+    class = CPARAM;
+if(class != CPARAM) {
+    diag(Z, "parameter cannot have class: %s", s->name);
+    class = CPARAM;
+}
+@
+%ocaml: by construction I do not allow storage on parameter
+
+% remember than pdecl calls adecl
+
 \subsection{adecl}
 
 <<[[adecl()]] adjust storage if function type>>=
@@ -8938,18 +9008,6 @@ if(s->block == autobn)
     diag(Z, "auto redeclaration of: %s", s->name);
 @
 
-\subsection{pdecl}
-
-<<[[pdecl()]] adjust class>>=
-if(class == CXXX)
-    class = CPARAM;
-if(class != CPARAM) {
-    diag(Z, "parameter cannot have class: %s", s->name);
-    class = CPARAM;
-}
-@
-
-
 \section{Type checking}
 
 \subsection{Overview}
@@ -8962,6 +9020,94 @@ if(class != CPARAM) {
 
 % in many of the functions below, the boolean return value
 % true means that there was a typechecking error.
+
+% saw complex() for enum (and for array later).
+% does lots of stuff, typechecking, simplification, constant evaluation.
+% Call typechecker also tcom().
+
+\subsection{Type declarations consistency, [[tmerge()]]}
+%Declaration and definition types merge
+
+<<[[xdecl()]] merge type declarations>>=
+tmerge(t, s);
+@
+% not for adecl, or edecl, just for xdecl.
+
+% dodectl(xdecl,...) -> xdecl -> <>
+<<function tmerge>>=
+void
+tmerge(Type *t1, Sym *s)
+{
+    Type *ta, *tb, *t2;
+
+    t2 = s->type;
+/*print("merge	%T; %T\n", t1, t2);/**/
+    for(;;) {
+        if(t1 == T || t2 == T || t1 == t2)
+            break;
+        if(t1->etype != t2->etype)
+            break;
+        switch(t1->etype) {
+        case TFUNC:
+            ta = t1->down;
+            tb = t2->down;
+            if(ta == T) {
+                t1->down = tb;
+                break;
+            }
+            if(tb == T)
+                break;
+            while(ta != T && tb != T) {
+                if(ta == tb)
+                    break;
+                /* ignore old-style flag */
+                if(ta->etype == TOLD) {
+                    ta = ta->down;
+                    continue;
+                }
+                if(tb->etype == TOLD) {
+                    tb = tb->down;
+                    continue;
+                }
+                /* checking terminated by ... */
+                if(ta->etype == TDOT && tb->etype == TDOT) {
+                    ta = T;
+                    tb = T;
+                    break;
+                }
+                if(!sametype(ta, tb))
+                    break;
+                ta = ta->down;
+                tb = tb->down;
+            }
+            if(ta != tb)
+                diag(Z, "function inconsistently declared: %s", s->name);
+
+            /* take new-style over old-style */
+            ta = t1->down;
+            tb = t2->down;
+            if(ta != T && ta->etype == TOLD)
+                if(tb != T && tb->etype != TOLD)
+                    t1->down = tb;
+            break;
+
+        case TARRAY:
+            /* should we check array size change? */
+            if(t2->width > t1->width)
+                t1->width = t2->width;
+            break;
+
+        case TUNION:
+        case TSTRUCT:
+            return;
+        }
+        t1 = t1->link;
+        t2 = t2->link;
+    }
+}
+@
+
+
 
 \subsection{Set of types constants, [[typexxx[]]]}
 
@@ -9649,95 +9795,12 @@ for(p=trelinit; p->code >= 0; p++) {
 @
 
 
-\subsection{Type declarations consistency, [[tmerge()]]}
-%Declaration and definition types merge
-
-<<[[xdecl()]] merge type declarations>>=
-tmerge(t, s);
-@
-% not for adecl, or edecl, just for xdecl.
-
-% dodectl(xdecl,...) -> xdecl -> <>
-<<function tmerge>>=
-void
-tmerge(Type *t1, Sym *s)
-{
-    Type *ta, *tb, *t2;
-
-    t2 = s->type;
-/*print("merge	%T; %T\n", t1, t2);/**/
-    for(;;) {
-        if(t1 == T || t2 == T || t1 == t2)
-            break;
-        if(t1->etype != t2->etype)
-            break;
-        switch(t1->etype) {
-        case TFUNC:
-            ta = t1->down;
-            tb = t2->down;
-            if(ta == T) {
-                t1->down = tb;
-                break;
-            }
-            if(tb == T)
-                break;
-            while(ta != T && tb != T) {
-                if(ta == tb)
-                    break;
-                /* ignore old-style flag */
-                if(ta->etype == TOLD) {
-                    ta = ta->down;
-                    continue;
-                }
-                if(tb->etype == TOLD) {
-                    tb = tb->down;
-                    continue;
-                }
-                /* checking terminated by ... */
-                if(ta->etype == TDOT && tb->etype == TDOT) {
-                    ta = T;
-                    tb = T;
-                    break;
-                }
-                if(!sametype(ta, tb))
-                    break;
-                ta = ta->down;
-                tb = tb->down;
-            }
-            if(ta != tb)
-                diag(Z, "function inconsistently declared: %s", s->name);
-
-            /* take new-style over old-style */
-            ta = t1->down;
-            tb = t2->down;
-            if(ta != T && ta->etype == TOLD)
-                if(tb != T && tb->etype != TOLD)
-                    t1->down = tb;
-            break;
-
-        case TARRAY:
-            /* should we check array size change? */
-            if(t2->width > t1->width)
-                t1->width = t2->width;
-            break;
-
-        case TUNION:
-        case TSTRUCT:
-            return;
-        }
-        t1 = t1->link;
-        t2 = t2->link;
-    }
-}
-@
-
-
-
 \subsection{Expression typechecking, [[tcom()]]}
 % cc/com.c
 
 
 % true means error
+% | tcomo  -> <>
 <<function tcom>>=
 /*
  * evaluate types
@@ -11179,6 +11242,7 @@ makedot(Node *n, Type *t, long o)
 
 \subsection{Arithmetic conversions}
 
+% ?? -> <>
 <<function arith>>=
 /*
  * "the usual arithmetic conversions are performed"
@@ -12174,11 +12238,12 @@ dpcheck(Node *n)
 bool	aused;
 @
 
+
+
 <<[[syminit()]] remaining initialisations>>=
 s->aused = false;
 @
-\t but if shadow past variable, set aused again to false?
-
+% if shadow past variable, set aused again to false in adecl.
 <<[[adecl()]] initialize symbol>>=
 s->aused = false;
 @
@@ -12220,6 +12285,7 @@ if(!s->aused) {
 OUSED,
 OSET,
 @
+% in AST!
 
 <<ulstmnt rule>>=
 |   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
@@ -12281,7 +12347,7 @@ usedset(Node *n, int o)
 % Node.complex = definition
 % Node.addable = use.
 
-<<[[dcllabel()]] set def and use fields>>=
+<<[[dcllabel()]] when new label, set def and use fields>>=
 n->complex = defcontext;
 n->addable = !defcontext;
 @
@@ -12311,7 +12377,7 @@ if(n != Z) {
 
 
 <<[[reverdcl()]] DLABEL case, warn if label not used>>=
-if(s->label && s->label->addable == 0)
+if(s->label && !s->label->addable)
     warn(s->label, "label declared and not used \"%s\"", s->name);
 @
 % ugly this abuse of addable, why not using lblaused instead?
@@ -12325,16 +12391,27 @@ if(s->label && s->label->addable == 0)
 <<global canreach>>=
 bool	canreach;
 @
+% once we processed a ORETURN in a OLIST, then for sure
+% the code after is not reachable.
 
 <<global warnreach>>=
 bool	warnreach;
 @
 % set in codgen(), used in gen()
+\t when want to disable warn reach?
+
+
+<<[[gen()]] locals>>=
+bool oldreach;
+@
+% local this time! but ugly to save/restore.
+%ocaml: pass in environment?
 
 <<global suppress>>=
 bool	suppress;
 @
 % often do warneach = !suppress. not sure why.
+\t what is that?
 
 <<[[codgen()]] initialisation before call to gen>>=
 canreach = true;
@@ -12366,6 +12443,7 @@ if(!canreach) {
 @
 % no OCONTINUE? because no need special handle, go through default and warning
 % 'switch body below'? where is it?
+
 
 
 % deadheads -> <>
@@ -12446,6 +12524,8 @@ deadheads(Node *c)
 
 \subsection{Missing return}
 
+% -B?
+
 <<[[codgen()]] warn for possible missing return after call to gen>>=
 if(canreach && thisfntype->link->etype != TVOID){
     if(debug['B'])
@@ -12494,7 +12574,8 @@ if(canreach && thisfntype->link->etype != TVOID){
 %            codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
 
 % main -> compile -> yyparse -> codgen (func) -> gen (statement) -> cgen (expr)
-\t where is the code to handle toplevel globals? 
+% The code to handle toplevel globals is in gclean(). Moreover
+% the code of toplevel globals defined by initializer is handled in doinit().
 
 % will visit the AST and generate recursively the code mostly.
 
@@ -13426,6 +13507,132 @@ complex(Node *n)
 
 
 
+\section{Sizes}
+
+
+<<global ewidth>>=
+schar	ewidth[NTYPE] =
+{
+    [TXXX] = -1,		
+    [TCHAR] = SZ_CHAR,	
+
+    [TUCHAR] = SZ_CHAR,	
+    [TSHORT] = SZ_SHORT,	
+    [TUSHORT] = SZ_SHORT,	
+    [TINT] = SZ_INT,		
+    [TUINT] = SZ_INT,		
+    [TLONG] = SZ_LONG,	
+    [TULONG] = SZ_LONG,	
+    [TVLONG] = SZ_VLONG,	
+    [TUVLONG] = SZ_VLONG,	
+    [TFLOAT] = SZ_FLOAT,	
+    [TDOUBLE] = SZ_DOUBLE,	
+
+    [TIND] = SZ_IND,		
+    [TFUNC] = 0,		
+    [TARRAY] = -1,		
+    [TVOID] = 0,		
+    [TSTRUCT] = -1,		
+    [TUNION] = -1,		
+    [TENUM] = SZ_INT,		
+};
+@
+%old: the designator used to be in comment, but then there is 
+% a strong coupling with the enum order, and actually I got
+% some regressions when I tried to reorder things in type_kind,
+% so better to use a designator.
+%cons? can be more complicated to bootstrap with other C compiler, but
+% I don't care
+
+
+<<constant SZ_CHAR(arm)>>=
+#define	SZ_CHAR		1
+@
+
+<<constant SZ_SHORT(arm)>>=
+#define	SZ_SHORT	2
+@
+
+<<constant SZ_INT(arm)>>=
+#define	SZ_INT		4
+@
+
+<<constant SZ_LONG(arm)>>=
+#define	SZ_LONG		4
+@
+
+<<constant SZ_IND(arm)>>=
+#define	SZ_IND		4
+@
+
+<<constant SZ_FLOAT(arm)>>=
+#define	SZ_FLOAT	4
+@
+
+<<constant SZ_VLONG(arm)>>=
+#define	SZ_VLONG	8
+@
+
+<<constant SZ_DOUBLE(arm)>>=
+#define	SZ_DOUBLE	8
+@
+
+
+\section{Offset}
+
+% stkoff, autoffset, Node.xoffset, lots of stuff done
+% at parsing time.
+
+% ?
+<<global autoffset>>=
+long	autoffset;
+@
+
+% ?
+<<global stkoff>>=
+long	stkoff;
+@
+% stack offset, used for ATEXT generation in codgen()
+% to compute the set of locals we need
+
+
+<<[[argmark()]] initializations>>=
+autoffset = align(0, thisfntype->link, Aarg0);
+stkoff = 0;
+@
+
+<<[[argmark()]] finalizations>>=
+autoffset = 0;
+stkoff = 0;
+@
+
+<<[[Sym]] identifier value, code generation fields>>=
+long	offset;
+@
+%todo: hmm seems used for CEXREG, flow fron exreg -> o -> xdecl -> offset field.
+
+<<[[Node]] code generation fields>>=
+long	xoffset;
+@
+% this is for ONAME after some resolving for params and locals
+% and for OREGISTER and OINDREG (in addition to reg)
+
+
+\section{First argument}
+
+<<global firstarg>>=
+Sym*	firstarg;
+@
+
+<<xdecl rule, initializations before processing a function>>=
+firstarg = S; // can mv after call to dodecl? No I think.
+@
+
+<<global firstargtype>>=
+Type*	firstargtype;
+@
+
+
 \section{Functions, [[codgen()]]}
 
 % Finally! codgen! called from yyparse.
@@ -13556,7 +13763,7 @@ loop:
     }
 }
 @
-
+% -G
 
 \subsection{Blocks, sequences}
 
@@ -13582,9 +13789,6 @@ bool err;
 @
 % saved prog
 
-<<[[gen()]] locals>>=
-bool oldreach;
-@
 
 % see Parsing section to remember how an OIF tree is
 % represented, with what is l(the cond) and r(a pair OLIST of then and else)
@@ -14038,6 +14242,7 @@ case OBREAK:
 
 
 \subsection{Switch}
+% mv in advanced topics?
 
 
 <<[[gen()]] locals>>=
@@ -14467,6 +14672,7 @@ default:
     break;
 @
 
+
 % also many calls to bcomplex() before when processing
 % statements for instance for the expression in if(e), or while(e).
 % Many calls to cgen too.
@@ -14476,6 +14682,7 @@ default:
 % codgen -> gen -> <>    for expression stuff
 % nn is optional! it's the possible target of the expr, e.g.
 % if do return <expr>; then will have in nn a node with REGRET
+% if do expr; then nn will be Z (like above in gen()).
 %pre: has called complex() on the node n before (and nn if not null?)
 <<function cgen(arm)>>=
 void
@@ -16133,53 +16340,6 @@ reglpcgen(Node *n, Node *nn, int f)
 
 \subsubsection{Parameters}
 
-<<global firstarg>>=
-Sym*	firstarg;
-@
-
-<<xdecl rule, initializations before processing a function>>=
-firstarg = S; // can mv after call to dodecl? No I think.
-@
-
-<<global firstargtype>>=
-Type*	firstargtype;
-@
-
-% ?
-<<global autoffset>>=
-long	autoffset;
-@
-
-% ?
-<<global stkoff>>=
-long	stkoff;
-@
-% stack offset, used for ATEXT generation in codgen()
-% to compute the set of locals we need
-
-
-<<[[argmark()]] initializations>>=
-autoffset = align(0, thisfntype->link, Aarg0);
-stkoff = 0;
-@
-
-<<[[argmark()]] finalizations>>=
-autoffset = 0;
-stkoff = 0;
-@
-
-<<[[Sym]] identifier value, code generation fields>>=
-long	offset;
-@
-%todo: hmm seems used for CEXREG, flow fron exreg -> o -> xdecl -> offset field.
-
-<<[[Node]] code generation fields>>=
-long	xoffset;
-@
-% this is for ONAME after some resolving for params and locals
-% and for OREGISTER and OINDREG (in addition to reg)
-
-
 
 
 
@@ -16434,6 +16594,8 @@ pre:
 
 \subsection{[[sizeof()]]}
 
+
+
 \section{Toplevel globals}
 
 <<[[gclean()]] generate all AGLOBL pseudo opcodes>>=
@@ -16466,6 +16628,16 @@ Node*	nodcast;
 OASI, // appears during parsing
 @
 % assign initializer?
+
+
+
+<<[[doinit()]] sanity check initlist after init1>>=
+if(initlist != Z)
+    diag(initlist, "more initializers than structure: %s",
+        s->name);
+@
+\t when can this happen?
+
 
 % doinit -> <>
 <<function init1>>=
@@ -16949,83 +17121,9 @@ symadjust(Sym *s, Node *n, long del)
 
 
 
-\section{Sizes}
-
-<<global ewidth>>=
-schar	ewidth[NTYPE] =
-{
-    [TXXX] = -1,		
-    [TCHAR] = SZ_CHAR,	
-
-    [TUCHAR] = SZ_CHAR,	
-    [TSHORT] = SZ_SHORT,	
-    [TUSHORT] = SZ_SHORT,	
-    [TINT] = SZ_INT,		
-    [TUINT] = SZ_INT,		
-    [TLONG] = SZ_LONG,	
-    [TULONG] = SZ_LONG,	
-    [TVLONG] = SZ_VLONG,	
-    [TUVLONG] = SZ_VLONG,	
-    [TFLOAT] = SZ_FLOAT,	
-    [TDOUBLE] = SZ_DOUBLE,	
-
-    [TIND] = SZ_IND,		
-    [TFUNC] = 0,		
-    [TARRAY] = -1,		
-    [TVOID] = 0,		
-    [TSTRUCT] = -1,		
-    [TUNION] = -1,		
-    [TENUM] = SZ_INT,		
-};
-@
-%old: the designator used to be in comment, but then there is 
-% a strong coupling with the enum order, and actually I got
-% some regressions when I tried to reorder things in type_kind,
-% so better to use a designator.
-%cons? can be more complicated to bootstrap with other C compiler, but
-% I don't care
-
-
-<<constant SZ_CHAR(arm)>>=
-#define	SZ_CHAR		1
-@
-
-<<constant SZ_SHORT(arm)>>=
-#define	SZ_SHORT	2
-@
-
-<<constant SZ_INT(arm)>>=
-#define	SZ_INT		4
-@
-
-<<constant SZ_LONG(arm)>>=
-#define	SZ_LONG		4
-@
-
-<<constant SZ_IND(arm)>>=
-#define	SZ_IND		4
-@
-
-<<constant SZ_FLOAT(arm)>>=
-#define	SZ_FLOAT	4
-@
-
-<<constant SZ_VLONG(arm)>>=
-#define	SZ_VLONG	8
-@
-
-<<constant SZ_DOUBLE(arm)>>=
-#define	SZ_DOUBLE	8
-@
-
-
-\section{Offset}
-
-% stkoff, autoffset, Node.xoffset, lots of stuff done
-% at parsing time.
-
 \section{Alignment}
 
+% ??? -> <>
 <<function align(arm)>>=
 long
 align(long i, Type *t, int op)
@@ -18091,6 +18189,9 @@ if(n->complex >= FNX)
     
     }
 @
+
+
+
 
 
 
@@ -19208,7 +19309,9 @@ useless:
 
 % Necessary also for typechecking arrays, enumeration constant resolution,
 % but true that could force programmer to write simple constants
-% for those things.
+% for those things. 
+% Still, not really an optimization, more like a feature.
+% Still also used for optimization? a bit like partial evaluation?
 
 % gen | ... -> complex -> ccom -> <>
 % evaluate constants statically.
@@ -24519,6 +24622,7 @@ if(a == ATEXT)
 \iffalse
 
 \section{Advanced C features}
+% see cc/c99.txt for list of things implemented by kencc
 
 \subsection{Local [[static]]}
 % not really a C extension, but really sugar
@@ -24852,7 +24956,7 @@ lastfield = 0;
 
 % parsing
 
-<<definition nodes>>=
+<<declaration nodes>>=
 OBIT,
 @
 
@@ -25237,6 +25341,12 @@ ambig:
 
 
 \subsection{Struct constructors}
+
+<<expression nodes>>=
+OSTRUCT, // used for defs, decls, and for struct constructors
+OUNION,
+@
+
 
 % kenccext and gccext, struct constructor
 <<xuexpr rule>>=
