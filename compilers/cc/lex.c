@@ -1474,10 +1474,10 @@ cinit(void)
     dclstack = D;
     /*e: [[cinit()]] dclstack initialization */
     /*s: [[cinit()]] symstring initialization */
-    t = typ(TARRAY, types[TCHAR]);
-    t->width = 0;
     symstring = slookup(".string");
     symstring->class = CSTATIC;
+    t = typ(TARRAY, types[TCHAR]);
+    t->width = 0;
     symstring->type = t;
     /*e: [[cinit()]] symstring initialization */
     /*s: [[cinit()]] nodproto initialization */

@@ -154,11 +154,11 @@ gen(Node *n)
     // enum<node_kind> of a statement
     int o;
     /*s: [[gen()]] locals */
+    bool oldreach;
+    /*x: [[gen()]] locals */
     Prog *sp;
     Node *l;
     bool err;
-    /*x: [[gen()]] locals */
-    bool oldreach;
     /*x: [[gen()]] locals */
     bool f;
     /*x: [[gen()]] locals */

@@ -214,7 +214,7 @@ doinit(Sym *s, Type *t, long o, Node *a)
     Node *n;
 
     /*s: [[doinit()]] sanity check t */
-    if(t == T) //??? when this happens?
+    if(t == T)
         return Z;
     /*e: [[doinit()]] sanity check t */
 
@@ -241,10 +241,11 @@ doinit(Sym *s, Type *t, long o, Node *a)
     initlist = a;
 
     a = init1(s, t, o, 0);
+    /*s: [[doinit()]] sanity check initlist after init1 */
     if(initlist != Z)
         diag(initlist, "more initializers than structure: %s",
             s->name);
-
+    /*e: [[doinit()]] sanity check initlist after init1 */
     initlist = n;
 
     return a;
@@ -904,7 +905,7 @@ Node* revertdcl(void)
             /*e: [[revertdcl()]] debug revert DLABEL */
 
             /*s: [[reverdcl()]] DLABEL case, warn if label not used */
-            if(s->label && s->label->addable == 0)
+            if(s->label && !s->label->addable)
                 warn(s->label, "label declared and not used \"%s\"", s->name);
             /*e: [[reverdcl()]] DLABEL case, warn if label not used */
             s->label = Z;
@@ -1119,13 +1120,16 @@ rsametype(Type *t1, Type *t2, int n, bool f)
             return true;
         if(t1 == T || t2 == T)
             return false;
+        /*s: [[rsametype()]] if n less than zero */
         if(n <= 0)
             return true;
+        /*e: [[rsametype()]] if n less than zero */
 
         et = t1->etype;
         if(et != t2->etype)
             return false;
 
+        /*s: [[rsametype()]] check function type equality */
         if(et == TFUNC) {
             if(!rsametype(t1->link, t2->link, n, false))
                 return false;
@@ -1154,20 +1158,26 @@ rsametype(Type *t1, Type *t2, int n, bool f)
             }
             return true;
         }
+        /*e: [[rsametype()]] check function type equality */
+        /*s: [[rsametype()]] check array type equality */
         if(et == TARRAY)
             if(t1->width != t2->width && t1->width != 0 && t2->width != 0)
                 return false;
+        /*e: [[rsametype()]] check array type equality */
+        /*s: [[rsametype()]] check structure type equality */
         if(typesu[et]) {
             if(t1->link == T)
                 snap(t1);
             if(t2->link == T)
                 snap(t2);
+
             if(t1 != t2 && t1->link == T && t2->link == T){
                 /* structs with missing or different tag names aren't considered equal */
                 if(t1->tag == nil || t2->tag == nil ||
                    strcmp(t1->tag->name, t2->tag->name) != 0)
                     return false;
             }
+            // equal if have same types (but do not care about field names)
             t1 = t1->link;
             t2 = t2->link;
             for(;;) {
@@ -1178,16 +1188,21 @@ rsametype(Type *t1, Type *t2, int n, bool f)
                 t1 = t1->down;
                 t2 = t2->down;
             }
-        }
+        } // end su
+        /*e: [[rsametype()]] check structure type equality */
+
+        // recurse
         t1 = t1->link;
         t2 = t2->link;
 
+        /*s: [[rsametype()]] if f and not -V, allow void star */
         if((f || !debug['V']) && et == TIND) {
             if(t1 != T && t1->etype == TVOID)
                 return true;
             if(t2 != T && t2->etype == TVOID)
                 return true;
         }
+        /*e: [[rsametype()]] if f and not -V, allow void star */
     }
 }
 /*e: function rsametype */
@@ -1338,8 +1353,7 @@ Type* dotag(Sym *s, int et, int bn)
     }
     /*s: [[dotag()]] sanity check tag redeclaration */
     if(s->suetag->etype != et)
-        diag(Z, "tag used for more than one type: %s",
-            s->name);
+        diag(Z, "tag used for more than one type: %s", s->name);
     /*e: [[dotag()]] sanity check tag redeclaration */
     if(s->suetag->tag == S)
         s->suetag->tag = s;
@@ -1368,7 +1382,7 @@ Node* dcllabel(Sym *s, bool defcontext)
         return n;
     }
     /*e: [[dcllabel()]] if n not null, mark node as declared or used */
-    // else
+    // else, new label
 
     d = push();
     d->sym = s;
@@ -1385,10 +1399,10 @@ Node* dcllabel(Sym *s, bool defcontext)
 
     n = new(OXXX, Z, Z);
     n->sym = s;
-    /*s: [[dcllabel()]] set def and use fields */
+    /*s: [[dcllabel()]] when new label, set def and use fields */
     n->complex = defcontext;
     n->addable = !defcontext;
-    /*e: [[dcllabel()]] set def and use fields */
+    /*e: [[dcllabel()]] when new label, set def and use fields */
     s->label = n;
 
     /*s: [[dcllabel()]] debug declaration */
@@ -1608,9 +1622,9 @@ xdecl(int class, Type *t, Sym *s)
 void
 tmerge(Type *t1, Sym *s)
 {
-    Type *ta, *tb, *t2;
+    Type *t2 = s->type;
+    Type *ta, *tb;
 
-    t2 = s->type;
 /*print("merge	%T; %T\n", t1, t2);/**/
     for(;;) {
         if(t1 == T || t2 == T || t1 == t2)
@@ -1618,6 +1632,7 @@ tmerge(Type *t1, Sym *s)
         if(t1->etype != t2->etype)
             break;
         switch(t1->etype) {
+        /*s: [[tmerge()]] switch etype t1 cases */
         case TFUNC:
             ta = t1->down;
             tb = t2->down;
@@ -1660,7 +1675,7 @@ tmerge(Type *t1, Sym *s)
                 if(tb != T && tb->etype != TOLD)
                     t1->down = tb;
             break;
-
+        /*e: [[tmerge()]] switch etype t1 cases */
         case TARRAY:
             /* should we check array size change? */
             if(t2->width > t1->width)
@@ -1671,6 +1686,7 @@ tmerge(Type *t1, Sym *s)
         case TSTRUCT:
             return;
         }
+        // recurse
         t1 = t1->link;
         t2 = t2->link;
     }
@@ -1773,7 +1789,8 @@ void doenum(Sym *s, Node *n)
     if(dclstack)
         push1(s); // will be reverted once out of scope
 
-    xdecl(CXXX, types[TENUM], s);
+    // check for redeclaration and set S->type to TENUM
+    xdecl(CXXX, types[TENUM], s); 
 
     if(en.cenum == T) {
         en.tenum = types[TINT];

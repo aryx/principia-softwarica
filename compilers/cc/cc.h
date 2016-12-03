@@ -109,28 +109,26 @@ struct	Node
     // enum<storage_class>
     char	class;
     /*e: [[Node]] type and storage fields */
-
     /*s: [[Node]] code generation fields */
     // address-able, used as a bool to mark lvalues, if can assign you can take
     // the address of. used by xcom() to assign ``addressibility''.
-    // also (ab)used as a bool to mark label uses (true = used in a goto)
+    // (also (ab)used as a bool to mark label uses (true = used in a goto))
     char	addable;
     /*x: [[Node]] code generation fields */
     // complexity in number of registers. for register allocation?
-    // also (ab)used as FNX special value
-    // also (ab)used as a bool to mark label definitions (true = already defined)
+    // (also (ab)used as FNX special value)
+    // (also (ab)used as a bool to mark label definitions (true = already defined))
     char	complex; 
+    /*x: [[Node]] code generation fields */
+    long	xoffset;
     /*x: [[Node]] code generation fields */
     long	pc;
     /*x: [[Node]] code generation fields */
     // ref<Prog>, but use void to be archi independent
     void*	label;
     /*x: [[Node]] code generation fields */
-    long	xoffset;
-    /*x: [[Node]] code generation fields */
     char	scale; // x86 only
     /*e: [[Node]] code generation fields */
-
     /*s: [[Node]] origin tracking fields */
     bool 	xcast;
     /*x: [[Node]] origin tracking fields */
@@ -285,12 +283,9 @@ struct	Type
     // option<list<ref_own<Type>>, next = Type.down, for TFUNC and TSTRUCT
     Type*	down;
 
-    long	lineno; // ??
-
     /*s: [[Type]] value fields */
     Sym*	tag;
     /*e: [[Type]] value fields */
-
     /*s: [[Type]] qualifier fields */
     // enum<qualifier>
     char	garb;
@@ -420,6 +415,12 @@ enum node_kind
     /*s: expression nodes */
     OCOMMA,
     /*x: expression nodes */
+    OCONST,
+    /*x: expression nodes */
+    OSTRING,
+    /*x: expression nodes */
+    OLSTRING,
+    /*x: expression nodes */
     OADD,
     OSUB,
 
@@ -470,13 +471,9 @@ enum node_kind
     OIND, // for uses (dereference) and also defs (and decls)
     OADDR,
     /*x: expression nodes */
+    OFUNC, // used for uses (calls) but also defs (and decls)
+    /*x: expression nodes */
     ODOT,
-    /*x: expression nodes */
-    OCONST,
-    /*x: expression nodes */
-    OSTRING,
-    /*x: expression nodes */
-    OLSTRING,
     /*x: expression nodes */
     OCAST,
     /*x: expression nodes */
@@ -490,7 +487,12 @@ enum node_kind
     /*x: expression nodes */
     OSIZE,
     /*x: expression nodes */
+    OARRAY, // used for uses (designator) and defs (and decl)
+    /*x: expression nodes */
     OASI, // appears during parsing
+    /*x: expression nodes */
+    OSTRUCT, // used for defs, decls, and for struct constructors
+    OUNION,
     /*x: expression nodes */
     OSIGN,
     /*e: expression nodes */
@@ -521,37 +523,25 @@ enum node_kind
     /*e: statement nodes */
 
     // ----------------------------------------------------------------------
-    // Variables (parameters, initializers)
+    // Declarations (parameters, initializers, bit fields)
     // ----------------------------------------------------------------------
-    /*s: variable declaration nodes */
+    /*s: declaration nodes */
     OINIT,
-    /*x: variable declaration nodes */
+    /*x: declaration nodes */
     OELEM,  // field designator
-    /*x: variable declaration nodes */
+    /*x: declaration nodes */
     OPROTO,
-    /*x: variable declaration nodes */
+    /*x: declaration nodes */
     ODOTDOT,
-    /*e: variable declaration nodes */
-
-    // ----------------------------------------------------------------------
-    // Definitions
-    // ----------------------------------------------------------------------
-    /*s: definition nodes */
-    OSTRUCT, // used for defs, decls, and for struct constructors
-    OUNION,
-    /*x: definition nodes */
+    /*x: declaration nodes */
     OBIT,
-    /*e: definition nodes */
+    /*e: declaration nodes */
 
     // ----------------------------------------------------------------------
     // Misc
     // ----------------------------------------------------------------------
     /*s: misc nodes */
     OLIST, // of stmts/labels/parameters/...  and also for pairs/triples/...
-    /*x: misc nodes */
-    OFUNC, // used for uses (calls) but also defs (and decls)
-    /*x: misc nodes */
-    OARRAY, // used for uses (designator) and defs (and decl)
     /*x: misc nodes */
     OINDEX, // x86 only
     OREGPAIR, // x86 only, for 64 bits stuff
@@ -561,15 +551,15 @@ enum node_kind
     // Post parsing nodes
     // ----------------------------------------------------------------------
     /*s: after parsing nodes */
-    OASLMUL,
-    OASLDIV,
-    OASLMOD,
-    OASLSHR,
-    /*x: after parsing nodes */
     OLMUL,
     OLDIV,
     OLMOD,
     OLSHR,
+    /*x: after parsing nodes */
+    OASLMUL,
+    OASLDIV,
+    OASLMOD,
+    OASLSHR,
     /*x: after parsing nodes */
     OREGISTER, // via regalloc()
     /*x: after parsing nodes */

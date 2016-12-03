@@ -549,31 +549,6 @@ uexpr:
 pexpr:
     '(' cexpr ')' { $$ = $2; }
 /*x: pexpr rule */
-|   pexpr '(' zelist ')'
-    {
-        $$ = new(OFUNC, $1, Z);
-        /*s: pexpr rule, implicit declaration of unknown function */
-        if(($1->op == ONAME) && ($1->type == T))
-            dodecl(xdecl, CXXX, types[TINT], $$);
-        /*e: pexpr rule, implicit declaration of unknown function */
-        $$->right = invert($3);
-    }
-/*x: pexpr rule */
-|   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
-/*x: pexpr rule */
-|   pexpr '.' ltag
-    {
-        $$ = new(ODOT, $1, Z);
-        $$->sym = $3;
-    }
-|   pexpr LMG ltag
-    {
-        $$ = new(ODOT, new(OIND, $1, Z), Z);
-        $$->sym = $3;
-    }
-/*x: pexpr rule */
-|   name
-/*x: pexpr rule */
 |   LCONST
     {
         $$ = new(OCONST, Z, Z);
@@ -636,6 +611,31 @@ pexpr:
 |   string
 |   lstring
 /*x: pexpr rule */
+|   name
+/*x: pexpr rule */
+|   pexpr '(' zelist ')'
+    {
+        $$ = new(OFUNC, $1, Z);
+        /*s: pexpr rule, implicit declaration of unknown function */
+        if(($1->op == ONAME) && ($1->type == T))
+            dodecl(xdecl, CXXX, types[TINT], $$);
+        /*e: pexpr rule, implicit declaration of unknown function */
+        $$->right = invert($3);
+    }
+/*x: pexpr rule */
+|   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
+/*x: pexpr rule */
+|   pexpr '.' ltag
+    {
+        $$ = new(ODOT, $1, Z);
+        $$->sym = $3;
+    }
+|   pexpr LMG ltag
+    {
+        $$ = new(ODOT, new(OIND, $1, Z), Z);
+        $$->sym = $3;
+    }
+/*x: pexpr rule */
 |   pexpr LPP { $$ = new(OPOSTINC, $1, Z); }
 |   pexpr LMM { $$ = new(OPOSTDEC, $1, Z); }
 /*x: pexpr rule */
@@ -669,10 +669,6 @@ lexpr:
         $$->type = types[TLONG];
     }
 /*x: expressions rules */
-elist:
-    expr
-|   elist ',' elist { $$ = new(OLIST, $1, $3); }
-/*x: expressions rules */
 string:
     LSTRING
     {
@@ -681,8 +677,10 @@ string:
         $$->etype = TARRAY;
         $$->type->width = $1.l + 1;
         $$->cstring = $1.s;
+        /*s: string rule, set sym and class for OSTRING */
         $$->sym = symstring;
         $$->class = CSTATIC;
+        /*e: string rule, set sym and class for OSTRING */
     }
 |   string LSTRING
     {
@@ -709,8 +707,10 @@ lstring:
         $$->etype = TARRAY;
         $$->type->width = $1.l + sizeof(TRune);
         $$->rstring = (TRune*)$1.s;
+        /*s: string rule, set sym and class for OSTRING */
         $$->sym = symstring;
         $$->class = CSTATIC;
+        /*e: string rule, set sym and class for OSTRING */
     }
 |   lstring LLSTRING
     {
@@ -728,6 +728,10 @@ lstring:
         $$->type->width += $2.l;
         $$->rstring = (TRune*)s;
     }
+/*x: expressions rules */
+elist:
+    expr
+|   elist ',' elist { $$ = new(OLIST, $1, $3); }
 /*e: expressions rules */
 /*s: initializers rules */
 init:
@@ -939,7 +943,7 @@ complex:
     {
         dotag($2, TENUM, 0);
         $$ = $2->suetag;
-        if($$->link == T)
+        if($$->link == T) // default type
             $$->link = types[TINT];
         $$ = $$->link;
     }

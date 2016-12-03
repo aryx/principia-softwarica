@@ -218,11 +218,7 @@ int simplec(long b)
     b &= BCLASS;
     switch(b) {
     case 0: 
-    // skipping register
-    case BREGISTER:
-        return CXXX;
     case BAUTO:
-    case BAUTO|BREGISTER:
         return CAUTO;
     case BEXTERN:
         return CEXTERN;
@@ -230,6 +226,12 @@ int simplec(long b)
         return CSTATIC;
 
     /*s: [[simplec()]] cases */
+    // skipping register
+    case BREGISTER:
+        return CXXX;
+    case BAUTO|BREGISTER:
+        return CAUTO;
+    /*x: [[simplec()]] cases */
     case BTYPEDEF:
         return CTYPEDEF;
     /*x: [[simplec()]] cases */
@@ -322,6 +324,7 @@ bool
 stcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
     int i;
+    //Type_kind (as a bit)
     ulong b;
 
     i = 0;
@@ -331,16 +334,21 @@ stcompat(Node *n, Type *t1, Type *t2, long ttab[])
     i = 0;
     if(t1 != T)
         i = t1->etype;
+    // type t2 part of set of types compatible with type t1
     if(b & ttab[i]) {
+        /*s: [[stcompat()]] when t1 matches t2, if ttab is tasign */
         if(ttab == tasign)
             if(b == BSTRUCT || b == BUNION)
                 if(!sametype(t1, t2))
                     return true;
+        /*e: [[stcompat()]] when t1 matches t2, if ttab is tasign */
+        /*s: [[stcompat()]] when t1 matches t2, if pointers and not a cast op */
         if(n->op != OCAST)
           if(b == BIND && i == TIND)
                 if(!sametype(t1, t2))
                     return true;
-        return false;
+        /*e: [[stcompat()]] when t1 matches t2, if pointers and not a cast op */
+        return false; // true means error, so false means everything fine
     }
     return true;
 }
@@ -352,9 +360,11 @@ tcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
 
     if(stcompat(n, t1, t2, ttab)) {
+        /*s: [[tcompat()]] if no T1 */
         if(t1 == T)
             diag(n, "incompatible type: \"%T\" for op \"%O\"",
                 t2, n->op);
+        /*e: [[tcompat()]] if no T1 */
         else
             diag(n, "incompatible types: \"%T\" and \"%T\" for op \"%O\"",
                 t1, t2, n->op);
@@ -732,7 +742,7 @@ nilcast(Type *t1, Type *t2)
  * "the usual arithmetic conversions are performed"
  */
 void
-arith(Node *n, int f)
+arith(Node *n, bool f)
 {
     Type *t1, *t2;
     int i, j, k;
@@ -761,8 +771,8 @@ arith(Node *n, int f)
             n->type = t2;
     } else {
         /* convert up to at least int */
-        if(f == 1)
-        while(k < TINT)
+        if(f)
+          while(k < TINT)
             k += 2;
         n->type = types[k];
     }
@@ -1299,19 +1309,19 @@ warn(Node *n, char *fmt, ...)
         va_start(arg, fmt);
         vseprint(buf, buf+sizeof(buf), fmt, arg);
         va_end(arg);
-
+        /*s: [[warn()]] if -W */
         if(debug['W']) {
             diag(n, "%s", buf);
             return;
         }
-
-        Bprint(&diagbuf, "warning: %L %s\n", 
-                 (n==Z) ? nearln : n->lineno, 
-                 buf);
-
+        /*e: [[warn()]] if -W */
+        // else
+        Bprint(&diagbuf, "warning: %L %s\n", (n==Z) ? nearln : n->lineno, buf);
+        /*s: [[warn()]] if -v */
         if(n != Z)
           if(debug['v'])
             prtree(n, "warning");
+        /*e: [[warn()]] if -v */
     }
 }
 /*e: function warn */
@@ -1326,8 +1336,7 @@ fatal(Node *n, char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
-    Bprint(&diagbuf, "%L %s\n", 
-              (n==Z)? nearln: n->lineno, buf);
+    Bprint(&diagbuf, "%L %s\n", (n==Z)? nearln: n->lineno, buf);
 
     if(debug['X']){
         Bflush(&diagbuf);
@@ -1641,7 +1650,7 @@ char	logrel[12] =
 /*e: global logrel */
 
 /*s: global typei */
-// set<type_kind>
+// set<Type_kind>
 char	typei[NTYPE];
 /*e: global typei */
 /*s: global typeiinit */
@@ -1787,6 +1796,7 @@ int	typesuinit[] =
 /*e: global typesuinit */
 
 /*s: global tasign */
+// map<Type_kind, set<Type_kind> >
 long	tasign[NTYPE];
 /*e: global tasign */
 /*s: global tasigninit */
@@ -1804,6 +1814,7 @@ Init	tasigninit[] =
     TUVLONG,	BNUMBER,	0,
     TFLOAT,		BNUMBER,	0,
     TDOUBLE,	BNUMBER,	0,
+
     TIND,		BIND,		0,
     TSTRUCT,	BSTRUCT,	0,
     TUNION,		BUNION,		0,

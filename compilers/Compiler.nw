@@ -44,13 +44,16 @@
 %   sign? overflow?
 % - how multiple declarations get merged. If do extern int x; int x = 1;
 %   what happens? If do reverse?
-% - TODO how constant strings are managed? symbol defined for them? shared?
+% - SEMI how constant strings are managed? symbol defined for them? shared?
+%   can you modify them? lvalue?
 
 %thx to ocaml:
 % - clarify all the things that are done at parsing time, and see that
 %   many could be done later to better separate concerns
-% - that parsing, naming, type checking can be done as a single pass!
+% - that parsing, naming, type checking is done by 5c in a single pass!
 %   5c calls the code generation after each function.
+% - understand lots of corner cases, and see that lots of checks 
+%   are not done by 5c (I wrote many test cases)
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -200,9 +203,17 @@ Are registers used? Is the stack used? How does a function communicate
 its return value to the caller?
 %codegen: frameize
 
+% what are common useful optimizations
+
 % aligns, offsets, structs, size
 
 \end{itemize}
+
+\t put in conclusion non-trivial adv algo and data structures seen? see comment
+%data-structures (beyond list/hashtbl):
+% - bitsets see the Bxxx (ab) used for many things (parsing, typechecking)
+% - pattern matching via bitsets (see tadd and taddinit)
+
 
 %tags used for recurring themes:
  %ocaml: to give a hint on how rewriting C in OCaml could improve things
@@ -896,7 +907,8 @@ long	lineno;
 <<global nearln>>=
 long	nearln;
 @
-%ocaml: set semi global in different analysis
+%ocaml: set semi global in different analysis, or avoid using nearln
+% so better error location in general.
 
 % set in codgen() to the lineno field of the function node.
 % this is useful for error reporting when use warn on an empty node,
@@ -1074,7 +1086,9 @@ Sym*	tag;
 % (The symbol table does not know about struct definition. The symbol
 % table is used only for resolve the scope of structs)
 % So again this thing is used really just to get the name.
-
+\l need to use snap() if resolved later and did not share same ref
+\l to same type returned by Sym.suetag.
+\t but why not same ref? because of some calls to copytyp! but when?
 
 % Each of the field of a struct will be a Type. The name of the field itself
 %  is stored in another field of Type:
@@ -1304,7 +1318,7 @@ char	class;
 <<[[Node]] code generation fields>>=
 // address-able, used as a bool to mark lvalues, if can assign you can take
 // the address of. used by xcom() to assign ``addressibility''.
-// also (ab)used as a bool to mark label uses (true = used in a goto)
+// (also (ab)used as a bool to mark label uses (true = used in a goto))
 char	addable;
 @
 \t use another field? at least a union, otherwise ugly
@@ -1314,8 +1328,8 @@ char	addable;
 % for expression nodes?
 <<[[Node]] code generation fields>>=
 // complexity in number of registers. for register allocation?
-// also (ab)used as FNX special value
-// also (ab)used as a bool to mark label definitions (true = already defined)
+// (also (ab)used as FNX special value)
+// (also (ab)used as a bool to mark label definitions (true = already defined))
 char	complex; 
 @
 
@@ -6470,6 +6484,267 @@ zcexpr:
 % with some unsigned variants, float), here we can have also
 % vlong, complex structures, etc.
 
+\subsection{Numeric constants}
+
+<<expression nodes>>=
+OCONST,
+@
+% also for float
+% the const keyword is actually a GCONSTNT, and LCONST
+
+%codegen: same in assembly, $intvalue.
+
+\subsubsection{Integers}
+
+% the grammar section builds the AST node and assign the types.
+
+<<[[Node]] value fields>>=
+vlong	vconst; /* non fp const */ // for OCONST
+@
+%// abused in switch?
+% could be put in a union with fpconst and rstring (but not cstring)
+% take vlong to store the maximum possible value.
+
+
+<<pexpr rule>>=
+|   LCONST
+    {
+        $$ = new(OCONST, Z, Z);
+        $$->type = types[TINT];
+        $$->vconst = $1;
+        $$->cstring = strdup(symb);
+    }
+|   LLCONST
+    {
+        $$ = new(OCONST, Z, Z);
+        $$->type = types[TLONG];
+        $$->vconst = $1;
+        $$->cstring = strdup(symb);
+    }
+|   LVLCONST
+    {
+        $$ = new(OCONST, Z, Z);
+        $$->type = types[TVLONG];
+        $$->vconst = $1;
+        $$->cstring = strdup(symb);
+    }
+@
+%$
+%ocaml: factorize by having size type in token constructor
+
+<<pexpr rule>>=
+|   LUCONST
+    {
+        $$ = new(OCONST, Z, Z);
+        $$->type = types[TUINT];
+        $$->vconst = $1;
+        $$->cstring = strdup(symb);
+    }
+|   LULCONST
+    {
+        $$ = new(OCONST, Z, Z);
+        $$->type = types[TULONG];
+        $$->vconst = $1;
+        $$->cstring = strdup(symb);
+    }
+|   LUVLCONST
+    {
+        $$ = new(OCONST, Z, Z);
+        $$->type = types[TUVLONG];
+        $$->vconst = $1;
+        $$->cstring = strdup(symb);
+    }
+@
+%$
+%ocaml: factorize by having size type in token constructor
+
+% but cast here to signed vlong. Pb?
+
+\subsubsection{Floats}
+
+<<[[Node]] value fields>>=
+double	fconst;		/* fp constant */ // for OCONST
+@
+% again use the biggest type so can accomodate also smaller float.
+
+% take double to store the maximum possible value.
+
+<<pexpr rule>>=
+|   LFCONST
+    {
+        $$ = new(OCONST, Z, Z);
+        $$->type = types[TFLOAT];
+        $$->fconst = $1;
+        $$->cstring = strdup(symb);
+    }
+|   LDCONST
+    {
+        $$ = new(OCONST, Z, Z);
+        $$->type = types[TDOUBLE];
+        $$->fconst = $1;
+        $$->cstring = strdup(symb);
+    }
+@
+%$
+%ocaml: factorize by having size type in token constructor
+
+\subsection{String constants}
+% char constant? unsugard in yylex?
+
+%codegen: same in assembly except not limited to 8bytes,
+% and also handle unicode here.
+
+\subsubsection{ASCII strings}
+% classic '\0' terminated "C strings"
+
+<<expression nodes>>=
+OSTRING,
+@
+
+<<pexpr rule>>=
+|   string
+|   lstring
+@
+
+<<[[Node]] value fields>>=
+char*	cstring;	/* character string */ // for OSTRING (and OCONST)
+@
+% could be put in a union, except it uses both vconst and cstring
+% at the same time.
+% used also to remember the original string representation of the integer.
+
+<<expressions rules>>=
+string:
+    LSTRING
+    {
+        $$ = new(OSTRING, Z, Z);
+        $$->type = typ(TARRAY, types[TCHAR]);
+        $$->etype = TARRAY;
+        $$->type->width = $1.l + 1;
+        $$->cstring = $1.s;
+        <<string rule, set sym and class for OSTRING>>
+    }
+|   string LSTRING
+    {
+        char *s;
+        int n;
+
+        n = $1->type->width - 1;
+        s = alloc(n+$2.l+MAXALIGN);
+
+        memcpy(s, $1->cstring, n);
+        memcpy(s+n, $2.s, $2.l);
+        s[n+$2.l] = '\0';
+
+        $$ = $1;
+        $$->type->width += $2.l;
+        $$->cstring = s;
+    }
+@
+%less: C extension to concatenate strings. could be aspectized
+% or even removed.
+% do not free the previous one?
+
+
+\subsubsection{Unicode strings}
+% long strings
+
+<<expression nodes>>=
+OLSTRING,
+@
+
+<<[[Node]] value fields>>=
+TRune*	rstring;	/* rune string */ // for OLSTRING
+@
+
+%in cc.h, which should include the u.h before?
+%typedef	Rune	TRune;	/* target system type */
+
+<<constant TRUNE>>=
+/* adapt size of Rune to target system's size */
+TRUNE = sizeof(TRune)==4? TUINT: TUSHORT,
+@
+
+
+% unicode
+<<expressions rules>>=
+lstring:
+    LLSTRING
+    {
+        $$ = new(OLSTRING, Z, Z);
+        $$->type = typ(TARRAY, types[TRUNE]);
+        $$->etype = TARRAY;
+        $$->type->width = $1.l + sizeof(TRune);
+        $$->rstring = (TRune*)$1.s;
+        <<string rule, set sym and class for OSTRING>>
+    }
+|   lstring LLSTRING
+    {
+        char *s;
+        int n;
+
+        n = $1->type->width - sizeof(TRune);
+        s = alloc(n+$2.l+MAXALIGN);
+
+        memcpy(s, $1->rstring, n);
+        memcpy(s+n, $2.s, $2.l);
+        *(TRune*)(s+n+$2.l) = 0;
+
+        $$ = $1;
+        $$->type->width += $2.l;
+        $$->rstring = (TRune*)s;
+    }
+@
+%$
+
+
+\subsection{Entity uses}
+% important!
+
+<<pexpr rule>>=
+|   name
+@
+
+% use (def of entities use 'tag' instead, in xdecor2, not 'name')
+<<names rules>>=
+name:
+    LNAME
+    {
+        $$ = new(ONAME, Z, Z);
+        <<name rule, if local static variable>>
+        $$->sym = $1;
+
+        // propagate symbol information to node
+        $$->type = $1->type;
+        $$->etype = ($1->type != T) ? $1->type->etype : TVOID;
+        $$->xoffset = $1->offset;
+        $$->class = $1->class;
+        <<name rule, LNAME case, adjust more fields>>
+    }
+@
+%ocaml: forbid implicit declarations of functions so can warn early.
+
+% similar to tag rule, but no LTYPE here!
+%$
+% no warning if not defined here. This id done in tcomo() instead.
+% We let the caller decide, so when in a funcall, it is just declared 
+% implicitely
+
+
+% Very important to propagate information from symbol to node!
+% Because when revertdcl, information will be lost and codegen
+% would have to redo this scoping resolution thing.
+
+% Can have type that escapes? if struct Foo x; is a local
+% and struct Foo defined later, then when backtrack to toplevel,
+% The type annotation in the AST for x is wrong? point to what
+% symbol?
+
+% This covers also enum constants!
+
+%codegen: name(SB), or name+-offset(FP) for params and locals
+% A C symbol is an assembly symbol! It is kept as is.
+
 \subsection{Arithmetic expressions}
 
 % Similar to Machine.nw/Assembler.nw in some sense,
@@ -6735,264 +7010,6 @@ ODOT,
 
 %codegen: more structured arrays! with different size, but ultimately
 % will be transformed in array access (pointer + offset).
-
-
-\subsection{Entity uses}
-% important!
-
-<<pexpr rule>>=
-|   name
-@
-
-% use (def of entities use 'tag' instead, in xdecor2, not 'name')
-<<names rules>>=
-name:
-    LNAME
-    {
-        $$ = new(ONAME, Z, Z);
-        <<name rule, if local static variable>>
-        $$->sym = $1;
-
-        // propagate symbol information to node
-        $$->type = $1->type;
-        $$->etype = ($1->type != T) ? $1->type->etype : TVOID;
-        $$->xoffset = $1->offset;
-        $$->class = $1->class;
-        <<name rule, LNAME case, adjust more fields>>
-    }
-@
-%ocaml: forbid implicit declarations of functions so can warn early.
-
-% similar to tag rule, but no LTYPE here!
-%$
-% no warning if not defined here. This id done in tcomo() instead.
-% We let the caller decide, so when in a funcall, it is just declared 
-% implicitely
-
-
-% Very important to propagate information from symbol to node!
-% Because when revertdcl, information will be lost and codegen
-% would have to redo this scoping resolution thing.
-
-% Can have type that escapes? if struct Foo x; is a local
-% and struct Foo defined later, then when backtrack to toplevel,
-% The type annotation in the AST for x is wrong? point to what
-% symbol?
-
-%codegen: name(SB), or name+-offset(FP) for params and locals
-% A C symbol is an assembly symbol! It is kept as is.
-
-\subsection{Numeric constants}
-
-<<expression nodes>>=
-OCONST,
-@
-% also for float
-% the const keyword is actually a GCONSTNT, and LCONST
-
-%codegen: same in assembly, $intvalue.
-
-\subsubsection{Integers}
-
-<<[[Node]] value fields>>=
-vlong	vconst; /* non fp const */ // for OCONST
-@
-%// abused in switch?
-% could be put in a union with fpconst and rstring (but not cstring)
-% take vlong to store the maximum possible value.
-
-
-<<pexpr rule>>=
-|   LCONST
-    {
-        $$ = new(OCONST, Z, Z);
-        $$->type = types[TINT];
-        $$->vconst = $1;
-        $$->cstring = strdup(symb);
-    }
-|   LLCONST
-    {
-        $$ = new(OCONST, Z, Z);
-        $$->type = types[TLONG];
-        $$->vconst = $1;
-        $$->cstring = strdup(symb);
-    }
-|   LVLCONST
-    {
-        $$ = new(OCONST, Z, Z);
-        $$->type = types[TVLONG];
-        $$->vconst = $1;
-        $$->cstring = strdup(symb);
-    }
-@
-%$
-
-
-<<pexpr rule>>=
-|   LUCONST
-    {
-        $$ = new(OCONST, Z, Z);
-        $$->type = types[TUINT];
-        $$->vconst = $1;
-        $$->cstring = strdup(symb);
-    }
-|   LULCONST
-    {
-        $$ = new(OCONST, Z, Z);
-        $$->type = types[TULONG];
-        $$->vconst = $1;
-        $$->cstring = strdup(symb);
-    }
-|   LUVLCONST
-    {
-        $$ = new(OCONST, Z, Z);
-        $$->type = types[TUVLONG];
-        $$->vconst = $1;
-        $$->cstring = strdup(symb);
-    }
-@
-%$
-% but cast here to signed vlong. Pb?
-
-\subsubsection{Floats}
-
-<<[[Node]] value fields>>=
-double	fconst;		/* fp constant */ // for OCONST
-@
-% again use the biggest type so can accomodate also smaller float.
-
-% take double to store the maximum possible value.
-
-<<pexpr rule>>=
-|   LFCONST
-    {
-        $$ = new(OCONST, Z, Z);
-        $$->type = types[TFLOAT];
-        $$->fconst = $1;
-        $$->cstring = strdup(symb);
-    }
-|   LDCONST
-    {
-        $$ = new(OCONST, Z, Z);
-        $$->type = types[TDOUBLE];
-        $$->fconst = $1;
-        $$->cstring = strdup(symb);
-    }
-@
-%$
-
-\subsection{String constants}
-% char constant? unsugard in yylex?
-
-%codegen: same in assembly except not limited to 8bytes,
-% and also handle unicode here.
-
-\subsubsection{Ascii strings}
-% classic '\0' terminated "C strings"
-
-<<expression nodes>>=
-OSTRING,
-@
-
-<<pexpr rule>>=
-|   string
-|   lstring
-@
-
-<<[[Node]] value fields>>=
-char*	cstring;	/* character string */ // for OSTRING (and OCONST)
-@
-% could be put in a union, except it uses both vconst and cstring
-% at the same time.
-% used also to remember the original string representation of the integer.
-
-<<expressions rules>>=
-string:
-    LSTRING
-    {
-        $$ = new(OSTRING, Z, Z);
-        $$->type = typ(TARRAY, types[TCHAR]);
-        $$->etype = TARRAY;
-        $$->type->width = $1.l + 1;
-        $$->cstring = $1.s;
-        $$->sym = symstring;
-        $$->class = CSTATIC;
-    }
-|   string LSTRING
-    {
-        char *s;
-        int n;
-
-        n = $1->type->width - 1;
-        s = alloc(n+$2.l+MAXALIGN);
-
-        memcpy(s, $1->cstring, n);
-        memcpy(s+n, $2.s, $2.l);
-        s[n+$2.l] = '\0';
-
-        $$ = $1;
-        $$->type->width += $2.l;
-        $$->cstring = s;
-    }
-@
-%less: C extension to concatenate strings. could be aspectized
-% or even removed.
-% do not free the previous one?
-
-
-% symstring? see later?
-
-\subsubsection{Unicode strings}
-% long strings
-
-<<expression nodes>>=
-OLSTRING,
-@
-
-<<[[Node]] value fields>>=
-TRune*	rstring;	/* rune string */ // for OLSTRING
-@
-
-%in cc.h, which should include the u.h before?
-%typedef	Rune	TRune;	/* target system type */
-
-<<constant TRUNE>>=
-/* adapt size of Rune to target system's size */
-TRUNE = sizeof(TRune)==4? TUINT: TUSHORT,
-@
-
-
-% unicode
-<<expressions rules>>=
-lstring:
-    LLSTRING
-    {
-        $$ = new(OLSTRING, Z, Z);
-        $$->type = typ(TARRAY, types[TRUNE]);
-        $$->etype = TARRAY;
-        $$->type->width = $1.l + sizeof(TRune);
-        $$->rstring = (TRune*)$1.s;
-        $$->sym = symstring;
-        $$->class = CSTATIC;
-    }
-|   lstring LLSTRING
-    {
-        char *s;
-        int n;
-
-        n = $1->type->width - sizeof(TRune);
-        s = alloc(n+$2.l+MAXALIGN);
-
-        memcpy(s, $1->rstring, n);
-        memcpy(s+n, $2.s, $2.l);
-        *(TRune*)(s+n+$2.l) = 0;
-
-        $$ = $1;
-        $$->type->width += $2.l;
-        $$->rstring = (TRune*)s;
-    }
-@
-%$
 
 
 \subsection{Cast}
@@ -7657,11 +7674,7 @@ int simplec(long b)
     b &= BCLASS;
     switch(b) {
     case 0: 
-    // skipping register
-    case BREGISTER:
-        return CXXX;
     case BAUTO:
-    case BAUTO|BREGISTER:
         return CAUTO;
     case BEXTERN:
         return CEXTERN;
@@ -7682,6 +7695,14 @@ int simplec(long b)
 % can declare the same thing multiple times (in header file and then
 % separately in C file).
 % See checking chapter.
+
+<<[[simplec()]] cases>>=
+// skipping register
+case BREGISTER:
+    return CXXX;
+case BAUTO|BREGISTER:
+    return CAUTO;
+@
 
 \subsection{Qualifiers}
 
@@ -8136,6 +8157,7 @@ void edecl(int c, Type *t, Sym *s)
 % There are two different types: 
 %   - the type of the enum declaration itself, when do  enum x foo;
 %   - the type of the enumeration constants of the enum (and also its value)
+%     which can be referenced later in an expression
 
 \subsubsection{Enumeration use and definitions}
 
@@ -8215,7 +8237,7 @@ if(en.tenum == T) {
 }
 @
 \t this can never happen? tenum always set, and grammar imposes
-\t  at least one enum element
+\t  at least one enum element. If do just enum { }; ?
 %ocaml: can happen???
 
 % So type of enum is Sym.suetag->link
@@ -8264,7 +8286,8 @@ void doenum(Sym *s, Node *n)
     if(dclstack)
         push1(s); // will be reverted once out of scope
 
-    xdecl(CXXX, types[TENUM], s);
+    // check for redeclaration and set S->type to TENUM
+    xdecl(CXXX, types[TENUM], s); 
 
     if(en.cenum == T) {
         en.tenum = types[TINT];
@@ -8288,8 +8311,10 @@ void doenum(Sym *s, Node *n)
 
 \t diff between Sym.type set by xdecl and Sym.tenum?
 
-\t how know when reference an enum constant that it's an enum?
-\t  just because it's Sym.tenum is set? because it has a Sym.vconst?
+% how know when reference an enum constant that it's an enum?
+% because it's Sym.tenum is set? because it has a Sym.vconst?
+%  tcomo look for sym.type->etype, because of xdecl!!
+%  abuse TENUM!
 
 \subsection{Typedefs}
 
@@ -8784,17 +8809,22 @@ abdecor3:
 
 \chapter{Checking}
 
-% Normally do checking after parsing, but 5c
-% do many checks during parsing. In fact,
-% it sometimes do checks during the code generation.
+% Normally, a compiler does many checks after parsing and before
+% code generation. 5c instead does most of those checks during parsing
+% and a few one during the code generation. There is not really
+% a separate checking phase, thus most of the code I will present
+% in this sections are chunks of functions I presented before (e.g., xdecl(),
+% revertdcl(), doenum()).
+\l not better software-engineering wise, maybe faster because one pass only
+%ocaml: I prefer to clearly separate and have check.ml and typecheck.ml
+% separate from parser.mly
 
 \section{Overview}
 
 % - symbol resolution, use/def matching correctly, lookup failure
-%   with scoping rules, via Decl and symbol table (and .h so have
+%   with scoping rules, done via Decl and symbol table (and .h so have
 %   all declarations in one file)
-%   and also def/def matching correctly by checking for wrong
-%   redeclaration in xdecl
+% - decl/def matching correctly by checking for wrong redeclaration in xdecl
 % - typechecking rules
 % - lint rules (e.g. unused vars/labels, unused param, dead code, etc)
 
@@ -8811,13 +8841,14 @@ abdecor3:
 
 % a few later:
 %  - div by zero in evconst()
+%  - use of undeclared label (Node.complex still 0)
+%  - use of undefined identifier (Node.type still T)
+%  - initializing a function
 
 \section{Printing warnings, [[5c -w]], [[5c -W]]}
 % also -X
 
 % 5c -w
-% 5c -W give full verbose diagnostic
-
 <<function warn>>=
 void
 warn(Node *n, char *fmt, ...)
@@ -8829,68 +8860,60 @@ warn(Node *n, char *fmt, ...)
         va_start(arg, fmt);
         vseprint(buf, buf+sizeof(buf), fmt, arg);
         va_end(arg);
-
-        if(debug['W']) {
-            diag(n, "%s", buf);
-            return;
-        }
+        <<[[warn()]] if -W>>
         // else
-
         Bprint(&diagbuf, "warning: %L %s\n", (n==Z) ? nearln : n->lineno, buf);
-
-        if(n != Z)
-          if(debug['v'])
-            prtree(n, "warning");
+        <<[[warn()]] if -v>>
     }
 }
 @
+%ocaml: do not use nearln, use precise location. Do not print AST,
+% use -dump_ast if you want that.
+
+% 5c -W give full verbose diagnostic
+
+<<[[warn()]] if -W>>=
+if(debug['W']) {
+    diag(n, "%s", buf);
+    return;
+}
+@
+% see Appendix for diag()
+
 % -w -v to print AST too!
 
-% ?? -> <>
-<<function fatal>>=
-void
-fatal(Node *n, char *fmt, ...)
-{
-    char buf[STRINGSZ];
-    va_list arg;
-
-    va_start(arg, fmt);
-    vseprint(buf, buf+sizeof(buf), fmt, arg);
-    va_end(arg);
-    Bprint(&diagbuf, "%L %s\n", (n==Z)? nearln: n->lineno, buf);
-
-    if(debug['X']){
-        Bflush(&diagbuf);
-        abort();
-    }
-    if(n != Z)
-      if(debug['v'])
-        prtree(n, "diagnostic");
-
-    nerrors++;
-    errorexit();
-}
+<<[[warn()]] if -v>>=
+if(n != Z)
+  if(debug['v'])
+    prtree(n, "warning");
 @
+% see Appendix for prtree().
 
-% %L will use Lconv to have right location
 
 \section{Symbol resolution}
+% Scoping, naming
 
-% Done in parsing, as C force to forward decl everything and have huge .h
+%as I said done in parsing, as C force to forward decl 
+% everything and have huge .h
 % (and actual linking is done in linker to find inconsistencies).
 % All the information is in the global symbol table.
 
-% Warn when symbol not found before, or (ugly) implicitly
-% declare it.
+% Warn when function not found before and (ugly) implicitly declare it.
+% Error when redeclare tag, or inconsistent declaration.
 
-% Warn when redeclare tag, or inconsistent declaration.
-
-\section{Scoping resolution}
+%\section{Scoping resolution}
 
 % See Decl section and markdcl() and revertdecl().
 % see also the Sym.block and Sym.sublock fields
 
 \section{Storage resolution}
+
+% C allows multiple declarations of toplevel entities.
+% Not an error. Need then to check if entity declared in .h
+% (but included by preprocessor) is compatible with entity
+% defined in .c.
+% Done in xdecl() during parsing.
+% Also checks in pdecl and adecl.
 
 \subsection{xdecl}
 
@@ -8909,6 +8932,7 @@ case CXXX:
         s->class = CGLOBL;
     break;
 @
+
 %semantic rules of C are fuzzy for me too.
 % what happened if do extern int x; and then int x; or the reverse?
 % Well you can become more precise! it's ok.
@@ -8922,14 +8946,19 @@ case CEXTERN:
 @
 %ocaml: should report an error
 
+% xdecl overwrite class so the class!=s->class later will not raise an error.
+
 <<[[xdecl()]] switch class cases>>=
 case CAUTO:
     diag(Z, "overspecified class: %s %s %s", s->name, cnames[class], cnames[s->class]);
     class = CEXTERN;
     break;
 @
-% So auto is a useless keyword? It always trigger an error?
-% Yes when at the toplevel!
+%ocaml: should forbid (clang reports illegal storage)
+
+% So auto is really a useless keyword.
+
+
 
 % Now a few sanity checks done after the switch class. 
 
@@ -8941,18 +8970,7 @@ if(s->class == CSTATIC)
         class = CSTATIC;
     }
 @
-
-<<[[xdecl()]] sanity checks type after switch class>>=
-if(s->type != T)
-    if(s->class != class || !sametype(t, s->type) || t->etype == TENUM) {
-        diag(Z, "external redeclaration of: %s", s->name);
-        Bprint(&diagbuf, "	%s %T %L\n", cnames[class], t, nearln);
-        Bprint(&diagbuf, "	%s %T %L\n", cnames[s->class], s->type, s->varlineno);
-    }
-@
-%ocaml: can not happen by construction
-\t when does not have a type?? should always get a type
-\t TENUM? when can have that?
+%ocaml: more than warn, I forbid
 
 \subsection{doinit}
 
@@ -8982,6 +9000,8 @@ if(class != CPARAM) {
 
 \subsection{adecl}
 
+%corner:
+
 <<[[adecl()]] adjust storage if function type>>=
 if(t->etype == TFUNC) {
     if(c == CXXX)
@@ -8992,10 +9012,12 @@ if(t->etype == TFUNC) {
         diag(Z, "function cannot be %s %s", cnames[c], s->name);
 }
 @
+
 <<[[adecl()]] adjust storage>>=
 if(c == CXXX)
     c = CAUTO;
 @
+% simple
 
 <<[[adecl()]] adjust storage if symbol>>=
 if(s->class == CSTATIC)
@@ -9008,11 +9030,11 @@ if(s->block == autobn)
     diag(Z, "auto redeclaration of: %s", s->name);
 @
 
-\section{Type checking}
+\section{Typechecking}
 
 \subsection{Overview}
 
-% remember type field in Node!
+% remember Node.type!
 
 % some concepts:
 % - balancing = make each type match for operands, so int+long => long+long
@@ -9025,7 +9047,174 @@ if(s->block == autobn)
 % does lots of stuff, typechecking, simplification, constant evaluation.
 % Call typechecker also tcom().
 
-\subsection{Type declarations consistency, [[tmerge()]]}
+
+
+<<[[xdecl()]] sanity checks type after switch class>>=
+if(s->type != T)
+    if(s->class != class || !sametype(t, s->type) || t->etype == TENUM) {
+        diag(Z, "external redeclaration of: %s", s->name);
+        Bprint(&diagbuf, "	%s %T %L\n", cnames[class], t, nearln);
+        Bprint(&diagbuf, "	%s %T %L\n", cnames[s->class], s->type, s->varlineno);
+    }
+@
+%ocaml: detect error in typecheck.ml, and no need for class comparison,
+% use merge_storage_toplevel() instead.
+
+% when can have TENUM? when abuse xdecl for setting Sym.type
+% for enumeration constant. TENUM is used as type of constants.
+%ocaml: do that in check.ml instead
+
+\t when does not have a type?? should always get a type
+
+
+
+\subsection{Type equality, [[sametype()]]}
+
+% sametype() called in xdecl() to make sure types are equals.
+% xdecl -> <>
+<<function sametype>>=
+bool
+sametype(Type *t1, Type *t2)
+{
+
+    if(t1 == t2)
+        return true;
+    return rsametype(t1, t2, 5, true);
+}
+@
+%ocaml: just Pervasives.(=) . No need for depth because structures
+% are not represented as pointers; I always keep the StructName.
+% Also I do not struct equality by fields, but by name, so I can simply use
+% (=).
+
+
+<<function rsametype>>=
+bool
+rsametype(Type *t1, Type *t2, int n, bool f)
+{
+    int et;
+
+    n--;
+    for(;;) {
+        if(t1 == t2)
+            return true;
+        if(t1 == T || t2 == T)
+            return false;
+        <<[[rsametype()]] if n less than zero>>
+
+        et = t1->etype;
+        if(et != t2->etype)
+            return false;
+
+        <<[[rsametype()]] check function type equality>>
+        <<[[rsametype()]] check array type equality>>
+        <<[[rsametype()]] check structure type equality>>
+
+        // recurse
+        t1 = t1->link;
+        t2 = t2->link;
+
+        <<[[rsametype()]] if f and not -V, allow void star>>
+    }
+}
+@
+% when can have T? because loop, so if compare pointer to int,
+% then only one of the t1 or t2 will have a Type.link.
+
+% n = depth, so equal modulo a certain depth (needed for complex chain 
+% of mutually recursive structures).
+
+<<[[rsametype()]] if n less than zero>>=
+if(n <= 0)
+    return true;
+@
+
+
+% for functions, etype is not enough, need look
+% for Type.link (return type), Type.down (parameters)
+
+<<[[rsametype()]] check function type equality>>=
+if(et == TFUNC) {
+    if(!rsametype(t1->link, t2->link, n, false))
+        return false;
+    t1 = t1->down;
+    t2 = t2->down;
+    while(t1 != T && t2 != T) {
+
+        <<[[rsametype()]] continue if old style type>>
+
+        while(t1 != T || t2 != T) {
+            if(!rsametype(t1, t2, n, false))
+                return false;
+            t1 = t1->down;
+            t2 = t2->down;
+        }
+        break;
+    }
+    return true;
+}
+@
+%ocaml: (=) goes in depth by default
+
+<<[[rsametype()]] check array type equality>>=
+if(et == TARRAY)
+    if(t1->width != t2->width && t1->width != 0 && t2->width != 0)
+        return false;
+@
+
+\t it accepts int[] to be compatible with int[5] ??
+
+
+<<[[rsametype()]] check structure type equality>>=
+if(typesu[et]) {
+    if(t1->link == T)
+        snap(t1);
+    if(t2->link == T)
+        snap(t2);
+
+    if(t1 != t2 && t1->link == T && t2->link == T){
+        /* structs with missing or different tag names aren't considered equal */
+        if(t1->tag == nil || t2->tag == nil ||
+           strcmp(t1->tag->name, t2->tag->name) != 0)
+            return false;
+    }
+    // equal if have same types (but do not care about field names)
+    t1 = t1->link;
+    t2 = t2->link;
+    for(;;) {
+        if(t1 == t2)
+            return true;
+        if(!rsametype(t1, t2, n, false))
+            return false;
+        t1 = t1->down;
+        t2 = t2->down;
+    }
+} // end su
+@
+%ocaml: I use struct equality by name, so I dont care whether struct
+% was defined or not.
+
+% use of typesu[] explained later.
+
+<<function snap>>=
+void
+snap(Type *t)
+{
+    if(typesu[t->etype])
+     if(t->link == T && t->tag && t->tag->suetag) {
+        t->link = t->tag->suetag->link;
+        t->width = t->tag->suetag->width;
+    }
+}
+@
+%ocaml: I don't need that. 
+
+\t why need that? 5c does not share types returned on
+\t Sym.suetag for all occurences? maybe not because of copytyp?
+\t This is why useful to keep a ref to the Sym in Type.tag?
+
+
+\subsection{Type merge, [[tmerge()]]}
 %Declaration and definition types merge
 
 <<[[xdecl()]] merge type declarations>>=
@@ -9038,9 +9227,9 @@ tmerge(t, s);
 void
 tmerge(Type *t1, Sym *s)
 {
-    Type *ta, *tb, *t2;
+    Type *t2 = s->type;
+    Type *ta, *tb;
 
-    t2 = s->type;
 /*print("merge	%T; %T\n", t1, t2);/**/
     for(;;) {
         if(t1 == T || t2 == T || t1 == t2)
@@ -9048,49 +9237,7 @@ tmerge(Type *t1, Sym *s)
         if(t1->etype != t2->etype)
             break;
         switch(t1->etype) {
-        case TFUNC:
-            ta = t1->down;
-            tb = t2->down;
-            if(ta == T) {
-                t1->down = tb;
-                break;
-            }
-            if(tb == T)
-                break;
-            while(ta != T && tb != T) {
-                if(ta == tb)
-                    break;
-                /* ignore old-style flag */
-                if(ta->etype == TOLD) {
-                    ta = ta->down;
-                    continue;
-                }
-                if(tb->etype == TOLD) {
-                    tb = tb->down;
-                    continue;
-                }
-                /* checking terminated by ... */
-                if(ta->etype == TDOT && tb->etype == TDOT) {
-                    ta = T;
-                    tb = T;
-                    break;
-                }
-                if(!sametype(ta, tb))
-                    break;
-                ta = ta->down;
-                tb = tb->down;
-            }
-            if(ta != tb)
-                diag(Z, "function inconsistently declared: %s", s->name);
-
-            /* take new-style over old-style */
-            ta = t1->down;
-            tb = t2->down;
-            if(ta != T && ta->etype == TOLD)
-                if(tb != T && tb->etype != TOLD)
-                    t1->down = tb;
-            break;
-
+        <<[[tmerge()]] switch etype t1 cases>>
         case TARRAY:
             /* should we check array size change? */
             if(t2->width > t1->width)
@@ -9101,18 +9248,23 @@ tmerge(Type *t1, Sym *s)
         case TSTRUCT:
             return;
         }
+        // recurse
         t1 = t1->link;
         t2 = t2->link;
     }
 }
 @
+%ocaml: no need because does not support old style decl func,
 
+% when can have t1 and t2 without a type, because recurse!
+% but should not call tmerge with incompatible types anyway no?
 
+\t why allow different size for array
 
 \subsection{Set of types constants, [[typexxx[]]]}
 
 <<global typei>>=
-// set<type_kind>
+// set<Type_kind>
 char	typei[NTYPE];
 @
 %less: char -> bool?
@@ -9123,111 +9275,23 @@ int	typeiinit[] =
     TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TVLONG, TUVLONG, -1,
 };
 @
+%ocaml: maybe pattern matching each time?
 
-<<global typeu>>=
-char	typeu[NTYPE];
+% have seen typesu[] before
+
+<<global typesu>>=
+char	typesu[NTYPE];
 @
-<<global typeuinit>>=
-int	typeuinit[] =
+<<global typesuinit>>=
+int	typesuinit[] =
 {
-    TUCHAR, TUSHORT, TUINT, TULONG, TUVLONG, TIND, -1,
+    TSTRUCT, TUNION, -1,
 };
 @
 
 
-
-<<global typeilp>>=
-char	typeilp[NTYPE];
-@
-<<global typeilpinit>>=
-int	typeilpinit[] =
-{
-    TINT, TUINT, TLONG, TULONG, TIND, -1
-};
-@
-% ilp, int long pointer
-
-
-<<global typechlp>>=
-char	typechlp[NTYPE];
-@
-<<global typechlpinit>>=
-int	typechlpinit[] =
-{
-    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TIND, -1,
-};
-@
-% added TIND!
-
-
-<<global typechlpfd>>=
-char	typechlpfd[NTYPE];
-@
-
-<<global typechlpfdinit>>=
-int	typechlpfdinit[] =
-{
-    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TFLOAT, TDOUBLE, TIND, -1,
-};
-@
-
-
-<<global typec>>=
-char	typec[NTYPE];
-@
-<<global typecinit>>=
-int	typecinit[] =
-{
-    TCHAR, TUCHAR, -1
-};
-@
-
-<<global typechl>>=
-char	typechl[NTYPE];
-@
-<<global typechlinit>>=
-int	typechlinit[] =
-{
-    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, -1,
-};
-@
-
-
-<<global typeh>>=
-char	typeh[NTYPE];
-@
-<<global typehinit>>=
-int	typehinit[] =
-{
-    TSHORT, TUSHORT, -1,
-};
-@
-
-<<global typeil>>=
-char	typeil[NTYPE];
-@
-<<global typeilinit>>=
-int	typeilinit[] =
-{
-    TINT, TUINT, TLONG, TULONG, -1,
-};
-@
-
-
-
-<<global typev>>=
-char	typev[NTYPE];
-@
-% very long
-<<global typevinit>>=
-int	typevinit[] =
-{
-    TVLONG,	TUVLONG, -1,
-};
-@
-
-
-
+% will see often code doing different things if float or not.
+% ex: for enum, if enum is float constant or int.
 <<global typefd>>=
 char	typefd[NTYPE];
 @
@@ -9240,53 +9304,7 @@ int	typefdinit[] =
 
 
 
-<<global typeaf>>=
-char	typeaf[NTYPE];
-@
-<<global typeafinit>>=
-int	typeafinit[] =
-{
-    TFUNC, TARRAY, -1,
-};
-@
-
-
-
-
-<<global typesu>>=
-char	typesu[NTYPE];
-@
-<<global typesuinit>>=
-int	typesuinit[] =
-{
-    TSTRUCT, TUNION, -1,
-};
-@
-
-<<global typesuv>>=
-char	typesuv[NTYPE];
-@
-
-<<global typesuvinit>>=
-int	typesuvinit[] =
-{
-    TVLONG, TUVLONG, TSTRUCT, TUNION, -1,
-};
-@
-% suv is for arguments or return values that are too big to
-% reside in REGRET in which case it needs some special handling
-
-
-
-<<global typechlv>>=
-char	typechlv[NTYPE];
-@
-% comes from a few xxxinit,
-<<global typechlvp>>=
-char typechlvp[NTYPE];
-@
-
-
+%chunks: will present gradually other typeXXX
 
 <<[[tinit()]] initialise typexxx type sets>>=
 for(ip=typeiinit; *ip>=0; ip++) {
@@ -9351,6 +9369,168 @@ for(ip=typesuinit; *ip >= 0; ip++) {
     typesu[*ip] = 1;
 }
 @
+%ocaml: use pattern matching directly, so no need those initialiser
+% and data-structure bitset tricks
+
+
+
+\subsection{XXX}
+
+
+<<global typeu>>=
+char	typeu[NTYPE];
+@
+<<global typeuinit>>=
+int	typeuinit[] =
+{
+    TUCHAR, TUSHORT, TUINT, TULONG, TUVLONG, TIND, -1,
+};
+@
+% TIND is a pointer, so really unsigned address.
+
+
+<<global typeilp>>=
+char	typeilp[NTYPE];
+@
+<<global typeilpinit>>=
+int	typeilpinit[] =
+{
+    TINT, TUINT, TLONG, TULONG, TIND, -1
+};
+@
+% ilp, int long pointer
+\l used for??
+
+
+<<global typechlp>>=
+char	typechlp[NTYPE];
+@
+<<global typechlpinit>>=
+int	typechlpinit[] =
+{
+    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TIND, -1,
+};
+@
+% added TIND!
+\l used for??
+
+
+<<global typechlpfd>>=
+char	typechlpfd[NTYPE];
+@
+
+<<global typechlpfdinit>>=
+int	typechlpfdinit[] =
+{
+    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TFLOAT, TDOUBLE, TIND, -1,
+};
+@
+\l used for??
+
+
+<<global typec>>=
+char	typec[NTYPE];
+@
+<<global typecinit>>=
+int	typecinit[] =
+{
+    TCHAR, TUCHAR, -1
+};
+@
+
+<<global typechl>>=
+char	typechl[NTYPE];
+@
+<<global typechlinit>>=
+int	typechlinit[] =
+{
+    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, -1,
+};
+@
+\l used for??
+
+
+<<global typeh>>=
+char	typeh[NTYPE];
+@
+<<global typehinit>>=
+int	typehinit[] =
+{
+    TSHORT, TUSHORT, -1,
+};
+@
+\l used for??
+
+<<global typeil>>=
+char	typeil[NTYPE];
+@
+<<global typeilinit>>=
+int	typeilinit[] =
+{
+    TINT, TUINT, TLONG, TULONG, -1,
+};
+@
+\l used for??
+
+
+
+<<global typev>>=
+char	typev[NTYPE];
+@
+% very long
+<<global typevinit>>=
+int	typevinit[] =
+{
+    TVLONG,	TUVLONG, -1,
+};
+@
+\l used for??
+
+
+
+
+
+
+<<global typeaf>>=
+char	typeaf[NTYPE];
+@
+<<global typeafinit>>=
+int	typeafinit[] =
+{
+    TFUNC, TARRAY, -1,
+};
+@
+\l used for??
+
+
+
+
+
+<<global typesuv>>=
+char	typesuv[NTYPE];
+@
+
+<<global typesuvinit>>=
+int	typesuvinit[] =
+{
+    TVLONG, TUVLONG, TSTRUCT, TUNION, -1,
+};
+@
+% suv is for arguments or return values that are too big to
+% reside in REGRET in which case it needs some special handling
+
+
+
+<<global typechlv>>=
+char	typechlv[NTYPE];
+@
+% comes from a few xxxinit,
+<<global typechlvp>>=
+char typechlvp[NTYPE];
+@
+\l used for??
+
+
 
 
 
@@ -9358,7 +9538,7 @@ for(ip=typesuinit; *ip >= 0; ip++) {
 % set of type supported for switch argument
 % todo use array of bool instead
 <<global typeswitch>>=
-// set<type_kind>
+// set<Type_kind>
 char*	typeswitch;
 @
 
@@ -9368,21 +9548,22 @@ typeswitch = typechl;
 @
 
 
-
 \subsection{Type compatibility, [[tcompat()]]}
 
-% again returning true means actually they are not compatible and
+% returning true means actually they are not compatible and
 % there is a type error
-% bcomplex -> <>
+
+% call as 'tcompat(n, l->type, r->type, tasadd)'
+% and tasadd is a compatibility policy (see next section)
+
+% (complex -> tcom -> tcomo) | bcomplex -> <>
 <<function tcompat>>=
 bool
 tcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
 
     if(stcompat(n, t1, t2, ttab)) {
-        if(t1 == T)
-            diag(n, "incompatible type: \"%T\" for op \"%O\"",
-                t2, n->op);
+        <<[[tcompat()]] if no T1>>
         else
             diag(n, "incompatible types: \"%T\" and \"%T\" for op \"%O\"",
                 t1, t2, n->op);
@@ -9392,6 +9573,14 @@ tcompat(Node *n, Type *t1, Type *t2, long ttab[])
 }
 @
 
+<<[[tcompat()]] if no T1>>=
+if(t1 == T)
+    diag(n, "incompatible type: \"%T\" for op \"%O\"",
+        t2, n->op);
+@
+\t when can have t1 == T?
+
+
 
 % this is silent, it does not generate error if there are not compatible.
 % tcompat -> <>
@@ -9400,6 +9589,7 @@ bool
 stcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
     int i;
+    //Type_kind (as a bit)
     ulong b;
 
     i = 0;
@@ -9409,134 +9599,49 @@ stcompat(Node *n, Type *t1, Type *t2, long ttab[])
     i = 0;
     if(t1 != T)
         i = t1->etype;
+    // type t2 part of set of types compatible with type t1
     if(b & ttab[i]) {
-        if(ttab == tasign)
-            if(b == BSTRUCT || b == BUNION)
-                if(!sametype(t1, t2))
-                    return true;
-        if(n->op != OCAST)
-          if(b == BIND && i == TIND)
-                if(!sametype(t1, t2))
-                    return true;
-        return false;
+        <<[[stcompat()]] when t1 matches t2, if ttab is tasign>>
+        <<[[stcompat()]] when t1 matches t2, if pointers and not a cast op>>
+        return false; // true means error, so false means everything fine
     }
     return true;
 }
 @
 
-% sametype called in xdecl to make sure you give a more precise
-% type to something that was previously declared.
-% xdecl -> <>
-<<function sametype>>=
-bool
-sametype(Type *t1, Type *t2)
-{
 
-    if(t1 == t2)
-        return true;
-    return rsametype(t1, t2, 5, true);
-}
-@
 
-% n = depth? so equal modulo a certain depth?? hmmm
-<<function rsametype>>=
-bool
-rsametype(Type *t1, Type *t2, int n, bool f)
-{
-    int et;
-
-    n--;
-    for(;;) {
-        if(t1 == t2)
+<<[[stcompat()]] when t1 matches t2, if ttab is tasign>>=
+if(ttab == tasign)
+    if(b == BSTRUCT || b == BUNION)
+        if(!sametype(t1, t2))
             return true;
-        if(t1 == T || t2 == T)
-            return false;
-        if(n <= 0)
-            return true;
-
-        et = t1->etype;
-        if(et != t2->etype)
-            return false;
-
-        if(et == TFUNC) {
-            if(!rsametype(t1->link, t2->link, n, false))
-                return false;
-            t1 = t1->down;
-            t2 = t2->down;
-            while(t1 != T && t2 != T) {
-
-                <<[[rsametype()]] continue if old style type>>
-
-                while(t1 != T || t2 != T) {
-                    if(!rsametype(t1, t2, n, false))
-                        return false;
-                    t1 = t1->down;
-                    t2 = t2->down;
-                }
-                break;
-            }
-            return true;
-        }
-        if(et == TARRAY)
-            if(t1->width != t2->width && t1->width != 0 && t2->width != 0)
-                return false;
-        if(typesu[et]) {
-            if(t1->link == T)
-                snap(t1);
-            if(t2->link == T)
-                snap(t2);
-            if(t1 != t2 && t1->link == T && t2->link == T){
-                /* structs with missing or different tag names aren't considered equal */
-                if(t1->tag == nil || t2->tag == nil ||
-                   strcmp(t1->tag->name, t2->tag->name) != 0)
-                    return false;
-            }
-            t1 = t1->link;
-            t2 = t2->link;
-            for(;;) {
-                if(t1 == t2)
-                    return true;
-                if(!rsametype(t1, t2, n, false))
-                    return false;
-                t1 = t1->down;
-                t2 = t2->down;
-            }
-        }
-        t1 = t1->link;
-        t2 = t2->link;
-
-        if((f || !debug['V']) && et == TIND) {
-            if(t1 != T && t1->etype == TVOID)
-                return true;
-            if(t2 != T && t2->etype == TVOID)
-                return true;
-        }
-    }
-}
 @
+% accept assigns if same types, not only if same etypes
 
-<<function snap>>=
-void
-snap(Type *t)
-{
-    if(typesu[t->etype])
-     if(t->link == T && t->tag && t->tag->suetag) {
-        t->link = t->tag->suetag->link;
-        t->width = t->tag->suetag->width;
-    }
-}
+<<[[stcompat()]] when t1 matches t2, if pointers and not a cast op>>=
+if(n->op != OCAST)
+  if(b == BIND && i == TIND)
+        if(!sametype(t1, t2))
+            return true;
 @
+% pointers must be equal type too (except in cast operation obviously)
 
+\subsection{Compatibility policies, [[txxx]]}
+
+% will call stcompat with different compatibilitie policies
 
 
 <<enum bxxx constants>>=
 BINTEGER	= BCHAR|BUCHAR|BSHORT|BUSHORT|BINT|BUINT|BLONG|BULONG|BVLONG|BUVLONG,
 BNUMBER		= BINTEGER|BFLOAT|BDOUBLE,
 @
+%ocaml: use pattern matching?
 
 
 % passed to tcompat
 <<global tasign>>=
+// map<Type_kind, set<Type_kind> >
 long	tasign[NTYPE];
 @
 <<global tasigninit>>=
@@ -9554,12 +9659,55 @@ Init	tasigninit[] =
     TUVLONG,	BNUMBER,	0,
     TFLOAT,		BNUMBER,	0,
     TDOUBLE,	BNUMBER,	0,
+
     TIND,		BIND,		0,
     TSTRUCT,	BSTRUCT,	0,
     TUNION,		BUNION,		0,
     -1,		0,		0,
 };
 @
+
+%chunks:
+% Just gave one example of policy. Will present other
+% later with code that uses it.
+
+<<[[tinit()]] initialise tcompat arrays>>=
+for(p=tasigninit; p->code >= 0; p++) {
+    urk("tasign", nelem(tasign), p->code);
+    tasign[p->code] = p->value;
+}
+for(p=tasaddinit; p->code >= 0; p++) {
+    urk("tasadd", nelem(tasadd), p->code);
+    tasadd[p->code] = p->value;
+}
+for(p=tcastinit; p->code >= 0; p++) {
+    urk("tcast", nelem(tcast), p->code);
+    tcast[p->code] = p->value;
+}
+for(p=taddinit; p->code >= 0; p++) {
+    urk("tadd", nelem(tadd), p->code);
+    tadd[p->code] = p->value;
+}
+for(p=tsubinit; p->code >= 0; p++) {
+    urk("tsub", nelem(tsub), p->code);
+    tsub[p->code] = p->value;
+}
+for(p=tmulinit; p->code >= 0; p++) {
+    urk("tmul", nelem(tmul), p->code);
+    tmul[p->code] = p->value;
+}
+for(p=tandinit; p->code >= 0; p++) {
+    urk("tand", nelem(tand), p->code);
+    tand[p->code] = p->value;
+}
+for(p=trelinit; p->code >= 0; p++) {
+    urk("trel", nelem(trel), p->code);
+    trel[p->code] = p->value;
+}
+@
+
+
+\subsection{XXX}
 
 <<global tasadd>>=
 long	tasadd[NTYPE];
@@ -9610,73 +9758,8 @@ Init	tcastinit[] =
 };
 @
 
-<<global tadd>>=
-long	tadd[NTYPE];
-@
-<<global taddinit>>=
-Init	taddinit[] =
-{
-    TCHAR,		BNUMBER|BIND,	0,
-    TUCHAR,		BNUMBER|BIND,	0,
-    TSHORT,		BNUMBER|BIND,	0,
-    TUSHORT,	BNUMBER|BIND,	0,
-    TINT,		BNUMBER|BIND,	0,
-    TUINT,		BNUMBER|BIND,	0,
-    TLONG,		BNUMBER|BIND,	0,
-    TULONG,		BNUMBER|BIND,	0,
-    TVLONG,		BNUMBER|BIND,	0,
-    TUVLONG,	BNUMBER|BIND,	0,
-    TFLOAT,		BNUMBER,	0,
-    TDOUBLE,	BNUMBER,	0,
-    TIND,		BINTEGER,	0,
-    -1,		0,		0,
-};
-@
 
-<<global tsub>>=
-long	tsub[NTYPE];
-@
-<<global tsubinit>>=
-Init	tsubinit[] =
-{
-    TCHAR,		BNUMBER,	0,
-    TUCHAR,		BNUMBER,	0,
-    TSHORT,		BNUMBER,	0,
-    TUSHORT,	BNUMBER,	0,
-    TINT,		BNUMBER,	0,
-    TUINT,		BNUMBER,	0,
-    TLONG,		BNUMBER,	0,
-    TULONG,		BNUMBER,	0,
-    TVLONG,		BNUMBER,	0,
-    TUVLONG,	BNUMBER,	0,
-    TFLOAT,		BNUMBER,	0,
-    TDOUBLE,	BNUMBER,	0,
-    TIND,		BINTEGER|BIND,	0,
-    -1,		0,		0,
-};
-@
 
-<<global tmul>>=
-long	tmul[NTYPE];
-@
-<<global tmulinit>>=
-Init	tmulinit[] =
-{
-    TCHAR,		BNUMBER,	0,
-    TUCHAR,		BNUMBER,	0,
-    TSHORT,		BNUMBER,	0,
-    TUSHORT,	BNUMBER,	0,
-    TINT,		BNUMBER,	0,
-    TUINT,		BNUMBER,	0,
-    TLONG,		BNUMBER,	0,
-    TULONG,		BNUMBER,	0,
-    TVLONG,		BNUMBER,	0,
-    TUVLONG,	BNUMBER,	0,
-    TFLOAT,		BNUMBER,	0,
-    TDOUBLE,	BNUMBER,	0,
-    -1,		0,		0,
-};
-@
 
 <<global tand>>=
 long	tand[NTYPE];
@@ -9759,48 +9842,14 @@ long	targ[1] =
 
 
 
-<<[[tinit()]] initialise tcompat arrays>>=
-for(p=tasigninit; p->code >= 0; p++) {
-    urk("tasign", nelem(tasign), p->code);
-    tasign[p->code] = p->value;
-}
-for(p=tasaddinit; p->code >= 0; p++) {
-    urk("tasadd", nelem(tasadd), p->code);
-    tasadd[p->code] = p->value;
-}
-for(p=tcastinit; p->code >= 0; p++) {
-    urk("tcast", nelem(tcast), p->code);
-    tcast[p->code] = p->value;
-}
-for(p=taddinit; p->code >= 0; p++) {
-    urk("tadd", nelem(tadd), p->code);
-    tadd[p->code] = p->value;
-}
-for(p=tsubinit; p->code >= 0; p++) {
-    urk("tsub", nelem(tsub), p->code);
-    tsub[p->code] = p->value;
-}
-for(p=tmulinit; p->code >= 0; p++) {
-    urk("tmul", nelem(tmul), p->code);
-    tmul[p->code] = p->value;
-}
-for(p=tandinit; p->code >= 0; p++) {
-    urk("tand", nelem(tand), p->code);
-    tand[p->code] = p->value;
-}
-for(p=trelinit; p->code >= 0; p++) {
-    urk("trel", nelem(trel), p->code);
-    trel[p->code] = p->value;
-}
-@
-
-
-\subsection{Expression typechecking, [[tcom()]]}
+\subsection{Typechecker, [[tcom()]]}
 % cc/com.c
 
+% finally!
 
-% true means error
-% | tcomo  -> <>
+% Again, returning true means type error!
+
+% complex | tcomo | tcoma | tcomx  -> <>
 <<function tcom>>=
 /*
  * evaluate types
@@ -9829,13 +9878,10 @@ enum
     ADDROP	= 1<<2,
 };
 @
+% >> >> >>
 % evaluate types means type checking and making cast explicits
 % lvalue vs rvalue: https://www.itu.dk/courses/BPRD/E2009/fundamental-1967.pdf)
 % (thx charles forsith)
-
-
-
-
 
 
 % true means error
@@ -9846,14 +9892,12 @@ tcomo(Node *n, int f)
 {
     Node *l, *r;
     Type *t;
-    int o;
-    static TRune zer;
+    // bool | int
+    int o; 
+    <<[[tcomo()]] other locals>>
 
-    if(n == Z) {
-        diag(Z, "Z in tcom");
-        errorexit();
-    }
-    n->addable = 0;
+    <<[[tcomo()]] sanity check n>>
+    n->addable = false;
     l = n->left;
     r = n->right;
 
@@ -9865,42 +9909,13 @@ tcomo(Node *n, int f)
 
     }
 
-
     t = n->type;
-    if(t == T)
-        goto bad;
-    if(t->width < 0) {
-        snap(t);
-        if(t->width < 0) {
-            if(typesu[t->etype] && t->tag)
-                diag(n, "structure not fully declared %s", t->tag->name);
-            else
-                diag(n, "structure not fully declared");
-            goto bad;
-        }
-    }
-    if(typeaf[t->etype]) {
-        if(f & ADDROF)
-            goto addaddr;
-        if(f & ADDROP)
-            warn(n, "address of array/func ignored");
-    }
-    return false;
+    <<[[tcomo()]] sanity check t after typing>>
+    <<[[tcomo()]] sanity check type width>>
+    <<[[tcomo()]] special adjustments for arrays and functions>>
+    return false; // everything is fine
 
-addaddr:
-    if(tlvalue(n))
-        goto bad;
-    l = new1(OXXX, Z, Z);
-    *l = *n;
-    n->op = OADDR;
-    if(l->type->etype == TARRAY)
-        l->type = l->type->link;
-    n->left = l;
-    n->right = Z;
-    n->addable = 0;
-    n->type = typ(TIND, l->type);
-    n->type->width = types[TIND]->width;
-    return false;
+<<[[tcomo()]] extra labels>>
 
 bad:
     n->type = T;
@@ -9908,504 +9923,42 @@ bad:
 }
 @
 
+<<[[tcomo()]] sanity check n>>=
+if(n == Z) {
+    diag(Z, "Z in tcom");
+    errorexit();
+}
+@
+%ocam: never happens, by construction, no node pointers.
 
-<<[[tcomo()]] switch node kind cases>>=
-case ODOTDOT:
-    /*
-     * tcom has already been called on this subtree
-     */
-    *n = *n->left;
-    if(n->type == T)
-        goto bad;
-    break;
+<<[[tcomo()]] sanity check t after typing>>=
+if(t == T)
+    goto bad;
 @
 
-<<[[tcomo()]] switch node kind cases>>=
-case OCAST:
-    if(n->type == T)
-        break;
-    if(n->type->width == types[TLONG]->width) {
-        if(tcomo(l, ADDROF|CASTOF))
-            goto bad;
-    } else
-        if(tcom(l))
-            goto bad;
-    if(isfunct(n))
-        break;
-    if(tcompat(n, l->type, n->type, tcast))
-        goto bad;
-    break;
-@
 
-<<[[tcomo()]] switch node kind cases>>=
-case ORETURN:
-    if(l == Z) {
-        if(n->type->etype != TVOID)
-            warn(n, "null return of a typed function");
-        break;
+
+<<[[tcomo()]] sanity check type width>>=
+if(t->width < 0) {
+    snap(t);
+    if(t->width < 0) {
+        if(typesu[t->etype] && t->tag)
+            diag(n, "structure not fully declared %s", t->tag->name);
+        else
+            diag(n, "structure not fully declared");
+        goto bad;
     }
-    if(tcom(l))
-        goto bad;
-    typeext(n->type, l);
-    if(tcompat(n, n->type, l->type, tasign))
-        break;
-    constas(n, n->type, l->type);
-    if(!sametype(n->type, l->type)) {
-        l = new1(OCAST, l, Z);
-        l->type = n->type;
-        n->left = l;
-    }
-    break;
+}
 @
-
-<<[[tcomo()]] switch node kind cases>>=
-case OASI:	/* same as as, but no test for const */
-    n->op = OAS;
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-
-    typeext(l->type, r);
-    if(tlvalue(l) || tcompat(n, l->type, r->type, tasign))
-        goto bad;
-    if(!sametype(l->type, r->type)) {
-        r = new1(OCAST, r, Z);
-        r->type = l->type;
-        n->right = r;
-    }
-    n->type = l->type;
-    break;
-@
-
-<<[[tcomo()]] switch node kind cases>>=
-case OAS:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(tlvalue(l))
-        goto bad;
-    if(isfunct(n))
-        break;
-    typeext(l->type, r);
-    if(tcompat(n, l->type, r->type, tasign))
-        goto bad;
-    constas(n, l->type, r->type);
-    if(!sametype(l->type, r->type)) {
-        r = new1(OCAST, r, Z);
-        r->type = l->type;
-        n->right = r;
-    }
-    n->type = l->type;
-    break;
-@
-
-<<[[tcomo()]] switch node kind cases>>=
-case OASADD:
-case OASSUB:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(tlvalue(l))
-        goto bad;
-    if(isfunct(n))
-        break;
-    typeext1(l->type, r);
-    if(tcompat(n, l->type, r->type, tasadd))
-        goto bad;
-    constas(n, l->type, r->type);
-    t = l->type;
-    arith(n, 0);
-    while(n->left->op == OCAST)
-        n->left = n->left->left;
-    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
-        r = new1(OCAST, n->right, Z);
-        r->type = t;
-        n->right = r;
-        n->type = t;
-    }
-    break;
-@
+%ocaml: no need, I compute the size far later during code generation
 
 
-<<after parsing nodes>>=
-OASLMUL,
-OASLDIV,
-OASLMOD,
-OASLSHR,
-@
-% typed long version?
-
-<<[[tcomo()]] switch node kind cases>>=
-case OASMUL:
-case OASDIV:
-case OASLMUL:
-case OASLDIV:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(tlvalue(l))
-        goto bad;
-    if(isfunct(n))
-        break;
-    typeext1(l->type, r);
-    if(tcompat(n, l->type, r->type, tmul))
-        goto bad;
-    constas(n, l->type, r->type);
-    t = l->type;
-    arith(n, 0);
-    while(n->left->op == OCAST)
-        n->left = n->left->left;
-    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
-        r = new1(OCAST, n->right, Z);
-        r->type = t;
-        n->right = r;
-        n->type = t;
-    }
-    if(typeu[n->type->etype]) {
-        if(n->op == OASDIV)
-            n->op = OASLDIV;
-        if(n->op == OASMUL)
-            n->op = OASLMUL;
-    }
-    break;
-@
 
 
-<<[[tcomo()]] switch node kind cases>>=
-case OASLSHR:
-case OASASHR:
-case OASASHL:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(tlvalue(l))
-        goto bad;
-    if(isfunct(n))
-        break;
-    if(tcompat(n, l->type, r->type, tand))
-        goto bad;
-    n->type = l->type;
-    n->right = new1(OCAST, r, Z);
-    n->right->type = types[TINT];
-    if(typeu[n->type->etype]) {
-        if(n->op == OASASHR)
-            n->op = OASLSHR;
-    }
-    break;
-@
+\section{Typechecking expressions}
+\n try same order than in Parsing
 
-<<[[tcomo()]] switch node kind cases>>=
-case OASMOD:
-case OASLMOD:
-case OASOR:
-case OASAND:
-case OASXOR:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(tlvalue(l))
-        goto bad;
-    if(isfunct(n))
-        break;
-    if(tcompat(n, l->type, r->type, tand))
-        goto bad;
-    t = l->type;
-    arith(n, 0);
-    while(n->left->op == OCAST)
-        n->left = n->left->left;
-    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
-        r = new1(OCAST, n->right, Z);
-        r->type = t;
-        n->right = r;
-        n->type = t;
-    }
-    if(typeu[n->type->etype]) {
-        if(n->op == OASMOD)
-            n->op = OASLMOD;
-    }
-    break;
-@
 
-<<[[tcomo()]] switch node kind cases>>=
-case OPREINC:
-case OPREDEC:
-case OPOSTINC:
-case OPOSTDEC:
-    if(tcom(l))
-        goto bad;
-    if(tlvalue(l))
-        goto bad;
-    if(isfunct(n))
-        break;
-    if(tcompat(n, l->type, types[TINT], tadd))
-        goto bad;
-    n->type = l->type;
-    if(n->type->etype == TIND)
-    if(n->type->link->width < 1) {
-        snap(n->type->link);
-        if(n->type->link->width < 1)
-            diag(n, "inc/dec of a void pointer");
-    }
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case OEQ:
-case ONE:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(isfunct(n))
-        break;
-    typeext(l->type, r);
-    typeext(r->type, l);
-    if(tcompat(n, l->type, r->type, trel))
-        goto bad;
-    arith(n, 0);
-    n->type = types[TINT];
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case OLT:
-case OGE:
-case OGT:
-case OLE:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(isfunct(n))
-        break;
-    typeext1(l->type, r);
-    typeext1(r->type, l);
-    if(tcompat(n, l->type, r->type, trel))
-        goto bad;
-    arith(n, 0);
-    if(typeu[n->type->etype])
-        n->op = logrel[relindex(n->op)];
-    n->type = types[TINT];
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case OCOND:
-    o = tcom(l);
-    o |= tcom(r->left);
-    if(o | tcom(r->right))
-        goto bad;
-    if(r->right->type->etype == TIND && vconst(r->left) == 0) {
-        r->left->type = r->right->type;
-        r->left->vconst = 0;
-    }
-    if(r->left->type->etype == TIND && vconst(r->right) == 0) {
-        r->right->type = r->left->type;
-        r->right->vconst = 0;
-    }
-    if(sametype(r->right->type, r->left->type)) {
-        r->type = r->right->type;
-        n->type = r->type;
-        break;
-    }
-    if(tcompat(r, r->left->type, r->right->type, trel))
-        goto bad;
-    arith(r, 0);
-    n->type = r->type;
-    break;
-@
-
-<<[[tcomo()]] switch node kind cases>>=
-case OADD:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(isfunct(n))
-        break;
-    if(tcompat(n, l->type, r->type, tadd))
-        goto bad;
-    arith(n, 1);
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case OSUB:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(isfunct(n))
-        break;
-    if(tcompat(n, l->type, r->type, tsub))
-        goto bad;
-    arith(n, 1);
-    break;
-@
-
-<<after parsing nodes>>=
-OLMUL,
-OLDIV,
-OLMOD,
-OLSHR,
-@
-
-<<[[tcomo()]] switch node kind cases>>=
-case OMUL:
-case ODIV:
-case OLMUL:
-case OLDIV:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(isfunct(n))
-        break;
-    if(tcompat(n, l->type, r->type, tmul))
-        goto bad;
-    arith(n, 1);
-    if(typeu[n->type->etype]) {
-        if(n->op == ODIV)
-            n->op = OLDIV;
-        if(n->op == OMUL)
-            n->op = OLMUL;
-    }
-    break;
-@
-
-<<[[tcomo()]] switch node kind cases>>=
-case OLSHR:
-case OASHL:
-case OASHR:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(isfunct(n))
-        break;
-    if(tcompat(n, l->type, r->type, tand))
-        goto bad;
-    n->right = Z;
-    arith(n, 1);
-    n->right = new1(OCAST, r, Z);
-    n->right->type = types[TINT];
-    if(typeu[n->type->etype])
-        if(n->op == OASHR)
-            n->op = OLSHR;
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case OAND:
-case OOR:
-case OXOR:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(isfunct(n))
-        break;
-    if(tcompat(n, l->type, r->type, tand))
-        goto bad;
-    arith(n, 1);
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case OMOD:
-case OLMOD:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(isfunct(n))
-        break;
-    if(tcompat(n, l->type, r->type, tand))
-        goto bad;
-    arith(n, 1);
-    if(typeu[n->type->etype])
-        n->op = OLMOD;
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case OPOS:
-    if(tcom(l))
-        goto bad;
-    if(isfunct(n))
-        break;
-
-    r = l;
-    l = new(OCONST, Z, Z);
-    l->vconst = 0;
-    l->type = types[TINT];
-    n->op = OADD;
-    n->right = r;
-    n->left = l;
-
-    if(tcom(l))
-        goto bad;
-    if(tcompat(n, l->type, r->type, tsub))
-        goto bad;
-    arith(n, 1);
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case ONEG:
-    if(tcom(l))
-        goto bad;
-    if(isfunct(n))
-        break;
-
-    if(!machcap(n)) {
-        r = l;
-        l = new(OCONST, Z, Z);
-        l->vconst = 0;
-        l->type = types[TINT];
-        n->op = OSUB;
-        n->right = r;
-        n->left = l;
-
-        if(tcom(l))
-            goto bad;
-        if(tcompat(n, l->type, r->type, tsub))
-            goto bad;
-    }
-    arith(n, 1);
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case OCOM:
-    if(tcom(l))
-        goto bad;
-    if(isfunct(n))
-        break;
-
-    if(!machcap(n)) {
-        r = l;
-        l = new(OCONST, Z, Z);
-        l->vconst = -1;
-        l->type = types[TINT];
-        n->op = OXOR;
-        n->right = r;
-        n->left = l;
-
-        if(tcom(l))
-            goto bad;
-        if(tcompat(n, l->type, r->type, tand))
-            goto bad;
-    }
-    arith(n, 1);
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case ONOT:
-    if(tcom(l))
-        goto bad;
-    if(isfunct(n))
-        break;
-    if(tcompat(n, T, l->type, tnot))
-        goto bad;
-    n->type = types[TINT];
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case OANDAND:
-case OOROR:
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-    if(tcompat(n, T, l->type, tnot) |
-       tcompat(n, T, r->type, tnot))
-        goto bad;
-    n->type = types[TINT];
-    break;
-@
 <<[[tcomo()]] switch node kind cases>>=
 case OCOMMA:
     o = tcom(l);
@@ -10414,86 +9967,134 @@ case OCOMMA:
     n->type = r->type;
     break;
 @
+% type of a,b is type of last element!
+
+\subsection{Numeric constants}
+
+% type annotations done already in grammar action.
+% See Section X. Node.type already good.
 
 <<[[tcomo()]] switch node kind cases>>=
-case OSIZE:
-    if(l != Z) {
-        if(l->op != OSTRING && l->op != OLSTRING)
-            if(tcomo(l, 0))
-                goto bad;
-        if(l->op == OBIT) {
-            diag(n, "sizeof bitfield");
-            goto bad;
-        }
-        n->type = l->type;
-    }
-    if(n->type == T)
-        goto bad;
-    if(n->type->width <= 0) {
-        diag(n, "sizeof undefined type");
-        goto bad;
-    }
-    if(n->type->etype == TFUNC) {
-        diag(n, "sizeof function");
-        goto bad;
-    }
-    n->op = OCONST;
-    n->left = Z;
-    n->right = Z;
-    n->vconst = convvtox(n->type->width, TINT);
-    n->type = types[TINT];
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case OFUNC:
-    o = tcomo(l, 0);
-    if(o)
-        goto bad;
-    if(l->type->etype == TIND && l->type->link->etype == TFUNC) {
-        l = new1(OIND, l, Z);
-        l->type = l->left->type->link;
-        n->left = l;
-    }
-    if(tcompat(n, T, l->type, tfunct))
-        goto bad;
-    if(o | tcoma(l, r, l->type->down, 1))
-        goto bad;
-    n->type = l->type->link;
-    if(!debug['B'])
-        if(l->type->down == T || l->type->down->etype == TOLD) {
-            nerrors--;
-            diag(n, "function args not checked: %F", l);
-        }
-    dpcheck(n);
-    break;
-@
-<<[[tcomo()]] switch node kind cases>>=
-case ONAME:
-    if(n->type == T) {
-        diag(n, "name not declared: %F", n);
-        goto bad;
-    }
-    if(n->type->etype == TENUM) {
-        n->op = OCONST;
-        n->type = n->sym->tenum;
-        if(!typefd[n->type->etype])
-            n->vconst = n->sym->vconst;
-        else
-            n->fconst = n->sym->fconst;
-        break;
-    }
-    n->addable = 1;
-    if(n->class == CEXREG) {
-        n->op = OREGISTER;
-        if(thechar == '8')
-            n->op = OEXREG;
-        n->reg = n->sym->offset;
-        n->xoffset = 0;
-        break;
-    }
+case OCONST:
     break;
 @
 
+\subsection{String constants}
+
+\subsubsection{ASCII strings}
+
+<<[[tcomo()]] switch node kind cases>>=
+case OSTRING:
+    <<[[tcomo()]] in OSTRING case, if not an array or chars>>
+    n->op = ONAME;
+    n->xoffset = outstring(n->cstring, n->type->width);
+    n->addable = true;
+    break;
+@
+% transformed as ONAME! (so become lvalue, Can do "foo"[0] = 'c'. )
+
+<<string rule, set sym and class for OSTRING>>=
+$$->sym = symstring;
+$$->class = CSTATIC;
+@
+% could do that in tcomo instead of in string rule.
+% Also why he does not do that directly in parser? Why not generate
+% ONAME directly?
+
+
+% rewrite AST! offset in a giant DATA string.
+
+
+<<global symstring>>=
+Sym*	symstring;
+@
+\t move in code generation?
+
+<<[[cinit()]] symstring initialization>>=
+symstring = slookup(".string");
+symstring->class = CSTATIC;
+t = typ(TARRAY, types[TCHAR]);
+t->width = 0;
+symstring->type = t;
+@
+
+
+<<global nstring>>=
+long	nstring;
+@
+
+<<global mnstring>>=
+int	mnstring;
+@
+
+
+<<[[ginit()]] initialisation>>=
+nstring = 0;
+mnstring = 0;
+@
+
+<<[[gclean()]] adjust symstring width>>=
+while(mnstring)
+    outstring("", 1L);
+symstring->type->width = nstring;
+@
+
+
+<<global string>>=
+char	string[NSNAME];
+@
+% NSNAME = 8, so print data by block of 8 characters.
+
+<<function outstring(arm)>>=
+long
+outstring(char *s, long n)
+{
+    long r;
+
+    if(suppress)
+        return nstring;
+    r = nstring;
+    while(n) {
+        string[mnstring] = *s++;
+        mnstring++;
+        nstring++;
+        if(mnstring >= NSNAME) {
+            gpseudo(ADATA, symstring, nodconst(0L));
+            p->from.offset += nstring - NSNAME;
+            p->reg = NSNAME;
+            p->to.type = D_SCONST;
+            memmove(p->to.sval, string, NSNAME);
+            mnstring = 0;
+        }
+        n--;
+    }
+    return r;
+}
+@
+% 386 diff is jsut p->reg -->  p->from.scale = NSNAME;
+
+% generate some DATA in the middle, ugly.
+
+
+
+
+<<[[tcomo()]] in OSTRING case, if not an array or chars>>=
+if(n->type->link != types[TCHAR]) {
+    o = outstring(0, 0);
+    while(o & 3) {
+        outstring("", 1);
+        o = outstring(0, 0);
+    }
+}
+@
+\t When can this happen?
+
+
+\subsubsection{Unicode strings}
+
+<<[[tcomo()]] other locals>>=
+static TRune zer;
+@
 
 <<[[tcomo()]] switch node kind cases>>=
 case OLSTRING:
@@ -10510,49 +10111,8 @@ case OLSTRING:
     break;
 @
 
-<<[[tcomo()]] switch node kind cases>>=
-case OSTRING:
-    if(n->type->link != types[TCHAR]) {
-        o = outstring(0, 0);
-        while(o & 3) {
-            outstring("", 1);
-            o = outstring(0, 0);
-        }
-    }
-    n->op = ONAME;
-    n->xoffset = outstring(n->cstring, n->type->width);
-    n->addable = 1;
-    break;
-@
 
 
-<<global symstring>>=
-Sym*	symstring;
-@
-
-<<[[cinit()]] symstring initialization>>=
-t = typ(TARRAY, types[TCHAR]);
-t->width = 0;
-symstring = slookup(".string");
-symstring->class = CSTATIC;
-symstring->type = t;
-@
-
-
-<<global nstring>>=
-long	nstring;
-@
-
-<<[[ginit()]] initialisation>>=
-nstring = 0;
-mnstring = 0;
-@
-
-<<[[gclean()]] adjust symstring width>>=
-while(mnstring)
-    outstring("", 1L);
-symstring->type->width = nstring;
-@
 
 
 <<function outlstring>>=
@@ -10585,59 +10145,814 @@ outlstring(TRune *s, long n)
 }
 @
 
-<<global mnstring>>=
-int	mnstring;
+
+\subsection{Entity uses}
+
+<<[[tcomo()]] switch node kind cases>>=
+case ONAME:
+    <<[[tcomo()]] in ONAME case, check if name declared>>
+    <<[[tcomo()]] in ONAME case, if enum constant>>
+    // else
+    n->addable = true;
+    <<[[tcomo()]] in ONAME case, if extern register>>
+    break;
 @
 
-<<global string>>=
-char	string[NSNAME];
-@
-
-
-<<function outstring(arm)>>=
-long
-outstring(char *s, long n)
-{
-    long r;
-
-    if(suppress)
-        return nstring;
-    r = nstring;
-    while(n) {
-        string[mnstring] = *s++;
-        mnstring++;
-        nstring++;
-        if(mnstring >= NSNAME) {
-            gpseudo(ADATA, symstring, nodconst(0L));
-            p->from.offset += nstring - NSNAME;
-            p->reg = NSNAME;
-            p->to.type = D_SCONST;
-            memmove(p->to.sval, string, NSNAME);
-            mnstring = 0;
-        }
-        n--;
-    }
-    return r;
+<<[[tcomo()]] in ONAME case, check if name declared>>=
+if(n->type == T) {
+    diag(n, "name not declared: %F", n);
+    goto bad;
 }
 @
-% 386 diff is jsut p->reg -->  p->from.scale = NSNAME;
+%ocaml: I do that during parsing, because I do not allow
+% implicit declaration and types
 
+% If entity referring to global, extern, param, auto, then
+% Node.class, Node.type, and Node.offset are already set correctly!
+
+% remember xdecl in doenum() which sets to TENUM type of enumeration
+% constants!
+
+<<[[tcomo()]] in ONAME case, if enum constant>>=
+if(n->type->etype == TENUM) {
+    n->op = OCONST;
+    if(!typefd[n->type->etype])
+        n->vconst = n->sym->vconst;
+    else
+        n->fconst = n->sym->fconst;
+    break;
+    n->type = n->sym->tenum;
+}
+@
+% adjust type to tenum!
+% break so no addable set
+
+
+\subsection{Arithmetic expressions}
 
 
 <<[[tcomo()]] switch node kind cases>>=
-case OCONST:
+case OADD:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    if(tcompat(n, l->type, r->type, tadd))
+        goto bad;
+    arith(n, true);
     break;
 @
+%ocaml: use exception so no need to thread those o and goto bad
+
+<<global tadd>>=
+long	tadd[NTYPE];
+@
+<<global taddinit>>=
+Init	taddinit[] =
+{
+    TCHAR,		BNUMBER|BIND,	0,
+    TUCHAR,		BNUMBER|BIND,	0,
+    TSHORT,		BNUMBER|BIND,	0,
+    TUSHORT,	BNUMBER|BIND,	0,
+    TINT,		BNUMBER|BIND,	0,
+    TUINT,		BNUMBER|BIND,	0,
+    TLONG,		BNUMBER|BIND,	0,
+    TULONG,		BNUMBER|BIND,	0,
+    TVLONG,		BNUMBER|BIND,	0,
+    TUVLONG,	BNUMBER|BIND,	0,
+    TFLOAT,		BNUMBER,	0,
+    TDOUBLE,	BNUMBER,	0,
+    TIND,		BINTEGER,	0,
+    -1,		0,		0,
+};
+@
+
+
+
+
 <<[[tcomo()]] switch node kind cases>>=
-case ODOT:
+case OSUB:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    if(tcompat(n, l->type, r->type, tsub))
+        goto bad;
+    arith(n, true);
+    break;
+@
+
+<<global tsub>>=
+long	tsub[NTYPE];
+@
+<<global tsubinit>>=
+Init	tsubinit[] =
+{
+    TCHAR,		BNUMBER,	0,
+    TUCHAR,		BNUMBER,	0,
+    TSHORT,		BNUMBER,	0,
+    TUSHORT,	BNUMBER,	0,
+    TINT,		BNUMBER,	0,
+    TUINT,		BNUMBER,	0,
+    TLONG,		BNUMBER,	0,
+    TULONG,		BNUMBER,	0,
+    TVLONG,		BNUMBER,	0,
+    TUVLONG,	BNUMBER,	0,
+    TFLOAT,		BNUMBER,	0,
+    TDOUBLE,	BNUMBER,	0,
+    TIND,		BINTEGER|BIND,	0,
+    -1,		0,		0,
+};
+@
+
+
+
+<<after parsing nodes>>=
+OLMUL,
+OLDIV,
+OLMOD,
+OLSHR,
+@
+
+<<[[tcomo()]] switch node kind cases>>=
+case OMUL:
+case ODIV:
+case OLMUL:
+case OLDIV:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    if(tcompat(n, l->type, r->type, tmul))
+        goto bad;
+    arith(n, true);
+    if(typeu[n->type->etype]) {
+        if(n->op == ODIV)
+            n->op = OLDIV;
+        if(n->op == OMUL)
+            n->op = OLMUL;
+    }
+    break;
+@
+
+<<global tmul>>=
+long	tmul[NTYPE];
+@
+<<global tmulinit>>=
+Init	tmulinit[] =
+{
+    TCHAR,		BNUMBER,	0,
+    TUCHAR,		BNUMBER,	0,
+    TSHORT,		BNUMBER,	0,
+    TUSHORT,	BNUMBER,	0,
+    TINT,		BNUMBER,	0,
+    TUINT,		BNUMBER,	0,
+    TLONG,		BNUMBER,	0,
+    TULONG,		BNUMBER,	0,
+    TVLONG,		BNUMBER,	0,
+    TUVLONG,	BNUMBER,	0,
+    TFLOAT,		BNUMBER,	0,
+    TDOUBLE,	BNUMBER,	0,
+    -1,		0,		0,
+};
+@
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case OMOD:
+case OLMOD:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    if(tcompat(n, l->type, r->type, tand))
+        goto bad;
+    arith(n, true);
+    if(typeu[n->type->etype])
+        n->op = OLMOD;
+    break;
+@
+% tand?
+
+
+
+% transform +x in  x+0 
+
+<<[[tcomo()]] switch node kind cases>>=
+case OPOS:
     if(tcom(l))
         goto bad;
-    if(tcompat(n, T, l->type, tdot))
+    <<[[tcomo()]] break if isfunct>>
+
+    r = l;
+    l = new(OCONST, Z, Z);
+    l->vconst = 0;
+    l->type = types[TINT];
+    n->op = OADD;
+    n->right = r;
+    n->left = l;
+
+    if(tcom(l))
         goto bad;
-    if(tcomd(n))
+    if(tcompat(n, l->type, r->type, tsub))
         goto bad;
+    arith(n, true);
     break;
 @
+% why tsub?
+
+% transform -x in  0-x
+
+<<[[tcomo()]] switch node kind cases>>=
+case ONEG:
+    if(tcom(l))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+
+    if(!machcap(n)) {
+        r = l;
+        l = new(OCONST, Z, Z);
+        l->vconst = 0;
+        l->type = types[TINT];
+        n->op = OSUB;
+        n->right = r;
+        n->left = l;
+
+        if(tcom(l))
+            goto bad;
+        if(tcompat(n, l->type, r->type, tsub))
+            goto bad;
+    }
+    arith(n, true);
+    break;
+@
+
+<<function machcap(arm)>>=
+/* default, like old cc */
+bool
+machcap(Node*)
+{
+    return false;
+}
+@
+% the one in x86 is more complex
+
+
+
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case OAND:
+case OOR:
+case OXOR:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    if(tcompat(n, l->type, r->type, tand))
+        goto bad;
+    arith(n, true);
+    break;
+@
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case OLSHR:
+case OASHL:
+case OASHR:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    if(tcompat(n, l->type, r->type, tand))
+        goto bad;
+    n->right = Z;
+    arith(n, true);
+    n->right = new1(OCAST, r, Z);
+    n->right->type = types[TINT];
+    if(typeu[n->type->etype])
+        if(n->op == OASHR)
+            n->op = OLSHR;
+    break;
+@
+
+
+
+
+
+
+
+\subsection{Arithmetic conversions}
+
+% ?? -> <>
+<<function arith>>=
+/*
+ * "the usual arithmetic conversions are performed"
+ */
+void
+arith(Node *n, bool f)
+{
+    Type *t1, *t2;
+    int i, j, k;
+    Node *n1;
+    long w;
+
+    t1 = n->left->type;
+    if(n->right == Z)
+        t2 = t1;
+    else
+        t2 = n->right->type;
+    i = TXXX;
+    if(t1 != T)
+        i = t1->etype;
+    j = TXXX;
+    if(t2 != T)
+        j = t2->etype;
+
+    k = tab[i][j];
+
+    if(k == TIND) {
+        if(i == TIND)
+            n->type = t1;
+        else
+        if(j == TIND)
+            n->type = t2;
+    } else {
+        /* convert up to at least int */
+        if(f)
+          while(k < TINT)
+            k += 2;
+        n->type = types[k];
+    }
+    if(n->op == OSUB)
+    if(i == TIND && j == TIND) {
+        w = n->right->type->link->width;
+        if(w < 1 || n->left->type->link == T || n->left->type->link->width < 1)
+            goto bad;
+        n->type = types[ewidth[TIND] <= ewidth[TLONG]? TLONG: TVLONG];
+        if(1 && ewidth[TIND] > ewidth[TLONG]){
+            n1 = new1(OXXX, Z, Z);
+            *n1 = *n;
+            n->op = OCAST;
+            n->left = n1;
+            n->right = Z;
+            n->type = types[TLONG];
+        }
+        if(w > 1) {
+            n1 = new1(OXXX, Z, Z);
+            *n1 = *n;
+            n->op = ODIV;
+            n->left = n1;
+            n1 = new1(OCONST, Z, Z);
+            n1->vconst = w;
+            n1->type = n->type;
+            n->right = n1;
+            w = vlog(n1);
+            if(w >= 0) {
+                n->op = OASHR;
+                n1->vconst = w;
+            }
+        }
+        return;
+    }
+    if(!sametype(n->type, n->left->type)) {
+        n->left = new1(OCAST, n->left, Z);
+        n->left->type = n->type;
+        if(n->type->etype == TIND) {
+            w = n->type->link->width;
+            if(w < 1) {
+                snap(n->type->link);
+                w = n->type->link->width;
+                if(w < 1)
+                    goto bad;
+            }
+            if(w > 1) {
+                n1 = new1(OCONST, Z, Z);
+                n1->vconst = w;
+                n1->type = n->type;
+                n->left = new1(OMUL, n->left, n1);
+                n->left->type = n->type;
+            }
+        }
+    }
+    if(n->right != Z)
+    if(!sametype(n->type, n->right->type)) {
+        n->right = new1(OCAST, n->right, Z);
+        n->right->type = n->type;
+        if(n->type->etype == TIND) {
+            w = n->type->link->width;
+            if(w < 1) {
+                snap(n->type->link);
+                w = n->type->link->width;
+                if(w < 1)
+                    goto bad;
+            }
+            if(w != 1) {
+                n1 = new1(OCONST, Z, Z);
+                n1->vconst = w;
+                n1->type = n->type;
+                n->right = new1(OMUL, n->right, n1);
+                n->right->type = n->type;
+            }
+        }
+    }
+    return;
+bad:
+    diag(n, "pointer addition not fully declared: %T", n->type->link);
+}
+@
+
+% arith -> <>
+<<function vlog>>=
+int
+vlog(Node *n)
+{
+    if(n->op != OCONST)
+        goto bad;
+    if(typefd[n->type->etype])
+        goto bad;
+
+    return log2(n->vconst);
+
+bad:
+    return -1;
+}
+@
+
+%coupling: could use designator for the nested initialiser too,
+% so less depdendencies on the order of the basic types
+% (I use designator for TIND only right now)
+<<global tab>>=
+char	tab[NTYPE][NTYPE] =
+{
+  [TXXX] =	{ 0,
+        },
+
+  [TCHAR] =	{ 0,	TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG,
+            TULONG, TVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TUCHAR] =	{ 0,	TUCHAR, TUCHAR, TUSHORT, TUSHORT, TUINT, TUINT, TULONG,
+            TULONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TSHORT] =	{ 0,	TSHORT, TUSHORT, TSHORT, TUSHORT, TINT, TUINT, TLONG,
+            TULONG, TVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TUSHORT] =	{ 0,	TUSHORT, TUSHORT, TUSHORT, TUSHORT, TUINT, TUINT, TULONG,
+            TULONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TINT] =	{ 0,	TINT, TUINT, TINT, TUINT, TINT, TUINT, TLONG,
+            TULONG, TVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TUINT] =	{ 0,	TUINT, TUINT, TUINT, TUINT, TUINT, TUINT, TULONG,
+            TULONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TLONG] =	{ 0,	TLONG, TULONG, TLONG, TULONG, TLONG, TULONG, TLONG,
+            TULONG, TVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TULONG] =	{ 0,	TULONG, TULONG, TULONG, TULONG, TULONG, TULONG, TULONG,
+            TULONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TVLONG] =	{ 0,	TVLONG, TUVLONG, TVLONG, TUVLONG, TVLONG, TUVLONG, TVLONG,
+            TUVLONG, TVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TUVLONG] =	{ 0,	TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG,
+            TUVLONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TFLOAT] =	{ 0,	TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT,
+            TFLOAT, TFLOAT, TFLOAT, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TDOUBLE] =	{ 0,	TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE,
+            TDOUBLE, TDOUBLE, TDOUBLE, TFLOAT, TDOUBLE, [TIND] = TIND,
+        },
+  [TIND] =	{ 0,	TIND, TIND, TIND, TIND, TIND, TIND, TIND,
+             TIND, TIND, TIND, TIND, TIND, [TIND] = TIND,
+        },
+};
+@
+
+
+\subsection{Boolean expressions}
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case OEQ:
+case ONE:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    typeext(l->type, r);
+    typeext(r->type, l);
+    if(tcompat(n, l->type, r->type, trel))
+        goto bad;
+    arith(n, false);
+    n->type = types[TINT];
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OLT:
+case OGE:
+case OGT:
+case OLE:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    typeext1(l->type, r);
+    typeext1(r->type, l);
+    if(tcompat(n, l->type, r->type, trel))
+        goto bad;
+    arith(n, false);
+    if(typeu[n->type->etype])
+        n->op = logrel[relindex(n->op)];
+    n->type = types[TINT];
+    break;
+@
+
+% ! x
+<<[[tcomo()]] switch node kind cases>>=
+case ONOT:
+    if(tcom(l))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    if(tcompat(n, T, l->type, tnot))
+        goto bad;
+    n->type = types[TINT];
+    break;
+@
+
+% ~ x
+<<[[tcomo()]] switch node kind cases>>=
+case OCOM:
+    if(tcom(l))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+
+    if(!machcap(n)) {
+        r = l;
+        l = new(OCONST, Z, Z);
+        l->vconst = -1;
+        l->type = types[TINT];
+        n->op = OXOR;
+        n->right = r;
+        n->left = l;
+
+        if(tcom(l))
+            goto bad;
+        if(tcompat(n, l->type, r->type, tand))
+            goto bad;
+    }
+    arith(n, false);
+    break;
+@
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case OANDAND:
+case OOROR:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tcompat(n, T, l->type, tnot) |
+       tcompat(n, T, r->type, tnot))
+        goto bad;
+    n->type = types[TINT];
+    break;
+@
+
+
+\subsection{Assignments}
+
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case OAS:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    typeext(l->type, r);
+    if(tcompat(n, l->type, r->type, tasign))
+        goto bad;
+    constas(n, l->type, r->type);
+    if(!sametype(l->type, r->type)) {
+        r = new1(OCAST, r, Z);
+        r->type = l->type;
+        n->right = r;
+    }
+    n->type = l->type;
+    break;
+@
+
+
+<<function constas>>=
+void
+constas(Node *n, Type *il, Type *ir)
+{
+    Type *l, *r;
+
+    l = il;
+    r = ir;
+
+    if(l == T)
+        return;
+    if(l->garb & GCONSTNT) {
+        warn(n, "assignment to a constant type (%T)", il);
+        return;
+    }
+    if(r == T)
+        return;
+    for(;;) {
+        if(l->etype != TIND || r->etype != TIND)
+            break;
+        l = l->link;
+        r = r->link;
+        if(l == T || r == T)
+            break;
+        if(r->garb & GCONSTNT)
+            if(!(l->garb & GCONSTNT)) {
+                warn(n, "assignment of a constant pointer type (%T)", ir);
+                break;
+            }
+    }
+}
+@
+
+
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case OASI:	/* same as as, but no test for const */
+    n->op = OAS;
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+
+    typeext(l->type, r);
+    if(tlvalue(l) || tcompat(n, l->type, r->type, tasign))
+        goto bad;
+    if(!sametype(l->type, r->type)) {
+        r = new1(OCAST, r, Z);
+        r->type = l->type;
+        n->right = r;
+    }
+    n->type = l->type;
+    break;
+@
+
+% usually called via if(tlvalue(x)) goto bad;
+<<function tlvalue>>=
+bool
+tlvalue(Node *n)
+{
+
+    if(!n->addable) {
+        diag(n, "not an l-value");
+        return true;
+    }
+    return false;
+}
+@
+
+
+
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case OASADD:
+case OASSUB:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    typeext1(l->type, r);
+    if(tcompat(n, l->type, r->type, tasadd))
+        goto bad;
+    constas(n, l->type, r->type);
+    t = l->type;
+    arith(n, false);
+    while(n->left->op == OCAST)
+        n->left = n->left->left;
+    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
+        r = new1(OCAST, n->right, Z);
+        r->type = t;
+        n->right = r;
+        n->type = t;
+    }
+    break;
+@
+
+<<function mixedasop>>=
+int
+mixedasop(Type *l, Type *r)
+{
+    return !typefd[l->etype] && typefd[r->etype];
+}
+@
+
+
+<<after parsing nodes>>=
+OASLMUL,
+OASLDIV,
+OASLMOD,
+OASLSHR,
+@
+% typed long version?
+
+<<[[tcomo()]] switch node kind cases>>=
+case OASMUL:
+case OASDIV:
+case OASLMUL:
+case OASLDIV:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    typeext1(l->type, r);
+    if(tcompat(n, l->type, r->type, tmul))
+        goto bad;
+    constas(n, l->type, r->type);
+    t = l->type;
+    arith(n, false);
+    while(n->left->op == OCAST)
+        n->left = n->left->left;
+    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
+        r = new1(OCAST, n->right, Z);
+        r->type = t;
+        n->right = r;
+        n->type = t;
+    }
+    if(typeu[n->type->etype]) {
+        if(n->op == OASDIV)
+            n->op = OASLDIV;
+        if(n->op == OASMUL)
+            n->op = OASLMUL;
+    }
+    break;
+@
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case OASLSHR:
+case OASASHR:
+case OASASHL:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    if(tcompat(n, l->type, r->type, tand))
+        goto bad;
+    n->type = l->type;
+    n->right = new1(OCAST, r, Z);
+    n->right->type = types[TINT];
+    if(typeu[n->type->etype]) {
+        if(n->op == OASASHR)
+            n->op = OASLSHR;
+    }
+    break;
+@
+
+<<[[tcomo()]] switch node kind cases>>=
+case OASMOD:
+case OASLMOD:
+case OASOR:
+case OASAND:
+case OASXOR:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    if(tcompat(n, l->type, r->type, tand))
+        goto bad;
+    t = l->type;
+    arith(n, false);
+    while(n->left->op == OCAST)
+        n->left = n->left->left;
+    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
+        r = new1(OCAST, n->right, Z);
+        r->type = t;
+        n->right = r;
+        n->type = t;
+    }
+    if(typeu[n->type->etype]) {
+        if(n->op == OASMOD)
+            n->op = OASLMOD;
+    }
+    break;
+@
+
+\subsection{Pointers}
+
 <<[[tcomo()]] switch node kind cases>>=
 case OADDR:
     if(tcomo(l, ADDROP))
@@ -10670,7 +10985,473 @@ case OIND:
 
 
 
+\subsection{Function calls}
 
+<<[[tcomo()]] switch node kind cases>>=
+case OFUNC:
+    o = tcomo(l, 0);
+    if(o)
+        goto bad;
+    if(l->type->etype == TIND && l->type->link->etype == TFUNC) {
+        l = new1(OIND, l, Z);
+        l->type = l->left->type->link;
+        n->left = l;
+    }
+    if(tcompat(n, T, l->type, tfunct))
+        goto bad;
+    if(o | tcoma(l, r, l->type->down, 1))
+        goto bad;
+    n->type = l->type->link;
+    if(!debug['B'])
+        if(l->type->down == T || l->type->down->etype == TOLD) {
+            nerrors--;
+            diag(n, "function args not checked: %F", l);
+        }
+    dpcheck(n);
+    break;
+@
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case ODOTDOT:
+    /*
+     * tcom has already been called on this subtree
+     */
+    *n = *n->left;
+    if(n->type == T)
+        goto bad;
+    break;
+@
+
+
+
+<<global nodproto>>=
+Node*	nodproto;
+@
+% dead? or just here so that error message in stcompat
+%  which access n->op have a valid n->op which is OPROTO?
+
+<<[[cinit()]] nodproto initialization>>=
+nodproto = new(OPROTO, Z, Z);
+@
+% could be a static local of tcoma?
+
+% typecheck com args
+<<function tcoma>>=
+bool
+tcoma(Node *l, Node *n, Type *t, int f)
+{
+    Node *n1;
+    int o;
+
+    if(t != T)
+    if(t->etype == TOLD || t->etype == TDOT)	/* .../old in prototype */
+        t = T;
+    if(n == Z) {
+        if(t != T && !sametype(t, types[TVOID])) {
+            diag(n, "not enough function arguments: %F", l);
+            return true;
+        }
+        return false;
+    }
+    if(n->op == OLIST) {
+        o = tcoma(l, n->left, t, 0);
+        if(t != T) {
+            t = t->down;
+            if(t == T)
+                t = types[TVOID];
+        }
+        return o | tcoma(l, n->right, t, 1);
+    }
+    if(f && t != T)
+        tcoma(l, Z, t->down, 0);
+    if(tcom(n) || tcompat(n, T, n->type, targ))
+        return true;
+    if(sametype(t, types[TVOID])) {
+        diag(n, "too many function arguments: %F", l);
+        return true;
+    }
+    if(t != T) {
+        typeext(t, n);
+        if(stcompat(nodproto, t, n->type, tasign)) {
+            diag(l, "argument prototype mismatch \"%T\" for \"%T\": %F",
+                n->type, t, l);
+            return true;
+        }
+        switch(t->etype) {
+        case TCHAR:
+        case TSHORT:
+            t = types[TINT];
+            break;
+
+        case TUCHAR:
+        case TUSHORT:
+            t = types[TUINT];
+            break;
+        }
+    } else
+    switch(n->type->etype)
+    {
+    case TCHAR:
+    case TSHORT:
+        t = types[TINT];
+        break;
+
+    case TUCHAR:
+    case TUSHORT:
+        t = types[TUINT];
+        break;
+
+    case TFLOAT:
+        t = types[TDOUBLE];
+    }
+    if(t != T && !sametype(t, n->type)) {
+        n1 = new1(OXXX, Z, Z);
+        *n1 = *n;
+        n->op = OCAST;
+        n->left = n1;
+        n->right = Z;
+        n->type = t;
+        n->addable = 0;
+    }
+    return false;
+}
+@
+
+
+\subsection{Implicit address of function or arrays}
+
+<<[[tcomo()]] special adjustments for arrays and functions>>=
+if(typeaf[t->etype]) {
+    if(f & ADDROF)
+        goto addaddr;
+    if(f & ADDROP)
+        warn(n, "address of array/func ignored");
+}
+@
+
+<<[[tcomo()]] extra labels>>=
+addaddr:
+    if(tlvalue(n))
+        goto bad;
+    l = new1(OXXX, Z, Z);
+    *l = *n;
+    n->op = OADDR;
+    if(l->type->etype == TARRAY)
+        l->type = l->type->link;
+    n->left = l;
+    n->right = Z;
+    n->addable = 0;
+    n->type = typ(TIND, l->type);
+    n->type->width = types[TIND]->width;
+    return false;
+@
+
+
+\subsection{Array accesses}
+
+\subsection{Field accesses}
+
+<<[[tcomo()]] switch node kind cases>>=
+case ODOT:
+    if(tcom(l))
+        goto bad;
+    if(tcompat(n, T, l->type, tdot))
+        goto bad;
+    if(tcomd(n))
+        goto bad;
+    break;
+@
+
+% tcom ODOT
+<<function tcomd>>=
+bool
+tcomd(Node *n)
+{
+    Type *t;
+    long o;
+
+    o = 0;
+    t = dotsearch(n->sym, n->left->type->link, n, &o);
+    if(t == T) {
+        diag(n, "not a member of struct/union: %F", n);
+        return true;
+    }
+    makedot(n, t, o);
+    return false;
+}
+@
+
+% tcomd -> <>
+<<function dotsearch>>=
+Type*
+dotsearch(Sym *s, Type *t, Node *n, long *off)
+{
+    Type *t1, *xt, *rt;
+
+    xt = T;
+
+    /*
+     * look it up by name
+     */
+    for(t1 = t; t1 != T; t1 = t1->down)
+        if(t1->sym == s) {
+            if(xt != T)
+                goto ambig;
+            xt = t1;
+        }
+
+    /*
+     * look it up by type
+     */
+    if(s->class == CTYPEDEF || s->class == CTYPESTR)
+        for(t1 = t; t1 != T; t1 = t1->down)
+            if(t1->sym == S && typesu[t1->etype])
+                if(sametype(s->type, t1)) {
+                    if(xt != T)
+                        goto ambig;
+                    xt = t1;
+                }
+    if(xt != T) {
+        *off = xt->offset;
+        return xt;
+    }
+
+    /*
+     * look it up in unnamed substructures
+     */
+    for(t1 = t; t1 != T; t1 = t1->down)
+        if(t1->sym == S && typesu[t1->etype]){
+            rt = dotsearch(s, t1->link, n, off);
+            if(rt != T) {
+                if(xt != T)
+                    goto ambig;
+                xt = rt;
+                *off += t1->offset;
+            }
+        }
+    return xt;
+
+ambig:
+    diag(n, "ambiguous structure element: %s", s->name);
+    return xt;
+}
+@
+
+% tcomd -> <>
+<<function makedot>>=
+void
+makedot(Node *n, Type *t, long o)
+{
+    Node *n1, *n2;
+
+    if(t->nbits) {
+        n1 = new(OXXX, Z, Z);
+        *n1 = *n;
+        n->op = OBIT;
+        n->left = n1;
+        n->right = Z;
+        n->type = t;
+        n->addable = n1->left->addable;
+        n = n1;
+    }
+    n->addable = n->left->addable;
+    if(n->addable == 0) {
+        n1 = new1(OCONST, Z, Z);
+        n1->vconst = o;
+        n1->type = types[TLONG];
+        n->right = n1;
+        n->type = t;
+        return;
+    }
+    n->left->type = t;
+    if(o == 0) {
+        *n = *n->left;
+        return;
+    }
+    n->type = t;
+    n1 = new1(OCONST, Z, Z);
+    n1->vconst = o;
+    t = typ(TIND, t);
+    t->width = types[TIND]->width;
+    n1->type = t;
+
+    n2 = new1(OADDR, n->left, Z);
+    n2->type = t;
+
+    n1 = new1(OADD, n1, n2);
+    n1->type = t;
+
+    n->op = OIND;
+    n->left = n1;
+    n->right = Z;
+}
+@
+
+
+
+\subsection{Cast}
+
+<<[[tcomo()]] switch node kind cases>>=
+case OCAST:
+    if(n->type == T)
+        break;
+    if(n->type->width == types[TLONG]->width) {
+        if(tcomo(l, ADDROF|CASTOF))
+            goto bad;
+    } else
+        if(tcom(l))
+            goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    if(tcompat(n, l->type, n->type, tcast))
+        goto bad;
+    break;
+@
+
+\subsection{Ternary expressions}
+
+<<[[tcomo()]] switch node kind cases>>=
+case OCOND:
+    o = tcom(l);
+    o |= tcom(r->left);
+    if(o | tcom(r->right))
+        goto bad;
+    if(r->right->type->etype == TIND && vconst(r->left) == 0) {
+        r->left->type = r->right->type;
+        r->left->vconst = 0;
+    }
+    if(r->left->type->etype == TIND && vconst(r->right) == 0) {
+        r->right->type = r->left->type;
+        r->right->vconst = 0;
+    }
+    if(sametype(r->right->type, r->left->type)) {
+        r->type = r->right->type;
+        n->type = r->type;
+        break;
+    }
+    if(tcompat(r, r->left->type, r->right->type, trel))
+        goto bad;
+    arith(r, false);
+    n->type = r->type;
+    break;
+@
+
+<<function vconst>>=
+int
+vconst(Node *n)
+{
+    int i;
+
+    if(n == Z)
+        goto no;
+    if(n->op != OCONST)
+        goto no;
+    if(n->type == T)
+        goto no;
+
+    switch(n->type->etype)
+    {
+    case TFLOAT:
+    case TDOUBLE:
+        i = 100;
+        if(n->fconst > i || n->fconst < -i)
+            goto no;
+        i = n->fconst;
+        if(i != n->fconst)
+            goto no;
+        return i;
+
+    case TVLONG:
+    case TUVLONG:
+        i = n->vconst;
+        if(i != n->vconst)
+            goto no;
+        return i;
+
+    case TCHAR:
+    case TUCHAR:
+    case TSHORT:
+    case TUSHORT:
+    case TINT:
+    case TUINT:
+    case TLONG:
+    case TULONG:
+    case TIND:
+        i = n->vconst;
+        if(i != n->vconst)
+            goto no;
+        return i;
+    }
+no:
+    return -159;	/* first uninteresting constant */
+}
+@
+% ???? wtf?
+
+
+
+\subsection{Prefix/postfix}
+
+<<[[tcomo()]] switch node kind cases>>=
+case OPREINC:
+case OPREDEC:
+case OPOSTINC:
+case OPOSTDEC:
+    if(tcom(l))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    <<[[tcomo()]] break if isfunct>>
+    if(tcompat(n, l->type, types[TINT], tadd))
+        goto bad;
+    n->type = l->type;
+    if(n->type->etype == TIND)
+    if(n->type->link->width < 1) {
+        snap(n->type->link);
+        if(n->type->link->width < 1)
+            diag(n, "inc/dec of a void pointer");
+    }
+    break;
+@
+
+\subsection{[[sizeof()]]}
+
+<<[[tcomo()]] switch node kind cases>>=
+case OSIZE:
+    if(l != Z) {
+        if(l->op != OSTRING && l->op != OLSTRING)
+            if(tcomo(l, 0))
+                goto bad;
+        if(l->op == OBIT) {
+            diag(n, "sizeof bitfield");
+            goto bad;
+        }
+        n->type = l->type;
+    }
+    if(n->type == T)
+        goto bad;
+    if(n->type->width <= 0) {
+        diag(n, "sizeof undefined type");
+        goto bad;
+    }
+    if(n->type->etype == TFUNC) {
+        diag(n, "sizeof function");
+        goto bad;
+    }
+    n->op = OCONST;
+    n->left = Z;
+    n->right = Z;
+    n->vconst = convvtox(n->type->width, TINT);
+    n->type = types[TINT];
+    break;
+@
+
+\subsection{[[isfunct()]]}
+
+<<[[tcomo()]] break if isfunct>>=
+if(isfunct(n))
+    break;
+@
 
 
 <<[[Type]] other fields>>=
@@ -10686,6 +11467,7 @@ struct	Funct
     Sym*	castfr[NTYPE];
 };
 @
+
 
 <<function isfunct>>=
 bool
@@ -10888,548 +11670,35 @@ bad:
 
 
 
-<<function machcap(arm)>>=
-/* default, like old cc */
-bool
-machcap(Node*)
-{
-    return false;
-}
-@
-% the one in x86 is more complex
 
 
-<<function mixedasop>>=
-int
-mixedasop(Type *l, Type *r)
-{
-    return !typefd[l->etype] && typefd[r->etype];
-}
-@
+\section{Typechecking statements}
 
-
-% usually called via if(tlvalue(x)) goto bad;
-<<function tlvalue>>=
-bool
-tlvalue(Node *n)
-{
-
-    if(!n->addable) {
-        diag(n, "not an l-value");
-        return true;
-    }
-    return false;
-}
-@
-
-
-<<function vconst>>=
-int
-vconst(Node *n)
-{
-    int i;
-
-    if(n == Z)
-        goto no;
-    if(n->op != OCONST)
-        goto no;
-    if(n->type == T)
-        goto no;
-
-    switch(n->type->etype)
-    {
-    case TFLOAT:
-    case TDOUBLE:
-        i = 100;
-        if(n->fconst > i || n->fconst < -i)
-            goto no;
-        i = n->fconst;
-        if(i != n->fconst)
-            goto no;
-        return i;
-
-    case TVLONG:
-    case TUVLONG:
-        i = n->vconst;
-        if(i != n->vconst)
-            goto no;
-        return i;
-
-    case TCHAR:
-    case TUCHAR:
-    case TSHORT:
-    case TUSHORT:
-    case TINT:
-    case TUINT:
-    case TLONG:
-    case TULONG:
-    case TIND:
-        i = n->vconst;
-        if(i != n->vconst)
-            goto no;
-        return i;
-    }
-no:
-    return -159;	/* first uninteresting constant */
-}
-@
-% ???? wtf?
-
-
-
-<<function constas>>=
-void
-constas(Node *n, Type *il, Type *ir)
-{
-    Type *l, *r;
-
-    l = il;
-    r = ir;
-
-    if(l == T)
-        return;
-    if(l->garb & GCONSTNT) {
-        warn(n, "assignment to a constant type (%T)", il);
-        return;
-    }
-    if(r == T)
-        return;
-    for(;;) {
-        if(l->etype != TIND || r->etype != TIND)
-            break;
-        l = l->link;
-        r = r->link;
-        if(l == T || r == T)
-            break;
-        if(r->garb & GCONSTNT)
-            if(!(l->garb & GCONSTNT)) {
-                warn(n, "assignment of a constant pointer type (%T)", ir);
-                break;
-            }
-    }
-}
-@
-
-
-
-
-
-
-<<global nodproto>>=
-Node*	nodproto;
-@
-% dead? or just here so that error message in stcompat
-%  which access n->op have a valid n->op which is OPROTO?
-
-<<[[cinit()]] nodproto initialization>>=
-nodproto = new(OPROTO, Z, Z);
-@
-% could be a static local of tcoma?
-
-<<function tcoma>>=
-bool
-tcoma(Node *l, Node *n, Type *t, int f)
-{
-    Node *n1;
-    int o;
-
-    if(t != T)
-    if(t->etype == TOLD || t->etype == TDOT)	/* .../old in prototype */
-        t = T;
-    if(n == Z) {
-        if(t != T && !sametype(t, types[TVOID])) {
-            diag(n, "not enough function arguments: %F", l);
-            return true;
-        }
-        return false;
-    }
-    if(n->op == OLIST) {
-        o = tcoma(l, n->left, t, 0);
-        if(t != T) {
-            t = t->down;
-            if(t == T)
-                t = types[TVOID];
-        }
-        return o | tcoma(l, n->right, t, 1);
-    }
-    if(f && t != T)
-        tcoma(l, Z, t->down, 0);
-    if(tcom(n) || tcompat(n, T, n->type, targ))
-        return true;
-    if(sametype(t, types[TVOID])) {
-        diag(n, "too many function arguments: %F", l);
-        return true;
-    }
-    if(t != T) {
-        typeext(t, n);
-        if(stcompat(nodproto, t, n->type, tasign)) {
-            diag(l, "argument prototype mismatch \"%T\" for \"%T\": %F",
-                n->type, t, l);
-            return true;
-        }
-        switch(t->etype) {
-        case TCHAR:
-        case TSHORT:
-            t = types[TINT];
-            break;
-
-        case TUCHAR:
-        case TUSHORT:
-            t = types[TUINT];
-            break;
-        }
-    } else
-    switch(n->type->etype)
-    {
-    case TCHAR:
-    case TSHORT:
-        t = types[TINT];
+<<[[tcomo()]] switch node kind cases>>=
+case ORETURN:
+    if(l == Z) {
+        if(n->type->etype != TVOID)
+            warn(n, "null return of a typed function");
         break;
-
-    case TUCHAR:
-    case TUSHORT:
-        t = types[TUINT];
+    }
+    if(tcom(l))
+        goto bad;
+    typeext(n->type, l);
+    if(tcompat(n, n->type, l->type, tasign))
         break;
-
-    case TFLOAT:
-        t = types[TDOUBLE];
+    constas(n, n->type, l->type);
+    if(!sametype(n->type, l->type)) {
+        l = new1(OCAST, l, Z);
+        l->type = n->type;
+        n->left = l;
     }
-    if(t != T && !sametype(t, n->type)) {
-        n1 = new1(OXXX, Z, Z);
-        *n1 = *n;
-        n->op = OCAST;
-        n->left = n1;
-        n->right = Z;
-        n->type = t;
-        n->addable = 0;
-    }
-    return false;
-}
+    break;
 @
 
 
+\section{Typechecking declarations}
 
-
-
-% tcom ODOT
-<<function tcomd>>=
-bool
-tcomd(Node *n)
-{
-    Type *t;
-    long o;
-
-    o = 0;
-    t = dotsearch(n->sym, n->left->type->link, n, &o);
-    if(t == T) {
-        diag(n, "not a member of struct/union: %F", n);
-        return true;
-    }
-    makedot(n, t, o);
-    return false;
-}
-@
-
-<<function dotsearch>>=
-Type*
-dotsearch(Sym *s, Type *t, Node *n, long *off)
-{
-    Type *t1, *xt, *rt;
-
-    xt = T;
-
-    /*
-     * look it up by name
-     */
-    for(t1 = t; t1 != T; t1 = t1->down)
-        if(t1->sym == s) {
-            if(xt != T)
-                goto ambig;
-            xt = t1;
-        }
-
-    /*
-     * look it up by type
-     */
-    if(s->class == CTYPEDEF || s->class == CTYPESTR)
-        for(t1 = t; t1 != T; t1 = t1->down)
-            if(t1->sym == S && typesu[t1->etype])
-                if(sametype(s->type, t1)) {
-                    if(xt != T)
-                        goto ambig;
-                    xt = t1;
-                }
-    if(xt != T) {
-        *off = xt->offset;
-        return xt;
-    }
-
-    /*
-     * look it up in unnamed substructures
-     */
-    for(t1 = t; t1 != T; t1 = t1->down)
-        if(t1->sym == S && typesu[t1->etype]){
-            rt = dotsearch(s, t1->link, n, off);
-            if(rt != T) {
-                if(xt != T)
-                    goto ambig;
-                xt = rt;
-                *off += t1->offset;
-            }
-        }
-    return xt;
-
-ambig:
-    diag(n, "ambiguous structure element: %s", s->name);
-    return xt;
-}
-@
-
-
-<<function makedot>>=
-void
-makedot(Node *n, Type *t, long o)
-{
-    Node *n1, *n2;
-
-    if(t->nbits) {
-        n1 = new(OXXX, Z, Z);
-        *n1 = *n;
-        n->op = OBIT;
-        n->left = n1;
-        n->right = Z;
-        n->type = t;
-        n->addable = n1->left->addable;
-        n = n1;
-    }
-    n->addable = n->left->addable;
-    if(n->addable == 0) {
-        n1 = new1(OCONST, Z, Z);
-        n1->vconst = o;
-        n1->type = types[TLONG];
-        n->right = n1;
-        n->type = t;
-        return;
-    }
-    n->left->type = t;
-    if(o == 0) {
-        *n = *n->left;
-        return;
-    }
-    n->type = t;
-    n1 = new1(OCONST, Z, Z);
-    n1->vconst = o;
-    t = typ(TIND, t);
-    t->width = types[TIND]->width;
-    n1->type = t;
-
-    n2 = new1(OADDR, n->left, Z);
-    n2->type = t;
-
-    n1 = new1(OADD, n1, n2);
-    n1->type = t;
-
-    n->op = OIND;
-    n->left = n1;
-    n->right = Z;
-}
-@
-
-
-
-
-
-
-\subsection{Arithmetic conversions}
-
-% ?? -> <>
-<<function arith>>=
-/*
- * "the usual arithmetic conversions are performed"
- */
-void
-arith(Node *n, int f)
-{
-    Type *t1, *t2;
-    int i, j, k;
-    Node *n1;
-    long w;
-
-    t1 = n->left->type;
-    if(n->right == Z)
-        t2 = t1;
-    else
-        t2 = n->right->type;
-    i = TXXX;
-    if(t1 != T)
-        i = t1->etype;
-    j = TXXX;
-    if(t2 != T)
-        j = t2->etype;
-
-    k = tab[i][j];
-
-    if(k == TIND) {
-        if(i == TIND)
-            n->type = t1;
-        else
-        if(j == TIND)
-            n->type = t2;
-    } else {
-        /* convert up to at least int */
-        if(f == 1)
-        while(k < TINT)
-            k += 2;
-        n->type = types[k];
-    }
-    if(n->op == OSUB)
-    if(i == TIND && j == TIND) {
-        w = n->right->type->link->width;
-        if(w < 1 || n->left->type->link == T || n->left->type->link->width < 1)
-            goto bad;
-        n->type = types[ewidth[TIND] <= ewidth[TLONG]? TLONG: TVLONG];
-        if(1 && ewidth[TIND] > ewidth[TLONG]){
-            n1 = new1(OXXX, Z, Z);
-            *n1 = *n;
-            n->op = OCAST;
-            n->left = n1;
-            n->right = Z;
-            n->type = types[TLONG];
-        }
-        if(w > 1) {
-            n1 = new1(OXXX, Z, Z);
-            *n1 = *n;
-            n->op = ODIV;
-            n->left = n1;
-            n1 = new1(OCONST, Z, Z);
-            n1->vconst = w;
-            n1->type = n->type;
-            n->right = n1;
-            w = vlog(n1);
-            if(w >= 0) {
-                n->op = OASHR;
-                n1->vconst = w;
-            }
-        }
-        return;
-    }
-    if(!sametype(n->type, n->left->type)) {
-        n->left = new1(OCAST, n->left, Z);
-        n->left->type = n->type;
-        if(n->type->etype == TIND) {
-            w = n->type->link->width;
-            if(w < 1) {
-                snap(n->type->link);
-                w = n->type->link->width;
-                if(w < 1)
-                    goto bad;
-            }
-            if(w > 1) {
-                n1 = new1(OCONST, Z, Z);
-                n1->vconst = w;
-                n1->type = n->type;
-                n->left = new1(OMUL, n->left, n1);
-                n->left->type = n->type;
-            }
-        }
-    }
-    if(n->right != Z)
-    if(!sametype(n->type, n->right->type)) {
-        n->right = new1(OCAST, n->right, Z);
-        n->right->type = n->type;
-        if(n->type->etype == TIND) {
-            w = n->type->link->width;
-            if(w < 1) {
-                snap(n->type->link);
-                w = n->type->link->width;
-                if(w < 1)
-                    goto bad;
-            }
-            if(w != 1) {
-                n1 = new1(OCONST, Z, Z);
-                n1->vconst = w;
-                n1->type = n->type;
-                n->right = new1(OMUL, n->right, n1);
-                n->right->type = n->type;
-            }
-        }
-    }
-    return;
-bad:
-    diag(n, "pointer addition not fully declared: %T", n->type->link);
-}
-@
-
-<<function vlog>>=
-int
-vlog(Node *n)
-{
-    if(n->op != OCONST)
-        goto bad;
-    if(typefd[n->type->etype])
-        goto bad;
-
-    return log2(n->vconst);
-
-bad:
-    return -1;
-}
-@
-
-%coupling: could use designator for the nested initialiser too,
-% so less depdendencies on the order of the basic types
-% (I use designator for TIND only right now)
-<<global tab>>=
-char	tab[NTYPE][NTYPE] =
-{
-  [TXXX] =	{ 0,
-        },
-
-  [TCHAR] =	{ 0,	TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG,
-            TULONG, TVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TUCHAR] =	{ 0,	TUCHAR, TUCHAR, TUSHORT, TUSHORT, TUINT, TUINT, TULONG,
-            TULONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TSHORT] =	{ 0,	TSHORT, TUSHORT, TSHORT, TUSHORT, TINT, TUINT, TLONG,
-            TULONG, TVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TUSHORT] =	{ 0,	TUSHORT, TUSHORT, TUSHORT, TUSHORT, TUINT, TUINT, TULONG,
-            TULONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TINT] =	{ 0,	TINT, TUINT, TINT, TUINT, TINT, TUINT, TLONG,
-            TULONG, TVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TUINT] =	{ 0,	TUINT, TUINT, TUINT, TUINT, TUINT, TUINT, TULONG,
-            TULONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TLONG] =	{ 0,	TLONG, TULONG, TLONG, TULONG, TLONG, TULONG, TLONG,
-            TULONG, TVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TULONG] =	{ 0,	TULONG, TULONG, TULONG, TULONG, TULONG, TULONG, TULONG,
-            TULONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TVLONG] =	{ 0,	TVLONG, TUVLONG, TVLONG, TUVLONG, TVLONG, TUVLONG, TVLONG,
-            TUVLONG, TVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TUVLONG] =	{ 0,	TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG,
-            TUVLONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TFLOAT] =	{ 0,	TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT,
-            TFLOAT, TFLOAT, TFLOAT, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TDOUBLE] =	{ 0,	TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE,
-            TDOUBLE, TDOUBLE, TDOUBLE, TFLOAT, TDOUBLE, [TIND] = TIND,
-        },
-  [TIND] =	{ 0,	TIND, TIND, TIND, TIND, TIND, TIND, TIND,
-             TIND, TIND, TIND, TIND, TIND, [TIND] = TIND,
-        },
-};
-@
-
-\subsection{Typechecking other constructs}
-
-\subsubsection{Enumerations typechecking and evaluation}
+\subsection{Enumerations typechecking and evaluation}
 
 % Seen already a bit of typechecking code with En structure,
 % and En.tenum and En.cenum and the call to maxtype!
@@ -11502,7 +11771,7 @@ maxtype(Type *t1, Type *t2)
     return t2;
 }
 @
-\subsubsection{Arrays}
+\subsection{Arrays}
 
 <<[[dodecl()]] switch node kind cases, case OARRAY, if array has a size>>=
 t->width = 0; // array[], size could be set by doinit (or specified in n1)
@@ -11519,7 +11788,7 @@ if(n1 != Z) {
 % Can compute the width!
 
 
-\subsubsection{Functions}
+\subsection{Functions}
 
 <<[[fnproto1()]] when OPROTO case, adjust parameter type>>=
 if(lastdcltype != T)
@@ -11586,7 +11855,14 @@ case TUSHORT:
 
 
 
-\subsubsection{Typedef expansions}
+\subsection{Structures}
+
+<<[[pdecl()]] sanity check type>>=
+if(typesu[t->etype] && t->width <= 0)
+    diag(Z, "incomplete structure: %s", t->tag->name);
+@
+
+\subsection{Typedef expansions}
 
 % done at parsing time.
 % Add in symbol table type value for symbol, like do when
@@ -11627,14 +11903,7 @@ tcopy(Type *t)
 \t write test case why need that!
 
 
-\subsubsection{Structures}
-
-<<[[pdecl()]] sanity check type>>=
-if(typesu[t->etype] && t->width <= 0)
-    diag(Z, "incomplete structure: %s", t->tag->name);
-@
-
-\subsection{C typing extensions}
+\section{Typing extensions}
 
 % | ... -> <>
 <<function typeext>>=
@@ -11659,6 +11928,339 @@ typeext(Type *st, Node *l)
     <<[[typeext()]] unnamed substructure handling>>
 }
 @
+
+\section{Lint checking}
+
+% good checks :) used/set ! good warnings. gcc sucks, it does not even
+% have that (or it's not by default maybe).
+
+% 5c -V enable void* conversion warnings
+% 5c -w print warnings
+
+\subsection{Unused variables}
+
+% the data structure
+
+<<[[Sym]] identifier value, checking fields>>=
+bool	aused;
+@
+%ocaml: separate analysis in check.ml, no need abuse symbol table
+
+<<[[syminit()]] remaining initialisations>>=
+s->aused = false;
+@
+% if shadow past variable, set aused again to false in adecl.
+<<[[adecl()]] initialize symbol>>=
+s->aused = false;
+@
+
+<<name rule, LNAME case, adjust more fields>>=
+$1->aused = true;
+@
+%$
+% during parsing, a bit ugly.
+
+<<[[reverdcl()]] DAUTO case, warn if auto declared but not used>>=
+if(!s->aused) {
+    nearln = s->varlineno;
+    if(s->class == CAUTO)
+        warn(Z, "auto declared and not used: %s", s->name);
+    if(s->class == CPARAM)
+        warn(Z, "param declared and not used: %s", s->name);
+}
+@
+% nice!
+%ocaml: I merged the error message
+
+\subsection{False positives silencing, [[SET()/USED()]]}
+% like fallthrough, to remove false positives or true positives which are ok.
+
+% Why have false positives? limitations? bugs? or normal?
+
+% the parsing
+
+<<token declarations>>=
+%token  LUSED LSET 
+@
+
+<<[[itab]] entries, kencc extensions>>=
+"SET",		LSET,		0,
+"USED",		LUSED,		0,
+@
+
+<<statement nodes>>=
+OUSED,
+OSET,
+@
+% in AST!
+
+<<ulstmnt rule>>=
+|   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
+|   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
+@
+
+
+% the check?
+
+% for USED if the local is mentionned, then there will be an LNAME
+% occurrence.
+% for SET?
+
+% the code generation
+
+<<[[gen()]] switch node kind cases>>=
+case OSET:
+case OUSED:
+    usedset(n->left, o);
+    break;
+@
+
+% gen -> <>
+<<function usedset>>=
+void
+usedset(Node *n, int o)
+{
+    if(n->op == OLIST) {
+        usedset(n->left, o);
+        usedset(n->right, o);
+        return;
+    }
+
+    complex(n);
+
+    switch(n->op) {
+    case ONAME:
+        if(o == OSET)
+            gins(ANOP, Z, n);
+        else
+            gins(ANOP, n, Z);
+        break;
+    case OADDR:	/* volatile */
+        gins(ANOP, n, Z);
+        break;
+    }
+}
+@
+% normal to generate ANOP for LUSED. goal is to shut
+% the lint checking, but code generation should be empty.
+%less: for LSET?
+
+%those ANOP with arguments are weird,
+%less: used in regopt?
+
+\subsection{Redeclared or unused labels}
+
+% abuse Node.complex and Node.addable to track the def and use of labels.
+% Node.complex = definition
+% Node.addable = use.
+
+<<[[dcllabel()]] when new label, set def and use fields>>=
+n->complex = defcontext;
+n->addable = !defcontext;
+@
+%ocaml: ugly, I use a separate usedef type in check.ml
+
+% either defined or used, but not both.
+% When goto => pass defcontext = false, when label: => pass defcontext = true
+
+<<[[dcllabel()]] if n not null, mark node as declared or used>>=
+if(n != Z) {
+    if(defcontext) {
+        if(n->complex)
+            diag(Z, "label reused: %s", s->name);
+        n->complex = true;	// declared
+    } else
+        n->addable = true;	// used
+    return n;
+}
+@
+%ocaml: ugly abuses of complex and addable field here,
+% I print better error message when redefine with original loc of first def
+% (a la clang)
+
+% use two fields because want to detect redeclared labels, and
+% unused labels.
+%less: cleanup abuse of complex/addable, do like in scheck field for used
+
+% where check that all labels were used? in revertdcl, see
+%  Check chapter.
+%ocaml: mix too many concerns at the same time; In parsing we should
+% just parse and name!
+
+<<[[reverdcl()]] DLABEL case, warn if label not used>>=
+if(s->label && !s->label->addable)
+    warn(s->label, "label declared and not used \"%s\"", s->name);
+@
+% ugly this abuse of addable, why not using lblaused instead?
+
+% the check for use of undeclared is done in cgen(), once
+% parsed the whole function.
+%ocaml: in check.ml
+
+\subsection{Unreachable code}
+
+%ocaml: Those globals crosscuts a lot the assemby generation part.
+% a bit ugly. Would have been better to have an intermediate
+% CFG DS and then do the unreachable code on it.
+
+<<global canreach>>=
+bool	canreach;
+@
+% once we processed a ORETURN in a OLIST, then for sure
+% the code after is not reachable.
+
+<<global warnreach>>=
+bool	warnreach;
+@
+% set in codgen(), used in gen()
+\t when want to disable warn reach?
+
+
+<<[[gen()]] locals>>=
+bool oldreach;
+@
+% local this time! but ugly to save/restore.
+%ocaml: pass in environment?
+
+<<global suppress>>=
+bool	suppress;
+@
+% often do warneach = !suppress. not sure why.
+\t what is that?
+
+<<[[codgen()]] initialisation before call to gen>>=
+canreach = true;
+warnreach = true;
+@
+
+
+
+<<[[gen()]] if not canreach>>=
+if(!canreach) {
+    switch(o) {
+    case OLABEL:
+    case OCASE:
+    case OLIST:
+    case OCOMMA:
+    case OBREAK:
+    case OFOR:
+    case OWHILE:
+    case ODWHILE:
+        /* all handled specially - see switch body below */
+        break;
+    default:
+        if(warnreach) {
+            warn(n, "unreachable code %O", o);
+            warnreach = false;
+        }
+    }
+}
+@
+% no OCONTINUE? because no need special handle, go through default and warning
+% 'switch body below'? where is it?
+
+
+
+% deadheads -> <>
+% return false if it is possible to jump in the middle of n
+%  that is if there is a label:
+% less: rewrite as a possibive form ... would be clearer?
+<<function deadhead>>=
+/*
+ * return true if it is impossible to jump into the middle of n.
+ */
+static bool
+deadhead(Node *n, bool caseok)
+{
+loop:
+    if(n == Z)
+        return true;
+
+    switch(n->op) {
+
+    case OCASE:
+        if(!caseok)
+            return false;
+        goto rloop;
+    case OLABEL:
+        return false;
+
+
+
+    case OLIST:
+        if(!deadhead(n->left, caseok))
+            return false;
+    rloop:
+        n = n->right;
+        goto loop;
+
+
+    case OWHILE:
+    case ODWHILE:
+    case OFOR:
+        goto rloop;
+
+
+    case OIF:
+        return deadhead(n->right->left, caseok) && 
+               deadhead(n->right->right, caseok);
+
+    case OSWITCH:
+        return deadhead(n->right, true);
+
+
+    case ORETURN:
+    case OGOTO:
+    case OCONTINUE:
+    case OBREAK:
+        return true;
+
+    case OSET:
+    case OUSED:
+        return true;
+    }
+    return true;
+}
+@
+
+% gen | bcomplex -> <>
+<<function deadheads>>=
+bool
+deadheads(Node *c)
+{
+    return deadhead(c->left, false) && deadhead(c->right, false);
+}
+@
+% called from bcomplex with an OLIST being a OPAIR(thenst, elsest)
+
+
+
+
+
+\subsection{Missing return}
+
+% -B?
+
+<<[[codgen()]] warn for possible missing return after call to gen>>=
+if(canreach && thisfntype->link->etype != TVOID){
+    if(debug['B'])
+        warn(Z, "no return at end of function: %s", n1->sym->name);
+    else
+        diag(Z, "no return at end of function: %s", n1->sym->name);
+}
+@
+% ansi C is diag instead of warn!
+
+\subsection{Constant if, [[5c -c]]}
+% ????
+
+
+
+
+
+
+
+
 
 \section{Const checking}
 
@@ -12217,331 +12819,6 @@ dpcheck(Node *n)
 %//        print("%s incomplete\n", s->name);
 %//}
 %@
-
-
-
-
-
-\section{Lint checking}
-
-% good checks :) used/set ! good warnings. gcc sucks, it does not even
-% have that (or it's not by default maybe).
-
-% 5c -V enable void* conversion warnings
-% 5c -w print warnings
-
-\subsection{Unused variables}
-
-% the data structure
-
-<<[[Sym]] identifier value, checking fields>>=
-bool	aused;
-@
-
-
-
-<<[[syminit()]] remaining initialisations>>=
-s->aused = false;
-@
-% if shadow past variable, set aused again to false in adecl.
-<<[[adecl()]] initialize symbol>>=
-s->aused = false;
-@
-
-<<name rule, LNAME case, adjust more fields>>=
-$1->aused = true;
-@
-%$
-% during parsing, a bit ugly.
-
-<<[[reverdcl()]] DAUTO case, warn if auto declared but not used>>=
-if(!s->aused) {
-    nearln = s->varlineno;
-    if(s->class == CAUTO)
-        warn(Z, "auto declared and not used: %s", s->name);
-    if(s->class == CPARAM)
-        warn(Z, "param declared and not used: %s", s->name);
-}
-@
-% nice!
-
-\subsection{False positives silencing, [[SET()/USED()]]}
-% like fallthrough, to remove false positives or true positives which are ok.
-
-% Why have false positives? limitations? bugs? or normal?
-
-% the parsing
-
-<<token declarations>>=
-%token  LUSED LSET 
-@
-
-<<[[itab]] entries, kencc extensions>>=
-"SET",		LSET,		0,
-"USED",		LUSED,		0,
-@
-
-<<statement nodes>>=
-OUSED,
-OSET,
-@
-% in AST!
-
-<<ulstmnt rule>>=
-|   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
-|   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
-@
-
-
-% the check?
-
-% for USED if the local is mentionned, then there will be an LNAME
-% occurrence.
-% for SET?
-
-% the code generation
-
-<<[[gen()]] switch node kind cases>>=
-case OSET:
-case OUSED:
-    usedset(n->left, o);
-    break;
-@
-
-% gen -> <>
-<<function usedset>>=
-void
-usedset(Node *n, int o)
-{
-    if(n->op == OLIST) {
-        usedset(n->left, o);
-        usedset(n->right, o);
-        return;
-    }
-
-    complex(n);
-
-    switch(n->op) {
-    case ONAME:
-        if(o == OSET)
-            gins(ANOP, Z, n);
-        else
-            gins(ANOP, n, Z);
-        break;
-    case OADDR:	/* volatile */
-        gins(ANOP, n, Z);
-        break;
-    }
-}
-@
-% normal to generate ANOP for LUSED. goal is to shut
-% the lint checking, but code generation should be empty.
-%less: for LSET?
-
-%those ANOP with arguments are weird,
-%less: used in regopt?
-
-\subsection{Redeclared or unused labels}
-
-% abuse Node.complex and Node.addable to track the def and use of labels.
-% Node.complex = definition
-% Node.addable = use.
-
-<<[[dcllabel()]] when new label, set def and use fields>>=
-n->complex = defcontext;
-n->addable = !defcontext;
-@
-% either defined or used, but not both.
-% When goto => pass defcontext = false, when label: => pass defcontext = true
-
-<<[[dcllabel()]] if n not null, mark node as declared or used>>=
-if(n != Z) {
-    if(defcontext) {
-        if(n->complex)
-            diag(Z, "label reused: %s", s->name);
-        n->complex = true;	// declared
-    } else
-        n->addable = true;	// used
-    return n;
-}
-@
-% ugly abuses of complex and addable field here
-% use two fields because want to detect redeclared labels, and
-% unused labels.
-%less: cleanup abuse of complex/addable, do like in scheck field for used
-
-% where check that all labels were used? in revertdcl, see
-%  Check chapter.
-%ocaml: mix too many concerns at the same time; In parsing we should
-% just parse and name!
-
-
-<<[[reverdcl()]] DLABEL case, warn if label not used>>=
-if(s->label && !s->label->addable)
-    warn(s->label, "label declared and not used \"%s\"", s->name);
-@
-% ugly this abuse of addable, why not using lblaused instead?
-
-\subsection{Unreachable code}
-
-%ocaml: Those globals crosscuts a lot the assemby generation part.
-% a bit ugly. Would have been better to have an intermediate
-% CFG DS and then do the unreachable code on it.
-
-<<global canreach>>=
-bool	canreach;
-@
-% once we processed a ORETURN in a OLIST, then for sure
-% the code after is not reachable.
-
-<<global warnreach>>=
-bool	warnreach;
-@
-% set in codgen(), used in gen()
-\t when want to disable warn reach?
-
-
-<<[[gen()]] locals>>=
-bool oldreach;
-@
-% local this time! but ugly to save/restore.
-%ocaml: pass in environment?
-
-<<global suppress>>=
-bool	suppress;
-@
-% often do warneach = !suppress. not sure why.
-\t what is that?
-
-<<[[codgen()]] initialisation before call to gen>>=
-canreach = true;
-warnreach = true;
-@
-
-
-
-<<[[gen()]] if not canreach>>=
-if(!canreach) {
-    switch(o) {
-    case OLABEL:
-    case OCASE:
-    case OLIST:
-    case OCOMMA:
-    case OBREAK:
-    case OFOR:
-    case OWHILE:
-    case ODWHILE:
-        /* all handled specially - see switch body below */
-        break;
-    default:
-        if(warnreach) {
-            warn(n, "unreachable code %O", o);
-            warnreach = false;
-        }
-    }
-}
-@
-% no OCONTINUE? because no need special handle, go through default and warning
-% 'switch body below'? where is it?
-
-
-
-% deadheads -> <>
-% return false if it is possible to jump in the middle of n
-%  that is if there is a label:
-% less: rewrite as a possibive form ... would be clearer?
-<<function deadhead>>=
-/*
- * return true if it is impossible to jump into the middle of n.
- */
-static bool
-deadhead(Node *n, bool caseok)
-{
-loop:
-    if(n == Z)
-        return true;
-
-    switch(n->op) {
-
-    case OCASE:
-        if(!caseok)
-            return false;
-        goto rloop;
-    case OLABEL:
-        return false;
-
-
-
-    case OLIST:
-        if(!deadhead(n->left, caseok))
-            return false;
-    rloop:
-        n = n->right;
-        goto loop;
-
-
-    case OWHILE:
-    case ODWHILE:
-    case OFOR:
-        goto rloop;
-
-
-    case OIF:
-        return deadhead(n->right->left, caseok) && 
-               deadhead(n->right->right, caseok);
-
-    case OSWITCH:
-        return deadhead(n->right, true);
-
-
-    case ORETURN:
-    case OGOTO:
-    case OCONTINUE:
-    case OBREAK:
-        return true;
-
-    case OSET:
-    case OUSED:
-        return true;
-    }
-    return true;
-}
-@
-
-% gen | bcomplex -> <>
-<<function deadheads>>=
-bool
-deadheads(Node *c)
-{
-    return deadhead(c->left, false) && deadhead(c->right, false);
-}
-@
-% called from bcomplex with an OLIST being a OPAIR(thenst, elsest)
-
-
-
-
-
-\subsection{Missing return}
-
-% -B?
-
-<<[[codgen()]] warn for possible missing return after call to gen>>=
-if(canreach && thisfntype->link->etype != TVOID){
-    if(debug['B'])
-        warn(Z, "no return at end of function: %s", n1->sym->name);
-    else
-        diag(Z, "no return at end of function: %s", n1->sym->name);
-}
-@
-% ansi C is diag instead of warn!
-
-\subsection{Constant if, [[5c -c]]}
-
-
-
-
-
 
 
 
@@ -13460,7 +13737,7 @@ if(reg[i] <= 0)
 % unsugaring -> expliciting?
 
 % complex? compile lexical?
-% gen | dodecl | doenum | codgen | bcomplex -> <>
+% dodecl (array size) | doenum (evconst) | codgen | bcomplex -> <>
 <<function complex>>=
 void
 complex(Node *n)
@@ -13478,6 +13755,7 @@ complex(Node *n)
     // typechecking, removing some sugar, lvalue annotate, bitfield annot, etc
     if(tcom(n))
         return;
+
     comma(n);
     if(debug['t'])
         if(n->op != OCONST)
@@ -14755,6 +15033,51 @@ long v;
 @
 % 5 possible registers, which is why the lasti <= 5 in regalloc?
 
+
+\subsection{Numeric constants}
+
+% same, OCONST is kept as is.
+
+\subsection{String constants}
+
+% String constants are transformed in ONAME in tcomo().
+% So see code after.
+
+\subsection{Entity uses}
+
+% this is ONAME! which will not be transformed by assembly generation
+% phase; a C symbol is an assembly symbol! 
+% The only thing is that ONAME is decorated with xoffset
+% if it's a parameter or a local.
+
+\subsubsection{Parameters}
+
+
+<<[[adecl()]] switch class cases>>=
+case CAUTO:
+    autoffset = align(autoffset, t, Aaut3);
+    stkoff = maxround(stkoff, autoffset);
+    s->offset = -autoffset;
+    break;
+@
+<<[[adecl()]] switch class cases>>=
+case CPARAM:
+    if(autoffset == 0) {
+        firstarg = s;
+        firstargtype = t;
+    }
+    autoffset = align(autoffset, t, Aarg1);
+    if(s)
+        s->offset = autoffset;
+    autoffset = align(autoffset, t, Aarg2);
+    break;
+@
+
+\subsubsection{Locals}
+
+\subsubsection{Enumeration constants}
+
+\subsubsection{Globals}
 
 \subsection{Arithmetic expressions}
 
@@ -16331,51 +16654,6 @@ reglpcgen(Node *n, Node *nn, int f)
 
 
 
-\subsection{Entity uses}
-
-% this is ONAME! which will not be transformed by assembly generation
-% phase; a C symbol is an assembly symbol! 
-% The only thing is that ONAME is decorated with xoffset
-% if it's a parameter or a local.
-
-\subsubsection{Parameters}
-
-
-
-
-
-<<[[adecl()]] switch class cases>>=
-case CAUTO:
-    autoffset = align(autoffset, t, Aaut3);
-    stkoff = maxround(stkoff, autoffset);
-    s->offset = -autoffset;
-    break;
-@
-<<[[adecl()]] switch class cases>>=
-case CPARAM:
-    if(autoffset == 0) {
-        firstarg = s;
-        firstargtype = t;
-    }
-    autoffset = align(autoffset, t, Aarg1);
-    if(s)
-        s->offset = autoffset;
-    autoffset = align(autoffset, t, Aarg2);
-    break;
-@
-
-\subsubsection{Locals}
-
-\subsubsection{Enumeration constants}
-
-\subsubsection{Globals}
-
-\subsection{Numeric constants}
-
-% same, OCONST is kept as is.
-
-\subsection{String constants}
-
 \subsection{Cast}
 
 <<[[cgenrel()]] switch node kind cases>>=
@@ -16865,6 +17143,8 @@ init1(Sym *s, Type *t, long o, int exflag)
 }
 @
 %TODO: lp split, big func
+%ocaml: "unknown type in initialization" is where 5c detects 
+% illegal things like void foo() = 0; I detect that earlier.
 
 
 <<function newlist>>=
@@ -24909,6 +25189,52 @@ loop:
 
 
 
+
+<<[[tmerge()]] switch etype t1 cases>>=
+case TFUNC:
+    ta = t1->down;
+    tb = t2->down;
+    if(ta == T) {
+        t1->down = tb;
+        break;
+    }
+    if(tb == T)
+        break;
+    while(ta != T && tb != T) {
+        if(ta == tb)
+            break;
+        /* ignore old-style flag */
+        if(ta->etype == TOLD) {
+            ta = ta->down;
+            continue;
+        }
+        if(tb->etype == TOLD) {
+            tb = tb->down;
+            continue;
+        }
+        /* checking terminated by ... */
+        if(ta->etype == TDOT && tb->etype == TDOT) {
+            ta = T;
+            tb = T;
+            break;
+        }
+        if(!sametype(ta, tb))
+            break;
+        ta = ta->down;
+        tb = tb->down;
+    }
+    if(ta != tb)
+        diag(Z, "function inconsistently declared: %s", s->name);
+
+    /* take new-style over old-style */
+    ta = t1->down;
+    tb = t2->down;
+    if(ta != T && ta->etype == TOLD)
+        if(tb != T && tb->etype != TOLD)
+            t1->down = tb;
+    break;
+@
+
 \subsection{Bitfields}
 
 % struct x { int foo:1, bar:2, xxx:14; }
@@ -25208,6 +25534,8 @@ bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
 
 
 \section{C extensions}
+
+% seen implicit address of function/array before.
 
 \subsection{Unnamed sub structure}
 % aka Anonymous field? poor's man inheritance?
@@ -25559,6 +25887,18 @@ exreg(Type *t)
 }
 @
 
+
+<<[[tcomo()]] in ONAME case, if extern register>>=
+if(n->class == CEXREG) {
+    n->op = OREGISTER;
+    if(thechar == '8')
+        n->op = OEXREG;
+    n->reg = n->sym->offset;
+    n->xoffset = 0;
+    break;
+}
+@
+
 \subsection{[[typestr()]]}
 % a form of reflection too?
 
@@ -25819,6 +26159,27 @@ Ftab	ftabinit[OEND] =
 
 
 
+\subsection{Void star conversions, [[5c -V]]}
+
+% often use 5c -FTV, -V means 'enable void* conversion warnings'
+% so in fact it disables void* conversions.
+
+<<[[rsametype()]] if f and not -V, allow void star>>=
+if((f || !debug['V']) && et == TIND) {
+    if(t1 != T && t1->etype == TVOID)
+        return true;
+    if(t2 != T && t2->etype == TVOID)
+        return true;
+}
+@
+%ocaml: stricter, disallow
+
+% if not -V means disable void* conversion
+
+% Allow void* to match int* or struct*, but only if not -V and
+% only for first level. 
+% When call recursively rsametype we disable it, this is what 'f'
+% is for (see code of rsametype)
 
 
 
@@ -28330,6 +28691,7 @@ if(debug['i']) {
 int	nerrors;
 @
 
+% syntax error
 <<function yyerror>>=
 void
 yyerror(char *fmt, ...)
@@ -28410,6 +28772,36 @@ diag(Node *n, char *fmt, ...)
 @
 
 % also warn()
+
+% code generation stuff -> <>
+<<function fatal>>=
+void
+fatal(Node *n, char *fmt, ...)
+{
+    char buf[STRINGSZ];
+    va_list arg;
+
+    va_start(arg, fmt);
+    vseprint(buf, buf+sizeof(buf), fmt, arg);
+    va_end(arg);
+    Bprint(&diagbuf, "%L %s\n", (n==Z)? nearln: n->lineno, buf);
+
+    if(debug['X']){
+        Bflush(&diagbuf);
+        abort();
+    }
+    if(n != Z)
+      if(debug['v'])
+        prtree(n, "diagnostic");
+
+    nerrors++;
+    errorexit();
+}
+@
+
+% %L will use Lconv to have right location
+
+
 
 
 <<[[cinit()]] fmtinstall>>=

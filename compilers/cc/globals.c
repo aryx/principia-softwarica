@@ -201,7 +201,7 @@ Bits	zbits;
 /*e: global zbits */
 
 /*s: global typeswitch */
-// set<type_kind>
+// set<Type_kind>
 char*	typeswitch;
 /*e: global typeswitch */
 /*s: global typeword */
