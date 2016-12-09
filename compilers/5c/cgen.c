@@ -970,8 +970,7 @@ sugen(Node *n, Node *nn, long w)
             sugen(&nod1, nn, w);
         }
         break;
-
-    // struct constructor extension?
+    /*s: [[sugen()]] switch op cases */
     case OSTRUCT:
         /*
          * rewrite so lhs has no fn call
@@ -1044,6 +1043,7 @@ sugen(Node *n, Node *nn, long w)
             cgen(&nod0, Z);
         }
         break;
+    /*e: [[sugen()]] switch op cases */
 
     case OAS:
         if(nn == Z) {

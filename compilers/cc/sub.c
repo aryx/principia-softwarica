@@ -4,9 +4,6 @@
 int	simpleg(long);
 long	dotoffset(Type*, Type*, Node*);
 
-extern	char	typechlvp[];
-extern	char	typec[];
-extern	char	typeh[];
 extern	char	tab[NTYPE][NTYPE];
 
 /*s: function new */
@@ -441,6 +438,7 @@ dotsearch(Sym *s, Type *t, Node *n, long *off)
             xt = t1;
         }
 
+    /*s: [[dotsearch()]] look by type */
     /*
      * look it up by type
      */
@@ -452,11 +450,14 @@ dotsearch(Sym *s, Type *t, Node *n, long *off)
                         goto ambig;
                     xt = t1;
                 }
+    /*e: [[dotsearch()]] look by type */
+
     if(xt != T) {
         *off = xt->offset;
         return xt;
     }
 
+    /*s: [[dotsearch()]] if unnamed substructures */
     /*
      * look it up in unnamed substructures
      */
@@ -470,6 +471,8 @@ dotsearch(Sym *s, Type *t, Node *n, long *off)
                 *off += t1->offset;
             }
         }
+    /*e: [[dotsearch()]] if unnamed substructures */
+
     return xt;
 
 ambig:
@@ -745,37 +748,55 @@ void
 arith(Node *n, bool f)
 {
     Type *t1, *t2;
-    int i, j, k;
+    // enum<Type_kind>
+    int i, j;
+    // enum<Type_kind>
+    int k;
+    /*s: [[arith()]] other locals */
     Node *n1;
     long w;
+    /*e: [[arith()]] other locals */
 
+    /*s: [[arith()]] set t1 and t2, left and right types */
     t1 = n->left->type;
     if(n->right == Z)
         t2 = t1;
     else
         t2 = n->right->type;
+    /*e: [[arith()]] set t1 and t2, left and right types */
+    /*s: [[arith()]] set i and j, etype of left and right types */
     i = TXXX;
     if(t1 != T)
         i = t1->etype;
     j = TXXX;
     if(t2 != T)
         j = t2->etype;
+    /*e: [[arith()]] set i and j, etype of left and right types */
 
     k = tab[i][j];
 
+    /*s: [[arith()]] set node type */
+    /*s: [[arith()]] if result type is a pointer */
     if(k == TIND) {
         if(i == TIND)
             n->type = t1;
         else
         if(j == TIND)
             n->type = t2;
-    } else {
+    } 
+    /*e: [[arith()]] if result type is a pointer */
+    else {
+        /*s: [[arith()]] if [[f]], convert up to at least int */
         /* convert up to at least int */
         if(f)
           while(k < TINT)
             k += 2;
+        /*e: [[arith()]] if [[f]], convert up to at least int */
         n->type = types[k];
     }
+    /*e: [[arith()]] set node type */
+
+    /*s: [[arith()]] if substract two pointers */
     if(n->op == OSUB)
     if(i == TIND && j == TIND) {
         w = n->right->type->link->width;
@@ -807,17 +828,23 @@ arith(Node *n, bool f)
         }
         return;
     }
+    /*e: [[arith()]] if substract two pointers */
+    // else
+    /*s: [[arith()]] if left  type not sametype than node type, add OCAST */
     if(!sametype(n->type, n->left->type)) {
         n->left = new1(OCAST, n->left, Z);
         n->left->type = n->type;
+        /*s: [[arith()]] pointer arithmetic with left child */
         if(n->type->etype == TIND) {
             w = n->type->link->width;
+            /*s: [[arith()]] if incomplete width */
             if(w < 1) {
                 snap(n->type->link);
                 w = n->type->link->width;
                 if(w < 1)
                     goto bad;
             }
+            /*e: [[arith()]] if incomplete width */
             if(w > 1) {
                 n1 = new1(OCONST, Z, Z);
                 n1->vconst = w;
@@ -826,19 +853,25 @@ arith(Node *n, bool f)
                 n->left->type = n->type;
             }
         }
+        /*e: [[arith()]] pointer arithmetic with left child */
     }
+    /*e: [[arith()]] if left  type not sametype than node type, add OCAST */
+    /*s: [[arith()]] if right type not sametype than node type, add OCAST */
     if(n->right != Z)
     if(!sametype(n->type, n->right->type)) {
         n->right = new1(OCAST, n->right, Z);
         n->right->type = n->type;
+        /*s: [[arith()]] pointer arithmetic with right child */
         if(n->type->etype == TIND) {
             w = n->type->link->width;
+            /*s: [[arith()]] if incomplete width */
             if(w < 1) {
                 snap(n->type->link);
                 w = n->type->link->width;
                 if(w < 1)
                     goto bad;
             }
+            /*e: [[arith()]] if incomplete width */
             if(w != 1) {
                 n1 = new1(OCONST, Z, Z);
                 n1->vconst = w;
@@ -847,7 +880,9 @@ arith(Node *n, bool f)
                 n->right->type = n->type;
             }
         }
+        /*e: [[arith()]] pointer arithmetic with right child */
     }
+    /*e: [[arith()]] if right type not sametype than node type, add OCAST */
     return;
 bad:
     diag(n, "pointer addition not fully declared: %T", n->type->link);
@@ -1282,14 +1317,17 @@ diag(Node *n, char *fmt, ...)
 
     Bprint(&diagbuf, "%L %s\n", (n==Z)? nearln: n->lineno, buf);
 
+    /*s: [[fatal() or diag()]] abort if -X */
     if(debug['X']){
         Bflush(&diagbuf);
         abort();
     }
+    /*e: [[fatal() or diag()]] abort if -X */
+    /*s: [[fatal() or diag()]] print diagnostic if -v */
     if(n != Z)
       if(debug['v'])
         prtree(n, "diagnostic");
-
+    /*e: [[fatal() or diag()]] print diagnostic if -v */
     nerrors++;
     if(nerrors > 10) {
         Bprint(&diagbuf, "too many errors\n");
@@ -1338,14 +1376,17 @@ fatal(Node *n, char *fmt, ...)
     va_end(arg);
     Bprint(&diagbuf, "%L %s\n", (n==Z)? nearln: n->lineno, buf);
 
+    /*s: [[fatal() or diag()]] abort if -X */
     if(debug['X']){
         Bflush(&diagbuf);
         abort();
     }
+    /*e: [[fatal() or diag()]] abort if -X */
+    /*s: [[fatal() or diag()]] print diagnostic if -v */
     if(n != Z)
       if(debug['v'])
         prtree(n, "diagnostic");
-
+    /*e: [[fatal() or diag()]] print diagnostic if -v */
     nerrors++;
     errorexit();
 }
@@ -1692,12 +1733,6 @@ int	typeilpinit[] =
 /*s: global typechl */
 char	typechl[NTYPE];
 /*e: global typechl */
-/*s: global typechlv */
-char	typechlv[NTYPE];
-/*e: global typechlv */
-/*s: global typechlvp */
-char typechlvp[NTYPE];
-/*e: global typechlvp */
 /*s: global typechlinit */
 int	typechlinit[] =
 {
@@ -1724,36 +1759,6 @@ int	typechlpfdinit[] =
     TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TFLOAT, TDOUBLE, TIND, -1,
 };
 /*e: global typechlpfdinit */
-
-/*s: global typec */
-char	typec[NTYPE];
-/*e: global typec */
-/*s: global typecinit */
-int	typecinit[] =
-{
-    TCHAR, TUCHAR, -1
-};
-/*e: global typecinit */
-
-/*s: global typeh */
-char	typeh[NTYPE];
-/*e: global typeh */
-/*s: global typehinit */
-int	typehinit[] =
-{
-    TSHORT, TUSHORT, -1,
-};
-/*e: global typehinit */
-
-/*s: global typeil */
-char	typeil[NTYPE];
-/*e: global typeil */
-/*s: global typeilinit */
-int	typeilinit[] =
-{
-    TINT, TUINT, TLONG, TULONG, -1,
-};
-/*e: global typeilinit */
 
 /*s: global typev */
 char	typev[NTYPE];
@@ -1812,6 +1817,7 @@ Init	tasigninit[] =
     TULONG,		BNUMBER,	0,
     TVLONG,		BNUMBER,	0,
     TUVLONG,	BNUMBER,	0,
+
     TFLOAT,		BNUMBER,	0,
     TDOUBLE,	BNUMBER,	0,
 
@@ -1838,8 +1844,10 @@ Init	tasaddinit[] =
     TULONG,		BNUMBER,	0,
     TVLONG,		BNUMBER,	0,
     TUVLONG,	BNUMBER,	0,
+
     TFLOAT,		BNUMBER,	0,
     TDOUBLE,	BNUMBER,	0,
+
     TIND,		BINTEGER,	0,
     -1,		0,		0,
 };
@@ -1861,8 +1869,10 @@ Init	tcastinit[] =
     TULONG,		BNUMBER|BIND|BVOID,	0,
     TVLONG,		BNUMBER|BIND|BVOID,	0,
     TUVLONG,	BNUMBER|BIND|BVOID,	0,
+
     TFLOAT,		BNUMBER|BVOID,		0,
     TDOUBLE,	BNUMBER|BVOID,		0,
+
     TIND,		BINTEGER|BIND|BVOID,	0,
     TVOID,		BVOID,			0,
     TSTRUCT,	BSTRUCT|BVOID,		0,
@@ -1887,6 +1897,7 @@ Init	taddinit[] =
     TULONG,		BNUMBER|BIND,	0,
     TVLONG,		BNUMBER|BIND,	0,
     TUVLONG,	BNUMBER|BIND,	0,
+
     TFLOAT,		BNUMBER,	0,
     TDOUBLE,	BNUMBER,	0,
     TIND,		BINTEGER,	0,
@@ -1910,6 +1921,7 @@ Init	tsubinit[] =
     TULONG,		BNUMBER,	0,
     TVLONG,		BNUMBER,	0,
     TUVLONG,	BNUMBER,	0,
+
     TFLOAT,		BNUMBER,	0,
     TDOUBLE,	BNUMBER,	0,
     TIND,		BINTEGER|BIND,	0,
@@ -1933,6 +1945,7 @@ Init	tmulinit[] =
     TULONG,		BNUMBER,	0,
     TVLONG,		BNUMBER,	0,
     TUVLONG,	BNUMBER,	0,
+
     TFLOAT,		BNUMBER,	0,
     TDOUBLE,	BNUMBER,	0,
     -1,		0,		0,
@@ -1949,8 +1962,10 @@ Init	tandinit[] =
     TUCHAR,		BINTEGER,	0,
     TSHORT,		BINTEGER,	0,
     TUSHORT,	BINTEGER,	0,
+
     TINT,		BNUMBER,	0,
     TUINT,		BNUMBER,	0,
+
     TLONG,		BINTEGER,	0,
     TULONG,		BINTEGER,	0,
     TVLONG,		BINTEGER,	0,
@@ -1975,6 +1990,7 @@ Init	trelinit[] =
     TULONG,		BNUMBER,	0,
     TVLONG,		BNUMBER,	0,
     TUVLONG,	BNUMBER,	0,
+
     TFLOAT,		BNUMBER,	0,
     TDOUBLE,	BNUMBER,	0,
 
@@ -2054,12 +2070,14 @@ char	tab[NTYPE][NTYPE] =
   [TUVLONG] =	{ 0,	TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG,
             TUVLONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
         },
+
   [TFLOAT] =	{ 0,	TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT,
             TFLOAT, TFLOAT, TFLOAT, TFLOAT, TDOUBLE, [TIND] = TIND,
         },
   [TDOUBLE] =	{ 0,	TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE,
             TDOUBLE, TDOUBLE, TDOUBLE, TFLOAT, TDOUBLE, [TIND] = TIND,
         },
+
   [TIND] =	{ 0,	TIND, TIND, TIND, TIND, TIND, TIND, TIND,
              TIND, TIND, TIND, TIND, TIND, [TIND] = TIND,
         },
@@ -2136,35 +2154,23 @@ tinit(void)
     for(ip=typechlinit; *ip>=0; ip++) {
         urk("typechl", nelem(typechl), *ip);
         typechl[*ip] = 1;
-        typechlv[*ip] = 1;
-        typechlvp[*ip] = 1;
+        //typechlv[*ip] = 1;
+        //typechlvp[*ip] = 1;
     }
     for(ip=typechlpinit; *ip>=0; ip++) {
         urk("typechlp", nelem(typechlp), *ip);
         typechlp[*ip] = 1;
-        typechlvp[*ip] = 1;
+        //typechlvp[*ip] = 1;
     }
     for(ip=typechlpfdinit; *ip>=0; ip++) {
         urk("typechlpfd", nelem(typechlpfd), *ip);
         typechlpfd[*ip] = 1;
     }
-    for(ip=typecinit; *ip>=0; ip++) {
-        urk("typec", nelem(typec), *ip);
-        typec[*ip] = 1;
-    }
-    for(ip=typehinit; *ip>=0; ip++) {
-        urk("typeh", nelem(typeh), *ip);
-        typeh[*ip] = 1;
-    }
-    for(ip=typeilinit; *ip>=0; ip++) {
-        urk("typeil", nelem(typeil), *ip);
-        typeil[*ip] = 1;
-    }
     for(ip=typevinit; *ip>=0; ip++) {
         urk("typev", nelem(typev), *ip);
         typev[*ip] = 1;
-        typechlv[*ip] = 1;
-        typechlvp[*ip] = 1;
+        //typechlv[*ip] = 1;
+        //typechlvp[*ip] = 1;
     }
     for(ip=typefdinit; *ip>=0; ip++) {
         urk("typefd", nelem(typefd), *ip);
@@ -2291,7 +2297,7 @@ deadheads(Node *c)
 /*e: function deadheads */
 
 /*s: function mixedasop */
-int
+bool
 mixedasop(Type *l, Type *r)
 {
     return !typefd[l->etype] && typefd[r->etype];

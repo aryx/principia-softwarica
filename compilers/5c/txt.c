@@ -9,34 +9,38 @@ static	char	resvreg[nelem(reg)];
 void
 ginit(void)
 {
+    /*s: [[ginit()]] locals */
     Type *t;
+    /*e: [[ginit()]] locals */
 
-    /*s: [[ginit()]] initialisation */
+    /*s: [[ginit()]] thexxx initialisation */
     thechar = '5';
     thestring = "arm";
-    /*x: [[ginit()]] initialisation */
-    nstring = 0;
-    mnstring = 0;
-    /*x: [[ginit()]] initialisation */
+    /*e: [[ginit()]] thexxx initialisation */
+    /*s: [[ginit()]] pc initialisation */
     pc = 0;
-    /*x: [[ginit()]] initialisation */
+    /*e: [[ginit()]] pc initialisation */
+    /*s: [[ginit()]] misc initialisations */
     firstp = P;
     lastp = P;
-    /*x: [[ginit()]] initialisation */
+    /*x: [[ginit()]] misc initialisations */
     breakpc = -1;
     continpc = -1;
-    /*x: [[ginit()]] initialisation */
+    /*x: [[ginit()]] misc initialisations */
     cases = C;
-    /*x: [[ginit()]] initialisation */
+    /*x: [[ginit()]] misc initialisations */
+    nstring = 0;
+    mnstring = 0;
+    /*x: [[ginit()]] misc initialisations */
     nrathole = 0;
-    /*x: [[ginit()]] initialisation */
+    /*x: [[ginit()]] misc initialisations */
     tfield = types[TLONG];
-    /*x: [[ginit()]] initialisation */
+    /*x: [[ginit()]] misc initialisations */
     exregoffset = REGEXT;
     exfregoffset = FREGEXT;
-    /*x: [[ginit()]] initialisation */
+    /*x: [[ginit()]] misc initialisations */
     listinit();
-    /*e: [[ginit()]] initialisation */
+    /*e: [[ginit()]] misc initialisations */
     /*s: [[ginit()]] zprog initialisation */
     zprog.link = P;
     zprog.as = AGOK;
@@ -120,8 +124,11 @@ ginit(void)
 void
 gclean(void)
 {
+    /*s: [[gclean()]] locals */
     int i;
+    /*x: [[gclean()]] locals */
     Sym *s;
+    /*e: [[gclean()]] locals */
 
     /*s: [[gclean()]] sanity check reg */
     for(i=0; i<NREG; i++)

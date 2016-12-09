@@ -197,8 +197,9 @@ tcopy(Type *t)
     if(typesu[et])
         return t;
 
-    tl = tcopy(t->link);
-    if(tl != t->link || (et == TARRAY && t->width == 0)) {
+    tl = tcopy(t->link); // go deep
+
+    if((et == TARRAY && t->width == 0) || tl != t->link) {
         tx = copytyp(t);
         tx->link = tl;
         return tx;
@@ -217,7 +218,6 @@ doinit(Sym *s, Type *t, long o, Node *a)
     if(t == T)
         return Z;
     /*e: [[doinit()]] sanity check t */
-
     /*s: [[doinit()]] possibly adjust class */
     if(s->class == CEXTERN) {
         s->class = CGLOBL;
@@ -233,7 +233,6 @@ doinit(Sym *s, Type *t, long o, Node *a)
     }
     /*e: [[doinit()]] debug initialization */
     /*e: [[doinit()]] possibly adjust class */
-
     n = initlist;
 
     if(a->op == OINIT)
@@ -730,7 +729,7 @@ void argmark(Node *n, int pass)
     for(; n->left != Z; n = n->left) {
         if(n->op != OFUNC || n->left->op != ONAME)
             continue;
-        // else, OFUNC
+        // else, OFUNC with ONAME on n->left, so analyze the parameters
         walkparam(n->right, pass);
         /*s: [[argmark()]] if old proto style */
         if(pass != 0 && anyproto(n->right) == OLDPROTO) {
@@ -1599,14 +1598,14 @@ xdecl(int class, Type *t, Sym *s)
             class = CSTATIC;
         }
     /*e: [[xdecl()]] sanity check class after switch class */
-    /*s: [[xdecl()]] sanity checks type after switch class */
+    /*s: [[xdecl()]] sanity check type after switch class */
     if(s->type != T)
         if(s->class != class || !sametype(t, s->type) || t->etype == TENUM) {
             diag(Z, "external redeclaration of: %s", s->name);
             Bprint(&diagbuf, "	%s %T %L\n", cnames[class], t, nearln);
             Bprint(&diagbuf, "	%s %T %L\n", cnames[s->class], s->type, s->varlineno);
         }
-    /*e: [[xdecl()]] sanity checks type after switch class */
+    /*e: [[xdecl()]] sanity check type after switch class */
     /*s: [[xdecl()]] merge type declarations */
     tmerge(t, s);
     /*e: [[xdecl()]] merge type declarations */
@@ -1789,12 +1788,12 @@ void doenum(Sym *s, Node *n)
     if(dclstack)
         push1(s); // will be reverted once out of scope
 
-    // check for redeclaration and set S->type to TENUM
+    // check for redeclaration and set s->type to TENUM
     xdecl(CXXX, types[TENUM], s); 
 
     if(en.cenum == T) {
-        en.tenum = types[TINT];
         en.cenum = types[TINT];
+        en.tenum = types[TINT];
         en.lastenum = 0;
     }
     s->tenum = en.cenum; // Sym.tenum, not En.tenum here

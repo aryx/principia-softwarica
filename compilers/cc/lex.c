@@ -59,7 +59,6 @@ void main(int argc, char *argv[])
 {
     /*s: [[main()]] locals */
     int err;
-    int c;
     /*x: [[main()]] locals */
     // growing_array<string>
     char **defs = nil;
@@ -69,6 +68,8 @@ void main(int argc, char *argv[])
     /*x: [[main()]] locals */
     char **np;
     int maxdef = 0;
+    /*x: [[main()]] locals */
+    int c;
     /*x: [[main()]] locals */
     int nproc, nout, status, i;
     /*e: [[main()]] locals */
@@ -1080,6 +1081,7 @@ caseout:
     }
     if(c1 & Numflt)
         return LFCONST;
+    // else
     return LDCONST;
 /*e: [[yylex()]] labels */
 }
@@ -1352,7 +1354,7 @@ struct
     char	*name;
     // enum<lexeme>
     ushort	lexical;
-    // option<enum<Type>>, None = 0 (or TXXX)
+    // option<enum<Type_kind>>, None = 0 (or TXXX)
     ushort	type;
 } itab[] =
 {
@@ -1402,9 +1404,9 @@ struct
     "SET",		LSET,		0,
     "USED",		LUSED,		0,
     /*x: [[itab]] entries, kencc extensions */
-    "signof",	LSIGNOF,	0,
-    /*x: [[itab]] entries, kencc extensions */
     "typestr",	LTYPESTR,	0,
+    /*x: [[itab]] entries, kencc extensions */
+    "signof",	LSIGNOF,	0,
     /*e: [[itab]] entries, kencc extensions */
     0
 };
@@ -1414,9 +1416,12 @@ struct
 void
 cinit(void)
 {
-    Sym *s;
     int i;
+    /*s: [[cinit()]] locals */
+    Sym *s;
+    /*x: [[cinit()]] locals */
     Type *t;
+    /*e: [[cinit()]] locals */
 
     /*s: [[cinit()]] lexing globals initialization */
     nerrors = 0;
@@ -1444,8 +1449,10 @@ cinit(void)
     types[TULONG]  = typ(TULONG, T);
     types[TVLONG]  = typ(TVLONG, T);
     types[TUVLONG] = typ(TUVLONG, T);
+
     types[TFLOAT]  = typ(TFLOAT, T);
     types[TDOUBLE] = typ(TDOUBLE, T);
+
     types[TVOID]   = typ(TVOID, T);
 
     types[TENUM] = typ(TENUM, T);
@@ -1551,7 +1558,7 @@ pop:
 
 
 /*s: function Oconv */
-// enum<node_kind> -> string
+// enum<Node_kind> -> unit
 int Oconv(Fmt *fp)
 {
     int a;
@@ -1651,7 +1658,7 @@ Tconv(Fmt *fp)
     int et;
     long n;
 
-    str[0] = 0;
+    str[0] = '\0';
     for(t = va_arg(fp->args, Type*); t != T; t = t->link) {
         et = t->etype;
         if(str[0])

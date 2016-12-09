@@ -279,7 +279,7 @@ build:
     n->type = l->type->link;
     if(tcompat(n, T, l->type, tfunct))
         goto bad;
-    if(tcoma(n->left, n->right, l->type->down, 1))
+    if(tcoma(n->left, n->right, l->type->down, true))
         goto bad;
     return true;
 

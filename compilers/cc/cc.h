@@ -38,7 +38,6 @@ typedef	Rune	TRune;	/* target system type */
 #define	HISTSZ		20
 /*e: constant HISTSZ */
 /*s: constant YYMAXDEPTH */
-//@Scheck: used in t.tab.c probably
 #define YYMAXDEPTH	1500
 /*e: constant YYMAXDEPTH */
 /*s: constant NTERM */
@@ -283,9 +282,6 @@ struct	Type
     // option<list<ref_own<Type>>, next = Type.down, for TFUNC and TSTRUCT
     Type*	down;
 
-    /*s: [[Type]] value fields */
-    Sym*	tag;
-    /*e: [[Type]] value fields */
     /*s: [[Type]] qualifier fields */
     // enum<qualifier>
     char	garb;
@@ -304,6 +300,8 @@ struct	Type
     /*e: [[Type]] code generation fields */
 
     /*s: [[Type]] other fields */
+    Sym*	tag;
+    /*x: [[Type]] other fields */
     Sym*	sym; // for fields in structures
     /*x: [[Type]] other fields */
     Funct*	funct;
@@ -400,7 +398,7 @@ enum os				/* also in ../{8a,5a,0a}.h */
 };
 /*e: enum os */
 /*s: enum node_kind */
-enum node_kind
+enum Node_kind
 {
     OXXX,
 
@@ -428,15 +426,15 @@ enum node_kind
     ODIV,
     OMOD,
     /*x: expression nodes */
+    OPOS,
+    ONEG,
+    /*x: expression nodes */
     OAND,
     OOR,
     OXOR,
 
     OASHL,
     OASHR,
-    /*x: expression nodes */
-    OPOS,
-    ONEG,
     /*x: expression nodes */
     OANDAND,
     OOROR,
@@ -468,12 +466,12 @@ enum node_kind
     OASASHL,
     OASASHR,
     /*x: expression nodes */
-    OIND, // for uses (dereference) and also defs (and decls)
+    OIND, // for uses (dereference) and also declarations
     OADDR,
     /*x: expression nodes */
-    OFUNC, // used for uses (calls) but also defs (and decls)
-    /*x: expression nodes */
     ODOT,
+    /*x: expression nodes */
+    OFUNC, // used for uses (calls) but also defs (and decls)
     /*x: expression nodes */
     OCAST,
     /*x: expression nodes */
@@ -487,11 +485,11 @@ enum node_kind
     /*x: expression nodes */
     OSIZE,
     /*x: expression nodes */
-    OARRAY, // used for uses (designator) and defs (and decl)
+    OARRAY, // used for uses (designator) and declarations
     /*x: expression nodes */
     OASI, // appears during parsing
     /*x: expression nodes */
-    OSTRUCT, // used for defs, decls, and for struct constructors
+    OSTRUCT,
     OUNION,
     /*x: expression nodes */
     OSIGN,
@@ -553,7 +551,9 @@ enum node_kind
     /*s: after parsing nodes */
     OLMUL,
     OLDIV,
+    /*x: after parsing nodes */
     OLMOD,
+    /*x: after parsing nodes */
     OLSHR,
     /*x: after parsing nodes */
     OASLMUL,
@@ -648,7 +648,7 @@ enum type_kind_bis {
     /*e: [[Type_kind_bis]] qualifier cases */
 
     // ----------------------------------------------------------------------
-    // Signs (temporary, see TUINT/TULONG/...)
+    // Signs (temporary, see TUINT/TULONG/... for final types)
     // ----------------------------------------------------------------------
     /*s: [[Type_kind_bis]] sign cases */
     TUNSIGNED,
@@ -720,7 +720,7 @@ enum Storage_class
 };
 /*e: enum storage_class */
 /*s: enum qualifier */
-enum qualifier
+enum Qualifier
 {
     GXXX		= 0, // None
 
@@ -728,12 +728,14 @@ enum qualifier
     GVOLATILE	= 1<<1,
 
     NGTYPES		= 1<<2,
-
+    /*s: [[Qualifier]] other cases */
     GINCOMPLETE	= 1<<2,
+    /*e: [[Qualifier]] other cases */
+
 };
 /*e: enum qualifier */
 /*s: enum bxxx */
-enum bxxx
+enum Bxxx
 {
     BCHAR		= 1L<<TCHAR,
     BUCHAR		= 1L<<TUCHAR,
@@ -769,19 +771,19 @@ enum bxxx
     BSTATIC		= 1L<<TSTATIC,
     BTYPEDEF	= 1L<<TTYPEDEF,
     BREGISTER	= 1L<<TREGISTER,
-    /*s: enum bxxx cases */
+    /*s: [[Bxxx]] cases */
     BTYPESTR	= 1L<<TTYPESTR,
-    /*e: enum bxxx cases */
+    /*e: [[Bxxx]] cases */
 
-    /*s: enum bxxx constants */
+    /*s: [[Bxxx]] constants */
     /* these can be overloaded with complex types */
     BCLASS		= BAUTO|BEXTERN|BSTATIC|BTYPEDEF|BTYPESTR|BREGISTER,
-    /*x: enum bxxx constants */
+    /*x: [[Bxxx]] constants */
     BGARB		= BCONSTNT|BVOLATILE,
-    /*x: enum bxxx constants */
+    /*x: [[Bxxx]] constants */
     BINTEGER	= BCHAR|BUCHAR|BSHORT|BUSHORT|BINT|BUINT|BLONG|BULONG|BVLONG|BUVLONG,
-    BNUMBER		= BINTEGER|BFLOAT|BDOUBLE,
-    /*e: enum bxxx constants */
+    BNUMBER		= BINTEGER | BFLOAT|BDOUBLE,
+    /*e: [[Bxxx]] constants */
 };
 /*e: enum bxxx */
 

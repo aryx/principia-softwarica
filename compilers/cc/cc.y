@@ -16,14 +16,14 @@
    /*s: [[union yacc]] other fields */
    Node*   node;
    /*x: [[union yacc]] other fields */
-   long    lval; //bitset<enum<bxxx> >
+   long    lval; //bitset<enum<Bxxx> >
    /*x: [[union yacc]] other fields */
    Type*   type;
    /*x: [[union yacc]] other fields */
    struct
    {
        Type*   t;
-       // option<enum<storage_class> >, None = CXXX
+       // option<enum<Storage_class> >, None = CXXX
        byte   c;
    } tycl;
    /*x: [[union yacc]] other fields */
@@ -54,9 +54,9 @@
 /*x: token declarations */
 %token  LUSED LSET 
 /*x: token declarations */
-%token  LSIGNOF
-/*x: token declarations */
 %token  LTYPESTR
+/*x: token declarations */
+%token  LSIGNOF
 /*e: token declarations */
 /*s: priority and associativity declarations */
 %left   ';'
@@ -613,16 +613,6 @@ pexpr:
 /*x: pexpr rule */
 |   name
 /*x: pexpr rule */
-|   pexpr '(' zelist ')'
-    {
-        $$ = new(OFUNC, $1, Z);
-        /*s: pexpr rule, implicit declaration of unknown function */
-        if(($1->op == ONAME) && ($1->type == T))
-            dodecl(xdecl, CXXX, types[TINT], $$);
-        /*e: pexpr rule, implicit declaration of unknown function */
-        $$->right = invert($3);
-    }
-/*x: pexpr rule */
 |   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
 /*x: pexpr rule */
 |   pexpr '.' ltag
@@ -634,6 +624,16 @@ pexpr:
     {
         $$ = new(ODOT, new(OIND, $1, Z), Z);
         $$->sym = $3;
+    }
+/*x: pexpr rule */
+|   pexpr '(' zelist ')'
+    {
+        $$ = new(OFUNC, $1, Z);
+        /*s: pexpr rule, implicit declaration of unknown function */
+        if(($1->op == ONAME) && ($1->type == T))
+            dodecl(xdecl, CXXX, types[TINT], $$);
+        /*e: pexpr rule, implicit declaration of unknown function */
+        $$->right = invert($3);
     }
 /*x: pexpr rule */
 |   pexpr LPP { $$ = new(OPOSTINC, $1, Z); }
@@ -947,6 +947,7 @@ complex:
             $$->link = types[TINT];
         $$ = $$->link;
     }
+/*x: complex rule */
 |   LENUM ltag
     {
         dotag($2, TENUM, autobn);
@@ -1030,12 +1031,13 @@ tag:
     {
         $$ = new(ONAME, Z, Z);
         $$->sym = $1;
-
+        /*s: tag rule, set other fields to name node */
         $$->type = $1->type;
         $$->etype = ($1->type != T) ? $1->type->etype : TVOID;
         $$->class = $1->class;
 
         $$->xoffset = $1->offset;
+        /*e: tag rule, set other fields to name node */
     }
 /*x: names rules */
 ltag:

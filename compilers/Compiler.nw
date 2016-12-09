@@ -15,6 +15,7 @@
 % - removed deadcode 
 %    * TFILE, OFAS/OTST/OENUM, CSELEM/CLABEL
 %    * Type.lineno
+%    * typeh[], typec[], typeil[], 
 % - renamed more consistently things 
 %   (thisfn -> thisfntype, lastdcl -> lastdcltype)
 % - TODO? D_CONST -> D_ADDR
@@ -46,6 +47,8 @@
 %   what happens? If do reverse?
 % - SEMI how constant strings are managed? symbol defined for them? shared?
 %   can you modify them? lvalue?
+% - pointer arithmetic, eend - estart ok, estart + eend no, and
+%   use DIV to get number of elements between.
 
 %thx to ocaml:
 % - clarify all the things that are done at parsing time, and see that
@@ -54,6 +57,7 @@
 %   5c calls the code generation after each function.
 % - understand lots of corner cases, and see that lots of checks 
 %   are not done by 5c (I wrote many test cases)
+% - understand need to prefix array access with '&'
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -213,6 +217,7 @@ its return value to the caller?
 %data-structures (beyond list/hashtbl):
 % - bitsets see the Bxxx (ab) used for many things (parsing, typechecking)
 % - pattern matching via bitsets (see tadd and taddinit)
+% - list of lists with special mark (DMARK) and undo list.
 
 
 %tags used for recurring themes:
@@ -716,7 +721,7 @@ who wrote in some sense most of this book.
 % simple.
 
 <<enum node_kind>>=
-enum node_kind
+enum Node_kind
 {
     OXXX,
 
@@ -809,7 +814,7 @@ struct	Node
 % hmm get some warnings though when do that, but maybe should fix those 
 % warnings anyway
 %ocaml: use ADT, and mv semantic fields to another phase.
-% Precise AST has some disadvantage. I have to duplicate lineno, and 
+% Precise AST has some disadvantage though: I have to duplicate lineno, and 
 % have complex dumper and visitor compare to this generic binary tree
 % (but at least I can autogenerate this dumper and visitor)
 
@@ -839,13 +844,16 @@ struct	Node
 <<constant Z>>=
 #define	Z	((Node*)nil)
 @
+%ocaml: never nil, and never have to check for nil! big win.
 
 % put OLIST here, because it has many usages
 <<misc nodes>>=
 OLIST, // of stmts/labels/parameters/...  and also for pairs/triples/...
 @
-% add an OPAIR alias?
 %ocaml: use 'a list (expr list, stmt list, etc)
+
+% add an OPAIR alias?
+
 
 
 % for nodes involving a symbol (global/func/variable, field, label)
@@ -856,9 +864,9 @@ Sym*	sym; // for ONAME, ODOT/OELEM, OXXX of OLABEL/OGOTO
 % rely later on external hashtbl to give more information about symbol
 % so better separate concerns. 5c does too many things at the same time.
 
-% see Sym in next section. Very important. 
+% see Sym in next section. 
 % Used only temporariliy for declaration ONAME nodes (which are temporary
-% nodes because they are not in the final AST). After dodecl, Node.sym
+% nodes because they are not in the final AST). After dodecl(), Node.sym
 % is useless I think.
 
 
@@ -893,8 +901,8 @@ else
 % easier add location info in lexer in each token. Will even get more precise
 % line location then!
 
-%less: why this special thing about OGOTO? because goto take a symbol
-% and don't want the line of the symbol?
+%why this special thing about OGOTO? because goto take a OXXX fake node
+% and don't want the line of that fake node
 
 
 <<global lineno>>=
@@ -907,8 +915,7 @@ long	lineno;
 <<global nearln>>=
 long	nearln;
 @
-%ocaml: set semi global in different analysis, or avoid using nearln
-% so better error location in general.
+%ocaml: no need for nearln, use more precise error location directly.
 
 % set in codgen() to the lineno field of the function node.
 % this is useful for error reporting when use warn on an empty node,
@@ -919,7 +926,6 @@ long	nearln;
 % nearln is also very useful for nextpc()! so that the generated
 % assembly instructions are tied to related C code they are generated
 % from! goodsupport for the debugger!
-
 
 <<function new1>>=
 Node*
@@ -990,7 +996,10 @@ TUVLONG,
 @
 %coupling: with the global 'tab' which use initialisers that
 % assumes a certain order
-%ocaml: I factorized the Signed vs Unsigned
+%coupling: with arith(), need to have char and short before int
+% and do +2 to get corresponding upper type.
+%ocaml: I factorized the Signed vs Unsigned, and I put all of that
+% under a Type.I so no need BINTEGER trick during typechecking.
 
 % C syntax for types is ugly, and allows many different schemes
 % such as signed int; int; int signed; ... but in the end
@@ -1026,6 +1035,8 @@ TENUM,
 % initialisers e.g. for the global 'tab'. I fixed it so it should
 % be ok to reorder now.
 
+% TARRAY and TENUM eventually disappear. They are used only temporariliy.
+
 % There is no really AST for types. They are directly "resolved".
 % Which is why I didn't put Type under the AST section.
 
@@ -1040,7 +1051,6 @@ struct	Type
     // option<list<ref_own<Type>>, next = Type.down, for TFUNC and TSTRUCT
     Type*	down;
 
-    <<[[Type]] value fields>>
     <<[[Type]] qualifier fields>>
 
     // ----------------------------------------------------------------------
@@ -1076,7 +1086,7 @@ struct	Type
 
 
 % when type involves a symbol, e.g. for tags in struct/union/enum
-<<[[Type]] value fields>>=
+<<[[Type]] other fields>>=
 Sym*	tag;
 @
 % How do you get the definition? At some point the Type.link
@@ -1123,8 +1133,10 @@ Sym*	sym; // for fields in structures
 <<[[Node]] type and storage fields>>=
 Type*	type;
 @
-%ocaml: separate AST? or have generic AST? 'a xxx ? need that just for expr
-% but because of mutual recursivity, might need that for stmt too.
+%ocaml: could have a separate AST, or have generic AST and 'a xxx,
+% but need that just for expr, so I prefer simply add a field e_type.
+
+% Node.type is also a value field for OCAST.
 
 % so it's more than an AST actually, there is semantic info attached to it
 % by other phases.
@@ -1137,6 +1149,8 @@ char	etype;
 @
 %less: could remove? redundant no? annoying to maintain?
 % annoying those n->etype = (s->type?): s->type->etype: TVOID;
+% but without it, lots of code would need to check wether n->type != T?
+% so maybe better to have Node.etype too?
 %ocaml: remove, etype used to quickly write code checking highlevel
 % category of a type, but with ADT of ocaml I can match conveniently
 % complex type too.
@@ -1147,6 +1161,7 @@ char	etype;
 <<constant T>>=
 #define	T	((Type*)nil)
 @
+%ocaml: again, no need, and no need for nil checking everywhere; big win.
 
 % constructor
 % optional<ref_type> for d
@@ -1196,8 +1211,10 @@ types[TLONG]   = typ(TLONG, T);
 types[TULONG]  = typ(TULONG, T);
 types[TVLONG]  = typ(TVLONG, T);
 types[TUVLONG] = typ(TUVLONG, T);
+
 types[TFLOAT]  = typ(TFLOAT, T);
 types[TDOUBLE] = typ(TDOUBLE, T);
+
 types[TVOID]   = typ(TVOID, T);
 
 types[TENUM] = typ(TENUM, T);
@@ -1233,7 +1250,7 @@ char	garb;
 
 % Gxxx for 'garbage' :) but should be renamed qualifier so Qxxx
 <<enum qualifier>>=
-enum qualifier
+enum Qualifier
 {
     GXXX		= 0, // None
 
@@ -1241,13 +1258,12 @@ enum qualifier
     GVOLATILE	= 1<<1,
 
     NGTYPES		= 1<<2,
+    <<[[Qualifier]] other cases>>
 
-    GINCOMPLETE	= 1<<2,
 };
 @
 % >> >> >> >>
 % see also gnames in debugging section
-% GINCOMPLETE?
 
 % storage class is not there! it's an attribute of the 
 % variable, not of the type of the variable, so it's
@@ -1682,7 +1698,7 @@ syminit(Sym *s)
 
 
 
-\section{Declarations, namespaces and scope, [[Decl]]}
+\section{Declarations, namespaces, and scope, [[Decl]]}
 % nested scope
 
 % the different "namespaces"
@@ -2128,7 +2144,6 @@ struct	Adr
 // option<enum<registr>> None = R_NONE
 char	reg;
 @
-%less: rename reg?
 
 
 <<[[Adr]] other fields(arm)>>=
@@ -2196,18 +2211,8 @@ char*	outfile = nil;
 
 <<[[main()]] locals>>=
 int err;
-int c;
 @
-%old: was called c
 
-<<[[main()]] locals>>=
-// growing_array<string>
-char **defs = nil;
-int ndef = 0;
-@
-% the -Dxxx
-%less: why have not something similar for Assembler.nw?
-%ocaml: use list directly
 
 <<function main>>=
 //@Scheck: not dead, entry point :)
@@ -2243,6 +2248,17 @@ void main(int argc, char *argv[])
 %really useful to compile stdin??
 %ocaml: no compile from stdin, never used. 5c is not an interpreter.
 
+% used above.
+<<[[main()]] locals>>=
+// growing_array<string>
+char **defs = nil;
+int ndef = 0;
+@
+% the -Dxxx
+%less: why have not something similar for Assembler.nw?
+%ocaml: use list directly
+
+
 
 <<[[main()]] xxxinit()>>=
 tinit(); // type globals initialisation
@@ -2254,7 +2270,7 @@ arginit(); // printf argument checking initialisation
 % and most of those things are not needed because we build things
 % directly
 
-<<[[ginit()]] initialisation>>=
+<<[[ginit()]] thexxx initialisation>>=
 thechar = '5';
 thestring = "arm";
 @
@@ -2322,6 +2338,9 @@ setinclude(".");
 %ocaml: use a pair for the local dir and system paths, clearer
 
 
+<<[[main()]] locals>>=
+int c;
+@
 <<[[main()]] command line processing>>=
 default:
     c = ARGC();
@@ -2498,13 +2517,6 @@ if(p = getenv("INCLUDE")) {
 @
 % note that INCLUDE can contain space! and setinclude handles that
 
-%XXX
-<<[[compile()]] locals>>=
-char **av, opt[256];
-int i, c, fd[2];
-@
-
-
 
 % ok now details each functions called.
 % yyparse() will see in parsing section though.
@@ -2518,8 +2530,7 @@ int i, c, fd[2];
 void
 gclean(void)
 {
-    int i;
-    Sym *s;
+    <<[[gclean()]] locals>>
 
     <<[[gclean()]] sanity check reg>>
 
@@ -2538,6 +2549,7 @@ gclean(void)
 
 % generate AGLOBL! (the ADATA are done in doinit)
 % generate AEND
+
 
 
 \section{Initializations}
@@ -2560,6 +2572,7 @@ tinit(void)
     <<[[tinit()]] initialise 32 bits defaults type sets>>
 }
 @
+% see Init in appendix.
 
 
 % put here just to show an example?
@@ -2591,9 +2604,8 @@ urk(char *name, int max, int i)
 void
 cinit(void)
 {
-    Sym *s;
     int i;
-    Type *t;
+    <<[[cinit()]] locals>>
 
     <<[[cinit()]] lexing globals initialization>>
     <<[[cinit()]] memory globals initialization>>
@@ -2613,6 +2625,8 @@ cinit(void)
 %    t->width = 0;
 %later: would be nice to have checks that detect those useless 
 % assignments
+
+% seen many cinit initializations in core DS. hash, declstack, etc.
 
 
 
@@ -2645,15 +2659,18 @@ if(getwd(pathname, 99) == 0) {
 void
 ginit(void)
 {
-    Type *t;
+    <<[[ginit()]] locals>>
 
-    <<[[ginit()]] initialisation>>
+    <<[[ginit()]] thexxx initialisation>>
+    <<[[ginit()]] pc initialisation>>
+    <<[[ginit()]] misc initialisations>>
     <<[[ginit()]] zprog initialisation>>
     <<[[ginit()]] special nodes initialisation>>
     <<[[ginit()]] com64init initialisation>>
     <<[[ginit()]] reg and resvreg initialisation>>
 }
 @
+
 
 \subsection{[[arginit()]]}
 
@@ -3062,7 +3079,7 @@ struct
     char	*name;
     // enum<lexeme>
     ushort	lexical;
-    // option<enum<Type>>, None = 0 (or TXXX)
+    // option<enum<Type_kind>>, None = 0 (or TXXX)
     ushort	type;
 } itab[] =
 {
@@ -3113,6 +3130,9 @@ struct
 };
 @
 
+<<[[cinit()]] locals>>=
+Sym *s;
+@
 <<[[cinit()]] symbol table initialization>>=
 for(i=0; itab[i].name; i++) {
     s = slookup(itab[i].name);
@@ -3121,7 +3141,8 @@ for(i=0; itab[i].name; i++) {
         s->type = types[itab[i].type];
 }
 @
-% abuse symbol table
+%ocaml: no need abuse symbol table.
+
 
 <<[[yylex()]] locals>>=
 char *cp;
@@ -3146,8 +3167,6 @@ if(isalpha(c)) {
 <<[[yylex()]] locals>>=
 Sym *s;
 @
-
-
 <<[[yylex()]] labels>>=
 talph:
     /*
@@ -3231,7 +3250,8 @@ if(s->class == CTYPEDEF || s->class == CTYPESTR)
 % At some point dodecl will set the class of the symbol!
 % (via first xdecl? adecl?)
 
-% CTYPESTR??
+% CTYPESTR?? seems dead, so maybe remove?
+\l remove?
 
 \section{Operators}
 
@@ -3560,6 +3580,7 @@ for(;;) {
 //Fallthrough
 @
 
+
 \subsection{Unsigned numbers}
 
 % why matters? why need this suffix?
@@ -3699,6 +3720,7 @@ caseout:
     }
     if(c1 & Numflt)
         return LFCONST;
+    // else
     return LDCONST;
 @
 %ocaml: lex definitely better I think
@@ -3731,6 +3753,7 @@ case '\'':
     return LCONST;
 @
 % type not set for this LCONST?
+
 
 % supports the ''' syntax
 \t but I'm not sure cpp does!
@@ -5652,10 +5675,6 @@ prog:
 %FIGURE: show peigne of prog when have multiple xdecl and the derivation
 % tree.
 
-<<constant YYMAXDEPTH>>=
-//@Scheck: used in t.tab.c probably
-#define YYMAXDEPTH	1500
-@
 
 
 \section{Declarations and definitions, part one}
@@ -5873,14 +5892,10 @@ tag:
     {
         $$ = new(ONAME, Z, Z);
         $$->sym = $1;
-
-        $$->type = $1->type;
-        $$->etype = ($1->type != T) ? $1->type->etype : TVOID;
-        $$->class = $1->class;
-
-        $$->xoffset = $1->offset;
+        <<tag rule, set other fields to name node>>
     }
 @
+%$
 % similar to name rule but here it's for decl/defs, 'name' rule is for use.
 % tag! but it's really ident.
 % the type will be adjusted in dodecl as goes up the chain.
@@ -5890,8 +5905,18 @@ tag:
 % this is probably the same for the class.
 %ocaml: forbid those multiple declarations? maybe not, needed for
 % prototypes anyway.
+%ocaml: ugly to do offset related stuff during parsing, and also tying
 %todo: but same for offset?? it can have one already?
 
+<<tag rule, set other fields to name node>>=
+$$->type = $1->type;
+$$->etype = ($1->type != T) ? $1->type->etype : TVOID;
+$$->class = $1->class;
+
+$$->xoffset = $1->offset;
+@
+%$
+%dead?
 \l Not sure we need here to propagate type info from sym to node.
 % Those fields will be overwritten by xdecl.
 
@@ -5945,6 +5970,8 @@ case ONAME:
 
 % Very important to propagate from Symbol to node! Because
 % Once we backtrack and revertdcl, this information will be lost!
+% Hmm, but anyway we are in dodecl, do we care about the node?
+% for doinit?
 
 % dodecl(<>, ..., node n != Z) -> <>
 <<function xdecl>>=
@@ -5958,7 +5985,7 @@ xdecl(int class, Type *t, Sym *s)
     <<[[xdecl()]] switch class cases>>
     }
     <<[[xdecl()]] sanity check class after switch class>>
-    <<[[xdecl()]] sanity checks type after switch class>>
+    <<[[xdecl()]] sanity check type after switch class>>
     <<[[xdecl()]] merge type declarations>>
 
     s->type = t;
@@ -5990,6 +6017,8 @@ Decl*	firstdcl;
 Type*	thisfntype;
 @
 %old: was called thisfn, but confusing.
+%ocaml: replace global by extra field in typechecking environment
+
 %this is useful to annotate the type of RETURN
 
 
@@ -6027,15 +6056,6 @@ Type*	thisfntype;
 %  walk through the params and add in scope.
 %ocaml: I do also a generic new_scope/pop_scope for block, so I have
 % a separate scope just for the parameters
-
-<<xdecl rule, debug function body>>=
-if(debug['x']) {
-    prtree($2, "func");
-    prtree($6, "body");
-}
-@
-%pad: I added that? it was not there originally?
-\t implement in kencc? mv in appendix?
 
 % markdcl(), revertdcl(), see next section
 
@@ -6107,7 +6127,7 @@ invert(Node *n)
     return i;
 }
 @
-
+%ocaml: List.rev
 
 
 % can have labels before stmts
@@ -6136,7 +6156,10 @@ labels:
     label
 |   labels label  { $$ = new(OLIST, $1, $2); }
 @
+%ocaml: return nest of Label directly
+
 % why not OLABEL instead?
+
 
 
 %codegen: most of the stmts will turns into AB and conditional
@@ -6252,7 +6275,9 @@ OCONTINUE,
     }
 @
 %$
-%useful thisfntype
+%useful thisfntype.
+% This will be used later when typechecking statements.
+%ocaml: do that in typechecking later
 
 <<ulstmnt rule>>=
 |   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
@@ -6288,28 +6313,6 @@ label:
 %ocaml: OCASE(l=option(expr), r=null)
 
 
-<<ulstmt rule, SWITCH case, adjust cexpr node>>=
-// generate (0:int - (0:int - x))
-// which will force the usual arithmetic conversions
-// (and will be simplified later by some transformations)
-
-$$ = new(OCONST, Z, Z);
-$$->vconst = 0;
-$$->type = types[TINT];
-$3 = new(OSUB, $$, $3);
-
-$$ = new(OCONST, Z, Z);
-$$->vconst = 0;
-$$->type = types[TINT];
-$3 = new(OSUB, $$, $3);
-@
-% I originally thought there was a copy paste bug above,
-% and even Rob Pike thought so, but it turned out it's not a bug :)
-% why 0 - 0 - x? why not 0+x?
-%"you can't subtract pointers from 0 but you can add 0 to a pointer,
-%since + is commutative" forsith
-%less: could use Node *n; local instead of $$.
-
 
 \subsection{Labels and goto}
 
@@ -6334,6 +6337,9 @@ OGOTO,
 @
 %$
 % ltag = LNAME | LTYPE, see later
+
+% remember special case in new() about OGOTO. l is result
+% of dcllabel which will be a fake OXXX node
 
 
 <<[[Sym]] label value fields>>=
@@ -6556,7 +6562,8 @@ vlong	vconst; /* non fp const */ // for OCONST
     }
 @
 %$
-%ocaml: factorize by having size type in token constructor
+%ocaml: factorize by having size type in token constructor and 
+% by factorizing the signed vs unsigned
 
 % but cast here to signed vlong. Pb?
 
@@ -6771,32 +6778,6 @@ OMOD,
 |   expr '%' expr { $$ = new(OMOD, $1, $3); }
 @
 
-%\subsection{Bit?? expressions}
-
-
-<<expression nodes>>=
-OAND,
-OOR,
-OXOR,
-
-OASHL,
-OASHR,
-@
-% OAS ... rename? so less confusing with the other assign nodes?
-
-
-<<expr rule>>=
-|   expr '&' expr  { $$ = new(OAND, $1, $3); }
-|   expr '^' expr  { $$ = new(OXOR, $1, $3); }
-|   expr '|' expr  { $$ = new(OOR, $1, $3); }
-
-|   expr LRSH expr { $$ = new(OASHR, $1, $3); }
-|   expr LLSH expr { $$ = new(OASHL, $1, $3); }
-@
-
-% see also in unary expression POS and NEG
-
-
 
 <<expression nodes>>=
 OPOS,
@@ -6809,6 +6790,34 @@ ONEG,
 @
 
 %codegen: similar asm instructions (e.g. AADD, AAND)
+
+
+%\subsection{Bit?? expressions}
+
+<<expression nodes>>=
+OAND,
+OOR,
+OXOR,
+
+OASHL,
+OASHR,
+@
+% OAS ... rename? so less confusing with the other assign nodes?
+
+% bitwise and
+
+
+<<expr rule>>=
+|   expr '&' expr  { $$ = new(OAND, $1, $3); }
+|   expr '^' expr  { $$ = new(OXOR, $1, $3); }
+|   expr '|' expr  { $$ = new(OOR, $1, $3); }
+
+|   expr LRSH expr { $$ = new(OASHR, $1, $3); }
+|   expr LLSH expr { $$ = new(OASHL, $1, $3); }
+@
+
+
+
 
 \subsection{Boolean expressions}
 
@@ -6833,6 +6842,8 @@ OCOM,
 |   '!' xuexpr { $$ = new(ONOT, $2, Z); }
 |   '~' xuexpr { $$ = new(OCOM, $2, Z); }
 @
+
+% ~ is not really boolean expr
 
 %\subsection{Relational? expressions}
 
@@ -6909,13 +6920,15 @@ OASASHR,
 %less: why not removing the sugar instead? and decompose
 % in an OADD and OAS? easier to optimize?
 
+
+
 %codegen: =~ AMOV in Assembler.nw
 
 \subsection{Pointers}
 % C power!
 
 <<expression nodes>>=
-OIND, // for uses (dereference) and also defs (and decls)
+OIND, // for uses (dereference) and also declarations
 OADDR,
 @
 % see also OINDREG, generated after parsing
@@ -6926,6 +6939,42 @@ OADDR,
 @
 
 %codegen: asm:  $name, (register) or name(SB).
+
+
+\subsection{Array accesses}
+
+% unsugar x[y] as *(x+y) :)
+<<pexpr rule>>=
+|   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
+@
+
+%codegen: operand to other op with offset  xxx+i(SB), e.g.
+% x[y] = 1 -> AMOVW $1, R1; AMOVW R1, x+y(SB) (which will expand
+% into a store low level ARM instruction).
+
+\subsection{Field accesses}
+
+<<expression nodes>>=
+ODOT,
+@
+
+% unsugar x->y as (*x).y
+<<pexpr rule>>=
+|   pexpr '.' ltag
+    {
+        $$ = new(ODOT, $1, Z);
+        $$->sym = $3;
+    }
+|   pexpr LMG ltag
+    {
+        $$ = new(ODOT, new(OIND, $1, Z), Z);
+        $$->sym = $3;
+    }
+@
+% unsugar x->y
+
+%codegen: more structured arrays! with different size, but ultimately
+% will be transformed in array access (pointer + offset).
 
 
 \subsection{Function calls}
@@ -6975,41 +7024,6 @@ if(($1->op == ONAME) && ($1->type == T))
 %codegen: ABL, but more convenient in C :) automatic
 % hiding of FP and offsets, use symbolic names instead,
 % and have typechecking of args vs params.
-
-
-\subsection{Array accesses}
-
-% unsugar x[y] as *(x+y) :)
-<<pexpr rule>>=
-|   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
-@
-
-%codegen: operand to other op with offset  xxx+i(SB), e.g.
-% x[y] = 1 -> AMOVW $1, R1; AMOVW R1, x+y(SB) (which will expand
-% into a store low level ARM instruction).
-
-\subsection{Field accesses}
-
-<<expression nodes>>=
-ODOT,
-@
-
-% unsugar x->y as (*x).y
-<<pexpr rule>>=
-|   pexpr '.' ltag
-    {
-        $$ = new(ODOT, $1, Z);
-        $$->sym = $3;
-    }
-|   pexpr LMG ltag
-    {
-        $$ = new(ODOT, new(OIND, $1, Z), Z);
-        $$->sym = $3;
-    }
-@
-
-%codegen: more structured arrays! with different size, but ultimately
-% will be transformed in array access (pointer + offset).
 
 
 \subsection{Cast}
@@ -7133,6 +7147,10 @@ OSIZE,
 
 \section{Initializers and designators}
 
+% this is a sort of C extension, because you could do
+% int x;  and the later in main 'x = ...' (especially if you
+% support Struct and Array constructor in expressions).
+
 
 <<xdlist rule>>=
 |   xdecor
@@ -7145,7 +7163,8 @@ OSIZE,
     }
 @
 %$
-%0L ? for offset
+%0L because call recursively and accumulator? seems not because
+% global vs local, because passes also 0L in adlist rule.
 % doinit is now in code generation part
 \t why make dodecl return something? anyway it is the same thing than last param
 
@@ -7184,7 +7203,7 @@ OELEM,  // field designator
 %less: rename OINITFIELD?
 
 <<expression nodes>>=
-OARRAY, // used for uses (designator) and defs (and decl)
+OARRAY, // used for uses (designator) and declarations
 @
 %less: could be renamed no? OINITARRAY
 %note that for regular uses that are not designator it does not
@@ -7218,9 +7237,7 @@ doinit(Sym *s, Type *t, long o, Node *a)
     Node *n;
 
     <<[[doinit()]] sanity check t>>
-
     <<[[doinit()]] possibly adjust class>>
-
     n = initlist;
 
     if(a->op == OINIT)
@@ -7277,7 +7294,7 @@ enum type_kind_bis {
     <<[[Type_kind_bis]] qualifier cases>>
 
     // ----------------------------------------------------------------------
-    // Signs (temporary, see TUINT/TULONG/...)
+    // Signs (temporary, see TUINT/TULONG/... for final types)
     // ----------------------------------------------------------------------
     <<[[Type_kind_bis]] sign cases>>
 
@@ -7298,7 +7315,7 @@ enum type_kind_bis {
 %ocaml: separate storage, qualifier, and type in grammar rules so
 % no need for those set union operations
 
-% enum bxxx is used mainly in the grammar
+% enum Bxxx is used mainly in the grammar
 % and is a 32 (long) bits bitset of the types above.
 %  (use of 1L, not just 1)
 % bitset, because need to aggregate keywords to form the final thing.
@@ -7307,7 +7324,7 @@ enum type_kind_bis {
 %  tight)
 %  1L => long => long enum
 <<enum bxxx>>=
-enum bxxx
+enum Bxxx
 {
     BCHAR		= 1L<<TCHAR,
     BUCHAR		= 1L<<TUCHAR,
@@ -7343,11 +7360,13 @@ enum bxxx
     BSTATIC		= 1L<<TSTATIC,
     BTYPEDEF	= 1L<<TTYPEDEF,
     BREGISTER	= 1L<<TREGISTER,
-    <<enum bxxx cases>>
+    <<[[Bxxx]] cases>>
 
-    <<enum bxxx constants>>
+    <<[[Bxxx]] constants>>
 };
 @
+%dead? BARRAY?
+
 % this will be used also later for type compatiblity checks,
 % see the tcompat taxxx globals.
 
@@ -7360,7 +7379,7 @@ enum bxxx
 @
 
 <<[[union yacc]] other fields>>=
-long    lval; //bitset<enum<bxxx> >
+long    lval; //bitset<enum<Bxxx> >
 @
 % for the bitset, but could probably abuse vval.
 %less: rename?
@@ -7423,7 +7442,7 @@ tlist:
 struct
 {
     Type*   t;
-    // option<enum<storage_class> >, None = CXXX
+    // option<enum<Storage_class> >, None = CXXX
     byte   c;
 } tycl;
 @
@@ -7547,12 +7566,12 @@ TSIGNED,
 
 
 
-<<enum bxxx constants>>=
+<<[[Bxxx]] constants>>=
 /* these can be overloaded with complex types */
 BCLASS		= BAUTO|BEXTERN|BSTATIC|BTYPEDEF|BTYPESTR|BREGISTER,
 @
 
-<<enum bxxx constants>>=
+<<[[Bxxx]] constants>>=
 BGARB		= BCONSTNT|BVOLATILE,
 @
 
@@ -7627,7 +7646,8 @@ simplet(long b)
     return types[TINT];
 }
 @
-%ocaml: illegal combination done via syntax error instead
+%ocaml: illegal combination done via syntax error instead.
+% I do not support many of those combinations. Anyway, who uses that?
 
 % simplet return pointers to shared basic types.
 % If then you add a qualifier, then this type will be copied
@@ -7655,6 +7675,8 @@ TTYPEDEF, // ugly, not really a storage class
 TREGISTER,
 @
 % temporary, the real one are the CAUTO, CEXTERN, etc
+
+% Keep after Txxx because used for Bxxx and need to be different bits.
 
 <<cname rule>>=
 cname:  /* class words */
@@ -7703,6 +7725,7 @@ case BREGISTER:
 case BAUTO|BREGISTER:
     return CAUTO;
 @
+%ocaml: forbid them
 
 \subsection{Qualifiers}
 
@@ -7779,7 +7802,7 @@ simpleg(long b)
 % Not so simple when need to handle scope.
 
 % There is OSTRUCT and OUNION but it's for struct constructor!
-
+% Here we will return directly a Type pointer.
 
 % Explained Sym.suetag before, and Type.tag (and Type.sym for fields)
 % And Sym.sueblock. And Type.link.
@@ -8065,7 +8088,7 @@ sbody:
 
 @
 %$
-
+%ocaml: ugly, return list directly
 
 
 <<structure element declarator rules>>=
@@ -8164,6 +8187,21 @@ void edecl(int c, Type *t, Sym *s)
 % the type of the enum is a TENUM with a Type.link pointing to the right
 % type.
 
+
+% same dotag than for struct/union, cos same namespace
+<<complex rule>>=
+|   LENUM ltag
+    {
+        dotag($2, TENUM, 0);
+        $$ = $2->suetag;
+        if($$->link == T) // default type
+            $$->link = types[TINT];
+        $$ = $$->link;
+    }
+@
+% but what is returned is the link, so really an int type!
+% this is why you dont need to handle TENUM later during typechecking.
+
 % To compute type of enum, need union of all types of enumeration constants.
 % TINT by default but if use floats, or if use big integers, then it can
 % change.
@@ -8187,16 +8225,7 @@ struct En en;
 @
 
 
-% same dotag than for struct/union, cos same namespace
 <<complex rule>>=
-|   LENUM ltag
-    {
-        dotag($2, TENUM, 0);
-        $$ = $2->suetag;
-        if($$->link == T) // default type
-            $$->link = types[TINT];
-        $$ = $$->link;
-    }
 |   LENUM ltag
     {
         dotag($2, TENUM, autobn);
@@ -8286,12 +8315,12 @@ void doenum(Sym *s, Node *n)
     if(dclstack)
         push1(s); // will be reverted once out of scope
 
-    // check for redeclaration and set S->type to TENUM
+    // check for redeclaration and set s->type to TENUM
     xdecl(CXXX, types[TENUM], s); 
 
     if(en.cenum == T) {
-        en.tenum = types[TINT];
         en.cenum = types[TINT];
+        en.tenum = types[TINT];
         en.lastenum = 0;
     }
     s->tenum = en.cenum; // Sym.tenum, not En.tenum here
@@ -8304,6 +8333,9 @@ void doenum(Sym *s, Node *n)
 @
 %ocaml: constant evaluation done in separate phase in typecheck.ml
 
+% note that symbol constant itself as type of cenum, not tenum.
+% It's if you do enum Foo x; that you will get the maximum type.
+
 % xdecl so check if redeclaration!
 %enum_redeclare.c:1 external redeclaration of: Foo
 %	GLOBL ENUM enum_redeclare.c:1
@@ -8315,44 +8347,6 @@ void doenum(Sym *s, Node *n)
 % because it's Sym.tenum is set? because it has a Sym.vconst?
 %  tcomo look for sym.type->etype, because of xdecl!!
 %  abuse TENUM!
-
-\subsection{Typedefs}
-
-% defs
-
-<<cname rule>>=
-|   LTYPEDEF  { $$ = BTYPEDEF; }
-@
-% the keyword
-
-<<[[simplec()]] cases>>=
-case BTYPEDEF:
-    return CTYPEDEF;
-@
-
-<<[[Storage_class]] cases>>=
-CTYPEDEF,
-@
-% but ugly, this should not be a storage class ...
-
-% this storage class will be stored in the class of the
-% declarator (where? in dodecl?) and yylex() will then generate LTYPE tokens
-% if this symbol is referenced.
-
-% And this typedef will have a Type! xdecl will do its job.
-% Just like when you do int x; then x in the symbol table as a 
-% Sym.type that point to int.  then a typedef int x; will do the same
-% for x!
-
-% uses
-
-<<complex rule>>=
-|   LTYPE { $$ = tcopy($1->type); }
-@
-%$
-% tricky! not copytyp here, but tcopy
-\t why want to tcopy?? see code tcopy
-
 
 \subsection{Pointer and array types}
 
@@ -8383,7 +8377,7 @@ case OIND:
     n = n->left;
     goto loop;
 @
-% n = n->left? to access the name?
+% n = n->left, to go deep in dodectl and access the name.
 
 % types part 2b
 <<xdecor2 rule>>=
@@ -8407,10 +8401,7 @@ case OARRAY:
     goto loop;
 @
 
-%XXX
-<<[[dodecl()]] locals>>=
-long v;
-@
+% use of n1 later
 
 
 \subsection{Function types, parameter types}
@@ -8476,6 +8467,7 @@ fnproto1(Node *n)
 % NODECL =~ (complex function type cast) nil
 %ocaml: should not get error by construction
 
+% n = Z if no parameters.
 
 <<parameter declarator rules>>=
 <<arglist rule>>
@@ -8485,7 +8477,7 @@ fnproto1(Node *n)
 <<declaration nodes>>=
 OPROTO,
 @
-% ?? rename OPARAM?
+\l rename OPARAM
 
 <<arglist rule>>=
 |   tlist xdecor
@@ -8545,9 +8537,48 @@ case ODOTDOT:
 <<[[Type_kind]] other cases>>=
 TDOT, // ... in function types
 @
+%ocaml: bool for Func type, not at the toplevel of Type_kind
 
 
 
+\subsection{Typedefs}
+
+% defs
+
+<<cname rule>>=
+|   LTYPEDEF  { $$ = BTYPEDEF; }
+@
+% the keyword
+
+<<[[simplec()]] cases>>=
+case BTYPEDEF:
+    return CTYPEDEF;
+@
+
+<<[[Storage_class]] cases>>=
+CTYPEDEF,
+@
+% but ugly, this should not be a storage class ...
+
+% this storage class will be stored in the class of the
+% declarator (where? in dodecl?) and yylex() will then generate LTYPE tokens
+% if this symbol is referenced.
+
+% And this typedef will have a Type! xdecl will do its job.
+% Just like when you do int x; then x in the symbol table as a 
+% Sym.type that point to int.  then a typedef int x; will do the same
+% for x!
+
+% uses
+
+<<complex rule>>=
+|   LTYPE { $$ = tcopy($1->type); }
+@
+%$
+% tricky! not copytyp here, but tcopy
+\t why want to tcopy?? see code tcopy
+%ocaml: do typedef expansion later, and forbid ugly typedefs
+% that forces the need for an ugly tcopy
 
 \section{Declarations and definitions, part two}
 
@@ -8557,9 +8588,16 @@ TDOT, // ... in function types
 
 \subsection{Function parameters}
 
-% call argmark before process body of function. See Section X.
+% seen OFUNC/OPROTO/OLIST before, now need to parse this
+% to add in scope when the function type was actually the start
+% of a function definition, not just a prototype.
 
-% pass is 0 for ANSI proto or 1 for old style proto
+% call argmark before process body of function. See Section X.
+% call argmark with node for xdecor in 'zctlist xdecor'
+% but after have called dodecl on this node.
+% so node should be a OFUNC(ONAME, args)
+
+% pass is 0 for ANSI proto, 1 for old style proto
 <<function argmark>>=
 //@Scheck: not dead, used by cc.y
 void argmark(Node *n, int pass)
@@ -8571,7 +8609,7 @@ void argmark(Node *n, int pass)
     for(; n->left != Z; n = n->left) {
         if(n->op != OFUNC || n->left->op != ONAME)
             continue;
-        // else, OFUNC
+        // else, OFUNC with ONAME on n->left, so analyze the parameters
         walkparam(n->right, pass);
         <<[[argmark()]] if old proto style>>
         break;
@@ -8581,7 +8619,7 @@ void argmark(Node *n, int pass)
 }
 @
 \t should be OFUNC immediately no?
-\t left op != ONAME? when?
+\t left op != ONAME? when? if syntax error I think and it's not a function
 
 
 <<function walkparam>>=
@@ -8727,6 +8765,8 @@ adlist:
 %ocaml: can just factorize with xdlist as do the adecl vs xdecl
 % in the caller
 
+% 0L again.
+
 
 % pdecl | dodecl(<>) -> <>
 <<function adecl>>=
@@ -8756,6 +8796,7 @@ adecl(int c, Type *t, Sym *s)
     }
 }
 @
+% offset 0 for local??
 
 \subsection{Types, abstract declarator}
 
@@ -8809,8 +8850,14 @@ abdecor3:
 
 \chapter{Checking}
 
-% Normally, a compiler does many checks after parsing and before
-% code generation. 5c instead does most of those checks during parsing
+% Can have many bugs. Programmer can do many mistakes.
+% Role of this chapter is to explain code that detect common mistakes.
+% Type checking is a big one. 
+% use of undeclared, redeclaring, unused are other one.
+
+% Normally, a compiler does many checks
+% after parsing and before code generation. 
+% 5c instead does most of those checks during parsing
 % and a few one during the code generation. There is not really
 % a separate checking phase, thus most of the code I will present
 % in this sections are chunks of functions I presented before (e.g., xdecl(),
@@ -8867,8 +8914,7 @@ warn(Node *n, char *fmt, ...)
     }
 }
 @
-%ocaml: do not use nearln, use precise location. Do not print AST,
-% use -dump_ast if you want that.
+%ocaml: do not use nearln, use precise location. 
 
 % 5c -W give full verbose diagnostic
 
@@ -8887,8 +8933,9 @@ if(n != Z)
   if(debug['v'])
     prtree(n, "warning");
 @
-% see Appendix for prtree().
+%ocaml: Do not print AST,  use -dump_ast if you want that.
 
+% see Appendix for prtree().
 
 \section{Symbol resolution}
 % Scoping, naming
@@ -9012,6 +9059,7 @@ if(t->etype == TFUNC) {
         diag(Z, "function cannot be %s %s", cnames[c], s->name);
 }
 @
+%ocaml: forbid prototype declaration inside a function.
 
 <<[[adecl()]] adjust storage>>=
 if(c == CXXX)
@@ -9029,6 +9077,7 @@ if(s->class == CAUTO || s->class == CPARAM || s->class == CLOCAL)
 if(s->block == autobn)
     diag(Z, "auto redeclaration of: %s", s->name);
 @
+%ocaml: done in check.ml
 
 \section{Typechecking}
 
@@ -9036,9 +9085,9 @@ if(s->block == autobn)
 
 % remember Node.type!
 
-% some concepts:
-% - balancing = make each type match for operands, so int+long => long+long
-%   and so imply some form of promotion
+% different kinds of type checks
+%  - type equality
+%  - type compatibility
 
 % in many of the functions below, the boolean return value
 % true means that there was a typechecking error.
@@ -9048,8 +9097,7 @@ if(s->block == autobn)
 % Call typechecker also tcom().
 
 
-
-<<[[xdecl()]] sanity checks type after switch class>>=
+<<[[xdecl()]] sanity check type after switch class>>=
 if(s->type != T)
     if(s->class != class || !sametype(t, s->type) || t->etype == TENUM) {
         diag(Z, "external redeclaration of: %s", s->name);
@@ -9062,9 +9110,9 @@ if(s->type != T)
 
 % when can have TENUM? when abuse xdecl for setting Sym.type
 % for enumeration constant. TENUM is used as type of constants.
+% So if s->type != T means there was a symbol before, and if new t is
+% TENUM then conflict! 
 %ocaml: do that in check.ml instead
-
-\t when does not have a type?? should always get a type
 
 
 
@@ -9207,7 +9255,7 @@ snap(Type *t)
     }
 }
 @
-%ocaml: I don't need that. 
+%ocaml: I don't need that I think.
 
 \t why need that? 5c does not share types returned on
 \t Sym.suetag for all occurences? maybe not because of copytyp?
@@ -9275,7 +9323,7 @@ int	typeiinit[] =
     TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TVLONG, TUVLONG, -1,
 };
 @
-%ocaml: maybe pattern matching each time?
+%ocaml: pattern matching, more powerful ADT, T.I of integer_type
 
 % have seen typesu[] before
 
@@ -9326,35 +9374,23 @@ for(ip=typeilpinit; *ip>=0; ip++) {
 for(ip=typechlinit; *ip>=0; ip++) {
     urk("typechl", nelem(typechl), *ip);
     typechl[*ip] = 1;
-    typechlv[*ip] = 1;
-    typechlvp[*ip] = 1;
+    //typechlv[*ip] = 1;
+    //typechlvp[*ip] = 1;
 }
 for(ip=typechlpinit; *ip>=0; ip++) {
     urk("typechlp", nelem(typechlp), *ip);
     typechlp[*ip] = 1;
-    typechlvp[*ip] = 1;
+    //typechlvp[*ip] = 1;
 }
 for(ip=typechlpfdinit; *ip>=0; ip++) {
     urk("typechlpfd", nelem(typechlpfd), *ip);
     typechlpfd[*ip] = 1;
 }
-for(ip=typecinit; *ip>=0; ip++) {
-    urk("typec", nelem(typec), *ip);
-    typec[*ip] = 1;
-}
-for(ip=typehinit; *ip>=0; ip++) {
-    urk("typeh", nelem(typeh), *ip);
-    typeh[*ip] = 1;
-}
-for(ip=typeilinit; *ip>=0; ip++) {
-    urk("typeil", nelem(typeil), *ip);
-    typeil[*ip] = 1;
-}
 for(ip=typevinit; *ip>=0; ip++) {
     urk("typev", nelem(typev), *ip);
     typev[*ip] = 1;
-    typechlv[*ip] = 1;
-    typechlvp[*ip] = 1;
+    //typechlv[*ip] = 1;
+    //typechlvp[*ip] = 1;
 }
 for(ip=typefdinit; *ip>=0; ip++) {
     urk("typefd", nelem(typefd), *ip);
@@ -9372,180 +9408,54 @@ for(ip=typesuinit; *ip >= 0; ip++) {
 %ocaml: use pattern matching directly, so no need those initialiser
 % and data-structure bitset tricks
 
+%dead:
+% <<global typec>>=
+% char	typec[NTYPE];
+% @
+% <<global typecinit>>=
+% int	typecinit[] =
+% {
+%     TCHAR, TUCHAR, -1
+% };
+% @
+% for(ip=typecinit; *ip>=0; ip++) {
+%     urk("typec", nelem(typec), *ip);
+%     typec[*ip] = 1;
+% }
+% <<global typeh>>=
+% char	typeh[NTYPE];
+% @
+% <<global typehinit>>=
+% int	typehinit[] =
+% {
+%     TSHORT, TUSHORT, -1,
+% };
+% @
+% for(ip=typehinit; *ip>=0; ip++) {
+%     urk("typeh", nelem(typeh), *ip);
+%     typeh[*ip] = 1;
+% }
+% <<global typeil>>=
+% char	typeil[NTYPE];
+% @
+% <<global typeilinit>>=
+% int	typeilinit[] =
+% {
+%     TINT, TUINT, TLONG, TULONG, -1,
+% };
+% @
+% for(ip=typeilinit; *ip>=0; ip++) {
+%     urk("typeil", nelem(typeil), *ip);
+%     typeil[*ip] = 1;
+% }
+% <<global typechlv>>=
+% char	typechlv[NTYPE];
+% @
+% % comes from a few xxxinit,
+% <<global typechlvp>>=
+% char typechlvp[NTYPE];
+% @
 
-
-\subsection{XXX}
-
-
-<<global typeu>>=
-char	typeu[NTYPE];
-@
-<<global typeuinit>>=
-int	typeuinit[] =
-{
-    TUCHAR, TUSHORT, TUINT, TULONG, TUVLONG, TIND, -1,
-};
-@
-% TIND is a pointer, so really unsigned address.
-
-
-<<global typeilp>>=
-char	typeilp[NTYPE];
-@
-<<global typeilpinit>>=
-int	typeilpinit[] =
-{
-    TINT, TUINT, TLONG, TULONG, TIND, -1
-};
-@
-% ilp, int long pointer
-\l used for??
-
-
-<<global typechlp>>=
-char	typechlp[NTYPE];
-@
-<<global typechlpinit>>=
-int	typechlpinit[] =
-{
-    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TIND, -1,
-};
-@
-% added TIND!
-\l used for??
-
-
-<<global typechlpfd>>=
-char	typechlpfd[NTYPE];
-@
-
-<<global typechlpfdinit>>=
-int	typechlpfdinit[] =
-{
-    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TFLOAT, TDOUBLE, TIND, -1,
-};
-@
-\l used for??
-
-
-<<global typec>>=
-char	typec[NTYPE];
-@
-<<global typecinit>>=
-int	typecinit[] =
-{
-    TCHAR, TUCHAR, -1
-};
-@
-
-<<global typechl>>=
-char	typechl[NTYPE];
-@
-<<global typechlinit>>=
-int	typechlinit[] =
-{
-    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, -1,
-};
-@
-\l used for??
-
-
-<<global typeh>>=
-char	typeh[NTYPE];
-@
-<<global typehinit>>=
-int	typehinit[] =
-{
-    TSHORT, TUSHORT, -1,
-};
-@
-\l used for??
-
-<<global typeil>>=
-char	typeil[NTYPE];
-@
-<<global typeilinit>>=
-int	typeilinit[] =
-{
-    TINT, TUINT, TLONG, TULONG, -1,
-};
-@
-\l used for??
-
-
-
-<<global typev>>=
-char	typev[NTYPE];
-@
-% very long
-<<global typevinit>>=
-int	typevinit[] =
-{
-    TVLONG,	TUVLONG, -1,
-};
-@
-\l used for??
-
-
-
-
-
-
-<<global typeaf>>=
-char	typeaf[NTYPE];
-@
-<<global typeafinit>>=
-int	typeafinit[] =
-{
-    TFUNC, TARRAY, -1,
-};
-@
-\l used for??
-
-
-
-
-
-<<global typesuv>>=
-char	typesuv[NTYPE];
-@
-
-<<global typesuvinit>>=
-int	typesuvinit[] =
-{
-    TVLONG, TUVLONG, TSTRUCT, TUNION, -1,
-};
-@
-% suv is for arguments or return values that are too big to
-% reside in REGRET in which case it needs some special handling
-
-
-
-<<global typechlv>>=
-char	typechlv[NTYPE];
-@
-% comes from a few xxxinit,
-<<global typechlvp>>=
-char typechlvp[NTYPE];
-@
-\l used for??
-
-
-
-
-
-\t mv later?
-% set of type supported for switch argument
-% todo use array of bool instead
-<<global typeswitch>>=
-// set<Type_kind>
-char*	typeswitch;
-@
-
-
-<<[[tinit()]] initialise 32 bits defaults type sets>>=
-typeswitch = typechl;
-@
 
 
 \subsection{Type compatibility, [[tcompat()]]}
@@ -9555,6 +9465,8 @@ typeswitch = typechl;
 
 % call as 'tcompat(n, l->type, r->type, tasadd)'
 % and tasadd is a compatibility policy (see next section)
+
+% t for test-compatibility, because later have tlvalue for test-lvalue.
 
 % (complex -> tcom -> tcomo) | bcomplex -> <>
 <<function tcompat>>=
@@ -9578,7 +9490,7 @@ if(t1 == T)
     diag(n, "incompatible type: \"%T\" for op \"%O\"",
         t2, n->op);
 @
-\t when can have t1 == T?
+% when can have t1 == T? when call tcompat with unary operator.
 
 
 
@@ -9608,64 +9520,54 @@ stcompat(Node *n, Type *t1, Type *t2, long ttab[])
     return true;
 }
 @
+%ocaml: use simply pattern matching, no need abuse Bxxx and special
+% case for tasign and pointers.
 
-
-
-<<[[stcompat()]] when t1 matches t2, if ttab is tasign>>=
-if(ttab == tasign)
-    if(b == BSTRUCT || b == BUNION)
-        if(!sametype(t1, t2))
-            return true;
-@
-% accept assigns if same types, not only if same etypes
-
-<<[[stcompat()]] when t1 matches t2, if pointers and not a cast op>>=
-if(n->op != OCAST)
-  if(b == BIND && i == TIND)
-        if(!sametype(t1, t2))
-            return true;
-@
-% pointers must be equal type too (except in cast operation obviously)
 
 \subsection{Compatibility policies, [[txxx]]}
 
 % will call stcompat with different compatibilitie policies
 
 
-<<enum bxxx constants>>=
+<<[[Bxxx]] constants>>=
 BINTEGER	= BCHAR|BUCHAR|BSHORT|BUSHORT|BINT|BUINT|BLONG|BULONG|BVLONG|BUVLONG,
-BNUMBER		= BINTEGER|BFLOAT|BDOUBLE,
+BNUMBER		= BINTEGER | BFLOAT|BDOUBLE,
 @
 %ocaml: use pattern matching?
 
 
-% passed to tcompat
-<<global tasign>>=
-// map<Type_kind, set<Type_kind> >
-long	tasign[NTYPE];
+<<global tadd>>=
+long	tadd[NTYPE];
 @
-<<global tasigninit>>=
-Init	tasigninit[] =
+<<global taddinit>>=
+Init	taddinit[] =
 {
-    TCHAR,		BNUMBER,	0,
-    TUCHAR,		BNUMBER,	0,
-    TSHORT,		BNUMBER,	0,
-    TUSHORT,	BNUMBER,	0,
-    TINT,		BNUMBER,	0,
-    TUINT,		BNUMBER,	0,
-    TLONG,		BNUMBER,	0,
-    TULONG,		BNUMBER,	0,
-    TVLONG,		BNUMBER,	0,
-    TUVLONG,	BNUMBER,	0,
+    TCHAR,		BNUMBER|BIND,	0,
+    TUCHAR,		BNUMBER|BIND,	0,
+    TSHORT,		BNUMBER|BIND,	0,
+    TUSHORT,	BNUMBER|BIND,	0,
+    TINT,		BNUMBER|BIND,	0,
+    TUINT,		BNUMBER|BIND,	0,
+    TLONG,		BNUMBER|BIND,	0,
+    TULONG,		BNUMBER|BIND,	0,
+    TVLONG,		BNUMBER|BIND,	0,
+    TUVLONG,	BNUMBER|BIND,	0,
+
     TFLOAT,		BNUMBER,	0,
     TDOUBLE,	BNUMBER,	0,
-
-    TIND,		BIND,		0,
-    TSTRUCT,	BSTRUCT,	0,
-    TUNION,		BUNION,		0,
+    TIND,		BINTEGER,	0,
     -1,		0,		0,
 };
 @
+% see Init in appendix.
+
+%corner:
+% can not add two pointers!!! would not make sense
+% (but can substract them, but then result is a long, not a pointer)
+% (so can do  eend - estart)
+
+
+% triple? 0? See Init type.
 
 %chunks:
 % Just gave one example of policy. Will present other
@@ -9707,147 +9609,13 @@ for(p=trelinit; p->code >= 0; p++) {
 @
 
 
-\subsection{XXX}
-
-<<global tasadd>>=
-long	tasadd[NTYPE];
-@
-<<global tasaddinit>>=
-Init	tasaddinit[] =
-{
-    TCHAR,		BNUMBER,	0,
-    TUCHAR,		BNUMBER,	0,
-    TSHORT,		BNUMBER,	0,
-    TUSHORT,	BNUMBER,	0,
-    TINT,		BNUMBER,	0,
-    TUINT,		BNUMBER,	0,
-    TLONG,		BNUMBER,	0,
-    TULONG,		BNUMBER,	0,
-    TVLONG,		BNUMBER,	0,
-    TUVLONG,	BNUMBER,	0,
-    TFLOAT,		BNUMBER,	0,
-    TDOUBLE,	BNUMBER,	0,
-    TIND,		BINTEGER,	0,
-    -1,		0,		0,
-};
-@
-
-<<global tcast>>=
-long	tcast[NTYPE];
-@
-<<global tcastinit>>=
-Init	tcastinit[] =
-{
-    TCHAR,		BNUMBER|BIND|BVOID,	0,
-    TUCHAR,		BNUMBER|BIND|BVOID,	0,
-    TSHORT,		BNUMBER|BIND|BVOID,	0,
-    TUSHORT,	BNUMBER|BIND|BVOID,	0,
-    TINT,		BNUMBER|BIND|BVOID,	0,
-    TUINT,		BNUMBER|BIND|BVOID,	0,
-    TLONG,		BNUMBER|BIND|BVOID,	0,
-    TULONG,		BNUMBER|BIND|BVOID,	0,
-    TVLONG,		BNUMBER|BIND|BVOID,	0,
-    TUVLONG,	BNUMBER|BIND|BVOID,	0,
-    TFLOAT,		BNUMBER|BVOID,		0,
-    TDOUBLE,	BNUMBER|BVOID,		0,
-    TIND,		BINTEGER|BIND|BVOID,	0,
-    TVOID,		BVOID,			0,
-    TSTRUCT,	BSTRUCT|BVOID,		0,
-    TUNION,		BUNION|BVOID,		0,
-    -1,		0,			0,
-};
-@
-
-
-
-
-<<global tand>>=
-long	tand[NTYPE];
-@
-<<global tandinit>>=
-Init	tandinit[] =
-{
-    TCHAR,		BINTEGER,	0,
-    TUCHAR,		BINTEGER,	0,
-    TSHORT,		BINTEGER,	0,
-    TUSHORT,	BINTEGER,	0,
-    TINT,		BNUMBER,	0,
-    TUINT,		BNUMBER,	0,
-    TLONG,		BINTEGER,	0,
-    TULONG,		BINTEGER,	0,
-    TVLONG,		BINTEGER,	0,
-    TUVLONG,	BINTEGER,	0,
-    -1,		0,		0,
-};
-@
-
-<<global trel>>=
-long	trel[NTYPE];
-@
-<<global trelinit>>=
-Init	trelinit[] =
-{
-    TCHAR,		BNUMBER,	0,
-    TUCHAR,		BNUMBER,	0,
-    TSHORT,		BNUMBER,	0,
-    TUSHORT,	BNUMBER,	0,
-    TINT,		BNUMBER,	0,
-    TUINT,		BNUMBER,	0,
-    TLONG,		BNUMBER,	0,
-    TULONG,		BNUMBER,	0,
-    TVLONG,		BNUMBER,	0,
-    TUVLONG,	BNUMBER,	0,
-    TFLOAT,		BNUMBER,	0,
-    TDOUBLE,	BNUMBER,	0,
-
-    TIND,		BIND,		0,
-    -1,		0,		0,
-};
-@
-
-<<global tfunct>>=
-long	tfunct[1] =
-{
-    BFUNC,
-};
-@
-
-<<global tindir>>=
-long	tindir[1] =
-{
-    BIND,
-};
-@
-
-<<global tdot>>=
-long	tdot[1] =
-{
-    BSTRUCT|BUNION,
-};
-@
-
-<<global tnot>>=
-long	tnot[1] =
-{
-    BNUMBER|BIND,
-};
-@
-
-<<global targ>>=
-long	targ[1] =
-{
-    BNUMBER|BIND|BSTRUCT|BUNION,
-};
-@
-
-
-
 \subsection{Typechecker, [[tcom()]]}
 % cc/com.c
 
 % finally!
 
 % Again, returning true means type error!
+%ocaml: use exn
 
 % complex | tcomo | tcoma | tcomx  -> <>
 <<function tcom>>=
@@ -9879,6 +9647,9 @@ enum
 };
 @
 % >> >> >>
+%ocaml: pass as a field in environment, and better names.
+% also add a CtxSizeof instead of passing 0 sometimes
+
 % evaluate types means type checking and making cast explicits
 % lvalue vs rvalue: https://www.itu.dk/courses/BPRD/E2009/fundamental-1967.pdf)
 % (thx charles forsith)
@@ -9886,6 +9657,7 @@ enum
 
 % true means error
 % f = context? ADDROF at the beginning
+% o for ? tcom_o ?
 <<function tcomo>>=
 bool
 tcomo(Node *n, int f)
@@ -9922,6 +9694,18 @@ bad:
     return true;
 }
 @
+%ocaml: use exn for error.
+%ocaml: how annotate expressions with type?
+% - by side effect on mutable expression field?
+% - by returning a new expression with a new type?
+% You will need to return new expression for enum, +x, -x,
+% This could be done in a later phase? Maybe, but then
+% will still need to check that used in right context, with right cast.
+% Also we need to add cast, so maybe better do that also during typechecking,
+% after all it's type related! It's also more functional.
+%ocaml: do lvalue (addable) by function, not field.
+
+
 
 <<[[tcomo()]] sanity check n>>=
 if(n == Z) {
@@ -9929,13 +9713,13 @@ if(n == Z) {
     errorexit();
 }
 @
-%ocam: never happens, by construction, no node pointers.
+%ocaml: never happens, by construction, no node pointers.
 
 <<[[tcomo()]] sanity check t after typing>>=
 if(t == T)
     goto bad;
 @
-
+%ocaml: never happens, by construction
 
 
 <<[[tcomo()]] sanity check type width>>=
@@ -9954,10 +9738,57 @@ if(t->width < 0) {
 
 
 
+% set addable to false by default.
+% lvalues are x, *x, and x[i] (which is converted in parsing in *(x+i))
+
+<<global typeaf>>=
+char	typeaf[NTYPE];
+@
+<<global typeafinit>>=
+int	typeafinit[] =
+{
+    TFUNC, TARRAY, -1,
+};
+@
+
+<<[[tcomo()]] special adjustments for arrays and functions>>=
+if(typeaf[t->etype]) {
+    if(f & ADDROF)
+        goto addaddr;
+    if(f & ADDROP)
+        warn(n, "address of array/func ignored");
+}
+@
+%ocaml: do it only for arrays?
+
+% The code below is very important. It transforms a reference to an array
+% type (TARRAY) in a TIND so below we can just use TIND uniformly.
+
+<<[[tcomo()]] extra labels>>=
+addaddr:
+    if(tlvalue(n))
+        goto bad;
+    l = new1(OXXX, Z, Z);
+    *l = *n;
+    n->op = OADDR;
+    if(l->type->etype == TARRAY)
+        l->type = l->type->link;
+    n->left = l;
+    n->right = Z;
+    n->addable = false;
+    n->type = typ(TIND, l->type);
+    n->type->width = types[TIND]->width;
+    return false;
+@
+
+% so if declared 'int x[45];', then when you refer to 'x' in an expression,
+% it first gets it full type (TARRAY(45, int)), but then this
+% node 'x' gets transformed in &x : TIND(int)
+% so x[10] -> *(x+10) which really becomes   *(&x + 40) (because sizeof(int)=4)
+% subtle!
 
 \section{Typechecking expressions}
 \n try same order than in Parsing
-
 
 <<[[tcomo()]] switch node kind cases>>=
 case OCOMMA:
@@ -9967,7 +9798,11 @@ case OCOMMA:
     n->type = r->type;
     break;
 @
+%ocaml: use exceptions do no need goto bad all the time and threading 'o'
+
 % type of a,b is type of last element!
+
+% call tcom, not tcomo, so reset [[f]] parameter to ADDROF.
 
 \subsection{Numeric constants}
 
@@ -9981,169 +9816,19 @@ case OCONST:
 
 \subsection{String constants}
 
-\subsubsection{ASCII strings}
+%\subsubsection{ASCII strings}
 
 <<[[tcomo()]] switch node kind cases>>=
 case OSTRING:
     <<[[tcomo()]] in OSTRING case, if not an array or chars>>
-    n->op = ONAME;
-    n->xoffset = outstring(n->cstring, n->type->width);
-    n->addable = true;
-    break;
-@
-% transformed as ONAME! (so become lvalue, Can do "foo"[0] = 'c'. )
-
-<<string rule, set sym and class for OSTRING>>=
-$$->sym = symstring;
-$$->class = CSTATIC;
-@
-% could do that in tcomo instead of in string rule.
-% Also why he does not do that directly in parser? Why not generate
-% ONAME directly?
-
-
-% rewrite AST! offset in a giant DATA string.
-
-
-<<global symstring>>=
-Sym*	symstring;
-@
-\t move in code generation?
-
-<<[[cinit()]] symstring initialization>>=
-symstring = slookup(".string");
-symstring->class = CSTATIC;
-t = typ(TARRAY, types[TCHAR]);
-t->width = 0;
-symstring->type = t;
-@
-
-
-<<global nstring>>=
-long	nstring;
-@
-
-<<global mnstring>>=
-int	mnstring;
-@
-
-
-<<[[ginit()]] initialisation>>=
-nstring = 0;
-mnstring = 0;
-@
-
-<<[[gclean()]] adjust symstring width>>=
-while(mnstring)
-    outstring("", 1L);
-symstring->type->width = nstring;
-@
-
-
-<<global string>>=
-char	string[NSNAME];
-@
-% NSNAME = 8, so print data by block of 8 characters.
-
-<<function outstring(arm)>>=
-long
-outstring(char *s, long n)
-{
-    long r;
-
-    if(suppress)
-        return nstring;
-    r = nstring;
-    while(n) {
-        string[mnstring] = *s++;
-        mnstring++;
-        nstring++;
-        if(mnstring >= NSNAME) {
-            gpseudo(ADATA, symstring, nodconst(0L));
-            p->from.offset += nstring - NSNAME;
-            p->reg = NSNAME;
-            p->to.type = D_SCONST;
-            memmove(p->to.sval, string, NSNAME);
-            mnstring = 0;
-        }
-        n--;
-    }
-    return r;
-}
-@
-% 386 diff is jsut p->reg -->  p->from.scale = NSNAME;
-
-% generate some DATA in the middle, ugly.
-
-
-
-
-<<[[tcomo()]] in OSTRING case, if not an array or chars>>=
-if(n->type->link != types[TCHAR]) {
-    o = outstring(0, 0);
-    while(o & 3) {
-        outstring("", 1);
-        o = outstring(0, 0);
-    }
-}
-@
-\t When can this happen?
-
-
-\subsubsection{Unicode strings}
-
-<<[[tcomo()]] other locals>>=
-static TRune zer;
-@
-
-<<[[tcomo()]] switch node kind cases>>=
-case OLSTRING:
-    if(n->type->link != types[TRUNE]) {
-        o = outstring(0, 0);
-        while(o & 3) {
-            outlstring(&zer, sizeof(TRune));
-            o = outlstring(0, 0);
-        }
-    }
-    n->op = ONAME;
-    n->xoffset = outlstring(n->rstring, n->type->width);
-    n->addable = 1;
+    <<[[tcomo()]] transform OSTRING in ONAME>>
     break;
 @
 
+% Again type annotations done during parsing.
+% Transformation explained later in code generation.
 
-
-
-
-<<function outlstring>>=
-long
-outlstring(TRune *s, long n)
-{
-    char buf[sizeof(TRune)];
-    uint c;
-    int i;
-    long r;
-
-    if(suppress)
-        return nstring;
-    while(nstring & (sizeof(TRune)-1))
-        outstring("", 1);
-    r = nstring;
-    while(n > 0) {
-        c = *s++;
-        if(align(0, types[TCHAR], Aarg1)) {
-            for(i = 0; i < sizeof(TRune); i++)
-                buf[i] = c>>(8*(sizeof(TRune) - i - 1));
-        } else {
-            for(i = 0; i < sizeof(TRune); i++)
-                buf[i] = c>>(8*i);
-        }
-        outstring(buf, sizeof(TRune));
-        n -= sizeof(TRune);
-    }
-    return r;
-}
-@
+%\subsubsection{Unicode strings}
 
 
 \subsection{Entity uses}
@@ -10158,6 +9843,10 @@ case ONAME:
     break;
 @
 
+% If entity referring to global, extern, param, auto, then
+% Node.class, Node.type, and Node.offset are already set correctly!
+
+
 <<[[tcomo()]] in ONAME case, check if name declared>>=
 if(n->type == T) {
     diag(n, "name not declared: %F", n);
@@ -10167,11 +9856,9 @@ if(n->type == T) {
 %ocaml: I do that during parsing, because I do not allow
 % implicit declaration and types
 
-% If entity referring to global, extern, param, auto, then
-% Node.class, Node.type, and Node.offset are already set correctly!
-
 % remember xdecl in doenum() which sets to TENUM type of enumeration
 % constants!
+
 
 <<[[tcomo()]] in ONAME case, if enum constant>>=
 if(n->type->etype == TENUM) {
@@ -10180,16 +9867,21 @@ if(n->type->etype == TENUM) {
         n->vconst = n->sym->vconst;
     else
         n->fconst = n->sym->fconst;
-    break;
     n->type = n->sym->tenum;
+    break;
 }
 @
-% adjust type to tenum!
-% break so no addable set
+%ocaml: forbid enum float
 
+% adjust type to tenum! and ONAME to OCONST!
+% break so no addable set
+\l mv in code generation?
 
 \subsection{Arithmetic expressions}
 
+% the different cases of tcomo for the different kinds of expressions
+% are very similar. Mosly like the code below, but with a different
+% compatibility policy.
 
 <<[[tcomo()]] switch node kind cases>>=
 case OADD:
@@ -10204,30 +9896,7 @@ case OADD:
 @
 %ocaml: use exception so no need to thread those o and goto bad
 
-<<global tadd>>=
-long	tadd[NTYPE];
-@
-<<global taddinit>>=
-Init	taddinit[] =
-{
-    TCHAR,		BNUMBER|BIND,	0,
-    TUCHAR,		BNUMBER|BIND,	0,
-    TSHORT,		BNUMBER|BIND,	0,
-    TUSHORT,	BNUMBER|BIND,	0,
-    TINT,		BNUMBER|BIND,	0,
-    TUINT,		BNUMBER|BIND,	0,
-    TLONG,		BNUMBER|BIND,	0,
-    TULONG,		BNUMBER|BIND,	0,
-    TVLONG,		BNUMBER|BIND,	0,
-    TUVLONG,	BNUMBER|BIND,	0,
-    TFLOAT,		BNUMBER,	0,
-    TDOUBLE,	BNUMBER,	0,
-    TIND,		BINTEGER,	0,
-    -1,		0,		0,
-};
-@
-
-
+% tadd shown before.
 
 
 <<[[tcomo()]] switch node kind cases>>=
@@ -10258,21 +9927,27 @@ Init	tsubinit[] =
     TULONG,		BNUMBER,	0,
     TVLONG,		BNUMBER,	0,
     TUVLONG,	BNUMBER,	0,
+
     TFLOAT,		BNUMBER,	0,
     TDOUBLE,	BNUMBER,	0,
     TIND,		BINTEGER|BIND,	0,
     -1,		0,		0,
 };
 @
+%ocaml: clearer with pattern matching, (T.I _ | T.F _), (T.I _ | T.F _) -> true
+% can do better grouping
+
+%corner:
+% you can substract two pointers but not add.
+% eend - estart makes sense, but estart+eend means nothing.
+
+%corner:
+% you can an int to a pointer, but not substract. 1 - estart does 
+% not make sense. 1+estart (or estat+1) yes. (and eend - 1 too)
 
 
-
-<<after parsing nodes>>=
-OLMUL,
-OLDIV,
-OLMOD,
-OLSHR,
-@
+% remember that enum constant converted to ints, so no need TENUM case
+% above.
 
 <<[[tcomo()]] switch node kind cases>>=
 case OMUL:
@@ -10286,14 +9961,11 @@ case OLDIV:
     if(tcompat(n, l->type, r->type, tmul))
         goto bad;
     arith(n, true);
-    if(typeu[n->type->etype]) {
-        if(n->op == ODIV)
-            n->op = OLDIV;
-        if(n->op == OMUL)
-            n->op = OLMUL;
-    }
+    <<[[tcomo()]] in OMUL/ODIV case, adjust opcode if unsigned type>>
     break;
 @
+\t OLMUL case should never happen? not generated by parser
+\t or call tcomo again on the same nodes?
 
 <<global tmul>>=
 long	tmul[NTYPE];
@@ -10311,6 +9983,7 @@ Init	tmulinit[] =
     TULONG,		BNUMBER,	0,
     TVLONG,		BNUMBER,	0,
     TUVLONG,	BNUMBER,	0,
+
     TFLOAT,		BNUMBER,	0,
     TDOUBLE,	BNUMBER,	0,
     -1,		0,		0,
@@ -10328,8 +10001,7 @@ case OLMOD:
     if(tcompat(n, l->type, r->type, tand))
         goto bad;
     arith(n, true);
-    if(typeu[n->type->etype])
-        n->op = OLMOD;
+    <<[[tcomo()]] in OMOD case, adjust opcode if unsigned type>>
     break;
 @
 % tand?
@@ -10359,7 +10031,11 @@ case OPOS:
     arith(n, true);
     break;
 @
-% why tsub?
+%ocaml: call recursively with new expr, so even simpler
+
+%bug? why tsub?
+
+\l move in code generation? anyway need to call typechecker and arith on it.
 
 % transform -x in  0-x
 
@@ -10386,6 +10062,9 @@ case ONEG:
     arith(n, true);
     break;
 @
+%old: guarded by !machcap ???  necessary?
+
+% ok this time tsub, normal.
 
 <<function machcap(arm)>>=
 /* default, like old cc */
@@ -10415,36 +10094,65 @@ case OXOR:
     break;
 @
 
+<<global tand>>=
+long	tand[NTYPE];
+@
+<<global tandinit>>=
+Init	tandinit[] =
+{
+    TCHAR,		BINTEGER,	0,
+    TUCHAR,		BINTEGER,	0,
+    TSHORT,		BINTEGER,	0,
+    TUSHORT,	BINTEGER,	0,
+
+    TINT,		BNUMBER,	0,
+    TUINT,		BNUMBER,	0,
+
+    TLONG,		BINTEGER,	0,
+    TULONG,		BINTEGER,	0,
+    TVLONG,		BINTEGER,	0,
+    TUVLONG,	BINTEGER,	0,
+    -1,		0,		0,
+};
+@
+%ocaml: do not allow int and float (clang does not)
+%corner:
+% can combine float and int, weird, but not long and float.
+
+
+
 
 <<[[tcomo()]] switch node kind cases>>=
-case OLSHR:
 case OASHL:
 case OASHR:
+case OLSHR:
     o = tcom(l);
     if(o | tcom(r))
         goto bad;
     <<[[tcomo()]] break if isfunct>>
     if(tcompat(n, l->type, r->type, tand))
         goto bad;
+
     n->right = Z;
     arith(n, true);
+
     n->right = new1(OCAST, r, Z);
     n->right->type = types[TINT];
-    if(typeu[n->type->etype])
-        if(n->op == OASHR)
-            n->op = OLSHR;
+    <<[[tcomo()]] in OASHL/OASHR case, adjust opcode if unsigned type>>
     break;
 @
 
+% force an int cast for right operand.
+%ocaml: need that?
 
+\l arith makes sense for OASHL without anything on the right?
 
-
-
+% call to new1() for the first time
 
 
 \subsection{Arithmetic conversions}
 
-% ?? -> <>
+% tcomo -> <>
 <<function arith>>=
 /*
  * "the usual arithmetic conversions are performed"
@@ -10453,135 +10161,64 @@ void
 arith(Node *n, bool f)
 {
     Type *t1, *t2;
-    int i, j, k;
-    Node *n1;
-    long w;
+    // enum<Type_kind>
+    int i, j;
+    // enum<Type_kind>
+    int k;
+    <<[[arith()]] other locals>>
 
-    t1 = n->left->type;
-    if(n->right == Z)
-        t2 = t1;
-    else
-        t2 = n->right->type;
-    i = TXXX;
-    if(t1 != T)
-        i = t1->etype;
-    j = TXXX;
-    if(t2 != T)
-        j = t2->etype;
+    <<[[arith()]] set t1 and t2, left and right types>>
+    <<[[arith()]] set i and j, etype of left and right types>>
 
     k = tab[i][j];
 
-    if(k == TIND) {
-        if(i == TIND)
-            n->type = t1;
-        else
-        if(j == TIND)
-            n->type = t2;
-    } else {
-        /* convert up to at least int */
-        if(f)
-          while(k < TINT)
-            k += 2;
-        n->type = types[k];
-    }
-    if(n->op == OSUB)
-    if(i == TIND && j == TIND) {
-        w = n->right->type->link->width;
-        if(w < 1 || n->left->type->link == T || n->left->type->link->width < 1)
-            goto bad;
-        n->type = types[ewidth[TIND] <= ewidth[TLONG]? TLONG: TVLONG];
-        if(1 && ewidth[TIND] > ewidth[TLONG]){
-            n1 = new1(OXXX, Z, Z);
-            *n1 = *n;
-            n->op = OCAST;
-            n->left = n1;
-            n->right = Z;
-            n->type = types[TLONG];
-        }
-        if(w > 1) {
-            n1 = new1(OXXX, Z, Z);
-            *n1 = *n;
-            n->op = ODIV;
-            n->left = n1;
-            n1 = new1(OCONST, Z, Z);
-            n1->vconst = w;
-            n1->type = n->type;
-            n->right = n1;
-            w = vlog(n1);
-            if(w >= 0) {
-                n->op = OASHR;
-                n1->vconst = w;
-            }
-        }
-        return;
-    }
-    if(!sametype(n->type, n->left->type)) {
-        n->left = new1(OCAST, n->left, Z);
-        n->left->type = n->type;
-        if(n->type->etype == TIND) {
-            w = n->type->link->width;
-            if(w < 1) {
-                snap(n->type->link);
-                w = n->type->link->width;
-                if(w < 1)
-                    goto bad;
-            }
-            if(w > 1) {
-                n1 = new1(OCONST, Z, Z);
-                n1->vconst = w;
-                n1->type = n->type;
-                n->left = new1(OMUL, n->left, n1);
-                n->left->type = n->type;
-            }
-        }
-    }
-    if(n->right != Z)
-    if(!sametype(n->type, n->right->type)) {
-        n->right = new1(OCAST, n->right, Z);
-        n->right->type = n->type;
-        if(n->type->etype == TIND) {
-            w = n->type->link->width;
-            if(w < 1) {
-                snap(n->type->link);
-                w = n->type->link->width;
-                if(w < 1)
-                    goto bad;
-            }
-            if(w != 1) {
-                n1 = new1(OCONST, Z, Z);
-                n1->vconst = w;
-                n1->type = n->type;
-                n->right = new1(OMUL, n->right, n1);
-                n->right->type = n->type;
-            }
-        }
-    }
+    <<[[arith()]] set node type>>
+
+    <<[[arith()]] if substract two pointers>>
+    // else
+    <<[[arith()]] if left  type not sametype than node type, add OCAST>>
+    <<[[arith()]] if right type not sametype than node type, add OCAST>>
     return;
 bad:
     diag(n, "pointer addition not fully declared: %T", n->type->link);
 }
 @
+% comment is a joke? probably comes from C standard or K&R and
+%  underestimate the complexity of it?
 
-% arith -> <>
-<<function vlog>>=
-int
-vlog(Node *n)
-{
-    if(n->op != OCONST)
-        goto bad;
-    if(typefd[n->type->etype])
-        goto bad;
 
-    return log2(n->vconst);
-
-bad:
-    return -1;
-}
+<<[[arith()]] set t1 and t2, left and right types>>=
+t1 = n->left->type;
+if(n->right == Z)
+    t2 = t1;
+else
+    t2 = n->right->type;
 @
 
-%coupling: could use designator for the nested initialiser too,
-% so less depdendencies on the order of the basic types
-% (I use designator for TIND only right now)
+<<[[arith()]] set i and j, etype of left and right types>>=
+i = TXXX;
+if(t1 != T)
+    i = t1->etype;
+j = TXXX;
+if(t2 != T)
+    j = t2->etype;
+@
+
+% if left type is i, and right type is j, what is the result
+% of arithmetic operation of i and j? tab[i][j]
+
+% For instance if you add a char and a short, the result is a short.
+
+%corner:
+% A few notes:
+%  - if one unsigned, then result is unsigned
+%  - if one is pointer, then result is pointer (pointer arithmetic)
+%  - if one is bigger, result is the biggest.
+
+% some concepts:
+% - balancing = make each type match for operands, so int+long => long+long
+%   and so imply some form of promotion
+
 <<global tab>>=
 char	tab[NTYPE][NTYPE] =
 {
@@ -10618,21 +10255,165 @@ char	tab[NTYPE][NTYPE] =
   [TUVLONG] =	{ 0,	TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG, TUVLONG,
             TUVLONG, TUVLONG, TUVLONG, TFLOAT, TDOUBLE, [TIND] = TIND,
         },
+
   [TFLOAT] =	{ 0,	TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT, TFLOAT,
             TFLOAT, TFLOAT, TFLOAT, TFLOAT, TDOUBLE, [TIND] = TIND,
         },
   [TDOUBLE] =	{ 0,	TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE, TDOUBLE,
             TDOUBLE, TDOUBLE, TDOUBLE, TFLOAT, TDOUBLE, [TIND] = TIND,
         },
+
   [TIND] =	{ 0,	TIND, TIND, TIND, TIND, TIND, TIND, TIND,
              TIND, TIND, TIND, TIND, TIND, [TIND] = TIND,
         },
 };
 @
+%coupling: could use designator for the nested initialiser too,
+% so less depdendencies on the order of the basic types
+% (I use designator for TIND only right now)
+
+<<[[arith()]] set node type>>=
+<<[[arith()]] if result type is a pointer>>
+else {
+    <<[[arith()]] if [[f]], convert up to at least int>>
+    n->type = types[k];
+}
+@
+
+
+<<[[arith()]] if result type is a pointer>>=
+if(k == TIND) {
+    if(i == TIND)
+        n->type = t1;
+    else
+    if(j == TIND)
+        n->type = t2;
+} 
+@
+% if one is pointer, result is pointer but want full type, with right
+% Type.link, not just types[k].
+
+%corner:
+<<[[arith()]] if [[f]], convert up to at least int>>=
+/* convert up to at least int */
+if(f)
+  while(k < TINT)
+    k += 2;
+@
+% call arith with true for now. But we will see later
+% for boolean operation we dont. In that case no up conversion for
+% result.
+
+
+<<[[arith()]] other locals>>=
+Node *n1;
+long w;
+@
+<<[[arith()]] if left  type not sametype than node type, add OCAST>>=
+if(!sametype(n->type, n->left->type)) {
+    n->left = new1(OCAST, n->left, Z);
+    n->left->type = n->type;
+    <<[[arith()]] pointer arithmetic with left child>>
+}
+@
+<<[[arith()]] if right type not sametype than node type, add OCAST>>=
+if(n->right != Z)
+if(!sametype(n->type, n->right->type)) {
+    n->right = new1(OCAST, n->right, Z);
+    n->right->type = n->type;
+    <<[[arith()]] pointer arithmetic with right child>>
+}
+@
+
+\subsection{Pointer arithmetic}
+
+%ocaml: do that in later phase?
+
+% if final result is pointer, but left child was not same type,
+% so not a pointer, so an integer, then must do pointer arithmetic!
+\l hmm could be a pointer but with different Type.link?
+\l no, would be detected before?)
+% need to know the size of the pointed thing!
+
+<<[[arith()]] pointer arithmetic with left child>>=
+if(n->type->etype == TIND) {
+    w = n->type->link->width;
+    <<[[arith()]] if incomplete width>>
+    if(w > 1) {
+        n1 = new1(OCONST, Z, Z);
+        n1->vconst = w;
+        n1->type = n->type;
+        n->left = new1(OMUL, n->left, n1);
+        n->left->type = n->type;
+    }
+}
+@
+
+<<[[arith()]] if incomplete width>>=
+if(w < 1) {
+    snap(n->type->link);
+    w = n->type->link->width;
+    if(w < 1)
+        goto bad;
+}
+@
+% snap because incomplete structure
+\t but when this happens? Type.link should be filled!
+
+<<[[arith()]] pointer arithmetic with right child>>=
+if(n->type->etype == TIND) {
+    w = n->type->link->width;
+    <<[[arith()]] if incomplete width>>
+    if(w != 1) {
+        n1 = new1(OCONST, Z, Z);
+        n1->vconst = w;
+        n1->type = n->type;
+        n->right = new1(OMUL, n->right, n1);
+        n->right->type = n->type;
+    }
+}
+@
+
+%corner:
+
+% why this special code? eend - estart requires something special?
+% Yes, pointer arithmetic again!
+<<[[arith()]] if substract two pointers>>=
+if(n->op == OSUB)
+if(i == TIND && j == TIND) {
+    w = n->right->type->link->width;
+    if(w < 1 || n->left->type->link == T || n->left->type->link->width < 1)
+        goto bad;
+    n->type = types[ewidth[TIND] <= ewidth[TLONG]? TLONG: TVLONG];
+    if(1 && ewidth[TIND] > ewidth[TLONG]){
+        n1 = new1(OXXX, Z, Z);
+        *n1 = *n;
+        n->op = OCAST;
+        n->left = n1;
+        n->right = Z;
+        n->type = types[TLONG];
+    }
+    if(w > 1) {
+        n1 = new1(OXXX, Z, Z);
+        *n1 = *n;
+        n->op = ODIV;
+        n->left = n1;
+        n1 = new1(OCONST, Z, Z);
+        n1->vconst = w;
+        n1->type = n->type;
+        n->right = n1;
+        w = vlog(n1);
+        if(w >= 0) {
+            n->op = OASHR;
+            n1->vconst = w;
+        }
+    }
+    return;
+}
+@
 
 
 \subsection{Boolean expressions}
-
 
 <<[[tcomo()]] switch node kind cases>>=
 case OEQ:
@@ -10641,14 +10422,47 @@ case ONE:
     if(o | tcom(r))
         goto bad;
     <<[[tcomo()]] break if isfunct>>
-    typeext(l->type, r);
-    typeext(r->type, l);
+    <<[[tcomo()]] when OEQ/ONE, typing extensions>>
     if(tcompat(n, l->type, r->type, trel))
         goto bad;
     arith(n, false);
+
     n->type = types[TINT];
     break;
 @
+% should be TBOOL not TINT! ugly C, 
+
+% arith(,false) here! so no up conversion to int.
+
+
+<<global trel>>=
+long	trel[NTYPE];
+@
+<<global trelinit>>=
+Init	trelinit[] =
+{
+    TCHAR,		BNUMBER,	0,
+    TUCHAR,		BNUMBER,	0,
+    TSHORT,		BNUMBER,	0,
+    TUSHORT,	BNUMBER,	0,
+    TINT,		BNUMBER,	0,
+    TUINT,		BNUMBER,	0,
+    TLONG,		BNUMBER,	0,
+    TULONG,		BNUMBER,	0,
+    TVLONG,		BNUMBER,	0,
+    TUVLONG,	BNUMBER,	0,
+
+    TFLOAT,		BNUMBER,	0,
+    TDOUBLE,	BNUMBER,	0,
+
+    TIND,		BIND,		0,
+    -1,		0,		0,
+};
+@
+
+
+
+
 <<[[tcomo()]] switch node kind cases>>=
 case OLT:
 case OGE:
@@ -10658,16 +10472,16 @@ case OLE:
     if(o | tcom(r))
         goto bad;
     <<[[tcomo()]] break if isfunct>>
-    typeext1(l->type, r);
-    typeext1(r->type, l);
+    <<[[tcomo()]] when OLT/OGE/OGT/OLE, typing extensions>>
     if(tcompat(n, l->type, r->type, trel))
         goto bad;
     arith(n, false);
-    if(typeu[n->type->etype])
-        n->op = logrel[relindex(n->op)];
+    <<[[tcomo()]] when OLT/OGE/OGT/OLE, adjust opcode if unsigned type>>
     n->type = types[TINT];
     break;
 @
+% same code than for OEQ
+
 
 % ! x
 <<[[tcomo()]] switch node kind cases>>=
@@ -10681,7 +10495,19 @@ case ONOT:
     break;
 @
 
-% ~ x
+<<global tnot>>=
+long	tnot[1] =
+{
+    BNUMBER|BIND,
+};
+@
+% does not look like other policy, but if you look at code
+% of tcompat, if pass 'T' to first param, then just
+% do b && ttab[0]
+
+% a pointer is ok in !foo
+
+% ~ x => xor -1 x
 <<[[tcomo()]] switch node kind cases>>=
 case OCOM:
     if(tcom(l))
@@ -10719,11 +10545,139 @@ case OOROR:
     n->type = types[TINT];
     break;
 @
+%ocaml: I should impose boolean!
 
+% does not need to have the same types. They are checked independently!
+
+\subsection{Unsigned adjustments}
+
+\l Why generate special opcode? 
+% Why not for OADD but for OMUL?
+% Because ARM handles unsigned and signed with same opcode for addition
+% but not for multiplication!!! and especially not for bit shifting!
+% lsr != asr
+\t move in code generation?
+
+% useful for evconst too! otherwise vconst interpreted wrongly!
+% and can not do certain operations on very high unsigned integers.
+
+<<global typeu>>=
+char	typeu[NTYPE];
+@
+<<global typeuinit>>=
+int	typeuinit[] =
+{
+    TUCHAR, TUSHORT, TUINT, TULONG, TUVLONG, TIND, -1,
+};
+@
+% TIND is a pointer, so really unsigned address.
+
+
+<<after parsing nodes>>=
+OLMUL,
+OLDIV,
+@
+
+<<[[tcomo()]] in OMUL/ODIV case, adjust opcode if unsigned type>>=
+if(typeu[n->type->etype]) {
+    if(n->op == OMUL)
+        n->op = OLMUL;
+    if(n->op == ODIV)
+        n->op = OLDIV;
+}
+@
+% see code in evconst later relying on this to know that the operation
+% involved must be done in an "unsigned mode".
+
+<<after parsing nodes>>=
+OLMOD,
+@
+
+<<[[tcomo()]] in OMOD case, adjust opcode if unsigned type>>=
+if(typeu[n->type->etype])
+    n->op = OLMOD;
+@
+
+<<after parsing nodes>>=
+OLSHR,
+@
+
+<<[[tcomo()]] in OASHL/OASHR case, adjust opcode if unsigned type>>=
+if(typeu[n->type->etype])
+    if(n->op == OASHR)
+        n->op = OLSHR;
+@
+% see Machine.nw or Assembler.nw or Linker.nw. 
+% There is arithmetic shift right and logical shift right.
+% Because question is how you fill the bits on the left. With 0 or 1's.
+
+<<[[tcomo()]] when OLT/OGE/OGT/OLE, adjust opcode if unsigned type>>=
+if(typeu[n->type->etype])
+    n->op = logrel[relindex(n->op)];
+@
+
+<<global logrel>>=
+char	logrel[12] =
+{
+    OEQ, ONE, OLS, OLS, OLO, OLO, OHS, OHS, OHI, OHI,
+};
+@
+
+<<function relindex>>=
+int
+relindex(int o)
+{
+
+    switch(o) {
+    case OEQ: return 0;
+    case ONE: return 1;
+    case OLE: return 2;
+    case OLS: return 3;
+    case OLT: return 4;
+    case OLO: return 5;
+    case OGE: return 6;
+    case OHS: return 7;
+    case OGT: return 8;
+    case OHI: return 9;
+    default:
+        diag(Z, "bad in relindex: %O", o);
+    }
+}
+@
+
+<<after parsing nodes>>=
+OASLMUL,
+OASLDIV,
+OASLMOD,
+OASLSHR,
+@
+% typed long version?
+
+
+<<[[tcomo()]] when OASMUL/OASDIV, adjust opcode if unsigned type>>=
+if(typeu[n->type->etype]) {
+    if(n->op == OASDIV)
+        n->op = OASLDIV;
+    if(n->op == OASMUL)
+        n->op = OASLMUL;
+}
+@
+
+<<[[tcomo()]] when OASLSHR, adjust opcode if unsigned type>>=
+if(typeu[n->type->etype]) {
+    if(n->op == OASASHR)
+        n->op = OASLSHR;
+}
+@
+
+<<[[tcomo()]] when OASMOD, adjust opcode if unsigned type>>=
+if(typeu[n->type->etype]) {
+    if(n->op == OASMOD)
+        n->op = OASLMOD;
+}
+@
 
 \subsection{Assignments}
-
-
 
 <<[[tcomo()]] switch node kind cases>>=
 case OAS:
@@ -10733,10 +10687,11 @@ case OAS:
     if(tlvalue(l))
         goto bad;
     <<[[tcomo()]] break if isfunct>>
-    typeext(l->type, r);
+    <<[[tcomo()]] when OAS, typing extension>>
     if(tcompat(n, l->type, r->type, tasign))
         goto bad;
-    constas(n, l->type, r->type);
+
+    <<[[tcomo()]] when OAS, const checking>>
     if(!sametype(l->type, r->type)) {
         r = new1(OCAST, r, Z);
         r->type = l->type;
@@ -10746,61 +10701,7 @@ case OAS:
     break;
 @
 
-
-<<function constas>>=
-void
-constas(Node *n, Type *il, Type *ir)
-{
-    Type *l, *r;
-
-    l = il;
-    r = ir;
-
-    if(l == T)
-        return;
-    if(l->garb & GCONSTNT) {
-        warn(n, "assignment to a constant type (%T)", il);
-        return;
-    }
-    if(r == T)
-        return;
-    for(;;) {
-        if(l->etype != TIND || r->etype != TIND)
-            break;
-        l = l->link;
-        r = r->link;
-        if(l == T || r == T)
-            break;
-        if(r->garb & GCONSTNT)
-            if(!(l->garb & GCONSTNT)) {
-                warn(n, "assignment of a constant pointer type (%T)", ir);
-                break;
-            }
-    }
-}
-@
-
-
-
-
-<<[[tcomo()]] switch node kind cases>>=
-case OASI:	/* same as as, but no test for const */
-    n->op = OAS;
-    o = tcom(l);
-    if(o | tcom(r))
-        goto bad;
-
-    typeext(l->type, r);
-    if(tlvalue(l) || tcompat(n, l->type, r->type, tasign))
-        goto bad;
-    if(!sametype(l->type, r->type)) {
-        r = new1(OCAST, r, Z);
-        r->type = l->type;
-        n->right = r;
-    }
-    n->type = l->type;
-    break;
-@
+%tlvalue, constas.
 
 % usually called via if(tlvalue(x)) goto bad;
 <<function tlvalue>>=
@@ -10815,10 +10716,84 @@ tlvalue(Node *n)
     return false;
 }
 @
+%ocaml: just compute recursively on the fly?
+
+% so true means not an lvalue
+
+
+
+% passed to tcompat
+<<global tasign>>=
+// map<Type_kind, set<Type_kind> >
+long	tasign[NTYPE];
+@
+\t tassign?
+<<global tasigninit>>=
+Init	tasigninit[] =
+{
+    TCHAR,		BNUMBER,	0,
+    TUCHAR,		BNUMBER,	0,
+    TSHORT,		BNUMBER,	0,
+    TUSHORT,	BNUMBER,	0,
+    TINT,		BNUMBER,	0,
+    TUINT,		BNUMBER,	0,
+    TLONG,		BNUMBER,	0,
+    TULONG,		BNUMBER,	0,
+    TVLONG,		BNUMBER,	0,
+    TUVLONG,	BNUMBER,	0,
+
+    TFLOAT,		BNUMBER,	0,
+    TDOUBLE,	BNUMBER,	0,
+
+    TIND,		BIND,		0,
+    TSTRUCT,	BSTRUCT,	0,
+    TUNION,		BUNION,		0,
+    -1,		0,		0,
+};
+@
+% can assign struct and union!!
+
+<<[[stcompat()]] when t1 matches t2, if ttab is tasign>>=
+if(ttab == tasign)
+    if(b == BSTRUCT || b == BUNION)
+        if(!sametype(t1, t2))
+            return true;
+@
+%ocaml: have ADT for Type.t so I can do this check when I mention
+% struct and unions.
+
+% accept assigns if same types, not only if same etypes
+
+% saw also similar thing for pointer.
 
 
 
 
+<<[[tcomo()]] switch node kind cases>>=
+case OASI:	/* same as as, but no test for const */
+    n->op = OAS;
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+
+    <<[[tcomo()]] when OAS, typing extension>>
+    if(tlvalue(l) || tcompat(n, l->type, r->type, tasign))
+        goto bad;
+    if(!sametype(l->type, r->type)) {
+        r = new1(OCAST, r, Z);
+        r->type = l->type;
+        n->right = r;
+    }
+    n->type = l->type;
+    break;
+@
+% OASI is generated by doinit. assign via initializer.
+% no const checking because it is not really an assign! it's the
+% first time we initialize the local or global.
+
+
+% for the +=, mix between OAS and OADD.
+% quite regular. But policy is from tadd to tasadd.
 
 <<[[tcomo()]] switch node kind cases>>=
 case OASADD:
@@ -10829,39 +10804,83 @@ case OASSUB:
     if(tlvalue(l))
         goto bad;
     <<[[tcomo()]] break if isfunct>>
-    typeext1(l->type, r);
+    <<[[tcomo()]] when OASADD, typing extension>>
     if(tcompat(n, l->type, r->type, tasadd))
         goto bad;
-    constas(n, l->type, r->type);
+    <<[[tcomo()]] when OASxxx, const checking>>
     t = l->type;
     arith(n, false);
-    while(n->left->op == OCAST)
-        n->left = n->left->left;
-    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
-        r = new1(OCAST, n->right, Z);
-        r->type = t;
-        n->right = r;
-        n->type = t;
-    }
+    <<[[tcomo()]] when OASxxx, adjust node after arith>>
     break;
 @
 
+% why arith() to then undo the cast?
+
+<<[[tcomo()]] when OASxxx, adjust node after arith>>=
+<<[[tcomo()]] when OASxxx, remove casts added by arith>>
+if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
+    r = new1(OCAST, n->right, Z);
+    r->type = t;
+    n->right = r;
+    n->type = t;
+}
+@
+% how it can not be the same type? because result is bigger
+% than left part. 
+
+% arith() adds some cast
+<<[[tcomo()]] when OASxxx, remove casts added by arith>>=
+while(n->left->op == OCAST)
+    n->left = n->left->left;
+@
+% even if we remove the cast, the final type of n might still
+% be different than the type of the left.
+
+
 <<function mixedasop>>=
-int
+bool
 mixedasop(Type *l, Type *r)
 {
     return !typefd[l->etype] && typefd[r->etype];
 }
 @
+%ocaml: need that?
 
 
-<<after parsing nodes>>=
-OASLMUL,
-OASLDIV,
-OASLMOD,
-OASLSHR,
+
+<<global tasadd>>=
+long	tasadd[NTYPE];
 @
-% typed long version?
+<<global tasaddinit>>=
+Init	tasaddinit[] =
+{
+    TCHAR,		BNUMBER,	0,
+    TUCHAR,		BNUMBER,	0,
+    TSHORT,		BNUMBER,	0,
+    TUSHORT,	BNUMBER,	0,
+    TINT,		BNUMBER,	0,
+    TUINT,		BNUMBER,	0,
+    TLONG,		BNUMBER,	0,
+    TULONG,		BNUMBER,	0,
+    TVLONG,		BNUMBER,	0,
+    TUVLONG,	BNUMBER,	0,
+
+    TFLOAT,		BNUMBER,	0,
+    TDOUBLE,	BNUMBER,	0,
+
+    TIND,		BINTEGER,	0,
+    -1,		0,		0,
+};
+@
+
+%corner:
+% not exactly the same than tadd and tsub.
+% We are more restrictive here with pointers.
+% you can do x - y  but not x-=y because the resulting type
+% of the diff between two pointers is a long, not a pointer!
+
+
+
 
 <<[[tcomo()]] switch node kind cases>>=
 case OASMUL:
@@ -10874,26 +10893,14 @@ case OASLDIV:
     if(tlvalue(l))
         goto bad;
     <<[[tcomo()]] break if isfunct>>
-    typeext1(l->type, r);
+    <<[[tcomo()]] when OASMUL/OASDIV, typing extensions>>
     if(tcompat(n, l->type, r->type, tmul))
         goto bad;
-    constas(n, l->type, r->type);
+    <<[[tcomo()]] when OASxxx, const checking>>
     t = l->type;
     arith(n, false);
-    while(n->left->op == OCAST)
-        n->left = n->left->left;
-    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
-        r = new1(OCAST, n->right, Z);
-        r->type = t;
-        n->right = r;
-        n->type = t;
-    }
-    if(typeu[n->type->etype]) {
-        if(n->op == OASDIV)
-            n->op = OASLDIV;
-        if(n->op == OASMUL)
-            n->op = OASLMUL;
-    }
+    <<[[tcomo()]] when OASxxx, adjust node after arith>>
+    <<[[tcomo()]] when OASMUL/OASDIV, adjust opcode if unsigned type>>
     break;
 @
 
@@ -10913,10 +10920,7 @@ case OASASHL:
     n->type = l->type;
     n->right = new1(OCAST, r, Z);
     n->right->type = types[TINT];
-    if(typeu[n->type->etype]) {
-        if(n->op == OASASHR)
-            n->op = OASLSHR;
-    }
+    <<[[tcomo()]] when OASLSHR, adjust opcode if unsigned type>>
     break;
 @
 
@@ -10936,22 +10940,14 @@ case OASXOR:
         goto bad;
     t = l->type;
     arith(n, false);
-    while(n->left->op == OCAST)
-        n->left = n->left->left;
-    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
-        r = new1(OCAST, n->right, Z);
-        r->type = t;
-        n->right = r;
-        n->type = t;
-    }
-    if(typeu[n->type->etype]) {
-        if(n->op == OASMOD)
-            n->op = OASLMOD;
-    }
+    <<[[tcomo()]] when OASxxx, adjust node after arith>>
+    <<[[tcomo()]] when OASMOD, adjust opcode if unsigned type>>
     break;
 @
 
 \subsection{Pointers}
+
+% call tcomo with special context, not tcom!
 
 <<[[tcomo()]] switch node kind cases>>=
 case OADDR:
@@ -10959,18 +10955,18 @@ case OADDR:
         goto bad;
     if(tlvalue(l))
         goto bad;
-    if(l->type->nbits) {
-        diag(n, "address of a bit field");
-        goto bad;
-    }
-    if(l->op == OREGISTER) {
-        diag(n, "address of a register");
-        goto bad;
-    }
+
+    <<[[tcomo()]] when OADDR, check if bitfield>>
+    <<[[tcomo()]] when OADDR, check if register>>
+
     n->type = typ(TIND, l->type);
     n->type->width = types[TIND]->width;
     break;
 @
+% pass ADDROP here! but just for warning when get address of array or
+%  func to say it's unnecessary
+% and also because dont want the OADDR added when call tcomo with ADDROF!!
+
 
 <<[[tcomo()]] switch node kind cases>>=
 case OIND:
@@ -10979,176 +10975,36 @@ case OIND:
     if(tcompat(n, T, l->type, tindir))
         goto bad;
     n->type = l->type->link;
-    n->addable = 1;
+    n->addable = true;
     break;
 @
+% a dereference pointer is a lvalue! you want to do *x = something
 
-
-
-\subsection{Function calls}
-
-<<[[tcomo()]] switch node kind cases>>=
-case OFUNC:
-    o = tcomo(l, 0);
-    if(o)
-        goto bad;
-    if(l->type->etype == TIND && l->type->link->etype == TFUNC) {
-        l = new1(OIND, l, Z);
-        l->type = l->left->type->link;
-        n->left = l;
-    }
-    if(tcompat(n, T, l->type, tfunct))
-        goto bad;
-    if(o | tcoma(l, r, l->type->down, 1))
-        goto bad;
-    n->type = l->type->link;
-    if(!debug['B'])
-        if(l->type->down == T || l->type->down->etype == TOLD) {
-            nerrors--;
-            diag(n, "function args not checked: %F", l);
-        }
-    dpcheck(n);
-    break;
-@
-
-
-<<[[tcomo()]] switch node kind cases>>=
-case ODOTDOT:
-    /*
-     * tcom has already been called on this subtree
-     */
-    *n = *n->left;
-    if(n->type == T)
-        goto bad;
-    break;
-@
-
-
-
-<<global nodproto>>=
-Node*	nodproto;
-@
-% dead? or just here so that error message in stcompat
-%  which access n->op have a valid n->op which is OPROTO?
-
-<<[[cinit()]] nodproto initialization>>=
-nodproto = new(OPROTO, Z, Z);
-@
-% could be a static local of tcoma?
-
-% typecheck com args
-<<function tcoma>>=
-bool
-tcoma(Node *l, Node *n, Type *t, int f)
+<<global tindir>>=
+long	tindir[1] =
 {
-    Node *n1;
-    int o;
+    BIND,
+};
+@
 
-    if(t != T)
-    if(t->etype == TOLD || t->etype == TDOT)	/* .../old in prototype */
-        t = T;
-    if(n == Z) {
-        if(t != T && !sametype(t, types[TVOID])) {
-            diag(n, "not enough function arguments: %F", l);
+
+<<[[stcompat()]] when t1 matches t2, if pointers and not a cast op>>=
+if(n->op != OCAST)
+  if(b == BIND && i == TIND)
+        if(!sametype(t1, t2))
             return true;
-        }
-        return false;
-    }
-    if(n->op == OLIST) {
-        o = tcoma(l, n->left, t, 0);
-        if(t != T) {
-            t = t->down;
-            if(t == T)
-                t = types[TVOID];
-        }
-        return o | tcoma(l, n->right, t, 1);
-    }
-    if(f && t != T)
-        tcoma(l, Z, t->down, 0);
-    if(tcom(n) || tcompat(n, T, n->type, targ))
-        return true;
-    if(sametype(t, types[TVOID])) {
-        diag(n, "too many function arguments: %F", l);
-        return true;
-    }
-    if(t != T) {
-        typeext(t, n);
-        if(stcompat(nodproto, t, n->type, tasign)) {
-            diag(l, "argument prototype mismatch \"%T\" for \"%T\": %F",
-                n->type, t, l);
-            return true;
-        }
-        switch(t->etype) {
-        case TCHAR:
-        case TSHORT:
-            t = types[TINT];
-            break;
-
-        case TUCHAR:
-        case TUSHORT:
-            t = types[TUINT];
-            break;
-        }
-    } else
-    switch(n->type->etype)
-    {
-    case TCHAR:
-    case TSHORT:
-        t = types[TINT];
-        break;
-
-    case TUCHAR:
-    case TUSHORT:
-        t = types[TUINT];
-        break;
-
-    case TFLOAT:
-        t = types[TDOUBLE];
-    }
-    if(t != T && !sametype(t, n->type)) {
-        n1 = new1(OXXX, Z, Z);
-        *n1 = *n;
-        n->op = OCAST;
-        n->left = n1;
-        n->right = Z;
-        n->type = t;
-        n->addable = 0;
-    }
-    return false;
-}
 @
+%ocaml: use ADT for Type.t so can do that earlier when rule
+% mention two pointers
 
-
-\subsection{Implicit address of function or arrays}
-
-<<[[tcomo()]] special adjustments for arrays and functions>>=
-if(typeaf[t->etype]) {
-    if(f & ADDROF)
-        goto addaddr;
-    if(f & ADDROP)
-        warn(n, "address of array/func ignored");
-}
-@
-
-<<[[tcomo()]] extra labels>>=
-addaddr:
-    if(tlvalue(n))
-        goto bad;
-    l = new1(OXXX, Z, Z);
-    *l = *n;
-    n->op = OADDR;
-    if(l->type->etype == TARRAY)
-        l->type = l->type->link;
-    n->left = l;
-    n->right = Z;
-    n->addable = 0;
-    n->type = typ(TIND, l->type);
-    n->type->width = types[TIND]->width;
-    return false;
-@
+% pointers must be equal type too (except in cast operation obviously)
 
 
 \subsection{Array accesses}
+
+% array access are converted in pointers during parsing
+% and reference to variable with a TARRAY type are converted
+% in OADDR first.
 
 \subsection{Field accesses}
 
@@ -11163,7 +11019,15 @@ case ODOT:
     break;
 @
 
-% tcom ODOT
+<<global tdot>>=
+long	tdot[1] =
+{
+    BSTRUCT|BUNION,
+};
+@
+
+
+% tcom DOT
 <<function tcomd>>=
 bool
 tcomd(Node *n)
@@ -11177,7 +11041,8 @@ tcomd(Node *n)
         diag(n, "not a member of struct/union: %F", n);
         return true;
     }
-    makedot(n, t, o);
+    // convert field and set n->type
+    <<[[tcomd()]] convert field access in offset>>
     return false;
 }
 @
@@ -11201,35 +11066,15 @@ dotsearch(Sym *s, Type *t, Node *n, long *off)
             xt = t1;
         }
 
-    /*
-     * look it up by type
-     */
-    if(s->class == CTYPEDEF || s->class == CTYPESTR)
-        for(t1 = t; t1 != T; t1 = t1->down)
-            if(t1->sym == S && typesu[t1->etype])
-                if(sametype(s->type, t1)) {
-                    if(xt != T)
-                        goto ambig;
-                    xt = t1;
-                }
+    <<[[dotsearch()]] look by type>>
+
     if(xt != T) {
         *off = xt->offset;
         return xt;
     }
 
-    /*
-     * look it up in unnamed substructures
-     */
-    for(t1 = t; t1 != T; t1 = t1->down)
-        if(t1->sym == S && typesu[t1->etype]){
-            rt = dotsearch(s, t1->link, n, off);
-            if(rt != T) {
-                if(xt != T)
-                    goto ambig;
-                xt = rt;
-                *off += t1->offset;
-            }
-        }
+    <<[[dotsearch()]] if unnamed substructures>>
+
     return xt;
 
 ambig:
@@ -11237,60 +11082,215 @@ ambig:
     return xt;
 }
 @
+%ocaml: ambiguous check done before
 
-% tcomd -> <>
-<<function makedot>>=
-void
-makedot(Node *n, Type *t, long o)
+
+<<[[dotsearch()]] look by type>>=
+/*
+ * look it up by type
+ */
+if(s->class == CTYPEDEF || s->class == CTYPESTR)
+    for(t1 = t; t1 != T; t1 = t1->down)
+        if(t1->sym == S && typesu[t1->etype])
+            if(sametype(s->type, t1)) {
+                if(xt != T)
+                    goto ambig;
+                xt = t1;
+            }
+@
+\t when this happens?
+
+\subsection{Function calls}
+
+% again here call recursively tcomo on left part without ADDROF, 
+% so will not get the OADDR added automatically 
+% around function (or array, but anyway obvious will not call an array)
+
+<<[[tcomo()]] switch node kind cases>>=
+case OFUNC:
+    o = tcomo(l, 0);
+    if(o)
+        goto bad;
+    <<[[tcomo()]] when OFUNC case, add OIND if pointer function call>>
+    if(tcompat(n, T, l->type, tfunct))
+        goto bad;
+    if(o | tcoma(l, r, l->type->down, true))
+        goto bad;
+    n->type = l->type->link;
+    <<[[tcomo()]] when OFUNC case, warn function args not checked if old proto>>
+    <<[[tcomo()]] when OFUNC case, format check>>
+    break;
+@
+
+<<global tfunct>>=
+long	tfunct[1] =
 {
-    Node *n1, *n2;
-
-    if(t->nbits) {
-        n1 = new(OXXX, Z, Z);
-        *n1 = *n;
-        n->op = OBIT;
-        n->left = n1;
-        n->right = Z;
-        n->type = t;
-        n->addable = n1->left->addable;
-        n = n1;
-    }
-    n->addable = n->left->addable;
-    if(n->addable == 0) {
-        n1 = new1(OCONST, Z, Z);
-        n1->vconst = o;
-        n1->type = types[TLONG];
-        n->right = n1;
-        n->type = t;
-        return;
-    }
-    n->left->type = t;
-    if(o == 0) {
-        *n = *n->left;
-        return;
-    }
-    n->type = t;
-    n1 = new1(OCONST, Z, Z);
-    n1->vconst = o;
-    t = typ(TIND, t);
-    t->width = types[TIND]->width;
-    n1->type = t;
-
-    n2 = new1(OADDR, n->left, Z);
-    n2->type = t;
-
-    n1 = new1(OADD, n1, n2);
-    n1->type = t;
-
-    n->op = OIND;
-    n->left = n1;
-    n->right = Z;
-}
+    BFUNC,
+};
 @
 
 
 
+% typecheck com args
+
+% f = first?
+
+<<function tcoma>>=
+bool
+tcoma(Node *l, Node *n, Type *t, bool f)
+{
+    Node *n1;
+    int o;
+
+    <<[[tcoma()]] start of tcoma, adjust t if TDOT>>
+    <<[[tcoma()]] if no arguments>>
+
+    // recurse over arguments and parameters
+    if(n->op == OLIST) {
+        o = tcoma(l, n->left, t, false);
+        if(t != T) {
+            t = t->down;
+            if(t == T)
+                t = types[TVOID];
+        }
+        return o | tcoma(l, n->right, t, true);
+    }
+
+    // process each argument
+
+    if(f && t != T)
+        tcoma(l, Z, t->down, false);
+
+    if(tcom(n) || tcompat(n, T, n->type, targ))
+        return true;
+    <<[[tcoma()]] check if too many arguments>>
+    if(t != T) {
+        <<[[tcoma()]] typing extension on argument>>
+        if(stcompat(nodproto, t, n->type, tasign)) {
+            diag(l, "argument prototype mismatch \"%T\" for \"%T\": %F",
+                n->type, t, l);
+            return true;
+        }
+        <<[[tcoma()]] adjust type if argument with small type>>
+    }
+    else
+        <<[[tcoma()]] adjust type when empty type>>
+
+    if(t != T && !sametype(t, n->type)) {
+        n1 = new1(OXXX, Z, Z);
+        *n1 = *n;
+        n->op = OCAST;
+        n->left = n1;
+        n->right = Z;
+        n->type = t;
+        n->addable = false;
+    }
+    return false; // everything is fine
+}
+@
+\t f is for?
+
+% a bit complicated
+
+<<global targ>>=
+long	targ[1] =
+{
+    BNUMBER|BIND|BSTRUCT|BUNION,
+};
+@
+% so you can pass everything, except a function and array
+% (but this func or array will be converted to a pointer)
+
+
+
+
+<<[[tcoma()]] start of tcoma, adjust t if TDOT>>=
+if(t != T)
+if(t->etype == TOLD || t->etype == TDOT)	/* .../old in prototype */
+    t = T;
+@
+<<[[tcoma()]] if no arguments>>=
+if(n == Z) {
+    if(t != T && !sametype(t, types[TVOID])) {
+        diag(n, "not enough function arguments: %F", l);
+        return true;
+    }
+    return false;
+}
+@
+
+<<[[tcoma()]] check if too many arguments>>=
+if(sametype(t, types[TVOID])) {
+    diag(n, "too many function arguments: %F", l);
+    return true;
+}
+@
+
+<<[[tcoma()]] adjust type if argument with small type>>=
+switch(t->etype) {
+case TCHAR:
+case TSHORT:
+    t = types[TINT];
+    break;
+
+case TUCHAR:
+case TUSHORT:
+    t = types[TUINT];
+    break;
+}
+@
+% this is why use int instead of char most of the time when char
+% would be ok, because anyway they will be converted up.
+
+<<[[tcoma()]] adjust type when empty type>>=
+switch(n->type->etype)
+{
+case TCHAR:
+case TSHORT:
+    t = types[TINT];
+    break;
+
+case TUCHAR:
+case TUSHORT:
+    t = types[TUINT];
+    break;
+
+case TFLOAT:
+    t = types[TDOUBLE];
+}
+@
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case ODOTDOT:
+    /*
+     * tcom has already been called on this subtree
+     */
+    *n = *n->left;
+    if(n->type == T)
+        goto bad;
+    break;
+@
+
+
+
+
+<<global nodproto>>=
+Node*	nodproto;
+@
+% dead? or just here so that error message in stcompat
+%  which access n->op have a valid n->op which is OPROTO?
+
+<<[[cinit()]] nodproto initialization>>=
+nodproto = new(OPROTO, Z, Z);
+@
+% could be a static local of tcoma?
+\t what is this for???
+
+
 \subsection{Cast}
+
+% again call tcomo with special context.
 
 <<[[tcomo()]] switch node kind cases>>=
 case OCAST:
@@ -11307,8 +11307,49 @@ case OCAST:
         goto bad;
     break;
 @
+\t when can be null type??? because error?
+
+\t CASTOF context! but who checks it?
+% nobody! so both branches are equivalent.
+
+
+<<global tcast>>=
+long	tcast[NTYPE];
+@
+<<global tcastinit>>=
+Init	tcastinit[] =
+{
+    TCHAR,		BNUMBER|BIND|BVOID,	0,
+    TUCHAR,		BNUMBER|BIND|BVOID,	0,
+    TSHORT,		BNUMBER|BIND|BVOID,	0,
+    TUSHORT,	BNUMBER|BIND|BVOID,	0,
+    TINT,		BNUMBER|BIND|BVOID,	0,
+    TUINT,		BNUMBER|BIND|BVOID,	0,
+    TLONG,		BNUMBER|BIND|BVOID,	0,
+    TULONG,		BNUMBER|BIND|BVOID,	0,
+    TVLONG,		BNUMBER|BIND|BVOID,	0,
+    TUVLONG,	BNUMBER|BIND|BVOID,	0,
+
+    TFLOAT,		BNUMBER|BVOID,		0,
+    TDOUBLE,	BNUMBER|BVOID,		0,
+
+    TIND,		BINTEGER|BIND|BVOID,	0,
+    TVOID,		BVOID,			0,
+    TSTRUCT,	BSTRUCT|BVOID,		0,
+    TUNION,		BUNION|BVOID,		0,
+    -1,		0,			0,
+};
+@
+
+% can cast a struct in a different struct?
+
+
+
+
 
 \subsection{Ternary expressions}
+
+% x ? (l : r) so l = r->left, r = r->right
 
 <<[[tcomo()]] switch node kind cases>>=
 case OCOND:
@@ -11316,14 +11357,7 @@ case OCOND:
     o |= tcom(r->left);
     if(o | tcom(r->right))
         goto bad;
-    if(r->right->type->etype == TIND && vconst(r->left) == 0) {
-        r->left->type = r->right->type;
-        r->left->vconst = 0;
-    }
-    if(r->left->type->etype == TIND && vconst(r->right) == 0) {
-        r->right->type = r->left->type;
-        r->right->vconst = 0;
-    }
+    <<[[tcomo()]] in OCOND, nil handling>>
     if(sametype(r->right->type, r->left->type)) {
         r->type = r->right->type;
         n->type = r->type;
@@ -11335,6 +11369,20 @@ case OCOND:
     n->type = r->type;
     break;
 @
+% useless code about sametype? anyway will be detected by tcompat no?
+% no check compat on l?
+
+<<[[tcomo()]] in OCOND, nil handling>>=
+if(r->right->type->etype == TIND && vconst(r->left) == 0) {
+    r->left->type = r->right->type;
+    r->left->vconst = 0;
+}
+if(r->left->type->etype == TIND && vconst(r->right) == 0) {
+    r->right->type = r->left->type;
+    r->right->vconst = 0;
+}
+@
+%ocaml: need that?
 
 <<function vconst>>=
 int
@@ -11387,7 +11435,7 @@ no:
 }
 @
 % ???? wtf?
-
+\t mv later?
 
 
 \subsection{Prefix/postfix}
@@ -11405,6 +11453,7 @@ case OPOSTDEC:
     if(tcompat(n, l->type, types[TINT], tadd))
         goto bad;
     n->type = l->type;
+
     if(n->type->etype == TIND)
     if(n->type->link->width < 1) {
         snap(n->type->link);
@@ -11413,8 +11462,14 @@ case OPOSTDEC:
     }
     break;
 @
+% note that not converted to x = x +1; Because special opcodes?
 
 \subsection{[[sizeof()]]}
+
+% for osize with call tcomo with special context,
+% because dont want the OADDR trick applied if ask for
+% the size of an array! otherwise will get the sizeof a pointer
+% instead of size of full array!
 
 <<[[tcomo()]] switch node kind cases>>=
 case OSIZE:
@@ -11422,10 +11477,7 @@ case OSIZE:
         if(l->op != OSTRING && l->op != OLSTRING)
             if(tcomo(l, 0))
                 goto bad;
-        if(l->op == OBIT) {
-            diag(n, "sizeof bitfield");
-            goto bad;
-        }
+        <<[[tcomo()]] when OSIZE, check if sizeof bitfield>>
         n->type = l->type;
     }
     if(n->type == T)
@@ -11445,235 +11497,14 @@ case OSIZE:
     n->type = types[TINT];
     break;
 @
-
-\subsection{[[isfunct()]]}
-
-<<[[tcomo()]] break if isfunct>>=
-if(isfunct(n))
-    break;
-@
-
-
-<<[[Type]] other fields>>=
-Funct*	funct;
-@
-% ????
-
-<<struct Funct>>=
-struct	Funct
-{
-    Sym*	sym[OEND];
-    Sym*	castto[NTYPE];
-    Sym*	castfr[NTYPE];
-};
-@
-
-
-<<function isfunct>>=
-bool
-isfunct(Node *n)
-{
-    Type *t, *t1;
-    Funct *f;
-    Node *l;
-    Sym *s;
-    int o;
-
-    o = n->op;
-    if(n->left == Z)
-        goto no;
-    t = n->left->type;
-    if(t == T)
-        goto no;
-    f = t->funct;
-
-    switch(o) {
-    case OAS:	// put cast on rhs
-    case OASI:
-    case OASADD:
-    case OASSUB:
-    case OASMUL:
-    case OASDIV:
-    case OASMOD:
-    case OASASHR:
-    case OASLMUL:
-    case OASLDIV:
-    case OASLMOD:
-    case OASLSHR:
-    case OASASHL:
-    case OASAND:
-    case OASOR:
-    case OASXOR:
-        if(n->right == Z)
-            goto no;
-        t1 = n->right->type;
-        if(t1 == T)
-            goto no;
-        if(t1->funct == f)
-            break;
-
-        l = new(OXXX, Z, Z);
-        *l = *n->right;
-
-        n->right->left = l;
-        n->right->right = Z;
-        n->right->type = t;
-        n->right->op = OCAST;
-
-        if(!isfunct(n->right))
-            prtree(n, "isfunc !");
-        break;
-
-    case OCAST:	// t f(T) or T f(t)
-        t1 = n->type;
-        if(t1 == T)
-            goto no;
-        if(f != nil) {
-            s = f->castfr[t1->etype];
-            if(s == S)
-                goto no;
-            n->right = n->left;
-            goto build;
-        }
-        f = t1->funct;
-        if(f != nil) {
-            s = f->castto[t->etype];
-            if(s == S)
-                goto no;
-            n->right = n->left;
-            goto build;
-        }
-        goto no;
-    }
-
-    if(f == nil)
-        goto no;
-    s = f->sym[o];
-    if(s == S)
-        goto no;
-
-
-
-    /*
-     * the answer is yes,
-     * now we rewrite the node
-     * and give diagnostics
-     */
-    switch(o) {
-    case OADD:	// T f(T, T)
-    case OAND:
-    case OASHL:
-    case OASHR:
-    case ODIV:
-    case OLDIV:
-    case OLMOD:
-    case OLMUL:
-    case OLSHR:
-    case OMOD:
-    case OMUL:
-    case OOR:
-    case OSUB:
-    case OXOR:
-
-    case OEQ:	// int f(T, T)
-    case OGE:
-    case OGT:
-    case OHI:
-    case OHS:
-    case OLE:
-    case OLO:
-    case OLS:
-    case OLT:
-    case ONE:
-        if(n->right == Z)
-            goto bad;
-        t1 = n->right->type;
-        if(t1 == T)
-            goto bad;
-        if(t1->funct != f)
-            goto bad;
-        n->right = new(OLIST, n->left, n->right);
-        break;
-
-    case OAS:	// structure copies done by the compiler
-    case OASI:
-        goto no;
-
-    case OASADD:	// T f(T*, T)
-    case OASAND:
-    case OASASHL:
-    case OASASHR:
-    case OASDIV:
-    case OASLDIV:
-    case OASLMOD:
-    case OASLMUL:
-    case OASLSHR:
-    case OASMOD:
-    case OASMUL:
-    case OASOR:
-    case OASSUB:
-    case OASXOR:
-        if(n->right == Z)
-            goto bad;
-        t1 = n->right->type;
-        if(t1 == T)
-            goto bad;
-        if(t1->funct != f)
-            goto bad;
-        n->right = new(OLIST, new(OADDR, n->left, Z), n->right);
-        break;
-
-    case OPOS:	// T f(T)
-    case ONEG:
-    case ONOT:
-    case OCOM:
-        n->right = n->left;
-        break;
-
-    default:
-        diag(n, "isfunct op missing %O\n", o);
-        goto bad;
-
-
-    }
-
-build:
-    l = new(ONAME, Z, Z);
-    l->sym = s;
-    l->type = s->type;
-    l->etype = s->type->etype;
-    l->xoffset = s->offset;
-    l->class = s->class;
-    tcomo(l, 0);
-
-    n->op = OFUNC;
-    n->left = l;
-    n->type = l->type->link;
-    if(tcompat(n, T, l->type, tfunct))
-        goto bad;
-    if(tcoma(n->left, n->right, l->type->down, 1))
-        goto bad;
-    return true;
-
-no:
-    return false;
-
-bad:
-    diag(n, "cant rewrite typestr for op %O\n", o);
-    prtree(n, "isfunct");
-    n->type = T;
-    return true;
-}
-@
-
-
-
-
-
-
+% why special code for OSTRING? because if call tcomo it will
+% convert it to an ONAME and you will lose the type information?
 
 \section{Typechecking statements}
 
+% remember that node typed with return type during parsing.
+
+\subsection{Return}
 <<[[tcomo()]] switch node kind cases>>=
 case ORETURN:
     if(l == Z) {
@@ -11683,10 +11514,10 @@ case ORETURN:
     }
     if(tcom(l))
         goto bad;
-    typeext(n->type, l);
+    <<[[tcomo()]] when ORETURN, typing extensions>>
     if(tcompat(n, n->type, l->type, tasign))
         break;
-    constas(n, n->type, l->type);
+    <<[[tcomo()]] when ORETURN, const checking>>
     if(!sametype(n->type, l->type)) {
         l = new1(OCAST, l, Z);
         l->type = n->type;
@@ -11695,10 +11526,42 @@ case ORETURN:
     break;
 @
 
+\subsection{Switch}
 
-\section{Typechecking declarations}
+% for if, we accept anything, but for switch
+% we want to typecheck that does not pass a pointer!
+% so we can abuse expression typechecker for that!
 
-\subsection{Enumerations typechecking and evaluation}
+<<ulstmt rule, SWITCH case, adjust cexpr node>>=
+// generate (0:int - (0:int - x))
+// which will force the usual arithmetic conversions
+// (and will be simplified later by some transformations)
+
+$$ = new(OCONST, Z, Z);
+$$->vconst = 0;
+$$->type = types[TINT];
+$3 = new(OSUB, $$, $3);
+
+$$ = new(OCONST, Z, Z);
+$$->vconst = 0;
+$$->type = types[TINT];
+$3 = new(OSUB, $$, $3);
+@
+% I originally thought there was a copy paste bug above,
+% and even Rob Pike thought so, but it turned out it's not a bug :)
+% why 0 - 0 - x? why not 0+x?
+%"you can't subtract pointers from 0 but you can add 0 to a pointer,
+%since + is commutative" forsith
+%less: could use Node *n; local instead of $$.
+%codegen: mv later?
+
+% 
+
+
+
+\section{Typechecking declarations and constant evaluation}
+
+\subsection{Enumerations}
 
 % Seen already a bit of typechecking code with En structure,
 % and En.tenum and En.cenum and the call to maxtype!
@@ -11709,6 +11572,8 @@ case ORETURN:
 vlong	lastenum;	/* value of current enum */
 double	floatenum;	/* value of current enum */ // for floats enums
 @
+%ocaml: support only integer enum (who uses float enums??)
+
 \t can have float enumeration?? where this is used? extension? Ansi C?
 
 % vlong! so can have 64 bitsets
@@ -11771,8 +11636,15 @@ maxtype(Type *t1, Type *t2)
     return t2;
 }
 @
+
+
+
 \subsection{Arrays}
 
+
+<<[[dodecl()]] locals>>=
+long v;
+@
 <<[[dodecl()]] switch node kind cases, case OARRAY, if array has a size>>=
 t->width = 0; // array[], size could be set by doinit (or specified in n1)
 if(n1 != Z) {
@@ -11785,6 +11657,8 @@ if(n1 != Z) {
     t->width = v * t->link->width;
 }
 @
+% OCONST can be a float, but code above checks not a float with -1 trick.
+
 % Can compute the width!
 
 
@@ -11798,6 +11672,8 @@ if(lastdcltype != T)
 <<[[pdecl()]] adjust type>>=
 t = paramconv(t, class==CPARAM);
 @
+% when class != CPARAM? never ... see code of pdecl
+
 
 
 % fnproto1 | pdecl -> <>
@@ -11822,12 +11698,20 @@ paramconv(Type *t, bool f)
     return t;
 }
 @
+%ocaml: warn at least?
+
 % A function parameter is really a function pointer.
 % An array is really a pointer when passed as a parameter
 % as the size of the array information is lost.
 
 %todo: can do int foo(int x[45]) { }? 
 %todo: can do int foo(int bar(int x)) { }? 
+
+<<[[pdecl()]] sanity check type>>=
+if(typesu[t->etype] && t->width <= 0)
+    diag(Z, "incomplete structure: %s", t->tag->name);
+@
+% pass by value struct
 
 
 
@@ -11849,18 +11733,13 @@ case TUSHORT:
         t = types[TUINT];
     break;
 @
+\t when not f case?
 
 
 
 
 
 
-\subsection{Structures}
-
-<<[[pdecl()]] sanity check type>>=
-if(typesu[t->etype] && t->width <= 0)
-    diag(Z, "incomplete structure: %s", t->tag->name);
-@
 
 \subsection{Typedef expansions}
 
@@ -11890,8 +11769,9 @@ tcopy(Type *t)
     if(typesu[et])
         return t;
 
-    tl = tcopy(t->link);
-    if(tl != t->link || (et == TARRAY && t->width == 0)) {
+    tl = tcopy(t->link); // go deep
+
+    if((et == TARRAY && t->width == 0) || tl != t->link) {
         tx = copytyp(t);
         tx->link = tl;
         return tx;
@@ -11899,35 +11779,15 @@ tcopy(Type *t)
     return t;
 }
 @
+%old: I reverse order of || because that is what triggers the chain of !=
+% for t->link
 
-\t write test case why need that!
+%ocaml: why do you allow typedef incomplete arrays?
 
 
-\section{Typing extensions}
+%\section{Typing extensions}
+% now in adv topics
 
-% | ... -> <>
-<<function typeext>>=
-void
-typeext(Type *st, Node *l)
-{
-    Type *lt;
-    Node *n1, *n2;
-    long o;
-
-    lt = l->type;
-
-    if(lt == T)
-        return;
-
-    if(st->etype == TIND && vconst(l) == 0) {
-        l->type = st;
-        l->vconst = 0;
-        return;
-    }
-    <<[[typeext()]] float handling>>
-    <<[[typeext()]] unnamed substructure handling>>
-}
-@
 
 \section{Lint checking}
 
@@ -12255,571 +12115,58 @@ if(canreach && thisfntype->link->etype != TVOID){
 % ????
 
 
-
-
-
-
-
-
-
 \section{Const checking}
+
+<<[[tcomo()]] when OAS, const checking>>=
+constas(n, l->type, r->type);
+@
+<<[[tcomo()]] when OASxxx, const checking>>=
+constas(n, l->type, r->type);
+@
+<<[[tcomo()]] when ORETURN, const checking>>=
+constas(n, n->type, l->type);
+@
 
 % qualifiers were called garbage, so I guess ken does
 % not respect that much const.
 
-\section{Format arguments checking}
+% check for const
+<<function constas>>=
+void
+constas(Node *n, Type *il, Type *ir)
+{
+    Type *l, *r;
+
+    l = il;
+    r = ir;
+
+    if(l == T)
+        return;
+    if(l->garb & GCONSTNT) {
+        warn(n, "assignment to a constant type (%T)", il);
+        return;
+    }
+    if(r == T)
+        return;
+    for(;;) {
+        if(l->etype != TIND || r->etype != TIND)
+            break;
+        l = l->link;
+        r = r->link;
+        if(l == T || r == T)
+            break;
+        if(r->garb & GCONSTNT)
+            if(!(l->garb & GCONSTNT)) {
+                warn(n, "assignment of a constant pointer type (%T)", ir);
+                break;
+            }
+    }
+}
+@
+
+%\section{Format's arguments checking}
 % cool, like in ocamlc!
-
-
-<<enum fxxx>>=
-enum fxxx
-{
-    Fnone	= 0,
-
-    Fl,
-    Fvl,
-    Fignor,
-    Fstar,
-    Fadj,
-
-    Fverb	= 10,
-};
-@
-
-<<struct Tprot>>=
-struct	Tprot
-{
-    Type*	type;
-    Bits	flag;
-    Tprot*	link;
-};
-@
-
-<<struct Tname>>=
-struct	Tname
-{
-    char*	name;
-    int		param;
-    Tname*	link;
-};
-@
-
-<<global indchar>>=
-static	Type*	indchar;
-@
-
-<<global flagbits>>=
-static	uchar	flagbits[512];
-@
-
-<<global fmtbuf>>=
-static	char	fmtbuf[100];
-@
-
-<<global lastadj>>=
-static	int	lastadj;
-@
-
-<<global lastverb>>=
-static	int	lastverb;
-@
-
-<<global nstar>>=
-static	int	nstar;
-@
-
-<<global tprot>>=
-static	Tprot*	tprot;
-@
-
-<<global tname>>=
-static	Tname*	tname;
-@
-
-<<function argflag>>=
-void
-argflag(int c, int v)
-{
-
-    switch(v) {
-    case Fignor:
-    case Fstar:
-    case Fl:
-    case Fvl:
-        flagbits[c] = v;
-        break;
-    case Fverb:
-        flagbits[c] = lastverb;
-/*print("flag-v %c %d\n", c, lastadj);*/
-        lastverb++;
-        break;
-    case Fadj:
-        flagbits[c] = lastadj;
-/*print("flag-l %c %d\n", c, lastadj);*/
-        lastadj++;
-        break;
-    }
-}
-@
-
-<<function getflag>>=
-Bits
-getflag(char *s)
-{
-    Bits flag;
-    int f;
-    char *fmt;
-    Rune c;
-
-    fmt = fmtbuf;
-    flag = zbits;
-    nstar = 0;
-    for(;;) {
-        s += chartorune(&c, s);
-        fmt += runetochar(fmt, &c);
-        if(c == 0 || c >= nelem(flagbits))
-            break;
-        f = flagbits[c];
-        switch(f) {
-        case Fnone:
-            argflag(c, Fverb);
-            f = flagbits[c];
-            break;
-        case Fstar:
-            nstar++;
-        case Fignor:
-            continue;
-        case Fl:
-            if(bset(flag, Fl))
-                flag = bor(flag, blsh(Fvl));
-        }
-        flag = bor(flag, blsh(f));
-        if(f >= Fverb)
-            break;
-    }
-    *fmt = 0;
-    return flag;
-}
-@
-
-
-<<function arginit>>=
-void
-arginit(void)
-{
-    int i;
-
-/* debug['F'] = 1;*/
-/* debug['w'] = 1;*/
-
-    lastadj = Fadj;
-    lastverb = Fverb;
-    indchar = typ(TIND, types[TCHAR]);
-
-    memset(flagbits, Fnone, sizeof(flagbits));
-
-    for(i='0'; i<='9'; i++)
-        argflag(i, Fignor);
-    argflag('.', Fignor);
-    argflag('#', Fignor);
-    argflag('u', Fignor);
-    argflag('h', Fignor);
-    argflag('+', Fignor);
-    argflag('-', Fignor);
-
-    argflag('*', Fstar);
-    argflag('l', Fl);
-
-    argflag('o', Fverb);
-    flagbits['x'] = flagbits['o'];
-    flagbits['X'] = flagbits['o'];
-}
-@
-
-
-<<function nextarg>>=
-Node*
-nextarg(Node *n, Node **a)
-{
-    if(n == Z) {
-        *a = Z;
-        return Z;
-    }
-    if(n->op == OLIST) {
-        *a = n->left;
-        return n->right;
-    }
-    *a = n;
-    return Z;
-}
-@
-
-<<function checkargs>>=
-void
-checkargs(Node *nn, char *s, int pos)
-{
-    Node *a, *n;
-    Bits flag;
-    Tprot *l;
-
-    if(!debug['F'])
-        return;
-    n = nn;
-    for(;;) {
-        s = strchr(s, '%');
-        if(s == 0) {
-            nextarg(n, &a);
-            if(a != Z)
-                warn(nn, "more arguments than format %T",
-                    a->type);
-            return;
-        }
-        s++;
-        flag = getflag(s);
-        while(nstar > 0) {
-            n = nextarg(n, &a);
-            pos++;
-            nstar--;
-            if(a == Z) {
-                warn(nn, "more format than arguments %s",
-                    fmtbuf);
-                return;
-            }
-            if(a->type == T)
-                continue;
-            if(!sametype(types[TINT], a->type) &&
-               !sametype(types[TUINT], a->type))
-                warn(nn, "format mismatch '*' in %s %T, arg %d",
-                    fmtbuf, a->type, pos);
-        }
-        for(l=tprot; l; l=l->link)
-            if(sametype(types[TVOID], l->type)) {
-                if(beq(flag, l->flag)) {
-                    s++;
-                    goto loop;
-                }
-            }
-
-        n = nextarg(n, &a);
-        pos++;
-        if(a == Z) {
-            warn(nn, "more format than arguments %s",
-                fmtbuf);
-            return;
-        }
-        if(a->type == 0)
-            continue;
-        for(l=tprot; l; l=l->link)
-            if(sametype(a->type, l->type)) {
-/*print("checking %T/%ulx %T/%ulx\n", a->type, flag.b[0], l->type, l->flag.b[0]);*/
-                if(beq(flag, l->flag))
-                    goto loop;
-            }
-        warn(nn, "format mismatch %s %T, arg %d", fmtbuf, a->type, pos);
-    loop:;
-    }
-}
-@
-
-<<function dpcheck>>=
-void
-dpcheck(Node *n)
-{
-    char *s;
-    Node *a, *b;
-    Tname *l;
-    int i;
-
-    if(n == Z)
-        return;
-    b = n->left;
-    if(b == Z || b->op != ONAME)
-        return;
-    s = b->sym->name;
-    for(l=tname; l; l=l->link)
-        if(strcmp(s, l->name) == 0)
-            break;
-    if(l == 0)
-        return;
-
-    i = l->param;
-    b = n->right;
-    while(i > 0) {
-        b = nextarg(b, &a);
-        i--;
-    }
-    if(a == Z) {
-        warn(n, "cant find format arg");
-        return;
-    }
-    if(!sametype(indchar, a->type)) {
-        warn(n, "format arg type %T", a->type);
-        return;
-    }
-    if(a->op != OADDR || a->left->op != ONAME || a->left->sym != symstring) {
-/*		warn(n, "format arg not constant string");*/
-        return;
-    }
-    s = a->left->cstring;
-    checkargs(b, s, l->param);
-}
-@
-
-%<<function newprot>>=
-%//void
-%//newprot(Sym *m, Type *t, char *s)
-%//{
-%//    Bits flag;
-%//    Tprot *l;
-%//
-%//    if(t == T) {
-%//        warn(Z, "%s: newprot: type not defined", m->name);
-%//        return;
-%//    }
-%//    flag = getflag(s);
-%//    for(l=tprot; l; l=l->link)
-%//        if(beq(flag, l->flag) && sametype(t, l->type))
-%//            return;
-%//    l = alloc(sizeof(*l));
-%//    l->type = t;
-%//    l->flag = flag;
-%//    l->link = tprot;
-%//    tprot = l;
-%//}
-%@
-%
-%<<function newname>>=
-%//void
-%//newname(char *s, int p)
-%//{
-%//    Tname *l;
-%//
-%//    for(l=tname; l; l=l->link)
-%//        if(strcmp(l->name, s) == 0) {
-%//            if(l->param != p)
-%//                yyerror("vargck %s already defined\n", s);
-%//            return;
-%//        }
-%//    l = alloc(sizeof(*l));
-%//    l->name = s;
-%//    l->param = p;
-%//    l->link = tname;
-%//    tname = l;
-%//}
-%@
-%
-%<<function pragvararg>>=
-%//void
-%//pragvararg(void)
-%//{
-%//    Sym *s;
-%//    int n, c;
-%//    char *t;
-%//    Rune r;
-%//    Type *ty;
-%//
-%//    if(!debug['F'])
-%//        goto out;
-%//    s = getsym();
-%//    if(s && strcmp(s->name, "argpos") == 0)
-%//        goto ckpos;
-%//    if(s && strcmp(s->name, "type") == 0)
-%//        goto cktype;
-%//    if(s && strcmp(s->name, "flag") == 0)
-%//        goto ckflag;
-%//    yyerror("syntax in #pragma varargck");
-%//    goto out;
-%//
-%//ckpos:
-%///*#pragma	varargck	argpos	warn	2*/
-%//    s = getsym();
-%//    if(s == S)
-%//        goto bad;
-%//    n = getnsn();
-%//    if(n < 0)
-%//        goto bad;
-%//    newname(s->name, n);
-%//    goto out;
-%//
-%//ckflag:
-%///*#pragma	varargck	flag	'c'*/
-%//    c = getnsc();
-%//    if(c != '\'')
-%//        goto bad;
-%//    c = getr();
-%//    if(c == '\\')
-%//        c = getr();
-%//    else if(c == '\'')
-%//        goto bad;
-%//    if(c == '\n')
-%//        goto bad;
-%//    if(getc() != '\'')
-%//        goto bad;
-%//    argflag(c, Fignor);
-%//    goto out;
-%//
-%//cktype:
-%///*#pragma	varargck	type	O	int*/
-%//    c = getnsc();
-%//    if(c != '"')
-%//        goto bad;
-%//    t = fmtbuf;
-%//    for(;;) {
-%//        r = getr();
-%//        if(r == ' ' || r == '\n')
-%//            goto bad;
-%//        if(r == '"')
-%//            break;
-%//        t += runetochar(t, &r);
-%//    }
-%//    *t = 0;
-%//    t = strdup(fmtbuf);
-%//    s = getsym();
-%//    if(s == S)
-%//        goto bad;
-%//    ty = s->type;
-%//    while((c = getnsc()) == '*')
-%//        ty = typ(TIND, ty);
-%//    unget(c);
-%//    newprot(s, ty, t);
-%//    goto out;
-%//
-%//bad:
-%//    yyerror("syntax in #pragma varargck");
-%//
-%//out:
-%//    while(getnsc() != '\n')
-%//        ;
-%//}
-%@
-%
-%<<function pragpack>>=
-%//void
-%//pragpack(void)
-%//{
-%//    Sym *s;
-%//
-%//    packflg = 0;
-%//    s = getsym();
-%//    if(s) {
-%//        packflg = atoi(s->name+1);
-%//        if(strcmp(s->name, "on") == 0 ||
-%//           strcmp(s->name, "yes") == 0)
-%//            packflg = 1;
-%//    }
-%//    while(getnsc() != '\n')
-%//        ;
-%//    if(debug['f'])
-%//        if(packflg)
-%//            print("%4ld: pack %d\n", lineno, packflg);
-%//        else
-%//            print("%4ld: pack off\n", lineno);
-%//}
-%@
-%
-%<<function pragfpround>>=
-%//void
-%//pragfpround(void)
-%//{
-%//    Sym *s;
-%//
-%//    fproundflg = 0;
-%//    s = getsym();
-%//    if(s) {
-%//        fproundflg = atoi(s->name+1);
-%//        if(strcmp(s->name, "on") == 0 ||
-%//           strcmp(s->name, "yes") == 0)
-%//            fproundflg = 1;
-%//    }
-%//    while(getnsc() != '\n')
-%//        ;
-%//    if(debug['f'])
-%//        if(fproundflg)
-%//            print("%4ld: fproundflg %d\n", lineno, fproundflg);
-%//        else
-%//            print("%4ld: fproundflg off\n", lineno);
-%//}
-%@
-%
-%<<function pragprofile>>=
-%//void
-%//pragprofile(void)
-%//{
-%//    Sym *s;
-%//
-%//    profileflg = false;
-%//    s = getsym();
-%//    if(s) {
-%//        profileflg = atoi(s->name+1);
-%//        if(strcmp(s->name, "on") == 0 ||
-%//           strcmp(s->name, "yes") == 0)
-%//            profileflg = true;
-%//    }
-%//    while(getnsc() != '\n')
-%//        ;
-%//    if(debug['f'])
-%//        if(profileflg)
-%//            print("%4ld: profileflg %d\n", lineno, profileflg);
-%//        else
-%//            print("%4ld: profileflg off\n", lineno);
-%//}
-%@
-%
-%<<function pragincomplete>>=
-%//void
-%//pragincomplete(void)
-%//{
-%//    Sym *s;
-%//    Type *t;
-%//    bool istag;
-%//    int  w, et;
-%//
-%//    istag = false;
-%//    s = getsym();
-%//    if(s == nil)
-%//        goto out;
-%//    et = 0;
-%//    w = s->lexical;
-%//    if(w == LSTRUCT)
-%//        et = TSTRUCT;
-%//    else if(w == LUNION)
-%//        et = TUNION;
-%//    if(et != 0){
-%//        s = getsym();
-%//        if(s == nil){
-%//            yyerror("missing struct/union tag in pragma incomplete");
-%//            goto out;
-%//        }
-%//        if(s->lexical != LNAME && s->lexical != LTYPE){
-%//            yyerror("invalid struct/union tag: %s", s->name);
-%//            goto out;
-%//        }
-%//        dotag(s, et, 0);
-%//        istag = true;
-%//    }else if(strcmp(s->name, "_off_") == 0){
-%//        debug['T'] = 0;
-%//        goto out;
-%//    }else if(strcmp(s->name, "_on_") == 0){
-%//        debug['T'] = 1;
-%//        goto out;
-%//    }
-%//    t = s->type;
-%//    if(istag)
-%//        t = s->suetag;
-%//    if(t == T)
-%//        yyerror("unknown type %s in pragma incomplete", s->name);
-%//    else if(!typesu[t->etype])
-%//        yyerror("not struct/union type in pragma incomplete: %s", s->name);
-%//    else
-%//        t->garb |= GINCOMPLETE;
-%//out:
-%//    while(getnsc() != '\n')
-%//        ;
-%//    if(debug['f'])
-%//        print("%s incomplete\n", s->name);
-%//}
-%@
-
+% now in adv topics
 
 
 
@@ -12863,6 +12210,9 @@ dpcheck(Node *n)
 % resolved, storage and types adjusted,
 % etc.
 
+% Some of the code generation is done during typechecking as tcomo
+% transforms certain nodes in other nodes (e.g., OSTRING in ONAME).
+
 \section{[[nextpc()]], [[p]] and [[pc]]}
 
 % as we visit we will create new ASM instructions, linked
@@ -12874,7 +12224,7 @@ dpcheck(Node *n)
 long	pc;
 @
 
-<<[[ginit()]] initialisation>>=
+<<[[ginit()]] pc initialisation>>=
 pc = 0;
 @
 % seems archi independent ... could be in a gginit()? generic globals init.
@@ -12942,7 +12292,7 @@ Prog*	lastp;
 
 % firstp/lastp are used only by outcode() (and nextpc())
 
-<<[[ginit()]] initialisation>>=
+<<[[ginit()]] misc initialisations>>=
 firstp = P;
 lastp = P;
 @
@@ -13285,6 +12635,35 @@ if(f->op == ONAME || f->op == OIND || f->op == OINDREG) {
 %chlp: char, short, long, pointer
 %todo: regalloc(, t, t) ??
 
+
+<<global typeilp>>=
+char	typeilp[NTYPE];
+@
+<<global typeilpinit>>=
+int	typeilpinit[] =
+{
+    TINT, TUINT, TLONG, TULONG, TIND, -1
+};
+@
+% ilp, int long pointer
+\l used for??
+
+
+<<global typechlp>>=
+char	typechlp[NTYPE];
+@
+<<global typechlpinit>>=
+int	typechlpinit[] =
+{
+    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TIND, -1,
+};
+@
+% added TIND!
+\l used for??
+
+
+
+
 <<[[gmove()]] if to is not a register, registerize and return>>=
 if(t->op == ONAME || t->op == OIND || t->op == OINDREG) {
     switch(tt) {
@@ -13563,6 +12942,9 @@ memmove(resvreg, reg, sizeof(reg));
 @
 
 
+<<[[gclean()]] locals>>=
+int i;
+@
 
 <<[[gclean()]] sanity check reg>>=
 for(i=0; i<NREG; i++)
@@ -13787,7 +13169,6 @@ complex(Node *n)
 
 \section{Sizes}
 
-
 <<global ewidth>>=
 schar	ewidth[NTYPE] =
 {
@@ -13821,11 +13202,13 @@ schar	ewidth[NTYPE] =
 % so better to use a designator.
 %cons? can be more complicated to bootstrap with other C compiler, but
 % I don't care
+%ocaml: do it via function, no need partial size here. ugly.
 
 
 <<constant SZ_CHAR(arm)>>=
 #define	SZ_CHAR		1
 @
+%ocaml: via pattern matching on Type.t
 
 <<constant SZ_SHORT(arm)>>=
 #define	SZ_SHORT	2
@@ -13854,7 +13237,6 @@ schar	ewidth[NTYPE] =
 <<constant SZ_DOUBLE(arm)>>=
 #define	SZ_DOUBLE	8
 @
-
 
 \section{Offset}
 
@@ -14260,7 +13642,7 @@ long	continpc;
 @
 % for continue to branch at the right place
 
-<<[[ginit()]] initialisation>>=
+<<[[ginit()]] misc initialisations>>=
 breakpc = -1;
 continpc = -1;
 @
@@ -14582,6 +13964,43 @@ case OSWITCH:
     break;
 @
 
+% set of type supported for switch argument
+% todo use array of bool instead
+<<global typeswitch>>=
+// set<Type_kind>
+char*	typeswitch;
+@
+
+
+<<global typechl>>=
+char	typechl[NTYPE];
+@
+<<global typechlinit>>=
+int	typechlinit[] =
+{
+    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, -1,
+};
+@
+\l used for??
+
+
+
+<<[[tinit()]] initialise 32 bits defaults type sets>>=
+typeswitch = typechl;
+@
+
+
+<<global typev>>=
+char	typev[NTYPE];
+@
+% very long
+<<global typevinit>>=
+int	typevinit[] =
+{
+    TVLONG,	TUVLONG, -1,
+};
+@
+
 
 
 
@@ -14650,7 +14069,7 @@ struct	C1
 <<global cases>>=
 Case*	cases;
 @
-<<[[ginit()]] initialisation>>=
+<<[[ginit()]] misc initialisations>>=
 cases = C;
 @
 
@@ -15036,12 +14455,188 @@ long v;
 
 \subsection{Numeric constants}
 
-% same, OCONST is kept as is.
+% constant are handled in naddr()
+
+% but where is code in cgenrel doing the very basic cases?
+% TODO??????
+
+% if do simple  void foo() { return 1; } => 5c -S ?
+% => cgenrel? 
 
 \subsection{String constants}
 
 % String constants are transformed in ONAME in tcomo().
-% So see code after.
+
+
+\subsubsection{ASCII strings}
+
+<<[[tcomo()]] transform OSTRING in ONAME>>=
+n->op = ONAME;
+n->xoffset = outstring(n->cstring, n->type->width);
+n->addable = true;
+@
+%ocaml: do that in separate phase? not typechecking related?
+
+% note that the TARRAY will be transformed in TIND later by
+% tcomo()
+
+% transformed as ONAME! (so become lvalue, Can do "foo"[0] = 'c'. )
+
+<<string rule, set sym and class for OSTRING>>=
+$$->sym = symstring;
+$$->class = CSTATIC;
+@
+% could do that in tcomo instead of in string rule.
+% Also why he does not do that directly in parser? Why not generate
+% ONAME directly?
+
+
+% rewrite AST! offset in a giant DATA string.
+
+
+<<global symstring>>=
+Sym*	symstring;
+@
+
+
+<<[[cinit()]] locals>>=
+Type *t;
+@
+<<[[cinit()]] symstring initialization>>=
+symstring = slookup(".string");
+symstring->class = CSTATIC;
+t = typ(TARRAY, types[TCHAR]);
+t->width = 0;
+symstring->type = t;
+@
+
+
+<<global nstring>>=
+long	nstring;
+@
+
+<<global mnstring>>=
+int	mnstring;
+@
+
+
+<<[[ginit()]] misc initialisations>>=
+nstring = 0;
+mnstring = 0;
+@
+
+<<[[gclean()]] adjust symstring width>>=
+while(mnstring)
+    outstring("", 1L);
+symstring->type->width = nstring;
+@
+
+
+<<global string>>=
+char	string[NSNAME];
+@
+% NSNAME = 8, so print data by block of 8 characters.
+
+<<function outstring(arm)>>=
+long
+outstring(char *s, long n)
+{
+    long r;
+
+    if(suppress)
+        return nstring;
+    r = nstring;
+    while(n) {
+        string[mnstring] = *s++;
+        mnstring++;
+        nstring++;
+        if(mnstring >= NSNAME) {
+            gpseudo(ADATA, symstring, nodconst(0L));
+            p->from.offset += nstring - NSNAME;
+            p->reg = NSNAME;
+            p->to.type = D_SCONST;
+            memmove(p->to.sval, string, NSNAME);
+            mnstring = 0;
+        }
+        n--;
+    }
+    return r;
+}
+@
+% 386 diff is jsut p->reg -->  p->from.scale = NSNAME;
+
+% generate some DATA in the middle, ugly.
+
+
+
+
+<<[[tcomo()]] in OSTRING case, if not an array or chars>>=
+if(n->type->link != types[TCHAR]) {
+    o = outstring(0, 0);
+    while(o & 3) {
+        outstring("", 1);
+        o = outstring(0, 0);
+    }
+}
+@
+\t When can this happen?
+
+\subsubsection{Unicode strings}
+
+<<[[tcomo()]] other locals>>=
+static TRune zer;
+@
+
+<<[[tcomo()]] switch node kind cases>>=
+case OLSTRING:
+    if(n->type->link != types[TRUNE]) {
+        o = outstring(0, 0);
+        while(o & 3) {
+            outlstring(&zer, sizeof(TRune));
+            o = outlstring(0, 0);
+        }
+    }
+    n->op = ONAME;
+    n->xoffset = outlstring(n->rstring, n->type->width);
+    n->addable = 1;
+    break;
+@
+
+
+
+
+
+<<function outlstring>>=
+long
+outlstring(TRune *s, long n)
+{
+    char buf[sizeof(TRune)];
+    uint c;
+    int i;
+    long r;
+
+    if(suppress)
+        return nstring;
+    while(nstring & (sizeof(TRune)-1))
+        outstring("", 1);
+    r = nstring;
+    while(n > 0) {
+        c = *s++;
+        if(align(0, types[TCHAR], Aarg1)) {
+            for(i = 0; i < sizeof(TRune); i++)
+                buf[i] = c>>(8*(sizeof(TRune) - i - 1));
+        } else {
+            for(i = 0; i < sizeof(TRune); i++)
+                buf[i] = c>>(8*i);
+        }
+        outstring(buf, sizeof(TRune));
+        n -= sizeof(TRune);
+    }
+    return r;
+}
+@
+
+
 
 \subsection{Entity uses}
 
@@ -15569,27 +15164,6 @@ bcgen(Node *n, bool btrue)
 }
 @
 
-<<function relindex>>=
-int
-relindex(int o)
-{
-
-    switch(o) {
-    case OEQ: return 0;
-    case ONE: return 1;
-    case OLE: return 2;
-    case OLS: return 3;
-    case OLT: return 4;
-    case OLO: return 5;
-    case OGE: return 6;
-    case OHS: return 7;
-    case OGT: return 8;
-    case OHI: return 9;
-    default:
-        diag(Z, "bad in relindex: %O", o);
-    }
-}
-@
 
 
 <<global comrel>>=
@@ -15607,12 +15181,6 @@ char	invrel[12] =
 };
 @
 
-<<global logrel>>=
-char	logrel[12] =
-{
-    OEQ, ONE, OLS, OLS, OLO, OLO, OHS, OHS, OHI, OHI,
-};
-@
 
 
 
@@ -16215,6 +15783,62 @@ case OINDREG:
 
 \subsection{Field accesses}
 
+<<[[tcomd()]] convert field access in offset>>=
+makedot(n, t, o);
+@
+
+% tcomd -> <>
+<<function makedot>>=
+void
+makedot(Node *n, Type *t, long o)
+{
+    Node *n1, *n2;
+
+    if(t->nbits) {
+        n1 = new(OXXX, Z, Z);
+        *n1 = *n;
+        n->op = OBIT;
+        n->left = n1;
+        n->right = Z;
+        n->type = t;
+        n->addable = n1->left->addable;
+        n = n1;
+    }
+    n->addable = n->left->addable;
+    if(n->addable == 0) {
+        n1 = new1(OCONST, Z, Z);
+        n1->vconst = o;
+        n1->type = types[TLONG];
+        n->right = n1;
+        n->type = t;
+        return;
+    }
+    n->left->type = t;
+    if(o == 0) {
+        *n = *n->left;
+        return;
+    }
+    n->type = t;
+    n1 = new1(OCONST, Z, Z);
+    n1->vconst = o;
+    t = typ(TIND, t);
+    t->width = types[TIND]->width;
+    n1->type = t;
+
+    n2 = new1(OADDR, n->left, Z);
+    n2->type = t;
+
+    n1 = new1(OADD, n1, n2);
+    n1->type = t;
+
+    n->op = OIND;
+    n->left = n1;
+    n->right = Z;
+}
+@
+
+
+
 %pre: ODOT resolving has been done, transforming fieldname
 % to constant. This is done in??
 <<[[cgenrel()]] switch node kind cases>>=
@@ -16242,6 +15866,9 @@ Node*	nodrat;
 Sym*	symrathole;
 @
 
+<<[[ginit()]] locals>>=
+Type *t;
+@
 <<[[ginit()]] special nodes initialisation>>=
 t = typ(TARRAY, types[TCHAR]);
 symrathole = slookup(".rathole");
@@ -16265,7 +15892,7 @@ symrathole->type->width = nrathole;
 long	nrathole;
 @
 
-<<[[ginit()]] initialisation>>=
+<<[[ginit()]] misc initialisations>>=
 nrathole = 0;
 @
 
@@ -16345,80 +15972,7 @@ sugen(Node *n, Node *nn, long w)
             sugen(&nod1, nn, w);
         }
         break;
-
-    // struct constructor extension?
-    case OSTRUCT:
-        /*
-         * rewrite so lhs has no fn call
-         */
-        if(nn != Z && nn->complex >= FNX) {
-            nod1 = *n;
-            nod1.type = typ(TIND, n->type);
-            regret(&nod2, &nod1);
-            lcgen(nn, &nod2);
-            regsalloc(&nod0, &nod1);
-            gopcode(OAS, &nod2, Z, &nod0);
-            regfree(&nod2);
-
-            nod1 = *n;
-            nod1.op = OIND;
-            nod1.left = &nod0;
-            nod1.right = Z;
-            nod1.complex = 1;
-
-            sugen(n, &nod1, w);
-            return;
-        }
-
-        r = n->left;
-        for(t = n->type->link; t != T; t = t->down) {
-            l = r;
-            if(r->op == OLIST) {
-                l = r->left;
-                r = r->right;
-            }
-            if(nn == Z) {
-                cgen(l, nn);
-                continue;
-            }
-            /*
-             * hand craft *(&nn + o) = l
-             */
-            nod0 = znode;
-            nod0.op = OAS;
-            nod0.type = t;
-            nod0.left = &nod1;
-            nod0.right = l;
-
-            nod1 = znode;
-            nod1.op = OIND;
-            nod1.type = t;
-            nod1.left = &nod2;
-
-            nod2 = znode;
-            nod2.op = OADD;
-            nod2.type = typ(TIND, t);
-            nod2.left = &nod3;
-            nod2.right = &nod4;
-
-            nod3 = znode;
-            nod3.op = OADDR;
-            nod3.type = nod2.type;
-            nod3.left = nn;
-
-            nod4 = znode;
-            nod4.op = OCONST;
-            nod4.type = nod2.type;
-            nod4.vconst = t->offset;
-
-            ccom(&nod0);
-            acom(&nod0);
-            xcom(&nod0);
-            nod0.addable = 0;
-
-            cgen(&nod0, Z);
-        }
-        break;
+    <<[[sugen()]] switch op cases>>
 
     case OAS:
         if(nn == Z) {
@@ -16876,6 +16430,9 @@ pre:
 
 \section{Toplevel globals}
 
+<<[[gclean()]] locals>>=
+Sym *s;
+@
 <<[[gclean()]] generate all AGLOBL pseudo opcodes>>=
 for(i=0; i<NHASH; i++)
  for(s = hash[i]; s != S; s = s->link) {
@@ -18477,7 +18034,7 @@ if(n->complex >= FNX)
 
 
 
-\chapter{Object Generation}
+\chapter{Object File Generation}
 % Dupe with Assembler.nw. Quite simple.
 
 %runtime support also? _main and main? more?
@@ -18890,9 +18447,6 @@ outhist(Biobuf *b)
 
 
 
-
-
-
 \section{AST simplifications}
 
 % using a visitor would be better, to avoid boilerplate
@@ -18928,6 +18482,7 @@ loop:
     switch(n->op) {
     <<[[ccom()]] switch node kind cases>>
     default:
+        // recurse
         if(l != Z)
             ccom(l);
         if(r != Z)
@@ -19710,6 +19265,7 @@ case OMOD:
     v = l->vconst % r->vconst;
     break;
 @
+% very meta :) use C operation to interpret C operations
 
 <<[[evconst()]] switch node kind cases>>=
 case OLMUL:
@@ -19986,6 +19542,25 @@ comargs(Com *com, Node *n)
 
 
 
+
+\section{Bitshifting opportunities}
+
+% arith -> <>
+<<function vlog>>=
+int
+vlog(Node *n)
+{
+    if(n->op != OCONST)
+        goto bad;
+    if(typefd[n->type->etype])
+        goto bad;
+
+    return log2(n->vconst);
+
+bad:
+    return -1;
+}
+@
 
 \section{Associative-commutative arithmetic optimisations}
 % see also 5c -m, print add/mul/sub trees
@@ -20644,8 +20219,6 @@ xcom(Node *n)
     }
 }
 @
-
-
 
 \chapter{Assembly-level Optimisations}
 
@@ -21800,6 +21373,20 @@ none:
     return zbits;
 }
 @
+
+
+
+<<global typechlpfd>>=
+char	typechlpfd[NTYPE];
+@
+
+<<global typechlpfdinit>>=
+int	typechlpfdinit[] =
+{
+    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TFLOAT, TDOUBLE, TIND, -1,
+};
+@
+\l used for??
 
 <<function sval(arm)>>=
 int
@@ -24167,14 +23754,6 @@ sigind(Type *t, Typetab *tt)
 
 \chapter{Debugging Support}
 
-<<[[dodecl()]] case ONAME, debugging support>>=
-acidvar(s);
-@
-
-<<[[doenum()]] debugging support>>=
-acidvar(s);
-@
-
 % db has awesome information! thx to 8c (and 8l).
 % in db doing $C  dumps the stacktrace with parameters values! and locals!
 %  ex:
@@ -24194,6 +23773,7 @@ acidvar(s);
 %less: need special flags for that?
 
 \section{Acid debugger metadata, [[5c -a]]}
+
 
 % 5c -a to print acid declarations
 %  -n print acid to file
@@ -24226,6 +23806,16 @@ if(debug['a'] && debug['n'])
 @
 
 \subsection{Entities}
+
+<<[[dodecl()]] case ONAME, debugging support>>=
+acidvar(s);
+@
+
+<<[[doenum()]] debugging support>>=
+acidvar(s);
+@
+
+
 
 % doenum? | dodecl? -> <>
 % exported in cc.h
@@ -24284,7 +23874,7 @@ acidvar(Sym *s)
 }
 @
 
-
+% acidvar -> <>
 <<function acidsue>>=
 Sym*
 acidsue(Type *t)
@@ -24301,6 +23891,7 @@ acidsue(Type *t)
 }
 @
 
+% acidvar -> <>
 <<function acidfun>>=
 Sym*
 acidfun(Type *t)
@@ -24904,9 +24495,20 @@ if(a == ATEXT)
 \section{Advanced C features}
 % see cc/c99.txt for list of things implemented by kencc
 
+\subsection{Function and function pointer automatic conversions}
+
+<<[[tcomo()]] when OFUNC case, add OIND if pointer function call>>=
+if(l->type->etype == TIND && l->type->link->etype == TFUNC) {
+    l = new1(OIND, l, Z);
+    l->type = l->left->type->link;
+    n->left = l;
+}
+@
+
+
+
 \subsection{Local [[static]]}
-% not really a C extension, but really sugar
-% for what could be just a scoped global.
+% sugar for what could be just a scoped global.
 
 
 <<[[Storage_class]] cases>>=
@@ -25020,9 +24622,317 @@ if(n){
 }
 @
 
+\subsection{Bitfields}
+
+% struct x { int foo:1, bar:2, xxx:14; }
+% bits for the same storage.
+% Not the same than  struct x {int foo:1; int bar:2 }
+
+<<global firstbit>>=
+bool	firstbit;
+@
+%old: long -> bool
+
+<<global lastbit>>=
+long	lastbit;
+@
+
+<<[[dodecl()]] case ONAME, other initializations>>=
+firstbit = false;
+@
+\t dead? already done in sbody anyway
+
+<<sbody rule, initializations before parsing the fields>>=
+lastbit = 0;
+firstbit = true;
+@
+
+<<edecor rule, set fields after parsed a field declarator>>=
+lastbit = 0;
+firstbit = true;
+@
+
+
+
+<<global lastfield>>=
+// option<long> None = -1 | 0
+long	lastfield;
+@
+% set in dodecl() and ?
+<<[[dodecl()]] other initializations>>=
+lastfield = 0;
+@
+
+
+
+
+
+% parsing
+
+<<declaration nodes>>=
+OBIT,
+@
+
+<<edecor rule>>=
+|   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
+|   ':' lexpr       { $$ = new(OBIT, Z, $2); }
+@
+%$
+
+<<[[dodecl()]] switch node kind cases>>=
+case OBIT:
+    n1 = n->right;
+    complex(n1);
+
+    lastfield = -1; // None
+    if(n1->op == OCONST)
+        lastfield = n1->vconst;
+    if(lastfield < 0) {
+        diag(n, "field width must be non-negative constant");
+        lastfield = 1;
+    }
+
+    if(lastfield == 0) {
+        lastbit = 0;
+        firstbit = true;
+        if(n->left != Z) {
+            diag(n, "zero width named field");
+            lastfield = 1;
+        }
+    }
+    if(!typei[t->etype]) {
+        diag(n, "field type must be int-like");
+        t = types[TINT];
+        lastfield = 1;
+    }
+    if(lastfield > tfield->width*8) {
+        diag(n, "field width larger than field unit");
+        lastfield = 1;
+    }
+
+    lastbit += lastfield;
+    if(lastbit > tfield->width*8) {
+        lastbit = lastfield;
+        firstbit = true;
+    }
+    n = n->left;
+    goto loop;
+@
+
+
+
+
+<<[[edecl()]] if lastfield>>=
+if(lastfield) {
+    t->shift = lastbit - lastfield;
+    t->nbits = lastfield;
+    if(firstbit)
+        t->shift = -t->shift;
+
+    if(typeu[t->etype])
+        t->etype = tufield->etype;
+    else
+        t->etype = tfield->etype;
+}
+@
+
+<<global tfield>>=
+Type*	tfield;
+@
+% and init code in cinit or tinit
+
+<<global tufield>>=
+Type*	tufield;
+@
+% ??? unsigned field?
+
+<<[[ginit()]] misc initialisations>>=
+tfield = types[TLONG];
+@
+% in ginit which is in 5c/txt.c because arm specific
+
+<<[[main()]] remaining initialisation>>=
+tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
+@
+% back in generic code
+% >>
+
+
+
+%\subsection{Typechecking}
+
+
+
+<<[[tcomo()]] when OADDR, check if bitfield>>=
+if(l->type->nbits) {
+    diag(n, "address of a bit field");
+    goto bad;
+}
+@
+<<[[tcomo()]] when OSIZE, check if sizeof bitfield>>=
+if(l->op == OBIT) {
+    diag(n, "sizeof bitfield");
+    goto bad;
+}
+@
+
+
+%\subsection{Bitfield access}
+
+% how can have this OBIT in an expression context?
+% I think complex() explicitly mark expressions
+% which are bitfields, e.g.  foo.x where x was a bitfield
+
+<<[[cgenrel()]] switch node kind cases>>=
+case OBIT:
+    <<[[cgenrel()]] nullwarn check if nn is null, empty right>>
+    bitload(n, &nod, Z, Z, nn);
+    gopcode(OAS, &nod, Z, nn);
+    regfree(&nod);
+    break;
+@
+
+<<[[cgenrel()]] switch node kind cases>>=
+asbitop:
+    regalloc(&nod4, n, nn);
+    if(l->complex >= r->complex) {
+        bitload(l, &nod, &nod1, &nod2, &nod4);
+        regalloc(&nod3, r, Z);
+        cgen(r, &nod3);
+    } else {
+        regalloc(&nod3, r, Z);
+        cgen(r, &nod3);
+        bitload(l, &nod, &nod1, &nod2, &nod4);
+    }
+    gmove(&nod, &nod4);
+    gopcode(o, &nod3, Z, &nod4);
+    regfree(&nod3);
+    gmove(&nod4, &nod);
+    regfree(&nod4);
+    bitstore(l, &nod, &nod1, &nod2, nn);
+    break;
+@
+
+<<[[cgenrel()]] switch node kind cases>>=
+bitinc:
+    if(nn != Z && (o == OPOSTINC || o == OPOSTDEC)) {
+        bitload(l, &nod, &nod1, &nod2, Z);
+        gopcode(OAS, &nod, Z, nn);
+        gopcode(OADD, nodconst(v), Z, &nod);
+        bitstore(l, &nod, &nod1, &nod2, Z);
+        break;
+    }
+    bitload(l, &nod, &nod1, &nod2, nn);
+    gopcode(OADD, nodconst(v), Z, &nod);
+    bitstore(l, &nod, &nod1, &nod2, nn);
+    break;
+@
+
+<<[[cgenrel()]] switch node kind cases>>=
+bitas:
+    n = l->left;
+    regalloc(&nod, r, nn);
+    if(l->complex >= r->complex) {
+        reglcgen(&nod1, n, Z);
+        cgen(r, &nod);
+    } else {
+        cgen(r, &nod);
+        reglcgen(&nod1, n, Z);
+    }
+    regalloc(&nod2, n, Z);
+    gopcode(OAS, &nod1, Z, &nod2);
+    bitstore(l, &nod, &nod1, &nod2, nn);
+    break;
+@
+
+
+
+<<function bitload(arm)>>=
+void
+bitload(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
+{
+    int sh;
+    long v;
+    Node *l;
+
+    /*
+     * n1 gets adjusted/masked value
+     * n2 gets address of cell
+     * n3 gets contents of cell
+     */
+    l = b->left;
+    if(n2 != Z) {
+        regalloc(n1, l, nn);
+        reglcgen(n2, l, Z);
+        regalloc(n3, l, Z);
+        gopcode(OAS, n2, Z, n3);
+        gopcode(OAS, n3, Z, n1);
+    } else {
+        regalloc(n1, l, nn);
+        cgen(l, n1);
+    }
+    if(b->type->shift == 0 && typeu[b->type->etype]) {
+        v = ~0 + (1L << b->type->nbits);
+        gopcode(OAND, nodconst(v), Z, n1);
+    } else {
+        sh = 32 - b->type->shift - b->type->nbits;
+        if(sh > 0)
+            gopcode(OASHL, nodconst(sh), Z, n1);
+        sh += b->type->shift;
+        if(sh > 0)
+            if(typeu[b->type->etype])
+                gopcode(OLSHR, nodconst(sh), Z, n1);
+            else
+                gopcode(OASHR, nodconst(sh), Z, n1);
+    }
+}
+@
+% >> >>
+
+<<function bitstore(arm)>>=
+void
+bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
+{
+    long v;
+    Node nod, *l;
+    int sh;
+
+    /*
+     * n1 has adjusted/masked value
+     * n2 has address of cell
+     * n3 has contents of cell
+     */
+    l = b->left;
+    regalloc(&nod, l, Z);
+    v = ~0 + (1L << b->type->nbits);
+    gopcode(OAND, nodconst(v), Z, n1);
+    gopcode(OAS, n1, Z, &nod);
+    if(nn != Z)
+        gopcode(OAS, n1, Z, nn);
+    sh = b->type->shift;
+    if(sh > 0)
+        gopcode(OASHL, nodconst(sh), Z, &nod);
+    v <<= sh;
+    gopcode(OAND, nodconst(~v), Z, n3);
+    gopcode(OOR, n3, Z, &nod);
+    gopcode(OAS, &nod, Z, n2);
+
+    regfree(&nod);
+    regfree(n1);
+    regfree(n2);
+    regfree(n3);
+}
+@
+% >> >>
+
+
+
+
+
+
+
 \subsection{Old style prototypes}
 % not really an advanced features though
-
 
 <<arglist rule>>=
 arglist:
@@ -25235,309 +25145,81 @@ case TFUNC:
     break;
 @
 
-\subsection{Bitfields}
-
-% struct x { int foo:1, bar:2, xxx:14; }
-% bits for the same storage.
-% Not the same than  struct x {int foo:1; int bar:2 }
-
-<<global firstbit>>=
-bool	firstbit;
-@
-%old: long -> bool
-
-<<global lastbit>>=
-long	lastbit;
-@
-
-<<[[dodecl()]] case ONAME, other initializations>>=
-firstbit = false;
-@
-\t dead? already done in sbody anyway
-
-<<sbody rule, initializations before parsing the fields>>=
-lastbit = 0;
-firstbit = true;
-@
-
-<<edecor rule, set fields after parsed a field declarator>>=
-lastbit = 0;
-firstbit = true;
-@
-
-
-
-<<global lastfield>>=
-// option<long> None = -1 | 0
-long	lastfield;
-@
-% set in dodecl() and ?
-<<[[dodecl()]] other initializations>>=
-lastfield = 0;
-@
-
-
-
-
-
-% parsing
-
-<<declaration nodes>>=
-OBIT,
-@
-
-<<edecor rule>>=
-|   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
-|   ':' lexpr       { $$ = new(OBIT, Z, $2); }
-@
-%$
-
-<<[[dodecl()]] switch node kind cases>>=
-case OBIT:
-    n1 = n->right;
-    complex(n1);
-
-    lastfield = -1; // None
-    if(n1->op == OCONST)
-        lastfield = n1->vconst;
-    if(lastfield < 0) {
-        diag(n, "field width must be non-negative constant");
-        lastfield = 1;
+<<[[tcomo()]] when OFUNC case, warn function args not checked if old proto>>=
+if(!debug['B'])
+    if(l->type->down == T || l->type->down->etype == TOLD) {
+        nerrors--;
+        diag(n, "function args not checked: %F", l);
     }
-
-    if(lastfield == 0) {
-        lastbit = 0;
-        firstbit = true;
-        if(n->left != Z) {
-            diag(n, "zero width named field");
-            lastfield = 1;
-        }
-    }
-    if(!typei[t->etype]) {
-        diag(n, "field type must be int-like");
-        t = types[TINT];
-        lastfield = 1;
-    }
-    if(lastfield > tfield->width*8) {
-        diag(n, "field width larger than field unit");
-        lastfield = 1;
-    }
-
-    lastbit += lastfield;
-    if(lastbit > tfield->width*8) {
-        lastbit = lastfield;
-        firstbit = true;
-    }
-    n = n->left;
-    goto loop;
 @
-
-
-
-
-<<[[edecl()]] if lastfield>>=
-if(lastfield) {
-    t->shift = lastbit - lastfield;
-    t->nbits = lastfield;
-    if(firstbit)
-        t->shift = -t->shift;
-
-    if(typeu[t->etype])
-        t->etype = tufield->etype;
-    else
-        t->etype = tfield->etype;
-}
-@
-
-<<global tfield>>=
-Type*	tfield;
-@
-% and init code in cinit or tinit
-
-<<global tufield>>=
-Type*	tufield;
-@
-% ??? unsigned field?
-
-<<[[ginit()]] initialisation>>=
-tfield = types[TLONG];
-@
-% in ginit which is in 5c/txt.c because arm specific
-
-<<[[main()]] remaining initialisation>>=
-tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
-@
-% back in generic code
-% >>
-
-
-
-
-
-
-
-
-
-
-%\subsection{Bitfield access}
-
-% how can have this OBIT in an expression context?
-% I think complex() explicitly mark expressions
-% which are bitfields, e.g.  foo.x where x was a bitfield
-
-<<[[cgenrel()]] switch node kind cases>>=
-case OBIT:
-    <<[[cgenrel()]] nullwarn check if nn is null, empty right>>
-    bitload(n, &nod, Z, Z, nn);
-    gopcode(OAS, &nod, Z, nn);
-    regfree(&nod);
-    break;
-@
-
-<<[[cgenrel()]] switch node kind cases>>=
-asbitop:
-    regalloc(&nod4, n, nn);
-    if(l->complex >= r->complex) {
-        bitload(l, &nod, &nod1, &nod2, &nod4);
-        regalloc(&nod3, r, Z);
-        cgen(r, &nod3);
-    } else {
-        regalloc(&nod3, r, Z);
-        cgen(r, &nod3);
-        bitload(l, &nod, &nod1, &nod2, &nod4);
-    }
-    gmove(&nod, &nod4);
-    gopcode(o, &nod3, Z, &nod4);
-    regfree(&nod3);
-    gmove(&nod4, &nod);
-    regfree(&nod4);
-    bitstore(l, &nod, &nod1, &nod2, nn);
-    break;
-@
-
-<<[[cgenrel()]] switch node kind cases>>=
-bitinc:
-    if(nn != Z && (o == OPOSTINC || o == OPOSTDEC)) {
-        bitload(l, &nod, &nod1, &nod2, Z);
-        gopcode(OAS, &nod, Z, nn);
-        gopcode(OADD, nodconst(v), Z, &nod);
-        bitstore(l, &nod, &nod1, &nod2, Z);
-        break;
-    }
-    bitload(l, &nod, &nod1, &nod2, nn);
-    gopcode(OADD, nodconst(v), Z, &nod);
-    bitstore(l, &nod, &nod1, &nod2, nn);
-    break;
-@
-
-<<[[cgenrel()]] switch node kind cases>>=
-bitas:
-    n = l->left;
-    regalloc(&nod, r, nn);
-    if(l->complex >= r->complex) {
-        reglcgen(&nod1, n, Z);
-        cgen(r, &nod);
-    } else {
-        cgen(r, &nod);
-        reglcgen(&nod1, n, Z);
-    }
-    regalloc(&nod2, n, Z);
-    gopcode(OAS, &nod1, Z, &nod2);
-    bitstore(l, &nod, &nod1, &nod2, nn);
-    break;
-@
-
-
-
-<<function bitload(arm)>>=
-void
-bitload(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
-{
-    int sh;
-    long v;
-    Node *l;
-
-    /*
-     * n1 gets adjusted/masked value
-     * n2 gets address of cell
-     * n3 gets contents of cell
-     */
-    l = b->left;
-    if(n2 != Z) {
-        regalloc(n1, l, nn);
-        reglcgen(n2, l, Z);
-        regalloc(n3, l, Z);
-        gopcode(OAS, n2, Z, n3);
-        gopcode(OAS, n3, Z, n1);
-    } else {
-        regalloc(n1, l, nn);
-        cgen(l, n1);
-    }
-    if(b->type->shift == 0 && typeu[b->type->etype]) {
-        v = ~0 + (1L << b->type->nbits);
-        gopcode(OAND, nodconst(v), Z, n1);
-    } else {
-        sh = 32 - b->type->shift - b->type->nbits;
-        if(sh > 0)
-            gopcode(OASHL, nodconst(sh), Z, n1);
-        sh += b->type->shift;
-        if(sh > 0)
-            if(typeu[b->type->etype])
-                gopcode(OLSHR, nodconst(sh), Z, n1);
-            else
-                gopcode(OASHR, nodconst(sh), Z, n1);
-    }
-}
-@
-% >> >>
-
-<<function bitstore(arm)>>=
-void
-bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
-{
-    long v;
-    Node nod, *l;
-    int sh;
-
-    /*
-     * n1 has adjusted/masked value
-     * n2 has address of cell
-     * n3 has contents of cell
-     */
-    l = b->left;
-    regalloc(&nod, l, Z);
-    v = ~0 + (1L << b->type->nbits);
-    gopcode(OAND, nodconst(v), Z, n1);
-    gopcode(OAS, n1, Z, &nod);
-    if(nn != Z)
-        gopcode(OAS, n1, Z, nn);
-    sh = b->type->shift;
-    if(sh > 0)
-        gopcode(OASHL, nodconst(sh), Z, &nod);
-    v <<= sh;
-    gopcode(OAND, nodconst(~v), Z, n3);
-    gopcode(OOR, n3, Z, &nod);
-    gopcode(OAS, &nod, Z, n2);
-
-    regfree(&nod);
-    regfree(n1);
-    regfree(n2);
-    regfree(n3);
-}
-@
-% >> >>
-
-
-
-
-
-
 
 \section{C extensions}
 
-% seen implicit address of function/array before.
+\subsection{Typing extensions, [[typeext()]]}
 
-\subsection{Unnamed sub structure}
+% Mostly for float? mv later?
+
+<<[[tcomo()]] when OEQ/ONE, typing extensions>>=
+typeext(l->type, r);
+typeext(r->type, l);
+@
+
+% why typeext??? equality is special?
+
+% | ... -> <>
+<<function typeext>>=
+void
+typeext(Type *st, Node *l)
+{
+    Type *lt;
+    Node *n1, *n2;
+    long o;
+
+    lt = l->type;
+
+    if(lt == T)
+        return;
+
+    if(st->etype == TIND && vconst(l) == 0) {
+        l->type = st;
+        l->vconst = 0;
+        return;
+    }
+    <<[[typeext()]] float handling>>
+    <<[[typeext()]] unnamed substructure handling>>
+}
+@
+
+
+
+<<[[tcomo()]] when OAS, typing extension>>=
+typeext(l->type, r);
+@
+
+<<[[tcomo()]] when OASADD, typing extension>>=
+typeext(l->type, r);
+@
+
+<<[[tcomo()]] when ORETURN, typing extensions>>=
+typeext(n->type, l);
+@
+
+<<[[tcoma()]] typing extension on argument>>=
+typeext(t, n);
+@
+
+
+<<[[tcomo()]] when OASMUL/OASDIV, typing extensions>>=
+typeext1(l->type, r);
+@
+
+<<[[tcomo()]] when OLT/OGE/OGT/OLE, typing extensions>>=
+typeext1(l->type, r);
+typeext1(r->type, l);
+@
+
+
+\subsection{Unnamed structure elements}
 % aka Anonymous field? poor's man inheritance?
 
 %ex:
@@ -25668,10 +25350,26 @@ ambig:
 @
 
 
+<<[[dotsearch()]] if unnamed substructures>>=
+/*
+ * look it up in unnamed substructures
+ */
+for(t1 = t; t1 != T; t1 = t1->down)
+    if(t1->sym == S && typesu[t1->etype]){
+        rt = dotsearch(s, t1->link, n, off);
+        if(rt != T) {
+            if(xt != T)
+                goto ambig;
+            xt = rt;
+            *off += t1->offset;
+        }
+    }
+@
+
 \subsection{Struct constructors}
 
 <<expression nodes>>=
-OSTRUCT, // used for defs, decls, and for struct constructors
+OSTRUCT,
 OUNION,
 @
 
@@ -25748,65 +25446,80 @@ tcomx(Node *n)
 % hmm e++ -> e = true instead? the count matters?
 
 
-\subsection{Signature reflection, [[signof()]]}
-% sign for signature, not sign of an operation
+<<[[sugen()]] switch op cases>>=
+case OSTRUCT:
+    /*
+     * rewrite so lhs has no fn call
+     */
+    if(nn != Z && nn->complex >= FNX) {
+        nod1 = *n;
+        nod1.type = typ(TIND, n->type);
+        regret(&nod2, &nod1);
+        lcgen(nn, &nod2);
+        regsalloc(&nod0, &nod1);
+        gopcode(OAS, &nod2, Z, &nod0);
+        regfree(&nod2);
 
-% parsing
+        nod1 = *n;
+        nod1.op = OIND;
+        nod1.left = &nod0;
+        nod1.right = Z;
+        nod1.complex = 1;
 
-<<token declarations>>=
-%token  LSIGNOF
-@
-
-<<[[itab]] entries, kencc extensions>>=
-"signof",	LSIGNOF,	0,
-@
-
-<<expression nodes>>=
-OSIGN,
-@
-
-<<uexpr rule>>=
-|   LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
-@
-%$
-
-<<pexpr rule>>=
-|   LSIGNOF '(' tlist abdecor ')'
-    {
-        $$ = new(OSIGN, Z, Z);
-        dodecl(NODECL, CXXX, $3, $4);
-        $$->type = lastdcltype;
+        sugen(n, &nod1, w);
+        return;
     }
-@
 
-% code generation
-
-<<[[tcomo()]] switch node kind cases>>=
-case OSIGN:	/* extension signof(type) returns a hash */
-    if(l != Z) {
-        if(l->op != OSTRING && l->op != OLSTRING)
-            if(tcomo(l, 0))
-                goto bad;
-        if(l->op == OBIT) {
-            diag(n, "signof bitfield");
-            goto bad;
+    r = n->left;
+    for(t = n->type->link; t != T; t = t->down) {
+        l = r;
+        if(r->op == OLIST) {
+            l = r->left;
+            r = r->right;
         }
-        n->type = l->type;
+        if(nn == Z) {
+            cgen(l, nn);
+            continue;
+        }
+        /*
+         * hand craft *(&nn + o) = l
+         */
+        nod0 = znode;
+        nod0.op = OAS;
+        nod0.type = t;
+        nod0.left = &nod1;
+        nod0.right = l;
+
+        nod1 = znode;
+        nod1.op = OIND;
+        nod1.type = t;
+        nod1.left = &nod2;
+
+        nod2 = znode;
+        nod2.op = OADD;
+        nod2.type = typ(TIND, t);
+        nod2.left = &nod3;
+        nod2.right = &nod4;
+
+        nod3 = znode;
+        nod3.op = OADDR;
+        nod3.type = nod2.type;
+        nod3.left = nn;
+
+        nod4 = znode;
+        nod4.op = OCONST;
+        nod4.type = nod2.type;
+        nod4.vconst = t->offset;
+
+        ccom(&nod0);
+        acom(&nod0);
+        xcom(&nod0);
+        nod0.addable = 0;
+
+        cgen(&nod0, Z);
     }
-    if(n->type == T)
-        goto bad;
-    if(n->type->width < 0) {
-        diag(n, "signof undefined type");
-        goto bad;
-    }
-    n->op = OCONST;
-    n->left = Z;
-    n->right = Z;
-    n->vconst = convvtox(signature(n->type), TULONG);
-    n->type = types[TULONG];
     break;
 @
-
 
 \subsection{Per-processor storage, [[extern register]]}
 % useful for ARM kernel (bcm/), where mach and up are in registers
@@ -25831,27 +25544,6 @@ case CEXREG:
     break;
 @
 
-
-
-<<after parsing nodes>>=
-OEXREG,
-@
-% for regnode
-
-
-<<global exregoffset>>=
-long	exregoffset;
-@
-% does not look like an offset, more a register number
-
-<<global exfregoffset>>=
-long	exfregoffset;
-@
-
-<<[[ginit()]] initialisation>>=
-exregoffset = REGEXT;
-exfregoffset = FREGEXT;
-@
 
 
 
@@ -25888,6 +25580,15 @@ exreg(Type *t)
 @
 
 
+<<[[tcomo()]] when OADDR, check if register>>=
+if(l->op == OREGISTER) {
+    diag(n, "address of a register");
+    goto bad;
+}
+@
+\t when can have OREGISTER? because of some transformation done on l
+\t  by tcomo (ex. CEXREG)
+
 <<[[tcomo()]] in ONAME case, if extern register>>=
 if(n->class == CEXREG) {
     n->op = OREGISTER;
@@ -25899,8 +25600,34 @@ if(n->class == CEXREG) {
 }
 @
 
-\subsection{[[typestr()]]}
+
+<<after parsing nodes>>=
+OEXREG,
+@
+% for regnode
+
+
+<<global exregoffset>>=
+long	exregoffset;
+@
+% does not look like an offset, more a register number
+
+<<global exfregoffset>>=
+long	exfregoffset;
+@
+
+<<[[ginit()]] misc initialisations>>=
+exregoffset = REGEXT;
+exfregoffset = FREGEXT;
+@
+
+
+
+
+
+\subsection{Type reflection, [[typestr()]]}
 % a form of reflection too?
+% seems dead. Never used, not documented.
 
 
 <<[[itab]] entries, kencc extensions>>=
@@ -25916,7 +25643,7 @@ if(n->class == CEXREG) {
 |   LTYPESTR  { $$ = BTYPESTR; }
 @
 
-<<enum bxxx cases>>=
+<<[[Bxxx]] cases>>=
 BTYPESTR	= 1L<<TTYPESTR,
 @
 
@@ -26159,6 +25886,290 @@ Ftab	ftabinit[OEND] =
 
 
 
+
+%\subsection{[[isfunct()]]}
+
+<<[[tcomo()]] break if isfunct>>=
+if(isfunct(n))
+    break;
+@
+
+
+<<[[Type]] other fields>>=
+Funct*	funct;
+@
+% ????
+
+<<struct Funct>>=
+struct	Funct
+{
+    Sym*	sym[OEND];
+    Sym*	castto[NTYPE];
+    Sym*	castfr[NTYPE];
+};
+@
+
+
+<<function isfunct>>=
+bool
+isfunct(Node *n)
+{
+    Type *t, *t1;
+    Funct *f;
+    Node *l;
+    Sym *s;
+    int o;
+
+    o = n->op;
+    if(n->left == Z)
+        goto no;
+    t = n->left->type;
+    if(t == T)
+        goto no;
+    f = t->funct;
+
+    switch(o) {
+    case OAS:	// put cast on rhs
+    case OASI:
+    case OASADD:
+    case OASSUB:
+    case OASMUL:
+    case OASDIV:
+    case OASMOD:
+    case OASASHR:
+    case OASLMUL:
+    case OASLDIV:
+    case OASLMOD:
+    case OASLSHR:
+    case OASASHL:
+    case OASAND:
+    case OASOR:
+    case OASXOR:
+        if(n->right == Z)
+            goto no;
+        t1 = n->right->type;
+        if(t1 == T)
+            goto no;
+        if(t1->funct == f)
+            break;
+
+        l = new(OXXX, Z, Z);
+        *l = *n->right;
+
+        n->right->left = l;
+        n->right->right = Z;
+        n->right->type = t;
+        n->right->op = OCAST;
+
+        if(!isfunct(n->right))
+            prtree(n, "isfunc !");
+        break;
+
+    case OCAST:	// t f(T) or T f(t)
+        t1 = n->type;
+        if(t1 == T)
+            goto no;
+        if(f != nil) {
+            s = f->castfr[t1->etype];
+            if(s == S)
+                goto no;
+            n->right = n->left;
+            goto build;
+        }
+        f = t1->funct;
+        if(f != nil) {
+            s = f->castto[t->etype];
+            if(s == S)
+                goto no;
+            n->right = n->left;
+            goto build;
+        }
+        goto no;
+    }
+
+    if(f == nil)
+        goto no;
+    s = f->sym[o];
+    if(s == S)
+        goto no;
+
+
+
+    /*
+     * the answer is yes,
+     * now we rewrite the node
+     * and give diagnostics
+     */
+    switch(o) {
+    case OADD:	// T f(T, T)
+    case OAND:
+    case OASHL:
+    case OASHR:
+    case ODIV:
+    case OLDIV:
+    case OLMOD:
+    case OLMUL:
+    case OLSHR:
+    case OMOD:
+    case OMUL:
+    case OOR:
+    case OSUB:
+    case OXOR:
+
+    case OEQ:	// int f(T, T)
+    case OGE:
+    case OGT:
+    case OHI:
+    case OHS:
+    case OLE:
+    case OLO:
+    case OLS:
+    case OLT:
+    case ONE:
+        if(n->right == Z)
+            goto bad;
+        t1 = n->right->type;
+        if(t1 == T)
+            goto bad;
+        if(t1->funct != f)
+            goto bad;
+        n->right = new(OLIST, n->left, n->right);
+        break;
+
+    case OAS:	// structure copies done by the compiler
+    case OASI:
+        goto no;
+
+    case OASADD:	// T f(T*, T)
+    case OASAND:
+    case OASASHL:
+    case OASASHR:
+    case OASDIV:
+    case OASLDIV:
+    case OASLMOD:
+    case OASLMUL:
+    case OASLSHR:
+    case OASMOD:
+    case OASMUL:
+    case OASOR:
+    case OASSUB:
+    case OASXOR:
+        if(n->right == Z)
+            goto bad;
+        t1 = n->right->type;
+        if(t1 == T)
+            goto bad;
+        if(t1->funct != f)
+            goto bad;
+        n->right = new(OLIST, new(OADDR, n->left, Z), n->right);
+        break;
+
+    case OPOS:	// T f(T)
+    case ONEG:
+    case ONOT:
+    case OCOM:
+        n->right = n->left;
+        break;
+
+    default:
+        diag(n, "isfunct op missing %O\n", o);
+        goto bad;
+
+
+    }
+
+build:
+    l = new(ONAME, Z, Z);
+    l->sym = s;
+    l->type = s->type;
+    l->etype = s->type->etype;
+    l->xoffset = s->offset;
+    l->class = s->class;
+    tcomo(l, 0);
+
+    n->op = OFUNC;
+    n->left = l;
+    n->type = l->type->link;
+    if(tcompat(n, T, l->type, tfunct))
+        goto bad;
+    if(tcoma(n->left, n->right, l->type->down, true))
+        goto bad;
+    return true;
+
+no:
+    return false;
+
+bad:
+    diag(n, "cant rewrite typestr for op %O\n", o);
+    prtree(n, "isfunct");
+    n->type = T;
+    return true;
+}
+@
+
+
+
+
+\subsection{Signature reflection, [[signof()]]}
+% sign for signature, not sign of an operation
+
+% parsing
+
+<<token declarations>>=
+%token  LSIGNOF
+@
+
+<<[[itab]] entries, kencc extensions>>=
+"signof",	LSIGNOF,	0,
+@
+
+<<expression nodes>>=
+OSIGN,
+@
+
+<<uexpr rule>>=
+|   LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
+@
+%$
+
+<<pexpr rule>>=
+|   LSIGNOF '(' tlist abdecor ')'
+    {
+        $$ = new(OSIGN, Z, Z);
+        dodecl(NODECL, CXXX, $3, $4);
+        $$->type = lastdcltype;
+    }
+@
+
+% code generation
+
+<<[[tcomo()]] switch node kind cases>>=
+case OSIGN:	/* extension signof(type) returns a hash */
+    if(l != Z) {
+        if(l->op != OSTRING && l->op != OLSTRING)
+            if(tcomo(l, 0))
+                goto bad;
+        if(l->op == OBIT) {
+            diag(n, "signof bitfield");
+            goto bad;
+        }
+        n->type = l->type;
+    }
+    if(n->type == T)
+        goto bad;
+    if(n->type->width < 0) {
+        diag(n, "signof undefined type");
+        goto bad;
+    }
+    n->op = OCONST;
+    n->left = Z;
+    n->right = Z;
+    n->vconst = convvtox(signature(n->type), TULONG);
+    n->type = types[TULONG];
+    break;
+@
+
+
 \subsection{Void star conversions, [[5c -V]]}
 
 % often use 5c -FTV, -V means 'enable void* conversion warnings'
@@ -26183,6 +26194,566 @@ if((f || !debug['V']) && et == TIND) {
 
 
 
+\subsection{Format's arguments checking}
+
+<<enum fxxx>>=
+enum fxxx
+{
+    Fnone	= 0,
+
+    Fl,
+    Fvl,
+    Fignor,
+    Fstar,
+    Fadj,
+
+    Fverb	= 10,
+};
+@
+
+<<struct Tprot>>=
+struct	Tprot
+{
+    Type*	type;
+    Bits	flag;
+    Tprot*	link;
+};
+@
+
+<<struct Tname>>=
+struct	Tname
+{
+    char*	name;
+    int		param;
+    Tname*	link;
+};
+@
+
+<<global indchar>>=
+static	Type*	indchar;
+@
+
+<<global flagbits>>=
+static	uchar	flagbits[512];
+@
+
+<<global fmtbuf>>=
+static	char	fmtbuf[100];
+@
+
+<<global lastadj>>=
+static	int	lastadj;
+@
+
+<<global lastverb>>=
+static	int	lastverb;
+@
+
+<<global nstar>>=
+static	int	nstar;
+@
+
+<<global tprot>>=
+static	Tprot*	tprot;
+@
+
+<<global tname>>=
+static	Tname*	tname;
+@
+
+<<function argflag>>=
+void
+argflag(int c, int v)
+{
+
+    switch(v) {
+    case Fignor:
+    case Fstar:
+    case Fl:
+    case Fvl:
+        flagbits[c] = v;
+        break;
+    case Fverb:
+        flagbits[c] = lastverb;
+/*print("flag-v %c %d\n", c, lastadj);*/
+        lastverb++;
+        break;
+    case Fadj:
+        flagbits[c] = lastadj;
+/*print("flag-l %c %d\n", c, lastadj);*/
+        lastadj++;
+        break;
+    }
+}
+@
+
+<<function getflag>>=
+Bits
+getflag(char *s)
+{
+    Bits flag;
+    int f;
+    char *fmt;
+    Rune c;
+
+    fmt = fmtbuf;
+    flag = zbits;
+    nstar = 0;
+    for(;;) {
+        s += chartorune(&c, s);
+        fmt += runetochar(fmt, &c);
+        if(c == 0 || c >= nelem(flagbits))
+            break;
+        f = flagbits[c];
+        switch(f) {
+        case Fnone:
+            argflag(c, Fverb);
+            f = flagbits[c];
+            break;
+        case Fstar:
+            nstar++;
+        case Fignor:
+            continue;
+        case Fl:
+            if(bset(flag, Fl))
+                flag = bor(flag, blsh(Fvl));
+        }
+        flag = bor(flag, blsh(f));
+        if(f >= Fverb)
+            break;
+    }
+    *fmt = 0;
+    return flag;
+}
+@
+
+
+<<function arginit>>=
+void
+arginit(void)
+{
+    int i;
+
+/* debug['F'] = 1;*/
+/* debug['w'] = 1;*/
+
+    lastadj = Fadj;
+    lastverb = Fverb;
+    indchar = typ(TIND, types[TCHAR]);
+
+    memset(flagbits, Fnone, sizeof(flagbits));
+
+    for(i='0'; i<='9'; i++)
+        argflag(i, Fignor);
+    argflag('.', Fignor);
+    argflag('#', Fignor);
+    argflag('u', Fignor);
+    argflag('h', Fignor);
+    argflag('+', Fignor);
+    argflag('-', Fignor);
+
+    argflag('*', Fstar);
+    argflag('l', Fl);
+
+    argflag('o', Fverb);
+    flagbits['x'] = flagbits['o'];
+    flagbits['X'] = flagbits['o'];
+}
+@
+
+
+<<function nextarg>>=
+Node*
+nextarg(Node *n, Node **a)
+{
+    if(n == Z) {
+        *a = Z;
+        return Z;
+    }
+    if(n->op == OLIST) {
+        *a = n->left;
+        return n->right;
+    }
+    *a = n;
+    return Z;
+}
+@
+
+<<function checkargs>>=
+void
+checkargs(Node *nn, char *s, int pos)
+{
+    Node *a, *n;
+    Bits flag;
+    Tprot *l;
+
+    if(!debug['F'])
+        return;
+    n = nn;
+    for(;;) {
+        s = strchr(s, '%');
+        if(s == 0) {
+            nextarg(n, &a);
+            if(a != Z)
+                warn(nn, "more arguments than format %T",
+                    a->type);
+            return;
+        }
+        s++;
+        flag = getflag(s);
+        while(nstar > 0) {
+            n = nextarg(n, &a);
+            pos++;
+            nstar--;
+            if(a == Z) {
+                warn(nn, "more format than arguments %s",
+                    fmtbuf);
+                return;
+            }
+            if(a->type == T)
+                continue;
+            if(!sametype(types[TINT], a->type) &&
+               !sametype(types[TUINT], a->type))
+                warn(nn, "format mismatch '*' in %s %T, arg %d",
+                    fmtbuf, a->type, pos);
+        }
+        for(l=tprot; l; l=l->link)
+            if(sametype(types[TVOID], l->type)) {
+                if(beq(flag, l->flag)) {
+                    s++;
+                    goto loop;
+                }
+            }
+
+        n = nextarg(n, &a);
+        pos++;
+        if(a == Z) {
+            warn(nn, "more format than arguments %s",
+                fmtbuf);
+            return;
+        }
+        if(a->type == 0)
+            continue;
+        for(l=tprot; l; l=l->link)
+            if(sametype(a->type, l->type)) {
+/*print("checking %T/%ulx %T/%ulx\n", a->type, flag.b[0], l->type, l->flag.b[0]);*/
+                if(beq(flag, l->flag))
+                    goto loop;
+            }
+        warn(nn, "format mismatch %s %T, arg %d", fmtbuf, a->type, pos);
+    loop:;
+    }
+}
+@
+
+<<[[tcomo()]] when OFUNC case, format check>>=
+dpcheck(n);
+@
+
+
+<<function dpcheck>>=
+void
+dpcheck(Node *n)
+{
+    char *s;
+    Node *a, *b;
+    Tname *l;
+    int i;
+
+    if(n == Z)
+        return;
+    b = n->left;
+    if(b == Z || b->op != ONAME)
+        return;
+    s = b->sym->name;
+    for(l=tname; l; l=l->link)
+        if(strcmp(s, l->name) == 0)
+            break;
+    if(l == 0)
+        return;
+
+    i = l->param;
+    b = n->right;
+    while(i > 0) {
+        b = nextarg(b, &a);
+        i--;
+    }
+    if(a == Z) {
+        warn(n, "cant find format arg");
+        return;
+    }
+    if(!sametype(indchar, a->type)) {
+        warn(n, "format arg type %T", a->type);
+        return;
+    }
+    if(a->op != OADDR || a->left->op != ONAME || a->left->sym != symstring) {
+/*		warn(n, "format arg not constant string");*/
+        return;
+    }
+    s = a->left->cstring;
+    checkargs(b, s, l->param);
+}
+@
+
+%<<function newprot>>=
+%//void
+%//newprot(Sym *m, Type *t, char *s)
+%//{
+%//    Bits flag;
+%//    Tprot *l;
+%//
+%//    if(t == T) {
+%//        warn(Z, "%s: newprot: type not defined", m->name);
+%//        return;
+%//    }
+%//    flag = getflag(s);
+%//    for(l=tprot; l; l=l->link)
+%//        if(beq(flag, l->flag) && sametype(t, l->type))
+%//            return;
+%//    l = alloc(sizeof(*l));
+%//    l->type = t;
+%//    l->flag = flag;
+%//    l->link = tprot;
+%//    tprot = l;
+%//}
+%@
+%
+%<<function newname>>=
+%//void
+%//newname(char *s, int p)
+%//{
+%//    Tname *l;
+%//
+%//    for(l=tname; l; l=l->link)
+%//        if(strcmp(l->name, s) == 0) {
+%//            if(l->param != p)
+%//                yyerror("vargck %s already defined\n", s);
+%//            return;
+%//        }
+%//    l = alloc(sizeof(*l));
+%//    l->name = s;
+%//    l->param = p;
+%//    l->link = tname;
+%//    tname = l;
+%//}
+%@
+%
+%<<function pragvararg>>=
+%//void
+%//pragvararg(void)
+%//{
+%//    Sym *s;
+%//    int n, c;
+%//    char *t;
+%//    Rune r;
+%//    Type *ty;
+%//
+%//    if(!debug['F'])
+%//        goto out;
+%//    s = getsym();
+%//    if(s && strcmp(s->name, "argpos") == 0)
+%//        goto ckpos;
+%//    if(s && strcmp(s->name, "type") == 0)
+%//        goto cktype;
+%//    if(s && strcmp(s->name, "flag") == 0)
+%//        goto ckflag;
+%//    yyerror("syntax in #pragma varargck");
+%//    goto out;
+%//
+%//ckpos:
+%///*#pragma	varargck	argpos	warn	2*/
+%//    s = getsym();
+%//    if(s == S)
+%//        goto bad;
+%//    n = getnsn();
+%//    if(n < 0)
+%//        goto bad;
+%//    newname(s->name, n);
+%//    goto out;
+%//
+%//ckflag:
+%///*#pragma	varargck	flag	'c'*/
+%//    c = getnsc();
+%//    if(c != '\'')
+%//        goto bad;
+%//    c = getr();
+%//    if(c == '\\')
+%//        c = getr();
+%//    else if(c == '\'')
+%//        goto bad;
+%//    if(c == '\n')
+%//        goto bad;
+%//    if(getc() != '\'')
+%//        goto bad;
+%//    argflag(c, Fignor);
+%//    goto out;
+%//
+%//cktype:
+%///*#pragma	varargck	type	O	int*/
+%//    c = getnsc();
+%//    if(c != '"')
+%//        goto bad;
+%//    t = fmtbuf;
+%//    for(;;) {
+%//        r = getr();
+%//        if(r == ' ' || r == '\n')
+%//            goto bad;
+%//        if(r == '"')
+%//            break;
+%//        t += runetochar(t, &r);
+%//    }
+%//    *t = 0;
+%//    t = strdup(fmtbuf);
+%//    s = getsym();
+%//    if(s == S)
+%//        goto bad;
+%//    ty = s->type;
+%//    while((c = getnsc()) == '*')
+%//        ty = typ(TIND, ty);
+%//    unget(c);
+%//    newprot(s, ty, t);
+%//    goto out;
+%//
+%//bad:
+%//    yyerror("syntax in #pragma varargck");
+%//
+%//out:
+%//    while(getnsc() != '\n')
+%//        ;
+%//}
+%@
+%
+%<<function pragpack>>=
+%//void
+%//pragpack(void)
+%//{
+%//    Sym *s;
+%//
+%//    packflg = 0;
+%//    s = getsym();
+%//    if(s) {
+%//        packflg = atoi(s->name+1);
+%//        if(strcmp(s->name, "on") == 0 ||
+%//           strcmp(s->name, "yes") == 0)
+%//            packflg = 1;
+%//    }
+%//    while(getnsc() != '\n')
+%//        ;
+%//    if(debug['f'])
+%//        if(packflg)
+%//            print("%4ld: pack %d\n", lineno, packflg);
+%//        else
+%//            print("%4ld: pack off\n", lineno);
+%//}
+%@
+%
+%<<function pragfpround>>=
+%//void
+%//pragfpround(void)
+%//{
+%//    Sym *s;
+%//
+%//    fproundflg = 0;
+%//    s = getsym();
+%//    if(s) {
+%//        fproundflg = atoi(s->name+1);
+%//        if(strcmp(s->name, "on") == 0 ||
+%//           strcmp(s->name, "yes") == 0)
+%//            fproundflg = 1;
+%//    }
+%//    while(getnsc() != '\n')
+%//        ;
+%//    if(debug['f'])
+%//        if(fproundflg)
+%//            print("%4ld: fproundflg %d\n", lineno, fproundflg);
+%//        else
+%//            print("%4ld: fproundflg off\n", lineno);
+%//}
+%@
+%
+%<<function pragprofile>>=
+%//void
+%//pragprofile(void)
+%//{
+%//    Sym *s;
+%//
+%//    profileflg = false;
+%//    s = getsym();
+%//    if(s) {
+%//        profileflg = atoi(s->name+1);
+%//        if(strcmp(s->name, "on") == 0 ||
+%//           strcmp(s->name, "yes") == 0)
+%//            profileflg = true;
+%//    }
+%//    while(getnsc() != '\n')
+%//        ;
+%//    if(debug['f'])
+%//        if(profileflg)
+%//            print("%4ld: profileflg %d\n", lineno, profileflg);
+%//        else
+%//            print("%4ld: profileflg off\n", lineno);
+%//}
+%@
+%
+%<<function pragincomplete>>=
+%//void
+%//pragincomplete(void)
+%//{
+%//    Sym *s;
+%//    Type *t;
+%//    bool istag;
+%//    int  w, et;
+%//
+%//    istag = false;
+%//    s = getsym();
+%//    if(s == nil)
+%//        goto out;
+%//    et = 0;
+%//    w = s->lexical;
+%//    if(w == LSTRUCT)
+%//        et = TSTRUCT;
+%//    else if(w == LUNION)
+%//        et = TUNION;
+%//    if(et != 0){
+%//        s = getsym();
+%//        if(s == nil){
+%//            yyerror("missing struct/union tag in pragma incomplete");
+%//            goto out;
+%//        }
+%//        if(s->lexical != LNAME && s->lexical != LTYPE){
+%//            yyerror("invalid struct/union tag: %s", s->name);
+%//            goto out;
+%//        }
+%//        dotag(s, et, 0);
+%//        istag = true;
+%//    }else if(strcmp(s->name, "_off_") == 0){
+%//        debug['T'] = 0;
+%//        goto out;
+%//    }else if(strcmp(s->name, "_on_") == 0){
+%//        debug['T'] = 1;
+%//        goto out;
+%//    }
+%//    t = s->type;
+%//    if(istag)
+%//        t = s->suetag;
+%//    if(t == T)
+%//        yyerror("unknown type %s in pragma incomplete", s->name);
+%//    else if(!typesu[t->etype])
+%//        yyerror("not struct/union type in pragma incomplete: %s", s->name);
+%//    else
+%//        t->garb |= GINCOMPLETE;
+%//out:
+%//    while(getnsc() != '\n')
+%//        ;
+%//    if(debug['f'])
+%//        print("%s incomplete\n", s->name);
+%//}
+%@
+
+<<[[Qualifier]] other cases>>=
+GINCOMPLETE	= 1<<2,
+@
+% >>
 
 
 \section{Floats}
@@ -26507,7 +27078,8 @@ case TVLONG:
 @
 
 \section{Complex values}
-% complex as in math, imaginary numbers
+% hmm not really an extension. It is necessary to have
+% a working compiler. You can return complex value.
 
 \subsection{Complex type}
 
@@ -26527,8 +27099,6 @@ typecmplx = typesuv;
 % the struct itself).
 
 \subsection{Complex return value}
-
-
 
 
 % set in codegen
@@ -26613,6 +27183,19 @@ if(typesuv[n->type->etype]) {
         sugen(n, tn2, n->type->width);
 }
 @
+
+<<global typesuv>>=
+char	typesuv[NTYPE];
+@
+
+<<global typesuvinit>>=
+int	typesuvinit[] =
+{
+    TVLONG, TUVLONG, TSTRUCT, TUNION, -1,
+};
+@
+% suv is for arguments or return values that are too big to
+% reside in REGRET in which case it needs some special handling
 
 \subsection{Complex expression}
 
@@ -27489,6 +28072,11 @@ bool64(Node *n)
 #define	CPP	"/bin/cpp"
 @
 
+<<[[compile()]] locals>>=
+char **av, opt[256];
+int i, c, fd[2];
+@
+
 <<[[compile()]] if use ANSI preprocessor>>=
 /* Use an ANSI preprocessor */
 if(debug['p']) {
@@ -27672,7 +28260,7 @@ fmtinstall('|', VBconv);
 @
 
 <<function Oconv>>=
-// enum<node_kind> -> string
+// enum<Node_kind> -> unit
 int Oconv(Fmt *fp)
 {
     int a;
@@ -27800,7 +28388,7 @@ Tconv(Fmt *fp)
     int et;
     long n;
 
-    str[0] = 0;
+    str[0] = '\0';
     for(t = va_arg(fp->args, Type*); t != T; t = t->link) {
         et = t->etype;
         if(str[0])
@@ -27962,7 +28550,7 @@ VBconv(Fmt *fp)
 % similar to Assembler.nw?
 
 
-<<[[ginit()]] initialisation>>=
+<<[[ginit()]] misc initialisations>>=
 listinit();
 @
 
@@ -28436,6 +29024,16 @@ for(p=onamesinit; p->code >= 0; p++) {
 % opposing adding them to gcc (but for licensing issues).
 % clang has it! (and pfff has it from the beginning of course ...)
 
+<<xdecl rule, debug function body>>=
+if(debug['x']) {
+    prtree($2, "func");
+    prtree($6, "body");
+}
+@
+%pad: I added that? it was not there originally?
+\t implement in kencc? mv in appendix?
+
+
 <<function prtree>>=
 void
 prtree(Node *n, char *s)
@@ -28538,7 +29136,8 @@ prtree1(Node *n, int d, bool f)
 \section{[[5c -v]], verbose mode}
 
 % see diag(), with -v it will print == diagnostic == and then the AST dump
-% via prtree()
+% via prtree() when there is an error. Pretty useful to get more
+% information about the error.
 
 \section{[[5c -m]], macro debugging}
 % also in Assembler.nw
@@ -28597,6 +29196,8 @@ if(debug['L'])
 \section{[[5c -d]], printing declarations}
 % useful to debug, potentially useful to build tools too! e.g. tags file
 % also print when revert a decl in revertdcl()
+
+% can see the result of evaluation of constant! (see const_expr.c)
 
 <<[[dodecl()]] debug declaration>>=
 if(debug['d'])
@@ -28714,8 +29315,9 @@ yyerror(char *fmt, ...)
     }
 }
 @
-% %L will use Lconv!
 %ocaml: call errorexit directly, do not do any error recovery
+
+% %L will use Lconv!
 
 
 <<[[yyerror()]] when called from yyparse>>=
@@ -28727,6 +29329,7 @@ if(strcmp(fmt, "syntax error") == 0) {
     return;
 }
 @
+% useful to print last symbol token.
 
 % main | compile | newio | newfile | yylex | ... -> <>
 <<function errorexit>>=
@@ -28741,7 +29344,7 @@ errorexit(void)
 % good citizen! no need for :D: in mkfile then, file is removed
 % if there was an error!
 
-
+% -> <>
 <<function diag>>=
 void
 diag(Node *n, char *fmt, ...)
@@ -28755,14 +29358,8 @@ diag(Node *n, char *fmt, ...)
 
     Bprint(&diagbuf, "%L %s\n", (n==Z)? nearln: n->lineno, buf);
 
-    if(debug['X']){
-        Bflush(&diagbuf);
-        abort();
-    }
-    if(n != Z)
-      if(debug['v'])
-        prtree(n, "diagnostic");
-
+    <<[[fatal() or diag()]] abort if -X>>
+    <<[[fatal() or diag()]] print diagnostic if -v>>
     nerrors++;
     if(nerrors > 10) {
         Bprint(&diagbuf, "too many errors\n");
@@ -28772,6 +29369,20 @@ diag(Node *n, char *fmt, ...)
 @
 
 % also warn()
+
+<<[[fatal() or diag()]] abort if -X>>=
+if(debug['X']){
+    Bflush(&diagbuf);
+    abort();
+}
+@
+
+<<[[fatal() or diag()]] print diagnostic if -v>>=
+if(n != Z)
+  if(debug['v'])
+    prtree(n, "diagnostic");
+@
+
 
 % code generation stuff -> <>
 <<function fatal>>=
@@ -28786,18 +29397,13 @@ fatal(Node *n, char *fmt, ...)
     va_end(arg);
     Bprint(&diagbuf, "%L %s\n", (n==Z)? nearln: n->lineno, buf);
 
-    if(debug['X']){
-        Bflush(&diagbuf);
-        abort();
-    }
-    if(n != Z)
-      if(debug['v'])
-        prtree(n, "diagnostic");
-
+    <<[[fatal() or diag()]] abort if -X>>
+    <<[[fatal() or diag()]] print diagnostic if -v>>
     nerrors++;
     errorexit();
 }
 @
+
 
 % %L will use Lconv to have right location
 
