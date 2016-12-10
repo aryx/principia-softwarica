@@ -9262,6 +9262,34 @@ snap(Type *t)
 \t This is why useful to keep a ref to the Sym in Type.tag?
 
 
+
+
+%\subsection{Void star conversions, [[5c -V]]}
+% I thought it was a C extension, but it is not!
+% Without the code below you cant call functions like pwrite with a string
+% because a char* will not match a void*
+
+% often use 5c -FTV, -V means 'enable void* conversion warnings'
+% so in fact it disables void* conversions.
+
+<<[[rsametype()]] if f and not -V, allow void star>>=
+if((f || !debug['V']) && et == TIND) {
+    if(t1 != T && t1->etype == TVOID)
+        return true;
+    if(t2 != T && t2->etype == TVOID)
+        return true;
+}
+@
+
+
+% if not -V means disable void* conversion
+
+% Allow void* to match int* or struct*, but only for first level. 
+% When call recursively rsametype we disable it, this is what 'f'
+% is for (see code of rsametype)
+
+
+
 \subsection{Type merge, [[tmerge()]]}
 %Declaration and definition types merge
 
@@ -9523,6 +9551,20 @@ stcompat(Node *n, Type *t1, Type *t2, long ttab[])
 %ocaml: use simply pattern matching, no need abuse Bxxx and special
 % case for tasign and pointers.
 
+
+
+<<[[stcompat()]] when t1 matches t2, if pointers and not a cast op>>=
+if(n->op != OCAST)
+  if(b == BIND && i == TIND)
+        if(!sametype(t1, t2))
+            return true;
+@
+%ocaml: use ADT for Type.t so can do that earlier when rule
+% mention two pointers
+
+% pointers must be equal type too (except in cast operation obviously)
+
+% note that sametype will allow a void* to match a xxx*
 
 \subsection{Compatibility policies, [[txxx]]}
 
@@ -10271,6 +10313,7 @@ char	tab[NTYPE][NTYPE] =
 %coupling: could use designator for the nested initialiser too,
 % so less depdendencies on the order of the basic types
 % (I use designator for TIND only right now)
+%bug? double and float should be double in TDOUBLE line.
 
 <<[[arith()]] set node type>>=
 <<[[arith()]] if result type is a pointer>>
@@ -10411,7 +10454,7 @@ if(i == TIND && j == TIND) {
     return;
 }
 @
-
+% special return type! it's a long!
 
 \subsection{Boolean expressions}
 
@@ -10988,16 +11031,6 @@ long	tindir[1] =
 @
 
 
-<<[[stcompat()]] when t1 matches t2, if pointers and not a cast op>>=
-if(n->op != OCAST)
-  if(b == BIND && i == TIND)
-        if(!sametype(t1, t2))
-            return true;
-@
-%ocaml: use ADT for Type.t so can do that earlier when rule
-% mention two pointers
-
-% pointers must be equal type too (except in cast operation obviously)
 
 
 \subsection{Array accesses}
@@ -11499,6 +11532,9 @@ case OSIZE:
 @
 % why special code for OSTRING? because if call tcomo it will
 % convert it to an ONAME and you will lose the type information?
+
+% CIL says that result of sizeof is unsigned, but here it is signed.
+% bug 5c?
 
 \section{Typechecking statements}
 
@@ -12098,6 +12134,7 @@ deadheads(Node *c)
 
 
 \subsection{Missing return}
+% related to unreachable code
 
 % -B?
 
@@ -13402,7 +13439,7 @@ nodconst(long v)
 void
 gen(Node *n)
 {
-    // enum<node_kind> of a statement
+    // enum<Node_kind> of a statement
     int o;
     <<[[gen()]] locals>>
 
@@ -13490,7 +13527,7 @@ case OIF:
         patch(sp, pc);
 
         canreach = canreach || oldreach;
-        if(canreach == false)
+        if(!canreach)
             warnreach = !suppress;
     }
     break;
@@ -24505,6 +24542,8 @@ if(l->type->etype == TIND && l->type->link->etype == TFUNC) {
 }
 @
 
+% and also automatically add a OADDR when pass function as
+% parameter (like for array).
 
 
 \subsection{Local [[static]]}
@@ -25247,6 +25286,25 @@ if(s == S) {
 @
 
 
+<<[[dotsearch()]] if unnamed substructures>>=
+/*
+ * look it up in unnamed substructures
+ */
+for(t1 = t; t1 != T; t1 = t1->down)
+    if(t1->sym == S && typesu[t1->etype]){
+        rt = dotsearch(s, t1->link, n, off);
+        if(rt != T) {
+            if(xt != T)
+                goto ambig;
+            xt = rt;
+            *off += t1->offset;
+        }
+    }
+@
+
+
+
+
 <<[[typeext()]] unnamed substructure handling>>=
 /*
  * extension of C
@@ -25350,21 +25408,6 @@ ambig:
 @
 
 
-<<[[dotsearch()]] if unnamed substructures>>=
-/*
- * look it up in unnamed substructures
- */
-for(t1 = t; t1 != T; t1 = t1->down)
-    if(t1->sym == S && typesu[t1->etype]){
-        rt = dotsearch(s, t1->link, n, off);
-        if(rt != T) {
-            if(xt != T)
-                goto ambig;
-            xt = rt;
-            *off += t1->offset;
-        }
-    }
-@
 
 \subsection{Struct constructors}
 
@@ -26169,28 +26212,6 @@ case OSIGN:	/* extension signof(type) returns a hash */
     break;
 @
 
-
-\subsection{Void star conversions, [[5c -V]]}
-
-% often use 5c -FTV, -V means 'enable void* conversion warnings'
-% so in fact it disables void* conversions.
-
-<<[[rsametype()]] if f and not -V, allow void star>>=
-if((f || !debug['V']) && et == TIND) {
-    if(t1 != T && t1->etype == TVOID)
-        return true;
-    if(t2 != T && t2->etype == TVOID)
-        return true;
-}
-@
-%ocaml: stricter, disallow
-
-% if not -V means disable void* conversion
-
-% Allow void* to match int* or struct*, but only if not -V and
-% only for first level. 
-% When call recursively rsametype we disable it, this is what 'f'
-% is for (see code of rsametype)
 
 
 
@@ -27078,7 +27099,7 @@ case TVLONG:
 @
 
 \section{Complex values}
-% hmm not really an extension. It is necessary to have
+\t hmm not really an extension. It is necessary to have
 % a working compiler. You can return complex value.
 
 \subsection{Complex type}
