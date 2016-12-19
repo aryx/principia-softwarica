@@ -21,7 +21,6 @@ void codgen(Node *n, Node *nn)
     curarg = 0;
     maxargsafe = 0;
     /*e: [[codgen()]] initialisation */
-
     /*s: [[codgen()]] set n1 node to node in nn where have ONAME */
     /*
      * isolate name
@@ -36,6 +35,7 @@ void codgen(Node *n, Node *nn)
     }
     /*e: [[codgen()]] set n1 node to node in nn where have ONAME */
     nearln = nn->lineno;
+
     gpseudo(ATEXT, n1->sym, nodconst(stkoff));
     sp = p;
 
@@ -44,7 +44,7 @@ void codgen(Node *n, Node *nn)
         n1 = nodret->left;
         if(n1->type == T || n1->type->link != thisfntype->link) {
             n1->type = typ(TIND, thisfntype->link);
-            n1->etype = n1->type->etype; // TIND
+            n1->etype = n1->type->etype; // TIND, dead instruction
             nodret = new(OIND, n1, Z); // useful? to force retyping?
             complex(nodret);
         }
@@ -84,6 +84,7 @@ void codgen(Node *n, Node *nn)
     /*e: [[codgen()]] initialisation before call to gen */
     // generate the assembly for the statements in the body
     gen(n);
+
     /*s: [[codgen()]] warn for possible missing return after call to gen */
     if(canreach && thisfntype->link->etype != TVOID){
         if(debug['B'])
@@ -92,7 +93,6 @@ void codgen(Node *n, Node *nn)
             diag(Z, "no return at end of function: %s", n1->sym->name);
     }
     /*e: [[codgen()]] warn for possible missing return after call to gen */
-
     /*s: [[codgen()]] before RET */
     noretval(1 | 2);
     /*e: [[codgen()]] before RET */
@@ -151,18 +151,19 @@ uncomma(Node *n)
 void
 gen(Node *n)
 {
-    // enum<node_kind> of a statement
+    // enum<Node_kind> of a statement
     int o;
     /*s: [[gen()]] locals */
-    bool oldreach;
+    bool f;
     /*x: [[gen()]] locals */
     Prog *sp;
     Node *l;
     bool err;
     /*x: [[gen()]] locals */
-    bool f;
+    bool oldreach;
     /*x: [[gen()]] locals */
     Prog *spc, *spb;
+    /*x: [[gen()]] locals */
     long sbc, scc;
     int snbreak, sncontin;
     /*x: [[gen()]] locals */
@@ -177,10 +178,10 @@ loop:
 
     nearln = n->lineno;
     o = n->op;
-
+    /*s: [[gen()]] debug opcode */
     if(debug['G'] && (o != OLIST))
         print("%L %O\n", nearln, o);
-
+    /*e: [[gen()]] debug opcode */
     /*s: [[gen()]] if not canreach */
     if(!canreach) {
         switch(o) {
@@ -202,7 +203,6 @@ loop:
         }
     }
     /*e: [[gen()]] if not canreach */
-
     switch(o) {
     /*s: [[gen()]] switch node kind cases */
     case OSET:
@@ -260,28 +260,74 @@ loop:
         /*e: [[gen()]] switch node kind cases, OIF case, if bcomplex error */
         else {
             sp = p; // AB instr for 'else' to patch later (created by bcomplex())
+            /*s: [[gen()]] when OIF, before gen then part, set canreach */
             canreach = true;
+            /*e: [[gen()]] when OIF, before gen then part, set canreach */
 
             if(n->right->left != Z) // gen then part
                 gen(n->right->left); 
 
+            /*s: [[gen()]] when OIF, before gen else part, save and set canreach */
             oldreach = canreach;
             canreach = true;
+            /*e: [[gen()]] when OIF, before gen else part, save and set canreach */
 
             if(n->right->right != Z) { // gen else part
                 gbranch(OGOTO);
                 patch(sp, pc);
                 sp = p;
-
                 gen(n->right->right);
             }
             patch(sp, pc);
 
+            /*s: [[gen()]] when OIF, after gen everything, set canreach */
             canreach = canreach || oldreach;
-            if(canreach == false)
+            if(!canreach)
                 warnreach = !suppress;
+            /*e: [[gen()]] when OIF, after gen everything, set canreach */
         }
         break;
+    /*x: [[gen()]] switch node kind cases */
+    case OLABEL:
+        /*s: [[gen()]] when LABEL, set canreach */
+        canreach = true;
+        /*e: [[gen()]] when LABEL, set canreach */
+        l = n->left;
+        if(l) {
+            l->pc = pc;
+            if(l->label)
+                patch(l->label, pc);
+        }
+        gbranch(OGOTO);	/* prevent self reference in reg */
+        patch(p, pc);
+
+        goto rloop;
+    /*x: [[gen()]] switch node kind cases */
+    case OGOTO:
+        /*s: [[gen()]] when OGOTO/ORETURN/OBREAK/OCONTINUE, set canreach */
+        canreach = false;
+        warnreach = !suppress;
+        /*e: [[gen()]] when OGOTO/ORETURN/OBREAK/OCONTINUE, set canreach */
+        n = n->left;
+        /*s: [[gen()]] when OGOTO, sanity check n */
+        if(n == Z) // possible?
+            return;
+        if(n->complex == 0) {
+            diag(Z, "label undefined: %s", n->sym->name);
+            return;
+        }
+        if(suppress)
+            return;
+        /*e: [[gen()]] when OGOTO, sanity check n */
+        gbranch(OGOTO);
+        if(n->pc) {
+            patch(p, n->pc);
+        } else {
+            if(n->label)
+                 patch(n->label, pc-1);
+            n->label = p;
+        }
+        return;
     /*x: [[gen()]] switch node kind cases */
     case OWHILE:
     case ODWHILE:
@@ -290,58 +336,71 @@ loop:
         gbranch(OGOTO);		/* entry */
         sp = p;
 
+        /*s: [[gen()]] when OWHILE/ODWHILE, set continpc to pc before goto continue */
         scc = continpc;
         continpc = pc;
-
-        gbranch(OGOTO);
+        /*e: [[gen()]] when OWHILE/ODWHILE, set continpc to pc before goto continue */
+        gbranch(OGOTO); // goto for continue
         spc = p;
 
+        /*s: [[gen()]] when OWHILE/ODWHILE, set breakpc to pc before goto break */
         sbc = breakpc;
-        breakpc = pc;
         snbreak = nbreak;
+        breakpc = pc;
         nbreak = 0;
-
-        gbranch(OGOTO);
+        /*e: [[gen()]] when OWHILE/ODWHILE, set breakpc to pc before goto break */
+        gbranch(OGOTO); // goto for break
         spb = p;
 
         patch(spc, pc);
         if(n->op == OWHILE)
             patch(sp, pc);
+
         bcomplex(l, Z);		/* test */
         patch(p, breakpc);
+        /*s: [[gen()]] when OWHILE/ODWHILE, increment nbreak */
         if(l->op != OCONST || vconst(l) == 0)
             nbreak++;
+        /*e: [[gen()]] when OWHILE/ODWHILE, increment nbreak */
 
         if(n->op == ODWHILE)
             patch(sp, pc);
+
         gen(n->right);		/* body */
 
         gbranch(OGOTO);
         patch(p, continpc);
 
-        patch(spb, pc);
+        patch(spb, pc); // exit
 
+        /*s: [[gen()]] when OWHILE/ODWHILE, before exit, restore continpc/breakpc */
+        // restore
         continpc = scc;
         breakpc = sbc;
-
+        /*s: [[gen()]] when OWHILE/ODWHILE, set canreach */
         canreach = nbreak!=0;
-        if(canreach == false)
-            warnreach = !suppress;
-
+        if(!canreach)
+             warnreach = !suppress;
+        /*e: [[gen()]] when OWHILE/ODWHILE, set canreach */
         nbreak = snbreak;
+        /*e: [[gen()]] when OWHILE/ODWHILE, before exit, restore continpc/breakpc */
         break;
     /*x: [[gen()]] switch node kind cases */
     case OFOR:
         l = n->left;
-        if(!canreach && l->right->left && warnreach) {
+        /*s: [[gen()]] when OFOR, check canreach before gen anything */
+        if(!canreach && warnreach && l->right->left) {
             warn(n, "unreachable code FOR");
             warnreach = false;
         }
+        /*e: [[gen()]] when OFOR, check canreach before gen anything */
+
         gen(l->right->left);	/* init */
 
         gbranch(OGOTO);		/* entry */
         sp = p;
 
+        /*s: [[gen()]] when OFOR, check canreach after gen init */
         /* 
          * if there are no incoming labels in the 
          * body and the top's not reachable, warn
@@ -350,64 +409,131 @@ loop:
             warn(n, "unreachable code %O", o);
             warnreach = false;
         }
+        /*e: [[gen()]] when OFOR, check canreach after gen init */
 
+        /*s: [[gen()]] when OFOR, set continpc to pc before goto continue */
         scc = continpc;
         continpc = pc;
-
-        gbranch(OGOTO);
+        /*e: [[gen()]] when OFOR, set continpc to pc before goto continue */
+        gbranch(OGOTO); // goto for continue
         spc = p;
 
+        /*s: [[gen()]] when OFOR, set breakpc to pc before goto break */
         sbc = breakpc;
-        breakpc = pc;
         snbreak = nbreak;
-        nbreak = 0;
         sncontin = ncontin;
+        breakpc = pc;
+        nbreak = 0;
         ncontin = 0;
-
-        gbranch(OGOTO);
+        /*e: [[gen()]] when OFOR, set breakpc to pc before goto break */
+        gbranch(OGOTO); // goto for break
         spb = p;
 
         patch(spc, pc);
+
         gen(l->right->right);	/* inc */
-        patch(sp, pc);	
+
+        patch(sp, pc); // entry
+
         if(l->left != Z) {	/* test */
             bcomplex(l->left, Z);
             patch(p, breakpc);
+            /*s: [[gen()]] when OFOR, increment nbreak */
             if(l->left->op != OCONST || vconst(l->left) == 0)
                 nbreak++;
+            /*e: [[gen()]] when OFOR, increment nbreak */
         }
+
+        /*s: [[gen()]] when OFOR, set canreach before gen body */
         canreach = true;
+        /*e: [[gen()]] when OFOR, set canreach before gen body */
+
         gen(n->right);		/* body */
+
         if(canreach){
             gbranch(OGOTO);
             patch(p, continpc);
-
+            /*s: [[gen()]] when OFOR, increment ncontin when canreach end of body */
             ncontin++;
+            /*e: [[gen()]] when OFOR, increment ncontin when canreach end of body */
         }
+        /*s: [[gen()]] when OFOR, check can reach for inc */
         if(!ncontin && l->right->right && warnreach) {
             warn(l->right->right, "unreachable FOR inc");
             warnreach = false;
         }
+        /*e: [[gen()]] when OFOR, check can reach for inc */
 
         patch(spb, pc);
+
+        /*s: [[gen()]] when OFOR, before exit, restore continpc/breakpc */
+        // restore
         continpc = scc;
         breakpc = sbc;
-
+        /*s: [[gen()]] when OFOR, set canreach after gen */
         canreach = nbreak!=0;
-        if(canreach == false)
+        if(!canreach)
             warnreach = !suppress;
-
+        /*e: [[gen()]] when OFOR, set canreach after gen */
         nbreak = snbreak;
         ncontin = sncontin;
+        /*e: [[gen()]] when OFOR, before exit, restore continpc/breakpc */
+        break;
+    /*x: [[gen()]] switch node kind cases */
+    case OCONTINUE:
+        /*s: [[gen()]] when OCONTINUE, sanity check continpc */
+        if(continpc < 0) {
+            diag(n, "continue not in a loop");
+            break;
+        }
+        /*e: [[gen()]] when OCONTINUE, sanity check continpc */
+        gbranch(OGOTO);
+        patch(p, continpc);
+        ncontin++;
+        /*s: [[gen()]] when OGOTO/ORETURN/OBREAK/OCONTINUE, set canreach */
+        canreach = false;
+        warnreach = !suppress;
+        /*e: [[gen()]] when OGOTO/ORETURN/OBREAK/OCONTINUE, set canreach */
+        break;
+    /*x: [[gen()]] switch node kind cases */
+    case OBREAK:
+        /*s: [[gen()]] when OBREAK, sanity check breakpc */
+        if(breakpc < 0) {
+            diag(n, "break not in a loop");
+            break;
+        }
+        /*e: [[gen()]] when OBREAK, sanity check breakpc */
+        /*s: [[gen()]] when OBREAK, check canreach */
+        /*
+         * Don't complain about unreachable break statements.
+         * There are breaks hidden in yacc's output and some people
+         * write return; break; in their switch statements out of habit.
+         * However, don't confuse the analysis by inserting an 
+         * unreachable reference to breakpc either.
+         */
+        if(!canreach)
+            break;
+        /*e: [[gen()]] when OBREAK, check canreach */
+        gbranch(OGOTO);
+        patch(p, breakpc);
+        nbreak++;
+        /*s: [[gen()]] when OGOTO/ORETURN/OBREAK/OCONTINUE, set canreach */
+        canreach = false;
+        warnreach = !suppress;
+        /*e: [[gen()]] when OGOTO/ORETURN/OBREAK/OCONTINUE, set canreach */
         break;
     /*x: [[gen()]] switch node kind cases */
     case ORETURN:
+        /*s: [[gen()]] when OGOTO/ORETURN/OBREAK/OCONTINUE, set canreach */
         canreach = false;
         warnreach = !suppress;
+        /*e: [[gen()]] when OGOTO/ORETURN/OBREAK/OCONTINUE, set canreach */
 
         complex(n);
+        /*s: [[gen()]] when ORETURN, after complex, if no type */
         if(n->type == T)
             break;
+        /*e: [[gen()]] when ORETURN, after complex, if no type */
 
         l = uncomma(n->left);
         if(l == Z) {
@@ -445,41 +571,9 @@ loop:
         }
         break;
     /*x: [[gen()]] switch node kind cases */
-    case OCONTINUE:
-        if(continpc < 0) {
-            diag(n, "continue not in a loop");
-            break;
-        }
-        gbranch(OGOTO);
-        patch(p, continpc);
-
-        ncontin++;
-        canreach = false;
-        warnreach = !suppress;
-
-        break;
-    /*x: [[gen()]] switch node kind cases */
-    case OBREAK:
-        if(breakpc < 0) {
-            diag(n, "break not in a loop");
-            break;
-        }
-        /*
-         * Don't complain about unreachable break statements.
-         * There are breaks hidden in yacc's output and some people
-         * write return; break; in their switch statements out of habit.
-         * However, don't confuse the analysis by inserting an 
-         * unreachable reference to breakpc either.
-         */
-        if(!canreach)
-            break;
-
-        gbranch(OGOTO);
-        patch(p, breakpc);
-
-        nbreak++;
-        canreach = false;
-        warnreach = !suppress;
+    default:
+        complex(n);
+        cgen(n, Z);
         break;
     /*x: [[gen()]] switch node kind cases */
     case OSWITCH:
@@ -487,10 +581,12 @@ loop:
         complex(l);
         if(l->type == T)
             break;
+        /*s: [[gen()]] when OSWITCH, typecheck condition */
         if(!typeswitch[l->type->etype]) {
             diag(n, "switch expression must be integer");
             break;
         }
+        /*e: [[gen()]] when OSWITCH, typecheck condition */
 
         gbranch(OGOTO);		/* entry */
         sp = p;
@@ -561,48 +657,6 @@ loop:
         cases->label = pc;
         cases->isv = typev[l->type->etype];
         goto rloop;
-    /*x: [[gen()]] switch node kind cases */
-    case OLABEL:
-        canreach = true;
-        l = n->left;
-        if(l) {
-            l->pc = pc;
-            if(l->label)
-                patch(l->label, pc);
-        }
-        gbranch(OGOTO);	/* prevent self reference in reg */
-        patch(p, pc);
-
-        goto rloop;
-    /*x: [[gen()]] switch node kind cases */
-    case OGOTO:
-        canreach = false;
-        warnreach = !suppress;
-
-        n = n->left;
-        if(n == Z) // possible?
-            return;
-        if(n->complex == 0) {
-            diag(Z, "label undefined: %s", n->sym->name);
-            return;
-        }
-        if(suppress)
-            return;
-
-        gbranch(OGOTO);
-        if(n->pc) {
-            patch(p, n->pc);
-        } else {
-            if(n->label)
-                 patch(n->label, pc-1);
-            n->label = p;
-        }
-        return;
-    /*x: [[gen()]] switch node kind cases */
-    default:
-        complex(n);
-        cgen(n, Z);
-        break;
     /*e: [[gen()]] switch node kind cases */
     }
 }
@@ -627,9 +681,11 @@ usedset(Node *n, int o)
         else
             gins(ANOP, n, Z);
         break;
+    /*s: [[usedset()]] switch node op cases */
     case OADDR:	/* volatile */
         gins(ANOP, n, Z);
         break;
+    /*e: [[usedset()]] switch node op cases */
     }
 }
 /*e: function usedset */
@@ -640,20 +696,28 @@ bcomplex(Node *n, Node *c)
 {
 
     complex(n);
-
+    /*s: [[bcomplex()]] typecheck n */
     if(n->type != T)
        if(tcompat(n, T, n->type, tnot))
           n->type = T;
+    /*e: [[bcomplex()]] typecheck n */
+    /*s: [[bcomplex()]] generate fake goto if type error */
     if(n->type == T) {
         gbranch(OGOTO);
         return false;
     }
+    /*e: [[bcomplex()]] generate fake goto if type error */
+    /*s: [[bcomplex()]] check for deadheads */
     if(c != Z && n->op == OCONST && deadheads(c))
         return true;
+    /*e: [[bcomplex()]] check for deadheads */
 
+    /*s: [[bcomplex()]] possibly convert node to funcall if unsupported 64 bit op */
     bool64(n);
+    /*e: [[bcomplex()]] possibly convert node to funcall if unsupported 64 bit op */
     boolgen(n, true, Z);
-    return false;
+
+    return false; // no error
 }
 /*e: function bcomplex */
 /*e: cc2/pgen.c */
