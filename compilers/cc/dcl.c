@@ -398,8 +398,10 @@ init1(Sym *s, Type *t, long o, int exflag)
         if(a == Z)
             return Z;
 
+        /*s: [[init1()]] sanity check t has no bitfields */
         if(t->nbits)
             diag(Z, "cannot initialize bitfields");
+        /*e: [[init1()]] sanity check t has no bitfields */
         if(s->class == CAUTO) {
             l = new(ONAME, Z, Z);
             l->sym = s;
@@ -1418,14 +1420,17 @@ paramconv(Type *t, bool f)
 {
 
     switch(t->etype) {
-    case TARRAY:
-        t = typ(TIND, t->link);
-        t->width = types[TIND]->width;
-        break;
+    /*s: [[paramconv()]] switch etype cases */
     case TFUNC:
         t = typ(TIND, t);
         t->width = types[TIND]->width;
         break;
+    /*x: [[paramconv()]] switch etype cases */
+    case TARRAY:
+        t = typ(TIND, t->link);
+        t->width = types[TIND]->width;
+        break;
+    /*e: [[paramconv()]] switch etype cases */
     /*s: [[paramconv()]] switch etype, adjust type when not f cases */
     case TFLOAT:
         if(!f)
@@ -1499,21 +1504,23 @@ adecl(int c, Type *t, Sym *s)
 
     switch(c) {
     /*s: [[adecl()]] switch class cases */
-    case CAUTO:
-        autoffset = align(autoffset, t, Aaut3);
-        stkoff = maxround(stkoff, autoffset);
-        s->offset = -autoffset;
-        break;
-    /*x: [[adecl()]] switch class cases */
     case CPARAM:
+        /*s: [[adecl()]] if first parameter */
         if(autoffset == 0) {
             firstarg = s;
             firstargtype = t;
         }
+        /*e: [[adecl()]] if first parameter */
         autoffset = align(autoffset, t, Aarg1);
         if(s)
             s->offset = autoffset;
         autoffset = align(autoffset, t, Aarg2);
+        break;
+    /*x: [[adecl()]] switch class cases */
+    case CAUTO:
+        autoffset = align(autoffset, t, Aaut3);
+        stkoff = maxround(stkoff, autoffset);
+        s->offset = -autoffset;
         break;
     /*e: [[adecl()]] switch class cases */
     }

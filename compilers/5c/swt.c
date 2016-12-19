@@ -166,8 +166,10 @@ outstring(char *s, long n)
 {
     long r;
 
+    /*s: [[outstring()]] return if suppress */
     if(suppress)
         return nstring;
+    /*e: [[outstring()]] return if suppress */
     r = nstring;
     while(n) {
         string[mnstring] = *s++;
@@ -188,7 +190,7 @@ outstring(char *s, long n)
 /*e: function outstring(arm) */
 
 /*s: function mulcon(arm) */
-int
+bool
 mulcon(Node *n, Node *nn)
 {
     Node *l, *r, nod1, nod2;
@@ -198,7 +200,7 @@ mulcon(Node *n, Node *nn)
     char code[sizeof(m->code)+2], *p;
 
     if(typefd[n->type->etype])
-        return 0;
+        return false;
     l = n->left;
     r = n->right;
     if(l->op == OCONST) {
@@ -206,18 +208,18 @@ mulcon(Node *n, Node *nn)
         r = n->left;
     }
     if(r->op != OCONST)
-        return 0;
+        return false;
     v = convvtox(r->vconst, n->type->etype);
     if(v != r->vconst) {
         if(debug['M'])
             print("%L multiply conv: %lld\n", n->lineno, r->vconst);
-        return 0;
+        return false;
     }
     m = mulcon0(v);
     if(!m) {
         if(debug['M'])
             print("%L multiply table: %lld\n", n->lineno, r->vconst);
-        return 0;
+        return false;
     }
     if(debug['M'] && debug['v'])
         print("%L multiply: %ld\n", n->lineno, v);
@@ -243,7 +245,7 @@ loop:
         } else 
             gopcode(OAS, &nod1, Z, nn);
         regfree(&nod1);
-        return 1;
+        return true;
     case '+':
         o = OADD;
         goto addsub;
@@ -353,6 +355,7 @@ outcode(void)
     Sym *s;
     int sf, st, t, sym;
 
+    /*s: [[outcode()]] debug */
     if(debug['S']) {
         for(p = firstp; p != P; p = p->link)
             if(p->as != ADATA && p->as != AGLOBL)
@@ -363,6 +366,7 @@ outcode(void)
                 pc++;
         }
     }
+    /*e: [[outcode()]] debug */
     outhist(&outbuf);
     for(sym=0; sym<NSYM; sym++) {
         h[sym].sym = S;

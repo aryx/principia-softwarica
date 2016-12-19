@@ -71,7 +71,7 @@ struct	Adr
     char	symkind;
     /*e: [[Adr]] other fields(arm) */
     /*s: [[Adr]] type fields(arm) */
-    // enum<type_kind>
+    // enum<Type_kind>
     char	etype;
     /*e: [[Adr]] type fields(arm) */
 };

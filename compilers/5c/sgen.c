@@ -26,10 +26,12 @@ noretval(int n)
  *		NAME ==> 10		name
  *		REGISTER ==> 11		register
  *		INDREG ==> 12		*[(reg)+offset]
+ *
  *		&10 ==> 2		$name
  *		ADD(2, 20) ==> 2	$name+offset
  *		ADD(3, 20) ==> 3	$(reg)+offset
  *		&12 ==> 3		$(reg)+offset
+ *
  *		*11 ==> 11		??
  *		*2 ==> 10		name
  *		*3 ==> 12		*(reg)+offset
@@ -43,74 +45,70 @@ xcom(Node *n)
 
     if(n == Z)
         return;
+
     l = n->left;
     r = n->right;
     n->addable = 0;
     n->complex = 0;
+
     switch(n->op) {
+    /*s: [[xcom()]] switch op cases to set addable */
     case OCONST:
         n->addable = 20;
         return;
-
-    case OREGISTER:
-        n->addable = 11;
-        return;
-
-    case OINDREG:
-        n->addable = 12;
-        return;
-
+    /*x: [[xcom()]] switch op cases to set addable */
     case ONAME:
         n->addable = 10;
         return;
-
+    /*x: [[xcom()]] switch op cases to set addable */
+    case OREGISTER:
+        n->addable = 11;
+        return;
+    /*x: [[xcom()]] switch op cases to set addable */
+    case OINDREG:
+        n->addable = 12;
+        return;
+    /*x: [[xcom()]] switch op cases to set addable */
     case OADDR:
         xcom(l);
         if(l->addable == 10)
             n->addable = 2;
+
         if(l->addable == 12)
             n->addable = 3;
         break;
 
+    /*x: [[xcom()]] switch op cases to set addable */
     case OIND:
         xcom(l);
-        if(l->addable == 11)
-            n->addable = 12;
-        if(l->addable == 3)
-            n->addable = 12;
         if(l->addable == 2)
             n->addable = 10;
-        break;
 
+        if(l->addable == 3)
+            n->addable = 12;
+        if(l->addable == 11)
+            n->addable = 12;
+        break;
+    /*x: [[xcom()]] switch op cases to set addable */
     case OADD:
         xcom(l);
         xcom(r);
         if(l->addable == 20) {
             if(r->addable == 2)
                 n->addable = 2;
+
             if(r->addable == 3)
                 n->addable = 3;
         }
         if(r->addable == 20) {
             if(l->addable == 2)
                 n->addable = 2;
+
             if(l->addable == 3)
                 n->addable = 3;
         }
         break;
-
-    case OASLMUL:
-    case OASMUL:
-        xcom(l);
-        xcom(r);
-        t = vlog(r);
-        if(t >= 0) {
-            n->op = OASASHL;
-            r->vconst = t;
-            r->type = types[TINT];
-        }
-        break;
-
+    /*x: [[xcom()]] switch op cases to set addable */
     case OMUL:
     case OLMUL:
         xcom(l);
@@ -132,18 +130,19 @@ xcom(Node *n)
             r->type = types[TINT];
         }
         break;
-
-    case OASLDIV:
+    /*x: [[xcom()]] switch op cases to set addable */
+    case OASLMUL:
+    case OASMUL:
         xcom(l);
         xcom(r);
         t = vlog(r);
         if(t >= 0) {
-            n->op = OASLSHR;
+            n->op = OASASHL;
             r->vconst = t;
             r->type = types[TINT];
         }
         break;
-
+    /*x: [[xcom()]] switch op cases to set addable */
     case OLDIV:
         xcom(l);
         xcom(r);
@@ -154,17 +153,18 @@ xcom(Node *n)
             r->type = types[TINT];
         }
         break;
-
-    case OASLMOD:
+    /*x: [[xcom()]] switch op cases to set addable */
+    case OASLDIV:
         xcom(l);
         xcom(r);
         t = vlog(r);
         if(t >= 0) {
-            n->op = OASAND;
-            r->vconst--;
+            n->op = OASLSHR;
+            r->vconst = t;
+            r->type = types[TINT];
         }
         break;
-
+    /*x: [[xcom()]] switch op cases to set addable */
     case OLMOD:
         xcom(l);
         xcom(r);
@@ -174,7 +174,17 @@ xcom(Node *n)
             r->vconst--;
         }
         break;
-
+    /*x: [[xcom()]] switch op cases to set addable */
+    case OASLMOD:
+        xcom(l);
+        xcom(r);
+        t = vlog(r);
+        if(t >= 0) {
+            n->op = OASAND;
+            r->vconst--;
+        }
+        break;
+    /*e: [[xcom()]] switch op cases to set addable */
     default:
         if(l != Z)
             xcom(l);
@@ -184,31 +194,36 @@ xcom(Node *n)
     }
     if(n->addable >= 10)
         return;
-
+    // else
+    /*s: [[xcom()]] set complex if addable less than 10 */
     if(l != Z)
         n->complex = l->complex;
     if(r != Z) {
         if(r->complex == n->complex)
             n->complex = r->complex+1;
         else
-        if(r->complex > n->complex)
-            n->complex = r->complex;
+           if(r->complex > n->complex)
+               n->complex = r->complex;
     }
+
     if(n->complex == 0)
         n->complex++;
 
+    /*s: [[xcom()]] if 64 bits operation, transform and return */
     if(com64(n))
         return;
-
+    /*e: [[xcom()]] if 64 bits operation, transform and return */
+    // else
     switch(n->op) {
+    /*s: [[xcom()]] switch node opkind cases to set complexity */
     case OFUNC:
         n->complex = FNX;
         break;
-
+    /*x: [[xcom()]] switch node opkind cases to set complexity */
     case OADD:
-    case OXOR:
     case OAND:
     case OOR:
+    case OXOR:
     case OEQ:
     case ONE:
         /*
@@ -219,7 +234,9 @@ xcom(Node *n)
             n->right = l;
         }
         break;
+    /*e: [[xcom()]] switch node opkind cases to set complexity */
     }
+    /*e: [[xcom()]] set complex if addable less than 10 */
 }
 /*e: function xcom(arm) */
 /*e: 5c/sgen.c */

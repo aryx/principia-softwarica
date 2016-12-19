@@ -144,7 +144,7 @@ evconst(Node *n)
     case OXOR:
         v = l->vconst ^ r->vconst;
         break;
-
+    /*x: [[evconst()]] switch node kind cases */
     case OLSHR:
         v = (uvlong)l->vconst >> r->vconst;
         break;

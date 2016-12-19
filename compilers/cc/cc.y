@@ -425,6 +425,8 @@ ulstmnt:
 |   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
 |   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
 /*x: ulstmnt rule */
+|   LGOTO ltag ';' { $$ = new(OGOTO, dcllabel($2, false), Z); }
+/*x: ulstmnt rule */
 |   LSWITCH '(' cexpr ')' stmnt
     {
        /*s: ulstmt rule, SWITCH case, adjust cexpr node */
@@ -445,17 +447,15 @@ ulstmnt:
         $$ = new(OSWITCH, $3, $5);
     }
 /*x: ulstmnt rule */
-|   LGOTO ltag ';' { $$ = new(OGOTO, dcllabel($2, false), Z); }
-/*x: ulstmnt rule */
 |   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
 |   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
 /*e: ulstmnt rule */
 /*s: label rule */
+|   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
+/*x: label rule */
 label:
     LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
 |   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
-/*x: label rule */
-|   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
 /*e: label rule */
 /*x: statements rules */
 forexpr:

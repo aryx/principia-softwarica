@@ -30,36 +30,44 @@ complex(Node *n)
 
     nearln = n->lineno;
 
+    /*s: [[complex()]] debug tree pre complex */
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "pre complex");
-
+    /*e: [[complex()]] debug tree pre complex */
     // typechecking, removing some sugar, lvalue annotate, bitfield annot, etc
     if(tcom(n))
         return;
 
+    // comma hoisting
     comma(n);
+    /*s: [[complex()]] debug tree after tcom and comma */
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "t complex");
-
+    /*e: [[complex()]] debug tree after tcom and comma */
     // general rewrite
     ccom(n);
+    /*s: [[complex()]] debug tree after ccom */
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "c complex");
-
+    /*e: [[complex()]] debug tree after ccom */
     // arithmetic rewrite
     acom(n);
+    /*s: [[complex()]] debug tree after acom */
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "a complex");
+    /*e: [[complex()]] debug tree after acom */
 
-    // addressability and complexity
+    // addressability and complexity (and shl/shr optimizations)
     xcom(n);
+    /*s: [[complex()]] debug tree after xcom */
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "x complex");
+    /*e: [[complex()]] debug tree after xcom */
 }
 /*e: function complex */
 
@@ -159,8 +167,10 @@ tcomo(Node *n, int f)
         /*s: [[tcomo()]] in ONAME case, if extern register */
         if(n->class == CEXREG) {
             n->op = OREGISTER;
+            /*s: [[tcomo()]] in ONAME case, if extern register, if x86 */
             if(thechar == '8')
                 n->op = OEXREG;
+            /*e: [[tcomo()]] in ONAME case, if extern register, if x86 */
             n->reg = n->sym->offset;
             n->xoffset = 0;
             break;
@@ -764,6 +774,7 @@ tcomo(Node *n, int f)
             /*e: [[tcomo()]] when OSIZE, check if sizeof bitfield */
             n->type = l->type;
         }
+        /*s: [[tcomo()]] when OSIZE, sanity check n */
         if(n->type == T)
             goto bad;
         if(n->type->width <= 0) {
@@ -774,6 +785,7 @@ tcomo(Node *n, int f)
             diag(n, "sizeof function");
             goto bad;
         }
+        /*e: [[tcomo()]] when OSIZE, sanity check n */
         n->op = OCONST;
         n->left = Z;
         n->right = Z;
@@ -827,18 +839,22 @@ tcomo(Node *n, int f)
             if(l->op != OSTRING && l->op != OLSTRING)
                 if(tcomo(l, 0))
                     goto bad;
+            /*s: [[tcomo()]] when OSIGN, sanity check no bitfield */
             if(l->op == OBIT) {
                 diag(n, "signof bitfield");
                 goto bad;
             }
+            /*e: [[tcomo()]] when OSIGN, sanity check no bitfield */
             n->type = l->type;
         }
+        /*s: [[tcomo()]] when OSIGN, typecheck and sanity check */
         if(n->type == T)
             goto bad;
         if(n->type->width < 0) {
             diag(n, "signof undefined type");
             goto bad;
         }
+        /*e: [[tcomo()]] when OSIGN, typecheck and sanity check */
         n->op = OCONST;
         n->left = Z;
         n->right = Z;
@@ -1218,25 +1234,21 @@ loop:
     r = n->right;
     switch(n->op) {
     /*s: [[ccom()]] switch node kind cases */
-    case OCONST:
-    case ONAME:
-        break;
-    /*x: [[ccom()]] switch node kind cases */
     case OAS:
-    case OASXOR:
-    case OASAND:
-    case OASOR:
-    case OASMOD:
-    case OASLMOD:
-    case OASLSHR:
-    case OASASHR:
-    case OASASHL:
-    case OASDIV:
-    case OASLDIV:
+    case OASADD:
+    case OASSUB:
     case OASMUL:
     case OASLMUL:
-    case OASSUB:
-    case OASADD:
+    case OASDIV:
+    case OASLDIV:
+    case OASMOD:
+    case OASLMOD:
+    case OASASHR:
+    case OASASHL:
+    case OASLSHR:
+    case OASAND:
+    case OASOR:
+    case OASXOR:
         ccom(l);
         ccom(r);
         if(n->op == OASLSHR || n->op == OASASHR || n->op == OASASHL)
@@ -1245,6 +1257,14 @@ loop:
             if(r->vconst >= t || r->vconst < 0)
                 warn(n, "stupid shift: %lld", r->vconst);
         }
+        break;
+    /*x: [[ccom()]] switch node kind cases */
+    case OCONST:
+    case ONAME:
+        break;
+    /*x: [[ccom()]] switch node kind cases */
+    case OREGISTER:
+    case OINDREG:
         break;
     /*x: [[ccom()]] switch node kind cases */
     case OCAST:
@@ -1260,16 +1280,6 @@ loop:
             l->type = n->type;
             *n = *l;
         }
-        break;
-    /*x: [[ccom()]] switch node kind cases */
-    case OCOND:
-        ccom(l);
-        ccom(r);
-        if(l->op == OCONST)
-            if(vconst(l) == 0)
-                *n = *r->right;
-            else
-                *n = *r->left;
         break;
     /*x: [[ccom()]] switch node kind cases */
     case OADDR:
@@ -1291,25 +1301,65 @@ loop:
         }
         goto common;
     /*x: [[ccom()]] switch node kind cases */
-    case OEQ:
-    case ONE:
-
-    case OLE:
-    case OGE:
-    case OLT:
-    case OGT:
-
-    case OLS:
-    case OHS:
-    case OLO:
-    case OHI:
+    case OADD:
+    case OOR:
+    case OXOR:
+        ccom(l);
+        if(vconst(l) == 0) {
+            *n = *r;
+            goto loop;
+        }
+        ccom(r);
+        if(vconst(r) == 0) {
+            *n = *l;
+            break;
+        }
+        goto commute;
+    /*x: [[ccom()]] switch node kind cases */
+    commute:
+        /* look for commutative constant */
+        if(r->op == OCONST) {
+            if(l->op == n->op) {
+                if(l->left->op == OCONST) {
+                    n->right = l->right;
+                    l->right = r;
+                    goto loop;
+                }
+                if(l->right->op == OCONST) {
+                    n->right = l->left;
+                    l->left = r;
+                    goto loop;
+                }
+            }
+        }
+        if(l->op == OCONST) {
+            if(r->op == n->op) {
+                if(r->left->op == OCONST) {
+                    n->left = r->right;
+                    r->right = l;
+                    goto loop;
+                }
+                if(r->right->op == OCONST) {
+                    n->left = r->left;
+                    r->left = l;
+                    goto loop;
+                }
+            }
+        }
+        goto common;
+    /*x: [[ccom()]] switch node kind cases */
+    case OAND:
         ccom(l);
         ccom(r);
-        if(compar(n, 0) || compar(n, 1))
+        if(vconst(l) == 0 && !side(r)) {
+            *n = *l;
             break;
-        relcon(l, r);
-        relcon(r, l);
-        goto common;
+        }
+        if(vconst(r) == 0 && !side(l)) {
+            *n = *r;
+            break;
+        }
+        // Fallthrough, goto commute
     /*x: [[ccom()]] switch node kind cases */
     case OASHR:
     case OASHL:
@@ -1324,11 +1374,13 @@ loop:
             *n = *l;
             break;
         }
+        /*s: [[ccom()]] when OASHR/OASHL/OLSHR, check for stupid shift */
         if(r->op == OCONST) {
             t = n->type->width * 8;	/* bits per byte */
             if(r->vconst >= t || r->vconst <= -t)
                 warn(n, "stupid shift: %lld", r->vconst);
         }
+        /*e: [[ccom()]] when OASHR/OASHL/OLSHR, check for stupid shift */
         goto common;
     /*x: [[ccom()]] switch node kind cases */
     case OMUL:
@@ -1391,64 +1443,24 @@ loop:
         ccom(l);
         goto common;
     /*x: [[ccom()]] switch node kind cases */
-    case OXOR:
-    case OOR:
-    case OADD:
-        ccom(l);
-        if(vconst(l) == 0) {
-            *n = *r;
-            goto loop;
-        }
-        ccom(r);
-        if(vconst(r) == 0) {
-            *n = *l;
-            break;
-        }
-        goto commute;
-    /*x: [[ccom()]] switch node kind cases */
-    case OAND:
+    case OEQ:
+    case ONE:
+
+    case OLE:
+    case OGE:
+    case OLT:
+    case OGT:
+
+    case OLS:
+    case OHS:
+    case OLO:
+    case OHI:
         ccom(l);
         ccom(r);
-        if(vconst(l) == 0 && !side(r)) {
-            *n = *l;
+        if(compar(n, 0) || compar(n, 1))
             break;
-        }
-        if(vconst(r) == 0 && !side(l)) {
-            *n = *r;
-            break;
-        }
-        // Fallthrough, goto commute
-    /*x: [[ccom()]] switch node kind cases */
-    commute:
-        /* look for commutative constant */
-        if(r->op == OCONST) {
-            if(l->op == n->op) {
-                if(l->left->op == OCONST) {
-                    n->right = l->right;
-                    l->right = r;
-                    goto loop;
-                }
-                if(l->right->op == OCONST) {
-                    n->right = l->left;
-                    l->left = r;
-                    goto loop;
-                }
-            }
-        }
-        if(l->op == OCONST) {
-            if(r->op == n->op) {
-                if(r->left->op == OCONST) {
-                    n->left = r->right;
-                    r->right = l;
-                    goto loop;
-                }
-                if(r->right->op == OCONST) {
-                    n->left = r->left;
-                    r->left = l;
-                    goto loop;
-                }
-            }
-        }
+        relcon(l, r);
+        relcon(r, l);
         goto common;
     /*x: [[ccom()]] switch node kind cases */
     case OANDAND:
@@ -1470,8 +1482,14 @@ loop:
         ccom(r);
         goto common;
     /*x: [[ccom()]] switch node kind cases */
-    case OREGISTER:
-    case OINDREG:
+    case OCOND:
+        ccom(l);
+        ccom(r);
+        if(l->op == OCONST)
+            if(vconst(l) == 0)
+                *n = *r->right;
+            else
+                *n = *r->left;
         break;
     /*e: [[ccom()]] switch node kind cases */
     default:

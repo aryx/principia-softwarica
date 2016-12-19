@@ -13,10 +13,10 @@ cgen(Node *n, Node *nn)
 void
 cgenrel(Node *n, Node *nn, bool inrel)
 {
-    Node *l, *r;
     // enum<node_kind>
     int o;
-    // enum<type_kind>?
+    Node *l, *r;
+    // enum<Type_kind>
     int t;
     long curs;
     /*s: [[cgenrel()]] locals */
@@ -25,10 +25,12 @@ cgenrel(Node *n, Node *nn, bool inrel)
     long v;
     /*e: [[cgenrel()]] locals */
 
+    /*s: [[cgenrel()]] debug */
     if(debug['g']) {
         prtree(nn, "cgen lhs");
         prtree(n, "cgen");
     }
+    /*e: [[cgenrel()]] debug */
     if(n == Z || n->type == T)
         return;
 
@@ -43,23 +45,28 @@ cgenrel(Node *n, Node *nn, bool inrel)
         r = n->right;
         o = n->op;
         
-        /*s: [[cgenrel()]] if addable more than INDEXED */
+        /*s: [[cgenrel()]] if node addressable */
         if(n->addable >= INDEXED) {
+            /*s: [[cgenrel()]] warn if target node is nil */
             if(nn == Z) {
                 switch(o) {
-                default:
-                    nullwarn(Z, Z);
-                    break;
                 case OINDEX:
                     nullwarn(l, r);
+                    break;
+                default:
+                    nullwarn(Z, Z);
                     break;
                 }
                 return;
             }
+            /*e: [[cgenrel()]] warn if target node is nil */
             gmove(n, nn);
             return;
         }
-        /*e: [[cgenrel()]] if addable more than INDEXED */
+        /*e: [[cgenrel()]] if node addressable */
+        // else
+
+        // save
         curs = cursafe;
         /*s: [[cgenrel()]] if all complex fields more than FNX */
         if(n->complex >= FNX)
@@ -98,6 +105,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
             break;
         /*x: [[cgenrel()]] switch node kind cases */
         case OSUB:
+            /*s: [[cgenrel()]] when OSUB, if l is OCONST */
             if(nn != Z)
              if(l->op == OCONST)
               if(!typefd[n->type->etype]) {
@@ -105,14 +113,16 @@ cgenrel(Node *n, Node *nn, bool inrel)
                 gopcode(o, Z, l, nn);
                 break;
             }
-            // Fallthrough
+            /*e: [[cgenrel()]] when OSUB, if l is OCONST */
+            // else, Fallthrough
         case OADD:
         case OAND:
         case OOR:
         case OXOR:
-        case OLSHR:
         case OASHL:
         case OASHR:
+        case OLSHR:
+            /*s: [[cgenrel()]] when OADD/OAND/etc, if r is OCONST */
             /*
              * immediate operands
              */
@@ -126,11 +136,12 @@ cgenrel(Node *n, Node *nn, bool inrel)
                     gopcode(o, r, Z, nn);
                 break;
             }
+            /*e: [[cgenrel()]] when OADD/OAND/etc, if r is OCONST */
             // Fallthrough
+        case OMUL:
         case OLMUL:
         case OLDIV:
         case OLMOD:
-        case OMUL:
         muldiv:
             /*s: [[cgenrel()]] nullwarn check if nn is null */
             if(nn == Z) {
@@ -138,17 +149,23 @@ cgenrel(Node *n, Node *nn, bool inrel)
                 break;
             }
             /*e: [[cgenrel()]] nullwarn check if nn is null */
+            /*s: [[cgenrel()]] when OMUL/OLMUL, mulcon opportunity */
             if(o == OMUL || o == OLMUL) {
                 if(mulcon(n, nn))
                     break;
             }
+            /*e: [[cgenrel()]] when OMUL/OLMUL, mulcon opportunity */
+            // else, the general case!
+            /*s: [[cgenrel()]] when OADD/OAND/..., if l more complex than r */
             if(l->complex >= r->complex) {
                 regalloc(&nod, l, nn);
                 cgen(l, &nod);
                 regalloc(&nod1, r, Z);
                 cgen(r, &nod1);
                 gopcode(o, &nod1, Z, &nod);
-            } else {
+            }
+            /*e: [[cgenrel()]] when OADD/OAND/..., if l more complex than r */
+            else {
                 regalloc(&nod, r, nn);
                 cgen(r, &nod);
                 regalloc(&nod1, l, Z);
@@ -162,6 +179,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
         /*x: [[cgenrel()]] switch node kind cases */
         case ODIV:
         case OMOD:
+            /*s: [[cgenrel()]] when ODIV/OMOD, convert to SHR if possible */
             if(nn != Z)
              if((t = vlog(r)) >= 0) {
                 /* signed div/mod by constant power of 2 */
@@ -184,51 +202,22 @@ cgenrel(Node *n, Node *nn, bool inrel)
                 }
                 break;
             }
+            /*e: [[cgenrel()]] when ODIV/OMOD, convert to SHR if possible */
+            // else
             goto muldiv;
         /*x: [[cgenrel()]] switch node kind cases */
-        case OANDAND:
-        case OOROR:
-            boolgen(n, true, nn);
-            if(nn == Z)
-                patch(p, pc);
-            break;
-        /*x: [[cgenrel()]] switch node kind cases */
-        case ONOT:
-            /*s: [[cgenrel()]] nullwarn check if nn is null, empty right */
-            if(nn == Z) {
-                nullwarn(l, Z);
-                break;
-            }
-            /*e: [[cgenrel()]] nullwarn check if nn is null, empty right */
-            boolgen(n, true, nn);
-            break;
-        /*x: [[cgenrel()]] switch node kind cases */
-        case OEQ:
-        case ONE:
-        case OLE:
-        case OLT:
-        case OGE:
-        case OGT:
-        case OLO:
-        case OLS:
-        case OHI:
-        case OHS:
-            /*s: [[cgenrel()]] nullwarn check if nn is null */
-            if(nn == Z) {
-                nullwarn(l, r);
-                break;
-            }
-            /*e: [[cgenrel()]] nullwarn check if nn is null */
-            boolgen(n, true, nn);
-            break;
-        /*x: [[cgenrel()]] switch node kind cases */
         case OAS:
+            /*s: [[cgenrel()]] when OAS, if bitfield assignment */
             if(l->op == OBIT)
                 goto bitas;
+            /*e: [[cgenrel()]] when OAS, if bitfield assignment */
             if(l->addable >= INDEXED && l->complex < FNX) {
+                /*s: [[cgenrel()]] when OAS, if right node not addressable or nn */
                 if(nn != Z || r->addable < INDEXED) {
+                    /*s: [[cgenrel()]] when OAS, if right node contain a call */
                     if(r->complex >= FNX && nn == Z)
                         regret(&nod, r);
+                    /*e: [[cgenrel()]] when OAS, if right node contain a call */
                     else
                         regalloc(&nod, r, nn);
                     cgen(r, &nod);
@@ -236,10 +225,16 @@ cgenrel(Node *n, Node *nn, bool inrel)
                     if(nn != Z)
                         gmove(&nod, nn);
                     regfree(&nod);
-                } else
+                }
+                /*e: [[cgenrel()]] when OAS, if right node not addressable or nn */
+                else
+                    // both left and right are addressable and nn == Z
                     gmove(r, l);
                 break;
             }
+            // else
+            /*s: [[cgenrel()]] when OAS, when left node not addressable or too complex */
+            /*s: [[cgenrel()]] when OAS, when l not addressable, if l more complex than r */
             if(l->complex >= r->complex) {
                 reglcgen(&nod1, l, Z);
                 if(r->addable >= INDEXED) {
@@ -249,9 +244,12 @@ cgenrel(Node *n, Node *nn, bool inrel)
                     regfree(&nod1);
                     break;
                 }
+                // else
                 regalloc(&nod, r, nn);
                 cgen(r, &nod);
-            } else {
+            }
+            /*e: [[cgenrel()]] when OAS, when l not addressable, if l more complex than r */
+            else {
                 regalloc(&nod, r, nn);
                 cgen(r, &nod);
                 reglcgen(&nod1, l, Z);
@@ -260,17 +258,58 @@ cgenrel(Node *n, Node *nn, bool inrel)
             regfree(&nod);
             regfree(&nod1);
             break;
+            /*e: [[cgenrel()]] when OAS, when left node not addressable or too complex */
         /*x: [[cgenrel()]] switch node kind cases */
-        case OASLSHR:
-        case OASASHL:
-        case OASASHR:
-        case OASAND:
+        case OADDR:
+            /*s: [[cgenrel()]] nullwarn check if nn is null */
+            if(nn == Z) {
+                nullwarn(l, r);
+                break;
+            }
+            /*e: [[cgenrel()]] nullwarn check if nn is null */
+            lcgen(l, nn);
+            break;
+        /*x: [[cgenrel()]] switch node kind cases */
+        case OIND:
+            /*s: [[cgenrel()]] nullwarn check if nn is null */
+            if(nn == Z) {
+                nullwarn(l, r);
+                break;
+            }
+            /*e: [[cgenrel()]] nullwarn check if nn is null */
+            regialloc(&nod, n, nn);
+            /*s: [[cgenrel()]] when OIND, if indirect of OADD constants */
+            r = l;
+            while(r->op == OADD)
+                r = r->right;
+            if(sconst(r) && (v = r->vconst + nod.xoffset) > -4096 && v < 4096) {
+                v = r->vconst;
+                r->vconst = 0;
+                cgen(l, &nod);
+                nod.xoffset += v;
+                r->vconst = v;
+            }
+            /*e: [[cgenrel()]] when OIND, if indirect of OADD constants */
+            else
+                cgen(l, &nod);
+            regind(&nod, n);
+            gopcode(OAS, &nod, Z, nn);
+            regfree(&nod);
+            break;
+        /*x: [[cgenrel()]] switch node kind cases */
         case OASADD:
         case OASSUB:
+        case OASAND:
         case OASXOR:
         case OASOR:
+        case OASASHL:
+        case OASASHR:
+        case OASLSHR:
+            /*s: [[cgenrel()]] when OASADD/OASSUB/etc, if bitfield assignment */
             if(l->op == OBIT)
                 goto asbitop;
+            /*e: [[cgenrel()]] when OASADD/OASSUB/etc, if bitfield assignment */
+            /*s: [[cgenrel()]] when OASADD/OASSUB/etc, if r is OCONST */
             if(r->op == OCONST)
              if(!typefd[r->type->etype])
               if(!typefd[n->type->etype]) {
@@ -288,15 +327,19 @@ cgenrel(Node *n, Node *nn, bool inrel)
                     regfree(&nod2);
                 break;
             }
+            /*e: [[cgenrel()]] when OASADD/OASSUB/etc, if r is OCONST */
             // Fallthrough
-        case OASLMUL:
-        case OASLDIV:
-        case OASLMOD:
         case OASMUL:
         case OASDIV:
         case OASMOD:
+        case OASLMUL:
+        case OASLDIV:
+        case OASLMOD:
+            /*s: [[cgenrel()]] when OASMUL/OASDIV/etc, if bitfield assignment */
             if(l->op == OBIT)
                 goto asbitop;
+            /*e: [[cgenrel()]] when OASMUL/OASDIV/etc, if bitfield assignment */
+            /*s: [[cgenrel()]] when OASADD/OASUB/etc, if l more complex than r */
             if(l->complex >= r->complex) {
                 if(l->addable < INDEXED)
                     reglcgen(&nod2, l, Z);
@@ -304,7 +347,9 @@ cgenrel(Node *n, Node *nn, bool inrel)
                     nod2 = *l;
                 regalloc(&nod1, r, Z);
                 cgen(r, &nod1);
-            } else {
+            }
+            /*e: [[cgenrel()]] when OASADD/OASUB/etc, if l more complex than r */
+             else {
                 regalloc(&nod1, r, Z);
                 cgen(r, &nod1);
                 if(l->addable < INDEXED)
@@ -325,41 +370,8 @@ cgenrel(Node *n, Node *nn, bool inrel)
                 regfree(&nod2);
             break;
         /*x: [[cgenrel()]] switch node kind cases */
-        case OADDR:
-            /*s: [[cgenrel()]] nullwarn check if nn is null, empty right */
-            if(nn == Z) {
-                nullwarn(l, Z);
-                break;
-            }
-            /*e: [[cgenrel()]] nullwarn check if nn is null, empty right */
-            lcgen(l, nn);
-            break;
-        /*x: [[cgenrel()]] switch node kind cases */
-        case OIND:
-            /*s: [[cgenrel()]] nullwarn check if nn is null, empty right */
-            if(nn == Z) {
-                nullwarn(l, Z);
-                break;
-            }
-            /*e: [[cgenrel()]] nullwarn check if nn is null, empty right */
-            regialloc(&nod, n, nn);
-            r = l;
-            while(r->op == OADD)
-                r = r->right;
-            if(sconst(r) && (v = r->vconst+nod.xoffset) > -4096 && v < 4096) {
-                v = r->vconst;
-                r->vconst = 0;
-                cgen(l, &nod);
-                nod.xoffset += v;
-                r->vconst = v;
-            } else
-                cgen(l, &nod);
-            regind(&nod, n);
-            gopcode(OAS, &nod, Z, nn);
-            regfree(&nod);
-            break;
-        /*x: [[cgenrel()]] switch node kind cases */
         case OFUNC:
+            /*s: [[cgenrel()]] when OFUNC, if indirect function call */
             if(l->complex >= FNX) {
                 if(l->op != OIND)
                     diag(n, "bad function call");
@@ -379,16 +391,21 @@ cgenrel(Node *n, Node *nn, bool inrel)
 
                 return;
             }
+            /*e: [[cgenrel()]] when OFUNC, if indirect function call */
+            // else
             /*s: [[cgenrel()]] OFUNC case, if use REGARG, part one */
             if(REGARG >= 0)
                 o = reg[REGARG];
             /*e: [[cgenrel()]] OFUNC case, if use REGARG, part one */
             gargs(r, &nod, &nod1);
+            /*s: [[cgenrel()]] OFUNC case, if l not addressable */
             if(l->addable < INDEXED) {
                 reglcgen(&nod, l, Z);
                 gopcode(OFUNC, Z, Z, &nod);
                 regfree(&nod);
-            } else
+            }
+            /*e: [[cgenrel()]] OFUNC case, if l not addressable */
+            else
                 gopcode(OFUNC, Z, Z, l);
             /*s: [[cgenrel()]] OFUNC case, if use REGARG, part two */
             if(REGARG >= 0)
@@ -418,21 +435,24 @@ cgenrel(Node *n, Node *nn, bool inrel)
             break;
         /*x: [[cgenrel()]] switch node kind cases */
         case OCAST:
-            /*s: [[cgenrel()]] nullwarn check if nn is null, empty right */
+            /*s: [[cgenrel()]] nullwarn check if nn is null */
             if(nn == Z) {
-                nullwarn(l, Z);
+                nullwarn(l, r);
                 break;
             }
-            /*e: [[cgenrel()]] nullwarn check if nn is null, empty right */
+            /*e: [[cgenrel()]] nullwarn check if nn is null */
             /*
              * convert from types l->n->nn
              */
+            /*s: [[cgenrel()]] if same types */
             if(nocast(l->type, n->type)) {
                 if(nocast(n->type, nn->type)) {
                     cgen(l, nn);
                     break;
                 }
             }
+            /*e: [[cgenrel()]] if same types */
+            // else
             regalloc(&nod, l, nn);
             cgen(l, &nod);
             regalloc(&nod1, n, &nod);
@@ -463,8 +483,10 @@ cgenrel(Node *n, Node *nn, bool inrel)
                 v = l->type->link->width;
             if(o == OPOSTDEC)
                 v = -v;
+            /*s: [[cgenrel()]] when OPOSTINC/OPOSTDEC, if bitfield */
             if(l->op == OBIT)
                 goto bitinc;
+            /*e: [[cgenrel()]] when OPOSTINC/OPOSTDEC, if bitfield */
             if(nn == Z)
                 goto pre;
 
@@ -503,8 +525,10 @@ cgenrel(Node *n, Node *nn, bool inrel)
                 v = l->type->link->width;
             if(o == OPREDEC)
                 v = -v;
+            /*s: [[cgenrel()]] when OPREINC/OPREDEC, if bitfield */
             if(l->op == OBIT)
                 goto bitinc;
+            /*e: [[cgenrel()]] when OPREINC/OPREDEC, if bitfield */
 
         pre:
             if(l->addable < INDEXED)
@@ -535,13 +559,49 @@ cgenrel(Node *n, Node *nn, bool inrel)
                 regfree(&nod2);
             break;
         /*x: [[cgenrel()]] switch node kind cases */
-        case OBIT:
-            /*s: [[cgenrel()]] nullwarn check if nn is null, empty right */
+        case OANDAND:
+        case OOROR:
+            boolgen(n, true, nn);
+            if(nn == Z)
+                patch(p, pc);
+            break;
+        /*x: [[cgenrel()]] switch node kind cases */
+        case ONOT:
+            /*s: [[cgenrel()]] nullwarn check if nn is null */
             if(nn == Z) {
-                nullwarn(l, Z);
+                nullwarn(l, r);
                 break;
             }
-            /*e: [[cgenrel()]] nullwarn check if nn is null, empty right */
+            /*e: [[cgenrel()]] nullwarn check if nn is null */
+            boolgen(n, true, nn);
+            break;
+        /*x: [[cgenrel()]] switch node kind cases */
+        case OEQ:
+        case ONE:
+        case OLE:
+        case OLT:
+        case OGE:
+        case OGT:
+        case OLO:
+        case OLS:
+        case OHI:
+        case OHS:
+            /*s: [[cgenrel()]] nullwarn check if nn is null */
+            if(nn == Z) {
+                nullwarn(l, r);
+                break;
+            }
+            /*e: [[cgenrel()]] nullwarn check if nn is null */
+            boolgen(n, true, nn);
+            break;
+        /*x: [[cgenrel()]] switch node kind cases */
+        case OBIT:
+            /*s: [[cgenrel()]] nullwarn check if nn is null */
+            if(nn == Z) {
+                nullwarn(l, r);
+                break;
+            }
+            /*e: [[cgenrel()]] nullwarn check if nn is null */
             bitload(n, &nod, Z, Z, nn);
             gopcode(OAS, &nod, Z, nn);
             regfree(&nod);
@@ -598,6 +658,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
             diag(n, "unknown op in cgen: %O", o);
             break;
         }
+        // restore
         cursafe = curs;
     }
     return;
@@ -612,6 +673,7 @@ reglcgen(Node *t, Node *n, Node *nn)
     long v;
 
     regialloc(t, n, nn);
+    /*s: [[reglcgen()]] if OIND of OADD of constants */
     if(n->op == OIND) {
         r = n->left;
         while(r->op == OADD)
@@ -625,7 +687,10 @@ reglcgen(Node *t, Node *n, Node *nn)
             regind(t, n);
             return;
         }
-    } else if(n->op == OINDREG) {
+    }
+    /*e: [[reglcgen()]] if OIND of OADD of constants */
+    /*s: [[reglcgen()]] if OINDREG with small offsets */
+    else if(n->op == OINDREG) {
         if((v = n->xoffset) > -4096 && v < 4096) {
             n->op = OREGISTER;
             cgen(n, t);
@@ -635,6 +700,8 @@ reglcgen(Node *t, Node *n, Node *nn)
             return;
         }
     }
+    /*e: [[reglcgen()]] if OINDREG with small offsets */
+    // else
     lcgen(n, t);
     regind(t, n);
 }
@@ -663,29 +730,38 @@ reglpcgen(Node *n, Node *nn, int f)
 void
 lcgen(Node *n, Node *nn)
 {
-    Prog *p1;
     Node nod;
+    /*s: [[lcgen()]] other locals */
+    Prog *p1;
+    /*e: [[lcgen()]] other locals */
 
+    /*s: [[lcgen()]] debug */
     if(debug['g']) {
         prtree(nn, "lcgen lhs");
         prtree(n, "lcgen");
     }
+    /*e: [[lcgen()]] debug */
+    /*s: [[lcgen()]] sanity check n */
     if(n == Z || n->type == T)
         return;
+    /*e: [[lcgen()]] sanity check n */
+    /*s: [[lcgen()]] if nn nil */
     if(nn == Z) {
         nn = &nod;
         regalloc(&nod, n, Z);
     }
+    /*e: [[lcgen()]] if nn nil */
     switch(n->op) {
+    /*s: [[lcgen()]] switch node cases */
+    case OIND:
+        cgen(n->left, nn);
+        break;
+    /*x: [[lcgen()]] switch node cases */
     case OCOMMA:
         cgen(n->left, n->left);
         lcgen(n->right, nn);
         break;
-
-    case OIND:
-        cgen(n->left, nn);
-        break;
-
+    /*x: [[lcgen()]] switch node cases */
     case OCOND:
         bcgen(n->left, 1);
         p1 = p;
@@ -696,12 +772,14 @@ lcgen(Node *n, Node *nn)
         lcgen(n->right->right, nn);
         patch(p1, pc);
         break;
-
+    /*e: [[lcgen()]] switch node cases */
     default:
+        /*s: [[lcgen()]] sanity check n in default case */
         if(n->addable < INDEXED) {
             diag(n, "unknown op in lcgen: %O", n->op);
             break;
         }
+        /*e: [[lcgen()]] sanity check n in default case */
         nod = *n;
         nod.op = OADDR;
         nod.left = n;
@@ -735,10 +813,12 @@ boolgen(Node *n, int btrue, Node *nn)
     Node *l, *r, nod, nod1;
     long curs;
 
+    /*s: [[boolgen()]] debug */
     if(debug['g']) {
         prtree(nn, "boolgen lhs");
         prtree(n, "boolgen");
     }
+    /*e: [[boolgen()]] debug */
     curs = cursafe;
 
     l = n->left;
@@ -908,10 +988,12 @@ sugen(Node *n, Node *nn, long w)
     if(n == Z || n->type == T)
         return;
 
+    /*s: [[sugen()]] debug */
     if(debug['g']) {
         prtree(nn, "sugen lhs");
         prtree(n, "sugen");
     }
+    /*e: [[sugen()]] debug */
     if(nn == nodrat)
         if(w > nrathole)
             nrathole = w;

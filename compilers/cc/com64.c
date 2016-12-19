@@ -282,24 +282,25 @@ com64init(void)
 /*e: function com64init */
 
 /*s: function com64 */
-int
+bool
 com64(Node *n)
 {
-    Node *l, *r, *a, *t;
-    int lv, rv;
+    Node *l, *r; 
+    Node *a, *t;
+    bool lv, rv;
 
-    if(n->type == 0)
-        return 0;
+    if(n->type == nil)
+        return false;
 
     l = n->left;
     r = n->right;
 
-    lv = 0;
+    lv = false;
     if(l && l->type && typev[l->type->etype])
-        lv = 1;
-    rv = 0;
+        lv = true;
+    rv = false;
     if(r && r->type && typev[r->type->etype])
-        rv = 1;
+        rv = true;
 
     if(lv) {
         switch(n->op) {
@@ -337,7 +338,7 @@ com64(Node *n)
         case OANDAND:
         case OOROR:
             if(machcap(n))
-                return 1;
+                return true;
 
             if(rv) {
                 r = new(OFUNC, nodtestv, r);
@@ -350,7 +351,7 @@ com64(Node *n)
         case OCOND:
         case ONOT:
             if(machcap(n))
-                return 1;
+                return true;
 
             l = new(OFUNC, nodtestv, l);
             n->left = l;
@@ -364,7 +365,7 @@ com64(Node *n)
 
     if(rv) {
         if(machcap(n))
-            return 1;
+            return true;
         switch(n->op) {
         case OANDAND:
         case OOROR:
@@ -381,7 +382,7 @@ com64(Node *n)
 
     if(typev[n->type->etype]) {
         if(machcap(n))
-            return 1;
+            return true;
         switch(n->op) {
         default:
             diag(n, "unknown vlong %O", n->op);
@@ -488,7 +489,7 @@ com64(Node *n)
                 goto setfnx;
             }
             diag(n, "unknown %T->vlong cast", l->type);
-            return 1;
+            return true;
         case OASADD:
             a = nodaddv;
             goto setasop;
@@ -557,7 +558,7 @@ com64(Node *n)
     if(n->op == OCAST) {
         if(l->type && typev[l->type->etype]) {
             if(machcap(n))
-                return 1;
+                return true;
             switch(n->type->etype) {
             case TDOUBLE:
                 a = nodv2d;
@@ -594,18 +595,18 @@ com64(Node *n)
                 goto setfnx;
             }
             diag(n, "unknown vlong->%T cast", n->type);
-            return 1;
+            return true;
         }
     }
 
-    return 0;
+    return false;
 
 setbop:
     n->left = a;
     n->right = new(OLIST, l, r);
     n->complex = FNX;
     n->op = OFUNC;
-    return 1;
+    return true;
 
 setfnxl:
     l = new(OCAST, l, 0);
@@ -617,7 +618,7 @@ setfnx:
     n->right = l;
     n->complex = FNX;
     n->op = OFUNC;
-    return 1;
+    return true;
 
 setvinc:
     n->left = a;
@@ -627,17 +628,17 @@ setvinc:
     n->right = new(OLIST, l, r);
     n->complex = FNX;
     n->op = OFUNC;
-    return 1;
+    return true;
 
 setbool:
     if(machcap(n))
-        return 1;
+        return true;
     n->left = a;
     n->right = new(OLIST, l, r);
     n->complex = FNX;
     n->op = OFUNC;
     n->type = types[TLONG];
-    return 1;
+    return true;
 
 setasop:
     if(l->op == OFUNC) {
@@ -665,7 +666,7 @@ setasop:
     n->complex = FNX;
     n->op = OFUNC;
 
-    return 1;
+    return true;
 }
 /*e: function com64 */
 
@@ -677,6 +678,7 @@ bool64(Node *n)
 
     if(machcap(Z))
         return;
+
     if(typev[n->type->etype]) {
         n1 = new(OXXX, 0, 0);
         *n1 = *n;

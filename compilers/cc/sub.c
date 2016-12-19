@@ -377,6 +377,7 @@ makedot(Node *n, Type *t, long o)
 {
     Node *n1, *n2;
 
+    /*s: [[makedot()]] if bitfields */
     if(t->nbits) {
         n1 = new(OXXX, Z, Z);
         *n1 = *n;
@@ -387,8 +388,9 @@ makedot(Node *n, Type *t, long o)
         n->addable = n1->left->addable;
         n = n1;
     }
+    /*e: [[makedot()]] if bitfields */
     n->addable = n->left->addable;
-    if(n->addable == 0) {
+    if(!n->addable) {
         n1 = new1(OCONST, Z, Z);
         n1->vconst = o;
         n1->type = types[TLONG];
@@ -820,11 +822,13 @@ arith(Node *n, bool f)
             n1->vconst = w;
             n1->type = n->type;
             n->right = n1;
+            /*s: [[arith()]] when substract two pointers, convert DIV to SHR if can */
             w = vlog(n1);
             if(w >= 0) {
                 n->op = OASHR;
                 n1->vconst = w;
             }
+            /*e: [[arith()]] when substract two pointers, convert DIV to SHR if can */
         }
         return;
     }

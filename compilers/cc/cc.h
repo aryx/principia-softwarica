@@ -510,11 +510,11 @@ enum Node_kind
     OBREAK,
     OCONTINUE,
     /*x: statement nodes */
-    OSWITCH,
-    OCASE, // for default too, in which case Node.left is null
-    /*x: statement nodes */
     OLABEL,
     OGOTO,
+    /*x: statement nodes */
+    OSWITCH,
+    OCASE, // for default too, in which case Node.left is null
     /*x: statement nodes */
     OUSED,
     OSET,
@@ -549,19 +549,19 @@ enum Node_kind
     // Post parsing nodes
     // ----------------------------------------------------------------------
     /*s: after parsing nodes */
+    OREGISTER,
+    /*x: after parsing nodes */
+    OLSHR,
+    /*x: after parsing nodes */
     OLMUL,
     OLDIV,
     /*x: after parsing nodes */
     OLMOD,
     /*x: after parsing nodes */
-    OLSHR,
-    /*x: after parsing nodes */
+    OASLSHR,
     OASLMUL,
     OASLDIV,
     OASLMOD,
-    OASLSHR,
-    /*x: after parsing nodes */
-    OREGISTER, // via regalloc()
     /*x: after parsing nodes */
     OINDREG,
     /*x: after parsing nodes */
@@ -607,9 +607,12 @@ enum Type_kind
     /*s: [[Type_kind]] composite cases */
     TIND,
     TARRAY,
+
     TFUNC,
+
     TSTRUCT,
     TUNION,
+
     TENUM,
     /*e: [[Type_kind]] composite cases */
     /*s: [[Type_kind]] other cases */
