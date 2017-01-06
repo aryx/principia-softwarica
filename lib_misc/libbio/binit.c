@@ -14,8 +14,8 @@ batexit(void)
 
 	for(i=0; i<nelem(wbufs); i++) {
 		bp = wbufs[i];
-		if(bp != 0) {
-			wbufs[i] = 0;
+		if(bp != nil) {
+			wbufs[i] = nil;
 			Bflush(bp);
 		}
 	}
@@ -29,7 +29,7 @@ deinstall(Biobufhdr *bp)
 
 	for(i=0; i<nelem(wbufs); i++)
 		if(wbufs[i] == bp)
-			wbufs[i] = 0;
+			wbufs[i] = nil;
 }
 
 static
