@@ -1319,9 +1319,11 @@ enum Storage_class
 
     CAUTO,
     CPARAM,
+
     CEXTERN,
     CGLOBL,
     CSTATIC,
+
     <<[[Storage_class]] cases>>
 
     NCTYPES,
@@ -1738,7 +1740,7 @@ syminit(Sym *s)
 
 % the different "namespaces"
 <<enum dxxx>>=
-enum namespace
+enum Namespace
 {
     DMARK, // special mark to help separate the different scopes
 
@@ -1765,7 +1767,7 @@ enum namespace
 struct	Decl
 {
     Sym*	sym;
-    // enum<namespace>
+    // enum<Namespace>
     short	val;
 
     <<[[Decl]] sym copy fields>>
@@ -2108,7 +2110,7 @@ d->varlineno = s->varlineno;
 <<struct Prog(arm)>>=
 struct	Prog
 {
-    // enum<opcode>, from 5.out.h
+    // enum<Opcode>, from 5.out.h
     char	as;
 
     Adr	from;
@@ -2146,7 +2148,7 @@ byte	scond;
 <<struct Adr(arm)>>=
 struct	Adr
 {
-    // enum<operand_kind> (D_NONE by default)
+    // enum<Operand_kind> (D_NONE by default)
     char	type;
 
     long	offset; // generic value, offset or simple constant
@@ -2233,15 +2235,12 @@ char*	outfile = nil;
 % -o, 5.out?
 
 
-<<[[main()]] locals>>=
-int err;
-@
-
 
 <<function main>>=
 //@Scheck: not dead, entry point :)
 void main(int argc, char *argv[])
 {
+    int err;
     <<[[main()]] locals>>
 
     memset(debug, 0, sizeof(debug));
@@ -2258,6 +2257,7 @@ void main(int argc, char *argv[])
     }
 
     <<[[main()]] multiple files handling>>
+    //else
 
     err = compile((argc == 0) ? "stdin" : argv[0], defs, ndef);
 
@@ -2313,7 +2313,6 @@ case 'o':
 <<[[main()]] locals>>=
 char *p;
 @
-
 <<[[main()]] command line processing>>=
 case 'D':
     p = ARGF();
@@ -2380,7 +2379,9 @@ default:
 % instead, so we could call codegen in the main (or compile)
 % instead of in cc.y.
 
-\t put -c here?
+% put -c here? There is no -c! (well there is one but for constant if check).
+% 5c always generates an object file. The linker is a separate necessary
+% program.
 
 \section{[[compile()]]}
 
@@ -2732,6 +2733,7 @@ struct	Io
 @
 %ocaml: use a stack of lexbuf (over a chan or over a string)
 % and adds also in the stack an optional chan as need to close it
+% (and reuse code between 5a and 5c)
 
 
 <<global iostack>>=
@@ -2954,7 +2956,7 @@ short	c;
 % Because anyway have to do a few things which are easier outside
 % lex like comment handling, typedefs, escape characters?
 % Had with C lex? hmm but can do that with ocamllex!
-% For unicode! ocamllex not great with unicode (hence ulex) is is true.
+% For unicode! ocamllex not great with unicode (hence ulex) ...
 
 \section{[[yylex()]]}
 
@@ -3052,7 +3054,7 @@ case EOF:
 case '/':
     c1 = GETC();
     if(c1 == '*') {
-        // '/''*' read, skip everything until next '*''/'
+        // '/''*' read; skip everything until next '*''/'
         for(;;) {
             c = getr();
             while(c == '*') {
@@ -3067,7 +3069,7 @@ case '/':
         }
     }
     if(c1 == '/') {
-        // '/''/' read, skip everything until next '\n'
+        // '/''/' read; skip everything until next '\n'
         for(;;) {
             c = getr();
             if(c == '\n')
@@ -5811,6 +5813,8 @@ ctlist:
 
 \subsection{Declarator-based declarations}
 
+%http://blog.robertelder.org/building-a-c-compiler-type-system-the-formidable-declarator/
+
 % It's not just for globals, it can also define
 % typedefs, and even struct and globals at the same time.
 % also can declare prototypes.
@@ -7015,7 +7019,7 @@ ODOT,
         $$->sym = $3;
     }
 @
-% unsugar x->y
+% unsugar x->y to (*x).y
 
 %codegen: more structured arrays! with different size, but ultimately
 % will be transformed in array access (pointer + offset).
@@ -7846,6 +7850,8 @@ simpleg(long b)
 \subsection{Structures and unions}
 
 % Not so simple when need to handle scope.
+
+%http://blog.robertelder.org/magical-world-of-structs-typedefs-scoping/
 
 % There is OSTRUCT and OUNION but it's for struct constructor!
 % Here we will return directly a Type pointer.
@@ -9138,7 +9144,7 @@ if(s->block == autobn)
 @
 %ocaml: done in check.ml
 
-\section{Typechecking}
+\section{Typechecking helpers}
 
 \subsection{Overview}
 
@@ -9323,7 +9329,8 @@ snap(Type *t)
 
 
 
-%\subsection{Void star conversions, [[5c -V]]}
+\subsection{generic [[void*]] pointer conversions, [[5c -V]]}
+
 % I thought it was a C extension, but it is not!
 % Without the code below you cant call functions like pwrite with a string
 % because a char* will not match a void*
@@ -9842,6 +9849,7 @@ if(t->width < 0) {
 @
 %ocaml: no need, I compute the size far later during code generation
 
+\subsection{Array to pointer conversions}
 
 
 % set addable to false by default.
@@ -9886,6 +9894,9 @@ addaddr:
     n->type->width = types[TIND]->width;
     return false;
 @
+
+% "array is a lie in C"
+%https://blog.feabhas.com/2016/12/a-convenient-untruth/
 
 % so if declared 'int x[45];', then when you refer to 'x' in an expression,
 % it first gets it full type (TARRAY(45, int)), but then this
@@ -12345,6 +12356,10 @@ case OASXOR:
 \t why not separate stuff for OASLHR and let generic recursor for the other?
 
 
+\subsection{Useless comparisons}
+
+% see compar()
+
 
 
 \section{Const checking}
@@ -12362,6 +12377,7 @@ constas(n, l->type, r->type);
 % not respect that much const.
 
 % check for const
+% il = initial l, ir = initial r
 <<function constas>>=
 void
 constas(Node *n, Type *il, Type *ir)
@@ -12413,9 +12429,9 @@ constas(n, n->type, l->type);
 
 \section{Overview}
 
-% 5c/8c/... do not have an intermediate language :( not even an RTL :(
+% 5c/8c/... do not use an intermediate language :( not even an RTL :(
 % They generate directly (arch-specific) assembly 
-% (or actually object-code, because use PC directly, not assembly labels).
+% (or actually object-code, because they use PC directly, not assembly labels).
 % But they have kinda factorized a few things behind some
 % common interface: gpseudo(), gins(), gmove(), gbranch(), as well
 % as some REGRET, REGARG.
@@ -12459,6 +12475,11 @@ constas(n, n->type, l->type);
 % but I tried to aspectized some of those code generation code
 % and so this code will be presented in this chapter (even if it
 % really code from tcomo()).
+
+%LLVM IR would be better?
+%https://idea.popcount.org/2013-07-24-ir-is-better-than-assembly/
+%5a does a bit too: abstract away RET, general MOVW, but still
+% hardcoded register names.
 
 \section{[[pc]], [[p]], and [[nextpc()]]}
 
@@ -13018,7 +13039,7 @@ long	pc;
 % can be seen as a kind of value field too, for OLABEL and OGOTO
 
 <<[[Node]] code generation fields>>=
-// ref<Prog>, but use void to be archi independent
+// ref<Prog>, but use 'void*' to be archi independent
 void*	label;
 @
 %ocaml: use external hash in external environment with list of
@@ -13077,7 +13098,7 @@ case OGOTO:
 
 % what if 2 goto to same label before the label itself is defined?
 % will patch first goto to jump to second one :) ugly. unoptimal
-% (but optimized later)
+% (but optimized later I think)
 
 <<[[gen()]] when OGOTO/ORETURN/OBREAK/OCONTINUE, set canreach>>=
 canreach = false;
@@ -13590,6 +13611,7 @@ reg[REGEXT] = 1; // R10
 reg[REGEXT-1] = 1; // R9
 @
 %ocaml: same
+\t how is it that it uses R9 for registers.c extreme case ???
 
 <<global resvreg(arm)>>=
 static	char	resvreg[nelem(reg)];
@@ -14140,7 +14162,7 @@ if(typechlp[ft] && typeilp[tt])
 @
 %chlp: char, short, long, pointer
 % regalloc(, t, t) so conversion on from?
-\l some kind of opti?
+\t some kind of opti?
 
 <<global typeilp>>=
 char	typeilp[NTYPE];
@@ -14636,6 +14658,8 @@ out:
 diag(tn, "out of fixed registers");
 goto err;
 @
+\t can this happen? or impossibly by construction thx to complexity
+\t  analysis and algorithm to favor less complex first?
 
 <<[[regalloc()]] if reach here, unknown type>>=
 
@@ -14817,7 +14841,8 @@ case CAUTO:
     break;
 @
 % locals are accessed as negative offset to SP.
-\t why not stkoff = autoffset?
+\t why not stkoff = autoffset? and what need stkoff for? reseted
+\t  anyway in argmark
 
 <<[[naddr()]] when ONAME, switch class cases>>=
 case CAUTO:
@@ -15067,6 +15092,7 @@ muldiv:
     break;
 @
 \l should gopcode to nn only if non null nn no?
+\l also could use gmove
 
 <<[[cgenrel()]] switch node kind cases>>=
 case ODIV:
@@ -15077,6 +15103,9 @@ case OMOD:
 @
 
 
+\subsubsection{Complexity and register allocation}
+
+% subtle! see plus_chain.c, or registers.c
 
 <<[[cgenrel()]] when OADD/OAND/..., if l more complex than r>>=
 if(l->complex >= r->complex) {
@@ -15087,6 +15116,16 @@ if(l->complex >= r->complex) {
     gopcode(o, &nod1, Z, &nod);
 }
 @
+\t why Z here? ugly? could not pass &nod? clearer?
+
+% Note that not symetric with other case.
+% In both case we store the result in nod (which one time refers to
+% r and one time to l). But this saves some extra MOVW! see plus_chain.c
+% because the     gopcode(OAS, &nod, Z, nn);
+% can become a NOP and be removed.
+% Subtle!
+
+
 
 \subsubsection{[[gopcode()]]}
 
@@ -15107,7 +15146,6 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
     <<[[gopcode()]] locals>>
 
     et = (f1 != Z && f1->type != T)? f1->type->etype : TLONG;
-
     <<[[gopcode()]] initialisation>>
 
     a = AGOK;
@@ -15137,6 +15175,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
 % o -> a.
 \t could call gins then? yes for first part, but still does special
 \t  thing about p->reg and the last parameter t.
+% why need et? for float adjustments.
 
 
 <<[[gopcode()]] sanity check a>>=
@@ -15497,7 +15536,7 @@ case OADDR:
 % note that tcomo() ensure tlvalue(l), so does not
 % have to handle every cases.
 
-% lvalue code generator?
+% lvalue code generator
 <<function lcgen(arm)>>=
 void
 lcgen(Node *n, Node *nn)
@@ -15535,7 +15574,11 @@ if(n->addable < INDEXED) {
     break;
 }
 @
+% In many cases do simply things like &x.
 
+
+% In some cases, do more complex things like
+% & ((&x).foo)
 
 
 
@@ -15719,7 +15762,7 @@ if(l->complex >= r->complex) {
 
 \subsubsection{[[reglcgen()]]}
 
-% lcgen in a reg.
+% lcgen in a reg, lvalue code generator in register
 
 <<function reglcgen(arm)>>=
 void
@@ -16116,6 +16159,7 @@ makedot(Node *n, Type *t, long o)
         n->type = t;
         return;
     }
+    // else
     n->left->type = t;
     if(o == 0) {
         *n = *n->left;
@@ -18384,6 +18428,8 @@ direct:
 @
 
 
+
+
 \chapter{Object File Generation}
 % Dupe with Assembler.nw. Quite simple.
 
@@ -18767,8 +18813,8 @@ case OCAST:
             break;
     }
     if(nocast(l->type, n->type) &&
-       (!typefd[l->type->etype] || typeu[l->type->etype] && 
-       typeu[n->type->etype])) {
+       (!typefd[l->type->etype] || 
+       typeu[l->type->etype] && typeu[n->type->etype]) ) {
         l->type = n->type;
         *n = *l;
     }
@@ -18874,7 +18920,8 @@ case OAND:
 @
 
 
-% ??? -> <>
+% look if has side effect?
+% ccom -> <>
 <<function side>>=
 bool
 side(Node *n)
@@ -18932,6 +18979,7 @@ loop:
     case ONAME:
         return false;
     }
+    // OFUNC/OAS/OASADD/...
     return true;
 }
 @
@@ -19012,7 +19060,8 @@ case OLDIV:
 
 \subsubsection{Sub to Add}
 
-% what for? 
+% OADD more performant than OSUB? meh
+% or because use more patterns with OADD than OSUB for optim opportunities?
 
 <<[[ccom()]] switch node kind cases>>=
 case OSUB:
@@ -19243,6 +19292,7 @@ compar(Node *n, int reverse)
         l = l->left;
     if(l->op == OCONST)
         return 0;
+
     lt = l->type;
     if(l->op == ONAME && l->sym->type){
         lt = l->sym->type;
@@ -19352,6 +19402,7 @@ case OANDAND:
     ccom(r);
     goto common;
 @
+
 <<[[ccom()]] switch node kind cases>>=
 case OOROR:
     ccom(l);
@@ -19975,6 +20026,8 @@ if(nn != Z)
     break;
 }
 @
+% look on the right for constant only because normalized already
+% in xcom. See below.
 
 <<[[xcom()]] switch node opkind cases to set complexity>>=
 case OADD:
@@ -19992,7 +20045,8 @@ case ONE:
     }
     break;
 @
-
+%ocaml: TODO should do that in rewrite.ml in separate phase;
+% nothing to do with complexity really
 
 \subsection{Multiplication}
 
@@ -20017,6 +20071,7 @@ mulcon(Node *n, Node *nn)
 
     if(typefd[n->type->etype])
         return false;
+
     l = n->left;
     r = n->right;
     if(l->op == OCONST) {
@@ -20025,6 +20080,8 @@ mulcon(Node *n, Node *nn)
     }
     if(r->op != OCONST)
         return false;
+
+
     v = convvtox(r->vconst, n->type->etype);
     if(v != r->vconst) {
         if(debug['M'])
@@ -21232,7 +21289,7 @@ if(a == AMOVW || a == AMOVF || a == AMOVD)
 @
 %When need that? if do
 % foo(int x) { return x } then would generate a MOVW R0, R0
-% which is useless
+% which is useless.
 
 <<function samaddr>>=
 bool
@@ -21262,8 +21319,7 @@ if(f2 && f2->op == OCONST) {
 @
 
 \section{Register passing argument, [[REGARG]]}
-% maybe not the best section, kind of assembly-level opti,
-% but seems generic and involves modifying the AST
+% kind of assembly-level opti. seems generic and involves modifying the AST.
 
 <<[[codgen()]] locals>>=
 Node nod, nod1;
@@ -21294,10 +21350,10 @@ if(REGARG >= 0) {
     }
 }
 @
-% xcom? why not complex()?
-%todo: what's the point of allocating a nod1 to put
-% the first argument passed via REGARG in? it removes
-% the benefit of this optimisation no?
+% xcom just to set addable and complex.
+
+% save R0 into stack (x-4(FP)) before doing anything.
+
 
 <<global typeword>>=
 // set<type_kind>
@@ -21333,6 +21389,7 @@ if(REGARG >= 0 && curarg == 0 && typechlp[n->type->etype]) {
         cgen(n, tn1);
 }
 @
+% should use typeword here.
 
 <<function regaalloc1(arm)>>=
 void
@@ -22113,6 +22170,8 @@ struct	Var
 % yet another etype
 
 \subsection{[[Reg]]}
+
+% for region?
 
 <<struct Reg>>=
 struct	Reg
@@ -24575,6 +24634,7 @@ postorder(Reg *r, Reg **rpo2r, long n)
 
 \section{[[#pragma lib]] and automagic linking}
 
+% put back pragma code here from preprocessing chapter
 
 \section{Safe linking with type signatures, [[5c -T]]}
 % md5sum like in ocaml!
@@ -24830,6 +24890,8 @@ sigind(Type *t, Typetab *tt)
 %	$CC -a $CFLAGS rio.c	> syms
 %	$CC -aa $CFLAGS *.c 	>>syms
 
+% -aa ??
+
 
 <<[[compile()]] if writing acid to standard output>>=
 /*
@@ -24873,15 +24935,9 @@ acidvar(Sym *s)
     Type *t;
     Sym *s1, *s2;
 
-    if(!debug['a'] || debug['s'])
-        return;
-    if(debug['a'] > 1) {
-        n = 0;
-        for(i=iostack; i; i=i->link)
-            n++;
-        if(n > 1)
-            return;
-    }
+    <<[[acidvar()]] return if no -a or -s>>
+    <<[[acidvar()]] if -aa>>
+
     t = s->type;
     while(t && t->etype == TIND)
         t = t->link;
@@ -24916,6 +24972,21 @@ acidvar(Sym *s)
             amap(s1->name), amap(s->name));
         break;
     }
+}
+@
+
+<<[[acidvar()]] return if no -a or -s>>=
+if(!debug['a'] || debug['s'])
+    return;
+@
+
+<<[[acidvar()]] if -aa>>=
+if(debug['a'] > 1) {
+    n = 0;
+    for(i=iostack; i; i=i->link)
+        n++;
+    if(n > 1)
+        return;
 }
 @
 
@@ -25008,15 +25079,9 @@ acidtype(Type *t)
     int n;
     char *an;
 
-    if(!debug['a'])
-        return;
-    if(debug['a'] > 1) {
-        n = 0;
-        for(i=iostack; i; i=i->link)
-            n++;
-        if(n > 1)
-            return;
-    }
+    <<[[acidtype()]] return if no -a>>
+    <<[[acidtype()]] if -aa>>
+
     s = acidsue(t->link);
     if(s == S)
         return;
@@ -25056,6 +25121,21 @@ acidtype(Type *t)
     }
 }
 @
+
+<<[[acidtype()]] return if no -a>>=
+if(!debug['a'])
+    return;
+@
+<<[[acidtype()]] if -aa>>=
+if(debug['a'] > 1) {
+    n = 0;
+    for(i=iostack; i; i=i->link)
+        n++;
+    if(n > 1)
+        return;
+}
+@
+\l could factorize, seems identical to chunk for acidvar
 
 <<global acidchar>>=
 char	acidchar[NTYPE];
@@ -25208,7 +25288,10 @@ acidmember(Type *t, long off, int flag)
 
 \section{Pickle, [[5c -Z]]}
 
-% 5c -Z  and -n create _picke.c
+% ?? automatic marshalling? thrift?
+
+% 5c -Z
+% - add -n to create _picke.c instead of printing on stdout
 
 
 <<[[compile()]] adjust p for outfile if pickle option>>=
@@ -25530,7 +25613,7 @@ if(a == ATEXT)
 
 \section{[[#pragma profile]]}
 
-
+% put back code here!
 
 
 
@@ -25542,6 +25625,8 @@ if(a == ATEXT)
 \section{Advanced C features}
 
 \subsection{Function and function pointer automatic conversions}
+
+% fp(...) -> (*fp)(...)
 
 <<[[tcomo()]] when OFUNC case, add OIND if pointer function call>>=
 if(l->type->etype == TIND && l->type->link->etype == TFUNC) {
@@ -25559,7 +25644,7 @@ case TFUNC:
     t->width = types[TIND]->width;
     break;
 @
-%ocaml: forbid
+%ocaml: forbid, seems wrong.
 
 % A function parameter is really a function pointer.
 %can do int foo(int bar(int x)) { }. ugly.
@@ -25580,6 +25665,7 @@ case TARRAY:
     break;
 @
 %ocaml: forbid
+% update: allow now because used for jmp_buf in libc.h
 
 % Also automatically add an OADDR when reference an array (to index it,
 % to pass it as an argument, etc.)
@@ -26067,11 +26153,10 @@ bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
 \subsection{Old style prototypes}
 % not really an advanced features though
 
-% See pdecl in function rule and argmark(1)
 
 %\subsubsection{Parsing}
 
-%todo: remove? old style decl?
+%todo: remove?
 <<parameter declarator rules>>=
 /*
  * parameter declarator
@@ -26085,8 +26170,6 @@ pdlist:
 |   pdlist ',' pdlist
 @
 %$
-% this is old style? pre-ansi? can remove no?
-
 
 
 
@@ -26305,12 +26388,21 @@ if(!debug['B'])
 
 \subsection{Typing extensions, [[typeext()]]}
 
-% Mostly for float and unnamed substructure
+% Mostly for float and unnamed substructure.
+
+% When you assign or compare x to y (via ==, or
+% assignment, or return, or by passing argument), 
+% 5c may do some automatic conversions.
+% typeext() below is a hook for those conversions.
 
 <<[[tcomo()]] when OEQ/ONE, typing extensions>>=
 typeext(l->type, r);
 typeext(r->type, l);
 @
+% compare left type with right node, to give opportunity
+% to adjust right node type before the call to 
+%   tcompat(n, l->type, r->type, trel).
+% Then do same for right.
 
 <<[[tcomo()]] when OAS, typing extension>>=
 typeext(l->type, r);
@@ -26329,41 +26421,71 @@ typeext(t, n);
 @
 
 
-% why typeext??? equality is special?
 
 % | ... -> <>
 <<function typeext>>=
 void
 typeext(Type *st, Node *l)
 {
-    Type *lt;
-    Node *n1, *n2;
-    long o;
+    Type *lt = l->type;
+    <<[[typeext()]] other locals>>
 
-    lt = l->type;
+    <<[[typeext()]] sanity check lt>>
 
-    if(lt == T)
-        return;
-
-    if(st->etype == TIND && vconst(l) == 0) {
-        l->type = st;
-        l->vconst = 0;
-        return;
-    }
+    <<[[typeext()]] nil pointer>>
     <<[[typeext()]] float handling>>
     <<[[typeext()]] unnamed substructure handling>>
 }
 @
+%old: lt = l->type; after
+\l st?? store type?
+\t st -> t, l -> n?
+
+<<[[typeext()]] sanity check lt>>=
+if(lt == T)
+    return;
+@
+%ocaml: should never happen
 
 
+<<[[typeext()]] nil pointer>>=
+if(st->etype == TIND && vconst(l) == 0) {
+    l->type = st;
+    l->vconst = 0;
+    return;
+}
+@
+% need that? otherwise will get some type error?
+%ocaml? we could force to add a cast?
 
+
+%XXX
+<<[[typeext()]] other locals>>=
+Node *n1, *n2;
+long o;
+@
 
 
 \subsection{Unnamed structure elements}
-% aka Anonymous field? poor's man inheritance?
+% aka Anonymous field? Poor's man inheritance?
 
 %ex:
 % Lock;
+%
+% I think it also generalizes what regular C allows such as
+% struct X {
+%   union { ... };
+%   struct { ...};
+% };
+% (but I think C just handles the small sugar when do x->foo, not
+%  the general kenccext explained below).
+%
+% Unnamed struct elements have implications when do x->foo where 5c
+% unsugars as x->anon_field.foo.
+% This has also implications when you pass as a parameter
+% the enclosing struct 'x', which can be automatically converted
+% to passing 'x.anon_field' (e.g. Biobuf vs Biobufhdr)
+
 
 %\subsubsection{Parsing}
 
@@ -26377,6 +26499,7 @@ zedlist:                    /* extension */
     }
 |   edlist
 @
+%ocaml: gensym a fieldname instead
 
 
 <<[[edecl()]] if unnamed structure element>>=
@@ -26387,17 +26510,20 @@ if(s == S) {
         diag(Z, "unnamed structure element cannot have class");
 } 
 @
-
+%ocaml: check done later during typecheck as that's when we have
+% done the typedef expansion
 
 
 %\subsubsection{Typing}
 
+% tcomo -> tcomd -> <>
 <<[[dotsearch()]] if unnamed substructures>>=
 /*
  * look it up in unnamed substructures
  */
 for(t1 = t; t1 != T; t1 = t1->down)
     if(t1->sym == S && typesu[t1->etype]){
+        // recurse!
         rt = dotsearch(s, t1->link, n, off);
         if(rt != T) {
             if(xt != T)
@@ -26407,6 +26533,8 @@ for(t1 = t; t1 != T; t1 = t1->down)
         }
     }
 @
+%ocaml: do by unsugaring, add extra RecordAccess?
+% but then complicated?
 
 %\subsubsection{Transforming}
 
@@ -26430,6 +26558,7 @@ if(typesu[st->etype] && typesu[lt->etype]) {
     }
     return;
 }
+// else
 
 if(st->etype == TIND && typesu[st->link->etype])
 if(lt->etype == TIND && typesu[lt->link->etype]) {
@@ -26438,6 +26567,7 @@ if(lt->etype == TIND && typesu[lt->link->etype]) {
         l->type = st;
         if(o == 0)
             return;
+        // else
         n1 = new1(OXXX, Z, Z);
         *n1 = *l;
         n2 = new1(OCONST, Z, Z);
@@ -26450,6 +26580,7 @@ if(lt->etype == TIND && typesu[lt->link->etype]) {
     return;
 }
 @
+
 
 % typeext -> <>
 <<function dotoffset>>=
@@ -26497,6 +26628,7 @@ dotoffset(Type *st, Type *lt, Node *n)
     for(t=lt->link; t!=T; t=t->down)
         if(t->sym == S)
         if(typesu[t->etype]) {
+            // recurse
             o1 = dotoffset(st, t, n);
             if(o1 >= 0) {
                 if(o >= 0)
