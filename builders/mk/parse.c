@@ -271,7 +271,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
             /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'P':
                 pp = utfrune(p, ':');
-                if (pp == 0 || *pp == 0)
+                if (pp == nil || *pp == 0)
                     goto eos;
                 *pp = 0;
                 *prog = strdup(p);
@@ -403,7 +403,7 @@ ipop(void)
 {
     struct Input *in, *me;
 
-    assert(/*pop input list*/ inputs != 0);
+    assert(/*pop input list*/ inputs != nil);
     // me = pop_list(inputs)
     if(inputs->next == nil){
         me = inputs;

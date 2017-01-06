@@ -14,11 +14,11 @@ atimeof(int force, char *name)
     char *archive, *member, buf[512];
 
     archive = split(name, &member);
-    if(archive == 0)
+    if(archive == nil)
         Exit();
 
     t = mkmtime(archive, true);
-    sym = symlook(archive, S_AGG, 0);
+    sym = symlook(archive, S_AGG, nil);
     if(sym){
         if(force || t > sym->u.value){
             atimes(archive);
@@ -32,7 +32,7 @@ atimeof(int force, char *name)
     }
         /* truncate long member name to sizeof of name field in archive header */
     snprint(buf, sizeof(buf), "%s(%.*s)", archive, utfnlen(member, SARNAME), member);
-    sym = symlook(buf, S_TIME, 0);
+    sym = symlook(buf, S_TIME, nil);
     if (sym)
         return sym->u.value;
     return 0;
@@ -49,7 +49,7 @@ atouch(char *name)
     long t;
 
     archive = split(name, &member);
-    if(archive == 0)
+    if(archive == nil)
         Exit();
 
     fd = open(archive, ORDWR);
@@ -61,17 +61,17 @@ atouch(char *name)
         }
         write(fd, ARMAG, SARMAG);
     }
-    if(symlook(name, S_TIME, 0)){
+    if(symlook(name, S_TIME, nil)){
         /* hoon off and change it in situ */
         seek(fd, SARMAG, 0);
         while(read(fd, (char *)&h, sizeof(h)) == sizeof(h)){
             for(i = SARNAME-1; i > 0 && h.name[i] == ' '; i--)
                     ;
-            h.name[i+1]=0;
+            h.name[i+1] = 0;
             if(strcmp(member, h.name) == 0){
                 t = SARNAME-sizeof(h);	/* ughgghh */
                 seek(fd, t, 1);
-                fprint(fd, "%-12ld", time(0));
+                fprint(fd, "%-12ld", time(nil));
                 break;
             }
             t = atol(h.size);
@@ -137,7 +137,7 @@ type(char *file)
 
     fd = open(file, OREAD);
     if(fd < 0){
-        if(symlook(file, S_BITCH, 0) == 0){
+        if(symlook(file, S_BITCH, nil) == nil){
             Bprint(&bout, "%s doesn't exist: assuming it will be an archive\n", file);
             symlook(file, S_BITCH, (void *)file);
         }
@@ -172,7 +172,7 @@ split(char *name, char **member)
         free(p);
         fprint(STDERR, "mk: '%s' is not an archive\n", name);
     }
-    return 0;
+    return nil;
 }
 /*e: function split */
 /*e: mk/archive.c */

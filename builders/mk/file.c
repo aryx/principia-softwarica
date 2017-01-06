@@ -59,7 +59,7 @@ touch(char *name)
 void
 delete(char *name)
 {
-    if(utfrune(name, '(') == 0) {		/* file */
+    if(utfrune(name, '(') == nil) {		/* file */
         if(remove(name) < 0)
             perror(name);
     } else

@@ -71,7 +71,7 @@ void
 dumpv(char *s)
 {
     Bprint(&bout, "%s:\n", s);
-    symtraverse(S_VAR, print1);
+    symtraverse(S_VAR, &print1);
 }
 /*e: dumper dumpv */
 

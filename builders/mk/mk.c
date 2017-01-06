@@ -74,7 +74,7 @@ clrmade(Node *n)
 
     /*s: [[clrmade()]] [[n->flags]] pretend adjustments */
     n->flags &= ~(CANPRETEND|PRETENDING);
-    if(strchr(n->name, '(') == 0 || n->time)
+    if(strchr(n->name, '(') == nil || n->time)
         n->flags |= CANPRETEND;
     /*e: [[clrmade()]] [[n->flags]] pretend adjustments */
     MADESET(n, NOTMADE);
@@ -288,7 +288,7 @@ pcmp(char *prog, char *p, char *q)
 
     Bflush(&bout);
     snprint(buf, sizeof buf, "%s '%s' '%s'\n", prog, p, q);
-    pid = pipecmd(buf, 0, 0);
+    pid = pipecmd(buf, nil, nil);
     while(waitup(EMPTY_CHILDREN_IS_ERROR3, &pid) >= 0)
         ;
     return (pid? 2:1);
@@ -310,7 +310,7 @@ outofdate(Node *node, Arc *arc, bool eval)
     if(arc->prog){
         snprint(buf, sizeof buf, "%s%c%s", node->name, 0377,
             arc->n->name);
-        sym = symlook(buf, S_OUTOFDATE, 0);
+        sym = symlook(buf, S_OUTOFDATE, nil);
         if(sym == nil || eval){
             if(sym == nil)
                 str = strdup(buf);

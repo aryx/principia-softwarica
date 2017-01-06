@@ -435,7 +435,7 @@ usage(void)
 {
     ulong t;
 
-    t = time(0);
+    t = time(nil);
     if(tick)
         tslot[nrunning] += t - tick;
     tick = t;

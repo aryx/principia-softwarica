@@ -124,7 +124,7 @@ expandvar(char **s)
     *end = '\0';
     *s = end+1;
     
-    sym = symlook(buf->start, S_VAR, 0);
+    sym = symlook(buf->start, S_VAR, nil);
     if(sym == nil || sym->u.value == 0)
         w = newword(buf->start);
     else
@@ -183,7 +183,7 @@ subsub(Word *v, char *s, char *end)
     head = tail = nil;
     buf = newbuf();
     for(; v; v = v->next){
-        h = w = 0;
+        h = w = nil;
         if(submatch(v->s, a, b, &nmid, &enda)){
             /* enda points to end of A match in source;
              * nmid = number of chars between end of A and start of B
@@ -223,10 +223,10 @@ subsub(Word *v, char *s, char *end)
                     h = w = wdup(d);
             }
         }
-        if(w == 0)
+        if(w == nil)
             h = w = newword(v->s);
     
-        if(head == 0)
+        if(head == nil)
             head = h;
         else
             tail->next = h;
