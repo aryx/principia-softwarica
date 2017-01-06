@@ -123,7 +123,7 @@ struct	Node
     /*x: [[Node]] code generation fields */
     long	pc;
     /*x: [[Node]] code generation fields */
-    // ref<Prog>, but use void to be archi independent
+    // ref<Prog>, but use 'void*' to be archi independent
     void*	label;
     /*x: [[Node]] code generation fields */
     char	scale; // x86 only
@@ -245,7 +245,7 @@ enum signature {
 struct	Decl
 {
     Sym*	sym;
-    // enum<namespace>
+    // enum<Namespace>
     short	val;
 
     /*s: [[Decl]] sym copy fields */
@@ -690,7 +690,7 @@ enum align
 };
 /*e: enum align */
 /*s: enum dxxx */
-enum namespace
+enum Namespace
 {
     DMARK, // special mark to help separate the different scopes
 
@@ -706,9 +706,11 @@ enum Storage_class
 
     CAUTO,
     CPARAM,
+
     CEXTERN,
     CGLOBL,
     CSTATIC,
+
     /*s: [[Storage_class]] cases */
     CTYPEDEF,
     /*x: [[Storage_class]] cases */

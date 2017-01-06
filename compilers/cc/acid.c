@@ -220,8 +220,11 @@ acidtype(Type *t)
     int n;
     char *an;
 
+    /*s: [[acidtype()]] return if no -a */
     if(!debug['a'])
         return;
+    /*e: [[acidtype()]] return if no -a */
+    /*s: [[acidtype()]] if -aa */
     if(debug['a'] > 1) {
         n = 0;
         for(i=iostack; i; i=i->link)
@@ -229,6 +232,8 @@ acidtype(Type *t)
         if(n > 1)
             return;
     }
+    /*e: [[acidtype()]] if -aa */
+
     s = acidsue(t->link);
     if(s == S)
         return;
@@ -278,8 +283,11 @@ acidvar(Sym *s)
     Type *t;
     Sym *s1, *s2;
 
+    /*s: [[acidvar()]] return if no -a or -s */
     if(!debug['a'] || debug['s'])
         return;
+    /*e: [[acidvar()]] return if no -a or -s */
+    /*s: [[acidvar()]] if -aa */
     if(debug['a'] > 1) {
         n = 0;
         for(i=iostack; i; i=i->link)
@@ -287,6 +295,8 @@ acidvar(Sym *s)
         if(n > 1)
             return;
     }
+    /*e: [[acidvar()]] if -aa */
+
     t = s->type;
     while(t && t->etype == TIND)
         t = t->link;

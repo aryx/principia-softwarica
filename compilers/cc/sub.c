@@ -398,6 +398,7 @@ makedot(Node *n, Type *t, long o)
         n->type = t;
         return;
     }
+    // else
     n->left->type = t;
     if(o == 0) {
         *n = *n->left;
@@ -465,6 +466,7 @@ dotsearch(Sym *s, Type *t, Node *n, long *off)
      */
     for(t1 = t; t1 != T; t1 = t1->down)
         if(t1->sym == S && typesu[t1->etype]){
+            // recurse!
             rt = dotsearch(s, t1->link, n, off);
             if(rt != T) {
                 if(xt != T)
@@ -528,6 +530,7 @@ dotoffset(Type *st, Type *lt, Node *n)
     for(t=lt->link; t!=T; t=t->down)
         if(t->sym == S)
         if(typesu[t->etype]) {
+            // recurse
             o1 = dotoffset(st, t, n);
             if(o1 >= 0) {
                 if(o >= 0)
@@ -623,20 +626,24 @@ typeext1(Type *st, Node *l)
 void
 typeext(Type *st, Node *l)
 {
-    Type *lt;
+    Type *lt = l->type;
+    /*s: [[typeext()]] other locals */
     Node *n1, *n2;
     long o;
+    /*e: [[typeext()]] other locals */
 
-    lt = l->type;
-
+    /*s: [[typeext()]] sanity check lt */
     if(lt == T)
         return;
+    /*e: [[typeext()]] sanity check lt */
 
+    /*s: [[typeext()]] nil pointer */
     if(st->etype == TIND && vconst(l) == 0) {
         l->type = st;
         l->vconst = 0;
         return;
     }
+    /*e: [[typeext()]] nil pointer */
     /*s: [[typeext()]] float handling */
     typeext1(st, l);
     /*e: [[typeext()]] float handling */
@@ -660,6 +667,7 @@ typeext(Type *st, Node *l)
         }
         return;
     }
+    // else
 
     if(st->etype == TIND && typesu[st->link->etype])
     if(lt->etype == TIND && typesu[lt->link->etype]) {
@@ -668,6 +676,7 @@ typeext(Type *st, Node *l)
             l->type = st;
             if(o == 0)
                 return;
+            // else
             n1 = new1(OXXX, Z, Z);
             *n1 = *l;
             n2 = new1(OCONST, Z, Z);
@@ -1092,6 +1101,7 @@ loop:
     case ONAME:
         return false;
     }
+    // OFUNC/OAS/OASADD/...
     return true;
 }
 /*e: function side */

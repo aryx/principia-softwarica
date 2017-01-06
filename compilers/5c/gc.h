@@ -54,7 +54,7 @@ typedef	struct	Rgn		Rgn;
 /*s: struct Adr(arm) */
 struct	Adr
 {
-    // enum<operand_kind> (D_NONE by default)
+    // enum<Operand_kind> (D_NONE by default)
     char	type;
 
     long	offset; // generic value, offset or simple constant
@@ -86,7 +86,7 @@ struct	Adr
 /*s: struct Prog(arm) */
 struct	Prog
 {
-    // enum<opcode>, from 5.out.h
+    // enum<Opcode>, from 5.out.h
     char	as;
 
     Adr	from;

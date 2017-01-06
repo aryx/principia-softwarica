@@ -201,6 +201,7 @@ mulcon(Node *n, Node *nn)
 
     if(typefd[n->type->etype])
         return false;
+
     l = n->left;
     r = n->right;
     if(l->op == OCONST) {
@@ -209,6 +210,8 @@ mulcon(Node *n, Node *nn)
     }
     if(r->op != OCONST)
         return false;
+
+
     v = convvtox(r->vconst, n->type->etype);
     if(v != r->vconst) {
         if(debug['M'])

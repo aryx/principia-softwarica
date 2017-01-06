@@ -1109,7 +1109,6 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
     /*e: [[gopcode()]] locals */
 
     et = (f1 != Z && f1->type != T)? f1->type->etype : TLONG;
-
     /*s: [[gopcode()]] initialisation */
     btrue = o & BTRUE;
     o &= ~BTRUE;

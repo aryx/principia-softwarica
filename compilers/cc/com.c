@@ -1275,8 +1275,8 @@ loop:
                 break;
         }
         if(nocast(l->type, n->type) &&
-           (!typefd[l->type->etype] || typeu[l->type->etype] && 
-           typeu[n->type->etype])) {
+           (!typefd[l->type->etype] || 
+           typeu[l->type->etype] && typeu[n->type->etype]) ) {
             l->type = n->type;
             *n = *l;
         }
@@ -1603,6 +1603,7 @@ compar(Node *n, int reverse)
         l = l->left;
     if(l->op == OCONST)
         return 0;
+
     lt = l->type;
     if(l->op == ONAME && l->sym->type){
         lt = l->sym->type;

@@ -57,9 +57,8 @@ void	setinclude(char*);
 //@Scheck: not dead, entry point :)
 void main(int argc, char *argv[])
 {
-    /*s: [[main()]] locals */
     int err;
-    /*x: [[main()]] locals */
+    /*s: [[main()]] locals */
     // growing_array<string>
     char **defs = nil;
     int ndef = 0;
@@ -181,6 +180,7 @@ void main(int argc, char *argv[])
         }
     }
     /*e: [[main()]] multiple files handling */
+    //else
 
     err = compile((argc == 0) ? "stdin" : argv[0], defs, ndef);
 
@@ -629,7 +629,7 @@ l1:
     case '/':
         c1 = GETC();
         if(c1 == '*') {
-            // '/''*' read, skip everything until next '*''/'
+            // '/''*' read; skip everything until next '*''/'
             for(;;) {
                 c = getr();
                 while(c == '*') {
@@ -644,7 +644,7 @@ l1:
             }
         }
         if(c1 == '/') {
-            // '/''/' read, skip everything until next '\n'
+            // '/''/' read; skip everything until next '\n'
             for(;;) {
                 c = getr();
                 if(c == '\n')
