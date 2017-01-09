@@ -1264,6 +1264,7 @@ relindex(int o)
     default:
         diag(Z, "bad in relindex: %O", o);
     }
+    return -1; // unreachable
 }
 /*e: function relindex */
 
@@ -1734,6 +1735,20 @@ int	typesuvinit[] =
 };
 /*e: global typesuvinit */
 
+// not used on ARM
+/*s: global typechlv */
+char	typechlv[NTYPE];
+/*e: global typechlv */
+/*s: global typeil */
+char	typeil[NTYPE];
+/*e: global typeil */
+/*s: global typeilinit */
+int	typeilinit[] =
+{
+    TINT, TUINT, TLONG, TULONG, -1,
+};
+/*e: global typeilinit */
+
 /*s: global typeilp */
 char	typeilp[NTYPE];
 /*e: global typeilp */
@@ -2168,7 +2183,7 @@ tinit(void)
     for(ip=typechlinit; *ip>=0; ip++) {
         urk("typechl", nelem(typechl), *ip);
         typechl[*ip] = 1;
-        //typechlv[*ip] = 1;
+        typechlv[*ip] = 1;
         //typechlvp[*ip] = 1;
     }
     for(ip=typechlpinit; *ip>=0; ip++) {
@@ -2183,7 +2198,7 @@ tinit(void)
     for(ip=typevinit; *ip>=0; ip++) {
         urk("typev", nelem(typev), *ip);
         typev[*ip] = 1;
-        //typechlv[*ip] = 1;
+        typechlv[*ip] = 1;
         //typechlvp[*ip] = 1;
     }
     for(ip=typefdinit; *ip>=0; ip++) {
@@ -2197,6 +2212,11 @@ tinit(void)
     for(ip=typesuinit; *ip >= 0; ip++) {
         urk("typesu", nelem(typesu), *ip);
         typesu[*ip] = 1;
+    }
+    /*x: [[tinit()]] initialise typexxx type sets */
+    for(ip=typeilinit; *ip>=0; ip++) {
+        urk("typeil", nelem(typeil), *ip);
+        typeil[*ip] = 1;
     }
     /*e: [[tinit()]] initialise typexxx type sets */
     /*s: [[tinit()]] initialise tcompat arrays */

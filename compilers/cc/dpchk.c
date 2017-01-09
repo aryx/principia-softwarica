@@ -288,4 +288,267 @@ dpcheck(Node *n)
     checkargs(b, s, l->param);
 }
 /*e: function dpcheck */
+
+
+/*s: function pragpack */
+void
+pragpack(void)
+{
+    Sym *s;
+
+    packflg = 0;
+    s = getsym();
+    if(s) {
+        packflg = atoi(s->name+1);
+        if(strcmp(s->name, "on") == 0 ||
+           strcmp(s->name, "yes") == 0)
+            packflg = 1;
+    }
+    while(getnsc() != '\n')
+        ;
+    /*s: [[pragpack()]] debug if [[-f]] */
+    if(debug['f'])
+        if(packflg)
+            print("%4ld: pack %d\n", lineno, packflg);
+        else
+            print("%4ld: pack off\n", lineno);
+    /*e: [[pragpack()]] debug if [[-f]] */
+}
+/*e: function pragpack */
+
+/*s: function newname */
+void
+newname(char *s, int p)
+{
+    Tname *l;
+
+    for(l=tname; l; l=l->link)
+        if(strcmp(l->name, s) == 0) {
+            if(l->param != p)
+                yyerror("vargck %s already defined\n", s);
+            return;
+        }
+    l = alloc(sizeof(*l));
+    l->name = s;
+    l->param = p;
+    l->link = tname;
+    tname = l;
+}
+/*e: function newname */
+
+/*s: function newprot */
+void
+newprot(Sym *m, Type *t, char *s)
+{
+    Bits flag;
+    Tprot *l;
+
+    if(t == T) {
+        warn(Z, "%s: newprot: type not defined", m->name);
+        return;
+    }
+    flag = getflag(s);
+    for(l=tprot; l; l=l->link)
+        if(beq(flag, l->flag) && sametype(t, l->type))
+            return;
+    l = alloc(sizeof(*l));
+    l->type = t;
+    l->flag = flag;
+    l->link = tprot;
+    tprot = l;
+}
+/*e: function newprot */
+
+/*s: function pragvararg */
+void
+pragvararg(void)
+{
+    Sym *s;
+    int n, c;
+    char *t;
+    Rune r;
+    Type *ty;
+
+    if(!debug['F'])
+        goto out;
+
+    s = getsym();
+    if(s && strcmp(s->name, "argpos") == 0)
+        goto ckpos;
+    if(s && strcmp(s->name, "type") == 0)
+        goto cktype;
+    if(s && strcmp(s->name, "flag") == 0)
+        goto ckflag;
+    yyerror("syntax in #pragma varargck");
+    goto out;
+
+ckpos:
+/*#pragma	varargck	argpos	warn	2*/
+    s = getsym();
+    if(s == S)
+        goto bad;
+    n = getnsn();
+    if(n < 0)
+        goto bad;
+    newname(s->name, n);
+    goto out;
+
+ckflag:
+/*#pragma	varargck	flag	'c'*/
+    c = getnsc();
+    if(c != '\'')
+        goto bad;
+    c = getr();
+    if(c == '\\')
+        c = getr();
+    else if(c == '\'')
+        goto bad;
+    if(c == '\n')
+        goto bad;
+    if(getc() != '\'')
+        goto bad;
+    argflag(c, Fignor);
+    goto out;
+
+cktype:
+/*#pragma	varargck	type	O	int*/
+    c = getnsc();
+    if(c != '"')
+        goto bad;
+    t = fmtbuf;
+    for(;;) {
+        r = getr();
+        if(r == ' ' || r == '\n')
+            goto bad;
+        if(r == '"')
+            break;
+        t += runetochar(t, &r);
+    }
+    *t = 0;
+    t = strdup(fmtbuf);
+    s = getsym();
+    if(s == S)
+        goto bad;
+    ty = s->type;
+    while((c = getnsc()) == '*')
+        ty = typ(TIND, ty);
+    unget(c);
+    newprot(s, ty, t);
+    goto out;
+
+bad:
+    yyerror("syntax in #pragma varargck");
+
+out:
+    while(getnsc() != '\n')
+        ;
+}
+/*e: function pragvararg */
+
+/*s: function pragfpround */
+void
+pragfpround(void)
+{
+    Sym *s;
+
+    fproundflg = 0;
+    s = getsym();
+    if(s) {
+        fproundflg = atoi(s->name+1);
+        if(strcmp(s->name, "on") == 0 ||
+           strcmp(s->name, "yes") == 0)
+            fproundflg = 1;
+    }
+    while(getnsc() != '\n')
+        ;
+    if(debug['f'])
+        if(fproundflg)
+            print("%4ld: fproundflg %d\n", lineno, fproundflg);
+        else
+            print("%4ld: fproundflg off\n", lineno);
+}
+/*e: function pragfpround */
+
+/*s: function pragprofile */
+void
+pragprofile(void)
+{
+    Sym *s;
+
+    profileflg = false;
+    s = getsym();
+    if(s) {
+        profileflg = atoi(s->name+1);
+        if(strcmp(s->name, "on") == 0 ||
+           strcmp(s->name, "yes") == 0)
+            profileflg = true;
+    }
+    while(getnsc() != '\n')
+        ;
+    /*s: [[pragprofile()]] debug if [[-f]] */
+    if(debug['f'])
+        if(profileflg)
+            print("%4ld: profileflg %d\n", lineno, profileflg);
+        else
+            print("%4ld: profileflg off\n", lineno);
+    /*e: [[pragprofile()]] debug if [[-f]] */
+}
+/*e: function pragprofile */
+
+/*s: function pragincomplete */
+void
+pragincomplete(void)
+{
+    Sym *s;
+    Type *t;
+    bool istag;
+    int  w, et;
+
+    istag = false;
+    s = getsym();
+    if(s == nil)
+        goto out;
+    et = 0;
+    w = s->lexical;
+    if(w == LSTRUCT)
+        et = TSTRUCT;
+    else if(w == LUNION)
+        et = TUNION;
+    if(et != 0){
+        s = getsym();
+        if(s == nil){
+            yyerror("missing struct/union tag in pragma incomplete");
+            goto out;
+        }
+        if(s->lexical != LNAME && s->lexical != LTYPE){
+            yyerror("invalid struct/union tag: %s", s->name);
+            goto out;
+        }
+        dotag(s, et, 0);
+        istag = true;
+    }else if(strcmp(s->name, "_off_") == 0){
+        debug['T'] = false;
+        goto out;
+    }else if(strcmp(s->name, "_on_") == 0){
+        debug['T'] = true;
+        goto out;
+    }
+
+    t = s->type;
+    if(istag)
+        t = s->suetag;
+    if(t == T)
+        yyerror("unknown type %s in pragma incomplete", s->name);
+    else if(!typesu[t->etype])
+        yyerror("not struct/union type in pragma incomplete: %s", s->name);
+    else
+        t->garb |= GINCOMPLETE;
+out:
+    while(getnsc() != '\n')
+        ;
+    if(debug['f'])
+        print("%s incomplete\n", s->name);
+}
+/*e: function pragincomplete */
+
 /*e: cc/dpchk.c */

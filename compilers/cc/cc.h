@@ -891,10 +891,12 @@ extern	char	typesu[];
 extern	char	typesuv[];
 extern	char	typeu[];
 extern	char	typev[];
-extern	char	typeil[];
 extern	char	typeilp[];
 extern	char	typechl[];
+
+// not used on ARM
 extern	char	typechlv[];
+extern	char	typeil[];
 
 extern	char	typechlp[];
 extern	char	typechlpfd[];
@@ -946,6 +948,9 @@ void	newio(void);
 void	pushio(void);
 void	unget(int);
 
+// used by dpchk.c
+long	getr(void);
+
 //!!!! (hmmm in lex.c, as well as cinit(), compile())
 void	main(int, char*[]);
 
@@ -957,6 +962,10 @@ void	dodefine(char*);
 void	domacro(void);
 void	linehist(char*, int);
 void	macexpand(Sym*, char*);
+
+// for dpchk.c
+Sym*	getsym(void);
+long	getnsn(void);
 
 /*
  * dcl.c
@@ -1078,13 +1087,14 @@ int	bset(Bits, uint);
 /*
  * dpchk.c
  */
-void	dpcheck(Node*);
-void	arginit(void);
-//void	pragvararg(void);
-//void	pragpack(void);
-//void	pragfpround(void);
-//void  pragprofile(void);
-//void	pragincomplete(void);
+void dpcheck(Node*);
+void arginit(void);
+
+void pragvararg(void);
+void pragpack(void);
+void pragfpround(void);
+void pragprofile(void);
+void pragincomplete(void);
 
 /*
  * calls to machine depend part

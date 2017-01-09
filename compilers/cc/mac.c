@@ -3,7 +3,6 @@
 
 //old: #include	"macbody"
 //TODO copy paste with aa/, maybe could factorize with another lib?
-//
 
 void	macdef(void);
 void	macinc(void);
@@ -890,14 +889,17 @@ void
 macprag(void)
 {
     Sym *s;
+    /*s: [[macprag()]] other locals */
     int c0, c;
     char *hp;
     Hist *h;
+    /*e: [[macprag()]] other locals */
 
     // lexing
 
     s = getsym();
 
+    /*s: [[macprag()]] if pragma xxx */
     if(s && strcmp(s->name, "lib") == 0) {
         c0 = getnsc();
         if(c0 != '"') {
@@ -918,21 +920,21 @@ macprag(void)
         c = getcom();
         if(c != '\n')
             goto bad;
-    
+
         /*
          * put pragma-line in as a funny history 
          */
         c = strlen(symb) + 1;
         while(c & 3)
             c++;
-    
+
         while(nhunk < c)
             gethunk();
         hp = hunk;
         memcpy(hunk, symb, c);
         nhunk -= c;
         hunk += c;
-    
+
         h = alloc(sizeof(Hist));
         h->name = hp;
         h->line = lineno;
@@ -950,12 +952,39 @@ macprag(void)
 
         return;
 
-bad:
+    bad:
         unget(c);
         yyerror("syntax in #pragma lib");
         macend();
 
-    } else {
+    }
+    /*x: [[macprag()]] if pragma xxx */
+    if(s && strcmp(s->name, "incomplete") == 0) {
+        pragincomplete();
+        return;
+    }
+    /*x: [[macprag()]] if pragma xxx */
+    if(s && strcmp(s->name, "profile") == 0) {
+        pragprofile();
+        return;
+    }
+    /*x: [[macprag()]] if pragma xxx */
+    if(s && strcmp(s->name, "varargck") == 0) {
+        pragvararg();
+        return;
+    }
+    /*x: [[macprag()]] if pragma xxx */
+    if(s && strcmp(s->name, "pack") == 0) {
+        pragpack();
+        return;
+    }
+    /*x: [[macprag()]] if pragma xxx */
+    if(s && strcmp(s->name, "fpround") == 0) {
+        pragfpround();
+        return;
+    }
+    /*e: [[macprag()]] if pragma xxx */
+     else {
         while(getnsc() != '\n')
             ;
         return;

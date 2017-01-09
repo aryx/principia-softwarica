@@ -168,10 +168,12 @@ extern	char	typesu[];
 extern	char	typesuv[];
 extern	char	typeu[];
 extern	char	typev[];
-extern	char	typeil[];
 extern	char	typeilp[];
 extern	char	typechl[];
+
+// not used on ARM
 extern	char	typechlv[];
+extern	char	typeil[];
 
 extern	char	typechlp[];
 extern	char	typechlpfd[];
@@ -223,6 +225,9 @@ void	newio(void);
 void	pushio(void);
 void	unget(int);
 
+// used by dpchk.c
+long	getr(void);
+
 //!!!! (hmmm in lex.c, as well as cinit(), compile())
 void	main(int, char*[]);
 
@@ -234,6 +239,10 @@ void	dodefine(char*);
 void	domacro(void);
 void	linehist(char*, int);
 void	macexpand(Sym*, char*);
+
+// for dpchk.c
+Sym*	getsym(void);
+long	getnsn(void);
 
 /*
  * dcl.c
@@ -355,13 +364,14 @@ int	bset(Bits, uint);
 /*
  * dpchk.c
  */
-void	dpcheck(Node*);
-void	arginit(void);
-//void	pragvararg(void);
-//void	pragpack(void);
-//void	pragfpround(void);
-//void  pragprofile(void);
-//void	pragincomplete(void);
+void dpcheck(Node*);
+void arginit(void);
+
+void pragvararg(void);
+void pragpack(void);
+void pragfpround(void);
+void pragprofile(void);
+void pragincomplete(void);
 
 /*
  * calls to machine depend part
@@ -635,7 +645,6 @@ pathchar(void)
 
 //old: #include	"macbody"
 //TODO copy paste with aa/, maybe could factorize with another lib?
-//
 
 void	macdef(void);
 void	macinc(void);
@@ -809,6 +818,11 @@ extern	char	tab[NTYPE][NTYPE];
 
 <<global typesuv>>
 <<global typesuvinit>>
+
+// not used on ARM
+<<global typechlv>>
+<<global typeil>>
+<<global typeilinit>>
 
 <<global typeilp>>
 <<global typeilpinit>>
@@ -1331,7 +1345,6 @@ int	addo(Node*);
 
 \subsection*{[[cc/dpchk.c]]}
 
-
 %-------------------------------------------------------------
 
 <<cc/dpchk.c>>=
@@ -1366,6 +1379,22 @@ typedef	struct	Tname	Tname;
 <<function checkargs>>
 
 <<function dpcheck>>
+
+
+<<function pragpack>>
+
+<<function newname>>
+
+<<function newprot>>
+
+<<function pragvararg>>
+
+<<function pragfpround>>
+
+<<function pragprofile>>
+
+<<function pragincomplete>>
+
 @
 
 
@@ -2318,6 +2347,24 @@ noretval(int n)
         gins(AFLDZ, Z, Z);
 }
 @
+
+
+<<global typeil>>=
+char	typeil[NTYPE];
+@
+<<global typeilinit>>=
+int	typeilinit[] =
+{
+    TINT, TUINT, TLONG, TULONG, -1,
+};
+@
+<<[[tinit()]] initialise typexxx type sets>>=
+for(ip=typeilinit; *ip>=0; ip++) {
+    urk("typeil", nelem(typeil), *ip);
+    typeil[*ip] = 1;
+}
+@
+
 
 % 8c/cgen.c
 % was in comment before the func?? /* ,x/^(print|prtree)\(/i/\/\/ */
@@ -9074,6 +9121,11 @@ Sconv(Fmt *fp)
 }
 @
 
+<<global typechlv>>=
+char	typechlv[NTYPE];
+@
+% comes from a few xxxinit,
+
 
 <<function machcap(x86)>>=
 bool
@@ -10166,6 +10218,37 @@ naddr(Node *n, Adr *a)
 int	fproundflg;
 @
 
+<<[[macprag()]] if pragma xxx>>=
+if(s && strcmp(s->name, "fpround") == 0) {
+    pragfpround();
+    return;
+}
+@
+
+% seems to be used only in x96
+<<function pragfpround>>=
+void
+pragfpround(void)
+{
+    Sym *s;
+
+    fproundflg = 0;
+    s = getsym();
+    if(s) {
+        fproundflg = atoi(s->name+1);
+        if(strcmp(s->name, "on") == 0 ||
+           strcmp(s->name, "yes") == 0)
+            fproundflg = 1;
+    }
+    while(getnsc() != '\n')
+        ;
+    if(debug['f'])
+        if(fproundflg)
+            print("%4ld: fproundflg %d\n", lineno, fproundflg);
+        else
+            print("%4ld: fproundflg off\n", lineno);
+}
+@
 
 
 <<function gmove(x86)>>=
@@ -12178,11 +12261,6 @@ gextern(Sym *s, Node *a, long o, long w)
 }
 @
 
-% set via pragma
-% seems dead, not initialized so probably 0
-<<global packflg>>=
-int	packflg;
-@
 
 <<function align(x86)>>=
 long

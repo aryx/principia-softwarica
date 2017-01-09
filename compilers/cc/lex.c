@@ -1241,6 +1241,7 @@ getnsc(void)
         // else, was a space, so continue
         c = GETC();
     }
+    return -1; // unreachable
 }
 /*e: function getnsc */
 
