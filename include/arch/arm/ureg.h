@@ -12,6 +12,7 @@ typedef struct Ureg {
 	ulong	r10;
 	ulong	r11;
 	ulong	r12;	/* sb */
+
 	union {
 		ulong	r13;
 		ulong	sp;
@@ -20,7 +21,9 @@ typedef struct Ureg {
 		ulong	r14;
 		ulong	link;
 	};
+
 	ulong	type;	/* of exception */
 	ulong	psr;
+
 	ulong	pc;	/* interrupted addr */
 } Ureg;
