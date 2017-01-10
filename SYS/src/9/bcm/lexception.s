@@ -39,7 +39,7 @@ TEXT _vsvc(SB), 1, $-4			/* SWI */
 
 	MOVW	$setR12(SB), R12	/* Make sure we've got the kernel's SB loaded */
 
-//	MOVW	$(KSEG0+16*KiB-MACHSIZE), R10	/* m */
+//	MOVW	$(KSEG0+16*KiB-CPUSIZE), R10	/* m */
 	MOVW	$(MACHADDR), R10	/* m */
 	MOVW	8(R10), R9		/* up */
 
@@ -140,7 +140,7 @@ _userexcep:
 
 	MOVW	$setR12(SB), R12	/* Make sure we've got the kernel's SB loaded */
 
-//	MOVW	$(KSEG0+16*KiB-MACHSIZE), R10	/* m */
+//	MOVW	$(KSEG0+16*KiB-CPUSIZE), R10	/* m */
 	MOVW	$(MACHADDR), R10	/* m */
 	MOVW	8(R10), R9		/* up */
 

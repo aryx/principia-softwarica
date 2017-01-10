@@ -1,18 +1,21 @@
+
+# CONF is the configuration file, processed by many mkxxx scripts
 CONF=pi
 CONFLIST=pi
-# picpu pifat
-
-EXTRACOPIES=
-
-loadaddr=0x80008000
 
 objtype=arm
 </$objtype/mkfile
 p=9
 
+loadaddr=0x80008000
+
 DEVS=`{rc ../port/mkdevlist $CONF}
 
 PORT=\
+     portfns.$O\
+     portdat.$O\
+	 portdat_memory.$O\
+	 portdat_processes.$O\
 	alarm.$O\
 	alloc.$O\
 	allocb.$O\
@@ -26,7 +29,7 @@ PORT=\
 	page.$O\
 	parse.$O\
 	pgrp.$O\
-	portclock.$O\
+	 clock.$O\
 	print.$O\
 	proc.$O\
 	qio.$O\
@@ -35,7 +38,7 @@ PORT=\
 	rebootcmd.$O\
 	segment.$O\
 	swap.$O\
-	syscallfmt.$O\
+    syscallfmt.$O\
 	sysfile.$O\
 	sysproc.$O\
 	taslock.$O\
@@ -47,10 +50,10 @@ OBJ=\
 	lexception.$O\
 	lproc.$O\
 	arch.$O\
-	clock.$O\
-	fpi.$O\
+	clockbcm.$O\
+	 fpi.$O\
 	fpiarm.$O\
-	fpimem.$O\
+#	 fpimem.$O\
 	main.$O\
 	mmu.$O\
 	random.$O\
@@ -61,59 +64,47 @@ OBJ=\
 	$DEVS\
 	$PORT\
 
-# HFILES=
-
+# the order matters!
 LIB=\
 	/$objtype/lib/libmemlayer.a\
 	/$objtype/lib/libmemdraw.a\
 	/$objtype/lib/libdraw.a\
 	/$objtype/lib/libip.a\
-	/$objtype/lib/libsec.a\
-	/$objtype/lib/libmp.a\
 	/$objtype/lib/libc.a\
 
-9:V: $p$CONF s$p$CONF
+9:V: $p$CONF
 
+DATE=`{date -n}
+
+# use of -l so no automagic lib and no _main
 $p$CONF:DQ:	$CONF.c $OBJ $LIB mkfile
-	$CC $CFLAGS '-DKERNDATE='`{date -n} $CONF.c
+	$CC $CFLAGS '-DKERNDATE='$DATE $CONF.c
 	echo '# linking raw kernel'	# H6: no headers, data segment aligned
-	$LD -l -o $target -H6 -R4096 -T$loadaddr $OBJ $CONF.$O $LIB
+	$LD -o $target -H6 -R4096 -T$loadaddr -l $OBJ $CONF.$O $LIB
 
-s$p$CONF:DQ:	$CONF.$O $OBJ $LIB
-	echo '# linking kernel with symbols'
-	$LD -l -o $target -R4096 -T$loadaddr $OBJ $CONF.$O $LIB
-	size $target
 
-$p$CONF.gz:D:	$p$CONF
-	gzip -9 <$p$CONF >$target
+install:V: $p$CONF
+	cp $p$CONF /$objtype/
 
-$OBJ: $HFILES
-
-install:V: /$objtype/$p$CONF
-
-/$objtype/$p$CONF:D: $p$CONF s$p$CONF
-	cp -x $p$CONF s$p$CONF /$objtype/ &
-	for(i in $EXTRACOPIES)
-		{ 9fs $i && cp $p$CONF s$p$CONF /n/$i/$objtype && echo -n $i... & }
-	wait
-	echo
-	touch $target
 
 <../boot/bootmkfile
 <../port/portmkfile
 <|../port/mkbootrules $CONF
 
-arch.$O clock.$O fpiarm.$O main.$O mmu.$O screen.$O syscall.$O trap.$O: \
-	/$objtype/include/ureg.h
+#TODO: should be done via 'mk depend'
 
+arch.$O clockbcm.$O fpiarm.$O main.$O mmu.$O bcmscreen.$O syscall.$O trap.$O: \
+	/$objtype/include/ureg.h
 archbcm.$O devether.$O: etherif.h ../port/netif.h
 archbcm.$O: ../port/flashif.h
 fpi.$O fpiarm.$O fpimem.$O: ../port/fpi.h
 l.$O lexception.$O lproc.$O mmu.$O: arm.s mem.h
-main.$O: errstr.h init.h reboot.h
-devmouse.$O mouse.$O screen.$O: screen.h
+main.$O: init.h reboot.h
+devmouse.$O mouse.$O bcmscreen.$O: screen.h
 devusb.$O: ../port/usb.h
 usbehci.$O usbohci.$O usbuhci.$O: ../port/usb.h usbehci.h uncached.h
+
+
 
 init.h:D:	../port/initcode.c init9.s
 	$CC $CFLAGS ../port/initcode.c

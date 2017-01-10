@@ -11,8 +11,8 @@
 #define	BY2PG		(4*KiB)			/* bytes per page */
 #define	PGSHIFT		12			/* log(BY2PG) */
 
-#define	MAXMACH		1			/* max # cpus system can run */
-#define	MACHSIZE	BY2PG
+#define	MAXCPUS		1			/* max # cpus system can run */
+#define	CPUSIZE	BY2PG
 
 #define KSTKSIZE	(8*KiB)
 #define STACKALIGN(sp)	((sp) & ~3)		/* bug: assure with alloc */
@@ -33,10 +33,10 @@
 #define	KZERO		KSEG0			/* kernel address space */
 #define CONFADDR	(KZERO+0x100)		/* unparsed plan9.ini */
 #define	MACHADDR	(KZERO+0x2000)		/* Mach structure */
-#define	L2		(KZERO+0x3000)		/* L2 ptes for vectors etc */
+#define	L2		    (KZERO+0x3000)		/* L2 ptes for vectors etc */
 #define	VCBUFFER	(KZERO+0x3400)		/* videocore mailbox buffer */
 #define	FIQSTKTOP	(KZERO+0x4000)		/* FIQ stack */
-#define	L1		(KZERO+0x4000)		/* tt ptes: 16KiB aligned */
+#define	L1		    (KZERO+0x4000)		/* tt ptes: 16KiB aligned */
 #define	KTZERO		(KZERO+0x8000)		/* kernel text start */
 #define VIRTIO		0x7E000000		/* i/o registers */
 #define	FRAMEBUFFER	0xA0000000		/* video framebuffer */
@@ -67,10 +67,12 @@
 #define BY2V		8			/* only used in xalloc.c */
 
 #define CACHELINESZ	32
-#define	PTEMAPMEM	(1024*1024)
-#define	PTEPERTAB	(PTEMAPMEM/BY2PG)
-#define	SEGMAPSIZE	1984
-#define	SSEGMAPSIZE	16
+
+#define	PAGETABMAPMEM	(1024*1024)
+#define	PAGETABSIZE	(PAGETABMAPMEM/BY2PG)
+
+#define	PAGEDIRSIZE	1984
+#define	SMALLPAGEDIRSIZE	16
 #define	PPN(x)		((x)&~(BY2PG-1))
 
 /*

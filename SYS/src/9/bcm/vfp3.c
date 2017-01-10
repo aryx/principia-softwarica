@@ -124,7 +124,7 @@ havefp(void)
 		cpu->fpnregs = (acc & Cpaccd16) ? 16 : 32;
 		break;
 	}
-	if (cpu->machno == 0)
+	if (cpu->cpuno == 0)
 		print("fp: %d registers, %s simd\n", cpu->fpnregs,
 			(acc & Cpaccnosimd? " no": ""));
 	cpu->havefpvalid = 1;
@@ -268,7 +268,7 @@ fpusysrforkchild(Proc *p, Ureg *, Proc *up)
 
 /* should only be called if p->fpstate == FPactive */
 void
-fpsave(FPsave *fps)
+fpsave(ArchFPsave *fps)
 {
 	int n;
 
@@ -412,7 +412,7 @@ fpstuck(uintptr pc)
 		cpu->fpcnt++;
 		if (cpu->fpcnt > 4)
 			panic("fpuemu: cpu%d stuck at pid %ld %s pc %#p "
-				"instr %#8.8lux", cpu->machno, up->pid, up->text,
+				"instr %#8.8lux", cpu->cpuno, up->pid, up->text,
 				pc, *(ulong *)pc);
 	} else {
 		cpu->fppid = up->pid;

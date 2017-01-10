@@ -280,7 +280,7 @@ trap(Ureg *ureg)
 	if(up != nil)
 		rem = ((char*)ureg)-up->kstack;
 	else
-		rem = ((char*)ureg)-((char*)m+sizeof(Mach));
+		rem = ((char*)ureg)-((char*)cpu + sizeof(Cpu));
 	if(rem < 256) {
 		iprint("trap: %d stack bytes left, up %#p ureg %#p at pc %#lux\n",
 			rem, up, ureg, ureg->pc);
@@ -492,13 +492,13 @@ dumpstackwithureg(Ureg *ureg)
 	if(up != nil && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
 		estack = (uintptr)up->kstack+KSTACK;
 	else if((uintptr)&l >= (uintptr)cpu->stack
-	     && (uintptr)&l <= (uintptr)cpu + MACHSIZE)
-		estack = (uintptr)m+MACHSIZE;
+	     && (uintptr)&l <= (uintptr)cpu + CPUSIZE)
+		estack = (uintptr)cpu + CPUSIZE;
 	else{
 		if(up != nil)
 			iprint("&up->kstack %#p &l %#p\n", up->kstack, &l);
 		else
-			iprint("&m %#p &l %#p\n", m, &l);
+			iprint("&m %#p &l %#p\n", cpu, &l);
 		return;
 	}
 	for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
@@ -569,7 +569,7 @@ dumpregs(Ureg* ureg)
 		iprint("user stack: %#p-%#p\n", up->kstack, up->kstack+KSTACK-4);
 	else
 		iprint("kernel stack: %8.8lux-%8.8lux\n",
-			(ulong)(m+1), (ulong)m+BY2PG-4);
+			(ulong)(cpu+1), (ulong)cpu+BY2PG-4);
 	dumplongs("stack", (ulong *)(ureg + 1), 16);
 	delay(2000);
 	dumpstack();

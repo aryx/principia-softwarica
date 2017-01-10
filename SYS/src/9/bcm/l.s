@@ -47,7 +47,7 @@ _ramZ:
 	 * start stack at top of mach (physical addr)
 	 * set up page tables for kernel
 	 */
-	MOVW	$PADDR(MACHADDR+MACHSIZE-4), R13
+	MOVW	$PADDR(MACHADDR+CPUSIZE-4), R13
 	BL	,mmuinit(SB)
 
 	/*
@@ -70,7 +70,7 @@ _ramZ:
 	 * switch SB, SP, and PC into KZERO space
 	 */
 	MOVW	$setR12(SB), R12
-	MOVW	$(MACHADDR+MACHSIZE-4), R13
+	MOVW	$(MACHADDR+CPUSIZE-4), R13
 	MOVW	$_startpg(SB), R15
 
 TEXT _startpg(SB), 1, $-4

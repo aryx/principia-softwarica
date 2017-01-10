@@ -28,8 +28,7 @@ enum {
 #define MAXCONFLINE	160
 
 uintptr kseg0 = KZERO;
-Mach*	machaddr[MAXMACH];
-Conf	conf;
+
 ulong	memsize = 128*1024*1024;
 
 /*

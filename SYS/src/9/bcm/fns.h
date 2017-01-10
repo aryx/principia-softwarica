@@ -1,4 +1,15 @@
-#include "../port/portfns.h"
+#include "../port/portfns_core.h"
+#include "../port/portfns_concurrency.h"
+#include "../port/portfns_memory.h"
+#include "../port/portfns_files.h"
+#include "../port/portfns_processes.h"
+#include "../port/portfns_misc.h"
+#include "../port/portfns_console.h"
+#include "../port/portfns_buses.h"
+#include "../port/portfns_devices.h"
+#include "../port/portfns_security.h"
+#include "../port/portfns_network.h"
+#include "../port/portfns_init.h"
 
 Dirtab*	addarchfile(char*, int, long(*)(Chan*, void*, long, vlong), 
 	long(*)(Chan*, void*, long, vlong));
@@ -16,12 +27,20 @@ extern void checkmmu(uintptr, uintptr);
 extern void clockinit(void);
 extern void clockshutdown(void);
 extern int cmpswap(long*, long, long);
-extern void coherence(void);
+//extern void coherence(void);
 extern ulong cprd(int cp, int op1, int crn, int crm, int op2);
 extern ulong cprdsc(int op1, int crn, int crm, int op2);
 extern void cpuidprint(void);
 extern void cpwr(int cp, int op1, int crn, int crm, int op2, ulong val);
 extern void cpwrsc(int op1, int crn, int crm, int op2, ulong val);
+
+// was in portfns.h but commented because not used in x86
+long    lcycles(void);
+
+// could be in portfns.h, same type in every arch, but called from arch-specific
+void    forkret(void);
+void		dumpregs(Ureg*);
+
 #define cycles(ip) *(ip) = lcycles()
 extern void dmastart(int, int, int, void*, void*, int);
 extern int dmawait(int);
@@ -31,7 +50,7 @@ extern u32int farget(void);
 extern void fpon(void);
 extern ulong fprd(int fpreg);
 extern void fprestreg(int fpreg, uvlong val);
-extern void fpsave(FPsave *);
+extern void fpsave(ArchFPsave *);
 extern ulong fpsavereg(int fpreg, uvlong *fpp);
 extern void fpwr(int fpreg, ulong val);
 extern u32int fsrget(void);
@@ -108,7 +127,6 @@ extern void kexit(Ureg*);
 #define PTR2UINT(p)	((uintptr)(p))
 #define UINT2PTR(i)	((void*)(i))
 
-#define	waserror()	(up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
 
 #define KADDR(pa)	UINT2PTR(KZERO    | ((uintptr)(pa) & ~KSEGM))
 #define PADDR(va)	PTR2UINT(PHYSDRAM | ((uintptr)(va) & ~KSEGM))

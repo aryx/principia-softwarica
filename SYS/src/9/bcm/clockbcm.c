@@ -117,7 +117,7 @@ clockinit(void)
 }
 
 void
-timerset(uvlong next)
+timerset(Tval next)
 {
 	Systimers *tn;
 	vlong now, period;
