@@ -108,9 +108,9 @@ clockinit(void)
 		t1 = lcycles();
 	}while(tn->clo != tend);
 	t1 -= t0;
-	m->cpuhz = 100 * t1;
-	m->cpumhz = (m->cpuhz + Mhz/2 - 1) / Mhz;
-	m->cyclefreq = m->cpuhz;
+	cpu->cpuhz = 100 * t1;
+	cpu->cpumhz = (cpu->cpuhz + Mhz/2 - 1) / Mhz;
+	cpu->cyclefreq = cpu->cpuhz;
 
 	tn->c3 = tn->clo - 1;
 	intrenable(IRQtimer3, clockintr, nil, 0, "clock");
@@ -145,8 +145,8 @@ fastticks(uvlong *hz)
 		hi = tn->chi;
 		lo = tn->clo;
 	}while(tn->chi != hi);
-	m->fastclock = (uvlong)hi<<32 | lo;
-	return m->fastclock;
+	cpu->fastclock = (uvlong)hi<<32 | lo;
+	return cpu->fastclock;
 }
 
 ulong

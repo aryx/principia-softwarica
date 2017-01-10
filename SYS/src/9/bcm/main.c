@@ -196,11 +196,11 @@ ataginit(Atag *a)
 void
 machinit(void)
 {
-	m->machno = 0;
-	machaddr[m->machno] = m;
+	cpu->cpuno = 0;
+	cpus[cpu->cpuno] = m;
 
-	m->ticks = 1;
-	m->perf.period = 1;
+	cpu->ticks = 1;
+	cpu->perf.period = 1;
 
 	conf.nmach = 1;
 
@@ -507,15 +507,15 @@ shutdown(int ispanic)
 	lock(&active);
 	if(ispanic)
 		active.ispanic = ispanic;
-	else if(m->machno == 0 && (active.machs & (1<<m->machno)) == 0)
+	else if(cpu->cpuno == 0 && (active.machs & (1 << cpu->cpuno)) == 0)
 		active.ispanic = 0;
-	once = active.machs & (1<<m->machno);
-	active.machs &= ~(1<<m->machno);
+	once = active.machs & (1 << cpu->cpuno);
+	active.machs &= ~(1 << cpu->cpuno);
 	active.exiting = 1;
 	unlock(&active);
 
 	if(once)
-		iprint("cpu%d: exiting\n", m->machno);
+		iprint("cpu%d: exiting\n", cpu->cpuno);
 	spllo();
 	for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
 		delay(TK2MS(2));

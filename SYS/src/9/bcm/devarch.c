@@ -152,7 +152,7 @@ cputyperead(Chan*, void *a, long n, vlong offset)
 {
 	char str[128];
 
-	snprint(str, sizeof str, "ARM11 %d\n", m->cpumhz);
+	snprint(str, sizeof str, "ARM11 %d\n", cpu->cpumhz);
 	return readstr(offset, a, n, str);
 }
 

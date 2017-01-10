@@ -9,7 +9,7 @@
 #include "ureg.h"
 #include "arm.h"
 
-/* subarchitecture code in m->havefp */
+/* subarchitecture code in cpu->havefp */
 enum {
 	VFPv2	= 2,
 	VFPv3	= 3,
@@ -89,10 +89,10 @@ havefp(void)
 	int gotfp;
 	ulong acc, sid;
 
-	if (m->havefpvalid)
-		return m->havefp;
+	if (cpu->havefpvalid)
+		return cpu->havefp;
 
-	m->havefp = 0;
+	cpu->havefp = 0;
 	gotfp = 1 << CpFP | 1 << CpDFP;
 	cpwrsc(0, CpCONTROL, 0, CpCPaccess, MASK(28));
 	acc = cprdsc(0, CpCONTROL, 0, CpCPaccess);
@@ -106,28 +106,28 @@ havefp(void)
 	}
 	if (!gotfp) {
 		print("fpon: no FP coprocessors\n");
-		m->havefpvalid = 1;
+		cpu->havefpvalid = 1;
 		return 0;
 	}
-	m->fpon = 1;			/* don't panic */
+	cpu->fpon = 1;			/* don't panic */
 	sid = fprd(Fpsid);
-	m->fpon = 0;
+	cpu->fpon = 0;
 	switch((sid >> 16) & MASK(7)){
 	case 0:				/* VFPv1 */
 		break;
 	case 1:				/* VFPv2 */
-		m->havefp = VFPv2;
-		m->fpnregs = 16;
+		cpu->havefp = VFPv2;
+		cpu->fpnregs = 16;
 		break;
 	default:			/* VFPv3 or later */
-		m->havefp = VFPv3;
-		m->fpnregs = (acc & Cpaccd16) ? 16 : 32;
+		cpu->havefp = VFPv3;
+		cpu->fpnregs = (acc & Cpaccd16) ? 16 : 32;
 		break;
 	}
-	if (m->machno == 0)
-		print("fp: %d registers, %s simd\n", m->fpnregs,
+	if (cpu->machno == 0)
+		print("fp: %d registers, %s simd\n", cpu->fpnregs,
 			(acc & Cpaccnosimd? " no": ""));
-	m->havefpvalid = 1;
+	cpu->havefpvalid = 1;
 	return 1;
 }
 
@@ -139,19 +139,19 @@ havefp(void)
 void
 fpoff(void)
 {
-	if (m->fpon) {
+	if (cpu->fpon) {
 		fpwr(Fpexc, 0);
-		m->fpon = 0;
+		cpu->fpon = 0;
 	}
 }
 
 void
 fpononly(void)
 {
-	if (!m->fpon && havefp()) {
+	if (!cpu->fpon && havefp()) {
 		/* enable fp.  must be first operation on the FPUs. */
 		fpwr(Fpexc, Fpenabled);
-		m->fpon = 1;
+		cpu->fpon = 1;
 	}
 }
 
@@ -163,9 +163,9 @@ fpcfg(void)
 	static int printed;
 
 	/* clear pending exceptions; no traps in vfp3; all v7 ops are scalar */
-	m->fpscr = Dn | Fz | FPRNR | (FPINVAL | FPZDIV | FPOVFL) & ~Alltraps;
-	fpwr(Fpscr, m->fpscr);
-	m->fpconfiged = 1;
+	cpu->fpscr = Dn | Fz | FPRNR | (FPINVAL | FPZDIV | FPOVFL) & ~Alltraps;
+	fpwr(Fpscr, cpu->fpscr);
+	cpu->fpconfiged = 1;
 
 	if (printed)
 		return;
@@ -190,8 +190,8 @@ fpon(void)
 {
 	if (havefp()) {
 	 	fpononly();
-		if (m->fpconfiged)
-			fpwr(Fpscr, (fprd(Fpscr) & Allcc) | m->fpscr);
+		if (cpu->fpconfiged)
+			fpwr(Fpscr, (fprd(Fpscr) & Allcc) | cpu->fpscr);
 		else
 			fpcfg();	/* 1st time on this fpu; configure it */
 	}
@@ -204,8 +204,8 @@ fpclear(void)
 
 	fpon();
 //	scr = fprd(Fpscr);
-//	m->fpscr = scr & ~Allexc;
-//	fpwr(Fpscr, m->fpscr);
+//	cpu->fpscr = scr & ~Allexc;
+//	fpwr(Fpscr, cpu->fpscr);
 
 	fpwr(Fpexc, fprd(Fpexc) & ~Fpmbc);
 }
@@ -274,8 +274,8 @@ fpsave(FPsave *fps)
 
 	fpon();
 	fps->control = fps->status = fprd(Fpscr);
-	assert(m->fpnregs);
-	for (n = 0; n < m->fpnregs; n++)
+	assert(cpu->fpnregs);
+	for (n = 0; n < cpu->fpnregs; n++)
 		fpsavereg(n, (uvlong *)fps->regs[n]);
 	fpoff();
 }
@@ -287,9 +287,9 @@ fprestore(Proc *p)
 
 	fpon();
 	fpwr(Fpscr, p->fpsave.control);
-	m->fpscr = fprd(Fpscr) & ~Allcc;
-	assert(m->fpnregs);
-	for (n = 0; n < m->fpnregs; n++)
+	cpu->fpscr = fprd(Fpscr) & ~Allcc;
+	assert(cpu->fpnregs);
+	for (n = 0; n < cpu->fpnregs; n++)
 		fprestreg(n, *(uvlong *)p->fpsave.regs[n]);
 }
 
@@ -408,16 +408,16 @@ mathemu(Ureg *)
 void
 fpstuck(uintptr pc)
 {
-	if (m->fppc == pc && m->fppid == up->pid) {
-		m->fpcnt++;
-		if (m->fpcnt > 4)
+	if (cpu->fppc == pc && cpu->fppid == up->pid) {
+		cpu->fpcnt++;
+		if (cpu->fpcnt > 4)
 			panic("fpuemu: cpu%d stuck at pid %ld %s pc %#p "
-				"instr %#8.8lux", m->machno, up->pid, up->text,
+				"instr %#8.8lux", cpu->machno, up->pid, up->text,
 				pc, *(ulong *)pc);
 	} else {
-		m->fppid = up->pid;
-		m->fppc = pc;
-		m->fpcnt = 0;
+		cpu->fppid = up->pid;
+		cpu->fppc = pc;
+		cpu->fpcnt = 0;
 	}
 }
 
@@ -491,7 +491,7 @@ fpuemu(Ureg* ureg)
 		iprint("fpuemu: conditional instr shouldn't have got here\n");
 	op  = (*(ulong *)pc >> 24) & MASK(4);
 	cop = (*(ulong *)pc >>  8) & MASK(4);
-	if(m->fpon)
+	if(cpu->fpon)
 		fpstuck(pc);		/* debugging; could move down 1 line */
 	if (ISFPAOP(cop, op)) {		/* old arm 7500 fpa opcode? */
 //		iprint("fpuemu: fpa instr %#8.8lux at %#p\n", *(ulong *)pc, pc);
@@ -503,7 +503,7 @@ fpuemu(Ureg* ureg)
 		}
 		nfp = fpiarm(ureg);	/* advances pc past emulated instr(s) */
 		if (nfp > 1)		/* could adjust this threshold */
-			m->fppc = m->fpcnt = 0;
+			cpu->fppc = cpu->fpcnt = 0;
 		splx(s);
 		poperror();
 	} else if (ISVFPOP(cop, op)) {	/* if vfp, fpu must be off */

@@ -51,7 +51,7 @@ kexit(Ureg*)
 	cycles(&t);
 	tos->kcycles += t - up->kentry;
 	tos->pcycles = up->pcycles;
-	tos->cyclefreq = m->cpuhz;
+	tos->cyclefreq = cpu->cpuhz;
 	tos->pid = up->pid;
 
 	/* make visible immediately to user proc */

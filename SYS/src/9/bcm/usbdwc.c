@@ -234,9 +234,9 @@ restart:
 			r->gnptxsts, r->hptxsts);
 		mask = Chhltd;
 		hc->hcchar |= Chdis;
-		start = m->ticks;
+		start = cpu->ticks;
 		while(hc->hcchar & Chen){
-			if(m->ticks - start >= 100){
+			if(cpu->ticks - start >= 100){
 				print("ep%d.%d channel won't halt hcchar %8.8ux\n",
 					ep->dev->nb, ep->nb, hc->hcchar);
 				break;
@@ -766,7 +766,7 @@ epread(Ep *ep, void *a, long n)
 		poperror();
 		return nr;
 	case Tintr:
-		elapsed = TK2MS(m->ticks) - epio->lastpoll;
+		elapsed = TK2MS(cpu->ticks) - epio->lastpoll;
 		if(elapsed < ep->pollival)
 			tsleep(&up->sleep, return0, 0, ep->pollival - elapsed);
 		/* fall through */
@@ -776,7 +776,7 @@ epread(Ep *ep, void *a, long n)
 		p = (uchar*)ROUND((uintptr)b->base, CACHELINESZ);
 		cachedwbinvse(p, n);
 		nr = eptrans(ep, Read, p, n);
-		epio->lastpoll = TK2MS(m->ticks);
+		epio->lastpoll = TK2MS(cpu->ticks);
 		memmove(a, p, nr);
 		qunlock(epio);
 		freeb(b);
@@ -807,7 +807,7 @@ epwrite(Ep *ep, void *a, long n)
 	default:
 		error(Egreg);
 	case Tintr:
-		elapsed = TK2MS(m->ticks) - epio->lastpoll;
+		elapsed = TK2MS(cpu->ticks) - epio->lastpoll;
 		if(elapsed < ep->pollival)
 			tsleep(&up->sleep, return0, 0, ep->pollival - elapsed);
 		/* fall through */
@@ -822,7 +822,7 @@ epwrite(Ep *ep, void *a, long n)
 			n = ctltrans(ep, p, n);
 		else{
 			n = eptrans(ep, Write, p, n);
-			epio->lastpoll = TK2MS(m->ticks);
+			epio->lastpoll = TK2MS(cpu->ticks);
 		}
 		qunlock(epio);
 		freeb(b);

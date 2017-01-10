@@ -196,7 +196,7 @@ syscall(Ureg* ureg)
 
 	cycles(&up->kentry);
 
-	m->syscall++;
+	cpu->syscall++;
 	up->insyscall = 1;
 	up->pc = ureg->pc;
 	up->dbgreg = ureg;

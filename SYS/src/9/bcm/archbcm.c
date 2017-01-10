@@ -74,7 +74,7 @@ wdogoff(void)
 void
 cpuidprint(void)
 {
-	print("cpu%d: %dMHz ARM1176JZF-S\n", m->machno, m->cpumhz);
+	print("cpu%d: %dMHz ARM1176JZF-S\n", cpu->cpuno, cpu->cpumhz);
 }
 
 void

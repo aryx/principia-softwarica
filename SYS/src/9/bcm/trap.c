@@ -88,10 +88,10 @@ trapinit(void)
 
 	/* set up the stacks for the interrupt modes */
 	setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
-	setr13(PsrMirq, m->sirq);
-	setr13(PsrMabt, m->sabt);
-	setr13(PsrMund, m->sund);
-	setr13(PsrMsys, m->ssys);
+	setr13(PsrMirq, cpu->sirq);
+	setr13(PsrMabt, cpu->sabt);
+	setr13(PsrMund, cpu->sund);
+	setr13(PsrMsys, cpu->ssys);
 
 	coherence();
 }
@@ -143,7 +143,7 @@ fiq(Ureg *ureg)
 	v = vfiq;
 	if(v == nil)
 		panic("unexpected item in bagging area");
-	m->intr++;
+	cpu->intr++;
 	ureg->pc -= 4;
 	coherence();
 	v->f(ureg, v->a);
@@ -313,7 +313,7 @@ trap(Ureg *ureg)
 		break;
 	case PsrMirq:
 		clockintr = irq(ureg);
-		m->intr++;
+		cpu->intr++;
 		break;
 	case PsrMabt:			/* prefetch fault */
 		x = ifsrget();
@@ -491,8 +491,8 @@ dumpstackwithureg(Ureg *ureg)
 	i = 0;
 	if(up != nil && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
 		estack = (uintptr)up->kstack+KSTACK;
-	else if((uintptr)&l >= (uintptr)m->stack
-	     && (uintptr)&l <= (uintptr)m+MACHSIZE)
+	else if((uintptr)&l >= (uintptr)cpu->stack
+	     && (uintptr)&l <= (uintptr)cpu + MACHSIZE)
 		estack = (uintptr)m+MACHSIZE;
 	else{
 		if(up != nil)

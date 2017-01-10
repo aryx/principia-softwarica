@@ -113,9 +113,9 @@ fprd(int fpreg)
 	volatile ulong instr[2];
 	Pufv fp;
 
-	if (!m->fpon) {
+	if (!cpu->fpon) {
 		dumpstack();
-		panic("fprd: cpu%d fpu off", m->machno);
+		panic("fprd: cpu%d fpu off", cpu->cpuno);
 	}
 	s = splhi();
 	/*
@@ -167,8 +167,8 @@ fpsavereg(int fpreg, uvlong *fpp)
 	volatile ulong instr[2];
 	ulong (*fp)(uvlong *);
 
-	if (!m->fpon)
-		panic("fpsavereg: cpu%d fpu off", m->machno);
+	if (!cpu->fpon)
+		panic("fpsavereg: cpu%d fpu off", cpu->cpuno);
 	s = splhi();
 	/*
 	 * VSTR.  pointer will be in R0, which is convenient.
@@ -189,8 +189,8 @@ fprestreg(int fpreg, uvlong val)
 	volatile ulong instr[2];
 	void (*fp)(uvlong *);
 
-	if (!m->fpon)
-		panic("fprestreg: cpu%d fpu off", m->machno);
+	if (!cpu->fpon)
+		panic("fprestreg: cpu%d fpu off", cpu->cpuno);
 	s = splhi();
 	setupfpop(instr, 0xed100000 | CpDFP << 8, fpreg); /* VLDR, Rt is R0 */
 	fp = (void (*)(uvlong *))instr;
