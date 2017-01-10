@@ -663,6 +663,7 @@ iliput(Proto *il, Ipifc*, Block *bp)
         ipriv->stats[CsumErrs]++;
         //netlog(il->f, Logil, "il: cksum %ux %s, pkt(%ux id %ud ack %I/%d->%d)\n",
 //			csum, st, nhgetl(ih->ilid), nhgetl(ih->ilack), raddr, sp, dp);
+        USED(csum); USED(st);
         goto raise;
     }
 
@@ -686,6 +687,7 @@ iliput(Proto *il, Ipifc*, Block *bp)
             ilreject(il->f, ih);		/* no channel and not sync */
             //netlog(il->f, Logil, "il: no channel, pkt(%s id %ud ack %ud %I/%ud->%ud)\n",
 //				st, nhgetl(ih->ilid), nhgetl(ih->ilack), raddr, sp, dp); 
+            USED(st);
             goto raise;
         }
 
@@ -923,10 +925,11 @@ ilrexmit(Ilcb *ic)
     hnputs(h->ilsum, ptclcsum(nb, IL_IPSIZE, nhgets(h->illen)));
 
     c = ic->conv;
-    id = nhgetl(h->ilid);
+    //id = nhgetl(h->ilid);
     //netlog(c->p->f, Logil, "il: rexmit %lud %lud: %d %lud: %I %d/%d\n", id, ic->recvd,
 //		ic->rexmit, ic->timeout,
 //		c->raddr, c->lport, c->rport);
+    USED(id);
 
     ilbackoff(ic);
 

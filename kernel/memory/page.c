@@ -151,7 +151,6 @@ newpage(bool clear, Segment **s, virt_addr va)
 {
     Page *p;
     KMap *k;
-    int i, hw;
     bool dontalloc;
 
     lock(&palloc);

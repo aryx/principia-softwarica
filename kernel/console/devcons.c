@@ -870,9 +870,9 @@ static long
 consread(Chan *c, void *buf, long n, vlong off)
 {
     ulong l;
-    char *b, *bp, ch;
+    char ch;
     char tmp[256];      /* must be >= 18*NUMSIZE (Qswap) */
-    int i, k, id, send;
+    int i, k, send;
     vlong offset = off;
 
     if(n <= 0)
@@ -1029,6 +1029,7 @@ consread(Chan *c, void *buf, long n, vlong off)
         error(Egreg);
     }
     panic("consread: should not reach this point");
+    return -1;
 }
 /*e: method consread */
 
@@ -1037,17 +1038,16 @@ static long
 conswrite(Chan *c, void *va, long n, vlong off)
 {
     char *a;
-    ulong offset;
 
     /*s: [[conswrite]] locals */
         char buf[256], ch;
         long l, bp;
-        int id, fd;
+        int fd;
         Chan *swc;
     /*e: [[conswrite]] locals */
 
     a = va;
-    offset = off;
+    USED(off);
 
     switch((ulong)c->qid.path){
 

@@ -353,6 +353,7 @@ piperead(Chan *c, void *va, long n, vlong)
         panic("piperead");
     }
     panic("piperead: should not reach this point");
+    return -1; // unreachable
 }
 /*e: method piperead */
 

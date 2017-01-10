@@ -50,6 +50,7 @@ syssegflush(ulong* arg)
         // when had cachectl
         //if(pt)
         //    ptflush(pt, ps/BY2PG, pe/BY2PG);
+        USED(pt);
 
         chunk = pe-ps;
         len -= chunk;

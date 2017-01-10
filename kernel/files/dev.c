@@ -324,6 +324,7 @@ devstat(Chan *c, byte *db, int n, Dirtab *tab, int ntab, Devgen *gen)
             break;
         }
     }
+    return -1; // unreachable
 }
 /*e: function devstat */
 

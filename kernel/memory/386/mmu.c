@@ -373,7 +373,6 @@ void
 mmurelease(Proc* proc)
 {
     Page *page, *next;
-    ulong *mmupd;
 
     if(islo())
         panic("mmurelease: islo");
@@ -442,7 +441,7 @@ upallocmmupd(void)
 void
 putmmu(virt_addr va, ulong mmupte, Page*)
 {
-    int old, s;
+    int old;
     Page *page;
     kern_addr2 mmupd;
     kern_addr2 mmupt;
@@ -491,6 +490,7 @@ checkmmu(virt_addr va, phys_addr pa)
 {
     if(up->mmupd == nil)
         return;
+   USED(va); USED(pa);
     /*s: [[checkmmu()]] pd at pt check(x86) */
     //    if(!(vpd[PDX(va)]&PTEVALID) || !(vpt[VPTX(va)]&PTEVALID))
     //        return;
@@ -560,6 +560,8 @@ mmuwalk(kern_addr2 pd, kern_addr va, int level, bool create)
 /*s: global vmaplock(x86) */
 static Lock vmaplock;
 /*e: global vmaplock(x86) */
+
+int pdmap(kern_addr2 mmupd, ulong pa, virt_addr va, int size);
 
 /*s: function vmap(x86) */
 /*
@@ -874,6 +876,7 @@ kmap(Page *p)
         return KADDR(p->pa);
     else
       panic("kmap: physical address too high");
+    return nil; // unreachable
 }
 /*e: function kmap(x86) */
 
@@ -906,6 +909,7 @@ tmpmap(Page *p)
         return KADDR(p->pa);
     else
       panic("tmpmap: physical address too high");
+   return nil; // unreachable
 }
 /*e: function tmpmap(x86) */
 

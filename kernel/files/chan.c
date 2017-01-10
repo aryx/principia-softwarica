@@ -1204,6 +1204,7 @@ createdir(Chan *c, Mhead *m)
     }
     error(Enocreate);
     panic("createdir: should not reach this point");
+    return nil; // unreachable
 }
 /*e: function createdir */
 

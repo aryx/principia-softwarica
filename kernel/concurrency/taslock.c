@@ -143,6 +143,7 @@ lock(Lock *l)
         if(up)
             deccnt(&up->nlocks);
     }
+    return -1; // unreachable
 }
 /*e: function lock */
 

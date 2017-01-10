@@ -215,6 +215,7 @@ vesaflush(VGAscr *scr, Rectangle r)
     int t, w, wid, off;
     ulong *hp, *sp, *esp;
 
+    USED(scr); // now use gscreen directly
     if(hardscreen == nil)
         return;
     if(rectclip(&r, gscreen->r) == 0)

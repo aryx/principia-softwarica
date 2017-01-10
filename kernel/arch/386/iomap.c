@@ -15,7 +15,7 @@ struct Iomapalloc iomap;
 
 // to remove some backward dependencies, so that ioalloc()
 // can be here instead of in devarch.c
-void (*hook_ioalloc)() = nil;
+void (*hook_ioalloc)(void) = nil;
 
 /*s: function ioinit(x86) */
 void

@@ -734,10 +734,8 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
 int
 setcolor(ulong p, ulong r, ulong g, ulong b)
 {
-    VGAscr *scr;
     int x;
 
-    scr = &vgascreen;
     if(gscreen == nil)
         return 0;
 

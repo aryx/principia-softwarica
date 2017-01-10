@@ -1093,6 +1093,7 @@ procread(Chan *c, void *va, long n, vlong off)
     }
     error(Egreg);
     panic("procread: should not reach this point");
+    return -1; // unreachable
 }
 /*e: method procread */
 

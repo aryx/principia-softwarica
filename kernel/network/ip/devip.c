@@ -853,6 +853,7 @@ ipread(Chan *ch, void *a, long n, vlong off)
     /*e: [[ipread()]] switch TYPE qid cases */
     default:
         error(Eperm);
+        return -1; // unreachable
 
     }
 }

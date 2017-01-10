@@ -11,8 +11,8 @@
 // backward dependencies breaker for non functional properties functions
 // (logging, security, error, profiling/timing)
 /*s: portfns.c backward deps breaker */
-void (*coherence)(void) = 0;
-int (*iprint)(char*, ...) = 0;
+void (*coherence)(void) = nil;
+int (*iprint)(char*, ...) = nil;
 /*e: portfns.c backward deps breaker */
 
 /*s: function returnfalse */
