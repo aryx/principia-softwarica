@@ -288,6 +288,7 @@ long  lockcycles;
 // tas < Lock < QLock|RWLock
 
 // used to be in 386/ but the fields were used from port/ so must be portable!
+// Lock.sr was u32int on bcm/. Matters?
 <<struct Lock>>
 
 <<struct ILock>>
@@ -792,14 +793,6 @@ typedef struct Mcfg Mcfg;
 typedef struct Mcfgd Mcfgd;
 typedef struct Rsd Rsd;
 
-// was in sd.h
-typedef struct SDev SDev;
-typedef struct SDifc SDifc;
-typedef struct SDio SDio;
-typedef struct SDpart SDpart;
-typedef struct SDperm SDperm;
-typedef struct SDreq SDreq;
-typedef struct SDunit SDunit;
 
 <<dat_forward.h pragma(x86)>>
 @
@@ -1182,15 +1175,14 @@ extern char Ecmdargs[];   /* wrong #args in control message */
 extern char Ebadip[];   /* bad ip address syntax */
 extern char Edirseek[];   /* seek in directory */
 extern char Echange[];    /* media or partition has changed */
+extern char Edetach[];    /* device is detached */
+extern char Enotconf[];   /* endpoint not configured */
 @
 \fi
 
 %//extern char Enoerror[];   /* no error */
 %//extern char Enoport[];    /* network port not available */
 %//extern char Enoswap[];    /* swap space full */
-%//extern char Estalled[];   /* endpoint stalled */
-%//extern char Edetach[];    /* device is detached */
-%//extern char Enotconf[];   /* endpoint not configured */
 %//extern char Eaoedown[];   /* aoe device is down */
 
 \subsection*{[[core/error.c]]}
@@ -1251,8 +1243,6 @@ enum misc_constants
     <<constant STAGESIZE(x86)>>
 
     NUMSIZE = 12,   /* size of formatted number */
-    /* READSTR was 1000, which is way too small for usb's ctl file */
-    READSTR = 4000,   /* temporary buffer size for device reads */
 
     KB      = 1024,
     MB =    (1024*1024),
@@ -1285,7 +1275,7 @@ enum misc_constants
 
 
 
-<<portdat.h macros(x86)>>=
+<<portdat.h macros>>=
 #define MIN(a, b) ((a) < (b)? (a): (b))
 #define HOWMANY(x, y) (((x)+((y)-1))/(y))
 #define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */
@@ -1359,8 +1349,13 @@ enum misc_constants
 //*****************************************************************************
 
 <<struct Confmem>>
+// TODO arm/ specific? uintptr	limit;
+
 
 <<struct Conf>>
+// TODO arm 
+//	ulong	hz;		/* processor cycle freq */
+//	ulong	mhz;
 
 extern Conf conf;
 
@@ -1385,8 +1380,7 @@ char* getconf(char *name);
 
 <<struct Cpu>>
 
-// ref<Cpu>, the actual Cpu is where??
-extern Cpu *cpu;
+
 // array<ref<Cpu>>, MAXCPUS is defined in 386/mem.h
 extern Cpu* cpus[MAXCPUS];
 <<macro CPUS>>
@@ -1489,6 +1483,15 @@ typedef struct Hole Hole;
 typedef struct Xalloc Xalloc;
 typedef struct Xhdr Xhdr;
 
+// was in sd.h
+typedef struct SDev SDev;
+typedef struct SDifc SDifc;
+typedef struct SDio SDio;
+typedef struct SDpart SDpart;
+typedef struct SDperm SDperm;
+typedef struct SDreq SDreq;
+typedef struct SDunit SDunit;
+
 <<portdat_forward.h pragmas>>
 @
 \fi
@@ -1547,6 +1550,9 @@ typedef struct Xhdr Xhdr;
 // exported in lib.h, defined in 386/fns.c (but used in port)
 // int  cistrcmp(char*, char*);
 // int  cistrncmp(char*, char*, int);
+
+// could be in lib.h
+<<portdat.h macros>>
 
 // portfns.c (mostly here just to remove some backward dependencies)
 <<portfns_core.h backward deps breaker>>
@@ -7478,6 +7484,10 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 
 <<struct KMap(x86)>>
 <<macro VA(x86)>>
+
+KMap* kmap(Page*);
+void  kunmap(KMap*);
+
 @
 
 
@@ -8689,9 +8699,10 @@ KImage*   attachimage(int, Chan*, ulong, ulong);
 // sysfile.c
 // syssetflush (used in syscalls/ without requiring extern decl)
 
-// in 386/mmu.c (but used in port)
-KMap* kmap(Page*);
-void  kunmap(KMap*);
+// used in port/ but not portable, so in dat_memory.h now
+//KMap* kmap(Page*);
+//void  kunmap(KMap*);
+
 void    countpagerefs(ulong*, int);
 void    flushmmu(void);
 void checkmmu(ulong va, ulong pa);
@@ -8969,6 +8980,12 @@ void        xhole(ulong, ulong);
 
 
 <<portdat_misc.h>>=
+
+enum misc_constants_portable {
+    /* READSTR was 1000, which is way too small for usb's ctl file */
+    READSTR = 4000,   /* temporary buffer size for device reads */
+};
+
 
 <<struct Cmdbuf>>
 
@@ -13670,6 +13687,8 @@ enum fpsavestatus
     FPinit=   0,
     FPactive= 1,
     FPinactive= 2,
+
+    FPemu = 3, // used by bcm/ only
   
     /* the following is a bit that can be or'd into the state */
     FPillegal=  0x100,
@@ -13693,7 +13712,7 @@ union ArchFPsave {
     SFPssestate;
 };
 @
-
+%old: FPsave
 
 <<struct FPstate(x86)>>=
 struct  FPstate     /* x87 fpu state */
@@ -16522,6 +16541,7 @@ struct ISAConf {
  *  a parsed plan9.ini line
  */
 <<constant NISAOPT(x86)>>
+//TODO: factorize with bcm/
 
 <<struct ISAConf(x86)>>
 @
@@ -24478,6 +24498,17 @@ enum {
 /*
  * mmc/sd/sdio host controller interface
  */
+struct SDio {
+ char	*name;
+ int	(*init)(void);
+ void	(*enable)(void);
+ int	(*inquiry)(char*, int);
+ int	(*cmd)(u32int, u32int, u32int*);
+ void	(*iosetup)(int, void*, int, int);
+ void	(*io)(int, uchar*, int);
+};
+
+extern SDio sdio;
 
 /* sdscsi.c */
 extern int scsiverify(SDunit*);

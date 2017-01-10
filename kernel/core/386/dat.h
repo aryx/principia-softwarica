@@ -21,8 +21,6 @@ enum misc_constants
     /*e: constant STAGESIZE(x86) */
 
     NUMSIZE = 12,   /* size of formatted number */
-    /* READSTR was 1000, which is way too small for usb's ctl file */
-    READSTR = 4000,   /* temporary buffer size for device reads */
 
     KB      = 1024,
     MB =    (1024*1024),
@@ -64,7 +62,7 @@ typedef void* kern_addr3;
 // defines Lock (used inline in Cpu in portdat_core.h so must be before)
 #include "../port/portdat_concurrency.h"
 
-// defines Conf, Cpu
+// defines Conf, Cpu, ... Label
 #include "dat_core.h"
 #include "../port/portdat_core.h"
 
@@ -92,17 +90,13 @@ typedef void* kern_addr3;
 // defines keyboard queue, consdevtab
 #include "../port/portdat_console.h"
 
-// could be put in lib.h
-/*s: portdat.h macros(x86) */
-#define ROUND(s, sz)  (((s)+(sz-1)) & ~(sz-1))
-/*x: portdat.h macros(x86) */
-#define MIN(a, b) ((a) < (b)? (a): (b))
-#define HOWMANY(x, y) (((x)+((y)-1))/(y))
-#define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */
+// ref<Cpu>, the actual Cpu is where??
+extern Cpu *cpu;
 
-// BY2PG is defined in mem.h, which should always be included before "dat.h"!
-#define PGROUND(s)  ROUNDUP(s, BY2PG)
-/*e: portdat.h macros(x86) */
+/*s: macro up(x86) */
+// up = user process
+#define up (cpu->proc)
+/*e: macro up(x86) */
 
 /*s: portdat.h pragmas(x86) */
 #pragma varargck  type  "I" uchar*

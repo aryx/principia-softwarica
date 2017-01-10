@@ -20,6 +20,8 @@ struct Confmem
     /*e: [[Confmem]] other fields */
 };
 /*e: struct Confmem */
+// TODO arm/ specific? uintptr	limit;
+
 
 /*s: struct Conf */
 struct Conf
@@ -47,6 +49,9 @@ struct Conf
     /*e: [[Conf]] other fields */
 };
 /*e: struct Conf */
+// TODO arm 
+//	ulong	hz;		/* processor cycle freq */
+//	ulong	mhz;
 
 extern Conf conf;
 
@@ -150,8 +155,7 @@ struct Cpu
 };
 /*e: struct Cpu */
 
-// ref<Cpu>, the actual Cpu is where??
-extern Cpu *cpu;
+
 // array<ref<Cpu>>, MAXCPUS is defined in 386/mem.h
 extern Cpu* cpus[MAXCPUS];
 /*s: macro CPUS */
@@ -160,7 +164,7 @@ extern Cpu* cpus[MAXCPUS];
 
 /*s: macro up */
 // up = user process
-#define up (cpu->proc)
+//XX #define up (cpu->proc)
 /*e: macro up */
 
 //*****************************************************************************

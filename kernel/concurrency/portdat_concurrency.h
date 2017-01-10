@@ -7,6 +7,7 @@
 // tas < Lock < QLock|RWLock
 
 // used to be in 386/ but the fields were used from port/ so must be portable!
+// Lock.sr was u32int on bcm/. Matters?
 /*s: struct Lock */
 struct Lock
 {

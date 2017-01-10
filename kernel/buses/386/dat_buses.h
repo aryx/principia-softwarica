@@ -6,6 +6,7 @@
 /*s: constant NISAOPT(x86) */
 #define NISAOPT   8
 /*e: constant NISAOPT(x86) */
+//TODO: factorize with bcm/
 
 /*s: struct ISAConf(x86) */
 struct ISAConf {

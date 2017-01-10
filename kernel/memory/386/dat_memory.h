@@ -26,4 +26,8 @@ typedef struct KMap   KMap;
 /*s: macro VA(x86) */
 #define VA(k)   ((virt_addr3)(k))
 /*e: macro VA(x86) */
+
+KMap* kmap(Page*);
+void  kunmap(KMap*);
+
 /*e: dat_memory.h */

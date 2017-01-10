@@ -88,9 +88,10 @@ KImage*   attachimage(int, Chan*, ulong, ulong);
 // sysfile.c
 // syssetflush (used in syscalls/ without requiring extern decl)
 
-// in 386/mmu.c (but used in port)
-KMap* kmap(Page*);
-void  kunmap(KMap*);
+// used in port/ but not portable, so in dat_memory.h now
+//KMap* kmap(Page*);
+//void  kunmap(KMap*);
+
 void    countpagerefs(ulong*, int);
 void    flushmmu(void);
 void checkmmu(ulong va, ulong pa);

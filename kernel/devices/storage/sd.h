@@ -144,6 +144,17 @@ enum {
 /*
  * mmc/sd/sdio host controller interface
  */
+struct SDio {
+ char	*name;
+ int	(*init)(void);
+ void	(*enable)(void);
+ int	(*inquiry)(char*, int);
+ int	(*cmd)(u32int, u32int, u32int*);
+ void	(*iosetup)(int, void*, int, int);
+ void	(*io)(int, uchar*, int);
+};
+
+extern SDio sdio;
 
 /* sdscsi.c */
 extern int scsiverify(SDunit*);

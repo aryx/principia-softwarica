@@ -65,6 +65,15 @@ typedef struct Hole Hole;
 typedef struct Xalloc Xalloc;
 typedef struct Xhdr Xhdr;
 
+// was in sd.h
+typedef struct SDev SDev;
+typedef struct SDifc SDifc;
+typedef struct SDio SDio;
+typedef struct SDpart SDpart;
+typedef struct SDperm SDperm;
+typedef struct SDreq SDreq;
+typedef struct SDunit SDunit;
+
 /*s: portdat_forward.h pragmas */
 #pragma incomplete DevConf
 #pragma incomplete Edf

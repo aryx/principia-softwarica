@@ -50,5 +50,8 @@ char Ecmdargs[] = "wrong #args in control message";
 char Ebadip[] = "bad ip address syntax";
 char Edirseek[] = "seek in directory";
 char Echange[] = "media or partition has changed";
+char Edetach[] = "device is detached";
+char Enotconf[] = "endpoint not configured";
+char Estalled[] = "endpoint stalled";
 /*e: global Exxx errors */
 /*e: error.c */

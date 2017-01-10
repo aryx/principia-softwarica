@@ -55,14 +55,6 @@ typedef struct Mcfg Mcfg;
 typedef struct Mcfgd Mcfgd;
 typedef struct Rsd Rsd;
 
-// was in sd.h
-typedef struct SDev SDev;
-typedef struct SDifc SDifc;
-typedef struct SDio SDio;
-typedef struct SDpart SDpart;
-typedef struct SDperm SDperm;
-typedef struct SDreq SDreq;
-typedef struct SDunit SDunit;
 
 /*s: dat_forward.h pragma(x86) */
 #pragma incomplete BIOS32si
