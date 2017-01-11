@@ -18,9 +18,10 @@ struct Confmem
     kern_addr kbase; // KADDR(Confmem.base)
     kern_addr klimit; // KADDR(base+ x*BY2PG) where x <= Confmem.npage
     /*e: [[Confmem]] other fields */
+
+    uintptr	limit; // TODO bcm/ specific?
 };
 /*e: struct Confmem */
-// TODO arm/ specific? uintptr	limit;
 
 
 /*s: struct Conf */

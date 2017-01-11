@@ -22,7 +22,10 @@ enum {
 
 // was a default in portdat.h
 #define STAGESIZE 64
+#define KMESGSIZE (16*1024)
 
+//TODO factorize in portdat.h
+#define PRINTSIZE 256
 
 // pad memory pointers
 // physical address

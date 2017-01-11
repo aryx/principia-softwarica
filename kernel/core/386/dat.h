@@ -20,11 +20,6 @@ enum misc_constants
     STAGESIZE = 2048, // default is 64
     /*e: constant STAGESIZE(x86) */
 
-    NUMSIZE = 12,   /* size of formatted number */
-
-    KB      = 1024,
-    MB =    (1024*1024),
-
     /* cpuid instruction result register bits */
     // this is actually only used in 386/ code. 
     /* dx */

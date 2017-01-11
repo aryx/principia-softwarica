@@ -37,7 +37,7 @@ char* getconf(char *name)
 // was in init/main.c
 /*s: global cpu */
 // ref<Cpu>, assigned to CPUADDR in _clearbss
-Cpu *cpu;
+//TODO Cpu *cpu;
 /*e: global cpu */
 // was in dat.h
 /*s: global cpus */

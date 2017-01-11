@@ -23,9 +23,12 @@ enum {
  * Where configuration info is left for the loaded programme.
  */
 #define BOOTARGS	((char*)CONFADDR)
-#define	BOOTARGSLEN	(MACHADDR-CONFADDR)
-#define	MAXCONF		64
+#define	BOOTARGSLEN	(CPUADDR-CONFADDR)
+
 #define MAXCONFLINE	160
+
+extern	char*	conffile;
+
 
 uintptr kseg0 = KZERO;
 
@@ -43,9 +46,9 @@ static int oargblen;
 static uintptr sp;		/* XXX - must go - user stack of init proc */
 
 /* store plan9.ini contents here at least until we stash them in #ec */
-static char confname[MAXCONF][KNAMELEN];
-static char confval[MAXCONF][MAXCONFLINE];
-static int nconf;
+//TODO: now in portdat.h
+//static char confname[MAXCONF][KNAMELEN];
+//static char confval[MAXCONF][MAXCONFLINE];
 
 typedef struct Atag Atag;
 struct Atag {
@@ -196,14 +199,14 @@ void
 machinit(void)
 {
 	cpu->cpuno = 0;
-	cpus[cpu->cpuno] = m;
+	cpus[cpu->cpuno] = cpu;
 
 	cpu->ticks = 1;
 	cpu->perf.period = 1;
 
-	conf.nmach = 1;
+	conf.ncpu = 1;
 
-	active.machs = 1;
+	active.cpus = 1;
 	active.exiting = 0;
 
 	up = nil;
@@ -226,7 +229,7 @@ main(void)
 	uint rev;
 
 	okay(1);
-	m = (Mach*)MACHADDR;
+	cpu = (Cpu*)CPUADDR;
 	memset(edata, 0, end - edata);	/* clear bss */
 	machinit();
 	mmuinit1();
@@ -253,13 +256,14 @@ main(void)
 	clockinit();
 	printinit();
 	timersinit();
-	if(conf.monitor)
+
 		swcursorinit();
+
 	cpuidprint();
 	archreset();
 
-	procinit0();
-	initseg();
+	procinit();
+	imageinit();
 	links();
 	chandevreset();			/* most devices are discovered here */
 	pageinit();
@@ -379,7 +383,9 @@ userinit(void)
 	 * Kernel Stack
 	 */
 	p->sched.pc = PTR2UINT(init0);
-	p->sched.sp = PTR2UINT(p->kstack+KSTACK-sizeof(up->s.args)-sizeof(uintptr));
+	p->sched.sp = PTR2UINT(p->kstack + KSTACK 
+                           - sizeof(up->sargs.args)
+                           - sizeof(uintptr));
 	p->sched.sp = STACKALIGN(p->sched.sp);
 
 	/*
@@ -391,7 +397,7 @@ userinit(void)
 	 * shouldn't be the case here.
 	 */
 	s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-	s->flushme++;
+//	s->flushme++;
 	p->seg[SSEG] = s;
 	pg = newpage(1, 0, USTKTOP-BY2PG);
 	segpage(s, pg);
@@ -405,9 +411,9 @@ userinit(void)
 	s = newseg(SG_TEXT, UTZERO, 1);
 	p->seg[TSEG] = s;
 	pg = newpage(1, 0, UTZERO);
-	memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+//	memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
 	segpage(s, pg);
-	k = kmap(s->map[0]->pages[0]);
+	k = kmap(s->pagedir[0]->pagetab[0]);
 	memmove(UINT2PTR(VA(k)), initcode, sizeof initcode);
 	kunmap(k);
 
@@ -461,7 +467,7 @@ confinit(void)
 	conf.ialloc = ((conf.npage-conf.upages)/2)*BY2PG;
 
 	/* only one processor */
-	conf.nmach = 1;
+	conf.ncpu = 1;
 
 	/* set up other configuration parameters */
 	conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
@@ -484,9 +490,9 @@ confinit(void)
 	kpages *= BY2PG;
 	kpages -= conf.upages*sizeof(Page)
 		+ conf.nproc*sizeof(Proc)
-		+ conf.nimage*sizeof(Image)
+		+ conf.nimage*sizeof(KImage)
 		+ conf.nswap
-		+ conf.nswppo*sizeof(Page);
+		+ conf.nswppo*sizeof(Page); // BUG, Page -> Page*?
 	mainmem->maxsize = kpages;
 	if(!cpuserver)
 		/*
@@ -506,10 +512,10 @@ shutdown(int ispanic)
 	lock(&active);
 	if(ispanic)
 		active.ispanic = ispanic;
-	else if(cpu->cpuno == 0 && (active.machs & (1 << cpu->cpuno)) == 0)
+	else if(cpu->cpuno == 0 && (active.cpus & (1 << cpu->cpuno)) == 0)
 		active.ispanic = 0;
-	once = active.machs & (1 << cpu->cpuno);
-	active.machs &= ~(1 << cpu->cpuno);
+	once = active.cpus & (1 << cpu->cpuno);
+	active.cpus &= ~(1 << cpu->cpuno);
 	active.exiting = 1;
 	unlock(&active);
 
@@ -518,7 +524,7 @@ shutdown(int ispanic)
 	spllo();
 	for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
 		delay(TK2MS(2));
-		if(active.machs == 0 && consactive() == 0)
+		if(active.cpus == 0 && consactive() == 0)
 			break;
 	}
 	delay(1000);

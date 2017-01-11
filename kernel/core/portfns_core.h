@@ -17,6 +17,8 @@
 
 // BY2PG is defined in mem.h, which should always be included before "dat.h"!
 #define PGROUND(s)  ROUNDUP(s, BY2PG)
+
+#define FEXT(d, o, w) (((d)>>(o)) & ((1<<(w))-1)) // used in bcm/mmu.c
 /*e: portdat.h macros */
 
 // portfns.c (mostly here just to remove some backward dependencies)

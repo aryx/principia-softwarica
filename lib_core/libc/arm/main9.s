@@ -27,7 +27,8 @@ loop:
 	MOVW	R(arg), 4(R(sp))
 	BL	exits(SB)
     // unreachable
-	BL	_div(SB) // force loading of div??
+    // force loading of div?
+	BL	_div(SB) 
 	B	loop
 
 DATA	_exitstr<>+0(SB)/4, $"main"

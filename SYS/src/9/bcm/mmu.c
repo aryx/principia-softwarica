@@ -185,8 +185,8 @@ mmurelease(Proc* proc)
 			panic("mmurelease: page->ref %d", page->ref);
 		pagechainhead(page);
 	}
-	if(proc->mmul2cache && palloc.r.p)
-		wakeup(&palloc.r);
+	if(proc->mmul2cache && palloc.freememr.p)
+		wakeup(&palloc.freememr);
 	proc->mmul2cache = nil;
 
 	mmul1empty();
@@ -264,11 +264,12 @@ putmmu(uintptr va, uintptr pa, Page* page)
 	 *  rather than direct mapped.
 	 */
 	cachedwbinv();
-	if(page->cachectl[0] == PG_TXTFLUSH){
-		/* pio() sets PG_TXTFLUSH whenever a text pg has been written */
-		cacheiinv();
-		page->cachectl[0] = PG_NOFLUSH;
-	}
+    //TODO?? need put back cachectl ??
+	//if(page->cachectl[0] == PG_TXTFLUSH){
+	//	/* pio() sets PG_TXTFLUSH whenever a text pg has been written */
+	//	cacheiinv();
+	//	page->cachectl[0] = PG_NOFLUSH;
+	//}
 	checkmmu(va, PPN(pa));
 }
 

@@ -40,6 +40,9 @@ long    lcycles(void);
 // could be in portfns.h, same type in every arch, but called from arch-specific
 void    forkret(void);
 void		dumpregs(Ureg*);
+void		confinit(void);
+void		printinit(void);
+void		userinit(void);
 
 #define cycles(ip) *(ip) = lcycles()
 extern void dmastart(int, int, int, void*, void*, int);

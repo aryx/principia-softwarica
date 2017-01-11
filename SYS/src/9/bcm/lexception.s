@@ -40,7 +40,7 @@ TEXT _vsvc(SB), 1, $-4			/* SWI */
 	MOVW	$setR12(SB), R12	/* Make sure we've got the kernel's SB loaded */
 
 //	MOVW	$(KSEG0+16*KiB-CPUSIZE), R10	/* m */
-	MOVW	$(MACHADDR), R10	/* m */
+	MOVW	$(CPUADDR), R10	/* m */
 	MOVW	8(R10), R9		/* up */
 
 	MOVW	R13, R0			/* first arg is pointer to ureg */
@@ -141,7 +141,7 @@ _userexcep:
 	MOVW	$setR12(SB), R12	/* Make sure we've got the kernel's SB loaded */
 
 //	MOVW	$(KSEG0+16*KiB-CPUSIZE), R10	/* m */
-	MOVW	$(MACHADDR), R10	/* m */
+	MOVW	$(CPUADDR), R10	/* m */
 	MOVW	8(R10), R9		/* up */
 
 	MOVW	R13, R0			/* first arg is pointer to ureg */
@@ -164,7 +164,7 @@ TEXT _vfiq(SB), 1, $-4			/* FIQ */
 	MOVM.DB.W [R8-R10], (R13)	/* save in ureg */
 	MOVM.DB.W.S [R0-R14], (R13)	/* save interrupted regs */
 	MOVW	$setR12(SB), R12	/* Make sure we've got the kernel's SB loaded */
-	MOVW	$(MACHADDR), R10	/* m */
+	MOVW	$(CPUADDR), R10	/* m */
 	MOVW	8(R10), R9		/* up */
 	MOVW	R13, R0			/* first arg is pointer to ureg */
 	SUB	$(4*2), R13		/* space for argument+link (for debugger) */

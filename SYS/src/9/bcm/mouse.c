@@ -10,7 +10,8 @@
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
-#include "screen.h"
+
+#include "bcmscreen.h"
 
 /*
  *  mouse types
