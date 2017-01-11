@@ -163,10 +163,8 @@ extern Cpu* cpus[MAXCPUS];
 #define CPUS(n)  (cpus[n])
 /*e: macro CPUS */
 
-/*s: macro up */
-// up = user process
-//XX #define up (cpu->proc)
-/*e: macro up */
+// 'up' and 'cpu' can have different implement in different archi
+// so they are not defined here.
 
 //*****************************************************************************
 // Other

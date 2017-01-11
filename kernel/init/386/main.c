@@ -32,6 +32,11 @@ extern  Dev*  conf_devtab[];
 extern  char* conffile;
 //extern  uchar initcode[]; in init.h
 
+/*s: global cpu(x86) */
+// ref<Cpu>, assigned to CPUADDR in _clearbss
+Cpu *cpu;
+/*e: global cpu(x86) */
+
 extern void (*i8237alloc)(void);
 
 //*****************************************************************************

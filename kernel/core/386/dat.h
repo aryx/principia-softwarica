@@ -8,9 +8,6 @@ enum misc_constants
     MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
     /*e: constant MAXSYSARG(x86) */
 
-    /*s: constant PRINTSIZE(x86) */
-    PRINTSIZE = 256,
-    /*e: constant PRINTSIZE(x86) */
     /*s: constant KMESGSIZE(x86) */
     // used in devcons.c
     KMESGSIZE = (16*1024),  /* put 256*1024 if want acpi debugging */

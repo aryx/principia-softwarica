@@ -34,11 +34,6 @@ char* getconf(char *name)
 }
 /*e: function getconf */
 
-// was in init/main.c
-/*s: global cpu */
-// ref<Cpu>, assigned to CPUADDR in _clearbss
-//TODO Cpu *cpu;
-/*e: global cpu */
 // was in dat.h
 /*s: global cpus */
 /*
@@ -50,6 +45,7 @@ char* getconf(char *name)
 // array<ref<Cpu>>
 Cpu* cpus[MAXCPUS];
 /*e: global cpus */
+// cpu is in init/main.c because it can differ in different archi
 
 // was in security/auth.c
 /*s: global eve */

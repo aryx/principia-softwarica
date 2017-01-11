@@ -9,6 +9,9 @@ enum misc_constants_portable {
 
     NUMSIZE = 12,   /* size of formatted number */
 
+    /*s: constant PRINTSIZE */
+    PRINTSIZE = 256,
+    /*e: constant PRINTSIZE */
 };
 
 
