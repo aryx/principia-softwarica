@@ -29,6 +29,9 @@ enum {
 
 extern	char*	conffile;
 
+// in l.s
+extern void    coherence1(void);
+
 
 uintptr kseg0 = KZERO;
 
@@ -227,6 +230,8 @@ main(void)
 {
 	extern char edata[], end[];
 	uint rev;
+    
+    coherence = coherence1;
 
 	okay(1);
 	cpu = (Cpu*)CPUADDR;
@@ -252,9 +257,10 @@ main(void)
 		for(;;)
 			;
 	}
+
 	trapinit();
 	clockinit();
-	printinit();
+	lineqinit();
 	timersinit();
 
 		swcursorinit();
@@ -605,3 +611,18 @@ cmpswap(long *addr, long old, long new)
 {
 	return cas32(addr, old, new);
 }
+
+// called from devcons.c
+void
+memorysummary(void) {
+}
+
+ulong
+us(void)
+{
+  return -1;
+}
+
+bool kdebug;
+
+

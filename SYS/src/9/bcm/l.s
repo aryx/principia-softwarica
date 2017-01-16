@@ -194,7 +194,7 @@ TEXT idlehands(SB), $-4
 	RET
 
 
-TEXT coherence(SB), $-4
+TEXT coherence1(SB), $-4
 	BARRIERS
 	RET
 

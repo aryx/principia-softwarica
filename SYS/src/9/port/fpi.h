@@ -29,7 +29,7 @@ enum {
 	ExpInfinity	= DoubleExpMax,
 };
 
-typedef struct {
+typedef struct Internal {
 	/* order matters: must start with s, e, l, h in that order */
 	unsigned char s;
 	short e;

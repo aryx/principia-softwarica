@@ -43,6 +43,8 @@ void		dumpregs(Ureg*);
 void		confinit(void);
 void		printinit(void);
 void		userinit(void);
+void		bootlinks(void);
+void  memorysummary(void);
 
 #define cycles(ip) *(ip) = lcycles()
 extern void dmastart(int, int, int, void*, void*, int);

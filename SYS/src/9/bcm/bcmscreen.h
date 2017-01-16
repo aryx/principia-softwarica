@@ -29,12 +29,12 @@ extern void	blankscreen(int);
 extern void	flushmemscreen(Rectangle);
 extern uchar*	attachscreen(Rectangle*, ulong*, int*, int*, int*);
 
-//ksetcursor now
-extern void	setcursor(Cursor*);
+extern void	ksetcursor(Cursor*);
+
 extern int	cursoron(int);
 extern void	cursoroff(int);
 
 /* devdraw.c */
 extern QLock	drawlock;
 
-#define ishwimage(i)	1		/* for ../port/devdraw.c */
+

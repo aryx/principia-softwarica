@@ -154,7 +154,8 @@ Rune kbtabctrl[Nscan] =
 int mouseshifted;
 void (*kbdmouse)(int);
 
-static int kdebug;
+// now in main.c
+//bool kdebug;
 
 typedef struct Kbscan Kbscan;
 struct Kbscan {

@@ -74,6 +74,16 @@ static void myscreenputs(char *s, int n);
 static void screenputc(char *buf);
 static void screenwin(void);
 
+
+//old: #define ishwimage(i)	1		/* for ../port/devdraw.c */
+bool
+ishwimage(Memimage* i)
+{
+  USED(i);
+  return true;
+}
+
+
 /*
  * Software cursor. 
  */
@@ -203,7 +213,7 @@ swload(Cursor *curs)
 
 /* called from devmouse */
 void
-setcursor(Cursor* curs)
+ksetcursor(Cursor* curs)
 {
 	cursoroff(0);
 	swload(curs);
@@ -336,6 +346,7 @@ screeninit(void)
 			xgscreen.r.max.x, xgscreen.r.max.y, xgscreen.depth);
 		return;
 	}
+
 	xgscreen.clipr = xgscreen.r;
 	switch(xgscreen.depth){
 	default:

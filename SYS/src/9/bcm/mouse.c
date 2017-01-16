@@ -196,8 +196,9 @@ resetmouse(void)
 	packetsize = 3;
 }
 
+// for screen.h
 void
-mousectl(Cmdbuf *cb)
+kmousectl(Cmdbuf *cb)
 {
 	Cmdtab *ct;
 

@@ -39,6 +39,7 @@
 #define	VCBUFFER	(KZERO+0x3400)		/* videocore mailbox buffer */
 #define	FIQSTKTOP	(KZERO+0x4000)		/* FIQ stack */
 #define	L1		    (KZERO+0x4000)		/* tt ptes: 16KiB aligned */
+
 #define	KTZERO		(KZERO+0x8000)		/* kernel text start */
 #define VIRTIO		0x7E000000		/* i/o registers */
 #define	FRAMEBUFFER	0xA0000000		/* video framebuffer */
