@@ -40,6 +40,7 @@ entryvalue(void)
     /*e: [[entryvalue()]] if dynamic module case */
     default:
         diag("entry not text: %s", s->name);
+        return -1;
     }
 }
 /*e: function entryvalue(x86) */
