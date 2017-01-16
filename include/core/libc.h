@@ -539,7 +539,7 @@ extern  void    qsort(void*, long, long, int (*)(void*, void*));
  *  profiling
  */
 /*s: type Prof */
-enum Prof {
+enum Profiling {
     Profoff,        /* No profiling */
 
     Profuser,       /* Measure user time only (default) */
