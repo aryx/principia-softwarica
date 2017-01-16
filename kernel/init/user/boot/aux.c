@@ -62,6 +62,7 @@ void bind_safe(char* old, char* new, int flag) {
   return;
 }
 
+//TODO: get path in fatal message?
 int open_safe(char* path, int flag) {
   int fd;
   if((fd = open(path, flag)) < 0) {

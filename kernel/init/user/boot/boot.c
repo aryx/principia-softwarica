@@ -3,6 +3,8 @@
 #include <libc.h>
 #include "../boot/boot.h"
 
+// TODO: replace by a script? /$objtype/boot.rc ?
+
 /*
  * we should inherit the standard fds referring to /dev/cons,
  * but we're being paranoid.
@@ -10,9 +12,9 @@
 static void
 opencons(void)
 {
-  close(0);
-  close(1);
-  close(2);
+  close(STDIN);
+  close(STDOUT);
+  close(STDERR);
   open("/dev/cons", OREAD);
   open("/dev/cons", OWRITE);
   open("/dev/cons", OWRITE);
@@ -25,11 +27,12 @@ opencons(void)
 static void
 bindenvsrv(void)
 {
-  bind("#ec", "/env", MREPL); // ec? 2 chars?
+  bind("#ec", "/env", MREPL); // ec? 2 chars? #e and pass 'c' to device?
   bind("#e", "/env", MBEFORE|MCREATE); // devenv
   bind("#s", "/srv/", MREPL|MCREATE); // devsrv
 }
 
+//TODO: use open_safe, write_safe
 static void
 swapproc(void)
 {
@@ -48,7 +51,7 @@ swapproc(void)
 static void
 execinit(void)
 {
-  int fd;
+  fdt fd;
 
   // basics
 
@@ -59,7 +62,9 @@ execinit(void)
   bind_safe("#k", "/ksys", MREPL); //devsys
 
   bind_safe("/root", "/", MAFTER|MCREATE);
-  bind_safe("/386/bin", "/bin", MREPL);
+
+  bind_safe("/386/bin", "/bin", MREPL); // X86
+
   bind_safe("/rc/bin", "/bin", MAFTER);
 
   bind_safe("#P", "/dev", MAFTER); //devarch
@@ -118,7 +123,7 @@ boot(int argc, char *argv[])
 
   fmtinstall('r', errfmt);
 
-  //At this point we should have #/ and #c setup by the kernel init0
+  // at this point we should have #/ and #c setup by the kernel init0
 
   opencons();
   bindenvsrv();
