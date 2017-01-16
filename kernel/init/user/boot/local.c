@@ -3,6 +3,8 @@
 #include <libc.h>
 #include "../boot/boot.h"
 
+// Note that most of this code is now superseded by $objtype/boot.rc
+
 void
 connectlocal(void)
 {

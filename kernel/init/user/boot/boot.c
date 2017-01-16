@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "../boot/boot.h"
 
-// TODO: replace by a script? /$objtype/boot.rc ?
+// Note that most of this code is now superseded by $objtype/boot.rc
 
 /*
  * we should inherit the standard fds referring to /dev/cons,
