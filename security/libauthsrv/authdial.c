@@ -33,4 +33,5 @@ authdial(char *netroot, char *dom)
 //PAD: 	rv = dial(netmkaddr(p, netroot, "ticket"), 0, 0, 0);
 //PAD: 	free(p);
 //PAD: 	return rv;
+  return -1;
 }
