@@ -113,7 +113,7 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
     else
       rptr = &r;
 
-    while((*s || *r) && len){
+    while((*s || *r) && len){ // PAD: len > 0 in recent
         /*s: [[_string()]] set max */
         max = Max;
         if(len < max)

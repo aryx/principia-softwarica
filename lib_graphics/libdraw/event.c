@@ -13,8 +13,10 @@ typedef struct	Ebuf Ebuf;
 struct Slave
 {
     int	pid;
+
     Ebuf	*head;		/* queue of messages for this descriptor */
     Ebuf	*tail;
+
     int	(*fn)(int, Event*, uchar*, int);
 };
 /*e: struct Slave */
@@ -41,7 +43,7 @@ static	int	Smouse = -1;
 static	int	Stimer = -1;
 /*e: global Stimer */
 /*s: global logfid */
-static	int	logfid;
+static	fdt	logfid;
 /*e: global logfid */
 
 /*s: global nslave */
@@ -51,7 +53,7 @@ static	int	nslave;
 static	int	parentpid;
 /*e: global parentpid */
 /*s: global epipe */
-static	int	epipe[2];
+static	fdt	epipe[2];
 /*e: global epipe */
 
 static	int	eforkslave(ulong);
@@ -60,10 +62,10 @@ static	void	ekill(void);
 static	int	enote(void *, char *);
 
 /*s: global mousefd */
-static	int	mousefd;
+static	fdt	mousefd;
 /*e: global mousefd */
 /*s: global cursorfd */
-static	int	cursorfd;
+static	fdt	cursorfd;
 /*e: global cursorfd */
 
 /*s: function ebread */

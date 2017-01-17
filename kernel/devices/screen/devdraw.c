@@ -30,8 +30,8 @@ enum
     Qwinname,
 
     // /dev/draw/x/y, third level device files associated to a client
-    Qctl,  // used in 'x < Qctl' code so must be the first!
-    Qdata, // all the operations, drawmesg()
+    Qctl,  // used in 'x < Qctl' code, so must be the first!
+    Qdata, // used for drawing commands, see drawmesg()
 
     Qcolormap, 
     Qrefresh,

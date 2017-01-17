@@ -7,13 +7,18 @@ typedef struct	Event Event;
 typedef struct	Menu Menu;
 //typedef struct	Mouse Mouse;
 
-/*s: enum _anon_ (include/event.h) */
+/*s: type keys */
+// bitset<Key>
+typedef ulong keys;
+/*e: type keys */
+
+/*s: enum Key */
 enum
 {
     Emouse	= 1,
     Ekeyboard	= 2,
 };
-/*e: enum _anon_ (include/event.h) */
+/*e: enum Key */
 
 /*s: enum _anon_ (include/event.h)2 */
 enum
@@ -40,7 +45,7 @@ struct	Event
 
     int		n;		/* number of characters in message */
     void	*v;		/* data unpacked by general event-handling function */
-    uchar	data[EMAXMSG];	/* message from an arbitrary file descriptor */
+    byte	data[EMAXMSG];	/* message from an arbitrary file descriptor */
 };
 /*e: struct Event */
 
