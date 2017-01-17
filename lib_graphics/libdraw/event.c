@@ -24,9 +24,11 @@ struct Slave
 /*s: struct Ebuf */
 struct Ebuf
 {
-    Ebuf	*next;
     int	n;		/* number of bytes in buf */
-    uchar	buf[EMAXMSG];
+    byte	buf[EMAXMSG];
+
+    // Extra
+    Ebuf	*next;
 };
 /*e: struct Ebuf */
 
@@ -85,18 +87,21 @@ ebread(Slave *s)
         free(d);
         if(s->head && l==0)
             break;
+        // else
         extract();
     }
+    // eb = pop_queue(s->head, s->tail);
     eb = s->head;
     s->head = s->head->next;
-    if(s->head == 0)
-        s->tail = 0;
+    if(s->head == nil)
+        s->tail = nil;
+
     return eb;
 }
 /*e: function ebread */
 
 /*s: function event */
-ulong
+keys
 event(Event *e)
 {
     return eread(~0UL, e);
@@ -104,8 +109,8 @@ event(Event *e)
 /*e: function event */
 
 /*s: function eread */
-ulong
-eread(ulong keys, Event *e)
+keys
+eread(keys keys, Event *e)
 {
     Ebuf *eb;
     int i, id;
@@ -113,7 +118,8 @@ eread(ulong keys, Event *e)
     if(keys == 0)
         return 0;
     for(;;){
-        for(i=0; i<nslave; i++)
+        // check if pending message
+        for(i=0; i<nslave; i++) {
             if((keys & (1<<i)) && eslave[i].head){
                 id = 1<<i;
                 if(i == Smouse)
@@ -121,7 +127,7 @@ eread(ulong keys, Event *e)
                 else if(i == Skeyboard)
                     e->kbdc = ekbd();
                 else if(i == Stimer)
-                    eslave[i].head = 0;
+                    eslave[i].head = nil;
                 else{
                     eb = ebread(&eslave[i]);
                     e->n = eb->n;
@@ -133,6 +139,8 @@ eread(ulong keys, Event *e)
                 }
                 return id;
             }
+        }
+        // read from pipe new messages from the slaves
         extract();
     }
     return 0; // unreachable
@@ -186,7 +194,7 @@ ecanread(ulong keys)
 
 /*s: function estartfn */
 ulong
-estartfn(ulong key, int fd, int n, int (*fn)(int, Event*, uchar*, int))
+estartfn(ulong key, fdt fd, int n, int (*fn)(int, Event*, uchar*, int))
 {
     char buf[EMAXMSG+1];
     int i, r;
@@ -195,25 +203,29 @@ estartfn(ulong key, int fd, int n, int (*fn)(int, Event*, uchar*, int))
         drawerror(display, "events: bad file descriptor");
     if(n <= 0 || n > EMAXMSG)
         n = EMAXMSG;
+
     i = eforkslave(key);
+    // master
     if(i < MAXSLAVE){
         eslave[i].fn = fn;
         return 1<<i;
     }
-    buf[0] = i - MAXSLAVE;
+    // slave
+    buf[0] = i - MAXSLAVE; // slave identifier
     while((r = read(fd, buf+1, n))>0)
         if(write(epipe[1], buf, r+1)!=r+1)
             break;
+
     buf[0] = MAXSLAVE;
     write(epipe[1], buf, 1);
-    _exits(0);
+    _exits(nil);
     return 0;
 }
 /*e: function estartfn */
 
 /*s: function estart */
 ulong
-estart(ulong key, int fd, int n)
+estart(ulong key, fdt fd, int n)
 {
     return estartfn(key, fd, n, nil);
 }
@@ -224,39 +236,48 @@ ulong
 etimer(ulong key, int n)
 {
     char t[2];
+    int cnt;
 
     if(Stimer != -1)
         drawerror(display, "events: timer started twice");
     Stimer = eforkslave(key);
+    // master
     if(Stimer < MAXSLAVE)
         return 1<<Stimer;
+    // slave
     if(n <= 0)
         n = 1000;
     t[0] = t[1] = Stimer - MAXSLAVE;
-    do
+    do {
         sleep(n);
-    while(write(epipe[1], t, 2) == 2);
+        cnt = write(epipe[1], t, 2);
+    } while(cnt == 2);
+
     t[0] = MAXSLAVE;
     write(epipe[1], t, 1);
-    _exits(0);
+    _exits(nil);
     return 0;
 }
 /*e: function etimer */
 
 /*s: function ekeyslave */
 static void
-ekeyslave(int fd)
+ekeyslave(fdt fd)
 {
     Rune r;
     char t[3], k[10];
     int kr, kn, w;
 
     if(eforkslave(Ekeyboard) < MAXSLAVE)
+        // parent (master)
         return;
+
+    // child (slave) code
     kn = 0;
     t[0] = Skeyboard;
     for(;;){
         while(!fullrune(k, kn)){
+            // blocking call
             kr = read(fd, k+kn, sizeof k - kn);
             if(kr <= 0)
                 goto breakout;
@@ -266,7 +287,8 @@ ekeyslave(int fd)
         kn -= w;
         memmove(k, &k[w], kn);
         t[1] = r;
-        t[2] = r>>8;
+        t[2] = r>>8; // TODO what about other parts of the Rune????
+        // send to master
         if(write(epipe[1], t, 3) != 3)
             break;
     }
@@ -279,34 +301,40 @@ breakout:;
 
 /*s: function einit */
 void
-einit(ulong keys)
+einit(keys keys)
 {
-    int ctl, fd;
+    fdt ctl, fd;
     char buf[256];
 
     parentpid = getpid();
     if(pipe(epipe) < 0)
         drawerror(display, "events: einit pipe");
+
     atexit(ekill);
     atnotify(enote, 1);
+
     snprint(buf, sizeof buf, "%s/mouse", display->devdir);
     mousefd = open(buf, ORDWR|OCEXEC);
     if(mousefd < 0)
         drawerror(display, "einit: can't open mouse\n");
+
     snprint(buf, sizeof buf, "%s/cursor", display->devdir);
     cursorfd = open(buf, ORDWR|OCEXEC);
     if(cursorfd < 0)
         drawerror(display, "einit: can't open cursor\n");
+
     if(keys&Ekeyboard){
         snprint(buf, sizeof buf, "%s/cons", display->devdir);
         fd = open(buf, OREAD);
         if(fd < 0)
             drawerror(display, "events: can't open console");
+
         snprint(buf, sizeof buf, "%s/consctl", display->devdir);
         ctl = open("/dev/consctl", OWRITE|OCEXEC);
         if(ctl < 0)
             drawerror(display, "events: can't open consctl");
         write(ctl, "rawon", 5);
+
         for(Skeyboard=0; Ekeyboard & ~(1<<Skeyboard); Skeyboard++)
             ;
         ekeyslave(fd);
@@ -326,7 +354,7 @@ extract(void)
     Slave *s;
     Ebuf *eb;
     int i, n;
-    uchar ebuf[EMAXMSG+1];
+    byte ebuf[EMAXMSG+1];
 
     /* avoid generating a message if there's nothing to show. */
     /* this test isn't perfect, though; could do flushimage(display, 0) then call extract */
@@ -341,16 +369,19 @@ extract(void)
     }else
         if(display->bufp > display->buf)
             flushimage(display, true);
+
 loop:
     if((n=read(epipe[0], ebuf, EMAXMSG+1)) < 0
     || ebuf[0] >= MAXSLAVE)
         drawerror(display, "eof on event pipe");
     if(n == 0)
         goto loop;
+
     i = ebuf[0];
     if(i >= nslave || n <= 1)
         drawerror(display, "events: protocol error: short read");
     s = &eslave[i];
+
     if(i == Stimer){
         s->head = (Ebuf *)1;
         return;
@@ -362,19 +393,23 @@ loop:
             drawerror(display, "events: protocol error: mouse");
         if(ebuf[1] == 'r')
             eresized(1);
+
         /* squash extraneous mouse events */
         if((eb=s->tail) && memcmp(eb->buf+1+2*12, ebuf+1+1+2*12, 12)==0){
             memmove(eb->buf, &ebuf[1], n - 1);
             return;
         }
     }
+
     /* try to save space by only allocating as much buffer as we need */
     eb = malloc(sizeof(*eb) - sizeof(eb->buf) + n - 1);
-    if(eb == 0)
+    if(eb == nil)
         drawerror(display, "events: protocol error 4");
     eb->n = n - 1;
     memmove(eb->buf, &ebuf[1], n - 1);
-    eb->next = 0;
+
+    // add_queue(eb, s->head, s->tail)
+    eb->next = nil;
     if(s->head)
         s->tail = s->tail->next = eb;
     else
@@ -397,14 +432,16 @@ eforkslave(ulong key)
              * out closes all connections to the window server.
              */
             switch(pid = rfork(RFPROC)){
+            // child
             case 0:
                 return MAXSLAVE+i;
             case -1:
                 fprint(2, "events: fork error\n");
                 exits("fork");
             }
+            // parent
             eslave[i].pid = pid;
-            eslave[i].head = eslave[i].tail = 0;
+            eslave[i].head = eslave[i].tail = nil;
             return i;
         }
     drawerror(display, "events: bad slave assignment");

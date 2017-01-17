@@ -53,7 +53,7 @@ struct Memimage
 {
     Rectangle	r;		/* rectangle in data area, local coords */
 
-    ulong	chan;	/* channel descriptions */
+    channels	chan;	/* channel descriptions */
     // derives from Memimage.chan
     int		depth;	/* number of bits of storage per pixel */
     int		nchan;	/* number of channels */
