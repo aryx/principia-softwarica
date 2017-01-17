@@ -271,6 +271,8 @@
 #define PTX(va)   ((((virt_addr)(va))>>12) & 0x03FF)
 // 0x03FF = 1023, so 10 bits, put 1024-1 no?
 
+#define getpgcolor(a) 0
+
 /*s: constant VectorSYSCALL(x86) */
 //!!! int 64 (0x40), way to jump in plan9 OS !!!
 #define VectorSYSCALL 64

@@ -264,12 +264,11 @@ putmmu(uintptr va, uintptr pa, Page* page)
 	 *  rather than direct mapped.
 	 */
 	cachedwbinv();
-    //TODO?? need put back cachectl ??
-	//if(page->cachectl[0] == PG_TXTFLUSH){
-	//	/* pio() sets PG_TXTFLUSH whenever a text pg has been written */
-	//	cacheiinv();
-	//	page->cachectl[0] = PG_NOFLUSH;
-	//}
+	if(page->cachectl[0] == PG_TXTFLUSH){
+		/* pio() sets PG_TXTFLUSH whenever a text pg has been written */
+		cacheiinv();
+		page->cachectl[0] = PG_NOFLUSH;
+	}
 	checkmmu(va, PPN(pa));
 }
 

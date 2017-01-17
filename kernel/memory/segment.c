@@ -253,6 +253,8 @@ dupseg(Segment **seg, int segno, bool share)
         if(pt = s->pagedir[i])
             n->pagedir[i] = ptcpy(pt); // will actually share the pages
 
+    n->flushme = s->flushme;
+
     if(s->ref > 1)
         procflushseg(s); // ??
     poperror();
@@ -818,6 +820,7 @@ data2txt(Segment *s)
     incref(ps->image);
     ps->fstart = s->fstart;
     ps->flen = s->flen;
+    ps->flushme = true;
 
     return ps;
 }

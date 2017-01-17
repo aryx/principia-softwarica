@@ -1,5 +1,7 @@
 /*s: dat_memory.h */
 
+#define NCOLOR 1
+
 // define things used in Proc, for mmu.c to work on
 /*
  *  MMU stuff in proc

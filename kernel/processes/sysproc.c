@@ -532,6 +532,7 @@ sysexec(ulong* arg)
         /* attachimage returns a locked cache image */
         img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
         ts = img->s;
+        ts->flushme = true;
         ts->fstart = 0;
         ts->flen = sizeof(Exec)+text;
         unlock(img);

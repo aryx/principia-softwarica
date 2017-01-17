@@ -1752,6 +1752,10 @@ procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
     kunmap(k);
     poperror();
 
+	/* Ensure the process sees text page changes */
+	if(s->flushme)
+		memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+
     s->steal--;
 
     if(read == 0)
@@ -1773,6 +1777,7 @@ text2data(Proc *p, Segment *s)
     incref(ps->image);
     ps->fstart = s->fstart;
     ps->flen = s->flen;
+    ps->flushme = true;
 
     qlock(&p->seglock);
     for(i = 0; i < NSEG; i++)

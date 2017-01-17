@@ -21,6 +21,13 @@ enum modref
 };
 /*e: enum modref */
 
+enum Cachectl {
+	PG_NOFLUSH	= 0,
+	PG_TXTFLUSH	= 1,		/* flush dcache and invalidate icache */
+	PG_NEWCOL	= 3,		/* page has been recolored */
+};
+
+
 /*s: struct Page */
 // Page metadata. We will allocate as many Page as to cover all physical memory
 // available for the user. xalloc'ed in Palloc.pages
@@ -43,6 +50,11 @@ struct Page
 
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
+
+    // enum<cachectl>??
+	char	color;			/* Cache coloring */
+    // array<enum<cachectl>>
+	char	cachectl[MAXCPUS];	/* Cache flushing control for putmmu */
 
     // extra
     Lock;
@@ -177,6 +189,8 @@ struct Segment
     // array<option<ref_own<Pagetable>>
     Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
+
+	bool	flushme;	/* maintain icache for this segment */
   
     /*s: [[Segment]] other fields */
     KImage  *image;   /* text in file attached to this segment */
