@@ -109,6 +109,7 @@ chandevreset(void)
 
     todinit();  /* avoid later reentry causing infinite recursion */
     for(i=0; devtab[i] != nil; i++) {
+        print("reset %d, %s\n", i, devtab[i]->name);
         devtab[i]->reset();
     }
 }
