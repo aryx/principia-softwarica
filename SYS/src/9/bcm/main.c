@@ -87,16 +87,16 @@ findconf(char *name)
 	return -1;
 }
 
-char*
-getconf(char *name)
-{
-	int i;
-
-	i = findconf(name);
-	if(i >= 0)
-		return confval[i];
-	return nil;
-}
+//char*
+//getconf(char *name)
+//{
+//	int i;
+//
+//	i = findconf(name);
+//	if(i >= 0)
+//		return confval[i];
+//	return nil;
+//}
 
 void
 addconf(char *name, char *val)
@@ -239,10 +239,10 @@ main(void)
 	machinit();
 	mmuinit1();
 
-	optionsinit("/boot/boot boot");
+	//optionsinit("/boot/boot boot");
 	quotefmtinstall();
 	
-	ataginit((Atag*)BOOTARGS);
+	//ataginit((Atag*)BOOTARGS);
 	confinit();		/* figures out amount of memory */
 	xinit();
 	uartconsinit();
