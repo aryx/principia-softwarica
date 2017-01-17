@@ -1,14 +1,15 @@
-/*s: kernel/devices/screen/screen.h */
+/*s: kernel/devices/screen/portscreen.h */
 // This file used to contain the stuff now in vga.h, but the prototypes were
-// VGA independent, so it is better to have a generic screen.h interface and 
-// vga.h in a separate file.
+// VGA independent, so it is better to have a generic portscreen.h interface 
+// and vga.h in a separate file.
 
-// defined in screen.c, set in xxxscreen.c, used by generic screen.c stuff
+// defined in portscreen.c, set in <arch>/screen.c, used by generic 
+// portscreen.c stuff
 extern Memimage *gscreen;
 extern Memdata gscreendata;
 extern Rectangle physgscreenr;  /* actual monitor size */
 
-/* defined in xxxscreen.c, needed by devdraw.c */
+/* defined in <arch>/screen.c, needed by devdraw.c */
 extern void 	flushmemscreen(Rectangle);
 extern byte* 	attachscreen(Rectangle*, ulong*, int*, int*, int*);
 extern void 	blankscreen(bool);
@@ -46,4 +47,4 @@ extern void 	cursoroff(int);
 
 //now in portfns_devices.h: extern void mouseresize(void);
 
-/*e: kernel/devices/screen/screen.h */
+/*e: kernel/devices/screen/portscreen.h */

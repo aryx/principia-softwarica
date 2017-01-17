@@ -1,4 +1,4 @@
-/*s: kernel/devices/screen/386/vgascreen.c */
+/*s: kernel/devices/screen/386/screen.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "../port/error.h"
@@ -14,8 +14,8 @@
 #include <memdraw.h>
 #include <cursor.h>
 
-#include "../port/screen.h"
-#include "vga.h"
+#include "../port/portscreen.h"
+#include "screen.h"
 
 //---------------------------------------------------------------------------
 // vgax.c
@@ -1296,4 +1296,4 @@ VGAcur swcursor =
     .move = swmove,
 };
 /*e: global swcursor(x86) */
-/*e: kernel/devices/screen/386/vgascreen.c */
+/*e: kernel/devices/screen/386/screen.c */

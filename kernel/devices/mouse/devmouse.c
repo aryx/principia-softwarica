@@ -13,7 +13,7 @@
 #include    <memdraw.h>
 #include    <cursor.h>
 
-#include    "screen.h"
+#include    "portscreen.h"
 
 enum {
     ScrollUp = 0x08,

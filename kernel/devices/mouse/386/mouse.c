@@ -14,7 +14,7 @@
 #include <memdraw.h>
 #include <cursor.h>
 
-#include "../port/screen.h"
+#include "../port/portscreen.h"
 
 /*
  *  mouse types

@@ -12,7 +12,7 @@
 #include    <memlayer.h>
 
 #include    <cursor.h>
-#include    "screen.h"
+#include    "portscreen.h"
 
 #include    "devdraw.h"
 
@@ -279,6 +279,7 @@ drawmesg(Client *client, void *av, int n)
     while((n-=m) > 0){
         USED(fmt);
         a += m;
+        // dispatch on first letter of the drawing command
         switch(*a){
         /*s: [[drawmesg()]] cases */
         /* new allocate: 'b' id[4] screenid[4] refresh[1] chan[4] repl[1] R[4*4] clipR[4*4] rrggbbaa[4] */

@@ -11,7 +11,7 @@
 #include    <memlayer.h>
 
 #include    <cursor.h>
-#include    "screen.h"
+#include    "portscreen.h"
 
 #include    "devdraw.h"
 

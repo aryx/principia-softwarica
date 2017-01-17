@@ -1,4 +1,4 @@
-/*s: kernel/devices/screen/screen.c */
+/*s: kernel/devices/screen/portscreen.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "../port/error.h"
@@ -11,7 +11,7 @@
 #include    <memlayer.h>
 #include    <cursor.h>
 
-#include    "screen.h"
+#include    "portscreen.h"
 
 // Many of the stuff below used to be in vgascreen.c, but they are
 // quite VGA independent so better to have a generic screen.c.
@@ -29,4 +29,4 @@ Rectangle physgscreenr;
 //put cursor here?
 // software cursor?
 // curpos, window, graphic text mode? graphic_screenputs
-/*e: kernel/devices/screen/screen.c */
+/*e: kernel/devices/screen/portscreen.c */

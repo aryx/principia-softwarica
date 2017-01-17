@@ -12,8 +12,8 @@
 #include <memdraw.h>
 #include <cursor.h>
 
-#include "../port/screen.h"
-#include "vga.h"
+#include "../port/portscreen.h"
+#include "screen.h"
 
 /*s: function clgd542xpageset(x86) */
 static int

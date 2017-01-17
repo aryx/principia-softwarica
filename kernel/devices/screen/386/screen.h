@@ -1,4 +1,4 @@
-/*s: kernel/devices/screen/386/vga.h */
+/*s: kernel/devices/screen/386/screen.h */
 
 /*s: enum vgaports(x86) */
 /*
@@ -184,4 +184,4 @@ extern void swcursorinit(void);
 //extern void swcursorhide(void);
 //extern void swcursoravoid(Rectangle);
 //extern void swcursorunhide(void);
-/*e: kernel/devices/screen/386/vga.h */
+/*e: kernel/devices/screen/386/screen.h */
