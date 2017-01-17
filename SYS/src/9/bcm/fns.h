@@ -46,6 +46,9 @@ void		userinit(void);
 void		bootlinks(void);
 void  memorysummary(void);
 
+// lib/latin1.c
+long    latin1(Rune*, int);
+
 #define cycles(ip) *(ip) = lcycles()
 extern void dmastart(int, int, int, void*, void*, int);
 extern int dmawait(int);
