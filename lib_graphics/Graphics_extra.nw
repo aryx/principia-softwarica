@@ -130,6 +130,8 @@ extern	Rectangle	ZR;
 // This sets the following globals: display, view, font (and screen).
 extern int	initdraw(Errorfn, char*, char*);
 extern int	geninitdraw(char*, Errorfn, char*, char*, char*, int);
+// to call after a resize event
+extern int	getwindow(Display*, int);
 
 extern Display*	initdisplay(char*, char*, Errorfn);
 extern void		closedisplay(Display*);
@@ -325,15 +327,18 @@ extern	int	Pfmt(Fmt*);
 
 <<struct Screen>>
 
+// set by initdraw() automatically.
+extern	Screen	*screen; // was called _screen before
+
+// called by initdraw()
+extern int	gengetwindow(Display*, char*, Image**, Screen**, int);
+
 //
-// Desktop
+// Base layer
 //
 extern Screen*	allocscreen(Image*, Image*, int);
 extern int		freescreen(Screen*);
 extern Screen*	publicscreen(Display*, int, ulong);
-
-// set by initdraw() automatically.
-extern	Screen	*screen; // was called _screen before
 
 /*
  * Windows
@@ -347,8 +352,6 @@ extern void	topnwindows(Image**, int);
 extern void	topwindow(Image*);
 
 extern int	newwindow(char*);
-extern int	getwindow(Display*, int);
-extern int	gengetwindow(Display*, char*, Image**, Screen**, int);
 
 @
 
@@ -5770,7 +5773,7 @@ redraw(Image *view)
     line(view, c, circlept(c, (rad*3)/4, angmin), 0, 0, 1, minhand, ZP);
     line(view, c, circlept(c, rad/2, anghr), 0, 0, 1, hrhand, ZP);
 
-    flushimage(display, 1);
+    flushimage(display, true);
 }
 @
 
@@ -5795,7 +5798,7 @@ main(int, char**)
     int key, timer;
     int t;
 
-    if (initdraw(0, 0, "clock") < 0)
+    if (initdraw(nil, nil, "clock") < 0)
         sysfatal("initdraw failed");
     back = allocimagemix(display, DPalebluegreen, DWhite);
 
@@ -5818,7 +5821,7 @@ main(int, char**)
             m = e.mouse;
             if(m.buttons & 4) {
                 if(emenuhit(3, &m, &menu) == 0)
-                    exits(0);
+                    exits(nil);
             }
         } else if(key == timer) {
             redraw(view);
@@ -5833,6 +5836,7 @@ main(int, char**)
 <<windows/apps/clock.c>>=
 #include <u.h>
 #include <libc.h>
+
 #include <draw.h>
 #include <window.h>
 #include <event.h>
@@ -5899,7 +5903,7 @@ eresized(bool new)
             draw(view, crect[i], color[i], nil, ZP);
         }
     }
-    flushimage(display, 1);
+    flushimage(display, true);
 }
 @
 
@@ -6039,7 +6043,7 @@ main(int argc, char *argv[])
         case 4: // right click
             switch(emenuhit(3, &m, &menu)){
             case 0:
-                exits(0);
+                exits(nil);
             }
         }
     }
@@ -6052,6 +6056,7 @@ main(int argc, char *argv[])
 <<windows/apps/colors.c>>=
 #include <u.h>
 #include <libc.h>
+
 #include <draw.h>
 #include <window.h>
 #include <event.h>
@@ -6446,9 +6451,13 @@ threadmain(int argc, char *argv[])
 
 \section{[[kernel/devices/screen/]]}
 
-\subsection*{[[kernel/devices/screen/screen.c]]}
+\subsection*{[[kernel/devices/screen/portscreen.c]]}
+%pad: I created this file. I originally called it
+% screen.c but then each arch defines its own screen.c which
+% then generates conflict in the mkfile of the arch, so simpler
+% to have a portscreen.c
 
-<<kernel/devices/screen/screen.c>>=
+<<kernel/devices/screen/portscreen.c>>=
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "../port/error.h"
@@ -6461,7 +6470,7 @@ threadmain(int argc, char *argv[])
 #include    <memlayer.h>
 #include    <cursor.h>
 
-#include    "screen.h"
+#include    "portscreen.h"
 
 // Many of the stuff below used to be in vgascreen.c, but they are
 // quite VGA independent so better to have a generic screen.c.
@@ -6475,22 +6484,24 @@ threadmain(int argc, char *argv[])
 // curpos, window, graphic text mode? graphic_screenputs
 @
 
-\subsection*{[[kernel/devices/screen/screen.h]]}
+\subsection*{[[kernel/devices/screen/portscreen.h]]}
 
+%pad: I created this file. 
 
 %-----------------------------------------------------------------
 
-<<kernel/devices/screen/screen.h>>=
+<<kernel/devices/screen/portscreen.h>>=
 // This file used to contain the stuff now in vga.h, but the prototypes were
-// VGA independent, so it is better to have a generic screen.h interface and 
-// vga.h in a separate file.
+// VGA independent, so it is better to have a generic portscreen.h interface 
+// and vga.h in a separate file.
 
-// defined in screen.c, set in xxxscreen.c, used by generic screen.c stuff
+// defined in portscreen.c, set in <arch>/screen.c, used by generic 
+// portscreen.c stuff
 extern Memimage *gscreen;
 extern Memdata gscreendata;
 extern Rectangle physgscreenr;  /* actual monitor size */
 
-/* defined in xxxscreen.c, needed by devdraw.c */
+/* defined in <arch>/screen.c, needed by devdraw.c */
 extern void 	flushmemscreen(Rectangle);
 extern byte* 	attachscreen(Rectangle*, ulong*, int*, int*, int*);
 extern void 	blankscreen(bool);
@@ -6646,7 +6657,7 @@ void drawrefreshscreen(DImage *l, Client *client);
 #include    <memlayer.h>
 
 #include    <cursor.h>
-#include    "screen.h"
+#include    "portscreen.h"
 
 #include    "devdraw.h"
 
@@ -6716,7 +6727,7 @@ void drawrefreshscreen(DImage *l, Client *client);
 #include    <memlayer.h>
 
 #include    <cursor.h>
-#include    "screen.h"
+#include    "portscreen.h"
 
 #include    "devdraw.h"
 
@@ -6810,7 +6821,7 @@ void drawrefreshscreen(DImage *l, Client *client);
 #include    <memlayer.h>
 
 #include    <cursor.h>
-#include    "screen.h"
+#include    "portscreen.h"
 
 #include    "devdraw.h"
 
@@ -6852,7 +6863,7 @@ void drawrefreshscreen(DImage *l, Client *client);
 #include    <memlayer.h>
 #include    <cursor.h>
 
-#include    "screen.h"
+#include    "portscreen.h"
 #include    "devdraw.h"
 
 <<global blanktime>>
@@ -6895,7 +6906,7 @@ void drawrefreshscreen(DImage *l, Client *client);
 #include    <memlayer.h>
 #include    <cursor.h>
 
-#include    "screen.h"
+#include    "portscreen.h"
 #include    "devdraw.h"
 
 <<enum QxxxDraw>>
@@ -6999,12 +7010,15 @@ DImage* 	allocdimage(Memimage*);
 
 \section{[[kernel/devices/screen/386/]]}
 
-\subsection*{[[kernel/devices/screen/386/vga.h]]}
+\subsection*{[[kernel/devices/screen/386/screen.h]]}
+%pad: I renamed it vga.h at some point, but now that I have portscreen.h,
+% which helps avoid some ambiguities in mkfile, simpler to keep
+% screen.h
 
 
 %-------------------------------------------------------------
 
-<<kernel/devices/screen/386/vga.h>>=
+<<kernel/devices/screen/386/screen.h>>=
 
 <<enum vgaports(x86)>>
 
@@ -7072,12 +7086,14 @@ extern void swcursorinit(void);
 @
 
 
-\subsection*{[[kernel/devices/screen/386/vgascreen.c]]}
+\subsection*{[[kernel/devices/screen/386/screen.c]]}
 %pad: I created this file; its content was in vga.c and vgax.c.
+% I originall called it vgascreen.c, but better keep as
+% screen.c now that I have portscreen.c
 
 %-------------------------------------------------------------
 
-<<kernel/devices/screen/386/vgascreen.c>>=
+<<kernel/devices/screen/386/screen.c>>=
 #include "u.h"
 #include "../port/lib.h"
 #include "../port/error.h"
@@ -7093,7 +7109,7 @@ extern void swcursorinit(void);
 #include <memdraw.h>
 #include <cursor.h>
 
-#include "../port/screen.h"
+#include "../port/portscreen.h"
 #include "vga.h"
 
 //---------------------------------------------------------------------------
@@ -7353,7 +7369,7 @@ extern void vgalinearpci(VGAscr*);
 #include <memdraw.h>
 #include <cursor.h>
 
-#include "../port/screen.h"
+#include "../port/portscreen.h"
 #include "vga.h"
 
 <<function clgd542xpageset(x86)>>
@@ -7529,6 +7545,7 @@ vesaflush(VGAscr *scr, Rectangle r)
     int t, w, wid, off;
     ulong *hp, *sp, *esp;
 
+    USED(scr); // now use gscreen directly
     if(hardscreen == nil)
         return;
     if(rectclip(&r, gscreen->r) == 0)
@@ -7577,7 +7594,7 @@ vesaflush(VGAscr *scr, Rectangle r)
 #include <memdraw.h>
 #include <cursor.h>
 
-#include "../port/screen.h"
+#include "../port/portscreen.h"
 #include "vga.h"
 
 <<enum _anon_ (kernel/devices/screen/386/vgavesa.c)>>
