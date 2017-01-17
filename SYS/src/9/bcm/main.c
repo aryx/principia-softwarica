@@ -5,9 +5,11 @@
 #include "dat.h"
 #include "fns.h"
 
+// initcode binary
 #include "init.h"
 #include <pool.h>
 
+// rebootcode binary
 #include "reboot.h"
 
 enum {
@@ -26,6 +28,10 @@ enum {
 #define	BOOTARGSLEN	(CPUADDR-CONFADDR)
 
 #define MAXCONFLINE	160
+
+// conf.c
+extern  Dev*  conf_devtab[];
+
 
 extern	char*	conffile;
 
@@ -87,16 +93,16 @@ findconf(char *name)
 	return -1;
 }
 
-//char*
-//getconf(char *name)
-//{
-//	int i;
-//
+char*
+getconf(char *name)
+{
+	int i;
+
 //	i = findconf(name);
 //	if(i >= 0)
 //		return confval[i];
-//	return nil;
-//}
+	return nil;
+}
 
 void
 addconf(char *name, char *val)
@@ -231,6 +237,9 @@ main(void)
 	extern char edata[], end[];
 	uint rev;
     
+    iprint = devcons_iprint;
+    //hook_ioalloc = devarch_hook_ioalloc;
+    devtab = conf_devtab;
     coherence = coherence1;
 
 	okay(1);
@@ -270,10 +279,13 @@ main(void)
 
 	procinit();
 	imageinit();
+
 	links();
 	chandevreset();			/* most devices are discovered here */
+
 	pageinit();
 	swapinit();
+
 	userinit();
 	schedinit();
 	assert(0);			/* shouldn't have returned */
