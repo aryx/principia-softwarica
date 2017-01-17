@@ -1752,9 +1752,9 @@ procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
     kunmap(k);
     poperror();
 
-	/* Ensure the process sees text page changes */
-	if(s->flushme)
-		memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+ /* Ensure the process sees text page changes */
+ if(s->flushme)
+  memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
 
     s->steal--;
 

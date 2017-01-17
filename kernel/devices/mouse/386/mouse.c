@@ -191,6 +191,7 @@ resetmouse(void)
     }
 }
 
+/*s: function kmousectl(x86) */
 // for screen.h
 void
 kmousectl(Cmdbuf *cb)
@@ -239,4 +240,5 @@ kmousectl(Cmdbuf *cb)
     qunlock(&mousectlqlock);
     poperror();
 }
+/*e: function kmousectl(x86) */
 /*e: mouse.c */

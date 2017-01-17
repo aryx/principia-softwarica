@@ -290,7 +290,7 @@ retry:
             if(!pagedout(*p)){
                 /* another process did it for me */
                 putpage(new);
-				goto done; // not return, need cachectl stuff??
+    goto done; // not return, need cachectl stuff??
             } else {
                 /* another process and the pager got in */
                 putpage(new);
@@ -304,8 +304,8 @@ retry:
         putswap(loadrec);
     }
 done:
-	if(s->flushme)
-		memset((*p)->cachectl, PG_TXTFLUSH, sizeof((*p)->cachectl));
+ if(s->flushme)
+  memset((*p)->cachectl, PG_TXTFLUSH, sizeof((*p)->cachectl));
 }
 /*e: function pio */
 

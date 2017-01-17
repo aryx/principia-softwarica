@@ -395,7 +395,7 @@ sysexec(ulong* arg)
         }
     /*e: [[sysexec()]] if indir arg adjustments */
 
-	validalign(arg[1], sizeof(char**));
+ validalign(arg[1], sizeof(char**));
     argp = (char**)arg[1];
     validaddr((ulong)argp, BY2WD, false);
     while(*argp){

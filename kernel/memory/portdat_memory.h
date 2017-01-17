@@ -22,9 +22,9 @@ enum modref
 /*e: enum modref */
 
 enum Cachectl {
-	PG_NOFLUSH	= 0,
-	PG_TXTFLUSH	= 1,		/* flush dcache and invalidate icache */
-	PG_NEWCOL	= 3,		/* page has been recolored */
+ PG_NOFLUSH	= 0,
+ PG_TXTFLUSH	= 1,		/* flush dcache and invalidate icache */
+ PG_NEWCOL	= 3,		/* page has been recolored */
 };
 
 
@@ -52,9 +52,9 @@ struct Page
     char  modref;     /* Simulated modify/reference bits */
 
     // enum<cachectl>??
-	char	color;			/* Cache coloring */
+ char	color;			/* Cache coloring */
     // array<enum<cachectl>>
-	char	cachectl[MAXCPUS];	/* Cache flushing control for putmmu */
+ char	cachectl[MAXCPUS];	/* Cache flushing control for putmmu */
 
     // extra
     Lock;
@@ -190,7 +190,7 @@ struct Segment
     Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
 
-	bool	flushme;	/* maintain icache for this segment */
+ bool	flushme;	/* maintain icache for this segment */
   
     /*s: [[Segment]] other fields */
     KImage  *image;   /* text in file attached to this segment */

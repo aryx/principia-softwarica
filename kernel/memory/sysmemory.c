@@ -15,14 +15,14 @@
 void
 ptflush(Pagetable *pt, int s, int e)
 {
-	int i;
-	Page *p;
+ int i;
+ Page *p;
 
-	for(i = s; i < e; i++) {
-		p = pt->pagetab[i];
-		if(pagedout(p) == 0)
-			memset(p->cachectl, PG_TXTFLUSH, sizeof(p->cachectl));
-	}
+ for(i = s; i < e; i++) {
+  p = pt->pagetab[i];
+  if(pagedout(p) == 0)
+   memset(p->cachectl, PG_TXTFLUSH, sizeof(p->cachectl));
+ }
 }
 
 

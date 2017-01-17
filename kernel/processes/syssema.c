@@ -272,7 +272,7 @@ syssemacquire(ulong* arg)
     Segment *s;
 
     validaddr(arg[0], sizeof(long), true);
-	validalign(arg[0], sizeof(long));
+ validalign(arg[0], sizeof(long));
     addr = (long*)arg[0];
     block = arg[1];
     
@@ -294,7 +294,7 @@ systsemacquire(ulong* arg)
     Segment *s;
 
     validaddr(arg[0], sizeof(long), true);
-	validalign(arg[0], sizeof(long));
+ validalign(arg[0], sizeof(long));
     addr = (long*)arg[0];
     ms = arg[1];
 

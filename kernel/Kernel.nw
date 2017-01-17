@@ -3661,6 +3661,11 @@ struct Page
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
 
+    // enum<cachectl>??
+ char	color;			/* Cache coloring */
+    // array<enum<cachectl>>
+ char	cachectl[MAXCPUS];	/* Cache flushing control for putmmu */
+
     // extra
     Lock;
     <<[[Page]] extra fields>>
@@ -3771,12 +3776,27 @@ newpage(bool clear, Segment **s, virt_addr va)
     Page *p;
     KMap *k;
     bool dontalloc;
+ uchar ct;
+    int i, color;
 
     lock(&palloc);
+ color = getpgcolor(va);
 
     <<[[newpage()]] loop waiting freecount > highwater>>
 
-    p = palloc.head;
+    //when no color: p = palloc.head;
+ /* First try for our colour */
+ for(p = palloc.head; p; p = p->next)
+  if(p->color == color)
+   break;
+
+ ct = PG_NOFLUSH;
+ if(p == 0) {
+  p = palloc.head;
+  p->color = color;
+  ct = PG_NEWCOL;
+ }
+
     pageunchain(p);
 
     lock(p);
@@ -3787,6 +3807,10 @@ newpage(bool clear, Segment **s, virt_addr va)
     p->ref = 1;
     p->va = va;
     p->modref = PG_NOTHING;
+
+ for(i = 0; i < MAXCPUS; i++)
+  p->cachectl[i] = ct;
+
     unlock(p);
     unlock(&palloc);
 
@@ -3952,6 +3976,8 @@ struct Segment
     // array<option<ref_own<Pagetable>>
     Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
+
+ bool	flushme;	/* maintain icache for this segment */
   
     <<[[Segment]] other fields>>
   
@@ -4379,6 +4405,8 @@ dupseg(Segment **seg, int segno, bool share)
         if(pt = s->pagedir[i])
             n->pagedir[i] = ptcpy(pt); // will actually share the pages
 
+    n->flushme = s->flushme;
+
     if(s->ref > 1)
         procflushseg(s); // ??
     poperror();
@@ -4405,6 +4433,7 @@ data2txt(Segment *s)
     incref(ps->image);
     ps->fstart = s->fstart;
     ps->flen = s->flen;
+    ps->flushme = true;
 
     return ps;
 }
@@ -5354,7 +5383,7 @@ sysexec(ulong* arg)
     <<[[sysexec()]] nbytes tos adjustments>>
     <<[[sysexec()]] if indir arg adjustments>>
 
-    evenaddr(arg[1]);
+ validalign(arg[1], sizeof(char**));
     argp = (char**)arg[1];
     validaddr((ulong)argp, BY2WD, false);
     while(*argp){
@@ -8570,6 +8599,7 @@ KImage *img;
     /* attachimage returns a locked cache image */
     img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
     ts = img->s;
+    ts->flushme = true;
     ts->fstart = 0;
     ts->flen = sizeof(Exec)+text;
     unlock(img);
@@ -8703,7 +8733,7 @@ retry:
             if(!pagedout(*p)){
                 /* another process did it for me */
                 putpage(new);
-                return;
+    goto done; // not return, need cachectl stuff??
             } else {
                 /* another process and the pager got in */
                 putpage(new);
@@ -8716,6 +8746,9 @@ retry:
         *p = new;
         putswap(loadrec);
     }
+done:
+ if(s->flushme)
+  memset((*p)->cachectl, PG_TXTFLUSH, sizeof((*p)->cachectl));
 }
 @
 % LP split for demand loading vs swapin
@@ -8766,6 +8799,7 @@ duppage(Page *p)
 {
     Page *np;
     int retries;
+ int color;
 
     retries = 0;
 retry:
@@ -8805,7 +8839,18 @@ retry:
         return 1;
     }
 
-    np = palloc.head;
+ color = getpgcolor(p->va);
+ for(np = palloc.head; np; np = np->next)
+  if(np->color == color)
+   break;
+
+ /* No page of the correct color */
+ if(np == 0) {
+  unlock(&palloc);
+  uncachepage(p);
+  return 1;
+ }
+    //when no color: np = palloc.head;
 
     pageunchain(np);
     pagechaintail(np);
@@ -12584,6 +12629,7 @@ pageinit(void)
     Page *p;
     Pallocmem *pm;
     ulong m, np, k, vkb, pkb;
+    int color;
 
     np = 0;
     for(i=0; i<nelem(palloc.mem); i++){
@@ -12594,6 +12640,7 @@ pageinit(void)
     if(palloc.pages == nil)
         panic("pageinit");
 
+ color = 0;
     palloc.head = palloc.pages;
     p = palloc.head;
     for(i=0; i<nelem(palloc.mem); i++){
@@ -12602,7 +12649,9 @@ pageinit(void)
             p->prev = p-1;
             p->next = p+1;
             p->pa = pm->base+j*BY2PG;
+   p->color = color;
             palloc.freecount++;
+   color = (color+1)%NCOLOR;
             p++;
         }
     }
@@ -12687,6 +12736,7 @@ chandevreset(void)
 
     todinit();  /* avoid later reentry causing infinite recursion */
     for(i=0; devtab[i] != nil; i++) {
+        print("reset %d, %s\n", i, devtab[i]->name);
         devtab[i]->reset();
     }
 }
@@ -12756,8 +12806,10 @@ userinit(void)
      * Text
      */
     s = newseg(SG_TEXT, UTZERO, 1); // 1 page
+    s->flushme = true;
     p->seg[TSEG] = s;
     pg = newpage(false, nil, UTZERO);
+    memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
     segpage(s, pg);
     v = tmpmap(pg);
     memset(v, 0, BY2PG);
@@ -14290,6 +14342,7 @@ long
 sysseek(ulong* arg)
 {
     validaddr(arg[0], BY2V, true);
+ validalign(arg[0], sizeof(vlong));
     sseek(arg);
     return 0;
 }
@@ -23617,7 +23670,7 @@ syspipe(ulong* arg)
     static char *datastr[] = {"data", "data1"};
 
     validaddr(arg[0], 2*BY2WD, true);
-    evenaddr(arg[0]);
+ validalign(arg[0], sizeof(int));
     d = devtab[devno('|', false)];
     c[0] = namec("#|", Atodir, 0, 0);
     c[1] = nil;
@@ -24476,6 +24529,7 @@ syssegflush(ulong* arg)
         if(s == 0)
             error(Ebadarg);
 
+    s->flushme = true;
     more:
         l = len;
         if(addr+l > s->top)
@@ -24494,10 +24548,9 @@ syssegflush(ulong* arg)
             error(Ebadarg);
         }
 
-        // when had cachectl
-        //if(pt)
-        //    ptflush(pt, ps/BY2PG, pe/BY2PG);
-        USED(pt);
+        // when have cachectl
+        if(pt)
+            ptflush(pt, ps/BY2PG, pe/BY2PG);
 
         chunk = pe-ps;
         len -= chunk;
@@ -24755,7 +24808,7 @@ syssemacquire(ulong* arg)
     Segment *s;
 
     validaddr(arg[0], sizeof(long), true);
-    evenaddr(arg[0]);
+ validalign(arg[0], sizeof(long));
     addr = (long*)arg[0];
     block = arg[1];
     
@@ -24778,7 +24831,7 @@ systsemacquire(ulong* arg)
     Segment *s;
 
     validaddr(arg[0], sizeof(long), true);
-    evenaddr(arg[0]);
+ validalign(arg[0], sizeof(long));
     addr = (long*)arg[0];
     ms = arg[1];
 
@@ -24800,7 +24853,7 @@ syssemrelease(ulong* arg)
     Segment *s;
 
     validaddr(arg[0], sizeof(long), true);
-    evenaddr(arg[0]);
+    validalign(arg[0], sizeof(long));
     addr = (long*)arg[0];
     delta = arg[1];
 
@@ -25451,6 +25504,10 @@ procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
     kunmap(k);
     poperror();
 
+ /* Ensure the process sees text page changes */
+ if(s->flushme)
+  memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+
     s->steal--;
 
     if(read == 0)
@@ -25473,6 +25530,7 @@ text2data(Proc *p, Segment *s)
     incref(ps->image);
     ps->fstart = s->fstart;
     ps->flen = s->flen;
+    ps->flushme = true;
 
     qlock(&p->seglock);
     for(i = 0; i < NSEG; i++)
@@ -25676,7 +25734,7 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         a = va_arg(list, char*);
         fmtuserstring(&fmt, a, "");
         argv = va_arg(list, char**);
-        //evenaddr(PTR2UINT(argv)); // ???
+        //validalign(PTR2UINT(argv), sizeof(char*)); ??
         for(;;){
             validaddr((ulong)argv, sizeof(char**), false);
             a = *(char **)argv;
@@ -26639,6 +26697,8 @@ nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
 #include <libc.h>
 #include "../boot/boot.h"
 
+// Note that most of this code is now superseded by $objtype/boot.rc
+
 /*
  * we should inherit the standard fds referring to /dev/cons,
  * but we're being paranoid.
@@ -26646,9 +26706,9 @@ nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
 static void
 opencons(void)
 {
-  close(0);
-  close(1);
-  close(2);
+  close(STDIN);
+  close(STDOUT);
+  close(STDERR);
   open("/dev/cons", OREAD);
   open("/dev/cons", OWRITE);
   open("/dev/cons", OWRITE);
@@ -26661,11 +26721,12 @@ opencons(void)
 static void
 bindenvsrv(void)
 {
-  bind("#ec", "/env", MREPL); // ec? 2 chars?
+  bind("#ec", "/env", MREPL); // ec? 2 chars? #e and pass 'c' to device?
   bind("#e", "/env", MBEFORE|MCREATE); // devenv
   bind("#s", "/srv/", MREPL|MCREATE); // devsrv
 }
 
+//TODO: use open_safe, write_safe
 static void
 swapproc(void)
 {
@@ -26684,7 +26745,7 @@ swapproc(void)
 static void
 execinit(void)
 {
-  int fd;
+  fdt fd;
 
   // basics
 
@@ -26695,7 +26756,9 @@ execinit(void)
   bind_safe("#k", "/ksys", MREPL); //devsys
 
   bind_safe("/root", "/", MAFTER|MCREATE);
-  bind_safe("/386/bin", "/bin", MREPL);
+
+  bind_safe("/386/bin", "/bin", MREPL); // X86
+
   bind_safe("/rc/bin", "/bin", MAFTER);
 
   bind_safe("#P", "/dev", MAFTER); //devarch
@@ -26754,7 +26817,7 @@ boot(int argc, char *argv[])
 
   fmtinstall('r', errfmt);
 
-  //At this point we should have #/ and #c setup by the kernel init0
+  // at this point we should have #/ and #c setup by the kernel init0
 
   opencons();
   bindenvsrv();
@@ -26807,6 +26870,8 @@ runv(char **argv)
 #include <u.h>
 #include <libc.h>
 #include "../boot/boot.h"
+
+// Note that most of this code is now superseded by $objtype/boot.rc
 
 void
 connectlocal(void)

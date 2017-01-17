@@ -36,7 +36,7 @@ pageinit(void)
     if(palloc.pages == nil)
         panic("pageinit");
 
-	color = 0;
+ color = 0;
     palloc.head = palloc.pages;
     p = palloc.head;
     for(i=0; i<nelem(palloc.mem); i++){
@@ -45,9 +45,9 @@ pageinit(void)
             p->prev = p-1;
             p->next = p+1;
             p->pa = pm->base+j*BY2PG;
-			p->color = color;
+   p->color = color;
             palloc.freecount++;
-			color = (color+1)%NCOLOR;
+   color = (color+1)%NCOLOR;
             p++;
         }
     }
@@ -156,11 +156,11 @@ newpage(bool clear, Segment **s, virt_addr va)
     Page *p;
     KMap *k;
     bool dontalloc;
-	uchar ct;
+ uchar ct;
     int i, color;
 
     lock(&palloc);
-	color = getpgcolor(va);
+ color = getpgcolor(va);
 
     /*s: [[newpage()]] loop waiting freecount > highwater */
         for(;;) {
@@ -203,17 +203,17 @@ newpage(bool clear, Segment **s, virt_addr va)
     /*e: [[newpage()]] loop waiting freecount > highwater */
 
     //when no color: p = palloc.head;
-	/* First try for our colour */
-	for(p = palloc.head; p; p = p->next)
-		if(p->color == color)
-			break;
+ /* First try for our colour */
+ for(p = palloc.head; p; p = p->next)
+  if(p->color == color)
+   break;
 
-	ct = PG_NOFLUSH;
-	if(p == 0) {
-		p = palloc.head;
-		p->color = color;
-		ct = PG_NEWCOL;
-	}
+ ct = PG_NOFLUSH;
+ if(p == 0) {
+  p = palloc.head;
+  p->color = color;
+  ct = PG_NEWCOL;
+ }
 
     pageunchain(p);
 
@@ -228,8 +228,8 @@ newpage(bool clear, Segment **s, virt_addr va)
     p->va = va;
     p->modref = PG_NOTHING;
 
-	for(i = 0; i < MAXCPUS; i++)
-		p->cachectl[i] = ct;
+ for(i = 0; i < MAXCPUS; i++)
+  p->cachectl[i] = ct;
 
     unlock(p);
     unlock(&palloc);
@@ -326,7 +326,7 @@ duppage(Page *p)
 {
     Page *np;
     int retries;
-	int color;
+ int color;
 
     retries = 0;
 retry:
@@ -366,17 +366,17 @@ retry:
         return 1;
     }
 
-	color = getpgcolor(p->va);
-	for(np = palloc.head; np; np = np->next)
-		if(np->color == color)
-			break;
+ color = getpgcolor(p->va);
+ for(np = palloc.head; np; np = np->next)
+  if(np->color == color)
+   break;
 
-	/* No page of the correct color */
-	if(np == 0) {
-		unlock(&palloc);
-		uncachepage(p);
-		return 1;
-	}
+ /* No page of the correct color */
+ if(np == 0) {
+  unlock(&palloc);
+  uncachepage(p);
+  return 1;
+ }
     //when no color: np = palloc.head;
 
     pageunchain(np);
