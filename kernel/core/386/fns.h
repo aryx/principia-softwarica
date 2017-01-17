@@ -58,7 +58,8 @@ void  (*cycles)(uvlong*);
 void  dmaend(int);
 int dmainit(int, int);
 long  dmasetup(int, void*, long, int);
-#define evenaddr(x)       /* x86 doesn't care */
+//#define evenaddr(x)       /* x86 doesn't care */
+void	validalign(uintptr, unsigned);
 //@Scheck: Assembly
 void  fpclear(void);
 //@Scheck: Assembly
