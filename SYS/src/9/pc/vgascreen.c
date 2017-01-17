@@ -1,1 +1,0 @@
-../../../../kernel/devices/screen/386/vgascreen.c
