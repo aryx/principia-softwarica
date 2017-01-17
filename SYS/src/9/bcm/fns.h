@@ -118,7 +118,9 @@ extern int fpuemu(Ureg*);
 extern void delay(int);				/* only scheddump() */
 extern int islo(void);
 extern void microdelay(int);			/* only edf.c */
-extern void evenaddr(uintptr);
+
+extern void validalign(uintptr, unsigned);
+
 extern void setkernur(Ureg*, Proc*);		/* only devproc.c */
 extern void* sysexecregs(uintptr, ulong, int);
 extern void sysprocsetup(Proc*);

@@ -158,7 +158,7 @@ syspipe(ulong* arg)
     static char *datastr[] = {"data", "data1"};
 
     validaddr(arg[0], 2*BY2WD, true);
-    evenaddr(arg[0]);
+	validalign(arg[0], sizeof(int));
     d = devtab[devno('|', false)];
     c[0] = namec("#|", Atodir, 0, 0);
     c[1] = nil;
@@ -849,6 +849,7 @@ long
 sysseek(ulong* arg)
 {
     validaddr(arg[0], BY2V, true);
+	validalign(arg[0], sizeof(vlong));
     sseek(arg);
     return 0;
 }

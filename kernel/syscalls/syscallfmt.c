@@ -121,7 +121,7 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         a = va_arg(list, char*);
         fmtuserstring(&fmt, a, "");
         argv = va_arg(list, char**);
-        //evenaddr(PTR2UINT(argv)); // ???
+        validalign(PTR2UINT(argv), sizeof(char*));
         for(;;){
             validaddr((ulong)argv, sizeof(char**), false);
             a = *(char **)argv;
