@@ -178,7 +178,11 @@ clkdiv(uint d)
 static int
 datadone(void*)
 {
-	return emmc.datadone;
+	int i;
+
+	u32int *r = (u32int*)EMMCREGS;
+	i = r[Interrupt];
+	return i & (Datadone|Err);
 }
 
 static int
@@ -310,9 +314,9 @@ emmccmd(u32int cmd, u32int arg, u32int *resp)
 	if((c & Respmask) == Resp48busy){
 		WR(Irpten, Datadone|Err);
 		tsleep(&emmc.r, datadone, 0, 3000);
-		i = emmc.datadone;
-		emmc.datadone = 0;
 		WR(Irpten, 0);
+		emmc.datadone = 0;
+		i = r[Interrupt];
 		if((i & Datadone) == 0)
 			print("emmcio: no Datadone after CMD%d\n", cmd);
 		if(i & Err)
@@ -380,11 +384,13 @@ emmcio(int write, uchar *buf, int len)
 			&r[Data], buf, len);
 	if(dmawait(DmaChanEmmc) < 0)
 		error(Eio);
+	if(!write)
+		cachedinvse(buf, len);
 	WR(Irpten, Datadone|Err);
 	tsleep(&emmc.r, datadone, 0, 3000);
-	i = emmc.datadone;
-	emmc.datadone = 0;
 	WR(Irpten, 0);
+	emmc.datadone = 0;
+	i = r[Interrupt];
 	if((i & Datadone) == 0){
 		print("emmcio: %d timeout intr %ux stat %ux\n",
 			write, i, r[Status]);
@@ -407,13 +413,11 @@ static void
 mmcinterrupt(Ureg*, void*)
 {	
 	u32int *r;
-	int i;
-
 	r = (u32int*)EMMCREGS;
-	i = r[Interrupt];
-	r[Interrupt] = i & (Datadone|Err);
-	emmc.datadone = i;
-	wakeup(&emmc.r);
+	if(r[Interrupt]&(Datadone|Err)){
+		WR(Irpten, 0);
+		wakeup(&emmc.r);
+	}
 }
 
 SDio sdio = {

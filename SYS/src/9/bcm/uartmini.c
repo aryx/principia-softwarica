@@ -88,8 +88,8 @@ gpiosel(uint pin, int func)
 	*fsel = (*fsel & ~(FuncMask<<off)) | func<<off;
 }
 
-void
-gpiopulloff(uint pin)
+static void
+gpiopull(uint pin, int func)
 {
 	u32int *gp, *reg;
 	u32int mask;
@@ -97,11 +97,29 @@ gpiopulloff(uint pin)
 	gp = (u32int*)GPIOREGS;
 	reg = &gp[PUDclk0 + pin/32];
 	mask = 1 << (pin % 32);
-	gp[PUD] = Off;
+	gp[PUD] = func;
 	microdelay(1);
 	*reg = mask;
 	microdelay(1);
 	*reg = 0;
+}
+
+void
+gpiopulloff(uint pin)
+{
+	gpiopull(pin, Off);
+}
+
+void
+gpiopullup(uint pin)
+{
+	gpiopull(pin, Pullup);
+}
+
+void
+gpiopulldown(uint pin)
+{
+	gpiopull(pin, Pulldown);
 }
 
 void
@@ -178,7 +196,7 @@ enable(Uart *uart, int ie)
 	ap[MuIir] = 6;
 	ap[MuLcr] = Bits8;
 	ap[MuCntl] = TxEn|RxEn;
-	ap[MuBaud] = 250000000/(115200*8) - 1;
+	ap[MuBaud] = uart->freq/(115200*8) - 1;
 	if(ie){
 		intrenable(IRQaux, interrupt, uart, 0, "uart");
 		ap[MuIer] = RxIen|TxIen;
@@ -417,8 +435,22 @@ void
 okay(int on)
 {
 	static int first;
+	static int okled, polarity;
+	char *p;
 
-	if(!first++)
-		gpiosel(OkLed, Output);
-	gpioout(OkLed, !on);
+	if(!first++){
+		p = getconf("bcm2709.disk_led_gpio");
+		if(p == nil)
+			p = getconf("bcm2708.disk_led_gpio");
+		if(p != nil)
+			okled = strtol(p, 0, 0);
+		else
+			okled = OkLed;
+		p = getconf("bcm2709.disk_led_active_low");
+		if(p == nil)
+			p = getconf("bcm2708.disk_led_active_low");
+		polarity = (p == nil || *p == '1');
+		gpiosel(okled, Output);
+	}
+	gpioout(okled, on^polarity);
 }

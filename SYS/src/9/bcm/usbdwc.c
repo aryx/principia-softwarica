@@ -39,6 +39,7 @@ typedef struct Ctlr Ctlr;
 typedef struct Epio Epio;
 
 struct Ctlr {
+	Lock;
 	Dwcregs	*regs;		/* controller registers */
 	int	nchan;		/* number of host channels */
 	ulong	chanbusy;	/* bitmap of in-use channels */
@@ -64,6 +65,22 @@ static char Ebadlen[] = "bad usb request length";
 
 static void clog(Ep *ep, Hostchan *hc);
 static void logdump(Ep *ep);
+
+static void
+filock(Lock *l)
+{
+	int x;
+
+	x = splfhi();
+	ilock(l);
+	l->sr = x;
+}
+
+static void
+fiunlock(Lock *l)
+{
+	iunlock(l);
+}
 
 static Hostchan*
 chanalloc(Ep *ep)
@@ -157,23 +174,22 @@ sofdone(void *a)
 	Dwcregs *r;
 
 	r = a;
-	return r->gintsts & Sofintr;
+	return (r->gintmsk & Sofintr) == 0;
 }
 
 static void
 sofwait(Ctlr *ctlr, int n)
 {
 	Dwcregs *r;
-	int x;
 
 	r = ctlr->regs;
 	do{
+		filock(ctlr);
 		r->gintsts = Sofintr;
-		x = splfhi();
 		ctlr->sofchan |= 1<<n;
 		r->gintmsk |= Sofintr;
+		fiunlock(ctlr);
 		sleep(&ctlr->chanintr[n], sofdone, r);
-		splx(x);
 	}while((r->hfnum & 7) == 6);
 }
 
@@ -191,7 +207,7 @@ chandone(void *a)
 static int
 chanwait(Ep *ep, Ctlr *ctlr, Hostchan *hc, int mask)
 {
-	int intr, n, x, ointr;
+	int intr, n, ointr;
 	ulong start, now;
 	Dwcregs *r;
 
@@ -199,12 +215,12 @@ chanwait(Ep *ep, Ctlr *ctlr, Hostchan *hc, int mask)
 	n = hc - r->hchan;
 	for(;;){
 restart:
-		x = splfhi();
+		filock(ctlr);
 		r->haintmsk |= 1<<n;
 		hc->hcintmsk = mask;
+		fiunlock(ctlr);
 		sleep(&ctlr->chanintr[n], chandone, hc);
 		hc->hcintmsk = 0;
-		splx(x);
 		intr = hc->hcint;
 		if(intr & Chhltd)
 			return intr;
@@ -244,7 +260,6 @@ restart:
 		}
 		logdump(ep);
 	}
-    return -1; // unreachable
 }
 
 static int
@@ -347,7 +362,7 @@ chanio(Ep *ep, Hostchan *hc, int dir, int pid, void *a, int len)
 	else
 		n = len;
 	hc->hctsiz = n | npkt<<OPktcnt | pid;
-	hc->hcdma  = PADDR(a);
+	hc->hcdma  = dmaaddr(a);
 
 	nleft = len;
 	logstart(ep);
@@ -524,8 +539,8 @@ ctltrans(Ep *ep, uchar *req, long n)
 		if(datalen <= 0 || datalen > Maxctllen)
 			error(Ebadlen);
 		/* XXX cache madness */
-		epio->cb = b = allocb(ROUND(datalen, ep->maxpkt) + CACHELINESZ);
-		b->wp = (uchar*)ROUND((uintptr)b->wp, CACHELINESZ);
+		epio->cb = b = allocb(ROUND(datalen, ep->maxpkt));
+		assert(((uintptr)b->wp & (BLOCKALIGN-1)) == 0);
 		memset(b->wp, 0x55, b->lim - b->wp);
 		cachedwbinvse(b->wp, b->lim - b->wp);
 		data = b->wp;
@@ -654,6 +669,7 @@ fiqintr(Ureg*, void *a)
 	ctlr = hp->aux;
 	r = ctlr->regs;
 	wakechan = 0;
+	filock(ctlr);
 	intr = r->gintsts;
 	if(intr & Hcintr){
 		haint = r->haint & r->haintmsk;
@@ -679,6 +695,7 @@ fiqintr(Ureg*, void *a)
 		ctlr->wakechan |= wakechan;
 		armtimerset(1);
 	}
+	fiunlock(ctlr);
 }
 
 static void
@@ -686,14 +703,14 @@ irqintr(Ureg*, void *a)
 {
 	Ctlr *ctlr;
 	uint wakechan;
-	int i, x;
+	int i;
 
 	ctlr = a;
-	x = splfhi();
+	filock(ctlr);
 	armtimerset(0);
 	wakechan = ctlr->wakechan;
 	ctlr->wakechan = 0;
-	splx(x);
+	fiunlock(ctlr);
 	for(i = 0; wakechan; i++){
 		if(wakechan & 1)
 			wakeup(&ctlr->chanintr[i]);
@@ -773,10 +790,12 @@ epread(Ep *ep, void *a, long n)
 		/* fall through */
 	case Tbulk:
 		/* XXX cache madness */
-		b = allocb(ROUND(n, ep->maxpkt) + CACHELINESZ);
-		p = (uchar*)ROUND((uintptr)b->base, CACHELINESZ);
-		cachedwbinvse(p, n);
+		b = allocb(ROUND(n, ep->maxpkt));
+		p = b->rp;
+		assert(((uintptr)p & (BLOCKALIGN-1)) == 0);
+		cachedinvse(p, n);
 		nr = eptrans(ep, Read, p, n);
+		cachedinvse(p, nr);
 		epio->lastpoll = TK2MS(cpu->ticks);
 		memmove(a, p, nr);
 		qunlock(epio);
@@ -815,8 +834,9 @@ epwrite(Ep *ep, void *a, long n)
 	case Tctl:
 	case Tbulk:
 		/* XXX cache madness */
-		b = allocb(n + CACHELINESZ);
-		p = (uchar*)ROUND((uintptr)b->base, CACHELINESZ);
+		b = allocb(n);
+		p = b->wp;
+		assert(((uintptr)p & (BLOCKALIGN-1)) == 0);
 		memmove(p, a, n);
 		cachedwbse(p, n);
 		if(ep->ttype == Tctl)

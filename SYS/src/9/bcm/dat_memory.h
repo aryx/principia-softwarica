@@ -17,4 +17,5 @@ typedef void		KMap;
 #define	VA(k)		((uintptr)(k))
 
 #define	kmap(p)		(KMap*)((p)->pa|kseg0)
-#define	kunmap(k)
+extern void kunmap(KMap*);
+//#define	kunmap(k)

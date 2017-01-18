@@ -198,10 +198,10 @@ transmitasix(Ctlr *ctlr, Block *b)
 
 	n = BLEN(b) & 0xFFFF;
 	n |= ~n << 16;
-	padblock(b, 4);
+	b = padblock(b, 4);
 	PUT4(b->rp, n);
 	if(BLEN(b) % ctlr->maxpkt == 0){
-		padblock(b, -4);
+		b = padblock(b, -4);
 		PUT4(b->wp, 0xFFFF0000);
 		b->wp += 4;
 	}
@@ -214,7 +214,7 @@ transmitsmsc(Ctlr *ctlr, Block *b)
 	int n;
 
 	n = BLEN(b) & 0x7FF;
-	padblock(b, 8);
+	b = padblock(b, 8);
 	PUT4(b->rp, n | SmscTxfirst | SmscTxlast);
 	PUT4(b->rp+4, n);
 	transmit(ctlr, b);
@@ -263,6 +263,8 @@ bind(Ctlr *ctlr, Udev *udev, Cmdbuf *cb)
 	Chan *inchan, *outchan;
 	char *buf;
 	uint bufsize, maxpkt;
+	uchar ea[Eaddrlen];
+	static char nullea[Eaddrlen];
 
 	qlock(ctlr);
 	inchan = outchan = nil;
@@ -288,9 +290,13 @@ bind(Ctlr *ctlr, Udev *udev, Cmdbuf *cb)
 	inchan = namec(cb->f[2], Aopen, OREAD, 0);
 	outchan = namec(cb->f[3], Aopen, OWRITE, 0);
 	assert(inchan != nil && outchan != nil);
-	if(parsemac(ctlr->edev->ea, cb->f[4], Eaddrlen) != Eaddrlen)
+	if(parsemac(ea, cb->f[4], Eaddrlen) != Eaddrlen)
 		cmderror(cb, "bad etheraddr");
-	memmove(ctlr->edev->addr, ctlr->edev->ea, Eaddrlen);
+	if(memcmp(ctlr->edev->ea, nullea, Eaddrlen) == 0)
+		memmove(ctlr->edev->ea, ea, Eaddrlen);
+	else if(memcmp(ctlr->edev->ea, ea, Eaddrlen) != 0)
+		cmderror(cb, "wrong ether address");
+	memmove(ctlr->edev->addr, ea, Eaddrlen);
 	print("\netherusb %s: %E\n", udev->name, ctlr->edev->addr);
 	ctlr->buf = buf;
 	ctlr->inchan = inchan;
@@ -397,6 +403,12 @@ etherusbctl(Ether* edev, void* buf, long n)
 }
 
 static void
+etherusbmulticast(void*, uchar*, int)
+{
+	/* nothing to do, we allow all multicast packets in */
+}
+
+static void
 etherusbattach(Ether* edev)
 {
 	Ctlr *ctlr;
@@ -428,7 +440,7 @@ etherusbpnp(Ether* edev)
 	/* TODO: promiscuous, multicast (for ipv6), shutdown (for reboot) */
 //	edev->promiscuous = etherusbpromiscuous;
 //	edev->shutdown = etherusbshutdown;
-//	edev->multicast = etherusbmulticast;
+	edev->multicast = etherusbmulticast;
 
 	return 0;
 }

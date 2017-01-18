@@ -10,17 +10,14 @@
 
 #include <draw.h>
 #include <font.h>
-
 #include <memdraw.h>
 #include <cursor.h>
 
-//#include "../port/screen.h"
 #include "screen.h"
 
 enum {
 	Tabstop		= 4,
 	Scroll		= 8,
-
 	Wid		= 1024,
 	Ht		= 768,
 	Depth		= 16,
@@ -43,6 +40,7 @@ Cursor	arrow = {
 Memimage *gscreen;
 
 static Memdata xgdata;
+
 static Memimage xgscreen =
 {
 	.r = { 0, 0, Wid, Ht },
@@ -53,36 +51,24 @@ static Memimage xgscreen =
 	.cmap = nil,
 	.data = &xgdata,
 	.zero = 0,
-	.width = 0,
+	.width = 0, 			/* width in words of a single scan line */
 	.layer = nil,
 	.flags = 0,
 };
 
 static Memimage *conscol;
 static Memimage *back;
-
 static Memsubfont *memdefont;
 
 static Lock screenlock;
 
-static int	h, w;
-
 static Point	curpos;
+static int	h, w;
 static Rectangle window;
 
 static void myscreenputs(char *s, int n);
 static void screenputc(char *buf);
 static void screenwin(void);
-
-
-//old: #define ishwimage(i)	1		/* for ../port/devdraw.c */
-bool
-ishwimage(Memimage* i)
-{
-  USED(i);
-  return true;
-}
-
 
 /*
  * Software cursor. 
@@ -283,15 +269,6 @@ swcursorinit(void)
 	memfillcolor(swimg1, DBlack);
 }
 
-
-
-
-
-/*
- *
- */
-
-
 int
 hwdraw(Memdrawparam *par)
 {
@@ -339,14 +316,13 @@ screeninit(void)
 	int set;
 	ulong chan;
 
-	set = (screensize() == 0);
+	set = screensize() == 0;
 	fb = fbinit(set, &xgscreen.r.max.x, &xgscreen.r.max.y, &xgscreen.depth);
 	if(fb == nil){
 		print("can't initialise %dx%dx%d framebuffer \n",
 			xgscreen.r.max.x, xgscreen.r.max.y, xgscreen.depth);
 		return;
 	}
-
 	xgscreen.clipr = xgscreen.r;
 	switch(xgscreen.depth){
 	default:
@@ -364,7 +340,7 @@ screeninit(void)
 		break;
 	}
 	memsetchan(&xgscreen, chan);
-//	conf.monitor = 1;
+	//conf.monitor = 1;
 	xgdata.bdata = fb;
 	xgdata.ref = 1;
 	gscreen = &xgscreen;
@@ -567,4 +543,12 @@ screenputc(char *buf)
 		curpos.x += w;
 		break;
 	}
+}
+
+//old: #define ishwimage(i)	1		/* for ../port/devdraw.c */
+bool
+ishwimage(Memimage* i)
+{
+  USED(i);
+  return true;
 }

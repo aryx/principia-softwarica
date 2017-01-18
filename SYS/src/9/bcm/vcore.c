@@ -19,8 +19,8 @@ enum {
 	Peek		= 0x10>>2,
 	Sender		= 0x14>>2,
 	Status		= 0x18>>2,
-	Full		= 1<<31,
-	Empty		= 1<<30,
+		Full		= 1<<31,
+		Empty		= 1<<30,
 	Config		= 0x1C>>2,
 	NRegs		= 0x20>>2,
 
@@ -33,12 +33,16 @@ enum {
 	TagResp		= 1<<31,
 
 	TagGetfwrev	= 0x00000001,
+	TagGetrev	= 0x00010002,
 	TagGetmac	= 0x00010003,
 	TagGetram	= 0x00010005,
 	TagGetpower	= 0x00020001,
 	TagSetpower	= 0x00028001,
-	Powerwait	= 1<<1,
+		Powerwait	= 1<<1,
 	TagGetclkspd= 0x00030002,
+	TagGetclkmax= 0x00030004,
+	TagSetclkspd= 0x00038002,
+	TagGettemp	= 0x00030006,
 	TagFballoc	= 0x00040001,
 	TagFbfree	= 0x00048001,
 	TagFbblank	= 0x00040002,
@@ -114,7 +118,8 @@ vcreq(int tag, void *buf, int vallen, int rsplen)
 	uintptr r;
 	int n;
 	Prophdr *prop;
-	static uintptr base = BUSDRAM;
+	uintptr aprop;
+	static int busaddr = 1;
 
 	if(rsplen < vallen)
 		rsplen = vallen;
@@ -131,13 +136,14 @@ vcreq(int tag, void *buf, int vallen, int rsplen)
 		memmove(prop->data, buf, vallen);
 	cachedwbinvse(prop, prop->len);
 	for(;;){
-		vcwrite(ChanProps, PADDR(prop) + base);
+		aprop = busaddr? dmaaddr(prop) : PTR2UINT(prop);
+		vcwrite(ChanProps, aprop);
 		r = vcread(ChanProps);
-		if(r == PADDR(prop) + base)
+		if(r == aprop)
 			break;
-		if(base == 0)
+		if(!busaddr)
 			return -1;
-		base = 0;
+		busaddr = 0;
 	}
 	if(prop->req == RspOk &&
 	   prop->tag == tag &&
@@ -185,7 +191,7 @@ fbinit(int set, int *width, int *height, int *depth)
 	fi->yres = fi->yresvirtual = *height;
 	fi->bpp = *depth;
 	cachedwbinvse(fi, sizeof(*fi));
-	vcwrite(ChanFb, DMAADDR(fi));
+	vcwrite(ChanFb, dmaaddr(fi));
 	if(vcread(ChanFb) != 0)
 		return 0;
 	va = mmukmap(FRAMEBUFFER, PADDR(fi->base), fi->screensize);
@@ -251,6 +257,19 @@ getethermac(void)
 }
 
 /*
+ * Get board revision
+ */
+uint
+getboardrev(void)
+{
+	u32int buf[1];
+
+	if(vcreq(TagGetrev, buf, 0, sizeof buf) != sizeof buf)
+		return 0;
+	return buf[0];
+}
+
+/*
  * Get firmware revision
  */
 uint
@@ -287,6 +306,36 @@ getclkrate(int clkid)
 
 	buf[0] = clkid;
 	if(vcreq(TagGetclkspd, buf, sizeof(buf[0]), sizeof(buf)) != sizeof buf)
+		return 0;
+	return buf[1];
+}
+
+/*
+ * Set clock rate to hz (or max speed if hz == 0)
+ */
+void
+setclkrate(int clkid, ulong hz)
+{
+	u32int buf[2];
+
+	buf[0] = clkid;
+	if(hz != 0)
+		buf[1] = hz;
+	else if(vcreq(TagGetclkmax, buf, sizeof(buf[0]), sizeof(buf)) != sizeof buf)
+		return;
+	vcreq(TagSetclkspd, buf, sizeof(buf), sizeof(buf));
+}
+
+/*
+ * Get cpu temperature
+ */
+uint
+getcputemp(void)
+{
+	u32int buf[2];
+
+	buf[0] = 0;
+	if(vcreq(TagGettemp, buf, sizeof(buf[0]), sizeof buf) != sizeof buf)
 		return 0;
 	return buf[1];
 }

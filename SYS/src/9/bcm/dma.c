@@ -97,6 +97,18 @@ struct Cb {
 static Ctlr dma[Nchan];
 static u32int *dmaregs = (u32int*)DMAREGS;
 
+uintptr
+dmaaddr(void *va)
+{
+	return soc.busdram | (PTR2UINT(va) & ~KSEGM);
+}
+
+static uintptr
+dmaioaddr(void *va)
+{
+	return soc.busio | (PTR2UINT(va) & ~VIRTIO);
+}
+
 static void
 dump(char *msg, uchar *p, int n)
 {
@@ -156,23 +168,23 @@ dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
 	ti = 0;
 	switch(dir){
 	case DmaD2M:
-		cachedwbinvse(dst, len);
+		cachedinvse(dst, len);
 		ti = Srcdreq | Destinc;
-		cb->sourcead = DMAIO(src);
-		cb->destad = DMAADDR(dst);
+		cb->sourcead = dmaioaddr(src);
+		cb->destad = dmaaddr(dst);
 		break;
 	case DmaM2D:
 		cachedwbse(src, len);
 		ti = Destdreq | Srcinc;
-		cb->sourcead = DMAADDR(src);
-		cb->destad = DMAIO(dst);
+		cb->sourcead = dmaaddr(src);
+		cb->destad = dmaioaddr(dst);
 		break;
 	case DmaM2M:
 		cachedwbse(src, len);
-		cachedwbinvse(dst, len);
+		cachedinvse(dst, len);
 		ti = Srcinc | Destinc;
-		cb->sourcead = DMAADDR(src);
-		cb->destad = DMAADDR(dst);
+		cb->sourcead = dmaaddr(src);
+		cb->destad = dmaaddr(dst);
 		break;
 	}
 	cb->ti = ti | dev<<Permapshift | Inten;
@@ -182,7 +194,7 @@ dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
 	cachedwbse(cb, sizeof(Cb));
 	ctlr->regs[Cs] = 0;
 	microdelay(1);
-	ctlr->regs[Conblkad] = DMAADDR(cb);
+	ctlr->regs[Conblkad] = dmaaddr(cb);
 	DBG print("dma start: %ux %ux %ux %ux %ux %ux\n",
 		cb->ti, cb->sourcead, cb->destad, cb->txfrlen,
 		cb->stride, cb->nextconbk);

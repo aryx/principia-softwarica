@@ -1,11 +1,13 @@
 /*
- * bcm2835 timers
+ * bcm283[56] timers
  *	System timers run at 1MHz (timers 1 and 2 are used by GPU)
  *	ARM timer usually runs at 250MHz (may be slower in low power modes)
  *	Cycle counter runs at 700MHz (unless overclocked)
  *    All are free-running up-counters
+ *  Cortex-a7 has local generic timers per cpu (which we run at 1MHz)
  *
  * Use system timer 3 (64 bits) for hzclock interrupts and fastticks
+ *   For smp on bcm2836, use local generic timer for interrupts on cpu1-3
  * Use ARM timer (32 bits) for perfticks
  * Use ARM timer to force immediate interrupt
  * Use cycle counter for cycles()
@@ -17,14 +19,22 @@
 #include "dat.h"
 #include "fns.h"
 #include "io.h"
+#include "ureg.h"
+#include "arm.h"
 
 enum {
 	SYSTIMERS	= VIRTIO+0x3000,
 	ARMTIMER	= VIRTIO+0xB400,
+	ARMLOCAL	= (VIRTIO+IOSIZE),
+
+	Localctl	= 0x00,
+	Prescaler	= 0x08,
+	Localintpending	= 0x60,
 
 	SystimerFreq	= 1*Mhz,
 	MaxPeriod	= SystimerFreq / HZ,
 	MinPeriod	= SystimerFreq / (100*HZ),
+
 };
 
 typedef struct Systimers Systimers;
@@ -64,6 +74,11 @@ enum {
 	TmrPrescale256	= 0x02<<2,
 	CntWidth16	= 0<<1,
 	CntWidth32	= 1<<1,
+
+	/* generic timer (cortex-a7) */
+	Enable	= 1<<0,
+	Imask	= 1<<1,
+	Istatus = 1<<2,
 };
 
 static void
@@ -77,6 +92,15 @@ clockintr(Ureg *ureg, void *)
 	timerintr(ureg, 0);
 }
 
+static void
+localclockintr(Ureg *ureg, void *)
+{
+	if(cpu->cpuno == 0)
+		panic("cpu0: Unexpected local generic timer interrupt");
+	cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask|Enable);
+	timerintr(ureg, 0);
+}
+
 void
 clockshutdown(void)
 {
@@ -84,7 +108,7 @@ clockshutdown(void)
 
 	tm = (Armtimer*)ARMTIMER;
 	tm->ctl = 0;
-	wdogoff();
+	//wdogoff();
 }
 
 void
@@ -94,11 +118,16 @@ clockinit(void)
 	Armtimer *tm;
 	u32int t0, t1, tstart, tend;
 
-	tn = (Systimers*)SYSTIMERS;
-	tm = (Armtimer*)ARMTIMER;
-	tm->load = 0;
-	tm->ctl = TmrPrescale1|CntEnable|CntWidth32;
+	if(((cprdsc(0, CpID, CpIDfeat, 1) >> 16) & 0xF) != 0) {
+		/* generic timer supported */
+		if(cpu->cpuno == 0){
+			*(ulong*)(ARMLOCAL + Localctl) = 0;				/* magic */
+			*(ulong*)(ARMLOCAL + Prescaler) = 0x06aaaaab;	/* magic for 1 Mhz */
+		}
+		cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask);
+	}
 
+	tn = (Systimers*)SYSTIMERS;
 	tstart = tn->clo;
 	do{
 		t0 = lcycles();
@@ -111,25 +140,36 @@ clockinit(void)
 	cpu->cpuhz = 100 * t1;
 	cpu->cpumhz = (cpu->cpuhz + Mhz/2 - 1) / Mhz;
 	cpu->cyclefreq = cpu->cpuhz;
-
-	tn->c3 = tn->clo - 1;
-	intrenable(IRQtimer3, clockintr, nil, 0, "clock");
+	if(cpu->cpuno == 0){
+		tn->c3 = tn->clo - 1;
+		tm = (Armtimer*)ARMTIMER;
+		tm->load = 0;
+		tm->ctl = TmrPrescale1|CntEnable|CntWidth32;
+		intrenable(IRQtimer3, clockintr, nil, 0, "clock");
+	}else
+		intrenable(IRQcntpns, localclockintr, nil, 0, "clock");
 }
 
 void
 timerset(Tval next)
 {
 	Systimers *tn;
-	vlong now, period;
+	uvlong now;
+	long period;
 
-	tn = (Systimers*)SYSTIMERS;
 	now = fastticks(nil);
-	period = next - fastticks(nil);
+	period = next - now;
 	if(period < MinPeriod)
-		next = now + MinPeriod;
+		period = MinPeriod;
 	else if(period > MaxPeriod)
-		next = now + MaxPeriod;
-	tn->c3 = (ulong)next;
+		period = MaxPeriod;
+	if(cpu->cpuno > 0){
+		cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
+		cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
+	}else{
+		tn = (Systimers*)SYSTIMERS;
+		tn->c3 = (ulong)(now + period);
+	}
 }
 
 uvlong
@@ -137,15 +177,20 @@ fastticks(uvlong *hz)
 {
 	Systimers *tn;
 	ulong lo, hi;
+	uvlong now;
+	int s;
 
-	tn = (Systimers*)SYSTIMERS;
 	if(hz)
 		*hz = SystimerFreq;
+	tn = (Systimers*)SYSTIMERS;
+	s = splhi();
 	do{
 		hi = tn->chi;
 		lo = tn->clo;
 	}while(tn->chi != hi);
-	cpu->fastclock = (uvlong)hi<<32 | lo;
+	now = (uvlong)hi<<32 | lo;
+	cpu->fastclock = now;
+	splx(s);
 	return cpu->fastclock;
 }
 
@@ -188,8 +233,8 @@ microdelay(int n)
 	Systimers *tn;
 	u32int now, diff;
 
-	tn = (Systimers*)SYSTIMERS;
 	diff = n + 1;
+	tn = (Systimers*)SYSTIMERS;
 	now = tn->clo;
 	while(tn->clo - now < diff)
 		;

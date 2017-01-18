@@ -13,6 +13,7 @@
 #include "arm.h"
 
 #define INTREGS		(VIRTIO+0xB200)
+#define	LOCALREGS	(VIRTIO+IOSIZE)
 
 typedef struct Intregs Intregs;
 typedef struct Vctl Vctl;
@@ -22,6 +23,10 @@ enum {
 
 	Nvec = 8,		/* # of vectors at start of lexception.s */
 	Fiqenable = 1<<7,
+
+	Localtimerint	= 0x40,
+	Localmboxint	= 0x50,
+	Localintpending	= 0x60,
 };
 
 /*
@@ -48,12 +53,14 @@ struct Intregs {
 struct Vctl {
 	Vctl	*next;
 	int	irq;
+	int	cpu;
 	u32int	*reg;
 	u32int	mask;
 	void	(*f)(Ureg*, void*);
 	void	*a;
 };
 
+static Lock vctllock;
 static Vctl *vctl, *vfiq;
 
 static char *trapnames[PsrMask+1] = {
@@ -77,14 +84,16 @@ trapinit(void)
 {
 	Vpage0 *vpage0;
 
-	/* disable everything */
-	intrsoff();
-
-	/* set up the exception vectors */
-	vpage0 = (Vpage0*)HVECTORS;
-	memmove(vpage0->vectors, vectors, sizeof(vpage0->vectors));
-	memmove(vpage0->vtable, vtable, sizeof(vpage0->vtable));
-	cacheuwbinv();
+	if (cpu->cpuno == 0) {
+		/* disable everything */
+		intrsoff();
+		/* set up the exception vectors */
+		vpage0 = (Vpage0*)HVECTORS;
+		memmove(vpage0->vectors, vectors, sizeof(vpage0->vectors));
+		memmove(vpage0->vtable, vtable, sizeof(vpage0->vtable));
+		cacheuwbinv();
+		l2cacheuwbinv();
+	}
 
 	/* set up the stacks for the interrupt modes */
 	setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
@@ -94,6 +103,21 @@ trapinit(void)
 	setr13(PsrMsys, cpu->ssys);
 
 	coherence();
+}
+
+void
+intrcpushutdown(void)
+{
+	u32int *enable;
+
+	if(soc.armlocal == 0)
+		return;
+	enable = (u32int*)(LOCALREGS + Localtimerint) + cpu->cpuno;
+	*enable = 0;
+	if(cpu->cpuno){
+		enable = (u32int*)(LOCALREGS + Localmboxint) + cpu->cpuno;
+		*enable = 1;
+	}
 }
 
 void
@@ -110,6 +134,30 @@ intrsoff(void)
 	ip->FIQctl = 0;
 }
 
+/* called from cpu0 after other cpus are shutdown */
+void
+intrshutdown(void)
+{
+	intrsoff();
+	intrcpushutdown();
+}
+
+static void
+intrtime(void)
+{
+	ulong diff;
+	ulong x;
+
+	x = perfticks();
+	diff = x - cpu->perf.intrts;
+	cpu->perf.intrts = x;
+
+	cpu->perf.inintr += diff;
+	if(up == nil && cpu->perf.inidle > diff)
+		cpu->perf.inidle -= diff;
+}
+
+
 /*
  *  called by trap to handle irq interrupts.
  *  returns true iff a clock interrupt, thus maybe reschedule.
@@ -119,16 +167,23 @@ irq(Ureg* ureg)
 {
 	Vctl *v;
 	int clockintr;
+	int found;
 
+	cpu->perf.intrts = perfticks();
 	clockintr = 0;
+	found = 0;
 	for(v = vctl; v; v = v->next)
-		if(*v->reg & v->mask){
+		if(v->cpu == cpu->cpuno && (*v->reg & v->mask) != 0){
+			found = 1;
 			coherence();
 			v->f(ureg, v->a);
 			coherence();
-			if(v->irq == IRQclock)
+			if(v->irq == IRQclock || v->irq == IRQcntps || v->irq == IRQcntpns)
 				clockintr = 1;
 		}
+	if(!found)
+		cpu->spuriousintr++;
+	intrtime();
 	return clockintr;
 }
 
@@ -140,14 +195,16 @@ fiq(Ureg *ureg)
 {
 	Vctl *v;
 
+	cpu->perf.intrts = perfticks();
 	v = vfiq;
 	if(v == nil)
-		panic("unexpected item in bagging area");
+		panic("cpu%d: unexpected item in bagging area", cpu->cpuno);
 	cpu->intr++;
 	ureg->pc -= 4;
 	coherence();
 	v->f(ureg, v->a);
 	coherence();
+	intrtime();
 }
 
 void
@@ -162,7 +219,13 @@ irqenable(int irq, void (*f)(Ureg*, void*), void* a)
 	if(v == nil)
 		panic("irqenable: no mem");
 	v->irq = irq;
-	if(irq >= IRQbasic){
+	v->cpu = 0;
+	if(irq >= IRQlocal){
+		enable = (u32int*)(LOCALREGS + Localtimerint) + cpu->cpuno;
+		v->reg = (u32int*)(LOCALREGS + Localintpending) + cpu->cpuno;
+		v->mask = 1 << (irq - IRQlocal);
+		v->cpu = cpu->cpuno;
+	}else if(irq >= IRQbasic){
 		enable = &ip->ARMenable;
 		v->reg = &ip->ARMpending;
 		v->mask = 1 << (irq - IRQbasic);
@@ -173,6 +236,7 @@ irqenable(int irq, void (*f)(Ureg*, void*), void* a)
 	}
 	v->f = f;
 	v->a = a;
+	lock(&vctllock);
 	if(irq == IRQfiq){
 		assert((ip->FIQctl & Fiqenable) == 0);
 		assert((*enable & v->mask) == 0);
@@ -181,8 +245,12 @@ irqenable(int irq, void (*f)(Ureg*, void*), void* a)
 	}else{
 		v->next = vctl;
 		vctl = v;
-		*enable = v->mask;
+		if(irq >= IRQlocal)
+			*enable |= 1 << (irq - IRQlocal);
+		else
+			*enable = v->mask;
 	}
+	unlock(&vctllock);
 }
 
 static char *
@@ -226,8 +294,8 @@ faultarm(Ureg *ureg, uintptr va, int user, int read)
 	char buf[ERRMAX];
 
 	if(up == nil) {
-		dumpregs(ureg);
-		panic("fault: nil up in faultarm, accessing %#p", va);
+		//dumpregs(ureg);
+		panic("fault: nil up in faultarm, pc %#p accessing %#p", ureg->pc, va);
 	}
 	insyscall = up->insyscall;
 	up->insyscall = 1;
@@ -308,8 +376,8 @@ trap(Ureg *ureg)
 	clockintr = 0;		/* if set, may call sched() before return */
 	switch(ureg->type){
 	default:
-		panic("unknown trap; type %#lux, psr mode %#lux", ureg->type,
-			ureg->psr & PsrMask);
+		panic("unknown trap; type %#lux, psr mode %#lux pc %lux", ureg->type,
+			ureg->psr & PsrMask, ureg->pc);
 		break;
 	case PsrMirq:
 		clockintr = irq(ureg);
@@ -524,13 +592,21 @@ dumpstackwithureg(Ureg *ureg)
  * Fill in enough of Ureg to get a stack trace, and call a function.
  * Used by debugging interface rdb.
  */
+
+static void
+getpcsp(ulong *pc, ulong *sp)
+{
+	*pc = getcallerpc(&pc);
+	*sp = (ulong)&pc-4;
+}
+
 void
 callwithureg(void (*fn)(Ureg*))
 {
 	Ureg ureg;
 
-	ureg.pc = getcallerpc(&fn);
-	ureg.sp = PTR2UINT(&fn);
+	getpcsp((ulong*)&ureg.pc, (ulong*)&ureg.sp);
+	ureg.r14 = getcallerpc(&fn);
 	fn(&ureg);
 }
 

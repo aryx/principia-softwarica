@@ -202,7 +202,7 @@ syscall(Ureg* ureg)
 	up->dbgreg = ureg;
 
 	scallnr = ureg->r0;
-	// up->scallnr = scallnr;
+	//up->scallnr = scallnr;
 	if(scallnr == RFORK)
 		fpusysrfork(ureg);
 	spllo();

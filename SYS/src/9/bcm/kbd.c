@@ -195,8 +195,9 @@ int mouseshifted;
 void (*kbdmouse)(int);
 
 // now in main.c
-//bool kdebug;
+//static int kdebug;
 extern bool kdebug;
+
 
 typedef struct Kbscan Kbscan;
 struct Kbscan {

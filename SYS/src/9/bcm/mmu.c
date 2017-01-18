@@ -8,58 +8,67 @@
 
 #define L1X(va)		FEXT((va), 20, 12)
 #define L2X(va)		FEXT((va), 12, 8)
+#define L2AP(ap)	l2ap(ap)
+#define L1ptedramattrs	soc.l1ptedramattrs
+#define L2ptedramattrs	soc.l2ptedramattrs
 
 enum {
 	L1lo		= UZERO/MiB,		/* L1X(UZERO)? */
 	L1hi		= (USTKTOP+MiB-1)/MiB,	/* L1X(USTKTOP+MiB-1)? */
 };
 
+/*
+ * Set up initial PTEs for this cpu (called with mmu off)
+ */
 void
-mmuinit(void)
+mmuinit(void *a)
 {
 	PTE *l1, *l2;
 	uintptr pa, va;
 
-	l1 = (PTE*)PADDR(L1);
+	l1 = (PTE*)a;
 	l2 = (PTE*)PADDR(L2);
 
 	/*
 	 * map all of ram at KZERO
 	 */
 	va = KZERO;
-	for(pa = PHYSDRAM; pa < PHYSDRAM+DRAMSIZE; pa += MiB){
-		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section|Cached|Buffered;
+	for(pa = PHYSDRAM; pa < PHYSDRAM+soc.dramsize; pa += MiB){
+		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
 		va += MiB;
 	}
 
 	/*
 	 * identity map first MB of ram so mmu can be enabled
 	 */
-	l1[L1X(PHYSDRAM)] = PHYSDRAM|Dom0|L1AP(Krw)|Section|Cached|Buffered;
+	l1[L1X(PHYSDRAM)] = PHYSDRAM|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
 
 	/*
 	 * map i/o registers 
 	 */
 	va = VIRTIO;
-	for(pa = PHYSIO; pa < PHYSIO+IOSIZE; pa += MiB){
+	for(pa = soc.physio; pa < soc.physio+IOSIZE; pa += MiB){
 		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
 		va += MiB;
 	}
-
+	pa = soc.armlocal;
+	if(pa)
+		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
+	
 	/*
 	 * double map exception vectors at top of virtual memory
 	 */
 	va = HVECTORS;
 	l1[L1X(va)] = (uintptr)l2|Dom0|Coarse;
-	l2[L2X(va)] = PHYSDRAM|L2AP(Krw)|Small;
+	l2[L2X(va)] = PHYSDRAM|L2AP(Krw)|Small|L2ptedramattrs;
 }
 
 void
-mmuinit1(void)
+mmuinit1(void *a)
 {
 	PTE *l1;
 
-	l1 = (PTE*)L1;
+	l1 = (PTE*)a;
 	cpu->mmul1 = l1;
 
 	/*
@@ -67,7 +76,10 @@ mmuinit1(void)
 	 */
 	l1[L1X(PHYSDRAM)] = 0;
 	cachedwbse(&l1[L1X(PHYSDRAM)], sizeof(PTE));
-	mmuinvalidate();
+
+	//cacheuwbinv();
+	//l2cacheuwbinv();
+	mmuinvalidateaddr(PHYSDRAM);
 }
 
 static void
@@ -125,8 +137,10 @@ mmuswitch(Proc* proc)
 	Page *page;
 
 	/* do kprocs get here and if so, do they need to? */
+/*** "This is plausible, but wrong" - Charles Forsyth 1 Mar 2015
 	if(cpu->mmupid == proc->pid && !proc->newtlb)
 		return;
+***/
 	cpu->mmupid = proc->pid;
 
 	/* write back dirty and invalidate l1 caches */
@@ -246,7 +260,7 @@ putmmu(uintptr va, uintptr pa, Page* page)
 	 */
 	x = Small;
 	if(!(pa & PTEUNCACHED))
-		x |= Cached|Buffered;
+		x |= L2ptedramattrs;
 	if(pa & PTEWRITE)
 		x |= L2AP(Urw);
 	else
@@ -263,13 +277,39 @@ putmmu(uintptr va, uintptr pa, Page* page)
 	 *  on this mmu because the virtual cache is set associative
 	 *  rather than direct mapped.
 	 */
-	cachedwbinv();
-	if(page->cachectl[0] == PG_TXTFLUSH){
+	if(page->cachectl[cpu->cpuno] == PG_TXTFLUSH){
 		/* pio() sets PG_TXTFLUSH whenever a text pg has been written */
 		cacheiinv();
-		page->cachectl[0] = PG_NOFLUSH;
+		page->cachectl[cpu->cpuno] = PG_NOFLUSH;
 	}
 	checkmmu(va, PPN(pa));
+}
+
+void*
+mmuuncache(void* v, usize size)
+{
+	int x;
+	PTE *pte;
+	uintptr va;
+
+	/*
+	 * Simple helper for ucalloc().
+	 * Uncache a Section, must already be
+	 * valid in the MMU.
+	 */
+	va = PTR2UINT(v);
+	assert(!(va & (1*MiB-1)) && size == 1*MiB);
+
+	x = L1X(va);
+	pte = &cpu->mmul1[x];
+	if((*pte & (Fine|Section|Coarse)) != Section)
+		return nil;
+	*pte &= ~L1ptedramattrs;
+	*pte |= L1sharable;
+	mmuinvalidateaddr(va);
+	cachedwbinvse(pte, 4);
+
+	return v;
 }
 
 /*
@@ -304,7 +344,7 @@ mmukmap(uintptr va, uintptr pa, usize size)
 		*pte++ = (pa+n)|Dom0|L1AP(Krw)|Section;
 		mmuinvalidateaddr(va+n);
 	}
-	cachedwbse(pte0, pte - pte0);
+	cachedwbse(pte0, (uintptr)pte - (uintptr)pte0);
 	return va + o;
 }
 
@@ -316,3 +356,8 @@ checkmmu(uintptr va, uintptr pa)
 	USED(pa);
 }
 
+void
+kunmap(KMap *k)
+{
+	cachedwbinvse(k, BY2PG);
+}

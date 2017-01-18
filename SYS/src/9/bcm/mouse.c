@@ -9,7 +9,6 @@
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
-
 #include "screen.h"
 
 /*
@@ -195,7 +194,6 @@ resetmouse(void)
 	packetsize = 3;
 }
 
-// for screen.h
 void
 kmousectl(Cmdbuf *cb)
 {
