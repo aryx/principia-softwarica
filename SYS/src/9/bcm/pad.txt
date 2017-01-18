@@ -1,0 +1,65 @@
+-*- org -*-
+from thread about how to build ourself a pi image:
+http://marc.info/?t=139271907600004&r=1&w=2
+
+latest kernel source of miller:
+ http://9p.io/magic/webls?dir=/sources/contrib/miller/9/bcm
+
+* first
+
+The 9pi image is very standard Plan 9.  Libraries, command binaries
+and kernel are all built from distribution sources with
+  cd /sys/src && mk install
+  cd /sys/src/9/bcm && mk install
+For the first, you need to link with the '-f' flag to get hardware
+floating point.  That could be done by editing mkfiles, but since I
+build for other arm systems from the same sources, I do it by setting
+up aliases in my shell environment before running mk -
+  fn 5l { /$cputype/bin/5l -f $* }
+  fn pcc { /$cputype/bin/pcc -f $* }
+
+The rest of the image is the same as the standard distribution for any
+architecture, with x86 binaries and libraries removed, and these small
+changes in config files to make an easier introduction for new users
+running as 'glenda':
+
+1. The /rc/bin/termrc.local script will optionally start up networking
+using the command defined in cmdline.txt variable ipconfig=
+
+2. The /usr/glenda/bin/rc/riostart script adds a console output window
+to prevent console messages from messing up the rio desktop
+
+3. The /rc/bin/replica/pull script filters x86 binaries from the update
+log, so the replica/pull command won't add them all in again
+
+* second
+
+OS porting is something of a black art.  I've been doing it for a while
+(http://www.usenix.org/legacy/publications/library/proceedings/usenix98/invited_talks/miller.ps)
+and it's not getting any easier.  Hardware vendors used to provide
+meticulously accurate reference manuals describing device behaviour at a
+register level, along with a programming manual explaining the sequence of
+operations required for standard procedures like device initialisation and
+error recovery.  Too often nowadays the best you'll get is a sketchy and
+inaccurate datasheet, and at worst the datasheet will be a "trade secret"
+and the only option is to reverse engineer many thousand lines of badly
+written linux driver.
+
+For the Raspberry Pi port, excellent documentation was available at least
+for the arm cpu.  Plan 9 kernels already existed for armv5 and armv7
+architectures, so I was mostly able to interpolate between the two to
+produce the low-level assembly parts of the kernel for the Pi's armv6.
+Hardware floating support for the kernel had already been done at the Labs
+for the teg2, and vfp code generation for the 5l linker was straightforward
+to add, using arm manuals.
+
+The rest of the work was creating device drivers, some easily adapted from
+other Plan 9 instances (eg uart and lcd display), some written from scratch
+using Broadcom's BCM2835 datasheet (eg sd/mmc).  By far the hardest driver
+was for the usb host adapter, which on the Pi is very non-standard and has
+no officially available documentation.  I couldn't face the prospect of
+digesting the linux driver (which is huge, unreadable, and at the time was
+known not to work reliably).  Luckily a web search turned up datasheets
+for some apparently very similar devices, which I was able to work from.
+Even so, writing and debugging the usb driver accounted for most of the time
+and effort of the whole project.

@@ -1,0 +1,3128 @@
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./arch.c ../bcm-latest/arch.c
+--- ./arch.c	2017-01-16 19:37:03.000000000 -0800
++++ ../bcm-latest/arch.c	2017-01-17 18:12:52.000000000 -0800
+@@ -176,65 +176,3 @@ userureg(Ureg* ureg)
+ {
+ 	return (ureg->psr & PsrMask) == PsrMusr;
+ }
+-
+-/*
+- * atomic ops
+- * make sure that we don't drag in the C library versions
+- */
+-
+-long
+-_xdec(long *p)
+-{
+-	int s, v;
+-
+-	s = splhi();
+-	v = --*p;
+-	splx(s);
+-	return v;
+-}
+-
+-void
+-_xinc(long *p)
+-{
+-	int s;
+-
+-	s = splhi();
+-	++*p;
+-	splx(s);
+-}
+-
+-int
+-ainc(int *p)
+-{
+-	int s, v;
+-
+-	s = splhi();
+-	v = ++*p;
+-	splx(s);
+-	return v;
+-}
+-
+-int
+-adec(int *p)
+-{
+-	int s, v;
+-
+-	s = splhi();
+-	v = --*p;
+-	splx(s);
+-	return v;
+-}
+-
+-int
+-cas32(void* addr, u32int old, u32int new)
+-{
+-	int r, s;
+-
+-	s = splhi();
+-	if(r = (*(u32int*)addr == old))
+-		*(u32int*)addr = new;
+-	splx(s);
+-	if (r)
+-		coherence();
+-	return r;
+-}
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./archbcm.c ../bcm-latest/archbcm.c
+--- ./archbcm.c	2017-01-09 22:00:48.000000000 -0800
++++ ../bcm-latest/archbcm.c	2017-01-17 18:30:55.000000000 -0800
+@@ -1,5 +1,5 @@
+ /*
+- * bcm2835 (e.g. raspberry pi) architecture-specific stuff
++ * bcm2835 (e.g. original raspberry pi) architecture-specific stuff
+  */
+ 
+ #include "u.h"
+@@ -16,6 +16,16 @@
+ 
+ #define	POWERREGS	(VIRTIO+0x100000)
+ 
++Soc soc = {
++	.dramsize	= 512*MiB,
++	.physio		= 0x20000000,
++	.busdram	= 0x40000000,
++	.busio		= 0x7E000000,
++	.armlocal	= 0,
++	.l1ptedramattrs = Cached | Buffered,
++	.l2ptedramattrs = Cached | Buffered,
++};
++
+ enum {
+ 	Wdogfreq	= 65536,
+ 	Wdogtime	= 5,	/* seconds, ≤ 15 */
+@@ -71,10 +81,33 @@ wdogoff(void)
+ 	r[Rstc] = Password | (r[Rstc] & ~CfgMask);
+ }
+ 	
++char *
++cputype2name(char *buf, int size)
++{
++	seprint(buf, buf + size, "1176JZF-S");
++	return buf;
++}
++
+ void
+ cpuidprint(void)
+ {
+-	print("cpu%d: %dMHz ARM1176JZF-S\n", cpu->cpuno, cpu->cpumhz);
++	char name[64];
++
++	cputype2name(name, sizeof name);
++	delay(50);				/* let uart catch up */
++	print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
++}
++
++int
++getncpus(void)
++{
++	return 1;
++}
++
++int
++startcpus(uint)
++{
++	return 1;
+ }
+ 
+ void
+@@ -86,15 +119,84 @@ archbcmlink(void)
+ int
+ archether(unsigned ctlrno, Ether *ether)
+ {
+-	switch(ctlrno) {
+-	case 0:
+ 		ether->type = "usb";
+ 		ether->ctlrno = ctlrno;
+ 		ether->irq = -1;
+ 		ether->nopt = 0;
+-		ether->mbps = 100;
+ 		return 1;
+-	}
+-	return -1;
++}
++
++int
++l2ap(int ap)
++{
++	return (AP(3, (ap))|AP(2, (ap))|AP(1, (ap))|AP(0, (ap)));
++}
++
++/*
++ * atomic ops
++ * make sure that we don't drag in the C library versions
++ */
++
++long
++_xdec(long *p)
++{
++	int s, v;
++
++	s = splhi();
++	v = --*p;
++	splx(s);
++	return v;
++}
++
++void
++_xinc(long *p)
++{
++	int s;
++
++	s = splhi();
++	++*p;
++	splx(s);
++}
++
++int
++ainc(int *p)
++{
++	int s, v;
++
++	s = splhi();
++	v = ++*p;
++	splx(s);
++	return v;
++}
++
++int
++adec(int *p)
++{
++	int s, v;
++
++	s = splhi();
++	v = --*p;
++	splx(s);
++	return v;
++}
++
++int
++cas32(void* addr, u32int old, u32int new)
++{
++	int r, s;
++
++	s = splhi();
++	if(r = (*(u32int*)addr == old))
++		*(u32int*)addr = new;
++	splx(s);
++	if (r)
++		coherence();
++	return r;
++}
++
++int
++cmpswap(long *addr, long old, long new)
++{
++	return cas32(addr, old, new);
+ }
+ 
+Only in ../bcm-latest/: archbcm2.c
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./arm.h ../bcm-latest/arm.h
+--- ./arm.h	2015-10-17 09:32:22.000000000 -0700
++++ ../bcm-latest/arm.h	2015-03-13 14:48:39.000000000 -0700
+@@ -1,5 +1,5 @@
+ /*
+- * arm-specific definitions for armv6
++ * arm-specific definitions for armv6 (arm11), armv7 (cortex-a8 and -a7)
+  * these are used in C and assembler
+  */
+ 
+@@ -52,9 +52,19 @@
+ #define CpTLD		10			/* TLB Lockdown, with op2 */
+ #define CpVECS		12			/* vector bases, op1==0, Crm==0, op2s (cortex) */
+ #define	CpPID		13			/* Process ID */
++#define	CpTIMER		14			/* Generic timer (cortex-a7) */
+ #define CpSPM		15			/* system performance monitor (arm1176) */
+ 
+ /*
++ * CpTIMER op1==0 Crm and opcode2 registers (cortex-a7)
++ */
++#define	CpTIMERcntfrq	0
++#define CpTIMERphys		2
++
++#define CpTIMERphysval	0
++#define CpTIMERphysctl	1
++
++/*
+  * CpTTB op1==0, Crm==0 opcode2 values.
+  */
+ #define CpTTB0		0
+@@ -71,6 +81,7 @@
+  * CpID Secondary (CRm) registers.
+  */
+ #define CpIDidct	0
++#define	CpIDfeat	1
+ 
+ /*
+  * CpID op1==0 opcode2 fields.
+@@ -80,6 +91,7 @@
+ #define CpIDct		1			/* cache type */
+ #define CpIDtlb		3			/* tlb type (cortex) */
+ #define CpIDmpid	5			/* multiprocessor id (cortex) */
++#define	CpIDrevid	6			/* extra revision ID */
+ 
+ /* CpIDid op1 values */
+ #define CpIDcsize	1			/* cache size (cortex) */
+@@ -133,6 +145,10 @@
+ #define CpACasa			(1<<4)	/* enable speculative accesses */
+ #define CpACl1pe		(1<<3)	/* l1 cache parity enable */
+ #define CpACl2en		(1<<1)	/* l2 cache enable; default 1 */
++
++/* cortex-a7 and cortex-a9 */
++#define CpACsmp			(1<<6)	/* SMP l1 caches coherence; needed for ldrex/strex */
++#define CpACl1pctl		(3<<13)	/* l1 prefetch control */
+ /*
+  * CpCONTROL Secondary (CRm) registers and opcode2 fields.
+  */
+@@ -151,9 +167,9 @@
+ #define CpCACHEinvd	6			/* data or unified */
+ #define CpCACHEinvu	7			/* unified (not on cortex) */
+ #define CpCACHEva2pa	8			/* va -> pa translation (cortex) */
+-#define CpCACHEwb	10			/* writeback */
+-#define CpCACHEinvdse	11			/* data or unified by mva */
+-#define CpCACHEwbi	14			/* writeback+invalidate */
++#define CpCACHEwb	10			/* writeback to PoC */
++#define CpCACHEwbu	11			/* writeback to PoU */
++#define CpCACHEwbi	14			/* writeback+invalidate (to PoC) */
+ 
+ #define CpCACHEall	0			/* entire (not for invd nor wb(i) on cortex) */
+ #define CpCACHEse	1			/* single entry */
+@@ -223,7 +239,7 @@
+ #define CpVECSmon	1			/* secure monitor base addr */
+ 
+ /*
+- * CpSPM Secondary (CRm) registers and opcode2 fields.
++ * CpSPM Secondary (CRm) registers and opcode2 fields (armv6)
+  */
+ #define CpSPMperf	12			/* various counters */
+ 
+@@ -239,6 +255,21 @@
+ #define CpCACHERANGEdwbi	14		/* writeback+invalidate */
+ 
+ /*
++ * CpTTB cache control bits
++ */
++#define CpTTBnos	(1<<5)	/* only Inner cache shareable */
++#define CpTTBinc	(0<<0|0<<6)	/* inner non-cacheable */
++#define CpTTBiwba	(0<<0|1<<6)	/* inner write-back write-allocate */
++#define CpTTBiwt	(1<<0|0<<6)	/* inner write-through */
++#define CpTTBiwb	(1<<0|1<<6)	/* inner write-back no write-allocate */
++#define CpTTBonc	(0<<3)	/* outer non-cacheable */
++#define CpTTBowba	(1<<3)	/* outer write-back write-allocate */
++#define CpTTBowt	(2<<3)	/* outer write-through */
++#define CpTTBowb	(3<<3)	/* outer write-back no write-allocate */
++#define CpTTBs	(1<<1)	/* page table in shareable memory */
++#define CpTTBbase	~0x7F		/* mask off control bits */
++
++/*
+  * MMU page table entries.
+  * Mbz (0x10) bit is implementation-defined and must be 0 on the cortex.
+  */
+@@ -256,6 +287,15 @@
+ #define Cached		0x00000008		/* L[12] */
+ #define Dom0		0
+ 
++#define L1wralloc	(1<<12)			/* L1 TEX */
++#define L1sharable	(1<<16)
++#define L2wralloc	(1<<6)			/* L2 TEX (small pages) */
++#define L2sharable	(1<<10)
++
++/* attributes for memory containing locks -- differs between armv6 and armv7 */
++//#define L1ptedramattrs	(Cached | Buffered | L1wralloc | L1sharable)
++//#define L2ptedramattrs	(Cached | Buffered | L2wralloc | L2sharable)
++
+ #define Noaccess	0			/* AP, DAC */
+ #define Krw		1			/* AP */
+ /* armv7 deprecates AP[2] == 1 & AP[1:0] == 2 (Uro), prefers 3 (new in v7) */
+@@ -267,7 +307,7 @@
+ #define F(v, o, w)	(((v) & ((1<<(w))-1))<<(o))
+ #define AP(n, v)	F((v), ((n)*2)+4, 2)
+ #define L1AP(ap)	(AP(3, (ap)))
+-#define L2AP(ap) (AP(3, (ap))|AP(2, (ap))|AP(1, (ap))|AP(0, (ap))) /* pre-armv7 */
++/* L2AP differs between armv6 and armv7 -- see l2ap in arch*.c */
+ #define DAC(n, v)	F((v), (n)*2, 2)
+ 
+ #define HVECTORS	0xffff0000
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./arm.s ../bcm-latest/arm.s
+--- ./arm.s	2015-10-17 09:32:22.000000000 -0700
++++ ../bcm-latest/arm.s	2017-01-17 18:12:05.000000000 -0800
+@@ -1,5 +1,5 @@
+ /*
+- * armv6 machine assist, definitions
++ * armv6/v7 machine assist, definitions
+  *
+  * loader uses R11 as scratch.
+  */
+@@ -11,8 +11,6 @@
+ 
+ #define L1X(va)		(((((va))>>20) & 0x0fff)<<2)
+ 
+-#define PTEDRAM		(Dom0|L1AP(Krw)|Section|Cached|Buffered)
+-
+ /*
+  * new instructions
+  */
+@@ -29,8 +27,31 @@
+ 
+ #define MCRR(coproc, op, rd, rn, crm) \
+ 	WORD $(0xec400000|(rn)<<16|(rd)<<12|(coproc)<<8|(op)<<4|(crm))
++#define MRRC(coproc, op, rd, rn, crm) \
++	WORD $(0xec500000|(rn)<<16|(rd)<<12|(coproc)<<8|(op)<<4|(crm))
++
++#define	LDREX(fp,t)   WORD $(0xe<<28|0x01900f9f | (fp)<<16 | (t)<<12)
++/* `The order of operands is from left to right in dataflow order' - asm man */
++#define	STREX(f,tp,r) WORD $(0xe<<28|0x01800f90 | (tp)<<16 | (r)<<12 | (f)<<0)
++#define	CLREX	WORD	$0xf57ff01f
++
++#define CPSIE	WORD	$0xf1080080	/* intr enable: zeroes I bit */
++#define CPSID	WORD	$0xf10c0080	/* intr disable: sets I bit */
+ 
+ #define OKAY \
+ 	MOVW	$0x7E200028,R2; \
+ 	MOVW	$0x10000,R3; \
+ 	MOVW	R3,(R2)
++
++#define PUTC(s)
++
++/*
++ * get cpu id, or zero if armv6
++ */
++#define CPUID(r) \
++	MRC	CpSC, 0, r, C(CpID), C(CpIDfeat), 7; \
++	CMP	$0, r; \
++	B.EQ	2(PC); \
++	MRC	CpSC, 0, r, C(CpID), C(CpIDidct), CpIDmpid; \
++	AND.S	$(MAXCPUS-1), r
++
+Only in ../bcm-latest/: armv6.s
+Only in ../bcm-latest/: armv7.s
+Only in ../bcm-latest/: cache.v7.s
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./clock.c ../bcm-latest/clock.c
+--- ./clock.c	2017-01-10 12:11:49.000000000 -0800
++++ ../bcm-latest/clock.c	2017-01-17 18:13:55.000000000 -0800
+@@ -1,11 +1,13 @@
+ /*
+- * bcm2835 timers
++ * bcm283[56] timers
+  *	System timers run at 1MHz (timers 1 and 2 are used by GPU)
+  *	ARM timer usually runs at 250MHz (may be slower in low power modes)
+  *	Cycle counter runs at 700MHz (unless overclocked)
+  *    All are free-running up-counters
++ *  Cortex-a7 has local generic timers per cpu (which we run at 1MHz)
+  *
+  * Use system timer 3 (64 bits) for hzclock interrupts and fastticks
++ *   For smp on bcm2836, use local generic timer for interrupts on cpu1-3
+  * Use ARM timer (32 bits) for perfticks
+  * Use ARM timer to force immediate interrupt
+  * Use cycle counter for cycles()
+@@ -17,10 +19,17 @@
+ #include "dat.h"
+ #include "fns.h"
+ #include "io.h"
++#include "ureg.h"
++#include "arm.h"
+ 
+ enum {
+ 	SYSTIMERS	= VIRTIO+0x3000,
+ 	ARMTIMER	= VIRTIO+0xB400,
++	ARMLOCAL	= (VIRTIO+IOSIZE),
++
++	Localctl	= 0x00,
++	Prescaler	= 0x08,
++	Localintpending	= 0x60,
+ 
+ 	SystimerFreq	= 1*Mhz,
+ 	MaxPeriod	= SystimerFreq / HZ,
+@@ -64,6 +74,11 @@ enum {
+ 	TmrPrescale256	= 0x02<<2,
+ 	CntWidth16	= 0<<1,
+ 	CntWidth32	= 1<<1,
++
++	/* generic timer (cortex-a7) */
++	Enable	= 1<<0,
++	Imask	= 1<<1,
++	Istatus = 1<<2,
+ };
+ 
+ static void
+@@ -77,6 +92,15 @@ clockintr(Ureg *ureg, void *)
+ 	timerintr(ureg, 0);
+ }
+ 
++static void
++localclockintr(Ureg *ureg, void *)
++{
++	if(cpu->cpuno == 0)
++		panic("cpu0: Unexpected local generic timer interrupt");
++	cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask|Enable);
++	timerintr(ureg, 0);
++}
++
+ void
+ clockshutdown(void)
+ {
+@@ -84,7 +108,7 @@ clockshutdown(void)
+ 
+ 	tm = (Armtimer*)ARMTIMER;
+ 	tm->ctl = 0;
+-	wdogoff();
++	//wdogoff();
+ }
+ 
+ void
+@@ -94,11 +118,16 @@ clockinit(void)
+ 	Armtimer *tm;
+ 	u32int t0, t1, tstart, tend;
+ 
+-	tn = (Systimers*)SYSTIMERS;
+-	tm = (Armtimer*)ARMTIMER;
+-	tm->load = 0;
+-	tm->ctl = TmrPrescale1|CntEnable|CntWidth32;
++	if(((cprdsc(0, CpID, CpIDfeat, 1) >> 16) & 0xF) != 0) {
++		/* generic timer supported */
++		if(cpu->cpuno == 0){
++			*(ulong*)(ARMLOCAL + Localctl) = 0;				/* magic */
++			*(ulong*)(ARMLOCAL + Prescaler) = 0x06aaaaab;	/* magic for 1 Mhz */
++		}
++		cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask);
++	}
+ 
++	tn = (Systimers*)SYSTIMERS;
+ 	tstart = tn->clo;
+ 	do{
+ 		t0 = lcycles();
+@@ -111,25 +140,36 @@ clockinit(void)
+ 	cpu->cpuhz = 100 * t1;
+ 	cpu->cpumhz = (cpu->cpuhz + Mhz/2 - 1) / Mhz;
+ 	cpu->cyclefreq = cpu->cpuhz;
+-
++	if(cpu->cpuno == 0){
+ 	tn->c3 = tn->clo - 1;
++		tm = (Armtimer*)ARMTIMER;
++		tm->load = 0;
++		tm->ctl = TmrPrescale1|CntEnable|CntWidth32;
+ 	intrenable(IRQtimer3, clockintr, nil, 0, "clock");
++	}else
++		intrenable(IRQcntpns, localclockintr, nil, 0, "clock");
+ }
+ 
+ void
+ timerset(Tval next)
+ {
+ 	Systimers *tn;
+-	vlong now, period;
++	uvlong now;
++	long period;
+ 
+-	tn = (Systimers*)SYSTIMERS;
+ 	now = fastticks(nil);
+-	period = next - fastticks(nil);
++	period = next - now;
+ 	if(period < MinPeriod)
+-		next = now + MinPeriod;
++		period = MinPeriod;
+ 	else if(period > MaxPeriod)
+-		next = now + MaxPeriod;
+-	tn->c3 = (ulong)next;
++		period = MaxPeriod;
++	if(cpu->cpuno > 0){
++		cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
++		cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
++	}else{
++		tn = (Systimers*)SYSTIMERS;
++		tn->c3 = (ulong)(now + period);
++	}
+ }
+ 
+ uvlong
+@@ -137,15 +177,20 @@ fastticks(uvlong *hz)
+ {
+ 	Systimers *tn;
+ 	ulong lo, hi;
++	uvlong now;
++	int s;
+ 
+-	tn = (Systimers*)SYSTIMERS;
+ 	if(hz)
+ 		*hz = SystimerFreq;
++	tn = (Systimers*)SYSTIMERS;
++	s = splhi();
+ 	do{
+ 		hi = tn->chi;
+ 		lo = tn->clo;
+ 	}while(tn->chi != hi);
+-	cpu->fastclock = (uvlong)hi<<32 | lo;
++	now = (uvlong)hi<<32 | lo;
++	cpu->fastclock = now;
++	splx(s);
+ 	return cpu->fastclock;
+ }
+ 
+@@ -188,8 +233,8 @@ microdelay(int n)
+ 	Systimers *tn;
+ 	u32int now, diff;
+ 
+-	tn = (Systimers*)SYSTIMERS;
+ 	diff = n + 1;
++	tn = (Systimers*)SYSTIMERS;
+ 	now = tn->clo;
+ 	while(tn->clo - now < diff)
+ 		;
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./dat.h ../bcm-latest/dat.h
+--- ./dat.h	2017-01-10 19:09:03.000000000 -0800
++++ ../bcm-latest/dat.h	2017-01-17 18:04:41.000000000 -0800
+@@ -107,3 +107,16 @@ int vflag;
+ extern char dbgflg[256];
+ 
+ #define dbgprint	print		/* for now */
++
++typedef struct Soc Soc;
++
++struct Soc {			/* SoC dependent configuration */
++	ulong	dramsize;
++	uintptr	physio;
++	uintptr	busdram;
++	uintptr	busio;
++	uintptr	armlocal;
++	u32int	l1ptedramattrs;
++	u32int	l2ptedramattrs;
++};
++extern Soc soc;
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./dat_memory.h ../bcm-latest/dat_memory.h
+--- ./dat_memory.h	2017-01-09 22:13:45.000000000 -0800
++++ ../bcm-latest/dat_memory.h	2017-01-17 18:27:48.000000000 -0800
+@@ -17,4 +17,5 @@ typedef void		KMap;
+ #define	VA(k)		((uintptr)(k))
+ 
+ #define	kmap(p)		(KMap*)((p)->pa|kseg0)
+-#define	kunmap(k)
++extern void kunmap(KMap*);
++//#define	kunmap(k)
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./devarch.c ../bcm-latest/devarch.c
+--- ./devarch.c	2017-01-10 12:24:06.000000000 -0800
++++ ../bcm-latest/devarch.c	2017-01-17 18:34:02.000000000 -0800
+@@ -150,9 +150,19 @@ Dev archdevtab = {
+ static long
+ cputyperead(Chan*, void *a, long n, vlong offset)
+ {
+-	char str[128];
++	char name[64], str[128];
+ 
+-	snprint(str, sizeof str, "ARM11 %d\n", cpu->cpumhz);
++	cputype2name(name, sizeof name);
++	snprint(str, sizeof str, "ARM %s %d\n", name, cpu->cpumhz);
++	return readstr(offset, a, n, str);
++}
++
++static long
++cputempread(Chan*, void *a, long n, vlong offset)
++{
++	char str[16];
++
++	snprint(str, sizeof str, "%ud\n", (getcputemp()+500)/1000);
+ 	return readstr(offset, a, n, str);
+ }
+ 
+@@ -160,4 +170,5 @@ void
+ archinit(void)
+ {
+ 	addarchfile("cputype", 0444, cputyperead, nil);
++	addarchfile("cputemp", 0444, cputempread, nil);
+ }
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./devfakertc.c ../bcm-latest/devfakertc.c
+--- ./devfakertc.c	2017-01-10 12:26:04.000000000 -0800
++++ ../bcm-latest/devfakertc.c	2012-08-16 03:38:04.000000000 -0700
+@@ -102,23 +102,23 @@ rtcclose(Chan*)
+ }
+ 
+ Dev fakertcdevtab = {
+-	.dc = 'r',
+-	.name = "rtc",
++	'r',
++	"rtc",
+ 
+-	.reset = devreset,
+-	.init = rtcinit,
+-	.shutdown = devshutdown,
+-	.attach = rtcattach,
+-	.walk = rtcwalk,
+-	.stat = rtcstat,
+-	.open = rtcopen,
+-	.create = devcreate,
+-	.close = rtcclose,
+-	.read = rtcread,
+-	.bread = devbread,
+-	.write = rtcwrite,
+-	.bwrite = devbwrite,
+-	.remove = devremove,
+-	.wstat = devwstat,
++	devreset,
++	rtcinit,
++	devshutdown,
++	rtcattach,
++	rtcwalk,
++	rtcstat,
++	rtcopen,
++	devcreate,
++	rtcclose,
++	rtcread,
++	devbread,
++	rtcwrite,
++	devbwrite,
++	devremove,
++	devwstat,
+ };
+ 
+Only in ../bcm-latest/: devrtc3231.c
+Only in ../bcm-latest/: devspi.c
+Only in .: diff_bcm1_pad
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./dma.c ../bcm-latest/dma.c
+--- ./dma.c	2015-10-17 09:32:22.000000000 -0700
++++ ../bcm-latest/dma.c	2015-03-14 03:47:23.000000000 -0700
+@@ -97,6 +97,18 @@ struct Cb {
+ static Ctlr dma[Nchan];
+ static u32int *dmaregs = (u32int*)DMAREGS;
+ 
++uintptr
++dmaaddr(void *va)
++{
++	return soc.busdram | (PTR2UINT(va) & ~KSEGM);
++}
++
++static uintptr
++dmaioaddr(void *va)
++{
++	return soc.busio | (PTR2UINT(va) & ~VIRTIO);
++}
++
+ static void
+ dump(char *msg, uchar *p, int n)
+ {
+@@ -156,23 +168,23 @@ dmastart(int chan, int dev, int dir, voi
+ 	ti = 0;
+ 	switch(dir){
+ 	case DmaD2M:
+-		cachedwbinvse(dst, len);
++		cachedinvse(dst, len);
+ 		ti = Srcdreq | Destinc;
+-		cb->sourcead = DMAIO(src);
+-		cb->destad = DMAADDR(dst);
++		cb->sourcead = dmaioaddr(src);
++		cb->destad = dmaaddr(dst);
+ 		break;
+ 	case DmaM2D:
+ 		cachedwbse(src, len);
+ 		ti = Destdreq | Srcinc;
+-		cb->sourcead = DMAADDR(src);
+-		cb->destad = DMAIO(dst);
++		cb->sourcead = dmaaddr(src);
++		cb->destad = dmaioaddr(dst);
+ 		break;
+ 	case DmaM2M:
+ 		cachedwbse(src, len);
+-		cachedwbinvse(dst, len);
++		cachedinvse(dst, len);
+ 		ti = Srcinc | Destinc;
+-		cb->sourcead = DMAADDR(src);
+-		cb->destad = DMAADDR(dst);
++		cb->sourcead = dmaaddr(src);
++		cb->destad = dmaaddr(dst);
+ 		break;
+ 	}
+ 	cb->ti = ti | dev<<Permapshift | Inten;
+@@ -182,7 +194,7 @@ dmastart(int chan, int dev, int dir, voi
+ 	cachedwbse(cb, sizeof(Cb));
+ 	ctlr->regs[Cs] = 0;
+ 	microdelay(1);
+-	ctlr->regs[Conblkad] = DMAADDR(cb);
++	ctlr->regs[Conblkad] = dmaaddr(cb);
+ 	DBG print("dma start: %ux %ux %ux %ux %ux %ux\n",
+ 		cb->ti, cb->sourcead, cb->destad, cb->txfrlen,
+ 		cb->stride, cb->nextconbk);
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./emmc.c ../bcm-latest/emmc.c
+--- ./emmc.c	2017-01-16 12:13:05.000000000 -0800
++++ ../bcm-latest/emmc.c	2017-01-17 18:36:36.000000000 -0800
+@@ -178,7 +178,11 @@ clkdiv(uint d)
+ static int
+ datadone(void*)
+ {
+-	return emmc.datadone;
++	int i;
++
++	u32int *r = (u32int*)EMMCREGS;
++	i = r[Interrupt];
++	return i & (Datadone|Err);
+ }
+ 
+ static int
+@@ -310,9 +314,9 @@ emmccmd(u32int cmd, u32int arg, u32int *
+ 	if((c & Respmask) == Resp48busy){
+ 		WR(Irpten, Datadone|Err);
+ 		tsleep(&emmc.r, datadone, 0, 3000);
+-		i = emmc.datadone;
+-		emmc.datadone = 0;
+ 		WR(Irpten, 0);
++		emmc.datadone = 0;
++		i = r[Interrupt];
+ 		if((i & Datadone) == 0)
+ 			print("emmcio: no Datadone after CMD%d\n", cmd);
+ 		if(i & Err)
+@@ -380,11 +384,13 @@ emmcio(int write, uchar *buf, int len)
+ 			&r[Data], buf, len);
+ 	if(dmawait(DmaChanEmmc) < 0)
+ 		error(Eio);
++	if(!write)
++		cachedinvse(buf, len);
+ 	WR(Irpten, Datadone|Err);
+ 	tsleep(&emmc.r, datadone, 0, 3000);
+-	i = emmc.datadone;
+-	emmc.datadone = 0;
+ 	WR(Irpten, 0);
++	emmc.datadone = 0;
++	i = r[Interrupt];
+ 	if((i & Datadone) == 0){
+ 		print("emmcio: %d timeout intr %ux stat %ux\n",
+ 			write, i, r[Status]);
+@@ -407,13 +413,11 @@ static void
+ mmcinterrupt(Ureg*, void*)
+ {	
+ 	u32int *r;
+-	int i;
+-
+ 	r = (u32int*)EMMCREGS;
+-	i = r[Interrupt];
+-	r[Interrupt] = i & (Datadone|Err);
+-	emmc.datadone = i;
++	if(r[Interrupt]&(Datadone|Err)){
++		WR(Irpten, 0);
+ 	wakeup(&emmc.r);
++	}
+ }
+ 
+ SDio sdio = {
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./etherusb.c ../bcm-latest/etherusb.c
+--- ./etherusb.c	2017-01-10 12:39:04.000000000 -0800
++++ ../bcm-latest/etherusb.c	2015-07-02 01:00:28.000000000 -0700
+@@ -198,10 +198,10 @@ transmitasix(Ctlr *ctlr, Block *b)
+ 
+ 	n = BLEN(b) & 0xFFFF;
+ 	n |= ~n << 16;
+-	padblock(b, 4);
++	b = padblock(b, 4);
+ 	PUT4(b->rp, n);
+ 	if(BLEN(b) % ctlr->maxpkt == 0){
+-		padblock(b, -4);
++		b = padblock(b, -4);
+ 		PUT4(b->wp, 0xFFFF0000);
+ 		b->wp += 4;
+ 	}
+@@ -214,7 +214,7 @@ transmitsmsc(Ctlr *ctlr, Block *b)
+ 	int n;
+ 
+ 	n = BLEN(b) & 0x7FF;
+-	padblock(b, 8);
++	b = padblock(b, 8);
+ 	PUT4(b->rp, n | SmscTxfirst | SmscTxlast);
+ 	PUT4(b->rp+4, n);
+ 	transmit(ctlr, b);
+@@ -263,6 +263,8 @@ bind(Ctlr *ctlr, Udev *udev, Cmdbuf *cb)
+ 	Chan *inchan, *outchan;
+ 	char *buf;
+ 	uint bufsize, maxpkt;
++	uchar ea[Eaddrlen];
++	static char nullea[Eaddrlen];
+ 
+ 	qlock(ctlr);
+ 	inchan = outchan = nil;
+@@ -288,9 +290,13 @@ bind(Ctlr *ctlr, Udev *udev, Cmdbuf *cb)
+ 	inchan = namec(cb->f[2], Aopen, OREAD, 0);
+ 	outchan = namec(cb->f[3], Aopen, OWRITE, 0);
+ 	assert(inchan != nil && outchan != nil);
+-	if(parsemac(ctlr->edev->ea, cb->f[4], Eaddrlen) != Eaddrlen)
++	if(parsemac(ea, cb->f[4], Eaddrlen) != Eaddrlen)
+ 		cmderror(cb, "bad etheraddr");
+-	memmove(ctlr->edev->addr, ctlr->edev->ea, Eaddrlen);
++	if(memcmp(ctlr->edev->ea, nullea, Eaddrlen) == 0)
++		memmove(ctlr->edev->ea, ea, Eaddrlen);
++	else if(memcmp(ctlr->edev->ea, ea, Eaddrlen) != 0)
++		cmderror(cb, "wrong ether address");
++	memmove(ctlr->edev->addr, ea, Eaddrlen);
+ 	print("\netherusb %s: %E\n", udev->name, ctlr->edev->addr);
+ 	ctlr->buf = buf;
+ 	ctlr->inchan = inchan;
+@@ -397,6 +403,12 @@ etherusbctl(Ether* edev, void* buf, long
+ }
+ 
+ static void
++etherusbmulticast(void*, uchar*, int)
++{
++	/* nothing to do, we allow all multicast packets in */
++}
++
++static void
+ etherusbattach(Ether* edev)
+ {
+ 	Ctlr *ctlr;
+@@ -428,7 +440,7 @@ etherusbpnp(Ether* edev)
+ 	/* TODO: promiscuous, multicast (for ipv6), shutdown (for reboot) */
+ //	edev->promiscuous = etherusbpromiscuous;
+ //	edev->shutdown = etherusbshutdown;
+-//	edev->multicast = etherusbmulticast;
++	edev->multicast = etherusbmulticast;
+ 
+ 	return 0;
+ }
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./fns.h ../bcm-latest/fns.h
+--- ./fns.h	2017-01-16 21:34:37.000000000 -0800
++++ ../bcm-latest/fns.h	2017-01-17 18:11:44.000000000 -0800
+@@ -11,18 +11,23 @@
+ #include "../port/portfns_network.h"
+ #include "../port/portfns_init.h"
+ 
++
++
+ Dirtab*	addarchfile(char*, int, long(*)(Chan*, void*, long, vlong), 
+ 	long(*)(Chan*, void*, long, vlong));
+ extern void archreboot(void);
+ extern void archreset(void);
+ extern void armtimerset(int);
++extern void cachedwb(void);
+ extern void cachedwbinv(void);
++extern void cachedinvse(void*, int);
+ extern void cachedwbse(void*, int);
+ extern void cachedwbinvse(void*, int);
+ extern void cacheiinv(void);
+ extern void cacheuwbinv(void);
+ extern uintptr cankaddr(uintptr pa);
+ extern int cas32(void*, u32int, u32int);
++extern int cas(ulong*, ulong, ulong);
+ extern void checkmmu(uintptr, uintptr);
+ extern void clockinit(void);
+ extern void clockshutdown(void);
+@@ -27,10 +32,16 @@ extern void checkmmu(uintptr, uintptr);
+ extern void clockinit(void);
+ extern void clockshutdown(void);
+ extern int cmpswap(long*, long, long);
++
+ //extern void coherence(void);
++extern void (*coherence)(void);
++extern void coherence1(void);
++
++extern u32int cpidget(void);
+ extern ulong cprd(int cp, int op1, int crn, int crm, int op2);
+ extern ulong cprdsc(int op1, int crn, int crm, int op2);
+ extern void cpuidprint(void);
++extern char *cputype2name(char *buf, int size);
+ extern void cpwr(int cp, int op1, int crn, int crm, int op2, ulong val);
+ extern void cpwrsc(int op1, int crn, int crm, int op2, ulong val);
+ 
+@@ -49,7 +61,10 @@ void  memorysummary(void);
+ // lib/latin1.c
+ long    latin1(Rune*, int);
+ 
++
++
+ #define cycles(ip) *(ip) = lcycles()
++extern uintptr dmaaddr(void *va);
+ extern void dmastart(int, int, int, void*, void*, int);
+ extern int dmawait(int);
+ extern int fbblank(int);
+@@ -62,34 +77,54 @@ extern void fpsave(ArchFPsave *);
+ extern ulong fpsavereg(int fpreg, uvlong *fpp);
+ extern void fpwr(int fpreg, ulong val);
+ extern u32int fsrget(void);
++extern uint getboardrev(void);
+ extern ulong getclkrate(int);
+ extern char* getconf(char*);
++extern uint getcputemp(void);
+ extern char *getethermac(void);
+ extern uint getfirmware(void);
++extern int getncpus(void);
+ extern int getpower(int);
+ extern void getramsize(Confmem*);
++extern void gpiosel(uint, int);
++extern void gpiopullup(uint);
++extern void gpiopulloff(uint);
++extern void gpiopulldown(uint);
++extern void i2cread(uint, void*, int);
++extern void i2cwrite(uint, void*, int);
+ extern u32int ifsrget(void);
+ extern void irqenable(int, void (*)(Ureg*, void*), void*);
+ #define intrenable(i, f, a, b, n) irqenable((i), (f), (a))
++extern void intrcpushutdown(void);
++extern void intrshutdown(void);
+ extern void intrsoff(void);
+ extern int isaconfig(char*, int, ISAConf*);
++extern int l2ap(int);
++extern void l2cacheuwbinv(void);
+ extern void links(void);
+-extern void mmuinit(void);
+-extern void mmuinit1(void);
++extern void mmuinit(void*);
++extern void mmuinit1(void*);
+ extern void mmuinvalidate(void);
+ extern void mmuinvalidateaddr(u32int);
+ extern uintptr mmukmap(uintptr, uintptr, usize);
+ extern void okay(int);
++//extern void procrestore(Proc *);
++//extern void procsave(Proc*);
++//extern void procsetup(Proc*);
+ extern void screeninit(void);
+ #define sdfree(p) free(p)
+-#define sdmalloc(n)	mallocalign(n, CACHELINESZ, 0, 0)
++#define sdmalloc(n)	mallocalign(n, BLOCKALIGN, 0, 0)
++extern void setclkrate(int, ulong);
+ extern void setpower(int, int);
+ extern void setr13(int, u32int*);
++extern void spirw(uint, void*, int);
+ extern int splfhi(void);
+ extern int splflo(void);
+ extern void swcursorinit(void);
+ extern void syscallfmt(int syscallno, ulong pc, va_list list);
+ extern void sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop);
++extern int startcpus(uint);
++extern void stopcpu(uint);
+ extern int tas(void *);
+ extern void touser(uintptr);
+ extern void trapinit(void);
+@@ -113,20 +148,29 @@ extern void fpusysprocsetup(Proc*);
+ extern void fpusysrfork(Ureg*);
+ extern void fpusysrforkchild(Proc*, Ureg*, Proc*);
+ extern int fpuemu(Ureg*);
+-
+-
++/*
++ * Miscellaneous machine dependent stuff.
++ */
++extern char* getenv(char*, char*, int);
++uintptr mmukmap(uintptr, uintptr, usize);
++uintptr mmukunmap(uintptr, uintptr, usize);
++extern void* mmuuncache(void*, usize);
++extern void* ucalloc(usize);
++extern Block* ucallocb(int);
++extern void* ucallocalign(usize size, int align, int span);
++extern void ucfree(void*);
++extern void ucfreeb(Block*);
+ /*
+  * Things called from port.
+  */
+ extern void delay(int);				/* only scheddump() */
+ extern int islo(void);
+ extern void microdelay(int);			/* only edf.c */
+-
+-extern void validalign(uintptr, unsigned);
+-
++extern void idlehands(void);
+ extern void setkernur(Ureg*, Proc*);		/* only devproc.c */
+ extern void* sysexecregs(uintptr, ulong, int);
+ extern void sysprocsetup(Proc*);
++extern void validalign(uintptr, unsigned);
+ 
+ extern void kexit(Ureg*);
+ 
+@@ -137,11 +181,9 @@ extern void kexit(Ureg*);
+ #define PTR2UINT(p)	((uintptr)(p))
+ #define UINT2PTR(i)	((void*)(i))
+ 
++//#define	waserror()	(up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
+ 
+ #define KADDR(pa)	UINT2PTR(KZERO    | ((uintptr)(pa) & ~KSEGM))
+ #define PADDR(va)	PTR2UINT(PHYSDRAM | ((uintptr)(va) & ~KSEGM))
+ 
+-#define DMAADDR(va)	PTR2UINT(BUSDRAM  | ((uintptr)(va) & ~KSEGM))
+-#define DMAIO(va)	PTR2UINT(BUSIO    | ((uintptr)(va) & ~VIRTIO))
+-
+ #define MASK(v)	((1UL << (v)) - 1)	/* mask `v' bits wide */
+Only in ../bcm-latest/: i2c.c
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./io.h ../bcm-latest/io.h
+--- ./io.h	2015-10-17 09:32:22.000000000 -0700
++++ ../bcm-latest/io.h	2015-04-02 11:03:28.000000000 -0700
+@@ -8,11 +8,17 @@ enum {
+ 	IRQdma0		= 16,
+ #define IRQDMA(chan)	(IRQdma0+(chan))
+ 	IRQaux		= 29,
++	IRQi2c		= 53,
++	IRQspi		= 54,
+ 	IRQmmc		= 62,
+ 
+ 	IRQbasic	= 64,
+ 	IRQtimerArm	= IRQbasic + 0,
+ 
++	IRQlocal	= 96,
++	IRQcntps	= IRQlocal + 0,
++	IRQcntpns	= IRQlocal + 1,
++
+ 	IRQfiq		= IRQusb,	/* only one source can be FIQ */
+ 
+ 	DmaD2M		= 0,		/* device to memory */
+@@ -20,6 +26,11 @@ enum {
+ 	DmaM2M		= 2,		/* memory to memory */
+ 
+ 	DmaChanEmmc	= 4,		/* can only use 2-5, maybe 0 */
++	DmaChanSpiTx= 2,
++	DmaChanSpiRx= 0,
++
++	DmaDevSpiTx	= 6,
++	DmaDevSpiRx	= 7,
+ 	DmaDevEmmc	= 11,
+ 
+ 	PowerSd		= 0,
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./kbd.c ../bcm-latest/kbd.c
+--- ./kbd.c	2017-01-16 21:37:25.000000000 -0800
++++ ../bcm-latest/kbd.c	2017-01-17 19:17:28.000000000 -0800
+@@ -195,9 +195,10 @@ int mouseshifted;
+ void (*kbdmouse)(int);
+ 
+ // now in main.c
+-//bool kdebug;
++//static int kdebug;
+ extern bool kdebug;
+ 
++
+ typedef struct Kbscan Kbscan;
+ struct Kbscan {
+ 	int	esc1;
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./l.s ../bcm-latest/l.s
+--- ./l.s	2017-01-10 23:10:26.000000000 -0800
++++ ../bcm-latest/l.s	2017-01-17 18:06:32.000000000 -0800
+@@ -1,10 +1,14 @@
+ /*
+- * Broadcom bcm2835 SoC, as used in Raspberry Pi
+- * arm1176jzf-s processor (armv6)
++ * Common startup for armv6 and armv7
++ * The rest of l.s has been moved to armv[67].s
+  */
+ 
+ #include "arm.s"
+ 
++/*
++ * on bcm2836, only cpu0 starts here
++ * other cpus enter at cpureset in armv7.s
++ */
+ TEXT _start(SB), 1, $-4
+ 	/*
+ 	 * load physical base for SB addressing while mmu is off
+@@ -22,257 +26,14 @@ TEXT _start(SB), 1, $-4
+ 	MOVW	R1, CPSR
+ 
+ 	/*
+-	 * disable the mmu and L1 caches
+-	 * invalidate caches and tlb
+-	 */
+-	MRC	CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+-	BIC	$(CpCdcache|CpCicache|CpCpredict|CpCmmu), R1
+-	MCR	CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvu), CpCACHEall
+-	MCR	CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+-	ISB
+-
+-	/*
+-	 * clear mach and page tables
+-	 */
+-	MOVW	$PADDR(CPUADDR), R1
+-	MOVW	$PADDR(KTZERO), R2
+-_ramZ:
+-	MOVW	R0, (R1)
+-	ADD	$4, R1
+-	CMP	R1, R2
+-	BNE	_ramZ
+-
+-	/*
+ 	 * start stack at top of mach (physical addr)
+-	 * set up page tables for kernel
+ 	 */
+ 	MOVW	$PADDR(CPUADDR+CPUSIZE-4), R13
+-	BL	,mmuinit(SB)
+-
+-	/*
+-	 * set up domain access control and page table base
+-	 */
+-	MOVW	$Client, R1
+-	MCR	CpSC, 0, R1, C(CpDAC), C(0)
+-	MOVW	$PADDR(L1), R1
+-	MCR	CpSC, 0, R1, C(CpTTB), C(0)
+-
+-	/*
+-	 * enable caches, mmu, and high vectors
+-	 */
+-	MRC	CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
+-	ORR	$(CpChv|CpCdcache|CpCicache|CpCmmu), R0
+-	MCR	CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
+-	ISB
+ 
+ 	/*
+-	 * switch SB, SP, and PC into KZERO space
++	 * do arch-dependent startup (no return)
+ 	 */
+-	MOVW	$setR12(SB), R12
+-	MOVW	$(CPUADDR+CPUSIZE-4), R13
+-	MOVW	$_startpg(SB), R15
+-
+-TEXT _startpg(SB), 1, $-4
+-
+-	/*
+-	 * enable cycle counter
+-	 */
+-	MOVW	$1, R1
+-	MCR	CpSC, 0, R1, C(CpSPM), C(CpSPMperf), CpSPMctl
+-
+-	/*
+-	 * call main and loop forever if it returns
+-	 */
+-	BL	,main(SB)
++	BL	,armstart(SB)
+ 	B	,0(PC)
+ 
+-	BL	_div(SB)		/* hack to load _div, etc. */
+-
+-TEXT fsrget(SB), 1, $-4				/* data fault status */
+-	MRC	CpSC, 0, R0, C(CpFSR), C(0), CpFSRdata
+-	RET
+-
+-TEXT ifsrget(SB), 1, $-4			/* instruction fault status */
+-	MRC	CpSC, 0, R0, C(CpFSR), C(0), CpFSRinst
+-	RET
+-
+-TEXT farget(SB), 1, $-4				/* fault address */
+-	MRC	CpSC, 0, R0, C(CpFAR), C(0x0)
+-	RET
+-
+-TEXT lcycles(SB), 1, $-4
+-	MRC	CpSC, 0, R0, C(CpSPM), C(CpSPMperf), CpSPMcyc
+-	RET
+-
+-
+-        
+-TEXT splhi(SB), 1, $-4
+-	MOVW	$(CPUADDR+4), R2		/* save caller pc in Mach */
+-	MOVW	R14, 0(R2)
+-
+-	MOVW	CPSR, R0			/* turn off irqs (but not fiqs) */
+-	ORR	$(PsrDirq), R0, R1
+-	MOVW	R1, CPSR
+-	RET
+-
+-TEXT splfhi(SB), 1, $-4
+-	MOVW	$(CPUADDR+4), R2		/* save caller pc in Mach */
+-	MOVW	R14, 0(R2)
+-
+-	MOVW	CPSR, R0			/* turn off irqs and fiqs */
+-	ORR	$(PsrDirq|PsrDfiq), R0, R1
+-	MOVW	R1, CPSR
+-	RET
+-
+-TEXT splflo(SB), 1, $-4
+-	MOVW	CPSR, R0			/* turn on fiqs */
+-	BIC	$(PsrDfiq), R0, R1
+-	MOVW	R1, CPSR
+-	RET
+-
+-TEXT spllo(SB), 1, $-4
+-	MOVW	CPSR, R0			/* turn on irqs and fiqs */
+-	BIC	$(PsrDirq|PsrDfiq), R0, R1
+-	MOVW	R1, CPSR
+-	RET
+-
+-TEXT splx(SB), 1, $-4
+-	MOVW	$(CPUADDR+0x04), R2		/* save caller pc in Mach */
+-	MOVW	R14, 0(R2)
+-
+-	MOVW	R0, R1				/* reset interrupt level */
+-	MOVW	CPSR, R0
+-	MOVW	R1, CPSR
+-	RET
+-
+-TEXT spldone(SB), 1, $0				/* end marker for devkprof.c */
+-	RET
+-
+-TEXT islo(SB), 1, $-4
+-	MOVW	CPSR, R0
+-	AND	$(PsrDirq), R0
+-	EOR	$(PsrDirq), R0
+-	RET
+-
+-
+-        
+-TEXT	tas(SB), $-4
+-TEXT	_tas(SB), $-4
+-	MOVW	R0,R1
+-	MOVW	$1,R0
+-	SWPW	R0,(R1)			/* fix: deprecated in armv6 */
+-	RET
+-
+-TEXT setlabel(SB), 1, $-4
+-	MOVW	R13, 0(R0)		/* sp */
+-	MOVW	R14, 4(R0)		/* pc */
+-	MOVW	$0, R0
+-	RET
+-
+-TEXT gotolabel(SB), 1, $-4
+-	MOVW	0(R0), R13		/* sp */
+-	MOVW	4(R0), R14		/* pc */
+-	MOVW	$1, R0
+-	RET
+-
+-TEXT getcallerpc(SB), 1, $-4
+-	MOVW	0(R13), R0
+-	RET
+-
+-TEXT idlehands(SB), $-4
+-	BARRIERS
+-	MOVW	CPSR, R3
+-	BIC	$(PsrDirq|PsrDfiq), R3, R1		/* spllo */
+-	MOVW	R1, CPSR
+-
+-	MOVW	$0, R0				/* wait for interrupt */
+-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEintr), CpCACHEwait
+-	ISB
+-
+-	MOVW	R3, CPSR			/* splx */
+-	RET
+-
+-
+-TEXT coherence1(SB), $-4
+-	BARRIERS
+-	RET
+-
+-/*
+- * invalidate tlb
+- */
+-TEXT mmuinvalidate(SB), 1, $-4
+-	MOVW	$0, R0
+-	MCR	CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+-	BARRIERS
+-	RET
+-
+-/*
+- * mmuinvalidateaddr(va)
+- *   invalidate tlb entry for virtual page address va, ASID 0
+- */
+-TEXT mmuinvalidateaddr(SB), 1, $-4
+-	MCR	CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinvse
+-	BARRIERS
+-	RET
+-
+-/*
+- * drain write buffer
+- * writeback and invalidate data cache
+- */
+-TEXT cachedwbinv(SB), 1, $-4
+-	DSB
+-	MOVW	$0, R0
+-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEwbi), CpCACHEall
+-	RET
+-
+-/*
+- * cachedwbinvse(va, n)
+- *   drain write buffer
+- *   writeback and invalidate data cache range [va, va+n)
+- */
+-TEXT cachedwbinvse(SB), 1, $-4
+-	MOVW	R0, R1		/* DSB clears R0 */
+-	DSB
+-	MOVW	n+4(FP), R2
+-	ADD	R1, R2
+-	SUB	$1, R2
+-	BIC	$(CACHELINESZ-1), R1
+-	BIC	$(CACHELINESZ-1), R2
+-	MCRR(CpSC, 0, 2, 1, CpCACHERANGEdwbi)
+-	RET
+-
+-/*
+- * cachedwbse(va, n)
+- *   drain write buffer
+- *   writeback data cache range [va, va+n)
+- */
+-TEXT cachedwbse(SB), 1, $-4
+-	MOVW	R0, R1		/* DSB clears R0 */
+-	DSB
+-	MOVW	n+4(FP), R2
+-	ADD	R1, R2
+-	BIC	$(CACHELINESZ-1), R1
+-	BIC	$(CACHELINESZ-1), R2
+-	MCRR(CpSC, 0, 2, 1, CpCACHERANGEdwb)
+-	RET
+-
+-/*
+- * drain write buffer and prefetch buffer
+- * writeback and invalidate data cache
+- * invalidate instruction cache
+- */
+-TEXT cacheuwbinv(SB), 1, $-4
+-	BARRIERS
+-	MOVW	$0, R0
+-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEwbi), CpCACHEall
+-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
+-	RET
+-
+-/*
+- * invalidate instruction cache
+- */
+-TEXT cacheiinv(SB), 1, $-4
+-	MOVW	$0, R0
+-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
+ 	RET
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./lexception.s ../bcm-latest/lexception.s
+--- ./lexception.s	2017-01-10 15:53:36.000000000 -0800
++++ ../bcm-latest/lexception.s	2017-01-17 18:51:02.000000000 -0800
+@@ -27,6 +27,7 @@ TEXT vtable(SB), 1, $-4
+ 	WORD	$_vfiq(SB)		/* FIQ, switch to svc mode */
+ 
+ TEXT _vsvc(SB), 1, $-4			/* SWI */
++	CLREX
+ 	MOVW.W	R14, -4(R13)		/* ureg->pc = interrupted PC */
+ 	MOVW	SPSR, R14		/* ureg->psr = SPSR */
+ 	MOVW.W	R14, -4(R13)		/* ... */
+@@ -39,9 +40,16 @@ TEXT _vsvc(SB), 1, $-4			/* SWI */
+ 
+ 	MOVW	$setR12(SB), R12	/* Make sure we've got the kernel's SB loaded */
+ 
+-//	MOVW	$(KSEG0+16*KiB-CPUSIZE), R10	/* m */
+-	MOVW	$(CPUADDR), R10	/* m */
+-	MOVW	8(R10), R9		/* up */
++	/* get R(MACH) for this cpu */
++	CPUID(R1)
++	SLL	$2, R1			/* convert to word index */
++	MOVW	$cpus(SB), R2
++	ADD	R1, R2
++	MOVW	(R2), R(MACH)		/* m = cpus[cpuid] */
++	CMP	$0, R(MACH)
++	MOVW.EQ	$CPUADDR, R0		/* paranoia: use CPUADDR if 0 */
++
++	MOVW	8(R(MACH)), R(USER)		/* up */
+ 
+ 	MOVW	R13, R0			/* first arg is pointer to ureg */
+ 	SUB	$8, R13			/* space for argument+link */
+@@ -81,6 +89,7 @@ TEXT _virq(SB), 1, $-4			/* IRQ */
+ 	 *  we'll switch to SVC mode and then call trap.
+ 	 */
+ _vswitch:
++	CLREX
+ 	MOVW	SPSR, R1		/* save SPSR for ureg */
+ 	MOVW	R14, R2			/* save interrupted pc for ureg */
+ 	MOVW	R13, R3			/* save pointer to where the original [R0-R4] are */
+@@ -119,7 +128,16 @@ _vswitch:
+ 
+ 	BL	trap(SB)
+ 
++	MOVW	$setR12(SB), R12	/* reload kernel's SB (ORLY?) */
+ 	ADD	$(4*2+4*15), R13	/* make r13 point to ureg->type */
++	/*
++	 * if we interrupted a previous trap's handler and are now
++	 * returning to it, we need to propagate the current R(MACH) (R10)
++	 * by overriding the saved one on the stack, since we may have
++	 * been rescheduled and be on a different processor now than
++	 * at entry.
++	 */
++	MOVW	R(MACH), (-(15-MACH)*4)(R13) /* restore current cpu's MACH */
+ 	MOVW	8(R13), R14		/* restore link */
+ 	MOVW	4(R13), R0		/* restore SPSR */
+ 	MOVW	R0, SPSR		/* ... */
+@@ -140,9 +158,16 @@ _userexcep:
+ 
+ 	MOVW	$setR12(SB), R12	/* Make sure we've got the kernel's SB loaded */
+ 
+-//	MOVW	$(KSEG0+16*KiB-CPUSIZE), R10	/* m */
+-	MOVW	$(CPUADDR), R10	/* m */
+-	MOVW	8(R10), R9		/* up */
++	/* get R(MACH) for this cpu */
++	CPUID(R1)
++	SLL	$2, R1			/* convert to word index */
++	MOVW	$cpus(SB), R2
++	ADD	R1, R2
++	MOVW	(R2), R(MACH)		/* m = cpus[cpuid] */
++	CMP	$0, R(MACH)
++	MOVW.EQ	$CPUADDR, R(MACH)		/* paranoia: use CPUADDR if 0 */
++
++	MOVW	8(R(MACH)), R(USER)		/* up */
+ 
+ 	MOVW	R13, R0			/* first arg is pointer to ureg */
+ 	SUB	$(4*2), R13		/* space for argument+link (for debugger) */
+@@ -158,14 +183,24 @@ _userexcep:
+ 	RFE				/* MOVM.IA.S.W (R13), [R15] */
+ 
+ TEXT _vfiq(SB), 1, $-4			/* FIQ */
++	CLREX
+ 	MOVW	$PsrMfiq, R8		/* trap type */
+ 	MOVW	SPSR, R9		/* interrupted psr */
+ 	MOVW	R14, R10		/* interrupted pc */
+ 	MOVM.DB.W [R8-R10], (R13)	/* save in ureg */
+-	MOVM.DB.W.S [R0-R14], (R13)	/* save interrupted regs */
++	MOVM.DB.S [R0-R14], (R13)	/* save interrupted regs */
++	SUB	$(15*4), R13
+ 	MOVW	$setR12(SB), R12	/* Make sure we've got the kernel's SB loaded */
+-	MOVW	$(CPUADDR), R10	/* m */
+-	MOVW	8(R10), R9		/* up */
++	/* get R(MACH) for this cpu */
++	CPUID(R1)
++	SLL	$2, R1			/* convert to word index */
++	MOVW	$cpus(SB), R2
++	ADD	R1, R2
++	MOVW	(R2), R(MACH)		/* m = cpus[cpuid] */
++	CMP	$0, R(MACH)
++	MOVW.EQ	$CPUADDR, R(MACH)		/* paranoia: use CPUADDR if 0 */
++
++	MOVW	8(R(MACH)), R(USER)		/* up */
+ 	MOVW	R13, R0			/* first arg is pointer to ureg */
+ 	SUB	$(4*2), R13		/* space for argument+link (for debugger) */
+ 
+@@ -187,6 +222,7 @@ TEXT setr13(SB), 1, $-4
+ 
+ 	MOVW	CPSR, R2
+ 	BIC	$PsrMask, R2, R3
++	ORR	$(PsrDirq|PsrDfiq), R3
+ 	ORR	R0, R3
+ 	MOVW	R3, CPSR		/* switch to new mode */
+ 
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./main.c ../bcm-latest/main.c
+--- ./main.c	2017-01-16 20:39:12.000000000 -0800
++++ ../bcm-latest/main.c	2017-01-17 19:18:23.000000000 -0800
+@@ -3,6 +3,7 @@
+ #include "../port/lib.h"
+ #include "mem.h"
+ #include "dat.h"
++#include "io.h"
+ #include "fns.h"
+ 
+ // initcode binary
+@@ -26,7 +27,7 @@ enum {
+  */
+ #define BOOTARGS	((char*)CONFADDR)
+ #define	BOOTARGSLEN	(CPUADDR-CONFADDR)
+-
++//#define	MAXCONF		64
+ #define MAXCONFLINE	160
+ 
+ // conf.c
+@@ -39,8 +40,11 @@ extern	char*	conffile;
+ extern void    coherence1(void);
+ 
+ 
++
+ uintptr kseg0 = KZERO;
+ 
++//Mach*	machaddr[MAXMACH];
++//Conf	conf;
+ ulong	memsize = 128*1024*1024;
+ 
+ /*
+@@ -55,9 +59,9 @@ static int oargblen;
+ static uintptr sp;		/* XXX - must go - user stack of init proc */
+ 
+ /* store plan9.ini contents here at least until we stash them in #ec */
+-//TODO: now in portdat.h
+ //static char confname[MAXCONF][KNAMELEN];
+ //static char confval[MAXCONF][MAXCONFLINE];
++//static int nconf;
+ 
+ typedef struct Atag Atag;
+ struct Atag {
+@@ -96,11 +100,12 @@ findconf(char *name)
+ char*
+ getconf(char *name)
+ {
+-	int i;
+-
+-//	i = findconf(name);
+-//	if(i >= 0)
+-//		return confval[i];
++    USED(name);
++	//int i;
++	// 
++	//i = findconf(name);
++	//if(i >= 0)
++	//	return confval[i];
+ 	return nil;
+ }
+ 
+@@ -204,23 +209,96 @@ ataginit(Atag *a)
+ 	}
+ }
+ 
++/* enable scheduling of this cpu */
++void
++machon(uint xcpu)
++{
++	ulong cpubit;
++
++	cpubit = 1 << xcpu;
++	lock(&active);
++	if ((active.cpus & cpubit) == 0) {	/* currently off? */
++		conf.ncpu++;
++		active.cpus |= cpubit;
++	}
++	unlock(&active);
++}
++
++/* disable scheduling of this cpu */
++void
++machoff(uint xcpu)
++{
++	ulong cpubit;
++
++	cpubit = 1 << xcpu;
++	lock(&active);
++	if (active.cpus & cpubit) {		/* currently on? */
++		conf.ncpu--;
++		active.cpus &= ~cpubit;
++	}
++	unlock(&active);
++}
++
+ void
+ machinit(void)
+ {
+-	cpu->cpuno = 0;
+-	cpus[cpu->cpuno] = cpu;
++	Cpu *m0;
+ 
+ 	cpu->ticks = 1;
+ 	cpu->perf.period = 1;
++	m0 = CPUS(0);
++	if (cpu->cpuno != 0) {
++		/* synchronise with cpu 0 */
++		cpu->ticks = m0->ticks;
++		cpu->fastclock = m0->fastclock;
++		cpu->delayloop = m0->delayloop;
++	}
++
++	//machon(m->cpuno);
++}
+ 
+-	conf.ncpu = 1;
++void
++mach0init(void)
++{
++	conf.ncpu = 0;
+ 
+-	active.cpus = 1;
++	cpu->cpuno = 0;
++	cpus[cpu->cpuno] = cpu;
++
++	machinit();
+ 	active.exiting = 0;
+ 
+ 	up = nil;
+ }
+ 
++void
++launchinit(int ncpus)
++{
++	int mach;
++	Cpu *mm;
++	PTE *l1;
++
++	if(ncpus > MAXCPUS)
++		ncpus = MAXCPUS;
++	for(mach = 1; mach < ncpus; mach++){
++		cpus[mach] = mm = mallocalign(CPUSIZE, CPUSIZE, 0, 0);
++		l1 = mallocalign(L1SIZE, L1SIZE, 0, 0);
++		if(mm == nil || l1 == nil)
++			panic("launchinit");
++		memset(mm, 0, CPUSIZE);
++		mm->cpuno = mach;
++
++		memmove(l1, cpu->mmul1, L1SIZE);  /* clone cpu0's l1 table */
++		cachedwbse(l1, L1SIZE);
++		mm->mmul1 = l1;
++		cachedwbse(mm, CPUSIZE);
++
++	}
++	cachedwbse(cpus, sizeof cpus);
++	if((mach = startcpus(ncpus)) < ncpus)
++			panic("only %d cpu%s started", mach, mach == 1? "" : "s");
++}
++
+ static void
+ optionsinit(char* s)
+ {
+@@ -235,18 +313,17 @@ void
+ main(void)
+ {
+ 	extern char edata[], end[];
+-	uint rev;
++	uint fw, board;
+     
+     iprint = devcons_iprint;
+-    //hook_ioalloc = devarch_hook_ioalloc;
+     devtab = conf_devtab;
+     coherence = coherence1;
+ 
+-	okay(1);
+ 	cpu = (Cpu*)CPUADDR;
+ 	memset(edata, 0, end - edata);	/* clear bss */
+-	machinit();
+-	mmuinit1();
++	mach0init();
++	mmuinit1((void*)L1);
++	machon(0);
+ 
+ 	//optionsinit("/boot/boot boot");
+ 	quotefmtinstall();
+@@ -258,22 +335,23 @@ main(void)
+ 	screeninit();
+ 
+ 	print("\nPlan 9 from Bell Labs\n");
+-	rev = getfirmware();
+-	print("firmware: rev %d\n", rev);
+-	if(rev < Minfirmrev){
++	board = getboardrev();
++	fw = getfirmware();
++	print("board rev: %#ux firmware rev: %d\n", board, fw);
++	if(fw < Minfirmrev){
+ 		print("Sorry, firmware (start*.elf) must be at least rev %d"
+ 		      " or newer than %s\n", Minfirmrev, Minfirmdate);
+ 		for(;;)
+ 			;
+ 	}
+-
++	/* set clock rate to arm_freq from config.txt (default pi1:700Mhz pi2:900MHz) */
++	setclkrate(ClkArm, 0);
+ 	trapinit();
+ 	clockinit();
+ 	lineqinit();
+ 	timersinit();
+-
++	//if(conf.monitor)
+ 		swcursorinit();
+-
+ 	cpuidprint();
+ 	archreset();
+ 
+@@ -279,14 +357,13 @@ main(void)
+ 
+ 	procinit();
+ 	imageinit();
+-
+ 	links();
+ 	chandevreset();			/* most devices are discovered here */
+-
+ 	pageinit();
+ 	swapinit();
+-
+ 	userinit();
++	launchinit(getncpus());
++
+ 	schedinit();
+ 	assert(0);			/* shouldn't have returned */
+ }
+@@ -415,7 +492,7 @@ userinit(void)
+ 	 * shouldn't be the case here.
+ 	 */
+ 	s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
+-	s->flushme = true;
++	s->flushme++;
+ 	p->seg[SSEG] = s;
+ 	pg = newpage(1, 0, USTKTOP-BY2PG);
+ 	segpage(s, pg);
+@@ -484,9 +561,6 @@ confinit(void)
+ 	conf.upages = (conf.npage*80)/100;
+ 	conf.ialloc = ((conf.npage-conf.upages)/2)*BY2PG;
+ 
+-	/* only one processor */
+-	conf.ncpu = 1;
+-
+ 	/* set up other configuration parameters */
+ 	conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
+ 	if(cpuserver)
+@@ -497,7 +571,7 @@ confinit(void)
+ 	conf.nswppo = 4096;
+ 	conf.nimage = 200;
+ 
+-	conf.copymode = 0;		/* copy on write */
++	conf.copymode = 1;		/* copy on reference, not copy on write */
+ 
+ 	/*
+ 	 * Guess how much is taken by the large permanent
+@@ -545,7 +619,7 @@ shutdown(int ispanic)
+ 		if(active.cpus == 0 && consactive() == 0)
+ 			break;
+ 	}
+-	delay(1000);
++	delay(100*cpu->cpuno);
+ }
+ 
+ /*
+@@ -554,9 +628,20 @@ shutdown(int ispanic)
+ void
+ exit(int code)
+ {
++	void (*f)(ulong, ulong, ulong);
++
+ 	shutdown(code);
+ 	splfhi();
++	if(cpu->cpuno == 0)
+ 	archreboot();
++	else{
++		f = (void*)REBOOTADDR;
++		intrcpushutdown();
++		cacheuwbinv();
++		l2cacheuwbinv();
++		(*f)(0, 0, 0);
++		for(;;){}
++	}
+ }
+ 
+ /*
+@@ -565,9 +650,23 @@ exit(int code)
+ int
+ isaconfig(char *class, int ctlrno, ISAConf *isa)
+ {
+-	USED(ctlrno);
+-	USED(isa);
+-	return strcmp(class, "ether") == 0;
++	char cc[32], *p;
++	int i;
++
++	if(strcmp(class, "ether") != 0)
++		return 0;
++	snprint(cc, sizeof cc, "%s%d", class, ctlrno);
++	p = getconf(cc);
++	if(p == nil)
++		return (ctlrno == 0);
++	isa->type = "";
++	isa->nopt = tokenize(p, isa->opt, NISAOPT);
++	for(i = 0; i < isa->nopt; i++){
++		p = isa->opt[i];
++		if(cistrncmp(p, "type=", 5) == 0)
++			isa->type = p + 5;
++	}
++	return 1;
+ }
+ 
+ /*
+@@ -579,14 +678,32 @@ reboot(void *entry, void *code, ulong si
+ {
+ 	void (*f)(ulong, ulong, ulong);
+ 
+-	print("starting reboot...");
+ 	writeconf();
++
++	/*
++	 * the boot processor is cpu0.  execute this function on it
++	 * so that the new kernel has the same cpu0.
++	 */
++	if (cpu->cpuno != 0) {
++		procwired(up, 0);
++		sched();
++	}
++	if (cpu->cpuno != 0)
++		print("on cpu%d (not 0)!\n", cpu->cpuno);
++
++	/* setup reboot trampoline function */
++	f = (void*)REBOOTADDR;
++	memmove(f, rebootcode, sizeof(rebootcode));
++	cachedwbse(f, sizeof(rebootcode));
++
+ 	shutdown(0);
+ 
+ 	/*
+ 	 * should be the only processor running now
+ 	 */
+ 
++	delay(5000);
++	print("active.machs = %x\n", active.cpus);
+ 	print("reboot entry %#lux code %#lux size %ld\n",
+ 		PADDR(entry), PADDR(code), size);
+ 	delay(100);
+@@ -597,20 +714,20 @@ reboot(void *entry, void *code, ulong si
+ 	screenputs = nil;
+ 
+ 	/* shutdown devices */
++	if(!waserror()){
+ 	chandevshutdown();
++		poperror();
++	}
+ 
+ 	/* stop the clock (and watchdog if any) */
+ 	clockshutdown();
+ 
+ 	splfhi();
+-	intrsoff();
+-
+-	/* setup reboot trampoline function */
+-	f = (void*)REBOOTADDR;
+-	memmove(f, rebootcode, sizeof(rebootcode));
+-	cacheuwbinv();
++	intrshutdown();
+ 
+ 	/* off we go - never to return */
++	cacheuwbinv();
++	l2cacheuwbinv();
+ 	(*f)(PADDR(entry), PADDR(code), size);
+ 
+ 	iprint("loaded kernel returned!\n");
+@@ -618,12 +735,6 @@ reboot(void *entry, void *code, ulong si
+ 	archreboot();
+ }
+ 
+-int
+-cmpswap(long *addr, long old, long new)
+-{
+-	return cas32(addr, old, new);
+-}
+-
+ // called from devcons.c
+ void
+ memorysummary(void) {
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./mem.h ../bcm-latest/mem.h
+--- ./mem.h	2017-01-12 11:31:55.000000000 -0800
++++ ../bcm-latest/mem.h	2017-01-17 20:20:00.000000000 -0800
+@@ -11,13 +11,21 @@
+ #define	BY2PG		(4*KiB)			/* bytes per page */
+ #define	PGSHIFT		12			/* log(BY2PG) */
+ 
+-#define	MAXCPUS		1			/* max # cpus system can run */
++#define	MAXCPUS		4			/* max # cpus system can run */
+ #define	CPUSIZE	BY2PG
++#define L1SIZE		(4 * BY2PG)
+ 
+ #define KSTKSIZE	(8*KiB)
+ #define STACKALIGN(sp)	((sp) & ~3)		/* bug: assure with alloc */
+ 
+ /*
++ * Magic registers
++ */
++
++#define	USER		9		/* R9 is up-> */
++#define	MACH		10		/* R10 is m-> */
++
++/*
+  * Address spaces.
+  * KTZERO is used by kprof and dumpstack (if any).
+  *
+@@ -28,13 +36,11 @@
+  */
+ 
+ #define	KSEG0		0x80000000		/* kernel segment */
+-/* mask to check segment; good for 512MB dram */
+-#define	KSEGM		0xE0000000
++/* mask to check segment; good for 1GB dram */
++#define	KSEGM		0xC0000000
+ #define	KZERO		KSEG0			/* kernel address space */
+ #define CONFADDR	(KZERO+0x100)		/* unparsed plan9.ini */
+-
+-#define	CPUADDR	(KZERO+0x2000)		/* Cpu structure */
+-
++#define	CPUADDR	(KZERO+0x2000)		/* Mach structure */
+ #define	L2		    (KZERO+0x3000)		/* L2 ptes for vectors etc */
+ #define	VCBUFFER	(KZERO+0x3400)		/* videocore mailbox buffer */
+ #define	FIQSTKTOP	(KZERO+0x4000)		/* FIQ stack */
+@@ -39,10 +45,9 @@
+ #define	VCBUFFER	(KZERO+0x3400)		/* videocore mailbox buffer */
+ #define	FIQSTKTOP	(KZERO+0x4000)		/* FIQ stack */
+ #define	L1		    (KZERO+0x4000)		/* tt ptes: 16KiB aligned */
+-
+ #define	KTZERO		(KZERO+0x8000)		/* kernel text start */
+ #define VIRTIO		0x7E000000		/* i/o registers */
+-#define	FRAMEBUFFER	0xA0000000		/* video framebuffer */
++#define	FRAMEBUFFER	0xC0000000		/* video framebuffer */
+ 
+ #define	UZERO		0			/* user segment */
+ #define	UTZERO		(UZERO+BY2PG)		/* user text start */
+@@ -53,11 +58,13 @@
+ #define	TSTKSIZ	 	256
+ 
+ /* address at which to copy and execute rebootcode */
+-#define	REBOOTADDR	(KZERO+0x3400)
++#define	REBOOTADDR	(KZERO+0x1800)
+ 
+ /*
+  * Legacy...
+  */
++//old: was 64 in bcm-latest, but then get panic in _allocb
++// possible alternative fix: git show 2342e706e42d1e6653c51cc1433f44816cf53fe6
+ #define BLOCKALIGN	32			/* only used in allocb.c */
+ #define KSTACK		KSTKSIZE
+ 
+@@ -69,11 +76,8 @@
+ #define BY2WD		4
+ #define BY2V		8			/* only used in xalloc.c */
+ 
+-#define CACHELINESZ	32
+-
+ #define	PAGETABMAPMEM	(1024*1024)
+ #define	PAGETABSIZE	(PAGETABMAPMEM/BY2PG)
+-
+ #define	PAGEDIRSIZE	1984
+ #define	SMALLPAGEDIRSIZE	16
+ #define	PPN(x)		((x)&~(BY2PG-1))
+@@ -93,8 +97,4 @@
+  *	BUS  addresses as seen from the videocore gpu.
+  */
+ #define	PHYSDRAM	0
+-#define BUSDRAM		0x40000000
+-#define	DRAMSIZE	(512*MiB)
+-#define	PHYSIO		0x20000000
+-#define	BUSIO		0x7E000000
+ #define	IOSIZE		(16*MiB)
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./mmu.c ../bcm-latest/mmu.c
+--- ./mmu.c	2017-01-16 18:42:33.000000000 -0800
++++ ../bcm-latest/mmu.c	2017-01-17 18:27:00.000000000 -0800
+@@ -8,58 +8,67 @@
+ 
+ #define L1X(va)		FEXT((va), 20, 12)
+ #define L2X(va)		FEXT((va), 12, 8)
++#define L2AP(ap)	l2ap(ap)
++#define L1ptedramattrs	soc.l1ptedramattrs
++#define L2ptedramattrs	soc.l2ptedramattrs
+ 
+ enum {
+ 	L1lo		= UZERO/MiB,		/* L1X(UZERO)? */
+ 	L1hi		= (USTKTOP+MiB-1)/MiB,	/* L1X(USTKTOP+MiB-1)? */
+ };
+ 
++/*
++ * Set up initial PTEs for this cpu (called with mmu off)
++ */
+ void
+-mmuinit(void)
++mmuinit(void *a)
+ {
+ 	PTE *l1, *l2;
+ 	uintptr pa, va;
+ 
+-	l1 = (PTE*)PADDR(L1);
++	l1 = (PTE*)a;
+ 	l2 = (PTE*)PADDR(L2);
+ 
+ 	/*
+ 	 * map all of ram at KZERO
+ 	 */
+ 	va = KZERO;
+-	for(pa = PHYSDRAM; pa < PHYSDRAM+DRAMSIZE; pa += MiB){
+-		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section|Cached|Buffered;
++	for(pa = PHYSDRAM; pa < PHYSDRAM+soc.dramsize; pa += MiB){
++		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
+ 		va += MiB;
+ 	}
+ 
+ 	/*
+ 	 * identity map first MB of ram so mmu can be enabled
+ 	 */
+-	l1[L1X(PHYSDRAM)] = PHYSDRAM|Dom0|L1AP(Krw)|Section|Cached|Buffered;
++	l1[L1X(PHYSDRAM)] = PHYSDRAM|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
+ 
+ 	/*
+ 	 * map i/o registers 
+ 	 */
+ 	va = VIRTIO;
+-	for(pa = PHYSIO; pa < PHYSIO+IOSIZE; pa += MiB){
++	for(pa = soc.physio; pa < soc.physio+IOSIZE; pa += MiB){
+ 		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
+ 		va += MiB;
+ 	}
++	pa = soc.armlocal;
++	if(pa)
++		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
+ 
+ 	/*
+ 	 * double map exception vectors at top of virtual memory
+ 	 */
+ 	va = HVECTORS;
+ 	l1[L1X(va)] = (uintptr)l2|Dom0|Coarse;
+-	l2[L2X(va)] = PHYSDRAM|L2AP(Krw)|Small;
++	l2[L2X(va)] = PHYSDRAM|L2AP(Krw)|Small|L2ptedramattrs;
+ }
+ 
+ void
+-mmuinit1(void)
++mmuinit1(void *a)
+ {
+ 	PTE *l1;
+ 
+-	l1 = (PTE*)L1;
++	l1 = (PTE*)a;
+ 	cpu->mmul1 = l1;
+ 
+ 	/*
+@@ -67,7 +76,10 @@ mmuinit1(void)
+ 	 */
+ 	l1[L1X(PHYSDRAM)] = 0;
+ 	cachedwbse(&l1[L1X(PHYSDRAM)], sizeof(PTE));
+-	mmuinvalidate();
++
++	//cacheuwbinv();
++	//l2cacheuwbinv();
++	mmuinvalidateaddr(PHYSDRAM);
+ }
+ 
+ static void
+@@ -125,8 +137,10 @@ mmuswitch(Proc* proc)
+ 	Page *page;
+ 
+ 	/* do kprocs get here and if so, do they need to? */
++/*** "This is plausible, but wrong" - Charles Forsyth 1 Mar 2015
+ 	if(cpu->mmupid == proc->pid && !proc->newtlb)
+ 		return;
++***/
+ 	cpu->mmupid = proc->pid;
+ 
+ 	/* write back dirty and invalidate l1 caches */
+@@ -246,7 +260,7 @@ putmmu(uintptr va, uintptr pa, Page* pag
+ 	 */
+ 	x = Small;
+ 	if(!(pa & PTEUNCACHED))
+-		x |= Cached|Buffered;
++		x |= L2ptedramattrs;
+ 	if(pa & PTEWRITE)
+ 		x |= L2AP(Urw);
+ 	else
+@@ -263,15 +277,41 @@ putmmu(uintptr va, uintptr pa, Page* pag
+ 	 *  on this mmu because the virtual cache is set associative
+ 	 *  rather than direct mapped.
+ 	 */
+-	cachedwbinv();
+-	if(page->cachectl[0] == PG_TXTFLUSH){
++	if(page->cachectl[cpu->cpuno] == PG_TXTFLUSH){
+ 		/* pio() sets PG_TXTFLUSH whenever a text pg has been written */
+ 		cacheiinv();
+-		page->cachectl[0] = PG_NOFLUSH;
++		page->cachectl[cpu->cpuno] = PG_NOFLUSH;
+ 	}
+ 	checkmmu(va, PPN(pa));
+ }
+ 
++void*
++mmuuncache(void* v, usize size)
++{
++	int x;
++	PTE *pte;
++	uintptr va;
++
++	/*
++	 * Simple helper for ucalloc().
++	 * Uncache a Section, must already be
++	 * valid in the MMU.
++	 */
++	va = PTR2UINT(v);
++	assert(!(va & (1*MiB-1)) && size == 1*MiB);
++
++	x = L1X(va);
++	pte = &cpu->mmul1[x];
++	if((*pte & (Fine|Section|Coarse)) != Section)
++		return nil;
++	*pte &= ~L1ptedramattrs;
++	*pte |= L1sharable;
++	mmuinvalidateaddr(va);
++	cachedwbinvse(pte, 4);
++
++	return v;
++}
++
+ /*
+  * Return the number of bytes that can be accessed via KADDR(pa).
+  * If pa is not a valid argument to KADDR, return 0.
+@@ -304,7 +344,7 @@ mmukmap(uintptr va, uintptr pa, usize si
+ 		*pte++ = (pa+n)|Dom0|L1AP(Krw)|Section;
+ 		mmuinvalidateaddr(va+n);
+ 	}
+-	cachedwbse(pte0, pte - pte0);
++	cachedwbse(pte0, (uintptr)pte - (uintptr)pte0);
+ 	return va + o;
+ }
+ 
+@@ -316,3 +356,8 @@ checkmmu(uintptr va, uintptr pa)
+ 	USED(pa);
+ }
+ 
++void
++kunmap(KMap *k)
++{
++	cachedwbinvse(k, BY2PG);
++}
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./mouse.c ../bcm-latest/mouse.c
+--- ./mouse.c	2017-01-17 19:21:51.000000000 -0800
++++ ../bcm-latest/mouse.c	2017-01-17 18:48:21.000000000 -0800
+@@ -195,7 +194,6 @@ resetmouse(void)
+ 	packetsize = 3;
+ }
+ 
+-// for screen.h
+ void
+ kmousectl(Cmdbuf *cb)
+ {
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./pad.txt ../bcm-latest/pad.txt
+--- ./pad.txt	2017-01-16 12:43:02.000000000 -0800
++++ ../bcm-latest/pad.txt	2017-01-11 16:14:11.000000000 -0800
+@@ -1,65 +1 @@
+--*- org -*-
+-from thread about how to build ourself a pi image:
+-http://marc.info/?t=139271907600004&r=1&w=2
+-
+-latest kernel source of miller:
+- http://9p.io/magic/webls?dir=/sources/contrib/miller/9/bcm
+-
+-* first
+-
+-The 9pi image is very standard Plan 9.  Libraries, command binaries
+-and kernel are all built from distribution sources with
+-  cd /sys/src && mk install
+-  cd /sys/src/9/bcm && mk install
+-For the first, you need to link with the '-f' flag to get hardware
+-floating point.  That could be done by editing mkfiles, but since I
+-build for other arm systems from the same sources, I do it by setting
+-up aliases in my shell environment before running mk -
+-  fn 5l { /$cputype/bin/5l -f $* }
+-  fn pcc { /$cputype/bin/pcc -f $* }
+-
+-The rest of the image is the same as the standard distribution for any
+-architecture, with x86 binaries and libraries removed, and these small
+-changes in config files to make an easier introduction for new users
+-running as 'glenda':
+-
+-1. The /rc/bin/termrc.local script will optionally start up networking
+-using the command defined in cmdline.txt variable ipconfig=
+-
+-2. The /usr/glenda/bin/rc/riostart script adds a console output window
+-to prevent console messages from messing up the rio desktop
+-
+-3. The /rc/bin/replica/pull script filters x86 binaries from the update
+-log, so the replica/pull command won't add them all in again
+-
+-* second
+-
+-OS porting is something of a black art.  I've been doing it for a while
+-(http://www.usenix.org/legacy/publications/library/proceedings/usenix98/invited_talks/miller.ps)
+-and it's not getting any easier.  Hardware vendors used to provide
+-meticulously accurate reference manuals describing device behaviour at a
+-register level, along with a programming manual explaining the sequence of
+-operations required for standard procedures like device initialisation and
+-error recovery.  Too often nowadays the best you'll get is a sketchy and
+-inaccurate datasheet, and at worst the datasheet will be a "trade secret"
+-and the only option is to reverse engineer many thousand lines of badly
+-written linux driver.
+-
+-For the Raspberry Pi port, excellent documentation was available at least
+-for the arm cpu.  Plan 9 kernels already existed for armv5 and armv7
+-architectures, so I was mostly able to interpolate between the two to
+-produce the low-level assembly parts of the kernel for the Pi's armv6.
+-Hardware floating support for the kernel had already been done at the Labs
+-for the teg2, and vfp code generation for the 5l linker was straightforward
+-to add, using arm manuals.
+-
+-The rest of the work was creating device drivers, some easily adapted from
+-other Plan 9 instances (eg uart and lcd display), some written from scratch
+-using Broadcom's BCM2835 datasheet (eg sd/mmc).  By far the hardest driver
+-was for the usb host adapter, which on the Pi is very non-standard and has
+-no officially available documentation.  I couldn't face the prospect of
+-digesting the linux driver (which is huge, unreadable, and at the time was
+-known not to work reliably).  Luckily a web search turned up datasheets
+-for some apparently very similar devices, which I was able to work from.
+-Even so, writing and debugging the usb driver accounted for most of the time
+-and effort of the whole project.
++src: http://9p.io/magic/webls?dir=/sources/contrib/miller/9/bcm
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./pi ../bcm-latest/pi
+--- ./pi	2017-01-17 11:46:31.000000000 -0800
++++ ../bcm-latest/pi	2017-01-17 18:03:02.000000000 -0800
+@@ -25,7 +25,7 @@ dev
+ 	mnt
+ 	srv
+ 
+-	fakertc
++#	fakertc
+ 
+ 	fs
+ 
+@@ -66,6 +66,7 @@ ip
+ 
+ 
+ misc
++	armv6
+ 	uartmini
+ 	sdmmc	emmc
+ 	dma
+Only in ../bcm-latest/: pi2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./rebootcode.s ../bcm-latest/rebootcode.s
+--- ./rebootcode.s	2015-10-17 09:32:22.000000000 -0700
++++ ../bcm-latest/rebootcode.s	2015-03-27 07:39:44.000000000 -0700
+@@ -1,8 +1,13 @@
+ /*
+- * armv6 reboot code
++ * armv6/armv7 reboot code
+  */
+ #include "arm.s"
+ 
++#define PTEDRAM		(Dom0|L1AP(Krw)|Section)
++
++#define WFI	WORD	$0xe320f003	/* wait for interrupt */
++#define WFE	WORD	$0xe320f002	/* wait for event */
++
+ /*
+  * Turn off MMU, then copy the new kernel to its correct location
+  * in physical memory.  Then jump to the start of the kernel.
+@@ -15,7 +20,7 @@ TEXT	main(SB), 1, $-4
+ 	/* copy in arguments before stack gets unmapped */
+ 	MOVW	R0, R8			/* entry point */
+ 	MOVW	p2+4(FP), R9		/* source */
+-	MOVW	n+8(FP), R10		/* byte count */
++	MOVW	n+8(FP), R6		/* byte count */
+ 
+ 	/* SVC mode, interrupts disabled */
+ 	MOVW	$(PsrDirq|PsrDfiq|PsrMsvc), R1
+@@ -29,6 +34,28 @@ TEXT	main(SB), 1, $-4
+ 	BIC	$CpCmmu, R1
+ 	MCR	CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+ 
++	/* continue with reboot only on cpu0 */
++	CPUID(R2)
++	BEQ	bootcpu
++
++	/* other cpus wait for inter processor interrupt from cpu0 */
++	/* turn icache back on */
++	MRC	CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
++	ORR	$(CpCicache), R1
++	MCR	CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
++	BARRIERS
++dowfi:
++	WFI
++	MOVW	$0x40000060, R1
++	ADD		R2<<2, R1
++	MOVW	0(R1), R0
++	AND		$0x10, R0
++	BEQ		dowfi
++	MOVW	$0x8000, R1
++	BL		(R1)
++	B		dowfi
++
++bootcpu:
+ 	/* set up a tiny stack for local vars and memmove args */
+ 	MOVW	R8, SP			/* stack top just before kernel dest */
+ 	SUB	$20, SP			/* allocate stack frame */
+@@ -37,11 +64,12 @@ TEXT	main(SB), 1, $-4
+ 	MOVW	R8, 16(SP)		/* save dest (entry point) */
+ 	MOVW	R8, R0			/* first arg is dest */
+ 	MOVW	R9, 8(SP)		/* push src */
+-	MOVW	R10, 12(SP)		/* push size */
++	MOVW	R6, 12(SP)		/* push size */
+ 	BL	memmove(SB)
+ 	MOVW	16(SP), R8		/* restore entry point */
+ 
+ 	/* jump to kernel physical entry point */
++	ORR	R8,R8
+ 	B	(R8)
+ 	B	0(PC)
+ 
+@@ -51,43 +79,38 @@ TEXT	main(SB), 1, $-4
+  * clobbers R0-R2, and returns with SP invalid.
+  */
+ TEXT cachesoff(SB), 1, $-4
++	MOVM.DB.W [R14,R1-R10], (R13)		/* save regs on stack */
+ 
+-	/* write back and invalidate caches */
+-	BARRIERS
+-	MOVW	$0, R0
+-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEwbi), CpCACHEall
+-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
+-
+-	/* turn caches off */
++	/* turn caches off, invalidate icache */
+ 	MRC	CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+ 	BIC	$(CpCdcache|CpCicache|CpCpredict), R1
+ 	MCR	CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
++	MOVW	$0, R0
++	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
+ 
+ 	/* invalidate stale TLBs before changing them */
+ 	BARRIERS
+-	MOVW	$KZERO, R0			/* some valid virtual address */
++	MOVW	$0, R0
+ 	MCR	CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+ 	BARRIERS
+ 
+-	/* from here on, R0 is base of physical memory */
+-	MOVW	$PHYSDRAM, R0
+-
+ 	/* redo double map of first MiB PHYSDRAM = KZERO */
+-	MOVW	$(L1+L1X(PHYSDRAM)), R2		/* address of PHYSDRAM's PTE */
++	MOVW	12(R(MACH)), R2		/* m->mmul1 (virtual addr) */
+ 	MOVW	$PTEDRAM, R1			/* PTE bits */
+-	ORR	R0, R1				/* dram base */
+ 	MOVW	R1, (R2)
+ 
+ 	/* invalidate stale TLBs again */
+ 	BARRIERS
++	MOVW	$0, R0
+ 	MCR	CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+ 	BARRIERS
+ 
+ 	/* relocate SB and return address to PHYSDRAM addressing */
+ 	MOVW	$KSEGM, R1		/* clear segment bits */
+ 	BIC	R1, R12			/* adjust SB */
+-	ORR	R0, R12
++	MOVM.IA.W (R13), [R14,R1-R10]		/* restore regs from stack */
++
++	MOVW	$KSEGM, R1		/* clear segment bits */
+ 	BIC	R1, R14			/* adjust return address */
+-	ORR	R0, R14
+ 
+ 	RET
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./screen.c ../bcm-latest/screen.c
+--- ./screen.c	2017-01-17 11:46:31.000000000 -0800
++++ ../bcm-latest/screen.c	2017-01-17 18:49:27.000000000 -0800
+@@ -10,11 +10,9 @@
+ 
+ #include <draw.h>
+ #include <font.h>
+-
+ #include <memdraw.h>
+ #include <cursor.h>
+ 
+-//#include "../port/screen.h"
+ #include "screen.h"
+ 
+ enum {
+@@ -53,7 +51,7 @@ static Memimage xgscreen =
+ 	.cmap = nil,
+ 	.data = &xgdata,
+ 	.zero = 0,
+-	.width = 0,
++	.width = 0, 			/* width in words of a single scan line */
+ 	.layer = nil,
+ 	.flags = 0,
+ };
+@@ -60,30 +58,18 @@ static Memimage xgscreen =
+ 
+ static Memimage *conscol;
+ static Memimage *back;
+-
+ static Memsubfont *memdefont;
+ 
+ static Lock screenlock;
+ 
+-static int	h, w;
+-
+ static Point	curpos;
++static int	h, w;
+ static Rectangle window;
+ 
+ static void myscreenputs(char *s, int n);
+ static void screenputc(char *buf);
+ static void screenwin(void);
+ 
+-
+-//old: #define ishwimage(i)	1		/* for ../port/devdraw.c */
+-bool
+-ishwimage(Memimage* i)
+-{
+-  USED(i);
+-  return true;
+-}
+-
+-
+ /*
+  * Software cursor. 
+  */
+@@ -283,15 +269,6 @@ swcursorinit(void)
+ 	memfillcolor(swimg1, DBlack);
+ }
+ 
+-
+-
+-
+-
+-/*
+- *
+- */
+-
+-
+ int
+ hwdraw(Memdrawparam *par)
+ {
+@@ -339,7 +316,7 @@ screeninit(void)
+ 	int set;
+ 	ulong chan;
+ 
+-	set = (screensize() == 0);
++	set = screensize() == 0;
+ 	fb = fbinit(set, &xgscreen.r.max.x, &xgscreen.r.max.y, &xgscreen.depth);
+ 	if(fb == nil){
+ 		print("can't initialise %dx%dx%d framebuffer \n",
+@@ -364,7 +340,7 @@ screeninit(void)
+ 		break;
+ 	}
+ 	memsetchan(&xgscreen, chan);
+-//	conf.monitor = 1;
++	//conf.monitor = 1;
+ 	xgdata.bdata = fb;
+ 	xgdata.ref = 1;
+ 	gscreen = &xgscreen;
+@@ -568,3 +544,11 @@ screenputc(char *buf)
+ 		break;
+ 	}
+ }
++
++//old: #define ishwimage(i)	1		/* for ../port/devdraw.c */
++bool
++ishwimage(Memimage* i)
++{
++  USED(i);
++  return true;
++}
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./screen.h ../bcm-latest/screen.h
+--- ./screen.h	2017-01-11 11:36:44.000000000 -0800
++++ ../bcm-latest/screen.h	2017-01-17 18:49:15.000000000 -0800
+@@ -1,4 +1,4 @@
+-
++typedef struct Cursor Cursor;
+ typedef struct Cursorinfo Cursorinfo;
+ struct Cursorinfo {
+ 	Cursor;
+@@ -8,9 +8,8 @@ struct Cursorinfo {
+ /* devmouse.c */
+ extern void mousetrack(int, int, int, int);
+ extern Point mousexy(void);
+-extern void mouseaccelerate(int);
+ 
+-// specific? maybe should not be in this interface file
++extern void mouseaccelerate(int);
+ extern int m3mouseputc(Queue*, int);
+ extern int m5mouseputc(Queue*, int);
+ extern int mouseputc(Queue*, int);
+@@ -19,22 +18,18 @@ extern Cursorinfo cursor;
+ extern Cursor arrow;
+ 
+ /* mouse.c */
+-//kmousectl now
+ extern void mousectl(Cmdbuf*);
+-//I think I've moved it
+ extern void mouseresize(void);
+ 
+ /* screen.c */
+ extern void	blankscreen(int);
+ extern void	flushmemscreen(Rectangle);
+ extern uchar*	attachscreen(Rectangle*, ulong*, int*, int*, int*);
+-
+-extern void	ksetcursor(Cursor*);
+-
+ extern int	cursoron(int);
+ extern void	cursoroff(int);
++extern void	setcursor(Cursor*);
+ 
+ /* devdraw.c */
+ extern QLock	drawlock;
+ 
+-
++//#define ishwimage(i)	1		/* for ../port/devdraw.c */
+Only in ../bcm-latest/: softfpu.c
+Only in ../bcm-latest/: spi.c
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./syscall.c ../bcm-latest/syscall.c
+--- ./syscall.c	2017-01-10 15:05:07.000000000 -0800
++++ ../bcm-latest/syscall.c	2017-01-17 18:28:50.000000000 -0800
+@@ -202,7 +202,7 @@ syscall(Ureg* ureg)
+ 	up->dbgreg = ureg;
+ 
+ 	scallnr = ureg->r0;
+-	// up->scallnr = scallnr;
++	//up->scallnr = scallnr;
+ 	if(scallnr == RFORK)
+ 		fpusysrfork(ureg);
+ 	spllo();
+Only in ../bcm-latest/: taslock.c
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./trap.c ../bcm-latest/trap.c
+--- ./trap.c	2017-01-10 15:08:40.000000000 -0800
++++ ../bcm-latest/trap.c	2017-01-17 18:30:17.000000000 -0800
+@@ -13,6 +13,7 @@
+ #include "arm.h"
+ 
+ #define INTREGS		(VIRTIO+0xB200)
++#define	LOCALREGS	(VIRTIO+IOSIZE)
+ 
+ typedef struct Intregs Intregs;
+ typedef struct Vctl Vctl;
+@@ -22,6 +23,10 @@ enum {
+ 
+ 	Nvec = 8,		/* # of vectors at start of lexception.s */
+ 	Fiqenable = 1<<7,
++
++	Localtimerint	= 0x40,
++	Localmboxint	= 0x50,
++	Localintpending	= 0x60,
+ };
+ 
+ /*
+@@ -48,12 +53,14 @@ struct Intregs {
+ struct Vctl {
+ 	Vctl	*next;
+ 	int	irq;
++	int	cpu;
+ 	u32int	*reg;
+ 	u32int	mask;
+ 	void	(*f)(Ureg*, void*);
+ 	void	*a;
+ };
+ 
++static Lock vctllock;
+ static Vctl *vctl, *vfiq;
+ 
+ static char *trapnames[PsrMask+1] = {
+@@ -77,14 +84,16 @@ trapinit(void)
+ {
+ 	Vpage0 *vpage0;
+ 
++	if (cpu->cpuno == 0) {
+ 	/* disable everything */
+ 	intrsoff();
+-
+ 	/* set up the exception vectors */
+ 	vpage0 = (Vpage0*)HVECTORS;
+ 	memmove(vpage0->vectors, vectors, sizeof(vpage0->vectors));
+ 	memmove(vpage0->vtable, vtable, sizeof(vpage0->vtable));
+ 	cacheuwbinv();
++		l2cacheuwbinv();
++	}
+ 
+ 	/* set up the stacks for the interrupt modes */
+ 	setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
+@@ -97,6 +106,21 @@ trapinit(void)
+ }
+ 
+ void
++intrcpushutdown(void)
++{
++	u32int *enable;
++
++	if(soc.armlocal == 0)
++		return;
++	enable = (u32int*)(LOCALREGS + Localtimerint) + cpu->cpuno;
++	*enable = 0;
++	if(cpu->cpuno){
++		enable = (u32int*)(LOCALREGS + Localmboxint) + cpu->cpuno;
++		*enable = 1;
++	}
++}
++
++void
+ intrsoff(void)
+ {
+ 	Intregs *ip;
+@@ -110,6 +134,30 @@ intrsoff(void)
+ 	ip->FIQctl = 0;
+ }
+ 
++/* called from cpu0 after other cpus are shutdown */
++void
++intrshutdown(void)
++{
++	intrsoff();
++	intrcpushutdown();
++}
++
++static void
++intrtime(void)
++{
++	ulong diff;
++	ulong x;
++
++	x = perfticks();
++	diff = x - cpu->perf.intrts;
++	cpu->perf.intrts = x;
++
++	cpu->perf.inintr += diff;
++	if(up == nil && cpu->perf.inidle > diff)
++		cpu->perf.inidle -= diff;
++}
++
++
+ /*
+  *  called by trap to handle irq interrupts.
+  *  returns true iff a clock interrupt, thus maybe reschedule.
+@@ -119,16 +167,23 @@ irq(Ureg* ureg)
+ {
+ 	Vctl *v;
+ 	int clockintr;
++	int found;
+ 
++	cpu->perf.intrts = perfticks();
+ 	clockintr = 0;
++	found = 0;
+ 	for(v = vctl; v; v = v->next)
+-		if(*v->reg & v->mask){
++		if(v->cpu == cpu->cpuno && (*v->reg & v->mask) != 0){
++			found = 1;
+ 			coherence();
+ 			v->f(ureg, v->a);
+ 			coherence();
+-			if(v->irq == IRQclock)
++			if(v->irq == IRQclock || v->irq == IRQcntps || v->irq == IRQcntpns)
+ 				clockintr = 1;
+ 		}
++	if(!found)
++		cpu->spuriousintr++;
++	intrtime();
+ 	return clockintr;
+ }
+ 
+@@ -140,14 +195,16 @@ fiq(Ureg *ureg)
+ {
+ 	Vctl *v;
+ 
++	cpu->perf.intrts = perfticks();
+ 	v = vfiq;
+ 	if(v == nil)
+-		panic("unexpected item in bagging area");
++		panic("cpu%d: unexpected item in bagging area", cpu->cpuno);
+ 	cpu->intr++;
+ 	ureg->pc -= 4;
+ 	coherence();
+ 	v->f(ureg, v->a);
+ 	coherence();
++	intrtime();
+ }
+ 
+ void
+@@ -162,7 +219,13 @@ irqenable(int irq, void (*f)(Ureg*, void
+ 	if(v == nil)
+ 		panic("irqenable: no mem");
+ 	v->irq = irq;
+-	if(irq >= IRQbasic){
++	v->cpu = 0;
++	if(irq >= IRQlocal){
++		enable = (u32int*)(LOCALREGS + Localtimerint) + cpu->cpuno;
++		v->reg = (u32int*)(LOCALREGS + Localintpending) + cpu->cpuno;
++		v->mask = 1 << (irq - IRQlocal);
++		v->cpu = cpu->cpuno;
++	}else if(irq >= IRQbasic){
+ 		enable = &ip->ARMenable;
+ 		v->reg = &ip->ARMpending;
+ 		v->mask = 1 << (irq - IRQbasic);
+@@ -173,6 +236,7 @@ irqenable(int irq, void (*f)(Ureg*, void
+ 	}
+ 	v->f = f;
+ 	v->a = a;
++	lock(&vctllock);
+ 	if(irq == IRQfiq){
+ 		assert((ip->FIQctl & Fiqenable) == 0);
+ 		assert((*enable & v->mask) == 0);
+@@ -181,8 +245,12 @@ irqenable(int irq, void (*f)(Ureg*, void
+ 	}else{
+ 		v->next = vctl;
+ 		vctl = v;
++		if(irq >= IRQlocal)
++			*enable |= 1 << (irq - IRQlocal);
++		else
+ 		*enable = v->mask;
+ 	}
++	unlock(&vctllock);
+ }
+ 
+ static char *
+@@ -226,8 +294,8 @@ faultarm(Ureg *ureg, uintptr va, int use
+ 	char buf[ERRMAX];
+ 
+ 	if(up == nil) {
+-		dumpregs(ureg);
+-		panic("fault: nil up in faultarm, accessing %#p", va);
++		//dumpregs(ureg);
++		panic("fault: nil up in faultarm, pc %#p accessing %#p", ureg->pc, va);
+ 	}
+ 	insyscall = up->insyscall;
+ 	up->insyscall = 1;
+@@ -308,8 +376,8 @@ trap(Ureg *ureg)
+ 	clockintr = 0;		/* if set, may call sched() before return */
+ 	switch(ureg->type){
+ 	default:
+-		panic("unknown trap; type %#lux, psr mode %#lux", ureg->type,
+-			ureg->psr & PsrMask);
++		panic("unknown trap; type %#lux, psr mode %#lux pc %lux", ureg->type,
++			ureg->psr & PsrMask, ureg->pc);
+ 		break;
+ 	case PsrMirq:
+ 		clockintr = irq(ureg);
+@@ -524,13 +592,21 @@ dumpstackwithureg(Ureg *ureg)
+  * Fill in enough of Ureg to get a stack trace, and call a function.
+  * Used by debugging interface rdb.
+  */
++
++static void
++getpcsp(ulong *pc, ulong *sp)
++{
++	*pc = getcallerpc(&pc);
++	*sp = (ulong)&pc-4;
++}
++
+ void
+ callwithureg(void (*fn)(Ureg*))
+ {
+ 	Ureg ureg;
+ 
+-	ureg.pc = getcallerpc(&fn);
+-	ureg.sp = PTR2UINT(&fn);
++	getpcsp((ulong*)&ureg.pc, (ulong*)&ureg.sp);
++	ureg.r14 = getcallerpc(&fn);
+ 	fn(&ureg);
+ }
+ 
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./uartmini.c ../bcm-latest/uartmini.c
+--- ./uartmini.c	2015-10-17 09:32:22.000000000 -0700
++++ ../bcm-latest/uartmini.c	2015-04-05 08:51:54.000000000 -0700
+@@ -88,8 +88,8 @@ gpiosel(uint pin, int func)
+ 	*fsel = (*fsel & ~(FuncMask<<off)) | func<<off;
+ }
+ 
+-void
+-gpiopulloff(uint pin)
++static void
++gpiopull(uint pin, int func)
+ {
+ 	u32int *gp, *reg;
+ 	u32int mask;
+@@ -97,7 +97,7 @@ gpiopulloff(uint pin)
+ 	gp = (u32int*)GPIOREGS;
+ 	reg = &gp[PUDclk0 + pin/32];
+ 	mask = 1 << (pin % 32);
+-	gp[PUD] = Off;
++	gp[PUD] = func;
+ 	microdelay(1);
+ 	*reg = mask;
+ 	microdelay(1);
+@@ -105,6 +105,24 @@ gpiopulloff(uint pin)
+ }
+ 
+ void
++gpiopulloff(uint pin)
++{
++	gpiopull(pin, Off);
++}
++
++void
++gpiopullup(uint pin)
++{
++	gpiopull(pin, Pullup);
++}
++
++void
++gpiopulldown(uint pin)
++{
++	gpiopull(pin, Pulldown);
++}
++
++void
+ gpioout(uint pin, int set)
+ {
+ 	u32int *gp;
+@@ -178,7 +196,7 @@ enable(Uart *uart, int ie)
+ 	ap[MuIir] = 6;
+ 	ap[MuLcr] = Bits8;
+ 	ap[MuCntl] = TxEn|RxEn;
+-	ap[MuBaud] = 250000000/(115200*8) - 1;
++	ap[MuBaud] = uart->freq/(115200*8) - 1;
+ 	if(ie){
+ 		intrenable(IRQaux, interrupt, uart, 0, "uart");
+ 		ap[MuIer] = RxIen|TxIen;
+@@ -417,8 +435,22 @@ void
+ okay(int on)
+ {
+ 	static int first;
++	static int okled, polarity;
++	char *p;
+ 
+-	if(!first++)
+-		gpiosel(OkLed, Output);
+-	gpioout(OkLed, !on);
++	if(!first++){
++		p = getconf("bcm2709.disk_led_gpio");
++		if(p == nil)
++			p = getconf("bcm2708.disk_led_gpio");
++		if(p != nil)
++			okled = strtol(p, 0, 0);
++		else
++			okled = OkLed;
++		p = getconf("bcm2709.disk_led_active_low");
++		if(p == nil)
++			p = getconf("bcm2708.disk_led_active_low");
++		polarity = (p == nil || *p == '1');
++		gpiosel(okled, Output);
++	}
++	gpioout(okled, on^polarity);
+ }
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./usbdwc.c ../bcm-latest/usbdwc.c
+--- ./usbdwc.c	2017-01-10 15:14:16.000000000 -0800
++++ ../bcm-latest/usbdwc.c	2017-01-17 18:41:01.000000000 -0800
+@@ -39,6 +39,7 @@ typedef struct Ctlr Ctlr;
+ typedef struct Epio Epio;
+ 
+ struct Ctlr {
++	Lock;
+ 	Dwcregs	*regs;		/* controller registers */
+ 	int	nchan;		/* number of host channels */
+ 	ulong	chanbusy;	/* bitmap of in-use channels */
+@@ -65,6 +66,22 @@ static char Ebadlen[] = "bad usb request
+ static void clog(Ep *ep, Hostchan *hc);
+ static void logdump(Ep *ep);
+ 
++static void
++filock(Lock *l)
++{
++	int x;
++
++	x = splfhi();
++	ilock(l);
++	l->sr = x;
++}
++
++static void
++fiunlock(Lock *l)
++{
++	iunlock(l);
++}
++
+ static Hostchan*
+ chanalloc(Ep *ep)
+ {
+@@ -157,23 +174,22 @@ sofdone(void *a)
+ 	Dwcregs *r;
+ 
+ 	r = a;
+-	return r->gintsts & Sofintr;
++	return (r->gintmsk & Sofintr) == 0;
+ }
+ 
+ static void
+ sofwait(Ctlr *ctlr, int n)
+ {
+ 	Dwcregs *r;
+-	int x;
+ 
+ 	r = ctlr->regs;
+ 	do{
++		filock(ctlr);
+ 		r->gintsts = Sofintr;
+-		x = splfhi();
+ 		ctlr->sofchan |= 1<<n;
+ 		r->gintmsk |= Sofintr;
++		fiunlock(ctlr);
+ 		sleep(&ctlr->chanintr[n], sofdone, r);
+-		splx(x);
+ 	}while((r->hfnum & 7) == 6);
+ }
+ 
+@@ -191,7 +207,7 @@ chandone(void *a)
+ static int
+ chanwait(Ep *ep, Ctlr *ctlr, Hostchan *hc, int mask)
+ {
+-	int intr, n, x, ointr;
++	int intr, n, ointr;
+ 	ulong start, now;
+ 	Dwcregs *r;
+ 
+@@ -199,12 +215,12 @@ chanwait(Ep *ep, Ctlr *ctlr, Hostchan *h
+ 	n = hc - r->hchan;
+ 	for(;;){
+ restart:
+-		x = splfhi();
++		filock(ctlr);
+ 		r->haintmsk |= 1<<n;
+ 		hc->hcintmsk = mask;
++		fiunlock(ctlr);
+ 		sleep(&ctlr->chanintr[n], chandone, hc);
+ 		hc->hcintmsk = 0;
+-		splx(x);
+ 		intr = hc->hcint;
+ 		if(intr & Chhltd)
+ 			return intr;
+@@ -244,7 +260,6 @@ restart:
+ 		}
+ 		logdump(ep);
+ 	}
+-    return -1; // unreachable
+ }
+ 
+ static int
+@@ -347,7 +362,7 @@ chanio(Ep *ep, Hostchan *hc, int dir, in
+ 	else
+ 		n = len;
+ 	hc->hctsiz = n | npkt<<OPktcnt | pid;
+-	hc->hcdma  = PADDR(a);
++	hc->hcdma  = dmaaddr(a);
+ 
+ 	nleft = len;
+ 	logstart(ep);
+@@ -524,8 +539,8 @@ ctltrans(Ep *ep, uchar *req, long n)
+ 		if(datalen <= 0 || datalen > Maxctllen)
+ 			error(Ebadlen);
+ 		/* XXX cache madness */
+-		epio->cb = b = allocb(ROUND(datalen, ep->maxpkt) + CACHELINESZ);
+-		b->wp = (uchar*)ROUND((uintptr)b->wp, CACHELINESZ);
++		epio->cb = b = allocb(ROUND(datalen, ep->maxpkt));
++		assert(((uintptr)b->wp & (BLOCKALIGN-1)) == 0);
+ 		memset(b->wp, 0x55, b->lim - b->wp);
+ 		cachedwbinvse(b->wp, b->lim - b->wp);
+ 		data = b->wp;
+@@ -654,6 +669,7 @@ fiqintr(Ureg*, void *a)
+ 	ctlr = hp->aux;
+ 	r = ctlr->regs;
+ 	wakechan = 0;
++	filock(ctlr);
+ 	intr = r->gintsts;
+ 	if(intr & Hcintr){
+ 		haint = r->haint & r->haintmsk;
+@@ -679,6 +695,7 @@ fiqintr(Ureg*, void *a)
+ 		ctlr->wakechan |= wakechan;
+ 		armtimerset(1);
+ 	}
++	fiunlock(ctlr);
+ }
+ 
+ static void
+@@ -686,14 +703,14 @@ irqintr(Ureg*, void *a)
+ {
+ 	Ctlr *ctlr;
+ 	uint wakechan;
+-	int i, x;
++	int i;
+ 
+ 	ctlr = a;
+-	x = splfhi();
++	filock(ctlr);
+ 	armtimerset(0);
+ 	wakechan = ctlr->wakechan;
+ 	ctlr->wakechan = 0;
+-	splx(x);
++	fiunlock(ctlr);
+ 	for(i = 0; wakechan; i++){
+ 		if(wakechan & 1)
+ 			wakeup(&ctlr->chanintr[i]);
+@@ -773,10 +790,12 @@ epread(Ep *ep, void *a, long n)
+ 		/* fall through */
+ 	case Tbulk:
+ 		/* XXX cache madness */
+-		b = allocb(ROUND(n, ep->maxpkt) + CACHELINESZ);
+-		p = (uchar*)ROUND((uintptr)b->base, CACHELINESZ);
+-		cachedwbinvse(p, n);
++		b = allocb(ROUND(n, ep->maxpkt));
++		p = b->rp;
++		assert(((uintptr)p & (BLOCKALIGN-1)) == 0);
++		cachedinvse(p, n);
+ 		nr = eptrans(ep, Read, p, n);
++		cachedinvse(p, nr);
+ 		epio->lastpoll = TK2MS(cpu->ticks);
+ 		memmove(a, p, nr);
+ 		qunlock(epio);
+@@ -815,8 +834,9 @@ epwrite(Ep *ep, void *a, long n)
+ 	case Tctl:
+ 	case Tbulk:
+ 		/* XXX cache madness */
+-		b = allocb(n + CACHELINESZ);
+-		p = (uchar*)ROUND((uintptr)b->base, CACHELINESZ);
++		b = allocb(n);
++		p = b->wp;
++		assert(((uintptr)p & (BLOCKALIGN-1)) == 0);
+ 		memmove(p, a, n);
+ 		cachedwbse(p, n);
+ 		if(ep->ttype == Tctl)
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./vcore.c ../bcm-latest/vcore.c
+--- ./vcore.c	2017-01-16 18:20:29.000000000 -0800
++++ ../bcm-latest/vcore.c	2015-03-27 13:36:45.000000000 -0700
+@@ -33,12 +33,16 @@ enum {
+ 	TagResp		= 1<<31,
+ 
+ 	TagGetfwrev	= 0x00000001,
++	TagGetrev	= 0x00010002,
+ 	TagGetmac	= 0x00010003,
+ 	TagGetram	= 0x00010005,
+ 	TagGetpower	= 0x00020001,
+ 	TagSetpower	= 0x00028001,
+ 	Powerwait	= 1<<1,
+ 	TagGetclkspd= 0x00030002,
++	TagGetclkmax= 0x00030004,
++	TagSetclkspd= 0x00038002,
++	TagGettemp	= 0x00030006,
+ 	TagFballoc	= 0x00040001,
+ 	TagFbfree	= 0x00048001,
+ 	TagFbblank	= 0x00040002,
+@@ -114,7 +118,8 @@ vcreq(int tag, void *buf, int vallen, in
+ 	uintptr r;
+ 	int n;
+ 	Prophdr *prop;
+-	static uintptr base = BUSDRAM;
++	uintptr aprop;
++	static int busaddr = 1;
+ 
+ 	if(rsplen < vallen)
+ 		rsplen = vallen;
+@@ -131,13 +136,14 @@ vcreq(int tag, void *buf, int vallen, in
+ 		memmove(prop->data, buf, vallen);
+ 	cachedwbinvse(prop, prop->len);
+ 	for(;;){
+-		vcwrite(ChanProps, PADDR(prop) + base);
++		aprop = busaddr? dmaaddr(prop) : PTR2UINT(prop);
++		vcwrite(ChanProps, aprop);
+ 		r = vcread(ChanProps);
+-		if(r == PADDR(prop) + base)
++		if(r == aprop)
+ 			break;
+-		if(base == 0)
++		if(!busaddr)
+ 			return -1;
+-		base = 0;
++		busaddr = 0;
+ 	}
+ 	if(prop->req == RspOk &&
+ 	   prop->tag == tag &&
+@@ -185,7 +191,7 @@ fbinit(int set, int *width, int *height,
+ 	fi->yres = fi->yresvirtual = *height;
+ 	fi->bpp = *depth;
+ 	cachedwbinvse(fi, sizeof(*fi));
+-	vcwrite(ChanFb, DMAADDR(fi));
++	vcwrite(ChanFb, dmaaddr(fi));
+ 	if(vcread(ChanFb) != 0)
+ 		return 0;
+ 	va = mmukmap(FRAMEBUFFER, PADDR(fi->base), fi->screensize);
+@@ -251,6 +257,19 @@ getethermac(void)
+ }
+ 
+ /*
++ * Get board revision
++ */
++uint
++getboardrev(void)
++{
++	u32int buf[1];
++
++	if(vcreq(TagGetrev, buf, 0, sizeof buf) != sizeof buf)
++		return 0;
++	return buf[0];
++}
++
++/*
+  * Get firmware revision
+  */
+ uint
+@@ -290,3 +309,33 @@ getclkrate(int clkid)
+ 		return 0;
+ 	return buf[1];
+ }
++
++/*
++ * Set clock rate to hz (or max speed if hz == 0)
++ */
++void
++setclkrate(int clkid, ulong hz)
++{
++	u32int buf[2];
++
++	buf[0] = clkid;
++	if(hz != 0)
++		buf[1] = hz;
++	else if(vcreq(TagGetclkmax, buf, sizeof(buf[0]), sizeof(buf)) != sizeof buf)
++		return;
++	vcreq(TagSetclkspd, buf, sizeof(buf), sizeof(buf));
++}
++
++/*
++ * Get cpu temperature
++ */
++uint
++getcputemp(void)
++{
++	u32int buf[2];
++
++	buf[0] = 0;
++	if(vcreq(TagGettemp, buf, sizeof(buf[0]), sizeof buf) != sizeof buf)
++		return 0;
++	return buf[1];
++}
