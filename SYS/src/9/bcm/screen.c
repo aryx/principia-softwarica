@@ -15,7 +15,7 @@
 #include <cursor.h>
 
 //#include "../port/screen.h"
-#include "bcmscreen.h"
+#include "screen.h"
 
 enum {
 	Tabstop		= 4,
