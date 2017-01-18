@@ -145,7 +145,7 @@ reset:
 	 * find Mach for this cpu
 	 */
 	MRC	CpSC, 0, R2, C(CpID), C(CpIDidct), CpIDmpid
-	AND	$(MAXMACH-1), R2	/* mask out non-cpu-id bits */
+	AND	$(MAXCPUS-1), R2	/* mask out non-cpu-id bits */
 	SLL	$2, R2			/* convert to word index */
 	MOVW	$cpus(SB), R0
 	ADD	R2, R0			/* R0 = &cpus[cpuid] */
@@ -221,7 +221,7 @@ TEXT _startpg2(SB), 1, $-4
 	 * call cpustart and loop forever if it returns
 	 */
 	MRC	CpSC, 0, R0, C(CpID), C(CpIDidct), CpIDmpid
-	AND	$(MAXMACH-1), R0			/* mask out non-cpu-id bits */
+	AND	$(MAXCPUS-1), R0			/* mask out non-cpu-id bits */
 	BL	,cpustart(SB)
 	B	,0(PC)
 

@@ -65,7 +65,7 @@ enum {
 	Mboxregs	= 0x80
 };
 
-static Lock startlock[MAXMACH + 1];
+static Lock startlock[MAXCPUS + 1];
 
 void
 archreset(void)
@@ -125,7 +125,7 @@ cpuidprint(void)
 
 	cputype2name(name, sizeof name);
 	delay(50);				/* let uart catch up */
-	print("cpu%d: %dMHz ARM %s\n", m->machno, m->cpumhz, name);
+	print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
 }
 
 int
@@ -135,8 +135,8 @@ getncpus(void)
 	char *p;
 
 	n = 4;
-	if(n > MAXMACH)
-		n = MAXMACH;
+	if(n > MAXCPUS)
+		n = MAXCPUS;
 	p = getconf("*ncpu");
 	if(p && (max = atoi(p)) > 0 && n > max)
 		n = max;
@@ -207,24 +207,26 @@ cmpswap(long *addr, long old, long new)
 	return cas((ulong*)addr, old, new);
 }
 
+extern void machinit(void);
+extern void machon(uint);
+
 void
-cpustart(int cpu)
+cpustart(int xcpu)
 {
 	Mboxes *mb;
-	void machon(int);
 
 	up = nil;
 	machinit();
-	mmuinit1(m->mmul1);
+	mmuinit1((void*)cpu->mmul1);
 	mb = (Mboxes*)(ARMLOCAL + Mboxregs);
-	mb->clr[cpu].doorbell = 1;
+	mb->clr[xcpu].doorbell = 1;
 	trapinit();
 	clockinit();
 	timersinit();
 	cpuidprint();
 	archreset();
-	machon(m->machno);
-	unlock(&startlock[cpu]);
+	machon(cpu->cpuno);
+	unlock(&startlock[xcpu]);
 	schedinit();
 	panic("schedinit returned");
 }
