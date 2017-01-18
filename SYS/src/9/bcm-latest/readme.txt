@@ -1,4 +1,7 @@
-raspberry pi
+-*- org -*-
+
+* raspberry pi
+(was in 'words' file in miller repo)
 
 broadcom 2835 SoC (based on 2708)
 arm1176jzf-s (v6 arch) 700MHz cpu, apparently dual-issue, with vfp2
@@ -147,3 +150,17 @@ irq0
 78	dma3
 82	sdio
 83	uart0
+
+
+* raspberry pi 2 -- differences from raspberry pi
+(was in 'words2' file in miller repo)
+
+broadcom 2836 SoC (based on 2709)
+4 x cortex-a7 (v7 arch) 900Mhz cpu, dual-issue, vfpv3+
+
+integral l2 cache
+
+1GB of dram at physical address 0
+
+peripherals   at 0x3F000000
+gpu/dma space at 0xC0000000
