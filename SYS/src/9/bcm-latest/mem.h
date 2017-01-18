@@ -63,7 +63,9 @@
 /*
  * Legacy...
  */
-#define BLOCKALIGN	64			/* only used in allocb.c */
+//old: was 64 in bcm-latest, but then get panic in _allocb
+// possible alternative fix: git show 2342e706e42d1e6653c51cc1433f44816cf53fe6
+#define BLOCKALIGN	32			/* only used in allocb.c */
 #define KSTACK		KSTKSIZE
 
 /*
