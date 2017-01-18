@@ -4,7 +4,7 @@
 #include "dat.h"
 #include "fns.h"
 #include "../port/error.h"
-#include "../port/edf.h"
+//#include "../port/edf.h"
 
 long maxlockcycles;
 long maxilockcycles;
@@ -93,7 +93,7 @@ lock(Lock *l)
 		lockstats.inglare++;
 		i = 0;
 		while(l->key){
-			if(conf.nmach < 2 && up && up->edf && (up->edf->flags & Admitted)){
+			if(conf.ncpu < 2 && up && up->edf && (up->edf->flags & Admitted)){
 				/*
 				 * Priority inversion, yield on a uniprocessor; on a
 				 * multiprocessor, the other processor will unlock
@@ -153,14 +153,14 @@ ilock(Lock *l)
 		}
 	}
 acquire:
-	m->ilockdepth++;
+	cpu->ilockdepth++;
 	if(up)
 		up->lastilock = l;
 	l->sr = x;
 	l->pc = pc;
 	l->p = up;
 	l->isilock = 1;
-	l->m = MACHP(m->machno);
+	l->cpu = CPUS(cpu->cpuno);
 #ifdef LOCKCYCLES
 	l->lockcycles = -lcycles();
 #endif
@@ -181,7 +181,7 @@ canlock(Lock *l)
 		up->lastlock = l;
 	l->pc = getcallerpc(&l);
 	l->p = up;
-	l->m = MACHP(m->machno);
+	l->cpu = CPUS(cpu->cpuno);
 	l->isilock = 0;
 #ifdef LOCKCYCLES
 	l->lockcycles = -lcycles();
@@ -206,7 +206,7 @@ unlock(Lock *l)
 		print("unlock of ilock: pc %lux, held by %lux\n", getcallerpc(&l), l->pc);
 	if(l->p != up)
 		print("unlock: up changed: pc %#p, acquired at pc %lux, lock p %#p, unlock up %#p\n", getcallerpc(&l), l->pc, l->p, up);
-	l->m = nil;
+	l->cpu = nil;
 	coherence();
 	l->key = 0;
 	coherence();
@@ -246,10 +246,10 @@ iunlock(Lock *l)
 		print("iunlock while lo: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
 
 	sr = l->sr;
-	l->m = nil;
+	l->cpu = nil;
 	l->key = 0;
 	coherence();
-	m->ilockdepth--;
+	cpu->ilockdepth--;
 	if(up)
 		up->lastilock = nil;
 	splx(sr);

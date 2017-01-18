@@ -28,7 +28,7 @@ TEXT _start(SB), 1, $-4
 	/*
 	 * start stack at top of mach (physical addr)
 	 */
-	MOVW	$PADDR(MACHADDR+MACHSIZE-4), R13
+	MOVW	$PADDR(CPUADDR+CPUSIZE-4), R13
 
 	/*
 	 * do arch-dependent startup (no return)

@@ -43,11 +43,11 @@ TEXT _vsvc(SB), 1, $-4			/* SWI */
 	/* get R(MACH) for this cpu */
 	CPUID(R1)
 	SLL	$2, R1			/* convert to word index */
-	MOVW	$machaddr(SB), R2
+	MOVW	$cpus(SB), R2
 	ADD	R1, R2
-	MOVW	(R2), R(MACH)		/* m = machaddr[cpuid] */
+	MOVW	(R2), R(MACH)		/* m = cpus[cpuid] */
 	CMP	$0, R(MACH)
-	MOVW.EQ	$MACHADDR, R0		/* paranoia: use MACHADDR if 0 */
+	MOVW.EQ	$CPUADDR, R0		/* paranoia: use CPUADDR if 0 */
 
 	MOVW	8(R(MACH)), R(USER)		/* up */
 
@@ -161,11 +161,11 @@ _userexcep:
 	/* get R(MACH) for this cpu */
 	CPUID(R1)
 	SLL	$2, R1			/* convert to word index */
-	MOVW	$machaddr(SB), R2
+	MOVW	$cpus(SB), R2
 	ADD	R1, R2
-	MOVW	(R2), R(MACH)		/* m = machaddr[cpuid] */
+	MOVW	(R2), R(MACH)		/* m = cpus[cpuid] */
 	CMP	$0, R(MACH)
-	MOVW.EQ	$MACHADDR, R(MACH)		/* paranoia: use MACHADDR if 0 */
+	MOVW.EQ	$CPUADDR, R(MACH)		/* paranoia: use CPUADDR if 0 */
 
 	MOVW	8(R(MACH)), R(USER)		/* up */
 
@@ -194,11 +194,11 @@ TEXT _vfiq(SB), 1, $-4			/* FIQ */
 	/* get R(MACH) for this cpu */
 	CPUID(R1)
 	SLL	$2, R1			/* convert to word index */
-	MOVW	$machaddr(SB), R2
+	MOVW	$cpus(SB), R2
 	ADD	R1, R2
-	MOVW	(R2), R(MACH)		/* m = machaddr[cpuid] */
+	MOVW	(R2), R(MACH)		/* m = cpus[cpuid] */
 	CMP	$0, R(MACH)
-	MOVW.EQ	$MACHADDR, R(MACH)		/* paranoia: use MACHADDR if 0 */
+	MOVW.EQ	$CPUADDR, R(MACH)		/* paranoia: use CPUADDR if 0 */
 
 	MOVW	8(R(MACH)), R(USER)		/* up */
 	MOVW	R13, R0			/* first arg is pointer to ureg */

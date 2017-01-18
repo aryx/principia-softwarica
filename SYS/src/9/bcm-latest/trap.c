@@ -84,7 +84,7 @@ trapinit(void)
 {
 	Vpage0 *vpage0;
 
-	if (m->machno == 0) {
+	if (cpu->cpuno == 0) {
 		/* disable everything */
 		intrsoff();
 		/* set up the exception vectors */
@@ -97,10 +97,10 @@ trapinit(void)
 
 	/* set up the stacks for the interrupt modes */
 	setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
-	setr13(PsrMirq, m->sirq);
-	setr13(PsrMabt, m->sabt);
-	setr13(PsrMund, m->sund);
-	setr13(PsrMsys, m->ssys);
+	setr13(PsrMirq, cpu->sirq);
+	setr13(PsrMabt, cpu->sabt);
+	setr13(PsrMund, cpu->sund);
+	setr13(PsrMsys, cpu->ssys);
 
 	coherence();
 }
@@ -112,10 +112,10 @@ intrcpushutdown(void)
 
 	if(soc.armlocal == 0)
 		return;
-	enable = (u32int*)(LOCALREGS + Localtimerint) + m->machno;
+	enable = (u32int*)(LOCALREGS + Localtimerint) + cpu->cpuno;
 	*enable = 0;
-	if(m->machno){
-		enable = (u32int*)(LOCALREGS + Localmboxint) + m->machno;
+	if(cpu->cpuno){
+		enable = (u32int*)(LOCALREGS + Localmboxint) + cpu->cpuno;
 		*enable = 1;
 	}
 }
@@ -149,12 +149,12 @@ intrtime(void)
 	ulong x;
 
 	x = perfticks();
-	diff = x - m->perf.intrts;
-	m->perf.intrts = x;
+	diff = x - cpu->perf.intrts;
+	cpu->perf.intrts = x;
 
-	m->perf.inintr += diff;
-	if(up == nil && m->perf.inidle > diff)
-		m->perf.inidle -= diff;
+	cpu->perf.inintr += diff;
+	if(up == nil && cpu->perf.inidle > diff)
+		cpu->perf.inidle -= diff;
 }
 
 
@@ -169,11 +169,11 @@ irq(Ureg* ureg)
 	int clockintr;
 	int found;
 
-	m->perf.intrts = perfticks();
+	cpu->perf.intrts = perfticks();
 	clockintr = 0;
 	found = 0;
 	for(v = vctl; v; v = v->next)
-		if(v->cpu == m->machno && (*v->reg & v->mask) != 0){
+		if(v->cpu == cpu->cpuno && (*v->reg & v->mask) != 0){
 			found = 1;
 			coherence();
 			v->f(ureg, v->a);
@@ -182,7 +182,7 @@ irq(Ureg* ureg)
 				clockintr = 1;
 		}
 	if(!found)
-		m->spuriousintr++;
+		cpu->spuriousintr++;
 	intrtime();
 	return clockintr;
 }
@@ -195,11 +195,11 @@ fiq(Ureg *ureg)
 {
 	Vctl *v;
 
-	m->perf.intrts = perfticks();
+	cpu->perf.intrts = perfticks();
 	v = vfiq;
 	if(v == nil)
-		panic("cpu%d: unexpected item in bagging area", m->machno);
-	m->intr++;
+		panic("cpu%d: unexpected item in bagging area", cpu->cpuno);
+	cpu->intr++;
 	ureg->pc -= 4;
 	coherence();
 	v->f(ureg, v->a);
@@ -221,10 +221,10 @@ irqenable(int irq, void (*f)(Ureg*, void*), void* a)
 	v->irq = irq;
 	v->cpu = 0;
 	if(irq >= IRQlocal){
-		enable = (u32int*)(LOCALREGS + Localtimerint) + m->machno;
-		v->reg = (u32int*)(LOCALREGS + Localintpending) + m->machno;
+		enable = (u32int*)(LOCALREGS + Localtimerint) + cpu->cpuno;
+		v->reg = (u32int*)(LOCALREGS + Localintpending) + cpu->cpuno;
 		v->mask = 1 << (irq - IRQlocal);
-		v->cpu = m->machno;
+		v->cpu = cpu->cpuno;
 	}else if(irq >= IRQbasic){
 		enable = &ip->ARMenable;
 		v->reg = &ip->ARMpending;
@@ -348,7 +348,7 @@ trap(Ureg *ureg)
 	if(up != nil)
 		rem = ((char*)ureg)-up->kstack;
 	else
-		rem = ((char*)ureg)-((char*)m+sizeof(Mach));
+		rem = ((char*)ureg)-((char*)cpu + sizeof(Cpu));
 	if(rem < 256) {
 		iprint("trap: %d stack bytes left, up %#p ureg %#p at pc %#lux\n",
 			rem, up, ureg, ureg->pc);
@@ -381,7 +381,7 @@ trap(Ureg *ureg)
 		break;
 	case PsrMirq:
 		clockintr = irq(ureg);
-		m->intr++;
+		cpu->intr++;
 		break;
 	case PsrMabt:			/* prefetch fault */
 		x = ifsrget();
@@ -559,14 +559,14 @@ dumpstackwithureg(Ureg *ureg)
 	i = 0;
 	if(up != nil && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
 		estack = (uintptr)up->kstack+KSTACK;
-	else if((uintptr)&l >= (uintptr)m->stack
-	     && (uintptr)&l <= (uintptr)m+MACHSIZE)
-		estack = (uintptr)m+MACHSIZE;
+	else if((uintptr)&l >= (uintptr)cpu->stack
+	     && (uintptr)&l <= (uintptr)cpu + CPUSIZE)
+		estack = (uintptr)cpu + CPUSIZE;
 	else{
 		if(up != nil)
 			iprint("&up->kstack %#p &l %#p\n", up->kstack, &l);
 		else
-			iprint("&m %#p &l %#p\n", m, &l);
+			iprint("&m %#p &l %#p\n", cpu, &l);
 		return;
 	}
 	for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
@@ -645,7 +645,7 @@ dumpregs(Ureg* ureg)
 		iprint("user stack: %#p-%#p\n", up->kstack, up->kstack+KSTACK-4);
 	else
 		iprint("kernel stack: %8.8lux-%8.8lux\n",
-			(ulong)(m+1), (ulong)m+BY2PG-4);
+			(ulong)(cpu+1), (ulong)cpu+BY2PG-4);
 	dumplongs("stack", (ulong *)(ureg + 1), 16);
 	delay(2000);
 	dumpstack();

@@ -32,4 +32,4 @@ extern void	setcursor(Cursor*);
 /* devdraw.c */
 extern QLock	drawlock;
 
-#define ishwimage(i)	1		/* for ../port/devdraw.c */
+//#define ishwimage(i)	1		/* for ../port/devdraw.c */

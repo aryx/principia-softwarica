@@ -37,7 +37,7 @@ TEXT armstart(SB), 1, $-4
 	/*
 	 * clear mach and page tables
 	 */
-	MOVW	$PADDR(MACHADDR), R1
+	MOVW	$PADDR(CPUADDR), R1
 	MOVW	$PADDR(KTZERO), R2
 _ramZ:
 	MOVW	R0, (R1)
@@ -49,7 +49,7 @@ _ramZ:
 	 * start stack at top of mach (physical addr)
 	 * set up page tables for kernel
 	 */
-	MOVW	$PADDR(MACHADDR+MACHSIZE-4), R13
+	MOVW	$PADDR(CPUADDR+CPUSIZE-4), R13
 	MOVW	$PADDR(L1), R0
 	BL	,mmuinit(SB)
 
@@ -88,7 +88,7 @@ _ramZ:
 	 * switch SB, SP, and PC into KZERO space
 	 */
 	MOVW	$setR12(SB), R12
-	MOVW	$(MACHADDR+MACHSIZE-4), R13
+	MOVW	$(CPUADDR+CPUSIZE-4), R13
 	MOVW	$_startpg(SB), R15
 
 TEXT _startpg(SB), 1, $-4
@@ -147,19 +147,19 @@ reset:
 	MRC	CpSC, 0, R2, C(CpID), C(CpIDidct), CpIDmpid
 	AND	$(MAXMACH-1), R2	/* mask out non-cpu-id bits */
 	SLL	$2, R2			/* convert to word index */
-	MOVW	$machaddr(SB), R0
-	ADD	R2, R0			/* R0 = &machaddr[cpuid] */
-	MOVW	(R0), R0		/* R0 = machaddr[cpuid] */
+	MOVW	$cpus(SB), R0
+	ADD	R2, R0			/* R0 = &cpus[cpuid] */
+	MOVW	(R0), R0		/* R0 = cpus[cpuid] */
 	CMP	$0, R0
-	MOVW.EQ	$MACHADDR, R0		/* paranoia: use MACHADDR if 0 */
+	MOVW.EQ	$CPUADDR, R0		/* paranoia: use CPUADDR if 0 */
 	SUB	$KZERO, R0		/* phys addr */
-	MOVW	R0, R(MACH)		/* m = PADDR(machaddr[cpuid]) */
+	MOVW	R0, R(MACH)		/* m = PADDR(cpus[cpuid]) */
 
 	/*
 	 * start stack at top of local Mach
 	 */
 	MOVW	R(MACH), R13
-	ADD		$(MACHSIZE-4), R13
+	ADD		$(CPUSIZE-4), R13
 
 	/*
 	 * set up page tables for kernel
@@ -255,7 +255,7 @@ TEXT tmrget(SB), 1, $-4				/* local generic timer physical counter value */
 	RET
 
 TEXT splhi(SB), 1, $-4
-	MOVW	$(MACHADDR+4), R2		/* save caller pc in Mach */
+	MOVW	$(CPUADDR+4), R2		/* save caller pc in Mach */
 	MOVW	R14, 0(R2)
 
 	MOVW	CPSR, R0			/* turn off irqs (but not fiqs) */
@@ -264,7 +264,7 @@ TEXT splhi(SB), 1, $-4
 	RET
 
 TEXT splfhi(SB), 1, $-4
-	MOVW	$(MACHADDR+4), R2		/* save caller pc in Mach */
+	MOVW	$(CPUADDR+4), R2		/* save caller pc in Mach */
 	MOVW	R14, 0(R2)
 
 	MOVW	CPSR, R0			/* turn off irqs and fiqs */
@@ -285,7 +285,7 @@ TEXT spllo(SB), 1, $-4
 	RET
 
 TEXT splx(SB), 1, $-4
-	MOVW	$(MACHADDR+0x04), R2		/* save caller pc in Mach */
+	MOVW	$(CPUADDR+0x04), R2		/* save caller pc in Mach */
 	MOVW	R14, 0(R2)
 
 	MOVW	R0, R1				/* reset interrupt level */
@@ -362,7 +362,7 @@ TEXT idlehands(SB), $-4
 	RET
 
 
-TEXT coherence(SB), $-4
+TEXT coherence1(SB), $-4
 	BARRIERS
 	RET
 

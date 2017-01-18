@@ -8,10 +8,11 @@
 #include "dat.h"
 #include "fns.h"
 
-#define	Image	IMAGE
 #include <draw.h>
+#include <font.h>
 #include <memdraw.h>
 #include <cursor.h>
+
 #include "screen.h"
 
 enum {
@@ -42,17 +43,17 @@ static Memdata xgdata;
 
 static Memimage xgscreen =
 {
-	{ 0, 0, Wid, Ht },	/* r */
-	{ 0, 0, Wid, Ht },	/* clipr */
-	Depth,			/* depth */
-	3,			/* nchan */
-	RGB16,			/* chan */
-	nil,			/* cmap */
-	&xgdata,		/* data */
-	0,			/* zero */
-	0, 			/* width in words of a single scan line */
-	0,			/* layer */
-	0,			/* flags */
+	.r = { 0, 0, Wid, Ht },
+	.clipr = { 0, 0, Wid, Ht },
+	.depth = Depth,
+	.nchan = 3,
+	.chan = RGB16,
+	.cmap = nil,
+	.data = &xgdata,
+	.zero = 0,
+	.width = 0, 			/* width in words of a single scan line */
+	.layer = nil,
+	.flags = 0,
 };
 
 static Memimage *conscol;
@@ -198,7 +199,7 @@ swload(Cursor *curs)
 
 /* called from devmouse */
 void
-setcursor(Cursor* curs)
+ksetcursor(Cursor* curs)
 {
 	cursoroff(0);
 	swload(curs);
@@ -339,7 +340,7 @@ screeninit(void)
 		break;
 	}
 	memsetchan(&xgscreen, chan);
-	conf.monitor = 1;
+	//conf.monitor = 1;
 	xgdata.bdata = fb;
 	xgdata.ref = 1;
 	gscreen = &xgscreen;
@@ -542,4 +543,12 @@ screenputc(char *buf)
 		curpos.x += w;
 		break;
 	}
+}
+
+//old: #define ishwimage(i)	1		/* for ../port/devdraw.c */
+bool
+ishwimage(Memimage* i)
+{
+  USED(i);
+  return true;
 }

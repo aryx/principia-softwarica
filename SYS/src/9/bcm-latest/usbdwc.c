@@ -250,9 +250,9 @@ restart:
 			r->gnptxsts, r->hptxsts);
 		mask = Chhltd;
 		hc->hcchar |= Chdis;
-		start = m->ticks;
+		start = cpu->ticks;
 		while(hc->hcchar & Chen){
-			if(m->ticks - start >= 100){
+			if(cpu->ticks - start >= 100){
 				print("ep%d.%d channel won't halt hcchar %8.8ux\n",
 					ep->dev->nb, ep->nb, hc->hcchar);
 				break;
@@ -414,9 +414,9 @@ chanio(Ep *ep, Hostchan *hc, int dir, int pid, void *a, int len)
 				continue;
 			if(i & Nak){
 				if(ep->ttype == Tintr)
-					tsleep(&up->sleep, return0, 0, ep->pollival);
+					tsleep(&up->sleepr, returnfalse, 0, ep->pollival);
 				else
-					tsleep(&up->sleep, return0, 0, 1);
+					tsleep(&up->sleepr, returnfalse, 0, 1);
 				continue;
 			}
 			logdump(ep);
@@ -628,7 +628,7 @@ init(Hci *hp)
 	greset(r, Csftrst);
 
 	r->gusbcfg |= Force_host_mode;
-	tsleep(&up->sleep, return0, 0, 25);
+	tsleep(&up->sleepr, returnfalse, 0, 25);
 	r->gahbcfg |= Dmaenable;
 
 	n = (r->ghwcfg3 & Dfifo_depth) >> ODfifo_depth;
@@ -637,7 +637,7 @@ init(Hci *hp)
 	ptx = 0x200;
 	r->grxfsiz = rx;
 	r->gnptxfsiz = rx | tx<<ODepth;
-	tsleep(&up->sleep, return0, 0, 1);
+	tsleep(&up->sleepr, returnfalse, 0, 1);
 	r->hptxfsiz = (rx + tx) | ptx << ODepth;
 	greset(r, Rxfflsh);
 	r->grstctl = TXF_ALL;
@@ -784,9 +784,9 @@ epread(Ep *ep, void *a, long n)
 		poperror();
 		return nr;
 	case Tintr:
-		elapsed = TK2MS(m->ticks) - epio->lastpoll;
+		elapsed = TK2MS(cpu->ticks) - epio->lastpoll;
 		if(elapsed < ep->pollival)
-			tsleep(&up->sleep, return0, 0, ep->pollival - elapsed);
+			tsleep(&up->sleepr, returnfalse, 0, ep->pollival - elapsed);
 		/* fall through */
 	case Tbulk:
 		/* XXX cache madness */
@@ -796,7 +796,7 @@ epread(Ep *ep, void *a, long n)
 		cachedinvse(p, n);
 		nr = eptrans(ep, Read, p, n);
 		cachedinvse(p, nr);
-		epio->lastpoll = TK2MS(m->ticks);
+		epio->lastpoll = TK2MS(cpu->ticks);
 		memmove(a, p, nr);
 		qunlock(epio);
 		freeb(b);
@@ -827,9 +827,9 @@ epwrite(Ep *ep, void *a, long n)
 	default:
 		error(Egreg);
 	case Tintr:
-		elapsed = TK2MS(m->ticks) - epio->lastpoll;
+		elapsed = TK2MS(cpu->ticks) - epio->lastpoll;
 		if(elapsed < ep->pollival)
-			tsleep(&up->sleep, return0, 0, ep->pollival - elapsed);
+			tsleep(&up->sleepr, returnfalse, 0, ep->pollival - elapsed);
 		/* fall through */
 	case Tctl:
 	case Tbulk:
@@ -843,7 +843,7 @@ epwrite(Ep *ep, void *a, long n)
 			n = ctltrans(ep, p, n);
 		else{
 			n = eptrans(ep, Write, p, n);
-			epio->lastpoll = TK2MS(m->ticks);
+			epio->lastpoll = TK2MS(cpu->ticks);
 		}
 		qunlock(epio);
 		freeb(b);
@@ -870,7 +870,7 @@ portenable(Hci *hp, int port, int on)
 	dprint("usbotg enable=%d; sts %#x\n", on, r->hport0);
 	if(!on)
 		r->hport0 = Prtpwr | Prtena;
-	tsleep(&up->sleep, return0, 0, Enabledelay);
+	tsleep(&up->sleepr, returnfalse, 0, Enabledelay);
 	dprint("usbotg enable=%d; sts %#x\n", on, r->hport0);
 	return 0;
 }
@@ -889,9 +889,9 @@ portreset(Hci *hp, int port, int on)
 	if(!on)
 		return 0;
 	r->hport0 = Prtpwr | Prtrst;
-	tsleep(&up->sleep, return0, 0, ResetdelayHS);
+	tsleep(&up->sleepr, returnfalse, 0, ResetdelayHS);
 	r->hport0 = Prtpwr;
-	tsleep(&up->sleep, return0, 0, Enabledelay);
+	tsleep(&up->sleepr, returnfalse, 0, Enabledelay);
 	s = r->hport0;
 	b = s & (Prtconndet|Prtenchng|Prtovrcurrchng);
 	if(b != 0)

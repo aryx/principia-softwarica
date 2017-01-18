@@ -95,7 +95,7 @@ clockintr(Ureg *ureg, void *)
 static void
 localclockintr(Ureg *ureg, void *)
 {
-	if(m->machno == 0)
+	if(cpu->cpuno == 0)
 		panic("cpu0: Unexpected local generic timer interrupt");
 	cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask|Enable);
 	timerintr(ureg, 0);
@@ -120,7 +120,7 @@ clockinit(void)
 
 	if(((cprdsc(0, CpID, CpIDfeat, 1) >> 16) & 0xF) != 0) {
 		/* generic timer supported */
-		if(m->machno == 0){
+		if(cpu->cpuno == 0){
 			*(ulong*)(ARMLOCAL + Localctl) = 0;				/* magic */
 			*(ulong*)(ARMLOCAL + Prescaler) = 0x06aaaaab;	/* magic for 1 Mhz */
 		}
@@ -137,10 +137,10 @@ clockinit(void)
 		t1 = lcycles();
 	}while(tn->clo != tend);
 	t1 -= t0;
-	m->cpuhz = 100 * t1;
-	m->cpumhz = (m->cpuhz + Mhz/2 - 1) / Mhz;
-	m->cyclefreq = m->cpuhz;
-	if(m->machno == 0){
+	cpu->cpuhz = 100 * t1;
+	cpu->cpumhz = (cpu->cpuhz + Mhz/2 - 1) / Mhz;
+	cpu->cyclefreq = cpu->cpuhz;
+	if(cpu->cpuno == 0){
 		tn->c3 = tn->clo - 1;
 		tm = (Armtimer*)ARMTIMER;
 		tm->load = 0;
@@ -151,7 +151,7 @@ clockinit(void)
 }
 
 void
-timerset(uvlong next)
+timerset(Tval next)
 {
 	Systimers *tn;
 	uvlong now;
@@ -163,7 +163,7 @@ timerset(uvlong next)
 		period = MinPeriod;
 	else if(period > MaxPeriod)
 		period = MaxPeriod;
-	if(m->machno > 0){
+	if(cpu->cpuno > 0){
 		cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
 		cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
 	}else{
@@ -189,9 +189,9 @@ fastticks(uvlong *hz)
 		lo = tn->clo;
 	}while(tn->chi != hi);
 	now = (uvlong)hi<<32 | lo;
-	m->fastclock = now;
+	cpu->fastclock = now;
 	splx(s);
-	return m->fastclock;
+	return cpu->fastclock;
 }
 
 ulong

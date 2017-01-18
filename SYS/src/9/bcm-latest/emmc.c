@@ -280,9 +280,9 @@ emmccmd(u32int cmd, u32int arg, u32int *resp)
 		WR(Interrupt, i);
 	}
 	WR(Cmdtm, c);
-	now = m->ticks;
+	now = cpu->ticks;
 	while(((i=r[Interrupt])&(Cmddone|Err)) == 0)
-		if(m->ticks-now > HZ)
+		if(cpu->ticks - now > HZ)
 			break;
 	if((i&(Cmddone|Err)) != Cmddone){
 		if((i&~Err) != Ctoerr)

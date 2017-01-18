@@ -95,7 +95,7 @@ cpuidprint(void)
 
 	cputype2name(name, sizeof name);
 	delay(50);				/* let uart catch up */
-	print("cpu%d: %dMHz ARM %s\n", m->machno, m->cpumhz, name);
+	print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
 }
 
 int

@@ -53,5 +53,5 @@
 	CMP	$0, r; \
 	B.EQ	2(PC); \
 	MRC	CpSC, 0, r, C(CpID), C(CpIDidct), CpIDmpid; \
-	AND.S	$(MAXMACH-1), r
+	AND.S	$(MAXCPUS-1), r
 

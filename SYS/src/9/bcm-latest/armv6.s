@@ -23,7 +23,7 @@ TEXT armstart(SB), 1, $-4
 	/*
 	 * clear mach and page tables
 	 */
-	MOVW	$PADDR(MACHADDR), R1
+	MOVW	$PADDR(CPUADDR), R1
 	MOVW	$PADDR(KTZERO), R2
 _ramZ:
 	MOVW	R0, (R1)
@@ -35,7 +35,7 @@ _ramZ:
 	 * start stack at top of mach (physical addr)
 	 * set up page tables for kernel
 	 */
-	MOVW	$PADDR(MACHADDR+MACHSIZE-4), R13
+	MOVW	$PADDR(CPUADDR+CPUSIZE-4), R13
 	MOVW	$PADDR(L1), R0
 	BL	,mmuinit(SB)
 
@@ -59,7 +59,7 @@ _ramZ:
 	 * switch SB, SP, and PC into KZERO space
 	 */
 	MOVW	$setR12(SB), R12
-	MOVW	$(MACHADDR+MACHSIZE-4), R13
+	MOVW	$(CPUADDR+CPUSIZE-4), R13
 	MOVW	$_startpg(SB), R15
 
 TEXT _startpg(SB), 1, $-4
@@ -105,7 +105,7 @@ TEXT tmrget(SB), 1, $-4				/* local generic timer physical counter value */
 	RET
 
 TEXT splhi(SB), 1, $-4
-	MOVW	$(MACHADDR+4), R2		/* save caller pc in Mach */
+	MOVW	$(CPUADDR+4), R2		/* save caller pc in Mach */
 	MOVW	R14, 0(R2)
 
 	MOVW	CPSR, R0			/* turn off irqs (but not fiqs) */
@@ -114,7 +114,7 @@ TEXT splhi(SB), 1, $-4
 	RET
 
 TEXT splfhi(SB), 1, $-4
-	MOVW	$(MACHADDR+4), R2		/* save caller pc in Mach */
+	MOVW	$(CPUADDR+4), R2		/* save caller pc in Mach */
 	MOVW	R14, 0(R2)
 
 	MOVW	CPSR, R0			/* turn off irqs and fiqs */
@@ -135,7 +135,7 @@ TEXT spllo(SB), 1, $-4
 	RET
 
 TEXT splx(SB), 1, $-4
-	MOVW	$(MACHADDR+0x04), R2		/* save caller pc in Mach */
+	MOVW	$(CPUADDR+0x04), R2		/* save caller pc in Mach */
 	MOVW	R14, 0(R2)
 
 	MOVW	R0, R1				/* reset interrupt level */
@@ -190,7 +190,7 @@ TEXT idlehands(SB), $-4
 	RET
 
 
-TEXT coherence(SB), $-4
+TEXT coherence1(SB), $-4
 	BARRIERS
 	RET
 

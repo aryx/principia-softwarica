@@ -69,7 +69,7 @@ mmuinit1(void *a)
 	PTE *l1;
 
 	l1 = (PTE*)a;
-	m->mmul1 = l1;
+	cpu->mmul1 = l1;
 
 	/*
 	 * undo identity map of first MB of ram
@@ -88,7 +88,7 @@ mmul2empty(Proc* proc, int clear)
 	PTE *l1;
 	Page **l2, *page;
 
-	l1 = m->mmul1;
+	l1 = cpu->mmul1;
 	l2 = &proc->mmul2;
 	for(page = *l2; page != nil; page = page->next){
 		if(clear)
@@ -109,23 +109,23 @@ mmul1empty(void)
 	PTE *l1;
 
 	/* clean out any user mappings still in l1 */
-	if(m->mmul1lo > L1lo){
-		if(m->mmul1lo == 1)
-			m->mmul1[L1lo] = Fault;
+	if(cpu->mmul1lo > L1lo){
+		if(cpu->mmul1lo == 1)
+			cpu->mmul1[L1lo] = Fault;
 		else
-			memset(&m->mmul1[L1lo], 0, m->mmul1lo*sizeof(PTE));
-		m->mmul1lo = L1lo;
+			memset(&cpu->mmul1[L1lo], 0, cpu->mmul1lo*sizeof(PTE));
+		cpu->mmul1lo = L1lo;
 	}
-	if(m->mmul1hi < L1hi){
-		l1 = &m->mmul1[m->mmul1hi];
-		if((L1hi - m->mmul1hi) == 1)
+	if(cpu->mmul1hi < L1hi){
+		l1 = &cpu->mmul1[cpu->mmul1hi];
+		if((L1hi - cpu->mmul1hi) == 1)
 			*l1 = Fault;
 		else
-			memset(l1, 0, (L1hi - m->mmul1hi)*sizeof(PTE));
-		m->mmul1hi = L1hi;
+			memset(l1, 0, (L1hi - cpu->mmul1hi)*sizeof(PTE));
+		cpu->mmul1hi = L1hi;
 	}
 #else
-	memset(&m->mmul1[L1lo], 0, (L1hi - L1lo)*sizeof(PTE));
+	memset(&cpu->mmul1[L1lo], 0, (L1hi - L1lo)*sizeof(PTE));
 #endif /* notdef */
 }
 
@@ -138,10 +138,10 @@ mmuswitch(Proc* proc)
 
 	/* do kprocs get here and if so, do they need to? */
 /*** "This is plausible, but wrong" - Charles Forsyth 1 Mar 2015
-	if(m->mmupid == proc->pid && !proc->newtlb)
+	if(cpu->mmupid == proc->pid && !proc->newtlb)
 		return;
 ***/
-	m->mmupid = proc->pid;
+	cpu->mmupid = proc->pid;
 
 	/* write back dirty and invalidate l1 caches */
 	cacheuwbinv();
@@ -154,15 +154,15 @@ mmuswitch(Proc* proc)
 	mmul1empty();
 
 	/* move in new map */
-	l1 = m->mmul1;
+	l1 = cpu->mmul1;
 	for(page = proc->mmul2; page != nil; page = page->next){
 		x = page->daddr;
 		l1[x] = PPN(page->pa)|Dom0|Coarse;
 		/* know here that L1lo < x < L1hi */
-		if(x+1 - m->mmul1lo < m->mmul1hi - x)
-			m->mmul1lo = x+1;
+		if(x+1 - cpu->mmul1lo < cpu->mmul1hi - x)
+			cpu->mmul1lo = x+1;
 		else
-			m->mmul1hi = x;
+			cpu->mmul1hi = x;
 	}
 
 	/* make sure map is in memory */
@@ -199,15 +199,15 @@ mmurelease(Proc* proc)
 			panic("mmurelease: page->ref %d", page->ref);
 		pagechainhead(page);
 	}
-	if(proc->mmul2cache && palloc.r.p)
-		wakeup(&palloc.r);
+	if(proc->mmul2cache && palloc.freememr.p)
+		wakeup(&palloc.freememr);
 	proc->mmul2cache = nil;
 
 	mmul1empty();
 
 	/* make sure map is in memory */
 	/* could be smarter about how much? */
-	cachedwbse(&m->mmul1[L1X(UZERO)], (L1hi - L1lo)*sizeof(PTE));
+	cachedwbse(&cpu->mmul1[L1X(UZERO)], (L1hi - L1lo)*sizeof(PTE));
 
 	/* lose any possible stale tlb entries */
 	mmuinvalidate();
@@ -221,7 +221,7 @@ putmmu(uintptr va, uintptr pa, Page* page)
 	PTE *l1, *pte;
 
 	x = L1X(va);
-	l1 = &m->mmul1[x];
+	l1 = &cpu->mmul1[x];
 	if(*l1 == Fault){
 		/* wasteful - l2 pages only have 256 entries - fix */
 		if(up->mmul2cache == nil){
@@ -244,11 +244,11 @@ putmmu(uintptr va, uintptr pa, Page* page)
 		*l1 = PPN(pg->pa)|Dom0|Coarse;
 		cachedwbse(l1, sizeof *l1);
 
-		if(x >= m->mmul1lo && x < m->mmul1hi){
-			if(x+1 - m->mmul1lo < m->mmul1hi - x)
-				m->mmul1lo = x+1;
+		if(x >= cpu->mmul1lo && x < cpu->mmul1hi){
+			if(x+1 - cpu->mmul1lo < cpu->mmul1hi - x)
+				cpu->mmul1lo = x+1;
 			else
-				m->mmul1hi = x;
+				cpu->mmul1hi = x;
 		}
 	}
 	pte = UINT2PTR(KADDR(PPN(*l1)));
@@ -277,10 +277,10 @@ putmmu(uintptr va, uintptr pa, Page* page)
 	 *  on this mmu because the virtual cache is set associative
 	 *  rather than direct mapped.
 	 */
-	if(page->cachectl[m->machno] == PG_TXTFLUSH){
+	if(page->cachectl[cpu->cpuno] == PG_TXTFLUSH){
 		/* pio() sets PG_TXTFLUSH whenever a text pg has been written */
 		cacheiinv();
-		page->cachectl[m->machno] = PG_NOFLUSH;
+		page->cachectl[cpu->cpuno] = PG_NOFLUSH;
 	}
 	checkmmu(va, PPN(pa));
 }
@@ -301,7 +301,7 @@ mmuuncache(void* v, usize size)
 	assert(!(va & (1*MiB-1)) && size == 1*MiB);
 
 	x = L1X(va);
-	pte = &m->mmul1[x];
+	pte = &cpu->mmul1[x];
 	if((*pte & (Fine|Section|Coarse)) != Section)
 		return nil;
 	*pte &= ~L1ptedramattrs;
@@ -335,7 +335,7 @@ mmukmap(uintptr va, uintptr pa, usize size)
 	o = pa & (MiB-1);
 	pa -= o;
 	size += o;
-	pte = pte0 = &m->mmul1[L1X(va)];
+	pte = pte0 = &cpu->mmul1[L1X(va)];
 	for(n = 0; n < size; n += MiB)
 		if(*pte++ != Fault)
 			return 0;

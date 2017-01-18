@@ -6,9 +6,11 @@
 #include "io.h"
 #include "fns.h"
 
+// initcode binary
 #include "init.h"
 #include <pool.h>
 
+// rebootcode binary
 #include "reboot.h"
 
 enum {
@@ -24,13 +26,25 @@ enum {
  * Where configuration info is left for the loaded programme.
  */
 #define BOOTARGS	((char*)CONFADDR)
-#define	BOOTARGSLEN	(MACHADDR-CONFADDR)
-#define	MAXCONF		64
+#define	BOOTARGSLEN	(CPUADDR-CONFADDR)
+//#define	MAXCONF		64
 #define MAXCONFLINE	160
 
+// conf.c
+extern  Dev*  conf_devtab[];
+
+
+extern	char*	conffile;
+
+// in l.s
+extern void    coherence1(void);
+
+
+
 uintptr kseg0 = KZERO;
-Mach*	machaddr[MAXMACH];
-Conf	conf;
+
+//Mach*	machaddr[MAXMACH];
+//Conf	conf;
 ulong	memsize = 128*1024*1024;
 
 /*
@@ -45,9 +59,9 @@ static int oargblen;
 static uintptr sp;		/* XXX - must go - user stack of init proc */
 
 /* store plan9.ini contents here at least until we stash them in #ec */
-static char confname[MAXCONF][KNAMELEN];
-static char confval[MAXCONF][MAXCONFLINE];
-static int nconf;
+//static char confname[MAXCONF][KNAMELEN];
+//static char confval[MAXCONF][MAXCONFLINE];
+//static int nconf;
 
 typedef struct Atag Atag;
 struct Atag {
@@ -86,11 +100,12 @@ findconf(char *name)
 char*
 getconf(char *name)
 {
-	int i;
-
-	i = findconf(name);
-	if(i >= 0)
-		return confval[i];
+    USED(name);
+	//int i;
+	// 
+	//i = findconf(name);
+	//if(i >= 0)
+	//	return confval[i];
 	return nil;
 }
 
@@ -196,30 +211,30 @@ ataginit(Atag *a)
 
 /* enable scheduling of this cpu */
 void
-machon(uint cpu)
+machon(uint xcpu)
 {
 	ulong cpubit;
 
-	cpubit = 1 << cpu;
+	cpubit = 1 << xcpu;
 	lock(&active);
-	if ((active.machs & cpubit) == 0) {	/* currently off? */
-		conf.nmach++;
-		active.machs |= cpubit;
+	if ((active.cpus & cpubit) == 0) {	/* currently off? */
+		conf.ncpu++;
+		active.cpus |= cpubit;
 	}
 	unlock(&active);
 }
 
 /* disable scheduling of this cpu */
 void
-machoff(uint cpu)
+machoff(uint xcpu)
 {
 	ulong cpubit;
 
-	cpubit = 1 << cpu;
+	cpubit = 1 << xcpu;
 	lock(&active);
-	if (active.machs & cpubit) {		/* currently on? */
-		conf.nmach--;
-		active.machs &= ~cpubit;
+	if (active.cpus & cpubit) {		/* currently on? */
+		conf.ncpu--;
+		active.cpus &= ~cpubit;
 	}
 	unlock(&active);
 }
@@ -227,28 +242,28 @@ machoff(uint cpu)
 void
 machinit(void)
 {
-	Mach *m0;
+	Cpu *m0;
 
-	m->ticks = 1;
-	m->perf.period = 1;
-	m0 = MACHP(0);
-	if (m->machno != 0) {
+	cpu->ticks = 1;
+	cpu->perf.period = 1;
+	m0 = CPUS(0);
+	if (cpu->cpuno != 0) {
 		/* synchronise with cpu 0 */
-		m->ticks = m0->ticks;
-		m->fastclock = m0->fastclock;
-		m->delayloop = m0->delayloop;
+		cpu->ticks = m0->ticks;
+		cpu->fastclock = m0->fastclock;
+		cpu->delayloop = m0->delayloop;
 	}
 
-	//machon(m->machno);
+	//machon(m->cpuno);
 }
 
 void
 mach0init(void)
 {
-	conf.nmach = 0;
+	conf.ncpu = 0;
 
-	m->machno = 0;
-	machaddr[m->machno] = m;
+	cpu->cpuno = 0;
+	cpus[cpu->cpuno] = cpu;
 
 	machinit();
 	active.exiting = 0;
@@ -260,26 +275,26 @@ void
 launchinit(int ncpus)
 {
 	int mach;
-	Mach *mm;
+	Cpu *mm;
 	PTE *l1;
 
-	if(ncpus > MAXMACH)
-		ncpus = MAXMACH;
+	if(ncpus > MAXCPUS)
+		ncpus = MAXCPUS;
 	for(mach = 1; mach < ncpus; mach++){
-		machaddr[mach] = mm = mallocalign(MACHSIZE, MACHSIZE, 0, 0);
+		cpus[mach] = mm = mallocalign(CPUSIZE, CPUSIZE, 0, 0);
 		l1 = mallocalign(L1SIZE, L1SIZE, 0, 0);
 		if(mm == nil || l1 == nil)
 			panic("launchinit");
-		memset(mm, 0, MACHSIZE);
-		mm->machno = mach;
+		memset(mm, 0, CPUSIZE);
+		mm->cpuno = mach;
 
-		memmove(l1, m->mmul1, L1SIZE);  /* clone cpu0's l1 table */
+		memmove(l1, cpu->mmul1, L1SIZE);  /* clone cpu0's l1 table */
 		cachedwbse(l1, L1SIZE);
 		mm->mmul1 = l1;
-		cachedwbse(mm, MACHSIZE);
+		cachedwbse(mm, CPUSIZE);
 
 	}
-	cachedwbse(machaddr, sizeof machaddr);
+	cachedwbse(cpus, sizeof cpus);
 	if((mach = startcpus(ncpus)) < ncpus)
 			panic("only %d cpu%s started", mach, mach == 1? "" : "s");
 }
@@ -300,16 +315,20 @@ main(void)
 	extern char edata[], end[];
 	uint fw, board;
 
-	m = (Mach*)MACHADDR;
+    iprint = devcons_iprint;
+    devtab = conf_devtab;
+    coherence = coherence1;
+
+	cpu = (Cpu*)CPUADDR;
 	memset(edata, 0, end - edata);	/* clear bss */
 	mach0init();
 	mmuinit1((void*)L1);
 	machon(0);
 
-	optionsinit("/boot/boot boot");
+	//optionsinit("/boot/boot boot");
 	quotefmtinstall();
 	
-	ataginit((Atag*)BOOTARGS);
+	//ataginit((Atag*)BOOTARGS);
 	confinit();		/* figures out amount of memory */
 	xinit();
 	uartconsinit();
@@ -329,15 +348,15 @@ main(void)
 	setclkrate(ClkArm, 0);
 	trapinit();
 	clockinit();
-	printinit();
+	lineqinit();
 	timersinit();
-	if(conf.monitor)
+	//if(conf.monitor)
 		swcursorinit();
 	cpuidprint();
 	archreset();
 
-	procinit0();
-	initseg();
+	procinit();
+	imageinit();
 	links();
 	chandevreset();			/* most devices are discovered here */
 	pageinit();
@@ -459,7 +478,9 @@ userinit(void)
 	 * Kernel Stack
 	 */
 	p->sched.pc = PTR2UINT(init0);
-	p->sched.sp = PTR2UINT(p->kstack+KSTACK-sizeof(up->s.args)-sizeof(uintptr));
+	p->sched.sp = PTR2UINT(p->kstack + KSTACK
+                           - sizeof(up->sargs.args)
+                           - sizeof(uintptr));
 	p->sched.sp = STACKALIGN(p->sched.sp);
 
 	/*
@@ -487,7 +508,7 @@ userinit(void)
 	pg = newpage(1, 0, UTZERO);
 	memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
 	segpage(s, pg);
-	k = kmap(s->map[0]->pages[0]);
+	k = kmap(s->pagedir[0]->pagetab[0]);
 	memmove(UINT2PTR(VA(k)), initcode, sizeof initcode);
 	kunmap(k);
 
@@ -561,9 +582,9 @@ confinit(void)
 	kpages *= BY2PG;
 	kpages -= conf.upages*sizeof(Page)
 		+ conf.nproc*sizeof(Proc)
-		+ conf.nimage*sizeof(Image)
+		+ conf.nimage*sizeof(KImage)
 		+ conf.nswap
-		+ conf.nswppo*sizeof(Page);
+		+ conf.nswppo*sizeof(Page); // BUG, Page -> Page*?
 	mainmem->maxsize = kpages;
 	if(!cpuserver)
 		/*
@@ -583,22 +604,22 @@ shutdown(int ispanic)
 	lock(&active);
 	if(ispanic)
 		active.ispanic = ispanic;
-	else if(m->machno == 0 && (active.machs & (1<<m->machno)) == 0)
+	else if(cpu->cpuno == 0 && (active.cpus & (1 << cpu->cpuno)) == 0)
 		active.ispanic = 0;
-	once = active.machs & (1<<m->machno);
-	active.machs &= ~(1<<m->machno);
+	once = active.cpus & (1 << cpu->cpuno);
+	active.cpus &= ~(1 << cpu->cpuno);
 	active.exiting = 1;
 	unlock(&active);
 
 	if(once)
-		iprint("cpu%d: exiting\n", m->machno);
+		iprint("cpu%d: exiting\n", cpu->cpuno);
 	spllo();
 	for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
 		delay(TK2MS(2));
-		if(active.machs == 0 && consactive() == 0)
+		if(active.cpus == 0 && consactive() == 0)
 			break;
 	}
-	delay(100*m->machno);
+	delay(100*cpu->cpuno);
 }
 
 /*
@@ -611,7 +632,7 @@ exit(int code)
 
 	shutdown(code);
 	splfhi();
-	if(m->machno == 0)
+	if(cpu->cpuno == 0)
 		archreboot();
 	else{
 		f = (void*)REBOOTADDR;
@@ -663,12 +684,12 @@ reboot(void *entry, void *code, ulong size)
 	 * the boot processor is cpu0.  execute this function on it
 	 * so that the new kernel has the same cpu0.
 	 */
-	if (m->machno != 0) {
+	if (cpu->cpuno != 0) {
 		procwired(up, 0);
 		sched();
 	}
-	if (m->machno != 0)
-		print("on cpu%d (not 0)!\n", m->machno);
+	if (cpu->cpuno != 0)
+		print("on cpu%d (not 0)!\n", cpu->cpuno);
 
 	/* setup reboot trampoline function */
 	f = (void*)REBOOTADDR;
@@ -682,7 +703,7 @@ reboot(void *entry, void *code, ulong size)
 	 */
 
 	delay(5000);
-	print("active.machs = %x\n", active.machs);
+	print("active.machs = %x\n", active.cpus);
 	print("reboot entry %#lux code %#lux size %ld\n",
 		PADDR(entry), PADDR(code), size);
 	delay(100);
@@ -713,3 +734,18 @@ reboot(void *entry, void *code, ulong size)
 	delay(1000);
 	archreboot();
 }
+
+// called from devcons.c
+void
+memorysummary(void) {
+}
+
+ulong
+us(void)
+{
+  return -1;
+}
+
+bool kdebug;
+
+

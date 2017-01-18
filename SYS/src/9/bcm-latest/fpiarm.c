@@ -216,7 +216,7 @@ fcmp(Internal *n, Internal *m)
 }
 
 static void
-fld(void (*f)(Internal*, void*), int d, ulong ea, int n, FPsave *ufp)
+fld(void (*f)(Internal*, void*), int d, ulong ea, int n, ArchFPsave *ufp)
 {
 	void *mem;
 
@@ -227,7 +227,7 @@ fld(void (*f)(Internal*, void*), int d, ulong ea, int n, FPsave *ufp)
 }
 
 static void
-fst(void (*f)(void*, Internal*), ulong ea, int s, int n, FPsave *ufp)
+fst(void (*f)(void*, Internal*), ulong ea, int s, int n, ArchFPsave *ufp)
 {
 	Internal tmp;
 	void *mem;
@@ -292,7 +292,7 @@ unimp(ulong pc, ulong op)
 }
 
 static void
-fpemu(ulong pc, ulong op, Ureg *ur, FPsave *ufp)
+fpemu(ulong pc, ulong op, Ureg *ur, ArchFPsave *ufp)
 {
 	int rn, rd, tag, o;
 	long off;
@@ -465,7 +465,7 @@ int
 fpiarm(Ureg *ur)
 {
 	ulong op, o, cp;
-	FPsave *ufp;
+	ArchFPsave *ufp;
 	int n;
 
 	if(up == nil)
