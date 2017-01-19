@@ -5,11 +5,12 @@
  */
 #include	"u.h"
 #include	"../port/lib.h"
+#include	"../port/error.h"
 #include	"mem.h"
 #include	"dat.h"
 #include	"fns.h"
+
 #include	"io.h"
-#include	"../port/error.h"
 
 enum {
 	Spec=		0xF800,		/* Unicode private space */
@@ -44,6 +45,7 @@ enum {
 
 	Int=	0,			/* kbscans indices */
 	Ext,
+
 	Nscans,
 };
 
@@ -217,6 +219,7 @@ struct Kbscan {
 
 Kbscan kbscans[Nscans];	/* kernel and external scan code state */
 
+// called when write in /dev/kbin (see devkbin.c)
 /*
  * Scan code processing
  */
@@ -401,6 +404,7 @@ kbdenable(void)
 	kbscans[Int].num = 0;
 }
 
+// called when interact with /dev/kbmap (see devkbmap.c)
 void
 kbdputmap(ushort m, ushort scanc, Rune r)
 {

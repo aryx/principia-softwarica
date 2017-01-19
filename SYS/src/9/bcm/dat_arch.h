@@ -1,6 +1,4 @@
 
-
-
 //TODO: factorize with x86, seems portable
 /*
  *  hardware info about a device

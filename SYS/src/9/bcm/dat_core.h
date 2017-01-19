@@ -1,4 +1,9 @@
 
+// was vlong in x86
+//typedef uvlong		Tval;
+
+typedef u32int		PTE;
+
 /*
  *  MMU stuff in Mach.
  */
@@ -7,6 +12,7 @@ struct MMMU
 	PTE*	mmul1;		/* l1 for this processor */
 	int	mmul1lo;
 	int	mmul1hi;
+
 	int	mmupid;
 };
 

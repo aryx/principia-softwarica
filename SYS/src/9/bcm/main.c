@@ -1,14 +1,15 @@
 #include "u.h"
-#include "tos.h"
 #include "../port/lib.h"
 #include "mem.h"
 #include "dat.h"
-#include "io.h"
 #include "fns.h"
+
+#include "tos.h"
+#include "io.h"
+#include <pool.h>
 
 // initcode binary
 #include "init.h"
-#include <pool.h>
 
 // rebootcode binary
 #include "reboot.h"

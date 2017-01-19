@@ -23,7 +23,7 @@
  */
 
 #define	USER		9		/* R9 is up-> */
-#define	MACH		10		/* R10 is m-> */
+#define	MACH		10		/* R10 is cpu-> */
 
 /*
  * Address spaces.
@@ -38,14 +38,17 @@
 #define	KSEG0		0x80000000		/* kernel segment */
 /* mask to check segment; good for 1GB dram */
 #define	KSEGM		0xC0000000
+
 #define	KZERO		KSEG0			/* kernel address space */
 #define CONFADDR	(KZERO+0x100)		/* unparsed plan9.ini */
-#define	CPUADDR	(KZERO+0x2000)		/* Mach structure */
-#define	L2		(KZERO+0x3000)		/* L2 ptes for vectors etc */
+#define	CPUADDR	    (KZERO+0x2000)		/* Mach structure */
+#define	L2		    (KZERO+0x3000)		/* L2 ptes for vectors etc */
 #define	VCBUFFER	(KZERO+0x3400)		/* videocore mailbox buffer */
 #define	FIQSTKTOP	(KZERO+0x4000)		/* FIQ stack */
-#define	L1		(KZERO+0x4000)		/* tt ptes: 16KiB aligned */
+#define	L1		    (KZERO+0x4000)		/* tt ptes: 16KiB aligned */
+
 #define	KTZERO		(KZERO+0x8000)		/* kernel text start */
+
 #define VIRTIO		0x7E000000		/* i/o registers */
 #define	FRAMEBUFFER	0xC0000000		/* video framebuffer */
 

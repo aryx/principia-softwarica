@@ -4,7 +4,6 @@
  */
 #define AOUT_MAGIC	(E_MAGIC)
 
-
 /*
  * emulated or vfp3 floating point
  */
@@ -19,6 +18,7 @@ struct ArchFPsave
 	ulong	regs[Maxfpregs][3];
 
 	int	fpstate;
+
 	uintptr	pc;		/* of failed fp instr. */
 };
 

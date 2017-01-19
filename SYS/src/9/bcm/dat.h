@@ -21,8 +21,8 @@ enum {
 };
 
 // was a default in portdat.h
-#define STAGESIZE 64
-#define KMESGSIZE (16*1024)
+#define STAGESIZE 64 // for devuart
+#define KMESGSIZE (16*1024) // for /dev/kmesg
 
 // pad memory pointers
 // physical address

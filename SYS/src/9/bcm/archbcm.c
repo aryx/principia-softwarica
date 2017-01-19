@@ -22,6 +22,7 @@ Soc soc = {
 	.busdram	= 0x40000000,
 	.busio		= 0x7E000000,
 	.armlocal	= 0,
+
 	.l1ptedramattrs = Cached | Buffered,
 	.l2ptedramattrs = Cached | Buffered,
 };

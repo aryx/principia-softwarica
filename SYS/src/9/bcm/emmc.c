@@ -10,6 +10,7 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+
 #include "io.h"
 #include "../port/sd.h"
 
@@ -152,8 +153,6 @@ struct Ctlr {
 
 static Ctlr emmc;
 
-static void mmcinterrupt(Ureg*, void*);
-
 static void
 WR(int reg, u32int val)
 {
@@ -221,6 +220,17 @@ emmcinquiry(char *inquiry, int inqlen)
 	return snprint(inquiry, inqlen,
 		"Arasan eMMC SD Host Controller %2.2x Version %2.2x",
 		ver&0xFF, ver>>8);
+}
+
+static void
+mmcinterrupt(Ureg*, void*)
+{	
+	u32int *r;
+	r = (u32int*)EMMCREGS;
+	if(r[Interrupt]&(Datadone|Err)){
+		WR(Irpten, 0);
+		wakeup(&emmc.r);
+	}
 }
 
 static void
@@ -409,16 +419,6 @@ emmcio(int write, uchar *buf, int len)
 	okay(0);
 }
 
-static void
-mmcinterrupt(Ureg*, void*)
-{	
-	u32int *r;
-	r = (u32int*)EMMCREGS;
-	if(r[Interrupt]&(Datadone|Err)){
-		WR(Irpten, 0);
-		wakeup(&emmc.r);
-	}
-}
 
 SDio sdio = {
 	"emmc",

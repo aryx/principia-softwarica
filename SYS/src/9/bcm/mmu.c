@@ -9,6 +9,7 @@
 #define L1X(va)		FEXT((va), 20, 12)
 #define L2X(va)		FEXT((va), 12, 8)
 #define L2AP(ap)	l2ap(ap)
+
 #define L1ptedramattrs	soc.l1ptedramattrs
 #define L2ptedramattrs	soc.l2ptedramattrs
 
@@ -32,10 +33,10 @@ mmuinit(void *a)
 	/*
 	 * map all of ram at KZERO
 	 */
-	va = KZERO;
-	for(pa = PHYSDRAM; pa < PHYSDRAM+soc.dramsize; pa += MiB){
+    va = KZERO;
+	for(pa = PHYSDRAM; pa < PHYSDRAM + soc.dramsize; pa += MiB, va += MiB)
+    {
 		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
-		va += MiB;
 	}
 
 	/*
@@ -47,9 +48,8 @@ mmuinit(void *a)
 	 * map i/o registers 
 	 */
 	va = VIRTIO;
-	for(pa = soc.physio; pa < soc.physio+IOSIZE; pa += MiB){
+	for(pa = soc.physio; pa < soc.physio+IOSIZE; pa += MiB, va += MiB){
 		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
-		va += MiB;
 	}
 	pa = soc.armlocal;
 	if(pa)

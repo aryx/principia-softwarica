@@ -4,9 +4,11 @@ enum {
 	IRQtimer2	= 2,
 	IRQtimer3	= 3,
 	IRQclock	= IRQtimer3,
+
 	IRQusb		= 9,
 	IRQdma0		= 16,
 #define IRQDMA(chan)	(IRQdma0+(chan))
+
 	IRQaux		= 29,
 	IRQi2c		= 53,
 	IRQspi		= 54,
