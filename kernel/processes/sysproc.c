@@ -294,11 +294,11 @@ sysexec(ulong* arg)
     /*x: [[sysexec()]] locals */
     Tos *tos;
     /*x: [[sysexec()]] locals */
-        char line[sizeof(Exec)];
-        char *progarg[sizeof(Exec)/2+1];
-        char progelem[64];
+    char line[sizeof(Exec)];
+    char *progarg[sizeof(Exec)/2+1];
+    char progelem[64];
 
-        bool indir = false;
+    bool indir = false;
     /*e: [[sysexec()]] locals */
 
     elem = nil;
@@ -338,30 +338,30 @@ sysexec(ulong* arg)
         }
 
         /*s: [[sysexec()]] process sharpbang */
-                /*
-                 * Process #! /bin/sh args ...
-                 */
-                memmove(line, &exec, sizeof(Exec));
-                if(indir || line[0]!='#' || line[1]!='!')
-                    error(Ebadexec);
-                n = shargs(line, n, progarg);
-                if(n == 0)
-                    error(Ebadexec);
-                indir = true;
-                /*
-                 * First arg becomes complete file name
-                 */
-                progarg[n++] = file;
-                progarg[n] = 0;
-                validaddr(arg[1], BY2WD, true);
-                arg[1] += BY2WD;
-                file = progarg[0];
-                if(strlen(elem) >= sizeof progelem)
-                    error(Ebadexec);
-                strcpy(progelem, elem);
-                progarg[0] = progelem;
-                poperror();
-                cclose(tc);
+        /*
+         * Process #! /bin/sh args ...
+         */
+        memmove(line, &exec, sizeof(Exec));
+        if(indir || line[0]!='#' || line[1]!='!')
+            error(Ebadexec);
+        n = shargs(line, n, progarg);
+        if(n == 0)
+            error(Ebadexec);
+        indir = true;
+        /*
+         * First arg becomes complete file name
+         */
+        progarg[n++] = file;
+        progarg[n] = 0;
+        validaddr(arg[1], BY2WD, true);
+        arg[1] += BY2WD;
+        file = progarg[0];
+        if(strlen(elem) >= sizeof progelem)
+            error(Ebadexec);
+        strcpy(progelem, elem);
+        progarg[0] = progelem;
+        poperror();
+        cclose(tc);
         /*e: [[sysexec()]] process sharpbang */
     }
 
@@ -385,14 +385,14 @@ sysexec(ulong* arg)
     nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
     /*e: [[sysexec()]] nbytes tos adjustments */
     /*s: [[sysexec()]] if indir arg adjustments */
-        if(indir){
-            argp = progarg;
-            while(*argp){
-                a = *argp++;
-                nbytes += strlen(a) + 1;
-                nargs++;
-            }
+    if(indir){
+        argp = progarg;
+        while(*argp){
+            a = *argp++;
+            nbytes += strlen(a) + 1;
+            nargs++;
         }
+    }
     /*e: [[sysexec()]] if indir arg adjustments */
 
  validalign(arg[1], sizeof(char**));
@@ -453,18 +453,18 @@ sysexec(ulong* arg)
     charp = (char*)(TSTKTOP - nbytes);
     args = charp;
     /*s: [[sysexec()]] if indir argp adjustments */
-        if(indir)
-            argp = progarg;
+    if(indir)
+        argp = progarg;
     /*e: [[sysexec()]] if indir argp adjustments */
     else
         argp = (char**)arg[1];
 
     for(i=0; i<nargs; i++){
         /*s: [[sysexec()]] if indir argp adjustments again */
-                if(indir && *argp==nil) {
-                    indir = false;
-                    argp = (char**)arg[1];
-                }
+        if(indir && *argp==nil) {
+            indir = false;
+            argp = (char**)arg[1];
+        }
         /*e: [[sysexec()]] if indir argp adjustments again */
         *argv++ = charp + (USTKTOP-TSTKTOP);
         n = strlen(*argp) + 1;

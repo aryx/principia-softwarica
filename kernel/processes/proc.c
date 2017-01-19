@@ -881,11 +881,12 @@ procwired(Proc *p, int bm)
 void
 procpriority(Proc *p, int pri, bool fixed)
 {
+    /*s: [[procpriority()]] sanity check pri */
     if(pri >= Npriq)
         pri = Npriq - 1;
     else if(pri < 0)
         pri = 0;
-
+    /*e: [[procpriority()]] sanity check pri */
     p->basepri = pri;
     p->priority = pri;
     p->fixedpri = fixed;

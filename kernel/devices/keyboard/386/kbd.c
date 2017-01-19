@@ -646,7 +646,7 @@ i8042intr(Ureg*, void*)
             return;
         }
     /*e: [[i8042intr()]] aux port handling(x86) */
-
+    // !!!
     kbdputsc(c, Int);
 }
 /*e: interrupt callback i8042intr(x86) */

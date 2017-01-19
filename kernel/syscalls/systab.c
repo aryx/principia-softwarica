@@ -115,11 +115,11 @@ Syscall *systab[] = {
     [TSEMACQUIRE]   systsemacquire,
 /*e: systab concurrency syscalls */
 /*s: systab special file syscalls */
-    [DUP]       sysdup,
+[DUP]       sysdup,
 /*e: systab special file syscalls */
 /*s: systab security syscalls */
-    [FAUTH]     sysfauth,
-    [FVERSION]  sysfversion,
+[FAUTH]     sysfauth,
+[FVERSION]  sysfversion,
 /*e: systab security syscalls */
     [ERRSTR]    syserrstr,
 };

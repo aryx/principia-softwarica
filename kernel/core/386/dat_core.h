@@ -67,6 +67,8 @@ struct ArchCpu {
     // for perfticks, tsc = time stamp counter
     bool havetsc;
     /*x: [[Cpu]] [[Arch]] other fields(x86) */
+    ArchFPsave *fpsavalign;
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     int mmupdalloc;
     int mmupdfree;
     /*x: [[Cpu]] [[Arch]] other fields(x86) */
@@ -76,8 +78,6 @@ struct ArchCpu {
     vlong mtrrdef;
     vlong mtrrfix[11];
     vlong mtrrvar[32];    /* 256 max. */
-    /*x: [[Cpu]] [[Arch]] other fields(x86) */
-    ArchFPsave *fpsavalign;
     /*x: [[Cpu]] [[Arch]] other fields(x86) */
     Lock  apictimerlock;
     /*x: [[Cpu]] [[Arch]] other fields(x86) */

@@ -52,9 +52,9 @@ struct Page
     char  modref;     /* Simulated modify/reference bits */
 
     // enum<cachectl>??
- char	color;			/* Cache coloring */
+    char color;			/* Cache coloring */
     // array<enum<cachectl>>
- char	cachectl[MAXCPUS];	/* Cache flushing control for putmmu */
+    char cachectl[MAXCPUS];	/* Cache flushing control for putmmu */
 
     // extra
     Lock;
@@ -204,9 +204,9 @@ struct Segment
     /*x: [[Segment]] other fields */
     kern_addr2  profile;  /* Tick profile area */ // for TSEG only
     /*x: [[Segment]] other fields */
-        ulong mark;   /* portcountrefs */
-    /*x: [[Segment]] other fields */
     Physseg *pseg;
+    /*x: [[Segment]] other fields */
+        ulong mark;   /* portcountrefs */
     /*e: [[Segment]] other fields */
   
     // extra

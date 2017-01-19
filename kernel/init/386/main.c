@@ -70,9 +70,6 @@ enum {
 // Global! set by bootargs()
 uchar *sp;      /* user stack of init proc */
 
-// could delete, nobody set it to true anyway
-int delaylink = 0;
-
 //@Scheck: Assembly
 extern phys_addr *multiboot;
 
@@ -914,11 +911,7 @@ void main(void)
     procinit();
     imageinit();
 
-    if(delaylink) {
-       bootlinks();
-       pcimatch(0, 0, 0);
-    } else
-       links();
+    links();
 
     // initialize all devices
     chandevreset();

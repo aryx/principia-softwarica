@@ -59,8 +59,10 @@ extern  char* statename[];
 enum procseg
 {
     SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
+
     ESEG, // E = Extra (used for temporary stack segment),
     _SEG0, _SEG1, _SEG2, _SEG3, _SEG4, // free slots for for segattach
+
     NSEG // to count, see Proc.seg array
 };
 /*e: enum procseg */
@@ -653,16 +655,16 @@ struct Proc
     /*x: [[Proc]] other fields */
     ulong alarm;    /* Time of call */
     /*x: [[Proc]] other fields */
+    // enum<fpsavestatus>
+    int fpstate;
+    ArchFPsave  fpsave;   /* address of this is known by db */
+    /*x: [[Proc]] other fields */
     // ref_counted<Egrp>
     Egrp  *egrp;    /* Environment group */
     /*x: [[Proc]] other fields */
     ulong procmode; /* proc device default file mode */
     /*x: [[Proc]] other fields */
     bool privatemem; /* proc does not let anyone read mem */
-    /*x: [[Proc]] other fields */
-    // enum<fpsavestatus>
-    int fpstate;
-    ArchFPsave  fpsave;   /* address of this is known by db */
     /*e: [[Proc]] other fields */
 //--------------------------------------------------------------------
 // Extra
