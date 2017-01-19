@@ -5,11 +5,12 @@
 
 #include	"u.h"
 #include	"../port/lib.h"
+#include	"../port/error.h"
 #include	"mem.h"
 #include	"dat.h"
 #include	"fns.h"
-#include	"../port/error.h"
 
+// defined in <arch>/kbd.c or port/portkbd.c?
 extern	void kbdputsc(int, int);
 
 enum {
