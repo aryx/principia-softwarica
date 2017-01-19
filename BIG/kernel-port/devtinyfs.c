@@ -1,6 +1,8 @@
 /*
  *  a pity the code isn't also tiny...
  */
+//pad: see http://www.vitanuova.com/inferno/man/3/tinyfs.html
+// very simple fs, no sub directories.
 #include "u.h"
 #include "../port/lib.h"
 #include "../port/error.h"
