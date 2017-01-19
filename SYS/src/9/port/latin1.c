@@ -1,1 +1,1 @@
-../../../../kernel/devices/keyboard/386/latin1.c
+../../../../kernel/devices/keyboard/latin1.c
