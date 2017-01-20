@@ -13,10 +13,13 @@
 #include	"io.h"
 
 enum {
+	KF=		    0xF000,		/* function key (begin Unicode private space) */
 	Spec=		0xF800,		/* Unicode private space */
-	PF=		Spec|0x20,	/* num pad function key */
+
+
+	PF=		    Spec|0x20,	/* num pad function key */
 	View=		Spec|0x00,	/* view (shift window up) */
-	KF=		0xF000,		/* function key (begin Unicode private space) */
+
 	Shift=		Spec|0x60,
 	Break=		Spec|0x61,
 	Ctrl=		Spec|0x62,
@@ -25,11 +28,15 @@ enum {
 	Num=		Spec|0x65,
 	Middle=		Spec|0x66,
 	Altgr=		Spec|0x67,
+
 	Kmouse=		Spec|0x100,
-	No=		0x00,		/* peter */
+
+	No=		    0x00,		/* peter */
+
+    /* KF|1, KF|2, ..., KF|0xC is F1, F2, ..., F12 */
 
 	Home=		KF|13,
-	Up=		KF|14,
+	Up=		    KF|14,
 	Pgup=		KF|15,
 	Print=		KF|16,
 	Left=		KF|17,
