@@ -11,9 +11,6 @@
 #include	"dat.h"
 #include	"fns.h"
 
-// defined in port/portkbd.c
-extern	void kbdputsc(int, int);
-
 enum {
 	Qdir,
 	Qkbd,
