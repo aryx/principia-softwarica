@@ -25,7 +25,7 @@ Dirtab kbmaptab[]={
 static Chan *
 kbmapattach(char *spec)
 {
-	return devattach(L'Îº', spec);
+	return devattach(L'κ', spec);
 }
 
 static Walkqid*
@@ -159,7 +159,7 @@ kbmapwrite(Chan *c, void *a, long n, vlong)
 }
 
 Dev kbmapdevtab = {
-	.dc = L'Îº',
+	.dc = L'κ',
 	.name = "kbmap",
 
 	.reset = devreset,
