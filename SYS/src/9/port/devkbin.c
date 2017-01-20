@@ -10,7 +10,7 @@
 #include	"dat.h"
 #include	"fns.h"
 
-// defined in <arch>/kbd.c or port/portkbd.c?
+// defined in port/portkbd.c
 extern	void kbdputsc(int, int);
 
 enum {
@@ -91,6 +91,7 @@ kbinwrite(Chan *c, void *a, long n, vlong)
 	switch((int)c->qid.path){
 	case Qkbd:
 		for(i = 0; i < n; i++)
+            // !! important call !!
 			kbdputsc(*p++, 1);	/* external source */
 		break;
 	default:

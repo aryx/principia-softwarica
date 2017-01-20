@@ -23,6 +23,7 @@ void    drawcmap(void);
 // mouse/devmouse.c
 void    mouseresize(void);
 // keyboard/portkbd.c
+void kbdputsc(int, int);
 int   kbdgetmap(uint, int*, int*, Rune*);
 void    kbdputmap(ushort, ushort, Rune);
 
