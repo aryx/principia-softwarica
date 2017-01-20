@@ -3,11 +3,6 @@
 /*s: enum misc_constants(x86) */
 enum misc_constants
 {
-    /*s: constant MAXSYSARG(x86) */
-    // used in Proc
-    MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
-    /*e: constant MAXSYSARG(x86) */
-
     /*s: constant KMESGSIZE(x86) */
     // used in devcons.c
     KMESGSIZE = (16*1024),  /* put 256*1024 if want acpi debugging */
@@ -16,20 +11,6 @@ enum misc_constants
     // used by devuart.c
     STAGESIZE = 2048, // default is 64
     /*e: constant STAGESIZE(x86) */
-
-    /* cpuid instruction result register bits */
-    // this is actually only used in 386/ code. 
-    /* dx */
-    Fpuonchip = 1<<0,
-    Vmex  = 1<<1,   /* virtual-mode extensions */
-    Pse = 1<<3,   /* page size extensions */
-    Tsc = 1<<4,   /* time-stamp counter */
-    Cpumsr  = 1<<5,   /* model-specific registers, rdmsr/wrmsr */
-    Mce = 1<<7,   /* machine-check exception */
-    Mtrr  = 1<<12,  /* memory-type range regs.  */
-    Pge = 1<<13,  /* page global extension */
-    Fxsr  = 1<<24,  /* have SSE FXSAVE/FXRSTOR */
-    Sse2  = 1<<26,  /* thus mfence & lfence instr.s */
 };
 /*e: enum misc_constants(x86) */
 /*s: pad memory pointer types(x86) */
@@ -65,7 +46,7 @@ typedef void* kern_addr3;
 // defines Chan
 #include "../port/portdat_files.h"
 
-// defines PCArch
+// defines PCArch, a few arch-specific constants
 #include "dat_arch.h"
 
 // defines Proc
@@ -81,6 +62,9 @@ typedef void* kern_addr3;
 
 // defines keyboard queue, consdevtab
 #include "../port/portdat_console.h"
+
+// defines DevConf, DevPort (not that used)
+#include "../port/portdat_devices.h"
 
 // ref<Cpu>, the actual Cpu is where??
 extern Cpu *cpu;

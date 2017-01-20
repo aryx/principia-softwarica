@@ -1,17 +1,18 @@
 
-//TODO: factorize with x86, seems portable
-/*
- *  hardware info about a device
- */
-typedef struct {
-	ulong	port;
-	int	size;
-} Devport;
-
-struct DevConf
-{
-	ulong	intnum;			/* interrupt number */
-	char	*type;			/* card type, malloced */
-	int	nports;			/* Number of ports */
-	Devport	*ports;			/* The ports themselves */
+enum {
+	Maxfpregs	= 32,	/* could be 16 or 32, see Mach.fpnregs */
+	Nfpctlregs	= 16,
 };
+
+typedef struct Soc Soc;
+
+struct Soc {			/* SoC dependent configuration */
+	ulong	dramsize;
+	uintptr	physio;
+	uintptr	busdram;
+	uintptr	busio;
+	uintptr	armlocal;
+	u32int	l1ptedramattrs;
+	u32int	l2ptedramattrs;
+};
+extern Soc soc;

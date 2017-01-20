@@ -1,7 +1,4 @@
 
-// misc constants
-#define MAXSYSARG	5	/* for mount(fd, mpt, flag, arg, srv) */
-
 /*
  * Time.
  *
@@ -13,11 +10,6 @@
 #define	TK2SEC(t)	((t)/HZ)		/* ticks to seconds */
 enum {
 	Mhz	= 1000 * 1000,
-};
-
-enum {
-	Maxfpregs	= 32,	/* could be 16 or 32, see Mach.fpnregs */
-	Nfpctlregs	= 16,
 };
 
 // was a default in portdat.h
@@ -39,7 +31,6 @@ typedef void* kern_addr3;
 
 //#define nil (void*)0 in lib.h
 #define nilptr 0
-
 
 
 #include "dat_forward.h"
@@ -76,6 +67,9 @@ typedef void* kern_addr3;
 // defines keyboard queue, consdevtab
 #include "../port/portdat_console.h"
 
+// defines DevConf, DevPort (not that used)
+#include "../port/portdat_devices.h"
+
 /*
  *  things saved in the Proc structure during a notify
  */
@@ -92,8 +86,6 @@ extern uintptr kseg0;
 extern ulong memsize;
 extern int normalprint;
 
-
-
 /*
  * Horrid. But the alternative is 'defined'.
  */
@@ -102,21 +94,6 @@ extern int normalprint;
 #else
 #define DBGFLG		(0)
 #endif /* _DBGC_ */
-
 int vflag;
 extern char dbgflg[256];
-
 #define dbgprint	print		/* for now */
-
-typedef struct Soc Soc;
-
-struct Soc {			/* SoC dependent configuration */
-	ulong	dramsize;
-	uintptr	physio;
-	uintptr	busdram;
-	uintptr	busio;
-	uintptr	armlocal;
-	u32int	l1ptedramattrs;
-	u32int	l2ptedramattrs;
-};
-extern Soc soc;

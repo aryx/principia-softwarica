@@ -1,5 +1,24 @@
 /*s: dat_arch.h */
 
+/*s: enum arch_constants(x86) */
+enum arch_constants
+{
+    /* cpuid instruction result register bits */
+    // this is actually only used in 386/ code. 
+    /* dx */
+    Fpuonchip = 1<<0,
+    Vmex  = 1<<1,   /* virtual-mode extensions */
+    Pse = 1<<3,   /* page size extensions */
+    Tsc = 1<<4,   /* time-stamp counter */
+    Cpumsr  = 1<<5,   /* model-specific registers, rdmsr/wrmsr */
+    Mce = 1<<7,   /* machine-check exception */
+    Mtrr  = 1<<12,  /* memory-type range regs.  */
+    Pge = 1<<13,  /* page global extension */
+    Fxsr  = 1<<24,  /* have SSE FXSAVE/FXRSTOR */
+    Sse2  = 1<<26,  /* thus mfence & lfence instr.s */
+};
+/*e: enum arch_constants(x86) */
+
 //*****************************************************************************
 // IO Map
 //*****************************************************************************
@@ -171,25 +190,4 @@ struct X86type {
 /*e: struct X86type(x86) */
 
 extern X86type *cputype;
-
-
-/*
- *  hardware info about a device
- */
-/*s: struct Devport(x86) */
-struct Devport {
-    ulong port; 
-    int size;
-};
-/*e: struct Devport(x86) */
-
-/*s: struct DevConf(x86) */
-struct DevConf
-{
-    ulong intnum;     /* interrupt number */
-    char  *type;      /* card type, malloced */
-    int nports;     /* Number of ports */
-    Devport *ports;     /* The ports themselves */
-};
-/*e: struct DevConf(x86) */
 /*e: dat_arch.h */

@@ -11,6 +11,7 @@
 #include "../port/portfns_network.h"
 #include "../port/portfns_init.h"
 
+// devarch.c
 Dirtab*	addarchfile(char*, int, long(*)(Chan*, void*, long, vlong), 
 	long(*)(Chan*, void*, long, vlong));
 

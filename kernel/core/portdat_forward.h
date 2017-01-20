@@ -11,7 +11,6 @@ typedef struct Egrp Egrp;
 typedef struct Evalue Evalue;
 typedef struct Execvals Execvals;
 typedef struct Fgrp Fgrp;
-typedef struct DevConf  DevConf;
 typedef struct KImage KImage;
 typedef struct Log  Log;
 typedef struct Logflag  Logflag;
@@ -57,6 +56,9 @@ typedef struct Confmem  Confmem;
 typedef struct Lock Lock;
 typedef struct Cpu Cpu;
 typedef struct Label  Label;
+typedef struct DevConf  DevConf;
+typedef struct Devport  Devport;
+typedef struct ISAConf  ISAConf;
 
 // was in cache.c
 typedef struct Extent Extent;

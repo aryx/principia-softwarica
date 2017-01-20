@@ -1,7 +1,6 @@
 /*s: portdat_processes.h */
 
 // in lib.h: Waitmsg, ERRMAX
-// see also ArchProcMMU, MAXSYSARG in 386/
 
 //*****************************************************************************
 // Proc components
@@ -130,6 +129,10 @@ struct Pgrp
 //--------------------------------------------------------------------
 // System call
 //--------------------------------------------------------------------
+
+/*s: constant MAXSYSARG */
+#define MAXSYSARG  5 /* for mount(fd, afd, mpt, flag, arg) */
+/*e: constant MAXSYSARG */
 
 /*s: struct Sargs */
 // syscall arguments copied from user stack
@@ -346,7 +349,7 @@ struct Edf {
 /*e: struct Edf */
 
 //--------------------------------------------------------------------
-// Error managment
+// Error management
 //--------------------------------------------------------------------
 enum {
     /*s: constant NERR */
