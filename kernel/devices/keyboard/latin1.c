@@ -1,9 +1,12 @@
 /*s: latin1.c */
-#include    "u.h"
-#include    "../port/lib.h"
-#include    "mem.h"
-#include    "dat.h"
-#include    "fns.h"
+/*s: kernel basic includes */
+#include <u.h>
+#include "../port/lib.h"
+#include "../port/error.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+/*e: kernel basic includes */
 
 /*
  * The code makes two assumptions: strlen(ld) is 1 or 2; latintab[i].ld can be a

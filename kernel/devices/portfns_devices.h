@@ -22,12 +22,12 @@ void    drawactive(bool);
 void    drawcmap(void);
 // mouse/devmouse.c
 void    mouseresize(void);
+// keyboard/portkbd.c
+int   kbdgetmap(uint, int*, int*, Rune*);
+void    kbdputmap(ushort, ushort, Rune);
 
 // in screen/386/screen.c (but used in port)
 void    getcolor(ulong, ulong*, ulong*, ulong*);
 int   setcolor(ulong, ulong, ulong, ulong);
-// in keyboard/386/kbd.c (but used in port)
-int   kbdgetmap(uint, int*, int*, Rune*);
-void    kbdputmap(ushort, ushort, Rune);
 
 /*e: portfns_devices.h */
