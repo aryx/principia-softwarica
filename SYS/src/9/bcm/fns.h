@@ -17,6 +17,7 @@ Dirtab*	addarchfile(char*, int, long(*)(Chan*, void*, long, vlong),
 
 extern void archreboot(void);
 extern void archreset(void);
+
 extern void armtimerset(int);
 
 extern void cachedwb(void);
@@ -43,6 +44,8 @@ extern void (*coherence)(void);
 extern void coherence1(void);
 
 extern u32int cpidget(void);
+
+// coproc.c
 extern ulong cprd(int cp, int op1, int crn, int crm, int op2);
 extern ulong cprdsc(int op1, int crn, int crm, int op2);
 extern void cpwr(int cp, int op1, int crn, int crm, int op2, ulong val);

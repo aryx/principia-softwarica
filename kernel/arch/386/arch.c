@@ -22,7 +22,6 @@ void    (*fpsave)(ArchFPsave*);
 
 int (*_pcmspecial)(char*, ISAConf*);
 //void (*_pcmspecialclose)(int); // useful if use pccard device driver
-
 /*
  *  call either the pcmcia or pccard device setup
  */

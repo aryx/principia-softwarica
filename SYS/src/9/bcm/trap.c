@@ -52,17 +52,21 @@ struct Intregs {
 };
 
 struct Vctl {
-	Vctl	*next;
 	int	irq;
 	int	cpu;
 	u32int	*reg;
 	u32int	mask;
+
 	void	(*f)(Ureg*, void*);
 	void	*a;
+
+	Vctl	*next;
 };
 
 static Lock vctllock;
-static Vctl *vctl, *vfiq;
+static Vctl *vctl;
+
+static Vctl *vfiq;
 
 static char *trapnames[PsrMask+1] = {
 	[ PsrMusr ] "user mode",
