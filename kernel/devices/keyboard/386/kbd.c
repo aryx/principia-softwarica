@@ -30,8 +30,6 @@ enum {
     Cmd=        0x64,       /* command port (write only) */
 };
 
-static char *initfailed = "i8042: kbdinit failed\n";
-
 enum
 {
     /* controller command byte */
@@ -57,6 +55,7 @@ static byte ccc;
 static void (*auxputc)(int, int);
 /*e: hook auxputc(x86) */
 
+static char *initfailed = "i8042: kbdinit failed\n";
 
 /*s: function outready(x86) */
 /*

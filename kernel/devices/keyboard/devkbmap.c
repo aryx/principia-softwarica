@@ -1,3 +1,4 @@
+/*s: devkbmap.c */
 /*
  *  keyboard map
  */
@@ -24,7 +25,7 @@ Dirtab kbmaptab[]={
 static Chan *
 kbmapattach(char *spec)
 {
-	return devattach(L'κ', spec);
+	return devattach(L'Îº', spec);
 }
 
 static Walkqid*
@@ -158,7 +159,7 @@ kbmapwrite(Chan *c, void *a, long n, vlong)
 }
 
 Dev kbmapdevtab = {
-	.dc = L'κ',
+	.dc = L'Îº',
 	.name = "kbmap",
 
 	.reset = devreset,
@@ -177,3 +178,4 @@ Dev kbmapdevtab = {
 	.remove = devremove,
 	.wstat = devwstat,
 };
+/*e: devkbmap.c */

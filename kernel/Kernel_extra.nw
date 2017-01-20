@@ -943,6 +943,7 @@ void    drawcmap(void);
 // mouse/devmouse.c
 void    mouseresize(void);
 // keyboard/portkbd.c
+void kbdputsc(int, int);
 int   kbdgetmap(uint, int*, int*, Rune*);
 void    kbdputmap(ushort, ushort, Rune);
 
@@ -1122,6 +1123,318 @@ latin1(Rune* k, int n)
 
 \subsection*{[[devices/keyboard/latin1.h]]}
 
+
+\subsection{[[devkbin.c]]}
+
+<<devkbin.c>>=
+/*
+ *  keyboard scan code input from outside the kernel.
+ *  to avoid duplication of keyboard map processing for usb.
+ */
+
+#include	"u.h"
+#include	"../port/lib.h"
+#include	"../port/error.h"
+#include	"mem.h"
+#include	"dat.h"
+#include	"fns.h"
+
+// defined in port/portkbd.c
+extern	void kbdputsc(int, int);
+
+enum {
+	Qdir,
+	Qkbd,
+};
+
+Dirtab kbintab[] = {
+	".",	{Qdir, 0, QTDIR},	0,	0555,
+	"kbin",	{Qkbd, 0},		0,	0200,
+};
+
+Lock	kbinlck;
+int	kbinbusy;
+
+static Chan *
+kbinattach(char *spec)
+{
+	return devattach(L'Ι', spec);
+}
+
+static Walkqid*
+kbinwalk(Chan *c, Chan *nc, char **name, int nname)
+{
+	return devwalk(c, nc, name, nname, kbintab, nelem(kbintab), devgen);
+}
+
+static int
+kbinstat(Chan *c, uchar *dp, int n)
+{
+	return devstat(c, dp, n, kbintab, nelem(kbintab), devgen);
+}
+
+static Chan*
+kbinopen(Chan *c, int omode)
+{
+	if(!iseve())
+		error(Eperm);
+	if(c->qid.path == Qkbd){
+		lock(&kbinlck);
+		if(kbinbusy){
+			unlock(&kbinlck);
+			error(Einuse);
+		}
+		kbinbusy++;
+		unlock(&kbinlck);
+	}
+	return devopen(c, omode, kbintab, nelem(kbintab), devgen);
+}
+
+static void
+kbinclose(Chan *c)
+{
+	if(c->aux){
+		free(c->aux);
+		c->aux = nil;
+	}
+	if(c->qid.path == Qkbd)
+		kbinbusy = 0;
+}
+
+static long
+kbinread(Chan *c, void *a, long n, vlong )
+{
+	if(c->qid.type == QTDIR)
+		return devdirread(c, a, n, kbintab, nelem(kbintab), devgen);
+	return 0;
+}
+
+static long
+kbinwrite(Chan *c, void *a, long n, vlong)
+{
+	int i;
+	uchar *p = a;
+
+	if(c->qid.type == QTDIR)
+		error(Eisdir);
+	switch((int)c->qid.path){
+	case Qkbd:
+		for(i = 0; i < n; i++)
+            // !! important call !!
+			kbdputsc(*p++, 1);	/* external source */
+		break;
+	default:
+		error(Egreg);
+	}
+	return n;
+}
+
+Dev kbindevtab = {
+	.dc = L'Ι',
+	.name = "kbin",
+
+	.reset = devreset,
+	.init = devinit,
+	.shutdown = devshutdown,
+	.attach = kbinattach,
+	.walk = kbinwalk,
+	.stat = kbinstat,
+	.open = kbinopen,
+	.create = devcreate,
+	.close = kbinclose,
+	.read = kbinread,
+	.bread = devbread,
+	.write = kbinwrite,
+	.bwrite = devbwrite,
+	.remove = devremove,
+	.wstat = devwstat,
+};
+@
+
+\subsection{[[devkbmap.c]]}
+
+
+<<devkbmap.c>>=
+/*
+ *  keyboard map
+ */
+
+#include	"u.h"
+#include	"../port/lib.h"
+#include	"../port/error.h"
+#include	"mem.h"
+#include	"dat.h"
+#include	"fns.h"
+
+enum{
+	Qdir,
+	Qdata,
+};
+Dirtab kbmaptab[]={
+	".",		{Qdir, 0, QTDIR},	0,	0555,
+	"kbmap",	{Qdata, 0},		0,	0600,
+};
+#define	NKBFILE	sizeof(kbmaptab)/sizeof(kbmaptab[0])
+
+#define	KBLINELEN	(3*NUMSIZE+1)	/* t code val\n */
+
+static Chan *
+kbmapattach(char *spec)
+{
+	return devattach(L'Îº', spec);
+}
+
+static Walkqid*
+kbmapwalk(Chan *c, Chan *nc, char **name, int nname)
+{
+	return devwalk(c, nc, name, nname, kbmaptab, NKBFILE, devgen);
+}
+
+static int
+kbmapstat(Chan *c, uchar *dp, int n)
+{
+	return devstat(c, dp, n, kbmaptab, NKBFILE, devgen);
+}
+
+static Chan*
+kbmapopen(Chan *c, int omode)
+{
+	if(!iseve())
+		error(Eperm);
+	return devopen(c, omode, kbmaptab, NKBFILE, devgen);
+}
+
+static void
+kbmapclose(Chan *c)
+{
+	if(c->aux){
+		free(c->aux);
+		c->aux = nil;
+	}
+}
+
+static long
+kbmapread(Chan *c, void *a, long n, vlong offset)
+{
+	char *bp;
+	char tmp[KBLINELEN+1];
+	int t, sc;
+	Rune r;
+
+	if(c->qid.type == QTDIR)
+		return devdirread(c, a, n, kbmaptab, NKBFILE, devgen);
+
+	switch((int)(c->qid.path)){
+	case Qdata:
+		if(kbdgetmap(offset/KBLINELEN, &t, &sc, &r)) {
+			bp = tmp;
+			bp += readnum(0, bp, NUMSIZE, t, NUMSIZE);
+			bp += readnum(0, bp, NUMSIZE, sc, NUMSIZE);
+			bp += readnum(0, bp, NUMSIZE, r, NUMSIZE);
+			*bp++ = '\n';
+			*bp = 0;
+			n = readstr(offset%KBLINELEN, a, n, tmp);
+		} else
+			n = 0;
+		break;
+	default:
+		n=0;
+		break;
+	}
+	return n;
+}
+
+static long
+kbmapwrite(Chan *c, void *a, long n, vlong)
+{
+	char line[100], *lp, *b;
+	int key, m, l;
+	Rune r;
+
+	if(c->qid.type == QTDIR)
+		error(Eperm);
+
+	switch((int)(c->qid.path)){
+	case Qdata:
+		b = a;
+		l = n;
+		lp = line;
+		if(c->aux){
+			strcpy(line, c->aux);
+			lp = line+strlen(line);
+			free(c->aux);
+			c->aux = nil;
+		}
+		while(--l >= 0) {
+			*lp++  = *b++;
+			if(lp[-1] == '\n' || lp == &line[sizeof(line)-1]) {
+				*lp = 0;
+				if(*line == 0)
+					error(Ebadarg);
+				if(*line == '\n' || *line == '#'){
+					lp = line;
+					continue;
+				}
+				lp = line;
+				while(*lp == ' ' || *lp == '\t')
+					lp++;
+				m = strtoul(line, &lp, 0);
+				key = strtoul(lp, &lp, 0);
+				while(*lp == ' ' || *lp == '\t')
+					lp++;
+				r = 0;
+				if(*lp == '\'' && lp[1])
+					chartorune(&r, lp+1);
+				else if(*lp == '^' && lp[1]){
+					chartorune(&r, lp+1);
+					if(0x40 <= r && r < 0x60)
+						r -= 0x40;
+					else
+						error(Ebadarg);
+				}else if(*lp == 'M' && ('1' <= lp[1] && lp[1] <= '5'))
+					r = 0xF900+lp[1]-'0';
+				else if(*lp>='0' && *lp<='9') /* includes 0x... */
+					r = strtoul(lp, &lp, 0);
+				else
+					error(Ebadarg);
+				kbdputmap(m, key, r);
+				lp = line;
+			}
+		}
+		if(lp != line){
+			l = lp-line;
+			c->aux = lp = smalloc(l+1);
+			memmove(lp, line, l);
+			lp[l] = 0;
+		}
+		break;
+	default:
+		error(Ebadusefd);
+	}
+	return n;
+}
+
+Dev kbmapdevtab = {
+	.dc = L'Îº',
+	.name = "kbmap",
+
+	.reset = devreset,
+	.init = devinit,
+	.shutdown = devshutdown,
+	.attach = kbmapattach,
+	.walk = kbmapwalk,
+	.stat = kbmapstat,
+	.open = kbmapopen,
+	.create = devcreate,
+	.close = kbmapclose,
+	.read = kbmapread,
+	.bread = devbread,
+	.write = kbmapwrite,
+	.bwrite = devbwrite,
+	.remove = devremove,
+	.wstat = devwstat,
+};
+@
 
 \subsection*{[[devices/mouse/devmouse.c]]}
 
@@ -13034,10 +13347,6 @@ rebootcmd(int argc, char *argv[])
 % Many files in plan9/BIG/kernel-port/
 
 \subsection{[[devaudio.c]]}
-
-\subsection{[[devkbin.c]]}
-
-\subsection{[[devkbmap.c]]}
 
 \subsection{[[fhashif.h]]}
 
