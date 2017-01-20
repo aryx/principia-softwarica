@@ -70,13 +70,6 @@ typedef void* kern_addr3;
 // defines DevConf, DevPort (not that used)
 #include "../port/portdat_devices.h"
 
-/*
- *  things saved in the Proc structure during a notify
- */
-struct Notsave {
-	int	emptiness;
-};
-
 // TODO add register! but 5c-ocaml does not like it
 extern register Cpu* cpu;			/* R10 */
 extern register Proc* up;			/* R9 */
