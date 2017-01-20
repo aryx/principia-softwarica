@@ -1,7 +1,6 @@
 /*
  *  SB 16 driver
  */
-
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"

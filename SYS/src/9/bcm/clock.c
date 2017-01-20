@@ -222,7 +222,7 @@ armtimerset(int n)
 }
 
 ulong
-µs(void)
+us(void)
 {
 	if(SystimerFreq != 1*Mhz)
 		return fastticks2us(fastticks(nil));

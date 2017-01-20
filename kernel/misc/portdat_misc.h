@@ -4,8 +4,8 @@ enum misc_constants_portable {
     /* READSTR was 1000, which is way too small for usb's ctl file */
     READSTR = 4000,   /* temporary buffer size for device reads */
 
-    KB      = 1024,
-    MB =    (1024*1024),
+    KB = 1024,
+    MB = (1024*1024),
 
     NUMSIZE = 12,   /* size of formatted number */
 

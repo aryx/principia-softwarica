@@ -573,7 +573,7 @@ struct Proc
     Proc  *rendhash;  /* Hash list for tag values */
     /*e: [[Proc]] synchronization fields */
 //--------------------------------------------------------------------
-// Error managment
+// Error management
 //--------------------------------------------------------------------
     /*s: [[Proc]] error managment fields */
     // array<Label>, error labels, poor's man exceptions in C

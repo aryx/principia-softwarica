@@ -741,12 +741,6 @@ void
 memorysummary(void) {
 }
 
-ulong
-us(void)
-{
-  return -1;
-}
-
 bool kdebug;
 
 

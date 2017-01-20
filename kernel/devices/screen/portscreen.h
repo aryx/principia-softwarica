@@ -29,14 +29,16 @@ struct Cursorinfo {
 };
 /*e: struct Cursorinfo */
 typedef struct Cursorinfo Cursorinfo;
+/*s: global signature cursor */
+extern Cursorinfo 	cursor;
+/*e: global signature cursor */
 
 /* defined in devmouse.c, needed by ?? */ // just enough Mouse getters/setters
 extern Point 	mousexy(void);
 extern void 	mouseaccelerate(int);
 extern void 	mousetrack(int, int, int, int);
-/*s: global signature cursor */
-extern Cursorinfo 	cursor;
-/*e: global signature cursor */
+
+
 /* xxxmouse.c */
 extern void kmousectl(Cmdbuf*);
 /* defined in xxxscreen.c, needed by devmouse.c */
