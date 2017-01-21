@@ -20,7 +20,8 @@
 enum
 {
     Mouseother= 0,
-    MousePS2=   1,
+	Mouseserial=	1,
+    MousePS2=   2,
 };
 
 
@@ -113,8 +114,12 @@ ps2mouseputc(int c, int shift)
 		nb = 0;
 	lasttick = m;
 
+	/* 
+	 *  check byte 0 for consistency
+	 */
 	if(nb==0 && (c&0xc8)!=0x08)
 		if(intellimouse && (c==0x00 || c==0x01 || c==0xFF)){
+			/* last byte of 4-byte packet */
 			packetsize = 4;
 			return;
 		}
@@ -130,10 +135,25 @@ ps2mouseputc(int c, int shift)
 		buttons = b[(msg[0]&7) | (shift ? 8 : 0)];
 		if(intellimouse && packetsize==4){
 			if((msg[3]&0xc8) == 0x08){
+				/* first byte of 3-byte packet */
 				packetsize = 3;
 				msg[0] = msg[3];
 				nb = 1;
+				/* fall through to emit previous packet */
 			}else{
+				/* The AccuPoint on the Toshiba 34[48]0CT
+				 * encodes extra buttons as 4 and 5. They repeat
+				 * and don't release, however, so user-level
+				 * timing code is required. Furthermore,
+				 * intellimice with 3buttons + scroll give a
+				 * two's complement number in the lower 4 bits
+				 * (bit 4 is sign extension) that describes
+				 * the amount the scroll wheel has moved during
+				 * the last sample. Here we use only the sign to
+				 * decide whether the wheel is moving up or down
+				 * and generate a single button 4 or 5 click
+				 * accordingly.
+				 */
 				if((msg[3] >> 3) & 1)
 					buttons |= 1<<3;
 				else if(msg[3] & 0x7)
@@ -226,6 +246,19 @@ setintellimouse(void)
 {
 	intellimouse = 1;
 	packetsize = 4;
+	switch(mousetype){
+	case MousePS2:
+		i8042auxcmd(0xF3);	/* set sample */
+		i8042auxcmd(0xC8);
+		i8042auxcmd(0xF3);	/* set sample */
+		i8042auxcmd(0x64);
+		i8042auxcmd(0xF3);	/* set sample */
+		i8042auxcmd(0x50);
+		break;
+	case Mouseserial:
+		//i8250setmouseputc(mouseport, m5mouseputc);
+		break;
+	}
 }
 
 static void
@@ -259,13 +292,15 @@ kmousectl(Cmdbuf *cb)
 	ct = lookupcmd(cb, mousectlmsg, nelem(mousectlmsg));
 	switch(ct->index){
 	case CMaccelerated:
-		setaccelerated(cb->nf == 1? 1: atoi(cb->f[1]));
+		setaccelerated(cb->nf == 1 ? 1: atoi(cb->f[1]));
 		break;
 	case CMlinear:
 		setlinear();
 		break;
 	case CMps2:
+//XXX
 		intellimouse = 0;
+        ps2mouse(); // must be after setting intellimouse!
 		break;
 	case CMres:
 		if(cb->nf >= 2)
@@ -289,14 +324,32 @@ kmousectl(Cmdbuf *cb)
 			mousehwaccel = 0;
 		else
 			cmderror(cb, "bad mouse control message");
+        break;
 	case CMintellimouse:
 		setintellimouse();
 		break;
 	case CMps2intellimouse:
+        ps2mouse();
 		setintellimouse();
 		break;
 	case CMserial:
-		error("serial mice not supported");
+		//if(mousetype == Mouseserial)
+		//	error(Emouseset);
+        //
+		//if(cb->nf > 2){
+		//	if(strcmp(cb->f[2], "M") == 0)
+		//		i8250mouse(cb->f[1], m3mouseputc, 0);
+		//	else if(strcmp(cb->f[2], "MI") == 0)
+		//		i8250mouse(cb->f[1], m5mouseputc, 0);
+		//	else
+		//		i8250mouse(cb->f[1], mouseputc, cb->nf == 1);
+		//} else
+		//	i8250mouse(cb->f[1], mouseputc, cb->nf == 1);
+        //
+		//mousetype = Mouseserial;
+		//strncpy(mouseport, cb->f[1], sizeof(mouseport)-1);
+		//packetsize = 3;
+        error("serial mice not supported anymore");
 		break;
 	}
 
