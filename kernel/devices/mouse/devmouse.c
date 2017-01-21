@@ -13,7 +13,7 @@
 #include    <memdraw.h>
 #include    <cursor.h>
 
-#include    "portscreen.h"
+#include    "../port/portscreen.h"
 
 enum {
     ScrollUp = 0x08,
@@ -56,11 +56,12 @@ struct Mouseinfo
     uchar   qfull;      /* queue is full */
 };
 
-// for portscreen.h
+Mouseinfo   mouse;
+
+
 Cursorinfo  cursor;
 Cursor      curs;
 
-Mouseinfo   mouse;
 
 // set to mousefromkbd here in mouseinit(), but used outside devmouse.c
 // to let know devmouse.c about some keyboard events related to the mouse
@@ -70,11 +71,6 @@ int     kbdbuttons;
 // not used in this file
 bool     mouseshifted;
 
-
-void Cursortocursor(Cursor*);
-int mousechanged(void*);
-
-static void mouseclock(void);
 
 enum{
     Qdir,
@@ -117,6 +113,15 @@ static uchar buttonmap[8] = {
 static bool mouseswap;
 static bool scrollswap;
 static ulong mousetime;
+
+
+
+void Cursortocursor(Cursor*);
+int mousechanged(void*);
+static void mouseclock(void);
+
+
+
 
 static void
 mousereset(void)

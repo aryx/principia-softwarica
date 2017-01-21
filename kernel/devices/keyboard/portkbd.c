@@ -11,8 +11,6 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-#include "../port/portkbd.h"
-
 /*s: global kdebug */
 bool kdebug;
 /*e: global kdebug */

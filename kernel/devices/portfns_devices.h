@@ -36,8 +36,4 @@ extern void kbdputsc(byte, int);
 extern int  kbdgetmap(uint, int*, int*, Rune*);
 extern void kbdputmap(ushort, ushort, Rune);
 
-// in screen/386/screen.c (but used in port)
-extern void  getcolor(ulong, ulong*, ulong*, ulong*);
-extern int   setcolor(ulong, ulong, ulong, ulong);
-
 /*e: portfns_devices.h */

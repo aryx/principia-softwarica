@@ -20,8 +20,6 @@ extern int		setcolor(ulong, ulong, ulong, ulong);
 // this used to be a macro, but then it was preventing this file to be generic
 extern bool ishwimage(Memimage*);
 
-
-
 /*s: struct Cursorinfo */
 struct Cursorinfo {
   Cursor;
@@ -29,6 +27,7 @@ struct Cursorinfo {
 };
 /*e: struct Cursorinfo */
 typedef struct Cursorinfo Cursorinfo;
+
 /*s: global signature cursor */
 extern Cursorinfo 	cursor;
 /*e: global signature cursor */
@@ -38,6 +37,7 @@ extern Point 	mousexy(void);
 
 /* defined in xxxscreen.c, needed by devmouse.c */
 extern Cursor 		arrow;
+
 extern void 	ksetcursor(Cursor*);
 extern int  	cursoron(int);
 extern void 	cursoroff(int);

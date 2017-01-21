@@ -1,6 +1,6 @@
 /*s: portdat_core.h */
 
-// All those structs used to be in dat.h, in 386/, but many of their fields
+// All those structs used to be in 386/dat.h, but many of their fields
 // were used from port/ so I've moved them here (and put the arch
 // specific fields in dat_core.h)
 

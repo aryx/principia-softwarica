@@ -85,6 +85,7 @@ struct Ref
     Lock;
 };
 /*e: struct Ref */
+
 /*s: struct Counter */
 typedef struct Ref Counter;
 /*e: struct Counter */

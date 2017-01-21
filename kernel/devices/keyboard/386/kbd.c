@@ -11,7 +11,6 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-#include "../port/portkbd.h"
 #include    "io.h"
 
 enum {
