@@ -8,11 +8,13 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-//#include <draw.h>
-//#include <memdraw.h>
-//#include <cursor.h>
-
 #include "io.h"
+
+#include <draw.h>
+#include <memdraw.h>
+#include <cursor.h>
+
+#include "../port/portscreen.h"
 
 /*
  *  mouse types
