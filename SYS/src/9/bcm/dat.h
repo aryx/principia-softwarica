@@ -61,7 +61,6 @@ typedef void* kern_addr3;
 #include "../port/portdat_misc.h"
 
 // defines Uart
-#include "dat_buses.h"
 #include "../port/portdat_buses.h"
 
 // defines keyboard queue, consdevtab
