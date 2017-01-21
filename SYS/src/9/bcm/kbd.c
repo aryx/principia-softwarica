@@ -7,6 +7,7 @@
 
 #include	"../port/portkbd.h"
 
+// callback for portkbd.c
 void
 setleds(Kbscan *kbscan)
 {
