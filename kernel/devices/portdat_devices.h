@@ -19,4 +19,9 @@ struct DevConf
     Devport *ports;     /* The ports themselves */
 };
 /*e: struct DevConf */
+
+// mouse/devmouse.c (used in portmouse.c, portkbd.c, ...)
+extern int mouseshifted;
+
+
 /*e: portdat_devices.h */

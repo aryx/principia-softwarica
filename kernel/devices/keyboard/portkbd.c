@@ -153,9 +153,6 @@ Rune kbtabaltgr[Nscan] =
 extern Rune kbtabctrl[];
 /*e: global kbtabctrl decl */
 
-extern int mouseshifted;
-extern void (*kbdmouse)(int);
-
 // defined in <arch>/kbd.c
 extern void setleds(Kbscan *kbscan);
 

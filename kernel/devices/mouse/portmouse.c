@@ -8,37 +8,30 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-#include "io.h"
-
-#include <draw.h>
-#include <memdraw.h>
-#include <cursor.h>
-
-#include "../port/portscreen.h"
-
 /*
  *  mouse types
  */
-enum
+enum MouseType
 {
     Mouseother= 0,
     Mouseserial=    1,
     MousePS2=   2,
 };
 
-
-extern int mouseshifted;
-
+// enum<MouseType>
 static int mousetype;
+
 static int packetsize;
 static int resolution;
 static int accelerated;
-static int mousehwaccel;
+
+static bool mousehwaccel;
+static bool intellimouse;
 
 static QLock mousectlqlock;
 
-static int intellimouse;
-static char mouseport[5];
+// for serial mouse
+//static char mouseport[5];
 
 enum
 {
@@ -55,15 +48,15 @@ enum
 
 static Cmdtab mousectlmsg[] =
 {
-    CMaccelerated,      "accelerated",      0,
-    CMhwaccel,      "hwaccel",      2,
-    CMintellimouse,     "intellimouse",     1,
-    CMlinear,       "linear",       1,
-    CMps2,          "ps2",          1,
-    CMps2intellimouse,  "ps2intellimouse",  1,
-    CMres,          "res",          0,
-    CMreset,        "reset",        1,
-    CMserial,       "serial",       0,
+    CMaccelerated     , "accelerated"     , 0 ,
+    CMhwaccel         , "hwaccel"         , 2 ,
+    CMintellimouse    , "intellimouse"    , 1 ,
+    CMlinear          , "linear"          , 1 ,
+    CMps2             , "ps2"             , 1 ,
+    CMps2intellimouse , "ps2intellimouse" , 1 ,
+    CMres             , "res"             , 0 ,
+    CMreset           , "reset"           , 1 ,
+    CMserial          , "serial"          , 0 ,
 };
 
 /*
@@ -279,7 +272,6 @@ resetmouse(void)
     }
 }
 
-// for portscreen.h
 void
 kmousectl(Cmdbuf *cb)
 {
@@ -354,7 +346,6 @@ kmousectl(Cmdbuf *cb)
         error("serial mice not supported anymore");
         break;
     }
-
     qunlock(&mousectlqlock);
     poperror();
 }

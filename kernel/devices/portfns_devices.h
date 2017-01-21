@@ -1,36 +1,43 @@
 /*s: portfns_devices.h */
 
 // sys/devroot.c
-void    addbootfile(char*, uchar*, ulong);
+extern void    addbootfile(char*, uchar*, ulong);
 // sys/devmnt.c
-Chan*   mntauth(Chan*, char*);
-long    mntversion(Chan*, char*, int, int);
+extern Chan*   mntauth(Chan*, char*);
+extern long    mntversion(Chan*, char*, int, int);
 // sys/devsrv.c
-char*   srvname(Chan*);
+extern char*   srvname(Chan*);
 // sys/devproc.c
-int   procfdprint(Chan*, int, int, char*, int);
+extern int   procfdprint(Chan*, int, int, char*, int);
 // sys/devrtc.c
 //long    rtctime(void);
 // sys/devenv.c
-void    envcpy(Egrp*, Egrp*);
-void    ksetenv(char*, char*, int);
-char*   getconfenv(void);
+extern void    envcpy(Egrp*, Egrp*);
+extern void    ksetenv(char*, char*, int);
+extern char*   getconfenv(void);
 
 
 // screen/devdraw.c
-void    drawactive(bool);
-void    drawcmap(void);
-// mouse/devmouse.c (callback called from portmouse.c, and ??)
-void    mouseresize(void);
-void mouseaccelerate(int x);
-void mousetrack(int dx, int dy, int b, int msec);
+extern void    drawactive(bool);
+extern void    drawcmap(void);
+
+// mouse/devmouse.c (called from portmouse.c or <arch>/mouse.c)
+extern void mouseresize(void);
+extern void mouseaccelerate(int x);
+extern void mousetrack(int dx, int dy, int b, int msec);
+// to call to let know devmouse.c about some mouse related keyboard events
+extern void (*kbdmouse)(int);
+
+// mouse/portmouse.c (called by devmouse.c for arch-specific mouse settings)
+extern void kmousectl(Cmdbuf*);
+
 // keyboard/portkbd.c
-void kbdputsc(byte, int);
-int  kbdgetmap(uint, int*, int*, Rune*);
-void kbdputmap(ushort, ushort, Rune);
+extern void kbdputsc(byte, int);
+extern int  kbdgetmap(uint, int*, int*, Rune*);
+extern void kbdputmap(ushort, ushort, Rune);
 
 // in screen/386/screen.c (but used in port)
-void    getcolor(ulong, ulong*, ulong*, ulong*);
-int   setcolor(ulong, ulong, ulong, ulong);
+extern void  getcolor(ulong, ulong*, ulong*, ulong*);
+extern int   setcolor(ulong, ulong, ulong, ulong);
 
 /*e: portfns_devices.h */

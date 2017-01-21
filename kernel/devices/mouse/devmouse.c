@@ -56,34 +56,22 @@ struct Mouseinfo
     uchar   qfull;      /* queue is full */
 };
 
-enum
-{
-    CMbuttonmap,
-    CMscrollswap,
-    CMswap,
-    CMwildcard,
-};
-
-static Cmdtab mousectlmsg[] =
-{
-    CMbuttonmap,    "buttonmap",    0,
-    CMscrollswap,   "scrollswap",   0,
-    CMswap,     "swap",     1,
-    CMwildcard, "*",        0,
-};
-
-
-// for screen.h
+// for portscreen.h
 Cursorinfo  cursor;
+Cursor      curs;
 
 Mouseinfo   mouse;
 
-bool     mouseshifted;
+// set to mousefromkbd here in mouseinit(), but used outside devmouse.c
+// to let know devmouse.c about some keyboard events related to the mouse
+void    (*kbdmouse)(int);
 int     kbdbuttons;
-void        (*kbdmouse)(int);
-Cursor      curs;
 
-void    Cursortocursor(Cursor*);
+// not used in this file
+bool     mouseshifted;
+
+
+void Cursortocursor(Cursor*);
 int mousechanged(void*);
 
 static void mouseclock(void);
@@ -104,14 +92,31 @@ static Dirtab mousedir[]={
     "mousectl", {Qmousectl},    0,          0220,
 };
 
+enum
+{
+    CMbuttonmap,
+    CMscrollswap,
+    CMswap,
+    CMwildcard,
+};
+
+static Cmdtab mousectlmsg[] =
+{
+    CMbuttonmap,    "buttonmap",    0,
+    CMscrollswap,   "scrollswap",   0,
+    CMswap,     "swap",     1,
+    CMwildcard, "*",        0,
+};
+// for CMwildcard, devmouse.c relies on arch defined kmousectl()
+
+
+
 static uchar buttonmap[8] = {
     0, 1, 2, 3, 4, 5, 6, 7,
 };
 static bool mouseswap;
 static bool scrollswap;
 static ulong mousetime;
-
-extern Memimage* gscreen;
 
 static void
 mousereset(void)
@@ -618,6 +623,7 @@ mousexy(void)
     return mouse.xy;
 }
 
+// called from outside devmouse.c to let know devmouse.c of changes
 void
 mouseaccelerate(int x)
 {
@@ -628,6 +634,7 @@ mouseaccelerate(int x)
         mouse.maxacc = mouse.acceleration;
 }
 
+// called from outside devmouse.c to let know devmouse.c of changes
 /*
  * notify reader that screen has been resized
  */

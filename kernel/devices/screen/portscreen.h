@@ -35,18 +35,11 @@ extern Cursorinfo 	cursor;
 
 /* defined in devmouse.c, needed by ?? */ // just enough Mouse getters/setters
 extern Point 	mousexy(void);
-extern void 	mouseaccelerate(int);
-extern void 	mousetrack(int, int, int, int);
 
-
-/* xxxmouse.c */
-extern void kmousectl(Cmdbuf*);
 /* defined in xxxscreen.c, needed by devmouse.c */
 extern Cursor 		arrow;
 extern void 	ksetcursor(Cursor*);
 extern int  	cursoron(int);
 extern void 	cursoroff(int);
-
-//now in portfns_devices.h: extern void mouseresize(void);
 
 /*e: kernel/devices/screen/portscreen.h */
