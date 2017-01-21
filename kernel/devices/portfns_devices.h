@@ -20,12 +20,14 @@ char*   getconfenv(void);
 // screen/devdraw.c
 void    drawactive(bool);
 void    drawcmap(void);
-// mouse/devmouse.c
+// mouse/devmouse.c (callback called from portmouse.c, and ??)
 void    mouseresize(void);
+void mouseaccelerate(int x);
+void mousetrack(int dx, int dy, int b, int msec);
 // keyboard/portkbd.c
 void kbdputsc(byte, int);
-int   kbdgetmap(uint, int*, int*, Rune*);
-void    kbdputmap(ushort, ushort, Rune);
+int  kbdgetmap(uint, int*, int*, Rune*);
+void kbdputmap(ushort, ushort, Rune);
 
 // in screen/386/screen.c (but used in port)
 void    getcolor(ulong, ulong*, ulong*, ulong*);
