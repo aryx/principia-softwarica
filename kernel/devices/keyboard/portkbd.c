@@ -444,5 +444,4 @@ kbdgetmap(uint offset, int *t, int *sc, Rune *r)
     }
 }
 /*e: function kbdgetmap */
-
 /*e: portkbd.c */

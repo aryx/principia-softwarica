@@ -34,7 +34,6 @@ struct Kbscan {
 };
 /*e: struct Kbscan */
 
-
 extern Kbscan kbscans[Nscans];
 
 extern void kbdputsc(byte k, int external);
