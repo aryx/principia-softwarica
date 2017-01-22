@@ -126,8 +126,8 @@ static void mouseclock(void);
 static void
 mousereset(void)
 {
-    curs = arrow;
-    Cursortocursor(&arrow);
+    curs = arch_arrow;
+    Cursortocursor(&arch_arrow);
     /* redraw cursor about 30 times per second */
     addclock0link(mouseclock, 33);
 }
@@ -153,9 +153,9 @@ mousedevgen(Chan *c, char *name, Dirtab *tab, int ntab, int i, DirEntry *dp)
 static void
 mouseinit(void)
 {
-    curs = arrow;
-    Cursortocursor(&arrow);
-    cursoron(true);
+    curs = arch_arrow;
+    Cursortocursor(&arch_arrow);
+    arch_cursoron(true);
     kbdmouse = mousefromkbd;
     mousetime = seconds();
 }
@@ -235,10 +235,10 @@ mouseclose(Chan *c)
         if(c->qid.path == Qmouse)
             mouse.open = false;
         if(--mouse.ref == 0){
-            cursoroff(true);
-            curs = arrow;
-            Cursortocursor(&arrow);
-            cursoron(true);
+            arch_cursoroff(true);
+            curs = arch_arrow;
+            Cursortocursor(&arch_arrow);
+            arch_cursoron(true);
         }
         unlock(&mouse);
     }
@@ -385,10 +385,10 @@ mousewrite(Chan *c, void *va, long n, vlong)
         error(Eisdir);
 
     case Qcursor:
-        cursoroff(true);
+        arch_cursoroff(true);
         if(n < 2*4+2*2*16){
-            curs = arrow;
-            Cursortocursor(&arrow);
+            curs = arch_arrow;
+            Cursortocursor(&arch_arrow);
         }else{
             n = 2*4+2*2*16;
             curs.offset.x = BGLONG(p+0);
@@ -401,7 +401,7 @@ mousewrite(Chan *c, void *va, long n, vlong)
         mouse.redraw = true;
         mouseclock();
         qunlock(&mouse);
-        cursoron(true);
+        arch_cursoron(true);
         return n;
 
     case Qmousectl:
@@ -512,7 +512,7 @@ Cursortocursor(Cursor *c)
 {
     lock(&cursor);
     memmove(&cursor.Cursor, c, sizeof(Cursor));
-    ksetcursor(c);
+    arch_ksetcursor(c);
     unlock(&cursor);
 }
 
@@ -531,8 +531,8 @@ mouseclock(void)
     }
     if(mouse.redraw && canlock(&cursor)){
         mouse.redraw = false;
-        cursoroff(false);
-        mouse.redraw = cursoron(false);
+        arch_cursoroff(false);
+        mouse.redraw = arch_cursoron(false);
         unlock(&cursor);
     }
     drawactive(false);
@@ -622,6 +622,7 @@ mousechanged(void*)
         mouse.lastresize != mouse.resize;
 }
 
+// called from outside devmouse.c
 Point
 mousexy(void)
 {

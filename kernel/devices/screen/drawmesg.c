@@ -122,7 +122,7 @@ drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImag
      * refer to for the underlying dst pixels instead of reading dst
      * directly.
      */
-    if(ishwimage(dst) && !ishwimage(rdst) && font->image->depth > 1){
+    if(arch_ishwimage(dst) && !arch_ishwimage(rdst) && font->image->depth > 1){
         if(tmp == nil || tmp->chan != dst->chan || Dx(tmp->r) < Dx(r) || Dy(tmp->r) < Dy(r)){
             if(tmp)
                 freememimage(tmp);

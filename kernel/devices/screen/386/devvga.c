@@ -342,13 +342,13 @@ vgactl(Cmdbuf *cb)
         if(chantodepth(chan) != z)
             error("depth, channel do not match");
 
-        cursoroff(1);
+        arch_cursoroff(1);
         deletescreenimage();
         if(screensize(x, y, z, chan))
             error(Egreg);
         vgascreenwin(scr);
         resetscreenimage();
-        cursoron(1);
+        arch_cursoron(1);
         return;
     /*x: [[vgactl]] cases(x86) */
     case CMactualsize:

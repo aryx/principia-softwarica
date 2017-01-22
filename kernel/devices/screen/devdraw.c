@@ -277,7 +277,7 @@ addflush(Rectangle r)
 
     /* emit current state */
     if(flushrect.min.x < flushrect.max.x)
-        flushmemscreen(flushrect);
+        arch_flushmemscreen(flushrect);
     flushrect = r;
 
     waste = 0;
@@ -328,7 +328,7 @@ void
 drawflush(void)
 {
     if(flushrect.min.x < flushrect.max.x)
-        flushmemscreen(flushrect);
+        arch_flushmemscreen(flushrect);
     flushrect = Rect(10000, 10000, -10000, -10000);
 }
 /*e: function drawflush */
@@ -739,7 +739,7 @@ drawread(Chan *c, void *a, long n, vlong off)
             error(Enomem);
         m = 0;
         for(index = 0; index < 256; index++){
-            getcolor(index, &red, &green, &blue);
+            arch_getcolor(index, &red, &green, &blue);
             m += snprint((char*)p+m, 4*12*256+1 - m,
                 "%11d %11lud %11lud %11lud\n", index,
                 red>>24, green>>24, blue>>24);
@@ -881,7 +881,7 @@ drawwrite(Chan *c, void *a, long n, vlong)
             green |= green<<16;
             blue |= blue<<8;
             blue |= blue<<16;
-            setcolor(i, red, green, blue);
+            arch_setcolor(i, red, green, blue);
         }
         break;
     /*e: [[drawwrite()]] switch qid cases */

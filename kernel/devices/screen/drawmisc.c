@@ -101,7 +101,7 @@ drawcmap(void)
                 cg = g*num/den;
                 cb = b*num/den;
             }
-            setcolor(i+(j&15),
+            arch_setcolor(i+(j&15),
                 cr*0x01010101, cg*0x01010101, cb*0x01010101);
             }
     }
@@ -133,13 +133,13 @@ drawblankscreen(bool blank)
      */
     if(!blank){ /* turn screen on */
         for(i=0; i<nc; i++, p+=3)
-            setcolor(i, p[0], p[1], p[2]);
-        blankscreen(false);
+            arch_setcolor(i, p[0], p[1], p[2]);
+        arch_blankscreen(false);
     }else{  /* turn screen off */
-        blankscreen(true);
+        arch_blankscreen(true);
         for(i=0; i<nc; i++, p+=3){
-            getcolor(i, &p[0], &p[1], &p[2]);
-            setcolor(i, 0, 0, 0);
+            arch_getcolor(i, &p[0], &p[1], &p[2]);
+            arch_setcolor(i, 0, 0, 0);
         }
     }
     sdraw.blanked = blank;

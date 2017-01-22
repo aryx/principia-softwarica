@@ -1,24 +1,25 @@
 /*s: kernel/devices/screen/portscreen.h */
-// This file used to contain the stuff now in vga.h, but the prototypes were
+// This file used to contain the stuff in pc/screen.c, but the prototypes were
 // VGA independent, so it is better to have a generic portscreen.h interface 
-// and vga.h in a separate file.
+// and VGA stuff in pc/screen.c in a separate file.
 
-// defined in portscreen.c, set in <arch>/screen.c, used by generic 
-// portscreen.c stuff
+// Image
+
+// defined in portscreen.c, set in <arch>/screen.c, used by devmouse.c
 extern Memimage *gscreen;
 extern Memdata gscreendata;
 extern Rectangle physgscreenr;  /* actual monitor size */
 
 /* defined in <arch>/screen.c, needed by devdraw.c */
-extern void 	flushmemscreen(Rectangle);
-extern byte* 	attachscreen(Rectangle*, ulong*, int*, int*, int*);
-extern void 	blankscreen(bool);
-
-extern void		getcolor(ulong, ulong*, ulong*, ulong*);
-extern int		setcolor(ulong, ulong, ulong, ulong);
-
+extern byte* arch_attachscreen(Rectangle*, ulong*, int*, int*, int*);
+extern void  arch_flushmemscreen(Rectangle);
+extern void  arch_blankscreen(bool);
+extern void	 arch_getcolor(ulong, ulong*, ulong*, ulong*);
+extern int	 arch_setcolor(ulong, ulong, ulong, ulong);
 // this used to be a macro, but then it was preventing this file to be generic
-extern bool ishwimage(Memimage*);
+extern bool  arch_ishwimage(Memimage*);
+
+// Cursor
 
 /*s: struct Cursorinfo */
 struct Cursorinfo {
@@ -29,17 +30,18 @@ struct Cursorinfo {
 typedef struct Cursorinfo Cursorinfo;
 
 /*s: global signature cursor */
+// defined in devmouse.c, set in <arch>/screen.c
 extern Cursorinfo 	cursor;
 /*e: global signature cursor */
+
+/* defined in <arch>/screen.c, needed by devmouse.c */
+extern Cursor 		arch_arrow;
 
 /* defined in devmouse.c, needed by ?? */ // just enough Mouse getters/setters
 extern Point 	mousexy(void);
 
-/* defined in xxxscreen.c, needed by devmouse.c */
-extern Cursor 		arrow;
-
-extern void 	ksetcursor(Cursor*);
-extern int  	cursoron(int);
-extern void 	cursoroff(int);
+extern void 	arch_ksetcursor(Cursor*);
+extern int  	arch_cursoron(int);
+extern void 	arch_cursoroff(int);
 
 /*e: kernel/devices/screen/portscreen.h */

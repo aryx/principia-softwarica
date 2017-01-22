@@ -305,7 +305,7 @@ vgascreenputs(char* s, int n)
         s += i;
         vgascreenputc(scr, buf, &flushr);
     }
-    flushmemscreen(flushr);
+    arch_flushmemscreen(flushr);
 
     if(gotdraw)
         qunlock(&drawlock);
@@ -396,7 +396,7 @@ VGAscr vgascreen;
 /*e: global vgascreen(x86) */
 
 /*s: global arrow(x86) */
-Cursor  arrow = {
+Cursor  arch_arrow = {
     .offset = { -1, -1 },
     .clr = { 
       0xFF, 0xFF, 0x80, 0x01, 0x80, 0x02, 0x80, 0x0C, 
@@ -423,7 +423,7 @@ static void *softscreen;
 
 /*s: function ishwimage(x86) */
 bool
-ishwimage(Memimage* i)
+arch_ishwimage(Memimage* i)
 {
   return (i->data->bdata == gscreendata.bdata);
 }
@@ -506,7 +506,7 @@ screensize(int x, int y, int z, ulong chan)
 
     // initial draw
     memimagedraw(gscreen, gscreen->r, memblack, ZP, nil, ZP, S);
-    flushmemscreen(gscreen->r);
+    arch_flushmemscreen(gscreen->r);
 
     /*s: [[screensize()]] initializations part2 */
     if(oldsoft)
@@ -561,7 +561,7 @@ screenaperture(int size, int align)
 
 /*s: function attachscreen(x86) */
 byte*
-attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
+arch_attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
 {
 
     /*s: [[attachscreen()]] sanity check gscreen */
@@ -585,7 +585,7 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
  * It would be fair to say that this doesn't work for >8-bit screens.
  */
 void
-flushmemscreen(Rectangle r)
+arch_flushmemscreen(Rectangle r)
 {
     VGAscr *scr;
     /*s: [[flushmemscreen()]] other locals */
@@ -672,7 +672,7 @@ flushmemscreen(Rectangle r)
 
 /*s: function getcolor(x86) */
 void
-getcolor(ulong p, ulong* pr, ulong* pg, ulong* pb)
+arch_getcolor(ulong p, ulong* pr, ulong* pg, ulong* pb)
 {
     VGAscr *scr;
     ulong x;
@@ -732,7 +732,7 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
  * is trying to set a colormap and the card is in one of these modes.
  */
 int
-setcolor(ulong p, ulong r, ulong g, ulong b)
+arch_setcolor(ulong p, ulong r, ulong g, ulong b)
 {
     int x;
 
@@ -762,7 +762,7 @@ setcolor(ulong p, ulong r, ulong g, ulong b)
 
 /*s: function cursoron(x86) */
 int
-cursoron(bool dolock)
+arch_cursoron(bool dolock)
 {
     VGAscr *scr;
     int v;
@@ -785,14 +785,14 @@ cursoron(bool dolock)
 
 /*s: function cursoroff(x86) */
 void
-cursoroff(int)
+arch_cursoroff(int)
 {
 }
 /*e: function cursoroff(x86) */
 
 /*s: function ksetcursor(x86) */
 void
-ksetcursor(Cursor* curs)
+arch_ksetcursor(Cursor* curs)
 {
     VGAscr *scr;
 
@@ -893,7 +893,7 @@ bool hwdraw(Memdrawparam *par)
 
 /*s: function blankscreen bis(x86) */
 void
-blankscreen(int blank)
+arch_blankscreen(int blank)
 {
     VGAscr *scr;
 
@@ -1089,7 +1089,7 @@ swcursorhide(void)
     swvisible = false;
     // restore what was under the cursor
     memimagedraw(gscreen, swrect, swback, ZP, memopaque, ZP, S);
-    flushmemscreen(swrect);
+    arch_flushmemscreen(swrect);
 }
 /*e: function swcursorhide(x86) */
 
@@ -1122,7 +1122,7 @@ swcursordraw(void)
     memimagedraw(swback, swback->r, gscreen, swpt, memopaque, ZP, S);
     // draw cursor
     memimagedraw(gscreen, swrect, swimg1, ZP, swmask1, ZP, SoverD);
-    flushmemscreen(swrect);
+    arch_flushmemscreen(swrect);
     swvisible = true;
 }
 /*e: function swcursordraw(x86) */

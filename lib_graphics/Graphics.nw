@@ -3915,7 +3915,7 @@ screensize(int x, int y, int z, ulong chan)
 
     // initial draw
     memimagedraw(gscreen, gscreen->r, memblack, ZP, nil, ZP, S);
-    flushmemscreen(gscreen->r);
+    arch_flushmemscreen(gscreen->r);
 
     <<[[screensize()]] initializations part2>>
     return OK_0;
@@ -4276,7 +4276,7 @@ md = malloc(sizeof(Memdata));
 <<[[makescreenimage()]] sanity check md>>
 md->allocd = true;
 
-md->bdata = attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
+md->bdata = arch_attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
 <<[[makescreenimage()]] sanity check md bdata>>
 md->base = nil; // not allocated by poolalloc
 md->ref = 1;
@@ -4608,7 +4608,7 @@ if(di == nil){
 % vgascreen.c
 <<function attachscreen(x86)>>=
 byte*
-attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
+arch_attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
 {
 
     <<[[attachscreen()]] sanity check gscreen>>
@@ -6716,7 +6716,7 @@ void
 drawflush(void)
 {
     if(flushrect.min.x < flushrect.max.x)
-        flushmemscreen(flushrect);
+        arch_flushmemscreen(flushrect);
     flushrect = Rect(10000, 10000, -10000, -10000);
 }
 @
@@ -6787,7 +6787,7 @@ combinerect(Rectangle *r1, Rectangle r2)
  * It would be fair to say that this doesn't work for >8-bit screens.
  */
 void
-flushmemscreen(Rectangle r)
+arch_flushmemscreen(Rectangle r)
 {
     VGAscr *scr;
     <<[[flushmemscreen()]] other locals>>
@@ -14939,7 +14939,7 @@ struct	Cursor
 % screen.h interface
 % vgascreen.c (seems general enough, could be put in a generic screen.c)
 <<global arrow(x86)>>=
-Cursor  arrow = {
+Cursor  arch_arrow = {
     .offset = { -1, -1 },
     .clr = { 
       0xFF, 0xFF, 0x80, 0x01, 0x80, 0x02, 0x80, 0x0C, 
@@ -14970,6 +14970,7 @@ struct Cursorinfo {
 % Cursor with lock, used in kernel
 
 <<global signature cursor>>=
+// defined in devmouse.c, set in <arch>/screen.c
 extern Cursorinfo 	cursor;
 @
 
@@ -15210,7 +15211,7 @@ swcursorclock(void)
     if(swvisible && eqpt(swpt, swvispt) && swvers==swvisvers)
         return;
 
-    x = splhi();
+    x = arch_splhi();
     // check again, might have changed in between
     if(swenabled)
      if(!swvisible || !eqpt(swpt, swvispt) || swvers!=swvisvers)
@@ -15221,7 +15222,7 @@ swcursorclock(void)
 
         qunlock(&drawlock);
     }
-    splx(x);
+    arch_splx(x);
 }
 @
 % if !swvisible?
@@ -15263,7 +15264,7 @@ swcursordraw(void)
     memimagedraw(swback, swback->r, gscreen, swpt, memopaque, ZP, S);
     // draw cursor
     memimagedraw(gscreen, swrect, swimg1, ZP, swmask1, ZP, SoverD);
-    flushmemscreen(swrect);
+    arch_flushmemscreen(swrect);
     swvisible = true;
 }
 @
@@ -15288,7 +15289,7 @@ swcursorhide(void)
     swvisible = false;
     // restore what was under the cursor
     memimagedraw(gscreen, swrect, swback, ZP, memopaque, ZP, S);
-    flushmemscreen(swrect);
+    arch_flushmemscreen(swrect);
 }
 @
 % comment?
@@ -15341,7 +15342,7 @@ swcursoravoid(Rectangle r)
 % ?? -> <>
 <<function cursoron(x86)>>=
 int
-cursoron(bool dolock)
+arch_cursoron(bool dolock)
 {
     VGAscr *scr;
     int v;
@@ -15369,7 +15370,7 @@ cursoron(bool dolock)
 % ?? -> <>
 <<function cursoroff(x86)>>=
 void
-cursoroff(int)
+arch_cursoroff(int)
 {
 }
 @
@@ -15418,7 +15419,7 @@ swdisable(VGAscr*)
 % ?? -> <>
 <<function ksetcursor(x86)>>=
 void
-ksetcursor(Cursor* curs)
+arch_ksetcursor(Cursor* curs)
 {
     VGAscr *scr;
 
@@ -20268,7 +20269,7 @@ case Qcolormap:
         error(Enomem);
     m = 0;
     for(index = 0; index < 256; index++){
-        getcolor(index, &red, &green, &blue);
+        arch_getcolor(index, &red, &green, &blue);
         m += snprint((char*)p+m, 4*12*256+1 - m,
             "%11d %11lud %11lud %11lud\n", index,
             red>>24, green>>24, blue>>24);
@@ -20319,7 +20320,7 @@ case Qcolormap:
         green |= green<<16;
         blue |= blue<<8;
         blue |= blue<<16;
-        setcolor(i, red, green, blue);
+        arch_setcolor(i, red, green, blue);
     }
     break;
 @
@@ -20331,7 +20332,7 @@ case Qcolormap:
 % drawread | blankscreen -> <>, part of screen.h interface now
 <<function getcolor(x86)>>=
 void
-getcolor(ulong p, ulong* pr, ulong* pg, ulong* pb)
+arch_getcolor(ulong p, ulong* pr, ulong* pg, ulong* pb)
 {
     VGAscr *scr;
     ulong x;
@@ -20393,7 +20394,7 @@ drawcmap(void)
                 cg = g*num/den;
                 cb = b*num/den;
             }
-            setcolor(i+(j&15),
+            arch_setcolor(i+(j&15),
                 cr*0x01010101, cg*0x01010101, cb*0x01010101);
             }
     }
@@ -20410,7 +20411,7 @@ drawcmap(void)
  * is trying to set a colormap and the card is in one of these modes.
  */
 int
-setcolor(ulong p, ulong r, ulong g, ulong b)
+arch_setcolor(ulong p, ulong r, ulong g, ulong b)
 {
     int x;
 
@@ -23211,7 +23212,7 @@ vgascreenputs(char* s, int n)
 
     scr = &vgascreen;
 
-    if(!islo()){
+    if(!arch_islo()){
         /*
          * Don't deadlock trying to
          * print in an interrupt.
@@ -23243,7 +23244,7 @@ vgascreenputs(char* s, int n)
         s += i;
         vgascreenputc(scr, buf, &flushr);
     }
-    flushmemscreen(flushr);
+    arch_flushmemscreen(flushr);
 
     if(gotdraw)
         qunlock(&drawlock);
@@ -23446,13 +23447,13 @@ drawblankscreen(bool blank)
      */
     if(!blank){ /* turn screen on */
         for(i=0; i<nc; i++, p+=3)
-            setcolor(i, p[0], p[1], p[2]);
-        blankscreen(false);
+            arch_setcolor(i, p[0], p[1], p[2]);
+        arch_blankscreen(false);
     }else{  /* turn screen off */
-        blankscreen(true);
+        arch_blankscreen(true);
         for(i=0; i<nc; i++, p+=3){
-            getcolor(i, &p[0], &p[1], &p[2]);
-            setcolor(i, 0, 0, 0);
+            arch_getcolor(i, &p[0], &p[1], &p[2]);
+            arch_setcolor(i, 0, 0, 0);
         }
     }
     sdraw.blanked = blank;
@@ -23539,7 +23540,7 @@ int isblank;
 
 <<function blankscreen bis(x86)>>=
 void
-blankscreen(int blank)
+arch_blankscreen(int blank)
 {
     VGAscr *scr;
 
@@ -24820,7 +24821,7 @@ static Memimage *tmp;
  * refer to for the underlying dst pixels instead of reading dst
  * directly.
  */
-if(ishwimage(dst) && !ishwimage(rdst) && font->image->depth > 1){
+if(arch_ishwimage(dst) && !arch_ishwimage(rdst) && font->image->depth > 1){
     if(tmp == nil || tmp->chan != dst->chan || Dx(tmp->r) < Dx(r) || Dy(tmp->r) < Dy(r)){
         if(tmp)
             freememimage(tmp);
@@ -25066,7 +25067,7 @@ addflush(Rectangle r)
 
     /* emit current state */
     if(flushrect.min.x < flushrect.max.x)
-        flushmemscreen(flushrect);
+        arch_flushmemscreen(flushrect);
     flushrect = r;
 
     waste = 0;
@@ -27182,7 +27183,7 @@ int (*scroll)(VGAscr*, Rectangle, Rectangle);
 % !!!!!!!!!
 <<function ishwimage(x86)>>=
 bool
-ishwimage(Memimage* i)
+arch_ishwimage(Memimage* i)
 {
   return (i->data->bdata == gscreendata.bdata);
 }
@@ -27564,7 +27565,7 @@ vgaread(Chan* c, void* a, long n, vlong off)
             return 0;
         if(offset+n >= 0x100000)
             n = 0x100000 - offset;
-        memmove(a, (uchar*)kaddr(0)+offset, n);
+        memmove(a, (uchar*)arch_kaddr(0)+offset, n); // why not KADDR()?
         return n;
 
     case Qvgactl:
@@ -27726,13 +27727,13 @@ case CMsize:
     if(chantodepth(chan) != z)
         error("depth, channel do not match");
 
-    cursoroff(1);
+    arch_cursoroff(1);
     deletescreenimage();
     if(screensize(x, y, z, chan))
         error(Egreg);
     vgascreenwin(scr);
     resetscreenimage();
-    cursoron(1);
+    arch_cursoron(1);
     return;
 @
 

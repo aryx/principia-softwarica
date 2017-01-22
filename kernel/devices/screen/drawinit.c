@@ -54,7 +54,7 @@ makescreenimage(void)
     /*e: [[makescreenimage()]] sanity check md */
     md->allocd = true;
 
-    md->bdata = attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
+    md->bdata = arch_attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
     /*s: [[makescreenimage()]] sanity check md bdata */
     if(md->bdata == nil){
         free(md);
