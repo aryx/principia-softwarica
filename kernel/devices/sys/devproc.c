@@ -203,7 +203,7 @@ profclock(Ureg *ur, Timer *)
         return;
 
     /* user profiling clock */
-    if(userureg(ur)){
+    if(arch_userureg(ur)){
         /*s: [[profclock]] tos adjustments when user */
         Tos *tos;
         tos = (Tos*)(USTKTOP-sizeof(Tos));

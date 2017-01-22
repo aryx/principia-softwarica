@@ -24,10 +24,10 @@ struct DevConf
 /*s: enum kbscan */
 /* kbscans indices */
 enum kbscan {
-    Int=    0,          
-    Ext,
+    KbInt=    0,          
+    KbExt,
 
-    Nscans,
+    KbNscans,
 };
 /*e: enum kbscan */
 
@@ -53,11 +53,14 @@ struct Kbscan {
 /*e: struct Kbscan */
 
 // keyboard/portkbd.c
-extern Kbscan kbscans[Nscans];
+extern Kbscan kbscans[KbNscans];
 
 // mouse
 
 // mouse/devmouse.c (used in portmouse.c, portkbd.c, ...)
 extern int mouseshifted;
+
+/* devdraw.c */ // used in some <arch>/screen.c
+extern QLock	drawlock;
 
 /*e: portdat_devices.h */

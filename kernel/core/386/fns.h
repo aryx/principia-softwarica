@@ -233,7 +233,7 @@ ulong upaalloc(int, int);
 //void  upafree(ulong, int);
 void  upareserve(ulong, int);
 /*s: function userureg(x86) */
-#define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
+#define arch_userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
 /*e: function userureg(x86) */
 //@Scheck: Assembly
 void  vectortable(void);

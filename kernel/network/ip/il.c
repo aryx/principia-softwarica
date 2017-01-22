@@ -905,6 +905,8 @@ ilrexmit(Ilcb *ic)
     ulong id;
     Ilpriv *priv;
 
+    USED(id); // BUG?? why not used?
+
     nb = nil;
     qlock(&ic->ackq);
     if(ic->unacked)

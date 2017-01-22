@@ -1,16 +1,17 @@
 /*s: kernel/devices/screen/portscreen.h */
-// This file used to contain the stuff in pc/screen.c, but the prototypes were
+// This file used to contain the stuff in pc/screen.h, but many prototypes were
 // VGA independent, so it is better to have a generic portscreen.h interface 
-// and VGA stuff in pc/screen.c in a separate file.
+// and VGA stuff in pc/screen.h in a separate file.
 
 // Image
 
-// defined in portscreen.c, set in <arch>/screen.c, used by devmouse.c
+// defined in portscreen.c, set in <arch>/screen.c, 
+// used by devmouse.c, swcursor.c, more?
 extern Memimage *gscreen;
 extern Memdata gscreendata;
 extern Rectangle physgscreenr;  /* actual monitor size */
 
-/* defined in <arch>/screen.c, needed by devdraw.c */
+/* defined in <arch>/screen.c, used by devdraw.c */
 extern byte* arch_attachscreen(Rectangle*, ulong*, int*, int*, int*);
 extern void  arch_flushmemscreen(Rectangle);
 extern void  arch_blankscreen(bool);

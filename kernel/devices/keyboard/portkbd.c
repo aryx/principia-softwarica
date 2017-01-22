@@ -153,7 +153,7 @@ extern Rune kbtabctrl[];
 
 /*s: global kbscans */
 // hash<enum<kbscan>, Kbscan>
-Kbscan kbscans[Nscans]; /* kernel and external scan code state */
+Kbscan kbscans[KbNscans]; /* kernel and external scan code state */
 /*e: global kbscans */
 
 
@@ -172,9 +172,9 @@ kbdputsc(byte k, int external)
     long c = k; 
 
     if(external)
-        kbscan = &kbscans[Ext];
+        kbscan = &kbscans[KbExt];
     else
-        kbscan = &kbscans[Int];
+        kbscan = &kbscans[KbInt];
 
     /*s: [[kbdputsc()]] debugging */
     if(kdebug)
