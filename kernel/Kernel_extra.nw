@@ -58,10 +58,9 @@ long  lockcycles;
 // Mutual exclusion
 //*****************************************************************************
 
-// tas < Lock < QLock|RWLock
+// arch_tas < Lock < QLock|RWLock
 
-// used to be in 386/ but the fields were used from port/ so must be portable!
-// Lock.sr was u32int on bcm/. Matters?
+// used to be in <arch> but the fields were used from port/ so must be portable!
 <<struct Lock>>
 
 <<struct ILock>>
@@ -118,26 +117,26 @@ int   canrlock(RWlock*);
 void    wlock(RWlock*);
 void    wunlock(RWlock*);
 
-// in 386/l.s (but used in port)
+// in <arch>/l.s (but used in port)
 //@Scheck: Assembly
-bool   islo(void);
+bool   arch_islo(void);
 //@Scheck: Assembly
-int   splhi(void);
+int   arch_splhi(void);
 //@Scheck: Assembly
-int   spllo(void);
+int   arch_spllo(void);
 //@Scheck: Assembly
-void    splx(int);
-//void    splxpc(int);
-//long    lcycles(void);
+void    arch_splx(int);
 //test-and-set
 //@Scheck: Assembly
-int tas(void*);
+int arch_tas(void*);
 //@Scheck: Assembly
-void    _xinc(long*);
+void    arch_xinc(long*);
 //@Scheck: Assembly
-long    _xdec(long*);
+long    arch_xdec(long*);
 @
 \fi
+%//void    splxpc(int);
+%//long    lcycles(void);
 
 \subsection*{[[concurrency/taslock.c]]}
 
@@ -579,7 +578,7 @@ typedef struct Kbscan Kbscan;
 
 <<portdat_core.h>>=
 
-// All those structs used to be in 386/dat.h, but many of their fields
+// All those structs used to be in <arch>/dat.h, but many of their fields
 // were used from port/ so I've moved them here (and put the arch
 // specific fields in dat_core.h)
 
@@ -589,11 +588,7 @@ typedef struct Kbscan Kbscan;
 
 <<struct Confmem>>
 
-
 <<struct Conf>>
-// TODO arm 
-//	ulong	hz;		/* processor cycle freq */
-//	ulong	mhz;
 
 extern Conf conf;
 
@@ -619,7 +614,7 @@ char* getconf(char *name);
 <<struct Cpu>>
 
 
-// array<ref<Cpu>>, MAXCPUS is defined in 386/mem.h
+// array<ref<Cpu>>, MAXCPUS is defined in <arch>/mem.h
 extern Cpu* cpus[MAXCPUS];
 <<macro CPUS>>
 
@@ -825,6 +820,8 @@ extern char Echange[];    /* media or partition has changed */
 extern char Edetach[];    /* device is detached */
 extern char Enotconf[];   /* endpoint not configured */
 extern char Estalled[];   /* endpoint stalled */
+extern char Esbadstat[];  /* invalid directory entry received from server */
+extern char Enoversion[]; /* version not established for mount channel */
 @
 \fi
 
@@ -983,6 +980,9 @@ extern void kbdputsc(byte, int);
 extern int  kbdgetmap(uint, int*, int*, Rune*);
 extern void kbdputmap(ushort, ushort, Rune);
 
+// defined in <arch>/kbd.c for portkbd.c
+extern void arch_setleds(Kbscan *kbscan);
+
 @
 \fi
 
@@ -1082,9 +1082,6 @@ extern void kbdputmap(ushort, ushort, Rune);
 // of issues with TeX with the special characters it contain
 // can't LPize it.
 <<global kbtabctrl decl>>
-
-// defined in <arch>/kbd.c
-extern void setleds(Kbscan *kbscan);
 
 <<global kbscans>>
 
@@ -3394,10 +3391,6 @@ struct Bogus {
 // actually internal to devmnt.c and mnt.c
 <<struct Mntalloc>>
 extern struct Mntalloc mntalloc;
-
-// TODO: mv in errstr.c?
-extern char Esbadstat[];
-extern char Enoversion[];
 @
 
 
@@ -3824,12 +3817,6 @@ enum
 
 \subsection*{[[files/mnt.c]]}
 
-<<mnt.c Exxx errors>>=
-char   Esbadstat[] = "invalid directory entry received from server";
-char   Enoversion[] = "version not established for mount channel";
-@
-
-
 <<enum channelflag cases>>=
 CMSG  = 0x0002,   /* the message channel for a mount */
 @
@@ -4000,8 +3987,6 @@ mntversion(Chan *c, char *version, int msize, int returnlen)
 <<global mntalloc>>
 
 #define MAXRPC (IOHDRSZ+8192)
-
-<<mnt.c Exxx errors>>
 
 <<function freetag>>
 
@@ -4293,8 +4278,8 @@ uint    qiomaxatomic = Maxatomic;
 \ifallcode
 <<portfns_init.h>>=
 
-//in init/386/main.c (but used in port)
-void    reboot(kern_addr3, kern_addr3, ulong);
+//in init/<arch>/main.c (but used in port)
+void    arch_reboot(kern_addr3, kern_addr3, ulong);
 
 // rebootcmd.c
 //void    readn(Chan *, void *, long);
@@ -4402,7 +4387,7 @@ extern void  connectlocal(void);
 //extern void configlocal(Method*);
 // other possible method connections: network.c, ...
 
-// 386/boot$CONF.c
+// <arch>/boot$CONF.c
 //extern Method method[];   /* defined in ../$arch/boot$CONF.c */
 //extern char*  bootdisk;   /* defined in ../$arch/boot$CONF.c */
 //void main(int argc, char **argv)
@@ -4618,7 +4603,7 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 
 <<portdat_memory.h>>=
 
-// see also KMap in 386/ (but used in port)
+// see also Arch_KMap in <arch>/ (but used in port)
 
 //*****************************************************************************
 // Page < Pagetable (can be filled by KImage) < Segment
@@ -4837,20 +4822,20 @@ KImage*   attachimage(int, Chan*, ulong, ulong);
 // syssetflush (used in syscalls/ without requiring extern decl)
 
 // used in port/ but not portable, so in dat_memory.h now
-//KMap* kmap(Page*);
-//void  kunmap(KMap*);
+//Arch_KMap* arch_kmap(Page*);
+//void  arch_kunmap(Arch_KMap*);
 
 void    countpagerefs(ulong*, int);
-void    flushmmu(void);
-void checkmmu(ulong va, ulong pa);
-ulong cankaddr(ulong);
+void    arch_flushmmu(void);
+void arch_checkmmu(ulong va, ulong pa);
+ulong arch_cankaddr(ulong);
 // actually KADDR is used in port, but it's expanding to kaddr
-kern_addr3 kaddr(phys_addr);
+kern_addr3 arch_kaddr(phys_addr);
 // actually PADDR is used in port, but it's expanding to paddr
-phys_addr paddr(kern_addr3);
-void    putmmu(ulong, ulong, Page*);
-void    mmurelease(Proc*);
-void    mmuswitch(Proc*);
+phys_addr arch_paddr(kern_addr3);
+void    arch_putmmu(ulong, ulong, Page*);
+void    arch_mmurelease(Proc*);
+void    arch_mmuswitch(Proc*);
 @
 \fi
 
@@ -5668,7 +5653,8 @@ void    todinit(void);
 void    todsetfreq(vlong);
 void    todset(vlong, vlong, int);
 vlong   todget(vlong*);
-//uvlong    (*fastticks)(uvlong*); is in 386/devarch.c (but used in port)
+//is in <arch>/devarch.c (but used in port)
+//uvlong    (*arch_fastticks)(uvlong*); 
 uvlong    fastticks2us(uvlong);
 uvlong    ns2fastticks(uvlong);
 long    seconds(void);
@@ -5702,7 +5688,7 @@ void    timeradd(Timer*);
 Timer*    addclock0link(void (*)(void), int);
 void    timerintr(Ureg*, Tval);
 void    timersinit(void);
-//void    timerset(Tval); is in 386/devarch.c (but used in port)
+//void    arch_timerset(Tval); is in <arch>/devarch.c (but used in port)
 
 // proc.c
 void exhausted(char*);
@@ -5770,37 +5756,37 @@ ulong   l2be(long);
 
 
 
-// 386/trap.c (but used in port)
-void    callwithureg(void(*)(Ureg*));
-ulong   dbgpc(Proc*);
-long    execregs(ulong, ulong, ulong);
-void    forkchild(Proc*, Ureg*);
-ulong   userpc(void);
-void    setregisters(Ureg*, char*, char*, int);
-void    setkernur(Ureg*, Proc*);
-void    kprocchild(Proc*, void (*)(void*), void*);
+// <arch>/trap.c (but used in port)
+void    arch_callwithureg(void(*)(Ureg*));
+ulong   arch_dbgpc(Proc*);
+long    arch_execregs(ulong, ulong, ulong);
+void    arch_forkchild(Proc*, Ureg*);
+ulong   arch_userpc(void);
+void    arch_setregisters(Ureg*, char*, char*, int);
+void    arch_setkernur(Ureg*, Proc*);
+void    arch_kprocchild(Proc*, void (*)(void*), void*);
 // intrenable(), but mostly used in 386, just in port/devaudio.c
 
-// 386/main_processes.c (but used in port)
-void procsetup(Proc*);
-void procsave(Proc*);
-void procrestore(Proc *);
-void idlehands(void);
+// <arch>/main_processes.c (but used in port)
+void arch_procsetup(Proc*);
+void arch_procsave(Proc*);
+void arch_procrestore(Proc *);
+void arch_idlehands(void);
 
-// 386/i8253.c (but used in port)
-ulong   perfticks(void);
+// <arch>/i8253.c (but used in port)
+ulong   arch_perfticks(void);
 
-// 386/devarch.c (but used in port)
-void    timerset(Tval);
-ulong   us(void);
+// <arch>/devarch.c (but used in port)
+void    arch_timerset(Tval);
+ulong   arch_us(void);
 
-// in 386/l.s (but used in port)
+// in <arch>/l.s (but used in port)
 //@Scheck: Assembly
-void    gotolabel(Label*);
+void    arch_gotolabel(Label*);
 //@Scheck: Assembly
-int   setlabel(Label*);
+int   arch_setlabel(Label*);
 //@Scheck: Assembly
-void    mul64fract(uvlong*, uvlong, uvlong);
+void    arch_mul64fract(uvlong*, uvlong, uvlong);
 
 // portdat_processes.c
 void (*proctrace)(Proc*, int, vlong); // was in devproc.c
@@ -5956,7 +5942,7 @@ long preempts;
 
 <<[[procctl()]] Proc_exitbig case>>=
     case Proc_exitbig:
-        spllo();
+        arch_spllo();
         pexit("Killed: Insufficient physical memory", true);
 @
 
@@ -6205,7 +6191,7 @@ static void todfix(void);
  *  mult = (1000000000<<32)/f
  *
  *  each time f is set.  f is normally set by a user level
- *  program writing to /dev/fastclock.  mul64fract will then
+ *  program writing to /dev/fastclock.  arch_mul64fract will then
  *  take that fractional multiplier and a 64 bit integer and
  *  return the resulting integer product.
  *
@@ -6248,7 +6234,7 @@ static void todfix(void);
 %//  uvlong x;
 %//
 %//  ilock(&tod);
-%//  mul64fract(&x, ns-tod.off, tod.divider);
+%//  arch_mul64fract(&x, ns-tod.off, tod.divider);
 %//  x += tod.last;
 %//  iunlock(&tod);
 %//  return x;
@@ -6262,7 +6248,7 @@ static void todfix(void);
 %//
 %//  if(!tod.init)
 %//      todinit();
-%//  mul64fract(&res, us, tod.udivider);
+%//  arch_mul64fract(&res, us, tod.udivider);
 %//  return res;
 %//}
 %
@@ -6288,7 +6274,7 @@ static void todfix(void);
 %//
 %//  if(!tod.init)
 %//      todinit();
-%//  mul64fract(&res, ticks, tod.multiplier);
+%//  arch_mul64fract(&res, ticks, tod.multiplier);
 %//  return res;
 %//}
 
@@ -7710,9 +7696,9 @@ talkrdb(Ureg *ureg)
 void
 rdb(void)
 {
-    splhi();
+    arch_splhi();
     iprint("rdb...");
-    callwithureg(talkrdb);
+    arch_callwithureg(talkrdb);
 }
 @
 
@@ -8639,7 +8625,7 @@ sdopen(Chan* c, int omode)
         break;
     case Qraw:
         c->qid.vers = unit->vers;
-        if(tas(&unit->rawinuse) != 0){
+        if(arch_tas(&unit->rawinuse) != 0){
             c->flag &= ~COPEN;
             decref(&sdev->r);
             error(Einuse);
@@ -10806,7 +10792,7 @@ mountio(Mnt *m, Mntrpc *r)
         panic("bad message type in mountio");
     if(devtab[m->c->type]->write(m->c, r->rpc, n, 0) != n)
         error(Emountrpc);
-    r->stime = fastticks(nil);
+    r->stime = arch_fastticks(nil);
     r->reqlen = n;
 
     /* Gate readers onto the mount point one at a time */
@@ -13235,7 +13221,7 @@ cdev(Mntcache *m, Chan *c)
 int
 cread(Chan *c, uchar *buf, int len, vlong off)
 {
-    KMap *k;
+    Arch_KMap *k;
     Page *p;
     Mntcache *m;
     Extent *e, **t;
@@ -13283,9 +13269,9 @@ cread(Chan *c, uchar *buf, int len, vlong off)
         if(l > e->len-o)
             l = e->len-o;
 
-        k = kmap(p);
+        k = arch_kmap(p);
         if(waserror()) {
-            kunmap(k);
+            arch_kunmap(k);
             putpage(p);
             qunlock(m);
             nexterror();
@@ -13294,7 +13280,7 @@ cread(Chan *c, uchar *buf, int len, vlong off)
         memmove(buf, (uchar*)VA(k) + o, l);
 
         poperror();
-        kunmap(k);
+        arch_kunmap(k);
 
         putpage(p);
 
@@ -13317,7 +13303,7 @@ cchain(uchar *buf, ulong offset, int len, Extent **tail)
 {
     int l;
     Page *p;
-    KMap *k;
+    Arch_KMap *k;
     Extent *e, *start, **t;
 
     start = 0;
@@ -13355,14 +13341,14 @@ cchain(uchar *buf, ulong offset, int len, Extent **tail)
         qunlock(&cache);
 
         p->daddr = e->bid;
-        k = kmap(p);
+        k = arch_kmap(p);
         if(waserror()) {        /* buf may be virtual */
-            kunmap(k);
+            arch_kunmap(k);
             nexterror();
         }
         memmove((void*)VA(k), buf, l);
         poperror();
-        kunmap(k);
+        arch_kunmap(k);
 
         cachepage(p, &fscache);
         putpage(p);
@@ -13383,22 +13369,22 @@ int
 cpgmove(Extent *e, uchar *buf, int boff, int len)
 {
     Page *p;
-    KMap *k;
+    Arch_KMap *k;
 
     p = cpage(e);
     if(p == 0)
         return 0;
 
-    k = kmap(p);
+    k = arch_kmap(p);
     if(waserror()) {        /* Since buf may be virtual */
-        kunmap(k);
+        arch_kunmap(k);
         nexterror();
     }
 
     memmove((uchar*)VA(k)+boff, buf, len);
 
     poperror();
-    kunmap(k);
+    arch_kunmap(k);
     putpage(p);
 
     return 1;
@@ -13764,7 +13750,7 @@ rebootcmd(int argc, char *argv[])
     ksetenv("bootfile", argv[0], 1);
     setbootcmd(argc-1, argv+1);
 
-    reboot((void*)entry, p, size);
+    arch_reboot((void*)entry, p, size);
 
     panic("return from reboot!");
 }

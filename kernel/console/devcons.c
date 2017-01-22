@@ -191,7 +191,7 @@ putstrn0(char *str, int n, bool usewrite)
     int m;
     char *t;
 
-    if(!islo())
+    if(!arch_islo())
         usewrite = false;
 
     /*s: [[putstrn0()]] kmesg handling */
@@ -323,7 +323,7 @@ devcons_iprint(char *fmt, ...)
     va_list arg;
     char buf[PRINTSIZE];
 
-    s = splhi();
+    s = arch_splhi();
 
     va_start(arg, fmt);
     n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
@@ -339,7 +339,7 @@ devcons_iprint(char *fmt, ...)
     if(locked)
         unlock(&iprintlock);
 
-    splx(s);
+    arch_splx(s);
 
     return n;
 }
@@ -361,7 +361,7 @@ devcons_panic(char *fmt, ...)
         for(;;);
     panicking = true;
 
-    s = splhi();
+    s = arch_splhi();
     strcpy(buf, "panic: ");
     va_start(arg, fmt);
     n = vseprint(buf+strlen(buf), buf+sizeof(buf), fmt, arg) - buf;
@@ -371,7 +371,7 @@ devcons_panic(char *fmt, ...)
         if(consdebug)
             (*consdebug)();
     /*e: [[panic()]] run consdebug hook */
-    splx(s);
+    arch_splx(s);
     prflush();
     buf[n] = '\n';
     putstrn(buf, n+1);
@@ -543,10 +543,10 @@ echo(char *buf, int n)
                 dumpstack();
                 return;
             case 'S':
-                x = splhi();
+                x = arch_splhi();
                 dumpstack();
                 procdump();
-                splx(x);
+                arch_splx(x);
                 return;
             case 'x':
                 xsummary();
@@ -566,9 +566,9 @@ echo(char *buf, int n)
                 memorysummary();
                 return;
             case 'p':
-                x = spllo();
+                x = arch_spllo();
                 procdump();
-                splx(x);
+                arch_splx(x);
                 return;
             case 'q':
                 scheddump();
@@ -818,7 +818,7 @@ consopen(Chan *c, int omode)
         break;
     /*x: [[consopen()]] cases */
         case Qkprint:
-            if(tas(&kprintinuse) != 0){
+            if(arch_tas(&kprintinuse) != 0){
                 c->flag &= ~COPEN;
                 error(Einuse);
             }
@@ -1264,7 +1264,7 @@ readtime(ulong off, char *buf, int n)
 
     nsec = todget(&ticks);
     if(fasthz == 0LL)
-        fastticks((uvlong*)&fasthz);
+        arch_fastticks((uvlong*)&fasthz);
     sec = nsec/1000000000ULL;
     snprint(str, sizeof(str), "%*lud %*llud %*llud %*llud ",
         NUMSIZE-1, sec,
@@ -1313,7 +1313,7 @@ readbintime(char *buf, int n)
 
     i = 0;
     if(fasthz == 0LL)
-        fastticks((uvlong*)&fasthz);
+        arch_fastticks((uvlong*)&fasthz);
     nsec = todget(&ticks);
     if(n >= 3*sizeof(uvlong)){
         vlong2le(b+2*sizeof(uvlong), fasthz);

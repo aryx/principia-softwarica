@@ -180,7 +180,7 @@ i8042auxcmd(int cmd)
  * thus we'd like to be able to force the numeric-lock led (and behaviour) off.
  */
 void
-setleds(Kbscan *kbscan)
+arch_setleds(Kbscan *kbscan)
 {
     int leds;
 
@@ -349,7 +349,7 @@ kbdenable(void)
     intrenable(IrqKBD, i8042intr, 0, BUSUNKNOWN, "kbd");
 
     kbscans[Int].num = false;
-    setleds(&kbscans[Int]);
+    arch_setleds(&kbscans[Int]);
 }
 /*e: function kbdenable(x86) */
 

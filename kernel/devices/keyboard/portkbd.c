@@ -151,9 +151,6 @@ Rune kbtabaltgr[Nscan] =
 extern Rune kbtabctrl[];
 /*e: global kbtabctrl decl */
 
-// defined in <arch>/kbd.c
-extern void setleds(Kbscan *kbscan);
-
 /*s: global kbscans */
 // hash<enum<kbscan>, Kbscan>
 Kbscan kbscans[Nscans]; /* kernel and external scan code state */
@@ -348,7 +345,7 @@ kbdputsc(byte k, int external)
         case Num:
             kbscan->num ^= true;
             if(!external)
-                setleds(kbscan);
+                arch_setleds(kbscan);
             break;
         /*s: [[kbdputsc()]] mouse keydown cases */
         case Kmouse|1:

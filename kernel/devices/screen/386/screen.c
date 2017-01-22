@@ -273,7 +273,7 @@ vgascreenputs(char* s, int n)
 
     scr = &vgascreen;
 
-    if(!islo()){
+    if(!arch_islo()){
         /*
          * Don't deadlock trying to
          * print in an interrupt.
@@ -1210,7 +1210,7 @@ swcursorclock(void)
     if(swvisible && eqpt(swpt, swvispt) && swvers==swvisvers)
         return;
 
-    x = splhi();
+    x = arch_splhi();
     // check again, might have changed in between
     if(swenabled)
      if(!swvisible || !eqpt(swpt, swvispt) || swvers!=swvisvers)
@@ -1221,7 +1221,7 @@ swcursorclock(void)
 
         qunlock(&drawlock);
     }
-    splx(x);
+    arch_splx(x);
 }
 /*e: function swcursorclock(x86) */
 

@@ -6,7 +6,8 @@ void    todinit(void);
 void    todsetfreq(vlong);
 void    todset(vlong, vlong, int);
 vlong   todget(vlong*);
-//uvlong    (*fastticks)(uvlong*); is in 386/devarch.c (but used in port)
+//is in <arch>/devarch.c (but used in port)
+//uvlong    (*arch_fastticks)(uvlong*); 
 uvlong    fastticks2us(uvlong);
 uvlong    ns2fastticks(uvlong);
 long    seconds(void);
@@ -40,7 +41,7 @@ void    timeradd(Timer*);
 Timer*    addclock0link(void (*)(void), int);
 void    timerintr(Ureg*, Tval);
 void    timersinit(void);
-//void    timerset(Tval); is in 386/devarch.c (but used in port)
+//void    arch_timerset(Tval); is in <arch>/devarch.c (but used in port)
 
 // proc.c
 void exhausted(char*);
@@ -108,37 +109,37 @@ ulong   l2be(long);
 
 
 
-// 386/trap.c (but used in port)
-void    callwithureg(void(*)(Ureg*));
-ulong   dbgpc(Proc*);
-long    execregs(ulong, ulong, ulong);
-void    forkchild(Proc*, Ureg*);
-ulong   userpc(void);
-void    setregisters(Ureg*, char*, char*, int);
-void    setkernur(Ureg*, Proc*);
-void    kprocchild(Proc*, void (*)(void*), void*);
+// <arch>/trap.c (but used in port)
+void    arch_callwithureg(void(*)(Ureg*));
+ulong   arch_dbgpc(Proc*);
+long    arch_execregs(ulong, ulong, ulong);
+void    arch_forkchild(Proc*, Ureg*);
+ulong   arch_userpc(void);
+void    arch_setregisters(Ureg*, char*, char*, int);
+void    arch_setkernur(Ureg*, Proc*);
+void    arch_kprocchild(Proc*, void (*)(void*), void*);
 // intrenable(), but mostly used in 386, just in port/devaudio.c
 
-// 386/main_processes.c (but used in port)
-void procsetup(Proc*);
-void procsave(Proc*);
-void procrestore(Proc *);
-void idlehands(void);
+// <arch>/main_processes.c (but used in port)
+void arch_procsetup(Proc*);
+void arch_procsave(Proc*);
+void arch_procrestore(Proc *);
+void arch_idlehands(void);
 
-// 386/i8253.c (but used in port)
-ulong   perfticks(void);
+// <arch>/i8253.c (but used in port)
+ulong   arch_perfticks(void);
 
-// 386/devarch.c (but used in port)
-void    timerset(Tval);
-ulong   us(void);
+// <arch>/devarch.c (but used in port)
+void    arch_timerset(Tval);
+ulong   arch_us(void);
 
-// in 386/l.s (but used in port)
+// in <arch>/l.s (but used in port)
 //@Scheck: Assembly
-void    gotolabel(Label*);
+void    arch_gotolabel(Label*);
 //@Scheck: Assembly
-int   setlabel(Label*);
+int   arch_setlabel(Label*);
 //@Scheck: Assembly
-void    mul64fract(uvlong*, uvlong, uvlong);
+void    arch_mul64fract(uvlong*, uvlong, uvlong);
 
 // portdat_processes.c
 void (*proctrace)(Proc*, int, vlong); // was in devproc.c

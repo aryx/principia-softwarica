@@ -2,8 +2,8 @@
 #include "mem.h"
 
 /*s: function splhi(x86) */
-// bool   splhi(void);
-TEXT splhi(SB), $0
+// bool   arch_splhi(void);
+TEXT arch_splhi(SB), $0
 shi:
         PUSHFL
         POPL    AX
@@ -18,8 +18,8 @@ alreadyhi:
 /*e: function splhi(x86) */
 
 /*s: function spllo(x86) */
-// bool   spllo(void);
-TEXT spllo(SB), $0
+// bool   arch_spllo(void);
+TEXT arch_spllo(SB), $0
 slo:
         PUSHFL
         POPL    AX
@@ -33,8 +33,8 @@ alreadylo:
 /*e: function spllo(x86) */
 
 /*s: function splx(x86) */
-// void    splx(bool);
-TEXT splx(SB), $0
+// void    arch_splx(bool);
+TEXT arch_splx(SB), $0
         MOVL    s+0(FP), AX
         TESTL   $0x200, AX
         JNZ     slo
@@ -42,8 +42,8 @@ TEXT splx(SB), $0
 /*e: function splx(x86) */
 
 /*s: function islo(x86) */
-// bool islo(void);
-TEXT islo(SB), $0
+// bool arch_islo(void);
+TEXT arch_islo(SB), $0
         PUSHFL
         POPL    AX
         ANDL    $0x200, AX                      /* interrupt enable flag */
@@ -54,7 +54,7 @@ TEXT islo(SB), $0
  * Test-And-Set.
  */
 /*s: function tas(x86) */
-TEXT tas(SB), $0
+TEXT arch_tas(SB), $0
         MOVL    $0xDEADDEAD, AX
         MOVL    l+0(FP), BX
         XCHGL   AX, (BX)                        /* lock->key */
@@ -62,16 +62,16 @@ TEXT tas(SB), $0
 /*e: function tas(x86) */
 
 /*s: function _xinc(x86) */
-/* void _xinc(long*); */
-TEXT _xinc(SB), $0
+/* void arch_xinc(long*); */
+TEXT arch_xinc(SB), $0
         MOVL    l+0(FP), AX
         LOCK;   INCL 0(AX)
         RET
 /*e: function _xinc(x86) */
 
 /*s: function _xdec(x86) */
-/* long _xdec(long*); */
-TEXT _xdec(SB), $0
+/* long arch_xdec(long*); */
+TEXT arch_xdec(SB), $0
         MOVL    l+0(FP), BX
         XORL    AX, AX
         LOCK;   DECL 0(BX)

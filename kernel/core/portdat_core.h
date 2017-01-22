@@ -1,6 +1,6 @@
 /*s: portdat_core.h */
 
-// All those structs used to be in 386/dat.h, but many of their fields
+// All those structs used to be in <arch>/dat.h, but many of their fields
 // were used from port/ so I've moved them here (and put the arch
 // specific fields in dat_core.h)
 
@@ -22,7 +22,6 @@ struct Confmem
     uintptr	limit; // TODO bcm/ specific?
 };
 /*e: struct Confmem */
-
 
 /*s: struct Conf */
 struct Conf
@@ -50,9 +49,6 @@ struct Conf
     /*e: [[Conf]] other fields */
 };
 /*e: struct Conf */
-// TODO arm 
-//	ulong	hz;		/* processor cycle freq */
-//	ulong	mhz;
 
 extern Conf conf;
 
@@ -98,8 +94,8 @@ struct Perf
     ulong inidle;   /* time since last clock tick in idle loop */
     ulong avg_inidle; /* avg time per clock tick in idle loop */
 
-    ulong last;   /* value of perfticks() at last clock tick */
-    ulong period;   /* perfticks() per clock tick */
+    ulong last;   /* value of arch_perfticks() at last clock tick */
+    ulong period;   /* arch_perfticks() per clock tick */
 };
 /*e: struct Perf */
 
@@ -108,8 +104,8 @@ struct Cpu
 {
     int cpuno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
     /*s: [[Cpu]] second field */
-    // must be second field at 0x04, used by splhi()
-    ulong splpc;      /* pc of last caller to splhi */
+    // must be second field at 0x04, used by arch_splhi()
+    ulong splpc;      /* pc of last caller to arch_splhi */
     /*e: [[Cpu]] second field */
   
     // ref<Proc>, or None if halting?
@@ -149,7 +145,7 @@ struct Cpu
         // cyclefreq == cpuhz if havetsc, 0 otherwise
         uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
     /*e: [[Cpu]] other fields */
-    struct ArchCpu;
+    struct Arch_Cpu;
   
     // must be at the end of the structure!
     int stack[1];
@@ -157,7 +153,7 @@ struct Cpu
 /*e: struct Cpu */
 
 
-// array<ref<Cpu>>, MAXCPUS is defined in 386/mem.h
+// array<ref<Cpu>>, MAXCPUS is defined in <arch>/mem.h
 extern Cpu* cpus[MAXCPUS];
 /*s: macro CPUS */
 #define CPUS(n)  (cpus[n])

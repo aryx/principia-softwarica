@@ -53,5 +53,7 @@ char Echange[] = "media or partition has changed";
 char Edetach[] = "device is detached";
 char Enotconf[] = "endpoint not configured";
 char Estalled[] = "endpoint stalled";
+char Esbadstat[] = "invalid directory entry received from server";
+char Enoversion[] = "version not established for mount channel";
 /*e: global Exxx errors */
 /*e: error.c */

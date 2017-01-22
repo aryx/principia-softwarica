@@ -7,7 +7,7 @@
 /*
  *  label consists of a stack pointer and a PC
  */
-TEXT gotolabel(SB), $0
+TEXT arch_gotolabel(SB), $0
         MOVL    label+0(FP), AX
         MOVL    0(AX), SP                       /* restore sp */
         MOVL    4(AX), AX                       /* put return pc on the stack */
@@ -17,7 +17,7 @@ TEXT gotolabel(SB), $0
 /*e: function gotolabel(x86) */
 
 /*s: function setlabel(x86) */
-TEXT setlabel(SB), $0
+TEXT arch_setlabel(SB), $0
         MOVL    label+0(FP), AX
         MOVL    SP, 0(AX)                       /* store sp */
         MOVL    0(SP), BX                       /* store return pc */

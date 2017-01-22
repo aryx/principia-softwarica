@@ -75,7 +75,7 @@ syssegflush(ulong* arg)
 
         qunlock(&s->lk);
     }
-    flushmmu();
+    arch_flushmmu();
     return 0;
 }
 /*e: syscall segflush */

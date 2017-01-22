@@ -40,7 +40,7 @@ static int n;
 static void
 inccnt(Ref *r)
 {
-    _xinc(&r->ref);
+    arch_xinc(&r->ref);
 }
 /*e: function inccnt */
 
@@ -50,7 +50,7 @@ deccnt(Ref *r)
 {
     int x;
 
-    x = _xdec(&r->ref);
+    x = arch_xdec(&r->ref);
     if(x < 0)
         panic("deccnt pc=%#p", getcallerpc(&r));
     return x;
@@ -84,7 +84,7 @@ lock(Lock *l)
     lockstats.locks++;
     if(up)
         inccnt(&up->nlocks);    /* prevent being scheded */
-    if(tas(&l->key) == 0){ // lock old value was 0, the lock was not held
+    if(arch_tas(&l->key) == 0){ // lock old value was 0, the lock was not held
         if(up)
             up->lastlock = l;
         l->pc = pc;
@@ -127,7 +127,7 @@ lock(Lock *l)
         // try again
         if(up)
             inccnt(&up->nlocks);
-        if(tas(&l->key) == 0){
+        if(arch_tas(&l->key) == 0){
             if(up)
                 up->lastlock = l;
             l->pc = pc;
@@ -149,7 +149,7 @@ lock(Lock *l)
 
 /*s: function ilock */
 // To provide mutual exclusion with interrupt code and avoiding deadlock.
-// By using splhi() we disable interrupts while running the critical region
+// By using arch_splhi() we disable interrupts while running the critical region
 // code.
 void
 ilock(Lock *l)
@@ -160,10 +160,10 @@ ilock(Lock *l)
     pc = getcallerpc(&l);
     lockstats.locks++;
 
-    x = splhi();
+    x = arch_splhi();
     // no need to take care of up->nlock++ here, we have disabled interrupt
     // so no risk of getting scheduled
-    if(tas(&l->key) != 0){
+    if(arch_tas(&l->key) != 0){
         lockstats.glare++;
         /*
          * Cannot also check l->pc, l->cpu, or l->isilock here
@@ -172,12 +172,12 @@ ilock(Lock *l)
          */
         for(;;){
             lockstats.inglare++;
-            splx(x);
+            arch_splx(x);
             while(l->key)
                 ;
             // let's try again
-            x = splhi();
-            if(tas(&l->key) == 0)
+            x = arch_splhi();
+            if(arch_tas(&l->key) == 0)
                 goto acquire;
         }
     }
@@ -204,7 +204,7 @@ canlock(Lock *l)
 {
     if(up)
         inccnt(&up->nlocks);
-    if(tas(&l->key) != 0){ // lock old value != 0, lock was already held
+    if(arch_tas(&l->key) != 0){ // lock old value != 0, lock was already held
         if(up)
             deccnt(&up->nlocks);
         return false;
@@ -255,10 +255,10 @@ unlock(Lock *l)
     coherence();
 
     /*s: [[unlock()]] if delaysched */
-    if(up && deccnt(&up->nlocks) == 0 && up->delaysched && islo()){
+    if(up && deccnt(&up->nlocks) == 0 && up->delaysched && arch_islo()){
         /*
          * Call sched if the need arose while locks were held
-         * But, don't do it from interrupt routines, hence the islo() test
+         * But, don't do it from interrupt routines, hence the arch_islo() test
          */
         sched();
     }
@@ -288,7 +288,7 @@ iunlock(Lock *l)
         print("iunlock: not locked: pc %#p\n", getcallerpc(&l));
     if(!l->isilock)
         print("iunlock of lock: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
-    if(islo())
+    if(arch_islo())
         print("iunlock while lo: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
 
     sr = l->sr;
@@ -298,7 +298,7 @@ iunlock(Lock *l)
     cpu->ilockdepth--;
     if(up)
         up->lastilock = nil;
-    splx(sr);
+    arch_splx(sr);
 }
 /*e: function iunlock */
 

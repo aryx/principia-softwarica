@@ -7,7 +7,7 @@
  *  MMU stuff in proc
  */
 /*s: struct ArchProcMMU(x86) */
-struct ArchProcMMU
+struct Arch_ProcMMU
 {
   /*s: [[Proc]] [[Arch]] memory fields(x86) */
   Page* mmupd;     /* page directory base */
@@ -23,13 +23,13 @@ struct ArchProcMMU
 /*
  * KMap the structure doesn't exist, but the functions do.
  */
-typedef struct KMap   KMap;
+typedef struct Arch_KMap   Arch_KMap;
 /*e: struct KMap(x86) */
 /*s: macro VA(x86) */
 #define VA(k)   ((virt_addr3)(k))
 /*e: macro VA(x86) */
 
-KMap* kmap(Page*);
-void  kunmap(KMap*);
+Arch_KMap* arch_kmap(Page*);
+void  arch_kunmap(Arch_KMap*);
 
 /*e: dat_memory.h */

@@ -1,6 +1,6 @@
 /*s: portdat_memory.h */
 
-// see also KMap in 386/ (but used in port)
+// see also Arch_KMap in <arch>/ (but used in port)
 
 //*****************************************************************************
 // Page < Pagetable (can be filled by KImage) < Segment

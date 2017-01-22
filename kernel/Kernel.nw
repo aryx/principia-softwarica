@@ -12,13 +12,15 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, I changed for the better a few things :)
-% - removed deadcode (e.g. field Proc.qlock, semalock, ArchConf, etc)
+% - removed deadcode (e.g. field Proc.qlock, semalock, Arch_Conf, etc)
 % - moved code in init/user such as preboot vs boot vs init
 % - introduced syssema.c (found while going through Kernel_extra.nw)
 % - introduced notion of IPC and Time (TODO change files accordingly)
 % - better grouping of things in devcons.c, present together the Qxxx,
 %   same for /proc/ and its many uses
 % - boolified, typeified, ...
+% - add some arch_ and Arch_ prefix to see more cleary what are the
+%   arch-specific callbacks or structures
 % - too many things to be put here
 
 %thx to codemap/codegraph:
@@ -765,8 +767,8 @@ extern Cpu *cpu;
 
 % some dat_xxx.h before portdat_xxx.h sometimes because
 % the dat_xxx.h defines some arch specific structure referenced
-% in the portable one. dat_core.h defines ArchCpu. dat_memory.c
-% defines ArchProcMMU.
+% in the portable one. dat_core.h defines Arch_Cpu. dat_memory.c
+% defines Arch_ProcMMU.
 
 <<fns.h>>=
 #include "../port/portfns_core.h"
@@ -876,7 +878,7 @@ int devcons_iprint(char*, ...);
 #define exit          main_exit
 #define isaconfig     main_isaconfig
 //#define coherence     nop
-#define fastticks     devarch_fastticks
+#define arch_fastticks     devarch_fastticks
 #define cclose        chan_cclose
 #define proctab       proc_proctab
 #define postnote      proc_postnote
@@ -1299,13 +1301,13 @@ typedef void* kern_addr3;
 
 <<function paddr(x86)>>=
 phys_addr
-paddr(kern_addr3 v)
+arch_paddr(kern_addr3 v)
 {
     kern_addr va;
     
     va = (kern_addr)v;
     if(va < KZERO)
-        panic("paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
+        panic("arch_paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
     return va-KZERO;
 }
 @
@@ -1313,17 +1315,17 @@ paddr(kern_addr3 v)
 % symetric because then got lots of type errors
 
 % pa must be <= MAXKPA, we use kaddr to access kernel data.
-% if want to access different pa, then must use tmpmap or kmap.
+% if want to access different pa, then must use tmpmap or arch_kmap.
 <<function kaddr(x86)>>=
 /*
  * These could go back to being macros once the kernel is debugged,
  * but the extra checking is nice to have.
  */
 kern_addr3
-kaddr(phys_addr pa)
+arch_kaddr(phys_addr pa)
 {
     if(pa > MAXKPA)
-        panic("kaddr: pa=%#.8lux", pa);
+        panic("arch_kaddr: pa=%#.8lux", pa);
     return (kern_addr3)(pa+KZERO);
 }
 @
@@ -1341,7 +1343,7 @@ kaddr(phys_addr pa)
  * If pa is not a valid argument to KADDR, return 0.
  */
 ulong
-cankaddr(phys_addr pa)
+arch_cankaddr(phys_addr pa)
 {
     if(pa >= MAXKPA)
         return 0;
@@ -1354,11 +1356,11 @@ cankaddr(phys_addr pa)
 
 % why trivial macro? because in other archi can be different
 <<function KADDR(x86)>>=
-#define KADDR(pa)  kaddr(pa)
+#define KADDR(pa)  arch_kaddr(pa)
 @
 
 <<function PADDR(x86)>>=
-#define PADDR(ka)  paddr((kern_addr3)(ka))
+#define PADDR(ka)  arch_paddr((kern_addr3)(ka))
 @
 %less: remove cast? more symetric with KADDR then
 % actually all those intermediate types are very ugly, could simplify!
@@ -1498,6 +1500,9 @@ struct Conf
 @ 
 %old: 'ulong monitor;'
 \t nproc used? have proc arena anyway no?
+%// TODO arm 
+%//	ulong	hz;		/* processor cycle freq */
+%//	ulong	mhz;
 
 % mem[4] to allow to have up to 4 free not contiguous memory regions.
 % On the PC we have 2, one in the low memory before the kernel, and
@@ -1571,7 +1576,7 @@ struct Cpu
 
     <<[[Cpu]] stat fields>>
     <<[[Cpu]] other fields>>
-    struct ArchCpu;
+    struct Arch_Cpu;
   
     // must be at the end of the structure!
     int stack[1];
@@ -1591,7 +1596,7 @@ struct Cpu
 
 
 <<struct ArchCpu(x86)>>=
-struct ArchCpu {
+struct Arch_Cpu {
     <<[[Cpu]] [[Arch]] cpuid fields(x86)>>
     <<[[Cpu]] [[Arch]] other fields(x86)>>
 };
@@ -1695,7 +1700,7 @@ struct Proc
 //--------------------------------------------------------------------
     <<[[Proc]] memory fields>>
 
-    struct ArchProcMMU;
+    struct Arch_ProcMMU;
 //--------------------------------------------------------------------
 // Scheduling
 //--------------------------------------------------------------------
@@ -1745,7 +1750,7 @@ struct Proc
 % apparently this uses 3004 bytes ... huge. procalloc is 6Mo!
 
 <<struct ArchProcMMU(x86)>>=
-struct ArchProcMMU
+struct Arch_ProcMMU
 {
   <<[[Proc]] [[Arch]] memory fields(x86)>>
 };
@@ -2065,7 +2070,7 @@ PCArch archgeneric = {
 %the little book on semaphores
 %http://www.greenteapress.com/semaphores/downey08semaphores.pdf
 
-\t make sure that if use splhi, then no use of lock! (only canqlock is ok) 
+\t make sure that if use arch_splhi, then no use of lock! (only canqlock is ok) 
 
 % when think about concurrency in a userspace program, one have
 % shared memory of multiple program threads and need to mediate
@@ -2119,20 +2124,20 @@ PCArch archgeneric = {
 % One must take care when using locks inside interrupts as one can deadlock
 % if the same lock was used in the enclosing syscall (hence ilock/iunlock)
 %
-% For protecting kernel syscall code from interrupt kernel code: splhi(), splo()
+% For protecting kernel syscall code from interrupt kernel code: arch_splhi(), splo()
 % For very small critical region: taslock
 % For bigger region, or when have lots of contention on a lock: qlock
 %  where the process will actually go to sleep (useful e.g. for IO queues
 %  producer/consumer)
 
 
-\section{[[splhi()]], [[spllo()]] (x86)}
+\section{[[arch_splhi()]], [[arch_spllo()]] (x86)}
 
 % cli
 
 <<function splhi(x86)>>=
-// bool   splhi(void);
-TEXT splhi(SB), $0
+// bool   arch_splhi(void);
+TEXT arch_splhi(SB), $0
 shi:
         PUSHFL
         POPL    AX
@@ -2150,15 +2155,15 @@ alreadyhi:
 % this function is actually used quite a lot, not just internally in ilock
 
 <<[[Cpu]] second field>>=
-// must be second field at 0x04, used by splhi()
-ulong splpc;      /* pc of last caller to splhi */
+// must be second field at 0x04, used by arch_splhi()
+ulong splpc;      /* pc of last caller to arch_splhi */
 @ 
 
 
 
 <<function spllo(x86)>>=
-// bool   spllo(void);
-TEXT spllo(SB), $0
+// bool   arch_spllo(void);
+TEXT arch_spllo(SB), $0
 slo:
         PUSHFL
         POPL    AX
@@ -2173,18 +2178,18 @@ alreadylo:
 
 
 <<function splx(x86)>>=
-// void    splx(bool);
-TEXT splx(SB), $0
+// void    arch_splx(bool);
+TEXT arch_splx(SB), $0
         MOVL    s+0(FP), AX
         TESTL   $0x200, AX
         JNZ     slo
         JMP     shi
 @ 
-% ref label in splhi and spllot
+% ref label in arch_splhi and spllot
 
 <<function islo(x86)>>=
-// bool islo(void);
-TEXT islo(SB), $0
+// bool arch_islo(void);
+TEXT arch_islo(SB), $0
         PUSHFL
         POPL    AX
         ANDL    $0x200, AX                      /* interrupt enable flag */
@@ -2193,13 +2198,13 @@ TEXT islo(SB), $0
 %$
 
 
-\section{[[tas()]] (x86)}
+\section{[[arch_tas()]] (x86)}
 
 % building block of concurrency
 
-% call we will see later as tas(&lock->key)
+% call we will see later as arch_tas(&lock->key)
 <<function tas(x86)>>=
-TEXT tas(SB), $0
+TEXT arch_tas(SB), $0
         MOVL    $0xDEADDEAD, AX
         MOVL    l+0(FP), BX
         XCHGL   AX, (BX)                        /* lock->key */
@@ -2215,23 +2220,23 @@ TEXT tas(SB), $0
 %        //    still be 0xdeaddead.
 
 % return in AX, so can read that as what was the value in the lock, and if
-% nul then set it! So tas() == 0 mean? tas() == 0xDEADEAD mean?
+% nul then set it! So arch_tas() == 0 mean? arch_tas() == 0xDEADEAD mean?
 % return in AX see C conventions.
 
 % movl l+0(FP) is because we use 0(FP) and 8a forces the programmer
 % to give a name to accessed parameters. Used in debugger?
 
 
-\section{Atomic [[_xinc()]] and [[_xdec()]] (x86)}
+\section{Atomic [[arch_xinc()]] and [[arch_xdec()]] (x86)}
 
-% tas() is to make sure one arrive first on something.
+% arch_tas() is to make sure one arrive first on something.
 % another fundamental concurrency operation is increment/decrement atomically
 % (actually can simulate second one with first, see Ref later, but can be
 % useful to have something faster on certain architecture)
 
 <<function _xinc(x86)>>=
-/* void _xinc(long*); */
-TEXT _xinc(SB), $0
+/* void arch_xinc(long*); */
+TEXT arch_xinc(SB), $0
         MOVL    l+0(FP), AX
         LOCK;   INCL 0(AX)
         RET
@@ -2239,8 +2244,8 @@ TEXT _xinc(SB), $0
 
 
 <<function _xdec(x86)>>=
-/* long _xdec(long*); */
-TEXT _xdec(SB), $0
+/* long arch_xdec(long*); */
+TEXT arch_xdec(SB), $0
         MOVL    l+0(FP), BX
         XORL    AX, AX
         LOCK;   DECL 0(BX)
@@ -2309,7 +2314,7 @@ lock(Lock *l)
     lockstats.locks++;
     if(up)
         inccnt(&up->nlocks);    /* prevent being scheded */
-    if(tas(&l->key) == 0){ // lock old value was 0, the lock was not held
+    if(arch_tas(&l->key) == 0){ // lock old value was 0, the lock was not held
         if(up)
             up->lastlock = l;
         l->pc = pc;
@@ -2338,7 +2343,7 @@ lock(Lock *l)
         // try again
         if(up)
             inccnt(&up->nlocks);
-        if(tas(&l->key) == 0){
+        if(arch_tas(&l->key) == 0){
             if(up)
                 up->lastlock = l;
             l->pc = pc;
@@ -2391,7 +2396,7 @@ canlock(Lock *l)
 {
     if(up)
         inccnt(&up->nlocks);
-    if(tas(&l->key) != 0){ // lock old value != 0, lock was already held
+    if(arch_tas(&l->key) != 0){ // lock old value != 0, lock was already held
         if(up)
             deccnt(&up->nlocks);
         return false;
@@ -2429,6 +2434,7 @@ typedef Lock ILock;
 bool_ushort isilock; // false when from lock(), true when from ilock()
 ulong sr; // saved priority level when using ilock() to restore in iunlock()
 @ 
+%// Lock.sr was u32int on bcm/. Matters?
 
 <<[[Proc]] debugging fields>>=
 Lock  *lastilock;
@@ -2438,10 +2444,10 @@ Lock  *lastilock;
 int ilockdepth;
 @ 
 
-% usage vs just splhi? for critical regions between different interrupt handlers?
+% usage vs just arch_splhi? for critical regions between different interrupt handlers?
 <<function ilock>>=
 // To provide mutual exclusion with interrupt code and avoiding deadlock.
-// By using splhi() we disable interrupts while running the critical region
+// By using arch_splhi() we disable interrupts while running the critical region
 // code.
 void
 ilock(Lock *l)
@@ -2452,10 +2458,10 @@ ilock(Lock *l)
     pc = getcallerpc(&l);
     lockstats.locks++;
 
-    x = splhi();
+    x = arch_splhi();
     // no need to take care of up->nlock++ here, we have disabled interrupt
     // so no risk of getting scheduled
-    if(tas(&l->key) != 0){
+    if(arch_tas(&l->key) != 0){
         lockstats.glare++;
         /*
          * Cannot also check l->pc, l->cpu, or l->isilock here
@@ -2464,12 +2470,12 @@ ilock(Lock *l)
          */
         for(;;){
             lockstats.inglare++;
-            splx(x);
+            arch_splx(x);
             while(l->key)
                 ;
             // let's try again
-            x = splhi();
-            if(tas(&l->key) == 0)
+            x = arch_splhi();
+            if(arch_tas(&l->key) == 0)
                 goto acquire;
         }
     }
@@ -2498,7 +2504,7 @@ iunlock(Lock *l)
         print("iunlock: not locked: pc %#p\n", getcallerpc(&l));
     if(!l->isilock)
         print("iunlock of lock: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
-    if(islo())
+    if(arch_islo())
         print("iunlock while lo: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
 
     sr = l->sr;
@@ -2508,7 +2514,7 @@ iunlock(Lock *l)
     cpu->ilockdepth--;
     if(up)
         up->lastilock = nil;
-    splx(sr);
+    arch_splx(sr);
 }
 @ 
 
@@ -2890,10 +2896,10 @@ typedef struct Ref Counter;
 static void
 inccnt(Ref *r)
 {
-    _xinc(&r->ref);
+    arch_xinc(&r->ref);
 }
 @ 
-% so why use incref()/decref()? why not use _xinc()/_xdec()?
+% so why use incref()/decref()? why not use arch_xinc()/arch_xdec()?
 
 
 <<function deccnt>>=
@@ -2902,7 +2908,7 @@ deccnt(Ref *r)
 {
     int x;
 
-    x = _xdec(&r->ref);
+    x = arch_xdec(&r->ref);
     if(x < 0)
         panic("deccnt pc=%#p", getcallerpc(&r));
     return x;
@@ -3802,7 +3808,7 @@ Page*
 newpage(bool clear, Segment **s, virt_addr va)
 {
     Page *p;
-    KMap *k;
+    Arch_KMap *k;
     bool dontalloc;
  uchar ct;
     int i, color;
@@ -3843,14 +3849,14 @@ newpage(bool clear, Segment **s, virt_addr va)
     unlock(&palloc);
 
     if(clear) {
-        k = kmap(p);
+        k = arch_kmap(p);
         memset((void*)VA(k), 0, BY2PG);
-        kunmap(k);
+        arch_kunmap(k);
     }
     return p;
 }
 @
-% kmap()? see later
+% arch_kmap()? see later
 %old: was storing highwater in intermediate hw, useful?
 %old: stuff with cachectl I now removed
 
@@ -4354,7 +4360,7 @@ okaddr(virt_addr addr, ulong len, bool write)
             }
         }
     }
-    pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, userpc());
+    pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, arch_userpc());
     return false;
 }
 @
@@ -4654,7 +4660,7 @@ ibrk(ulong addr, int seg)
         s->top = newtop;
         s->size = newsize;
         qunlock(&s->lk);
-        flushmmu();
+        arch_flushmmu();
         return 0;
     }
 
@@ -5209,7 +5215,7 @@ sysrfork(ulong* arg)
     /* Craft a return frame which will cause the child to pop out of
      * the scheduler in user mode with the return register zero
      */
-    forkchild(p, up->dbgreg);
+    arch_forkchild(p, up->dbgreg);
 
     p->parent = up;
     p->parentpid = up->pid;
@@ -5234,7 +5240,7 @@ sysrfork(ulong* arg)
      *  any mmu info about this process is now stale
      *  (i.e. has bad properties) and has to be discarded.
      */
-    flushmmu();
+    arch_flushmmu();
 
     p->basepri = up->basepri;
     p->priority = up->basepri;
@@ -5251,11 +5257,11 @@ sysrfork(ulong* arg)
 @ 
 % LP split
 
-\subsection{[[forkchild()]] (x86)}
+\subsection{[[arch_forkchild()]] (x86)}
 
 <<function forkchild(x86)>>=
 void
-forkchild(Proc *p, Ureg *ureg)
+arch_forkchild(Proc *p, Ureg *ureg)
 {
     Ureg *cureg;
 
@@ -5430,7 +5436,7 @@ sysexec(ulong* arg)
 
     /*
      * 8-byte align SP for those (e.g. sparc) that need it.
-     * execregs() will subtract another 4 bytes for argc.
+     * arch_execregs() will subtract another 4 bytes for argc.
      */
     if((ssize+4) & 7)
         ssize += 4;
@@ -5560,19 +5566,19 @@ sysexec(ulong* arg)
      *  At this point, the mmu contains info about the old address
      *  space and needs to be flushed
      */
-    flushmmu();
+    arch_flushmmu();
 
     qlock(&up->debug);
     up->nnote = 0;
     up->notify = nil;
     up->notified = false;
     up->privatemem = false;
-    procsetup(up); // archi specific hook
+    arch_procsetup(up);
     qunlock(&up->debug);
 
     <<[[sysexec()]] if hang>>
 
-    return execregs(entry, ssize, nargs);
+    return arch_execregs(entry, ssize, nargs);
 }
 @ 
 
@@ -5580,7 +5586,7 @@ sysexec(ulong* arg)
 
 <<function procsetup(x86)>>=
 void
-procsetup(Proc* p)
+arch_procsetup(Proc* p)
 {
   <<[[procsetup()]] fp setup(x86)>>
 }
@@ -5618,7 +5624,7 @@ l2be(long l)
 
 <<function execregs(x86)>>=
 long
-execregs(ulong entry, ulong ssize, ulong nargs)
+arch_execregs(ulong entry, ulong ssize, ulong nargs)
 {
     ulong *sp;
     Ureg *ureg;
@@ -5985,12 +5991,12 @@ proc_pexit(char *exitstr, bool freemem)
 
     <<[[pexit()]] optional [[edfstop()]] for real-time scheduling>>
     up->state = Moribund;
-    // will gotolabel() to schedinit() which has special code around Moribund
+    // will arch_gotolabel() to schedinit() which has special code around Moribund
     sched(); 
     panic("pexit: should never reach this point"); 
 }
 @ 
-% (why not doing more simply gotolabel(cpu->sched)? to reuse some of
+% (why not doing more simply arch_gotolabel(cpu->sched)? to reuse some of
 %  sched() code?)
 
 % What about zombie process? There is no zombie in plan9!
@@ -6039,7 +6045,7 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     procpriority(p, PriKproc, false);
 
-    kprocchild(p, func, arg);
+    arch_kprocchild(p, func, arg);
 
     kstrdup(&p->user, eve);
     kstrdup(&p->text, name);
@@ -6053,17 +6059,17 @@ kproc(char *name, void (*func)(void *), void *arg)
 }
 @ 
 
-\subsection{[[kprocchild()]] (x86)}
+\subsection{[[arch_kprocchild()]] (x86)}
 
 <<function kprocchild(x86)>>=
 void
-kprocchild(Proc* p, void (*func)(void*), void* arg)
+arch_kprocchild(Proc* p, void (*func)(void*), void* arg)
 {
     p->kpfun = func;
     p->kparg = arg;
 
     /*
-     * gotolabel() needs a word on the stack in
+     * arch_gotolabel() needs a word on the stack in
      * which to place the return PC used to jump
      * to linkproc().
      */
@@ -6076,7 +6082,7 @@ kprocchild(Proc* p, void (*func)(void*), void* arg)
 static void
 linkproc(void)
 {
-    spllo();
+    arch_spllo();
     up->kpfun(up->kparg);
     // should never reach this place?? kernel processes are supposed
     // to run forever??
@@ -6105,7 +6111,7 @@ linkproc(void)
 
 <<[[procctl()]] Proc_exitme case>>=
     case Proc_exitme:
-        spllo();        /* pexit has locks in it */
+        arch_spllo();        /* pexit has locks in it */
         pexit("Killed", true);
 @
 %procctl() is executed by notify() executed itself usually
@@ -7004,7 +7010,7 @@ void trap(Ureg* ureg)
         panic("trap %lud: not ready", ureg->trap);
     }
 
-    cpu->perf.intrts = perfticks();
+    cpu->perf.intrts = arch_perfticks();
 
     user = (ureg->cs & 0xFFFF) == UESEL;
 
@@ -7045,7 +7051,7 @@ void trap(Ureg* ureg)
         }
     } // no Vctl?
     else if(vno < nelem(excname) && user){
-        spllo();
+        arch_spllo();
         snprint(buf, sizeof buf, "sys: trap: %s", excname[vno]);
         postnote(up, 1, buf, NDebug);
     }
@@ -7101,7 +7107,7 @@ void trap(Ureg* ureg)
             panic("%s", excname[vno]);
         panic("unknown trap/intr: %d", vno);
     }
-    splhi(); // possible spllo() done above
+    arch_splhi(); // possible arch_spllo() done above
 
     <<[[trap()]] if delaysched(x86)>>
 
@@ -7240,7 +7246,7 @@ void syscall(Ureg* ureg)
     <<[[syscall()]] Proc_tracesyscall if, syscall entry(x86)>>
 
     <<[[syscall()]] fp adjustments if fork(x86)>>
-    spllo();
+    arch_spllo();
 
     up->nerrlab = 0;
     ret = -1;
@@ -7309,7 +7315,7 @@ void syscall(Ureg* ureg)
  *  return the userpc the last exception happened at
  */
 ulong
-userpc(void)
+arch_userpc(void)
 {
     Ureg *ureg;
 
@@ -7544,7 +7550,7 @@ Segdesc *gdt;     /* gdt for this processor */
 
 
 % on tmpmap, tmpunmap. For now assume just alias to XXX
-% on kmap, kunmap, VA. Assume alias to XXX.
+% on arch_kmap, arch_kunmap, VA. Assume alias to XXX.
 % see Advanced memory chapter for the actual definitions when
 % have machine with lots of memory where MAXKPA is not enough
 % and so can't just do KADDR(page->pa) to get a virtual address
@@ -7610,7 +7616,7 @@ mmuwalk(kern_addr2 pd, kern_addr va, int level, bool create)
 <<[[Cpu]] [[Arch]] other fields(x86)>>=
 kern_addr2   pdproto;      /* page directory base for this processor (va) */
 @
-% this pd is super important!! see mmuswitch, he's the one
+% this pd is super important!! see arch_mmuswitch, he's the one
 % that will map specially the CPUADDR for each CPU!
 % it is actually a prototype that is copied in the mmupagedir of each
 % new process
@@ -7619,7 +7625,7 @@ kern_addr2   pdproto;      /* page directory base for this processor (va) */
 Page* mmupdpool;
 int mmupdcnt;
 @
-%// TODO: have a ArchCpuMMU like in bcm/
+%// TODO: have a Arch_CpuMMU like in bcm/
 % mv later? when used? opti to not wait for newpage()
 
 
@@ -7650,7 +7656,7 @@ upallocmmupd(void)
     if(up->mmupd != nil)
         return;
     page = mmupdalloc();
-    s = splhi();
+    s = arch_splhi();
     if(up->mmupd != nil){
         /*
          * Perhaps we got an interrupt while
@@ -7659,7 +7665,7 @@ upallocmmupd(void)
          * Seems unlikely.
          */
         mmupdfree(up, page);
-        splx(s);
+        arch_splx(s);
         return;
     }
     mmupd = tmpmap(page);
@@ -7667,7 +7673,7 @@ upallocmmupd(void)
     tmpunmap(mmupd);
     up->mmupd = page;
     putcr3(up->mmupd->pa); //!!!! bootstrap! putcr3 take a PA of course
-    splx(s);
+    arch_splx(s);
 }
 @
 
@@ -7687,12 +7693,12 @@ mmupdalloc(void)
     Page *page;
     kern_addr2 mmupd;
 
-    s = splhi();
+    s = arch_splhi();
     cpu->mmupdalloc++;
     if(cpu->mmupdpool == nil){
-        spllo();
+        arch_spllo();
         page = newpage(false, nil, nilptr);
-        splhi();
+        arch_splhi();
         mmupd = tmpmap(page);
         memmove(mmupd, cpu->pdproto, BY2PG);
         <<[[mmupdalloc()]] vpt adjustments(x86)>>
@@ -7702,14 +7708,14 @@ mmupdalloc(void)
         cpu->mmupdpool = page->next;
         cpu->mmupdcnt--;
     }
-    splx(s);
+    arch_splx(s);
     return page;
 }
 @
 % why not using kernel memory for that? after all use kernel memory
 % for Segment and Pagetable
 % how sure what is put back in the mmupdpool has virgin mapping?
-% because of mmurelease?
+% because of arch_mmurelease?
 
 
 %dtor
@@ -7717,8 +7723,8 @@ mmupdalloc(void)
 static void
 mmupdfree(Proc *proc, Page *page)
 {
-    if(islo())
-        panic("mmupdfree: islo");
+    if(arch_islo())
+        panic("mmupdfree: arch_islo");
     cpu->mmupdfree++;
     if(cpu->mmupdcnt >= 10){ // 10??? keep small cache of mmupd page, but not too big, don't want to eat too much memory for that.
         page->next = proc->mmufree;
@@ -7732,7 +7738,7 @@ mmupdfree(Proc *proc, Page *page)
 @
 % but the Page is a pd that have all entries correct? who initialize it?
 % it has the good entries for the mapping of the kernel, but before KZERO?
-% assumes have called mmuptefree before I think in mmurelease
+% assumes have called mmuptefree before I think in arch_mmurelease
 
 
 
@@ -7756,7 +7762,7 @@ mmuptefree(Proc* proc)
     if(proc->mmupd == nil || proc->mmuused == nil)
         return; // panic? bug to be called with that?
 
-    s = splhi();
+    s = arch_splhi();
     mmupd = tmpmap(proc->mmupd);
     last = &proc->mmuused;
     for(page = *last; page; page = page->next){
@@ -7764,7 +7770,7 @@ mmuptefree(Proc* proc)
         last = &page->next;
     }
     tmpunmap(mmupd);
-    splx(s);
+    arch_splx(s);
     *last = proc->mmufree;
     proc->mmufree = proc->mmuused;
     proc->mmuused = nil;
@@ -7786,12 +7792,12 @@ mmuptefree(Proc* proc)
  * This routine is only called from schedinit() with palloc locked.
  */
 void
-mmurelease(Proc* proc)
+arch_mmurelease(Proc* proc)
 {
     Page *page, *next;
 
-    if(islo())
-        panic("mmurelease: islo");
+    if(arch_islo())
+        panic("arch_mmurelease: arch_islo");
     taskswitch(PADDR(cpu->pdproto), (ulong)cpu + BY2PG);
 
 
@@ -7805,7 +7811,7 @@ mmurelease(Proc* proc)
     for(page = proc->mmufree; page; page = next){
         next = page->next;
         if(--page->ref)
-            panic("mmurelease: page->ref %d", page->ref);
+            panic("arch_mmurelease: page->ref %d", page->ref);
         pagechainhead(page);
     }
     if(proc->mmufree && palloc.freememr.p)
@@ -7822,7 +7828,7 @@ mmurelease(Proc* proc)
  * Update the mmu in response to a user fault.  pa may have PTEWRITE set.
  */
 void
-putmmu(virt_addr va, ulong mmupte, Page*)
+arch_putmmu(virt_addr va, ulong mmupte, Page*)
 {
     int old;
     Page *page;
@@ -7840,9 +7846,9 @@ putmmu(virt_addr va, ulong mmupte, Page*)
 mmupd = KADDR(up->mmupd->pa);
 if(!(mmupd[PDX(va)]&PTEVALID)) {
     if(up->mmufree == nil){
-        spllo();
+        arch_spllo();
         page = newpage(false, nil, nilptr);
-        splhi();
+        arch_splhi();
     }
     else{
         page = up->mmufree;
@@ -7884,14 +7890,14 @@ bool newtlb;   /* Pager has changed my pte's, I must flush */
  * It will be paged back in on demand.
  */
 void
-flushmmu(void)
+arch_flushmmu(void)
 {
     int s;
 
-    s = splhi();
+    s = arch_splhi();
     up->newtlb = true;
-    mmuswitch(up);
-    splx(s);
+    arch_mmuswitch(up);
+    arch_splx(s);
 }
 @
 
@@ -7983,7 +7989,7 @@ fault(virt_addr addr, bool read)
 
     sps = up->psstate;
     up->psstate = "Fault";
-    spllo();
+    arch_spllo();
 
     cpu->pfault++;
     for(;;) {
@@ -8091,7 +8097,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     qunlock(&s->lk);
 
     if(doputmmu)
-        putmmu(addr, mmupte, *pte);
+        arch_putmmu(addr, mmupte, *pte);
 
     return 0; // OK
 }
@@ -8131,7 +8137,7 @@ checkpages(void)
             pg = p->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
             if(pg == nil || pagedout(pg))
                 continue;
-            checkmmu(addr, pg->pa);
+            arch_checkmmu(addr, pg->pa);
             checked++;
         }
         qunlock(&s->lk);
@@ -8146,7 +8152,7 @@ checkpages(void)
  * Error checking only.
  */
 void
-checkmmu(virt_addr va, phys_addr pa)
+arch_checkmmu(virt_addr va, phys_addr pa)
 {
     if(up->mmupd == nil)
         return;
@@ -8191,13 +8197,13 @@ if(ref > 1){
 void
 copypage(Page *f, Page *t)
 {
-    KMap *ks, *kd;
+    Arch_KMap *ks, *kd;
 
-    ks = kmap(f);
-    kd = kmap(t);
+    ks = arch_kmap(f);
+    kd = arch_kmap(t);
     memmove((void*)VA(kd), (void*)VA(ks), BY2PG);
-    kunmap(ks);
-    kunmap(kd);
+    arch_kunmap(ks);
+    arch_kunmap(kd);
 }
 @
 
@@ -8688,7 +8694,7 @@ void
 pio(Segment *s, virt_addr addr, ulong soff, PageOrSwap **p)
 {
     Page *new;
-    KMap *k;
+    Arch_KMap *k;
     Chan *c;
     int n, ask;
     char *kaddr;
@@ -8724,13 +8730,13 @@ retry:
     qunlock(&s->lk);
 
     new = newpage(false, nil, addr);
-    k = kmap(new);
+    k = arch_kmap(new);
     kaddr = (char*)VA(k);
 
     while(waserror()) {
         if(strcmp(up->errstr, Eintr) == 0)
             continue;
-        kunmap(k);
+        arch_kunmap(k);
         putpage(new);
         faulterror(Eioload, c, false);
     }
@@ -8744,7 +8750,7 @@ retry:
         memset(kaddr+ask, 0, BY2PG-ask);
 
     poperror();
-    kunmap(k);
+    arch_kunmap(k);
     qlock(&s->lk);
 
     if(loadrec == nil) {  /* This is demand load */
@@ -9056,7 +9062,7 @@ imagereclaim(void)
         return;
 
     lock(&palloc);
-    ticks = fastticks(nil);
+    ticks = arch_fastticks(nil);
     n = 0;
     /*
      * All the pages with images backing them are at the
@@ -9072,7 +9078,7 @@ imagereclaim(void)
             unlock(p);
         }
     }
-    ticks = fastticks(nil) - ticks;
+    ticks = arch_fastticks(nil) - ticks;
     unlock(&palloc);
     irstats.loops++;
     irstats.ticks += ticks;
@@ -9649,7 +9655,7 @@ canpage(Proc *p)
 {
     bool ok = false;
 
-    splhi();
+    arch_splhi();
     lock(runq);
     /* Only reliable way to see if we are Running */
     if(p->cpu == nil) {
@@ -9657,7 +9663,7 @@ canpage(Proc *p)
         ok = true;
     }
     unlock(runq);
-    spllo();
+    arch_spllo();
 
     return ok;
 }
@@ -9708,7 +9714,7 @@ executeio(void)
     int i, n;
     Chan *c;
     char *kaddr;
-    KMap *k;
+    Arch_KMap *k;
 
     c = swapimage.c;
     qsort(iolist, ioptr, sizeof iolist[0], pageiocomp);
@@ -9716,7 +9722,7 @@ executeio(void)
         if(ioptr > conf.nswppo)
             panic("executeio: ioptr %d > %d", ioptr, conf.nswppo);
         out = iolist[i];
-        k = kmap(out);
+        k = arch_kmap(out);
         kaddr = (char*)VA(k);
 
         if(waserror())
@@ -9726,7 +9732,7 @@ executeio(void)
         if(n != BY2PG)
             nexterror();
 
-        kunmap(k);
+        arch_kunmap(k);
         poperror();
 
         /* Free up the page after I/O */
@@ -10005,7 +10011,7 @@ queueproc(Schedq *rq, Proc *p)
 
 <<function dequeueproc>>=
 /*
- *  try to remove a process from a scheduling queue (called splhi)
+ *  try to remove a process from a scheduling queue (called arch_splhi)
  */
 // tp should belong to the queue
 Proc*
@@ -10087,23 +10093,23 @@ sched(void)
             (up && up->lastilock)? up->lastilock->pc: 0, getcallerpc(&p+2));
     if(up){
         <<[[sched()]] if complex condition increment delaysched and return>>
-        splhi(); // schedinit requires this
+        arch_splhi(); // schedinit requires this
         cpu->cs++;
 
-        procsave(up);
-        if(setlabel(&up->sched)){
+        arch_procsave(up);
+        if(arch_setlabel(&up->sched)){
             //
             // here when the process has been scheduled back
-            // from a gotolabel(up->sched) by another process, see below
+            // from a arch_gotolabel(up->sched) by another process, see below
             //
-            procrestore(up);
-            spllo();
+            arch_procrestore(up);
+            arch_spllo();
             return;
         }else{
             //
             // here to go to schedinit() (which will call sched() back)
             //
-            gotolabel(&cpu->sched); // goto schedinit()
+            arch_gotolabel(&cpu->sched); // goto schedinit()
             panic("sched: should never reach this point");
         }
     }
@@ -10126,8 +10132,8 @@ sched(void)
     up->state = Running;
     up->cpu = CPUS(cpu->cpuno);
 
-    mmuswitch(up);
-    gotolabel(&up->sched);
+    arch_mmuswitch(up);
+    arch_gotolabel(&up->sched);
 }
 @ 
 
@@ -10146,14 +10152,14 @@ Label sched;      /* scheduler wakeup */ // address of schedinit()
 
 <<function schedinit>>=
 /*
- * Always splhi()'ed.
+ * Always arch_splhi()'ed.
  */
 void
 schedinit(void)     /* never returns */
 {
     Edf *e;
 
-    setlabel(&cpu->sched);
+    arch_setlabel(&cpu->sched);
 
     if(up) {
         <<[[schedinit()]] optional real-time [[edfrecord()]]>>
@@ -10173,7 +10179,7 @@ schedinit(void)     /* never returns */
              *  procalloc
              *  palloc
              */
-            mmurelease(up);
+            arch_mmurelease(up);
 
             up->qnext = procalloc.free;
             procalloc.free = up;
@@ -10196,7 +10202,7 @@ schedinit(void)     /* never returns */
 % Why the logic of scheduling is splitted between sched() and schedinit()?
 % could not gather? And doing so remove the need for Cpu->label?
 % I think it's related to the per-process stack.
-% Once you've called setlabel(), that means you saved the kernel context
+% Once you've called arch_setlabel(), that means you saved the kernel context
 % of a certain process, you should not use the kernel stack of
 % this process for other things, you should switch to an exterior 
 % process-independent task, that is the main() kernel stack!
@@ -10222,7 +10228,7 @@ runproc(void)
     int i;
     void (*pt)(Proc*, int, vlong);
 
-    start = perfticks();
+    start = arch_perfticks();
 
     /* cooperative scheduling until the clock ticks */
     if((p=cpu->readied) && p->cpu==nil && p->state==Ready && 
@@ -10242,7 +10248,7 @@ loop:
      *  or one that hasn't moved in a while (load balancing). Every
      *  time around the loop affinity goes down.
      */
-    spllo();
+    arch_spllo();
     for(i = 0;; i++){
         /*
          *  find the highest priority target process that this
@@ -10258,16 +10264,16 @@ loop:
         }
         // nothing found
         /* waste time or halt the CPU */
-        idlehands();
+        arch_idlehands();
 
         /* remember how much time we're here */
-        now = perfticks();
+        now = arch_perfticks();
         cpu->perf.inidle += now-start;
         start = now;
     }
 
 found:
-    splhi();
+    arch_splhi();
     p = dequeueproc(rq, p);
     if(p == nil)
         goto loop;
@@ -10460,7 +10466,7 @@ up->delaysched = 0;
 /* delaysched set because we held a lock or because our quantum ended */
 if(up && up->delaysched && clockintr){
     sched();
-    splhi();
+    arch_splhi();
 }
 @
 
@@ -10471,10 +10477,10 @@ if(up->delaysched)
 @
 
 <<[[unlock()]] if delaysched>>=
-if(up && deccnt(&up->nlocks) == 0 && up->delaysched && islo()){
+if(up && deccnt(&up->nlocks) == 0 && up->delaysched && arch_islo()){
     /*
      * Call sched if the need arose while locks were held
-     * But, don't do it from interrupt routines, hence the islo() test
+     * But, don't do it from interrupt routines, hence the arch_islo() test
      */
     sched();
 }
@@ -10497,14 +10503,14 @@ struct Label
 % is this enough? what about the other registers? the kernel code assumes
 % compiles with kencc, so the only context we need is this.
 % no need save registers, the caller compiled code should have done
-% that before calling setlabel(). Note that this is ok because
-% gotolabel assumes we jump to other kernel code compiled via kencc!
+% that before calling arch_setlabel(). Note that this is ok because
+% arch_gotolabel assumes we jump to other kernel code compiled via kencc!
 % for the user switch, this is not the same (also because can
 % be interrupted in the middle of anything) and so we save
 % everything.
 
 % cflow of syscall e.g. syssleep is: user -> kernel -> sleep ->
-% kernel switch gotolabel -> return from kernel code (syscall or trap)
+% kernel switch arch_gotolabel -> return from kernel code (syscall or trap)
 % restore registers back from kernel code to user.
 
 <<[[Proc]] assembly fields>>=
@@ -10523,7 +10529,7 @@ char  *kstack;  /* known to l.s */
 /*
  *  label consists of a stack pointer and a PC
  */
-TEXT gotolabel(SB), $0
+TEXT arch_gotolabel(SB), $0
         MOVL    label+0(FP), AX
         MOVL    0(AX), SP                       /* restore sp */
         MOVL    4(AX), AX                       /* put return pc on the stack */
@@ -10535,7 +10541,7 @@ TEXT gotolabel(SB), $0
 
 
 <<function setlabel(x86)>>=
-TEXT setlabel(SB), $0
+TEXT arch_setlabel(SB), $0
         MOVL    label+0(FP), AX
         MOVL    SP, 0(AX)                       /* store sp */
         MOVL    0(SP), BX                       /* store return pc */
@@ -10548,7 +10554,7 @@ TEXT setlabel(SB), $0
 
 <<function mmuswitch(x86)>>=
 void
-mmuswitch(Proc* proc)
+arch_mmuswitch(Proc* proc)
 {
     ulong *mmupd;
 
@@ -10627,7 +10633,7 @@ taskswitch(phys_addr mmupd, ulong stack)
  *  Save the cpu dependent part of the process state.
  */
 void
-procsave(Proc *p)
+arch_procsave(Proc *p)
 {
     <<[[procsave()]] cycles adjustments(x86)>>
     <<[[procsave()]] fp adjustments(x86)>>
@@ -10649,7 +10655,7 @@ procsave(Proc *p)
 
 <<function procrestore(x86)>>=
 void
-procrestore(Proc *p)
+arch_procrestore(Proc *p)
 {
     uvlong t;
     if(p->kp)
@@ -10704,7 +10710,7 @@ proc_ready(Proc *p)
     Schedq *rq;
     void (*pt)(Proc*, int, vlong);
 
-    s = splhi();
+    s = arch_splhi();
     <<[[ready()]] optional [[edfready()]] for real-time scheduling>>
 
     if(up != p && (p->wired == nil || p->wired == CPUS(cpu->cpuno))) // pad fix
@@ -10717,7 +10723,7 @@ proc_ready(Proc *p)
     p->state = Ready;
     queueproc(rq, p);
     <<[[ready()]] hook proctrace>>
-    splx(s);
+    arch_splx(s);
 }
 @ 
 
@@ -10767,7 +10773,7 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
     int s;
     void (*pt)(Proc*, int, vlong);
 
-    s = splhi();
+    s = arch_splhi();
 
     if(up->nlocks.ref)
         print("process %lud sleeps with %lud locks held, last lock %#p locked at pc %#lux, sleep called from %#p\n",
@@ -10811,32 +10817,32 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
         /* statistics */
         cpu->cs++;
 
-        procsave(up);
-        if(setlabel(&up->sched)) {
+        arch_procsave(up);
+        if(arch_setlabel(&up->sched)) {
             /*
              *  here when the process is awakened
              */
-            procrestore(up);
-            spllo();
+            arch_procrestore(up);
+            arch_spllo();
         } else {
             /*
              *  here to go to sleep (i.e. stop Running)
              */
             unlock(&up->rlock);
             unlock(r);
-            gotolabel(&cpu->sched);
+            arch_gotolabel(&cpu->sched);
             panic("sleep: should never reach this point");
         }
     }
 
     if(up->notepending) {
         up->notepending = false;
-        splx(s);
+        arch_splx(s);
         <<[[sleep()]] forceclosefgrp>>
         error(Eintr);
     }
 
-    splx(s);
+    arch_splx(s);
 }
 @ 
 
@@ -10853,7 +10859,7 @@ proc_wakeup(Rendez *r)
     Proc *p;
     int s;
 
-    s = splhi();
+    s = arch_splhi();
     lock(r);
     p = r->p;
 
@@ -10869,7 +10875,7 @@ proc_wakeup(Rendez *r)
         unlock(&p->rlock);
     }
     unlock(r);
-    splx(s);
+    arch_splx(s);
     return p;
 }
 @ 
@@ -10949,11 +10955,11 @@ another:
         updatecpu(p);
         npri = reprioritize(p);
         if(npri != pri){
-            x = splhi();
+            x = arch_splhi();
             p = dequeueproc(rq, p);
             if(p)
                 queueproc(&runq[npri], p);
-            splx(x);
+            arch_splx(x);
             goto another;
         }
     }
@@ -10983,7 +10989,7 @@ preempt(void)
               cpu->readied = nil;   /* avoid cooperative scheduling */
               up->preempted = true;
               sched();
-              splhi(); // still in interrupt context
+              arch_splhi(); // still in interrupt context
               up->preempted = false;
           }
     return;
@@ -11107,7 +11113,7 @@ hzclock(Ureg *ur)
 
     if(cpu->flushmmu){
         if(up)
-            flushmmu();
+            arch_flushmmu();
         cpu->flushmmu = false;
     }
 
@@ -11203,7 +11209,7 @@ static int idle_if_nproc = 0;
  *  an interrupt will get us going again.
  */
 void
-idlehands(void)
+arch_idlehands(void)
 {
     /*
      * we used to halt only on single-core setups. halting in an SMP system 
@@ -12614,7 +12620,7 @@ xinit(void)
         if(nkpages > kpages)
             nkpages = kpages; // will be zero once kpages has been filled
         /* don't try to use non-KADDR-able memory for kernel */
-        maxpages = cankaddr(m->base)/BY2PG;
+        maxpages = arch_cankaddr(m->base)/BY2PG;
         if(nkpages > maxpages)
             nkpages = maxpages;
 
@@ -12825,7 +12831,7 @@ userinit(void)
      *
      * N.B. make sure there's enough space for syscall to check
      *      for valid args and 
-     *      4 bytes for gotolabel's return PC
+     *      4 bytes for arch_gotolabel's return PC
      */
     p->sched.pc = (kern_addr)init0;
     p->sched.sp = (kern_addr)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
@@ -12833,7 +12839,7 @@ userinit(void)
     /*
      * User Stack
      *
-     * N.B. cannot call newpage() with clear=1, because PC kmap()
+     * N.B. cannot call newpage() with clear=1, because PC arch_kmap()
      * requires up != nil.  use tmpmap() instead.
      */
     s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
@@ -12886,7 +12892,7 @@ init0(void)
     
     up->nerrlab = 0;
 
-    spllo();
+    arch_spllo();
 
     /*
      * These are o.k. because rootinit is null.
@@ -17859,7 +17865,7 @@ kbdenable(void)
     intrenable(IrqKBD, i8042intr, 0, BUSUNKNOWN, "kbd");
 
     kbscans[Int].num = false;
-    setleds(&kbscans[Int]);
+    arch_setleds(&kbscans[Int]);
 }
 @
 % used to have kdbq init here, but better to separate
@@ -17997,7 +18003,7 @@ kbdputsc(byte k, int external)
         case Num:
             kbscan->num ^= true;
             if(!external)
-                setleds(kbscan);
+                arch_setleds(kbscan);
             break;
         <<[[kbdputsc()]] mouse keydown cases>>
         <<[[kbdputsc()]] special keyboard debug keys cases>>
@@ -18395,7 +18401,7 @@ inready(void)
  * thus we'd like to be able to force the numeric-lock led (and behaviour) off.
  */
 void
-setleds(Kbscan *kbscan)
+arch_setleds(Kbscan *kbscan)
 {
     int leds;
 
@@ -18565,7 +18571,7 @@ screeninit(void)
 static void
 cgascreenputs(char* s, int n)
 {
-    if(!islo()){
+    if(!arch_islo()){
         /*
          * Don't deadlock trying to
          * print in an interrupt.
@@ -18838,7 +18844,7 @@ putstrn0(char *str, int n, bool usewrite)
     int m;
     char *t;
 
-    if(!islo())
+    if(!arch_islo())
         usewrite = false;
 
     <<[[putstrn0()]] kmesg handling>>
@@ -18905,7 +18911,7 @@ devcons_iprint(char *fmt, ...)
     va_list arg;
     char buf[PRINTSIZE];
 
-    s = splhi();
+    s = arch_splhi();
 
     va_start(arg, fmt);
     n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
@@ -18921,7 +18927,7 @@ devcons_iprint(char *fmt, ...)
     if(locked)
         unlock(&iprintlock);
 
-    splx(s);
+    arch_splx(s);
 
     return n;
 }
@@ -19464,7 +19470,7 @@ qwrite(Queue *q, void *vp, int len)
     Block *b;
     byte *p = vp;
 
-//    QDEBUG if(!islo())  print("qwrite hi %#p\n", getcallerpc(&q));
+//    QDEBUG if(!arch_islo())  print("qwrite hi %#p\n", getcallerpc(&q));
 
     sofar = 0;
     do {
@@ -20327,7 +20333,7 @@ qbwrite(Queue *q, Block *b)
 
 <<function qiwrite>>=
 /*
- *  used by print() to write to a queue.  Since we may be splhi or not in
+ *  used by print() to write to a queue.  Since we may be arch_splhi or not in
  *  a process, don't qlock.
  *
  *  this routine merges adjacent blocks if block n+1 will fit into
@@ -21389,7 +21395,7 @@ _allocb(int size)
     b->free = 0;
     b->flag = 0;
     b->ref = 0;
-    _xinc(&b->ref);
+    arch_xinc(&b->ref);
 
     /* align start of data portion by rounding up */
     addr = (ulong)b;
@@ -21434,7 +21440,7 @@ allocb(int size)
     if(up == nil)
         panic("allocb without up: %#p", getcallerpc(&size));
     if((b = _allocb(size)) == nil){
-        splhi();
+        arch_splhi();
         xsummary();
         mallocsummary();
         delay(500);
@@ -21512,7 +21518,7 @@ freeb(Block *b)
     void *dead = (void*)Bdead;
     long ref;
 
-    if(b == nil || (ref = _xdec(&b->ref)) > 0)
+    if(b == nil || (ref = arch_xdec(&b->ref)) > 0)
         return;
 
     if(ref < 0){
@@ -22018,7 +22024,7 @@ QTEXCL = 0x20,    /* type bit for exclusive use files */
 @
 
 <<[[Cpu]] [[Arch]] other fields(x86)>>=
-// for perfticks, tsc = time stamp counter
+// for arch_perfticks, tsc = time stamp counter
 bool havetsc;
 @
 
@@ -22093,7 +22099,7 @@ ms2tk(ulong ms)
 % ?? -> <>
 <<function us(x86)>>=
 ulong
-us(void)
+arch_us(void)
 {
     return fastticks2us((*arch->fastclock)(nil));
 }
@@ -22122,7 +22128,7 @@ devarch_fastticks(uvlong *hz)
 
 \subsection{Programmable timer [[i8253]] (x86)}
 
-\subsection{[[timerset()]] (x86)}
+\subsection{[[arch_timerset()]] (x86)}
 
 <<function timerset(x86)>>=
 // used to be static, but now shared between arch.c and devarch.c
@@ -22131,7 +22137,7 @@ int doi8253set = 1;
  *  set next timer interrupt
  */
 void
-timerset(Tval x)
+arch_timerset(Tval x)
 {
     if(doi8253set)
         (*arch->timerset)(x);
@@ -22149,7 +22155,7 @@ i8253timerset(uvlong next)
     period = MaxPeriod;
     if(next != 0){
         want = next>>Tickshift;
-        now = i8253.ticks;  /* assuming whomever called us just did fastticks() */
+        now = i8253.ticks;  /* assuming whomever called us just did arch_fastticks() */
 
         period = want - now;
         if(period < MinPeriod)
@@ -22189,7 +22195,7 @@ struct Timer
     /* Internal */
     Lock;
     Tval  tticks;   /* tns converted to ticks */
-    Tval  twhen;    /* ns represented in fastticks */
+    Tval  twhen;    /* ns represented in arch_fastticks */
 
     <<[[Timer extra fields>>
     };
@@ -22236,7 +22242,7 @@ tadd(Timers *tt, Timer *nt)
     case Trelative:
         if(nt->tns <= 0)
             nt->tns = 1;
-        nt->twhen = fastticks(nil) + ns2fastticks(nt->tns);
+        nt->twhen = arch_fastticks(nil) + ns2fastticks(nt->tns);
         break;
     case Tperiodic:
         assert(nt->tns >= 100000);  /* At least 100 Âµs period */
@@ -22249,7 +22255,7 @@ tadd(Timers *tt, Timer *nt)
             if (t)
                 nt->twhen = t->twhen;
             else
-                nt->twhen = fastticks(nil);
+                nt->twhen = arch_fastticks(nil);
         }
         nt->twhen += ns2fastticks(nt->tns);
         break;
@@ -22323,7 +22329,7 @@ timeradd(Timer *nt)
     ilock(tt);
     when = tadd(tt, nt);
     if(when)
-        timerset(when);
+        arch_timerset(when);
     iunlock(tt);
     iunlock(nt);
 }
@@ -22341,7 +22347,7 @@ timerdel(Timer *dt)
         ilock(tt);
         when = tdel(dt);
         if(when && tt == &timers[cpu->cpuno])
-            timerset(tt->head->twhen);
+            arch_timerset(tt->head->twhen);
         iunlock(tt);
     }
     iunlock(dt);
@@ -22400,9 +22406,9 @@ timerintr(Ureg *u, Tval)
     intrcount[cpu->cpuno]++;
     callhzclock = 0;
     tt = &timers[cpu->cpuno];
-    now = fastticks(nil);
+    now = arch_fastticks(nil);
     if(now == 0)
-        panic("timerintr: zero fastticks()");
+        panic("timerintr: zero arch_fastticks()");
     ilock(tt);
     count = Maxtimerloops;
     while((t = tt->head) != nil){
@@ -22414,7 +22420,7 @@ timerintr(Ureg *u, Tval)
          */
         when = t->twhen;
         if(when > now){
-            timerset(when);
+            arch_timerset(when);
             iunlock(tt);
             if(callhzclock)
                 hzclock(u);
@@ -22477,7 +22483,7 @@ addclock0link(void (*f)(void), Tms ms)
     ilock(&timers[0]);
     when = tadd(&timers[0], nt);
     if(when)
-        timerset(when);
+        arch_timerset(when);
     iunlock(&timers[0]);
     return nt;
 }
@@ -22767,8 +22773,8 @@ todinit(void)
     if(tod.init)
         return;
     ilock(&tod);
-    tod.init = 1;           /* prevent reentry via fastticks */
-    tod.last = fastticks((uvlong *)&tod.hz);
+    tod.init = 1;           /* prevent reentry via arch_fastticks */
+    tod.last = arch_fastticks((uvlong *)&tod.hz);
     iunlock(&tod);
     todsetfreq(tod.hz);
     addclock0link(todfix, 100);
@@ -22811,7 +22817,7 @@ todset(vlong t, vlong delta, int n)
     ilock(&tod);
     if(t >= 0){
         tod.off = t;
-        tod.last = fastticks(nil);
+        tod.last = arch_fastticks(nil);
         tod.lasttime = 0;
         tod.delta = 0;
         tod.sstart = tod.send;
@@ -22852,13 +22858,13 @@ todget(vlong *ticksp)
         todinit();
 
     /*
-     * we don't want time to pass twixt the measuring of fastticks
+     * we don't want time to pass twixt the measuring of arch_fastticks
      * and grabbing tod.last.  Also none of the vlongs are atomic so
      * we have to look at them inside the lock.
      */
     ilock(&tod);
     tod.cnt++;
-    ticks = fastticks(nil);
+    ticks = arch_fastticks(nil);
 
     /* add in correction */
     if(tod.sstart != tod.send){
@@ -22873,7 +22879,7 @@ todget(vlong *ticksp)
     diff = ticks - tod.last;
     if(diff < 0)
         diff = 0;
-    mul64fract(&x, diff, tod.multiplier);
+    arch_mul64fract(&x, diff, tod.multiplier);
     x += tod.off;
 
     /* time can't go backwards */
@@ -22902,14 +22908,14 @@ todfix(void)
     vlong ticks, diff;
     uvlong x;
 
-    ticks = fastticks(nil);
+    ticks = arch_fastticks(nil);
 
     diff = ticks - tod.last;
     if(diff > tod.hz){
         ilock(&tod);
 
         /* convert to epoch */
-        mul64fract(&x, diff, tod.multiplier);
+        arch_mul64fract(&x, diff, tod.multiplier);
 if(x > 30000000000ULL) iprint("todfix %llud\n", x);
         x += tod.off;
 
@@ -22940,7 +22946,7 @@ fastticks2us(uvlong ticks)
 
     if(!tod.init)
         todinit();
-    mul64fract(&res, ticks, tod.umultiplier);
+    arch_mul64fract(&res, ticks, tod.umultiplier);
     return res;
 }
 @ 
@@ -22957,7 +22963,7 @@ ns2fastticks(uvlong ns)
 
     if(!tod.init)
         todinit();
-    mul64fract(&res, ns, tod.divider);
+    arch_mul64fract(&res, ns, tod.divider);
     return res;
 }
 @ 
@@ -22966,7 +22972,7 @@ ns2fastticks(uvlong ns)
 /*
  * Make a 64 bit fixed point number that has a decimal point
  * to the left of the low order 32 bits.  This is used with
- * mul64fract for converting twixt nanoseconds and fastticks.
+ * arch_mul64fract for converting twixt nanoseconds and arch_fastticks.
  *
  *  multiplier = (to<<32)/from
  */
@@ -23007,7 +23013,7 @@ readtime(ulong off, char *buf, int n)
 
     nsec = todget(&ticks);
     if(fasthz == 0LL)
-        fastticks((uvlong*)&fasthz);
+        arch_fastticks((uvlong*)&fasthz);
     sec = nsec/1000000000ULL;
     snprint(str, sizeof(str), "%*lud %*llud %*llud %*llud ",
         NUMSIZE-1, sec,
@@ -23058,7 +23064,7 @@ readbintime(char *buf, int n)
 
     i = 0;
     if(fasthz == 0LL)
-        fastticks((uvlong*)&fasthz);
+        arch_fastticks((uvlong*)&fasthz);
     nsec = todget(&ticks);
     if(n >= 3*sizeof(uvlong)){
         vlong2le(b+2*sizeof(uvlong), fasthz);
@@ -23457,7 +23463,7 @@ sysnotify(ulong* arg)
 
 <<[[syscall()]] call notify()(x86)>>=
     if(scallnr!=RFORK && (up->procctl || up->nnote)){
-        splhi();
+        arch_splhi();
         notify(ureg);
     }
 @
@@ -23481,7 +23487,7 @@ notify(Ureg* ureg)
 
     <<[[notify()]] fp adjustments(x86)>>
 
-    s = spllo();
+    s = arch_spllo();
     qlock(&up->debug);
     up->notepending = false;
     n = &up->note[0];
@@ -23502,7 +23508,7 @@ notify(Ureg* ureg)
 
     if(up->notified){
         qunlock(&up->debug);
-        splhi();
+        arch_splhi();
         return 0;
     }
 
@@ -23538,7 +23544,7 @@ notify(Ureg* ureg)
     memmove(&up->note[0], &up->note[1], up->nnote*sizeof(Note));
 
     qunlock(&up->debug);
-    splx(s);
+    arch_splx(s);
     return 1;
 }
 @ 
@@ -23636,7 +23642,7 @@ noted(Ureg* ureg, ulong arg0)
         }
         qunlock(&up->debug);
         sp = oureg-4*BY2WD-ERRMAX;
-        splhi();
+        arch_splhi();
         ureg->sp = sp;
         ((ulong*)sp)[1] = oureg;    /* arg 1 0(FP) is ureg* */
         ((ulong*)sp)[0] = 0;        /* arg 0 is pc */
@@ -23696,7 +23702,7 @@ proc_postnote(Proc *p, int dolock, char *n, int flag)
 
     /* this loop is to avoid lock ordering problems. */
     for(;;){
-        s = splhi();
+        s = arch_splhi();
         lock(&p->rlock);
         r = p->r;
 
@@ -23717,11 +23723,11 @@ proc_postnote(Proc *p, int dolock, char *n, int flag)
 
         /* give other process time to get out of critical section and try again */
         unlock(&p->rlock);
-        splx(s);
+        arch_splx(s);
         sched();
     }
     unlock(&p->rlock);
-    splx(s);
+    arch_splx(s);
 
     if(p->state != Rendezvous)
         return ret;
@@ -24223,7 +24229,7 @@ pipewrite(Chan *c, void *va, long n, vlong)
 {
     Pipe *p;
 
-    if(!islo())
+    if(!arch_islo())
         print("pipewrite hi %#p\n", getcallerpc(&c));
     if(waserror()) {
         /* avoid notes when pipe is a mounted queue */
@@ -24516,7 +24522,7 @@ found:
     poperror();
 
     /* Ensure we flush any entries from the lost segment */
-    flushmmu();
+    arch_flushmmu();
     return 0;
 }
 @ 
@@ -24544,7 +24550,7 @@ syssegfree(ulong* arg)
 
     mfreeseg(s, from, (to - from) / BY2PG);
     qunlock(&s->lk);
-    flushmmu();
+    arch_flushmmu();
 
     return 0;
 }
@@ -24653,7 +24659,7 @@ syssegflush(ulong* arg)
 
         qunlock(&s->lk);
     }
-    flushmmu();
+    arch_flushmmu();
     return 0;
 }
 @
@@ -24703,10 +24709,10 @@ cmpswap386(long *addr, long old, long new)
 {
     int r, s;
 
-    s = splhi();
+    s = arch_splhi();
     if(r = (*addr == old))
         *addr = new;
-    splx(s);
+    arch_splx(s);
     return r;
 }
 
@@ -25121,7 +25127,7 @@ void  *dbgreg;  /* User registers for devproc */
  * to write from devproc and then restore the saved values before returning.
  */
 void
-setregisters(Ureg* ureg, char* pureg, char* uva, int n)
+arch_setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 {
     ulong cs, ds, es, flags, fs, gs, ss;
 
@@ -25286,7 +25292,7 @@ int procctl;  /* Control for /proc debugging */
 
 <<function procctl>>=
 /*
- *  called splhi() by notify().  See comment in notify for the
+ *  called arch_splhi() by notify().  See comment in notify for the
  *  reasoning.
  */
 void
@@ -25301,14 +25307,14 @@ procctl(Proc *p)
         p->procctl = Proc_nothing;
         oldstate = p->psstate;
         p->psstate = "Stopped";
-        s = spllo();
+        s = arch_spllo();
         <<[[procctl()]] wakeup waiting debugger>>
-        splhi();
+        arch_splhi();
         p->state = Stopped;
         sched();
         // here when something (debugger, strace, user) ready(p) back
         p->psstate = oldstate;
-        splx(s);
+        arch_splx(s);
         return;
     <<[[procctl()]] Proc_exitbig case>>
     <<[[procctl()]] Proc_exitme case>>
@@ -25317,7 +25323,7 @@ procctl(Proc *p)
 @ 
 % why pass p? it's always called via procctl(up), so why not using
 % up directly? in the end we call sched()
-% why set p->state = Stopped inside splhi(), would make more sense
+% why set p->state = Stopped inside arch_splhi(), would make more sense
 % actually to set it before wakeing up the debugger that is sleeping
 % on the condition that the process was stopped!
 
@@ -25542,7 +25548,7 @@ ushort  steal;    /* Page stealer lock */
 int
 procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
 {
-    KMap *k;
+    Arch_KMap *k;
     Pagetable *pt;
     Page *pg;
     Segment *s;
@@ -25583,10 +25589,10 @@ procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
     if(n > l)
         n = l;
 
-    k = kmap(pg);
+    k = arch_kmap(pg);
     if(waserror()) {
         s->steal--;
-        kunmap(k);
+        arch_kunmap(k);
         nexterror();
     }
     b = (char*)VA(k);
@@ -25595,7 +25601,7 @@ procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
         memmove(a, b, n);   /* This can fault */
     else
         memmove(b, a, n);
-    kunmap(k);
+    arch_kunmap(k);
     poperror();
 
  /* Ensure the process sees text page changes */
@@ -25723,15 +25729,15 @@ text2data(Proc *p, Segment *s)
         stopns = todget(nil);
         up->procctl = Proc_stopme;
         sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
-        s = splhi();
+        s = arch_splhi();
         procctl(up); // again, will call sched() and wakeup tracer process
-        splx(s);
+        arch_splx(s);
         if(up->syscalltrace)
             free(up->syscalltrace);
         up->syscalltrace = nil;
     }
 @
-% why protect procctl(up) with splhi here and not before?
+% why protect procctl(up) with arch_splhi here and not before?
 % both the entry and exit are not perfectly symetric :( TOFIX?
 
 <<[[sysrfork()]] inherit Proc_tracesyscall>>=
@@ -27124,7 +27130,7 @@ if(indir && *argp==nil) {
 % is really outside and need to communicate with him?
 % simpler with 486?
 
-\subsection{[[ArchFPsave]]}
+\subsection{[[Arch_FPsave]]}
 
 <<enum fpsavestatus>>=
 /*
@@ -27147,18 +27153,18 @@ enum fpsavestatus
 <<[[Proc]] other fields>>=
 // enum<fpsavestatus>
 int fpstate;
-ArchFPsave  fpsave;   /* address of this is known by db */
+Arch_FPsave  fpsave;   /* address of this is known by db */
 @
 
-\subsection{[[ArchFPsave]] (x86)}
+\subsection{[[Arch_FPsave]] (x86)}
 
 <<union ArchFPSave(x86)>>=
 /*
  * the FP regs must be stored here, not somewhere pointed to from here.
  * port code assumes this.
  */
-// could be renamed ArchProcFPSave (used both in Proc and Cpu though)
-union ArchFPsave {
+// could be renamed Arch_ProcFPSave (used both in Proc and Cpu though)
+union Arch_FPsave {
     FPstate;
     SFPssestate;
 };
@@ -27223,7 +27229,7 @@ struct  FPssestate    /* SSE fp state */
 \subsection{XXX}
 
 <<[[Cpu]] [[Arch]] other fields(x86)>>=
-ArchFPsave *fpsavalign;
+Arch_FPsave *fpsavalign;
 @
 
 
@@ -27252,8 +27258,8 @@ fpsavealloc(void)
 
 
 <<hook fprestore and fpsave(x86)>>=
-void    (*fprestore)(ArchFPsave*);
-void    (*fpsave)(ArchFPsave*);
+void    (*fprestore)(Arch_FPsave*);
+void    (*fpsave)(Arch_FPsave*);
 @
 
 <<function fpssesave(x86)>>=
@@ -27263,12 +27269,12 @@ void    (*fpsave)(ArchFPsave*);
  */
 
 void
-fpssesave(ArchFPsave *fps)
+fpssesave(Arch_FPsave *fps)
 {
-    ArchFPsave *afps;
+    Arch_FPsave *afps;
 
     fps->magic = 0x1234;
-    afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
+    afps = (Arch_FPsave *)ROUND(((uintptr)fps), FPalign);
     fpssesave0(afps);
     if (fps != afps)  /* not aligned? shuffle down from aligned buffer */
         memmove(fps, afps, sizeof(FPssestate));
@@ -27280,12 +27286,12 @@ fpssesave(ArchFPsave *fps)
 
 <<function fpsserestore(x86)>>=
 void
-fpsserestore(ArchFPsave *fps)
+fpsserestore(Arch_FPsave *fps)
 {
-    ArchFPsave *afps;
+    Arch_FPsave *afps;
 
     fps->magic = 0x4321;
-    afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
+    afps = (Arch_FPsave *)ROUND(((uintptr)fps), FPalign);
     if (fps != afps) {
         afps = cpu->fpsavalign;
         memmove(afps, fps, sizeof(FPssestate)); /* make aligned copy */
@@ -27314,7 +27320,7 @@ fpsserestore(ArchFPsave *fps)
 @
 
 <<[[execregs()]] fp adjustments(x86)>>=
-    //procsetup(up), redundant?
+    //arch_procsetup(up), redundant?
     up->fpstate = FPinit;
     fpoff();
 @
@@ -27362,16 +27368,16 @@ fpsserestore(ArchFPsave *fps)
 <<[[procread()]] Qfpregs case>>=
     case Qfpregs:
         rptr = (uchar*)&p->fpsave;
-        rsize = sizeof(ArchFPsave);
+        rsize = sizeof(Arch_FPsave);
         goto regread;
 @
 
 <<[[procwrite]] Qfpregs case>>=
     case Qfpregs:
-        if(offset >= sizeof(ArchFPsave))
+        if(offset >= sizeof(Arch_FPsave))
             n = 0;
-        else if(offset+n > sizeof(ArchFPsave))
-            n = sizeof(ArchFPsave) - offset;
+        else if(offset+n > sizeof(Arch_FPsave))
+            n = sizeof(Arch_FPsave) - offset;
         memmove((uchar*)&p->fpsave+offset, va, n);
         break;
 @
@@ -27384,7 +27390,7 @@ static void
 mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
 {
         ulong sts, fpc, ctl;
-        ArchFPsave *f = &up->fpsave;
+        Arch_FPsave *f = &up->fpsave;
 
         if(fpsave == fpx87save){
                 sts = f->status;
@@ -27644,7 +27650,7 @@ TEXT fpsserestore0(SB), $0                      /* enable and restore state */
 
 \section{Advanced virtual memory (x86)}
 
-% large memory system: vpt/vpd, tmpmap, kmap
+% large memory system: vpt/vpd, tmpmap, arch_kmap
 % other: vmap? for devices? framebuffer related?
 % 9atom also provides patches for PAE support and amd64 support
 
@@ -27878,12 +27884,12 @@ if(up == nil) {
      * we shouldn't need to.        - rsc
      */
     
-    s = splhi();
+    s = arch_splhi();
     if(!(vpd[PDX(va)]&PTEVALID)){
         if(up->mmufree == nil){
-            spllo();
+            arch_spllo();
             page = newpage(false, nil, nilptr);
-            splhi();
+            arch_splhi();
         }
         else{
             page = up->mmufree;
@@ -27904,7 +27910,7 @@ if(up == nil) {
         flushpg(va);
     if(getcr3() != up->mmupd->pa)
         print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
-    splx(s);
+    arch_splx(s);
 @
 
 
@@ -27937,8 +27943,8 @@ if(up == nil) {
 virt_addr3
 tmpmap(Page *p)
 {
-    if(islo())
-        panic("tmpmap: islo");
+    if(arch_islo())
+        panic("tmpmap: arch_islo");
     if(p->pa < MAXKPA)
         return KADDR(p->pa);
     else
@@ -27951,8 +27957,8 @@ tmpmap(Page *p)
 void
 tmpunmap(virt_addr3 v)
 {
-    if(islo())
-        panic("tmpmap: islo");
+    if(arch_islo())
+        panic("tmpmap: arch_islo");
     if((ulong)v >= KZERO)
         return;
     panic("tmpmap: physical address too high");
@@ -27973,8 +27979,8 @@ tmpmap(Page *p)
     ulong i;
     ulong *entry;
     
-    if(islo())
-        panic("tmpaddr: islo");
+    if(arch_islo())
+        panic("tmpaddr: arch_islo");
 
     if(p->pa < MAXKPA)
         return KADDR(p->pa);
@@ -28007,8 +28013,8 @@ tmpunmap(virt_addr3 v)
 {
     ulong *entry;
     
-    if(islo())
-        panic("tmpaddr: islo");
+    if(arch_islo())
+        panic("tmpaddr: arch_islo");
     if((ulong)v >= KZERO && v != (void*)TMPADDR)
         return;
 
@@ -28025,13 +28031,13 @@ tmpunmap(virt_addr3 v)
 
 
 
-\subsection{[[kmap()]]}
+\subsection{[[arch_kmap()]]}
 
 <<struct KMap(x86)>>=
 /*
  * KMap the structure doesn't exist, but the functions do.
  */
-typedef struct KMap   KMap;
+typedef struct Arch_KMap   Arch_KMap;
 @
 % why not void like in bcm?
 
@@ -28063,22 +28069,22 @@ typedef struct KMap   KMap;
 
 % start of differences and simplificiations
 <<function kmap(x86)>>=
-KMap*
-kmap(Page *p)
+Arch_KMap*
+arch_kmap(Page *p)
 {
     if(up == nil)
-        panic("kmap: up=0 pc=%#.8lux", getcallerpc(&p));
+        panic("arch_kmap: up=0 pc=%#.8lux", getcallerpc(&p));
     if(p->pa < MAXKPA)
         return KADDR(p->pa);
     else
-      panic("kmap: physical address too high");
+      panic("arch_kmap: physical address too high");
     return nil; // unreachable
 }
 @
 
 <<function kunmap(x86)>>=
 void
-kunmap(KMap *k)
+arch_kunmap(Arch_KMap *k)
 {
     ulong va;
     va = (ulong)k;
@@ -28086,7 +28092,7 @@ kunmap(KMap *k)
 
     if((ulong)va >= KZERO)
         return;
-    panic("kunmap: physical address too high");
+    panic("arch_kunmap: physical address too high");
 }
 @
 
@@ -28120,8 +28126,8 @@ kunmap(KMap *k)
 
 
 <<[[Proc]] [[Arch]] memory fieldsTODO>>=
-Page* kmaptable;    /* page table used by kmap */
-uint  lastkmap;   /* last entry used by kmap */
+Page* kmaptable;    /* page table used by arch_kmap */
+uint  lastkmap;   /* last entry used by arch_kmap */
 int nkmap;      /* number of current kmaps */
 @
 
@@ -28145,17 +28151,17 @@ int nkmap;      /* number of current kmaps */
 <<[[mmurelease()]] handle kmaptableTODO>>=
     if(proc->kmaptable){
         if(proc->mmupd == nil)
-            panic("mmurelease: no mmupd");
+            panic("arch_mmurelease: no mmupd");
         if(--proc->kmaptable->ref)
-            panic("mmurelease: kmap ref %d", proc->kmaptable->ref);
+            panic("arch_mmurelease: arch_kmap ref %d", proc->kmaptable->ref);
         if(proc->nkmap)
-            panic("mmurelease: nkmap %d", proc->nkmap);
+            panic("arch_mmurelease: nkmap %d", proc->nkmap);
         /*
          * remove kmaptable from pd before putting pd up for reuse.
          */
         mmupd = tmpmap(proc->mmupd);
         if(PPN(mmupd[PDX(KMAP)]) != proc->kmaptable->pa)
-            panic("mmurelease: bad kmap pde %#.8lux kmap %#.8lux",
+            panic("arch_mmurelease: bad kmap pde %#.8lux kmap %#.8lux",
                 mmupd[PDX(KMAP)], proc->kmaptable->pa);
         mmupd[PDX(KMAP)] = 0;
         tmpunmap(mmupd);
@@ -28169,23 +28175,23 @@ int nkmap;      /* number of current kmaps */
 
 
 <<function kmapTODO>>=
-KMap*
-kmap(Page *page)
+Arch_KMap*
+arch_kmap(Page *page)
 {
     int i, o, s;
 
     if(up == nil)
-        panic("kmap: up=0 pc=%#.8lux", getcallerpc(&page));
+        panic("arch_kmap: up=0 pc=%#.8lux", getcallerpc(&page));
     if(up->mmupd == nil)
         upallocmmupd();
     if(up->nkmap < 0)
-        panic("kmap %lud %s: nkmap=%d", up->pid, up->text, up->nkmap);
+        panic("arch_kmap %lud %s: nkmap=%d", up->pid, up->text, up->nkmap);
     
     /*
-     * Splhi shouldn't be necessary here, but paranoia reigns.
+     * Arch_Splhi shouldn't be necessary here, but paranoia reigns.
      * See comment in putmmu above.
      */
-    s = splhi();
+    s = arch_splhi();
     up->nkmap++;
     if(!(vpd[PDX(KMAP)]&PTEVALID)){
         /* allocate page directory */
@@ -28193,16 +28199,16 @@ kmap(Page *page)
             panic("bad kmapsize");
         if(up->kmaptable != nil)
             panic("kmaptable");
-        spllo();
+        arch_spllo();
         up->kmaptable = newpage(0, 0, 0);
-        splhi();
+        arch_splhi();
         vpd[PDX(KMAP)] = up->kmaptable->pa|PTEWRITE|PTEVALID;
         flushpg((ulong)kpt);
         memset(kpt, 0, BY2PG);
         kpt[0] = page->pa|PTEWRITE|PTEVALID;
         up->lastkmap = 0;
-        splx(s);
-        return (KMap*)KMAP;
+        arch_splx(s);
+        return (Arch_KMap*)KMAP;
     }
     if(up->kmaptable == nil)
         panic("no kmaptable");
@@ -28212,11 +28218,11 @@ kmap(Page *page)
             o = (i+o)%NKPT;
             kpt[o] = page->pa|PTEWRITE|PTEVALID;
             up->lastkmap = o;
-            splx(s);
-            return (KMap*)(KMAP+o*BY2PG);
+            arch_splx(s);
+            return (Arch_KMap*)(KMAP+o*BY2PG);
         }
     }
-    panic("out of kmap");
+    panic("out of arch_kmap");
     return nil;
 }
 @
@@ -28224,20 +28230,20 @@ kmap(Page *page)
 
 <<function kunmapTODO>>=
 void
-kunmap(KMap *k)
+arch_kunmap(Arch_KMap *k)
 {
     ulong va;
 
     va = (ulong)k;
     if(up->mmupd == nil || !(vpd[PDX(KMAP)]&PTEVALID))
-        panic("kunmap: no kmaps");
+        panic("arch_kunmap: no kmaps");
     if(va < KMAP || va >= KMAP+KMAPSIZE)
-        panic("kunmap: bad address %#.8lux pc=%#p", va, getcallerpc(&k));
+        panic("arch_kunmap: bad address %#.8lux pc=%#p", va, getcallerpc(&k));
     if(!(vpt[VPTX(va)]&PTEVALID))
-        panic("kunmap: not mapped %#.8lux pc=%#p", va, getcallerpc(&k));
+        panic("arch_kunmap: not mapped %#.8lux pc=%#p", va, getcallerpc(&k));
     up->nkmap--;
     if(up->nkmap < 0)
-        panic("kunmap %lud %s: nkmap=%d", up->pid, up->text, up->nkmap);
+        panic("arch_kunmap %lud %s: nkmap=%d", up->pid, up->text, up->nkmap);
     vpt[VPTX(va)] = 0;
     flushpg(va);
 }
@@ -28257,7 +28263,7 @@ kunmap(KMap *k)
 @
 % 256Mo, enough for big framebuffers!
 
-% actually this is independent of vpt, tmpmap, kmap
+% actually this is independent of vpt, tmpmap, arch_kmap
 
 <<global vmaplock(x86)>>=
 static Lock vmaplock;
@@ -28469,7 +28475,7 @@ vunmap(virt_addr3 v, int size)
         if(nm != cpu)
             nm->flushmmu = true;
     }
-    flushmmu();
+    arch_flushmmu();
     for(i=0; i<conf.ncpu; i++){
         nm = CPUS(i);
         if(nm != cpu)
@@ -28588,7 +28594,7 @@ runq[Nrq-1].head == nil && runq[Nrq-2].head == nil
 
 <<[[ready()]] optional [[edfready()]] for real-time scheduling>>=
     if(edfready(p)){
-        splx(s);
+        arch_splx(s);
         return;
     }
 @
@@ -28876,7 +28882,7 @@ edflock(Proc *p)
 #ifdef EDFCYCLES
         edfcycles -= lcycles();
 #endif
-        now = us();
+        now = arch_us();
         return e;
     }
     iunlock(&thelock);
@@ -28901,7 +28907,7 @@ edfinit(Proc* p)
         fmtinstall('t', timeconv);
         edfinited++;
     }
-    now = us();
+    now = arch_us();
     DPRINT("%lud edfinit %lud[%s]\n", now, p->pid, statename[p->state]);
     p->edf = malloc(sizeof(Edf));
     if(p->edf == nil)
@@ -28920,7 +28926,7 @@ deadlineintr(Ureg*, Timer *t)
         return;
 
     p = t->ta;
-    now = us();
+    now = arch_us();
     DPRINT("%lud deadlineintr %lud[%s]\n", now, p->pid, statename[p->state]);
     /* If we're interrupting something other than the proc pointed to by t->a,
      * we've already achieved recheduling, so we need not do anything
@@ -29231,7 +29237,7 @@ edfstop(Proc *p)
 static int
 yfn(void *)
 {
-    now = us();
+    now = arch_us();
     return up->trend == nil || now - up->edf->r >= 0;
 }
 
@@ -30219,7 +30225,7 @@ Dirtab procdir[] =
     "args",     {Qargs},    0,          0660,
     "ctl",      {Qctl},     0,          0000,
     "fd",       {Qfd},      0,          0444,
-    "fpregs",   {Qfpregs},  sizeof(ArchFPsave),     0000,
+    "fpregs",   {Qfpregs},  sizeof(Arch_FPsave),     0000,
     "kregs",    {Qkregs},   sizeof(Ureg),       0400,
     "mem",      {Qmem},     0,          0000,
     "note",     {Qnote},    0,          0000,
@@ -30349,7 +30355,7 @@ ulong mid;    /* for ns in devproc */
  * a sleeping process
  */
 void
-setkernur(Ureg* ureg, Proc* p)
+arch_setkernur(Ureg* ureg, Proc* p)
 {
     ureg->pc = p->sched.pc;
     ureg->sp = p->sched.sp+4;
@@ -30450,7 +30456,7 @@ procread(Chan *c, void *va, long n, vlong off)
 
     case Qkregs:
         memset(&kur, 0, sizeof(Ureg));
-        setkernur(&kur, p);
+        arch_setkernur(&kur, p);
         rptr = (byte*)&kur;
         rsize = sizeof(Ureg);
         goto regread;
@@ -30621,7 +30627,7 @@ procwrite(Chan *c, void *va, long n, vlong off)
             n = sizeof(Ureg) - offset;
         if(p->dbgreg == nil)
             error(Enoreg);
-        setregisters(p->dbgreg, (char*)(p->dbgreg)+offset, va, n);
+        arch_setregisters(p->dbgreg, (char*)(p->dbgreg)+offset, va, n);
         break;
 
     <<[[procwrite]] Qfpregs case>>
@@ -31724,7 +31730,7 @@ shutdown(bool ispanic)
         iprint("cpu%d: exiting\n", cpu->cpuno);
 
     /* wait for any other processors to shutdown */
-    spllo();
+    arch_spllo();
     for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
         delay(TK2MS(2));
         if(active.cpus == 0 && consactive() == 0)
@@ -31792,7 +31798,7 @@ bool rebooting;    /* just idle cpus > 0 */
 
 <<function reboot(x86)>>=
 void
-reboot(kern_addr3 entry, kern_addr3 code, ulong size)
+arch_reboot(kern_addr3 entry, kern_addr3 code, ulong size)
 {
     void (*f)(ulong, ulong, ulong);
     kern_addr2 mmupd;
@@ -31835,7 +31841,7 @@ reboot(kern_addr3 entry, kern_addr3 code, ulong size)
     print("shutting down...\n");
     delay(200);
 
-    splhi();
+    arch_splhi();
 
     <<[[reboot()]] reset serialoq(x86)>>
 
@@ -31962,7 +31968,7 @@ Cmdtab rebootmsg[] =
         ct = lookupcmd(cb, rebootmsg, nelem(rebootmsg));
         switch(ct->index) {
         case CMhalt:
-            reboot(nil, 0, 0);
+            arch_reboot(nil, 0, 0);
             break;
         case CMreboot:
             rebootcmd(cb->nf-1, cb->f+1);
@@ -32387,10 +32393,10 @@ char *e, *p;
             dumpstack();
             return;
         case 'S':
-            x = splhi();
+            x = arch_splhi();
             dumpstack();
             procdump();
-            splx(x);
+            arch_splx(x);
             return;
         case 'x':
             xsummary();
@@ -32410,9 +32416,9 @@ char *e, *p;
             memorysummary();
             return;
         case 'p':
-            x = spllo();
+            x = arch_spllo();
             procdump();
-            splx(x);
+            arch_splx(x);
             return;
         case 'q':
             scheddump();
@@ -32649,7 +32655,7 @@ proc_dumpaproc(Proc *p)
     if(s == nil)
         s = statename[p->state];
     print("%3lud:%10s pc %8lux dbgpc %8lux  %8s (%s) ut %ld st %ld bss %lux qpc %lux nl %lud nd %lud lpc %lux pri %lud\n",
-        p->pid, p->text, p->pc, dbgpc(p),  s, statename[p->state],
+        p->pid, p->text, p->pc, arch_dbgpc(p),  s, statename[p->state],
         p->time[TUser], p->time[TSys], bss, p->qpc, p->nlocks.ref, p->delaysched, p->lastlock ? p->lastlock->pc : 0, p->priority);
 }
 @ 
@@ -32657,7 +32663,7 @@ proc_dumpaproc(Proc *p)
 % vs userpc?
 <<function dbgpc(x86)>>=
 ulong
-dbgpc(Proc *p)
+arch_dbgpc(Proc *p)
 {
     Ureg *ureg;
 
@@ -32814,7 +32820,7 @@ dumpregs(Ureg* ureg)
 void
 trap_dumpstack(void)
 {
-    callwithureg(_dumpstack);
+    arch_callwithureg(_dumpstack);
 }
 @ 
 
@@ -32890,7 +32896,7 @@ _dumpstack(Ureg *ureg)
  * Used by debugging interface rdb.
  */
 void
-callwithureg(void (*fn)(Ureg*))
+arch_callwithureg(void (*fn)(Ureg*))
 {
     Ureg ureg;
     ureg.pc = getcallerpc(&fn);
@@ -33021,7 +33027,7 @@ DMEXCL = 0x20000000,  /* mode bit for exclusive use files */
 Queue*  kprintoq;       /* console output, for /dev/kprint */
 @ 
 
-% why use tas() on it? why not use a Ref? because core debugging?
+% why use arch_tas() on it? why not use a Ref? because core debugging?
 % so don't want to rely on anything fancy?
 <<global kprintinuse>>=
 ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
@@ -33029,7 +33035,7 @@ ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
 
 <<[[consopen()]] cases>>=
     case Qkprint:
-        if(tas(&kprintinuse) != 0){
+        if(arch_tas(&kprintinuse) != 0){
             c->flag &= ~COPEN;
             error(Einuse);
         }
@@ -33256,8 +33262,8 @@ struct Perf
     ulong inidle;   /* time since last clock tick in idle loop */
     ulong avg_inidle; /* avg time per clock tick in idle loop */
 
-    ulong last;   /* value of perfticks() at last clock tick */
-    ulong period;   /* perfticks() per clock tick */
+    ulong last;   /* value of arch_perfticks() at last clock tick */
+    ulong period;   /* arch_perfticks() per clock tick */
 };
 @ 
 
@@ -33284,7 +33290,7 @@ accounttime(void)
     }
 
     /* calculate decaying duty cycles */
-    n = perfticks();
+    n = arch_perfticks();
     per = n - cpu->perf.last;
     cpu->perf.last = n;
     per = (cpu->perf.period*(HZ-1) + per)/HZ;
@@ -33339,7 +33345,7 @@ intrtime(Cpu*, int vno)
     ulong diff;
     ulong x;
 
-    x = perfticks();
+    x = arch_perfticks();
     diff = x - cpu->perf.intrts;
     cpu->perf.intrts = x;
 
@@ -33361,7 +33367,7 @@ intrtime(Cpu*, int vno)
  *  doesn't have to count over a second.
  */
 ulong
-perfticks(void)
+arch_perfticks(void)
 {
     uvlong x;
 
@@ -33495,14 +33501,14 @@ devcons_panic(char *fmt, ...)
         for(;;);
     panicking = true;
 
-    s = splhi();
+    s = arch_splhi();
     strcpy(buf, "panic: ");
     va_start(arg, fmt);
     n = vseprint(buf+strlen(buf), buf+sizeof(buf), fmt, arg) - buf;
     va_end(arg);
     iprint("%s\n", buf);
     <<[[panic()]] run consdebug hook>>
-    splx(s);
+    arch_splx(s);
     prflush();
     buf[n] = '\n';
     putstrn(buf, n+1);
@@ -33594,6 +33600,8 @@ char Echange[] = "media or partition has changed";
 char Edetach[] = "device is detached";
 char Enotconf[] = "endpoint not configured";
 char Estalled[] = "endpoint stalled";
+char Esbadstat[] = "invalid directory entry received from server";
+char Enoversion[] = "version not established for mount channel";
 @ 
 
 <<global Edoesnotexist>>=
@@ -33621,11 +33629,11 @@ char  errbuf1[ERRMAX];
 void
 proc_error(char *err)
 {
-    spllo();
+    arch_spllo();
 
     assert(up->nerrlab < NERR);
     kstrcpy(up->errstr, err, ERRMAX);
-    setlabel(&up->errlab[NERR-1]);
+    arch_setlabel(&up->errlab[NERR-1]);
     nexterror();
 }
 @ 
@@ -33657,9 +33665,9 @@ exhausted(char *resource)
 //  - poperror() = nothing
 //  - error() =~ raise
 //  - nexterror() =~ re raise from exn handler
-// note, setlabel() return false, so the branch is never taken first
-// but nexterror() is using gotolabel() which returns true, see l_switch.s
-#define waserror()  (up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
+// note, arch_setlabel() return false, so the branch is never taken first
+// but nexterror() is using arch_gotolabel() which returns true, see l_switch.s
+#define waserror()  (up->nerrlab++, arch_setlabel(&up->errlab[up->nerrlab-1]))
 #define poperror()    up->nerrlab--
 @ 
 
@@ -33669,7 +33677,7 @@ exhausted(char *resource)
 void
 proc_nexterror(void)
 {
-    gotolabel(&up->errlab[--up->nerrlab]);
+    arch_gotolabel(&up->errlab[--up->nerrlab]);
 }
 @ 
 

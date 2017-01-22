@@ -17,11 +17,6 @@ struct Mntalloc mntalloc;
 
 #define MAXRPC (IOHDRSZ+8192)
 
-/*s: mnt.c Exxx errors */
-char   Esbadstat[] = "invalid directory entry received from server";
-char   Enoversion[] = "version not established for mount channel";
-/*e: mnt.c Exxx errors */
-
 /*s: function freetag */
 void
 freetag(int t)

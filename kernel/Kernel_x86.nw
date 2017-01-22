@@ -281,8 +281,8 @@ enum misc_constants
 
 \ifallcode
 <<dat_forward.h>>=
-typedef union ArchFPsave  ArchFPsave;
-typedef struct ArchProcMMU ArchProcMMU;
+typedef union Arch_FPsave  Arch_FPsave;
+typedef struct Arch_ProcMMU Arch_ProcMMU;
 
 typedef struct BIOS32si BIOS32si;
 typedef struct BIOS32ci BIOS32ci;
@@ -409,27 +409,27 @@ void	validalign(uintptr, unsigned);
 //@Scheck: Assembly
 void  fpclear(void);
 //@Scheck: Assembly
-void  fpenv(ArchFPsave*);
+void  fpenv(Arch_FPsave*);
 //@Scheck: Assembly
 void  fpinit(void);
 //@Scheck: Assembly
 void  fpoff(void);
 //@Scheck: Assembly
 void  fpon(void);
-void  (*fprestore)(ArchFPsave*);
-void  (*fpsave)(ArchFPsave*);
+void  (*fprestore)(Arch_FPsave*);
+void  (*fpsave)(Arch_FPsave*);
 void  fpsavealloc(void);
-void  fpsserestore(ArchFPsave*);
+void  fpsserestore(Arch_FPsave*);
 //@Scheck: Assembly
-void  fpsserestore0(ArchFPsave*);
-void  fpssesave(ArchFPsave*);
+void  fpsserestore0(Arch_FPsave*);
+void  fpssesave(Arch_FPsave*);
 //@Scheck: Assembly
-void  fpssesave0(ArchFPsave*);
+void  fpssesave0(Arch_FPsave*);
 //ulong fpstatus(void);
 //@Scheck: Assembly
-void  fpx87restore(ArchFPsave*);
+void  fpx87restore(Arch_FPsave*);
 //@Scheck: Assembly
-void  fpx87save(ArchFPsave*);
+void  fpx87save(Arch_FPsave*);
 //@Scheck: Assembly
 ulong getcr0(void);
 //@Scheck: Assembly
@@ -1809,14 +1809,14 @@ floppyrevive(void)
         fldump();
 
         /* reset controller and turn all motors off */
-        splhi();
+        arch_splhi();
         fl.ncmd = 1;
         fl.cmd[0] = 0;
         outb(Pdor, 0);
         delay(10);
         outb(Pdor, Fintena|Fena);
         delay(10);
-        spllo();
+        arch_spllo();
         fl.motor = 0;
         fl.confused = 0;
         floppywait(0);
@@ -3181,7 +3181,7 @@ didnt:
         XORL    AX,AX
         RET
 
-TEXT mul64fract(SB), $0
+TEXT arch_mul64fract(SB), $0
 /*
  * Multiply two 64-bit number s and keep the middle 64 bits from the 128-bit result
  * See ../port/tod.c for motivation.
@@ -3724,8 +3724,8 @@ extern phys_addr *multiboot;
 <<struct KMap(x86)>>
 <<macro VA(x86)>>
 
-KMap* kmap(Page*);
-void  kunmap(KMap*);
+Arch_KMap* arch_kmap(Page*);
+void  arch_kunmap(Arch_KMap*);
 
 @
 
@@ -3966,7 +3966,7 @@ checkpagerefs(void)
      * that if you run it on a quiescent system it will still
      * be useful.
      */
-    s = splhi();
+    s = arch_splhi();
     lock(&palloc);
     countpagerefs(ref, 0);
     portcountpagerefs(ref, 0);
@@ -3984,7 +3984,7 @@ checkpagerefs(void)
     portcountpagerefs(ref, 1);
     iprint("%lud mistakes found\n", nwrong);
     unlock(&palloc);
-    splx(s);
+    arch_splx(s);
 }
 @
 
@@ -4297,7 +4297,7 @@ int pdmap(kern_addr2 mmupd, ulong pa, virt_addr va, int size);
 %/*
 % *  things saved in the Proc structure during a notify
 % */
-%struct ArchProcNotsave
+%struct Arch_ProcNotsave
 %{
 %    ulong svflags;
 %    ulong svcs;
@@ -4400,7 +4400,7 @@ wdogpause(void)
 {
     int turndogoff;
 
-    turndogoff = watchdogon && cpu->cpuno == 0 && !islo();
+    turndogoff = watchdogon && cpu->cpuno == 0 && !arch_islo();
     if (turndogoff) {
         watchdog->disable();
         watchdogon = 0;
@@ -4557,7 +4557,7 @@ i8253_delay(int millisecs)
     if (millisecs > 10*1000)
         iprint("delay(%d) from %#p\n", millisecs,
             getcallerpc(&millisecs));
-    if (watchdogon && cpu->cpuno == 0 && !islo())
+    if (watchdogon && cpu->cpuno == 0 && !arch_islo())
         for (; millisecs > Wdogms; millisecs -= Wdogms) {
             delay(Wdogms);
             watchdog->restart();
@@ -4574,7 +4574,7 @@ i8253_delay(int millisecs)
 void
 i8253_microdelay(int microsecs)
 {
-    if (watchdogon && cpu->cpuno == 0 && !islo())
+    if (watchdogon && cpu->cpuno == 0 && !arch_islo())
         for (; microsecs > Wdogms*1000; microsecs -= Wdogms*1000) {
             delay(Wdogms);
             watchdog->restart();
@@ -5935,7 +5935,7 @@ mpshutdown(void)
         return;
     print("apshutdown: active = %#8.8ux\n", active.cpus);
     delay(1000);
-    splhi();
+    arch_splhi();
     arch->resetothers();
 
     pcireset();
@@ -7709,7 +7709,7 @@ realmode(Ureg *ureg)
     /* copy l.s so that it can be run from 16-bit mode */
     memmove((void*)RMCODE, (void*)KTZERO, 0x1000);
 
-    s = splhi();
+    s = arch_splhi();
     cpu->pdproto[PDX(0)] = cpu->pdproto[PDX(KZERO)];    /* identity map low */
     cr3 = getcr3();
     putcr3(PADDR(cpu->pdproto));
@@ -7730,7 +7730,7 @@ realmode(Ureg *ureg)
     }
     cpu->pdproto[PDX(0)] = 0; /* remove low mapping */
     putcr3(cr3);
-    splx(s);
+    arch_splx(s);
     *ureg = realmoderegs;
     unlock(&rmlock);
 }
@@ -13180,11 +13180,11 @@ lapictimerinit(void)
     lapicw(LapicTIMER, ApicIMASK|LapicCLKIN|LapicONESHOT|(VectorPIC+IrqTIMER));
 
     if(lapictimer.hz == 0ULL){
-        x = fastticks(&hz);
+        x = arch_fastticks(&hz);
         x += hz/10;
         lapicw(LapicTICR, 0xffffffff);
         do{
-            v = fastticks(nil);
+            v = arch_fastticks(nil);
         }while(v < x);
 
         lapictimer.hz = (0xffffffffUL-lapicr(LapicTCCR))*10;
@@ -13415,12 +13415,12 @@ lapictimerset(uvlong next)
     vlong period;
     int x;
 
-    x = splhi();
+    x = arch_splhi();
     lock(&cpu->apictimerlock);
 
     period = lapictimer.max;
     if(next != 0){
-        period = next - fastticks(nil);
+        period = next - arch_fastticks(nil);
         if (lapictimer.div == 0)
             panic("lapictimerset: zero lapictimer.div");
         period /= lapictimer.div;
@@ -13433,7 +13433,7 @@ lapictimerset(uvlong next)
     lapicw(LapicTICR, period);
 
     unlock(&cpu->apictimerlock);
-    splx(x);
+    arch_splx(x);
 }
 
 void

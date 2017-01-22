@@ -47,7 +47,7 @@ realmode(Ureg *ureg)
     /* copy l.s so that it can be run from 16-bit mode */
     memmove((void*)RMCODE, (void*)KTZERO, 0x1000);
 
-    s = splhi();
+    s = arch_splhi();
     cpu->pdproto[PDX(0)] = cpu->pdproto[PDX(KZERO)];    /* identity map low */
     cr3 = getcr3();
     putcr3(PADDR(cpu->pdproto));
@@ -68,7 +68,7 @@ realmode(Ureg *ureg)
     }
     cpu->pdproto[PDX(0)] = 0; /* remove low mapping */
     putcr3(cr3);
-    splx(s);
+    arch_splx(s);
     *ureg = realmoderegs;
     unlock(&rmlock);
 }

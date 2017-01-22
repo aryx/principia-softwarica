@@ -555,7 +555,7 @@ mountio(Mnt *m, Mntrpc *r)
         panic("bad message type in mountio");
     if(devtab[m->c->type]->write(m->c, r->rpc, n, 0) != n)
         error(Emountrpc);
-    r->stime = fastticks(nil);
+    r->stime = arch_fastticks(nil);
     r->reqlen = n;
 
     /* Gate readers onto the mount point one at a time */

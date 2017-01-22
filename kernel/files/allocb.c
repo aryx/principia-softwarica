@@ -40,7 +40,7 @@ _allocb(int size)
     b->free = 0;
     b->flag = 0;
     b->ref = 0;
-    _xinc(&b->ref);
+    arch_xinc(&b->ref);
 
     /* align start of data portion by rounding up */
     addr = (ulong)b;
@@ -76,7 +76,7 @@ allocb(int size)
     if(up == nil)
         panic("allocb without up: %#p", getcallerpc(&size));
     if((b = _allocb(size)) == nil){
-        splhi();
+        arch_splhi();
         xsummary();
         mallocsummary();
         delay(500);
@@ -137,7 +137,7 @@ freeb(Block *b)
     void *dead = (void*)Bdead;
     long ref;
 
-    if(b == nil || (ref = _xdec(&b->ref)) > 0)
+    if(b == nil || (ref = arch_xdec(&b->ref)) > 0)
         return;
 
     if(ref < 0){

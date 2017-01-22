@@ -407,7 +407,7 @@ executeio(void)
     int i, n;
     Chan *c;
     char *kaddr;
-    KMap *k;
+    Arch_KMap *k;
 
     c = swapimage.c;
     qsort(iolist, ioptr, sizeof iolist[0], pageiocomp);
@@ -415,7 +415,7 @@ executeio(void)
         if(ioptr > conf.nswppo)
             panic("executeio: ioptr %d > %d", ioptr, conf.nswppo);
         out = iolist[i];
-        k = kmap(out);
+        k = arch_kmap(out);
         kaddr = (char*)VA(k);
 
         if(waserror())
@@ -425,7 +425,7 @@ executeio(void)
         if(n != BY2PG)
             nexterror();
 
-        kunmap(k);
+        arch_kunmap(k);
         poperror();
 
         /* Free up the page after I/O */

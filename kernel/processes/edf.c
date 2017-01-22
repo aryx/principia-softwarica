@@ -119,7 +119,7 @@ edflock(Proc *p)
 #ifdef EDFCYCLES
         edfcycles -= lcycles();
 #endif
-        now = us();
+        now = arch_us();
         return e;
     }
     iunlock(&thelock);
@@ -144,7 +144,7 @@ edfinit(Proc* p)
         fmtinstall('t', timeconv);
         edfinited++;
     }
-    now = us();
+    now = arch_us();
     DPRINT("%lud edfinit %lud[%s]\n", now, p->pid, statename[p->state]);
     p->edf = malloc(sizeof(Edf));
     if(p->edf == nil)
@@ -163,7 +163,7 @@ deadlineintr(Ureg*, Timer *t)
         return;
 
     p = t->ta;
-    now = us();
+    now = arch_us();
     DPRINT("%lud deadlineintr %lud[%s]\n", now, p->pid, statename[p->state]);
     /* If we're interrupting something other than the proc pointed to by t->a,
      * we've already achieved recheduling, so we need not do anything
@@ -474,7 +474,7 @@ edfstop(Proc *p)
 static int
 yfn(void *)
 {
-    now = us();
+    now = arch_us();
     return up->trend == nil || now - up->edf->r >= 0;
 }
 

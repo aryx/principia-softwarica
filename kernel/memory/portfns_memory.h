@@ -89,18 +89,18 @@ KImage*   attachimage(int, Chan*, ulong, ulong);
 // syssetflush (used in syscalls/ without requiring extern decl)
 
 // used in port/ but not portable, so in dat_memory.h now
-//KMap* kmap(Page*);
-//void  kunmap(KMap*);
+//Arch_KMap* arch_kmap(Page*);
+//void  arch_kunmap(Arch_KMap*);
 
 void    countpagerefs(ulong*, int);
-void    flushmmu(void);
-void checkmmu(ulong va, ulong pa);
-ulong cankaddr(ulong);
+void    arch_flushmmu(void);
+void arch_checkmmu(ulong va, ulong pa);
+ulong arch_cankaddr(ulong);
 // actually KADDR is used in port, but it's expanding to kaddr
-kern_addr3 kaddr(phys_addr);
+kern_addr3 arch_kaddr(phys_addr);
 // actually PADDR is used in port, but it's expanding to paddr
-phys_addr paddr(kern_addr3);
-void    putmmu(ulong, ulong, Page*);
-void    mmurelease(Proc*);
-void    mmuswitch(Proc*);
+phys_addr arch_paddr(kern_addr3);
+void    arch_putmmu(ulong, ulong, Page*);
+void    arch_mmurelease(Proc*);
+void    arch_mmuswitch(Proc*);
 /*e: portfns_memory.h */

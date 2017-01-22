@@ -149,11 +149,11 @@ lapictimerinit(void)
     lapicw(LapicTIMER, ApicIMASK|LapicCLKIN|LapicONESHOT|(VectorPIC+IrqTIMER));
 
     if(lapictimer.hz == 0ULL){
-        x = fastticks(&hz);
+        x = arch_fastticks(&hz);
         x += hz/10;
         lapicw(LapicTICR, 0xffffffff);
         do{
-            v = fastticks(nil);
+            v = arch_fastticks(nil);
         }while(v < x);
 
         lapictimer.hz = (0xffffffffUL-lapicr(LapicTCCR))*10;
@@ -384,12 +384,12 @@ lapictimerset(uvlong next)
     vlong period;
     int x;
 
-    x = splhi();
+    x = arch_splhi();
     lock(&cpu->apictimerlock);
 
     period = lapictimer.max;
     if(next != 0){
-        period = next - fastticks(nil);
+        period = next - arch_fastticks(nil);
         if (lapictimer.div == 0)
             panic("lapictimerset: zero lapictimer.div");
         period /= lapictimer.div;
@@ -402,7 +402,7 @@ lapictimerset(uvlong next)
     lapicw(LapicTICR, period);
 
     unlock(&cpu->apictimerlock);
-    splx(x);
+    arch_splx(x);
 }
 
 void

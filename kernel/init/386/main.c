@@ -326,7 +326,7 @@ init0(void)
     
     up->nerrlab = 0;
 
-    spllo();
+    arch_spllo();
 
     /*
      * These are o.k. because rootinit is null.
@@ -448,7 +448,7 @@ userinit(void)
      *
      * N.B. make sure there's enough space for syscall to check
      *      for valid args and 
-     *      4 bytes for gotolabel's return PC
+     *      4 bytes for arch_gotolabel's return PC
      */
     p->sched.pc = (kern_addr)init0;
     p->sched.sp = (kern_addr)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
@@ -456,7 +456,7 @@ userinit(void)
     /*
      * User Stack
      *
-     * N.B. cannot call newpage() with clear=1, because PC kmap()
+     * N.B. cannot call newpage() with clear=1, because PC arch_kmap()
      * requires up != nil.  use tmpmap() instead.
      */
     s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
@@ -507,7 +507,7 @@ static void
 mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
 {
         ulong sts, fpc, ctl;
-        ArchFPsave *f = &up->fpsave;
+        Arch_FPsave *f = &up->fpsave;
 
         if(fpsave == fpx87save){
                 sts = f->status;
@@ -691,7 +691,7 @@ shutdown(bool ispanic)
         iprint("cpu%d: exiting\n", cpu->cpuno);
 
     /* wait for any other processors to shutdown */
-    spllo();
+    arch_spllo();
     for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
         delay(TK2MS(2));
         if(active.cpus == 0 && consactive() == 0)
@@ -722,7 +722,7 @@ main_exit(bool ispanic)
 
 /*s: function reboot(x86) */
 void
-reboot(kern_addr3 entry, kern_addr3 code, ulong size)
+arch_reboot(kern_addr3 entry, kern_addr3 code, ulong size)
 {
     void (*f)(ulong, ulong, ulong);
     kern_addr2 mmupd;
@@ -765,7 +765,7 @@ reboot(kern_addr3 entry, kern_addr3 code, ulong size)
     print("shutting down...\n");
     delay(200);
 
-    splhi();
+    arch_splhi();
 
     /*s: [[reboot()]] reset serialoq(x86) */
     /* turn off buffered serial console */

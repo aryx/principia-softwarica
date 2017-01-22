@@ -837,14 +837,14 @@ floppyrevive(void)
         fldump();
 
         /* reset controller and turn all motors off */
-        splhi();
+        arch_splhi();
         fl.ncmd = 1;
         fl.cmd[0] = 0;
         outb(Pdor, 0);
         delay(10);
         outb(Pdor, Fintena|Fena);
         delay(10);
-        spllo();
+        arch_spllo();
         fl.motor = 0;
         fl.confused = 0;
         floppywait(0);

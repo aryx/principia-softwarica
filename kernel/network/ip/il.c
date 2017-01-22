@@ -481,7 +481,7 @@ ilkick(void *x, Block *bp)
     /* Start the round trip timer for this packet if the timer is free */
     if(ic->rttack == 0) {
         ic->rttack = id;
-        ic->rttstart = fastticks(nil);
+        ic->rttstart = arch_fastticks(nil);
         ic->rttlen = dlen + IL_IPSIZE + IL_HDRSIZE;
     }
 
@@ -549,7 +549,7 @@ ilrttcalc(Ilcb *ic, Block *bp)
 {
     int rtt, tt, pt, delay, rate;
 
-    rtt = fastticks(nil) - ic->rttstart;
+    rtt = arch_fastticks(nil) - ic->rttstart;
     rtt = (rtt*scalemul)/scalediv;
     delay = ic->delay;
     rate = ic->rate;
@@ -1504,7 +1504,7 @@ inittimescale(void)
 {
     uvlong hz;
 
-    fastticks(&hz);
+    arch_fastticks(&hz);
     if(hz > 1000){
         scalediv = hz/1000;
         scalemul = 1;

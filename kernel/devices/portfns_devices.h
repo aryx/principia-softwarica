@@ -36,4 +36,7 @@ extern void kbdputsc(byte, int);
 extern int  kbdgetmap(uint, int*, int*, Rune*);
 extern void kbdputmap(ushort, ushort, Rune);
 
+// defined in <arch>/kbd.c for portkbd.c
+extern void arch_setleds(Kbscan *kbscan);
+
 /*e: portfns_devices.h */

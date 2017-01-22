@@ -1,6 +1,8 @@
 #include <u.h>
 
-/* mul64fract(uvlong*r, uvlong a, uvlong b)
+// default implementation for mul64fract
+
+/* arch_mul64fract(uvlong*r, uvlong a, uvlong b)
  *
  * Multiply two 64 numbers and return the middle 64 bits of the 128 bit result.
  *
@@ -17,9 +19,8 @@
  *	msw of result	r2 = 		hi(a0*b1) +hi(a1*b0) +lo(a1*b1)
  *	ignored		r3 = hi(a1*b1)
  */
-
 void
-mul64fract(uvlong *r, uvlong a, uvlong b)
+arch_mul64fract(uvlong *r, uvlong a, uvlong b)
 {
 	uvlong bh, bl;
 	uvlong ah, al;

@@ -44,7 +44,7 @@ struct Segdesc
 /*e: struct Segdesc(x86) */
 
 /*s: struct ArchCpu(x86) */
-struct ArchCpu {
+struct Arch_Cpu {
     /*s: [[Cpu]] [[Arch]] cpuid fields(x86) */
     char  cpuidid[16];
     char* cpuidtype;
@@ -64,10 +64,10 @@ struct ArchCpu {
     /*x: [[Cpu]] [[Arch]] other fields(x86) */
     int havepge;
     /*x: [[Cpu]] [[Arch]] other fields(x86) */
-    // for perfticks, tsc = time stamp counter
+    // for arch_perfticks, tsc = time stamp counter
     bool havetsc;
     /*x: [[Cpu]] [[Arch]] other fields(x86) */
-    ArchFPsave *fpsavalign;
+    Arch_FPsave *fpsavalign;
     /*x: [[Cpu]] [[Arch]] other fields(x86) */
     int mmupdalloc;
     int mmupdfree;

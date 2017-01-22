@@ -666,7 +666,7 @@ sdopen(Chan* c, int omode)
         break;
     case Qraw:
         c->qid.vers = unit->vers;
-        if(tas(&unit->rawinuse) != 0){
+        if(arch_tas(&unit->rawinuse) != 0){
             c->flag &= ~COPEN;
             decref(&sdev->r);
             error(Einuse);

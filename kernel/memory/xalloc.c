@@ -51,7 +51,7 @@ xinit(void)
         if(nkpages > kpages)
             nkpages = kpages; // will be zero once kpages has been filled
         /* don't try to use non-KADDR-able memory for kernel */
-        maxpages = cankaddr(m->base)/BY2PG;
+        maxpages = arch_cankaddr(m->base)/BY2PG;
         if(nkpages > maxpages)
             nkpages = maxpages;
 

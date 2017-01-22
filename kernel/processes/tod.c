@@ -32,7 +32,7 @@ static void todfix(void);
  *  mult = (1000000000<<32)/f
  *
  *  each time f is set.  f is normally set by a user level
- *  program writing to /dev/fastclock.  mul64fract will then
+ *  program writing to /dev/fastclock.  arch_mul64fract will then
  *  take that fractional multiplier and a 64 bit integer and
  *  return the resulting integer product.
  *
@@ -73,8 +73,8 @@ todinit(void)
     if(tod.init)
         return;
     ilock(&tod);
-    tod.init = 1;           /* prevent reentry via fastticks */
-    tod.last = fastticks((uvlong *)&tod.hz);
+    tod.init = 1;           /* prevent reentry via arch_fastticks */
+    tod.last = arch_fastticks((uvlong *)&tod.hz);
     iunlock(&tod);
     todsetfreq(tod.hz);
     addclock0link(todfix, 100);
@@ -115,7 +115,7 @@ todset(vlong t, vlong delta, int n)
     ilock(&tod);
     if(t >= 0){
         tod.off = t;
-        tod.last = fastticks(nil);
+        tod.last = arch_fastticks(nil);
         tod.lasttime = 0;
         tod.delta = 0;
         tod.sstart = tod.send;
@@ -155,13 +155,13 @@ todget(vlong *ticksp)
         todinit();
 
     /*
-     * we don't want time to pass twixt the measuring of fastticks
+     * we don't want time to pass twixt the measuring of arch_fastticks
      * and grabbing tod.last.  Also none of the vlongs are atomic so
      * we have to look at them inside the lock.
      */
     ilock(&tod);
     tod.cnt++;
-    ticks = fastticks(nil);
+    ticks = arch_fastticks(nil);
 
     /* add in correction */
     if(tod.sstart != tod.send){
@@ -176,7 +176,7 @@ todget(vlong *ticksp)
     diff = ticks - tod.last;
     if(diff < 0)
         diff = 0;
-    mul64fract(&x, diff, tod.multiplier);
+    arch_mul64fract(&x, diff, tod.multiplier);
     x += tod.off;
 
     /* time can't go backwards */
@@ -204,14 +204,14 @@ todfix(void)
     vlong ticks, diff;
     uvlong x;
 
-    ticks = fastticks(nil);
+    ticks = arch_fastticks(nil);
 
     diff = ticks - tod.last;
     if(diff > tod.hz){
         ilock(&tod);
 
         /* convert to epoch */
-        mul64fract(&x, diff, tod.multiplier);
+        arch_mul64fract(&x, diff, tod.multiplier);
 if(x > 30000000000ULL) iprint("todfix %llud\n", x);
         x += tod.off;
 
@@ -240,7 +240,7 @@ fastticks2us(uvlong ticks)
 
     if(!tod.init)
         todinit();
-    mul64fract(&res, ticks, tod.umultiplier);
+    arch_mul64fract(&res, ticks, tod.umultiplier);
     return res;
 }
 /*e: function fastticks2us */
@@ -256,7 +256,7 @@ ns2fastticks(uvlong ns)
 
     if(!tod.init)
         todinit();
-    mul64fract(&res, ns, tod.divider);
+    arch_mul64fract(&res, ns, tod.divider);
     return res;
 }
 /*e: function ns2fastticks */
@@ -265,7 +265,7 @@ ns2fastticks(uvlong ns)
 /*
  * Make a 64 bit fixed point number that has a decimal point
  * to the left of the low order 32 bits.  This is used with
- * mul64fract for converting twixt nanoseconds and fastticks.
+ * arch_mul64fract for converting twixt nanoseconds and arch_fastticks.
  *
  *  multiplier = (to<<32)/from
  */

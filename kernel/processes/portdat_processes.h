@@ -248,7 +248,7 @@ struct Timer
     /* Internal */
     Lock;
     Tval  tticks;   /* tns converted to ticks */
-    Tval  twhen;    /* ns represented in fastticks */
+    Tval  twhen;    /* ns represented in arch_fastticks */
 
     /*s: [[Timer extra fields */
     // list<Timer> of Timers.head
@@ -467,7 +467,7 @@ struct Proc
     bool noswap;   /* process is not swappable */
     /*e: [[Proc]] memory fields */
 
-    struct ArchProcMMU;
+    struct Arch_ProcMMU;
 //--------------------------------------------------------------------
 // Scheduling
 //--------------------------------------------------------------------
@@ -660,7 +660,7 @@ struct Proc
     /*x: [[Proc]] other fields */
     // enum<fpsavestatus>
     int fpstate;
-    ArchFPsave  fpsave;   /* address of this is known by db */
+    Arch_FPsave  fpsave;   /* address of this is known by db */
     /*x: [[Proc]] other fields */
     // ref_counted<Egrp>
     Egrp  *egrp;    /* Environment group */
@@ -696,9 +696,9 @@ struct Proc
 //  - poperror() = nothing
 //  - error() =~ raise
 //  - nexterror() =~ re raise from exn handler
-// note, setlabel() return false, so the branch is never taken first
-// but nexterror() is using gotolabel() which returns true, see l_switch.s
-#define waserror()  (up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
+// note, arch_setlabel() return false, so the branch is never taken first
+// but nexterror() is using arch_gotolabel() which returns true, see l_switch.s
+#define waserror()  (up->nerrlab++, arch_setlabel(&up->errlab[up->nerrlab-1]))
 #define poperror()    up->nerrlab--
 /*e: macro waserror poperror */
 

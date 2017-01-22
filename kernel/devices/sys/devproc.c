@@ -105,7 +105,7 @@ Dirtab procdir[] =
     "args",     {Qargs},    0,          0660,
     "ctl",      {Qctl},     0,          0000,
     "fd",       {Qfd},      0,          0444,
-    "fpregs",   {Qfpregs},  sizeof(ArchFPsave),     0000,
+    "fpregs",   {Qfpregs},  sizeof(Arch_FPsave),     0000,
     "kregs",    {Qkregs},   sizeof(Ureg),       0400,
     "mem",      {Qmem},     0,          0000,
     "note",     {Qnote},    0,          0000,
@@ -976,7 +976,7 @@ procread(Chan *c, void *va, long n, vlong off)
 
     case Qkregs:
         memset(&kur, 0, sizeof(Ureg));
-        setkernur(&kur, p);
+        arch_setkernur(&kur, p);
         rptr = (byte*)&kur;
         rsize = sizeof(Ureg);
         goto regread;
@@ -984,7 +984,7 @@ procread(Chan *c, void *va, long n, vlong off)
     /*s: [[procread()]] Qfpregs case */
         case Qfpregs:
             rptr = (uchar*)&p->fpsave;
-            rsize = sizeof(ArchFPsave);
+            rsize = sizeof(Arch_FPsave);
             goto regread;
     /*e: [[procread()]] Qfpregs case */
 
@@ -1210,15 +1210,15 @@ procwrite(Chan *c, void *va, long n, vlong off)
             n = sizeof(Ureg) - offset;
         if(p->dbgreg == nil)
             error(Enoreg);
-        setregisters(p->dbgreg, (char*)(p->dbgreg)+offset, va, n);
+        arch_setregisters(p->dbgreg, (char*)(p->dbgreg)+offset, va, n);
         break;
 
     /*s: [[procwrite]] Qfpregs case */
         case Qfpregs:
-            if(offset >= sizeof(ArchFPsave))
+            if(offset >= sizeof(Arch_FPsave))
                 n = 0;
-            else if(offset+n > sizeof(ArchFPsave))
-                n = sizeof(ArchFPsave) - offset;
+            else if(offset+n > sizeof(Arch_FPsave))
+                n = sizeof(Arch_FPsave) - offset;
             memmove((uchar*)&p->fpsave+offset, va, n);
             break;
     /*e: [[procwrite]] Qfpregs case */
@@ -1696,7 +1696,7 @@ procstopped(void *a)
 int
 procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
 {
-    KMap *k;
+    Arch_KMap *k;
     Pagetable *pt;
     Page *pg;
     Segment *s;
@@ -1737,10 +1737,10 @@ procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
     if(n > l)
         n = l;
 
-    k = kmap(pg);
+    k = arch_kmap(pg);
     if(waserror()) {
         s->steal--;
-        kunmap(k);
+        arch_kunmap(k);
         nexterror();
     }
     b = (char*)VA(k);
@@ -1749,7 +1749,7 @@ procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
         memmove(a, b, n);   /* This can fault */
     else
         memmove(b, a, n);
-    kunmap(k);
+    arch_kunmap(k);
     poperror();
 
  /* Ensure the process sees text page changes */

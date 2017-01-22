@@ -22,22 +22,20 @@ int   canrlock(RWlock*);
 void    wlock(RWlock*);
 void    wunlock(RWlock*);
 
-// in 386/l.s (but used in port)
+// in <arch>/l.s (but used in port)
 //@Scheck: Assembly
-bool   islo(void);
+bool   arch_islo(void);
 //@Scheck: Assembly
-int   splhi(void);
+int   arch_splhi(void);
 //@Scheck: Assembly
-int   spllo(void);
+int   arch_spllo(void);
 //@Scheck: Assembly
-void    splx(int);
-//void    splxpc(int);
-//long    lcycles(void);
+void    arch_splx(int);
 //test-and-set
 //@Scheck: Assembly
-int tas(void*);
+int arch_tas(void*);
 //@Scheck: Assembly
-void    _xinc(long*);
+void    arch_xinc(long*);
 //@Scheck: Assembly
-long    _xdec(long*);
+long    arch_xdec(long*);
 /*e: portfns_concurrency.h */

@@ -288,7 +288,7 @@ syswrite(Chan *c, void *va, long n, vlong off)
             ct = lookupcmd(cb, rebootmsg, nelem(rebootmsg));
             switch(ct->index) {
             case CMhalt:
-                reboot(nil, 0, 0);
+                arch_reboot(nil, 0, 0);
                 break;
             case CMreboot:
                 rebootcmd(cb->nf-1, cb->f+1);

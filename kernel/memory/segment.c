@@ -396,7 +396,7 @@ imagereclaim(void)
         return;
 
     lock(&palloc);
-    ticks = fastticks(nil);
+    ticks = arch_fastticks(nil);
     n = 0;
     /*
      * All the pages with images backing them are at the
@@ -412,7 +412,7 @@ imagereclaim(void)
             unlock(p);
         }
     }
-    ticks = fastticks(nil) - ticks;
+    ticks = arch_fastticks(nil) - ticks;
     unlock(&palloc);
     irstats.loops++;
     irstats.ticks += ticks;
@@ -551,7 +551,7 @@ ibrk(ulong addr, int seg)
         s->top = newtop;
         s->size = newsize;
         qunlock(&s->lk);
-        flushmmu();
+        arch_flushmmu();
         return 0;
     }
 

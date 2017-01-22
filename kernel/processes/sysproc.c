@@ -205,7 +205,7 @@ sysrfork(ulong* arg)
     /* Craft a return frame which will cause the child to pop out of
      * the scheduler in user mode with the return register zero
      */
-    forkchild(p, up->dbgreg);
+    arch_forkchild(p, up->dbgreg);
 
     p->parent = up;
     p->parentpid = up->pid;
@@ -236,7 +236,7 @@ sysrfork(ulong* arg)
      *  any mmu info about this process is now stale
      *  (i.e. has bad properties) and has to be discarded.
      */
-    flushmmu();
+    arch_flushmmu();
 
     p->basepri = up->basepri;
     p->priority = up->basepri;
@@ -410,7 +410,7 @@ sysexec(ulong* arg)
 
     /*
      * 8-byte align SP for those (e.g. sparc) that need it.
-     * execregs() will subtract another 4 bytes for argc.
+     * arch_execregs() will subtract another 4 bytes for argc.
      */
     if((ssize+4) & 7)
         ssize += 4;
@@ -580,14 +580,14 @@ sysexec(ulong* arg)
      *  At this point, the mmu contains info about the old address
      *  space and needs to be flushed
      */
-    flushmmu();
+    arch_flushmmu();
 
     qlock(&up->debug);
     up->nnote = 0;
     up->notify = nil;
     up->notified = false;
     up->privatemem = false;
-    procsetup(up); // archi specific hook
+    arch_procsetup(up);
     qunlock(&up->debug);
 
     /*s: [[sysexec()]] if hang */
@@ -595,7 +595,7 @@ sysexec(ulong* arg)
             up->procctl = Proc_stopme;
     /*e: [[sysexec()]] if hang */
 
-    return execregs(entry, ssize, nargs);
+    return arch_execregs(entry, ssize, nargs);
 }
 /*e: syscall exec */
 
@@ -871,7 +871,7 @@ found:
     poperror();
 
     /* Ensure we flush any entries from the lost segment */
-    flushmmu();
+    arch_flushmmu();
     return 0;
 }
 /*e: syscall segdetach */
@@ -898,7 +898,7 @@ syssegfree(ulong* arg)
 
     mfreeseg(s, from, (to - from) / BY2PG);
     qunlock(&s->lk);
-    flushmmu();
+    arch_flushmmu();
 
     return 0;
 }

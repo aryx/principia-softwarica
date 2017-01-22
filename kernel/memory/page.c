@@ -154,7 +154,7 @@ Page*
 newpage(bool clear, Segment **s, virt_addr va)
 {
     Page *p;
-    KMap *k;
+    Arch_KMap *k;
     bool dontalloc;
  uchar ct;
     int i, color;
@@ -235,9 +235,9 @@ newpage(bool clear, Segment **s, virt_addr va)
     unlock(&palloc);
 
     if(clear) {
-        k = kmap(p);
+        k = arch_kmap(p);
         memset((void*)VA(k), 0, BY2PG);
-        kunmap(k);
+        arch_kunmap(k);
     }
     return p;
 }
@@ -412,13 +412,13 @@ retry:
 void
 copypage(Page *f, Page *t)
 {
-    KMap *ks, *kd;
+    Arch_KMap *ks, *kd;
 
-    ks = kmap(f);
-    kd = kmap(t);
+    ks = arch_kmap(f);
+    kd = arch_kmap(t);
     memmove((void*)VA(kd), (void*)VA(ks), BY2PG);
-    kunmap(ks);
-    kunmap(kd);
+    arch_kunmap(ks);
+    arch_kunmap(kd);
 }
 /*e: function copypage */
 
@@ -638,7 +638,7 @@ checkpagerefs(void)
      * that if you run it on a quiescent system it will still
      * be useful.
      */
-    s = splhi();
+    s = arch_splhi();
     lock(&palloc);
     countpagerefs(ref, 0);
     portcountpagerefs(ref, 0);
@@ -656,7 +656,7 @@ checkpagerefs(void)
     portcountpagerefs(ref, 1);
     iprint("%lud mistakes found\n", nwrong);
     unlock(&palloc);
-    splx(s);
+    arch_splx(s);
 }
 /*e: function checkpagerefs */
 

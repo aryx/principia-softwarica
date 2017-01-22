@@ -1281,7 +1281,7 @@ qwrite(Queue *q, void *vp, int len)
     Block *b;
     byte *p = vp;
 
-//    QDEBUG if(!islo())  print("qwrite hi %#p\n", getcallerpc(&q));
+//    QDEBUG if(!arch_islo())  print("qwrite hi %#p\n", getcallerpc(&q));
 
     sofar = 0;
     do {
@@ -1310,7 +1310,7 @@ qwrite(Queue *q, void *vp, int len)
 
 /*s: function qiwrite */
 /*
- *  used by print() to write to a queue.  Since we may be splhi or not in
+ *  used by print() to write to a queue.  Since we may be arch_splhi or not in
  *  a process, don't qlock.
  *
  *  this routine merges adjacent blocks if block n+1 will fit into

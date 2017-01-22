@@ -209,14 +209,14 @@ memglobal(void)
  * It will be paged back in on demand.
  */
 void
-flushmmu(void)
+arch_flushmmu(void)
 {
     int s;
 
-    s = splhi();
+    s = arch_splhi();
     up->newtlb = true;
-    mmuswitch(up);
-    splx(s);
+    arch_mmuswitch(up);
+    arch_splx(s);
 }
 /*e: function flushmmu(x86) */
 
@@ -247,12 +247,12 @@ mmupdalloc(void)
     Page *page;
     kern_addr2 mmupd;
 
-    s = splhi();
+    s = arch_splhi();
     cpu->mmupdalloc++;
     if(cpu->mmupdpool == nil){
-        spllo();
+        arch_spllo();
         page = newpage(false, nil, nilptr);
-        splhi();
+        arch_splhi();
         mmupd = tmpmap(page);
         memmove(mmupd, cpu->pdproto, BY2PG);
         /*s: [[mmupdalloc()]] vpt adjustments(x86) */
@@ -263,7 +263,7 @@ mmupdalloc(void)
         cpu->mmupdpool = page->next;
         cpu->mmupdcnt--;
     }
-    splx(s);
+    arch_splx(s);
     return page;
 }
 /*e: function mmupdalloc(x86) */
@@ -272,8 +272,8 @@ mmupdalloc(void)
 static void
 mmupdfree(Proc *proc, Page *page)
 {
-    if(islo())
-        panic("mmupdfree: islo");
+    if(arch_islo())
+        panic("mmupdfree: arch_islo");
     cpu->mmupdfree++;
     if(cpu->mmupdcnt >= 10){ // 10??? keep small cache of mmupd page, but not too big, don't want to eat too much memory for that.
         page->next = proc->mmufree;
@@ -303,7 +303,7 @@ mmuptefree(Proc* proc)
     if(proc->mmupd == nil || proc->mmuused == nil)
         return; // panic? bug to be called with that?
 
-    s = splhi();
+    s = arch_splhi();
     mmupd = tmpmap(proc->mmupd);
     last = &proc->mmuused;
     for(page = *last; page; page = page->next){
@@ -311,7 +311,7 @@ mmuptefree(Proc* proc)
         last = &page->next;
     }
     tmpunmap(mmupd);
-    splx(s);
+    arch_splx(s);
     *last = proc->mmufree;
     proc->mmufree = proc->mmuused;
     proc->mmuused = nil;
@@ -337,7 +337,7 @@ taskswitch(phys_addr mmupd, ulong stack)
 
 /*s: function mmuswitch(x86) */
 void
-mmuswitch(Proc* proc)
+arch_mmuswitch(Proc* proc)
 {
     ulong *mmupd;
 
@@ -370,12 +370,12 @@ mmuswitch(Proc* proc)
  * This routine is only called from schedinit() with palloc locked.
  */
 void
-mmurelease(Proc* proc)
+arch_mmurelease(Proc* proc)
 {
     Page *page, *next;
 
-    if(islo())
-        panic("mmurelease: islo");
+    if(arch_islo())
+        panic("arch_mmurelease: arch_islo");
     taskswitch(PADDR(cpu->pdproto), (ulong)cpu + BY2PG);
 
 
@@ -390,7 +390,7 @@ mmurelease(Proc* proc)
     for(page = proc->mmufree; page; page = next){
         next = page->next;
         if(--page->ref)
-            panic("mmurelease: page->ref %d", page->ref);
+            panic("arch_mmurelease: page->ref %d", page->ref);
         pagechainhead(page);
     }
     if(proc->mmufree && palloc.freememr.p)
@@ -413,7 +413,7 @@ upallocmmupd(void)
     if(up->mmupd != nil)
         return;
     page = mmupdalloc();
-    s = splhi();
+    s = arch_splhi();
     if(up->mmupd != nil){
         /*
          * Perhaps we got an interrupt while
@@ -422,7 +422,7 @@ upallocmmupd(void)
          * Seems unlikely.
          */
         mmupdfree(up, page);
-        splx(s);
+        arch_splx(s);
         return;
     }
     mmupd = tmpmap(page);
@@ -430,7 +430,7 @@ upallocmmupd(void)
     tmpunmap(mmupd);
     up->mmupd = page;
     putcr3(up->mmupd->pa); //!!!! bootstrap! putcr3 take a PA of course
-    splx(s);
+    arch_splx(s);
 }
 /*e: function upallocmmupd(x86) */
 
@@ -439,7 +439,7 @@ upallocmmupd(void)
  * Update the mmu in response to a user fault.  pa may have PTEWRITE set.
  */
 void
-putmmu(virt_addr va, ulong mmupte, Page*)
+arch_putmmu(virt_addr va, ulong mmupte, Page*)
 {
     int old;
     Page *page;
@@ -453,9 +453,9 @@ putmmu(virt_addr va, ulong mmupte, Page*)
     mmupd = KADDR(up->mmupd->pa);
     if(!(mmupd[PDX(va)]&PTEVALID)) {
         if(up->mmufree == nil){
-            spllo();
+            arch_spllo();
             page = newpage(false, nil, nilptr);
-            splhi();
+            arch_splhi();
         }
         else{
             page = up->mmufree;
@@ -486,7 +486,7 @@ putmmu(virt_addr va, ulong mmupte, Page*)
  * Error checking only.
  */
 void
-checkmmu(virt_addr va, phys_addr pa)
+arch_checkmmu(virt_addr va, phys_addr pa)
 {
     if(up->mmupd == nil)
         return;
@@ -718,7 +718,7 @@ vunmap(virt_addr3 v, int size)
         if(nm != cpu)
             nm->flushmmu = true;
     }
-    flushmmu();
+    arch_flushmmu();
     for(i=0; i<conf.ncpu; i++){
         nm = CPUS(i);
         if(nm != cpu)
@@ -867,22 +867,22 @@ vmapsync(virt_addr va)
 /*e: constant NKPT(x86) */
 
 /*s: function kmap(x86) */
-KMap*
-kmap(Page *p)
+Arch_KMap*
+arch_kmap(Page *p)
 {
     if(up == nil)
-        panic("kmap: up=0 pc=%#.8lux", getcallerpc(&p));
+        panic("arch_kmap: up=0 pc=%#.8lux", getcallerpc(&p));
     if(p->pa < MAXKPA)
         return KADDR(p->pa);
     else
-      panic("kmap: physical address too high");
+      panic("arch_kmap: physical address too high");
     return nil; // unreachable
 }
 /*e: function kmap(x86) */
 
 /*s: function kunmap(x86) */
 void
-kunmap(KMap *k)
+arch_kunmap(Arch_KMap *k)
 {
     ulong va;
     va = (ulong)k;
@@ -890,7 +890,7 @@ kunmap(KMap *k)
 
     if((ulong)va >= KZERO)
         return;
-    panic("kunmap: physical address too high");
+    panic("arch_kunmap: physical address too high");
 }
 /*e: function kunmap(x86) */
 
@@ -903,8 +903,8 @@ kunmap(KMap *k)
 virt_addr3
 tmpmap(Page *p)
 {
-    if(islo())
-        panic("tmpmap: islo");
+    if(arch_islo())
+        panic("tmpmap: arch_islo");
     if(p->pa < MAXKPA)
         return KADDR(p->pa);
     else
@@ -917,8 +917,8 @@ tmpmap(Page *p)
 void
 tmpunmap(virt_addr3 v)
 {
-    if(islo())
-        panic("tmpmap: islo");
+    if(arch_islo())
+        panic("tmpmap: arch_islo");
     if((ulong)v >= KZERO)
         return;
     panic("tmpmap: physical address too high");
@@ -931,23 +931,23 @@ tmpunmap(virt_addr3 v)
  * but the extra checking is nice to have.
  */
 kern_addr3
-kaddr(phys_addr pa)
+arch_kaddr(phys_addr pa)
 {
     if(pa > MAXKPA)
-        panic("kaddr: pa=%#.8lux", pa);
+        panic("arch_kaddr: pa=%#.8lux", pa);
     return (kern_addr3)(pa+KZERO);
 }
 /*e: function kaddr(x86) */
 
 /*s: function paddr(x86) */
 phys_addr
-paddr(kern_addr3 v)
+arch_paddr(kern_addr3 v)
 {
     kern_addr va;
     
     va = (kern_addr)v;
     if(va < KZERO)
-        panic("paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
+        panic("arch_paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
     return va-KZERO;
 }
 /*e: function paddr(x86) */
@@ -1043,7 +1043,7 @@ countpagerefs(ulong *ref, int print)
  * If pa is not a valid argument to KADDR, return 0.
  */
 ulong
-cankaddr(phys_addr pa)
+arch_cankaddr(phys_addr pa)
 {
     if(pa >= MAXKPA)
         return 0;

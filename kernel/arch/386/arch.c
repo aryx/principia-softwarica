@@ -16,8 +16,8 @@ PCArch* arch;
 /*e: global arch(x86) */
 
 /*s: hook fprestore and fpsave(x86) */
-void    (*fprestore)(ArchFPsave*);
-void    (*fpsave)(ArchFPsave*);
+void    (*fprestore)(Arch_FPsave*);
+void    (*fpsave)(Arch_FPsave*);
 /*e: hook fprestore and fpsave(x86) */
 
 int (*_pcmspecial)(char*, ISAConf*);
@@ -70,10 +70,10 @@ cmpswap386(long *addr, long old, long new)
 {
     int r, s;
 
-    s = splhi();
+    s = arch_splhi();
     if(r = (*addr == old))
         *addr = new;
-    splx(s);
+    arch_splx(s);
     return r;
 }
 
@@ -98,7 +98,7 @@ int doi8253set = 1;
  *  set next timer interrupt
  */
 void
-timerset(Tval x)
+arch_timerset(Tval x)
 {
     if(doi8253set)
         (*arch->timerset)(x);
@@ -107,7 +107,7 @@ timerset(Tval x)
 
 /*s: function us(x86) */
 ulong
-us(void)
+arch_us(void)
 {
     return fastticks2us((*arch->fastclock)(nil));
 }

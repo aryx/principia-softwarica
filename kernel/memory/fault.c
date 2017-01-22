@@ -26,7 +26,7 @@ fault(virt_addr addr, bool read)
 
     sps = up->psstate;
     up->psstate = "Fault";
-    spllo();
+    arch_spllo();
 
     cpu->pfault++;
     for(;;) {
@@ -198,7 +198,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     qunlock(&s->lk);
 
     if(doputmmu)
-        putmmu(addr, mmupte, *pte);
+        arch_putmmu(addr, mmupte, *pte);
 
     return 0; // OK
 }
@@ -209,7 +209,7 @@ void
 pio(Segment *s, virt_addr addr, ulong soff, PageOrSwap **p)
 {
     Page *new;
-    KMap *k;
+    Arch_KMap *k;
     Chan *c;
     int n, ask;
     char *kaddr;
@@ -245,13 +245,13 @@ retry:
     qunlock(&s->lk);
 
     new = newpage(false, nil, addr);
-    k = kmap(new);
+    k = arch_kmap(new);
     kaddr = (char*)VA(k);
 
     while(waserror()) {
         if(strcmp(up->errstr, Eintr) == 0)
             continue;
-        kunmap(k);
+        arch_kunmap(k);
         putpage(new);
         faulterror(Eioload, c, false);
     }
@@ -265,7 +265,7 @@ retry:
         memset(kaddr+ask, 0, BY2PG-ask);
 
     poperror();
-    kunmap(k);
+    arch_kunmap(k);
     qlock(&s->lk);
 
     if(loadrec == nil) {  /* This is demand load */
@@ -332,7 +332,7 @@ okaddr(virt_addr addr, ulong len, bool write)
             }
         }
     }
-    pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, userpc());
+    pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, arch_userpc());
     return false;
 }
 /*e: function okaddr */
@@ -431,7 +431,7 @@ checkpages(void)
             pg = p->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
             if(pg == nil || pagedout(pg))
                 continue;
-            checkmmu(addr, pg->pa);
+            arch_checkmmu(addr, pg->pa);
             checked++;
         }
         qunlock(&s->lk);

@@ -10,7 +10,7 @@
 
 /*s: function procsetup(x86) */
 void
-procsetup(Proc* p)
+arch_procsetup(Proc* p)
 {
   /*s: [[procsetup()]] fp setup(x86) */
   /*
@@ -27,7 +27,7 @@ procsetup(Proc* p)
  *  Save the cpu dependent part of the process state.
  */
 void
-procsave(Proc *p)
+arch_procsave(Proc *p)
 {
     /*s: [[procsave()]] cycles adjustments(x86) */
         uvlong t;
@@ -70,7 +70,7 @@ procsave(Proc *p)
 
 /*s: function procrestore(x86) */
 void
-procrestore(Proc *p)
+arch_procrestore(Proc *p)
 {
     uvlong t;
     if(p->kp)
@@ -99,12 +99,12 @@ fpsavealloc(void)
  */
 
 void
-fpssesave(ArchFPsave *fps)
+fpssesave(Arch_FPsave *fps)
 {
-    ArchFPsave *afps;
+    Arch_FPsave *afps;
 
     fps->magic = 0x1234;
-    afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
+    afps = (Arch_FPsave *)ROUND(((uintptr)fps), FPalign);
     fpssesave0(afps);
     if (fps != afps)  /* not aligned? shuffle down from aligned buffer */
         memmove(fps, afps, sizeof(FPssestate));
@@ -115,12 +115,12 @@ fpssesave(ArchFPsave *fps)
 
 /*s: function fpsserestore(x86) */
 void
-fpsserestore(ArchFPsave *fps)
+fpsserestore(Arch_FPsave *fps)
 {
-    ArchFPsave *afps;
+    Arch_FPsave *afps;
 
     fps->magic = 0x4321;
-    afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
+    afps = (Arch_FPsave *)ROUND(((uintptr)fps), FPalign);
     if (fps != afps) {
         afps = cpu->fpsavalign;
         memmove(afps, fps, sizeof(FPssestate)); /* make aligned copy */
@@ -142,7 +142,7 @@ static int idle_if_nproc = 0;
  *  an interrupt will get us going again.
  */
 void
-idlehands(void)
+arch_idlehands(void)
 {
     /*
      * we used to halt only on single-core setups. halting in an SMP system 

@@ -157,7 +157,7 @@ wdogpause(void)
 {
     int turndogoff;
 
-    turndogoff = watchdogon && cpu->cpuno == 0 && !islo();
+    turndogoff = watchdogon && cpu->cpuno == 0 && !arch_islo();
     if (turndogoff) {
         watchdog->disable();
         watchdogon = 0;
@@ -269,7 +269,7 @@ i8253timerset(uvlong next)
     period = MaxPeriod;
     if(next != 0){
         want = next>>Tickshift;
-        now = i8253.ticks;  /* assuming whomever called us just did fastticks() */
+        now = i8253.ticks;  /* assuming whomever called us just did arch_fastticks() */
 
         period = want - now;
         if(period < MinPeriod)
@@ -360,7 +360,7 @@ i8253_delay(int millisecs)
     if (millisecs > 10*1000)
         iprint("delay(%d) from %#p\n", millisecs,
             getcallerpc(&millisecs));
-    if (watchdogon && cpu->cpuno == 0 && !islo())
+    if (watchdogon && cpu->cpuno == 0 && !arch_islo())
         for (; millisecs > Wdogms; millisecs -= Wdogms) {
             delay(Wdogms);
             watchdog->restart();
@@ -376,7 +376,7 @@ i8253_delay(int millisecs)
 void
 i8253_microdelay(int microsecs)
 {
-    if (watchdogon && cpu->cpuno == 0 && !islo())
+    if (watchdogon && cpu->cpuno == 0 && !arch_islo())
         for (; microsecs > Wdogms*1000; microsecs -= Wdogms*1000) {
             delay(Wdogms);
             watchdog->restart();
@@ -395,7 +395,7 @@ i8253_microdelay(int microsecs)
  *  doesn't have to count over a second.
  */
 ulong
-perfticks(void)
+arch_perfticks(void)
 {
     uvlong x;
 

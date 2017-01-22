@@ -96,11 +96,11 @@ static void rebalance(void);
 void
 proc_error(char *err)
 {
-    spllo();
+    arch_spllo();
 
     assert(up->nerrlab < NERR);
     kstrcpy(up->errstr, err, ERRMAX);
-    setlabel(&up->errlab[NERR-1]);
+    arch_setlabel(&up->errlab[NERR-1]);
     nexterror();
 }
 /*e: function error */
@@ -110,7 +110,7 @@ proc_error(char *err)
 void
 proc_nexterror(void)
 {
-    gotolabel(&up->errlab[--up->nerrlab]);
+    arch_gotolabel(&up->errlab[--up->nerrlab]);
 }
 /*e: function nexterror */
 
@@ -132,14 +132,14 @@ exhausted(char *resource)
 
 /*s: function schedinit */
 /*
- * Always splhi()'ed.
+ * Always arch_splhi()'ed.
  */
 void
 schedinit(void)     /* never returns */
 {
     Edf *e;
 
-    setlabel(&cpu->sched);
+    arch_setlabel(&cpu->sched);
 
     if(up) {
         /*s: [[schedinit()]] optional real-time [[edfrecord()]] */
@@ -167,7 +167,7 @@ schedinit(void)     /* never returns */
              *  procalloc
              *  palloc
              */
-            mmurelease(up);
+            arch_mmurelease(up);
 
             up->qnext = procalloc.free;
             procalloc.free = up;
@@ -231,23 +231,23 @@ sched(void)
             }
         up->delaysched = 0;
         /*e: [[sched()]] if complex condition increment delaysched and return */
-        splhi(); // schedinit requires this
+        arch_splhi(); // schedinit requires this
         cpu->cs++;
 
-        procsave(up);
-        if(setlabel(&up->sched)){
+        arch_procsave(up);
+        if(arch_setlabel(&up->sched)){
             //
             // here when the process has been scheduled back
-            // from a gotolabel(up->sched) by another process, see below
+            // from a arch_gotolabel(up->sched) by another process, see below
             //
-            procrestore(up);
-            spllo();
+            arch_procrestore(up);
+            arch_spllo();
             return;
         }else{
             //
             // here to go to schedinit() (which will call sched() back)
             //
-            gotolabel(&cpu->sched); // goto schedinit()
+            arch_gotolabel(&cpu->sched); // goto schedinit()
             panic("sched: should never reach this point");
         }
     }
@@ -272,8 +272,8 @@ sched(void)
     up->state = Running;
     up->cpu = CPUS(cpu->cpuno);
 
-    mmuswitch(up);
-    gotolabel(&up->sched);
+    arch_mmuswitch(up);
+    arch_gotolabel(&up->sched);
 }
 /*e: function sched */
 
@@ -329,7 +329,7 @@ preempt(void)
               cpu->readied = nil;   /* avoid cooperative scheduling */
               up->preempted = true;
               sched();
-              splhi(); // still in interrupt context
+              arch_splhi(); // still in interrupt context
               up->preempted = false;
           }
     return;
@@ -476,7 +476,7 @@ queueproc(Schedq *rq, Proc *p)
 
 /*s: function dequeueproc */
 /*
- *  try to remove a process from a scheduling queue (called splhi)
+ *  try to remove a process from a scheduling queue (called arch_splhi)
  */
 // tp should belong to the queue
 Proc*
@@ -540,10 +540,10 @@ proc_ready(Proc *p)
     Schedq *rq;
     void (*pt)(Proc*, int, vlong);
 
-    s = splhi();
+    s = arch_splhi();
     /*s: [[ready()]] optional [[edfready()]] for real-time scheduling */
         if(edfready(p)){
-            splx(s);
+            arch_splx(s);
             return;
         }
     /*e: [[ready()]] optional [[edfready()]] for real-time scheduling */
@@ -562,7 +562,7 @@ proc_ready(Proc *p)
         if(pt)
             pt(p, SReady, 0);
     /*e: [[ready()]] hook proctrace */
-    splx(s);
+    arch_splx(s);
 }
 /*e: function ready */
 
@@ -615,11 +615,11 @@ another:
         updatecpu(p);
         npri = reprioritize(p);
         if(npri != pri){
-            x = splhi();
+            x = arch_splhi();
             p = dequeueproc(rq, p);
             if(p)
                 queueproc(&runq[npri], p);
-            splx(x);
+            arch_splx(x);
             goto another;
         }
     }
@@ -639,7 +639,7 @@ runproc(void)
     int i;
     void (*pt)(Proc*, int, vlong);
 
-    start = perfticks();
+    start = arch_perfticks();
 
     /* cooperative scheduling until the clock ticks */
     if((p=cpu->readied) && p->cpu==nil && p->state==Ready && 
@@ -661,7 +661,7 @@ loop:
      *  or one that hasn't moved in a while (load balancing). Every
      *  time around the loop affinity goes down.
      */
-    spllo();
+    arch_spllo();
     for(i = 0;; i++){
         /*
          *  find the highest priority target process that this
@@ -677,16 +677,16 @@ loop:
         }
         // nothing found
         /* waste time or halt the CPU */
-        idlehands();
+        arch_idlehands();
 
         /* remember how much time we're here */
-        now = perfticks();
+        now = arch_perfticks();
         cpu->perf.inidle += now-start;
         start = now;
     }
 
 found:
-    splhi();
+    arch_splhi();
     p = dequeueproc(rq, p);
     if(p == nil)
         goto loop;
@@ -715,7 +715,7 @@ canpage(Proc *p)
 {
     bool ok = false;
 
-    splhi();
+    arch_splhi();
     lock(runq);
     /* Only reliable way to see if we are Running */
     if(p->cpu == nil) {
@@ -723,7 +723,7 @@ canpage(Proc *p)
         ok = true;
     }
     unlock(runq);
-    spllo();
+    arch_spllo();
 
     return ok;
 }
@@ -930,7 +930,7 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
     int s;
     void (*pt)(Proc*, int, vlong);
 
-    s = splhi();
+    s = arch_splhi();
 
     if(up->nlocks.ref)
         print("process %lud sleeps with %lud locks held, last lock %#p locked at pc %#lux, sleep called from %#p\n",
@@ -978,27 +978,27 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
         /* statistics */
         cpu->cs++;
 
-        procsave(up);
-        if(setlabel(&up->sched)) {
+        arch_procsave(up);
+        if(arch_setlabel(&up->sched)) {
             /*
              *  here when the process is awakened
              */
-            procrestore(up);
-            spllo();
+            arch_procrestore(up);
+            arch_spllo();
         } else {
             /*
              *  here to go to sleep (i.e. stop Running)
              */
             unlock(&up->rlock);
             unlock(r);
-            gotolabel(&cpu->sched);
+            arch_gotolabel(&cpu->sched);
             panic("sleep: should never reach this point");
         }
     }
 
     if(up->notepending) {
         up->notepending = false;
-        splx(s);
+        arch_splx(s);
         /*s: [[sleep()]] forceclosefgrp */
         if(up->procctl == Proc_exitme && up->closingfgrp)
             forceclosefgrp();
@@ -1006,7 +1006,7 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
         error(Eintr);
     }
 
-    splx(s);
+    arch_splx(s);
 }
 /*e: function sleep */
 
@@ -1074,7 +1074,7 @@ proc_wakeup(Rendez *r)
     Proc *p;
     int s;
 
-    s = splhi();
+    s = arch_splhi();
     lock(r);
     p = r->p;
 
@@ -1090,7 +1090,7 @@ proc_wakeup(Rendez *r)
         unlock(&p->rlock);
     }
     unlock(r);
-    splx(s);
+    arch_splx(s);
     return p;
 }
 /*e: function wakeup */
@@ -1128,7 +1128,7 @@ proc_postnote(Proc *p, int dolock, char *n, int flag)
 
     /* this loop is to avoid lock ordering problems. */
     for(;;){
-        s = splhi();
+        s = arch_splhi();
         lock(&p->rlock);
         r = p->r;
 
@@ -1149,11 +1149,11 @@ proc_postnote(Proc *p, int dolock, char *n, int flag)
 
         /* give other process time to get out of critical section and try again */
         unlock(&p->rlock);
-        splx(s);
+        arch_splx(s);
         sched();
     }
     unlock(&p->rlock);
-    splx(s);
+    arch_splx(s);
 
     if(p->state != Rendezvous)
         return ret;
@@ -1416,7 +1416,7 @@ proc_pexit(char *exitstr, bool freemem)
         edfstop(up);
     /*e: [[pexit()]] optional [[edfstop()]] for real-time scheduling */
     up->state = Moribund;
-    // will gotolabel() to schedinit() which has special code around Moribund
+    // will arch_gotolabel() to schedinit() which has special code around Moribund
     sched(); 
     panic("pexit: should never reach this point"); 
 }
@@ -1500,7 +1500,7 @@ proc_dumpaproc(Proc *p)
     if(s == nil)
         s = statename[p->state];
     print("%3lud:%10s pc %8lux dbgpc %8lux  %8s (%s) ut %ld st %ld bss %lux qpc %lux nl %lud nd %lud lpc %lux pri %lud\n",
-        p->pid, p->text, p->pc, dbgpc(p),  s, statename[p->state],
+        p->pid, p->text, p->pc, arch_dbgpc(p),  s, statename[p->state],
         p->time[TUser], p->time[TSys], bss, p->qpc, p->nlocks.ref, p->delaysched, p->lastlock ? p->lastlock->pc : 0, p->priority);
 }
 /*e: function dumpaproc */
@@ -1624,7 +1624,7 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     procpriority(p, PriKproc, false);
 
-    kprocchild(p, func, arg);
+    arch_kprocchild(p, func, arg);
 
     kstrdup(&p->user, eve);
     kstrdup(&p->text, name);
@@ -1643,7 +1643,7 @@ kproc(char *name, void (*func)(void *), void *arg)
 
 /*s: function procctl */
 /*
- *  called splhi() by notify().  See comment in notify for the
+ *  called arch_splhi() by notify().  See comment in notify for the
  *  reasoning.
  */
 void
@@ -1663,7 +1663,7 @@ procctl(Proc *p)
         p->procctl = Proc_nothing;
         oldstate = p->psstate;
         p->psstate = "Stopped";
-        s = spllo();
+        s = arch_spllo();
         /*s: [[procctl()]] wakeup waiting debugger */
                 /* free a waiting debugger */
                 qlock(&p->debug);
@@ -1673,21 +1673,21 @@ procctl(Proc *p)
                 }
                 qunlock(&p->debug);
         /*e: [[procctl()]] wakeup waiting debugger */
-        splhi();
+        arch_splhi();
         p->state = Stopped;
         sched();
         // here when something (debugger, strace, user) ready(p) back
         p->psstate = oldstate;
-        splx(s);
+        arch_splx(s);
         return;
     /*s: [[procctl()]] Proc_exitbig case */
         case Proc_exitbig:
-            spllo();
+            arch_spllo();
             pexit("Killed: Insufficient physical memory", true);
     /*e: [[procctl()]] Proc_exitbig case */
     /*s: [[procctl()]] Proc_exitme case */
         case Proc_exitme:
-            spllo();        /* pexit has locks in it */
+            arch_spllo();        /* pexit has locks in it */
             pexit("Killed", true);
     /*e: [[procctl()]] Proc_exitme case */
     }
@@ -1776,7 +1776,7 @@ accounttime(void)
     }
 
     /* calculate decaying duty cycles */
-    n = perfticks();
+    n = arch_perfticks();
     per = n - cpu->perf.last;
     cpu->perf.last = n;
     per = (cpu->perf.period*(HZ-1) + per)/HZ;

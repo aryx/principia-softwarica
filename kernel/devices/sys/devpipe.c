@@ -386,7 +386,7 @@ pipewrite(Chan *c, void *va, long n, vlong)
 {
     Pipe *p;
 
-    if(!islo())
+    if(!arch_islo())
         print("pipewrite hi %#p\n", getcallerpc(&c));
     if(waserror()) {
         /* avoid notes when pipe is a mounted queue */

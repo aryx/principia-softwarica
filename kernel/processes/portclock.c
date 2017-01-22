@@ -42,7 +42,7 @@ tadd(Timers *tt, Timer *nt)
     case Trelative:
         if(nt->tns <= 0)
             nt->tns = 1;
-        nt->twhen = fastticks(nil) + ns2fastticks(nt->tns);
+        nt->twhen = arch_fastticks(nil) + ns2fastticks(nt->tns);
         break;
     case Tperiodic:
         assert(nt->tns >= 100000);  /* At least 100 Âµs period */
@@ -55,7 +55,7 @@ tadd(Timers *tt, Timer *nt)
             if (t)
                 nt->twhen = t->twhen;
             else
-                nt->twhen = fastticks(nil);
+                nt->twhen = arch_fastticks(nil);
         }
         nt->twhen += ns2fastticks(nt->tns);
         break;
@@ -122,7 +122,7 @@ timeradd(Timer *nt)
     ilock(tt);
     when = tadd(tt, nt);
     if(when)
-        timerset(when);
+        arch_timerset(when);
     iunlock(tt);
     iunlock(nt);
 }
@@ -140,7 +140,7 @@ timerdel(Timer *dt)
         ilock(tt);
         when = tdel(dt);
         if(when && tt == &timers[cpu->cpuno])
-            timerset(tt->head->twhen);
+            arch_timerset(tt->head->twhen);
         iunlock(tt);
     }
     iunlock(dt);
@@ -157,7 +157,7 @@ hzclock(Ureg *ur)
 
     if(cpu->flushmmu){
         if(up)
-            flushmmu();
+            arch_flushmmu();
         cpu->flushmmu = false;
     }
 
@@ -195,9 +195,9 @@ timerintr(Ureg *u, Tval)
     intrcount[cpu->cpuno]++;
     callhzclock = 0;
     tt = &timers[cpu->cpuno];
-    now = fastticks(nil);
+    now = arch_fastticks(nil);
     if(now == 0)
-        panic("timerintr: zero fastticks()");
+        panic("timerintr: zero arch_fastticks()");
     ilock(tt);
     count = Maxtimerloops;
     while((t = tt->head) != nil){
@@ -209,7 +209,7 @@ timerintr(Ureg *u, Tval)
          */
         when = t->twhen;
         if(when > now){
-            timerset(when);
+            arch_timerset(when);
             iunlock(tt);
             if(callhzclock)
                 hzclock(u);
@@ -288,7 +288,7 @@ addclock0link(void (*f)(void), Tms ms)
     ilock(&timers[0]);
     when = tadd(&timers[0], nt);
     if(when)
-        timerset(when);
+        arch_timerset(when);
     iunlock(&timers[0]);
     return nt;
 }

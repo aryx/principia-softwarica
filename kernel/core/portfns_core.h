@@ -73,7 +73,7 @@ int devcons_iprint(char*, ...);
 #define exit          main_exit
 #define isaconfig     main_isaconfig
 //#define coherence     nop
-#define fastticks     devarch_fastticks
+#define arch_fastticks     devarch_fastticks
 #define cclose        chan_cclose
 #define proctab       proc_proctab
 #define postnote      proc_postnote

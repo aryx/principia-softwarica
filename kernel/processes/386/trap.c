@@ -333,7 +333,7 @@ intrtime(Cpu*, int vno)
     ulong diff;
     ulong x;
 
-    x = perfticks();
+    x = arch_perfticks();
     diff = x - cpu->perf.intrts;
     cpu->perf.intrts = x;
 
@@ -392,7 +392,7 @@ void trap(Ureg* ureg)
         panic("trap %lud: not ready", ureg->trap);
     }
 
-    cpu->perf.intrts = perfticks();
+    cpu->perf.intrts = arch_perfticks();
 
     user = (ureg->cs & 0xFFFF) == UESEL;
 
@@ -435,7 +435,7 @@ void trap(Ureg* ureg)
         }
     } // no Vctl?
     else if(vno < nelem(excname) && user){
-        spllo();
+        arch_spllo();
         snprint(buf, sizeof buf, "sys: trap: %s", excname[vno]);
         postnote(up, 1, buf, NDebug);
     }
@@ -506,13 +506,13 @@ void trap(Ureg* ureg)
             panic("%s", excname[vno]);
         panic("unknown trap/intr: %d", vno);
     }
-    splhi(); // possible spllo() done above
+    arch_splhi(); // possible arch_spllo() done above
 
     /*s: [[trap()]] if delaysched(x86) */
     /* delaysched set because we held a lock or because our quantum ended */
     if(up && up->delaysched && clockintr){
         sched();
-        splhi();
+        arch_splhi();
     }
     /*e: [[trap()]] if delaysched(x86) */
 
@@ -584,7 +584,7 @@ dumpregs(Ureg* ureg)
  * Used by debugging interface rdb.
  */
 void
-callwithureg(void (*fn)(Ureg*))
+arch_callwithureg(void (*fn)(Ureg*))
 {
     Ureg ureg;
     ureg.pc = getcallerpc(&fn);
@@ -663,7 +663,7 @@ _dumpstack(Ureg *ureg)
 void
 trap_dumpstack(void)
 {
-    callwithureg(_dumpstack);
+    arch_callwithureg(_dumpstack);
 }
 /*e: function dumpstack(x86) */
 
@@ -813,7 +813,7 @@ void syscall(Ureg* ureg)
             up->fpstate = FPinactive;
         }
     /*e: [[syscall()]] fp adjustments if fork(x86) */
-    spllo();
+    arch_spllo();
 
     up->nerrlab = 0;
     ret = -1;
@@ -867,9 +867,9 @@ void syscall(Ureg* ureg)
             stopns = todget(nil);
             up->procctl = Proc_stopme;
             sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
-            s = splhi();
+            s = arch_splhi();
             procctl(up); // again, will call sched() and wakeup tracer process
-            splx(s);
+            arch_splx(s);
             if(up->syscalltrace)
                 free(up->syscalltrace);
             up->syscalltrace = nil;
@@ -885,7 +885,7 @@ void syscall(Ureg* ureg)
     /*e: [[syscall()]] call noted()(x86) */
     /*s: [[syscall()]] call notify()(x86) */
         if(scallnr!=RFORK && (up->procctl || up->nnote)){
-            splhi();
+            arch_splhi();
             notify(ureg);
         }
     /*e: [[syscall()]] call notify()(x86) */
@@ -924,7 +924,7 @@ notify(Ureg* ureg)
         up->fpstate |= FPillegal;
     /*e: [[notify()]] fp adjustments(x86) */
 
-    s = spllo();
+    s = arch_spllo();
     qlock(&up->debug);
     up->notepending = false;
     n = &up->note[0];
@@ -945,7 +945,7 @@ notify(Ureg* ureg)
 
     if(up->notified){
         qunlock(&up->debug);
-        splhi();
+        arch_splhi();
         return 0;
     }
 
@@ -981,7 +981,7 @@ notify(Ureg* ureg)
     memmove(&up->note[0], &up->note[1], up->nnote*sizeof(Note));
 
     qunlock(&up->debug);
-    splx(s);
+    arch_splx(s);
     return 1;
 }
 /*e: function notify(x86) */
@@ -1059,7 +1059,7 @@ noted(Ureg* ureg, ulong arg0)
         }
         qunlock(&up->debug);
         sp = oureg-4*BY2WD-ERRMAX;
-        splhi();
+        arch_splhi();
         ureg->sp = sp;
         ((ulong*)sp)[1] = oureg;    /* arg 1 0(FP) is ureg* */
         ((ulong*)sp)[0] = 0;        /* arg 0 is pc */
@@ -1110,13 +1110,13 @@ validalign(uintptr addr, unsigned align)
 
 /*s: function execregs(x86) */
 long
-execregs(ulong entry, ulong ssize, ulong nargs)
+arch_execregs(ulong entry, ulong ssize, ulong nargs)
 {
     ulong *sp;
     Ureg *ureg;
 
     /*s: [[execregs()]] fp adjustments(x86) */
-        //procsetup(up), redundant?
+        //arch_procsetup(up), redundant?
         up->fpstate = FPinit;
         fpoff();
     /*e: [[execregs()]] fp adjustments(x86) */
@@ -1140,7 +1140,7 @@ execregs(ulong entry, ulong ssize, ulong nargs)
  *  return the userpc the last exception happened at
  */
 ulong
-userpc(void)
+arch_userpc(void)
 {
     Ureg *ureg;
 
@@ -1154,7 +1154,7 @@ userpc(void)
  * to write from devproc and then restore the saved values before returning.
  */
 void
-setregisters(Ureg* ureg, char* pureg, char* uva, int n)
+arch_setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 {
     ulong cs, ds, es, flags, fs, gs, ss;
 
@@ -1180,7 +1180,7 @@ setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 static void
 linkproc(void)
 {
-    spllo();
+    arch_spllo();
     up->kpfun(up->kparg);
     // should never reach this place?? kernel processes are supposed
     // to run forever??
@@ -1190,13 +1190,13 @@ linkproc(void)
 
 /*s: function kprocchild(x86) */
 void
-kprocchild(Proc* p, void (*func)(void*), void* arg)
+arch_kprocchild(Proc* p, void (*func)(void*), void* arg)
 {
     p->kpfun = func;
     p->kparg = arg;
 
     /*
-     * gotolabel() needs a word on the stack in
+     * arch_gotolabel() needs a word on the stack in
      * which to place the return PC used to jump
      * to linkproc().
      */
@@ -1207,7 +1207,7 @@ kprocchild(Proc* p, void (*func)(void*), void* arg)
 
 /*s: function forkchild(x86) */
 void
-forkchild(Proc *p, Ureg *ureg)
+arch_forkchild(Proc *p, Ureg *ureg)
 {
     Ureg *cureg;
 
@@ -1235,7 +1235,7 @@ forkchild(Proc *p, Ureg *ureg)
  * a sleeping process
  */
 void
-setkernur(Ureg* ureg, Proc* p)
+arch_setkernur(Ureg* ureg, Proc* p)
 {
     ureg->pc = p->sched.pc;
     ureg->sp = p->sched.sp+4;
@@ -1244,7 +1244,7 @@ setkernur(Ureg* ureg, Proc* p)
 
 /*s: function dbgpc(x86) */
 ulong
-dbgpc(Proc *p)
+arch_dbgpc(Proc *p)
 {
     Ureg *ureg;
 

@@ -931,7 +931,7 @@ mpshutdown(void)
         return;
     print("apshutdown: active = %#8.8ux\n", active.cpus);
     delay(1000);
-    splhi();
+    arch_splhi();
     arch->resetothers();
 
     pcireset();

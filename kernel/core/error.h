@@ -52,4 +52,6 @@ extern char Echange[];    /* media or partition has changed */
 extern char Edetach[];    /* device is detached */
 extern char Enotconf[];   /* endpoint not configured */
 extern char Estalled[];   /* endpoint stalled */
+extern char Esbadstat[];  /* invalid directory entry received from server */
+extern char Enoversion[]; /* version not established for mount channel */
 /*e: error.h */

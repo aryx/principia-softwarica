@@ -4,10 +4,9 @@
 // Mutual exclusion
 //*****************************************************************************
 
-// tas < Lock < QLock|RWLock
+// arch_tas < Lock < QLock|RWLock
 
-// used to be in 386/ but the fields were used from port/ so must be portable!
-// Lock.sr was u32int on bcm/. Matters?
+// used to be in <arch> but the fields were used from port/ so must be portable!
 /*s: struct Lock */
 struct Lock
 {

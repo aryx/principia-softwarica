@@ -173,7 +173,7 @@ vgaread(Chan* c, void* a, long n, vlong off)
             return 0;
         if(offset+n >= 0x100000)
             n = 0x100000 - offset;
-        memmove(a, (uchar*)kaddr(0)+offset, n);
+        memmove(a, (uchar*)arch_kaddr(0)+offset, n); // why not KADDR()?
         return n;
 
     case Qvgactl:

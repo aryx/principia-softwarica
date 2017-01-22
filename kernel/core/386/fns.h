@@ -63,27 +63,27 @@ void	validalign(uintptr, unsigned);
 //@Scheck: Assembly
 void  fpclear(void);
 //@Scheck: Assembly
-void  fpenv(ArchFPsave*);
+void  fpenv(Arch_FPsave*);
 //@Scheck: Assembly
 void  fpinit(void);
 //@Scheck: Assembly
 void  fpoff(void);
 //@Scheck: Assembly
 void  fpon(void);
-void  (*fprestore)(ArchFPsave*);
-void  (*fpsave)(ArchFPsave*);
+void  (*fprestore)(Arch_FPsave*);
+void  (*fpsave)(Arch_FPsave*);
 void  fpsavealloc(void);
-void  fpsserestore(ArchFPsave*);
+void  fpsserestore(Arch_FPsave*);
 //@Scheck: Assembly
-void  fpsserestore0(ArchFPsave*);
-void  fpssesave(ArchFPsave*);
+void  fpsserestore0(Arch_FPsave*);
+void  fpssesave(Arch_FPsave*);
 //@Scheck: Assembly
-void  fpssesave0(ArchFPsave*);
+void  fpssesave0(Arch_FPsave*);
 //ulong fpstatus(void);
 //@Scheck: Assembly
-void  fpx87restore(ArchFPsave*);
+void  fpx87restore(Arch_FPsave*);
 //@Scheck: Assembly
-void  fpx87save(ArchFPsave*);
+void  fpx87save(Arch_FPsave*);
 //@Scheck: Assembly
 ulong getcr0(void);
 //@Scheck: Assembly
@@ -250,10 +250,10 @@ void  wrmsr(int, vlong);
 
 /*s: fns.h macros(x86) */
 /*s: function KADDR(x86) */
-#define KADDR(pa)  kaddr(pa)
+#define KADDR(pa)  arch_kaddr(pa)
 /*e: function KADDR(x86) */
 /*s: function PADDR(x86) */
-#define PADDR(ka)  paddr((kern_addr3)(ka))
+#define PADDR(ka)  arch_paddr((kern_addr3)(ka))
 /*e: function PADDR(x86) */
 
 // used in devaudio, maybe could remove it

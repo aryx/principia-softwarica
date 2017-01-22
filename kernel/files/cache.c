@@ -252,7 +252,7 @@ cdev(Mntcache *m, Chan *c)
 int
 cread(Chan *c, uchar *buf, int len, vlong off)
 {
-    KMap *k;
+    Arch_KMap *k;
     Page *p;
     Mntcache *m;
     Extent *e, **t;
@@ -300,9 +300,9 @@ cread(Chan *c, uchar *buf, int len, vlong off)
         if(l > e->len-o)
             l = e->len-o;
 
-        k = kmap(p);
+        k = arch_kmap(p);
         if(waserror()) {
-            kunmap(k);
+            arch_kunmap(k);
             putpage(p);
             qunlock(m);
             nexterror();
@@ -311,7 +311,7 @@ cread(Chan *c, uchar *buf, int len, vlong off)
         memmove(buf, (uchar*)VA(k) + o, l);
 
         poperror();
-        kunmap(k);
+        arch_kunmap(k);
 
         putpage(p);
 
@@ -334,7 +334,7 @@ cchain(uchar *buf, ulong offset, int len, Extent **tail)
 {
     int l;
     Page *p;
-    KMap *k;
+    Arch_KMap *k;
     Extent *e, *start, **t;
 
     start = 0;
@@ -372,14 +372,14 @@ cchain(uchar *buf, ulong offset, int len, Extent **tail)
         qunlock(&cache);
 
         p->daddr = e->bid;
-        k = kmap(p);
+        k = arch_kmap(p);
         if(waserror()) {        /* buf may be virtual */
-            kunmap(k);
+            arch_kunmap(k);
             nexterror();
         }
         memmove((void*)VA(k), buf, l);
         poperror();
-        kunmap(k);
+        arch_kunmap(k);
 
         cachepage(p, &fscache);
         putpage(p);
@@ -400,22 +400,22 @@ int
 cpgmove(Extent *e, uchar *buf, int boff, int len)
 {
     Page *p;
-    KMap *k;
+    Arch_KMap *k;
 
     p = cpage(e);
     if(p == 0)
         return 0;
 
-    k = kmap(p);
+    k = arch_kmap(p);
     if(waserror()) {        /* Since buf may be virtual */
-        kunmap(k);
+        arch_kunmap(k);
         nexterror();
     }
 
     memmove((uchar*)VA(k)+boff, buf, len);
 
     poperror();
-    kunmap(k);
+    arch_kunmap(k);
     putpage(p);
 
     return 1;

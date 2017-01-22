@@ -109,8 +109,8 @@ talkrdb(Ureg *ureg)
 void
 rdb(void)
 {
-    splhi();
+    arch_splhi();
     iprint("rdb...");
-    callwithureg(talkrdb);
+    arch_callwithureg(talkrdb);
 }
 /*e: rdb.c */

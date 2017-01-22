@@ -171,7 +171,7 @@ rebootcmd(int argc, char *argv[])
     ksetenv("bootfile", argv[0], 1);
     setbootcmd(argc-1, argv+1);
 
-    reboot((void*)entry, p, size);
+    arch_reboot((void*)entry, p, size);
 
     panic("return from reboot!");
 }

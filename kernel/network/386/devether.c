@@ -262,9 +262,9 @@ etheroq(Ether* ether, Block* bp)
     len = BLEN(bp);
     loopback = memcmp(pkt->d, ether->ea, sizeof(pkt->d)) == 0;
     if(loopback || memcmp(pkt->d, ether->bcast, sizeof(pkt->d)) == 0 || ether->prom){
-        s = splhi();
+        s = arch_splhi();
         etheriq(ether, bp, 0);
-        splx(s);
+        arch_splx(s);
     }
 
     if(!loopback){

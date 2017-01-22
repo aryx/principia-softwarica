@@ -124,7 +124,7 @@ cgascreenputc(char c)
 static void
 cgascreenputs(char* s, int n)
 {
-    if(!islo()){
+    if(!arch_islo()){
         /*
          * Don't deadlock trying to
          * print in an interrupt.
