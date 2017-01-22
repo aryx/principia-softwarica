@@ -2,11 +2,11 @@
 
 // devuart.c
 int   uartstageoutput(Uart*);
-void    uartkick(void*);
+void  uartkick(void*);
 int   uartgetc(void);
 //void    uartputc(int);
-void    uartputs(char*, int);
-void    uartrecv(Uart*, char);
+void  uartputs(char*, int);
+void  uartrecv(Uart*, char);
 int   uartctl(Uart*, char*);
 //void    uartmouse(Uart*, int (*)(Queue*, int), int);
 //void    uartsetmouseputc(Uart*, int (*)(Queue*, int));
