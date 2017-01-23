@@ -29,7 +29,4 @@ typedef struct Arch_KMap   Arch_KMap;
 #define VA(k)   ((virt_addr3)(k))
 /*e: macro VA(x86) */
 
-Arch_KMap* arch_kmap(Page*);
-void  arch_kunmap(Arch_KMap*);
-
 /*e: dat_memory.h */

@@ -1,6 +1,6 @@
 /*s: portfns_init.h */
 
-//in init/<arch>/main.c (but used in port)
+//in init/<arch>/main.c (but called from syswrite)
 void    arch_reboot(kern_addr3, kern_addr3, ulong);
 
 // rebootcmd.c

@@ -109,5 +109,8 @@ struct Uart
 
 extern  Uart* consuart;
 
+extern Dev uartdevtab;
+extern PhysUart* physuart[];
+
 //void (*lprint)(char *, int);
 /*e: portdat_buses.h */

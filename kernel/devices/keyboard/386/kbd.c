@@ -184,7 +184,7 @@ arch_setleds(Kbscan *kbscan)
 {
     int leds;
 
-    if(nokbd || kbscan != &kbscans[Int])
+    if(nokbd || kbscan != &kbscans[KbInt])
         return;
     leds = 0;
     if(kbscan->num)
@@ -239,12 +239,12 @@ i8042intr(Ureg*, void*)
          */
         if(s & Minready){
             if(auxputc != nil)
-                auxputc(c, kbscans[Int].shift);
+                auxputc(c, kbscans[KbInt].shift);
             return;
         }
     /*e: [[i8042intr()]] aux port handling(x86) */
     // !!!
-    kbdputsc(c, Int);
+    kbdputsc(c, KbInt);
 }
 /*e: interrupt callback i8042intr(x86) */
 
@@ -348,8 +348,8 @@ kbdenable(void)
 
     intrenable(IrqKBD, i8042intr, 0, BUSUNKNOWN, "kbd");
 
-    kbscans[Int].num = false;
-    arch_setleds(&kbscans[Int]);
+    kbscans[KbInt].num = false;
+    arch_setleds(&kbscans[KbInt]);
 }
 /*e: function kbdenable(x86) */
 

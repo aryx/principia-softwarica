@@ -129,7 +129,7 @@ void arch_idlehands(void);
 // <arch>/i8253.c (but used in port)
 ulong   arch_perfticks(void);
 
-// <arch>/devarch.c (but used in port)
+// <arch>/arch.c (but used in port)
 void    arch_timerset(Tval);
 ulong   arch_us(void);
 

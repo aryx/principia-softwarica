@@ -7,6 +7,7 @@
 #include "dat.h"
 #include "fns.h"
 /*e: kernel basic includes */
+
 #include    "io.h"
 #include    "../port/netif.h"
 
@@ -16,9 +17,6 @@ enum
     CTLS= 023,
     CTLQ= 021,
 };
-
-extern Dev uartdevtab;
-extern PhysUart* physuart[];
 
 static Uart* uartlist;
 static Uart** uart;
