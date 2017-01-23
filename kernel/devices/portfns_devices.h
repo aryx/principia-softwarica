@@ -39,6 +39,10 @@ extern void arch_setres(int n);
 extern void arch_setintellimouse();
 extern void arch_resetmouse(void);
 
+// keyboard/latin1.c (used by portkbd.c)
+//@Scheck: def currently skipped, see skip_list.txt, because of unicode
+long    latin1(Rune*, int);
+
 // keyboard/portkbd.c
 extern void kbdputsc(byte, int);
 extern int  kbdgetmap(uint, int*, int*, Rune*);
