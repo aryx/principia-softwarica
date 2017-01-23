@@ -394,7 +394,7 @@ void trap(Ureg* ureg)
 
     cpu->perf.intrts = arch_perfticks();
 
-    user = (ureg->cs & 0xFFFF) == UESEL;
+    user = (ureg->cs & 0xFFFF) == UESEL; // TODO: arch_userureg
 
     if(user){
         up->dbgreg = ureg;
@@ -593,6 +593,17 @@ arch_callwithureg(void (*fn)(Ureg*))
 }
 /*e: function callwithureg(x86) */
 
+// was in fns.h before as a macro
+// #define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
+/*s: function userureg(x86) */
+//#define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
+int
+arch_userureg(Ureg* ur)
+{
+  return (((ur)->cs & 0xFFFF) == UESEL);
+}
+/*e: function userureg(x86) */
+
 /*s: function _dumpstack(x86) */
 static void
 _dumpstack(Ureg *ureg)
@@ -765,7 +776,7 @@ void syscall(Ureg* ureg)
     ulong scallnr;
     vlong startns, stopns;
 
-    if((ureg->cs & 0xFFFF) != UESEL)
+    if((ureg->cs & 0xFFFF) != UESEL) // TODO: arch_userureg
         panic("syscall: cs 0x%4.4luX", ureg->cs);
 
     /*s: [[syscall()]] adjust kentry(x86) */

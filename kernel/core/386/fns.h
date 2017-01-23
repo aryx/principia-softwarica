@@ -233,7 +233,6 @@ ulong upaalloc(int, int);
 //void  upafree(ulong, int);
 void  upareserve(ulong, int);
 
-
 //@Scheck: Assembly
 void  vectortable(void);
 void* vmap(ulong, int);
@@ -247,25 +246,21 @@ void  wrmsr(int, vlong);
 
 //int iounused(int start, int end); not used anymore in vga.c
 
-/*s: function userureg(x86) */
-#define arch_userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
-/*e: function userureg(x86) */
-
+/*s: fns.h macros(x86) */
 /*s: function KADDR(x86) */
 #define KADDR(pa)  arch_kaddr(pa)
 /*e: function KADDR(x86) */
-
 /*s: function PADDR(x86) */
 #define PADDR(ka)  arch_paddr((kern_addr3)(ka))
 /*e: function PADDR(x86) */
 
-/*s: fns.h macros(x86) */
 // used in devaudio, maybe could remove it
 #define dcflush(a, b)
+
 #define BIOSSEG(a)  KADDR(((uint)(a))<<4)
+
 #define L16GET(p) (((p)[1]<<8)|(p)[0])
 #define L32GET(p) (((u32int)L16GET((p)+2)<<16)|L16GET(p))
 /*e: fns.h macros(x86) */
-
 /*e: fns.h declarations(x86) */
 /*e: fns.h */

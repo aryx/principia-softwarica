@@ -110,14 +110,15 @@ ulong   l2be(long);
 
 
 // <arch>/trap.c (but used in port)
+int     arch_userureg(Ureg *);
 void    arch_callwithureg(void(*)(Ureg*));
 ulong   arch_dbgpc(Proc*);
+ulong   arch_userpc(void);
 long    arch_execregs(ulong, ulong, ulong);
 void    arch_forkchild(Proc*, Ureg*);
-ulong   arch_userpc(void);
+void    arch_kprocchild(Proc*, void (*)(void*), void*);
 void    arch_setregisters(Ureg*, char*, char*, int);
 void    arch_setkernur(Ureg*, Proc*);
-void    arch_kprocchild(Proc*, void (*)(void*), void*);
 // intrenable(), but mostly used in 386, just in port/devaudio.c
 
 // <arch>/main_processes.c (but used in port)

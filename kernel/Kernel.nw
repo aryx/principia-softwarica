@@ -1545,7 +1545,7 @@ int nconf;
 %old: used to be duplicated in every main.c, now factorized
 
 <<function getconf>>=
-char* getconf(char *name)
+char* getconf2(char *name)
 {
         int i;
         for(i = 0; i < nconf; i++)
@@ -7012,7 +7012,7 @@ void trap(Ureg* ureg)
 
     cpu->perf.intrts = arch_perfticks();
 
-    user = (ureg->cs & 0xFFFF) == UESEL;
+    user = (ureg->cs & 0xFFFF) == UESEL; // TODO: arch_userureg
 
     if(user){
         up->dbgreg = ureg;
@@ -7228,7 +7228,7 @@ void syscall(Ureg* ureg)
     ulong scallnr;
     vlong startns, stopns;
 
-    if((ureg->cs & 0xFFFF) != UESEL)
+    if((ureg->cs & 0xFFFF) != UESEL) // TODO: arch_userureg
         panic("syscall: cs 0x%4.4luX", ureg->cs);
 
     <<[[syscall()]] adjust kentry(x86)>>
@@ -7474,7 +7474,12 @@ Segdesc *gdt;     /* gdt for this processor */
 % why need that?
 
 <<function userureg(x86)>>=
-#define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
+//#define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
+int
+arch_userureg(Ureg* ur)
+{
+  return (((ur)->cs & 0xFFFF) == UESEL);
+}
 @
 % ->cs, see Ureg in x86 section in overview chapter
 %todo: could be used at more places actually
@@ -17838,10 +17843,10 @@ struct Kbscan {
 <<enum kbscan>>=
 /* kbscans indices */
 enum kbscan {
-    Int=    0,          
-    Ext,
+    KbInt=    0,          
+    KbExt,
 
-    Nscans,
+    KbNscans,
 };
 @
 % always used Int actually. Ext is used only by devkbin.c so could simplify code
@@ -17849,7 +17854,7 @@ enum kbscan {
 
 <<global kbscans>>=
 // hash<enum<kbscan>, Kbscan>
-Kbscan kbscans[Nscans]; /* kernel and external scan code state */
+Kbscan kbscans[KbNscans]; /* kernel and external scan code state */
 @
 
 
@@ -17864,8 +17869,8 @@ kbdenable(void)
 
     intrenable(IrqKBD, i8042intr, 0, BUSUNKNOWN, "kbd");
 
-    kbscans[Int].num = false;
-    arch_setleds(&kbscans[Int]);
+    kbscans[KbInt].num = false;
+    arch_setleds(&kbscans[KbInt]);
 }
 @
 % used to have kdbq init here, but better to separate
@@ -17901,7 +17906,7 @@ i8042intr(Ureg*, void*)
 
     <<[[i8042intr()]] aux port handling(x86)>>
     // !!!
-    kbdputsc(c, Int);
+    kbdputsc(c, KbInt);
 }
 @
 
@@ -17921,9 +17926,9 @@ kbdputsc(byte k, int external)
     long c = k; 
 
     if(external)
-        kbscan = &kbscans[Ext];
+        kbscan = &kbscans[KbExt];
     else
-        kbscan = &kbscans[Int];
+        kbscan = &kbscans[KbInt];
 
     <<[[kbdputsc()]] debugging>>
 
@@ -18405,7 +18410,7 @@ arch_setleds(Kbscan *kbscan)
 {
     int leds;
 
-    if(nokbd || kbscan != &kbscans[Int])
+    if(nokbd || kbscan != &kbscans[KbInt])
         return;
     leds = 0;
     if(kbscan->num)
@@ -19331,7 +19336,7 @@ static void (*auxputc)(int, int);
      */
     if(s & Minready){
         if(auxputc != nil)
-            auxputc(c, kbscans[Int].shift);
+            auxputc(c, kbscans[KbInt].shift);
         return;
     }
 @
@@ -26553,7 +26558,7 @@ profclock(Ureg *ur, Timer *)
         return;
 
     /* user profiling clock */
-    if(userureg(ur)){
+    if(arch_userureg(ur)){
         <<[[profclock]] tos adjustments when user>>
         segclock(ur->pc);
     }
