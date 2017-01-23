@@ -33,7 +33,7 @@ pcmspecial(char *idstr, ISAConf *isa)
 
 /*s: function cpuidprint(x86) */
 void
-cpuidprint(void)
+arch_cpuidprint(void)
 {
     int i;
     char buf[128];

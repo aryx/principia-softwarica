@@ -97,7 +97,7 @@ static bool didmmuinit;
 
 /*s: function mmuinit(x86) */
 void
-mmuinit(void)
+arch_mmuinit(void)
 {
     ulong x, *p;
     ushort ptr[3];

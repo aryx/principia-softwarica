@@ -119,7 +119,19 @@ void    arch_forkchild(Proc*, Ureg*);
 void    arch_kprocchild(Proc*, void (*)(void*), void*);
 void    arch_setregisters(Ureg*, char*, char*, int);
 void    arch_setkernur(Ureg*, Proc*);
-// intrenable(), but mostly used in 386, just in port/devaudio.c
+void    arch_validalign(uintptr, unsigned); // TODO: should be in memory/?
+
+// <arch>/trap.c (used in arch specific)
+void  arch_intrenable(int, void (*)(Ureg*, void*), void*, int, char*);
+
+
+// <arch>/trap.c (called from main)
+void  arch_trapinit(void);
+// in <arch>/forkret.s, called from arch_forkchild
+//@Scheck: Assembly
+void    arch_forkret(void); 
+
+
 
 // <arch>/main_processes.c (but used in port)
 void arch_procsetup(Proc*);

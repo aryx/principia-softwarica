@@ -659,7 +659,7 @@ upareserve(ulong pa, int size)
 
 /*s: function memorysummary(x86) */
 void
-memorysummary(void)
+arch_memorysummary(void)
 {
   int i;
   int npallocpage = 0;

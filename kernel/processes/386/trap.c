@@ -63,7 +63,7 @@ extern void checkpages(void);
 
 /*s: function intrenable(x86) */
 void
-intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
+arch_intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
 {
     int vno;
     Vctl *v;
@@ -264,7 +264,7 @@ trapinit0(void)
 
 /*s: function trapinit(x86) */
 void
-trapinit(void)
+arch_trapinit(void)
 {
     /*
      * Special traps.
@@ -1091,9 +1091,9 @@ noted(Ureg* ureg, ulong arg0)
     }
 }
 /*e: function noted(x86) */
-
+//old: #define evenaddr(x)       /* x86 doesn't care */
 void
-validalign(uintptr addr, unsigned align)
+arch_validalign(uintptr addr, unsigned align)
 {
  /*
   * Plan 9 is a 32-bit O/S, and the hardware it runs on
@@ -1228,7 +1228,7 @@ arch_forkchild(Proc *p, Ureg *ureg)
      *  - trap's argument (ur)
      */
     p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Ureg)+2*BY2WD);
-    p->sched.pc = (ulong)forkret;
+    p->sched.pc = (ulong)arch_forkret;
 
     cureg = (Ureg*)(p->sched.sp+2*BY2WD);
     memmove(cureg, ureg, sizeof(Ureg));

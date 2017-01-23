@@ -160,7 +160,7 @@ cgapost(int code)
 
 /*s: function screeninit(x86) */
 void
-screeninit(void)
+arch_screeninit(void)
 {
 
     cgapos = cgaregr(0x0E)<<8;

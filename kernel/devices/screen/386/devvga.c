@@ -425,7 +425,7 @@ vgactl(Cmdbuf *cb)
         return;
     /*x: [[vgactl]] cases(x86) */
     case CMtextmode:
-        screeninit();
+        arch_screeninit();
         return;
     /*e: [[vgactl]] cases(x86) */
     }

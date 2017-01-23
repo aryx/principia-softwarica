@@ -70,6 +70,7 @@ TEXT insb(SB), $0
       REP;    INSB
       RET
 
+// not called anywhere right now
 TEXT insl(SB), $0
       MOVL    port+0(FP), DX
       MOVL    address+4(FP), DI

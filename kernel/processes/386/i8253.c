@@ -308,7 +308,7 @@ i8253enable(void)
 {
     i8253.enabled = true;
     i8253.period = Freq/HZ;
-    intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
+    arch_intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
 }
 /*e: function i8253enable(x86) */
 

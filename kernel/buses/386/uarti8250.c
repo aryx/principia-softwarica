@@ -597,7 +597,7 @@ i8250enable(Uart* uart, int ie)
      */
     if(ie){
         if(ctlr->iena == 0){
-            intrenable(ctlr->irq, i8250interrupt, uart, ctlr->tbdf, uart->name);
+            arch_intrenable(ctlr->irq, i8250interrupt, uart, ctlr->tbdf, uart->name);
             ctlr->iena = 1;
         }
         ctlr->sticky[Ier] = Ethre|Erda;

@@ -6,7 +6,7 @@
  *  Used to get to the first process:
  *      set up an interrupt return frame and IRET to user level.
  */
-TEXT touser(SB), $0
+TEXT arch_touser(SB), $0
         PUSHL   $(UDSEL)                        /* old ss */
         MOVL    sp+0(FP), AX                    /* old sp */
         PUSHL   AX

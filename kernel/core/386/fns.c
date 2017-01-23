@@ -8,9 +8,6 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-// backward deps trick too
-//int (*isaconfig)(char*, int, ISAConf*) = 0;
-
 // was in main.c, could be in lib/386/libc.c (or even lib/libc.c)
 
 /*s: function cistrncmp(x86) */

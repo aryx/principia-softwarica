@@ -56,10 +56,6 @@ TEXT invlpg(SB), $0
         INVLPG
         RET
 
-#define WBINVD  BYTE $0x0F; BYTE $0x09
-TEXT wbinvd(SB), $0
-        WBINVD
-        RET
 
 #define RDTSC           BYTE $0x0F; BYTE $0x31  /* RDTSC, result in AX/DX (lo/hi) */
 TEXT _cycles(SB), $0                            /* time stamp counter */

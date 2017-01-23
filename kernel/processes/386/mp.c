@@ -409,10 +409,10 @@ squidboy(Apic* apic)
 
     cpuinit();
     fpsavealloc();
-    mmuinit();
+    arch_mmuinit();
 
     cpuidentify();
-    cpuidprint();
+    arch_cpuidprint();
     checkmtrr();
 
     apic->online = 1;
@@ -637,9 +637,9 @@ mpinit(void)
      * and do not appear in the I/O APIC so it is OK
      * to set them now.
      */
-    intrenable(IrqTIMER, lapicclock, 0, BUSUNKNOWN, "clock");
-    intrenable(IrqERROR, lapicerror, 0, BUSUNKNOWN, "lapicerror");
-    intrenable(IrqSPURIOUS, lapicspurious, 0, BUSUNKNOWN, "lapicspurious");
+    arch_intrenable(IrqTIMER, lapicclock, 0, BUSUNKNOWN, "clock");
+    arch_intrenable(IrqERROR, lapicerror, 0, BUSUNKNOWN, "lapicerror");
+    arch_intrenable(IrqSPURIOUS, lapicspurious, 0, BUSUNKNOWN, "lapicspurious");
     lapiconline();
 
     checkmtrr();

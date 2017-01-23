@@ -93,7 +93,7 @@ floppysetup1(FController *fl)
         fl->d[1].dt = equip & 0xf;
         floppysetdef(&fl->d[1]);
     }
-    intrenable(IrqFLOPPY, pcfloppyintr, fl, BUSUNKNOWN, "floppy");
+    arch_intrenable(IrqFLOPPY, pcfloppyintr, fl, BUSUNKNOWN, "floppy");
 }
 
 /*

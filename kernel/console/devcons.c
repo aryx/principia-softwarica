@@ -559,11 +559,11 @@ echo(char *buf, int n)
                 xsummary();
                 ixsummary();
                 mallocsummary();
-                memorysummary();
+                arch_memorysummary();
                 pagersummary();
                 return;
             case 'm':
-                memorysummary();
+                arch_memorysummary();
                 return;
             case 'p':
                 x = arch_spllo();

@@ -356,7 +356,7 @@ init0(void)
     }
     kproc("kalarm", alarmkproc, nil);
     cgapost(0x9);
-    touser(sp);
+    arch_touser(sp);
 }
 /*e: function init0(x86) */
 
@@ -654,7 +654,7 @@ mathinit(void)
 {
         trapenable(VectorCERR, matherror, 0, "matherror");
         if(X86FAMILY(cpu->cpuidax) == 3)
-                intrenable(IrqIRQ13, matherror, 0, BUSUNKNOWN, "matherror");
+                arch_intrenable(IrqIRQ13, matherror, 0, BUSUNKNOWN, "matherror");
         trapenable(VectorCNA, mathemu, 0, "mathemu");
         trapenable(VectorCSO, mathover, 0, "mathover");
 }
@@ -869,7 +869,7 @@ void main(void)
 
     ioinit(); // does some getconf("ioexclude") so must be after options()
 
-    screeninit(); // screenputs = cgascreenputs
+    arch_screeninit(); // screenputs = cgascreenputs
     quotefmtinstall(); // libc printf initialization
     i8250console(); // setup optional serial console if getconf("console") == 1
     print("\nPlan 9\n");
@@ -882,7 +882,7 @@ void main(void)
     i8253init(); // clock controller
 
     cpuidentify(); // setup cpu, to know which advanced features we can enable
-    cpuidprint();
+    arch_cpuidprint();
 
     meminit(); // setup conf.mem memory banks and setup more PDEs and PTEs
     confinit(); // setup conf (and mainmem->maxsize, imagmem->maxsize)
@@ -891,8 +891,8 @@ void main(void)
     if(i8237alloc != nil)
             i8237alloc(); // setup DMA, need low memory below 16MB
 
-    trapinit();
-    mmuinit();
+    arch_trapinit();
+    arch_mmuinit();
 
     fpsavealloc();
     if(arch->intrinit)      /* launches other processors on an mp */

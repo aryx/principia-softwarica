@@ -470,7 +470,7 @@ etherprobe(int cardno, int ctlrno)
      * used by ethersink.
      */
     if(ether->irq >= 0)
-        intrenable(ether->irq, ether->interrupt, ether, ether->tbdf, name);
+        arch_intrenable(ether->irq, ether->interrupt, ether, ether->tbdf, name);
 
     i = sprint(buf, "#l%d: %s: ", ctlrno, cards[cardno].type);
     if(ether->mbps >= 1000)

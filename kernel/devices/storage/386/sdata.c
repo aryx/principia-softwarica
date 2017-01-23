@@ -2208,7 +2208,7 @@ ataenable(SDev* sdev)
             error(Enomem);
     }
     snprint(name, sizeof(name), "%s (%s)", sdev->name, sdev->ifc->name);
-    intrenable(ctlr->irq, atainterrupt, ctlr, ctlr->tbdf, name);
+    arch_intrenable(ctlr->irq, atainterrupt, ctlr, ctlr->tbdf, name);
     outb(ctlr->ctlport+Dc, 0);
     if(ctlr->ienable)
         ctlr->ienable(ctlr);

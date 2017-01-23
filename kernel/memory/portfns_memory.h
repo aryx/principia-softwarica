@@ -52,10 +52,10 @@ void    swapinit(void);
 void    putswap(Page*);
 void    dupswap(Page*);
 int   swapcount(ulong);
-//int   swapfull(void);
 void    pagersummary(void);
 void    setswapchan(Chan*);
 void    kickpager(void);
+//int   swapfull(void);
 
 // fault.c
 Segment*  seg(Proc*, ulong, int);
@@ -77,12 +77,12 @@ void    putseg(Segment*);
 Segment*  dupseg(Segment**, int, int);
 long    ibrk(ulong, int);
 int   addphysseg(Physseg*);
-//int   isphysseg(char*);
 ulong   segattach(Proc*, ulong, char *, ulong, ulong);
 void    imageinit(void);
 KImage*   attachimage(int, Chan*, ulong, ulong);
 //Segment*  isoverlap(Proc*, ulong, int);
 //Segment*  data2txt(Segment*);
+//int   isphysseg(char*);
 
 
 // sysfile.c
@@ -101,6 +101,12 @@ ulong arch_cankaddr(ulong);
 kern_addr3 arch_kaddr(phys_addr);
 // actually PADDR is used in port, but it's expanding to paddr
 phys_addr arch_paddr(kern_addr3);
+
+// defined in <arch>/ (used in port)
+void arch_memorysummary(void);
+
+// in <arch>/mmu.c (called from main and other other cpu init function)
+void arch_mmuinit(void);
 
 void    countpagerefs(ulong*, int);
 

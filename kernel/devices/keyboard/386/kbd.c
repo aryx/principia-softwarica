@@ -273,7 +273,7 @@ i8042auxenable(void (*putc)(int, int))
         return;
     }
     auxputc = putc;
-    intrenable(IrqAUX, i8042intr, 0, BUSUNKNOWN, "kbdaux");
+    arch_intrenable(IrqAUX, i8042intr, 0, BUSUNKNOWN, "kbdaux");
     iunlock(&i8042lock);
 }
 /*e: function i8042auxenable(x86) */
@@ -346,7 +346,7 @@ kbdenable(void)
     ioalloc(Data, 1, 0, "kbd");
     ioalloc(Cmd, 1, 0, "kbd");
 
-    intrenable(IrqKBD, i8042intr, 0, BUSUNKNOWN, "kbd");
+    arch_intrenable(IrqKBD, i8042intr, 0, BUSUNKNOWN, "kbd");
 
     kbscans[KbInt].num = false;
     arch_setleds(&kbscans[KbInt]);
