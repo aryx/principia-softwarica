@@ -57,10 +57,28 @@ extern Kbscan kbscans[KbNscans];
 
 // mouse
 
+/*
+ *  mouse types
+ */
+enum MouseType
+{
+    Mouseother= 0,
+    Mouseserial=    1,
+    MousePS2=   2,
+};
+
 // mouse/devmouse.c (used in portmouse.c, portkbd.c, ...)
 extern int mouseshifted;
 
+// mouse/portmouse.c (used in <arch>/mouse.c)
+// enum<MouseType>
+extern int mousetype;
+extern int packetsize;
+extern bool mousehwaccel;
+extern bool intellimouse;
+
 /* devdraw.c */ // used in some <arch>/screen.c
 extern QLock	drawlock;
+// for gscreen, gscreendata, see portscreen.h
 
 /*e: portdat_devices.h */

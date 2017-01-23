@@ -31,6 +31,14 @@ extern void (*kbdmouse)(int);
 // mouse/portmouse.c (called by devmouse.c for arch-specific mouse settings)
 extern void kmousectl(Cmdbuf*);
 
+// defined in <arch>/mouse.c for portmouse.c
+extern void arch_ps2mouse(void);
+extern void arch_setaccelerated(void);
+extern void arch_setlinear(void);
+extern void arch_setres(int n);
+extern void arch_setintellimouse();
+extern void arch_resetmouse(void);
+
 // keyboard/portkbd.c
 extern void kbdputsc(byte, int);
 extern int  kbdgetmap(uint, int*, int*, Rune*);
