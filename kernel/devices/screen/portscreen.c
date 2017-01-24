@@ -12,7 +12,7 @@
 #include    <cursor.h>
 
 // Many of the stuff below used to be in vgascreen.c, but they are
-// quite VGA independent so better to have a generic screen.c.
+// quite VGA independent so better to have a generic portscreen.c.
 
 /*s: global gscreen */
 Memimage *gscreen;
@@ -24,7 +24,7 @@ Memdata gscreendata;
 Rectangle physgscreenr;
 /*e: global physgscreenr */
 
-//put cursor here?
-// software cursor?
-// curpos, window, graphic text mode? graphic_screenputs
+// for software cursor look swcursor.c
+// for software console look swconsole.c
+
 /*e: kernel/devices/screen/portscreen.c */

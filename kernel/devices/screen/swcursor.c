@@ -87,9 +87,6 @@ void
 swcursor_init(void)
 {
     static bool init;
-    /*s: [[swcursorinit()]] other locals */
-    static bool warned;
-    /*e: [[swcursorinit()]] other locals */
 
     if(!init){
         init = true;

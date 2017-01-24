@@ -11,6 +11,12 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
+// The main entry point in this file is kbdputsc() called
+// from devkbin.c when a process (e.g., usbd) writes into /dev/kbin.
+
+// The functions kbdputmap/kbdgetmap are also portable functions called
+// from devkbmap.c
+
 /*s: global kdebug */
 bool kdebug;
 /*e: global kdebug */

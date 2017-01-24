@@ -67,6 +67,7 @@ static Rectangle window;
 
 static void myscreenputs(char *s, int n);
 static void screenputc(char *buf);
+
 static void screenwin(void);
 
 /*
