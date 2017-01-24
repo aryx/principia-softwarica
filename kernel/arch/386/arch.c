@@ -7,9 +7,6 @@
 #include "dat.h"
 #include "fns.h"
 /*e: kernel basic includes */
-//todo: weird, if don't include this file, then can't declare arch in this file
-// or I get some type signature mismatch
-#include "io.h"
 
 /*s: global arch(x86) */
 PCArch* arch;
@@ -56,7 +53,7 @@ simplecycles(uvlong *x)
     *x = cpu->ticks;
 }
 
-void    (*cycles)(uvlong*) = simplecycles;
+void    (*arch_cycles)(uvlong*) = simplecycles;
 /*e: function cycles and default implementation(x86) */
 
 /*s: function cmpswap and default implementation(x86) */
@@ -77,7 +74,7 @@ cmpswap386(long *addr, long old, long new)
     return r;
 }
 
-int (*cmpswap)(long*, long, long) = cmpswap386;
+int (*arch_cmpswap)(long*, long, long) = cmpswap386;
 /*e: function cmpswap and default implementation(x86) */
 
 /*
@@ -118,7 +115,7 @@ arch_us(void)
  *  return value and speed of timer set in arch->clockenable
  */
 uvlong
-devarch_fastticks(uvlong *hz)
+arch_fastticks(uvlong *hz)
 {
     return (*arch->fastclock)(hz);
 }

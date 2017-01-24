@@ -211,7 +211,7 @@ cpuidentify(void)
      */
     if(cpu->cpuiddx & Tsc){
         cpu->havetsc = true;
-        cycles = _cycles;
+        arch_cycles = _cycles;
         if(cpu->cpuiddx & Cpumsr)
             wrmsr(0x10, 0);
     }

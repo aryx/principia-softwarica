@@ -87,6 +87,7 @@ TEXT outsb(SB), $0
       REP;    OUTSB
       RET
 
+// not called anywhere right now
 TEXT outsl(SB), $0
       MOVL    port+0(FP), DX
       MOVL    address+4(FP), SI

@@ -71,7 +71,6 @@ enum MouseType
 extern int mouseshifted;
 
 // mouse/portmouse.c (used in <arch>/mouse.c)
-// enum<MouseType>
 extern int mousetype;
 extern int packetsize;
 extern bool mousehwaccel;

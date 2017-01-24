@@ -640,7 +640,7 @@ checkpagerefs(void)
      */
     s = arch_splhi();
     lock(&palloc);
-    countpagerefs(ref, 0);
+    arch_countpagerefs(ref, 0);
     portcountpagerefs(ref, 0);
     nwrong = 0;
     for(i=0; i<np; i++){
@@ -652,7 +652,7 @@ checkpagerefs(void)
         }else
             ref[i] = 0;
     }
-    countpagerefs(ref, 1);
+    arch_countpagerefs(ref, 1);
     portcountpagerefs(ref, 1);
     iprint("%lud mistakes found\n", nwrong);
     unlock(&palloc);

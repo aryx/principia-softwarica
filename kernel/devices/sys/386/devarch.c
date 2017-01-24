@@ -328,23 +328,23 @@ archctlread(Chan*, void *a, long nn, vlong offset)
         cpu->havepge ? " pge" : "");
     p = seprint(p, ep, "pge %s\n", getcr4()&0x80 ? "on" : "off");
     p = seprint(p, ep, "coherence ");
-    if(coherence == mb386)
+    if(arch_coherence == mb386)
         p = seprint(p, ep, "mb386\n");
-    else if(coherence == mb586)
+    else if(arch_coherence == mb586)
         p = seprint(p, ep, "mb586\n");
-    else if(coherence == mfence)
+    else if(arch_coherence == mfence)
         p = seprint(p, ep, "mfence\n");
-    else if(coherence == nop)
+    else if(arch_coherence == nop)
         p = seprint(p, ep, "nop\n");
     else
-        p = seprint(p, ep, "0x%p\n", coherence);
+        p = seprint(p, ep, "0x%p\n", arch_coherence);
     p = seprint(p, ep, "cmpswap ");
-    if(cmpswap == cmpswap386)
+    if(arch_cmpswap == cmpswap386)
         p = seprint(p, ep, "cmpswap386\n");
-    else if(cmpswap == cmpswap486)
+    else if(arch_cmpswap == cmpswap486)
         p = seprint(p, ep, "cmpswap486\n");
     else
-        p = seprint(p, ep, "0x%p\n", cmpswap);
+        p = seprint(p, ep, "0x%p\n", arch_cmpswap);
     p = seprint(p, ep, "i8253set %s\n", doi8253set ? "on" : "off");
     n = p - buf;
     //n += mtrrprint(p, ep - p);
@@ -398,20 +398,20 @@ archctlwrite(Chan*, void *a, long n, vlong)
         break;
     case CMcoherence:
         if(strcmp(cb->f[1], "mb386") == 0)
-            coherence = mb386;
+            arch_coherence = mb386;
         else if(strcmp(cb->f[1], "mb586") == 0){
             if(X86FAMILY(cpu->cpuidax) < 5)
                 error("invalid coherence ctl on this cpu family");
-            coherence = mb586;
+            arch_coherence = mb586;
         }else if(strcmp(cb->f[1], "mfence") == 0){
             if((cpu->cpuiddx & Sse2) == 0)
                 error("invalid coherence ctl on this cpu family");
-            coherence = mfence;
+            arch_coherence = mfence;
         }else if(strcmp(cb->f[1], "nop") == 0){
             /* only safe on vmware */
             if(conf.ncpu > 1)
                 error("cannot disable coherence on a multiprocessor");
-            coherence = nop;
+            arch_coherence = nop;
         }else
             cmderror(cb, "invalid coherence ctl");
         break;
@@ -479,13 +479,13 @@ archinit(void)
         conf.copymode = true;
 
     if(X86FAMILY(cpu->cpuidax) >= 4)
-        cmpswap = cmpswap486;
+        arch_cmpswap = cmpswap486;
 
     if(X86FAMILY(cpu->cpuidax) >= 5)
-        coherence = mb586;
+        arch_coherence = mb586;
 
     if(cpu->cpuiddx & Sse2)
-        coherence = mfence;
+        arch_coherence = mfence;
 
     addarchfile("cputype", 0444, cputyperead, nil);
     addarchfile("archctl", 0664, archctlread, archctlwrite);

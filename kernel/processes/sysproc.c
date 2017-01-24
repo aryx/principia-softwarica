@@ -441,7 +441,7 @@ sysexec(ulong* arg)
         tos = (Tos*)(TSTKTOP - sizeof(Tos));
 
         tos->cyclefreq = cpu->cyclefreq;
-        cycles((uvlong*)&tos->pcycles);
+        arch_cycles((uvlong*)&tos->pcycles);
         tos->pcycles = -tos->pcycles; // see comment above on Proc->pcycle
         tos->kcycles = tos->pcycles;
         tos->clock = 0;

@@ -32,7 +32,7 @@ arch_procsave(Proc *p)
     /*s: [[procsave()]] cycles adjustments(x86) */
         uvlong t;
 
-        cycles(&t);
+        arch_cycles(&t);
         p->pcycles += t;
     /*e: [[procsave()]] cycles adjustments(x86) */
     /*s: [[procsave()]] fp adjustments(x86) */
@@ -76,7 +76,7 @@ arch_procrestore(Proc *p)
     if(p->kp)
         return;
     /*s: [[procrestore]] cycles adjustments(x86) */
-        cycles(&t);
+        arch_cycles(&t);
         p->pcycles -= t;
     /*e: [[procrestore]] cycles adjustments(x86) */
 }

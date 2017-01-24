@@ -252,7 +252,7 @@ unlock(Lock *l)
     // for processor caches, to ensure the lock value is seen by other
     // processors so that if they were doing while(l->key) { ... } they
     // can finally exit the while loop.
-    coherence();
+    arch_coherence();
 
     /*s: [[unlock()]] if delaysched */
     if(up && deccnt(&up->nlocks) == 0 && up->delaysched && arch_islo()){
@@ -294,7 +294,7 @@ iunlock(Lock *l)
     sr = l->sr;
     l->cpu = nil;
     l->key = 0;
-    coherence();
+    arch_coherence();
     cpu->ilockdepth--;
     if(up)
         up->lastilock = nil;

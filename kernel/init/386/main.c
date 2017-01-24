@@ -791,7 +791,7 @@ arch_reboot(kern_addr3 entry, kern_addr3 code, ulong size)
     print("rebooting...\n");
 
     /* off we go - never to return */
-    coherence();
+    arch_coherence();
     (*f)(PADDR(entry), PADDR(code), size);
 }
 /*e: function reboot(x86) */
@@ -856,7 +856,7 @@ void main(void)
      * On VMware, it's safe (and a huge win) to set this to nop.
      * Aux/vmware does this via the #P/archctl file.
      */
-    coherence = nop;
+    arch_coherence = nop;
     /*e: [[main()]] initial assignments for backward deps(x86) */
 
     cgapost(0);

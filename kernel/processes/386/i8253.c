@@ -204,12 +204,12 @@ guesscpuhz(int aalcycles)
          *
          */
         outb(Tmode, Latch0);
-        cycles(&a);
+        arch_cycles(&a);
         x = inb(T0cntr);
         x |= inb(T0cntr)<<8;
         aamloop(loops);
         outb(Tmode, Latch0);
-        cycles(&b);
+        arch_cycles(&b);
         y = inb(T0cntr);
         y |= inb(T0cntr)<<8;
         x -= y;
@@ -400,7 +400,7 @@ arch_perfticks(void)
     uvlong x;
 
     if(cpu->havetsc)
-        cycles(&x);
+        arch_cycles(&x);
     else
         x = 0;
     return x;

@@ -359,7 +359,7 @@ kexit(Ureg*)
 
         /* precise time accounting, kernel exit */
         tos = (Tos*)(USTKTOP-sizeof(Tos));
-        cycles(&t);
+        arch_cycles(&t);
         tos->kcycles += t - up->kentry;
         tos->pcycles = up->pcycles;
         tos->pid = up->pid;
@@ -399,7 +399,7 @@ void trap(Ureg* ureg)
     if(user){
         up->dbgreg = ureg;
         /*s: [[trap()]] adjust kentry when interrupt user(x86) */
-                cycles(&up->kentry);
+                arch_cycles(&up->kentry);
         /*e: [[trap()]] adjust kentry when interrupt user(x86) */
     }
     // else if !user, then that means we interrupted a syscall() which should
@@ -780,7 +780,7 @@ void syscall(Ureg* ureg)
         panic("syscall: cs 0x%4.4luX", ureg->cs);
 
     /*s: [[syscall()]] adjust kentry(x86) */
-        cycles(&up->kentry);
+        arch_cycles(&up->kentry);
     /*e: [[syscall()]] adjust kentry(x86) */
 
     cpu->syscall++;

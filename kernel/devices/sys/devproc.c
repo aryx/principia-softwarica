@@ -506,7 +506,7 @@ procopen(Chan *c, int omode)
         c->qid.vers = p->pid;
 
     /* make sure the process slot didn't get reallocated while we were playing */
-    coherence();
+    arch_coherence();
     if(p->pid != pid)
         error(Eprocdied);
 

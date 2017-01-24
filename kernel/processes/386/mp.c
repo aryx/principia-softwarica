@@ -416,7 +416,7 @@ squidboy(Apic* apic)
     checkmtrr();
 
     apic->online = 1;
-    coherence();
+    arch_coherence();
 
     lapicinit(apic);
     lapiconline();
@@ -500,7 +500,7 @@ mpstartap(Apic* apic)
     *p++ = i;
     *p = i>>8;
 
-    coherence();
+    arch_coherence();
 
     nvramwrite(0x0F, 0x0A); /* shutdown code: warm reset upon init ipi */
     lapicstartap(apic, PADDR(APBOOTSTRAP));

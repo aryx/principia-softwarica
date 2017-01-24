@@ -131,7 +131,7 @@ semwakeup(Segment *s, long *a, long n)
     for(p=s->sema.next; p!=&s->sema && n>0; p=p->next){
         if(p->addr == a && p->waiting){
             p->waiting = false;
-            coherence();
+            arch_coherence();
             wakeup(p);
             n--;
         }
@@ -149,7 +149,7 @@ semrelease(Segment *s, long *addr, long delta)
 
     do
         value = *addr;
-    while(!cmpswap(addr, value, value+delta));
+    while(!arch_cmpswap(addr, value, value+delta));
     semwakeup(s, addr, delta);
     return value+delta;
 }
@@ -163,7 +163,7 @@ canacquire(long *addr)
     long value;
     
     while((value=*addr) > 0)
-        if(cmpswap(addr, value, value-1))
+        if(arch_cmpswap(addr, value, value-1))
             return true;
     return false;
 }       
@@ -174,7 +174,7 @@ canacquire(long *addr)
 static bool
 semawoke(void *p)
 {
-    coherence();
+    arch_coherence();
     return !((Sema*)p)->waiting;
 }
 /*e: function semawoke */
@@ -196,7 +196,7 @@ semacquire(Segment *s, long *addr, bool block)
     semqueue(s, addr, &phore);
     for(;;){
         phore.waiting = true;
-        coherence();
+        arch_coherence();
         if(canacquire(addr)){
             acquired = true;
             break;
@@ -207,7 +207,7 @@ semacquire(Segment *s, long *addr, bool block)
         poperror();
     }
     semdequeue(s, &phore);
-    coherence();    /* not strictly necessary due to lock in semdequeue */
+    arch_coherence();    /* not strictly necessary due to lock in semdequeue */
     if(!phore.waiting)
         semwakeup(s, addr, 1);
     if(!acquired)
@@ -233,7 +233,7 @@ tsemacquire(Segment *s, long *addr, ulong ms)
     semqueue(s, addr, &phore);
     for(;;){
         phore.waiting = true;
-        coherence();
+        arch_coherence();
         if(canacquire(addr)){
             acquired = true;
             break;
@@ -251,7 +251,7 @@ tsemacquire(Segment *s, long *addr, ulong ms)
         ms -= elms;
     }
     semdequeue(s, &phore);
-    coherence();    /* not strictly necessary due to lock in semdequeue */
+    arch_coherence();    /* not strictly necessary due to lock in semdequeue */
     if(!phore.waiting)
         semwakeup(s, addr, 1);
     if(timedout)

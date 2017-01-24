@@ -902,10 +902,8 @@ ilrexmit(Ilcb *ic)
     Ilhdr *h;
     Block *nb;
     Conv *c;
-    ulong id;
+//    ulong id; BUG?
     Ilpriv *priv;
-
-    USED(id); // BUG?? why not used?
 
     nb = nil;
     qlock(&ic->ackq);
@@ -931,7 +929,6 @@ ilrexmit(Ilcb *ic)
     //netlog(c->p->f, Logil, "il: rexmit %lud %lud: %d %lud: %I %d/%d\n", id, ic->recvd,
 //		ic->rexmit, ic->timeout,
 //		c->raddr, c->lport, c->rport);
-    USED(id);
 
     ilbackoff(ic);
 

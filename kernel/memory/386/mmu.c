@@ -957,7 +957,7 @@ arch_paddr(kern_addr3 v)
  * More debugging.
  */
 void
-countpagerefs(ulong *ref, int print)
+arch_countpagerefs(ulong *ref, int print)
 {
     int i, n;
     Cpu *mm;

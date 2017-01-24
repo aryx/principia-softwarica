@@ -1148,7 +1148,7 @@ igbereplenish(CtlrEtherIgbe* ctlr)
             rd->addr[0] = PCIWADDR(bp->rp);
             rd->addr[1] = 0;
         }
-        coherence();
+        arch_coherence();
         rd->status = 0;
         rdt = NEXT(rdt, ctlr->nrd);
         ctlr->rdfree++;
@@ -1289,7 +1289,7 @@ igberproc(void* arg)
             }
 
             memset(rd, 0, sizeof(Rd));
-            coherence();
+            arch_coherence();
             ctlr->rdfree--;
             rdh = NEXT(rdh, ctlr->nrd);
         }

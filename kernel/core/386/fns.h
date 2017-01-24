@@ -17,46 +17,50 @@
 
 /*s: fns.h declarations(x86) */
 
-void  arch_touser(void*); // uintptr??
+// different signatures in different arch so cant factorize
+void  arch_touser(void*);
+int   (*arch_cmpswap)(long*, long, long);
+void  (*arch_coherence)(void);
+void  (*arch_cycles)(uvlong*);
 
 // fns_memory.h
 
 // mmu.c (called from main.c)
-extern void mmuinit0(void); 
-void* tmpmap(Page*);
-void  tmpunmap(void*);
+void   mmuinit0(void); 
+void*  tmpmap(Page*);
+void   tmpunmap(void*);
 // mmu.c (called from main.c/mp.c)
-extern ulong*  mmuwalk(ulong*, ulong, int, bool); 
+ulong* mmuwalk(ulong*, ulong, int, bool); 
 // mmu.c (called from many arch specific)
-void* vmap(ulong, int);
-void  vunmap(void*, int);
-int vmapsync(ulong);
+void*  vmap(ulong, int);
+void   vunmap(void*, int);
+int    vmapsync(ulong);
 // memory.c (called from main.c)
-extern void meminit(void); 
+void   meminit(void); 
 // memory.c (called from mmu.c)
 kern_addr3 rampage(void);
-void* sigsearch(char*);
+void*  sigsearch(char*);
 // memory.c (called from screen.c, pci.c)
-ulong upaalloc(int, int);
-void  upareserve(ulong, int);
+ulong  upaalloc(int, int);
+void   upareserve(ulong, int);
 // l_misc.s (called from mmu.c)
 //@Scheck: Assembly
-void  invlpg(ulong);
+void   invlpg(ulong);
 // l.s (called from mmu.c)
 //@Scheck: Assembly
-void  ltr(ulong);
+void   ltr(ulong);
 //@Scheck: Assembly
-void  lidt(ushort[3]);
+void   lidt(ushort[3]);
 //@Scheck: Assembly
-void  lgdt(ushort[3]);
+void   lgdt(ushort[3]);
 
 // fns_init.h
 
 // main.c (called from main.c/mp.c)
-extern void cpuinit(void); 
+void   cpuinit(void); 
 // l_misc.s (called from main.c)
 //@Scheck: Assembly
-void  halt(void);
+void   halt(void);
 
 // fns_processes.h
 
@@ -64,7 +68,7 @@ void  halt(void);
 void  trapenable(int, void (*)(Ureg*, void*), void*, char*);
 void  trapinit0(void);
 // trap.c (called from sdata.c, uarti...)
-int intrdisable(int, void (*)(Ureg *, void *), void*, int, char*);
+int   intrdisable(int, void (*)(Ureg *, void *), void*, int, char*);
 // l_misc.s (called from mp.c, x86.c, trap.c)
 void  rdmsr(int, vlong*);
 // l_trap.s (called from trap.c)
@@ -89,9 +93,7 @@ void  archrevert(void);
 //@Scheck: Assembly
 void  cpuid(int, ulong regs[]);
 // x86.c (called from main.c/mp.c)
-int cpuidentify(void);
-// ???
-void  (*cycles)(uvlong*);
+int   cpuidentify(void);
 //l_misc.c (called from i8253.c)
 //@Scheck: Assembly
 void  aamloop(int);
@@ -106,20 +108,19 @@ void  syncclock(void);
 //@Scheck: Assembly
 void  wrmsr(int, vlong);
 
-// fns_concurrency.h ????
+// fns_concurrency.h
 
-// coherence
+// coherence possible values
 //@Scheck: Assembly
 void  mfence(void);
 //@Scheck: Assembly
 void  mb386(void);
 //@Scheck: Assembly
 void  mb586(void);
-// ???
-int (*cmpswap)(long*, long, long);
 // l_misc.s (called from devarch)
+// cmpswap possible value
 //@Scheck: Assembly
-int cmpswap486(long*, long, long);
+int   cmpswap486(long*, long, long);
 
 
 
@@ -129,17 +130,17 @@ void (*hook_ioalloc)(void);
 
 void  iofree(int);
 void  ioinit(void);
-int ioalloc(int, int, int, char*);
+int   ioalloc(int, int, int, char*);
 
 //@Scheck: Assembly
-int bios32call(BIOS32ci*, u16int[3]);
-int bios32ci(BIOS32si*, BIOS32ci*);
+int   bios32call(BIOS32ci*, u16int[3]);
+int   bios32ci(BIOS32si*, BIOS32ci*);
 BIOS32si* bios32open(char*);
 
 void  dmaend(int); // called from port/devaudio.c!
 long  dmasetup(int, void*, long, int);
 
-int dmainit(int, int);
+int   dmainit(int, int);
 
 
 //@Scheck: Assembly
@@ -186,7 +187,7 @@ void  putcr3(ulong);
 void  putcr4(ulong);
 
 
-int i8042auxcmd(int);
+int   i8042auxcmd(int);
 void  i8042auxenable(void (*)(int, int));
 void  i8042reset(void);
 void  i8250console(void);
@@ -195,19 +196,19 @@ void  i8253enable(void);
 void  i8253init(void);
 uvlong  i8253read(uvlong*);
 void  i8253timerset(uvlong);
-int i8259disable(int);
-int i8259enable(Vctl*);
+int   i8259disable(int);
+int   i8259enable(Vctl*);
 void  i8259init(void);
-int i8259isr(int);
+int   i8259isr(int);
 void  i8259on(void);
 void  i8259off(void);
-int i8259vecno(int);
+int   i8259vecno(int);
 
 //@Scheck: Assembly
-int inb(int);
+int   inb(int);
 void  insb(int, void*, int); // used only by ether8390 for now
 //@Scheck: Assembly
-ushort  ins(int);
+ushort ins(int);
 //@Scheck: Assembly
 void  inss(int, void*, int);
 //@Scheck: Assembly
@@ -239,9 +240,9 @@ void  outl(int, ulong);
 uchar nvramread(int);
 void  nvramwrite(int, uchar);
 
-int pcicfgr8(Pcidev*, int);
-int pcicfgr16(Pcidev*, int);
-int pcicfgr32(Pcidev*, int);
+int   pcicfgr8(Pcidev*, int);
+int   pcicfgr16(Pcidev*, int);
+int   pcicfgr32(Pcidev*, int);
 void  pcicfgw8(Pcidev*, int, int);
 void  pcicfgw32(Pcidev*, int, int);
 void  pciclrbme(Pcidev*);
@@ -252,16 +253,16 @@ void  pcisetbme(Pcidev*);
 //void  pcicfgw16(Pcidev*, int, int);
 //void  pciclrioe(Pcidev*);
 //void  pciclrmwi(Pcidev*);
-//int pcigetpms(Pcidev*);
-//int pciscan(int, Pcidev**);
+//int   pcigetpms(Pcidev*);
+//int   pciscan(int, Pcidev**);
 //void  pcisetioe(Pcidev*);
 //void  pcisetmwi(Pcidev*);
-//int pcisetpms(Pcidev*, int);
+//int   pcisetpms(Pcidev*, int);
 
 int pcmspecial(char*, ISAConf*);
 //int (*_pcmspecial)(char *, ISAConf *);
 //void  pcmcisread(PCMslot*);
-//int pcmcistuple(int, int, int, void*, int);
+//int   pcmcistuple(int, int, int, void*, int);
 //void  pcmspecialclose(int);
 //void  (*_pcmspecialclose)(int);
 //PCMmap* pcmmap(int, ulong, int, int);

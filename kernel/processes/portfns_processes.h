@@ -8,14 +8,9 @@ void    todset(vlong, vlong, int);
 vlong   todget(vlong*);
 //is in <arch>/devarch.c (but used in port)
 //uvlong    (*arch_fastticks)(uvlong*); 
-uvlong    fastticks2us(uvlong);
-uvlong    ns2fastticks(uvlong);
+uvlong  fastticks2us(uvlong);
+uvlong  ns2fastticks(uvlong);
 long    seconds(void);
-//uvlong    tod2fastticks(vlong);
-//uvlong    us2fastticks(uvlong);
-//uvlong    ms2fastticks(ulong);
-//uvlong    fastticks2ns(uvlong);
-//todfix(): TODO false positive, static forward decl
 
 // pgrp.c
 Rgrp*   newrgrp(void);
@@ -28,7 +23,7 @@ void    pgrpcpy(Pgrp*, Pgrp*);
 void    forceclosefgrp(void);
 void    pgrpnote(ulong, char*, long, int);
 void    mountfree(Mount*);
-Mount*    newmount(Chan*, int, char*);
+Mount*  newmount(Chan*, int, char*);
 void    resrcwait(char*);
 
 // portclock.c
@@ -38,7 +33,7 @@ ulong   tk2ms(ulong);
 ulong   ms2tk(ulong);
 void    timerdel(Timer*);
 void    timeradd(Timer*);
-Timer*    addclock0link(void (*)(void), int);
+Timer*  addclock0link(void (*)(void), int);
 void    timerintr(Ureg*, Tval);
 void    timersinit(void);
 //void    arch_timerset(Tval); is in <arch>/devarch.c (but used in port)
@@ -46,37 +41,37 @@ void    timersinit(void);
 // proc.c
 void exhausted(char*);
 // in portfns_core.h, to remove some backward dependencies
-//void    (*sleep)(Rendez*, int(*)(void*), void*);
-//int (*postnote)(Proc*, int, char*, int);
+//void  (*sleep)(Rendez*, int(*)(void*), void*);
+//int   (*postnote)(Proc*, int, char*, int);
 void    procctl(Proc*);
 void    procwired(Proc*, int);
-//Proc*   (*wakeup)(Rendez*);
-//void    (*error)(char*);
+//Proc* (*wakeup)(Rendez*);
+//void  (*error)(char*);
 void    procpriority(Proc*, int, int);
 //TODO: fp non-deps twakeup, passed as pointer func
-//void    (*nexterror)(void);
-//void    (*dumpaproc)(Proc*);
+//void  (*nexterror)(void);
+//void  (*dumpaproc)(Proc*);
 void    accounttime(void);
-int   canpage(Proc*);
-int   anyhigher(void);
+int     canpage(Proc*);
+int     anyhigher(void);
 void    scheddump(void);
 Proc*   dequeueproc(Schedq*, Proc*);
-void   preempt(void);
+void    preempt(void);
 void    killbig(char*);
 void    procflushseg(Segment*); 
 void    procdump(void);
 void    renameuser(char*, char*);
 void    procinit(void);
-int   procindex(ulong);
+int     procindex(ulong);
 ulong   pwait(Waitmsg*);
-//void    (*tsleep)(Rendez*, int (*)(void*), void*, ulong);
+//void  (*tsleep)(Rendez*, int (*)(void*), void*, ulong);
 void    unbreak(Proc*);
-int   freebroken(void);
+int     freebroken(void);
 void    yield(void);
-//void    (*pexit)(char*, bool);
-//void    (*sched)(void);
+//void  (*pexit)(char*, bool);
+//void  (*sched)(void);
 void    schedinit(void);
-//void    (*ready)(Proc*);
+//void  (*ready)(Proc*);
 Proc*   newproc(void);
 void    kproc(char*, void(*)(void*), void*);
 void    hzsched(void);
@@ -98,7 +93,7 @@ void    edfinit(Proc*);
 void    edfrecord(Proc*);
 void    edfstop(Proc*);
 void    edfyield(void);
-int   edfready(Proc*);
+int     edfready(Proc*);
 char*   edfadmit(Proc*);
 
 // sysproc.c
@@ -129,30 +124,30 @@ void  arch_intrenable(int, void (*)(Ureg*, void*), void*, int, char*);
 void  arch_trapinit(void);
 // in <arch>/forkret.s, called from arch_forkchild
 //@Scheck: Assembly
-void    arch_forkret(void); 
+void  arch_forkret(void); 
 
 
 
 // <arch>/main_processes.c (but used in port)
-void arch_procsetup(Proc*);
-void arch_procsave(Proc*);
-void arch_procrestore(Proc *);
-void arch_idlehands(void);
+void  arch_procsetup(Proc*);
+void  arch_procsave(Proc*);
+void  arch_procrestore(Proc *);
+void  arch_idlehands(void);
 
 // <arch>/i8253.c (but used in port)
-ulong   arch_perfticks(void);
+ulong arch_perfticks(void);
 
 // <arch>/arch.c (but used in port)
-void    arch_timerset(Tval);
-ulong   arch_us(void);
+void  arch_timerset(Tval);
+ulong arch_us(void);
 
 // in <arch>/l.s (but used in port)
 //@Scheck: Assembly
-void    arch_gotolabel(Label*);
+void  arch_gotolabel(Label*);
 //@Scheck: Assembly
 int   arch_setlabel(Label*);
 //@Scheck: Assembly
-void    arch_mul64fract(uvlong*, uvlong, uvlong);
+void  arch_mul64fract(uvlong*, uvlong, uvlong);
 
 // portdat_processes.c
 void (*proctrace)(Proc*, int, vlong); // was in devproc.c

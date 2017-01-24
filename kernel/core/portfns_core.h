@@ -49,7 +49,6 @@ void nop(void);
 uvlong devarch_fastticks(uvlong *hz);
 void devarch_hook_ioalloc();
 
-void    (*coherence)(void);
 int   (*iprint)(char*, ...);
 int devcons_iprint(char*, ...);
 /*x: portfns_core.h backward deps breaker */
@@ -73,7 +72,7 @@ int devcons_iprint(char*, ...);
 #define exit          main_exit
 #define isaconfig     main_isaconfig
 //#define coherence     nop
-#define arch_fastticks     devarch_fastticks
+//#define arch_fastticks     devarch_fastticks
 #define cclose        chan_cclose
 #define proctab       proc_proctab
 #define postnote      proc_postnote

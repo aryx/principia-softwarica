@@ -24,7 +24,7 @@ tscticks(uvlong *hz)
     if(hz != nil)
         *hz = cpu->cpuhz;
 
-    cycles(&cpu->tscticks);   /* Uses the rdtsc instruction */
+    arch_cycles(&cpu->tscticks);   /* Uses the rdtsc instruction */
     return cpu->tscticks;
 }
 
@@ -121,7 +121,7 @@ syncclock(void)
         while(x == CPUS(0)->tscticks)
             ;
         wrmsr(0x10, CPUS(0)->tscticks);
-        cycles(&cpu->tscticks);
+        arch_cycles(&cpu->tscticks);
     }
 }
 /*e: function syncclock(x86) */
