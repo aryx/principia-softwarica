@@ -5,10 +5,5 @@
 #include	"dat.h"
 #include	"fns.h"
 
-// callback for portkbd.c
-void
-arch_setleds(Kbscan *kbscan)
-{
-  USED(kbscan);
-  return;
-}
+// empty callback for portkbd.c
+void arch_setleds(Kbscan *kbscan) { USED(kbscan); }

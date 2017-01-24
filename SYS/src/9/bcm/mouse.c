@@ -5,29 +5,13 @@
 #include "dat.h"
 #include "fns.h"
 
-void arch_ps2mouse(void)
-{
-}
+// empty callbacks for portmouse.c
 
-void arch_setaccelerated(void)
-{
-}
-
-void arch_setlinear(void)
-{
-}
-
-void arch_setres(int n)
-{
-  USED(n);
-}
-
-void arch_setintellimouse(void)
-{
-}
-
-void arch_resetmouse(void)
-{
-}
+void arch_ps2mouse(void) { }
+void arch_setaccelerated(void) { }
+void arch_setlinear(void) { }
+void arch_setres(int n) { USED(n); }
+void arch_setintellimouse(void) { }
+void arch_resetmouse(void) { }
 
 

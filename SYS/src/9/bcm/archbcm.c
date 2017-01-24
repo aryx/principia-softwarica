@@ -1,13 +1,13 @@
 /*
  * bcm2835 (e.g. original raspberry pi) architecture-specific stuff
  */
-
 #include "u.h"
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-#include "../port/error.h"
+
 #include "io.h"
 #include "arm.h"
 
@@ -159,6 +159,7 @@ arch_xinc(long *p)
 	arch_splx(s);
 }
 
+// overwrite libc!
 int
 ainc(int *p)
 {
