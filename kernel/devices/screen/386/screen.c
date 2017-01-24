@@ -513,7 +513,7 @@ screensize(int x, int y, int z, ulong chan)
         xfree(oldsoft);
     /*x: [[screensize()]] initializations part2 */
     if(didswcursorinit)
-        swcursorinit();
+        swcursorinit_wrapper();
     /*x: [[screensize()]] initializations part2 */
     drawcmap();
     /*x: [[screensize()]] initializations part2 */
@@ -1227,7 +1227,7 @@ swcursorclock(void)
 
 /*s: function swcursorinit(x86) */
 void
-swcursorinit(void)
+swcursorinit_wrapper(void)
 {
     static bool init;
     VGAscr *scr;

@@ -284,7 +284,7 @@ vgactl(Cmdbuf *cb)
         }
         if(strcmp(cb->f[1], "soft") == 0){
             lock(&cursor);
-            swcursorinit();
+            swcursorinit_wrapper();
             if(scr->cur && scr->cur->disable)
                 scr->cur->disable(scr);
             scr->cur = &swcursor;

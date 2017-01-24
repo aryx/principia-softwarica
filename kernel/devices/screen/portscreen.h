@@ -36,6 +36,7 @@ extern Cursorinfo 	cursor;
 /*e: global signature cursor */
 
 // swcursor.c
+/*
 extern void swcursorhide(void);
 extern void swcursoravoid(Rectangle);
 extern void swcursordraw(void);
@@ -44,6 +45,9 @@ extern int swmove(Point p);
 extern void swcursorinit(void);
 extern Cursor swcursor_arrow;
 extern bool swenabled;
+*/
+
+extern void swcursorinit_wrapper(void);
 
 /* defined in <arch>/screen.c, needed by devmouse.c */
 extern Cursor 		arch_arrow;
