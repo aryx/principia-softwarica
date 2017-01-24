@@ -16,8 +16,6 @@
 
 #include    "../port/portscreen.h"
 
-
-
 /*s: global swcursor_arrow */
 Cursor  swcursor_arrow = {
     .offset = { -1, -1 },
@@ -96,7 +94,7 @@ swcursor_init(void)
     if(!init){
         init = true;
         addclock0link(swcursor_clock, 10);
-        //swenabled = 1; //bcm: was not in pc (but maybe bug?)
+        swenabled = 1; //bcm: was not in pc (but maybe bug?)
     }
     /*s: [[swcursorinit()]] free old versions of cursor images if any */
     if(swback){
@@ -137,7 +135,7 @@ swcursor_clock(void)
 
     if(!swenabled)
         return;
-    //swmove(mousexy()); //bcm: only, was not in pc
+    swcursor_move(mousexy()); //bcm: only, was not in pc
     if(swvisible && eqpt(swpt, swvispt) && swvers==swvisvers)
         return;
 
@@ -160,7 +158,7 @@ swcursor_clock(void)
 void
 swcursor_draw(void)
 {
- bool dounlock;
+    bool dounlock;
 
     if(swvisible)
         return;
@@ -168,8 +166,8 @@ swcursor_draw(void)
         return;
     if(swback == nil || swimg1 == nil || swmask1 == nil)
         return;
-    //dounlock = canqlock(&drawlock); //bcm:
-    assert(!canqlock(&drawlock)); // pc:
+    dounlock = canqlock(&drawlock); //bcm:
+    //assert(!canqlock(&drawlock)); // pc:
 
     swvispt = swpt;
     swvisvers = swvers;
@@ -182,8 +180,8 @@ swcursor_draw(void)
     arch_flushmemscreen(swrect);
     swvisible = true;
     //bcm:
-    //if(dounlock)
-    //    qunlock(&drawlock);
+    if(dounlock)
+        qunlock(&drawlock);
 
 }
 /*e: function swcursordraw */
