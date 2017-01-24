@@ -35,6 +35,15 @@ typedef struct Cursorinfo Cursorinfo;
 extern Cursorinfo 	cursor;
 /*e: global signature cursor */
 
+// swcursor.c
+extern void swcursorhide(void);
+extern void swcursoravoid(Rectangle);
+extern void swcursordraw(void);
+extern void swload(Cursor *curs);
+extern int swmove(Point p);
+extern Cursor swcursor_arrow;
+extern bool swenabled;
+
 /* defined in <arch>/screen.c, needed by devmouse.c */
 extern Cursor 		arch_arrow;
 

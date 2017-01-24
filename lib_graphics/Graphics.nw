@@ -1707,7 +1707,7 @@ transfering an image     & \ref{chap:image-io}                  & [[transfer.c]]
 image IO                 & \ref{chap:image-io}                  & [[io.c]]                        & [[io.c]]                  &                             & [[readimage()]]                                              \\ % writememimage() is here actually, and it's compressed
 %
 mouse management         & \ref{chap:input}                     & [[mouse.h]] [[mouse.c]]         &                           &                             & [[Mouse]] [[Mousectl]] [[initmouse()]] [[readmouse()]]      \\ % [[closemouse()]]
-cursor management        & \ref{chap:input}                     & [[cursor.h]]                    &                           & [[CURSOR.h]] [[SWCURSOR.c]] & [[swcursorinit()]] [[cursoron()]]                           \\
+cursor management        & \ref{chap:input}                     & [[cursor.h]]                    &                           & [[CURSOR.h]] [[swcursor.c]] & [[swcursorinit()]] [[cursoron()]]                           \\
 keyboard management      & \ref{chap:input}                     & [[keyboard.h]] [[keyboard.c]]   &                           &                             & [[Kxxx]] [[Keyboardctl]] [[initkeyboard()]]                 \\ % [[closekeyboard()]] 
 %
 overlapping layers      & \ref{chap:overlapping-windows}       & [[window.h]] [[window.c]]       &                           & [[DRAWDESKTOP.c]]           & [[allocwindow()]] \\ % desktop.c,
@@ -14938,8 +14938,8 @@ struct	Cursor
 
 % screen.h interface
 % vgascreen.c (seems general enough, could be put in a generic screen.c)
-<<global arrow(x86)>>=
-Cursor  arch_arrow = {
+<<global swcursor_arrow>>=
+Cursor  swcursor_arrow = {
     .offset = { -1, -1 },
     .clr = { 
       0xFF, 0xFF, 0x80, 0x01, 0x80, 0x02, 0x80, 0x0C, 
@@ -14985,7 +14985,7 @@ extern Cursorinfo 	cursor;
 % save image, and then draw/save appropriately!
 
 
-<<global swback(x86)>>=
+<<global swback>>=
 Memimage*   swback; /* screen under cursor */
 @
 % quite important!
@@ -14993,11 +14993,11 @@ Memimage*   swback; /* screen under cursor */
 
 % Grey1 version
 
-<<global swimg1(x86)>>=
+<<global swimg1>>=
 Memimage*   swimg1;
 @
 % should be just black color no?
-<<global swmask1(x86)>>=
+<<global swmask1>>=
 Memimage*   swmask1;
 @
 % mask of the bits of the cursor?
@@ -15008,10 +15008,10 @@ Memimage*   swmask1;
 \subsubsection{Cursor coordinates and visibility}
 
 
-<<global swpt(x86)>>=
+<<global swpt>>=
 Point   swpt;   /* desired cursor location */
 @
-<<global swvispt(x86)>>=
+<<global swvispt>>=
 Point   swvispt;    /* actual cursor location */
 @
 % set by devmouse? mouse interrupt?
@@ -15020,10 +15020,10 @@ Point   swvispt;    /* actual cursor location */
 
 
 
-<<global swvers(x86)>>=
+<<global swvers>>=
 int swvers; /* incremented each time cursor image changes */
 @
-<<global swvisvers(x86)>>=
+<<global swvisvers>>=
 int swvisvers;  /* the version on the screen */
 @
 % changed by swload
@@ -15032,12 +15032,12 @@ int swvisvers;  /* the version on the screen */
 
 % see swcursorclock for use of those globals
 
-<<global swenabled(x86)>>=
+<<global swenabled>>=
 bool swenabled;  /* is the cursor supposed to be on the screen? */
 @
 % set after cursoron() and swenable
 
-<<global swvisible(x86)>>=
+<<global swvisible>>=
 bool swvisible;  /* is the cursor visible? */
 @
 % set where? why it would not be visible? after swcursorhide,
@@ -15081,8 +15081,8 @@ VGAcur swcursor =
     .enable  = swenable,
     .disable = swdisable,
 
-    .load = swload,
-    .move = swmove,
+    .load = swload_wrapper,
+    .move = swmove_wrapper,
 };
 @
 
@@ -15095,7 +15095,7 @@ VGAcur swcursor =
 % screensize is vgascreen.c, called by aux/vga to see the size
 <<[[screensize()]] initializations part2>>=
 if(didswcursorinit)
-    swcursorinit();
+    swcursorinit_wrapper();
 @
 % if did then redo?
 
@@ -15105,23 +15105,20 @@ bool didswcursorinit;
 % if did it once that means we want to use swcursor?
 
 
+
 % screensize | ?? -> <>
-<<function swcursorinit(x86)>>=
+<<function swcursorinit>>=
 void
 swcursorinit(void)
 {
     static bool init;
-    VGAscr *scr;
     <<[[swcursorinit()]] other locals>>
 
-    didswcursorinit = true;
     if(!init){
         init = true;
         addclock0link(swcursorclock, 10);
+        swenabled = 1; //bcm: was not in pc (but maybe bug?)
     }
-    scr = &vgascreen;
-
-    <<[[swcursorinit()]] sanity check scr regarding cursor>>
     <<[[swcursorinit()]] free old versions of cursor images if any>>
 
     swback  = allocmemimage(Rect(0,0,32,32), gscreen->chan);
@@ -15147,10 +15144,10 @@ swcursorinit(void)
 
 % Grey8 version
 
-<<global swimg(x86)>>=
+<<global swimg>>=
 Memimage*   swimg;  /* cursor image */
 @
-<<global swmask(x86)>>=
+<<global swmask>>=
 Memimage*   swmask; /* cursor mask */
 @
 % initialized by swcursorinit, but set by by swload. used then
@@ -15159,21 +15156,6 @@ Memimage*   swmask; /* cursor mask */
 
 
 
-<<[[swcursorinit()]] other locals>>=
-static bool warned;
-@
-<<[[swcursorinit()]] sanity check scr regarding cursor>>=
-if(scr == nil || gscreen == nil)
-    return;
-if(scr->dev == nil || scr->dev->linear == nil){
-    if(!warned){
-        print("cannot use software cursor on non-linear vga screen\n");
-        warned = true;
-    }
-    return;
-}
-@
-% linear??
 
 <<[[swcursorinit()]] free old versions of cursor images if any>>=
 if(swback){
@@ -15200,7 +15182,7 @@ if(swback == nil || swmask == nil || swmask1 == nil || swimg == nil || swimg1 ==
 
 % ?? -> <> (as ?? <- addlock0link(<>) <- swcursorinit
 % so called at each clock interrupt 
-<<function swcursorclock(x86)>>=
+<<function swcursorclock>>=
 void
 swcursorclock(void)
 {
@@ -15208,6 +15190,7 @@ swcursorclock(void)
 
     if(!swenabled)
         return;
+    swmove(mousexy()); //bcm: only, was not in pc
     if(swvisible && eqpt(swpt, swvispt) && swvers==swvisvers)
         return;
 
@@ -15237,24 +15220,27 @@ swcursorclock(void)
 
 
 
-<<global swrect(x86)>>=
+<<global swrect>>=
 Rectangle   swrect; /* screen rectangle in swback */
 @
 % why need to be a global? because used in swcursorhide after.
 
 
 % swcursorclock | swenable -> <> (assumes drawlock is hold)
-<<function swcursordraw(x86)>>=
+<<function swcursordraw>>=
 void
 swcursordraw(void)
 {
+ bool dounlock;
+
     if(swvisible)
         return;
     if(!swenabled)
         return;
     if(swback == nil || swimg1 == nil || swmask1 == nil)
         return;
-    assert(!canqlock(&drawlock));
+    dounlock = canqlock(&drawlock); //bcm:
+    //assert(!canqlock(&drawlock)); // pc:
 
     swvispt = swpt;
     swvisvers = swvers;
@@ -15266,12 +15252,16 @@ swcursordraw(void)
     memimagedraw(gscreen, swrect, swimg1, ZP, swmask1, ZP, SoverD);
     arch_flushmemscreen(swrect);
     swvisible = true;
+    //bcm:
+    if(dounlock)
+        qunlock(&drawlock);
+
 }
 @
 % no use swimg here. dead?
 
 % swcursorclock | (hwdraw -> swcursoravoid) -> <>
-<<function swcursorhide(x86)>>=
+<<function swcursorhide>>=
 /*
  * called with drawlock locked for us, most of the time.
  * kernel prints at inopportune times might mean we don't
@@ -15326,7 +15316,7 @@ if(scr->cur == &swcursor){
 
 % if no hardware accel then no call to hwdraw, but ok?
 
-<<function swcursoravoid(x86)>>=
+<<function swcursoravoid>>=
 void
 swcursoravoid(Rectangle r)
 {
@@ -15434,9 +15424,9 @@ arch_ksetcursor(Cursor* curs)
 %old: was called setcursor
 
 
-<<function swload(x86)>>=
+<<function swload>>=
 void
-swload(VGAscr*, Cursor *curs)
+swload(Cursor *curs)
 {
     byte *ip, *mp;
     int i, j, set, clr;
@@ -15475,13 +15465,13 @@ swload(VGAscr*, Cursor *curs)
 
 % see also adv topics section on setcursor and /dev/cursor
 
-<<global swoffset(x86)>>=
+<<global swoffset>>=
 Point   swoffset;
 @
 
-<<function swmove(x86)>>=
+<<function swmove>>=
 int
-swmove(VGAscr*, Point p)
+swmove(Point p)
 {
     swpt = addpt(p, swoffset);
     return 0;
