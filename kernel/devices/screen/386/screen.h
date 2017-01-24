@@ -180,8 +180,4 @@ extern Lock vgascreenlock;
 
 // software cursors
 extern VGAcur swcursor;
-extern void swcursorinit(void);
-//extern void swcursorhide(void);
-//extern void swcursoravoid(Rectangle);
-//extern void swcursorunhide(void);
 /*e: kernel/devices/screen/386/screen.h */

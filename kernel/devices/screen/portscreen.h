@@ -41,6 +41,7 @@ extern void swcursoravoid(Rectangle);
 extern void swcursordraw(void);
 extern void swload(Cursor *curs);
 extern int swmove(Point p);
+extern void swcursorinit(void);
 extern Cursor swcursor_arrow;
 extern bool swenabled;
 
