@@ -152,7 +152,7 @@ interrupt(Ureg*, void *arg)
 	uart = arg;
 	ap = (u32int*)uart->regs;
 
-	coherence();
+	arch_coherence();
 	if(0 && (ap[Irq] & UartIrq) == 0)
 		return;
 	if(ap[MuLsr] & TxRdy)
@@ -168,7 +168,7 @@ interrupt(Ureg*, void *arg)
 			uartrecv(uart, ap[MuIo] & 0xFF);
 		}while(ap[MuLsr] & RxRdy);
 	}
-	coherence();
+	arch_coherence();
 }
 
 static Uart*
@@ -223,7 +223,7 @@ kick(Uart *uart)
 	ap = (u32int*)uart->regs;
 	if(uart->blocked)
 		return;
-	coherence();
+	arch_coherence();
 	while(ap[MuLsr] & TxRdy){
 		if(uart->op >= uart->oe && uartstageoutput(uart) == 0)
 			break;
@@ -233,7 +233,7 @@ kick(Uart *uart)
 		ap[MuIer] &= ~TxIen;
 	else
 		ap[MuIer] |= TxIen;
-	coherence();
+	arch_coherence();
 }
 
 /* TODO */

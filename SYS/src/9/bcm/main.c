@@ -37,10 +37,6 @@ extern  Dev*  conf_devtab[];
 
 extern	char*	conffile;
 
-// in l.s
-extern void    coherence1(void);
-
-
 
 uintptr kseg0 = KZERO;
 
@@ -318,7 +314,6 @@ main(void)
 
     iprint = devcons_iprint;
     devtab = conf_devtab;
-    coherence = coherence1;
 
 	cpu = (Cpu*)CPUADDR;
 	memset(edata, 0, end - edata);	/* clear bss */
@@ -379,7 +374,7 @@ init0(void)
 	char buf[2*KNAMELEN];
 
 	up->nerrlab = 0;
-	coherence();
+	arch_coherence();
 	arch_spllo();
 
 	/*

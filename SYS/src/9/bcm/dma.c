@@ -203,7 +203,7 @@ dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
 	dmaregs[Intstatus] = 0;
 	ctlr->regs[Cs] = Int;
 	microdelay(1);
-	coherence();
+	arch_coherence();
 	DBG dumpdregs("before Active", ctlr->regs);
 	ctlr->regs[Cs] = Active;
 	DBG dumpdregs("after Active", ctlr->regs);

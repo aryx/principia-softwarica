@@ -65,7 +65,7 @@ kexit(Ureg*)
 
 	/* precise time accounting, kernel exit */
 	tos = (Tos*)(USTKTOP-sizeof(Tos));
-	cycles(&t);
+	arch_cycles(&t);
 	tos->kcycles += t - up->kentry;
 	tos->pcycles = up->pcycles;
 	tos->cyclefreq = cpu->cpuhz;
@@ -151,7 +151,7 @@ arch_procsave(Proc* p)
 {
 	uvlong t;
 
-	cycles(&t);
+	arch_cycles(&t);
 	p->pcycles += t;
 
 // TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.
@@ -165,7 +165,7 @@ arch_procrestore(Proc* p)
 
 	if(p->kp)
 		return;
-	cycles(&t);
+	arch_cycles(&t);
 	p->pcycles -= t;
 
 	fpuprocrestore(p);

@@ -88,7 +88,7 @@ vcwrite(uint chan, int val)
 	val &= ~ChanMask;
 	while(r[Status]&Full)
 		;
-	coherence();
+	arch_coherence();
 	r[Write] = val | chan;
 }
 
@@ -102,7 +102,7 @@ vcread(uint chan)
 	do{
 		while(r[Status]&Empty)
 			;
-		coherence();
+		arch_coherence();
 		x = r[Read];
 	}while((x&ChanMask) != chan);
 	return x & ~ChanMask;

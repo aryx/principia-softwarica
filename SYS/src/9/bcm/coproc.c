@@ -74,7 +74,7 @@ cpwr(int cp, int op1, int crn, int crm, int op2, ulong val)
 	setupcpop(instr, 0xee000010, cp, op1, crn, crm, op2); /* MCR, Rt is R0 */
 	fp = (Pvfu)instr;
 	fp(val);
-	coherence();
+	arch_coherence();
 	arch_splx(s);
 }
 
@@ -141,7 +141,7 @@ fpwr(int fpreg, ulong val)
 	setupfpctlop(instr, 0xeee00010, fpreg);		/* VMSR, Rt is R0 */
 	fp = (Pvfu)instr;
 	fp(val);
-	coherence();
+	arch_coherence();
 	arch_splx(s);
 }
 
@@ -178,7 +178,7 @@ fpsavereg(int fpreg, uvlong *fpp)
 	fp = (ulong (*)(uvlong *))instr;
 	r = fp(fpp);
 	arch_splx(s);
-	coherence();
+	arch_coherence();
 	return r;			/* not too meaningful */
 }
 
@@ -195,6 +195,6 @@ fprestreg(int fpreg, uvlong val)
 	setupfpop(instr, 0xed100000 | CpDFP << 8, fpreg); /* VLDR, Rt is R0 */
 	fp = (void (*)(uvlong *))instr;
 	fp(&val);
-	coherence();
+	arch_coherence();
 	arch_splx(s);
 }

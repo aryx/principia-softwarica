@@ -19,9 +19,10 @@ void arch_setlinear(void)
 
 void arch_setres(int n)
 {
+  USED(n);
 }
 
-void arch_setintellimouse()
+void arch_setintellimouse(void)
 {
 }
 

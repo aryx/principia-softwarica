@@ -195,7 +195,7 @@ syscall(Ureg* ureg)
 		panic("syscall: from kernel: pc %#lux r14 %#lux psr %#lux",
 			ureg->pc, ureg->r14, ureg->psr);
 
-	cycles(&up->kentry);
+	arch_cycles(&up->kentry);
 
 	cpu->syscall++;
 	up->insyscall = 1;

@@ -362,7 +362,7 @@ TEXT arch_idlehands(SB), $-4
 	RET
 
 
-TEXT coherence1(SB), $-4
+TEXT arch_coherence(SB), $-4
 	BARRIERS
 	RET
 

@@ -58,7 +58,7 @@ archreboot(void)
 	r = (u32int*)POWERREGS;
 	r[Wdog] = Password | 1;
 	r[Rstc] = Password | (r[Rstc] & ~CfgMask) | CfgReset;
-	coherence();
+	arch_coherence();
 	for(;;)
 		;
 }
@@ -191,12 +191,12 @@ cas32(void* addr, u32int old, u32int new)
 		*(u32int*)addr = new;
 	arch_splx(s);
 	if (r)
-		coherence();
+		arch_coherence();
 	return r;
 }
 
 int
-cmpswap(long *addr, long old, long new)
+arch_cmpswap(long *addr, long old, long new)
 {
 	return cas32(addr, old, new);
 }

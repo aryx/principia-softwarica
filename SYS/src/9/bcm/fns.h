@@ -16,20 +16,22 @@
 
 #define	getpgcolor(a)	0
 #define	kmapinval()
-#define countpagerefs(a, b)
 
+// different signatures in different arch so cant factorize
 void  arch_touser(uintptr);
+int   arch_cmpswap(long*, long, long);
+void  arch_coherence(void);
+#define arch_cycles(ip) *(ip) = arch_lcycles()
 
+// same signatures but optimized away
+#define arch_countpagerefs(a, b)
+#define arch_intrenable(i, f, a, b, n) irqenable((i), (f), (a))
 
 void dumpregs(Ureg*);
 
 void confinit(void);
 void printinit(void);
 void userinit(void);
-
-
-
-#define cycles(ip) *(ip) = arch_lcycles()
 
 
 extern void mmuinit1(void*);
@@ -39,38 +41,26 @@ extern uintptr mmukmap(uintptr, uintptr, usize);
 
 extern void kexit(Ureg*);
 
-
 extern void irqenable(int, void (*)(Ureg*, void*), void*);
-#define arch_intrenable(i, f, a, b, n) irqenable((i), (f), (a))
 
 extern void intrcpushutdown(void);
 extern void intrshutdown(void);
 extern void intrsoff(void);
 
 
-
 extern void archreboot(void);
 extern void archreset(void);
 
-
 extern void clockinit(void);
 extern void clockshutdown(void);
-
-extern void (*coherence)(void);
-extern void coherence1(void);
-
 
 
 extern int cas32(void*, u32int, u32int);
 extern int cas(ulong*, ulong, ulong);
 
-extern int cmpswap(long*, long, long);
-
-
 extern char *cputype2name(char *buf, int size);
 
 extern void swcursorinit(void);
-
 
 
 extern void armtimerset(int);

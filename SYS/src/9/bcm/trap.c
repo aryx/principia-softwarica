@@ -107,7 +107,7 @@ arch_trapinit(void)
 	setr13(PsrMund, cpu->sund);
 	setr13(PsrMsys, cpu->ssys);
 
-	coherence();
+	arch_coherence();
 }
 
 void
@@ -180,9 +180,9 @@ irq(Ureg* ureg)
 	for(v = vctl; v; v = v->next)
 		if(v->cpu == cpu->cpuno && (*v->reg & v->mask) != 0){
 			found = 1;
-			coherence();
+			arch_coherence();
 			v->f(ureg, v->a);
-			coherence();
+			arch_coherence();
 			if(v->irq == IRQclock || v->irq == IRQcntps || v->irq == IRQcntpns)
 				clockintr = 1;
 		}
@@ -206,9 +206,9 @@ fiq(Ureg *ureg)
 		panic("cpu%d: unexpected item in bagging area", cpu->cpuno);
 	cpu->intr++;
 	ureg->pc -= 4;
-	coherence();
+	arch_coherence();
 	v->f(ureg, v->a);
-	coherence();
+	arch_coherence();
 	intrtime();
 }
 
@@ -366,7 +366,7 @@ trap(Ureg *ureg)
 	user = (ureg->psr & PsrMask) == PsrMusr;
 	if(user){
 		up->dbgreg = ureg;
-		cycles(&up->kentry);
+		arch_cycles(&up->kentry);
 	}
 
 	/*
