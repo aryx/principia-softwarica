@@ -178,6 +178,8 @@ extern void vgalinearaddr(VGAscr*, ulong, int);
 extern void vgablank(VGAscr*, int);
 extern Lock vgascreenlock;
 
+void swcursorinit_wrapper(void);
+
 // software cursors
 extern VGAcur swcursor;
 /*e: kernel/devices/screen/386/screen.h */

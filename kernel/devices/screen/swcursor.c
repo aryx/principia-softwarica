@@ -16,14 +16,6 @@
 
 #include    "../port/portscreen.h"
 
-extern void swcursorhide(void);
-extern void swcursoravoid(Rectangle);
-extern void swcursordraw(void);
-extern void swload(Cursor *curs);
-extern int swmove(Point p);
-extern void swcursorinit(void);
-extern Cursor swcursor_arrow;
-extern bool swenabled;
 
 
 /*s: global swcursor_arrow */
@@ -89,12 +81,12 @@ Rectangle   swrect; /* screen rectangle in swback */
 Point   swoffset;
 /*e: global swoffset */
 
-void swcursorclock(void);
+void swcursor_clock(void);
 
 
 /*s: function swcursorinit */
 void
-swcursorinit(void)
+swcursor_init(void)
 {
     static bool init;
     /*s: [[swcursorinit()]] other locals */
@@ -103,7 +95,7 @@ swcursorinit(void)
 
     if(!init){
         init = true;
-        addclock0link(swcursorclock, 10);
+        addclock0link(swcursor_clock, 10);
         //swenabled = 1; //bcm: was not in pc (but maybe bug?)
     }
     /*s: [[swcursorinit()]] free old versions of cursor images if any */
@@ -139,7 +131,7 @@ swcursorinit(void)
 
 /*s: function swcursorclock */
 void
-swcursorclock(void)
+swcursor_clock(void)
 {
     int x;
 
@@ -155,8 +147,8 @@ swcursorclock(void)
      if(!swvisible || !eqpt(swpt, swvispt) || swvers!=swvisvers)
       if(canqlock(&drawlock)){
 
-        swcursorhide();
-        swcursordraw();
+        swcursor_hide();
+        swcursor_draw();
 
         qunlock(&drawlock);
     }
@@ -166,7 +158,7 @@ swcursorclock(void)
 
 /*s: function swcursordraw */
 void
-swcursordraw(void)
+swcursor_draw(void)
 {
  bool dounlock;
 
@@ -204,7 +196,7 @@ swcursordraw(void)
  * that should be okay: worst case we get cursor droppings.
  */
 void
-swcursorhide(void)
+swcursor_hide(void)
 {
     if(!swvisible)
         return;
@@ -220,10 +212,10 @@ swcursorhide(void)
 
 /*s: function swcursoravoid */
 void
-swcursoravoid(Rectangle r)
+swcursor_avoid(Rectangle r)
 {
     if(swvisible && rectXrect(r, swrect))
-        swcursorhide();
+        swcursor_hide();
 }
 /*e: function swcursoravoid */
 

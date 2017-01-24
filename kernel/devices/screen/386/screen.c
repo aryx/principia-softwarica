@@ -17,6 +17,15 @@
 #include "../port/portscreen.h"
 #include "screen.h"
 
+static void swcursorhide(void);
+static void swcursoravoid(Rectangle);
+static void swcursordraw(void);
+static void swload(VGAscr*, Cursor *curs);
+static int swmove(VGAscr*, Point p);
+static void swcursorinit(void);
+
+void swcursorinit_wrapper(void);
+
 //---------------------------------------------------------------------------
 // vgax.c
 //---------------------------------------------------------------------------
@@ -384,8 +393,6 @@ addvgaseg(char *name, ulong pa, ulong size)
 
 //#define RGB2K(r,g,b)    ((156763*(r)+307758*(g)+59769*(b))>>19)
 
-extern void swcursorhide(void);
-extern void swcursoravoid(Rectangle);
 extern void vgalinearpci(VGAscr*);
 
 
@@ -1030,55 +1037,28 @@ vgalinearaddr(VGAscr *scr, ulong paddr, int size)
  * Software cursor. 
  */
 
-/*s: global swvisible(x86) */
 bool swvisible;  /* is the cursor visible? */
-/*e: global swvisible(x86) */
-/*s: global swenabled(x86) */
 bool swenabled;  /* is the cursor supposed to be on the screen? */
-/*e: global swenabled(x86) */
-/*s: global swback(x86) */
 Memimage*   swback; /* screen under cursor */
-/*e: global swback(x86) */
-/*s: global swimg(x86) */
 Memimage*   swimg;  /* cursor image */
-/*e: global swimg(x86) */
-/*s: global swmask(x86) */
 Memimage*   swmask; /* cursor mask */
-/*e: global swmask(x86) */
-/*s: global swimg1(x86) */
 Memimage*   swimg1;
-/*e: global swimg1(x86) */
-/*s: global swmask1(x86) */
 Memimage*   swmask1;
-/*e: global swmask1(x86) */
-
-/*s: global swoffset(x86) */
 Point   swoffset;
-/*e: global swoffset(x86) */
-/*s: global swrect(x86) */
 Rectangle   swrect; /* screen rectangle in swback */
-/*e: global swrect(x86) */
-/*s: global swpt(x86) */
 Point   swpt;   /* desired cursor location */
-/*e: global swpt(x86) */
-/*s: global swvispt(x86) */
 Point   swvispt;    /* actual cursor location */
-/*e: global swvispt(x86) */
-/*s: global swvers(x86) */
 int swvers; /* incremented each time cursor image changes */
-/*e: global swvers(x86) */
-/*s: global swvisvers(x86) */
 int swvisvers;  /* the version on the screen */
-/*e: global swvisvers(x86) */
 
-/*s: function swcursorhide(x86) */
+
 /*
  * called with drawlock locked for us, most of the time.
  * kernel prints at inopportune times might mean we don't
  * hold the lock, but memimagedraw is now reentrant so
  * that should be okay: worst case we get cursor droppings.
  */
-void
+static void
 swcursorhide(void)
 {
     if(!swvisible)
@@ -1091,19 +1071,15 @@ swcursorhide(void)
     memimagedraw(gscreen, swrect, swback, ZP, memopaque, ZP, S);
     arch_flushmemscreen(swrect);
 }
-/*e: function swcursorhide(x86) */
 
-/*s: function swcursoravoid(x86) */
-void
+static void
 swcursoravoid(Rectangle r)
 {
     if(swvisible && rectXrect(r, swrect))
         swcursorhide();
 }
-/*e: function swcursoravoid(x86) */
 
-/*s: function swcursordraw(x86) */
-void
+static void
 swcursordraw(void)
 {
     if(swvisible)
@@ -1125,9 +1101,6 @@ swcursordraw(void)
     arch_flushmemscreen(swrect);
     swvisible = true;
 }
-/*e: function swcursordraw(x86) */
-
-/*s: function swenable(x86) */
 /*
  * Need to lock drawlock for ourselves.
  */
@@ -1140,9 +1113,7 @@ swenable(VGAscr*)
         qunlock(&drawlock);
     }
 }
-/*e: function swenable(x86) */
 
-/*s: function swdisable(x86) */
 void
 swdisable(VGAscr*)
 {
@@ -1152,10 +1123,8 @@ swdisable(VGAscr*)
         qunlock(&drawlock);
     }
 }
-/*e: function swdisable(x86) */
 
-/*s: function swload(x86) */
-void
+static void
 swload(VGAscr*, Cursor *curs)
 {
     byte *ip, *mp;
@@ -1188,19 +1157,15 @@ swload(VGAscr*, Cursor *curs)
     memimagedraw(swimg1,  swimg1->r,  swimg,  ZP, memopaque, ZP, S);
     memimagedraw(swmask1, swmask1->r, swmask, ZP, memopaque, ZP, S);
 }
-/*e: function swload(x86) */
 
-/*s: function swmove(x86) */
-int
+static int
 swmove(VGAscr*, Point p)
 {
     swpt = addpt(p, swoffset);
     return 0;
 }
-/*e: function swmove(x86) */
 
-/*s: function swcursorclock(x86) */
-void
+static void
 swcursorclock(void)
 {
     int x;
@@ -1223,17 +1188,13 @@ swcursorclock(void)
     }
     arch_splx(x);
 }
-/*e: function swcursorclock(x86) */
 
-/*s: function swcursorinit(x86) */
 void
 swcursorinit_wrapper(void)
 {
     static bool init;
     VGAscr *scr;
-    /*s: [[swcursorinit()]] other locals */
     static bool warned;
-    /*e: [[swcursorinit()]] other locals */
 
     didswcursorinit = true;
     if(!init){
@@ -1242,7 +1203,6 @@ swcursorinit_wrapper(void)
     }
     scr = &vgascreen;
 
-    /*s: [[swcursorinit()]] sanity check scr regarding cursor */
     if(scr == nil || gscreen == nil)
         return;
     if(scr->dev == nil || scr->dev->linear == nil){
@@ -1252,8 +1212,7 @@ swcursorinit_wrapper(void)
         }
         return;
     }
-    /*e: [[swcursorinit()]] sanity check scr regarding cursor */
-    /*s: [[swcursorinit()]] free old versions of cursor images if any */
+
     if(swback){
         freememimage(swback);
         freememimage(swmask);
@@ -1261,7 +1220,6 @@ swcursorinit_wrapper(void)
         freememimage(swimg);
         freememimage(swimg1);
     }
-    /*e: [[swcursorinit()]] free old versions of cursor images if any */
 
     swback  = allocmemimage(Rect(0,0,32,32), gscreen->chan);
 
@@ -1270,19 +1228,17 @@ swcursorinit_wrapper(void)
     swimg   = allocmemimage(Rect(0,0,16,16), GREY8);
     swimg1  = allocmemimage(Rect(0,0,16,16), GREY1);
 
-    /*s: [[swcursorinit()]] sanity check cursor images */
     if(swback == nil || swmask == nil || swmask1 == nil || swimg == nil || swimg1 == nil){
         print("software cursor: allocmemimage fails");
         return;
     }
-    /*e: [[swcursorinit()]] sanity check cursor images */
 
     memfillcolor(swmask,  DOpaque);
     memfillcolor(swmask1, DOpaque);
     memfillcolor(swimg,   DBlack);
     memfillcolor(swimg1,  DBlack);
 }
-/*e: function swcursorinit(x86) */
+
 
 /*s: global swcursor(x86) */
 VGAcur swcursor =
@@ -1296,4 +1252,5 @@ VGAcur swcursor =
     .move = swmove,
 };
 /*e: global swcursor(x86) */
+
 /*e: kernel/devices/screen/386/screen.c */
