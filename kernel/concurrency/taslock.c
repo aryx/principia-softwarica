@@ -93,7 +93,7 @@ lock(Lock *l)
         l->cpu = CPUS(cpu->cpuno); // pad's third bugfix
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
-        l->lockcycles = -lcycles();
+        l->lockcycles = -arch_lcycles();
 #endif
 /*e: lock ifdef LOCKCYCLES */
         return 0;
@@ -135,7 +135,7 @@ lock(Lock *l)
             l->isilock = false;
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
-        l->lockcycles = -lcycles();
+        l->lockcycles = -arch_lcycles();
 #endif
 /*e: lock ifdef LOCKCYCLES */
             return 1;
@@ -192,7 +192,7 @@ acquire:
     l->cpu = CPUS(cpu->cpuno);
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
-        l->lockcycles = -lcycles();
+        l->lockcycles = -arch_lcycles();
 #endif
 /*e: lock ifdef LOCKCYCLES */
 }
@@ -218,7 +218,7 @@ canlock(Lock *l)
     l->isilock = false;
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
-        l->lockcycles = -lcycles();
+        l->lockcycles = -arch_lcycles();
 #endif
 /*e: lock ifdef LOCKCYCLES */
     return true;
@@ -293,6 +293,7 @@ iunlock(Lock *l)
 
     sr = l->sr;
     l->cpu = nil;
+    arch_coherence(); // added in latest bcm/
     l->key = 0;
     arch_coherence();
     cpu->ilockdepth--;
