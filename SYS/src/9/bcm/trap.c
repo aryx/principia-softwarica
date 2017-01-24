@@ -85,7 +85,7 @@ extern int notify(Ureg*);
  *  set up for exceptions
  */
 void
-trapinit(void)
+arch_trapinit(void)
 {
 	Vpage0 *vpage0;
 
@@ -153,7 +153,7 @@ intrtime(void)
 	ulong diff;
 	ulong x;
 
-	x = perfticks();
+	x = arch_perfticks();
 	diff = x - cpu->perf.intrts;
 	cpu->perf.intrts = x;
 
@@ -174,7 +174,7 @@ irq(Ureg* ureg)
 	int clockintr;
 	int found;
 
-	cpu->perf.intrts = perfticks();
+	cpu->perf.intrts = arch_perfticks();
 	clockintr = 0;
 	found = 0;
 	for(v = vctl; v; v = v->next)
@@ -200,7 +200,7 @@ fiq(Ureg *ureg)
 {
 	Vctl *v;
 
-	cpu->perf.intrts = perfticks();
+	cpu->perf.intrts = arch_perfticks();
 	v = vfiq;
 	if(v == nil)
 		panic("cpu%d: unexpected item in bagging area", cpu->cpuno);
@@ -349,7 +349,7 @@ trap(Ureg *ureg)
 	uintptr va;
 	char buf[ERRMAX];
 
-	assert(!islo());
+	assert(!arch_islo());
 	if(up != nil)
 		rem = ((char*)ureg)-up->kstack;
 	else
@@ -503,12 +503,12 @@ trap(Ureg *ureg)
 		}
 		break;
 	}
-	splhi();
+	arch_splhi();
 
 	/* delaysched set because we held a lock or because our quantum ended */
 	if(up && up->delaysched && clockintr){
 		sched();		/* can cause more traps */
-		splhi();
+		arch_splhi();
 	}
 
 	if(user){
@@ -606,7 +606,7 @@ getpcsp(ulong *pc, ulong *sp)
 }
 
 void
-callwithureg(void (*fn)(Ureg*))
+arch_callwithureg(void (*fn)(Ureg*))
 {
 	Ureg ureg;
 
@@ -618,7 +618,7 @@ callwithureg(void (*fn)(Ureg*))
 void
 dumpstack(void)
 {
-	callwithureg(dumpstackwithureg);
+	arch_callwithureg(dumpstackwithureg);
 }
 
 void
@@ -630,7 +630,7 @@ dumpregs(Ureg* ureg)
 		iprint("trap: no user process\n");
 		return;
 	}
-	s = splhi();
+	s = arch_splhi();
 	iprint("trap: %s", trapname(ureg->type));
 	if(ureg != nil && (ureg->psr & PsrMask) != PsrMsvc)
 		iprint(" in %s", trapname(ureg->psr));
@@ -654,5 +654,5 @@ dumpregs(Ureg* ureg)
 	dumplongs("stack", (ulong *)(ureg + 1), 16);
 	delay(2000);
 	dumpstack();
-	splx(s);
+	arch_splx(s);
 }

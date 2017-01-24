@@ -7,7 +7,7 @@
 /*
  * emulated or vfp3 floating point
  */
-struct ArchFPsave
+struct Arch_FPsave
 {
 	ulong	status;
 	ulong	control;

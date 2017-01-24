@@ -1,9 +1,9 @@
 #include "u.h"
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-#include "../port/error.h"
 
 #include <tos.h>
 #include "ureg.h"
@@ -20,7 +20,7 @@
  * a sleeping process
  */
 void
-setkernur(Ureg* ureg, Proc* p)
+arch_setkernur(Ureg* ureg, Proc* p)
 {
 	ureg->pc = p->sched.pc;
 	ureg->sp = p->sched.sp+4;
@@ -31,7 +31,7 @@ setkernur(Ureg* ureg, Proc* p)
  * called in syscallfmt.c, sysfile.c, sysproc.c
  */
 void
-validalign(uintptr addr, unsigned align)
+arch_validalign(uintptr addr, unsigned align)
 {
 	/*
 	 * Plan 9 is a 32-bit O/S, and the hardware it runs on
@@ -79,7 +79,7 @@ kexit(Ureg*)
  *  return the userpc the last exception happened at
  */
 uintptr
-userpc(void)
+arch_userpc(void)
 {
 	Ureg *ureg = up->dbgreg;
 	return ureg->pc;
@@ -89,7 +89,7 @@ userpc(void)
  * to write from devproc and then restore the saved values before returning.
  */
 void
-setregisters(Ureg* ureg, char* pureg, char* uva, int n)
+arch_setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 {
 	USED(ureg, pureg, uva, n);
 }
@@ -100,7 +100,7 @@ setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 static void
 linkproc(void)
 {
-	spllo();
+	arch_spllo();
 	up->kpfun(up->kparg);
 	pexit("kproc exiting", 0);
 }
@@ -110,7 +110,7 @@ linkproc(void)
  *  dependent because of the starting stack location
  */
 void
-kprocchild(Proc *p, void (*func)(void*), void *arg)
+arch_kprocchild(Proc *p, void (*func)(void*), void *arg)
 {
 	p->sched.pc = PTR2UINT(linkproc);
 	p->sched.sp = PTR2UINT(p->kstack+KSTACK);
@@ -123,7 +123,7 @@ kprocchild(Proc *p, void (*func)(void*), void *arg)
  *  pc output by dumpaproc
  */
 uintptr
-dbgpc(Proc* p)
+arch_dbgpc(Proc* p)
 {
 	Ureg *ureg;
 
@@ -138,7 +138,7 @@ dbgpc(Proc* p)
  *  set mach dependent process state for a new process
  */
 void
-procsetup(Proc* p)
+arch_procsetup(Proc* p)
 {
 	fpusysprocsetup(p);
 }
@@ -147,7 +147,7 @@ procsetup(Proc* p)
  *  Save the mach dependent part of the process state.
  */
 void
-procsave(Proc* p)
+arch_procsave(Proc* p)
 {
 	uvlong t;
 
@@ -159,7 +159,7 @@ procsave(Proc* p)
 }
 
 void
-procrestore(Proc* p)
+arch_procrestore(Proc* p)
 {
 	uvlong t;
 
@@ -172,7 +172,7 @@ procrestore(Proc* p)
 }
 
 int
-userureg(Ureg* ureg)
+arch_userureg(Ureg* ureg)
 {
 	return (ureg->psr & PsrMask) == PsrMusr;
 }

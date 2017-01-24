@@ -199,7 +199,7 @@ enable(Uart *uart, int ie)
 	ap[MuCntl] = TxEn|RxEn;
 	ap[MuBaud] = uart->freq/(115200*8) - 1;
 	if(ie){
-		intrenable(IRQaux, interrupt, uart, 0, "uart");
+		arch_intrenable(IRQaux, interrupt, uart, 0, "uart");
 		ap[MuIer] = RxIen|TxIen;
 	}else
 		ap[MuIer] = 0;

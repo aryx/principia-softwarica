@@ -269,7 +269,7 @@ fpusysrforkchild(Proc *p, Ureg *, Proc *up)
 
 /* should only be called if p->fpstate == FPactive */
 void
-fpsave(ArchFPsave *fps)
+fpsave(Arch_FPsave *fps)
 {
 	int n;
 
@@ -497,15 +497,15 @@ fpuemu(Ureg* ureg)
 	if (ISFPAOP(cop, op)) {		/* old arm 7500 fpa opcode? */
 //		iprint("fpuemu: fpa instr %#8.8lux at %#p\n", *(ulong *)pc, pc);
 //		error("illegal instruction: old arm 7500 fpa opcode");
-		s = spllo();
+		s = arch_spllo();
 		if(waserror()){
-			splx(s);
+			arch_splx(s);
 			nexterror();
 		}
 		nfp = fpiarm(ureg);	/* advances pc past emulated instr(s) */
 		if (nfp > 1)		/* could adjust this threshold */
 			cpu->fppc = cpu->fpcnt = 0;
-		splx(s);
+		arch_splx(s);
 		poperror();
 	} else if (ISVFPOP(cop, op)) {	/* if vfp, fpu must be off */
 		mathemu(ureg);		/* enable fpu & retry */

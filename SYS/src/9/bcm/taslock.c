@@ -24,7 +24,7 @@ struct
 static void
 inccnt(Ref *r)
 {
-	_xinc(&r->ref);
+	arch_xinc(&r->ref);
 }
 
 static int
@@ -32,7 +32,7 @@ deccnt(Ref *r)
 {
 	int x;
 
-	x = _xdec(&r->ref);
+	x = arch_xdec(&r->ref);
 	if(x < 0)
 		panic("deccnt pc=%#p", getcallerpc(&r));
 	return x;
@@ -75,14 +75,14 @@ lock(Lock *l)
 	lockstats.locks++;
 	if(up)
 		inccnt(&up->nlocks);	/* prevent being scheded */
-	if(tas(&l->key) == 0){
+	if(arch_tas(&l->key) == 0){
 		if(up)
 			up->lastlock = l;
 		l->pc = pc;
 		l->p = up;
 		l->isilock = 0;
 #ifdef LOCKCYCLES
-		l->lockcycles = -lcycles();
+		l->lockcycles = -arch_lcycles();
 #endif
 		return 0;
 	}
@@ -110,14 +110,14 @@ lock(Lock *l)
 		}
 		if(up)
 			inccnt(&up->nlocks);
-		if(tas(&l->key) == 0){
+		if(arch_tas(&l->key) == 0){
 			if(up)
 				up->lastlock = l;
 			l->pc = pc;
 			l->p = up;
 			l->isilock = 0;
 #ifdef LOCKCYCLES
-			l->lockcycles = -lcycles();
+			l->lockcycles = -arch_lcycles();
 #endif
 			return 1;
 		}
@@ -135,8 +135,8 @@ ilock(Lock *l)
 	pc = getcallerpc(&l);
 	lockstats.locks++;
 
-	x = splhi();
-	if(tas(&l->key) != 0){
+	x = arch_splhi();
+	if(arch_tas(&l->key) != 0){
 		lockstats.glare++;
 		/*
 		 * Cannot also check l->pc, l->m, or l->isilock here
@@ -145,11 +145,11 @@ ilock(Lock *l)
 		 */
 		for(;;){
 			lockstats.inglare++;
-			splx(x);
+			arch_splx(x);
 			while(l->key)
 				;
-			x = splhi();
-			if(tas(&l->key) == 0)
+			x = arch_splhi();
+			if(arch_tas(&l->key) == 0)
 				goto acquire;
 		}
 	}
@@ -163,7 +163,7 @@ acquire:
 	l->isilock = 1;
 	l->cpu = CPUS(cpu->cpuno);
 #ifdef LOCKCYCLES
-	l->lockcycles = -lcycles();
+	l->lockcycles = -arch_lcycles();
 #endif
 }
 
@@ -172,7 +172,7 @@ canlock(Lock *l)
 {
 	if(up)
 		inccnt(&up->nlocks);
-	if(tas(&l->key)){
+	if(arch_tas(&l->key)){
 		if(up)
 			deccnt(&up->nlocks);
 		return 0;
@@ -185,7 +185,7 @@ canlock(Lock *l)
 	l->cpu = CPUS(cpu->cpuno);
 	l->isilock = 0;
 #ifdef LOCKCYCLES
-	l->lockcycles = -lcycles();
+	l->lockcycles = -arch_lcycles();
 #endif
 	return 1;
 }
@@ -194,7 +194,7 @@ void
 unlock(Lock *l)
 {
 #ifdef LOCKCYCLES
-	l->lockcycles += lcycles();
+	l->lockcycles += arch_lcycles();
 	cumlockcycles += l->lockcycles;
 	if(l->lockcycles > maxlockcycles){
 		maxlockcycles = l->lockcycles;
@@ -212,7 +212,7 @@ unlock(Lock *l)
 	l->key = 0;
 	coherence();
 
-	if(up && deccnt(&up->nlocks) == 0 && up->delaysched && islo()){
+	if(up && deccnt(&up->nlocks) == 0 && up->delaysched && arch_islo()){
 		/*
 		 * Call sched if the need arose while locks were held
 		 * But, don't do it from interrupt routines, hence the islo() test
@@ -230,7 +230,7 @@ iunlock(Lock *l)
 	ulong sr;
 
 #ifdef LOCKCYCLES
-	l->lockcycles += lcycles();
+	l->lockcycles += arch_lcycles();
 	cumilockcycles += l->lockcycles;
 	if(l->lockcycles > maxilockcycles){
 		maxilockcycles = l->lockcycles;
@@ -243,7 +243,7 @@ iunlock(Lock *l)
 		print("iunlock: not locked: pc %#p\n", getcallerpc(&l));
 	if(!l->isilock)
 		print("iunlock of lock: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
-	if(islo())
+	if(arch_islo())
 		print("iunlock while lo: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
 
 	sr = l->sr;
@@ -253,5 +253,5 @@ iunlock(Lock *l)
 	cpu->ilockdepth--;
 	if(up)
 		up->lastilock = nil;
-	splx(sr);
+	arch_splx(sr);
 }

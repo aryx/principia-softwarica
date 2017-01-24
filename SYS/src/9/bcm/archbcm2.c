@@ -119,7 +119,7 @@ cputype2name(char *buf, int size)
 }
 
 void
-cpuidprint(void)
+arch_cpuidprint(void)
 {
 	char name[64];
 

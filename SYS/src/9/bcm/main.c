@@ -333,7 +333,7 @@ main(void)
 	confinit();		/* figures out amount of memory */
 	xinit();
 	uartconsinit();
-	screeninit();
+	arch_screeninit();
 
 	print("\nPlan 9 from Bell Labs\n");
 	board = getboardrev();
@@ -347,13 +347,13 @@ main(void)
 	}
 	/* set clock rate to arm_freq from config.txt (default pi1:700Mhz pi2:900MHz) */
 	setclkrate(ClkArm, 0);
-	trapinit();
+	arch_trapinit();
 	clockinit();
 	lineqinit();
 	timersinit();
 	//if(conf.monitor)
 		swcursorinit();
-	cpuidprint();
+	arch_cpuidprint();
 	archreset();
 
 	procinit();
@@ -380,7 +380,7 @@ init0(void)
 
 	up->nerrlab = 0;
 	coherence();
-	spllo();
+	arch_spllo();
 
 	/*
 	 * These are o.k. because rootinit is null.
@@ -412,7 +412,7 @@ init0(void)
 		poperror();
 	}
 	kproc("alarm", alarmkproc, 0);
-	touser(sp);
+	arch_touser(sp);
 	assert(0);			/* shouldn't have returned */
 }
 
@@ -457,7 +457,7 @@ userinit(void)
 {
 	Proc *p;
 	Segment *s;
-	KMap *k;
+	Arch_KMap *k;
 	Page *pg;
 
 	/* no processes yet */
@@ -497,9 +497,9 @@ userinit(void)
 	p->seg[SSEG] = s;
 	pg = newpage(1, 0, USTKTOP-BY2PG);
 	segpage(s, pg);
-	k = kmap(pg);
+	k = arch_kmap(pg);
 	bootargs(VA(k));
-	kunmap(k);
+	arch_kunmap(k);
 
 	/*
 	 * Text
@@ -509,9 +509,9 @@ userinit(void)
 	pg = newpage(1, 0, UTZERO);
 	memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
 	segpage(s, pg);
-	k = kmap(s->pagedir[0]->pagetab[0]);
+	k = arch_kmap(s->pagedir[0]->pagetab[0]);
 	memmove(UINT2PTR(VA(k)), initcode, sizeof initcode);
-	kunmap(k);
+	arch_kunmap(k);
 
 	ready(p);
 }
@@ -614,7 +614,7 @@ shutdown(int ispanic)
 
 	if(once)
 		iprint("cpu%d: exiting\n", cpu->cpuno);
-	spllo();
+	arch_spllo();
 	for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
 		delay(TK2MS(2));
 		if(active.cpus == 0 && consactive() == 0)
@@ -675,7 +675,7 @@ isaconfig(char *class, int ctlrno, ISAConf *isa)
  * of size `size' and entry point `entry'.
  */
 void
-reboot(void *entry, void *code, ulong size)
+arch_reboot(void *entry, void *code, ulong size)
 {
 	void (*f)(ulong, ulong, ulong);
 
@@ -738,7 +738,7 @@ reboot(void *entry, void *code, ulong size)
 
 // called from devcons.c
 void
-memorysummary(void) {
+arch_memorysummary(void) {
 }
 
 bool kdebug;

@@ -90,7 +90,7 @@ cputype2name(char *buf, int size)
 }
 
 void
-cpuidprint(void)
+arch_cpuidprint(void)
 {
 	char name[64];
 
@@ -139,24 +139,24 @@ l2ap(int ap)
  */
 
 long
-_xdec(long *p)
+arch_xdec(long *p)
 {
 	int s, v;
 
-	s = splhi();
+	s = arch_splhi();
 	v = --*p;
-	splx(s);
+	arch_splx(s);
 	return v;
 }
 
 void
-_xinc(long *p)
+arch_xinc(long *p)
 {
 	int s;
 
-	s = splhi();
+	s = arch_splhi();
 	++*p;
-	splx(s);
+	arch_splx(s);
 }
 
 int
@@ -164,9 +164,9 @@ ainc(int *p)
 {
 	int s, v;
 
-	s = splhi();
+	s = arch_splhi();
 	v = ++*p;
-	splx(s);
+	arch_splx(s);
 	return v;
 }
 
@@ -175,9 +175,9 @@ adec(int *p)
 {
 	int s, v;
 
-	s = splhi();
+	s = arch_splhi();
 	v = --*p;
-	splx(s);
+	arch_splx(s);
 	return v;
 }
 
@@ -186,10 +186,10 @@ cas32(void* addr, u32int old, u32int new)
 {
 	int r, s;
 
-	s = splhi();
+	s = arch_splhi();
 	if(r = (*(u32int*)addr == old))
 		*(u32int*)addr = new;
-	splx(s);
+	arch_splx(s);
 	if (r)
 		coherence();
 	return r;

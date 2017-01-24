@@ -5,3 +5,28 @@
 #include "dat.h"
 #include "fns.h"
 
+void arch_ps2mouse(void)
+{
+}
+
+void arch_setaccelerated(void)
+{
+}
+
+void arch_setlinear(void)
+{
+}
+
+void arch_setres(int n)
+{
+}
+
+void arch_setintellimouse()
+{
+}
+
+void arch_resetmouse(void)
+{
+}
+
+

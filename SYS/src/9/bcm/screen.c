@@ -13,7 +13,7 @@
 #include <memdraw.h>
 #include <cursor.h>
 
-#include "screen.h"
+#include "../port/portscreen.h"
 
 enum {
 	Tabstop		= 4,
@@ -23,7 +23,7 @@ enum {
 	Depth		= 16,
 };
 
-Cursor	arrow = {
+Cursor	arch_arrow = {
 	{ -1, -1 },
 	{ 0xFF, 0xFF, 0x80, 0x01, 0x80, 0x02, 0x80, 0x0C,
 	  0x80, 0x10, 0x80, 0x10, 0x80, 0x08, 0x80, 0x04,
@@ -36,8 +36,6 @@ Cursor	arrow = {
 	  0x61, 0xF0, 0x60, 0xE0, 0x40, 0x40, 0x00, 0x00,
 	},
 };
-
-Memimage *gscreen;
 
 static Memdata xgdata;
 
@@ -103,7 +101,7 @@ swcursorhide(void)
 		return;
 	swvisible = 0;
 	memimagedraw(gscreen, swrect, swback, ZP, memopaque, ZP, S);
-	flushmemscreen(swrect);
+	arch_flushmemscreen(swrect);
 }
 
 static void
@@ -130,14 +128,14 @@ swcursordraw(void)
 	swrect = rectaddpt(Rect(0,0,16,16), swvispt);
 	memimagedraw(swback, swback->r, gscreen, swpt, memopaque, ZP, S);
 	memimagedraw(gscreen, swrect, swimg1, ZP, swmask1, ZP, SoverD);
-	flushmemscreen(swrect);
+	arch_flushmemscreen(swrect);
 	swvisible = 1;
 	if(dounlock)
 		qunlock(&drawlock);
 }
 
 int
-cursoron(int dolock)
+arch_cursoron(int dolock)
 {
 	int retry;
 
@@ -156,7 +154,7 @@ cursoron(int dolock)
 }
 
 void
-cursoroff(int dolock)
+arch_cursoroff(int dolock)
 {
 	if (dolock)
 		lock(&cursor);
@@ -199,11 +197,11 @@ swload(Cursor *curs)
 
 /* called from devmouse */
 void
-ksetcursor(Cursor* curs)
+arch_ksetcursor(Cursor* curs)
 {
-	cursoroff(0);
+	arch_cursoroff(0);
 	swload(curs);
-	cursoron(0);
+	arch_cursoron(0);
 }
 
 static int
@@ -224,7 +222,7 @@ swcursorclock(void)
 	if(swvisible && eqpt(swpt, swvispt) && swvers==swvisvers)
 		return;
 
-	x = splhi();
+	x = arch_splhi();
 	if(swenabled)
 	if(!swvisible || !eqpt(swpt, swvispt) || swvers!=swvisvers)
 	if(canqlock(&drawlock)){
@@ -232,7 +230,7 @@ swcursorclock(void)
 		swcursordraw();
 		qunlock(&drawlock);
 	}
-	splx(x);
+	arch_splx(x);
 }
 
 void
@@ -310,7 +308,7 @@ screensize(void)
 }
 
 void
-screeninit(void)
+arch_screeninit(void)
 {
 	uchar *fb;
 	int set;
@@ -353,12 +351,12 @@ screeninit(void)
 }
 
 void
-flushmemscreen(Rectangle)
+arch_flushmemscreen(Rectangle)
 {
 }
 
 uchar*
-attachscreen(Rectangle *r, ulong *chan, int* d, int *width, int *softscreen)
+arch_attachscreen(Rectangle *r, ulong *chan, int* d, int *width, int *softscreen)
 {
 	*r = gscreen->r;
 	*d = gscreen->depth;
@@ -370,20 +368,20 @@ attachscreen(Rectangle *r, ulong *chan, int* d, int *width, int *softscreen)
 }
 
 void
-getcolor(ulong p, ulong *pr, ulong *pg, ulong *pb)
+arch_getcolor(ulong p, ulong *pr, ulong *pg, ulong *pb)
 {
 	USED(p, pr, pg, pb);
 }
 
 int
-setcolor(ulong p, ulong r, ulong g, ulong b)
+arch_setcolor(ulong p, ulong r, ulong g, ulong b)
 {
 	USED(p, r, g, b);
 	return 0;
 }
 
 void
-blankscreen(int blank)
+arch_blankscreen(int blank)
 {
 	fbblank(blank);
 }
@@ -395,7 +393,7 @@ myscreenputs(char *s, int n)
 	Rune r;
 	char buf[4];
 
-	if(!islo()) {
+	if(!arch_islo()) {
 		/* don't deadlock trying to print in interrupt */
 		if(!canlock(&screenlock))
 			return;	
@@ -454,7 +452,7 @@ screenwin(void)
 	p = addpt(window.min, Pt(10, 0));
 	q = memsubfontwidth(memdefont, greet);
 	memimagestring(gscreen, p, conscol, ZP, memdefont, greet);
-	flushmemscreen(r);
+	arch_flushmemscreen(r);
 	window.min.y += h + 6;
 	curpos = window.min;
 	window.max.y = window.min.y + ((window.max.y - window.min.y) / h) * h;
@@ -471,10 +469,10 @@ scroll(void)
 	r = Rpt(window.min, Pt(window.max.x, window.max.y-o));
 	p = Pt(window.min.x, window.min.y+o);
 	memimagedraw(gscreen, r, gscreen, p, nil, p, S);
-	flushmemscreen(r);
+	arch_flushmemscreen(r);
 	r = Rpt(Pt(window.min.x, window.max.y-o), window.max);
 	memimagedraw(gscreen, r, back, ZP, nil, ZP, S);
-	flushmemscreen(r);
+	arch_flushmemscreen(r);
 
 	curpos.y -= o;
 }
@@ -514,7 +512,7 @@ screenputc(char *buf)
 		*xp++ = curpos.x;
 		r = Rect(curpos.x, curpos.y, curpos.x + pos * w, curpos.y + h);
 		memimagedraw(gscreen, r, back, back->r.min, nil, back->r.min, S);
-		flushmemscreen(r);
+		arch_flushmemscreen(r);
 		curpos.x += pos * w;
 		break;
 	case '\b':
@@ -523,7 +521,7 @@ screenputc(char *buf)
 		xp--;
 		r = Rect(*xp, curpos.y, curpos.x, curpos.y + h);
 		memimagedraw(gscreen, r, back, back->r.min, nil, back->r.min, S);
-		flushmemscreen(r);
+		arch_flushmemscreen(r);
 		curpos.x = *xp;
 		break;
 	case '\0':
@@ -539,7 +537,7 @@ screenputc(char *buf)
 		r = Rect(curpos.x, curpos.y, curpos.x + w, curpos.y + h);
 		memimagedraw(gscreen, r, back, back->r.min, nil, back->r.min, S);
 		memimagestring(gscreen, curpos, conscol, ZP, memdefont, buf);
-		flushmemscreen(r);
+		arch_flushmemscreen(r);
 		curpos.x += w;
 		break;
 	}
@@ -547,7 +545,7 @@ screenputc(char *buf)
 
 //old: #define ishwimage(i)	1		/* for ../port/devdraw.c */
 bool
-ishwimage(Memimage* i)
+arch_ishwimage(Memimage* i)
 {
   USED(i);
   return true;

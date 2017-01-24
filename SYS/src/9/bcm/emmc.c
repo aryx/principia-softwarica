@@ -250,7 +250,7 @@ emmcenable(void)
 	if(i == 1000)
 		print("SD clock won't initialise!\n");
 	WR(Irptmask, ~(Dtoerr|Cardintr));
-	intrenable(IRQmmc, mmcinterrupt, nil, 0, "mmc");
+	arch_intrenable(IRQmmc, mmcinterrupt, nil, 0, "mmc");
 }
 
 static int

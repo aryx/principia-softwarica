@@ -50,7 +50,7 @@ typedef void* kern_addr3;
 // defines Chan
 #include "../port/portdat_files.h"
 
-// defines ??
+// defines Soc
 #include "dat_arch.h"
 
 // defines Proc
@@ -89,3 +89,9 @@ extern int normalprint;
 int vflag;
 extern char dbgflg[256];
 #define dbgprint	print		/* for now */
+
+// TODO: put that in portdat.h
+#pragma varargck  type  "I" uchar*
+#pragma varargck  type  "V" uchar*
+#pragma varargck  type  "E" uchar*
+#pragma varargck  type  "M" uchar*

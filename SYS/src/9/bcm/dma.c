@@ -163,7 +163,7 @@ dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
 		ctlr->regs[Cs] = Reset;
 		while(ctlr->regs[Cs] & Reset)
 			;
-		intrenable(IRQDMA(chan), dmainterrupt, ctlr, 0, "dma");
+		arch_intrenable(IRQDMA(chan), dmainterrupt, ctlr, 0, "dma");
 	}
 	cb = ctlr->cb;
 	ti = 0;

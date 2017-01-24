@@ -225,7 +225,7 @@ restart:
 		intr = hc->hcint;
 		if(intr & Chhltd)
 			return intr;
-		start = fastticks(0);
+		start = arch_fastticks(0);
 		ointr = intr;
 		now = start;
 		do{
@@ -243,7 +243,7 @@ restart:
 					ep->dev->nb, ep->nb, mask, ointr, intr);
 				goto restart;
 			}
-			now = fastticks(0);
+			now = arch_fastticks(0);
 		}while(now - start < 100);
 		dprint("ep%d.%d halting channel %8.8ux hcchar %8.8ux "
 			"grxstsr %8.8ux gnptxsts %8.8ux hptxsts %8.8ux\n",
@@ -971,7 +971,7 @@ reset(Hci *hp)
 		return -1;
 	dprint("usbotg: rev %d.%3.3x\n", (id>>12)&0xF, id&0xFFF);
 
-	intrenable(IRQtimerArm, irqintr, ctlr, 0, "dwc");
+	arch_intrenable(IRQtimerArm, irqintr, ctlr, 0, "dwc");
 
 	hp->aux = ctlr;
 	hp->port = 0;

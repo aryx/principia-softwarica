@@ -5,11 +5,10 @@
 #include	"dat.h"
 #include	"fns.h"
 
-#include	"../port/portkbd.h"
-
 // callback for portkbd.c
 void
-setleds(Kbscan *kbscan)
+arch_setleds(Kbscan *kbscan)
 {
+  USED(kbscan);
   return;
 }

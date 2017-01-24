@@ -51,7 +51,7 @@ cprd(int cp, int op1, int crn, int crm, int op2)
 	volatile ulong instr[2];
 	Pufv fp;
 
-	s = splhi();
+	s = arch_splhi();
 	/*
 	 * MRC.  return value will be in R0, which is convenient.
 	 * Rt will be R0.
@@ -59,7 +59,7 @@ cprd(int cp, int op1, int crn, int crm, int op2)
 	setupcpop(instr, 0xee100010, cp, op1, crn, crm, op2);
 	fp = (Pufv)instr;
 	r = fp();
-	splx(s);
+	arch_splx(s);
 	return r;
 }
 
@@ -70,12 +70,12 @@ cpwr(int cp, int op1, int crn, int crm, int op2, ulong val)
 	volatile ulong instr[2];
 	Pvfu fp;
 
-	s = splhi();
+	s = arch_splhi();
 	setupcpop(instr, 0xee000010, cp, op1, crn, crm, op2); /* MCR, Rt is R0 */
 	fp = (Pvfu)instr;
 	fp(val);
 	coherence();
-	splx(s);
+	arch_splx(s);
 }
 
 ulong
@@ -117,7 +117,7 @@ fprd(int fpreg)
 		dumpstack();
 		panic("fprd: cpu%d fpu off", cpu->cpuno);
 	}
-	s = splhi();
+	s = arch_splhi();
 	/*
 	 * VMRS.  return value will be in R0, which is convenient.
 	 * Rt will be R0.
@@ -125,7 +125,7 @@ fprd(int fpreg)
 	setupfpctlop(instr, 0xeef00010, fpreg);
 	fp = (Pufv)instr;
 	r = fp();
-	splx(s);
+	arch_splx(s);
 	return r;
 }
 
@@ -137,12 +137,12 @@ fpwr(int fpreg, ulong val)
 	Pvfu fp;
 
 	/* fpu might be off and this VMSR might enable it */
-	s = splhi();
+	s = arch_splhi();
 	setupfpctlop(instr, 0xeee00010, fpreg);		/* VMSR, Rt is R0 */
 	fp = (Pvfu)instr;
 	fp(val);
 	coherence();
-	splx(s);
+	arch_splx(s);
 }
 
 /* fp register access; don't bother with single precision */
@@ -169,7 +169,7 @@ fpsavereg(int fpreg, uvlong *fpp)
 
 	if (!cpu->fpon)
 		panic("fpsavereg: cpu%d fpu off", cpu->cpuno);
-	s = splhi();
+	s = arch_splhi();
 	/*
 	 * VSTR.  pointer will be in R0, which is convenient.
 	 * Rt will be R0.
@@ -177,7 +177,7 @@ fpsavereg(int fpreg, uvlong *fpp)
 	setupfpop(instr, 0xed000000 | CpDFP << 8, fpreg);
 	fp = (ulong (*)(uvlong *))instr;
 	r = fp(fpp);
-	splx(s);
+	arch_splx(s);
 	coherence();
 	return r;			/* not too meaningful */
 }
@@ -191,10 +191,10 @@ fprestreg(int fpreg, uvlong val)
 
 	if (!cpu->fpon)
 		panic("fprestreg: cpu%d fpu off", cpu->cpuno);
-	s = splhi();
+	s = arch_splhi();
 	setupfpop(instr, 0xed100000 | CpDFP << 8, fpreg); /* VLDR, Rt is R0 */
 	fp = (void (*)(uvlong *))instr;
 	fp(&val);
 	coherence();
-	splx(s);
+	arch_splx(s);
 }

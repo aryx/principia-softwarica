@@ -17,7 +17,7 @@ struct MMMU
 };
 
 
-struct ArchCpu {
+struct Arch_Cpu {
 	MMMU;
 
 	Lock	alarmlock;		/* access to alarm list */

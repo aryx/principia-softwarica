@@ -1,6 +1,6 @@
 
+typedef struct Arch_FPsave	Arch_FPsave;
 typedef struct MMMU	MMMU;
-typedef struct ArchFPsave	ArchFPsave;
 
 typedef struct Ureg	Ureg;
 #pragma incomplete Ureg

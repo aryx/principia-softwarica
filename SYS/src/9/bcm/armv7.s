@@ -245,7 +245,7 @@ TEXT cpctget(SB), 1, $-4			/* cache type */
 	MRC	CpSC, 0, R0, C(CpID), C(CpIDidct), CpIDct
 	RET
 
-TEXT lcycles(SB), 1, $-4
+TEXT arch_lcycles(SB), 1, $-4
 	MRC	CpSC, 0, R0, C(CpCLD), C(CpCLDcyc), 0
 	RET
 
@@ -254,7 +254,7 @@ TEXT tmrget(SB), 1, $-4				/* local generic timer physical counter value */
 	MOVM.IA [R1-R2], (R0)
 	RET
 
-TEXT splhi(SB), 1, $-4
+TEXT arch_splhi(SB), 1, $-4
 	MOVW	$(CPUADDR+4), R2		/* save caller pc in Mach */
 	MOVW	R14, 0(R2)
 
@@ -278,13 +278,13 @@ TEXT splflo(SB), 1, $-4
 	MOVW	R1, CPSR
 	RET
 
-TEXT spllo(SB), 1, $-4
+TEXT arch_spllo(SB), 1, $-4
 	MOVW	CPSR, R0			/* turn on irqs and fiqs */
 	BIC	$(PsrDirq|PsrDfiq), R0, R1
 	MOVW	R1, CPSR
 	RET
 
-TEXT splx(SB), 1, $-4
+TEXT arch_splx(SB), 1, $-4
 	MOVW	$(CPUADDR+0x04), R2		/* save caller pc in Mach */
 	MOVW	R14, 0(R2)
 
@@ -296,13 +296,13 @@ TEXT splx(SB), 1, $-4
 TEXT spldone(SB), 1, $0				/* end marker for devkprof.c */
 	RET
 
-TEXT islo(SB), 1, $-4
+TEXT arch_islo(SB), 1, $-4
 	MOVW	CPSR, R0
 	AND	$(PsrDirq), R0
 	EOR	$(PsrDirq), R0
 	RET
 
-TEXT	tas(SB), $-4
+TEXT	arch_tas(SB), $-4
 TEXT	_tas(SB), $-4			/* _tas(ulong *) */
 	/* returns old (R0) after modifying (R0) */
 	MOVW	R0,R5
@@ -329,13 +329,13 @@ tas0:
 	MOVW	R7, R0		/* return old value */
 	RET
 
-TEXT setlabel(SB), 1, $-4
+TEXT arch_setlabel(SB), 1, $-4
 	MOVW	R13, 0(R0)		/* sp */
 	MOVW	R14, 4(R0)		/* pc */
 	MOVW	$0, R0
 	RET
 
-TEXT gotolabel(SB), 1, $-4
+TEXT arch_gotolabel(SB), 1, $-4
 	MOVW	0(R0), R13		/* sp */
 	MOVW	4(R0), R14		/* pc */
 	MOVW	$1, R0
@@ -345,7 +345,7 @@ TEXT getcallerpc(SB), 1, $-4
 	MOVW	0(R13), R0
 	RET
 
-TEXT idlehands(SB), $-4
+TEXT arch_idlehands(SB), $-4
 	MOVW	CPSR, R3
 	ORR	$(PsrDirq|PsrDfiq), R3, R1		/* splfhi */
 	MOVW	R1, CPSR

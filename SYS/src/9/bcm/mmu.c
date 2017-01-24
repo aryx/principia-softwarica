@@ -130,7 +130,7 @@ mmul1empty(void)
 }
 
 void
-mmuswitch(Proc* proc)
+arch_mmuswitch(Proc* proc)
 {
 	int x;
 	PTE *l1;
@@ -174,18 +174,18 @@ mmuswitch(Proc* proc)
 }
 
 void
-flushmmu(void)
+arch_flushmmu(void)
 {
 	int s;
 
-	s = splhi();
+	s = arch_splhi();
 	up->newtlb = 1;
-	mmuswitch(up);
-	splx(s);
+	arch_mmuswitch(up);
+	arch_splx(s);
 }
 
 void
-mmurelease(Proc* proc)
+arch_mmurelease(Proc* proc)
 {
 	Page *page, *next;
 
@@ -214,7 +214,7 @@ mmurelease(Proc* proc)
 }
 
 void
-putmmu(uintptr va, uintptr pa, Page* page)
+arch_putmmu(uintptr va, uintptr pa, Page* page)
 {
 	int x;
 	Page *pg;
@@ -227,7 +227,7 @@ putmmu(uintptr va, uintptr pa, Page* page)
 		if(up->mmul2cache == nil){
 			/* auxpg since we don't need much? memset if so */
 			pg = newpage(1, 0, 0);
-			pg->va = VA(kmap(pg));
+			pg->va = VA(arch_kmap(pg));
 		}
 		else{
 			pg = up->mmul2cache;
@@ -282,7 +282,7 @@ putmmu(uintptr va, uintptr pa, Page* page)
 		cacheiinv();
 		page->cachectl[cpu->cpuno] = PG_NOFLUSH;
 	}
-	checkmmu(va, PPN(pa));
+	arch_checkmmu(va, PPN(pa));
 }
 
 void*
@@ -317,7 +317,7 @@ mmuuncache(void* v, usize size)
  * If pa is not a valid argument to KADDR, return 0.
  */
 uintptr
-cankaddr(uintptr pa)
+arch_cankaddr(uintptr pa)
 {
 	if(pa < PHYSDRAM + memsize)		/* assumes PHYSDRAM is 0 */
 		return PHYSDRAM + memsize - pa;
@@ -350,14 +350,23 @@ mmukmap(uintptr va, uintptr pa, usize size)
 
 
 void
-checkmmu(uintptr va, uintptr pa)
+arch_checkmmu(uintptr va, uintptr pa)
 {
 	USED(va);
 	USED(pa);
 }
 
+//old:#define	arch_kmap(p)		(Arch_KMap*)((p)->pa|kseg0)
+Arch_KMap*
+arch_kmap(Page *p) {
+  return (Arch_KMap*)((p)->pa|kseg0);
+}
+
 void
-kunmap(KMap *k)
+arch_kunmap(Arch_KMap *k)
 {
 	cachedwbinvse(k, BY2PG);
 }
+
+
+//#define	kunmap(k)

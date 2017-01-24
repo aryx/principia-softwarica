@@ -132,11 +132,11 @@ clockinit(void)
 	tn = (Systimers*)SYSTIMERS;
 	tstart = tn->clo;
 	do{
-		t0 = lcycles();
+		t0 = arch_lcycles();
 	}while(tn->clo == tstart);
 	tend = tstart + 10000;
 	do{
-		t1 = lcycles();
+		t1 = arch_lcycles();
 	}while(tn->clo != tend);
 	t1 -= t0;
 	cpu->cpuhz = 100 * t1;
@@ -147,19 +147,19 @@ clockinit(void)
 		tm = (Armtimer*)ARMTIMER;
 		tm->load = 0;
 		tm->ctl = TmrPrescale1|CntEnable|CntWidth32;
-		intrenable(IRQtimer3, clockintr, nil, 0, "clock");
+		arch_intrenable(IRQtimer3, clockintr, nil, 0, "clock");
 	}else
-		intrenable(IRQcntpns, localclockintr, nil, 0, "clock");
+		arch_intrenable(IRQcntpns, localclockintr, nil, 0, "clock");
 }
 
 void
-timerset(Tval next)
+arch_timerset(Tval next)
 {
 	Systimers *tn;
 	uvlong now;
 	long period;
 
-	now = fastticks(nil);
+	now = arch_fastticks(nil);
 	period = next - now;
 	if(period < MinPeriod)
 		period = MinPeriod;
@@ -175,7 +175,7 @@ timerset(Tval next)
 }
 
 uvlong
-fastticks(uvlong *hz)
+arch_fastticks(uvlong *hz)
 {
 	Systimers *tn;
 	ulong lo, hi;
@@ -185,19 +185,19 @@ fastticks(uvlong *hz)
 	if(hz)
 		*hz = SystimerFreq;
 	tn = (Systimers*)SYSTIMERS;
-	s = splhi();
+	s = arch_splhi();
 	do{
 		hi = tn->chi;
 		lo = tn->clo;
 	}while(tn->chi != hi);
 	now = (uvlong)hi<<32 | lo;
 	cpu->fastclock = now;
-	splx(s);
+	arch_splx(s);
 	return cpu->fastclock;
 }
 
 ulong
-perfticks(void)
+arch_perfticks(void)
 {
 	Armtimer *tm;
 
@@ -222,11 +222,11 @@ armtimerset(int n)
 }
 
 ulong
-us(void)
+arch_us(void)
 {
 	if(SystimerFreq != 1*Mhz)
-		return fastticks2us(fastticks(nil));
-	return fastticks(nil);
+		return fastticks2us(arch_fastticks(nil));
+	return arch_fastticks(nil);
 }
 
 void

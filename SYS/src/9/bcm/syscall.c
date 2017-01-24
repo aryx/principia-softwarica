@@ -74,7 +74,7 @@ noted(Ureg* cur, uintptr arg0)
 		}
 		qunlock(&up->debug);
 
-		splhi();
+		arch_splhi();
 		nf->arg1 = nf->msg;
 		nf->arg0 = &nf->ureg;
 		nf->ip = 0;
@@ -116,7 +116,7 @@ notify(Ureg* ureg)
 
 	fpunotify(ureg);
 
-	s = spllo();
+	s = arch_spllo();
 	qlock(&up->debug);
 
 	up->notepending = 0;
@@ -137,7 +137,7 @@ notify(Ureg* ureg)
 
 	if(up->notified){
 		qunlock(&up->debug);
-		splhi();
+		arch_splhi();
 		return 0;
 	}
 		
@@ -176,7 +176,7 @@ notify(Ureg* ureg)
 	memmove(&up->note[0], &up->note[1], up->nnote*sizeof(Note));
 
 	qunlock(&up->debug);
-	splx(s);
+	arch_splx(s);
 
 	return 1;
 }
@@ -191,7 +191,7 @@ syscall(Ureg* ureg)
 	int i, scallnr;
 	vlong startns, stopns;
 
-	if(!userureg(ureg))
+	if(!arch_userureg(ureg))
 		panic("syscall: from kernel: pc %#lux r14 %#lux psr %#lux",
 			ureg->pc, ureg->r14, ureg->psr);
 
@@ -206,7 +206,7 @@ syscall(Ureg* ureg)
 	//up->scallnr = scallnr;
 	if(scallnr == RFORK)
 		fpusysrfork(ureg);
-	spllo();
+	arch_spllo();
 	sp = ureg->sp;
 
 	if(up->procctl == Proc_tracesyscall){
@@ -275,9 +275,9 @@ syscall(Ureg* ureg)
 		stopns = todget(nil);
 		up->procctl = Proc_stopme;
 		sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
-		s = splhi();
+		s = arch_splhi();
 		procctl(up);
-		splx(s);
+		arch_splx(s);
 		if(up->syscalltrace)
 			free(up->syscalltrace);
 		up->syscalltrace = nil;
@@ -289,20 +289,20 @@ syscall(Ureg* ureg)
 	if(scallnr == NOTED)
 		noted(ureg, *(ulong*)(sp+BY2WD));
 
-	splhi();
+	arch_splhi();
 	if(scallnr != RFORK && (up->procctl || up->nnote))
 		notify(ureg);
 
 	/* if we delayed sched because we held a lock, sched now */
 	if(up->delaysched){
 		sched();
-		splhi();
+		arch_splhi();
 	}
 	kexit(ureg);
 }
 
 long
-execregs(ulong entry, ulong ssize, ulong nargs)
+arch_execregs(ulong entry, ulong ssize, ulong nargs)
 {
 	ulong *sp;
 	Ureg *ureg;
@@ -335,13 +335,13 @@ sysprocsetup(Proc* p)
  *  pc to point to a l.s return function.
  */
 void
-forkchild(Proc *p, Ureg *ureg)
+arch_forkchild(Proc *p, Ureg *ureg)
 {
 	Ureg *cureg;
 
 //print("%lud setting up for forking child %lud\n", up->pid, p->pid);
 	p->sched.sp = (ulong)p->kstack+KSTACK-sizeof(Ureg);
-	p->sched.pc = (ulong)forkret;
+	p->sched.pc = (ulong)arch_forkret;
 
 	cureg = (Ureg*)(p->sched.sp);
 	memmove(cureg, ureg, sizeof(Ureg));

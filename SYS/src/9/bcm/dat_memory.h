@@ -4,7 +4,7 @@
  */
 #define NCOLOR	1		/* 1 level cache, don't worry about VCE's */
 
-struct ArchProcMMU
+struct Arch_ProcMMU
 {
 	Page*	mmul2;
 	Page*	mmul2cache;	/* free mmu pages */
@@ -13,9 +13,6 @@ struct ArchProcMMU
 /*
  * Fake kmap.
  */
-typedef void		KMap;
+typedef void		Arch_KMap;
 #define	VA(k)		((uintptr)(k))
 
-#define	kmap(p)		(KMap*)((p)->pa|kseg0)
-extern void kunmap(KMap*);
-//#define	kunmap(k)
