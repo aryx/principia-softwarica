@@ -154,7 +154,7 @@ arch_procsave(Proc* p)
 	arch_cycles(&t);
 	p->pcycles += t;
 
-// TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.
+/* TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.*/
 	fpuprocsave(p);
 }
 
