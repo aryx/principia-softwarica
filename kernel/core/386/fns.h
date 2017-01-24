@@ -17,6 +17,8 @@
 
 /*s: fns.h declarations(x86) */
 
+void  arch_touser(void*); // uintptr??
+
 // fns_memory.h
 
 // mmu.c (called from main.c)

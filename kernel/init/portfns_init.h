@@ -13,7 +13,7 @@ void  links(void);
 // in <arch>/<conf>.root.c (called from main)
 void    bootlinks(void);
 
-// in <arch>/?? (called from main)
-void  arch_touser(void*); // uintptr??
+// in <arch>/?? (called from main) but different prototypes
+//void  arch_touser(void*); // uintptr??
 
 /*e: portfns_init.h */
