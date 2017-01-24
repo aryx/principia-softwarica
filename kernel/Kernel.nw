@@ -849,7 +849,6 @@ void nop(void);
 uvlong devarch_fastticks(uvlong *hz);
 void devarch_hook_ioalloc();
 
-void    (*coherence)(void);
 int   (*iprint)(char*, ...);
 int devcons_iprint(char*, ...);
 @
@@ -881,7 +880,7 @@ int devcons_iprint(char*, ...);
 #define exit          main_exit
 #define isaconfig     main_isaconfig
 //#define coherence     nop
-#define arch_fastticks     devarch_fastticks
+//#define arch_fastticks     devarch_fastticks
 #define cclose        chan_cclose
 #define proctab       proc_proctab
 #define postnote      proc_postnote
@@ -909,7 +908,7 @@ devtab = conf_devtab;
  * On VMware, it's safe (and a huge win) to set this to nop.
  * Aux/vmware does this via the #P/archctl file.
  */
-coherence = nop;
+arch_coherence = nop;
 @
 
 %-------------------------------------------------
@@ -1548,7 +1547,7 @@ int nconf;
 %old: used to be duplicated in every main.c, now factorized
 
 <<function getconf>>=
-char* getconf2(char *name)
+char* getconf(char *name)
 {
         int i;
         for(i = 0; i < nconf; i++)
@@ -2384,7 +2383,7 @@ unlock(Lock *l)
     // for processor caches, to ensure the lock value is seen by other
     // processors so that if they were doing while(l->key) { ... } they
     // can finally exit the while loop.
-    coherence();
+    arch_coherence();
 
     <<[[unlock()]] if delaysched>>
 }
@@ -2513,7 +2512,7 @@ iunlock(Lock *l)
     sr = l->sr;
     l->cpu = nil;
     l->key = 0;
-    coherence();
+    arch_coherence();
     cpu->ilockdepth--;
     if(up)
         up->lastilock = nil;
@@ -11753,13 +11752,13 @@ archinit(void)
         conf.copymode = true;
 
     if(X86FAMILY(cpu->cpuidax) >= 4)
-        cmpswap = cmpswap486;
+        arch_cmpswap = cmpswap486;
 
     if(X86FAMILY(cpu->cpuidax) >= 5)
-        coherence = mb586;
+        arch_coherence = mb586;
 
     if(cpu->cpuiddx & Sse2)
-        coherence = mfence;
+        arch_coherence = mfence;
 
     addarchfile("cputype", 0444, cputyperead, nil);
     addarchfile("archctl", 0664, archctlread, archctlwrite);
@@ -22121,7 +22120,7 @@ arch_us(void)
  *  return value and speed of timer set in arch->clockenable
  */
 uvlong
-devarch_fastticks(uvlong *hz)
+arch_fastticks(uvlong *hz)
 {
     return (*arch->fastclock)(hz);
 }
@@ -24726,7 +24725,7 @@ cmpswap386(long *addr, long old, long new)
     return r;
 }
 
-int (*cmpswap)(long*, long, long) = cmpswap386;
+int (*arch_cmpswap)(long*, long, long) = cmpswap386;
 @
 
 
@@ -24771,7 +24770,7 @@ semwakeup(Segment *s, long *a, long n)
     for(p=s->sema.next; p!=&s->sema && n>0; p=p->next){
         if(p->addr == a && p->waiting){
             p->waiting = false;
-            coherence();
+            arch_coherence();
             wakeup(p);
             n--;
         }
@@ -24790,7 +24789,7 @@ semrelease(Segment *s, long *addr, long delta)
 
     do
         value = *addr;
-    while(!cmpswap(addr, value, value+delta));
+    while(!arch_cmpswap(addr, value, value+delta));
     semwakeup(s, addr, delta);
     return value+delta;
 }
@@ -24805,7 +24804,7 @@ canacquire(long *addr)
     long value;
     
     while((value=*addr) > 0)
-        if(cmpswap(addr, value, value-1))
+        if(arch_cmpswap(addr, value, value-1))
             return true;
     return false;
 }       
@@ -24817,7 +24816,7 @@ canacquire(long *addr)
 static bool
 semawoke(void *p)
 {
-    coherence();
+    arch_coherence();
     return !((Sema*)p)->waiting;
 }
 @ 
@@ -24840,7 +24839,7 @@ semacquire(Segment *s, long *addr, bool block)
     semqueue(s, addr, &phore);
     for(;;){
         phore.waiting = true;
-        coherence();
+        arch_coherence();
         if(canacquire(addr)){
             acquired = true;
             break;
@@ -24851,7 +24850,7 @@ semacquire(Segment *s, long *addr, bool block)
         poperror();
     }
     semdequeue(s, &phore);
-    coherence();    /* not strictly necessary due to lock in semdequeue */
+    arch_coherence();    /* not strictly necessary due to lock in semdequeue */
     if(!phore.waiting)
         semwakeup(s, addr, 1);
     if(!acquired)
@@ -24878,7 +24877,7 @@ tsemacquire(Segment *s, long *addr, ulong ms)
     semqueue(s, addr, &phore);
     for(;;){
         phore.waiting = true;
-        coherence();
+        arch_coherence();
         if(canacquire(addr)){
             acquired = true;
             break;
@@ -24896,7 +24895,7 @@ tsemacquire(Segment *s, long *addr, ulong ms)
         ms -= elms;
     }
     semdequeue(s, &phore);
-    coherence();    /* not strictly necessary due to lock in semdequeue */
+    arch_coherence();    /* not strictly necessary due to lock in semdequeue */
     if(!phore.waiting)
         semwakeup(s, addr, 1);
     if(timedout)
@@ -26689,7 +26688,7 @@ simplecycles(uvlong *x)
     *x = cpu->ticks;
 }
 
-void    (*cycles)(uvlong*) = simplecycles;
+void    (*arch_cycles)(uvlong*) = simplecycles;
 @ 
 
 
@@ -26727,7 +26726,7 @@ Tos *tos;
     tos = (Tos*)(TSTKTOP - sizeof(Tos));
 
     tos->cyclefreq = cpu->cyclefreq;
-    cycles((uvlong*)&tos->pcycles);
+    arch_cycles((uvlong*)&tos->pcycles);
     tos->pcycles = -tos->pcycles; // see comment above on Proc->pcycle
     tos->kcycles = tos->pcycles;
     tos->clock = 0;
@@ -26741,7 +26740,7 @@ Tos *tos;
 
     /* precise time accounting, kernel exit */
     tos = (Tos*)(USTKTOP-sizeof(Tos));
-    cycles(&t);
+    arch_cycles(&t);
     tos->kcycles += t - up->kentry;
     tos->pcycles = up->pcycles;
     tos->pid = up->pid;
@@ -26756,24 +26755,24 @@ tos->clock += TK2MS(1);
 
 
 <<[[syscall()]] adjust kentry(x86)>>=
-    cycles(&up->kentry);
+    arch_cycles(&up->kentry);
 @
 
 <<[[trap()]] adjust kentry when interrupt user(x86)>>=
-        cycles(&up->kentry);
+        arch_cycles(&up->kentry);
 @
 
 
 <<[[procsave()]] cycles adjustments(x86)>>=
     uvlong t;
 
-    cycles(&t);
+    arch_cycles(&t);
     p->pcycles += t;
 @
 
 
 <<[[procrestore]] cycles adjustments(x86)>>=
-    cycles(&t);
+    arch_cycles(&t);
     p->pcycles -= t;
 @
 
@@ -30809,7 +30808,7 @@ procopen(Chan *c, int omode)
         c->qid.vers = p->pid;
 
     /* make sure the process slot didn't get reallocated while we were playing */
-    coherence();
+    arch_coherence();
     if(p->pid != pid)
         error(Eprocdied);
 
@@ -31874,7 +31873,7 @@ arch_reboot(kern_addr3 entry, kern_addr3 code, ulong size)
     print("rebooting...\n");
 
     /* off we go - never to return */
-    coherence();
+    arch_coherence();
     (*f)(PADDR(entry), PADDR(code), size);
 }
 @
@@ -33382,7 +33381,7 @@ arch_perfticks(void)
     uvlong x;
 
     if(cpu->havetsc)
-        cycles(&x);
+        arch_cycles(&x);
     else
         x = 0;
     return x;
