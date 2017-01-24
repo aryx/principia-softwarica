@@ -360,62 +360,143 @@ typedef struct Rsd Rsd;
 \ifallcode
 <<fns.h declarations(x86)>>=
 
-// used by $CONF.c and main.c
-void    bootlinks(void);
+void  arch_touser(void*); // uintptr??
 
-// defined in lib/latin1.c, used only in 386
-//@Scheck: def currently skipped, see skip_list.txt, because of unicode
-long    latin1(Rune*, int);
+// fns_memory.h
 
-// used by main.c
-void    cpuinit(void);
+// mmu.c (called from main.c)
+extern void mmuinit0(void); 
+void* tmpmap(Page*);
+void  tmpunmap(void*);
+// mmu.c (called from main.c/mp.c)
+extern ulong*  mmuwalk(ulong*, ulong, int, bool); 
+// mmu.c (called from many arch specific)
+void* vmap(ulong, int);
+void  vunmap(void*, int);
+int vmapsync(ulong);
+// memory.c (called from main.c)
+extern void meminit(void); 
+// memory.c (called from mmu.c)
+kern_addr3 rampage(void);
+void* sigsearch(char*);
+// memory.c (called from screen.c, pci.c)
+ulong upaalloc(int, int);
+void  upareserve(ulong, int);
+// l_misc.s (called from mmu.c)
+//@Scheck: Assembly
+void  invlpg(ulong);
+// l.s (called from mmu.c)
+//@Scheck: Assembly
+void  ltr(ulong);
+//@Scheck: Assembly
+void  lidt(ushort[3]);
+//@Scheck: Assembly
+void  lgdt(ushort[3]);
 
-// used by main.c
-void mmuinit0(void);
+// fns_init.h
+
+// main.c (called from main.c/mp.c)
+extern void cpuinit(void); 
+// l_misc.s (called from main.c)
+//@Scheck: Assembly
+void  halt(void);
+
+// fns_processes.h
+
+// trap.c (called from main.c)
+void  trapenable(int, void (*)(Ureg*, void*), void*, char*);
+void  trapinit0(void);
+// trap.c (called from sdata.c, uarti...)
+int intrdisable(int, void (*)(Ureg *, void *), void*, int, char*);
+// l_misc.s (called from mp.c, x86.c, trap.c)
+void  rdmsr(int, vlong*);
+// l_trap.s (called from trap.c)
+//@Scheck: Assembly
+void  vectortable(void);
+
+// fns_devices.h
+
+// kbd.c (called from main)
+void  kbdinit(void);
+void  kbdenable(void);
+// cga.c (called from main)
+void  cgapost(int);
+
+// fns_arch.h
+
+// devarch.c (called from main)
+void  archinit(void);
+// archgeneric.c (called from mp)
+void  archrevert(void);
+// l_misc.s 
+//@Scheck: Assembly
+void  cpuid(int, ulong regs[]);
+// x86.c (called from main.c/mp.c)
+int cpuidentify(void);
+// ???
+void  (*cycles)(uvlong*);
+//l_misc.c (called from i8253.c)
+//@Scheck: Assembly
+void  aamloop(int);
+// l_misc.s (called from mp.c/archgeneric.c)
+//@Scheck: Assembly
+void  idle(void);
+// i8253.c (called from x86.c)
+void  guesscpuhz(int);
+// archmp.c (called from mp.c)
+void  syncclock(void);
+// l_misc.c (called from arch specific)
+//@Scheck: Assembly
+void  wrmsr(int, vlong);
+
+// fns_concurrency.h ????
+
+// coherence
+//@Scheck: Assembly
+void  mfence(void);
+//@Scheck: Assembly
+void  mb386(void);
+//@Scheck: Assembly
+void  mb586(void);
+// ???
+int (*cmpswap)(long*, long, long);
+// l_misc.s (called from devarch)
+//@Scheck: Assembly
+int cmpswap486(long*, long, long);
+
+
+
 
 // iomap.c
 void (*hook_ioalloc)(void);
 
-//@Scheck: Assembly
-void    forkret(void);
-//@Scheck: Assembly
-void  aamloop(int);
-//void  acpiscan(void (*func)(uchar *));
-Dirtab* addarchfile(char*, int, long(*)(Chan*,void*,long,vlong), long(*)(Chan*,void*,long,vlong));
-void  archinit(void);
-void  archrevert(void);
+void  iofree(int);
+void  ioinit(void);
+int ioalloc(int, int, int, char*);
+
 //@Scheck: Assembly
 int bios32call(BIOS32ci*, u16int[3]);
 int bios32ci(BIOS32si*, BIOS32ci*);
-//void  bios32close(BIOS32si*);
 BIOS32si* bios32open(char*);
-void  cgapost(int);
-//void  clockintr(Ureg*, void*);
-int (*cmpswap)(long*, long, long);
-//@Scheck: Assembly
-int cmpswap486(long*, long, long);
-//@Scheck: Assembly
-void  cpuid(int, ulong regs[]);
-int cpuidentify(void);
-void  cpuidprint(void);
-void  (*cycles)(uvlong*);
-//int dmacount(int);
-//int dmadone(int);
-void  dmaend(int);
-int dmainit(int, int);
+
+void  dmaend(int); // called from port/devaudio.c!
 long  dmasetup(int, void*, long, int);
-//#define evenaddr(x)       /* x86 doesn't care */
-void	validalign(uintptr, unsigned);
+
+int dmainit(int, int);
+
+
 //@Scheck: Assembly
 void  fpclear(void);
-//@Scheck: Assembly
-void  fpenv(Arch_FPsave*);
 //@Scheck: Assembly
 void  fpinit(void);
 //@Scheck: Assembly
 void  fpoff(void);
 //@Scheck: Assembly
 void  fpon(void);
+
+
+//@Scheck: Assembly
+void  fpenv(Arch_FPsave*);
 void  (*fprestore)(Arch_FPsave*);
 void  (*fpsave)(Arch_FPsave*);
 void  fpsavealloc(void);
@@ -430,6 +511,7 @@ void  fpssesave0(Arch_FPsave*);
 void  fpx87restore(Arch_FPsave*);
 //@Scheck: Assembly
 void  fpx87save(Arch_FPsave*);
+
 //@Scheck: Assembly
 ulong getcr0(void);
 //@Scheck: Assembly
@@ -438,11 +520,16 @@ ulong getcr2(void);
 ulong getcr3(void);
 //@Scheck: Assembly
 ulong getcr4(void);
-void  guesscpuhz(int);
+
 //@Scheck: Assembly
-void  halt(void);
+void  putcr0(ulong);
+//@Scheck: Assembly
+void  putcr3(ulong);
+//@Scheck: Assembly
+void  putcr4(ulong);
+
+
 int i8042auxcmd(int);
-//int i8042auxcmds(uchar*, int);
 void  i8042auxenable(void (*)(int, int));
 void  i8042reset(void);
 void  i8250console(void);
@@ -458,9 +545,7 @@ int i8259isr(int);
 void  i8259on(void);
 void  i8259off(void);
 int i8259vecno(int);
-//@Scheck: Assembly
-void  idle(void);
-void  idlehands(void);
+
 //@Scheck: Assembly
 int inb(int);
 void  insb(int, void*, int); // used only by ether8390 for now
@@ -470,44 +555,7 @@ ushort  ins(int);
 void  inss(int, void*, int);
 //@Scheck: Assembly
 ulong inl(int);
-//void  insl(int, void*, int);
-int intrdisable(int, void (*)(Ureg *, void *), void*, int, char*);
-void  intrenable(int, void (*)(Ureg*, void*), void*, int, char*);
-//void  introff(void);
-//void  intron(void);
-//@Scheck: Assembly
-void  invlpg(ulong);
-void  iofree(int);
-void  ioinit(void);
-int ioalloc(int, int, int, char*);
-//int ioreserve(int, int, int, char*);
-//int (*isaconfig)(char*, int, ISAConf*);
-void  kbdenable(void);
-void  kbdinit(void);
-<<function kmapinval(x86)>>
-//@Scheck: Assembly
-void  lgdt(ushort[3]);
-//@Scheck: Assembly
-void  lidt(ushort[3]);
-void  links(void);
-//@Scheck: Assembly
-void  ltr(ulong);
-//@Scheck: Assembly
-void  mb386(void);
-//@Scheck: Assembly
-void  mb586(void);
-void  meminit(void);
-void  memorysummary(void);
-//@Scheck: Assembly
-void  mfence(void);
-<<function mmuflushtlb(x86)>>
-void  mmuinit(void);
-ulong*  mmuwalk(ulong*, ulong, int, bool);
-//int mtrr(uvlong, uvlong, char *);
-//void  mtrrclock(void);
-//int mtrrprint(char *, long);
-uchar nvramread(int);
-void  nvramwrite(int, uchar);
+
 //@Scheck: Assembly
 void  outb(int, int);
 void  outsb(int, void*, int); // used only by ether8390 for now
@@ -517,76 +565,47 @@ void  outs(int, ushort);
 void  outss(int, void*, int);
 //@Scheck: Assembly
 void  outl(int, ulong);
-//void  outsl(int, void*, int);
+
+<<function kmapinval(x86)>>
+
+<<function mmuflushtlb(x86)>>
+
+//int mtrr(uvlong, uvlong, char *);
+//void mtrrclock(void);
+//int mtrrprint(char *, long);
+
+// nvram.c (called from devfloppy.c and memory.c)
+uchar nvramread(int);
+void  nvramwrite(int, uchar);
+
 int pcicfgr8(Pcidev*, int);
 int pcicfgr16(Pcidev*, int);
 int pcicfgr32(Pcidev*, int);
 void  pcicfgw8(Pcidev*, int, int);
-//void  pcicfgw16(Pcidev*, int, int);
 void  pcicfgw32(Pcidev*, int, int);
 void  pciclrbme(Pcidev*);
-//void  pciclrioe(Pcidev*);
-//void  pciclrmwi(Pcidev*);
-//int pcigetpms(Pcidev*);
 Pcidev* pcimatch(Pcidev*, int, int);
 Pcidev* pcimatchtbdf(int);
 void  pcireset(void);
-//int pciscan(int, Pcidev**);
 void  pcisetbme(Pcidev*);
+//void  pcicfgw16(Pcidev*, int, int);
+//void  pciclrioe(Pcidev*);
+//void  pciclrmwi(Pcidev*);
+//int pcigetpms(Pcidev*);
+//int pciscan(int, Pcidev**);
 //void  pcisetioe(Pcidev*);
 //void  pcisetmwi(Pcidev*);
 //int pcisetpms(Pcidev*, int);
-//void  pcmcisread(PCMslot*);
-//int pcmcistuple(int, int, int, void*, int);
-//PCMmap* pcmmap(int, ulong, int, int);
+
 int pcmspecial(char*, ISAConf*);
 //int (*_pcmspecial)(char *, ISAConf *);
+//void  pcmcisread(PCMslot*);
+//int pcmcistuple(int, int, int, void*, int);
 //void  pcmspecialclose(int);
 //void  (*_pcmspecialclose)(int);
+//PCMmap* pcmmap(int, ulong, int, int);
 //void  pcmunmap(int, PCMmap*);
-//int pdmap(ulong*, ulong, ulong, int);
-void  procrestore(Proc*);
-void  procsave(Proc*);
-void  procsetup(Proc*);
-//@Scheck: Assembly
-void  putcr0(ulong);
-//@Scheck: Assembly
-void  putcr3(ulong);
-//@Scheck: Assembly
-void  putcr4(ulong);
-kern_addr3 rampage(void);
-//@Scheck: Assembly
-void  rdmsr(int, vlong*);
-//void  realmode(Ureg*);
-void  screeninit(void);
-void  (*screenputs)(char*, int);
-void* sigsearch(char*);
-void  syncclock(void);
-void  syscallfmt(int syscallno, ulong pc, va_list list);
-void  sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop);
-void* tmpmap(Page*);
-void  tmpunmap(void*);
-//@Scheck: Assembly
-void  touser(void*);
-void  trapenable(int, void (*)(Ureg*, void*), void*, char*);
-void  trapinit(void);
-void  trapinit0(void);
-ulong upaalloc(int, int);
-//void  upafree(ulong, int);
-void  upareserve(ulong, int);
 
-//@Scheck: Assembly
-void  vectortable(void);
-void* vmap(ulong, int);
-int vmapsync(ulong);
-void  vunmap(void*, int);
-//@Scheck: Assembly
-void  wbinvd(void);
-//@Scheck: Assembly
-void  wrmsr(int, vlong);
-//int xchgw(ushort*, int);
-
-//int iounused(int start, int end); not used anymore in vga.c
 
 <<fns.h macros(x86)>>
 @
@@ -652,9 +671,6 @@ cistrcmp(char *a, char *b)
 
 <<fns.c>>=
 <<kernel basic includes>>
-
-// backward deps trick too
-//int (*isaconfig)(char*, int, ISAConf*) = 0;
 
 // was in main.c, could be in lib/386/libc.c (or even lib/libc.c)
 
@@ -1246,7 +1262,7 @@ floppysetup1(FController *fl)
         fl->d[1].dt = equip & 0xf;
         floppysetdef(&fl->d[1]);
     }
-    intrenable(IrqFLOPPY, pcfloppyintr, fl, BUSUNKNOWN, "floppy");
+    arch_intrenable(IrqFLOPPY, pcfloppyintr, fl, BUSUNKNOWN, "floppy");
 }
 
 /*
@@ -3216,10 +3232,6 @@ TEXT invlpg(SB), $0
         INVLPG
         RET
 
-#define WBINVD  BYTE $0x0F; BYTE $0x09
-TEXT wbinvd(SB), $0
-        WBINVD
-        RET
 
 #define RDTSC           BYTE $0x0F; BYTE $0x31  /* RDTSC, result in AX/DX (lo/hi) */
 TEXT _cycles(SB), $0                            /* time stamp counter */
@@ -5105,9 +5117,9 @@ enum
 <<function notify(x86)>>
 
 <<function noted(x86)>>
-
+//old: #define evenaddr(x)       /* x86 doesn't care */
 void
-validalign(uintptr addr, unsigned align)
+arch_validalign(uintptr addr, unsigned align)
 {
  /*
   * Plan 9 is a 32-bit O/S, and the hardware it runs on
@@ -5592,10 +5604,10 @@ squidboy(Apic* apic)
 
     cpuinit();
     fpsavealloc();
-    mmuinit();
+    arch_mmuinit();
 
     cpuidentify();
-    cpuidprint();
+    arch_cpuidprint();
     checkmtrr();
 
     apic->online = 1;
@@ -5820,9 +5832,9 @@ mpinit(void)
      * and do not appear in the I/O APIC so it is OK
      * to set them now.
      */
-    intrenable(IrqTIMER, lapicclock, 0, BUSUNKNOWN, "clock");
-    intrenable(IrqERROR, lapicerror, 0, BUSUNKNOWN, "lapicerror");
-    intrenable(IrqSPURIOUS, lapicspurious, 0, BUSUNKNOWN, "lapicspurious");
+    arch_intrenable(IrqTIMER, lapicclock, 0, BUSUNKNOWN, "clock");
+    arch_intrenable(IrqERROR, lapicerror, 0, BUSUNKNOWN, "lapicerror");
+    arch_intrenable(IrqSPURIOUS, lapicspurious, 0, BUSUNKNOWN, "lapicspurious");
     lapiconline();
 
     checkmtrr();
@@ -6717,6 +6729,7 @@ TEXT insb(SB), $0
       REP;    INSB
       RET
 
+// not called anywhere right now
 TEXT insl(SB), $0
       MOVL    port+0(FP), DX
       MOVL    address+4(FP), DI
@@ -10593,7 +10606,7 @@ i8250enable(Uart* uart, int ie)
      */
     if(ie){
         if(ctlr->iena == 0){
-            intrenable(ctlr->irq, i8250interrupt, uart, ctlr->tbdf, uart->name);
+            arch_intrenable(ctlr->irq, i8250interrupt, uart, ctlr->tbdf, uart->name);
             ctlr->iena = 1;
         }
         ctlr->sticky[Ier] = Ethre|Erda;
@@ -13038,7 +13051,7 @@ ataenable(SDev* sdev)
             error(Enomem);
     }
     snprint(name, sizeof(name), "%s (%s)", sdev->name, sdev->ifc->name);
-    intrenable(ctlr->irq, atainterrupt, ctlr, ctlr->tbdf, name);
+    arch_intrenable(ctlr->irq, atainterrupt, ctlr, ctlr->tbdf, name);
     outb(ctlr->ctlport+Dc, 0);
     if(ctlr->ienable)
         ctlr->ienable(ctlr);

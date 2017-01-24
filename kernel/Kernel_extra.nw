@@ -967,20 +967,21 @@ ERROR
 
 // sys/devroot.c
 extern void    addbootfile(char*, uchar*, ulong);
+
 // sys/devmnt.c
 extern Chan*   mntauth(Chan*, char*);
 extern long    mntversion(Chan*, char*, int, int);
+
 // sys/devsrv.c
 extern char*   srvname(Chan*);
+
 // sys/devproc.c
 extern int   procfdprint(Chan*, int, int, char*, int);
-// sys/devrtc.c
-//long    rtctime(void);
+
 // sys/devenv.c
 extern void    envcpy(Egrp*, Egrp*);
 extern void    ksetenv(char*, char*, int);
 extern char*   getconfenv(void);
-
 
 // screen/devdraw.c
 extern void    drawactive(bool);
@@ -993,10 +994,24 @@ extern void mousetrack(int dx, int dy, int b, int msec);
 // to call to let know devmouse.c about some mouse related keyboard events
 extern void (*kbdmouse)(int);
 
+// sys/devrtc.c
+//long    rtctime(void);
+
+
 // mouse/portmouse.c (called by devmouse.c for arch-specific mouse settings)
 extern void kmousectl(Cmdbuf*);
 
-// defined in <arch>/mouse.c for portmouse.c
+// keyboard/latin1.c (used by portkbd.c)
+//@Scheck: def currently skipped, see skip_list.txt, because of unicode
+long    latin1(Rune*, int);
+
+// keyboard/portkbd.c
+extern void kbdputsc(byte, int);
+extern int  kbdgetmap(uint, int*, int*, Rune*);
+extern void kbdputmap(ushort, ushort, Rune);
+
+
+// mouse/<arch>/mouse.c (called from portmouse.c)
 extern void arch_ps2mouse(void);
 extern void arch_setaccelerated(void);
 extern void arch_setlinear(void);
@@ -1004,13 +1019,14 @@ extern void arch_setres(int n);
 extern void arch_setintellimouse();
 extern void arch_resetmouse(void);
 
-// keyboard/portkbd.c
-extern void kbdputsc(byte, int);
-extern int  kbdgetmap(uint, int*, int*, Rune*);
-extern void kbdputmap(ushort, ushort, Rune);
-
-// defined in <arch>/kbd.c for portkbd.c
+// keyboard/<arch>/kbd.c (called from portkbd.c)
 extern void arch_setleds(Kbscan *kbscan);
+
+// screen/<arch>/screen.c (called from main)
+void  arch_screeninit(void);
+
+// sys/<arch>/devarch.c (called from arch specific)
+Dirtab* addarchfile(char*, int, long(*)(Chan*,void*,long,vlong), long(*)(Chan*,void*,long,vlong));
 
 @
 \fi
@@ -4150,12 +4166,21 @@ uint    qiomaxatomic = Maxatomic;
 \ifallcode
 <<portfns_init.h>>=
 
-//in init/<arch>/main.c (but called from syswrite)
-void    arch_reboot(kern_addr3, kern_addr3, ulong);
-
 // rebootcmd.c
 //void    readn(Chan *, void *, long);
 void    rebootcmd(int, char**);
+
+//in <arch>/main.c (but called from syswrite)
+void    arch_reboot(kern_addr3, kern_addr3, ulong);
+
+//TODO: should add prefix arch_ (or conf_ ?)
+// in <arch>/<conf>.c (called from main)
+void  links(void);
+// in <arch>/<conf>.root.c (called from main)
+void    bootlinks(void);
+
+// in <arch>/?? (called from main) but different prototypes
+//void  arch_touser(void*); // uintptr??
 
 @
 \fi
@@ -4657,10 +4682,10 @@ void    swapinit(void);
 void    putswap(Page*);
 void    dupswap(Page*);
 int   swapcount(ulong);
-//int   swapfull(void);
 void    pagersummary(void);
 void    setswapchan(Chan*);
 void    kickpager(void);
+//int   swapfull(void);
 
 // fault.c
 Segment*  seg(Proc*, ulong, int);
@@ -4682,12 +4707,12 @@ void    putseg(Segment*);
 Segment*  dupseg(Segment**, int, int);
 long    ibrk(ulong, int);
 int   addphysseg(Physseg*);
-//int   isphysseg(char*);
 ulong   segattach(Proc*, ulong, char *, ulong, ulong);
 void    imageinit(void);
 KImage*   attachimage(int, Chan*, ulong, ulong);
 //Segment*  isoverlap(Proc*, ulong, int);
 //Segment*  data2txt(Segment*);
+//int   isphysseg(char*);
 
 
 // sysfile.c
@@ -4706,6 +4731,12 @@ ulong arch_cankaddr(ulong);
 kern_addr3 arch_kaddr(phys_addr);
 // actually PADDR is used in port, but it's expanding to paddr
 phys_addr arch_paddr(kern_addr3);
+
+// defined in <arch>/ (used in port)
+void arch_memorysummary(void);
+
+// in <arch>/mmu.c (called from main and other other cpu init function)
+void arch_mmuinit(void);
 
 void    countpagerefs(ulong*, int);
 
@@ -5630,15 +5661,28 @@ ulong   l2be(long);
 
 
 // <arch>/trap.c (but used in port)
+int     arch_userureg(Ureg *);
 void    arch_callwithureg(void(*)(Ureg*));
 ulong   arch_dbgpc(Proc*);
+ulong   arch_userpc(void);
 long    arch_execregs(ulong, ulong, ulong);
 void    arch_forkchild(Proc*, Ureg*);
-ulong   arch_userpc(void);
+void    arch_kprocchild(Proc*, void (*)(void*), void*);
 void    arch_setregisters(Ureg*, char*, char*, int);
 void    arch_setkernur(Ureg*, Proc*);
-void    arch_kprocchild(Proc*, void (*)(void*), void*);
-// intrenable(), but mostly used in 386, just in port/devaudio.c
+void    arch_validalign(uintptr, unsigned); // TODO: should be in memory/?
+
+// <arch>/trap.c (used in arch specific)
+void  arch_intrenable(int, void (*)(Ureg*, void*), void*, int, char*);
+
+
+// <arch>/trap.c (called from main)
+void  arch_trapinit(void);
+// in <arch>/forkret.s, called from arch_forkchild
+//@Scheck: Assembly
+void    arch_forkret(void); 
+
+
 
 // <arch>/main_processes.c (but used in port)
 void arch_procsetup(Proc*);
@@ -6649,6 +6693,10 @@ void  uartrecv(Uart*, char);
 int   uartctl(Uart*, char*);
 //void    uartmouse(Uart*, int (*)(Queue*, int), int);
 //void    uartsetmouseputc(Uart*, int (*)(Queue*, int));
+
+// TODO: move outside main.c?
+// <arch>/main.c for now (called from port)
+int arch_isaconfig(char*, int, ISAConf*);
 
 @
 \fi
