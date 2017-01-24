@@ -219,7 +219,7 @@ swcursor_avoid(Rectangle r)
 
 /*s: function swload */
 void
-swload(Cursor *curs)
+swcursor_load(Cursor *curs)
 {
     byte *ip, *mp;
     int i, j, set, clr;
@@ -255,7 +255,7 @@ swload(Cursor *curs)
 
 /*s: function swmove */
 int
-swmove(Point p)
+swcursor_move(Point p)
 {
     swpt = addpt(p, swoffset);
     return 0;

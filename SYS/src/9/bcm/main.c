@@ -347,7 +347,7 @@ main(void)
 	lineqinit();
 	timersinit();
 	//if(conf.monitor)
-		swcursorinit();
+		swcursor_init();
 	arch_cpuidprint();
 	archreset();
 

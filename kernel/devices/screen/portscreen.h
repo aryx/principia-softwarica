@@ -39,10 +39,10 @@ extern void swcursor_hide(void);
 extern void swcursor_avoid(Rectangle);
 extern void swcursor_draw(void);
 extern void swcursor_load(Cursor *curs);
-extern int swcursor_move(Point p);
+extern int  swcursor_move(Point p);
 extern void swcursor_init(void);
-extern Cursor swcursor_arrow;
-extern bool swcursor_enabled;
+//extern Cursor swcursor_arrow;
+
 
 /* <arch>/screen.c (needed by devmouse.c) */
 extern Cursor 		arch_arrow;

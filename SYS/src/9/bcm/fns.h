@@ -60,7 +60,7 @@ extern int cas(ulong*, ulong, ulong);
 
 extern char *cputype2name(char *buf, int size);
 
-extern void swcursorinit(void);
+extern void swcursor_init(void);
 
 
 extern void armtimerset(int);
