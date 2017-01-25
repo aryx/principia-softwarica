@@ -1,7 +1,9 @@
 /*
  * armv6/armv7 reboot code
  */
-#include "arm.s"
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.h"
 
 #define PTEDRAM		(Dom0|L1AP(Krw)|Section)
 

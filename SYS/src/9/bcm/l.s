@@ -2,8 +2,9 @@
  * Common startup for armv6 and armv7
  * The rest of l.s has been moved to armv[67].s
  */
-
-#include "arm.s"
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.h"
 
 /*
  * on bcm2836, only cpu0 starts here

@@ -1,8 +1,10 @@
 /*
  * arm exception handlers
  */
-#include "arm.s"
-
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.h"
+        
 /*
  *  exception vectors, copied by trapinit() to somewhere useful
  */

@@ -3,9 +3,7 @@
  *
  * loader uses R11 as scratch.
  */
-
-#include "mem.h"
-#include "arm.h"
+//pad: used to be arm.s
 
 #define PADDR(va)	(PHYSDRAM | ((va) & ~KSEGM))
 
@@ -54,4 +52,3 @@
 	B.EQ	2(PC); \
 	MRC	CpSC, 0, r, C(CpID), C(CpIDidct), CpIDmpid; \
 	AND.S	$(MAXCPUS-1), r
-

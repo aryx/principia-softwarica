@@ -2,8 +2,9 @@
  * Broadcom bcm2836 SoC, as used in Raspberry Pi 2
  * 4 x Cortex-A7 processor (armv7)
  */
-
-#include "arm.s"
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.h"
 
 #define CACHELINESZ 64
 

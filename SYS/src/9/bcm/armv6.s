@@ -3,7 +3,9 @@
  * arm1176jzf-s processor (armv6)
  */
 
-#include "arm.s"
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.h"
 
 #define CACHELINESZ 32
 
