@@ -53,14 +53,6 @@ static Memimage xgscreen =
 };
 
 
-extern Point     curpos;
-extern Rectangle window;
-extern Memsubfont *memdefont;
-extern Memimage *conscol;
-
-extern void swconsole_init(void);
-extern void swconsole_screenputs(char *s, int n);
-
 
 /*
  * Software cursor. 
@@ -105,8 +97,9 @@ arch_ksetcursor(Cursor* curs)
 	arch_cursoron(false);
 }
 
-
-
+/*
+ * Drawing
+ */
 
 int
 hwdraw(Memdrawparam *par)
@@ -228,8 +221,6 @@ arch_screeninit(void)
 	screenputs = swconsole_screenputs;
 }
 
-void arch_flushmemscreen(Rectangle) { }
-
 uchar*
 arch_attachscreen(Rectangle *r, ulong *chan, int* d, int *width, int *softscreen)
 {
@@ -242,23 +233,14 @@ arch_attachscreen(Rectangle *r, ulong *chan, int* d, int *width, int *softscreen
 	return gscreen->data->bdata;
 }
 
-void arch_getcolor(ulong p, ulong *pr, ulong *pg, ulong *pb)
-{
-	USED(p, pr, pg, pb);
-}
-
-int arch_setcolor(ulong p, ulong r, ulong g, ulong b)
-{
-	USED(p, r, g, b);
-	return 0;
-}
-
 void
 arch_blankscreen(int blank)
 {
 	fbblank(blank);
 }
 
-
+void arch_flushmemscreen(Rectangle) { }
 //old: #define ishwimage(i)	1		/* for ../port/devdraw.c */
-bool arch_ishwimage(Memimage* i) { USED(i); return true; }
+bool arch_ishwimage(Memimage*) { return true; }
+void arch_getcolor(ulong, ulong*, ulong*, ulong*) { }
+int arch_setcolor(ulong, ulong, ulong, ulong) {	return 0; }

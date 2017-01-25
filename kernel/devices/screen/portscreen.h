@@ -5,9 +5,9 @@
 
 // Image
 
-// portscreen.c, set in <arch>/screen.c (used devmouse.c/swcursor.c)
-extern Memimage *gscreen;
-extern Memdata gscreendata;
+// portscreen.c, set in <arch>/screen.c (used by devmouse.c, swcursor.c)
+extern Memimage* gscreen;
+extern Memdata   gscreendata;
 extern Rectangle physgscreenr;  /* actual monitor size */
 
 /* <arch>/screen.c  (used by devdraw.c) */
@@ -16,7 +16,6 @@ extern void  arch_flushmemscreen(Rectangle);
 extern void  arch_blankscreen(bool);
 extern void	 arch_getcolor(ulong, ulong*, ulong*, ulong*);
 extern int	 arch_setcolor(ulong, ulong, ulong, ulong);
-// this used to be a macro, but then it was preventing this file to be generic
 extern bool  arch_ishwimage(Memimage*);
 
 // Cursor
@@ -34,15 +33,14 @@ typedef struct Cursorinfo Cursorinfo;
 extern Cursorinfo 	cursor;
 /*e: global signature cursor */
 
-// swcursor.c
-extern void swcursor_hide(void);
-extern void swcursor_avoid(Rectangle);
-extern void swcursor_draw(void);
-extern void swcursor_load(Cursor *curs);
-extern int  swcursor_move(Point p);
+// swcursor.c (called from <arch>/screen.c from arch_cursorxxx)
 extern void swcursor_init(void);
+extern void swcursor_hide(void);
+extern void swcursor_draw(void);
+extern int  swcursor_move(Point p);
+extern void swcursor_load(Cursor *curs);
+extern void swcursor_avoid(Rectangle);
 //extern Cursor swcursor_arrow;
-
 
 /* <arch>/screen.c (needed by devmouse.c) */
 extern Cursor 		arch_arrow;
@@ -50,8 +48,18 @@ extern Cursor 		arch_arrow;
 /* devmouse.c (needed by ??) */ // just enough Mouse getters/setters
 extern Point 	mousexy(void);
 
+// <arch>/screen.c (called from devmouse.c)
 extern void 	arch_ksetcursor(Cursor*);
 extern int  	arch_cursoron(int);
 extern void 	arch_cursoroff(int);
+
+// swconsole.c (used from <arch>/screen.c)
+extern Memsubfont *memdefont;
+extern Memimage *conscol;
+extern Point     curpos;
+extern Rectangle window;
+
+extern void swconsole_init(void);
+extern void swconsole_screenputs(char *s, int n);
 
 /*e: kernel/devices/screen/portscreen.h */
