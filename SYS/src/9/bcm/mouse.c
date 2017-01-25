@@ -5,8 +5,8 @@
 #include "dat.h"
 #include "fns.h"
 
-// In the Raspberry Pi the mouse is handled by usbd
-// with help from /dev/mousein
+// In the Raspberry Pi, the mouse is handled by usbd
+// with help from /dev/mousein.
 
 // empty callbacks for portmouse.c
 
