@@ -702,7 +702,7 @@ even in graphical applications.
 % http://www.adriancourreges.com/blog/2015/11/02/gta-v-graphics-study/
 % https://engineering.riotgames.com/news/trip-down-lol-graphics-pipeline
 
-\section{Getting started}
+\section{Getting started (x86)}
 \label{sec:getting-started}
 
 %dup: (and adapted) Assembler.mw
@@ -3871,14 +3871,14 @@ enum Drawop
 
 % complex flow, maybe need a control flow Figure?
 
-\subsection{Binding the VGA device}
+\subsection{Binding the VGA device (x86)}
 % [[vgascreen]], (-> vga_screen)
 %x86
 
 % complex, arch specific, so in appendix, but important part
 % is setup vgascreen global  for aux/vgactl I think.
 
-\subsection{Setting the screen size, VGA [[screensize()]]}
+\subsection{Setting the screen size, VGA [[screensize()]] (x86)}
 \n put before draw mount as anyway it depends on many globals being set
 \n for VGA attachscreen
 % [[gscreendata]] and [[gscreen]], ( -> screen, screendata)
@@ -3959,7 +3959,7 @@ if(gscreen == nil)
     error("no memory for vga memimage");
 @
 
-\subsubsection{Soft screen vs frame buffer}
+\subsubsection{Soft screen vs frame buffer (x86)}
 
 <<[[screensize()]] set [[gscreendata.bdata]]>>=
 if(scr->paddr == 0){
@@ -4596,7 +4596,7 @@ if(di == nil){
 
 
 
-\subsubsection{VGA [[attachscreen()]]}
+\subsubsection{VGA [[attachscreen()]] (x86)}
 %\subsubsection{Hardware support hook}
 
 % The connection between the two preceding section!
@@ -6773,7 +6773,7 @@ combinerect(Rectangle *r1, Rectangle r2)
 
 
 
-\subsection{Hardware support hook}
+\subsection{Hardware support hook (x86)}
 
 % on bcm/ this is a noop as write in the frame buffer are already
 % flushed ... it's a direct connection.
@@ -6810,7 +6810,7 @@ arch_flushmemscreen(Rectangle r)
     <<[[flushmemscreen()]] use VGA page>>
 }
 @
-% See apparendix for dev->flush and dev->page implementation
+% See appendix for dev->flush and dev->page implementation
 
 
 \section{Naming and sharing}
@@ -7739,7 +7739,7 @@ if(op < Clear || op > SoverD){
 % will see clipping, replicating, and memoptdraw and alphadraw in next sections
 
 
-\subsection{Hardware support hook}
+\subsection{Hardware support hook (x86)}
 
 % but really optional, bcm/screen.c does nothing except
 % calling the software cursor save/restore.
@@ -15043,7 +15043,7 @@ bool swvisible;  /* is the cursor visible? */
 % set where? why it would not be visible? after swcursorhide,
 %  but anyway should be followed by swcursordraw so not sure need this global.
 
-\subsubsection{[[VGAcur]] and [[swcursor]]}
+\subsubsection{[[VGAcur]] and [[swcursor]] (x86)}
 
 % VGAscr exposed in appendix (sad that have to introduce it here)
 <<[[VGAscr]] cursor fields>>=
@@ -15289,7 +15289,7 @@ swcursor_hide(void)
 
 
 
-\subsection{Drawing rectangles and the cursor}
+\subsection{Drawing rectangles and the cursor (x86)}
 
 % swcursorclock modifies gscreen, but what if draw operation
 %  with screen as targer or source? then need restore 
@@ -15325,7 +15325,7 @@ swcursor_avoid(Rectangle r)
 @
 
 
-\subsection{Enabling the cursor}
+\subsection{Enabling the cursor (x86)}
 
 % screen.h interface, vgascreen.c
 % ?? -> <>
@@ -15399,7 +15399,7 @@ swdisable(VGAscr*)
 }
 @
 
-\subsection{Setting the cursor}
+\subsection{Setting the cursor (x86)}
 
 % Important that can be changed. Rio uses that.
 
@@ -20316,7 +20316,7 @@ case Qcolormap:
 % >> >> >> >> >> >> >>
 
 
-\subsection{Hardware support hook}
+\subsection{Hardware support hook (x86)}
 
 % drawread | blankscreen -> <>, part of screen.h interface now
 <<function getcolor(x86)>>=
@@ -23148,77 +23148,170 @@ emenuhit(int but, Mouse *m, Menu *menu)
 % but the code seems quite generic and almost independent of VGA
 % so I moved it here.
 
-<<global curpos(x86)>>=
-static Point curpos;
+
+<<global curpos>>=
+Point     swconsole_curpos;
 @
-<<global window bis(x86)>>=
-static Rectangle window;
+<<global window bis>>=
+Rectangle swconsole_window;
 @
 
 
-
-<<[[screensize()]] vga settings>>=
-scr->memdefont = getmemdefont();
+<<global conscol>>=
+Memimage *swconsole_conscol;
 @
-% direct access to subfont! no intermediate Font wrapper.
-% Just need 1 subfont for simple ascii stuff.
+<<global back2>>=
+Memimage *swconsole_back;
+@
+
+<<global memdefont2>>=
+Memsubfont *swconsole_memdefont;
+@
 
 
-
-
-% /dev/vgactl size write -> <>
-<<function vgascreenwin(x86)>>=
-void
-vgascreenwin(VGAscr* scr)
+% main -> arch_screeninit -> screenwin -> <>
+<<function swconsole_init>>=
+void swconsole_init(void)
 {
-    int h, w;
+    Rectangle r;
 
-    h = scr->memdefont->height;
-    w = scr->memdefont->info[' '].width;
+    swconsole_back = memwhite;
+    swconsole_conscol = memblack;
 
-    window = insetrect(gscreen->r, 48);
-    window.max.x = window.min.x+((window.max.x-window.min.x)/w)*w;
-    window.max.y = window.min.y+((window.max.y-window.min.y)/h)*h;
-    curpos = window.min;
+    swconsole_memdefont = getmemdefont();
+    w = swconsole_memdefont->info[' '].width;
+    h = swconsole_memdefont->height;
 
-    screenputs = vgascreenputs;
+    r = insetrect(gscreen->r, 4);
+    memimagedraw(gscreen, r, memblack, ZP, memopaque, ZP, S);
+    swconsole_window = insetrect(r, 4);
+    memimagedraw(gscreen, swconsole_window, memwhite, ZP, memopaque, ZP, S);
 }
 @
-%todo: do like for raspberry, have greet message also in graphic mode?
 
-% vgascreenputs -> screenputs = <> (and screenputs call for printing 
-%  keystroke on the screen)
-<<function vgascreenputs(x86)>>=
-static void
-vgascreenputs(char* s, int n)
+
+<<global swconsole h w>>=
+static int h, w;
+@
+
+<<global swconsole_screenlock>>=
+Lock      swconsole_screenlock;
+@
+
+
+<<function swconsole_scroll>>=
+void
+swconsole_scroll(void)
+{
+    int o;
+    Point p;
+    Rectangle r;
+
+    o = Scroll*h;
+    r = Rpt(swconsole_window.min, 
+            Pt(swconsole_window.max.x, swconsole_window.max.y-o));
+    p = Pt(swconsole_window.min.x, swconsole_window.min.y+o);
+    memimagedraw(gscreen, r, gscreen, p, nil, p, S);
+    arch_flushmemscreen(r);
+    r = Rpt(Pt(swconsole_window.min.x, swconsole_window.max.y-o), 
+            swconsole_window.max);
+    memimagedraw(gscreen, r, swconsole_back, ZP, nil, ZP, S);
+    arch_flushmemscreen(r);
+
+    swconsole_curpos.y -= o;
+}
+@
+
+<<function swconsole_screenputc>>=
+void
+swconsole_screenputc(char *buf)
+{
+    int w;
+    uint pos;
+    Point p;
+    Rectangle r;
+    static int *xp;
+    static int xbuf[256];
+
+    if (xp < xbuf || xp >= &xbuf[sizeof(xbuf)])
+        xp = xbuf;
+
+    switch (buf[0]) {
+    case '\n':
+        if (swconsole_curpos.y + h >= swconsole_window.max.y)
+            swconsole_scroll();
+        swconsole_curpos.y += h;
+        swconsole_screenputc("\r");
+        break;
+    case '\r':
+        xp = xbuf;
+        swconsole_curpos.x = swconsole_window.min.x;
+        break;
+    case '\t':
+        p = memsubfontwidth(swconsole_memdefont, " ");
+        w = p.x;
+        if (swconsole_curpos.x >= swconsole_window.max.x - Tabstop * w)
+            swconsole_screenputc("\n");
+
+        pos = (swconsole_curpos.x - swconsole_window.min.x) / w;
+        pos = Tabstop - pos % Tabstop;
+        *xp++ = swconsole_curpos.x;
+        r = Rect(swconsole_curpos.x, swconsole_curpos.y, 
+                 swconsole_curpos.x + pos * w, swconsole_curpos.y + h);
+        memimagedraw(gscreen, r, swconsole_back, 
+                     swconsole_back->r.min, nil, swconsole_back->r.min, S);
+        arch_flushmemscreen(r);
+        swconsole_curpos.x += pos * w;
+        break;
+    case '\b':
+        if (xp <= xbuf)
+            break;
+        xp--;
+        r = Rect(*xp, swconsole_curpos.y, 
+                 swconsole_curpos.x, swconsole_curpos.y + h);
+        memimagedraw(gscreen, r, swconsole_back, 
+                     swconsole_back->r.min, nil, swconsole_back->r.min, S);
+        arch_flushmemscreen(r);
+        swconsole_curpos.x = *xp;
+        break;
+    case '\0':
+        break;
+    default:
+        p = memsubfontwidth(swconsole_memdefont, buf);
+        w = p.x;
+
+        if (swconsole_curpos.x >= swconsole_window.max.x - w)
+            swconsole_screenputc("\n");
+
+        *xp++ = swconsole_curpos.x;
+        r = Rect(swconsole_curpos.x, swconsole_curpos.y, 
+                 swconsole_curpos.x + w, swconsole_curpos.y + h);
+        memimagedraw(gscreen, r, swconsole_back, 
+                     swconsole_back->r.min, nil, swconsole_back->r.min, S);
+        memimagestring(gscreen, swconsole_curpos, swconsole_conscol, ZP, 
+                       swconsole_memdefont, buf);
+        arch_flushmemscreen(r);
+        swconsole_curpos.x += w;
+        break;
+    }
+}
+@
+
+<<function swconsole_screenputs>>=
+void
+swconsole_screenputs(char *s, int n)
 {
     int i;
-    bool gotdraw;
     Rune r;
     char buf[4];
-    VGAscr *scr;
-    Rectangle flushr;
 
-    scr = &vgascreen;
-
-    if(!arch_islo()){
-        /*
-         * Don't deadlock trying to
-         * print in an interrupt.
-         */
-        if(!canlock(&vgascreenlock))
-            return;
+    if(!arch_islo()) {
+        /* don't deadlock trying to print in interrupt */
+        if(!canlock(&swconsole_screenlock))
+            return; 
     }
     else
-        lock(&vgascreenlock);
-
-    /*
-     * Be nice to hold this, but not going to deadlock
-     * waiting for it.  Just try and see.
-     */
-    gotdraw = canqlock(&drawlock);
-
-    flushr = Rect(10000, 10000, -10000, -10000);
+        lock(&swconsole_screenlock);
 
     while(n > 0){
         i = chartorune(&r, s);
@@ -23231,163 +23324,17 @@ vgascreenputs(char* s, int n)
         buf[i] = 0;
         n -= i;
         s += i;
-        vgascreenputc(scr, buf, &flushr);
+        swconsole_screenputc(buf);
     }
-    arch_flushmemscreen(flushr);
-
-    if(gotdraw)
-        qunlock(&drawlock);
-    unlock(&vgascreenlock);
+    unlock(&swconsole_screenlock);
 }
 @
 
 
-<<global xbuf(x86)>>=
-static int xbuf[256];
-@
-<<global xp(x86)>>=
-static int *xp;
-@
-
-
-% vgascreenputs -> <>
-<<function vgascreenputc(x86)>>=
-static void
-vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
-{
-    Point p;
-    int h, w, pos;
-    Rectangle r;
-
-    if(xp < xbuf || xp >= &xbuf[sizeof(xbuf)])
-        xp = xbuf;
-
-    h = scr->memdefont->height;
-    switch(buf[0]){
-
-    case '\n':
-        if(curpos.y+h >= window.max.y){
-            vgascroll(scr);
-            *flushr = window;
-        }
-        curpos.y += h;
-        vgascreenputc(scr, "\r", flushr);
-        break;
-
-    case '\r':
-        xp = xbuf;
-        curpos.x = window.min.x;
-        break;
-
-    case '\t':
-        p = memsubfontwidth(scr->memdefont, " ");
-        w = p.x;
-        if(curpos.x >= window.max.x-4*w)
-            vgascreenputc(scr, "\n", flushr);
-
-        pos = (curpos.x-window.min.x)/w;
-        pos = 4-(pos%4);
-        *xp++ = curpos.x;
-        r = Rect(curpos.x, curpos.y, curpos.x+pos*w, curpos.y + h);
-        memimagedraw(gscreen, r, back, back->r.min, nil, back->r.min, S);
-        curpos.x += pos*w;
-        break;
-
-    case '\b':
-        if(xp <= xbuf)
-            break;
-        xp--;
-        r = Rect(*xp, curpos.y, curpos.x, curpos.y+h);
-        memimagedraw(gscreen, r, back, back->r.min, nil, ZP, S);
-        combinerect(flushr, r);
-        curpos.x = *xp;
-        break;
-
-    case '\0':
-        break;
-
-    default:
-        p = memsubfontwidth(scr->memdefont, buf);
-        w = p.x;
-
-        if(curpos.x >= window.max.x-w)
-            vgascreenputc(scr, "\n", flushr);
-
-        *xp++ = curpos.x;
-        r = Rect(curpos.x, curpos.y, curpos.x+w, curpos.y+h);
-        memimagedraw(gscreen, r, back, back->r.min, nil, back->r.min, S);
-        memimagestring(gscreen, curpos, conscol, ZP, scr->memdefont, buf);
-        combinerect(flushr, r);
-        curpos.x += w;
-    }
-}
-@
-%old: was setting to true at beginning and reset at end
-%//  drawdebug = true;
-%//  drawdebug = false;
 
 
 
 
-
-% vgascreenputs -> vgascreenputc -> <>
-<<function vgascroll(x86)>>=
-static void
-vgascroll(VGAscr* scr)
-{
-    int h, o;
-    Point p;
-    Rectangle r;
-
-    h = scr->memdefont->height;
-    o = 8*h;
-    r = Rpt(window.min, Pt(window.max.x, window.max.y-o));
-    p = Pt(window.min.x, window.min.y+o);
-    memimagedraw(gscreen, r, gscreen, p, nil, p, S);
-    r = Rpt(Pt(window.min.x, window.max.y-o), window.max);
-    memimagedraw(gscreen, r, back, ZP, nil, ZP, S);
-
-    curpos.y -= o;
-}
-@
-% not very hardware specific, could probably be put in a generic screen.c no?
-
-
-<<global back2(x86)>>=
-static Memimage* back;
-@
-
-<<global conscol(x86)>>=
-static Memimage *conscol;
-@
-
-<<[[screensize()]] vga settings>>=
-vgaimageinit(chan);
-@
-
-<<function vgaimageinit(x86)>>=
-void
-vgaimageinit(channels chan)
-{
-    if(back == nil){
-        back = allocmemimage(Rect(0,0,1,1), chan);  /* RSC BUG */
-        if(back == nil)
-            panic("back alloc");        /* RSC BUG */
-        back->flags |= Frepl;
-        back->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
-        memfillcolor(back, DBlack);
-    }
-
-    if(conscol == nil){
-        conscol = allocmemimage(Rect(0,0,1,1), chan);   /* RSC BUG */
-        if(conscol == nil)
-            panic("conscol alloc"); /* RSC BUG */
-        conscol->flags |= Frepl;
-        conscol->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
-        memfillcolor(conscol, DWhite);
-    }
-}
-@
 
 \section{Blank screen}
 % used by screenlock.c, used to save energy?
@@ -23499,7 +23446,7 @@ drawidletime(void)
 }
 @
 
-\subsection{Hardware support hook}
+\subsection{Hardware support hook (x86)}
 
 <<global hwblank(x86)>>=
 bool hwblank = false;    /* turned on by drivers that are known good */
@@ -24014,7 +23961,7 @@ bool     busy;
 
 \subsection{[[memimagedraw()]] optimisations}
 
-\subsubsection{[[hwdraw()]]}
+\subsubsection{[[hwdraw()]] (x86)}
 
 <<[[hwdraw()]] when dst is the screen>>=
 if(scr->fill == nil && scr->scroll == nil)
