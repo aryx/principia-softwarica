@@ -1,7 +1,3 @@
-#ifndef nil
-#include <u.h>
-#endif
-
 typedef long Word;
 typedef long long Vlong;
 typedef unsigned long Single;
@@ -29,14 +25,15 @@ enum {
 	ExpInfinity	= DoubleExpMax,
 };
 
-typedef struct Internal {
+struct Internal {
 	/* order matters: must start with s, e, l, h in that order */
 	unsigned char s;
 	short e;
 	/* double bits */
 	long l;				/* 0000FFFFFFFFFFFFFFFFFFFFFFFFFGGG */
 	long h;				/* 0000HFFFFFFFFFFFFFFFFFFFFFFFFFFF */
-} Internal;
+};
+typedef struct Internal Internal;
 
 #define IsWeird(n)	((n)->e >= ExpInfinity)
 #define	IsInfinity(n)	(IsWeird(n) && (n)->h == HiddenBit && (n)->l == 0)
@@ -50,12 +47,13 @@ typedef struct Internal {
 /*
  * fpi.c
  */
-extern void fpiround(Internal *);
 extern void fpiadd(Internal *, Internal *, Internal *);
 extern void fpisub(Internal *, Internal *, Internal *);
 extern void fpimul(Internal *, Internal *, Internal *);
 extern void fpidiv(Internal *, Internal *, Internal *);
-extern int fpicmp(Internal *, Internal *);
+
+extern void fpiround(Internal *);
+extern int  fpicmp(Internal *, Internal *);
 extern void fpinormalise(Internal*);
 
 /*
@@ -65,6 +63,7 @@ extern void fpis2i(Internal *, void *);
 extern void fpid2i(Internal *, void *);
 extern void fpiw2i(Internal *, void *);
 extern void fpiv2i(Internal *, void *);
+
 extern void fpii2s(void *, Internal *);
 extern void fpii2d(void *, Internal *);
 extern void fpii2w(Word *, Internal *);
