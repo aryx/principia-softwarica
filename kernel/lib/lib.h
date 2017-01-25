@@ -29,6 +29,9 @@ typedef int error1;
 typedef int errorneg1;
 /*e: pad basic types */
 
+//#define nil (void*)0 in u.h
+#define nilptr 0
+
 /*s: lib.h forward decl */
 typedef struct Qid  Qid;
 typedef struct DirEntry  DirEntry;

@@ -29,8 +29,6 @@ typedef ulong* virt_addr2;
 typedef void* virt_addr3;
 typedef void* kern_addr3;
 
-//#define nil (void*)0 in lib.h
-#define nilptr 0
 
 
 #include "dat_forward.h"
@@ -90,7 +88,7 @@ int vflag;
 extern char dbgflg[256];
 #define dbgprint	print		/* for now */
 
-// TODO: put that in portdat.h
+// TODO: put that in portdat.h or in netif.h?
 #pragma varargck  type  "I" uchar*
 #pragma varargck  type  "V" uchar*
 #pragma varargck  type  "E" uchar*
