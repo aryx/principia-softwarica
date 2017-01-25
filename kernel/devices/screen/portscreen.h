@@ -53,11 +53,13 @@ extern void 	arch_ksetcursor(Cursor*);
 extern int  	arch_cursoron(int);
 extern void 	arch_cursoroff(int);
 
+// Graphical console
+
 // swconsole.c (used from <arch>/screen.c)
-extern Memsubfont *memdefont;
-extern Memimage *conscol;
-extern Point     curpos;
-extern Rectangle window;
+extern Memsubfont *swconsole_memdefont;
+extern Memimage *swconsole_conscol;
+extern Point     swconsole_curpos;
+extern Rectangle swconsole_window;
 
 extern void swconsole_init(void);
 extern void swconsole_screenputs(char *s, int n);

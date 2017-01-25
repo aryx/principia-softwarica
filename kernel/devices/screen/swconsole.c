@@ -1,6 +1,6 @@
 /*s: kernel/devices/screen/swconsole.c */
 /*
- * Software cursor
+ * Text output using memdraw
  */
 #include    "u.h"
 #include    "../port/lib.h"
@@ -17,6 +17,14 @@
 
 #include    "../port/portscreen.h"
 
+// The main entry point of this module is the function 
+// swconsole_screenputs() which is assigned to screenputs in devcons.c and
+// called from print() to display text on the screen.
+// swconsole_screenputs() uses the default text font in memdraw
+// and the memdraw functions to draw characters on the screen (via gscreen).
+// See pc/cga.c for another screenputs function using the CGA hardware
+// to display text.
+
 enum {
     Scroll      = 8, // want this to be configurable?
     Tabstop     = 4,
@@ -27,23 +35,23 @@ Lock      swconsole_screenlock;
 /*e: global swconsole_screenlock */
 
 /*s: global curpos */
-Point     curpos;
+Point     swconsole_curpos;
 /*e: global curpos */
 
 /*s: global window bis */
-Rectangle window;
+Rectangle swconsole_window;
 /*e: global window bis */
 
 /*s: global conscol */
-Memimage *conscol;
+Memimage *swconsole_conscol;
 /*e: global conscol */
 
 /*s: global back2 */
-Memimage *back;
+Memimage *swconsole_back;
 /*e: global back2 */
 
 /*s: global memdefont2 */
-Memsubfont *memdefont;
+Memsubfont *swconsole_memdefont;
 /*e: global memdefont2 */
 
 /*s: global swconsole h w */
@@ -55,17 +63,17 @@ void swconsole_init(void)
 {
     Rectangle r;
 
-    back = memwhite;
-    conscol = memblack;
+    swconsole_back = memwhite;
+    swconsole_conscol = memblack;
 
-    memdefont = getmemdefont();
-    w = memdefont->info[' '].width;
-    h = memdefont->height;
+    swconsole_memdefont = getmemdefont();
+    w = swconsole_memdefont->info[' '].width;
+    h = swconsole_memdefont->height;
 
     r = insetrect(gscreen->r, 4);
     memimagedraw(gscreen, r, memblack, ZP, memopaque, ZP, S);
-    window = insetrect(r, 4);
-    memimagedraw(gscreen, window, memwhite, ZP, memopaque, ZP, S);
+    swconsole_window = insetrect(r, 4);
+    memimagedraw(gscreen, swconsole_window, memwhite, ZP, memopaque, ZP, S);
 }
 /*e: function swconsole_init */
 
@@ -78,15 +86,17 @@ swconsole_scroll(void)
     Rectangle r;
 
     o = Scroll*h;
-    r = Rpt(window.min, Pt(window.max.x, window.max.y-o));
-    p = Pt(window.min.x, window.min.y+o);
+    r = Rpt(swconsole_window.min, 
+            Pt(swconsole_window.max.x, swconsole_window.max.y-o));
+    p = Pt(swconsole_window.min.x, swconsole_window.min.y+o);
     memimagedraw(gscreen, r, gscreen, p, nil, p, S);
     arch_flushmemscreen(r);
-    r = Rpt(Pt(window.min.x, window.max.y-o), window.max);
-    memimagedraw(gscreen, r, back, ZP, nil, ZP, S);
+    r = Rpt(Pt(swconsole_window.min.x, swconsole_window.max.y-o), 
+            swconsole_window.max);
+    memimagedraw(gscreen, r, swconsole_back, ZP, nil, ZP, S);
     arch_flushmemscreen(r);
 
-    curpos.y -= o;
+    swconsole_curpos.y -= o;
 }
 /*e: function swconsole_scroll */
 
@@ -106,53 +116,60 @@ swconsole_screenputc(char *buf)
 
     switch (buf[0]) {
     case '\n':
-        if (curpos.y + h >= window.max.y)
+        if (swconsole_curpos.y + h >= swconsole_window.max.y)
             swconsole_scroll();
-        curpos.y += h;
+        swconsole_curpos.y += h;
         swconsole_screenputc("\r");
         break;
     case '\r':
         xp = xbuf;
-        curpos.x = window.min.x;
+        swconsole_curpos.x = swconsole_window.min.x;
         break;
     case '\t':
-        p = memsubfontwidth(memdefont, " ");
+        p = memsubfontwidth(swconsole_memdefont, " ");
         w = p.x;
-        if (curpos.x >= window.max.x - Tabstop * w)
+        if (swconsole_curpos.x >= swconsole_window.max.x - Tabstop * w)
             swconsole_screenputc("\n");
 
-        pos = (curpos.x - window.min.x) / w;
+        pos = (swconsole_curpos.x - swconsole_window.min.x) / w;
         pos = Tabstop - pos % Tabstop;
-        *xp++ = curpos.x;
-        r = Rect(curpos.x, curpos.y, curpos.x + pos * w, curpos.y + h);
-        memimagedraw(gscreen, r, back, back->r.min, nil, back->r.min, S);
+        *xp++ = swconsole_curpos.x;
+        r = Rect(swconsole_curpos.x, swconsole_curpos.y, 
+                 swconsole_curpos.x + pos * w, swconsole_curpos.y + h);
+        memimagedraw(gscreen, r, swconsole_back, 
+                     swconsole_back->r.min, nil, swconsole_back->r.min, S);
         arch_flushmemscreen(r);
-        curpos.x += pos * w;
+        swconsole_curpos.x += pos * w;
         break;
     case '\b':
         if (xp <= xbuf)
             break;
         xp--;
-        r = Rect(*xp, curpos.y, curpos.x, curpos.y + h);
-        memimagedraw(gscreen, r, back, back->r.min, nil, back->r.min, S);
+        r = Rect(*xp, swconsole_curpos.y, 
+                 swconsole_curpos.x, swconsole_curpos.y + h);
+        memimagedraw(gscreen, r, swconsole_back, 
+                     swconsole_back->r.min, nil, swconsole_back->r.min, S);
         arch_flushmemscreen(r);
-        curpos.x = *xp;
+        swconsole_curpos.x = *xp;
         break;
     case '\0':
         break;
     default:
-        p = memsubfontwidth(memdefont, buf);
+        p = memsubfontwidth(swconsole_memdefont, buf);
         w = p.x;
 
-        if (curpos.x >= window.max.x - w)
+        if (swconsole_curpos.x >= swconsole_window.max.x - w)
             swconsole_screenputc("\n");
 
-        *xp++ = curpos.x;
-        r = Rect(curpos.x, curpos.y, curpos.x + w, curpos.y + h);
-        memimagedraw(gscreen, r, back, back->r.min, nil, back->r.min, S);
-        memimagestring(gscreen, curpos, conscol, ZP, memdefont, buf);
+        *xp++ = swconsole_curpos.x;
+        r = Rect(swconsole_curpos.x, swconsole_curpos.y, 
+                 swconsole_curpos.x + w, swconsole_curpos.y + h);
+        memimagedraw(gscreen, r, swconsole_back, 
+                     swconsole_back->r.min, nil, swconsole_back->r.min, S);
+        memimagestring(gscreen, swconsole_curpos, swconsole_conscol, ZP, 
+                       swconsole_memdefont, buf);
         arch_flushmemscreen(r);
-        curpos.x += w;
+        swconsole_curpos.x += w;
         break;
     }
 }

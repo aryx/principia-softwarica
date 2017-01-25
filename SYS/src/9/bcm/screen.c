@@ -20,21 +20,6 @@ enum {
 	Depth		= 16,
 };
 
-// could factorize with swcursor_arrow
-Cursor	arch_arrow = {
-	{ -1, -1 },
-	{ 0xFF, 0xFF, 0x80, 0x01, 0x80, 0x02, 0x80, 0x0C,
-	  0x80, 0x10, 0x80, 0x10, 0x80, 0x08, 0x80, 0x04,
-	  0x80, 0x02, 0x80, 0x01, 0x80, 0x02, 0x8C, 0x04,
-	  0x92, 0x08, 0x91, 0x10, 0xA0, 0xA0, 0xC0, 0x40,
-	},
-	{ 0x00, 0x00, 0x7F, 0xFE, 0x7F, 0xFC, 0x7F, 0xF0,
-	  0x7F, 0xE0, 0x7F, 0xE0, 0x7F, 0xF0, 0x7F, 0xF8,
-	  0x7F, 0xFC, 0x7F, 0xFE, 0x7F, 0xFC, 0x73, 0xF8,
-	  0x61, 0xF0, 0x60, 0xE0, 0x40, 0x40, 0x00, 0x00,
-	},
-};
-
 static Memdata xgdata;
 
 static Memimage xgscreen =
@@ -57,6 +42,21 @@ static Memimage xgscreen =
 /*
  * Software cursor. 
  */
+
+// could factorize with swcursor_arrow
+Cursor	arch_arrow = {
+	{ -1, -1 },
+	{ 0xFF, 0xFF, 0x80, 0x01, 0x80, 0x02, 0x80, 0x0C,
+	  0x80, 0x10, 0x80, 0x10, 0x80, 0x08, 0x80, 0x04,
+	  0x80, 0x02, 0x80, 0x01, 0x80, 0x02, 0x8C, 0x04,
+	  0x92, 0x08, 0x91, 0x10, 0xA0, 0xA0, 0xC0, 0x40,
+	},
+	{ 0x00, 0x00, 0x7F, 0xFE, 0x7F, 0xFC, 0x7F, 0xF0,
+	  0x7F, 0xE0, 0x7F, 0xE0, 0x7F, 0xF0, 0x7F, 0xF8,
+	  0x7F, 0xFC, 0x7F, 0xFE, 0x7F, 0xFC, 0x73, 0xF8,
+	  0x61, 0xF0, 0x60, 0xE0, 0x40, 0x40, 0x00, 0x00,
+	},
+};
 
 bool
 arch_cursoron(bool dolock)
@@ -155,24 +155,29 @@ screenwin(void)
 	orange->data->bdata[0] = 0x40;		/* magic: colour? */
 	orange->data->bdata[1] = 0xfd;		/* magic: colour? */
 
-	h = memdefont->height;
+	h = swconsole_memdefont->height;
 
-	memimagedraw(gscreen, Rect(window.min.x, window.min.y,
-		window.max.x, window.min.y + h + 5 + 6), orange, ZP, nil, ZP, S);
+	memimagedraw(gscreen, 
+                 Rect(swconsole_window.min.x, swconsole_window.min.y,
+                      swconsole_window.max.x, swconsole_window.min.y + h + 5 + 6), 
+                 orange, ZP, nil, ZP, S);
 	freememimage(orange);
 
-	window = insetrect(window, 5);
+	swconsole_window = insetrect(swconsole_window, 5);
 
 	greet = " Plan 9 Console ";
-	p = addpt(window.min, Pt(10, 0));
-	q = memsubfontwidth(memdefont, greet);
-	memimagestring(gscreen, p, conscol, ZP, memdefont, greet);
+	p = addpt(swconsole_window.min, Pt(10, 0));
+	q = memsubfontwidth(swconsole_memdefont, greet);
+	memimagestring(gscreen, p, swconsole_conscol, ZP, swconsole_memdefont, 
+                   greet);
 
 	arch_flushmemscreen(gscreen->r); // was r before, but now in swconsole.c
 
-	window.min.y += h + 6;
-	curpos = window.min;
-	window.max.y = window.min.y + ((window.max.y - window.min.y) / h) * h;
+	swconsole_window.min.y += h + 6;
+	swconsole_curpos = swconsole_window.min;
+	swconsole_window.max.y = 
+      swconsole_window.min.y + 
+      ((swconsole_window.max.y - swconsole_window.min.y) / h) * h;
 }
 
 
