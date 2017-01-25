@@ -22,20 +22,35 @@ enum {
     Tabstop     = 4,
 };
 
+/*s: global swconsole_screenlock */
 Lock      swconsole_screenlock;
+/*e: global swconsole_screenlock */
 
+/*s: global curpos */
 Point     curpos;
+/*e: global curpos */
+
+/*s: global window bis */
 Rectangle window;
+/*e: global window bis */
 
+/*s: global conscol */
 Memimage *conscol;
+/*e: global conscol */
+
+/*s: global back2 */
 Memimage *back;
+/*e: global back2 */
+
+/*s: global memdefont2 */
 Memsubfont *memdefont;
+/*e: global memdefont2 */
 
+/*s: global swconsole h w */
 static int h, w;
+/*e: global swconsole h w */
 
-//static void myscreenputs(char *s, int n);
-//static void screenputc(char *buf);
-
+/*s: function swconsole_init */
 void swconsole_init(void)
 {
     Rectangle r;
@@ -52,7 +67,9 @@ void swconsole_init(void)
     window = insetrect(r, 4);
     memimagedraw(gscreen, window, memwhite, ZP, memopaque, ZP, S);
 }
+/*e: function swconsole_init */
 
+/*s: function swconsole_scroll */
 void
 swconsole_scroll(void)
 {
@@ -71,8 +88,9 @@ swconsole_scroll(void)
 
     curpos.y -= o;
 }
+/*e: function swconsole_scroll */
 
-
+/*s: function swconsole_screenputc */
 void
 swconsole_screenputc(char *buf)
 {
@@ -138,7 +156,9 @@ swconsole_screenputc(char *buf)
         break;
     }
 }
+/*e: function swconsole_screenputc */
 
+/*s: function swconsole_screenputs */
 void
 swconsole_screenputs(char *s, int n)
 {
@@ -169,7 +189,6 @@ swconsole_screenputs(char *s, int n)
     }
     unlock(&swconsole_screenlock);
 }
-
-
+/*e: function swconsole_screenputs */
 
 /*e: kernel/devices/screen/swconsole.c */

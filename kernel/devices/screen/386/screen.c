@@ -17,6 +17,7 @@
 #include "../port/portscreen.h"
 #include "screen.h"
 
+//TODO: can not reuse swcursor.c, WEIRD, kernel fault when run rio!
 static void swcursorhide(void);
 static void swcursoravoid(Rectangle);
 static void swcursordraw(void);
@@ -1018,7 +1019,7 @@ vgalinearaddr(VGAscr *scr, ulong paddr, int size)
 /*
  * Software cursor. 
  */
-
+//TODO: reuse swcursor.c (but get kernel fault when run rio, WEIRD)
 
 Cursor  arch_arrow = {
     .offset = { -1, -1 },

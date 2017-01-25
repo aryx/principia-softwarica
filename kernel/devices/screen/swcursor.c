@@ -79,8 +79,33 @@ Rectangle   swrect; /* screen rectangle in swback */
 Point   swoffset;
 /*e: global swoffset */
 
-void swcursor_clock(void);
 
+/*s: function swcursorclock */
+void
+swcursor_clock(void)
+{
+    int x;
+
+    if(!swenabled)
+        return;
+    swcursor_move(mousexy()); //bcm: only, was not in pc
+    if(swvisible && eqpt(swpt, swvispt) && swvers==swvisvers)
+        return;
+
+    x = arch_splhi();
+    // check again, might have changed in between
+    if(swenabled)
+     if(!swvisible || !eqpt(swpt, swvispt) || swvers!=swvisvers)
+      if(canqlock(&drawlock)){
+
+        swcursor_hide();
+        swcursor_draw();
+
+        qunlock(&drawlock);
+    }
+    arch_splx(x);
+}
+/*e: function swcursorclock */
 
 /*s: function swcursorinit */
 void
@@ -123,33 +148,6 @@ swcursor_init(void)
     memfillcolor(swimg1,  DBlack);
 }
 /*e: function swcursorinit */
-
-/*s: function swcursorclock */
-void
-swcursor_clock(void)
-{
-    int x;
-
-    if(!swenabled)
-        return;
-    swcursor_move(mousexy()); //bcm: only, was not in pc
-    if(swvisible && eqpt(swpt, swvispt) && swvers==swvisvers)
-        return;
-
-    x = arch_splhi();
-    // check again, might have changed in between
-    if(swenabled)
-     if(!swvisible || !eqpt(swpt, swvispt) || swvers!=swvisvers)
-      if(canqlock(&drawlock)){
-
-        swcursor_hide();
-        swcursor_draw();
-
-        qunlock(&drawlock);
-    }
-    arch_splx(x);
-}
-/*e: function swcursorclock */
 
 /*s: function swcursordraw */
 void
