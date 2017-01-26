@@ -20,7 +20,6 @@ enum arch_constants
 @
 
 %  //  MAXCRYPT =  127,
-
 %//  Pae = 1<<6,   /* physical-addr extensions */
 %//  Cmpxchg8b = 1<<8,
 %//  Cpuapic = 1<<9,
@@ -151,6 +150,8 @@ extern X86type *cputype;
 
 
 \subsection*{[[arch/386/arch.c]]}
+%pad: I created this file to remove some backward deps
+% some stuff was in devarch.c
 
 <<arch.c>>=
 <<kernel basic includes>>
@@ -172,26 +173,6 @@ pcmspecial(char *idstr, ISAConf *isa)
 
 <<function cpuidprint(x86)>>
 
-<<function cycles and default implementation(x86)>>
-
-<<function cmpswap and default implementation(x86)>>
-
-/*
- * On a uniprocessor, you'd think that coherence could be nop,
- * but it can't.  We still need a barrier when using coherence() in
- * device drivers.
- *
- * On VMware, it's safe (and a huge win) to set this to nop.
- * Aux/vmware does this via the #P/archctl file.
- */
-//now in globals.c: void (*coherence)(void) = nop;
-
-
-<<function timerset(x86)>>
-
-<<function us(x86)>>
-
-<<function fastticks(x86)>>
 @
 
 %/*
@@ -204,8 +185,27 @@ pcmspecial(char *idstr, ISAConf *isa)
 %//      _pcmspecialclose(a);
 %//}
 
+\subsection*{[[concurrency/386/concurrency.c]]}
+%pad: I created this file
+
+<<concurrency.c>>=
+<<kernel basic includes>>
+
+<<function cmpswap and default implementation(x86)>>
+
+/*
+ * On a uniprocessor, you'd think that coherence could be nop,
+ * but it can't.  We still need a barrier when using coherence() in
+ * device drivers.
+ *
+ * On VMware, it's safe (and a huge win) to set this to nop.
+ * Aux/vmware does this via the #P/archctl file.
+ */
+//now in globals.c: void (*coherence)(void) = nop;
+@
 
 \subsection*{[[concurrency/386/l_concurrency.s]]}
+%pad: I created this file, was in l.s before
 
 <<l_concurrency.s>>=
 #include "mem.h"
@@ -226,7 +226,57 @@ pcmspecial(char *idstr, ISAConf *isa)
 <<function _xinc(x86)>>
 
 <<function _xdec(x86)>>
+
+// cmpswap
+
+TEXT cmpswap486(SB), $0
+        MOVL    addr+0(FP), BX
+        MOVL    old+4(FP), AX
+        MOVL    new+8(FP), CX
+        LOCK
+        BYTE $0x0F; BYTE $0xB1; BYTE $0x0B      /* CMPXCHGL CX, (BX) */
+        JNZ didnt
+        MOVL    $1, AX
+        RET
+didnt:
+        XORL    AX,AX
+        RET
+
+// coherence
+
+TEXT mb386(SB), $0
+        POPL    AX                              /* return PC */
+        PUSHFL
+        PUSHL   CS
+        PUSHL   AX
+        IRETL
+
+TEXT mb586(SB), $0
+        XORL    AX, AX
+        CPUID
+        RET
+
+TEXT mfence(SB), $0
+        BYTE $0x0f
+        BYTE $0xae
+        BYTE $0xf0
+        RET
+
 @
+%$
+
+%dead:
+%  TEXT sfence(SB), $0
+%          BYTE $0x0f
+%          BYTE $0xae
+%          BYTE $0xf8
+%          RET
+%  
+%  TEXT lfence(SB), $0
+%          BYTE $0x0f
+%          BYTE $0xae
+%          BYTE $0xe8
+%          RET
 
 
 \subsection*{[[core/386/dat.h]]}
@@ -356,6 +406,9 @@ typedef struct Rsd Rsd;
 
 \ifallcode
 <<fns.h declarations(x86)>>=
+
+// <arch>/arch.c (called from main)
+void   arch_cpuidprint(void);
 
 // different signatures in different arch so cant factorize
 void  arch_touser(void*);
@@ -530,12 +583,15 @@ void  putcr4(ulong);
 int   i8042auxcmd(int);
 void  i8042auxenable(void (*)(int, int));
 void  i8042reset(void);
+
 void  i8250console(void);
 void* i8250alloc(int, int, int);
+
 void  i8253enable(void);
 void  i8253init(void);
 uvlong  i8253read(uvlong*);
 void  i8253timerset(uvlong);
+
 int   i8259disable(int);
 int   i8259enable(Vctl*);
 void  i8259init(void);
@@ -750,6 +806,7 @@ static char *initfailed = "i8042: kbdinit failed\n";
 <<function kbdenable(x86)>>
 
 @ 
+% >> >> >> >> >> >> >> >>
 
 %/*
 % *  ask 8042 to enable the use of address bit 20
@@ -782,6 +839,8 @@ static char *initfailed = "i8042: kbdinit failed\n";
 %//  iunlock(&i8042lock);
 %//  return i;
 %//}
+
+% >> >> >> >>
 
 \subsection*{[[devices/mouse/386/mouse.c]]}
 
@@ -2310,6 +2369,8 @@ floppyintr(Ureg *)
 
 
 \subsection*{[[devices/sys/386/devarch.c]]}
+%pad: I moved stuff in newly created files arch.c, in time.c 
+% to remove some backward deps
 
 <<global archdevtab(x86)>>=
 Dev archdevtab = {
@@ -2357,7 +2418,6 @@ enum {
 typedef long Rdwrfn(Chan*, void*, long, vlong);
 
 extern int doi8253set;
-extern int cmpswap386(long *addr, long old, long new);
 extern PCArch* knownarch[];
 
 
@@ -3326,48 +3386,7 @@ _cpuid:
 
 
 
-TEXT mb386(SB), $0
-        POPL    AX                              /* return PC */
-        PUSHFL
-        PUSHL   CS
-        PUSHL   AX
-        IRETL
 
-TEXT mb586(SB), $0
-        XORL    AX, AX
-        CPUID
-        RET
-
-TEXT sfence(SB), $0
-        BYTE $0x0f
-        BYTE $0xae
-        BYTE $0xf8
-        RET
-
-TEXT lfence(SB), $0
-        BYTE $0x0f
-        BYTE $0xae
-        BYTE $0xe8
-        RET
-
-TEXT mfence(SB), $0
-        BYTE $0x0f
-        BYTE $0xae
-        BYTE $0xf0
-        RET
-
-TEXT cmpswap486(SB), $0
-        MOVL    addr+0(FP), BX
-        MOVL    old+4(FP), AX
-        MOVL    new+8(FP), CX
-        LOCK
-        BYTE $0x0F; BYTE $0xB1; BYTE $0x0B      /* CMPXCHGL CX, (BX) */
-        JNZ didnt
-        MOVL    $1, AX
-        RET
-didnt:
-        XORL    AX,AX
-        RET
 
 TEXT arch_mul64fract(SB), $0
 /*
@@ -4555,8 +4574,23 @@ int pdmap(kern_addr2 mmupd, ulong pa, virt_addr va, int size);
 
 @
 
+\subsection*{[[time/386/time.c]]}
+%pad: I created this file. content was in arch.c before and
+% in devarch.c before
 
-\subsection*{[[processes/386/i8253.c]]}
+<<time/386/time.c>>=
+<<kernel basic includes>>
+
+<<function cycles and default implementation(x86)>>
+
+<<function timerset(x86)>>
+
+<<function us(x86)>>
+
+<<function fastticks(x86)>>
+@
+
+\subsection*{[[time/386/i8253.c]]}
 
 <<struct Watchdog(x86)>>=
 struct Watchdog
@@ -4782,7 +4816,6 @@ i8253_microdelay(int microsecs)
 //*****************************************************************************
 // Data
 //*****************************************************************************
-
 
 /*
  *  8253 timer

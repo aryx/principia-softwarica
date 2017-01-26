@@ -1,1 +1,1 @@
-../../../../kernel/processes/386/i8253.c
+../../../../kernel/time/386/i8253.c

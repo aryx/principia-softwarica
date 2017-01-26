@@ -3,6 +3,7 @@
 #include "../port/portfns_concurrency.h"
 #include "../port/portfns_memory.h"
 #include "../port/portfns_files.h"
+#include "../port/portfns_time.h"
 #include "../port/portfns_processes.h"
 #include "../port/portfns_misc.h"
 #include "../port/portfns_console.h"
@@ -13,9 +14,10 @@
 #include "../port/portfns_syscalls.h"
 #include "../port/portfns_init.h"
 
-#include "../port/portfns_arch.h"
-
 /*s: fns.h declarations(x86) */
+
+// <arch>/arch.c (called from main)
+void   arch_cpuidprint(void);
 
 // different signatures in different arch so cant factorize
 void  arch_touser(void*);
@@ -119,6 +121,7 @@ void  mb386(void);
 void  mb586(void);
 // l_misc.s (called from devarch)
 // cmpswap possible value
+int   cmpswap386(long*, long, long);
 //@Scheck: Assembly
 int   cmpswap486(long*, long, long);
 
@@ -190,12 +193,15 @@ void  putcr4(ulong);
 int   i8042auxcmd(int);
 void  i8042auxenable(void (*)(int, int));
 void  i8042reset(void);
+
 void  i8250console(void);
 void* i8250alloc(int, int, int);
+
 void  i8253enable(void);
 void  i8253init(void);
 uvlong  i8253read(uvlong*);
 void  i8253timerset(uvlong);
+
 int   i8259disable(int);
 int   i8259enable(Vctl*);
 void  i8259init(void);

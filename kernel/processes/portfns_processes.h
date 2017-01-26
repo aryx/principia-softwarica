@@ -1,43 +1,5 @@
 /*s: portfns_processes.h */
 
-// tod.c
-// initialize the hidden global tod.c#tod
-void    todinit(void);
-void    todsetfreq(vlong);
-void    todset(vlong, vlong, int);
-vlong   todget(vlong*);
-//is in <arch>/devarch.c (but used in port)
-//uvlong    (*arch_fastticks)(uvlong*); 
-uvlong  fastticks2us(uvlong);
-uvlong  ns2fastticks(uvlong);
-long    seconds(void);
-
-// pgrp.c
-Rgrp*   newrgrp(void);
-Pgrp*   newpgrp(void);
-void    closergrp(Rgrp*);
-void    closefgrp(Fgrp*);
-Fgrp*   dupfgrp(Fgrp*);
-void    closepgrp(Pgrp*);
-void    pgrpcpy(Pgrp*, Pgrp*);
-void    forceclosefgrp(void);
-void    pgrpnote(ulong, char*, long, int);
-void    mountfree(Mount*);
-Mount*  newmount(Chan*, int, char*);
-void    resrcwait(char*);
-
-// portclock.c
-ulong   tk2ms(ulong);
-#define   TK2MS(x) ((x)*(1000/HZ))
-#define   MS2NS(n) (((vlong)(n))*1000000LL)
-ulong   ms2tk(ulong);
-void    timerdel(Timer*);
-void    timeradd(Timer*);
-Timer*  addclock0link(void (*)(void), int);
-void    timerintr(Ureg*, Tval);
-void    timersinit(void);
-//void    arch_timerset(Tval); is in <arch>/devarch.c (but used in port)
-
 // proc.c
 void exhausted(char*);
 // in portfns_core.h, to remove some backward dependencies
@@ -79,10 +41,20 @@ void    hzsched(void);
 //TODO cg didn't find ref outside in devproc.c?
 int   haswaitq(void*);
 
-// alarm.c
-ulong   procalarm(ulong);
-void    alarmkproc(void*);
-void    checkalarms(void);
+// pgrp.c
+Rgrp*   newrgrp(void);
+Pgrp*   newpgrp(void);
+void    closergrp(Rgrp*);
+void    closefgrp(Fgrp*);
+Fgrp*   dupfgrp(Fgrp*);
+void    closepgrp(Pgrp*);
+void    pgrpcpy(Pgrp*, Pgrp*);
+void    forceclosefgrp(void);
+void    pgrpnote(ulong, char*, long, int);
+void    mountfree(Mount*);
+Mount*  newmount(Chan*, int, char*);
+void    resrcwait(char*);
+
 
 // edf.c (used to be declared in edf.h)
 Edf*    edflock(Proc*);
@@ -100,8 +72,6 @@ char*   edfadmit(Proc*);
 // not useless, used by misc/rebootcmd.c, weird not recognized by cg
 ulong   l2be(long);
 // many sysxxx functions (used in syscalls/ without requiring extern decl)
-
-
 
 
 // <arch>/trap.c (but used in port)
@@ -127,19 +97,12 @@ void  arch_trapinit(void);
 void  arch_forkret(void); 
 
 
-
 // <arch>/main_processes.c (but used in port)
 void  arch_procsetup(Proc*);
 void  arch_procsave(Proc*);
 void  arch_procrestore(Proc *);
 void  arch_idlehands(void);
 
-// <arch>/i8253.c (but used in port)
-ulong arch_perfticks(void);
-
-// <arch>/arch.c (but used in port)
-void  arch_timerset(Tval);
-ulong arch_us(void);
 
 // in <arch>/l.s (but used in port)
 //@Scheck: Assembly

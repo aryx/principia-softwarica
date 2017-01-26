@@ -26,7 +26,6 @@ enum {
 typedef long Rdwrfn(Chan*, void*, long, vlong);
 
 extern int doi8253set;
-extern int cmpswap386(long *addr, long old, long new);
 extern PCArch* knownarch[];
 
 

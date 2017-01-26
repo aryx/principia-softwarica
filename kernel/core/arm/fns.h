@@ -2,6 +2,7 @@
 #include "../port/portfns_concurrency.h"
 #include "../port/portfns_memory.h"
 #include "../port/portfns_files.h"
+#include "../port/portfns_time.h"
 #include "../port/portfns_processes.h"
 #include "../port/portfns_misc.h"
 #include "../port/portfns_console.h"
@@ -11,8 +12,6 @@
 #include "../port/portfns_network.h"
 #include "../port/portfns_syscalls.h"
 #include "../port/portfns_init.h"
-
-#include "../port/portfns_arch.h"
 
 #define	getpgcolor(a)	0
 #define	kmapinval()

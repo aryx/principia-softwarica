@@ -85,4 +85,44 @@ _xdeclt:
         DECL    AX
         RET
 /*e: function _xdec(x86) */
+
+// cmpswap
+
+// cmpswap386 is in concurrenc.c
+        
+TEXT cmpswap486(SB), $0
+        MOVL    addr+0(FP), BX
+        MOVL    old+4(FP), AX
+        MOVL    new+8(FP), CX
+        LOCK
+        BYTE $0x0F; BYTE $0xB1; BYTE $0x0B      /* CMPXCHGL CX, (BX) */
+        JNZ didnt
+        MOVL    $1, AX
+        RET
+didnt:
+        XORL    AX,AX
+        RET
+
+// coherence
+
+#define CPUID           BYTE $0x0F; BYTE $0xA2  /* CPUID, argument in AX */
+
+TEXT mb386(SB), $0
+        POPL    AX                              /* return PC */
+        PUSHFL
+        PUSHL   CS
+        PUSHL   AX
+        IRETL
+
+TEXT mb586(SB), $0
+        XORL    AX, AX
+        CPUID
+        RET
+
+TEXT mfence(SB), $0
+        BYTE $0x0f
+        BYTE $0xae
+        BYTE $0xf0
+        RET
+
 /*e: l_concurrency.s */
