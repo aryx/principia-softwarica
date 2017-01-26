@@ -1,42 +1,45 @@
 /*s: portfns_processes.h */
 
 // proc.c
-void exhausted(char*);
-// in portfns_core.h, to remove some backward dependencies
+// (now in portfns_core.h, to remove some backward dependencies)
 //void  (*sleep)(Rendez*, int(*)(void*), void*);
 //int   (*postnote)(Proc*, int, char*, int);
-void    procctl(Proc*);
-void    procwired(Proc*, int);
 //Proc* (*wakeup)(Rendez*);
 //void  (*error)(char*);
-void    procpriority(Proc*, int, int);
 //TODO: fp non-deps twakeup, passed as pointer func
 //void  (*nexterror)(void);
 //void  (*dumpaproc)(Proc*);
+//void  (*tsleep)(Rendez*, int (*)(void*), void*, ulong);
+//void  (*pexit)(char*, bool);
+//void  (*sched)(void);
+//void  (*ready)(Proc*);
+//
+void    yield(void);
+void    hzsched(void);
+void    schedinit(void);
+Proc*   newproc(void);
+void    preempt(void);
+void    procinit(void);
+int     procindex(ulong);
+void    kproc(char*, void(*)(void*), void*);
+Proc*   dequeueproc(Schedq*, Proc*);
+//
+void    scheddump(void);
+void    procdump(void);
+//
+void    exhausted(char*);
+void    procctl(Proc*);
+void    procwired(Proc*, int);
+void    procpriority(Proc*, int, int);
 void    accounttime(void);
 int     canpage(Proc*);
 int     anyhigher(void);
-void    scheddump(void);
-Proc*   dequeueproc(Schedq*, Proc*);
-void    preempt(void);
 void    killbig(char*);
 void    procflushseg(Segment*); 
-void    procdump(void);
 void    renameuser(char*, char*);
-void    procinit(void);
-int     procindex(ulong);
 ulong   pwait(Waitmsg*);
-//void  (*tsleep)(Rendez*, int (*)(void*), void*, ulong);
 void    unbreak(Proc*);
 int     freebroken(void);
-void    yield(void);
-//void  (*pexit)(char*, bool);
-//void  (*sched)(void);
-void    schedinit(void);
-//void  (*ready)(Proc*);
-Proc*   newproc(void);
-void    kproc(char*, void(*)(void*), void*);
-void    hzsched(void);
 //not used outside: int   anyready(void);
 //TODO cg didn't find ref outside in devproc.c?
 int   haswaitq(void*);
