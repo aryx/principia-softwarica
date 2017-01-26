@@ -7,7 +7,7 @@
 #include "io.h"
 
 #include "../port/netif.h"
-#include "etherif.h"
+#include "../port/etherif.h"
 
 extern int archether(unsigned ctlno, Ether *ether);
 

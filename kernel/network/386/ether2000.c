@@ -1,14 +1,15 @@
 /*s: kernel/network/386/ether2000.c */
 #include "u.h"
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-#include "io.h"
-#include "../port/error.h"
-#include "../port/netif.h"
 
-#include "etherif.h"
+#include "io.h"
+#include "../port/netif.h"
+#include "../port/etherif.h"
+
 #include "ether8390.h"
 
 /*

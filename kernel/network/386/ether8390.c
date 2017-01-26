@@ -11,8 +11,8 @@
 #include "io.h"
 #include "../port/error.h"
 #include "../port/netif.h"
+#include "../port/etherif.h"
 
-#include "etherif.h"
 #include "ether8390.h"
 
 /*s: enum _anon_ (kernel/network/386/ether8390.c)0 */

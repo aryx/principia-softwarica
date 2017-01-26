@@ -21,11 +21,12 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+
 #include "io.h"
 #include "../port/error.h"
 #include "../port/netif.h"
+#include "../port/etherif.h"
 
-#include "etherif.h"
 #include "ethermii.h"
 
 typedef struct Td Td;

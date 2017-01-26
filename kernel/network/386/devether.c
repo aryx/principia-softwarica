@@ -10,8 +10,7 @@
 #include "pool.h"
 #include <ureg.h>
 #include "../port/netif.h"
-
-#include "etherif.h"
+#include "../port/etherif.h"
 
 /*s: global etherxx (kernel) */
 static Ether *etherxx[MaxEther];

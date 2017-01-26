@@ -12,7 +12,7 @@
 #include "arm.h"
 
 #include "../port/netif.h"
-#include "etherif.h"
+#include "../port/etherif.h"
 
 #define	POWERREGS	(VIRTIO+0x100000)
 

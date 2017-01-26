@@ -1,1 +1,0 @@
-../../../../kernel/network/386/etherif.h
