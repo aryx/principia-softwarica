@@ -162,7 +162,7 @@ hzclock(Ureg *ur)
     }
 
     accounttime();
-    kmapinval();
+    //kmapinval();pc: bcm: a nope in both archs
 
     if(kproftimer != nil)
         kproftimer(ur->pc);

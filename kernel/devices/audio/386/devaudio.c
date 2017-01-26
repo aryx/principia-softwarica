@@ -631,7 +631,7 @@ sbbufinit(void)
     if (p == nil)
         panic("sbbufinit: no memory");
     for(i=0; i<Nbuf; i++) {
-        dcflush(p, Bufsize);
+        //dcflush(p, Bufsize); //pc: a nope in pc/ and bcm/
         audio.buf[i].virt = UNCACHED(uchar, p);
         audio.buf[i].phys = (ulong)PADDR(p);
         p += Bufsize;

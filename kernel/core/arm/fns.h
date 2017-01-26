@@ -14,7 +14,6 @@
 #include "../port/portfns_init.h"
 
 #define	getpgcolor(a)	0
-#define	kmapinval()
 
 // different signatures in different arch so cant factorize
 void  arch_touser(uintptr);

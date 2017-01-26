@@ -87,7 +87,7 @@ static void rebalance(void);
 /*e: proc.c forward decl */
 
 //*****************************************************************************
-// Error managment
+// Error management
 //*****************************************************************************
 
 // see also waserror() and poperror() macro in portdat_processes.h

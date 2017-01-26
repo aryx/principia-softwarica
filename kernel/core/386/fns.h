@@ -24,6 +24,9 @@ void  arch_touser(void*);
 int   (*arch_cmpswap)(long*, long, long);
 void  (*arch_coherence)(void);
 void  (*arch_cycles)(uvlong*);
+/*s: function mmuflushtlb(x86) */
+#define mmuflushtlb(mmupd) putcr3(mmupd)
+/*e: function mmuflushtlb(x86) */
 
 // fns_memory.h
 
@@ -230,14 +233,6 @@ void  outss(int, void*, int);
 //@Scheck: Assembly
 void  outl(int, ulong);
 
-/*s: function kmapinval(x86) */
-#define kmapinval()
-/*e: function kmapinval(x86) */
-
-/*s: function mmuflushtlb(x86) */
-#define mmuflushtlb(mmupd) putcr3(mmupd)
-/*e: function mmuflushtlb(x86) */
-
 //int mtrr(uvlong, uvlong, char *);
 //void mtrrclock(void);
 //int mtrrprint(char *, long);
@@ -282,9 +277,6 @@ int pcmspecial(char*, ISAConf*);
 /*s: function PADDR(x86) */
 #define PADDR(ka)  arch_paddr((kern_addr3)(ka))
 /*e: function PADDR(x86) */
-
-// used in devaudio, maybe could remove it
-#define dcflush(a, b)
 
 #define BIOSSEG(a)  KADDR(((uint)(a))<<4)
 

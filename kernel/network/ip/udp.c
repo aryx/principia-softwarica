@@ -38,8 +38,6 @@ enum
     /*e: constant UDP6_xxx */
     /*s: constant IP_UDPPROTO */
     IP_UDPPROTO = 17,
-    /*x: constant IP_UDPPROTO */
-    #define IP_UDPPROTO	17
     /*e: constant IP_UDPPROTO */
 
     /*s: constant UDP_USEAD7 */

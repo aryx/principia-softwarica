@@ -157,8 +157,6 @@ enum
     /*e: constant IL_xxxSIZE */
     /*s: constant IP_ILPROTO */
     IP_ILPROTO	= 40,
-    /*x: constant IP_ILPROTO */
-    #define	IP_ILPROTO	40
     /*e: constant IP_ILPROTO */
 
 };
