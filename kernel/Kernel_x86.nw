@@ -4501,33 +4501,10 @@ int pdmap(kern_addr2 mmupd, ulong pa, virt_addr va, int size);
 
 @
 
+\subsection*{[[interrupts/386/dat_interrupts.h]]}
 
-\subsection*{[[processes/386/dat_processes.h]]}
+<<dat_interrupts.h>>=
 
-%/*
-% *  things saved in the Proc structure during a notify
-% */
-%struct Arch_ProcNotsave
-%{
-%    ulong svflags;
-%    ulong svcs;
-%    ulong svss;
-%};
-
-
-<<dat_processes.h>>=
-
-<<constant AOUT_MAGIC(x86)>>
-
-//*****************************************************************************
-// Proc extensions
-//*****************************************************************************
-
-<<union ArchFPSave(x86)>>
-
-//*****************************************************************************
-// Interrupts
-//*****************************************************************************
 // Used only in 386/, so could be put in arch/, but used by the .c here.
 // Used to be in io.h but more important than just a set of enums for IO
 // so put here.
@@ -4536,15 +4513,263 @@ int pdmap(kern_addr2 mmupd, ulong pa, virt_addr va, int size);
 
 <<enum irq(x86)>>
   
-
 <<struct Vctl(x86)>>
 
 // array<list<Vctl>>, xalloc'ed
 //IMPORTANT: static Vctl *vctl[256]; (in trap.c)
 
+@
+
+\subsection*{[[interrupts/386/l_trap.s]]}
+
+<<l_trap.s>>=
+#include "mem.h"
+
+<<function _strayintr(x86)>>
+
+<<function _strayintrx(x86)>>
+
+<<function forkret(x86)>>
+
+<<global vectortable(x86)>>
+@
+
+\subsection*{[[interrupts/386/i8259.c]]}
+
+
+<<i8259.c>>=
+<<kernel basic includes>>
+#include "io.h"
+
+/*
+ *  8259 interrupt controllers
+ */
+enum
+{
+    Int0ctl=    0x20,       /* control port (ICW1, OCW2, OCW3) */
+    Int0aux=    0x21,       /* everything else (ICW2, ICW3, ICW4, OCW1) */
+    Int1ctl=    0xA0,       /* control port */
+    Int1aux=    0xA1,       /* everything else (ICW2, ICW3, ICW4, OCW1) */
+
+    Icw1=       0x10,       /* select bit in ctl register */
+    Ocw2=       0x00,
+    Ocw3=       0x08,
+
+    EOI=        0x20,       /* non-specific end of interrupt */
+
+    Elcr1=      0x4D0,      /* Edge/Level Triggered Register */
+    Elcr2=      0x4D1,
+};
+
+<<global i8259lock(x86)>>
+static int i8259mask = 0xFFFF;      /* disabled interrupts */
+int i8259elcr;              /* mask of level-triggered interrupts */
+
+<<function i8259init(x86)>>
+
+<<function i8259isr(x86)>>
+
+<<function i8259enable(x86)>>
+
+<<function i8259vecno(x86)>>
+
+<<function i8259disable(x86)>>
+
+<<function i8259on(x86)>>
+
+<<function i8259off(x86)>>
+
+@
+
+
+
+\subsection*{[[interrupts/386/trap.c]]}
+
+\ifallcode
+<<trap.c forward decl(x86)>>=
+void    noted(Ureg*, ulong);
+int     notify(Ureg*);
+void        dumpregs(Ureg*);
+
+static void debugbpt(Ureg*, void*);
+static void fault386(Ureg*, void*);
+static void doublefault(Ureg*, void*);
+static void unexpected(Ureg*, void*);
+static void _dumpstack(Ureg*);
+
+extern void checkpages(void);
+@ 
+//extern void checkfault(ulong, ulong);
+\fi
+
+
+<<function nmienable(x86)>>=
+static void
+nmienable(void)
+{
+    int x;
+
+    /*
+     * Hack: should be locked with NVRAM access.
+     */
+    outb(0x70, 0x80);       /* NMI latch clear */
+    outb(0x70, 0);
+
+    x = inb(0x61) & 0x07;       /* Enable NMI */
+    outb(0x61, 0x08|x);
+    outb(0x61, x);
+}
+@ 
+
+
+<<trap.c>>=
+<<kernel basic includes>>
+
+#include    "io.h"
+
+#include    <tos.h>
+#include    <ureg.h>
+#include    <trace.h>
+
 //*****************************************************************************
-// Timer
+// Globals
 //*****************************************************************************
+
+<<global trapinited(x86)>>
+
+<<global vctllock(x86)>>
+<<global vctl(x86)>>
+
+enum
+{
+   <<constant Ntimevec(x86)>>
+};
+<<global intrtimes(x86)>>
+
+//*****************************************************************************
+// Forward decl
+//*****************************************************************************
+<<trap.c forward decl(x86)>>
+
+//*****************************************************************************
+// Interrupts enable/disable
+//*****************************************************************************
+
+<<function intrenable(x86)>>
+
+<<function intrdisable(x86)>>
+
+//*****************************************************************************
+// Init
+//*****************************************************************************
+
+<<function irqallocread(x86)>>
+
+<<function trapenable(x86)>>
+
+<<function nmienable(x86)>>
+
+<<function trapinit0(x86)>>
+
+<<function trapinit(x86)>>
+
+//*****************************************************************************
+// Misc
+//*****************************************************************************
+
+<<global excname(x86)>>
+
+<<function intrtime(x86)>>
+
+<<function kexit(x86)>>
+
+<<function trap(x86)>>
+
+<<function dumpregs2(x86)>>
+
+<<function dumpregs(x86)>>
+
+<<function callwithureg(x86)>>
+
+// was in fns.h before as a macro
+// #define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
+<<function userureg(x86)>>
+
+<<function _dumpstack(x86)>>
+
+<<function dumpstack(x86)>>
+
+<<function debugbpt(x86)>>
+
+<<function doublefault(x86)>>
+
+<<function unexpected(x86)>>
+
+<<function fault386>>
+
+//*****************************************************************************
+// Syscall
+//*****************************************************************************
+
+/*
+ *  system calls
+ */
+#include "../port/systab.h"
+
+<<function syscall(x86)>>
+
+<<function notify(x86)>>
+
+<<function noted(x86)>>
+//old: #define evenaddr(x)       /* x86 doesn't care */
+void
+arch_validalign(uintptr addr, unsigned align)
+{
+ /*
+  * Plan 9 is a 32-bit O/S, and the hardware it runs on
+  * does not usually have instructions which move 64-bit
+  * quantities directly, synthesizing the operations
+  * with 32-bit move instructions. Therefore, the compiler
+  * (and hardware) usually only enforce 32-bit alignment,
+  * if at all.
+  *
+  * Take this out if the architecture warrants it.
+  */
+ if(align == sizeof(vlong))
+  align = sizeof(long);
+
+ /*
+  * Check align is a power of 2, then addr alignment.
+  */
+ if((align != 0 && !(align & (align-1))) && !(addr & (align-1)))
+  return;
+ postnote(up, 1, "sys: odd address", NDebug);
+ error(Ebadarg);
+ /*NOTREACHED*/
+}
+
+
+<<function execregs(x86)>>
+
+<<function userpc(x86)>>
+
+<<function setregisters(x86)>>
+
+<<function linkproc(x86)>>
+
+<<function kprocchild(x86)>>
+
+<<function forkchild(x86)>>
+
+<<function setkernur(x86)>>
+
+<<function dbgpc(x86)>>
+@
+
+
+\subsection*{[[time/386/dat_time.h]]}
+
+<<dat_time.h>>=
 
 // Used only in 386/, so could be put in arch/ but used by the .c here.
 // Actually used only in i8253.c but important so put here.
@@ -4553,31 +4778,6 @@ int pdmap(kern_addr2 mmupd, ulong pa, virt_addr va, int size);
 
 //IMPORTANT: I8253 i8253; (in i8253.c)
 //IMPORTANT: also is interrupt i8253clock() calling clock.c:timerintr()
-@
-
-
-\subsection*{[[processes/386/archgeneric.c]]}
-
-<<archgeneric.c>>=
-<<kernel basic includes>>
-
-//todo: weird, if don't include this file, then can't declare arch in this file
-// or I get some type signature mismatch
-#include "io.h"
-
-/*
- *  the following is a generic version of the
- *  architecture specific stuff
- */
-
-<<function unimplemented(x86)>>
-
-<<function archreset(x86)>>
-
-<<global archgeneric(x86)>>
-
-<<function archrevert(x86)>>
-
 @
 
 \subsection*{[[time/386/time.c]]}
@@ -4919,53 +5119,55 @@ enum {
 @
 
 
-\subsection*{[[processes/386/i8259.c]]}
+\subsection*{[[processes/386/dat_processes.h]]}
+
+%/*
+% *  things saved in the Proc structure during a notify
+% */
+%struct Arch_ProcNotsave
+%{
+%    ulong svflags;
+%    ulong svcs;
+%    ulong svss;
+%};
 
 
-<<i8259.c>>=
-<<kernel basic includes>>
-#include "io.h"
+<<dat_processes.h>>=
 
-/*
- *  8259 interrupt controllers
- */
-enum
-{
-    Int0ctl=    0x20,       /* control port (ICW1, OCW2, OCW3) */
-    Int0aux=    0x21,       /* everything else (ICW2, ICW3, ICW4, OCW1) */
-    Int1ctl=    0xA0,       /* control port */
-    Int1aux=    0xA1,       /* everything else (ICW2, ICW3, ICW4, OCW1) */
+<<constant AOUT_MAGIC(x86)>>
 
-    Icw1=       0x10,       /* select bit in ctl register */
-    Ocw2=       0x00,
-    Ocw3=       0x08,
+//*****************************************************************************
+// Proc extensions
+//*****************************************************************************
 
-    EOI=        0x20,       /* non-specific end of interrupt */
-
-    Elcr1=      0x4D0,      /* Edge/Level Triggered Register */
-    Elcr2=      0x4D1,
-};
-
-<<global i8259lock(x86)>>
-static int i8259mask = 0xFFFF;      /* disabled interrupts */
-int i8259elcr;              /* mask of level-triggered interrupts */
-
-<<function i8259init(x86)>>
-
-<<function i8259isr(x86)>>
-
-<<function i8259enable(x86)>>
-
-<<function i8259vecno(x86)>>
-
-<<function i8259disable(x86)>>
-
-<<function i8259on(x86)>>
-
-<<function i8259off(x86)>>
+<<union ArchFPSave(x86)>>
 
 @
 
+
+\subsection*{[[processes/386/archgeneric.c]]}
+
+<<archgeneric.c>>=
+<<kernel basic includes>>
+
+//todo: weird, if don't include this file, then can't declare arch in this file
+// or I get some type signature mismatch
+#include "io.h"
+
+/*
+ *  the following is a generic version of the
+ *  architecture specific stuff
+ */
+
+<<function unimplemented(x86)>>
+
+<<function archreset(x86)>>
+
+<<global archgeneric(x86)>>
+
+<<function archrevert(x86)>>
+
+@
 
 \subsection*{[[processes/386/l_switch.s]]}
 
@@ -4977,21 +5179,6 @@ int i8259elcr;              /* mask of level-triggered interrupts */
 <<function gotolabel(x86)>>
 
 <<function setlabel(x86)>>
-@
-
-
-\subsection*{[[processes/386/l_trap.s]]}
-
-<<l_trap.s>>=
-#include "mem.h"
-
-<<function _strayintr(x86)>>
-
-<<function _strayintrx(x86)>>
-
-<<function forkret(x86)>>
-
-<<global vectortable(x86)>>
 @
 
 
@@ -5014,190 +5201,6 @@ int i8259elcr;              /* mask of level-triggered interrupts */
 <<function fpsserestore(x86)>>
 
 <<function idlehands(x86)>>
-@
-
-
-\subsection*{[[processes/386/trap.c]]}
-
-\ifallcode
-<<trap.c forward decl(x86)>>=
-void    noted(Ureg*, ulong);
-int     notify(Ureg*);
-void        dumpregs(Ureg*);
-
-static void debugbpt(Ureg*, void*);
-static void fault386(Ureg*, void*);
-static void doublefault(Ureg*, void*);
-static void unexpected(Ureg*, void*);
-static void _dumpstack(Ureg*);
-
-extern void checkpages(void);
-@ 
-//extern void checkfault(ulong, ulong);
-\fi
-
-
-<<function nmienable(x86)>>=
-static void
-nmienable(void)
-{
-    int x;
-
-    /*
-     * Hack: should be locked with NVRAM access.
-     */
-    outb(0x70, 0x80);       /* NMI latch clear */
-    outb(0x70, 0);
-
-    x = inb(0x61) & 0x07;       /* Enable NMI */
-    outb(0x61, 0x08|x);
-    outb(0x61, x);
-}
-@ 
-
-
-<<trap.c>>=
-<<kernel basic includes>>
-
-#include    "io.h"
-
-#include    <tos.h>
-#include    <ureg.h>
-#include    <trace.h>
-
-//*****************************************************************************
-// Globals
-//*****************************************************************************
-
-<<global trapinited(x86)>>
-
-<<global vctllock(x86)>>
-<<global vctl(x86)>>
-
-enum
-{
-   <<constant Ntimevec(x86)>>
-};
-<<global intrtimes(x86)>>
-
-//*****************************************************************************
-// Forward decl
-//*****************************************************************************
-<<trap.c forward decl(x86)>>
-
-//*****************************************************************************
-// Interrupts enable/disable
-//*****************************************************************************
-
-<<function intrenable(x86)>>
-
-<<function intrdisable(x86)>>
-
-//*****************************************************************************
-// Init
-//*****************************************************************************
-
-<<function irqallocread(x86)>>
-
-<<function trapenable(x86)>>
-
-<<function nmienable(x86)>>
-
-<<function trapinit0(x86)>>
-
-<<function trapinit(x86)>>
-
-//*****************************************************************************
-// Misc
-//*****************************************************************************
-
-<<global excname(x86)>>
-
-<<function intrtime(x86)>>
-
-<<function kexit(x86)>>
-
-<<function trap(x86)>>
-
-<<function dumpregs2(x86)>>
-
-<<function dumpregs(x86)>>
-
-<<function callwithureg(x86)>>
-
-// was in fns.h before as a macro
-// #define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
-<<function userureg(x86)>>
-
-<<function _dumpstack(x86)>>
-
-<<function dumpstack(x86)>>
-
-<<function debugbpt(x86)>>
-
-<<function doublefault(x86)>>
-
-<<function unexpected(x86)>>
-
-<<function fault386>>
-
-//*****************************************************************************
-// Syscall
-//*****************************************************************************
-
-/*
- *  system calls
- */
-#include "../port/systab.h"
-
-<<function syscall(x86)>>
-
-<<function notify(x86)>>
-
-<<function noted(x86)>>
-//old: #define evenaddr(x)       /* x86 doesn't care */
-void
-arch_validalign(uintptr addr, unsigned align)
-{
- /*
-  * Plan 9 is a 32-bit O/S, and the hardware it runs on
-  * does not usually have instructions which move 64-bit
-  * quantities directly, synthesizing the operations
-  * with 32-bit move instructions. Therefore, the compiler
-  * (and hardware) usually only enforce 32-bit alignment,
-  * if at all.
-  *
-  * Take this out if the architecture warrants it.
-  */
- if(align == sizeof(vlong))
-  align = sizeof(long);
-
- /*
-  * Check align is a power of 2, then addr alignment.
-  */
- if((align != 0 && !(align & (align-1))) && !(addr & (align-1)))
-  return;
- postnote(up, 1, "sys: odd address", NDebug);
- error(Ebadarg);
- /*NOTREACHED*/
-}
-
-
-<<function execregs(x86)>>
-
-<<function userpc(x86)>>
-
-<<function setregisters(x86)>>
-
-<<function linkproc(x86)>>
-
-<<function kprocchild(x86)>>
-
-<<function forkchild(x86)>>
-
-<<function setkernur(x86)>>
-
-<<function dbgpc(x86)>>
 @
 
 

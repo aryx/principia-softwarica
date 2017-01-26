@@ -48,7 +48,11 @@ typedef void* kern_addr3;
 #include "dat_arch.h"
 
 // defines Timer
+#include "dat_time.h"
 #include "../port/portdat_time.h"
+
+// defines Vctl
+#include "dat_interrupts.h"
 
 // defines Proc
 #include "dat_processes.h"

@@ -1,1 +1,1 @@
-../../../../kernel/processes/386/trap.c
+../../../../kernel/interrupts/386/trap.c

@@ -1,1 +1,1 @@
-../../../../kernel/processes/386/i8259.c
+../../../../kernel/interrupts/386/i8259.c

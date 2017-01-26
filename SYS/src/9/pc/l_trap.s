@@ -1,1 +1,1 @@
-../../../../kernel/processes/386/l_trap.s
+../../../../kernel/interrupts/386/l_trap.s
