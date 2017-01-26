@@ -502,11 +502,12 @@ fpuemu(Ureg* ureg)
 			arch_splx(s);
 			nexterror();
 		}
-		nfp = fpiarm(ureg);	/* advances pc past emulated instr(s) */
-		if (nfp > 1)		/* could adjust this threshold */
-			cpu->fppc = cpu->fpcnt = 0;
-		arch_splx(s);
-		poperror();
+        error("ARM7500 instructions not supported; use 5l -f when linking");
+		//nfp = fpiarm(ureg);	/* advances pc past emulated instr(s) */
+		//if (nfp > 1)		/* could adjust this threshold */
+		//	cpu->fppc = cpu->fpcnt = 0;
+		//arch_splx(s);
+		//poperror();
 	} else if (ISVFPOP(cop, op)) {	/* if vfp, fpu must be off */
 		mathemu(ureg);		/* enable fpu & retry */
 		nfp = 1;
