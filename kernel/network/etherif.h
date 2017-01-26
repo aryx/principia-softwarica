@@ -1,12 +1,12 @@
-/*s: kernel/network/386/etherif.h */
-/*s: enum _anon_ (kernel/network/386/etherif.h) */
+/*s: kernel/network/etherif.h */
+/*s: enum _anon_ (kernel/network/etherif.h) */
 enum {
   /*s: constant MaxEther */
-  MaxEther  = 48,
+  MaxEther  = 48, //bcm: 4 
   /*e: constant MaxEther */
   Ntypes    = 8,
 };
-/*e: enum _anon_ (kernel/network/386/etherif.h) */
+/*e: enum _anon_ (kernel/network/etherif.h) */
 
 typedef struct Ether Ether;
 /*s: struct Ether (kernel) */
@@ -41,13 +41,21 @@ struct Ether {
   void  *ctlr;
   /*e: [[Ether]] priv fields */
   /*s: [[Ether]] other fields */
-  int tbdf;     /* type+busno+devno+funcno */
+  int tbdf;     /* type+busno+devno+funcno */ //pc: only?
   /*e: [[Ether]] other fields */
 
   // Extra
   /*s: [[Ether]] extra fields */
   int ctlrno;
   /*e: [[Ether]] extra fields */
+
+  //bcm: only, but seems dead
+  //RWlock;
+  //int	minmtu;
+  //int maxmtu;
+  //void*	address;
+  //int	irq;
+
 };
 /*e: struct Ether (kernel) */
 
@@ -62,4 +70,4 @@ extern ulong ethercrc(uchar*, int);
 /*s: macro PREV */
 #define PREV(x, l)  (((x) == 0) ? (l)-1: (x)-1)
 /*e: macro PREV */
-/*e: kernel/network/386/etherif.h */
+/*e: kernel/network/etherif.h */
