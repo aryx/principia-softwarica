@@ -161,22 +161,22 @@ vcreq(int tag, void *buf, int vallen, int rsplen)
  * Framebuffer
  */
 
-static int
+static errorneg1
 fbdefault(int *width, int *height, int *depth)
 {
 	u32int buf[3];
 
 	if(vcreq(TagGetres, &buf[0], 0, 2*4) != 2*4 ||
 	   vcreq(TagGetdepth, &buf[2], 0, 4) != 4)
-		return -1;
+		return ERROR_NEG1;
 	*width = buf[0];
 	*height = buf[1];
 	*depth = buf[2];
-	return 0;
+	return OK_0;
 }
 
 void*
-fbinit(int set, int *width, int *height, int *depth)
+fbinit(bool set, int *width, int *height, int *depth)
 {
 	Fbinfo *fi;
 	uintptr va;
@@ -193,7 +193,7 @@ fbinit(int set, int *width, int *height, int *depth)
 	cachedwbinvse(fi, sizeof(*fi));
 	vcwrite(ChanFb, dmaaddr(fi));
 	if(vcread(ChanFb) != 0)
-		return 0;
+		return nil;
 	va = mmukmap(FRAMEBUFFER, PADDR(fi->base), fi->screensize);
 	if(va)
 		memset((char*)va, 0x7F, fi->screensize);
