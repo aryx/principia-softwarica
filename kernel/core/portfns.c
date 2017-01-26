@@ -11,8 +11,49 @@
 // backward dependencies breaker for non functional properties functions
 // (logging, security, error, profiling/timing)
 /*s: portfns.c backward deps breaker */
-void (*coherence)(void) = nil;
+// console/devcons.c
+int (*print)(char*, ...) = nil;
 int (*iprint)(char*, ...) = nil;
+int (*pprint)(char *fmt, ...) = nil;
+
+void (*panic)(char*, ...) = nil;
+void (*_assert)(char *fmt) = nil;
+
+// process/386/trap.c
+void (*dumpstack)(void) = nil;
+
+// process/proc.c
+void (*dumpaproc)(Proc*) = nil;
+
+// process/proc.c
+void (*error)(char*) = nil;
+void (*nexterror)(void) = nil;
+
+void (*sched)(void) = nil;
+void (*ready)(Proc*) = nil;
+Proc* (*wakeup)(Rendez*) = nil;
+void (*sleep)(Rendez*, int(*)(void*), void*) = nil;
+void (*tsleep)(Rendez*, int (*)(void*), void*, ulong) = nil;
+
+Proc* (*proctab)(int) = nil;
+int (*postnote)(Proc*, int, char*, int) = nil;
+void (*pexit)(char*, bool) = nil;
+
+// files/chan.c
+void (*cclose)(Chan*);
+
+// init/main.c
+void (*exit)(int ispanic) = nil;
+
+// misc/386/devarch.c
+void (*arch_coherence)(void) = nil;
+
+// misc/386/devarch.c
+uvlong (*arch_fastticks)(uvlong*) = nil;
+
+// processes/386/i8253.c
+void (*delay)(int) = nil;
+void (*microdelay)(int) = nil;
 /*e: portfns.c backward deps breaker */
 
 /*s: function returnfalse */

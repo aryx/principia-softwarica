@@ -23,61 +23,49 @@
 
 // portfns.c (mostly here just to remove some backward dependencies)
 /*s: portfns_core.h backward deps breaker */
-int devcons_print(char*, ...);
-int devcons_pprint(char*, ...);
-void devcons_panic(char*, ...);
-void devcons__assert(char*);
-void trap_dumpstack(void);
-void proc_dumpaproc(Proc *p);
-void proc_error(char*);
-void proc_nexterror(void);
-void i8253_delay(int millisecs);
-void i8253_microdelay(int microsecs);
-//void proc_sched(void);
-void sched(void);
-void proc_ready(Proc*);
-void proc_sleep(Rendez*, int(*)(void*), void*);
-void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
-Proc* proc_wakeup(Rendez*);
-void proc_pexit(char *exitstr, bool freemem);
-Proc* proc_proctab(int i);
-int proc_postnote(Proc *p, int dolock, char *n, int flag);
-void chan_cclose(Chan *c);
-void main_exit(int ispanic);
-int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
-void nop(void);
-uvlong devarch_fastticks(uvlong *hz);
-void devarch_hook_ioalloc();
-
+// console/devcons.c
 int   (*iprint)(char*, ...);
-int devcons_iprint(char*, ...);
+int   (*pprint)(char*, ...);
+void  (*panic)(char*, ...);
+void  (*_assert)(char*);
 /*x: portfns_core.h backward deps breaker */
-#define print         devcons_print
-//#define iprint        devcons_iprint
-#define pprint        devcons_pprint
-#define panic         devcons_panic
-#define _assert       devcons__assert
-#define error         proc_error
-#define nexterror     proc_nexterror
-#define dumpstack     trap_dumpstack
-#define dumpaproc     proc_dumpaproc
-//#define devtab        conf_devtab
-#define delay         i8253_delay
-#define microdelay    i8253_microdelay
-#define wakeup        proc_wakeup
-//#define sched()         proc_sched()
-#define ready         proc_ready
-#define sleep         proc_sleep
-#define tsleep        proc_tsleep
-#define exit          main_exit
-#define isaconfig     main_isaconfig
-//#define coherence     nop
-//#define arch_fastticks     devarch_fastticks
-#define cclose        chan_cclose
-#define proctab       proc_proctab
-#define postnote      proc_postnote
-#define pexit         proc_pexit
-//#define hook_ioalloc  devarch_hook_ioalloc
+// process/386/trap.c
+void    (*dumpstack)(void);
+/*x: portfns_core.h backward deps breaker */
+// process/proc.c
+void    (*dumpaproc)(Proc*);
+/*x: portfns_core.h backward deps breaker */
+// process/proc.c
+void    (*error)(char*);
+void    (*nexterror)(void);
+/*x: portfns_core.h backward deps breaker */
+// process/proc.c
+void    (*sleep)(Rendez*, int(*)(void*), void*);
+void    (*tsleep)(Rendez*, int (*)(void*), void*, ulong);
+Proc*   (*wakeup)(Rendez*);
+void    (*sched)(void);
+void    (*ready)(Proc*);
+/*x: portfns_core.h backward deps breaker */
+// process/proc.c
+Proc*   (*proctab)(int);
+int     (*postnote)(Proc*, int, char*, int);
+void    (*pexit)(char*, bool);
+/*x: portfns_core.h backward deps breaker */
+// files/chan.c
+void    (*cclose)(Chan*);
+/*x: portfns_core.h backward deps breaker */
+// init/main.c
+void    (*exit)(int);
+/*x: portfns_core.h backward deps breaker */
+//misc/386/devarch.c
+void    (*arch_coherence)(void);
+uvlong  (*arch_fastticks)(uvlong*);
+/*x: portfns_core.h backward deps breaker */
+// processes/386/i8253.c
+void    (*microdelay)(int);
+void    (*delay)(int);
+
+bool (*isaconfig)(char*, int, ISAConf*);
 /*e: portfns_core.h backward deps breaker */
 
 // portfns.c

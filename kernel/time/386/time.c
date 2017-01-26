@@ -45,7 +45,7 @@ arch_us(void)
  *  return value and speed of timer set in arch->clockenable
  */
 uvlong
-arch_fastticks(uvlong *hz)
+devarch_arch_fastticks(uvlong *hz)
 {
     return (*arch->fastclock)(hz);
 }

@@ -24,6 +24,40 @@ void bootargs(void*);
 
 // part of a trick to remove some backward dependencies
 /*s: main.c forward decl for backward deps(x86) */
+int devcons_print(char*, ...);
+int devcons_iprint(char*, ...);
+int devcons_pprint(char*, ...);
+void devcons_panic(char*, ...);
+void devcons__assert(char*);
+
+void trap_dumpstack(void);
+void proc_dumpaproc(Proc *p);
+
+void proc_error(char*);
+void proc_nexterror(void);
+
+void i8253_delay(int millisecs);
+void i8253_microdelay(int microsecs);
+
+void proc_sched(void);
+void proc_ready(Proc*);
+void proc_sleep(Rendez*, int(*)(void*), void*);
+void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
+Proc* proc_wakeup(Rendez*);
+
+void proc_pexit(char *exitstr, bool freemem);
+Proc* proc_proctab(int i);
+int proc_postnote(Proc *p, int dolock, char *n, int flag);
+
+void chan_cclose(Chan *c);
+
+void main_exit(int ispanic);
+
+int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
+
+void nop(void);
+uvlong devarch_arch_fastticks(uvlong *hz);
+void devarch_hook_ioalloc();
 /*e: main.c forward decl for backward deps(x86) */
 
 // conf.c
@@ -845,9 +879,30 @@ void main(void)
 {
     // initial assignment made to avoid circular dependencies in codegraph
     /*s: [[main()]] initial assignments for backward deps(x86) */
+    print = devcons_print;
     iprint = devcons_iprint;
-    hook_ioalloc = devarch_hook_ioalloc;
+    pprint = devcons_pprint;
+
+    panic = devcons_panic;
+    _assert = devcons__assert;
+
+    error = proc_error;
+    nexterror = proc_nexterror;
+
+    dumpstack = trap_dumpstack;
+    dumpaproc = proc_dumpaproc;
+
     devtab = conf_devtab;
+
+    delay = i8253_delay;
+    microdelay = i8253_microdelay;
+
+    wakeup = proc_wakeup;
+    sched = proc_sched;
+    ready = proc_ready;
+    sleep = proc_sleep;
+    tsleep = proc_tsleep;
+
     /*
      * On a uniprocessor, you'd think that coherence could be nop,
      * but it can't.  We still need a barrier when using coherence() in
@@ -857,6 +912,18 @@ void main(void)
      * Aux/vmware does this via the #P/archctl file.
      */
     arch_coherence = nop;
+    arch_fastticks = devarch_arch_fastticks;
+
+    cclose = chan_cclose;
+
+    proctab = proc_proctab;
+    postnote = proc_postnote;
+    pexit = proc_pexit;
+
+    hook_ioalloc = devarch_hook_ioalloc;
+
+    exit = main_exit;
+    isaconfig = main_isaconfig;
     /*e: [[main()]] initial assignments for backward deps(x86) */
 
     cgapost(0);
