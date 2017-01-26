@@ -6,13 +6,11 @@ enum
 
 typedef struct Ether Ether;
 struct Ether {
-	RWlock;
+	eaddr	ea;
+
+	Queue*	oq;
+
 	ISAConf;			/* hardware info */
-
-	int	ctlrno;
-	int	minmtu;
-	int 	maxmtu;
-
 	Netif;
 
 	void	(*attach)(Ether*);	/* filled in by reset routine */
@@ -25,16 +23,20 @@ struct Ether {
 	void	(*shutdown)(Ether*);	/* shutdown hardware before reboot */
 
 	void*	ctlr;
-	uchar	ea[Eaddrlen];
+
+	int	ctlrno;
+
+	RWlock;
+	int	minmtu;
+	int maxmtu;
 	void*	address;
 	int	irq;
-
-	Queue*	oq;
 };
 
 extern Block* etheriq(Ether*, Block*, int);
 extern void addethercard(char*, int(*)(Ether*));
 extern ulong ethercrc(uchar*, int);
+
 extern int parseether(uchar*, char*);
 
 #define NEXT(x, l)	(((x)+1)%(l))
