@@ -1037,19 +1037,19 @@ Cursor  arch_arrow = {
     },
 };
 
-bool swvisible;  /* is the cursor visible? */
-bool swenabled;  /* is the cursor supposed to be on the screen? */
-Memimage*   swback; /* screen under cursor */
-Memimage*   swimg;  /* cursor image */
-Memimage*   swmask; /* cursor mask */
-Memimage*   swimg1;
-Memimage*   swmask1;
-Point   swoffset;
-Rectangle   swrect; /* screen rectangle in swback */
-Point   swpt;   /* desired cursor location */
-Point   swvispt;    /* actual cursor location */
-int swvers; /* incremented each time cursor image changes */
-int swvisvers;  /* the version on the screen */
+extern bool swvisible;  /* is the cursor visible? */
+extern bool swenabled;  /* is the cursor supposed to be on the screen? */
+extern Memimage*   swback; /* screen under cursor */
+extern Memimage*   swimg;  /* cursor image */
+extern Memimage*   swmask; /* cursor mask */
+extern Memimage*   swimg1;
+extern Memimage*   swmask1;
+extern Point   swoffset;
+extern Rectangle   swrect; /* screen rectangle in swback */
+extern Point   swpt;   /* desired cursor location */
+extern Point   swvispt;    /* actual cursor location */
+extern int swvers; /* incremented each time cursor image changes */
+extern int swvisvers;  /* the version on the screen */
 
 
 /*
