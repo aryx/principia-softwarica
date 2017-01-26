@@ -10,8 +10,9 @@
 
 #include    <authsrv.h>
 
-//char  *eve; now in core/
-//int iseve(void) { } now in core/
+//now in core/
+//char  *eve;
+//int iseve(void) { }
 
 /*s: global hostdomain */
 char    hostdomain[DOMLEN];
