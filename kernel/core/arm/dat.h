@@ -51,6 +51,9 @@ typedef void* kern_addr3;
 // defines Soc
 #include "dat_arch.h"
 
+// defines Timer
+#include "../port/portdat_time.h"
+
 // defines Proc
 #include "dat_processes.h"
 #include "../port/portdat_processes.h"
