@@ -3,7 +3,7 @@
  */
 #include "mem.h"
 #include "arm.h"
-#include "arminstr.h"
+#include "arminstr.ha"
 
 #define PTEDRAM		(Dom0|L1AP(Krw)|Section)
 

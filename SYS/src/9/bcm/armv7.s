@@ -4,7 +4,7 @@
  */
 #include "mem.h"
 #include "arm.h"
-#include "arminstr.h"
+#include "arminstr.ha"
 
 #define CACHELINESZ 64
 

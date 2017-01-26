@@ -3,7 +3,7 @@
  */
 #include "mem.h"
 #include "arm.h"
-#include "arminstr.h"
+#include "arminstr.ha"
         
 /*
  *  exception vectors, copied by trapinit() to somewhere useful

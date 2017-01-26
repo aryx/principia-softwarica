@@ -4,7 +4,7 @@
  */
 #include "mem.h"
 #include "arm.h"
-#include "arminstr.h"
+#include "arminstr.ha"
 
 /*
  * on bcm2836, only cpu0 starts here
