@@ -40,7 +40,8 @@ void arch_xinc(long*);
 long arch_xdec(long*);
 
 // <arch>/??? (called from port but signature not portable across <arch>)
-//void  arch_coherence(void);
 //int   arch_cmpswap(long*, long, long); 
+
+//void  arch_coherence(void); // now in core/ for backward deps
 
 /*e: portfns_concurrency.h */

@@ -65,7 +65,7 @@ uvlong  (*arch_fastticks)(uvlong*);
 // processes/386/i8253.c
 void    (*arch_microdelay)(int);
 void    (*arch_delay)(int);
-
+// init/386/main.c
 bool (*arch_isaconfig)(char*, int, ISAConf*);
 /*e: portfns_core.h backward deps breaker */
 
