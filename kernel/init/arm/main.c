@@ -31,6 +31,34 @@ enum {
 //#define	MAXCONF		64
 #define MAXCONFLINE	160
 
+// part of a trick to remove some backward dependencies
+int devcons_print(char*, ...);
+int devcons_iprint(char*, ...);
+int devcons_pprint(char*, ...);
+void devcons_panic(char*, ...);
+void devcons__assert(char*);
+void proc_dumpaproc(Proc *p);
+void proc_error(char*);
+void proc_nexterror(void);
+void proc_sched(void);
+void proc_ready(Proc*);
+void proc_sleep(Rendez*, int(*)(void*), void*);
+void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
+Proc* proc_wakeup(Rendez*);
+void proc_pexit(char *exitstr, bool freemem);
+Proc* proc_proctab(int i);
+int proc_postnote(Proc *p, int dolock, char *n, int flag);
+void chan_cclose(Chan *c);
+
+uvlong clock_arch_fastticks(uvlong *hz);
+void clock_arch_delay(int millisecs);
+void clock_arch_microdelay(int microsecs);
+void trap_arch_dumpstack(void);
+void arm_arch_coherence(void);
+void main_arch_exit(int ispanic);
+int  main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa);
+
+
 // conf.c
 extern  Dev*  conf_devtab[];
 
@@ -312,8 +340,37 @@ main(void)
 	extern char edata[], end[];
 	uint fw, board;
 
-    iprint = devcons_iprint;
+    // backward deps breaker!
     devtab = conf_devtab;
+
+    print = devcons_print;
+    iprint = devcons_iprint;
+    pprint = devcons_pprint;
+    panic = devcons_panic;
+    _assert = devcons__assert;
+    error = proc_error;
+    nexterror = proc_nexterror;
+    dumpaproc = proc_dumpaproc;
+    wakeup = proc_wakeup;
+    sched = proc_sched;
+    ready = proc_ready;
+    sleep = proc_sleep;
+    tsleep = proc_tsleep;
+    cclose = chan_cclose;
+    proctab = proc_proctab;
+    postnote = proc_postnote;
+    pexit = proc_pexit;
+
+    arch_exit = main_arch_exit;
+    arch_dumpstack = trap_arch_dumpstack;
+    arch_delay = clock_arch_delay;
+    arch_microdelay = clock_arch_microdelay;
+    arch_coherence = arm_arch_coherence;
+    arch_fastticks = clock_arch_fastticks;
+    arch_isaconfig = main_arch_isaconfig;
+
+
+
 
 	cpu = (Cpu*)CPUADDR;
 	memset(edata, 0, end - edata);	/* clear bss */
@@ -611,18 +668,18 @@ shutdown(int ispanic)
 		iprint("cpu%d: exiting\n", cpu->cpuno);
 	arch_spllo();
 	for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
-		delay(TK2MS(2));
+		arch_delay(TK2MS(2));
 		if(active.cpus == 0 && consactive() == 0)
 			break;
 	}
-	delay(100*cpu->cpuno);
+	arch_delay(100*cpu->cpuno);
 }
 
 /*
  *  exit kernel either on a panic or user request
  */
 void
-exit(int code)
+main_arch_exit(int code)
 {
 	void (*f)(ulong, ulong, ulong);
 
@@ -644,7 +701,7 @@ exit(int code)
  * stub for ../omap/devether.c
  */
 int
-isaconfig(char *class, int ctlrno, ISAConf *isa)
+main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa)
 {
 	char cc[32], *p;
 	int i;
@@ -698,11 +755,11 @@ arch_reboot(void *entry, void *code, ulong size)
 	 * should be the only processor running now
 	 */
 
-	delay(5000);
+	arch_delay(5000);
 	print("active.machs = %x\n", active.cpus);
 	print("reboot entry %#lux code %#lux size %ld\n",
 		PADDR(entry), PADDR(code), size);
-	delay(100);
+	arch_delay(100);
 
 	/* turn off buffered serial console */
 	serialoq = nil;
@@ -727,7 +784,7 @@ arch_reboot(void *entry, void *code, ulong size)
 	(*f)(PADDR(entry), PADDR(code), size);
 
 	iprint("loaded kernel returned!\n");
-	delay(1000);
+	arch_delay(1000);
 	archreboot();
 }
 

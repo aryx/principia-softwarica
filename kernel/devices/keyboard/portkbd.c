@@ -281,7 +281,7 @@ kbdputsc(byte k, int external)
         /*s: [[kbdputsc()]] reboot if ctl-alt-del */
         if(kbscan->ctl)
             if(kbscan->alt && c == Del) // Ctl-Alt-Del
-                exit(0);
+                arch_exit(0);
         /*e: [[kbdputsc()]] reboot if ctl-alt-del */
         /*s: [[kbdputsc()]] if collecting */
         if(kbscan->collecting){

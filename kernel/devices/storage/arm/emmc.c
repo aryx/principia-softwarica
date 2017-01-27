@@ -159,7 +159,7 @@ WR(int reg, u32int val)
 	u32int *r = (u32int*)EMMCREGS;
 
 	if(0)print("WR %2.2ux %ux\n", reg<<2, val);
-	microdelay(emmc.fastclock? 2 : 20);
+	arch_microdelay(emmc.fastclock? 2 : 20);
 	r[reg] = val;
 }
 
@@ -203,7 +203,7 @@ emmcinit(void)
 	if(0)print("emmc control %8.8ux %8.8ux %8.8ux\n",
 		r[Control0], r[Control1], r[Control2]);
 	WR(Control1, Srsthc);
-	delay(10);
+	arch_delay(10);
 	while(r[Control1] & Srsthc)
 		;
 	return 0;
@@ -243,7 +243,7 @@ emmcenable(void)
 	WR(Control1, clkdiv(emmc.extclk/Initfreq - 1) |
 		DTO<<Datatoshift | Clkgendiv | Clken | Clkintlen);
 	for(i = 0; i < 1000; i++){
-		delay(1);
+		arch_delay(1);
 		if(r[Control1] & Clkstable)
 			break;
 	}
@@ -338,15 +338,15 @@ emmccmd(u32int cmd, u32int arg, u32int *resp)
 	 * Once card is selected, use faster clock
 	 */
 	if(cmd == MMCSelect){
-		delay(10);
+		arch_delay(10);
 		WR(Control1, clkdiv(emmc.extclk/SDfreq - 1) |
 			DTO<<Datatoshift | Clkgendiv | Clken | Clkintlen);
 		for(i = 0; i < 1000; i++){
-			delay(1);
+			arch_delay(1);
 			if(r[Control1] & Clkstable)
 				break;
 		}
-		delay(10);
+		arch_delay(10);
 		emmc.fastclock = 1;
 	}
 	/*

@@ -194,7 +194,7 @@ dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
 	cb->nextconbk = 0;
 	cachedwbse(cb, sizeof(Cb));
 	ctlr->regs[Cs] = 0;
-	microdelay(1);
+	arch_microdelay(1);
 	ctlr->regs[Conblkad] = dmaaddr(cb);
 	DBG print("dma start: %ux %ux %ux %ux %ux %ux\n",
 		cb->ti, cb->sourcead, cb->destad, cb->txfrlen,
@@ -202,7 +202,7 @@ dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
 	DBG print("intstatus %ux\n", dmaregs[Intstatus]);
 	dmaregs[Intstatus] = 0;
 	ctlr->regs[Cs] = Int;
-	microdelay(1);
+	arch_microdelay(1);
 	arch_coherence();
 	DBG dumpdregs("before Active", ctlr->regs);
 	ctlr->regs[Cs] = Active;

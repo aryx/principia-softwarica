@@ -95,7 +95,7 @@ arch_cpuidprint(void)
 	char name[64];
 
 	cputype2name(name, sizeof name);
-	delay(50);				/* let uart catch up */
+	arch_delay(50);				/* let uart catch up */
 	print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
 }
 

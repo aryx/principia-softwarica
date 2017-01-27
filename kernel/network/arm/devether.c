@@ -380,7 +380,7 @@ etherreset(void)
 		if(archether(ctlrno, ether) <= 0)
 			continue;
 
-		if(isaconfig("ether", ctlrno, ether) == 0){
+		if(arch_isaconfig("ether", ctlrno, ether) == 0){
 //			free(ether);
 //			return nil;
 			continue;

@@ -8,9 +8,10 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-// backward dependencies breaker for non functional properties functions
-// (logging, security, error, profiling/timing)
 /*s: portfns.c backward deps breaker */
+// backward dependencies breaker for non functional properties functions
+// (e.g., logging, security, error, profiling, timing)
+
 // console/devcons.c
 int (*print)(char*, ...) = nil;
 int (*iprint)(char*, ...) = nil;
@@ -18,12 +19,6 @@ int (*pprint)(char *fmt, ...) = nil;
 
 void (*panic)(char*, ...) = nil;
 void (*_assert)(char *fmt) = nil;
-
-// process/386/trap.c
-void (*dumpstack)(void) = nil;
-
-// process/proc.c
-void (*dumpaproc)(Proc*) = nil;
 
 // process/proc.c
 void (*error)(char*) = nil;
@@ -39,21 +34,29 @@ Proc* (*proctab)(int) = nil;
 int (*postnote)(Proc*, int, char*, int) = nil;
 void (*pexit)(char*, bool) = nil;
 
+// process/proc.c
+void (*dumpaproc)(Proc*) = nil;
+
 // files/chan.c
 void (*cclose)(Chan*);
 
-// init/main.c
-void (*exit)(int ispanic) = nil;
+
+// process/386/trap.c
+void (*arch_dumpstack)(void) = nil;
+
+// init/386/main.c
+void (*arch_exit)(int ispanic) = nil;
+bool (*arch_isaconfig)(char*, int, ISAConf*) = nil;
 
 // misc/386/devarch.c
 void (*arch_coherence)(void) = nil;
-
 // misc/386/devarch.c
 uvlong (*arch_fastticks)(uvlong*) = nil;
 
 // processes/386/i8253.c
-void (*delay)(int) = nil;
-void (*microdelay)(int) = nil;
+void (*arch_delay)(int) = nil;
+void (*arch_microdelay)(int) = nil;
+
 /*e: portfns.c backward deps breaker */
 
 /*s: function returnfalse */

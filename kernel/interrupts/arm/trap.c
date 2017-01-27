@@ -357,8 +357,8 @@ trap(Ureg *ureg)
 	if(rem < 256) {
 		iprint("trap: %d stack bytes left, up %#p ureg %#p at pc %#lux\n",
 			rem, up, ureg, ureg->pc);
-		delay(1000);
-		dumpstack();
+		arch_delay(1000);
+		arch_dumpstack();
 		panic("trap: %d stack bytes left, up %#p ureg %#p at pc %#lux",
 			rem, up, ureg, ureg->pc);
 	}
@@ -560,7 +560,7 @@ dumpstackwithureg(Ureg *ureg)
 	}
 	iprint("ktrace /kernel/path %#.8lux %#.8lux %#.8lux # pc, sp, link\n",
 		ureg->pc, ureg->sp, ureg->r14);
-	delay(2000);
+	arch_delay(2000);
 	i = 0;
 	if(up != nil && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
 		estack = (uintptr)up->kstack+KSTACK;
@@ -616,7 +616,7 @@ arch_callwithureg(void (*fn)(Ureg*))
 }
 
 void
-dumpstack(void)
+trap_arch_dumpstack(void)
 {
 	arch_callwithureg(dumpstackwithureg);
 }
@@ -652,7 +652,7 @@ dumpregs(Ureg* ureg)
 		iprint("kernel stack: %8.8lux-%8.8lux\n",
 			(ulong)(cpu+1), (ulong)cpu+BY2PG-4);
 	dumplongs("stack", (ulong *)(ureg + 1), 16);
-	delay(2000);
-	dumpstack();
+	arch_delay(2000);
+	arch_dumpstack();
 	arch_splx(s);
 }

@@ -309,7 +309,7 @@ iprintcanlock(Lock *l)
             return true;
         if(l->cpu == CPUS(cpu->cpuno))
             return false;
-        microdelay(100);
+        arch_microdelay(100);
     }
     return false;
 }
@@ -377,7 +377,7 @@ devcons_panic(char *fmt, ...)
     putstrn(buf, n+1);
     //TODO: put in comment for now because already got some panic with
     // lapic, but it seems to work still :)
-    //dumpstack();
+    //arch_dumpstack();
     //exit(1);
 }
 /*e: function panic */
@@ -540,11 +540,11 @@ echo(char *buf, int n)
             ctrlt = 0;
             switch(*p){
             case 's':
-                dumpstack();
+                arch_dumpstack();
                 return;
             case 'S':
                 x = arch_splhi();
-                dumpstack();
+                arch_dumpstack();
                 procdump();
                 arch_splx(x);
                 return;
@@ -577,7 +577,7 @@ echo(char *buf, int n)
                 killbig("^t ^t k");
                 return;
             case 'r':
-                exit(0);
+                arch_exit(0);
                 return;
             /*s: [[echo()]] C-t C-t special keys handler other cases */
                     case 'd':

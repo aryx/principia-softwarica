@@ -172,7 +172,7 @@ hzclock(Ureg *ur)
 
     if(active.exiting) {
         print("someone's exiting\n");
-        exit(0);
+        arch_exit(0);
     }
 
     checkalarms();

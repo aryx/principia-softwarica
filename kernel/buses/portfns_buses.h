@@ -10,6 +10,6 @@ void  uartkick(void*);
 
 // TODO: move outside main.c?
 // <arch>/main.c for now (called from port)
-int arch_isaconfig(char*, int, ISAConf*);
+//int arch_isaconfig(char*, int, ISAConf*); // now in core/ for backward deps
 
 /*e: portfns_buses.h */

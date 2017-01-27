@@ -744,7 +744,7 @@ noprocpanic(char *msg)
     unlock(&active);
 
     procdump();
-    delay(1000);
+    arch_delay(1000);
     panic(msg);
 }
 /*e: function noprocpanic */
@@ -941,7 +941,7 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
 
     if(r->p){
         print("double sleep called from %#p, %lud %lud\n", getcallerpc(&r), r->p->pid, up->pid);
-        dumpstack();
+        arch_dumpstack();
     }
 
     /*
@@ -1587,7 +1587,7 @@ scheddump(void)
         for(p = rq->head; p; p = p->rnext)
             print(" %lud(%lud)", p->pid, cpu->ticks - p->readytime);
         print("\n");
-        delay(150);
+        arch_delay(150);
     }
     print("nrdy %d\n", nrdy);
 }

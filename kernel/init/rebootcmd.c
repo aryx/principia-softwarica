@@ -121,7 +121,7 @@ rebootcmd(int argc, char *argv[])
     uchar *p;
 
     if(argc == 0)
-        exit(0);
+        arch_exit(0);
 
     c = namec(argv[0], Aopen, OEXEC, 0);
     if(waserror()){

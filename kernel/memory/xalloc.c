@@ -299,7 +299,7 @@ xsummary(void)
         if (0) {
             print("addr %#.8lux top %#.8lux size %lud\n",
                 h->addr, h->top, h->size);
-            delay(10);
+            arch_delay(10);
         }
         i += h->size;
         if (h == h->next) {

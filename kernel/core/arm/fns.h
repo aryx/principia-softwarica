@@ -3,6 +3,7 @@
 #include "../port/portfns_memory.h"
 #include "../port/portfns_files.h"
 #include "../port/portfns_time.h"
+#include "../port/portfns_interrupts.h"
 #include "../port/portfns_processes.h"
 #include "../port/portfns_misc.h"
 #include "../port/portfns_console.h"
@@ -13,12 +14,13 @@
 #include "../port/portfns_syscalls.h"
 #include "../port/portfns_init.h"
 
+// not classified yet
+void arch_cpuidprint(void);
 #define	getpgcolor(a)	0
 
 // different signatures in different arch so cant factorize
 void  arch_touser(uintptr);
 int   arch_cmpswap(long*, long, long);
-void  arch_coherence(void);
 #define arch_cycles(ip) *(ip) = arch_lcycles()
 
 // same signatures but optimized away
@@ -175,12 +177,6 @@ extern Block* ucallocb(int);
 extern void* ucallocalign(usize size, int align, int span);
 extern void ucfree(void*);
 extern void ucfreeb(Block*);
-
-/*
- * Things called from port.
- */
-extern void delay(int);				/* only scheddump() */
-extern void microdelay(int);			/* only edf.c */
 
 extern void sysprocsetup(Proc*);
 

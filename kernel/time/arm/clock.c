@@ -175,7 +175,7 @@ arch_timerset(Tval next)
 }
 
 uvlong
-arch_fastticks(uvlong *hz)
+clock_arch_fastticks(uvlong *hz)
 {
 	Systimers *tn;
 	ulong lo, hi;
@@ -230,7 +230,7 @@ arch_us(void)
 }
 
 void
-microdelay(int n)
+clock_arch_microdelay(int n)
 {
 	Systimers *tn;
 	u32int now, diff;
@@ -243,8 +243,8 @@ microdelay(int n)
 }
 
 void
-delay(int n)
+clock_arch_delay(int n)
 {
 	while(--n >= 0)
-		microdelay(1000);
+		arch_microdelay(1000);
 }

@@ -99,9 +99,9 @@ gpiopull(uint pin, int func)
 	reg = &gp[PUDclk0 + pin/32];
 	mask = 1 << (pin % 32);
 	gp[PUD] = func;
-	microdelay(1);
+	arch_microdelay(1);
 	*reg = mask;
-	microdelay(1);
+	arch_microdelay(1);
 	*reg = 0;
 }
 
@@ -188,7 +188,7 @@ enable(Uart *uart, int ie)
 	u32int *ap;
 
 	ap = (u32int*)uart->regs;
-	delay(10);
+	arch_delay(10);
 	gpiosel(TxPin, Alt5);
 	gpiosel(RxPin, Alt5);
 	gpiopulloff(TxPin);

@@ -197,7 +197,7 @@ mmconline(SDunit *unit)
 		poperror();
 	}
 	for(i = 0; i < Inittimeout; i++){
-		delay(100);
+		arch_delay(100);
 		io->cmd(APP_CMD, 0, r);
 		io->cmd(SD_SEND_OP_COND, hcs|V3_3, r);
 		if(r[0] & Powerup)

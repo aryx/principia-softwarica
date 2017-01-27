@@ -605,7 +605,7 @@ greset(Dwcregs *r, int bits)
 	r->grstctl |= bits;
 	while(r->grstctl & bits)
 		;
-	microdelay(10);
+	arch_microdelay(10);
 }
 
 static void

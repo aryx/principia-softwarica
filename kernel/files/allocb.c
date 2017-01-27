@@ -79,7 +79,7 @@ allocb(int size)
         arch_splhi();
         xsummary();
         mallocsummary();
-        delay(500);
+        arch_delay(500);
         panic("allocb: no memory for %d bytes; caller %#p", size,
             getcallerpc(&size));
     }
@@ -100,7 +100,7 @@ iallocb(int size)
         if((m1++%10000)==0){
             if(mp++ > 1000){
                 active.exiting = true;
-                exit(0);
+                arch_exit(0);
             }
             iprint("iallocb: limited %lud/%lud\n",
                 ialloc.bytes, conf.ialloc);
@@ -112,7 +112,7 @@ iallocb(int size)
         if((m2++%10000)==0){
             if(mp++ > 1000){
                 active.exiting = true;
-                exit(0);
+                arch_exit(0);
             }
             iprint("iallocb: no memory %lud/%lud\n",
                 ialloc.bytes, conf.ialloc);
@@ -141,7 +141,7 @@ freeb(Block *b)
         return;
 
     if(ref < 0){
-        dumpstack();
+        arch_dumpstack();
         panic("freeb: ref %ld; caller pc %#p", ref, getcallerpc(&b));
     }
 

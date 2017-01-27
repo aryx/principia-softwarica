@@ -114,7 +114,7 @@ fprd(int fpreg)
 	Pufv fp;
 
 	if (!cpu->fpon) {
-		dumpstack();
+		arch_dumpstack();
 		panic("fprd: cpu%d fpu off", cpu->cpuno);
 	}
 	s = arch_splhi();

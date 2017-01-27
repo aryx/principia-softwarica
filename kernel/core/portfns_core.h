@@ -17,8 +17,8 @@
 
 // BY2PG is defined in mem.h, which should always be included before "dat.h"!
 #define PGROUND(s)  ROUNDUP(s, BY2PG)
-
-#define FEXT(d, o, w) (((d)>>(o)) & ((1<<(w))-1)) // used in bcm/mmu.c
+// used in bcm/mmu.c
+#define FEXT(d, o, w) (((d)>>(o)) & ((1<<(w))-1)) 
 /*e: portdat.h macros */
 
 // portfns.c (mostly here just to remove some backward dependencies)
@@ -30,7 +30,7 @@ void  (*panic)(char*, ...);
 void  (*_assert)(char*);
 /*x: portfns_core.h backward deps breaker */
 // process/386/trap.c
-void    (*dumpstack)(void);
+void    (*arch_dumpstack)(void);
 /*x: portfns_core.h backward deps breaker */
 // process/proc.c
 void    (*dumpaproc)(Proc*);
@@ -55,17 +55,18 @@ void    (*pexit)(char*, bool);
 void    (*cclose)(Chan*);
 /*x: portfns_core.h backward deps breaker */
 // init/main.c
-void    (*exit)(int);
+void    (*arch_exit)(int);
 /*x: portfns_core.h backward deps breaker */
+
 //misc/386/devarch.c
 void    (*arch_coherence)(void);
 uvlong  (*arch_fastticks)(uvlong*);
 /*x: portfns_core.h backward deps breaker */
 // processes/386/i8253.c
-void    (*microdelay)(int);
-void    (*delay)(int);
+void    (*arch_microdelay)(int);
+void    (*arch_delay)(int);
 
-bool (*isaconfig)(char*, int, ISAConf*);
+bool (*arch_isaconfig)(char*, int, ISAConf*);
 /*e: portfns_core.h backward deps breaker */
 
 // portfns.c
