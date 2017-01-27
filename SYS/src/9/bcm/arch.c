@@ -16,6 +16,50 @@
  * later sorting into the appropriate buckets.
  */
 
+/*
+ *  return the userpc the last exception happened at
+ */
+uintptr
+arch_userpc(void)
+{
+	Ureg *ureg = up->dbgreg;
+	return ureg->pc;
+}
+
+/*
+ *  pc output by dumpaproc
+ */
+uintptr
+arch_dbgpc(Proc* p)
+{
+	Ureg *ureg;
+
+	ureg = p->dbgreg;
+	if(ureg == 0)
+		return 0;
+
+	return ureg->pc;
+}
+
+
+int
+arch_userureg(Ureg* ureg)
+{
+	return (ureg->psr & PsrMask) == PsrMusr;
+}
+
+
+
+
+/* This routine must save the values of registers the user is not permitted
+ * to write from devproc and then restore the saved values before returning.
+ */
+void
+arch_setregisters(Ureg* ureg, char* pureg, char* uva, int n)
+{
+	USED(ureg, pureg, uva, n);
+}
+
 /* Give enough context in the ureg to produce a kernel stack for
  * a sleeping process
  */
@@ -75,24 +119,6 @@ kexit(Ureg*)
 	cachedwbinvse(tos, sizeof *tos);
 }
 
-/*
- *  return the userpc the last exception happened at
- */
-uintptr
-arch_userpc(void)
-{
-	Ureg *ureg = up->dbgreg;
-	return ureg->pc;
-}
-
-/* This routine must save the values of registers the user is not permitted
- * to write from devproc and then restore the saved values before returning.
- */
-void
-arch_setregisters(Ureg* ureg, char* pureg, char* uva, int n)
-{
-	USED(ureg, pureg, uva, n);
-}
 
 /*
  *  this is the body for all kproc's
@@ -119,60 +145,3 @@ arch_kprocchild(Proc *p, void (*func)(void*), void *arg)
 	p->kparg = arg;
 }
 
-/*
- *  pc output by dumpaproc
- */
-uintptr
-arch_dbgpc(Proc* p)
-{
-	Ureg *ureg;
-
-	ureg = p->dbgreg;
-	if(ureg == 0)
-		return 0;
-
-	return ureg->pc;
-}
-
-/*
- *  set mach dependent process state for a new process
- */
-void
-arch_procsetup(Proc* p)
-{
-	fpusysprocsetup(p);
-}
-
-/*
- *  Save the mach dependent part of the process state.
- */
-void
-arch_procsave(Proc* p)
-{
-	uvlong t;
-
-	arch_cycles(&t);
-	p->pcycles += t;
-
-/* TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.*/
-	fpuprocsave(p);
-}
-
-void
-arch_procrestore(Proc* p)
-{
-	uvlong t;
-
-	if(p->kp)
-		return;
-	arch_cycles(&t);
-	p->pcycles -= t;
-
-	fpuprocrestore(p);
-}
-
-int
-arch_userureg(Ureg* ureg)
-{
-	return (ureg->psr & PsrMask) == PsrMusr;
-}

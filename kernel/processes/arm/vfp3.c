@@ -345,6 +345,44 @@ fpusysprocsetup(Proc *p)
 	fpoff();
 }
 
+
+/*
+ *  set mach dependent process state for a new process
+ */
+void
+arch_procsetup(Proc* p)
+{
+	fpusysprocsetup(p);
+}
+
+/*
+ *  Save the mach dependent part of the process state.
+ */
+void
+arch_procsave(Proc* p)
+{
+	uvlong t;
+
+	arch_cycles(&t);
+	p->pcycles += t;
+
+/* TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.*/
+	fpuprocsave(p);
+}
+
+void
+arch_procrestore(Proc* p)
+{
+	uvlong t;
+
+	if(p->kp)
+		return;
+	arch_cycles(&t);
+	p->pcycles -= t;
+
+	fpuprocrestore(p);
+}
+
 static void
 mathnote(void)
 {
