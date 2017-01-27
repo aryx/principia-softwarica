@@ -931,7 +931,7 @@ void  (*_assert)(char*);
 @
 <<portfns_core.h backward deps breaker>>=
 // process/386/trap.c
-void    (*dumpstack)(void);
+void    (*arch_dumpstack)(void);
 @
 <<portfns_core.h backward deps breaker>>=
 // process/proc.c
@@ -962,19 +962,20 @@ void    (*cclose)(Chan*);
 @
 <<portfns_core.h backward deps breaker>>=
 // init/main.c
-void    (*exit)(int);
+void    (*arch_exit)(int);
 @
 <<portfns_core.h backward deps breaker>>=
+
 //misc/386/devarch.c
 void    (*arch_coherence)(void);
 uvlong  (*arch_fastticks)(uvlong*);
 @
 <<portfns_core.h backward deps breaker>>=
 // processes/386/i8253.c
-void    (*microdelay)(int);
-void    (*delay)(int);
-
-bool (*isaconfig)(char*, int, ISAConf*);
+void    (*arch_microdelay)(int);
+void    (*arch_delay)(int);
+// init/386/main.c
+bool (*arch_isaconfig)(char*, int, ISAConf*);
 @
 
 
@@ -983,6 +984,9 @@ bool (*isaconfig)(char*, int, ISAConf*);
 
 
 <<portfns.c backward deps breaker>>=
+// backward dependencies breaker for non functional properties functions
+// (e.g., logging, security, error, profiling, timing)
+
 // console/devcons.c
 int (*print)(char*, ...) = nil;
 int (*iprint)(char*, ...) = nil;
@@ -990,12 +994,6 @@ int (*pprint)(char *fmt, ...) = nil;
 
 void (*panic)(char*, ...) = nil;
 void (*_assert)(char *fmt) = nil;
-
-// process/386/trap.c
-void (*dumpstack)(void) = nil;
-
-// process/proc.c
-void (*dumpaproc)(Proc*) = nil;
 
 // process/proc.c
 void (*error)(char*) = nil;
@@ -1011,21 +1009,29 @@ Proc* (*proctab)(int) = nil;
 int (*postnote)(Proc*, int, char*, int) = nil;
 void (*pexit)(char*, bool) = nil;
 
+// process/proc.c
+void (*dumpaproc)(Proc*) = nil;
+
 // files/chan.c
 void (*cclose)(Chan*);
 
-// init/main.c
-void (*exit)(int ispanic) = nil;
+
+// process/386/trap.c
+void (*arch_dumpstack)(void) = nil;
+
+// init/386/main.c
+void (*arch_exit)(int ispanic) = nil;
+bool (*arch_isaconfig)(char*, int, ISAConf*) = nil;
 
 // misc/386/devarch.c
 void (*arch_coherence)(void) = nil;
-
 // misc/386/devarch.c
 uvlong (*arch_fastticks)(uvlong*) = nil;
 
 // processes/386/i8253.c
-void (*delay)(int) = nil;
-void (*microdelay)(int) = nil;
+void (*arch_delay)(int) = nil;
+void (*arch_microdelay)(int) = nil;
+
 @
 
 
@@ -1035,32 +1041,23 @@ int devcons_iprint(char*, ...);
 int devcons_pprint(char*, ...);
 void devcons_panic(char*, ...);
 void devcons__assert(char*);
-
 void trap_dumpstack(void);
 void proc_dumpaproc(Proc *p);
-
 void proc_error(char*);
 void proc_nexterror(void);
-
 void i8253_delay(int millisecs);
 void i8253_microdelay(int microsecs);
-
 void proc_sched(void);
 void proc_ready(Proc*);
 void proc_sleep(Rendez*, int(*)(void*), void*);
 void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
 Proc* proc_wakeup(Rendez*);
-
 void proc_pexit(char *exitstr, bool freemem);
 Proc* proc_proctab(int i);
 int proc_postnote(Proc *p, int dolock, char *n, int flag);
-
 void chan_cclose(Chan *c);
-
 void main_exit(int ispanic);
-
 int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
-
 void nop(void);
 uvlong devarch_arch_fastticks(uvlong *hz);
 void devarch_hook_ioalloc();
@@ -1068,30 +1065,29 @@ void devarch_hook_ioalloc();
 
 
 <<[[main()]] initial assignments for backward deps(x86)>>=
+devtab = conf_devtab;
+
 print = devcons_print;
 iprint = devcons_iprint;
 pprint = devcons_pprint;
-
 panic = devcons_panic;
 _assert = devcons__assert;
-
 error = proc_error;
 nexterror = proc_nexterror;
-
-dumpstack = trap_dumpstack;
 dumpaproc = proc_dumpaproc;
-
-devtab = conf_devtab;
-
-delay = i8253_delay;
-microdelay = i8253_microdelay;
-
 wakeup = proc_wakeup;
 sched = proc_sched;
 ready = proc_ready;
 sleep = proc_sleep;
 tsleep = proc_tsleep;
+cclose = chan_cclose;
+proctab = proc_proctab;
+postnote = proc_postnote;
+pexit = proc_pexit;
+hook_ioalloc = devarch_hook_ioalloc;
 
+arch_delay = i8253_delay;
+arch_microdelay = i8253_microdelay;
 /*
  * On a uniprocessor, you'd think that coherence could be nop,
  * but it can't.  We still need a barrier when using coherence() in
@@ -1102,17 +1098,9 @@ tsleep = proc_tsleep;
  */
 arch_coherence = nop;
 arch_fastticks = devarch_arch_fastticks;
-
-cclose = chan_cclose;
-
-proctab = proc_proctab;
-postnote = proc_postnote;
-pexit = proc_pexit;
-
-hook_ioalloc = devarch_hook_ioalloc;
-
-exit = main_exit;
-isaconfig = main_isaconfig;
+arch_exit = main_exit;
+arch_dumpstack = trap_dumpstack;
+arch_isaconfig = main_isaconfig;
 @
 
 \fi
@@ -4881,7 +4869,7 @@ noprocpanic(char *msg)
     unlock(&active);
 
     procdump();
-    delay(1000);
+    arch_delay(1000);
     panic(msg);
 }
 @ 
@@ -10729,7 +10717,7 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
 
     if(r->p){
         print("double sleep called from %#p, %lud %lud\n", getcallerpc(&r), r->p->pid, up->pid);
-        dumpstack();
+        arch_dumpstack();
     }
 
     /*
@@ -11073,7 +11061,7 @@ hzclock(Ureg *ur)
 
     if(active.exiting) {
         print("someone's exiting\n");
-        exit(0);
+        arch_exit(0);
     }
 
     checkalarms();
@@ -18243,7 +18231,7 @@ kbdinit(void)
     while(try-- > 0 && (c = inb(Status)) & (Outbusy | Inready)) {
         if(c & Inready)
             inb(Data);
-        delay(1);
+        arch_delay(1);
     }
     if (try <= 0) {
         print(initfailed);
@@ -18307,7 +18295,7 @@ outready(void)
     for(tries = 0; (inb(Status) & Outbusy); tries++){
         if(tries > 500)
             return -1;
-        delay(2);
+        arch_delay(2);
     }
     return 0;
 }
@@ -18326,7 +18314,7 @@ inready(void)
     for(tries = 0; !(inb(Status) & Inready); tries++){
         if(tries > 500)
             return -1;
-        delay(2);
+        arch_delay(2);
     }
     return 0;
 }
@@ -18899,7 +18887,7 @@ iprintcanlock(Lock *l)
             return true;
         if(l->cpu == CPUS(cpu->cpuno))
             return false;
-        microdelay(100);
+        arch_microdelay(100);
     }
     return false;
 }
@@ -21390,7 +21378,7 @@ allocb(int size)
         arch_splhi();
         xsummary();
         mallocsummary();
-        delay(500);
+        arch_delay(500);
         panic("allocb: no memory for %d bytes; caller %#p", size,
             getcallerpc(&size));
     }
@@ -21427,7 +21415,7 @@ iallocb(int size)
         if((m1++%10000)==0){
             if(mp++ > 1000){
                 active.exiting = true;
-                exit(0);
+                arch_exit(0);
             }
             iprint("iallocb: limited %lud/%lud\n",
                 ialloc.bytes, conf.ialloc);
@@ -21439,7 +21427,7 @@ iallocb(int size)
         if((m2++%10000)==0){
             if(mp++ > 1000){
                 active.exiting = true;
-                exit(0);
+                arch_exit(0);
             }
             iprint("iallocb: no memory %lud/%lud\n",
                 ialloc.bytes, conf.ialloc);
@@ -21469,7 +21457,7 @@ freeb(Block *b)
         return;
 
     if(ref < 0){
-        dumpstack();
+        arch_dumpstack();
         panic("freeb: ref %ld; caller pc %#p", ref, getcallerpc(&b));
     }
 
@@ -31625,7 +31613,7 @@ main_exit(bool ispanic)
 <<[[kbdputsc()]] reboot if ctl-alt-del>>=
 if(kbscan->ctl)
     if(kbscan->alt && c == Del) // Ctl-Alt-Del
-        exit(0);
+        arch_exit(0);
 @
 
 <<[[ConsKbd]] other fields>>=
@@ -31682,7 +31670,7 @@ shutdown(bool ispanic)
     /* wait for any other processors to shutdown */
     arch_spllo();
     for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
-        delay(TK2MS(2));
+        arch_delay(TK2MS(2));
         if(active.cpus == 0 && consactive() == 0)
             break;
     }
@@ -31692,11 +31680,11 @@ shutdown(bool ispanic)
             for(;;)
                halt();
         if(getconf("*debug"))
-            delay(5*60*1000);
+            arch_delay(5*60*1000);
         else
-            delay(10000);
+            arch_delay(10000);
     }else
-        delay(1000);
+        arch_delay(1000);
 }
 @
 % >>
@@ -31778,7 +31766,7 @@ arch_reboot(kern_addr3 entry, kern_addr3 code, ulong size)
         shutdown(0);
         if(arch->resetothers)
             arch->resetothers();
-        delay(20);
+        arch_delay(20);
     }
 
     /*
@@ -31789,7 +31777,7 @@ arch_reboot(kern_addr3 entry, kern_addr3 code, ulong size)
         print("on cpu%d (not 0)!\n", cpu->cpuno);
 
     print("shutting down...\n");
-    delay(200);
+    arch_delay(200);
 
     arch_splhi();
 
@@ -31870,7 +31858,7 @@ i8042reset(void)
         outb(Cmd, 0xD1);
         outready();
         outb(Data, x);  /* toggle reset */
-        delay(100);
+        arch_delay(100);
     }
 }
 @
@@ -32340,11 +32328,11 @@ char *e, *p;
         ctrlt = 0;
         switch(*p){
         case 's':
-            dumpstack();
+            arch_dumpstack();
             return;
         case 'S':
             x = arch_splhi();
-            dumpstack();
+            arch_dumpstack();
             procdump();
             arch_splx(x);
             return;
@@ -32377,7 +32365,7 @@ char *e, *p;
             killbig("^t ^t k");
             return;
         case 'r':
-            exit(0);
+            arch_exit(0);
             return;
         <<[[echo()]] C-t C-t special keys handler other cases>>
         }
@@ -32412,7 +32400,7 @@ xsummary(void)
         if (0) {
             print("addr %#.8lux top %#.8lux size %lud\n",
                 h->addr, h->top, h->size);
-            delay(10);
+            arch_delay(10);
         }
         i += h->size;
         if (h == h->next) {
@@ -32560,7 +32548,7 @@ scheddump(void)
         for(p = rq->head; p; p = p->rnext)
             print(" %lud(%lud)", p->pid, cpu->ticks - p->readytime);
         print("\n");
-        delay(150);
+        arch_delay(150);
     }
     print("nrdy %d\n", nrdy);
 }
@@ -33464,7 +33452,7 @@ devcons_panic(char *fmt, ...)
     putstrn(buf, n+1);
     //TODO: put in comment for now because already got some panic with
     // lapic, but it seems to work still :)
-    //dumpstack();
+    //arch_dumpstack();
     //exit(1);
 }
 @ 
