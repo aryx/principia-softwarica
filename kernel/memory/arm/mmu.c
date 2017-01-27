@@ -359,7 +359,7 @@ arch_checkmmu(uintptr va, uintptr pa)
 //old:#define	arch_kmap(p)		(Arch_KMap*)((p)->pa|kseg0)
 Arch_KMap*
 arch_kmap(Page *p) {
-  return (Arch_KMap*)((p)->pa|kseg0);
+  return (Arch_KMap*)((p)->pa|KZERO);
 }
 
 void

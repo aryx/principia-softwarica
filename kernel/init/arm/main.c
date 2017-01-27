@@ -28,8 +28,8 @@ enum {
  */
 #define BOOTARGS	((char*)CONFADDR)
 #define	BOOTARGSLEN	(CPUADDR-CONFADDR)
-//#define	MAXCONF		64
-#define MAXCONFLINE	160
+//#define MAXCONF		64
+//#define MAXCONFLINE	160
 
 // part of a trick to remove some backward dependencies
 int devcons_print(char*, ...);
@@ -58,18 +58,10 @@ void arm_arch_coherence(void);
 void main_arch_exit(int ispanic);
 int  main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa);
 
-
-// conf.c
+// <conf>.c
 extern  Dev*  conf_devtab[];
-
-
 extern	char*	conffile;
 
-
-uintptr kseg0 = KZERO;
-
-//Mach*	machaddr[MAXMACH];
-//Conf	conf;
 ulong	memsize = 128*1024*1024;
 
 /*
@@ -338,7 +330,7 @@ void
 main(void)
 {
 	extern char edata[], end[];
-	uint fw, board;
+	uint firmware, board;
 
     // backward deps breaker!
     devtab = conf_devtab;
@@ -369,8 +361,7 @@ main(void)
     arch_fastticks = clock_arch_fastticks;
     arch_isaconfig = main_arch_isaconfig;
 
-
-
+    // Let's go!
 
 	cpu = (Cpu*)CPUADDR;
 	memset(edata, 0, end - edata);	/* clear bss */
@@ -378,10 +369,11 @@ main(void)
 	mmuinit1((void*)L1);
 	machon(0);
 
-	//optionsinit("/boot/boot boot");
 	quotefmtinstall();
-	
+
+	//optionsinit("/boot/boot boot");
 	//ataginit((Atag*)BOOTARGS);
+
 	confinit();		/* figures out amount of memory */
 	xinit();
 	uartconsinit();
@@ -389,9 +381,9 @@ main(void)
 
 	print("\nPlan 9 from Bell Labs\n");
 	board = getboardrev();
-	fw = getfirmware();
-	print("board rev: %#ux firmware rev: %d\n", board, fw);
-	if(fw < Minfirmrev){
+	firmware = getfirmware();
+	print("board rev: %#ux firmware rev: %d\n", board, firmware);
+	if(firmware < Minfirmrev){
 		print("Sorry, firmware (start*.elf) must be at least rev %d"
 		      " or newer than %s\n", Minfirmrev, Minfirmdate);
 		for(;;)
@@ -403,18 +395,21 @@ main(void)
 	clockinit();
 	lineqinit();
 	timersinit();
-	//if(conf.monitor)
-		swcursor_init();
+	swcursor_init(); //if(conf.monitor)
+
 	arch_cpuidprint();
 	archreset();
 
 	procinit();
 	imageinit();
+
 	links();
 	chandevreset();			/* most devices are discovered here */
+
 	pageinit();
 	swapinit();
 	userinit();
+
 	launchinit(getncpus());
 
 	schedinit();
@@ -549,6 +544,7 @@ userinit(void)
 	p->seg[SSEG] = s;
 	pg = newpage(1, 0, USTKTOP-BY2PG);
 	segpage(s, pg);
+
 	k = arch_kmap(pg);
 	bootargs(VA(k));
 	arch_kunmap(k);
@@ -792,7 +788,3 @@ arch_reboot(void *entry, void *code, ulong size)
 void
 arch_memorysummary(void) {
 }
-
-bool kdebug;
-
-

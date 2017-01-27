@@ -73,9 +73,9 @@ typedef void* kern_addr3;
 extern register Cpu* cpu;			/* R10 */
 extern register Proc* up;			/* R9 */
 
-extern uintptr kseg0;
-
+// in main.c (used in mmu.c)
 extern ulong memsize;
+
 extern int normalprint;
 
 /*

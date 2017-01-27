@@ -41,7 +41,7 @@
 
 #define	KZERO		KSEG0			/* kernel address space */
 #define CONFADDR	(KZERO+0x100)		/* unparsed plan9.ini */
-#define	CPUADDR	    (KZERO+0x2000)		/* Mach structure */
+#define	CPUADDR	    (KZERO+0x2000)		/* Cpu structure */
 #define	L2		    (KZERO+0x3000)		/* L2 ptes for vectors etc */
 #define	VCBUFFER	(KZERO+0x3400)		/* videocore mailbox buffer */
 #define	FIQSTKTOP	(KZERO+0x4000)		/* FIQ stack */
