@@ -4,6 +4,7 @@
 #include "../port/portfns_memory.h"
 #include "../port/portfns_files.h"
 #include "../port/portfns_time.h"
+#include "../port/portfns_interrupts.h"
 #include "../port/portfns_processes.h"
 #include "../port/portfns_misc.h"
 #include "../port/portfns_console.h"
