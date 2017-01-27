@@ -6,14 +6,11 @@
 #include "arm.h"
 #include "arminstr.ha"
 
-#define CACHELINESZ 64
 
-#define DMB	WORD	$0xf57ff05f	/* data mem. barrier; last f = SY */
+
 #define WFI	WORD	$0xe320f003	/* wait for interrupt */
 #define WFI_EQ	WORD	$0x0320f003	/* wait for interrupt if eq */
 
-/* tas/cas strex debugging limits; started at 10000 */
-#define MAXSC 100000
 
 TEXT armstart(SB), 1, $-4
 
@@ -226,22 +223,9 @@ TEXT _startpg2(SB), 1, $-4
 	BL	,cpustart(SB)
 	B	,0(PC)
 
-TEXT cpidget(SB), 1, $-4			/* main ID */
-	MRC	CpSC, 0, R0, C(CpID), C(0), CpIDid
-	RET
 
-TEXT fsrget(SB), 1, $-4				/* data fault status */
-	MRC	CpSC, 0, R0, C(CpFSR), C(0), CpFSRdata
-	RET
 
-TEXT ifsrget(SB), 1, $-4			/* instruction fault status */
-	MRC	CpSC, 0, R0, C(CpFSR), C(0), CpFSRinst
-	RET
-
-TEXT farget(SB), 1, $-4				/* fault address */
-	MRC	CpSC, 0, R0, C(CpFAR), C(0x0)
-	RET
-
+        
 TEXT cpctget(SB), 1, $-4			/* cache type */
 	MRC	CpSC, 0, R0, C(CpID), C(CpIDidct), CpIDct
 	RET
@@ -255,96 +239,6 @@ TEXT tmrget(SB), 1, $-4				/* local generic timer physical counter value */
 	MOVM.IA [R1-R2], (R0)
 	RET
 
-TEXT arch_splhi(SB), 1, $-4
-	MOVW	$(CPUADDR+4), R2		/* save caller pc in Mach */
-	MOVW	R14, 0(R2)
-
-	MOVW	CPSR, R0			/* turn off irqs (but not fiqs) */
-	ORR	$(PsrDirq), R0, R1
-	MOVW	R1, CPSR
-	RET
-
-TEXT splfhi(SB), 1, $-4
-	MOVW	$(CPUADDR+4), R2		/* save caller pc in Mach */
-	MOVW	R14, 0(R2)
-
-	MOVW	CPSR, R0			/* turn off irqs and fiqs */
-	ORR	$(PsrDirq|PsrDfiq), R0, R1
-	MOVW	R1, CPSR
-	RET
-
-TEXT splflo(SB), 1, $-4
-	MOVW	CPSR, R0			/* turn on fiqs */
-	BIC	$(PsrDfiq), R0, R1
-	MOVW	R1, CPSR
-	RET
-
-TEXT arch_spllo(SB), 1, $-4
-	MOVW	CPSR, R0			/* turn on irqs and fiqs */
-	BIC	$(PsrDirq|PsrDfiq), R0, R1
-	MOVW	R1, CPSR
-	RET
-
-TEXT arch_splx(SB), 1, $-4
-	MOVW	$(CPUADDR+0x04), R2		/* save caller pc in Mach */
-	MOVW	R14, 0(R2)
-
-	MOVW	R0, R1				/* reset interrupt level */
-	MOVW	CPSR, R0
-	MOVW	R1, CPSR
-	RET
-
-TEXT spldone(SB), 1, $0				/* end marker for devkprof.c */
-	RET
-
-TEXT arch_islo(SB), 1, $-4
-	MOVW	CPSR, R0
-	AND	$(PsrDirq), R0
-	EOR	$(PsrDirq), R0
-	RET
-
-TEXT	arch_tas(SB), $-4
-TEXT	_tas(SB), $-4			/* _tas(ulong *) */
-	/* returns old (R0) after modifying (R0) */
-	MOVW	R0,R5
-	DMB
-
-	MOVW	$1,R2		/* new value of (R0) */
-	MOVW	$MAXSC, R8
-tas1:
-	LDREX(5,7)		/* LDREX 0(R5),R7 */
-	CMP.S	$0, R7		/* old value non-zero (lock taken)? */
-	BNE	lockbusy	/* we lose */
-	SUB.S	$1, R8
-	BEQ	lockloop2
-	STREX(2,5,4)		/* STREX R2,(R5),R4 */
-	CMP.S	$0, R4
-	BNE	tas1		/* strex failed? try again */
-	DMB
-	B	tas0
-lockloop2:
-	BL	abort(SB)
-lockbusy:
-	CLREX
-tas0:
-	MOVW	R7, R0		/* return old value */
-	RET
-
-TEXT arch_setlabel(SB), 1, $-4
-	MOVW	R13, 0(R0)		/* sp */
-	MOVW	R14, 4(R0)		/* pc */
-	MOVW	$0, R0
-	RET
-
-TEXT arch_gotolabel(SB), 1, $-4
-	MOVW	0(R0), R13		/* sp */
-	MOVW	4(R0), R14		/* pc */
-	MOVW	$1, R0
-	RET
-
-TEXT getcallerpc(SB), 1, $-4
-	MOVW	0(R13), R0
-	RET
 
 TEXT arch_idlehands(SB), $-4
 	MOVW	CPSR, R3
@@ -361,95 +255,3 @@ TEXT arch_idlehands(SB), $-4
 
 	MOVW	R3, CPSR			/* splx */
 	RET
-
-
-TEXT arch_coherence(SB), $-4
-	BARRIERS
-	RET
-
-/*
- * invalidate tlb
- */
-TEXT mmuinvalidate(SB), 1, $-4
-	MOVW	$0, R0
-	MCR	CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
-	BARRIERS
-	RET
-
-/*
- * mmuinvalidateaddr(va)
- *   invalidate tlb entry for virtual page address va, ASID 0
- */
-TEXT mmuinvalidateaddr(SB), 1, $-4
-	MCR	CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinvse
-	BARRIERS
-	RET
-
-/*
- * `single-element' cache operations.
- * in arm arch v7, they operate on all cache levels, so separate
- * l2 functions are unnecessary.
- */
-
-TEXT cachedwbse(SB), $-4			/* D writeback SE */
-	MOVW	R0, R2
-
-	MOVW	CPSR, R3
-	CPSID					/* splhi */
-
-	BARRIERS			/* force outstanding stores to cache */
-	MOVW	R2, R0
-	MOVW	4(FP), R1
-	ADD	R0, R1				/* R1 is end address */
-	BIC	$(CACHELINESZ-1), R0		/* cache line start */
-_dwbse:
-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEse
-	/* can't have a BARRIER here since it zeroes R0 */
-	ADD	$CACHELINESZ, R0
-	CMP.S	R0, R1
-	BGT	_dwbse
-	B	_wait
-
-TEXT cachedwbinvse(SB), $-4			/* D writeback+invalidate SE */
-	MOVW	R0, R2
-
-	MOVW	CPSR, R3
-	CPSID					/* splhi */
-
-	BARRIERS			/* force outstanding stores to cache */
-	MOVW	R2, R0
-	MOVW	4(FP), R1
-	ADD	R0, R1				/* R1 is end address */
-	BIC	$(CACHELINESZ-1), R0		/* cache line start */
-_dwbinvse:
-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEwbi), CpCACHEse
-	/* can't have a BARRIER here since it zeroes R0 */
-	ADD	$CACHELINESZ, R0
-	CMP.S	R0, R1
-	BGT	_dwbinvse
-_wait:						/* drain write buffer */
-	BARRIERS
-
-	MOVW	R3, CPSR			/* splx */
-	RET
-
-TEXT cachedinvse(SB), $-4			/* D invalidate SE */
-	MOVW	R0, R2
-
-	MOVW	CPSR, R3
-	CPSID					/* splhi */
-
-	BARRIERS			/* force outstanding stores to cache */
-	MOVW	R2, R0
-	MOVW	4(FP), R1
-	ADD	R0, R1				/* R1 is end address */
-	BIC	$(CACHELINESZ-1), R0		/* cache line start */
-_dinvse:
-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvd), CpCACHEse
-	/* can't have a BARRIER here since it zeroes R0 */
-	ADD	$CACHELINESZ, R0
-	CMP.S	R0, R1
-	BGT	_dinvse
-	B	_wait
-
-#include "cache.v7.s"

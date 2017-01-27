@@ -1,3 +1,77 @@
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.ha"
+
+#define CACHELINESZ 64
+        
+        
+/*
+ * `single-element' cache operations.
+ * in arm arch v7, they operate on all cache levels, so separate
+ * l2 functions are unnecessary.
+ */
+
+TEXT cachedwbse(SB), $-4			/* D writeback SE */
+	MOVW	R0, R2
+
+	MOVW	CPSR, R3
+	CPSID					/* splhi */
+
+	BARRIERS			/* force outstanding stores to cache */
+	MOVW	R2, R0
+	MOVW	4(FP), R1
+	ADD	R0, R1				/* R1 is end address */
+	BIC	$(CACHELINESZ-1), R0		/* cache line start */
+_dwbse:
+	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEse
+	/* can't have a BARRIER here since it zeroes R0 */
+	ADD	$CACHELINESZ, R0
+	CMP.S	R0, R1
+	BGT	_dwbse
+	B	_wait
+
+TEXT cachedwbinvse(SB), $-4			/* D writeback+invalidate SE */
+	MOVW	R0, R2
+
+	MOVW	CPSR, R3
+	CPSID					/* splhi */
+
+	BARRIERS			/* force outstanding stores to cache */
+	MOVW	R2, R0
+	MOVW	4(FP), R1
+	ADD	R0, R1				/* R1 is end address */
+	BIC	$(CACHELINESZ-1), R0		/* cache line start */
+_dwbinvse:
+	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEwbi), CpCACHEse
+	/* can't have a BARRIER here since it zeroes R0 */
+	ADD	$CACHELINESZ, R0
+	CMP.S	R0, R1
+	BGT	_dwbinvse
+_wait:						/* drain write buffer */
+	BARRIERS
+
+	MOVW	R3, CPSR			/* splx */
+	RET
+
+TEXT cachedinvse(SB), $-4			/* D invalidate SE */
+	MOVW	R0, R2
+
+	MOVW	CPSR, R3
+	CPSID					/* splhi */
+
+	BARRIERS			/* force outstanding stores to cache */
+	MOVW	R2, R0
+	MOVW	4(FP), R1
+	ADD	R0, R1				/* R1 is end address */
+	BIC	$(CACHELINESZ-1), R0		/* cache line start */
+_dinvse:
+	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvd), CpCACHEse
+	/* can't have a BARRIER here since it zeroes R0 */
+	ADD	$CACHELINESZ, R0
+	CMP.S	R0, R1
+	BGT	_dinvse
+	B	_wait
+
 /*
  * cortex arm arch v7 cache flushing and invalidation
  * shared by l.s and rebootcode.s
@@ -198,3 +272,4 @@ inner:
 	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEwait
 	ISB
 	RET
+        

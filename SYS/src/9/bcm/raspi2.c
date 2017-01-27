@@ -1,7 +1,6 @@
 /*
  * bcm2836 (e.g.raspberry pi 2) architecture-specific stuff
  */
-
 #include "u.h"
 #include "../port/lib.h"
 #include "../port/error.h"
@@ -70,7 +69,7 @@ arch_cpuidprint(void)
 	char name[64];
 
 	cputype2name(name, sizeof name);
-	delay(50);				/* let uart catch up */
+	arch_delay(50);				/* let uart catch up */
 	print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
 }
 
@@ -142,11 +141,6 @@ l2ap(int ap)
 	return (AP(0, (ap)));
 }
 
-int
-arch_cmpswap(long *addr, long old, long new)
-{
-	return cas((ulong*)addr, old, new);
-}
 
 extern void machinit(void);
 extern void machon(uint);
@@ -161,10 +155,10 @@ cpustart(int xcpu)
 	mmuinit1((void*)cpu->mmul1);
 	mb = (Mboxes*)(ARMLOCAL + Mboxregs);
 	mb->clr[xcpu].doorbell = 1;
-	trapinit();
+	arch_trapinit();
 	clockinit();
 	timersinit();
-	cpuidprint();
+	arch_cpuidprint();
 	archreset();
 	machon(cpu->cpuno);
 	unlock(&startlock[xcpu]);
