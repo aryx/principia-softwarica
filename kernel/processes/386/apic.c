@@ -129,7 +129,7 @@ lapiconline(void)
      * then lower the task priority to allow interrupts to be
      * accepted by the APIC.
      */
-    microdelay((TK2MS(1)*1000/conf.ncpu) * cpu->cpuno);
+    arch_microdelay((TK2MS(1)*1000/conf.ncpu) * cpu->cpuno);
     lapicw(LapicTICR, lapictimer.max);
     lapicw(LapicTIMER, LapicCLKIN|LapicPERIODIC|(VectorPIC+IrqTIMER));
 
@@ -257,16 +257,16 @@ lapicstartap(Apic* apic, int v)
     crhi = apic->apicno<<24;
     lapicw(LapicICRHI, crhi);
     lapicw(LapicICRLO, LapicFIELD|ApicLEVEL|LapicASSERT|ApicINIT);
-    microdelay(200);
+    arch_microdelay(200);
     lapicw(LapicICRLO, LapicFIELD|ApicLEVEL|LapicDEASSERT|ApicINIT);
-    delay(10);
+    arch_delay(10);
 
     /* assumes apic is not an 82489dx */
     for(i = 0; i < 2; i++){
         lapicw(LapicICRHI, crhi);
         /* make apic's processor start at v in real mode */
         lapicw(LapicICRLO, LapicFIELD|ApicEDGE|ApicSTARTUP|(v/BY2PG));
-        microdelay(200);
+        arch_microdelay(200);
     }
 }
 

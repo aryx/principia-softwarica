@@ -61,7 +61,7 @@ uartisapnp(void)
     head = tail = nil;
     for(ctlrno = 2; ctlrno < 6; ctlrno++){
         memset(&isa, 0, sizeof(isa));
-        if(!isaconfig("uart", ctlrno, &isa))
+        if(!arch_isaconfig("uart", ctlrno, &isa))
             continue;
         if(strcmp(isa.type, "isa") != 0)
             continue;

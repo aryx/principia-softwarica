@@ -430,7 +430,7 @@ squidboy(Apic* apic)
     unlock(&active);
 
     while(!active.main_reached_sched)
-        microdelay(100);
+        arch_microdelay(100);
 
     schedinit();
 }
@@ -507,7 +507,7 @@ mpstartap(Apic* apic)
     for(i = 0; i < 1000; i++){
         if(apic->online)
             break;
-        delay(10);
+        arch_delay(10);
     }
     nvramwrite(0x0F, 0x00);
 }
@@ -930,7 +930,7 @@ mpshutdown(void)
     if(active.rebooting)
         return;
     print("apshutdown: active = %#8.8ux\n", active.cpus);
-    delay(1000);
+    arch_delay(1000);
     arch_splhi();
     arch->resetothers();
 

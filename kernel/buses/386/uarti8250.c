@@ -652,7 +652,7 @@ i8250getc(Uart *uart)
 
     ctlr = uart->regs;
     while(!(csr8r(ctlr, Lsr)&Dr))
-        delay(1);
+        arch_delay(1);
     return csr8r(ctlr, Rbr);
 }
 
@@ -664,10 +664,10 @@ i8250putc(Uart *uart, int c)
 
     ctlr = uart->regs;
     for(i = 0; !(csr8r(ctlr, Lsr)&Thre) && i < 128; i++)
-        delay(1);
+        arch_delay(1);
     outb(ctlr->io+Thr, c);
     for(i = 0; !(csr8r(ctlr, Lsr)&Thre) && i < 128; i++)
-        delay(1);
+        arch_delay(1);
 }
 
 PhysUart i8250physuart = {

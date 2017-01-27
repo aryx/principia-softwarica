@@ -1029,7 +1029,7 @@ pcicfginit(void)
                     /* reset the cardbus */
                     bcr = pcicfgr16(pci, PciBCR);
                     pcicfgw16(pci, PciBCR, 0x40 | bcr);
-                    delay(50);
+                    arch_delay(50);
                 }
             }
         }

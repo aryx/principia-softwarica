@@ -429,7 +429,7 @@ etherprobe(int cardno, int ctlrno)
     ether->mtu = ETHERMAXTU;
 
     if(cardno < 0){
-        if(isaconfig("ether", ctlrno, ether) == 0){
+        if(arch_isaconfig("ether", ctlrno, ether) == 0){
             free(ether);
             return nil;
         }

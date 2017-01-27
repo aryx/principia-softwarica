@@ -713,7 +713,7 @@ shutdown(bool ispanic)
     /* wait for any other processors to shutdown */
     arch_spllo();
     for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
-        delay(TK2MS(2));
+        arch_delay(TK2MS(2));
         if(active.cpus == 0 && consactive() == 0)
             break;
     }
@@ -723,11 +723,11 @@ shutdown(bool ispanic)
             for(;;)
                halt();
         if(getconf("*debug"))
-            delay(5*60*1000);
+            arch_delay(5*60*1000);
         else
-            delay(10000);
+            arch_delay(10000);
     }else
-        delay(1000);
+        arch_delay(1000);
 }
 /*e: function shutdown(x86) */
 
@@ -772,7 +772,7 @@ arch_reboot(kern_addr3 entry, kern_addr3 code, ulong size)
         shutdown(0);
         if(arch->resetothers)
             arch->resetothers();
-        delay(20);
+        arch_delay(20);
     }
 
     /*
@@ -783,7 +783,7 @@ arch_reboot(kern_addr3 entry, kern_addr3 code, ulong size)
         print("on cpu%d (not 0)!\n", cpu->cpuno);
 
     print("shutting down...\n");
-    delay(200);
+    arch_delay(200);
 
     arch_splhi();
 
@@ -865,6 +865,8 @@ void main(void)
 {
     // initial assignment made to avoid circular dependencies in codegraph
     /*s: [[main()]] initial assignments for backward deps(x86) */
+    devtab = conf_devtab;
+
     print = devcons_print;
     iprint = devcons_iprint;
     pprint = devcons_pprint;
@@ -872,16 +874,20 @@ void main(void)
     _assert = devcons__assert;
     error = proc_error;
     nexterror = proc_nexterror;
-    dumpstack = trap_dumpstack;
     dumpaproc = proc_dumpaproc;
-    devtab = conf_devtab;
-    delay = i8253_delay;
-    microdelay = i8253_microdelay;
     wakeup = proc_wakeup;
     sched = proc_sched;
     ready = proc_ready;
     sleep = proc_sleep;
     tsleep = proc_tsleep;
+    cclose = chan_cclose;
+    proctab = proc_proctab;
+    postnote = proc_postnote;
+    pexit = proc_pexit;
+    hook_ioalloc = devarch_hook_ioalloc;
+
+    arch_delay = i8253_delay;
+    arch_microdelay = i8253_microdelay;
     /*
      * On a uniprocessor, you'd think that coherence could be nop,
      * but it can't.  We still need a barrier when using coherence() in
@@ -892,13 +898,9 @@ void main(void)
      */
     arch_coherence = nop;
     arch_fastticks = devarch_arch_fastticks;
-    cclose = chan_cclose;
-    proctab = proc_proctab;
-    postnote = proc_postnote;
-    pexit = proc_pexit;
-    hook_ioalloc = devarch_hook_ioalloc;
-    exit = main_exit;
-    isaconfig = main_isaconfig;
+    arch_exit = main_exit;
+    arch_dumpstack = trap_dumpstack;
+    arch_isaconfig = main_isaconfig;
     /*e: [[main()]] initial assignments for backward deps(x86) */
 
     cgapost(0);

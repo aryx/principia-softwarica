@@ -365,7 +365,7 @@ vgablank(VGAscr*, int blank)
     seq1 |= vgaxi(Seqx, 1) & ~0x20;
     vgaxo(Seqx, 1, seq1);
     crtc17 |= vgaxi(Crtx, 0x17) & ~0x80;
-    delay(10);
+    arch_delay(10);
     vgaxo(Crtx, 0x17, crtc17);
     outs(Crtx, 0x0300);             /* end synchronous reset */
 }

@@ -361,7 +361,7 @@ i8253_delay(int millisecs)
             getcallerpc(&millisecs));
     if (watchdogon && cpu->cpuno == 0 && !arch_islo())
         for (; millisecs > Wdogms; millisecs -= Wdogms) {
-            delay(Wdogms);
+            arch_delay(Wdogms);
             watchdog->restart();
         }
     millisecs *= cpu->loopconst;
@@ -377,7 +377,7 @@ i8253_microdelay(int microsecs)
 {
     if (watchdogon && cpu->cpuno == 0 && !arch_islo())
         for (; microsecs > Wdogms*1000; microsecs -= Wdogms*1000) {
-            delay(Wdogms);
+            arch_delay(Wdogms);
             watchdog->restart();
         }
     microsecs *= cpu->loopconst;

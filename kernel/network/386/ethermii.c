@@ -96,7 +96,7 @@ miireset(Mii* mii)
     bmcr = mii->mir(mii, mii->curphy->phyno, Bmcr);
     bmcr |= BmcrR;
     mii->miw(mii, mii->curphy->phyno, Bmcr, bmcr);
-    microdelay(1);
+    arch_microdelay(1);
 
     return 0;
 }

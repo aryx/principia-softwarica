@@ -1536,7 +1536,7 @@ igbemiimir(Mii* mii, int pa, int ra)
         mdic = csr32r(ctlr, Mdic);
         if(mdic & (MDIe|MDIready))
             break;
-        microdelay(1);
+        arch_microdelay(1);
     }
 
     if((mdic & (MDIe|MDIready)) == MDIready)
@@ -1561,7 +1561,7 @@ igbemiimiw(Mii* mii, int pa, int ra, int data)
         mdic = csr32r(ctlr, Mdic);
         if(mdic & (MDIe|MDIready))
             break;
-        microdelay(1);
+        arch_microdelay(1);
     }
     if((mdic & (MDIe|MDIready)) == MDIready)
         return 0;
@@ -1603,15 +1603,15 @@ igbemii(CtlrEtherIgbe* ctlr)
             return -1;
         }
         csr32w(ctlr, Ctrlext, r);
-        delay(20);
+        arch_delay(20);
         r = csr32r(ctlr, Ctrlext);
         r &= ~Mdr;
         csr32w(ctlr, Ctrlext, r);
-        delay(20);
+        arch_delay(20);
         r = csr32r(ctlr, Ctrlext);
         r |= Mdr;
         csr32w(ctlr, Ctrlext, r);
-        delay(20);
+        arch_delay(20);
 
         ctlr->mii->mir = i82543miimir;
         ctlr->mii->miw = i82543miimiw;
@@ -1762,7 +1762,7 @@ at93c46io(CtlrEtherIgbe* ctlr, char* op, int data)
             break;
         }
         csr32w(ctlr, Eecd, eecd);
-        microdelay(50);
+        arch_microdelay(50);
     }
     if(loop >= 0)
         return -1;
@@ -1811,7 +1811,7 @@ at93c46r(CtlrEtherIgbe* ctlr)
         for(i = 0; i < 1000; i++){
             if((eecd = csr32r(ctlr, Eecd)) & Agnt)
                 break;
-            microdelay(5);
+            arch_microdelay(5);
         }
         if(!(eecd & Agnt)){
             print("igbe: not granted EEPROM access\n");
@@ -1860,24 +1860,24 @@ igbedetach(CtlrEtherIgbe* ctlr)
     csr32w(ctlr, Rctl, 0);
     csr32w(ctlr, Tctl, 0);
 
-    delay(10);
+    arch_delay(10);
 
     csr32w(ctlr, Ctrl, Devrst);
-    delay(1);
+    arch_delay(1);
     for(timeo = 0; timeo < 1000; timeo++){
         if(!(csr32r(ctlr, Ctrl) & Devrst))
             break;
-        delay(1);
+        arch_delay(1);
     }
     if(csr32r(ctlr, Ctrl) & Devrst)
         return -1;
     r = csr32r(ctlr, Ctrlext);
     csr32w(ctlr, Ctrlext, r|Eerst);
-    delay(1);
+    arch_delay(1);
     for(timeo = 0; timeo < 1000; timeo++){
         if(!(csr32r(ctlr, Ctrlext) & Eerst))
             break;
-        delay(1);
+        arch_delay(1);
     }
     if(csr32r(ctlr, Ctrlext) & Eerst)
         return -1;
@@ -1902,11 +1902,11 @@ igbedetach(CtlrEtherIgbe* ctlr)
     }
 
     csr32w(ctlr, Imc, ~0);
-    delay(1);
+    arch_delay(1);
     for(timeo = 0; timeo < 1000; timeo++){
         if(!csr32r(ctlr, Icr))
             break;
-        delay(1);
+        arch_delay(1);
     }
     if(csr32r(ctlr, Icr))
         return -1;

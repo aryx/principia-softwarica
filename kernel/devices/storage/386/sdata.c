@@ -490,7 +490,7 @@ ataready(int cmdport, int ctlport, int dev, int reset, int ready, int micro)
             atadebug(0, 0, "ataready: %d 0x%2.2uX\n", micro, as);
             break;
         }
-        microdelay(1);
+        arch_microdelay(1);
     }
     atadebug(cmdport, ctlport, "ataready: timeout");
 
@@ -555,7 +555,7 @@ atarwmmode(Drive* drive, int cmdport, int ctlport, int dev)
         return 0;
     outb(cmdport+Count, rwm);
     outb(cmdport+Command, Csm);
-    microdelay(1);
+    arch_microdelay(1);
     as = ataready(cmdport, ctlport, 0, Bsy, Drdy|Df|Err, 1000);
     inb(cmdport+Status);
     if(as < 0 || (as & (Df|Err)))
@@ -606,7 +606,7 @@ ataidentify(int cmdport, int ctlport, int dev, int pkt, void* info)
     if(as < 0)
         return as;
     outb(cmdport+Command, command);
-    microdelay(1);
+    arch_microdelay(1);
 
     as = ataready(cmdport, ctlport, 0, Bsy, Drq|Err, 400*1000);
     if(as < 0)
@@ -744,11 +744,11 @@ atasrst(int ctlport)
      * Also, there will be problems here if overlapped commands
      * are ever supported.
      */
-    microdelay(5);
+    arch_microdelay(5);
     outb(ctlport+Dc, Srst);
-    microdelay(5);
+    arch_microdelay(5);
     outb(ctlport+Dc, 0);
-    microdelay(2*1000);
+    arch_microdelay(2*1000);
 }
 
 static SDev*
@@ -790,7 +790,7 @@ ataprobe(int cmdport, int ctlport, int irq)
     dev = Dev0;
     if(inb(ctlport+As) & Bsy){
         outb(cmdport+Dh, dev);
-        microdelay(1);
+        arch_microdelay(1);
 trydev1:
         atadebug(cmdport, ctlport, "ataprobe bsy");
         outb(cmdport+Cyllo, 0xAA);
@@ -835,7 +835,7 @@ tryedd1:
      * Wait for the command to complete (6 seconds max).
      */
     outb(cmdport+Command, Cedd);
-    delay(2);
+    arch_delay(2);
     if(ataready(cmdport, ctlport, dev, Bsy|Drq, 0, 6*1000*1000) < 0)
         goto release;
 
@@ -894,7 +894,7 @@ tryedd1:
             }
             else{
                 outb(cmdport+Dh, Dev0);
-                microdelay(1);
+                arch_microdelay(1);
             }
         }
     }
@@ -1077,13 +1077,13 @@ atanop(Drive* drive, int subcommand)
     ctlr->command = Cnop;       /* debugging */
     outb(cmdport+Command, Cnop);
 
-    microdelay(1);
+    arch_microdelay(1);
     ctlport = ctlr->ctlport;
     for(timeo = 0; timeo < 1000; timeo++){
         as = inb(ctlport+As);
         if(!(as & Bsy))
             break;
-        microdelay(1);
+        arch_microdelay(1);
     }
     drive->error |= Abrt;
 }
@@ -1320,7 +1320,7 @@ atapktio(Drive* drive, uchar* cmd, int clen)
     outb(cmdport+Command, Cpkt);
 
     if((drive->info[Iconfig] & Mdrq) != 0x0020){
-        microdelay(1);
+        arch_microdelay(1);
         as = ataready(cmdport, ctlport, 0, Bsy, Drq|Chk, 4*1000);
         if(as < 0 || (as & (Bsy|Chk))){
             drive->status = as<0 ? 0 : as;
@@ -1459,7 +1459,7 @@ atageniostart(Drive* drive, uvlong lba)
     switch(drive->command){
     case Cws:
     case Cwsm:
-        microdelay(1);
+        arch_microdelay(1);
         /* 10*1000 for flash ide drives - maybe detect them? */
         as = ataready(cmdport, ctlport, 0, Bsy, Drq|Err, 10*1000);
         if(as < 0 || (as & Err)){

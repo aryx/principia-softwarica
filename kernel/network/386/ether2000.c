@@ -208,9 +208,9 @@ ne2000reset(Ether* edev)
      * followed by a write to the Reset address.
      */
     buf[0] = inb(port+Reset);
-    delay(2);
+    arch_delay(2);
     outb(port+Reset, buf[0]);
-    delay(2);
+    arch_delay(2);
     
     /*
      * Init the (possible) chip, then use the (possible)

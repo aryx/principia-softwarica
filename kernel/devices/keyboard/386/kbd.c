@@ -68,7 +68,7 @@ outready(void)
     for(tries = 0; (inb(Status) & Outbusy); tries++){
         if(tries > 500)
             return -1;
-        delay(2);
+        arch_delay(2);
     }
     return 0;
 }
@@ -86,7 +86,7 @@ inready(void)
     for(tries = 0; !(inb(Status) & Inready); tries++){
         if(tries > 500)
             return -1;
-        delay(2);
+        arch_delay(2);
     }
     return 0;
 }
@@ -123,7 +123,7 @@ i8042reset(void)
         outb(Cmd, 0xD1);
         outready();
         outb(Data, x);  /* toggle reset */
-        delay(100);
+        arch_delay(100);
     }
 }
 /*e: function i8042reset(x86) */
@@ -302,7 +302,7 @@ kbdinit(void)
     while(try-- > 0 && (c = inb(Status)) & (Outbusy | Inready)) {
         if(c & Inready)
             inb(Data);
-        delay(1);
+        arch_delay(1);
     }
     if (try <= 0) {
         print(initfailed);

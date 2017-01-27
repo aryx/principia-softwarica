@@ -273,9 +273,9 @@ floppyreset(void)
      *  stop the motors
      */
     fl.motor = 0;
-    delay(10);
+    arch_delay(10);
     outb(Pdor, fl.motor | Fintena | Fena);
-    delay(10);
+    arch_delay(10);
 
     /*
      *  init drives
@@ -670,7 +670,7 @@ floppycmd(void)
                 floppyresult();
                 return -1;
             }
-            microdelay(8);  /* for machine independence */
+            arch_microdelay(8);  /* for machine independence */
         }
         outb(Pfdata, fl.cmd[i]);
     }
@@ -707,7 +707,7 @@ floppyresult(void)
                 fl.confused = 1;
                 return -1;
             }
-            microdelay(8);  /* for machine independence */
+            arch_microdelay(8);  /* for machine independence */
         }
         fl.stat[i] = inb(Pfdata);
     }
@@ -841,9 +841,9 @@ floppyrevive(void)
         fl.ncmd = 1;
         fl.cmd[0] = 0;
         outb(Pdor, 0);
-        delay(10);
+        arch_delay(10);
         outb(Pdor, Fintena|Fena);
-        delay(10);
+        arch_delay(10);
         arch_spllo();
         fl.motor = 0;
         fl.confused = 0;

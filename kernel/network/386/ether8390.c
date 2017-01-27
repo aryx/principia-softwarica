@@ -548,7 +548,7 @@ overflow(Ether *ether)
      */
     txp = regr(ctlr, Cr) & Txp;
     regw(ctlr, Cr, Page0|RdABORT|Stp);
-    delay(2);
+    arch_delay(2);
     regw(ctlr, Rbcr0, 0);
     regw(ctlr, Rbcr1, 0);
 

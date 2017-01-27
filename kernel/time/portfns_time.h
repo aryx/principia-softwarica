@@ -29,9 +29,12 @@ long    seconds(void);
 // <arch>/clock.c (called from port)
 void   arch_timerset(Tval x); // called from portclock.c (e.g., addclock0link)
 ulong  arch_us(void);         // called from edf.c
-//uvlong arch_fastticks(uvlong *hz); // called from portclock.c
 long   arch_lcycles(void); // called from edf.c, sysproc.c, taslock.c
 ulong  arch_perfticks(void);
+// now in core/ for backward deps
+//uvlong arch_fastticks(uvlong *hz); // called from portclock.c
+//void   arch_microdelay(int);
+//void   arch_delay(int);
 // <arch>/clock.c (called from port but signature not portable across <arch>)
 //void arch_cycles(uvlong*);
 

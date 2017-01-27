@@ -433,9 +433,9 @@ ess1688reset(void)
     int i;
 
     outb(blaster.reset, 3);
-    delay(1);           /* >3 υs */
+    arch_delay(1);           /* >3 υs */
     outb(blaster.reset, 0);
-    delay(1);
+    arch_delay(1);
 
     i = sbread();
     if(i != 0xAA) {
@@ -743,7 +743,7 @@ audioinit(void)
     sbconf.port = 0x220;
     sbconf.dma = Dma;
     sbconf.irq = IrqAUDIO;
-    if(isaconfig("audio", 0, &sbconf) == 0)
+    if(arch_isaconfig("audio", 0, &sbconf) == 0)
         return;
     if(sbconf.type == nil ||
         (cistrcmp(sbconf.type, "sb16") != 0 && 
@@ -803,9 +803,9 @@ audioinit(void)
     resetlevel();
 
     outb(blaster.reset, 1);
-    delay(1);           /* >3 υs */
+    arch_delay(1);           /* >3 υs */
     outb(blaster.reset, 0);
-    delay(1);
+    arch_delay(1);
 
     i = sbread();
     if(i != 0xaa) {
