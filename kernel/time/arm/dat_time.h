@@ -6,3 +6,5 @@
  */
 #define	Arch_HZ		100			/* clock frequency */
 
+// was vlong in x86
+//typedef uvlong		Tval;

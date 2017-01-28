@@ -1,7 +1,4 @@
 
-// was vlong in x86
-//typedef uvlong		Tval;
-
 typedef u32int		PTE;
 
 /*
