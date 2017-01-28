@@ -81,15 +81,6 @@ TEXT _startpg(SB), 1, $-4
 	BL	_div(SB)		/* hack to load _div, etc. */
 
 
-TEXT arch_lcycles(SB), 1, $-4
-	MRC	CpSC, 0, R0, C(CpSPM), C(CpSPMperf), CpSPMcyc
-	RET
-
-TEXT tmrget(SB), 1, $-4				/* local generic timer physical counter value */
-	MOVW	$0, R1				/* not in armv6 */
-	MOVW	R1, 0(R0)
-	MOVW	R1, 4(R0)
-	RET
 
 
 

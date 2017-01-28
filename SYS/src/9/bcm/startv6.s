@@ -1,0 +1,1 @@
+../../../../kernel/init/arm/startv6.s
