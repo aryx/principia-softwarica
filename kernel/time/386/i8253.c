@@ -65,8 +65,8 @@ enum {
     Freq=   1193182,    /* Real clock frequency */
     /*e: constant Freq(x86) */
     Tickshift=8,        /* extra accuracy */
-    MaxPeriod=Freq/HZ,
-    MinPeriod=Freq/(100*HZ),
+    MaxPeriod=Freq/Arch_HZ,
+    MinPeriod=Freq/(100*Arch_HZ),
 
     Wdogms  = 200,      /* ms between strokes */
 };
@@ -104,14 +104,14 @@ i8253init(void)
     ioalloc(T0cntr, 4, 0, "i8253");
     ioalloc(T2ctl, 1, 0, "i8253.cntr2ctl");
 
-    i8253.period = Freq/HZ;
+    i8253.period = Freq/Arch_HZ;
 
     /*
      *  enable a 1/HZ interrupt for providing scheduling interrupts
      */
     outb(Tmode, Load0|Square);
-    outb(T0cntr, (Freq/HZ));    /* low byte */
-    outb(T0cntr, (Freq/HZ)>>8); /* high byte */
+    outb(T0cntr, (Freq/Arch_HZ));    /* low byte */
+    outb(T0cntr, (Freq/Arch_HZ)>>8); /* high byte */
 
     /*
      *  enable a longer period counter to use as a clock
@@ -131,8 +131,8 @@ i8253init(void)
      * command which can be used to make sure the counting
      * register has been written into the counting element.
      */
-    x = (Freq/HZ);
-    for(loops = 0; loops < 100000 && x >= (Freq/HZ); loops++){
+    x = (Freq/Arch_HZ);
+    for(loops = 0; loops < 100000 && x >= (Freq/Arch_HZ); loops++){
         outb(Tmode, Latch0);
         x = inb(T0cntr);
         x |= inb(T0cntr)<<8;
@@ -186,7 +186,7 @@ guesscpuhz(int aalcycles)
     dogwason = wdogpause();     /* don't get NMI while busy looping */
 
     /* find biggest loop that doesn't wrap */
-    incr = 16000000/(aalcycles*HZ*2);
+    incr = 16000000/(aalcycles*Arch_HZ*2);
     x = 2000;
     for(loops = incr; loops < 64*1024; loops += incr) {
     
@@ -214,9 +214,9 @@ guesscpuhz(int aalcycles)
         x -= y;
     
         if(x < 0)
-            x += Freq/HZ;
+            x += Freq/Arch_HZ;
 
-        if(x > Freq/(3*HZ))
+        if(x > Freq/(3*Arch_HZ))
             break;
     }
     wdogresume(dogwason);
@@ -306,7 +306,7 @@ void
 i8253enable(void)
 {
     i8253.enabled = true;
-    i8253.period = Freq/HZ;
+    i8253.period = Freq/Arch_HZ;
     arch_intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
 }
 /*e: function i8253enable(x86) */

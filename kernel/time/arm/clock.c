@@ -34,8 +34,8 @@ enum {
 	Localintpending	= 0x60,
 
 	SystimerFreq	= 1*Mhz,
-	MaxPeriod	= SystimerFreq / HZ,
-	MinPeriod	= SystimerFreq / (100*HZ),
+	MaxPeriod	= SystimerFreq / Arch_HZ,
+	MinPeriod	= SystimerFreq / (100*Arch_HZ),
 
 };
 

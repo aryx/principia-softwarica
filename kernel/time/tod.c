@@ -122,7 +122,7 @@ todset(vlong t, vlong delta, int n)
     } else {
         if(n <= 0)
             n = 1;
-        n *= HZ;
+        n *= Arch_HZ;
         if(delta < 0 && n > -delta)
             n = -delta;
         if(delta > 0 && n > delta)

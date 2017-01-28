@@ -283,6 +283,7 @@
 #define Large		0x00000001		/* L2 64KB */
 #define Small		0x00000002		/* L2 4KB */
 #define Tiny		0x00000003		/* L2 1KB: not in v7 */
+
 #define Buffered	0x00000004		/* L[12]: write-back not -thru */
 #define Cached		0x00000008		/* L[12] */
 

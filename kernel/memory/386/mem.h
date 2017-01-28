@@ -47,10 +47,8 @@
  * Time
  */
 /*s: constant HZ(x86) */
-#define HZ    (100)     /* clock frequency */
+#define Arch_HZ    (100)     /* clock frequency */ //TODO: mv in dat_time.h
 /*e: constant HZ(x86) */
-//#define MS2HZ   (1000/HZ)   /* millisec per clock tick */
-#define TK2SEC(t) ((t)/HZ)    /* ticks to seconds */
 
 /*
  *  Address spaces

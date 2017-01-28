@@ -252,7 +252,7 @@ timersinit(void)
         error(Enomem);
     t->tmode = Tperiodic;
     t->tt = nil;
-    t->tns = 1000000000/HZ;
+    t->tns = 1000000000 / Arch_HZ;
     /*
      * T->tf == nil means the HZ clock for this processor.
      */
@@ -276,7 +276,7 @@ addclock0link(void (*f)(void), Tms ms)
     if(nt == nil)
         error(Enomem);
     if(ms == 0)
-        ms = 1000/HZ;
+        ms = 1000 / Arch_HZ;
 
     nt->tns = (Tnano)ms*1000000LL;
     nt->tmode = Tperiodic;
@@ -306,7 +306,7 @@ tk2ms(ulong ticks)
     uvlong t, hz;
 
     t = ticks;
-    hz = HZ;
+    hz = Arch_HZ;
     t *= 1000L;
     t = t/hz;
     ticks = t;
@@ -319,9 +319,9 @@ ulong
 ms2tk(ulong ms)
 {
     /* avoid overflows at the cost of precision */
-    if(ms >= 1000000000/HZ)
-        return (ms/1000)*HZ;
-    return (ms*HZ+500)/1000;
+    if(ms >= 1000000000 / Arch_HZ)
+        return (ms / 1000) * Arch_HZ;
+    return (ms * Arch_HZ + 500) / 1000;
 }
 /*e: function ms2tk */
 /*e: portclock.c */

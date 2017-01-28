@@ -263,7 +263,7 @@ proc_sched(void)
         p->priority = reprioritize(p);
     }
     if(p != cpu->readied)
-        cpu->schedticks = cpu->ticks + HZ/10; // 100ms of allocated time
+        cpu->schedticks = cpu->ticks + Arch_HZ/10; // 100ms of allocated time
     cpu->readied = nil;
 
     cpu->proc = p;
@@ -381,7 +381,7 @@ void
 updatecpu(Proc *p)
 {
     int n, t, ocpu;
-    int D = schedgain*HZ*Scaling;
+    int D = schedgain*Arch_HZ*Scaling;
 
     if(p->edf)
         return;
@@ -599,7 +599,7 @@ rebalance(void)
     Proc *p;
 
     t = cpu->ticks;
-    if(t - balancetime < HZ)
+    if(t - balancetime < Arch_HZ)
         return;
     balancetime = t;
 
@@ -1779,14 +1779,16 @@ accounttime(void)
     n = arch_perfticks();
     per = n - cpu->perf.last;
     cpu->perf.last = n;
-    per = (cpu->perf.period*(HZ-1) + per)/HZ;
+    per = (cpu->perf.period*(Arch_HZ-1) + per)/Arch_HZ;
     if(per != 0)
         cpu->perf.period = per;
 
-    cpu->perf.avg_inidle = (cpu->perf.avg_inidle*(HZ-1)+cpu->perf.inidle)/HZ;
+    cpu->perf.avg_inidle = 
+      (cpu->perf.avg_inidle*(Arch_HZ-1)+cpu->perf.inidle)/Arch_HZ;
     cpu->perf.inidle = 0;
 
-    cpu->perf.avg_inintr = (cpu->perf.avg_inintr*(HZ-1)+cpu->perf.inintr)/HZ;
+    cpu->perf.avg_inintr = 
+      (cpu->perf.avg_inintr*(Arch_HZ-1)+cpu->perf.inintr)/Arch_HZ;
     cpu->perf.inintr = 0;
 
     /* only one processor gets to compute system load averages */
@@ -1805,7 +1807,7 @@ accounttime(void)
     n = nrun;
     nrun = 0;
     n = (nrdy+n)*1000;
-    cpu->load = (cpu->load*(HZ-1)+n)/HZ;
+    cpu->load = (cpu->load*(Arch_HZ-1)+n)/Arch_HZ;
 }
 /*e: function accounttime */
 

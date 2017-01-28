@@ -65,5 +65,5 @@ wdogoff(void)
 void
 watchdoglink(void)
 {
-	addclock0link(wdogfeed, HZ);
+	addclock0link(wdogfeed, Arch_HZ);
 }

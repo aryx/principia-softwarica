@@ -2,8 +2,10 @@
 
 // portclock.c
 ulong   tk2ms(ulong);
-#define   TK2MS(x) ((x)*(1000/HZ))
-#define   MS2NS(n) (((vlong)(n))*1000000LL)
+#define TK2MS(x) ((x)*(1000/Arch_HZ))
+#define MS2NS(n) (((vlong)(n))*1000000LL)
+#define TK2SEC(t)	((t)/Arch_HZ) /* ticks to seconds */ // not used in port
+//#define	MS2HZ		(1000/Arch_HZ)		/* millisec per clock tick */
 ulong   ms2tk(ulong);
 void    timerdel(Timer*);
 void    timeradd(Timer*);

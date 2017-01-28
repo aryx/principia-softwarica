@@ -54,6 +54,13 @@ struct Timers
 };
 /*e: struct Timers */
 
+// used only in arm/ for now
+enum {
+	Mhz	= 1000 * 1000,
+};
+
+// <arch>/dat_time.h should defined Arch_HZ
+
 #pragma varargck  type  "t"   long
 #pragma varargck  type  "U"   uvlong
 /*e: portdat_time.h */

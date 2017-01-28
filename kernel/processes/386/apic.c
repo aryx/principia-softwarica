@@ -157,8 +157,8 @@ lapictimerinit(void)
         }while(v < x);
 
         lapictimer.hz = (0xffffffffUL-lapicr(LapicTCCR))*10;
-        lapictimer.max = lapictimer.hz/HZ;
-        lapictimer.min = lapictimer.hz/(100*HZ);
+        lapictimer.max = lapictimer.hz/Arch_HZ;
+        lapictimer.min = lapictimer.hz/(100*Arch_HZ);
 
         if(lapictimer.hz > hz-(hz/10)){
             if(lapictimer.hz > hz+(hz/10))

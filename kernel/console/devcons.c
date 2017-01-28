@@ -129,7 +129,7 @@ prflush(void)
 
     now = cpu->ticks;
     while(consactive())
-        if(cpu->ticks - now >= HZ)
+        if(cpu->ticks - now >= Arch_HZ)
             break;
 }
 /*e: function prflush */
