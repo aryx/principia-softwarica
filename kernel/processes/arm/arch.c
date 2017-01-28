@@ -144,4 +144,3 @@ arch_kprocchild(Proc *p, void (*func)(void*), void *arg)
 	p->kpfun = func;
 	p->kparg = arg;
 }
-
