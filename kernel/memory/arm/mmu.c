@@ -49,7 +49,7 @@ mmuinit(void *a)
 	 */
 	va = VIRTIO;
 	for(pa = soc.physio; pa < soc.physio + IOSIZE; pa += MiB, va += MiB){
-        // No L1ptedramattrs heres (Cached | Buffered) cos volatile!
+        // No L1ptedramattrs (Cached | Buffered) here, because volatile!
 		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section; 
 	}
     // for raspi2
@@ -60,7 +60,7 @@ mmuinit(void *a)
 	/*
 	 * double map exception vectors at top of virtual memory
 	 */
-    // what for?
+    // ???
 	l2 = (PTE*)PADDR(L2);
 	va = HVECTORS;
 	l1[L1X(va)] = (uintptr)l2|Dom0|Coarse;

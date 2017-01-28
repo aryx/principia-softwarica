@@ -54,13 +54,15 @@ adec(int *p)
 	return v;
 }
 
-int
+bool
 cas32(void* addr, u32int old, u32int new)
 {
-	int r, s;
+	bool r;
+    int s;
 
 	s = arch_splhi();
-	if(r = (*(u32int*)addr == old))
+    r = (*(u32int*)addr == old);
+	if(r)
 		*(u32int*)addr = new;
 	arch_splx(s);
 	if (r)
@@ -68,7 +70,7 @@ cas32(void* addr, u32int old, u32int new)
 	return r;
 }
 
-int
+bool
 arch_cmpswap(long *addr, long old, long new)
 {
 	return cas32(addr, old, new);

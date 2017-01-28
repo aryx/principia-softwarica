@@ -50,6 +50,8 @@ enum {
 
 static Lock startlock[MAXCPUS + 1];
 
+// in startv7.s
+extern u32int cpidget(void);
 
 char*
 cputype2name(char *buf, int size)

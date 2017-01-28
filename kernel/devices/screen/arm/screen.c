@@ -123,7 +123,7 @@ hwdraw(Memdrawparam *par)
 	return 0;
 }
 
-static int
+static bool
 screensize(void)
 {
 	char *p;
@@ -135,10 +135,10 @@ screensize(void)
 	    (width = atoi(f[0])) < 16 ||
 	    (height = atoi(f[1])) <= 0 ||
 	    (depth = atoi(f[2])) <= 0)
-		return -1;
+		return false;
 	xgscreen.r.max = Pt(width, height);
 	xgscreen.depth = depth;
-	return 0;
+	return true;
 }
 
 static void
@@ -188,7 +188,7 @@ arch_screeninit(void)
 	int set;
 	ulong chan;
 
-	set = (screensize() == 0);
+	set = screensize();
 	fb = fbinit(set, &xgscreen.r.max.x, &xgscreen.r.max.y, &xgscreen.depth);
 	if(fb == nil){
 		print("can't initialise %dx%dx%d framebuffer \n",
@@ -239,7 +239,7 @@ arch_attachscreen(Rectangle *r, ulong *chan, int* d, int *width, int *softscreen
 }
 
 void
-arch_blankscreen(int blank)
+arch_blankscreen(bool blank)
 {
 	fbblank(blank);
 }

@@ -10,8 +10,8 @@
 
 #define	MAILBOX		(VIRTIO+0xB880)
 
-typedef struct Prophdr Prophdr;
 typedef struct Fbinfo Fbinfo;
+typedef struct Prophdr Prophdr;
 
 enum {
 	Read		= 0x00>>2,
@@ -22,30 +22,42 @@ enum {
 		Full		= 1<<31,
 		Empty		= 1<<30,
 	Config		= 0x1C>>2,
+
 	NRegs		= 0x20>>2,
-
-	ChanMask	= 0xF,
-	ChanProps	= 8,
+};
+enum {
 	ChanFb		= 1,
+	ChanProps	= 8,
+	ChanMask	= 0xF,
+};
 
+enum {
 	Req			= 0x0,
 	RspOk		= 0x80000000,
 	TagResp		= 1<<31,
+};
 
+enum {
 	TagGetfwrev	= 0x00000001,
 	TagGetrev	= 0x00010002,
+
 	TagGetmac	= 0x00010003,
 	TagGetram	= 0x00010005,
+
 	TagGetpower	= 0x00020001,
 	TagSetpower	= 0x00028001,
 		Powerwait	= 1<<1,
+
 	TagGetclkspd= 0x00030002,
 	TagGetclkmax= 0x00030004,
 	TagSetclkspd= 0x00038002,
+
 	TagGettemp	= 0x00030006,
+
 	TagFballoc	= 0x00040001,
 	TagFbfree	= 0x00048001,
 	TagFbblank	= 0x00040002,
+
 	TagGetres	= 0x00040003,
 	TagSetres	= 0x00048003,
 	TagGetvres	= 0x00040004,
@@ -56,6 +68,7 @@ enum {
 	TagSetrgb	= 0x00048006,
 };
 
+// Framebuffer
 struct Fbinfo {
 	u32int	xres;
 	u32int	yres;
@@ -86,7 +99,7 @@ vcwrite(uint chan, int val)
 
 	r = (u32int*)MAILBOX + NRegs;
 	val &= ~ChanMask;
-	while(r[Status]&Full)
+	while(r[Status] & Full)
 		;
 	arch_coherence();
 	r[Write] = val | chan;
@@ -117,14 +130,14 @@ vcreq(int tag, void *buf, int vallen, int rsplen)
 {
 	uintptr r;
 	int n;
-	Prophdr *prop;
+	Prophdr *prop = (Prophdr*)(VCBUFFER);
 	uintptr aprop;
-	static int busaddr = 1;
+	static bool busaddr = true;
 
 	if(rsplen < vallen)
 		rsplen = vallen;
 	rsplen = (rsplen+3) & ~3;
-	prop = (Prophdr*)(VCBUFFER);
+
 	n = sizeof(Prophdr) + rsplen + 8;
 	memset(prop, 0, n);
 	prop->len = n;
@@ -143,7 +156,7 @@ vcreq(int tag, void *buf, int vallen, int rsplen)
 			break;
 		if(!busaddr)
 			return -1;
-		busaddr = 0;
+		busaddr = false;
 	}
 	if(prop->req == RspOk &&
 	   prop->tag == tag &&
@@ -178,36 +191,37 @@ fbdefault(int *width, int *height, int *depth)
 void*
 fbinit(bool set, int *width, int *height, int *depth)
 {
-	Fbinfo *fi;
+	Fbinfo *fi = (Fbinfo*)(VCBUFFER);
 	uintptr va;
 
 	if(!set)
 		fbdefault(width, height, depth);
 	/* Screen width must be a multiple of 16 */
 	*width &= ~0xF;
-	fi = (Fbinfo*)(VCBUFFER);
-	memset(fi, 0, sizeof(*fi));
+	memset(fi, 0, sizeof(Fbinfo));
 	fi->xres = fi->xresvirtual = *width;
 	fi->yres = fi->yresvirtual = *height;
 	fi->bpp = *depth;
-	cachedwbinvse(fi, sizeof(*fi));
+	cachedwbinvse(fi, sizeof(Fbinfo));
 	vcwrite(ChanFb, dmaaddr(fi));
 	if(vcread(ChanFb) != 0)
 		return nil;
+    //TODO: fi->base is in virtual space?? how vcore knows about that? PADDR?
 	va = mmukmap(FRAMEBUFFER, PADDR(fi->base), fi->screensize);
+    // make it a blue screen
 	if(va)
 		memset((char*)va, 0x7F, fi->screensize);
 	return (void*)va;
 }
 
 int
-fbblank(int blank)
+fbblank(bool blank)
 {
 	u32int buf[1];
 
 	buf[0] = blank;
 	if(vcreq(TagFbblank, buf, sizeof buf, sizeof buf) != sizeof buf)
-		return -1;
+		return ERROR_NEG1;
 	return buf[0] & 1;
 }
 
@@ -215,12 +229,12 @@ fbblank(int blank)
  * Power management
  */
 void
-setpower(int dev, int on)
+setpower(int dev, bool on)
 {
 	u32int buf[2];
 
 	buf[0] = dev;
-	buf[1] = Powerwait | (on? 1 : 0);
+	buf[1] = Powerwait | on;
 	vcreq(TagSetpower, buf, sizeof buf, sizeof buf);
 }
 
@@ -232,7 +246,7 @@ getpower(int dev)
 	buf[0] = dev;
 	buf[1] = 0;
 	if(vcreq(TagGetpower, buf, sizeof buf[0], sizeof buf) != sizeof buf)
-		return -1;
+		return ERROR_NEG1;
 	return buf[0] & 1;
 }
 

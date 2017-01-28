@@ -8,10 +8,12 @@ typedef struct Soc Soc;
 
 struct Soc {			/* SoC dependent configuration */
 	ulong	dramsize;
+
 	uintptr	physio;
 	uintptr	busdram;
 	uintptr	busio;
 	uintptr	armlocal;
+
 	u32int	l1ptedramattrs;
 	u32int	l2ptedramattrs;
 };

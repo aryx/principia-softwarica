@@ -43,6 +43,7 @@
 
 #define CONFADDR	(KZERO+0x100)		/* unparsed plan9.ini */
 
+// L1 must be 16KiB aligned so this dictates the organization below
 #define	CPUADDR	    (KZERO+0x2000)		/* Cpu structure */
 #define	L2		    (KZERO+0x3000)		/* L2 ptes for vectors etc */
 #define	VCBUFFER	(KZERO+0x3400)		/* videocore mailbox buffer */

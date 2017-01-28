@@ -101,7 +101,7 @@ static u32int *dmaregs = (u32int*)DMAREGS;
 uintptr
 dmaaddr(void *va)
 {
-	return soc.busdram | (PTR2UINT(va) & ~KSEGM);
+	return soc.busdram | (PTR2UINT(va) & ~KSEGM); // PADDR?
 }
 
 static uintptr

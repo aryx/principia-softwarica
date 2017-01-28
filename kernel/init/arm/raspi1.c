@@ -15,9 +15,9 @@
 #include "../port/etherif.h"
 
 Soc soc = {
-	.dramsize	= 512*MiB,
+	.dramsize	= 512*MiB,    // 0 to 0x20000000
 
-	.physio		= 0x20000000,
+	.physio		= 0x20000000, // after RAM
 	.busdram	= 0x40000000,
 	.busio		= 0x7E000000,
 	.armlocal	= 0,

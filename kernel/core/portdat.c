@@ -24,7 +24,7 @@ int nconf;
 /*e: globals confname and confvar */
 
 /*s: function getconf */
-char* getconf(char *name)
+char* getconf2(char *name)
 {
         int i;
         for(i = 0; i < nconf; i++)

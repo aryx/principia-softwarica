@@ -86,7 +86,7 @@ extern void dmastart(int, int, int, void*, void*, int);
 extern int dmawait(int);
 
 extern int fbblank(int);
-extern void* fbinit(int, int*, int*, int*);
+extern void* fbinit(bool, int*, int*, int*);
 
 extern u32int farget(void);
 

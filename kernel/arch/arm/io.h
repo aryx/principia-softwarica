@@ -5,9 +5,9 @@ enum {
 	IRQtimer3	= 3,
 	IRQclock	= IRQtimer3,
 
-	IRQusb		= 9,
+	IRQusb		= 9, // also IRQfiq
 	IRQdma0		= 16,
-#define IRQDMA(chan)	(IRQdma0+(chan))
+    // IRQdma1, IRQdma2, ... via IRQDMA macro below
 
 	IRQaux		= 29,
 	IRQi2c		= 53,
@@ -22,7 +22,10 @@ enum {
 	IRQcntpns	= IRQlocal + 1,
 
 	IRQfiq		= IRQusb,	/* only one source can be FIQ */
+};
+#define IRQDMA(chan)	(IRQdma0+(chan))
 
+enum {
 	DmaD2M		= 0,		/* device to memory */
 	DmaM2D		= 1,		/* memory to device */
 	DmaM2M		= 2,		/* memory to memory */
@@ -34,7 +37,9 @@ enum {
 	DmaDevSpiTx	= 6,
 	DmaDevSpiRx	= 7,
 	DmaDevEmmc	= 11,
+};
 
+enum {
 	PowerSd		= 0,
 	PowerUart0,
 	PowerUart1,
@@ -44,7 +49,9 @@ enum {
 	PowerI2c2,
 	PowerSpi,
 	PowerCcp2tx,
+};
 
+enum {
 	ClkEmmc		= 1,
 	ClkUart,
 	ClkArm,
