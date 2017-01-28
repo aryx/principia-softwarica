@@ -241,20 +241,21 @@ machon(uint xcpu)
 	unlock(&active);
 }
 
-/* disable scheduling of this cpu */
-void
-machoff(uint xcpu)
-{
-	ulong cpubit;
-
-	cpubit = 1 << xcpu;
-	lock(&active);
-	if (active.cpus & cpubit) {		/* currently on? */
-		conf.ncpu--;
-		active.cpus &= ~cpubit;
-	}
-	unlock(&active);
-}
+// dead:
+///* disable scheduling of this cpu */
+//void
+//machoff(uint xcpu)
+//{
+//	ulong cpubit;
+//
+//	cpubit = 1 << xcpu;
+//	lock(&active);
+//	if (active.cpus & cpubit) {		/* currently on? */
+//		conf.ncpu--;
+//		active.cpus &= ~cpubit;
+//	}
+//	unlock(&active);
+//}
 
 void
 machinit(void)
@@ -579,15 +580,15 @@ confinit(void)
 			cpuserver = 0;
 	}
 	if((p = getconf("*maxmem")) != nil){
-		memsize = strtoul(p, 0, 0) - PHYSDRAM;
+		memsize = strtoul(p, 0, 0);
 		if (memsize < 16*MB)		/* sanity */
 			memsize = 16*MB;
 	}
 
 	getramsize(&conf.mem[0]);
 	if(conf.mem[0].limit == 0){
-		conf.mem[0].base = PHYSDRAM;
-		conf.mem[0].limit = PHYSDRAM + memsize;
+		conf.mem[0].base = 0;
+		conf.mem[0].limit = memsize;
 	}else if(p != nil)
 		conf.mem[0].limit = conf.mem[0].base + memsize;
 

@@ -27,14 +27,13 @@ mmuinit(void *a)
 	PTE *l1, *l2;
 	uintptr pa, va;
 
-	l1 = (PTE*)a;
-	l2 = (PTE*)PADDR(L2);
+	l1 = (PTE*)a; // PADDR(L1) for cpu0
 
 	/*
 	 * map all of ram at KZERO
 	 */
     va = KZERO;
-	for(pa = PHYSDRAM; pa < PHYSDRAM + soc.dramsize; pa += MiB, va += MiB)
+	for(pa = 0; pa < soc.dramsize; pa += MiB, va += MiB)
     {
 		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
 	}
@@ -42,15 +41,17 @@ mmuinit(void *a)
 	/*
 	 * identity map first MB of ram so mmu can be enabled
 	 */
-	l1[L1X(PHYSDRAM)] = PHYSDRAM|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
+	l1[L1X(0)] = 0|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
 
 	/*
 	 * map i/o registers 
 	 */
 	va = VIRTIO;
-	for(pa = soc.physio; pa < soc.physio+IOSIZE; pa += MiB, va += MiB){
-		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
+	for(pa = soc.physio; pa < soc.physio + IOSIZE; pa += MiB, va += MiB){
+        // No L1ptedramattrs heres (Cached | Buffered) cos volatile!
+		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section; 
 	}
+    // for raspi2
 	pa = soc.armlocal;
 	if(pa)
 		l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
@@ -58,9 +59,11 @@ mmuinit(void *a)
 	/*
 	 * double map exception vectors at top of virtual memory
 	 */
+    // what for?
+	l2 = (PTE*)PADDR(L2);
 	va = HVECTORS;
 	l1[L1X(va)] = (uintptr)l2|Dom0|Coarse;
-	l2[L2X(va)] = PHYSDRAM|L2AP(Krw)|Small|L2ptedramattrs;
+	l2[L2X(va)] = L2AP(Krw)|Small|L2ptedramattrs;
 }
 
 void
@@ -74,12 +77,12 @@ mmuinit1(void *a)
 	/*
 	 * undo identity map of first MB of ram
 	 */
-	l1[L1X(PHYSDRAM)] = 0;
-	cachedwbse(&l1[L1X(PHYSDRAM)], sizeof(PTE));
+	l1[L1X(0)] = 0;
+	cachedwbse(&l1[L1X(0)], sizeof(PTE));
 
 	//cacheuwbinv();
 	//l2cacheuwbinv();
-	mmuinvalidateaddr(PHYSDRAM);
+	mmuinvalidateaddr(0);
 }
 
 static void
@@ -319,8 +322,8 @@ mmuuncache(void* v, usize size)
 uintptr
 arch_cankaddr(uintptr pa)
 {
-	if(pa < PHYSDRAM + memsize)		/* assumes PHYSDRAM is 0 */
-		return PHYSDRAM + memsize - pa;
+	if(pa < memsize)		/* assumes PHYSDRAM is 0 */
+		return memsize - pa;
 	return 0;
 }
 

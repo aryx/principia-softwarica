@@ -6,8 +6,6 @@
 #include "arm.h"
 #include "arminstr.ha"
 
-
-
 #define WFI	WORD	$0xe320f003	/* wait for interrupt */
 #define WFI_EQ	WORD	$0x0320f003	/* wait for interrupt if eq */
 
@@ -118,7 +116,6 @@ reset:
 	 */
 	MOVW	$setR12(SB), R12
 	SUB	$KZERO, R12
-	ADD	$PHYSDRAM, R12
 	MOVW	$0, R0
 
 	/*
@@ -164,7 +161,7 @@ reset:
 	 */
 	MOVW	12(R(MACH)), R0	/* m->mmul1 */
 	SUB	$KZERO, R0		/* phys addr */
-	BL	,mmuinit(SB)
+	BL	mmuinit(SB)
 
 	/*
 	 * set up domain access control and page table base

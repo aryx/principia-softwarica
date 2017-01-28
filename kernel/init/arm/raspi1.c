@@ -16,6 +16,7 @@
 
 Soc soc = {
 	.dramsize	= 512*MiB,
+
 	.physio		= 0x20000000,
 	.busdram	= 0x40000000,
 	.busio		= 0x7E000000,

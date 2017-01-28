@@ -17,7 +17,6 @@ TEXT _start(SB), 1, $-4
 	 */
 	MOVW	$setR12(SB), R12
 	SUB	$KZERO, R12
-	ADD	$PHYSDRAM, R12
 	MOVW	$0, R0
 
 	/*
@@ -34,7 +33,7 @@ TEXT _start(SB), 1, $-4
 	/*
 	 * do arch-dependent startup (no return)
 	 */
-	BL	,armstart(SB)
-	B	,0(PC)
+	BL	armstart(SB)
+	B	0(PC)
 
 	RET

@@ -2,7 +2,6 @@
  * Broadcom bcm2835 SoC, as used in Raspberry Pi
  * arm1176jzf-s processor (armv6)
  */
-
 #include "mem.h"
 #include "arm.h"
 #include "arminstr.ha"
@@ -16,7 +15,8 @@ TEXT armstart(SB), 1, $-4
 	MRC	CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
 	BIC	$(CpCdcache|CpCicache|CpCpredict|CpCmmu), R1
 	MCR	CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
-	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvu), CpCACHEall
+
+   	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvu), CpCACHEall
 	MCR	CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
 	ISB
 
@@ -32,19 +32,20 @@ _ramZ:
 	BNE	_ramZ
 
 	/*
-	 * start stack at top of mach (physical addr)
+	 * start stack at top of CPUADDR (physical addr)
 	 * set up page tables for kernel
 	 */
-	MOVW	$PADDR(CPUADDR+CPUSIZE-4), R13
+	MOVW	$PADDR(CPUADDR+CPUSIZE-4), R13 // done already in l.s
 	MOVW	$PADDR(L1), R0
-	BL	,mmuinit(SB)
+	BL	mmuinit(SB)
 
 	/*
 	 * set up domain access control and page table base
 	 */
 	MOVW	$Client, R1
 	MCR	CpSC, 0, R1, C(CpDAC), C(0)
-	MOVW	$PADDR(L1), R1
+
+   	MOVW	$PADDR(L1), R1
 	MCR	CpSC, 0, R1, C(CpTTB), C(0)
 
 	/*
@@ -60,6 +61,7 @@ _ramZ:
 	 */
 	MOVW	$setR12(SB), R12
 	MOVW	$(CPUADDR+CPUSIZE-4), R13
+
 	MOVW	$_startpg(SB), R15
 
 TEXT _startpg(SB), 1, $-4
@@ -68,7 +70,7 @@ TEXT _startpg(SB), 1, $-4
 	 * enable cycle counter
 	 */
 	MOVW	$1, R1
-	MCR	CpSC, 0, R1, C(CpSPM), C(CpSPMperf), CpSPMctl
+	MCR	CpSC, 0, R1, C(CpSPM), C(CpSPMperf), CpSPMctl // Not CpSPMcyc??
 
 	/*
 	 * call main and loop forever if it returns

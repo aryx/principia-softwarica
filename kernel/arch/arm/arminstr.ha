@@ -3,10 +3,9 @@
  *
  * loader uses R11 as scratch.
  */
-//pad: used to be arm.s
+//pad: used to be called arm.s, but I prefer the .ha suffix for asm macros
 
-#define PADDR(va)	(PHYSDRAM | ((va) & ~KSEGM))
-
+#define PADDR(va)	(((va) & ~KSEGM))
 #define L1X(va)		(((((va))>>20) & 0x0fff)<<2)
 
 /*

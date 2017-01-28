@@ -42,16 +42,16 @@ TEXT _vsvc(SB), 1, $-4			/* SWI */
 
 	MOVW	$setR12(SB), R12	/* Make sure we've got the kernel's SB loaded */
 
-	/* get R(MACH) for this cpu */
+	/* get R(CPU) for this cpu */
 	CPUID(R1)
 	SLL	$2, R1			/* convert to word index */
 	MOVW	$cpus(SB), R2
 	ADD	R1, R2
-	MOVW	(R2), R(MACH)		/* m = cpus[cpuid] */
-	CMP	$0, R(MACH)
+	MOVW	(R2), R(CPU)		/* m = cpus[cpuid] */
+	CMP	$0, R(CPU)
 	MOVW.EQ	$CPUADDR, R0		/* paranoia: use CPUADDR if 0 */
 
-	MOVW	8(R(MACH)), R(USER)		/* up */
+	MOVW	8(R(CPU)), R(UP)		/* up */
 
 	MOVW	R13, R0			/* first arg is pointer to ureg */
 	SUB	$8, R13			/* space for argument+link */
@@ -134,12 +134,12 @@ _vswitch:
 	ADD	$(4*2+4*15), R13	/* make r13 point to ureg->type */
 	/*
 	 * if we interrupted a previous trap's handler and are now
-	 * returning to it, we need to propagate the current R(MACH) (R10)
+	 * returning to it, we need to propagate the current R(CPU) (R10)
 	 * by overriding the saved one on the stack, since we may have
 	 * been rescheduled and be on a different processor now than
 	 * at entry.
 	 */
-	MOVW	R(MACH), (-(15-MACH)*4)(R13) /* restore current cpu's MACH */
+	MOVW	R(CPU), (-(15-CPU)*4)(R13) /* restore current cpu's CPU */
 	MOVW	8(R13), R14		/* restore link */
 	MOVW	4(R13), R0		/* restore SPSR */
 	MOVW	R0, SPSR		/* ... */
@@ -160,16 +160,16 @@ _userexcep:
 
 	MOVW	$setR12(SB), R12	/* Make sure we've got the kernel's SB loaded */
 
-	/* get R(MACH) for this cpu */
+	/* get R(CPU) for this cpu */
 	CPUID(R1)
 	SLL	$2, R1			/* convert to word index */
 	MOVW	$cpus(SB), R2
 	ADD	R1, R2
-	MOVW	(R2), R(MACH)		/* m = cpus[cpuid] */
-	CMP	$0, R(MACH)
-	MOVW.EQ	$CPUADDR, R(MACH)		/* paranoia: use CPUADDR if 0 */
+	MOVW	(R2), R(CPU)		/* m = cpus[cpuid] */
+	CMP	$0, R(CPU)
+	MOVW.EQ	$CPUADDR, R(CPU)		/* paranoia: use CPUADDR if 0 */
 
-	MOVW	8(R(MACH)), R(USER)		/* up */
+	MOVW	8(R(CPU)), R(UP)		/* up */
 
 	MOVW	R13, R0			/* first arg is pointer to ureg */
 	SUB	$(4*2), R13		/* space for argument+link (for debugger) */
@@ -193,16 +193,16 @@ TEXT _vfiq(SB), 1, $-4			/* FIQ */
 	MOVM.DB.S [R0-R14], (R13)	/* save interrupted regs */
 	SUB	$(15*4), R13
 	MOVW	$setR12(SB), R12	/* Make sure we've got the kernel's SB loaded */
-	/* get R(MACH) for this cpu */
+	/* get R(CPU) for this cpu */
 	CPUID(R1)
 	SLL	$2, R1			/* convert to word index */
 	MOVW	$cpus(SB), R2
 	ADD	R1, R2
-	MOVW	(R2), R(MACH)		/* m = cpus[cpuid] */
-	CMP	$0, R(MACH)
-	MOVW.EQ	$CPUADDR, R(MACH)		/* paranoia: use CPUADDR if 0 */
+	MOVW	(R2), R(CPU)		/* m = cpus[cpuid] */
+	CMP	$0, R(CPU)
+	MOVW.EQ	$CPUADDR, R(CPU)		/* paranoia: use CPUADDR if 0 */
 
-	MOVW	8(R(MACH)), R(USER)		/* up */
+	MOVW	8(R(CPU)), R(UP)		/* up */
 	MOVW	R13, R0			/* first arg is pointer to ureg */
 	SUB	$(4*2), R13		/* space for argument+link (for debugger) */
 

@@ -97,7 +97,7 @@ TEXT cachesoff(SB), 1, $-4
 	BARRIERS
 
 	/* redo double map of first MiB PHYSDRAM = KZERO */
-	MOVW	12(R(MACH)), R2		/* m->mmul1 (virtual addr) */
+	MOVW	12(R(CPU)), R2		/* m->mmul1 (virtual addr) */
 	MOVW	$PTEDRAM, R1			/* PTE bits */
 	MOVW	R1, (R2)
 
