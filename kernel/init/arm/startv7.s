@@ -227,6 +227,9 @@ TEXT cpctget(SB), 1, $-4			/* cache type */
 	MRC	CpSC, 0, R0, C(CpID), C(CpIDidct), CpIDct
 	RET
 
+TEXT cpidget(SB), 1, $-4			/* main ID */
+	MRC	CpSC, 0, R0, C(CpID), C(0), CpIDid
+	RET
 
 
 TEXT arch_idlehands(SB), $-4

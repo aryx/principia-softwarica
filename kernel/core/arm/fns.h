@@ -73,7 +73,6 @@ extern void cachedwbinvse(void*, int);
 extern void cacheiinv(void);
 extern void cacheuwbinv(void);
 
-extern u32int cpidget(void);
 
 // coproc.c
 extern ulong cprd(int cp, int op1, int crn, int crm, int op2);
