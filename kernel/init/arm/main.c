@@ -13,6 +13,9 @@
 // rebootcode binary
 #include "reboot.h"
 
+// in portscreen.h
+extern void swcursor_init(void);
+
 /* Firmware compatibility */
 #define	Minfirmrev	326770
 #define	Minfirmdate	"19 Aug 2013"

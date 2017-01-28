@@ -30,14 +30,12 @@ int   arch_cmpswap(long*, long, long);
 void dumpregs(Ureg*);
 
 void confinit(void);
-void printinit(void);
 void userinit(void);
 
 
 extern void mmuinit1(void*);
 extern void mmuinvalidate(void);
 extern void mmuinvalidateaddr(u32int);
-extern uintptr mmukmap(uintptr, uintptr, usize);
 
 extern void kexit(Ureg*);
 
@@ -60,9 +58,6 @@ extern int cas(ulong*, ulong, ulong);
 
 extern char *cputype2name(char *buf, int size);
 
-extern void swcursor_init(void);
-
-
 extern void armtimerset(int);
 
 extern void cachedwb(void);
@@ -80,11 +75,12 @@ extern ulong cprdsc(int op1, int crn, int crm, int op2);
 extern void cpwr(int cp, int op1, int crn, int crm, int op2, ulong val);
 extern void cpwrsc(int op1, int crn, int crm, int op2, ulong val);
 
-
+// dma.c
 extern uintptr dmaaddr(void *va);
 extern void dmastart(int, int, int, void*, void*, int);
 extern int dmawait(int);
 
+// vcore.c
 extern int fbblank(int);
 extern void* fbinit(bool, int*, int*, int*);
 
@@ -98,18 +94,17 @@ extern ulong fpsavereg(int fpreg, uvlong *fpp);
 extern void fpwr(int fpreg, ulong val);
 extern u32int fsrget(void);
 
+// vcore.c
 extern uint getboardrev(void);
 extern ulong getclkrate(int);
-
 extern uint getcputemp(void);
-
 extern char *getethermac(void);
 extern uint getfirmware(void);
+extern void getramsize(Confmem*);
 
 extern int getncpus(void);
 extern int getpower(int);
 
-extern void getramsize(Confmem*);
 
 extern void gpiosel(uint, int);
 extern void gpiopullup(uint);
@@ -178,7 +173,6 @@ extern void ucfree(void*);
 extern void ucfreeb(Block*);
 
 extern void sysprocsetup(Proc*);
-
 
 
 #define PTR2UINT(p)	((uintptr)(p))
