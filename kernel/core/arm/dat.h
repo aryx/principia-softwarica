@@ -45,25 +45,16 @@ typedef void* kern_addr3;
 // defines DevConf, DevPort (not that used)
 #include "../port/portdat_devices.h"
 
+// DO NOT switch those declarations. 5c allocates R10
+// for the first 'extern register' declaration seen in a file
+// and R9 for the second one. See Compiler.nw.
+// Then mem.h relies on this to define the UP and CPU macros used
+// then inside assembly code.
 extern register Cpu* cpu;			/* R10 */
 extern register Proc* up;			/* R9 */
 
 // in main.c (used in mmu.c)
 extern ulong memsize;
-
-extern int normalprint;
-
-/*
- * Horrid. But the alternative is 'defined'.
- */
-#ifdef _DBGC_
-#define DBGFLG		(dbgflg[_DBGC_])
-#else
-#define DBGFLG		(0)
-#endif /* _DBGC_ */
-int vflag;
-extern char dbgflg[256];
-#define dbgprint	print		/* for now */
 
 // TODO: put that in portdat.h or in netif.h?
 #pragma varargck  type  "I" uchar*
