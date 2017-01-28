@@ -26,7 +26,7 @@ TEXT _start(SB), 1, $-4
 	MOVW	R1, CPSR
 
 	/*
-	 * start stack at top of mach (physical addr)
+	 * start stack at top of 'cpu' (physical addr)
 	 */
 	MOVW	$PADDR(CPUADDR+CPUSIZE-4), R13
 

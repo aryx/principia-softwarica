@@ -41,6 +41,7 @@ mmuinit(void *a)
 	/*
 	 * identity map first MB of ram so mmu can be enabled
 	 */
+    // ???
 	l1[L1X(0)] = 0|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
 
 	/*

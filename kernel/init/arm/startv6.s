@@ -35,7 +35,7 @@ _ramZ:
 	 * start stack at top of CPUADDR (physical addr)
 	 * set up page tables for kernel
 	 */
-	MOVW	$PADDR(CPUADDR+CPUSIZE-4), R13 // done already in l.s
+	MOVW	$PADDR(CPUADDR+CPUSIZE-4), R13 // done already in start.s
 	MOVW	$PADDR(L1), R0
 	BL	mmuinit(SB)
 

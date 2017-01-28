@@ -45,13 +45,18 @@ void arm_arch_coherence(void);
 void main_arch_exit(int ispanic);
 int  main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa);
 
+//*****************************************************************************
+// Configuration
+//*****************************************************************************
+// See globals in portdat_globals.h
+
 // <conf>.c
 extern  Dev*  conf_devtab[];
 extern	char*	conffile;
 
-ulong	memsize = 128*1024*1024;
-
-static uintptr sp;		/* XXX - must go - user stack of init proc */
+//*****************************************************************************
+// Boot parameters, see bootconf.c (not used by pad)
+//*****************************************************************************
 
 char*
 getconf(char *name)
@@ -65,6 +70,42 @@ getconf(char *name)
 	return nil;
 }
 
+
+//*****************************************************************************
+// Cpu init
+//*****************************************************************************
+
+void
+cpuinit(void)
+{
+	Cpu *m0;
+
+	cpu->ticks = 1;
+	cpu->perf.period = 1;
+
+	m0 = CPUS(0);
+	if (cpu->cpuno != 0) {
+		/* synchronise with cpu 0 */
+		cpu->ticks = m0->ticks;
+		cpu->fastclock = m0->fastclock;
+		cpu->delayloop = m0->delayloop;
+	}
+	//machon(m->cpuno);
+}
+
+void
+cpu0init(void)
+{
+	conf.ncpu = 0; // set in machon instead called after cpuinit
+
+	cpu->cpuno = 0;
+	cpus[cpu->cpuno] = cpu;
+
+	cpuinit();
+	active.exiting = 0;
+
+	up = nil;
+}
 
 /* enable scheduling of this cpu */
 void
@@ -81,172 +122,99 @@ machon(uint xcpu)
 	unlock(&active);
 }
 
-// dead:
-///* disable scheduling of this cpu */
-//void
-//machoff(uint xcpu)
-//{
-//	ulong cpubit;
-//
-//	cpubit = 1 << xcpu;
-//	lock(&active);
-//	if (active.cpus & cpubit) {		/* currently on? */
-//		conf.ncpu--;
-//		active.cpus &= ~cpubit;
-//	}
-//	unlock(&active);
-//}
+//*****************************************************************************
+// Conf init
+//*****************************************************************************
+
+// used also in mmu.c
+ulong	memsize = 128*1024*1024;
 
 void
-machinit(void)
+confinit(void)
 {
-	Cpu *m0;
+	int i;
+	ulong kpages;
+	uintptr pa;
+	char *p;
 
-	cpu->ticks = 1;
-	cpu->perf.period = 1;
-	m0 = CPUS(0);
-	if (cpu->cpuno != 0) {
-		/* synchronise with cpu 0 */
-		cpu->ticks = m0->ticks;
-		cpu->fastclock = m0->fastclock;
-		cpu->delayloop = m0->delayloop;
+	if(0 && (p = getconf("service")) != nil){
+		if(strcmp(p, "cpu") == 0)
+			cpuserver = 1;
+		else if(strcmp(p,"terminal") == 0)
+			cpuserver = 0;
+	}
+	if((p = getconf("*maxmem")) != nil){
+		memsize = strtoul(p, 0, 0);
+		if (memsize < 16*MB)		/* sanity */
+			memsize = 16*MB;
 	}
 
-	//machon(m->cpuno);
-}
+	getramsize(&conf.mem[0]);
+	if(conf.mem[0].limit == 0){
+		conf.mem[0].base = 0;
+		conf.mem[0].limit = memsize;
+	}else if(p != nil)
+		conf.mem[0].limit = conf.mem[0].base + memsize;
 
-void
-mach0init(void)
-{
-	conf.ncpu = 0;
+	conf.npage = 0;
+	pa = PADDR(PGROUND(PTR2UINT(end)));
 
-	cpu->cpuno = 0;
-	cpus[cpu->cpuno] = cpu;
+	/*
+	 *  we assume that the kernel is at the beginning of one of the
+	 *  contiguous chunks of memory and fits therein.
+	 */
+	for(i=0; i<nelem(conf.mem); i++){
+		/* take kernel out of allocatable space */
+		if(pa > conf.mem[i].base && pa < conf.mem[i].limit)
+			conf.mem[i].base = pa;
 
-	machinit();
-	active.exiting = 0;
-
-	up = nil;
-}
-
-void
-launchinit(int ncpus)
-{
-	int mach;
-	Cpu *mm;
-	PTE *l1;
-
-	if(ncpus > MAXCPUS)
-		ncpus = MAXCPUS;
-	for(mach = 1; mach < ncpus; mach++){
-		cpus[mach] = mm = mallocalign(CPUSIZE, CPUSIZE, 0, 0);
-		l1 = mallocalign(L1SIZE, L1SIZE, 0, 0);
-		if(mm == nil || l1 == nil)
-			panic("launchinit");
-		memset(mm, 0, CPUSIZE);
-		mm->cpuno = mach;
-
-		memmove(l1, cpu->mmul1, L1SIZE);  /* clone cpu0's l1 table */
-		cachedwbse(l1, L1SIZE);
-		mm->mmul1 = l1;
-		cachedwbse(mm, CPUSIZE);
-
+		conf.mem[i].npage = (conf.mem[i].limit - conf.mem[i].base)/BY2PG;
+		conf.npage += conf.mem[i].npage;
 	}
-	cachedwbse(cpus, sizeof cpus);
-	if((mach = startcpus(ncpus)) < ncpus)
-			panic("only %d cpu%s started", mach, mach == 1? "" : "s");
+
+	conf.upages = (conf.npage*80)/100;
+	conf.ialloc = ((conf.npage-conf.upages)/2)*BY2PG;
+
+	/* set up other configuration parameters */
+	conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
+	if(cpuserver)
+		conf.nproc *= 3;
+	if(conf.nproc > 2000)
+		conf.nproc = 2000;
+	conf.nswap = conf.npage*3;
+	conf.nswppo = 4096;
+	conf.nimage = 200;
+
+	conf.copymode = 1;		/* copy on reference, not copy on write */
+
+	/*
+	 * Guess how much is taken by the large permanent
+	 * datastructures. Mntcache and Mntrpc are not accounted for
+	 * (probably ~300KB).
+	 */
+	kpages = conf.npage - conf.upages;
+	kpages *= BY2PG;
+	kpages -= conf.upages*sizeof(Page)
+		+ conf.nproc*sizeof(Proc)
+		+ conf.nimage*sizeof(KImage)
+		+ conf.nswap
+		+ conf.nswppo*sizeof(Page); // BUG, Page -> Page*?
+	mainmem->maxsize = kpages;
+	if(!cpuserver)
+		/*
+		 * give terminals lots of image memory, too; the dynamic
+		 * allocation will balance the load properly, hopefully.
+		 * be careful with 32-bit overflow.
+		 */
+		imagmem->maxsize = kpages;
+
 }
 
+//*****************************************************************************
+// First process init
+//*****************************************************************************
 
-void
-main(void)
-{
-	extern char edata[], end[];
-	uint firmware, board;
-
-    // backward deps breaker!
-    devtab = conf_devtab;
-
-    print = devcons_print;
-    iprint = devcons_iprint;
-    pprint = devcons_pprint;
-    panic = devcons_panic;
-    _assert = devcons__assert;
-    error = proc_error;
-    nexterror = proc_nexterror;
-    dumpaproc = proc_dumpaproc;
-    wakeup = proc_wakeup;
-    sched = proc_sched;
-    ready = proc_ready;
-    sleep = proc_sleep;
-    tsleep = proc_tsleep;
-    cclose = chan_cclose;
-    proctab = proc_proctab;
-    postnote = proc_postnote;
-    pexit = proc_pexit;
-
-    arch_exit = main_arch_exit;
-    arch_dumpstack = trap_arch_dumpstack;
-    arch_delay = clock_arch_delay;
-    arch_microdelay = clock_arch_microdelay;
-    arch_coherence = arm_arch_coherence;
-    arch_fastticks = clock_arch_fastticks;
-    arch_isaconfig = main_arch_isaconfig;
-
-    // Let's go!
-
-	cpu = (Cpu*)CPUADDR;
-	memset(edata, 0, end - edata);	/* clear bss */
-	mach0init();
-	mmuinit1((void*)L1);
-	machon(0);
-
-	quotefmtinstall();
-
-	//optionsinit("/boot/boot boot");
-	//ataginit((Atag*)BOOTARGS);
-
-	confinit();		/* figures out amount of memory */
-	xinit();
-	uartconsinit();
-	arch_screeninit();
-
-	print("\nPlan 9 from Bell Labs\n");
-	board = getboardrev();
-	firmware = getfirmware();
-	print("board rev: %#ux firmware rev: %d\n", board, firmware);
-	if(firmware < Minfirmrev){
-		print("Sorry, firmware (start*.elf) must be at least rev %d"
-		      " or newer than %s\n", Minfirmrev, Minfirmdate);
-		for(;;)
-			;
-	}
-	/* set clock rate to arm_freq from config.txt (default pi1:700Mhz pi2:900MHz) */
-	setclkrate(ClkArm, 0);
-	arch_trapinit();
-	clockinit();
-	lineqinit();
-	timersinit();
-	swcursor_init(); //if(conf.monitor)
-
-	arch_cpuidprint();
-	archreset();
-
-	procinit();
-	imageinit();
-
-	links();
-	chandevreset();			/* most devices are discovered here */
-
-	pageinit();
-	swapinit();
-	userinit();
-
-	launchinit(getncpus());
-
-	schedinit();
-	assert(0);			/* shouldn't have returned */
-}
+static uintptr sp;		/* XXX - must go - user stack of init proc */
 
 /*
  *  starting place for first process
@@ -365,86 +333,10 @@ userinit(void)
 	ready(p);
 }
 
-void
-confinit(void)
-{
-	int i;
-	ulong kpages;
-	uintptr pa;
-	char *p;
 
-	if(0 && (p = getconf("service")) != nil){
-		if(strcmp(p, "cpu") == 0)
-			cpuserver = 1;
-		else if(strcmp(p,"terminal") == 0)
-			cpuserver = 0;
-	}
-	if((p = getconf("*maxmem")) != nil){
-		memsize = strtoul(p, 0, 0);
-		if (memsize < 16*MB)		/* sanity */
-			memsize = 16*MB;
-	}
-
-	getramsize(&conf.mem[0]);
-	if(conf.mem[0].limit == 0){
-		conf.mem[0].base = 0;
-		conf.mem[0].limit = memsize;
-	}else if(p != nil)
-		conf.mem[0].limit = conf.mem[0].base + memsize;
-
-	conf.npage = 0;
-	pa = PADDR(PGROUND(PTR2UINT(end)));
-
-	/*
-	 *  we assume that the kernel is at the beginning of one of the
-	 *  contiguous chunks of memory and fits therein.
-	 */
-	for(i=0; i<nelem(conf.mem); i++){
-		/* take kernel out of allocatable space */
-		if(pa > conf.mem[i].base && pa < conf.mem[i].limit)
-			conf.mem[i].base = pa;
-
-		conf.mem[i].npage = (conf.mem[i].limit - conf.mem[i].base)/BY2PG;
-		conf.npage += conf.mem[i].npage;
-	}
-
-	conf.upages = (conf.npage*80)/100;
-	conf.ialloc = ((conf.npage-conf.upages)/2)*BY2PG;
-
-	/* set up other configuration parameters */
-	conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
-	if(cpuserver)
-		conf.nproc *= 3;
-	if(conf.nproc > 2000)
-		conf.nproc = 2000;
-	conf.nswap = conf.npage*3;
-	conf.nswppo = 4096;
-	conf.nimage = 200;
-
-	conf.copymode = 1;		/* copy on reference, not copy on write */
-
-	/*
-	 * Guess how much is taken by the large permanent
-	 * datastructures. Mntcache and Mntrpc are not accounted for
-	 * (probably ~300KB).
-	 */
-	kpages = conf.npage - conf.upages;
-	kpages *= BY2PG;
-	kpages -= conf.upages*sizeof(Page)
-		+ conf.nproc*sizeof(Proc)
-		+ conf.nimage*sizeof(KImage)
-		+ conf.nswap
-		+ conf.nswppo*sizeof(Page); // BUG, Page -> Page*?
-	mainmem->maxsize = kpages;
-	if(!cpuserver)
-		/*
-		 * give terminals lots of image memory, too; the dynamic
-		 * allocation will balance the load properly, hopefully.
-		 * be careful with 32-bit overflow.
-		 */
-		imagmem->maxsize = kpages;
-
-}
+//*****************************************************************************
+// Shutdown/reboot
+//*****************************************************************************
 
 static void
 shutdown(int ispanic)
@@ -492,31 +384,6 @@ main_arch_exit(int code)
 		(*f)(0, 0, 0);
 		for(;;){}
 	}
-}
-
-/*
- * stub for ../omap/devether.c
- */
-int
-main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa)
-{
-	char cc[32], *p;
-	int i;
-
-	if(strcmp(class, "ether") != 0)
-		return 0;
-	snprint(cc, sizeof cc, "%s%d", class, ctlrno);
-	p = getconf(cc);
-	if(p == nil)
-		return (ctlrno == 0);
-	isa->type = "";
-	isa->nopt = tokenize(p, isa->opt, NISAOPT);
-	for(i = 0; i < isa->nopt; i++){
-		p = isa->opt[i];
-		if(cistrncmp(p, "type=", 5) == 0)
-			isa->type = p + 5;
-	}
-	return 1;
 }
 
 /*
@@ -585,7 +452,167 @@ arch_reboot(void *entry, void *code, ulong size)
 	archreboot();
 }
 
+//*****************************************************************************
+// Misc
+//*****************************************************************************
+
+/*
+ * stub for ../omap/devether.c
+ */
+int
+main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa)
+{
+	char cc[32], *p;
+	int i;
+
+	if(strcmp(class, "ether") != 0)
+		return 0;
+	snprint(cc, sizeof cc, "%s%d", class, ctlrno);
+	p = getconf(cc);
+	if(p == nil)
+		return (ctlrno == 0);
+	isa->type = "";
+	isa->nopt = tokenize(p, isa->opt, NISAOPT);
+	for(i = 0; i < isa->nopt; i++){
+		p = isa->opt[i];
+		if(cistrncmp(p, "type=", 5) == 0)
+			isa->type = p + 5;
+	}
+	return 1;
+}
+
+
 // called from devcons.c
 void
 arch_memorysummary(void) {
+}
+
+//*****************************************************************************
+// Main entry point!
+//*****************************************************************************
+
+void
+launchinit(int ncpus)
+{
+	int mach;
+	Cpu *mm;
+	PTE *l1;
+
+	if(ncpus > MAXCPUS)
+		ncpus = MAXCPUS;
+	for(mach = 1; mach < ncpus; mach++){
+		cpus[mach] = mm = mallocalign(CPUSIZE, CPUSIZE, 0, 0);
+		l1 = mallocalign(L1SIZE, L1SIZE, 0, 0);
+		if(mm == nil || l1 == nil)
+			panic("launchinit");
+		memset(mm, 0, CPUSIZE);
+		mm->cpuno = mach;
+
+		memmove(l1, cpu->mmul1, L1SIZE);  /* clone cpu0's l1 table */
+		cachedwbse(l1, L1SIZE);
+		mm->mmul1 = l1;
+		cachedwbse(mm, CPUSIZE);
+
+	}
+	cachedwbse(cpus, sizeof cpus);
+	if((mach = startcpus(ncpus)) < ncpus)
+			panic("only %d cpu%s started", mach, mach == 1? "" : "s");
+}
+
+extern char edata[], end[];
+
+void
+main(void)
+{
+	uint firmware, board;
+
+    // backward deps breaker!
+    devtab = conf_devtab;
+
+    print = devcons_print;
+    iprint = devcons_iprint;
+    pprint = devcons_pprint;
+    panic = devcons_panic;
+    _assert = devcons__assert;
+    error = proc_error;
+    nexterror = proc_nexterror;
+    dumpaproc = proc_dumpaproc;
+    wakeup = proc_wakeup;
+    sched = proc_sched;
+    ready = proc_ready;
+    sleep = proc_sleep;
+    tsleep = proc_tsleep;
+    cclose = chan_cclose;
+    proctab = proc_proctab;
+    postnote = proc_postnote;
+    pexit = proc_pexit;
+
+    arch_exit = main_arch_exit;
+    arch_dumpstack = trap_arch_dumpstack;
+    arch_delay = clock_arch_delay;
+    arch_microdelay = clock_arch_microdelay;
+    arch_coherence = arm_arch_coherence;
+    arch_fastticks = clock_arch_fastticks;
+    arch_isaconfig = main_arch_isaconfig;
+
+    // Let's go!
+
+	cpu = (Cpu*)CPUADDR;
+	memset(edata, 0, end - edata);	/* clear bss */
+	cpu0init();
+	mmuinit1((void*)L1);
+	machon(0);
+
+	quotefmtinstall();
+
+	//optionsinit("/boot/boot boot");
+	//ataginit((Atag*)BOOTARGS);
+
+	confinit();		/* figures out amount of memory */
+	xinit();
+
+	uartconsinit();
+
+	arch_screeninit();
+
+	print("\nPlan 9 from Bell Labs\n"); // yeah!
+
+	board = getboardrev();
+	firmware = getfirmware();
+	print("board rev: %#ux firmware rev: %d\n", board, firmware);
+	if(firmware < Minfirmrev){
+		print("Sorry, firmware (start*.elf) must be at least rev %d"
+		      " or newer than %s\n", Minfirmrev, Minfirmdate);
+		for(;;)
+			;
+	}
+	/* set clock rate to arm_freq from config.txt (default pi1:700Mhz pi2:900MHz) */
+	setclkrate(ClkArm, 0);
+
+	arch_trapinit();
+	clockinit();
+
+	lineqinit();
+	timersinit();
+	swcursor_init(); //if(conf.monitor)
+
+	arch_cpuidprint();
+	archreset();
+
+	procinit();
+	imageinit();
+
+	links();
+	chandevreset();			/* most devices are discovered here */
+
+	pageinit();
+	swapinit();
+
+	userinit();
+
+	launchinit(getncpus());
+
+	schedinit();
+
+	assert(0);			/* shouldn't have returned */
 }
