@@ -57,10 +57,6 @@ int  main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa);
 extern  Dev*  conf_devtab[];
 extern	char*	conffile;
 
-//*****************************************************************************
-// Boot parameters, see bootconf.c (not used by pad)
-//*****************************************************************************
-
 char*
 getconf(char *name)
 {
@@ -73,6 +69,9 @@ getconf(char *name)
 	return nil;
 }
 
+//*****************************************************************************
+// Boot parameters, see bootconf.c (not used by pad)
+//*****************************************************************************
 
 //*****************************************************************************
 // Cpu init
@@ -140,19 +139,20 @@ confinit(void)
 	uintptr pa;
 	char *p;
 
-	if(0 && (p = getconf("service")) != nil){
-		if(strcmp(p, "cpu") == 0)
-			cpuserver = 1;
-		else if(strcmp(p,"terminal") == 0)
-			cpuserver = 0;
-	}
+	//if(0 && (p = getconf("service")) != nil){
+	//	if(strcmp(p, "cpu") == 0)
+	//		cpuserver = 1;
+	//	else if(strcmp(p,"terminal") == 0)
+	//		cpuserver = 0;
+	//}
 	if((p = getconf("*maxmem")) != nil){
 		memsize = strtoul(p, 0, 0);
 		if (memsize < 16*MB)		/* sanity */
 			memsize = 16*MB;
 	}
-
+    // simpler than for x86 :)
 	getramsize(&conf.mem[0]);
+
 	if(conf.mem[0].limit == 0){
 		conf.mem[0].base = 0;
 		conf.mem[0].limit = memsize;
@@ -176,9 +176,10 @@ confinit(void)
 	}
 
 	conf.upages = (conf.npage*80)/100;
-	conf.ialloc = ((conf.npage-conf.upages)/2)*BY2PG;
+	kpages = conf.npage - conf.upages;
 
 	/* set up other configuration parameters */
+	conf.ialloc = (kpages/2)*BY2PG; // max bytes for iallocb
 	conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
 	if(cpuserver)
 		conf.nproc *= 3;
@@ -195,14 +196,17 @@ confinit(void)
 	 * datastructures. Mntcache and Mntrpc are not accounted for
 	 * (probably ~300KB).
 	 */
-	kpages = conf.npage - conf.upages;
 	kpages *= BY2PG;
-	kpages -= conf.upages*sizeof(Page)
+	kpages -= 
+          conf.upages*sizeof(Page)
 		+ conf.nproc*sizeof(Proc)
 		+ conf.nimage*sizeof(KImage)
 		+ conf.nswap
 		+ conf.nswppo*sizeof(Page); // BUG, Page -> Page*?
+
+    // memory pool
 	mainmem->maxsize = kpages;
+
 	if(!cpuserver)
 		/*
 		 * give terminals lots of image memory, too; the dynamic
@@ -210,7 +214,6 @@ confinit(void)
 		 * be careful with 32-bit overflow.
 		 */
 		imagmem->maxsize = kpages;
-
 }
 
 //*****************************************************************************
@@ -521,8 +524,6 @@ launchinit(int ncpus)
 	if((mach = startcpus(ncpus)) < ncpus)
 			panic("only %d cpu%s started", mach, mach == 1? "" : "s");
 }
-
-extern char edata[], end[];
 
 void
 main(void)

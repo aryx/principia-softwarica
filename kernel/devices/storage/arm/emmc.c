@@ -158,7 +158,7 @@ WR(int reg, u32int val)
 {
 	u32int *r = (u32int*)EMMCREGS;
 
-	if(0)print("WR %2.2ux %ux\n", reg<<2, val);
+	//if(0)print("WR %2.2ux %ux\n", reg<<2, val);
 	arch_microdelay(emmc.fastclock? 2 : 20);
 	r[reg] = val;
 }
@@ -198,10 +198,9 @@ emmcinit(void)
 		clk = Extfreq;
 	}
 	emmc.extclk = clk;
-	print("%seMMC external clock %lud Mhz\n", s, clk/1000000);
+	print("%seMMC external clock %lud Mhz\n", s, clk / Mhz);
 	r = (u32int*)EMMCREGS;
-	if(0)print("emmc control %8.8ux %8.8ux %8.8ux\n",
-		r[Control0], r[Control1], r[Control2]);
+	//if(0)print("emmc control %8.8ux %8.8ux %8.8ux\n",	r[Control0], r[Control1], r[Control2]);
 	WR(Control1, Srsthc);
 	arch_delay(10);
 	while(r[Control1] & Srsthc)

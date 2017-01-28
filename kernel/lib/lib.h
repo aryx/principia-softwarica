@@ -200,7 +200,7 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 
 /*s: lib.h exxx decl */
 extern  char  etext[];
-//@Scheck: Assembly, not dead used by 386/l.s
+//@Scheck: Assembly, not dead used by 386/l.s and arm/main.c
 extern  char  edata[];
 extern  char  end[];
 /*e: lib.h exxx decl */

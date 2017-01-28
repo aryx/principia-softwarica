@@ -1,3 +1,4 @@
+// in dat_interrupts.h?
 enum {
 	IRQtimer0	= 0,
 	IRQtimer1	= 1,
@@ -51,6 +52,7 @@ enum {
 	PowerCcp2tx,
 };
 
+// in dat_time.h?
 enum {
 	ClkEmmc		= 1,
 	ClkUart,

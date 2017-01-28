@@ -216,6 +216,7 @@ arch_screeninit(void)
 	xgdata.bdata = fb;
 	xgdata.ref = 1;
 
+    // set portscreen.c globals (used by draw.c, swcursor.c, swconsole
 	gscreen = &xgscreen;
 	gscreen->width = wordsperline(gscreen->r, gscreen->depth);
 
@@ -227,13 +228,13 @@ arch_screeninit(void)
 }
 
 uchar*
-arch_attachscreen(Rectangle *r, ulong *chan, int* d, int *width, int *softscreen)
+arch_attachscreen(Rectangle *r, ulong *chan, int* d, int *width, bool *softscreen)
 {
 	*r = gscreen->r;
 	*d = gscreen->depth;
 	*chan = gscreen->chan;
 	*width = gscreen->width;
-	*softscreen = 0;
+	*softscreen = false;
 
 	return gscreen->data->bdata;
 }
@@ -248,4 +249,4 @@ void arch_flushmemscreen(Rectangle) { }
 //old: #define ishwimage(i)	1		/* for ../port/devdraw.c */
 bool arch_ishwimage(Memimage*) { return true; }
 void arch_getcolor(ulong, ulong*, ulong*, ulong*) { }
-int arch_setcolor(ulong, ulong, ulong, ulong) {	return 0; }
+int  arch_setcolor(ulong, ulong, ulong, ulong) { return 0; }
