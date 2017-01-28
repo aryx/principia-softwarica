@@ -285,6 +285,7 @@
 #define Tiny		0x00000003		/* L2 1KB: not in v7 */
 #define Buffered	0x00000004		/* L[12]: write-back not -thru */
 #define Cached		0x00000008		/* L[12] */
+
 #define Dom0		0
 
 #define L1wralloc	(1<<12)			/* L1 TEX */
@@ -301,6 +302,7 @@
 /* armv7 deprecates AP[2] == 1 & AP[1:0] == 2 (Uro), prefers 3 (new in v7) */
 #define Uro		2			/* AP */
 #define Urw		3			/* AP */
+
 #define Client		1			/* DAC */
 #define Manager		3			/* DAC */
 
