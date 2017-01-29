@@ -1,5 +1,5 @@
 /*
- * This is the same as the C programme:
+ * This is the same as the C program:
  *
  *	void
  *	main(char* argv0)

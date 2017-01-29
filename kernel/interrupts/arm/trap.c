@@ -18,6 +18,7 @@
 
 typedef struct Intregs Intregs;
 typedef struct Vctl Vctl;
+typedef struct Vpage0 Vpage0;
 
 enum {
 	Debug = 0,
@@ -33,10 +34,10 @@ enum {
 /*
  *   Layout at virtual address KZERO (double mapped at HVECTORS).
  */
-typedef struct Vpage0 {
+struct Vpage0 {
 	void	(*vectors[Nvec])(void);
 	u32int	vtable[Nvec];
-} Vpage0;
+};
 
 /*
  * interrupt control registers
@@ -51,6 +52,7 @@ struct Intregs {
 	u32int	ARMdisable;
 };
 
+// quite similar to the one for x86
 struct Vctl {
 	int	irq;
 	int	cpu;
@@ -64,6 +66,7 @@ struct Vctl {
 };
 
 static Lock vctllock;
+
 static Vctl *vctl;
 
 static Vctl *vfiq;

@@ -5,6 +5,7 @@
 #include "fns.h"
 
 #include "io.h"
+// for mainmem and imagmem
 #include <pool.h>
 
 // initcode binary
@@ -222,6 +223,7 @@ confinit(void)
 
 static uintptr sp;		/* XXX - must go - user stack of init proc */
 
+// kernel space instructions executed by first process
 /*
  *  starting place for first process
  */
@@ -264,10 +266,13 @@ init0(void)
 		}
 		poperror();
 	}
-	kproc("alarm", alarmkproc, 0);
+	kproc("alarm", alarmkproc, nil); // ??
 	arch_touser(sp);
 	assert(0);			/* shouldn't have returned */
 }
+
+// user space instructions executed by first process
+// see initcode in init.h (comes from ../port/initcode.c and init9.s
 
 extern uintptr bootargs(uintptr base);
 /*
@@ -316,7 +321,7 @@ userinit(void)
 	s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
 	s->flushme++;
 	p->seg[SSEG] = s;
-	pg = newpage(1, 0, USTKTOP-BY2PG);
+	pg = newpage(true, nil, USTKTOP-BY2PG);
 	segpage(s, pg);
 
 	k = arch_kmap(pg);
@@ -326,9 +331,9 @@ userinit(void)
 	/*
 	 * Text
 	 */
-	s = newseg(SG_TEXT, UTZERO, 1);
+	s = newseg(SG_TEXT, UTZERO, 1); // initcode needs only 1 page
 	p->seg[TSEG] = s;
-	pg = newpage(1, 0, UTZERO);
+	pg = newpage(true, nil, UTZERO);
 	memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
 	segpage(s, pg);
 
@@ -336,6 +341,7 @@ userinit(void)
 	memmove(UINT2PTR(VA(k)), initcode, sizeof initcode);
 	arch_kunmap(k);
 
+    // ready to go!
 	ready(p);
 }
 
@@ -616,6 +622,7 @@ main(void)
 
 	launchinit(getncpus());
 
+    // schedule the only ready user process (the one created by userinit)
 	schedinit();
 
 	assert(0);			/* shouldn't have returned */

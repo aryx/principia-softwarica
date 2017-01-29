@@ -144,26 +144,34 @@ l2ap(int ap)
 }
 
 
-extern void machinit(void);
+// in main.c
+extern void cpuinit(void);
 extern void machon(uint);
 
+//TODO: cpus[] set? and cpu->cpuno??
 void
 cpustart(int xcpu)
 {
 	Mboxes *mb;
 
 	up = nil;
-	machinit();
+	cpuinit();
 	mmuinit1((void*)cpu->mmul1);
+
 	mb = (Mboxes*)(ARMLOCAL + Mboxregs);
 	mb->clr[xcpu].doorbell = 1;
+
 	arch_trapinit();
 	clockinit();
 	timersinit();
 	arch_cpuidprint();
 	archreset();
+
 	machon(cpu->cpuno);
 	unlock(&startlock[xcpu]);
+
+    // schedule a ready process (not necessarily the first one now)
 	schedinit();
+
 	panic("schedinit returned");
 }

@@ -18,6 +18,7 @@ char s[] = "#s";
 char srv[] = "/srv";
 char env[] = "/env";
 
+// called from init9.s
 void
 startboot(char *argv0, char **argv)
 {
