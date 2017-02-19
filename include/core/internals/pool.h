@@ -18,7 +18,7 @@ struct Pool {
  void*	arenalist;	/* actually Arena* */
 
  void*	(*alloc)(ulong);
- int	    (*merge)(void*, void*);
+ int    (*merge)(void*, void*);
  void	(*move)(void* from, void* to);
 
  int	flags;

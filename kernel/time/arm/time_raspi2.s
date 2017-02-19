@@ -1,5 +1,6 @@
 #include "mem.h"
 #include "arm.h"
+#include "arminstr.ha"
         
 TEXT arch_lcycles(SB), 1, $-4
 	MRC	CpSC, 0, R0, C(CpCLD), C(CpCLDcyc), 0

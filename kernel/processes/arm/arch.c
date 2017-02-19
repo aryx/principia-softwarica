@@ -42,7 +42,7 @@ arch_dbgpc(Proc* p)
 }
 
 
-int
+bool
 arch_userureg(Ureg* ureg)
 {
 	return (ureg->psr & PsrMask) == PsrMusr;

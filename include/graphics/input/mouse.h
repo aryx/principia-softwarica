@@ -55,6 +55,7 @@ struct Mousectl
 };
 /*e: struct Mousectl */
 
+//TODO: mv in menu.h?
 /*s: struct Menu (include/mouse.h) */
 struct Menu
 {
@@ -74,6 +75,7 @@ extern int			readmouse(Mousectl*);
 extern void			moveto(Mousectl*, Point);
 extern void			setcursor(Mousectl*, Cursor*);
 
+//TODO? mv in menu.h?
 extern void			drawgetrect(Rectangle, int);
 extern Rectangle	getrect(int, Mousectl*);
 

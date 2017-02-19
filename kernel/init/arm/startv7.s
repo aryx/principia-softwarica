@@ -148,18 +148,18 @@ reset:
 	CMP	$0, R0
 	MOVW.EQ	$CPUADDR, R0		/* paranoia: use CPUADDR if 0 */
 	SUB	$KZERO, R0		/* phys addr */
-	MOVW	R0, R(MACH)		/* m = PADDR(cpus[cpuid]) */
+	MOVW	R0, R(CPU)		/* m = PADDR(cpus[cpuid]) */
 
 	/*
 	 * start stack at top of local Mach
 	 */
-	MOVW	R(MACH), R13
+	MOVW	R(CPU), R13
 	ADD		$(CPUSIZE-4), R13
 
 	/*
 	 * set up page tables for kernel
 	 */
-	MOVW	12(R(MACH)), R0	/* m->mmul1 */
+	MOVW	12(R(CPU)), R0	/* m->mmul1 */
 	SUB	$KZERO, R0		/* phys addr */
 	BL	mmuinit(SB)
 
@@ -168,7 +168,7 @@ reset:
 	 */
 	MOVW	$Client, R1
 	MCR	CpSC, 0, R1, C(CpDAC), C(0)
-	MOVW	12(R(MACH)), R1	/* m->mmul1 */
+	MOVW	12(R(CPU)), R1	/* m->mmul1 */
 	SUB	$KZERO, R1		/* phys addr */
 	ORR		$(CpTTBs/*|CpTTBowba|CpTTBiwba*/), R1
 	MCR	CpSC, 0, R1, C(CpTTB), C(0)
@@ -195,9 +195,9 @@ reset:
 	BARRIERS
 
 	/*
-	 * switch MACH, SB, SP, and PC into KZERO space
+	 * switch CPU, SB, SP, and PC into KZERO space
 	 */
-	ADD	$KZERO, R(MACH)
+	ADD	$KZERO, R(CPU)
 	MOVW	$setR12(SB), R12
 	ADD	$KZERO, R13
 	MOVW	$_startpg2(SB), R15
