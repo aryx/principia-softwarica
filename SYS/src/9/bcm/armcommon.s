@@ -1,1 +1,0 @@
-../../../../kernel/arch/arm/armcommon.s
