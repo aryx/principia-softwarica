@@ -56,7 +56,7 @@ struct Timers
 
 // used only in arm/ for now
 enum {
-	Mhz	= 1000 * 1000,
+ Mhz	= 1000 * 1000,
 };
 
 // <arch>/dat_time.h should defined Arch_HZ

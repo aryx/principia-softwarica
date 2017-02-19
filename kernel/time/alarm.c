@@ -16,7 +16,7 @@ static Rendez alarmr;
 /*e: global alarmr */
 
 /*s: kernel process alarmkproc */
-// Kernel Process for alarm managment
+// Kernel Process for alarm management
 void
 alarmkproc(void*)
 {

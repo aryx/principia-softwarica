@@ -15,7 +15,7 @@
 % - removed deadcode (e.g. field Proc.qlock, semalock, Arch_Conf, etc)
 % - moved code in init/user such as preboot vs boot vs init
 % - introduced syssema.c (found while going through Kernel_extra.nw)
-% - introduced notion of IPC and Time (TODO change files accordingly)
+% - introduced notion of IPC and Time and interrupt (changed files accordingly)
 % - better grouping of things in devcons.c, present together the Qxxx,
 %   same for /proc/ and its many uses
 % - boolified, typeified, ...
@@ -170,20 +170,20 @@ Here are a few questions I hope this book will answer:
 Which code gets executed? How the kernel initialises itself?
 
 \item What happens when the user type [[ls]] in a terminal?
-What are the set of software involved in such a command? What
+What are the set of programs involved in such a command? What
 is the trace of such a command through the different layers
 of the software stack, from the keyboard interrupt to
 the display of text glyphs on the screen?
 \l actually different if do ls and ls RET
 
-\item Where the kernel stores meta data about its processes?
+\item Where does the kernel store meta data about the user processes?
 
-\item Why the kernel code and some kernel data are in the virtual
-memory space of every process?
+\item Why does the kernel code and some kernel data structures reside
+in the virtual memory space of every process?
 
 \item What is the trace of a system call?
 
-\item What is the memory image of the kernel and its
+\item What is the memory image of the kernel and the user
 processes?
 
 \end{itemize}
@@ -203,8 +203,8 @@ processes?
 
 \section{Other kernels}
 
-Here are a few kernels that were considered for this book but 
-which were ultimately discarded:
+Here are a few kernels that I considered for this book but 
+which I ultimately discarded:
 \begin{itemize}
 
 \item Unix V6 (or its modern incarnation xv6) is too simple;
@@ -247,7 +247,7 @@ bigger than \plan equivalent core.
 % - nuttx, ils ont meme une graphic stack, widget, window manager
 % - oberon, see www.qemu-advent-calendar.org day 12
 % - templeos: http://www.codersnotes.com/notes/a-constructive-look-at-templeos
-% - a tentative in Rust: https://redox-os.org/
+% - redox-os: a tentative in Rust: https://redox-os.org/
 % - another tentative, documented in a blog: http://os.phil-opp.com/
 % - http://littleosbook.github.io/book.pdf
 % - http://ulixos.org/ literate unix, but just kernel though. 30 000 L for .nw
@@ -1472,7 +1472,7 @@ int nconf;
 %old: used to be duplicated in every main.c, now factorized
 
 <<function getconf>>=
-char* getconf(char *name)
+char* getconf2(char *name)
 {
         int i;
         for(i = 0; i < nconf; i++)
@@ -10056,7 +10056,7 @@ proc_sched(void)
         p->priority = reprioritize(p);
     }
     if(p != cpu->readied)
-        cpu->schedticks = cpu->ticks + HZ/10; // 100ms of allocated time
+        cpu->schedticks = cpu->ticks + Arch_HZ/10; // 100ms of allocated time
     cpu->readied = nil;
 
     cpu->proc = p;
@@ -10289,7 +10289,7 @@ void
 updatecpu(Proc *p)
 {
     int n, t, ocpu;
-    int D = schedgain*HZ*Scaling;
+    int D = schedgain*Arch_HZ*Scaling;
 
     if(p->edf)
         return;
@@ -10872,7 +10872,7 @@ rebalance(void)
     Proc *p;
 
     t = cpu->ticks;
-    if(t - balancetime < HZ)
+    if(t - balancetime < Arch_HZ)
         return;
     balancetime = t;
 
@@ -10937,7 +10937,7 @@ preempt(void)
 % number of times per second we want to get a clock interrupt, called
 % also a tick
 <<constant HZ(x86)>>=
-#define HZ    (100)     /* clock frequency */
+#define Arch_HZ    (100)     /* clock frequency */ //TODO: mv in dat_time.h
 @
 
 <<constant Freq(x86)>>=
@@ -10976,14 +10976,14 @@ i8253init(void)
     ioalloc(T0cntr, 4, 0, "i8253");
     ioalloc(T2ctl, 1, 0, "i8253.cntr2ctl");
 
-    i8253.period = Freq/HZ;
+    i8253.period = Freq/Arch_HZ;
 
     /*
      *  enable a 1/HZ interrupt for providing scheduling interrupts
      */
     outb(Tmode, Load0|Square);
-    outb(T0cntr, (Freq/HZ));    /* low byte */
-    outb(T0cntr, (Freq/HZ)>>8); /* high byte */
+    outb(T0cntr, (Freq/Arch_HZ));    /* low byte */
+    outb(T0cntr, (Freq/Arch_HZ)>>8); /* high byte */
 
     /*
      *  enable a longer period counter to use as a clock
@@ -11003,8 +11003,8 @@ i8253init(void)
      * command which can be used to make sure the counting
      * register has been written into the counting element.
      */
-    x = (Freq/HZ);
-    for(loops = 0; loops < 100000 && x >= (Freq/HZ); loops++){
+    x = (Freq/Arch_HZ);
+    for(loops = 0; loops < 100000 && x >= (Freq/Arch_HZ); loops++){
         outb(Tmode, Latch0);
         x = inb(T0cntr);
         x |= inb(T0cntr)<<8;
@@ -11017,7 +11017,7 @@ void
 i8253enable(void)
 {
     i8253.enabled = true;
-    i8253.period = Freq/HZ;
+    i8253.period = Freq/Arch_HZ;
     arch_intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
 }
 @
@@ -11265,7 +11265,7 @@ TEXT _multibootentry(SB), $0
 
 <<lib.h exxx decl>>=
 extern  char  etext[];
-//@Scheck: Assembly, not dead used by 386/l.s
+//@Scheck: Assembly, not dead used by 386/l.s and arm/main.c
 extern  char  edata[];
 extern  char  end[];
 @ 
@@ -12954,6 +12954,7 @@ char s[] = "#s";
 char srv[] = "/srv";
 char env[] = "/env";
 
+// called from init9.s
 void
 startboot(char *argv0, char **argv)
 {
@@ -22010,7 +22011,7 @@ tk2ms(ulong ticks)
     uvlong t, hz;
 
     t = ticks;
-    hz = HZ;
+    hz = Arch_HZ;
     t *= 1000L;
     t = t/hz;
     ticks = t;
@@ -22024,9 +22025,9 @@ ulong
 ms2tk(ulong ms)
 {
     /* avoid overflows at the cost of precision */
-    if(ms >= 1000000000/HZ)
-        return (ms/1000)*HZ;
-    return (ms*HZ+500)/1000;
+    if(ms >= 1000000000 / Arch_HZ)
+        return (ms / 1000) * Arch_HZ;
+    return (ms * Arch_HZ + 500) / 1000;
 }
 @ 
 
@@ -22310,7 +22311,7 @@ timersinit(void)
         error(Enomem);
     t->tmode = Tperiodic;
     t->tt = nil;
-    t->tns = 1000000000/HZ;
+    t->tns = 1000000000 / Arch_HZ;
     /*
      * T->tf == nil means the HZ clock for this processor.
      */
@@ -22406,7 +22407,7 @@ addclock0link(void (*f)(void), Tms ms)
     if(nt == nil)
         error(Enomem);
     if(ms == 0)
-        ms = 1000/HZ;
+        ms = 1000 / Arch_HZ;
 
     nt->tns = (Tnano)ms*1000000LL;
     nt->tmode = Tperiodic;
@@ -22759,7 +22760,7 @@ todset(vlong t, vlong delta, int n)
     } else {
         if(n <= 0)
             n = 1;
-        n *= HZ;
+        n *= Arch_HZ;
         if(delta < 0 && n > -delta)
             n = -delta;
         if(delta > 0 && n > delta)
@@ -33162,7 +33163,7 @@ prflush(void)
 
     now = cpu->ticks;
     while(consactive())
-        if(cpu->ticks - now >= HZ)
+        if(cpu->ticks - now >= Arch_HZ)
             break;
 }
 @ 
@@ -33231,14 +33232,16 @@ accounttime(void)
     n = arch_perfticks();
     per = n - cpu->perf.last;
     cpu->perf.last = n;
-    per = (cpu->perf.period*(HZ-1) + per)/HZ;
+    per = (cpu->perf.period*(Arch_HZ-1) + per)/Arch_HZ;
     if(per != 0)
         cpu->perf.period = per;
 
-    cpu->perf.avg_inidle = (cpu->perf.avg_inidle*(HZ-1)+cpu->perf.inidle)/HZ;
+    cpu->perf.avg_inidle = 
+      (cpu->perf.avg_inidle*(Arch_HZ-1)+cpu->perf.inidle)/Arch_HZ;
     cpu->perf.inidle = 0;
 
-    cpu->perf.avg_inintr = (cpu->perf.avg_inintr*(HZ-1)+cpu->perf.inintr)/HZ;
+    cpu->perf.avg_inintr = 
+      (cpu->perf.avg_inintr*(Arch_HZ-1)+cpu->perf.inintr)/Arch_HZ;
     cpu->perf.inintr = 0;
 
     /* only one processor gets to compute system load averages */
@@ -33257,7 +33260,7 @@ accounttime(void)
     n = nrun;
     nrun = 0;
     n = (nrdy+n)*1000;
-    cpu->load = (cpu->load*(HZ-1)+n)/HZ;
+    cpu->load = (cpu->load*(Arch_HZ-1)+n)/Arch_HZ;
 }
 @ 
 
