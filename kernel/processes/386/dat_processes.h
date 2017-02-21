@@ -1,4 +1,4 @@
-/*s: dat_processes.h */
+/*s: processes/386/dat_processes.h */
 
 /*s: constant AOUT_MAGIC(x86) */
 /*
@@ -24,4 +24,4 @@ union Arch_FPsave {
 };
 /*e: union ArchFPSave(x86) */
 
-/*e: dat_processes.h */
+/*e: processes/386/dat_processes.h */

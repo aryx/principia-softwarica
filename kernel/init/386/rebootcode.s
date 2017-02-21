@@ -1,4 +1,4 @@
-/*s: rebootcode.s */
+/*s: init/386/rebootcode.s */
 #include "mem.h"
 
 /*
@@ -53,4 +53,4 @@ _back:
 _startkernel:
         ORL     AX, AX          /* NOP: avoid link bug */
         JMP*    AX
-/*e: rebootcode.s */
+/*e: init/386/rebootcode.s */

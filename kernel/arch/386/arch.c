@@ -1,4 +1,4 @@
-/*s: arch.c */
+/*s: arch/386/arch.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -46,4 +46,4 @@ arch_cpuidprint(void)
 }
 /*e: function cpuidprint(x86) */
 
-/*e: arch.c */
+/*e: arch/386/arch.c */

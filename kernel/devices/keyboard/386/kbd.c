@@ -1,4 +1,4 @@
-/*s: kbd.c */
+/*s: devices/keyboard/386/kbd.c */
 /*
  * keyboard input
  */
@@ -353,4 +353,4 @@ kbdenable(void)
 }
 /*e: function kbdenable(x86) */
 
-/*e: kbd.c */
+/*e: devices/keyboard/386/kbd.c */

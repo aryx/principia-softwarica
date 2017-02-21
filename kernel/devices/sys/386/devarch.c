@@ -1,4 +1,4 @@
-/*s: devarch.c */
+/*s: devices/sys/386/devarch.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -490,4 +490,4 @@ archinit(void)
     addarchfile("archctl", 0664, archctlread, archctlwrite);
 }
 /*e: function archinit(x86) */
-/*e: devarch.c */
+/*e: devices/sys/386/devarch.c */

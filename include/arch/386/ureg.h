@@ -1,4 +1,4 @@
-/*s: ureg.h */
+/*s: include/arch/386/ureg.h */
 struct Ureg
 {
  ulong	di;		/* general registers */
@@ -26,4 +26,4 @@ struct Ureg
  };
  ulong	ss;		/* old stack segment */
 };
-/*e: ureg.h */
+/*e: include/arch/386/ureg.h */

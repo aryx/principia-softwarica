@@ -1,4 +1,4 @@
-/*s: main.c */
+/*s: init/386/main.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -974,4 +974,4 @@ void main(void)
     panic("should never reach this point");
 }
 /*e: function main(x86) */
-/*e: main.c */
+/*e: init/386/main.c */

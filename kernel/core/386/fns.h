@@ -1,4 +1,4 @@
-/*s: fns.h */
+/*s: core/386/fns.h */
 #include "../port/portfns_core.h"
 #include "../port/portfns_concurrency.h"
 #include "../port/portfns_memory.h"
@@ -285,4 +285,4 @@ int pcmspecial(char*, ISAConf*);
 #define L32GET(p) (((u32int)L16GET((p)+2)<<16)|L16GET(p))
 /*e: fns.h macros(x86) */
 /*e: fns.h declarations(x86) */
-/*e: fns.h */
+/*e: core/386/fns.h */

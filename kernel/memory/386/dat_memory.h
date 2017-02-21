@@ -1,4 +1,4 @@
-/*s: dat_memory.h */
+/*s: memory/386/dat_memory.h */
 
 #define NCOLOR 1
 
@@ -29,4 +29,4 @@ typedef struct Arch_KMap   Arch_KMap;
 #define VA(k)   ((virt_addr3)(k))
 /*e: macro VA(x86) */
 
-/*e: dat_memory.h */
+/*e: memory/386/dat_memory.h */

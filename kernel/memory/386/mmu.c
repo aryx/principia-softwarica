@@ -1,4 +1,4 @@
-/*s: mmu.c */
+/*s: memory/386/mmu.c */
 /*
  * Memory mappings.  Life was easier when 2G of memory was enough.
  *
@@ -1051,4 +1051,4 @@ arch_cankaddr(phys_addr pa)
 }
 /*e: function cankaddr(x86) */
 
-/*e: mmu.c */
+/*e: memory/386/mmu.c */

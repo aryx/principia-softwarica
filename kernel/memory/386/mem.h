@@ -1,4 +1,4 @@
-/*s: mem.h */
+/*s: memory/386/mem.h */
 /*
  * Memory and machine-specific definitions.  Used in C and assembler.
  */
@@ -275,4 +275,4 @@
 //!!! int 64 (0x40), way to jump in plan9 OS !!!
 #define VectorSYSCALL 64
 /*e: constant VectorSYSCALL(x86) */
-/*e: mem.h */
+/*e: memory/386/mem.h */

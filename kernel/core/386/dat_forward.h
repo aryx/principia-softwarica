@@ -1,4 +1,4 @@
-/*s: dat_forward.h */
+/*s: core/386/dat_forward.h */
 typedef union Arch_FPsave  Arch_FPsave;
 typedef struct Arch_ProcMMU Arch_ProcMMU;
 
@@ -59,4 +59,4 @@ typedef struct Rsd Rsd;
 #pragma incomplete Pcidev
 #pragma incomplete Ureg
 /*e: dat_forward.h pragma(x86) */
-/*e: dat_forward.h */
+/*e: core/386/dat_forward.h */

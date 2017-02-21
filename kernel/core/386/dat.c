@@ -1,4 +1,4 @@
-/*s: dat.c */
+/*s: core/386/dat.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -12,4 +12,4 @@
 // ref<Cpu>, assigned to CPUADDR in _clearbss
 Cpu *cpu;
 /*e: global cpu(x86) */
-/*e: dat.c */
+/*e: core/386/dat.c */

@@ -1,4 +1,4 @@
-/*s: trap.c */
+/*s: interrupts/386/trap.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -1266,4 +1266,4 @@ arch_dbgpc(Proc *p)
     return ureg->pc;
 }
 /*e: function dbgpc(x86) */
-/*e: trap.c */
+/*e: interrupts/386/trap.c */

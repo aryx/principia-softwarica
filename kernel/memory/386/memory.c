@@ -1,4 +1,4 @@
-/*s: memory.c */
+/*s: memory/386/memory.c */
 /*
  * Size memory and create the kernel page-tables on the fly while doing so.
  * Called from main(), this code should only be run by the bootstrap processor.
@@ -696,4 +696,4 @@ arch_memorysummary(void)
 }
 /*e: function memorysummary(x86) */
 
-/*e: memory.c */
+/*e: memory/386/memory.c */

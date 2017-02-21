@@ -1,4 +1,4 @@
-/*s: dat.h */
+/*s: core/386/dat.h */
 
 /*s: enum misc_constants(x86) */
 enum misc_constants
@@ -84,4 +84,4 @@ extern Cpu *cpu;
 #pragma varargck  type  "E" uchar*
 #pragma varargck  type  "M" uchar*
 /*e: portdat.h pragmas(x86) */
-/*e: dat.h */
+/*e: core/386/dat.h */

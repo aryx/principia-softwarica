@@ -1,4 +1,4 @@
-/*s: dma.c */
+/*s: buses/386/dma.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -243,4 +243,4 @@ dmaend(int chan)
     xp->len = 0;
 }
 
-/*e: dma.c */
+/*e: buses/386/dma.c */

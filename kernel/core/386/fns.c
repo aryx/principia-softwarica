@@ -1,4 +1,4 @@
-/*s: fns.c */
+/*s: core/386/fns.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -61,4 +61,4 @@ cistrcmp(char *a, char *b)
 }
 /*e: function cistrcmp(x86) */
 
-/*e: fns.c */
+/*e: core/386/fns.c */

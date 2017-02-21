@@ -1,4 +1,4 @@
-/*s: devrtc.c */
+/*s: devices/sys/386/devrtc.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -454,4 +454,4 @@ sec2rtc(ulong secs, Rtc *rtc)
 }
 /*e: function sec2rtc(x86) */
 
-/*e: devrtc.c */
+/*e: devices/sys/386/devrtc.c */

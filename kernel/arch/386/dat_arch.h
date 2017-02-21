@@ -1,4 +1,4 @@
-/*s: dat_arch.h */
+/*s: arch/386/dat_arch.h */
 
 /*s: enum arch_constants(x86) */
 enum arch_constants
@@ -190,4 +190,4 @@ struct X86type {
 /*e: struct X86type(x86) */
 
 extern X86type *cputype;
-/*e: dat_arch.h */
+/*e: arch/386/dat_arch.h */

@@ -1,4 +1,4 @@
-/*s: main_processes.c */
+/*s: processes/386/main_processes.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -159,4 +159,4 @@ arch_idlehands(void)
         halt();
 }
 /*e: function idlehands(x86) */
-/*e: main_processes.c */
+/*e: processes/386/main_processes.c */
