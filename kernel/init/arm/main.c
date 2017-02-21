@@ -1,3 +1,4 @@
+/*s: init/arm/main.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -17,9 +18,13 @@
 // in portscreen.h
 extern void swcursor_init(void);
 
+/*s: constant Minfirmrev(arm) */
 /* Firmware compatibility */
 #define	Minfirmrev	326770
+/*e: constant Minfirmrev(arm) */
+/*s: constant Minfirmdate(arm) */
 #define	Minfirmdate	"19 Aug 2013"
+/*e: constant Minfirmdate(arm) */
 
 
 // part of a trick to remove some backward dependencies
@@ -58,17 +63,19 @@ int  main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa);
 extern  Dev*  conf_devtab[];
 extern	char*	conffile;
 
+/*s: function getconf(arm) */
 char*
 getconf(char *name)
 {
     USED(name);
-	//int i;
-	// 
-	//i = findconf(name);
-	//if(i >= 0)
-	//	return confval[i];
-	return nil;
+    //int i;
+    // 
+    //i = findconf(name);
+    //if(i >= 0)
+    //	return confval[i];
+    return nil;
 }
+/*e: function getconf(arm) */
 
 //*****************************************************************************
 // Boot parameters, see bootconf.c (not used by pad)
@@ -77,327 +84,347 @@ getconf(char *name)
 //*****************************************************************************
 // Cpu init
 //*****************************************************************************
-
+/*s: function cpuinit(arm) */
 void
 cpuinit(void)
 {
-	Cpu *m0;
+    Cpu *m0;
 
-	cpu->ticks = 1;
-	cpu->perf.period = 1;
+    cpu->ticks = 1;
+    cpu->perf.period = 1;
 
-	m0 = CPUS(0);
-	if (cpu->cpuno != 0) {
-		/* synchronise with cpu 0 */
-		cpu->ticks = m0->ticks;
-		cpu->fastclock = m0->fastclock;
-		cpu->delayloop = m0->delayloop;
-	}
-	//machon(m->cpuno);
+    m0 = CPUS(0);
+    if (cpu->cpuno != 0) {
+        /* synchronise with cpu 0 */
+        cpu->ticks = m0->ticks;
+        cpu->fastclock = m0->fastclock;
+        cpu->delayloop = m0->delayloop;
+    }
+    //machon(m->cpuno);
 }
+/*e: function cpuinit(arm) */
 
+/*s: function cpu0init(arm) */
 void
 cpu0init(void)
 {
-	conf.ncpu = 0; // set in machon instead called after cpuinit
+    conf.ncpu = 0; // set in machon instead called after cpuinit
 
-	cpu->cpuno = 0;
-	cpus[cpu->cpuno] = cpu;
+    cpu->cpuno = 0;
+    cpus[cpu->cpuno] = cpu;
 
-	cpuinit();
-	active.exiting = 0;
+    cpuinit();
+    active.exiting = 0;
 
-	up = nil;
+    up = nil;
 }
+/*e: function cpu0init(arm) */
 
+/*s: function machon(arm) */
 /* enable scheduling of this cpu */
 void
 machon(uint xcpu)
 {
-	ulong cpubit;
+    ulong cpubit;
 
-	cpubit = 1 << xcpu;
-	lock(&active);
-	if ((active.cpus & cpubit) == 0) {	/* currently off? */
-		conf.ncpu++;
-		active.cpus |= cpubit;
-	}
-	unlock(&active);
+    cpubit = 1 << xcpu;
+    lock(&active);
+    if ((active.cpus & cpubit) == 0) {	/* currently off? */
+        conf.ncpu++;
+        active.cpus |= cpubit;
+    }
+    unlock(&active);
 }
+/*e: function machon(arm) */
 
 //*****************************************************************************
 // Conf init
 //*****************************************************************************
 
+/*s: global memsize(arm) */
 // used also in mmu.c
 ulong	memsize = 128*1024*1024;
+/*e: global memsize(arm) */
 
+/*s: function confinit(arm) */
 void
 confinit(void)
 {
-	int i;
-	ulong kpages;
-	uintptr pa;
-	char *p;
+    int i;
+    ulong kpages;
+    uintptr pa;
+    char *p;
 
-	//if(0 && (p = getconf("service")) != nil){
-	//	if(strcmp(p, "cpu") == 0)
-	//		cpuserver = 1;
-	//	else if(strcmp(p,"terminal") == 0)
-	//		cpuserver = 0;
-	//}
-	if((p = getconf("*maxmem")) != nil){
-		memsize = strtoul(p, 0, 0);
-		if (memsize < 16*MB)		/* sanity */
-			memsize = 16*MB;
-	}
+    //if(0 && (p = getconf("service")) != nil){
+    //	if(strcmp(p, "cpu") == 0)
+    //		cpuserver = 1;
+    //	else if(strcmp(p,"terminal") == 0)
+    //		cpuserver = 0;
+    //}
+    if((p = getconf("*maxmem")) != nil){
+        memsize = strtoul(p, 0, 0);
+        if (memsize < 16*MB)		/* sanity */
+            memsize = 16*MB;
+    }
     // simpler than for x86 :)
-	getramsize(&conf.mem[0]);
+    getramsize(&conf.mem[0]);
 
-	if(conf.mem[0].limit == 0){
-		conf.mem[0].base = 0;
-		conf.mem[0].limit = memsize;
-	}else if(p != nil)
-		conf.mem[0].limit = conf.mem[0].base + memsize;
+    if(conf.mem[0].limit == 0){
+        conf.mem[0].base = 0;
+        conf.mem[0].limit = memsize;
+    }else if(p != nil)
+        conf.mem[0].limit = conf.mem[0].base + memsize;
 
-	conf.npage = 0;
-	pa = PADDR(PGROUND(PTR2UINT(end)));
+    conf.npage = 0;
+    pa = PADDR(PGROUND(PTR2UINT(end)));
 
-	/*
-	 *  we assume that the kernel is at the beginning of one of the
-	 *  contiguous chunks of memory and fits therein.
-	 */
-	for(i=0; i<nelem(conf.mem); i++){
-		/* take kernel out of allocatable space */
-		if(pa > conf.mem[i].base && pa < conf.mem[i].limit)
-			conf.mem[i].base = pa;
+    /*
+     *  we assume that the kernel is at the beginning of one of the
+     *  contiguous chunks of memory and fits therein.
+     */
+    for(i=0; i<nelem(conf.mem); i++){
+        /* take kernel out of allocatable space */
+        if(pa > conf.mem[i].base && pa < conf.mem[i].limit)
+            conf.mem[i].base = pa;
 
-		conf.mem[i].npage = (conf.mem[i].limit - conf.mem[i].base)/BY2PG;
-		conf.npage += conf.mem[i].npage;
-	}
+        conf.mem[i].npage = (conf.mem[i].limit - conf.mem[i].base)/BY2PG;
+        conf.npage += conf.mem[i].npage;
+    }
 
-	conf.upages = (conf.npage*80)/100;
-	kpages = conf.npage - conf.upages;
+    conf.upages = (conf.npage*80)/100;
+    kpages = conf.npage - conf.upages;
 
-	/* set up other configuration parameters */
-	conf.ialloc = (kpages/2)*BY2PG; // max bytes for iallocb
-	conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
-	if(cpuserver)
-		conf.nproc *= 3;
-	if(conf.nproc > 2000)
-		conf.nproc = 2000;
-	conf.nswap = conf.npage*3;
-	conf.nswppo = 4096;
-	conf.nimage = 200;
+    /* set up other configuration parameters */
+    conf.ialloc = (kpages/2)*BY2PG; // max bytes for iallocb
+    conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
+    if(cpuserver)
+        conf.nproc *= 3;
+    if(conf.nproc > 2000)
+        conf.nproc = 2000;
+    conf.nswap = conf.npage*3;
+    conf.nswppo = 4096;
+    conf.nimage = 200;
 
-	conf.copymode = 1;		/* copy on reference, not copy on write */
+    conf.copymode = 1;		/* copy on reference, not copy on write */
 
-	/*
-	 * Guess how much is taken by the large permanent
-	 * datastructures. Mntcache and Mntrpc are not accounted for
-	 * (probably ~300KB).
-	 */
-	kpages *= BY2PG;
-	kpages -= 
+    /*
+     * Guess how much is taken by the large permanent
+     * datastructures. Mntcache and Mntrpc are not accounted for
+     * (probably ~300KB).
+     */
+    kpages *= BY2PG;
+    kpages -= 
           conf.upages*sizeof(Page)
-		+ conf.nproc*sizeof(Proc)
-		+ conf.nimage*sizeof(KImage)
-		+ conf.nswap
-		+ conf.nswppo*sizeof(Page); // BUG, Page -> Page*?
+        + conf.nproc*sizeof(Proc)
+        + conf.nimage*sizeof(KImage)
+        + conf.nswap
+        + conf.nswppo*sizeof(Page); // BUG, Page -> Page*?
 
     // memory pool
-	mainmem->maxsize = kpages;
+    mainmem->maxsize = kpages;
 
-	if(!cpuserver)
-		/*
-		 * give terminals lots of image memory, too; the dynamic
-		 * allocation will balance the load properly, hopefully.
-		 * be careful with 32-bit overflow.
-		 */
-		imagmem->maxsize = kpages;
+    if(!cpuserver)
+        /*
+         * give terminals lots of image memory, too; the dynamic
+         * allocation will balance the load properly, hopefully.
+         * be careful with 32-bit overflow.
+         */
+        imagmem->maxsize = kpages;
 }
+/*e: function confinit(arm) */
 
 //*****************************************************************************
 // First process init
 //*****************************************************************************
 
+/*s: global sp(arm) */
 static uintptr sp;		/* XXX - must go - user stack of init proc */
+/*e: global sp(arm) */
 
 // kernel space instructions executed by first process
+/*s: function init0(arm) */
 /*
  *  starting place for first process
  */
 void
 init0(void)
 {
-	int i;
-	char buf[2*KNAMELEN];
+    int i;
+    char buf[2*KNAMELEN];
 
-	up->nerrlab = 0;
-	arch_coherence();
-	arch_spllo();
+    up->nerrlab = 0;
+    arch_coherence();
+    arch_spllo();
 
-	/*
-	 * These are o.k. because rootinit is null.
-	 * Then early kproc's will have a root and dot.
-	 */
-	up->slash = namec("#/", Atodir, 0, 0);
-	pathclose(up->slash->path);
-	up->slash->path = newpath("/");
-	up->dot = cclone(up->slash);
+    /*
+     * These are o.k. because rootinit is null.
+     * Then early kproc's will have a root and dot.
+     */
+    up->slash = namec("#/", Atodir, 0, 0);
+    pathclose(up->slash->path);
+    up->slash->path = newpath("/");
+    up->dot = cclone(up->slash);
 
-	chandevinit();
+    chandevinit();
 
-	if(!waserror()){
-		snprint(buf, sizeof(buf), "%s %s", "ARM", conffile);
-		ksetenv("terminal", buf, 0);
-		ksetenv("cputype", "arm", 0);
-		if(cpuserver)
-			ksetenv("service", "cpu", 0);
-		else
-			ksetenv("service", "terminal", 0);
-		snprint(buf, sizeof(buf), "-a %s", getethermac());
-		ksetenv("etherargs", buf, 0);
+    if(!waserror()){
+        snprint(buf, sizeof(buf), "%s %s", "ARM", conffile);
+        ksetenv("terminal", buf, 0);
+        ksetenv("cputype", "arm", 0);
+        if(cpuserver)
+            ksetenv("service", "cpu", 0);
+        else
+            ksetenv("service", "terminal", 0);
+        snprint(buf, sizeof(buf), "-a %s", getethermac());
+        ksetenv("etherargs", buf, 0);
 
-		/* convert plan9.ini variables to #e and #ec */
-		for(i = 0; i < nconf; i++) {
-			ksetenv(confname[i], confval[i], 0);
-			ksetenv(confname[i], confval[i], 1);
-		}
-		poperror();
-	}
-	kproc("alarm", alarmkproc, nil); // ??
-	arch_touser(sp);
-	assert(0);			/* shouldn't have returned */
+        /* convert plan9.ini variables to #e and #ec */
+        for(i = 0; i < nconf; i++) {
+            ksetenv(confname[i], confval[i], 0);
+            ksetenv(confname[i], confval[i], 1);
+        }
+        poperror();
+    }
+    kproc("alarm", alarmkproc, nil); // ??
+    arch_touser(sp);
+    assert(0);			/* shouldn't have returned */
 }
+/*e: function init0(arm) */
 
 // user space instructions executed by first process
 // see initcode in init.h (comes from ../port/initcode.c and init9.s
 
 extern uintptr bootargs(uintptr base);
+/*s: function userinit(arm) */
 /*
  *  create the first process
  */
 void
 userinit(void)
 {
-	Proc *p;
-	Segment *s;
-	Arch_KMap *k;
-	Page *pg;
+    Proc *p;
+    Segment *s;
+    Arch_KMap *k;
+    Page *pg;
 
-	/* no processes yet */
-	up = nil;
+    /* no processes yet */
+    up = nil;
 
-	p = newproc();
-	p->pgrp = newpgrp();
-	p->egrp = smalloc(sizeof(Egrp));
-	p->egrp->ref = 1;
-	p->fgrp = dupfgrp(nil);
-	p->rgrp = newrgrp();
-	p->procmode = 0640;
+    p = newproc();
+    p->pgrp = newpgrp();
+    p->egrp = smalloc(sizeof(Egrp));
+    p->egrp->ref = 1;
+    p->fgrp = dupfgrp(nil);
+    p->rgrp = newrgrp();
+    p->procmode = 0640;
 
-	kstrdup(&eve, "");
-	kstrdup(&p->text, "*init*");
-	kstrdup(&p->user, eve);
+    kstrdup(&eve, "");
+    kstrdup(&p->text, "*init*");
+    kstrdup(&p->user, eve);
 
-	/*
-	 * Kernel Stack
-	 */
-	p->sched.pc = PTR2UINT(init0);
-	p->sched.sp = PTR2UINT(p->kstack + KSTACK
+    /*
+     * Kernel Stack
+     */
+    p->sched.pc = PTR2UINT(init0);
+    p->sched.sp = PTR2UINT(p->kstack + KSTACK
                            - sizeof(up->sargs.args)
                            - sizeof(uintptr));
-	p->sched.sp = STACKALIGN(p->sched.sp);
+    p->sched.sp = STACKALIGN(p->sched.sp);
 
-	/*
-	 * User Stack
-	 *
-	 * Technically, newpage can't be called here because it
-	 * should only be called when in a user context as it may
-	 * try to sleep if there are no pages available, but that
-	 * shouldn't be the case here.
-	 */
-	s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-	s->flushme++;
-	p->seg[SSEG] = s;
-	pg = newpage(true, nil, USTKTOP-BY2PG);
-	segpage(s, pg);
+    /*
+     * User Stack
+     *
+     * Technically, newpage can't be called here because it
+     * should only be called when in a user context as it may
+     * try to sleep if there are no pages available, but that
+     * shouldn't be the case here.
+     */
+    s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
+    s->flushme++;
+    p->seg[SSEG] = s;
+    pg = newpage(true, nil, USTKTOP-BY2PG);
+    segpage(s, pg);
 
-	k = arch_kmap(pg);
-	sp = bootargs(VA(k));
-	arch_kunmap(k);
+    k = arch_kmap(pg);
+    sp = bootargs(VA(k));
+    arch_kunmap(k);
 
-	/*
-	 * Text
-	 */
-	s = newseg(SG_TEXT, UTZERO, 1); // initcode needs only 1 page
-	p->seg[TSEG] = s;
-	pg = newpage(true, nil, UTZERO);
-	memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
-	segpage(s, pg);
+    /*
+     * Text
+     */
+    s = newseg(SG_TEXT, UTZERO, 1); // initcode needs only 1 page
+    p->seg[TSEG] = s;
+    pg = newpage(true, nil, UTZERO);
+    memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+    segpage(s, pg);
 
-	k = arch_kmap(s->pagedir[0]->pagetab[0]);
-	memmove(UINT2PTR(VA(k)), initcode, sizeof initcode);
-	arch_kunmap(k);
+    k = arch_kmap(s->pagedir[0]->pagetab[0]);
+    memmove(UINT2PTR(VA(k)), initcode, sizeof initcode);
+    arch_kunmap(k);
 
     // ready to go!
-	ready(p);
+    ready(p);
 }
+/*e: function userinit(arm) */
 
 
 //*****************************************************************************
 // Shutdown/reboot
 //*****************************************************************************
 
+/*s: function shutdown (init/arm/main.c)(arm) */
 static void
 shutdown(int ispanic)
 {
-	int ms, once;
+    int ms, once;
 
-	lock(&active);
-	if(ispanic)
-		active.ispanic = ispanic;
-	else if(cpu->cpuno == 0 && (active.cpus & (1 << cpu->cpuno)) == 0)
-		active.ispanic = 0;
-	once = active.cpus & (1 << cpu->cpuno);
-	active.cpus &= ~(1 << cpu->cpuno);
-	active.exiting = 1;
-	unlock(&active);
+    lock(&active);
+    if(ispanic)
+        active.ispanic = ispanic;
+    else if(cpu->cpuno == 0 && (active.cpus & (1 << cpu->cpuno)) == 0)
+        active.ispanic = 0;
+    once = active.cpus & (1 << cpu->cpuno);
+    active.cpus &= ~(1 << cpu->cpuno);
+    active.exiting = 1;
+    unlock(&active);
 
-	if(once)
-		iprint("cpu%d: exiting\n", cpu->cpuno);
-	arch_spllo();
-	for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
-		arch_delay(TK2MS(2));
-		if(active.cpus == 0 && consactive() == 0)
-			break;
-	}
-	arch_delay(100*cpu->cpuno);
+    if(once)
+        iprint("cpu%d: exiting\n", cpu->cpuno);
+    arch_spllo();
+    for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
+        arch_delay(TK2MS(2));
+        if(active.cpus == 0 && consactive() == 0)
+            break;
+    }
+    arch_delay(100*cpu->cpuno);
 }
+/*e: function shutdown (init/arm/main.c)(arm) */
 
+/*s: function main_arch_exit(arm) */
 /*
  *  exit kernel either on a panic or user request
  */
 void
 main_arch_exit(int code)
 {
-	void (*f)(ulong, ulong, ulong);
+    void (*f)(ulong, ulong, ulong);
 
-	shutdown(code);
-	splfhi();
-	if(cpu->cpuno == 0)
-		archreboot();
-	else{
-		f = (void*)REBOOTADDR;
-		intrcpushutdown();
-		cacheuwbinv();
-		l2cacheuwbinv();
-		(*f)(0, 0, 0);
-		for(;;){}
-	}
+    shutdown(code);
+    splfhi();
+    if(cpu->cpuno == 0)
+        archreboot();
+    else{
+        f = (void*)REBOOTADDR;
+        intrcpushutdown();
+        cacheuwbinv();
+        l2cacheuwbinv();
+        (*f)(0, 0, 0);
+        for(;;){}
+    }
 }
+/*e: function main_arch_exit(arm) */
 
+/*s: function arch_reboot(arm) */
 /*
  * the new kernel is already loaded at address `code'
  * of size `size' and entry point `entry'.
@@ -405,136 +432,144 @@ main_arch_exit(int code)
 void
 arch_reboot(void *entry, void *code, ulong size)
 {
-	void (*f)(ulong, ulong, ulong);
+    void (*f)(ulong, ulong, ulong);
 
-	//writeconf();
+    //writeconf();
 
-	/*
-	 * the boot processor is cpu0.  execute this function on it
-	 * so that the new kernel has the same cpu0.
-	 */
-	if (cpu->cpuno != 0) {
-		procwired(up, 0);
-		sched();
-	}
-	if (cpu->cpuno != 0)
-		print("on cpu%d (not 0)!\n", cpu->cpuno);
+    /*
+     * the boot processor is cpu0.  execute this function on it
+     * so that the new kernel has the same cpu0.
+     */
+    if (cpu->cpuno != 0) {
+        procwired(up, 0);
+        sched();
+    }
+    if (cpu->cpuno != 0)
+        print("on cpu%d (not 0)!\n", cpu->cpuno);
 
-	/* setup reboot trampoline function */
-	f = (void*)REBOOTADDR;
-	memmove(f, rebootcode, sizeof(rebootcode));
-	cachedwbse(f, sizeof(rebootcode));
+    /* setup reboot trampoline function */
+    f = (void*)REBOOTADDR;
+    memmove(f, rebootcode, sizeof(rebootcode));
+    cachedwbse(f, sizeof(rebootcode));
 
-	shutdown(0);
+    shutdown(0);
 
-	/*
-	 * should be the only processor running now
-	 */
+    /*
+     * should be the only processor running now
+     */
 
-	arch_delay(5000);
-	print("active.machs = %x\n", active.cpus);
-	print("reboot entry %#lux code %#lux size %ld\n",
-		PADDR(entry), PADDR(code), size);
-	arch_delay(100);
+    arch_delay(5000);
+    print("active.machs = %x\n", active.cpus);
+    print("reboot entry %#lux code %#lux size %ld\n",
+        PADDR(entry), PADDR(code), size);
+    arch_delay(100);
 
-	/* turn off buffered serial console */
-	serialoq = nil;
-	kprintoq = nil;
-	screenputs = nil;
+    /* turn off buffered serial console */
+    serialoq = nil;
+    kprintoq = nil;
+    screenputs = nil;
 
-	/* shutdown devices */
-	if(!waserror()){
-		chandevshutdown();
-		poperror();
-	}
+    /* shutdown devices */
+    if(!waserror()){
+        chandevshutdown();
+        poperror();
+    }
 
-	/* stop the clock (and watchdog if any) */
-	clockshutdown();
+    /* stop the clock (and watchdog if any) */
+    clockshutdown();
 
-	splfhi();
-	intrshutdown();
+    splfhi();
+    intrshutdown();
 
-	/* off we go - never to return */
-	cacheuwbinv();
-	l2cacheuwbinv();
-	(*f)(PADDR(entry), PADDR(code), size);
+    /* off we go - never to return */
+    cacheuwbinv();
+    l2cacheuwbinv();
+    (*f)(PADDR(entry), PADDR(code), size);
 
-	iprint("loaded kernel returned!\n");
-	arch_delay(1000);
-	archreboot();
+    iprint("loaded kernel returned!\n");
+    arch_delay(1000);
+    archreboot();
 }
+/*e: function arch_reboot(arm) */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
+/*s: function main_arch_isaconfig(arm) */
 /*
  * stub for ../omap/devether.c
  */
 int
 main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa)
 {
-	char cc[32], *p;
-	int i;
+    char cc[32], *p;
+    int i;
 
-	if(strcmp(class, "ether") != 0)
-		return 0;
-	snprint(cc, sizeof cc, "%s%d", class, ctlrno);
-	p = getconf(cc);
-	if(p == nil)
-		return (ctlrno == 0);
-	isa->type = "";
-	isa->nopt = tokenize(p, isa->opt, NISAOPT);
-	for(i = 0; i < isa->nopt; i++){
-		p = isa->opt[i];
-		if(cistrncmp(p, "type=", 5) == 0)
-			isa->type = p + 5;
-	}
-	return 1;
+    if(strcmp(class, "ether") != 0)
+        return 0;
+    snprint(cc, sizeof cc, "%s%d", class, ctlrno);
+    p = getconf(cc);
+    if(p == nil)
+        return (ctlrno == 0);
+    isa->type = "";
+    isa->nopt = tokenize(p, isa->opt, NISAOPT);
+    for(i = 0; i < isa->nopt; i++){
+        p = isa->opt[i];
+        if(cistrncmp(p, "type=", 5) == 0)
+            isa->type = p + 5;
+    }
+    return 1;
 }
+/*e: function main_arch_isaconfig(arm) */
 
 
+/*s: function arch_memorysummary(arm) */
 // called from devcons.c
 void
 arch_memorysummary(void) {
 }
+/*e: function arch_memorysummary(arm) */
 
 //*****************************************************************************
 // Main entry point!
 //*****************************************************************************
 
+/*s: function launchinit(arm) */
 void
 launchinit(int ncpus)
 {
-	int mach;
-	Cpu *mm;
-	PTE *l1;
+    int mach;
+    Cpu *mm;
+    PTE *l1;
 
-	if(ncpus > MAXCPUS)
-		ncpus = MAXCPUS;
-	for(mach = 1; mach < ncpus; mach++){
-		cpus[mach] = mm = mallocalign(CPUSIZE, CPUSIZE, 0, 0);
-		l1 = mallocalign(L1SIZE, L1SIZE, 0, 0);
-		if(mm == nil || l1 == nil)
-			panic("launchinit");
-		memset(mm, 0, CPUSIZE);
-		mm->cpuno = mach;
+    if(ncpus > MAXCPUS)
+        ncpus = MAXCPUS;
+    for(mach = 1; mach < ncpus; mach++){
+        cpus[mach] = mm = mallocalign(CPUSIZE, CPUSIZE, 0, 0);
+        l1 = mallocalign(L1SIZE, L1SIZE, 0, 0);
+        if(mm == nil || l1 == nil)
+            panic("launchinit");
+        memset(mm, 0, CPUSIZE);
+        mm->cpuno = mach;
 
-		memmove(l1, cpu->mmul1, L1SIZE);  /* clone cpu0's l1 table */
-		cachedwbse(l1, L1SIZE);
-		mm->mmul1 = l1;
-		cachedwbse(mm, CPUSIZE);
+        memmove(l1, cpu->mmul1, L1SIZE);  /* clone cpu0's l1 table */
+        cachedwbse(l1, L1SIZE);
+        mm->mmul1 = l1;
+        cachedwbse(mm, CPUSIZE);
 
-	}
-	cachedwbse(cpus, sizeof cpus);
-	if((mach = startcpus(ncpus)) < ncpus)
-			panic("only %d cpu%s started", mach, mach == 1? "" : "s");
+    }
+    cachedwbse(cpus, sizeof cpus);
+    if((mach = startcpus(ncpus)) < ncpus)
+            panic("only %d cpu%s started", mach, mach == 1? "" : "s");
 }
+/*e: function launchinit(arm) */
 
+/*s: function main(arm) */
 void
 main(void)
 {
-	uint firmware, board;
+    uint firmware, board;
 
     // backward deps breaker!
     devtab = conf_devtab;
@@ -567,63 +602,65 @@ main(void)
 
     // Let's go!
 
-	cpu = (Cpu*)CPUADDR;
-	memset(edata, 0, end - edata);	/* clear bss */
-	cpu0init();
-	mmuinit1((void*)L1);
-	machon(0);
+    cpu = (Cpu*)CPUADDR;
+    memset(edata, 0, end - edata);	/* clear bss */
+    cpu0init();
+    mmuinit1((void*)L1);
+    machon(0);
 
-	quotefmtinstall();
+    quotefmtinstall();
 
-	//optionsinit("/boot/boot boot");
-	//ataginit((Atag*)BOOTARGS);
+    //optionsinit("/boot/boot boot");
+    //ataginit((Atag*)BOOTARGS);
 
-	confinit();		/* figures out amount of memory */
-	xinit();
+    confinit();		/* figures out amount of memory */
+    xinit();
 
-	uartconsinit();
+    uartconsinit();
 
-	arch_screeninit();
+    arch_screeninit();
 
-	print("\nPlan 9 from Bell Labs\n"); // yeah!
+    print("\nPlan 9 from Bell Labs\n"); // yeah!
 
-	board = getboardrev();
-	firmware = getfirmware();
-	print("board rev: %#ux firmware rev: %d\n", board, firmware);
-	if(firmware < Minfirmrev){
-		print("Sorry, firmware (start*.elf) must be at least rev %d"
-		      " or newer than %s\n", Minfirmrev, Minfirmdate);
-		for(;;)
-			;
-	}
-	/* set clock rate to arm_freq from config.txt (default pi1:700Mhz pi2:900MHz) */
-	setclkrate(ClkArm, 0);
+    board = getboardrev();
+    firmware = getfirmware();
+    print("board rev: %#ux firmware rev: %d\n", board, firmware);
+    if(firmware < Minfirmrev){
+        print("Sorry, firmware (start*.elf) must be at least rev %d"
+              " or newer than %s\n", Minfirmrev, Minfirmdate);
+        for(;;)
+            ;
+    }
+    /* set clock rate to arm_freq from config.txt (default pi1:700Mhz pi2:900MHz) */
+    setclkrate(ClkArm, 0);
 
-	arch_trapinit();
-	clockinit();
+    arch_trapinit();
+    clockinit();
 
-	lineqinit();
-	timersinit();
-	swcursor_init(); //if(conf.monitor)
+    lineqinit();
+    timersinit();
+    swcursor_init(); //if(conf.monitor)
 
-	arch_cpuidprint();
-	archreset();
+    arch_cpuidprint();
+    archreset();
 
-	procinit();
-	imageinit();
+    procinit();
+    imageinit();
 
-	links();
-	chandevreset();			/* most devices are discovered here */
+    links();
+    chandevreset();			/* most devices are discovered here */
 
-	pageinit();
-	swapinit();
+    pageinit();
+    swapinit();
 
-	userinit();
+    userinit();
 
-	launchinit(getncpus());
+    launchinit(getncpus());
 
     // schedule the only ready user process (the one created by userinit)
-	schedinit();
+    schedinit();
 
-	assert(0);			/* shouldn't have returned */
+    assert(0);			/* shouldn't have returned */
 }
+/*e: function main(arm) */
+/*e: init/arm/main.c */

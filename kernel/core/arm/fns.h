@@ -1,3 +1,4 @@
+/*s: core/arm/fns.h */
 #include "../port/portfns_core.h"
 #include "../port/portfns_concurrency.h"
 #include "../port/portfns_memory.h"
@@ -16,16 +17,24 @@
 
 // not classified yet
 void arch_cpuidprint(void);
+/*s: macro getpgcolor(arm) */
 #define	getpgcolor(a)	0
+/*e: macro getpgcolor(arm) */
 
 // different signatures in different arch so cant factorize
 void  arch_touser(uintptr);
 int   arch_cmpswap(long*, long, long);
+/*s: macro arch_cycles(arm) */
 #define arch_cycles(ip) *(ip) = arch_lcycles()
+/*e: macro arch_cycles(arm) */
 
+/*s: macro arch_countpagerefs(arm) */
 // same signatures but optimized away
 #define arch_countpagerefs(a, b)
+/*e: macro arch_countpagerefs(arm) */
+/*s: macro arch_intrenable(arm) */
 #define arch_intrenable(i, f, a, b, n) irqenable((i), (f), (a))
+/*e: macro arch_intrenable(arm) */
 
 void dumpregs(Ureg*);
 
@@ -121,8 +130,12 @@ extern void okay(int);
 extern int l2ap(int);
 extern void l2cacheuwbinv(void);
 
+/*s: macro sdfree(arm) */
 #define sdfree(p) free(p)
+/*e: macro sdfree(arm) */
+/*s: macro sdmalloc(arm) */
 #define sdmalloc(n)	mallocalign(n, BLOCKALIGN, 0, 0)
+/*e: macro sdmalloc(arm) */
 
 extern void setclkrate(int, ulong);
 extern void setpower(int, int);
@@ -175,10 +188,21 @@ extern void ucfreeb(Block*);
 extern void sysprocsetup(Proc*);
 
 
+/*s: macro PTR2UINT(arm) */
 #define PTR2UINT(p)	((uintptr)(p))
+/*e: macro PTR2UINT(arm) */
+/*s: macro UINT2PTR(arm) */
 #define UINT2PTR(i)	((void*)(i))
+/*e: macro UINT2PTR(arm) */
 
+/*s: macro KADDR(arm) */
 #define KADDR(pa)	UINT2PTR(KZERO    | ((uintptr)(pa) & ~KSEGM))
+/*e: macro KADDR(arm) */
+/*s: macro PADDR(arm) */
 #define PADDR(va)	PTR2UINT(PHYSDRAM | ((uintptr)(va) & ~KSEGM))
+/*e: macro PADDR(arm) */
 
+/*s: macro MASK(arm) */
 #define MASK(v)	((1UL << (v)) - 1)	/* mask `v' bits wide */
+/*e: macro MASK(arm) */
+/*e: core/arm/fns.h */

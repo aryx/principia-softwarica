@@ -1,6 +1,11 @@
+/*s: core/arm/dat.h */
+/*s: constant STAGESIZE(arm) */
 // was a default in portdat.h
 #define STAGESIZE 64 // for devuart
+/*e: constant STAGESIZE(arm) */
+/*s: constant KMESGSIZE(arm) */
 #define KMESGSIZE (16*1024) // for /dev/kmesg
+/*e: constant KMESGSIZE(arm) */
 
 // pad memory pointers (used in Lock so must be early)
 // physical address
@@ -61,3 +66,4 @@ extern ulong memsize;
 #pragma varargck  type  "V" uchar*
 #pragma varargck  type  "E" uchar*
 #pragma varargck  type  "M" uchar*
+/*e: core/arm/dat.h */
