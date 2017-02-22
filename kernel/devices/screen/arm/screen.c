@@ -1,3 +1,4 @@
+/*s: kernel/devices/screen/arm/screen.c */
 /*
  * bcm2385 framebuffer
  */
@@ -250,3 +251,4 @@ void arch_flushmemscreen(Rectangle) { }
 bool arch_ishwimage(Memimage*) { return true; }
 void arch_getcolor(ulong, ulong*, ulong*, ulong*) { }
 int  arch_setcolor(ulong, ulong, ulong, ulong) { return 0; }
+/*e: kernel/devices/screen/arm/screen.c */
