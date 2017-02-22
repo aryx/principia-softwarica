@@ -1,3 +1,4 @@
+/*s: devices/mouse/arm/mouse.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "../port/error.h"
@@ -16,3 +17,4 @@ void arch_setlinear(void) { }
 void arch_setres(int n) { USED(n); }
 void arch_setintellimouse(void) { }
 void arch_resetmouse(void) { }
+/*e: devices/mouse/arm/mouse.c */
