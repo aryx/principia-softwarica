@@ -54,7 +54,7 @@ typedef void* kern_addr3;
 // for the first 'extern register' declaration seen in a file
 // and R9 for the second one. See Compiler.nw.
 // Then mem.h relies on this to define the UP and CPU macros used
-// then inside assembly code.
+// inside assembly code.
 extern register Cpu* cpu;			/* R10 */
 extern register Proc* up;			/* R9 */
 

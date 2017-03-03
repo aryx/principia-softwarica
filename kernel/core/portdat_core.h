@@ -1,8 +1,8 @@
 /*s: portdat_core.h */
 
 // All those structs used to be in <arch>/dat.h, but many of their fields
-// were used from port/ so I've moved them here (and put the arch
-// specific fields in dat_core.h)
+// were used from port/ so I've moved them here (and put the arch-specific
+// fields in dat_core.h)
 
 //*****************************************************************************
 // Conf
@@ -158,7 +158,7 @@ extern Cpu* cpus[MAXCPUS];
 #define CPUS(n)  (cpus[n])
 /*e: macro CPUS */
 
-// 'up' and 'cpu' can have different implement in different archi
+// 'up' and 'cpu' can have different implement in different arch
 // so they are not defined here.
 
 //*****************************************************************************

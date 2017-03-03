@@ -1,4 +1,4 @@
-/*s: mouse.c */
+/*s: 386/mouse.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -186,4 +186,4 @@ void arch_resetmouse(void)
     }
 }
 
-/*e: mouse.c */
+/*e: 386/mouse.c */

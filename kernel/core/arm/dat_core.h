@@ -4,7 +4,7 @@ typedef u32int		PTE;
 
 /*s: struct MMMU(arm) */
 /*
- *  MMU stuff in Mach.
+ *  MMU stuff in Cpu.
  */
 struct MMMU
 {

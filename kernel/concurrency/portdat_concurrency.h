@@ -4,9 +4,10 @@
 // Mutual exclusion
 //*****************************************************************************
 
-// arch_tas < Lock < QLock|RWLock
+// arch_tas() < Lock|ILock < QLock|RWLock
 
-// used to be in <arch> but the fields were used from port/ so must be portable!
+// used to be in <arch>/, but the fields are used from port/, so the 
+// code it must be portable!
 /*s: struct Lock */
 struct Lock
 {
