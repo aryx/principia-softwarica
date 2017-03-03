@@ -1,7 +1,7 @@
 /*s: buses/arm/usbdwc.c */
 /*
  * USB host driver for BCM2835
- *	Synopsis DesignWare Core USB 2.0 OTG controller
+ *  Synopsis DesignWare Core USB 2.0 OTG controller
  *
  * Copyright © 2012 Richard Miller <r.miller@acm.org>
  *
@@ -14,28 +14,28 @@
  * keyboard, mouse, ethernet adapter, and an external flash drive.
  */
 
-#include	"u.h"
-#include	"../port/lib.h"
-#include	"../port/error.h"
-#include	"mem.h"
-#include	"dat.h"
-#include	"fns.h"
+#include    "u.h"
+#include    "../port/lib.h"
+#include    "../port/error.h"
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
 
-#include	"io.h"
-#include	"../port/usb.h"
+#include    "io.h"
+#include    "../port/usb.h"
 
 #include "dwcotg.h"
 
 /*s: enum _anon_ (buses/arm/usbdwc.c)(arm) */
 enum
 {
-    USBREGS		= VIRTIO + 0x980000,
-    Enabledelay	= 50,
-    Resetdelay	= 10,
-    ResetdelayHS	= 50,
+    USBREGS     = VIRTIO + 0x980000,
+    Enabledelay = 50,
+    Resetdelay  = 10,
+    ResetdelayHS    = 50,
 
-    Read		= 0,
-    Write		= 1,
+    Read        = 0,
+    Write       = 1,
 };
 /*e: enum _anon_ (buses/arm/usbdwc.c)(arm) */
 
@@ -45,24 +45,24 @@ typedef struct Epio Epio;
 /*s: struct Ctlr (buses/arm/usbdwc.c)(arm) */
 struct Ctlr {
     Lock;
-    Dwcregs	*regs;		/* controller registers */
-    int	nchan;		/* number of host channels */
-    ulong	chanbusy;	/* bitmap of in-use channels */
-    QLock	chanlock;	/* serialise access to chanbusy */
-    QLock	split;		/* serialise split transactions */
-    int	splitretry;	/* count retries of Nyet */
-    int	sofchan;	/* bitmap of channels waiting for sof */
-    int	wakechan;	/* bitmap of channels to wakeup after fiq */
-    int	debugchan;	/* bitmap of channels for interrupt debug */
-    Rendez	*chanintr;	/* sleep till interrupt on channel N */
+    Dwcregs *regs;      /* controller registers */
+    int nchan;      /* number of host channels */
+    ulong   chanbusy;   /* bitmap of in-use channels */
+    QLock   chanlock;   /* serialise access to chanbusy */
+    QLock   split;      /* serialise split transactions */
+    int splitretry; /* count retries of Nyet */
+    int sofchan;    /* bitmap of channels waiting for sof */
+    int wakechan;   /* bitmap of channels to wakeup after fiq */
+    int debugchan;  /* bitmap of channels for interrupt debug */
+    Rendez  *chanintr;  /* sleep till interrupt on channel N */
 };
 /*e: struct Ctlr (buses/arm/usbdwc.c)(arm) */
 
 /*s: struct Epio(arm) */
 struct Epio {
     QLock;
-    Block	*cb;
-    ulong	lastpoll;
+    Block   *cb;
+    ulong   lastpoll;
 };
 /*e: struct Epio(arm) */
 

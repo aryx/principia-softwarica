@@ -1,3 +1,4 @@
+/*s: init/arm/rebootcode.s */
 /*
  * armv6/armv7 reboot code
  */
@@ -116,3 +117,4 @@ TEXT cachesoff(SB), 1, $-4
 	BIC	R1, R14			/* adjust return address */
 
 	RET
+/*e: init/arm/rebootcode.s */

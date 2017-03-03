@@ -8,26 +8,26 @@
 #include "arm.h"
 
 /*s: macro L1X(arm) */
-#define L1X(va)		FEXT((va), 20, 12)
+#define L1X(va)     FEXT((va), 20, 12)
 /*e: macro L1X(arm) */
 /*s: macro L2X(arm) */
-#define L2X(va)		FEXT((va), 12, 8)
+#define L2X(va)     FEXT((va), 12, 8)
 /*e: macro L2X(arm) */
 /*s: macro L2AP(arm) */
-#define L2AP(ap)	l2ap(ap)
+#define L2AP(ap)    l2ap(ap)
 /*e: macro L2AP(arm) */
 
 /*s: constant L1ptedramattrs(arm) */
-#define L1ptedramattrs	soc.l1ptedramattrs
+#define L1ptedramattrs  soc.l1ptedramattrs
 /*e: constant L1ptedramattrs(arm) */
 /*s: constant L2ptedramattrs(arm) */
-#define L2ptedramattrs	soc.l2ptedramattrs
+#define L2ptedramattrs  soc.l2ptedramattrs
 /*e: constant L2ptedramattrs(arm) */
 
 /*s: enum _anon_ (memory/arm/mmu.c)(arm) */
 enum {
-    L1lo		= UZERO/MiB,		/* L1X(UZERO)? */
-    L1hi		= (USTKTOP+MiB-1)/MiB,	/* L1X(USTKTOP+MiB-1)? */
+    L1lo        = UZERO/MiB,        /* L1X(UZERO)? */
+    L1hi        = (USTKTOP+MiB-1)/MiB,  /* L1X(USTKTOP+MiB-1)? */
 };
 /*e: enum _anon_ (memory/arm/mmu.c)(arm) */
 
@@ -286,9 +286,9 @@ arch_putmmu(uintptr va, uintptr pa, Page* page)
     pte = UINT2PTR(KADDR(PPN(*l1)));
 
     /* protection bits are
-     *	PTERONLY|PTEVALID;
-     *	PTEWRITE|PTEVALID;
-     *	PTEWRITE|PTEUNCACHED|PTEVALID;
+     *  PTERONLY|PTEVALID;
+     *  PTEWRITE|PTEVALID;
+     *  PTEWRITE|PTEUNCACHED|PTEVALID;
      */
     x = Small;
     if(!(pa & PTEUNCACHED))
@@ -355,7 +355,7 @@ mmuuncache(void* v, usize size)
 uintptr
 arch_cankaddr(uintptr pa)
 {
-    if(pa < memsize)		/* assumes PHYSDRAM is 0 */
+    if(pa < memsize)        /* assumes PHYSDRAM is 0 */
         return memsize - pa;
     return 0;
 }
@@ -398,7 +398,7 @@ arch_checkmmu(uintptr va, uintptr pa)
 /*e: function arch_checkmmu(arm) */
 
 /*s: function arch_kmap(arm) */
-//old:#define	arch_kmap(p)		(Arch_KMap*)((p)->pa|kseg0)
+//old:#define   arch_kmap(p)        (Arch_KMap*)((p)->pa|kseg0)
 Arch_KMap*
 arch_kmap(Page *p) {
   return (Arch_KMap*)((p)->pa|KZERO);
@@ -414,5 +414,5 @@ arch_kunmap(Arch_KMap *k)
 /*e: function arch_kunmap(arm) */
 
 
-//#define	kunmap(k)
+//#define   kunmap(k)
 /*e: memory/arm/mmu.c */

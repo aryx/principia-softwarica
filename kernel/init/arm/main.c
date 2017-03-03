@@ -20,10 +20,10 @@ extern void swcursor_init(void);
 
 /*s: constant Minfirmrev(arm) */
 /* Firmware compatibility */
-#define	Minfirmrev	326770
+#define Minfirmrev  326770
 /*e: constant Minfirmrev(arm) */
 /*s: constant Minfirmdate(arm) */
-#define	Minfirmdate	"19 Aug 2013"
+#define Minfirmdate "19 Aug 2013"
 /*e: constant Minfirmdate(arm) */
 
 
@@ -61,7 +61,7 @@ int  main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa);
 
 // <conf>.c
 extern  Dev*  conf_devtab[];
-extern	char*	conffile;
+extern  char*   conffile;
 
 /*s: function getconf(arm) */
 char*
@@ -72,7 +72,7 @@ getconf(char *name)
     // 
     //i = findconf(name);
     //if(i >= 0)
-    //	return confval[i];
+    //  return confval[i];
     return nil;
 }
 /*e: function getconf(arm) */
@@ -129,7 +129,7 @@ machon(uint xcpu)
 
     cpubit = 1 << xcpu;
     lock(&active);
-    if ((active.cpus & cpubit) == 0) {	/* currently off? */
+    if ((active.cpus & cpubit) == 0) {  /* currently off? */
         conf.ncpu++;
         active.cpus |= cpubit;
     }
@@ -143,7 +143,7 @@ machon(uint xcpu)
 
 /*s: global memsize(arm) */
 // used also in mmu.c
-ulong	memsize = 128*1024*1024;
+ulong   memsize = 128*1024*1024;
 /*e: global memsize(arm) */
 
 /*s: function confinit(arm) */
@@ -156,14 +156,14 @@ confinit(void)
     char *p;
 
     //if(0 && (p = getconf("service")) != nil){
-    //	if(strcmp(p, "cpu") == 0)
-    //		cpuserver = 1;
-    //	else if(strcmp(p,"terminal") == 0)
-    //		cpuserver = 0;
+    //  if(strcmp(p, "cpu") == 0)
+    //      cpuserver = 1;
+    //  else if(strcmp(p,"terminal") == 0)
+    //      cpuserver = 0;
     //}
     if((p = getconf("*maxmem")) != nil){
         memsize = strtoul(p, 0, 0);
-        if (memsize < 16*MB)		/* sanity */
+        if (memsize < 16*MB)        /* sanity */
             memsize = 16*MB;
     }
     // simpler than for x86 :)
@@ -205,7 +205,7 @@ confinit(void)
     conf.nswppo = 4096;
     conf.nimage = 200;
 
-    conf.copymode = 1;		/* copy on reference, not copy on write */
+    conf.copymode = 1;      /* copy on reference, not copy on write */
 
     /*
      * Guess how much is taken by the large permanent
@@ -238,7 +238,7 @@ confinit(void)
 //*****************************************************************************
 
 /*s: global sp(arm) */
-static uintptr sp;		/* XXX - must go - user stack of init proc */
+static uintptr sp;      /* XXX - must go - user stack of init proc */
 /*e: global sp(arm) */
 
 // kernel space instructions executed by first process
@@ -287,7 +287,7 @@ init0(void)
     }
     kproc("alarm", alarmkproc, nil); // ??
     arch_touser(sp);
-    assert(0);			/* shouldn't have returned */
+    assert(0);          /* shouldn't have returned */
 }
 /*e: function init0(arm) */
 
@@ -603,7 +603,7 @@ main(void)
     // Let's go!
 
     cpu = (Cpu*)CPUADDR;
-    memset(edata, 0, end - edata);	/* clear bss */
+    memset(edata, 0, end - edata);  /* clear bss */
     cpu0init();
     mmuinit1((void*)L1);
     machon(0);
@@ -613,7 +613,7 @@ main(void)
     //optionsinit("/boot/boot boot");
     //ataginit((Atag*)BOOTARGS);
 
-    confinit();		/* figures out amount of memory */
+    confinit();     /* figures out amount of memory */
     xinit();
 
     uartconsinit();
@@ -648,7 +648,7 @@ main(void)
     imageinit();
 
     links();
-    chandevreset();			/* most devices are discovered here */
+    chandevreset();         /* most devices are discovered here */
 
     pageinit();
     swapinit();
@@ -660,7 +660,7 @@ main(void)
     // schedule the only ready user process (the one created by userinit)
     schedinit();
 
-    assert(0);			/* shouldn't have returned */
+    assert(0);          /* shouldn't have returned */
 }
 /*e: function main(arm) */
 /*e: init/arm/main.c */

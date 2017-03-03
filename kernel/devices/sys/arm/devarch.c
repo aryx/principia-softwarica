@@ -28,12 +28,12 @@ static Rdwrfn *writefn[Qmax];
 
 /*s: global archdir(arm) */
 static Dirtab archdir[Qmax] = {
-    ".",		{ Qdir, 0, QTDIR },	0,	0555,
+    ".",        { Qdir, 0, QTDIR }, 0,  0555,
 };
 /*e: global archdir(arm) */
 
 /*s: global archwlock(arm) */
-Lock archwlock;	/* the lock is only for changing archdir */
+Lock archwlock; /* the lock is only for changing archdir */
 /*e: global archwlock(arm) */
 /*s: global narchdir(arm) */
 int narchdir = Qbase;

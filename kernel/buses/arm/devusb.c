@@ -39,15 +39,15 @@
  * get in the way. Thus, code is probably easier the way it is.
  */
 
-#include	"u.h"
-#include	"../port/lib.h"
-#include	"../port/error.h"
-#include	"mem.h"
-#include	"dat.h"
-#include	"fns.h"
+#include    "u.h"
+#include    "../port/lib.h"
+#include    "../port/error.h"
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
 
-#include	"io.h"
-#include	"../port/usb.h"
+#include    "io.h"
+#include    "../port/usb.h"
 
 typedef struct Hcitype Hcitype;
 
@@ -55,47 +55,47 @@ typedef struct Hcitype Hcitype;
 enum
 {
     /* Qid numbers */
-    Qdir = 0,		/* #u */
-    Qusbdir,			/* #u/usb */
-    Qctl,			/* #u/usb/ctl - control requests */
+    Qdir = 0,       /* #u */
+    Qusbdir,            /* #u/usb */
+    Qctl,           /* #u/usb/ctl - control requests */
 
-    Qep0dir,			/* #u/usb/ep0.0 - endpoint 0 dir */
-    Qep0io,			/* #u/usb/ep0.0/data - endpoint 0 I/O */
-    Qep0ctl,		/* #u/usb/ep0.0/ctl - endpoint 0 ctl. */
-    Qep0dummy,		/* give 4 qids to each endpoint */
+    Qep0dir,            /* #u/usb/ep0.0 - endpoint 0 dir */
+    Qep0io,         /* #u/usb/ep0.0/data - endpoint 0 I/O */
+    Qep0ctl,        /* #u/usb/ep0.0/ctl - endpoint 0 ctl. */
+    Qep0dummy,      /* give 4 qids to each endpoint */
 
-    Qepdir = 0,		/* (qid-qep0dir)&3 is one of these */
-    Qepio,			/* to identify which file for the endpoint */
+    Qepdir = 0,     /* (qid-qep0dir)&3 is one of these */
+    Qepio,          /* to identify which file for the endpoint */
     Qepctl,
 
     /* ... */
 
     /* Usb ctls. */
-    CMdebug = 0,		/* debug on|off */
-    CMdump,			/* dump (data structures for debug) */
+    CMdebug = 0,        /* debug on|off */
+    CMdump,         /* dump (data structures for debug) */
 
     /* Ep. ctls */
-    CMnew = 0,		/* new nb ctl|bulk|intr|iso r|w|rw (endpoint) */
-    CMnewdev,		/* newdev full|low|high portnb (allocate new devices) */
-    CMhub,			/* hub (set the device as a hub) */
-    CMspeed,		/* speed full|low|high|no */
-    CMmaxpkt,		/* maxpkt size */
-    CMntds,			/* ntds nb (max nb. of tds per µframe) */
-    CMclrhalt,		/* clrhalt (halt was cleared on endpoint) */
-    CMpollival,		/* pollival interval (interrupt/iso) */
-    CMhz,			/* hz n (samples/sec; iso) */
-    CMsamplesz,		/* samplesz n (sample size; iso) */
-    CMinfo,			/* info infostr (ke.ep info for humans) */
-    CMdetach,		/* detach (abort I/O forever on this ep). */
-    CMaddress,		/* address (address is assigned) */
-    CMdebugep,		/* debug n (set/clear debug for this ep) */
-    CMname,			/* name str (show up as #u/name as well) */
-    CMtmout,		/* timeout n (activate timeouts for ep) */
-    CMpreset,		/* reset the port */
+    CMnew = 0,      /* new nb ctl|bulk|intr|iso r|w|rw (endpoint) */
+    CMnewdev,       /* newdev full|low|high portnb (allocate new devices) */
+    CMhub,          /* hub (set the device as a hub) */
+    CMspeed,        /* speed full|low|high|no */
+    CMmaxpkt,       /* maxpkt size */
+    CMntds,         /* ntds nb (max nb. of tds per µframe) */
+    CMclrhalt,      /* clrhalt (halt was cleared on endpoint) */
+    CMpollival,     /* pollival interval (interrupt/iso) */
+    CMhz,           /* hz n (samples/sec; iso) */
+    CMsamplesz,     /* samplesz n (sample size; iso) */
+    CMinfo,         /* info infostr (ke.ep info for humans) */
+    CMdetach,       /* detach (abort I/O forever on this ep). */
+    CMaddress,      /* address (address is assigned) */
+    CMdebugep,      /* debug n (set/clear debug for this ep) */
+    CMname,         /* name str (show up as #u/name as well) */
+    CMtmout,        /* timeout n (activate timeouts for ep) */
+    CMpreset,       /* reset the port */
 
     /* Hub feature selectors */
-    Rportenable	= 1,
-    Rportreset	= 4,
+    Rportenable = 1,
+    Rportreset  = 4,
 
 };
 /*e: enum _anon_ (buses/arm/devusb.c)(arm) */
@@ -103,103 +103,103 @@ enum
 /*s: struct Hcitype(arm) */
 struct Hcitype
 {
-    char*	type;
-    int	(*reset)(Hci*);
+    char*   type;
+    int (*reset)(Hci*);
 };
 /*e: struct Hcitype(arm) */
 
 /*s: macro QID(arm) */
-#define QID(q)	((int)(q).path)
+#define QID(q)  ((int)(q).path)
 /*e: macro QID(arm) */
 
 /*s: global usbctls(arm) */
 static Cmdtab usbctls[] =
 {
-    {CMdebug,	"debug",	2},
-    {CMdump,	"dump",		1},
+    {CMdebug,   "debug",    2},
+    {CMdump,    "dump",     1},
 };
 /*e: global usbctls(arm) */
 
 /*s: global epctls(arm) */
 static Cmdtab epctls[] =
 {
-    {CMnew,		"new",		4},
-    {CMnewdev,	"newdev",	3},
-    {CMhub,		"hub",		1},
-    {CMspeed,	"speed",	2},
-    {CMmaxpkt,	"maxpkt",	2},
-    {CMntds,	"ntds",		2},
-    {CMpollival,	"pollival",	2},
-    {CMsamplesz,	"samplesz",	2},
-    {CMhz,		"hz",		2},
-    {CMinfo,	"info",		0},
-    {CMdetach,	"detach",	1},
-    {CMaddress,	"address",	1},
-    {CMdebugep,	"debug",	2},
-    {CMclrhalt,	"clrhalt",	1},
-    {CMname,	"name",		2},
-    {CMtmout,	"timeout",	2},
-    {CMpreset,	"reset",	1},
+    {CMnew,     "new",      4},
+    {CMnewdev,  "newdev",   3},
+    {CMhub,     "hub",      1},
+    {CMspeed,   "speed",    2},
+    {CMmaxpkt,  "maxpkt",   2},
+    {CMntds,    "ntds",     2},
+    {CMpollival,    "pollival", 2},
+    {CMsamplesz,    "samplesz", 2},
+    {CMhz,      "hz",       2},
+    {CMinfo,    "info",     0},
+    {CMdetach,  "detach",   1},
+    {CMaddress, "address",  1},
+    {CMdebugep, "debug",    2},
+    {CMclrhalt, "clrhalt",  1},
+    {CMname,    "name",     2},
+    {CMtmout,   "timeout",  2},
+    {CMpreset,  "reset",    1},
 };
 /*e: global epctls(arm) */
 
 /*s: global usbdir(arm) */
 static Dirtab usbdir[] =
 {
-    "ctl",		{Qctl},		0,	0666,
+    "ctl",      {Qctl},     0,  0666,
 };
 /*e: global usbdir(arm) */
 
 /*s: global usbmodename(arm) */
 char *usbmodename[] =
 {
-    [OREAD]	"r",
-    [OWRITE]	"w",
-    [ORDWR]	"rw",
+    [OREAD] "r",
+    [OWRITE]    "w",
+    [ORDWR] "rw",
 };
 /*e: global usbmodename(arm) */
 
 /*s: global ttname(arm) */
 static char *ttname[] =
 {
-    [Tnone]	"none",
-    [Tctl]	"control",
-    [Tiso]	"iso",
-    [Tintr]	"interrupt",
-    [Tbulk]	"bulk",
+    [Tnone] "none",
+    [Tctl]  "control",
+    [Tiso]  "iso",
+    [Tintr] "interrupt",
+    [Tbulk] "bulk",
 };
 /*e: global ttname(arm) */
 
 /*s: global spname(arm) */
 static char *spname[] =
 {
-    [Fullspeed]	"full",
-    [Lowspeed]	"low",
-    [Highspeed]	"high",
-    [Nospeed]	"no",
+    [Fullspeed] "full",
+    [Lowspeed]  "low",
+    [Highspeed] "high",
+    [Nospeed]   "no",
 };
 /*e: global spname(arm) */
 
 /*s: global debug(arm) */
-static int	debug;
+static int  debug;
 /*e: global debug(arm) */
 /*s: global hcitypes(arm) */
-static Hcitype	hcitypes[Nhcis];
+static Hcitype  hcitypes[Nhcis];
 /*e: global hcitypes(arm) */
 /*s: global hcis(arm) */
-static Hci*	hcis[Nhcis];
+static Hci* hcis[Nhcis];
 /*e: global hcis(arm) */
 /*s: global epslck(arm) */
-static QLock	epslck;		/* add, del, lookup endpoints */
+static QLock    epslck;     /* add, del, lookup endpoints */
 /*e: global epslck(arm) */
 /*s: global eps(arm) */
-static Ep*	eps[Neps];	/* all endpoints known */
+static Ep*  eps[Neps];  /* all endpoints known */
 /*e: global eps(arm) */
 /*s: global epmax(arm) */
-static int	epmax;		/* 1 + last endpoint index used  */
+static int  epmax;      /* 1 + last endpoint index used  */
 /*e: global epmax(arm) */
 /*s: global usbidgen(arm) */
-static int	usbidgen;	/* device address generator */
+static int  usbidgen;   /* device address generator */
 /*e: global usbidgen(arm) */
 
 /*s: function seprintdata(arm) */
@@ -522,9 +522,9 @@ newdev(Hci *hp, int ishub, int isroot)
         d->speed = Highspeed;
     else
         d->speed = Fullspeed;
-    d->state = Dconfig;		/* address not yet set */
+    d->state = Dconfig;     /* address not yet set */
     ep->dev = d;
-    ep->ep0 = ep;			/* no ref counted here */
+    ep->ep0 = ep;           /* no ref counted here */
     ep->ttype = Tctl;
     ep->tmout = Xfertmout;
     ep->mode = ORDWR;
@@ -621,7 +621,7 @@ usbgen(Chan *c, char *, Dirtab*, int, int s, Dir *dp)
     }
 
     switch(QID(c->qid)){
-    case Qdir:				/* list #u */
+    case Qdir:              /* list #u */
         if(s == 0){
             mkqid(&q, Qusbdir, 0, QTDIR);
             devdir(c, q, "usb", 0, eve, 0555, dp);
@@ -649,7 +649,7 @@ usbgen(Chan *c, char *, Dirtab*, int, int s, Dir *dp)
         if(0)ddprint("ok\n");
         return 1;
 
-    case Qusbdir:				/* list #u/usb */
+    case Qusbdir:               /* list #u/usb */
     Usbdir:
         if(s < nelem(usbdir)){
             dir = &usbdir[s];
@@ -683,7 +683,7 @@ usbgen(Chan *c, char *, Dirtab*, int, int s, Dir *dp)
         s = 0;
         goto Usbdir;
 
-    default:				/* list #u/usb/epN.M */
+    default:                /* list #u/usb/epN.M */
         nb = qid2epidx(QID(c->qid));
         ep = getep(nb);
         if(ep == nil)
@@ -728,7 +728,7 @@ hciprobe(int cardno, int ctlrno)
     Hci *hp;
     char *type;
     char name[64];
-    static int epnb = 1;	/* guess the endpoint nb. for the controller */
+    static int epnb = 1;    /* guess the endpoint nb. for the controller */
 
     ddprint("hciprobe %d %d\n", cardno, ctlrno);
     hp = smalloc(sizeof(Hci));
@@ -808,8 +808,8 @@ usbinit(void)
         if(hp != nil){
             if(hp->init != nil)
                 hp->init(hp);
-            d = newdev(hp, 1, 1);		/* new root hub */
-            d->dev->state = Denabled;	/* although addr == 0 */
+            d = newdev(hp, 1, 1);       /* new root hub */
+            d->dev->state = Denabled;   /* although addr == 0 */
             d->maxpkt = 64;
             snprint(info, sizeof(info), "ports %d", hp->nports);
             kstrdup(&d->info, info);
@@ -874,7 +874,7 @@ usbload(int speed, int maxpkt)
         print("usbload: bad speed %d\n", speed);
         /* let it run */
     }
-    return l / 1000UL;	/* in µs */
+    return l / 1000UL;  /* in µs */
 }
 /*e: function usbload(arm) */
 
@@ -925,13 +925,13 @@ usbopen(Chan *c, int omode)
         ep->load = usbload(ep->dev->speed, ep->maxpkt);
     ep->hp->epopen(ep);
 
-    poperror();	/* ep->inuse */
-    poperror();	/* don't putep(): ref kept for fid using the ep. */
+    poperror(); /* ep->inuse */
+    poperror(); /* don't putep(): ref kept for fid using the ep. */
 
     c->mode = mode;
     c->flag |= COPEN;
     c->offset = 0;
-    c->aux = nil;	/* paranoia */
+    c->aux = nil;   /* paranoia */
     return c;
 }
 /*e: function usbopen(arm) */
@@ -977,7 +977,7 @@ usbclose(Chan *c)
         free(c->aux);
         c->aux = nil;
         epclose(ep);
-        putep(ep);	/* release ref kept since usbopen */
+        putep(ep);  /* release ref kept since usbopen */
         c->flag &= ~COPEN;
     }
     poperror();
@@ -1167,7 +1167,7 @@ pow2(int n)
 static void
 setmaxpkt(Ep *ep, char* s)
 {
-    long spp;	/* samples per packet */
+    long spp;   /* samples per packet */
 
     if(ep->dev->speed == Highspeed)
         spp = (ep->hz * ep->pollival * ep->ntds + 7999) / 8000;
@@ -1243,7 +1243,7 @@ epctl(Ep *ep, Chan *c, void *a, long n)
         nep = newdev(ep->hp, 0, 0);
         nep->dev->speed = l;
         if(nep->dev->speed  != Lowspeed)
-            nep->maxpkt = 64;	/* assume full speed */
+            nep->maxpkt = 64;   /* assume full speed */
         nep->dev->hub = d->nb;
         nep->dev->port = atoi(cb->f[2]);
         /* next read request will read

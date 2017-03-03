@@ -1,3 +1,4 @@
+/*s: init/arm/start.s */
 /*
  * Common startup for armv6 and armv7
  * The rest of l.s has been moved to armv[67].s
@@ -37,3 +38,4 @@ TEXT _start(SB), 1, $-4
 	B	0(PC)
 
 	RET
+/*e: init/arm/start.s */

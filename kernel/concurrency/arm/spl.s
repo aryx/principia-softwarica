@@ -1,3 +1,4 @@
+/*s: concurrency/arm/spl.s */
 #include "mem.h"
 #include "arm.h"
 #include "arminstr.ha"
@@ -57,3 +58,4 @@ TEXT splflo(SB), 1, $-4
 	BIC	$(PsrDfiq), R0, R1
 	MOVW	R1, CPSR
 	RET
+/*e: concurrency/arm/spl.s */

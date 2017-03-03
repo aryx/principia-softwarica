@@ -17,12 +17,12 @@
 
 /*s: global soc(arm) */
 Soc soc = {
-    .dramsize	= 512*MiB,    // 0 to 0x20000000
+    .dramsize   = 512*MiB,    // 0 to 0x20000000
 
-    .physio		= 0x20000000, // after RAM
-    .busdram	= 0x40000000,
-    .busio		= 0x7E000000,
-    .armlocal	= 0,
+    .physio     = 0x20000000, // after RAM
+    .busdram    = 0x40000000,
+    .busio      = 0x7E000000,
+    .armlocal   = 0,
 
     .l1ptedramattrs = Cached | Buffered,
     .l2ptedramattrs = Cached | Buffered,
@@ -46,7 +46,7 @@ arch_cpuidprint(void)
     char name[64];
 
     cputype2name(name, sizeof name);
-    arch_delay(50);				/* let uart catch up */
+    arch_delay(50);             /* let uart catch up */
     print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
 }
 /*e: function arch_cpuidprint(arm) */

@@ -1,3 +1,4 @@
+/*s: memory/arm/cache_raspi1.s */
 #include "mem.h"
 #include "arm.h"
 #include "arminstr.ha"
@@ -96,3 +97,4 @@ TEXT cacheiinv(SB), 1, $-4
 	MOVW	$0, R0
 	MCR	CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
 	RET
+/*e: memory/arm/cache_raspi1.s */

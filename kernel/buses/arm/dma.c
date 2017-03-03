@@ -3,10 +3,10 @@
  * bcm2835 dma controller
  *
  * simplest to use only channels 0-6
- *	channels 7-14 have reduced functionality
- *	channel 15 is at a weird address
- *	channels 0 and 15 have an "external 128 bit 8 word read FIFO"
- *	  for memory to memory transfers
+ *  channels 7-14 have reduced functionality
+ *  channel 15 is at a weird address
+ *  channels 0 and 15 have an "external 128 bit 8 word read FIFO"
+ *    for memory to memory transfers
  *
  * Experiments show that only channels 2-5,11-12 work with mmc
  */
@@ -21,62 +21,62 @@
 #include "io.h"
 
 /*s: constant DMAREGS(arm) */
-#define DMAREGS	(VIRTIO+0x7000)
+#define DMAREGS (VIRTIO+0x7000)
 /*e: constant DMAREGS(arm) */
 
-#define DBG	if(Dbg)
+#define DBG if(Dbg)
 
 /*s: enum _anon_ (buses/arm/dma.c)(arm) */
 enum {
-    Nchan		= 7,		/* number of dma channels */
-    Regsize		= 0x100,	/* size of regs for each chan */
-    Cbalign		= 32,		/* control block byte alignment */
-    Dbg		= 0,
+    Nchan       = 7,        /* number of dma channels */
+    Regsize     = 0x100,    /* size of regs for each chan */
+    Cbalign     = 32,       /* control block byte alignment */
+    Dbg     = 0,
     
     /* registers for each dma controller */
-    Cs		= 0x00>>2,
-    Conblkad	= 0x04>>2,
-    Ti		= 0x08>>2,
-    Sourcead	= 0x0c>>2,
-    Destad		= 0x10>>2,
-    Txfrlen		= 0x14>>2,
-    Stride		= 0x18>>2,
-    Nextconbk	= 0x1c>>2,
-    Debug		= 0x20>>2,
+    Cs      = 0x00>>2,
+    Conblkad    = 0x04>>2,
+    Ti      = 0x08>>2,
+    Sourcead    = 0x0c>>2,
+    Destad      = 0x10>>2,
+    Txfrlen     = 0x14>>2,
+    Stride      = 0x18>>2,
+    Nextconbk   = 0x1c>>2,
+    Debug       = 0x20>>2,
 
     /* collective registers */
-    Intstatus	= 0xfe0>>2,
-    Enable		= 0xff0>>2,
+    Intstatus   = 0xfe0>>2,
+    Enable      = 0xff0>>2,
 
     /* Cs */
-    Reset		= 1<<31,
-    Abort		= 1<<30,
-    Error		= 1<<8,
-    Waitwrite	= 1<<6,
-    Waitdreq	= 1<<5,
-    Paused		= 1<<4,
-    Dreq		= 1<<3,
-    Int		= 1<<2,
-    End		= 1<<1,
-    Active		= 1<<0,
+    Reset       = 1<<31,
+    Abort       = 1<<30,
+    Error       = 1<<8,
+    Waitwrite   = 1<<6,
+    Waitdreq    = 1<<5,
+    Paused      = 1<<4,
+    Dreq        = 1<<3,
+    Int     = 1<<2,
+    End     = 1<<1,
+    Active      = 1<<0,
 
     /* Ti */
     Permapshift= 16,
-    Srcignore	= 1<<11,
-    Srcdreq		= 1<<10,
-    Srcwidth128	= 1<<9,
-    Srcinc		= 1<<8,
-    Destignore	= 1<<7,
-    Destdreq	= 1<<6,
-    Destwidth128	= 1<<5,
-    Destinc		= 1<<4,
-    Waitresp	= 1<<3,
-    Tdmode		= 1<<1,
-    Inten		= 1<<0,
+    Srcignore   = 1<<11,
+    Srcdreq     = 1<<10,
+    Srcwidth128 = 1<<9,
+    Srcinc      = 1<<8,
+    Destignore  = 1<<7,
+    Destdreq    = 1<<6,
+    Destwidth128    = 1<<5,
+    Destinc     = 1<<4,
+    Waitresp    = 1<<3,
+    Tdmode      = 1<<1,
+    Inten       = 1<<0,
 
     /* Debug */
-    Lite		= 1<<28,
-    Clrerrors	= 7<<0,
+    Lite        = 1<<28,
+    Clrerrors   = 7<<0,
 };
 /*e: enum _anon_ (buses/arm/dma.c)(arm) */
 
@@ -85,22 +85,22 @@ typedef struct Cb Cb;
 
 /*s: struct Ctlr(arm) */
 struct Ctlr {
-    u32int	*regs;
-    Cb	*cb;
-    Rendez	r;
-    int	dmadone;
+    u32int  *regs;
+    Cb  *cb;
+    Rendez  r;
+    int dmadone;
 };
 /*e: struct Ctlr(arm) */
 
 /*s: struct Cb(arm) */
 struct Cb {
-    u32int	ti;
-    u32int	sourcead;
-    u32int	destad;
-    u32int	txfrlen;
-    u32int	stride;
-    u32int	nextconbk;
-    u32int	reserved[2];
+    u32int  ti;
+    u32int  sourcead;
+    u32int  destad;
+    u32int  txfrlen;
+    u32int  stride;
+    u32int  nextconbk;
+    u32int  reserved[2];
 };
 /*e: struct Cb(arm) */
 

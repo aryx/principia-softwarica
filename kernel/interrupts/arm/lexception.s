@@ -1,3 +1,4 @@
+/*s: interrupts/arm/lexception.s */
 /*
  * arm exception handlers
  */
@@ -233,3 +234,4 @@ TEXT setr13(SB), 1, $-4
 
 	MOVW	R2, CPSR		/* switch back to old mode */
 	RET
+/*e: interrupts/arm/lexception.s */

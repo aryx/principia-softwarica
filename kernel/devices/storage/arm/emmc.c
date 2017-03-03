@@ -16,117 +16,117 @@
 #include "../port/sd.h"
 
 /*s: constant EMMCREGS(arm) */
-#define EMMCREGS	(VIRTIO+0x300000)
+#define EMMCREGS    (VIRTIO+0x300000)
 /*e: constant EMMCREGS(arm) */
 
 /*s: enum _anon_ (devices/storage/arm/emmc.c)(arm) */
 enum {
-    Extfreq		= 100*Mhz,	/* guess external clock frequency if */
+    Extfreq     = 100*Mhz,  /* guess external clock frequency if */
                     /* not available from vcore */
-    Initfreq	= 400000,	/* initialisation frequency for MMC */
-    SDfreq		= 25*Mhz,	/* standard SD frequency */
-    DTO		= 14,		/* data timeout exponent (guesswork) */
+    Initfreq    = 400000,   /* initialisation frequency for MMC */
+    SDfreq      = 25*Mhz,   /* standard SD frequency */
+    DTO     = 14,       /* data timeout exponent (guesswork) */
 
-    MMCSelect	= 7,		/* mmc/sd card select command */
-    Setbuswidth	= 6,		/* mmc/sd set bus width command */
+    MMCSelect   = 7,        /* mmc/sd card select command */
+    Setbuswidth = 6,        /* mmc/sd set bus width command */
 };
 /*e: enum _anon_ (devices/storage/arm/emmc.c)(arm) */
 
 /*s: enum _anon_ (devices/storage/arm/emmc.c)2(arm) */
 enum {
     /* Controller registers */
-    Arg2			= 0x00>>2,
-    Blksizecnt		= 0x04>>2,
-    Arg1			= 0x08>>2,
-    Cmdtm			= 0x0c>>2,
-    Resp0			= 0x10>>2,
-    Resp1			= 0x14>>2,
-    Resp2			= 0x18>>2,
-    Resp3			= 0x1c>>2,
-    Data			= 0x20>>2,
-    Status			= 0x24>>2,
-    Control0		= 0x28>>2,
-    Control1		= 0x2c>>2,
-    Interrupt		= 0x30>>2,
-    Irptmask		= 0x34>>2,
-    Irpten			= 0x38>>2,
-    Control2		= 0x3c>>2,
-    Forceirpt		= 0x50>>2,
-    Boottimeout		= 0x70>>2,
-    Dbgsel			= 0x74>>2,
-    Exrdfifocfg		= 0x80>>2,
-    Exrdfifoen		= 0x84>>2,
-    Tunestep		= 0x88>>2,
-    Tunestepsstd		= 0x8c>>2,
-    Tunestepsddr		= 0x90>>2,
-    Spiintspt		= 0xf0>>2,
-    Slotisrver		= 0xfc>>2,
+    Arg2            = 0x00>>2,
+    Blksizecnt      = 0x04>>2,
+    Arg1            = 0x08>>2,
+    Cmdtm           = 0x0c>>2,
+    Resp0           = 0x10>>2,
+    Resp1           = 0x14>>2,
+    Resp2           = 0x18>>2,
+    Resp3           = 0x1c>>2,
+    Data            = 0x20>>2,
+    Status          = 0x24>>2,
+    Control0        = 0x28>>2,
+    Control1        = 0x2c>>2,
+    Interrupt       = 0x30>>2,
+    Irptmask        = 0x34>>2,
+    Irpten          = 0x38>>2,
+    Control2        = 0x3c>>2,
+    Forceirpt       = 0x50>>2,
+    Boottimeout     = 0x70>>2,
+    Dbgsel          = 0x74>>2,
+    Exrdfifocfg     = 0x80>>2,
+    Exrdfifoen      = 0x84>>2,
+    Tunestep        = 0x88>>2,
+    Tunestepsstd        = 0x8c>>2,
+    Tunestepsddr        = 0x90>>2,
+    Spiintspt       = 0xf0>>2,
+    Slotisrver      = 0xfc>>2,
 
     /* Control0 */
-    Dwidth4			= 1<<1,
-    Dwidth1			= 0<<1,
+    Dwidth4         = 1<<1,
+    Dwidth1         = 0<<1,
 
     /* Control1 */
-    Srstdata		= 1<<26,	/* reset data circuit */
-    Srstcmd			= 1<<25,	/* reset command circuit */
-    Srsthc			= 1<<24,	/* reset complete host controller */
-    Datatoshift		= 16,		/* data timeout unit exponent */
-    Datatomask		= 0xF0000,
-    Clkfreq8shift		= 8,		/* SD clock base divider LSBs */
-    Clkfreq8mask		= 0xFF00,
-    Clkfreqms2shift		= 6,		/* SD clock base divider MSBs */
-    Clkfreqms2mask		= 0xC0,
-    Clkgendiv		= 0<<5,		/* SD clock divided */
-    Clkgenprog		= 1<<5,		/* SD clock programmable */
-    Clken			= 1<<2,		/* SD clock enable */
-    Clkstable		= 1<<1,	
-    Clkintlen		= 1<<0,		/* enable internal EMMC clocks */
+    Srstdata        = 1<<26,    /* reset data circuit */
+    Srstcmd         = 1<<25,    /* reset command circuit */
+    Srsthc          = 1<<24,    /* reset complete host controller */
+    Datatoshift     = 16,       /* data timeout unit exponent */
+    Datatomask      = 0xF0000,
+    Clkfreq8shift       = 8,        /* SD clock base divider LSBs */
+    Clkfreq8mask        = 0xFF00,
+    Clkfreqms2shift     = 6,        /* SD clock base divider MSBs */
+    Clkfreqms2mask      = 0xC0,
+    Clkgendiv       = 0<<5,     /* SD clock divided */
+    Clkgenprog      = 1<<5,     /* SD clock programmable */
+    Clken           = 1<<2,     /* SD clock enable */
+    Clkstable       = 1<<1, 
+    Clkintlen       = 1<<0,     /* enable internal EMMC clocks */
 
     /* Cmdtm */
-    Indexshift		= 24,
-    Suspend			= 1<<22,
-    Resume			= 2<<22,
-    Abort			= 3<<22,
-    Isdata			= 1<<21,
-    Ixchken			= 1<<20,
-    Crcchken		= 1<<19,
-    Respmask		= 3<<16,
-    Respnone		= 0<<16,
-    Resp136			= 1<<16,
-    Resp48			= 2<<16,
-    Resp48busy		= 3<<16,
-    Multiblock		= 1<<5,
-    Host2card		= 0<<4,
-    Card2host		= 1<<4,
-    Autocmd12		= 1<<2,
-    Autocmd23		= 2<<2,
-    Blkcnten		= 1<<1,
+    Indexshift      = 24,
+    Suspend         = 1<<22,
+    Resume          = 2<<22,
+    Abort           = 3<<22,
+    Isdata          = 1<<21,
+    Ixchken         = 1<<20,
+    Crcchken        = 1<<19,
+    Respmask        = 3<<16,
+    Respnone        = 0<<16,
+    Resp136         = 1<<16,
+    Resp48          = 2<<16,
+    Resp48busy      = 3<<16,
+    Multiblock      = 1<<5,
+    Host2card       = 0<<4,
+    Card2host       = 1<<4,
+    Autocmd12       = 1<<2,
+    Autocmd23       = 2<<2,
+    Blkcnten        = 1<<1,
 
     /* Interrupt */
-    Acmderr		= 1<<24,
-    Denderr		= 1<<22,
-    Dcrcerr		= 1<<21,
-    Dtoerr		= 1<<20,
-    Cbaderr		= 1<<19,
-    Cenderr		= 1<<18,
-    Ccrcerr		= 1<<17,
-    Ctoerr		= 1<<16,
-    Err		= 1<<15,
-    Cardintr	= 1<<8,		/* not in Broadcom datasheet */
-    Cardinsert	= 1<<6,		/* not in Broadcom datasheet */
-    Readrdy		= 1<<5,
-    Writerdy	= 1<<4,
-    Datadone	= 1<<1,
-    Cmddone		= 1<<0,
+    Acmderr     = 1<<24,
+    Denderr     = 1<<22,
+    Dcrcerr     = 1<<21,
+    Dtoerr      = 1<<20,
+    Cbaderr     = 1<<19,
+    Cenderr     = 1<<18,
+    Ccrcerr     = 1<<17,
+    Ctoerr      = 1<<16,
+    Err     = 1<<15,
+    Cardintr    = 1<<8,     /* not in Broadcom datasheet */
+    Cardinsert  = 1<<6,     /* not in Broadcom datasheet */
+    Readrdy     = 1<<5,
+    Writerdy    = 1<<4,
+    Datadone    = 1<<1,
+    Cmddone     = 1<<0,
 
     /* Status */
-    Bufread		= 1<<11,	/* not in Broadcom datasheet */
-    Bufwrite	= 1<<10,	/* not in Broadcom datasheet */
-    Readtrans	= 1<<9,
-    Writetrans	= 1<<8,
-    Datactive	= 1<<2,
-    Datinhibit	= 1<<1,
-    Cmdinhibit	= 1<<0,
+    Bufread     = 1<<11,    /* not in Broadcom datasheet */
+    Bufwrite    = 1<<10,    /* not in Broadcom datasheet */
+    Readtrans   = 1<<9,
+    Writetrans  = 1<<8,
+    Datactive   = 1<<2,
+    Datinhibit  = 1<<1,
+    Cmdinhibit  = 1<<0,
 };
 /*e: enum _anon_ (devices/storage/arm/emmc.c)2(arm) */
 
@@ -155,10 +155,10 @@ typedef struct Ctlr Ctlr;
 
 /*s: struct Ctlr (devices/storage/arm/emmc.c)(arm) */
 struct Ctlr {
-    Rendez	r;
-    int	datadone;
-    int	fastclock;
-    ulong	extclk;
+    Rendez  r;
+    int datadone;
+    int fastclock;
+    ulong   extclk;
 };
 /*e: struct Ctlr (devices/storage/arm/emmc.c)(arm) */
 
@@ -220,7 +220,7 @@ emmcinit(void)
     emmc.extclk = clk;
     print("%seMMC external clock %lud Mhz\n", s, clk / Mhz);
     r = (u32int*)EMMCREGS;
-    //if(0)print("emmc control %8.8ux %8.8ux %8.8ux\n",	r[Control0], r[Control1], r[Control2]);
+    //if(0)print("emmc control %8.8ux %8.8ux %8.8ux\n", r[Control0], r[Control1], r[Control2]);
     WR(Control1, Srsthc);
     arch_delay(10);
     while(r[Control1] & Srsthc)
@@ -247,7 +247,7 @@ emmcinquiry(char *inquiry, int inqlen)
 /*s: function mmcinterrupt(arm) */
 static void
 mmcinterrupt(Ureg*, void*)
-{	
+{   
     u32int *r;
     r = (u32int*)EMMCREGS;
     if(r[Interrupt]&(Datadone|Err)){

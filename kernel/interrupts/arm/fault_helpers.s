@@ -1,3 +1,4 @@
+/*s: interrupts/arm/fault_helpers.s */
 #include "mem.h"
 #include "arm.h"
 
@@ -12,3 +13,4 @@ TEXT ifsrget(SB), 1, $-4			/* instruction fault status */
 TEXT farget(SB), 1, $-4				/* fault address */
 	MRC	CpSC, 0, R0, C(CpFAR), C(0x0)
 	RET
+/*e: interrupts/arm/fault_helpers.s */

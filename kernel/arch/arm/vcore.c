@@ -9,7 +9,7 @@
  * Mailbox interface with videocore gpu
  */
 /*s: constant MAILBOX(arm) */
-#define	MAILBOX		(VIRTIO+0xB880)
+#define MAILBOX     (VIRTIO+0xB880)
 /*e: constant MAILBOX(arm) */
 
 typedef struct Fbinfo Fbinfo;
@@ -17,92 +17,92 @@ typedef struct Prophdr Prophdr;
 
 /*s: enum _anon_ (arch/arm/vcore.c)(arm) */
 enum {
-    Read		= 0x00>>2,
-    Write		= 0x00>>2,
-    Peek		= 0x10>>2,
-    Sender		= 0x14>>2,
-    Status		= 0x18>>2,
-        Full		= 1<<31,
-        Empty		= 1<<30,
-    Config		= 0x1C>>2,
+    Read        = 0x00>>2,
+    Write       = 0x00>>2,
+    Peek        = 0x10>>2,
+    Sender      = 0x14>>2,
+    Status      = 0x18>>2,
+        Full        = 1<<31,
+        Empty       = 1<<30,
+    Config      = 0x1C>>2,
 
-    NRegs		= 0x20>>2,
+    NRegs       = 0x20>>2,
 };
 /*e: enum _anon_ (arch/arm/vcore.c)(arm) */
 /*s: enum _anon_ (arch/arm/vcore.c)2(arm) */
 enum {
-    ChanFb		= 1,
-    ChanProps	= 8,
-    ChanMask	= 0xF,
+    ChanFb      = 1,
+    ChanProps   = 8,
+    ChanMask    = 0xF,
 };
 /*e: enum _anon_ (arch/arm/vcore.c)2(arm) */
 
 /*s: enum _anon_ (arch/arm/vcore.c)3(arm) */
 enum {
-    Req			= 0x0,
-    RspOk		= 0x80000000,
-    TagResp		= 1<<31,
+    Req         = 0x0,
+    RspOk       = 0x80000000,
+    TagResp     = 1<<31,
 };
 /*e: enum _anon_ (arch/arm/vcore.c)3(arm) */
 
 /*s: enum _anon_ (arch/arm/vcore.c)4(arm) */
 enum {
-    TagGetfwrev	= 0x00000001,
-    TagGetrev	= 0x00010002,
+    TagGetfwrev = 0x00000001,
+    TagGetrev   = 0x00010002,
 
-    TagGetmac	= 0x00010003,
-    TagGetram	= 0x00010005,
+    TagGetmac   = 0x00010003,
+    TagGetram   = 0x00010005,
 
-    TagGetpower	= 0x00020001,
-    TagSetpower	= 0x00028001,
-        Powerwait	= 1<<1,
+    TagGetpower = 0x00020001,
+    TagSetpower = 0x00028001,
+        Powerwait   = 1<<1,
 
     TagGetclkspd= 0x00030002,
     TagGetclkmax= 0x00030004,
     TagSetclkspd= 0x00038002,
 
-    TagGettemp	= 0x00030006,
+    TagGettemp  = 0x00030006,
 
-    TagFballoc	= 0x00040001,
-    TagFbfree	= 0x00048001,
-    TagFbblank	= 0x00040002,
+    TagFballoc  = 0x00040001,
+    TagFbfree   = 0x00048001,
+    TagFbblank  = 0x00040002,
 
-    TagGetres	= 0x00040003,
-    TagSetres	= 0x00048003,
-    TagGetvres	= 0x00040004,
-    TagSetvres	= 0x00048004,
-    TagGetdepth	= 0x00040005,
-    TagSetdepth	= 0x00048005,
-    TagGetrgb	= 0x00044006,
-    TagSetrgb	= 0x00048006,
+    TagGetres   = 0x00040003,
+    TagSetres   = 0x00048003,
+    TagGetvres  = 0x00040004,
+    TagSetvres  = 0x00048004,
+    TagGetdepth = 0x00040005,
+    TagSetdepth = 0x00048005,
+    TagGetrgb   = 0x00044006,
+    TagSetrgb   = 0x00048006,
 };
 /*e: enum _anon_ (arch/arm/vcore.c)4(arm) */
 
 /*s: struct Fbinfo(arm) */
 // Framebuffer
 struct Fbinfo {
-    u32int	xres;
-    u32int	yres;
-    u32int	xresvirtual;
-    u32int	yresvirtual;
-    u32int	pitch;			/* returned by gpu */
-    u32int	bpp;
-    u32int	xoffset;
-    u32int	yoffset;
-    u32int	base;			/* returned by gpu */
-    u32int	screensize;		/* returned by gpu */
+    u32int  xres;
+    u32int  yres;
+    u32int  xresvirtual;
+    u32int  yresvirtual;
+    u32int  pitch;          /* returned by gpu */
+    u32int  bpp;
+    u32int  xoffset;
+    u32int  yoffset;
+    u32int  base;           /* returned by gpu */
+    u32int  screensize;     /* returned by gpu */
 };
 /*e: struct Fbinfo(arm) */
 
 
 /*s: struct Prophdr(arm) */
 struct Prophdr {
-    u32int	len;
-    u32int	req;
-    u32int	tag;
-    u32int	tagbuflen;
-    u32int	taglen;
-    u32int	data[1];
+    u32int  len;
+    u32int  req;
+    u32int  tag;
+    u32int  tagbuflen;
+    u32int  taglen;
+    u32int  data[1];
 };
 /*e: struct Prophdr(arm) */
 
@@ -283,7 +283,7 @@ getpower(int dev)
 /*s: function getethermac(arm) */
 /*
  * Get ethernet address (as hex string)
- *	 [not reentrant]
+ *   [not reentrant]
  */
 char *
 getethermac(void)

@@ -1,3 +1,4 @@
+/*s: init/user/preboot/arm/init9.s */
 /*
  * This is the same as the C program:
  *
@@ -23,3 +24,4 @@ TEXT main(SB), 1, $8
 	BL	startboot(SB)
 _loop:
 	B	_loop
+/*e: init/user/preboot/arm/init9.s */

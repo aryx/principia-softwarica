@@ -15,10 +15,10 @@
 #include "arm.h"
 
 /*s: constant INTREGS(arm) */
-#define INTREGS		(VIRTIO+0xB200)
+#define INTREGS     (VIRTIO+0xB200)
 /*e: constant INTREGS(arm) */
 /*s: constant LOCALREGS(arm) */
-#define	LOCALREGS	(VIRTIO+IOSIZE)
+#define LOCALREGS   (VIRTIO+IOSIZE)
 /*e: constant LOCALREGS(arm) */
 
 typedef struct Intregs Intregs;
@@ -29,12 +29,12 @@ typedef struct Vpage0 Vpage0;
 enum {
     Debug = 0,
 
-    Nvec = 8,		/* # of vectors at start of lexception.s */
+    Nvec = 8,       /* # of vectors at start of lexception.s */
     Fiqenable = 1<<7,
 
-    Localtimerint	= 0x40,
-    Localmboxint	= 0x50,
-    Localintpending	= 0x60,
+    Localtimerint   = 0x40,
+    Localmboxint    = 0x50,
+    Localintpending = 0x60,
 };
 /*e: enum _anon_ (interrupts/arm/trap.c)(arm) */
 
@@ -43,8 +43,8 @@ enum {
  *   Layout at virtual address KZERO (double mapped at HVECTORS).
  */
 struct Vpage0 {
-    void	(*vectors[Nvec])(void);
-    u32int	vtable[Nvec];
+    void    (*vectors[Nvec])(void);
+    u32int  vtable[Nvec];
 };
 /*e: struct Vpage0(arm) */
 
@@ -53,28 +53,28 @@ struct Vpage0 {
  * interrupt control registers
  */
 struct Intregs {
-    u32int	ARMpending;
-    u32int	GPUpending[2];
-    u32int	FIQctl;
-    u32int	GPUenable[2];
-    u32int	ARMenable;
-    u32int	GPUdisable[2];
-    u32int	ARMdisable;
+    u32int  ARMpending;
+    u32int  GPUpending[2];
+    u32int  FIQctl;
+    u32int  GPUenable[2];
+    u32int  ARMenable;
+    u32int  GPUdisable[2];
+    u32int  ARMdisable;
 };
 /*e: struct Intregs(arm) */
 
 /*s: struct Vctl(arm) */
 // quite similar to the one for x86
 struct Vctl {
-    int	irq;
-    int	cpu;
-    u32int	*reg;
-    u32int	mask;
+    int irq;
+    int cpu;
+    u32int  *reg;
+    u32int  mask;
 
-    void	(*f)(Ureg*, void*);
-    void	*a;
+    void    (*f)(Ureg*, void*);
+    void    *a;
 
-    Vctl	*next;
+    Vctl    *next;
 };
 /*e: struct Vctl(arm) */
 
@@ -427,7 +427,7 @@ trap(Ureg *ureg)
     else
         ureg->pc -= 4;
 
-    clockintr = 0;		/* if set, may call sched() before return */
+    clockintr = 0;      /* if set, may call sched() before return */
     switch(ureg->type){
     default:
         panic("unknown trap; type %#lux, psr mode %#lux pc %lux", ureg->type,
@@ -437,11 +437,11 @@ trap(Ureg *ureg)
         clockintr = irq(ureg);
         cpu->intr++;
         break;
-    case PsrMabt:			/* prefetch fault */
+    case PsrMabt:           /* prefetch fault */
         x = ifsrget();
         fsr = (x>>7) & 0x8 | x & 0x7;
         switch(fsr){
-        case 0x02:		/* instruction debug event (BKPT) */
+        case 0x02:      /* instruction debug event (BKPT) */
             if(user){
                 snprint(buf, sizeof buf, "sys: breakpoint");
                 postnote(up, 1, buf, NDebug);
@@ -456,7 +456,7 @@ trap(Ureg *ureg)
             break;
         }
         break;
-    case PsrMabt+1:			/* data fault */
+    case PsrMabt+1:         /* data fault */
         va = farget();
         inst = *(ulong*)(ureg->pc);
         /* bits 12 and 10 have to be concatenated with status */
@@ -464,14 +464,14 @@ trap(Ureg *ureg)
         fsr = (x>>7) & 0x20 | (x>>6) & 0x10 | x & 0xf;
         switch(fsr){
         default:
-        case 0xa:		/* ? was under external abort */
+        case 0xa:       /* ? was under external abort */
             panic("unknown data fault, 6b fsr %#lux", fsr);
             break;
         case 0x0:
             panic("vector exception at %#lux", ureg->pc);
             break;
-        case 0x1:		/* alignment fault */
-        case 0x3:		/* access flag fault (section) */
+        case 0x1:       /* alignment fault */
+        case 0x3:       /* access flag fault (section) */
             if(user){
                 snprint(buf, sizeof buf,
                     "sys: alignment: pc %#lux va %#p\n",
@@ -483,27 +483,27 @@ trap(Ureg *ureg)
         case 0x2:
             panic("terminal exception at %#lux", ureg->pc);
             break;
-        case 0x4:		/* icache maint fault */
-        case 0x6:		/* access flag fault (page) */
-        case 0x8:		/* precise external abort, non-xlat'n */
+        case 0x4:       /* icache maint fault */
+        case 0x6:       /* access flag fault (page) */
+        case 0x8:       /* precise external abort, non-xlat'n */
         case 0x28:
-        case 0xc:		/* l1 translation, precise ext. abort */
+        case 0xc:       /* l1 translation, precise ext. abort */
         case 0x2c:
-        case 0xe:		/* l2 translation, precise ext. abort */
+        case 0xe:       /* l2 translation, precise ext. abort */
         case 0x2e:
-        case 0x16:		/* imprecise ext. abort, non-xlt'n */
+        case 0x16:      /* imprecise ext. abort, non-xlt'n */
         case 0x36:
             panic("external abort %#lux pc %#lux addr %#p",
                 fsr, ureg->pc, va);
             break;
-        case 0x1c:		/* l1 translation, precise parity err */
-        case 0x1e:		/* l2 translation, precise parity err */
-        case 0x18:		/* imprecise parity or ecc err */
+        case 0x1c:      /* l1 translation, precise parity err */
+        case 0x1e:      /* l2 translation, precise parity err */
+        case 0x18:      /* imprecise parity or ecc err */
             panic("translation parity error %#lux pc %#lux addr %#p",
                 fsr, ureg->pc, va);
             break;
-        case 0x5:		/* translation fault, no section entry */
-        case 0x7:		/* translation fault, no page entry */
+        case 0x5:       /* translation fault, no section entry */
+        case 0x7:       /* translation fault, no page entry */
             faultarm(ureg, va, user, !writetomem(inst));
             break;
         case 0x9:
@@ -525,7 +525,7 @@ trap(Ureg *ureg)
             break;
         }
         break;
-    case PsrMund:			/* undefined instruction */
+    case PsrMund:           /* undefined instruction */
         if(user){
             if(seg(up, ureg->pc, 0) != nil &&
                *(u32int*)ureg->pc == 0xD1200070)
@@ -556,7 +556,7 @@ trap(Ureg *ureg)
 
     /* delaysched set because we held a lock or because our quantum ended */
     if(up && up->delaysched && clockintr){
-        sched();		/* can cause more traps */
+        sched();        /* can cause more traps */
         arch_splhi();
     }
 
@@ -632,9 +632,9 @@ dumpstackwithureg(Ureg *ureg)
     for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
         v = *(uintptr*)l;
         if(KTZERO < v && v < (uintptr)etext && !(v & 3)){
-            v -= sizeof(u32int);		/* back up an instr */
+            v -= sizeof(u32int);        /* back up an instr */
             p = (u32int*)v;
-            if((*p & 0x0f000000) == 0x0b000000){	/* BL instr? */
+            if((*p & 0x0f000000) == 0x0b000000){    /* BL instr? */
                 iprint("%#8.8lux=%#8.8lux ", l, v);
                 i++;
             }

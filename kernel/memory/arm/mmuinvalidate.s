@@ -1,3 +1,4 @@
+/*s: memory/arm/mmuinvalidate.s */
 #include "mem.h"
 #include "arm.h"
 #include "arminstr.ha"
@@ -19,3 +20,4 @@ TEXT mmuinvalidateaddr(SB), 1, $-4
 	MCR	CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinvse
 	BARRIERS
 	RET
+/*e: memory/arm/mmuinvalidate.s */

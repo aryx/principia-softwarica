@@ -13,73 +13,73 @@
 #include "io.h"
 
 /*s: constant GPIOREGS(arm) */
-#define GPIOREGS	(VIRTIO+0x200000)
+#define GPIOREGS    (VIRTIO+0x200000)
 /*e: constant GPIOREGS(arm) */
 /*s: constant AUXREGS(arm) */
-#define AUXREGS		(VIRTIO+0x215000)
+#define AUXREGS     (VIRTIO+0x215000)
 /*e: constant AUXREGS(arm) */
 /*s: constant OkLed(arm) */
-#define	OkLed		16
+#define OkLed       16
 /*e: constant OkLed(arm) */
 /*s: constant TxPin(arm) */
-#define	TxPin		14
+#define TxPin       14
 /*e: constant TxPin(arm) */
 /*s: constant RxPin(arm) */
-#define	RxPin		15
+#define RxPin       15
 /*e: constant RxPin(arm) */
 
 /*s: enum _anon_ (buses/arm/uartmini.c)(arm) */
 /* GPIO regs */
 enum {
-    Fsel0	= 0x00>>2,
+    Fsel0   = 0x00>>2,
         FuncMask= 0x7,
-        Input	= 0x0,
-        Output	= 0x1,
-        Alt0	= 0x4,
-        Alt1	= 0x5,
-        Alt2	= 0x6,
-        Alt3	= 0x7,
-        Alt4	= 0x3,
-        Alt5	= 0x2,
-    Set0	= 0x1c>>2,
-    Clr0	= 0x28>>2,
-    Lev0	= 0x34>>2,
-    PUD	= 0x94>>2,
-        Off	= 0x0,
+        Input   = 0x0,
+        Output  = 0x1,
+        Alt0    = 0x4,
+        Alt1    = 0x5,
+        Alt2    = 0x6,
+        Alt3    = 0x7,
+        Alt4    = 0x3,
+        Alt5    = 0x2,
+    Set0    = 0x1c>>2,
+    Clr0    = 0x28>>2,
+    Lev0    = 0x34>>2,
+    PUD = 0x94>>2,
+        Off = 0x0,
         Pulldown= 0x1,
-        Pullup	= 0x2,
-    PUDclk0	= 0x98>>2,
-    PUDclk1	= 0x9c>>2,
+        Pullup  = 0x2,
+    PUDclk0 = 0x98>>2,
+    PUDclk1 = 0x9c>>2,
 };
 /*e: enum _anon_ (buses/arm/uartmini.c)(arm) */
 
 /*s: enum _anon_ (buses/arm/uartmini.c)2(arm) */
 /* AUX regs */
 enum {
-    Irq	= 0x00>>2,
-        UartIrq	= 1<<0,
-    Enables	= 0x04>>2,
-        UartEn	= 1<<0,
-    MuIo	= 0x40>>2,
-    MuIer	= 0x44>>2,
-        RxIen	= 1<<0,
-        TxIen	= 1<<1,
-    MuIir	= 0x48>>2,
-    MuLcr	= 0x4c>>2,
+    Irq = 0x00>>2,
+        UartIrq = 1<<0,
+    Enables = 0x04>>2,
+        UartEn  = 1<<0,
+    MuIo    = 0x40>>2,
+    MuIer   = 0x44>>2,
+        RxIen   = 1<<0,
+        TxIen   = 1<<1,
+    MuIir   = 0x48>>2,
+    MuLcr   = 0x4c>>2,
         Bitsmask= 3<<0,
-        Bits7	= 2<<0,
-        Bits8	= 3<<0,
-    MuMcr	= 0x50>>2,
-        RtsN	= 1<<1,
-    MuLsr	= 0x54>>2,
-        TxDone	= 1<<6,
-        TxRdy	= 1<<5,
-        RxRdy	= 1<<0,
-    MuCntl	= 0x60>>2,
-        CtsFlow	= 1<<3,
-        TxEn	= 1<<1,
-        RxEn	= 1<<0,
-    MuBaud	= 0x68>>2,
+        Bits7   = 2<<0,
+        Bits8   = 3<<0,
+    MuMcr   = 0x50>>2,
+        RtsN    = 1<<1,
+    MuLsr   = 0x54>>2,
+        TxDone  = 1<<6,
+        TxRdy   = 1<<5,
+        RxRdy   = 1<<0,
+    MuCntl  = 0x60>>2,
+        CtsFlow = 1<<3,
+        TxEn    = 1<<1,
+        RxEn    = 1<<0,
+    MuBaud  = 0x68>>2,
 };
 /*e: enum _anon_ (buses/arm/uartmini.c)2(arm) */
 
@@ -87,17 +87,17 @@ extern PhysUart miniphysuart;
 
 /*s: global miniuart(arm) */
 static Uart miniuart = {
-    .regs	= (u32int*)AUXREGS,
-    .name	= "uart0",
-    .freq	= 250000000,
-    .phys	= &miniphysuart,
+    .regs   = (u32int*)AUXREGS,
+    .name   = "uart0",
+    .freq   = 250000000,
+    .phys   = &miniphysuart,
 };
 /*e: global miniuart(arm) */
 
 /*s: function gpiosel(arm) */
 void
 gpiosel(uint pin, int func)
-{	
+{   
     u32int *gp, *fsel;
     int off;
 
@@ -479,23 +479,23 @@ uartconsinit(void)
 
 /*s: global miniphysuart(arm) */
 PhysUart miniphysuart = {
-    .name		= "miniuart",
-    .pnp		= pnp,
-    .enable		= enable,
-    .disable	= disable,
-    .kick		= kick,
-    .dobreak	= dobreak,
-    .baud		= baud,
-    .bits		= bits,
-    .stop		= stop,
-    .parity		= parity,
-    .modemctl	= donothing,
-    .rts		= rts,
-    .dtr		= donothing,
-    .status		= status,
-    .fifo		= donothing,
-    .getc		= getc,
-    .putc		= putc,
+    .name       = "miniuart",
+    .pnp        = pnp,
+    .enable     = enable,
+    .disable    = disable,
+    .kick       = kick,
+    .dobreak    = dobreak,
+    .baud       = baud,
+    .bits       = bits,
+    .stop       = stop,
+    .parity     = parity,
+    .modemctl   = donothing,
+    .rts        = rts,
+    .dtr        = donothing,
+    .status     = status,
+    .fifo       = donothing,
+    .getc       = getc,
+    .putc       = putc,
 };
 /*e: global miniphysuart(arm) */
 

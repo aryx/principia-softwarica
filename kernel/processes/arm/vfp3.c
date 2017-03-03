@@ -14,56 +14,56 @@
 /*s: enum _anon_ (processes/arm/vfp3.c)(arm) */
 /* subarchitecture code in cpu->havefp */
 enum {
-    VFPv2	= 2,
-    VFPv3	= 3,
+    VFPv2   = 2,
+    VFPv3   = 3,
 };
 /*e: enum _anon_ (processes/arm/vfp3.c)(arm) */
 
 /*s: enum _anon_ (processes/arm/vfp3.c)2(arm) */
 /* fp control regs.  most are read-only */
 enum {
-    Fpsid =	0,
-    Fpscr =	1,			/* rw */
-    Mvfr1 =	6,
-    Mvfr0 =	7,
-    Fpexc =	8,			/* rw */
-    Fpinst= 9,			/* optional, for exceptions */
+    Fpsid = 0,
+    Fpscr = 1,          /* rw */
+    Mvfr1 = 6,
+    Mvfr0 = 7,
+    Fpexc = 8,          /* rw */
+    Fpinst= 9,          /* optional, for exceptions */
     Fpinst2=10,
 };
 /*e: enum _anon_ (processes/arm/vfp3.c)2(arm) */
 /*s: enum _anon_ (processes/arm/vfp3.c)3(arm) */
 enum {
     /* Fpexc bits */
-    Fpex =		1u << 31,
-    Fpenabled =	1 << 30,
-    Fpdex =		1 << 29,	/* defined synch exception */
-//	Fp2v =		1 << 28,	/* Fpinst2 reg is valid */
-//	Fpvv =		1 << 27,	/* if Fpdex, vecitr is valid */
-//	Fptfv = 	1 << 26,	/* trapped fault is valid */
-//	Fpvecitr =	MASK(3) << 8,
+    Fpex =      1u << 31,
+    Fpenabled = 1 << 30,
+    Fpdex =     1 << 29,    /* defined synch exception */
+//  Fp2v =      1 << 28,    /* Fpinst2 reg is valid */
+//  Fpvv =      1 << 27,    /* if Fpdex, vecitr is valid */
+//  Fptfv =     1 << 26,    /* trapped fault is valid */
+//  Fpvecitr =  MASK(3) << 8,
     /* FSR bits appear here */
-    Fpmbc =		Fpdex,		/* bits exception handler must clear */
+    Fpmbc =     Fpdex,      /* bits exception handler must clear */
 
     /* Fpscr bits; see u.h for more */
-    Stride =	MASK(2) << 20,
-    Len =		MASK(3) << 16,
-    Dn=		1 << 25,
-    Fz=		1 << 24,
+    Stride =    MASK(2) << 20,
+    Len =       MASK(3) << 16,
+    Dn=     1 << 25,
+    Fz=     1 << 24,
     /* trap exception enables (not allowed in vfp3) */
-    FPIDNRM =	1 << 15,	/* input denormal */
+    FPIDNRM =   1 << 15,    /* input denormal */
     Alltraps = FPIDNRM | FPINEX | FPUNFL | FPOVFL | FPZDIV | FPINVAL,
     /* pending exceptions */
-    FPAIDNRM =	1 << 7,		/* input denormal */
+    FPAIDNRM =  1 << 7,     /* input denormal */
     Allexc = FPAIDNRM | FPAINEX | FPAUNFL | FPAOVFL | FPAZDIV | FPAINVAL,
     /* condition codes */
-    Allcc =		MASK(4) << 28,
+    Allcc =     MASK(4) << 28,
 };
 /*e: enum _anon_ (processes/arm/vfp3.c)3(arm) */
 /*s: enum _anon_ (processes/arm/vfp3.c)4(arm) */
 enum {
     /* CpCPaccess bits */
-    Cpaccnosimd =	1u << 31,
-    Cpaccd16 =	1 << 30,
+    Cpaccnosimd =   1u << 31,
+    Cpaccd16 =  1 << 30,
 };
 /*e: enum _anon_ (processes/arm/vfp3.c)4(arm) */
 
@@ -124,17 +124,17 @@ havefp(void)
         cpu->havefpvalid = 1;
         return 0;
     }
-    cpu->fpon = 1;			/* don't panic */
+    cpu->fpon = 1;          /* don't panic */
     sid = fprd(Fpsid);
     cpu->fpon = 0;
     switch((sid >> 16) & MASK(7)){
-    case 0:				/* VFPv1 */
+    case 0:             /* VFPv1 */
         break;
-    case 1:				/* VFPv2 */
+    case 1:             /* VFPv2 */
         cpu->havefp = VFPv2;
         cpu->fpnregs = 16;
         break;
-    default:			/* VFPv3 or later */
+    default:            /* VFPv3 or later */
         cpu->havefp = VFPv3;
         cpu->fpnregs = (acc & Cpaccd16) ? 16 : 32;
         break;
@@ -218,7 +218,7 @@ fpon(void)
         if (cpu->fpconfiged)
             fpwr(Fpscr, (fprd(Fpscr) & Allcc) | cpu->fpscr);
         else
-            fpcfg();	/* 1st time on this fpu; configure it */
+            fpcfg();    /* 1st time on this fpu; configure it */
     }
 }
 /*e: function fpon(arm) */
@@ -227,12 +227,12 @@ fpon(void)
 void
 fpclear(void)
 {
-//	ulong scr;
+//  ulong scr;
 
     fpon();
-//	scr = fprd(Fpscr);
-//	cpu->fpscr = scr & ~Allexc;
-//	fpwr(Fpscr, cpu->fpscr);
+//  scr = fprd(Fpscr);
+//  cpu->fpscr = scr & ~Allexc;
+//  fpwr(Fpscr, cpu->fpscr);
 
     fpwr(Fpexc, fprd(Fpexc) & ~Fpmbc);
 }
@@ -532,40 +532,40 @@ static int
 condok(int cc, int c)
 {
     switch(c){
-    case 0:	/* Z set */
+    case 0: /* Z set */
         return cc&Z;
-    case 1:	/* Z clear */
+    case 1: /* Z clear */
         return (cc&Z) == 0;
-    case 2:	/* C set */
+    case 2: /* C set */
         return cc&C;
-    case 3:	/* C clear */
+    case 3: /* C clear */
         return (cc&C) == 0;
-    case 4:	/* N set */
+    case 4: /* N set */
         return cc&N;
-    case 5:	/* N clear */
+    case 5: /* N clear */
         return (cc&N) == 0;
-    case 6:	/* V set */
+    case 6: /* V set */
         return cc&V;
-    case 7:	/* V clear */
+    case 7: /* V clear */
         return (cc&V) == 0;
-    case 8:	/* C set and Z clear */
+    case 8: /* C set and Z clear */
         return cc&C && (cc&Z) == 0;
-    case 9:	/* C clear or Z set */
+    case 9: /* C clear or Z set */
         return (cc&C) == 0 || cc&Z;
-    case 10:	/* N set and V set, or N clear and V clear */
+    case 10:    /* N set and V set, or N clear and V clear */
         return (~cc&(N|V))==0 || (cc&(N|V)) == 0;
-    case 11:	/* N set and V clear, or N clear and V set */
+    case 11:    /* N set and V clear, or N clear and V set */
         return (cc&(N|V))==N || (cc&(N|V))==V;
-    case 12:	/* Z clear, and either N set and V set or N clear and V clear */
+    case 12:    /* Z clear, and either N set and V set or N clear and V clear */
         return (cc&Z) == 0 && ((~cc&(N|V))==0 || (cc&(N|V))==0);
-    case 13:	/* Z set, or N set and V clear or N clear and V set */
+    case 13:    /* Z set, or N set and V clear or N clear and V set */
         return (cc&Z) || (cc&(N|V))==N || (cc&(N|V))==V;
-    case 14:	/* always */
+    case 14:    /* always */
         return 1;
-    case 15:	/* never (reserved) */
+    case 15:    /* never (reserved) */
         return 0;
     }
-    return 0;	/* not reached */
+    return 0;   /* not reached */
 }
 /*e: function condok(arm) */
 
@@ -593,23 +593,23 @@ fpuemu(Ureg* ureg)
     op  = (*(ulong *)pc >> 24) & MASK(4);
     cop = (*(ulong *)pc >>  8) & MASK(4);
     if(cpu->fpon)
-        fpstuck(pc);		/* debugging; could move down 1 line */
-    if (ISFPAOP(cop, op)) {		/* old arm 7500 fpa opcode? */
-//		iprint("fpuemu: fpa instr %#8.8lux at %#p\n", *(ulong *)pc, pc);
-//		error("illegal instruction: old arm 7500 fpa opcode");
+        fpstuck(pc);        /* debugging; could move down 1 line */
+    if (ISFPAOP(cop, op)) {     /* old arm 7500 fpa opcode? */
+//      iprint("fpuemu: fpa instr %#8.8lux at %#p\n", *(ulong *)pc, pc);
+//      error("illegal instruction: old arm 7500 fpa opcode");
         s = arch_spllo();
         if(waserror()){
             arch_splx(s);
             nexterror();
         }
         error("ARM7500 instructions not supported; use 5l -f when linking");
-        //nfp = fpiarm(ureg);	/* advances pc past emulated instr(s) */
-        //if (nfp > 1)		/* could adjust this threshold */
-        //	cpu->fppc = cpu->fpcnt = 0;
+        //nfp = fpiarm(ureg);   /* advances pc past emulated instr(s) */
+        //if (nfp > 1)      /* could adjust this threshold */
+        //  cpu->fppc = cpu->fpcnt = 0;
         //arch_splx(s);
         //poperror();
-    } else if (ISVFPOP(cop, op)) {	/* if vfp, fpu must be off */
-        mathemu(ureg);		/* enable fpu & retry */
+    } else if (ISVFPOP(cop, op)) {  /* if vfp, fpu must be off */
+        mathemu(ureg);      /* enable fpu & retry */
         nfp = 1;
     }
 

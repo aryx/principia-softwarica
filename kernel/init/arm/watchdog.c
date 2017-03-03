@@ -7,13 +7,13 @@
 #include "fns.h"
 
 /*s: constant POWERREGS(arm) */
-#define	POWERREGS	(VIRTIO+0x100000)
+#define POWERREGS   (VIRTIO+0x100000)
 /*e: constant POWERREGS(arm) */
 
 /*s: enum _anon_ (init/arm/watchdog.c)(arm) */
 enum {
-    Wdogfreq	= 65536,
-    Wdogtime	= 5,	/* seconds, ≤ 15 */
+    Wdogfreq    = 65536,
+    Wdogtime    = 5,    /* seconds, ≤ 15 */
 };
 /*e: enum _anon_ (init/arm/watchdog.c)(arm) */
 
@@ -22,12 +22,12 @@ enum {
  * Power management / watchdog registers
  */
 enum {
-    Rstc		= 0x1c>>2,
-        Password	= 0x5A<<24,
-        CfgMask		= 0x03<<4,
-        CfgReset	= 0x02<<4,
-    Rsts		= 0x20>>2,
-    Wdog		= 0x24>>2,
+    Rstc        = 0x1c>>2,
+        Password    = 0x5A<<24,
+        CfgMask     = 0x03<<4,
+        CfgReset    = 0x02<<4,
+    Rsts        = 0x20>>2,
+    Wdog        = 0x24>>2,
 };
 /*e: enum _anon_ (init/arm/watchdog.c)2(arm) */
 

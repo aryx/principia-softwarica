@@ -10,7 +10,7 @@
 /*s: enum _anon_ (init/arm/bootconf.c)(arm) */
 enum {
     /* space for syscall args, return PC, top-of-stack struct */
-    Ustkheadroom	= sizeof(Sargs) + sizeof(uintptr) + sizeof(Tos),
+    Ustkheadroom    = sizeof(Sargs) + sizeof(uintptr) + sizeof(Tos),
 };
 /*e: enum _anon_ (init/arm/bootconf.c)(arm) */
 
@@ -18,13 +18,13 @@ enum {
 /*
  * Where configuration info is left for the loaded programme.
  */
-#define BOOTARGS	((char*)CONFADDR)
+#define BOOTARGS    ((char*)CONFADDR)
 /*e: constant BOOTARGS(arm) */
 /*s: constant BOOTARGSLEN(arm) */
-#define	BOOTARGSLEN	(CPUADDR-CONFADDR)
+#define BOOTARGSLEN (CPUADDR-CONFADDR)
 /*e: constant BOOTARGSLEN(arm) */
-//#define MAXCONF		64
-//#define MAXCONFLINE	160
+//#define MAXCONF       64
+//#define MAXCONFLINE   160
 
 /*s: global oargc(arm) */
 /*
@@ -51,27 +51,27 @@ static int oargblen;
 typedef struct Atag Atag;
 /*s: struct Atag(arm) */
 struct Atag {
-    u32int	size;	/* size of atag in words, including this header */
-    u32int	tag;	/* atag type */
+    u32int  size;   /* size of atag in words, including this header */
+    u32int  tag;    /* atag type */
     union {
-        u32int	data[1];	/* actually [size-2] */
+        u32int  data[1];    /* actually [size-2] */
         /* AtagMem */
         struct {
-            u32int	size;
-            u32int	base;
+            u32int  size;
+            u32int  base;
         } mem;
         /* AtagCmdLine */
-        char	cmdline[1];	/* actually [4*(size-2)] */
+        char    cmdline[1]; /* actually [4*(size-2)] */
     };
 };
 /*e: struct Atag(arm) */
 
 /*s: enum _anon_ (init/arm/bootconf.c)2(arm) */
 enum {
-    AtagNone	= 0x00000000,
-    AtagCore	= 0x54410001,
-    AtagMem		= 0x54410002,
-    AtagCmdline	= 0x54410009,
+    AtagNone    = 0x00000000,
+    AtagCore    = 0x54410001,
+    AtagMem     = 0x54410002,
+    AtagCmdline = 0x54410009,
 };
 /*e: enum _anon_ (init/arm/bootconf.c)2(arm) */
 
@@ -230,9 +230,9 @@ bootargs(uintptr base)
     /*
      * Now push the argv pointers.
      * The code jumped to by touser in lproc.s expects arguments
-     *	main(char* argv0, ...)
+     *  main(char* argv0, ...)
      * and calls
-     * 	startboot("/boot/boot", &argv0)
+     *  startboot("/boot/boot", &argv0)
      * not the usual (int argc, char* argv[])
      */
     av = (char**)(p - (oargc+1)*sizeof(char*));

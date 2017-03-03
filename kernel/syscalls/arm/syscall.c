@@ -14,12 +14,12 @@
 #include "arm.h"
 
 typedef struct {
-    uintptr	ip;
-    Ureg*	arg0;
-    char*	arg1;
-    char	msg[ERRMAX];
-    Ureg*	old;
-    Ureg	ureg;
+    uintptr ip;
+    Ureg*   arg0;
+    char*   arg1;
+    char    msg[ERRMAX];
+    Ureg*   old;
+    Ureg    ureg;
 } NFrame;
 
 /*s: function noted(arm) */
@@ -127,7 +127,7 @@ notify(Ureg* ureg)
     n = &up->note[0];
     if(strncmp(n->msg, "sys:", 4) == 0){
         l = strlen(n->msg);
-        if(l > ERRMAX-23)	/* " pc=0x0123456789abcdef\0" */
+        if(l > ERRMAX-23)   /* " pc=0x0123456789abcdef\0" */
             l = ERRMAX-23;
         snprint(n->msg + l, sizeof n->msg - l, " pc=%#lux", ureg->pc);
     }
@@ -251,7 +251,7 @@ syscall(Ureg* ureg)
         up->sargs = *((Sargs*)(sp+BY2WD));
         up->psstate = sysctab[scallnr];
 
-    /*	iprint("%s: syscall %s\n", up->text, sysctab[scallnr]?sysctab[scallnr]:"huh?"); */
+    /*  iprint("%s: syscall %s\n", up->text, sysctab[scallnr]?sysctab[scallnr]:"huh?"); */
 
         ret = systab[scallnr](up->sargs.args);
         poperror();
@@ -319,7 +319,7 @@ arch_execregs(ulong entry, ulong ssize, ulong nargs)
     *--sp = nargs;
 
     ureg = up->dbgreg;
-//	memset(ureg, 0, 15*sizeof(ulong));
+//  memset(ureg, 0, 15*sizeof(ulong));
     ureg->r13 = (ulong)sp;
     ureg->pc = entry;
 //print("%lud: EXECREGS pc %#ux sp %#ux nargs %ld\n", up->pid, ureg->pc, ureg->r13, nargs);

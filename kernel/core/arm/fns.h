@@ -18,7 +18,7 @@
 // not classified yet
 void arch_cpuidprint(void);
 /*s: macro getpgcolor(arm) */
-#define	getpgcolor(a)	0
+#define getpgcolor(a)   0
 /*e: macro getpgcolor(arm) */
 
 // different signatures in different arch so cant factorize
@@ -134,7 +134,7 @@ extern void l2cacheuwbinv(void);
 #define sdfree(p) free(p)
 /*e: macro sdfree(arm) */
 /*s: macro sdmalloc(arm) */
-#define sdmalloc(n)	mallocalign(n, BLOCKALIGN, 0, 0)
+#define sdmalloc(n) mallocalign(n, BLOCKALIGN, 0, 0)
 /*e: macro sdmalloc(arm) */
 
 extern void setclkrate(int, ulong);
@@ -189,20 +189,20 @@ extern void sysprocsetup(Proc*);
 
 
 /*s: macro PTR2UINT(arm) */
-#define PTR2UINT(p)	((uintptr)(p))
+#define PTR2UINT(p) ((uintptr)(p))
 /*e: macro PTR2UINT(arm) */
 /*s: macro UINT2PTR(arm) */
-#define UINT2PTR(i)	((void*)(i))
+#define UINT2PTR(i) ((void*)(i))
 /*e: macro UINT2PTR(arm) */
 
 /*s: macro KADDR(arm) */
-#define KADDR(pa)	UINT2PTR(KZERO    | ((uintptr)(pa) & ~KSEGM))
+#define KADDR(pa)   UINT2PTR(KZERO    | ((uintptr)(pa) & ~KSEGM))
 /*e: macro KADDR(arm) */
 /*s: macro PADDR(arm) */
-#define PADDR(va)	PTR2UINT(PHYSDRAM | ((uintptr)(va) & ~KSEGM))
+#define PADDR(va)   PTR2UINT(PHYSDRAM | ((uintptr)(va) & ~KSEGM))
 /*e: macro PADDR(arm) */
 
 /*s: macro MASK(arm) */
-#define MASK(v)	((1UL << (v)) - 1)	/* mask `v' bits wide */
+#define MASK(v) ((1UL << (v)) - 1)  /* mask `v' bits wide */
 /*e: macro MASK(arm) */
 /*e: core/arm/fns.h */

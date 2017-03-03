@@ -1,3 +1,4 @@
+/*s: processes/arm/lproc.s */
 #include "mem.h"
 #include "arm.h"
 
@@ -45,3 +46,4 @@ TEXT arch_forkret(SB), 1, $-4
 	MOVM.DB.S (R13), [R0-R14]	/* restore registers */
 	ADD	$8, R13			/* pop past ureg->{type+psr} */
 	RFE				/* MOVM.IA.S.W (R13), [R15] */
+/*e: processes/arm/lproc.s */

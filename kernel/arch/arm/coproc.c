@@ -19,14 +19,14 @@
 // that takes the coprocessor register numbers as arguments in the stack?
 /*s: enum _anon_(arm) */
 enum {
-    /* alternates:	
-     *  0xe12fff1e	BX (R14); last e is R14
-     *	0xe28ef000	B 0(R14); second e is R14 (ken)
+    /* alternates:  
+     *  0xe12fff1e  BX (R14); last e is R14
+     *  0xe28ef000  B 0(R14); second e is R14 (ken)
      */
-    RETinst	= 0xe1a0f00e,		/* MOV R14, R15 */
+    RETinst = 0xe1a0f00e,       /* MOV R14, R15 */
 
-    Opmask	= MASK(3),
-    Regmask	= MASK(4),
+    Opmask  = MASK(3),
+    Regmask = MASK(4),
 };
 /*e: enum _anon_(arm) */
 
@@ -165,7 +165,7 @@ fpwr(int fpreg, ulong val)
 
     /* fpu might be off and this VMSR might enable it */
     s = arch_splhi();
-    setupfpctlop(instr, 0xeee00010, fpreg);		/* VMSR, Rt is R0 */
+    setupfpctlop(instr, 0xeee00010, fpreg);     /* VMSR, Rt is R0 */
     fp = (Pvfu)instr;
     fp(val);
     arch_coherence();
@@ -182,7 +182,7 @@ setupfpop(ulong instr[2], int opcode, int fpreg)
 
     instr[0] = opcode | 0 << 16 | (fpreg & (16 - 1)) << 12;
     if (fpreg >= 16)
-        instr[0] |= 1 << 22;		/* high bit of dfp reg # */
+        instr[0] |= 1 << 22;        /* high bit of dfp reg # */
     instr[1] = RETinst;
 
     cachedwbse(instr, sizeof instrsz);
@@ -209,7 +209,7 @@ fpsavereg(int fpreg, uvlong *fpp)
     r = fp(fpp);
     arch_splx(s);
     arch_coherence();
-    return r;			/* not too meaningful */
+    return r;           /* not too meaningful */
 }
 
 /*s: function fprestreg(arm) */

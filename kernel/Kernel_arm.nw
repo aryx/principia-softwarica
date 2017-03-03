@@ -1,6 +1,23 @@
 \part{In Kernel main text}
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 \part{Files}
 
 \section{[[include/arm/]]}
@@ -45,22 +62,22 @@ typedef struct Ureg {
 
 <<enum _anon_ (arch/arm/dat_arch.h)(arm)>>=
 enum {
-    Maxfpregs	= 32,	/* could be 16 or 32, see Mach.fpnregs */
-    Nfpctlregs	= 16,
+    Maxfpregs   = 32,   /* could be 16 or 32, see Mach.fpnregs */
+    Nfpctlregs  = 16,
 };
 @
 
 <<struct Soc(arm)>>=
-struct Soc {			/* SoC dependent configuration */
-    ulong	dramsize;
+struct Soc {            /* SoC dependent configuration */
+    ulong   dramsize;
 
-    uintptr	physio;
-    uintptr	busdram;
-    uintptr	busio;
-    uintptr	armlocal;
+    uintptr physio;
+    uintptr busdram;
+    uintptr busio;
+    uintptr armlocal;
 
-    u32int	l1ptedramattrs;
-    u32int	l2ptedramattrs;
+    u32int  l1ptedramattrs;
+    u32int  l2ptedramattrs;
 };
 @
 
@@ -78,60 +95,446 @@ extern Soc soc;
 @
 
 
+\subsection*{[[arch/arm/arm.h]]}
+
+<<arch/arm/arm.h>>=
+/*
+ * arm-specific definitions for armv6 (arm11), armv7 (cortex-a8 and -a7)
+ * these are used in C and assembler
+ */
+
+/*
+ * Program Status Registers
+ */
+#define PsrMusr     0x00000010      /* mode */
+#define PsrMfiq     0x00000011
+#define PsrMirq     0x00000012
+#define PsrMsvc     0x00000013  /* `protected mode for OS' */
+#define PsrMmon     0x00000016  /* `secure monitor' (trustzone hyper) */
+#define PsrMabt     0x00000017
+#define PsrMund     0x0000001B
+#define PsrMsys     0x0000001F  /* `privileged user mode for OS' (trustzone) */
+#define PsrMask     0x0000001F
+
+#define PsrDfiq     0x00000040      /* disable FIQ interrupts */
+#define PsrDirq     0x00000080      /* disable IRQ interrupts */
+
+#define PsrV        0x10000000      /* overflow */
+#define PsrC        0x20000000      /* carry/borrow/extend */
+#define PsrZ        0x40000000      /* zero */
+#define PsrN        0x80000000      /* negative/less than */
+
+/* instruction decoding */
+#define ISCPOP(op)  ((op) == 0xE || ((op) & ~1) == 0xC)
+#define ISFPAOP(cp, op) ((cp) == CpOFPA && ISCPOP(op))
+#define ISVFPOP(cp, op) (((cp) == CpDFP || (cp) == CpFP) && ISCPOP(op))
+
+/*
+ * Coprocessors
+ */
+#define CpOFPA      1           /* ancient 7500 FPA */
+#define CpFP        10          /* float FP, VFP cfg. */
+#define CpDFP       11          /* double FP */
+#define CpSC        15          /* System Control */
+
+/*
+ * Primary (CRn) CpSC registers.
+ */
+#define CpID        0           /* ID and cache type */
+#define CpCONTROL   1           /* miscellaneous control */
+#define CpTTB       2           /* Translation Table Base(s) */
+#define CpDAC       3           /* Domain Access Control */
+#define CpFSR       5           /* Fault Status */
+#define CpFAR       6           /* Fault Address */
+#define CpCACHE     7           /* cache/write buffer control */
+#define CpTLB       8           /* TLB control */
+#define CpCLD       9           /* L2 Cache Lockdown, op1==1 */
+#define CpTLD       10          /* TLB Lockdown, with op2 */
+#define CpVECS      12          /* vector bases, op1==0, Crm==0, op2s (cortex) */
+#define CpPID       13          /* Process ID */
+#define CpTIMER     14          /* Generic timer (cortex-a7) */
+#define CpSPM       15          /* system performance monitor (arm1176) */
+
+/*
+ * CpTIMER op1==0 Crm and opcode2 registers (cortex-a7)
+ */
+#define CpTIMERcntfrq   0
+#define CpTIMERphys     2
+
+#define CpTIMERphysval  0
+#define CpTIMERphysctl  1
+
+/*
+ * CpTTB op1==0, Crm==0 opcode2 values.
+ */
+#define CpTTB0      0
+#define CpTTB1      1           /* cortex */
+#define CpTTBctl    2           /* cortex */
+
+/*
+ * CpFSR opcode2 values.
+ */
+#define CpFSRdata   0           /* armv6, armv7 */
+#define CpFSRinst   1           /* armv6, armv7 */
+
+/*
+ * CpID Secondary (CRm) registers.
+ */
+#define CpIDidct    0
+#define CpIDfeat    1
+
+/*
+ * CpID op1==0 opcode2 fields.
+ * the cortex has more op1 codes for cache size, etc.
+ */
+#define CpIDid      0           /* main ID */
+#define CpIDct      1           /* cache type */
+#define CpIDtlb     3           /* tlb type (cortex) */
+#define CpIDmpid    5           /* multiprocessor id (cortex) */
+#define CpIDrevid   6           /* extra revision ID */
+
+/* CpIDid op1 values */
+#define CpIDcsize   1           /* cache size (cortex) */
+#define CpIDcssel   2           /* cache size select (cortex) */
+
+/*
+ * CpCONTROL op2 codes, op1==0, Crm==0.
+ */
+#define CpMainctl   0
+#define CpAuxctl    1
+#define CpCPaccess  2
+
+/*
+ * CpCONTROL: op1==0, CRm==0, op2==CpMainctl.
+ * main control register.
+ * cortex/armv7 has more ops and CRm values.
+ */
+#define CpCmmu      0x00000001  /* M: MMU enable */
+#define CpCalign    0x00000002  /* A: alignment fault enable */
+#define CpCdcache   0x00000004  /* C: data cache on */
+#define CpCsbo (3<<22|1<<18|1<<16|017<<3)   /* must be 1 (armv7) */
+#define CpCsbz (CpCtre|1<<26|CpCve|1<<15|7<<7)  /* must be 0 (armv7) */
+#define CpCsw       (1<<10)     /* SW: SWP(B) enable (deprecated in v7) */
+#define CpCpredict  0x00000800  /* Z: branch prediction (armv7) */
+#define CpCicache   0x00001000  /* I: instruction cache on */
+#define CpChv       0x00002000  /* V: high vectors */
+#define CpCrr       (1<<14) /* RR: round robin vs random cache replacement */
+#define CpCha       (1<<17)     /* HA: hw access flag enable */
+#define CpCdz       (1<<19)     /* DZ: divide by zero fault enable */
+#define CpCfi       (1<<21)     /* FI: fast intrs */
+#define CpCve       (1<<24)     /* VE: intr vectors enable */
+#define CpCee       (1<<25)     /* EE: exception endianness */
+#define CpCnmfi     (1<<27)     /* NMFI: non-maskable fast intrs. */
+#define CpCtre      (1<<28)     /* TRE: TEX remap enable */
+#define CpCafe      (1<<29)     /* AFE: access flag (ttb) enable */
+
+/*
+ * CpCONTROL: op1==0, CRm==0, op2==CpAuxctl.
+ * Auxiliary control register on cortex at least.
+ */
+#define CpACcachenopipe     (1<<20) /* don't pipeline cache maint. */
+#define CpACcp15serial      (1<<18) /* serialise CP1[45] ops. */
+#define CpACcp15waitidle    (1<<17) /* CP1[45] wait-on-idle */
+#define CpACcp15pipeflush   (1<<16) /* CP1[45] flush pipeline */
+#define CpACneonissue1      (1<<12) /* neon single issue */
+#define CpACldstissue1      (1<<11) /* force single issue ld, st */
+#define CpACissue1      (1<<10) /* force single issue */
+#define CpACnobsm       (1<<7)  /* no branch size mispredicts */
+#define CpACibe         (1<<6)  /* cp15 invalidate & btb enable */
+#define CpACl1neon      (1<<5)  /* cache neon (FP) data in L1 cache */
+#define CpACasa         (1<<4)  /* enable speculative accesses */
+#define CpACl1pe        (1<<3)  /* l1 cache parity enable */
+#define CpACl2en        (1<<1)  /* l2 cache enable; default 1 */
+
+/* cortex-a7 and cortex-a9 */
+#define CpACsmp         (1<<6)  /* SMP l1 caches coherence; needed for ldrex/strex */
+#define CpACl1pctl      (3<<13) /* l1 prefetch control */
+/*
+ * CpCONTROL Secondary (CRm) registers and opcode2 fields.
+ */
+#define CpCONTROLscr    1
+
+#define CpSCRscr    0
+
+/*
+ * CpCACHE Secondary (CRm) registers and opcode2 fields.  op1==0.
+ * In ARM-speak, 'flush' means invalidate and 'clean' means writeback.
+ */
+#define CpCACHEintr 0           /* interrupt (op2==4) */
+#define CpCACHEisi  1           /* inner-sharable I cache (v7) */
+#define CpCACHEpaddr    4           /* 0: phys. addr (cortex) */
+#define CpCACHEinvi 5           /* instruction, branch table */
+#define CpCACHEinvd 6           /* data or unified */
+#define CpCACHEinvu 7           /* unified (not on cortex) */
+#define CpCACHEva2pa    8           /* va -> pa translation (cortex) */
+#define CpCACHEwb   10          /* writeback to PoC */
+#define CpCACHEwbu  11          /* writeback to PoU */
+#define CpCACHEwbi  14          /* writeback+invalidate (to PoC) */
+
+#define CpCACHEall  0           /* entire (not for invd nor wb(i) on cortex) */
+#define CpCACHEse   1           /* single entry */
+#define CpCACHEsi   2           /* set/index (set/way) */
+#define CpCACHEtest 3           /* test loop */
+#define CpCACHEwait 4           /* wait (prefetch flush on cortex) */
+#define CpCACHEdmbarr   5           /* wb only (cortex) */
+#define CpCACHEflushbtc 6           /* flush branch-target cache (cortex) */
+#define CpCACHEflushbtse 7          /* ⋯ or just one entry in it (cortex) */
+
+/*
+ * CpTLB Secondary (CRm) registers and opcode2 fields.
+ */
+#define CpTLBinvi   5           /* instruction */
+#define CpTLBinvd   6           /* data */
+#define CpTLBinvu   7           /* unified */
+
+#define CpTLBinv    0           /* invalidate all */
+#define CpTLBinvse  1           /* invalidate single entry */
+#define CpTBLasid   2           /* by ASID (cortex) */
+
+/*
+ * CpCLD Secondary (CRm) registers and opcode2 fields for op1==0. (cortex)
+ */
+#define CpCLDena    12          /* enables */
+#define CpCLDcyc    13          /* cycle counter */
+#define CpCLDuser   14          /* user enable */
+
+#define CpCLDenapmnc    0
+#define CpCLDenacyc 1
+
+/*
+ * CpCLD Secondary (CRm) registers and opcode2 fields for op1==1.
+ */
+#define CpCLDl2     0           /* l2 cache */
+
+#define CpCLDl2aux  2           /* auxiliary control */
+
+/*
+ * l2 cache aux. control
+ */
+#define CpCl2ecc    (1<<28)         /* use ecc, not parity */
+#define CpCl2noldforw   (1<<27)         /* no ld forwarding */
+#define CpCl2nowrcomb   (1<<25)         /* no write combining */
+#define CpCl2nowralldel (1<<24)         /* no write allocate delay */
+#define CpCl2nowrallcomb (1<<23)        /* no write allocate combine */
+#define CpCl2nowralloc  (1<<22)         /* no write allocate */
+#define CpCl2eccparity  (1<<21)         /* enable ecc or parity */
+#define CpCl2inner  (1<<16)         /* inner cacheability */
+/* other bits are tag ram & data ram latencies */
+
+/*
+ * CpTLD Secondary (CRm) registers and opcode2 fields.
+ */
+#define CpTLDlock   0           /* TLB lockdown registers */
+#define CpTLDpreload    1           /* TLB preload */
+
+#define CpTLDi      0           /* TLB instr. lockdown reg. */
+#define CpTLDd      1           /* " data " " */
+
+/*
+ * CpVECS Secondary (CRm) registers and opcode2 fields.
+ */
+#define CpVECSbase  0
+
+#define CpVECSnorm  0           /* (non-)secure base addr */
+#define CpVECSmon   1           /* secure monitor base addr */
+
+/*
+ * CpSPM Secondary (CRm) registers and opcode2 fields (armv6)
+ */
+#define CpSPMperf   12          /* various counters */
+
+#define CpSPMctl    0           /* performance monitor control */
+#define CpSPMcyc    1           /* cycle counter register */
+
+/*
+ * CpCACHERANGE opcode2 fields for MCRR instruction (armv6)
+ */
+#define CpCACHERANGEinvi    5       /* invalidate instruction  */
+#define CpCACHERANGEinvd    6       /* invalidate data */
+#define CpCACHERANGEdwb     12      /* writeback */
+#define CpCACHERANGEdwbi    14      /* writeback+invalidate */
+
+/*
+ * CpTTB cache control bits
+ */
+#define CpTTBnos    (1<<5)  /* only Inner cache shareable */
+#define CpTTBinc    (0<<0|0<<6) /* inner non-cacheable */
+#define CpTTBiwba   (0<<0|1<<6) /* inner write-back write-allocate */
+#define CpTTBiwt    (1<<0|0<<6) /* inner write-through */
+#define CpTTBiwb    (1<<0|1<<6) /* inner write-back no write-allocate */
+#define CpTTBonc    (0<<3)  /* outer non-cacheable */
+#define CpTTBowba   (1<<3)  /* outer write-back write-allocate */
+#define CpTTBowt    (2<<3)  /* outer write-through */
+#define CpTTBowb    (3<<3)  /* outer write-back no write-allocate */
+#define CpTTBs  (1<<1)  /* page table in shareable memory */
+#define CpTTBbase   ~0x7F       /* mask off control bits */
+
+/*
+ * MMU page table entries.
+ * Mbz (0x10) bit is implementation-defined and must be 0 on the cortex.
+ */
+#define Mbz     (0<<4)
+#define Fault       0x00000000      /* L[12] pte: unmapped */
+
+#define Coarse      (Mbz|1)         /* L1 */
+#define Section     (Mbz|2)         /* L1 1MB */
+#define Fine        (Mbz|3)         /* L1 */
+
+#define Large       0x00000001      /* L2 64KB */
+#define Small       0x00000002      /* L2 4KB */
+#define Tiny        0x00000003      /* L2 1KB: not in v7 */
+
+#define Buffered    0x00000004      /* L[12]: write-back not -thru */
+#define Cached      0x00000008      /* L[12] */
+
+#define Dom0        0
+
+#define L1wralloc   (1<<12)         /* L1 TEX */
+#define L1sharable  (1<<16)
+#define L2wralloc   (1<<6)          /* L2 TEX (small pages) */
+#define L2sharable  (1<<10)
+
+/* attributes for memory containing locks -- differs between armv6 and armv7 */
+//#define L1ptedramattrs    (Cached | Buffered | L1wralloc | L1sharable)
+//#define L2ptedramattrs    (Cached | Buffered | L2wralloc | L2sharable)
+
+#define Noaccess    0           /* AP, DAC */
+#define Krw     1           /* AP */
+/* armv7 deprecates AP[2] == 1 & AP[1:0] == 2 (Uro), prefers 3 (new in v7) */
+#define Uro     2           /* AP */
+#define Urw     3           /* AP */
+
+#define Client      1           /* DAC */
+#define Manager     3           /* DAC */
+
+#define F(v, o, w)  (((v) & ((1<<(w))-1))<<(o))
+#define AP(n, v)    F((v), ((n)*2)+4, 2)
+#define L1AP(ap)    (AP(3, (ap)))
+/* L2AP differs between armv6 and armv7 -- see l2ap in arch*.c */
+#define DAC(n, v)   F((v), (n)*2, 2)
+
+#define HVECTORS    0xffff0000
+
+@
+% >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >>
+
+\subsection*{[[arch/arm/arminstr.ha]]}
+
+<<arch/arm/arminstr.ha>>=
+/*
+ * armv6/v7 machine assist, definitions
+ *
+ * loader uses R11 as scratch.
+ */
+//pad: used to be called arm.s, but I prefer the .ha suffix for asm macros
+
+#define PADDR(va)   (((va) & ~KSEGM))
+#define L1X(va)     (((((va))>>20) & 0x0fff)<<2)
+
+/*
+ * new instructions
+ */
+
+#define ISB \
+    MOVW    $0, R0; \
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEwait
+
+#define DSB \
+    MOVW    $0, R0; \
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEwait
+
+#define BARRIERS    ISB; DSB
+
+#define MCRR(coproc, op, rd, rn, crm) \
+    WORD $(0xec400000|(rn)<<16|(rd)<<12|(coproc)<<8|(op)<<4|(crm))
+#define MRRC(coproc, op, rd, rn, crm) \
+    WORD $(0xec500000|(rn)<<16|(rd)<<12|(coproc)<<8|(op)<<4|(crm))
+
+#define LDREX(fp,t)   WORD $(0xe<<28|0x01900f9f | (fp)<<16 | (t)<<12)
+/* `The order of operands is from left to right in dataflow order' - asm man */
+#define STREX(f,tp,r) WORD $(0xe<<28|0x01800f90 | (tp)<<16 | (r)<<12 | (f)<<0)
+#define CLREX   WORD    $0xf57ff01f
+
+#define CPSIE   WORD    $0xf1080080 /* intr enable: zeroes I bit */
+#define CPSID   WORD    $0xf10c0080 /* intr disable: sets I bit */
+
+#define OKAY \
+    MOVW    $0x7E200028,R2; \
+    MOVW    $0x10000,R3; \
+    MOVW    R3,(R2)
+
+#define PUTC(s)
+
+/*
+ * get cpu id, or zero if armv6
+ */
+#define CPUID(r) \
+    MRC CpSC, 0, r, C(CpID), C(CpIDfeat), 7; \
+    CMP $0, r; \
+    B.EQ    2(PC); \
+    MRC CpSC, 0, r, C(CpID), C(CpIDidct), CpIDmpid; \
+    AND.S   $(MAXCPUS-1), r
+@
+%$
+
 \subsection*{[[arch/arm/io.h]]}
 
 <<enum _anon_ (arch/arm/io.h)(arm)>>=
 // in dat_interrupts.h?
 enum {
-    IRQtimer0	= 0,
-    IRQtimer1	= 1,
-    IRQtimer2	= 2,
-    IRQtimer3	= 3,
-    IRQclock	= IRQtimer3,
+    IRQtimer0   = 0,
+    IRQtimer1   = 1,
+    IRQtimer2   = 2,
+    IRQtimer3   = 3,
+    IRQclock    = IRQtimer3,
 
-    IRQusb		= 9, // also IRQfiq
-    IRQdma0		= 16,
+    IRQusb      = 9, // also IRQfiq
+    IRQdma0     = 16,
     // IRQdma1, IRQdma2, ... via IRQDMA macro below
 
-    IRQaux		= 29,
-    IRQi2c		= 53,
-    IRQspi		= 54,
-    IRQmmc		= 62,
+    IRQaux      = 29,
+    IRQi2c      = 53,
+    IRQspi      = 54,
+    IRQmmc      = 62,
 
-    IRQbasic	= 64,
-    IRQtimerArm	= IRQbasic + 0,
+    IRQbasic    = 64,
+    IRQtimerArm = IRQbasic + 0,
 
-    IRQlocal	= 96,
-    IRQcntps	= IRQlocal + 0,
-    IRQcntpns	= IRQlocal + 1,
+    IRQlocal    = 96,
+    IRQcntps    = IRQlocal + 0,
+    IRQcntpns   = IRQlocal + 1,
 
-    IRQfiq		= IRQusb,	/* only one source can be FIQ */
+    IRQfiq      = IRQusb,   /* only one source can be FIQ */
 };
 @
 
 <<macro IRQDMA(arm)>>=
-#define IRQDMA(chan)	(IRQdma0+(chan))
+#define IRQDMA(chan)    (IRQdma0+(chan))
 @
 
 <<enum _anon_ (arch/arm/io.h)2(arm)>>=
 enum {
-    DmaD2M		= 0,		/* device to memory */
-    DmaM2D		= 1,		/* memory to device */
-    DmaM2M		= 2,		/* memory to memory */
+    DmaD2M      = 0,        /* device to memory */
+    DmaM2D      = 1,        /* memory to device */
+    DmaM2M      = 2,        /* memory to memory */
 
-    DmaChanEmmc	= 4,		/* can only use 2-5, maybe 0 */
+    DmaChanEmmc = 4,        /* can only use 2-5, maybe 0 */
     DmaChanSpiTx= 2,
     DmaChanSpiRx= 0,
 
-    DmaDevSpiTx	= 6,
-    DmaDevSpiRx	= 7,
-    DmaDevEmmc	= 11,
+    DmaDevSpiTx = 6,
+    DmaDevSpiRx = 7,
+    DmaDevEmmc  = 11,
 };
 @
 
 <<enum _anon_ (arch/arm/io.h)3(arm)>>=
 enum {
-    PowerSd		= 0,
+    PowerSd     = 0,
     PowerUart0,
     PowerUart1,
     PowerUsb,
@@ -146,7 +549,7 @@ enum {
 <<enum _anon_ (arch/arm/io.h)4(arm)>>=
 // in dat_time.h?
 enum {
-    ClkEmmc		= 1,
+    ClkEmmc     = 1,
     ClkUart,
     ClkArm,
     ClkCore,
@@ -178,14 +581,14 @@ enum {
 
 <<enum _anon_(arm)>>=
 enum {
-    /* alternates:	
-     *  0xe12fff1e	BX (R14); last e is R14
-     *	0xe28ef000	B 0(R14); second e is R14 (ken)
+    /* alternates:  
+     *  0xe12fff1e  BX (R14); last e is R14
+     *  0xe28ef000  B 0(R14); second e is R14 (ken)
      */
-    RETinst	= 0xe1a0f00e,		/* MOV R14, R15 */
+    RETinst = 0xe1a0f00e,       /* MOV R14, R15 */
 
-    Opmask	= MASK(3),
-    Regmask	= MASK(4),
+    Opmask  = MASK(3),
+    Regmask = MASK(4),
 };
 @
 
@@ -317,7 +720,7 @@ fpwr(int fpreg, ulong val)
 
     /* fpu might be off and this VMSR might enable it */
     s = arch_splhi();
-    setupfpctlop(instr, 0xeee00010, fpreg);		/* VMSR, Rt is R0 */
+    setupfpctlop(instr, 0xeee00010, fpreg);     /* VMSR, Rt is R0 */
     fp = (Pvfu)instr;
     fp(val);
     arch_coherence();
@@ -334,7 +737,7 @@ setupfpop(ulong instr[2], int opcode, int fpreg)
 
     instr[0] = opcode | 0 << 16 | (fpreg & (16 - 1)) << 12;
     if (fpreg >= 16)
-        instr[0] |= 1 << 22;		/* high bit of dfp reg # */
+        instr[0] |= 1 << 22;        /* high bit of dfp reg # */
     instr[1] = RETinst;
 
     cachedwbse(instr, sizeof instrsz);
@@ -430,7 +833,7 @@ fpsavereg(int fpreg, uvlong *fpp)
     r = fp(fpp);
     arch_splx(s);
     arch_coherence();
-    return r;			/* not too meaningful */
+    return r;           /* not too meaningful */
 }
 
 <<function fprestreg(arm)>>
@@ -442,97 +845,97 @@ fpsavereg(int fpreg, uvlong *fpp)
 \subsection*{[[arch/arm/vcore.c]]}
 
 <<constant MAILBOX(arm)>>=
-#define	MAILBOX		(VIRTIO+0xB880)
+#define MAILBOX     (VIRTIO+0xB880)
 @
 
 <<enum _anon_ (arch/arm/vcore.c)(arm)>>=
 enum {
-    Read		= 0x00>>2,
-    Write		= 0x00>>2,
-    Peek		= 0x10>>2,
-    Sender		= 0x14>>2,
-    Status		= 0x18>>2,
-        Full		= 1<<31,
-        Empty		= 1<<30,
-    Config		= 0x1C>>2,
+    Read        = 0x00>>2,
+    Write       = 0x00>>2,
+    Peek        = 0x10>>2,
+    Sender      = 0x14>>2,
+    Status      = 0x18>>2,
+        Full        = 1<<31,
+        Empty       = 1<<30,
+    Config      = 0x1C>>2,
 
-    NRegs		= 0x20>>2,
+    NRegs       = 0x20>>2,
 };
 @
 
 <<enum _anon_ (arch/arm/vcore.c)2(arm)>>=
 enum {
-    ChanFb		= 1,
-    ChanProps	= 8,
-    ChanMask	= 0xF,
+    ChanFb      = 1,
+    ChanProps   = 8,
+    ChanMask    = 0xF,
 };
 @
 
 <<enum _anon_ (arch/arm/vcore.c)3(arm)>>=
 enum {
-    Req			= 0x0,
-    RspOk		= 0x80000000,
-    TagResp		= 1<<31,
+    Req         = 0x0,
+    RspOk       = 0x80000000,
+    TagResp     = 1<<31,
 };
 @
 
 <<enum _anon_ (arch/arm/vcore.c)4(arm)>>=
 enum {
-    TagGetfwrev	= 0x00000001,
-    TagGetrev	= 0x00010002,
+    TagGetfwrev = 0x00000001,
+    TagGetrev   = 0x00010002,
 
-    TagGetmac	= 0x00010003,
-    TagGetram	= 0x00010005,
+    TagGetmac   = 0x00010003,
+    TagGetram   = 0x00010005,
 
-    TagGetpower	= 0x00020001,
-    TagSetpower	= 0x00028001,
-        Powerwait	= 1<<1,
+    TagGetpower = 0x00020001,
+    TagSetpower = 0x00028001,
+        Powerwait   = 1<<1,
 
     TagGetclkspd= 0x00030002,
     TagGetclkmax= 0x00030004,
     TagSetclkspd= 0x00038002,
 
-    TagGettemp	= 0x00030006,
+    TagGettemp  = 0x00030006,
 
-    TagFballoc	= 0x00040001,
-    TagFbfree	= 0x00048001,
-    TagFbblank	= 0x00040002,
+    TagFballoc  = 0x00040001,
+    TagFbfree   = 0x00048001,
+    TagFbblank  = 0x00040002,
 
-    TagGetres	= 0x00040003,
-    TagSetres	= 0x00048003,
-    TagGetvres	= 0x00040004,
-    TagSetvres	= 0x00048004,
-    TagGetdepth	= 0x00040005,
-    TagSetdepth	= 0x00048005,
-    TagGetrgb	= 0x00044006,
-    TagSetrgb	= 0x00048006,
+    TagGetres   = 0x00040003,
+    TagSetres   = 0x00048003,
+    TagGetvres  = 0x00040004,
+    TagSetvres  = 0x00048004,
+    TagGetdepth = 0x00040005,
+    TagSetdepth = 0x00048005,
+    TagGetrgb   = 0x00044006,
+    TagSetrgb   = 0x00048006,
 };
 @
 
 <<struct Fbinfo(arm)>>=
 // Framebuffer
 struct Fbinfo {
-    u32int	xres;
-    u32int	yres;
-    u32int	xresvirtual;
-    u32int	yresvirtual;
-    u32int	pitch;			/* returned by gpu */
-    u32int	bpp;
-    u32int	xoffset;
-    u32int	yoffset;
-    u32int	base;			/* returned by gpu */
-    u32int	screensize;		/* returned by gpu */
+    u32int  xres;
+    u32int  yres;
+    u32int  xresvirtual;
+    u32int  yresvirtual;
+    u32int  pitch;          /* returned by gpu */
+    u32int  bpp;
+    u32int  xoffset;
+    u32int  yoffset;
+    u32int  base;           /* returned by gpu */
+    u32int  screensize;     /* returned by gpu */
 };
 @
 
 <<struct Prophdr(arm)>>=
 struct Prophdr {
-    u32int	len;
-    u32int	req;
-    u32int	tag;
-    u32int	tagbuflen;
-    u32int	taglen;
-    u32int	data[1];
+    u32int  len;
+    u32int  req;
+    u32int  tag;
+    u32int  tagbuflen;
+    u32int  taglen;
+    u32int  data[1];
 };
 @
 
@@ -713,7 +1116,7 @@ getpower(int dev)
 <<function getethermac(arm)>>=
 /*
  * Get ethernet address (as hex string)
- *	 [not reentrant]
+ *   [not reentrant]
  */
 char *
 getethermac(void)
@@ -891,6 +1294,83 @@ typedef struct Prophdr Prophdr;
 
 
 \section{[[concurrency/arm/]]}
+
+\subsection*{[[concurrency/arm/spl.s]]}
+
+<<concurrency/arm/spl.s>>=
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.ha"
+
+TEXT arch_splhi(SB), 1, $-4
+    MOVW    $(CPUADDR+4), R2        /* save caller pc in Mach */
+    MOVW    R14, 0(R2)
+
+    MOVW    CPSR, R0            /* turn off irqs (but not fiqs) */
+    ORR $(PsrDirq), R0, R1
+    MOVW    R1, CPSR
+    RET
+
+TEXT arch_spllo(SB), 1, $-4
+    MOVW    CPSR, R0            /* turn on irqs and fiqs */
+    BIC $(PsrDirq|PsrDfiq), R0, R1
+    MOVW    R1, CPSR
+    RET
+
+TEXT arch_splx(SB), 1, $-4
+    MOVW    $(CPUADDR+4), R2        /* save caller pc in Mach */
+    MOVW    R14, 0(R2)
+
+    MOVW    R0, R1              /* reset interrupt level */
+    MOVW    CPSR, R0
+    MOVW    R1, CPSR
+    RET
+
+TEXT spldone(SB), 1, $0             /* end marker for devkprof.c */
+    RET
+
+TEXT arch_islo(SB), 1, $-4
+    MOVW    CPSR, R0
+    AND $(PsrDirq), R0
+    EOR $(PsrDirq), R0
+    RET
+
+
+      
+TEXT arm_arch_coherence(SB), $-4
+    BARRIERS
+    RET
+
+
+// FIQ
+TEXT splfhi(SB), 1, $-4
+    MOVW    $(CPUADDR+4), R2        /* save caller pc in Mach */
+    MOVW    R14, 0(R2)
+
+    MOVW    CPSR, R0            /* turn off irqs and fiqs */
+    ORR $(PsrDirq|PsrDfiq), R0, R1
+    MOVW    R1, CPSR
+    RET
+
+TEXT splflo(SB), 1, $-4
+    MOVW    CPSR, R0            /* turn on fiqs */
+    BIC $(PsrDfiq), R0, R1
+    MOVW    R1, CPSR
+    RET
+@
+%$
+
+\subsection*{[[concurrency/arm/tas_raspi1.s]]}
+
+<<concurrency/arm/tas_raspi1.s>>=
+TEXT    arch_tas(SB), $-4
+TEXT    _tas(SB), $-4
+    MOVW    R0,R1
+    MOVW    $1,R0
+    SWPW    R0,(R1)         /* fix: deprecated in armv6 */
+    RET
+@
+%$
 
 \subsection*{[[concurrency/arm/concurrency_raspi1.c]]}
 
@@ -1070,8 +1550,8 @@ typedef void* kern_addr3;
 // and R9 for the second one. See Compiler.nw.
 // Then mem.h relies on this to define the UP and CPU macros used
 // inside assembly code.
-extern register Cpu* cpu;			/* R10 */
-extern register Proc* up;			/* R9 */
+extern register Cpu* cpu;           /* R10 */
+extern register Proc* up;           /* R9 */
 
 // in main.c (used in mmu.c)
 extern ulong memsize;
@@ -1092,11 +1572,11 @@ extern ulong memsize;
  */
 struct MMMU
 {
-    PTE*	mmul1;		/* l1 for this processor */
-    int	mmul1lo;
-    int	mmul1hi;
+    PTE*    mmul1;      /* l1 for this processor */
+    int mmul1lo;
+    int mmul1hi;
 
-    int	mmupid;
+    int mmupid;
 };
 @
 
@@ -1104,36 +1584,36 @@ struct MMMU
 struct Arch_Cpu {
     MMMU;
 
-    Lock	alarmlock;		/* access to alarm list */
-    void*	alarm;			/* alarms bound to this clock */
+    Lock    alarmlock;      /* access to alarm list */
+    void*   alarm;          /* alarms bound to this clock */
 
-    int	cputype;
-    ulong	delayloop;
+    int cputype;
+    ulong   delayloop;
 
     /* stats */
 
-    uvlong	fastclock;		/* last sampled value */
+    uvlong  fastclock;      /* last sampled value */
 
-    int	lastintr;
+    int lastintr;
 
     /* vfp2 or vfp3 fpu */
-    int	havefp;
-    int	havefpvalid;
-    int	fpon;
-    int	fpconfiged;
-    int	fpnregs;
-    ulong	fpscr;			/* sw copy */
-    int	fppid;			/* pid of last fault */
-    uintptr	fppc;			/* addr of last fault */
-    int	fpcnt;			/* how many consecutive at that addr */
+    int havefp;
+    int havefpvalid;
+    int fpon;
+    int fpconfiged;
+    int fpnregs;
+    ulong   fpscr;          /* sw copy */
+    int fppid;          /* pid of last fault */
+    uintptr fppc;           /* addr of last fault */
+    int fpcnt;          /* how many consecutive at that addr */
 
     /* save areas for exceptions, hold R0-R4 */
-    u32int	sfiq[5];
-    u32int	sirq[5];
-    u32int	sund[5];
-    u32int	sabt[5];
-    u32int	smon[5];		/* probably not needed */
-    u32int	ssys[5];
+    u32int  sfiq[5];
+    u32int  sirq[5];
+    u32int  sund[5];
+    u32int  sabt[5];
+    u32int  smon[5];        /* probably not needed */
+    u32int  ssys[5];
 
 };
 @
@@ -1143,7 +1623,7 @@ struct Arch_Cpu {
 
 <<core/arm/dat_core.h>>=
 
-typedef u32int		PTE;
+typedef u32int      PTE;
 
 <<struct MMMU(arm)>>
 
@@ -1159,10 +1639,10 @@ typedef u32int		PTE;
 
 <<core/arm/dat_forward.h>>=
 
-typedef struct Arch_FPsave	Arch_FPsave;
-typedef struct MMMU	MMMU;
+typedef struct Arch_FPsave  Arch_FPsave;
+typedef struct MMMU MMMU;
 
-typedef struct Ureg	Ureg;
+typedef struct Ureg Ureg;
 #pragma incomplete Ureg
 @
 
@@ -1170,7 +1650,7 @@ typedef struct Ureg	Ureg;
 \subsection*{[[core/arm/fns.h]]}
 
 <<macro getpgcolor(arm)>>=
-#define	getpgcolor(a)	0
+#define getpgcolor(a)   0
 @
 
 <<macro arch_cycles(arm)>>=
@@ -1191,27 +1671,27 @@ typedef struct Ureg	Ureg;
 @
 
 <<macro sdmalloc(arm)>>=
-#define sdmalloc(n)	mallocalign(n, BLOCKALIGN, 0, 0)
+#define sdmalloc(n) mallocalign(n, BLOCKALIGN, 0, 0)
 @
 
 <<macro PTR2UINT(arm)>>=
-#define PTR2UINT(p)	((uintptr)(p))
+#define PTR2UINT(p) ((uintptr)(p))
 @
 
 <<macro UINT2PTR(arm)>>=
-#define UINT2PTR(i)	((void*)(i))
+#define UINT2PTR(i) ((void*)(i))
 @
 
 <<macro KADDR(arm)>>=
-#define KADDR(pa)	UINT2PTR(KZERO    | ((uintptr)(pa) & ~KSEGM))
+#define KADDR(pa)   UINT2PTR(KZERO    | ((uintptr)(pa) & ~KSEGM))
 @
 
 <<macro PADDR(arm)>>=
-#define PADDR(va)	PTR2UINT(PHYSDRAM | ((uintptr)(va) & ~KSEGM))
+#define PADDR(va)   PTR2UINT(PHYSDRAM | ((uintptr)(va) & ~KSEGM))
 @
 
 <<macro MASK(arm)>>=
-#define MASK(v)	((1UL << (v)) - 1)	/* mask `v' bits wide */
+#define MASK(v) ((1UL << (v)) - 1)  /* mask `v' bits wide */
 @
 
 
@@ -1412,47 +1892,47 @@ extern void sysprocsetup(Proc*);
 enum
 {
     /* Qid numbers */
-    Qdir = 0,		/* #u */
-    Qusbdir,			/* #u/usb */
-    Qctl,			/* #u/usb/ctl - control requests */
+    Qdir = 0,       /* #u */
+    Qusbdir,            /* #u/usb */
+    Qctl,           /* #u/usb/ctl - control requests */
 
-    Qep0dir,			/* #u/usb/ep0.0 - endpoint 0 dir */
-    Qep0io,			/* #u/usb/ep0.0/data - endpoint 0 I/O */
-    Qep0ctl,		/* #u/usb/ep0.0/ctl - endpoint 0 ctl. */
-    Qep0dummy,		/* give 4 qids to each endpoint */
+    Qep0dir,            /* #u/usb/ep0.0 - endpoint 0 dir */
+    Qep0io,         /* #u/usb/ep0.0/data - endpoint 0 I/O */
+    Qep0ctl,        /* #u/usb/ep0.0/ctl - endpoint 0 ctl. */
+    Qep0dummy,      /* give 4 qids to each endpoint */
 
-    Qepdir = 0,		/* (qid-qep0dir)&3 is one of these */
-    Qepio,			/* to identify which file for the endpoint */
+    Qepdir = 0,     /* (qid-qep0dir)&3 is one of these */
+    Qepio,          /* to identify which file for the endpoint */
     Qepctl,
 
     /* ... */
 
     /* Usb ctls. */
-    CMdebug = 0,		/* debug on|off */
-    CMdump,			/* dump (data structures for debug) */
+    CMdebug = 0,        /* debug on|off */
+    CMdump,         /* dump (data structures for debug) */
 
     /* Ep. ctls */
-    CMnew = 0,		/* new nb ctl|bulk|intr|iso r|w|rw (endpoint) */
-    CMnewdev,		/* newdev full|low|high portnb (allocate new devices) */
-    CMhub,			/* hub (set the device as a hub) */
-    CMspeed,		/* speed full|low|high|no */
-    CMmaxpkt,		/* maxpkt size */
-    CMntds,			/* ntds nb (max nb. of tds per µframe) */
-    CMclrhalt,		/* clrhalt (halt was cleared on endpoint) */
-    CMpollival,		/* pollival interval (interrupt/iso) */
-    CMhz,			/* hz n (samples/sec; iso) */
-    CMsamplesz,		/* samplesz n (sample size; iso) */
-    CMinfo,			/* info infostr (ke.ep info for humans) */
-    CMdetach,		/* detach (abort I/O forever on this ep). */
-    CMaddress,		/* address (address is assigned) */
-    CMdebugep,		/* debug n (set/clear debug for this ep) */
-    CMname,			/* name str (show up as #u/name as well) */
-    CMtmout,		/* timeout n (activate timeouts for ep) */
-    CMpreset,		/* reset the port */
+    CMnew = 0,      /* new nb ctl|bulk|intr|iso r|w|rw (endpoint) */
+    CMnewdev,       /* newdev full|low|high portnb (allocate new devices) */
+    CMhub,          /* hub (set the device as a hub) */
+    CMspeed,        /* speed full|low|high|no */
+    CMmaxpkt,       /* maxpkt size */
+    CMntds,         /* ntds nb (max nb. of tds per µframe) */
+    CMclrhalt,      /* clrhalt (halt was cleared on endpoint) */
+    CMpollival,     /* pollival interval (interrupt/iso) */
+    CMhz,           /* hz n (samples/sec; iso) */
+    CMsamplesz,     /* samplesz n (sample size; iso) */
+    CMinfo,         /* info infostr (ke.ep info for humans) */
+    CMdetach,       /* detach (abort I/O forever on this ep). */
+    CMaddress,      /* address (address is assigned) */
+    CMdebugep,      /* debug n (set/clear debug for this ep) */
+    CMname,         /* name str (show up as #u/name as well) */
+    CMtmout,        /* timeout n (activate timeouts for ep) */
+    CMpreset,       /* reset the port */
 
     /* Hub feature selectors */
-    Rportenable	= 1,
-    Rportreset	= 4,
+    Rportenable = 1,
+    Rportreset  = 4,
 
 };
 @
@@ -1460,109 +1940,109 @@ enum
 <<struct Hcitype(arm)>>=
 struct Hcitype
 {
-    char*	type;
-    int	(*reset)(Hci*);
+    char*   type;
+    int (*reset)(Hci*);
 };
 @
 
 <<macro QID(arm)>>=
-#define QID(q)	((int)(q).path)
+#define QID(q)  ((int)(q).path)
 @
 
 <<global usbctls(arm)>>=
 static Cmdtab usbctls[] =
 {
-    {CMdebug,	"debug",	2},
-    {CMdump,	"dump",		1},
+    {CMdebug,   "debug",    2},
+    {CMdump,    "dump",     1},
 };
 @
 
 <<global epctls(arm)>>=
 static Cmdtab epctls[] =
 {
-    {CMnew,		"new",		4},
-    {CMnewdev,	"newdev",	3},
-    {CMhub,		"hub",		1},
-    {CMspeed,	"speed",	2},
-    {CMmaxpkt,	"maxpkt",	2},
-    {CMntds,	"ntds",		2},
-    {CMpollival,	"pollival",	2},
-    {CMsamplesz,	"samplesz",	2},
-    {CMhz,		"hz",		2},
-    {CMinfo,	"info",		0},
-    {CMdetach,	"detach",	1},
-    {CMaddress,	"address",	1},
-    {CMdebugep,	"debug",	2},
-    {CMclrhalt,	"clrhalt",	1},
-    {CMname,	"name",		2},
-    {CMtmout,	"timeout",	2},
-    {CMpreset,	"reset",	1},
+    {CMnew,     "new",      4},
+    {CMnewdev,  "newdev",   3},
+    {CMhub,     "hub",      1},
+    {CMspeed,   "speed",    2},
+    {CMmaxpkt,  "maxpkt",   2},
+    {CMntds,    "ntds",     2},
+    {CMpollival,    "pollival", 2},
+    {CMsamplesz,    "samplesz", 2},
+    {CMhz,      "hz",       2},
+    {CMinfo,    "info",     0},
+    {CMdetach,  "detach",   1},
+    {CMaddress, "address",  1},
+    {CMdebugep, "debug",    2},
+    {CMclrhalt, "clrhalt",  1},
+    {CMname,    "name",     2},
+    {CMtmout,   "timeout",  2},
+    {CMpreset,  "reset",    1},
 };
 @
 
 <<global usbdir(arm)>>=
 static Dirtab usbdir[] =
 {
-    "ctl",		{Qctl},		0,	0666,
+    "ctl",      {Qctl},     0,  0666,
 };
 @
 
 <<global usbmodename(arm)>>=
 char *usbmodename[] =
 {
-    [OREAD]	"r",
-    [OWRITE]	"w",
-    [ORDWR]	"rw",
+    [OREAD] "r",
+    [OWRITE]    "w",
+    [ORDWR] "rw",
 };
 @
 
 <<global ttname(arm)>>=
 static char *ttname[] =
 {
-    [Tnone]	"none",
-    [Tctl]	"control",
-    [Tiso]	"iso",
-    [Tintr]	"interrupt",
-    [Tbulk]	"bulk",
+    [Tnone] "none",
+    [Tctl]  "control",
+    [Tiso]  "iso",
+    [Tintr] "interrupt",
+    [Tbulk] "bulk",
 };
 @
 
 <<global spname(arm)>>=
 static char *spname[] =
 {
-    [Fullspeed]	"full",
-    [Lowspeed]	"low",
-    [Highspeed]	"high",
-    [Nospeed]	"no",
+    [Fullspeed] "full",
+    [Lowspeed]  "low",
+    [Highspeed] "high",
+    [Nospeed]   "no",
 };
 @
 
 <<global debug(arm)>>=
-static int	debug;
+static int  debug;
 @
 
 <<global hcitypes(arm)>>=
-static Hcitype	hcitypes[Nhcis];
+static Hcitype  hcitypes[Nhcis];
 @
 
 <<global hcis(arm)>>=
-static Hci*	hcis[Nhcis];
+static Hci* hcis[Nhcis];
 @
 
 <<global epslck(arm)>>=
-static QLock	epslck;		/* add, del, lookup endpoints */
+static QLock    epslck;     /* add, del, lookup endpoints */
 @
 
 <<global eps(arm)>>=
-static Ep*	eps[Neps];	/* all endpoints known */
+static Ep*  eps[Neps];  /* all endpoints known */
 @
 
 <<global epmax(arm)>>=
-static int	epmax;		/* 1 + last endpoint index used  */
+static int  epmax;      /* 1 + last endpoint index used  */
 @
 
 <<global usbidgen(arm)>>=
-static int	usbidgen;	/* device address generator */
+static int  usbidgen;   /* device address generator */
 @
 
 <<function seprintdata(arm)>>=
@@ -1885,9 +2365,9 @@ newdev(Hci *hp, int ishub, int isroot)
         d->speed = Highspeed;
     else
         d->speed = Fullspeed;
-    d->state = Dconfig;		/* address not yet set */
+    d->state = Dconfig;     /* address not yet set */
     ep->dev = d;
-    ep->ep0 = ep;			/* no ref counted here */
+    ep->ep0 = ep;           /* no ref counted here */
     ep->ttype = Tctl;
     ep->tmout = Xfertmout;
     ep->mode = ORDWR;
@@ -1984,7 +2464,7 @@ usbgen(Chan *c, char *, Dirtab*, int, int s, Dir *dp)
     }
 
     switch(QID(c->qid)){
-    case Qdir:				/* list #u */
+    case Qdir:              /* list #u */
         if(s == 0){
             mkqid(&q, Qusbdir, 0, QTDIR);
             devdir(c, q, "usb", 0, eve, 0555, dp);
@@ -2012,7 +2492,7 @@ usbgen(Chan *c, char *, Dirtab*, int, int s, Dir *dp)
         if(0)ddprint("ok\n");
         return 1;
 
-    case Qusbdir:				/* list #u/usb */
+    case Qusbdir:               /* list #u/usb */
     Usbdir:
         if(s < nelem(usbdir)){
             dir = &usbdir[s];
@@ -2046,7 +2526,7 @@ usbgen(Chan *c, char *, Dirtab*, int, int s, Dir *dp)
         s = 0;
         goto Usbdir;
 
-    default:				/* list #u/usb/epN.M */
+    default:                /* list #u/usb/epN.M */
         nb = qid2epidx(QID(c->qid));
         ep = getep(nb);
         if(ep == nil)
@@ -2091,7 +2571,7 @@ hciprobe(int cardno, int ctlrno)
     Hci *hp;
     char *type;
     char name[64];
-    static int epnb = 1;	/* guess the endpoint nb. for the controller */
+    static int epnb = 1;    /* guess the endpoint nb. for the controller */
 
     ddprint("hciprobe %d %d\n", cardno, ctlrno);
     hp = smalloc(sizeof(Hci));
@@ -2171,8 +2651,8 @@ usbinit(void)
         if(hp != nil){
             if(hp->init != nil)
                 hp->init(hp);
-            d = newdev(hp, 1, 1);		/* new root hub */
-            d->dev->state = Denabled;	/* although addr == 0 */
+            d = newdev(hp, 1, 1);       /* new root hub */
+            d->dev->state = Denabled;   /* although addr == 0 */
             d->maxpkt = 64;
             snprint(info, sizeof(info), "ports %d", hp->nports);
             kstrdup(&d->info, info);
@@ -2237,7 +2717,7 @@ usbload(int speed, int maxpkt)
         print("usbload: bad speed %d\n", speed);
         /* let it run */
     }
-    return l / 1000UL;	/* in µs */
+    return l / 1000UL;  /* in µs */
 }
 @
 
@@ -2288,13 +2768,13 @@ usbopen(Chan *c, int omode)
         ep->load = usbload(ep->dev->speed, ep->maxpkt);
     ep->hp->epopen(ep);
 
-    poperror();	/* ep->inuse */
-    poperror();	/* don't putep(): ref kept for fid using the ep. */
+    poperror(); /* ep->inuse */
+    poperror(); /* don't putep(): ref kept for fid using the ep. */
 
     c->mode = mode;
     c->flag |= COPEN;
     c->offset = 0;
-    c->aux = nil;	/* paranoia */
+    c->aux = nil;   /* paranoia */
     return c;
 }
 @
@@ -2340,7 +2820,7 @@ usbclose(Chan *c)
         free(c->aux);
         c->aux = nil;
         epclose(ep);
-        putep(ep);	/* release ref kept since usbopen */
+        putep(ep);  /* release ref kept since usbopen */
         c->flag &= ~COPEN;
     }
     poperror();
@@ -2530,7 +3010,7 @@ pow2(int n)
 static void
 setmaxpkt(Ep *ep, char* s)
 {
-    long spp;	/* samples per packet */
+    long spp;   /* samples per packet */
 
     if(ep->dev->speed == Highspeed)
         spp = (ep->hz * ep->pollival * ep->ntds + 7999) / 8000;
@@ -2606,7 +3086,7 @@ epctl(Ep *ep, Chan *c, void *a, long n)
         nep = newdev(ep->hp, 0, 0);
         nep->dev->speed = l;
         if(nep->dev->speed  != Lowspeed)
-            nep->maxpkt = 64;	/* assume full speed */
+            nep->maxpkt = 64;   /* assume full speed */
         nep->dev->hub = d->nb;
         nep->dev->port = atoi(cb->f[2]);
         /* next read request will read
@@ -3012,15 +3492,15 @@ Dev usbdevtab = {
  * get in the way. Thus, code is probably easier the way it is.
  */
 
-#include	"u.h"
-#include	"../port/lib.h"
-#include	"../port/error.h"
-#include	"mem.h"
-#include	"dat.h"
-#include	"fns.h"
+#include    "u.h"
+#include    "../port/lib.h"
+#include    "../port/error.h"
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
 
-#include	"io.h"
-#include	"../port/usb.h"
+#include    "io.h"
+#include    "../port/usb.h"
 
 typedef struct Hcitype Hcitype;
 
@@ -3137,81 +3617,81 @@ typedef struct Hcitype Hcitype;
 \subsection*{[[buses/arm/dma.c]]}
 
 <<constant DMAREGS(arm)>>=
-#define DMAREGS	(VIRTIO+0x7000)
+#define DMAREGS (VIRTIO+0x7000)
 @
 
 <<enum _anon_ (buses/arm/dma.c)(arm)>>=
 enum {
-    Nchan		= 7,		/* number of dma channels */
-    Regsize		= 0x100,	/* size of regs for each chan */
-    Cbalign		= 32,		/* control block byte alignment */
-    Dbg		= 0,
+    Nchan       = 7,        /* number of dma channels */
+    Regsize     = 0x100,    /* size of regs for each chan */
+    Cbalign     = 32,       /* control block byte alignment */
+    Dbg     = 0,
     
     /* registers for each dma controller */
-    Cs		= 0x00>>2,
-    Conblkad	= 0x04>>2,
-    Ti		= 0x08>>2,
-    Sourcead	= 0x0c>>2,
-    Destad		= 0x10>>2,
-    Txfrlen		= 0x14>>2,
-    Stride		= 0x18>>2,
-    Nextconbk	= 0x1c>>2,
-    Debug		= 0x20>>2,
+    Cs      = 0x00>>2,
+    Conblkad    = 0x04>>2,
+    Ti      = 0x08>>2,
+    Sourcead    = 0x0c>>2,
+    Destad      = 0x10>>2,
+    Txfrlen     = 0x14>>2,
+    Stride      = 0x18>>2,
+    Nextconbk   = 0x1c>>2,
+    Debug       = 0x20>>2,
 
     /* collective registers */
-    Intstatus	= 0xfe0>>2,
-    Enable		= 0xff0>>2,
+    Intstatus   = 0xfe0>>2,
+    Enable      = 0xff0>>2,
 
     /* Cs */
-    Reset		= 1<<31,
-    Abort		= 1<<30,
-    Error		= 1<<8,
-    Waitwrite	= 1<<6,
-    Waitdreq	= 1<<5,
-    Paused		= 1<<4,
-    Dreq		= 1<<3,
-    Int		= 1<<2,
-    End		= 1<<1,
-    Active		= 1<<0,
+    Reset       = 1<<31,
+    Abort       = 1<<30,
+    Error       = 1<<8,
+    Waitwrite   = 1<<6,
+    Waitdreq    = 1<<5,
+    Paused      = 1<<4,
+    Dreq        = 1<<3,
+    Int     = 1<<2,
+    End     = 1<<1,
+    Active      = 1<<0,
 
     /* Ti */
     Permapshift= 16,
-    Srcignore	= 1<<11,
-    Srcdreq		= 1<<10,
-    Srcwidth128	= 1<<9,
-    Srcinc		= 1<<8,
-    Destignore	= 1<<7,
-    Destdreq	= 1<<6,
-    Destwidth128	= 1<<5,
-    Destinc		= 1<<4,
-    Waitresp	= 1<<3,
-    Tdmode		= 1<<1,
-    Inten		= 1<<0,
+    Srcignore   = 1<<11,
+    Srcdreq     = 1<<10,
+    Srcwidth128 = 1<<9,
+    Srcinc      = 1<<8,
+    Destignore  = 1<<7,
+    Destdreq    = 1<<6,
+    Destwidth128    = 1<<5,
+    Destinc     = 1<<4,
+    Waitresp    = 1<<3,
+    Tdmode      = 1<<1,
+    Inten       = 1<<0,
 
     /* Debug */
-    Lite		= 1<<28,
-    Clrerrors	= 7<<0,
+    Lite        = 1<<28,
+    Clrerrors   = 7<<0,
 };
 @
 
 <<struct Ctlr(arm)>>=
 struct Ctlr {
-    u32int	*regs;
-    Cb	*cb;
-    Rendez	r;
-    int	dmadone;
+    u32int  *regs;
+    Cb  *cb;
+    Rendez  r;
+    int dmadone;
 };
 @
 
 <<struct Cb(arm)>>=
 struct Cb {
-    u32int	ti;
-    u32int	sourcead;
-    u32int	destad;
-    u32int	txfrlen;
-    u32int	stride;
-    u32int	nextconbk;
-    u32int	reserved[2];
+    u32int  ti;
+    u32int  sourcead;
+    u32int  destad;
+    u32int  txfrlen;
+    u32int  stride;
+    u32int  nextconbk;
+    u32int  reserved[2];
 };
 @
 
@@ -3292,10 +3772,10 @@ dmainterrupt(Ureg*, void *a)
  * bcm2835 dma controller
  *
  * simplest to use only channels 0-6
- *	channels 7-14 have reduced functionality
- *	channel 15 is at a weird address
- *	channels 0 and 15 have an "external 128 bit 8 word read FIFO"
- *	  for memory to memory transfers
+ *  channels 7-14 have reduced functionality
+ *  channel 15 is at a weird address
+ *  channels 0 and 15 have an "external 128 bit 8 word read FIFO"
+ *    for memory to memory transfers
  *
  * Experiments show that only channels 2-5,11-12 work with mmc
  */
@@ -3311,7 +3791,7 @@ dmainterrupt(Ureg*, void *a)
 
 <<constant DMAREGS(arm)>>
 
-#define DBG	if(Dbg)
+#define DBG if(Dbg)
 
 <<enum _anon_ (buses/arm/dma.c)(arm)>>
 
@@ -3429,73 +3909,73 @@ dmawait(int chan)
 
 <<enum _anon_ (buses/arm/dwcotg.h)(arm)>>=
 enum {
-    Maxchans	= 16,	/* actual number of channels in ghwcfg2 */
+    Maxchans    = 16,   /* actual number of channels in ghwcfg2 */
 };
 @
 
 <<struct Dwcregs(arm)>>=
 struct Dwcregs {
     /* Core global registers 0x000-0x140 */
-    Reg	gotgctl;	/* OTG Control and Status */
-    Reg	gotgint;	/* OTG Interrupt */
-    Reg	gahbcfg;	/* Core AHB Configuration */
-    Reg	gusbcfg;	/* Core USB Configuration */
-    Reg	grstctl;	/* Core Reset */
-    Reg	gintsts;	/* Core Interrupt */
-    Reg	gintmsk;	/* Core Interrupt Mask */
-    Reg	grxstsr;	/* Receive Status Queue Read (RO) */
-    Reg	grxstsp;	/* Receive Status Queue Read & POP (RO) */
-    Reg	grxfsiz;	/* Receive FIFO Size */
-    Reg	gnptxfsiz;	/* Non Periodic Transmit FIFO Size */
-    Reg	gnptxsts;	/* Non Periodic Transmit FIFO/Queue Status (RO) */
-    Reg	gi2cctl;	/* I2C Access */
-    Reg	gpvndctl;	/* PHY Vendor Control */
-    Reg	ggpio;		/* General Purpose Input/Output */
-    Reg	guid;		/* User ID */
-    Reg	gsnpsid;	/* Synopsys ID (RO) */
-    Reg	ghwcfg1;	/* User HW Config1 (RO) (DEVICE) */
-    Reg	ghwcfg2;	/* User HW Config2 (RO) */
-    Reg	ghwcfg3;	/* User HW Config3 (RO) */
-    Reg	ghwcfg4;	/* User HW Config4 (RO)*/
-    Reg	glpmcfg;	/* Core LPM Configuration */
-    Reg	gpwrdn;		/* Global PowerDn */
-    Reg	gdfifocfg;	/* Global DFIFO SW Config (DEVICE?) */
-    Reg	adpctl;		/* ADP Control */
-    Reg	reserved0[39];
-    Reg	hptxfsiz;	/* Host Periodic Transmit FIFO Size */
-    Reg	dtxfsiz[15];	/* Device Periodic Transmit FIFOs (DEVICE) */
-    char	pad0[0x400-0x140];
+    Reg gotgctl;    /* OTG Control and Status */
+    Reg gotgint;    /* OTG Interrupt */
+    Reg gahbcfg;    /* Core AHB Configuration */
+    Reg gusbcfg;    /* Core USB Configuration */
+    Reg grstctl;    /* Core Reset */
+    Reg gintsts;    /* Core Interrupt */
+    Reg gintmsk;    /* Core Interrupt Mask */
+    Reg grxstsr;    /* Receive Status Queue Read (RO) */
+    Reg grxstsp;    /* Receive Status Queue Read & POP (RO) */
+    Reg grxfsiz;    /* Receive FIFO Size */
+    Reg gnptxfsiz;  /* Non Periodic Transmit FIFO Size */
+    Reg gnptxsts;   /* Non Periodic Transmit FIFO/Queue Status (RO) */
+    Reg gi2cctl;    /* I2C Access */
+    Reg gpvndctl;   /* PHY Vendor Control */
+    Reg ggpio;      /* General Purpose Input/Output */
+    Reg guid;       /* User ID */
+    Reg gsnpsid;    /* Synopsys ID (RO) */
+    Reg ghwcfg1;    /* User HW Config1 (RO) (DEVICE) */
+    Reg ghwcfg2;    /* User HW Config2 (RO) */
+    Reg ghwcfg3;    /* User HW Config3 (RO) */
+    Reg ghwcfg4;    /* User HW Config4 (RO)*/
+    Reg glpmcfg;    /* Core LPM Configuration */
+    Reg gpwrdn;     /* Global PowerDn */
+    Reg gdfifocfg;  /* Global DFIFO SW Config (DEVICE?) */
+    Reg adpctl;     /* ADP Control */
+    Reg reserved0[39];
+    Reg hptxfsiz;   /* Host Periodic Transmit FIFO Size */
+    Reg dtxfsiz[15];    /* Device Periodic Transmit FIFOs (DEVICE) */
+    char    pad0[0x400-0x140];
 
     /* Host global registers 0x400-0x420 */
-    Reg	hcfg;		/* Configuration */
-    Reg	hfir;		/* Frame Interval */
-    Reg	hfnum;		/* Frame Number / Frame Remaining (RO) */
-    Reg	reserved1;
-    Reg	hptxsts;	/* Periodic Transmit FIFO / Queue Status */
-    Reg	haint;		/* All Channels Interrupt */
-    Reg	haintmsk;	/* All Channels Interrupt Mask */
-    Reg	hflbaddr;	/* Frame List Base Address */
-    char	pad1[0x440-0x420];
+    Reg hcfg;       /* Configuration */
+    Reg hfir;       /* Frame Interval */
+    Reg hfnum;      /* Frame Number / Frame Remaining (RO) */
+    Reg reserved1;
+    Reg hptxsts;    /* Periodic Transmit FIFO / Queue Status */
+    Reg haint;      /* All Channels Interrupt */
+    Reg haintmsk;   /* All Channels Interrupt Mask */
+    Reg hflbaddr;   /* Frame List Base Address */
+    char    pad1[0x440-0x420];
 
     /* Host port register 0x440 */
-    Reg	hport0;		/* Host Port 0 Control and Status */
-    char	pad2[0x500-0x444];
+    Reg hport0;     /* Host Port 0 Control and Status */
+    char    pad2[0x500-0x444];
 
     /* Host channel specific registers 0x500-0x700 */
-    struct	Hostchan {
-        Reg	hcchar;	/* Characteristic */
-        Reg	hcsplt;	/* Split Control */
-        Reg	hcint;	/* Interrupt */
-        Reg	hcintmsk; /* Interrupt Mask */
-        Reg	hctsiz;	/* Transfer Size */
-        Reg	hcdma;	/* DMA Address */
-        Reg	reserved;
-        Reg	hcdmab;	/* DMA Buffer Address */
+    struct  Hostchan {
+        Reg hcchar; /* Characteristic */
+        Reg hcsplt; /* Split Control */
+        Reg hcint;  /* Interrupt */
+        Reg hcintmsk; /* Interrupt Mask */
+        Reg hctsiz; /* Transfer Size */
+        Reg hcdma;  /* DMA Address */
+        Reg reserved;
+        Reg hcdmab; /* DMA Buffer Address */
     } hchan[Maxchans];
-    char	pad3[0xE00-0x700];
+    char    pad3[0xE00-0x700];
 
     /* Power & clock gating control register 0xE00 */
-    Reg	pcgcctl;
+    Reg pcgcctl;
 };
 @
 
@@ -3505,7 +3985,7 @@ struct Dwcregs {
 <<buses/arm/dwcotg.h>>=
 /*
  * USB host driver for BCM2835
- *	Synopsis DesignWare Core USB 2.0 OTG controller
+ *  Synopsis DesignWare Core USB 2.0 OTG controller
  *
  * Device register definitions
  */
@@ -3520,434 +4000,434 @@ typedef struct Hostchan Hostchan;
 
 enum {
     /* gotgctl */
-    Sesreqscs	= 1<<0,
-    Sesreq		= 1<<1,
-    Vbvalidoven	= 1<<2,
-    Vbvalidovval	= 1<<3,
-    Avalidoven	= 1<<4,
-    Avalidovval	= 1<<5,
-    Bvalidoven	= 1<<6,
-    Bvalidovval	= 1<<7,
-    Hstnegscs	= 1<<8,
-    Hnpreq		= 1<<9,
-    Hstsethnpen	= 1<<10,
-    Devhnpen	= 1<<11,
-    Conidsts	= 1<<16,
-    Dbnctime	= 1<<17,
-    Asesvld		= 1<<18,
-    Bsesvld		= 1<<19,
-    Otgver		= 1<<20,
-    Multvalidbc	= 0x1F<<22,
-    Chirpen		= 1<<27,
+    Sesreqscs   = 1<<0,
+    Sesreq      = 1<<1,
+    Vbvalidoven = 1<<2,
+    Vbvalidovval    = 1<<3,
+    Avalidoven  = 1<<4,
+    Avalidovval = 1<<5,
+    Bvalidoven  = 1<<6,
+    Bvalidovval = 1<<7,
+    Hstnegscs   = 1<<8,
+    Hnpreq      = 1<<9,
+    Hstsethnpen = 1<<10,
+    Devhnpen    = 1<<11,
+    Conidsts    = 1<<16,
+    Dbnctime    = 1<<17,
+    Asesvld     = 1<<18,
+    Bsesvld     = 1<<19,
+    Otgver      = 1<<20,
+    Multvalidbc = 0x1F<<22,
+    Chirpen     = 1<<27,
 
     /* gotgint */
-    Sesenddet	= 1<<2,
+    Sesenddet   = 1<<2,
     Sesreqsucstschng= 1<<8,
     Hstnegsucstschng= 1<<9,
-    Hstnegdet	= 1<<17,
-    Adevtoutchng	= 1<<18,
-    Debdone		= 1<<19,
-    Mvic		= 1<<20,
+    Hstnegdet   = 1<<17,
+    Adevtoutchng    = 1<<18,
+    Debdone     = 1<<19,
+    Mvic        = 1<<20,
 
     /* gahbcfg */
-    Glblintrmsk	= 1<<0,
+    Glblintrmsk = 1<<0,
     /* bits 1:4 redefined for BCM2835 */
-    Axiburstlen	= 0x3<<1,
-        BURST1		= 3<<1,
-        BURST2		= 2<<1,
-        BURST3		= 1<<1,
-        BURST4		= 0<<1,
-    Axiwaitwrites	= 1<<4,
-    Dmaenable	= 1<<5,
-    Nptxfemplvl	= 1<<7,
-        NPTX_HALFEMPTY	= 0<<7,
-        NPTX_EMPTY	= 1<<7,
-    Ptxfemplvl	= 1<<8,
-        PTX_HALFEMPTY	= 0<<8,
-        PTX_EMPTY	= 1<<8,
-    Remmemsupp	= 1<<21,
-    Notialldmawrit	= 1<<22,
-    Ahbsingle	= 1<<23,
+    Axiburstlen = 0x3<<1,
+        BURST1      = 3<<1,
+        BURST2      = 2<<1,
+        BURST3      = 1<<1,
+        BURST4      = 0<<1,
+    Axiwaitwrites   = 1<<4,
+    Dmaenable   = 1<<5,
+    Nptxfemplvl = 1<<7,
+        NPTX_HALFEMPTY  = 0<<7,
+        NPTX_EMPTY  = 1<<7,
+    Ptxfemplvl  = 1<<8,
+        PTX_HALFEMPTY   = 0<<8,
+        PTX_EMPTY   = 1<<8,
+    Remmemsupp  = 1<<21,
+    Notialldmawrit  = 1<<22,
+    Ahbsingle   = 1<<23,
 
     /* gusbcfg */
-    Toutcal		= 0x7<<0,
-    Phyif		= 1<<3,
-    Ulpi_utmi_sel	= 1<<4,
-    Fsintf		= 1<<5,
-        FsUnidir	= 0<<5,
-        FsBidir		= 1<<5,
-    Physel		= 1<<6,
-        PhyHighspeed	= 0<<6,
-        PhyFullspeed	= 1<<6,
-    Ddrsel		= 1<<7,
-    Srpcap		= 1<<8,
-    Hnpcap		= 1<<9,
-    Usbtrdtim	= 0xf<<10,
-        OUsbtrdtim		= 10,
-    Phylpwrclksel	= 1<<15,
-    Otgutmifssel	= 1<<16,
-    Ulpi_fsls	= 1<<17,
-    Ulpi_auto_res	= 1<<18,
-    Ulpi_clk_sus_m	= 1<<19,
+    Toutcal     = 0x7<<0,
+    Phyif       = 1<<3,
+    Ulpi_utmi_sel   = 1<<4,
+    Fsintf      = 1<<5,
+        FsUnidir    = 0<<5,
+        FsBidir     = 1<<5,
+    Physel      = 1<<6,
+        PhyHighspeed    = 0<<6,
+        PhyFullspeed    = 1<<6,
+    Ddrsel      = 1<<7,
+    Srpcap      = 1<<8,
+    Hnpcap      = 1<<9,
+    Usbtrdtim   = 0xf<<10,
+        OUsbtrdtim      = 10,
+    Phylpwrclksel   = 1<<15,
+    Otgutmifssel    = 1<<16,
+    Ulpi_fsls   = 1<<17,
+    Ulpi_auto_res   = 1<<18,
+    Ulpi_clk_sus_m  = 1<<19,
     Ulpi_ext_vbus_drv= 1<<20,
     Ulpi_int_vbus_indicator= 1<<21,
     Term_sel_dl_pulse= 1<<22,
     Indicator_complement= 1<<23,
     Indicator_pass_through= 1<<24,
     Ulpi_int_prot_dis= 1<<25,
-    Ic_usb_cap	= 1<<26,
+    Ic_usb_cap  = 1<<26,
     Ic_traffic_pull_remove= 1<<27,
-    Tx_end_delay	= 1<<28,
-    Force_host_mode	= 1<<29,
-    Force_dev_mode	= 1<<30,
+    Tx_end_delay    = 1<<28,
+    Force_host_mode = 1<<29,
+    Force_dev_mode  = 1<<30,
 
     /* grstctl */
-    Csftrst		= 1<<0,
-    Hsftrst		= 1<<1,
-    Hstfrm		= 1<<2,
-    Intknqflsh	= 1<<3,
-    Rxfflsh		= 1<<4,
-    Txfflsh		= 1<<5,
-    Txfnum		= 0x1f<<6,
-        TXF_ALL		= 0x10<<6,
-    Dmareq		= 1<<30,
-    Ahbidle		= 1<<31,
+    Csftrst     = 1<<0,
+    Hsftrst     = 1<<1,
+    Hstfrm      = 1<<2,
+    Intknqflsh  = 1<<3,
+    Rxfflsh     = 1<<4,
+    Txfflsh     = 1<<5,
+    Txfnum      = 0x1f<<6,
+        TXF_ALL     = 0x10<<6,
+    Dmareq      = 1<<30,
+    Ahbidle     = 1<<31,
 
     /* gintsts, gintmsk */
-    Curmode		= 1<<0,
-        HOSTMODE	= 1<<0,
-        DEVMODE		= 0<<0,
-    Modemismatch	= 1<<1,
-    Otgintr		= 1<<2,
-    Sofintr		= 1<<3,
-    Rxstsqlvl	= 1<<4,
-    Nptxfempty	= 1<<5,
-    Ginnakeff	= 1<<6,
-    Goutnakeff	= 1<<7,
-    Ulpickint	= 1<<8,
-    I2cintr		= 1<<9,
-    Erlysuspend	= 1<<10,
-    Usbsuspend	= 1<<11,
-    Usbreset	= 1<<12,
-    Enumdone	= 1<<13,
-    Isooutdrop	= 1<<14,
-    Eopframe	= 1<<15,
-    Restoredone	= 1<<16,
-    Epmismatch	= 1<<17,
-    Inepintr	= 1<<18,
-    Outepintr	= 1<<19,
-    Incomplisoin	= 1<<20,
-    Incomplisoout	= 1<<21,
-    Fetsusp		= 1<<22,
-    Resetdet	= 1<<23,
-    Portintr	= 1<<24,
-    Hcintr		= 1<<25,
-    Ptxfempty	= 1<<26,
-    Lpmtranrcvd	= 1<<27,
-    Conidstschng	= 1<<28,
-    Disconnect	= 1<<29,
-    Sessreqintr	= 1<<30,
-    Wkupintr	= 1<<31,
+    Curmode     = 1<<0,
+        HOSTMODE    = 1<<0,
+        DEVMODE     = 0<<0,
+    Modemismatch    = 1<<1,
+    Otgintr     = 1<<2,
+    Sofintr     = 1<<3,
+    Rxstsqlvl   = 1<<4,
+    Nptxfempty  = 1<<5,
+    Ginnakeff   = 1<<6,
+    Goutnakeff  = 1<<7,
+    Ulpickint   = 1<<8,
+    I2cintr     = 1<<9,
+    Erlysuspend = 1<<10,
+    Usbsuspend  = 1<<11,
+    Usbreset    = 1<<12,
+    Enumdone    = 1<<13,
+    Isooutdrop  = 1<<14,
+    Eopframe    = 1<<15,
+    Restoredone = 1<<16,
+    Epmismatch  = 1<<17,
+    Inepintr    = 1<<18,
+    Outepintr   = 1<<19,
+    Incomplisoin    = 1<<20,
+    Incomplisoout   = 1<<21,
+    Fetsusp     = 1<<22,
+    Resetdet    = 1<<23,
+    Portintr    = 1<<24,
+    Hcintr      = 1<<25,
+    Ptxfempty   = 1<<26,
+    Lpmtranrcvd = 1<<27,
+    Conidstschng    = 1<<28,
+    Disconnect  = 1<<29,
+    Sessreqintr = 1<<30,
+    Wkupintr    = 1<<31,
 
     /* grxsts[rp] */
-    Chnum		= 0xf<<0,
-    Bcnt		= 0x7ff<<4,
-    Dpid		= 0x3<<15,
-    Pktsts		= 0xf<<17,
-        PKTSTS_IN		= 2<<17,
-        PKTSTS_IN_XFER_COMP	= 3<<17,
-        PKTSTS_DATA_TOGGLE_ERR	= 5<<17,
-        PKTSTS_CH_HALTED	= 7<<17,
+    Chnum       = 0xf<<0,
+    Bcnt        = 0x7ff<<4,
+    Dpid        = 0x3<<15,
+    Pktsts      = 0xf<<17,
+        PKTSTS_IN       = 2<<17,
+        PKTSTS_IN_XFER_COMP = 3<<17,
+        PKTSTS_DATA_TOGGLE_ERR  = 5<<17,
+        PKTSTS_CH_HALTED    = 7<<17,
 
     /* hptxfsiz, gnptxfsiz */
-    Startaddr	= 0xffff<<0,
-    Depth		= 0xffff<<16,
-        ODepth		= 16,
+    Startaddr   = 0xffff<<0,
+    Depth       = 0xffff<<16,
+        ODepth      = 16,
 
     /* gnptxsts */
-    Nptxfspcavail	= 0xffff<<0,
-    Nptxqspcavail	= 0xff<<16,
+    Nptxfspcavail   = 0xffff<<0,
+    Nptxqspcavail   = 0xff<<16,
     Nptxqtop_terminate= 1<<24,
-    Nptxqtop_token	= 0x3<<25,
-    Nptxqtop_chnep	= 0xf<<27,
+    Nptxqtop_token  = 0x3<<25,
+    Nptxqtop_chnep  = 0xf<<27,
 
     /* gpvndctl */
-    Regdata		= 0xff<<0,
-    Vctrl		= 0xff<<8,
-    Regaddr16_21	= 0x3f<<16,
-    Regwr		= 1<<22,
-    Newregreq	= 1<<25,
-    Vstsbsy		= 1<<26,
-    Vstsdone	= 1<<27,
-    Disulpidrvr	= 1<<31,
+    Regdata     = 0xff<<0,
+    Vctrl       = 0xff<<8,
+    Regaddr16_21    = 0x3f<<16,
+    Regwr       = 1<<22,
+    Newregreq   = 1<<25,
+    Vstsbsy     = 1<<26,
+    Vstsdone    = 1<<27,
+    Disulpidrvr = 1<<31,
 
     /* ggpio */
-    Gpi		= 0xffff<<0,
-    Gpo		= 0xffff<<16,
+    Gpi     = 0xffff<<0,
+    Gpo     = 0xffff<<16,
 
     /* ghwcfg2 */
-    Op_mode		= 0x7<<0,
-        HNP_SRP_CAPABLE_OTG	= 0<<0,
-        SRP_ONLY_CAPABLE_OTG	= 1<<0,
-        NO_HNP_SRP_CAPABLE	= 2<<0,
-        SRP_CAPABLE_DEVICE	= 3<<0,
-        NO_SRP_CAPABLE_DEVICE	= 4<<0,
-        SRP_CAPABLE_HOST	= 5<<0,
-        NO_SRP_CAPABLE_HOST	= 6<<0,
-    Architecture	= 0x3<<3,
-        SLAVE_ONLY		= 0<<3,
-        EXT_DMA			= 1<<3,
-        INT_DMA			= 2<<3,
-    Point2point	= 1<<5,
-    Hs_phy_type	= 0x3<<6,
-        PHY_NOT_SUPPORTED	= 0<<6,
-        PHY_UTMI		= 1<<6,
-        PHY_ULPI		= 2<<6,
-        PHY_UTMI_ULPI		= 3<<6,
-    Fs_phy_type	= 0x3<<8,
-    Num_dev_ep	= 0xf<<10,
-    Num_host_chan	= 0xf<<14,
-        ONum_host_chan		= 14,
+    Op_mode     = 0x7<<0,
+        HNP_SRP_CAPABLE_OTG = 0<<0,
+        SRP_ONLY_CAPABLE_OTG    = 1<<0,
+        NO_HNP_SRP_CAPABLE  = 2<<0,
+        SRP_CAPABLE_DEVICE  = 3<<0,
+        NO_SRP_CAPABLE_DEVICE   = 4<<0,
+        SRP_CAPABLE_HOST    = 5<<0,
+        NO_SRP_CAPABLE_HOST = 6<<0,
+    Architecture    = 0x3<<3,
+        SLAVE_ONLY      = 0<<3,
+        EXT_DMA         = 1<<3,
+        INT_DMA         = 2<<3,
+    Point2point = 1<<5,
+    Hs_phy_type = 0x3<<6,
+        PHY_NOT_SUPPORTED   = 0<<6,
+        PHY_UTMI        = 1<<6,
+        PHY_ULPI        = 2<<6,
+        PHY_UTMI_ULPI       = 3<<6,
+    Fs_phy_type = 0x3<<8,
+    Num_dev_ep  = 0xf<<10,
+    Num_host_chan   = 0xf<<14,
+        ONum_host_chan      = 14,
     Perio_ep_supported= 1<<18,
-    Dynamic_fifo	= 1<<19,
+    Dynamic_fifo    = 1<<19,
     Nonperio_tx_q_depth= 0x3<<22,
     Host_perio_tx_q_depth= 0x3<<24,
     Dev_token_q_depth= 0x1f<<26,
     Otg_enable_ic_usb= 1<<31,
 
     /* ghwcfg3 */
-    Xfer_size_cntr_width	= 0xf<<0,
-    Packet_size_cntr_width	= 0x7<<4,
-    Otg_func		= 1<<7,
-    I2c			= 1<<8,
-    Vendor_ctrl_if		= 1<<9,
-    Optional_features	= 1<<10,
-    Synch_reset_type	= 1<<11,
-    Adp_supp		= 1<<12,
-    Otg_enable_hsic		= 1<<13,
-    Bc_support		= 1<<14,
-    Otg_lpm_en		= 1<<15,
-    Dfifo_depth		= 0xffff<<16,
-        ODfifo_depth		= 16,
+    Xfer_size_cntr_width    = 0xf<<0,
+    Packet_size_cntr_width  = 0x7<<4,
+    Otg_func        = 1<<7,
+    I2c         = 1<<8,
+    Vendor_ctrl_if      = 1<<9,
+    Optional_features   = 1<<10,
+    Synch_reset_type    = 1<<11,
+    Adp_supp        = 1<<12,
+    Otg_enable_hsic     = 1<<13,
+    Bc_support      = 1<<14,
+    Otg_lpm_en      = 1<<15,
+    Dfifo_depth     = 0xffff<<16,
+        ODfifo_depth        = 16,
 
     /* ghwcfg4 */
-    Num_dev_perio_in_ep	= 0xf<<0,
-    Power_optimiz		= 1<<4,
-    Min_ahb_freq		= 1<<5,
-    Hiber			= 1<<6,
-    Xhiber			= 1<<7,
-    Utmi_phy_data_width	= 0x3<<14,
-    Num_dev_mode_ctrl_ep	= 0xf<<16,
-    Iddig_filt_en		= 1<<20,
-    Vbus_valid_filt_en	= 1<<21,
-    A_valid_filt_en		= 1<<22,
-    B_valid_filt_en		= 1<<23,
-    Session_end_filt_en	= 1<<24,
-    Ded_fifo_en		= 1<<25,
-    Num_in_eps		= 0xf<<26,
-    Desc_dma		= 1<<30,
-    Desc_dma_dyn		= 1<<31,
+    Num_dev_perio_in_ep = 0xf<<0,
+    Power_optimiz       = 1<<4,
+    Min_ahb_freq        = 1<<5,
+    Hiber           = 1<<6,
+    Xhiber          = 1<<7,
+    Utmi_phy_data_width = 0x3<<14,
+    Num_dev_mode_ctrl_ep    = 0xf<<16,
+    Iddig_filt_en       = 1<<20,
+    Vbus_valid_filt_en  = 1<<21,
+    A_valid_filt_en     = 1<<22,
+    B_valid_filt_en     = 1<<23,
+    Session_end_filt_en = 1<<24,
+    Ded_fifo_en     = 1<<25,
+    Num_in_eps      = 0xf<<26,
+    Desc_dma        = 1<<30,
+    Desc_dma_dyn        = 1<<31,
 
     /* glpmcfg */
-    Lpm_cap_en	= 1<<0,
-    Appl_resp	= 1<<1,
-    Hird		= 0xf<<2,
-    Rem_wkup_en	= 1<<6,
-    En_utmi_sleep	= 1<<7,
-    Hird_thres	= 0x1f<<8,
-    Lpm_resp	= 0x3<<13,
-    Prt_sleep_sts	= 1<<15,
+    Lpm_cap_en  = 1<<0,
+    Appl_resp   = 1<<1,
+    Hird        = 0xf<<2,
+    Rem_wkup_en = 1<<6,
+    En_utmi_sleep   = 1<<7,
+    Hird_thres  = 0x1f<<8,
+    Lpm_resp    = 0x3<<13,
+    Prt_sleep_sts   = 1<<15,
     Sleep_state_resumeok= 1<<16,
-    Lpm_chan_index	= 0xf<<17,
-    Retry_count	= 0x7<<21,
-    Send_lpm	= 1<<24,
-    Retry_count_sts	= 0x7<<25,
-    Hsic_connect	= 1<<30,
-    Inv_sel_hsic	= 1<<31,
+    Lpm_chan_index  = 0xf<<17,
+    Retry_count = 0x7<<21,
+    Send_lpm    = 1<<24,
+    Retry_count_sts = 0x7<<25,
+    Hsic_connect    = 1<<30,
+    Inv_sel_hsic    = 1<<31,
 
     /* gpwrdn */
-    Pmuintsel	= 1<<0,
-    Pmuactv		= 1<<1,
-    Restore		= 1<<2,
-    Pwrdnclmp	= 1<<3,
-    Pwrdnrstn	= 1<<4,
-    Pwrdnswtch	= 1<<5,
-    Dis_vbus	= 1<<6,
-    Lnstschng	= 1<<7,
-    Lnstchng_msk	= 1<<8,
-    Rst_det		= 1<<9,
-    Rst_det_msk	= 1<<10,
-    Disconn_det	= 1<<11,
-    Disconn_det_msk	= 1<<12,
-    Connect_det	= 1<<13,
-    Connect_det_msk	= 1<<14,
-    Srp_det		= 1<<15,
-    Srp_det_msk	= 1<<16,
-    Sts_chngint	= 1<<17,
-    Sts_chngint_msk	= 1<<18,
-    Linestate	= 0x3<<19,
-    Idsts		= 1<<21,
-    Bsessvld	= 1<<22,
-    Adp_int		= 1<<23,
-    Mult_val_id_bc	= 0x1f<<24,
+    Pmuintsel   = 1<<0,
+    Pmuactv     = 1<<1,
+    Restore     = 1<<2,
+    Pwrdnclmp   = 1<<3,
+    Pwrdnrstn   = 1<<4,
+    Pwrdnswtch  = 1<<5,
+    Dis_vbus    = 1<<6,
+    Lnstschng   = 1<<7,
+    Lnstchng_msk    = 1<<8,
+    Rst_det     = 1<<9,
+    Rst_det_msk = 1<<10,
+    Disconn_det = 1<<11,
+    Disconn_det_msk = 1<<12,
+    Connect_det = 1<<13,
+    Connect_det_msk = 1<<14,
+    Srp_det     = 1<<15,
+    Srp_det_msk = 1<<16,
+    Sts_chngint = 1<<17,
+    Sts_chngint_msk = 1<<18,
+    Linestate   = 0x3<<19,
+    Idsts       = 1<<21,
+    Bsessvld    = 1<<22,
+    Adp_int     = 1<<23,
+    Mult_val_id_bc  = 0x1f<<24,
 
     /* gdfifocfg */
-    Gdfifocfg	= 0xffff<<0,
-    Epinfobase	= 0xffff<<16,
+    Gdfifocfg   = 0xffff<<0,
+    Epinfobase  = 0xffff<<16,
 
     /* adpctl */
-    Prb_dschg	= 0x3<<0,
-    Prb_delta	= 0x3<<2,
-    Prb_per		= 0x3<<4,
-    Rtim		= 0x7ff<<6,
-    Enaprb		= 1<<17,
-    Enasns		= 1<<18,
-    Adpres		= 1<<19,
-    Adpen		= 1<<20,
-    Adp_prb_int	= 1<<21,
-    Adp_sns_int	= 1<<22,
-    Adp_tmout_int	= 1<<23,
-    Adp_prb_int_msk	= 1<<24,
-    Adp_sns_int_msk	= 1<<25,
+    Prb_dschg   = 0x3<<0,
+    Prb_delta   = 0x3<<2,
+    Prb_per     = 0x3<<4,
+    Rtim        = 0x7ff<<6,
+    Enaprb      = 1<<17,
+    Enasns      = 1<<18,
+    Adpres      = 1<<19,
+    Adpen       = 1<<20,
+    Adp_prb_int = 1<<21,
+    Adp_sns_int = 1<<22,
+    Adp_tmout_int   = 1<<23,
+    Adp_prb_int_msk = 1<<24,
+    Adp_sns_int_msk = 1<<25,
     Adp_tmout_int_msk= 1<<26,
-    Ar		= 0x3<<27,
+    Ar      = 0x3<<27,
 
     /* hcfg */
-    Fslspclksel	= 0x3<<0,
-        HCFG_30_60_MHZ	= 0<<0,
-        HCFG_48_MHZ	= 1<<0,
-        HCFG_6_MHZ	= 2<<0,
-    Fslssupp	= 1<<2,
-    Ena32khzs	= 1<<7,
-    Resvalid	= 0xff<<8,
-    Descdma		= 1<<23,
-    Frlisten	= 0x3<<24,
-    Modechtimen	= 1<<31,
+    Fslspclksel = 0x3<<0,
+        HCFG_30_60_MHZ  = 0<<0,
+        HCFG_48_MHZ = 1<<0,
+        HCFG_6_MHZ  = 2<<0,
+    Fslssupp    = 1<<2,
+    Ena32khzs   = 1<<7,
+    Resvalid    = 0xff<<8,
+    Descdma     = 1<<23,
+    Frlisten    = 0x3<<24,
+    Modechtimen = 1<<31,
 
     /* hfir */
-    Frint		= 0xffff<<0,
-    Hfirrldctrl	= 1<<16,
+    Frint       = 0xffff<<0,
+    Hfirrldctrl = 1<<16,
 
     /* hfnum */
-    Frnum		= 0xffff<<0,
-        MAX_FRNUM 	= 0x3FFF<<0,
-    Frrem		= 0xffff<<16,
+    Frnum       = 0xffff<<0,
+        MAX_FRNUM   = 0x3FFF<<0,
+    Frrem       = 0xffff<<16,
 
     /* hptxsts */
-    Ptxfspcavail	= 0xffff<<0,
-    Ptxqspcavail	= 0xff<<16,
+    Ptxfspcavail    = 0xffff<<0,
+    Ptxqspcavail    = 0xff<<16,
     Ptxqtop_terminate= 1<<24,
-    Ptxqtop_token	= 0x3<<25,
-    Ptxqtop_chnum	= 0xf<<27,
-    Ptxqtop_odd	= 1<<31,
+    Ptxqtop_token   = 0x3<<25,
+    Ptxqtop_chnum   = 0xf<<27,
+    Ptxqtop_odd = 1<<31,
 
     /* haint, haintmsk */
-#define CHANINT(n)	(1<<(n))
+#define CHANINT(n)  (1<<(n))
 
     /* hport0 */
-    Prtconnsts	= 1<<0,		/* connect status (RO) */
-    Prtconndet	= 1<<1,		/* connect detected R/W1C) */
-    Prtena		= 1<<2,		/* enable (R/W1C) */
-    Prtenchng	= 1<<3,		/* enable/disable change (R/W1C) */
-    Prtovrcurract	= 1<<4,		/* overcurrent active (RO) */
-    Prtovrcurrchng	= 1<<5,		/* overcurrent change (R/W1C) */
-    Prtres		= 1<<6,		/* resume */
-    Prtsusp		= 1<<7,		/* suspend */
-    Prtrst		= 1<<8,		/* reset */
-    Prtlnsts	= 0x3<<10,	/* line state {D+,D-} (RO) */
-    Prtpwr		= 1<<12,	/* power on */
-    Prttstctl	= 0xf<<13,	/* test */
-    Prtspd		= 0x3<<17,	/* speed (RO) */
-        HIGHSPEED	= 0<<17,
-        FULLSPEED	= 1<<17,
-        LOWSPEED	= 2<<17,
+    Prtconnsts  = 1<<0,     /* connect status (RO) */
+    Prtconndet  = 1<<1,     /* connect detected R/W1C) */
+    Prtena      = 1<<2,     /* enable (R/W1C) */
+    Prtenchng   = 1<<3,     /* enable/disable change (R/W1C) */
+    Prtovrcurract   = 1<<4,     /* overcurrent active (RO) */
+    Prtovrcurrchng  = 1<<5,     /* overcurrent change (R/W1C) */
+    Prtres      = 1<<6,     /* resume */
+    Prtsusp     = 1<<7,     /* suspend */
+    Prtrst      = 1<<8,     /* reset */
+    Prtlnsts    = 0x3<<10,  /* line state {D+,D-} (RO) */
+    Prtpwr      = 1<<12,    /* power on */
+    Prttstctl   = 0xf<<13,  /* test */
+    Prtspd      = 0x3<<17,  /* speed (RO) */
+        HIGHSPEED   = 0<<17,
+        FULLSPEED   = 1<<17,
+        LOWSPEED    = 2<<17,
 
     /* hcchar */
-    Mps		= 0x7ff<<0,	/* endpoint maximum packet size */
-    Epnum		= 0xf<<11,	/* endpoint number */
-        OEpnum		= 11,
-    Epdir		= 1<<15,	/* endpoint direction */
-        Epout		= 0<<15,
-        Epin		= 1<<15,
-    Lspddev		= 1<<17,	/* device is lowspeed */
-    Eptype		= 0x3<<18,	/* endpoint type */
-        Epctl		= 0<<18,
-        Episo		= 1<<18,
-        Epbulk		= 2<<18,
-        Epintr		= 3<<18,
-    Multicnt	= 0x3<<20,	/* transactions per μframe */
+    Mps     = 0x7ff<<0, /* endpoint maximum packet size */
+    Epnum       = 0xf<<11,  /* endpoint number */
+        OEpnum      = 11,
+    Epdir       = 1<<15,    /* endpoint direction */
+        Epout       = 0<<15,
+        Epin        = 1<<15,
+    Lspddev     = 1<<17,    /* device is lowspeed */
+    Eptype      = 0x3<<18,  /* endpoint type */
+        Epctl       = 0<<18,
+        Episo       = 1<<18,
+        Epbulk      = 2<<18,
+        Epintr      = 3<<18,
+    Multicnt    = 0x3<<20,  /* transactions per μframe */
                     /* or retries per periodic split */
-        OMulticnt	= 20,
-    Devaddr		= 0x7f<<22,	/* device address */
-        ODevaddr	= 22,
-    Oddfrm		= 1<<29,	/* xfer in odd frame (iso/interrupt) */
-    Chdis		= 1<<30,	/* channel disable (write 1 only) */
-    Chen		= 1<<31,	/* channel enable (write 1 only) */
+        OMulticnt   = 20,
+    Devaddr     = 0x7f<<22, /* device address */
+        ODevaddr    = 22,
+    Oddfrm      = 1<<29,    /* xfer in odd frame (iso/interrupt) */
+    Chdis       = 1<<30,    /* channel disable (write 1 only) */
+    Chen        = 1<<31,    /* channel enable (write 1 only) */
 
     /* hcsplt */
-    Prtaddr		= 0x7f<<0,	/* port address of recipient */
+    Prtaddr     = 0x7f<<0,  /* port address of recipient */
                     /* transaction translator */
-    Hubaddr		= 0x7f<<7,	/* dev address of transaction */
+    Hubaddr     = 0x7f<<7,  /* dev address of transaction */
                     /* translator's hub */
-        OHubaddr	= 7,
-    Xactpos		= 0x3<<14,	/* payload's position within transaction */
-        POS_MID		= 0<<14,		
-        POS_END		= 1<<14,
-        POS_BEGIN	= 2<<14,
-        POS_ALL		= 3<<14, /* all of data (<= 188 bytes) */
-    Compsplt	= 1<<16,	/* do complete split */
-    Spltena		= 1<<31,	/* channel enabled to do splits */
+        OHubaddr    = 7,
+    Xactpos     = 0x3<<14,  /* payload's position within transaction */
+        POS_MID     = 0<<14,        
+        POS_END     = 1<<14,
+        POS_BEGIN   = 2<<14,
+        POS_ALL     = 3<<14, /* all of data (<= 188 bytes) */
+    Compsplt    = 1<<16,    /* do complete split */
+    Spltena     = 1<<31,    /* channel enabled to do splits */
 
     /* hcint, hcintmsk */
-    Xfercomp	= 1<<0,		/* transfer completed without error */
-    Chhltd		= 1<<1,		/* channel halted */
-    Ahberr		= 1<<2,		/* AHB dma error */
-    Stall		= 1<<3,
-    Nak		= 1<<4,
-    Ack		= 1<<5,
-    Nyet		= 1<<6,
-    Xacterr		= 1<<7,	/* transaction error (crc, t/o, bit stuff, eop) */
-    Bblerr		= 1<<8,
-    Frmovrun	= 1<<9,
-    Datatglerr	= 1<<10,
-    Bna		= 1<<11,
-    Xcs_xact	= 1<<12,
-    Frm_list_roll	= 1<<13,
+    Xfercomp    = 1<<0,     /* transfer completed without error */
+    Chhltd      = 1<<1,     /* channel halted */
+    Ahberr      = 1<<2,     /* AHB dma error */
+    Stall       = 1<<3,
+    Nak     = 1<<4,
+    Ack     = 1<<5,
+    Nyet        = 1<<6,
+    Xacterr     = 1<<7, /* transaction error (crc, t/o, bit stuff, eop) */
+    Bblerr      = 1<<8,
+    Frmovrun    = 1<<9,
+    Datatglerr  = 1<<10,
+    Bna     = 1<<11,
+    Xcs_xact    = 1<<12,
+    Frm_list_roll   = 1<<13,
 
     /* hctsiz */
-    Xfersize	= 0x7ffff<<0,	/* expected total bytes */
-    Pktcnt		= 0x3ff<<19,	/* expected number of packets */
-        OPktcnt		= 19,
-    Pid		= 0x3<<29,	/* packet id for initial transaction */
-        DATA0		= 0<<29,
-        DATA1		= 2<<29,	/* sic */
-        DATA2		= 1<<29,	/* sic */
-        MDATA		= 3<<29,	/* (non-ctl ep) */
-        SETUP		= 3<<29,	/* (ctl ep) */
-    Dopng		= 1<<31,	/* do PING protocol */
+    Xfersize    = 0x7ffff<<0,   /* expected total bytes */
+    Pktcnt      = 0x3ff<<19,    /* expected number of packets */
+        OPktcnt     = 19,
+    Pid     = 0x3<<29,  /* packet id for initial transaction */
+        DATA0       = 0<<29,
+        DATA1       = 2<<29,    /* sic */
+        DATA2       = 1<<29,    /* sic */
+        MDATA       = 3<<29,    /* (non-ctl ep) */
+        SETUP       = 3<<29,    /* (ctl ep) */
+    Dopng       = 1<<31,    /* do PING protocol */
 
     /* pcgcctl */
-    Stoppclk		= 1<<0,
-    Gatehclk		= 1<<1,
-    Pwrclmp			= 1<<2,
-    Rstpdwnmodule		= 1<<3,
-    Enbl_sleep_gating	= 1<<5,
-    Phy_in_sleep		= 1<<6,
-    Deep_sleep		= 1<<7,
-    Resetaftsusp		= 1<<8,
-    Restoremode		= 1<<9,
-    Enbl_extnd_hiber	= 1<<10,
-    Extnd_hiber_pwrclmp	= 1<<11,
-    Extnd_hiber_switch	= 1<<12,
-    Ess_reg_restored	= 1<<13,
-    Prt_clk_sel		= 0x3<<14,
-    Port_power		= 1<<16,
-    Max_xcvrselect		= 0x3<<17,
-    Max_termsel		= 1<<19,
-    Mac_dev_addr		= 0x7f<<20,
-    P2hd_dev_enum_spd	= 0x3<<27,
-    P2hd_prt_spd		= 0x3<<29,
-    If_dev_mode		= 1<<31,
+    Stoppclk        = 1<<0,
+    Gatehclk        = 1<<1,
+    Pwrclmp         = 1<<2,
+    Rstpdwnmodule       = 1<<3,
+    Enbl_sleep_gating   = 1<<5,
+    Phy_in_sleep        = 1<<6,
+    Deep_sleep      = 1<<7,
+    Resetaftsusp        = 1<<8,
+    Restoremode     = 1<<9,
+    Enbl_extnd_hiber    = 1<<10,
+    Extnd_hiber_pwrclmp = 1<<11,
+    Extnd_hiber_switch  = 1<<12,
+    Ess_reg_restored    = 1<<13,
+    Prt_clk_sel     = 0x3<<14,
+    Port_power      = 1<<16,
+    Max_xcvrselect      = 0x3<<17,
+    Max_termsel     = 1<<19,
+    Mac_dev_addr        = 0x7f<<20,
+    P2hd_dev_enum_spd   = 0x3<<27,
+    P2hd_prt_spd        = 0x3<<29,
+    If_dev_mode     = 1<<31,
 };
 @
 % >> >> >> >> >> >> >> >> >> >> >>
@@ -3965,93 +4445,93 @@ enum {
 \subsection*{[[buses/arm/uartmini.c]]}
 
 <<constant GPIOREGS(arm)>>=
-#define GPIOREGS	(VIRTIO+0x200000)
+#define GPIOREGS    (VIRTIO+0x200000)
 @
 
 <<constant AUXREGS(arm)>>=
-#define AUXREGS		(VIRTIO+0x215000)
+#define AUXREGS     (VIRTIO+0x215000)
 @
 
 <<constant OkLed(arm)>>=
-#define	OkLed		16
+#define OkLed       16
 @
 
 <<constant TxPin(arm)>>=
-#define	TxPin		14
+#define TxPin       14
 @
 
 <<constant RxPin(arm)>>=
-#define	RxPin		15
+#define RxPin       15
 @
 
 <<enum _anon_ (buses/arm/uartmini.c)(arm)>>=
 /* GPIO regs */
 enum {
-    Fsel0	= 0x00>>2,
+    Fsel0   = 0x00>>2,
         FuncMask= 0x7,
-        Input	= 0x0,
-        Output	= 0x1,
-        Alt0	= 0x4,
-        Alt1	= 0x5,
-        Alt2	= 0x6,
-        Alt3	= 0x7,
-        Alt4	= 0x3,
-        Alt5	= 0x2,
-    Set0	= 0x1c>>2,
-    Clr0	= 0x28>>2,
-    Lev0	= 0x34>>2,
-    PUD	= 0x94>>2,
-        Off	= 0x0,
+        Input   = 0x0,
+        Output  = 0x1,
+        Alt0    = 0x4,
+        Alt1    = 0x5,
+        Alt2    = 0x6,
+        Alt3    = 0x7,
+        Alt4    = 0x3,
+        Alt5    = 0x2,
+    Set0    = 0x1c>>2,
+    Clr0    = 0x28>>2,
+    Lev0    = 0x34>>2,
+    PUD = 0x94>>2,
+        Off = 0x0,
         Pulldown= 0x1,
-        Pullup	= 0x2,
-    PUDclk0	= 0x98>>2,
-    PUDclk1	= 0x9c>>2,
+        Pullup  = 0x2,
+    PUDclk0 = 0x98>>2,
+    PUDclk1 = 0x9c>>2,
 };
 @
 
 <<enum _anon_ (buses/arm/uartmini.c)2(arm)>>=
 /* AUX regs */
 enum {
-    Irq	= 0x00>>2,
-        UartIrq	= 1<<0,
-    Enables	= 0x04>>2,
-        UartEn	= 1<<0,
-    MuIo	= 0x40>>2,
-    MuIer	= 0x44>>2,
-        RxIen	= 1<<0,
-        TxIen	= 1<<1,
-    MuIir	= 0x48>>2,
-    MuLcr	= 0x4c>>2,
+    Irq = 0x00>>2,
+        UartIrq = 1<<0,
+    Enables = 0x04>>2,
+        UartEn  = 1<<0,
+    MuIo    = 0x40>>2,
+    MuIer   = 0x44>>2,
+        RxIen   = 1<<0,
+        TxIen   = 1<<1,
+    MuIir   = 0x48>>2,
+    MuLcr   = 0x4c>>2,
         Bitsmask= 3<<0,
-        Bits7	= 2<<0,
-        Bits8	= 3<<0,
-    MuMcr	= 0x50>>2,
-        RtsN	= 1<<1,
-    MuLsr	= 0x54>>2,
-        TxDone	= 1<<6,
-        TxRdy	= 1<<5,
-        RxRdy	= 1<<0,
-    MuCntl	= 0x60>>2,
-        CtsFlow	= 1<<3,
-        TxEn	= 1<<1,
-        RxEn	= 1<<0,
-    MuBaud	= 0x68>>2,
+        Bits7   = 2<<0,
+        Bits8   = 3<<0,
+    MuMcr   = 0x50>>2,
+        RtsN    = 1<<1,
+    MuLsr   = 0x54>>2,
+        TxDone  = 1<<6,
+        TxRdy   = 1<<5,
+        RxRdy   = 1<<0,
+    MuCntl  = 0x60>>2,
+        CtsFlow = 1<<3,
+        TxEn    = 1<<1,
+        RxEn    = 1<<0,
+    MuBaud  = 0x68>>2,
 };
 @
 
 <<global miniuart(arm)>>=
 static Uart miniuart = {
-    .regs	= (u32int*)AUXREGS,
-    .name	= "uart0",
-    .freq	= 250000000,
-    .phys	= &miniphysuart,
+    .regs   = (u32int*)AUXREGS,
+    .name   = "uart0",
+    .freq   = 250000000,
+    .phys   = &miniphysuart,
 };
 @
 
 <<function gpiosel(arm)>>=
 void
 gpiosel(uint pin, int func)
-{	
+{   
     u32int *gp, *fsel;
     int off;
 
@@ -4433,23 +4913,23 @@ uartconsinit(void)
 
 <<global miniphysuart(arm)>>=
 PhysUart miniphysuart = {
-    .name		= "miniuart",
-    .pnp		= pnp,
-    .enable		= enable,
-    .disable	= disable,
-    .kick		= kick,
-    .dobreak	= dobreak,
-    .baud		= baud,
-    .bits		= bits,
-    .stop		= stop,
-    .parity		= parity,
-    .modemctl	= donothing,
-    .rts		= rts,
-    .dtr		= donothing,
-    .status		= status,
-    .fifo		= donothing,
-    .getc		= getc,
-    .putc		= putc,
+    .name       = "miniuart",
+    .pnp        = pnp,
+    .enable     = enable,
+    .disable    = disable,
+    .kick       = kick,
+    .dobreak    = dobreak,
+    .baud       = baud,
+    .bits       = bits,
+    .stop       = stop,
+    .parity     = parity,
+    .modemctl   = donothing,
+    .rts        = rts,
+    .dtr        = donothing,
+    .status     = status,
+    .fifo       = donothing,
+    .getc       = getc,
+    .putc       = putc,
 };
 @
 
@@ -4569,37 +5049,37 @@ extern PhysUart miniphysuart;
 <<enum _anon_ (buses/arm/usbdwc.c)(arm)>>=
 enum
 {
-    USBREGS		= VIRTIO + 0x980000,
-    Enabledelay	= 50,
-    Resetdelay	= 10,
-    ResetdelayHS	= 50,
+    USBREGS     = VIRTIO + 0x980000,
+    Enabledelay = 50,
+    Resetdelay  = 10,
+    ResetdelayHS    = 50,
 
-    Read		= 0,
-    Write		= 1,
+    Read        = 0,
+    Write       = 1,
 };
 @
 
 <<struct Ctlr (buses/arm/usbdwc.c)(arm)>>=
 struct Ctlr {
     Lock;
-    Dwcregs	*regs;		/* controller registers */
-    int	nchan;		/* number of host channels */
-    ulong	chanbusy;	/* bitmap of in-use channels */
-    QLock	chanlock;	/* serialise access to chanbusy */
-    QLock	split;		/* serialise split transactions */
-    int	splitretry;	/* count retries of Nyet */
-    int	sofchan;	/* bitmap of channels waiting for sof */
-    int	wakechan;	/* bitmap of channels to wakeup after fiq */
-    int	debugchan;	/* bitmap of channels for interrupt debug */
-    Rendez	*chanintr;	/* sleep till interrupt on channel N */
+    Dwcregs *regs;      /* controller registers */
+    int nchan;      /* number of host channels */
+    ulong   chanbusy;   /* bitmap of in-use channels */
+    QLock   chanlock;   /* serialise access to chanbusy */
+    QLock   split;      /* serialise split transactions */
+    int splitretry; /* count retries of Nyet */
+    int sofchan;    /* bitmap of channels waiting for sof */
+    int wakechan;   /* bitmap of channels to wakeup after fiq */
+    int debugchan;  /* bitmap of channels for interrupt debug */
+    Rendez  *chanintr;  /* sleep till interrupt on channel N */
 };
 @
 
 <<struct Epio(arm)>>=
 struct Epio {
     QLock;
-    Block	*cb;
-    ulong	lastpoll;
+    Block   *cb;
+    ulong   lastpoll;
 };
 @
 
@@ -5632,7 +6112,7 @@ usbdwclink(void)
 <<buses/arm/usbdwc.c>>=
 /*
  * USB host driver for BCM2835
- *	Synopsis DesignWare Core USB 2.0 OTG controller
+ *  Synopsis DesignWare Core USB 2.0 OTG controller
  *
  * Copyright © 2012 Richard Miller <r.miller@acm.org>
  *
@@ -5645,15 +6125,15 @@ usbdwclink(void)
  * keyboard, mouse, ethernet adapter, and an external flash drive.
  */
 
-#include	"u.h"
-#include	"../port/lib.h"
-#include	"../port/error.h"
-#include	"mem.h"
-#include	"dat.h"
-#include	"fns.h"
+#include    "u.h"
+#include    "../port/lib.h"
+#include    "../port/error.h"
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
 
-#include	"io.h"
-#include	"../port/usb.h"
+#include    "io.h"
+#include    "../port/usb.h"
 
 #include "dwcotg.h"
 
@@ -5803,117 +6283,117 @@ void arch_resetmouse(void) { }
 \subsection*{[[devices/storage/arm/emmc.c]]}
 
 <<constant EMMCREGS(arm)>>=
-#define EMMCREGS	(VIRTIO+0x300000)
+#define EMMCREGS    (VIRTIO+0x300000)
 @
 
 <<enum _anon_ (devices/storage/arm/emmc.c)(arm)>>=
 enum {
-    Extfreq		= 100*Mhz,	/* guess external clock frequency if */
+    Extfreq     = 100*Mhz,  /* guess external clock frequency if */
                     /* not available from vcore */
-    Initfreq	= 400000,	/* initialisation frequency for MMC */
-    SDfreq		= 25*Mhz,	/* standard SD frequency */
-    DTO		= 14,		/* data timeout exponent (guesswork) */
+    Initfreq    = 400000,   /* initialisation frequency for MMC */
+    SDfreq      = 25*Mhz,   /* standard SD frequency */
+    DTO     = 14,       /* data timeout exponent (guesswork) */
 
-    MMCSelect	= 7,		/* mmc/sd card select command */
-    Setbuswidth	= 6,		/* mmc/sd set bus width command */
+    MMCSelect   = 7,        /* mmc/sd card select command */
+    Setbuswidth = 6,        /* mmc/sd set bus width command */
 };
 @
 
 <<enum _anon_ (devices/storage/arm/emmc.c)2(arm)>>=
 enum {
     /* Controller registers */
-    Arg2			= 0x00>>2,
-    Blksizecnt		= 0x04>>2,
-    Arg1			= 0x08>>2,
-    Cmdtm			= 0x0c>>2,
-    Resp0			= 0x10>>2,
-    Resp1			= 0x14>>2,
-    Resp2			= 0x18>>2,
-    Resp3			= 0x1c>>2,
-    Data			= 0x20>>2,
-    Status			= 0x24>>2,
-    Control0		= 0x28>>2,
-    Control1		= 0x2c>>2,
-    Interrupt		= 0x30>>2,
-    Irptmask		= 0x34>>2,
-    Irpten			= 0x38>>2,
-    Control2		= 0x3c>>2,
-    Forceirpt		= 0x50>>2,
-    Boottimeout		= 0x70>>2,
-    Dbgsel			= 0x74>>2,
-    Exrdfifocfg		= 0x80>>2,
-    Exrdfifoen		= 0x84>>2,
-    Tunestep		= 0x88>>2,
-    Tunestepsstd		= 0x8c>>2,
-    Tunestepsddr		= 0x90>>2,
-    Spiintspt		= 0xf0>>2,
-    Slotisrver		= 0xfc>>2,
+    Arg2            = 0x00>>2,
+    Blksizecnt      = 0x04>>2,
+    Arg1            = 0x08>>2,
+    Cmdtm           = 0x0c>>2,
+    Resp0           = 0x10>>2,
+    Resp1           = 0x14>>2,
+    Resp2           = 0x18>>2,
+    Resp3           = 0x1c>>2,
+    Data            = 0x20>>2,
+    Status          = 0x24>>2,
+    Control0        = 0x28>>2,
+    Control1        = 0x2c>>2,
+    Interrupt       = 0x30>>2,
+    Irptmask        = 0x34>>2,
+    Irpten          = 0x38>>2,
+    Control2        = 0x3c>>2,
+    Forceirpt       = 0x50>>2,
+    Boottimeout     = 0x70>>2,
+    Dbgsel          = 0x74>>2,
+    Exrdfifocfg     = 0x80>>2,
+    Exrdfifoen      = 0x84>>2,
+    Tunestep        = 0x88>>2,
+    Tunestepsstd        = 0x8c>>2,
+    Tunestepsddr        = 0x90>>2,
+    Spiintspt       = 0xf0>>2,
+    Slotisrver      = 0xfc>>2,
 
     /* Control0 */
-    Dwidth4			= 1<<1,
-    Dwidth1			= 0<<1,
+    Dwidth4         = 1<<1,
+    Dwidth1         = 0<<1,
 
     /* Control1 */
-    Srstdata		= 1<<26,	/* reset data circuit */
-    Srstcmd			= 1<<25,	/* reset command circuit */
-    Srsthc			= 1<<24,	/* reset complete host controller */
-    Datatoshift		= 16,		/* data timeout unit exponent */
-    Datatomask		= 0xF0000,
-    Clkfreq8shift		= 8,		/* SD clock base divider LSBs */
-    Clkfreq8mask		= 0xFF00,
-    Clkfreqms2shift		= 6,		/* SD clock base divider MSBs */
-    Clkfreqms2mask		= 0xC0,
-    Clkgendiv		= 0<<5,		/* SD clock divided */
-    Clkgenprog		= 1<<5,		/* SD clock programmable */
-    Clken			= 1<<2,		/* SD clock enable */
-    Clkstable		= 1<<1,	
-    Clkintlen		= 1<<0,		/* enable internal EMMC clocks */
+    Srstdata        = 1<<26,    /* reset data circuit */
+    Srstcmd         = 1<<25,    /* reset command circuit */
+    Srsthc          = 1<<24,    /* reset complete host controller */
+    Datatoshift     = 16,       /* data timeout unit exponent */
+    Datatomask      = 0xF0000,
+    Clkfreq8shift       = 8,        /* SD clock base divider LSBs */
+    Clkfreq8mask        = 0xFF00,
+    Clkfreqms2shift     = 6,        /* SD clock base divider MSBs */
+    Clkfreqms2mask      = 0xC0,
+    Clkgendiv       = 0<<5,     /* SD clock divided */
+    Clkgenprog      = 1<<5,     /* SD clock programmable */
+    Clken           = 1<<2,     /* SD clock enable */
+    Clkstable       = 1<<1, 
+    Clkintlen       = 1<<0,     /* enable internal EMMC clocks */
 
     /* Cmdtm */
-    Indexshift		= 24,
-    Suspend			= 1<<22,
-    Resume			= 2<<22,
-    Abort			= 3<<22,
-    Isdata			= 1<<21,
-    Ixchken			= 1<<20,
-    Crcchken		= 1<<19,
-    Respmask		= 3<<16,
-    Respnone		= 0<<16,
-    Resp136			= 1<<16,
-    Resp48			= 2<<16,
-    Resp48busy		= 3<<16,
-    Multiblock		= 1<<5,
-    Host2card		= 0<<4,
-    Card2host		= 1<<4,
-    Autocmd12		= 1<<2,
-    Autocmd23		= 2<<2,
-    Blkcnten		= 1<<1,
+    Indexshift      = 24,
+    Suspend         = 1<<22,
+    Resume          = 2<<22,
+    Abort           = 3<<22,
+    Isdata          = 1<<21,
+    Ixchken         = 1<<20,
+    Crcchken        = 1<<19,
+    Respmask        = 3<<16,
+    Respnone        = 0<<16,
+    Resp136         = 1<<16,
+    Resp48          = 2<<16,
+    Resp48busy      = 3<<16,
+    Multiblock      = 1<<5,
+    Host2card       = 0<<4,
+    Card2host       = 1<<4,
+    Autocmd12       = 1<<2,
+    Autocmd23       = 2<<2,
+    Blkcnten        = 1<<1,
 
     /* Interrupt */
-    Acmderr		= 1<<24,
-    Denderr		= 1<<22,
-    Dcrcerr		= 1<<21,
-    Dtoerr		= 1<<20,
-    Cbaderr		= 1<<19,
-    Cenderr		= 1<<18,
-    Ccrcerr		= 1<<17,
-    Ctoerr		= 1<<16,
-    Err		= 1<<15,
-    Cardintr	= 1<<8,		/* not in Broadcom datasheet */
-    Cardinsert	= 1<<6,		/* not in Broadcom datasheet */
-    Readrdy		= 1<<5,
-    Writerdy	= 1<<4,
-    Datadone	= 1<<1,
-    Cmddone		= 1<<0,
+    Acmderr     = 1<<24,
+    Denderr     = 1<<22,
+    Dcrcerr     = 1<<21,
+    Dtoerr      = 1<<20,
+    Cbaderr     = 1<<19,
+    Cenderr     = 1<<18,
+    Ccrcerr     = 1<<17,
+    Ctoerr      = 1<<16,
+    Err     = 1<<15,
+    Cardintr    = 1<<8,     /* not in Broadcom datasheet */
+    Cardinsert  = 1<<6,     /* not in Broadcom datasheet */
+    Readrdy     = 1<<5,
+    Writerdy    = 1<<4,
+    Datadone    = 1<<1,
+    Cmddone     = 1<<0,
 
     /* Status */
-    Bufread		= 1<<11,	/* not in Broadcom datasheet */
-    Bufwrite	= 1<<10,	/* not in Broadcom datasheet */
-    Readtrans	= 1<<9,
-    Writetrans	= 1<<8,
-    Datactive	= 1<<2,
-    Datinhibit	= 1<<1,
-    Cmdinhibit	= 1<<0,
+    Bufread     = 1<<11,    /* not in Broadcom datasheet */
+    Bufwrite    = 1<<10,    /* not in Broadcom datasheet */
+    Readtrans   = 1<<9,
+    Writetrans  = 1<<8,
+    Datactive   = 1<<2,
+    Datinhibit  = 1<<1,
+    Cmdinhibit  = 1<<0,
 };
 @
 
@@ -5940,10 +6420,10 @@ int cmdinfo[64] = {
 
 <<struct Ctlr (devices/storage/arm/emmc.c)(arm)>>=
 struct Ctlr {
-    Rendez	r;
-    int	datadone;
-    int	fastclock;
-    ulong	extclk;
+    Rendez  r;
+    int datadone;
+    int fastclock;
+    ulong   extclk;
 };
 @
 
@@ -6005,7 +6485,7 @@ emmcinit(void)
     emmc.extclk = clk;
     print("%seMMC external clock %lud Mhz\n", s, clk / Mhz);
     r = (u32int*)EMMCREGS;
-    //if(0)print("emmc control %8.8ux %8.8ux %8.8ux\n",	r[Control0], r[Control1], r[Control2]);
+    //if(0)print("emmc control %8.8ux %8.8ux %8.8ux\n", r[Control0], r[Control1], r[Control2]);
     WR(Control1, Srsthc);
     arch_delay(10);
     while(r[Control1] & Srsthc)
@@ -6032,7 +6512,7 @@ emmcinquiry(char *inquiry, int inqlen)
 <<function mmcinterrupt(arm)>>=
 static void
 mmcinterrupt(Ureg*, void*)
-{	
+{   
     u32int *r;
     r = (u32int*)EMMCREGS;
     if(r[Interrupt]&(Datadone|Err)){
@@ -6328,12 +6808,12 @@ static Rdwrfn *writefn[Qmax];
 
 <<global archdir(arm)>>=
 static Dirtab archdir[Qmax] = {
-    ".",		{ Qdir, 0, QTDIR },	0,	0555,
+    ".",        { Qdir, 0, QTDIR }, 0,  0555,
 };
 @
 
 <<global archwlock(arm)>>=
-Lock archwlock;	/* the lock is only for changing archdir */
+Lock archwlock; /* the lock is only for changing archdir */
 @
 
 <<global narchdir(arm)>>=
@@ -6565,15 +7045,167 @@ void archinit(void);
 
 \section{[[init/arm/]]}
 
+\subsection*{[[init/arm/start.s]]}
+
+<<init/arm/start.s>>=
+/*
+ * Common startup for armv6 and armv7
+ * The rest of l.s has been moved to armv[67].s
+ */
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.ha"
+
+/*
+ * on bcm2836, only cpu0 starts here
+ * other cpus enter at cpureset in armv7.s
+ */
+TEXT _start(SB), 1, $-4
+    /*
+     * load physical base for SB addressing while mmu is off
+     * keep a handy zero in R0 until first function call
+     */
+    MOVW    $setR12(SB), R12
+    SUB $KZERO, R12
+    MOVW    $0, R0
+
+    /*
+     * SVC mode, interrupts disabled
+     */
+    MOVW    $(PsrDirq|PsrDfiq|PsrMsvc), R1
+    MOVW    R1, CPSR
+
+    /*
+     * start stack at top of 'cpu' (physical addr)
+     */
+    MOVW    $PADDR(CPUADDR+CPUSIZE-4), R13
+
+    /*
+     * do arch-dependent startup (no return)
+     */
+    BL  armstart(SB)
+    B   0(PC)
+
+    RET
+@
+
+\subsection*{[[init/arm/startv6.s]]}
+
+<<init/arm/startv6.s>>=
+/*
+ * Broadcom bcm2835 SoC, as used in Raspberry Pi
+ * arm1176jzf-s processor (armv6)
+ */
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.ha"
+
+TEXT armstart(SB), 1, $-4
+
+    /*
+     * disable the mmu and L1 caches
+     * invalidate caches and tlb
+     */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    BIC $(CpCdcache|CpCicache|CpCpredict|CpCmmu), R1
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvu), CpCACHEall
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+    ISB
+
+    /*
+     * clear mach and page tables
+     */
+    MOVW    $PADDR(CPUADDR), R1
+    MOVW    $PADDR(KTZERO), R2
+_ramZ:
+    MOVW    R0, (R1)
+    ADD $4, R1
+    CMP R1, R2
+    BNE _ramZ
+
+    /*
+     * start stack at top of CPUADDR (physical addr)
+     * set up page tables for kernel
+     */
+    MOVW    $PADDR(CPUADDR+CPUSIZE-4), R13 // done already in start.s
+    MOVW    $PADDR(L1), R0
+    BL  mmuinit(SB)
+
+    /*
+     * set up domain access control and page table base
+     */
+    MOVW    $Client, R1
+    MCR CpSC, 0, R1, C(CpDAC), C(0)
+
+    MOVW    $PADDR(L1), R1
+    MCR CpSC, 0, R1, C(CpTTB), C(0)
+
+    /*
+     * enable caches, mmu, and high vectors
+     */
+    MRC CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
+    ORR $(CpChv|CpCdcache|CpCicache|CpCmmu), R0
+    MCR CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
+    ISB
+
+    /*
+     * switch SB, SP, and PC into KZERO space
+     */
+    MOVW    $setR12(SB), R12
+    MOVW    $(CPUADDR+CPUSIZE-4), R13
+
+    MOVW    $_startpg(SB), R15
+
+TEXT _startpg(SB), 1, $-4
+
+    /*
+     * enable cycle counter
+     */
+    MOVW    $1, R1
+    MCR CpSC, 0, R1, C(CpSPM), C(CpSPMperf), CpSPMctl // Not CpSPMcyc??
+
+    /*
+     * call main and loop forever if it returns
+     */
+    BL  ,main(SB)
+    B   ,0(PC)
+
+    BL  _div(SB)        /* hack to load _div, etc. */
+
+
+
+
+
+
+
+        
+
+TEXT arch_idlehands(SB), $-4
+    MOVW    CPSR, R3
+    ORR $(PsrDirq|PsrDfiq), R3, R1      /* splfhi */
+    MOVW    R1, CPSR
+
+    DSB
+    MOVW    nrdy(SB), R0
+    CMP $0, R0
+    MCR.EQ  CpSC, 0, R0, C(CpCACHE), C(CpCACHEintr), CpCACHEwait
+    DSB
+
+    MOVW    R3, CPSR            /* splx */
+    RET
+@
+
 \subsection*{[[init/arm/main.c]]}
 
 <<constant Minfirmrev(arm)>>=
 /* Firmware compatibility */
-#define	Minfirmrev	326770
+#define Minfirmrev  326770
 @
 
 <<constant Minfirmdate(arm)>>=
-#define	Minfirmdate	"19 Aug 2013"
+#define Minfirmdate "19 Aug 2013"
 @
 
 <<function getconf(arm)>>=
@@ -6585,7 +7217,7 @@ getconf(char *name)
     // 
     //i = findconf(name);
     //if(i >= 0)
-    //	return confval[i];
+    //  return confval[i];
     return nil;
 }
 @
@@ -6635,7 +7267,7 @@ machon(uint xcpu)
 
     cpubit = 1 << xcpu;
     lock(&active);
-    if ((active.cpus & cpubit) == 0) {	/* currently off? */
+    if ((active.cpus & cpubit) == 0) {  /* currently off? */
         conf.ncpu++;
         active.cpus |= cpubit;
     }
@@ -6645,7 +7277,7 @@ machon(uint xcpu)
 
 <<global memsize(arm)>>=
 // used also in mmu.c
-ulong	memsize = 128*1024*1024;
+ulong   memsize = 128*1024*1024;
 @
 
 <<function confinit(arm)>>=
@@ -6658,14 +7290,14 @@ confinit(void)
     char *p;
 
     //if(0 && (p = getconf("service")) != nil){
-    //	if(strcmp(p, "cpu") == 0)
-    //		cpuserver = 1;
-    //	else if(strcmp(p,"terminal") == 0)
-    //		cpuserver = 0;
+    //  if(strcmp(p, "cpu") == 0)
+    //      cpuserver = 1;
+    //  else if(strcmp(p,"terminal") == 0)
+    //      cpuserver = 0;
     //}
     if((p = getconf("*maxmem")) != nil){
         memsize = strtoul(p, 0, 0);
-        if (memsize < 16*MB)		/* sanity */
+        if (memsize < 16*MB)        /* sanity */
             memsize = 16*MB;
     }
     // simpler than for x86 :)
@@ -6707,7 +7339,7 @@ confinit(void)
     conf.nswppo = 4096;
     conf.nimage = 200;
 
-    conf.copymode = 1;		/* copy on reference, not copy on write */
+    conf.copymode = 1;      /* copy on reference, not copy on write */
 
     /*
      * Guess how much is taken by the large permanent
@@ -6736,7 +7368,7 @@ confinit(void)
 @
 
 <<global sp(arm)>>=
-static uintptr sp;		/* XXX - must go - user stack of init proc */
+static uintptr sp;      /* XXX - must go - user stack of init proc */
 @
 
 <<function init0(arm)>>=
@@ -6784,7 +7416,7 @@ init0(void)
     }
     kproc("alarm", alarmkproc, nil); // ??
     arch_touser(sp);
-    assert(0);			/* shouldn't have returned */
+    assert(0);          /* shouldn't have returned */
 }
 @
 
@@ -7082,7 +7714,7 @@ main(void)
     // Let's go!
 
     cpu = (Cpu*)CPUADDR;
-    memset(edata, 0, end - edata);	/* clear bss */
+    memset(edata, 0, end - edata);  /* clear bss */
     cpu0init();
     mmuinit1((void*)L1);
     machon(0);
@@ -7092,7 +7724,7 @@ main(void)
     //optionsinit("/boot/boot boot");
     //ataginit((Atag*)BOOTARGS);
 
-    confinit();		/* figures out amount of memory */
+    confinit();     /* figures out amount of memory */
     xinit();
 
     uartconsinit();
@@ -7127,7 +7759,7 @@ main(void)
     imageinit();
 
     links();
-    chandevreset();			/* most devices are discovered here */
+    chandevreset();         /* most devices are discovered here */
 
     pageinit();
     swapinit();
@@ -7139,7 +7771,7 @@ main(void)
     // schedule the only ready user process (the one created by userinit)
     schedinit();
 
-    assert(0);			/* shouldn't have returned */
+    assert(0);          /* shouldn't have returned */
 }
 @
 
@@ -7204,7 +7836,7 @@ int  main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa);
 
 // <conf>.c
 extern  Dev*  conf_devtab[];
-extern	char*	conffile;
+extern  char*   conffile;
 
 <<function getconf(arm)>>
 
@@ -7278,12 +7910,12 @@ extern uintptr bootargs(uintptr base);
 
 <<global soc(arm)>>=
 Soc soc = {
-    .dramsize	= 512*MiB,    // 0 to 0x20000000
+    .dramsize   = 512*MiB,    // 0 to 0x20000000
 
-    .physio		= 0x20000000, // after RAM
-    .busdram	= 0x40000000,
-    .busio		= 0x7E000000,
-    .armlocal	= 0,
+    .physio     = 0x20000000, // after RAM
+    .busdram    = 0x40000000,
+    .busio      = 0x7E000000,
+    .armlocal   = 0,
 
     .l1ptedramattrs = Cached | Buffered,
     .l2ptedramattrs = Cached | Buffered,
@@ -7306,7 +7938,7 @@ arch_cpuidprint(void)
     char name[64];
 
     cputype2name(name, sizeof name);
-    arch_delay(50);				/* let uart catch up */
+    arch_delay(50);             /* let uart catch up */
     print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
 }
 @
@@ -7390,7 +8022,7 @@ l2ap(int ap)
 <<enum _anon_ (init/arm/bootconf.c)(arm)>>=
 enum {
     /* space for syscall args, return PC, top-of-stack struct */
-    Ustkheadroom	= sizeof(Sargs) + sizeof(uintptr) + sizeof(Tos),
+    Ustkheadroom    = sizeof(Sargs) + sizeof(uintptr) + sizeof(Tos),
 };
 @
 
@@ -7398,11 +8030,11 @@ enum {
 /*
  * Where configuration info is left for the loaded programme.
  */
-#define BOOTARGS	((char*)CONFADDR)
+#define BOOTARGS    ((char*)CONFADDR)
 @
 
 <<constant BOOTARGSLEN(arm)>>=
-#define	BOOTARGSLEN	(CPUADDR-CONFADDR)
+#define BOOTARGSLEN (CPUADDR-CONFADDR)
 @
 
 <<global oargc(arm)>>=
@@ -7427,27 +8059,27 @@ static int oargblen;
 
 <<struct Atag(arm)>>=
 struct Atag {
-    u32int	size;	/* size of atag in words, including this header */
-    u32int	tag;	/* atag type */
+    u32int  size;   /* size of atag in words, including this header */
+    u32int  tag;    /* atag type */
     union {
-        u32int	data[1];	/* actually [size-2] */
+        u32int  data[1];    /* actually [size-2] */
         /* AtagMem */
         struct {
-            u32int	size;
-            u32int	base;
+            u32int  size;
+            u32int  base;
         } mem;
         /* AtagCmdLine */
-        char	cmdline[1];	/* actually [4*(size-2)] */
+        char    cmdline[1]; /* actually [4*(size-2)] */
     };
 };
 @
 
 <<enum _anon_ (init/arm/bootconf.c)2(arm)>>=
 enum {
-    AtagNone	= 0x00000000,
-    AtagCore	= 0x54410001,
-    AtagMem		= 0x54410002,
-    AtagCmdline	= 0x54410009,
+    AtagNone    = 0x00000000,
+    AtagCore    = 0x54410001,
+    AtagMem     = 0x54410002,
+    AtagCmdline = 0x54410009,
 };
 @
 
@@ -7605,9 +8237,9 @@ bootargs(uintptr base)
     /*
      * Now push the argv pointers.
      * The code jumped to by touser in lproc.s expects arguments
-     *	main(char* argv0, ...)
+     *  main(char* argv0, ...)
      * and calls
-     * 	startboot("/boot/boot", &argv0)
+     *  startboot("/boot/boot", &argv0)
      * not the usual (int argc, char* argv[])
      */
     av = (char**)(p - (oargc+1)*sizeof(char*));
@@ -7636,8 +8268,8 @@ bootargs(uintptr base)
 
 <<constant BOOTARGS(arm)>>
 <<constant BOOTARGSLEN(arm)>>
-//#define MAXCONF		64
-//#define MAXCONFLINE	160
+//#define MAXCONF       64
+//#define MAXCONFLINE   160
 
 <<global oargc(arm)>>
 <<global oargv(arm)>>
@@ -7674,13 +8306,13 @@ typedef struct Atag Atag;
 \subsection*{[[init/arm/watchdog.c]]}
 
 <<constant POWERREGS(arm)>>=
-#define	POWERREGS	(VIRTIO+0x100000)
+#define POWERREGS   (VIRTIO+0x100000)
 @
 
 <<enum _anon_ (init/arm/watchdog.c)(arm)>>=
 enum {
-    Wdogfreq	= 65536,
-    Wdogtime	= 5,	/* seconds, ≤ 15 */
+    Wdogfreq    = 65536,
+    Wdogtime    = 5,    /* seconds, ≤ 15 */
 };
 @
 
@@ -7689,12 +8321,12 @@ enum {
  * Power management / watchdog registers
  */
 enum {
-    Rstc		= 0x1c>>2,
-        Password	= 0x5A<<24,
-        CfgMask		= 0x03<<4,
-        CfgReset	= 0x02<<4,
-    Rsts		= 0x20>>2,
-    Wdog		= 0x24>>2,
+    Rstc        = 0x1c>>2,
+        Password    = 0x5A<<24,
+        CfgMask     = 0x03<<4,
+        CfgReset    = 0x02<<4,
+    Rsts        = 0x20>>2,
+    Wdog        = 0x24>>2,
 };
 @
 
@@ -7780,6 +8412,159 @@ watchdoglink(void)
 <<function watchdoglink(arm)>>
 @
 
+\subsection*{[[init/user/preboot/arm/init9.s]]}
+
+<<init/user/preboot/arm/init9.s>>=
+/*
+ * This is the same as the C program:
+ *
+ *  void
+ *  main(char* argv0)
+ *  {
+ *      startboot(argv0, &argv0);
+ *  }
+ *
+ * It is in assembler because SB needs to be
+ * set and doing this in C drags in too many
+ * other routines.
+ */
+TEXT main(SB), 1, $8
+    MOVW    $setR12(SB), R12        /* load the SB */
+    MOVW    $boot(SB), R0
+
+    ADD $12, R13, R1            /* pointer to 0(FP) */
+
+    MOVW    R0, 4(R13)          /* pass argc, argv */
+    MOVW    R1, 8(R13)
+
+    BL  startboot(SB)
+_loop:
+    B   _loop
+@
+
+\subsection*{[[init/arm/rebootcode.s]]}
+
+<<init/arm/rebootcode.s>>=
+/*
+ * armv6/armv7 reboot code
+ */
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.ha"
+
+#define PTEDRAM     (Dom0|L1AP(Krw)|Section)
+
+#define WFI WORD    $0xe320f003 /* wait for interrupt */
+#define WFE WORD    $0xe320f002 /* wait for event */
+
+/*
+ * Turn off MMU, then copy the new kernel to its correct location
+ * in physical memory.  Then jump to the start of the kernel.
+ */
+
+/* main(PADDR(entry), PADDR(code), size); */
+TEXT    main(SB), 1, $-4
+    MOVW    $setR12(SB), R12
+
+    /* copy in arguments before stack gets unmapped */
+    MOVW    R0, R8          /* entry point */
+    MOVW    p2+4(FP), R9        /* source */
+    MOVW    n+8(FP), R6     /* byte count */
+
+    /* SVC mode, interrupts disabled */
+    MOVW    $(PsrDirq|PsrDfiq|PsrMsvc), R1
+    MOVW    R1, CPSR
+
+    /* prepare to turn off mmu  */
+    BL  cachesoff(SB)
+
+    /* turn off mmu */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    BIC $CpCmmu, R1
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+
+    /* continue with reboot only on cpu0 */
+    CPUID(R2)
+    BEQ bootcpu
+
+    /* other cpus wait for inter processor interrupt from cpu0 */
+    /* turn icache back on */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    ORR $(CpCicache), R1
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    BARRIERS
+dowfi:
+    WFI
+    MOVW    $0x40000060, R1
+    ADD     R2<<2, R1
+    MOVW    0(R1), R0
+    AND     $0x10, R0
+    BEQ     dowfi
+    MOVW    $0x8000, R1
+    BL      (R1)
+    B       dowfi
+
+bootcpu:
+    /* set up a tiny stack for local vars and memmove args */
+    MOVW    R8, SP          /* stack top just before kernel dest */
+    SUB $20, SP         /* allocate stack frame */
+
+    /* copy the kernel to final destination */
+    MOVW    R8, 16(SP)      /* save dest (entry point) */
+    MOVW    R8, R0          /* first arg is dest */
+    MOVW    R9, 8(SP)       /* push src */
+    MOVW    R6, 12(SP)      /* push size */
+    BL  memmove(SB)
+    MOVW    16(SP), R8      /* restore entry point */
+
+    /* jump to kernel physical entry point */
+    ORR R8,R8
+    B   (R8)
+    B   0(PC)
+
+/*
+ * turn the caches off, double map PHYSDRAM & KZERO, invalidate TLBs, revert
+ * to tiny addresses.  upon return, it will be safe to turn off the mmu.
+ * clobbers R0-R2, and returns with SP invalid.
+ */
+TEXT cachesoff(SB), 1, $-4
+    MOVM.DB.W [R14,R1-R10], (R13)       /* save regs on stack */
+
+    /* turn caches off, invalidate icache */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    BIC $(CpCdcache|CpCicache|CpCpredict), R1
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
+
+    /* invalidate stale TLBs before changing them */
+    BARRIERS
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+    BARRIERS
+
+    /* redo double map of first MiB PHYSDRAM = KZERO */
+    MOVW    12(R(CPU)), R2      /* m->mmul1 (virtual addr) */
+    MOVW    $PTEDRAM, R1            /* PTE bits */
+    MOVW    R1, (R2)
+
+    /* invalidate stale TLBs again */
+    BARRIERS
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+    BARRIERS
+
+    /* relocate SB and return address to PHYSDRAM addressing */
+    MOVW    $KSEGM, R1      /* clear segment bits */
+    BIC R1, R12         /* adjust SB */
+    MOVM.IA.W (R13), [R14,R1-R10]       /* restore regs from stack */
+
+    MOVW    $KSEGM, R1      /* clear segment bits */
+    BIC R1, R14         /* adjust return address */
+
+    RET
+@
+%$
 
 \section{[[memory/arm/]]}
 
@@ -7789,19 +8574,19 @@ watchdoglink(void)
 /*
  *  MMU stuff in proc
  */
-#define NCOLOR	1		/* 1 level cache, don't worry about VCE's */
+#define NCOLOR  1       /* 1 level cache, don't worry about VCE's */
 @
 
 <<struct Arch_ProcMMU(arm)>>=
 struct Arch_ProcMMU
 {
-    Page*	mmul2;
-    Page*	mmul2cache;	/* free mmu pages */
+    Page*   mmul2;
+    Page*   mmul2cache; /* free mmu pages */
 };
 @
 
 <<macro VA(arm)>>=
-#define	VA(k)		((uintptr)(k))
+#define VA(k)       ((uintptr)(k))
 @
 
 
@@ -7816,7 +8601,7 @@ struct Arch_ProcMMU
 /*
  * Fake kmap.
  */
-typedef void		Arch_KMap;
+typedef void        Arch_KMap;
 <<macro VA(arm)>>
 
 @
@@ -7828,46 +8613,46 @@ typedef void		Arch_KMap;
 /*
  * Memory and machine-specific definitions.  Used in C and assembler.
  */
-#define KiB		1024u			/* Kibi 0x0000000000000400 */
+#define KiB     1024u           /* Kibi 0x0000000000000400 */
 @
 
 <<constant MiB(arm)>>=
-#define MiB		1048576u		/* Mebi 0x0000000000100000 */
+#define MiB     1048576u        /* Mebi 0x0000000000100000 */
 @
 
 <<constant GiB(arm)>>=
-#define GiB		1073741824u		/* Gibi 000000000040000000 */
+#define GiB     1073741824u     /* Gibi 000000000040000000 */
 @
 
 <<constant BY2PG(arm)>>=
 /*
  * Sizes
  */
-#define	BY2PG		(4*KiB)			/* bytes per page */
+#define BY2PG       (4*KiB)         /* bytes per page */
 @
 
 <<constant PGSHIFT(arm)>>=
-#define	PGSHIFT		12			/* log(BY2PG) */
+#define PGSHIFT     12          /* log(BY2PG) */
 @
 
 <<constant MAXCPUS(arm)>>=
-#define	MAXCPUS		4			/* max # cpus system can run */
+#define MAXCPUS     4           /* max # cpus system can run */
 @
 
 <<constant CPUSIZE(arm)>>=
-#define	CPUSIZE	BY2PG
+#define CPUSIZE BY2PG
 @
 
 <<constant L1SIZE(arm)>>=
-#define L1SIZE		(4 * BY2PG)
+#define L1SIZE      (4 * BY2PG)
 @
 
 <<constant KSTKSIZE(arm)>>=
-#define KSTKSIZE	(8*KiB)
+#define KSTKSIZE    (8*KiB)
 @
 
 <<macro STACKALIGN(arm)>>=
-#define STACKALIGN(sp)	((sp) & ~3)		/* bug: assure with alloc */
+#define STACKALIGN(sp)  ((sp) & ~3)     /* bug: assure with alloc */
 @
 
 <<constant UP(arm)>>=
@@ -7875,11 +8660,11 @@ typedef void		Arch_KMap;
  * Magic registers
  */
 
-#define	UP		9		/* R9 is up-> */
+#define UP      9       /* R9 is up-> */
 @
 
 <<constant CPU(arm)>>=
-#define	CPU		10		/* R10 is cpu-> */
+#define CPU     10      /* R10 is cpu-> */
 @
 
 <<constant KSEG0(arm)>>=
@@ -7893,171 +8678,171 @@ typedef void		Arch_KMap;
  * devenv.
  */
 
-#define	KSEG0		0x80000000		/* kernel segment */
+#define KSEG0       0x80000000      /* kernel segment */
 @
 
 <<constant KSEGM(arm)>>=
 /* mask to check segment; good for 1GB dram */
-#define	KSEGM		0xC0000000
+#define KSEGM       0xC0000000
 @
 
 <<constant KZERO(arm)>>=
-#define	KZERO		KSEG0			/* kernel address space */
+#define KZERO       KSEG0           /* kernel address space */
 @
 
 <<constant CONFADDR(arm)>>=
-#define CONFADDR	(KZERO+0x100)		/* unparsed plan9.ini */
+#define CONFADDR    (KZERO+0x100)       /* unparsed plan9.ini */
 @
 
 <<constant CPUADDR(arm)>>=
 // L1 must be 16KiB aligned so this dictates the organization below
-#define	CPUADDR	    (KZERO+0x2000)		/* Cpu structure */
+#define CPUADDR     (KZERO+0x2000)      /* Cpu structure */
 @
 
 <<constant L2(arm)>>=
-#define	L2		    (KZERO+0x3000)		/* L2 ptes for vectors etc */
+#define L2          (KZERO+0x3000)      /* L2 ptes for vectors etc */
 @
 
 <<constant VCBUFFER(arm)>>=
-#define	VCBUFFER	(KZERO+0x3400)		/* videocore mailbox buffer */
+#define VCBUFFER    (KZERO+0x3400)      /* videocore mailbox buffer */
 @
 
 <<constant FIQSTKTOP(arm)>>=
-#define	FIQSTKTOP	(KZERO+0x4000)		/* FIQ stack */
+#define FIQSTKTOP   (KZERO+0x4000)      /* FIQ stack */
 @
 
 <<constant L1(arm)>>=
-#define	L1		    (KZERO+0x4000)		/* ttb ptes: 16KiB aligned */
+#define L1          (KZERO+0x4000)      /* ttb ptes: 16KiB aligned */
 @
 
 <<constant KTZERO(arm)>>=
-#define	KTZERO		(KZERO+0x8000)		/* kernel text start */
+#define KTZERO      (KZERO+0x8000)      /* kernel text start */
 @
 
 <<constant VIRTIO(arm)>>=
-#define VIRTIO		0x7E000000		/* i/o registers */
+#define VIRTIO      0x7E000000      /* i/o registers */
 @
 
 <<constant FRAMEBUFFER(arm)>>=
-#define	FRAMEBUFFER	0xC0000000		/* video framebuffer */
+#define FRAMEBUFFER 0xC0000000      /* video framebuffer */
 @
 
 <<constant UZERO(arm)>>=
-#define	UZERO		0			/* user segment */
+#define UZERO       0           /* user segment */
 @
 
 <<constant UTZERO(arm)>>=
-#define	UTZERO		(UZERO+BY2PG)		/* user text start */
+#define UTZERO      (UZERO+BY2PG)       /* user text start */
 @
 
 <<macro UTROUND(arm)>>=
-#define UTROUND(t)	ROUNDUP((t), BY2PG)
+#define UTROUND(t)  ROUNDUP((t), BY2PG)
 @
 
 <<constant USTKTOP(arm)>>=
 // that's it? only 512 MB for virtual space?
-#define	USTKTOP		0x20000000		/* user segment end +1 */
+#define USTKTOP     0x20000000      /* user segment end +1 */
 @
 
 <<constant USTKSIZE(arm)>>=
-#define	USTKSIZE	(8*1024*1024)		/* user stack size */
+#define USTKSIZE    (8*1024*1024)       /* user stack size */
 @
 
 <<constant TSTKTOP(arm)>>=
-#define	TSTKTOP		(USTKTOP-USTKSIZE)	/* sysexec temporary stack */
+#define TSTKTOP     (USTKTOP-USTKSIZE)  /* sysexec temporary stack */
 @
 
 <<constant TSTKSIZ(arm)>>=
-#define	TSTKSIZ	 	256
+#define TSTKSIZ     256
 @
 
 <<constant REBOOTADDR(arm)>>=
 /* address at which to copy and execute rebootcode */
-#define	REBOOTADDR	(KZERO+0x1800)
+#define REBOOTADDR  (KZERO+0x1800)
 @
 
 <<constant BLOCKALIGN(arm)>>=
 // possible alternative fix: git show 2342e706e42d1e6653c51cc1433f44816cf53fe6
-#define BLOCKALIGN	32			/* only used in allocb.c */
+#define BLOCKALIGN  32          /* only used in allocb.c */
 @
 
 <<constant KSTACK(arm)>>=
-#define KSTACK		KSTKSIZE
+#define KSTACK      KSTKSIZE
 @
 
 <<constant BI2BY(arm)>>=
 /*
  * Sizes
  */
-#define BI2BY		8			/* bits per byte */
+#define BI2BY       8           /* bits per byte */
 @
 
 <<constant BY2SE(arm)>>=
-#define BY2SE		4
+#define BY2SE       4
 @
 
 <<constant BY2WD(arm)>>=
-#define BY2WD		4
+#define BY2WD       4
 @
 
 <<constant BY2V(arm)>>=
-#define BY2V		8			/* only used in xalloc.c */
+#define BY2V        8           /* only used in xalloc.c */
 @
 
 <<constant PAGETABMAPMEM(arm)>>=
-#define	PAGETABMAPMEM	(1024*1024)
+#define PAGETABMAPMEM   (1024*1024)
 @
 
 <<constant PAGETABSIZE(arm)>>=
-#define	PAGETABSIZE	(PAGETABMAPMEM/BY2PG)
+#define PAGETABSIZE (PAGETABMAPMEM/BY2PG)
 @
 
 <<constant PAGEDIRSIZE(arm)>>=
-#define	PAGEDIRSIZE	1984
+#define PAGEDIRSIZE 1984
 @
 
 <<constant SMALLPAGEDIRSIZE(arm)>>=
-#define	SMALLPAGEDIRSIZE	16
+#define SMALLPAGEDIRSIZE    16
 @
 
 <<macro PPN(arm)>>=
-#define	PPN(x)		((x)&~(BY2PG-1))
+#define PPN(x)      ((x)&~(BY2PG-1))
 @
 
 <<constant PTEVALID(arm)>>=
 /*
  * With a little work these move to port.
  */
-#define	PTEVALID	(1<<0)
+#define PTEVALID    (1<<0)
 @
 
 <<constant PTERONLY(arm)>>=
-#define	PTERONLY	0
+#define PTERONLY    0
 @
 
 <<constant PTEWRITE(arm)>>=
-#define	PTEWRITE	(1<<1)
+#define PTEWRITE    (1<<1)
 @
 
 <<constant PTEUNCACHED(arm)>>=
-#define	PTEUNCACHED	(1<<2)
+#define PTEUNCACHED (1<<2)
 @
 
 <<constant PTEKERNEL(arm)>>=
-#define PTEKERNEL	(1<<3)
+#define PTEKERNEL   (1<<3)
 @
 
 <<constant PHYSDRAM(arm)>>=
 /*
  * Physical machine information from here on.
- *	PHYS addresses as seen from the arm cpu.
- *	BUS  addresses as seen from the videocore gpu.
+ *  PHYS addresses as seen from the arm cpu.
+ *  BUS  addresses as seen from the videocore gpu.
  */
-#define	PHYSDRAM	0
+#define PHYSDRAM    0
 @
 
 <<constant IOSIZE(arm)>>=
-#define	IOSIZE		(16*MiB)
+#define IOSIZE      (16*MiB)
 @
 
 
@@ -8141,29 +8926,29 @@ typedef void		Arch_KMap;
 \subsection*{[[memory/arm/mmu.c]]}
 
 <<macro L1X(arm)>>=
-#define L1X(va)		FEXT((va), 20, 12)
+#define L1X(va)     FEXT((va), 20, 12)
 @
 
 <<macro L2X(arm)>>=
-#define L2X(va)		FEXT((va), 12, 8)
+#define L2X(va)     FEXT((va), 12, 8)
 @
 
 <<macro L2AP(arm)>>=
-#define L2AP(ap)	l2ap(ap)
+#define L2AP(ap)    l2ap(ap)
 @
 
 <<constant L1ptedramattrs(arm)>>=
-#define L1ptedramattrs	soc.l1ptedramattrs
+#define L1ptedramattrs  soc.l1ptedramattrs
 @
 
 <<constant L2ptedramattrs(arm)>>=
-#define L2ptedramattrs	soc.l2ptedramattrs
+#define L2ptedramattrs  soc.l2ptedramattrs
 @
 
 <<enum _anon_ (memory/arm/mmu.c)(arm)>>=
 enum {
-    L1lo		= UZERO/MiB,		/* L1X(UZERO)? */
-    L1hi		= (USTKTOP+MiB-1)/MiB,	/* L1X(USTKTOP+MiB-1)? */
+    L1lo        = UZERO/MiB,        /* L1X(UZERO)? */
+    L1hi        = (USTKTOP+MiB-1)/MiB,  /* L1X(USTKTOP+MiB-1)? */
 };
 @
 
@@ -8422,9 +9207,9 @@ arch_putmmu(uintptr va, uintptr pa, Page* page)
     pte = UINT2PTR(KADDR(PPN(*l1)));
 
     /* protection bits are
-     *	PTERONLY|PTEVALID;
-     *	PTEWRITE|PTEVALID;
-     *	PTEWRITE|PTEUNCACHED|PTEVALID;
+     *  PTERONLY|PTEVALID;
+     *  PTEWRITE|PTEVALID;
+     *  PTEWRITE|PTEUNCACHED|PTEVALID;
      */
     x = Small;
     if(!(pa & PTEUNCACHED))
@@ -8491,7 +9276,7 @@ mmuuncache(void* v, usize size)
 uintptr
 arch_cankaddr(uintptr pa)
 {
-    if(pa < memsize)		/* assumes PHYSDRAM is 0 */
+    if(pa < memsize)        /* assumes PHYSDRAM is 0 */
         return memsize - pa;
     return 0;
 }
@@ -8533,7 +9318,7 @@ arch_checkmmu(uintptr va, uintptr pa)
 @
 
 <<function arch_kmap(arm)>>=
-//old:#define	arch_kmap(p)		(Arch_KMap*)((p)->pa|kseg0)
+//old:#define   arch_kmap(p)        (Arch_KMap*)((p)->pa|kseg0)
 Arch_KMap*
 arch_kmap(Page *p) {
   return (Arch_KMap*)((p)->pa|KZERO);
@@ -8599,32 +9384,161 @@ arch_kunmap(Arch_KMap *k)
 <<function arch_kunmap(arm)>>
 
 
-//#define	kunmap(k)
+//#define   kunmap(k)
 @
 
+
+\subsection*{[[memory/arm/mmuinvalidate.s]]}
+
+<<memory/arm/mmuinvalidate.s>>=
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.ha"
+        
+/*
+ * invalidate tlb
+ */
+TEXT mmuinvalidate(SB), 1, $-4
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+    BARRIERS
+    RET
+
+/*
+ * mmuinvalidateaddr(va)
+ *   invalidate tlb entry for virtual page address va, ASID 0
+ */
+TEXT mmuinvalidateaddr(SB), 1, $-4
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinvse
+    BARRIERS
+    RET
+@
+%$
+\subsection*{[[memory/arm/cache_raspi1.s]]}
+
+<<memory/arm/cache_raspi1.s>>=
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.ha"
+
+#define CACHELINESZ 32
+                
+/*
+ * drain write buffer
+ * writeback data cache
+ */
+TEXT cachedwb(SB), 1, $-4
+    DSB
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEall
+    RET
+
+/*
+ * drain write buffer
+ * writeback and invalidate data cache
+ */
+TEXT cachedwbinv(SB), 1, $-4
+    DSB
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwbi), CpCACHEall
+    RET
+
+/*
+ * cachedwbinvse(va, n)
+ *   drain write buffer
+ *   writeback and invalidate data cache range [va, va+n)
+ */
+TEXT cachedwbinvse(SB), 1, $-4
+    MOVW    R0, R1      /* DSB clears R0 */
+    DSB
+    MOVW    n+4(FP), R2
+    ADD R1, R2
+    SUB $1, R2
+    BIC $(CACHELINESZ-1), R1
+    BIC $(CACHELINESZ-1), R2
+    MCRR(CpSC, 0, 2, 1, CpCACHERANGEdwbi)
+    RET
+
+/*
+ * cachedwbse(va, n)
+ *   drain write buffer
+ *   writeback data cache range [va, va+n)
+ */
+TEXT cachedwbse(SB), 1, $-4
+    MOVW    R0, R1      /* DSB clears R0 */
+    DSB
+    MOVW    n+4(FP), R2
+    ADD R1, R2
+    BIC $(CACHELINESZ-1), R1
+    BIC $(CACHELINESZ-1), R2
+    MCRR(CpSC, 0, 2, 1, CpCACHERANGEdwb)
+    RET
+
+/*
+ * cachedinvse(va, n)
+ *   drain write buffer
+ *   invalidate data cache range [va, va+n)
+ */
+TEXT cachedinvse(SB), 1, $-4
+    MOVW    R0, R1      /* DSB clears R0 */
+    DSB
+    MOVW    n+4(FP), R2
+    ADD R1, R2
+    SUB $1, R2
+    BIC $(CACHELINESZ-1), R1
+    BIC $(CACHELINESZ-1), R2
+    MCRR(CpSC, 0, 2, 1, CpCACHERANGEinvd)
+    RET
+
+/*
+ * drain write buffer and prefetch buffer
+ * writeback and invalidate data cache
+ * invalidate instruction cache
+ */
+TEXT cacheuwbinv(SB), 1, $-4
+    BARRIERS
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwbi), CpCACHEall
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
+    RET
+
+/*
+ * L2 cache is not enabled
+ */
+TEXT l2cacheuwbinv(SB), 1, $-4
+    RET
+
+/*
+ * invalidate instruction cache
+ */
+TEXT cacheiinv(SB), 1, $-4
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
+    RET
+@
 
 \section{[[interrupts/arm/]]}
 
 \subsection*{[[interrupts/arm/trap.c]]}
 
 <<constant INTREGS(arm)>>=
-#define INTREGS		(VIRTIO+0xB200)
+#define INTREGS     (VIRTIO+0xB200)
 @
 
 <<constant LOCALREGS(arm)>>=
-#define	LOCALREGS	(VIRTIO+IOSIZE)
+#define LOCALREGS   (VIRTIO+IOSIZE)
 @
 
 <<enum _anon_ (interrupts/arm/trap.c)(arm)>>=
 enum {
     Debug = 0,
 
-    Nvec = 8,		/* # of vectors at start of lexception.s */
+    Nvec = 8,       /* # of vectors at start of lexception.s */
     Fiqenable = 1<<7,
 
-    Localtimerint	= 0x40,
-    Localmboxint	= 0x50,
-    Localintpending	= 0x60,
+    Localtimerint   = 0x40,
+    Localmboxint    = 0x50,
+    Localintpending = 0x60,
 };
 @
 
@@ -8633,8 +9547,8 @@ enum {
  *   Layout at virtual address KZERO (double mapped at HVECTORS).
  */
 struct Vpage0 {
-    void	(*vectors[Nvec])(void);
-    u32int	vtable[Nvec];
+    void    (*vectors[Nvec])(void);
+    u32int  vtable[Nvec];
 };
 @
 
@@ -8643,28 +9557,28 @@ struct Vpage0 {
  * interrupt control registers
  */
 struct Intregs {
-    u32int	ARMpending;
-    u32int	GPUpending[2];
-    u32int	FIQctl;
-    u32int	GPUenable[2];
-    u32int	ARMenable;
-    u32int	GPUdisable[2];
-    u32int	ARMdisable;
+    u32int  ARMpending;
+    u32int  GPUpending[2];
+    u32int  FIQctl;
+    u32int  GPUenable[2];
+    u32int  ARMenable;
+    u32int  GPUdisable[2];
+    u32int  ARMdisable;
 };
 @
 
 <<struct Vctl(arm)>>=
 // quite similar to the one for x86
 struct Vctl {
-    int	irq;
-    int	cpu;
-    u32int	*reg;
-    u32int	mask;
+    int irq;
+    int cpu;
+    u32int  *reg;
+    u32int  mask;
 
-    void	(*f)(Ureg*, void*);
-    void	*a;
+    void    (*f)(Ureg*, void*);
+    void    *a;
 
-    Vctl	*next;
+    Vctl    *next;
 };
 @
 
@@ -9014,7 +9928,7 @@ trap(Ureg *ureg)
     else
         ureg->pc -= 4;
 
-    clockintr = 0;		/* if set, may call sched() before return */
+    clockintr = 0;      /* if set, may call sched() before return */
     switch(ureg->type){
     default:
         panic("unknown trap; type %#lux, psr mode %#lux pc %lux", ureg->type,
@@ -9024,11 +9938,11 @@ trap(Ureg *ureg)
         clockintr = irq(ureg);
         cpu->intr++;
         break;
-    case PsrMabt:			/* prefetch fault */
+    case PsrMabt:           /* prefetch fault */
         x = ifsrget();
         fsr = (x>>7) & 0x8 | x & 0x7;
         switch(fsr){
-        case 0x02:		/* instruction debug event (BKPT) */
+        case 0x02:      /* instruction debug event (BKPT) */
             if(user){
                 snprint(buf, sizeof buf, "sys: breakpoint");
                 postnote(up, 1, buf, NDebug);
@@ -9043,7 +9957,7 @@ trap(Ureg *ureg)
             break;
         }
         break;
-    case PsrMabt+1:			/* data fault */
+    case PsrMabt+1:         /* data fault */
         va = farget();
         inst = *(ulong*)(ureg->pc);
         /* bits 12 and 10 have to be concatenated with status */
@@ -9051,14 +9965,14 @@ trap(Ureg *ureg)
         fsr = (x>>7) & 0x20 | (x>>6) & 0x10 | x & 0xf;
         switch(fsr){
         default:
-        case 0xa:		/* ? was under external abort */
+        case 0xa:       /* ? was under external abort */
             panic("unknown data fault, 6b fsr %#lux", fsr);
             break;
         case 0x0:
             panic("vector exception at %#lux", ureg->pc);
             break;
-        case 0x1:		/* alignment fault */
-        case 0x3:		/* access flag fault (section) */
+        case 0x1:       /* alignment fault */
+        case 0x3:       /* access flag fault (section) */
             if(user){
                 snprint(buf, sizeof buf,
                     "sys: alignment: pc %#lux va %#p\n",
@@ -9070,27 +9984,27 @@ trap(Ureg *ureg)
         case 0x2:
             panic("terminal exception at %#lux", ureg->pc);
             break;
-        case 0x4:		/* icache maint fault */
-        case 0x6:		/* access flag fault (page) */
-        case 0x8:		/* precise external abort, non-xlat'n */
+        case 0x4:       /* icache maint fault */
+        case 0x6:       /* access flag fault (page) */
+        case 0x8:       /* precise external abort, non-xlat'n */
         case 0x28:
-        case 0xc:		/* l1 translation, precise ext. abort */
+        case 0xc:       /* l1 translation, precise ext. abort */
         case 0x2c:
-        case 0xe:		/* l2 translation, precise ext. abort */
+        case 0xe:       /* l2 translation, precise ext. abort */
         case 0x2e:
-        case 0x16:		/* imprecise ext. abort, non-xlt'n */
+        case 0x16:      /* imprecise ext. abort, non-xlt'n */
         case 0x36:
             panic("external abort %#lux pc %#lux addr %#p",
                 fsr, ureg->pc, va);
             break;
-        case 0x1c:		/* l1 translation, precise parity err */
-        case 0x1e:		/* l2 translation, precise parity err */
-        case 0x18:		/* imprecise parity or ecc err */
+        case 0x1c:      /* l1 translation, precise parity err */
+        case 0x1e:      /* l2 translation, precise parity err */
+        case 0x18:      /* imprecise parity or ecc err */
             panic("translation parity error %#lux pc %#lux addr %#p",
                 fsr, ureg->pc, va);
             break;
-        case 0x5:		/* translation fault, no section entry */
-        case 0x7:		/* translation fault, no page entry */
+        case 0x5:       /* translation fault, no section entry */
+        case 0x7:       /* translation fault, no page entry */
             faultarm(ureg, va, user, !writetomem(inst));
             break;
         case 0x9:
@@ -9112,7 +10026,7 @@ trap(Ureg *ureg)
             break;
         }
         break;
-    case PsrMund:			/* undefined instruction */
+    case PsrMund:           /* undefined instruction */
         if(user){
             if(seg(up, ureg->pc, 0) != nil &&
                *(u32int*)ureg->pc == 0xD1200070)
@@ -9143,7 +10057,7 @@ trap(Ureg *ureg)
 
     /* delaysched set because we held a lock or because our quantum ended */
     if(up && up->delaysched && clockintr){
-        sched();		/* can cause more traps */
+        sched();        /* can cause more traps */
         arch_splhi();
     }
 
@@ -9219,9 +10133,9 @@ dumpstackwithureg(Ureg *ureg)
     for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
         v = *(uintptr*)l;
         if(KTZERO < v && v < (uintptr)etext && !(v & 3)){
-            v -= sizeof(u32int);		/* back up an instr */
+            v -= sizeof(u32int);        /* back up an instr */
             p = (u32int*)v;
-            if((*p & 0x0f000000) == 0x0b000000){	/* BL instr? */
+            if((*p & 0x0f000000) == 0x0b000000){    /* BL instr? */
                 iprint("%#8.8lux=%#8.8lux ", l, v);
                 i++;
             }
@@ -9394,6 +10308,266 @@ extern int notify(Ureg*);
 <<function dumpregs(arm)>>
 @
 
+\subsection*{[[interrupts/arm/fault_helpers.s]]}
+
+<<interrupts/arm/fault_helpers.s>>=
+#include "mem.h"
+#include "arm.h"
+
+TEXT fsrget(SB), 1, $-4             /* data fault status */
+    MRC CpSC, 0, R0, C(CpFSR), C(0), CpFSRdata
+    RET
+
+TEXT ifsrget(SB), 1, $-4            /* instruction fault status */
+    MRC CpSC, 0, R0, C(CpFSR), C(0), CpFSRinst
+    RET
+
+TEXT farget(SB), 1, $-4             /* fault address */
+    MRC CpSC, 0, R0, C(CpFAR), C(0x0)
+    RET
+@
+%$
+
+\subsection*{[[interrupts/arm/lexception.s]]}
+
+<<interrupts/arm/lexception.s>>=
+/*
+ * arm exception handlers
+ */
+#include "mem.h"
+#include "arm.h"
+#include "arminstr.ha"
+        
+/*
+ *  exception vectors, copied by trapinit() to somewhere useful
+ */
+TEXT vectors(SB), 1, $-4
+    MOVW    0x18(R15), R15      /* reset */
+    MOVW    0x18(R15), R15      /* undefined instr. */
+    MOVW    0x18(R15), R15      /* SWI & SMC */
+    MOVW    0x18(R15), R15      /* prefetch abort */
+    MOVW    0x18(R15), R15      /* data abort */
+    MOVW    0x18(R15), R15      /* reserved */
+    MOVW    0x18(R15), R15      /* IRQ */
+    MOVW    0x18(R15), R15      /* FIQ */
+
+TEXT vtable(SB), 1, $-4
+    WORD    $_vsvc(SB)      /* reset, in svc mode already */
+    WORD    $_vund(SB)      /* undefined, switch to svc mode */
+    WORD    $_vsvc(SB)      /* swi, in svc mode already */
+    WORD    $_vpabt(SB)     /* prefetch abort, switch to svc mode */
+    WORD    $_vdabt(SB)     /* data abort, switch to svc mode */
+    WORD    $_vsvc(SB)      /* reserved */
+    WORD    $_virq(SB)      /* IRQ, switch to svc mode */
+    WORD    $_vfiq(SB)      /* FIQ, switch to svc mode */
+
+TEXT _vsvc(SB), 1, $-4          /* SWI */
+    CLREX
+    MOVW.W  R14, -4(R13)        /* ureg->pc = interrupted PC */
+    MOVW    SPSR, R14       /* ureg->psr = SPSR */
+    MOVW.W  R14, -4(R13)        /* ... */
+    MOVW    $PsrMsvc, R14       /* ureg->type = PsrMsvc */
+    MOVW.W  R14, -4(R13)        /* ... */
+
+    /* avoid the ambiguity described in notes/movm.w. */
+    MOVM.DB.S [R0-R14], (R13)   /* save user level registers */
+    SUB $(15*4), R13        /* r13 now points to ureg */
+
+    MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
+
+    /* get R(CPU) for this cpu */
+    CPUID(R1)
+    SLL $2, R1          /* convert to word index */
+    MOVW    $cpus(SB), R2
+    ADD R1, R2
+    MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
+    CMP $0, R(CPU)
+    MOVW.EQ $CPUADDR, R0        /* paranoia: use CPUADDR if 0 */
+
+    MOVW    8(R(CPU)), R(UP)        /* up */
+
+    MOVW    R13, R0         /* first arg is pointer to ureg */
+    SUB $8, R13         /* space for argument+link */
+
+    BL  syscall(SB)
+
+    ADD $(8+4*15), R13      /* make r13 point to ureg->type */
+    MOVW    8(R13), R14     /* restore link */
+    MOVW    4(R13), R0      /* restore SPSR */
+    MOVW    R0, SPSR        /* ... */
+    MOVM.DB.S (R13), [R0-R14]   /* restore registers */
+    ADD $8, R13         /* pop past ureg->{type+psr} */
+    RFE             /* MOVM.IA.S.W (R13), [R15] */
+
+TEXT _vund(SB), 1, $-4          /* undefined */
+    MOVM.IA [R0-R4], (R13)      /* free some working space */
+    MOVW    $PsrMund, R0
+    B   _vswitch
+
+TEXT _vpabt(SB), 1, $-4         /* prefetch abort */
+    MOVM.IA [R0-R4], (R13)      /* free some working space */
+    MOVW    $PsrMabt, R0        /* r0 = type */
+    B   _vswitch
+
+TEXT _vdabt(SB), 1, $-4         /* data abort */
+    MOVM.IA [R0-R4], (R13)      /* free some working space */
+    MOVW    $(PsrMabt+1), R0    /* r0 = type */
+    B   _vswitch
+
+TEXT _virq(SB), 1, $-4          /* IRQ */
+    MOVM.IA [R0-R4], (R13)      /* free some working space */
+    MOVW    $PsrMirq, R0        /* r0 = type */
+    B   _vswitch
+
+    /*
+     *  come here with type in R0 and R13 pointing above saved [r0-r4].
+     *  we'll switch to SVC mode and then call trap.
+     */
+_vswitch:
+    CLREX
+    MOVW    SPSR, R1        /* save SPSR for ureg */
+    MOVW    R14, R2         /* save interrupted pc for ureg */
+    MOVW    R13, R3         /* save pointer to where the original [R0-R4] are */
+
+    /*
+     * switch processor to svc mode.  this switches the banked registers
+     * (r13 [sp] and r14 [link]) to those of svc mode.
+     */
+    MOVW    CPSR, R14
+    BIC $PsrMask, R14
+    ORR $(PsrDirq|PsrMsvc), R14
+    MOVW    R14, CPSR       /* switch! */
+
+    AND.S   $0xf, R1, R4        /* interrupted code kernel or user? */
+    BEQ _userexcep
+
+    /* here for trap from SVC mode */
+    MOVM.DB.W [R0-R2], (R13)    /* set ureg->{type, psr, pc}; r13 points to ureg->type  */
+    MOVM.IA   (R3), [R0-R4]     /* restore [R0-R4] from previous mode's stack */
+
+    /*
+     * avoid the ambiguity described in notes/movm.w.
+     * In order to get a predictable value in R13 after the stores,
+     * separate the store-multiple from the stack-pointer adjustment.
+     * We'll assume that the old value of R13 should be stored on the stack.
+     */
+    /* save kernel level registers, at end r13 points to ureg */
+    MOVM.DB [R0-R14], (R13)
+    SUB $(15*4), R13        /* SP now points to saved R0 */
+
+    MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
+
+    MOVW    R13, R0         /* first arg is pointer to ureg */
+    SUB $(4*2), R13     /* space for argument+link (for debugger) */
+    MOVW    $0xdeaddead, R11    /* marker */
+
+    BL  trap(SB)
+
+    MOVW    $setR12(SB), R12    /* reload kernel's SB (ORLY?) */
+    ADD $(4*2+4*15), R13    /* make r13 point to ureg->type */
+    /*
+     * if we interrupted a previous trap's handler and are now
+     * returning to it, we need to propagate the current R(CPU) (R10)
+     * by overriding the saved one on the stack, since we may have
+     * been rescheduled and be on a different processor now than
+     * at entry.
+     */
+    MOVW    R(CPU), (-(15-CPU)*4)(R13) /* restore current cpu's CPU */
+    MOVW    8(R13), R14     /* restore link */
+    MOVW    4(R13), R0      /* restore SPSR */
+    MOVW    R0, SPSR        /* ... */
+
+    MOVM.DB (R13), [R0-R14]     /* restore registers */
+
+    ADD $(4*2), R13     /* pop past ureg->{type+psr} to pc */
+    RFE             /* MOVM.IA.S.W (R13), [R15] */
+
+    /* here for trap from USER mode */
+_userexcep:
+    MOVM.DB.W [R0-R2], (R13)    /* set ureg->{type, psr, pc}; r13 points to ureg->type  */
+    MOVM.IA   (R3), [R0-R4]     /* restore [R0-R4] from previous mode's stack */
+
+    /* avoid the ambiguity described in notes/movm.w. */
+    MOVM.DB.S [R0-R14], (R13)   /* save kernel level registers */
+    SUB $(15*4), R13        /* r13 now points to ureg */
+
+    MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
+
+    /* get R(CPU) for this cpu */
+    CPUID(R1)
+    SLL $2, R1          /* convert to word index */
+    MOVW    $cpus(SB), R2
+    ADD R1, R2
+    MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
+    CMP $0, R(CPU)
+    MOVW.EQ $CPUADDR, R(CPU)        /* paranoia: use CPUADDR if 0 */
+
+    MOVW    8(R(CPU)), R(UP)        /* up */
+
+    MOVW    R13, R0         /* first arg is pointer to ureg */
+    SUB $(4*2), R13     /* space for argument+link (for debugger) */
+
+    BL  trap(SB)
+
+    ADD $(4*2+4*15), R13    /* make r13 point to ureg->type */
+    MOVW    8(R13), R14     /* restore link */
+    MOVW    4(R13), R0      /* restore SPSR */
+    MOVW    R0, SPSR        /* ... */
+    MOVM.DB.S (R13), [R0-R14]   /* restore registers */
+    ADD $(4*2), R13     /* pop past ureg->{type+psr} */
+    RFE             /* MOVM.IA.S.W (R13), [R15] */
+
+TEXT _vfiq(SB), 1, $-4          /* FIQ */
+    CLREX
+    MOVW    $PsrMfiq, R8        /* trap type */
+    MOVW    SPSR, R9        /* interrupted psr */
+    MOVW    R14, R10        /* interrupted pc */
+    MOVM.DB.W [R8-R10], (R13)   /* save in ureg */
+    MOVM.DB.S [R0-R14], (R13)   /* save interrupted regs */
+    SUB $(15*4), R13
+    MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
+    /* get R(CPU) for this cpu */
+    CPUID(R1)
+    SLL $2, R1          /* convert to word index */
+    MOVW    $cpus(SB), R2
+    ADD R1, R2
+    MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
+    CMP $0, R(CPU)
+    MOVW.EQ $CPUADDR, R(CPU)        /* paranoia: use CPUADDR if 0 */
+
+    MOVW    8(R(CPU)), R(UP)        /* up */
+    MOVW    R13, R0         /* first arg is pointer to ureg */
+    SUB $(4*2), R13     /* space for argument+link (for debugger) */
+
+    BL  fiq(SB)
+
+    ADD $(8+4*15), R13      /* make r13 point to ureg->type */
+    MOVW    8(R13), R14     /* restore link */
+    MOVW    4(R13), R0      /* restore SPSR */
+    MOVW    R0, SPSR        /* ... */
+    MOVM.DB.S (R13), [R0-R14]   /* restore registers */
+    ADD $8, R13         /* pop past ureg->{type+psr} */
+    RFE             /* MOVM.IA.S.W (R13), [R15] */
+
+/*
+ *  set the stack value for the mode passed in R0
+ */
+TEXT setr13(SB), 1, $-4
+    MOVW    4(FP), R1
+
+    MOVW    CPSR, R2
+    BIC $PsrMask, R2, R3
+    ORR $(PsrDirq|PsrDfiq), R3
+    ORR R0, R3
+    MOVW    R3, CPSR        /* switch to new mode */
+
+    MOVW    R13, R0         /* return old sp */
+    MOVW    R1, R13         /* install new one */
+
+    MOVW    R2, CPSR        /* switch back to old mode */
+    RET
+@
+
 \section{[[time/arm/]]}
 
 \subsection*{[[time/arm/dat_time.h]]}
@@ -9405,7 +10579,7 @@ extern int notify(Ureg*);
  * HZ should divide 1000 evenly, ideally.
  * 100, 125, 200, 250 and 333 are okay.
  */
-#define	Arch_HZ		100			/* clock frequency */
+#define Arch_HZ     100         /* clock frequency */
 @
 
 
@@ -9415,7 +10589,7 @@ extern int notify(Ureg*);
 <<constant Arch_HZ(arm)>>
 
 // was vlong in x86
-//typedef uvlong		Tval;
+//typedef uvlong        Tval;
 @
 
 
@@ -9424,64 +10598,64 @@ extern int notify(Ureg*);
 
 <<enum _anon_ (time/arm/clock.c)(arm)>>=
 enum {
-    SYSTIMERS	= VIRTIO+0x3000,
-    ARMTIMER	= VIRTIO+0xB400,
-    ARMLOCAL	= (VIRTIO+IOSIZE),
+    SYSTIMERS   = VIRTIO+0x3000,
+    ARMTIMER    = VIRTIO+0xB400,
+    ARMLOCAL    = (VIRTIO+IOSIZE),
 
-    Localctl	= 0x00,
-    Prescaler	= 0x08,
-    Localintpending	= 0x60,
+    Localctl    = 0x00,
+    Prescaler   = 0x08,
+    Localintpending = 0x60,
 
-    SystimerFreq	= 1*Mhz,
-    MaxPeriod	= SystimerFreq / Arch_HZ,
-    MinPeriod	= SystimerFreq / (100*Arch_HZ),
+    SystimerFreq    = 1*Mhz,
+    MaxPeriod   = SystimerFreq / Arch_HZ,
+    MinPeriod   = SystimerFreq / (100*Arch_HZ),
 
 };
 @
 
 <<struct Systimers(arm)>>=
 struct Systimers {
-    u32int	cs;
-    u32int	clo;
-    u32int	chi;
-    u32int	c0;
-    u32int	c1;
-    u32int	c2;
-    u32int	c3;
+    u32int  cs;
+    u32int  clo;
+    u32int  chi;
+    u32int  c0;
+    u32int  c1;
+    u32int  c2;
+    u32int  c3;
 };
 @
 
 <<struct Armtimer(arm)>>=
 struct Armtimer {
-    u32int	load;
-    u32int	val;
-    u32int	ctl;
-    u32int	irqack;
-    u32int	irq;
-    u32int	maskedirq;
-    u32int	reload;
-    u32int	predivider;
-    u32int	count;
+    u32int  load;
+    u32int  val;
+    u32int  ctl;
+    u32int  irqack;
+    u32int  irq;
+    u32int  maskedirq;
+    u32int  reload;
+    u32int  predivider;
+    u32int  count;
 };
 @
 
 <<enum _anon_ (time/arm/clock.c)2(arm)>>=
 enum {
-    CntPrescaleShift= 16,	/* freq is sys_clk/(prescale+1) */
-    CntPrescaleMask	= 0xFF,
-    CntEnable	= 1<<9,
-    TmrDbgHalt	= 1<<8,
-    TmrEnable	= 1<<7,
-    TmrIntEnable	= 1<<5,
-    TmrPrescale1	= 0x00<<2,
-    TmrPrescale16	= 0x01<<2,
-    TmrPrescale256	= 0x02<<2,
-    CntWidth16	= 0<<1,
-    CntWidth32	= 1<<1,
+    CntPrescaleShift= 16,   /* freq is sys_clk/(prescale+1) */
+    CntPrescaleMask = 0xFF,
+    CntEnable   = 1<<9,
+    TmrDbgHalt  = 1<<8,
+    TmrEnable   = 1<<7,
+    TmrIntEnable    = 1<<5,
+    TmrPrescale1    = 0x00<<2,
+    TmrPrescale16   = 0x01<<2,
+    TmrPrescale256  = 0x02<<2,
+    CntWidth16  = 0<<1,
+    CntWidth32  = 1<<1,
 
     /* generic timer (cortex-a7) */
-    Enable	= 1<<0,
-    Imask	= 1<<1,
+    Enable  = 1<<0,
+    Imask   = 1<<1,
     Istatus = 1<<2,
 };
 @
@@ -9533,8 +10707,8 @@ clockinit(void)
     if(((cprdsc(0, CpID, CpIDfeat, 1) >> 16) & 0xF) != 0) {
         /* generic timer supported */
         if(cpu->cpuno == 0){
-            *(ulong*)(ARMLOCAL + Localctl) = 0;				/* magic */
-            *(ulong*)(ARMLOCAL + Prescaler) = 0x06aaaaab;	/* magic for 1 Mhz */
+            *(ulong*)(ARMLOCAL + Localctl) = 0;             /* magic */
+            *(ulong*)(ARMLOCAL + Prescaler) = 0x06aaaaab;   /* magic for 1 Mhz */
         }
         cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask);
     }
@@ -9680,9 +10854,9 @@ clock_arch_delay(int n)
 <<time/arm/clock.c>>=
 /*
  * bcm283[56] timers
- *	System timers run at 1MHz (timers 1 and 2 are used by GPU)
- *	ARM timer usually runs at 250MHz (may be slower in low power modes)
- *	Cycle counter runs at 700MHz (unless overclocked)
+ *  System timers run at 1MHz (timers 1 and 2 are used by GPU)
+ *  ARM timer usually runs at 250MHz (may be slower in low power modes)
+ *  Cycle counter runs at 700MHz (unless overclocked)
  *    All are free-running up-counters
  *  Cortex-a7 has local generic timers per cpu (which we run at 1MHz)
  *
@@ -9739,6 +10913,25 @@ typedef struct Armtimer Armtimer;
 @
 
 
+\subsection*{[[time/arm/time_raspi1.s]]}
+
+<<time/arm/time_raspi1.s>>=
+#include "mem.h"
+#include "arm.h"
+        
+TEXT arch_lcycles(SB), 1, $-4
+    MRC CpSC, 0, R0, C(CpSPM), C(CpSPMperf), CpSPMcyc
+    RET
+
+TEXT tmrget(SB), 1, $-4             /* local generic timer physical counter value */
+    MOVW    $0, R1              /* not in armv6 */
+    MOVW    R1, 0(R0)
+    MOVW    R1, 4(R0)
+    RET
+@
+%$
+
+
 \section{[[processes/arm/]]}
 
 \subsection*{[[processes/arm/dat_processes.h]]}
@@ -9747,7 +10940,7 @@ typedef struct Armtimer Armtimer;
 /*
  *  parameters for sysproc.c
  */
-#define AOUT_MAGIC	(E_MAGIC)
+#define AOUT_MAGIC  (E_MAGIC)
 @
 
 <<struct Arch_FPsave(arm)>>=
@@ -9756,17 +10949,17 @@ typedef struct Armtimer Armtimer;
  */
 struct Arch_FPsave
 {
-    ulong	status;
-    ulong	control;
+    ulong   status;
+    ulong   control;
     /*
      * vfp3 with ieee fp regs; uvlong is sufficient for hardware but
      * each must be able to hold an Internal from fpi.h for sw emulation.
      */
-    ulong	regs[Maxfpregs][3];
+    ulong   regs[Maxfpregs][3];
 
-    int	fpstate;
+    int fpstate;
 
-    uintptr	pc;		/* of failed fp instr. */
+    uintptr pc;     /* of failed fp instr. */
 };
 @
 
@@ -9978,20 +11171,20 @@ arch_kprocchild(Proc *p, void (*func)(void*), void *arg)
 <<enum _anon_ (processes/arm/vfp3.c)(arm)>>=
 /* subarchitecture code in cpu->havefp */
 enum {
-    VFPv2	= 2,
-    VFPv3	= 3,
+    VFPv2   = 2,
+    VFPv3   = 3,
 };
 @
 
 <<enum _anon_ (processes/arm/vfp3.c)2(arm)>>=
 /* fp control regs.  most are read-only */
 enum {
-    Fpsid =	0,
-    Fpscr =	1,			/* rw */
-    Mvfr1 =	6,
-    Mvfr0 =	7,
-    Fpexc =	8,			/* rw */
-    Fpinst= 9,			/* optional, for exceptions */
+    Fpsid = 0,
+    Fpscr = 1,          /* rw */
+    Mvfr1 = 6,
+    Mvfr0 = 7,
+    Fpexc = 8,          /* rw */
+    Fpinst= 9,          /* optional, for exceptions */
     Fpinst2=10,
 };
 @
@@ -9999,37 +11192,37 @@ enum {
 <<enum _anon_ (processes/arm/vfp3.c)3(arm)>>=
 enum {
     /* Fpexc bits */
-    Fpex =		1u << 31,
-    Fpenabled =	1 << 30,
-    Fpdex =		1 << 29,	/* defined synch exception */
-//	Fp2v =		1 << 28,	/* Fpinst2 reg is valid */
-//	Fpvv =		1 << 27,	/* if Fpdex, vecitr is valid */
-//	Fptfv = 	1 << 26,	/* trapped fault is valid */
-//	Fpvecitr =	MASK(3) << 8,
+    Fpex =      1u << 31,
+    Fpenabled = 1 << 30,
+    Fpdex =     1 << 29,    /* defined synch exception */
+//  Fp2v =      1 << 28,    /* Fpinst2 reg is valid */
+//  Fpvv =      1 << 27,    /* if Fpdex, vecitr is valid */
+//  Fptfv =     1 << 26,    /* trapped fault is valid */
+//  Fpvecitr =  MASK(3) << 8,
     /* FSR bits appear here */
-    Fpmbc =		Fpdex,		/* bits exception handler must clear */
+    Fpmbc =     Fpdex,      /* bits exception handler must clear */
 
     /* Fpscr bits; see u.h for more */
-    Stride =	MASK(2) << 20,
-    Len =		MASK(3) << 16,
-    Dn=		1 << 25,
-    Fz=		1 << 24,
+    Stride =    MASK(2) << 20,
+    Len =       MASK(3) << 16,
+    Dn=     1 << 25,
+    Fz=     1 << 24,
     /* trap exception enables (not allowed in vfp3) */
-    FPIDNRM =	1 << 15,	/* input denormal */
+    FPIDNRM =   1 << 15,    /* input denormal */
     Alltraps = FPIDNRM | FPINEX | FPUNFL | FPOVFL | FPZDIV | FPINVAL,
     /* pending exceptions */
-    FPAIDNRM =	1 << 7,		/* input denormal */
+    FPAIDNRM =  1 << 7,     /* input denormal */
     Allexc = FPAIDNRM | FPAINEX | FPAUNFL | FPAOVFL | FPAZDIV | FPAINVAL,
     /* condition codes */
-    Allcc =		MASK(4) << 28,
+    Allcc =     MASK(4) << 28,
 };
 @
 
 <<enum _anon_ (processes/arm/vfp3.c)4(arm)>>=
 enum {
     /* CpCPaccess bits */
-    Cpaccnosimd =	1u << 31,
-    Cpaccd16 =	1 << 30,
+    Cpaccnosimd =   1u << 31,
+    Cpaccd16 =  1 << 30,
 };
 @
 
@@ -10090,17 +11283,17 @@ havefp(void)
         cpu->havefpvalid = 1;
         return 0;
     }
-    cpu->fpon = 1;			/* don't panic */
+    cpu->fpon = 1;          /* don't panic */
     sid = fprd(Fpsid);
     cpu->fpon = 0;
     switch((sid >> 16) & MASK(7)){
-    case 0:				/* VFPv1 */
+    case 0:             /* VFPv1 */
         break;
-    case 1:				/* VFPv2 */
+    case 1:             /* VFPv2 */
         cpu->havefp = VFPv2;
         cpu->fpnregs = 16;
         break;
-    default:			/* VFPv3 or later */
+    default:            /* VFPv3 or later */
         cpu->havefp = VFPv3;
         cpu->fpnregs = (acc & Cpaccd16) ? 16 : 32;
         break;
@@ -10184,7 +11377,7 @@ fpon(void)
         if (cpu->fpconfiged)
             fpwr(Fpscr, (fprd(Fpscr) & Allcc) | cpu->fpscr);
         else
-            fpcfg();	/* 1st time on this fpu; configure it */
+            fpcfg();    /* 1st time on this fpu; configure it */
     }
 }
 @
@@ -10193,12 +11386,12 @@ fpon(void)
 void
 fpclear(void)
 {
-//	ulong scr;
+//  ulong scr;
 
     fpon();
-//	scr = fprd(Fpscr);
-//	cpu->fpscr = scr & ~Allexc;
-//	fpwr(Fpscr, cpu->fpscr);
+//  scr = fprd(Fpscr);
+//  cpu->fpscr = scr & ~Allexc;
+//  fpwr(Fpscr, cpu->fpscr);
 
     fpwr(Fpexc, fprd(Fpexc) & ~Fpmbc);
 }
@@ -10496,40 +11689,40 @@ static int
 condok(int cc, int c)
 {
     switch(c){
-    case 0:	/* Z set */
+    case 0: /* Z set */
         return cc&Z;
-    case 1:	/* Z clear */
+    case 1: /* Z clear */
         return (cc&Z) == 0;
-    case 2:	/* C set */
+    case 2: /* C set */
         return cc&C;
-    case 3:	/* C clear */
+    case 3: /* C clear */
         return (cc&C) == 0;
-    case 4:	/* N set */
+    case 4: /* N set */
         return cc&N;
-    case 5:	/* N clear */
+    case 5: /* N clear */
         return (cc&N) == 0;
-    case 6:	/* V set */
+    case 6: /* V set */
         return cc&V;
-    case 7:	/* V clear */
+    case 7: /* V clear */
         return (cc&V) == 0;
-    case 8:	/* C set and Z clear */
+    case 8: /* C set and Z clear */
         return cc&C && (cc&Z) == 0;
-    case 9:	/* C clear or Z set */
+    case 9: /* C clear or Z set */
         return (cc&C) == 0 || cc&Z;
-    case 10:	/* N set and V set, or N clear and V clear */
+    case 10:    /* N set and V set, or N clear and V clear */
         return (~cc&(N|V))==0 || (cc&(N|V)) == 0;
-    case 11:	/* N set and V clear, or N clear and V set */
+    case 11:    /* N set and V clear, or N clear and V set */
         return (cc&(N|V))==N || (cc&(N|V))==V;
-    case 12:	/* Z clear, and either N set and V set or N clear and V clear */
+    case 12:    /* Z clear, and either N set and V set or N clear and V clear */
         return (cc&Z) == 0 && ((~cc&(N|V))==0 || (cc&(N|V))==0);
-    case 13:	/* Z set, or N set and V clear or N clear and V set */
+    case 13:    /* Z set, or N set and V clear or N clear and V set */
         return (cc&Z) || (cc&(N|V))==N || (cc&(N|V))==V;
-    case 14:	/* always */
+    case 14:    /* always */
         return 1;
-    case 15:	/* never (reserved) */
+    case 15:    /* never (reserved) */
         return 0;
     }
-    return 0;	/* not reached */
+    return 0;   /* not reached */
 }
 @
 
@@ -10557,23 +11750,23 @@ fpuemu(Ureg* ureg)
     op  = (*(ulong *)pc >> 24) & MASK(4);
     cop = (*(ulong *)pc >>  8) & MASK(4);
     if(cpu->fpon)
-        fpstuck(pc);		/* debugging; could move down 1 line */
-    if (ISFPAOP(cop, op)) {		/* old arm 7500 fpa opcode? */
-//		iprint("fpuemu: fpa instr %#8.8lux at %#p\n", *(ulong *)pc, pc);
-//		error("illegal instruction: old arm 7500 fpa opcode");
+        fpstuck(pc);        /* debugging; could move down 1 line */
+    if (ISFPAOP(cop, op)) {     /* old arm 7500 fpa opcode? */
+//      iprint("fpuemu: fpa instr %#8.8lux at %#p\n", *(ulong *)pc, pc);
+//      error("illegal instruction: old arm 7500 fpa opcode");
         s = arch_spllo();
         if(waserror()){
             arch_splx(s);
             nexterror();
         }
         error("ARM7500 instructions not supported; use 5l -f when linking");
-        //nfp = fpiarm(ureg);	/* advances pc past emulated instr(s) */
-        //if (nfp > 1)		/* could adjust this threshold */
-        //	cpu->fppc = cpu->fpcnt = 0;
+        //nfp = fpiarm(ureg);   /* advances pc past emulated instr(s) */
+        //if (nfp > 1)      /* could adjust this threshold */
+        //  cpu->fppc = cpu->fpcnt = 0;
         //arch_splx(s);
         //poperror();
-    } else if (ISVFPOP(cop, op)) {	/* if vfp, fpu must be off */
-        mathemu(ureg);		/* enable fpu & retry */
+    } else if (ISVFPOP(cop, op)) {  /* if vfp, fpu must be off */
+        mathemu(ureg);      /* enable fpu & retry */
         nfp = 1;
     }
 
@@ -10660,6 +11853,81 @@ fpuemu(Ureg* ureg)
 
 <<function fpuemu(arm)>>
 @
+
+
+\subsection*{[[processes/arm/lproc.s]]}
+
+<<processes/arm/lproc.s>>=
+#include "mem.h"
+#include "arm.h"
+
+/*
+ *  This is the first jump from kernel to user mode.
+ *  Fake a return from interrupt.
+ *
+ *  Enter with R0 containing the user stack pointer.
+ *  UTZERO + 0x20 is always the entry point.
+ *
+ */
+TEXT arch_touser(SB), 1, $-4
+    /* store the user stack pointer into the USR_r13 */
+    MOVM.DB.W [R0], (R13)
+    /* avoid the ambiguity described in notes/movm.w. */
+//  MOVM.S.IA.W (R13), [R13]
+    MOVM.S  (R13), [R13]
+    ADD $4, R13
+
+    /* set up a PSR for user level */
+    MOVW    $(PsrMusr), R0
+    MOVW    R0, SPSR
+
+    /* save the PC on the stack */
+    MOVW    $(UTZERO+0x20), R0
+    MOVM.DB.W [R0], (R13)
+
+    /*
+     * note that 5a's RFE is not the v6 arch. instruction (0xe89d0a00,
+     * I think), which loads CPSR from the word after the PC at (R13),
+     * but rather the pre-v6 simulation `MOVM.IA.S.W (R13), [R15]'
+     * (0xe8fd8000 since MOVM is LDM in this case), which loads CPSR
+     * not from memory but from SPSR due to `.S'.
+     */
+    RFE
+
+/*
+ *  here to jump to a newly forked process
+ */
+TEXT arch_forkret(SB), 1, $-4
+    ADD $(4*15), R13        /* make r13 point to ureg->type */
+    MOVW    8(R13), R14     /* restore link */
+    MOVW    4(R13), R0      /* restore SPSR */
+    MOVW    R0, SPSR        /* ... */
+    MOVM.DB.S (R13), [R0-R14]   /* restore registers */
+    ADD $8, R13         /* pop past ureg->{type+psr} */
+    RFE             /* MOVM.IA.S.W (R13), [R15] */
+@
+%$
+
+\subsection*{[[processes/arm/switch.s]]}
+
+<<processes/arm/switch.s>>=
+TEXT arch_setlabel(SB), 1, $-4
+    MOVW    R13, 0(R0)      /* sp */
+    MOVW    R14, 4(R0)      /* pc */
+    MOVW    $0, R0
+    RET
+
+TEXT arch_gotolabel(SB), 1, $-4
+    MOVW    0(R0), R13      /* sp */
+    MOVW    4(R0), R14      /* pc */
+    MOVW    $1, R0
+    RET
+
+TEXT getcallerpc(SB), 1, $-4
+    MOVW    0(R13), R0
+    RET
+@
+%$
 
 
 \section{[[syscalls/arm/]]}
@@ -10771,7 +12039,7 @@ notify(Ureg* ureg)
     n = &up->note[0];
     if(strncmp(n->msg, "sys:", 4) == 0){
         l = strlen(n->msg);
-        if(l > ERRMAX-23)	/* " pc=0x0123456789abcdef\0" */
+        if(l > ERRMAX-23)   /* " pc=0x0123456789abcdef\0" */
             l = ERRMAX-23;
         snprint(n->msg + l, sizeof n->msg - l, " pc=%#lux", ureg->pc);
     }
@@ -10895,7 +12163,7 @@ syscall(Ureg* ureg)
         up->sargs = *((Sargs*)(sp+BY2WD));
         up->psstate = sysctab[scallnr];
 
-    /*	iprint("%s: syscall %s\n", up->text, sysctab[scallnr]?sysctab[scallnr]:"huh?"); */
+    /*  iprint("%s: syscall %s\n", up->text, sysctab[scallnr]?sysctab[scallnr]:"huh?"); */
 
         ret = systab[scallnr](up->sargs.args);
         poperror();
@@ -10963,7 +12231,7 @@ arch_execregs(ulong entry, ulong ssize, ulong nargs)
     *--sp = nargs;
 
     ureg = up->dbgreg;
-//	memset(ureg, 0, 15*sizeof(ulong));
+//  memset(ureg, 0, 15*sizeof(ulong));
     ureg->r13 = (ulong)sp;
     ureg->pc = entry;
 //print("%lud: EXECREGS pc %#ux sp %#ux nargs %ld\n", up->pid, ureg->pc, ureg->r13, nargs);
@@ -11032,12 +12300,12 @@ arch_forkchild(Proc *p, Ureg *ureg)
 #include "arm.h"
 
 typedef struct {
-    uintptr	ip;
-    Ureg*	arg0;
-    char*	arg1;
-    char	msg[ERRMAX];
-    Ureg*	old;
-    Ureg	ureg;
+    uintptr ip;
+    Ureg*   arg0;
+    char*   arg1;
+    char    msg[ERRMAX];
+    Ureg*   old;
+    Ureg    ureg;
 } NFrame;
 
 <<function noted(arm)>>

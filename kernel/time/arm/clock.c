@@ -1,9 +1,9 @@
 /*s: time/arm/clock.c */
 /*
  * bcm283[56] timers
- *	System timers run at 1MHz (timers 1 and 2 are used by GPU)
- *	ARM timer usually runs at 250MHz (may be slower in low power modes)
- *	Cycle counter runs at 700MHz (unless overclocked)
+ *  System timers run at 1MHz (timers 1 and 2 are used by GPU)
+ *  ARM timer usually runs at 250MHz (may be slower in low power modes)
+ *  Cycle counter runs at 700MHz (unless overclocked)
  *    All are free-running up-counters
  *  Cortex-a7 has local generic timers per cpu (which we run at 1MHz)
  *
@@ -27,17 +27,17 @@
 
 /*s: enum _anon_ (time/arm/clock.c)(arm) */
 enum {
-    SYSTIMERS	= VIRTIO+0x3000,
-    ARMTIMER	= VIRTIO+0xB400,
-    ARMLOCAL	= (VIRTIO+IOSIZE),
+    SYSTIMERS   = VIRTIO+0x3000,
+    ARMTIMER    = VIRTIO+0xB400,
+    ARMLOCAL    = (VIRTIO+IOSIZE),
 
-    Localctl	= 0x00,
-    Prescaler	= 0x08,
-    Localintpending	= 0x60,
+    Localctl    = 0x00,
+    Prescaler   = 0x08,
+    Localintpending = 0x60,
 
-    SystimerFreq	= 1*Mhz,
-    MaxPeriod	= SystimerFreq / Arch_HZ,
-    MinPeriod	= SystimerFreq / (100*Arch_HZ),
+    SystimerFreq    = 1*Mhz,
+    MaxPeriod   = SystimerFreq / Arch_HZ,
+    MinPeriod   = SystimerFreq / (100*Arch_HZ),
 
 };
 /*e: enum _anon_ (time/arm/clock.c)(arm) */
@@ -47,47 +47,47 @@ typedef struct Armtimer Armtimer;
 
 /*s: struct Systimers(arm) */
 struct Systimers {
-    u32int	cs;
-    u32int	clo;
-    u32int	chi;
-    u32int	c0;
-    u32int	c1;
-    u32int	c2;
-    u32int	c3;
+    u32int  cs;
+    u32int  clo;
+    u32int  chi;
+    u32int  c0;
+    u32int  c1;
+    u32int  c2;
+    u32int  c3;
 };
 /*e: struct Systimers(arm) */
 
 /*s: struct Armtimer(arm) */
 struct Armtimer {
-    u32int	load;
-    u32int	val;
-    u32int	ctl;
-    u32int	irqack;
-    u32int	irq;
-    u32int	maskedirq;
-    u32int	reload;
-    u32int	predivider;
-    u32int	count;
+    u32int  load;
+    u32int  val;
+    u32int  ctl;
+    u32int  irqack;
+    u32int  irq;
+    u32int  maskedirq;
+    u32int  reload;
+    u32int  predivider;
+    u32int  count;
 };
 /*e: struct Armtimer(arm) */
 
 /*s: enum _anon_ (time/arm/clock.c)2(arm) */
 enum {
-    CntPrescaleShift= 16,	/* freq is sys_clk/(prescale+1) */
-    CntPrescaleMask	= 0xFF,
-    CntEnable	= 1<<9,
-    TmrDbgHalt	= 1<<8,
-    TmrEnable	= 1<<7,
-    TmrIntEnable	= 1<<5,
-    TmrPrescale1	= 0x00<<2,
-    TmrPrescale16	= 0x01<<2,
-    TmrPrescale256	= 0x02<<2,
-    CntWidth16	= 0<<1,
-    CntWidth32	= 1<<1,
+    CntPrescaleShift= 16,   /* freq is sys_clk/(prescale+1) */
+    CntPrescaleMask = 0xFF,
+    CntEnable   = 1<<9,
+    TmrDbgHalt  = 1<<8,
+    TmrEnable   = 1<<7,
+    TmrIntEnable    = 1<<5,
+    TmrPrescale1    = 0x00<<2,
+    TmrPrescale16   = 0x01<<2,
+    TmrPrescale256  = 0x02<<2,
+    CntWidth16  = 0<<1,
+    CntWidth32  = 1<<1,
 
     /* generic timer (cortex-a7) */
-    Enable	= 1<<0,
-    Imask	= 1<<1,
+    Enable  = 1<<0,
+    Imask   = 1<<1,
     Istatus = 1<<2,
 };
 /*e: enum _anon_ (time/arm/clock.c)2(arm) */
@@ -139,8 +139,8 @@ clockinit(void)
     if(((cprdsc(0, CpID, CpIDfeat, 1) >> 16) & 0xF) != 0) {
         /* generic timer supported */
         if(cpu->cpuno == 0){
-            *(ulong*)(ARMLOCAL + Localctl) = 0;				/* magic */
-            *(ulong*)(ARMLOCAL + Prescaler) = 0x06aaaaab;	/* magic for 1 Mhz */
+            *(ulong*)(ARMLOCAL + Localctl) = 0;             /* magic */
+            *(ulong*)(ARMLOCAL + Prescaler) = 0x06aaaaab;   /* magic for 1 Mhz */
         }
         cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask);
     }

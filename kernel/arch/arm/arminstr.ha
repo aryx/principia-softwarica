@@ -1,3 +1,4 @@
+/*s: arch/arm/arminstr.ha */
 /*
  * armv6/v7 machine assist, definitions
  *
@@ -51,3 +52,4 @@
 	B.EQ	2(PC); \
 	MRC	CpSC, 0, r, C(CpID), C(CpIDidct), CpIDmpid; \
 	AND.S	$(MAXCPUS-1), r
+/*e: arch/arm/arminstr.ha */

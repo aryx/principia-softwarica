@@ -1,3 +1,4 @@
+/*s: init/arm/startv6.s */
 /*
  * Broadcom bcm2835 SoC, as used in Raspberry Pi
  * arm1176jzf-s processor (armv6)
@@ -101,3 +102,4 @@ TEXT arch_idlehands(SB), $-4
 
 	MOVW	R3, CPSR			/* splx */
 	RET
+/*e: init/arm/startv6.s */
