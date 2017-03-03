@@ -191,7 +191,7 @@ processes?
 %  size for read? but then how know the size? it's a maxsize
 %  but if newlines it is passed before?
 
-\section{The \plan kernel, [[9]]}
+\section{The \plan kernel: [[9]]}
 
 % We chose plan9 kernel. A good basis for the other books.
 
@@ -6082,7 +6082,7 @@ linkproc(void)
 
 % used for many things, virtual memory, swap, ... even debugging I think
 
-\section{[[Vctl] (x86)]}
+\section{[[Vctl]] (x86)}
 
 <<struct Vctl(x86)>>=
 struct Vctl {
@@ -20820,7 +20820,7 @@ rootread(Chan *c, void *buf, long n, vlong off)
 }
 @
 
-\section{The /boot/ filesystem}
+\section{The [[/boot/]] filesystem}
 
 <<globals bootdir, bootdata, bootlist>>=
 static Dirtab bootdir[Nbootfiles] = {
@@ -26945,9 +26945,8 @@ connectlocal(void)
 
 
 \subsection{[[#!]]}
-% hmm not sure right section. Maybe should be put
-% in advanced topics?
-% but now that I use boot.rc, we need it more!
+% hmm not sure right section. Maybe should be put in advanced topics?
+%update: now that I use boot.rc, we need it more here actually!
 
 <<[[sysexec()]] locals>>=
 char line[sizeof(Exec)];
@@ -28695,7 +28694,6 @@ struct Edf {
 };
 @ 
 
-
 \subsection*{[[processes/edf.c]]}
 
 \ifallcode
@@ -29406,6 +29404,19 @@ testschedulability(Proc *theproc)
 
 % >>
 
+
+\subsection*{Tracing scheduling events}
+
+<<[[enum Tevent]] real-time scheduling events>>=
+SAdmit,	/* Edf admit */
+SRelease,	/* Edf release, waiting to be scheduled */
+SYield,		/* blocked waiting for release */
+SSlice,		/* slice exhausted */
+SDeadline,	/* proc's deadline */
+SExpel,		/* Edf expel */
+SInts,		/* Interrupt start */
+SInte,		/* Interrupt end */
+@
 
 \section{Power management (x86)}
 
@@ -33181,8 +33192,6 @@ serialoq = nil;
 
 \chapter{Profiling}
 
-% see also lockcycles, QlockStats, TaslockStats, ... in Kernel_extra.nw
-
 \section{[[/sys/sysstat]] (x86)}
 
 <<[[Cpu]] stat fields>>=
@@ -33420,6 +33429,122 @@ ulong spuriousintr; // not really used
 
 <<hook kproftimer>>=
 void (*kproftimer)(ulong);
+@ 
+
+\section{Statistics}
+
+\subsection{[[Lock.lockcycles]]}
+
+<<lock ifdef LOCKCYCLES>>=
+#ifdef LOCKCYCLES
+        l->lockcycles = -arch_lcycles();
+#endif
+@ 
+
+
+<<[[Lock]] debugging fields>>=
+//#ifdef LOCKCYCLES
+long  lockcycles;
+//#endif
+@ 
+
+
+<<unlock ifdef LOCKCYCLES>>=
+#ifdef LOCKCYCLES
+    l->lockcycles += lcycles();
+    cumlockcycles += l->lockcycles;
+    if(l->lockcycles > maxlockcycles){
+        maxlockcycles = l->lockcycles;
+        maxlockpc = l->pc;
+    }
+#endif
+@ 
+
+
+
+<<iunlock ifdef LOCKCYCLES>>=
+#ifdef LOCKCYCLES
+    l->lockcycles += lcycles();
+    cumilockcycles += l->lockcycles;
+    if(l->lockcycles > maxilockcycles){
+        maxilockcycles = l->lockcycles;
+        maxilockpc = l->pc;
+    }
+    if(l->lockcycles > 2400)
+        ilockpcs[n++ & 0xff]  = l->pc;
+#endif
+@ 
+
+
+<<globals lockcycles>>=
+#ifdef LOCKCYCLES
+long maxlockcycles;
+long maxilockcycles;
+long cumlockcycles;
+long cumilockcycles;
+ulong maxlockpc;
+ulong maxilockpc;
+
+ulong ilockpcs[0x100] = { [0xff] = 1 };
+static int n;
+#endif
+@
+
+
+\subsection{[[TaslockStats]]}
+
+<<struct TaslockStats>>=
+struct TaslockStats
+{
+    ulong   locks;
+    ulong   glare;
+    ulong   inglare;
+};
+@
+
+<<global lockstats>>=
+struct TaslockStats lockstats;
+@
+
+\subsection{[[QlockStats]]}
+
+<<struct QlockStats>>=
+struct QlockStats {
+    ulong rlock;
+    ulong rlockq;
+    ulong wlock;
+    ulong wlockq;
+    ulong qlock;
+    ulong qlockq;
+};
+@
+
+<<global rwstats>>=
+struct QlockStats rwstats;
+@
+
+\subsection{[[Kimage]] statistics}
+
+<<struct Irstats>>=
+struct Irstats {
+    int calls;          /* times imagereclaim was called */
+    int loops;          /* times the main loop was run */
+    uvlong  ticks;          /* total time in the main loop */
+    uvlong  maxt;           /* longest time in main loop */
+};
+@ 
+
+<<segment.c global irstats>>=
+static struct Irstats  irstats;
+@ 
+
+\subsection{Scheduling}
+
+<<proc.c statistics>>=
+ulong delayedscheds;    /* statistics */
+long skipscheds;
+long preempts;
+//ulong load;
 @ 
 
 \chapter{Error Management}
