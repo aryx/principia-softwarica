@@ -1,14 +1,211 @@
 \part{In Kernel main text}
 
+% title: x86 (32 bits) edition
 
+\chapter{Introduction}
 
+\section{Requirements}
 
-
+%one of the item
+the x86 architecture
 
 \chapter{Overview}
 
 \section{The [[x86]] machine}
+% there are tons of x86 machines ... we restrict to the one
+% supported by qemu-system-386.
 
+% actually will take 386, not 486, nor x86_64 or amd64, so simpler.
+
+% little endian, big endian, the le2xxx function?
+
+<<include/arch/386/ureg.h>>=
+struct Ureg
+{
+ ulong	di;		/* general registers */
+ ulong	si;		/* ... */
+ ulong	bp;		/* ... */
+ ulong	nsp;
+ ulong	bx;		/* ... */
+ ulong	dx;		/* ... */
+ ulong	cx;		/* ... */
+ ulong	ax;		/* ... */
+
+ ulong	gs;		/* data segments */
+ ulong	fs;		/* ... */
+ ulong	es;		/* ... */
+ ulong	ds;		/* ... */
+
+ ulong	trap;		/* trap type */
+ ulong	ecode;		/* error code (or zero) */
+ ulong	pc;		/* pc */
+ ulong	cs;		/* old context */
+ ulong	flags;		/* old flags */
+ union {
+  ulong	usp;
+  ulong	sp;
+ };
+ ulong	ss;		/* old stack segment */
+};
+@
+% complicated ... ARM simpler.
+
+% intro segmentation and pagination? or ref to vm chapter?
+
+\section{Code organization}
+
+<<core/386/dat.h>>=
+
+<<enum misc_constants(x86)>>
+<<pad memory pointer types(x86)>>
+
+#include "dat_forward.h"
+#include "../port/portdat_forward.h"
+
+// defines Lock (used inline in Cpu in portdat_core.h so must be before)
+#include "../port/portdat_concurrency.h"
+
+// defines Conf, Cpu, ... Label
+#include "dat_core.h"
+#include "../port/portdat_core.h"
+
+// defines Page, Pagetable, Segment, KImage
+#include "dat_memory.h"
+#include "../port/portdat_memory.h"
+
+// defines Chan
+#include "../port/portdat_files.h"
+
+// defines PCArch, a few arch-specific constants
+#include "dat_arch.h"
+
+// defines Timer
+#include "dat_time.h"
+#include "../port/portdat_time.h"
+
+// defines Vctl
+#include "dat_interrupts.h"
+
+// defines Proc
+#include "dat_processes.h"
+#include "../port/portdat_processes.h"
+
+// defines Cmd
+#include "../port/portdat_misc.h"
+
+// defines Uart
+#include "../port/portdat_buses.h"
+
+// defines keyboard queue, consdevtab
+#include "../port/portdat_console.h"
+
+// defines DevConf, DevPort (not that used)
+#include "../port/portdat_devices.h"
+
+// ref<Cpu>, the actual Cpu is where??
+extern Cpu *cpu;
+
+<<macro up(x86)>>
+
+<<portdat.h pragmas(x86)>>
+@
+
+<<core/386/fns.h>>=
+#include "../port/portfns_core.h"
+#include "../port/portfns_concurrency.h"
+#include "../port/portfns_memory.h"
+#include "../port/portfns_files.h"
+#include "../port/portfns_time.h"
+#include "../port/portfns_interrupts.h"
+#include "../port/portfns_processes.h"
+#include "../port/portfns_misc.h"
+#include "../port/portfns_console.h"
+#include "../port/portfns_buses.h"
+#include "../port/portfns_devices.h"
+#include "../port/portfns_security.h"
+#include "../port/portfns_network.h"
+#include "../port/portfns_syscalls.h"
+#include "../port/portfns_init.h"
+
+<<fns.h declarations(x86)>>
+@
+
+
+<<main.c forward decl for backward deps(x86)>>=
+int devcons_print(char*, ...);
+int devcons_iprint(char*, ...);
+int devcons_pprint(char*, ...);
+void devcons_panic(char*, ...);
+void devcons__assert(char*);
+void trap_dumpstack(void);
+void proc_dumpaproc(Proc *p);
+void proc_error(char*);
+void proc_nexterror(void);
+void i8253_delay(int millisecs);
+void i8253_microdelay(int microsecs);
+void proc_sched(void);
+void proc_ready(Proc*);
+void proc_sleep(Rendez*, int(*)(void*), void*);
+void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
+Proc* proc_wakeup(Rendez*);
+void proc_pexit(char *exitstr, bool freemem);
+Proc* proc_proctab(int i);
+int proc_postnote(Proc *p, int dolock, char *n, int flag);
+void chan_cclose(Chan *c);
+void main_exit(int ispanic);
+int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
+void nop(void);
+uvlong devarch_arch_fastticks(uvlong *hz);
+void devarch_hook_ioalloc();
+@
+
+
+<<[[main()]] initial assignments for backward deps(x86)>>=
+devtab = conf_devtab;
+
+print = devcons_print;
+iprint = devcons_iprint;
+pprint = devcons_pprint;
+panic = devcons_panic;
+_assert = devcons__assert;
+error = proc_error;
+nexterror = proc_nexterror;
+dumpaproc = proc_dumpaproc;
+wakeup = proc_wakeup;
+sched = proc_sched;
+ready = proc_ready;
+sleep = proc_sleep;
+tsleep = proc_tsleep;
+cclose = chan_cclose;
+proctab = proc_proctab;
+postnote = proc_postnote;
+pexit = proc_pexit;
+hook_ioalloc = devarch_hook_ioalloc;
+
+arch_delay = i8253_delay;
+arch_microdelay = i8253_microdelay;
+/*
+ * On a uniprocessor, you'd think that coherence could be nop,
+ * but it can't.  We still need a barrier when using coherence() in
+ * device drivers.
+ *
+ * On VMware, it's safe (and a huge win) to set this to nop.
+ * Aux/vmware does this via the #P/archctl file.
+ */
+arch_coherence = nop;
+arch_fastticks = devarch_arch_fastticks;
+arch_exit = main_exit;
+arch_dumpstack = trap_dumpstack;
+arch_isaconfig = main_isaconfig;
+@
+
+\section{Software architecture}
+
+\subsection{Booting overview (x86)}
+
+\subsection{Memory overview (x86)}
+
+% idt, gdt, pd intel, pt intel, 
 
 
 

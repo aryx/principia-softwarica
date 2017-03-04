@@ -1,5 +1,7 @@
 /*s: arm/ureg.h */
-typedef struct Ureg {
+typedef struct Ureg Ureg;
+/*s: struct Ureg(arm) */
+struct Ureg {
     ulong   r0;
     ulong   r1;
     ulong   r2;
@@ -27,5 +29,6 @@ typedef struct Ureg {
     ulong   psr;
 
     ulong   pc; /* interrupted addr */
-} Ureg;
+};
+/*e: struct Ureg(arm) */
 /*e: arm/ureg.h */

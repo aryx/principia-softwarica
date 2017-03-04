@@ -115,10 +115,10 @@
 {\Huge 
 Principia Softwarica: The Plan~9 Kernel [[9]]
 }\\
-x86 (32 bits) edition\\
+The Raspberry Pi (ARM 32 bits) edition\\
 {version 0.1}
 }
-% hopefully one day an even cleaner ARM (32 bits) Raspberry Pi edition!
+
 
 \author{
 Yoann Padioleau\\
@@ -128,11 +128,12 @@ with code from\\
 Ken Thompson, 
 Rob Pike, 
 Dave Presotto, 
-Phil Winterbottom
+Phil Winterbottom,
+and Richard Miller
 }
 % hmm actually this volume does not contain the networking code,
 % so maybe can put just Pike and Thompson? or maybe just Thompson?
-% Richard Miller for bcm/
+% (Richard Miller for bcm/)
 
 \maketitle 
 \onecolumn
@@ -248,11 +249,11 @@ bigger than \plan equivalent core.
 % - oberon, see www.qemu-advent-calendar.org day 12
 % - templeos: http://www.codersnotes.com/notes/a-constructive-look-at-templeos
 % - redox-os: a tentative in Rust: https://redox-os.org/
-% - another tentative, documented in a blog: http://os.phil-opp.com/
+%   another Rust tentative, documented in a blog: http://os.phil-opp.com/
 % - http://littleosbook.github.io/book.pdf
 % - http://ulixos.org/ literate unix, but just kernel though. 30 000 L for .nw
 %   600 pages
-% - beos
+% - BeOS (and Haiku and newOS)
 %microkernel:
 % - gnumach and gnu hurd?
 % - L4
@@ -281,11 +282,11 @@ using the \plan C cross compilers installed in the previous step.
 You can also cross compile the whole \plan operating
 system with all its libraries and utilities.
 
-Finally you can test this compiled kernel and utilities using
-QEMU.
-% or a real PC.
-% see qemu-system-i386 -device ?
-% or Raspberry Pi!!
+Finally you can test this compiled kernel and utilities
+by installing them on a SD card and by booting this SD card
+on a Raspberry Pi.
+% - or a real PC.
+% - or using QEMU see qemu-system-i386 -device or qemu-system-arm -M raspi2
 
 As a bonus step you can also now compile \plan under \plan itself!
 
@@ -298,15 +299,15 @@ you'll need to have a good knowledge of
 the C programming language~\cite{k-r}.
 % see also comp.ps
 
-\item Assembly:
-% ref?
-% see also asm.ps
-
 \item Operating system: (yep)
 % ref?
 
-\item The x86 architecture:
-%\item The ARM architecture:
+\item The ARM architecture:
+% actually maybe not that much. Mention Raspberry Pi instead of ARM?
+
+\item Assembly:
+% ref? and assembly for ARM actually
+% see also asm.ps
 
 \end{itemize}
 
@@ -332,10 +333,12 @@ cover the practice.
 I would like to acknowledge of course Plan9's authors who wrote
 most of this book: Ken Thompson, Rob Pike, Dave Presotto, Phil
 Winterbottom, Russ Cox, and many other people from Bell Labs.
-
+%
 Thanks also to Federic Balesteros who wrote a lengthy note about
-the \plan kernel.
-% Richard Miller for Raspberry Pi port.
+the \plan kernel. 
+%
+Finally, thanks to Richard Miller for porting
+\plan to the Raspberry Pi architecture.
 
 
 
@@ -590,52 +593,45 @@ provides to the user programs.
 
 % supervisor calls, system call, syscall, software interrupt
 
-\section{The [[x86]] machine}
+\section{The Raspberry Pi machine (ARM)}
 %http://g.oswego.edu/dl/jmm/cookbook.html references many architecture spec
+
+% Actually lots of different ARM.
+% on qemu use C-Alt-2 and then 'info registers' 'info cpus' etc :)
 
 %PC vs raspberry pi?
 
-% actually will take 386, not 486, nor x86_64 or amd64, so simpler.
+<<struct Ureg(arm)>>=
+struct Ureg {
+    ulong   r0;
+    ulong   r1;
+    ulong   r2;
+    ulong   r3;
+    ulong   r4;
+    ulong   r5;
+    ulong   r6;
+    ulong   r7;
+    ulong   r8;
+    ulong   r9;
+    ulong   r10;
+    ulong   r11;
+    ulong   r12;    /* sb */
 
-% little endian, big endian, the le2xxx function?
+    union {
+        ulong   r13;
+        ulong   sp;
+    };
+    union {
+        ulong   r14;
+        ulong   link;
+    };
 
-<<include/arch/386/ureg.h>>=
-struct Ureg
-{
- ulong	di;		/* general registers */
- ulong	si;		/* ... */
- ulong	bp;		/* ... */
- ulong	nsp;
- ulong	bx;		/* ... */
- ulong	dx;		/* ... */
- ulong	cx;		/* ... */
- ulong	ax;		/* ... */
+    ulong   type;   /* of exception */
+    ulong   psr;
 
- ulong	gs;		/* data segments */
- ulong	fs;		/* ... */
- ulong	es;		/* ... */
- ulong	ds;		/* ... */
-
- ulong	trap;		/* trap type */
- ulong	ecode;		/* error code (or zero) */
- ulong	pc;		/* pc */
- ulong	cs;		/* old context */
- ulong	flags;		/* old flags */
- union {
-  ulong	usp;
-  ulong	sp;
- };
- ulong	ss;		/* old stack segment */
+    ulong   pc; /* interrupted addr */
 };
 @
-% complicated ... ARM simpler.
-
-% intro segmentation and pagination? or ref to vm chapter?
-
-% on qemu use C-Alt-2 and then 'info registers' 'info cpus' etc :)
-
-%\section{The [[ARM]] machine}
-% Actually lots of different ARM. Raspberry Pi.
 
 \section{C and assembly}
 
@@ -717,86 +713,12 @@ struct Ureg
 % error.h see Section YY
 % mem.h see memory overview, important constants such as address kernel.
 
-<<core/386/dat.h>>=
-
-<<enum misc_constants(x86)>>
-<<pad memory pointer types(x86)>>
-
-#include "dat_forward.h"
-#include "../port/portdat_forward.h"
-
-// defines Lock (used inline in Cpu in portdat_core.h so must be before)
-#include "../port/portdat_concurrency.h"
-
-// defines Conf, Cpu, ... Label
-#include "dat_core.h"
-#include "../port/portdat_core.h"
-
-// defines Page, Pagetable, Segment, KImage
-#include "dat_memory.h"
-#include "../port/portdat_memory.h"
-
-// defines Chan
-#include "../port/portdat_files.h"
-
-// defines PCArch, a few arch-specific constants
-#include "dat_arch.h"
-
-// defines Timer
-#include "dat_time.h"
-#include "../port/portdat_time.h"
-
-// defines Vctl
-#include "dat_interrupts.h"
-
-// defines Proc
-#include "dat_processes.h"
-#include "../port/portdat_processes.h"
-
-// defines Cmd
-#include "../port/portdat_misc.h"
-
-// defines Uart
-#include "../port/portdat_buses.h"
-
-// defines keyboard queue, consdevtab
-#include "../port/portdat_console.h"
-
-// defines DevConf, DevPort (not that used)
-#include "../port/portdat_devices.h"
-
-// ref<Cpu>, the actual Cpu is where??
-extern Cpu *cpu;
-
-<<macro up(x86)>>
-
-<<portdat.h pragmas(x86)>>
-@
 
 % some dat_xxx.h before portdat_xxx.h sometimes because
 % the dat_xxx.h defines some arch specific structure referenced
 % in the portable one. dat_core.h defines Arch_Cpu. dat_memory.c
 % defines Arch_ProcMMU.
 
-<<core/386/fns.h>>=
-#include "../port/portfns_core.h"
-#include "../port/portfns_concurrency.h"
-#include "../port/portfns_memory.h"
-#include "../port/portfns_files.h"
-#include "../port/portfns_time.h"
-#include "../port/portfns_interrupts.h"
-#include "../port/portfns_processes.h"
-#include "../port/portfns_misc.h"
-#include "../port/portfns_console.h"
-#include "../port/portfns_buses.h"
-#include "../port/portfns_devices.h"
-#include "../port/portfns_security.h"
-#include "../port/portfns_network.h"
-#include "../port/portfns_syscalls.h"
-#include "../port/portfns_init.h"
-
-<<fns.h declarations(x86)>>
-@
 
 
 \ifallcode
@@ -931,20 +853,20 @@ void  (*panic)(char*, ...);
 void  (*_assert)(char*);
 @
 <<portfns_core.h backward deps breaker>>=
-// process/386/trap.c
+// processes/<arch>/trap.c
 void    (*arch_dumpstack)(void);
 @
 <<portfns_core.h backward deps breaker>>=
-// process/proc.c
+// processes/proc.c
 void    (*dumpaproc)(Proc*);
 @
 <<portfns_core.h backward deps breaker>>=
-// process/proc.c
+// processes/proc.c
 void    (*error)(char*);
 void    (*nexterror)(void);
 @
 <<portfns_core.h backward deps breaker>>=
-// process/proc.c
+// processes/proc.c
 void    (*sleep)(Rendez*, int(*)(void*), void*);
 void    (*tsleep)(Rendez*, int (*)(void*), void*, ulong);
 Proc*   (*wakeup)(Rendez*);
@@ -952,7 +874,7 @@ void    (*sched)(void);
 void    (*ready)(Proc*);
 @
 <<portfns_core.h backward deps breaker>>=
-// process/proc.c
+// processes/proc.c
 Proc*   (*proctab)(int);
 int     (*postnote)(Proc*, int, char*, int);
 void    (*pexit)(char*, bool);
@@ -962,20 +884,20 @@ void    (*pexit)(char*, bool);
 void    (*cclose)(Chan*);
 @
 <<portfns_core.h backward deps breaker>>=
-// init/main.c
+// init/<arch>/main.c
 void    (*arch_exit)(int);
 @
 <<portfns_core.h backward deps breaker>>=
 
-//misc/386/devarch.c
+//misc/<arch>/devarch.c
 void    (*arch_coherence)(void);
 uvlong  (*arch_fastticks)(uvlong*);
 @
 <<portfns_core.h backward deps breaker>>=
-// processes/386/i8253.c
+// time/<arch>/time.c
 void    (*arch_microdelay)(int);
 void    (*arch_delay)(int);
-// init/386/main.c
+// init/<arch>/main.c
 bool (*arch_isaconfig)(char*, int, ISAConf*);
 @
 
@@ -1036,73 +958,6 @@ void (*arch_microdelay)(int) = nil;
 @
 
 
-<<main.c forward decl for backward deps(x86)>>=
-int devcons_print(char*, ...);
-int devcons_iprint(char*, ...);
-int devcons_pprint(char*, ...);
-void devcons_panic(char*, ...);
-void devcons__assert(char*);
-void trap_dumpstack(void);
-void proc_dumpaproc(Proc *p);
-void proc_error(char*);
-void proc_nexterror(void);
-void i8253_delay(int millisecs);
-void i8253_microdelay(int microsecs);
-void proc_sched(void);
-void proc_ready(Proc*);
-void proc_sleep(Rendez*, int(*)(void*), void*);
-void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
-Proc* proc_wakeup(Rendez*);
-void proc_pexit(char *exitstr, bool freemem);
-Proc* proc_proctab(int i);
-int proc_postnote(Proc *p, int dolock, char *n, int flag);
-void chan_cclose(Chan *c);
-void main_exit(int ispanic);
-int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
-void nop(void);
-uvlong devarch_arch_fastticks(uvlong *hz);
-void devarch_hook_ioalloc();
-@
-
-
-<<[[main()]] initial assignments for backward deps(x86)>>=
-devtab = conf_devtab;
-
-print = devcons_print;
-iprint = devcons_iprint;
-pprint = devcons_pprint;
-panic = devcons_panic;
-_assert = devcons__assert;
-error = proc_error;
-nexterror = proc_nexterror;
-dumpaproc = proc_dumpaproc;
-wakeup = proc_wakeup;
-sched = proc_sched;
-ready = proc_ready;
-sleep = proc_sleep;
-tsleep = proc_tsleep;
-cclose = chan_cclose;
-proctab = proc_proctab;
-postnote = proc_postnote;
-pexit = proc_pexit;
-hook_ioalloc = devarch_hook_ioalloc;
-
-arch_delay = i8253_delay;
-arch_microdelay = i8253_microdelay;
-/*
- * On a uniprocessor, you'd think that coherence could be nop,
- * but it can't.  We still need a barrier when using coherence() in
- * device drivers.
- *
- * On VMware, it's safe (and a huge win) to set this to nop.
- * Aux/vmware does this via the #P/archctl file.
- */
-arch_coherence = nop;
-arch_fastticks = devarch_arch_fastticks;
-arch_exit = main_exit;
-arch_dumpstack = trap_dumpstack;
-arch_isaconfig = main_isaconfig;
-@
 
 \fi
 
@@ -1110,7 +965,7 @@ arch_isaconfig = main_isaconfig;
 
 % will need a big picture ...
 
-\subsection{Booting overview (x86)}
+\subsection{Booting overview (ARM)}
 
 % maybe screenshot of boot sequence? and simple example of use
 % where illustrate that under the hood there is shell process,
@@ -1142,7 +997,7 @@ arch_isaconfig = main_isaconfig;
 % and then init assumes a root and setup last things.
 % show also rootfs and data2txt
 
-\subsection{Memory overview (x86)}
+\subsection{Memory overview (ARM)}
 
 % many dimensions:
 % - physical vs virtual
@@ -1152,7 +1007,7 @@ arch_isaconfig = main_isaconfig;
 
 
 %figure: need precise physical map of memory
-%with first empty page?, idt, gdt, pd intel, pt intel, 
+%with first empty page?, 
 %io RAM, vga ram,  then KZERO header, KTZERO, 
 %code,  data with important globals like xlist, and array holes,
 %palloc with pointer page, and then on top of that confmem area
@@ -1325,7 +1180,7 @@ arch_cankaddr(phys_addr pa)
 
 %http://duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory/
 
-\subsection{Syscall overview}
+\subsection{Syscall overview (ARM)}
 % kernel vs user code
 
 
