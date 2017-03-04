@@ -1,5 +1,4 @@
 /*s: portfns_concurrency.h */
-
 // taslock.c
 int  lock(Lock*);
 void unlock(Lock*);

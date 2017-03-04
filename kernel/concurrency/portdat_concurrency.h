@@ -6,8 +6,8 @@
 
 // arch_tas() < Lock|ILock < QLock|RWLock
 
-// used to be in <arch>/, but the fields are used from port/, so the 
-// code it must be portable!
+// This used to be in <arch>/, but its fields are used from port/, so the 
+// code must be portable!
 /*s: struct Lock */
 struct Lock
 {

@@ -29,24 +29,24 @@ int   (*pprint)(char*, ...);
 void  (*panic)(char*, ...);
 void  (*_assert)(char*);
 /*x: portfns_core.h backward deps breaker */
-// process/386/trap.c
+// processes/<arch>/trap.c
 void    (*arch_dumpstack)(void);
 /*x: portfns_core.h backward deps breaker */
-// process/proc.c
+// processes/proc.c
 void    (*dumpaproc)(Proc*);
 /*x: portfns_core.h backward deps breaker */
-// process/proc.c
+// processes/proc.c
 void    (*error)(char*);
 void    (*nexterror)(void);
 /*x: portfns_core.h backward deps breaker */
-// process/proc.c
+// processes/proc.c
 void    (*sleep)(Rendez*, int(*)(void*), void*);
 void    (*tsleep)(Rendez*, int (*)(void*), void*, ulong);
 Proc*   (*wakeup)(Rendez*);
 void    (*sched)(void);
 void    (*ready)(Proc*);
 /*x: portfns_core.h backward deps breaker */
-// process/proc.c
+// processes/proc.c
 Proc*   (*proctab)(int);
 int     (*postnote)(Proc*, int, char*, int);
 void    (*pexit)(char*, bool);
@@ -54,18 +54,18 @@ void    (*pexit)(char*, bool);
 // files/chan.c
 void    (*cclose)(Chan*);
 /*x: portfns_core.h backward deps breaker */
-// init/main.c
+// init/<arch>/main.c
 void    (*arch_exit)(int);
 /*x: portfns_core.h backward deps breaker */
 
-//misc/386/devarch.c
+//misc/<arch>/devarch.c
 void    (*arch_coherence)(void);
 uvlong  (*arch_fastticks)(uvlong*);
 /*x: portfns_core.h backward deps breaker */
-// processes/386/i8253.c
+// time/<arch>/time.c
 void    (*arch_microdelay)(int);
 void    (*arch_delay)(int);
-// init/386/main.c
+// init/<arch>/main.c
 bool (*arch_isaconfig)(char*, int, ISAConf*);
 /*e: portfns_core.h backward deps breaker */
 
