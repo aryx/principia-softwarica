@@ -43,7 +43,6 @@ struct Arch_Cpu {
     u32int  sund[5];
     u32int  sabt[5];
     u32int  smon[5];        /* probably not needed */
-    u32int  ssys[5];
     /*e: [[Cpu]] [[Arch]] save of first five registers fields(arm) */
     /*s: [[Cpu]] [[Arch]] other fields(arm) */
     Lock    alarmlock;      /* access to alarm list */

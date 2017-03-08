@@ -16,42 +16,30 @@ typedef uintptr virt_addr;
 // kernel address (mostly physical + KZERO)
 typedef uintptr kern_addr;
 /*x: pad memory pointer types(arm) */
-typedef ulong* kern_addr2;
 typedef ulong* virt_addr2;
 typedef void* virt_addr3;
+typedef ulong* kern_addr2;
 typedef void* kern_addr3;
 /*e: pad memory pointer types(arm) */
 
-/*s: dat.h includes(arm) */
 #include "dat_forward.h"
 #include "../port/portdat_forward.h"
-
-// defines Lock (used inline in Cpu in portdat_core.h so must be before)
-#include "../port/portdat_concurrency.h"
-// defines Conf, Cpu, ... Label
-#include "dat_core.h"
-#include "../port/portdat_core.h"
-// defines Page, Pagetable, Segment, KImage
-#include "dat_memory.h"
-#include "../port/portdat_memory.h"
-// defines Chan
-#include "../port/portdat_files.h"
-// defines Timer
-#include "dat_time.h"
-#include "../port/portdat_time.h"
-// defines Proc
-#include "dat_processes.h"
-#include "../port/portdat_processes.h"
-// defines keyboard queue, consdevtab
-#include "../port/portdat_console.h"
-// defines DevConf, DevPort (not that used)
-#include "../port/portdat_devices.h"
-// defines Cmd
-#include "../port/portdat_misc.h"
-// defines Uart
-#include "../port/portdat_buses.h"
-// defines Soc
-#include "dat_arch.h"
+/*s: dat.h includes(arm) */
+#include "../port/portdat_concurrency.h" // Lock (used in Cpu so must be before)
+#include "dat_core.h"                    // Arch_Cpu
+#include "../port/portdat_core.h"        // Conf, Cpu, ... Label
+#include "dat_memory.h"                  // Arch_ProcMMU
+#include "../port/portdat_memory.h"      // Page, Pagetable, Segment, KImage
+#include "../port/portdat_files.h"       // Chan
+#include "dat_time.h"                    // Arch_HZ
+#include "../port/portdat_time.h"        // Timer
+#include "dat_processes.h"               // Arch_FPsave
+#include "../port/portdat_processes.h"   // Proc
+#include "../port/portdat_console.h"     // keyboard queue, consdevtab
+#include "../port/portdat_devices.h"     // DevConf, DevPort (not that used)
+#include "../port/portdat_misc.h"        // Cmd
+#include "../port/portdat_buses.h"       // Uart
+#include "dat_arch.h"                    // Soc
 /*e: dat.h includes(arm) */
 
 // DO NOT switch those declarations. 5c allocates R10

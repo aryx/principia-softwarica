@@ -1,6 +1,6 @@
 /*s: arch/arm/arm.h */
 /*
- * arm-specific definitions for armv6 (arm11), armv7 (cortex-a8 and -a7)
+ * ARM-specific definitions for armv6 (arm11), armv7 (cortex-a7 and -a8)
  * these are used in C and assembler
  */
 
@@ -8,16 +8,15 @@
  * Program Status Registers
  */
 /*s: type PsrMode(arm) */
-#define PsrMusr     0x00000010      /* mode */
-#define PsrMfiq     0x00000011
-#define PsrMirq     0x00000012
+#define PsrMusr     0x00000010  /* user mode */
 #define PsrMsvc     0x00000013  /* `protected mode for OS' */
-
-#define PsrMmon     0x00000016  /* `secure monitor' (trustzone hyper) */
+/*s: [[PsrMode]] other cases(arm) */
+#define PsrMirq     0x00000012
+#define PsrMfiq     0x00000011
+/*x: [[PsrMode]] other cases(arm) */
 #define PsrMabt     0x00000017
 #define PsrMund     0x0000001B
-#define PsrMsys     0x0000001F  /* `privileged user mode for OS' (trustzone) */
-
+/*e: [[PsrMode]] other cases(arm) */
 #define PsrMask     0x0000001F
 /*e: type PsrMode(arm) */
 
@@ -26,33 +25,21 @@
 #define PsrDirq     0x00000080      /* disable IRQ interrupts */
 /*e: type PsrDisable(arm) */
 
-/*s: type PsrArith(arm) */
-#define PsrV        0x10000000      /* overflow */
-#define PsrC        0x20000000      /* carry/borrow/extend */
-#define PsrZ        0x40000000      /* zero */
-#define PsrN        0x80000000      /* negative/less than */
-/*e: type PsrArith(arm) */
-
-/* instruction decoding */
-#define ISCPOP(op)  ((op) == 0xE || ((op) & ~1) == 0xC)
-#define ISFPAOP(cp, op) ((cp) == CpOFPA && ISCPOP(op))
-#define ISVFPOP(cp, op) (((cp) == CpDFP || (cp) == CpFP) && ISCPOP(op))
-
 /*
  * Coprocessors
  */
-/*s: type coprocessors(arm) */
-#define CpOFPA      1           /* ancient 7500 FPA */
+/*s: type Coprocessors(arm) */
+#define CpSC        15          /* System Control */
+/*s: [[Coprocessors]] other cases(arm) */
 #define CpFP        10          /* float FP, VFP cfg. */
 #define CpDFP       11          /* double FP */
-#define CpSC        15          /* System Control */
-/*e: type coprocessors(arm) */
+/*e: [[Coprocessors]] other cases(arm) */
+/*e: type Coprocessors(arm) */
 
 /*
  * Primary (CRn) CpSC registers.
  */
-/*s: type PrimaryCpSCRegisters */
-#define CpID        0           /* ID and cache type */
+/*s: type CpSC primary registers(arm) */
 #define CpCONTROL   1           /* miscellaneous control */
 #define CpTTB       2           /* Translation Table Base(s) */
 #define CpDAC       3           /* Domain Access Control */
@@ -60,44 +47,24 @@
 #define CpFAR       6           /* Fault Address */
 #define CpCACHE     7           /* cache/write buffer control */
 #define CpTLB       8           /* TLB control */
-
-#define CpCLD       9           /* L2 Cache Lockdown, op1==1 */
-#define CpTLD       10          /* TLB Lockdown, with op2 */
-#define CpVECS      12          /* vector bases, op1==0, Crm==0, op2s (cortex) */
-#define CpPID       13          /* Process ID */
-
-#define CpTIMER     14          /* Generic timer (cortex-a7) */
 #define CpSPM       15          /* system performance monitor (arm1176) */
-/*e: type PrimaryCpSCRegisters */
+/*s: [[CpSC primary registers]] other cases(arm) */
+#define CpID        0           /* ID and cache type */
+#define CpTIMER     14          /* Generic timer (cortex-a7) */
+/*x: [[CpSC primary registers]] other cases(arm) */
+#define CpCLD       9        /* L2 Cache Lockdown, op1==1 */
+/*e: [[CpSC primary registers]] other cases(arm) */
+/*e: type CpSC primary registers(arm) */
 
-/*
- * CpTIMER op1==0 Crm and opcode2 registers (cortex-a7)
- */
-#define CpTIMERcntfrq   0
-#define CpTIMERphys     2
 
-#define CpTIMERphysval  0
-#define CpTIMERphysctl  1
-
-/*
- * CpTTB op1==0, Crm==0 opcode2 values.
- */
-#define CpTTB0      0
-#define CpTTB1      1           /* cortex */
-#define CpTTBctl    2           /* cortex */
-
-/*
- * CpFSR opcode2 values.
- */
-#define CpFSRdata   0           /* armv6, armv7 */
-#define CpFSRinst   1           /* armv6, armv7 */
-
+/*s: type CpID secondary registers(arm) */
 /*
  * CpID Secondary (CRm) registers.
  */
 #define CpIDidct    0
 #define CpIDfeat    1
-
+/*e: type CpID secondary registers(arm) */
+/*s: type CpID opcode2(arm) */
 /*
  * CpID op1==0 opcode2 fields.
  * the cortex has more op1 codes for cache size, etc.
@@ -111,14 +78,17 @@
 /* CpIDid op1 values */
 #define CpIDcsize   1           /* cache size (cortex) */
 #define CpIDcssel   2           /* cache size select (cortex) */
+/*e: type CpID opcode2(arm) */
 
+/*s: type CpCONTROL opcode2(arm) */
 /*
  * CpCONTROL op2 codes, op1==0, Crm==0.
  */
 #define CpMainctl   0
 #define CpAuxctl    1
 #define CpCPaccess  2
-
+/*e: type CpCONTROL opcode2(arm) */
+/*s: type CpCONTROL CpMainctl(arm) */
 /*
  * CpCONTROL: op1==0, CRm==0, op2==CpMainctl.
  * main control register.
@@ -142,7 +112,8 @@
 #define CpCnmfi     (1<<27)     /* NMFI: non-maskable fast intrs. */
 #define CpCtre      (1<<28)     /* TRE: TEX remap enable */
 #define CpCafe      (1<<29)     /* AFE: access flag (ttb) enable */
-
+/*e: type CpCONTROL CpMainctl(arm) */
+/*s: type CpCONTROL CpAuxctl(arm) */
 /*
  * CpCONTROL: op1==0, CRm==0, op2==CpAuxctl.
  * Auxiliary control register on cortex at least.
@@ -164,14 +135,35 @@
 /* cortex-a7 and cortex-a9 */
 #define CpACsmp         (1<<6)  /* SMP l1 caches coherence; needed for ldrex/strex */
 #define CpACl1pctl      (3<<13) /* l1 prefetch control */
+/*e: type CpCONTROL CpAuxctl(arm) */
+/*s: type CpCONTROL secondary registers(arm) */
 /*
  * CpCONTROL Secondary (CRm) registers and opcode2 fields.
  */
 #define CpCONTROLscr    1
-
+/*e: type CpCONTROL secondary registers(arm) */
+/*s: type CpCONTROL opcode2 bis(arm) */
 #define CpSCRscr    0
+/*e: type CpCONTROL opcode2 bis(arm) */
 
-/*s: type CpCacheRegister */
+/*s: type CpTTB(arm) */
+/*
+ * CpTTB op1==0, Crm==0 opcode2 values.
+ */
+#define CpTTB0      0
+#define CpTTB1      1           /* cortex */
+#define CpTTBctl    2           /* cortex */
+/*e: type CpTTB(arm) */
+
+/*s: type CpFSR(arm) */
+/*
+ * CpFSR opcode2 values.
+ */
+#define CpFSRdata   0           /* armv6, armv7 */
+#define CpFSRinst   1           /* armv6, armv7 */
+/*e: type CpFSR(arm) */
+
+/*s: type CpCACHE secondary registers(arm) */
 /*
  * CpCACHE Secondary (CRm) registers and opcode2 fields.  op1==0.
  * In ARM-speak, 'flush' means invalidate and 'clean' means writeback.
@@ -186,9 +178,8 @@
 #define CpCACHEwb   10          /* writeback to PoC */
 #define CpCACHEwbu  11          /* writeback to PoU */
 #define CpCACHEwbi  14          /* writeback+invalidate (to PoC) */
-/*e: type CpCacheRegister */
-
-/*s: type CpCacheOpcode */
+/*e: type CpCACHE secondary registers(arm) */
+/*s: type CpCACHE opcode2(arm) */
 #define CpCACHEall  0           /* entire (not for invd nor wb(i) on cortex) */
 #define CpCACHEse   1           /* single entry */
 #define CpCACHEsi   2           /* set/index (set/way) */
@@ -197,74 +188,57 @@
 #define CpCACHEdmbarr   5           /* wb only (cortex) */
 #define CpCACHEflushbtc 6           /* flush branch-target cache (cortex) */
 #define CpCACHEflushbtse 7          /* ⋯ or just one entry in it (cortex) */
-/*e: type CpCacheOpcode */
+/*e: type CpCACHE opcode2(arm) */
 
-
+/*s: type CpTLB secondary registers(arm) */
 /*
  * CpTLB Secondary (CRm) registers and opcode2 fields.
  */
 #define CpTLBinvi   5           /* instruction */
 #define CpTLBinvd   6           /* data */
 #define CpTLBinvu   7           /* unified */
-
+/*e: type CpTLB secondary registers(arm) */
+/*s: type CpTLB opcode2(arm) */
 #define CpTLBinv    0           /* invalidate all */
 #define CpTLBinvse  1           /* invalidate single entry */
 #define CpTBLasid   2           /* by ASID (cortex) */
+/*e: type CpTLB opcode2(arm) */
 
+/*s: type CpCLD secondary registers(arm) */
 /*
  * CpCLD Secondary (CRm) registers and opcode2 fields for op1==0. (cortex)
  */
 #define CpCLDena    12          /* enables */
 #define CpCLDcyc    13          /* cycle counter */
 #define CpCLDuser   14          /* user enable */
-
+/*e: type CpCLD secondary registers(arm) */
+/*s: type CpCLD opcode2(arm) */
 #define CpCLDenapmnc    0
 #define CpCLDenacyc 1
+/*e: type CpCLD opcode2(arm) */
 
+/*s: type CpTIMER(arm) */
 /*
- * CpCLD Secondary (CRm) registers and opcode2 fields for op1==1.
+ * CpTIMER op1==0 Crm and opcode2 registers (cortex-a7)
  */
-#define CpCLDl2     0           /* l2 cache */
+#define CpTIMERcntfrq   0
+#define CpTIMERphys     2
 
-#define CpCLDl2aux  2           /* auxiliary control */
+#define CpTIMERphysval  0
+#define CpTIMERphysctl  1
+/*e: type CpTIMER(arm) */
 
-/*
- * l2 cache aux. control
- */
-#define CpCl2ecc    (1<<28)         /* use ecc, not parity */
-#define CpCl2noldforw   (1<<27)         /* no ld forwarding */
-#define CpCl2nowrcomb   (1<<25)         /* no write combining */
-#define CpCl2nowralldel (1<<24)         /* no write allocate delay */
-#define CpCl2nowrallcomb (1<<23)        /* no write allocate combine */
-#define CpCl2nowralloc  (1<<22)         /* no write allocate */
-#define CpCl2eccparity  (1<<21)         /* enable ecc or parity */
-#define CpCl2inner  (1<<16)         /* inner cacheability */
-/* other bits are tag ram & data ram latencies */
-
-/*
- * CpTLD Secondary (CRm) registers and opcode2 fields.
- */
-#define CpTLDlock   0           /* TLB lockdown registers */
-#define CpTLDpreload    1           /* TLB preload */
-
-#define CpTLDi      0           /* TLB instr. lockdown reg. */
-#define CpTLDd      1           /* " data " " */
-
-/*
- * CpVECS Secondary (CRm) registers and opcode2 fields.
- */
-#define CpVECSbase  0
-
-#define CpVECSnorm  0           /* (non-)secure base addr */
-#define CpVECSmon   1           /* secure monitor base addr */
-
+/*s: type CpSPM secondary registers(arm) */
 /*
  * CpSPM Secondary (CRm) registers and opcode2 fields (armv6)
  */
 #define CpSPMperf   12          /* various counters */
-
+/*e: type CpSPM secondary registers(arm) */
+/*s: type CpSPM opcode2(arm) */
 #define CpSPMctl    0           /* performance monitor control */
 #define CpSPMcyc    1           /* cycle counter register */
+/*e: type CpSPM opcode2(arm) */
+
 
 /*
  * CpCACHERANGE opcode2 fields for MCRR instruction (armv6)

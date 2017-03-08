@@ -28,7 +28,7 @@ struct Ureg {
     ulong   type;   /* of exception */
     ulong   psr;
 
-    ulong   pc; /* interrupted addr */
+    ulong   pc; /* interrupted addr */ // r15
 };
 /*e: struct Ureg(arm) */
 /*e: arm/ureg.h */

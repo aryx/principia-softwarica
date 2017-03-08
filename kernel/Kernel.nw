@@ -133,7 +133,6 @@ and Richard Miller
 }
 % hmm actually this volume does not contain the networking code,
 %  so maybe can put just Pike and Thompson? or maybe just Thompson?
-% (Richard Miller for bcm/)
 
 \maketitle 
 \onecolumn
@@ -352,8 +351,8 @@ Thanks also to Federic Balesteros who wrote a lengthy note about
 the \plan kernel. 
 %
 Finally, thanks to Richard Miller for porting
-\plan to the Raspberry Pi architecture.
-
+the \plan kernel to the Raspberry Pi machine.
+\n thanks also to author of 5c/5a/5l
 
 
 
@@ -644,6 +643,8 @@ provides to the user programs.
 % Most popular archi in smartphones. Most popular archi in number of devices.
 % More than x86!
 
+%http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0360f/BIHGGAFJ.html
+
 \subsubsection{ARM registers, [[Ureg]]}
 
 <<struct Ureg(arm)>>=
@@ -674,9 +675,10 @@ struct Ureg {
     ulong   type;   /* of exception */
     ulong   psr;
 
-    ulong   pc; /* interrupted addr */
+    ulong   pc; /* interrupted addr */ // r15
 };
 @
+% Ureg for user registers.
 % Ureg will be used when saving state of processes.
 % Save pc/sp but also value of current registers
 % (and also of float registers, see Appendix).
@@ -689,40 +691,50 @@ struct Ureg {
 %  MOVW $0, R0
 
 
-\subsubsection{Program status register bits ([[PsrXxx]])}
+\subsubsection{Program Status Register ([[PsrXxx]])}
 
 % Ureg.psr! important.
 
+% example of use:
+%    MOVW    CPSR, R0            /* turn off irqs (but not fiqs) */
+%    ORR $(PsrDirq), R0, R1
+%    MOVW R1, CPSR
+% (5a translates that in the special instruction ??)
+
+
 <<type PsrMode(arm)>>=
-#define PsrMusr     0x00000010      /* mode */
-#define PsrMfiq     0x00000011
-#define PsrMirq     0x00000012
+#define PsrMusr     0x00000010  /* user mode */
 #define PsrMsvc     0x00000013  /* `protected mode for OS' */
-
-#define PsrMmon     0x00000016  /* `secure monitor' (trustzone hyper) */
-#define PsrMabt     0x00000017
-#define PsrMund     0x0000001B
-#define PsrMsys     0x0000001F  /* `privileged user mode for OS' (trustzone) */
-
+<<[[PsrMode]] other cases(arm)>>
 #define PsrMask     0x0000001F
 @
-% what is actually used? PsrMusr vs PsrMsvc
-% less used: PsrMfiq, MsrMirq, PsrMabt (fault), PsrMund
-% not used: PsrMmon, PsrMsys
-\t comment unused modes
+%dead: #define PsrMmon     0x00000016  /* `secure monitor' (trustzone hyper) */
+%dead: #define PsrMsys     0x0000001F  /* `privileged user mode for OS' (trustzone) */
+
+<<[[PsrMode]] other cases(arm)>>=
+#define PsrMirq     0x00000012
+#define PsrMfiq     0x00000011
+@
+<<[[PsrMode]] other cases(arm)>>=
+#define PsrMabt     0x00000017
+#define PsrMund     0x0000001B
+@
+% less used
+
+
 
 <<global trapnames(arm)>>=
 static char *trapnames[PsrMask+1] = {
     [ PsrMusr ] "user mode",
+    [ PsrMsvc ] "svc/swi exception",
     [ PsrMfiq ] "fiq interrupt",
     [ PsrMirq ] "irq interrupt",
-    [ PsrMsvc ] "svc/swi exception",
     [ PsrMabt ] "prefetch abort/data abort",
     [ PsrMabt+1 ] "data abort",
     [ PsrMund ] "undefined instruction",
-    [ PsrMsys ] "sys trap",
 };
 @
+%dead:     [ PsrMsys ] "sys trap",
 
 
 
@@ -733,31 +745,40 @@ static char *trapnames[PsrMask+1] = {
 % Dirq vs Mirq? Being in an interrupt handler and disabling IRQs
 % are two different things!
 
-% example of use:
-%    MOVW    CPSR, R0            /* turn off irqs (but not fiqs) */
-%    ORR $(PsrDirq), R0, R1
-%    MOVW R1, CPSR
-% (5a translates that in the special instruction ??)
+%dead:
+% <<type PsrArith(arm)>>=
+% #define PsrV        0x10000000      /* overflow */
+% #define PsrC        0x20000000      /* carry/borrow/extend */
+% #define PsrZ        0x40000000      /* zero */
+% #define PsrN        0x80000000      /* negative/less than */
+% @
 
 
 \subsubsection{System control coprocessor ([[CpSC]])}
 
+% PSR nice, but limited. For extra functionalities, enter coprocessors
+% and their registers.
+
+% http://infocenter.arm.com/help/topic/com.arm.doc.ddi0211k/Bihggafj.html
+
+% example of use:
+%  MRC ...
+%  MCR ...
+%  and also MCRR MRCC
+
 %coprocessors. 
 
-<<type coprocessors(arm)>>=
-#define CpOFPA      1           /* ancient 7500 FPA */
-#define CpFP        10          /* float FP, VFP cfg. */
-#define CpDFP       11          /* double FP */
+<<type Coprocessors(arm)>>=
 #define CpSC        15          /* System Control */
+<<[[Coprocessors]] other cases(arm)>>
 @
-%dead: 
-\t remove CpOFPA?
+%dead: #define CpOFPA      1           /* ancient 7500 FPA */
 %Floating points (single and double) see Appendix X. 
 
-% More important CpSC!
+% Those coprocessors have primary and secondary registers
+% that are accessible via MRC instruction.
 
-<<type PrimaryCpSCRegisters>>=
-#define CpID        0           /* ID and cache type */
+<<type CpSC primary registers(arm)>>=
 #define CpCONTROL   1           /* miscellaneous control */
 #define CpTTB       2           /* Translation Table Base(s) */
 #define CpDAC       3           /* Domain Access Control */
@@ -765,23 +786,16 @@ static char *trapnames[PsrMask+1] = {
 #define CpFAR       6           /* Fault Address */
 #define CpCACHE     7           /* cache/write buffer control */
 #define CpTLB       8           /* TLB control */
-
-#define CpCLD       9           /* L2 Cache Lockdown, op1==1 */
-#define CpTLD       10          /* TLB Lockdown, with op2 */
-#define CpVECS      12          /* vector bases, op1==0, Crm==0, op2s (cortex) */
-#define CpPID       13          /* Process ID */
-
-#define CpTIMER     14          /* Generic timer (cortex-a7) */
 #define CpSPM       15          /* system performance monitor (arm1176) */
+<<[[CpSC primary registers]] other cases(arm)>>
 @
-\t remove unused: (and the related macros in arm.h)
-%dead: CpCLD, CpTLD, CpVECS, CpPID, Lockdown??
-%CpTIMER
+%dead: 
+% #define CpTLD       10       /* TLB Lockdown, with op2 */
+% #define CpVECS      12       /* vector bases, op1==0, Crm==0, op2s (cortex) */
+% #define CpPID       13       /* Process ID */
 
-% for MMU, DAC.
+% will see later how to use those primary registers.
 
-% example of use:
-%  MRC ...
 
 \subsection{VideoCore GPU}
 %VideoCore 4.
@@ -909,35 +923,21 @@ typedef int errorneg1;
 % graph dependencies? (where remove artificial edges, or use thickness of edge?)
 
 <<dat.h includes(arm)>>=
-#include "dat_forward.h"
-#include "../port/portdat_forward.h"
-
-// defines Lock (used inline in Cpu in portdat_core.h so must be before)
-#include "../port/portdat_concurrency.h"
-// defines Conf, Cpu, ... Label
-#include "dat_core.h"
-#include "../port/portdat_core.h"
-// defines Page, Pagetable, Segment, KImage
-#include "dat_memory.h"
-#include "../port/portdat_memory.h"
-// defines Chan
-#include "../port/portdat_files.h"
-// defines Timer
-#include "dat_time.h"
-#include "../port/portdat_time.h"
-// defines Proc
-#include "dat_processes.h"
-#include "../port/portdat_processes.h"
-// defines keyboard queue, consdevtab
-#include "../port/portdat_console.h"
-// defines DevConf, DevPort (not that used)
-#include "../port/portdat_devices.h"
-// defines Cmd
-#include "../port/portdat_misc.h"
-// defines Uart
-#include "../port/portdat_buses.h"
-// defines Soc
-#include "dat_arch.h"
+#include "../port/portdat_concurrency.h" // Lock (used in Cpu so must be before)
+#include "dat_core.h"                    // Arch_Cpu
+#include "../port/portdat_core.h"        // Conf, Cpu, ... Label
+#include "dat_memory.h"                  // Arch_ProcMMU
+#include "../port/portdat_memory.h"      // Page, Pagetable, Segment, KImage
+#include "../port/portdat_files.h"       // Chan
+#include "dat_time.h"                    // Arch_HZ
+#include "../port/portdat_time.h"        // Timer
+#include "dat_processes.h"               // Arch_FPsave
+#include "../port/portdat_processes.h"   // Proc
+#include "../port/portdat_console.h"     // keyboard queue, consdevtab
+#include "../port/portdat_devices.h"     // DevConf, DevPort (not that used)
+#include "../port/portdat_misc.h"        // Cmd
+#include "../port/portdat_buses.h"       // Uart
+#include "dat_arch.h"                    // Soc
 @
 
 % some dat_xxx.h before portdat_xxx.h sometimes because
@@ -1268,16 +1268,13 @@ typedef uintptr kern_addr;
 
 \ifallcode
 <<pad memory pointer types(arm)>>=
-typedef ulong* kern_addr2;
 typedef ulong* virt_addr2;
 typedef void* virt_addr3;
+typedef ulong* kern_addr2;
 typedef void* kern_addr3;
 @
 \fi
 %less: I think the void* is the best form, so should s/xxx_addr3/xxx_add/
-
-
-
 
 
 
@@ -1312,6 +1309,7 @@ typedef void* kern_addr3;
 <<constant UTZERO(arm)>>=
 #define UTZERO      (UZERO+BY2PG)       /* user text start */
 @
+% this is actually portable. Could be in portdat.h
 
 % because first page will be marked as protected to detect null pointer
 % dereference
@@ -1366,6 +1364,9 @@ arch_cankaddr(uintptr pa)
     return 0;
 }
 @
+% comment above about PHYSDRAM confirms I was right to remove this constant
+% because anyway the code assumes it's 0.
+
 % memsize?? global set in meminit?
 
 
@@ -2203,6 +2204,7 @@ TEXT    arch_tas(SB), $-4
 % nul then set it! So arch_tas() == 0 mean? arch_tas() == 1 mean?
 % return in R0, see C conventions.
 
+% See Section~\ref{smp} for arch_tas() handling multiple processors!
 
 \section{[[arch_coherence()]] (ARM)}
 
@@ -2233,7 +2235,7 @@ TEXT arm_arch_coherence(SB), $-4
 @
 % D for data
 
-<<type CpCacheRegister>>=
+<<type CpCACHE secondary registers(arm)>>=
 /*
  * CpCACHE Secondary (CRm) registers and opcode2 fields.  op1==0.
  * In ARM-speak, 'flush' means invalidate and 'clean' means writeback.
@@ -2251,7 +2253,7 @@ TEXT arm_arch_coherence(SB), $-4
 @
 % PoC ??
 
-<<type CpCacheOpcode>>=
+<<type CpCACHE opcode2(arm)>>=
 #define CpCACHEall  0           /* entire (not for invd nor wb(i) on cortex) */
 #define CpCACHEse   1           /* single entry */
 #define CpCACHEsi   2           /* set/index (set/way) */
@@ -2280,8 +2282,10 @@ arch_xinc(long *p)
     arch_splx(s);
 }
 @
+%old: was called xinc? or _xinc?
 % good enough when have only 1 processor!
 % for SMP see Section~\ref{sec:smp}.
+
 
 <<function arch_xdec(arm)>>=
 long
@@ -27211,19 +27215,774 @@ if(indir && *argp==nil) {
 
 % other: Serial line, Scsi, see Kernel_extra.nw
 
-\section{Floating point (x86)}
+\section{Floating point (ARM)}
+
 % pretty important
-% for ARM, simplified a lot by relying on VFP3 instructions
-% generated by 5l -f. No need for coprocessor and fpiarm.c/fpi.c/fpimem.c.
 
-
-%{FP}
-
+<<[[Coprocessors]] other cases(arm)>>=
+#define CpFP        10          /* float FP, VFP cfg. */
+#define CpDFP       11          /* double FP */
+@
 % related co-processors: GPU
 
-% apparently on 386 we have IrqIRQ13 for coprocessor, meaning the copro
-% is really outside and need to communicate with him?
-% simpler with 486?
+% for ARM, simplified a lot by relying on VFP3 instructions
+% generated by 5l -f. 
+% So no need for coprocessor and fpiarm.c/fpi.c/fpimem.c.
+
+\subsection{[[coproc.c]]}
+
+<<function setupfpctlop(arm)>>=
+/* fp coproc control */
+static void
+setupfpctlop(ulong instr[2], int opcode, int fpctlreg)
+{
+    ulong instrsz[2];
+
+    fpctlreg &= Nfpctlregs - 1;
+    instr[0] = opcode | fpctlreg << 16 | 0 << 12 | CpFP << 8;
+    instr[1] = RETinst;
+
+    cachedwbse(instr, sizeof instrsz);
+    cacheiinv();
+}
+@
+% >> >> >>
+
+<<function fprd(arm)>>=
+ulong
+fprd(int fpreg)
+{
+    int s, r;
+    volatile ulong instr[2];
+    Pufv fp;
+
+    if (!cpu->fpon) {
+        arch_dumpstack();
+        panic("fprd: cpu%d fpu off", cpu->cpuno);
+    }
+    s = arch_splhi();
+    /*
+     * VMRS.  return value will be in R0, which is convenient.
+     * Rt will be R0.
+     */
+    setupfpctlop(instr, 0xeef00010, fpreg);
+    fp = (Pufv)instr;
+    r = fp();
+    arch_splx(s);
+    return r;
+}
+@
+
+<<function fpwr(arm)>>=
+void
+fpwr(int fpreg, ulong val)
+{
+    int s;
+    volatile ulong instr[2];
+    Pvfu fp;
+
+    /* fpu might be off and this VMSR might enable it */
+    s = arch_splhi();
+    setupfpctlop(instr, 0xeee00010, fpreg);     /* VMSR, Rt is R0 */
+    fp = (Pvfu)instr;
+    fp(val);
+    arch_coherence();
+    arch_splx(s);
+}
+@
+
+<<function setupfpop(arm)>>=
+/* fp register access; don't bother with single precision */
+static void
+setupfpop(ulong instr[2], int opcode, int fpreg)
+{
+    ulong instrsz[2];
+
+    instr[0] = opcode | 0 << 16 | (fpreg & (16 - 1)) << 12;
+    if (fpreg >= 16)
+        instr[0] |= 1 << 22;        /* high bit of dfp reg # */
+    instr[1] = RETinst;
+
+    cachedwbse(instr, sizeof instrsz);
+    cacheiinv();
+}
+@
+% >> >> >>
+
+<<function fprestreg(arm)>>=
+void
+fprestreg(int fpreg, uvlong val)
+{
+    int s;
+    volatile ulong instr[2];
+    void (*fp)(uvlong *);
+
+    if (!cpu->fpon)
+        panic("fprestreg: cpu%d fpu off", cpu->cpuno);
+    s = arch_splhi();
+    setupfpop(instr, 0xed100000 | CpDFP << 8, fpreg); /* VLDR, Rt is R0 */
+    fp = (void (*)(uvlong *))instr;
+    fp(&val);
+    arch_coherence();
+    arch_splx(s);
+}
+@
+% >>
+
+<<function fpsavereg(arm)>>=
+ulong
+fpsavereg(int fpreg, uvlong *fpp)
+{
+    int s, r;
+    volatile ulong instr[2];
+    ulong (*fp)(uvlong *);
+
+    if (!cpu->fpon)
+        panic("fpsavereg: cpu%d fpu off", cpu->cpuno);
+    s = arch_splhi();
+    /*
+     * VSTR.  pointer will be in R0, which is convenient.
+     * Rt will be R0.
+     */
+    setupfpop(instr, 0xed000000 | CpDFP << 8, fpreg);
+    fp = (ulong (*)(uvlong *))instr;
+    r = fp(fpp);
+    arch_splx(s);
+    arch_coherence();
+    return r;           /* not too meaningful */
+}
+@
+% >> >>
+
+\subsection{[[vfp.c]]}
+
+<<enum _anon_ (processes/arm/vfp3.c)(arm)>>=
+/* subarchitecture code in cpu->havefp */
+enum {
+    VFPv2   = 2,
+    VFPv3   = 3,
+};
+@
+
+<<enum _anon_ (processes/arm/vfp3.c)2(arm)>>=
+/* fp control regs.  most are read-only */
+enum {
+    Fpsid = 0,
+    Fpscr = 1,          /* rw */
+    Mvfr1 = 6,
+    Mvfr0 = 7,
+    Fpexc = 8,          /* rw */
+    Fpinst= 9,          /* optional, for exceptions */
+    Fpinst2=10,
+};
+@
+
+<<enum _anon_ (processes/arm/vfp3.c)3(arm)>>=
+enum {
+    /* Fpexc bits */
+    Fpex =      1u << 31,
+    Fpenabled = 1 << 30,
+    Fpdex =     1 << 29,    /* defined synch exception */
+//  Fp2v =      1 << 28,    /* Fpinst2 reg is valid */
+//  Fpvv =      1 << 27,    /* if Fpdex, vecitr is valid */
+//  Fptfv =     1 << 26,    /* trapped fault is valid */
+//  Fpvecitr =  MASK(3) << 8,
+    /* FSR bits appear here */
+    Fpmbc =     Fpdex,      /* bits exception handler must clear */
+
+    /* Fpscr bits; see u.h for more */
+    Stride =    MASK(2) << 20,
+    Len =       MASK(3) << 16,
+    Dn=     1 << 25,
+    Fz=     1 << 24,
+    /* trap exception enables (not allowed in vfp3) */
+    FPIDNRM =   1 << 15,    /* input denormal */
+    Alltraps = FPIDNRM | FPINEX | FPUNFL | FPOVFL | FPZDIV | FPINVAL,
+    /* pending exceptions */
+    FPAIDNRM =  1 << 7,     /* input denormal */
+    Allexc = FPAIDNRM | FPAINEX | FPAUNFL | FPAOVFL | FPAZDIV | FPAINVAL,
+    /* condition codes */
+    Allcc =     MASK(4) << 28,
+};
+@
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+
+<<enum _anon_ (processes/arm/vfp3.c)4(arm)>>=
+enum {
+    /* CpCPaccess bits */
+    Cpaccnosimd =   1u << 31,
+    Cpaccd16 =  1 << 30,
+};
+@
+
+<<function subarch(arm)>>=
+static char *
+subarch(int impl, uint sa)
+{
+    static char *armarchs[] = {
+        "VFPv1 (unsupported)",
+        "VFPv2",
+        "VFPv3+ with common VFP subarch v2",
+        "VFPv3+ with null subarch",
+        "VFPv3+ with common VFP subarch v3",
+    };
+
+    if (impl != 'A' || sa >= nelem(armarchs))
+        return "GOK";
+    else
+        return armarchs[sa];
+}
+@
+
+<<function implement(arm)>>=
+static char *
+implement(uchar impl)
+{
+    if (impl == 'A')
+        return "arm";
+    else
+        return "unknown";
+}
+@
+
+
+<<function havefp(arm)>>=
+static int
+havefp(void)
+{
+    int gotfp;
+    ulong acc, sid;
+
+    if (cpu->havefpvalid)
+        return cpu->havefp;
+
+    cpu->havefp = 0;
+    gotfp = 1 << CpFP | 1 << CpDFP;
+    cpwrsc(0, CpCONTROL, 0, CpCPaccess, MASK(28));
+    acc = cprdsc(0, CpCONTROL, 0, CpCPaccess);
+    if ((acc & (MASK(2) << (2*CpFP))) == 0) {
+        gotfp &= ~(1 << CpFP);
+        print("fpon: no single FP coprocessor\n");
+    }
+    if ((acc & (MASK(2) << (2*CpDFP))) == 0) {
+        gotfp &= ~(1 << CpDFP);
+        print("fpon: no double FP coprocessor\n");
+    }
+    if (!gotfp) {
+        print("fpon: no FP coprocessors\n");
+        cpu->havefpvalid = 1;
+        return 0;
+    }
+    cpu->fpon = 1;          /* don't panic */
+    sid = fprd(Fpsid);
+    cpu->fpon = 0;
+    switch((sid >> 16) & MASK(7)){
+    case 0:             /* VFPv1 */
+        break;
+    case 1:             /* VFPv2 */
+        cpu->havefp = VFPv2;
+        cpu->fpnregs = 16;
+        break;
+    default:            /* VFPv3 or later */
+        cpu->havefp = VFPv3;
+        cpu->fpnregs = (acc & Cpaccd16) ? 16 : 32;
+        break;
+    }
+    if (cpu->cpuno == 0)
+        print("fp: %d registers, %s simd\n", cpu->fpnregs,
+            (acc & Cpaccnosimd? " no": ""));
+    cpu->havefpvalid = 1;
+    return 1;
+}
+@
+% >> >> >> >> >> >>
+
+<<function fpoff(arm)>>=
+/*
+ * these can be called to turn the fpu on or off for user procs,
+ * not just at system start up or shutdown.
+ */
+
+void
+fpoff(void)
+{
+    if (cpu->fpon) {
+        fpwr(Fpexc, 0);
+        cpu->fpon = 0;
+    }
+}
+@
+
+<<function fpononly(arm)>>=
+void
+fpononly(void)
+{
+    if (!cpu->fpon && havefp()) {
+        /* enable fp.  must be first operation on the FPUs. */
+        fpwr(Fpexc, Fpenabled);
+        cpu->fpon = 1;
+    }
+}
+@
+
+<<function fpcfg(arm)>>=
+static void
+fpcfg(void)
+{
+    int impl;
+    ulong sid;
+    static int printed;
+
+    /* clear pending exceptions; no traps in vfp3; all v7 ops are scalar */
+    cpu->fpscr = Dn | Fz | FPRNR | (FPINVAL | FPZDIV | FPOVFL) & ~Alltraps;
+    fpwr(Fpscr, cpu->fpscr);
+    cpu->fpconfiged = 1;
+
+    if (printed)
+        return;
+    sid = fprd(Fpsid);
+    impl = sid >> 24;
+    print("fp: %s arch %s; rev %ld\n", implement(impl),
+        subarch(impl, (sid >> 16) & MASK(7)), sid & MASK(4));
+    printed = 1;
+}
+@
+
+<<function fpinit(arm)>>=
+void
+fpinit(void)
+{
+    if (havefp()) {
+        fpononly();
+        fpcfg();
+    }
+}
+@
+
+<<function fpon(arm)>>=
+void
+fpon(void)
+{
+    if (havefp()) {
+      fpononly();
+        if (cpu->fpconfiged)
+            fpwr(Fpscr, (fprd(Fpscr) & Allcc) | cpu->fpscr);
+        else
+            fpcfg();    /* 1st time on this fpu; configure it */
+    }
+}
+@
+
+<<function fpclear(arm)>>=
+void
+fpclear(void)
+{
+//  ulong scr;
+
+    fpon();
+//  scr = fprd(Fpscr);
+//  cpu->fpscr = scr & ~Allexc;
+//  fpwr(Fpscr, cpu->fpscr);
+
+    fpwr(Fpexc, fprd(Fpexc) & ~Fpmbc);
+}
+@
+
+<<function fpunotify(arm)>>=
+/*
+ * Called when a note is about to be delivered to a
+ * user process, usually at the end of a system call.
+ * Note handlers are not allowed to use the FPU so
+ * the state is marked (after saving if necessary) and
+ * checked in the Device Not Available handler.
+ */
+void
+fpunotify(Ureg*)
+{
+    if(up->fpstate == FPactive){
+        fpsave(&up->fpsave);
+        up->fpstate = FPinactive;
+    }
+    up->fpstate |= FPillegal;
+}
+@
+
+<<function fpunoted(arm)>>=
+/*
+ * Called from sysnoted() via the machine-dependent
+ * noted() routine.
+ * Clear the flag set above in fpunotify().
+ */
+void
+fpunoted(void)
+{
+    up->fpstate &= ~FPillegal;
+}
+@
+
+<<function fpusysrfork(arm)>>=
+/*
+ * Called early in the non-interruptible path of
+ * sysrfork() via the machine-dependent syscall() routine.
+ * Save the state so that it can be easily copied
+ * to the child process later.
+ */
+void
+fpusysrfork(Ureg*)
+{
+    if(up->fpstate == FPactive){
+        fpsave(&up->fpsave);
+        up->fpstate = FPinactive;
+    }
+}
+@
+
+<<function fpusysrforkchild(arm)>>=
+/*
+ * Called later in sysrfork() via the machine-dependent
+ * sysrforkchild() routine.
+ * Copy the parent FPU state to the child.
+ */
+void
+fpusysrforkchild(Proc *p, Ureg *, Proc *up)
+{
+    /* don't penalize the child, it hasn't done FP in a note handler. */
+    p->fpstate = up->fpstate & ~FPillegal;
+}
+@
+
+<<function fpsave(arm)>>=
+/* should only be called if p->fpstate == FPactive */
+void
+fpsave(Arch_FPsave *fps)
+{
+    int n;
+
+    fpon();
+    fps->control = fps->status = fprd(Fpscr);
+    assert(cpu->fpnregs);
+    for (n = 0; n < cpu->fpnregs; n++)
+        fpsavereg(n, (uvlong *)fps->regs[n]);
+    fpoff();
+}
+@
+
+<<function fprestore(arm)>>=
+static void
+fprestore(Proc *p)
+{
+    int n;
+
+    fpon();
+    fpwr(Fpscr, p->fpsave.control);
+    cpu->fpscr = fprd(Fpscr) & ~Allcc;
+    assert(cpu->fpnregs);
+    for (n = 0; n < cpu->fpnregs; n++)
+        fprestreg(n, *(uvlong *)p->fpsave.regs[n]);
+}
+@
+
+<<function fpuprocsave(arm)>>=
+/*
+ * Called from sched() and sleep() via the machine-dependent
+ * procsave() routine.
+ * About to go in to the scheduler.
+ * If the process wasn't using the FPU
+ * there's nothing to do.
+ */
+void
+fpuprocsave(Proc *p)
+{
+    if(p->fpstate == FPactive){
+        if(p->state == Moribund)
+            fpclear();
+        else{
+            /*
+             * Fpsave() stores without handling pending
+             * unmasked exeptions. Postnote() can't be called
+             * here as sleep() already has up->rlock, so
+             * the handling of pending exceptions is delayed
+             * until the process runs again and generates an
+             * emulation fault to activate the FPU.
+             */
+            fpsave(&p->fpsave);
+        }
+        p->fpstate = FPinactive;
+    }
+}
+@
+
+<<function fpuprocrestore(arm)>>=
+/*
+ * The process has been rescheduled and is about to run.
+ * Nothing to do here right now. If the process tries to use
+ * the FPU again it will cause a Device Not Available
+ * exception and the state will then be restored.
+ */
+void
+fpuprocrestore(Proc *)
+{
+}
+@
+
+<<function fpusysprocsetup(arm)>>=
+/*
+ * Disable the FPU.
+ * Called from sysexec() via sysprocsetup() to
+ * set the FPU for the new process.
+ */
+void
+fpusysprocsetup(Proc *p)
+{
+    p->fpstate = FPinit;
+    fpoff();
+}
+@
+
+<<function arch_procsetup(arm)>>=
+/*
+ *  set mach dependent process state for a new process
+ */
+void
+arch_procsetup(Proc* p)
+{
+    fpusysprocsetup(p);
+}
+@
+
+<<function arch_procsave(arm)>>=
+/*
+ *  Save the mach dependent part of the process state.
+ */
+void
+arch_procsave(Proc* p)
+{
+    uvlong t;
+
+    arch_cycles(&t);
+    p->pcycles += t;
+
+/* TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.*/
+    fpuprocsave(p);
+}
+@
+
+<<function arch_procrestore(arm)>>=
+void
+arch_procrestore(Proc* p)
+{
+    uvlong t;
+
+    if(p->kp)
+        return;
+    arch_cycles(&t);
+    p->pcycles -= t;
+
+    fpuprocrestore(p);
+}
+@
+
+<<function mathnote(arm)>>=
+static void
+mathnote(void)
+{
+    ulong status;
+    char *msg, note[ERRMAX];
+
+    status = up->fpsave.status;
+
+    /*
+     * Some attention should probably be paid here to the
+     * exception masks and error summary.
+     */
+    if (status & FPAINEX)
+        msg = "inexact";
+    else if (status & FPAOVFL)
+        msg = "overflow";
+    else if (status & FPAUNFL)
+        msg = "underflow";
+    else if (status & FPAZDIV)
+        msg = "divide by zero";
+    else if (status & FPAINVAL)
+        msg = "bad operation";
+    else
+        msg = "spurious";
+    snprint(note, sizeof note, "sys: fp: %s fppc=%#p status=%#lux",
+        msg, up->fpsave.pc, status);
+    postnote(up, 1, note, NDebug);
+}
+@
+
+<<function mathemu(arm)>>=
+static void
+mathemu(Ureg *)
+{
+    switch(up->fpstate){
+    case FPemu:
+        error("illegal instruction: VFP opcode in emulated mode");
+    case FPinit:
+        fpinit();
+        up->fpstate = FPactive;
+        break;
+    case FPinactive:
+        /*
+         * Before restoring the state, check for any pending
+         * exceptions.  There's no way to restore the state without
+         * generating an unmasked exception.
+         * More attention should probably be paid here to the
+         * exception masks and error summary.
+         */
+        if(up->fpsave.status & (FPAINEX|FPAUNFL|FPAOVFL|FPAZDIV|FPAINVAL)){
+            mathnote();
+            break;
+        }
+        fprestore(up);
+        up->fpstate = FPactive;
+        break;
+    case FPactive:
+        error("illegal instruction: bad vfp fpu opcode");
+        break;
+    }
+    fpclear();
+}
+@
+
+<<function fpstuck(arm)>>=
+void
+fpstuck(uintptr pc)
+{
+    if (cpu->fppc == pc && cpu->fppid == up->pid) {
+        cpu->fpcnt++;
+        if (cpu->fpcnt > 4)
+            panic("fpuemu: cpu%d stuck at pid %ld %s pc %#p "
+                "instr %#8.8lux", cpu->cpuno, up->pid, up->text,
+                pc, *(ulong *)pc);
+    } else {
+        cpu->fppid = up->pid;
+        cpu->fppc = pc;
+        cpu->fpcnt = 0;
+    }
+}
+@
+
+<<enum _anon_ (processes/arm/vfp3.c)5(arm)>>=
+enum {
+    N = 1<<31,
+    Z = 1<<30,
+    C = 1<<29,
+    V = 1<<28,
+    REGPC = 15,
+};
+@
+
+<<function condok(arm)>>=
+static int
+condok(int cc, int c)
+{
+    switch(c){
+    case 0: /* Z set */
+        return cc&Z;
+    case 1: /* Z clear */
+        return (cc&Z) == 0;
+    case 2: /* C set */
+        return cc&C;
+    case 3: /* C clear */
+        return (cc&C) == 0;
+    case 4: /* N set */
+        return cc&N;
+    case 5: /* N clear */
+        return (cc&N) == 0;
+    case 6: /* V set */
+        return cc&V;
+    case 7: /* V clear */
+        return (cc&V) == 0;
+    case 8: /* C set and Z clear */
+        return cc&C && (cc&Z) == 0;
+    case 9: /* C clear or Z set */
+        return (cc&C) == 0 || cc&Z;
+    case 10:    /* N set and V set, or N clear and V clear */
+        return (~cc&(N|V))==0 || (cc&(N|V)) == 0;
+    case 11:    /* N set and V clear, or N clear and V set */
+        return (cc&(N|V))==N || (cc&(N|V))==V;
+    case 12:    /* Z clear, and either N set and V set or N clear and V clear */
+        return (cc&Z) == 0 && ((~cc&(N|V))==0 || (cc&(N|V))==0);
+    case 13:    /* Z set, or N set and V clear or N clear and V set */
+        return (cc&Z) || (cc&(N|V))==N || (cc&(N|V))==V;
+    case 14:    /* always */
+        return 1;
+    case 15:    /* never (reserved) */
+        return 0;
+    }
+    return 0;   /* not reached */
+}
+@
+
+<<macro ISCPOP(arm)>>=
+#define ISCPOP(op)  ((op) == 0xE || ((op) & ~1) == 0xC)
+@
+
+<<macro ISVFPOP(arm)>>=
+#define ISVFPOP(cp, op) (((cp) == CpDFP || (cp) == CpFP) && ISCPOP(op))
+@
+
+<<function fpuemu(arm)>>=
+/* only called to deal with user-mode instruction faults */
+int
+fpuemu(Ureg* ureg)
+{
+    int s, nfp, cop, op;
+    uintptr pc;
+
+    if(waserror()){
+        postnote(up, 1, up->errstr, NDebug);
+        return 1;
+    }
+
+    if(up->fpstate & FPillegal)
+        error("floating point in note handler");
+
+    nfp = 0;
+    pc = ureg->pc;
+    validaddr(pc, 4, 0);
+    if(!condok(ureg->psr, *(ulong*)pc >> 28))
+        iprint("fpuemu: conditional instr shouldn't have got here\n");
+    op  = (*(ulong *)pc >> 24) & MASK(4);
+    cop = (*(ulong *)pc >>  8) & MASK(4);
+    if(cpu->fpon)
+        fpstuck(pc);        /* debugging; could move down 1 line */
+//#define ISFPAOP(cp, op) ((cp) == CpOFPA && ISCPOP(op))
+
+//    if (ISFPAOP(cop, op)) {     /* old arm 7500 fpa opcode? */
+////      iprint("fpuemu: fpa instr %#8.8lux at %#p\n", *(ulong *)pc, pc);
+////      error("illegal instruction: old arm 7500 fpa opcode");
+//        s = arch_spllo();
+//        if(waserror()){
+//            arch_splx(s);
+//            nexterror();
+//        }
+//        error("ARM7500 instructions not supported; use 5l -f when linking");
+//        //nfp = fpiarm(ureg);   /* advances pc past emulated instr(s) */
+//        //if (nfp > 1)      /* could adjust this threshold */
+//        //  cpu->fppc = cpu->fpcnt = 0;
+//        //arch_splx(s);
+//        //poperror();
+//    } else 
+    if (ISVFPOP(cop, op)) {  /* if vfp, fpu must be off */
+        mathemu(ureg);      /* enable fpu & retry */
+        nfp = 1;
+    }
+
+    poperror();
+    return nfp;
+}
+@
+
 
 \subsection{[[Arch_FPsave]]}
 
@@ -27250,6 +28009,14 @@ enum fpsavestatus
 int fpstate;
 Arch_FPsave  fpsave;   /* address of this is known by db */
 @
+
+
+\section{Floating point (x86)}
+
+% apparently on 386 we have IrqIRQ13 for coprocessor, meaning the copro
+% is really outside and need to communicate with him?
+% simpler with 486?
+
 
 \subsection{[[Arch_FPsave]] (x86)}
 
@@ -27738,13 +28505,64 @@ TEXT fpsserestore0(SB), $0                      /* enable and restore state */
         RET
         
 @
-
+%$
 
 
 \section{SMP on the Raspberry Pi 2 (ARM)}
 
 % Raspberry Pi 2 has 4 processors. Cortex-a7 (used in many smartphones).
 
+<<[[CpSC primary registers]] other cases(arm)>>=
+#define CpID        0           /* ID and cache type */
+#define CpTIMER     14          /* Generic timer (cortex-a7) */
+@
+
+<<[[CpSC primary registers]] other cases(arm)>>=
+#define CpCLD       9        /* L2 Cache Lockdown, op1==1 */
+@
+
+
+<<[[Soc]] other fields>>=
+uintptr armlocal;
+@
+<<[[soc(raspberry pi1)]] other fields>>=
+.armlocal   = 0,
+@
+
+<<type CpTIMER(arm)>>=
+/*
+ * CpTIMER op1==0 Crm and opcode2 registers (cortex-a7)
+ */
+#define CpTIMERcntfrq   0
+#define CpTIMERphys     2
+
+#define CpTIMERphysval  0
+#define CpTIMERphysctl  1
+@
+
+<<type CpID secondary registers(arm)>>=
+/*
+ * CpID Secondary (CRm) registers.
+ */
+#define CpIDidct    0
+#define CpIDfeat    1
+@
+
+<<type CpID opcode2(arm)>>=
+/*
+ * CpID op1==0 opcode2 fields.
+ * the cortex has more op1 codes for cache size, etc.
+ */
+#define CpIDid      0           /* main ID */
+#define CpIDct      1           /* cache type */
+#define CpIDtlb     3           /* tlb type (cortex) */
+#define CpIDmpid    5           /* multiprocessor id (cortex) */
+#define CpIDrevid   6           /* extra revision ID */
+
+/* CpIDid op1 values */
+#define CpIDcsize   1           /* cache size (cortex) */
+#define CpIDcssel   2           /* cache size select (cortex) */
+@
 
 \section{Advanced virtual memory (x86)}
 

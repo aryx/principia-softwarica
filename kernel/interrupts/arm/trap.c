@@ -93,13 +93,12 @@ static Vctl *vfiq;
 /*s: global trapnames(arm) */
 static char *trapnames[PsrMask+1] = {
     [ PsrMusr ] "user mode",
+    [ PsrMsvc ] "svc/swi exception",
     [ PsrMfiq ] "fiq interrupt",
     [ PsrMirq ] "irq interrupt",
-    [ PsrMsvc ] "svc/swi exception",
     [ PsrMabt ] "prefetch abort/data abort",
     [ PsrMabt+1 ] "data abort",
     [ PsrMund ] "undefined instruction",
-    [ PsrMsys ] "sys trap",
 };
 /*e: global trapnames(arm) */
 
@@ -130,7 +129,6 @@ arch_trapinit(void)
     setr13(PsrMirq, cpu->sirq);
     setr13(PsrMabt, cpu->sabt);
     setr13(PsrMund, cpu->sund);
-    setr13(PsrMsys, cpu->ssys);
 
     arch_coherence();
 }

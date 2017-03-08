@@ -16,5 +16,6 @@ struct Soc {            /* SoC dependent configuration */
     /*e: [[Soc]] other fields */
 };
 /*e: struct Soc(arm) */
+
 extern Soc soc;
 /*e: arch/arm/dat_arch.h */

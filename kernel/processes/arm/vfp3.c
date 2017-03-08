@@ -569,6 +569,14 @@ condok(int cc, int c)
 }
 /*e: function condok(arm) */
 
+/* instruction decoding */ // was in arm.h
+/*s: macro ISCPOP(arm) */
+#define ISCPOP(op)  ((op) == 0xE || ((op) & ~1) == 0xC)
+/*e: macro ISCPOP(arm) */
+/*s: macro ISVFPOP(arm) */
+#define ISVFPOP(cp, op) (((cp) == CpDFP || (cp) == CpFP) && ISCPOP(op))
+/*e: macro ISVFPOP(arm) */
+
 /*s: function fpuemu(arm) */
 /* only called to deal with user-mode instruction faults */
 int
@@ -594,21 +602,24 @@ fpuemu(Ureg* ureg)
     cop = (*(ulong *)pc >>  8) & MASK(4);
     if(cpu->fpon)
         fpstuck(pc);        /* debugging; could move down 1 line */
-    if (ISFPAOP(cop, op)) {     /* old arm 7500 fpa opcode? */
-//      iprint("fpuemu: fpa instr %#8.8lux at %#p\n", *(ulong *)pc, pc);
-//      error("illegal instruction: old arm 7500 fpa opcode");
-        s = arch_spllo();
-        if(waserror()){
-            arch_splx(s);
-            nexterror();
-        }
-        error("ARM7500 instructions not supported; use 5l -f when linking");
-        //nfp = fpiarm(ureg);   /* advances pc past emulated instr(s) */
-        //if (nfp > 1)      /* could adjust this threshold */
-        //  cpu->fppc = cpu->fpcnt = 0;
-        //arch_splx(s);
-        //poperror();
-    } else if (ISVFPOP(cop, op)) {  /* if vfp, fpu must be off */
+//#define ISFPAOP(cp, op) ((cp) == CpOFPA && ISCPOP(op))
+
+//    if (ISFPAOP(cop, op)) {     /* old arm 7500 fpa opcode? */
+////      iprint("fpuemu: fpa instr %#8.8lux at %#p\n", *(ulong *)pc, pc);
+////      error("illegal instruction: old arm 7500 fpa opcode");
+//        s = arch_spllo();
+//        if(waserror()){
+//            arch_splx(s);
+//            nexterror();
+//        }
+//        error("ARM7500 instructions not supported; use 5l -f when linking");
+//        //nfp = fpiarm(ureg);   /* advances pc past emulated instr(s) */
+//        //if (nfp > 1)      /* could adjust this threshold */
+//        //  cpu->fppc = cpu->fpcnt = 0;
+//        //arch_splx(s);
+//        //poperror();
+//    } else 
+    if (ISVFPOP(cop, op)) {  /* if vfp, fpu must be off */
         mathemu(ureg);      /* enable fpu & retry */
         nfp = 1;
     }

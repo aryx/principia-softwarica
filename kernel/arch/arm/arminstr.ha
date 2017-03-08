@@ -12,7 +12,6 @@
 /*
  * new instructions
  */
-
 /*s: instruction ISB(arm) */
 #define ISB \
     MOVW    $0, R0; \
