@@ -7,6 +7,13 @@
 #define AOUT_MAGIC  (E_MAGIC)
 /*e: constant AOUT_MAGIC(arm) */
 
+/*s: enum _anon_ (arch/arm/dat_processes.h)(arm) */
+enum {
+    Maxfpregs   = 32,   /* could be 16 or 32, see Mach.fpnregs */
+    Nfpctlregs  = 16,
+};
+/*e: enum _anon_ (arch/arm/dat_processes.h)(arm) */
+
 /*s: struct Arch_FPsave(arm) */
 /*
  * emulated or vfp3 floating point

@@ -1,11 +1,5 @@
 /*s: arch/arm/dat_arch.h */
 
-/*s: enum _anon_ (arch/arm/dat_arch.h)(arm) */
-enum {
-    Maxfpregs   = 32,   /* could be 16 or 32, see Mach.fpnregs */
-    Nfpctlregs  = 16,
-};
-/*e: enum _anon_ (arch/arm/dat_arch.h)(arm) */
 /*s: struct Soc(arm) */
 struct Soc {            /* SoC dependent configuration */
     ulong   dramsize;
