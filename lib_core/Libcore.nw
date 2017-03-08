@@ -266,7 +266,7 @@ which I ultimately discarded:
 
 
 
-\section{[[libc.h]]}
+\section{[[libc.h]] interface}
 % in \plan no hundreds of header files (stdio.h, unistd.h, stdlib.h...)
 % mostly just libc.h (and u.h).
 % other header files are for other libraries: thread.h, regexp.h, draw.h, etc.
@@ -295,7 +295,7 @@ which I ultimately discarded:
 % void, int, double, 
 % pointer, void*!
 % signed vs unsigned, different int size, etc.
-% All defined in Compiler.nw but libcore define a few aliases.
+% All defined in Compiler.nw but libcore define a few aliases in u.h.
 
 \subsection{Booleans}
 
@@ -306,7 +306,7 @@ enum _bool {
   true = 1
 };
 @
-%pad: I added that
+%pad: I added that. But Pike must agree because they have bools in Go.
 
 
 \subsection{Integers}
@@ -472,7 +472,7 @@ Runemax     = 0x10FFFF, /* 21-bit rune */
 Runemask    = 0x1FFFFF, /* bits used by runes (see grep) */
 @
 
-\subsubsection{UTF}
+\subsubsection{UTF8}
 
 % utf(6)
 % rune(2)
@@ -513,6 +513,7 @@ typedef unsigned long   uintptr;
 <<type byte>>=
 typedef uchar byte;
 @
+% and byte*
 
 \subsection{Arrays}
 
@@ -687,6 +688,8 @@ typedef char*   va_list;
 
 %related: getcallerpc
 
+% Fcall here?
+
 %\section{Memory pool}
 % More in memory management chapter
 
@@ -699,7 +702,7 @@ typedef char*   va_list;
 % regexp =~ for structured input
 % fmt =~ for structured output
 
-\section{IO}
+\section{Files}
 
 <<type fdt>>=
 typedef int fdt; // file descriptor type
@@ -734,7 +737,7 @@ struct Tm {
 @
 % some redundant stuff above?
 
-\section{Concurrency data structures}
+\section{Concurrency}
 
 %\subsection{Locks}
 % normal, read-write
@@ -749,6 +752,7 @@ struct Tm {
 
 \section{[[Fcall]]}
 
+% related to concurrency.
 
 \section{Collections}
 
@@ -1029,6 +1033,8 @@ memchr(void *ap, int c, ulong n)
 
 
 \chapter{Memory Management}
+
+%http://marek.vavrusa.com/c/memory/2015/02/20/memory/
 
 %https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/
 
@@ -1548,7 +1554,7 @@ strstr(char *s1, char *s2)
     return 0;
 }
 @
-
+% a classic interview question :)
 
 \section{Runes}
 
@@ -1568,6 +1574,7 @@ tobaserune(Rune c)
     return c;
 }
 @
+% ?? baserune?
 
 <<function isbaserune>>=
 int
@@ -2041,7 +2048,7 @@ enum Fmt_flag {
 
 
 \section{Quoted strings}
-% adv topics?
+% put in advcanced topics?
 
 \chapter{Regular Expressions}
 % libregexp/
@@ -2050,9 +2057,9 @@ enum Fmt_flag {
 
 \chapter{IO}
 
-% file descriptor type in core DS.
+% See file descriptor type in core DS.
 
-\section{Data structures, [[Qid]]}
+\section{Data structures}
 
 <<type Open_flag>>=
 // enum Open_flag, open parameter
@@ -2579,7 +2586,7 @@ access(char *name, int mode)
 % called Time-of-day, not sure  why
 
 
-\section{[[localtime()]]}
+\section{Time zones and [[localtime()]]}
 
 <<function localtime>>=
 Tm*
@@ -2664,6 +2671,7 @@ time(long *tp)
     return t;
 }
 @
+% nsec is recent syscalls?
 
 <<function oldtime>>=
 /*
@@ -2770,18 +2778,18 @@ tm2sec(Tm *tm)
 /* rfork */
 enum Rfork_flags
 {
- RFNAMEG		= (1<<0),
- RFENVG		= (1<<1),
- RFFDG		= (1<<2),
- RFNOTEG		= (1<<3),
- RFPROC		= (1<<4),
- RFMEM		= (1<<5),
- RFNOWAIT	= (1<<6),
- RFCNAMEG	= (1<<10),
- RFCENVG		= (1<<11),
- RFCFDG		= (1<<12),
- RFREND		= (1<<13),
- RFNOMNT		= (1<<14)
+    RFNAMEG  = (1<<0),
+    RFENVG   = (1<<1),
+    RFFDG    = (1<<2),
+    RFNOTEG  = (1<<3),
+    RFPROC   = (1<<4),
+    RFMEM    = (1<<5),
+    RFNOWAIT = (1<<6),
+    RFCNAMEG = (1<<10),
+    RFCENVG  = (1<<11),
+    RFCFDG   = (1<<12),
+    RFREND   = (1<<13),
+    RFNOMNT  = (1<<14)
 };
 @
 
@@ -2812,6 +2820,7 @@ fork(void)
 }
 @
 % no RFENVG?
+% REFREND?
 
 \section{[[execl()]]}
 
@@ -2882,6 +2891,8 @@ lock(Lock *l)
     }
 }
 @
+% ainc: atomic inc.
+% so futex? use kernel only when necessary?
 
 <<function unlock>>=
 void
@@ -2908,8 +2919,13 @@ canlock(Lock *l)
 }
 @
 
+\section{Atomic operations, [[ainc()]] (ARM)}
 
-\section{Queues}
+% see atom.s
+
+\section{Waiting queues}
+% But Lock is already a waiting lock no? with semacquire?
+% But at least here let access/manipulate the queue?
 
 <<type QLock>>=
 struct QLock {
@@ -2923,10 +2939,10 @@ struct QLock {
 
 <<type QLp>>=
 struct QLp {
-    int inuse;
-
-    QLp *next;
     char    state;
+    int inuse;
+    // Extra
+    QLp *next;
 };
 @
 
@@ -2962,6 +2978,8 @@ qlock(QLock *q)
     mp->inuse = 0;
 }
 @
+
+%_rendezvousp?
 
 <<function qunlock>>=
 void
@@ -3626,6 +3644,7 @@ notifier(void *v, char *s)
 #define	SG_RONLY	0040	/* read only */
 #define	SG_CEXEC	0100	/* detach on exec */
 @
+
 
 \section{Fileserver}
 
@@ -4442,6 +4461,7 @@ _xinc(long *p)
 }
 @
 % who calls _xinc?? ainc?
+% atom.s defines _xinc and _ainc as the same function
 
 <<function _xdec>>=
 long
@@ -7682,6 +7702,9 @@ chanprint(Channel *c, char *fmt, ...)
     return n;
 }
 @
+
+
+
 \chapter{Network}
 
 % More in Network.nw, here just wrappers.
@@ -10587,6 +10610,7 @@ struct IOchunk {
 \ifallcode
 #include "Libcore_extra.nw"
 #include "Libcore_big.nw"
+#include "Libcore_arm.nw"
 \fi
 
 %\chapter{Changelog}
