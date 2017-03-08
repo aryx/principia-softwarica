@@ -1,3 +1,4 @@
+/*s: concurrency/arm/concurrency_raspi2.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "../port/error.h"
@@ -24,5 +25,6 @@ arch_xinc(long *p)
 int
 arch_cmpswap(long *addr, long old, long new)
 {
-	return cas((ulong*)addr, old, new);
+    return cas((ulong*)addr, old, new);
 }
+/*e: concurrency/arm/concurrency_raspi2.c */
