@@ -1,4 +1,4 @@
-\part{In Kernel main text}
+\part{Was in Kernel.nw main text}
 
 % title: x86 (32 bits) edition
 
@@ -12,12 +12,7 @@ the x86 architecture
 \chapter{Overview}
 
 \section{The [[x86]] machine}
-% there are tons of x86 machines ... we restrict to the one
-% supported by qemu-system-386.
-
 % actually will take 386, not 486, nor x86_64 or amd64, so simpler.
-
-% little endian, big endian, the le2xxx function?
 
 <<include/arch/386/ureg.h>>=
 struct Ureg
@@ -50,7 +45,13 @@ struct Ureg
 @
 % complicated ... ARM simpler.
 
+% processor is not everything. There is also buses, devices, RAM, etc.
+% There are tons of x86 machines ... we restrict to the one
+% supported by qemu-system-386.
+
 % intro segmentation and pagination? or ref to vm chapter?
+
+
 
 \section{Code organization}
 
@@ -199,39 +200,395 @@ arch_dumpstack = trap_dumpstack;
 arch_isaconfig = main_isaconfig;
 @
 
+
+%<<main.c forward decl for backward deps(x86)>>=
+%@
+%
+%<<[[main()]] initial assignments for backward deps(x86)>>=
+%iprint = devcons_iprint;
+%hook_ioalloc = devarch_hook_ioalloc;
+%devtab = conf_devtab;
+%arch_coherence = nop;
+%@
+
 \section{Software architecture}
 
 \subsection{Booting overview (x86)}
 
 \subsection{Memory overview (x86)}
 
+<<pad memory pointer types(x86)>>=
+// physical address
+typedef uintptr phys_addr;
+// virtual address (which should be a user address)
+typedef uintptr virt_addr;
+// kernel address (mostly physical + KZERO)
+typedef uintptr kern_addr;
+@
+
+<<pad memory pointer types(x86)>>=
+typedef ulong* kern_addr2;
+typedef ulong* virt_addr2;
+typedef void* virt_addr3;
+typedef void* kern_addr3;
+@
+
 % idt, gdt, pd intel, pt intel, 
 
 
+<<constant KZERO(x86)>>=
+//coupling: with mkfile KZERO_AND_HEADER
+#define KZERO   0xE0000000    /* base of kernel address space */
+@
+% last 512Mo of virtual memory space
+
+% why not use different segments? because convenient to be in same
+% virtual space, can read/write stuff on and from userspace
+
+<<constant KTZERO(x86)>>=
+#define KTZERO    (KZERO+0x100000)  /* first address in kernel text */
+@
+% why + 0x100000? because will map kzero to physical memory addr 0,
+% and lots of address before 1Mo are reserved, used by device, e.g.
+% screen cga is at 0xb8000
+
+<<constant UZERO(x86)>>=
+#define UZERO   0     /* base of user address space */
+@
+
+<<constant UTZERO(x86)>>=
+#define UTZERO    (UZERO+BY2PG)   /* first address in user text */
+@
 
 
 
+<<function paddr(x86)>>=
+phys_addr
+arch_paddr(kern_addr3 v)
+{
+    kern_addr va;
+    
+    va = (kern_addr)v;
+    if(va < KZERO)
+        panic("arch_paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
+    return va-KZERO;
+}
+@
+%less: not symetric, phys_addr vs kern_addr3, but hard to make
+% symetric because then got lots of type errors
+
+% pa must be <= MAXKPA, we use kaddr to access kernel data.
+% if want to access different pa, then must use tmpmap or arch_kmap.
+<<function kaddr(x86)>>=
+/*
+ * These could go back to being macros once the kernel is debugged,
+ * but the extra checking is nice to have.
+ */
+kern_addr3
+arch_kaddr(phys_addr pa)
+{
+    if(pa > MAXKPA)
+        panic("arch_kaddr: pa=%#.8lux", pa);
+    return (kern_addr3)(pa+KZERO);
+}
+@
+%todo: should return a kern_addr
+
+<<constant MAXKPA(x86)>>=
+// -KZERO = 0xFFFFFFFF-KZERO in two's complement arithmetic
+#define MAXKPA (phys_addr)(-KZERO)
+@
+% rename KEND? but it's not really kernel end. KADDREND? MAXKADDR? KADDREND?
+
+<<function cankaddr(x86)>>=
+/*
+ * Return the number of bytes that can be accessed via KADDR(pa).
+ * If pa is not a valid argument to KADDR, return 0.
+ */
+ulong
+arch_cankaddr(phys_addr pa)
+{
+    if(pa >= MAXKPA)
+        return 0;
+    return MAXKPA - pa;
+}
+@
+% used in xinit
 
 
 
+% why trivial macro? because in other archi can be different
+<<function KADDR(x86)>>=
+#define KADDR(pa)  arch_kaddr(pa)
+@
+
+<<function PADDR(x86)>>=
+#define PADDR(ka)  arch_paddr((kern_addr3)(ka))
+@
+%less: remove cast? more symetric with KADDR then
+% actually all those intermediate types are very ugly, could simplify!
+% but not easy
+
+% in l.s:
+%#define PADDR(ka)        ((ka)&~KZERO)
+%#define KADDR(pa)        (KZERO|(pa))
+
+% also IDT, GDT, PD0, PT0
 
 
+\subsection{Syscall overview (x86)}
+
+<<constant VectorSYSCALL(x86)>>=
+//!!! int 64 (0x40), way to jump in plan9 OS !!!
+#define VectorSYSCALL 64
+@
+
+\chapter{Core Data Structures}
+
+\section{[[Cpu]] and [[cpu]]}
+
+<<struct ArchCpu(x86)>>=
+struct Arch_Cpu {
+    <<[[Cpu]] [[Arch]] cpuid fields(x86)>>
+    <<[[Cpu]] [[Arch]] other fields(x86)>>
+};
+@ 
+
+% note that cpuinit just set cpus[0], not cpu, cpu is set in clearbss
+<<global cpu(x86)>>=
+// ref<Cpu>, assigned to CPUADDR in _clearbss
+Cpu *cpu;
+@ 
+% x86 because differ in different archi
+
+% note that cpus[0] will not be CPUADDR! it will be
+% CPU0CPU (this will defeat the purpose otherwise)
+
+<<constant MAXCPUS(x86)>>=
+/*
+ * In 32-bit mode, the MAXCPUS limit is 32 without
+ * changing the way active.cpus is defined and used
+ * (unfortunately, it is also used in the port code).
+ */
+#define MAXCPUS   32      /* max # cpus system can run */
+@
+
+\section{[[Proc]] and [[up]]}
+
+<<struct ArchProcMMU(x86)>>=
+struct Arch_ProcMMU
+{
+  <<[[Proc]] [[Arch]] memory fields(x86)>>
+};
+@
+
+<<macro up(x86)>>=
+// up = user process
+#define up (cpu->proc)
+@
+%history: 
+% Just like for 'cpu', we want 'up' to be something local to each processor.
+% up used to be '#define up ((MACH*)MACHADDR)->externup' because:
+% - doing just (m->externup) was conflicting with some functions using
+%   a local variables called 'm'. Indeed up is a macro, not a closure so
+%   any code introducing a local variable 'm' will not be able to use up
+%   => rename m to cpu so less conflict (still some but rare) 
+%   and can now do (cpu->externup)
+% - why externup? because in other architectures such as bcm one can do
+%     extern register Mach* m;			/* R10 */
+%     extern register Proc* up;			/* R9 */
+%   and so m and up are really extern registers (for sure local and different
+%   in each processor). On the PC we don't have that many registers so
+%   have to emulate per-processor data via the virtual memory and the CPUADDR
+%   trick
+% - => because in the end we don't use registers, there is no need
+%   to have both a cpu->proc and cpu->externup field, one can just
+%   use cpu->proc for up!
+
+\section{[[PCArch]] and [[arch]] (x86)}
+
+<<struct PCArch(x86)>>=
+struct PCArch
+{
+  char* id;
+
+  int (*ident)(void);   /* this should be in the model */
+  void  (*reset)(void);   /* this should be in the model */
+  void  (*resetothers)(void); /* put other cpus into reset */
+
+  // interrupts
+  <<[[PCArch]] interrupt methods fields(x86)>>
+  // clock, timer
+  <<[[PCArch]] time methods fields(x86)>>
+  // power
+  <<[[PCArch]] power methods fields(x86)>>
+};
+@ 
+
+% could add cycles and cmpswap here? and also pcmspecial, fps?
+
+<<global arch(x86)>>=
+PCArch* arch;
+@ 
+
+<<global archgeneric(x86)>>=
+PCArch archgeneric = {
+    .id=        "generic",
+    .ident=     nil,
+    .reset=     archreset,
+
+    // interrupt: Intel i8259 controller
+    <<[[archgeneric]] interrupt methods(x86)>>
+    // clock: Intel i8253 controller
+    <<[[archgeneric]] time methods(x86)>>
+    // power: none
+    <<[[archgeneric]] power methods(x86)>>
+};
+@
+% what ident is for?
+
+% SMP is more complex arch: 'archmp'
+
+\chapter{Concurrency}
+
+\section{[[arch_splhi()]], [[arch_spllo()]] (x86)}
+
+<<function splhi(x86)>>=
+// bool   arch_splhi(void);
+TEXT arch_splhi(SB), $0
+shi:
+        PUSHFL
+        POPL    AX
+        TESTL   $0x200, AX /* pad: interrupt bit */
+        JZ      alreadyhi
+        MOVL    $(CPUADDR+0x04), CX            /* save PC in cpu->splpc */
+        MOVL    (SP), BX
+        MOVL    BX, (CX)
+alreadyhi:
+        CLI
+        RET
+@ 
+%$
+% interrupt state is in x86 flags register, accessible via pushfl
+% cli
+
+<<function spllo(x86)>>=
+// bool   arch_spllo(void);
+TEXT arch_spllo(SB), $0
+slo:
+        PUSHFL
+        POPL    AX
+        TESTL   $0x200, AX
+        JNZ     alreadylo
+        MOVL    $(CPUADDR+0x04), CX            /* clear cpu->splpc */
+        MOVL    $0, (CX)
+alreadylo:
+        STI
+        RET
+@ 
+%sti
+
+<<function splx(x86)>>=
+// void    arch_splx(bool);
+TEXT arch_splx(SB), $0
+        MOVL    s+0(FP), AX
+        TESTL   $0x200, AX
+        JNZ     slo
+        JMP     shi
+@ 
+% ref label in arch_splhi and spllot
 
 
+<<function islo(x86)>>=
+// bool arch_islo(void);
+TEXT arch_islo(SB), $0
+        PUSHFL
+        POPL    AX
+        ANDL    $0x200, AX                      /* interrupt enable flag */
+        RET
+@ 
+%$
+
+\section{[[arch_tas()]] (x86)}
+
+<<function tas(x86)>>=
+TEXT arch_tas(SB), $0
+        MOVL    $0xDEADDEAD, AX
+        MOVL    l+0(FP), BX
+        XCHGL   AX, (BX)                        /* lock->key */
+        RET
+@ 
+% XCHGL is atomic! can't have 2 cpu doing same thing at the same time
+% only one will win!
+
+%        // Exchange AX (0xDEADDEAD) to lock->key. So:
+%        //  - if the lock was not held, lock->key was 0 and so AX will be 0
+%        //     and lock->key will be 0xdeaddead
+%        //  - if the lock was held, AX will be 0xdeaddead and lock->key will
+%        //    still be 0xdeaddead.
+
+% return in AX, so can read that as what was the value in the lock, and if
+% nul then set it! So arch_tas() == 0 mean? arch_tas() == 0xDEADEAD mean?
+% return in AX see C conventions.
+
+% movl l+0(FP) is because we use 0(FP) and 8a forces the programmer
+% to give a name to accessed parameters. Used in debugger?
+
+\section{Atomic [[arch_xinc()]] and [[arch_xdec()]] (x86)}
+
+<<function _xinc(x86)>>=
+/* void arch_xinc(long*); */
+TEXT arch_xinc(SB), $0
+        MOVL    l+0(FP), AX
+        LOCK;   INCL 0(AX)
+        RET
+@ 
 
 
+<<function _xdec(x86)>>=
+/* long arch_xdec(long*); */
+TEXT arch_xdec(SB), $0
+        MOVL    l+0(FP), BX
+        XORL    AX, AX
+        LOCK;   DECL 0(BX)
+        JLT     _xdeclt
+        JGT     _xdecgt
+        RET
+_xdecgt:
+        INCL    AX
+        RET
+_xdeclt:
+        DECL    AX
+        RET
+@ 
 
 
+\section{[[arch_coherence()]] (x86)}
 
+% originally set to nop, but then can be set to functions
+% below via arch device
 
-
-
-
-
-
-
-
-
+<<function mb386(x86)>>=
+TEXT mb386(SB), $0
+        POPL    AX                              /* return PC */
+        PUSHFL
+        PUSHL   CS
+        PUSHL   AX
+        IRETL
+@
+<<function mb586(x86)>>=
+TEXT mb586(SB), $0
+        XORL    AX, AX
+        CPUID
+        RET
+@
+<<function mfence(x86)>>=
+TEXT mfence(SB), $0
+        BYTE $0x0f
+        BYTE $0xae
+        BYTE $0xf0
+        RET
+@
 
 \part{Files}
 
@@ -493,23 +850,11 @@ didnt:
 
 #define CPUID           BYTE $0x0F; BYTE $0xA2  /* CPUID, argument in AX */
 
-TEXT mb386(SB), $0
-        POPL    AX                              /* return PC */
-        PUSHFL
-        PUSHL   CS
-        PUSHL   AX
-        IRETL
+<<function mb386(x86)>>
 
-TEXT mb586(SB), $0
-        XORL    AX, AX
-        CPUID
-        RET
+<<function mb586(x86)>>
 
-TEXT mfence(SB), $0
-        BYTE $0x0f
-        BYTE $0xae
-        BYTE $0xf0
-        RET
+<<function mfence(x86)>>
 
 @
 %$
