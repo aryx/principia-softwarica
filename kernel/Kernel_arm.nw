@@ -1,23 +1,6 @@
 \part{In Kernel main text}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 \part{Files}
 
 \section{[[include/arm/]]}
@@ -40,35 +23,45 @@ enum {
 };
 @
 
-<<struct Soc(arm)>>=
-struct Soc {            /* SoC dependent configuration */
-    ulong   dramsize;
 
-    uintptr physio;
-    uintptr busdram;
-    uintptr busio;
-    uintptr armlocal;
-
-    u32int  l1ptedramattrs;
-    u32int  l2ptedramattrs;
-};
+<<[[Soc]] mmu fields>>=
+u32int  l1ptedramattrs;
+u32int  l2ptedramattrs;
 @
 
+<<[[Soc]] other fields>>=
+uintptr armlocal;
+@
+
+<<[[soc(raspberry pi1)]] other fields>>=
+.armlocal   = 0,
+@
+
+<<[[soc(raspberry pi1)]] other fields>>=
+.l1ptedramattrs = Cached | Buffered,
+.l2ptedramattrs = Cached | Buffered,
+@
 
 %-------------------------------------------------------------
 
 <<arch/arm/dat_arch.h>>=
 
 <<enum _anon_ (arch/arm/dat_arch.h)(arm)>>
-
-typedef struct Soc Soc;
-
 <<struct Soc(arm)>>
 extern Soc soc;
 @
 
 
 \subsection*{[[arch/arm/arm.h]]}
+
+<<type PsrArith(arm)>>=
+#define PsrV        0x10000000      /* overflow */
+#define PsrC        0x20000000      /* carry/borrow/extend */
+#define PsrZ        0x40000000      /* zero */
+#define PsrN        0x80000000      /* negative/less than */
+@
+%dead?
+
 
 <<arch/arm/arm.h>>=
 /*
@@ -79,23 +72,11 @@ extern Soc soc;
 /*
  * Program Status Registers
  */
-#define PsrMusr     0x00000010      /* mode */
-#define PsrMfiq     0x00000011
-#define PsrMirq     0x00000012
-#define PsrMsvc     0x00000013  /* `protected mode for OS' */
-#define PsrMmon     0x00000016  /* `secure monitor' (trustzone hyper) */
-#define PsrMabt     0x00000017
-#define PsrMund     0x0000001B
-#define PsrMsys     0x0000001F  /* `privileged user mode for OS' (trustzone) */
-#define PsrMask     0x0000001F
+<<type PsrMode(arm)>>
 
-#define PsrDfiq     0x00000040      /* disable FIQ interrupts */
-#define PsrDirq     0x00000080      /* disable IRQ interrupts */
+<<type PsrDisable(arm)>>
 
-#define PsrV        0x10000000      /* overflow */
-#define PsrC        0x20000000      /* carry/borrow/extend */
-#define PsrZ        0x40000000      /* zero */
-#define PsrN        0x80000000      /* negative/less than */
+<<type PsrArith(arm)>>
 
 /* instruction decoding */
 #define ISCPOP(op)  ((op) == 0xE || ((op) & ~1) == 0xC)
@@ -105,28 +86,12 @@ extern Soc soc;
 /*
  * Coprocessors
  */
-#define CpOFPA      1           /* ancient 7500 FPA */
-#define CpFP        10          /* float FP, VFP cfg. */
-#define CpDFP       11          /* double FP */
-#define CpSC        15          /* System Control */
+<<type coprocessors(arm)>>
 
 /*
  * Primary (CRn) CpSC registers.
  */
-#define CpID        0           /* ID and cache type */
-#define CpCONTROL   1           /* miscellaneous control */
-#define CpTTB       2           /* Translation Table Base(s) */
-#define CpDAC       3           /* Domain Access Control */
-#define CpFSR       5           /* Fault Status */
-#define CpFAR       6           /* Fault Address */
-#define CpCACHE     7           /* cache/write buffer control */
-#define CpTLB       8           /* TLB control */
-#define CpCLD       9           /* L2 Cache Lockdown, op1==1 */
-#define CpTLD       10          /* TLB Lockdown, with op2 */
-#define CpVECS      12          /* vector bases, op1==0, Crm==0, op2s (cortex) */
-#define CpPID       13          /* Process ID */
-#define CpTIMER     14          /* Generic timer (cortex-a7) */
-#define CpSPM       15          /* system performance monitor (arm1176) */
+<<type PrimaryCpSCRegisters>>
 
 /*
  * CpTIMER op1==0 Crm and opcode2 registers (cortex-a7)
@@ -229,29 +194,10 @@ extern Soc soc;
 
 #define CpSCRscr    0
 
-/*
- * CpCACHE Secondary (CRm) registers and opcode2 fields.  op1==0.
- * In ARM-speak, 'flush' means invalidate and 'clean' means writeback.
- */
-#define CpCACHEintr 0           /* interrupt (op2==4) */
-#define CpCACHEisi  1           /* inner-sharable I cache (v7) */
-#define CpCACHEpaddr    4           /* 0: phys. addr (cortex) */
-#define CpCACHEinvi 5           /* instruction, branch table */
-#define CpCACHEinvd 6           /* data or unified */
-#define CpCACHEinvu 7           /* unified (not on cortex) */
-#define CpCACHEva2pa    8           /* va -> pa translation (cortex) */
-#define CpCACHEwb   10          /* writeback to PoC */
-#define CpCACHEwbu  11          /* writeback to PoU */
-#define CpCACHEwbi  14          /* writeback+invalidate (to PoC) */
+<<type CpCacheRegister>>
 
-#define CpCACHEall  0           /* entire (not for invd nor wb(i) on cortex) */
-#define CpCACHEse   1           /* single entry */
-#define CpCACHEsi   2           /* set/index (set/way) */
-#define CpCACHEtest 3           /* test loop */
-#define CpCACHEwait 4           /* wait (prefetch flush on cortex) */
-#define CpCACHEdmbarr   5           /* wb only (cortex) */
-#define CpCACHEflushbtc 6           /* flush branch-target cache (cortex) */
-#define CpCACHEflushbtse 7          /* ⋯ or just one entry in it (cortex) */
+<<type CpCacheOpcode>>
+
 
 /*
  * CpTLB Secondary (CRm) registers and opcode2 fields.
@@ -412,15 +358,11 @@ extern Soc soc;
  * new instructions
  */
 
-#define ISB \
-    MOVW    $0, R0; \
-    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEwait
+<<instruction ISB(arm)>>
+<<instruction DSB(arm)>>
+<<instruction BARRIERS(arm)>>
 
-#define DSB \
-    MOVW    $0, R0; \
-    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEwait
 
-#define BARRIERS    ISB; DSB
 
 #define MCRR(coproc, op, rd, rn, crm) \
     WORD $(0xec400000|(rn)<<16|(rd)<<12|(coproc)<<8|(op)<<4|(crm))
@@ -745,6 +687,31 @@ fprestreg(int fpreg, uvlong val)
 @
 % >>
 
+<<function fpsavereg(arm)>>=
+ulong
+fpsavereg(int fpreg, uvlong *fpp)
+{
+    int s, r;
+    volatile ulong instr[2];
+    ulong (*fp)(uvlong *);
+
+    if (!cpu->fpon)
+        panic("fpsavereg: cpu%d fpu off", cpu->cpuno);
+    s = arch_splhi();
+    /*
+     * VSTR.  pointer will be in R0, which is convenient.
+     * Rt will be R0.
+     */
+    setupfpop(instr, 0xed000000 | CpDFP << 8, fpreg);
+    fp = (ulong (*)(uvlong *))instr;
+    r = fp(fpp);
+    arch_splx(s);
+    arch_coherence();
+    return r;           /* not too meaningful */
+}
+@
+% >> >>
+
 %-------------------------------------------------------------
 
 <<arch/arm/coproc.c>>=
@@ -793,27 +760,7 @@ typedef void  (*Pvfu)(ulong);
 
 <<function setupfpop(arm)>>
 
-ulong
-fpsavereg(int fpreg, uvlong *fpp)
-{
-    int s, r;
-    volatile ulong instr[2];
-    ulong (*fp)(uvlong *);
-
-    if (!cpu->fpon)
-        panic("fpsavereg: cpu%d fpu off", cpu->cpuno);
-    s = arch_splhi();
-    /*
-     * VSTR.  pointer will be in R0, which is convenient.
-     * Rt will be R0.
-     */
-    setupfpop(instr, 0xed000000 | CpDFP << 8, fpreg);
-    fp = (ulong (*)(uvlong *))instr;
-    r = fp(fpp);
-    arch_splx(s);
-    arch_coherence();
-    return r;           /* not too meaningful */
-}
+<<function fpsavereg(arm)>>
 
 <<function fprestreg(arm)>>
 @
@@ -1281,44 +1228,20 @@ typedef struct Prophdr Prophdr;
 #include "arm.h"
 #include "arminstr.ha"
 
-TEXT arch_splhi(SB), 1, $-4
-    MOVW    $(CPUADDR+4), R2        /* save caller pc in Mach */
-    MOVW    R14, 0(R2)
+<<function arch_splhi(arm)>>
 
-    MOVW    CPSR, R0            /* turn off irqs (but not fiqs) */
-    ORR $(PsrDirq), R0, R1
-    MOVW    R1, CPSR
-    RET
+<<function arch_spllo(arm)>>
 
-TEXT arch_spllo(SB), 1, $-4
-    MOVW    CPSR, R0            /* turn on irqs and fiqs */
-    BIC $(PsrDirq|PsrDfiq), R0, R1
-    MOVW    R1, CPSR
-    RET
-
-TEXT arch_splx(SB), 1, $-4
-    MOVW    $(CPUADDR+4), R2        /* save caller pc in Mach */
-    MOVW    R14, 0(R2)
-
-    MOVW    R0, R1              /* reset interrupt level */
-    MOVW    CPSR, R0
-    MOVW    R1, CPSR
-    RET
+<<function arch_spllx(arm)>>
 
 TEXT spldone(SB), 1, $0             /* end marker for devkprof.c */
     RET
 
-TEXT arch_islo(SB), 1, $-4
-    MOVW    CPSR, R0
-    AND $(PsrDirq), R0
-    EOR $(PsrDirq), R0
-    RET
+<<function arch_islo(arm)>>
 
 
-      
-TEXT arm_arch_coherence(SB), $-4
-    BARRIERS
-    RET
+
+<<function arm_arch_coherence(arm)>>
 
 
 // FIQ
@@ -1342,41 +1265,15 @@ TEXT splflo(SB), 1, $-4
 \subsection*{[[concurrency/arm/tas_raspi1.s]]}
 
 <<concurrency/arm/tas_raspi1.s>>=
-TEXT    arch_tas(SB), $-4
 TEXT    _tas(SB), $-4
-    MOVW    R0,R1
-    MOVW    $1,R0
-    SWPW    R0,(R1)         /* fix: deprecated in armv6 */
-    RET
+<<function arch_tas(arm)(raspberry pi1)>>
 @
 %$
+% _tas used??
 
 \subsection*{[[concurrency/arm/concurrency_raspi1.c]]}
 
-<<function arch_xdec(arm)>>=
-long
-arch_xdec(long *p)
-{
-    int s, v;
 
-    s = arch_splhi();
-    v = --*p;
-    arch_splx(s);
-    return v;
-}
-@
-
-<<function arch_xinc(arm)>>=
-void
-arch_xinc(long *p)
-{
-    int s;
-
-    s = arch_splhi();
-    ++*p;
-    arch_splx(s);
-}
-@
 
 <<function ainc(arm)>>=
 // overwrite libc!
@@ -1481,56 +1378,18 @@ arch_cmpswap(long *addr, long old, long new)
 <<constant STAGESIZE(arm)>>
 <<constant KMESGSIZE(arm)>>
 
-// pad memory pointers (used in Lock so must be early)
-// physical address
-typedef uintptr phys_addr;
-// virtual address (which should be a user address)
-typedef uintptr virt_addr;
-// kernel address (mostly physical + KZERO)
-typedef uintptr kern_addr;
+// pad's memory pointers (used in Lock so must be early)
+<<pad memory pointer types(arm)>>
 
-typedef ulong* kern_addr2;
-typedef ulong* virt_addr2;
-typedef void* virt_addr3;
-typedef void* kern_addr3;
-
-
-#include "dat_forward.h"
-#include "../port/portdat_forward.h"
-// defines Lock (used inline in Cpu in portdat_core.h so must be before)
-#include "../port/portdat_concurrency.h"
-// defines Conf, Cpu, ... Label
-#include "dat_core.h"
-#include "../port/portdat_core.h"
-// defines Page, Pagetable, Segment, KImage
-#include "dat_memory.h"
-#include "../port/portdat_memory.h"
-// defines Chan
-#include "../port/portdat_files.h"
-// defines Soc
-#include "dat_arch.h"
-// defines Timer
-#include "dat_time.h"
-#include "../port/portdat_time.h"
-// defines Proc
-#include "dat_processes.h"
-#include "../port/portdat_processes.h"
-// defines Cmd
-#include "../port/portdat_misc.h"
-// defines Uart
-#include "../port/portdat_buses.h"
-// defines keyboard queue, consdevtab
-#include "../port/portdat_console.h"
-// defines DevConf, DevPort (not that used)
-#include "../port/portdat_devices.h"
+<<dat.h includes(arm)>>
 
 // DO NOT switch those declarations. 5c allocates R10
 // for the first 'extern register' declaration seen in a file
 // and R9 for the second one. See Compiler.nw.
 // Then mem.h relies on this to define the UP and CPU macros used
 // inside assembly code.
-extern register Cpu* cpu;           /* R10 */
-extern register Proc* up;           /* R9 */
+<<global cpu(arm)>>
+<<global up(arm)>>
 
 // in main.c (used in mmu.c)
 extern ulong memsize;
@@ -1559,50 +1418,54 @@ struct MMMU
 };
 @
 
-<<struct Arch_Cpu(arm)>>=
-struct Arch_Cpu {
-    MMMU;
-
-    Lock    alarmlock;      /* access to alarm list */
-    void*   alarm;          /* alarms bound to this clock */
-
-    int cputype;
-    ulong   delayloop;
-
-    /* stats */
-
-    uvlong  fastclock;      /* last sampled value */
-
-    int lastintr;
-
-    /* vfp2 or vfp3 fpu */
-    int havefp;
-    int havefpvalid;
-    int fpon;
-    int fpconfiged;
-    int fpnregs;
-    ulong   fpscr;          /* sw copy */
-    int fppid;          /* pid of last fault */
-    uintptr fppc;           /* addr of last fault */
-    int fpcnt;          /* how many consecutive at that addr */
-
-    /* save areas for exceptions, hold R0-R4 */
-    u32int  sfiq[5];
-    u32int  sirq[5];
-    u32int  sund[5];
-    u32int  sabt[5];
-    u32int  smon[5];        /* probably not needed */
-    u32int  ssys[5];
-
-};
+<<[[Cpu]] [[Arch]] mmu fields(arm)>>=
+MMMU;
 @
 
+<<[[Cpu]] [[Arch]] float fields(arm)>>=
+/* vfp2 or vfp3 fpu */
+int havefp;
+int havefpvalid;
+int fpon;
+int fpconfiged;
+int fpnregs;
+ulong   fpscr;          /* sw copy */
+int fppid;          /* pid of last fault */
+uintptr fppc;           /* addr of last fault */
+int fpcnt;          /* how many consecutive at that addr */
+@
+<<[[Cpu]] [[Arch]] save of first five registers fields(arm)>>=
+/* save areas for exceptions, hold R0-R4 */
+u32int  sfiq[5];
+u32int  sirq[5];
+u32int  sund[5];
+u32int  sabt[5];
+u32int  smon[5];        /* probably not needed */
+u32int  ssys[5];
+@
+<<[[Cpu]] [[Arch]] other fields(arm)>>=
+Lock    alarmlock;      /* access to alarm list */
+void*   alarm;          /* alarms bound to this clock */
+
+int cputype;
+ulong   delayloop;
+
+/* stats */
+
+uvlong  fastclock;      /* last sampled value */
+
+int lastintr;
+@
+
+<<type PTE(arm)>>=
+typedef u32int      PTE;
+@
 
 %-------------------------------------------------------------
 
 <<core/arm/dat_core.h>>=
 
-typedef u32int      PTE;
+<<type PTE(arm)>>
 
 <<struct MMMU(arm)>>
 
@@ -1620,6 +1483,7 @@ typedef u32int      PTE;
 
 typedef struct Arch_FPsave  Arch_FPsave;
 typedef struct MMMU MMMU;
+typedef struct Soc Soc;
 
 typedef struct Ureg Ureg;
 #pragma incomplete Ureg
@@ -1653,21 +1517,8 @@ typedef struct Ureg Ureg;
 #define sdmalloc(n) mallocalign(n, BLOCKALIGN, 0, 0)
 @
 
-<<macro PTR2UINT(arm)>>=
-#define PTR2UINT(p) ((uintptr)(p))
-@
 
-<<macro UINT2PTR(arm)>>=
-#define UINT2PTR(i) ((void*)(i))
-@
 
-<<macro KADDR(arm)>>=
-#define KADDR(pa)   UINT2PTR(KZERO    | ((uintptr)(pa) & ~KSEGM))
-@
-
-<<macro PADDR(arm)>>=
-#define PADDR(va)   PTR2UINT(PHYSDRAM | ((uintptr)(va) & ~KSEGM))
-@
 
 <<macro MASK(arm)>>=
 #define MASK(v) ((1UL << (v)) - 1)  /* mask `v' bits wide */
@@ -1677,21 +1528,8 @@ typedef struct Ureg Ureg;
 %-------------------------------------------------------------
 
 <<core/arm/fns.h>>=
-#include "../port/portfns_core.h"
-#include "../port/portfns_concurrency.h"
-#include "../port/portfns_memory.h"
-#include "../port/portfns_files.h"
-#include "../port/portfns_time.h"
-#include "../port/portfns_interrupts.h"
-#include "../port/portfns_processes.h"
-#include "../port/portfns_misc.h"
-#include "../port/portfns_console.h"
-#include "../port/portfns_buses.h"
-#include "../port/portfns_devices.h"
-#include "../port/portfns_security.h"
-#include "../port/portfns_network.h"
-#include "../port/portfns_syscalls.h"
-#include "../port/portfns_init.h"
+
+<<fns.h includes(arm)>>
 
 // not classified yet
 void arch_cpuidprint(void);
@@ -1762,7 +1600,6 @@ extern int dmawait(int);
 extern int fbblank(int);
 extern void* fbinit(bool, int*, int*, int*);
 
-extern u32int farget(void);
 
 extern void fpon(void);
 extern ulong fprd(int fpreg);
@@ -1770,7 +1607,9 @@ extern void fprestreg(int fpreg, uvlong val);
 extern void fpsave(Arch_FPsave *);
 extern ulong fpsavereg(int fpreg, uvlong *fpp);
 extern void fpwr(int fpreg, ulong val);
+
 extern u32int fsrget(void);
+extern u32int farget(void);
 
 // vcore.c
 extern uint getboardrev(void);
@@ -3744,58 +3583,7 @@ dmainterrupt(Ureg*, void *a)
 @
 
 
-%-------------------------------------------------------------
-
-<<buses/arm/dma.c>>=
-/*
- * bcm2835 dma controller
- *
- * simplest to use only channels 0-6
- *  channels 7-14 have reduced functionality
- *  channel 15 is at a weird address
- *  channels 0 and 15 have an "external 128 bit 8 word read FIFO"
- *    for memory to memory transfers
- *
- * Experiments show that only channels 2-5,11-12 work with mmc
- */
-
-#include "u.h"
-#include "../port/lib.h"
-#include "../port/error.h"
-#include "mem.h"
-#include "dat.h"
-#include "fns.h"
-
-#include "io.h"
-
-<<constant DMAREGS(arm)>>
-
-#define DBG if(Dbg)
-
-<<enum _anon_ (buses/arm/dma.c)(arm)>>
-
-typedef struct Ctlr Ctlr;
-typedef struct Cb Cb;
-
-<<struct Ctlr(arm)>>
-
-<<struct Cb(arm)>>
-
-<<global dma(arm)>>
-<<global dmaregs(arm)>>
-
-<<function dmaaddr(arm)>>
-
-<<function dmaioaddr(arm)>>
-
-<<function dump(arm)>>
-
-<<function dumpdregs(arm)>>
-
-<<function dmadone(arm)>>
-
-<<function dmainterrupt(arm)>>
-
+<<function dmastart(arm)>>=
 void
 dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
 {
@@ -3857,7 +3645,9 @@ dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
     ctlr->regs[Cs] = Active;
     DBG dumpdregs("after Active", ctlr->regs);
 }
+@
 
+<<function dmawait(arm)>>=
 int
 dmawait(int chan)
 {
@@ -3881,6 +3671,64 @@ dmawait(int chan)
     r[Cs] = Int|End;
     return 0;
 }
+@
+
+%-------------------------------------------------------------
+
+<<buses/arm/dma.c>>=
+/*
+ * bcm2835 dma controller
+ *
+ * simplest to use only channels 0-6
+ *  channels 7-14 have reduced functionality
+ *  channel 15 is at a weird address
+ *  channels 0 and 15 have an "external 128 bit 8 word read FIFO"
+ *    for memory to memory transfers
+ *
+ * Experiments show that only channels 2-5,11-12 work with mmc
+ */
+
+#include "u.h"
+#include "../port/lib.h"
+#include "../port/error.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+
+#include "io.h"
+
+<<constant DMAREGS(arm)>>
+
+#define DBG if(Dbg)
+
+<<enum _anon_ (buses/arm/dma.c)(arm)>>
+
+typedef struct Ctlr Ctlr;
+typedef struct Cb Cb;
+
+<<struct Ctlr(arm)>>
+
+<<struct Cb(arm)>>
+
+<<global dma(arm)>>
+<<global dmaregs(arm)>>
+
+<<function dmaaddr(arm)>>
+
+<<function dmaioaddr(arm)>>
+
+<<function dump(arm)>>
+
+<<function dumpdregs(arm)>>
+
+<<function dmadone(arm)>>
+
+<<function dmainterrupt(arm)>>
+
+<<function dmastart(arm)>>
+
+<<function dmawait(arm)>>
+
 @
 
 
@@ -7887,19 +7735,6 @@ extern uintptr bootargs(uintptr base);
 
 \subsection*{[[init/arm/raspi1.c]]}
 
-<<global soc(arm)>>=
-Soc soc = {
-    .dramsize   = 512*MiB,    // 0 to 0x20000000
-
-    .physio     = 0x20000000, // after RAM
-    .busdram    = 0x40000000,
-    .busio      = 0x7E000000,
-    .armlocal   = 0,
-
-    .l1ptedramattrs = Cached | Buffered,
-    .l2ptedramattrs = Cached | Buffered,
-};
-@
 
 <<function cputype2name(arm)>>=
 char*
@@ -7978,7 +7813,7 @@ l2ap(int ap)
 #include "../port/netif.h"
 #include "../port/etherif.h"
 
-<<global soc(arm)>>
+<<global soc(arm)(raspberry pi1)>>
 
     
 <<function cputype2name(arm)>>
@@ -8556,12 +8391,9 @@ TEXT cachesoff(SB), 1, $-4
 #define NCOLOR  1       /* 1 level cache, don't worry about VCE's */
 @
 
-<<struct Arch_ProcMMU(arm)>>=
-struct Arch_ProcMMU
-{
-    Page*   mmul2;
-    Page*   mmul2cache; /* free mmu pages */
-};
+<<[[Proc]] [[Arch]] memory fields(arm)>>=
+Page*   mmul2;
+Page*   mmul2cache; /* free mmu pages */
 @
 
 <<macro VA(arm)>>=
@@ -8614,13 +8446,7 @@ typedef void        Arch_KMap;
 #define PGSHIFT     12          /* log(BY2PG) */
 @
 
-<<constant MAXCPUS(arm)>>=
-#define MAXCPUS     4           /* max # cpus system can run */
-@
 
-<<constant CPUSIZE(arm)>>=
-#define CPUSIZE BY2PG
-@
 
 <<constant L1SIZE(arm)>>=
 #define L1SIZE      (4 * BY2PG)
@@ -8646,37 +8472,13 @@ typedef void        Arch_KMap;
 #define CPU     10      /* R10 is cpu-> */
 @
 
-<<constant KSEG0(arm)>>=
-/*
- * Address spaces.
- * KTZERO is used by kprof and dumpstack (if any).
- *
- * KZERO is mapped to physical 0 (start of ram).
- *
- * vectors are at 0, plan9.ini is at KZERO+256 and is limited to 16K by
- * devenv.
- */
 
-#define KSEG0       0x80000000      /* kernel segment */
-@
 
-<<constant KSEGM(arm)>>=
-/* mask to check segment; good for 1GB dram */
-#define KSEGM       0xC0000000
-@
-
-<<constant KZERO(arm)>>=
-#define KZERO       KSEG0           /* kernel address space */
-@
 
 <<constant CONFADDR(arm)>>=
 #define CONFADDR    (KZERO+0x100)       /* unparsed plan9.ini */
 @
 
-<<constant CPUADDR(arm)>>=
-// L1 must be 16KiB aligned so this dictates the organization below
-#define CPUADDR     (KZERO+0x2000)      /* Cpu structure */
-@
 
 <<constant L2(arm)>>=
 #define L2          (KZERO+0x3000)      /* L2 ptes for vectors etc */
@@ -8694,9 +8496,6 @@ typedef void        Arch_KMap;
 #define L1          (KZERO+0x4000)      /* ttb ptes: 16KiB aligned */
 @
 
-<<constant KTZERO(arm)>>=
-#define KTZERO      (KZERO+0x8000)      /* kernel text start */
-@
 
 <<constant VIRTIO(arm)>>=
 #define VIRTIO      0x7E000000      /* i/o registers */
@@ -8706,13 +8505,6 @@ typedef void        Arch_KMap;
 #define FRAMEBUFFER 0xC0000000      /* video framebuffer */
 @
 
-<<constant UZERO(arm)>>=
-#define UZERO       0           /* user segment */
-@
-
-<<constant UTZERO(arm)>>=
-#define UTZERO      (UZERO+BY2PG)       /* user text start */
-@
 
 <<macro UTROUND(arm)>>=
 #define UTROUND(t)  ROUNDUP((t), BY2PG)
@@ -8811,19 +8603,11 @@ typedef void        Arch_KMap;
 #define PTEKERNEL   (1<<3)
 @
 
-<<constant PHYSDRAM(arm)>>=
-/*
- * Physical machine information from here on.
- *  PHYS addresses as seen from the arm cpu.
- *  BUS  addresses as seen from the videocore gpu.
- */
-#define PHYSDRAM    0
-@
 
 <<constant IOSIZE(arm)>>=
 #define IOSIZE      (16*MiB)
 @
-
+%BUS  addresses as seen from the videocore gpu.
 
 %-------------------------------------------------------------
 
@@ -8845,6 +8629,15 @@ typedef void        Arch_KMap;
 <<constant UP(arm)>>
 <<constant CPU(arm)>>
 
+/*
+ * Address spaces.
+ * KTZERO is used by kprof and dumpstack (if any).
+ *
+ * KZERO is mapped to physical 0 (start of ram).
+ *
+ * vectors are at 0, plan9.ini is at KZERO+256 and is limited to 16K by
+ * devenv.
+ */
 <<constant KSEG0(arm)>>
 <<constant KSEGM(arm)>>
 
@@ -8852,6 +8645,7 @@ typedef void        Arch_KMap;
 
 <<constant CONFADDR(arm)>>
 
+// L1 must be 16KiB aligned so this dictates the organization below
 <<constant CPUADDR(arm)>>
 <<constant L2(arm)>>
 <<constant VCBUFFER(arm)>>
@@ -8897,6 +8691,11 @@ typedef void        Arch_KMap;
 <<constant PTEUNCACHED(arm)>>
 <<constant PTEKERNEL(arm)>>
 
+/*
+ * Physical machine information from here on.
+ *  PHYS addresses as seen from the arm cpu.
+ *  BUS  addresses as seen from the videocore gpu.
+ */
 <<constant PHYSDRAM(arm)>>
 <<constant IOSIZE(arm)>>
 @
@@ -9247,19 +9046,6 @@ mmuuncache(void* v, usize size)
 }
 @
 
-<<function arch_cankaddr(arm)>>=
-/*
- * Return the number of bytes that can be accessed via KADDR(pa).
- * If pa is not a valid argument to KADDR, return 0.
- */
-uintptr
-arch_cankaddr(uintptr pa)
-{
-    if(pa < memsize)        /* assumes PHYSDRAM is 0 */
-        return memsize - pa;
-    return 0;
-}
-@
 
 <<function mmukmap(arm)>>=
 uintptr
@@ -9305,6 +9091,7 @@ arch_kmap(Page *p) {
 @
 
 <<function arch_kunmap(arm)>>=
+//old: #define   kunmap(k)
 void
 arch_kunmap(Arch_KMap *k)
 {
@@ -9361,9 +9148,6 @@ arch_kunmap(Arch_KMap *k)
 <<function arch_kmap(arm)>>
 
 <<function arch_kunmap(arm)>>
-
-
-//#define   kunmap(k)
 @
 
 
@@ -9573,18 +9357,6 @@ static Vctl *vctl;
 static Vctl *vfiq;
 @
 
-<<global trapnames(arm)>>=
-static char *trapnames[PsrMask+1] = {
-    [ PsrMusr ] "user mode",
-    [ PsrMfiq ] "fiq interrupt",
-    [ PsrMirq ] "irq interrupt",
-    [ PsrMsvc ] "svc/swi exception",
-    [ PsrMabt ] "prefetch abort/data abort",
-    [ PsrMabt+1 ] "data abort",
-    [ PsrMund ] "undefined instruction",
-    [ PsrMsys ] "sys trap",
-};
-@
 
 <<function arch_trapinit(arm)>>=
 /*
@@ -10554,12 +10326,6 @@ TEXT setr13(SB), 1, $-4
 \subsection*{[[time/arm/dat_time.h]]}
 
 <<constant Arch_HZ(arm)>>=
-/*
- * Time.
- *
- * HZ should divide 1000 evenly, ideally.
- * 100, 125, 200, 250 and 333 are okay.
- */
 #define Arch_HZ     100         /* clock frequency */
 @
 
@@ -10567,6 +10333,12 @@ TEXT setr13(SB), 1, $-4
 %-------------------------------------------------------------
 
 <<time/arm/dat_time.h>>=
+/*
+ * Time.
+ *
+ * HZ should divide 1000 evenly, ideally.
+ * 100, 125, 200, 250 and 333 are okay.
+ */
 <<constant Arch_HZ(arm)>>
 
 // was vlong in x86
