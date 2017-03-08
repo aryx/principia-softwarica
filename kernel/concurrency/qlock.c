@@ -28,13 +28,14 @@ qlock(QLock *q)
 {
     Proc *p;
 
+    /*s: [[qlock()]] sanity checks */
     if(cpu->ilockdepth != 0)
         print("qlock: %#p: ilockdepth %d\n", getcallerpc(&q), cpu->ilockdepth);
     if(up != nil && up->nlocks.ref)
         print("qlock: %#p: nlocks %lud\n", getcallerpc(&q), up->nlocks.ref);
     if(q->use.key == 0x55555555) // dead code??
         panic("qlock: q %#p, key 5*\n", q);
-
+    /*e: [[qlock()]] sanity checks */
     lock(&q->use);
     rwstats.qlock++;
     if(!q->locked) {
@@ -43,6 +44,7 @@ qlock(QLock *q)
         unlock(&q->use);
         return;
     }
+    // else
     if(up == nil)
         panic("qlock");
     rwstats.qlockq++;
@@ -79,6 +81,8 @@ canqlock(QLock *q)
         unlock(&q->use);
         return false;
     }
+    // else
+
     q->locked = true;
     q->qpc = getcallerpc(&q);
     unlock(&q->use);
@@ -93,9 +97,11 @@ qunlock(QLock *q)
     Proc *p;
 
     lock(&q->use);
-    if (q->locked == false)
+    /*s: [[qunlock()]] sanity checks */
+    if(q->locked == false)
         print("qunlock called with qlock not held, from %#p\n",
             getcallerpc(&q));
+    /*e: [[qunlock()]] sanity checks */
 
     p = q->head;
     if(p){

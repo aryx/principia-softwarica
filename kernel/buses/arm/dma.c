@@ -172,6 +172,7 @@ dmainterrupt(Ureg*, void *a)
 }
 /*e: function dmainterrupt(arm) */
 
+/*s: function dmastart(arm) */
 void
 dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
 {
@@ -233,7 +234,9 @@ dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
     ctlr->regs[Cs] = Active;
     DBG dumpdregs("after Active", ctlr->regs);
 }
+/*e: function dmastart(arm) */
 
+/*s: function dmawait(arm) */
 int
 dmawait(int chan)
 {
@@ -257,4 +260,6 @@ dmawait(int chan)
     r[Cs] = Int|End;
     return 0;
 }
+/*e: function dmawait(arm) */
+
 /*e: buses/arm/dma.c */

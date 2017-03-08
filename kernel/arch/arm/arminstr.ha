@@ -13,15 +13,21 @@
  * new instructions
  */
 
+/*s: instruction ISB(arm) */
 #define ISB \
     MOVW    $0, R0; \
     MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEwait
-
+/*e: instruction ISB(arm) */
+/*s: instruction DSB(arm) */
 #define DSB \
     MOVW    $0, R0; \
     MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEwait
-
+/*e: instruction DSB(arm) */
+/*s: instruction BARRIERS(arm) */
 #define BARRIERS    ISB; DSB
+/*e: instruction BARRIERS(arm) */
+
+
 
 #define MCRR(coproc, op, rd, rn, crm) \
     WORD $(0xec400000|(rn)<<16|(rd)<<12|(coproc)<<8|(op)<<4|(crm))

@@ -6,9 +6,6 @@ enum {
     Nfpctlregs  = 16,
 };
 /*e: enum _anon_ (arch/arm/dat_arch.h)(arm) */
-
-typedef struct Soc Soc;
-
 /*s: struct Soc(arm) */
 struct Soc {            /* SoC dependent configuration */
     ulong   dramsize;
@@ -16,10 +13,13 @@ struct Soc {            /* SoC dependent configuration */
     uintptr physio;
     uintptr busdram;
     uintptr busio;
-    uintptr armlocal;
-
+    /*s: [[Soc]] mmu fields */
     u32int  l1ptedramattrs;
     u32int  l2ptedramattrs;
+    /*e: [[Soc]] mmu fields */
+    /*s: [[Soc]] other fields */
+    uintptr armlocal;
+    /*e: [[Soc]] other fields */
 };
 /*e: struct Soc(arm) */
 extern Soc soc;

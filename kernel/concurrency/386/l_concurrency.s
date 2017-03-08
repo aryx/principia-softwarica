@@ -107,22 +107,28 @@ didnt:
 
 #define CPUID           BYTE $0x0F; BYTE $0xA2  /* CPUID, argument in AX */
 
+/*s: function mb386(x86) */
 TEXT mb386(SB), $0
         POPL    AX                              /* return PC */
         PUSHFL
         PUSHL   CS
         PUSHL   AX
         IRETL
+/*e: function mb386(x86) */
 
+/*s: function mb586(x86) */
 TEXT mb586(SB), $0
         XORL    AX, AX
         CPUID
         RET
+/*e: function mb586(x86) */
 
+/*s: function mfence(x86) */
 TEXT mfence(SB), $0
         BYTE $0x0f
         BYTE $0xae
         BYTE $0xf0
         RET
+/*e: function mfence(x86) */
 
 /*e: l_concurrency.s */

@@ -41,19 +41,19 @@ void (*dumpaproc)(Proc*) = nil;
 void (*cclose)(Chan*);
 
 
-// process/386/trap.c
+// process/<arch>/trap.c
 void (*arch_dumpstack)(void) = nil;
 
-// init/386/main.c
+// init/<arch>/main.c
 void (*arch_exit)(int ispanic) = nil;
 bool (*arch_isaconfig)(char*, int, ISAConf*) = nil;
 
-// misc/386/devarch.c
+// misc/<arch>/devarch.c
 void (*arch_coherence)(void) = nil;
-// misc/386/devarch.c
+// misc/<arch>/devarch.c
 uvlong (*arch_fastticks)(uvlong*) = nil;
 
-// processes/386/i8253.c
+// time/<arch>/time.c
 void (*arch_delay)(int) = nil;
 void (*arch_microdelay)(int) = nil;
 

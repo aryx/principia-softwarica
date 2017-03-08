@@ -237,7 +237,8 @@ struct Hole
     phys_addr addr; 
     phys_addr top; 
     ulong size; // top - addr
-    // extra
+
+    // Extra
     /*s: [[Hole]] extra fields */
     Hole* next; // list<ref<Hole>> of Xalloc.sorted_holes or Xalloc.unused_slots
     /*e: [[Hole]] extra fields */

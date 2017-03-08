@@ -19,9 +19,11 @@ Conf conf;
 // hash<string, string>
 char *confname[MAXCONF];
 char *confval[MAXCONF];
+/*e: globals confname and confvar */
+/*s: global nconf */
 // Hashtbl.length(confname)
 int nconf;
-/*e: globals confname and confvar */
+/*e: global nconf */
 
 /*s: function getconf */
 char* getconf2(char *name)

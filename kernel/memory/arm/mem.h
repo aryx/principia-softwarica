@@ -50,7 +50,6 @@
 #define CPU     10      /* R10 is cpu-> */
 /*e: constant CPU(arm) */
 
-/*s: constant KSEG0(arm) */
 /*
  * Address spaces.
  * KTZERO is used by kprof and dumpstack (if any).
@@ -60,7 +59,7 @@
  * vectors are at 0, plan9.ini is at KZERO+256 and is limited to 16K by
  * devenv.
  */
-
+/*s: constant KSEG0(arm) */
 #define KSEG0       0x80000000      /* kernel segment */
 /*e: constant KSEG0(arm) */
 /*s: constant KSEGM(arm) */
@@ -76,8 +75,8 @@
 #define CONFADDR    (KZERO+0x100)       /* unparsed plan9.ini */
 /*e: constant CONFADDR(arm) */
 
-/*s: constant CPUADDR(arm) */
 // L1 must be 16KiB aligned so this dictates the organization below
+/*s: constant CPUADDR(arm) */
 #define CPUADDR     (KZERO+0x2000)      /* Cpu structure */
 /*e: constant CPUADDR(arm) */
 /*s: constant L2(arm) */
@@ -195,12 +194,12 @@
 #define PTEKERNEL   (1<<3)
 /*e: constant PTEKERNEL(arm) */
 
-/*s: constant PHYSDRAM(arm) */
 /*
  * Physical machine information from here on.
  *  PHYS addresses as seen from the arm cpu.
  *  BUS  addresses as seen from the videocore gpu.
  */
+/*s: constant PHYSDRAM(arm) */
 #define PHYSDRAM    0
 /*e: constant PHYSDRAM(arm) */
 /*s: constant IOSIZE(arm) */

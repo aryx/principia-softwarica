@@ -123,8 +123,10 @@ Syscall *systab[] = {
 /*e: systab security syscalls */
     [ERRSTR]    syserrstr,
 };
-int nsyscall = nelem(systab);
 /*e: global systab */
+/*s: global nsyscall */
+int nsyscall = nelem(systab);
+/*e: global nsyscall */
 
 /*s: global sysstab */
 char *sysctab[] = {

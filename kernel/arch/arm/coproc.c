@@ -190,6 +190,7 @@ setupfpop(ulong instr[2], int opcode, int fpreg)
 }
 /*e: function setupfpop(arm) */
 
+/*s: function fpsavereg(arm) */
 ulong
 fpsavereg(int fpreg, uvlong *fpp)
 {
@@ -211,6 +212,7 @@ fpsavereg(int fpreg, uvlong *fpp)
     arch_coherence();
     return r;           /* not too meaningful */
 }
+/*e: function fpsavereg(arm) */
 
 /*s: function fprestreg(arm) */
 void

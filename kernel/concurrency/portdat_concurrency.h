@@ -11,16 +11,18 @@
 /*s: struct Lock */
 struct Lock
 {
-    ulong key; // 0 when unset, 0xDEADDEAD when acquired, could be a bool
+    ulong key; // 0 when unset, 1 (or 0xDEADDEAD) when acquired, could be a bool
+
     /*s: [[Lock]] ilock fields */
     bool_ushort isilock; // false when from lock(), true when from ilock()
     ulong sr; // saved priority level when using ilock() to restore in iunlock()
     /*e: [[Lock]] ilock fields */
     /*s: [[Lock]] debugging fields */
-    // option<ref<Proc>>, None when key == 0
-    Proc  *p; // the process who did the locking should be the same unlocking
     // for debugging, the caller who did the lock()
     kern_addr pc; 
+    /*x: [[Lock]] debugging fields */
+    // option<ref<Proc>>, None when key == 0
+    Proc  *p; // the process who did the locking should be the same unlocking
     /*x: [[Lock]] debugging fields */
     //#ifdef LOCKCYCLES
     long  lockcycles;
@@ -47,8 +49,10 @@ struct KQLock
     Proc  *head;    /* next process waiting for object */
     // option<ref<Proc>> (direct access to tail, queue)
     Proc  *tail;    /* last process waiting for object */
-  
+
+    /*s: [[KQLock]] debugging fields */
     kern_addr qpc;    /* pc of the holder */ // for debugging?
+    /*e: [[KQLock]] debugging fields */
   
     Lock  use;    /* to access Qlock structure */
 };

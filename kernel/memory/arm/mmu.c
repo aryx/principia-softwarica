@@ -406,13 +406,11 @@ arch_kmap(Page *p) {
 /*e: function arch_kmap(arm) */
 
 /*s: function arch_kunmap(arm) */
+//old: #define   kunmap(k)
 void
 arch_kunmap(Arch_KMap *k)
 {
     cachedwbinvse(k, BY2PG);
 }
 /*e: function arch_kunmap(arm) */
-
-
-//#define   kunmap(k)
 /*e: memory/arm/mmu.c */

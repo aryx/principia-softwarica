@@ -82,8 +82,10 @@ lock(Lock *l)
     pc = getcallerpc(&l);
 
     lockstats.locks++;
+    /*s: [[lock()]] increment nlocks */
     if(up)
         inccnt(&up->nlocks);    /* prevent being scheded */
+    /*e: [[lock()]] increment nlocks */
     if(arch_tas(&l->key) == 0){ // lock old value was 0, the lock was not held
         if(up)
             up->lastlock = l;
@@ -98,10 +100,13 @@ lock(Lock *l)
 /*e: lock ifdef LOCKCYCLES */
         return 0;
     }
+    //else
+    //the lock was already held, need to spin
 
-    // the lock was already held, need to spin
+    /*s: [[lock()]] decrement nlocks */
     if(up)
         deccnt(&up->nlocks);
+    /*e: [[lock()]] decrement nlocks */
 
     lockstats.glare++;
     for(;;){
@@ -125,8 +130,10 @@ lock(Lock *l)
             }
         }
         // try again
+        /*s: [[lock()]] increment nlocks */
         if(up)
-            inccnt(&up->nlocks);
+            inccnt(&up->nlocks);    /* prevent being scheded */
+        /*e: [[lock()]] increment nlocks */
         if(arch_tas(&l->key) == 0){
             if(up)
                 up->lastlock = l;
@@ -140,8 +147,10 @@ lock(Lock *l)
 /*e: lock ifdef LOCKCYCLES */
             return 1;
         }
+        /*s: [[lock()]] decrement nlocks */
         if(up)
             deccnt(&up->nlocks);
+        /*e: [[lock()]] decrement nlocks */
     }
     return -1; // unreachable
 }
@@ -202,13 +211,18 @@ acquire:
 bool
 canlock(Lock *l)
 {
+    /*s: [[lock()]] increment nlocks */
     if(up)
-        inccnt(&up->nlocks);
+        inccnt(&up->nlocks);    /* prevent being scheded */
+    /*e: [[lock()]] increment nlocks */
     if(arch_tas(&l->key) != 0){ // lock old value != 0, lock was already held
-        if(up)
-            deccnt(&up->nlocks);
+       /*s: [[lock()]] decrement nlocks */
+       if(up)
+           deccnt(&up->nlocks);
+       /*e: [[lock()]] decrement nlocks */
         return false;
     }
+    // else
 
     if(up)
         up->lastlock = l;
@@ -240,13 +254,14 @@ unlock(Lock *l)
 #endif
 /*e: unlock ifdef LOCKCYCLES */
 
+    /*s: [[unlock()]] sanity checks */
     if(l->key == 0)
         print("unlock: not locked: pc %#p\n", getcallerpc(&l));
     if(l->isilock)
         print("unlock of ilock: pc %lux, held by %lux\n", getcallerpc(&l), l->pc);
     if(l->p != up)
         print("unlock: up changed: pc %#p, acquired at pc %lux, lock p %#p, unlock up %#p\n", getcallerpc(&l), l->pc, l->p, up);
-
+    /*e: [[unlock()]] sanity checks */
     l->cpu = nil;
     l->key = 0;
     // for processor caches, to ensure the lock value is seen by other
@@ -284,13 +299,14 @@ iunlock(Lock *l)
         ilockpcs[n++ & 0xff]  = l->pc;
 #endif
 /*e: iunlock ifdef LOCKCYCLES */
+    /*s: [[iunlock()]] sanity checks */
     if(l->key == 0)
         print("iunlock: not locked: pc %#p\n", getcallerpc(&l));
     if(!l->isilock)
         print("iunlock of lock: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
     if(arch_islo())
         print("iunlock while lo: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
-
+    /*e: [[iunlock()]] sanity checks */
     sr = l->sr;
     l->cpu = nil;
     arch_coherence(); // added in latest bcm/

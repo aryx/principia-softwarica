@@ -10,8 +10,10 @@
 /*s: struct Arch_ProcMMU(arm) */
 struct Arch_ProcMMU
 {
+    /*s: [[Proc]] [[Arch]] memory fields(arm) */
     Page*   mmul2;
     Page*   mmul2cache; /* free mmu pages */
+    /*e: [[Proc]] [[Arch]] memory fields(arm) */
 };
 /*e: struct Arch_ProcMMU(arm) */
 
