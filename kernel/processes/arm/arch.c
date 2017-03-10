@@ -118,16 +118,18 @@ arch_validalign(uintptr addr, unsigned align)
 void
 kexit(Ureg*)
 {
-    uvlong t;
-    Tos *tos;
+    /*s: [[kexit()]] tos adjustments */
+        uvlong t;
+        Tos *tos;
 
-    /* precise time accounting, kernel exit */
-    tos = (Tos*)(USTKTOP-sizeof(Tos));
-    arch_cycles(&t);
-    tos->kcycles += t - up->kentry;
-    tos->pcycles = up->pcycles;
+        /* precise time accounting, kernel exit */
+        tos = (Tos*)(USTKTOP-sizeof(Tos));
+        arch_cycles(&t);
+        tos->kcycles += t - up->kentry;
+        tos->pcycles = up->pcycles;
+        tos->pid = up->pid;
+    /*e: [[kexit()]] tos adjustments */
     tos->cyclefreq = cpu->cpuhz;
-    tos->pid = up->pid;
 
     /* make visible immediately to user proc */
     cachedwbinvse(tos, sizeof *tos);
@@ -144,6 +146,8 @@ linkproc(void)
 {
     arch_spllo();
     up->kpfun(up->kparg);
+    // should never reach this place?? kernel processes are supposed
+    // to run forever??
     pexit("kproc exiting", 0);
 }
 /*e: function linkproc(arm) */

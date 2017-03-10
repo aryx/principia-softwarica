@@ -26,10 +26,12 @@
 
 #include "dwcotg.h"
 
+/*s: constant USBREGS(arm) */
+#define  USBREGS (VIRTIO+0x980000)
+/*e: constant USBREGS(arm) */
 /*s: enum _anon_ (buses/arm/usbdwc.c)(arm) */
 enum
 {
-    USBREGS     = VIRTIO + 0x980000,
     Enabledelay = 50,
     Resetdelay  = 10,
     ResetdelayHS    = 50,

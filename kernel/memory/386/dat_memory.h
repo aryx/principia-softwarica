@@ -6,8 +6,8 @@
 /*
  *  MMU stuff in proc
  */
-/*s: struct ArchProcMMU(x86) */
-struct Arch_ProcMMU
+/*s: struct ArchProc(x86) */
+struct Arch_Proc
 {
   /*s: [[Proc]] [[Arch]] memory fields(x86) */
   Page* mmupd;     /* page directory base */
@@ -17,7 +17,7 @@ struct Arch_ProcMMU
   Page* mmuused;    /* used page table pages */
   /*e: [[Proc]] [[Arch]] memory fields(x86) */
 };
-/*e: struct ArchProcMMU(x86) */
+/*e: struct ArchProc(x86) */
 
 /*s: struct KMap(x86) */
 /*

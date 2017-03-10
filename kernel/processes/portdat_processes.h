@@ -330,9 +330,9 @@ enum procctl
     Proc_nothing = 0,
     Proc_stopme,
     /*s: enum procctl cases */
-        Proc_exitme,
+    Proc_exitme,
     /*x: enum procctl cases */
-        Proc_tracesyscall,
+    Proc_tracesyscall,
     /*x: enum procctl cases */
         Proc_traceme,
     /*x: enum procctl cases */
@@ -414,7 +414,7 @@ struct Proc
     bool noswap;   /* process is not swappable */
     /*e: [[Proc]] memory fields */
 
-    struct Arch_ProcMMU;
+    struct Arch_Proc;
 //--------------------------------------------------------------------
 // Scheduling
 //--------------------------------------------------------------------

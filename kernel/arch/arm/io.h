@@ -1,7 +1,7 @@
 /*s: arch/arm/io.h */
-/*s: enum _anon_ (arch/arm/io.h)(arm) */
-// in dat_interrupts.h?
-enum {
+// could be in dat_interrupts.h?
+/*s: enum IRQ(arm) */
+enum IRQ {
     IRQtimer0   = 0,
     IRQtimer1   = 1,
     IRQtimer2   = 2,
@@ -26,12 +26,12 @@ enum {
 
     IRQfiq      = IRQusb,   /* only one source can be FIQ */
 };
-/*e: enum _anon_ (arch/arm/io.h)(arm) */
+/*e: enum IRQ(arm) */
 /*s: macro IRQDMA(arm) */
 #define IRQDMA(chan)    (IRQdma0+(chan))
 /*e: macro IRQDMA(arm) */
 
-/*s: enum _anon_ (arch/arm/io.h)2(arm) */
+/*s: enum Dma(arm) */
 enum {
     DmaD2M      = 0,        /* device to memory */
     DmaM2D      = 1,        /* memory to device */
@@ -45,9 +45,9 @@ enum {
     DmaDevSpiRx = 7,
     DmaDevEmmc  = 11,
 };
-/*e: enum _anon_ (arch/arm/io.h)2(arm) */
+/*e: enum Dma(arm) */
 
-/*s: enum _anon_ (arch/arm/io.h)3(arm) */
+/*s: enum Power(arm) */
 enum {
     PowerSd     = 0,
     PowerUart0,
@@ -59,10 +59,10 @@ enum {
     PowerSpi,
     PowerCcp2tx,
 };
-/*e: enum _anon_ (arch/arm/io.h)3(arm) */
+/*e: enum Power(arm) */
 
-/*s: enum _anon_ (arch/arm/io.h)4(arm) */
-// in dat_time.h?
+// could be in dat_time.h?
+/*s: enum Clock(arm) */
 enum {
     ClkEmmc     = 1,
     ClkUart,
@@ -75,5 +75,5 @@ enum {
     ClkPixel,
     ClkPwm,
 };
-/*e: enum _anon_ (arch/arm/io.h)4(arm) */
+/*e: enum Clock(arm) */
 /*e: arch/arm/io.h */

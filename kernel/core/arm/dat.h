@@ -27,14 +27,14 @@ typedef void* kern_addr3;
 /*s: dat.h includes(arm) */
 #include "../port/portdat_concurrency.h" // Lock (used in Cpu so must be before)
 #include "dat_core.h"                    // Arch_Cpu
-#include "../port/portdat_core.h"        // Conf, Cpu, ... Label
-#include "dat_memory.h"                  // Arch_ProcMMU
+#include "../port/portdat_core.h"        // Cpu!!, Conf, Label
+#include "dat_memory.h"                  // Arch_Proc
 #include "../port/portdat_memory.h"      // Page, Pagetable, Segment, KImage
-#include "../port/portdat_files.h"       // Chan
+#include "../port/portdat_files.h"       // Chan!! Dev!!
 #include "dat_time.h"                    // Arch_HZ
 #include "../port/portdat_time.h"        // Timer
 #include "dat_processes.h"               // Arch_FPsave
-#include "../port/portdat_processes.h"   // Proc
+#include "../port/portdat_processes.h"   // Proc!!!
 #include "../port/portdat_console.h"     // keyboard queue, consdevtab
 #include "../port/portdat_devices.h"     // DevConf, DevPort (not that used)
 #include "../port/portdat_misc.h"        // Cmd

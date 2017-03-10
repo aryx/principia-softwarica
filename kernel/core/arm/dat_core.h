@@ -55,7 +55,7 @@ struct Arch_Cpu {
 
     uvlong  fastclock;      /* last sampled value */
 
-    int lastintr;
+    int lastintr; // dead?? also redundant with one in Cpu?
     /*e: [[Cpu]] [[Arch]] other fields(arm) */
 };
 /*e: struct Arch_Cpu(arm) */

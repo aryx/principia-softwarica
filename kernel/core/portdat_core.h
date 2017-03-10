@@ -131,8 +131,6 @@ struct Cpu
     /*s: [[Cpu]] other fields */
     int ilockdepth;
     /*x: [[Cpu]] other fields */
-    int lastintr; // debugging
-    /*x: [[Cpu]] other fields */
     Label sched;      /* scheduler wakeup */ // address of schedinit()
     /*x: [[Cpu]] other fields */
     Proc* readied;    /* for runproc */
@@ -143,6 +141,8 @@ struct Cpu
     /*x: [[Cpu]] other fields */
         // cyclefreq == cpuhz if havetsc, 0 otherwise
         uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
+    /*x: [[Cpu]] other fields */
+    int lastintr; // debugging
     /*e: [[Cpu]] other fields */
     struct Arch_Cpu;
   

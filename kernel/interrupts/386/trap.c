@@ -353,7 +353,7 @@ intrtime(Cpu*, int vno)
 void
 kexit(Ureg*)
 {
-    /*s: [[kexit()]] tos adjustments(x86) */
+    /*s: [[kexit()]] tos adjustments */
         uvlong t;
         Tos *tos;
 
@@ -363,7 +363,7 @@ kexit(Ureg*)
         tos->kcycles += t - up->kentry;
         tos->pcycles = up->pcycles;
         tos->pid = up->pid;
-    /*e: [[kexit()]] tos adjustments(x86) */
+    /*e: [[kexit()]] tos adjustments */
 }
 /*e: function kexit(x86) */
 
@@ -398,9 +398,9 @@ void trap(Ureg* ureg)
 
     if(user){
         up->dbgreg = ureg;
-        /*s: [[trap()]] adjust kentry when interrupt user(x86) */
-                arch_cycles(&up->kentry);
-        /*e: [[trap()]] adjust kentry when interrupt user(x86) */
+        /*s: [[trap()]] adjust kentry when interrupt user */
+        arch_cycles(&up->kentry);
+        /*e: [[trap()]] adjust kentry when interrupt user */
     }
     // else if !user, then that means we interrupted a syscall() which should
     // already have done those things, so no need for redundancy
@@ -508,13 +508,13 @@ void trap(Ureg* ureg)
     }
     arch_splhi(); // possible arch_spllo() done above
 
-    /*s: [[trap()]] if delaysched(x86) */
+    /*s: [[trap()]] if delaysched */
     /* delaysched set because we held a lock or because our quantum ended */
     if(up && up->delaysched && clockintr){
         sched();
         arch_splhi();
     }
-    /*e: [[trap()]] if delaysched(x86) */
+    /*e: [[trap()]] if delaysched */
 
     if(user){
         if(up->procctl || up->nnote)
@@ -779,9 +779,9 @@ void syscall(Ureg* ureg)
     if((ureg->cs & 0xFFFF) != UESEL) // TODO: arch_userureg
         panic("syscall: cs 0x%4.4luX", ureg->cs);
 
-    /*s: [[syscall()]] adjust kentry(x86) */
-        arch_cycles(&up->kentry);
-    /*e: [[syscall()]] adjust kentry(x86) */
+    /*s: [[syscall()]] adjust kentry */
+    arch_cycles(&up->kentry);
+    /*e: [[syscall()]] adjust kentry */
 
     cpu->syscall++;
     up->insyscall = true;
@@ -794,28 +794,28 @@ void syscall(Ureg* ureg)
     scallnr = ureg->ax;
 
     /*s: [[syscall()]] Proc_tracesyscall if, syscall entry(x86) */
-        if(up->procctl == Proc_tracesyscall){
-            /*
-             * Redundant validaddr.  Do we care?
-             * Tracing syscalls is not exactly a fast path...
-             * Beware, validaddr currently does a pexit rather
-             * than an error if there's a problem; that might
-             * change in the future.
-             */
-            if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
-                validaddr(sp, sizeof(Sargs)+BY2WD, false);
+    if(up->procctl == Proc_tracesyscall){
+        /*
+         * Redundant validaddr.  Do we care?
+         * Tracing syscalls is not exactly a fast path...
+         * Beware, validaddr currently does a pexit rather
+         * than an error if there's a problem; that might
+         * change in the future.
+         */
+        if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
+            validaddr(sp, sizeof(Sargs)+BY2WD, false);
 
-            syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
-            up->procctl = Proc_stopme;
-            // this will call sched() and wakeup the tracer process
-            procctl(up); 
-            // back here when the tracer process readied us back and
-            // should have set procctl back to Proc_tracesyscall
-            if(up->syscalltrace)
-                free(up->syscalltrace);
-            up->syscalltrace = nil;
-            startns = todget(nil);
-        }
+        syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
+        up->procctl = Proc_stopme;
+        // this will call sched() and wakeup the tracer process
+        procctl(up); 
+        // back here when the tracer process readied us back and
+        // should have set procctl back to Proc_tracesyscall
+        if(up->syscalltrace)
+            free(up->syscalltrace);
+        up->syscalltrace = nil;
+        startns = todget(nil);
+    }
     /*e: [[syscall()]] Proc_tracesyscall if, syscall entry(x86) */
 
     /*s: [[syscall()]] fp adjustments if fork(x86) */
@@ -874,31 +874,31 @@ void syscall(Ureg* ureg)
     ureg->ax = ret;
 
     /*s: [[syscall()]] Proc_tracesyscall if, syscall exit(x86) */
-        if(up->procctl == Proc_tracesyscall){
-            stopns = todget(nil);
-            up->procctl = Proc_stopme;
-            sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
-            s = arch_splhi();
-            procctl(up); // again, will call sched() and wakeup tracer process
-            arch_splx(s);
-            if(up->syscalltrace)
-                free(up->syscalltrace);
-            up->syscalltrace = nil;
-        }
+    if(up->procctl == Proc_tracesyscall){
+        stopns = todget(nil);
+        up->procctl = Proc_stopme;
+        sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
+        s = arch_splhi();
+        procctl(up); // again, will call sched() and wakeup tracer process
+        arch_splx(s);
+        if(up->syscalltrace)
+            free(up->syscalltrace);
+        up->syscalltrace = nil;
+    }
     /*e: [[syscall()]] Proc_tracesyscall if, syscall exit(x86) */
 
     up->insyscall = false;
     up->psstate = nil;
 
-    /*s: [[syscall()]] call noted()(x86) */
-        if(scallnr == NOTED)
-            noted(ureg, *(ulong*)(sp+BY2WD));
-    /*e: [[syscall()]] call noted()(x86) */
+    /*s: [[syscall()]] call noted() */
+    if(scallnr == NOTED)
+        noted(ureg, *(ulong*)(sp+BY2WD));
+    /*e: [[syscall()]] call noted() */
     /*s: [[syscall()]] call notify()(x86) */
-        if(scallnr!=RFORK && (up->procctl || up->nnote)){
-            arch_splhi();
-            notify(ureg);
-        }
+    if(scallnr!=RFORK && (up->procctl || up->nnote)){
+        arch_splhi();
+        notify(ureg);
+    }
     /*e: [[syscall()]] call notify()(x86) */
 
     /*s: [[syscall()]] if delaysched(x86) */

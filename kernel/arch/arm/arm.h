@@ -12,10 +12,11 @@
 #define PsrMsvc     0x00000013  /* `protected mode for OS' */
 /*s: [[PsrMode]] other cases(arm) */
 #define PsrMirq     0x00000012
-#define PsrMfiq     0x00000011
 /*x: [[PsrMode]] other cases(arm) */
 #define PsrMabt     0x00000017
 #define PsrMund     0x0000001B
+/*x: [[PsrMode]] other cases(arm) */
+#define PsrMfiq     0x00000011
 /*e: [[PsrMode]] other cases(arm) */
 #define PsrMask     0x0000001F
 /*e: type PsrMode(arm) */
@@ -85,8 +86,10 @@
  * CpCONTROL op2 codes, op1==0, Crm==0.
  */
 #define CpMainctl   0
+/*s: [[CpCONTROL.opcode2]] other cases(arm) */
 #define CpAuxctl    1
 #define CpCPaccess  2
+/*e: [[CpCONTROL.opcode2]] other cases(arm) */
 /*e: type CpCONTROL opcode2(arm) */
 /*s: type CpCONTROL CpMainctl(arm) */
 /*
@@ -95,12 +98,13 @@
  * cortex/armv7 has more ops and CRm values.
  */
 #define CpCmmu      0x00000001  /* M: MMU enable */
-#define CpCalign    0x00000002  /* A: alignment fault enable */
 #define CpCdcache   0x00000004  /* C: data cache on */
+/*s: [[CpCONTROL.CpMainctl]] other cases(arm) */
 #define CpCsbo (3<<22|1<<18|1<<16|017<<3)   /* must be 1 (armv7) */
 #define CpCsbz (CpCtre|1<<26|CpCve|1<<15|7<<7)  /* must be 0 (armv7) */
 #define CpCsw       (1<<10)     /* SW: SWP(B) enable (deprecated in v7) */
 #define CpCpredict  0x00000800  /* Z: branch prediction (armv7) */
+/*e: [[CpCONTROL.CpMainctl]] other cases(arm) */
 #define CpCicache   0x00001000  /* I: instruction cache on */
 #define CpChv       0x00002000  /* V: high vectors */
 #define CpCrr       (1<<14) /* RR: round robin vs random cache replacement */
@@ -265,41 +269,51 @@
 
 /*
  * MMU page table entries.
- * Mbz (0x10) bit is implementation-defined and must be 0 on the cortex.
  */
+/*s: constant Mbz(arm) */
+/* Mbz (0x10) bit is implementation-defined and must be 0 on the cortex. */
 #define Mbz     (0<<4)
+/*e: constant Mbz(arm) */
+
 #define Fault       0x00000000      /* L[12] pte: unmapped */
 
+/*s: type PageDirGranularity(arm) */
 #define Coarse      (Mbz|1)         /* L1 */
 #define Section     (Mbz|2)         /* L1 1MB */
 #define Fine        (Mbz|3)         /* L1 */
-
+/*e: type PageDirGranularity(arm) */
+/*s: type PageTableGranularity(arm) */
 #define Large       0x00000001      /* L2 64KB */
 #define Small       0x00000002      /* L2 4KB */
 #define Tiny        0x00000003      /* L2 1KB: not in v7 */
+/*e: type PageTableGranularity(arm) */
 
+/*s: type PageTableEntryAttribute1(arm) */
 #define Buffered    0x00000004      /* L[12]: write-back not -thru */
 #define Cached      0x00000008      /* L[12] */
+/*e: type PageTableEntryAttribute1(arm) */
 
 #define Dom0        0
 
+/*s: type PageTableEntryAttribute2(arm) */
 #define L1wralloc   (1<<12)         /* L1 TEX */
 #define L1sharable  (1<<16)
 #define L2wralloc   (1<<6)          /* L2 TEX (small pages) */
 #define L2sharable  (1<<10)
+/*e: type PageTableEntryAttribute2(arm) */
 
-/* attributes for memory containing locks -- differs between armv6 and armv7 */
-//#define L1ptedramattrs    (Cached | Buffered | L1wralloc | L1sharable)
-//#define L2ptedramattrs    (Cached | Buffered | L2wralloc | L2sharable)
-
-#define Noaccess    0           /* AP, DAC */
+/*s: type PageTableEntryAttribute3(arm) */
+#define Noaccess    0       /* AP, DAC */
 #define Krw     1           /* AP */
 /* armv7 deprecates AP[2] == 1 & AP[1:0] == 2 (Uro), prefers 3 (new in v7) */
 #define Uro     2           /* AP */
 #define Urw     3           /* AP */
+/*e: type PageTableEntryAttribute3(arm) */
 
+/*s: type DAC(arm) */
 #define Client      1           /* DAC */
 #define Manager     3           /* DAC */
+/*e: type DAC(arm) */
 
 #define F(v, o, w)  (((v) & ((1<<(w))-1))<<(o))
 #define AP(n, v)    F((v), ((n)*2)+4, 2)
@@ -307,6 +321,8 @@
 /* L2AP differs between armv6 and armv7 -- see l2ap in arch*.c */
 #define DAC(n, v)   F((v), (n)*2, 2)
 
+/*s: constant HVECTORS(arm) */
 #define HVECTORS    0xffff0000
+/*e: constant HVECTORS(arm) */
 
 /*e: arch/arm/arm.h */

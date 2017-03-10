@@ -1686,9 +1686,9 @@ procctl(Proc *p)
             pexit("Killed: Insufficient physical memory", true);
     /*e: [[procctl()]] Proc_exitbig case */
     /*s: [[procctl()]] Proc_exitme case */
-        case Proc_exitme:
-            arch_spllo();        /* pexit has locks in it */
-            pexit("Killed", true);
+    case Proc_exitme:
+        arch_spllo();        /* pexit has locks in it */
+        pexit("Killed", true);
     /*e: [[procctl()]] Proc_exitme case */
     }
 }

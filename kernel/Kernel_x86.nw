@@ -1,13 +1,12 @@
 \part{Was in Kernel.nw main text}
 
-% title: x86 (32 bits) edition
+%title: x86 (32 bits) edition
 
 \chapter{Introduction}
 
 \section{Requirements}
 
-%one of the item
-the x86 architecture
+%one of the item is about the x86 architecture
 
 \chapter{Overview}
 
@@ -359,7 +358,6 @@ struct Arch_Cpu {
 // ref<Cpu>, assigned to CPUADDR in _clearbss
 Cpu *cpu;
 @ 
-% x86 because differ in different archi
 
 % note that cpus[0] will not be CPUADDR! it will be
 % CPU0CPU (this will defeat the purpose otherwise)
@@ -375,8 +373,8 @@ Cpu *cpu;
 
 \section{[[Proc]] and [[up]]}
 
-<<struct ArchProcMMU(x86)>>=
-struct Arch_ProcMMU
+<<struct ArchProc(x86)>>=
+struct Arch_Proc
 {
   <<[[Proc]] [[Arch]] memory fields(x86)>>
 };
@@ -589,6 +587,1566 @@ TEXT mfence(SB), $0
         BYTE $0xf0
         RET
 @
+
+\chapter{Memory}
+
+\section{[[Segment]] and [[Pagetable]]}
+
+<<constant PAGEDIRSIZE(x86)>>=
+#define PAGEDIRSIZE  1984
+@
+
+<<constant SMALLPAGEDIRSIZE(x86)>>=
+#define SMALLPAGEDIRSIZE 16
+@
+
+<<constant PAGETABMAPMEM(x86)>>=
+#define PAGETABMAPMEM (1024*1024) // 1MB
+@
+
+<<constant PAGETABSIZE(x86)>>=
+#define PAGETABSIZE 256 // (PAGETABMAPMEM/BY2PG)
+@
+
+\chapter{Processes}
+
+\section{[[sysrfork()]]}
+
+\subsection{[[arch_forkchild()]] (x86)}
+
+
+<<function forkchild(x86)>>=
+void
+arch_forkchild(Proc *p, Ureg *ureg)
+{
+    Ureg *cureg;
+
+    /*
+     * Add 2*BY2WD to the stack to account for
+     *  - the return PC
+     *  - trap's argument (ur)
+     */
+    p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Ureg)+2*BY2WD);
+    p->sched.pc = (ulong)arch_forkret;
+
+    cureg = (Ureg*)(p->sched.sp+2*BY2WD);
+    memmove(cureg, ureg, sizeof(Ureg));
+    /* return value of syscall in child */
+    cureg->ax = 0;
+
+    /* Things from bottom of syscall which were never executed */
+    p->psstate = nil;
+    p->insyscall = false;
+}
+@
+% have to fake a return of syscall here, of sysrfork
+
+<<function forkret(x86)>>=
+TEXT arch_forkret(SB), $0
+        POPL    AX
+        POPAL
+        POPL    GS
+        POPL    FS
+        POPL    ES
+        POPL    DS
+        ADDL    $8, SP                  /* pop error code and trap type */
+        IRETL
+@
+%?? POPAL? need to look at core code for returning from syscall as this is
+% what we emulate here
+
+\section{[[sysexec()]]}
+
+<<constant AOUT_MAGIC(x86)>>=
+/*
+ *  parameters for sysproc.c
+ */
+// I_MAGIC is defined in include/a.out.h, I for INTEL?
+#define AOUT_MAGIC  (I_MAGIC)
+@
+
+<<function UTROUND(x86)>>=
+#define UTROUND(t)  ROUNDUP((t), BY2PG)
+@
+
+<<constant TSTKTOP(x86)>>=
+#define TSTKTOP   (USTKTOP-USTKSIZE)  /* end of new stack in sysexec */ // just below
+@
+
+<<constant TSTKSIZ(x86)>>=
+#define TSTKSIZ   100     /* pages in new stack; limits exec args */
+@
+
+<<function procsetup(x86)>>=
+void
+arch_procsetup(Proc* p)
+{
+  <<[[procsetup()]] fp setup(x86)>>
+}
+@ 
+
+<<function execregs(x86)>>=
+long
+arch_execregs(ulong entry, ulong ssize, ulong nargs)
+{
+    ulong *sp;
+    Ureg *ureg;
+
+    <<[[execregs()]] fp adjustments(x86)>>
+
+    sp = (ulong*)(USTKTOP - ssize);
+    *--sp = nargs;
+
+    ureg = up->dbgreg;
+    ureg->usp = (ulong)sp;
+    ureg->pc = entry;
+    return USTKTOP
+     <<[[execregs()]] return adjustments(x86)>>
+     ;     /* address of kernel/user shared data */
+}
+@ 
+
+\section{Kernel processes}
+
+<<function kprocchild(x86)>>=
+void
+arch_kprocchild(Proc* p, void (*func)(void*), void* arg)
+{
+    p->kpfun = func;
+    p->kparg = arg;
+
+    /*
+     * arch_gotolabel() needs a word on the stack in
+     * which to place the return PC used to jump
+     * to linkproc().
+     */
+    p->sched.pc = (ulong)linkproc;
+    p->sched.sp = (ulong)p->kstack+KSTACK-BY2WD;
+}
+@ 
+
+<<function linkproc(x86)>>=
+static void
+linkproc(void)
+{
+    arch_spllo();
+    up->kpfun(up->kparg);
+    // should never reach this place?? kernel processes are supposed
+    // to run forever??
+    pexit("kproc dying", /*freemem*/false); 
+}
+@ 
+
+\chapter{Interrupts}
+
+% from wikipedia IRQ page:
+%  - at beginning had one PIC, IRQ0 ot IRQ7
+%  - then 2 PICs, IRQ0 to IRQ15 (and one IRQ used for the chaining I think)
+%  - then APIC, up to 255 IRQ lines per APIC
+
+\section{[[Vctl]] (x86)}
+
+<<struct Vctl(x86)>>=
+struct Vctl {
+
+    bool isintr;     /* interrupt or fault/trap */
+    int irq; // if interrupt
+  
+    void  (*f)(Ureg*, void*); /* handler to call */
+    void* a;      /* argument to call it with */
+  
+    char  name[KNAMELEN];   /* of driver */
+    int tbdf; // /* type+bus+device+function */ ??
+  
+    <<[[Vctl]] other fields(x86)>>
+    // Extra
+    <<[[Vctl]] extra fields(x86)>>
+};
+@
+
+<<global vctl(x86)>>=
+// array<list<ref_own<Vctl>>> (next = Vctl.next)
+static Vctl *vctl[256];
+@ 
+
+<<[[Vctl]] extra fields(x86)>>=
+// list<ref_own<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
+Vctl* next;     /* handlers on this vector */
+@
+
+<<global vctllock(x86)>>=
+static Lock vctllock;
+@ 
+
+% for /dev/irqalloc via devarch.c addarchfile
+<<function irqallocread(x86)>>=
+static long
+irqallocread(Chan*, void *vbuf, long n, vlong offset)
+{
+    char *buf, *p, str[2*(11+1)+KNAMELEN+1+1];
+    int m, vno;
+    long oldn;
+    Vctl *v;
+
+    if(n < 0 || offset < 0)
+        error(Ebadarg);
+
+    oldn = n;
+    buf = vbuf;
+    for(vno=0; vno<nelem(vctl); vno++){
+        for(v=vctl[vno]; v; v=v->next){
+            m = snprint(str, sizeof str, "%11d %11d %.*s\n", vno, v->irq, KNAMELEN, v->name);
+            if(m <= offset) /* if do not want this, skip entry */
+                offset -= m;
+            else{
+                /* skip offset bytes */
+                m -= offset;
+                p = str+offset;
+                offset = 0;
+
+                /* write at most max(n,m) bytes */
+                if(m > n)
+                    m = n;
+                memmove(buf, p, m);
+                n -= m;
+                buf += m;
+
+                if(n == 0)
+                    return oldn;
+            }
+        }
+    }
+    return oldn - n;
+}
+@ 
+
+\section{Faults (x86)}
+
+<<enum vector(x86)>>=
+enum {
+    <<enum vector cases(x86)>>
+};
+@
+
+<<enum vector cases(x86)>>=
+    VectorNMI = 2,    /* non-maskable interrupt */
+    VectorBPT = 3,    /* breakpoint */
+    VectorUD  = 6,    /* invalid opcode exception */
+    VectorCNA = 7,    /* coprocessor not available */
+    Vector2F  = 8,    /* double fault */
+    VectorCSO = 9,    /* coprocessor segment overrun */
+    VectorPF  = 14,   /* page fault */ //!!! page fault interrupt
+    Vector15  = 15,   /* reserved */
+    VectorCERR  = 16,   /* coprocessor error */
+@
+% very important page fault, base of virtual memory
+
+% called by trapinit() (trap vs intr?)
+<<function trapenable(x86)>>=
+void
+trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
+{
+    Vctl *v;
+
+    if(vno < 0 || vno >= VectorPIC)
+        panic("trapenable: vno %d", vno);
+
+    v = xalloc(sizeof(Vctl));
+    v->tbdf = BUSUNKNOWN;
+    v->f = f;
+    v->a = a;
+    v->isintr = false;
+    strncpy(v->name, name, KNAMELEN);
+    v->name[KNAMELEN-1] = 0;
+
+    ilock(&vctllock);
+    //add_list(vctl[vno], v)
+    v->next = vctl[vno];
+    vctl[vno] = v;
+    iunlock(&vctllock);
+}
+@ 
+
+\section{IRQs (x86)}
+
+<<enum vector cases(x86)>>=
+    VectorPIC = 32,   /* external i8259 interrupts */
+@
+
+<<enum irq(x86)>>=
+enum {
+    IrqCLOCK  = 0, // !!! clock interrupt
+    IrqKBD    = 1,
+    IrqUART1  = 3,
+    IrqUART0  = 4,
+    IrqPCMCIA = 5,
+    IrqFLOPPY = 6,
+    IrqLPT    = 7,
+    IrqIRQ7   = 7,
+    IrqAUX    = 12,   /* PS/2 port */
+    IrqIRQ13  = 13,   /* coprocessor on 386 */
+    IrqATA0   = 14,
+    IrqATA1   = 15,
+
+    MaxIrqPIC = 15,
+  
+    IrqLINT0  = 16,   /* LINT[01] must be offsets 0 and 1 */
+    IrqLINT1  = 17,
+    IrqTIMER  = 18, // for alarms
+    IrqERROR  = 19,
+    IrqPCINT  = 20,
+    IrqSPURIOUS = 31,   /* must have bits [3-0] == 0x0F */
+
+    MaxIrqLAPIC = 31,
+};
+@
+% LINT? Low interrupt? PCINT?
+% very important: clock interrupt, base of preemptive scheduling!
+
+
+<<[[Vctl]] other fields(x86)>>=
+// interrupt service routine
+int (*isr)(int);    /* get isr bit for this irq */
+int (*eoi)(int);    /* eoi */
+@
+
+
+<<function intrenable(x86)>>=
+void
+arch_intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
+{
+    int vno;
+    Vctl *v;
+
+    if(f == nil){
+        print("intrenable: nil handler for %d, tbdf 0x%uX for %s\n",
+            irq, tbdf, name);
+        return;
+    }
+
+    v = xalloc(sizeof(Vctl));
+    v->isintr = true;
+    v->irq = irq;
+    v->tbdf = tbdf;
+    v->f = f;
+    v->a = a;
+    strncpy(v->name, name, KNAMELEN-1);
+    v->name[KNAMELEN-1] = 0;
+
+    ilock(&vctllock);
+    vno = arch->intrenable(v); // this should also set v->isr or v->eoi
+    if(vno == -1){
+        iunlock(&vctllock);
+        print("intrenable: couldn't enable irq %d, tbdf 0x%uX for %s\n",
+            irq, tbdf, v->name);
+        xfree(v);
+        return;
+    }
+    // add_list(vctl[vno], v) and extra check
+    if(vctl[vno]){
+        if(vctl[vno]->isr != v->isr || vctl[vno]->eoi != v->eoi)
+            panic("intrenable: handler: %s %s %#p %#p %#p %#p",
+                vctl[vno]->name, v->name,
+                vctl[vno]->isr, v->isr, vctl[vno]->eoi, v->eoi);
+        v->next = vctl[vno];
+    }
+    vctl[vno] = v;
+    iunlock(&vctllock);
+}
+@ 
+% why use xalloc? because malloc forbidden in interrupt code?
+
+<<function intrdisable(x86)>>=
+int
+intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
+{
+    Vctl **pv, *v;
+    int vno;
+
+    /*
+     * For now, none of this will work with the APIC code,
+     * there is no mapping between irq and vector as the IRQ
+     * is pretty meaningless.
+     */
+    if(arch->intrvecno == nil)
+        return -1;
+    vno = arch->intrvecno(irq);
+    ilock(&vctllock);
+    pv = &vctl[vno];
+    while (*pv &&
+          ((*pv)->irq != irq || (*pv)->tbdf != tbdf || (*pv)->f != f || (*pv)->a != a ||
+           strcmp((*pv)->name, name)))
+        pv = &((*pv)->next);
+    assert(*pv);
+
+    v = *pv;
+    *pv = (*pv)->next;  /* Link out the entry */
+
+    if(vctl[vno] == nil && arch->intrdisable != nil)
+        arch->intrdisable(irq);
+    iunlock(&vctllock);
+    xfree(v);
+    return 0;
+}
+@ 
+
+%\section{Interrupt controller [[i8259]]}
+
+<<[[PCArch]] interrupt methods fields(x86)>>=
+void  (*intrinit)(void);
+int (*intrenable)(Vctl*);
+int (*intrvecno)(int);
+int (*intrdisable)(int);
+void  (*introff)(void);
+void  (*intron)(void);
+@
+
+<<[[archgeneric]] interrupt methods(x86)>>=
+.intrinit=  i8259init,
+.intrenable=    i8259enable,
+.intrvecno= i8259vecno,
+.intrdisable=   i8259disable,
+.intron=    i8259on,
+.introff=   i8259off,
+@
+
+<<function i8259init(x86)>>=
+void
+i8259init(void)
+{
+    int x;
+
+    ioalloc(Int0ctl, 2, 0, "i8259.0");
+    ioalloc(Int1ctl, 2, 0, "i8259.1");
+    ilock(&i8259lock);
+
+    /*
+     *  Set up the first 8259 interrupt processor.
+     *  Make 8259 interrupts start at CPU vector VectorPIC.
+     *  Set the 8259 as master with edge triggered
+     *  input with fully nested interrupts.
+     */
+    outb(Int0ctl, (1<<4)|(0<<3)|(1<<0));    /* ICW1 - master, edge triggered,
+                           ICW4 will be sent */
+    outb(Int0aux, VectorPIC);       /* ICW2 - interrupt vector offset */
+    outb(Int0aux, 0x04);            /* ICW3 - have slave on level 2 */
+    outb(Int0aux, 0x01);            /* ICW4 - 8086 mode, not buffered */
+
+    /*
+     *  Set up the second 8259 interrupt processor.
+     *  Make 8259 interrupts start at CPU vector VectorPIC+8.
+     *  Set the 8259 as slave with edge triggered
+     *  input with fully nested interrupts.
+     */
+    outb(Int1ctl, (1<<4)|(0<<3)|(1<<0));    /* ICW1 - master, edge triggered,
+                           ICW4 will be sent */
+    outb(Int1aux, VectorPIC+8);     /* ICW2 - interrupt vector offset */
+    outb(Int1aux, 0x02);            /* ICW3 - I am a slave on level 2 */
+    outb(Int1aux, 0x01);            /* ICW4 - 8086 mode, not buffered */
+    outb(Int1aux, (i8259mask>>8) & 0xFF);
+
+    /*
+     *  pass #2 8259 interrupts to #1
+     */
+    i8259mask &= ~0x04;
+    outb(Int0aux, i8259mask & 0xFF);
+
+    /*
+     * Set Ocw3 to return the ISR when ctl read.
+     * After initialisation status read is set to IRR.
+     * Read IRR first to possibly deassert an outstanding
+     * interrupt.
+     */
+    inb(Int0ctl);
+    outb(Int0ctl, Ocw3|0x03);
+    inb(Int1ctl);
+    outb(Int1ctl, Ocw3|0x03);
+
+    /*
+     * Check for Edge/Level register.
+     * This check may not work for all chipsets.
+     * First try a non-intrusive test - the bits for
+     * IRQs 13, 8, 2, 1 and 0 must be edge (0). If
+     * that's OK try a R/W test.
+     */
+    x = (inb(Elcr2)<<8)|inb(Elcr1);
+    if(!(x & 0x2107)){
+        outb(Elcr1, 0);
+        if(inb(Elcr1) == 0){
+            outb(Elcr1, 0x20);
+            if(inb(Elcr1) == 0x20)
+                i8259elcr = x;
+            outb(Elcr1, x & 0xFF);
+            print("ELCR: %4.4uX\n", i8259elcr);
+        }
+    }
+    iunlock(&i8259lock);
+}
+@
+% >> >> >> >> >> >>
+
+<<global i8259lock(x86)>>=
+static Lock i8259lock;
+@
+
+<<function i8259isr(x86)>>=
+int
+i8259isr(int vno)
+{
+    int irq, isr;
+
+    if(vno < VectorPIC || vno > VectorPIC+MaxIrqPIC)
+        return 0;
+    irq = vno-VectorPIC;
+
+    /*
+     *  tell the 8259 that we're done with the
+     *  highest level interrupt (interrupts are still
+     *  off at this point)
+     */
+    ilock(&i8259lock);
+    isr = inb(Int0ctl);
+    outb(Int0ctl, EOI);
+    if(irq >= 8){
+        isr |= inb(Int1ctl)<<8;
+        outb(Int1ctl, EOI);
+    }
+    iunlock(&i8259lock);
+
+    return isr & (1<<irq);
+}
+@
+% >> >>
+
+<<function i8259enable(x86)>>=
+int
+i8259enable(Vctl* v)
+{
+    int irq, irqbit;
+
+    /*
+     * Given an IRQ, enable the corresponding interrupt in the i8259
+     * and return the vector to be used. The i8259 is set to use a fixed
+     * range of vectors starting at VectorPIC.
+     */
+    irq = v->irq;
+    if(irq < 0 || irq > MaxIrqPIC){
+        print("i8259enable: irq %d out of range\n", irq);
+        return -1;
+    }
+    irqbit = 1<<irq;
+
+    ilock(&i8259lock);
+    if(!(i8259mask & irqbit) && !(i8259elcr & irqbit)){
+        print("i8259enable: irq %d shared but not level\n", irq);
+        iunlock(&i8259lock);
+        return -1;
+    }
+    i8259mask &= ~irqbit;
+    if(irq < 8)
+        outb(Int0aux, i8259mask & 0xFF);
+    else
+        outb(Int1aux, (i8259mask>>8) & 0xFF);
+
+    if(i8259elcr & irqbit)
+        v->eoi = i8259isr;
+    else
+        v->isr = i8259isr;
+    iunlock(&i8259lock);
+
+    return VectorPIC+irq;
+}
+@
+
+<<function i8259vecno(x86)>>=
+int
+i8259vecno(int irq)
+{
+    return VectorPIC+irq;
+}
+@
+
+<<function i8259disable(x86)>>=
+int
+i8259disable(int irq)
+{
+    int irqbit;
+
+    /*
+     * Given an IRQ, disable the corresponding interrupt
+     * in the 8259.
+     */
+    if(irq < 0 || irq > MaxIrqPIC){
+        print("i8259disable: irq %d out of range\n", irq);
+        return -1;
+    }
+    irqbit = 1<<irq;
+
+    ilock(&i8259lock);
+    if(!(i8259mask & irqbit)){
+        i8259mask |= irqbit;
+        if(irq < 8)
+            outb(Int0aux, i8259mask & 0xFF);
+        else
+            outb(Int1aux, (i8259mask>>8) & 0xFF);
+    }
+    iunlock(&i8259lock);
+    return 0;
+}
+@
+
+<<function i8259on(x86)>>=
+void
+i8259on(void)
+{
+    outb(Int0aux, i8259mask&0xFF);
+    outb(Int1aux, (i8259mask>>8)&0xFF);
+}
+@
+
+
+<<function i8259off(x86)>>=
+void
+i8259off(void)
+{
+    outb(Int0aux, 0xFF);
+    outb(Int1aux, 0xFF);
+}
+@
+
+
+\section{Interrupt [[vectortable]] and [[idt]] (x86)}
+
+<<constant IDTADDR(x86)>>=
+#define IDTADDR   (KZERO+0x10800)   /* idt */
+@
+% why 800? why not 0x10000?
+
+<<global vectortable(x86)>>=
+TEXT vectortable(SB), $0
+        CALL _strayintr(SB); BYTE $0x00         /* divide error */
+        CALL _strayintr(SB); BYTE $0x01         /* debug exception */
+        CALL _strayintr(SB); BYTE $0x02         /* NMI interrupt */
+        CALL _strayintr(SB); BYTE $0x03         /* breakpoint */
+        CALL _strayintr(SB); BYTE $0x04         /* overflow */
+        CALL _strayintr(SB); BYTE $0x05         /* bound */
+        CALL _strayintr(SB); BYTE $0x06         /* invalid opcode */
+        CALL _strayintr(SB); BYTE $0x07         /* no coprocessor available */
+        CALL _strayintrx(SB); BYTE $0x08        /* double fault */
+        CALL _strayintr(SB); BYTE $0x09         /* coprocessor segment overflow */
+        CALL _strayintrx(SB); BYTE $0x0A        /* invalid TSS */
+        CALL _strayintrx(SB); BYTE $0x0B        /* segment not available */
+        CALL _strayintrx(SB); BYTE $0x0C        /* stack exception */
+        CALL _strayintrx(SB); BYTE $0x0D        /* general protection error */
+        CALL _strayintrx(SB); BYTE $0x0E        /* page fault */
+        CALL _strayintr(SB); BYTE $0x0F         /*  */
+        CALL _strayintr(SB); BYTE $0x10         /* coprocessor error */
+        CALL _strayintrx(SB); BYTE $0x11        /* alignment check */
+        CALL _strayintr(SB); BYTE $0x12         /* machine check */
+        CALL _strayintr(SB); BYTE $0x13
+        CALL _strayintr(SB); BYTE $0x14
+        CALL _strayintr(SB); BYTE $0x15
+        CALL _strayintr(SB); BYTE $0x16
+        CALL _strayintr(SB); BYTE $0x17
+        CALL _strayintr(SB); BYTE $0x18
+        CALL _strayintr(SB); BYTE $0x19
+        CALL _strayintr(SB); BYTE $0x1A
+        CALL _strayintr(SB); BYTE $0x1B
+        CALL _strayintr(SB); BYTE $0x1C
+        CALL _strayintr(SB); BYTE $0x1D
+        CALL _strayintr(SB); BYTE $0x1E
+        CALL _strayintr(SB); BYTE $0x1F
+        CALL _strayintr(SB); BYTE $0x20         /* VectorLAPIC */
+        CALL _strayintr(SB); BYTE $0x21
+        CALL _strayintr(SB); BYTE $0x22
+        CALL _strayintr(SB); BYTE $0x23
+        CALL _strayintr(SB); BYTE $0x24
+        CALL _strayintr(SB); BYTE $0x25
+        CALL _strayintr(SB); BYTE $0x26
+        CALL _strayintr(SB); BYTE $0x27
+        CALL _strayintr(SB); BYTE $0x28
+        CALL _strayintr(SB); BYTE $0x29
+        CALL _strayintr(SB); BYTE $0x2A
+        CALL _strayintr(SB); BYTE $0x2B
+        CALL _strayintr(SB); BYTE $0x2C
+        CALL _strayintr(SB); BYTE $0x2D
+        CALL _strayintr(SB); BYTE $0x2E
+        CALL _strayintr(SB); BYTE $0x2F
+        CALL _strayintr(SB); BYTE $0x30
+        CALL _strayintr(SB); BYTE $0x31
+        CALL _strayintr(SB); BYTE $0x32
+        CALL _strayintr(SB); BYTE $0x33
+        CALL _strayintr(SB); BYTE $0x34
+        CALL _strayintr(SB); BYTE $0x35
+        CALL _strayintr(SB); BYTE $0x36
+        CALL _strayintr(SB); BYTE $0x37
+        CALL _strayintr(SB); BYTE $0x38
+        CALL _strayintr(SB); BYTE $0x39
+        CALL _strayintr(SB); BYTE $0x3A
+        CALL _strayintr(SB); BYTE $0x3B
+        CALL _strayintr(SB); BYTE $0x3C
+        CALL _strayintr(SB); BYTE $0x3D
+        CALL _strayintr(SB); BYTE $0x3E
+        CALL _strayintr(SB); BYTE $0x3F
+        CALL _syscallintr(SB); BYTE $0x40       /* VectorSYSCALL */
+        CALL _strayintr(SB); BYTE $0x41
+        CALL _strayintr(SB); BYTE $0x42
+        CALL _strayintr(SB); BYTE $0x43
+        CALL _strayintr(SB); BYTE $0x44
+        CALL _strayintr(SB); BYTE $0x45
+        CALL _strayintr(SB); BYTE $0x46
+        CALL _strayintr(SB); BYTE $0x47
+        CALL _strayintr(SB); BYTE $0x48
+        CALL _strayintr(SB); BYTE $0x49
+        CALL _strayintr(SB); BYTE $0x4A
+        CALL _strayintr(SB); BYTE $0x4B
+        CALL _strayintr(SB); BYTE $0x4C
+        CALL _strayintr(SB); BYTE $0x4D
+        CALL _strayintr(SB); BYTE $0x4E
+        CALL _strayintr(SB); BYTE $0x4F
+        CALL _strayintr(SB); BYTE $0x50
+        CALL _strayintr(SB); BYTE $0x51
+        CALL _strayintr(SB); BYTE $0x52
+        CALL _strayintr(SB); BYTE $0x53
+        CALL _strayintr(SB); BYTE $0x54
+        CALL _strayintr(SB); BYTE $0x55
+        CALL _strayintr(SB); BYTE $0x56
+        CALL _strayintr(SB); BYTE $0x57
+        CALL _strayintr(SB); BYTE $0x58
+        CALL _strayintr(SB); BYTE $0x59
+        CALL _strayintr(SB); BYTE $0x5A
+        CALL _strayintr(SB); BYTE $0x5B
+        CALL _strayintr(SB); BYTE $0x5C
+        CALL _strayintr(SB); BYTE $0x5D
+        CALL _strayintr(SB); BYTE $0x5E
+        CALL _strayintr(SB); BYTE $0x5F
+        CALL _strayintr(SB); BYTE $0x60
+        CALL _strayintr(SB); BYTE $0x61
+        CALL _strayintr(SB); BYTE $0x62
+        CALL _strayintr(SB); BYTE $0x63
+        CALL _strayintr(SB); BYTE $0x64
+        CALL _strayintr(SB); BYTE $0x65
+        CALL _strayintr(SB); BYTE $0x66
+        CALL _strayintr(SB); BYTE $0x67
+        CALL _strayintr(SB); BYTE $0x68
+        CALL _strayintr(SB); BYTE $0x69
+        CALL _strayintr(SB); BYTE $0x6A
+        CALL _strayintr(SB); BYTE $0x6B
+        CALL _strayintr(SB); BYTE $0x6C
+        CALL _strayintr(SB); BYTE $0x6D
+        CALL _strayintr(SB); BYTE $0x6E
+        CALL _strayintr(SB); BYTE $0x6F
+        CALL _strayintr(SB); BYTE $0x70
+        CALL _strayintr(SB); BYTE $0x71
+        CALL _strayintr(SB); BYTE $0x72
+        CALL _strayintr(SB); BYTE $0x73
+        CALL _strayintr(SB); BYTE $0x74
+        CALL _strayintr(SB); BYTE $0x75
+        CALL _strayintr(SB); BYTE $0x76
+        CALL _strayintr(SB); BYTE $0x77
+        CALL _strayintr(SB); BYTE $0x78
+        CALL _strayintr(SB); BYTE $0x79
+        CALL _strayintr(SB); BYTE $0x7A
+        CALL _strayintr(SB); BYTE $0x7B
+        CALL _strayintr(SB); BYTE $0x7C
+        CALL _strayintr(SB); BYTE $0x7D
+        CALL _strayintr(SB); BYTE $0x7E
+        CALL _strayintr(SB); BYTE $0x7F
+        CALL _strayintr(SB); BYTE $0x80         /* Vector[A]PIC */
+        CALL _strayintr(SB); BYTE $0x81
+        CALL _strayintr(SB); BYTE $0x82
+        CALL _strayintr(SB); BYTE $0x83
+        CALL _strayintr(SB); BYTE $0x84
+        CALL _strayintr(SB); BYTE $0x85
+        CALL _strayintr(SB); BYTE $0x86
+        CALL _strayintr(SB); BYTE $0x87
+        CALL _strayintr(SB); BYTE $0x88
+        CALL _strayintr(SB); BYTE $0x89
+        CALL _strayintr(SB); BYTE $0x8A
+        CALL _strayintr(SB); BYTE $0x8B
+        CALL _strayintr(SB); BYTE $0x8C
+        CALL _strayintr(SB); BYTE $0x8D
+        CALL _strayintr(SB); BYTE $0x8E
+        CALL _strayintr(SB); BYTE $0x8F
+        CALL _strayintr(SB); BYTE $0x90
+        CALL _strayintr(SB); BYTE $0x91
+        CALL _strayintr(SB); BYTE $0x92
+        CALL _strayintr(SB); BYTE $0x93
+        CALL _strayintr(SB); BYTE $0x94
+        CALL _strayintr(SB); BYTE $0x95
+        CALL _strayintr(SB); BYTE $0x96
+        CALL _strayintr(SB); BYTE $0x97
+        CALL _strayintr(SB); BYTE $0x98
+        CALL _strayintr(SB); BYTE $0x99
+        CALL _strayintr(SB); BYTE $0x9A
+        CALL _strayintr(SB); BYTE $0x9B
+        CALL _strayintr(SB); BYTE $0x9C
+        CALL _strayintr(SB); BYTE $0x9D
+        CALL _strayintr(SB); BYTE $0x9E
+        CALL _strayintr(SB); BYTE $0x9F
+        CALL _strayintr(SB); BYTE $0xA0
+        CALL _strayintr(SB); BYTE $0xA1
+        CALL _strayintr(SB); BYTE $0xA2
+        CALL _strayintr(SB); BYTE $0xA3
+        CALL _strayintr(SB); BYTE $0xA4
+        CALL _strayintr(SB); BYTE $0xA5
+        CALL _strayintr(SB); BYTE $0xA6
+        CALL _strayintr(SB); BYTE $0xA7
+        CALL _strayintr(SB); BYTE $0xA8
+        CALL _strayintr(SB); BYTE $0xA9
+        CALL _strayintr(SB); BYTE $0xAA
+        CALL _strayintr(SB); BYTE $0xAB
+        CALL _strayintr(SB); BYTE $0xAC
+        CALL _strayintr(SB); BYTE $0xAD
+        CALL _strayintr(SB); BYTE $0xAE
+        CALL _strayintr(SB); BYTE $0xAF
+        CALL _strayintr(SB); BYTE $0xB0
+        CALL _strayintr(SB); BYTE $0xB1
+        CALL _strayintr(SB); BYTE $0xB2
+        CALL _strayintr(SB); BYTE $0xB3
+        CALL _strayintr(SB); BYTE $0xB4
+        CALL _strayintr(SB); BYTE $0xB5
+        CALL _strayintr(SB); BYTE $0xB6
+        CALL _strayintr(SB); BYTE $0xB7
+        CALL _strayintr(SB); BYTE $0xB8
+        CALL _strayintr(SB); BYTE $0xB9
+        CALL _strayintr(SB); BYTE $0xBA
+        CALL _strayintr(SB); BYTE $0xBB
+        CALL _strayintr(SB); BYTE $0xBC
+        CALL _strayintr(SB); BYTE $0xBD
+        CALL _strayintr(SB); BYTE $0xBE
+        CALL _strayintr(SB); BYTE $0xBF
+        CALL _strayintr(SB); BYTE $0xC0
+        CALL _strayintr(SB); BYTE $0xC1
+        CALL _strayintr(SB); BYTE $0xC2
+        CALL _strayintr(SB); BYTE $0xC3
+        CALL _strayintr(SB); BYTE $0xC4
+        CALL _strayintr(SB); BYTE $0xC5
+        CALL _strayintr(SB); BYTE $0xC6
+        CALL _strayintr(SB); BYTE $0xC7
+        CALL _strayintr(SB); BYTE $0xC8
+        CALL _strayintr(SB); BYTE $0xC9
+        CALL _strayintr(SB); BYTE $0xCA
+        CALL _strayintr(SB); BYTE $0xCB
+        CALL _strayintr(SB); BYTE $0xCC
+        CALL _strayintr(SB); BYTE $0xCD
+        CALL _strayintr(SB); BYTE $0xCE
+        CALL _strayintr(SB); BYTE $0xCF
+        CALL _strayintr(SB); BYTE $0xD0
+        CALL _strayintr(SB); BYTE $0xD1
+        CALL _strayintr(SB); BYTE $0xD2
+        CALL _strayintr(SB); BYTE $0xD3
+        CALL _strayintr(SB); BYTE $0xD4
+        CALL _strayintr(SB); BYTE $0xD5
+        CALL _strayintr(SB); BYTE $0xD6
+        CALL _strayintr(SB); BYTE $0xD7
+        CALL _strayintr(SB); BYTE $0xD8
+        CALL _strayintr(SB); BYTE $0xD9
+        CALL _strayintr(SB); BYTE $0xDA
+        CALL _strayintr(SB); BYTE $0xDB
+        CALL _strayintr(SB); BYTE $0xDC
+        CALL _strayintr(SB); BYTE $0xDD
+        CALL _strayintr(SB); BYTE $0xDE
+        CALL _strayintr(SB); BYTE $0xDF
+        CALL _strayintr(SB); BYTE $0xE0
+        CALL _strayintr(SB); BYTE $0xE1
+        CALL _strayintr(SB); BYTE $0xE2
+        CALL _strayintr(SB); BYTE $0xE3
+        CALL _strayintr(SB); BYTE $0xE4
+        CALL _strayintr(SB); BYTE $0xE5
+        CALL _strayintr(SB); BYTE $0xE6
+        CALL _strayintr(SB); BYTE $0xE7
+        CALL _strayintr(SB); BYTE $0xE8
+        CALL _strayintr(SB); BYTE $0xE9
+        CALL _strayintr(SB); BYTE $0xEA
+        CALL _strayintr(SB); BYTE $0xEB
+        CALL _strayintr(SB); BYTE $0xEC
+        CALL _strayintr(SB); BYTE $0xED
+        CALL _strayintr(SB); BYTE $0xEE
+        CALL _strayintr(SB); BYTE $0xEF
+        CALL _strayintr(SB); BYTE $0xF0
+        CALL _strayintr(SB); BYTE $0xF1
+        CALL _strayintr(SB); BYTE $0xF2
+        CALL _strayintr(SB); BYTE $0xF3
+        CALL _strayintr(SB); BYTE $0xF4
+        CALL _strayintr(SB); BYTE $0xF5
+        CALL _strayintr(SB); BYTE $0xF6
+        CALL _strayintr(SB); BYTE $0xF7
+        CALL _strayintr(SB); BYTE $0xF8
+        CALL _strayintr(SB); BYTE $0xF9
+        CALL _strayintr(SB); BYTE $0xFA
+        CALL _strayintr(SB); BYTE $0xFB
+        CALL _strayintr(SB); BYTE $0xFC
+        CALL _strayintr(SB); BYTE $0xFD
+        CALL _strayintr(SB); BYTE $0xFE
+        CALL _strayintr(SB); BYTE $0xFF
+@ 
+%$
+% more a global than a function really. It's essentially an array 
+% of function pointer
+
+<<global excname(x86)>>=
+static char* excname[32] = {
+    "divide error",
+    "debug exception",
+    "nonmaskable interrupt",
+    "breakpoint",
+    "overflow",
+    "bounds check",
+    "invalid opcode",
+    "coprocessor not available",
+    "double fault",
+    "coprocessor segment overrun",
+    "invalid TSS",
+    "segment not present",
+    "stack exception",
+    "general protection violation",
+    "page fault",
+    "15 (reserved)",
+    "coprocessor error",
+    "alignment check",
+    "machine check",
+    "19 (reserved)",
+    "20 (reserved)",
+    "21 (reserved)",
+    "22 (reserved)",
+    "23 (reserved)",
+    "24 (reserved)",
+    "25 (reserved)",
+    "26 (reserved)",
+    "27 (reserved)",
+    "28 (reserved)",
+    "29 (reserved)",
+    "30 (reserved)",
+    "31 (reserved)",
+};
+@ 
+
+\section{[[trap()]] (x86)}
+
+<<function _strayintr(x86)>>=
+/*
+ * Interrupt/exception handling.
+ * Each entry in the vector table calls either _strayintr or _strayintrx depending
+ * on whether an error code has been automatically pushed onto the stack
+ * (_strayintrx) or not, in which case a dummy entry must be pushed before retrieving
+ * the trap type from the vector table entry and placing it on the stack as part
+ * of the Ureg structure.
+ * The size of each entry in the vector table (6 bytes) is known in trapinit().
+ */
+TEXT _strayintr(SB), $0
+        PUSHL   AX                      /* save AX */
+        MOVL    4(SP), AX               /* return PC from vectortable(SB) */
+        JMP     intrcommon
+@
+
+
+<<function _strayintrx(x86)>>=
+TEXT _strayintrx(SB), $0
+        XCHGL   AX, (SP)                /* swap AX with vectortable CALL PC */
+intrcommon:
+        PUSHL   DS                      /* save DS */
+        PUSHL   $(KDSEL)
+        POPL    DS                      /* fix up DS */
+        MOVBLZX (AX), AX                /* trap type -> AX */
+        XCHGL   AX, 4(SP)               /* exchange trap type with saved AX */
+
+        PUSHL   ES                      /* save ES */
+        PUSHL   $(KDSEL)
+        POPL    ES                      /* fix up ES */
+
+        PUSHL   FS                      /* save the rest of the Ureg struct */
+        PUSHL   GS
+        PUSHAL
+
+        PUSHL   SP                      /* Ureg* argument to trap */
+        CALL    trap(SB)
+@ 
+
+% todo: [[Cpu]] debugging fields?
+<<[[Cpu]] other fields>>=
+int lastintr; // debugging
+@
+% actually unused in bcm/
+
+<<function trap(x86)>>=
+/*
+ *  All traps come here.  It is slower to have all traps call trap()
+ *  rather than directly vectoring the handler. However, this avoids a
+ *  lot of code duplication and possible bugs. The only exception is
+ *  VectorSYSCALL.
+ *  Trap is called with interrupts disabled via interrupt-gates.
+ */
+//@Scheck: not dead, called from assembly by _strayintr
+void trap(Ureg* ureg)
+{
+    bool clockintr;
+    bool user;
+    int i, vno;
+    char buf[ERRMAX];
+    Vctl *ctl, *v;
+    Cpu *mach;
+
+    if(!trapinited){
+        /* fault386 can give a better error message */
+        if(ureg->trap == VectorPF)
+            fault386(ureg, nil);
+        panic("trap %lud: not ready", ureg->trap);
+    }
+
+    cpu->perf.intrts = arch_perfticks();
+
+    user = (ureg->cs & 0xFFFF) == UESEL; // TODO: arch_userureg
+
+    if(user){
+        up->dbgreg = ureg;
+        <<[[trap()]] adjust kentry when interrupt user>>
+    }
+    // else if !user, then that means we interrupted a syscall() which should
+    // already have done those things, so no need for redundancy
+
+    clockintr = false;
+
+    vno = ureg->trap;
+    if(ctl = vctl[vno]){
+        if(ctl->isintr){
+            cpu->intr++;
+            if(vno >= VectorPIC && vno != VectorSYSCALL)
+                cpu->lastintr = ctl->irq;
+        }
+
+        if(ctl->isr)
+            ctl->isr(vno);
+        for(v = ctl; v != nil; v = v->next){
+            if(v->f) // this can be null?
+                v->f(ureg, v->a);
+        }
+        if(ctl->eoi)
+            ctl->eoi(vno);
+
+        if(ctl->isintr){
+            intrtime(cpu, vno);
+
+            if(ctl->irq == IrqCLOCK || ctl->irq == IrqTIMER)
+                clockintr = true;
+
+            if(up && !clockintr)
+                preempt();
+        }
+    } // no Vctl?
+    else if(vno < nelem(excname) && user){
+        arch_spllo();
+        snprint(buf, sizeof buf, "sys: trap: %s", excname[vno]);
+        postnote(up, 1, buf, NDebug);
+    }
+    else if(vno >= VectorPIC && vno != VectorSYSCALL){
+        /*
+         * An unknown interrupt.
+         * Check for a default IRQ7. This can happen when
+         * the IRQ input goes away before the acknowledge.
+         * In this case, a 'default IRQ7' is generated, but
+         * the corresponding bit in the ISR isn't set.
+         * In fact, just ignore all such interrupts.
+         */
+
+        /* call all interrupt routines, just in case */
+        for(i = VectorPIC; i <= MaxIrqLAPIC; i++){
+            ctl = vctl[i];
+            if(ctl == nil)
+                continue;
+            if(!ctl->isintr)
+                continue;
+            for(v = ctl; v != nil; v = v->next){
+                if(v->f)
+                    v->f(ureg, v->a);
+            }
+            /* should we do this? */
+            if(ctl->eoi)
+                ctl->eoi(i);
+        } // remove? ugly?
+
+        /* clear the interrupt */
+        i8259isr(vno);
+        <<[[trap()]] debugging(x86)>>
+        cpu->spuriousintr++;
+        if(user)
+            kexit(ureg);
+        return;
+    }else{
+        if(vno == VectorNMI){
+            /*
+             * Don't re-enable, it confuses the crash dumps.
+            nmienable();
+             */
+            iprint("cpu%d: NMI PC %#8.8lux\n", cpu->cpuno, ureg->pc);
+            while(cpu->cpuno != 0)
+                ;
+        }
+        dumpregs(ureg);
+        if(!user){
+            ureg->sp = (ulong)&ureg->sp;
+            _dumpstack(ureg);
+        }
+        if(vno < nelem(excname))
+            panic("%s", excname[vno]);
+        panic("unknown trap/intr: %d", vno);
+    }
+    arch_splhi(); // possible arch_spllo() done above
+
+    <<[[trap()]] if delaysched>>
+
+    if(user){
+        if(up->procctl || up->nnote)
+            notify(ureg);
+        kexit(ureg);
+    }
+}
+@ 
+
+
+<<function kexit(x86)>>=
+/* go to user space */
+void
+kexit(Ureg*)
+{
+    <<[[kexit()]] tos adjustments>>
+}
+@ 
+
+<<[[trap()]] debugging(x86)>>=
+        if(0)print("cpu%d: spurious interrupt %d, last %d\n",
+            cpu->cpuno, vno, cpu->lastintr);
+        if(0)if(conf.ncpu > 1){
+            for(i = 0; i < MAXCPUS; i++){
+                if(!(active.cpus & (1<<i)))
+                    continue;
+                mach = CPUS(i);
+                if(cpu->cpuno == mach->cpuno)
+                    continue;
+                print(" cpu%d: last %d",
+                    mach->cpuno, mach->lastintr);
+            }
+            print("\n");
+        }
+@
+
+
+\section{[[syscall()]] (x86)}
+
+<<enum vector cases(x86)>>=
+    //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
+    // VectorSYSCALL = 64, in mem.h because used by Assembly too
+@
+
+<<function _syscallintr(x86)>>=
+/*
+ * This is merely _strayintr from l.s optimised to vector
+ * to syscall() without going through trap().
+ */
+TEXT _syscallintr(SB), $0
+        PUSHL   $VectorSYSCALL                  /* trap type */
+
+        PUSHL   DS
+        PUSHL   ES
+        PUSHL   FS
+        PUSHL   GS
+        PUSHAL
+        MOVL    $(KDSEL), AX
+        MOVW    AX, DS
+        MOVW    AX, ES
+        PUSHL   SP
+        CALL    syscall(SB)
+
+        POPL    AX
+        POPAL
+        POPL    GS
+        POPL    FS
+        POPL    ES
+        POPL    DS
+        ADDL    $8, SP                          /* pop error code and trap type */
+        IRETL
+@ 
+
+<<function syscall(x86)>>=
+/*
+ *  Syscall is called directly from assembler without going through trap().
+ */
+//@Scheck: not dead, called from assembly by _syscallintr
+void syscall(Ureg* ureg)
+{
+    char *e;
+    ulong   sp;
+    long    ret;
+    int i, s;
+    ulong scallnr;
+    vlong startns, stopns;
+
+    if((ureg->cs & 0xFFFF) != UESEL) // TODO: arch_userureg
+        panic("syscall: cs 0x%4.4luX", ureg->cs);
+
+    <<[[syscall()]] adjust kentry>>
+
+    cpu->syscall++;
+    up->insyscall = true;
+
+    up->pc = ureg->pc;
+    up->dbgreg = ureg;
+    sp = ureg->usp;
+
+    // syscall number!
+    scallnr = ureg->ax;
+
+    <<[[syscall()]] Proc_tracesyscall if, syscall entry(x86)>>
+
+    <<[[syscall()]] fp adjustments if fork(x86)>>
+    arch_spllo();
+
+    up->nerrlab = 0;
+    ret = -1;
+
+    if(!waserror()){
+        if(scallnr >= nsyscall || systab[scallnr] == nil){
+            pprint("bad sys call number %lud pc %lux\n",
+                scallnr, ureg->pc);
+            postnote(up, 1, "sys: bad sys call", NDebug);
+            error(Ebadarg);
+        }
+
+        if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD)) // adjust Tos ?
+            validaddr(sp, sizeof(Sargs)+BY2WD, false);
+
+        // copy syscall arguments from user stack to up->sargs
+        up->sargs = *((Sargs*)(sp+BY2WD)); // 1 word for? return pc?
+        up->psstate = sysctab[scallnr];
+
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        //IMPORTANT: The actual system call
+        ret = systab[scallnr](up->sargs.args);
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        poperror();
+    }else{
+        /* failure: save the error buffer for errstr */
+        e = up->syserrstr;
+        up->syserrstr = up->errstr;
+        up->errstr = e;
+    }
+
+    if(up->nerrlab){
+        print("bad errstack [%lud]: %d extra\n", scallnr, up->nerrlab);
+        for(i = 0; i < NERR; i++)
+            print("sp=%lux pc=%lux\n",
+                up->errlab[i].sp, up->errlab[i].pc);
+        panic("error stack");
+    }
+
+    /*
+     *  Put return value in frame.  On the x86 the syscall is
+     *  just another trap and the return value from syscall is
+     *  ignored.  On other machines the return value is put into
+     *  the results register by caller of syscall.
+     */
+    ureg->ax = ret;
+
+    <<[[syscall()]] Proc_tracesyscall if, syscall exit(x86)>>
+
+    up->insyscall = false;
+    up->psstate = nil;
+
+    <<[[syscall()]] call noted()>>
+    <<[[syscall()]] call notify()(x86)>>
+
+    <<[[syscall()]] if delaysched(x86)>>
+    kexit(ureg);
+}
+@ 
+%        //if(0 && up->pid == 1)
+%        //    print("syscall %lud error %s\n", scallnr, up->syserrstr);
+
+
+<<function userpc(x86)>>=
+/*
+ *  return the userpc the last exception happened at
+ */
+ulong
+arch_userpc(void)
+{
+    Ureg *ureg;
+
+    ureg = (Ureg*)up->dbgreg;
+    return ureg->pc;
+}
+@ 
+
+\chapter{Virtual Memory}
+
+% segmentation + pagination on intel, but like most OS, pagination
+% offers most of the advantages so less need segmentation once use
+% pagination. Will use segmentation only for security to differentiate
+% kernel vs user.
+
+% what a system with only segmentation? can do a lot too.
+
+\section{Segmentation and [[gdt]] (x86)}
+
+% see Basic segmentation intialization section too
+
+% use segments mostly for security, for kernel vs user different
+% level. CS will contain a selector in gdt (user can't change
+% CS?) with gdt describe ring.
+
+% could be an enum, but has to be used from assembly too
+<<constant x86 segments>>=
+/*
+ *  known x86 segments (in GDT) and their selectors
+ */
+#define NULLSEG 0 /* null segment */
+#define KDSEG 1 /* kernel data/stack */
+#define KESEG 2 /* kernel executable */ 
+#define UDSEG 3 /* user data/stack */
+#define UESEG 4 /* user executable */
+#define TSSSEG  5 /* task segment */
+<<constant x86 other segments>>
+#define NGDT    10  /* number of GDT entries required */
+@
+
+% will do MOVE XXSEG, AX; MOVE AX, ES
+% can't do MOVE AX, CS, for that we do jmp XXSEG:ADDR
+% actually will use XXSEL, not XXSEG, see below
+
+% also used for IDT
+<<struct Segdesc(x86)>>=
+struct Segdesc
+{
+    ulong d0; // ??
+    ulong d1; // ??
+};
+@ 
+% rename, first is size and second is flag
+
+% #define ring0, ring3? instead of 0 and 3 below?
+
+
+<<constant segment field extractors(x86)>>=
+/*
+ *  fields in segment descriptors
+ */
+#define SEGDATA (0x10<<8) /* data/stack segment */
+#define SEGEXEC (0x18<<8) /* executable segment */
+#define SEGTSS  (0x9<<8)  /* TSS segment */
+//#define SEGCG (0x0C<<8) /* call gate */
+#define SEGIG (0x0E<<8) /* interrupt gate */
+//#define SEGTG (0x0F<<8) /* trap gate */
+
+//#define SEGTYPE (0x1F<<8)
+
+#define SEGP  (1<<15)   /* segment present */
+
+#define SEGPL(x) ((x)<<13)  /* priority level */
+
+#define SEGB  (1<<22)   /* granularity 1==4k (for expand-down) */
+#define SEGG  (1<<23)   /* granularity 1==4k (for other) */
+//#define SEGE  (1<<10)   /* expand down */
+
+#define SEGW  (1<<9)    /* writable (for data/stack) */
+#define SEGR  (1<<9)    /* readable (for code) */
+
+#define SEGD  (1<<22)   /* default 1==32bit (for code) */
+@
+
+
+
+<<global gdt(x86)>>=
+Segdesc gdt[NGDT] =
+{
+[NULLSEG]   { 0, 0},        /* null descriptor */
+[KDSEG]     DATASEGM(0),        /* kernel data/stack */
+[KESEG]     EXECSEGM(0),        /* kernel code */
+[UDSEG]     DATASEGM(3),        /* user data/stack */
+[UESEG]     EXECSEGM(3),        /* user code */
+[TSSSEG]    TSSSEGM(0,0),       /* tss segment */
+<<[[gdt]] other elements(x86)>>
+};
+@
+% copied in cpu->gdt (at CPU0GDT addresS) in mmuinit0
+% speaks about user! as opposed to the more basic tgdt in _setup_segmentation
+
+<<macros xxxSEGM(x86)>>=
+/*
+ * Simple segment descriptors with no translation.
+ */
+#define DATASEGM(p) { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
+#define EXECSEGM(p) { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
+#define TSSSEGM(b,p) { ((b)<<16)|sizeof(Tss),\
+                   ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
+<<macros other xxxSEGM(x86)>>
+@
+% maybe could define redundant C structure with bitfield to make
+% this clearer. kencc supports bitfield? but has to be used from asm too no?
+
+
+
+
+
+<<[[Cpu]] [[Arch]] other fields(x86)>>=
+// array<Segdesc>
+Segdesc *gdt;     /* gdt for this processor */
+@
+
+% CPU0GDT? and the other? mostly similar, just the 
+% TSS change I think. Why use TSS?
+
+
+<<constant x86 segment selectors>>=
+//#define NULLSEL SELECTOR(NULLSEG, SELGDT, 0)
+#define KDSEL SELECTOR(KDSEG, SELGDT, 0)
+#define KESEL SELECTOR(KESEG, SELGDT, 0)
+#define UESEL SELECTOR(UESEG, SELGDT, 3)
+#define UDSEL SELECTOR(UDSEG, SELGDT, 3)
+#define TSSSEL  SELECTOR(TSSSEG, SELGDT, 0)
+<<constant x86 other segment selectors>>
+@
+% why need that?
+
+<<function userureg(x86)>>=
+//#define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
+int
+arch_userureg(Ureg* ur)
+{
+  return (((ur)->cs & 0xFFFF) == UESEL);
+}
+@
+% ->cs, see Ureg in x86 section in overview chapter
+%todo: could be used at more places actually
+
+
+
+<<constant SELGDT(x86)>>=
+#define SELGDT  (0<<2)  /* selector is in gdt */
+@
+
+<<macro SELECTOR(x86)>>=
+#define SELECTOR(idx, type, prio) (((idx)<<3) | (type) | (prio))
+@
+
+% could put code of tgdt of initialization here? but the real gdt
+% is the one above, the tgdt is just used at the beginning
+
+
+\section{Pagination and [[mmupd]], [[mmupt]] (x86)} 
+
+<<constant PTExxx(x86)>>=
+/*
+ *  physical MMU
+ */
+#define PTEVALID  (1<<0)
+
+#define PTEWRITE  (1<<1)
+#define PTERONLY  (0<<1)
+
+// x86 specific constants
+//#define PTEKERNEL (0<<2)
+#define PTEUSER   (1<<2)
+
+#define PTEWT       (1<<3) // Write Through, e.g. VGA memory, mean??
+#define PTEUNCACHED (1<<4) // ??
+#define PTESIZE   (1<<7) // Big pages (x86 extension)
+#define PTEGLOBAL (1<<8) // do not clear from TLB kernel pages (x86 extension)
+@
+
+% PTESIZE is used to say this entry actually maps a big page (4Mo, not 4Ko)
+% but is used only for vmap mapping
+
+\section{Page fault (x86)}
+
+% trap -> <>
+<<function fault386>>=
+static void
+fault386(Ureg* ureg, void*)
+{
+    virt_addr addr; 
+    bool read, insyscall, user;
+    int n; // ret_code
+    char buf[ERRMAX];
+
+    addr = getcr2(); // faulting va
+    read = !(ureg->ecode & 2);
+    user = (ureg->cs & 0xFFFF) == UESEL;
+
+    if(!user){
+        if(vmapsync(addr))
+            return;
+        if(addr >= USTKTOP)
+            panic("kernel fault: bad address pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
+        if(up == nil)
+            panic("kernel fault: no user process pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
+    }
+    if(up == nil)
+        panic("user fault: up=0 pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
+
+    insyscall = up->insyscall;
+    up->insyscall = true; // really?
+
+    n = fault(addr, read); // portable code
+
+    if(n < 0){
+        if(!user){
+            dumpregs(ureg);
+            panic("fault: 0x%lux", addr);
+        }
+        checkpages();
+        //checkfault(addr, ureg->pc);
+        snprint(buf, sizeof buf, "sys: trap: fault %s addr=0x%lux",
+            read ? "read" : "write", addr);
+        postnote(up, 1, buf, NDebug);
+    }
+    up->insyscall = insyscall;
+}
+@ 
+
+<<function checkpages>>=
+void
+checkpages(void)
+{
+    int checked;
+    ulong addr, off;
+    Pagetable *p;
+    Page *pg;
+    Segment **sp, **ep, *s;
+    
+    if(up == nil)
+        return;
+
+    checked = 0;
+    // foreach(up->seg)
+    for(sp=up->seg, ep=&up->seg[NSEG]; sp<ep; sp++){
+        s = *sp;
+        if(s == nil)
+            continue;
+        qlock(&s->lk);
+        for(addr=s->base; addr<s->top; addr+=BY2PG){
+            off = addr - s->base;
+            p = s->pagedir[off/PAGETABMAPMEM];
+            if(p == nil)
+                continue;
+            pg = p->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
+            if(pg == nil || pagedout(pg))
+                continue;
+            arch_checkmmu(addr, pg->pa);
+            checked++;
+        }
+        qunlock(&s->lk);
+    }
+    print("%ld %s: checked %d page table entries\n", up->pid, up->text, checked);
+}
+@
+
+
+\chapter{Advanced Topics}
+
+\section{Floating point (x86)}
+
+\section{Advanced virtual memory (x86)}
 
 \part{Files}
 
@@ -925,7 +2483,7 @@ enum misc_constants
 \ifallcode
 <<core/386/dat_forward.h>>=
 typedef union Arch_FPsave  Arch_FPsave;
-typedef struct Arch_ProcMMU Arch_ProcMMU;
+typedef struct Arch_Proc Arch_Proc;
 
 typedef struct BIOS32si BIOS32si;
 typedef struct BIOS32ci BIOS32ci;
@@ -4528,7 +6086,7 @@ extern phys_addr *multiboot;
 /*
  *  MMU stuff in proc
  */
-<<struct ArchProcMMU(x86)>>
+<<struct ArchProc(x86)>>
 
 <<struct KMap(x86)>>
 <<macro VA(x86)>>

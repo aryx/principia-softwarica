@@ -12,7 +12,7 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, I changed for the better a few things :)
-% - removed deadcode (e.g. field Proc.qlock, semalock, Arch_Conf, etc)
+% - removed deadcode (e.g. Proc.qlock, semalock, Arch_Conf, etc)
 % - moved code in init/user such as preboot vs boot vs init
 % - introduced syssema.c (found while going through Kernel_extra.nw)
 % - introduced notion of IPC and time and interrupt (changed files accordingly)
@@ -55,15 +55,9 @@
 %    * [[xxx]] other fields, [[xxx]] extra fields
 %    * [[xxx()]] yyy case>>, <<enum xxx cases>>
 % - distribute parts of the file before
+% - switch to ARM and Raspberry Pi for the arch-specific code.
 % - TODO add figures (hand made), so many things will be easier to understand
 %   once you have a picture of data structures and their relations
-
-%TODO:
-% - lots of things could be reduced if C had better support for lists or hash;
-%   there are lots of duplicated code adding/removing stuff in list
-%   (e.g. tdel(), tadd(), etc)
-% - put some "lemma/theorem" in the code, which are prolog/datalog queries
-%   explaining some invariants :)
 
 %------------------------------------------------------------------------------
 % Packages
@@ -192,19 +186,26 @@ processes?
 %  size for read? but then how know the size? it's a maxsize
 %  but if newlines it is passed before?
 
+%tags used for recurring themes:
+%x86: how ARM code relates to x86 (same/similar/very-different)
+
 \section{The \plan kernel: [[9]]}
 
 % We chose plan9 kernel. A good basis for the other books.
-% Made by Unix master Ken Thompson!
+% Made by Unix master Ken Thompson! Unix 2.0 (see Principia.nw)
 
-% 9 for Raspberry Pi. Simpler archi.
+% We will focus on code of 9 for Raspberry Pi. Simpler archi.
+% Will have (ARM) in section when ARM specific. But most of the code
+% in this book is portable code. The same code is used for 9 for x86.
 
-%graphics and network in other books.
+%Graphics and network in other books.
 
-% some disadvantages of 9: more general but also probably less
-% efficient, no buffer cache really, graphic stack in the kernel,
-% hardcoded split for kernel mem vs images mem and user mem,
-% other stuff?
+%Some disadvantages of 9: more general but also probably less
+% efficient, 
+% - no buffer cache really, 
+% - graphic stack in the kernel,
+% - hardcoded split for kernel mem vs images mem and user mem,
+% - other stuff?
 
 
 \section{Other kernels}
@@ -240,7 +241,7 @@ bigger than \plan equivalent core.
 \end{itemize}
 
 %industry:
-% - Window kernel? doc somewhere? paper by Dave Cutler?
+% - Window kernel? Doc somewhere? paper by Dave Cutler?
 % - macOS XNU (based on CMU Mach)
 % - Linux
 % - Symbian
@@ -251,7 +252,7 @@ bigger than \plan equivalent core.
 % - Unix
 % - ...
 %mini:
-% - minimal os to get to print stuff http://littleosbook.github.io/book.pdf
+% - minimal OS to get to print stuff http://littleosbook.github.io/book.pdf
 %other: so many ...
 % - nuttx, ils ont meme une graphic stack, widget, window manager
 % - oberon, see www.qemu-advent-calendar.org day 12
@@ -326,7 +327,8 @@ cover the practice.
 \begin{itemize}
 \item The ARM architecture:
 % actually maybe not that much. Mention Raspberry Pi instead of ARM?
-% see \book{Machine}?
+% see \book{Machine}? help, but \book{Machine} does not emulate everything
+% like MMU or coprocessors, so less useful.
 
 \item Assembly:
 % ref? and assembly for ARM actually
@@ -382,6 +384,7 @@ for itself (via the windowing system)
 \item a file abstraction, so a process can read and store data
 whether it's on a disk, network, floppy, etc
 % continous even though spreaded on concrete disk (like mm)
+% used also to represent devices! uniform access!
 
 \item a directory abstraction, so a process can organize data
 whether it's on a disk, network, floppy, etc
@@ -425,7 +428,7 @@ provides to the user programs.
 \section{[[9]] syscall interface}
 
 % Saw general principles.
-% Will now focus on plan9 kernel. Plan9 is successor of unix so share philosphy.
+% Will now focus on plan9 kernel. Plan9 is successor of Unix so share philosphy.
 % Philosphy unix is everything is a file.
 % Philosphy plan9 is everything is a file server.
 % see 9.ps, excellent introduction to Plan9 advanced features
@@ -448,7 +451,9 @@ provides to the user programs.
 #define	ERRSTR		39
 @ 
 
+% will see in helloraw.c how to use those codes to perform syscall to kernel.
 % will see sys_nop() soon.
+
 
 % use an enum instead in sys.h? but then the script that generates
 %  the .s in libc/ will be a bit more complicated and the syscall numbers
@@ -628,14 +633,18 @@ provides to the user programs.
 
 \section{The Raspberry Pi machine (ARM)}
 
-% Raspberry Pi. Hobbist machine. Cheap. 
+% Raspberry Pi. Hobbyist machine. Cheap.
+
+% * Broadcom bcm2835 SoC, as used in Raspberry Pi
+% * arm1176jzf-s processor (armv6)
 
 % Focus mostly on code for Pi 1 Model B. ARMv6 32 bits.
 % See Appendix~\ref{} for code for Raspberry Pi 2 and SMP.
 % In rest when I say Raspberry Pi and ARM is mostly Raspberry Pi 1 Model B
 % and ARMv6!.
 
-%PC vs raspberry pi?
+%x86: PC vs Raspberry Pi?
+
 
 \subsection{ARM CPU}
 
@@ -643,9 +652,12 @@ provides to the user programs.
 % Most popular archi in smartphones. Most popular archi in number of devices.
 % More than x86!
 
-%http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0360f/BIHGGAFJ.html
+%https://en.wikipedia.org/wiki/ARM_architecture
+%http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0301h/index.html
+%https://www.heyrick.co.uk/armwiki/Main_Page 
+% (RiscOS oriented, but still a few good pages)
 
-\subsubsection{ARM registers, [[Ureg]]}
+\subsubsection{Main registers, [[Ureg]]}
 
 <<struct Ureg(arm)>>=
 struct Ureg {
@@ -678,10 +690,14 @@ struct Ureg {
     ulong   pc; /* interrupted addr */ // r15
 };
 @
-% Ureg for user registers.
+%x86: less regular naming
+
+% Ureg for user registers. 
 % Ureg will be used when saving state of processes.
 % Save pc/sp but also value of current registers
 % (and also of float registers, see Appendix).
+% Save PSR because contains the flag bits NZCV (dont care so much
+% about control bits because it should be PsrUsr always)
 
 % on qemu use C-Alt-2 and then 'info registers' 'info cpus' etc :)
 % qemu-system-arm. Actually lots of different ARM, just like PCs.
@@ -691,17 +707,35 @@ struct Ureg {
 %  MOVW $0, R0
 
 
-\subsubsection{Program Status Register ([[PsrXxx]])}
+\subsubsection{Program Status Register ([[PSR]])}
 
-% Ureg.psr! important.
+% http://infocenter.arm.com/help/topic/com.arm.doc.ddi0301h/I2837.html
+% https://www.heyrick.co.uk/armwiki/The_Status_register
+
+% Ureg.psr! important. Need to restore it too!
+
+%example of use:
+% CPSR
+
+%dead: non-control bits
+% <<type PsrArith(arm)>>=
+% #define PsrV        0x10000000      /* overflow */
+% #define PsrC        0x20000000      /* carry/borrow/extend */
+% #define PsrZ        0x40000000      /* zero */
+% #define PsrN        0x80000000      /* negative/less than */
+% @
 
 % example of use:
-%    MOVW    CPSR, R0            /* turn off irqs (but not fiqs) */
-%    ORR $(PsrDirq), R0, R1
-%    MOVW R1, CPSR
-% (5a translates that in the special instruction ??)
 
 
+
+\subsubsection{Processor modes}
+
+% "control bits" are last 8 bits in PSR register. Can not be
+% changed by user. Can be changed only when in privileged mode.
+% (the control bits changes also when an exception occurs).
+
+% 16 domains, but really use 2, user vs supervisor(privileged/protected).
 <<type PsrMode(arm)>>=
 #define PsrMusr     0x00000010  /* user mode */
 #define PsrMsvc     0x00000013  /* `protected mode for OS' */
@@ -711,32 +745,8 @@ struct Ureg {
 %dead: #define PsrMmon     0x00000016  /* `secure monitor' (trustzone hyper) */
 %dead: #define PsrMsys     0x0000001F  /* `privileged user mode for OS' (trustzone) */
 
-<<[[PsrMode]] other cases(arm)>>=
-#define PsrMirq     0x00000012
-#define PsrMfiq     0x00000011
-@
-<<[[PsrMode]] other cases(arm)>>=
-#define PsrMabt     0x00000017
-#define PsrMund     0x0000001B
-@
-% less used
-
-
-
-<<global trapnames(arm)>>=
-static char *trapnames[PsrMask+1] = {
-    [ PsrMusr ] "user mode",
-    [ PsrMsvc ] "svc/swi exception",
-    [ PsrMfiq ] "fiq interrupt",
-    [ PsrMirq ] "irq interrupt",
-    [ PsrMabt ] "prefetch abort/data abort",
-    [ PsrMabt+1 ] "data abort",
-    [ PsrMund ] "undefined instruction",
-};
-@
-%dead:     [ PsrMsys ] "sys trap",
-
-
+%example of use: (but can change those bits only when already in svc mode)
+% 
 
 <<type PsrDisable(arm)>>=
 #define PsrDfiq     0x00000040      /* disable FIQ interrupts */
@@ -745,16 +755,20 @@ static char *trapnames[PsrMask+1] = {
 % Dirq vs Mirq? Being in an interrupt handler and disabling IRQs
 % are two different things!
 
-%dead:
-% <<type PsrArith(arm)>>=
-% #define PsrV        0x10000000      /* overflow */
-% #define PsrC        0x20000000      /* carry/borrow/extend */
-% #define PsrZ        0x40000000      /* zero */
-% #define PsrN        0x80000000      /* negative/less than */
-% @
+% example of use:
+%    MOVW    CPSR, R0            /* turn off irqs (but not fiqs) */
+%    ORR $(PsrDirq), R0, R1
+%    MOVW R1, CPSR
+% (5a translates that in the special instruction ??)
 
+% CPSR and SPSR.
 
-\subsubsection{System control coprocessor ([[CpSC]])}
+% banked (shadow) registers.
+
+%\subsubsection{Exceptions}
+%HVECTORS here?
+
+\subsection{ARM coprocessors}
 
 % PSR nice, but limited. For extra functionalities, enter coprocessors
 % and their registers.
@@ -777,6 +791,10 @@ static char *trapnames[PsrMask+1] = {
 
 % Those coprocessors have primary and secondary registers
 % that are accessible via MRC instruction.
+% C0, C1, etc. See \book{Assembler}.
+
+\subsubsection{System control coprocessor ([[CpSC]])}
+
 
 <<type CpSC primary registers(arm)>>=
 #define CpCONTROL   1           /* miscellaneous control */
@@ -797,19 +815,153 @@ static char *trapnames[PsrMask+1] = {
 % will see later how to use those primary registers.
 
 
+<<type CpCONTROL opcode2(arm)>>=
+/*
+ * CpCONTROL op2 codes, op1==0, Crm==0.
+ */
+#define CpMainctl   0
+<<[[CpCONTROL.opcode2]] other cases(arm)>>
+@
+
+
+<<type CpCONTROL CpMainctl(arm)>>=
+/*
+ * CpCONTROL: op1==0, CRm==0, op2==CpMainctl.
+ * main control register.
+ * cortex/armv7 has more ops and CRm values.
+ */
+#define CpCmmu      0x00000001  /* M: MMU enable */
+#define CpCdcache   0x00000004  /* C: data cache on */
+<<[[CpCONTROL.CpMainctl]] other cases(arm)>>
+#define CpCicache   0x00001000  /* I: instruction cache on */
+#define CpChv       0x00002000  /* V: high vectors */
+#define CpCrr       (1<<14) /* RR: round robin vs random cache replacement */
+#define CpCha       (1<<17)     /* HA: hw access flag enable */
+#define CpCdz       (1<<19)     /* DZ: divide by zero fault enable */
+#define CpCfi       (1<<21)     /* FI: fast intrs */
+#define CpCve       (1<<24)     /* VE: intr vectors enable */
+#define CpCee       (1<<25)     /* EE: exception endianness */
+#define CpCnmfi     (1<<27)     /* NMFI: non-maskable fast intrs. */
+#define CpCtre      (1<<28)     /* TRE: TEX remap enable */
+#define CpCafe      (1<<29)     /* AFE: access flag (ttb) enable */
+@
+%dead:
+% #define CpCalign    0x00000002  /* A: alignment fault enable */
+% the X: syntax refers to the ARM reference manuel bit description.
+% >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >>
+\t why not use consistently 1<<x syntax, also for CpCmmu
+\t remove dead constants
+
+\subsubsection{Floating point coprocessors}
+% 2 coprocessors, one for single and other for double precision.
+
+% See Advanced Topics.
+
+\subsection{ARM MMU}
+
+% Physical memory and virtual memory.
+% CpTTB, CpTLB, 
+% CpFAR, CpFSR ...
+
+% More about virtual memory in chapter X.
+
+% More about memory layout in Overview section.
+
 \subsection{VideoCore GPU}
-%VideoCore 4.
+%VideoCore IV.
 %GPU with framebuffer. 
 
 % example of use:
+%  ???
 
-\subsection{Devices}
+<<struct Fbinfo(arm)>>=
+// Framebuffer
+struct Fbinfo {
+    u32int  xres;
+    u32int  yres;
+    u32int  xresvirtual;
+    u32int  yresvirtual;
+    u32int  pitch;          /* returned by gpu */
+    u32int  bpp;
+    u32int  xoffset;
+    u32int  yoffset;
+    u32int  base;           /* returned by gpu */
+    u32int  screensize;     /* returned by gpu */
+};
+@
+
+<<constant FRAMEBUFFER(arm)>>=
+#define FRAMEBUFFER 0xC0000000      /* video framebuffer */
+@
+% but used mostly in Graphics.nw?
+% Physical address?
+
+\subsection{IO address space}
+
+% Yet another way to access external registers. Not coprocessors
+% here but registers in external devices.
+
+%example of use:
+% no need MCR, MRC, can use simply MOVW (really LDR/STR under the hood)
+
+% Soc.physio = 0x20000000
+\t define a constant PHYSIO(raspberry pi1)(arm)
+
+
+<<constant VIRTIO(arm)>>=
+#define VIRTIO      0x7E000000      /* i/o registers */
+@
+%max below is 0x7E0000000 + 300000 so still lots of space before 4Go.
+
+<<constant SYSTIMERS(arm)>>=
+#define SYSTIMERS (VIRTIO+0x3000)
+@
+<<constant ARMTIMER(arm)>>=
+#define ARMTIMER (VIRTIO+0xB400)
+@
+% vs CpTIMER?
+
+<<constant DMAREGS(arm)>>=
+#define DMAREGS (VIRTIO+0x7000)
+@
+<<constant INTREGS(arm)>>=
+#define INTREGS     (VIRTIO+0xB200)
+@
+% vs CpCve?
+
+<<constant MAILBOX(arm)>>=
+#define MAILBOX     (VIRTIO+0xB880)
+@
+%for GPU, add in constant name?
+<<constant POWERREGS(arm)>>=
+#define POWERREGS   (VIRTIO+0x100000)
+@
+<<constant GPIOREGS(arm)>>=
+#define GPIOREGS    (VIRTIO+0x200000)
+@
+<<constant AUXREGS(arm)>>=
+#define AUXREGS     (VIRTIO+0x215000)
+@
+%aux??
+<<constant EMMCREGS(arm)>>=
+#define EMMCREGS    (VIRTIO+0x300000)
+@
+<<constant USBREGS(arm)>>=
+#define  USBREGS (VIRTIO+0x980000)
+@
+
+
+\subsection{Raspberry Pi devices}
 
 % processors (CPU/GPU) are not everything. Also bus, devices.
-% For Raspberry Pi, SD card for storage. USB for keyboard and mouse. 
-% GPIO, etc. 
+% For Raspberry Pi, 
+%  - SD card for storage
+%  - USB for keyboard and mouse (and more, like wifi card, camera, etc)
+%  - GPIO
+%  - etc. 
 % Will see later those things and how to interact with those devices.
-
 
 % little endian, big endian, the le2xxx function?
 
@@ -925,25 +1077,26 @@ typedef int errorneg1;
 <<dat.h includes(arm)>>=
 #include "../port/portdat_concurrency.h" // Lock (used in Cpu so must be before)
 #include "dat_core.h"                    // Arch_Cpu
-#include "../port/portdat_core.h"        // Conf, Cpu, ... Label
-#include "dat_memory.h"                  // Arch_ProcMMU
+#include "../port/portdat_core.h"        // Cpu!!, Conf, Label
+#include "dat_memory.h"                  // Arch_Proc
 #include "../port/portdat_memory.h"      // Page, Pagetable, Segment, KImage
-#include "../port/portdat_files.h"       // Chan
+#include "../port/portdat_files.h"       // Chan!! Dev!!
 #include "dat_time.h"                    // Arch_HZ
 #include "../port/portdat_time.h"        // Timer
 #include "dat_processes.h"               // Arch_FPsave
-#include "../port/portdat_processes.h"   // Proc
+#include "../port/portdat_processes.h"   // Proc!!!
 #include "../port/portdat_console.h"     // keyboard queue, consdevtab
 #include "../port/portdat_devices.h"     // DevConf, DevPort (not that used)
 #include "../port/portdat_misc.h"        // Cmd
 #include "../port/portdat_buses.h"       // Uart
 #include "dat_arch.h"                    // Soc
 @
+%x86: similar
 
 % some dat_xxx.h before portdat_xxx.h sometimes because
 % the dat_xxx.h defines some arch specific structure referenced
 % in the portable one. dat_core.h defines Arch_Cpu. dat_memory.c
-% defines Arch_ProcMMU.
+% defines Arch_Proc.
 
 
 % fns.h
@@ -966,6 +1119,8 @@ typedef int errorneg1;
 #include "../port/portfns_misc.h"
 #include "../port/portfns_init.h"
 @
+%x86: same
+
 %missing compared to directories: arch/ conf/ docs/ filesystems/ lib/ 
 
 
@@ -1094,7 +1249,6 @@ void    (*cclose)(Chan*);
 void    (*arch_exit)(int);
 @
 <<portfns_core.h backward deps breaker>>=
-
 //misc/<arch>/devarch.c
 void    (*arch_coherence)(void);
 uvlong  (*arch_fastticks)(uvlong*);
@@ -1162,8 +1316,6 @@ void (*arch_delay)(int) = nil;
 void (*arch_microdelay)(int) = nil;
 
 @
-
-
 
 \fi
 
@@ -1261,7 +1413,7 @@ typedef uintptr virt_addr;
 // kernel address (mostly physical + KZERO)
 typedef uintptr kern_addr;
 @
-
+%x86: same
 
 % all structure pointers in the code are kernel addresses.
 % e.g. Page*, Segment*, be it in fields or in globals.
@@ -1273,6 +1425,7 @@ typedef void* virt_addr3;
 typedef ulong* kern_addr2;
 typedef void* kern_addr3;
 @
+%x86: same
 \fi
 %less: I think the void* is the best form, so should s/xxx_addr3/xxx_add/
 
@@ -1309,7 +1462,7 @@ typedef void* kern_addr3;
 <<constant UTZERO(arm)>>=
 #define UTZERO      (UZERO+BY2PG)       /* user text start */
 @
-% this is actually portable. Could be in portdat.h
+%x86: same
 
 % because first page will be marked as protected to detect null pointer
 % dereference
@@ -1345,7 +1498,7 @@ typedef void* kern_addr3;
 <<macro UINT2PTR(arm)>>=
 #define UINT2PTR(i) ((void*)(i))
 @
-\l remove? more readable than cast??
+\t remove? more readable than cast? meh.
 
 
 % in l.s:
@@ -1392,6 +1545,10 @@ arch_cankaddr(uintptr pa)
 
 
 %http://duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory/
+
+<<constant HVECTORS(arm)>>=
+#define HVECTORS    0xffff0000
+@
 
 \subsection{Syscall overview (ARM)}
 % kernel vs user code
@@ -1562,6 +1719,7 @@ char* getconf2(char *name)
 }
 @
 % cistrcmp???
+\t fix getconf vs getconf2, factorize x86/arm
 
 % see also confegrp
 
@@ -1608,6 +1766,7 @@ struct Cpu
 #define CPUSIZE BY2PG
 @
 % will see lots of code like $(CPUADDR+CPUSIZE)
+%x86: same
 
 <<struct Arch_Cpu(arm)>>=
 struct Arch_Cpu {
@@ -1641,6 +1800,8 @@ struct Arch_Cpu {
 <<global cpu(arm)>>=
 extern register Cpu* cpu;           /* R10 */
 @
+%x86: differs in different archi!
+
 %old: was called [[m]]
 % (arm) because different in different archi. Can afford to use register
 % (which simplifies things a lot) in arm because ARM has lots of registers.
@@ -1714,7 +1875,7 @@ struct Proc
 //--------------------------------------------------------------------
     <<[[Proc]] memory fields>>
 
-    struct Arch_ProcMMU;
+    struct Arch_Proc;
 //--------------------------------------------------------------------
 // Scheduling
 //--------------------------------------------------------------------
@@ -1764,8 +1925,8 @@ struct Proc
 % apparently this uses 3004 bytes ... huge. procalloc is 6Mo!
 
 
-<<struct Arch_ProcMMU(arm)>>=
-struct Arch_ProcMMU
+<<struct Arch_Proc(arm)>>=
+struct Arch_Proc
 {
     <<[[Proc]] [[Arch]] memory fields(arm)>>
 };
@@ -2008,28 +2169,34 @@ Dev** devtab = nil;
 <<struct Soc(arm)>>=
 struct Soc {            /* SoC dependent configuration */
     ulong   dramsize;
-
     uintptr physio;
-    uintptr busdram;
-    uintptr busio;
+    <<[[Soc]] bus fields>>
     <<[[Soc]] mmu fields>>
     <<[[Soc]] other fields>>
 };
 @
 
-<<global soc(arm)(raspberry pi1)>>=
+<<global soc(raspberry pi1)(arm)>>=
 Soc soc = {
     .dramsize   = 512*MiB,    // 0 to 0x20000000
-
     .physio     = 0x20000000, // after RAM
-    .busdram    = 0x40000000,
-    .busio      = 0x7E000000,
-    <<[[soc(raspberry pi1)]] other fields>>
+    <<[[soc(raspberry pi1)]] other fields(arm)>>
 };
 @
+% soc.physio maps then to VIRTIO in mmuinit.
 
-
-
+%XXX
+<<[[Soc]] bus fields>>=
+uintptr busdram;
+uintptr busio;
+@
+% as seen from GPU? vs as seen from CPU?
+<<[[soc(raspberry pi1)]] other fields(arm)>>=
+.busdram    = 0x40000000,
+.busio      = 0x7E000000,
+@
+\t mv later
+%???
 
 
 
@@ -2105,7 +2272,8 @@ Soc soc = {
 
 \section{[[arch_splhi()]], [[arch_spllo()]] (ARM)}
 
-% spl for System Priority Level? legacy from UNIX code?
+% spl for Set Priority Level (see glossary)
+% legacy from UNIX code?
 
 <<function arch_splhi(arm)>>=
 // bool   arch_splhi(void);
@@ -2183,7 +2351,7 @@ ulong splpc;      /* pc of last caller to arch_splhi */
 % TAS is the building block of concurrency
 
 % call we will see later as arch_tas(&lock->key)
-<<function arch_tas(arm)(raspberry pi1)>>=
+<<function arch_tas(raspberry pi1)(arm)>>=
 TEXT    arch_tas(SB), $-4
     MOVW    R0,R1
     MOVW    $1,R0
@@ -2219,7 +2387,7 @@ TEXT arm_arch_coherence(SB), $-4
 <<instruction BARRIERS(arm)>>=
 #define BARRIERS    ISB; DSB
 @
-
+\t mv later? 
 
 <<instruction ISB(arm)>>=
 #define ISB \
@@ -2271,6 +2439,7 @@ TEXT arm_arch_coherence(SB), $-4
 % (actually can simulate second one with first, see Ref later, but can be
 % useful to have something faster on certain architecture)
 
+% (lock -> inccnt) | _allocb -> <>
 <<function arch_xinc(arm)>>=
 void
 arch_xinc(long *p)
@@ -2282,9 +2451,10 @@ arch_xinc(long *p)
     arch_splx(s);
 }
 @
-%old: was called xinc? or _xinc?
-% good enough when have only 1 processor!
-% for SMP see Section~\ref{sec:smp}.
+%old: was called xinc? or _xinc? 
+\t conflict with libc version? cleanup this _xinc ainc mess
+
+% good enough when have only 1 processor! for SMP see Section~\ref{sec:smp}.
 
 
 <<function arch_xdec(arm)>>=
@@ -4118,15 +4288,18 @@ struct Segment
 % Segment acts as a kind of Page directory per process, but
 % archi-independent.
 
-<<constant PAGEDIRSIZE(x86)>>=
-#define PAGEDIRSIZE  1984
+
+<<constant PAGEDIRSIZE(arm)>>=
+#define PAGEDIRSIZE 1984
 @
+%x86: same
 %old: SEGMAPSIZE
 % why this size? 1984 Mo = 2Go - 16 Mo, not sure why
 
-<<constant SMALLPAGEDIRSIZE(x86)>>=
-#define SMALLPAGEDIRSIZE 16
+<<constant SMALLPAGEDIRSIZE(arm)>>=
+#define SMALLPAGEDIRSIZE    16
 @
+%x86: same
 %old: SSEGMAPSIZE
 
 
@@ -4151,14 +4324,16 @@ struct Pagetable
 % (first and last optimize a bit as many of the Page* can be null in pagetab)
 % actually really PageOrSwapOrNil!
 
-<<constant PAGETABMAPMEM(x86)>>=
-#define PAGETABMAPMEM (1024*1024) // 1MB
+<<constant PAGETABMAPMEM(arm)>>=
+#define PAGETABMAPMEM   (1024*1024) // 1MB
 @
+%x86: same
 %old: PTEMAPMEM
 
-<<constant PAGETABSIZE(x86)>>=
+<<constant PAGETABSIZE(arm)>>=
 #define PAGETABSIZE 256 // (PAGETABMAPMEM/BY2PG)
 @
+%x86: same
 %old: PTEPERTAB
 
 
@@ -5348,47 +5523,51 @@ sysrfork(ulong* arg)
 @ 
 % LP split
 
-\subsection{[[arch_forkchild()]] (x86)}
+\subsection{[[arch_forkchild()]] (ARM)}
 
-<<function forkchild(x86)>>=
+<<function arch_forkchild(arm)>>=
+/* 
+ *  Craft a return frame which will cause the child to pop out of
+ *  the scheduler in user mode with the return register zero.  Set
+ *  pc to point to a l.s return function.
+ */
 void
 arch_forkchild(Proc *p, Ureg *ureg)
 {
     Ureg *cureg;
 
-    /*
-     * Add 2*BY2WD to the stack to account for
-     *  - the return PC
-     *  - trap's argument (ur)
-     */
-    p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Ureg)+2*BY2WD);
+    p->sched.sp = (ulong)p->kstack+KSTACK-sizeof(Ureg);
     p->sched.pc = (ulong)arch_forkret;
 
-    cureg = (Ureg*)(p->sched.sp+2*BY2WD);
+    cureg = (Ureg*)(p->sched.sp);
     memmove(cureg, ureg, sizeof(Ureg));
-    /* return value of syscall in child */
-    cureg->ax = 0;
+
+    /* syscall returns 0 for child */
+    cureg->r0 = 0;
 
     /* Things from bottom of syscall which were never executed */
-    p->psstate = nil;
-    p->insyscall = false;
+    p->psstate = 0;
+    p->insyscall = 0;
+
+    fpusysrforkchild(p, cureg, up);
 }
 @
-% have to fake a return of syscall here, of sysrfork
+%//print("%lud setting up for forking child %lud\n", up->pid, p->pid);
 
-<<function forkret(x86)>>=
-TEXT arch_forkret(SB), $0
-        POPL    AX
-        POPAL
-        POPL    GS
-        POPL    FS
-        POPL    ES
-        POPL    DS
-        ADDL    $8, SP                  /* pop error code and trap type */
-        IRETL
+<<function arch_forkret(arm)>>=
+/*
+ *  here to jump to a newly forked process
+ */
+TEXT arch_forkret(SB), 1, $-4
+    ADD $(4*15), R13        /* make r13 point to ureg->type */
+    MOVW    8(R13), R14     /* restore link */
+    MOVW    4(R13), R0      /* restore SPSR */
+    MOVW    R0, SPSR        /* ... */
+    MOVM.DB.S (R13), [R0-R14]   /* restore registers */
+    ADD $8, R13         /* pop past ureg->{type+psr} */
+    RFE             /* MOVM.IA.S.W (R13), [R15] */
 @
-%?? POPAL? need to look at core code for returning from syscall as this is
-% what we emulate here
+%$
 
 \section{[[sysexec()]]}
 
@@ -5396,13 +5575,14 @@ TEXT arch_forkret(SB), $0
 
 %http://lwn.net/Articles/630727/
 
-<<constant AOUT_MAGIC(x86)>>=
+<<constant AOUT_MAGIC(arm)>>=
 /*
  *  parameters for sysproc.c
  */
-// I_MAGIC is defined in include/a.out.h, I for INTEL?
-#define AOUT_MAGIC  (I_MAGIC)
+// E_MAGIC is defined in include/a.out.h
+#define AOUT_MAGIC  (E_MAGIC)
 @
+
 
 % struct Exec = binary header in include/a.out.h
 
@@ -5673,16 +5853,6 @@ sysexec(ulong* arg)
 }
 @ 
 
-\subsection{[[procsetup()]] (x86)}
-
-<<function procsetup(x86)>>=
-void
-arch_procsetup(Proc* p)
-{
-  <<[[procsetup()]] fp setup(x86)>>
-}
-@ 
-
 
 % could mv in lib.h? 
 <<function l2be>>=
@@ -5697,42 +5867,103 @@ l2be(long l)
 @ 
 % >> >> >>
 
-<<function UTROUND(x86)>>=
+<<macro UTROUND(arm)>>=
 #define UTROUND(t)  ROUNDUP((t), BY2PG)
 @
+%x86: same
+
 
 % Temporary STacK TOP
-<<constant TSTKTOP(x86)>>=
-#define TSTKTOP   (USTKTOP-USTKSIZE)  /* end of new stack in sysexec */ // just below
+<<constant TSTKTOP(arm)>>=
+// end of new stack in sysexec
+#define TSTKTOP     (USTKTOP-USTKSIZE)  /* sysexec temporary stack */
+@
+%x86: same
+
+
+<<constant TSTKSIZ(arm)>>=
+#define TSTKSIZ     256 // pages in new stack; limits exec args
+@
+%x86: 100
+
+
+\subsection{[[arch_procsetup()]] (ARM)}
+
+% sysexec -> <>
+<<function arch_procsetup(arm)>>=
+/*
+ *  set mach dependent process state for a new process
+ */
+void
+arch_procsetup(Proc* p)
+{
+    fpusysprocsetup(p);
+}
+@
+%x86: same, fpu hook
+
+<<function arch_procsave(arm)>>=
+/*
+ *  Save the mach dependent part of the process state.
+ */
+void
+arch_procsave(Proc* p)
+{
+    uvlong t;
+
+    arch_cycles(&t);
+    p->pcycles += t;
+
+/* TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.*/
+    fpuprocsave(p);
+}
 @
 
-<<constant TSTKSIZ(x86)>>=
-#define TSTKSIZ   100     /* pages in new stack; limits exec args */
+<<function arch_procrestore(arm)>>=
+void
+arch_procrestore(Proc* p)
+{
+    uvlong t;
+
+    if(p->kp)
+        return;
+    arch_cycles(&t);
+    p->pcycles -= t;
+
+    fpuprocrestore(p);
+}
 @
 
+\subsection{[[arch_execregs()]] (ARM)}
 
+%Tos later in Section X
 
-
-<<function execregs(x86)>>=
+% sysexec -> <>
+<<function arch_execregs(arm)>>=
 long
 arch_execregs(ulong entry, ulong ssize, ulong nargs)
 {
     ulong *sp;
     Ureg *ureg;
 
-    <<[[execregs()]] fp adjustments(x86)>>
-
     sp = (ulong*)(USTKTOP - ssize);
     *--sp = nargs;
 
     ureg = up->dbgreg;
-    ureg->usp = (ulong)sp;
+    ureg->r13 = (ulong)sp;
     ureg->pc = entry;
-    return USTKTOP
-     <<[[execregs()]] return adjustments(x86)>>
-     ;     /* address of kernel/user shared data */
+
+    /*
+     * return the address of kernel/user shared data
+     * (e.g. clock stuff)
+     */
+    return USTKTOP-sizeof(Tos);
 }
-@ 
+@
+%//  memset(ureg, 0, 15*sizeof(ulong));
+%//print("%lud: EXECREGS pc %#ux sp %#ux nargs %ld\n", up->pid, ureg->pc, ureg->r13, nargs);
+
+
 
 
 
@@ -6150,26 +6381,29 @@ kproc(char *name, void (*func)(void *), void *arg)
 }
 @ 
 
-\subsection{[[arch_kprocchild()]] (x86)}
+\subsection{[[arch_kprocchild()]] (ARM)}
 
-<<function kprocchild(x86)>>=
+<<function arch_kprocchild(arm)>>=
+/*
+ *  setup stack and initial PC for a new kernel proc.  This is architecture
+ *  dependent because of the starting stack location
+ */
 void
-arch_kprocchild(Proc* p, void (*func)(void*), void* arg)
+arch_kprocchild(Proc *p, void (*func)(void*), void *arg)
 {
+    p->sched.pc = PTR2UINT(linkproc);
+    p->sched.sp = PTR2UINT(p->kstack+KSTACK);
+
     p->kpfun = func;
     p->kparg = arg;
-
-    /*
-     * arch_gotolabel() needs a word on the stack in
-     * which to place the return PC used to jump
-     * to linkproc().
-     */
-    p->sched.pc = (ulong)linkproc;
-    p->sched.sp = (ulong)p->kstack+KSTACK-BY2WD;
 }
-@ 
+@
+%x86: almost identical except KSTACK-BY2WD
 
-<<function linkproc(x86)>>=
+<<function linkproc(arm)>>=
+/*
+ *  this is the body for all kproc's
+ */
 static void
 linkproc(void)
 {
@@ -6177,9 +6411,11 @@ linkproc(void)
     up->kpfun(up->kparg);
     // should never reach this place?? kernel processes are supposed
     // to run forever??
-    pexit("kproc dying", /*freemem*/false); 
+    pexit("kproc exiting", 0);
 }
-@ 
+@
+%x86: same
+
 
 
 \section{Process control [[/proc/#/ctl]]}
@@ -6197,1064 +6433,321 @@ linkproc(void)
 
 % used by 'echo kill > /proc/x/ctl, and used by pager if not enough free memory
 <<enum procctl cases>>=
-    Proc_exitme,
+Proc_exitme,
 @
 
 <<[[procctl()]] Proc_exitme case>>=
-    case Proc_exitme:
-        arch_spllo();        /* pexit has locks in it */
-        pexit("Killed", true);
+case Proc_exitme:
+    arch_spllo();        /* pexit has locks in it */
+    pexit("Killed", true);
 @
 %procctl() is executed by notify() executed itself usually
 % at syscall boundary or trap
 
 % lock on p->debug hold while doing that?
 <<[[procctlreq()]] CMkill case>>=
-    case CMkill:
-        switch(p->state) {
-        <<[[procctlreq()]] CMkill case, Broken case>>
-        case Stopped:
-            p->procctl = Proc_exitme;
-            postnote(p, 0, "sys: killed", NExit);
-            ready(p);
-            break;
-        default:
-            p->procctl = Proc_exitme;
-            postnote(p, 0, "sys: killed", NExit);
-        }
+case CMkill:
+    switch(p->state) {
+    <<[[procctlreq()]] CMkill case, Broken case>>
+    case Stopped:
+        p->procctl = Proc_exitme;
+        postnote(p, 0, "sys: killed", NExit);
+        ready(p);
         break;
+    default:
+        p->procctl = Proc_exitme;
+        postnote(p, 0, "sys: killed", NExit);
+    }
+    break;
 @
 
 
 
 \chapter{Interrupts}
-
-%todo: would be nice to have a /sys/interrupts like Linux
-% has a /proc/interrupts
+%less: (ARM) in title because almost everything is arch-specific.
 
 \section{Overview}
+
+% fault vs trap vs irq vs interrupt vs exception vs syscall
+% hardware interrupt vs software interrupt
+
+% exception|interrupt > irq | syscall | fault|trap
+
+%"Exceptions occur whenever the normal flow of a program has to be 
+% halted temporarily." from ARM ref manual
 
 % fault/trap vs irq? irq is a request from "outside", generating an interrupt
 % fault/trap is also generating an interrupt, but more from "inside"
 
-% from wikipedia IRQ page:
-%  - at beginning had one PIC, IRQ0 ot IRQ7
-%  - then 2 PICs, IRQ0 to IRQ15 (and one IRQ used for the chaining I think)
-%  - then APIC, up to 255 IRQ lines per APIC
-
 % used for many things, virtual memory, swap, ... even debugging I think
 
-\section{[[Vctl]] (x86)}
+%less: would be nice to have a /sys/interrupts like Linux
+% has a /proc/interrupts
 
-<<struct Vctl(x86)>>=
-struct Vctl {
-
-    bool isintr;     /* interrupt or fault/trap */
-    int irq; // if interrupt
-  
-    void  (*f)(Ureg*, void*); /* handler to call */
-    void* a;      /* argument to call it with */
-  
-    char  name[KNAMELEN];   /* of driver */
-    int tbdf; // /* type+bus+device+function */ ??
-  
-    <<[[Vctl]] other fields(x86)>>
-    // extra
-    <<[[Vctl]] extra fields(x86)>>
-};
-@
-% V?? Vector? Interrupt vector?
-
-<<global vctl(x86)>>=
-// array<list<ref_own<Vctl>>> (next = Vctl.next)
-static Vctl *vctl[256];
-@ 
-
-<<enum vector(x86)>>=
-enum {
-    <<enum vector cases(x86)>>
-};
-@
+% Saw INTREGS in Section~\ref{X}.
 
 
-<<[[Vctl]] extra fields(x86)>>=
-// list<ref_own<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
-Vctl* next;     /* handlers on this vector */
-@
+% Control flow for hardware interrupt:
+% interrupt -> vector[x] -> vtable[x] -> _vxxx -> _vswitch -> trap -> RFE?
 
-<<global vctllock(x86)>>=
-static Lock vctllock;
-@ 
+% Control flow for syscall (software interrupt):
+% SWI -> vector[2] -> vtable[2] -> _vsvc -> syscall -> RFE
 
 
-
-% for /dev/irqalloc via devarch.c addarchfile
-<<function irqallocread(x86)>>=
-static long
-irqallocread(Chan*, void *vbuf, long n, vlong offset)
-{
-    char *buf, *p, str[2*(11+1)+KNAMELEN+1+1];
-    int m, vno;
-    long oldn;
-    Vctl *v;
-
-    if(n < 0 || offset < 0)
-        error(Ebadarg);
-
-    oldn = n;
-    buf = vbuf;
-    for(vno=0; vno<nelem(vctl); vno++){
-        for(v=vctl[vno]; v; v=v->next){
-            m = snprint(str, sizeof str, "%11d %11d %.*s\n", vno, v->irq, KNAMELEN, v->name);
-            if(m <= offset) /* if do not want this, skip entry */
-                offset -= m;
-            else{
-                /* skip offset bytes */
-                m -= offset;
-                p = str+offset;
-                offset = 0;
-
-                /* write at most max(n,m) bytes */
-                if(m > n)
-                    m = n;
-                memmove(buf, p, m);
-                n -= m;
-                buf += m;
-
-                if(n == 0)
-                    return oldn;
-            }
-        }
-    }
-    return oldn - n;
-}
-@ 
-
-
-\section{Faults (x86)}
+\section{Faults (ARM)}
 % fault/trap/exceptions
 
-<<enum vector cases(x86)>>=
-    VectorNMI = 2,    /* non-maskable interrupt */
-    VectorBPT = 3,    /* breakpoint */
-    VectorUD  = 6,    /* invalid opcode exception */
-    VectorCNA = 7,    /* coprocessor not available */
-    Vector2F  = 8,    /* double fault */
-    VectorCSO = 9,    /* coprocessor segment overrun */
-    VectorPF  = 14,   /* page fault */ //!!! page fault interrupt
-    Vector15  = 15,   /* reserved */
-    VectorCERR  = 16,   /* coprocessor error */
+% faults matches "Processor modes". 
+% Depending on processor mode, has access to certain registers of ARM or not.
+% When fault change processor operating mode.
+% (Save also CPSR in SPSR)
+
+<<[[PsrMode]] other cases(arm)>>=
+#define PsrMirq     0x00000012
 @
-% very important page fault, base of virtual memory
-
-% called by trapinit() (trap vs intr?)
-<<function trapenable(x86)>>=
-void
-trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
-{
-    Vctl *v;
-
-    if(vno < 0 || vno >= VectorPIC)
-        panic("trapenable: vno %d", vno);
-
-    v = xalloc(sizeof(Vctl));
-    v->tbdf = BUSUNKNOWN;
-    v->f = f;
-    v->a = a;
-    v->isintr = false;
-    strncpy(v->name, name, KNAMELEN);
-    v->name[KNAMELEN-1] = 0;
-
-    ilock(&vctllock);
-    //add_list(vctl[vno], v)
-    v->next = vctl[vno];
-    vctl[vno] = v;
-    iunlock(&vctllock);
-}
-@ 
-
-
-\section{IRQs (x86)}
-
-<<enum vector cases(x86)>>=
-    VectorPIC = 32,   /* external i8259 interrupts */
+<<[[PsrMode]] other cases(arm)>>=
+#define PsrMabt     0x00000017
+#define PsrMund     0x0000001B
 @
+% less used, lead to _vswitch all
 
-<<enum irq(x86)>>=
-enum {
-    IrqCLOCK  = 0, // !!! clock interrupt
-    IrqKBD    = 1,
-    IrqUART1  = 3,
-    IrqUART0  = 4,
-    IrqPCMCIA = 5,
-    IrqFLOPPY = 6,
-    IrqLPT    = 7,
-    IrqIRQ7   = 7,
-    IrqAUX    = 12,   /* PS/2 port */
-    IrqIRQ13  = 13,   /* coprocessor on 386 */
-    IrqATA0   = 14,
-    IrqATA1   = 15,
-
-    MaxIrqPIC = 15,
-  
-    IrqLINT0  = 16,   /* LINT[01] must be offsets 0 and 1 */
-    IrqLINT1  = 17,
-    IrqTIMER  = 18, // for alarms
-    IrqERROR  = 19,
-    IrqPCINT  = 20,
-    IrqSPURIOUS = 31,   /* must have bits [3-0] == 0x0F */
-
-    MaxIrqLAPIC = 31,
+<<global trapnames(arm)>>=
+static char *trapnames[PsrMask+1] = {
+    [ PsrMusr ] "user mode",
+    [ PsrMsvc ] "svc/swi exception",
+    [ PsrMfiq ] "fiq interrupt",
+    [ PsrMirq ] "irq interrupt",
+    [ PsrMabt ] "prefetch abort/data abort",
+    [ PsrMabt+1 ] "data abort",
+    [ PsrMund ] "undefined instruction",
 };
 @
-% LINT? Low interrupt? PCINT?
-% very important: clock interrupt, base of preemptive scheduling!
+%dead:     [ PsrMsys ] "sys trap",
+
+% divide by zero here?
+% page fault? PsrMabt?
 
 
-<<[[Vctl]] other fields(x86)>>=
-// interrupt service routine
-int (*isr)(int);    /* get isr bit for this irq */
-int (*eoi)(int);    /* eoi */
+\section{IRQs (ARM)}
+
+<<enum IRQ(arm)>>=
+enum IRQ {
+    IRQtimer0   = 0,
+    IRQtimer1   = 1,
+    IRQtimer2   = 2,
+    IRQtimer3   = 3,
+    IRQclock    = IRQtimer3,
+
+    IRQusb      = 9, // also IRQfiq
+    IRQdma0     = 16,
+    // IRQdma1, IRQdma2, ... via IRQDMA macro below
+
+    IRQaux      = 29,
+    IRQi2c      = 53,
+    IRQspi      = 54,
+    IRQmmc      = 62,
+
+    IRQbasic    = 64,
+    IRQtimerArm = IRQbasic + 0,
+
+    IRQlocal    = 96,
+    IRQcntps    = IRQlocal + 0,
+    IRQcntpns   = IRQlocal + 1,
+
+    IRQfiq      = IRQusb,   /* only one source can be FIQ */
+};
+@
+\t LP split and aspectize advanced SMP stuff
+
+\subsection{[[Vctl]] (ARM)}
+
+<<struct Vctl(arm)>>=
+struct Vctl {
+    int irq;
+    int cpu;
+
+    u32int  *reg;
+    u32int  mask;
+
+    void    (*f)(Ureg*, void*); /* handler to call */
+    void    *a; /* argument to call it with */
+
+    // Extra
+    <<[[Vctl]] extra fields(arm)>>
+};
+@
+%x86: similar structure, but few differences
+
+% V?? Vector? Interrupt vector?
+
+<<global vctl(arm)>>=
+// list<ref_own<Vctl>>> (next = Vctl.next)
+static Vctl *vctl;
+@
+%x86: [256]
+
+<<[[Vctl]] extra fields(arm)>>=
+Vctl    *next;
 @
 
+<<global vctllock(arm)>>=
+static Lock vctllock;
+@
+%x86: same
 
-<<function intrenable(x86)>>=
+\subsection{[[arch_intrenable()]] (ARM}
+
+<<macro arch_intrenable(arm)>>=
+#define arch_intrenable(i, f, a, b, n) irqenable((i), (f), (a))
+@
+
+% INTREGS!
+
+<<function irqenable(arm)>>=
 void
-arch_intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
+irqenable(int irq, void (*f)(Ureg*, void*), void* a)
 {
-    int vno;
     Vctl *v;
+    Intregs *ip;
+    u32int *enable;
 
-    if(f == nil){
-        print("intrenable: nil handler for %d, tbdf 0x%uX for %s\n",
-            irq, tbdf, name);
-        return;
-    }
-
-    v = xalloc(sizeof(Vctl));
-    v->isintr = true;
+    ip = (Intregs*)INTREGS;
+    v = (Vctl*)malloc(sizeof(Vctl));
+    if(v == nil)
+        panic("irqenable: no mem");
     v->irq = irq;
-    v->tbdf = tbdf;
+    v->cpu = 0;
+    if(irq >= IRQlocal){
+        enable = (u32int*)(LOCALREGS + Localtimerint) + cpu->cpuno;
+        v->reg = (u32int*)(LOCALREGS + Localintpending) + cpu->cpuno;
+        v->mask = 1 << (irq - IRQlocal);
+        v->cpu = cpu->cpuno;
+    }else if(irq >= IRQbasic){
+        enable = &ip->ARMenable;
+        v->reg = &ip->ARMpending;
+        v->mask = 1 << (irq - IRQbasic);
+    }else{
+        enable = &ip->GPUenable[irq/32];
+        v->reg = &ip->GPUpending[irq/32];
+        v->mask = 1 << (irq % 32);
+    }
     v->f = f;
     v->a = a;
-    strncpy(v->name, name, KNAMELEN-1);
-    v->name[KNAMELEN-1] = 0;
-
-    ilock(&vctllock);
-    vno = arch->intrenable(v); // this should also set v->isr or v->eoi
-    if(vno == -1){
-        iunlock(&vctllock);
-        print("intrenable: couldn't enable irq %d, tbdf 0x%uX for %s\n",
-            irq, tbdf, v->name);
-        xfree(v);
-        return;
-    }
-    // add_list(vctl[vno], v) and extra check
-    if(vctl[vno]){
-        if(vctl[vno]->isr != v->isr || vctl[vno]->eoi != v->eoi)
-            panic("intrenable: handler: %s %s %#p %#p %#p %#p",
-                vctl[vno]->name, v->name,
-                vctl[vno]->isr, v->isr, vctl[vno]->eoi, v->eoi);
-        v->next = vctl[vno];
-    }
-    vctl[vno] = v;
-    iunlock(&vctllock);
-}
-@ 
-% why use xalloc? because malloc forbidden in interrupt code?
-
-<<function intrdisable(x86)>>=
-int
-intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
-{
-    Vctl **pv, *v;
-    int vno;
-
-    /*
-     * For now, none of this will work with the APIC code,
-     * there is no mapping between irq and vector as the IRQ
-     * is pretty meaningless.
-     */
-    if(arch->intrvecno == nil)
-        return -1;
-    vno = arch->intrvecno(irq);
-    ilock(&vctllock);
-    pv = &vctl[vno];
-    while (*pv &&
-          ((*pv)->irq != irq || (*pv)->tbdf != tbdf || (*pv)->f != f || (*pv)->a != a ||
-           strcmp((*pv)->name, name)))
-        pv = &((*pv)->next);
-    assert(*pv);
-
-    v = *pv;
-    *pv = (*pv)->next;  /* Link out the entry */
-
-    if(vctl[vno] == nil && arch->intrdisable != nil)
-        arch->intrdisable(irq);
-    iunlock(&vctllock);
-    xfree(v);
-    return 0;
-}
-@ 
-
-%\section{Interrupt controller [[i8259]]}
-
-<<[[PCArch]] interrupt methods fields(x86)>>=
-void  (*intrinit)(void);
-int (*intrenable)(Vctl*);
-int (*intrvecno)(int);
-int (*intrdisable)(int);
-void  (*introff)(void);
-void  (*intron)(void);
-@
-
-<<[[archgeneric]] interrupt methods(x86)>>=
-.intrinit=  i8259init,
-.intrenable=    i8259enable,
-.intrvecno= i8259vecno,
-.intrdisable=   i8259disable,
-.intron=    i8259on,
-.introff=   i8259off,
-@
-
-<<function i8259init(x86)>>=
-void
-i8259init(void)
-{
-    int x;
-
-    ioalloc(Int0ctl, 2, 0, "i8259.0");
-    ioalloc(Int1ctl, 2, 0, "i8259.1");
-    ilock(&i8259lock);
-
-    /*
-     *  Set up the first 8259 interrupt processor.
-     *  Make 8259 interrupts start at CPU vector VectorPIC.
-     *  Set the 8259 as master with edge triggered
-     *  input with fully nested interrupts.
-     */
-    outb(Int0ctl, (1<<4)|(0<<3)|(1<<0));    /* ICW1 - master, edge triggered,
-                           ICW4 will be sent */
-    outb(Int0aux, VectorPIC);       /* ICW2 - interrupt vector offset */
-    outb(Int0aux, 0x04);            /* ICW3 - have slave on level 2 */
-    outb(Int0aux, 0x01);            /* ICW4 - 8086 mode, not buffered */
-
-    /*
-     *  Set up the second 8259 interrupt processor.
-     *  Make 8259 interrupts start at CPU vector VectorPIC+8.
-     *  Set the 8259 as slave with edge triggered
-     *  input with fully nested interrupts.
-     */
-    outb(Int1ctl, (1<<4)|(0<<3)|(1<<0));    /* ICW1 - master, edge triggered,
-                           ICW4 will be sent */
-    outb(Int1aux, VectorPIC+8);     /* ICW2 - interrupt vector offset */
-    outb(Int1aux, 0x02);            /* ICW3 - I am a slave on level 2 */
-    outb(Int1aux, 0x01);            /* ICW4 - 8086 mode, not buffered */
-    outb(Int1aux, (i8259mask>>8) & 0xFF);
-
-    /*
-     *  pass #2 8259 interrupts to #1
-     */
-    i8259mask &= ~0x04;
-    outb(Int0aux, i8259mask & 0xFF);
-
-    /*
-     * Set Ocw3 to return the ISR when ctl read.
-     * After initialisation status read is set to IRR.
-     * Read IRR first to possibly deassert an outstanding
-     * interrupt.
-     */
-    inb(Int0ctl);
-    outb(Int0ctl, Ocw3|0x03);
-    inb(Int1ctl);
-    outb(Int1ctl, Ocw3|0x03);
-
-    /*
-     * Check for Edge/Level register.
-     * This check may not work for all chipsets.
-     * First try a non-intrusive test - the bits for
-     * IRQs 13, 8, 2, 1 and 0 must be edge (0). If
-     * that's OK try a R/W test.
-     */
-    x = (inb(Elcr2)<<8)|inb(Elcr1);
-    if(!(x & 0x2107)){
-        outb(Elcr1, 0);
-        if(inb(Elcr1) == 0){
-            outb(Elcr1, 0x20);
-            if(inb(Elcr1) == 0x20)
-                i8259elcr = x;
-            outb(Elcr1, x & 0xFF);
-            print("ELCR: %4.4uX\n", i8259elcr);
-        }
-    }
-    iunlock(&i8259lock);
-}
-@
-% >> >> >> >> >> >>
-
-<<global i8259lock(x86)>>=
-static Lock i8259lock;
-@
-
-<<function i8259isr(x86)>>=
-int
-i8259isr(int vno)
-{
-    int irq, isr;
-
-    if(vno < VectorPIC || vno > VectorPIC+MaxIrqPIC)
-        return 0;
-    irq = vno-VectorPIC;
-
-    /*
-     *  tell the 8259 that we're done with the
-     *  highest level interrupt (interrupts are still
-     *  off at this point)
-     */
-    ilock(&i8259lock);
-    isr = inb(Int0ctl);
-    outb(Int0ctl, EOI);
-    if(irq >= 8){
-        isr |= inb(Int1ctl)<<8;
-        outb(Int1ctl, EOI);
-    }
-    iunlock(&i8259lock);
-
-    return isr & (1<<irq);
-}
-@
-% >> >>
-
-<<function i8259enable(x86)>>=
-int
-i8259enable(Vctl* v)
-{
-    int irq, irqbit;
-
-    /*
-     * Given an IRQ, enable the corresponding interrupt in the i8259
-     * and return the vector to be used. The i8259 is set to use a fixed
-     * range of vectors starting at VectorPIC.
-     */
-    irq = v->irq;
-    if(irq < 0 || irq > MaxIrqPIC){
-        print("i8259enable: irq %d out of range\n", irq);
-        return -1;
-    }
-    irqbit = 1<<irq;
-
-    ilock(&i8259lock);
-    if(!(i8259mask & irqbit) && !(i8259elcr & irqbit)){
-        print("i8259enable: irq %d shared but not level\n", irq);
-        iunlock(&i8259lock);
-        return -1;
-    }
-    i8259mask &= ~irqbit;
-    if(irq < 8)
-        outb(Int0aux, i8259mask & 0xFF);
-    else
-        outb(Int1aux, (i8259mask>>8) & 0xFF);
-
-    if(i8259elcr & irqbit)
-        v->eoi = i8259isr;
-    else
-        v->isr = i8259isr;
-    iunlock(&i8259lock);
-
-    return VectorPIC+irq;
-}
-@
-
-<<function i8259vecno(x86)>>=
-int
-i8259vecno(int irq)
-{
-    return VectorPIC+irq;
-}
-@
-
-<<function i8259disable(x86)>>=
-int
-i8259disable(int irq)
-{
-    int irqbit;
-
-    /*
-     * Given an IRQ, disable the corresponding interrupt
-     * in the 8259.
-     */
-    if(irq < 0 || irq > MaxIrqPIC){
-        print("i8259disable: irq %d out of range\n", irq);
-        return -1;
-    }
-    irqbit = 1<<irq;
-
-    ilock(&i8259lock);
-    if(!(i8259mask & irqbit)){
-        i8259mask |= irqbit;
-        if(irq < 8)
-            outb(Int0aux, i8259mask & 0xFF);
+    lock(&vctllock);
+    if(irq == IRQfiq){
+        assert((ip->FIQctl & Fiqenable) == 0);
+        assert((*enable & v->mask) == 0);
+        vfiq = v;
+        ip->FIQctl = Fiqenable | irq;
+    }else{
+        v->next = vctl;
+        vctl = v;
+        if(irq >= IRQlocal)
+            *enable |= 1 << (irq - IRQlocal);
         else
-            outb(Int1aux, (i8259mask>>8) & 0xFF);
+            *enable = v->mask;
     }
-    iunlock(&i8259lock);
-    return 0;
+    unlock(&vctllock);
 }
 @
+% >> >> >> >> >>
+%x86: also a intrdisable
+\t aspectize complex stuff
 
-<<function i8259on(x86)>>=
-void
-i8259on(void)
-{
-    outb(Int0aux, i8259mask&0xFF);
-    outb(Int1aux, (i8259mask>>8)&0xFF);
-}
+\section{Exception [[vectors]]  (ARM)}
+
+% The vector below will be copied in trapinit()
+% and processor will be made error that exceptions should
+% be handled by the entries in this vector.
+
+% Saw HVECTORS before.
+
+
+<<global vectors(arm)>>=
+/*
+ *  exception vectors, copied by trapinit() to somewhere useful
+ */
+TEXT vectors(SB), 1, $-4
+    MOVW    0x18(R15), R15      /* reset */
+    MOVW    0x18(R15), R15      /* undefined instr. */
+    MOVW    0x18(R15), R15      /* SWI & SMC */
+    MOVW    0x18(R15), R15      /* prefetch abort */
+    MOVW    0x18(R15), R15      /* data abort */
+    MOVW    0x18(R15), R15      /* reserved */
+    MOVW    0x18(R15), R15      /* IRQ */
+    MOVW    0x18(R15), R15      /* FIQ */
 @
+%$
+% it's written as a function, but really it's a global
+%x86: IDTADDR
 
-
-<<function i8259off(x86)>>=
-void
-i8259off(void)
-{
-    outb(Int0aux, 0xFF);
-    outb(Int1aux, 0xFF);
-}
+% assumes will be copied just after vectors
+<<global vtable(arm)>>=
+TEXT vtable(SB), 1, $-4
+    WORD    $_vsvc(SB)      /* reset, in svc mode already */
+    WORD    $_vund(SB)      /* undefined, switch to svc mode */
+    WORD    $_vsvc(SB)      /* swi, in svc mode already */
+    WORD    $_vpabt(SB)     /* prefetch abort, switch to svc mode */
+    WORD    $_vdabt(SB)     /* data abort, switch to svc mode */
+    WORD    $_vsvc(SB)      /* reserved */
+    WORD    $_virq(SB)      /* IRQ, switch to svc mode */
+    WORD    $_vfiq(SB)      /* FIQ, switch to svc mode */
 @
-
-
-\section{Interrupt [[vectortable]] and [[idt]] (x86)}
-
-<<constant IDTADDR(x86)>>=
-#define IDTADDR   (KZERO+0x10800)   /* idt */
-@
-% why 800? why not 0x10000?
-
-<<global vectortable(x86)>>=
-TEXT vectortable(SB), $0
-        CALL _strayintr(SB); BYTE $0x00         /* divide error */
-        CALL _strayintr(SB); BYTE $0x01         /* debug exception */
-        CALL _strayintr(SB); BYTE $0x02         /* NMI interrupt */
-        CALL _strayintr(SB); BYTE $0x03         /* breakpoint */
-        CALL _strayintr(SB); BYTE $0x04         /* overflow */
-        CALL _strayintr(SB); BYTE $0x05         /* bound */
-        CALL _strayintr(SB); BYTE $0x06         /* invalid opcode */
-        CALL _strayintr(SB); BYTE $0x07         /* no coprocessor available */
-        CALL _strayintrx(SB); BYTE $0x08        /* double fault */
-        CALL _strayintr(SB); BYTE $0x09         /* coprocessor segment overflow */
-        CALL _strayintrx(SB); BYTE $0x0A        /* invalid TSS */
-        CALL _strayintrx(SB); BYTE $0x0B        /* segment not available */
-        CALL _strayintrx(SB); BYTE $0x0C        /* stack exception */
-        CALL _strayintrx(SB); BYTE $0x0D        /* general protection error */
-        CALL _strayintrx(SB); BYTE $0x0E        /* page fault */
-        CALL _strayintr(SB); BYTE $0x0F         /*  */
-        CALL _strayintr(SB); BYTE $0x10         /* coprocessor error */
-        CALL _strayintrx(SB); BYTE $0x11        /* alignment check */
-        CALL _strayintr(SB); BYTE $0x12         /* machine check */
-        CALL _strayintr(SB); BYTE $0x13
-        CALL _strayintr(SB); BYTE $0x14
-        CALL _strayintr(SB); BYTE $0x15
-        CALL _strayintr(SB); BYTE $0x16
-        CALL _strayintr(SB); BYTE $0x17
-        CALL _strayintr(SB); BYTE $0x18
-        CALL _strayintr(SB); BYTE $0x19
-        CALL _strayintr(SB); BYTE $0x1A
-        CALL _strayintr(SB); BYTE $0x1B
-        CALL _strayintr(SB); BYTE $0x1C
-        CALL _strayintr(SB); BYTE $0x1D
-        CALL _strayintr(SB); BYTE $0x1E
-        CALL _strayintr(SB); BYTE $0x1F
-        CALL _strayintr(SB); BYTE $0x20         /* VectorLAPIC */
-        CALL _strayintr(SB); BYTE $0x21
-        CALL _strayintr(SB); BYTE $0x22
-        CALL _strayintr(SB); BYTE $0x23
-        CALL _strayintr(SB); BYTE $0x24
-        CALL _strayintr(SB); BYTE $0x25
-        CALL _strayintr(SB); BYTE $0x26
-        CALL _strayintr(SB); BYTE $0x27
-        CALL _strayintr(SB); BYTE $0x28
-        CALL _strayintr(SB); BYTE $0x29
-        CALL _strayintr(SB); BYTE $0x2A
-        CALL _strayintr(SB); BYTE $0x2B
-        CALL _strayintr(SB); BYTE $0x2C
-        CALL _strayintr(SB); BYTE $0x2D
-        CALL _strayintr(SB); BYTE $0x2E
-        CALL _strayintr(SB); BYTE $0x2F
-        CALL _strayintr(SB); BYTE $0x30
-        CALL _strayintr(SB); BYTE $0x31
-        CALL _strayintr(SB); BYTE $0x32
-        CALL _strayintr(SB); BYTE $0x33
-        CALL _strayintr(SB); BYTE $0x34
-        CALL _strayintr(SB); BYTE $0x35
-        CALL _strayintr(SB); BYTE $0x36
-        CALL _strayintr(SB); BYTE $0x37
-        CALL _strayintr(SB); BYTE $0x38
-        CALL _strayintr(SB); BYTE $0x39
-        CALL _strayintr(SB); BYTE $0x3A
-        CALL _strayintr(SB); BYTE $0x3B
-        CALL _strayintr(SB); BYTE $0x3C
-        CALL _strayintr(SB); BYTE $0x3D
-        CALL _strayintr(SB); BYTE $0x3E
-        CALL _strayintr(SB); BYTE $0x3F
-        CALL _syscallintr(SB); BYTE $0x40       /* VectorSYSCALL */
-        CALL _strayintr(SB); BYTE $0x41
-        CALL _strayintr(SB); BYTE $0x42
-        CALL _strayintr(SB); BYTE $0x43
-        CALL _strayintr(SB); BYTE $0x44
-        CALL _strayintr(SB); BYTE $0x45
-        CALL _strayintr(SB); BYTE $0x46
-        CALL _strayintr(SB); BYTE $0x47
-        CALL _strayintr(SB); BYTE $0x48
-        CALL _strayintr(SB); BYTE $0x49
-        CALL _strayintr(SB); BYTE $0x4A
-        CALL _strayintr(SB); BYTE $0x4B
-        CALL _strayintr(SB); BYTE $0x4C
-        CALL _strayintr(SB); BYTE $0x4D
-        CALL _strayintr(SB); BYTE $0x4E
-        CALL _strayintr(SB); BYTE $0x4F
-        CALL _strayintr(SB); BYTE $0x50
-        CALL _strayintr(SB); BYTE $0x51
-        CALL _strayintr(SB); BYTE $0x52
-        CALL _strayintr(SB); BYTE $0x53
-        CALL _strayintr(SB); BYTE $0x54
-        CALL _strayintr(SB); BYTE $0x55
-        CALL _strayintr(SB); BYTE $0x56
-        CALL _strayintr(SB); BYTE $0x57
-        CALL _strayintr(SB); BYTE $0x58
-        CALL _strayintr(SB); BYTE $0x59
-        CALL _strayintr(SB); BYTE $0x5A
-        CALL _strayintr(SB); BYTE $0x5B
-        CALL _strayintr(SB); BYTE $0x5C
-        CALL _strayintr(SB); BYTE $0x5D
-        CALL _strayintr(SB); BYTE $0x5E
-        CALL _strayintr(SB); BYTE $0x5F
-        CALL _strayintr(SB); BYTE $0x60
-        CALL _strayintr(SB); BYTE $0x61
-        CALL _strayintr(SB); BYTE $0x62
-        CALL _strayintr(SB); BYTE $0x63
-        CALL _strayintr(SB); BYTE $0x64
-        CALL _strayintr(SB); BYTE $0x65
-        CALL _strayintr(SB); BYTE $0x66
-        CALL _strayintr(SB); BYTE $0x67
-        CALL _strayintr(SB); BYTE $0x68
-        CALL _strayintr(SB); BYTE $0x69
-        CALL _strayintr(SB); BYTE $0x6A
-        CALL _strayintr(SB); BYTE $0x6B
-        CALL _strayintr(SB); BYTE $0x6C
-        CALL _strayintr(SB); BYTE $0x6D
-        CALL _strayintr(SB); BYTE $0x6E
-        CALL _strayintr(SB); BYTE $0x6F
-        CALL _strayintr(SB); BYTE $0x70
-        CALL _strayintr(SB); BYTE $0x71
-        CALL _strayintr(SB); BYTE $0x72
-        CALL _strayintr(SB); BYTE $0x73
-        CALL _strayintr(SB); BYTE $0x74
-        CALL _strayintr(SB); BYTE $0x75
-        CALL _strayintr(SB); BYTE $0x76
-        CALL _strayintr(SB); BYTE $0x77
-        CALL _strayintr(SB); BYTE $0x78
-        CALL _strayintr(SB); BYTE $0x79
-        CALL _strayintr(SB); BYTE $0x7A
-        CALL _strayintr(SB); BYTE $0x7B
-        CALL _strayintr(SB); BYTE $0x7C
-        CALL _strayintr(SB); BYTE $0x7D
-        CALL _strayintr(SB); BYTE $0x7E
-        CALL _strayintr(SB); BYTE $0x7F
-        CALL _strayintr(SB); BYTE $0x80         /* Vector[A]PIC */
-        CALL _strayintr(SB); BYTE $0x81
-        CALL _strayintr(SB); BYTE $0x82
-        CALL _strayintr(SB); BYTE $0x83
-        CALL _strayintr(SB); BYTE $0x84
-        CALL _strayintr(SB); BYTE $0x85
-        CALL _strayintr(SB); BYTE $0x86
-        CALL _strayintr(SB); BYTE $0x87
-        CALL _strayintr(SB); BYTE $0x88
-        CALL _strayintr(SB); BYTE $0x89
-        CALL _strayintr(SB); BYTE $0x8A
-        CALL _strayintr(SB); BYTE $0x8B
-        CALL _strayintr(SB); BYTE $0x8C
-        CALL _strayintr(SB); BYTE $0x8D
-        CALL _strayintr(SB); BYTE $0x8E
-        CALL _strayintr(SB); BYTE $0x8F
-        CALL _strayintr(SB); BYTE $0x90
-        CALL _strayintr(SB); BYTE $0x91
-        CALL _strayintr(SB); BYTE $0x92
-        CALL _strayintr(SB); BYTE $0x93
-        CALL _strayintr(SB); BYTE $0x94
-        CALL _strayintr(SB); BYTE $0x95
-        CALL _strayintr(SB); BYTE $0x96
-        CALL _strayintr(SB); BYTE $0x97
-        CALL _strayintr(SB); BYTE $0x98
-        CALL _strayintr(SB); BYTE $0x99
-        CALL _strayintr(SB); BYTE $0x9A
-        CALL _strayintr(SB); BYTE $0x9B
-        CALL _strayintr(SB); BYTE $0x9C
-        CALL _strayintr(SB); BYTE $0x9D
-        CALL _strayintr(SB); BYTE $0x9E
-        CALL _strayintr(SB); BYTE $0x9F
-        CALL _strayintr(SB); BYTE $0xA0
-        CALL _strayintr(SB); BYTE $0xA1
-        CALL _strayintr(SB); BYTE $0xA2
-        CALL _strayintr(SB); BYTE $0xA3
-        CALL _strayintr(SB); BYTE $0xA4
-        CALL _strayintr(SB); BYTE $0xA5
-        CALL _strayintr(SB); BYTE $0xA6
-        CALL _strayintr(SB); BYTE $0xA7
-        CALL _strayintr(SB); BYTE $0xA8
-        CALL _strayintr(SB); BYTE $0xA9
-        CALL _strayintr(SB); BYTE $0xAA
-        CALL _strayintr(SB); BYTE $0xAB
-        CALL _strayintr(SB); BYTE $0xAC
-        CALL _strayintr(SB); BYTE $0xAD
-        CALL _strayintr(SB); BYTE $0xAE
-        CALL _strayintr(SB); BYTE $0xAF
-        CALL _strayintr(SB); BYTE $0xB0
-        CALL _strayintr(SB); BYTE $0xB1
-        CALL _strayintr(SB); BYTE $0xB2
-        CALL _strayintr(SB); BYTE $0xB3
-        CALL _strayintr(SB); BYTE $0xB4
-        CALL _strayintr(SB); BYTE $0xB5
-        CALL _strayintr(SB); BYTE $0xB6
-        CALL _strayintr(SB); BYTE $0xB7
-        CALL _strayintr(SB); BYTE $0xB8
-        CALL _strayintr(SB); BYTE $0xB9
-        CALL _strayintr(SB); BYTE $0xBA
-        CALL _strayintr(SB); BYTE $0xBB
-        CALL _strayintr(SB); BYTE $0xBC
-        CALL _strayintr(SB); BYTE $0xBD
-        CALL _strayintr(SB); BYTE $0xBE
-        CALL _strayintr(SB); BYTE $0xBF
-        CALL _strayintr(SB); BYTE $0xC0
-        CALL _strayintr(SB); BYTE $0xC1
-        CALL _strayintr(SB); BYTE $0xC2
-        CALL _strayintr(SB); BYTE $0xC3
-        CALL _strayintr(SB); BYTE $0xC4
-        CALL _strayintr(SB); BYTE $0xC5
-        CALL _strayintr(SB); BYTE $0xC6
-        CALL _strayintr(SB); BYTE $0xC7
-        CALL _strayintr(SB); BYTE $0xC8
-        CALL _strayintr(SB); BYTE $0xC9
-        CALL _strayintr(SB); BYTE $0xCA
-        CALL _strayintr(SB); BYTE $0xCB
-        CALL _strayintr(SB); BYTE $0xCC
-        CALL _strayintr(SB); BYTE $0xCD
-        CALL _strayintr(SB); BYTE $0xCE
-        CALL _strayintr(SB); BYTE $0xCF
-        CALL _strayintr(SB); BYTE $0xD0
-        CALL _strayintr(SB); BYTE $0xD1
-        CALL _strayintr(SB); BYTE $0xD2
-        CALL _strayintr(SB); BYTE $0xD3
-        CALL _strayintr(SB); BYTE $0xD4
-        CALL _strayintr(SB); BYTE $0xD5
-        CALL _strayintr(SB); BYTE $0xD6
-        CALL _strayintr(SB); BYTE $0xD7
-        CALL _strayintr(SB); BYTE $0xD8
-        CALL _strayintr(SB); BYTE $0xD9
-        CALL _strayintr(SB); BYTE $0xDA
-        CALL _strayintr(SB); BYTE $0xDB
-        CALL _strayintr(SB); BYTE $0xDC
-        CALL _strayintr(SB); BYTE $0xDD
-        CALL _strayintr(SB); BYTE $0xDE
-        CALL _strayintr(SB); BYTE $0xDF
-        CALL _strayintr(SB); BYTE $0xE0
-        CALL _strayintr(SB); BYTE $0xE1
-        CALL _strayintr(SB); BYTE $0xE2
-        CALL _strayintr(SB); BYTE $0xE3
-        CALL _strayintr(SB); BYTE $0xE4
-        CALL _strayintr(SB); BYTE $0xE5
-        CALL _strayintr(SB); BYTE $0xE6
-        CALL _strayintr(SB); BYTE $0xE7
-        CALL _strayintr(SB); BYTE $0xE8
-        CALL _strayintr(SB); BYTE $0xE9
-        CALL _strayintr(SB); BYTE $0xEA
-        CALL _strayintr(SB); BYTE $0xEB
-        CALL _strayintr(SB); BYTE $0xEC
-        CALL _strayintr(SB); BYTE $0xED
-        CALL _strayintr(SB); BYTE $0xEE
-        CALL _strayintr(SB); BYTE $0xEF
-        CALL _strayintr(SB); BYTE $0xF0
-        CALL _strayintr(SB); BYTE $0xF1
-        CALL _strayintr(SB); BYTE $0xF2
-        CALL _strayintr(SB); BYTE $0xF3
-        CALL _strayintr(SB); BYTE $0xF4
-        CALL _strayintr(SB); BYTE $0xF5
-        CALL _strayintr(SB); BYTE $0xF6
-        CALL _strayintr(SB); BYTE $0xF7
-        CALL _strayintr(SB); BYTE $0xF8
-        CALL _strayintr(SB); BYTE $0xF9
-        CALL _strayintr(SB); BYTE $0xFA
-        CALL _strayintr(SB); BYTE $0xFB
-        CALL _strayintr(SB); BYTE $0xFC
-        CALL _strayintr(SB); BYTE $0xFD
-        CALL _strayintr(SB); BYTE $0xFE
-        CALL _strayintr(SB); BYTE $0xFF
-@ 
-
 %$
 
+% what about overflow, divide error, etc?
 
-<<global excname(x86)>>=
-static char* excname[32] = {
-    "divide error",
-    "debug exception",
-    "nonmaskable interrupt",
-    "breakpoint",
-    "overflow",
-    "bounds check",
-    "invalid opcode",
-    "coprocessor not available",
-    "double fault",
-    "coprocessor segment overrun",
-    "invalid TSS",
-    "segment not present",
-    "stack exception",
-    "general protection violation",
-    "page fault",
-    "15 (reserved)",
-    "coprocessor error",
-    "alignment check",
-    "machine check",
-    "19 (reserved)",
-    "20 (reserved)",
-    "21 (reserved)",
-    "22 (reserved)",
-    "23 (reserved)",
-    "24 (reserved)",
-    "25 (reserved)",
-    "26 (reserved)",
-    "27 (reserved)",
-    "28 (reserved)",
-    "29 (reserved)",
-    "30 (reserved)",
-    "31 (reserved)",
-};
-@ 
-
-\section{[[trap()]] (x86)}
-
-<<function _strayintr(x86)>>=
-/*
- * Interrupt/exception handling.
- * Each entry in the vector table calls either _strayintr or _strayintrx depending
- * on whether an error code has been automatically pushed onto the stack
- * (_strayintrx) or not, in which case a dummy entry must be pushed before retrieving
- * the trap type from the vector table entry and placing it on the stack as part
- * of the Ureg structure.
- * The size of each entry in the vector table (6 bytes) is known in trapinit().
- */
-TEXT _strayintr(SB), $0
-        PUSHL   AX                      /* save AX */
-        MOVL    4(SP), AX               /* return PC from vectortable(SB) */
-        JMP     intrcommon
-@
-
-
-<<function _strayintrx(x86)>>=
-TEXT _strayintrx(SB), $0
-        XCHGL   AX, (SP)                /* swap AX with vectortable CALL PC */
-intrcommon:
-        PUSHL   DS                      /* save DS */
-        PUSHL   $(KDSEL)
-        POPL    DS                      /* fix up DS */
-        MOVBLZX (AX), AX                /* trap type -> AX */
-        XCHGL   AX, 4(SP)               /* exchange trap type with saved AX */
-
-        PUSHL   ES                      /* save ES */
-        PUSHL   $(KDSEL)
-        POPL    ES                      /* fix up ES */
-
-        PUSHL   FS                      /* save the rest of the Ureg struct */
-        PUSHL   GS
-        PUSHAL
-
-        PUSHL   SP                      /* Ureg* argument to trap */
-        CALL    trap(SB)
-@ 
-
-% todo: [[Cpu]] debugging fields?
-<<[[Cpu]] other fields>>=
-int lastintr; // debugging
-@
-
-<<function trap(x86)>>=
-/*
- *  All traps come here.  It is slower to have all traps call trap()
- *  rather than directly vectoring the handler. However, this avoids a
- *  lot of code duplication and possible bugs. The only exception is
- *  VectorSYSCALL.
- *  Trap is called with interrupts disabled via interrupt-gates.
- */
-//@Scheck: not dead, called from assembly by _strayintr
-void trap(Ureg* ureg)
-{
-    bool clockintr;
-    bool user;
-    int i, vno;
-    char buf[ERRMAX];
-    Vctl *ctl, *v;
-    Cpu *mach;
-
-    if(!trapinited){
-        /* fault386 can give a better error message */
-        if(ureg->trap == VectorPF)
-            fault386(ureg, nil);
-        panic("trap %lud: not ready", ureg->trap);
-    }
-
-    cpu->perf.intrts = arch_perfticks();
-
-    user = (ureg->cs & 0xFFFF) == UESEL; // TODO: arch_userureg
-
-    if(user){
-        up->dbgreg = ureg;
-        <<[[trap()]] adjust kentry when interrupt user(x86)>>
-    }
-    // else if !user, then that means we interrupted a syscall() which should
-    // already have done those things, so no need for redundancy
-
-    clockintr = false;
-
-    vno = ureg->trap;
-    if(ctl = vctl[vno]){
-        if(ctl->isintr){
-            cpu->intr++;
-            if(vno >= VectorPIC && vno != VectorSYSCALL)
-                cpu->lastintr = ctl->irq;
-        }
-
-        if(ctl->isr)
-            ctl->isr(vno);
-        for(v = ctl; v != nil; v = v->next){
-            if(v->f) // this can be null?
-                v->f(ureg, v->a);
-        }
-        if(ctl->eoi)
-            ctl->eoi(vno);
-
-        if(ctl->isintr){
-            intrtime(cpu, vno);
-
-            if(ctl->irq == IrqCLOCK || ctl->irq == IrqTIMER)
-                clockintr = true;
-
-            if(up && !clockintr)
-                preempt();
-        }
-    } // no Vctl?
-    else if(vno < nelem(excname) && user){
-        arch_spllo();
-        snprint(buf, sizeof buf, "sys: trap: %s", excname[vno]);
-        postnote(up, 1, buf, NDebug);
-    }
-    else if(vno >= VectorPIC && vno != VectorSYSCALL){
-        /*
-         * An unknown interrupt.
-         * Check for a default IRQ7. This can happen when
-         * the IRQ input goes away before the acknowledge.
-         * In this case, a 'default IRQ7' is generated, but
-         * the corresponding bit in the ISR isn't set.
-         * In fact, just ignore all such interrupts.
-         */
-
-        /* call all interrupt routines, just in case */
-        for(i = VectorPIC; i <= MaxIrqLAPIC; i++){
-            ctl = vctl[i];
-            if(ctl == nil)
-                continue;
-            if(!ctl->isintr)
-                continue;
-            for(v = ctl; v != nil; v = v->next){
-                if(v->f)
-                    v->f(ureg, v->a);
-            }
-            /* should we do this? */
-            if(ctl->eoi)
-                ctl->eoi(i);
-        } // remove? ugly?
-
-        /* clear the interrupt */
-        i8259isr(vno);
-        <<[[trap()]] debugging(x86)>>
-        cpu->spuriousintr++;
-        if(user)
-            kexit(ureg);
-        return;
-    }else{
-        if(vno == VectorNMI){
-            /*
-             * Don't re-enable, it confuses the crash dumps.
-            nmienable();
-             */
-            iprint("cpu%d: NMI PC %#8.8lux\n", cpu->cpuno, ureg->pc);
-            while(cpu->cpuno != 0)
-                ;
-        }
-        dumpregs(ureg);
-        if(!user){
-            ureg->sp = (ulong)&ureg->sp;
-            _dumpstack(ureg);
-        }
-        if(vno < nelem(excname))
-            panic("%s", excname[vno]);
-        panic("unknown trap/intr: %d", vno);
-    }
-    arch_splhi(); // possible arch_spllo() done above
-
-    <<[[trap()]] if delaysched(x86)>>
-
-    if(user){
-        if(up->procctl || up->nnote)
-            notify(ureg);
-        kexit(ureg);
-    }
-}
-@ 
-
-<<function kexit(x86)>>=
-/* go to user space */
-void
-kexit(Ureg*)
-{
-    <<[[kexit()]] tos adjustments(x86)>>
-}
-@ 
-% should be called hook_before_exit_syscall note that
-% take Ureg*, so the address is in the stack and the actual
-% value are where?
-
-
-% ---------------------------------------------------------------------------
-
-
-\ifallcode
-<<[[trap()]] debugging(x86)>>=
-        if(0)print("cpu%d: spurious interrupt %d, last %d\n",
-            cpu->cpuno, vno, cpu->lastintr);
-        if(0)if(conf.ncpu > 1){
-            for(i = 0; i < MAXCPUS; i++){
-                if(!(active.cpus & (1<<i)))
-                    continue;
-                mach = CPUS(i);
-                if(cpu->cpuno == mach->cpuno)
-                    continue;
-                print(" cpu%d: last %d",
-                    mach->cpuno, mach->lastintr);
-            }
-            print("\n");
-        }
-@
-\fi
-
-
-
-
-\section{[[syscall()]] (x86)}
+\section{System calls}
 %Software interrupts (a.k.a syscalls)
 
-<<enum vector cases(x86)>>=
-    //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
-    // VectorSYSCALL = 64, in mem.h because used by Assembly too
-@
+\subsection{[[_vsvc()]] (ARM)}
 
+% Use R14 below as temporary register.
+% SPSR vs CPSR? Previous CPSR before the interrupt. So know
+% if you interrupt an interrupt!
+
+<<function _vsvc(arm)>>=
+TEXT _vsvc(SB), 1, $-4          /* SWI */
+    CLREX
+    MOVW.W  R14, -4(R13)        /* ureg->pc = interrupted PC */
+    MOVW    SPSR, R14       /* ureg->psr = SPSR */
+    MOVW.W  R14, -4(R13)        /* ... */
+    MOVW    $PsrMsvc, R14       /* ureg->type = PsrMsvc */
+    MOVW.W  R14, -4(R13)        /* ... */
+
+    /* avoid the ambiguity described in notes/movm.w. */
+    MOVM.DB.S [R0-R14], (R13)   /* save user level registers */
+    SUB $(15*4), R13        /* r13 now points to ureg */
+
+    MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
+
+    /* get R(CPU) for this cpu */
+    CPUID(R1)
+    SLL $2, R1          /* convert to word index */
+    MOVW    $cpus(SB), R2
+    ADD R1, R2
+    MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
+    CMP $0, R(CPU)
+    MOVW.EQ $CPUADDR, R0        /* paranoia: use CPUADDR if 0 */
+
+    MOVW    8(R(CPU)), R(UP)        /* up */
+
+    MOVW    R13, R0         /* first arg is pointer to ureg */
+    SUB $8, R13         /* space for argument+link */
+
+    BL  syscall(SB)
+
+    ADD $(8+4*15), R13      /* make r13 point to ureg->type */
+    MOVW    8(R13), R14     /* restore link */
+    MOVW    4(R13), R0      /* restore SPSR */
+    MOVW    R0, SPSR        /* ... */
+    MOVM.DB.S (R13), [R0-R14]   /* restore registers */
+    ADD $8, R13         /* pop past ureg->{type+psr} */
+    RFE             /* MOVM.IA.S.W (R13), [R15] */
+@
+%$
+
+\subsection{[[Sargs]]}
 
 <<constant MAXSYSARG>>=
 #define MAXSYSARG  5 /* for mount(fd, afd, mpt, flag, arg) */
@@ -7274,87 +6767,59 @@ Sargs sargs;    /* address of this is known by db */
 @ 
 %old: s -> sargs
 
+\subsection{[[syscall()]] (ARM)}
 
-<<function _syscallintr(x86)>>=
-/*
- * This is merely _strayintr from l.s optimised to vector
- * to syscall() without going through trap().
- */
-TEXT _syscallintr(SB), $0
-        PUSHL   $VectorSYSCALL                  /* trap type */
-
-        PUSHL   DS
-        PUSHL   ES
-        PUSHL   FS
-        PUSHL   GS
-        PUSHAL
-        MOVL    $(KDSEL), AX
-        MOVW    AX, DS
-        MOVW    AX, ES
-        PUSHL   SP
-        CALL    syscall(SB)
-
-        POPL    AX
-        POPAL
-        POPL    GS
-        POPL    FS
-        POPL    ES
-        POPL    DS
-        ADDL    $8, SP                          /* pop error code and trap type */
-        IRETL
-@ 
-
-<<function syscall(x86)>>=
-/*
- *  Syscall is called directly from assembler without going through trap().
- */
-//@Scheck: not dead, called from assembly by _syscallintr
-void syscall(Ureg* ureg)
+<<function syscall(arm)>>=
+void
+syscall(Ureg* ureg)
 {
     char *e;
-    ulong   sp;
-    long    ret;
-    int i, s;
-    ulong scallnr;
+    u32int s;
+    ulong sp;
+    long ret;
+    int i, scallnr;
     vlong startns, stopns;
 
-    if((ureg->cs & 0xFFFF) != UESEL) // TODO: arch_userureg
-        panic("syscall: cs 0x%4.4luX", ureg->cs);
+    if(!arch_userureg(ureg))
+        panic("syscall: from kernel: pc %#lux r14 %#lux psr %#lux",
+            ureg->pc, ureg->r14, ureg->psr);
 
-    <<[[syscall()]] adjust kentry(x86)>>
+    <<[[syscall()]] adjust kentry>>
 
     cpu->syscall++;
-    up->insyscall = true;
-
+    up->insyscall = 1;
     up->pc = ureg->pc;
     up->dbgreg = ureg;
-    sp = ureg->usp;
 
-    // syscall number!
-    scallnr = ureg->ax;
+    scallnr = ureg->r0;
+    //up->scallnr = scallnr;
 
-    <<[[syscall()]] Proc_tracesyscall if, syscall entry(x86)>>
+    if(scallnr == RFORK)
+        fpusysrfork(ureg);
 
-    <<[[syscall()]] fp adjustments if fork(x86)>>
     arch_spllo();
+    sp = ureg->sp;
+
+    <<[[syscall()]] Proc_tracesyscall if, syscall entry(arm)>>
 
     up->nerrlab = 0;
     ret = -1;
-
+    startns = todget(nil);
     if(!waserror()){
-        if(scallnr >= nsyscall || systab[scallnr] == nil){
-            pprint("bad sys call number %lud pc %lux\n",
+        if(scallnr >= nsyscall){
+            pprint("bad sys call number %d pc %#lux\n",
                 scallnr, ureg->pc);
             postnote(up, 1, "sys: bad sys call", NDebug);
             error(Ebadarg);
         }
 
-        if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD)) // adjust Tos ?
-            validaddr(sp, sizeof(Sargs)+BY2WD, false);
+        if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
+            validaddr(sp, sizeof(Sargs)+BY2WD, 0);
 
-        // copy syscall arguments from user stack to up->sargs
-        up->sargs = *((Sargs*)(sp+BY2WD)); // 1 word for? return pc?
+        up->sargs = *((Sargs*)(sp+BY2WD));
         up->psstate = sysctab[scallnr];
+
+    /*  iprint("%s: syscall %s\n", up->text, sysctab[scallnr]?sysctab[scallnr]:"huh?"); */
 
         //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         //IMPORTANT: The actual system call
@@ -7368,11 +6833,10 @@ void syscall(Ureg* ureg)
         up->syserrstr = up->errstr;
         up->errstr = e;
     }
-
     if(up->nerrlab){
-        print("bad errstack [%lud]: %d extra\n", scallnr, up->nerrlab);
+        print("bad errstack [%d]: %d extra\n", scallnr, up->nerrlab);
         for(i = 0; i < NERR; i++)
-            print("sp=%lux pc=%lux\n",
+            print("sp=%#p pc=%#p\n",
                 up->errlab[i].sp, up->errlab[i].pc);
         panic("error stack");
     }
@@ -7383,226 +6847,495 @@ void syscall(Ureg* ureg)
      *  ignored.  On other machines the return value is put into
      *  the results register by caller of syscall.
      */
-    ureg->ax = ret;
+    ureg->r0 = ret;
 
-    <<[[syscall()]] Proc_tracesyscall if, syscall exit(x86)>>
+    <<[[syscall()]] Proc_tracesyscall if, syscall exit(arm)>>
 
-    up->insyscall = false;
-    up->psstate = nil;
 
-    <<[[syscall()]] call noted()(x86)>>
-    <<[[syscall()]] call notify()(x86)>>
+    up->insyscall = 0;
+    up->psstate = 0;
 
-    <<[[syscall()]] if delaysched(x86)>>
+    <<[[syscall()]] call noted()>>
+    <<[[syscall()]] call notify(arm)>>
+
+
+    <<[[syscall()]] if delaysched(arm)>>
     kexit(ureg);
 }
-@ 
-%        //if(0 && up->pid == 1)
-%        //    print("syscall %lud error %s\n", scallnr, up->syserrstr);
+@
+%could be called arch_syscall but called only from arch-specific code so ...
 
-<<function userpc(x86)>>=
+
+<<function arch_userpc(arm)>>=
 /*
  *  return the userpc the last exception happened at
  */
-ulong
+uintptr
 arch_userpc(void)
 {
-    Ureg *ureg;
-
-    ureg = (Ureg*)up->dbgreg;
+    Ureg *ureg = up->dbgreg;
     return ureg->pc;
 }
-@ 
+@
+
+
+
+\section{Exceptions}
+
+\subsection{[[_vxxx()]] (ARM)}
+
+% save R0-R4 because will use those registers later
+
+<<function _vund(arm)>>=
+TEXT _vund(SB), 1, $-4          /* undefined */
+    MOVM.IA [R0-R4], (R13)      /* free some working space */
+    MOVW    $PsrMund, R0
+    B   _vswitch
+@
+<<function _vpabt(arm)>>=
+TEXT _vpabt(SB), 1, $-4         /* prefetch abort */
+    MOVM.IA [R0-R4], (R13)      /* free some working space */
+    MOVW    $PsrMabt, R0        /* r0 = type */
+    B   _vswitch
+@
+<<function _vdabt(arm)>>=
+TEXT _vdabt(SB), 1, $-4         /* data abort */
+    MOVM.IA [R0-R4], (R13)      /* free some working space */
+    MOVW    $(PsrMabt+1), R0    /* r0 = type */
+    B   _vswitch
+@
+<<function _virq(arm)>>=
+TEXT _virq(SB), 1, $-4          /* IRQ */
+    MOVM.IA [R0-R4], (R13)      /* free some working space */
+    MOVW    $PsrMirq, R0        /* r0 = type */
+    B   _vswitch
+@
+
+\subsection{[[_vswitch()]] (ARM)}
+
+<<label _vswitch(arm)>>=
+    /*
+     *  come here with type in R0 and R13 pointing above saved [r0-r4].
+     *  we'll switch to SVC mode and then call trap.
+     */
+_vswitch:
+    CLREX
+    MOVW    SPSR, R1        /* save SPSR for ureg */
+    MOVW    R14, R2         /* save interrupted pc for ureg */
+    MOVW    R13, R3         /* save pointer to where the original [R0-R4] are */
+
+    /*
+     * switch processor to svc mode.  this switches the banked registers
+     * (r13 [sp] and r14 [link]) to those of svc mode.
+     */
+    MOVW    CPSR, R14
+    BIC $PsrMask, R14
+    ORR $(PsrDirq|PsrMsvc), R14
+    MOVW    R14, CPSR       /* switch! */
+
+    AND.S   $0xf, R1, R4        /* interrupted code kernel or user? */
+    BEQ _userexcep
+    // else
+    /* here for trap from SVC mode */
+    <<[[_vswitch]] trap from SVC mode>>
+    /* here for trap from USER mode */
+    <<[[_vswitch]] trap from USER mode>>
+@
+%$
+
+<<[[_vswitch]] trap from USER mode>>=
+_userexcep:
+    MOVM.DB.W [R0-R2], (R13)    /* set ureg->{type, psr, pc}; r13 points to ureg->type  */
+    MOVM.IA   (R3), [R0-R4]     /* restore [R0-R4] from previous mode's stack */
+
+    /* avoid the ambiguity described in notes/movm.w. */
+    MOVM.DB.S [R0-R14], (R13)   /* save kernel level registers */
+    SUB $(15*4), R13        /* r13 now points to ureg */
+
+    MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
+
+    /* get R(CPU) for this cpu */
+    CPUID(R1)
+    SLL $2, R1          /* convert to word index */
+    MOVW    $cpus(SB), R2
+    ADD R1, R2
+    MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
+    CMP $0, R(CPU)
+    MOVW.EQ $CPUADDR, R(CPU)        /* paranoia: use CPUADDR if 0 */
+
+    MOVW    8(R(CPU)), R(UP)        /* up */
+
+    MOVW    R13, R0         /* first arg is pointer to ureg */
+    SUB $(4*2), R13     /* space for argument+link (for debugger) */
+
+    BL  trap(SB)
+
+    ADD $(4*2+4*15), R13    /* make r13 point to ureg->type */
+    MOVW    8(R13), R14     /* restore link */
+    MOVW    4(R13), R0      /* restore SPSR */
+    MOVW    R0, SPSR        /* ... */
+    MOVM.DB.S (R13), [R0-R14]   /* restore registers */
+    ADD $(4*2), R13     /* pop past ureg->{type+psr} */
+    RFE             /* MOVM.IA.S.W (R13), [R15] */
+@
+%$
+
+
+<<[[_vswitch]] trap from SVC mode>>=
+    MOVM.DB.W [R0-R2], (R13)    /* set ureg->{type, psr, pc}; r13 points to ureg->type  */
+    MOVM.IA   (R3), [R0-R4]     /* restore [R0-R4] from previous mode's stack */
+
+    /*
+     * avoid the ambiguity described in notes/movm.w.
+     * In order to get a predictable value in R13 after the stores,
+     * separate the store-multiple from the stack-pointer adjustment.
+     * We'll assume that the old value of R13 should be stored on the stack.
+     */
+    /* save kernel level registers, at end r13 points to ureg */
+    MOVM.DB [R0-R14], (R13)
+    SUB $(15*4), R13        /* SP now points to saved R0 */
+
+    MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
+
+    MOVW    R13, R0         /* first arg is pointer to ureg */
+    SUB $(4*2), R13     /* space for argument+link (for debugger) */
+    MOVW    $0xdeaddead, R11    /* marker */
+
+    BL  trap(SB)
+
+    MOVW    $setR12(SB), R12    /* reload kernel's SB (ORLY?) */
+    ADD $(4*2+4*15), R13    /* make r13 point to ureg->type */
+    /*
+     * if we interrupted a previous trap's handler and are now
+     * returning to it, we need to propagate the current R(CPU) (R10)
+     * by overriding the saved one on the stack, since we may have
+     * been rescheduled and be on a different processor now than
+     * at entry.
+     */
+    MOVW    R(CPU), (-(15-CPU)*4)(R13) /* restore current cpu's CPU */
+    MOVW    8(R13), R14     /* restore link */
+    MOVW    4(R13), R0      /* restore SPSR */
+    MOVW    R0, SPSR        /* ... */
+
+    MOVM.DB (R13), [R0-R14]     /* restore registers */
+
+    ADD $(4*2), R13     /* pop past ureg->{type+psr} to pc */
+    RFE             /* MOVM.IA.S.W (R13), [R15] */
+@
+%$
+
+\subsection{[[trap()]] (ARM)}
+
+% (_virq |  -> _vswitch) -> <>
+<<function trap(arm)>>=
+/*
+ *  here on all exceptions other than syscall (SWI) and fiq
+ */
+void
+trap(Ureg *ureg)
+{
+    int clockintr, user, x, rv, rem;
+    ulong inst, fsr;
+    uintptr va;
+    char buf[ERRMAX];
+
+    assert(!arch_islo());
+    if(up != nil)
+        rem = ((char*)ureg)-up->kstack;
+    else
+        rem = ((char*)ureg)-((char*)cpu + sizeof(Cpu));
+    if(rem < 256) {
+        iprint("trap: %d stack bytes left, up %#p ureg %#p at pc %#lux\n",
+            rem, up, ureg, ureg->pc);
+        arch_delay(1000);
+        arch_dumpstack();
+        panic("trap: %d stack bytes left, up %#p ureg %#p at pc %#lux",
+            rem, up, ureg, ureg->pc);
+    }
+
+    user = (ureg->psr & PsrMask) == PsrMusr;
+    if(user){
+        up->dbgreg = ureg;
+        <<[[trap()]] adjust kentry when interrupt user>>
+    }
+
+    /*
+     * All interrupts/exceptions should be resumed at ureg->pc-4,
+     * except for Data Abort which resumes at ureg->pc-8.
+     */
+    if(ureg->type == (PsrMabt+1))
+        ureg->pc -= 8;
+    else
+        ureg->pc -= 4;
+
+    clockintr = 0;      /* if set, may call sched() before return */
+
+    switch(ureg->type){
+    default:
+        panic("unknown trap; type %#lux, psr mode %#lux pc %lux", ureg->type,
+            ureg->psr & PsrMask, ureg->pc);
+        break;
+    case PsrMirq:
+        clockintr = irq(ureg);
+        cpu->intr++;
+        break;
+    case PsrMabt:           /* prefetch fault */
+        x = ifsrget();
+        fsr = (x>>7) & 0x8 | x & 0x7;
+        switch(fsr){
+        case 0x02:      /* instruction debug event (BKPT) */
+            if(user){
+                snprint(buf, sizeof buf, "sys: breakpoint");
+                postnote(up, 1, buf, NDebug);
+            }else{
+                iprint("kernel bkpt: pc %#lux inst %#ux\n",
+                    ureg->pc, *(u32int*)ureg->pc);
+                panic("kernel bkpt");
+            }
+            break;
+        default:
+            faultarm(ureg, ureg->pc, user, 1);
+            break;
+        }
+        break;
+    case PsrMabt+1:         /* data fault */
+        va = farget();
+        inst = *(ulong*)(ureg->pc);
+        /* bits 12 and 10 have to be concatenated with status */
+        x = fsrget();
+        fsr = (x>>7) & 0x20 | (x>>6) & 0x10 | x & 0xf;
+        switch(fsr){
+        default:
+        case 0xa:       /* ? was under external abort */
+            panic("unknown data fault, 6b fsr %#lux", fsr);
+            break;
+        case 0x0:
+            panic("vector exception at %#lux", ureg->pc);
+            break;
+        case 0x1:       /* alignment fault */
+        case 0x3:       /* access flag fault (section) */
+            if(user){
+                snprint(buf, sizeof buf,
+                    "sys: alignment: pc %#lux va %#p\n",
+                    ureg->pc, va);
+                postnote(up, 1, buf, NDebug);
+            } else
+                panic("kernel alignment: pc %#lux va %#p", ureg->pc, va);
+            break;
+        case 0x2:
+            panic("terminal exception at %#lux", ureg->pc);
+            break;
+        case 0x4:       /* icache maint fault */
+        case 0x6:       /* access flag fault (page) */
+        case 0x8:       /* precise external abort, non-xlat'n */
+        case 0x28:
+        case 0xc:       /* l1 translation, precise ext. abort */
+        case 0x2c:
+        case 0xe:       /* l2 translation, precise ext. abort */
+        case 0x2e:
+        case 0x16:      /* imprecise ext. abort, non-xlt'n */
+        case 0x36:
+            panic("external abort %#lux pc %#lux addr %#p",
+                fsr, ureg->pc, va);
+            break;
+        case 0x1c:      /* l1 translation, precise parity err */
+        case 0x1e:      /* l2 translation, precise parity err */
+        case 0x18:      /* imprecise parity or ecc err */
+            panic("translation parity error %#lux pc %#lux addr %#p",
+                fsr, ureg->pc, va);
+            break;
+        case 0x5:       /* translation fault, no section entry */
+        case 0x7:       /* translation fault, no page entry */
+            faultarm(ureg, va, user, !writetomem(inst));
+            break;
+        case 0x9:
+        case 0xb:
+            /* domain fault, accessing something we shouldn't */
+            if(user){
+                snprint(buf, sizeof buf,
+                    "sys: access violation: pc %#lux va %#p\n",
+                    ureg->pc, va);
+                postnote(up, 1, buf, NDebug);
+            } else
+                panic("kernel access violation: pc %#lux va %#p",
+                    ureg->pc, va);
+            break;
+        case 0xd:
+        case 0xf:
+            /* permission error, copy on write or real permission error */
+            faultarm(ureg, va, user, !writetomem(inst));
+            break;
+        }
+        break;
+    case PsrMund:           /* undefined instruction */
+        if(user){
+            if(seg(up, ureg->pc, 0) != nil &&
+               *(u32int*)ureg->pc == 0xD1200070)
+                postnote(up, 1, "sys: breakpoint", NDebug);
+            else{
+                /* look for floating point instructions to interpret */
+                rv = fpuemu(ureg);
+                if(rv == 0){
+                    snprint(buf, sizeof buf,
+                        "undefined instruction: pc %#lux\n",
+                        ureg->pc);
+                    postnote(up, 1, buf, NDebug);
+                }
+            }
+        }else{
+            if (ureg->pc & 3) {
+                iprint("rounding fault pc %#lux down to word\n",
+                    ureg->pc);
+                ureg->pc &= ~3;
+            }
+            iprint("undefined instruction: pc %#lux inst %#ux\n",
+                ureg->pc, *(u32int*)ureg->pc);
+            panic("undefined instruction");
+        }
+        break;
+    }
+    arch_splhi();
+
+    <<[[trap()]] if delaysched>>
+
+    if(user){
+        if(up->procctl || up->nnote)
+            notify(ureg);
+        kexit(ureg);
+    }
+}
+@
+%could be renamed arch_trap but called from arch-specific only
+
+<<function kexit(arm)>>=
+/* go to user space */
+void
+kexit(Ureg*)
+{
+    <<[[kexit()]] tos adjustments>>
+    tos->cyclefreq = cpu->cpuhz;
+
+    /* make visible immediately to user proc */
+    cachedwbinvse(tos, sizeof *tos);
+}
+@
+% should be called hook_before_exit_syscall note that
+% take Ureg*, so the address is in the stack and the actual
+% value are where?
+%could be renamed arch_kexit, but called from arch-specific only (trap())
+
+
+
+
 
 \chapter{Virtual Memory}
-% rename x86 virtual memory? but now that have swapping and demand loading
-% sections here, it makes less sense to rename.
-% less: could add (page fault) in title to relate to Interrupt chapter
+%less: add (ARM) in title? less cos have swapping and demand loading now.
+%less: add (page fault) in title to relate to Interrupt chapter?
 
 \section{Overview}
 
-% What a system would look like (including for a programmer) without Virtual mem?
+% What a system would look like (including for a programmer) without 
+% Virtual memory?
+
 % Virtual memory, via the indirection trick, enables many many things:
-% - isolated processes, safer! (see DOS ...) a malicious/buggy process can't harm
+% - isolated processes, safer! (see DOS ...) a malicious/buggy process cant harm
 % - can access more than physical, hence virtual in some sense, swapping
 % - sharing optimization: shared text pages, but also in fork copy on write
 % - lazy optimization: can have demand loading
 % - easier for loading programs, no need relocation, they all start at 0
-% - ??
-
-% segmentation + pagination on intel, but like most OS, pagination
-% offers most of the advantages so less need segmentation once use
-% pagination. Will use segmentation only for security to differentiate
-% kernel vs user.
+% - more stuff?
 
 % kernel and user in same virtual space (user then vpt then kernel), so
 % convenient, kernel need access user data: syscall have arguments
 % that can point to user area that we will need to read/modify.
 
-% what a system with only segmentation? can do a lot too.
+% segmentation, pagination.
+% Pagination enough.
 % what a system with only pagination? can do security kernel vs user with this?
-
-\section{Segmentation and [[gdt]] (x86)}
-
-% see Basic segmentation intialization section too
-
-% use segments mostly for security, for kernel vs user different
-% level. CS will contain a selector in gdt (user can't change
-% CS?) with gdt describe ring.
-
-% could be an enum, but has to be used from assembly too
-<<constant x86 segments>>=
-/*
- *  known x86 segments (in GDT) and their selectors
- */
-#define NULLSEG 0 /* null segment */
-#define KDSEG 1 /* kernel data/stack */
-#define KESEG 2 /* kernel executable */ 
-#define UDSEG 3 /* user data/stack */
-#define UESEG 4 /* user executable */
-#define TSSSEG  5 /* task segment */
-<<constant x86 other segments>>
-#define NGDT    10  /* number of GDT entries required */
-@
-
-% will do MOVE XXSEG, AX; MOVE AX, ES
-% can't do MOVE AX, CS, for that we do jmp XXSEG:ADDR
-% actually will use XXSEL, not XXSEG, see below
-
-% also used for IDT
-<<struct Segdesc(x86)>>=
-struct Segdesc
-{
-    ulong d0; // ??
-    ulong d1; // ??
-};
-@ 
-% rename, first is size and second is flag
-
-% #define ring0, ring3? instead of 0 and 3 below?
-
-
-<<constant segment field extractors(x86)>>=
-/*
- *  fields in segment descriptors
- */
-#define SEGDATA (0x10<<8) /* data/stack segment */
-#define SEGEXEC (0x18<<8) /* executable segment */
-#define SEGTSS  (0x9<<8)  /* TSS segment */
-//#define SEGCG (0x0C<<8) /* call gate */
-#define SEGIG (0x0E<<8) /* interrupt gate */
-//#define SEGTG (0x0F<<8) /* trap gate */
-
-//#define SEGTYPE (0x1F<<8)
-
-#define SEGP  (1<<15)   /* segment present */
-
-#define SEGPL(x) ((x)<<13)  /* priority level */
-
-#define SEGB  (1<<22)   /* granularity 1==4k (for expand-down) */
-#define SEGG  (1<<23)   /* granularity 1==4k (for other) */
-//#define SEGE  (1<<10)   /* expand down */
-
-#define SEGW  (1<<9)    /* writable (for data/stack) */
-#define SEGR  (1<<9)    /* readable (for code) */
-
-#define SEGD  (1<<22)   /* default 1==32bit (for code) */
-@
-
-
-
-<<global gdt(x86)>>=
-Segdesc gdt[NGDT] =
-{
-[NULLSEG]   { 0, 0},        /* null descriptor */
-[KDSEG]     DATASEGM(0),        /* kernel data/stack */
-[KESEG]     EXECSEGM(0),        /* kernel code */
-[UDSEG]     DATASEGM(3),        /* user data/stack */
-[UESEG]     EXECSEGM(3),        /* user code */
-[TSSSEG]    TSSSEGM(0,0),       /* tss segment */
-<<[[gdt]] other elements(x86)>>
-};
-@
-% copied in cpu->gdt (at CPU0GDT addresS) in mmuinit0
-% speaks about user! as opposed to the more basic tgdt in _setup_segmentation
-
-<<macros xxxSEGM(x86)>>=
-/*
- * Simple segment descriptors with no translation.
- */
-#define DATASEGM(p) { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
-#define EXECSEGM(p) { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
-#define TSSSEGM(b,p) { ((b)<<16)|sizeof(Tss),\
-                   ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
-<<macros other xxxSEGM(x86)>>
-@
-% maybe could define redundant C structure with bitfield to make
-% this clearer. kencc supports bitfield? but has to be used from asm too no?
-
-
-
-
-
-<<[[Cpu]] [[Arch]] other fields(x86)>>=
-// array<Segdesc>
-Segdesc *gdt;     /* gdt for this processor */
-@
-
-% CPU0GDT? and the other? mostly similar, just the 
-% TSS change I think. Why use TSS?
-
-
-<<constant x86 segment selectors>>=
-//#define NULLSEL SELECTOR(NULLSEG, SELGDT, 0)
-#define KDSEL SELECTOR(KDSEG, SELGDT, 0)
-#define KESEL SELECTOR(KESEG, SELGDT, 0)
-#define UESEL SELECTOR(UESEG, SELGDT, 3)
-#define UDSEL SELECTOR(UDSEG, SELGDT, 3)
-#define TSSSEL  SELECTOR(TSSSEG, SELGDT, 0)
-<<constant x86 other segment selectors>>
-@
-% why need that?
-
-<<function userureg(x86)>>=
-//#define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
-int
-arch_userureg(Ureg* ur)
-{
-  return (((ur)->cs & 0xFFFF) == UESEL);
-}
-@
-% ->cs, see Ureg in x86 section in overview chapter
-%todo: could be used at more places actually
-
-
-
-<<constant SELGDT(x86)>>=
-#define SELGDT  (0<<2)  /* selector is in gdt */
-@
-
-<<macro SELECTOR(x86)>>=
-#define SELECTOR(idx, type, prio) (((idx)<<3) | (type) | (prio))
-@
-
-% could put code of tgdt of initialization here? but the real gdt
-% is the one above, the tgdt is just used at the beginning
-
-\section{Pagination and [[mmupd]], [[mmupt]] (x86)} 
-%http://wiki.osdev.org/Paging
-
-% see Basic pagination intialization too
+%x86: has also segmentation, but not that useful
 
 % different levels:
-%  tlb, mmupd, mmupt
-%  Segment itself have pagedir, pagetab,
-%  and cpu have pdproto, and proc avec mmupd ... very complex.
+% - hardware:  TLB, mmupd+mmupt (called L1/L2 on ARM)
+% - software: Segment itself have pagedir, pagetab,
+%   and Cpu has pdproto, and Proc has mmupd ... 
+% => complex.
 
 % glossary: 
 % PD (page directory), PDE (page directory entry), PDX (page directory idx)
 % PT (page table),     PTE (page table entry),     PTX (page table index)
+%pad: I added that? or original code was abusing PTE for everything?
+
+\section{The MMU (ARM)} 
+
+%http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0211k/Caceaije.html
+
+% L1 = PD
+% L2 = PT
+
+<<type PageDirGranularity(arm)>>=
+#define Coarse      (Mbz|1)         /* L1 */
+#define Section     (Mbz|2)         /* L1 1MB */
+#define Fine        (Mbz|3)         /* L1 */
+@
+<<constant Mbz(arm)>>=
+/* Mbz (0x10) bit is implementation-defined and must be 0 on the cortex. */
+#define Mbz     (0<<4)
+@
+
+<<type PageTableGranularity(arm)>>=
+#define Large       0x00000001      /* L2 64KB */
+#define Small       0x00000002      /* L2 4KB */
+#define Tiny        0x00000003      /* L2 1KB: not in v7 */
+@
+% will use Small
+
+<<type PageTableEntryAttribute1(arm)>>=
+#define Buffered    0x00000004      /* L[12]: write-back not -thru */
+#define Cached      0x00000008      /* L[12] */
+@
+% write-back vs write-thru ???
+
+<<type PageTableEntryAttribute2(arm)>>=
+#define L1wralloc   (1<<12)         /* L1 TEX */
+#define L1sharable  (1<<16)
+#define L2wralloc   (1<<6)          /* L2 TEX (small pages) */
+#define L2sharable  (1<<10)
+@
+%/* attributes for memory containing locks -- differs between armv6 and armv7 */
+%//#define L1ptedramattrs    (Cached | Buffered | L1wralloc | L1sharable)
+%//#define L2ptedramattrs    (Cached | Buffered | L2wralloc | L2sharable)
+\t in SMP?
+
+<<type DAC(arm)>>=
+#define Client      1           /* DAC */
+#define Manager     3           /* DAC */
+@
+
+<<type PageTableEntryAttribute3(arm)>>=
+#define Noaccess    0       /* AP, DAC */
+#define Krw     1           /* AP */
+/* armv7 deprecates AP[2] == 1 & AP[1:0] == 2 (Uro), prefers 3 (new in v7) */
+#define Uro     2           /* AP */
+#define Urw     3           /* AP */
+@
+% Kernel User
+
+\section{Pagination and [[mmupd]], [[mmupt]] (ARM)} 
+%http://wiki.osdev.org/Paging
+
+% See Basic pagination intialization too
+
+<<constant BY2PG(arm)>>=
+#define BY2PG       (4*KiB)         /* bytes per page */
+@
+%x86: same
 
 % page, 4096, so when give page address, don't need 12 low bits! PGSHIFT
-% PGSHIFT here?
+<<constant PGSHIFT(arm)>>=
+#define PGSHIFT     12          /* log(BY2PG) */
+@
+%x86: same
+
 
 % each time switch process, they have different segments, and
 % different pages they use, so will need to empty tlb and
@@ -7612,37 +7345,25 @@ arch_userureg(Ureg* ur)
 
 % properties of 1 page, 1 byte
 % PTE = page table entry, so spec about one page (also for entries in PD)
-<<constant PTExxx(x86)>>=
-/*
- *  physical MMU
- */
-#define PTEVALID  (1<<0)
 
-#define PTEWRITE  (1<<1)
-#define PTERONLY  (0<<1)
-
-// x86 specific constants
-//#define PTEKERNEL (0<<2)
-#define PTEUSER   (1<<2)
-
-#define PTEWT       (1<<3) // Write Through, e.g. VGA memory, mean??
-#define PTEUNCACHED (1<<4) // ??
-#define PTESIZE   (1<<7) // Big pages (x86 extension)
-#define PTEGLOBAL (1<<8) // do not clear from TLB kernel pages (x86 extension)
+<<type PTExxx(arm)>>=
+#define PTEVALID    (1<<0)
+#define PTERONLY    0
+#define PTEWRITE    (1<<1)
+#define PTEUNCACHED (1<<2)
+#define PTEKERNEL   (1<<3)
 @
+
+
 % pa is aligned at page, so can use low 12 bytes hence 1<<8
 % in a PTE what is implicit is the va. the va is the index
 % in the PD (Page Directory) + index in the PT (Page table)
 
-% PTESIZE is used to say this entry actually maps a big page (4Mo, not 4Ko)
-% but is used only for vmap mapping
 
 % how set 1-to-1 mapping for KZERO and more?
 
 % complicated to access to physical memory if have lots of memory :)
 % so let's first do a simple version? see advanced memory chapter for more
-
-
 
 % on tmpmap, tmpunmap. For now assume just alias to XXX
 % on arch_kmap, arch_kunmap, VA. Assume alias to XXX.
@@ -7715,6 +7436,7 @@ kern_addr2   pdproto;      /* page directory base for this processor (va) */
 % that will map specially the CPUADDR for each CPU!
 % it is actually a prototype that is copied in the mmupagedir of each
 % new process
+
 
 <<[[Cpu]] [[Arch]] other fields(x86)>>=
 Page* mmupdpool;
@@ -7965,6 +7687,7 @@ if(old&PTEVALID)
 if(getcr3() != up->mmupd->pa)
      print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
 @
+
 % there are called to newpage, so use user memory for pagedir/pagetable
 % of process, which kinda make sense, but is it dangerous? can those
 % pages containing pagedir/pagetable data be swapped out? No because
@@ -8010,64 +7733,58 @@ flushpg(virt_addr va)
         putcr3(getcr3());
 }
 @
+% invalidate everything if does not have the feature
 
 
+\section{Page fault}
 
-\section{Page fault (x86)}
-
-% see also trapinit
-
-% insyscall saving? means can have trap in a syscall itself?
+% see also trapinit()
 
 % addr be kernel (virtual) address or user (virtual) address?
 % can it be kernel address? I don't think so. should panic in that case
 % at least to understand.
 
-<<function fault386>>=
+\subsection{[[faultarm()]] (ARM)}
+
+% [interrupt] -> _vxxx -> vswitch -> trap -> <>
+<<function faultarm(arm)>>=
+/*
+ *  called by trap to handle access faults
+ */
 static void
-fault386(Ureg* ureg, void*)
+faultarm(Ureg *ureg, uintptr va, int user, int read)
 {
-    virt_addr addr; 
-    bool read, insyscall, user;
-    int n; // ret_code
+    int n, insyscall;
     char buf[ERRMAX];
 
-    addr = getcr2(); // faulting va
-    read = !(ureg->ecode & 2);
-    user = (ureg->cs & 0xFFFF) == UESEL;
-
-    if(!user){
-        if(vmapsync(addr))
-            return;
-        if(addr >= USTKTOP)
-            panic("kernel fault: bad address pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
-        if(up == nil)
-            panic("kernel fault: no user process pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
+    if(up == nil) {
+        //dumpregs(ureg);
+        panic("fault: nil up in faultarm, pc %#p accessing %#p", ureg->pc, va);
     }
-    if(up == nil)
-        panic("user fault: up=0 pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
-
     insyscall = up->insyscall;
-    up->insyscall = true; // really?
+    up->insyscall = 1;
+    if (Debug)
+        ckfaultstuck(va);
 
-    n = fault(addr, read); // portable code
-
+    n = fault(va, read);
     if(n < 0){
         if(!user){
             dumpregs(ureg);
-            panic("fault: 0x%lux", addr);
+            panic("fault: kernel accessing %#p", va);
         }
-        checkpages();
-        //checkfault(addr, ureg->pc);
-        snprint(buf, sizeof buf, "sys: trap: fault %s addr=0x%lux",
-            read ? "read" : "write", addr);
+        /* don't dump registers; programs suicide all the time */
+        snprint(buf, sizeof buf, "sys: trap: fault %s va=%#p",
+            read? "read": "write", va);
         postnote(up, 1, buf, NDebug);
     }
     up->insyscall = insyscall;
 }
-@ 
-% LP split hide error managment code in first pass
+@
+% LP split hide error management code in first pass
 
+% insyscall saving? means can have trap in a syscall itself?
+
+\subsection{[[fault()]]}
 
 % ret_code2?
 <<function fault>>=
@@ -8111,6 +7828,7 @@ fault(virt_addr addr, bool read)
 @
 % why loop?
 
+\subsection{[[fixfault()]]}
 
 % The big one! very important function!
 %ret_code
@@ -8199,47 +7917,10 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 @
 
 
+\subsection{[[arch_putmmu()]] (ARM)}
+% and back to ARM specific. 
+% faultarm(ARM) -> fault -> fixfault -> arch_putmmu(ARM)
 
-
-
-%-----------------------------------------------------------------------------
-
-<<function checkpages>>=
-void
-checkpages(void)
-{
-    int checked;
-    ulong addr, off;
-    Pagetable *p;
-    Page *pg;
-    Segment **sp, **ep, *s;
-    
-    if(up == nil)
-        return;
-
-    checked = 0;
-    // foreach(up->seg)
-    for(sp=up->seg, ep=&up->seg[NSEG]; sp<ep; sp++){
-        s = *sp;
-        if(s == nil)
-            continue;
-        qlock(&s->lk);
-        for(addr=s->base; addr<s->top; addr+=BY2PG){
-            off = addr - s->base;
-            p = s->pagedir[off/PAGETABMAPMEM];
-            if(p == nil)
-                continue;
-            pg = p->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
-            if(pg == nil || pagedout(pg))
-                continue;
-            arch_checkmmu(addr, pg->pa);
-            checked++;
-        }
-        qunlock(&s->lk);
-    }
-    print("%ld %s: checked %d page table entries\n", up->pid, up->text, checked);
-}
-@
 
 <<function checkmmu(x86)>>=
 /*
@@ -10557,7 +10238,7 @@ up->delaysched = 0;
 @
 
 
-<<[[trap()]] if delaysched(x86)>>=
+<<[[trap()]] if delaysched>>=
 /* delaysched set because we held a lock or because our quantum ended */
 if(up && up->delaysched && clockintr){
     sched();
@@ -10565,11 +10246,24 @@ if(up && up->delaysched && clockintr){
 }
 @
 
+
+<<[[syscall()]] if delaysched(arm)>>=
+/* if we delayed sched because we held a lock, sched now */
+if(up->delaysched){
+    sched();
+    arch_splhi();
+}
+@
+%x86: call arch_splhi here (but maybe can factorize because
+% do reverse somewhere else
+
+
 <<[[syscall()]] if delaysched(x86)>>=
 /* if we delayed sched because we held a lock, sched now */
 if(up->delaysched)
     sched();
 @
+
 
 <<[[unlock()]] if delaysched>>=
 if(up && deccnt(&up->nlocks) == 0 && up->delaysched && arch_islo()){
@@ -10582,8 +10276,11 @@ if(up && deccnt(&up->nlocks) == 0 && up->delaysched && arch_islo()){
 @
 
 
-\section{Context switch (x86)}
+\section{Context switch}
 % probably needs to see this section before sched()
+
+
+\subsection{[[Label]]}
 
 <<struct Label>>=
 // =~ a jumpbuf in C, for coroutines
@@ -10620,6 +10317,9 @@ char  *kstack;  /* known to l.s */
 
 % TSS, mmu, sched labels, ... many switches
 
+
+\subsection{[[arch_gotolabel()]] (x86)}
+
 <<function gotolabel(x86)>>=
 /*
  *  label consists of a stack pointer and a PC
@@ -10646,6 +10346,7 @@ TEXT arch_setlabel(SB), $0
 
 @
 
+\subsection{[[arch_mmuswitch()]] (x86)}
 
 <<function mmuswitch(x86)>>=
 void
@@ -10721,6 +10422,8 @@ taskswitch(phys_addr mmupd, ulong stack)
     putcr3(mmupd);
 }
 @
+
+\subsection{[[arch_procsave()]] (x86)}
 
 
 <<function procsave(x86)>>=
@@ -11348,10 +11051,11 @@ _nothingready:
 
 
 \chapter{Initialization}
+% could put ARM in title
 
-\section{Booting the kernel (x86)}
+\section{Booting the kernel}
 
-\subsection{Loading the kernel in physical memory}
+\subsection{Loading the kernel in physical memory (x86)}
 
 % output of inm -n 9qemu  is nice! 2879 symbols!
 % explain the text + data + bss part of the binary! see ksize 9qemu too
@@ -11439,7 +11143,7 @@ TEXT multiboot(SB), $0
 @
 
 
-\subsection{Basic segmentation}
+\subsection{Basic segmentation (x86)}
 
 <<function _setup_segmentation(x86)>>=
 TEXT _setup_segmentation(SB), $0
@@ -11513,7 +11217,7 @@ TEXT tgdtptr(SB), $0
 @
 %$
 
-\subsection{Basic pagination}
+\subsection{Basic pagination (x86)}
 
 <<function _setup_pagination(x86)>>=
 /*
@@ -11586,7 +11290,7 @@ _setpte:
 @
 %$
 
-\subsection{BSS and stack initialization}
+\subsection{BSS and stack initialization (x86)}
 
 % the x86 archi does not have multi register, so have to use same
 % pointer to differently mapped physical page
@@ -11623,7 +11327,7 @@ _clearbss:
 @
 
 
-\subsection{Jumping to C [[main()]]}
+\subsection{Jumping to C [[main()]] (x86)}
 
 % or do another function and in previous code to a JMP _last_before_main?
 <<end of _setup_bss_stack(x86)>>=
@@ -11718,7 +11422,7 @@ void main(void)
 }
 @
 
-\subsection{[[cpu]] initialization}
+\subsection{[[cpu]] initialization (x86)}
 
 <<function cpu0init(x86)>>=
 void
@@ -11767,7 +11471,7 @@ cpuinit(void)
 @
 
 
-\subsection{CPU detection}
+\subsection{CPU detection (x86)}
 
 <<[[Cpu]] [[Arch]] cpuid fields(x86)>>=
 char  cpuidid[16];
@@ -11797,7 +11501,7 @@ arch_cpuidprint(void)
 }
 @
 
-\subsection{[[arch]] initialization}
+\subsection{[[arch]] initialization (x86)}
 
 % main -> <>
 <<function archinit(x86)>>=
@@ -11852,7 +11556,7 @@ archinit(void)
 }
 @
 
-\subsection{Memory detection}
+\subsection{Memory detection (x86)}
 
 <<struct Map(x86)>>=
 struct Map {
@@ -12357,7 +12061,7 @@ ramscan(phys_addr maxmem)
 
 
 
-\subsection{[[conf]] initialization}
+\subsection{[[conf]] initialization (x86)}
 
 % already set conf.ncpu (but to 1), and conf.mem[] normally
 
@@ -12474,7 +12178,7 @@ confinit(void)
 
 % see also cat /dev/swap
 
-\subsection{[[idt]] initialization}
+\subsection{[[idt]] initialization (x86)}
 
 <<function trapinit0(x86)>>=
 /*
@@ -12555,7 +12259,7 @@ unexpected(Ureg* ureg, void*)
 }
 @ 
 
-\subsection{Virtual memory initialisation}
+\subsection{Virtual memory initialisation (x86)}
 
 <<function mmuinit0(x86)>>=
 void
@@ -13142,11 +12846,10 @@ startboot(char *argv0, char **argv)
 
 \section{Booting the user}
 
-% see section on Userspace system programs
-% when arrive here, we got the first process executing! and
-% a working kernel!
+% See section on Userspace system programs.
+% when arrive here, we got the first process executing! and a working kernel!
 
-% see boot.rc now! simpler than 9/boot/
+% See boot.rc now! Even simpler than 9/boot/.
 
 
 %###############################################################################
@@ -17760,6 +17463,7 @@ dirfixed(byte *p, byte *e, DirEntry *d)
 
 
 \chapter{Devices}
+%could add (ARM)
 %less: Keyboard/Screen sections before File/Dir/Namespace sections? hmmm hard.
 
 % We will only see a few drivers. Drivers actually are biggest part of
@@ -23558,11 +23262,18 @@ sysnotify(ulong* arg)
 }
 @ 
 
+<<[[syscall()]] call notify(arm)>>=
+arch_splhi();
+if(scallnr != RFORK && (up->procctl || up->nnote))
+    notify(ureg);
+@
+%x86: call arch_splhi inside the if (bug in bcm/?)
+
 <<[[syscall()]] call notify()(x86)>>=
-    if(scallnr!=RFORK && (up->procctl || up->nnote)){
-        arch_splhi();
-        notify(ureg);
-    }
+if(scallnr!=RFORK && (up->procctl || up->nnote)){
+    arch_splhi();
+    notify(ureg);
+}
 @
 
 <<function notify(x86)>>=
@@ -23663,9 +23374,9 @@ sysnoted(ulong* arg)
 }
 @ 
 
-<<[[syscall()]] call noted()(x86)>>=
-    if(scallnr == NOTED)
-        noted(ureg, *(ulong*)(sp+BY2WD));
+<<[[syscall()]] call noted()>>=
+if(scallnr == NOTED)
+    noted(ureg, *(ulong*)(sp+BY2WD));
 @
 
 <<function noted(x86)>>=
@@ -25774,20 +25485,20 @@ text2data(Proc *p, Segment *s)
 % alternative approach? 
 
 <<enum procctl cases>>=
-    Proc_tracesyscall,
+Proc_tracesyscall,
 @
 % but who can set the procctl to Proc_tracesyscall?
 
 % note that 'up' here is the process of the tracer! he is the one
 % writing to /proc/x/ctl 
 <<[[procctlreq()]] CMstartsyscall case>>=
-    case CMstartsyscall:
-        if(p->state != Stopped)
-            error(Ebadctl);
-        p->procctl = Proc_tracesyscall;
-        ready(p);
-        procstopwait(p, Proc_tracesyscall); // will sleep
-        break;
+case CMstartsyscall:
+    if(p->state != Stopped)
+        error(Ebadctl);
+    p->procctl = Proc_tracesyscall;
+    ready(p);
+    procstopwait(p, Proc_tracesyscall); // will sleep
+    break;
 @
 % but how x was stopped in the first place? get hang to true
 % but then it just leads to Proc_stopme, there was no call to procctl(up)
@@ -25795,44 +25506,80 @@ text2data(Proc *p, Segment *s)
 
 
 
+<<[[syscall()]] Proc_tracesyscall if, syscall entry(arm)>>=
+if(up->procctl == Proc_tracesyscall){
+    /*
+     * Redundant validaddr.  Do we care?
+     * Tracing syscalls is not exactly a fast path...
+     * Beware, validaddr currently does a pexit rather
+     * than an error if there's a problem; that might
+     * change in the future.
+     */
+    if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
+        validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+
+    syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
+    up->procctl = Proc_stopme;
+    procctl(up);
+    if (up->syscalltrace) 
+        free(up->syscalltrace);
+    up->syscalltrace = nil;
+}
+@
+%x86: very similar, just additional call to toget() in x86
 
 <<[[syscall()]] Proc_tracesyscall if, syscall entry(x86)>>=
-    if(up->procctl == Proc_tracesyscall){
-        /*
-         * Redundant validaddr.  Do we care?
-         * Tracing syscalls is not exactly a fast path...
-         * Beware, validaddr currently does a pexit rather
-         * than an error if there's a problem; that might
-         * change in the future.
-         */
-        if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
-            validaddr(sp, sizeof(Sargs)+BY2WD, false);
+if(up->procctl == Proc_tracesyscall){
+    /*
+     * Redundant validaddr.  Do we care?
+     * Tracing syscalls is not exactly a fast path...
+     * Beware, validaddr currently does a pexit rather
+     * than an error if there's a problem; that might
+     * change in the future.
+     */
+    if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
+        validaddr(sp, sizeof(Sargs)+BY2WD, false);
 
-        syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
-        up->procctl = Proc_stopme;
-        // this will call sched() and wakeup the tracer process
-        procctl(up); 
-        // back here when the tracer process readied us back and
-        // should have set procctl back to Proc_tracesyscall
-        if(up->syscalltrace)
-            free(up->syscalltrace);
-        up->syscalltrace = nil;
-        startns = todget(nil);
-    }
+    syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
+    up->procctl = Proc_stopme;
+    // this will call sched() and wakeup the tracer process
+    procctl(up); 
+    // back here when the tracer process readied us back and
+    // should have set procctl back to Proc_tracesyscall
+    if(up->syscalltrace)
+        free(up->syscalltrace);
+    up->syscalltrace = nil;
+    startns = todget(nil);
+}
 @
 
+<<[[syscall()]] Proc_tracesyscall if, syscall exit(arm)>>=
+if(up->procctl == Proc_tracesyscall){
+    stopns = todget(nil);
+    up->procctl = Proc_stopme;
+    sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
+    s = arch_splhi();
+    procctl(up);
+    arch_splx(s);
+    if(up->syscalltrace)
+        free(up->syscalltrace);
+    up->syscalltrace = nil;
+}
+@
+%x86: identical
+
 <<[[syscall()]] Proc_tracesyscall if, syscall exit(x86)>>=
-    if(up->procctl == Proc_tracesyscall){
-        stopns = todget(nil);
-        up->procctl = Proc_stopme;
-        sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
-        s = arch_splhi();
-        procctl(up); // again, will call sched() and wakeup tracer process
-        arch_splx(s);
-        if(up->syscalltrace)
-            free(up->syscalltrace);
-        up->syscalltrace = nil;
-    }
+if(up->procctl == Proc_tracesyscall){
+    stopns = todget(nil);
+    up->procctl = Proc_stopme;
+    sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
+    s = arch_splhi();
+    procctl(up); // again, will call sched() and wakeup tracer process
+    arch_splx(s);
+    if(up->syscalltrace)
+        free(up->syscalltrace);
+    up->syscalltrace = nil;
+}
 @
 % why protect procctl(up) with arch_splhi here and not before?
 % both the entry and exit are not perfectly symetric :( TOFIX?
@@ -26824,7 +26571,7 @@ Tos *tos;
     // done here? what about sysrfork? call kexit?
 @
 
-<<[[kexit()]] tos adjustments(x86)>>=
+<<[[kexit()]] tos adjustments>>=
     uvlong t;
     Tos *tos;
 
@@ -26844,12 +26591,12 @@ tos->clock += TK2MS(1);
 
 
 
-<<[[syscall()]] adjust kentry(x86)>>=
-    arch_cycles(&up->kentry);
+<<[[syscall()]] adjust kentry>>=
+arch_cycles(&up->kentry);
 @
 
-<<[[trap()]] adjust kentry when interrupt user(x86)>>=
-        arch_cycles(&up->kentry);
+<<[[trap()]] adjust kentry when interrupt user>>=
+arch_cycles(&up->kentry);
 @
 
 
@@ -27228,6 +26975,19 @@ if(indir && *argp==nil) {
 % for ARM, simplified a lot by relying on VFP3 instructions
 % generated by 5l -f. 
 % So no need for coprocessor and fpiarm.c/fpi.c/fpimem.c.
+
+<<[[Cpu]] [[Arch]] float fields(arm)>>=
+/* vfp2 or vfp3 fpu */
+int havefp;
+int havefpvalid;
+int fpon;
+int fpconfiged;
+int fpnregs;
+ulong   fpscr;          /* sw copy */
+int fppid;          /* pid of last fault */
+uintptr fppc;           /* addr of last fault */
+int fpcnt;          /* how many consecutive at that addr */
+@
 
 \subsection{[[coproc.c]]}
 
@@ -27745,48 +27505,6 @@ fpusysprocsetup(Proc *p)
 }
 @
 
-<<function arch_procsetup(arm)>>=
-/*
- *  set mach dependent process state for a new process
- */
-void
-arch_procsetup(Proc* p)
-{
-    fpusysprocsetup(p);
-}
-@
-
-<<function arch_procsave(arm)>>=
-/*
- *  Save the mach dependent part of the process state.
- */
-void
-arch_procsave(Proc* p)
-{
-    uvlong t;
-
-    arch_cycles(&t);
-    p->pcycles += t;
-
-/* TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.*/
-    fpuprocsave(p);
-}
-@
-
-<<function arch_procrestore(arm)>>=
-void
-arch_procrestore(Proc* p)
-{
-    uvlong t;
-
-    if(p->kp)
-        return;
-    arch_cycles(&t);
-    p->pcycles -= t;
-
-    fpuprocrestore(p);
-}
-@
 
 <<function mathnote(arm)>>=
 static void
@@ -28011,6 +27729,36 @@ Arch_FPsave  fpsave;   /* address of this is known by db */
 @
 
 
+<<struct Arch_FPsave(arm)>>=
+/*
+ * emulated or vfp3 floating point
+ */
+struct Arch_FPsave
+{
+    ulong   status;
+    ulong   control;
+    /*
+     * vfp3 with ieee fp regs; uvlong is sufficient for hardware but
+     * each must be able to hold an Internal from fpi.h for sw emulation.
+     */
+    ulong   regs[Maxfpregs][3];
+
+    int fpstate;
+
+    uintptr pc;     /* of failed fp instr. */
+};
+@
+
+
+<<enum _anon_ (arch/arm/dat_processes.h)(arm)>>=
+enum {
+    Maxfpregs   = 32,   /* could be 16 or 32, see Mach.fpnregs */
+    Nfpctlregs  = 16,
+};
+@
+%old: was in dat_arch.h
+
+
 \section{Floating point (x86)}
 
 % apparently on 386 we have IrqIRQ13 for coprocessor, meaning the copro
@@ -28025,13 +27773,13 @@ Arch_FPsave  fpsave;   /* address of this is known by db */
  * the FP regs must be stored here, not somewhere pointed to from here.
  * port code assumes this.
  */
-// could be renamed Arch_ProcFPSave (used both in Proc and Cpu though)
 union Arch_FPsave {
     FPstate;
     SFPssestate;
 };
 @
 %old: FPsave
+%less: could be renamed Arch_ProcFPSave (used both in Proc and Cpu though)
 
 <<struct FPstate(x86)>>=
 struct  FPstate     /* x87 fpu state */
@@ -28508,7 +28256,9 @@ TEXT fpsserestore0(SB), $0                      /* enable and restore state */
 %$
 
 
-\section{SMP on the Raspberry Pi 2 (ARM)}
+\section{SMP (ARM)}
+
+\subsection{The Raspberry Pi 2 machine}
 
 % Raspberry Pi 2 has 4 processors. Cortex-a7 (used in many smartphones).
 
@@ -28521,11 +28271,17 @@ TEXT fpsserestore0(SB), $0                      /* enable and restore state */
 #define CpCLD       9        /* L2 Cache Lockdown, op1==1 */
 @
 
+<<[[CpCONTROL.CpMainctl]] other cases(arm)>>=
+#define CpCsbo (3<<22|1<<18|1<<16|017<<3)   /* must be 1 (armv7) */
+#define CpCsbz (CpCtre|1<<26|CpCve|1<<15|7<<7)  /* must be 0 (armv7) */
+#define CpCsw       (1<<10)     /* SW: SWP(B) enable (deprecated in v7) */
+#define CpCpredict  0x00000800  /* Z: branch prediction (armv7) */
+@
 
 <<[[Soc]] other fields>>=
 uintptr armlocal;
 @
-<<[[soc(raspberry pi1)]] other fields>>=
+<<[[soc(raspberry pi1)]] other fields(arm)>>=
 .armlocal   = 0,
 @
 
@@ -28563,6 +28319,8 @@ uintptr armlocal;
 #define CpIDcsize   1           /* cache size (cortex) */
 #define CpIDcssel   2           /* cache size select (cortex) */
 @
+
+\subsection{Concurrency adjustments}
 
 \section{Advanced virtual memory (x86)}
 
@@ -28703,7 +28461,7 @@ addphysseg(Physseg* new)
         break;
 @
 
-\subsection{[[vpt]], [[vpd]]}
+\subsection{[[vpt]], [[vpd]] (x86)}
 
 % tricks apparently borrowed from exokernel code.
 % see the toplevel comment in mmu.c
@@ -28850,7 +28608,7 @@ if(up == nil) {
 
 
 
-\subsection{[[tmpmap()]]}
+\subsection{[[tmpmap()]] (x86)}
 
 <<constant TMPADDR(x86)>>=
 @
@@ -29476,6 +29234,121 @@ vmapsync(virt_addr va)
 % pse? see code in vmap, could aspectize things
 % also does vpt/vpd uses this feature? I don't think so.
 
+
+
+\section{Power management (x86)}
+
+%<<[[Dev]] methods>>=
+%void  (*power)(bool);  /* power mgt: power(1) => on, power (0) => off */
+%@
+% but does not seem called by anything
+% dead?
+
+% used by apm.c
+<<constant x86 other segments>>=
+//#define APMCSEG   6 /* APM code segment */
+//#define APMCSEG16 7 /* APM 16-bit code segment */
+//#define APMDSEG   8 /* APM data segment */
+/* #define  APM40SEG  8 /* APM segment 0x40 */
+@
+
+
+<<constant x86 other segment selectors>>=
+//#define APMCSEL   SELECTOR(APMCSEG, SELGDT, 0)
+//#define APMCSEL16 SELECTOR(APMCSEG16, SELGDT, 0)
+//#define APMDSEL   SELECTOR(APMDSEG, SELGDT, 0)
+/* #define  APM40SEL  SELECTOR(APM40SEG, SELGDT, 0) */
+@
+
+
+<<[[PCArch]] power methods fields(x86)>>=
+int (*serialpower)(int);  /* 1 == on, 0 == off */
+int (*modempower)(int); /* 1 == on, 0 == off */
+@
+
+<<[[archgeneric]] power methods(x86)>>=
+    .serialpower=   unimplemented,
+    .modempower=    unimplemented,
+@
+
+<<function unimplemented(x86)>>=
+static int
+unimplemented(int)
+{
+    return 0;
+}
+@
+
+
+\section{Fast interrupts (ARM)}
+
+%x86: NMI (Non Maskable Interrupts)
+
+% two level interrupt system. An interrupt that can interrupt another
+% interrupt.
+
+% More "banked" registers (shadow registers) in FIQ (R8-R12)
+
+<<[[PsrMode]] other cases(arm)>>=
+#define PsrMfiq     0x00000011
+@
+
+<<function _vfiq(arm)>>=
+TEXT _vfiq(SB), 1, $-4          /* FIQ */
+    CLREX
+    MOVW    $PsrMfiq, R8        /* trap type */
+    MOVW    SPSR, R9        /* interrupted psr */
+    MOVW    R14, R10        /* interrupted pc */
+    MOVM.DB.W [R8-R10], (R13)   /* save in ureg */
+    MOVM.DB.S [R0-R14], (R13)   /* save interrupted regs */
+    SUB $(15*4), R13
+    MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
+    /* get R(CPU) for this cpu */
+    CPUID(R1)
+    SLL $2, R1          /* convert to word index */
+    MOVW    $cpus(SB), R2
+    ADD R1, R2
+    MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
+    CMP $0, R(CPU)
+    MOVW.EQ $CPUADDR, R(CPU)        /* paranoia: use CPUADDR if 0 */
+
+    MOVW    8(R(CPU)), R(UP)        /* up */
+    MOVW    R13, R0         /* first arg is pointer to ureg */
+    SUB $(4*2), R13     /* space for argument+link (for debugger) */
+
+    BL  fiq(SB)
+
+    ADD $(8+4*15), R13      /* make r13 point to ureg->type */
+    MOVW    8(R13), R14     /* restore link */
+    MOVW    4(R13), R0      /* restore SPSR */
+    MOVW    R0, SPSR        /* ... */
+    MOVM.DB.S (R13), [R0-R14]   /* restore registers */
+    ADD $8, R13         /* pop past ureg->{type+psr} */
+    RFE             /* MOVM.IA.S.W (R13), [R15] */
+@
+%$
+
+<<function fiq(arm)>>=
+/*
+ * called direct from lexception.s to handle fiq interrupt.
+ */
+void
+fiq(Ureg *ureg)
+{
+    Vctl *v;
+
+    cpu->perf.intrts = arch_perfticks();
+    v = vfiq;
+    if(v == nil)
+        panic("cpu%d: unexpected item in bagging area", cpu->cpuno);
+    cpu->intr++;
+    ureg->pc -= 4;
+    arch_coherence();
+    v->f(ureg, v->a);
+    arch_coherence();
+    intrtime();
+}
+@
 
 
 \section{Real-time scheduling}
@@ -30393,50 +30266,6 @@ SExpel,		/* Edf expel */
 SInts,		/* Interrupt start */
 SInte,		/* Interrupt end */
 @
-
-\section{Power management (x86)}
-
-%<<[[Dev]] methods>>=
-%void  (*power)(bool);  /* power mgt: power(1) => on, power (0) => off */
-%@
-% but does not seem called by anything
-% dead?
-
-% used by apm.c
-<<constant x86 other segments>>=
-//#define APMCSEG   6 /* APM code segment */
-//#define APMCSEG16 7 /* APM 16-bit code segment */
-//#define APMDSEG   8 /* APM data segment */
-/* #define  APM40SEG  8 /* APM segment 0x40 */
-@
-
-
-<<constant x86 other segment selectors>>=
-//#define APMCSEL   SELECTOR(APMCSEG, SELGDT, 0)
-//#define APMCSEL16 SELECTOR(APMCSEG16, SELGDT, 0)
-//#define APMDSEL   SELECTOR(APMDSEG, SELGDT, 0)
-/* #define  APM40SEL  SELECTOR(APM40SEG, SELGDT, 0) */
-@
-
-
-<<[[PCArch]] power methods fields(x86)>>=
-int (*serialpower)(int);  /* 1 == on, 0 == off */
-int (*modempower)(int); /* 1 == on, 0 == off */
-@
-
-<<[[archgeneric]] power methods(x86)>>=
-    .serialpower=   unimplemented,
-    .modempower=    unimplemented,
-@
-
-<<function unimplemented(x86)>>=
-static int
-unimplemented(int)
-{
-    return 0;
-}
-@
-
 
 \section{Security}
 
@@ -35266,15 +35095,11 @@ if(!kbscan->ctl){
 UP   = User Process
 PC   = Program Counter
 SPL  = Set Priority Level
-RMAP = RAM map
-UMB  = Upper Memory Block
-GDT  = Global Descriptor Table
 PD   = Page Directory
 PT   = Page Table
 PDB  = Page Directory Base
 PTE  = Page Table Entry
 PPN  = Physical Page Number?
-VPT  = Virtual Page Table
 INTR = INTeRrupt (not INT, probably to avoid ambiguity with integer)
 VNO  = Vector Number (interrupt)
 IRQ  = Interrupt Request
@@ -35289,9 +35114,26 @@ PGRP = Process GRouP (namespace)
 QID  = uniQue IDentifier (uid is taken for user id)
 TSC  = Time Stamp Counter
 TOD  = Time Of Day
+UART = Universal Asynchronous Receive/Transmitter
+
+(x86)
+RMAP = RAM map
+UMB  = Upper Memory Block
+GDT  = Global Descriptor Table
+VPT  = Virtual Page Table
 APIC = Advanded Programmable Interrupt Controller (a next gen 8259)
 ACPI = Advanced Configuration & Power Interface
-UART = Universal Asynchronous Receive/Transmitter
+
+(ARM)
+ARM = Acorn Risc Machines
+CPSR = Current Program Status Register
+SPSR = Saved Program Status Register
+MCR = Move to Coprocessor from ARM Register
+MRC = Move to ARM Register from Coprocessor
+TTB = Translation Table Base
+TLB = Translation Lookup Table
+AP  = Access Permission
+DAC = Domain Access Control
 \end{verbatim}
 
 \chapter*{Indexes}

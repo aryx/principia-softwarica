@@ -4,6 +4,7 @@
 /*
  *  parameters for sysproc.c
  */
+// E_MAGIC is defined in include/a.out.h
 #define AOUT_MAGIC  (E_MAGIC)
 /*e: constant AOUT_MAGIC(arm) */
 

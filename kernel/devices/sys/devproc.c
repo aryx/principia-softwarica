@@ -1538,13 +1538,13 @@ procctlreq(Proc *p, char *va, int n)
     /*e: [[procctlreq()]] CMwaitstop case */
 
     /*s: [[procctlreq()]] CMstartsyscall case */
-        case CMstartsyscall:
-            if(p->state != Stopped)
-                error(Ebadctl);
-            p->procctl = Proc_tracesyscall;
-            ready(p);
-            procstopwait(p, Proc_tracesyscall); // will sleep
-            break;
+    case CMstartsyscall:
+        if(p->state != Stopped)
+            error(Ebadctl);
+        p->procctl = Proc_tracesyscall;
+        ready(p);
+        procstopwait(p, Proc_tracesyscall); // will sleep
+        break;
     /*e: [[procctlreq()]] CMstartsyscall case */
     /*s: [[procctlreq()]] CMstartstop case */
         case CMstartstop:
@@ -1594,24 +1594,24 @@ procctlreq(Proc *p, char *va, int n)
 
 
     /*s: [[procctlreq()]] CMkill case */
-        case CMkill:
-            switch(p->state) {
-            /*s: [[procctlreq()]] CMkill case, Broken case */
-                    case Broken:
-                        // will resume the broken process to finally die and free its mem
-                        unbreak(p); 
-                        break;
-            /*e: [[procctlreq()]] CMkill case, Broken case */
-            case Stopped:
-                p->procctl = Proc_exitme;
-                postnote(p, 0, "sys: killed", NExit);
-                ready(p);
-                break;
-            default:
-                p->procctl = Proc_exitme;
-                postnote(p, 0, "sys: killed", NExit);
-            }
+    case CMkill:
+        switch(p->state) {
+        /*s: [[procctlreq()]] CMkill case, Broken case */
+                case Broken:
+                    // will resume the broken process to finally die and free its mem
+                    unbreak(p); 
+                    break;
+        /*e: [[procctlreq()]] CMkill case, Broken case */
+        case Stopped:
+            p->procctl = Proc_exitme;
+            postnote(p, 0, "sys: killed", NExit);
+            ready(p);
             break;
+        default:
+            p->procctl = Proc_exitme;
+            postnote(p, 0, "sys: killed", NExit);
+        }
+        break;
     /*e: [[procctlreq()]] CMkill case */
 
     case CMclose:

@@ -27,7 +27,6 @@
 /*e: instruction BARRIERS(arm) */
 
 
-
 #define MCRR(coproc, op, rd, rn, crm) \
     WORD $(0xec400000|(rn)<<16|(rd)<<12|(coproc)<<8|(op)<<4|(crm))
 #define MRRC(coproc, op, rd, rn, crm) \
@@ -46,7 +45,6 @@
     MOVW    $0x10000,R3; \
     MOVW    R3,(R2)
 
-#define PUTC(s)
 
 
 /*

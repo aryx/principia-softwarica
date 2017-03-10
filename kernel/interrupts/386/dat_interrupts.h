@@ -74,7 +74,7 @@ struct Vctl {
     int (*isr)(int);    /* get isr bit for this irq */
     int (*eoi)(int);    /* eoi */
     /*e: [[Vctl]] other fields(x86) */
-    // extra
+    // Extra
     /*s: [[Vctl]] extra fields(x86) */
     // list<ref_own<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
     Vctl* next;     /* handlers on this vector */

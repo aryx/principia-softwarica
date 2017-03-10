@@ -3,10 +3,11 @@
 /*s: struct Soc(arm) */
 struct Soc {            /* SoC dependent configuration */
     ulong   dramsize;
-
     uintptr physio;
+    /*s: [[Soc]] bus fields */
     uintptr busdram;
     uintptr busio;
+    /*e: [[Soc]] bus fields */
     /*s: [[Soc]] mmu fields */
     u32int  l1ptedramattrs;
     u32int  l2ptedramattrs;

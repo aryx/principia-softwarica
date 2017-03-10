@@ -13,14 +13,17 @@
 
 #include "arm.h"
 
-typedef struct {
+typedef struct NFrame NFrame;
+/*s: struct NFrame(arm) */
+struct NFrame {
     uintptr ip;
     Ureg*   arg0;
     char*   arg1;
     char    msg[ERRMAX];
     Ureg*   old;
     Ureg    ureg;
-} NFrame;
+};
+/*e: struct NFrame(arm) */
 
 /*s: function noted(arm) */
 /*
@@ -201,7 +204,9 @@ syscall(Ureg* ureg)
         panic("syscall: from kernel: pc %#lux r14 %#lux psr %#lux",
             ureg->pc, ureg->r14, ureg->psr);
 
+    /*s: [[syscall()]] adjust kentry */
     arch_cycles(&up->kentry);
+    /*e: [[syscall()]] adjust kentry */
 
     cpu->syscall++;
     up->insyscall = 1;
@@ -210,11 +215,14 @@ syscall(Ureg* ureg)
 
     scallnr = ureg->r0;
     //up->scallnr = scallnr;
+
     if(scallnr == RFORK)
         fpusysrfork(ureg);
+
     arch_spllo();
     sp = ureg->sp;
 
+    /*s: [[syscall()]] Proc_tracesyscall if, syscall entry(arm) */
     if(up->procctl == Proc_tracesyscall){
         /*
          * Redundant validaddr.  Do we care?
@@ -233,6 +241,7 @@ syscall(Ureg* ureg)
             free(up->syscalltrace);
         up->syscalltrace = nil;
     }
+    /*e: [[syscall()]] Proc_tracesyscall if, syscall entry(arm) */
 
     up->nerrlab = 0;
     ret = -1;
@@ -253,7 +262,11 @@ syscall(Ureg* ureg)
 
     /*  iprint("%s: syscall %s\n", up->text, sysctab[scallnr]?sysctab[scallnr]:"huh?"); */
 
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        //IMPORTANT: The actual system call
         ret = systab[scallnr](up->sargs.args);
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
         poperror();
     }else{
         /* failure: save the error buffer for errstr */
@@ -277,6 +290,7 @@ syscall(Ureg* ureg)
      */
     ureg->r0 = ret;
 
+    /*s: [[syscall()]] Proc_tracesyscall if, syscall exit(arm) */
     if(up->procctl == Proc_tracesyscall){
         stopns = todget(nil);
         up->procctl = Proc_stopme;
@@ -288,22 +302,30 @@ syscall(Ureg* ureg)
             free(up->syscalltrace);
         up->syscalltrace = nil;
     }
+    /*e: [[syscall()]] Proc_tracesyscall if, syscall exit(arm) */
+
 
     up->insyscall = 0;
     up->psstate = 0;
 
+    /*s: [[syscall()]] call noted() */
     if(scallnr == NOTED)
         noted(ureg, *(ulong*)(sp+BY2WD));
-
+    /*e: [[syscall()]] call noted() */
+    /*s: [[syscall()]] call notify(arm) */
     arch_splhi();
     if(scallnr != RFORK && (up->procctl || up->nnote))
         notify(ureg);
+    /*e: [[syscall()]] call notify(arm) */
 
+
+    /*s: [[syscall()]] if delaysched(arm) */
     /* if we delayed sched because we held a lock, sched now */
     if(up->delaysched){
         sched();
         arch_splhi();
     }
+    /*e: [[syscall()]] if delaysched(arm) */
     kexit(ureg);
 }
 /*e: function syscall(arm) */
@@ -319,10 +341,8 @@ arch_execregs(ulong entry, ulong ssize, ulong nargs)
     *--sp = nargs;
 
     ureg = up->dbgreg;
-//  memset(ureg, 0, 15*sizeof(ulong));
     ureg->r13 = (ulong)sp;
     ureg->pc = entry;
-//print("%lud: EXECREGS pc %#ux sp %#ux nargs %ld\n", up->pid, ureg->pc, ureg->r13, nargs);
 
     /*
      * return the address of kernel/user shared data
@@ -351,7 +371,6 @@ arch_forkchild(Proc *p, Ureg *ureg)
 {
     Ureg *cureg;
 
-//print("%lud setting up for forking child %lud\n", up->pid, p->pid);
     p->sched.sp = (ulong)p->kstack+KSTACK-sizeof(Ureg);
     p->sched.pc = (ulong)arch_forkret;
 

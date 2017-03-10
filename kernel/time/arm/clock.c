@@ -25,12 +25,19 @@
 
 #include "arm.h"
 
+/*s: constant SYSTIMERS(arm) */
+#define SYSTIMERS (VIRTIO+0x3000)
+/*e: constant SYSTIMERS(arm) */
+/*s: constant ARMTIMER(arm) */
+#define ARMTIMER (VIRTIO+0xB400)
+/*e: constant ARMTIMER(arm) */
+//TODO factorize in mem.h
+/*s: constant ARMLOCAL(arm) */
+#define ARMLOCAL    (VIRTIO+IOSIZE)
+/*e: constant ARMLOCAL(arm) */
+
 /*s: enum _anon_ (time/arm/clock.c)(arm) */
 enum {
-    SYSTIMERS   = VIRTIO+0x3000,
-    ARMTIMER    = VIRTIO+0xB400,
-    ARMLOCAL    = (VIRTIO+IOSIZE),
-
     Localctl    = 0x00,
     Prescaler   = 0x08,
     Localintpending = 0x60,

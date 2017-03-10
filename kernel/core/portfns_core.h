@@ -57,7 +57,6 @@ void    (*cclose)(Chan*);
 // init/<arch>/main.c
 void    (*arch_exit)(int);
 /*x: portfns_core.h backward deps breaker */
-
 //misc/<arch>/devarch.c
 void    (*arch_coherence)(void);
 uvlong  (*arch_fastticks)(uvlong*);

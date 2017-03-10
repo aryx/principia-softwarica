@@ -14,7 +14,7 @@ TEXT armstart(SB), 1, $-4
      * invalidate caches and tlb
      */
     MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
-    BIC $(CpCdcache|CpCicache|CpCpredict|CpCmmu), R1
+    BIC $(CpCdcache|CpCicache|CpCpredict|CpCmmu), R1 // Remove CpCpredict
     MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
 
     MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvu), CpCACHEall

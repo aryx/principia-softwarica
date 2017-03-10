@@ -15,21 +15,21 @@
 #include "../port/netif.h"
 #include "../port/etherif.h"
 
-/*s: global soc(arm)(raspberry pi1) */
+/*s: global soc(raspberry pi1)(arm) */
 Soc soc = {
     .dramsize   = 512*MiB,    // 0 to 0x20000000
-
     .physio     = 0x20000000, // after RAM
+    /*s: [[soc(raspberry pi1)]] other fields(arm) */
     .busdram    = 0x40000000,
     .busio      = 0x7E000000,
-    /*s: [[soc(raspberry pi1)]] other fields */
+    /*x: [[soc(raspberry pi1)]] other fields(arm) */
     .armlocal   = 0,
-    /*x: [[soc(raspberry pi1)]] other fields */
+    /*x: [[soc(raspberry pi1)]] other fields(arm) */
     .l1ptedramattrs = Cached | Buffered,
     .l2ptedramattrs = Cached | Buffered,
-    /*e: [[soc(raspberry pi1)]] other fields */
+    /*e: [[soc(raspberry pi1)]] other fields(arm) */
 };
-/*e: global soc(arm)(raspberry pi1) */
+/*e: global soc(raspberry pi1)(arm) */
 
     
 /*s: function cputype2name(arm) */

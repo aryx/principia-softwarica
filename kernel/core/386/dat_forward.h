@@ -1,6 +1,6 @@
 /*s: core/386/dat_forward.h */
 typedef union Arch_FPsave  Arch_FPsave;
-typedef struct Arch_ProcMMU Arch_ProcMMU;
+typedef struct Arch_Proc Arch_Proc;
 
 typedef struct BIOS32si BIOS32si;
 typedef struct BIOS32ci BIOS32ci;

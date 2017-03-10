@@ -64,17 +64,20 @@ struct Intregs {
 /*e: struct Intregs(arm) */
 
 /*s: struct Vctl(arm) */
-// quite similar to the one for x86
 struct Vctl {
     int irq;
     int cpu;
+
     u32int  *reg;
     u32int  mask;
 
-    void    (*f)(Ureg*, void*);
-    void    *a;
+    void    (*f)(Ureg*, void*); /* handler to call */
+    void    *a; /* argument to call it with */
 
+    // Extra
+    /*s: [[Vctl]] extra fields(arm) */
     Vctl    *next;
+    /*e: [[Vctl]] extra fields(arm) */
 };
 /*e: struct Vctl(arm) */
 
@@ -83,6 +86,7 @@ static Lock vctllock;
 /*e: global vctllock(arm) */
 
 /*s: global vctl(arm) */
+// list<ref_own<Vctl>>> (next = Vctl.next)
 static Vctl *vctl;
 /*e: global vctl(arm) */
 
@@ -413,7 +417,9 @@ trap(Ureg *ureg)
     user = (ureg->psr & PsrMask) == PsrMusr;
     if(user){
         up->dbgreg = ureg;
+        /*s: [[trap()]] adjust kentry when interrupt user */
         arch_cycles(&up->kentry);
+        /*e: [[trap()]] adjust kentry when interrupt user */
     }
 
     /*
@@ -426,6 +432,7 @@ trap(Ureg *ureg)
         ureg->pc -= 4;
 
     clockintr = 0;      /* if set, may call sched() before return */
+
     switch(ureg->type){
     default:
         panic("unknown trap; type %#lux, psr mode %#lux pc %lux", ureg->type,
@@ -552,11 +559,13 @@ trap(Ureg *ureg)
     }
     arch_splhi();
 
+    /*s: [[trap()]] if delaysched */
     /* delaysched set because we held a lock or because our quantum ended */
     if(up && up->delaysched && clockintr){
-        sched();        /* can cause more traps */
+        sched();
         arch_splhi();
     }
+    /*e: [[trap()]] if delaysched */
 
     if(user){
         if(up->procctl || up->nnote)

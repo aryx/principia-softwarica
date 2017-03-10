@@ -8,8 +8,8 @@
 /* tas/cas strex debugging limits; started at 10000 */
 #define MAXSC 100000
         
-TEXT    arch_tas(SB), $-4
 TEXT    _tas(SB), $-4           /* _tas(ulong *) */
+TEXT    arch_tas(SB), $-4
     /* returns old (R0) after modifying (R0) */
     MOVW    R0,R5
     DMB

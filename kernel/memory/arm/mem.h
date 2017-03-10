@@ -1,8 +1,9 @@
 /*s: memory/arm/mem.h */
-/*s: constant KiB(arm) */
 /*
  * Memory and machine-specific definitions.  Used in C and assembler.
  */
+
+/*s: constant KiB(arm) */
 #define KiB     1024u           /* Kibi 0x0000000000000400 */
 /*e: constant KiB(arm) */
 /*s: constant MiB(arm) */
@@ -12,10 +13,10 @@
 #define GiB     1073741824u     /* Gibi 000000000040000000 */
 /*e: constant GiB(arm) */
 
-/*s: constant BY2PG(arm) */
 /*
  * Sizes
  */
+/*s: constant BY2PG(arm) */
 #define BY2PG       (4*KiB)         /* bytes per page */
 /*e: constant BY2PG(arm) */
 /*s: constant PGSHIFT(arm) */
@@ -120,10 +121,11 @@
 #define USTKSIZE    (8*1024*1024)       /* user stack size */
 /*e: constant USTKSIZE(arm) */
 /*s: constant TSTKTOP(arm) */
+// end of new stack in sysexec
 #define TSTKTOP     (USTKTOP-USTKSIZE)  /* sysexec temporary stack */
 /*e: constant TSTKTOP(arm) */
 /*s: constant TSTKSIZ(arm) */
-#define TSTKSIZ     256
+#define TSTKSIZ     256 // pages in new stack; limits exec args
 /*e: constant TSTKSIZ(arm) */
 
 /*s: constant REBOOTADDR(arm) */
@@ -160,10 +162,10 @@
 /*e: constant BY2V(arm) */
 
 /*s: constant PAGETABMAPMEM(arm) */
-#define PAGETABMAPMEM   (1024*1024)
+#define PAGETABMAPMEM   (1024*1024) // 1MB
 /*e: constant PAGETABMAPMEM(arm) */
 /*s: constant PAGETABSIZE(arm) */
-#define PAGETABSIZE (PAGETABMAPMEM/BY2PG)
+#define PAGETABSIZE 256 // (PAGETABMAPMEM/BY2PG)
 /*e: constant PAGETABSIZE(arm) */
 /*s: constant PAGEDIRSIZE(arm) */
 #define PAGEDIRSIZE 1984
@@ -175,24 +177,16 @@
 #define PPN(x)      ((x)&~(BY2PG-1))
 /*e: macro PPN(arm) */
 
-/*s: constant PTEVALID(arm) */
 /*
  * With a little work these move to port.
  */
+/*s: type PTExxx(arm) */
 #define PTEVALID    (1<<0)
-/*e: constant PTEVALID(arm) */
-/*s: constant PTERONLY(arm) */
 #define PTERONLY    0
-/*e: constant PTERONLY(arm) */
-/*s: constant PTEWRITE(arm) */
 #define PTEWRITE    (1<<1)
-/*e: constant PTEWRITE(arm) */
-/*s: constant PTEUNCACHED(arm) */
 #define PTEUNCACHED (1<<2)
-/*e: constant PTEUNCACHED(arm) */
-/*s: constant PTEKERNEL(arm) */
 #define PTEKERNEL   (1<<3)
-/*e: constant PTEKERNEL(arm) */
+/*e: type PTExxx(arm) */
 
 /*
  * Physical machine information from here on.

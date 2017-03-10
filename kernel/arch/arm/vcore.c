@@ -194,7 +194,6 @@ vcreq(int tag, void *buf, int vallen, int rsplen)
 /*
  * Framebuffer
  */
-
 static errorneg1
 fbdefault(int *width, int *height, int *depth)
 {

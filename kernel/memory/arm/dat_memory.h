@@ -7,15 +7,15 @@
 #define NCOLOR  1       /* 1 level cache, don't worry about VCE's */
 /*e: constant NCOLOR(arm) */
 
-/*s: struct Arch_ProcMMU(arm) */
-struct Arch_ProcMMU
+/*s: struct Arch_Proc(arm) */
+struct Arch_Proc
 {
     /*s: [[Proc]] [[Arch]] memory fields(arm) */
     Page*   mmul2;
     Page*   mmul2cache; /* free mmu pages */
     /*e: [[Proc]] [[Arch]] memory fields(arm) */
 };
-/*e: struct Arch_ProcMMU(arm) */
+/*e: struct Arch_Proc(arm) */
 
 /*
  * Fake kmap.

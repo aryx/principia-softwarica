@@ -97,8 +97,6 @@ mmuinit1(void *a)
     l1[L1X(0)] = 0;
     cachedwbse(&l1[L1X(0)], sizeof(PTE));
 
-    //cacheuwbinv();
-    //l2cacheuwbinv();
     mmuinvalidateaddr(0);
 }
 /*e: function mmuinit1(arm) */
@@ -128,29 +126,7 @@ mmul2empty(Proc* proc, int clear)
 static void
 mmul1empty(void)
 {
-#ifdef notdef
-/* there's a bug in here */
-    PTE *l1;
-
-    /* clean out any user mappings still in l1 */
-    if(cpu->mmul1lo > L1lo){
-        if(cpu->mmul1lo == 1)
-            cpu->mmul1[L1lo] = Fault;
-        else
-            memset(&cpu->mmul1[L1lo], 0, cpu->mmul1lo*sizeof(PTE));
-        cpu->mmul1lo = L1lo;
-    }
-    if(cpu->mmul1hi < L1hi){
-        l1 = &cpu->mmul1[cpu->mmul1hi];
-        if((L1hi - cpu->mmul1hi) == 1)
-            *l1 = Fault;
-        else
-            memset(l1, 0, (L1hi - cpu->mmul1hi)*sizeof(PTE));
-        cpu->mmul1hi = L1hi;
-    }
-#else
     memset(&cpu->mmul1[L1lo], 0, (L1hi - L1lo)*sizeof(PTE));
-#endif /* notdef */
 }
 /*e: function mmul1empty(arm) */
 

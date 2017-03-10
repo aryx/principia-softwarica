@@ -18,7 +18,9 @@
 typedef struct Mbox Mbox;
 typedef struct Mboxes Mboxes;
 
+/*s: constant ARMLOCAL(arm) */
 #define ARMLOCAL    (VIRTIO+IOSIZE)
+/*e: constant ARMLOCAL(arm) */
 
 Soc soc = {
     .dramsize   = 1024*MiB,
