@@ -145,10 +145,10 @@
 #define KSTACK      KSTKSIZE
 /*e: constant KSTACK(arm) */
 
-/*s: constant BI2BY(arm) */
 /*
  * Sizes
  */
+/*s: constant BI2BY(arm) */
 #define BI2BY       8           /* bits per byte */
 /*e: constant BI2BY(arm) */
 /*s: constant BY2SE(arm) */

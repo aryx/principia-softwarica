@@ -11,8 +11,8 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-#include "io.h"
 
+#include "io.h"
 #include "arm.h"
 
 //pad: why not have generic assembly functions called from C

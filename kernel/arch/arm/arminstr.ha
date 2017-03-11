@@ -46,7 +46,6 @@
     MOVW    R3,(R2)
 
 
-
 /*
  * get cpu id, or zero if armv6
  */

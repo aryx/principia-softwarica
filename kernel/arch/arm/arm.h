@@ -99,23 +99,14 @@
  */
 #define CpCmmu      0x00000001  /* M: MMU enable */
 #define CpCdcache   0x00000004  /* C: data cache on */
+#define CpCicache   0x00001000  /* I: instruction cache on */
+#define CpChv       0x00002000  /* V: high vectors */
 /*s: [[CpCONTROL.CpMainctl]] other cases(arm) */
 #define CpCsbo (3<<22|1<<18|1<<16|017<<3)   /* must be 1 (armv7) */
 #define CpCsbz (CpCtre|1<<26|CpCve|1<<15|7<<7)  /* must be 0 (armv7) */
 #define CpCsw       (1<<10)     /* SW: SWP(B) enable (deprecated in v7) */
 #define CpCpredict  0x00000800  /* Z: branch prediction (armv7) */
 /*e: [[CpCONTROL.CpMainctl]] other cases(arm) */
-#define CpCicache   0x00001000  /* I: instruction cache on */
-#define CpChv       0x00002000  /* V: high vectors */
-#define CpCrr       (1<<14) /* RR: round robin vs random cache replacement */
-#define CpCha       (1<<17)     /* HA: hw access flag enable */
-#define CpCdz       (1<<19)     /* DZ: divide by zero fault enable */
-#define CpCfi       (1<<21)     /* FI: fast intrs */
-#define CpCve       (1<<24)     /* VE: intr vectors enable */
-#define CpCee       (1<<25)     /* EE: exception endianness */
-#define CpCnmfi     (1<<27)     /* NMFI: non-maskable fast intrs. */
-#define CpCtre      (1<<28)     /* TRE: TEX remap enable */
-#define CpCafe      (1<<29)     /* AFE: access flag (ttb) enable */
 /*e: type CpCONTROL CpMainctl(arm) */
 /*s: type CpCONTROL CpAuxctl(arm) */
 /*
@@ -316,6 +307,7 @@
 /*e: type DAC(arm) */
 
 #define F(v, o, w)  (((v) & ((1<<(w))-1))<<(o))
+
 #define AP(n, v)    F((v), ((n)*2)+4, 2)
 #define L1AP(ap)    (AP(3, (ap)))
 /* L2AP differs between armv6 and armv7 -- see l2ap in arch*.c */

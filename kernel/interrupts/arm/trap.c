@@ -457,6 +457,7 @@ trap(Ureg *ureg)
             }
             break;
         default:
+            // Page fault on code!!
             faultarm(ureg, ureg->pc, user, 1);
             break;
         }
@@ -509,6 +510,7 @@ trap(Ureg *ureg)
             break;
         case 0x5:       /* translation fault, no section entry */
         case 0x7:       /* translation fault, no page entry */
+            // Page fault on data!!
             faultarm(ureg, va, user, !writetomem(inst));
             break;
         case 0x9:

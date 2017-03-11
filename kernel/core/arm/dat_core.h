@@ -11,13 +11,13 @@ typedef u32int      PTE;
 struct MMMU
 {
     PTE*    mmul1;      /* l1 for this processor */
+
     int mmul1lo;
     int mmul1hi;
 
     int mmupid;
 };
 /*e: struct MMMU(arm) */
-
 
 /*s: struct Arch_Cpu(arm) */
 struct Arch_Cpu {

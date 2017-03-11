@@ -3,7 +3,6 @@
  * atomic ops
  * make sure that we don't drag in the C library versions
  */
-
 #include "u.h"
 #include "../port/lib.h"
 #include "../port/error.h"
