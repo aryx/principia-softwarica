@@ -652,10 +652,28 @@ provides to the user programs.
 % Most popular archi in smartphones. Most popular archi in number of devices.
 % More than x86!
 
-%https://en.wikipedia.org/wiki/ARM_architecture
-%http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0301h/index.html
-%https://www.heyrick.co.uk/armwiki/Main_Page 
-% (RiscOS oriented, but still a few good pages)
+%references:
+% https://en.wikipedia.org/wiki/ARM_architecture
+% http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0301h/index.html
+% https://www.heyrick.co.uk/armwiki/Main_Page 
+%  (RiscOS oriented, but still a few good pages)
+% https://courses.cs.washington.edu/courses/cse466/10au/pdfs/lectures/07-arm_overview.pdf Very good!
+
+<<constant BI2BY(arm)>>=
+#define BI2BY       8           /* bits per byte */
+@
+<<constant BY2SE(arm)>>=
+#define BY2SE       4
+@
+<<constant BY2WD(arm)>>=
+#define BY2WD       4
+@
+<<constant BY2V(arm)>>=
+#define BY2V        8           /* only used in xalloc.c */
+@
+
+% ARM state, Thumb state, Jazelle state, but care only about
+% ARM state where instructions are 32 bits wide and word aligned.
 
 \subsubsection{Main registers, [[Ureg]]}
 
@@ -691,6 +709,8 @@ struct Ureg {
 };
 @
 %x86: less regular naming
+%coupling: do not change the order! code assumes this order such as _vswitch
+% and _userexcep
 
 % Ureg for user registers. 
 % Ureg will be used when saving state of processes.
@@ -709,10 +729,12 @@ struct Ureg {
 
 \subsubsection{Program Status Register ([[PSR]])}
 
+% Special register not accessed in normal programs. No need.
+% But important for kernel! State of process regarding ALU flags.
+% Ureg.psr! important. Need to restore it too!
+
 % http://infocenter.arm.com/help/topic/com.arm.doc.ddi0301h/I2837.html
 % https://www.heyrick.co.uk/armwiki/The_Status_register
-
-% Ureg.psr! important. Need to restore it too!
 
 %example of use:
 % CPSR
@@ -731,7 +753,7 @@ struct Ureg {
 
 \subsubsection{Processor modes}
 
-% "control bits" are last 8 bits in PSR register. Can not be
+%PSR contains also "control bits". Last 8 bits in PSR register. Can not be
 % changed by user. Can be changed only when in privileged mode.
 % (the control bits changes also when an exception occurs).
 
@@ -748,6 +770,12 @@ struct Ureg {
 %example of use: (but can change those bits only when already in svc mode)
 % 
 
+% When reset, supervisor mode.
+% When create first user process, will set PSR to MsrMusr before RFE.
+
+
+% PSR controls also interrupts.
+
 <<type PsrDisable(arm)>>=
 #define PsrDfiq     0x00000040      /* disable FIQ interrupts */
 #define PsrDirq     0x00000080      /* disable IRQ interrupts */
@@ -761,12 +789,29 @@ struct Ureg {
 %    MOVW R1, CPSR
 % (5a translates that in the special instruction ??)
 
-% CPSR and SPSR.
+%later: banked (shadow) registers.
+% so no need save R14, R13.
 
-% banked (shadow) registers.
+%later: CPSR and SPSR.
 
-%\subsubsection{Exceptions}
-%HVECTORS here?
+
+\subsubsection{Exceptions}
+
+%Ureg.type
+%matches closely processor modes actually (which is
+% why will abuse PsrMode for that.
+
+% When exception, processor copies CPSR to SPSR,
+% set appropriate CPSR control bits depending on exception
+% set PC to vector address.
+
+<<constant HVECTORS(arm)>>=
+#define HVECTORS    0xffff0000
+@
+
+% will contain notably callback for SWI!
+
+% when SWI then processor change CPSR (and before also save in SPSR)
 
 \subsection{ARM coprocessors}
 
@@ -832,27 +877,29 @@ struct Ureg {
  */
 #define CpCmmu      0x00000001  /* M: MMU enable */
 #define CpCdcache   0x00000004  /* C: data cache on */
-<<[[CpCONTROL.CpMainctl]] other cases(arm)>>
 #define CpCicache   0x00001000  /* I: instruction cache on */
 #define CpChv       0x00002000  /* V: high vectors */
-#define CpCrr       (1<<14) /* RR: round robin vs random cache replacement */
-#define CpCha       (1<<17)     /* HA: hw access flag enable */
-#define CpCdz       (1<<19)     /* DZ: divide by zero fault enable */
-#define CpCfi       (1<<21)     /* FI: fast intrs */
-#define CpCve       (1<<24)     /* VE: intr vectors enable */
-#define CpCee       (1<<25)     /* EE: exception endianness */
-#define CpCnmfi     (1<<27)     /* NMFI: non-maskable fast intrs. */
-#define CpCtre      (1<<28)     /* TRE: TEX remap enable */
-#define CpCafe      (1<<29)     /* AFE: access flag (ttb) enable */
+<<[[CpCONTROL.CpMainctl]] other cases(arm)>>
 @
 %dead:
 % #define CpCalign    0x00000002  /* A: alignment fault enable */
+% #define CpCrr       (1<<14) /* RR: round robin vs random cache replacement */
+% #define CpCha       (1<<17)     /* HA: hw access flag enable */
+% #define CpCdz       (1<<19)     /* DZ: divide by zero fault enable */
+% #define CpCfi       (1<<21)     /* FI: fast intrs */
+% #define CpCve       (1<<24)     /* VE: intr vectors enable */
+% #define CpCee       (1<<25)     /* EE: exception endianness */
+% #define CpCnmfi     (1<<27)     /* NMFI: non-maskable fast intrs. */
+% #define CpCtre      (1<<28)     /* TRE: TEX remap enable */
+% #define CpCafe      (1<<29)     /* AFE: access flag (ttb) enable */
 % the X: syntax refers to the ARM reference manuel bit description.
 % >> >> >> >> >> >> >> >> >>
 % >> >> >> >> >> >> >> >> >>
 % >> >> >> >> >> >> >> >> >>
 \t why not use consistently 1<<x syntax, also for CpCmmu
 \t remove dead constants
+
+% CpChv and HVECTORS
 
 \subsubsection{Floating point coprocessors}
 % 2 coprocessors, one for single and other for double precision.
@@ -898,7 +945,9 @@ struct Fbinfo {
 % but used mostly in Graphics.nw?
 % Physical address?
 
-\subsection{IO address space}
+\subsection{Memory-mapped IO}
+
+%x86: ins/out special instruction
 
 % Yet another way to access external registers. Not coprocessors
 % here but registers in external devices.
@@ -914,6 +963,7 @@ struct Fbinfo {
 #define VIRTIO      0x7E000000      /* i/o registers */
 @
 %max below is 0x7E0000000 + 300000 so still lots of space before 4Go.
+%why this value? 0x8000000 is start of kernel space.
 
 <<constant SYSTIMERS(arm)>>=
 #define SYSTIMERS (VIRTIO+0x3000)
@@ -929,12 +979,14 @@ struct Fbinfo {
 <<constant INTREGS(arm)>>=
 #define INTREGS     (VIRTIO+0xB200)
 @
-% vs CpCve?
+% vs CpCve? This is for IRQ programming, not for general fault
+% callback.
 
 <<constant MAILBOX(arm)>>=
 #define MAILBOX     (VIRTIO+0xB880)
 @
 %for GPU, add in constant name?
+
 <<constant POWERREGS(arm)>>=
 #define POWERREGS   (VIRTIO+0x100000)
 @
@@ -948,10 +1000,12 @@ struct Fbinfo {
 <<constant EMMCREGS(arm)>>=
 #define EMMCREGS    (VIRTIO+0x300000)
 @
+% sdcard
+
 <<constant USBREGS(arm)>>=
 #define  USBREGS (VIRTIO+0x980000)
 @
-
+%so still under 0x80000000
 
 \subsection{Raspberry Pi devices}
 
@@ -965,6 +1019,7 @@ struct Fbinfo {
 
 % little endian, big endian, the le2xxx function?
 
+%\subsection{Broadcom SoC boot sequence}
 
 
 \section{C and assembly}
@@ -1546,9 +1601,9 @@ arch_cankaddr(uintptr pa)
 
 %http://duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory/
 
-<<constant HVECTORS(arm)>>=
-#define HVECTORS    0xffff0000
-@
+
+% See also VIRTIO before KZERO.
+% See also HVECTORS far after.
 
 \subsection{Syscall overview (ARM)}
 % kernel vs user code
@@ -1609,8 +1664,8 @@ sysnop(ulong*)
 % of the arguments
 
 % SWI $0 for system call. Put value of syscall in R0 (see \book{Assembler}).
-% Then branch where???
-\t global for interrupt vectors??
+% Then branch where? in HVECTORS and then vector -> vtable -> _vsvc.
+
 
 % show small ex of asm that call this hello world
 
@@ -1978,6 +2033,7 @@ char *statename[] =
 extern register Proc* up;           /* R9 */
 @
 % again per processor!
+% R9 because declared after cpu in file and see \book{Compiler}.
 
 % process table? see procalloc, but can think of a global array.
 
@@ -2375,6 +2431,7 @@ TEXT    arch_tas(SB), $-4
 % See Section~\ref{smp} for arch_tas() handling multiple processors!
 
 \section{[[arch_coherence()]] (ARM)}
+% Put in SMP section? issue only when SMP no?
 
 <<function arm_arch_coherence(arm)>>=
 TEXT arm_arch_coherence(SB), $-4
@@ -6471,10 +6528,11 @@ case CMkill:
 % fault vs trap vs irq vs interrupt vs exception vs syscall
 % hardware interrupt vs software interrupt
 
-% exception|interrupt > irq | syscall | fault|trap
+% exception|interrupt|trap > irq | syscall | fault
 
 %"Exceptions occur whenever the normal flow of a program has to be 
 % halted temporarily." from ARM ref manual
+% (hence use of RFE for Return From Exception)
 
 % fault/trap vs irq? irq is a request from "outside", generating an interrupt
 % fault/trap is also generating an interrupt, but more from "inside"
@@ -6494,12 +6552,12 @@ case CMkill:
 % SWI -> vector[2] -> vtable[2] -> _vsvc -> syscall -> RFE
 
 
-\section{Faults (ARM)}
-% fault/trap/exceptions
+\section{Exceptions (ARM)}
+% and processor modes
 
-% faults matches "Processor modes". 
+% many exceptions matches a  "Processor mode". 
 % Depending on processor mode, has access to certain registers of ARM or not.
-% When fault change processor operating mode.
+% When exception change processor mode.
 % (Save also CPSR in SPSR)
 
 <<[[PsrMode]] other cases(arm)>>=
@@ -6525,8 +6583,55 @@ static char *trapnames[PsrMask+1] = {
 %dead:     [ PsrMsys ] "sys trap",
 
 % divide by zero here?
-% page fault? PsrMabt?
+% page fault? in PsrMabt
 
+
+\section{Exception [[vectors]]  (ARM)}
+
+% The vector below will be copied in trapinit()
+% and processor will be made error that exceptions should
+% be handled by the entries in this vector.
+
+% Saw HVECTORS before.
+
+% matches closely the processor mode. Each fault has almost a processor mode.
+<<global vectors(arm)>>=
+/*
+ *  exception vectors, copied by trapinit() to somewhere useful
+ */
+TEXT vectors(SB), 1, $-4
+    MOVW    0x18(R15), R15      /* reset */
+    MOVW    0x18(R15), R15      /* undefined instr. */
+    MOVW    0x18(R15), R15      /* SWI & SMC */
+    MOVW    0x18(R15), R15      /* prefetch abort */
+    MOVW    0x18(R15), R15      /* data abort */
+    MOVW    0x18(R15), R15      /* reserved */
+    MOVW    0x18(R15), R15      /* IRQ */
+    MOVW    0x18(R15), R15      /* FIQ */
+@
+%$
+% it's written as a function, but really it's a global
+%x86: IDTADDR
+\l SMC??
+
+
+% assumes will be copied just after vectors
+<<global vtable(arm)>>=
+TEXT vtable(SB), 1, $-4
+    WORD    $_vsvc(SB)      /* reset, in svc mode already */
+    WORD    $_vund(SB)      /* undefined, switch to svc mode */
+    WORD    $_vsvc(SB)      /* swi, in svc mode already */
+    WORD    $_vpabt(SB)     /* prefetch abort, switch to svc mode */
+    WORD    $_vdabt(SB)     /* data abort, switch to svc mode */
+    WORD    $_vsvc(SB)      /* reserved */
+    WORD    $_virq(SB)      /* IRQ, switch to svc mode */
+    WORD    $_vfiq(SB)      /* FIQ, switch to svc mode */
+@
+%$
+% in the end dont care so much about processor mode except
+% user and svc. Switch to svc mode for the other.
+
+% what about overflow, divide error, etc?
 
 \section{IRQs (ARM)}
 
@@ -6654,57 +6759,15 @@ irqenable(int irq, void (*f)(Ureg*, void*), void* a)
 %x86: also a intrdisable
 \t aspectize complex stuff
 
-\section{Exception [[vectors]]  (ARM)}
-
-% The vector below will be copied in trapinit()
-% and processor will be made error that exceptions should
-% be handled by the entries in this vector.
-
-% Saw HVECTORS before.
-
-
-<<global vectors(arm)>>=
-/*
- *  exception vectors, copied by trapinit() to somewhere useful
- */
-TEXT vectors(SB), 1, $-4
-    MOVW    0x18(R15), R15      /* reset */
-    MOVW    0x18(R15), R15      /* undefined instr. */
-    MOVW    0x18(R15), R15      /* SWI & SMC */
-    MOVW    0x18(R15), R15      /* prefetch abort */
-    MOVW    0x18(R15), R15      /* data abort */
-    MOVW    0x18(R15), R15      /* reserved */
-    MOVW    0x18(R15), R15      /* IRQ */
-    MOVW    0x18(R15), R15      /* FIQ */
-@
-%$
-% it's written as a function, but really it's a global
-%x86: IDTADDR
-
-% assumes will be copied just after vectors
-<<global vtable(arm)>>=
-TEXT vtable(SB), 1, $-4
-    WORD    $_vsvc(SB)      /* reset, in svc mode already */
-    WORD    $_vund(SB)      /* undefined, switch to svc mode */
-    WORD    $_vsvc(SB)      /* swi, in svc mode already */
-    WORD    $_vpabt(SB)     /* prefetch abort, switch to svc mode */
-    WORD    $_vdabt(SB)     /* data abort, switch to svc mode */
-    WORD    $_vsvc(SB)      /* reserved */
-    WORD    $_virq(SB)      /* IRQ, switch to svc mode */
-    WORD    $_vfiq(SB)      /* FIQ, switch to svc mode */
-@
-%$
-
-% what about overflow, divide error, etc?
-
 \section{System calls}
 %Software interrupts (a.k.a syscalls)
 
 \subsection{[[_vsvc()]] (ARM)}
 
 % Use R14 below as temporary register.
-% SPSR vs CPSR? Previous CPSR before the interrupt. So know
-% if you interrupt an interrupt!
+% SPSR vs CPSR? Previous CPSR before the SWI (one of user)
+% (not that useful here but for _virq it allows to know 
+% if you interrupted an interrupt or if you had a fault while in kernel mode)
 
 <<function _vsvc(arm)>>=
 TEXT _vsvc(SB), 1, $-4          /* SWI */
@@ -6913,6 +6976,8 @@ TEXT _virq(SB), 1, $-4          /* IRQ */
 
 \subsection{[[_vswitch()]] (ARM)}
 
+% need save R14/R13 because banked registers.
+
 <<label _vswitch(arm)>>=
     /*
      *  come here with type in R0 and R13 pointing above saved [r0-r4].
@@ -7094,6 +7159,7 @@ trap(Ureg *ureg)
             }
             break;
         default:
+            // Page fault on code!!
             faultarm(ureg, ureg->pc, user, 1);
             break;
         }
@@ -7146,6 +7212,7 @@ trap(Ureg *ureg)
             break;
         case 0x5:       /* translation fault, no section entry */
         case 0x7:       /* translation fault, no page entry */
+            // Page fault on data!!
             faultarm(ureg, va, user, !writetomem(inst));
             break;
         case 0x9:
@@ -7225,7 +7292,7 @@ kexit(Ureg*)
 %could be renamed arch_kexit, but called from arch-specific only (trap())
 
 
-
+% divide by zero?
 
 
 \chapter{Virtual Memory}
@@ -7936,6 +8003,13 @@ arch_checkmmu(virt_addr va, phys_addr pa)
     <<[[checkmmu()]] pd at pt check(x86)>>
 }
 @
+
+\section{Cache validation (ARM)}
+
+% put barrier here.
+% When switch processor, virtual mem, then interfere
+% with cache as virtual address may now correspond to something else.
+% Also issue about VIRTIO space that should not be cached.
 
 \section{Copy on write}
 
@@ -35098,31 +35172,32 @@ SPL  = Set Priority Level
 PD   = Page Directory
 PT   = Page Table
 PDB  = Page Directory Base
+PDE  = Page Directory Entry
 PTE  = Page Table Entry
 PPN  = Physical Page Number?
-INTR = INTeRrupt (not INT, probably to avoid ambiguity with integer)
-VNO  = Vector Number (interrupt)
-IRQ  = Interrupt Request
-ISR  = Interrupt Service Routine
-NMI  = Non Maskable Interrupts (hardware error)
-AP   = Application Processor
 EDF  = Earliest Deadline First
 RPC  = Remote Procedure Call
 EGRP = Environment GRouP
 FGRP = File descriptor GRouP (channels)
 PGRP = Process GRouP (namespace)
 QID  = uniQue IDentifier (uid is taken for user id)
-TSC  = Time Stamp Counter
 TOD  = Time Of Day
 UART = Universal Asynchronous Receive/Transmitter
 
 (x86)
+IRQ  = Interrupt Request
+INTR = INTeRrupt (not INT, probably to avoid ambiguity with integer)
+VNO  = Vector Number (interrupt)
+ISR  = Interrupt Service Routine
+NMI  = Non Maskable Interrupts (hardware error)
+AP   = Application Processor
 RMAP = RAM map
 UMB  = Upper Memory Block
 GDT  = Global Descriptor Table
 VPT  = Virtual Page Table
 APIC = Advanded Programmable Interrupt Controller (a next gen 8259)
 ACPI = Advanced Configuration & Power Interface
+TSC  = Time Stamp Counter
 
 (ARM)
 ARM = Acorn Risc Machines
@@ -35134,6 +35209,8 @@ TTB = Translation Table Base
 TLB = Translation Lookup Table
 AP  = Access Permission
 DAC = Domain Access Control
+RFE = Return From Exception
+IRQ  = Interrupt Request
 \end{verbatim}
 
 \chapter*{Indexes}
