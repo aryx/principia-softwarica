@@ -1,10 +1,12 @@
 /*s: devices/keyboard/arm/kbd.c */
-#include "u.h"
+/*s: kernel basic includes */
+#include <u.h>
 #include "../port/lib.h"
 #include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+/*e: kernel basic includes */
 
 // In the Raspberry Pi, the keyboard is handled by usbd
 // with help from /dev/kbin (which then calls functions from portkbd

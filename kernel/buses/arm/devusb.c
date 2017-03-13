@@ -38,13 +38,14 @@
  * regarding how to handle toggles, tokens, Tds, etc. will
  * get in the way. Thus, code is probably easier the way it is.
  */
-
-#include    "u.h"
-#include    "../port/lib.h"
-#include    "../port/error.h"
-#include    "mem.h"
-#include    "dat.h"
-#include    "fns.h"
+/*s: kernel basic includes */
+#include <u.h>
+#include "../port/lib.h"
+#include "../port/error.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+/*e: kernel basic includes */
 
 #include    "io.h"
 #include    "../port/usb.h"

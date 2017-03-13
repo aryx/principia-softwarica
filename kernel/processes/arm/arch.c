@@ -1,10 +1,12 @@
 /*s: processes/arm/arch.c */
-#include "u.h"
+/*s: kernel basic includes */
+#include <u.h>
 #include "../port/lib.h"
 #include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+/*e: kernel basic includes */
 
 #include <tos.h>
 #include "ureg.h"

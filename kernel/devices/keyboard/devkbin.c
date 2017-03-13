@@ -3,13 +3,14 @@
  *  keyboard scan code input from outside the kernel.
  *  to avoid duplication of keyboard map processing for usb.
  */
-
-#include    "u.h"
-#include    "../port/lib.h"
-#include    "mem.h"
-#include    "dat.h"
-#include    "fns.h"
-#include    "../port/error.h"
+/*s: kernel basic includes */
+#include <u.h>
+#include "../port/lib.h"
+#include "../port/error.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+/*e: kernel basic includes */
 
 extern  void kbdputsc(byte, int);
 

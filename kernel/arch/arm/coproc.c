@@ -6,11 +6,14 @@
  * CP15 (system control) is the one that gets used the most in practice.
  * these routines must be callable from KZERO space or the 0 segment.
  */
-#include "u.h"
+/*s: kernel basic includes */
+#include <u.h>
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+/*e: kernel basic includes */
 
 #include "io.h"
 #include "arm.h"

@@ -3,12 +3,14 @@
  * atomic ops
  * make sure that we don't drag in the C library versions
  */
-#include "u.h"
+/*s: kernel basic includes */
+#include <u.h>
 #include "../port/lib.h"
 #include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+/*e: kernel basic includes */
 
 /*s: function arch_xdec(arm) */
 long

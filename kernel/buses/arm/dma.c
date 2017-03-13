@@ -10,13 +10,14 @@
  *
  * Experiments show that only channels 2-5,11-12 work with mmc
  */
-
-#include "u.h"
+/*s: kernel basic includes */
+#include <u.h>
 #include "../port/lib.h"
 #include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+/*e: kernel basic includes */
 
 #include "io.h"
 

@@ -1,10 +1,12 @@
 /*s: init/arm/watchdog.c */
-#include "u.h"
+/*s: kernel basic includes */
+#include <u.h>
 #include "../port/lib.h"
 #include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+/*e: kernel basic includes */
 
 /*s: constant POWERREGS(arm) */
 #define POWERREGS   (VIRTIO+0x100000)

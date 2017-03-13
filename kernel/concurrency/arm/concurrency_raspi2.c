@@ -1,10 +1,12 @@
 /*s: concurrency/arm/concurrency_raspi2.c */
-#include "u.h"
+/*s: kernel basic includes */
+#include <u.h>
 #include "../port/lib.h"
 #include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+/*e: kernel basic includes */
 
 extern long _xdec(long *p);
 extern long _xinc(long *p);

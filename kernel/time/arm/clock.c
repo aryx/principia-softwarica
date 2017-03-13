@@ -13,12 +13,14 @@
  * Use ARM timer to force immediate interrupt
  * Use cycle counter for cycles()
  */
-
-#include "u.h"
+/*s: kernel basic includes */
+#include <u.h>
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+/*e: kernel basic includes */
 
 #include "io.h"
 #include "ureg.h"
