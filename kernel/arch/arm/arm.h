@@ -8,16 +8,17 @@
  * Program Status Registers
  */
 /*s: type PsrMode(arm) */
+// Last 4 bits of PSR
 #define PsrMusr     0x00000010  /* user mode */
 #define PsrMsvc     0x00000013  /* `protected mode for OS' */
 /*s: [[PsrMode]] other cases(arm) */
 #define PsrMirq     0x00000012
-/*x: [[PsrMode]] other cases(arm) */
 #define PsrMabt     0x00000017
 #define PsrMund     0x0000001B
 /*x: [[PsrMode]] other cases(arm) */
 #define PsrMfiq     0x00000011
 /*e: [[PsrMode]] other cases(arm) */
+
 #define PsrMask     0x0000001F
 /*e: type PsrMode(arm) */
 
@@ -106,6 +107,9 @@
 #define CpCsbz (CpCtre|1<<26|CpCve|1<<15|7<<7)  /* must be 0 (armv7) */
 #define CpCsw       (1<<10)     /* SW: SWP(B) enable (deprecated in v7) */
 #define CpCpredict  0x00000800  /* Z: branch prediction (armv7) */
+/*x: [[CpCONTROL.CpMainctl]] other cases(arm) */
+#define CpCve       (1<<24)     /* VE: intr vectors enable */
+#define CpCtre      (1<<28)     /* TRE: TEX remap enable */
 /*e: [[CpCONTROL.CpMainctl]] other cases(arm) */
 /*e: type CpCONTROL CpMainctl(arm) */
 /*s: type CpCONTROL CpAuxctl(arm) */

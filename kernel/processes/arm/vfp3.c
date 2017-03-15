@@ -401,7 +401,9 @@ fpusysprocsetup(Proc *p)
 void
 arch_procsetup(Proc* p)
 {
+    /*s: [[arch_procsetup()]] floating point(arm) */
     fpusysprocsetup(p);
+    /*e: [[arch_procsetup()]] floating point(arm) */
 }
 /*e: function arch_procsetup(arm) */
 
@@ -417,8 +419,10 @@ arch_procsave(Proc* p)
     arch_cycles(&t);
     p->pcycles += t;
 
-/* TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.*/
+    /*s: [[arch_procsave()]] floating point(arm) */
+    /* TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.*/
     fpuprocsave(p);
+    /*e: [[arch_procsave()]] floating point(arm) */
 }
 /*e: function arch_procsave(arm) */
 
@@ -433,7 +437,9 @@ arch_procrestore(Proc* p)
     arch_cycles(&t);
     p->pcycles -= t;
 
+    /*s: [[arch_procrestore()]] floating point(arm) */
     fpuprocrestore(p);
+    /*e: [[arch_procrestore()]] floating point(arm) */
 }
 /*e: function arch_procrestore(arm) */
 

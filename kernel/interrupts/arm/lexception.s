@@ -57,7 +57,7 @@ TEXT _vsvc(SB), 1, $-4          /* SWI */
     CMP $0, R(CPU)
     MOVW.EQ $CPUADDR, R0        /* paranoia: use CPUADDR if 0 */
 
-    MOVW    8(R(CPU)), R(UP)        /* up */
+    MOVW    8(R(CPU)), R(UP)        /* up */ // Cpu->proc
 
     MOVW    R13, R0         /* first arg is pointer to ureg */
     SUB $8, R13         /* space for argument+link */
@@ -214,6 +214,7 @@ TEXT _vfiq(SB), 1, $-4          /* FIQ */
     MOVM.DB.S [R0-R14], (R13)   /* save interrupted regs */
     SUB $(15*4), R13
     MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
+
     /* get R(CPU) for this cpu */
     CPUID(R1)
     SLL $2, R1          /* convert to word index */

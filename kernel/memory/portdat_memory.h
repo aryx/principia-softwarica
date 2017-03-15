@@ -12,7 +12,7 @@
 // Imagealloc.free?
 
 /*s: enum modref */
-enum modref 
+enum Modref 
 {
     PG_NOTHING = 0x00, // nothing
 
@@ -118,23 +118,23 @@ struct KImage
 
 /*s: enum segtype */
 /* Segment types */
-enum segtype
+enum Segtype
 {
     SG_TEXT   = 00,
     SG_DATA   = 01,
     SG_BSS    = 02,
     SG_STACK  = 03,
-    /*s: enum segtype other cases */
+    /*s: [[Segtype]] other cases */
         SG_SHARED = 04,
-    /*x: enum segtype other cases */
+    /*x: [[Segtype]] other cases */
         SG_PHYSICAL = 05,
-    /*e: enum segtype other cases */
+    /*e: [[Segtype]] other cases */
     SG_TYPE   = 07,   /* Mask type of segment */
   
     SG_RONLY  = 0040,   /* Segment is read only */
-    /*s: enum segtype other flags */
-        SG_CEXEC  = 0100,   /* Detach at exec */
-    /*e: enum segtype other flags */
+    /*s: [[Segtype]] other flags */
+    SG_CEXEC  = 0100,   /* Detach at exec */
+    /*e: [[Segtype]] other flags */
 };
 /*e: enum segtype */
 

@@ -216,6 +216,12 @@ arch_isaconfig = main_isaconfig;
 
 \subsection{Memory overview (x86)}
 
+%binary image has been compiled with -TKZERO_AND_HEADER!! important
+% and assume loading phase setup physical mapping from KZERO to 0 physical
+% and so by having kernel at KTZERO beyond all special memory so no overlap
+% with sensitive area.
+
+
 <<pad memory pointer types(x86)>>=
 // physical address
 typedef uintptr phys_addr;
@@ -1568,7 +1574,7 @@ intrcommon:
 <<[[Cpu]] other fields>>=
 int lastintr; // debugging
 @
-% actually unused in bcm/
+\t actually unused in bcm/! so put in Arch_Cpu?
 
 <<function trap(x86)>>=
 /*
@@ -1694,7 +1700,7 @@ void trap(Ureg* ureg)
     }
     arch_splhi(); // possible arch_spllo() done above
 
-    <<[[trap()]] if delaysched>>
+    <<[[trap()]] if delaysched and clockintr>>
 
     if(user){
         if(up->procctl || up->nnote)
@@ -1782,7 +1788,7 @@ void syscall(Ureg* ureg)
     ulong scallnr;
     vlong startns, stopns;
 
-    if((ureg->cs & 0xFFFF) != UESEL) // TODO: arch_userureg
+    if((ureg->cs & 0xFFFF) != UESEL) // TODO: use arch_userureg
         panic("syscall: cs 0x%4.4luX", ureg->cs);
 
     <<[[syscall()]] adjust kentry>>
@@ -2058,6 +2064,313 @@ arch_userureg(Ureg* ur)
 % PTESIZE is used to say this entry actually maps a big page (4Mo, not 4Ko)
 % but is used only for vmap mapping
 
+
+% on tmpmap, tmpunmap. For now assume just alias to XXX
+% on arch_kmap, arch_kunmap, VA. Assume alias to XXX.
+% see Advanced memory chapter for the actual definitions when
+% have machine with lots of memory where MAXKPA is not enough
+% and so can't just do KADDR(page->pa) to get a virtual address
+% when can access the content of a physical page.
+
+
+%pd is always cpu->pdproto so a kern_addr.
+% returns something created by xpanalloc so return a kern_addr too.
+<<function mmuwalk(x86)>>=
+/*
+ * Walk the page-table pointed to by pd and return a pointer
+ * to the entry for virtual address va at the requested level.
+ * If the entry is invalid and create isn't requested then bail
+ * out early. Otherwise, for the 2nd level walk, allocate a new
+ * page-table page and register it in the 1st level.  This is used
+ * only to edit kernel mappings, which use pages from kernel memory,
+ * so it's okay to use KADDR to look at the tables.
+ */
+kern_addr2
+mmuwalk(kern_addr2 pd, kern_addr va, int level, bool create)
+{
+    ulong *table;
+    void *map;
+
+    table = &pd[PDX(va)];
+    if(!(*table & PTEVALID) && create == false)
+        return nil;
+
+    switch(level){
+    default:
+        return nil; //todo: panic? invalid value no?
+    case 1:
+        return table;
+    case 2:
+        if(*table & PTESIZE)
+            panic("mmuwalk2: va %luX entry %luX", va, *table);
+        if(!(*table & PTEVALID)){
+            /*
+             * Have to call low-level allocator from
+             * memory.c if we haven't set up the xalloc
+             * tables yet.
+             */
+            if(didmmuinit)
+                map = xspanalloc(BY2PG, BY2PG, 0);
+            else
+                map = rampage();  //when called from meminit()
+            if(map == nil)
+                panic("mmuwalk xspanalloc failed");
+            *table = PADDR(map)|PTEWRITE|PTEVALID;
+        }
+        table = KADDR(PPN(*table));
+        return &table[PTX(va)];
+    }
+}
+@
+% s/table/pde_or_pte/?
+
+<<[[Cpu]] [[Arch]] other fields(x86)>>=
+kern_addr2   pdproto;      /* page directory base for this processor (va) */
+@
+% this pd is super important!! see arch_mmuswitch, he's the one
+% that will map specially the CPUADDR for each CPU!
+% it is actually a prototype that is copied in the mmupagedir of each
+% new process
+
+<<[[Cpu]] [[Arch]] other fields(x86)>>=
+Page* mmupdpool;
+int mmupdcnt;
+@
+%// TODO: have a Arch_CpuMMU like in bcm/
+% mv later? when used? opti to not wait for newpage()
+
+% pointers in kern_addr? no! but the page->pa there is real mem.
+<<[[Proc]] [[Arch]] memory fields(x86)>>=
+Page* mmupd;     /* page directory base */
+@
+
+<<[[Proc]] [[Arch]] memory fields(x86)>>=
+// type? list<ref<?? > >
+Page* mmufree;    /* unused page table pages */
+Page* mmuused;    /* used page table pages */
+@
+% rename! mmupt_used, mmupt_free?
+% so mmu release should release mmupd and those pages
+
+<<function upallocmmupd(x86)>>=
+/*
+ * Allocate and install pd for the current process.
+ */
+static void
+upallocmmupd(void)
+{
+    int s;
+    kern_addr2 mmupd;
+    Page *page;
+    
+    if(up->mmupd != nil)
+        return;
+    page = mmupdalloc();
+    s = arch_splhi();
+    if(up->mmupd != nil){
+        /*
+         * Perhaps we got an interrupt while
+         * mmupdalloc was sleeping and that
+         * interrupt allocated an mmupd?
+         * Seems unlikely.
+         */
+        mmupdfree(up, page);
+        arch_splx(s);
+        return;
+    }
+    mmupd = tmpmap(page);
+    mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)]; // for up
+    tmpunmap(mmupd);
+    up->mmupd = page;
+    putcr3(up->mmupd->pa); //!!!! bootstrap! putcr3 take a PA of course
+    arch_splx(s);
+}
+@
+
+
+%ctor
+<<function mmupdalloc(x86)>>=
+/*
+ * Allocate a new page for a page directory.
+ * We keep a small cache of pre-initialized
+ * page directories in each cpu (see mmupdfree).
+ */
+static Page*
+mmupdalloc(void)
+{
+    int s;
+    Page *page;
+    kern_addr2 mmupd;
+
+    s = arch_splhi();
+    cpu->mmupdalloc++;
+    if(cpu->mmupdpool == nil){
+        arch_spllo();
+        page = newpage(false, nil, nilptr);
+        arch_splhi();
+        mmupd = tmpmap(page);
+        memmove(mmupd, cpu->pdproto, BY2PG);
+        <<[[mmupdalloc()]] vpt adjustments(x86)>>
+        tmpunmap(mmupd);
+    }else{
+        page = cpu->mmupdpool;
+        cpu->mmupdpool = page->next;
+        cpu->mmupdcnt--;
+    }
+    arch_splx(s);
+    return page;
+}
+@
+% why not using kernel memory for that? after all use kernel memory
+% for Segment and Pagetable
+% how sure what is put back in the mmupdpool has virgin mapping?
+% because of arch_mmurelease?
+
+
+%dtor
+<<function mmupdfree(x86)>>=
+static void
+mmupdfree(Proc *proc, Page *page)
+{
+    if(arch_islo())
+        panic("mmupdfree: arch_islo");
+    cpu->mmupdfree++;
+    if(cpu->mmupdcnt >= 10){ // 10??? keep small cache of mmupd page, but not too big, don't want to eat too much memory for that.
+        page->next = proc->mmufree;
+        proc->mmufree = page;
+    }else{
+        page->next = cpu->mmupdpool;
+        cpu->mmupdpool = page;
+        cpu->mmupdcnt++;
+    }
+}
+@
+% but the Page is a pd that have all entries correct? who initialize it?
+% it has the good entries for the mapping of the kernel, but before KZERO?
+% assumes have called mmuptefree before I think in arch_mmurelease
+
+
+
+
+
+%dtor
+<<function mmuptefree(x86)>>=
+/*
+ * A user-space memory segment has been deleted, or the
+ * process is exiting.  Clear all the pde entries for user-space
+ * memory mappings and device mappings.  Any entries that
+ * are needed will be paged back in as necessary.
+ */
+static void
+mmuptefree(Proc* proc)
+{
+    int s;
+    kern_addr2 mmupd;
+    Page **last, *page;
+
+    if(proc->mmupd == nil || proc->mmuused == nil)
+        return; // panic? bug to be called with that?
+
+    s = arch_splhi();
+    mmupd = tmpmap(proc->mmupd);
+    last = &proc->mmuused;
+    for(page = *last; page; page = page->next){
+        mmupd[page->daddr] = 0; //???? use daddr??
+        last = &page->next;
+    }
+    tmpunmap(mmupd);
+    arch_splx(s);
+    *last = proc->mmufree;
+    proc->mmufree = proc->mmuused;
+    proc->mmuused = nil;
+}
+@
+
+
+<<function mmurelease(x86)>>=
+/*
+ * Release any pages allocated for a page directory or page-tables
+ * for this process:
+ *   switch to the prototype pd for this processor (cpu->pdproto);
+ *   call mmuptefree() to place all pages used for page-tables (proc->mmuused)
+ *   onto the process' free list (proc->mmufree). This has the side-effect of
+ *   cleaning any user entries in the pdb (proc->mmupd);
+ *   if there's a pd put it in the cache of pre-initialised pd's
+ *   for this processor (cpu->mmupdpool) or on the process' free list;
+ *   finally, place any pages freed back into the free pool (palloc).
+ * This routine is only called from schedinit() with palloc locked.
+ */
+void
+arch_mmurelease(Proc* proc)
+{
+    Page *page, *next;
+
+    if(arch_islo())
+        panic("arch_mmurelease: arch_islo");
+    taskswitch(PADDR(cpu->pdproto), (ulong)cpu + BY2PG);
+
+
+    <<[[mmurelease()]] handle kmaptable(x86)>>
+
+    if(proc->mmupd){
+        mmuptefree(proc);
+        mmupdfree(proc, proc->mmupd);
+        proc->mmupd = nil;
+    }
+    for(page = proc->mmufree; page; page = next){
+        next = page->next;
+        if(--page->ref)
+            panic("arch_mmurelease: page->ref %d", page->ref);
+        pagechainhead(page);
+    }
+    if(proc->mmufree && palloc.freememr.p)
+        wakeup(&palloc.freememr);
+    proc->mmufree = nil;
+}
+@
+
+
+
+% there are called to newpage, so use user memory for pagedir/pagetable
+% of process, which kinda make sense, but is it dangerous? can those
+% pages containing pagedir/pagetable data be swapped out? No because
+% the swapping procedure iterate over the pages used by segments of
+% processes, not on pages in Proc->mmupd or Proc->mmused. So it's safe.
+
+<<function flushmmu(x86)>>=
+/*
+ * Flush all the user-space and device-mapping mmu info
+ * for this process, because something has been deleted.
+ * It will be paged back in on demand.
+ */
+void
+arch_flushmmu(void)
+{
+    int s;
+
+    s = arch_splhi();
+    up->newtlb = true;
+    arch_mmuswitch(up);
+    arch_splx(s);
+}
+@
+
+
+<<function flushpg(x86)>>=
+/*
+ * Flush a single page mapping from the tlb.
+ */
+void
+flushpg(virt_addr va)
+{
+    if(X86FAMILY(cpu->cpuidax) >= 4)
+        invlpg(va);
+    else
+        putcr3(getcr3());
+}
+@
+% invalidate everything if does not have the feature
+
 \section{Page fault (x86)}
 
 % trap -> <>
@@ -2104,6 +2417,72 @@ fault386(Ureg* ureg, void*)
     up->insyscall = insyscall;
 }
 @ 
+
+% this is the fundamental operation, put earlier?
+% can some of the code here generate itself a fault?
+<<function putmmu(x86)>>=
+/*
+ * Update the mmu in response to a user fault.  pa may have PTEWRITE set.
+ */
+void
+arch_putmmu(virt_addr va, ulong mmupte, Page*)
+{
+    int old;
+    Page *page;
+    kern_addr2 mmupd;
+    kern_addr2 mmupt;
+
+    if(up->mmupd == nil)
+        upallocmmupd();
+    <<[[putmmu()]] adjustments(x86)>>
+}
+@
+
+<<[[putmmu()]] adjustments(x86)>>=
+// pad's code for simplified virtual memory, no VPT
+mmupd = KADDR(up->mmupd->pa);
+if(!(mmupd[PDX(va)]&PTEVALID)) {
+    if(up->mmufree == nil){
+        arch_spllo();
+        page = newpage(false, nil, nilptr);
+        arch_splhi();
+    }
+    else{
+        page = up->mmufree;
+        up->mmufree = page->next;
+    }
+    mmupd[PDX(va)] = PPN(page->pa)|PTEUSER|PTEWRITE|PTEVALID;
+    mmupt = KADDR(page->pa);
+    memset(mmupt, 0, BY2PG);
+    page->daddr = PDX(va); // ???
+    page->next = up->mmuused;
+    up->mmuused = page;
+}
+mmupt = KADDR(PPN(mmupd[PDX(va)]));
+old = mmupt[PTX(va)];
+mmupt[PTX(va)] = mmupte|PTEUSER|PTEVALID;
+
+if(old&PTEVALID)
+    flushpg(va);
+if(getcr3() != up->mmupd->pa)
+     print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
+@
+
+
+<<function checkmmu(x86)>>=
+/*
+ * Double-check the user MMU.
+ * Error checking only.
+ */
+void
+arch_checkmmu(virt_addr va, phys_addr pa)
+{
+    if(up->mmupd == nil)
+        return;
+   USED(va); USED(pa);
+    <<[[checkmmu()]] pd at pt check(x86)>>
+}
+@
 
 <<function checkpages>>=
 void

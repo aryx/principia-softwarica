@@ -2,7 +2,7 @@
 
 /*s: enum blockflag */
 /* flag values */
-enum
+enum BlockFlags
 {
   BINTR = (1<<0),
   BFREE = (1<<1),
@@ -39,7 +39,7 @@ struct Block
 
 /*s: enum queuestate */
 /* queue state bits,  Qmsg, Qcoalesce, and Qkick can be set in qopen */
-enum
+enum QueueState
 {
   /* Queue.state */
   Qstarve   = (1<<0), /* consumer starved */
@@ -226,17 +226,17 @@ struct Path
 /*
  * Access types in namec
  */
-enum
+enum AccessFlags
 {
   Aopen,        /* for i/o */
   Acreate,      /* is to be created */
   Aremove,      /* will be removed by caller */
   Aaccess,      /* as in stat, wstat */
   Atodir,       /* as in chdir */
-  /*s: enum accessnamec cases */
+  /*s: [[AccessFlags]] cases */
   Abind,        /* for left-hand-side of bind */
   Amount,       /* to be mounted or mounted upon */
-  /*e: enum accessnamec cases */
+  /*e: [[AccessFlags]] cases */
 };
 /*e: enum accessnamec */
 
@@ -244,19 +244,19 @@ enum
 /*
  * channel flags
  */
-enum 
+enum ChannelFlag
 {
   COPEN = 0x0001,   /* for i/o */
   CFREE = 0x0010,   /* not in use */
-  /*s: enum channelflag cases */
+  /*s: [[ChannelFlag]] cases */
   CCEXEC  = 0x0008,   /* close on exec */
-  /*x: enum channelflag cases */
+  /*x: [[ChannelFlag]] cases */
   CRCLOSE = 0x0020,   /* remove on close */
-  /*x: enum channelflag cases */
+  /*x: [[ChannelFlag]] cases */
   CMSG  = 0x0002,   /* the message channel for a mount */
-  /*x: enum channelflag cases */
+  /*x: [[ChannelFlag]] cases */
   CCACHE  = 0x0080,   /* client cache */
-  /*e: enum channelflag cases */
+  /*e: [[ChannelFlag]] cases */
 };
 /*e: enum channelflag */
 

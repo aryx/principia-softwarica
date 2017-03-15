@@ -206,7 +206,4 @@ extern void sysprocsetup(Proc*);
 #define PADDR(va)   PTR2UINT(PHYSDRAM | ((uintptr)(va) & ~KSEGM))
 /*e: macro PADDR(arm) */
 
-/*s: macro MASK(arm) */
-#define MASK(v) ((1UL << (v)) - 1)  /* mask `v' bits wide */
-/*e: macro MASK(arm) */
 /*e: core/arm/fns.h */

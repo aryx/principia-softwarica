@@ -76,8 +76,8 @@ TEXT _startpg(SB), 1, $-4
     /*
      * call main and loop forever if it returns
      */
-    BL  ,main(SB)
-    B   ,0(PC)
+    BL  main(SB)
+    B   0(PC)
 
     BL  _div(SB)        /* hack to load _div, etc. */
 

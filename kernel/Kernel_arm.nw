@@ -84,13 +84,6 @@ extern Soc soc;
 #define CpTTBctl    2           /* cortex */
 @
 
-<<type CpFSR(arm)>>=
-/*
- * CpFSR opcode2 values.
- */
-#define CpFSRdata   0           /* armv6, armv7 */
-#define CpFSRinst   1           /* armv6, armv7 */
-@
 
 
 <<type CpTLB secondary registers(arm)>>=
@@ -1036,7 +1029,7 @@ TEXT    _tas(SB), $-4
 <<function arch_tas(raspberry pi1)(arm)>>
 @
 %$
-% _tas used?? remove? used by libc?
+\t _tas used?? remove? used by libc?
 
 \subsection*{[[concurrency/arm/tas_raspi2.s]]}
 
@@ -1188,7 +1181,7 @@ arch_cmpswap(long *addr, long old, long new)
     return cas((ulong*)addr, old, new);
 }
 @
-\l clean those _xinc vs arch_xinc
+\t clean those _xinc vs arch_xinc
 
 \section{[[core/arm/]]}
 
@@ -1196,7 +1189,7 @@ arch_cmpswap(long *addr, long old, long new)
 
 <<constant STAGESIZE(arm)>>=
 // was a default in portdat.h
-#define STAGESIZE 64 // for devuart
+#define STAGESIZE 64 // for struct Uart
 @
 
 <<constant KMESGSIZE(arm)>>=
@@ -1207,14 +1200,13 @@ arch_cmpswap(long *addr, long old, long new)
 %-------------------------------------------------------------
 
 <<core/arm/dat.h>>=
-<<constant STAGESIZE(arm)>>
-<<constant KMESGSIZE(arm)>>
-
 // pad's memory pointers (used in Lock so must be early)
 <<pad memory pointer types(arm)>>
 
 #include "dat_forward.h"
 #include "../port/portdat_forward.h"
+<<constant STAGESIZE(arm)>>
+
 <<dat.h includes(arm)>>
 
 // DO NOT switch those declarations. 5c allocates R10
@@ -1228,6 +1220,8 @@ arch_cmpswap(long *addr, long old, long new)
 // in main.c (used in mmu.c)
 extern ulong memsize;
 
+<<constant KMESGSIZE(arm)>>
+
 // TODO: put that in portdat.h or in netif.h?
 #pragma varargck  type  "I" uchar*
 #pragma varargck  type  "V" uchar*
@@ -1238,30 +1232,7 @@ extern ulong memsize;
 
 \subsection*{[[core/arm/dat_core.h]]}
 
-<<type PTE(arm)>>=
-typedef u32int      PTE;
-@
-\t PDE too?
 
-<<struct MMMU(arm)>>=
-/*
- *  MMU stuff in Cpu.
- */
-struct MMMU
-{
-    PTE*    mmul1;      /* l1 for this processor */
-
-    int mmul1lo;
-    int mmul1hi;
-
-    int mmupid;
-};
-@
-
-<<[[Cpu]] [[Arch]] mmu fields(arm)>>=
-MMMU;
-@
-% why 3 M?
 
 <<[[Cpu]] [[Arch]] save of first five registers fields(arm)>>=
 /* save areas for exceptions, hold R0-R4 */
@@ -1338,10 +1309,6 @@ typedef struct Soc Soc;
 @
 <<macro sdmalloc(arm)>>=
 #define sdmalloc(n) mallocalign(n, BLOCKALIGN, 0, 0)
-@
-
-<<macro MASK(arm)>>=
-#define MASK(v) ((1UL << (v)) - 1)  /* mask `v' bits wide */
 @
 
 
@@ -1518,7 +1485,6 @@ extern void sysprocsetup(Proc*);
 <<macro KADDR(arm)>>
 <<macro PADDR(arm)>>
 
-<<macro MASK(arm)>>
 @
 
 
@@ -2440,8 +2406,8 @@ TEXT _startpg(SB), 1, $-4
     /*
      * call main and loop forever if it returns
      */
-    BL  ,main(SB)
-    B   ,0(PC)
+    BL  main(SB)
+    B   0(PC)
 
     BL  _div(SB)        /* hack to load _div, etc. */
 
@@ -2573,8 +2539,8 @@ TEXT _startpg(SB), 1, $-4
     /*
      * call main and loop forever if it returns
      */
-    BL  ,main(SB)
-    B   ,0(PC)
+    BL  main(SB)
+    B   0(PC)
 
     BL  _div(SB)        /* hack to load _div, etc. */
 
@@ -4252,14 +4218,6 @@ TEXT cachesoff(SB), 1, $-4
 #define NCOLOR  1       /* 1 level cache, don't worry about VCE's */
 @
 
-<<[[Proc]] [[Arch]] memory fields(arm)>>=
-Page*   mmul2;
-Page*   mmul2cache; /* free mmu pages */
-@
-
-<<macro VA(arm)>>=
-#define VA(k)       ((uintptr)(k))
-@
 
 
 %-------------------------------------------------------------
@@ -4467,7 +4425,6 @@ typedef void        Arch_KMap;
  * Sizes
  */
 <<constant BI2BY(arm)>>
-<<constant BY2SE(arm)>>
 <<constant BY2WD(arm)>>
 <<constant BY2V(arm)>>
 
@@ -4701,123 +4658,7 @@ arch_mmuswitch(Proc* proc)
 }
 @
 
-<<function arch_flushmmu(arm)>>=
-void
-arch_flushmmu(void)
-{
-    int s;
 
-    s = arch_splhi();
-    up->newtlb = 1;
-    arch_mmuswitch(up);
-    arch_splx(s);
-}
-@
-
-<<function arch_mmurelease(arm)>>=
-void
-arch_mmurelease(Proc* proc)
-{
-    Page *page, *next;
-
-    /* write back dirty and invalidate l1 caches */
-    cacheuwbinv();
-
-    mmul2empty(proc, 0);
-    for(page = proc->mmul2cache; page != nil; page = next){
-        next = page->next;
-        if(--page->ref)
-            panic("mmurelease: page->ref %d", page->ref);
-        pagechainhead(page);
-    }
-    if(proc->mmul2cache && palloc.freememr.p)
-        wakeup(&palloc.freememr);
-    proc->mmul2cache = nil;
-
-    mmul1empty();
-
-    /* make sure map is in memory */
-    /* could be smarter about how much? */
-    cachedwbse(&cpu->mmul1[L1X(UZERO)], (L1hi - L1lo)*sizeof(PTE));
-
-    /* lose any possible stale tlb entries */
-    mmuinvalidate();
-}
-@
-
-<<function arch_putmmu(arm)>>=
-void
-arch_putmmu(uintptr va, uintptr pa, Page* page)
-{
-    int x;
-    Page *pg;
-    PTE *l1, *pte;
-
-    x = L1X(va);
-    l1 = &cpu->mmul1[x];
-    if(*l1 == Fault){
-        /* wasteful - l2 pages only have 256 entries - fix */
-        if(up->mmul2cache == nil){
-            /* auxpg since we don't need much? memset if so */
-            pg = newpage(1, 0, 0);
-            pg->va = VA(arch_kmap(pg));
-        }
-        else{
-            pg = up->mmul2cache;
-            up->mmul2cache = pg->next;
-            memset(UINT2PTR(pg->va), 0, BY2PG);
-        }
-        pg->daddr = x;
-        pg->next = up->mmul2;
-        up->mmul2 = pg;
-
-        /* force l2 page to memory */
-        cachedwbse((void *)pg->va, BY2PG);
-
-        *l1 = PPN(pg->pa)|Dom0|Coarse;
-        cachedwbse(l1, sizeof *l1);
-
-        if(x >= cpu->mmul1lo && x < cpu->mmul1hi){
-            if(x+1 - cpu->mmul1lo < cpu->mmul1hi - x)
-                cpu->mmul1lo = x+1;
-            else
-                cpu->mmul1hi = x;
-        }
-    }
-    pte = UINT2PTR(KADDR(PPN(*l1)));
-
-    /* protection bits are
-     *  PTERONLY|PTEVALID;
-     *  PTEWRITE|PTEVALID;
-     *  PTEWRITE|PTEUNCACHED|PTEVALID;
-     */
-    x = Small;
-    if(!(pa & PTEUNCACHED))
-        x |= L2ptedramattrs;
-    if(pa & PTEWRITE)
-        x |= L2AP(Urw);
-    else
-        x |= L2AP(Uro);
-    pte[L2X(va)] = PPN(pa)|x;
-    cachedwbse(&pte[L2X(va)], sizeof pte[0]);
-
-    /* clear out the current entry */
-    mmuinvalidateaddr(PPN(va));
-
-    /*  write back dirty entries - we need this because the pio() in
-     *  fault.c is writing via a different virt addr and won't clean
-     *  its changes out of the dcache.  Page coloring doesn't work
-     *  on this mmu because the virtual cache is set associative
-     *  rather than direct mapped.
-     */
-    if(page->cachectl[cpu->cpuno] == PG_TXTFLUSH){
-        /* pio() sets PG_TXTFLUSH whenever a text pg has been written */
-        cacheiinv();
-        page->cachectl[cpu->cpuno] = PG_NOFLUSH;
-    }
-    arch_checkmmu(va, PPN(pa));
-}
-@
 
 <<function mmuuncache(arm)>>=
 void*
@@ -4875,31 +4716,7 @@ mmukmap(uintptr va, uintptr pa, usize size)
 }
 @
 
-<<function arch_checkmmu(arm)>>=
-void
-arch_checkmmu(uintptr va, uintptr pa)
-{
-    USED(va);
-    USED(pa);
-}
-@
 
-<<function arch_kmap(arm)>>=
-//old:#define   arch_kmap(p)        (Arch_KMap*)((p)->pa|kseg0)
-Arch_KMap*
-arch_kmap(Page *p) {
-  return (Arch_KMap*)((p)->pa|KZERO);
-}
-@
-
-<<function arch_kunmap(arm)>>=
-//old: #define   kunmap(k)
-void
-arch_kunmap(Arch_KMap *k)
-{
-    cachedwbinvse(k, BY2PG);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -5366,10 +5183,6 @@ inner:
 \subsection*{[[interrupts/arm/trap.c]]}
 
 
-<<constant LOCALREGS(arm)>>=
-#define LOCALREGS   (VIRTIO+IOSIZE)
-@
-\t reuse ARMLOCAL
 
 <<enum _anon_ (interrupts/arm/trap.c)(arm)>>=
 enum {
@@ -5395,20 +5208,6 @@ struct Vpage0 {
 };
 @
 
-<<struct Intregs(arm)>>=
-/*
- * interrupt control registers
- */
-struct Intregs {
-    u32int  ARMpending;
-    u32int  GPUpending[2];
-    u32int  FIQctl;
-    u32int  GPUenable[2];
-    u32int  ARMenable;
-    u32int  GPUdisable[2];
-    u32int  ARMdisable;
-};
-@
 
 
 
@@ -5509,36 +5308,6 @@ intrtime(void)
 }
 @
 
-<<function irq(arm)>>=
-/*
- *  called by trap to handle irq interrupts.
- *  returns true iff a clock interrupt, thus maybe reschedule.
- */
-static int
-irq(Ureg* ureg)
-{
-    Vctl *v;
-    int clockintr;
-    int found;
-
-    cpu->perf.intrts = arch_perfticks();
-    clockintr = 0;
-    found = 0;
-    for(v = vctl; v; v = v->next)
-        if(v->cpu == cpu->cpuno && (*v->reg & v->mask) != 0){
-            found = 1;
-            arch_coherence();
-            v->f(ureg, v->a);
-            arch_coherence();
-            if(v->irq == IRQclock || v->irq == IRQcntps || v->irq == IRQcntpns)
-                clockintr = 1;
-        }
-    if(!found)
-        cpu->spuriousintr++;
-    intrtime();
-    return clockintr;
-}
-@
 
 
 
@@ -5578,25 +5347,6 @@ ckfaultstuck(uintptr va)
 @
 
 
-<<function writetomem(arm)>>=
-/*
- *  returns 1 if the instruction writes memory, 0 otherwise
- */
-int
-writetomem(ulong inst)
-{
-    /* swap always write memory */
-    if((inst & 0x0FC00000) == 0x01000000)
-        return 1;
-
-    /* loads and stores are distinguished by bit 20 */
-    if(inst & (1<<20))
-        return 0;
-
-    return 1;
-}
-@
-% >> >>
 
 
 <<function isvalidaddr(arm)>>=
@@ -5839,17 +5589,12 @@ extern int notify(Ureg*);
 #include "mem.h"
 #include "arm.h"
 
-TEXT fsrget(SB), 1, $-4             /* data fault status */
-    MRC CpSC, 0, R0, C(CpFSR), C(0), CpFSRdata
-    RET
+<< function fstget(arm)>>
 
-TEXT ifsrget(SB), 1, $-4            /* instruction fault status */
-    MRC CpSC, 0, R0, C(CpFSR), C(0), CpFSRinst
-    RET
+<< function ifsrget(arm)>>
 
-TEXT farget(SB), 1, $-4             /* fault address */
-    MRC CpSC, 0, R0, C(CpFAR), C(0x0)
-    RET
+<< function farget(arm)>>
+
 @
 %$
 
@@ -6322,13 +6067,6 @@ arch_dbgpc(Proc* p)
 }
 @
 
-<<function arch_userureg(arm)>>=
-bool
-arch_userureg(Ureg* ureg)
-{
-    return (ureg->psr & PsrMask) == PsrMusr;
-}
-@
 
 <<function arch_setregisters(arm)>>=
 /* This routine must save the values of registers the user is not permitted

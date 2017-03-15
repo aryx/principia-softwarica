@@ -23,7 +23,7 @@ struct DevConf
 
 /*s: enum kbscan */
 /* kbscans indices */
-enum kbscan {
+enum KbscanKind {
     KbInt=    0,          
     KbExt,
 

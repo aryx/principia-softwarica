@@ -11,6 +11,8 @@
 /*s: portdat.h macros */
 #define ROUND(s, sz)  (((s)+(sz-1)) & ~(sz-1))
 /*x: portdat.h macros */
+#define MASK(v) ((1UL << (v)) - 1)  /* mask `v' bits wide */
+/*x: portdat.h macros */
 #define MIN(a, b) ((a) < (b)? (a): (b))
 #define HOWMANY(x, y) (((x)+((y)-1))/(y))
 #define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */

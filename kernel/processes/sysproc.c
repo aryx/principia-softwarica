@@ -13,7 +13,7 @@
 
 /*s: enum rfork */
 //coupling: with libc.h
-enum rfork
+enum Rfork
 {
     RFPROC      = (1<<4), // fork a new process!! (if unset then set props for up)
     RFMEM       = (1<<5), // share data and bss (kinda thread, a la Linux clone)

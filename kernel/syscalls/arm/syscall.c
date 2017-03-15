@@ -195,31 +195,40 @@ notify(Ureg* ureg)
 void
 syscall(Ureg* ureg)
 {
+    int scallnr;
+    long ret;
+    ulong sp; // user_addr
+    /*s: [[syscall()]] other locals(arm) */
     char *e;
     u32int s;
-    ulong sp;
-    long ret;
-    int i, scallnr;
+    int i;
+    /*x: [[syscall()]] other locals(arm) */
     vlong startns, stopns;
+    /*e: [[syscall()]] other locals(arm) */
 
+    /*s: [[syscall()]] sanity check call from userspace(arm) */
     if(!arch_userureg(ureg))
         panic("syscall: from kernel: pc %#lux r14 %#lux psr %#lux",
             ureg->pc, ureg->r14, ureg->psr);
-
+    /*e: [[syscall()]] sanity check call from userspace(arm) */
     /*s: [[syscall()]] adjust kentry */
     arch_cycles(&up->kentry);
     /*e: [[syscall()]] adjust kentry */
 
     cpu->syscall++;
-    up->insyscall = 1;
+    up->insyscall = true;
+
     up->pc = ureg->pc;
     up->dbgreg = ureg;
 
+    // syscall number!
     scallnr = ureg->r0;
     //up->scallnr = scallnr;
 
+    /*s: [[syscall()]] if RFORK, handle floating point(arm) */
     if(scallnr == RFORK)
         fpusysrfork(ureg);
+    /*e: [[syscall()]] if RFORK, handle floating point(arm) */
 
     arch_spllo();
     sp = ureg->sp;
@@ -247,22 +256,24 @@ syscall(Ureg* ureg)
 
     up->nerrlab = 0;
     ret = -1;
+
     startns = todget(nil);
     if(!waserror()){
+        /*s: [[syscall()]] sanity check scallnr(arm) */
         if(scallnr >= nsyscall){
             pprint("bad sys call number %d pc %#lux\n",
                 scallnr, ureg->pc);
             postnote(up, 1, "sys: bad sys call", NDebug);
             error(Ebadarg);
         }
-
+        /*e: [[syscall()]] sanity check scallnr(arm) */
+        /*s: [[syscall()]] sanity check sp(arm) */
         if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
             validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+        /*e: [[syscall()]] sanity check sp(arm) */
 
         up->sargs = *((Sargs*)(sp+BY2WD));
         up->psstate = sysctab[scallnr];
-
-    /*  iprint("%s: syscall %s\n", up->text, sysctab[scallnr]?sysctab[scallnr]:"huh?"); */
 
         //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         //IMPORTANT: The actual system call
@@ -276,6 +287,7 @@ syscall(Ureg* ureg)
         up->syserrstr = up->errstr;
         up->errstr = e;
     }
+    /*s: [[syscall()]] if nerrlab(arm) */
     if(up->nerrlab){
         print("bad errstack [%d]: %d extra\n", scallnr, up->nerrlab);
         for(i = 0; i < NERR; i++)
@@ -283,6 +295,7 @@ syscall(Ureg* ureg)
                 up->errlab[i].sp, up->errlab[i].pc);
         panic("error stack");
     }
+    /*e: [[syscall()]] if nerrlab(arm) */
 
     /*
      *  Put return value in frame.  On the x86 the syscall is
@@ -306,9 +319,8 @@ syscall(Ureg* ureg)
     }
     /*e: [[syscall()]] Proc_tracesyscall if, syscall exit(arm) */
 
-
-    up->insyscall = 0;
-    up->psstate = 0;
+    up->insyscall = false;
+    up->psstate = nil;
 
     /*s: [[syscall()]] call noted() */
     if(scallnr == NOTED)
@@ -319,7 +331,6 @@ syscall(Ureg* ureg)
     if(scallnr != RFORK && (up->procctl || up->nnote))
         notify(ureg);
     /*e: [[syscall()]] call notify(arm) */
-
 
     /*s: [[syscall()]] if delaysched(arm) */
     /* if we delayed sched because we held a lock, sched now */
@@ -383,10 +394,12 @@ arch_forkchild(Proc *p, Ureg *ureg)
     cureg->r0 = 0;
 
     /* Things from bottom of syscall which were never executed */
-    p->psstate = 0;
-    p->insyscall = 0;
+    p->psstate = nil;
+    p->insyscall = false;
 
+    /*s: [[arch_forkchild()]] floating point(arm) */
     fpusysrforkchild(p, cureg, up);
+    /*e: [[arch_forkchild()]] floating point(arm) */
 }
 /*e: function arch_forkchild(arm) */
 /*e: syscalls/arm/syscall.c */

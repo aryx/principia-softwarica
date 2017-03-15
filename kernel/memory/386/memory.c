@@ -22,7 +22,7 @@
 /*e: memory.c debugging macro(x86) */
 
 /*s: enum memkind(x86) */
-enum memkind {
+enum Memkind {
     MemUPA,        /* unbacked physical address */
     MemRAM,        /* physical memory */
     MemUMB,        /* upper memory block (<16MB) */

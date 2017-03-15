@@ -99,6 +99,8 @@ struct Perf
 /*e: struct Perf */
 
 /*s: struct Cpu */
+//coupling: do not change the order of the first 4 fields! 
+// Some assembly code assumes this order.
 struct Cpu
 {
     int cpuno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
@@ -109,6 +111,8 @@ struct Cpu
   
     // ref<Proc>, or None if halting?
     Proc* proc;     /* current process on this processor */
+
+    struct Arch_Cpu;
 
     ulong ticks;      /* of the clock since boot time */
 
@@ -144,7 +148,6 @@ struct Cpu
     /*x: [[Cpu]] other fields */
     int lastintr; // debugging
     /*e: [[Cpu]] other fields */
-    struct Arch_Cpu;
   
     // must be at the end of the structure!
     int stack[1];

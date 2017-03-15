@@ -4,7 +4,7 @@
 /*
  * fasttick timer interrupts
  */
-enum timermode 
+enum Timermode 
 {
     Trelative,  /* timer programmed in ns from now */
     Tperiodic,  /* periodic timer, period in ns */

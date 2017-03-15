@@ -16,9 +16,13 @@ enum _bool {
   false = 0,
   true = 1
 };
+
 typedef uchar byte;
-typedef ushort bool_ushort;
+
+typedef ushort bool_ushort; //TODO: delete
+
 typedef int fdt; // file descriptor type
+
 #define OK_0 0
 #define OK_1 1
 #define ERROR_0 0
@@ -210,16 +214,16 @@ extern  char  end[];
  * Syscall data structures
  */
 /*s: enum mount */
-enum mount {
+enum MountFlags {
     MREPL = 0x0000,  /* mount replaces object */
   
     MBEFORE = 0x0001,  /* mount goes before others in union directory */
     MAFTER = 0x0002,  /* mount goes after others in union directory */
   
     MCREATE = 0x0004,  /* permit creation in mounted directory */
-    /*s: enum mount cases */
+    /*s: [[MountFlags]] cases */
     MCACHE = 0x0010,  /* cache some data */
-    /*e: enum mount cases */
+    /*e: [[MountFlags]] cases */
   
     MORDERMASK =  0x0003,  /* mask for bits defining order of mounting */
     MMASK = 0x0017,  /* all bits on */
@@ -227,26 +231,26 @@ enum mount {
 /*e: enum mount */
 
 /*s: enum open */
-enum open {
+enum OpenFlags {
     OREAD = 0, /* open for read */
     OWRITE = 1, /* write */
     ORDWR = 2, /* read and write */
-    /*s: enum open cases */
+    /*s: [[OpenFlags]] cases */
     OEXEC = 3, /* execute, == read but check execute permission */
-    /*x: enum open cases */
+    /*x: [[OpenFlags]] cases */
     OCEXEC = 32,  /* or'ed in, close on exec */
-    /*x: enum open cases */
+    /*x: [[OpenFlags]] cases */
     ORCLOSE = 64,  /* or'ed in, remove on close */
-    /*x: enum open cases */
+    /*x: [[OpenFlags]] cases */
     OTRUNC = 16,  /* or'ed in (except for exec), truncate file first */
-    /*x: enum open cases */
+    /*x: [[OpenFlags]] cases */
     OEXCL = 0x1000,  /* or'ed in, exclusive create */
-    /*e: enum open cases */
+    /*e: [[OpenFlags]] cases */
 };
 /*e: enum open */
 
 /*s: enum note */
-enum note {
+enum NoteHook {
   NCONT = 0, /* continue after note */
   NDFLT = 1, /* terminate after note */
   NSAVE = 2, /* clear note but hold state */
@@ -255,7 +259,7 @@ enum note {
 /*e: enum note */
 
 /*s: enum miscsize */
-enum miscsize {  
+enum Miscsize {  
     /*s: constant ERRMAX */
     ERRMAX = 128, /* max length of error string */
     /*e: constant ERRMAX */
@@ -269,32 +273,32 @@ enum miscsize {
 
 /*s: enum qidtype */
 /* bits in Qid.type */
-enum qidtype {
+enum Qidtype {
   QTFILE = 0x00,    /* plain file */
   QTDIR = 0x80,    /* type bit for directories */
-  /*s: enum qidtype cases */
+  /*s: [[Qidtype]] cases */
   QTMOUNT = 0x10,    /* type bit for mounted channel */
-  /*x: enum qidtype cases */
+  /*x: [[Qidtype]] cases */
   QTAUTH = 0x08,    /* type bit for authentication file */
   QTAPPEND = 0x40,    /* type bit for append only files */
   QTEXCL = 0x20,    /* type bit for exclusive use files */
-  /*e: enum qidtype cases */
+  /*e: [[Qidtype]] cases */
 };
 /*e: enum qidtype */
 
 /*s: enum dirmode */
 /* bits in DirEntry.mode */
-enum dirmode {
+enum Dirmode {
     DMDIR = 0x80000000,  /* mode bit for directories */
 
     DMREAD = 0x4,   /* mode bit for read permission */
     DMWRITE = 0x2,   /* mode bit for write permission */
     DMEXEC = 0x1,   /* mode bit for execute permission */
-    /*s: enum dirmode cases */
+    /*s: [[Dirmode]] cases */
     DMMOUNT = 0x10000000,  /* mode bit for mounted channel */
-    /*x: enum dirmode cases */
+    /*x: [[Dirmode]] cases */
     DMEXCL = 0x20000000,  /* mode bit for exclusive use files */
-    /*e: enum dirmode cases */
+    /*e: [[Dirmode]] cases */
 };
 /*e: enum dirmode */
 
@@ -305,7 +309,7 @@ struct Qid
   uvlong  path;
   // for cache invalidation
   ulong vers;
-  // enum<qidtype>
+  // enum<Qidtype>
   byte type;
 };
 /*e: struct Qid */

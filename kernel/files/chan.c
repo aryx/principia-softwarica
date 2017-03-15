@@ -1567,8 +1567,8 @@ namec(char *aname, int amode, int omode, ulong perm)
             /*e: [[namec()]] case Aopen, Acreate, handle mountpoint part2 */
    
             /*s: [[namec()]] set channel flag before open */
-                    if(omode == OEXEC)
-                        c->flag &= ~CCACHE;
+            if(omode == OEXEC)
+                c->flag &= ~CCACHE;
             /*e: [[namec()]] set channel flag before open */
             c = devtab[c->type]->open(c, omode&~OCEXEC);
             /*s: [[namec()]] set channel flag after open */

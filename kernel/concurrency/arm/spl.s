@@ -42,6 +42,7 @@ TEXT spldone(SB), 1, $0             /* end marker for devkprof.c */
     RET
 
 /*s: function arch_islo(arm) */
+// bool arch_islo(void);
 TEXT arch_islo(SB), 1, $-4
     MOVW    CPSR, R0
     AND $(PsrDirq), R0

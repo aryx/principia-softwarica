@@ -15,33 +15,33 @@
 // TODO: state transition diagram
 /*s: enum procstate */
 /* Process states, Proc.state */
-enum procstate
+enum Procstate
 {
     Dead = 0,
     Running,
-    /*s: enum procstate cases */
+    /*s: [[Procstate]] cases */
     Queueing, // see qlock()
-    /*x: enum procstate cases */
+    /*x: [[Procstate]] cases */
     QueueingR, // see rlock()
-    /*x: enum procstate cases */
+    /*x: [[Procstate]] cases */
     QueueingW, // see wlock()
-    /*x: enum procstate cases */
+    /*x: [[Procstate]] cases */
     Scheding,
-    /*x: enum procstate cases */
+    /*x: [[Procstate]] cases */
     Moribund,
-    /*x: enum procstate cases */
+    /*x: [[Procstate]] cases */
     Ready,
-    /*x: enum procstate cases */
+    /*x: [[Procstate]] cases */
     Wakeme,
-    /*x: enum procstate cases */
+    /*x: [[Procstate]] cases */
     Rendezvous,
-    /*x: enum procstate cases */
+    /*x: [[Procstate]] cases */
     Broken,
-    /*x: enum procstate cases */
+    /*x: [[Procstate]] cases */
     Stopped,
-    /*x: enum procstate cases */
+    /*x: [[Procstate]] cases */
     Waitrelease, // for real-time scheduling
-    /*e: enum procstate cases */
+    /*e: [[Procstate]] cases */
 };
 /*e: enum procstate */
 
@@ -55,7 +55,7 @@ extern  char* statename[];
 /*
  *  process memory segments - NSEG always last !
  */
-enum procseg
+enum Procseg
 {
     SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
 
@@ -148,12 +148,12 @@ struct Sargs
 
 enum {
     /*s: constant NNOTE */
-        NNOTE = 5,
+    NNOTE = 5,
     /*e: constant NNOTE */
 };
 
 /*s: enum notekind */
-enum notekind
+enum NoteKind
 {
     NUser,        /* note provided externally */
     NExit,        /* deliver note quietly */
@@ -166,7 +166,7 @@ enum notekind
 struct Note
 {
     char  msg[ERRMAX];
-    // enum<notekind>
+    // enum<NoteKind>
     int flag;     /* whether system posted it */
 };
 /*e: struct Note */
@@ -231,7 +231,7 @@ enum {
 };
 
 /*s: enum priority */
-enum priority 
+enum Priority 
 {
     PriNormal = 10,   /* base priority for normal processes */
     PriKproc  = 13,   /* base priority for kernel processes */
@@ -246,7 +246,7 @@ enum priority
 /*e: enum priority */
 
 /*s: enum edfflags */
-enum edfflags 
+enum EdfFlags 
 {
     /* Edf.flags field */
     Admitted    = 0x01,
@@ -308,7 +308,7 @@ enum {
 // Stats, profiling
 //--------------------------------------------------------------------
 /*s: enum proctimer */
-enum proctime 
+enum Proctime 
 {
     TUser = 0,    /* Proc.time */
     TSys,
@@ -325,19 +325,19 @@ enum proctime
 //--------------------------------------------------------------------
 
 /*s: enum procctl */
-enum procctl
+enum Procctl
 {
     Proc_nothing = 0,
     Proc_stopme,
-    /*s: enum procctl cases */
+    /*s: [[Procctl]] cases */
     Proc_exitme,
-    /*x: enum procctl cases */
+    /*x: [[Procctl]] cases */
     Proc_tracesyscall,
-    /*x: enum procctl cases */
+    /*x: [[Procctl]] cases */
         Proc_traceme,
-    /*x: enum procctl cases */
-        Proc_exitbig,
-    /*e: enum procctl cases */
+    /*x: [[Procctl]] cases */
+    Proc_exitbig,
+    /*e: [[Procctl]] cases */
 };
 /*e: enum procctl */
 
@@ -371,7 +371,7 @@ enum fpsavestatus
 struct Proc
 {
 //--------------------------------------------------------------------
-// Assembly requirements, Low level, have to be first
+//coupling: have to be first! Some assembly code assumes this order.
 //--------------------------------------------------------------------
     /*s: [[Proc]] assembly fields */
     Label sched;    /* known to l.s */
@@ -381,7 +381,7 @@ struct Proc
 // State
 //--------------------------------------------------------------------
     /*s: [[Proc]] state fields */
-    // enum<procstate> 
+    // enum<Procstate> 
     int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate==nil)
     /*x: [[Proc]] state fields */
     ulong pid;

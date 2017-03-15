@@ -6,6 +6,7 @@ enum IRQ {
     IRQtimer1   = 1,
     IRQtimer2   = 2,
     IRQtimer3   = 3,
+
     IRQclock    = IRQtimer3,
 
     IRQusb      = 9, // also IRQfiq
@@ -17,14 +18,18 @@ enum IRQ {
     IRQspi      = 54,
     IRQmmc      = 62,
 
+    /*s: [[IRQ]] basic cases(arm) */
     IRQbasic    = 64,
     IRQtimerArm = IRQbasic + 0,
-
+    /*e: [[IRQ]] basic cases(arm) */
+    /*s: [[IRQ]] local cases(arm) */
     IRQlocal    = 96,
     IRQcntps    = IRQlocal + 0,
     IRQcntpns   = IRQlocal + 1,
-
+    /*e: [[IRQ]] local cases(arm) */
+    /*s: [[IRQ]] other cases(arm) */
     IRQfiq      = IRQusb,   /* only one source can be FIQ */
+    /*e: [[IRQ]] other cases(arm) */
 };
 /*e: enum IRQ(arm) */
 /*s: macro IRQDMA(arm) */

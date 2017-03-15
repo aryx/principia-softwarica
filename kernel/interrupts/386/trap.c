@@ -508,13 +508,13 @@ void trap(Ureg* ureg)
     }
     arch_splhi(); // possible arch_spllo() done above
 
-    /*s: [[trap()]] if delaysched */
+    /*s: [[trap()]] if delaysched and clockintr */
     /* delaysched set because we held a lock or because our quantum ended */
     if(up && up->delaysched && clockintr){
         sched();
         arch_splhi();
     }
-    /*e: [[trap()]] if delaysched */
+    /*e: [[trap()]] if delaysched and clockintr */
 
     if(user){
         if(up->procctl || up->nnote)
@@ -776,7 +776,7 @@ void syscall(Ureg* ureg)
     ulong scallnr;
     vlong startns, stopns;
 
-    if((ureg->cs & 0xFFFF) != UESEL) // TODO: arch_userureg
+    if((ureg->cs & 0xFFFF) != UESEL) // TODO: use arch_userureg
         panic("syscall: cs 0x%4.4luX", ureg->cs);
 
     /*s: [[syscall()]] adjust kentry */

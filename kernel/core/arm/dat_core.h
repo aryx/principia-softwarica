@@ -8,6 +8,7 @@ typedef u32int      PTE;
 /*
  *  MMU stuff in Cpu.
  */
+//coupling: do not change the first field! Some assembly code assumes this order
 struct MMMU
 {
     PTE*    mmul1;      /* l1 for this processor */
@@ -20,6 +21,7 @@ struct MMMU
 /*e: struct MMMU(arm) */
 
 /*s: struct Arch_Cpu(arm) */
+//coupling: do not change the first field! Some assembly code assumes this order
 struct Arch_Cpu {
     /*s: [[Cpu]] [[Arch]] mmu fields(arm) */
     MMMU;

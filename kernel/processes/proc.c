@@ -57,22 +57,22 @@ enum
 };
 
 /*s: global statename */
-// hash<enum<procstate>, string>, coupling: with enum procstate
+// hash<enum<Procstate>, string>, coupling: with enum Procstate
 char *statename[] =
 {
-    "Dead",
-    "Running",
-    "Queueing",
-    "QueueingR",
-    "QueueingW",
-    "Moribund",
-    "Ready",
-    "Scheding",
-    "Wakeme",
-    "Broken",
-    "Stopped",
-    "Rendez",
-    "Waitrelease",
+    [Dead]        = "Dead",
+    [Running]     = "Running",
+    [Queueing]    = "Queueing",
+    [QueueingR]   = "QueueingR",
+    [QueueingW]   = "QueueingW",
+    [Moribund]    = "Moribund",
+    [Ready]       = "Ready",
+    [Scheding]    = "Scheding",
+    [Wakeme]      = "Wakeme",
+    [Broken]      = "Broken",
+    [Stopped]     = "Stopped",
+    [Rendezvous]  = "Rendezvous",
+    [Waitrelease] = "Waitrelease",
 };
 /*e: global statename */
 
@@ -1681,9 +1681,10 @@ procctl(Proc *p)
         arch_splx(s);
         return;
     /*s: [[procctl()]] Proc_exitbig case */
-        case Proc_exitbig:
-            arch_spllo();
-            pexit("Killed: Insufficient physical memory", true);
+    case Proc_exitbig:
+        arch_spllo();
+        pexit("Killed: Insufficient physical memory", true);
+        // Fallthrough
     /*e: [[procctl()]] Proc_exitbig case */
     /*s: [[procctl()]] Proc_exitme case */
     case Proc_exitme:

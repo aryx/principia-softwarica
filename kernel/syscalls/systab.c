@@ -58,23 +58,23 @@ extern Syscall systsemacquire;
 /*s: global systab */
 Syscall *systab[] = {
     [NOP]     sysnop,
-/*s: systab process syscalls */
+    /*s: [[systab]] process syscalls */
     [RFORK]     sysrfork,
     [EXEC]      sysexec,
     [EXITS]     sysexits,
     [AWAIT]     sysawait,
-/*e: systab process syscalls */
-/*s: systab memory syscalls */
+    /*e: [[systab]] process syscalls */
+    /*s: [[systab]] memory syscalls */
     [BRK]      sysbrk,
-/*e: systab memory syscalls */
-/*s: systab file syscalls */
+    /*e: [[systab]] memory syscalls */
+    /*s: [[systab]] file syscalls */
     [OPEN]      sysopen,
     [CLOSE]     sysclose,
     [PREAD]     syspread,
     [PWRITE]    syspwrite,
     [SEEK]      sysseek,
-/*e: systab file syscalls */
-/*s: systab directory syscalls */
+    /*e: [[systab]] file syscalls */
+    /*s: [[systab]] directory syscalls */
     [CREATE]    syscreate,
     [REMOVE]    sysremove,
 
@@ -85,17 +85,17 @@ Syscall *systab[] = {
     [FSTAT]     sysfstat,
     [WSTAT]     syswstat,
     [FWSTAT]    sysfwstat,
-/*e: systab directory syscalls */
-/*s: systab namespace syscalls */
+    /*e: [[systab]] directory syscalls */
+    /*s: [[systab]] namespace syscalls */
     [BIND]      sysbind,
     [MOUNT]     sysmount,
     [UNMOUNT]   sysunmount,
-/*e: systab namespace syscalls */
-/*s: systab time syscalls */
+    /*e: [[systab]] namespace syscalls */
+    /*s: [[systab]] time syscalls */
     [SLEEP]     syssleep,
     [ALARM]     sysalarm,
-/*e: systab time syscalls */
-/*s: systab ipc syscalls */
+    /*e: [[systab]] time syscalls */
+    /*s: [[systab]] ipc syscalls */
     [NOTIFY]    sysnotify,
     [NOTED]     sysnoted,
 
@@ -106,21 +106,21 @@ Syscall *systab[] = {
     [SEGFREE]   syssegfree,
     [SEGFLUSH]  syssegflush,
     [SEGBRK]    syssegbrk,
-/*e: systab ipc syscalls */
-/*s: systab concurrency syscalls */
+    /*e: [[systab]] ipc syscalls */
+    /*s: [[systab]] concurrency syscalls */
     [RENDEZVOUS]    sysrendezvous,
 
     [SEMACQUIRE]    syssemacquire,
     [SEMRELEASE]    syssemrelease,
     [TSEMACQUIRE]   systsemacquire,
-/*e: systab concurrency syscalls */
-/*s: systab special file syscalls */
-[DUP]       sysdup,
-/*e: systab special file syscalls */
-/*s: systab security syscalls */
-[FAUTH]     sysfauth,
-[FVERSION]  sysfversion,
-/*e: systab security syscalls */
+    /*e: [[systab]] concurrency syscalls */
+    /*s: [[systab]] special file syscalls */
+    [DUP]       sysdup,
+    /*e: [[systab]] special file syscalls */
+    /*s: [[systab]] security syscalls */
+    [FAUTH]     sysfauth,
+    [FVERSION]  sysfversion,
+    /*e: [[systab]] security syscalls */
     [ERRSTR]    syserrstr,
 };
 /*e: global systab */

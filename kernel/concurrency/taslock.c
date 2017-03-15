@@ -93,11 +93,11 @@ lock(Lock *l)
         l->p = up;
         l->isilock = false;
         l->cpu = CPUS(cpu->cpuno); // pad's third bugfix
-/*s: lock ifdef LOCKCYCLES */
-#ifdef LOCKCYCLES
-        l->lockcycles = -arch_lcycles();
-#endif
-/*e: lock ifdef LOCKCYCLES */
+        /*s: lock ifdef LOCKCYCLES */
+        #ifdef LOCKCYCLES
+                l->lockcycles = -arch_lcycles();
+        #endif
+        /*e: lock ifdef LOCKCYCLES */
         return 0;
     }
     //else
@@ -140,11 +140,11 @@ lock(Lock *l)
             l->pc = pc;
             l->p = up;
             l->isilock = false;
-/*s: lock ifdef LOCKCYCLES */
-#ifdef LOCKCYCLES
-        l->lockcycles = -arch_lcycles();
-#endif
-/*e: lock ifdef LOCKCYCLES */
+            /*s: lock ifdef LOCKCYCLES */
+            #ifdef LOCKCYCLES
+                    l->lockcycles = -arch_lcycles();
+            #endif
+            /*e: lock ifdef LOCKCYCLES */
             return 1;
         }
         /*s: [[lock()]] decrement nlocks */
@@ -199,11 +199,11 @@ acquire:
     l->p = up;
     l->isilock = true;
     l->cpu = CPUS(cpu->cpuno);
-/*s: lock ifdef LOCKCYCLES */
-#ifdef LOCKCYCLES
-        l->lockcycles = -arch_lcycles();
-#endif
-/*e: lock ifdef LOCKCYCLES */
+    /*s: lock ifdef LOCKCYCLES */
+    #ifdef LOCKCYCLES
+            l->lockcycles = -arch_lcycles();
+    #endif
+    /*e: lock ifdef LOCKCYCLES */
 }
 /*e: function ilock */
 
@@ -230,11 +230,11 @@ canlock(Lock *l)
     l->p = up;
     l->cpu = CPUS(cpu->cpuno);
     l->isilock = false;
-/*s: lock ifdef LOCKCYCLES */
-#ifdef LOCKCYCLES
-        l->lockcycles = -arch_lcycles();
-#endif
-/*e: lock ifdef LOCKCYCLES */
+    /*s: lock ifdef LOCKCYCLES */
+    #ifdef LOCKCYCLES
+            l->lockcycles = -arch_lcycles();
+    #endif
+    /*e: lock ifdef LOCKCYCLES */
     return true;
 }
 /*e: function canlock */
@@ -243,16 +243,16 @@ canlock(Lock *l)
 void
 unlock(Lock *l)
 {
-/*s: unlock ifdef LOCKCYCLES */
-#ifdef LOCKCYCLES
-    l->lockcycles += lcycles();
-    cumlockcycles += l->lockcycles;
-    if(l->lockcycles > maxlockcycles){
-        maxlockcycles = l->lockcycles;
-        maxlockpc = l->pc;
-    }
-#endif
-/*e: unlock ifdef LOCKCYCLES */
+    /*s: unlock ifdef LOCKCYCLES */
+    #ifdef LOCKCYCLES
+        l->lockcycles += lcycles();
+        cumlockcycles += l->lockcycles;
+        if(l->lockcycles > maxlockcycles){
+            maxlockcycles = l->lockcycles;
+            maxlockpc = l->pc;
+        }
+    #endif
+    /*e: unlock ifdef LOCKCYCLES */
 
     /*s: [[unlock()]] sanity checks */
     if(l->key == 0)
@@ -287,18 +287,18 @@ iunlock(Lock *l)
 {
     ulong sr;
 
-/*s: iunlock ifdef LOCKCYCLES */
-#ifdef LOCKCYCLES
-    l->lockcycles += lcycles();
-    cumilockcycles += l->lockcycles;
-    if(l->lockcycles > maxilockcycles){
-        maxilockcycles = l->lockcycles;
-        maxilockpc = l->pc;
-    }
-    if(l->lockcycles > 2400)
-        ilockpcs[n++ & 0xff]  = l->pc;
-#endif
-/*e: iunlock ifdef LOCKCYCLES */
+    /*s: iunlock ifdef LOCKCYCLES */
+    #ifdef LOCKCYCLES
+        l->lockcycles += lcycles();
+        cumilockcycles += l->lockcycles;
+        if(l->lockcycles > maxilockcycles){
+            maxilockcycles = l->lockcycles;
+            maxilockpc = l->pc;
+        }
+        if(l->lockcycles > 2400)
+            ilockpcs[n++ & 0xff]  = l->pc;
+    #endif
+    /*e: iunlock ifdef LOCKCYCLES */
     /*s: [[iunlock()]] sanity checks */
     if(l->key == 0)
         print("iunlock: not locked: pc %#p\n", getcallerpc(&l));

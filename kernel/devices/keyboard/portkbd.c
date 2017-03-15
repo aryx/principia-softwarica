@@ -158,7 +158,7 @@ extern Rune kbtabctrl[];
 /*e: global kbtabctrl decl */
 
 /*s: global kbscans */
-// hash<enum<kbscan>, Kbscan>
+// hash<enum<KbscanKind>, Kbscan>
 Kbscan kbscans[KbNscans]; /* kernel and external scan code state */
 /*e: global kbscans */
 
