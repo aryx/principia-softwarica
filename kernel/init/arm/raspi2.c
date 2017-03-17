@@ -142,11 +142,13 @@ archether(unsigned ctlrno, Ether *ether)
     return 1;
 }
 
+/*s: function l2ap(raspberry pi2)(arm) */
 int
 l2ap(int ap)
 {
     return (AP(0, (ap)));
 }
+/*e: function l2ap(raspberry pi2)(arm) */
 
 
 // in main.c

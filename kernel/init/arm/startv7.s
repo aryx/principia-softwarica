@@ -48,7 +48,7 @@ _ramZ:
      */
     MOVW    $PADDR(CPUADDR+CPUSIZE-4), R13
     MOVW    $PADDR(L1), R0
-    BL  ,mmuinit(SB)
+    BL  mmuinit(SB)
 
     /*
      * set up domain access control and page table base

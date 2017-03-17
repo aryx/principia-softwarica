@@ -243,12 +243,15 @@ syscall(Ureg* ureg)
          * change in the future.
          */
         if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
-            validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+            validaddr(sp, sizeof(Sargs)+BY2WD, false);
 
         syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
         up->procctl = Proc_stopme;
+        // this will call sched() and wakeup the tracer process
         procctl(up);
-        if (up->syscalltrace) 
+        // back here when the tracer process readied us back and
+        // should have set procctl back to Proc_tracesyscall
+        if(up->syscalltrace) 
             free(up->syscalltrace);
         up->syscalltrace = nil;
     }
@@ -272,7 +275,8 @@ syscall(Ureg* ureg)
             validaddr(sp, sizeof(Sargs)+BY2WD, 0);
         /*e: [[syscall()]] sanity check sp(arm) */
 
-        up->sargs = *((Sargs*)(sp+BY2WD));
+        // copy syscall arguments from user stack to up->sargs
+        up->sargs = *((Sargs*)(sp+BY2WD)); // extra BY2WD for?
         up->psstate = sysctab[scallnr];
 
         //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -311,7 +315,7 @@ syscall(Ureg* ureg)
         up->procctl = Proc_stopme;
         sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
         s = arch_splhi();
-        procctl(up);
+        procctl(up); // again, will call sched() and wakeup tracer process
         arch_splx(s);
         if(up->syscalltrace)
             free(up->syscalltrace);

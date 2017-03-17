@@ -2,6 +2,7 @@
 #include "mem.h"
 #include "arm.h"
 
+/*s: function arch_touser(arm) */
 /*
  *  This is the first jump from kernel to user mode.
  *  Fake a return from interrupt.
@@ -34,6 +35,7 @@ TEXT arch_touser(SB), 1, $-4
      * not from memory but from SPSR due to `.S'.
      */
     RFE
+/*e: function arch_touser(arm) */
 
 /*s: function arch_forkret(arm) */
 /*

@@ -813,9 +813,9 @@ newproc(void)
     p->egrp = nil;
     p->rgrp = nil;
 
-    /*s: [[newproc()]] fb init */
-        p->fpstate = FPinit;
-    /*e: [[newproc()]] fb init */
+    /*s: [[newproc()]] fp init */
+    p->fpstate = FPinit;
+    /*e: [[newproc()]] fp init */
     p->kp = false;
 
     p->pdbg = nil;

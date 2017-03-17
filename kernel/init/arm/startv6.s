@@ -7,6 +7,7 @@
 #include "arm.h"
 #include "arminstr.ha"
 
+/*s: function armstart(raspberry pi1)(arm) */
 TEXT armstart(SB), 1, $-4
 
     /*
@@ -38,6 +39,7 @@ _ramZ:
      */
     MOVW    $PADDR(CPUADDR+CPUSIZE-4), R13 // done already in start.s
     MOVW    $PADDR(L1), R0
+
     BL  mmuinit(SB)
 
     /*
@@ -64,7 +66,9 @@ _ramZ:
     MOVW    $(CPUADDR+CPUSIZE-4), R13
 
     MOVW    $_startpg(SB), R15
+/*e: function armstart(raspberry pi1)(arm) */
 
+/*s: function _startpg(raspberry pi1)(arm) */
 TEXT _startpg(SB), 1, $-4
 
     /*
@@ -80,15 +84,11 @@ TEXT _startpg(SB), 1, $-4
     B   0(PC)
 
     BL  _div(SB)        /* hack to load _div, etc. */
-
-
-
-
-
+/*e: function _startpg(raspberry pi1)(arm) */
 
 
         
-
+/*s: function arch_idlehands(raspberry pi1)(arm) */
 TEXT arch_idlehands(SB), $-4
     MOVW    CPSR, R3
     ORR $(PsrDirq|PsrDfiq), R3, R1      /* splfhi */
@@ -102,4 +102,5 @@ TEXT arch_idlehands(SB), $-4
 
     MOVW    R3, CPSR            /* splx */
     RET
+/*e: function arch_idlehands(raspberry pi1)(arm) */
 /*e: init/arm/startv6.s */

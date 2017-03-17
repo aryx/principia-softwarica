@@ -12,6 +12,7 @@ struct Arch_Proc
 {
     /*s: [[Proc]] [[Arch]] memory fields(arm) */
     Page*   mmul2;
+    /*x: [[Proc]] [[Arch]] memory fields(arm) */
     Page*   mmul2cache; /* free mmu pages */
     /*e: [[Proc]] [[Arch]] memory fields(arm) */
 };

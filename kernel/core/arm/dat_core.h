@@ -4,27 +4,17 @@
 typedef u32int      PTE;
 /*e: type PTE(arm) */
 
-/*s: struct MMMU(arm) */
-/*
- *  MMU stuff in Cpu.
- */
-//coupling: do not change the first field! Some assembly code assumes this order
-struct MMMU
-{
-    PTE*    mmul1;      /* l1 for this processor */
-
-    int mmul1lo;
-    int mmul1hi;
-
-    int mmupid;
-};
-/*e: struct MMMU(arm) */
-
 /*s: struct Arch_Cpu(arm) */
 //coupling: do not change the first field! Some assembly code assumes this order
 struct Arch_Cpu {
     /*s: [[Cpu]] [[Arch]] mmu fields(arm) */
-    MMMU;
+    PTE*    mmul1;      /* l1 for this processor */
+    /*x: [[Cpu]] [[Arch]] mmu fields(arm) */
+    // index in mmul1
+    int mmul1lo;
+    int mmul1hi;
+    /*x: [[Cpu]] [[Arch]] mmu fields(arm) */
+    int mmupid;
     /*e: [[Cpu]] [[Arch]] mmu fields(arm) */
     /*s: [[Cpu]] [[Arch]] float fields(arm) */
     /* vfp2 or vfp3 fpu */

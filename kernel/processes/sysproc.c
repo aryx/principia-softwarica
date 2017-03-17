@@ -131,7 +131,7 @@ sysrfork(ulong* arg)
     p->notify = up->notify;
     p->ureg = up->ureg;
     /*s: [[sysrfork()]] propagate fpsave */
-        p->fpsave = up->fpsave;
+    p->fpsave = up->fpsave;
     /*e: [[sysrfork()]] propagate fpsave */
 
     /* Make a new set of memory segments */
@@ -220,8 +220,8 @@ sysrfork(ulong* arg)
         p->noteid = up->noteid;
 
     /*s: [[sysrfork()]] propagate fpstate */
-        /* don't penalize the child, it hasn't done FP in a note handler. */
-        p->fpstate = up->fpstate & ~FPillegal;
+    /* don't penalize the child, it hasn't done FP in a note handler. */
+    p->fpstate = up->fpstate & ~FPillegal;
     /*e: [[sysrfork()]] propagate fpstate */
     /*s: [[sysrfork()]] setting time field */
     memset(p->time, 0, sizeof(p->time));

@@ -584,19 +584,19 @@ freept(Segment *s, Pagetable *p)
 
     switch(s->type&SG_TYPE) {
     /*s: [[freept()]] SG_PHYSICAL case */
-        case SG_PHYSICAL:
-            ptop = &p->pagetab[PAGETABSIZE];
-            for(pte = p->pagetab; pte < ptop; pte++) {
-                pt = *pte;
-                if(pt == nil)
-                    continue;
-                lock(pt);
-                ref = --pt->ref;
-                unlock(pt);
-                if(ref == 0)
-                    free(pt); // because was smalloc'ed in fixfault
-            }
-            break;
+    case SG_PHYSICAL:
+        ptop = &p->pagetab[PAGETABSIZE];
+        for(pte = p->pagetab; pte < ptop; pte++) {
+            pt = *pte;
+            if(pt == nil)
+                continue;
+            lock(pt);
+            ref = --pt->ref;
+            unlock(pt);
+            if(ref == 0)
+                free(pt); // because was smalloc'ed in fixfault
+        }
+        break;
     /*e: [[freept()]] SG_PHYSICAL case */
     default:
         for(pte = p->first; pte <= p->last; pte++)
@@ -613,7 +613,7 @@ freept(Segment *s, Pagetable *p)
 ulong
 pagenumber(Page *p)
 {
-    return p-palloc.pages;
+    return p - palloc.pages;
 }
 /*e: function pagenumber */
 

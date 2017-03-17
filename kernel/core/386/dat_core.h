@@ -52,6 +52,14 @@ struct Arch_Cpu {
     int cpuiddx;
     /*e: [[Cpu]] [[Arch]] cpuid fields(x86) */
     /*s: [[Cpu]] [[Arch]] other fields(x86) */
+    // array<Segdesc>
+    Segdesc *gdt;     /* gdt for this processor */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
+    kern_addr2   pdproto;      /* page directory base for this processor (va) */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
+    Page* mmupdpool;
+    int mmupdcnt;
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     Tss*  tss;      /* tss for this processor */
     /*x: [[Cpu]] [[Arch]] other fields(x86) */
     int havepge;
@@ -60,14 +68,6 @@ struct Arch_Cpu {
     bool havetsc;
     /*x: [[Cpu]] [[Arch]] other fields(x86) */
     Arch_FPsave *fpsavalign;
-    /*x: [[Cpu]] [[Arch]] other fields(x86) */
-    // array<Segdesc>
-    Segdesc *gdt;     /* gdt for this processor */
-    /*x: [[Cpu]] [[Arch]] other fields(x86) */
-    kern_addr2   pdproto;      /* page directory base for this processor (va) */
-    /*x: [[Cpu]] [[Arch]] other fields(x86) */
-    Page* mmupdpool;
-    int mmupdcnt;
     /*x: [[Cpu]] [[Arch]] other fields(x86) */
     int mmupdalloc;
     int mmupdfree;

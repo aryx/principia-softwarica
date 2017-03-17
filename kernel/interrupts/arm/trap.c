@@ -31,7 +31,9 @@ typedef struct Vpage0 Vpage0;
 enum {
     Debug = 0,
 
+    /*s: constant Nvec(arm) */
     Nvec = 8,       /* # of vectors at start of lexception.s */
+    /*e: constant Nvec(arm) */
     Fiqenable = 1<<7,
 
     Localtimerint   = 0x40,
@@ -383,7 +385,8 @@ faultarm(Ureg *ureg, uintptr va, int user, bool read)
     if (Debug)
         ckfaultstuck(va);
 
-    n = fault(va, read);
+    n = fault(va, read); // portable code
+
     if(n < 0){
         if(!user){
             dumpregs(ureg);

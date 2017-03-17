@@ -414,11 +414,12 @@ arch_procsetup(Proc* p)
 void
 arch_procsave(Proc* p)
 {
+    /*s: [[arch_procsave()]] cycles adjustments */
     uvlong t;
 
     arch_cycles(&t);
     p->pcycles += t;
-
+    /*e: [[arch_procsave()]] cycles adjustments */
     /*s: [[arch_procsave()]] floating point(arm) */
     /* TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.*/
     fpuprocsave(p);
@@ -434,9 +435,10 @@ arch_procrestore(Proc* p)
 
     if(p->kp)
         return;
+    /*s: [[arch_procrestore]] cycles adjustments */
     arch_cycles(&t);
     p->pcycles -= t;
-
+    /*e: [[arch_procrestore]] cycles adjustments */
     /*s: [[arch_procrestore()]] floating point(arm) */
     fpuprocrestore(p);
     /*e: [[arch_procrestore()]] floating point(arm) */

@@ -251,12 +251,11 @@
 #define PTEWRITE  (1<<1)
 #define PTERONLY  (0<<1)
 
-// x86 specific constants
-//#define PTEKERNEL (0<<2)
-#define PTEUSER   (1<<2)
+#define PTEUNCACHED (1<<4)
 
+// x86 specific constants
+#define PTEUSER   (1<<2)
 #define PTEWT       (1<<3) // Write Through, e.g. VGA memory, mean??
-#define PTEUNCACHED (1<<4) // ??
 #define PTESIZE   (1<<7) // Big pages (x86 extension)
 #define PTEGLOBAL (1<<8) // do not clear from TLB kernel pages (x86 extension)
 /*e: constant PTExxx(x86) */

@@ -114,6 +114,7 @@ struct Cpu
 
     struct Arch_Cpu;
 
+
     ulong ticks;      /* of the clock since boot time */
 
     uvlong  cpuhz;

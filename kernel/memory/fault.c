@@ -175,20 +175,20 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         break;
 
     /*s: [[fixfault()]] SG_PHYSICAL case */
-        case SG_PHYSICAL:
-            if(*pte == nil) {
-                new = smalloc(sizeof(Page));
-                new->va = addr;
-                new->pa = s->pseg->pa+(addr-s->base);
-                new->ref = 1;
-                *pte = new;
-            }
+    case SG_PHYSICAL:
+        if(*pte == nil) {
+            new = smalloc(sizeof(Page));
+            new->va = addr;
+            new->pa = s->pseg->pa+(addr-s->base);
+            new->ref = 1;
+            *pte = new;
+        }
 
-            if (checkaddr && addr == addr2check)
-                (*checkaddr)(addr, s, *pte);
-            mmupte = PPN((*pte)->pa) |PTEWRITE|PTEUNCACHED|PTEVALID;
-            (*pte)->modref = PG_MOD|PG_REF;
-            break;
+        if (checkaddr && addr == addr2check)
+            (*checkaddr)(addr, s, *pte);
+        mmupte = PPN((*pte)->pa) |PTEWRITE|PTEUNCACHED|PTEVALID;
+        (*pte)->modref = PG_MOD|PG_REF;
+        break;
     /*e: [[fixfault()]] SG_PHYSICAL case */
 
     default:

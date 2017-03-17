@@ -33,9 +33,6 @@
 #define L1SIZE      (4 * BY2PG)
 /*e: constant L1SIZE(arm) */
 
-/*s: constant KSTKSIZE(arm) */
-#define KSTKSIZE    (8*KiB)
-/*e: constant KSTKSIZE(arm) */
 /*s: macro STACKALIGN(arm) */
 #define STACKALIGN(sp)  ((sp) & ~3)     /* bug: assure with alloc */
 /*e: macro STACKALIGN(arm) */
@@ -114,7 +111,6 @@
 #define UTROUND(t)  ROUNDUP((t), BY2PG)
 /*e: macro UTROUND(arm) */
 /*s: constant USTKTOP(arm) */
-// that's it? only 512 MB for virtual space?
 #define USTKTOP     0x20000000      /* user segment end +1 */
 /*e: constant USTKTOP(arm) */
 /*s: constant USTKSIZE(arm) */
@@ -142,7 +138,7 @@
 #define BLOCKALIGN  32          /* only used in allocb.c */
 /*e: constant BLOCKALIGN(arm) */
 /*s: constant KSTACK(arm) */
-#define KSTACK      KSTKSIZE
+#define KSTACK      (8*KiB)
 /*e: constant KSTACK(arm) */
 
 /*
@@ -181,8 +177,9 @@
 #define PTEVALID    (1<<0)
 #define PTERONLY    0
 #define PTEWRITE    (1<<1)
+/*s: [[PTExxx]] other cases(arm) */
 #define PTEUNCACHED (1<<2)
-#define PTEKERNEL   (1<<3)
+/*e: [[PTExxx]] other cases(arm) */
 /*e: type PTExxx(arm) */
 
 /*

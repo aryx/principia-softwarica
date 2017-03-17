@@ -125,9 +125,9 @@ enum Segtype
     SG_BSS    = 02,
     SG_STACK  = 03,
     /*s: [[Segtype]] other cases */
-        SG_SHARED = 04,
+    SG_SHARED = 04,
     /*x: [[Segtype]] other cases */
-        SG_PHYSICAL = 05,
+    SG_PHYSICAL = 05,
     /*e: [[Segtype]] other cases */
     SG_TYPE   = 07,   /* Mask type of segment */
   

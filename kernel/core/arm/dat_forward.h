@@ -4,6 +4,5 @@ typedef struct Arch_FPsave  Arch_FPsave;
 typedef struct Ureg Ureg;
 #pragma incomplete Ureg
 
-typedef struct MMMU MMMU;
 typedef struct Soc Soc;
 /*e: core/arm/dat_forward.h */

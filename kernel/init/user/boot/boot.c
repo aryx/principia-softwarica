@@ -32,7 +32,6 @@ bindenvsrv(void)
   bind("#s", "/srv/", MREPL|MCREATE); // devsrv
 }
 
-//TODO: use open_safe, write_safe
 static void
 swapproc(void)
 {

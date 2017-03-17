@@ -82,11 +82,11 @@ cas32(void* addr, u32int old, u32int new)
 }
 /*e: function cas32(arm) */
 
-/*s: function arch_cmpswap(arm) */
+/*s: function arch_cmpswap(raspberry pi1)(arm) */
 bool
 arch_cmpswap(long *addr, long old, long new)
 {
     return cas32(addr, old, new);
 }
-/*e: function arch_cmpswap(arm) */
+/*e: function arch_cmpswap(raspberry pi1)(arm) */
 /*e: concurrency/arm/concurrency_raspi1.c */

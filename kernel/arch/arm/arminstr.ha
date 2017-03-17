@@ -7,7 +7,9 @@
 //pad: used to be called arm.s, but I prefer the .ha suffix for asm macros
 
 #define PADDR(va)   (((va) & ~KSEGM))
+/*s: macro L1X bis(arm) */
 #define L1X(va)     (((((va))>>20) & 0x0fff)<<2)
+/*e: macro L1X bis(arm) */
 
 /*
  * new instructions

@@ -556,7 +556,7 @@ provides to the user programs.
 #define	SEGBRK		31
 @
 % pipe! one of unix greatest invention!
-
+% segxxx =~ mmap (important for speed for some programs)
 
 % user level concurrency of course, the kernel itself uses
 % lots of concurrency mechanisms (often mimiced also in userland)
@@ -818,6 +818,9 @@ struct Ureg {
 % set appropriate CPSR control bits depending on exception
 % set PC to vector address.
 
+% vector normally at 0x00000 (physical and virtual?)
+% but more convenient have it higher virtual memory
+
 <<constant HVECTORS(arm)>>=
 #define HVECTORS    0xffff0000
 @
@@ -892,8 +895,6 @@ struct Ureg {
  * cortex/armv7 has more ops and CRm values.
  */
 #define CpCmmu      0x00000001  /* M: MMU enable */
-#define CpCdcache   0x00000004  /* C: data cache on */
-#define CpCicache   0x00001000  /* I: instruction cache on */
 #define CpChv       0x00002000  /* V: high vectors */
 <<[[CpCONTROL.CpMainctl]] other cases(arm)>>
 @
@@ -917,6 +918,12 @@ struct Ureg {
 %example of use:
 % ...
 
+<<[[CpCONTROL.CpMainctl]] other cases(arm)>>=
+#define CpCdcache   0x00000004  /* C: data cache on */
+#define CpCicache   0x00001000  /* I: instruction cache on */
+@
+\t aspectize? can? or too pervasive?
+
 \subsubsection{Floating point coprocessors}
 % 2 coprocessors, one for single and other for double precision.
 
@@ -932,7 +939,18 @@ struct Ureg {
 
 % More about memory layout in Overview section.
 
-% put BY2PG here?
+% put BY2PG here cos referenced a few times.
+<<constant BY2PG(arm)>>=
+#define BY2PG       (4*KiB)         /* bytes per page */
+@
+%x86: same
+
+% page, 4096, so when give page address, don't need 12 low bits! PGSHIFT
+<<constant PGSHIFT(arm)>>=
+#define PGSHIFT     12          /* log(BY2PG) */
+@
+%x86: same
+
 
 \subsection{VideoCore GPU}
 %VideoCore IV.
@@ -1048,6 +1066,7 @@ struct Fbinfo {
 
 \section{C and assembly}
 
+
 % compilation scheme of kernel assumes pass parameters in stack,
 % return value in R0 (EAX for x86), and caller save registers it needs
 % after call before calling (so Label structure is simple).
@@ -1061,24 +1080,6 @@ struct Fbinfo {
 % it's probably forcing the user to give a name to what debugger
 % could then display when giving the list of parameters to an assembly
 % function?
-
-% maybe a bit of rappel on bit manip :) 2 complementary arithmetic,
-%  e.g. pa > -KZERO, or in bcm have  pa & ~KSEGM
-
-<<portdat.h macros>>=
-#define ROUND(s, sz)  (((s)+(sz-1)) & ~(sz-1))
-@
-%old: was in portdat.h but now in portfns.h, more logical
-%ex: ROUND(2045, 1024) -> 3072 (3 * 1024), it rounds up
-% the round down would be just: s&~(sz-1), ex: va &= ~(BY2PG-1);
-% BY2PG-1 means you get all the bits to 1, and then you reverse
-% so you really just reset the lower bits
-% rename ROUNDUP?
-
-<<portdat.h macros>>=
-#define MASK(v) ((1UL << (v)) - 1)  /* mask `v' bits wide */
-@
-%old: was in dat.h but seems general
 
 % why C? because OS is at the very bottom, so need low-level features,
 % and if OS is slower, everything on top of it is slower ... so need
@@ -1103,6 +1104,43 @@ struct Fbinfo {
 % would be better at some point though to rewrite part of it in Rust,
 % the modern C. 
 % tool to help https://github.com/jameysharp/corrode C->Rust (in haskell)
+
+
+
+
+% maybe a bit of rappel on bit manip :) 2 complementary arithmetic,
+%  e.g. pa > -KZERO, or in bcm have  pa & ~KSEGM
+
+<<portdat.h macros>>=
+#define ROUND(s, sz)  (((s)+(sz-1)) & ~(sz-1))
+@
+%old: was in portdat.h but now in portfns.h, more logical
+%ex: ROUND(2045, 1024) -> 3072 (3 * 1024), it rounds up
+% the round down would be just: s&~(sz-1), ex: va &= ~(BY2PG-1);
+% BY2PG-1 means you get all the bits to 1, and then you reverse
+% so you really just reset the lower bits
+% rename ROUNDUP?
+
+<<portdat.h macros>>=
+#define MASK(v) ((1UL << (v)) - 1)  /* mask `v' bits wide */
+@
+%old: was in bcm/dat.h but seems general
+% >>
+
+<<portdat.h macros>>=
+#define MIN(a, b) ((a) < (b)? (a): (b))
+@
+
+<<portdat.h macros>>=
+// used in bcm/mmu.c
+#define FEXT(d, o, w) (((d)>>(o)) & ((1<<(w))-1)) 
+@
+% >> >> 
+
+<<portdat.h macros>>=
+#define HOWMANY(x, y) (((x)+((y)-1))/(y))
+#define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */
+@
 
 \section{Code organization}
 
@@ -1405,6 +1443,41 @@ void (*arch_microdelay)(int) = nil;
 
 @
 
+
+
+
+
+<<[[main()]] initial assignments for backward deps(arm)>>=
+// backward deps breaker!
+devtab = conf_devtab;
+
+print = devcons_print;
+iprint = devcons_iprint;
+pprint = devcons_pprint;
+panic = devcons_panic;
+_assert = devcons__assert;
+error = proc_error;
+nexterror = proc_nexterror;
+dumpaproc = proc_dumpaproc;
+wakeup = proc_wakeup;
+sched = proc_sched;
+ready = proc_ready;
+sleep = proc_sleep;
+tsleep = proc_tsleep;
+cclose = chan_cclose;
+proctab = proc_proctab;
+postnote = proc_postnote;
+pexit = proc_pexit;
+
+arch_exit = main_arch_exit;
+arch_dumpstack = trap_arch_dumpstack;
+arch_delay = clock_arch_delay;
+arch_microdelay = clock_arch_microdelay;
+arch_coherence = arm_arch_coherence;
+arch_fastticks = clock_arch_fastticks;
+arch_isaconfig = main_arch_isaconfig;
+@
+
 \fi
 
 \section{Software architecture}
@@ -1422,7 +1495,7 @@ void (*arch_microdelay)(int) = nil;
 % https://github.com/christinaa/rpi-open-firmware
 %  https://github.com/puppeh/vc4-toolchain toolchain for open firmwaire
 
-%on x86 it was also very very complicated. Even more when you
+%x86: very very complicated. Even more when you
 % wanted to have a kernel bigger than a floppy disk 
 % (see ugly pcboot/ directory)
 
@@ -1551,7 +1624,7 @@ typedef void* kern_addr3;
 @
 %x86: same
 
-% BY2PG later = 1 Page (4Ko)
+% BY2PG in Overview now (= 1 Page (4Ko))
 
 % because first page will be marked as protected to detect null pointer
 % dereference
@@ -1830,6 +1903,7 @@ struct Cpu
     Proc* proc;     /* current process on this processor */
 
     struct Arch_Cpu;
+
 
     ulong ticks;      /* of the clock since boot time */
 
@@ -4080,6 +4154,7 @@ struct Page
 @
 % use 'ref', will be used to share, copy on write!
 % note that pa is constant! set once and for all in pageinit and that's it
+\l pages also used for kernel stuff? like page table?
 
 % Note that it's not a Page! It's some metadata about a Page. It's actually
 % a kind of PTE if compare to the terminology in Intel MMU.
@@ -4174,7 +4249,7 @@ Page  *prev;
 ulong
 pagenumber(Page *p)
 {
-    return p-palloc.pages;
+    return p - palloc.pages;
 }
 @
 
@@ -4983,7 +5058,10 @@ vmemchr(virt_addr3 s, int c, int n)
 }
 @
 
-
+<<portdat.h macros>>=
+// BY2PG is defined in mem.h, which should always be included before "dat.h"!
+#define PGROUND(s)  ROUNDUP(s, BY2PG)
+@
 
 
 
@@ -5281,7 +5359,7 @@ newproc(void)
     p->egrp = nil;
     p->rgrp = nil;
 
-    <<[[newproc()]] fb init>>
+    <<[[newproc()]] fp init>>
     p->kp = false;
 
     p->pdbg = nil;
@@ -5992,6 +6070,7 @@ l2be(long l)
 #define UTROUND(t)  ROUNDUP((t), BY2PG)
 @
 %x86: same
+\l factorize with PGROUND?
 
 
 % Temporary STacK TOP
@@ -6006,6 +6085,15 @@ l2be(long l)
 #define TSTKSIZ     256 // pages in new stack; limits exec args
 @
 %x86: 100
+
+<<constant USTKTOP(arm)>>=
+#define USTKTOP     0x20000000      /* user segment end +1 */
+@
+\l that's it? only 512 MB for virtual space?
+
+<<constant USTKSIZE(arm)>>=
+#define USTKSIZE    (8*1024*1024)       /* user stack size */
+@
 
 
 \subsection{[[arch_procsetup()]] (ARM)}
@@ -6022,39 +6110,6 @@ arch_procsetup(Proc* p)
 }
 @
 %x86: same floating point hook
-
-
-<<function arch_procsave(arm)>>=
-/*
- *  Save the mach dependent part of the process state.
- */
-void
-arch_procsave(Proc* p)
-{
-    uvlong t;
-
-    arch_cycles(&t);
-    p->pcycles += t;
-
-    <<[[arch_procsave()]] floating point(arm)>>
-}
-@
-\t move later?
-
-<<function arch_procrestore(arm)>>=
-void
-arch_procrestore(Proc* p)
-{
-    uvlong t;
-
-    if(p->kp)
-        return;
-    arch_cycles(&t);
-    p->pcycles -= t;
-
-    <<[[arch_procrestore()]] floating point(arm)>>
-}
-@
 
 \subsection{[[arch_execregs()]] (ARM)}
 
@@ -6686,10 +6741,12 @@ TEXT vectors(SB), 1, $-4
 % it's written as a function, but really it's a global
 %x86: IDTADDR
 \l SMC??
+\l why not JMP _vsvc(SB) directly? why this indirect trick?
 
 
 % assumes will be copied just after vectors
 <<global vtable(arm)>>=
+//coupling: must be just after vectors in memory (at +0x18 = 8 instructions)
 TEXT vtable(SB), 1, $-4
     WORD    $_vsvc(SB)      /* reset, in svc mode already */
     WORD    $_vund(SB)      /* undefined, switch to svc mode */
@@ -6824,7 +6881,8 @@ syscall(Ureg* ureg)
         <<[[syscall()]] sanity check scallnr(arm)>>
         <<[[syscall()]] sanity check sp(arm)>>
 
-        up->sargs = *((Sargs*)(sp+BY2WD));
+        // copy syscall arguments from user stack to up->sargs
+        up->sargs = *((Sargs*)(sp+BY2WD)); // extra BY2WD for?
         up->psstate = sysctab[scallnr];
 
         //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -7243,7 +7301,7 @@ case PsrMabt:           /* prefetch fault */
 % faultarm later! in Virtual memory chapter.
 % true = read
 
-<< function ifsrget(arm)>>=
+<<function ifsrget(arm)>>=
 TEXT ifsrget(SB), 1, $-4            /* instruction fault status */
     MRC CpSC, 0, R0, C(CpFSR), C(0), CpFSRinst
     RET
@@ -7287,13 +7345,13 @@ case PsrMabt+1:         /* data fault */
     break;
 @
 
-<< function farget(arm)>>=
+<<function farget(arm)>>=
 TEXT farget(SB), 1, $-4             /* fault address */
     MRC CpSC, 0, R0, C(CpFAR), C(0x0)
     RET
 @
 
-<< function fstget(arm)>>=
+<<function fstget(arm)>>=
 TEXT fsrget(SB), 1, $-4             /* data fault status */
     MRC CpSC, 0, R0, C(CpFSR), C(0), CpFSRdata
     RET
@@ -7602,8 +7660,8 @@ irq(Ureg* ureg)
 
 
 \chapter{Virtual Memory}
-%less: add (ARM) in title? less cos have swapping and demand loading now.
-%less: add (page fault) in title to relate to Interrupt chapter?
+%less: (ARM) in title? no cos have portable swapping/demand-loading now.
+%less: (page fault) in title? to relate to Interrupt chapter?
 
 \section{Overview}
 
@@ -7645,6 +7703,23 @@ irq(Ureg* ureg)
 % L1 = PD
 % L2 = PT
 
+<<macro L1X(arm)>>=
+#define L1X(va)     FEXT((va), 20, 12)
+@
+% in mmu.c
+<<macro L2X(arm)>>=
+#define L2X(va)     FEXT((va), 12, 8)
+@
+\t rename PDX PTX or MMUPDX? MMUPTX?
+
+<<macro L1X bis(arm)>>=
+#define L1X(va)     (((((va))>>20) & 0x0fff)<<2)
+@
+% in arminstr.ha
+\t factorize? hmm but L1X above can rely on pointer arithmetic for the shift 2
+
+
+
 <<type PageDirGranularity(arm)>>=
 #define Coarse      (Mbz|1)         /* L1 */
 #define Section     (Mbz|2)         /* L1 1MB */
@@ -7654,7 +7729,11 @@ irq(Ureg* ureg)
 /* Mbz (0x10) bit is implementation-defined and must be 0 on the cortex. */
 #define Mbz     (0<<4)
 @
-% will use Section? so #PDEs? So virtual mem mapped? enough for 4Go?
+% will use Section to map big regions like all of RAM at KZERO
+% will use Coarse for user pages
+
+% so #PDEs? So virtual mem mapped? enough for 4Go?
+% >>
 
 <<type PageTableGranularity(arm)>>=
 #define Large       0x00000001      /* L2 64KB */
@@ -7662,6 +7741,8 @@ irq(Ureg* ureg)
 #define Tiny        0x00000003      /* L2 1KB: not in v7 */
 @
 % will use Small
+% See BY2PG in Overview
+
 
 
 
@@ -7671,16 +7752,24 @@ irq(Ureg* ureg)
 @
 % write-back vs write-thru ???
 
-<<type PageTableEntryAttribute2(arm)>>=
-#define L1wralloc   (1<<12)         /* L1 TEX */
-#define L1sharable  (1<<16)
-#define L2wralloc   (1<<6)          /* L2 TEX (small pages) */
-#define L2sharable  (1<<10)
+<<[[Soc]] mmu fields>>=
+u32int  l1ptedramattrs;
+u32int  l2ptedramattrs;
 @
-%/* attributes for memory containing locks -- differs between armv6 and armv7 */
-%//#define L1ptedramattrs    (Cached | Buffered | L1wralloc | L1sharable)
-%//#define L2ptedramattrs    (Cached | Buffered | L2wralloc | L2sharable)
-\t in SMP?
+<<[[soc(raspberry pi1)]] other fields(arm)>>=
+.l1ptedramattrs = Cached | Buffered,
+.l2ptedramattrs = Cached | Buffered,
+@
+
+<<constant L1ptedramattrs(arm)>>=
+#define L1ptedramattrs  soc.l1ptedramattrs
+@
+<<constant L2ptedramattrs(arm)>>=
+#define L2ptedramattrs  soc.l2ptedramattrs
+@
+\t remove intermediate macro, use soc.xxx directly
+
+
 
 <<type DAC(arm)>>=
 #define Client      1           /* DAC */
@@ -7697,94 +7786,112 @@ irq(Ureg* ureg)
 @
 % Krw = Kernel read/write, Uro = User read-only
 
-\section{Pagination and [[mmupd]], [[mmupt]] (ARM)} 
+
+
+<<constant Fault(arm)>>=
+#define Fault       0x00000000      /* L[12] pte: unmapped */
+@
+
+<<constant Dom0(arm)>>=
+#define Dom0        0
+@
+% used to mark PDE entries (in L1). So page tables are protected?
+
+<<macro L1AP(arm)>>=
+#define L1AP(ap)    (AP(3, (ap)))
+@
+
+<<macro AP(arm)>>=
+#define AP(n, v)    F((v), ((n)*2)+4, 2)
+@
+
+<<macro F(arm)>>=
+#define F(v, o, w)  (((v) & ((1<<(w))-1))<<(o))
+@
+
+<<macro DAC(arm)>>=
+#define DAC(n, v)   F((v), (n)*2, 2)
+@
+
+<<macro L2AP(arm)>>=
+#define L2AP(ap)    l2ap(ap)
+@
+
+<<function l2ap(raspberry pi1)(arm)>>=
+int
+l2ap(int ap)
+{
+    return (AP(3, (ap))|AP(2, (ap))|AP(1, (ap))|AP(0, (ap)));
+}
+@
+
+
+\section{Pagination and [[mmupd]]/[[mmupt]] (ARM)} 
 %http://wiki.osdev.org/Paging
 
-% See Basic pagination intialization
+%trans:
+% Saw hardware spec for MMU. Now how used and adapted by plan9.
 
-<<constant BY2PG(arm)>>=
-#define BY2PG       (4*KiB)         /* bytes per page */
-@
-%x86: same
-
-% page, 4096, so when give page address, don't need 12 low bits! PGSHIFT
-<<constant PGSHIFT(arm)>>=
-#define PGSHIFT     12          /* log(BY2PG) */
-@
-%x86: same
-
-
-% each time switch process, they have different pages they use, 
+% Each time switch process, they have different pages they use, 
 % so will need to empty tlb and reassign based on per-process info?
 
 % sections: MMUPD section (=~ Segment), MMUPT section (=~ Pagetable)
 
-% properties of 1 page, 1 byte
-% PTE = page table entry, so spec about one page (also for entries in PD)
-
-<<type PTExxx(arm)>>=
-#define PTEVALID    (1<<0)
-#define PTERONLY    0
-#define PTEWRITE    (1<<1)
-#define PTEUNCACHED (1<<2)
-#define PTEKERNEL   (1<<3)
-@
-
-
-% pa is aligned at page, so can use low 12 bytes hence 1<<8
-% in a PTE what is implicit is the va. the va is the index
-% in the PD (Page Directory) + index in the PT (Page table)
-
-
-% how set 1-to-1 mapping for KZERO and more?
-
-% complicated to access to physical memory if have lots of memory :)
-% so let's first do a simple version? see advanced memory chapter for more
-
 
 <<[[Cpu]] [[Arch]] mmu fields(arm)>>=
-MMMU;
+PTE*    mmul1;      /* l1 for this processor */
 @
-% why 3 M?
-\t remove intermediate struct MMMU? inline fields above
+%old: MMMU; but remove cos useless intermediate struct (also why 3 M ?)
+%coupling: see 12(R(CPU)) in cpureset()
+%This should always point to KZERO+L1 when have one processor.
 
 <<type PTE(arm)>>=
 typedef u32int      PTE;
 @
 \t PDE too?
 
-<<struct MMMU(arm)>>=
-/*
- *  MMU stuff in Cpu.
- */
-//coupling: do not change the first field! Some assembly code assumes this order
-struct MMMU
-{
-    PTE*    mmul1;      /* l1 for this processor */
+%mmul1 contains entries for the page directory entries for the kernel
+% and exception vector. Only a certain range of entries is used
+% for the user process.
 
-    int mmul1lo;
-    int mmul1hi;
-
-    int mmupid;
-};
+<<constant L1lo(arm)>>=
+L1lo        = UZERO/MiB,        /* L1X(UZERO)? */
 @
-\t mmupid? LP split
-%coupling: see 12(R(CPU)) in cpureset()
+<<constant L1hi(arm)>>=
+L1hi        = (USTKTOP+MiB-1)/MiB,  /* L1X(USTKTOP+MiB-1)? */
+@
+
+
 
 
 <<[[Proc]] [[Arch]] memory fields(arm)>>=
 Page*   mmul2;
-Page*   mmul2cache; /* free mmu pages */
 @
 %rename mmu_pt!
-%Page referencing memory containing MMU PT!
+%Page referencing memory containing MMU PT! subtle!
+%The Page table for the kernel is in KZERO+L2
 
+
+
+% See Basic pagination intialization to setup those fields.
+
+
+
+
+
+
+% complicated to access to physical memory if have lots of memory :)
+% so let's first do a simple version? see advanced memory chapter for more
 <<macro VA(arm)>>=
 #define VA(k)       ((uintptr)(k))
 @
 
 
 
+
+
+
+% schedinit (when Moribund) -> <>
 <<function arch_mmurelease(arm)>>=
 void
 arch_mmurelease(Proc* proc)
@@ -7794,16 +7901,9 @@ arch_mmurelease(Proc* proc)
     /* write back dirty and invalidate l1 caches */
     cacheuwbinv();
 
-    mmul2empty(proc, 0);
-    for(page = proc->mmul2cache; page != nil; page = next){
-        next = page->next;
-        if(--page->ref)
-            panic("mmurelease: page->ref %d", page->ref);
-        pagechainhead(page);
-    }
-    if(proc->mmul2cache && palloc.freememr.p)
-        wakeup(&palloc.freememr);
-    proc->mmul2cache = nil;
+    mmul2empty(proc, false);
+
+    <<[[arch_mmurelease()]] free l2 page cache(arm)>>
 
     mmul1empty();
 
@@ -7815,6 +7915,100 @@ arch_mmurelease(Proc* proc)
     mmuinvalidate();
 }
 @
+\t talk about same L1 caches above in comment?? from MMU?
+
+
+%dtor
+<<function mmul2empty(arm)>>=
+static void
+mmul2empty(Proc* proc, bool clear)
+{
+    PTE *l1;
+    Page **l2, *page;
+
+    l1 = cpu->mmul1;
+    l2 = &proc->mmul2;
+    for(page = *l2; page != nil; page = page->next){
+        if(clear)
+            memset(UINT2PTR(page->va), 0, BY2PG);
+        l1[page->daddr] = Fault;
+        l2 = &page->next;
+    }
+    <<[[mmul2empty()]] remember free pages(arm)>>
+}
+@
+\t rename mmuptfree?
+
+
+<<[[mmul2empty()]] remember free pages(arm)>>=
+*l2 = proc->mmul2cache;
+proc->mmul2cache = proc->mmul2;
+proc->mmul2 = nil;
+@
+
+<<[[Proc]] [[Arch]] memory fields(arm)>>=
+Page*   mmul2cache; /* free mmu pages */
+@
+
+<<[[arch_mmurelease()]] free l2 page cache(arm)>>=
+for(page = proc->mmul2cache; page != nil; page = next){
+    next = page->next;
+    if(--page->ref)
+        panic("mmurelease: page->ref %d", page->ref);
+    pagechainhead(page);
+}
+if(proc->mmul2cache && palloc.freememr.p)
+    wakeup(&palloc.freememr);
+proc->mmul2cache = nil;
+@
+
+
+
+
+
+
+
+%dtor
+<<function mmul1empty(arm)>>=
+static void
+mmul1empty(void)
+{
+    memset(&cpu->mmul1[L1lo], 0, (L1hi - L1lo)*sizeof(PTE));
+}
+@
+\t rename mmupdfree?
+%#ifdef notdef
+%/* there's a bug in here */
+%    PTE *l1;
+%
+%    /* clean out any user mappings still in l1 */
+%    if(cpu->mmul1lo > L1lo){
+%        if(cpu->mmul1lo == 1)
+%            cpu->mmul1[L1lo] = Fault;
+%        else
+%            memset(&cpu->mmul1[L1lo], 0, cpu->mmul1lo*sizeof(PTE));
+%        cpu->mmul1lo = L1lo;
+%    }
+%    if(cpu->mmul1hi < L1hi){
+%        l1 = &cpu->mmul1[cpu->mmul1hi];
+%        if((L1hi - cpu->mmul1hi) == 1)
+%            *l1 = Fault;
+%        else
+%            memset(l1, 0, (L1hi - cpu->mmul1hi)*sizeof(PTE));
+%        cpu->mmul1hi = L1hi;
+%    }
+%#else
+%    memset(&cpu->mmul1[L1lo], 0, (L1hi - L1lo)*sizeof(PTE));
+%#endif /* notdef */
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7829,7 +8023,7 @@ arch_mmurelease(Proc* proc)
 bool newtlb;   /* Pager has changed my pte's, I must flush */
 @ 
 
-
+% ibrk | fork | exec -> <>
 <<function arch_flushmmu(arm)>>=
 void
 arch_flushmmu(void)
@@ -7837,7 +8031,7 @@ arch_flushmmu(void)
     int s;
 
     s = arch_splhi();
-    up->newtlb = 1;
+    up->newtlb = true;
     arch_mmuswitch(up);
     arch_splx(s);
 }
@@ -7875,7 +8069,8 @@ faultarm(Ureg *ureg, uintptr va, int user, bool read)
     if (Debug)
         ckfaultstuck(va);
 
-    n = fault(va, read);
+    n = fault(va, read); // portable code
+
     if(n < 0){
         if(!user){
             dumpregs(ureg);
@@ -7938,6 +8133,28 @@ fault(virt_addr addr, bool read)
 % why loop?
 
 \subsection{[[fixfault()]]}
+
+% properties of 1 page, 1 byte
+% PTE = page table entry, so spec about one page (also for entries in PD)
+% Not hardware spec, but bits communicated from portable part of
+% virtual memory to arch-specific hooks for virtual memory.
+
+<<type PTExxx(arm)>>=
+#define PTEVALID    (1<<0)
+#define PTERONLY    0
+#define PTEWRITE    (1<<1)
+<<[[PTExxx]] other cases(arm)>>
+@
+%dead: #define PTEKERNEL   (1<<3)
+\t mv earlier, and factorize across arch (was used in port/ code)
+% need PTEVALID? not sure.
+
+% pa is aligned at page, so can use low 12 bytes hence 1<<8
+% in a PTE what is implicit is the va. the va is the index
+% in the PD (Page Directory) + index in the PT (Page table)
+
+
+
 
 % The big one! very important function!
 %ret_code
@@ -8030,10 +8247,11 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 % and back to ARM specific. 
 % faultarm(ARM) -> fault -> fixfault -> arch_putmmu(ARM)
 
-
+\t rename pa argument below to mmupte
+% fixfault -> <>
 <<function arch_putmmu(arm)>>=
 void
-arch_putmmu(uintptr va, uintptr pa, Page* page)
+arch_putmmu(virt_addr va, uintptr pa, Page* page)
 {
     int x;
     Page *pg;
@@ -8045,7 +8263,7 @@ arch_putmmu(uintptr va, uintptr pa, Page* page)
         /* wasteful - l2 pages only have 256 entries - fix */
         if(up->mmul2cache == nil){
             /* auxpg since we don't need much? memset if so */
-            pg = newpage(1, 0, 0);
+            pg = newpage(true, nil, 0);
             pg->va = VA(arch_kmap(pg));
         }
         else{
@@ -8054,6 +8272,7 @@ arch_putmmu(uintptr va, uintptr pa, Page* page)
             memset(UINT2PTR(pg->va), 0, BY2PG);
         }
         pg->daddr = x;
+
         pg->next = up->mmul2;
         up->mmul2 = pg;
 
@@ -8063,12 +8282,7 @@ arch_putmmu(uintptr va, uintptr pa, Page* page)
         *l1 = PPN(pg->pa)|Dom0|Coarse;
         cachedwbse(l1, sizeof *l1);
 
-        if(x >= cpu->mmul1lo && x < cpu->mmul1hi){
-            if(x+1 - cpu->mmul1lo < cpu->mmul1hi - x)
-                cpu->mmul1lo = x+1;
-            else
-                cpu->mmul1hi = x;
-        }
+        <<[[arch_putmmu()]] maintain mmul1lo and mmul1hi(arm)>>
     }
     pte = UINT2PTR(KADDR(PPN(*l1)));
 
@@ -8078,12 +8292,15 @@ arch_putmmu(uintptr va, uintptr pa, Page* page)
      *  PTEWRITE|PTEUNCACHED|PTEVALID;
      */
     x = Small;
-    if(!(pa & PTEUNCACHED))
+    <<[[arch_putmmu()]] if PTEUNCACHED, do not change x(arm)>>
+    else
         x |= L2ptedramattrs;
+
     if(pa & PTEWRITE)
         x |= L2AP(Urw);
     else
         x |= L2AP(Uro);
+
     pte[L2X(va)] = PPN(pa)|x;
     cachedwbse(&pte[L2X(va)], sizeof pte[0]);
 
@@ -8105,6 +8322,22 @@ arch_putmmu(uintptr va, uintptr pa, Page* page)
 }
 @
 
+
+<<[[Cpu]] [[Arch]] mmu fields(arm)>>=
+// index in mmul1
+int mmul1lo;
+int mmul1hi;
+@
+<<[[arch_putmmu()]] maintain mmul1lo and mmul1hi(arm)>>=
+if(x >= cpu->mmul1lo && x < cpu->mmul1hi){
+    if(x+1 - cpu->mmul1lo < cpu->mmul1hi - x)
+        cpu->mmul1lo = x+1;
+    else
+        cpu->mmul1hi = x;
+}
+@
+
+
 <<function arch_checkmmu(arm)>>=
 void
 arch_checkmmu(uintptr va, uintptr pa)
@@ -8115,29 +8348,31 @@ arch_checkmmu(uintptr va, uintptr pa)
 @
 
 <<function arch_kmap(arm)>>=
-//old:#define   arch_kmap(p)        (Arch_KMap*)((p)->pa|kseg0)
 Arch_KMap*
 arch_kmap(Page *p) {
   return (Arch_KMap*)((p)->pa|KZERO);
 }
 @
+%//old:#define   arch_kmap(p)        (Arch_KMap*)((p)->pa|kseg0)
 
 <<function arch_kunmap(arm)>>=
-//old: #define   kunmap(k)
 void
 arch_kunmap(Arch_KMap *k)
 {
     cachedwbinvse(k, BY2PG);
 }
 @
+%//old: #define   kunmap(k)
 
 
-\section{Cache validation (ARM)}
+\section{Instruction and data cache (ARM)}
 
 % put barrier here.
 % When switch processor, virtual mem, then interfere
 % with cache as virtual address may now correspond to something else.
 % Also issue about VIRTIO space that should not be cached.
+
+
 
 \section{Copy on write}
 
@@ -10459,15 +10694,10 @@ if(up->delaysched){
     arch_splhi();
 }
 @
-%x86: call arch_splhi here (but maybe can factorize because
+%x86: does not call arch_splhi here (but maybe can factorize because
 % do reverse somewhere else
 
 
-<<[[syscall()]] if delaysched(x86)>>=
-/* if we delayed sched because we held a lock, sched now */
-if(up->delaysched)
-    sched();
-@
 
 
 <<[[unlock()]] if delaysched>>=
@@ -10516,157 +10746,120 @@ char  *kstack;  /* known to l.s */
 @ 
 % kstack is smalloc'ed in newproc()
 
-<<constant KSTACK(x86)>>=
-#define KSTACK    4096      /* Size of kernel stack */
+
+<<constant KSTACK(arm)>>=
+#define KSTACK      (8*KiB)
 @
+%old: KSTKSIZE but useless intermediate
+% <<constant KSTKSIZE(arm)>>=
+% #define KSTKSIZE    (8*KiB)
+% @
 
-% TSS, mmu, sched labels, ... many switches
 
+\subsection{[[arch_gotolabel()]] (arm)}
 
-\subsection{[[arch_gotolabel()]] (x86)}
-
-<<function gotolabel(x86)>>=
-/*
- *  label consists of a stack pointer and a PC
- */
-TEXT arch_gotolabel(SB), $0
-        MOVL    label+0(FP), AX
-        MOVL    0(AX), SP                       /* restore sp */
-        MOVL    4(AX), AX                       /* put return pc on the stack */
-        MOVL    AX, 0(SP)
-        MOVL    $1, AX                          /* return true */
-        RET
+<<function arch_gotolabel(arm)>>=
+TEXT arch_gotolabel(SB), 1, $-4
+    MOVW    0(R0), R13      /* sp */
+    MOVW    4(R0), R14      /* pc */
+    MOVW    $1, R0
+    RET
 @
 % similar to C setjmp longjmp?
 
-
-<<function setlabel(x86)>>=
-TEXT arch_setlabel(SB), $0
-        MOVL    label+0(FP), AX
-        MOVL    SP, 0(AX)                       /* store sp */
-        MOVL    0(SP), BX                       /* store return pc */
-        MOVL    BX, 4(AX)
-        MOVL    $0, AX                          /* return false */
-        RET
-
+<<function arch_setlabel(arm)>>=
+TEXT arch_setlabel(SB), 1, $-4
+    MOVW    R13, 0(R0)      /* sp */
+    MOVW    R14, 4(R0)      /* pc */
+    MOVW    $0, R0
+    RET
 @
 
-\subsection{[[arch_mmuswitch()]] (x86)}
+\subsection{[[arch_mmuswitch()]] (arm)}
 
-<<function mmuswitch(x86)>>=
+<<[[Cpu]] [[Arch]] mmu fields(arm)>>=
+int mmupid;
+@
+
+<<function arch_mmuswitch(arm)>>=
 void
 arch_mmuswitch(Proc* proc)
 {
-    ulong *mmupd;
+    int x;
+    PTE *l1;
+    Page *page;
+
+    /* do kprocs get here and if so, do they need to? */
+/*** "This is plausible, but wrong" - Charles Forsyth 1 Mar 2015
+    if(cpu->mmupid == proc->pid && !proc->newtlb)
+        return;
+***/
+    cpu->mmupid = proc->pid;
+
+    /* write back dirty and invalidate l1 caches */
+    cacheuwbinv();
 
     if(proc->newtlb){
-        mmuptefree(proc);
+        mmul2empty(proc, 1);
         proc->newtlb = false;
     }
 
-    if(proc->mmupd){
-        mmupd = tmpmap(proc->mmupd);
-        mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)]; // for up
-        tmpunmap(mmupd);
-        taskswitch(proc->mmupd->pa, (ulong)(proc->kstack+KSTACK));
-    }else
-        taskswitch(PADDR(cpu->pdproto), (ulong)(proc->kstack+KSTACK));
+    mmul1empty();
+
+    /* move in new map */
+    l1 = cpu->mmul1;
+    for(page = proc->mmul2; page != nil; page = page->next){
+        x = page->daddr;
+        l1[x] = PPN(page->pa)|Dom0|Coarse;
+        /* know here that L1lo < x < L1hi */
+        if(x+1 - cpu->mmul1lo < cpu->mmul1hi - x)
+            cpu->mmul1lo = x+1;
+        else
+            cpu->mmul1hi = x;
+    }
+
+    /* make sure map is in memory */
+    /* could be smarter about how much? */
+    cachedwbse(&l1[L1X(UZERO)], (L1hi - L1lo)*sizeof(PTE));
+
+    /* lose any possible stale tlb entries */
+    mmuinvalidate();
 }
 @
 
 
 
-<<struct Tss(x86)>>=
-struct Tss {
-    ulong link;     /* link (old TSS selector) */
-    ulong esp0;     /* privilege level 0 stack pointer */
-    ulong ss0;      /* privilege level 0 stack selector */
-    ulong esp1;     /* privilege level 1 stack pointer */
-    ulong ss1;      /* privilege level 1 stack selector */
-    ulong esp2;     /* privilege level 2 stack pointer */
-    ulong ss2;      /* privilege level 2 stack selector */
-    ulong xcr3;     /* page directory base register - not used because we don't use trap gates */
-    ulong eip;      /* instruction pointer */
-    ulong eflags;     /* flags register */
-    ulong eax;      /* general registers */
-    ulong   ecx;
-    ulong edx;
-    ulong ebx;
-    ulong esp;
-    ulong ebp;
-    ulong esi;
-    ulong edi;
-    ulong es;     /* segment selectors */
-    ulong cs;
-    ulong ss;
-    ulong ds;
-    ulong fs;
-    ulong gs;
-    ulong ldt;      /* selector for task's LDT */
-    ulong iomap;      /* I/O map base address + T-bit */
-};
-@ 
-
-<<[[Cpu]] [[Arch]] other fields(x86)>>=
-Tss*  tss;      /* tss for this processor */
-@
-
-<<function taskswitch(x86)>>=
-static void
-taskswitch(phys_addr mmupd, ulong stack)
-{
-    Tss *tss;
-
-    tss = cpu->tss;
-    tss->ss0 = KDSEL;
-    tss->esp0 = stack;
-    tss->ss1 = KDSEL;
-    tss->esp1 = stack;
-    tss->ss2 = KDSEL;
-    tss->esp2 = stack;
-    putcr3(mmupd);
-}
-@
-
-\subsection{[[arch_procsave()]] (x86)}
+\subsection{[[arch_procsave()]] (arm)}
 
 
-<<function procsave(x86)>>=
+<<function arch_procsave(arm)>>=
 /*
- *  Save the cpu dependent part of the process state.
+ *  Save the mach dependent part of the process state.
  */
 void
-arch_procsave(Proc *p)
+arch_procsave(Proc* p)
 {
-    <<[[procsave()]] cycles adjustments(x86)>>
-    <<[[procsave()]] fp adjustments(x86)>>
-    /*
-     * While this processor is in the scheduler, the process could run
-     * on another processor and exit, returning the page tables to
-     * the free list where they could be reallocated and overwritten.
-     * When this processor eventually has to get an entry from the
-     * trashed page tables it will crash.
-     *
-     * If there's only one processor, this can't happen.
-     * You might think it would be a win not to do this in that case,
-     * especially on VMware, but it turns out not to matter.
-     */
-    mmuflushtlb(PADDR(cpu->pdproto));
+    <<[[arch_procsave()]] cycles adjustments>>
+    <<[[arch_procsave()]] floating point(arm)>>
 }
-@ 
+@
 
 
-<<function procrestore(x86)>>=
+<<function arch_procrestore(arm)>>=
 void
-arch_procrestore(Proc *p)
+arch_procrestore(Proc* p)
 {
     uvlong t;
+
     if(p->kp)
         return;
-    <<[[procrestore]] cycles adjustments(x86)>>
+    <<[[arch_procrestore]] cycles adjustments>>
+    <<[[arch_procrestore()]] floating point(arm)>>
 }
-@ 
-
+@
+%x86: identical except different floating point restore function
+\l maybe make the floating point the arch_xxx and have a portable
+\l procsave procrestore?
 
 
 \section{Cooperative scheduling}
@@ -11001,111 +11194,56 @@ preempt(void)
 % servicing an interrupt may have adjusted the readyness of higher priority
 % process so preempt!
 
-\subsection{Clock interrupt (x86)}
+\subsection{Clock interrupt (arm)}
 % see also Time chapter
 
 % number of times per second we want to get a clock interrupt, called
 % also a tick
-<<constant HZ(x86)>>=
-#define Arch_HZ    (100)     /* clock frequency */ //TODO: mv in dat_time.h
+
+
+<<constant Arch_HZ(arm)>>=
+#define Arch_HZ     100         /* clock frequency */
 @
+% 100 per second so every 10ms.
 
-<<constant Freq(x86)>>=
-Freq=   1193182,    /* Real clock frequency */
-@
+% at SYSTIMERS VIRTIO
+<<struct Systimers(arm)>>=
+struct Systimers {
+    u32int  cs;
+    u32int  clo;
+    u32int  chi;
 
-<<struct I8253(x86)>>=
-struct I8253
-{
-    ulong   period;     /* current clock period */
-    bool    enabled;
-
-    uvlong  hz;
-
-    ushort  last;       /* last value of clock 1 */
-    uvlong  ticks;      /* cumulative ticks of counter 1 */
-
-    ulong   periodset;
-
-    // extra
-    Lock;
+    u32int  c0;
+    u32int  c1;
+    u32int  c2;
+    u32int  c3;
 };
 @
+% Raspberry Pi has 4 timers, 4 IRQs.
 
 
-<<global i8253(x86)>>=
-I8253 i8253;
-@
-
-<<function i8253init(x86)>>=
-void
-i8253init(void)
-{
-    int loops, x;
-
-    ioalloc(T0cntr, 4, 0, "i8253");
-    ioalloc(T2ctl, 1, 0, "i8253.cntr2ctl");
-
-    i8253.period = Freq/Arch_HZ;
-
-    /*
-     *  enable a 1/HZ interrupt for providing scheduling interrupts
-     */
-    outb(Tmode, Load0|Square);
-    outb(T0cntr, (Freq/Arch_HZ));    /* low byte */
-    outb(T0cntr, (Freq/Arch_HZ)>>8); /* high byte */
-
-    /*
-     *  enable a longer period counter to use as a clock
-     */
-    outb(Tmode, Load2|Square);
-    outb(T2cntr, 0);        /* low byte */
-    outb(T2cntr, 0);        /* high byte */
-    x = inb(T2ctl);
-    x |= T2gate;
-    outb(T2ctl, x);
-    
-    /*
-     * Introduce a little delay to make sure the count is
-     * latched and the timer is counting down; with a fast
-     * enough processor this may not be the case.
-     * The i8254 (which this probably is) has a read-back
-     * command which can be used to make sure the counting
-     * register has been written into the counting element.
-     */
-    x = (Freq/Arch_HZ);
-    for(loops = 0; loops < 100000 && x >= (Freq/Arch_HZ); loops++){
-        outb(Tmode, Latch0);
-        x = inb(T0cntr);
-        x |= inb(T0cntr)<<8;
-    }
-}
-@
-
-<<function i8253enable(x86)>>=
-void
-i8253enable(void)
-{
-    i8253.enabled = true;
-    i8253.period = Freq/Arch_HZ;
-    arch_intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
-}
-@
-
-<<interrupt callback i8253clock(x86)>>=
+% set by clockinit to IRQ3
+<<function clockintr(arm)>>=
 static void
-i8253clock(Ureg* ureg, void*)
+clockintr(Ureg *ureg, void*)
 {
+    Systimers *tn;
+
+    tn = (Systimers*)SYSTIMERS;
+    /* dismiss interrupt */
+    tn->cs = 1<<3;
     timerintr(ureg, 0);
 }
 @
+% >> 
+
 
 % put in virtual memory section?
 <<[[Cpu]] other fields>>=
 bool flushmmu;   /* make current proc flush it's mmu state */
 @
 
-
+% ?timerintr? -> <>
 <<clock callback hzclock>>=
 void
 hzclock(Ureg *ur)
@@ -11141,7 +11279,6 @@ hzclock(Ureg *ur)
 }
 @ 
 % //todo: can be not Running? maybe if checkalarms resched?
-
 
 
 
@@ -11199,54 +11336,25 @@ procwired(Proc *p, int bm)
 % see EDF section
 
 
-\section{Halting (x86)}
+\section{Halting (arm)}
 
-<<function idlehands(x86)>>=
-// current configuration
-static bool idle_spin = false;
-static int idle_if_nproc = 0;
+<<function arch_idlehands(raspberry pi1)(arm)>>=
+TEXT arch_idlehands(SB), $-4
+    MOVW    CPSR, R3
+    ORR $(PsrDirq|PsrDfiq), R3, R1      /* splfhi */
+    MOVW    R1, CPSR
 
+    DSB
+    MOVW    nrdy(SB), R0
+    CMP $0, R0
+    MCR.EQ  CpSC, 0, R0, C(CpCACHE), C(CpCACHEintr), CpCACHEwait
+    DSB
 
-/*
- *  put the processor in the halt state if we've no processes to run.
- *  an interrupt will get us going again.
- */
-void
-arch_idlehands(void)
-{
-    /*
-     * we used to halt only on single-core setups. halting in an SMP system 
-     * can result in a startup latency for processes that become ready.
-     * if idle_spin is false, we care more about saving energy
-     * than reducing this latency.
-     *
-     * the performance loss with idle_spin == false seems to be slight
-     * and it reduces lock contention (thus system time and real time)
-     * on many-core systems with large values of NPROC.
-     */
-    if(conf.ncpu == 1 || idle_spin == false ||
-        (idle_if_nproc && conf.ncpu >= idle_if_nproc))
-        halt();
-}
-@ 
-% was just 'int idle_if_nproc;' but clearbss does the job of setting it to 0
-
-<<function halt(x86)>>=
-/*
- * Attempt at power saving. -rsc
- */
-TEXT halt(SB), $0
-        CLI
-        CMPL    nrdy(SB), $0
-        JEQ     _nothingready
-        STI
-        RET
-
-_nothingready:
-        STI
-        HLT
-        RET
+    MOVW    R3, CPSR            /* splx */
+    RET
 @
+%$
+% nrdy is #processes in ready state?
 
 % see halting just before initializing :)
 
@@ -11256,355 +11364,258 @@ _nothingready:
 
 
 \chapter{Initialization}
-% could put ARM in title
+%less: (ARM) in title
 
 \section{Booting the kernel}
 
-\subsection{Loading the kernel in physical memory (x86)}
+\subsection{Loading the kernel in physical memory (arm)}
 
-% output of inm -n 9qemu  is nice! 2879 symbols!
-% explain the text + data + bss part of the binary! see ksize 9qemu too
+%startup_elf.cd cheat. 
+%load whole file at 0x8000 and starts there
 
-<<l_multiboot.s>>=
-#include "mem.h"
-        
-TEXT _start(SB), $0
+%x86: multiboot header, with description of where ends the code/data/bss
+% and entry point
 
-<<global _multibootheader(x86)>>
 
-<<function _multibootentry(x86)>>
 
-<<global multiboot(x86)>>
-@
+\subsection{First instructions (arm)}
 
-<<global _multibootheader(x86)>>=
+% Setup the base pointer, stack pointer, supervisor mode.
+
+<<function _start(arm)>>=
 /*
- * Must be 4-byte aligned.
+ * on bcm2836, only cpu0 starts here
+ * other cpus enter at cpureset in armv7.s
  */
-TEXT _multibootheader(SB), $0
-        LONG    $0x1BADB002                     /* magic */
-        LONG    $0x00010003                     /* flags */
-        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
-        
-        LONG    $_multibootheader-KZERO(SB)     /* header_addr */
-        LONG    $_start-KZERO(SB)          /* load_addr */
-        LONG    $edata-KZERO(SB)                /* load_end_addr */
-        LONG    $end-KZERO(SB)                  /* bss_end_addr */
-        
-//      !!!entry point specification!!!
-        LONG    $_multibootentry-KZERO(SB)              /* entry_addr */
-        
-        LONG    $0                              /* mode_type */
-        LONG    $0                              /* width */
-        LONG    $0                              /* height */
-        LONG    $0                              /* depth */
-@
-% history: was called _startKADDR, but confusing I think
+TEXT _start(SB), 1, $-4
+    /*
+     * load physical base for SB addressing while mmu is off
+     * keep a handy zero in R0 until first function call
+     */
+    MOVW    $setR12(SB), R12
+    SUB $KZERO, R12
+    MOVW    $0, R0
 
-% about the page-aligned requirment:
-% indeed, as we will see later binaries when exec'd are
-% mapped to memory and we want the data section to be
-% separate from text section so they can have different
-% properties for their segments
+    /*
+     * SVC mode, interrupts disabled
+     */
+    MOVW    $(PsrDirq|PsrDfiq|PsrMsvc), R1
+    MOVW    R1, CPSR
 
-<<function _multibootentry(x86)>>=
-/* 
- * the kernel expects the data segment to be page-aligned
- * multiboot bootloaders put the data segment right behind text
- */
-TEXT _multibootentry(SB), $0
-        MOVL    $etext-KZERO(SB), SI
-        MOVL    SI, DI
-        ADDL    $0xfff, DI
-        ANDL    $~0xfff, DI
-        MOVL    $edata-KZERO(SB), CX
-        SUBL    DI, CX
-        ADDL    CX, SI
-        ADDL    CX, DI
-        STD
-        REP; MOVSB
-        CLD
-        ADDL    $KZERO, BX
-        MOVL    BX, multiboot-KZERO(SB)
-//      !!! Jump !!!
-        MOVL    $_setup_segmentation(SB), AX
-        ANDL    $~KZERO, AX
-        JMP*    AX
-@
-% can't do simply        MOVL    $_setup_segmentation-KZERO(SB), AX ?
+    /*
+     * start stack at top of 'cpu' (physical addr)
+     */
+    MOVW    $PADDR(CPUADDR+CPUSIZE-4), R13
 
-<<lib.h exxx decl>>=
-extern  char  etext[];
-//@Scheck: Assembly, not dead used by 386/l.s and arm/main.c
-extern  char  edata[];
-extern  char  end[];
-@ 
+    /*
+     * do arch-dependent startup (no return)
+     */
+    BL  armstart(SB)
+    B   0(PC)
 
-
-<<global multiboot(x86)>>=
-/* multiboot structure pointer */
-TEXT multiboot(SB), $0
-        LONG    $0
+    RET
 @
 
-
-\subsection{Basic segmentation (x86)}
-
-<<function _setup_segmentation(x86)>>=
-TEXT _setup_segmentation(SB), $0
-        CLI                     /* make sure interrupts are off */
-
-        /* set up the gdt so we have sane plan 9 style gdts. */
-        MOVL    $tgdtptr(SB), AX
-        ANDL    $~KZERO, AX
-        MOVL    (AX), GDTR
-        MOVW    $1, AX
-        MOVW    AX, MSW
-
-        /* clear prefetch queue (weird code to avoid optimizations) */
-        DELAY
-
-        /* set segs to something sane (avoid traps later) */
-        MOVW    $(1<<3), AX
-        MOVW    AX, DS
-        MOVW    AX, SS
-        MOVW    AX, ES
-        MOVW    AX, FS
-        MOVW    AX, GS
-
-/*      JMP     $(2<<3):$_setup_pagination(SB) /**/
-         BYTE   $0xEA
-         LONG   $_setup_pagination-KZERO(SB)
-         WORD   $(2<<3)
-@
-% 1 << 3 for 1 selector (data segment, see tgdt) and because
-% each entry is 8 bytes -> << 3.
-%was called _startPADDR, not sure why, not really a PADDR
-%old comment not valid anymore I think in qemu -kernel context
-% * Entered via a jump to PADDR(entry),
-% * the physical address of the virtual kernel entry point of KADDR(entry).
+% Linker assumes -T0x80008000 (see loadaddr in bcm/mkfile)
+% (and -H6) and every global access like foo(SB) use SB which is R12.
+% Firmware loads  at 0x8000
+% Hence the temporary SUB trick above.
 
 
 
+\subsection{Basic pagination (arm)}
 
-<<global tgdt(x86)>>=
-/*
- *  gdt to get us to 32-bit/segmented/unpaged mode
- */
-TEXT tgdt(SB), $0
+<<function armstart(raspberry pi1)(arm)>>=
+TEXT armstart(SB), 1, $-4
 
-        /* null descriptor */
-        LONG    $0
-        LONG    $0
+    /*
+     * disable the mmu and L1 caches
+     * invalidate caches and tlb
+     */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    BIC $(CpCdcache|CpCicache|CpCpredict|CpCmmu), R1 // Remove CpCpredict
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
 
-        /* data segment descriptor for 4 gigabytes (PL 0) */
-        LONG    $(0xFFFF)
-        LONG    $(SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(0)|SEGDATA|SEGW)
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvu), CpCACHEall
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+    ISB
 
-        /* exec segment descriptor for 4 gigabytes (PL 0) */
-        LONG    $(0xFFFF)
-        LONG    $(SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(0)|SEGEXEC|SEGR)
-@
-%$
-%tgdt? temporary gdt? compared to global gdt just have entries
-% for kernel segments, the global gdt also have entries for user segment
-% and TSS
+    /*
+     * clear mach and page tables
+     */
+    MOVW    $PADDR(CPUADDR), R1
+    MOVW    $PADDR(KTZERO), R2
+_ramZ:
+    MOVW    R0, (R1)
+    ADD $4, R1
+    CMP R1, R2
+    BNE _ramZ
 
-<<global tgdtptr(x86)>>=
-/*
- *  pointer to initial gdt
- *  Note the -KZERO which puts the physical address in the gdtptr. 
- *  that's needed as we start executing in physical addresses. 
- */
-TEXT tgdtptr(SB), $0
-        WORD    $(3*8)
-        LONG    $tgdt-KZERO(SB)
+    /*
+     * start stack at top of CPUADDR (physical addr)
+     * set up page tables for kernel
+     */
+    MOVW    $PADDR(CPUADDR+CPUSIZE-4), R13 // done already in start.s
+    MOVW    $PADDR(L1), R0
+
+    BL  mmuinit(SB)
+
+    /*
+     * set up domain access control and page table base
+     */
+    MOVW    $Client, R1
+    MCR CpSC, 0, R1, C(CpDAC), C(0)
+
+    MOVW    $PADDR(L1), R1
+    MCR CpSC, 0, R1, C(CpTTB), C(0)
+
+    /*
+     * enable caches, mmu, and high vectors
+     */
+    MRC CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
+    ORR $(CpChv|CpCdcache|CpCicache|CpCmmu), R0
+    MCR CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
+    ISB
+
+    /*
+     * switch SB, SP, and PC into KZERO space
+     */
+    MOVW    $setR12(SB), R12
+    MOVW    $(CPUADDR+CPUSIZE-4), R13
+
+    MOVW    $_startpg(SB), R15
 @
 %$
 
-\subsection{Basic pagination (x86)}
 
-<<function _setup_pagination(x86)>>=
+<<function mmuinit(arm)>>=
 /*
- * In protected mode with paging turned off and segment registers setup
- * to linear map all memory.
- * Make the basic page tables for processor 0. Five pages are needed for
- * the basic set:
- *      a page directory;
- *      page table for mapping the first 4MB of physical memory to KZERO;
- *      a page for the GDT;
- *      virtual and physical pages for mapping the Cpu structure.
- * The remaining PTEs will be allocated later when memory is sized.
- *
- * An identity mmu map is also needed for the switch to virtual mode.
- * This identity mapping is removed once the MMU is going and the JMP has
- * been made to virtual memory.
+ * Set up initial PTEs for this cpu (called with mmu off)
  */
-TEXT _setup_pagination(SB), $0
-        /* At this point, the GDT setup is done. */
-
-        MOVL    $PADDR(CPU0PD), DI             /* clear 4 pages for the tables etc. */
-        XORL    AX, AX
-        MOVL    $(4*BY2PG), CX
-        SHRL    $2, CX
-
-        CLD
-        REP;    STOSL
-
-        MOVL    $PADDR(CPU0PD), AX
-        ADDL    $PDO(KZERO), AX                 /* page directory offset for KZERO */
-        MOVL    $PADDR(CPU0PT), (AX)           /* PTE's for KZERO */
-        MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
-        ORL     BX, (AX)
-
-
-        MOVL    $PADDR(CPU0PT), AX             /* first page of page table */
-        MOVL    $1024, CX                       /* 1024 pages in 4MB */
-_setpte:
-        MOVL    BX, (AX)
-        ADDL    $(1<<PGSHIFT), BX
-        ADDL    $4, AX
-        LOOP    _setpte
-
-
-        MOVL    $PADDR(CPU0PT), AX
-        ADDL    $PTO(CPUADDR), AX              /* page table entry offset for CPUADDR */
-        MOVL    $PADDR(CPU0CPU), (AX)          /* PTE for Cpu */
-        MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
-        ORL     BX, (AX)
-
-/*
- * Now ready to use the new map. Make sure the processor options are what is wanted.
- * It is necessary on some processors to immediately follow mode switching with a JMP instruction
- * to clear the prefetch queues.
- */
-        MOVL    $PADDR(CPU0PD), CX             /* load address of page directory */
-        MOVL    (PDO(KZERO))(CX), DX            /* double-map KZERO at 0 */
-        MOVL    DX, (PDO(0))(CX)
-
-        MOVL    CX, CR3
-        DELAY                                   /* JMP .+2 */
-
-        MOVL    CR0, DX
-        ORL     $0x80010000, DX                 /* PG|WP */
-        ANDL    $~0x6000000A, DX                /* ~(CD|NW|TS|MP) */
-
-        MOVL    $_setup_bss_stack(SB), AX       /* this is a virtual address */
-        MOVL    DX, CR0                         /* turn on paging */
-        JMP*    AX                              /* jump to the virtual nirvana */
-@
-%$
-
-\subsection{BSS and stack initialization (x86)}
-
-% the x86 archi does not have multi register, so have to use same
-% pointer to differently mapped physical page
-<<function _setup_bss_stack(x86)>>=
-/*
- * Basic machine environment set, can clear BSS and create a stack.
- * The stack starts at the top of the page containing the Cpu structure.
- * The x86 architecture forces the use of the same virtual address for
- * each processor's Cpu structure, so the global Cpu pointer 'cpu' can
- * be initialised here.
- */
-TEXT _setup_bss_stack(SB), $0
-        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */
-        MOVL    CX, CR3                         /* load and flush the mmu */
-
-_clearbss:
-        MOVL    $edata(SB), DI
-        XORL    AX, AX
-        MOVL    $end(SB), CX
-        SUBL    DI, CX                          /* end-edata bytes */
-        SHRL    $2, CX                          /* end-edata doublewords */
-
-        CLD
-        REP;    STOSL                           /* clear BSS */
-
-        MOVL    $CPUADDR, SP
-        MOVL    SP, cpu(SB)                /* initialise global Cpu pointer */
-        MOVL    $0, 0(SP)                       /* initialise cpu->cpuno */
-
-
-        ADDL    $(CPUSIZE-4), SP               /* initialise stack */
-
-<<end of _setup_bss_stack(x86)>>
-@
-
-
-\subsection{Jumping to C [[main()]] (x86)}
-
-% or do another function and in previous code to a JMP _last_before_main?
-<<end of _setup_bss_stack(x86)>>=
-/*
- * Need to do one final thing to ensure a clean machine environment,
- * clear the EFLAGS register, which can only be done once there is a stack.
- */
-        MOVL    $0, AX
-        PUSHL   AX
-        POPFL
-
-        CALL    main(SB)
-@
-%$
-
-\section{Kernel initialization (x86)}
-
-<<function main(x86)>>=
-//@Scheck: not dead, entry point :) jumped from assembly at _startpg() end
-void main(void)
+void
+mmuinit(void *a)
 {
-    // initial assignment made to avoid circular dependencies in codegraph
-    <<[[main()]] initial assignments for backward deps(x86)>>
+    PTE *l1, *l2;
+    phys_addr pa;
+    kern_addr va;
 
-    cgapost(0);
+    l1 = (PTE*)a; // PADDR(L1) for cpu0
+
+    /*
+     * map all of ram at KZERO
+     */
+    va = KZERO;
+    for(pa = 0; pa < soc.dramsize; pa += MiB, va += MiB)
+    {
+        l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
+    }
+
+    /*
+     * identity map first MB of ram so mmu can be enabled
+     */
+    // ???
+    l1[L1X(0)] = 0|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
+
+    /*
+     * map i/o registers 
+     */
+    va = VIRTIO;
+    for(pa = soc.physio; pa < soc.physio + IOSIZE; pa += MiB, va += MiB){
+        // No L1ptedramattrs (Cached | Buffered) here, because volatile!
+        l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section; 
+    }
+    // for raspi2
+    pa = soc.armlocal;
+    if(pa)
+        l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
+    
+    /*
+     * double map exception vectors at top of virtual memory
+     */
+    // ???
+    l2 = (PTE*)PADDR(L2);
+    va = HVECTORS;
+    l1[L1X(va)] = (uintptr)l2|Dom0|Coarse;
+    l2[L2X(va)] = L2AP(Krw)|Small|L2ptedramattrs;
+}
+@
+% Section so 1MB direct match. Big pages ...
+\t rename to mmuinit0
+
+\subsection{Jumping to C [[main()]] (arm)}
+
+% assumes pagination done here
+<<function _startpg(raspberry pi1)(arm)>>=
+TEXT _startpg(SB), 1, $-4
+
+    /*
+     * enable cycle counter
+     */
+    MOVW    $1, R1
+    MCR CpSC, 0, R1, C(CpSPM), C(CpSPMperf), CpSPMctl // Not CpSPMcyc??
+
+    /*
+     * call main and loop forever if it returns
+     */
+    BL  main(SB)
+    B   0(PC)
+
+    BL  _div(SB)        /* hack to load _div, etc. */
+@
+
+
+\section{Kernel initialization (arm)}
+
+
+<<function main(arm)>>=
+void
+main(void)
+{
+    <<[[main()]] locals(arm)>>
+
+    // initial assignment made to avoid circular dependencies in codegraph
+    <<[[main()]] initial assignments for backward deps(arm)>>
+
+    // Let's go!
+
+    cpu = (Cpu*)CPUADDR;
+
+    <<[[main()]] clear bss(arm)>>
 
     cpu0init(); // cpu0 initialization (calls cpuinit())
+    mmuinit1((void*)L1); // finish mmu initialization after mmuinit0
 
-    options(); // setup values for getconf() from bootloader config
+    machon(0);
+
+    //optionsinit("/boot/boot boot"); // setup values for getconf() 
+    //ataginit((Atag*)BOOTARGS); // from bootloader config
     // example of manual config:
     // TODO confname(``console'') = 1?
 
-    ioinit(); // does some getconf("ioexclude") so must be after options()
+    confinit();     /* figures out amount of memory */
+    xinit();
 
-    arch_screeninit(); // screenputs = cgascreenputs
+    uartconsinit();
+
+    arch_screeninit(); // screenputs = swconsole_screenputs
     quotefmtinstall(); // libc printf initialization
-    i8250console(); // setup optional serial console if getconf("console") == 1
-    print("\nPlan 9\n");
 
-    // the init0 means this is really early on (e.g. malloc is not available)
-    trapinit0();
-    mmuinit0();
+    print("\nPlan 9 from Bell Labs\n"); // yeah!
 
-    kbdinit(); // kbd is then fully enabled below via kdbenable()
-    i8253init(); // clock controller
-
-    cpuidentify(); // setup cpu, to know which advanced features we can enable
-    arch_cpuidprint();
-
-    meminit(); // setup conf.mem memory banks and setup more PDEs and PTEs
-    confinit(); // setup conf (and mainmem->maxsize, imagmem->maxsize)
-    archinit(); // setup arch
-    xinit(); // setup xlists for xalloc() and palloc.mem for pageinit()
-    if(i8237alloc != nil)
-            i8237alloc(); // setup DMA, need low memory below 16MB
+    <<[[main()]] print board and firmware information(arm)>>
+    /* set clock rate to arm_freq from config.txt (default pi1:700Mhz pi2:900MHz) */
+    setclkrate(ClkArm, 0);
 
     arch_trapinit();
-    arch_mmuinit();
+    clockinit();
 
-    fpsavealloc();
-    if(arch->intrinit)      /* launches other processors on an mp */
-        arch->intrinit();
-
-    timersinit();
-    mathinit();
-
-    kbdqinit(); // setup kbdq
-    kbdenable(); // enable interrupts
+    //TODO? kbdqinit(); // setup kbdq
     lineqinit(); // setup lineq
+    timersinit();
+    swcursor_init(); //if(conf.monitor)
 
-    if(arch->clockenable)
-        arch->clockenable();
+    arch_cpuidprint();
+    archreset();
 
     procinit();
     imageinit();
@@ -11612,661 +11623,90 @@ void main(void)
     links();
 
     // initialize all devices
-    chandevreset();
-    cgapost(0xcd); // 0xcd, for chandev :)
+    chandevreset();         /* most devices are discovered here */
 
     pageinit(); // setup palloc.pages and swapalloc.highwater
     swapinit(); // setup swapalloc
 
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
-    <<[[main()]] before schedinit()(x86)>>
-    cgapost(0x99); // done!
+
+    launchinit(getncpus());
+
+    // schedule the only ready user process (the one created by userinit)
     schedinit();
-    panic("should never reach this point");
+
+    assert(0);          /* shouldn't have returned */
 }
 @
 
-\subsection{[[cpu]] initialization (x86)}
 
-<<function cpu0init(x86)>>=
+
+\subsection{[[cpu]] initialization (arm)}
+
+<<function cpu0init(arm)>>=
 void
 cpu0init(void)
 {
-    conf.ncpu = 1;
-    // note that cpu points to CPUADDR, which then is mapped to CPU0CPU
-    // via the page directory/page table setup in cr3 on the first processor
-    CPUS(0) = (Cpu*)CPU0CPU;
-    cpu->pdproto = (kern_addr2)CPU0PD;
-    cpu->gdt = (Segdesc*)CPU0GDT;
+    conf.ncpu = 0; // set in machon() instead (machon() called after cpuinit)
+
+    cpu->cpuno = 0;
+    cpus[cpu->cpuno] = cpu;
 
     cpuinit();
+    active.exiting = 0;
 
-    active.cpus = 1;
-    active.exiting = false;
+    up = nil;
 }
 @
 
-% inline in previous func? no? because used in squidboy too!
-<<function cpuinit(x86)>>=
+<<function cpuinit(arm)>>=
 void
 cpuinit(void)
 {
-    int cpuno;
-    kern_addr2 mmupd;
-    Segdesc *gdt;
+    Cpu *m0;
 
-    cpuno = cpu->cpuno;
-    mmupd = cpu->pdproto;
-    gdt = cpu->gdt;
-    memset(cpu, 0, sizeof(Cpu));
-    cpu->cpuno = cpuno;
-    cpu->pdproto = mmupd;
-    cpu->gdt = gdt;
-
+    cpu->ticks = 1;
     cpu->perf.period = 1;
-    /*
-     * For polled uart output at boot, need
-     * a default delay constant. 100000 should
-     * be enough for a while. Cpuidentify will
-     * calculate the real value later.
-     */
-    cpu->loopconst = 100000;
+
+    m0 = CPUS(0);
+    if (cpu->cpuno != 0) {
+        /* synchronise with cpu 0 */
+        cpu->ticks = m0->ticks;
+        cpu->fastclock = m0->fastclock;
+        cpu->delayloop = m0->delayloop;
+    }
+    //machon(m->cpuno);
 }
 @
 
+%\subsection{CPU detection (arm)}
+% hardcoded in mkfile, either pi or pi2
 
-\subsection{CPU detection (x86)}
+%x86: complicated
 
-<<[[Cpu]] [[Arch]] cpuid fields(x86)>>=
-char  cpuidid[16];
-char* cpuidtype;
-int cpuidax;
-int cpuiddx;
-@
-
-% put code guesscpu? guesshz? but quite long and ugly ...
-% or maybe can simplify?
-
-<<function cpuidprint(x86)>>=
-void
-arch_cpuidprint(void)
-{
-    int i;
-    char buf[128];
-
-    i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", cpu->cpuno,
-        cpu->cpuno < 10? " ": "", cpu->cpumhz);
-    if(cpu->cpuidid[0])
-        i += sprint(buf+i, "%12.12s ", cpu->cpuidid);
-    seprint(buf+i, buf + sizeof buf - 1,
-        "%s (cpuid: AX 0x%4.4uX DX 0x%4.4uX)\n",
-        cpu->cpuidtype, cpu->cpuidax, cpu->cpuiddx);
-    print(buf);
-}
-@
-
-\subsection{[[arch]] initialization (x86)}
-
-% main -> <>
-<<function archinit(x86)>>=
-void
-archinit(void)
-{
-    PCArch **p;
-
-    arch = nil;
-    for(p = knownarch; *p; p++){
-        if((*p)->ident && (*p)->ident() == 0){
-            arch = *p;
-            break;
-        }
-    }
-    if(arch == nil)
-        arch = &archgeneric;
-    else{
-        if(arch->id == 0)
-            arch->id = archgeneric.id;
-        if(arch->reset == 0)
-            arch->reset = archgeneric.reset;
-        if(arch->serialpower == 0)
-            arch->serialpower = archgeneric.serialpower;
-        if(arch->modempower == 0)
-            arch->modempower = archgeneric.modempower;
-        if(arch->intrinit == 0)
-            arch->intrinit = archgeneric.intrinit;
-        if(arch->intrenable == 0)
-            arch->intrenable = archgeneric.intrenable;
-    }
-
-    /*
-     *  Decide whether to use copy-on-reference (386 and mp).
-     *  We get another chance to set it in mpinit() for a
-     *  multiprocessor.
-     */
-    if(X86FAMILY(cpu->cpuidax) == 3)
-        conf.copymode = true;
-
-    if(X86FAMILY(cpu->cpuidax) >= 4)
-        arch_cmpswap = cmpswap486;
-
-    if(X86FAMILY(cpu->cpuidax) >= 5)
-        arch_coherence = mb586;
-
-    if(cpu->cpuiddx & Sse2)
-        arch_coherence = mfence;
-
-    addarchfile("cputype", 0444, cputyperead, nil);
-    addarchfile("archctl", 0664, archctlread, archctlwrite);
-}
-@
-
-\subsection{Memory detection (x86)}
-
-<<struct Map(x86)>>=
-struct Map {
-    phys_addr addr;
-    ulong size; // in bytes
-};
-@
-% bad name ... too many Map names
+\subsection{Memory detection (arm)}
 
 
-% Ram Map
-<<struct RMap(x86)>>=
-struct RMap {
-    char*   name;
-    //ref<Map> in mapram
-    Map*    map;
-    //ref<Map> in mapram
-    Map*    mapend;
-    Lock;
-};
-@
-%todo: why not use the simpler approach of Conf.mem and Palloc.mem?
-
-<<enum memkind(x86)>>=
-enum Memkind {
-    MemUPA,        /* unbacked physical address */
-    MemRAM,        /* physical memory */
-    MemUMB,        /* upper memory block (<16MB) */
-
-    NMemType, // must be last
-};
-@
-
-<<global mapram(x86)>>=
-static Map mapram[16];
-static RMap rmapram = {
-    "physical memory",
-    mapram,
-    &mapram[nelem(mapram)-1],
-};
-@
-
-<<function meminit(x86)>>=
-void
-meminit(void)
-{
-    int i;
-    Map *mp;
-    Confmem *cm;
-    phys_addr pa;
-    kern_addr2 pte;
-    phys_addr maxmem;
-    ulong lost;
-    char *p;
-
-    if(p = getconf("*maxmem"))
-        maxmem = strtoul(p, 0, 0);
-    else
-        maxmem = 0;
-
-    /*
-     * Set special attributes for memory between 640KB and 1MB:
-     *   VGA memory is writethrough;
-     *   BIOS ROM's/UMB's are uncached;
-     * then scan for useful memory.
-     */
-    for(pa = 0xA0000; pa < 0xC0000; pa += BY2PG){
-        pte = mmuwalk(cpu->pdproto, (kern_addr)KADDR(pa), 2, false);
-        *pte |= PTEWT;
-    }
-    for(pa = 0xC0000; pa < 0x100000; pa += BY2PG){
-        pte = mmuwalk(cpu->pdproto, (kern_addr)KADDR(pa), 2, false);
-        *pte |= PTEUNCACHED;
-    }
-    mmuflushtlb(PADDR(cpu->pdproto));
-
-    umbscan();
-    lowraminit();
-    ramscan(maxmem);
-
-    /*
-     * Set the conf entries describing banks of allocatable memory.
-     */
-    for(i=0; i<nelem(mapram) && i<nelem(conf.mem); i++){
-        mp = &rmapram.map[i];
-        cm = &conf.mem[i];
-        cm->base = mp->addr;
-        cm->npage = mp->size/BY2PG;
-    }
-    
-    lost = 0;
-    for(; i<nelem(mapram); i++)
-        lost += rmapram.map[i].size;
-    if(lost)
-        print("meminit - lost %lud bytes\n", lost);
-    if(MEMDEBUG)
-        memdebug();
-}
-@
-
-<<function mmuflushtlb(x86)>>=
-#define mmuflushtlb(mmupd) putcr3(mmupd)
-@
-
-
-
-
-
-<<function mapfree(x86)>>=
-void
-mapfree(RMap* rmap, phys_addr addr, ulong size)
-{
-    Map *mp;
-    ulong t;
-
-    if(size <= 0)
-        return;
-
-    lock(rmap);
-    for(mp = rmap->map; mp->addr <= addr && mp->size; mp++)
-        ;
-
-    if(mp > rmap->map && (mp-1)->addr+(mp-1)->size == addr){
-        (mp-1)->size += size;
-        if(addr+size == mp->addr){
-            (mp-1)->size += mp->size;
-            while(mp->size){
-                mp++;
-                (mp-1)->addr = mp->addr;
-                (mp-1)->size = mp->size;
-            }
-        }
-    }
-    else{
-        if(addr+size == mp->addr && mp->size){
-            mp->addr -= size;
-            mp->size += size;
-        }
-        else do{
-            if(mp >= rmap->mapend){
-                print("mapfree: %s: losing 0x%luX, %ld\n",
-                    rmap->name, addr, size);
-                break;
-            }
-            t = mp->addr;
-            mp->addr = addr;
-            addr = t;
-            t = mp->size;
-            mp->size = size;
-            mp++;
-        }while(size = t);
-    }
-    unlock(rmap);
-}
-@
-
-
-<<function mapalloc(x86)>>=
-ulong
-mapalloc(RMap* rmap, ulong addr, int size, int align)
-{
-    Map *mp;
-    ulong maddr, oaddr;
-
-    lock(rmap);
-    for(mp = rmap->map; mp->size; mp++){
-        maddr = mp->addr;
-
-        if(addr){
-            /*
-             * A specific address range has been given:
-             *   if the current map entry is greater then
-             *   the address is not in the map;
-             *   if the current map entry does not overlap
-             *   the beginning of the requested range then
-             *   continue on to the next map entry;
-             *   if the current map entry does not entirely
-             *   contain the requested range then the range
-             *   is not in the map.
-             */
-            if(maddr > addr)
-                break;
-            if(mp->size < addr - maddr) /* maddr+mp->size < addr, but no overflow */
-                continue;
-            if(addr - maddr > mp->size - size)  /* addr+size > maddr+mp->size, but no overflow */
-                break;
-            maddr = addr;
-        }
-
-        if(align > 0)
-            maddr = ((maddr+align-1)/align)*align;
-        if(mp->addr+mp->size-maddr < size)
-            continue;
-
-        oaddr = mp->addr;
-        mp->addr = maddr+size;
-        mp->size -= maddr-oaddr+size;
-        if(mp->size == 0){
-            do{
-                mp++;
-                (mp-1)->addr = mp->addr;
-            }while((mp-1)->size = mp->size);
-        }
-
-        unlock(rmap);
-        if(oaddr != maddr)
-            mapfree(rmap, oaddr, maddr-oaddr);
-
-        return maddr;
-    }
-    unlock(rmap);
-    return nilptr;
-}
-@
-
-
-
-<<function rampage(x86)>>=
+<<function getramsize(arm)>>=
 /*
- * Allocate from the ram map directly to make page tables.
- * Called by mmuwalk during e820scan.
+ * Get ARM ram
  */
-kern_addr3
-rampage(void)
+void
+getramsize(Confmem *mem)
 {
-    phys_addr m;
-    
-    m = mapalloc(&rmapram, 0, BY2PG, BY2PG);
-    if(m == nilptr)
-        return nil;
-    return KADDR(m);
+    u32int buf[2];
+
+    if(vcreq(TagGetram, buf, 0, sizeof buf) != sizeof buf)
+        return;
+    mem->base = buf[0];
+    mem->limit = buf[1];
 }
 @
+%x86: so much more complicated
 
 
-
-<<function umbscan(x86)>>=
-static void
-umbscan(void)
-{
-    byte o[2], *p;
-
-    /*
-     * Scan the Upper Memory Blocks (0xA0000->0xF0000) for pieces
-     * which aren't used; they can be used later for devices which
-     * want to allocate some virtual address space.
-     * Check for two things:
-     * 1) device BIOS ROM. This should start with a two-byte header
-     *    of 0x55 0xAA, followed by a byte giving the size of the ROM
-     *    in 512-byte chunks. These ROM's must start on a 2KB boundary.
-     * 2) device memory. This is read-write.
-     * There are some assumptions: there's VGA memory at 0xA0000 and
-     * the VGA BIOS ROM is at 0xC0000. Also, if there's no ROM signature
-     * at 0xE0000 then the whole 64KB up to 0xF0000 is theoretically up
-     * for grabs; check anyway.
-     */
-    p = KADDR(0xD0000);
-    while(p < KADDR(0xE0000)){
-        /*
-         * Check for the ROM signature, skip if valid.
-         */
-        if(p[0] == 0x55 && p[1] == 0xAA){
-            p += p[2]*512;
-            continue;
-        }
-
-        /*
-         * Is it writeable? If yes, then stick it in
-         * the UMB device memory map. A floating bus will
-         * return 0xff, so add that to the map of the
-         * UMB space available for allocation.
-         * If it is neither of those, ignore it.
-         */
-        o[0] = p[0];
-        p[0] = 0xCC;
-        o[1] = p[2*KB-1];
-        p[2*KB-1] = 0xCC;
-        if(p[0] == 0xCC && p[2*KB-1] == 0xCC){
-            p[0] = o[0];
-            p[2*KB-1] = o[1];
-            mapfree(&rmapumbrw, PADDR(p), 2*KB);
-        }
-        else if(p[0] == 0xFF && p[1] == 0xFF)
-            mapfree(&rmapumb, PADDR(p), 2*KB);
-        p += 2*KB;
-    }
-
-    p = KADDR(0xE0000);
-    if(p[0] != 0x55 || p[1] != 0xAA){
-        p[0] = 0xCC;
-        p[64*KB-1] = 0xCC;
-        if(p[0] != 0xCC && p[64*KB-1] != 0xCC)
-            mapfree(&rmapumb, PADDR(p), 64*KB);
-    }
-}
-@
-
-
-
-
-<<function lowraminit(x86)>>=
-static void
-lowraminit(void)
-{
-    ulong n, pa, x;
-    byte *bda;
-
-    /*
-     * Initialise the memory bank information for conventional memory
-     * (i.e. less than 640KB). The base is the first location after the
-     * bootstrap processor MMU information and the limit is obtained from
-     * the BIOS data area.
-     */
-    x = PADDR(CPU0END);
-    bda = (byte*)KADDR(0x400);
-    n = ((bda[0x14]<<8)|bda[0x13])*KB-x;
-    mapfree(&rmapram, x, n);
-    memset(KADDR(x), 0, n);         /* keep us honest */
-
-    x = PADDR(PGROUND((ulong)end));
-    pa = MemMin;
-    if(x > pa)
-        panic("kernel too big");
-    mapfree(&rmapram, x, pa-x);
-    memset(KADDR(x), 0, pa-x);      /* keep us honest */
-}
-@
-% >>
-
-
-
-<<function ramscan(x86)>>=
-static void
-ramscan(phys_addr maxmem)
-{
-    ulong *k0, kzero, map, *pte, *table, *va, vbase, x;
-    phys_addr pa, maxpa, maxkpa;
-
-    // hash<enum<memtype>, int> nb pages per memory type
-    int nvalid[NMemType];
-
-    /*
-     * The bootstrap code has created a prototype page
-     * table which maps the first MemMin of physical memory to KZERO.
-     * The page directory is at cpu->pdproto and the first page of
-     * free memory is after the per-processor MMU information.
-     */
-    pa = MemMin;
-
-    /*
-     * Check if the extended memory size can be obtained from the CMOS.
-     * If it's 0 then it's either not known or >= 64MB. Always check
-     * at least 24MB in case there's a memory gap (up to 8MB) below 16MB;
-     * in this case the memory from the gap is remapped to the top of
-     * memory.
-     * The value in CMOS is supposed to be the number of KB above 1MB.
-     */
-    if(maxmem == 0){
-        x = (nvramread(0x18)<<8)|nvramread(0x17);
-        if(x == 0 || x >= (63*KB))
-            maxpa = MemMax;
-        else
-            maxpa = MB+x*KB;
-        if(maxpa < 24*MB)
-            maxpa = 24*MB;
-    }else
-        maxpa = maxmem;
-
-    maxkpa = MAXKPA; /* 2^32 - KZERO */
-
-    /*
-     * March up memory from MemMin to maxpa 1MB at a time,
-     * mapping the first page and checking the page can
-     * be written and read correctly. The page tables are created here
-     * on the fly, allocating from low memory as necessary.
-     */
-    k0 = (kern_addr2)KADDR(0);
-    kzero = *k0;
-    map = 0;
-    x = 0x12345678;
-    memset(nvalid, 0, sizeof(nvalid));
-    
-    /*
-     * Can't map memory to KADDR(pa) when we're walking because
-     * can only use KADDR for relatively low addresses.
-     * Instead, map each 4MB we scan to the virtual address range
-     * MemMin->MemMin+4MB while we are scanning.
-     */
-    vbase = MemMin;
-    while(pa < maxpa){
-        /*
-         * Map the page. Use mapalloc(&rmapram, ...) to make
-         * the page table if necessary, it will be returned to the
-         * pool later if it isn't needed.  Map in a fixed range (the second 4M)
-         * because high physical addresses cannot be passed to KADDR.
-         */
-        va = (void*)(vbase + pa%(4*MB));
-        table = &cpu->pdproto[PDX(va)];
-        if(pa%(4*MB) == 0){
-            if(map == 0 && (map = mapalloc(&rmapram, 0, BY2PG, BY2PG)) == 0)
-                break;
-            memset(KADDR(map), 0, BY2PG);
-            *table = map|PTEWRITE|PTEVALID;
-            memset(nvalid, 0, sizeof(nvalid));
-        }
-        table = KADDR(PPN(*table));
-        pte = &table[PTX(va)];
-
-        *pte = pa|PTEWRITE|PTEUNCACHED|PTEVALID;
-        mmuflushtlb(PADDR(cpu->pdproto));
-        /*
-         * Write a pattern to the page and write a different
-         * pattern to a possible mirror at KZERO. If the data
-         * reads back correctly the chunk is some type of RAM (possibly
-         * a linearly-mapped VGA framebuffer, for instance...) and
-         * can be cleared and added to the memory pool. If not, the
-         * chunk is marked uncached and added to the UMB pool if <16MB
-         * or is marked invalid and added to the UPA pool.
-         */
-        *va = x;
-        *k0 = ~x;
-        if(*va == x){
-            nvalid[MemRAM] += MB/BY2PG;
-            mapfree(&rmapram, pa, MB);
-
-            do{
-                *pte++ = pa|PTEWRITE|PTEVALID;
-                pa += BY2PG;
-            }while(pa % MB);
-            mmuflushtlb(PADDR(cpu->pdproto));
-            /* memset(va, 0, MB); so damn slow to memset all of memory */
-        }
-        else if(pa < 16*MB){
-            nvalid[MemUMB] += MB/BY2PG;
-            mapfree(&rmapumb, pa, MB);
-
-            do{
-                *pte++ = pa|PTEWRITE|PTEUNCACHED|PTEVALID;
-                pa += BY2PG;
-            }while(pa % MB);
-        }
-        else{
-            nvalid[MemUPA] += MB/BY2PG;
-            mapfree(&rmapupa, pa, MB);
-            *pte = 0;
-            pa += MB;
-        }
-
-        /*
-         * Done with this 4MB chunk, review the options:
-         * 1) not physical memory and >=16MB - invalidate the PD entry;
-         * 2) physical memory - use the 4MB page extension if possible;
-         * 3) not physical memory and <16MB - use the 4MB page extension
-         *    if possible;
-         * 4) mixed or no 4MB page extension - commit the already
-         *    initialised space for the page table.
-         */
-        if(pa%(4*MB) == 0 && pa >= 32*MB && nvalid[MemUPA] == (4*MB)/BY2PG){
-            /*
-             * If we encounter a 4MB chunk of missing memory
-             * at a sufficiently high offset, call it the end of
-             * memory.  Otherwise we run the risk of thinking
-             * that video memory is real RAM.
-             */
-            break;
-        }
-        if(pa <= maxkpa && pa%(4*MB) == 0){
-            table = &cpu->pdproto[PDX(KADDR(pa - 4*MB))];
-            if(nvalid[MemUPA] == (4*MB)/BY2PG)
-                *table = 0;
-            else if(nvalid[MemRAM] == (4*MB)/BY2PG && (cpu->cpuiddx & 0x08))
-                *table = (pa - 4*MB)|PTESIZE|PTEWRITE|PTEVALID;
-            else if(nvalid[MemUMB] == (4*MB)/BY2PG && (cpu->cpuiddx & 0x08))
-                *table = (pa - 4*MB)|PTESIZE|PTEWRITE|PTEUNCACHED|PTEVALID;
-            else{
-                *table = map|PTEWRITE|PTEVALID;
-                map = 0;
-            }
-        }
-        mmuflushtlb(PADDR(cpu->pdproto));
-        x += 0x3141526;
-    }
-    /*
-     * If we didn't reach the end of the 4MB chunk, that part won't
-     * be mapped.  Commit the already initialised space for the page table.
-     */
-    if(pa % (4*MB) && pa <= maxkpa){
-        cpu->pdproto[PDX(KADDR(pa))] = map|PTEWRITE|PTEVALID;
-        map = 0;
-    }
-    if(map)
-        mapfree(&rmapram, map, BY2PG);
-
-    cpu->pdproto[PDX(vbase)] = 0;
-    mmuflushtlb(PADDR(cpu->pdproto));
-
-    mapfree(&rmapupa, pa, (u32int)(-pa));
-    *k0 = kzero;
-}
-@
-
-
-
-
-\subsection{[[conf]] initialization (x86)}
+\subsection{[[conf]] initialization (arm)}
 
 % already set conf.ncpu (but to 1), and conf.mem[] normally
 
@@ -12280,80 +11720,64 @@ ulong nimage;   /* number of page cache image headers */
 ulong ialloc;   /* max interrupt time allocation in bytes */
 @
 
-<<function confinit(x86)>>=
-// precondition: meminit() have initialized Conf.mem
+
+<<function confinit(arm)>>=
 void
 confinit(void)
 {
+    int i;
     char *p;
-    int i, userpcnt;
+    phys_addr pa;
     ulong kpages;
     ulong kmem;
 
-    if(p = getconf("*kernelpercent"))
-        userpcnt = 100 - strtol(p, 0, 0);
-    else
-        userpcnt = 0;
+    if((p = getconf("*maxmem")) != nil){
+        memsize = strtoul(p, 0, 0);
+        if (memsize < 16*MB)        /* sanity */
+            memsize = 16*MB;
+    }
+    // simpler than for x86 :)
+    getramsize(&conf.mem[0]);
+
+    if(conf.mem[0].limit == 0){
+        conf.mem[0].base = 0;
+        conf.mem[0].limit = memsize;
+    }else if(p != nil)
+        conf.mem[0].limit = conf.mem[0].base + memsize;
 
     conf.npage = 0;
-    for(i=0; i<nelem(conf.mem); i++)
-        conf.npage += conf.mem[i].npage;
+    pa = PADDR(PGROUND(PTR2UINT(end)));
 
-    // 1 process per 250Ko of available memory
+    /*
+     *  we assume that the kernel is at the beginning of one of the
+     *  contiguous chunks of memory and fits therein.
+     */
+    for(i=0; i<nelem(conf.mem); i++){
+        /* take kernel out of allocatable space */
+        if(pa > conf.mem[i].base && pa < conf.mem[i].limit)
+            conf.mem[i].base = pa;
+
+        conf.mem[i].npage = (conf.mem[i].limit - conf.mem[i].base)/BY2PG;
+        conf.npage += conf.mem[i].npage;
+    }
+
+    conf.upages = (conf.npage*80)/100;
+    kpages = conf.npage - conf.upages;
+
+    /* set up other configuration parameters */
+    conf.ialloc = (kpages/2)*BY2PG; // max bytes for iallocb
+
     conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
     if(cpuserver)
         conf.nproc *= 3;
     if(conf.nproc > 2000)
         conf.nproc = 2000;
 
+    conf.nswap = conf.npage*3;
+    conf.nswppo = 4096;
     conf.nimage = 200;
 
-    conf.nswap = conf.nproc*80;
-    conf.nswppo = 4096;
-
-    if(cpuserver) {
-        if(userpcnt < 10)
-            userpcnt = 70;
-        kpages = conf.npage - (conf.npage*userpcnt)/100;
-
-        /*
-         * Hack for the big boys. Only good while physmem < 4GB.
-         * Give the kernel fixed max + enough to allocate the
-         * page pool.
-         * This is an overestimate as conf.upages < conf.npages.
-         * The patch of nimage is a band-aid, scanning the whole
-         * page list in imagereclaim just takes too long.
-         */
-        if(kpages > (128*MB + conf.npage*sizeof(Page))/BY2PG){
-            kpages = (128*MB + conf.npage*sizeof(Page))/BY2PG;
-            conf.nimage = 2000;
-            kpages += (conf.nproc*KSTACK)/BY2PG;
-        }
-    } else {
-        if(userpcnt < 10) {
-            if(conf.npage*BY2PG < 16*MB)
-                userpcnt = 40;
-            else
-                userpcnt = 80;
-        }
-        kpages = conf.npage - (conf.npage*userpcnt)/100;
-
-        /*
-         * Make sure terminals with low memory get at least
-         * 4MB on the first Image chunk allocation.
-         */
-        if(conf.npage*BY2PG < 16*MB)
-            imagmem->minarena = 4*MB;
-    }
-
-    /*
-     * can't go past the end of virtual memory
-     */
-    if(kpages > MAXKPA/BY2PG)
-        kpages = MAXKPA/BY2PG;
-
-    conf.upages = conf.npage - kpages;
-    conf.ialloc = (kpages/2)*BY2PG;
+    conf.copymode = 1;      /* copy on reference, not copy on write */
 
     /*
      * Guess how much is taken by the large permanent
@@ -12361,236 +11785,142 @@ confinit(void)
      * (probably ~300KB).
      */
     kmem = kpages * BY2PG;
-    kmem -= conf.upages*sizeof(Page)
-            + conf.nproc*sizeof(Proc)
-            + conf.nimage*sizeof(KImage)
-            + conf.nswap
-            + conf.nswppo*sizeof(Page*); // pad's second bugfix :)
+    kmem -= 
+          conf.upages*sizeof(Page)
+        + conf.nproc*sizeof(Proc)
+        + conf.nimage*sizeof(KImage)
+        + conf.nswap
+        + conf.nswppo*sizeof(Page*); // pad's second bugfix :)
+
+    // memory pool
     mainmem->maxsize = kmem;
-    if(!cpuserver){
+
+    if(!cpuserver)
         /*
          * give terminals lots of image memory, too; the dynamic
          * allocation will balance the load properly, hopefully.
          * be careful with 32-bit overflow.
          */
         imagmem->maxsize = kmem;
-    }
 }
 @
+%pad: I introduced a kmem instead of abusing kpages
 %bug: see pad's bugfix above
+%    //if(0 && (p = getconf("service")) != nil){
+%    //  if(strcmp(p, "cpu") == 0)
+%    //      cpuserver = 1;
+%    //  else if(strcmp(p,"terminal") == 0)
+%    //      cpuserver = 0;
+%    //}
 
 %references also mainmem, imagmem
 
 % see also cat /dev/swap
 
-\subsection{[[idt]] initialization (x86)}
+\subsection{Exception vector initialization (arm)}
 
-<<function trapinit0(x86)>>=
+<<struct Vpage0(arm)>>=
 /*
- * Minimal trap setup.  Just enough so that we can panic
- * on traps (bugs) during kernel initialization.
- * Called very early - malloc is not yet available.
+ *   Layout at virtual address KZERO (double mapped at HVECTORS).
  */
-void
-trapinit0(void)
-{
-    int d1, v;
-    kern_addr vaddr;
-    Segdesc *idt;
+struct Vpage0 {
+    void    (*vectors[Nvec])(void);
+    u32int  vtable[Nvec];
+};
+@
 
-    idt = (Segdesc*)IDTADDR;
-    vaddr = (kern_addr)vectortable;
-    for(v = 0; v < 256; v++){
-        d1 = (vaddr & 0xFFFF0000)|SEGP;
-        switch(v){
-        case VectorBPT:
-            d1 |= SEGPL(3)|SEGIG;
-            break;
-        case VectorSYSCALL:
-            d1 |= SEGPL(3)|SEGIG;
-            break;
-        default:
-            d1 |= SEGPL(0)|SEGIG;
-            break;
-        }
-        idt[v].d0 = (vaddr & 0xFFFF)|(KESEL<<16);
-        idt[v].d1 = d1;
-        vaddr += 6;
-    }
-}
-@ 
-% >>
+<<constant Nvec(arm)>>=
+Nvec = 8,       /* # of vectors at start of lexception.s */
+@
 
-<<function trapinit(x86)>>=
+<<function arch_trapinit(arm)>>=
+/*
+ *  set up for exceptions
+ */
 void
 arch_trapinit(void)
 {
-    /*
-     * Special traps.
-     * Syscall() is called directly without going through trap().
-     */
-    trapenable(VectorBPT, debugbpt, 0, "debugpt");
-    trapenable(VectorPF, fault386, 0, "fault386");
+    Vpage0 *vpage0;
 
-    trapenable(Vector2F, doublefault, 0, "doublefault");
-    trapenable(Vector15, unexpected, 0, "unexpected");
-    nmienable();
-
-    addarchfile("irqalloc", 0444, irqallocread, nil);
-    trapinited = true;
-}
-@ 
-% LP split! put debugpt line in debugging section, VectorPF in Page fault?
-
-<<global trapinited(x86)>>=
-static bool trapinited;
-@
-
-% ??
-<<function doublefault(x86)>>=
-static void
-doublefault(Ureg*, void*)
-{
-    panic("double fault");
-}
-@ 
-
-% ??
-<<function unexpected(x86)>>=
-static void
-unexpected(Ureg* ureg, void*)
-{
-    print("unexpected trap %lud; ignoring\n", ureg->trap);
-}
-@ 
-
-\subsection{Virtual memory initialisation (x86)}
-
-<<function mmuinit0(x86)>>=
-void
-mmuinit0(void)
-{
-    // cpu->gdt should point to CPU0GDT, see cpu0init
-    memmove(cpu->gdt, gdt, sizeof gdt); 
-}
-@
-
-% need xinit? cos mmuwalk possible call xspanalloc?
-% todo simplify the code?
-<<function mmuinit(x86)>>=
-void
-arch_mmuinit(void)
-{
-    ulong x, *p;
-    ushort ptr[3];
-
-    didmmuinit = true;
-
-    memglobal();
-    <<[[mmuinit()]] vpt adjusments(x86)>>
-    
-    cpu->tss = malloc(sizeof(Tss));
-    if(cpu->tss == nil)
-        panic("mmuinit: no memory");
-    memset(cpu->tss, 0, sizeof(Tss));
-    cpu->tss->iomap = 0xDFFF<<16;
-
-    /*
-     * We used to keep the GDT in the Cpu structure, but it
-     * turns out that that slows down access to the rest of the
-     * page.  Since the Cpu structure is accessed quite often,
-     * it pays off anywhere from a factor of 1.25 to 2 on real
-     * hardware to separate them (the AMDs are more sensitive
-     * than Intels in this regard).  Under VMware it pays off
-     * a factor of about 10 to 100.
-     */
-     // so now cpu->gdt is a pointer to another page (CPU0GDT <> CPUADDR)
-     // but why it was slowing down things to have both data in same page?
-
-    // we already did that in mmuinit0, but mmuinit is also called by
-    // the other processors which don't call mmuinit0 and which have
-    // a different cpu->gdt pointer.
-    memmove(cpu->gdt, gdt, sizeof gdt); 
-    x = (ulong)cpu->tss;
-    cpu->gdt[TSSSEG].d0 = (x<<16)|sizeof(Tss);
-    cpu->gdt[TSSSEG].d1 = (x&0xFF000000)|((x>>16)&0xFF)|SEGTSS|SEGPL(0)|SEGP;
-
-    ptr[0] = sizeof(gdt)-1;
-    x = (ulong)cpu->gdt;
-    ptr[1] = x & 0xFFFF;
-    ptr[2] = (x>>16) & 0xFFFF;
-    lgdt(ptr);
-
-    ptr[0] = sizeof(Segdesc)*256-1;
-    x = IDTADDR;
-    ptr[1] = x & 0xFFFF;
-    ptr[2] = (x>>16) & 0xFFFF;
-    lidt(ptr);
-
-    /* make kernel text unwritable */
-    for(x = KTZERO; x < (ulong)etext; x += BY2PG){
-        p = mmuwalk(cpu->pdproto, x, 2, false);
-        if(p == nil)
-            panic("mmuinit");
-        *p &= ~PTEWRITE;
+    if (cpu->cpuno == 0) {
+        /* disable everything */
+        intrsoff();
+        /* set up the exception vectors */
+        vpage0 = (Vpage0*)HVECTORS;
+        memmove(vpage0->vectors, vectors, sizeof(vpage0->vectors));
+        memmove(vpage0->vtable, vtable, sizeof(vpage0->vtable));
+        cacheuwbinv();
+        l2cacheuwbinv();
     }
 
-    taskswitch(PADDR(cpu->pdproto),  (ulong)cpu + BY2PG);
-    ltr(TSSSEL);
+    /* set up the stacks for the interrupt modes */
+    setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
+    setr13(PsrMirq, cpu->sirq);
+    setr13(PsrMabt, cpu->sabt);
+    setr13(PsrMund, cpu->sund);
+
+    arch_coherence();
 }
 @
+%dead:    setr13(PsrMsys, cpu->ssys);
 
-<<global didmmuinit(x86)>>=
-static bool didmmuinit;
+<<[[Cpu]] [[Arch]] save of first five registers fields(arm)>>=
+/* save areas for exceptions, hold R0-R4 */
+u32int  sfiq[5];
+u32int  sirq[5];
+u32int  sund[5];
+u32int  sabt[5];
+u32int  smon[5];        /* probably not needed */
 @
+%dead: u32int  ssys[5];
 
 
-<<[[Cpu]] [[Arch]] other fields(x86)>>=
-int havepge;
-@
-
-<<function memglobal(x86)>>=
-/* 
- * On processors that support it, we set the PTEGLOBAL bit in
- * page table and page directory entries that map kernel memory.
- * Doing this tells the processor not to bother flushing them
- * from the TLB when doing the TLB flush associated with a 
- * context switch (write to CR3).  Since kernel memory mappings
- * are never removed, this is safe.  (If we ever remove kernel memory
- * mappings, we can do a full flush by turning off the PGE bit in CR4,
- * writing to CR3, and then turning the PGE bit back on.) 
- *
- * See also mmukmap below.
- * 
- * Processor support for the PTEGLOBAL bit is enabled in devarch.c.
+<<function setr13(arm)>>=
+/*
+ *  set the stack value for the mode passed in R0
  */
-static void
-memglobal(void)
+TEXT setr13(SB), 1, $-4
+    MOVW    4(FP), R1
+
+    MOVW    CPSR, R2
+    BIC $PsrMask, R2, R3
+    ORR $(PsrDirq|PsrDfiq), R3
+    ORR R0, R3
+    MOVW    R3, CPSR        /* switch to new mode */
+
+    MOVW    R13, R0         /* return old sp */
+    MOVW    R1, R13         /* install new one */
+
+    MOVW    R2, CPSR        /* switch back to old mode */
+    RET
+@
+%$
+%banked register R13
+
+\subsection{Virtual memory initialisation (arm)}
+
+<<function mmuinit1(arm)>>=
+void
+mmuinit1(void *a)
 {
-    int i, j;
-    ulong *pd, *pt;
+    PTE *l1;
 
-    /* only need to do this once, on bootstrap processor */
-    if(cpu->cpuno != 0)
-        return;
+    l1 = (PTE*)a;
+    cpu->mmul1 = l1;
 
-    if(!cpu->havepge)
-        return;
+    /*
+     * undo identity map of first MB of ram
+     */
+    l1[L1X(0)] = 0;
+    cachedwbse(&l1[L1X(0)], sizeof(PTE));
 
-    pd = cpu->pdproto;
-    for(i=PDX(KZERO); i<1024; i++){
-        if(pd[i] & PTEVALID){
-            pd[i] |= PTEGLOBAL;
-            if(!(pd[i] & PTESIZE)){
-                pt = KADDR(pd[i]&~(BY2PG-1));
-                for(j=0; j<1024; j++)
-                    if(pt[j] & PTEVALID)
-                        pt[j] |= PTEGLOBAL;
-            }
-        }
-    }           
+    mmuinvalidateaddr(0);
 }
 @
+%    //cacheuwbinv();
+%    //l2cacheuwbinv();
+
+
 
 \subsection{Memory initialisation}
 
@@ -12798,76 +12128,107 @@ chandevreset(void)
 <<[[Dev]] methods>>=
 void  (*reset)(void); // done once at boot time
 @
+\subsection{XXX}
 
-\section{The first process (x86)}
+<<[[main()]] clear bss(arm)>>=
+memset(edata, 0, end - edata);  /* clear bss */
+@
+%x86: done in assembly before the call to main
+<<lib.h exxx decl>>=
+extern  char  etext[];
+//@Scheck: Assembly, not dead used by 386/l.s and arm/main.c
+extern  char  edata[];
+extern  char  end[];
+@ 
+
+<<[[main()]] locals(arm)>>=
+uint firmware, board;
+@
+<<[[main()]] print board and firmware information(arm)>>=
+board = getboardrev();
+firmware = getfirmware();
+print("board rev: %#ux firmware rev: %d\n", board, firmware);
+if(firmware < Minfirmrev){
+    print("Sorry, firmware (start*.elf) must be at least rev %d"
+          " or newer than %s\n", Minfirmrev, Minfirmdate);
+    for(;;)
+        ;
+}
+@
+
+\section{The first process (arm)}
 
 % kernel code part of first process: init0
 % user code part of first process: initcode, which will then exec boot/boot!
 
-<<function userinit(x86)>>=
+<<function userinit(arm)>>=
+/*
+ *  create the first process
+ */
 void
 userinit(void)
 {
-    void *v;
     Proc *p;
     Segment *s;
+    Arch_KMap *k;
     Page *pg;
 
+    /* no processes yet */
+    up = nil;
+
     p = newproc();
-
     p->pgrp = newpgrp();
-    p->fgrp = dupfgrp(nil);
-    p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
+    p->egrp = smalloc(sizeof(Egrp));
     p->egrp->ref = 1;
+    p->fgrp = dupfgrp(nil);
     p->rgrp = newrgrp();
-
     p->procmode = 0640;
 
     kstrdup(&eve, "");
     kstrdup(&p->text, "*init*");
     kstrdup(&p->user, eve);
 
-    <<[[userinit()]] fp setup(x86)>>
-
     /*
      * Kernel Stack
-     *
-     * N.B. make sure there's enough space for syscall to check
-     *      for valid args and 
-     *      4 bytes for arch_gotolabel's return PC
      */
-    p->sched.pc = (kern_addr)init0;
-    p->sched.sp = (kern_addr)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
+    p->sched.pc = PTR2UINT(init0);
+    p->sched.sp = PTR2UINT(p->kstack + KSTACK
+                           - sizeof(up->sargs.args)
+                           - sizeof(uintptr));
+    p->sched.sp = STACKALIGN(p->sched.sp);
 
     /*
      * User Stack
      *
-     * N.B. cannot call newpage() with clear=1, because PC arch_kmap()
-     * requires up != nil.  use tmpmap() instead.
+     * Technically, newpage can't be called here because it
+     * should only be called when in a user context as it may
+     * try to sleep if there are no pages available, but that
+     * shouldn't be the case here.
      */
     s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
+    s->flushme++;
     p->seg[SSEG] = s;
-    pg = newpage(false, nil, USTKTOP-BY2PG);
-    v = tmpmap(pg);
-    memset(v, 0, BY2PG);
+    pg = newpage(true, nil, USTKTOP-BY2PG);
     segpage(s, pg);
-    bootargs(v); // populate user stack for boot/boot program
-    tmpunmap(v);
+
+    k = arch_kmap(pg);
+    sp = bootargs(VA(k));
+    arch_kunmap(k);
 
     /*
      * Text
      */
-    s = newseg(SG_TEXT, UTZERO, 1); // 1 page
-    s->flushme = true;
+    s = newseg(SG_TEXT, UTZERO, 1); // initcode needs only 1 page
     p->seg[TSEG] = s;
-    pg = newpage(false, nil, UTZERO);
+    pg = newpage(true, nil, UTZERO);
     memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
     segpage(s, pg);
-    v = tmpmap(pg);
-    memset(v, 0, BY2PG);
-    memmove(v, initcode, sizeof initcode); // must be < BY2PG!
-    tmpunmap(v);
 
+    k = arch_kmap(s->pagedir[0]->pagetab[0]);
+    memmove(UINT2PTR(VA(k)), initcode, sizeof initcode);
+    arch_kunmap(k);
+
+    // ready to go!
     ready(p);
 }
 @
@@ -12882,19 +12243,22 @@ userinit(void)
 % to make it bigger.
 % also maybe cause use segattach for a new seg and put the stack there?
 
-
 % rename init_kernel_part? will be the code at the very top
 % of the stack! that should eventually IRET to user code
-<<function init0(x86)>>=
-// set by userinit to sched.pc
+% set by userinit to sched.pc
+<<function init0(arm)>>=
+/*
+ *  starting place for first process
+ */
 void
 init0(void)
 {
     int i;
     char buf[2*KNAMELEN]; // has to be the same than in ksetenv?
-    
+
     up->nerrlab = 0;
 
+    arch_coherence();
     arch_spllo();
 
     /*
@@ -12903,32 +12267,37 @@ init0(void)
      */
     up->slash = namec("#/", Atodir, 0, 0);
     pathclose(up->slash->path);
-    up->slash->path = newpath("/"); // prefer / to #/
+    up->slash->path = newpath("/");
     up->dot = cclone(up->slash);
 
     chandevinit();
 
     if(!waserror()){
-        snprint(buf, sizeof(buf), "%s %s", arch->id, conffile);
-        ksetenv("terminal", buf, false);
-        ksetenv("cputype", "386", false); // used by mkfile! 
+        snprint(buf, sizeof(buf), "%s %s", "ARM", conffile);
+        ksetenv("terminal", buf, 0);
+        ksetenv("cputype", "arm", 0); // used by mkfile! 
         if(cpuserver)
-                ksetenv("service", "cpu", false);
+            ksetenv("service", "cpu", 0);
         else
-                ksetenv("service", "terminal", false);
-        for(i = 0; i < nconf; i++){
-                if(confname[i][0] != '*')
-                        ksetenv(confname[i], confval[i], false);
-                ksetenv(confname[i], confval[i], true);
+            ksetenv("service", "terminal", 0);
+        snprint(buf, sizeof(buf), "-a %s", getethermac());
+        ksetenv("etherargs", buf, 0);
+
+        /* convert plan9.ini variables to #e and #ec */
+        for(i = 0; i < nconf; i++) {
+            ksetenv(confname[i], confval[i], 0);
+            ksetenv(confname[i], confval[i], 1);
         }
         poperror();
     }
-    kproc("kalarm", alarmkproc, nil);
-    cgapost(0x9);
+    kproc("alarm", alarmkproc, nil); // ??
     arch_touser(sp);
+    assert(0);          /* shouldn't have returned */
 }
 @
-% sp, use of global sp, because of bootargs?
+
+
+
 
 <<function chandevinit>>=
 void
@@ -12949,27 +12318,43 @@ void  (*init)(void);
 % when forking? maybe could remove
 
 
-% UTZERO+32 because of a.out header of initcode binary generated by ld
-<<function touser(x86)>>=
+<<function arch_touser(arm)>>=
 /*
- *  Used to get to the first process:
- *      set up an interrupt return frame and IRET to user level.
+ *  This is the first jump from kernel to user mode.
+ *  Fake a return from interrupt.
+ *
+ *  Enter with R0 containing the user stack pointer.
+ *  UTZERO + 0x20 is always the entry point.
+ *
  */
-TEXT arch_touser(SB), $0
-        PUSHL   $(UDSEL)                        /* old ss */
-        MOVL    sp+0(FP), AX                    /* old sp */
-        PUSHL   AX
-        MOVL    $0x200, AX                      /* interrupt enable flag */
-        PUSHL   AX                              /* old flags */
-        PUSHL   $(UESEL)                        /* old cs */
-        PUSHL   $(UTZERO+32)                    /* old pc */
-        MOVL    $(UDSEL), AX
-        MOVW    AX, DS
-        MOVW    AX, ES
-        MOVW    AX, GS
-        MOVW    AX, FS
-        IRETL
-@ 
+TEXT arch_touser(SB), 1, $-4
+    /* store the user stack pointer into the USR_r13 */
+    MOVM.DB.W [R0], (R13)
+    /* avoid the ambiguity described in notes/movm.w. */
+//  MOVM.S.IA.W (R13), [R13]
+    MOVM.S  (R13), [R13]
+    ADD $4, R13
+
+    /* set up a PSR for user level */
+    MOVW    $(PsrMusr), R0
+    MOVW    R0, SPSR
+
+    /* save the PC on the stack */
+    MOVW    $(UTZERO+0x20), R0
+    MOVM.DB.W [R0], (R13)
+
+    /*
+     * note that 5a's RFE is not the v6 arch. instruction (0xe89d0a00,
+     * I think), which loads CPSR from the word after the PC at (R13),
+     * but rather the pre-v6 simulation `MOVM.IA.S.W (R13), [R15]'
+     * (0xe8fd8000 since MOVM is LDM in this case), which loads CPSR
+     * not from memory but from SPSR due to `.S'.
+     */
+    RFE
+@
+
+
+
 
 
 % code of initcode here! generated by a trick in a .h! chicken and egg
@@ -12979,14 +12364,13 @@ TEXT arch_touser(SB), $0
 % but also init9.s in other architecture, and so the common part 
 % is having a startboot() but before you need to setup a few things
 % like the proper stack registers (see bcm init9.s)
+
+
 <<init9.c>>=
 //@Scheck: def can actually be found initcode.c, but this file is in skip list
 extern void startboot(char*, char**);
 
 //@Scheck: entry point looked for by the linker 8l 
-//For x86, no need for an init9.s; there is no special registers
-//to set in assembly (for example for arm we need to set R12 and we can
-//do that only from assembly).
 void
 _main(char *argv0)
 {
@@ -12994,6 +12378,43 @@ _main(char *argv0)
 }
 @
 % see also initcode_dead.s
+
+% For x86, no need for an init9.s; there is no special registers
+% to set in assembly (for example for arm we need to set R12 and we can
+% do that only from assembly).
+
+
+<<init/user/preboot/arm/init9.s>>=
+/*
+ * This is the same as the C program:
+ *
+ *  void
+ *  main(char* argv0)
+ *  {
+ *      startboot(argv0, &argv0);
+ *  }
+ *
+ * It is in assembler because SB needs to be
+ * set and doing this in C drags in too many
+ * other routines.
+ */
+TEXT main(SB), 1, $8
+    MOVW    $setR12(SB), R12        /* load the SB */
+    MOVW    $boot(SB), R0
+
+    ADD $12, R13, R1            /* pointer to 0(FP) */
+
+    MOVW    R0, 4(R13)          /* pass argc, argv */
+    MOVW    R1, 8(R13)
+
+    BL  startboot(SB)
+_loop:
+    B   _loop
+@
+
+
+
+
 
 % _main? related to main9.s in libc/386/? it is
 % because ld is using _main for the default entry point!
@@ -13048,6 +12469,8 @@ startboot(char *argv0, char **argv)
     _exits(buf);
 }
 @
+
+
 
 \section{Booting the user}
 
@@ -17674,7 +17097,7 @@ dirfixed(byte *p, byte *e, DirEntry *d)
 % We will only see a few drivers. Drivers actually are biggest part of
 % kernel. But not as core, not as interesting. Lots of specifics.
 
-\section{The keyboard (x86)}
+\section{The keyboard}
 
 \subsection{Overview}
 
@@ -17857,57 +17280,9 @@ Kbscan kbscans[KbNscans]; /* kernel and external scan code state */
 @
 
 
+%x86: kbdenable intr, i8042intr, kbdputsc(Int)
 
 
-<<function kbdenable(x86)>>=
-void
-kbdenable(void)
-{
-    ioalloc(Data, 1, 0, "kbd");
-    ioalloc(Cmd, 1, 0, "kbd");
-
-    arch_intrenable(IrqKBD, i8042intr, 0, BUSUNKNOWN, "kbd");
-
-    kbscans[KbInt].num = false;
-    arch_setleds(&kbscans[KbInt]);
-}
-@
-% used to have kdbq init here, but better to separate
-
-<<global i8042lock(x86)>>=
-static Lock i8042lock;
-@
-
-<<interrupt callback i8042intr(x86)>>=
-/*
- *  keyboard interrupt
- */
-static void
-i8042intr(Ureg*, void*)
-{
-    byte s, c;
-
-    /*
-     *  get status
-     */
-    ilock(&i8042lock);
-    s = inb(Status);
-    if(!(s&Inready)){
-        iunlock(&i8042lock);
-        return;
-    }
-
-    /*
-     *  get the character
-     */
-    c = inb(Data);
-    iunlock(&i8042lock);
-
-    <<[[i8042intr()]] aux port handling(x86)>>
-    // !!!
-    kbdputsc(c, KbInt);
-}
-@
 
 
 % i8042intr -> <> -> kbdputc
@@ -18277,163 +17652,6 @@ echoscreen(char *buf, int n)
 % screenputs!
 
 
-\ifallcode
-\subsection{Controller IO (x86)}
-
-<<global nokbd(x86)>>=
-static bool nokbd = true;           /* flag: no PS/2 keyboard */
-@
-% set to false in kbdinit
-
-<<global ccc(x86)>>=
-static byte ccc;
-@
-% set by i8042auxenable for mouse on aux port?
-
-
-<<function kbdinit(x86)>>=
-void
-kbdinit(void)
-{
-    int c, try;
-
-    /* wait for a quiescent controller */
-    try = 500;
-    while(try-- > 0 && (c = inb(Status)) & (Outbusy | Inready)) {
-        if(c & Inready)
-            inb(Data);
-        arch_delay(1);
-    }
-    if (try <= 0) {
-        print(initfailed);
-        return;
-    }
-
-    /* get current controller command byte */
-    outb(Cmd, 0x20);
-    if(inready() < 0){
-        print("i8042: kbdinit can't read ccc\n");
-        ccc = 0;
-    } else
-        ccc = inb(Data);
-
-    /* enable kbd xfers and interrupts */
-    ccc &= ~Ckbddis;
-    ccc |= Csf | Ckbdint | Cscs1;
-    if(outready() < 0) {
-        print(initfailed);
-        return;
-    }
-
-    nokbd = false;
-
-    /* disable mouse */
-    if (outbyte(Cmd, 0x60) < 0 || outbyte(Data, ccc) < 0)
-        print("i8042: kbdinit mouse disable failed\n");
-
-    /* see http://www.computer-engineering.org/ps2keyboard for codes */
-    if(getconf("*typematic") != nil)
-        /* set typematic rate/delay (0 -> delay=250ms & rate=30cps) */
-        if(outbyte(Data, 0xf3) < 0 || outbyte(Data, 0) < 0)
-            print("i8042: kbdinit set typematic rate failed\n");
-}
-@
-
-
-%TODO: return bool instead? those outread < 0 seems bad no?
-<<function outbyte(x86)>>=
-static int
-outbyte(int port, int c)
-{
-    outb(port, c);
-    if(outready() < 0) {
-        print(initfailed);
-        return -1;
-    }
-    return 0;
-}
-@
-
-<<function outready(x86)>>=
-/*
- *  wait for output no longer busy
- */
-static int
-outready(void)
-{
-    int tries;
-
-    for(tries = 0; (inb(Status) & Outbusy); tries++){
-        if(tries > 500)
-            return -1;
-        arch_delay(2);
-    }
-    return 0;
-}
-@
-
-
-<<function inready(x86)>>=
-/*
- *  wait for input
- */
-static int
-inready(void)
-{
-    int tries;
-
-    for(tries = 0; !(inb(Status) & Inready); tries++){
-        if(tries > 500)
-            return -1;
-        arch_delay(2);
-    }
-    return 0;
-}
-@
-
-\subsection{Leds}
-
-<<function setleds(x86)>>=
-/*
- * set keyboard's leds for lock states (scroll, numeric, caps).
- *
- * at least one keyboard (from Qtronics) also sets its numeric-lock
- * behaviour to match the led state, though it has no numeric keypad,
- * and some BIOSes bring the system up with numeric-lock set and no
- * setting to change that.  this combination steals the keys for these
- * characters and makes it impossible to generate them: uiolkjm&*().
- * thus we'd like to be able to force the numeric-lock led (and behaviour) off.
- */
-void
-arch_setleds(Kbscan *kbscan)
-{
-    int leds;
-
-    if(nokbd || kbscan != &kbscans[KbInt])
-        return;
-    leds = 0;
-    if(kbscan->num)
-        leds |= 1<<1;
-    if(0 && kbscan->caps)       /* we don't implement caps lock */
-        leds |= 1<<2;
-
-    ilock(&i8042lock);
-    outready();
-    outb(Data, 0xed);       /* `reset keyboard lock states' */
-    if(inready() == 0)
-        inb(Data);
-
-    outready();
-    outb(Data, leds);
-    if(inready() == 0)
-        inb(Data);
-
-    outready();
-    iunlock(&i8042lock);
-}
-@
-% >> >>
-
 
 \subsection{Changing keyboard, [[/dev/kbmap]]}
 
@@ -18502,171 +17720,63 @@ kbdputmap(ushort m, ushort scanc, Rune r)
 \fi
 
 
-\section{The screen (x86)}
+\section{The screen (arm)}
 
-% just cga.c here, see Graphics.nw for the advanced vga kernel support
-% (and also for full operation of the mouse)
+% arch_screeninit in Graphics.nw
+%    screenputs = swconsole_screenputs;
 
-<<cga.c enum color(x86)>>=
-enum color {
-    Black,
-    Blue,
-    Green,
-    Cyan,
-    Red,
-    Magenta,
-    Brown,
-    Grey,
-
-    Bright = 0x08,
-    Blinking = 0x80,
-
-    Yellow = Bright|Brown,
-    White = Bright|Grey,
-};
-@
-
-<<cga.c enum misc(x86)>>=
-enum {
-    Width       = 80*2,
-    Height      = 25,
-
-    Attr        = (Black<<4)|Grey,  /* high nibble background
-                         * low foreground
-                         */
-
-    Poststrlen  = 0,
-    Postcodelen = 2,
-    Postlen     = Poststrlen+Postcodelen,
-};
-@
-%>>
-
-<<constant CGASCREENBASE(x86)>>=
-#define CGASCREENBASE   ((byte*)KADDR(0xB8000))
-@
-
-
-<<global cgapos(x86)>>=
-static int cgapos;
-@
-
-
-<<global cgascreenlock(x86)>>=
-static Lock cgascreenlock;
-@
-
-<<function screeninit(x86)>>=
-void
-arch_screeninit(void)
+% main -> arch_screeninit (Graphics.nw) -> <>
+<<function fbinit(arm)>>=
+void*
+fbinit(bool set, int *width, int *height, int *depth)
 {
+    Fbinfo *fi = (Fbinfo*)(VCBUFFER);
+    uintptr va;
 
-    cgapos = cgaregr(0x0E)<<8;
-    cgapos |= cgaregr(0x0F);
-    cgapos *= 2;
-
-    screenputs = cgascreenputs;
-}
-@
-% >>
-% see hook screenputs later
-
-<<function cgascreenputs(x86)>>=
-static void
-cgascreenputs(char* s, int n)
-{
-    if(!arch_islo()){
-        /*
-         * Don't deadlock trying to
-         * print in an interrupt.
-         */
-        if(!canlock(&cgascreenlock))
-            return;
-    }
-    else
-        lock(&cgascreenlock);
-
-    while(n-- > 0)
-        cgascreenputc(*s++);
-
-    unlock(&cgascreenlock);
-}
-@
-% note that this does not handle unicode characters. For
-% this you need a better screenputs() like the one maybe provided
-% by devvga?
-
-
-<<function cgascreenputc(x86)>>=
-static void
-cgascreenputc(char c)
-{
-    int i;
-    byte *p;
-
-    if(c == '\n'){
-        cgapos = cgapos/Width;
-        cgapos = (cgapos+1)*Width;
-    }
-    else if(c == '\t'){
-        i = 8 - ((cgapos/2)&7);
-        while(i-->0)
-            cgascreenputc(' ');
-    }
-    else if(c == '\b'){
-        if(cgapos >= 2)
-            cgapos -= 2;
-        cgascreenputc(' ');
-        cgapos -= 2;
-    }
-    else{
-        CGASCREENBASE[cgapos++] = c;
-        CGASCREENBASE[cgapos++] = Attr;
-    }
-    if(cgapos >= Width*Height){
-        memmove(CGASCREENBASE, &CGASCREENBASE[Width], Width*(Height-1));
-        p = &CGASCREENBASE[Width*(Height-1)];
-        for(i=0; i<Width/2; i++){
-            *p++ = ' ';
-            *p++ = Attr;
-        }
-        cgapos = Width*(Height-1);
-    }
-    movecursor();
-}
-@
-% does not handle unicode characters
-
-
-<<function movecursor(x86)>>=
-static void
-movecursor(void)
-{
-    cgaregw(0x0E, (cgapos/2>>8) & 0xFF);
-    cgaregw(0x0F, cgapos/2 & 0xFF);
-    CGASCREENBASE[cgapos+1] = Attr;
+    if(!set)
+        fbdefault(width, height, depth);
+    /* Screen width must be a multiple of 16 */
+    *width &= ~0xF;
+    memset(fi, 0, sizeof(Fbinfo));
+    fi->xres = fi->xresvirtual = *width;
+    fi->yres = fi->yresvirtual = *height;
+    fi->bpp = *depth;
+    cachedwbinvse(fi, sizeof(Fbinfo));
+    vcwrite(ChanFb, dmaaddr(fi));
+    if(vcread(ChanFb) != 0)
+        return nil;
+    //TODO: fi->base is in virtual space?? how vcore knows about that? PADDR?
+    va = mmukmap(FRAMEBUFFER, PADDR(fi->base), fi->screensize);
+    // make it a blue screen
+    if(va)
+        memset((char*)va, 0x7F, fi->screensize);
+    return (void*)va;
 }
 @
 
-%-------------------------------------------------------------------------------
-<<function cgaregr(x86)>>=
-static byte
-cgaregr(int index)
+%gscreen setting!
+
+<<function fbdefault(arm)>>=
+/*
+ * Framebuffer
+ */
+static errorneg1
+fbdefault(int *width, int *height, int *depth)
 {
-    outb(0x3D4, index);
-    return inb(0x3D4+1) & 0xFF;
+    u32int buf[3];
+
+    if(vcreq(TagGetres, &buf[0], 0, 2*4) != 2*4 ||
+       vcreq(TagGetdepth, &buf[2], 0, 4) != 4)
+        return ERROR_NEG1;
+    *width = buf[0];
+    *height = buf[1];
+    *depth = buf[2];
+    return OK_0;
 }
 @
 
-<<function cgaregw(x86)>>=
-static void
-cgaregw(int index, int data)
-{
-    outb(0x3D4, index);
-    outb(0x3D4+1, data);
-}
-@
-
+%x86: cga print at least is simple. Simpler than explaining
+% the font of Graphics.nw and swconsole_screenputs
 
 
 \section{The console device [[/dev/cons]]}
@@ -19242,7 +18352,7 @@ case Qconsctl:
 @
 
 
-\section{The mouse (x86)}
+\section{The mouse}
 
 % devmouse.c! or put in Graphics.nw?
 
@@ -19293,100 +18403,10 @@ case Kmouse|5:
     break;
 @
 
-
-% used by mouse.c
-<<function i8042auxenable(x86)>>=
-void
-i8042auxenable(void (*putc)(int, int))
-{
-    char *err = "i8042: aux init failed\n";
-
-    /* enable kbd/aux xfers and interrupts */
-    ccc &= ~Cauxdis;
-    ccc |= Cauxint;
-
-    ilock(&i8042lock);
-    if(outready() < 0)
-        print(err);
-    outb(Cmd, 0x60);            /* write control register */
-    if(outready() < 0)
-        print(err);
-    outb(Data, ccc);
-    if(outready() < 0)
-        print(err);
-    outb(Cmd, 0xA8);            /* auxiliary device enable */
-    if(outready() < 0){
-        iunlock(&i8042lock);
-        return;
-    }
-    auxputc = putc;
-    arch_intrenable(IrqAUX, i8042intr, 0, BUSUNKNOWN, "kbdaux");
-    iunlock(&i8042lock);
-}
-@
-
-<<hook auxputc(x86)>>=
-static void (*auxputc)(int, int);
-@
-
-<<[[i8042intr()]] aux port handling(x86)>>=
-    /*
-     *  if it's the aux port...
-     */
-    if(s & Minready){
-        if(auxputc != nil)
-            auxputc(c, kbscans[KbInt].shift);
-        return;
-    }
-@
+%x86: i8042auxenable
 
 
 
-% used by mouse, could be moved?
-<<function i8042auxcmd(x86)>>=
-int
-i8042auxcmd(int cmd)
-{
-    unsigned int c;
-    int tries;
-    static bool badkbd;
-
-    if(badkbd)
-        return -1;
-    c = 0;
-    tries = 0;
-
-    ilock(&i8042lock);
-    do{
-        if(tries++ > 2)
-            break;
-        if(outready() < 0)
-            break;
-        outb(Cmd, 0xD4);
-        if(outready() < 0)
-            break;
-        outb(Data, cmd);
-        if(outready() < 0)
-            break;
-        if(inready() < 0)
-            break;
-        c = inb(Data);
-    } while(c == 0xFE || c == 0);
-    iunlock(&i8042lock);
-
-    if(c != 0xFA){
-        print("i8042: %2.2ux returned to the %2.2ux command\n", c, cmd);
-        badkbd = true; /* don't keep trying; there might not be one */
-        return -1;
-    }
-    return 0;
-}
-@
-
-
-
-\section{The floppy (x86)}
-% or The storage device?
 
 \section{Other devices}
 %optional, advanced concepts
@@ -21383,8 +20403,9 @@ struct Block
 @
 
 
-<<constant BLOCKALIGN(x86)>>=
-#define BLOCKALIGN  8
+<<constant BLOCKALIGN(arm)>>=
+// possible alternative fix: git show 2342e706e42d1e6653c51cc1433f44816cf53fe6
+#define BLOCKALIGN  32          /* only used in allocb.c */
 @
 
 <<function _allocb>>=
@@ -22029,32 +21050,17 @@ QTEXCL = 0x20,    /* type bit for exclusive use files */
 [ALARM]     sysalarm,
 @
 
-<<[[Cpu]] [[Arch]] other fields(x86)>>=
-// for arch_perfticks, tsc = time stamp counter
-bool havetsc;
-@
 
 % what about delay() and microdelay()? but seems used only in panic path
 % so maybe not that interesting
 
-\section{Overview (x86)}
+\section{Overview (arm)}
 
 % we have one machine timer, but we want many processes to have
 % different alarms.
 
 % different capabilities? timer, clock, rtc, ??
 
-<<[[PCArch]] time methods fields(x86)>>=
-void  (*clockenable)(void);
-uvlong  (*fastclock)(uvlong*);
-void  (*timerset)(uvlong);
-@
-
-<<[[archgeneric]] time methods(x86)>>=
-.clockenable=   i8253enable,
-.fastclock= i8253read,
-.timerset=  i8253timerset,
-@
 
 
 \section{Time units}
@@ -22102,29 +21108,43 @@ ms2tk(ulong ms)
 @ 
 
 
-% ?? -> <>
-<<function us(x86)>>=
+<<function arch_us(arm)>>=
 ulong
 arch_us(void)
 {
-    return fastticks2us((*arch->fastclock)(nil));
+    if(SystimerFreq != 1*Mhz)
+        return fastticks2us(arch_fastticks(nil));
+    return arch_fastticks(nil);
 }
 @
-%old: was called microsecond in unicode (Âµs)
 
-<<function fastticks(x86)>>=
-/*
- *  return value and speed of timer set in arch->clockenable
- */
+<<function clock_arch_fastticks(arm)>>=
 uvlong
-devarch_arch_fastticks(uvlong *hz)
+clock_arch_fastticks(uvlong *hz)
 {
-    return (*arch->fastclock)(hz);
+    Systimers *tn;
+    ulong lo, hi;
+    uvlong now;
+    int s;
+
+    if(hz)
+        *hz = SystimerFreq;
+    tn = (Systimers*)SYSTIMERS;
+    s = arch_splhi();
+    do{
+        hi = tn->chi;
+        lo = tn->clo;
+    }while(tn->chi != hi);
+    now = (uvlong)hi<<32 | lo;
+    cpu->fastclock = now;
+    arch_splx(s);
+    return cpu->fastclock;
 }
 @
+% >> >>
 
 
-\section{Timers (x86)}
+\section{Timers (arm)}
 
 % capacity of machine is very low, just timer next point
 %  but have many processes, many timer needs, so need map
@@ -22132,59 +21152,33 @@ devarch_arch_fastticks(uvlong *hz)
 
 
 
-\subsection{Programmable timer [[i8253]] (x86)}
 
-\subsection{[[arch_timerset()]] (x86)}
+\subsection{[[arch_timerset()]] (arm)}
 
-<<function timerset(x86)>>=
-// used to be static, but now shared between arch.c and devarch.c
-int doi8253set = 1;
-/*
- *  set next timer interrupt
- */
+<<function arch_timerset(arm)>>=
 void
-arch_timerset(Tval x)
+arch_timerset(Tval next)
 {
-    if(doi8253set)
-        (*arch->timerset)(x);
-}
-@
-
-<<function i8253timerset(x86)>>=
-void
-i8253timerset(uvlong next)
-{
+    Systimers *tn;
+    uvlong now;
     long period;
-    ulong want;
-    ulong now;
 
-    period = MaxPeriod;
-    if(next != 0){
-        want = next>>Tickshift;
-        now = i8253.ticks;  /* assuming whomever called us just did arch_fastticks() */
-
-        period = want - now;
-        if(period < MinPeriod)
-            period = MinPeriod;
-        else if(period > MaxPeriod)
-            period = MaxPeriod;
-    }
-
-    /* hysteresis */
-    if(i8253.period != period){
-        ilock(&i8253);
-        /* load new value */
-        outb(Tmode, Load0|Square);
-        outb(T0cntr, period);       /* low byte */
-        outb(T0cntr, period >> 8);      /* high byte */
-
-        /* remember period */
-        i8253.period = period;
-        i8253.periodset++;
-        iunlock(&i8253);
+    now = arch_fastticks(nil);
+    period = next - now;
+    if(period < MinPeriod)
+        period = MinPeriod;
+    else if(period > MaxPeriod)
+        period = MaxPeriod;
+    if(cpu->cpuno > 0){
+        cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
+        cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
+    }else{
+        tn = (Systimers*)SYSTIMERS;
+        tn->c3 = (ulong)(now + period);
     }
 }
 @
+
 
 \subsection{[[Timer]] and [[Timers]]}
 
@@ -23192,172 +22186,9 @@ le2long(long *to, byte *f)
 @
 
 
-\section{Real time clock, [[/dev/rtc]] (x86)}
-
+%\section{Real time clock, [[/dev/rtc]] (arm)}
 % RTC
 
-% needed? bcm/ works with fakertc and even without fakertc
-
-<<struct Rtc(x86)>>=
-struct Rtc
-{
-    int sec;
-    int min;
-    int hour;
-    int mday;
-    int mon;
-    int year;
-};
-@
-
-
-<<global rtcdevtab(x86)>>=
-Dev rtcdevtab = {
-    .dc       =    'r',
-    .name     =    "rtc",
-               
-    .reset    =    devreset,
-    .init     =    rtcinit,
-    .shutdown =    devshutdown,
-    .attach   =    rtcattach,
-    .walk     =    rtcwalk,
-    .stat     =    rtcstat,
-    .open     =    rtcopen,
-    .create   =    devcreate,
-    .close    =    rtcclose,
-    .read     =    rtcread,
-    .bread    =    devbread,
-    .write    =    rtcwrite,
-    .bwrite   =    devbwrite,
-    .remove   =    devremove,
-    .wstat    =    devwstat,
-};
-@
-
-<<constants SEC2XXX(x86)>>=
-#define SEC2MIN 60L
-#define SEC2HOUR (60L*SEC2MIN)
-#define SEC2DAY (24L*SEC2HOUR)
-@
-
-<<globals dmsize ldmsize(x86)>>=
-/*
- *  days per month plus days/year
- */
-static  int dmsize[] =
-{
-    365, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
-};
-static  int ldmsize[] =
-{
-    366, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
-};
-@
-
-<<function yrsize(x86)>>=
-/*
- *  return the days/month for the given year
- */
-static int*
-yrsize(int y)
-{
-    if((y%4) == 0 && ((y%100) != 0 || (y%400) == 0))
-        return ldmsize;
-    else
-        return dmsize;
-}
-@
-
-<<function rtc2sec(x86)>>=
-/*
- *  compute seconds since Jan 1 1970
- */
-static ulong
-rtc2sec(Rtc *rtc)
-{
-    ulong secs;
-    int i;
-    int *d2m;
-
-    secs = 0;
-
-    /*
-     *  seconds per year
-     */
-    for(i = 1970; i < rtc->year; i++){
-        d2m = yrsize(i);
-        secs += d2m[0] * SEC2DAY;
-    }
-
-    /*
-     *  seconds per month
-     */
-    d2m = yrsize(rtc->year);
-    for(i = 1; i < rtc->mon; i++)
-        secs += d2m[i] * SEC2DAY;
-
-    secs += (rtc->mday-1) * SEC2DAY;
-    secs += rtc->hour * SEC2HOUR;
-    secs += rtc->min * SEC2MIN;
-    secs += rtc->sec;
-
-    return secs;
-}
-@
-
-<<function sec2rtc(x86)>>=
-/*
- *  compute rtc from seconds since Jan 1 1970
- */
-static void
-sec2rtc(ulong secs, Rtc *rtc)
-{
-    int d;
-    long hms, day;
-    int *d2m;
-
-    /*
-     * break initial number into days
-     */
-    hms = secs % SEC2DAY;
-    day = secs / SEC2DAY;
-    if(hms < 0) {
-        hms += SEC2DAY;
-        day -= 1;
-    }
-
-    /*
-     * generate hours:minutes:seconds
-     */
-    rtc->sec = hms % 60;
-    d = hms / 60;
-    rtc->min = d % 60;
-    d /= 60;
-    rtc->hour = d;
-
-    /*
-     * year number
-     */
-    if(day >= 0)
-        for(d = 1970; day >= *yrsize(d); d++)
-            day -= *yrsize(d);
-    else
-        for (d = 1970; day < 0; d--)
-            day += *yrsize(d-1);
-    rtc->year = d;
-
-    /*
-     * generate month
-     */
-    d2m = yrsize(rtc->year);
-    for(d = 1; day >= d2m[d]; d++)
-        day -= d2m[d];
-    rtc->mday = day + 1;
-    rtc->mon = d;
-
-    return;
-}
-@
 
 
 \section{Watchdog}
@@ -23459,7 +22290,7 @@ if(up->procctl || up->nnote)
     notify(ureg);
 @
 
-\subsection{[[sysnotify()]] (x86)}
+\subsection{[[sysnotify()]] (arm)}
 
 <<syscall notify>>=
 // int notify(void (*f)(void*, char*));
@@ -23480,14 +22311,7 @@ if(scallnr != RFORK && (up->procctl || up->nnote))
 @
 %x86: call arch_splhi inside the if (bug in bcm/?)
 
-<<[[syscall()]] call notify()(x86)>>=
-if(scallnr!=RFORK && (up->procctl || up->nnote)){
-    arch_splhi();
-    notify(ureg);
-}
-@
-
-<<function notify(x86)>>=
+<<function notify(arm)>>=
 /*
  *  Call user, if necessary, with note.
  *  Pass user the Ureg struct and the note on his stack.
@@ -23496,33 +22320,35 @@ int
 notify(Ureg* ureg)
 {
     int l;
-    ulong s, sp;
     Note *n;
+    u32int s;
+    uintptr sp;
+    NFrame *nf;
 
     if(up->procctl)
-        procctl(up); // a bit ugly to group procctl handling and note handling
+        procctl(up);
     if(up->nnote == 0)
         return 0;
 
-    <<[[notify()]] fp adjustments(x86)>>
+    fpunotify(ureg);
 
     s = arch_spllo();
     qlock(&up->debug);
-    up->notepending = false;
+
+    up->notepending = 0;
     n = &up->note[0];
     if(strncmp(n->msg, "sys:", 4) == 0){
         l = strlen(n->msg);
-        if(l > ERRMAX-15)   /* " pc=0x12345678\0" */
-            l = ERRMAX-15;
-        seprint(n->msg+l, &n->msg[sizeof n->msg], " pc=0x%.8lux",
-            ureg->pc);
+        if(l > ERRMAX-23)   /* " pc=0x0123456789abcdef\0" */
+            l = ERRMAX-23;
+        snprint(n->msg + l, sizeof n->msg - l, " pc=%#lux", ureg->pc);
     }
 
-    if(n->flag!=NUser && (up->notified || up->notify==0)){
+    if(n->flag != NUser && (up->notified || up->notify == 0)){
         if(n->flag == NDebug)
             pprint("suicide: %s\n", n->msg);
         qunlock(&up->debug);
-        pexit(n->msg, n->flag!=NDebug);
+        pexit(n->msg, n->flag != NDebug);
     }
 
     if(up->notified){
@@ -23530,49 +22356,50 @@ notify(Ureg* ureg)
         arch_splhi();
         return 0;
     }
-
-    if(!up->notify){
+        
+    if(up->notify == nil){
         qunlock(&up->debug);
-        pexit(n->msg, n->flag!=NDebug);
+        pexit(n->msg, n->flag != NDebug);
     }
-    sp = ureg->usp;
-    sp -= 256;  /* debugging: preserve context causing problem */
-    sp -= sizeof(Ureg);
-
-    if(!okaddr((ulong)up->notify, 1, 0)
-    || !okaddr(sp-ERRMAX-4*BY2WD, sizeof(Ureg)+ERRMAX+4*BY2WD, 1)){
+    if(!okaddr(PTR2UINT(up->notify), 1, 0)){
+        pprint("suicide: notify function address %#p\n", up->notify);
         qunlock(&up->debug);
-        pprint("suicide: bad address in notify\n");
-        pexit("Suicide", false);
+        pexit("Suicide", 0);
     }
 
-    memmove((Ureg*)sp, ureg, sizeof(Ureg));
-    *(Ureg**)(sp-BY2WD) = up->ureg; /* word under Ureg is old up->ureg */
-    up->ureg = (void*)sp;
-    sp -= BY2WD+ERRMAX;
-    memmove((char*)sp, up->note[0].msg, ERRMAX);
-    sp -= 3*BY2WD;
-    *(ulong*)(sp+2*BY2WD) = sp+3*BY2WD;     /* arg 2 is string */
-    *(ulong*)(sp+1*BY2WD) = (ulong)up->ureg;    /* arg 1 is ureg* */
-    *(ulong*)(sp+0*BY2WD) = 0;          /* arg 0 is pc */
-    ureg->usp = sp;
-    ureg->pc = (ulong)up->notify;
-    up->notified = true;
+    sp = ureg->sp - sizeof(NFrame);
+    if(!okaddr(sp, sizeof(NFrame), 1)){
+        qunlock(&up->debug);
+        pprint("suicide: notify stack address %#p\n", sp);
+        pexit("Suicide", 0);
+    }
+
+    nf = UINT2PTR(sp);
+    memmove(&nf->ureg, ureg, sizeof(Ureg));
+    nf->old = up->ureg;
+    up->ureg = nf;
+    memmove(nf->msg, up->note[0].msg, ERRMAX);
+    nf->arg1 = nf->msg;
+    nf->arg0 = &nf->ureg;
+    ureg->r0 = PTR2UINT(nf->arg0);
+    nf->ip = 0;
+
+    ureg->sp = sp;
+    ureg->pc = PTR2UINT(up->notify);
+    up->notified = 1;
     up->nnote--;
     memmove(&up->lastnote, &up->note[0], sizeof(Note));
     memmove(&up->note[0], &up->note[1], up->nnote*sizeof(Note));
 
     qunlock(&up->debug);
     arch_splx(s);
+
     return 1;
 }
-@ 
-%if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
-%    up->text, up->pid, ureg->pc, ureg->usp, sp, n->msg);
+@
 
 
-
-\subsection{[[sysnoted()]]}
+\subsection{[[sysnoted()]] (arm)}
 
 <<syscall noted>>=
 // int noted(int v);
@@ -23590,100 +22417,83 @@ if(scallnr == NOTED)
     noted(ureg, *(ulong*)(sp+BY2WD));
 @
 
-<<function noted(x86)>>=
+
+<<function noted(arm)>>=
 /*
  *   Return user to state before notify()
  */
-void
-noted(Ureg* ureg, ulong arg0)
+static void
+noted(Ureg* cur, uintptr arg0)
 {
-    Ureg *nureg;
-    ulong oureg, sp;
+    NFrame *nf;
+    Ureg *nur;
 
     qlock(&up->debug);
-    if(arg0!=NRSTR && !up->notified) {
+    if(arg0 != NRSTR && !up->notified){
         qunlock(&up->debug);
         pprint("call to noted() when not notified\n");
-        pexit("Suicide", /*freemem*/false);
+        pexit("Suicide", 0);
     }
-    up->notified = false;
+    up->notified = 0;
+    fpunoted();
 
-    nureg = up->ureg;   /* pointer to user returned Ureg struct */
-
-    <<[[noted()]] fp adjustments(x86)>>
+    nf = up->ureg;
 
     /* sanity clause */
-    oureg = (ulong)nureg;
-    if(!okaddr((ulong)oureg-BY2WD, BY2WD+sizeof(Ureg), 0)){
+    if(!okaddr(PTR2UINT(nf), sizeof(NFrame), 0)){
         qunlock(&up->debug);
-        pprint("bad ureg in noted or call to noted when not notified\n");
-        pexit("Suicide", false);
-    }
-
-    /*
-     * Check the segment selectors are all valid, otherwise
-     * a fault will be taken on attempting to return to the
-     * user process.
-     * Take care with the comparisons as different processor
-     * generations push segment descriptors in different ways.
-     */
-    if((nureg->cs & 0xFFFF) != UESEL || (nureg->ss & 0xFFFF) != UDSEL
-      || (nureg->ds & 0xFFFF) != UDSEL || (nureg->es & 0xFFFF) != UDSEL
-      || (nureg->fs & 0xFFFF) != UDSEL || (nureg->gs & 0xFFFF) != UDSEL){
-        qunlock(&up->debug);
-        pprint("bad segment selector in noted\n");
-        pexit("Suicide", false);
+        pprint("bad ureg in noted %#p\n", nf);
+        pexit("Suicide", 0);
     }
 
     /* don't let user change system flags */
-    nureg->flags = (ureg->flags & ~0xCD5) | (nureg->flags & 0xCD5);
+    nur = &nf->ureg;
+    nur->psr &= PsrMask|PsrDfiq|PsrDirq;
+    nur->psr |= (cur->psr & ~(PsrMask|PsrDfiq|PsrDirq));
 
-    memmove(ureg, nureg, sizeof(Ureg));
+    memmove(cur, nur, sizeof(Ureg));
 
-    switch(arg0){
+    switch((int)arg0){
     case NCONT:
     case NRSTR:
-        if(!okaddr(nureg->pc, 1, 0) || !okaddr(nureg->usp, BY2WD, 0)){
+        if(!okaddr(nur->pc, BY2WD, 0) || !okaddr(nur->sp, BY2WD, 0)){
             qunlock(&up->debug);
             pprint("suicide: trap in noted\n");
-            pexit("Suicide", false);
+            pexit("Suicide", 0);
         }
-        up->ureg = (Ureg*)(*(ulong*)(oureg-BY2WD));
+        up->ureg = nf->old;
         qunlock(&up->debug);
         break;
-
     case NSAVE:
-        if(!okaddr(nureg->pc, BY2WD, 0)
-        || !okaddr(nureg->usp, BY2WD, 0)){
+        if(!okaddr(nur->pc, BY2WD, 0) || !okaddr(nur->sp, BY2WD, 0)){
             qunlock(&up->debug);
             pprint("suicide: trap in noted\n");
-            pexit("Suicide", false);
+            pexit("Suicide", 0);
         }
         qunlock(&up->debug);
-        sp = oureg-4*BY2WD-ERRMAX;
+
         arch_splhi();
-        ureg->sp = sp;
-        ((ulong*)sp)[1] = oureg;    /* arg 1 0(FP) is ureg* */
-        ((ulong*)sp)[0] = 0;        /* arg 0 is pc */
+        nf->arg1 = nf->msg;
+        nf->arg0 = &nf->ureg;
+        nf->ip = 0;
+        cur->sp = PTR2UINT(nf);
+        cur->r0 = PTR2UINT(nf->arg0);
         break;
-
     default:
-        pprint("unknown noted arg 0x%lux\n", arg0);
+        pprint("unknown noted arg %#p\n", arg0);
         up->lastnote.flag = NDebug;
-        /* fall through */
-
+        /*FALLTHROUGH*/
     case NDFLT:
-        if(up->lastnote.flag == NDebug){
+        if(up->lastnote.flag == NDebug){ 
             qunlock(&up->debug);
             pprint("suicide: %s\n", up->lastnote.msg);
-        } else
+        }
+        else
             qunlock(&up->debug);
-        pexit(up->lastnote.msg, up->lastnote.flag!=NDebug);
+        pexit(up->lastnote.msg, up->lastnote.flag != NDebug);
     }
 }
-@ 
-%if(0) print("%s %lud: noted %.8lux %.8lux\n",
-%    up->text, up->pid, nureg->pc, nureg->usp);
+@
 
 
 \subsection{[[postnote()]]}
@@ -24715,28 +23525,36 @@ Sema sema;
 @
 
 
-\subsubsection{[[cmpswap()]] (x86)}
+\subsubsection{[[cmpswap()]] (arm)}
 
-<<function cmpswap and default implementation(x86)>>=
-/*
- * 386 has no compare-and-swap instruction.
- * Run it with interrupts turned off instead.
- */
-// used to be static, but now shared between arch.c and devarch.c
-int
-cmpswap386(long *addr, long old, long new)
+<<function arch_cmpswap(raspberry pi1)(arm)>>=
+bool
+arch_cmpswap(long *addr, long old, long new)
 {
-    int r, s;
+    return cas32(addr, old, new);
+}
+@
+
+<<function cas32(arm)>>=
+bool
+cas32(void* addr, u32int old, u32int new)
+{
+    bool r;
+    int s;
 
     s = arch_splhi();
-    if(r = (*addr == old))
-        *addr = new;
+    r = (*(u32int*)addr == old);
+    if(r)
+        *(u32int*)addr = new;
     arch_splx(s);
+    if (r)
+        arch_coherence();
     return r;
 }
-
-int (*arch_cmpswap)(long*, long, long) = cmpswap386;
 @
+
+
+
 
 
 <<function semqueue>>=
@@ -25135,24 +23953,6 @@ case 0x02:      /* instruction debug event (BKPT) */
 
 
 
-<<function debugbpt(x86)>>=
-static void
-debugbpt(Ureg* ureg, void*)
-{
-    char buf[ERRMAX];
-
-    if(up == nil)
-        panic("kernel bpt");
-    /* restore pc to instruction that caused the trap */
-    ureg->pc--;
-    snprint(buf, sizeof buf, "sys: breakpoint");
-    postnote(up, 1, buf, NDebug);
-}
-@ 
-
-
-\section{XTODO (x86)}
-
 
 
 
@@ -25160,32 +23960,17 @@ debugbpt(Ureg* ureg, void*)
 % put back? db will still work?
 
 %TODO: Qreg section of /dev/proc
-<<function setregisters(x86)>>=
+<<function arch_setregisters(arm)>>=
 /* This routine must save the values of registers the user is not permitted
  * to write from devproc and then restore the saved values before returning.
  */
 void
 arch_setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 {
-    ulong cs, ds, es, flags, fs, gs, ss;
-
-    ss = ureg->ss;
-    flags = ureg->flags;
-    cs = ureg->cs;
-    ds = ureg->ds;
-    es = ureg->es;
-    fs = ureg->fs;
-    gs = ureg->gs;
-    memmove(pureg, uva, n);
-    ureg->gs = gs;
-    ureg->fs = fs;
-    ureg->es = es;
-    ureg->ds = ds;
-    ureg->cs = cs;
-    ureg->flags = (ureg->flags & 0x00FF) | (flags & 0xFF00);
-    ureg->ss = ss;
+    USED(ureg, pureg, uva, n);
 }
-@ 
+@
+%x86: hide and restore segments in Ureg
 
 
 \section{Core dumps and broken processes}
@@ -25746,12 +24531,15 @@ if(up->procctl == Proc_tracesyscall){
      * change in the future.
      */
     if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
-        validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+        validaddr(sp, sizeof(Sargs)+BY2WD, false);
 
     syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
     up->procctl = Proc_stopme;
+    // this will call sched() and wakeup the tracer process
     procctl(up);
-    if (up->syscalltrace) 
+    // back here when the tracer process readied us back and
+    // should have set procctl back to Proc_tracesyscall
+    if(up->syscalltrace) 
         free(up->syscalltrace);
     up->syscalltrace = nil;
 }
@@ -25762,47 +24550,8 @@ if(up->procctl == Proc_tracesyscall){
 vlong startns, stopns;
 @
 
-<<[[syscall()]] Proc_tracesyscall if, syscall entry(x86)>>=
-if(up->procctl == Proc_tracesyscall){
-    /*
-     * Redundant validaddr.  Do we care?
-     * Tracing syscalls is not exactly a fast path...
-     * Beware, validaddr currently does a pexit rather
-     * than an error if there's a problem; that might
-     * change in the future.
-     */
-    if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
-        validaddr(sp, sizeof(Sargs)+BY2WD, false);
-
-    syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
-    up->procctl = Proc_stopme;
-    // this will call sched() and wakeup the tracer process
-    procctl(up); 
-    // back here when the tracer process readied us back and
-    // should have set procctl back to Proc_tracesyscall
-    if(up->syscalltrace)
-        free(up->syscalltrace);
-    up->syscalltrace = nil;
-    startns = todget(nil);
-}
-@
 
 <<[[syscall()]] Proc_tracesyscall if, syscall exit(arm)>>=
-if(up->procctl == Proc_tracesyscall){
-    stopns = todget(nil);
-    up->procctl = Proc_stopme;
-    sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
-    s = arch_splhi();
-    procctl(up);
-    arch_splx(s);
-    if(up->syscalltrace)
-        free(up->syscalltrace);
-    up->syscalltrace = nil;
-}
-@
-%x86: identical
-
-<<[[syscall()]] Proc_tracesyscall if, syscall exit(x86)>>=
 if(up->procctl == Proc_tracesyscall){
     stopns = todget(nil);
     up->procctl = Proc_stopme;
@@ -25815,8 +24564,11 @@ if(up->procctl == Proc_tracesyscall){
     up->syscalltrace = nil;
 }
 @
+%x86: identical except stuff about startns
+
 % why protect procctl(up) with arch_splhi here and not before?
 % both the entry and exit are not perfectly symetric :( TOFIX?
+
 
 <<[[sysrfork()]] inherit Proc_tracesyscall>>=
     if(up && up->procctl == Proc_tracesyscall)
@@ -26752,15 +25504,16 @@ uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
 vlong pcycles;
 @ 
 
-<<function cycles and default implementation(x86)>>=
-static void
-simplecycles(uvlong *x)
-{
-    *x = cpu->ticks;
-}
+<<macro arch_cycles(arm)>>=
+#define arch_cycles(ip) *(ip) = arch_lcycles()
+@
 
-void    (*arch_cycles)(uvlong*) = simplecycles;
-@ 
+<<function arch_lcycles(raspberry pi1)(arm)>>=
+TEXT arch_lcycles(SB), 1, $-4
+    MRC CpSC, 0, R0, C(CpSPM), C(CpSPMperf), CpSPMcyc
+    RET
+@
+%$
 
 
 
@@ -26834,17 +25587,17 @@ arch_cycles(&up->kentry);
 @
 
 
-<<[[procsave()]] cycles adjustments(x86)>>=
-    uvlong t;
+<<[[arch_procsave()]] cycles adjustments>>=
+uvlong t;
 
-    arch_cycles(&t);
-    p->pcycles += t;
+arch_cycles(&t);
+p->pcycles += t;
 @
+%arch_ but same in both arch
 
-
-<<[[procrestore]] cycles adjustments(x86)>>=
-    arch_cycles(&t);
-    p->pcycles -= t;
+<<[[arch_procrestore]] cycles adjustments>>=
+arch_cycles(&t);
+p->pcycles -= t;
 @
 
 
@@ -26853,9 +25606,8 @@ arch_cycles(&up->kentry);
 <<[[sysexec()]] nbytes tos adjustments>>=
 nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
 @
-<<[[execregs()]] return adjustments(x86)>>=
-      -sizeof(Tos)
-@
+
+% in arch_execregs:     return USTKTOP-sizeof(Tos);
 
 
 
@@ -26872,208 +25624,6 @@ nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
 
 %history of standard error channel:
 %http://www.spinellis.gr/blog/20131211/index.html
-
-<<boot.c>>=
-#include <u.h>
-#include <libc.h>
-#include "../boot/boot.h"
-
-// Note that most of this code is now superseded by $objtype/boot.rc
-
-/*
- * we should inherit the standard fds referring to /dev/cons,
- * but we're being paranoid.
- */
-static void
-opencons(void)
-{
-  close(STDIN);
-  close(STDOUT);
-  close(STDERR);
-  open("/dev/cons", OREAD);
-  open("/dev/cons", OWRITE);
-  open("/dev/cons", OWRITE);
-}
-
-/*
- * init will reinitialize its namespace.
- * #ec gets us plan9.ini settings (*var variables).
- */
-static void
-bindenvsrv(void)
-{
-  bind("#ec", "/env", MREPL); // ec? 2 chars? #e and pass 'c' to device?
-  bind("#e", "/env", MBEFORE|MCREATE); // devenv
-  bind("#s", "/srv/", MREPL|MCREATE); // devsrv
-}
-
-//TODO: use open_safe, write_safe
-static void
-swapproc(void)
-{
-    int fd;
-
-    fd = open("#c/swap", OWRITE);
-    if(fd < 0){
-        warning("opening #c/swap");
-        return;
-    }
-    if(write(fd, "start", 5) <= 0)
-        warning("starting swap kproc");
-    close(fd);
-}
-
-static void
-execinit(void)
-{
-  fdt fd;
-
-  // basics
-
-  bind_safe("#p", "/proc", MREPL); //devproc
-  // used by rc and many programs, e.g. via open("#d/0")
-  bind_safe("#d", "/fd", MREPL); //devdup
-  // can't use sys, because too much code assumes /sys/ have an include/, src/
-  bind_safe("#k", "/ksys", MREPL); //devsys
-
-  bind_safe("/root", "/", MAFTER|MCREATE);
-
-  bind_safe("/386/bin", "/bin", MREPL); // X86
-
-  bind_safe("/rc/bin", "/bin", MAFTER);
-
-  bind_safe("#P", "/dev", MAFTER); //devarch
-
-  bind_safe("#m", "/dev", MAFTER); //devmouse
-  run("/bin/mouse", "ps2", nil);
-
-
-  // for draw
-
-  bind_safe("#v", "/dev", MAFTER); //devvga
-  //this just need a regular vga driver
-  run("/bin/vga", "-l", "640x480x8", nil);
-  //this need special drivers, such as the clgd424x.c in the kernel
-  //run("/bin/vga", "-l", "1024x768x8", nil); // can add -V to debug vga
-  bind_safe("#i", "/dev", MAFTER); // devdraw
-
-  // for rio
-
-  run("/bin/ramfs", "-m", "/mnt", nil);
-  run("/bin/mkdir", "/mnt/temp", nil); // see thread(2), used to create pipes
-  run("/bin/mkdir", "/mnt/wsys", nil);
-  fd = open_safe("#k/hostowner", OWRITE);
-  print_safe(fd, "pad");
-  close(fd);
-
-  // network
-
-  bind_safe("#I", "/net", MREPL); // devip
-  bind_safe("#l0", "/net", MAFTER); // ether (and dev 0)
-
-  // for 8c, 8a, 8l
-
-  putenv("objtype", "386");
-
-  // I have a bug in the kernel where I can't get the current
-  // date from qemu. At boot time there is some lapic clock error.
-  // So then the date is set to 0sec since epoch which is 1970
-  // which is bad for tools like mk because many files are in the futur.
-  // So here I set the date to 2033 so mk should be happy
-  fd = open_safe("#c/time", OWRITE);
-  print_safe(fd, "2000000000");
-  close(fd);
-
-  // should normally run /root/init, but prefer to simply run rc for now
-  run("/bin/rc", nil);
-}
-
-
-// called from boot$CONF.c:main()
-void
-boot(int argc, char *argv[])
-{
-  USED(argc);
-  USED(argv);
-
-  fmtinstall('r', errfmt);
-
-  // at this point we should have #/ and #c setup by the kernel init0
-
-  opencons();
-  bindenvsrv();
-
-  print("booooooooting...\n");
-
-  rfork(RFNAMEG);
-
-  connectlocal();
-
-  swapproc();
-  execinit();
-
-  exits("failed to exec init");
-}
-@
-%$
-
-<<function run>>=
-void
-run(char *file, ...)
-{
-  runv(&file);
-}
-@
-
-<<function runv>>=
-void
-runv(char **argv)
-{
-  int i, pid;
-  
-  switch(pid = fork()){
-  case -1:
-    fatal("fork");
-  case 0:
-    exec(argv[0], argv);
-    fatal(smprint("can't exec %s: %r", argv[0]));
-  default:
-    while ((i = waitpid()) != pid && i != -1)
-      ;
-    if(i == -1)
-      fatal(smprint("wait failed running %s", argv[0]));
-  }
-}
-@
-
-
-<<local.c>>=
-#include <u.h>
-#include <libc.h>
-#include "../boot/boot.h"
-
-// Note that most of this code is now superseded by $objtype/boot.rc
-
-void
-connectlocal(void)
-{
-  int fd;
-  
-  bind_safe("#S", "/dev", MAFTER);
-
-  fd = open_safe("/dev/sdC0/ctl", ORDWR);
-  //TODO: use fdisk -p /dev/sdC1/data > /dev/sdC1/ctl
-  //for sdC0: #prep -p /dev/sdC1/plan9 > /dev/sdC1/ctl
-  print_safe(fd, "part dos 1 1000063");
-  close_safe(fd);
-
-  run("/boot/dossrv", nil);
-  run("/boot/mount", "-c", "/srv/dos", "/root", "/dev/sdC0/dos", nil);
-  
-  return;
-}
-@
-%$
 
 
 \section{[[/root/init]]}
@@ -27190,7 +25740,6 @@ if(indir && *argp==nil) {
 
 
 \chapter{Advanced Topics}
-% put in Kernel_extra.nw for now
 
 % [[select()]]? [[alt()]]?
 
@@ -27199,6 +25748,9 @@ if(indir && *argp==nil) {
 \section{Floating point (ARM)}
 
 % pretty important
+
+
+\subsection{ARM floating point coprocessors}
 
 <<[[Coprocessors]] other cases(arm)>>=
 #define CpFP        10          /* float FP, VFP cfg. */
@@ -27223,6 +25775,7 @@ uintptr fppc;           /* addr of last fault */
 int fpcnt;          /* how many consecutive at that addr */
 @
 
+\subsection{Floating point hooks}
 
 <<[[arch_forkchild()]] floating point(arm)>>=
 fpusysrforkchild(p, cureg, up);
@@ -27231,17 +25784,180 @@ fpusysrforkchild(p, cureg, up);
 <<[[arch_procsetup()]] floating point(arm)>>=
 fpusysprocsetup(p);
 @
+
+
+
+
+
 <<[[arch_procsave()]] floating point(arm)>>=
 /* TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.*/
 fpuprocsave(p);
 @
+
 <<[[arch_procrestore()]] floating point(arm)>>=
 fpuprocrestore(p);
 @
 
+
+
 <<[[syscall()]] if RFORK, handle floating point(arm)>>=
 if(scallnr == RFORK)
     fpusysrfork(ureg);
+@
+
+
+
+
+
+<<function fpunotify(arm)>>=
+/*
+ * Called when a note is about to be delivered to a
+ * user process, usually at the end of a system call.
+ * Note handlers are not allowed to use the FPU so
+ * the state is marked (after saving if necessary) and
+ * checked in the Device Not Available handler.
+ */
+void
+fpunotify(Ureg*)
+{
+    if(up->fpstate == FPactive){
+        fpsave(&up->fpsave);
+        up->fpstate = FPinactive;
+    }
+    up->fpstate |= FPillegal;
+}
+@
+
+<<function fpunoted(arm)>>=
+/*
+ * Called from sysnoted() via the machine-dependent
+ * noted() routine.
+ * Clear the flag set above in fpunotify().
+ */
+void
+fpunoted(void)
+{
+    up->fpstate &= ~FPillegal;
+}
+@
+
+<<function fpusysrfork(arm)>>=
+/*
+ * Called early in the non-interruptible path of
+ * sysrfork() via the machine-dependent syscall() routine.
+ * Save the state so that it can be easily copied
+ * to the child process later.
+ */
+void
+fpusysrfork(Ureg*)
+{
+    if(up->fpstate == FPactive){
+        fpsave(&up->fpsave);
+        up->fpstate = FPinactive;
+    }
+}
+@
+
+<<function fpusysrforkchild(arm)>>=
+/*
+ * Called later in sysrfork() via the machine-dependent
+ * sysrforkchild() routine.
+ * Copy the parent FPU state to the child.
+ */
+void
+fpusysrforkchild(Proc *p, Ureg *, Proc *up)
+{
+    /* don't penalize the child, it hasn't done FP in a note handler. */
+    p->fpstate = up->fpstate & ~FPillegal;
+}
+@
+
+<<function fpsave(arm)>>=
+/* should only be called if p->fpstate == FPactive */
+void
+fpsave(Arch_FPsave *fps)
+{
+    int n;
+
+    fpon();
+    fps->control = fps->status = fprd(Fpscr);
+    assert(cpu->fpnregs);
+    for (n = 0; n < cpu->fpnregs; n++)
+        fpsavereg(n, (uvlong *)fps->regs[n]);
+    fpoff();
+}
+@
+
+<<function fprestore(arm)>>=
+static void
+fprestore(Proc *p)
+{
+    int n;
+
+    fpon();
+    fpwr(Fpscr, p->fpsave.control);
+    cpu->fpscr = fprd(Fpscr) & ~Allcc;
+    assert(cpu->fpnregs);
+    for (n = 0; n < cpu->fpnregs; n++)
+        fprestreg(n, *(uvlong *)p->fpsave.regs[n]);
+}
+@
+
+<<function fpuprocsave(arm)>>=
+/*
+ * Called from sched() and sleep() via the machine-dependent
+ * procsave() routine.
+ * About to go in to the scheduler.
+ * If the process wasn't using the FPU
+ * there's nothing to do.
+ */
+void
+fpuprocsave(Proc *p)
+{
+    if(p->fpstate == FPactive){
+        if(p->state == Moribund)
+            fpclear();
+        else{
+            /*
+             * Fpsave() stores without handling pending
+             * unmasked exeptions. Postnote() can't be called
+             * here as sleep() already has up->rlock, so
+             * the handling of pending exceptions is delayed
+             * until the process runs again and generates an
+             * emulation fault to activate the FPU.
+             */
+            fpsave(&p->fpsave);
+        }
+        p->fpstate = FPinactive;
+    }
+}
+@
+
+<<function fpuprocrestore(arm)>>=
+/*
+ * The process has been rescheduled and is about to run.
+ * Nothing to do here right now. If the process tries to use
+ * the FPU again it will cause a Device Not Available
+ * exception and the state will then be restored.
+ */
+void
+fpuprocrestore(Proc *)
+{
+}
+@
+
+<<function fpusysprocsetup(arm)>>=
+/*
+ * Disable the FPU.
+ * Called from sysexec() via sysprocsetup() to
+ * set the FPU for the new process.
+ */
+void
+fpusysprocsetup(Proc *p)
+{
+    p->fpstate = FPinit;
+    fpoff();
+}
 @
 
 \subsection{[[coproc.c]]}
@@ -27609,222 +26325,8 @@ fpclear(void)
 }
 @
 
-<<function fpunotify(arm)>>=
-/*
- * Called when a note is about to be delivered to a
- * user process, usually at the end of a system call.
- * Note handlers are not allowed to use the FPU so
- * the state is marked (after saving if necessary) and
- * checked in the Device Not Available handler.
- */
-void
-fpunotify(Ureg*)
-{
-    if(up->fpstate == FPactive){
-        fpsave(&up->fpsave);
-        up->fpstate = FPinactive;
-    }
-    up->fpstate |= FPillegal;
-}
-@
-
-<<function fpunoted(arm)>>=
-/*
- * Called from sysnoted() via the machine-dependent
- * noted() routine.
- * Clear the flag set above in fpunotify().
- */
-void
-fpunoted(void)
-{
-    up->fpstate &= ~FPillegal;
-}
-@
-
-<<function fpusysrfork(arm)>>=
-/*
- * Called early in the non-interruptible path of
- * sysrfork() via the machine-dependent syscall() routine.
- * Save the state so that it can be easily copied
- * to the child process later.
- */
-void
-fpusysrfork(Ureg*)
-{
-    if(up->fpstate == FPactive){
-        fpsave(&up->fpsave);
-        up->fpstate = FPinactive;
-    }
-}
-@
-
-<<function fpusysrforkchild(arm)>>=
-/*
- * Called later in sysrfork() via the machine-dependent
- * sysrforkchild() routine.
- * Copy the parent FPU state to the child.
- */
-void
-fpusysrforkchild(Proc *p, Ureg *, Proc *up)
-{
-    /* don't penalize the child, it hasn't done FP in a note handler. */
-    p->fpstate = up->fpstate & ~FPillegal;
-}
-@
-
-<<function fpsave(arm)>>=
-/* should only be called if p->fpstate == FPactive */
-void
-fpsave(Arch_FPsave *fps)
-{
-    int n;
-
-    fpon();
-    fps->control = fps->status = fprd(Fpscr);
-    assert(cpu->fpnregs);
-    for (n = 0; n < cpu->fpnregs; n++)
-        fpsavereg(n, (uvlong *)fps->regs[n]);
-    fpoff();
-}
-@
-
-<<function fprestore(arm)>>=
-static void
-fprestore(Proc *p)
-{
-    int n;
-
-    fpon();
-    fpwr(Fpscr, p->fpsave.control);
-    cpu->fpscr = fprd(Fpscr) & ~Allcc;
-    assert(cpu->fpnregs);
-    for (n = 0; n < cpu->fpnregs; n++)
-        fprestreg(n, *(uvlong *)p->fpsave.regs[n]);
-}
-@
-
-<<function fpuprocsave(arm)>>=
-/*
- * Called from sched() and sleep() via the machine-dependent
- * procsave() routine.
- * About to go in to the scheduler.
- * If the process wasn't using the FPU
- * there's nothing to do.
- */
-void
-fpuprocsave(Proc *p)
-{
-    if(p->fpstate == FPactive){
-        if(p->state == Moribund)
-            fpclear();
-        else{
-            /*
-             * Fpsave() stores without handling pending
-             * unmasked exeptions. Postnote() can't be called
-             * here as sleep() already has up->rlock, so
-             * the handling of pending exceptions is delayed
-             * until the process runs again and generates an
-             * emulation fault to activate the FPU.
-             */
-            fpsave(&p->fpsave);
-        }
-        p->fpstate = FPinactive;
-    }
-}
-@
-
-<<function fpuprocrestore(arm)>>=
-/*
- * The process has been rescheduled and is about to run.
- * Nothing to do here right now. If the process tries to use
- * the FPU again it will cause a Device Not Available
- * exception and the state will then be restored.
- */
-void
-fpuprocrestore(Proc *)
-{
-}
-@
-
-<<function fpusysprocsetup(arm)>>=
-/*
- * Disable the FPU.
- * Called from sysexec() via sysprocsetup() to
- * set the FPU for the new process.
- */
-void
-fpusysprocsetup(Proc *p)
-{
-    p->fpstate = FPinit;
-    fpoff();
-}
-@
 
 
-<<function mathnote(arm)>>=
-static void
-mathnote(void)
-{
-    ulong status;
-    char *msg, note[ERRMAX];
-
-    status = up->fpsave.status;
-
-    /*
-     * Some attention should probably be paid here to the
-     * exception masks and error summary.
-     */
-    if (status & FPAINEX)
-        msg = "inexact";
-    else if (status & FPAOVFL)
-        msg = "overflow";
-    else if (status & FPAUNFL)
-        msg = "underflow";
-    else if (status & FPAZDIV)
-        msg = "divide by zero";
-    else if (status & FPAINVAL)
-        msg = "bad operation";
-    else
-        msg = "spurious";
-    snprint(note, sizeof note, "sys: fp: %s fppc=%#p status=%#lux",
-        msg, up->fpsave.pc, status);
-    postnote(up, 1, note, NDebug);
-}
-@
-
-<<function mathemu(arm)>>=
-static void
-mathemu(Ureg *)
-{
-    switch(up->fpstate){
-    case FPemu:
-        error("illegal instruction: VFP opcode in emulated mode");
-    case FPinit:
-        fpinit();
-        up->fpstate = FPactive;
-        break;
-    case FPinactive:
-        /*
-         * Before restoring the state, check for any pending
-         * exceptions.  There's no way to restore the state without
-         * generating an unmasked exception.
-         * More attention should probably be paid here to the
-         * exception masks and error summary.
-         */
-        if(up->fpsave.status & (FPAINEX|FPAUNFL|FPAOVFL|FPAZDIV|FPAINVAL)){
-            mathnote();
-            break;
-        }
-        fprestore(up);
-        up->fpstate = FPactive;
-        break;
-    case FPactive:
-        error("illegal instruction: bad vfp fpu opcode");
-        break;
-    }
-    fpclear();
-}
-@
 
 <<function fpstuck(arm)>>=
 void
@@ -27966,13 +26468,15 @@ rv = fpuemu(ureg);
 \t remove fpuemu and rv local
 
 
-\subsection{[[Arch_FPsave]]}
+\subsection{[[FPSaveStatus]]}
+
+%trans: saw hardware support for float, how plan9 adapts that.
 
 <<enum fpsavestatus>>=
 /*
  * FPsave.status
  */
-enum fpsavestatus
+enum FPSaveStatus
 {
     /* this is a state */
     FPinit=   0,
@@ -27992,6 +26496,7 @@ int fpstate;
 Arch_FPsave  fpsave;   /* address of this is known by db */
 @
 
+\subsection{[[Arch_FPsave]]}
 
 <<struct Arch_FPsave(arm)>>=
 /*
@@ -28023,219 +26528,89 @@ enum {
 %old: was in dat_arch.h
 
 
-\section{Floating point (x86)}
+\subsection{[[mathxxx()]] (arm)}
 
-% apparently on 386 we have IrqIRQ13 for coprocessor, meaning the copro
-% is really outside and need to communicate with him?
-% simpler with 486?
-
-
-\subsection{[[Arch_FPsave]] (x86)}
-
-<<union ArchFPSave(x86)>>=
-/*
- * the FP regs must be stored here, not somewhere pointed to from here.
- * port code assumes this.
- */
-union Arch_FPsave {
-    FPstate;
-    SFPssestate;
-};
-@
-%old: FPsave
-%less: could be renamed Arch_ProcFPSave (used both in Proc and Cpu though)
-
-<<struct FPstate(x86)>>=
-struct  FPstate     /* x87 fpu state */
+<<function mathnote(arm)>>=
+static void
+mathnote(void)
 {
-  ushort  control;
-  ushort  r1;
-  // enum<fpsavestatus>
-  ushort  status;
-  ushort  r2;
-  ushort  tag;
-  ushort  r3;
-  ulong pc;
-  ushort  selector;
-  ushort  r4;
-  ulong operand;
-  ushort  oselector;
-  ushort  r5;
-  uchar regs[80]; /* floating point registers */
-};
+    ulong status;
+    char *msg, note[ERRMAX];
+
+    status = up->fpsave.status;
+
+    /*
+     * Some attention should probably be paid here to the
+     * exception masks and error summary.
+     */
+    if (status & FPAINEX)
+        msg = "inexact";
+    else if (status & FPAOVFL)
+        msg = "overflow";
+    else if (status & FPAUNFL)
+        msg = "underflow";
+    else if (status & FPAZDIV)
+        msg = "divide by zero";
+    else if (status & FPAINVAL)
+        msg = "bad operation";
+    else
+        msg = "spurious";
+    snprint(note, sizeof note, "sys: fp: %s fppc=%#p status=%#lux",
+        msg, up->fpsave.pc, status);
+    postnote(up, 1, note, NDebug);
+}
 @
 
-\subsection{SSE}
-
-<<struct  SFPssestate(x86)>>=
-struct  SFPssestate   /* SSE fp state with alignment slop */
+<<function mathemu(arm)>>=
+static void
+mathemu(Ureg *)
 {
-  FPssestate;
-  uchar alignpad[FPalign]; /* slop to allow copying to aligned addr */
-  ulong magic;    /* debugging: check for overrun */
-};
-@
-
-<<constant FPalign(x86)>>=
-#define FPalign   16      /* required for FXSAVE */
-@
-
-
-<<struct FPssestate(x86)>>=
-struct  FPssestate    /* SSE fp state */
-{
-  ushort  fcw;    /* control */
-  ushort  fsw;    /* status */
-  ushort  ftw;    /* tag */
-  ushort  fop;    /* opcode */
-  ulong fpuip;    /* pc */
-  ushort  cs;   /* pc segment */
-  ushort  r1;   /* reserved */
-  ulong fpudp;    /* data pointer */
-  ushort  ds;   /* data pointer segment */
-  ushort  r2;
-  ulong mxcsr;    /* MXCSR register state */
-  ulong mxcsr_mask; /* MXCSR mask register */
-  uchar xregs[480]; /* extended registers */
-};
+    switch(up->fpstate){
+    case FPemu:
+        error("illegal instruction: VFP opcode in emulated mode");
+    case FPinit:
+        fpinit();
+        up->fpstate = FPactive;
+        break;
+    case FPinactive:
+        /*
+         * Before restoring the state, check for any pending
+         * exceptions.  There's no way to restore the state without
+         * generating an unmasked exception.
+         * More attention should probably be paid here to the
+         * exception masks and error summary.
+         */
+        if(up->fpsave.status & (FPAINEX|FPAUNFL|FPAOVFL|FPAZDIV|FPAINVAL)){
+            mathnote();
+            break;
+        }
+        fprestore(up);
+        up->fpstate = FPactive;
+        break;
+    case FPactive:
+        error("illegal instruction: bad vfp fpu opcode");
+        break;
+    }
+    fpclear();
+}
 @
 
 \subsection{XXX}
 
-<<[[Cpu]] [[Arch]] other fields(x86)>>=
-Arch_FPsave *fpsavalign;
-@
-
-
-<<[[newproc()]] fb init>>=
-    p->fpstate = FPinit;
+<<[[newproc()]] fp init>>=
+p->fpstate = FPinit;
 @
 
 <<[[sysrfork()]] propagate fpsave>>=
-    p->fpsave = up->fpsave;
+p->fpsave = up->fpsave;
 @
 
 <<[[sysrfork()]] propagate fpstate>>=
-    /* don't penalize the child, it hasn't done FP in a note handler. */
-    p->fpstate = up->fpstate & ~FPillegal;
+/* don't penalize the child, it hasn't done FP in a note handler. */
+p->fpstate = up->fpstate & ~FPillegal;
 @
 
-<<function fpsavealloc(x86)>>=
-void
-fpsavealloc(void)
-{
-    cpu->fpsavalign = mallocalign(sizeof(FPssestate), FPalign, 0, 0);
-    if (cpu->fpsavalign == nil)
-        panic("cpu%d: can't allocate fpsavalign", cpu->cpuno);
-}
-@ 
 
-
-<<hook fprestore and fpsave(x86)>>=
-void    (*fprestore)(Arch_FPsave*);
-void    (*fpsave)(Arch_FPsave*);
-@
-
-<<function fpssesave(x86)>>=
-/*
- * sse fp save and restore buffers have to be 16-byte (FPalign) aligned,
- * so we shuffle the data down as needed or make copies.
- */
-
-void
-fpssesave(Arch_FPsave *fps)
-{
-    Arch_FPsave *afps;
-
-    fps->magic = 0x1234;
-    afps = (Arch_FPsave *)ROUND(((uintptr)fps), FPalign);
-    fpssesave0(afps);
-    if (fps != afps)  /* not aligned? shuffle down from aligned buffer */
-        memmove(fps, afps, sizeof(FPssestate));
-    if (fps->magic != 0x1234)
-        print("fpssesave: magic corrupted\n");
-}
-@ 
-
-
-<<function fpsserestore(x86)>>=
-void
-fpsserestore(Arch_FPsave *fps)
-{
-    Arch_FPsave *afps;
-
-    fps->magic = 0x4321;
-    afps = (Arch_FPsave *)ROUND(((uintptr)fps), FPalign);
-    if (fps != afps) {
-        afps = cpu->fpsavalign;
-        memmove(afps, fps, sizeof(FPssestate)); /* make aligned copy */
-    }
-    fpsserestore0(afps);
-    if (fps->magic != 0x4321)
-        print("fpsserestore: magic corrupted\n");
-}
-@ 
-
-
-
-
-
-<<[[procsetup()]] fp setup(x86)>>=
-/*
- *  set up floating point for a new process
- */
-    p->fpstate = FPinit;
-    fpoff();
-@
-
-<<[[userinit()]] fp setup(x86)>>=
-    p->fpstate = FPinit;
-    fpoff();
-@
-
-<<[[execregs()]] fp adjustments(x86)>>=
-    //arch_procsetup(up), redundant?
-    up->fpstate = FPinit;
-    fpoff();
-@
-
-<<[[syscall()]] fp adjustments if fork(x86)>>=
-    if(scallnr == RFORK && up->fpstate == FPactive){
-        fpsave(&up->fpsave);
-        up->fpstate = FPinactive;
-    }
-@
-
-<<[[notify()]] fp adjustments(x86)>>=
-    if(up->fpstate == FPactive){
-        fpsave(&up->fpsave);
-        up->fpstate = FPinactive;
-    }
-    up->fpstate |= FPillegal;
-@
-
-<<[[noted()]] fp adjustments(x86)>>=
-    up->fpstate &= ~FPillegal;
-@
-
-<<[[procsave()]] fp adjustments(x86)>>=
-    if(p->fpstate == FPactive){
-        if(p->state == Moribund)
-            fpclear();
-        else{
-            /*
-             * Fpsave() stores without handling pending
-             * unmasked exeptions. Postnote() can't be called
-             * here as sleep() already has up->rlock, so
-             * the handling of pending exceptions is delayed
-             * until the process runs again and generates an
-             * emulation fault to activate the FPU.
-             */
-            fpsave(&p->fpsave);
-        }
-        p->fpstate = FPinactive;
-    }
-@
 
 
 
@@ -28259,265 +26634,7 @@ fpsserestore(Arch_FPsave *fps)
 
 
 
-<<function mathstate(x86)>>=
-static void
-mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
-{
-        ulong sts, fpc, ctl;
-        Arch_FPsave *f = &up->fpsave;
 
-        if(fpsave == fpx87save){
-                sts = f->status;
-                fpc = f->pc;
-                ctl = f->control;
-        } else {
-                sts = f->fsw;
-                fpc = f->fpuip;
-                ctl = f->fcw;
-        }
-        if(stsp)
-                *stsp = sts;
-        if(pcp)
-                *pcp = fpc;
-        if(ctlp)
-                *ctlp = ctl;
-}
-@
-
-<<function mathnote(x86)>>=
-static void
-mathnote(void)
-{
-        int i;
-        ulong status, pc;
-        char *msg, note[ERRMAX];
-
-        mathstate(&status, &pc, nil);
-
-        /*
-         * Some attention should probably be paid here to the
-         * exception masks and error summary.
-         */
-        msg = "unknown exception";
-        for(i = 1; i <= 5; i++){
-                if(!((1<<i) & status))
-                        continue;
-                msg = mathmsg[i];
-                break;
-        }
-        if(status & 0x01){
-                if(status & 0x40){
-                        if(status & 0x200)
-                                msg = "stack overflow";
-                        else
-                                msg = "stack underflow";
-                }else
-                        msg = "invalid operation";
-        }
-        snprint(note, sizeof note, "sys: fp: %s fppc=%#lux status=%#lux",
-                msg, pc, status);
-        postnote(up, 1, note, NDebug);
-}
-@
-% >>
-
-<<function matherror(x86)>>=
-/*
- *  math coprocessor error
- */
-static void
-matherror(Ureg *ur, void*)
-{
-        ulong status, pc;
-
-        /*
-         *  a write cycle to port 0xF0 clears the interrupt latch attached
-         *  to the error# line from the 387
-         */
-        if(!(cpu->cpuiddx & Fpuonchip))
-                outb(0xF0, 0xFF);
-
-        /*
-         *  save floating point state to check out error
-         */
-        fpenv(&up->fpsave);     /* result ignored, but masks fp exceptions */
-        fpsave(&up->fpsave);            /* also turns fpu off */
-        fpon();
-        mathnote();
-
-        if((ur->pc & 0xf0000000) == KZERO){
-                mathstate(&status, &pc, nil);
-                panic("fp: status %#lux fppc=%#lux pc=%#lux", status, pc, ur->pc);
-        }
-}
-@
-
-
-<<function mathemu(x86)>>=
-/*
- *  math coprocessor emulation fault
- */
-static void
-mathemu(Ureg *ureg, void*)
-{
-        ulong status, control;
-
-        if(up->fpstate & FPillegal){
-                /* someone did floating point in a note handler */
-                postnote(up, 1, "sys: floating point in note handler", NDebug);
-                return;
-        }
-        switch(up->fpstate){
-        case FPinit:
-                fpinit();
-                up->fpstate = FPactive;
-                break;
-        case FPinactive:
-                /*
-                 * Before restoring the state, check for any pending
-                 * exceptions, there's no way to restore the state without
-                 * generating an unmasked exception.
-                 * More attention should probably be paid here to the
-                 * exception masks and error summary.
-                 */
-                mathstate(&status, nil, &control);
-                if((status & ~control) & 0x07F){
-                        mathnote();
-                        break;
-                }
-                fprestore(&up->fpsave);
-                up->fpstate = FPactive;
-                break;
-        case FPactive:
-                panic("math emu pid %ld %s pc %#lux",
-                        up->pid, up->text, ureg->pc);
-                break;
-        }
-}
-@
-
-
-<<function mathover(x86)>>=
-/*
- *  math coprocessor segment overrun
- */
-static void
-mathover(Ureg*, void*)
-{
-        pexit("math overrun", false);
-}
-@
-
-
-<<function mathinit(x86)>>=
-void
-mathinit(void)
-{
-        trapenable(VectorCERR, matherror, 0, "matherror");
-        if(X86FAMILY(cpu->cpuidax) == 3)
-                arch_intrenable(IrqIRQ13, matherror, 0, BUSUNKNOWN, "matherror");
-        trapenable(VectorCNA, mathemu, 0, "mathemu");
-        trapenable(VectorCSO, mathover, 0, "mathover");
-}
-@
-
-
-
-<<l_fp.s>>=
-/*
- * Some machine instructions not handled by 8[al].
- */
-#define FXSAVE          BYTE $0x0f; BYTE $0xae; BYTE $0x00  /* SSE FP save */
-#define FXRSTOR         BYTE $0x0f; BYTE $0xae; BYTE $0x08  /* SSE FP restore */
-
-        
-/*
- * Floating point.
- * Note: the encodings for the FCLEX, FINIT, FSAVE, FSTCW, FSENV and FSTSW
- * instructions do NOT have the WAIT prefix byte (i.e. they act like their
- * FNxxx variations) so WAIT instructions must be explicitly placed in the
- * code as necessary.
- */
-#define FPOFF(l)                                                 ;\
-        MOVL    CR0, AX                                          ;\
-        ANDL    $0xC, AX                        /* EM, TS */     ;\
-        CMPL    AX, $0x8                                         ;\
-        JEQ     l                                                ;\
-        WAIT                                                     ;\
-l:                                                               ;\
-        MOVL    CR0, AX                                          ;\
-        ANDL    $~0x4, AX                       /* EM=0 */       ;\
-        ORL     $0x28, AX                       /* NE=1, TS=1 */ ;\
-        MOVL    AX, CR0
-
-#define FPON                                                     ;\
-        MOVL    CR0, AX                                          ;\
-        ANDL    $~0xC, AX                       /* EM=0, TS=0 */ ;\
-        MOVL    AX, CR0
-
-TEXT fpon(SB), $0                               /* enable */
-        FPON
-        RET
-
-TEXT fpoff(SB), $0                              /* disable */
-        FPOFF(l1)
-        RET
-
-TEXT fpinit(SB), $0                             /* enable and init */
-        FPON
-        FINIT
-        WAIT
-        /* setfcr(FPPDBL|FPRNR|FPINVAL|FPZDIV|FPOVFL) */
-        /* note that low 6 bits are masks, not enables, on this chip */
-        PUSHW   $0x0232
-        FLDCW   0(SP)
-        POPW    AX
-        WAIT
-        RET
-
-TEXT fpx87save(SB), $0                          /* save state and disable */
-        MOVL    p+0(FP), AX
-        FSAVE   0(AX)                           /* no WAIT */
-        FPOFF(l2)
-        RET
-
-TEXT fpx87restore(SB), $0                       /* enable and restore state */
-        FPON
-        MOVL    p+0(FP), AX
-        FRSTOR  0(AX)
-        WAIT
-        RET
-
-//TEXT fpstatus(SB), $0                         /* get floating point status */
-//      FSTSW   AX
-//      RET
-
-TEXT fpenv(SB), $0                              /* save state without waiting */
-        MOVL    p+0(FP), AX
-        FSTENV  0(AX)                           /* also masks FP exceptions */
-        RET
-
-TEXT fpclear(SB), $0                            /* clear pending exceptions */
-        FPON
-        FCLEX                                   /* no WAIT */
-        FPOFF(l3)
-        RET
-
-TEXT fpssesave0(SB), $0                         /* save state and disable */
-        MOVL    p+0(FP), AX
-        FXSAVE                                  /* no WAIT */
-        FPOFF(l4)
-        RET
-
-TEXT fpsserestore0(SB), $0                      /* enable and restore state */
-        FPON
-        MOVL    p+0(FP), AX
-        FXRSTOR
-        WAIT
-        RET
-        
-@
-%$
 
 
 \section{SMP (ARM)}
@@ -28591,6 +26708,19 @@ uintptr armlocal;
 #define CpIDcssel   2           /* cache size select (cortex) */
 @
 
+
+
+<<type PageTableEntryAttribute2(arm)>>=
+#define L1wralloc   (1<<12)         /* L1 TEX */
+#define L1sharable  (1<<16)
+#define L2wralloc   (1<<6)          /* L2 TEX (small pages) */
+#define L2sharable  (1<<10)
+@
+%/* attributes for memory containing locks -- differs between armv6 and armv7 */
+%//#define L1ptedramattrs    (Cached | Buffered | L1wralloc | L1sharable)
+%//#define L2ptedramattrs    (Cached | Buffered | L2wralloc | L2sharable)
+% >> >> >> >>
+
 \subsection{IRQ adjustments}
 
 <<[[IRQ]] local cases(arm)>>=
@@ -28621,7 +26751,7 @@ if(irq >= IRQlocal){
 
 \subsection{Concurrency adjustments}
 
-\section{Advanced virtual memory (x86)}
+\section{Advanced virtual memory}
 
 % large memory system: vpt/vpd, tmpmap, arch_kmap
 % other: vmap? for devices? framebuffer related?
@@ -28643,12 +26773,12 @@ if(irq >= IRQlocal){
 \subsection{Extra segment types}
 
 <<[[Segtype]] other cases>>=
-    SG_SHARED = 04,
+SG_SHARED = 04,
 @
 
 
 <<[[Segtype]] other cases>>=
-    SG_PHYSICAL = 05,
+SG_PHYSICAL = 05,
 @
 % SG_PHYSICAL used only for vga/vesa apparently
 
@@ -28728,814 +26858,55 @@ addphysseg(Physseg* new)
 
 
 <<[[freept()]] SG_PHYSICAL case>>=
-    case SG_PHYSICAL:
-        ptop = &p->pagetab[PAGETABSIZE];
-        for(pte = p->pagetab; pte < ptop; pte++) {
-            pt = *pte;
-            if(pt == nil)
-                continue;
-            lock(pt);
-            ref = --pt->ref;
-            unlock(pt);
-            if(ref == 0)
-                free(pt); // because was smalloc'ed in fixfault
-        }
-        break;
+case SG_PHYSICAL:
+    ptop = &p->pagetab[PAGETABSIZE];
+    for(pte = p->pagetab; pte < ptop; pte++) {
+        pt = *pte;
+        if(pt == nil)
+            continue;
+        lock(pt);
+        ref = --pt->ref;
+        unlock(pt);
+        if(ref == 0)
+            free(pt); // because was smalloc'ed in fixfault
+    }
+    break;
 @
 
 <<[[fixfault()]] SG_PHYSICAL case>>=
-    case SG_PHYSICAL:
-        if(*pte == nil) {
-            new = smalloc(sizeof(Page));
-            new->va = addr;
-            new->pa = s->pseg->pa+(addr-s->base);
-            new->ref = 1;
-            *pte = new;
-        }
-
-        if (checkaddr && addr == addr2check)
-            (*checkaddr)(addr, s, *pte);
-        mmupte = PPN((*pte)->pa) |PTEWRITE|PTEUNCACHED|PTEVALID;
-        (*pte)->modref = PG_MOD|PG_REF;
-        break;
-@
-
-\subsection{[[vpt]], [[vpd]] (x86)}
-
-% tricks apparently borrowed from exokernel code.
-% see the toplevel comment in mmu.c
-% essentially just tricks abusing the long page feature of x86 to make
-% it easy to map and then edit physical content of page tables or
-% page directory per process.
-
-<<constant VPTSIZE(x86)>>=
-#define VPTSIZE 0
-@
-
-<<constant VPT(x86)>>=
-@
-
-<<global vpt and vpd(x86)>>=
-@
-
-<<[[mmuinit()]] vpt adjusments(x86)>>=
-@
-
-
-<<[[mmupdalloc()]] vpt adjustments(x86)>>=
-@
-% the page->va used to be just after newpage() in mmupdalloc, not sure it matters
-
-
-
-
-<<[[checkmmu()]] pd at pt check(x86)>>=
-//    if(!(vpd[PDX(va)]&PTEVALID) || !(vpt[VPTX(va)]&PTEVALID))
-//        return;
-//    if(PPN(vpt[VPTX(va)]) != pa)
-//        print("%ld %s: va=%#08lux pa=%#08lux pte=%#08lux\n",
-//            up->pid, up->text,
-//            va, pa, vpt[VPTX(va)]);
-@
-
-<<[[vmapsync()]] va set to entry(x86)>>=
-// pad's code for simplified virtual memory, no VPT
-if(up == nil) {
-    return 0;
-} else {
-   if(up->mmupd == nil)
-       upallocmmupd();
-    mmupd = KADDR(up->mmupd->pa);
-    mmupd[PDX(va)] = pde;
-}
-@
-
-%-------------------------------------------------------------------------
-
-<<constant VPTSIZETODO>>=
-#define VPTSIZE   BY2XPG
-@
-% 4Mo because potentially a full page dir + page tables for 4Go
-% can take 4Mo (1pagedir + 1024 page table = 1025 * 4Ko = 4Mo
-
-
-<<constant VPTTODO>>=
-#define VPT   (KZERO-VPTSIZE)
-@
-
-
-<<global vpt and vpdTODO>>=
-#define vpt ((ulong*)VPT)
-#define VPTX(va)        (((ulong)(va))>>12)
-#define vpd (vpt+VPTX(VPT))
-@
-
-<<[[mmuinit()]] vpt adjusmentsTODO>>=
-    cpu->pdproto[PDX(VPT)] = PADDR(cpu->pdproto)|PTEWRITE|PTEVALID; // setup VPT
-@
-
-
-<<[[mmupdalloc()]] vpt adjustmentsTODO>>=
-        page->va = (ulong)vpd; // needed? not part of a segment anyway no?
-        mmupd[PDX(VPT)] = page->pa|PTEWRITE|PTEVALID; /* set up VPT */
-@
-% the page->va used to be just after newpage() in mmupdalloc, not sure it matters
-
-
-<<[[putmmu()]] adjustmentsTODO>>=
-    /*
-     * We should be able to get through this with interrupts
-     * turned on (if we get interrupted we'll just pick up 
-     * where we left off) but we get many faults accessing
-     * vpt[] near the end of this function, and they always happen
-     * after the process has been switched out and then 
-     * switched back, usually many times in a row (perhaps
-     * it cannot switch back successfully for some reason).
-     * 
-     * In any event, I'm tired of searching for this bug.  
-     * Turn off interrupts during putmmu even though
-     * we shouldn't need to.        - rsc
-     */
-    
-    s = arch_splhi();
-    if(!(vpd[PDX(va)]&PTEVALID)){
-        if(up->mmufree == nil){
-            arch_spllo();
-            page = newpage(false, nil, nilptr);
-            arch_splhi();
-        }
-        else{
-            page = up->mmufree;
-            up->mmufree = page->next;
-        }
-        vpd[PDX(va)] = PPN(page->pa)|PTEUSER|PTEWRITE|PTEVALID;
-        /* page is now mapped into the VPT - clear it */
-        memset((void*)(VPT+PDX(va)*BY2PG), 0, BY2PG);
-        page->daddr = PDX(va); // ???
-        page->next = up->mmuused;
-        up->mmuused = page;
+case SG_PHYSICAL:
+    if(*pte == nil) {
+        new = smalloc(sizeof(Page));
+        new->va = addr;
+        new->pa = s->pseg->pa+(addr-s->base);
+        new->ref = 1;
+        *pte = new;
     }
 
-    old = vpt[VPTX(va)];
-    vpt[VPTX(va)] = pa|PTEUSER|PTEVALID;
-
-    if(old&PTEVALID)
-        flushpg(va);
-    if(getcr3() != up->mmupd->pa)
-        print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
-    arch_splx(s);
+    if (checkaddr && addr == addr2check)
+        (*checkaddr)(addr, s, *pte);
+    mmupte = PPN((*pte)->pa) |PTEWRITE|PTEUNCACHED|PTEVALID;
+    (*pte)->modref = PG_MOD|PG_REF;
+    break;
 @
 
-
-<<[[checkmmu()]] pd at pt checkTODO>>=
-    if(!(vpd[PDX(va)]&PTEVALID) || !(vpt[VPTX(va)]&PTEVALID))
-        return;
-    if(PPN(vpt[VPTX(va)]) != pa)
-        print("%ld %s: va=%#08lux pa=%#08lux pte=%#08lux\n",
-            up->pid, up->text,
-            va, pa, vpt[VPTX(va)]);
+<<[[PTExxx]] other cases(arm)>>=
+#define PTEUNCACHED (1<<2)
 @
+%>>
 
-
-<<[[vmapsync()]] va set to entryTODO>>=
-    vpd[PDX(va)] = entry;
-@
-
-% in mmuinit
-%    //if(0) print("vpt=%#.8ux vpd=%#p kmap=%#.8ux\n", VPT, vpd, KMAP);
-
-
-
-
-\subsection{[[tmpmap()]] (x86)}
-
-<<constant TMPADDR(x86)>>=
-@
-
-<<function tmpmap(x86)>>=
-virt_addr3
-tmpmap(Page *p)
-{
-    if(arch_islo())
-        panic("tmpmap: arch_islo");
-    if(p->pa < MAXKPA)
-        return KADDR(p->pa);
-    else
-      panic("tmpmap: physical address too high");
-   return nil; // unreachable
+<<[[arch_putmmu()]] if PTEUNCACHED, do not change x(arm)>>=
+if(pa & PTEUNCACHED) {
 }
 @
-
-<<function tmpunmap(x86)>>=
-void
-tmpunmap(virt_addr3 v)
-{
-    if(arch_islo())
-        panic("tmpmap: arch_islo");
-    if((ulong)v >= KZERO)
-        return;
-    panic("tmpmap: physical address too high");
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<constant TMPADDRTODO>>=
-#define TMPADDR   (KZERO+0x2000)    /* used for temporary mappings */
-@
-
-<<function tmpmapTODO>>=
-virt_addr3
-tmpmap(Page *p)
-{
-    ulong i;
-    ulong *entry;
-    
-    if(arch_islo())
-        panic("tmpaddr: arch_islo");
-
-    if(p->pa < MAXKPA)
-        return KADDR(p->pa);
-
-
-
-    /*
-     * PDX(TMPADDR) == PDX(CPUADDR), so this
-     * entry is private to the processor and shared 
-     * between up->mmupd (if any) and cpu->pd.
-     */
-    entry = &vpt[VPTX(TMPADDR)];
-    if(!(*entry&PTEVALID)){
-        for(i=KZERO; i<=CPU0CPU; i+=BY2PG)
-            print("%#p: *%#p=%#p (vpt=%#p index=%#p)\n", i, &vpt[VPTX(i)], vpt[VPTX(i)], vpt, VPTX(i));
-        panic("tmpmap: no entry");
-    }
-    if(PPN(*entry) != PPN(TMPADDR-KZERO))
-        panic("tmpmap: already mapped entry=%#.8lux", *entry);
-    *entry = p->pa|PTEWRITE|PTEVALID;
-    flushpg(TMPADDR);
-    return (virt_addr3)TMPADDR;
-}
-@
-%PPN = pure page number
-
-<<function tmpunmapTODO>>=
-void
-tmpunmap(virt_addr3 v)
-{
-    ulong *entry;
-    
-    if(arch_islo())
-        panic("tmpaddr: arch_islo");
-    if((ulong)v >= KZERO && v != (void*)TMPADDR)
-        return;
-
-    if(v != (void*)TMPADDR)
-        panic("tmpunmap: bad address");
-
-    entry = &vpt[VPTX(TMPADDR)];
-    if(!(*entry&PTEVALID) || PPN(*entry) == PPN(PADDR(TMPADDR)))
-        panic("tmpmap: not mapped entry=%#.8lux", *entry);
-    *entry = PPN(TMPADDR-KZERO)|PTEWRITE|PTEVALID;
-    flushpg(TMPADDR);
-}
-@
-
+%old: was written in negative style, but harder to aspectize
 
 
 \subsection{[[arch_kmap()]]}
 
-<<struct KMap(x86)>>=
-/*
- * KMap the structure doesn't exist, but the functions do.
- */
-typedef struct Arch_KMap   Arch_KMap;
-@
-% why not void like in bcm?
-
-<<macro VA(x86)>>=
-#define VA(k)   ((virt_addr3)(k))
-@
 
 
-
-<<constant KMAPSIZE(x86)>>=
-#define KMAPSIZE 0
-@
-<<constant KMAP(x86)>>=
-#define KMAP KZERO
-@
-
-<<global kpt(x86)>>=
-@
-
-<<constant NKPT(x86)>>=
-@
-
-
-% start of differences and simplificiations
-<<function kmap(x86)>>=
-Arch_KMap*
-arch_kmap(Page *p)
-{
-    if(up == nil)
-        panic("arch_kmap: up=0 pc=%#.8lux", getcallerpc(&p));
-    if(p->pa < MAXKPA)
-        return KADDR(p->pa);
-    else
-      panic("arch_kmap: physical address too high");
-    return nil; // unreachable
-}
-@
-
-<<function kunmap(x86)>>=
-void
-arch_kunmap(Arch_KMap *k)
-{
-    ulong va;
-    va = (ulong)k;
-    flushpg(va); // not sure we need that
-
-    if((ulong)va >= KZERO)
-        return;
-    panic("arch_kunmap: physical address too high");
-}
-@
-
-%ulong *mmupd;
-%
-<<[[mmurelease()]] handle kmaptable(x86)>>=
-@
-%old: ???
-
-<<[[countpagerefs()]] handle kmaptable(x86)>>=
-@
-%old: ???
-
-%dead:
-%<<function kmapinval(x86)>>=
-%#define kmapinval()
-%@
-%note: if '#define kmapinval() nil' then get warning with 8c
-% when do 'kmapinval();' as it expands to 'nil;'
-% but if you do not put value then codegraph complains
-
-% -----------------------------------------------------------------------
-
-<<constant KMAPSIZETODO>>=
-#define KMAPSIZE  BY2XPG
-@
-
-<<constant KMAPTODO>>=
-#define KMAP    (VPT-KMAPSIZE)
-@
-
-<<global kptTODO>>=
-#define kpt (vpt+VPTX(KMAP))
-@
-<<constant NKPTTODO>>=
-#define NKPT (KMAPSIZE/BY2PG)
-@
-
-
-<<[[Proc]] [[Arch]] memory fieldsTODO>>=
-Page* kmaptable;    /* page table used by arch_kmap */
-uint  lastkmap;   /* last entry used by arch_kmap */
-int nkmap;      /* number of current kmaps */
-@
-
-<<[[countpagerefs()]] handle kmaptableTODO>>=
-        if(p->kmaptable){
-            if(print){
-                if(ref[pagenumber(p->kmaptable)])
-                    iprint("page %#.8lux is proc %d (pid %lud) kmaptable\n",
-                        p->kmaptable->pa, i, p->pid);
-                continue;
-            }
-            if(ref[pagenumber(p->kmaptable)]++ == 0)
-                n++;
-            else
-                iprint("page %#.8lux is proc %d (pid %lud) kmaptable but has other refs!\n",
-                    p->kmaptable->pa, i, p->pid);
-        }
-
-@
-
-<<[[mmurelease()]] handle kmaptableTODO>>=
-    if(proc->kmaptable){
-        if(proc->mmupd == nil)
-            panic("arch_mmurelease: no mmupd");
-        if(--proc->kmaptable->ref)
-            panic("arch_mmurelease: arch_kmap ref %d", proc->kmaptable->ref);
-        if(proc->nkmap)
-            panic("arch_mmurelease: nkmap %d", proc->nkmap);
-        /*
-         * remove kmaptable from pd before putting pd up for reuse.
-         */
-        mmupd = tmpmap(proc->mmupd);
-        if(PPN(mmupd[PDX(KMAP)]) != proc->kmaptable->pa)
-            panic("arch_mmurelease: bad kmap pde %#.8lux kmap %#.8lux",
-                mmupd[PDX(KMAP)], proc->kmaptable->pa);
-        mmupd[PDX(KMAP)] = 0;
-        tmpunmap(mmupd);
-        /*
-         * move kmaptable to free list.
-         */
-        pagechainhead(proc->kmaptable);
-        proc->kmaptable = nil;
-    }
-@
-
-
-<<function kmapTODO>>=
-Arch_KMap*
-arch_kmap(Page *page)
-{
-    int i, o, s;
-
-    if(up == nil)
-        panic("arch_kmap: up=0 pc=%#.8lux", getcallerpc(&page));
-    if(up->mmupd == nil)
-        upallocmmupd();
-    if(up->nkmap < 0)
-        panic("arch_kmap %lud %s: nkmap=%d", up->pid, up->text, up->nkmap);
-    
-    /*
-     * Arch_Splhi shouldn't be necessary here, but paranoia reigns.
-     * See comment in putmmu above.
-     */
-    s = arch_splhi();
-    up->nkmap++;
-    if(!(vpd[PDX(KMAP)]&PTEVALID)){
-        /* allocate page directory */
-        if(KMAPSIZE > BY2XPG)
-            panic("bad kmapsize");
-        if(up->kmaptable != nil)
-            panic("kmaptable");
-        arch_spllo();
-        up->kmaptable = newpage(0, 0, 0);
-        arch_splhi();
-        vpd[PDX(KMAP)] = up->kmaptable->pa|PTEWRITE|PTEVALID;
-        flushpg((ulong)kpt);
-        memset(kpt, 0, BY2PG);
-        kpt[0] = page->pa|PTEWRITE|PTEVALID;
-        up->lastkmap = 0;
-        arch_splx(s);
-        return (Arch_KMap*)KMAP;
-    }
-    if(up->kmaptable == nil)
-        panic("no kmaptable");
-    o = up->lastkmap+1;
-    for(i=0; i<NKPT; i++){
-        if(kpt[(i+o)%NKPT] == 0){
-            o = (i+o)%NKPT;
-            kpt[o] = page->pa|PTEWRITE|PTEVALID;
-            up->lastkmap = o;
-            arch_splx(s);
-            return (Arch_KMap*)(KMAP+o*BY2PG);
-        }
-    }
-    panic("out of arch_kmap");
-    return nil;
-}
-@
-
-
-<<function kunmapTODO>>=
-void
-arch_kunmap(Arch_KMap *k)
-{
-    ulong va;
-
-    va = (ulong)k;
-    if(up->mmupd == nil || !(vpd[PDX(KMAP)]&PTEVALID))
-        panic("arch_kunmap: no kmaps");
-    if(va < KMAP || va >= KMAP+KMAPSIZE)
-        panic("arch_kunmap: bad address %#.8lux pc=%#p", va, getcallerpc(&k));
-    if(!(vpt[VPTX(va)]&PTEVALID))
-        panic("arch_kunmap: not mapped %#.8lux pc=%#p", va, getcallerpc(&k));
-    up->nkmap--;
-    if(up->nkmap < 0)
-        panic("arch_kunmap %lud %s: nkmap=%d", up->pid, up->text, up->nkmap);
-    vpt[VPTX(va)] = 0;
-    flushpg(va);
-}
-@
-
-
-\subsection{[[vmap()]]}
-
-% used to map framebuffer for instance. the vga driver uses it!
-
-<<constant VMAP(x86)>>=
-#define VMAP    (KMAP-VMAPSIZE)
-@
-
-<<constant VMAPSIZE(x86)>>=
-#define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
-@
-% 256Mo, enough for big framebuffers!
-
-% actually this is independent of vpt, tmpmap, arch_kmap
-
-<<global vmaplock(x86)>>=
-static Lock vmaplock;
-@
-
-
-<<function vmap(x86)>>=
-/*
- * Add a device mapping to the vmap range.
- */
-virt_addr3
-vmap(phys_addr pa, int size)
-{
-    int osize;
-    virt_addr va;
-    ulong o;
-    
-    /*
-     * might be asking for less than a page.
-     */
-    osize = size;
-    o = pa & (BY2PG-1);
-    pa -= o;
-    size += o;
-
-    size = ROUND(size, BY2PG);
-    if(pa == 0){
-        print("vmap pa=0 pc=%#p\n", getcallerpc(&pa));
-        return nil;
-    }
-    ilock(&vmaplock);
-    if((va = vmapalloc(size)) == 0 
-    || pdmap(CPUS(0)->pdproto, pa|PTEUNCACHED|PTEWRITE, va, size) < 0){
-        iunlock(&vmaplock);
-        return nil;
-    }
-    iunlock(&vmaplock);
-    /* avoid trap on local processor
-    for(i=0; i<size; i+=4*MB)
-        vmapsync(va+i);
-    */
-    USED(osize);
-//  print("  vmap %#.8lux %d => %#.8lux\n", pa+o, osize, va+o);
-    return (void*)(va + o);
-}
-@
-
-<<function pdmap(x86)>>=
-/*
- * Add kernel mappings for pa -> va for a section of size bytes.
- */
-int
-pdmap(kern_addr2 mmupd, ulong pa, virt_addr va, int size)
-{
-    bool pse;
-    ulong pgsz;
-    kern_addr2 pte, pde;
-    ulong flag, off;
-    
-    flag = pa&0xFFF;
-    pa &= ~0xFFF;
-
-    if((CPUS(0)->cpuiddx & Pse) && (getcr4() & 0x10))
-        pse = true;
-    else
-        pse = false;
-
-    for(off=0; off<size; off+=pgsz){
-        pde = &mmupd[PDX(va+off)];
-        if((*pde&PTEVALID) && (*pde&PTESIZE))
-            panic("vmap: va=%#.8lux pa=%#.8lux pde=%#.8lux",
-                va+off, pa+off, *pde);
-
-        /*
-         * Check if it can be mapped using a 4MB page:
-         * va, pa aligned and size >= 4MB and processor can do it.
-         */
-        if(pse && (pa+off)%(4*MB) == 0 && (va+off)%(4*MB) == 0 && (size-off) >= 4*MB){
-            *pde = (pa+off)|flag|PTESIZE|PTEVALID;
-            pgsz = 4*MB;
-        }else{
-            pte = mmuwalk(mmupd, va+off, 2, true);
-            if(*pte&PTEVALID)
-                panic("vmap: va=%#.8lux pa=%#.8lux pte=%#.8lux",
-                    va+off, pa+off, *pte);
-            *pte = (pa+off)|flag|PTEVALID;
-            pgsz = BY2PG;
-        }
-    }
-    return 0;
-}
-@
-
-
-
-<<function findhole(x86)>>=
-static int
-findhole(ulong *a, int n, int count)
-{
-    int have, i;
-    
-    have = 0;
-    for(i=0; i<n; i++){
-        if(a[i] == 0)
-            have++;
-        else
-            have = 0;
-        if(have >= count)
-            return i+1 - have;
-    }
-    return -1;
-}
-@
-
-
-
-<<function vmapalloc(x86)>>=
-/*
- * Look for free space in the vmap.
- */
-static virt_addr
-vmapalloc(ulong size)
-{
-    int i, n, o;
-    // this is really a page directory base, that spans a range of pdes
-    // starting to map from VMAP to VMAP+VMAPSIZE
-    kern_addr2 vpdb;
-    int vpdsize;
-    
-    vpdb = &CPUS(0)->pdproto[PDX(VMAP)];
-    vpdsize = VMAPSIZE/(4*MB);
-
-    if(size >= 4*MB){
-        n = (size+4*MB-1) / (4*MB);
-        if((o = findhole(vpdb, vpdsize, n)) != -1)
-            return VMAP + o*4*MB;
-        return nilptr;
-    }
-
-    // size <= 4MB
-    n = (size+BY2PG-1) / BY2PG;
-    for(i=0; i<vpdsize; i++)
-        if((vpdb[i]&PTEVALID) && !(vpdb[i]&PTESIZE))
-            if((o = findhole(KADDR(PPN(vpdb[i])), WD2PG, n)) != -1)
-                return VMAP + i*4*MB + o*BY2PG;
-
-    if((o = findhole(vpdb, vpdsize, 1)) != -1)
-        return VMAP + o*4*MB;
-        
-    /*
-     * could span page directory entries, but not worth the trouble.
-     * not going to be very much contention.
-     */
-    return nilptr;
-}
-@
-
-<<function vunmap(x86)>>=
-/*
- * Remove a device mapping from the vmap range.
- * Since pdunmap does not remove page tables, just entries,
- * the call need not be interlocked with vmap.
- */
-void
-vunmap(virt_addr3 v, int size)
-{
-    int i;
-    virt_addr va;
-    ulong o;
-    Cpu *nm;
-    Proc *p;
-    
-    /*
-     * might not be aligned
-     */
-    va = (virt_addr)v;
-    o = va&(BY2PG-1);
-    va -= o;
-    size += o;
-    size = ROUND(size, BY2PG);
-    
-    if(size < 0 || va < VMAP || va+size > VMAP+VMAPSIZE)
-        panic("vunmap va=%#.8lux size=%#x pc=%#.8lux",
-            va, size, getcallerpc(&v));
-
-    pdunmap(CPUS(0)->pdproto, va, size);
-    
-    /*
-     * Flush mapping from all the tlbs and copied pds.
-     * This can be (and is) slow, since it is called only rarely.
-     * It is possible for vunmap to be called with up == nil,
-     * e.g. from the reset/init driver routines during system
-     * boot. In that case it suffices to flush the CPUS(0) TLB
-     * and return.
-     */
-    if(!active.main_reached_sched){
-        putcr3(PADDR(CPUS(0)->pdproto));
-        return;
-    }
-    for(i=0; i<conf.nproc; i++){
-        p = proctab(i);
-        if(p->state == Dead)
-            continue;
-        if(p != up)
-            p->newtlb = true;
-    }
-    for(i=0; i<conf.ncpu; i++){
-        nm = CPUS(i);
-        if(nm != cpu)
-            nm->flushmmu = true;
-    }
-    arch_flushmmu();
-    for(i=0; i<conf.ncpu; i++){
-        nm = CPUS(i);
-        if(nm != cpu)
-            while((active.cpus&(1<<nm->cpuno)) && nm->flushmmu)
-                ;
-    }
-}
-@
-% >>
-
-<<function pdunmap(x86)>>=
-/*
- * Remove mappings.  Must already exist, for sanity.
- * Only used for kernel mappings, so okay to use KADDR.
- */
-static void
-pdunmap(kern_addr2 mmupd, virt_addr va, int size)
-{
-    virt_addr vae;
-    kern_addr2 pde, pte;
-    
-    vae = va+size;
-    while(va < vae){
-        pde = &mmupd[PDX(va)];
-        if(!(*pde & PTEVALID)){
-            panic("vunmap: not mapped");
-            /* 
-            va = (va+4*MB-1) & ~(4*MB-1);
-            continue;
-            */
-        }
-        if(*pde & PTESIZE){
-            *pde = 0;
-            va = (va+4*MB-1) & ~(4*MB-1);
-            continue;
-        }
-        pte = KADDR(PPN(*pde));
-        if(!(pte[PTX(va)] & PTEVALID))
-            panic("vunmap: not mapped");
-        pte[PTX(va)] = 0;
-        va += BY2PG;
-    }
-}
-@
-
-<<function vmapsync(x86)>>=
-/*
- * Handle a fault by bringing vmap up to date.
- * Only copy pd entries and they never go away,
- * so no locking needed.
- */
-int
-vmapsync(virt_addr va)
-{
-    ulong pde;
-    kern_addr2 mmupt;
-    kern_addr2 mmupd;
-
-    if(va < VMAP || va >= VMAP+VMAPSIZE)
-        return 0;
-
-    pde = CPUS(0)->pdproto[PDX(va)];
-    if(!(pde&PTEVALID))
-        return 0;
-    if(!(pde&PTESIZE)){
-        /* make sure entry will help the fault */
-        mmupt = KADDR(PPN(pde));
-        if(!(mmupt[PTX(va)]&PTEVALID))
-            return 0;
-    }
-    <<[[vmapsync()]] va set to entry(x86)>>
-    /*
-     * TLB doesn't cache negative results, so no flush needed.
-     */
-    return 1;
-}
-@
-
-\subsection{Big pages }
-
-% pse? see code in vmap, could aspectize things
-% also does vpt/vpd uses this feature? I don't think so.
-
-
-
-\section{Power management (x86)}
+\section{Power management (arm)}
 
 %<<[[Dev]] methods>>=
 %void  (*power)(bool);  /* power mgt: power(1) => on, power (0) => off */
@@ -29543,40 +26914,6 @@ vmapsync(virt_addr va)
 % but does not seem called by anything
 % dead?
 
-% used by apm.c
-<<constant x86 other segments>>=
-//#define APMCSEG   6 /* APM code segment */
-//#define APMCSEG16 7 /* APM 16-bit code segment */
-//#define APMDSEG   8 /* APM data segment */
-/* #define  APM40SEG  8 /* APM segment 0x40 */
-@
-
-
-<<constant x86 other segment selectors>>=
-//#define APMCSEL   SELECTOR(APMCSEG, SELGDT, 0)
-//#define APMCSEL16 SELECTOR(APMCSEG16, SELGDT, 0)
-//#define APMDSEL   SELECTOR(APMDSEG, SELGDT, 0)
-/* #define  APM40SEL  SELECTOR(APM40SEG, SELGDT, 0) */
-@
-
-
-<<[[PCArch]] power methods fields(x86)>>=
-int (*serialpower)(int);  /* 1 == on, 0 == off */
-int (*modempower)(int); /* 1 == on, 0 == off */
-@
-
-<<[[archgeneric]] power methods(x86)>>=
-    .serialpower=   unimplemented,
-    .modempower=    unimplemented,
-@
-
-<<function unimplemented(x86)>>=
-static int
-unimplemented(int)
-{
-    return 0;
-}
-@
 
 \section{Basic IRQs (ARM)}
 
@@ -31452,20 +28789,6 @@ ulong mid;    /* for ns in devproc */
 @
 
 
-% ??? -> <>
-% todo LP split
-<<function setkernur(x86)>>=
-/* Give enough context in the ureg to produce a kernel stack for
- * a sleeping process
- */
-void
-arch_setkernur(Ureg* ureg, Proc* p)
-{
-    ureg->pc = p->sched.pc;
-    ureg->sp = p->sched.sp+4;
-}
-@ 
-%??
 
 <<[[procread()]] locals>>=
 /* NSEG*32 was too small for worst cases */
@@ -32765,16 +30088,33 @@ char    *sysname;
 @
 
 
-\subsection{[[/sys/reboot]] (x86)}
+\subsection{[[/sys/reboot]] (arm)}
 
-<<function exit(x86)>>=
+<<function main_arch_exit(arm)>>=
+/*
+ *  exit kernel either on a panic or user request
+ */
 void
-main_exit(bool ispanic)
+main_arch_exit(int code)
 {
-        shutdown(ispanic);
-        arch->reset();
+    void (*f)(ulong, ulong, ulong);
+
+    shutdown(code);
+    splfhi();
+    if(cpu->cpuno == 0)
+        archreboot();
+    else{
+        f = (void*)REBOOTADDR;
+        intrcpushutdown();
+        cacheuwbinv();
+        l2cacheuwbinv();
+        (*f)(0, 0, 0);
+        for(;;){}
+    }
 }
 @
+
+
 
 <<[[kbdputsc()]] reboot if ctl-alt-del>>=
 if(kbscan->ctl)
@@ -32807,169 +30147,106 @@ case 0x10:  /* ^P */
 bool ispanic;    /* shutdown in response to a panic */
 @
 
-<<function shutdown(x86)>>=
+<<function shutdown (init/arm/main.c)(arm)>>=
 static void
-shutdown(bool ispanic)
+shutdown(int ispanic)
 {
     int ms, once;
 
     lock(&active);
     if(ispanic)
         active.ispanic = ispanic;
-    else if(cpu->cpuno == 0 && (active.cpus & (1<<cpu->cpuno)) == 0)
-        active.ispanic = false;
-    once = active.cpus & (1<<cpu->cpuno);
-    /*
-     * setting exiting will make hzclock() on each processor call exit(0),
-     * which calls shutdown(0) and arch->reset(), which on mp systems is
-     * mpshutdown, which idles non-bootstrap cpus and returns on bootstrap
-     * processors (to permit a reboot).  clearing our bit in cpus avoids
-     * calling exit(0) from hzclock() on this processor.
-     */
-    active.cpus &= ~(1<<cpu->cpuno);
-    active.exiting = true;
+    else if(cpu->cpuno == 0 && (active.cpus & (1 << cpu->cpuno)) == 0)
+        active.ispanic = 0;
+    once = active.cpus & (1 << cpu->cpuno);
+    active.cpus &= ~(1 << cpu->cpuno);
+    active.exiting = 1;
     unlock(&active);
 
     if(once)
         iprint("cpu%d: exiting\n", cpu->cpuno);
-
-    /* wait for any other processors to shutdown */
     arch_spllo();
     for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
         arch_delay(TK2MS(2));
         if(active.cpus == 0 && consactive() == 0)
             break;
     }
-
-    if(active.ispanic){
-        if(!cpuserver)
-            for(;;)
-               halt();
-        if(getconf("*debug"))
-            arch_delay(5*60*1000);
-        else
-            arch_delay(10000);
-    }else
-        arch_delay(1000);
+    arch_delay(100*cpu->cpuno);
 }
 @
-% >>
 
 
-<<function idle(x86)>>=
-/*
- * Park a processor. Should never fall through a return from main to here,
- * should only be called by application processors when shutting down.
- */
-TEXT idle(SB), $0
-_idle:
-        STI
-        HLT
-        JMP     _idle
-@
-%$
-
-<<function archreset(x86)>>=
-static void
-archreset(void)
-{
-    i8042reset();
-
-    /*
-     * Often the BIOS hangs during restart if a conventional 8042
-     * warm-boot sequence is tried. The following is Intel specific and
-     * seems to perform a cold-boot, but at least it comes back.
-     * And sometimes there is no keyboard...
-     *
-     * The reset register (0xcf9) is usually in one of the bridge
-     * chips. The actual location and sequence could be extracted from
-     * ACPI but why bother, this is the end of the line anyway.
-     */
-    print("Takes a licking and keeps on ticking...\n");
-    *(ushort*)KADDR(0x472) = 0x1234;    /* BIOS warm-boot flag */
-    outb(0xcf9, 0x02);
-    outb(0xcf9, 0x06);
-
-    for(;;)
-        idle();
-}
-@
 
 <<[[Active]] other fields>>=
 bool rebooting;    /* just idle cpus > 0 */
 @
 
 
-<<function reboot(x86)>>=
+<<function arch_reboot(arm)>>=
+/*
+ * the new kernel is already loaded at address `code'
+ * of size `size' and entry point `entry'.
+ */
 void
-arch_reboot(kern_addr3 entry, kern_addr3 code, ulong size)
+arch_reboot(void *entry, void *code, ulong size)
 {
     void (*f)(ulong, ulong, ulong);
-    kern_addr2 mmupd;
 
-    writeconf();
+    //writeconf();
 
     /*
      * the boot processor is cpu0.  execute this function on it
-     * so that the new kernel has the same cpu0.  this only matters
-     * because the hardware has a notion of which processor was the
-     * boot processor and we look at it at start up.
+     * so that the new kernel has the same cpu0.
      */
     if (cpu->cpuno != 0) {
         procwired(up, 0);
         sched();
     }
-
-    if(conf.ncpu > 1) {
-        /*
-         * the other cpus could be holding locks that will never get
-         * released (e.g., in the print path) if we put them into
-         * reset now, so force them to shutdown gracefully first.
-         */
-        lock(&active);
-        active.rebooting = true;
-        unlock(&active);
-        shutdown(0);
-        if(arch->resetothers)
-            arch->resetothers();
-        arch_delay(20);
-    }
-
-    /*
-     * should be the only processor running now
-     */
-    active.cpus = 0;
     if (cpu->cpuno != 0)
         print("on cpu%d (not 0)!\n", cpu->cpuno);
-
-    print("shutting down...\n");
-    arch_delay(200);
-
-    arch_splhi();
-
-    <<[[reboot()]] reset serialoq(x86)>>
-
-    /* shutdown devices */
-    chandevshutdown();
-    arch->introff();
-
-    /*
-     * Modify the processor page table to directly map the low 4MB of memory
-     * This allows the reboot code to turn off the page mapping
-     */
-    mmupd = cpu->pdproto;
-    mmupd[PDX(0)] = mmupd[PDX(KZERO)];
-    mmuflushtlb(PADDR(mmupd));
 
     /* setup reboot trampoline function */
     f = (void*)REBOOTADDR;
     memmove(f, rebootcode, sizeof(rebootcode));
+    cachedwbse(f, sizeof(rebootcode));
 
-    print("rebooting...\n");
+    shutdown(0);
+
+    /*
+     * should be the only processor running now
+     */
+
+    arch_delay(5000);
+    print("active.machs = %x\n", active.cpus);
+    print("reboot entry %#lux code %#lux size %ld\n",
+        PADDR(entry), PADDR(code), size);
+    arch_delay(100);
+
+    /* turn off buffered serial console */
+    serialoq = nil;
+    kprintoq = nil;
+    screenputs = nil;
+
+    /* shutdown devices */
+    if(!waserror()){
+        chandevshutdown();
+        poperror();
+    }
+
+    /* stop the clock (and watchdog if any) */
+    clockshutdown();
+
+    splfhi();
+    intrshutdown();
 
     /* off we go - never to return */
-    arch_coherence();
+    cacheuwbinv();
+    l2cacheuwbinv();
     (*f)(PADDR(entry), PADDR(code), size);
+
+    iprint("loaded kernel returned!\n");
+    arch_delay(1000);
+    archreboot();
 }
 @
 
@@ -32993,41 +30270,6 @@ void  (*shutdown)(void);
 @
 % opposite of reset() and init()?
 
-<<function i8042reset(x86)>>=
-/*
- *  ask 8042 to reset the machine
- */
-void
-i8042reset(void)
-{
-    int i, x;
-
-    if(nokbd)
-        return;
-
-    *((ushort*)KADDR(0x472)) = 0x1234;  /* BIOS warm-boot flag */
-
-    /*
-     *  newer reset the machine command
-     */
-    outready();
-    outb(Cmd, 0xFE);
-    outready();
-
-    /*
-     *  Pulse it by hand (old somewhat reliable)
-     */
-    x = 0xDF;
-    for(i = 0; i < 5; i++){
-        x ^= 1;
-        outready();
-        outb(Cmd, 0xD1);
-        outready();
-        outb(Data, x);  /* toggle reset */
-        arch_delay(100);
-    }
-}
-@
 
 <<devsys.c enum Qxxx cases>>=
     Qreboot,
@@ -33395,26 +30637,11 @@ randomread(void *xp, ulong n)
 
 % use of getconf("*debugstart*") to setup some global tracing stuff
 
-\section{[[cgapost()]] (x86)}
-%first line of "defense" (using sound could be nice too, like linus
+%first line of "defense"? (using sound could be nice too, like linus
 % printf style debugging, except when can't even printf :) have to access
 % directly the screen device :)
+%x86: nice \section{[[cgapost()]]}
 
-<<function cgapost(x86)>>=
-char hex[] = "0123456789ABCDEF";
-
-void
-cgapost(int code)
-{
-    byte *cga;
-
-    cga = CGASCREENBASE;
-    cga[Width*Height-Postcodelen*2] = hex[(code>>4) & 0x0F];
-    cga[Width*Height-Postcodelen*2+1] = Attr;
-    cga[Width*Height-Postcodelen*2+2] = hex[code & 0x0F];
-    cga[Width*Height-Postcodelen*2+3] = Attr;
-}
-@
 
 % print() is also useful once has setup the screen.
 
@@ -33596,76 +30823,14 @@ poolsummary(Pool *p)
 }
 @
 
-<<function memorysummary(x86)>>=
+<<function arch_memorysummary(arm)>>=
+// called from devcons.c
 void
-arch_memorysummary(void)
-{
-  int i;
-  int npallocpage = 0;
-
-  print("\n");
-  print("etext = 0x%luX, edata = 0x%luX, eend = 0x%luX, sizeof long = %d\n",
-        etext, edata, end, sizeof(long));
-  for(i=0; i<nelem(conf.mem); i++) {
-       print("conf mem %d start = 0x%luX, npage = %ld\n", 
-          i,
-          conf.mem[i].base,
-          conf.mem[i].npage
-          );
-  }
-  for(i=0; i<nelem(palloc.mem); i++) {
-       print("palloc mem %d start = 0x%luX, npage = %ld\n", 
-          i,
-          palloc.mem[i].base,
-          palloc.mem[i].npage
-          );
-       npallocpage += palloc.mem[i].npage;
-  }
-  print("size of Page = %d, palloc size = %d\n", 
-        sizeof(Page),
-        npallocpage*sizeof(Page)
-        );
-
-  print("size of Proc = %d, procalloc size = %d\n",
-        sizeof(Proc),
-        conf.nproc*sizeof(Proc)
-        );
-  print("\n");
-  memdebug();
-}
-@
-
-<<function memdebug(x86)>>=
-void
-memdebug(void)
-{
-    ulong maxpa, maxpa1, maxpa2;
-
-    maxpa = (nvramread(0x18)<<8)|nvramread(0x17);
-    maxpa1 = (nvramread(0x31)<<8)|nvramread(0x30);
-    maxpa2 = (nvramread(0x16)<<8)|nvramread(0x15);
-    print("maxpa = %luX -> %luX, maxpa1 = %luX maxpa2 = %luX\n",
-        maxpa, MB+maxpa*KB, maxpa1, maxpa2);
-
-    mapprint(&rmapram);
-    mapprint(&rmapumb);
-    mapprint(&rmapumbrw);
-    mapprint(&rmapupa);
+arch_memorysummary(void) {
 }
 @
 
 
-<<function mapprint(x86)>>=
-void
-mapprint(RMap *rmap)
-{
-    Map *mp;
-
-    print("%s\n", rmap->name);  
-    for(mp = rmap->map; mp->size; mp++)
-        print("\t%8.8luX %8.8luX (%lud)\n", mp->addr, mp->addr+mp->size, mp->size);
-}
-@
 
 <<function pagersummary>>=
 void
@@ -33764,20 +30929,23 @@ proc_dumpaproc(Proc *p)
 }
 @ 
 
-% vs userpc?
-<<function dbgpc(x86)>>=
-ulong
-arch_dbgpc(Proc *p)
+<<function arch_dbgpc(arm)>>=
+/*
+ *  pc output by dumpaproc
+ */
+uintptr
+arch_dbgpc(Proc* p)
 {
     Ureg *ureg;
 
     ureg = p->dbgreg;
-    if(ureg == nil)
-        return nilptr;
+    if(ureg == 0)
+        return 0;
 
     return ureg->pc;
 }
-@ 
+@
+
 
 % ----------------------------------------------------------------------------
 % not used by C-t C-t but could, and related
@@ -33798,60 +30966,43 @@ lockloop(Lock *l, ulong pc)
 @ 
 
 
-<<function dumpregs2(x86)>>=
-/*
- *  dump registers
- */
-void
-dumpregs2(Ureg* ureg)
-{
-    if(up)
-        iprint("cpu%d: registers for %s %lud\n",
-            cpu->cpuno, up->text, up->pid);
-    else
-        iprint("cpu%d: registers for kernel\n", cpu->cpuno);
-    iprint("FLAGS=%luX TRAP=%luX ECODE=%luX PC=%luX",
-        ureg->flags, ureg->trap, ureg->ecode, ureg->pc);
-    iprint(" SS=%4.4luX USP=%luX\n", ureg->ss & 0xFFFF, ureg->usp);
-    iprint("  AX %8.8luX  BX %8.8luX  CX %8.8luX  DX %8.8luX\n",
-        ureg->ax, ureg->bx, ureg->cx, ureg->dx);
-    iprint("  SI %8.8luX  DI %8.8luX  BP %8.8luX\n",
-        ureg->si, ureg->di, ureg->bp);
-    iprint("  CS %4.4luX  DS %4.4luX  ES %4.4luX  FS %4.4luX  GS %4.4luX\n",
-        ureg->cs & 0xFFFF, ureg->ds & 0xFFFF, ureg->es & 0xFFFF,
-        ureg->fs & 0xFFFF, ureg->gs & 0xFFFF);
-}
-@ 
-
-
-<<function dumpregs(x86)>>=
+<<function dumpregs(arm)>>=
 void
 dumpregs(Ureg* ureg)
 {
-    vlong mca, mct;
+    int s;
 
-    dumpregs2(ureg);
-
-    /*
-     * Processor control registers.
-     * If machine check exception, time stamp counter, page size extensions
-     * or enhanced virtual 8086 mode extensions are supported, there is a
-     * CR4. If there is a CR4 and machine check extensions, read the machine
-     * check address and machine check type registers if RDMSR supported.
-     */
-    iprint("  CR0 %8.8lux CR2 %8.8lux CR3 %8.8lux",
-        getcr0(), getcr2(), getcr3());
-    if(cpu->cpuiddx & (Mce|Tsc|Pse|Vmex)){
-        iprint(" CR4 %8.8lux", getcr4());
-        if((cpu->cpuiddx & (Mce|Cpumsr)) == (Mce|Cpumsr)){
-            rdmsr(0x00, &mca);
-            rdmsr(0x01, &mct);
-            iprint("\n  MCA %8.8llux MCT %8.8llux", mca, mct);
-        }
+    if (ureg == nil) {
+        iprint("trap: no user process\n");
+        return;
     }
-    iprint("\n  ur %#p up %#p\n", ureg, up);
+    s = arch_splhi();
+    iprint("trap: %s", trapname(ureg->type));
+    if(ureg != nil && (ureg->psr & PsrMask) != PsrMsvc)
+        iprint(" in %s", trapname(ureg->psr));
+    iprint("\n");
+    iprint("psr %8.8lux type %2.2lux pc %8.8lux link %8.8lux\n",
+        ureg->psr, ureg->type, ureg->pc, ureg->link);
+    iprint("R14 %8.8lux R13 %8.8lux R12 %8.8lux R11 %8.8lux R10 %8.8lux\n",
+        ureg->r14, ureg->r13, ureg->r12, ureg->r11, ureg->r10);
+    iprint("R9  %8.8lux R8  %8.8lux R7  %8.8lux R6  %8.8lux R5  %8.8lux\n",
+        ureg->r9, ureg->r8, ureg->r7, ureg->r6, ureg->r5);
+    iprint("R4  %8.8lux R3  %8.8lux R2  %8.8lux R1  %8.8lux R0  %8.8lux\n",
+        ureg->r4, ureg->r3, ureg->r2, ureg->r1, ureg->r0);
+    iprint("stack is at %#p\n", ureg);
+    iprint("pc %#lux link %#lux\n", ureg->pc, ureg->link);
+
+    if(up)
+        iprint("user stack: %#p-%#p\n", up->kstack, up->kstack+KSTACK-4);
+    else
+        iprint("kernel stack: %8.8lux-%8.8lux\n",
+            (ulong)(cpu+1), (ulong)cpu+BY2PG-4);
+    dumplongs("stack", (ulong *)(ureg + 1), 16);
+    arch_delay(2000);
+    arch_dumpstack();
+    arch_splx(s);
 }
-@ 
+@
 
 
 %//unused:
@@ -33906,7 +31057,7 @@ dumpregs(Ureg* ureg)
 %//  runlock(&pg->ns);
 %//}
 
-\section{[[/bin/ktrace]] (x86)}
+\section{[[/bin/ktrace]] (arm)}
 % rename /bin/kstracktrace?
 
 % getcallerpc nice trick
@@ -33920,71 +31071,65 @@ dumpregs(Ureg* ureg)
 
 % TODO: ex of dumpstack(): 
 
-<<function dumpstack(x86)>>=
+<<function trap_arch_dumpstack(arm)>>=
 void
-trap_dumpstack(void)
+trap_arch_dumpstack(void)
 {
-    arch_callwithureg(_dumpstack);
+    arch_callwithureg(dumpstackwithureg);
 }
-@ 
+@
 
-<<function _dumpstack(x86)>>=
-static void
-_dumpstack(Ureg *ureg)
+<<function arch_callwithureg(arm)>>=
+void
+arch_callwithureg(void (*fn)(Ureg*))
 {
-    uintptr l, v, i, estack;
-    extern ulong etext;
-    int x;
+    Ureg ureg;
+
+    getpcsp((ulong*)&ureg.pc, (ulong*)&ureg.sp);
+    ureg.r14 = getcallerpc(&fn);
+    fn(&ureg);
+}
+@
+
+<<function dumpstackwithureg(arm)>>=
+static void
+dumpstackwithureg(Ureg *ureg)
+{
+    uintptr l, i, v, estack;
+    u32int *p;
     char *s;
 
     if((s = getconf("*nodumpstack")) != nil && strcmp(s, "0") != 0){
         iprint("dumpstack disabled\n");
         return;
     }
-    iprint("dumpstack\n");
-
-    x = 0;
-    x += iprint("ktrace /kernel/path %.8lux %.8lux <<EOF\n", ureg->pc, ureg->sp);
+    iprint("ktrace /kernel/path %#.8lux %#.8lux %#.8lux # pc, sp, link\n",
+        ureg->pc, ureg->sp, ureg->r14);
+    arch_delay(2000);
     i = 0;
-    if(up
-    && (uintptr)&l >= (uintptr)up->kstack
-    && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
+    if(up != nil && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
         estack = (uintptr)up->kstack+KSTACK;
-    else if((uintptr)(&l) >= (uintptr)(cpu->stack)
-    && (uintptr)(&l) <= (uintptr)(cpu+CPUSIZE))
-        estack = (uintptr)(cpu+CPUSIZE);
-    else
+    else if((uintptr)&l >= (uintptr)cpu->stack
+         && (uintptr)&l <= (uintptr)cpu + CPUSIZE)
+        estack = (uintptr)cpu + CPUSIZE;
+    else{
+        if(up != nil)
+            iprint("&up->kstack %#p &l %#p\n", up->kstack, &l);
+        else
+            iprint("&m %#p &l %#p\n", cpu, &l);
         return;
-    x += iprint("estackx %p\n", estack);
-
-    for(l = (uintptr)(&l); l < estack; l += sizeof(uintptr)){
+    }
+    for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
         v = *(uintptr*)l;
-        if((KTZERO < v && v < (uintptr)(&etext)) || estack-l < 32){
-            /*
-             * Could Pick off general CALL (((byte*)v)[-5] == 0xE8)
-             * and CALL indirect through AX
-             * (((byte*)v)[-2] == 0xFF && ((byte*)v)[-2] == 0xD0),
-             * but this is too clever and misses faulting address.
-             */
-            x += iprint("%.8p=%.8p ", l, v);
-            i++;
+        if(KTZERO < v && v < (uintptr)etext && !(v & 3)){
+            v -= sizeof(u32int);        /* back up an instr */
+            p = (u32int*)v;
+            if((*p & 0x0f000000) == 0x0b000000){    /* BL instr? */
+                iprint("%#8.8lux=%#8.8lux ", l, v);
+                i++;
+            }
         }
         if(i == 4){
-            i = 0;
-            x += iprint("\n");
-        }
-    }
-    if(i)
-        iprint("\n");
-    iprint("EOF\n");
-
-    if(ureg->trap != VectorNMI)
-        return;
-
-    i = 0;
-    for(l = (uintptr)(&l); l < estack; l += sizeof(uintptr)){
-        iprint("%.8p ", *(uintptr*)l);
-        if(++i == 8){
             i = 0;
             iprint("\n");
         }
@@ -33992,22 +31137,8 @@ _dumpstack(Ureg *ureg)
     if(i)
         iprint("\n");
 }
-@ 
+@
 
-<<function callwithureg(x86)>>=
-/*
- * Fill in enough of Ureg to get a stack trace, and call a function.
- * Used by debugging interface rdb.
- */
-void
-arch_callwithureg(void (*fn)(Ureg*))
-{
-    Ureg ureg;
-    ureg.pc = getcallerpc(&fn);
-    ureg.sp = (ulong)&fn;
-    fn(&ureg);
-}
-@ 
 
 
 % put code of ktrace? interesting code ... and very kernel specific
@@ -34031,12 +31162,13 @@ struct KMesg {
 struct KMesg kmesg;
 @ 
 
-<<constant KMESGSIZE(x86)>>=
-// used in devcons.c
-KMESGSIZE = (16*1024),  /* put 256*1024 if want acpi debugging */
+<<constant KMESGSIZE(arm)>>=
+#define KMESGSIZE (16*1024) // for /dev/kmesg
 @
+\t mv it to portdat, same in both arch
 % used to be 256Ko but was making the binary really big which could make it
 % harder to put a kernel on a floppy; no need for that much.
+
 
 
 <<[[echo()]] hooks>>=
@@ -34333,17 +31465,13 @@ prflush(void)
 }
 @ 
 
-<<[[reboot()]] reset serialoq(x86)>>=
-/* turn off buffered serial console */
-serialoq = nil;
-@
 
 
 
 
 \chapter{Profiling}
 
-\section{[[/sys/sysstat]] (x86)}
+\section{[[/sys/sysstat]] (arm)}
 
 <<[[Cpu]] stat fields>>=
 Perf  perf;     /* performance counters */
@@ -34428,23 +31556,9 @@ accounttime(void)
 @ 
 
 
-
-
-<<global intrtimes(x86)>>=
-ulong intrtimes[256][Ntimevec];
-@ 
-% note really used, could hide it
-
-<<constant Ntimevec(x86)>>=
-    Ntimevec = 20       /* number of time buckets for each intr */
-@
-
-<<function intrtime(x86)>>=
-/*
- *  keep histogram of interrupt service times
- */
-void
-intrtime(Cpu*, int vno)
+<<function intrtime(arm)>>=
+static void
+intrtime(void)
 {
     ulong diff;
     ulong x;
@@ -34456,33 +31570,21 @@ intrtime(Cpu*, int vno)
     cpu->perf.inintr += diff;
     if(up == nil && cpu->perf.inidle > diff)
         cpu->perf.inidle -= diff;
-
-    diff /= cpu->cpumhz*100;      /* quantum = 100microsec */
-    if(diff >= Ntimevec)
-        diff = Ntimevec-1;
-    intrtimes[vno][diff]++;
 }
-@ 
+@
 
-
-<<function perfticks(x86)>>=
-/*  
- *  performance measurement ticks.  must be low overhead.
- *  doesn't have to count over a second.
- */
+<<function arch_perfticks(arm)>>=
 ulong
 arch_perfticks(void)
 {
-    uvlong x;
+    Armtimer *tm;
 
-    if(cpu->havetsc)
-        arch_cycles(&x);
-    else
-        x = 0;
-    return x;
+    tm = (Armtimer*)ARMTIMER;
+    return tm->count;
 }
 @
-% see cycles() below. essentially *x = cpu->ticks.
+
+
 
 
 <<[[Cpu]] stat fields>>=

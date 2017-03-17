@@ -19,8 +19,8 @@ enum {
     /*x: enum vector cases(x86) */
         VectorPIC = 32,   /* external i8259 interrupts */
     /*x: enum vector cases(x86) */
-        //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
-        // VectorSYSCALL = 64, in mem.h because used by Assembly too
+    //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
+    // VectorSYSCALL = 64, in mem.h because used by Assembly too
     /*x: enum vector cases(x86) */
         VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
         VectorAPIC  = 65,   /* external APIC interrupts */

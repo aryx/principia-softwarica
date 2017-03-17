@@ -99,10 +99,11 @@
  * cortex/armv7 has more ops and CRm values.
  */
 #define CpCmmu      0x00000001  /* M: MMU enable */
-#define CpCdcache   0x00000004  /* C: data cache on */
-#define CpCicache   0x00001000  /* I: instruction cache on */
 #define CpChv       0x00002000  /* V: high vectors */
 /*s: [[CpCONTROL.CpMainctl]] other cases(arm) */
+#define CpCdcache   0x00000004  /* C: data cache on */
+#define CpCicache   0x00001000  /* I: instruction cache on */
+/*x: [[CpCONTROL.CpMainctl]] other cases(arm) */
 #define CpCsbo (3<<22|1<<18|1<<16|017<<3)   /* must be 1 (armv7) */
 #define CpCsbz (CpCtre|1<<26|CpCve|1<<15|7<<7)  /* must be 0 (armv7) */
 #define CpCsw       (1<<10)     /* SW: SWP(B) enable (deprecated in v7) */
@@ -270,7 +271,9 @@
 #define Mbz     (0<<4)
 /*e: constant Mbz(arm) */
 
+/*s: constant Fault(arm) */
 #define Fault       0x00000000      /* L[12] pte: unmapped */
+/*e: constant Fault(arm) */
 
 /*s: type PageDirGranularity(arm) */
 #define Coarse      (Mbz|1)         /* L1 */
@@ -288,7 +291,9 @@
 #define Cached      0x00000008      /* L[12] */
 /*e: type PageTableEntryAttribute1(arm) */
 
+/*s: constant Dom0(arm) */
 #define Dom0        0
+/*e: constant Dom0(arm) */
 
 /*s: type PageTableEntryAttribute2(arm) */
 #define L1wralloc   (1<<12)         /* L1 TEX */
@@ -310,12 +315,20 @@
 #define Manager     3           /* DAC */
 /*e: type DAC(arm) */
 
+/*s: macro F(arm) */
 #define F(v, o, w)  (((v) & ((1<<(w))-1))<<(o))
+/*e: macro F(arm) */
 
+/*s: macro AP(arm) */
 #define AP(n, v)    F((v), ((n)*2)+4, 2)
+/*e: macro AP(arm) */
+/*s: macro L1AP(arm) */
 #define L1AP(ap)    (AP(3, (ap)))
+/*e: macro L1AP(arm) */
 /* L2AP differs between armv6 and armv7 -- see l2ap in arch*.c */
+/*s: macro DAC(arm) */
 #define DAC(n, v)   F((v), (n)*2, 2)
+/*e: macro DAC(arm) */
 
 /*s: constant HVECTORS(arm) */
 #define HVECTORS    0xffff0000

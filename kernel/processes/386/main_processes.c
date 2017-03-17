@@ -29,12 +29,12 @@ arch_procsetup(Proc* p)
 void
 arch_procsave(Proc *p)
 {
-    /*s: [[procsave()]] cycles adjustments(x86) */
-        uvlong t;
+    /*s: [[arch_procsave()]] cycles adjustments */
+    uvlong t;
 
-        arch_cycles(&t);
-        p->pcycles += t;
-    /*e: [[procsave()]] cycles adjustments(x86) */
+    arch_cycles(&t);
+    p->pcycles += t;
+    /*e: [[arch_procsave()]] cycles adjustments */
     /*s: [[procsave()]] fp adjustments(x86) */
         if(p->fpstate == FPactive){
             if(p->state == Moribund)
@@ -73,12 +73,13 @@ void
 arch_procrestore(Proc *p)
 {
     uvlong t;
+
     if(p->kp)
         return;
-    /*s: [[procrestore]] cycles adjustments(x86) */
-        arch_cycles(&t);
-        p->pcycles -= t;
-    /*e: [[procrestore]] cycles adjustments(x86) */
+    /*s: [[arch_procrestore]] cycles adjustments */
+    arch_cycles(&t);
+    p->pcycles -= t;
+    /*e: [[arch_procrestore]] cycles adjustments */
 }
 /*e: function procrestore(x86) */
 

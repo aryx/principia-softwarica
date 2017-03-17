@@ -111,7 +111,7 @@ cpuinit(void)
 void
 cpu0init(void)
 {
-    conf.ncpu = 0; // set in machon instead called after cpuinit
+    conf.ncpu = 0; // set in machon() instead (machon() called after cpuinit)
 
     cpu->cpuno = 0;
     cpus[cpu->cpuno] = cpu;
@@ -154,16 +154,11 @@ void
 confinit(void)
 {
     int i;
-    ulong kpages;
-    uintptr pa;
     char *p;
+    phys_addr pa;
+    ulong kpages;
+    ulong kmem;
 
-    //if(0 && (p = getconf("service")) != nil){
-    //  if(strcmp(p, "cpu") == 0)
-    //      cpuserver = 1;
-    //  else if(strcmp(p,"terminal") == 0)
-    //      cpuserver = 0;
-    //}
     if((p = getconf("*maxmem")) != nil){
         memsize = strtoul(p, 0, 0);
         if (memsize < 16*MB)        /* sanity */
@@ -199,11 +194,13 @@ confinit(void)
 
     /* set up other configuration parameters */
     conf.ialloc = (kpages/2)*BY2PG; // max bytes for iallocb
+
     conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
     if(cpuserver)
         conf.nproc *= 3;
     if(conf.nproc > 2000)
         conf.nproc = 2000;
+
     conf.nswap = conf.npage*3;
     conf.nswppo = 4096;
     conf.nimage = 200;
@@ -215,16 +212,16 @@ confinit(void)
      * datastructures. Mntcache and Mntrpc are not accounted for
      * (probably ~300KB).
      */
-    kpages *= BY2PG;
-    kpages -= 
+    kmem = kpages * BY2PG;
+    kmem -= 
           conf.upages*sizeof(Page)
         + conf.nproc*sizeof(Proc)
         + conf.nimage*sizeof(KImage)
         + conf.nswap
-        + conf.nswppo*sizeof(Page); // BUG, Page -> Page*?
+        + conf.nswppo*sizeof(Page*); // pad's second bugfix :)
 
     // memory pool
-    mainmem->maxsize = kpages;
+    mainmem->maxsize = kmem;
 
     if(!cpuserver)
         /*
@@ -232,7 +229,7 @@ confinit(void)
          * allocation will balance the load properly, hopefully.
          * be careful with 32-bit overflow.
          */
-        imagmem->maxsize = kpages;
+        imagmem->maxsize = kmem;
 }
 /*e: function confinit(arm) */
 
@@ -253,9 +250,10 @@ void
 init0(void)
 {
     int i;
-    char buf[2*KNAMELEN];
+    char buf[2*KNAMELEN]; // has to be the same than in ksetenv?
 
     up->nerrlab = 0;
+
     arch_coherence();
     arch_spllo();
 
@@ -273,7 +271,7 @@ init0(void)
     if(!waserror()){
         snprint(buf, sizeof(buf), "%s %s", "ARM", conffile);
         ksetenv("terminal", buf, 0);
-        ksetenv("cputype", "arm", 0);
+        ksetenv("cputype", "arm", 0); // used by mkfile! 
         if(cpuserver)
             ksetenv("service", "cpu", 0);
         else
@@ -572,8 +570,12 @@ launchinit(int ncpus)
 void
 main(void)
 {
+    /*s: [[main()]] locals(arm) */
     uint firmware, board;
+    /*e: [[main()]] locals(arm) */
 
+    // initial assignment made to avoid circular dependencies in codegraph
+    /*s: [[main()]] initial assignments for backward deps(arm) */
     // backward deps breaker!
     devtab = conf_devtab;
 
@@ -602,29 +604,37 @@ main(void)
     arch_coherence = arm_arch_coherence;
     arch_fastticks = clock_arch_fastticks;
     arch_isaconfig = main_arch_isaconfig;
+    /*e: [[main()]] initial assignments for backward deps(arm) */
 
     // Let's go!
 
     cpu = (Cpu*)CPUADDR;
+
+    /*s: [[main()]] clear bss(arm) */
     memset(edata, 0, end - edata);  /* clear bss */
-    cpu0init();
-    mmuinit1((void*)L1);
+    /*e: [[main()]] clear bss(arm) */
+
+    cpu0init(); // cpu0 initialization (calls cpuinit())
+    mmuinit1((void*)L1); // finish mmu initialization after mmuinit0
+
     machon(0);
 
-    quotefmtinstall();
-
-    //optionsinit("/boot/boot boot");
-    //ataginit((Atag*)BOOTARGS);
+    //optionsinit("/boot/boot boot"); // setup values for getconf() 
+    //ataginit((Atag*)BOOTARGS); // from bootloader config
+    // example of manual config:
+    // TODO confname(``console'') = 1?
 
     confinit();     /* figures out amount of memory */
     xinit();
 
     uartconsinit();
 
-    arch_screeninit();
+    arch_screeninit(); // screenputs = swconsole_screenputs
+    quotefmtinstall(); // libc printf initialization
 
     print("\nPlan 9 from Bell Labs\n"); // yeah!
 
+    /*s: [[main()]] print board and firmware information(arm) */
     board = getboardrev();
     firmware = getfirmware();
     print("board rev: %#ux firmware rev: %d\n", board, firmware);
@@ -634,13 +644,15 @@ main(void)
         for(;;)
             ;
     }
+    /*e: [[main()]] print board and firmware information(arm) */
     /* set clock rate to arm_freq from config.txt (default pi1:700Mhz pi2:900MHz) */
     setclkrate(ClkArm, 0);
 
     arch_trapinit();
     clockinit();
 
-    lineqinit();
+    //TODO? kbdqinit(); // setup kbdq
+    lineqinit(); // setup lineq
     timersinit();
     swcursor_init(); //if(conf.monitor)
 
@@ -651,11 +663,14 @@ main(void)
     imageinit();
 
     links();
+
+    // initialize all devices
     chandevreset();         /* most devices are discovered here */
 
-    pageinit();
-    swapinit();
+    pageinit(); // setup palloc.pages and swapalloc.highwater
+    swapinit(); // setup swapalloc
 
+    // let's craft our first process (that will then exec("boot/boot"))
     userinit();
 
     launchinit(getncpus());

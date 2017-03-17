@@ -22,6 +22,7 @@ TEXT vectors(SB), 1, $-4
 /*e: global vectors(arm) */
 
 /*s: global vtable(arm) */
+//coupling: must be just after vectors in memory (at +0x18 = 8 instructions)
 TEXT vtable(SB), 1, $-4
     WORD    $_vsvc(SB)      /* reset, in svc mode already */
     WORD    $_vund(SB)      /* undefined, switch to svc mode */

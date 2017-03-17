@@ -25,10 +25,10 @@ Soc soc = {
     .busdram    = 0x40000000,
     .busio      = 0x7E000000,
     /*x: [[soc(raspberry pi1)]] other fields(arm) */
-    .armlocal   = 0,
-    /*x: [[soc(raspberry pi1)]] other fields(arm) */
     .l1ptedramattrs = Cached | Buffered,
     .l2ptedramattrs = Cached | Buffered,
+    /*x: [[soc(raspberry pi1)]] other fields(arm) */
+    .armlocal   = 0,
     /*e: [[soc(raspberry pi1)]] other fields(arm) */
 };
 /*e: global soc(raspberry pi1)(arm) */
@@ -84,11 +84,11 @@ archether(unsigned ctlrno, Ether *ether)
 }
 /*e: function archether(arm) */
 
-/*s: function l2ap(arm) */
+/*s: function l2ap(raspberry pi1)(arm) */
 int
 l2ap(int ap)
 {
     return (AP(3, (ap))|AP(2, (ap))|AP(1, (ap))|AP(0, (ap)));
 }
-/*e: function l2ap(arm) */
+/*e: function l2ap(raspberry pi1)(arm) */
 /*e: init/arm/raspi1.c */

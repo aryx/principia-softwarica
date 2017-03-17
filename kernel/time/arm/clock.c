@@ -59,6 +59,7 @@ struct Systimers {
     u32int  cs;
     u32int  clo;
     u32int  chi;
+
     u32int  c0;
     u32int  c1;
     u32int  c2;
@@ -103,7 +104,7 @@ enum {
 
 /*s: function clockintr(arm) */
 static void
-clockintr(Ureg *ureg, void *)
+clockintr(Ureg *ureg, void*)
 {
     Systimers *tn;
 

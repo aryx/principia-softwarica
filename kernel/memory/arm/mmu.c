@@ -7,7 +7,6 @@
 #include "dat.h"
 #include "fns.h"
 /*e: kernel basic includes */
-
 #include "arm.h"
 
 /*s: macro L1X(arm) */
@@ -29,8 +28,12 @@
 
 /*s: enum _anon_ (memory/arm/mmu.c)(arm) */
 enum {
-    L1lo        = UZERO/MiB,        /* L1X(UZERO)? */
-    L1hi        = (USTKTOP+MiB-1)/MiB,  /* L1X(USTKTOP+MiB-1)? */
+/*s: constant L1lo(arm) */
+L1lo        = UZERO/MiB,        /* L1X(UZERO)? */
+/*e: constant L1lo(arm) */
+/*s: constant L1hi(arm) */
+L1hi        = (USTKTOP+MiB-1)/MiB,  /* L1X(USTKTOP+MiB-1)? */
+/*e: constant L1hi(arm) */
 };
 /*e: enum _anon_ (memory/arm/mmu.c)(arm) */
 
@@ -42,7 +45,8 @@ void
 mmuinit(void *a)
 {
     PTE *l1, *l2;
-    uintptr pa, va;
+    phys_addr pa;
+    kern_addr va;
 
     l1 = (PTE*)a; // PADDR(L1) for cpu0
 
@@ -106,7 +110,7 @@ mmuinit1(void *a)
 
 /*s: function mmul2empty(arm) */
 static void
-mmul2empty(Proc* proc, int clear)
+mmul2empty(Proc* proc, bool clear)
 {
     PTE *l1;
     Page **l2, *page;
@@ -119,9 +123,11 @@ mmul2empty(Proc* proc, int clear)
         l1[page->daddr] = Fault;
         l2 = &page->next;
     }
+    /*s: [[mmul2empty()]] remember free pages(arm) */
     *l2 = proc->mmul2cache;
     proc->mmul2cache = proc->mmul2;
     proc->mmul2 = nil;
+    /*e: [[mmul2empty()]] remember free pages(arm) */
 }
 /*e: function mmul2empty(arm) */
 
@@ -153,7 +159,7 @@ arch_mmuswitch(Proc* proc)
 
     if(proc->newtlb){
         mmul2empty(proc, 1);
-        proc->newtlb = 0;
+        proc->newtlb = false;
     }
 
     mmul1empty();
@@ -186,7 +192,7 @@ arch_flushmmu(void)
     int s;
 
     s = arch_splhi();
-    up->newtlb = 1;
+    up->newtlb = true;
     arch_mmuswitch(up);
     arch_splx(s);
 }
@@ -201,7 +207,9 @@ arch_mmurelease(Proc* proc)
     /* write back dirty and invalidate l1 caches */
     cacheuwbinv();
 
-    mmul2empty(proc, 0);
+    mmul2empty(proc, false);
+
+    /*s: [[arch_mmurelease()]] free l2 page cache(arm) */
     for(page = proc->mmul2cache; page != nil; page = next){
         next = page->next;
         if(--page->ref)
@@ -211,6 +219,7 @@ arch_mmurelease(Proc* proc)
     if(proc->mmul2cache && palloc.freememr.p)
         wakeup(&palloc.freememr);
     proc->mmul2cache = nil;
+    /*e: [[arch_mmurelease()]] free l2 page cache(arm) */
 
     mmul1empty();
 
@@ -225,7 +234,7 @@ arch_mmurelease(Proc* proc)
 
 /*s: function arch_putmmu(arm) */
 void
-arch_putmmu(uintptr va, uintptr pa, Page* page)
+arch_putmmu(virt_addr va, uintptr pa, Page* page)
 {
     int x;
     Page *pg;
@@ -237,7 +246,7 @@ arch_putmmu(uintptr va, uintptr pa, Page* page)
         /* wasteful - l2 pages only have 256 entries - fix */
         if(up->mmul2cache == nil){
             /* auxpg since we don't need much? memset if so */
-            pg = newpage(1, 0, 0);
+            pg = newpage(true, nil, 0);
             pg->va = VA(arch_kmap(pg));
         }
         else{
@@ -246,6 +255,7 @@ arch_putmmu(uintptr va, uintptr pa, Page* page)
             memset(UINT2PTR(pg->va), 0, BY2PG);
         }
         pg->daddr = x;
+
         pg->next = up->mmul2;
         up->mmul2 = pg;
 
@@ -255,12 +265,14 @@ arch_putmmu(uintptr va, uintptr pa, Page* page)
         *l1 = PPN(pg->pa)|Dom0|Coarse;
         cachedwbse(l1, sizeof *l1);
 
+        /*s: [[arch_putmmu()]] maintain mmul1lo and mmul1hi(arm) */
         if(x >= cpu->mmul1lo && x < cpu->mmul1hi){
             if(x+1 - cpu->mmul1lo < cpu->mmul1hi - x)
                 cpu->mmul1lo = x+1;
             else
                 cpu->mmul1hi = x;
         }
+        /*e: [[arch_putmmu()]] maintain mmul1lo and mmul1hi(arm) */
     }
     pte = UINT2PTR(KADDR(PPN(*l1)));
 
@@ -270,12 +282,18 @@ arch_putmmu(uintptr va, uintptr pa, Page* page)
      *  PTEWRITE|PTEUNCACHED|PTEVALID;
      */
     x = Small;
-    if(!(pa & PTEUNCACHED))
+    /*s: [[arch_putmmu()]] if PTEUNCACHED, do not change x(arm) */
+    if(pa & PTEUNCACHED) {
+    }
+    /*e: [[arch_putmmu()]] if PTEUNCACHED, do not change x(arm) */
+    else
         x |= L2ptedramattrs;
+
     if(pa & PTEWRITE)
         x |= L2AP(Urw);
     else
         x |= L2AP(Uro);
+
     pte[L2X(va)] = PPN(pa)|x;
     cachedwbse(&pte[L2X(va)], sizeof pte[0]);
 
@@ -377,7 +395,6 @@ arch_checkmmu(uintptr va, uintptr pa)
 /*e: function arch_checkmmu(arm) */
 
 /*s: function arch_kmap(arm) */
-//old:#define   arch_kmap(p)        (Arch_KMap*)((p)->pa|kseg0)
 Arch_KMap*
 arch_kmap(Page *p) {
   return (Arch_KMap*)((p)->pa|KZERO);
@@ -385,7 +402,6 @@ arch_kmap(Page *p) {
 /*e: function arch_kmap(arm) */
 
 /*s: function arch_kunmap(arm) */
-//old: #define   kunmap(k)
 void
 arch_kunmap(Arch_KMap *k)
 {

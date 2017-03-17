@@ -33,7 +33,7 @@ static Vctl *vctl[256];
 enum
 {
    /*s: constant Ntimevec(x86) */
-       Ntimevec = 20       /* number of time buckets for each intr */
+   Ntimevec = 20       /* number of time buckets for each intr */
    /*e: constant Ntimevec(x86) */
 };
 /*s: global intrtimes(x86) */

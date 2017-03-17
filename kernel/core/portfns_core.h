@@ -14,13 +14,15 @@
 #define MASK(v) ((1UL << (v)) - 1)  /* mask `v' bits wide */
 /*x: portdat.h macros */
 #define MIN(a, b) ((a) < (b)? (a): (b))
-#define HOWMANY(x, y) (((x)+((y)-1))/(y))
-#define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */
-
-// BY2PG is defined in mem.h, which should always be included before "dat.h"!
-#define PGROUND(s)  ROUNDUP(s, BY2PG)
+/*x: portdat.h macros */
 // used in bcm/mmu.c
 #define FEXT(d, o, w) (((d)>>(o)) & ((1<<(w))-1)) 
+/*x: portdat.h macros */
+#define HOWMANY(x, y) (((x)+((y)-1))/(y))
+#define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */
+/*x: portdat.h macros */
+// BY2PG is defined in mem.h, which should always be included before "dat.h"!
+#define PGROUND(s)  ROUNDUP(s, BY2PG)
 /*e: portdat.h macros */
 
 // portfns.c (mostly here just to remove some backward dependencies)

@@ -210,14 +210,14 @@ extern Soc soc;
  */
 <<constant Mbz(arm)>>
 
-#define Fault       0x00000000      /* L[12] pte: unmapped */
+<<constant Fault(arm)>>
 
 <<type PageDirGranularity(arm)>>
 <<type PageTableGranularity(arm)>>
 
 <<type PageTableEntryAttribute1(arm)>>
 
-#define Dom0        0
+<<constant Dom0(arm)>>
 
 <<type PageTableEntryAttribute2(arm)>>
 
@@ -225,12 +225,12 @@ extern Soc soc;
 
 <<type DAC(arm)>>
 
-#define F(v, o, w)  (((v) & ((1<<(w))-1))<<(o))
+<<macro F(arm)>>
 
-#define AP(n, v)    F((v), ((n)*2)+4, 2)
-#define L1AP(ap)    (AP(3, (ap)))
+<<macro AP(arm)>>
+<<macro L1AP(arm)>>
 /* L2AP differs between armv6 and armv7 -- see l2ap in arch*.c */
-#define DAC(n, v)   F((v), (n)*2, 2)
+<<macro DAC(arm)>>
 
 <<constant HVECTORS(arm)>>
 
@@ -293,7 +293,7 @@ extern Soc soc;
 //pad: used to be called arm.s, but I prefer the .ha suffix for asm macros
 
 #define PADDR(va)   (((va) & ~KSEGM))
-#define L1X(va)     (((((va))>>20) & 0x0fff)<<2)
+<<macro L1X bis(arm)>>
 
 /*
  * new instructions
@@ -714,52 +714,7 @@ vcreq(int tag, void *buf, int vallen, int rsplen)
 }
 @
 
-<<function fbdefault(arm)>>=
-/*
- * Framebuffer
- */
-static errorneg1
-fbdefault(int *width, int *height, int *depth)
-{
-    u32int buf[3];
 
-    if(vcreq(TagGetres, &buf[0], 0, 2*4) != 2*4 ||
-       vcreq(TagGetdepth, &buf[2], 0, 4) != 4)
-        return ERROR_NEG1;
-    *width = buf[0];
-    *height = buf[1];
-    *depth = buf[2];
-    return OK_0;
-}
-@
-
-<<function fbinit(arm)>>=
-void*
-fbinit(bool set, int *width, int *height, int *depth)
-{
-    Fbinfo *fi = (Fbinfo*)(VCBUFFER);
-    uintptr va;
-
-    if(!set)
-        fbdefault(width, height, depth);
-    /* Screen width must be a multiple of 16 */
-    *width &= ~0xF;
-    memset(fi, 0, sizeof(Fbinfo));
-    fi->xres = fi->xresvirtual = *width;
-    fi->yres = fi->yresvirtual = *height;
-    fi->bpp = *depth;
-    cachedwbinvse(fi, sizeof(Fbinfo));
-    vcwrite(ChanFb, dmaaddr(fi));
-    if(vcread(ChanFb) != 0)
-        return nil;
-    //TODO: fi->base is in virtual space?? how vcore knows about that? PADDR?
-    va = mmukmap(FRAMEBUFFER, PADDR(fi->base), fi->screensize);
-    // make it a blue screen
-    if(va)
-        memset((char*)va, 0x7F, fi->screensize);
-    return (void*)va;
-}
-@
 
 <<function fbblank(arm)>>=
 int
@@ -855,21 +810,6 @@ getfirmware(void)
 }
 @
 
-<<function getramsize(arm)>>=
-/*
- * Get ARM ram
- */
-void
-getramsize(Confmem *mem)
-{
-    u32int buf[2];
-
-    if(vcreq(TagGetram, buf, 0, sizeof buf) != sizeof buf)
-        return;
-    mem->base = buf[0];
-    mem->limit = buf[1];
-}
-@
 
 <<function getclkrate(arm)>>=
 /*
@@ -1103,31 +1043,7 @@ adec(int *p)
 }
 @
 
-<<function cas32(arm)>>=
-bool
-cas32(void* addr, u32int old, u32int new)
-{
-    bool r;
-    int s;
 
-    s = arch_splhi();
-    r = (*(u32int*)addr == old);
-    if(r)
-        *(u32int*)addr = new;
-    arch_splx(s);
-    if (r)
-        arch_coherence();
-    return r;
-}
-@
-
-<<function arch_cmpswap(arm)>>=
-bool
-arch_cmpswap(long *addr, long old, long new)
-{
-    return cas32(addr, old, new);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1149,7 +1065,7 @@ arch_cmpswap(long *addr, long old, long new)
 
 <<function cas32(arm)>>
 
-<<function arch_cmpswap(arm)>>
+<<function arch_cmpswap(raspberry pi1)(arm)>>
 @
 
 \subsection*{[[concurrency/arm/concurrency_raspi2.c]]}
@@ -1192,9 +1108,6 @@ arch_cmpswap(long *addr, long old, long new)
 #define STAGESIZE 64 // for struct Uart
 @
 
-<<constant KMESGSIZE(arm)>>=
-#define KMESGSIZE (16*1024) // for /dev/kmesg
-@
 
 
 %-------------------------------------------------------------
@@ -1234,15 +1147,6 @@ extern ulong memsize;
 
 
 
-<<[[Cpu]] [[Arch]] save of first five registers fields(arm)>>=
-/* save areas for exceptions, hold R0-R4 */
-u32int  sfiq[5];
-u32int  sirq[5];
-u32int  sund[5];
-u32int  sabt[5];
-u32int  smon[5];        /* probably not needed */
-@
-%dead: u32int  ssys[5];
 
 
 <<[[Cpu]] [[Arch]] other fields(arm)>>=
@@ -1266,8 +1170,6 @@ int lastintr; // dead?? also redundant with one in Cpu?
 
 <<type PTE(arm)>>
 
-<<struct MMMU(arm)>>
-
 <<struct Arch_Cpu(arm)>>
 @
 
@@ -1283,10 +1185,9 @@ typedef struct Arch_FPsave  Arch_FPsave;
 typedef struct Ureg Ureg;
 #pragma incomplete Ureg
 
-typedef struct MMMU MMMU;
 typedef struct Soc Soc;
 @
-
+%old: typedef struct MMMU MMMU;
 
 \subsection*{[[core/arm/fns.h]]}
 
@@ -1294,9 +1195,6 @@ typedef struct Soc Soc;
 #define getpgcolor(a)   0
 @
 
-<<macro arch_cycles(arm)>>=
-#define arch_cycles(ip) *(ip) = arch_lcycles()
-@
 
 <<macro arch_countpagerefs(arm)>>=
 // same signatures but optimized away
@@ -2293,37 +2191,7 @@ void archinit(void);
 #include "arm.h"
 #include "arminstr.ha"
 
-/*
- * on bcm2836, only cpu0 starts here
- * other cpus enter at cpureset in armv7.s
- */
-TEXT _start(SB), 1, $-4
-    /*
-     * load physical base for SB addressing while mmu is off
-     * keep a handy zero in R0 until first function call
-     */
-    MOVW    $setR12(SB), R12
-    SUB $KZERO, R12
-    MOVW    $0, R0
-
-    /*
-     * SVC mode, interrupts disabled
-     */
-    MOVW    $(PsrDirq|PsrDfiq|PsrMsvc), R1
-    MOVW    R1, CPSR
-
-    /*
-     * start stack at top of 'cpu' (physical addr)
-     */
-    MOVW    $PADDR(CPUADDR+CPUSIZE-4), R13
-
-    /*
-     * do arch-dependent startup (no return)
-     */
-    BL  armstart(SB)
-    B   0(PC)
-
-    RET
+<<function _start(arm)>>
 @
 
 \subsection*{[[init/arm/startv6.s]]}
@@ -2337,102 +2205,15 @@ TEXT _start(SB), 1, $-4
 #include "arm.h"
 #include "arminstr.ha"
 
-TEXT armstart(SB), 1, $-4
+<<function armstart(raspberry pi1)(arm)>>
 
-    /*
-     * disable the mmu and L1 caches
-     * invalidate caches and tlb
-     */
-    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
-    BIC $(CpCdcache|CpCicache|CpCpredict|CpCmmu), R1 // Remove CpCpredict
-    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
-
-    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvu), CpCACHEall
-    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
-    ISB
-
-    /*
-     * clear mach and page tables
-     */
-    MOVW    $PADDR(CPUADDR), R1
-    MOVW    $PADDR(KTZERO), R2
-_ramZ:
-    MOVW    R0, (R1)
-    ADD $4, R1
-    CMP R1, R2
-    BNE _ramZ
-
-    /*
-     * start stack at top of CPUADDR (physical addr)
-     * set up page tables for kernel
-     */
-    MOVW    $PADDR(CPUADDR+CPUSIZE-4), R13 // done already in start.s
-    MOVW    $PADDR(L1), R0
-    BL  mmuinit(SB)
-
-    /*
-     * set up domain access control and page table base
-     */
-    MOVW    $Client, R1
-    MCR CpSC, 0, R1, C(CpDAC), C(0)
-
-    MOVW    $PADDR(L1), R1
-    MCR CpSC, 0, R1, C(CpTTB), C(0)
-
-    /*
-     * enable caches, mmu, and high vectors
-     */
-    MRC CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
-    ORR $(CpChv|CpCdcache|CpCicache|CpCmmu), R0
-    MCR CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
-    ISB
-
-    /*
-     * switch SB, SP, and PC into KZERO space
-     */
-    MOVW    $setR12(SB), R12
-    MOVW    $(CPUADDR+CPUSIZE-4), R13
-
-    MOVW    $_startpg(SB), R15
-
-TEXT _startpg(SB), 1, $-4
-
-    /*
-     * enable cycle counter
-     */
-    MOVW    $1, R1
-    MCR CpSC, 0, R1, C(CpSPM), C(CpSPMperf), CpSPMctl // Not CpSPMcyc??
-
-    /*
-     * call main and loop forever if it returns
-     */
-    BL  main(SB)
-    B   0(PC)
-
-    BL  _div(SB)        /* hack to load _div, etc. */
-
-
-
-
-
+<<function _startpg(raspberry pi1)(arm)>>
 
 
         
-
-TEXT arch_idlehands(SB), $-4
-    MOVW    CPSR, R3
-    ORR $(PsrDirq|PsrDfiq), R3, R1      /* splfhi */
-    MOVW    R1, CPSR
-
-    DSB
-    MOVW    nrdy(SB), R0
-    CMP $0, R0
-    MCR.EQ  CpSC, 0, R0, C(CpCACHE), C(CpCACHEintr), CpCACHEwait
-    DSB
-
-    MOVW    R3, CPSR            /* splx */
-    RET
+<<function arch_idlehands(raspberry pi1)(arm)>>
 @
+%$
 
 \subsection*{[[init/arm/startv7.s]]}
 
@@ -2486,7 +2267,7 @@ _ramZ:
      */
     MOVW    $PADDR(CPUADDR+CPUSIZE-4), R13
     MOVW    $PADDR(L1), R0
-    BL  ,mmuinit(SB)
+    BL  mmuinit(SB)
 
     /*
      * set up domain access control and page table base
@@ -2713,41 +2494,7 @@ getconf(char *name)
 }
 @
 
-<<function cpuinit(arm)>>=
-void
-cpuinit(void)
-{
-    Cpu *m0;
 
-    cpu->ticks = 1;
-    cpu->perf.period = 1;
-
-    m0 = CPUS(0);
-    if (cpu->cpuno != 0) {
-        /* synchronise with cpu 0 */
-        cpu->ticks = m0->ticks;
-        cpu->fastclock = m0->fastclock;
-        cpu->delayloop = m0->delayloop;
-    }
-    //machon(m->cpuno);
-}
-@
-
-<<function cpu0init(arm)>>=
-void
-cpu0init(void)
-{
-    conf.ncpu = 0; // set in machon instead called after cpuinit
-
-    cpu->cpuno = 0;
-    cpus[cpu->cpuno] = cpu;
-
-    cpuinit();
-    active.exiting = 0;
-
-    up = nil;
-}
-@
 
 <<function machon(arm)>>=
 /* enable scheduling of this cpu */
@@ -2771,337 +2518,15 @@ machon(uint xcpu)
 ulong   memsize = 128*1024*1024;
 @
 
-<<function confinit(arm)>>=
-void
-confinit(void)
-{
-    int i;
-    ulong kpages;
-    uintptr pa;
-    char *p;
-
-    //if(0 && (p = getconf("service")) != nil){
-    //  if(strcmp(p, "cpu") == 0)
-    //      cpuserver = 1;
-    //  else if(strcmp(p,"terminal") == 0)
-    //      cpuserver = 0;
-    //}
-    if((p = getconf("*maxmem")) != nil){
-        memsize = strtoul(p, 0, 0);
-        if (memsize < 16*MB)        /* sanity */
-            memsize = 16*MB;
-    }
-    // simpler than for x86 :)
-    getramsize(&conf.mem[0]);
-
-    if(conf.mem[0].limit == 0){
-        conf.mem[0].base = 0;
-        conf.mem[0].limit = memsize;
-    }else if(p != nil)
-        conf.mem[0].limit = conf.mem[0].base + memsize;
-
-    conf.npage = 0;
-    pa = PADDR(PGROUND(PTR2UINT(end)));
-
-    /*
-     *  we assume that the kernel is at the beginning of one of the
-     *  contiguous chunks of memory and fits therein.
-     */
-    for(i=0; i<nelem(conf.mem); i++){
-        /* take kernel out of allocatable space */
-        if(pa > conf.mem[i].base && pa < conf.mem[i].limit)
-            conf.mem[i].base = pa;
-
-        conf.mem[i].npage = (conf.mem[i].limit - conf.mem[i].base)/BY2PG;
-        conf.npage += conf.mem[i].npage;
-    }
-
-    conf.upages = (conf.npage*80)/100;
-    kpages = conf.npage - conf.upages;
-
-    /* set up other configuration parameters */
-    conf.ialloc = (kpages/2)*BY2PG; // max bytes for iallocb
-    conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
-    if(cpuserver)
-        conf.nproc *= 3;
-    if(conf.nproc > 2000)
-        conf.nproc = 2000;
-    conf.nswap = conf.npage*3;
-    conf.nswppo = 4096;
-    conf.nimage = 200;
-
-    conf.copymode = 1;      /* copy on reference, not copy on write */
-
-    /*
-     * Guess how much is taken by the large permanent
-     * datastructures. Mntcache and Mntrpc are not accounted for
-     * (probably ~300KB).
-     */
-    kpages *= BY2PG;
-    kpages -= 
-          conf.upages*sizeof(Page)
-        + conf.nproc*sizeof(Proc)
-        + conf.nimage*sizeof(KImage)
-        + conf.nswap
-        + conf.nswppo*sizeof(Page); // BUG, Page -> Page*?
-
-    // memory pool
-    mainmem->maxsize = kpages;
-
-    if(!cpuserver)
-        /*
-         * give terminals lots of image memory, too; the dynamic
-         * allocation will balance the load properly, hopefully.
-         * be careful with 32-bit overflow.
-         */
-        imagmem->maxsize = kpages;
-}
-@
 
 <<global sp(arm)>>=
 static uintptr sp;      /* XXX - must go - user stack of init proc */
 @
 
-<<function init0(arm)>>=
-/*
- *  starting place for first process
- */
-void
-init0(void)
-{
-    int i;
-    char buf[2*KNAMELEN];
 
-    up->nerrlab = 0;
-    arch_coherence();
-    arch_spllo();
 
-    /*
-     * These are o.k. because rootinit is null.
-     * Then early kproc's will have a root and dot.
-     */
-    up->slash = namec("#/", Atodir, 0, 0);
-    pathclose(up->slash->path);
-    up->slash->path = newpath("/");
-    up->dot = cclone(up->slash);
 
-    chandevinit();
 
-    if(!waserror()){
-        snprint(buf, sizeof(buf), "%s %s", "ARM", conffile);
-        ksetenv("terminal", buf, 0);
-        ksetenv("cputype", "arm", 0);
-        if(cpuserver)
-            ksetenv("service", "cpu", 0);
-        else
-            ksetenv("service", "terminal", 0);
-        snprint(buf, sizeof(buf), "-a %s", getethermac());
-        ksetenv("etherargs", buf, 0);
-
-        /* convert plan9.ini variables to #e and #ec */
-        for(i = 0; i < nconf; i++) {
-            ksetenv(confname[i], confval[i], 0);
-            ksetenv(confname[i], confval[i], 1);
-        }
-        poperror();
-    }
-    kproc("alarm", alarmkproc, nil); // ??
-    arch_touser(sp);
-    assert(0);          /* shouldn't have returned */
-}
-@
-
-<<function userinit(arm)>>=
-/*
- *  create the first process
- */
-void
-userinit(void)
-{
-    Proc *p;
-    Segment *s;
-    Arch_KMap *k;
-    Page *pg;
-
-    /* no processes yet */
-    up = nil;
-
-    p = newproc();
-    p->pgrp = newpgrp();
-    p->egrp = smalloc(sizeof(Egrp));
-    p->egrp->ref = 1;
-    p->fgrp = dupfgrp(nil);
-    p->rgrp = newrgrp();
-    p->procmode = 0640;
-
-    kstrdup(&eve, "");
-    kstrdup(&p->text, "*init*");
-    kstrdup(&p->user, eve);
-
-    /*
-     * Kernel Stack
-     */
-    p->sched.pc = PTR2UINT(init0);
-    p->sched.sp = PTR2UINT(p->kstack + KSTACK
-                           - sizeof(up->sargs.args)
-                           - sizeof(uintptr));
-    p->sched.sp = STACKALIGN(p->sched.sp);
-
-    /*
-     * User Stack
-     *
-     * Technically, newpage can't be called here because it
-     * should only be called when in a user context as it may
-     * try to sleep if there are no pages available, but that
-     * shouldn't be the case here.
-     */
-    s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-    s->flushme++;
-    p->seg[SSEG] = s;
-    pg = newpage(true, nil, USTKTOP-BY2PG);
-    segpage(s, pg);
-
-    k = arch_kmap(pg);
-    sp = bootargs(VA(k));
-    arch_kunmap(k);
-
-    /*
-     * Text
-     */
-    s = newseg(SG_TEXT, UTZERO, 1); // initcode needs only 1 page
-    p->seg[TSEG] = s;
-    pg = newpage(true, nil, UTZERO);
-    memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
-    segpage(s, pg);
-
-    k = arch_kmap(s->pagedir[0]->pagetab[0]);
-    memmove(UINT2PTR(VA(k)), initcode, sizeof initcode);
-    arch_kunmap(k);
-
-    // ready to go!
-    ready(p);
-}
-@
-
-<<function shutdown (init/arm/main.c)(arm)>>=
-static void
-shutdown(int ispanic)
-{
-    int ms, once;
-
-    lock(&active);
-    if(ispanic)
-        active.ispanic = ispanic;
-    else if(cpu->cpuno == 0 && (active.cpus & (1 << cpu->cpuno)) == 0)
-        active.ispanic = 0;
-    once = active.cpus & (1 << cpu->cpuno);
-    active.cpus &= ~(1 << cpu->cpuno);
-    active.exiting = 1;
-    unlock(&active);
-
-    if(once)
-        iprint("cpu%d: exiting\n", cpu->cpuno);
-    arch_spllo();
-    for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
-        arch_delay(TK2MS(2));
-        if(active.cpus == 0 && consactive() == 0)
-            break;
-    }
-    arch_delay(100*cpu->cpuno);
-}
-@
-
-<<function main_arch_exit(arm)>>=
-/*
- *  exit kernel either on a panic or user request
- */
-void
-main_arch_exit(int code)
-{
-    void (*f)(ulong, ulong, ulong);
-
-    shutdown(code);
-    splfhi();
-    if(cpu->cpuno == 0)
-        archreboot();
-    else{
-        f = (void*)REBOOTADDR;
-        intrcpushutdown();
-        cacheuwbinv();
-        l2cacheuwbinv();
-        (*f)(0, 0, 0);
-        for(;;){}
-    }
-}
-@
-
-<<function arch_reboot(arm)>>=
-/*
- * the new kernel is already loaded at address `code'
- * of size `size' and entry point `entry'.
- */
-void
-arch_reboot(void *entry, void *code, ulong size)
-{
-    void (*f)(ulong, ulong, ulong);
-
-    //writeconf();
-
-    /*
-     * the boot processor is cpu0.  execute this function on it
-     * so that the new kernel has the same cpu0.
-     */
-    if (cpu->cpuno != 0) {
-        procwired(up, 0);
-        sched();
-    }
-    if (cpu->cpuno != 0)
-        print("on cpu%d (not 0)!\n", cpu->cpuno);
-
-    /* setup reboot trampoline function */
-    f = (void*)REBOOTADDR;
-    memmove(f, rebootcode, sizeof(rebootcode));
-    cachedwbse(f, sizeof(rebootcode));
-
-    shutdown(0);
-
-    /*
-     * should be the only processor running now
-     */
-
-    arch_delay(5000);
-    print("active.machs = %x\n", active.cpus);
-    print("reboot entry %#lux code %#lux size %ld\n",
-        PADDR(entry), PADDR(code), size);
-    arch_delay(100);
-
-    /* turn off buffered serial console */
-    serialoq = nil;
-    kprintoq = nil;
-    screenputs = nil;
-
-    /* shutdown devices */
-    if(!waserror()){
-        chandevshutdown();
-        poperror();
-    }
-
-    /* stop the clock (and watchdog if any) */
-    clockshutdown();
-
-    splfhi();
-    intrshutdown();
-
-    /* off we go - never to return */
-    cacheuwbinv();
-    l2cacheuwbinv();
-    (*f)(PADDR(entry), PADDR(code), size);
-
-    iprint("loaded kernel returned!\n");
-    arch_delay(1000);
-    archreboot();
-}
-@
 
 <<function main_arch_isaconfig(arm)>>=
 /*
@@ -3130,12 +2555,6 @@ main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa)
 }
 @
 
-<<function arch_memorysummary(arm)>>=
-// called from devcons.c
-void
-arch_memorysummary(void) {
-}
-@
 
 <<function launchinit(arm)>>=
 void
@@ -3167,104 +2586,6 @@ launchinit(int ncpus)
 }
 @
 
-<<function main(arm)>>=
-void
-main(void)
-{
-    uint firmware, board;
-
-    // backward deps breaker!
-    devtab = conf_devtab;
-
-    print = devcons_print;
-    iprint = devcons_iprint;
-    pprint = devcons_pprint;
-    panic = devcons_panic;
-    _assert = devcons__assert;
-    error = proc_error;
-    nexterror = proc_nexterror;
-    dumpaproc = proc_dumpaproc;
-    wakeup = proc_wakeup;
-    sched = proc_sched;
-    ready = proc_ready;
-    sleep = proc_sleep;
-    tsleep = proc_tsleep;
-    cclose = chan_cclose;
-    proctab = proc_proctab;
-    postnote = proc_postnote;
-    pexit = proc_pexit;
-
-    arch_exit = main_arch_exit;
-    arch_dumpstack = trap_arch_dumpstack;
-    arch_delay = clock_arch_delay;
-    arch_microdelay = clock_arch_microdelay;
-    arch_coherence = arm_arch_coherence;
-    arch_fastticks = clock_arch_fastticks;
-    arch_isaconfig = main_arch_isaconfig;
-
-    // Let's go!
-
-    cpu = (Cpu*)CPUADDR;
-    memset(edata, 0, end - edata);  /* clear bss */
-    cpu0init();
-    mmuinit1((void*)L1);
-    machon(0);
-
-    quotefmtinstall();
-
-    //optionsinit("/boot/boot boot");
-    //ataginit((Atag*)BOOTARGS);
-
-    confinit();     /* figures out amount of memory */
-    xinit();
-
-    uartconsinit();
-
-    arch_screeninit();
-
-    print("\nPlan 9 from Bell Labs\n"); // yeah!
-
-    board = getboardrev();
-    firmware = getfirmware();
-    print("board rev: %#ux firmware rev: %d\n", board, firmware);
-    if(firmware < Minfirmrev){
-        print("Sorry, firmware (start*.elf) must be at least rev %d"
-              " or newer than %s\n", Minfirmrev, Minfirmdate);
-        for(;;)
-            ;
-    }
-    /* set clock rate to arm_freq from config.txt (default pi1:700Mhz pi2:900MHz) */
-    setclkrate(ClkArm, 0);
-
-    arch_trapinit();
-    clockinit();
-
-    lineqinit();
-    timersinit();
-    swcursor_init(); //if(conf.monitor)
-
-    arch_cpuidprint();
-    archreset();
-
-    procinit();
-    imageinit();
-
-    links();
-    chandevreset();         /* most devices are discovered here */
-
-    pageinit();
-    swapinit();
-
-    userinit();
-
-    launchinit(getncpus());
-
-    // schedule the only ready user process (the one created by userinit)
-    schedinit();
-
-    assert(0);          /* shouldn't have returned */
-}
-@
 
 
 %-------------------------------------------------------------
@@ -3445,14 +2766,6 @@ archether(unsigned ctlrno, Ether *ether)
 }
 @
 
-<<function l2ap(arm)>>=
-int
-l2ap(int ap)
-{
-    return (AP(3, (ap))|AP(2, (ap))|AP(1, (ap))|AP(0, (ap)));
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -3482,7 +2795,7 @@ l2ap(int ap)
 
 <<function archether(arm)>>
 
-<<function l2ap(arm)>>
+<<function l2ap(raspberry pi1)(arm)>>
 @
 
 
@@ -3492,6 +2805,15 @@ l2ap(int ap)
 #define ARMLOCAL    (VIRTIO+IOSIZE)
 @
 \t put in mem.h so can reuse in different files
+
+
+<<function l2ap(raspberry pi2)(arm)>>=
+int
+l2ap(int ap)
+{
+    return (AP(0, (ap)));
+}
+@
 
 %-------------------------------------------------------------
 
@@ -3630,11 +2952,7 @@ archether(unsigned ctlrno, Ether *ether)
     return 1;
 }
 
-int
-l2ap(int ap)
-{
-    return (AP(0, (ap)));
-}
+<<function l2ap(raspberry pi2)(arm)>>
 
 
 // in main.c
@@ -4055,33 +3373,6 @@ watchdoglink(void)
 
 \subsection*{[[init/user/preboot/arm/init9.s]]}
 
-<<init/user/preboot/arm/init9.s>>=
-/*
- * This is the same as the C program:
- *
- *  void
- *  main(char* argv0)
- *  {
- *      startboot(argv0, &argv0);
- *  }
- *
- * It is in assembler because SB needs to be
- * set and doing this in C drags in too many
- * other routines.
- */
-TEXT main(SB), 1, $8
-    MOVW    $setR12(SB), R12        /* load the SB */
-    MOVW    $boot(SB), R0
-
-    ADD $12, R13, R1            /* pointer to 0(FP) */
-
-    MOVW    R0, 4(R13)          /* pass argc, argv */
-    MOVW    R1, 8(R13)
-
-    BL  startboot(SB)
-_loop:
-    B   _loop
-@
 
 \subsection*{[[init/arm/rebootcode.s]]}
 
@@ -4260,9 +3551,6 @@ typedef void        Arch_KMap;
 @
 %16K
 
-<<constant KSTKSIZE(arm)>>=
-#define KSTKSIZE    (8*KiB)
-@
 
 <<macro STACKALIGN(arm)>>=
 #define STACKALIGN(sp)  ((sp) & ~3)     /* bug: assure with alloc */
@@ -4309,14 +3597,6 @@ typedef void        Arch_KMap;
 
 
 
-<<constant USTKTOP(arm)>>=
-// that's it? only 512 MB for virtual space?
-#define USTKTOP     0x20000000      /* user segment end +1 */
-@
-
-<<constant USTKSIZE(arm)>>=
-#define USTKSIZE    (8*1024*1024)       /* user stack size */
-@
 
 
 
@@ -4325,14 +3605,7 @@ typedef void        Arch_KMap;
 #define REBOOTADDR  (KZERO+0x1800)
 @
 
-<<constant BLOCKALIGN(arm)>>=
-// possible alternative fix: git show 2342e706e42d1e6653c51cc1433f44816cf53fe6
-#define BLOCKALIGN  32          /* only used in allocb.c */
-@
 
-<<constant KSTACK(arm)>>=
-#define KSTACK      KSTKSIZE
-@
 
 
 
@@ -4370,7 +3643,6 @@ typedef void        Arch_KMap;
 <<constant CPUSIZE(arm)>>
 <<constant L1SIZE(arm)>>
 
-<<constant KSTKSIZE(arm)>>
 <<macro STACKALIGN(arm)>>
 
 <<constant UP(arm)>>
@@ -4451,212 +3723,19 @@ typedef void        Arch_KMap;
 
 \subsection*{[[memory/arm/mmu.c]]}
 
-<<macro L1X(arm)>>=
-#define L1X(va)     FEXT((va), 20, 12)
-@
 
-<<macro L2X(arm)>>=
-#define L2X(va)     FEXT((va), 12, 8)
-@
 
-<<macro L2AP(arm)>>=
-#define L2AP(ap)    l2ap(ap)
-@
-
-<<[[Soc]] mmu fields>>=
-u32int  l1ptedramattrs;
-u32int  l2ptedramattrs;
-@
-
-<<[[soc(raspberry pi1)]] other fields(arm)>>=
-.l1ptedramattrs = Cached | Buffered,
-.l2ptedramattrs = Cached | Buffered,
-@
-
-<<constant L1ptedramattrs(arm)>>=
-#define L1ptedramattrs  soc.l1ptedramattrs
-@
-
-<<constant L2ptedramattrs(arm)>>=
-#define L2ptedramattrs  soc.l2ptedramattrs
-@
 
 <<enum _anon_ (memory/arm/mmu.c)(arm)>>=
 enum {
-    L1lo        = UZERO/MiB,        /* L1X(UZERO)? */
-    L1hi        = (USTKTOP+MiB-1)/MiB,  /* L1X(USTKTOP+MiB-1)? */
+<<constant L1lo(arm)>>
+<<constant L1hi(arm)>>
 };
 @
 
-<<function mmuinit(arm)>>=
-/*
- * Set up initial PTEs for this cpu (called with mmu off)
- */
-void
-mmuinit(void *a)
-{
-    PTE *l1, *l2;
-    uintptr pa, va;
 
-    l1 = (PTE*)a; // PADDR(L1) for cpu0
 
-    /*
-     * map all of ram at KZERO
-     */
-    va = KZERO;
-    for(pa = 0; pa < soc.dramsize; pa += MiB, va += MiB)
-    {
-        l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
-    }
 
-    /*
-     * identity map first MB of ram so mmu can be enabled
-     */
-    // ???
-    l1[L1X(0)] = 0|Dom0|L1AP(Krw)|Section|L1ptedramattrs;
-
-    /*
-     * map i/o registers 
-     */
-    va = VIRTIO;
-    for(pa = soc.physio; pa < soc.physio + IOSIZE; pa += MiB, va += MiB){
-        // No L1ptedramattrs (Cached | Buffered) here, because volatile!
-        l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section; 
-    }
-    // for raspi2
-    pa = soc.armlocal;
-    if(pa)
-        l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
-    
-    /*
-     * double map exception vectors at top of virtual memory
-     */
-    // ???
-    l2 = (PTE*)PADDR(L2);
-    va = HVECTORS;
-    l1[L1X(va)] = (uintptr)l2|Dom0|Coarse;
-    l2[L2X(va)] = L2AP(Krw)|Small|L2ptedramattrs;
-}
-@
-
-<<function mmuinit1(arm)>>=
-void
-mmuinit1(void *a)
-{
-    PTE *l1;
-
-    l1 = (PTE*)a;
-    cpu->mmul1 = l1;
-
-    /*
-     * undo identity map of first MB of ram
-     */
-    l1[L1X(0)] = 0;
-    cachedwbse(&l1[L1X(0)], sizeof(PTE));
-
-    mmuinvalidateaddr(0);
-}
-@
-%    //cacheuwbinv();
-%    //l2cacheuwbinv();
-
-<<function mmul2empty(arm)>>=
-static void
-mmul2empty(Proc* proc, int clear)
-{
-    PTE *l1;
-    Page **l2, *page;
-
-    l1 = cpu->mmul1;
-    l2 = &proc->mmul2;
-    for(page = *l2; page != nil; page = page->next){
-        if(clear)
-            memset(UINT2PTR(page->va), 0, BY2PG);
-        l1[page->daddr] = Fault;
-        l2 = &page->next;
-    }
-    *l2 = proc->mmul2cache;
-    proc->mmul2cache = proc->mmul2;
-    proc->mmul2 = nil;
-}
-@
-
-<<function mmul1empty(arm)>>=
-static void
-mmul1empty(void)
-{
-    memset(&cpu->mmul1[L1lo], 0, (L1hi - L1lo)*sizeof(PTE));
-}
-@
-%#ifdef notdef
-%/* there's a bug in here */
-%    PTE *l1;
-%
-%    /* clean out any user mappings still in l1 */
-%    if(cpu->mmul1lo > L1lo){
-%        if(cpu->mmul1lo == 1)
-%            cpu->mmul1[L1lo] = Fault;
-%        else
-%            memset(&cpu->mmul1[L1lo], 0, cpu->mmul1lo*sizeof(PTE));
-%        cpu->mmul1lo = L1lo;
-%    }
-%    if(cpu->mmul1hi < L1hi){
-%        l1 = &cpu->mmul1[cpu->mmul1hi];
-%        if((L1hi - cpu->mmul1hi) == 1)
-%            *l1 = Fault;
-%        else
-%            memset(l1, 0, (L1hi - cpu->mmul1hi)*sizeof(PTE));
-%        cpu->mmul1hi = L1hi;
-%    }
-%#else
-%    memset(&cpu->mmul1[L1lo], 0, (L1hi - L1lo)*sizeof(PTE));
-%#endif /* notdef */
-
-<<function arch_mmuswitch(arm)>>=
-void
-arch_mmuswitch(Proc* proc)
-{
-    int x;
-    PTE *l1;
-    Page *page;
-
-    /* do kprocs get here and if so, do they need to? */
-/*** "This is plausible, but wrong" - Charles Forsyth 1 Mar 2015
-    if(cpu->mmupid == proc->pid && !proc->newtlb)
-        return;
-***/
-    cpu->mmupid = proc->pid;
-
-    /* write back dirty and invalidate l1 caches */
-    cacheuwbinv();
-
-    if(proc->newtlb){
-        mmul2empty(proc, 1);
-        proc->newtlb = 0;
-    }
-
-    mmul1empty();
-
-    /* move in new map */
-    l1 = cpu->mmul1;
-    for(page = proc->mmul2; page != nil; page = page->next){
-        x = page->daddr;
-        l1[x] = PPN(page->pa)|Dom0|Coarse;
-        /* know here that L1lo < x < L1hi */
-        if(x+1 - cpu->mmul1lo < cpu->mmul1hi - x)
-            cpu->mmul1lo = x+1;
-        else
-            cpu->mmul1hi = x;
-    }
-
-    /* make sure map is in memory */
-    /* could be smarter about how much? */
-    cachedwbse(&l1[L1X(UZERO)], (L1hi - L1lo)*sizeof(PTE));
-
-    /* lose any possible stale tlb entries */
-    mmuinvalidate();
-}
-@
 
 
 
@@ -4723,7 +3802,6 @@ mmukmap(uintptr va, uintptr pa, usize size)
 
 <<memory/arm/mmu.c>>=
 <<kernel basic includes>>
-
 #include "arm.h"
 
 <<macro L1X(arm)>>
@@ -5188,7 +4266,7 @@ inner:
 enum {
     Debug = 0,
 
-    Nvec = 8,       /* # of vectors at start of lexception.s */
+    <<constant Nvec(arm)>>
     Fiqenable = 1<<7,
 
     Localtimerint   = 0x40,
@@ -5198,15 +4276,6 @@ enum {
 @
 % >> >>
 
-<<struct Vpage0(arm)>>=
-/*
- *   Layout at virtual address KZERO (double mapped at HVECTORS).
- */
-struct Vpage0 {
-    void    (*vectors[Nvec])(void);
-    u32int  vtable[Nvec];
-};
-@
 
 
 
@@ -5217,36 +4286,6 @@ static Vctl *vfiq;
 @
 
 
-<<function arch_trapinit(arm)>>=
-/*
- *  set up for exceptions
- */
-void
-arch_trapinit(void)
-{
-    Vpage0 *vpage0;
-
-    if (cpu->cpuno == 0) {
-        /* disable everything */
-        intrsoff();
-        /* set up the exception vectors */
-        vpage0 = (Vpage0*)HVECTORS;
-        memmove(vpage0->vectors, vectors, sizeof(vpage0->vectors));
-        memmove(vpage0->vtable, vtable, sizeof(vpage0->vtable));
-        cacheuwbinv();
-        l2cacheuwbinv();
-    }
-
-    /* set up the stacks for the interrupt modes */
-    setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
-    setr13(PsrMirq, cpu->sirq);
-    setr13(PsrMabt, cpu->sabt);
-    setr13(PsrMund, cpu->sund);
-
-    arch_coherence();
-}
-@
-%dead:    setr13(PsrMsys, cpu->ssys);
 
 <<function intrcpushutdown(arm)>>=
 void
@@ -5291,22 +4330,6 @@ intrshutdown(void)
 }
 @
 
-<<function intrtime(arm)>>=
-static void
-intrtime(void)
-{
-    ulong diff;
-    ulong x;
-
-    x = arch_perfticks();
-    diff = x - cpu->perf.intrts;
-    cpu->perf.intrts = x;
-
-    cpu->perf.inintr += diff;
-    if(up == nil && cpu->perf.inidle > diff)
-        cpu->perf.inidle -= diff;
-}
-@
 
 
 
@@ -5382,53 +4405,6 @@ dumplongs(char *msg, ulong *v, int n)
 }
 @
 
-<<function dumpstackwithureg(arm)>>=
-static void
-dumpstackwithureg(Ureg *ureg)
-{
-    uintptr l, i, v, estack;
-    u32int *p;
-    char *s;
-
-    if((s = getconf("*nodumpstack")) != nil && strcmp(s, "0") != 0){
-        iprint("dumpstack disabled\n");
-        return;
-    }
-    iprint("ktrace /kernel/path %#.8lux %#.8lux %#.8lux # pc, sp, link\n",
-        ureg->pc, ureg->sp, ureg->r14);
-    arch_delay(2000);
-    i = 0;
-    if(up != nil && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
-        estack = (uintptr)up->kstack+KSTACK;
-    else if((uintptr)&l >= (uintptr)cpu->stack
-         && (uintptr)&l <= (uintptr)cpu + CPUSIZE)
-        estack = (uintptr)cpu + CPUSIZE;
-    else{
-        if(up != nil)
-            iprint("&up->kstack %#p &l %#p\n", up->kstack, &l);
-        else
-            iprint("&m %#p &l %#p\n", cpu, &l);
-        return;
-    }
-    for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
-        v = *(uintptr*)l;
-        if(KTZERO < v && v < (uintptr)etext && !(v & 3)){
-            v -= sizeof(u32int);        /* back up an instr */
-            p = (u32int*)v;
-            if((*p & 0x0f000000) == 0x0b000000){    /* BL instr? */
-                iprint("%#8.8lux=%#8.8lux ", l, v);
-                i++;
-            }
-        }
-        if(i == 4){
-            i = 0;
-            iprint("\n");
-        }
-    }
-    if(i)
-        iprint("\n");
-}
-@
 
 <<function getpcsp(arm)>>=
 /*
@@ -5444,63 +4420,8 @@ getpcsp(ulong *pc, ulong *sp)
 }
 @
 
-<<function arch_callwithureg(arm)>>=
-void
-arch_callwithureg(void (*fn)(Ureg*))
-{
-    Ureg ureg;
 
-    getpcsp((ulong*)&ureg.pc, (ulong*)&ureg.sp);
-    ureg.r14 = getcallerpc(&fn);
-    fn(&ureg);
-}
-@
 
-<<function trap_arch_dumpstack(arm)>>=
-void
-trap_arch_dumpstack(void)
-{
-    arch_callwithureg(dumpstackwithureg);
-}
-@
-
-<<function dumpregs(arm)>>=
-void
-dumpregs(Ureg* ureg)
-{
-    int s;
-
-    if (ureg == nil) {
-        iprint("trap: no user process\n");
-        return;
-    }
-    s = arch_splhi();
-    iprint("trap: %s", trapname(ureg->type));
-    if(ureg != nil && (ureg->psr & PsrMask) != PsrMsvc)
-        iprint(" in %s", trapname(ureg->psr));
-    iprint("\n");
-    iprint("psr %8.8lux type %2.2lux pc %8.8lux link %8.8lux\n",
-        ureg->psr, ureg->type, ureg->pc, ureg->link);
-    iprint("R14 %8.8lux R13 %8.8lux R12 %8.8lux R11 %8.8lux R10 %8.8lux\n",
-        ureg->r14, ureg->r13, ureg->r12, ureg->r11, ureg->r10);
-    iprint("R9  %8.8lux R8  %8.8lux R7  %8.8lux R6  %8.8lux R5  %8.8lux\n",
-        ureg->r9, ureg->r8, ureg->r7, ureg->r6, ureg->r5);
-    iprint("R4  %8.8lux R3  %8.8lux R2  %8.8lux R1  %8.8lux R0  %8.8lux\n",
-        ureg->r4, ureg->r3, ureg->r2, ureg->r1, ureg->r0);
-    iprint("stack is at %#p\n", ureg);
-    iprint("pc %#lux link %#lux\n", ureg->pc, ureg->link);
-
-    if(up)
-        iprint("user stack: %#p-%#p\n", up->kstack, up->kstack+KSTACK-4);
-    else
-        iprint("kernel stack: %8.8lux-%8.8lux\n",
-            (ulong)(cpu+1), (ulong)cpu+BY2PG-4);
-    dumplongs("stack", (ulong *)(ureg + 1), 16);
-    arch_delay(2000);
-    arch_dumpstack();
-    arch_splx(s);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -5589,11 +4510,11 @@ extern int notify(Ureg*);
 #include "mem.h"
 #include "arm.h"
 
-<< function fstget(arm)>>
+<<function fstget(arm)>>
 
-<< function ifsrget(arm)>>
+<<function ifsrget(arm)>>
 
-<< function farget(arm)>>
+<<function farget(arm)>>
 
 @
 %$
@@ -5629,34 +4550,11 @@ extern int notify(Ureg*);
 <<function setr13(arm)>>        
 @
 
-<<function setr13(arm)>>=
-/*
- *  set the stack value for the mode passed in R0
- */
-TEXT setr13(SB), 1, $-4
-    MOVW    4(FP), R1
-
-    MOVW    CPSR, R2
-    BIC $PsrMask, R2, R3
-    ORR $(PsrDirq|PsrDfiq), R3
-    ORR R0, R3
-    MOVW    R3, CPSR        /* switch to new mode */
-
-    MOVW    R13, R0         /* return old sp */
-    MOVW    R1, R13         /* install new one */
-
-    MOVW    R2, CPSR        /* switch back to old mode */
-    RET
-@
-%$
 
 \section{[[time/arm/]]}
 
 \subsection*{[[time/arm/dat_time.h]]}
 
-<<constant Arch_HZ(arm)>>=
-#define Arch_HZ     100         /* clock frequency */
-@
 
 
 %-------------------------------------------------------------
@@ -5692,17 +4590,6 @@ enum {
 };
 @
 
-<<struct Systimers(arm)>>=
-struct Systimers {
-    u32int  cs;
-    u32int  clo;
-    u32int  chi;
-    u32int  c0;
-    u32int  c1;
-    u32int  c2;
-    u32int  c3;
-};
-@
 
 <<struct Armtimer(arm)>>=
 struct Armtimer {
@@ -5739,19 +4626,6 @@ enum {
 };
 @
 
-<<function clockintr(arm)>>=
-static void
-clockintr(Ureg *ureg, void *)
-{
-    Systimers *tn;
-
-    tn = (Systimers*)SYSTIMERS;
-    /* dismiss interrupt */
-    tn->cs = 1<<3;
-    timerintr(ureg, 0);
-}
-@
-% >> 
 
 <<function localclockintr(arm)>>=
 static void
@@ -5817,64 +4691,8 @@ clockinit(void)
 }
 @
 
-<<function arch_timerset(arm)>>=
-void
-arch_timerset(Tval next)
-{
-    Systimers *tn;
-    uvlong now;
-    long period;
 
-    now = arch_fastticks(nil);
-    period = next - now;
-    if(period < MinPeriod)
-        period = MinPeriod;
-    else if(period > MaxPeriod)
-        period = MaxPeriod;
-    if(cpu->cpuno > 0){
-        cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
-        cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
-    }else{
-        tn = (Systimers*)SYSTIMERS;
-        tn->c3 = (ulong)(now + period);
-    }
-}
-@
 
-<<function clock_arch_fastticks(arm)>>=
-uvlong
-clock_arch_fastticks(uvlong *hz)
-{
-    Systimers *tn;
-    ulong lo, hi;
-    uvlong now;
-    int s;
-
-    if(hz)
-        *hz = SystimerFreq;
-    tn = (Systimers*)SYSTIMERS;
-    s = arch_splhi();
-    do{
-        hi = tn->chi;
-        lo = tn->clo;
-    }while(tn->chi != hi);
-    now = (uvlong)hi<<32 | lo;
-    cpu->fastclock = now;
-    arch_splx(s);
-    return cpu->fastclock;
-}
-@
-
-<<function arch_perfticks(arm)>>=
-ulong
-arch_perfticks(void)
-{
-    Armtimer *tm;
-
-    tm = (Armtimer*)ARMTIMER;
-    return tm->count;
-}
-@
 
 <<function armtimerset(arm)>>=
 void
@@ -5894,15 +4712,6 @@ armtimerset(int n)
 }
 @
 
-<<function arch_us(arm)>>=
-ulong
-arch_us(void)
-{
-    if(SystimerFreq != 1*Mhz)
-        return fastticks2us(arch_fastticks(nil));
-    return arch_fastticks(nil);
-}
-@
 
 <<function clock_arch_microdelay(arm)>>=
 void
@@ -5998,10 +4807,8 @@ typedef struct Armtimer Armtimer;
 <<time/arm/time_raspi1.s>>=
 #include "mem.h"
 #include "arm.h"
-        
-TEXT arch_lcycles(SB), 1, $-4
-    MRC CpSC, 0, R0, C(CpSPM), C(CpSPMperf), CpSPMcyc
-    RET
+
+<<function arch_lcycles(raspberry pi1)(arm)>>        
 
 TEXT tmrget(SB), 1, $-4             /* local generic timer physical counter value */
     MOVW    $0, R1              /* not in armv6 */
@@ -6050,34 +4857,8 @@ TEXT tmrget(SB), 1, $-4             /* local generic timer physical counter valu
 \subsection*{[[processes/arm/arch.c]]}
 
 
-<<function arch_dbgpc(arm)>>=
-/*
- *  pc output by dumpaproc
- */
-uintptr
-arch_dbgpc(Proc* p)
-{
-    Ureg *ureg;
-
-    ureg = p->dbgreg;
-    if(ureg == 0)
-        return 0;
-
-    return ureg->pc;
-}
-@
 
 
-<<function arch_setregisters(arm)>>=
-/* This routine must save the values of registers the user is not permitted
- * to write from devproc and then restore the saved values before returning.
- */
-void
-arch_setregisters(Ureg* ureg, char* pureg, char* uva, int n)
-{
-    USED(ureg, pureg, uva, n);
-}
-@
 
 <<function arch_setkernur(arm)>>=
 /* Give enough context in the ureg to produce a kernel stack for
@@ -6254,38 +5035,7 @@ arch_validalign(uintptr addr, unsigned align)
 #include "mem.h"
 #include "arm.h"
 
-/*
- *  This is the first jump from kernel to user mode.
- *  Fake a return from interrupt.
- *
- *  Enter with R0 containing the user stack pointer.
- *  UTZERO + 0x20 is always the entry point.
- *
- */
-TEXT arch_touser(SB), 1, $-4
-    /* store the user stack pointer into the USR_r13 */
-    MOVM.DB.W [R0], (R13)
-    /* avoid the ambiguity described in notes/movm.w. */
-//  MOVM.S.IA.W (R13), [R13]
-    MOVM.S  (R13), [R13]
-    ADD $4, R13
-
-    /* set up a PSR for user level */
-    MOVW    $(PsrMusr), R0
-    MOVW    R0, SPSR
-
-    /* save the PC on the stack */
-    MOVW    $(UTZERO+0x20), R0
-    MOVM.DB.W [R0], (R13)
-
-    /*
-     * note that 5a's RFE is not the v6 arch. instruction (0xe89d0a00,
-     * I think), which loads CPSR from the word after the PC at (R13),
-     * but rather the pre-v6 simulation `MOVM.IA.S.W (R13), [R15]'
-     * (0xe8fd8000 since MOVM is LDM in this case), which loads CPSR
-     * not from memory but from SPSR due to `.S'.
-     */
-    RFE
+<<function arch_touser(arm)>>
 
 <<function arch_forkret(arm)>>
 @
@@ -6294,17 +5044,9 @@ TEXT arch_touser(SB), 1, $-4
 \subsection*{[[processes/arm/switch.s]]}
 
 <<processes/arm/switch.s>>=
-TEXT arch_setlabel(SB), 1, $-4
-    MOVW    R13, 0(R0)      /* sp */
-    MOVW    R14, 4(R0)      /* pc */
-    MOVW    $0, R0
-    RET
+<<function arch_setlabel(arm)>>
 
-TEXT arch_gotolabel(SB), 1, $-4
-    MOVW    0(R0), R13      /* sp */
-    MOVW    4(R0), R14      /* pc */
-    MOVW    $1, R0
-    RET
+<<function arch_gotolabel(arm)>>
 
 TEXT getcallerpc(SB), 1, $-4
     MOVW    0(R13), R0
@@ -6317,169 +5059,6 @@ TEXT getcallerpc(SB), 1, $-4
 
 \subsection*{[[syscalls/arm/syscall.c]]}
 
-<<function noted(arm)>>=
-/*
- *   Return user to state before notify()
- */
-static void
-noted(Ureg* cur, uintptr arg0)
-{
-    NFrame *nf;
-    Ureg *nur;
-
-    qlock(&up->debug);
-    if(arg0 != NRSTR && !up->notified){
-        qunlock(&up->debug);
-        pprint("call to noted() when not notified\n");
-        pexit("Suicide", 0);
-    }
-    up->notified = 0;
-    fpunoted();
-
-    nf = up->ureg;
-
-    /* sanity clause */
-    if(!okaddr(PTR2UINT(nf), sizeof(NFrame), 0)){
-        qunlock(&up->debug);
-        pprint("bad ureg in noted %#p\n", nf);
-        pexit("Suicide", 0);
-    }
-
-    /* don't let user change system flags */
-    nur = &nf->ureg;
-    nur->psr &= PsrMask|PsrDfiq|PsrDirq;
-    nur->psr |= (cur->psr & ~(PsrMask|PsrDfiq|PsrDirq));
-
-    memmove(cur, nur, sizeof(Ureg));
-
-    switch((int)arg0){
-    case NCONT:
-    case NRSTR:
-        if(!okaddr(nur->pc, BY2WD, 0) || !okaddr(nur->sp, BY2WD, 0)){
-            qunlock(&up->debug);
-            pprint("suicide: trap in noted\n");
-            pexit("Suicide", 0);
-        }
-        up->ureg = nf->old;
-        qunlock(&up->debug);
-        break;
-    case NSAVE:
-        if(!okaddr(nur->pc, BY2WD, 0) || !okaddr(nur->sp, BY2WD, 0)){
-            qunlock(&up->debug);
-            pprint("suicide: trap in noted\n");
-            pexit("Suicide", 0);
-        }
-        qunlock(&up->debug);
-
-        arch_splhi();
-        nf->arg1 = nf->msg;
-        nf->arg0 = &nf->ureg;
-        nf->ip = 0;
-        cur->sp = PTR2UINT(nf);
-        cur->r0 = PTR2UINT(nf->arg0);
-        break;
-    default:
-        pprint("unknown noted arg %#p\n", arg0);
-        up->lastnote.flag = NDebug;
-        /*FALLTHROUGH*/
-    case NDFLT:
-        if(up->lastnote.flag == NDebug){ 
-            qunlock(&up->debug);
-            pprint("suicide: %s\n", up->lastnote.msg);
-        }
-        else
-            qunlock(&up->debug);
-        pexit(up->lastnote.msg, up->lastnote.flag != NDebug);
-    }
-}
-@
-
-<<function notify(arm)>>=
-/*
- *  Call user, if necessary, with note.
- *  Pass user the Ureg struct and the note on his stack.
- */
-int
-notify(Ureg* ureg)
-{
-    int l;
-    Note *n;
-    u32int s;
-    uintptr sp;
-    NFrame *nf;
-
-    if(up->procctl)
-        procctl(up);
-    if(up->nnote == 0)
-        return 0;
-
-    fpunotify(ureg);
-
-    s = arch_spllo();
-    qlock(&up->debug);
-
-    up->notepending = 0;
-    n = &up->note[0];
-    if(strncmp(n->msg, "sys:", 4) == 0){
-        l = strlen(n->msg);
-        if(l > ERRMAX-23)   /* " pc=0x0123456789abcdef\0" */
-            l = ERRMAX-23;
-        snprint(n->msg + l, sizeof n->msg - l, " pc=%#lux", ureg->pc);
-    }
-
-    if(n->flag != NUser && (up->notified || up->notify == 0)){
-        if(n->flag == NDebug)
-            pprint("suicide: %s\n", n->msg);
-        qunlock(&up->debug);
-        pexit(n->msg, n->flag != NDebug);
-    }
-
-    if(up->notified){
-        qunlock(&up->debug);
-        arch_splhi();
-        return 0;
-    }
-        
-    if(up->notify == nil){
-        qunlock(&up->debug);
-        pexit(n->msg, n->flag != NDebug);
-    }
-    if(!okaddr(PTR2UINT(up->notify), 1, 0)){
-        pprint("suicide: notify function address %#p\n", up->notify);
-        qunlock(&up->debug);
-        pexit("Suicide", 0);
-    }
-
-    sp = ureg->sp - sizeof(NFrame);
-    if(!okaddr(sp, sizeof(NFrame), 1)){
-        qunlock(&up->debug);
-        pprint("suicide: notify stack address %#p\n", sp);
-        pexit("Suicide", 0);
-    }
-
-    nf = UINT2PTR(sp);
-    memmove(&nf->ureg, ureg, sizeof(Ureg));
-    nf->old = up->ureg;
-    up->ureg = nf;
-    memmove(nf->msg, up->note[0].msg, ERRMAX);
-    nf->arg1 = nf->msg;
-    nf->arg0 = &nf->ureg;
-    ureg->r0 = PTR2UINT(nf->arg0);
-    nf->ip = 0;
-
-    ureg->sp = sp;
-    ureg->pc = PTR2UINT(up->notify);
-    up->notified = 1;
-    up->nnote--;
-    memmove(&up->lastnote, &up->note[0], sizeof(Note));
-    memmove(&up->note[0], &up->note[1], up->nnote*sizeof(Note));
-
-    qunlock(&up->debug);
-    arch_splx(s);
-
-    return 1;
-}
-@
 
 
 

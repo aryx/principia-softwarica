@@ -349,7 +349,7 @@ enum Procctl
 /*
  * FPsave.status
  */
-enum fpsavestatus
+enum FPSaveStatus
 {
     /* this is a state */
     FPinit=   0,
