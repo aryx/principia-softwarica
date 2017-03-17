@@ -18,7 +18,6 @@
 #include "dat.h"
 #include "fns.h"
 /*e: kernel basic includes */
-
 #include "io.h"
 
 /*s: constant DMAREGS(arm) */

@@ -12,7 +12,6 @@
 #include "dat.h"
 #include "fns.h"
 /*e: kernel basic includes */
-
 #include "io.h"
 #include "../port/sd.h"
 
@@ -153,7 +152,6 @@ int cmdinfo[64] = {
 /*e: global cmdinfo(arm) */
 
 typedef struct Ctlr Ctlr;
-
 /*s: struct Ctlr (devices/storage/arm/emmc.c)(arm) */
 struct Ctlr {
     Rendez  r;

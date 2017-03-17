@@ -15,7 +15,10 @@ TEXT arch_gotolabel(SB), 1, $-4
     RET
 /*e: function arch_gotolabel(arm) */
 
+/*s: function getcallerpc(arm) */
 TEXT getcallerpc(SB), 1, $-4
     MOVW    0(R13), R0
     RET
+/*e: function getcallerpc(arm) */
+
 /*e: processes/arm/switch.s */

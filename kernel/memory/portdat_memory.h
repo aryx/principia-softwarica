@@ -206,7 +206,7 @@ struct Segment
     /*x: [[Segment]] other fields */
     Physseg *pseg;
     /*x: [[Segment]] other fields */
-        ulong mark;   /* portcountrefs */
+    ulong mark;   /* portcountrefs */
     /*e: [[Segment]] other fields */
   
     // extra

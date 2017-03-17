@@ -20,6 +20,7 @@ enum {
 /*e: enum _anon_ (devices/sys/arm/devarch.c)(arm) */
 
 typedef long Rdwrfn(Chan*, void*, long, vlong);
+void archinit(void);
 
 /*s: global readfn(arm) */
 static Rdwrfn *readfn[Qmax];
@@ -155,8 +156,6 @@ archwrite(Chan *c, void *a, long n, vlong offset)
     return 0;
 }
 /*e: function archwrite(arm) */
-
-void archinit(void);
 
 /*s: global archdevtab(arm) */
 Dev archdevtab = {

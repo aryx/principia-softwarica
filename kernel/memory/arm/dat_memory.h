@@ -1,9 +1,9 @@
 /*s: memory/arm/dat_memory.h */
 
-/*s: constant NCOLOR(arm) */
 /*
  *  MMU stuff in proc
  */
+/*s: constant NCOLOR(arm) */
 #define NCOLOR  1       /* 1 level cache, don't worry about VCE's */
 /*e: constant NCOLOR(arm) */
 

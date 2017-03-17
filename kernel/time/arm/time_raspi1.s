@@ -7,10 +7,4 @@ TEXT arch_lcycles(SB), 1, $-4
     MRC CpSC, 0, R0, C(CpSPM), C(CpSPMperf), CpSPMcyc
     RET
 /*e: function arch_lcycles(raspberry pi1)(arm) */
-
-TEXT tmrget(SB), 1, $-4             /* local generic timer physical counter value */
-    MOVW    $0, R1              /* not in armv6 */
-    MOVW    R1, 0(R0)
-    MOVW    R1, 4(R0)
-    RET
 /*e: time/arm/time_raspi1.s */

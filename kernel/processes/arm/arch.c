@@ -48,7 +48,6 @@ arch_dbgpc(Proc* p)
 }
 /*e: function arch_dbgpc(arm) */
 
-
 /*s: function arch_userureg(arm) */
 bool
 arch_userureg(Ureg* ureg)
@@ -56,8 +55,6 @@ arch_userureg(Ureg* ureg)
     return (ureg->psr & PsrMask) == PsrMusr;
 }
 /*e: function arch_userureg(arm) */
-
-
 
 
 /*s: function arch_setregisters(arm) */

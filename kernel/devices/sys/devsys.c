@@ -26,7 +26,7 @@ enum{
     /*x: devsys.c enum Qxxx cases */
         Qdrivers,
     /*x: devsys.c enum Qxxx cases */
-        Qreboot,
+    Qreboot,
     /*x: devsys.c enum Qxxx cases */
         Qsysstat,
     /*e: devsys.c enum Qxxx cases */
@@ -49,7 +49,7 @@ static Dirtab sysdir[]={
     /*x: [[sysdir]] fields */
         "drivers",  {Qdrivers}, 0,      0444,
     /*x: [[sysdir]] fields */
-        "reboot",   {Qreboot},  0,      0660,
+    "reboot",   {Qreboot},  0,      0660,
     /*x: [[sysdir]] fields */
         "sysstat",  {Qsysstat}, 0,      0666,
     /*e: [[sysdir]] fields */
@@ -248,8 +248,8 @@ syswrite(Chan *c, void *va, long n, vlong off)
         Cpu *mp;
         int id;
     /*x: [[syswrite()]] locals */
-        Cmdbuf *cb;
-        Cmdtab *ct;
+    Cmdbuf *cb;
+    Cmdtab *ct;
     /*e: [[syswrite()]] locals */
 
     offset = off;
@@ -276,30 +276,30 @@ syswrite(Chan *c, void *va, long n, vlong off)
             kstrdup(&sysname, buf);
             break;
     /*x: [[syswrite()]] cases */
-        case Qreboot:
-            if(!iseve())
-                error(Eperm);
-            cb = parsecmd(a, n);
+    case Qreboot:
+        if(!iseve())
+            error(Eperm);
+        cb = parsecmd(a, n);
 
-            if(waserror()) {
-                free(cb);
-                nexterror();
-            }
-            ct = lookupcmd(cb, rebootmsg, nelem(rebootmsg));
-            switch(ct->index) {
-            case CMhalt:
-                arch_reboot(nil, 0, 0);
-                break;
-            case CMreboot:
-                rebootcmd(cb->nf-1, cb->f+1);
-                break;
-            case CMpanic:
-                *(ulong*)0=0;
-                panic("/dev/reboot");
-            }
-            poperror();
+        if(waserror()) {
             free(cb);
+            nexterror();
+        }
+        ct = lookupcmd(cb, rebootmsg, nelem(rebootmsg));
+        switch(ct->index) {
+        case CMhalt:
+            arch_reboot(nil, 0, 0);
             break;
+        case CMreboot:
+            rebootcmd(cb->nf-1, cb->f+1);
+            break;
+        case CMpanic:
+            *(ulong*)0=0;
+            panic("/dev/reboot");
+        }
+        poperror();
+        free(cb);
+        break;
     /*x: [[syswrite()]] cases */
         case Qsysstat:
             for(id = 0; id < 32; id++) {

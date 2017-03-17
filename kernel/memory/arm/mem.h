@@ -37,11 +37,10 @@
 #define STACKALIGN(sp)  ((sp) & ~3)     /* bug: assure with alloc */
 /*e: macro STACKALIGN(arm) */
 
-/*s: constant UP(arm) */
 /*
  * Magic registers
  */
-
+/*s: constant UP(arm) */
 #define UP      9       /* R9 is up-> */
 /*e: constant UP(arm) */
 /*s: constant CPU(arm) */

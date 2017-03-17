@@ -9,9 +9,8 @@ enum IRQ {
 
     IRQclock    = IRQtimer3,
 
-    IRQusb      = 9, // also IRQfiq
-    IRQdma0     = 16,
-    // IRQdma1, IRQdma2, ... via IRQDMA macro below
+    IRQusb      = 9,  // also IRQfiq
+    IRQdma0     = 16, // IRQdma1, IRQdma2, ... via IRQDMA() macro
 
     IRQaux      = 29,
     IRQi2c      = 53,
@@ -37,7 +36,7 @@ enum IRQ {
 /*e: macro IRQDMA(arm) */
 
 /*s: enum Dma(arm) */
-enum {
+enum DmaFlags {
     DmaD2M      = 0,        /* device to memory */
     DmaM2D      = 1,        /* memory to device */
     DmaM2M      = 2,        /* memory to memory */

@@ -7,12 +7,9 @@
 #include "dat.h"
 #include "fns.h"
 /*e: kernel basic includes */
-
 #include "../port/systab.h"
-
 #include <tos.h>
 #include "ureg.h"
-
 #include "arm.h"
 
 typedef struct NFrame NFrame;
@@ -368,14 +365,6 @@ arch_execregs(ulong entry, ulong ssize, ulong nargs)
     return USTKTOP-sizeof(Tos);
 }
 /*e: function arch_execregs(arm) */
-
-/*s: function sysprocsetup(arm) */
-void
-sysprocsetup(Proc* p)
-{
-    fpusysprocsetup(p);
-}
-/*e: function sysprocsetup(arm) */
 
 /*s: function arch_forkchild(arm) */
 /* 

@@ -10,7 +10,6 @@
 #include "dat.h"
 #include "fns.h"
 /*e: kernel basic includes */
-
 #include "ureg.h"
 #include "arm.h"
 

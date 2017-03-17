@@ -23,8 +23,10 @@
 /*e: type PsrMode(arm) */
 
 /*s: type PsrDisable(arm) */
-#define PsrDfiq     0x00000040      /* disable FIQ interrupts */
 #define PsrDirq     0x00000080      /* disable IRQ interrupts */
+/*s: [[PsrDisable]] other cases(arm) */
+#define PsrDfiq     0x00000040      /* disable FIQ interrupts */
+/*e: [[PsrDisable]] other cases(arm) */
 /*e: type PsrDisable(arm) */
 
 /*
@@ -52,12 +54,14 @@
 #define CpSPM       15          /* system performance monitor (arm1176) */
 /*s: [[CpSC primary registers]] other cases(arm) */
 #define CpID        0           /* ID and cache type */
+/*x: [[CpSC primary registers]] other cases(arm) */
 #define CpTIMER     14          /* Generic timer (cortex-a7) */
 /*x: [[CpSC primary registers]] other cases(arm) */
 #define CpCLD       9        /* L2 Cache Lockdown, op1==1 */
 /*e: [[CpSC primary registers]] other cases(arm) */
 /*e: type CpSC primary registers(arm) */
 
+// CpSC secondary registers
 
 /*s: type CpID secondary registers(arm) */
 /*
@@ -88,8 +92,9 @@
  */
 #define CpMainctl   0
 /*s: [[CpCONTROL.opcode2]] other cases(arm) */
-#define CpAuxctl    1
 #define CpCPaccess  2
+/*x: [[CpCONTROL.opcode2]] other cases(arm) */
+#define CpAuxctl    1
 /*e: [[CpCONTROL.opcode2]] other cases(arm) */
 /*e: type CpCONTROL opcode2(arm) */
 /*s: type CpCONTROL CpMainctl(arm) */
@@ -136,15 +141,6 @@
 #define CpACsmp         (1<<6)  /* SMP l1 caches coherence; needed for ldrex/strex */
 #define CpACl1pctl      (3<<13) /* l1 prefetch control */
 /*e: type CpCONTROL CpAuxctl(arm) */
-/*s: type CpCONTROL secondary registers(arm) */
-/*
- * CpCONTROL Secondary (CRm) registers and opcode2 fields.
- */
-#define CpCONTROLscr    1
-/*e: type CpCONTROL secondary registers(arm) */
-/*s: type CpCONTROL opcode2 bis(arm) */
-#define CpSCRscr    0
-/*e: type CpCONTROL opcode2 bis(arm) */
 
 /*s: type CpTTB(arm) */
 /*
@@ -239,7 +235,9 @@
 #define CpSPMcyc    1           /* cycle counter register */
 /*e: type CpSPM opcode2(arm) */
 
+// For MCRR
 
+/*s: type CpCACHERANGE opcode2(arm) */
 /*
  * CpCACHERANGE opcode2 fields for MCRR instruction (armv6)
  */
@@ -247,7 +245,11 @@
 #define CpCACHERANGEinvd    6       /* invalidate data */
 #define CpCACHERANGEdwb     12      /* writeback */
 #define CpCACHERANGEdwbi    14      /* writeback+invalidate */
+/*e: type CpCACHERANGE opcode2(arm) */
 
+// Misc
+
+/*s: type CpTTB cache control bits(arm) */
 /*
  * CpTTB cache control bits
  */
@@ -262,6 +264,7 @@
 #define CpTTBowb    (3<<3)  /* outer write-back no write-allocate */
 #define CpTTBs  (1<<1)  /* page table in shareable memory */
 #define CpTTBbase   ~0x7F       /* mask off control bits */
+/*e: type CpTTB cache control bits(arm) */
 
 /*
  * MMU page table entries.

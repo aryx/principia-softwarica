@@ -315,35 +315,6 @@ arch_putmmu(virt_addr va, uintptr pa, Page* page)
 }
 /*e: function arch_putmmu(arm) */
 
-/*s: function mmuuncache(arm) */
-void*
-mmuuncache(void* v, usize size)
-{
-    int x;
-    PTE *pte;
-    uintptr va;
-
-    /*
-     * Simple helper for ucalloc().
-     * Uncache a Section, must already be
-     * valid in the MMU.
-     */
-    va = PTR2UINT(v);
-    assert(!(va & (1*MiB-1)) && size == 1*MiB);
-
-    x = L1X(va);
-    pte = &cpu->mmul1[x];
-    if((*pte & (Fine|Section|Coarse)) != Section)
-        return nil;
-    *pte &= ~L1ptedramattrs;
-    *pte |= L1sharable;
-    mmuinvalidateaddr(va);
-    cachedwbinvse(pte, 4);
-
-    return v;
-}
-/*e: function mmuuncache(arm) */
-
 /*s: function arch_cankaddr(arm) */
 /*
  * Return the number of bytes that can be accessed via KADDR(pa).

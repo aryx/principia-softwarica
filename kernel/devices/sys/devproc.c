@@ -918,6 +918,13 @@ procread(Chan *c, void *va, long n, vlong off)
             n = i - offset;
         memmove(a, ((char*)s->profile)+offset, n);
         return n;
+    /*x: [[procread()]] cases */
+    case Qkregs:
+        memset(&kur, 0, sizeof(Ureg));
+        arch_setkernur(&kur, p);
+        rptr = (byte*)&kur;
+        rsize = sizeof(Ureg);
+        goto regread;
     /*e: [[procread()]] cases */
 
     case Qargs:
@@ -974,12 +981,6 @@ procread(Chan *c, void *va, long n, vlong off)
         rsize = sizeof(Ureg);
         goto regread;
 
-    case Qkregs:
-        memset(&kur, 0, sizeof(Ureg));
-        arch_setkernur(&kur, p);
-        rptr = (byte*)&kur;
-        rsize = sizeof(Ureg);
-        goto regread;
 
     /*s: [[procread()]] Qfpregs case */
         case Qfpregs:

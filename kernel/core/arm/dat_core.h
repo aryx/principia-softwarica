@@ -30,24 +30,12 @@ struct Arch_Cpu {
     /*e: [[Cpu]] [[Arch]] float fields(arm) */
     /*s: [[Cpu]] [[Arch]] save of first five registers fields(arm) */
     /* save areas for exceptions, hold R0-R4 */
-    u32int  sfiq[5];
     u32int  sirq[5];
     u32int  sund[5];
     u32int  sabt[5];
-    u32int  smon[5];        /* probably not needed */
     /*e: [[Cpu]] [[Arch]] save of first five registers fields(arm) */
     /*s: [[Cpu]] [[Arch]] other fields(arm) */
-    Lock    alarmlock;      /* access to alarm list */
-    void*   alarm;          /* alarms bound to this clock */
-
-    int cputype;
-    ulong   delayloop;
-
-    /* stats */
-
     uvlong  fastclock;      /* last sampled value */
-
-    int lastintr; // dead?? also redundant with one in Cpu?
     /*e: [[Cpu]] [[Arch]] other fields(arm) */
 };
 /*e: struct Arch_Cpu(arm) */

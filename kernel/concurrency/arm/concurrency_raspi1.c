@@ -37,6 +37,7 @@ arch_xinc(long *p)
 }
 /*e: function arch_xinc(arm) */
 
+
 /*s: function ainc(arm) */
 // overwrite libc!
 int
@@ -63,6 +64,7 @@ adec(int *p)
     return v;
 }
 /*e: function adec(arm) */
+
 
 /*s: function cas32(arm) */
 bool

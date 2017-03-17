@@ -101,7 +101,6 @@ cpuinit(void)
         /* synchronise with cpu 0 */
         cpu->ticks = m0->ticks;
         cpu->fastclock = m0->fastclock;
-        cpu->delayloop = m0->delayloop;
     }
     //machon(m->cpuno);
 }
@@ -523,7 +522,6 @@ main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa)
     return 1;
 }
 /*e: function main_arch_isaconfig(arm) */
-
 
 /*s: function arch_memorysummary(arm) */
 // called from devcons.c

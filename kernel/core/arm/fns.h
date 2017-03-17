@@ -41,9 +41,6 @@ int   arch_cmpswap(long*, long, long);
 
 void dumpregs(Ureg*);
 
-void confinit(void);
-void userinit(void);
-
 
 extern void mmuinit1(void*);
 extern void mmuinvalidate(void);
@@ -106,6 +103,7 @@ extern void fpwr(int fpreg, ulong val);
 
 extern u32int fsrget(void);
 extern u32int farget(void);
+extern u32int ifsrget(void);
 
 // vcore.c
 extern uint getboardrev(void);
@@ -127,7 +125,6 @@ extern void gpiopulldown(uint);
 extern void i2cread(uint, void*, int);
 extern void i2cwrite(uint, void*, int);
 
-extern u32int ifsrget(void);
 
 extern void okay(int);
 
@@ -181,15 +178,6 @@ extern char* getenv(char*, char*, int);
 
 uintptr mmukmap(uintptr, uintptr, usize);
 uintptr mmukunmap(uintptr, uintptr, usize);
-extern void* mmuuncache(void*, usize);
-
-extern void* ucalloc(usize);
-extern Block* ucallocb(int);
-extern void* ucallocalign(usize size, int align, int span);
-extern void ucfree(void*);
-extern void ucfreeb(Block*);
-
-extern void sysprocsetup(Proc*);
 
 
 /*s: macro PTR2UINT(arm) */

@@ -3,8 +3,11 @@
 #include "arm.h"
 #include "arminstr.ha"
 
+/*s: constant CACHELINESZ(raspberry pi1)(ram) */
 #define CACHELINESZ 32
-                
+/*e: constant CACHELINESZ(raspberry pi1)(ram) */
+
+/*s: function cachexxx(raspberry pi1)(ram) */
 /*
  * drain write buffer
  * writeback data cache
@@ -97,4 +100,6 @@ TEXT cacheiinv(SB), 1, $-4
     MOVW    $0, R0
     MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
     RET
+/*e: function cachexxx(raspberry pi1)(ram) */
+                
 /*e: memory/arm/cache_raspi1.s */

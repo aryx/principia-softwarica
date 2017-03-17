@@ -3,9 +3,11 @@
 #include "arm.h"
 #include "arminstr.ha"
 
+/*s: constant CACHELINESZ(raspberry pi2)(ram) */
 #define CACHELINESZ 64
-        
-        
+/*e: constant CACHELINESZ(raspberry pi2)(ram) */
+
+/*s: function cachexxx(raspberry pi2)(ram) */
 /*
  * `single-element' cache operations.
  * in arm arch v7, they operate on all cache levels, so separate
@@ -273,4 +275,6 @@ inner:
     MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEwait
     ISB
     RET
+/*e: function cachexxx(raspberry pi2)(ram) */
+       
 /*e: memory/arm/cache_raspi2.s */

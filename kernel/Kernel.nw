@@ -736,6 +736,15 @@ struct Ureg {
 % example of use:
 %  MOVW $0, R0
 
+<<function getcallerpc(arm)>>=
+TEXT getcallerpc(SB), 1, $-4
+    MOVW    0(R13), R0
+    RET
+@
+%$
+% why not use R14? because will get caller of getcallerpc, not
+% caller of caller of getcallerpc. The -4 above indicates
+% no stack alloc for this func. So same SP than caller. 
 
 \subsubsection{Program Status Register ([[PSR]])}
 
@@ -788,12 +797,14 @@ struct Ureg {
 
 % PSR controls also interrupts.
 
+
 <<type PsrDisable(arm)>>=
-#define PsrDfiq     0x00000040      /* disable FIQ interrupts */
 #define PsrDirq     0x00000080      /* disable IRQ interrupts */
+<<[[PsrDisable]] other cases(arm)>>
 @
 % Dirq vs Mirq? Being in an interrupt handler and disabling IRQs
 % are two different things!
+\l introduce concept of FIQ early? too pervasive?
 
 % example of use:
 %    MOVW    CPSR, R0            /* turn off irqs (but not fiqs) */
@@ -994,6 +1005,11 @@ struct Fbinfo {
 % Soc.physio = 0x20000000
 \t define a constant PHYSIO(raspberry pi1)(arm)
 
+<<constant IOSIZE(arm)>>=
+#define IOSIZE      (16*MiB)
+@
+%BUS  addresses as seen from the videocore gpu.
+
 
 <<constant VIRTIO(arm)>>=
 #define VIRTIO      0x7E000000      /* i/o registers */
@@ -1006,10 +1022,11 @@ struct Fbinfo {
 <<constant SYSTIMERS(arm)>>=
 #define SYSTIMERS (VIRTIO+0x3000)
 @
+\t vs CpTIMER? aspectize one?
 <<constant ARMTIMER(arm)>>=
 #define ARMTIMER (VIRTIO+0xB400)
 @
-\t vs CpTIMER? aspectize one?
+
 
 <<constant INTREGS(arm)>>=
 #define INTREGS     (VIRTIO+0xB200)
@@ -1140,6 +1157,18 @@ struct Fbinfo {
 <<portdat.h macros>>=
 #define HOWMANY(x, y) (((x)+((y)-1))/(y))
 #define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */
+@
+
+
+<<constant KiB(arm)>>=
+#define KiB     1024u           /* Kibi 0x0000000000000400 */
+@
+\t mv in portdat.h and rename KB MB GB
+<<constant MiB(arm)>>=
+#define MiB     1048576u        /* Mebi 0x0000000000100000 */
+@
+<<constant GiB(arm)>>=
+#define GiB     1073741824u     /* Gibi 000000000040000000 */
 @
 
 \section{Code organization}
@@ -1636,6 +1665,10 @@ typedef void* kern_addr3;
 @
 \t maybe put arch_paddr that does more verification!
 
+<<macro PADDR bis(arm)>>=
+#define PADDR(va)   (((va) & ~KSEGM))
+@
+
 <<constant PHYSDRAM(arm)>>=
 #define PHYSDRAM    0
 @
@@ -1948,6 +1981,12 @@ struct Arch_Cpu {
 };
 @
 %coupling: see 12(R(CPU)) in cpureset()
+%dead: 
+% Lock    alarmlock;      /* access to alarm list */
+% void*   alarm;          /* alarms bound to this clock */
+% ulong   delayloop;
+% int cputype;
+% int lastintr;
 
 
 
@@ -2452,7 +2491,7 @@ uintptr busio;
 <<function arch_splhi(arm)>>=
 // bool   arch_splhi(void);
 TEXT arch_splhi(SB), 1, $-4
-    <<[[arch_splxxx()]] save caller information(arm)>> 
+    <<[[arch_splxxx()]] save caller information(arm)>>
     MOVW    CPSR, R0            /* turn off irqs (but not fiqs) */
     ORR $(PsrDirq), R0, R1
     MOVW    R1, CPSR
@@ -2570,55 +2609,6 @@ TEXT arm_arch_coherence(SB), $-4
 @
 %$
 %arch_coherence = arm_arch_coherence in main
-
-<<instruction BARRIERS(arm)>>=
-#define BARRIERS    ISB; DSB
-@
-\t mv later
-
-<<instruction ISB(arm)>>=
-#define ISB \
-    MOVW    $0, R0; \
-    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEwait
-@
-% I for instruction
-
-<<instruction DSB(arm)>>=
-#define DSB \
-    MOVW    $0, R0; \
-    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEwait
-@
-% D for data
-
-<<type CpCACHE secondary registers(arm)>>=
-/*
- * CpCACHE Secondary (CRm) registers and opcode2 fields.  op1==0.
- * In ARM-speak, 'flush' means invalidate and 'clean' means writeback.
- */
-#define CpCACHEintr 0           /* interrupt (op2==4) */
-#define CpCACHEisi  1           /* inner-sharable I cache (v7) */
-#define CpCACHEpaddr    4           /* 0: phys. addr (cortex) */
-#define CpCACHEinvi 5           /* instruction, branch table */
-#define CpCACHEinvd 6           /* data or unified */
-#define CpCACHEinvu 7           /* unified (not on cortex) */
-#define CpCACHEva2pa    8           /* va -> pa translation (cortex) */
-#define CpCACHEwb   10          /* writeback to PoC */
-#define CpCACHEwbu  11          /* writeback to PoU */
-#define CpCACHEwbi  14          /* writeback+invalidate (to PoC) */
-@
-% PoC ??
-
-<<type CpCACHE opcode2(arm)>>=
-#define CpCACHEall  0           /* entire (not for invd nor wb(i) on cortex) */
-#define CpCACHEse   1           /* single entry */
-#define CpCACHEsi   2           /* set/index (set/way) */
-#define CpCACHEtest 3           /* test loop */
-#define CpCACHEwait 4           /* wait (prefetch flush on cortex) */
-#define CpCACHEdmbarr   5           /* wb only (cortex) */
-#define CpCACHEflushbtc 6           /* flush branch-target cache (cortex) */
-#define CpCACHEflushbtse 7          /* ⋯ or just one entry in it (cortex) */
-@
-\t mv later and remove dead constants
 
 \section{Atomic [[arch_xinc()]] and [[arch_xdec()]] (ARM)}
 
@@ -6768,6 +6758,16 @@ TEXT vtable(SB), 1, $-4
 
 \subsection{[[_vsvc()]] (ARM)}
 
+<<constant CPU(arm)>>=
+#define CPU     10      /* R10 is cpu-> */
+@
+
+
+<<constant UP(arm)>>=
+#define UP      9       /* R9 is up-> */
+@
+
+
 % Use R14 below as temporary register.
 % SPSR vs CPSR? Previous CPSR before the SWI (one of user)
 % (not super useful here but for _virq() it will allow to know 
@@ -7482,9 +7482,8 @@ enum IRQ {
 
     IRQclock    = IRQtimer3,
 
-    IRQusb      = 9, // also IRQfiq
-    IRQdma0     = 16,
-    // IRQdma1, IRQdma2, ... via IRQDMA macro below
+    IRQusb      = 9,  // also IRQfiq
+    IRQdma0     = 16, // IRQdma1, IRQdma2, ... via IRQDMA() macro
 
     IRQaux      = 29,
     IRQi2c      = 53,
@@ -7876,6 +7875,9 @@ Page*   mmul2;
 % See Basic pagination intialization to setup those fields.
 
 
+<<macro PPN(arm)>>=
+#define PPN(x)      ((x)&~(BY2PG-1))
+@
 
 
 
@@ -7916,6 +7918,17 @@ arch_mmurelease(Proc* proc)
 }
 @
 \t talk about same L1 caches above in comment?? from MMU?
+
+<<function mmuinvalidate(arm)>>=
+/*
+ * invalidate tlb
+ */
+TEXT mmuinvalidate(SB), 1, $-4
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+    BARRIERS
+    RET
+@
 
 
 %dtor
@@ -8066,9 +8079,7 @@ faultarm(Ureg *ureg, uintptr va, int user, bool read)
     }
     insyscall = up->insyscall;
     up->insyscall = true; // ???
-    if (Debug)
-        ckfaultstuck(va);
-
+    <<[[faultarm()]] if debug>>
     n = fault(va, read); // portable code
 
     if(n < 0){
@@ -8322,6 +8333,17 @@ arch_putmmu(virt_addr va, uintptr pa, Page* page)
 }
 @
 
+<<function mmuinvalidateaddr(arm)>>=
+/*
+ * mmuinvalidateaddr(va)
+ *   invalidate tlb entry for virtual page address va, ASID 0
+ */
+TEXT mmuinvalidateaddr(SB), 1, $-4
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinvse
+    BARRIERS
+    RET
+@
+%$
 
 <<[[Cpu]] [[Arch]] mmu fields(arm)>>=
 // index in mmul1
@@ -8363,14 +8385,6 @@ arch_kunmap(Arch_KMap *k)
 }
 @
 %//old: #define   kunmap(k)
-
-
-\section{Instruction and data cache (ARM)}
-
-% put barrier here.
-% When switch processor, virtual mem, then interfere
-% with cache as virtual address may now correspond to something else.
-% Also issue about VIRTIO space that should not be cached.
 
 
 
@@ -11488,6 +11502,29 @@ _ramZ:
 %$
 
 
+<<type CpTLB secondary registers(arm)>>=
+/*
+ * CpTLB Secondary (CRm) registers and opcode2 fields.
+ */
+#define CpTLBinvi   5           /* instruction */
+#define CpTLBinvd   6           /* data */
+#define CpTLBinvu   7           /* unified */
+@
+
+<<type CpTLB opcode2(arm)>>=
+#define CpTLBinv    0           /* invalidate all */
+#define CpTLBinvse  1           /* invalidate single entry */
+#define CpTBLasid   2           /* by ASID (cortex) */
+@
+
+<<constant L1(arm)>>=
+#define L1          (KZERO+0x4000)      /* ttb ptes: 16KiB aligned */
+@
+
+<<constant L2(arm)>>=
+#define L2          (KZERO+0x3000)      /* L2 ptes for vectors etc */
+@
+
 <<function mmuinit(arm)>>=
 /*
  * Set up initial PTEs for this cpu (called with mmu off)
@@ -11548,12 +11585,7 @@ mmuinit(void *a)
 <<function _startpg(raspberry pi1)(arm)>>=
 TEXT _startpg(SB), 1, $-4
 
-    /*
-     * enable cycle counter
-     */
-    MOVW    $1, R1
-    MCR CpSC, 0, R1, C(CpSPM), C(CpSPMperf), CpSPMctl // Not CpSPMcyc??
-
+    <<[[_startpg()]] enable cycle counter(raspberry pi1)(arm)>>
     /*
      * call main and loop forever if it returns
      */
@@ -11562,7 +11594,7 @@ TEXT _startpg(SB), 1, $-4
 
     BL  _div(SB)        /* hack to load _div, etc. */
 @
-
+%$
 
 \section{Kernel initialization (arm)}
 
@@ -11674,11 +11706,104 @@ cpuinit(void)
         /* synchronise with cpu 0 */
         cpu->ticks = m0->ticks;
         cpu->fastclock = m0->fastclock;
-        cpu->delayloop = m0->delayloop;
     }
     //machon(m->cpuno);
 }
 @
+%dead:        cpu->delayloop = m0->delayloop;
+
+
+<<function machon(arm)>>=
+/* enable scheduling of this cpu */
+void
+machon(uint xcpu)
+{
+    ulong cpubit;
+
+    cpubit = 1 << xcpu;
+    lock(&active);
+    if ((active.cpus & cpubit) == 0) {  /* currently off? */
+        conf.ncpu++;
+        active.cpus |= cpubit;
+    }
+    unlock(&active);
+}
+@
+
+
+<<function arch_cpuidprint(raspberry pi1)(arm)>>=
+void
+arch_cpuidprint(void)
+{
+    char name[64];
+
+    cputype2name(name, sizeof name);
+    arch_delay(50);             /* let uart catch up */
+    print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
+}
+@
+
+<<function cputype2name(raspberry pi1)(arm)>>=
+char*
+cputype2name(char *buf, int size)
+{
+    seprint(buf, buf + size, "1176JZF-S");
+    return buf;
+}
+@
+
+
+<<function getncpus(raspberry pi1)(arm)>>=
+int
+getncpus(void)
+{
+    return 1;
+}
+@
+
+<<constant L1SIZE(arm)>>=
+#define L1SIZE      (4 * BY2PG)
+@
+%16K
+
+<<function launchinit(arm)>>=
+void
+launchinit(int ncpus)
+{
+    int mach;
+    Cpu *mm;
+    PTE *l1;
+
+    if(ncpus > MAXCPUS)
+        ncpus = MAXCPUS;
+    for(mach = 1; mach < ncpus; mach++){
+        cpus[mach] = mm = mallocalign(CPUSIZE, CPUSIZE, 0, 0);
+        l1 = mallocalign(L1SIZE, L1SIZE, 0, 0);
+        if(mm == nil || l1 == nil)
+            panic("launchinit");
+        memset(mm, 0, CPUSIZE);
+        mm->cpuno = mach;
+
+        memmove(l1, cpu->mmul1, L1SIZE);  /* clone cpu0's l1 table */
+        cachedwbse(l1, L1SIZE);
+        mm->mmul1 = l1;
+        cachedwbse(mm, CPUSIZE);
+
+    }
+    cachedwbse(cpus, sizeof cpus);
+    if((mach = startcpus(ncpus)) < ncpus)
+            panic("only %d cpu%s started", mach, mach == 1? "" : "s");
+}
+@
+
+<<function startcpus(raspberry pi1)(arm)>>=
+int
+startcpus(uint)
+{
+    return 1;
+}
+@
+
 
 %\subsection{CPU detection (arm)}
 % hardcoded in mkfile, either pi or pi2
@@ -11718,6 +11843,11 @@ ulong upages;   /* user page pool */
 
 ulong nimage;   /* number of page cache image headers */
 ulong ialloc;   /* max interrupt time allocation in bytes */
+@
+
+<<global memsize(arm)>>=
+// used also in mmu.c
+ulong   memsize = 128*1024*1024;
 @
 
 
@@ -11854,25 +11984,46 @@ arch_trapinit(void)
     }
 
     /* set up the stacks for the interrupt modes */
-    setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
-    setr13(PsrMirq, cpu->sirq);
-    setr13(PsrMabt, cpu->sabt);
-    setr13(PsrMund, cpu->sund);
+    <<[[arch_trapinit()]] set stack for other exception/processor-modes>>
 
     arch_coherence();
 }
 @
 %dead:    setr13(PsrMsys, cpu->ssys);
 
+<<function intrsoff(arm)>>=
+void
+intrsoff(void)
+{
+    Intregs *ip;
+    int disable;
+
+    ip = (Intregs*)INTREGS;
+    disable = ~0;
+    ip->GPUdisable[0] = disable;
+    ip->GPUdisable[1] = disable;
+    ip->ARMdisable = disable;
+    ip->FIQctl = 0;
+}
+@
+
+
+
+<<[[arch_trapinit()]] set stack for other exception/processor-modes>>=
+setr13(PsrMirq, cpu->sirq);
+setr13(PsrMabt, cpu->sabt);
+setr13(PsrMund, cpu->sund);
+@
+
+
 <<[[Cpu]] [[Arch]] save of first five registers fields(arm)>>=
 /* save areas for exceptions, hold R0-R4 */
-u32int  sfiq[5];
 u32int  sirq[5];
 u32int  sund[5];
 u32int  sabt[5];
-u32int  smon[5];        /* probably not needed */
 @
 %dead: u32int  ssys[5];
+%dead: u32int  smon[5];        /* probably not needed */
 
 
 <<function setr13(arm)>>=
@@ -11896,6 +12047,42 @@ TEXT setr13(SB), 1, $-4
 @
 %$
 %banked register R13
+
+\subsection{Clock initialization (arm)}
+
+<<function clockinit(arm)>>=
+void
+clockinit(void)
+{
+    Systimers *tn;
+    Armtimer *tm;
+    u32int t0, t1, tstart, tend;
+
+    <<[[clockinit()]] if many processors>>
+
+    tn = (Systimers*)SYSTIMERS;
+    tstart = tn->clo;
+    do{
+        t0 = arch_lcycles();
+    }while(tn->clo == tstart);
+    tend = tstart + 10000;
+    do{
+        t1 = arch_lcycles();
+    }while(tn->clo != tend);
+    t1 -= t0;
+    cpu->cpuhz = 100 * t1;
+    cpu->cpumhz = (cpu->cpuhz + Mhz/2 - 1) / Mhz;
+    cpu->cyclefreq = cpu->cpuhz;
+    if(cpu->cpuno == 0){
+        tn->c3 = tn->clo - 1;
+        tm = (Armtimer*)ARMTIMER;
+        tm->load = 0;
+        tm->ctl = TmrPrescale1|CntEnable|CntWidth32;
+        arch_intrenable(IRQtimer3, clockintr, nil, 0, "clock");
+    }
+    <<[[clockinit()]] if not cpu0>>
+}
+@
 
 \subsection{Virtual memory initialisation (arm)}
 
@@ -12156,10 +12343,59 @@ if(firmware < Minfirmrev){
 }
 @
 
+<<constant Minfirmrev(arm)>>=
+/* Firmware compatibility */
+#define Minfirmrev  326770
+@
+
+<<constant Minfirmdate(arm)>>=
+#define Minfirmdate "19 Aug 2013"
+@
+
+
+<<function getboardrev(arm)>>=
+/*
+ * Get board revision
+ */
+uint
+getboardrev(void)
+{
+    u32int buf[1];
+
+    if(vcreq(TagGetrev, buf, 0, sizeof buf) != sizeof buf)
+        return 0;
+    return buf[0];
+}
+@
+
+<<function getfirmware(arm)>>=
+/*
+ * Get firmware revision
+ */
+uint
+getfirmware(void)
+{
+    u32int buf[1];
+
+    if(vcreq(TagGetfwrev, buf, 0, sizeof buf) != sizeof buf)
+        return 0;
+    return buf[0];
+}
+@
+
+
 \section{The first process (arm)}
 
 % kernel code part of first process: init0
 % user code part of first process: initcode, which will then exec boot/boot!
+
+<<global sp(arm)>>=
+static uintptr sp;      /* XXX - must go - user stack of init proc */
+@
+
+<<macro STACKALIGN(arm)>>=
+#define STACKALIGN(sp)  ((sp) & ~3)     /* bug: assure with alloc */
+@
 
 <<function userinit(arm)>>=
 /*
@@ -17396,6 +17632,11 @@ kbdputsc(byte k, int external)
 @
 %old: was taking an int, but clearer I think to take a byte
 
+<<function arch_setleds(arm)>>=
+// empty callback for portkbd.c
+void arch_setleds(Kbscan *kbscan) { USED(kbscan); }
+@
+
 % about keyup, when type 'a', get 1e, when release get 9e, so 1e+0x80
 % do not put char instead of byte for 'k', otherwise will get weird
 % behavior like Left generating a 2.
@@ -17722,6 +17963,11 @@ kbdputmap(ushort m, ushort scanc, Rune r)
 
 \section{The screen (arm)}
 
+<<constant VCBUFFER(arm)>>=
+#define VCBUFFER    (KZERO+0x3400)      /* videocore mailbox buffer */
+@
+% yet another way to access external stuff? at physical 0x3400??
+
 % arch_screeninit in Graphics.nw
 %    screenputs = swconsole_screenputs;
 
@@ -17754,6 +18000,34 @@ fbinit(bool set, int *width, int *height, int *depth)
 }
 @
 
+<<function mmukmap(arm)>>=
+uintptr
+mmukmap(uintptr va, uintptr pa, usize size)
+{
+    int o;
+    usize n;
+    PTE *pte, *pte0;
+
+    assert((va & (MiB-1)) == 0);
+    o = pa & (MiB-1);
+    pa -= o;
+    size += o;
+    pte = pte0 = &cpu->mmul1[L1X(va)];
+    for(n = 0; n < size; n += MiB)
+        if(*pte++ != Fault)
+            return 0;
+    pte = pte0;
+    for(n = 0; n < size; n += MiB){
+        *pte++ = (pa+n)|Dom0|L1AP(Krw)|Section;
+        mmuinvalidateaddr(va+n);
+    }
+    cachedwbse(pte0, (uintptr)pte - (uintptr)pte0);
+    return va + o;
+}
+@
+
+
+
 %gscreen setting!
 
 <<function fbdefault(arm)>>=
@@ -17774,6 +18048,20 @@ fbdefault(int *width, int *height, int *depth)
     return OK_0;
 }
 @
+
+<<function fbblank(arm)>>=
+int
+fbblank(bool blank)
+{
+    u32int buf[1];
+
+    buf[0] = blank;
+    if(vcreq(TagFbblank, buf, sizeof buf, sizeof buf) != sizeof buf)
+        return ERROR_NEG1;
+    return buf[0] & 1;
+}
+@
+
 
 %x86: cga print at least is simple. Simpler than explaining
 % the font of Graphics.nw and swconsole_screenputs
@@ -21112,10 +21400,17 @@ ms2tk(ulong ms)
 ulong
 arch_us(void)
 {
-    if(SystimerFreq != 1*Mhz)
-        return fastticks2us(arch_fastticks(nil));
+    <<[[arch_us()]] if non-standard systimer frequency>>
     return arch_fastticks(nil);
 }
+@
+
+<<[[Cpu]] [[Arch]] other fields(arm)>>=
+uvlong  fastclock;      /* last sampled value */
+@
+
+<<constant SystimerFreq(arm)>>=
+SystimerFreq    = 1*Mhz,
 @
 
 <<function clock_arch_fastticks(arm)>>=
@@ -21143,8 +21438,12 @@ clock_arch_fastticks(uvlong *hz)
 @
 % >> >>
 
+<<[[arch_us()]] if non-standard systimer frequency>>=
+if(SystimerFreq != 1*Mhz)
+    return fastticks2us(arch_fastticks(nil));
+@
 
-\section{Timers (arm)}
+\section{Timers}
 
 % capacity of machine is very low, just timer next point
 %  but have many processes, many timer needs, so need map
@@ -21152,8 +21451,9 @@ clock_arch_fastticks(uvlong *hz)
 
 
 
-
 \subsection{[[arch_timerset()]] (arm)}
+
+% Saw clockinterrupt before and SYSTIMERS
 
 <<function arch_timerset(arm)>>=
 void
@@ -21169,16 +21469,63 @@ arch_timerset(Tval next)
         period = MinPeriod;
     else if(period > MaxPeriod)
         period = MaxPeriod;
-    if(cpu->cpuno > 0){
-        cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
-        cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
-    }else{
+    <<[[arch_timerset()]] if not cpu0>>
+    else{
         tn = (Systimers*)SYSTIMERS;
         tn->c3 = (ulong)(now + period);
     }
 }
 @
 
+<<constant MaxPeriod(arm)>>=
+MaxPeriod   = SystimerFreq / Arch_HZ,
+@
+<<constant MinPeriod(arm)>>=
+MinPeriod   = SystimerFreq / (100*Arch_HZ),
+@
+
+
+<<function armtimerset(arm)>>=
+void
+armtimerset(int n)
+{
+    Armtimer *tm;
+
+    tm = (Armtimer*)ARMTIMER;
+    if(n > 0){
+        tm->ctl |= TmrEnable|TmrIntEnable;
+        tm->load = n;
+    }else{
+        tm->load = 0;
+        tm->ctl &= ~(TmrEnable|TmrIntEnable);
+        tm->irq = 1;
+    }
+}
+@
+
+<<function clock_arch_microdelay(arm)>>=
+void
+clock_arch_microdelay(int n)
+{
+    Systimers *tn;
+    u32int now, diff;
+
+    diff = n + 1;
+    tn = (Systimers*)SYSTIMERS;
+    now = tn->clo;
+    while(tn->clo - now < diff)
+        ;
+}
+@
+
+<<function clock_arch_delay(arm)>>=
+void
+clock_arch_delay(int n)
+{
+    while(--n >= 0)
+        arch_microdelay(1000);
+}
+@
 
 \subsection{[[Timer]] and [[Timers]]}
 
@@ -22310,6 +22657,18 @@ if(scallnr != RFORK && (up->procctl || up->nnote))
     notify(ureg);
 @
 %x86: call arch_splhi inside the if (bug in bcm/?)
+
+<<struct NFrame(arm)>>=
+struct NFrame {
+    uintptr ip;
+    Ureg*   arg0;
+    char*   arg1;
+    char    msg[ERRMAX];
+    Ureg*   old;
+    Ureg    ureg;
+};
+@
+
 
 <<function notify(arm)>>=
 /*
@@ -25508,13 +25867,34 @@ vlong pcycles;
 #define arch_cycles(ip) *(ip) = arch_lcycles()
 @
 
+<<type CpSPM secondary registers(arm)>>=
+/*
+ * CpSPM Secondary (CRm) registers and opcode2 fields (armv6)
+ */
+#define CpSPMperf   12          /* various counters */
+@
+
+<<type CpSPM opcode2(arm)>>=
+#define CpSPMctl    0           /* performance monitor control */
+#define CpSPMcyc    1           /* cycle counter register */
+@
+
+
+<<[[_startpg()]] enable cycle counter(raspberry pi1)(arm)>>=
+/*
+ * enable cycle counter
+ */
+MOVW    $1, R1
+MCR CpSC, 0, R1, C(CpSPM), C(CpSPMperf), CpSPMctl // Not CpSPMcyc??
+@
+%$
+
 <<function arch_lcycles(raspberry pi1)(arm)>>=
 TEXT arch_lcycles(SB), 1, $-4
     MRC CpSC, 0, R0, C(CpSPM), C(CpSPMperf), CpSPMcyc
     RET
 @
 %$
-
 
 
 
@@ -26182,6 +26562,9 @@ implement(uchar impl)
 }
 @
 
+<<[[CpCONTROL.opcode2]] other cases(arm)>>=
+#define CpCPaccess  2
+@
 
 <<function havefp(arm)>>=
 static int
@@ -26637,20 +27020,215 @@ p->fpstate = up->fpstate & ~FPillegal;
 
 
 
-\section{SMP (ARM)}
 
-\subsection{The Raspberry Pi 2 machine}
+
+\section{Instruction and data cache (ARM)}
+
+<<type CpCACHERANGE opcode2(arm)>>=
+/*
+ * CpCACHERANGE opcode2 fields for MCRR instruction (armv6)
+ */
+#define CpCACHERANGEinvi    5       /* invalidate instruction  */
+#define CpCACHERANGEinvd    6       /* invalidate data */
+#define CpCACHERANGEdwb     12      /* writeback */
+#define CpCACHERANGEdwbi    14      /* writeback+invalidate */
+@
+
+<<instruction MCRR(arm)>>=
+#define MCRR(coproc, op, rd, rn, crm) \
+    WORD $(0xec400000|(rn)<<16|(rd)<<12|(coproc)<<8|(op)<<4|(crm))
+@
+%$
+
+% When switch processor, virtual mem, then interfere
+% with cache as virtual address may now correspond to something else.
+% Also issue about VIRTIO space that should not be cached.
+
+<<instruction BARRIERS(arm)>>=
+#define BARRIERS    ISB; DSB
+@
+
+
+<<instruction ISB(arm)>>=
+#define ISB \
+    MOVW    $0, R0; \
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEwait
+@
+% I for instruction
+
+<<instruction DSB(arm)>>=
+#define DSB \
+    MOVW    $0, R0; \
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEwait
+@
+% D for data
+
+<<type CpCACHE secondary registers(arm)>>=
+/*
+ * CpCACHE Secondary (CRm) registers and opcode2 fields.  op1==0.
+ * In ARM-speak, 'flush' means invalidate and 'clean' means writeback.
+ */
+#define CpCACHEintr 0           /* interrupt (op2==4) */
+#define CpCACHEisi  1           /* inner-sharable I cache (v7) */
+#define CpCACHEpaddr    4           /* 0: phys. addr (cortex) */
+#define CpCACHEinvi 5           /* instruction, branch table */
+#define CpCACHEinvd 6           /* data or unified */
+#define CpCACHEinvu 7           /* unified (not on cortex) */
+#define CpCACHEva2pa    8           /* va -> pa translation (cortex) */
+#define CpCACHEwb   10          /* writeback to PoC */
+#define CpCACHEwbu  11          /* writeback to PoU */
+#define CpCACHEwbi  14          /* writeback+invalidate (to PoC) */
+@
+% PoC ??
+
+<<type CpCACHE opcode2(arm)>>=
+#define CpCACHEall  0           /* entire (not for invd nor wb(i) on cortex) */
+#define CpCACHEse   1           /* single entry */
+#define CpCACHEsi   2           /* set/index (set/way) */
+#define CpCACHEtest 3           /* test loop */
+#define CpCACHEwait 4           /* wait (prefetch flush on cortex) */
+#define CpCACHEdmbarr   5           /* wb only (cortex) */
+#define CpCACHEflushbtc 6           /* flush branch-target cache (cortex) */
+#define CpCACHEflushbtse 7          /* ⋯ or just one entry in it (cortex) */
+@
+\t remove dead constants
+
+
+
+<<constant CACHELINESZ(raspberry pi1)(ram)>>=
+#define CACHELINESZ 32
+@
+
+<<function cachexxx(raspberry pi1)(ram)>>=
+/*
+ * drain write buffer
+ * writeback data cache
+ */
+TEXT cachedwb(SB), 1, $-4
+    DSB
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEall
+    RET
+
+/*
+ * drain write buffer
+ * writeback and invalidate data cache
+ */
+TEXT cachedwbinv(SB), 1, $-4
+    DSB
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwbi), CpCACHEall
+    RET
+
+/*
+ * cachedwbinvse(va, n)
+ *   drain write buffer
+ *   writeback and invalidate data cache range [va, va+n)
+ */
+TEXT cachedwbinvse(SB), 1, $-4
+    MOVW    R0, R1      /* DSB clears R0 */
+    DSB
+    MOVW    n+4(FP), R2
+    ADD R1, R2
+    SUB $1, R2
+    BIC $(CACHELINESZ-1), R1
+    BIC $(CACHELINESZ-1), R2
+    MCRR(CpSC, 0, 2, 1, CpCACHERANGEdwbi)
+    RET
+
+/*
+ * cachedwbse(va, n)
+ *   drain write buffer
+ *   writeback data cache range [va, va+n)
+ */
+TEXT cachedwbse(SB), 1, $-4
+    MOVW    R0, R1      /* DSB clears R0 */
+    DSB
+    MOVW    n+4(FP), R2
+    ADD R1, R2
+    BIC $(CACHELINESZ-1), R1
+    BIC $(CACHELINESZ-1), R2
+    MCRR(CpSC, 0, 2, 1, CpCACHERANGEdwb)
+    RET
+
+/*
+ * cachedinvse(va, n)
+ *   drain write buffer
+ *   invalidate data cache range [va, va+n)
+ */
+TEXT cachedinvse(SB), 1, $-4
+    MOVW    R0, R1      /* DSB clears R0 */
+    DSB
+    MOVW    n+4(FP), R2
+    ADD R1, R2
+    SUB $1, R2
+    BIC $(CACHELINESZ-1), R1
+    BIC $(CACHELINESZ-1), R2
+    MCRR(CpSC, 0, 2, 1, CpCACHERANGEinvd)
+    RET
+
+/*
+ * drain write buffer and prefetch buffer
+ * writeback and invalidate data cache
+ * invalidate instruction cache
+ */
+TEXT cacheuwbinv(SB), 1, $-4
+    BARRIERS
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwbi), CpCACHEall
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
+    RET
+
+/*
+ * L2 cache is not enabled
+ */
+TEXT l2cacheuwbinv(SB), 1, $-4
+    RET
+
+/*
+ * invalidate instruction cache
+ */
+TEXT cacheiinv(SB), 1, $-4
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
+    RET
+@
+
+\section{The Raspberry Pi 2 machine}
 
 % Raspberry Pi 2 has 4 processors. Cortex-a7 (used in many smartphones).
 
-<<[[CpSC primary registers]] other cases(arm)>>=
-#define CpID        0           /* ID and cache type */
-#define CpTIMER     14          /* Generic timer (cortex-a7) */
+<<global soc(raspberry pi2)(arm)>>=
+Soc soc = {
+    .dramsize   = 1024*MiB,
+    .physio     = 0x3F000000,
+     <<[[soc(raspberry pi2)]] other fields(arm)>>
+};
 @
 
-<<[[CpSC primary registers]] other cases(arm)>>=
-#define CpCLD       9        /* L2 Cache Lockdown, op1==1 */
+<<constant ARMLOCAL(arm)>>=
+#define ARMLOCAL    (VIRTIO+IOSIZE)
 @
+\t put in mem.h so can reuse in different files
+
+
+<<[[Soc]] other fields>>=
+uintptr armlocal;
+@
+<<[[soc(raspberry pi1)]] other fields(arm)>>=
+.armlocal   = 0,
+@
+
+<<[[soc(raspberry pi2)]] other fields(arm)>>=
+.busdram    = 0xC0000000,
+.busio      = 0x7E000000,
+.armlocal   = 0x40000000,
+.l1ptedramattrs = Cached | Buffered | L1wralloc | L1sharable,
+.l2ptedramattrs = Cached | Buffered | L2wralloc | L2sharable,
+@
+
+
+\subsection{Extended control}
 
 <<[[CpCONTROL.CpMainctl]] other cases(arm)>>=
 #define CpCsbo (3<<22|1<<18|1<<16|017<<3)   /* must be 1 (armv7) */
@@ -26666,22 +27244,45 @@ p->fpstate = up->fpstate & ~FPillegal;
 @
 % >> >>
 
-<<[[Soc]] other fields>>=
-uintptr armlocal;
-@
-<<[[soc(raspberry pi1)]] other fields(arm)>>=
-.armlocal   = 0,
+
+
+<<[[CpCONTROL.opcode2]] other cases(arm)>>=
+#define CpAuxctl    1
 @
 
-<<type CpTIMER(arm)>>=
+<<type CpCONTROL CpAuxctl(arm)>>=
 /*
- * CpTIMER op1==0 Crm and opcode2 registers (cortex-a7)
+ * CpCONTROL: op1==0, CRm==0, op2==CpAuxctl.
+ * Auxiliary control register on cortex at least.
  */
-#define CpTIMERcntfrq   0
-#define CpTIMERphys     2
+#define CpACcachenopipe     (1<<20) /* don't pipeline cache maint. */
+#define CpACcp15serial      (1<<18) /* serialise CP1[45] ops. */
+#define CpACcp15waitidle    (1<<17) /* CP1[45] wait-on-idle */
+#define CpACcp15pipeflush   (1<<16) /* CP1[45] flush pipeline */
+#define CpACneonissue1      (1<<12) /* neon single issue */
+#define CpACldstissue1      (1<<11) /* force single issue ld, st */
+#define CpACissue1      (1<<10) /* force single issue */
+#define CpACnobsm       (1<<7)  /* no branch size mispredicts */
+#define CpACibe         (1<<6)  /* cp15 invalidate & btb enable */
+#define CpACl1neon      (1<<5)  /* cache neon (FP) data in L1 cache */
+#define CpACasa         (1<<4)  /* enable speculative accesses */
+#define CpACl1pe        (1<<3)  /* l1 cache parity enable */
+#define CpACl2en        (1<<1)  /* l2 cache enable; default 1 */
 
-#define CpTIMERphysval  0
-#define CpTIMERphysctl  1
+/* cortex-a7 and cortex-a9 */
+#define CpACsmp         (1<<6)  /* SMP l1 caches coherence; needed for ldrex/strex */
+#define CpACl1pctl      (3<<13) /* l1 prefetch control */
+@
+% >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >>
+
+
+
+\subsection{CPU ID}
+
+<<[[CpSC primary registers]] other cases(arm)>>=
+#define CpID        0           /* ID and cache type */
 @
 
 <<type CpID secondary registers(arm)>>=
@@ -26709,6 +27310,56 @@ uintptr armlocal;
 @
 
 
+<<instruction CPUID(arm)>>=
+/*
+ * get cpu id, or zero if armv6
+ */
+#define CPUID(r) \
+    MRC CpSC, 0, r, C(CpID), C(CpIDfeat), 7; \
+    CMP $0, r; \
+    B.EQ    2(PC); \
+    MRC CpSC, 0, r, C(CpID), C(CpIDidct), CpIDmpid; \
+    AND.S   $(MAXCPUS-1), r
+@
+
+\subsection{Local registers}
+
+<<struct Mbox(arm)>>=
+/*
+ * Arm local regs for smp
+ */
+struct Mbox {
+    u32int  doorbell;
+    u32int  mbox1;
+    u32int  mbox2;
+    u32int  startcpu;
+};
+@
+<<struct Mboxes(arm)>>=
+struct Mboxes {
+    Mbox    set[4];
+    Mbox    clr[4];
+};
+@
+
+\subsection{Timer}
+
+<<[[CpSC primary registers]] other cases(arm)>>=
+#define CpTIMER     14          /* Generic timer (cortex-a7) */
+@
+
+<<type CpTIMER(arm)>>=
+/*
+ * CpTIMER op1==0 Crm and opcode2 registers (cortex-a7)
+ */
+#define CpTIMERcntfrq   0
+#define CpTIMERphys     2
+
+#define CpTIMERphysval  0
+#define CpTIMERphysctl  1
+@
+
+\subsection{MMU}
 
 <<type PageTableEntryAttribute2(arm)>>=
 #define L1wralloc   (1<<12)         /* L1 TEX */
@@ -26720,6 +27371,827 @@ uintptr armlocal;
 %//#define L1ptedramattrs    (Cached | Buffered | L1wralloc | L1sharable)
 %//#define L2ptedramattrs    (Cached | Buffered | L2wralloc | L2sharable)
 % >> >> >> >>
+
+
+<<function l2ap(raspberry pi2)(arm)>>=
+int
+l2ap(int ap)
+{
+    return (AP(0, (ap)));
+}
+@
+
+\subsection{L2 cache}
+
+% Same than L2 of MMU???
+
+<<[[CpSC primary registers]] other cases(arm)>>=
+#define CpCLD       9        /* L2 Cache Lockdown, op1==1 */
+@
+
+<<type CpCLD secondary registers(arm)>>=
+/*
+ * CpCLD Secondary (CRm) registers and opcode2 fields for op1==0. (cortex)
+ */
+#define CpCLDena    12          /* enables */
+#define CpCLDcyc    13          /* cycle counter */
+#define CpCLDuser   14          /* user enable */
+@
+
+<<type CpCLD opcode2(arm)>>=
+#define CpCLDenapmnc    0
+#define CpCLDenacyc 1
+@
+
+\subsection{TTB}
+
+
+<<type CpTTB(arm)>>=
+/*
+ * CpTTB op1==0, Crm==0 opcode2 values.
+ */
+#define CpTTB0      0
+#define CpTTB1      1           /* cortex */
+#define CpTTBctl    2           /* cortex */
+@
+
+<<type CpTTB cache control bits(arm)>>=
+/*
+ * CpTTB cache control bits
+ */
+#define CpTTBnos    (1<<5)  /* only Inner cache shareable */
+#define CpTTBinc    (0<<0|0<<6) /* inner non-cacheable */
+#define CpTTBiwba   (0<<0|1<<6) /* inner write-back write-allocate */
+#define CpTTBiwt    (1<<0|0<<6) /* inner write-through */
+#define CpTTBiwb    (1<<0|1<<6) /* inner write-back no write-allocate */
+#define CpTTBonc    (0<<3)  /* outer non-cacheable */
+#define CpTTBowba   (1<<3)  /* outer write-back write-allocate */
+#define CpTTBowt    (2<<3)  /* outer write-through */
+#define CpTTBowb    (3<<3)  /* outer write-back no write-allocate */
+#define CpTTBs  (1<<1)  /* page table in shareable memory */
+#define CpTTBbase   ~0x7F       /* mask off control bits */
+@
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+
+
+\section{SMP (ARM)}
+
+\subsection{Initialization adjustments}
+
+<<function armstart(raspberry pi2)(arm)>>=
+TEXT armstart(SB), 1, $-4
+
+    /*
+     * if not cpu0, go to secondary startup
+     */
+    CPUID(R1)
+    BNE reset
+
+    /*
+     * disable the mmu and caches
+     * invalidate tlb
+     */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    BIC $(CpCdcache|CpCicache|CpCmmu), R1
+    ORR $(CpCsbo|CpCsw), R1
+    BIC $CpCsbz, R1
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+    ISB
+
+    /*
+     * clear mach and page tables
+     */
+    MOVW    $PADDR(CPUADDR), R1
+    MOVW    $PADDR(KTZERO), R2
+_ramZ:
+    MOVW    R0, (R1)
+    ADD $4, R1
+    CMP R1, R2
+    BNE _ramZ
+
+    /*
+     * start stack at top of mach (physical addr)
+     * set up page tables for kernel
+     */
+    MOVW    $PADDR(CPUADDR+CPUSIZE-4), R13
+    MOVW    $PADDR(L1), R0
+    BL  mmuinit(SB)
+
+    /*
+     * set up domain access control and page table base
+     */
+    MOVW    $Client, R1
+    MCR CpSC, 0, R1, C(CpDAC), C(0)
+    MOVW    $PADDR(L1), R1
+    ORR     $(CpTTBs/*|CpTTBowba|CpTTBiwba*/), R1
+    MCR CpSC, 0, R1, C(CpTTB), C(0)
+    MCR CpSC, 0, R1, C(CpTTB), C(0), CpTTB1 /* cortex has two */
+
+    /*
+     * invalidate my caches before enabling
+     */
+    BL  cachedinv(SB)
+    BL  cacheiinv(SB)
+    BL  l2cacheuinv(SB)
+    BARRIERS
+
+    /*
+     * enable caches, mmu, and high vectors
+     */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpAuxctl
+    ORR $CpACsmp, R1        /* turn SMP on */
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpAuxctl
+    BARRIERS
+
+    MRC CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
+    ORR $(CpChv|CpCdcache|CpCicache|CpCmmu), R0
+    MCR CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
+    BARRIERS
+
+    /*
+     * switch SB, SP, and PC into KZERO space
+     */
+    MOVW    $setR12(SB), R12
+    MOVW    $(CPUADDR+CPUSIZE-4), R13
+    MOVW    $_startpg(SB), R15
+@
+%$
+
+<<function _startpg(raspberry pi2)(arm)>>=
+TEXT _startpg(SB), 1, $-4
+
+    /*
+     * enable cycle counter
+     */
+    MOVW    $(1<<31), R1
+    MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenacyc
+    MOVW    $1, R1
+    MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenapmnc
+
+    /*
+     * call main and loop forever if it returns
+     */
+    BL  main(SB)
+    B   0(PC)
+
+    BL  _div(SB)        /* hack to load _div, etc. */
+@
+%$
+% >> >>
+
+<<function cpureset(raspberry pi2)(arm)>>=
+/*
+ * startup entry for cpu(s) other than 0
+ */
+TEXT cpureset(SB), 1, $-4
+reset:
+    /*
+     * load physical base for SB addressing while mmu is off
+     * keep a handy zero in R0 until first function call
+     */
+    MOVW    $setR12(SB), R12
+    SUB $KZERO, R12
+    MOVW    $0, R0
+
+    /*
+     * SVC mode, interrupts disabled
+     */
+    MOVW    $(PsrDirq|PsrDfiq|PsrMsvc), R1
+    MOVW    R1, CPSR
+
+    /*
+     * disable the mmu and caches
+     * invalidate tlb
+     */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    BIC $(CpCdcache|CpCicache|CpCmmu), R1
+    ORR $(CpCsbo|CpCsw), R1
+    BIC $CpCsbz, R1
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+    ISB
+
+    /*
+     * find Mach for this cpu
+     */
+    MRC CpSC, 0, R2, C(CpID), C(CpIDidct), CpIDmpid
+    AND $(MAXCPUS-1), R2    /* mask out non-cpu-id bits */
+    SLL $2, R2          /* convert to word index */
+    MOVW    $cpus(SB), R0
+    ADD R2, R0          /* R0 = &cpus[cpuid] */
+    MOVW    (R0), R0        /* R0 = cpus[cpuid] */
+    CMP $0, R0
+    MOVW.EQ $CPUADDR, R0        /* paranoia: use CPUADDR if 0 */
+    SUB $KZERO, R0      /* phys addr */
+    MOVW    R0, R(CPU)      /* m = PADDR(cpus[cpuid]) */
+
+    /*
+     * start stack at top of local Mach
+     */
+    MOVW    R(CPU), R13
+    ADD     $(CPUSIZE-4), R13
+
+    /*
+     * set up page tables for kernel
+     */
+    MOVW    12(R(CPU)), R0  /* m->mmul1 */
+    SUB $KZERO, R0      /* phys addr */
+    BL  mmuinit(SB)
+
+    /*
+     * set up domain access control and page table base
+     */
+    MOVW    $Client, R1
+    MCR CpSC, 0, R1, C(CpDAC), C(0)
+    MOVW    12(R(CPU)), R1  /* m->mmul1 */
+    SUB $KZERO, R1      /* phys addr */
+    ORR     $(CpTTBs/*|CpTTBowba|CpTTBiwba*/), R1
+    MCR CpSC, 0, R1, C(CpTTB), C(0)
+    MCR CpSC, 0, R1, C(CpTTB), C(0), CpTTB1 /* cortex has two */
+
+    /*
+     * invalidate my caches before enabling
+     */
+    BL  cachedinv(SB)
+    BL  cacheiinv(SB)
+    BARRIERS
+
+    /*
+     * enable caches, mmu, and high vectors
+     */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpAuxctl
+    ORR $CpACsmp, R1        /* turn SMP on */
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpAuxctl
+    BARRIERS
+
+    MRC CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
+    ORR $(CpChv|CpCdcache|CpCicache|CpCmmu), R0
+    MCR CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
+    BARRIERS
+
+    /*
+     * switch CPU, SB, SP, and PC into KZERO space
+     */
+    ADD $KZERO, R(CPU)
+    MOVW    $setR12(SB), R12
+    ADD $KZERO, R13
+    MOVW    $_startpg2(SB), R15
+@
+%$
+
+<<function _startpg2(raspberry pi2)(arm)>>=
+TEXT _startpg2(SB), 1, $-4
+
+    /*
+     * enable cycle counter
+     */
+    MOVW    $(1<<31), R1
+    MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenacyc
+    MOVW    $1, R1
+    MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenapmnc
+
+    /*
+     * call cpustart and loop forever if it returns
+     */
+    MRC CpSC, 0, R0, C(CpID), C(CpIDidct), CpIDmpid
+    AND $(MAXCPUS-1), R0            /* mask out non-cpu-id bits */
+    BL  ,cpustart(SB)
+    B   ,0(PC)
+@
+% >>
+
+<<function arch_idlehands(raspberry pi2)(arm)>>=
+TEXT arch_idlehands(SB), $-4
+    MOVW    CPSR, R3
+    ORR $(PsrDirq|PsrDfiq), R3, R1      /* splfhi */
+    MOVW    R1, CPSR
+
+    DSB
+    MOVW    nrdy(SB), R0
+    CMP $0, R0
+/*** with WFI, local timer interrupts can be lost and dispatching stops
+    WFI_EQ
+***/
+    DSB
+
+    MOVW    R3, CPSR            /* splx */
+    RET
+@
+%$
+
+<<instruction WFI_EQ(arm)>>=
+#define WFI_EQ  WORD    $0x0320f003 /* wait for interrupt if eq */
+@
+%$
+%dead: #define WFI WORD    $0xe320f003 /* wait for interrupt */
+
+
+
+<<function cpidget(raspberry pi2)(arm)>>=
+TEXT cpidget(SB), 1, $-4            /* main ID */
+    MRC CpSC, 0, R0, C(CpID), C(0), CpIDid
+    RET
+@
+%$
+
+<<function cputype2name(raspberry pi2)(arm)>>=
+char*
+cputype2name(char *buf, int size)
+{
+    ulong r;
+
+    r = cpidget();          /* main id register */
+    assert((r >> 24) == 'A');
+    seprint(buf, buf + size, "Cortex-A7 r%ldp%ld",
+        (r >> 20) & MASK(4), r & MASK(4));
+    return buf;
+}
+@
+% >> >>
+
+<<function arch_cpuidprint(raspberry pi2)(arm)>>=
+void
+arch_cpuidprint(void)
+{
+    char name[64];
+
+    cputype2name(name, sizeof name);
+    arch_delay(50);             /* let uart catch up */
+    print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
+}
+@
+
+<<function getncpus(raspberry pi2)(arm)>>=
+int
+getncpus(void)
+{
+    int n, max;
+    char *p;
+
+    n = 4;
+    if(n > MAXCPUS)
+        n = MAXCPUS;
+    p = getconf("*ncpu");
+    if(p && (max = atoi(p)) > 0 && n > max)
+        n = max;
+    return n;
+}
+@
+
+<<function startcpu(raspberry pi2)(arm)>>=
+static int
+startcpu(uint cpu)
+{
+    Mboxes *mb;
+    int i;
+    void cpureset();
+
+    mb = (Mboxes*)(ARMLOCAL + Mboxregs);
+    if(mb->clr[cpu].startcpu)
+        return -1;
+    mb->set[cpu].startcpu = PADDR(cpureset);
+    for(i = 0; i < 1000; i++)
+        if(mb->clr[cpu].startcpu == 0)
+            return 0;
+    mb->clr[cpu].startcpu = PADDR(cpureset);
+    mb->set[cpu].doorbell = 1;
+    return 0;
+}
+@
+
+<<function startcpus(raspberry pi2)(arm)>>=
+int
+startcpus(uint ncpu)
+{
+    int i;
+
+    for(i = 0; i < ncpu; i++)
+        lock(&startlock[i]);
+    cachedwbse(startlock, sizeof startlock);
+    for(i = 1; i < ncpu; i++){
+        if(startcpu(i) < 0)
+            return i;
+        lock(&startlock[i]);
+        unlock(&startlock[i]);
+    }
+    return ncpu;
+}
+@
+
+<<function cpustart(raspberry pi2)(arm)>>=
+//TODO: cpus[] set? and cpu->cpuno??
+void
+cpustart(int xcpu)
+{
+    Mboxes *mb;
+
+    up = nil;
+    cpuinit();
+    mmuinit1((void*)cpu->mmul1);
+
+    mb = (Mboxes*)(ARMLOCAL + Mboxregs);
+    mb->clr[xcpu].doorbell = 1;
+
+    arch_trapinit();
+    clockinit();
+    timersinit();
+    arch_cpuidprint();
+    archreset();
+
+    machon(cpu->cpuno);
+    unlock(&startlock[xcpu]);
+
+    // schedule a ready process (not necessarily the first one now)
+    schedinit();
+
+    panic("schedinit returned");
+}
+@
+
+\subsection{Concurrency adjustments}
+
+<<instruction LDREX(arm)>>=
+#define LDREX(fp,t)   WORD $(0xe<<28|0x01900f9f | (fp)<<16 | (t)<<12)
+@
+<<instruction STREX(arm)>>=
+/* `The order of operands is from left to right in dataflow order' - asm man */
+#define STREX(f,tp,r) WORD $(0xe<<28|0x01800f90 | (tp)<<16 | (r)<<12 | (f)<<0)
+@
+% >> >> >> >>
+
+<<instruction CLREX(arm)>>=
+#define CLREX   WORD    $0xf57ff01f
+@
+%$
+
+
+<<instruction DMB(arm)>>=
+#define DMB WORD    $0xf57ff05f /* data mem. barrier; last f = SY */
+@
+
+<<function arch_tas(raspberry pi2)(arm)>>=
+TEXT    arch_tas(SB), $-4
+    /* returns old (R0) after modifying (R0) */
+    MOVW    R0,R5
+    DMB
+
+    MOVW    $1,R2       /* new value of (R0) */
+    MOVW    $MAXSC, R8
+tas1:
+    LDREX(5,7)      /* LDREX 0(R5),R7 */
+    CMP.S   $0, R7      /* old value non-zero (lock taken)? */
+    BNE lockbusy    /* we lose */
+    SUB.S   $1, R8
+    BEQ lockloop2
+    STREX(2,5,4)        /* STREX R2,(R5),R4 */
+    CMP.S   $0, R4
+    BNE tas1        /* strex failed? try again */
+    DMB
+    B   tas0
+lockloop2:
+    BL  abort(SB)
+lockbusy:
+    CLREX
+tas0:
+    MOVW    R7, R0      /* return old value */
+    RET
+@
+%$
+
+\subsection{Timer adjustments}
+
+<<[[arch_timerset()]] if not cpu0>>=
+if(cpu->cpuno > 0){
+    cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
+    cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
+}
+@
+
+<<constant Localctl(arm)>>=
+Localctl    = 0x00,
+@
+<<constant Prescaler(arm)>>=
+Prescaler   = 0x08,
+@
+<<[[clockinit()]] if many processors>>=
+if(((cprdsc(0, CpID, CpIDfeat, 1) >> 16) & 0xF) != 0) {
+    /* generic timer supported */
+    if(cpu->cpuno == 0){
+        *(ulong*)(ARMLOCAL + Localctl) = 0;             /* magic */
+        *(ulong*)(ARMLOCAL + Prescaler) = 0x06aaaaab;   /* magic for 1 Mhz */
+    }
+    cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask);
+}
+@
+
+<<[[clockinit()]] if not cpu0>>=
+else
+    arch_intrenable(IRQcntpns, localclockintr, nil, 0, "clock");
+@
+
+<<function localclockintr(arm)>>=
+static void
+localclockintr(Ureg *ureg, void *)
+{
+    if(cpu->cpuno == 0)
+        panic("cpu0: Unexpected local generic timer interrupt");
+    cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask|Enable);
+    timerintr(ureg, 0);
+}
+@
+
+<<function arch_lcycles(raspberry pi2)(arm)>>=
+TEXT arch_lcycles(SB), 1, $-4
+    MRC CpSC, 0, R0, C(CpCLD), C(CpCLDcyc), 0
+    RET
+@
+%$
+
+\subsection{Cache adjustments}
+
+<<constant CACHELINESZ(raspberry pi2)(ram)>>=
+#define CACHELINESZ 64
+@
+
+<<instruction CPSID(arm)>>=
+#define CPSID   WORD    $0xf10c0080 /* intr disable: sets I bit */
+@
+%$
+%dead: #define CPSIE   WORD    $0xf1080080 /* intr enable: zeroes I bit */
+
+<<function cachexxx(raspberry pi2)(ram)>>=
+/*
+ * `single-element' cache operations.
+ * in arm arch v7, they operate on all cache levels, so separate
+ * l2 functions are unnecessary.
+ */
+
+TEXT cachedwbse(SB), $-4            /* D writeback SE */
+    MOVW    R0, R2
+
+    MOVW    CPSR, R3
+    CPSID                   /* splhi */
+
+    BARRIERS            /* force outstanding stores to cache */
+    MOVW    R2, R0
+    MOVW    4(FP), R1
+    ADD R0, R1              /* R1 is end address */
+    BIC $(CACHELINESZ-1), R0        /* cache line start */
+_dwbse:
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEse
+    /* can't have a BARRIER here since it zeroes R0 */
+    ADD $CACHELINESZ, R0
+    CMP.S   R0, R1
+    BGT _dwbse
+    B   _wait
+
+TEXT cachedwbinvse(SB), $-4         /* D writeback+invalidate SE */
+    MOVW    R0, R2
+
+    MOVW    CPSR, R3
+    CPSID                   /* splhi */
+
+    BARRIERS            /* force outstanding stores to cache */
+    MOVW    R2, R0
+    MOVW    4(FP), R1
+    ADD R0, R1              /* R1 is end address */
+    BIC $(CACHELINESZ-1), R0        /* cache line start */
+_dwbinvse:
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwbi), CpCACHEse
+    /* can't have a BARRIER here since it zeroes R0 */
+    ADD $CACHELINESZ, R0
+    CMP.S   R0, R1
+    BGT _dwbinvse
+_wait:                      /* drain write buffer */
+    BARRIERS
+
+    MOVW    R3, CPSR            /* splx */
+    RET
+
+TEXT cachedinvse(SB), $-4           /* D invalidate SE */
+    MOVW    R0, R2
+
+    MOVW    CPSR, R3
+    CPSID                   /* splhi */
+
+    BARRIERS            /* force outstanding stores to cache */
+    MOVW    R2, R0
+    MOVW    4(FP), R1
+    ADD R0, R1              /* R1 is end address */
+    BIC $(CACHELINESZ-1), R0        /* cache line start */
+_dinvse:
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvd), CpCACHEse
+    /* can't have a BARRIER here since it zeroes R0 */
+    ADD $CACHELINESZ, R0
+    CMP.S   R0, R1
+    BGT _dinvse
+    B   _wait
+
+/*
+ * cortex arm arch v7 cache flushing and invalidation
+ * shared by l.s and rebootcode.s
+ */
+
+TEXT cacheiinv(SB), $-4             /* I invalidate */
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall /* ok on cortex */
+    ISB
+    RET
+
+/*
+ * set/way operators, passed a suitable set/way value in R0.
+ */
+TEXT cachedwb_sw(SB), $-4
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEsi
+    RET
+
+TEXT cachedwbinv_sw(SB), $-4
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwbi), CpCACHEsi
+    RET
+
+TEXT cachedinv_sw(SB), $-4
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvd), CpCACHEsi
+    RET
+
+    /* set cache size select */
+TEXT setcachelvl(SB), $-4
+    MCR CpSC, CpIDcssel, R0, C(CpID), C(CpIDidct), 0
+    ISB
+    RET
+
+    /* return cache sizes */
+TEXT getwayssets(SB), $-4
+    MRC CpSC, CpIDcsize, R0, C(CpID), C(CpIDidct), 0
+    RET
+
+/*
+ * l1 cache operations.
+ * l1 and l2 ops are intended to be called from C, thus need save no
+ * caller's regs, only those we need to preserve across calls.
+ */
+
+TEXT cachedwb(SB), $-4
+    MOVW.W  R14, -8(R13)
+    MOVW    $cachedwb_sw(SB), R0
+    MOVW    $1, R8
+    BL  wholecache(SB)
+    MOVW.P  8(R13), R15
+
+TEXT cachedwbinv(SB), $-4
+    MOVW.W  R14, -8(R13)
+    MOVW    $cachedwbinv_sw(SB), R0
+    MOVW    $1, R8
+    BL  wholecache(SB)
+    MOVW.P  8(R13), R15
+
+TEXT cachedinv(SB), $-4
+    MOVW.W  R14, -8(R13)
+    MOVW    $cachedinv_sw(SB), R0
+    MOVW    $1, R8
+    BL  wholecache(SB)
+    MOVW.P  8(R13), R15
+
+TEXT cacheuwbinv(SB), $-4
+    MOVM.DB.W [R14], (R13)  /* save lr on stack */
+    MOVW    CPSR, R1
+    CPSID           /* splhi */
+
+    MOVM.DB.W [R1], (R13)   /* save R1 on stack */
+
+    BL  cachedwbinv(SB)
+    BL  cacheiinv(SB)
+
+    MOVM.IA.W (R13), [R1]   /* restore R1 (saved CPSR) */
+    MOVW    R1, CPSR
+    MOVM.IA.W (R13), [R14]  /* restore lr */
+    RET
+
+/*
+ * l2 cache operations
+ */
+
+TEXT l2cacheuwb(SB), $-4
+    MOVW.W  R14, -8(R13)
+    MOVW    $cachedwb_sw(SB), R0
+    MOVW    $2, R8
+    BL  wholecache(SB)
+    MOVW.P  8(R13), R15
+
+TEXT l2cacheuwbinv(SB), $-4
+    MOVW.W  R14, -8(R13)
+    MOVW    CPSR, R1
+    CPSID           /* splhi */
+
+    MOVM.DB.W [R1], (R13)   /* save R1 on stack */
+
+    MOVW    $cachedwbinv_sw(SB), R0
+    MOVW    $2, R8
+    BL  wholecache(SB)
+    BL  l2cacheuinv(SB)
+
+    MOVM.IA.W (R13), [R1]   /* restore R1 (saved CPSR) */
+    MOVW    R1, CPSR
+    MOVW.P  8(R13), R15
+
+TEXT l2cacheuinv(SB), $-4
+    MOVW.W  R14, -8(R13)
+    MOVW    $cachedinv_sw(SB), R0
+    MOVW    $2, R8
+    BL  wholecache(SB)
+    MOVW.P  8(R13), R15
+
+/*
+ * these shift values are for the Cortex-A8 L1 cache (A=2, L=6) and
+ * the Cortex-A8 L2 cache (A=3, L=6).
+ * A = log2(# of ways), L = log2(bytes per cache line).
+ * see armv7 arch ref p. 1403.
+ */
+#define L1WAYSH 30
+#define L1SETSH 6
+#define L2WAYSH 29
+#define L2SETSH 6
+
+/*
+ * callers are assumed to be the above l1 and l2 ops.
+ * R0 is the function to call in the innermost loop.
+ * R8 is the cache level (one-origin: 1 or 2).
+ *
+ * initial translation by 5c, then massaged by hand.
+ */
+TEXT wholecache+0(SB), $-4
+    MOVW    R0, R1      /* save argument for inner loop in R1 */
+    SUB $1, R8      /* convert cache level to zero origin */
+
+    /* we may not have the MMU on yet, so map R1 to PC's space */
+    BIC $KSEGM, R1  /* strip segment from address */
+    MOVW    PC, R2      /* get PC's segment ... */
+    AND $KSEGM, R2
+    ORR R2, R1      /* combine them */
+
+    /* drain write buffers */
+    BARRIERS
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEwait
+    ISB
+
+    MOVW    CPSR, R2
+    MOVM.DB.W [R2,R14], (SP) /* save regs on stack */
+    CPSID           /* splhi to make entire op atomic */
+
+    /* get cache sizes */
+    SLL $1, R8, R0  /* R0 = (cache - 1) << 1 */
+    MCR CpSC, CpIDcssel, R0, C(CpID), C(CpIDidct), 0 /* set cache size select */
+    ISB
+    MRC CpSC, CpIDcsize, R0, C(CpID), C(CpIDidct), 0 /* get cache sizes */
+
+    /* compute # of ways and sets for this cache level */
+    SRA $3, R0, R5  /* R5 (ways) = R0 >> 3 */
+    AND $1023, R5   /* R5 = (R0 >> 3) & MASK(10) */
+    ADD $1, R5      /* R5 (ways) = ((R0 >> 3) & MASK(10)) + 1 */
+
+    SRA $13, R0, R2 /* R2 = R0 >> 13 */
+    AND $32767, R2  /* R2 = (R0 >> 13) & MASK(15) */
+    ADD $1, R2      /* R2 (sets) = ((R0 >> 13) & MASK(15)) + 1 */
+
+    /* precompute set/way shifts for inner loop */
+    CMP $0, R8      /* cache == 1? */
+    MOVW.EQ $L1WAYSH, R3    /* yes */
+    MOVW.EQ $L1SETSH, R4
+    MOVW.NE $L2WAYSH, R3    /* no */
+    MOVW.NE $L2SETSH, R4
+
+    /* iterate over ways */
+    MOVW    $0, R7      /* R7: way */
+outer:
+    /* iterate over sets */
+    MOVW    $0, R6      /* R6: set */
+inner:
+    /* compute set/way register contents */
+    SLL R3, R7, R0  /* R0 = way << R3 (L?WAYSH) */
+    ORR R8<<1, R0   /* R0 = way << L?WAYSH | (cache - 1) << 1 */
+    ORR R6<<R4, R0  /* R0 = way<<L?WAYSH | (cache-1)<<1 |set<<R4 */
+
+    BL  (R1)        /* call set/way operation with R0 */
+
+    ADD $1, R6      /* set++ */
+    CMP R2, R6      /* set >= sets? */
+    BLT inner       /* no, do next set */
+
+    ADD $1, R7      /* way++ */
+    CMP R5, R7      /* way >= ways? */
+    BLT outer       /* no, do next way */
+
+    MOVM.IA.W (SP), [R2,R14] /* restore regs */
+    MOVW    R2, CPSR    /* splx */
+
+    /* drain write buffers */
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEwb), CpCACHEwait
+    ISB
+    RET
+@
+%$
 
 \subsection{IRQ adjustments}
 
@@ -26744,12 +28216,22 @@ if(irq >= IRQlocal){
 @
 % >> >> 
 
+<<constant Localtimerint(arm)>>=
+Localtimerint   = 0x40,
+@
+<<constant Localintpending(arm)>>=
+Localintpending = 0x60,
+@
+<<constant Localmboxint(arm)>>=
+Localmboxint    = 0x50,
+@
+
 <<constant LOCALREGS(arm)>>=
 #define LOCALREGS   (VIRTIO+IOSIZE)
 @
 \t reuse ARMLOCAL
 
-\subsection{Concurrency adjustments}
+
 
 \section{Advanced virtual memory}
 
@@ -26760,15 +28242,22 @@ if(irq >= IRQlocal){
 \subsection{Page coloring}
 % page coloring, getpgcolor, cachectl, etc
 % but I've removed the code actually
-%update: put back because of bcm/ ?
+%update: put back because of bcm/? 
+\t seems unused though so remove again?
 
 %old? in newpage
 %	for(i = 0; i < MAXMACH; i++)
 %		p->cachectl[i] = ct;
 
-\subsection{Cache line}
+<<macro getpgcolor(arm)>>=
+#define getpgcolor(a)   0
+@
 
-%#define CACHELINESZ 32      /* pentium & later */
+
+<<constant NCOLOR(arm)>>=
+#define NCOLOR  1       /* 1 level cache, don't worry about VCE's */
+@
+
 
 \subsection{Extra segment types}
 
@@ -26904,6 +28393,132 @@ if(pa & PTEUNCACHED) {
 
 \subsection{[[arch_kmap()]]}
 
+\subsection{Extra checks}
+
+%dead?
+
+
+%// called? mv in debugging section? with C-t C-t stuff?
+<<function checkpagerefs>>=
+void
+checkpagerefs(void)
+{
+    int s;
+    ulong i, np, nwrong;
+    ulong *ref;
+    
+    np = palloc.user;
+    ref = malloc(np*sizeof ref[0]);
+    if(ref == nil){
+        print("checkpagerefs: out of memory\n");
+        return;
+    }
+    
+    /*
+     * This may not be exact if there are other processes
+     * holding refs to pages on their stacks.  The hope is
+     * that if you run it on a quiescent system it will still
+     * be useful.
+     */
+    s = arch_splhi();
+    lock(&palloc);
+    arch_countpagerefs(ref, 0);
+    portcountpagerefs(ref, 0);
+    nwrong = 0;
+    for(i=0; i<np; i++){
+        if(palloc.pages[i].ref != ref[i]){
+            iprint("page %#.8lux ref %d actual %lud\n", 
+                palloc.pages[i].pa, palloc.pages[i].ref, ref[i]);
+            ref[i] = 1;
+            nwrong++;
+        }else
+            ref[i] = 0;
+    }
+    arch_countpagerefs(ref, 1);
+    portcountpagerefs(ref, 1);
+    iprint("%lud mistakes found\n", nwrong);
+    unlock(&palloc);
+    arch_splx(s);
+}
+@
+
+<<macro arch_countpagerefs(arm)>>=
+// same signatures but optimized away
+#define arch_countpagerefs(a, b)
+@
+
+<<[[Segment]] other fields>>=
+ulong mark;   /* portcountrefs */
+@
+
+<<function portcountpagerefs>>=
+void
+portcountpagerefs(ulong *ref, int print)
+{
+    ulong i, j, k, ns, n;
+    Page **pg, *entry;
+    Proc *p;
+    Pagetable *pt;
+    Segment *s;
+
+    /*
+     * Pages in segments.  s->mark avoids double-counting.
+     */
+    n = 0;
+    ns = 0;
+    for(i=0; i<conf.nproc; i++){
+        p = proctab(i);
+        for(j=0; j<NSEG; j++){
+            s = p->seg[j];
+            if(s)
+                s->mark = 0;
+        }
+    }
+    for(i=0; i<conf.nproc; i++){
+        p = proctab(i);
+        for(j=0; j<NSEG; j++){
+            s = p->seg[j];
+            if(s == nil || s->mark++)
+                continue;
+            ns++;
+            for(k=0; k<s->pagedirsize; k++){
+                pt = s->pagedir[k];
+                if(pt == nil)
+                    continue;
+                for(pg = pt->first; pg <= pt->last; pg++){
+                    entry = *pg;
+                    if(pagedout(entry))
+                        continue;
+                    if(print){
+                        if(ref[pagenumber(entry)])
+                            iprint("page %#.8lux in segment %#p\n", entry->pa, s);
+                        continue;
+                    }
+                    if(ref[pagenumber(entry)]++ == 0)
+                        n++;
+                }
+            }
+        }
+    }
+    if(!print){
+        iprint("%lud pages in %lud segments\n", n, ns);
+        for(i=0; i<conf.nproc; i++){
+            p = proctab(i);
+            for(j=0; j<NSEG; j++){
+                s = p->seg[j];
+                if(s == nil)
+                    continue;
+                if(s->ref != s->mark){
+                    iprint("segment %#p (used by proc %lud pid %lud) has bad ref count %lud actual %lud\n",
+                        s, i, p->pid, s->ref, s->mark);
+                }
+            }
+        }
+    }
+}
+@
+
+
 
 
 \section{Power management (arm)}
@@ -26911,9 +28526,53 @@ if(pa & PTEUNCACHED) {
 %<<[[Dev]] methods>>=
 %void  (*power)(bool);  /* power mgt: power(1) => on, power (0) => off */
 %@
-% but does not seem called by anything
-% dead?
+%dead? Does not seem called by anything.
 
+<<enum Power(arm)>>=
+enum {
+    PowerSd     = 0,
+    PowerUart0,
+    PowerUart1,
+    PowerUsb,
+    PowerI2c0,
+    PowerI2c1,
+    PowerI2c2,
+    PowerSpi,
+    PowerCcp2tx,
+};
+@
+% only PowerUsb is used currently.
+
+<<function setpower(arm)>>=
+/*
+ * Power management
+ */
+void
+setpower(int dev, bool on)
+{
+    u32int buf[2];
+
+    buf[0] = dev;
+    buf[1] = Powerwait | on;
+    vcreq(TagSetpower, buf, sizeof buf, sizeof buf);
+}
+@
+
+<<function getpower(arm)>>=
+int
+getpower(int dev)
+{
+    u32int buf[2];
+
+    buf[0] = dev;
+    buf[1] = 0;
+    if(vcreq(TagGetpower, buf, sizeof buf[0], sizeof buf) != sizeof buf)
+        return ERROR_NEG1;
+    return buf[0] & 1;
+}
+@
+
+% See also watchdog.c
 
 \section{Basic IRQs (ARM)}
 
@@ -26939,19 +28598,36 @@ if(irq >= IRQlocal)
 
 \section{Fast interrupts (FIQ) (ARM)}
 
+
+
+
 <<[[IRQ]] other cases(arm)>>=
 IRQfiq      = IRQusb,   /* only one source can be FIQ */
 @
 
 <<[[irqenable()]] if IRQfiq(arm)>>=
 if(irq == IRQfiq){
-    assert((ip->FIQctl & Fiqenable) == 0);
-    assert((*enable & v->mask) == 0);
+    <<[[irqenable()]] sanity check no previous FIQ(arm)>>
     vfiq = v;
     ip->FIQctl = Fiqenable | irq;
 }
 @
 %x86: NMI (Non Maskable Interrupts)
+
+<<constant Fiqenable(arm)>>=
+Fiqenable = 1<<7,
+@
+<<global vfiq(arm)>>=
+static Vctl *vfiq;
+@
+
+
+<<[[irqenable()]] sanity check no previous FIQ(arm)>>=
+assert((ip->FIQctl & Fiqenable) == 0);
+assert((*enable & v->mask) == 0);
+@
+
+
 
 % Two level interrupt system. 
 % An interrupt that can interrupt another interrupt.
@@ -26968,6 +28644,26 @@ if(irq == IRQfiq){
 <<[[trapnames()]] other entries(arm)>>=
 [ PsrMfiq ] "fiq interrupt",
 @
+
+
+
+
+<<constant FIQSTKTOP(arm)>>=
+#define FIQSTKTOP   (KZERO+0x4000)      /* FIQ stack */
+@
+<<[[arch_trapinit()]] set stack for other exception/processor-modes>>=
+setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
+@
+%<<[[Cpu]] [[Arch]] save of first five registers fields(arm)>>=
+%u32int  sfiq[5];
+%@
+%dead: use FIQSTKTOP instead. Why? because more than 5?
+
+<<[[PsrDisable]] other cases(arm)>>=
+#define PsrDfiq     0x00000040      /* disable FIQ interrupts */
+@
+
+
 
 % Saw special entries in vector and vtable (_virq).
 % References _vfiq below.
@@ -27033,6 +28729,26 @@ fiq(Ureg *ureg)
 }
 @
 
+
+<<function splfhi(arm)>>=
+TEXT splfhi(SB), 1, $-4
+    MOVW    $(CPUADDR+4), R2        /* save caller pc in Mach */
+    MOVW    R14, 0(R2)
+
+    MOVW    CPSR, R0            /* turn off irqs and fiqs */
+    ORR $(PsrDirq|PsrDfiq), R0, R1
+    MOVW    R1, CPSR
+    RET
+@
+%$
+
+<<function splflo(arm)>>=
+TEXT splflo(SB), 1, $-4
+    MOVW    CPSR, R0            /* turn on fiqs */
+    BIC $(PsrDfiq), R0, R1
+    MOVW    R1, CPSR
+    RET
+@
 
 \section{Real-time scheduling}
 
@@ -27949,6 +29665,41 @@ SExpel,		/* Edf expel */
 SInts,		/* Interrupt start */
 SInte,		/* Interrupt end */
 @
+
+\section{Alignements}
+
+<<function arch_validalign(arm)>>=
+/*
+ * called in syscallfmt.c, sysfile.c, sysproc.c
+ */
+void
+arch_validalign(uintptr addr, unsigned align)
+{
+    /*
+     * Plan 9 is a 32-bit O/S, and the hardware it runs on
+     * does not usually have instructions which move 64-bit
+     * quantities directly, synthesizing the operations
+     * with 32-bit move instructions. Therefore, the compiler
+     * (and hardware) usually only enforce 32-bit alignment,
+     * if at all.
+     *
+     * Take this out if the architecture warrants it.
+     */
+    if(align == sizeof(vlong))
+        align = sizeof(long);
+
+    /*
+     * Check align is a power of 2, then addr alignment.
+     */
+    if((align != 0 && !(align & (align-1))) && !(addr & (align-1)))
+        return;
+    postnote(up, 1, "sys: odd address", NDebug);
+    error(Ebadarg);
+    /*NOTREACHED*/
+}
+@
+
+
 
 \section{Security}
 
@@ -28881,12 +30632,6 @@ procread(Chan *c, void *va, long n, vlong off)
         rsize = sizeof(Ureg);
         goto regread;
 
-    case Qkregs:
-        memset(&kur, 0, sizeof(Ureg));
-        arch_setkernur(&kur, p);
-        rptr = (byte*)&kur;
-        rsize = sizeof(Ureg);
-        goto regread;
 
     <<[[procread()]] Qfpregs case>>
 
@@ -28988,6 +30733,29 @@ procread(Chan *c, void *va, long n, vlong off)
     return -1; // unreachable
 }
 @
+
+<<[[procread()]] cases>>=
+case Qkregs:
+    memset(&kur, 0, sizeof(Ureg));
+    arch_setkernur(&kur, p);
+    rptr = (byte*)&kur;
+    rsize = sizeof(Ureg);
+    goto regread;
+@
+<<function arch_setkernur(arm)>>=
+/* Give enough context in the ureg to produce a kernel stack for
+ * a sleeping process
+ */
+void
+arch_setkernur(Ureg* ureg, Proc* p)
+{
+    ureg->pc = p->sched.pc;
+    ureg->sp = p->sched.sp+4;
+    ureg->r14 = PTR2UINT(sched);
+}
+@
+
+
 
 <<method procwrite>>=
 static long
@@ -30088,34 +31856,66 @@ char    *sysname;
 @
 
 
-\subsection{[[/sys/reboot]] (arm)}
+\subsection{[[/sys/reboot]]}
 
-<<function main_arch_exit(arm)>>=
-/*
- *  exit kernel either on a panic or user request
- */
-void
-main_arch_exit(int code)
+<<devsys.c enum Qxxx cases>>=
+Qreboot,
+@
+
+<<[[sysdir]] fields>>=
+"reboot",   {Qreboot},  0,      0660,
+@
+
+<<devsys.c decls and globals>>=
+enum
 {
-    void (*f)(ulong, ulong, ulong);
+    CMhalt,
+    CMreboot,
+    CMpanic,
+};
 
-    shutdown(code);
-    splfhi();
-    if(cpu->cpuno == 0)
-        archreboot();
-    else{
-        f = (void*)REBOOTADDR;
-        intrcpushutdown();
-        cacheuwbinv();
-        l2cacheuwbinv();
-        (*f)(0, 0, 0);
-        for(;;){}
-    }
-}
+Cmdtab rebootmsg[] =
+{
+    CMhalt,     "halt",     1,
+    CMreboot,   "reboot",   0,
+    CMpanic,    "panic",    0,
+};
 @
 
 
+<<[[syswrite()]] locals>>=
+Cmdbuf *cb;
+Cmdtab *ct;
+@
 
+<<[[syswrite()]] cases>>=
+case Qreboot:
+    if(!iseve())
+        error(Eperm);
+    cb = parsecmd(a, n);
+
+    if(waserror()) {
+        free(cb);
+        nexterror();
+    }
+    ct = lookupcmd(cb, rebootmsg, nelem(rebootmsg));
+    switch(ct->index) {
+    case CMhalt:
+        arch_reboot(nil, 0, 0);
+        break;
+    case CMreboot:
+        rebootcmd(cb->nf-1, cb->f+1);
+        break;
+    case CMpanic:
+        *(ulong*)0=0;
+        panic("/dev/reboot");
+    }
+    poperror();
+    free(cb);
+    break;
+@
+
+% alternative to reboot: speciak keys
 <<[[kbdputsc()]] reboot if ctl-alt-del>>=
 if(kbscan->ctl)
     if(kbscan->alt && c == Del) // Ctl-Alt-Del
@@ -30147,6 +31947,61 @@ case 0x10:  /* ^P */
 bool ispanic;    /* shutdown in response to a panic */
 @
 
+
+
+% arch_reboot -> <>
+<<function chandevshutdown>>=
+void
+chandevshutdown(void)
+{
+    int i;
+    
+    /* shutdown in reverse order */
+    for(i=0; devtab[i] != nil; i++)
+        ;
+    for(i--; i >= 0; i--)
+        devtab[i]->shutdown();
+}
+@
+
+<<[[Dev]] methods>>=
+void  (*shutdown)(void);
+@
+% opposite of reset() and init()?
+
+\subsubsection{[[arch_exit()]](ARM)}
+
+% -> <>
+<<function main_arch_exit(arm)>>=
+/*
+ *  exit kernel either on a panic or user request
+ */
+void
+main_arch_exit(int code)
+{
+    void (*f)(ulong, ulong, ulong);
+
+    shutdown(code);
+    splfhi();
+    if(cpu->cpuno == 0)
+        archreboot();
+    else{
+        f = (void*)REBOOTADDR;
+        intrcpushutdown();
+        cacheuwbinv();
+        l2cacheuwbinv();
+        (*f)(0, 0, 0);
+        for(;;){}
+    }
+}
+@
+
+<<constant REBOOTADDR(arm)>>=
+/* address at which to copy and execute rebootcode */
+#define REBOOTADDR  (KZERO+0x1800)
+@
+
+
 <<function shutdown (init/arm/main.c)(arm)>>=
 static void
 shutdown(int ispanic)
@@ -30174,7 +32029,7 @@ shutdown(int ispanic)
     arch_delay(100*cpu->cpuno);
 }
 @
-
+% >> >> >> >> >>
 
 
 <<[[Active]] other fields>>=
@@ -30250,84 +32105,172 @@ arch_reboot(void *entry, void *code, ulong size)
 }
 @
 
-
-<<function chandevshutdown>>=
+<<function intrshutdown(arm)>>=
+/* called from cpu0 after other cpus are shutdown */
 void
-chandevshutdown(void)
+intrshutdown(void)
 {
-    int i;
-    
-    /* shutdown in reverse order */
-    for(i=0; devtab[i] != nil; i++)
-        ;
-    for(i--; i >= 0; i--)
-        devtab[i]->shutdown();
+    intrsoff();
+    intrcpushutdown();
 }
 @
 
-<<[[Dev]] methods>>=
-void  (*shutdown)(void);
-@
-% opposite of reset() and init()?
-
-
-<<devsys.c enum Qxxx cases>>=
-    Qreboot,
-@
-
-<<[[sysdir]] fields>>=
-    "reboot",   {Qreboot},  0,      0660,
-@
-
-<<devsys.c decls and globals>>=
-enum
+<<function clockshutdown(arm)>>=
+void
+clockshutdown(void)
 {
-    CMhalt,
-    CMreboot,
-    CMpanic,
-};
+    Armtimer *tm;
 
-Cmdtab rebootmsg[] =
+    tm = (Armtimer*)ARMTIMER;
+    tm->ctl = 0;
+    //wdogoff();
+}
+@
+
+<<function intrcpushutdown(arm)>>=
+void
+intrcpushutdown(void)
 {
-    CMhalt,     "halt",     1,
-    CMreboot,   "reboot",   0,
-    CMpanic,    "panic",    0,
-};
+    u32int *enable;
+
+    if(soc.armlocal == 0)
+        return;
+    enable = (u32int*)(LOCALREGS + Localtimerint) + cpu->cpuno;
+    *enable = 0;
+    if(cpu->cpuno){
+        enable = (u32int*)(LOCALREGS + Localmboxint) + cpu->cpuno;
+        *enable = 1;
+    }
+}
 @
 
 
-<<[[syswrite()]] locals>>=
-    Cmdbuf *cb;
-    Cmdtab *ct;
+\subsubsection{[[rebootcode.s]] (arm)}
+
+
+<<constant PTEDRAM(arm)>>=
+#define PTEDRAM     (Dom0|L1AP(Krw)|Section)
 @
 
-<<[[syswrite()]] cases>>=
-    case Qreboot:
-        if(!iseve())
-            error(Eperm);
-        cb = parsecmd(a, n);
-
-        if(waserror()) {
-            free(cb);
-            nexterror();
-        }
-        ct = lookupcmd(cb, rebootmsg, nelem(rebootmsg));
-        switch(ct->index) {
-        case CMhalt:
-            arch_reboot(nil, 0, 0);
-            break;
-        case CMreboot:
-            rebootcmd(cb->nf-1, cb->f+1);
-            break;
-        case CMpanic:
-            *(ulong*)0=0;
-            panic("/dev/reboot");
-        }
-        poperror();
-        free(cb);
-        break;
+<<instruction WFI(arm)>>=
+#define WFI WORD    $0xe320f003 /* wait for interrupt */
 @
+%$
 
+<<instruction WFE(arm)>>=
+#define WFE WORD    $0xe320f002 /* wait for event */
+@
+%$
+
+<<function main(rebootcode.s)(arm)>>=
+/*
+ * Turn off MMU, then copy the new kernel to its correct location
+ * in physical memory.  Then jump to the start of the kernel.
+ */
+
+/* main(PADDR(entry), PADDR(code), size); */
+TEXT    main(SB), 1, $-4
+    MOVW    $setR12(SB), R12
+
+    /* copy in arguments before stack gets unmapped */
+    MOVW    R0, R8          /* entry point */
+    MOVW    p2+4(FP), R9        /* source */
+    MOVW    n+8(FP), R6     /* byte count */
+
+    /* SVC mode, interrupts disabled */
+    MOVW    $(PsrDirq|PsrDfiq|PsrMsvc), R1
+    MOVW    R1, CPSR
+
+    /* prepare to turn off mmu  */
+    BL  cachesoff(SB)
+
+    /* turn off mmu */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    BIC $CpCmmu, R1
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+
+    /* continue with reboot only on cpu0 */
+    CPUID(R2)
+    BEQ bootcpu
+
+    /* other cpus wait for inter processor interrupt from cpu0 */
+    /* turn icache back on */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    ORR $(CpCicache), R1
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    BARRIERS
+dowfi:
+    WFI
+    MOVW    $0x40000060, R1
+    ADD     R2<<2, R1
+    MOVW    0(R1), R0
+    AND     $0x10, R0
+    BEQ     dowfi
+    MOVW    $0x8000, R1
+    BL      (R1)
+    B       dowfi
+
+bootcpu:
+    /* set up a tiny stack for local vars and memmove args */
+    MOVW    R8, SP          /* stack top just before kernel dest */
+    SUB $20, SP         /* allocate stack frame */
+
+    /* copy the kernel to final destination */
+    MOVW    R8, 16(SP)      /* save dest (entry point) */
+    MOVW    R8, R0          /* first arg is dest */
+    MOVW    R9, 8(SP)       /* push src */
+    MOVW    R6, 12(SP)      /* push size */
+    BL  memmove(SB)
+    MOVW    16(SP), R8      /* restore entry point */
+
+    /* jump to kernel physical entry point */
+    ORR R8,R8
+    B   (R8)
+    B   0(PC)
+
+/*
+ * turn the caches off, double map PHYSDRAM & KZERO, invalidate TLBs, revert
+ * to tiny addresses.  upon return, it will be safe to turn off the mmu.
+ * clobbers R0-R2, and returns with SP invalid.
+ */
+TEXT cachesoff(SB), 1, $-4
+    MOVM.DB.W [R14,R1-R10], (R13)       /* save regs on stack */
+
+    /* turn caches off, invalidate icache */
+    MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    BIC $(CpCdcache|CpCicache|CpCpredict), R1
+    MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvi), CpCACHEall
+
+    /* invalidate stale TLBs before changing them */
+    BARRIERS
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+    BARRIERS
+
+    /* redo double map of first MiB PHYSDRAM = KZERO */
+    MOVW    12(R(CPU)), R2      /* m->mmul1 (virtual addr) */
+    MOVW    $PTEDRAM, R1            /* PTE bits */
+    MOVW    R1, (R2)
+
+    /* invalidate stale TLBs again */
+    BARRIERS
+    MOVW    $0, R0
+    MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
+    BARRIERS
+
+    /* relocate SB and return address to PHYSDRAM addressing */
+    MOVW    $KSEGM, R1      /* clear segment bits */
+    BIC R1, R12         /* adjust SB */
+    MOVM.IA.W (R13), [R14,R1-R10]       /* restore regs from stack */
+
+    MOVW    $KSEGM, R1      /* clear segment bits */
+    BIC R1, R14         /* adjust return address */
+
+    RET
+@
+%$
 
 
 %\subsection{[[/sys/xxx]]}
@@ -31004,6 +32947,80 @@ dumpregs(Ureg* ureg)
 }
 @
 
+<<function dumplongs(arm)>>=
+static void
+dumplongs(char *msg, ulong *v, int n)
+{
+    int i, l;
+
+    l = 0;
+    iprint("%s at %.8p: ", msg, v);
+    for(i=0; i<n; i++){
+        if(l >= 4){
+            iprint("\n    %.8p: ", v);
+            l = 0;
+        }
+        if(isvalidaddr(v)){
+            iprint(" %.8lux", *v++);
+            l++;
+        }else{
+            iprint(" invalid");
+            break;
+        }
+    }
+    iprint("\n");
+}
+@
+
+<<function isvalidaddr(arm)>>=
+int
+isvalidaddr(void *v)
+{
+    return (uintptr)v >= KZERO;
+}
+@
+
+<<function trapname(arm)>>=
+static char *
+trapname(int psr)
+{
+    char *s;
+
+    s = trapnames[psr & PsrMask];
+    if(s == nil)
+        s = "unknown trap number in psr";
+    return s;
+}
+@
+
+<<[[faultarm()]] if debug>>=
+if (Debug)
+    ckfaultstuck(va);
+@
+
+<<function ckfaultstuck(arm)>>=
+/* this is quite helpful during mmu and cache debugging */
+static void
+ckfaultstuck(uintptr va)
+{
+    static int cnt, lastpid;
+    static uintptr lastva;
+
+    if (va == lastva && up->pid == lastpid) {
+        ++cnt;
+        if (cnt >= 2)
+            /* fault() isn't fixing the underlying cause */
+            panic("fault: %d consecutive faults for va %#p",
+                cnt+1, va);
+    } else {
+        cnt = 0;
+        lastva = va;
+        lastpid = up->pid;
+    }
+}
+@
+
+
 
 %//unused:
 %//static void
@@ -31088,6 +33105,19 @@ arch_callwithureg(void (*fn)(Ureg*))
     getpcsp((ulong*)&ureg.pc, (ulong*)&ureg.sp);
     ureg.r14 = getcallerpc(&fn);
     fn(&ureg);
+}
+@
+
+<<function getpcsp(arm)>>=
+/*
+ * Fill in enough of Ureg to get a stack trace, and call a function.
+ * Used by debugging interface rdb.
+ */
+static void
+getpcsp(ulong *pc, ulong *sp)
+{
+    *pc = getcallerpc(&pc);
+    *sp = (ulong)&pc-4;
 }
 @
 
@@ -31582,6 +33612,20 @@ arch_perfticks(void)
     tm = (Armtimer*)ARMTIMER;
     return tm->count;
 }
+@
+
+<<struct Armtimer(arm)>>=
+struct Armtimer {
+    u32int  load;
+    u32int  val;
+    u32int  ctl;
+    u32int  irqack;
+    u32int  irq;
+    u32int  maskedirq;
+    u32int  reload;
+    u32int  predivider;
+    u32int  count;
+};
 @
 
 

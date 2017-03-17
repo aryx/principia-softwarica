@@ -10,10 +10,8 @@
 #include "dat.h"
 #include "fns.h"
 /*e: kernel basic includes */
-
 #include "io.h"
 #include "ureg.h"
-
 #include "arm.h"
 
 /*s: constant INTREGS(arm) */
@@ -34,11 +32,19 @@ enum {
     /*s: constant Nvec(arm) */
     Nvec = 8,       /* # of vectors at start of lexception.s */
     /*e: constant Nvec(arm) */
+    /*s: constant Fiqenable(arm) */
     Fiqenable = 1<<7,
+    /*e: constant Fiqenable(arm) */
 
+    /*s: constant Localtimerint(arm) */
     Localtimerint   = 0x40,
+    /*e: constant Localtimerint(arm) */
+    /*s: constant Localmboxint(arm) */
     Localmboxint    = 0x50,
+    /*e: constant Localmboxint(arm) */
+    /*s: constant Localintpending(arm) */
     Localintpending = 0x60,
+    /*e: constant Localintpending(arm) */
 };
 /*e: enum _anon_ (interrupts/arm/trap.c)(arm) */
 
@@ -140,10 +146,13 @@ arch_trapinit(void)
     }
 
     /* set up the stacks for the interrupt modes */
-    setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
+    /*s: [[arch_trapinit()]] set stack for other exception/processor-modes */
     setr13(PsrMirq, cpu->sirq);
     setr13(PsrMabt, cpu->sabt);
     setr13(PsrMund, cpu->sund);
+    /*x: [[arch_trapinit()]] set stack for other exception/processor-modes */
+    setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
+    /*e: [[arch_trapinit()]] set stack for other exception/processor-modes */
 
     arch_coherence();
 }
@@ -310,8 +319,10 @@ irqenable(int irq, void (*f)(Ureg*, void*), void* a)
     lock(&vctllock);
     /*s: [[irqenable()]] if IRQfiq(arm) */
     if(irq == IRQfiq){
+        /*s: [[irqenable()]] sanity check no previous FIQ(arm) */
         assert((ip->FIQctl & Fiqenable) == 0);
         assert((*enable & v->mask) == 0);
+        /*e: [[irqenable()]] sanity check no previous FIQ(arm) */
         vfiq = v;
         ip->FIQctl = Fiqenable | irq;
     }
@@ -382,9 +393,10 @@ faultarm(Ureg *ureg, uintptr va, int user, bool read)
     }
     insyscall = up->insyscall;
     up->insyscall = true; // ???
+    /*s: [[faultarm()]] if debug */
     if (Debug)
         ckfaultstuck(va);
-
+    /*e: [[faultarm()]] if debug */
     n = fault(va, read); // portable code
 
     if(n < 0){
@@ -734,7 +746,6 @@ dumpstackwithureg(Ureg *ureg)
  * Fill in enough of Ureg to get a stack trace, and call a function.
  * Used by debugging interface rdb.
  */
-
 static void
 getpcsp(ulong *pc, ulong *sp)
 {

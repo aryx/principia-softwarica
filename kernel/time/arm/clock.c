@@ -21,10 +21,8 @@
 #include "dat.h"
 #include "fns.h"
 /*e: kernel basic includes */
-
 #include "io.h"
 #include "ureg.h"
-
 #include "arm.h"
 
 /*s: constant SYSTIMERS(arm) */
@@ -40,14 +38,23 @@
 
 /*s: enum _anon_ (time/arm/clock.c)(arm) */
 enum {
+    /*s: constant Localctl(arm) */
     Localctl    = 0x00,
+    /*e: constant Localctl(arm) */
+    /*s: constant Prescaler(arm) */
     Prescaler   = 0x08,
-    Localintpending = 0x60,
+    /*e: constant Prescaler(arm) */
 
+    /*s: constant SystimerFreq(arm) */
     SystimerFreq    = 1*Mhz,
-    MaxPeriod   = SystimerFreq / Arch_HZ,
-    MinPeriod   = SystimerFreq / (100*Arch_HZ),
+    /*e: constant SystimerFreq(arm) */
 
+    /*s: constant MaxPeriod(arm) */
+    MaxPeriod   = SystimerFreq / Arch_HZ,
+    /*e: constant MaxPeriod(arm) */
+    /*s: constant MinPeriod(arm) */
+    MinPeriod   = SystimerFreq / (100*Arch_HZ),
+    /*e: constant MinPeriod(arm) */
 };
 /*e: enum _anon_ (time/arm/clock.c)(arm) */
 
@@ -146,6 +153,7 @@ clockinit(void)
     Armtimer *tm;
     u32int t0, t1, tstart, tend;
 
+    /*s: [[clockinit()]] if many processors */
     if(((cprdsc(0, CpID, CpIDfeat, 1) >> 16) & 0xF) != 0) {
         /* generic timer supported */
         if(cpu->cpuno == 0){
@@ -154,6 +162,7 @@ clockinit(void)
         }
         cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask);
     }
+    /*e: [[clockinit()]] if many processors */
 
     tn = (Systimers*)SYSTIMERS;
     tstart = tn->clo;
@@ -174,8 +183,11 @@ clockinit(void)
         tm->load = 0;
         tm->ctl = TmrPrescale1|CntEnable|CntWidth32;
         arch_intrenable(IRQtimer3, clockintr, nil, 0, "clock");
-    }else
+    }
+    /*s: [[clockinit()]] if not cpu0 */
+    else
         arch_intrenable(IRQcntpns, localclockintr, nil, 0, "clock");
+    /*e: [[clockinit()]] if not cpu0 */
 }
 /*e: function clockinit(arm) */
 
@@ -193,10 +205,13 @@ arch_timerset(Tval next)
         period = MinPeriod;
     else if(period > MaxPeriod)
         period = MaxPeriod;
+    /*s: [[arch_timerset()]] if not cpu0 */
     if(cpu->cpuno > 0){
         cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
         cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
-    }else{
+    }
+    /*e: [[arch_timerset()]] if not cpu0 */
+    else{
         tn = (Systimers*)SYSTIMERS;
         tn->c3 = (ulong)(now + period);
     }
@@ -260,8 +275,10 @@ armtimerset(int n)
 ulong
 arch_us(void)
 {
+    /*s: [[arch_us()]] if non-standard systimer frequency */
     if(SystimerFreq != 1*Mhz)
         return fastticks2us(arch_fastticks(nil));
+    /*e: [[arch_us()]] if non-standard systimer frequency */
     return arch_fastticks(nil);
 }
 /*e: function arch_us(arm) */

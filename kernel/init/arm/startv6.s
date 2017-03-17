@@ -71,12 +71,13 @@ _ramZ:
 /*s: function _startpg(raspberry pi1)(arm) */
 TEXT _startpg(SB), 1, $-4
 
+    /*s: [[_startpg()]] enable cycle counter(raspberry pi1)(arm) */
     /*
      * enable cycle counter
      */
     MOVW    $1, R1
     MCR CpSC, 0, R1, C(CpSPM), C(CpSPMperf), CpSPMctl // Not CpSPMcyc??
-
+    /*e: [[_startpg()]] enable cycle counter(raspberry pi1)(arm) */
     /*
      * call main and loop forever if it returns
      */
