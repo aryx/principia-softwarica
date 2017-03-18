@@ -6,6 +6,7 @@ struct Soc {            /* SoC dependent configuration */
     uintptr physio;
     /*s: [[Soc]] bus fields */
     uintptr busdram;
+    /*x: [[Soc]] bus fields */
     uintptr busio;
     /*e: [[Soc]] bus fields */
     /*s: [[Soc]] mmu fields */

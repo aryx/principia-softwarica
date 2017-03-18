@@ -83,6 +83,7 @@ enum {
 
 /*s: struct Fbinfo(arm) */
 // Framebuffer
+// The order matters! the fields match the memory-mapped external registers.
 struct Fbinfo {
     u32int  xres;
     u32int  yres;

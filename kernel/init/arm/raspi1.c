@@ -22,13 +22,14 @@ Soc soc = {
     .dramsize   = 512*MiB,    // 0 to 0x20000000
     .physio     = 0x20000000, // after RAM
     /*s: [[soc(raspberry pi1)]] other fields(arm) */
-    .busdram    = 0x40000000,
-    .busio      = 0x7E000000,
-    /*x: [[soc(raspberry pi1)]] other fields(arm) */
     .l1ptedramattrs = Cached | Buffered,
     .l2ptedramattrs = Cached | Buffered,
     /*x: [[soc(raspberry pi1)]] other fields(arm) */
     .armlocal   = 0,
+    /*x: [[soc(raspberry pi1)]] other fields(arm) */
+    .busdram    = 0x40000000,
+    /*x: [[soc(raspberry pi1)]] other fields(arm) */
+    .busio      = 0x7E000000,
     /*e: [[soc(raspberry pi1)]] other fields(arm) */
 };
 /*e: global soc(raspberry pi1)(arm) */

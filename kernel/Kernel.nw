@@ -12,12 +12,12 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, I changed for the better a few things :)
-% - removed deadcode (e.g. Proc.qlock, semalock, Arch_Conf, etc)
+% - removed deadcode (e.g. Proc.qlock, semalock, Arch_Conf, etc.)
 % - moved code in init/user such as preboot vs boot vs init
 % - introduced syssema.c (found while going through Kernel_extra.nw)
 % - introduced notion of IPC and time and interrupt (changed files accordingly)
 % - better grouping of things in devcons.c, present together the Qxxx,
-%   same for /proc/ and its many uses
+%   same for devproc.c and its many uses
 % - boolified, typeified, ...
 % - add some arch_ and Arch_ prefix to see more cleary what are the
 %   arch-specific callbacks or structures
@@ -542,6 +542,7 @@ provides to the user programs.
 @
 % alarm very useful, e.g. for timeout in a program
 % SLEEP is also for sleep/wakeup and synchronization?
+\t nsec?
 
 <<[[sys.h]] ipc syscalls>>=
 #define	PIPE		26
@@ -657,6 +658,9 @@ provides to the user programs.
 \subsection{ARM CPU}
 
 % ARM processor (far simpler than x86, great for our teaching purpose).
+% arm1176jzf-s processor
+% armv6 instruction set.
+
 % Most popular archi in smartphones. Most popular archi in number of devices.
 % More than x86!
 
@@ -674,6 +678,7 @@ provides to the user programs.
 <<constant BY2WD(arm)>>=
 #define BY2WD       4
 @
+%ARM 32 bits
 <<constant BY2V(arm)>>=
 #define BY2V        8           /* only used in xalloc.c */
 @
@@ -814,7 +819,7 @@ TEXT getcallerpc(SB), 1, $-4
 
 %later: banked (shadow) registers.
 % so no need save R14, R13
-% For FIQ also have shadow R8-R12
+%(for FIQ also have shadow R8-R12)
 
 %later: CPSR and SPSR.
 
@@ -972,6 +977,7 @@ TEXT getcallerpc(SB), 1, $-4
 
 <<struct Fbinfo(arm)>>=
 // Framebuffer
+// The order matters! the fields match the memory-mapped external registers.
 struct Fbinfo {
     u32int  xres;
     u32int  yres;
@@ -1018,11 +1024,11 @@ struct Fbinfo {
 %max below is 0x7E0000000 + 300000 so still lots of space before 4Go.
 %The +0x... is defined by the hardware. Normally PHYSIO+0x... but
 % we map PHYSIO to VIRTIO so VIRTIO+0x...
+% VIRTIO+IOSIZE = KZERO? no, ARMLOCAL, so still space before KZERO?
 
 <<constant SYSTIMERS(arm)>>=
 #define SYSTIMERS (VIRTIO+0x3000)
 @
-\t vs CpTIMER? aspectize one?
 <<constant ARMTIMER(arm)>>=
 #define ARMTIMER (VIRTIO+0xB400)
 @
@@ -1477,6 +1483,7 @@ void (*arch_microdelay)(int) = nil;
 
 
 <<[[main()]] initial assignments for backward deps(arm)>>=
+// initial assignments to avoid circular dependencies in codegraph
 // backward deps breaker!
 devtab = conf_devtab;
 
@@ -1569,6 +1576,8 @@ arch_isaconfig = main_arch_isaconfig;
 %   and even per-process kernel stack kstack, user stack, main kernel stack
 % - dynamic vs static (the static allocator so can bootstrap things)
 
+% see kernel/docs/arm/readme.txt
+% Also add Framebuffer in it?
 
 %figure: need precise physical map of memory
 %with first empty page?, 
@@ -1856,7 +1865,8 @@ struct Conf
 };
 @ 
 %old: 'ulong monitor;'
-\t nproc used? have proc arena anyway no?
+\l nproc used? have proc arena anyway no? yes it is used because we
+\l do not allocate too many Proc in confinit.
 %// TODO arm 
 %//	ulong	hz;		/* processor cycle freq */
 %//	ulong	mhz;
@@ -2011,6 +2021,7 @@ struct Arch_Cpu {
 extern register Cpu* cpu;           /* R10 */
 @
 %x86: differs in different archi!
+
 
 %old: was called [[m]]
 % (arm) because different in different archi. Can afford to use register
@@ -2399,20 +2410,6 @@ Soc soc = {
 @
 % soc.physio maps then to VIRTIO in mmuinit.
 
-%XXX
-<<[[Soc]] bus fields>>=
-uintptr busdram;
-uintptr busio;
-@
-% as seen from GPU? vs as seen from CPU?
-<<[[soc(raspberry pi1)]] other fields(arm)>>=
-.busdram    = 0x40000000,
-.busio      = 0x7E000000,
-@
-\t mv later? rename .busio to virtio?
-%???
-
-
 
 
 
@@ -2524,7 +2521,7 @@ TEXT arch_spllo(SB), 1, $-4
     RET
 @
 %BIC?
-%FIQ will be explained later in Section~\ref{sec:fiq}
+
 
 <<function arch_spllx(arm)>>=
 // void    arch_splx(bool);
@@ -2548,7 +2545,6 @@ TEXT arch_islo(SB), 1, $-4
 @
 %$
 
-% See also arch_splfhi and arch_splflo in Section~\ref{sec:fiq}.
 
 
 
@@ -5740,7 +5736,7 @@ arch_forkchild(Proc *p, Ureg *ureg)
 @
 %x86: does not use R0 to return from syscall so need extra space in kstack
 %//print("%lud setting up for forking child %lud\n", up->pid, p->pid);
-\t aspectize float
+
 
 % sched? -> <> (as p->sched.pc <- arch_forkchild)
 <<function arch_forkret(arm)>>=
@@ -6761,8 +6757,6 @@ TEXT vtable(SB), 1, $-4
 <<constant CPU(arm)>>=
 #define CPU     10      /* R10 is cpu-> */
 @
-
-
 <<constant UP(arm)>>=
 #define UP      9       /* R9 is up-> */
 @
@@ -6791,13 +6785,7 @@ TEXT _vsvc(SB), 1, $-4          /* SWI */
     MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
 
     /* get R(CPU) for this cpu */
-    CPUID(R1)
-    SLL $2, R1          /* convert to word index */
-    MOVW    $cpus(SB), R2
-    ADD R1, R2
-    MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
-    CMP $0, R(CPU)
-    MOVW.EQ $CPUADDR, R0        /* paranoia: use CPUADDR if 0 */
+    <<[[_vsvc()]] set cpu register(arm)>>
 
     MOVW    8(R(CPU)), R(UP)        /* up */ // Cpu->proc
 
@@ -7064,13 +7052,7 @@ _userexcep:
     MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
 
     /* get R(CPU) for this cpu */
-    CPUID(R1)
-    SLL $2, R1          /* convert to word index */
-    MOVW    $cpus(SB), R2
-    ADD R1, R2
-    MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
-    CMP $0, R(CPU)
-    MOVW.EQ $CPUADDR, R(CPU)        /* paranoia: use CPUADDR if 0 */
+    <<[[_vswitch()]] set cpu register(arm)>>
 
     MOVW    8(R(CPU)), R(UP)        /* up */
 
@@ -7475,9 +7457,9 @@ case 0x18:      /* imprecise parity or ecc err */
 
 <<enum IRQ(arm)>>=
 enum IRQ {
-    IRQtimer0   = 0,
-    IRQtimer1   = 1,
-    IRQtimer2   = 2,
+    IRQtimer0   = 0, // reserved by GPU?
+    IRQtimer1   = 1, // reserved by GPU?
+    IRQtimer2   = 2, // reserved by GPU?
     IRQtimer3   = 3,
 
     IRQclock    = IRQtimer3,
@@ -7552,13 +7534,16 @@ static Lock vctllock;
 /*
  * interrupt control registers
  */
-// The order matters! the fields match the hardware memory mapped-IO.
+// The order matters! the fields match the memory-mapped external registers.
 struct Intregs {
     u32int  ARMpending;
     u32int  GPUpending[2];
+
     u32int  FIQctl;
+
     u32int  GPUenable[2];
     u32int  ARMenable;
+
     u32int  GPUdisable[2];
     u32int  ARMdisable;
 };
@@ -7685,7 +7670,7 @@ irq(Ureg* ureg)
 %x86: has also segmentation, but not that useful
 
 % different levels:
-% - hardware:  TLB, mmupd+mmupt (called L1/L2 on ARM)
+% - hardware:  TLB, mmupd+mmupt (called originally L1/L2 on bcm/)
 % - software: Segment itself have pagedir, pagetab,
 %   and Cpu has pdproto, and Proc has mmupd ... 
 % => complex.
@@ -7701,6 +7686,7 @@ irq(Ureg* ureg)
 
 % L1 = PD
 % L2 = PT
+%pad: rename cos confusing with L1/L2 instruction/data cache of machine
 
 <<macro L1X(arm)>>=
 #define L1X(va)     FEXT((va), 20, 12)
@@ -11220,8 +11206,25 @@ preempt(void)
 @
 % 100 per second so every 10ms.
 
+% See comment in clock.c
+%/*
+% * bcm283[56] timers
+% *  System timers run at 1MHz (timers 1 and 2 are used by GPU)
+% *  ARM timer usually runs at 250MHz (may be slower in low power modes)
+% *  Cycle counter runs at 700MHz (unless overclocked)
+% *    All are free-running up-counters
+% *  Cortex-a7 has local generic timers per cpu (which we run at 1MHz)
+% *
+% * Use system timer 3 (64 bits) for hzclock interrupts and fastticks
+% *   For smp on bcm2836, use local generic timer for interrupts on cpu1-3
+% * Use ARM timer (32 bits) for perfticks
+% * Use ARM timer to force immediate interrupt
+% * Use cycle counter for cycles()
+% */
+
 % at SYSTIMERS VIRTIO
 <<struct Systimers(arm)>>=
+// The order matters! the fields match the memory-mapped external registers.
 struct Systimers {
     u32int  cs;
     u32int  clo;
@@ -11235,6 +11238,7 @@ struct Systimers {
 @
 % Raspberry Pi has 4 timers, 4 IRQs.
 
+% see clockinit() later.
 
 % set by clockinit to IRQ3
 <<function clockintr(arm)>>=
@@ -11278,7 +11282,7 @@ hzclock(Ureg *ur)
     if(kproftimer != nil)
         kproftimer(ur->pc);
 
-    if((active.cpus&(1<<cpu->cpuno)) == 0)
+    if((active.cpus & (1<<cpu->cpuno)) == 0)
         return;
 
     if(active.exiting) {
@@ -11598,32 +11602,24 @@ TEXT _startpg(SB), 1, $-4
 
 \section{Kernel initialization (arm)}
 
-
 <<function main(arm)>>=
 void
 main(void)
 {
     <<[[main()]] locals(arm)>>
 
-    // initial assignment made to avoid circular dependencies in codegraph
     <<[[main()]] initial assignments for backward deps(arm)>>
+
+    <<[[main()]] clear bss(arm)>>
 
     // Let's go!
 
     cpu = (Cpu*)CPUADDR;
-
-    <<[[main()]] clear bss(arm)>>
-
     cpu0init(); // cpu0 initialization (calls cpuinit())
-    mmuinit1((void*)L1); // finish mmu initialization after mmuinit0
+    mmuinit1((void*)L1); // finish mmu initialization started in mmuinit0
+    machon(0); // enable cpu0 for scheduling
 
-    machon(0);
-
-    //optionsinit("/boot/boot boot"); // setup values for getconf() 
-    //ataginit((Atag*)BOOTARGS); // from bootloader config
-    // example of manual config:
-    // TODO confname(``console'') = 1?
-
+    <<[[main()]] parsing options and boot arguments(arm)>>
     confinit();     /* figures out amount of memory */
     xinit();
 
@@ -11644,7 +11640,7 @@ main(void)
     //TODO? kbdqinit(); // setup kbdq
     lineqinit(); // setup lineq
     timersinit();
-    swcursor_init(); //if(conf.monitor)
+    swcursor_init();
 
     arch_cpuidprint();
     archreset();
@@ -11663,7 +11659,7 @@ main(void)
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
 
-    launchinit(getncpus());
+    <<[[main()]] start the other processors(arm)>>
 
     // schedule the only ready user process (the one created by userinit)
     schedinit();
@@ -11671,8 +11667,19 @@ main(void)
     assert(0);          /* shouldn't have returned */
 }
 @
+%old:  if(conf.monitor)  swcursor_init(); 
 
 
+<<[[main()]] clear bss(arm)>>=
+memset(edata, 0, end - edata);  /* clear bss */
+@
+%x86: done in assembly before the call to main
+<<lib.h exxx decl>>=
+extern  char  etext[];
+//@Scheck: Assembly, not dead used by 386/l.s and arm/main.c
+extern  char  edata[];
+extern  char  end[];
+@ 
 
 \subsection{[[cpu]] initialization (arm)}
 
@@ -11680,7 +11687,7 @@ main(void)
 void
 cpu0init(void)
 {
-    conf.ncpu = 0; // set in machon() instead (machon() called after cpuinit)
+    conf.ncpu = 0; // set in machon() instead (machon() is called after cpuinit)
 
     cpu->cpuno = 0;
     cpus[cpu->cpuno] = cpu;
@@ -11702,17 +11709,13 @@ cpuinit(void)
     cpu->perf.period = 1;
 
     m0 = CPUS(0);
-    if (cpu->cpuno != 0) {
-        /* synchronise with cpu 0 */
-        cpu->ticks = m0->ticks;
-        cpu->fastclock = m0->fastclock;
-    }
-    //machon(m->cpuno);
+    <<[[cpuinit()]] it not cpu0>>
 }
 @
+% done later:   //machon(m->cpuno);
 %dead:        cpu->delayloop = m0->delayloop;
 
-
+% now wait that mmuinit1 has been called.
 <<function machon(arm)>>=
 /* enable scheduling of this cpu */
 void
@@ -11753,58 +11756,6 @@ cputype2name(char *buf, int size)
 @
 
 
-<<function getncpus(raspberry pi1)(arm)>>=
-int
-getncpus(void)
-{
-    return 1;
-}
-@
-
-<<constant L1SIZE(arm)>>=
-#define L1SIZE      (4 * BY2PG)
-@
-%16K
-
-<<function launchinit(arm)>>=
-void
-launchinit(int ncpus)
-{
-    int mach;
-    Cpu *mm;
-    PTE *l1;
-
-    if(ncpus > MAXCPUS)
-        ncpus = MAXCPUS;
-    for(mach = 1; mach < ncpus; mach++){
-        cpus[mach] = mm = mallocalign(CPUSIZE, CPUSIZE, 0, 0);
-        l1 = mallocalign(L1SIZE, L1SIZE, 0, 0);
-        if(mm == nil || l1 == nil)
-            panic("launchinit");
-        memset(mm, 0, CPUSIZE);
-        mm->cpuno = mach;
-
-        memmove(l1, cpu->mmul1, L1SIZE);  /* clone cpu0's l1 table */
-        cachedwbse(l1, L1SIZE);
-        mm->mmul1 = l1;
-        cachedwbse(mm, CPUSIZE);
-
-    }
-    cachedwbse(cpus, sizeof cpus);
-    if((mach = startcpus(ncpus)) < ncpus)
-            panic("only %d cpu%s started", mach, mach == 1? "" : "s");
-}
-@
-
-<<function startcpus(raspberry pi1)(arm)>>=
-int
-startcpus(uint)
-{
-    return 1;
-}
-@
-
-
 %\subsection{CPU detection (arm)}
 % hardcoded in mkfile, either pi or pi2
 
@@ -11832,6 +11783,13 @@ getramsize(Confmem *mem)
 
 
 \subsection{[[conf]] initialization (arm)}
+
+<<[[main()]] parsing options and boot arguments(arm)>>=
+//optionsinit("/boot/boot boot"); // setup values for getconf() 
+//ataginit((Atag*)BOOTARGS); // from bootloader config
+// example of manual config:
+// TODO confname(``console'') = 1?
+@
 
 % already set conf.ncpu (but to 1), and conf.mem[] normally
 
@@ -11979,6 +11937,7 @@ arch_trapinit(void)
         vpage0 = (Vpage0*)HVECTORS;
         memmove(vpage0->vectors, vectors, sizeof(vpage0->vectors));
         memmove(vpage0->vtable, vtable, sizeof(vpage0->vtable));
+
         cacheuwbinv();
         l2cacheuwbinv();
     }
@@ -12070,9 +12029,12 @@ clockinit(void)
         t1 = arch_lcycles();
     }while(tn->clo != tend);
     t1 -= t0;
+
     cpu->cpuhz = 100 * t1;
     cpu->cpumhz = (cpu->cpuhz + Mhz/2 - 1) / Mhz;
+
     cpu->cyclefreq = cpu->cpuhz;
+
     if(cpu->cpuno == 0){
         tn->c3 = tn->clo - 1;
         tm = (Armtimer*)ARMTIMER;
@@ -12083,8 +12045,10 @@ clockinit(void)
     <<[[clockinit()]] if not cpu0>>
 }
 @
+% so will generate at Arch_HZ ?
 
 \subsection{Virtual memory initialisation (arm)}
+% part 2
 
 <<function mmuinit1(arm)>>=
 void
@@ -12099,8 +12063,8 @@ mmuinit1(void *a)
      * undo identity map of first MB of ram
      */
     l1[L1X(0)] = 0;
-    cachedwbse(&l1[L1X(0)], sizeof(PTE));
 
+    cachedwbse(&l1[L1X(0)], sizeof(PTE));
     mmuinvalidateaddr(0);
 }
 @
@@ -12315,18 +12279,8 @@ chandevreset(void)
 <<[[Dev]] methods>>=
 void  (*reset)(void); // done once at boot time
 @
-\subsection{XXX}
 
-<<[[main()]] clear bss(arm)>>=
-memset(edata, 0, end - edata);  /* clear bss */
-@
-%x86: done in assembly before the call to main
-<<lib.h exxx decl>>=
-extern  char  etext[];
-//@Scheck: Assembly, not dead used by 386/l.s and arm/main.c
-extern  char  edata[];
-extern  char  end[];
-@ 
+\subsection{Displaying hardware information}
 
 <<[[main()]] locals(arm)>>=
 uint firmware, board;
@@ -17327,7 +17281,7 @@ dirfixed(byte *p, byte *e, DirEntry *d)
 
 
 \chapter{Devices}
-%could add (ARM)
+%less: (ARM) in title
 %less: Keyboard/Screen sections before File/Dir/Namespace sections? hmmm hard.
 
 % We will only see a few drivers. Drivers actually are biggest part of
@@ -17862,6 +17816,7 @@ if(screenputs != nil)
 void    (*screenputs)(char*, int) = nil;
 @ 
 % see later set to cgascreenputs
+%update: set to swconsole_screenputs which use framebuffer and libmemdraw!
 
 <<function echoscreen>>=
 static void
@@ -17967,6 +17922,8 @@ kbdputmap(ushort m, ushort scanc, Rune r)
 #define VCBUFFER    (KZERO+0x3400)      /* videocore mailbox buffer */
 @
 % yet another way to access external stuff? at physical 0x3400??
+
+% FRAMEBUFFER also!
 
 % arch_screeninit in Graphics.nw
 %    screenputs = swconsole_screenputs;
@@ -18150,58 +18107,58 @@ lineqinit(void)
 %old: was called printinit
 
 <<[[ConsKbd]] other fields>>=
-    char    line[1024]; /* current input line */
-    int x;      /* index into line */
+char    line[1024]; /* current input line */
+int x;      /* index into line */
 @
 
 %!!! this is an important one!
 <<[[consread()]] Qcons case>>=
-    case Qcons:
-        qlock(&kbd);
-        if(waserror()) {
-            qunlock(&kbd);
-            nexterror();
-        }
-        while(!qcanread(lineq)){
-            if(qread(kbdq, &ch, 1) == 0)
-                continue;
-            send = false;
-            if(ch == 0){
-                /* flush output on rawoff -> rawon */
-                if(kbd.x > 0)
-                    send = !qcanread(kbdq);
-            
-            <<[[consread()]] else if raw mode>>
-            }else{
-                switch(ch){
-                case '\b':
-                    if(kbd.x > 0)
-                        kbd.x--;
-                    break;
-                case 0x15:  /* ^U */
-                    kbd.x = 0;
-                    break;
-                case '\n':
-                    send = true;
-                    kbd.line[kbd.x++] = ch;
-                    break;
-                case 0x04:  /* ^D */
-                    send = true;
-                    break;
-                default:
-                    kbd.line[kbd.x++] = ch;
-                    break;
-                }
-            }
-            if(send || kbd.x == sizeof kbd.line){
-                qwrite(lineq, kbd.line, kbd.x);
-                kbd.x = 0;
-            }
-        }
-        n = qread(lineq, buf, n);
+case Qcons:
+    qlock(&kbd);
+    if(waserror()) {
         qunlock(&kbd);
-        poperror();
-        return n;
+        nexterror();
+    }
+    while(!qcanread(lineq)){
+        if(qread(kbdq, &ch, 1) == 0)
+            continue;
+        send = false;
+        if(ch == 0){
+            /* flush output on rawoff -> rawon */
+            if(kbd.x > 0)
+                send = !qcanread(kbdq);
+        
+        <<[[consread()]] else if raw mode>>
+        }else{
+            switch(ch){
+            case '\b':
+                if(kbd.x > 0)
+                    kbd.x--;
+                break;
+            case 0x15:  /* ^U */
+                kbd.x = 0;
+                break;
+            case '\n':
+                send = true;
+                kbd.line[kbd.x++] = ch;
+                break;
+            case 0x04:  /* ^D */
+                send = true;
+                break;
+            default:
+                kbd.line[kbd.x++] = ch;
+                break;
+            }
+        }
+        if(send || kbd.x == sizeof kbd.line){
+            qwrite(lineq, kbd.line, kbd.x);
+            kbd.x = 0;
+        }
+    }
+    n = qread(lineq, buf, n);
+    qunlock(&kbd);
+    poperror();
+    return n;
 @
 
 
@@ -18219,21 +18176,21 @@ lineqinit(void)
 
 %!!! this is an important one!
 <<[[conswrite()]] Qcons case>>=
-    case Qcons:
-        /*
-         * Can't page fault in putstrn, so copy the data locally.
-         */
-        l = n;
-        while(l > 0){
-            bp = l;
-            if(bp > sizeof buf)
-                bp = sizeof buf;
-            memmove(buf, a, bp);
-            putstrn0(buf, bp, 1);
-            a += bp;
-            l -= bp;
-        }
-        break;
+case Qcons:
+    /*
+     * Can't page fault in putstrn, so copy the data locally.
+     */
+    l = n;
+    while(l > 0){
+        bp = l;
+        if(bp > sizeof buf)
+            bp = sizeof buf;
+        memmove(buf, a, bp);
+        putstrn0(buf, bp, 1);
+        a += bp;
+        l -= bp;
+    }
+    break;
 @
 
 <<function putstrn0>>=
@@ -18703,6 +18660,8 @@ case Kmouse|5:
 
 
 % see also devpipe.c and devdup.c, devmnt.c, devsrv.c
+
+
 
 
 \chapter{[[Queue]]}
@@ -21320,6 +21279,7 @@ bl2mem(byte *p, Block *b, int n)
 
 \section{XTODO}
 
+%XXX
 <<[[Qidtype]] cases>>=
 QTAUTH = 0x08,    /* type bit for authentication file */
 QTAPPEND = 0x40,    /* type bit for append only files */
@@ -21797,7 +21757,7 @@ timerintr(Ureg *u, Tval)
 @ 
 
 <<constant Maxtimerloops>>=
-    Maxtimerloops = 20*1000,
+Maxtimerloops = 20*1000,
 @
 
 \subsection{Clock callbacks, [[addclock0link()]]}
@@ -22539,6 +22499,7 @@ le2long(long *to, byte *f)
 
 
 \section{Watchdog}
+
 % used in raspberry PI
 % useful automatic reboot when something get completely stuck?
 
@@ -23913,6 +23874,7 @@ cas32(void* addr, u32int old, u32int new)
 @
 
 
+\subsubsection{[[semxxx()]]}
 
 
 
@@ -24275,6 +24237,8 @@ sysrendezvous(ulong* arg)
 \section{Network}
 % and 9P
 
+
+
 \chapter{Debugging Support}
 %\section{Debugging user processes}
 
@@ -24519,17 +24483,17 @@ procctl(Proc *p)
 
 
 <<[[procctlreq()]] CMstop case>>=
-    case CMstop:
-        procstopwait(p, Proc_stopme);
-        break;
+case CMstop:
+    procstopwait(p, Proc_stopme);
+    break;
 @
 
 <<[[procctlreq()]] CMstart case>>=
-    case CMstart:
-        if(p->state != Stopped)
-            error(Ebadctl);
-        ready(p);
-        break;
+case CMstart:
+    if(p->state != Stopped)
+        error(Ebadctl);
+    ready(p);
+    break;
 @
 % hmm but does not set to Proc_nothing?
 
@@ -24596,13 +24560,13 @@ procstopped(void *a)
 
 
 <<[[procctl()]] wakeup waiting debugger>>=
-        /* free a waiting debugger */
-        qlock(&p->debug);
-        if(p->pdbg) {
-            wakeup(&p->pdbg->sleepr);
-            p->pdbg = nil;
-        }
-        qunlock(&p->debug);
+/* free a waiting debugger */
+qlock(&p->debug);
+if(p->pdbg) {
+    wakeup(&p->pdbg->sleepr);
+    p->pdbg = nil;
+}
+qunlock(&p->debug);
 @
 
 
@@ -24623,27 +24587,27 @@ bool hang;   /* hang at next exec for debug */
 @
 
 <<[[procctlreq()]] CMhang case>>=
-    case CMhang:
-        p->hang = true;
-        break;
+case CMhang:
+    p->hang = true;
+    break;
 @
 <<[[procctlreq()]] CMnohang case>>=
-    case CMnohang:
-        p->hang = false;
-        break;
+ case CMnohang:
+     p->hang = false;
+     break;
 @
 
 
 <<[[sysrfork()]] inherit hang>>=
-    p->hang = up->hang;
+p->hang = up->hang;
 @
 % so strace can trace child of process! actually create one thread
 % per child, see strace.c! but will it trace the syscall between
 % fork and exec? yes because up->procctl get inherited!
 
 <<[[sysexec()]] if hang>>=
-    if(up->hang)
-        up->procctl = Proc_stopme;
+if(up->hang)
+    up->procctl = Proc_stopme;
 @
 % why not do procctl(up) here? when the process will stop? because
 % at return of sysexec there will be a call to notify and procctl(up),
@@ -24652,9 +24616,9 @@ bool hang;   /* hang at next exec for debug */
 % notes?
 
 <<[[procctlreq()]] CMwaitstop case>>=
-    case CMwaitstop:
-        procstopwait(p, Proc_nothing);
-        break;
+case CMwaitstop:
+    procstopwait(p, Proc_nothing);
+    break;
 @
 % used by strace actually ... because did fork, but
 % need to wait that it is actually created and scheduled
@@ -25342,18 +25306,18 @@ bool trace;    /* process being traced? */
 % echo 'trace 1' > proc/x/ctl
 
 <<[[procctlreq()]] CMtrace case>>=
-    case CMtrace:
-        switch(cb->nf){
-        case 1:
-            p->trace ^= true;
-            break;
-        case 2:
-            p->trace = (atoi(cb->f[1]) != 0);
-            break;
-        default:
-            error("args");
-        }
+case CMtrace:
+    switch(cb->nf){
+    case 1:
+        p->trace ^= true;
         break;
+    case 2:
+        p->trace = (atoi(cb->f[1]) != 0);
+        break;
+    default:
+        error("args");
+    }
+    break;
 @
 
 
@@ -25396,37 +25360,37 @@ struct Traceevent {
 % could draw automata :)
 
 <<[[ready()]] hook proctrace>>=
-    pt = proctrace;
-    if(pt)
-        pt(p, SReady, 0);
+pt = proctrace;
+if(pt)
+    pt(p, SReady, 0);
 @
 
 <<[[runproc()]] hook proctrace>>=
-    pt = proctrace;
-    if(pt)
-        pt(p, SRun, 0);
+pt = proctrace;
+if(pt)
+    pt(p, SRun, 0);
 @
 
 <<[[pexit()]] hook proctrace>>=
-    pt = proctrace;
-    if(pt)
-        pt(up, SDead, 0);
+pt = proctrace;
+if(pt)
+    pt(up, SDead, 0);
 @
 
 
 <<[[sleep()]] hook proctrace>>=
-        pt = proctrace;
-        if(pt)
-            pt(up, SSleep, 0);
+pt = proctrace;
+if(pt)
+    pt(up, SSleep, 0);
 @
 
 % this one is a little bit different
 <<[[procctlreq()]] CMevent case>>=
-    case CMevent:
-        pt = proctrace;
-        if(up->trace && pt)
-            pt(up, SUser, 0);
-        break;
+case CMevent:
+    pt = proctrace;
+    if(up->trace && pt)
+        pt(up, SUser, 0);
+    break;
 @
 %TODO: can remove the up->trace, pt does this internally
 
@@ -25473,74 +25437,74 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
 @
 
 <<constant Nevents>>=
-    Nevents = 0x4000,
+Nevents = 0x4000,
 @
 
 <<constant Emask>>=
-    Emask = Nevents - 1,
+Emask = Nevents - 1,
 @
 
 <<[[procopen()]] Qtrace if>>=
-    if(QID(c->qid) == Qtrace){
-        if (omode != OREAD) 
-            error(Eperm);
-        lock(&tlock);
-        if (waserror()){
-            unlock(&tlock);
-            nexterror();
-        }
-        if (topens > 0)
-            error("already open");
-        topens++;
-        if (tevents == nil){
-            tevents = (Traceevent*)malloc(Nevents * sizeof(Traceevent));
-            if(tevents == nil)
-                error(Enomem);
-            tproduced = tconsumed = 0;
-        }
-        proctrace = _proctrace;
+if(QID(c->qid) == Qtrace){
+    if (omode != OREAD) 
+        error(Eperm);
+    lock(&tlock);
+    if (waserror()){
         unlock(&tlock);
-        poperror();
-
-        c->mode = openmode(omode);
-        c->flag |= COPEN;
-        c->offset = 0;
-        return c;
+        nexterror();
     }
+    if (topens > 0)
+        error("already open");
+    topens++;
+    if (tevents == nil){
+        tevents = (Traceevent*)malloc(Nevents * sizeof(Traceevent));
+        if(tevents == nil)
+            error(Enomem);
+        tproduced = tconsumed = 0;
+    }
+    proctrace = _proctrace;
+    unlock(&tlock);
+    poperror();
+
+    c->mode = openmode(omode);
+    c->flag |= COPEN;
+    c->offset = 0;
+    return c;
+}
 @
 
 <<[[procclose()]] Qtrace if>>=
-    if(QID(c->qid) == Qtrace){
-        lock(&tlock);
-        if(topens > 0)
-            topens--;
-        if(topens == 0)
-            proctrace = nil;
-        unlock(&tlock);
-    }
+if(QID(c->qid) == Qtrace){
+    lock(&tlock);
+    if(topens > 0)
+        topens--;
+    if(topens == 0)
+        proctrace = nil;
+    unlock(&tlock);
+}
 @
 
 <<[[procread()]] Qtrace if>>=
-    if(QID(c->qid) == Qtrace){
-        if(!eventsavailable(nil))
-            return 0;
+if(QID(c->qid) == Qtrace){
+    if(!eventsavailable(nil))
+        return 0;
 
-        rptr = (byte*)va;
-        navail = tproduced - tconsumed;
-        if(navail > n / sizeof(Traceevent))
-            navail = n / sizeof(Traceevent);
-        while(navail > 0) {
-            ne = ((tconsumed & Emask) + navail > Nevents)? 
-                    Nevents - (tconsumed & Emask): navail;
-            memmove(rptr, &tevents[tconsumed & Emask], 
-                    ne * sizeof(Traceevent));
+    rptr = (byte*)va;
+    navail = tproduced - tconsumed;
+    if(navail > n / sizeof(Traceevent))
+        navail = n / sizeof(Traceevent);
+    while(navail > 0) {
+        ne = ((tconsumed & Emask) + navail > Nevents)? 
+                Nevents - (tconsumed & Emask): navail;
+        memmove(rptr, &tevents[tconsumed & Emask], 
+                ne * sizeof(Traceevent));
 
-            tconsumed += ne;
-            rptr += ne * sizeof(Traceevent);
-            navail -= ne;
-        }
-        return rptr - (byte*)va;
+        tconsumed += ne;
+        rptr += ne * sizeof(Traceevent);
+        navail -= ne;
     }
+    return rptr - (byte*)va;
+}
 @
 
 
@@ -25559,24 +25523,24 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
 
 % used? by what? acid? db? seems to stop until there is a note essentially
 <<[[Procctl]] cases>>=
-    Proc_traceme,
+Proc_traceme,
 @
 
 <<[[procctl()]] Proc_traceme case (and fallthrough [[Proc_stopme]])>>=
-    case Proc_traceme:
-        if(p->nnote == 0)
-            return;
-        /* No break */
+case Proc_traceme:
+    if(p->nnote == 0)
+        return;
+    /* No break */
 @
 
 <<[[procctlreq()]] CMstartstop case>>=
-    case CMstartstop:
-        if(p->state != Stopped)
-            error(Ebadctl);
-        p->procctl = Proc_traceme;
-        ready(p);
-        procstopwait(p, Proc_traceme);
-        break;
+case CMstartstop:
+    if(p->state != Stopped)
+        error(Ebadctl);
+    p->procctl = Proc_traceme;
+    ready(p);
+    procstopwait(p, Proc_traceme);
+    break;
 @
 
 
@@ -25673,7 +25637,7 @@ for(i = 0; i < 5; i++) {
 
 % actually waitmsg has time info, so /bin/time is pretty simple
 <<[[Waitmsg]] time field>>=
-  ulong time[3];  /* of loved one and descendants */
+ulong time[3];  /* of loved one and descendants */
 @
 % 3 = user, sys, real
 
@@ -25717,8 +25681,8 @@ kern_addr2  profile;  /* Tick profile area */ // for TSEG only
 % for multiprocess (or multithreads) programs that share the same text!
 
 <<[[putseg()]] free profile>>=
-    if(s->profile != nil)
-        free(s->profile);
+if(s->profile != nil)
+    free(s->profile);
 @
 
 
@@ -25773,17 +25737,17 @@ segclock(ulong pc)
 
 % to activate
 <<[[procctlreq()]] CMprofile case>>=
-    case CMprofile:
-        s = p->seg[TSEG];
-        if(s == nil || (s->type&SG_TYPE) != SG_TEXT)
-            error(Ebadctl);
-        if(s->profile != nil)
-            free(s->profile);
-        npc = (s->top-s->base)>>LRESPROF;
-        s->profile = malloc(npc*sizeof(*s->profile));
-        if(s->profile == nil)
-            error(Enomem);
-        break;
+case CMprofile:
+    s = p->seg[TSEG];
+    if(s == nil || (s->type&SG_TYPE) != SG_TEXT)
+        error(Ebadctl);
+    if(s->profile != nil)
+        free(s->profile);
+    npc = (s->top-s->base)>>LRESPROF;
+    s->profile = malloc(npc*sizeof(*s->profile));
+    if(s->profile == nil)
+        error(Enomem);
+    break;
 @
 
 % to read
@@ -25804,13 +25768,13 @@ case Qprofile:
 
 % size of profile data, for ls -l /proc/#/profile
 <<[[procgen()]] Qprofile case>>=
-    case Qprofile:
-        q = p->seg[TSEG];
-        if(q && q->profile) {
-            len = (q->top-q->base)>>LRESPROF;
-            len *= sizeof(*q->profile);
-        }
-        break;
+case Qprofile:
+    q = p->seg[TSEG];
+    if(q && q->profile) {
+        len = (q->top-q->base)>>LRESPROF;
+        len *= sizeof(*q->profile);
+    }
+    break;
 @
 
 \section{[[/bin/prof]]}
@@ -25846,8 +25810,8 @@ struct Tos {
 %    tos = (Tos*)(USTKTOP-sizeof(Tos));
 
 <<[[Cpu]] other fields>>=
-    // cyclefreq == cpuhz if havetsc, 0 otherwise
-    uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
+// cyclefreq == cpuhz if havetsc, 0 otherwise
+uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
 @
 
 <<[[Proc]] stats and profiling fields>>=
@@ -25927,27 +25891,27 @@ Tos *tos;
 @
 
 <<[[sysexec()]] tos settings>>=
-    tos = (Tos*)(TSTKTOP - sizeof(Tos));
+tos = (Tos*)(TSTKTOP - sizeof(Tos));
 
-    tos->cyclefreq = cpu->cyclefreq;
-    arch_cycles((uvlong*)&tos->pcycles);
-    tos->pcycles = -tos->pcycles; // see comment above on Proc->pcycle
-    tos->kcycles = tos->pcycles;
-    tos->clock = 0;
-    // what about other fields? like pid? will be set in kexit! but could be
-    // done here? what about sysrfork? call kexit?
+tos->cyclefreq = cpu->cyclefreq;
+arch_cycles((uvlong*)&tos->pcycles);
+tos->pcycles = -tos->pcycles; // see comment above on Proc->pcycle
+tos->kcycles = tos->pcycles;
+tos->clock = 0;
+// what about other fields? like pid? will be set in kexit! but could be
+// done here? what about sysrfork? call kexit?
 @
 
 <<[[kexit()]] tos adjustments>>=
-    uvlong t;
-    Tos *tos;
+uvlong t;
+Tos *tos;
 
-    /* precise time accounting, kernel exit */
-    tos = (Tos*)(USTKTOP-sizeof(Tos));
-    arch_cycles(&t);
-    tos->kcycles += t - up->kentry;
-    tos->pcycles = up->pcycles;
-    tos->pid = up->pid;
+/* precise time accounting, kernel exit */
+tos = (Tos*)(USTKTOP-sizeof(Tos));
+arch_cycles(&t);
+tos->kcycles += t - up->kentry;
+tos->pcycles = up->pcycles;
+tos->pid = up->pid;
 @
 
 <<[[profclock]] tos adjustments when user>>=
@@ -26738,6 +26702,8 @@ enum {
     REGPC = 15,
 };
 @
+% PSR ALU flags?
+% >> >> >> >> >> >> >>
 
 <<function condok(arm)>>=
 static int
@@ -26998,20 +26964,20 @@ p->fpstate = up->fpstate & ~FPillegal;
 
 
 <<[[procread()]] Qfpregs case>>=
-    case Qfpregs:
-        rptr = (uchar*)&p->fpsave;
-        rsize = sizeof(Arch_FPsave);
-        goto regread;
+case Qfpregs:
+    rptr = (uchar*)&p->fpsave;
+    rsize = sizeof(Arch_FPsave);
+    goto regread;
 @
 
 <<[[procwrite]] Qfpregs case>>=
-    case Qfpregs:
-        if(offset >= sizeof(Arch_FPsave))
-            n = 0;
-        else if(offset+n > sizeof(Arch_FPsave))
-            n = sizeof(Arch_FPsave) - offset;
-        memmove((uchar*)&p->fpsave+offset, va, n);
-        break;
+case Qfpregs:
+    if(offset >= sizeof(Arch_FPsave))
+        n = 0;
+    else if(offset+n > sizeof(Arch_FPsave))
+        n = sizeof(Arch_FPsave) - offset;
+    memmove((uchar*)&p->fpsave+offset, va, n);
+    break;
 @
 
 
@@ -27023,6 +26989,13 @@ p->fpstate = up->fpstate & ~FPillegal;
 
 
 \section{Instruction and data cache (ARM)}
+
+%in kernel/docs/arm/readme.txt
+% l1 I & D VIPT caches
+% 	16K each: 4-way, 128 sets, 32-byte lines
+% 	l1 D is write-through, l1 I is write-back
+% unified l2 PIPT cache 128K: 4-way?, 1024? sets, 32-byte lines, mostly for gpu
+% (by default CPU doesn't see it)
 
 <<type CpCACHERANGE opcode2(arm)>>=
 /*
@@ -27205,27 +27178,9 @@ Soc soc = {
      <<[[soc(raspberry pi2)]] other fields(arm)>>
 };
 @
-
-<<constant ARMLOCAL(arm)>>=
-#define ARMLOCAL    (VIRTIO+IOSIZE)
-@
-\t put in mem.h so can reuse in different files
+% so physio part of RAM? (1Go = 0x40000000)
 
 
-<<[[Soc]] other fields>>=
-uintptr armlocal;
-@
-<<[[soc(raspberry pi1)]] other fields(arm)>>=
-.armlocal   = 0,
-@
-
-<<[[soc(raspberry pi2)]] other fields(arm)>>=
-.busdram    = 0xC0000000,
-.busio      = 0x7E000000,
-.armlocal   = 0x40000000,
-.l1ptedramattrs = Cached | Buffered | L1wralloc | L1sharable,
-.l2ptedramattrs = Cached | Buffered | L2wralloc | L2sharable,
-@
 
 
 \subsection{Extended control}
@@ -27342,6 +27297,52 @@ struct Mboxes {
 };
 @
 
+
+
+<<constant ARMLOCAL(arm)>>=
+#define ARMLOCAL    (VIRTIO+IOSIZE)
+@
+\t put in mem.h so can reuse in different files
+\t related to local registers???
+
+<<[[Soc]] other fields>>=
+uintptr armlocal;
+@
+<<[[soc(raspberry pi1)]] other fields(arm)>>=
+.armlocal   = 0,
+@
+<<[[soc(raspberry pi2)]] other fields(arm)>>=
+.armlocal   = 0x40000000,
+@
+
+
+\subsection{MMU}
+
+<<type PageTableEntryAttribute2(arm)>>=
+#define L1wralloc   (1<<12)         /* L1 TEX */
+#define L1sharable  (1<<16)
+#define L2wralloc   (1<<6)          /* L2 TEX (small pages) */
+#define L2sharable  (1<<10)
+@
+%/* attributes for memory containing locks -- differs between armv6 and armv7 */
+%//#define L1ptedramattrs    (Cached | Buffered | L1wralloc | L1sharable)
+%//#define L2ptedramattrs    (Cached | Buffered | L2wralloc | L2sharable)
+% >> >> >> >>
+
+<<[[soc(raspberry pi2)]] other fields(arm)>>=
+.l1ptedramattrs = Cached | Buffered | L1wralloc | L1sharable,
+.l2ptedramattrs = Cached | Buffered | L2wralloc | L2sharable,
+@
+
+
+<<function l2ap(raspberry pi2)(arm)>>=
+int
+l2ap(int ap)
+{
+    return (AP(0, (ap)));
+}
+@
+
 \subsection{Timer}
 
 <<[[CpSC primary registers]] other cases(arm)>>=
@@ -27359,31 +27360,10 @@ struct Mboxes {
 #define CpTIMERphysctl  1
 @
 
-\subsection{MMU}
-
-<<type PageTableEntryAttribute2(arm)>>=
-#define L1wralloc   (1<<12)         /* L1 TEX */
-#define L1sharable  (1<<16)
-#define L2wralloc   (1<<6)          /* L2 TEX (small pages) */
-#define L2sharable  (1<<10)
-@
-%/* attributes for memory containing locks -- differs between armv6 and armv7 */
-%//#define L1ptedramattrs    (Cached | Buffered | L1wralloc | L1sharable)
-%//#define L2ptedramattrs    (Cached | Buffered | L2wralloc | L2sharable)
-% >> >> >> >>
-
-
-<<function l2ap(raspberry pi2)(arm)>>=
-int
-l2ap(int ap)
-{
-    return (AP(0, (ap)));
-}
-@
-
 \subsection{L2 cache}
 
-% Same than L2 of MMU???
+% confusing than ARM (or Miller?) use L1/L2 terminology for MMU
+% and L1/L2 for cache techno
 
 <<[[CpSC primary registers]] other cases(arm)>>=
 #define CpCLD       9        /* L2 Cache Lockdown, op1==1 */
@@ -27440,6 +27420,14 @@ l2ap(int ap)
 
 \subsection{Initialization adjustments}
 
+% Same 'loading the kernel in memory' and 'first instructions' in [[_start]].
+% Then start to diverge.
+
+\subsubsection{Basic pagination cpu0}
+
+% Some of adjustments below are not SMP related but because of Pi2 specifics.
+
+% _start -> <>
 <<function armstart(raspberry pi2)(arm)>>=
 TEXT armstart(SB), 1, $-4
 
@@ -27520,17 +27508,12 @@ _ramZ:
 @
 %$
 
+\subsubsection{Jumping to C [[main()]] cpu0}
+
 <<function _startpg(raspberry pi2)(arm)>>=
 TEXT _startpg(SB), 1, $-4
 
-    /*
-     * enable cycle counter
-     */
-    MOVW    $(1<<31), R1
-    MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenacyc
-    MOVW    $1, R1
-    MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenapmnc
-
+    <<[[_startpg()]] enable cycle counter(raspberry pi2)(arm)>>
     /*
      * call main and loop forever if it returns
      */
@@ -27541,6 +27524,141 @@ TEXT _startpg(SB), 1, $-4
 @
 %$
 % >> >>
+
+
+
+\subsubsection{Starting the other processors}
+
+<<[[main()]] start the other processors(arm)>>=
+launchinit(getncpus());
+@
+
+% launchinit() makes sense only in pi2 context. In pi1 it is
+% essentially an NOP.
+
+<<function launchinit(arm)>>=
+void
+launchinit(int ncpus)
+{
+    int xcpu;
+    Cpu *mm;
+    PTE *l1;
+
+    <<[[launchinit()]] sanity check ncpus(arm)>>
+    for(xcpu = 1; xcpu < ncpus; xcpu++){
+        cpus[xcpu] = mm = mallocalign(CPUSIZE, CPUSIZE, 0, 0);
+        l1 = mallocalign(L1SIZE, L1SIZE, 0, 0);
+        if(mm == nil || l1 == nil)
+            panic("launchinit");
+        memset(mm, 0, CPUSIZE);
+        mm->cpuno = xcpu;
+
+        memmove(l1, cpu->mmul1, L1SIZE);  /* clone cpu0's l1 table */
+        cachedwbse(l1, L1SIZE);
+        mm->mmul1 = l1;
+        cachedwbse(mm, CPUSIZE);
+
+    }
+    cachedwbse(cpus, sizeof cpus);
+    xcpu = startcpus(ncpus);
+    if(xcpu < ncpus)
+            panic("only %d cpu%s started", xcpu, xcpu == 1? "" : "s");
+}
+@
+%old: mach -> xcpu
+
+<<constant L1SIZE(arm)>>=
+#define L1SIZE      (4 * BY2PG)
+@
+%16K
+
+
+<<[[launchinit()]] sanity check ncpus(arm)>>=
+if(ncpus > MAXCPUS)
+    ncpus = MAXCPUS;
+@
+
+<<function startcpus(raspberry pi1)(arm)>>=
+int
+startcpus(uint)
+{
+    return 1;
+}
+@
+<<function getncpus(raspberry pi1)(arm)>>=
+int
+getncpus(void)
+{
+    return 1;
+}
+@
+
+
+<<function getncpus(raspberry pi2)(arm)>>=
+int
+getncpus(void)
+{
+    int n, max;
+    char *p;
+
+    n = 4;
+    if(n > MAXCPUS)
+        n = MAXCPUS;
+    <<[[getncpus()]] adjust n if ncpu config parameter(arm)>>
+    return n;
+}
+@
+
+<<[[getncpus()]] adjust n if ncpu config parameter(arm)>>=
+p = getconf("*ncpu");
+if(p && (max = atoi(p)) > 0 && n > max)
+    n = max;
+@
+
+
+<<function startcpus(raspberry pi2)(arm)>>=
+int
+startcpus(uint ncpu)
+{
+    int i;
+
+    for(i = 0; i < ncpu; i++)
+        lock(&startlock[i]);
+    cachedwbse(startlock, sizeof startlock);
+    for(i = 1; i < ncpu; i++){
+        if(startcpu(i) < 0)
+            return i;
+        lock(&startlock[i]);
+        unlock(&startlock[i]);
+    }
+    return ncpu;
+}
+@
+
+<<function startcpu(raspberry pi2)(arm)>>=
+static int
+startcpu(uint xcpu)
+{
+    Mboxes *mb;
+    int i;
+    void cpureset();
+
+    mb = (Mboxes*)(ARMLOCAL + Mboxregs);
+    if(mb->clr[xcpu].startcpu)
+        return -1;
+    mb->set[xcpu].startcpu = PADDR(cpureset);
+    for(i = 0; i < 1000; i++)
+        if(mb->clr[xcpu].startcpu == 0)
+            return 0;
+    mb->clr[xcpu].startcpu = PADDR(cpureset);
+    mb->set[xcpu].doorbell = 1;
+    return 0;
+}
+@
+%old: cpu -> xcpu because of my  m -> cpu refactoring.
+
+
+\subsubsection{Basic pagination other cpus}
 
 <<function cpureset(raspberry pi2)(arm)>>=
 /*
@@ -27642,17 +27760,12 @@ reset:
 @
 %$
 
+\subsubsection{Jumping to C [[cpustart()]]}
+
 <<function _startpg2(raspberry pi2)(arm)>>=
 TEXT _startpg2(SB), 1, $-4
 
-    /*
-     * enable cycle counter
-     */
-    MOVW    $(1<<31), R1
-    MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenacyc
-    MOVW    $1, R1
-    MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenapmnc
-
+    <<[[_startpg2()]] enable cycle counter(raspberry pi2)(arm)>>
     /*
      * call cpustart and loop forever if it returns
      */
@@ -27662,6 +27775,97 @@ TEXT _startpg2(SB), 1, $-4
     B   ,0(PC)
 @
 % >>
+
+\subsubsection{[[main()]] other processors ([[cpustart()]])}
+
+% No need to do confinit, xinit, etc.
+% Just need setup information for your own processor
+
+% Assumes cpu has been set, its mmul1 set (see launchinit?)
+
+<<function cpustart(raspberry pi2)(arm)>>=
+void
+cpustart(int xcpu)
+{
+    Mboxes *mb;
+
+    up = nil;
+    cpuinit();
+    mmuinit1((void*)cpu->mmul1);
+
+    mb = (Mboxes*)(ARMLOCAL + Mboxregs);
+    mb->clr[xcpu].doorbell = 1;
+
+    arch_trapinit();
+    clockinit();
+    timersinit();
+
+    arch_cpuidprint();
+    archreset();
+
+    machon(cpu->cpuno);
+
+    unlock(&startlock[xcpu]);
+
+    // schedule a ready process (not necessarily the first one now)
+    schedinit();
+
+    panic("schedinit returned");
+}
+@
+%//pad: cpus[] set? and cpu->cpuno??
+
+
+<<[[cpuinit()]] it not cpu0>>=
+if (cpu->cpuno != 0) {
+    /* synchronise with cpu 0 */
+    cpu->ticks = m0->ticks;
+    cpu->fastclock = m0->fastclock;
+}
+@
+
+
+\subsubsection{Displaying processor information}
+
+<<function arch_cpuidprint(raspberry pi2)(arm)>>=
+void
+arch_cpuidprint(void)
+{
+    char name[64];
+
+    cputype2name(name, sizeof name);
+    arch_delay(50);             /* let uart catch up */
+    print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
+}
+@
+
+<<function cputype2name(raspberry pi2)(arm)>>=
+char*
+cputype2name(char *buf, int size)
+{
+    ulong r;
+
+    r = cpidget();          /* main id register */
+    assert((r >> 24) == 'A');
+    seprint(buf, buf + size, "Cortex-A7 r%ldp%ld",
+        (r >> 20) & MASK(4), r & MASK(4));
+    return buf;
+}
+@
+% >> >>
+
+
+<<function cpidget(raspberry pi2)(arm)>>=
+TEXT cpidget(SB), 1, $-4            /* main ID */
+    MRC CpSC, 0, R0, C(CpID), C(0), CpIDid
+    RET
+@
+%$
+
+
+
+
+\subsubsection{Halting}
 
 <<function arch_idlehands(raspberry pi2)(arm)>>=
 TEXT arch_idlehands(SB), $-4
@@ -27689,127 +27893,29 @@ TEXT arch_idlehands(SB), $-4
 %dead: #define WFI WORD    $0xe320f003 /* wait for interrupt */
 
 
+\subsection{Setting [[cpu]]}
 
-<<function cpidget(raspberry pi2)(arm)>>=
-TEXT cpidget(SB), 1, $-4            /* main ID */
-    MRC CpSC, 0, R0, C(CpID), C(0), CpIDid
-    RET
-@
-%$
-
-<<function cputype2name(raspberry pi2)(arm)>>=
-char*
-cputype2name(char *buf, int size)
-{
-    ulong r;
-
-    r = cpidget();          /* main id register */
-    assert((r >> 24) == 'A');
-    seprint(buf, buf + size, "Cortex-A7 r%ldp%ld",
-        (r >> 20) & MASK(4), r & MASK(4));
-    return buf;
-}
-@
-% >> >>
-
-<<function arch_cpuidprint(raspberry pi2)(arm)>>=
-void
-arch_cpuidprint(void)
-{
-    char name[64];
-
-    cputype2name(name, sizeof name);
-    arch_delay(50);             /* let uart catch up */
-    print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
-}
+<<[[_vsvc()]] set cpu register(arm)>>=
+CPUID(R1)
+SLL $2, R1          /* convert to word index */
+MOVW    $cpus(SB), R2
+ADD R1, R2
+MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
+CMP $0, R(CPU)
+MOVW.EQ $CPUADDR, R0        /* paranoia: use CPUADDR if 0 */
 @
 
-<<function getncpus(raspberry pi2)(arm)>>=
-int
-getncpus(void)
-{
-    int n, max;
-    char *p;
-
-    n = 4;
-    if(n > MAXCPUS)
-        n = MAXCPUS;
-    p = getconf("*ncpu");
-    if(p && (max = atoi(p)) > 0 && n > max)
-        n = max;
-    return n;
-}
+<<[[_vswitch()]] set cpu register(arm)>>=
+CPUID(R1)
+SLL $2, R1          /* convert to word index */
+MOVW    $cpus(SB), R2
+ADD R1, R2
+MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
+CMP $0, R(CPU)
+MOVW.EQ $CPUADDR, R0        /* paranoia: use CPUADDR if 0 */
 @
-
-<<function startcpu(raspberry pi2)(arm)>>=
-static int
-startcpu(uint cpu)
-{
-    Mboxes *mb;
-    int i;
-    void cpureset();
-
-    mb = (Mboxes*)(ARMLOCAL + Mboxregs);
-    if(mb->clr[cpu].startcpu)
-        return -1;
-    mb->set[cpu].startcpu = PADDR(cpureset);
-    for(i = 0; i < 1000; i++)
-        if(mb->clr[cpu].startcpu == 0)
-            return 0;
-    mb->clr[cpu].startcpu = PADDR(cpureset);
-    mb->set[cpu].doorbell = 1;
-    return 0;
-}
-@
-
-<<function startcpus(raspberry pi2)(arm)>>=
-int
-startcpus(uint ncpu)
-{
-    int i;
-
-    for(i = 0; i < ncpu; i++)
-        lock(&startlock[i]);
-    cachedwbse(startlock, sizeof startlock);
-    for(i = 1; i < ncpu; i++){
-        if(startcpu(i) < 0)
-            return i;
-        lock(&startlock[i]);
-        unlock(&startlock[i]);
-    }
-    return ncpu;
-}
-@
-
-<<function cpustart(raspberry pi2)(arm)>>=
-//TODO: cpus[] set? and cpu->cpuno??
-void
-cpustart(int xcpu)
-{
-    Mboxes *mb;
-
-    up = nil;
-    cpuinit();
-    mmuinit1((void*)cpu->mmul1);
-
-    mb = (Mboxes*)(ARMLOCAL + Mboxregs);
-    mb->clr[xcpu].doorbell = 1;
-
-    arch_trapinit();
-    clockinit();
-    timersinit();
-    arch_cpuidprint();
-    archreset();
-
-    machon(cpu->cpuno);
-    unlock(&startlock[xcpu]);
-
-    // schedule a ready process (not necessarily the first one now)
-    schedinit();
-
-    panic("schedinit returned");
-}
-@
+% This is when comes from trap from user mode.
+% If trap from kernel code, no need set R(CPU)
 
 \subsection{Concurrency adjustments}
 
@@ -28231,6 +28337,31 @@ Localmboxint    = 0x50,
 @
 \t reuse ARMLOCAL
 
+\subsection{Cycle counter adjustments}
+
+%cpu0
+<<[[_startpg()]] enable cycle counter(raspberry pi2)(arm)>>=
+/*
+ * enable cycle counter
+ */
+MOVW    $(1<<31), R1
+MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenacyc
+MOVW    $1, R1
+MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenapmnc
+@
+
+%other cpus
+<<[[_startpg2()]] enable cycle counter(raspberry pi2)(arm)>>=
+/*
+ * enable cycle counter
+ */
+MOVW    $(1<<31), R1
+MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenacyc
+MOVW    $1, R1
+MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenapmnc
+@
+
+
 
 
 \section{Advanced virtual memory}
@@ -28575,8 +28706,7 @@ getpower(int dev)
 % See also watchdog.c
 
 \section{Basic IRQs (ARM)}
-
-% what is that?
+\t what is that?
 
 <<[[IRQ]] basic cases(arm)>>=
 IRQbasic    = 64,
@@ -28598,36 +28728,9 @@ if(irq >= IRQlocal)
 
 \section{Fast interrupts (FIQ) (ARM)}
 
-
-
-
-<<[[IRQ]] other cases(arm)>>=
-IRQfiq      = IRQusb,   /* only one source can be FIQ */
-@
-
-<<[[irqenable()]] if IRQfiq(arm)>>=
-if(irq == IRQfiq){
-    <<[[irqenable()]] sanity check no previous FIQ(arm)>>
-    vfiq = v;
-    ip->FIQctl = Fiqenable | irq;
-}
-@
-%x86: NMI (Non Maskable Interrupts)
-
-<<constant Fiqenable(arm)>>=
-Fiqenable = 1<<7,
-@
-<<global vfiq(arm)>>=
-static Vctl *vfiq;
-@
-
-
-<<[[irqenable()]] sanity check no previous FIQ(arm)>>=
-assert((ip->FIQctl & Fiqenable) == 0);
-assert((*enable & v->mask) == 0);
-@
-
-
+% Saw lots of PsrDirq|PsrDfiq before.
+% Saw Intregs.FIQctl, _vfiq exception callback.
+% FIQ = fast interrupts.
 
 % Two level interrupt system. 
 % An interrupt that can interrupt another interrupt.
@@ -28637,6 +28740,8 @@ assert((*enable & v->mask) == 0);
 % FIQ Really useful? Faster because of the banked registers? Or useful
 % just because provide a two level interrupt system?
 
+\subsection{Exception [[PsrMfiq]] and associated processor mode}
+
 <<[[PsrMode]] other cases(arm)>>=
 #define PsrMfiq     0x00000011
 @
@@ -28645,7 +28750,9 @@ assert((*enable & v->mask) == 0);
 [ PsrMfiq ] "fiq interrupt",
 @
 
-
+<<[[PsrDisable]] other cases(arm)>>=
+#define PsrDfiq     0x00000040      /* disable FIQ interrupts */
+@
 
 
 <<constant FIQSTKTOP(arm)>>=
@@ -28658,11 +28765,6 @@ setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
 %u32int  sfiq[5];
 %@
 %dead: use FIQSTKTOP instead. Why? because more than 5?
-
-<<[[PsrDisable]] other cases(arm)>>=
-#define PsrDfiq     0x00000040      /* disable FIQ interrupts */
-@
-
 
 
 % Saw special entries in vector and vtable (_virq).
@@ -28704,6 +28806,40 @@ TEXT _vfiq(SB), 1, $-4          /* FIQ */
 @
 %$
 
+
+\subsection{[[IRQfiq]] and [[vfiq]]}
+
+<<[[IRQ]] other cases(arm)>>=
+IRQfiq      = IRQusb,   /* only one source can be FIQ */
+@
+
+<<[[irqenable()]] if IRQfiq(arm)>>=
+if(irq == IRQfiq){
+    <<[[irqenable()]] sanity check no previous FIQ(arm)>>
+    vfiq = v;
+    ip->FIQctl = Fiqenable | irq;
+}
+@
+%x86: NMI (Non Maskable Interrupts)
+%See Intregs.FIQctl before.
+
+<<global vfiq(arm)>>=
+static Vctl *vfiq;
+@
+
+<<constant Fiqenable(arm)>>=
+Fiqenable = 1<<7,
+@
+% >>
+
+<<[[irqenable()]] sanity check no previous FIQ(arm)>>=
+assert((ip->FIQctl & Fiqenable) == 0);
+assert((*enable & v->mask) == 0);
+@
+
+
+\subsection{[[fiq()]]}
+
 <<function fiq(arm)>>=
 /*
  * called direct from lexception.s to handle fiq interrupt.
@@ -28729,7 +28865,7 @@ fiq(Ureg *ureg)
 }
 @
 
-
+% arch_exit -> <>
 <<function splfhi(arm)>>=
 TEXT splfhi(SB), 1, $-4
     MOVW    $(CPUADDR+4), R2        /* save caller pc in Mach */
@@ -28741,21 +28877,21 @@ TEXT splfhi(SB), 1, $-4
     RET
 @
 %$
-
-<<function splflo(arm)>>=
-TEXT splflo(SB), 1, $-4
-    MOVW    CPSR, R0            /* turn on fiqs */
-    BIC $(PsrDfiq), R0, R1
-    MOVW    R1, CPSR
-    RET
-@
+%dead:
+% <<function splflo(arm)>>=
+% TEXT splflo(SB), 1, $-4
+%     MOVW    CPSR, R0            /* turn on fiqs */
+%     BIC $(PsrDfiq), R0, R1
+%     MOVW    R1, CPSR
+%     RET
+% @
 
 \section{Real-time scheduling}
 
 <<constants for real-time priority>>=
-    PriRelease  = Npriq,  /* released edf processes */
-    PriEdf    = Npriq+1,  /* active edf processes */
-    PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
+PriRelease  = Npriq,  /* released edf processes */
+PriEdf    = Npriq+1,  /* active edf processes */
+PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
 @
 
 <<[[runproc()]] test for empty real-time scheduling queue>>=
@@ -28763,98 +28899,98 @@ runq[Nrq-1].head == nil && runq[Nrq-2].head == nil
 @
 
 <<[[runproc()]] test if p is a real-time process>>=
-    if(edflock(p)){
-        edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
-        edfunlock();
-    }
+if(edflock(p)){
+    edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
+    edfunlock();
+}
 @
 
 <<[[schedinit()]] optional real-time [[edfrecord()]]>>=
-        if((e = up->edf) && (e->flags & Admitted))
-            edfrecord(up);
+if((e = up->edf) && (e->flags & Admitted))
+    edfrecord(up);
 @
 
 <<[[schedinit()]] optional real-time [[edfstop()]]>>=
-            edfstop(up);
-            if (up->edf)
-                free(up->edf);
-            up->edf = nil;
+edfstop(up);
+if (up->edf)
+    free(up->edf);
+up->edf = nil;
 @
 
 <<[[ready()]] optional [[edfready()]] for real-time scheduling>>=
-    if(edfready(p)){
-        arch_splx(s);
-        return;
-    }
+if(edfready(p)){
+    arch_splx(s);
+    return;
+}
 @
 
 
 <<[[syssleep()]] optional [[edfyield()]] for real-time scheduling>>=
-        if (up->edf && (up->edf->flags & Admitted))
-            edfyield();
-        else
+if (up->edf && (up->edf->flags & Admitted))
+    edfyield();
+else
 @
 
 <<[[procctlreq()]] optional real-time commands>>=
-    /* real time */
-    case CMperiod:
-        if(p->edf == nil)
-            edfinit(p);
-        if(e=parsetime(&time, cb->f[1]))    /* time in ns */
-            error(e);
+/* real time */
+case CMperiod:
+    if(p->edf == nil)
+        edfinit(p);
+    if(e=parsetime(&time, cb->f[1]))    /* time in ns */
+        error(e);
+    edfstop(p);
+    p->edf->T = time/1000;  /* Edf times are in microseconds */
+    break;
+case CMdeadline:
+    if(p->edf == nil)
+        edfinit(p);
+    if(e=parsetime(&time, cb->f[1]))
+        error(e);
+    edfstop(p);
+    p->edf->D = time/1000;
+    break;
+case CMcost:
+    if(p->edf == nil)
+        edfinit(p);
+    if(e=parsetime(&time, cb->f[1]))
+        error(e);
+    edfstop(p);
+    p->edf->C = time/1000;
+    break;
+case CMsporadic:
+    if(p->edf == nil)
+        edfinit(p);
+    p->edf->flags |= Sporadic;
+    break;
+case CMdeadlinenotes:
+    if(p->edf == nil)
+        edfinit(p);
+    p->edf->flags |= Sendnotes;
+    break;
+case CMadmit:
+    if(p->edf == 0)
+        error("edf params");
+    if(e = edfadmit(p))
+        error(e);
+    break;
+case CMextra:
+    if(p->edf == nil)
+        edfinit(p);
+    p->edf->flags |= Extratime;
+    break;
+case CMexpel:
+    if(p->edf)
         edfstop(p);
-        p->edf->T = time/1000;  /* Edf times are in microseconds */
-        break;
-    case CMdeadline:
-        if(p->edf == nil)
-            edfinit(p);
-        if(e=parsetime(&time, cb->f[1]))
-            error(e);
-        edfstop(p);
-        p->edf->D = time/1000;
-        break;
-    case CMcost:
-        if(p->edf == nil)
-            edfinit(p);
-        if(e=parsetime(&time, cb->f[1]))
-            error(e);
-        edfstop(p);
-        p->edf->C = time/1000;
-        break;
-    case CMsporadic:
-        if(p->edf == nil)
-            edfinit(p);
-        p->edf->flags |= Sporadic;
-        break;
-    case CMdeadlinenotes:
-        if(p->edf == nil)
-            edfinit(p);
-        p->edf->flags |= Sendnotes;
-        break;
-    case CMadmit:
-        if(p->edf == 0)
-            error("edf params");
-        if(e = edfadmit(p))
-            error(e);
-        break;
-    case CMextra:
-        if(p->edf == nil)
-            edfinit(p);
-        p->edf->flags |= Extratime;
-        break;
-    case CMexpel:
-        if(p->edf)
-            edfstop(p);
-        break;
+    break;
 
 @
 
 <<[[sched()]] optional guard for real-time process>>=
-    if(!p->edf)
+if(!p->edf)
 @
 
 <<[[pexit()]] optional [[edfstop()]] for real-time scheduling>>=
-    edfstop(up);
+edfstop(up);
 @
 
 
@@ -28877,15 +29013,15 @@ Edf *edf; /* if non-null, real-time proc, edf contains scheduling params */
 @
 
 <<[[lock()]] optional priority-inversion for real-time process>>=
-            if(conf.ncpu < 2 && up && up->edf && (up->edf->flags & Admitted)){
-                /*
-                 * Priority inversion, yield on a uniprocessor; on a
-                 * multiprocessor, the other processor will unlock
-                 */
-                print("inversion %#p pc %#lux proc %lud held by pc %#lux proc %lud\n",
-                    l, pc, up ? up->pid : 0, l->pc, l->p ? l->p->pid : 0);
-                up->edf->d = todget(nil);   /* yield to process with lock */
-            }
+if(conf.ncpu < 2 && up && up->edf && (up->edf->flags & Admitted)){
+    /*
+     * Priority inversion, yield on a uniprocessor; on a
+     * multiprocessor, the other processor will unlock
+     */
+    print("inversion %#p pc %#lux proc %lud held by pc %#lux proc %lud\n",
+        l, pc, up ? up->pid : 0, l->pc, l->p ? l->p->pid : 0);
+    up->edf->d = todget(nil);   /* yield to process with lock */
+}
 @
 
 
@@ -30170,14 +30306,14 @@ ncmdfield(char *p, int n)
 <<struct Evalue>>=
 struct Evalue
 {
-  // string
-  char  *name;
-  // option<array<byte>, usually a string but can be something else
-  byte  *value;
-  // nelem(Evalue.value), 
-  int len;
-
-  Qid qid;
+    // string
+    char  *name;
+    // option<array<byte>, usually a string but can be something else
+    byte  *value;
+    // nelem(Evalue.value), 
+    int len;
+    
+    Qid qid;
 };
 @
 
@@ -30185,19 +30321,19 @@ struct Evalue
 <<struct Egrp>>=
 struct Egrp
 {
-  // array<ref_counted<Evalue>>
-  Evalue  **ent;
-  // used entries, <= ment
-  int nent;
-  // nelem(Egrp.ent), malloc'ed entries
-  int ment; 
-
-  ulong path; /* qid.path of next Evalue to be allocated */
-  ulong vers; /* of Egrp */
-
-  // extra
-  Ref;
-  RWlock;
+    // array<ref_counted<Evalue>>
+    Evalue  **ent;
+    // used entries, <= ment
+    int nent;
+    // nelem(Egrp.ent), malloc'ed entries
+    int ment; 
+    
+    ulong path; /* qid.path of next Evalue to be allocated */
+    ulong vers; /* of Egrp */
+    
+    // extra
+    Ref;
+    RWlock;
 };
 @
 
@@ -31725,18 +31861,18 @@ Dev sysdevtab = {
 \subsection{[[/ksys/osversion]]}
 
 <<devsys.c enum Qxxx cases>>=
-    Qosversion,
+Qosversion,
 @
 
 <<[[sysdir]] fields>>=
-    "osversion",    {Qosversion},   0,      0444,
+"osversion",    {Qosversion},   0,      0444,
 @
 
 <<[[sysread()]] cases>>=
-    case Qosversion:
-        snprint(tmp, sizeof tmp, "pad's version");
-        n = readstr((ulong)offset, buf, n, tmp);
-        return n;
+case Qosversion:
+    snprint(tmp, sizeof tmp, "pad's version");
+    n = readstr((ulong)offset, buf, n, tmp);
+    return n;
 @
 % pad version :)
 %old: "2000"
@@ -31750,44 +31886,44 @@ extern byte configfile[]; // in $CONF.c
 
 
 <<devsys.c enum Qxxx cases>>=
-    Qconfig,
+Qconfig,
 @
 
 <<[[sysdir]] fields>>=
-    "config",   {Qconfig},  0,      0444,
+"config",   {Qconfig},  0,      0444,
 @
 
 <<[[sysread()]] cases>>=
-    case Qconfig:
-        return readstr((ulong)offset, buf, n, (char*) configfile);
+case Qconfig:
+    return readstr((ulong)offset, buf, n, (char*) configfile);
 @
 
 \subsection{[[/sys/hosthowner]], [[/sys/hostdomain]]}
 
 <<devsys.c enum Qxxx cases>>=
-    Qhostowner,
-    Qhostdomain,
+Qhostowner,
+Qhostdomain,
 @
 
 <<[[sysdir]] fields>>=
-    "hostowner",    {Qhostowner},   0,      0664,
-    "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
+"hostowner",    {Qhostowner},   0,      0664,
+"hostdomain",   {Qhostdomain},  DOMLEN,     0664,
 @
 
 <<[[sysread()]] cases>>=
-    case Qhostowner:
-        return readstr((ulong)offset, buf, n, eve);
+case Qhostowner:
+    return readstr((ulong)offset, buf, n, eve);
 
-    case Qhostdomain:
-        return readstr((ulong)offset, buf, n, hostdomain);
+case Qhostdomain:
+    return readstr((ulong)offset, buf, n, hostdomain);
 @
 
 <<[[syswrite()]] cases>>=
-    case Qhostowner:
-        return hostownerwrite(a, n);
+case Qhostowner:
+    return hostownerwrite(a, n);
 
-    case Qhostdomain:
-        return hostdomainwrite(a, n);
+case Qhostdomain:
+    return hostdomainwrite(a, n);
 @
 
 
@@ -31798,61 +31934,61 @@ char    *sysname;
 @ 
 
 <<devsys.c enum Qxxx cases>>=
-    Qsysname,
+Qsysname,
 @
 
 <<[[sysdir]] fields>>=
-    "sysname",  {Qsysname}, 0,      0664,
+"sysname",  {Qsysname}, 0,      0664,
 @
 
 <<[[sysread()]] cases>>=
-    case Qsysname:
-        if(sysname == nil)
-            return 0;
-        return readstr((ulong)offset, buf, n, sysname);
+case Qsysname:
+    if(sysname == nil)
+        return 0;
+    return readstr((ulong)offset, buf, n, sysname);
 @
 
 <<[[syswrite()]] cases>>=
-    case Qsysname:
-        if(offset != 0)
-            error(Ebadarg);
-        if(n <= 0 || n >= sizeof buf)
-            error(Ebadarg);
-        strncpy(buf, a, n);
-        buf[n] = 0;
-        if(buf[n-1] == '\n')
-            buf[n-1] = 0;
-        kstrdup(&sysname, buf);
-        break;
+case Qsysname:
+    if(offset != 0)
+        error(Ebadarg);
+    if(n <= 0 || n >= sizeof buf)
+        error(Ebadarg);
+    strncpy(buf, a, n);
+    buf[n] = 0;
+    if(buf[n-1] == '\n')
+        buf[n-1] = 0;
+    kstrdup(&sysname, buf);
+    break;
 @
 
 \subsection{[[/sys/drivers]]}
 
 <<devsys.c enum Qxxx cases>>=
-    Qdrivers,
+Qdrivers,
 @
 
 <<[[sysdir]] fields>>=
-    "drivers",  {Qdrivers}, 0,      0444,
+"drivers",  {Qdrivers}, 0,      0444,
 @
 
 <<[[sysread()]] cases>>=
-    case Qdrivers:
-        b = malloc(READSTR);
-        if(b == nil)
-            error(Enomem);
-        k = 0;
-        for(i = 0; devtab[i] != nil; i++)
-            k += snprint(b+k, READSTR-k, "#%C %s\n",
-                devtab[i]->dc, devtab[i]->name);
-        if(waserror()){
-            free(b);
-            nexterror();
-        }
-        n = readstr((ulong)offset, buf, n, b);
+case Qdrivers:
+    b = malloc(READSTR);
+    if(b == nil)
+        error(Enomem);
+    k = 0;
+    for(i = 0; devtab[i] != nil; i++)
+        k += snprint(b+k, READSTR-k, "#%C %s\n",
+            devtab[i]->dc, devtab[i]->name);
+    if(waserror()){
         free(b);
-        poperror();
-        return n;
+        nexterror();
+    }
+    n = readstr((ulong)offset, buf, n, b);
+    free(b);
+    poperror();
+    return n;
 @
 
 
@@ -32271,7 +32407,7 @@ TEXT cachesoff(SB), 1, $-4
     RET
 @
 %$
-
+% >> >> >>
 
 %\subsection{[[/sys/xxx]]}
 %% template
@@ -32298,39 +32434,39 @@ TEXT cachesoff(SB), 1, $-4
 
 
 <<devcons.c enum Qxxx cases>>=
-    Qbintime,
-    Qcputime,
-    Qnull,
-    Qpgrpid,
-    Qpid,
-    Qppid,
-    Qrandom,
-    Qswap,
-    Qtime,
-    Quser,
-    Qzero,
+Qbintime,
+Qcputime,
+Qnull,
+Qpgrpid,
+Qpid,
+Qppid,
+Qrandom,
+Qswap,
+Qtime,
+Quser,
+Qzero,
 @
 
 <<[[consdir]] fields>>=
-    "bintime",  {Qbintime}, 24,     0664,
-    "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
-    "null",     {Qnull},    0,      0666,
-    "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
-    "pid",      {Qpid},     NUMSIZE,    0444,
-    "ppid",     {Qppid},    NUMSIZE,    0444,
-    "random",   {Qrandom},  0,      0444,
-    "swap",     {Qswap},    0,      0664,
-    "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
-    "user",     {Quser},    0,      0666,
-    "zero",     {Qzero},    0,      0444,
+"bintime",  {Qbintime}, 24,     0664,
+"cputime",  {Qcputime}, 6*NUMSIZE,  0444,
+"null",     {Qnull},    0,      0666,
+"pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
+"pid",      {Qpid},     NUMSIZE,    0444,
+"ppid",     {Qppid},    NUMSIZE,    0444,
+"random",   {Qrandom},  0,      0444,
+"swap",     {Qswap},    0,      0664,
+"time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
+"user",     {Quser},    0,      0666,
+"zero",     {Qzero},    0,      0444,
 @
 % /dev/pid vs /env/pid?
 % maybe could move those one elsewhere? abuse of #c a bit,
 % un peu foutoire just to factorize things
 
 <<[[consinit()]] initializing things>>=
-    todinit();
-    randominit();
+todinit();
+randominit();
 @
 
 
@@ -33276,11 +33412,11 @@ case Qkmesg:
 %TODO: I don't understand this
 
 <<devcons.c enum Qxxx cases>>=
-    Qkprint,
+Qkprint,
 @
 
 <<[[consdir]] fields>>=
-    "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
+"kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
 @
 
 <<[[Dirmode]] cases>>=
@@ -33300,59 +33436,59 @@ ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
 @
 
 <<[[consopen()]] cases>>=
-    case Qkprint:
-        if(arch_tas(&kprintinuse) != 0){
-            c->flag &= ~COPEN;
-            error(Einuse);
-        }
+case Qkprint:
+    if(arch_tas(&kprintinuse) != 0){
+        c->flag &= ~COPEN;
+        error(Einuse);
+    }
+    if(kprintoq == nil){
+        kprintoq = qopen(8*1024, Qcoalesce, 0, 0);
         if(kprintoq == nil){
-            kprintoq = qopen(8*1024, Qcoalesce, 0, 0);
-            if(kprintoq == nil){
-                c->flag &= ~COPEN;
-                error(Enomem);
-            }
-            qnoblock(kprintoq, true);
-        }else
-            qreopen(kprintoq);
-        c->iounit = qiomaxatomic;
-        break;
+            c->flag &= ~COPEN;
+            error(Enomem);
+        }
+        qnoblock(kprintoq, true);
+    }else
+        qreopen(kprintoq);
+    c->iounit = qiomaxatomic;
+    break;
 @
 
 <<[[consclose()]] cases>>=
-    /* close of kprint allows other opens */
-    case Qkprint:
-        if(c->flag & COPEN){
-            kprintinuse = 0;
-            qhangup(kprintoq, nil);
-        }
-        break;
+/* close of kprint allows other opens */
+case Qkprint:
+    if(c->flag & COPEN){
+        kprintinuse = 0;
+        qhangup(kprintoq, nil);
+    }
+    break;
 @
 
 <<[[consread()]] cases>>=
-    case Qkprint:
-        return qread(kprintoq, buf, n);
+case Qkprint:
+    return qread(kprintoq, buf, n);
 @
 
 <<[[putstrn0()]] if kprint>>=
-    /*
-     *  if someone is reading /dev/kprint,
-     *  put the message there.
-     *  if not and there's an attached bit mapped display,
-     *  put the message there.
-     *
-     *  if there's a serial line being used as a console,
-     *  put the message there.
-     */
-    if(kprintoq != nil && !qisclosed(kprintoq)){
-        if(usewrite)
-            qwrite(kprintoq, str, n);
-        else
-            qiwrite(kprintoq, str, n);
-    }
+/*
+ *  if someone is reading /dev/kprint,
+ *  put the message there.
+ *  if not and there's an attached bit mapped display,
+ *  put the message there.
+ *
+ *  if there's a serial line being used as a console,
+ *  put the message there.
+ */
+if(kprintoq != nil && !qisclosed(kprintoq)){
+    if(usewrite)
+        qwrite(kprintoq, str, n);
+    else
+        qiwrite(kprintoq, str, n);
+}
 @
 
 <<[[panic()]] reset kprintoq>>=
-    kprintoq = nil; /* don't try to write to /dev/kprint */
+kprintoq = nil; /* don't try to write to /dev/kprint */
 @
 
 
@@ -33367,23 +33503,23 @@ void    (*consdebug)(void) = nil; // for rdb
 @ 
 
 <<[[panic()]] run consdebug hook>>=
-    if(consdebug)
-        (*consdebug)();
+if(consdebug)
+    (*consdebug)();
 @
 
 <<[[echo()]] C-t C-t special keys handler other cases>>=
-        case 'd':
-            if(consdebug == nil)
-                consdebug = rdb;
-            else
-                consdebug = nil;
-            print("consdebug now %#p\n", consdebug);
-            return;
-        case 'D':
-            if(consdebug == nil)
-                consdebug = rdb;
-            consdebug();
-            return;
+case 'd':
+    if(consdebug == nil)
+        consdebug = rdb;
+    else
+        consdebug = nil;
+    print("consdebug now %#p\n", consdebug);
+    return;
+case 'D':
+    if(consdebug == nil)
+        consdebug = rdb;
+    consdebug();
+    return;
 @
 
 \section{Serial line}
@@ -33649,74 +33785,73 @@ ulong spuriousintr; // not really used
 
 
 <<devsys.c enum Qxxx cases>>=
-    Qsysstat,
+Qsysstat,
 @
 %old: used to be in devcons.c
 
 <<[[sysdir]] fields>>=
-    "sysstat",  {Qsysstat}, 0,      0666,
+"sysstat",  {Qsysstat}, 0,      0666,
 @
 
 <<[[sysread()]] cases>>=
-    case Qsysstat:
-        b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
-        bp = b;
-        for(id = 0; id < MAXCPUS; id++) {
-            if(active.cpus & (1<<id)) {
-                mp = CPUS(id);
-                readnum(0, bp, NUMSIZE, id, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->cs, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->intr, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->syscall, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->pfault, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->tlbfault, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->tlbpurge, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->load, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE,
-                    (mp->perf.avg_inidle*100)/mp->perf.period,
-                    NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE,
-                    (mp->perf.avg_inintr*100)/mp->perf.period,
-                    NUMSIZE);
-                bp += NUMSIZE;
-                *bp++ = '\n';
-            }
+case Qsysstat:
+    b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
+    bp = b;
+    for(id = 0; id < MAXCPUS; id++) {
+        if(active.cpus & (1<<id)) {
+            mp = CPUS(id);
+            readnum(0, bp, NUMSIZE, id, NUMSIZE);
+            bp += NUMSIZE;
+            readnum(0, bp, NUMSIZE, mp->cs, NUMSIZE);
+            bp += NUMSIZE;
+            readnum(0, bp, NUMSIZE, mp->intr, NUMSIZE);
+            bp += NUMSIZE;
+            readnum(0, bp, NUMSIZE, mp->syscall, NUMSIZE);
+            bp += NUMSIZE;
+            readnum(0, bp, NUMSIZE, mp->pfault, NUMSIZE);
+            bp += NUMSIZE;
+            readnum(0, bp, NUMSIZE, mp->tlbfault, NUMSIZE);
+            bp += NUMSIZE;
+            readnum(0, bp, NUMSIZE, mp->tlbpurge, NUMSIZE);
+            bp += NUMSIZE;
+            readnum(0, bp, NUMSIZE, mp->load, NUMSIZE);
+            bp += NUMSIZE;
+            readnum(0, bp, NUMSIZE,
+                (mp->perf.avg_inidle*100)/mp->perf.period,
+                NUMSIZE);
+            bp += NUMSIZE;
+            readnum(0, bp, NUMSIZE,
+                (mp->perf.avg_inintr*100)/mp->perf.period,
+                NUMSIZE);
+            bp += NUMSIZE;
+            *bp++ = '\n';
         }
-        if(waserror()){
-            free(b);
-            nexterror();
-        }
-        n = readstr((ulong)offset, buf, n, b);
+    }
+    if(waserror()){
         free(b);
-        poperror();
-        return n;
+        nexterror();
+    }
+    n = readstr((ulong)offset, buf, n, b);
+    free(b);
+    poperror();
+    return n;
 @
 % >>
 
 <<[[syswrite()]] cases>>=
-    case Qsysstat:
-        for(id = 0; id < 32; id++) {
-            if(active.cpus & (1<<id)) {
-                mp = CPUS(id);
-                mp->cs = 0;
-                mp->intr = 0;
-                mp->syscall = 0;
-                mp->pfault = 0;
-                mp->tlbfault = 0;
-                mp->tlbpurge = 0;
-            }
+case Qsysstat:
+    for(id = 0; id < 32; id++) {
+        if(active.cpus & (1<<id)) {
+            mp = CPUS(id);
+            mp->cs = 0;
+            mp->intr = 0;
+            mp->syscall = 0;
+            mp->pfault = 0;
+            mp->tlbfault = 0;
+            mp->tlbpurge = 0;
         }
-        break;
-
+    }
+    break;
 @
 % >>
 
@@ -33988,7 +34123,7 @@ char  errbuf1[ERRMAX];
 @ 
 
 <<constant NERR>>=
-    NERR = 64,
+NERR = 64,
 @
 
 <<function error>>=

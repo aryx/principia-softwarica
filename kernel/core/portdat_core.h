@@ -144,8 +144,8 @@ struct Cpu
     /*x: [[Cpu]] other fields */
     bool flushmmu;   /* make current proc flush it's mmu state */
     /*x: [[Cpu]] other fields */
-        // cyclefreq == cpuhz if havetsc, 0 otherwise
-        uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
+    // cyclefreq == cpuhz if havetsc, 0 otherwise
+    uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
     /*x: [[Cpu]] other fields */
     int lastintr; // debugging
     /*e: [[Cpu]] other fields */

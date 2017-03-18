@@ -118,15 +118,15 @@ void
 kexit(Ureg*)
 {
     /*s: [[kexit()]] tos adjustments */
-        uvlong t;
-        Tos *tos;
+    uvlong t;
+    Tos *tos;
 
-        /* precise time accounting, kernel exit */
-        tos = (Tos*)(USTKTOP-sizeof(Tos));
-        arch_cycles(&t);
-        tos->kcycles += t - up->kentry;
-        tos->pcycles = up->pcycles;
-        tos->pid = up->pid;
+    /* precise time accounting, kernel exit */
+    tos = (Tos*)(USTKTOP-sizeof(Tos));
+    arch_cycles(&t);
+    tos->kcycles += t - up->kentry;
+    tos->pcycles = up->pcycles;
+    tos->pid = up->pid;
     /*e: [[kexit()]] tos adjustments */
     tos->cyclefreq = cpu->cpuhz;
 

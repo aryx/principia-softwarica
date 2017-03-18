@@ -29,11 +29,14 @@ Soc soc = {
     .dramsize   = 1024*MiB,
     .physio     = 0x3F000000,
      /*s: [[soc(raspberry pi2)]] other fields(arm) */
-     .busdram    = 0xC0000000,
-     .busio      = 0x7E000000,
      .armlocal   = 0x40000000,
+     /*x: [[soc(raspberry pi2)]] other fields(arm) */
      .l1ptedramattrs = Cached | Buffered | L1wralloc | L1sharable,
      .l2ptedramattrs = Cached | Buffered | L2wralloc | L2sharable,
+     /*x: [[soc(raspberry pi2)]] other fields(arm) */
+     .busdram    = 0xC0000000,
+     /*x: [[soc(raspberry pi2)]] other fields(arm) */
+     .busio      = 0x7E000000,
      /*e: [[soc(raspberry pi2)]] other fields(arm) */
 };
 /*e: global soc(raspberry pi2)(arm) */
@@ -102,30 +105,32 @@ getncpus(void)
     n = 4;
     if(n > MAXCPUS)
         n = MAXCPUS;
+    /*s: [[getncpus()]] adjust n if ncpu config parameter(arm) */
     p = getconf("*ncpu");
     if(p && (max = atoi(p)) > 0 && n > max)
         n = max;
+    /*e: [[getncpus()]] adjust n if ncpu config parameter(arm) */
     return n;
 }
 /*e: function getncpus(raspberry pi2)(arm) */
 
 /*s: function startcpu(raspberry pi2)(arm) */
 static int
-startcpu(uint cpu)
+startcpu(uint xcpu)
 {
     Mboxes *mb;
     int i;
     void cpureset();
 
     mb = (Mboxes*)(ARMLOCAL + Mboxregs);
-    if(mb->clr[cpu].startcpu)
+    if(mb->clr[xcpu].startcpu)
         return -1;
-    mb->set[cpu].startcpu = PADDR(cpureset);
+    mb->set[xcpu].startcpu = PADDR(cpureset);
     for(i = 0; i < 1000; i++)
-        if(mb->clr[cpu].startcpu == 0)
+        if(mb->clr[xcpu].startcpu == 0)
             return 0;
-    mb->clr[cpu].startcpu = PADDR(cpureset);
-    mb->set[cpu].doorbell = 1;
+    mb->clr[xcpu].startcpu = PADDR(cpureset);
+    mb->set[xcpu].doorbell = 1;
     return 0;
 }
 /*e: function startcpu(raspberry pi2)(arm) */
@@ -174,7 +179,6 @@ extern void cpuinit(void);
 extern void machon(uint);
 
 /*s: function cpustart(raspberry pi2)(arm) */
-//TODO: cpus[] set? and cpu->cpuno??
 void
 cpustart(int xcpu)
 {
@@ -190,10 +194,12 @@ cpustart(int xcpu)
     arch_trapinit();
     clockinit();
     timersinit();
+
     arch_cpuidprint();
     archreset();
 
     machon(cpu->cpuno);
+
     unlock(&startlock[xcpu]);
 
     // schedule a ready process (not necessarily the first one now)

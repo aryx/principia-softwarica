@@ -14,7 +14,7 @@
 
 enum {
    /*s: constant Maxtimerloops */
-       Maxtimerloops = 20*1000,
+   Maxtimerloops = 20*1000,
    /*e: constant Maxtimerloops */
 };
 
@@ -167,7 +167,7 @@ hzclock(Ureg *ur)
     if(kproftimer != nil)
         kproftimer(ur->pc);
 
-    if((active.cpus&(1<<cpu->cpuno)) == 0)
+    if((active.cpus & (1<<cpu->cpuno)) == 0)
         return;
 
     if(active.exiting) {

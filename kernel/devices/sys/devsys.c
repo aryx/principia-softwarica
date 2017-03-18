@@ -15,20 +15,20 @@ enum{
     Qdir,
 
     /*s: devsys.c enum Qxxx cases */
-        Qosversion,
+    Qosversion,
     /*x: devsys.c enum Qxxx cases */
-        Qconfig,
+    Qconfig,
     /*x: devsys.c enum Qxxx cases */
-        Qhostowner,
-        Qhostdomain,
+    Qhostowner,
+    Qhostdomain,
     /*x: devsys.c enum Qxxx cases */
-        Qsysname,
+    Qsysname,
     /*x: devsys.c enum Qxxx cases */
-        Qdrivers,
+    Qdrivers,
     /*x: devsys.c enum Qxxx cases */
     Qreboot,
     /*x: devsys.c enum Qxxx cases */
-        Qsysstat,
+    Qsysstat,
     /*e: devsys.c enum Qxxx cases */
 };
 /*e: devsys.c enum Qxxx */
@@ -38,20 +38,20 @@ static Dirtab sysdir[]={
     ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
 
     /*s: [[sysdir]] fields */
-        "osversion",    {Qosversion},   0,      0444,
+    "osversion",    {Qosversion},   0,      0444,
     /*x: [[sysdir]] fields */
-        "config",   {Qconfig},  0,      0444,
+    "config",   {Qconfig},  0,      0444,
     /*x: [[sysdir]] fields */
-        "hostowner",    {Qhostowner},   0,      0664,
-        "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
+    "hostowner",    {Qhostowner},   0,      0664,
+    "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
     /*x: [[sysdir]] fields */
-        "sysname",  {Qsysname}, 0,      0664,
+    "sysname",  {Qsysname}, 0,      0664,
     /*x: [[sysdir]] fields */
-        "drivers",  {Qdrivers}, 0,      0444,
+    "drivers",  {Qdrivers}, 0,      0444,
     /*x: [[sysdir]] fields */
     "reboot",   {Qreboot},  0,      0660,
     /*x: [[sysdir]] fields */
-        "sysstat",  {Qsysstat}, 0,      0666,
+    "sysstat",  {Qsysstat}, 0,      0666,
     /*e: [[sysdir]] fields */
 };
 /*e: global sysdir */
@@ -150,83 +150,83 @@ sysread(Chan *c, void *buf, long n, vlong off)
         return devdirread(c, buf, n, sysdir, nelem(sysdir), devgen);
 
     /*s: [[sysread()]] cases */
-        case Qosversion:
-            snprint(tmp, sizeof tmp, "pad's version");
-            n = readstr((ulong)offset, buf, n, tmp);
-            return n;
+    case Qosversion:
+        snprint(tmp, sizeof tmp, "pad's version");
+        n = readstr((ulong)offset, buf, n, tmp);
+        return n;
     /*x: [[sysread()]] cases */
-        case Qconfig:
-            return readstr((ulong)offset, buf, n, (char*) configfile);
+    case Qconfig:
+        return readstr((ulong)offset, buf, n, (char*) configfile);
     /*x: [[sysread()]] cases */
-        case Qhostowner:
-            return readstr((ulong)offset, buf, n, eve);
+    case Qhostowner:
+        return readstr((ulong)offset, buf, n, eve);
 
-        case Qhostdomain:
-            return readstr((ulong)offset, buf, n, hostdomain);
+    case Qhostdomain:
+        return readstr((ulong)offset, buf, n, hostdomain);
     /*x: [[sysread()]] cases */
-        case Qsysname:
-            if(sysname == nil)
-                return 0;
-            return readstr((ulong)offset, buf, n, sysname);
+    case Qsysname:
+        if(sysname == nil)
+            return 0;
+        return readstr((ulong)offset, buf, n, sysname);
     /*x: [[sysread()]] cases */
-        case Qdrivers:
-            b = malloc(READSTR);
-            if(b == nil)
-                error(Enomem);
-            k = 0;
-            for(i = 0; devtab[i] != nil; i++)
-                k += snprint(b+k, READSTR-k, "#%C %s\n",
-                    devtab[i]->dc, devtab[i]->name);
-            if(waserror()){
-                free(b);
-                nexterror();
-            }
-            n = readstr((ulong)offset, buf, n, b);
+    case Qdrivers:
+        b = malloc(READSTR);
+        if(b == nil)
+            error(Enomem);
+        k = 0;
+        for(i = 0; devtab[i] != nil; i++)
+            k += snprint(b+k, READSTR-k, "#%C %s\n",
+                devtab[i]->dc, devtab[i]->name);
+        if(waserror()){
             free(b);
-            poperror();
-            return n;
+            nexterror();
+        }
+        n = readstr((ulong)offset, buf, n, b);
+        free(b);
+        poperror();
+        return n;
     /*x: [[sysread()]] cases */
-        case Qsysstat:
-            b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
-            bp = b;
-            for(id = 0; id < MAXCPUS; id++) {
-                if(active.cpus & (1<<id)) {
-                    mp = CPUS(id);
-                    readnum(0, bp, NUMSIZE, id, NUMSIZE);
-                    bp += NUMSIZE;
-                    readnum(0, bp, NUMSIZE, mp->cs, NUMSIZE);
-                    bp += NUMSIZE;
-                    readnum(0, bp, NUMSIZE, mp->intr, NUMSIZE);
-                    bp += NUMSIZE;
-                    readnum(0, bp, NUMSIZE, mp->syscall, NUMSIZE);
-                    bp += NUMSIZE;
-                    readnum(0, bp, NUMSIZE, mp->pfault, NUMSIZE);
-                    bp += NUMSIZE;
-                    readnum(0, bp, NUMSIZE, mp->tlbfault, NUMSIZE);
-                    bp += NUMSIZE;
-                    readnum(0, bp, NUMSIZE, mp->tlbpurge, NUMSIZE);
-                    bp += NUMSIZE;
-                    readnum(0, bp, NUMSIZE, mp->load, NUMSIZE);
-                    bp += NUMSIZE;
-                    readnum(0, bp, NUMSIZE,
-                        (mp->perf.avg_inidle*100)/mp->perf.period,
-                        NUMSIZE);
-                    bp += NUMSIZE;
-                    readnum(0, bp, NUMSIZE,
-                        (mp->perf.avg_inintr*100)/mp->perf.period,
-                        NUMSIZE);
-                    bp += NUMSIZE;
-                    *bp++ = '\n';
-                }
+    case Qsysstat:
+        b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
+        bp = b;
+        for(id = 0; id < MAXCPUS; id++) {
+            if(active.cpus & (1<<id)) {
+                mp = CPUS(id);
+                readnum(0, bp, NUMSIZE, id, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->cs, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->intr, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->syscall, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->pfault, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->tlbfault, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->tlbpurge, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->load, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE,
+                    (mp->perf.avg_inidle*100)/mp->perf.period,
+                    NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE,
+                    (mp->perf.avg_inintr*100)/mp->perf.period,
+                    NUMSIZE);
+                bp += NUMSIZE;
+                *bp++ = '\n';
             }
-            if(waserror()){
-                free(b);
-                nexterror();
-            }
-            n = readstr((ulong)offset, buf, n, b);
+        }
+        if(waserror()){
             free(b);
-            poperror();
-            return n;
+            nexterror();
+        }
+        n = readstr((ulong)offset, buf, n, b);
+        free(b);
+        poperror();
+        return n;
     /*e: [[sysread()]] cases */
 
     default:
@@ -258,23 +258,23 @@ syswrite(Chan *c, void *va, long n, vlong off)
     switch((ulong)c->qid.path){
 
     /*s: [[syswrite()]] cases */
-        case Qhostowner:
-            return hostownerwrite(a, n);
+    case Qhostowner:
+        return hostownerwrite(a, n);
 
-        case Qhostdomain:
-            return hostdomainwrite(a, n);
+    case Qhostdomain:
+        return hostdomainwrite(a, n);
     /*x: [[syswrite()]] cases */
-        case Qsysname:
-            if(offset != 0)
-                error(Ebadarg);
-            if(n <= 0 || n >= sizeof buf)
-                error(Ebadarg);
-            strncpy(buf, a, n);
-            buf[n] = 0;
-            if(buf[n-1] == '\n')
-                buf[n-1] = 0;
-            kstrdup(&sysname, buf);
-            break;
+    case Qsysname:
+        if(offset != 0)
+            error(Ebadarg);
+        if(n <= 0 || n >= sizeof buf)
+            error(Ebadarg);
+        strncpy(buf, a, n);
+        buf[n] = 0;
+        if(buf[n-1] == '\n')
+            buf[n-1] = 0;
+        kstrdup(&sysname, buf);
+        break;
     /*x: [[syswrite()]] cases */
     case Qreboot:
         if(!iseve())
@@ -301,20 +301,19 @@ syswrite(Chan *c, void *va, long n, vlong off)
         free(cb);
         break;
     /*x: [[syswrite()]] cases */
-        case Qsysstat:
-            for(id = 0; id < 32; id++) {
-                if(active.cpus & (1<<id)) {
-                    mp = CPUS(id);
-                    mp->cs = 0;
-                    mp->intr = 0;
-                    mp->syscall = 0;
-                    mp->pfault = 0;
-                    mp->tlbfault = 0;
-                    mp->tlbpurge = 0;
-                }
+    case Qsysstat:
+        for(id = 0; id < 32; id++) {
+            if(active.cpus & (1<<id)) {
+                mp = CPUS(id);
+                mp->cs = 0;
+                mp->intr = 0;
+                mp->syscall = 0;
+                mp->pfault = 0;
+                mp->tlbfault = 0;
+                mp->tlbpurge = 0;
             }
-            break;
-
+        }
+        break;
     /*e: [[syswrite()]] cases */
 
     default:

@@ -54,8 +54,8 @@ struct ConsKbd
     ILock    lockputc;
 
     /*s: [[ConsKbd]] other fields */
-        char    line[1024]; /* current input line */
-        int x;      /* index into line */
+    char    line[1024]; /* current input line */
+    int x;      /* index into line */
     /*x: [[ConsKbd]] other fields */
     bool raw;        /* true if we shouldn't process input */
     Ref ctl;        /* number of opens to the control file */
@@ -201,21 +201,21 @@ putstrn0(char *str, int n, bool usewrite)
     kmesgputs(str, n);
     /*e: [[putstrn0()]] kmesg handling */
     /*s: [[putstrn0()]] if kprint */
-        /*
-         *  if someone is reading /dev/kprint,
-         *  put the message there.
-         *  if not and there's an attached bit mapped display,
-         *  put the message there.
-         *
-         *  if there's a serial line being used as a console,
-         *  put the message there.
-         */
-        if(kprintoq != nil && !qisclosed(kprintoq)){
-            if(usewrite)
-                qwrite(kprintoq, str, n);
-            else
-                qiwrite(kprintoq, str, n);
-        }
+    /*
+     *  if someone is reading /dev/kprint,
+     *  put the message there.
+     *  if not and there's an attached bit mapped display,
+     *  put the message there.
+     *
+     *  if there's a serial line being used as a console,
+     *  put the message there.
+     */
+    if(kprintoq != nil && !qisclosed(kprintoq)){
+        if(usewrite)
+            qwrite(kprintoq, str, n);
+        else
+            qiwrite(kprintoq, str, n);
+    }
     /*e: [[putstrn0()]] if kprint */
     else if(screenputs != nil)
         screenputs(str, n);
@@ -354,7 +354,7 @@ devcons_panic(char *fmt, ...)
     char buf[PRINTSIZE];
 
     /*s: [[panic()]] reset kprintoq */
-        kprintoq = nil; /* don't try to write to /dev/kprint */
+    kprintoq = nil; /* don't try to write to /dev/kprint */
     /*e: [[panic()]] reset kprintoq */
 
     if(panicking)
@@ -368,8 +368,8 @@ devcons_panic(char *fmt, ...)
     va_end(arg);
     iprint("%s\n", buf);
     /*s: [[panic()]] run consdebug hook */
-        if(consdebug)
-            (*consdebug)();
+    if(consdebug)
+        (*consdebug)();
     /*e: [[panic()]] run consdebug hook */
     arch_splx(s);
     prflush();
@@ -580,18 +580,18 @@ echo(char *buf, int n)
                 arch_exit(0);
                 return;
             /*s: [[echo()]] C-t C-t special keys handler other cases */
-                    case 'd':
-                        if(consdebug == nil)
-                            consdebug = rdb;
-                        else
-                            consdebug = nil;
-                        print("consdebug now %#p\n", consdebug);
-                        return;
-                    case 'D':
-                        if(consdebug == nil)
-                            consdebug = rdb;
-                        consdebug();
-                        return;
+            case 'd':
+                if(consdebug == nil)
+                    consdebug = rdb;
+                else
+                    consdebug = nil;
+                print("consdebug now %#p\n", consdebug);
+                return;
+            case 'D':
+                if(consdebug == nil)
+                    consdebug = rdb;
+                consdebug();
+                return;
             /*e: [[echo()]] C-t C-t special keys handler other cases */
             }
         }
@@ -716,21 +716,21 @@ enum{
     Qconsctl,
 
     /*s: devcons.c enum Qxxx cases */
-        Qbintime,
-        Qcputime,
-        Qnull,
-        Qpgrpid,
-        Qpid,
-        Qppid,
-        Qrandom,
-        Qswap,
-        Qtime,
-        Quser,
-        Qzero,
+    Qbintime,
+    Qcputime,
+    Qnull,
+    Qpgrpid,
+    Qpid,
+    Qppid,
+    Qrandom,
+    Qswap,
+    Qtime,
+    Quser,
+    Qzero,
     /*x: devcons.c enum Qxxx cases */
     Qkmesg,
     /*x: devcons.c enum Qxxx cases */
-        Qkprint,
+    Qkprint,
     /*e: devcons.c enum Qxxx cases */
 };
 /*e: devcons.c enum Qxxx */
@@ -750,21 +750,21 @@ static Dirtab consdir[]={
     "consctl",  {Qconsctl}, 0,      0220,
 
     /*s: [[consdir]] fields */
-        "bintime",  {Qbintime}, 24,     0664,
-        "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
-        "null",     {Qnull},    0,      0666,
-        "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
-        "pid",      {Qpid},     NUMSIZE,    0444,
-        "ppid",     {Qppid},    NUMSIZE,    0444,
-        "random",   {Qrandom},  0,      0444,
-        "swap",     {Qswap},    0,      0664,
-        "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
-        "user",     {Quser},    0,      0666,
-        "zero",     {Qzero},    0,      0444,
+    "bintime",  {Qbintime}, 24,     0664,
+    "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
+    "null",     {Qnull},    0,      0666,
+    "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
+    "pid",      {Qpid},     NUMSIZE,    0444,
+    "ppid",     {Qppid},    NUMSIZE,    0444,
+    "random",   {Qrandom},  0,      0444,
+    "swap",     {Qswap},    0,      0664,
+    "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
+    "user",     {Quser},    0,      0666,
+    "zero",     {Qzero},    0,      0444,
     /*x: [[consdir]] fields */
     "kmesg",    {Qkmesg},   0,      0440,
     /*x: [[consdir]] fields */
-        "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
+    "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
     /*e: [[consdir]] fields */
 };
 /*e: global consdir */
@@ -780,8 +780,8 @@ consinit(void)
          */
         addclock0link(kbdputcclock, 22);
     /*x: [[consinit()]] initializing things */
-        todinit();
-        randominit();
+    todinit();
+    randominit();
     /*e: [[consinit()]] initializing things */
 }
 /*e: method consinit */
@@ -817,22 +817,22 @@ consopen(Chan *c, int omode)
         incref(&kbd.ctl);
         break;
     /*x: [[consopen()]] cases */
-        case Qkprint:
-            if(arch_tas(&kprintinuse) != 0){
-                c->flag &= ~COPEN;
-                error(Einuse);
-            }
+    case Qkprint:
+        if(arch_tas(&kprintinuse) != 0){
+            c->flag &= ~COPEN;
+            error(Einuse);
+        }
+        if(kprintoq == nil){
+            kprintoq = qopen(8*1024, Qcoalesce, 0, 0);
             if(kprintoq == nil){
-                kprintoq = qopen(8*1024, Qcoalesce, 0, 0);
-                if(kprintoq == nil){
-                    c->flag &= ~COPEN;
-                    error(Enomem);
-                }
-                qnoblock(kprintoq, true);
-            }else
-                qreopen(kprintoq);
-            c->iounit = qiomaxatomic;
-            break;
+                c->flag &= ~COPEN;
+                error(Enomem);
+            }
+            qnoblock(kprintoq, true);
+        }else
+            qreopen(kprintoq);
+        c->iounit = qiomaxatomic;
+        break;
     /*e: [[consopen()]] cases */
     }
     return c;
@@ -853,13 +853,13 @@ consclose(Chan *c)
         }
         break;
     /*x: [[consclose()]] cases */
-        /* close of kprint allows other opens */
-        case Qkprint:
-            if(c->flag & COPEN){
-                kprintinuse = 0;
-                qhangup(kprintoq, nil);
-            }
-            break;
+    /* close of kprint allows other opens */
+    case Qkprint:
+        if(c->flag & COPEN){
+            kprintinuse = 0;
+            qhangup(kprintoq, nil);
+        }
+        break;
     /*e: [[consclose()]] cases */
     }
 }
@@ -883,56 +883,56 @@ consread(Chan *c, void *buf, long n, vlong off)
         return devdirread(c, buf, n, consdir, nelem(consdir), devgen);
 
     /*s: [[consread()]] Qcons case */
-        case Qcons:
-            qlock(&kbd);
-            if(waserror()) {
-                qunlock(&kbd);
-                nexterror();
-            }
-            while(!qcanread(lineq)){
-                if(qread(kbdq, &ch, 1) == 0)
-                    continue;
-                send = false;
-                if(ch == 0){
-                    /* flush output on rawoff -> rawon */
-                    if(kbd.x > 0)
-                        send = !qcanread(kbdq);
-            
-                /*s: [[consread()]] else if raw mode */
-                }else if(kbd.raw){
-                    kbd.line[kbd.x++] = ch;
-                    send = !qcanread(kbdq);
-                /*e: [[consread()]] else if raw mode */
-                }else{
-                    switch(ch){
-                    case '\b':
-                        if(kbd.x > 0)
-                            kbd.x--;
-                        break;
-                    case 0x15:  /* ^U */
-                        kbd.x = 0;
-                        break;
-                    case '\n':
-                        send = true;
-                        kbd.line[kbd.x++] = ch;
-                        break;
-                    case 0x04:  /* ^D */
-                        send = true;
-                        break;
-                    default:
-                        kbd.line[kbd.x++] = ch;
-                        break;
-                    }
-                }
-                if(send || kbd.x == sizeof kbd.line){
-                    qwrite(lineq, kbd.line, kbd.x);
-                    kbd.x = 0;
-                }
-            }
-            n = qread(lineq, buf, n);
+    case Qcons:
+        qlock(&kbd);
+        if(waserror()) {
             qunlock(&kbd);
-            poperror();
-            return n;
+            nexterror();
+        }
+        while(!qcanread(lineq)){
+            if(qread(kbdq, &ch, 1) == 0)
+                continue;
+            send = false;
+            if(ch == 0){
+                /* flush output on rawoff -> rawon */
+                if(kbd.x > 0)
+                    send = !qcanread(kbdq);
+        
+            /*s: [[consread()]] else if raw mode */
+            }else if(kbd.raw){
+                kbd.line[kbd.x++] = ch;
+                send = !qcanread(kbdq);
+            /*e: [[consread()]] else if raw mode */
+            }else{
+                switch(ch){
+                case '\b':
+                    if(kbd.x > 0)
+                        kbd.x--;
+                    break;
+                case 0x15:  /* ^U */
+                    kbd.x = 0;
+                    break;
+                case '\n':
+                    send = true;
+                    kbd.line[kbd.x++] = ch;
+                    break;
+                case 0x04:  /* ^D */
+                    send = true;
+                    break;
+                default:
+                    kbd.line[kbd.x++] = ch;
+                    break;
+                }
+            }
+            if(send || kbd.x == sizeof kbd.line){
+                qwrite(lineq, kbd.line, kbd.x);
+                kbd.x = 0;
+            }
+        }
+        n = qread(lineq, buf, n);
+        qunlock(&kbd);
+        poperror();
+        return n;
     /*e: [[consread()]] Qcons case */
 
     /*s: [[consread()]] cases */
@@ -992,8 +992,8 @@ consread(Chan *c, void *buf, long n, vlong off)
         }
         return n;
     /*x: [[consread()]] cases */
-        case Qkprint:
-            return qread(kprintoq, buf, n);
+    case Qkprint:
+        return qread(kprintoq, buf, n);
     /*e: [[consread()]] cases */
 
     case Qtime:
@@ -1052,21 +1052,21 @@ conswrite(Chan *c, void *va, long n, vlong off)
     switch((ulong)c->qid.path){
 
     /*s: [[conswrite()]] Qcons case */
-        case Qcons:
-            /*
-             * Can't page fault in putstrn, so copy the data locally.
-             */
-            l = n;
-            while(l > 0){
-                bp = l;
-                if(bp > sizeof buf)
-                    bp = sizeof buf;
-                memmove(buf, a, bp);
-                putstrn0(buf, bp, 1);
-                a += bp;
-                l -= bp;
-            }
-            break;
+    case Qcons:
+        /*
+         * Can't page fault in putstrn, so copy the data locally.
+         */
+        l = n;
+        while(l > 0){
+            bp = l;
+            if(bp > sizeof buf)
+                bp = sizeof buf;
+            memmove(buf, a, bp);
+            putstrn0(buf, bp, 1);
+            a += bp;
+            l -= bp;
+        }
+        break;
     /*e: [[conswrite()]] Qcons case */
 
     /*s: [[conswrite()]] cases */

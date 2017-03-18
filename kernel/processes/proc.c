@@ -143,8 +143,8 @@ schedinit(void)     /* never returns */
 
     if(up) {
         /*s: [[schedinit()]] optional real-time [[edfrecord()]] */
-                if((e = up->edf) && (e->flags & Admitted))
-                    edfrecord(up);
+        if((e = up->edf) && (e->flags & Admitted))
+            edfrecord(up);
         /*e: [[schedinit()]] optional real-time [[edfrecord()]] */
         //old: cpu->proc = nil;
         // but now that on x86 up = cpu->proc and not cpu->externup
@@ -157,10 +157,10 @@ schedinit(void)     /* never returns */
         case Moribund:
             up->state = Dead;
             /*s: [[schedinit()]] optional real-time [[edfstop()]] */
-                        edfstop(up);
-                        if (up->edf)
-                            free(up->edf);
-                        up->edf = nil;
+            edfstop(up);
+            if (up->edf)
+                free(up->edf);
+            up->edf = nil;
             /*e: [[schedinit()]] optional real-time [[edfstop()]] */
             /*
              * Holding locks from pexit:
@@ -256,7 +256,7 @@ proc_sched(void)
 
     p = runproc();
     /*s: [[sched()]] optional guard for real-time process */
-        if(!p->edf)
+    if(!p->edf)
     /*e: [[sched()]] optional guard for real-time process */
     {
         updatecpu(p);
@@ -542,10 +542,10 @@ proc_ready(Proc *p)
 
     s = arch_splhi();
     /*s: [[ready()]] optional [[edfready()]] for real-time scheduling */
-        if(edfready(p)){
-            arch_splx(s);
-            return;
-        }
+    if(edfready(p)){
+        arch_splx(s);
+        return;
+    }
     /*e: [[ready()]] optional [[edfready()]] for real-time scheduling */
 
     if(up != p && (p->wired == nil || p->wired == CPUS(cpu->cpuno))) // pad fix
@@ -558,9 +558,9 @@ proc_ready(Proc *p)
     p->state = Ready;
     queueproc(rq, p);
     /*s: [[ready()]] hook proctrace */
-        pt = proctrace;
-        if(pt)
-            pt(p, SReady, 0);
+    pt = proctrace;
+    if(pt)
+        pt(p, SReady, 0);
     /*e: [[ready()]] hook proctrace */
     arch_splx(s);
 }
@@ -695,15 +695,15 @@ found:
     p->lastcpu = CPUS(cpu->cpuno);
 
     /*s: [[runproc()]] test if p is a real-time process */
-        if(edflock(p)){
-            edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
-            edfunlock();
-        }
+    if(edflock(p)){
+        edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
+        edfunlock();
+    }
     /*e: [[runproc()]] test if p is a real-time process */
     /*s: [[runproc()]] hook proctrace */
-        pt = proctrace;
-        if(pt)
-            pt(p, SRun, 0);
+    pt = proctrace;
+    if(pt)
+        pt(p, SRun, 0);
     /*e: [[runproc()]] hook proctrace */
     return p;
 }
@@ -966,9 +966,9 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
          *  change state and call scheduler
          */
         /*s: [[sleep()]] hook proctrace */
-                pt = proctrace;
-                if(pt)
-                    pt(up, SSleep, 0);
+        pt = proctrace;
+        if(pt)
+            pt(up, SSleep, 0);
         /*e: [[sleep()]] hook proctrace */
 
         up->state = Wakeme;
@@ -1276,9 +1276,9 @@ proc_pexit(char *exitstr, bool freemem)
         timerdel(up);
 
     /*s: [[pexit()]] hook proctrace */
-        pt = proctrace;
-        if(pt)
-            pt(up, SDead, 0);
+    pt = proctrace;
+    if(pt)
+        pt(up, SDead, 0);
     /*e: [[pexit()]] hook proctrace */
 
     /* nil out all the resources under lock (free later) */
@@ -1413,7 +1413,7 @@ proc_pexit(char *exitstr, bool freemem)
     lock(&palloc);
 
     /*s: [[pexit()]] optional [[edfstop()]] for real-time scheduling */
-        edfstop(up);
+    edfstop(up);
     /*e: [[pexit()]] optional [[edfstop()]] for real-time scheduling */
     up->state = Moribund;
     // will arch_gotolabel() to schedinit() which has special code around Moribund
@@ -1654,10 +1654,10 @@ procctl(Proc *p)
 
     switch(p->procctl) {
     /*s: [[procctl()]] Proc_traceme case (and fallthrough [[Proc_stopme]]) */
-        case Proc_traceme:
-            if(p->nnote == 0)
-                return;
-            /* No break */
+    case Proc_traceme:
+        if(p->nnote == 0)
+            return;
+        /* No break */
     /*e: [[procctl()]] Proc_traceme case (and fallthrough [[Proc_stopme]]) */
     case Proc_stopme:
         p->procctl = Proc_nothing;
@@ -1665,13 +1665,13 @@ procctl(Proc *p)
         p->psstate = "Stopped";
         s = arch_spllo();
         /*s: [[procctl()]] wakeup waiting debugger */
-                /* free a waiting debugger */
-                qlock(&p->debug);
-                if(p->pdbg) {
-                    wakeup(&p->pdbg->sleepr);
-                    p->pdbg = nil;
-                }
-                qunlock(&p->debug);
+        /* free a waiting debugger */
+        qlock(&p->debug);
+        if(p->pdbg) {
+            wakeup(&p->pdbg->sleepr);
+            p->pdbg = nil;
+        }
+        qunlock(&p->debug);
         /*e: [[procctl()]] wakeup waiting debugger */
         arch_splhi();
         p->state = Stopped;

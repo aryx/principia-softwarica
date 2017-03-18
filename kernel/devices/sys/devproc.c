@@ -86,10 +86,10 @@ enum
 
 enum{
 /*s: constant Nevents */
-    Nevents = 0x4000,
+Nevents = 0x4000,
 /*e: constant Nevents */
 /*s: constant Emask */
-    Emask = Nevents - 1,
+Emask = Nevents - 1,
 /*e: constant Emask */
 };
 
@@ -293,13 +293,13 @@ procgen(Chan *c, char *name, Dirtab *tab, int, int s, DirEntry *dp)
         break;
 
     /*s: [[procgen()]] Qprofile case */
-        case Qprofile:
-            q = p->seg[TSEG];
-            if(q && q->profile) {
-                len = (q->top-q->base)>>LRESPROF;
-                len *= sizeof(*q->profile);
-            }
-            break;
+    case Qprofile:
+        q = p->seg[TSEG];
+        if(q && q->profile) {
+            len = (q->top-q->base)>>LRESPROF;
+            len *= sizeof(*q->profile);
+        }
+        break;
     /*e: [[procgen()]] Qprofile case */
     }
 
@@ -394,32 +394,32 @@ procopen(Chan *c, int omode)
         return devopen(c, omode, 0, 0, procgen);
 
     /*s: [[procopen()]] Qtrace if */
-        if(QID(c->qid) == Qtrace){
-            if (omode != OREAD) 
-                error(Eperm);
-            lock(&tlock);
-            if (waserror()){
-                unlock(&tlock);
-                nexterror();
-            }
-            if (topens > 0)
-                error("already open");
-            topens++;
-            if (tevents == nil){
-                tevents = (Traceevent*)malloc(Nevents * sizeof(Traceevent));
-                if(tevents == nil)
-                    error(Enomem);
-                tproduced = tconsumed = 0;
-            }
-            proctrace = _proctrace;
+    if(QID(c->qid) == Qtrace){
+        if (omode != OREAD) 
+            error(Eperm);
+        lock(&tlock);
+        if (waserror()){
             unlock(&tlock);
-            poperror();
-
-            c->mode = openmode(omode);
-            c->flag |= COPEN;
-            c->offset = 0;
-            return c;
+            nexterror();
         }
+        if (topens > 0)
+            error("already open");
+        topens++;
+        if (tevents == nil){
+            tevents = (Traceevent*)malloc(Nevents * sizeof(Traceevent));
+            if(tevents == nil)
+                error(Enomem);
+            tproduced = tconsumed = 0;
+        }
+        proctrace = _proctrace;
+        unlock(&tlock);
+        poperror();
+
+        c->mode = openmode(omode);
+        c->flag |= COPEN;
+        c->offset = 0;
+        return c;
+    }
     /*e: [[procopen()]] Qtrace if */
         
     p = proctab(SLOT(c->qid));
@@ -677,14 +677,14 @@ static void
 procclose(Chan* c)
 {
     /*s: [[procclose()]] Qtrace if */
-        if(QID(c->qid) == Qtrace){
-            lock(&tlock);
-            if(topens > 0)
-                topens--;
-            if(topens == 0)
-                proctrace = nil;
-            unlock(&tlock);
-        }
+    if(QID(c->qid) == Qtrace){
+        lock(&tlock);
+        if(topens > 0)
+            topens--;
+        if(topens == 0)
+            proctrace = nil;
+        unlock(&tlock);
+    }
     /*e: [[procclose()]] Qtrace if */
     /*s: [[procclose()]] hooks */
     if(QID(c->qid) == Qns && c->aux != nil)
@@ -778,26 +778,26 @@ procread(Chan *c, void *va, long n, vlong off)
         return devdirread(c, a, n, 0, 0, procgen);
 
     /*s: [[procread()]] Qtrace if */
-        if(QID(c->qid) == Qtrace){
-            if(!eventsavailable(nil))
-                return 0;
+    if(QID(c->qid) == Qtrace){
+        if(!eventsavailable(nil))
+            return 0;
 
-            rptr = (byte*)va;
-            navail = tproduced - tconsumed;
-            if(navail > n / sizeof(Traceevent))
-                navail = n / sizeof(Traceevent);
-            while(navail > 0) {
-                ne = ((tconsumed & Emask) + navail > Nevents)? 
-                        Nevents - (tconsumed & Emask): navail;
-                memmove(rptr, &tevents[tconsumed & Emask], 
-                        ne * sizeof(Traceevent));
+        rptr = (byte*)va;
+        navail = tproduced - tconsumed;
+        if(navail > n / sizeof(Traceevent))
+            navail = n / sizeof(Traceevent);
+        while(navail > 0) {
+            ne = ((tconsumed & Emask) + navail > Nevents)? 
+                    Nevents - (tconsumed & Emask): navail;
+            memmove(rptr, &tevents[tconsumed & Emask], 
+                    ne * sizeof(Traceevent));
 
-                tconsumed += ne;
-                rptr += ne * sizeof(Traceevent);
-                navail -= ne;
-            }
-            return rptr - (byte*)va;
+            tconsumed += ne;
+            rptr += ne * sizeof(Traceevent);
+            navail -= ne;
         }
+        return rptr - (byte*)va;
+    }
     /*e: [[procread()]] Qtrace if */
 
     p = proctab(SLOT(c->qid));
@@ -983,10 +983,10 @@ procread(Chan *c, void *va, long n, vlong off)
 
 
     /*s: [[procread()]] Qfpregs case */
-        case Qfpregs:
-            rptr = (uchar*)&p->fpsave;
-            rsize = sizeof(Arch_FPsave);
-            goto regread;
+    case Qfpregs:
+        rptr = (uchar*)&p->fpsave;
+        rsize = sizeof(Arch_FPsave);
+        goto regread;
     /*e: [[procread()]] Qfpregs case */
 
     regread:
@@ -1215,13 +1215,13 @@ procwrite(Chan *c, void *va, long n, vlong off)
         break;
 
     /*s: [[procwrite]] Qfpregs case */
-        case Qfpregs:
-            if(offset >= sizeof(Arch_FPsave))
-                n = 0;
-            else if(offset+n > sizeof(Arch_FPsave))
-                n = sizeof(Arch_FPsave) - offset;
-            memmove((uchar*)&p->fpsave+offset, va, n);
-            break;
+    case Qfpregs:
+        if(offset >= sizeof(Arch_FPsave))
+            n = 0;
+        else if(offset+n > sizeof(Arch_FPsave))
+            n = sizeof(Arch_FPsave) - offset;
+        memmove((uchar*)&p->fpsave+offset, va, n);
+        break;
     /*e: [[procwrite]] Qfpregs case */
 
     case Qnote:
@@ -1510,32 +1510,32 @@ procctlreq(Proc *p, char *va, int n)
     /*e: [[procctlreq()]] CMprivate case */
 
     /*s: [[procctlreq()]] CMhang case */
-        case CMhang:
-            p->hang = true;
-            break;
+    case CMhang:
+        p->hang = true;
+        break;
     /*e: [[procctlreq()]] CMhang case */
     /*s: [[procctlreq()]] CMnohang case */
-        case CMnohang:
-            p->hang = false;
-            break;
+     case CMnohang:
+         p->hang = false;
+         break;
     /*e: [[procctlreq()]] CMnohang case */
 
     /*s: [[procctlreq()]] CMstop case */
-        case CMstop:
-            procstopwait(p, Proc_stopme);
-            break;
+    case CMstop:
+        procstopwait(p, Proc_stopme);
+        break;
     /*e: [[procctlreq()]] CMstop case */
     /*s: [[procctlreq()]] CMstart case */
-        case CMstart:
-            if(p->state != Stopped)
-                error(Ebadctl);
-            ready(p);
-            break;
+    case CMstart:
+        if(p->state != Stopped)
+            error(Ebadctl);
+        ready(p);
+        break;
     /*e: [[procctlreq()]] CMstart case */
     /*s: [[procctlreq()]] CMwaitstop case */
-        case CMwaitstop:
-            procstopwait(p, Proc_nothing);
-            break;
+    case CMwaitstop:
+        procstopwait(p, Proc_nothing);
+        break;
     /*e: [[procctlreq()]] CMwaitstop case */
 
     /*s: [[procctlreq()]] CMstartsyscall case */
@@ -1548,49 +1548,49 @@ procctlreq(Proc *p, char *va, int n)
         break;
     /*e: [[procctlreq()]] CMstartsyscall case */
     /*s: [[procctlreq()]] CMstartstop case */
-        case CMstartstop:
-            if(p->state != Stopped)
-                error(Ebadctl);
-            p->procctl = Proc_traceme;
-            ready(p);
-            procstopwait(p, Proc_traceme);
-            break;
+    case CMstartstop:
+        if(p->state != Stopped)
+            error(Ebadctl);
+        p->procctl = Proc_traceme;
+        ready(p);
+        procstopwait(p, Proc_traceme);
+        break;
     /*e: [[procctlreq()]] CMstartstop case */
 
     /*s: [[procctlreq()]] CMtrace case */
-        case CMtrace:
-            switch(cb->nf){
-            case 1:
-                p->trace ^= true;
-                break;
-            case 2:
-                p->trace = (atoi(cb->f[1]) != 0);
-                break;
-            default:
-                error("args");
-            }
+    case CMtrace:
+        switch(cb->nf){
+        case 1:
+            p->trace ^= true;
             break;
+        case 2:
+            p->trace = (atoi(cb->f[1]) != 0);
+            break;
+        default:
+            error("args");
+        }
+        break;
     /*e: [[procctlreq()]] CMtrace case */
     /*s: [[procctlreq()]] CMevent case */
-        case CMevent:
-            pt = proctrace;
-            if(up->trace && pt)
-                pt(up, SUser, 0);
-            break;
+    case CMevent:
+        pt = proctrace;
+        if(up->trace && pt)
+            pt(up, SUser, 0);
+        break;
     /*e: [[procctlreq()]] CMevent case */
 
     /*s: [[procctlreq()]] CMprofile case */
-        case CMprofile:
-            s = p->seg[TSEG];
-            if(s == nil || (s->type&SG_TYPE) != SG_TEXT)
-                error(Ebadctl);
-            if(s->profile != nil)
-                free(s->profile);
-            npc = (s->top-s->base)>>LRESPROF;
-            s->profile = malloc(npc*sizeof(*s->profile));
-            if(s->profile == nil)
-                error(Enomem);
-            break;
+    case CMprofile:
+        s = p->seg[TSEG];
+        if(s == nil || (s->type&SG_TYPE) != SG_TEXT)
+            error(Ebadctl);
+        if(s->profile != nil)
+            free(s->profile);
+        npc = (s->top-s->base)>>LRESPROF;
+        s->profile = malloc(npc*sizeof(*s->profile));
+        if(s->profile == nil)
+            error(Enomem);
+        break;
     /*e: [[procctlreq()]] CMprofile case */
 
 
@@ -1624,56 +1624,56 @@ procctlreq(Proc *p, char *va, int n)
 
 
     /*s: [[procctlreq()]] optional real-time commands */
-        /* real time */
-        case CMperiod:
-            if(p->edf == nil)
-                edfinit(p);
-            if(e=parsetime(&time, cb->f[1]))    /* time in ns */
-                error(e);
+    /* real time */
+    case CMperiod:
+        if(p->edf == nil)
+            edfinit(p);
+        if(e=parsetime(&time, cb->f[1]))    /* time in ns */
+            error(e);
+        edfstop(p);
+        p->edf->T = time/1000;  /* Edf times are in microseconds */
+        break;
+    case CMdeadline:
+        if(p->edf == nil)
+            edfinit(p);
+        if(e=parsetime(&time, cb->f[1]))
+            error(e);
+        edfstop(p);
+        p->edf->D = time/1000;
+        break;
+    case CMcost:
+        if(p->edf == nil)
+            edfinit(p);
+        if(e=parsetime(&time, cb->f[1]))
+            error(e);
+        edfstop(p);
+        p->edf->C = time/1000;
+        break;
+    case CMsporadic:
+        if(p->edf == nil)
+            edfinit(p);
+        p->edf->flags |= Sporadic;
+        break;
+    case CMdeadlinenotes:
+        if(p->edf == nil)
+            edfinit(p);
+        p->edf->flags |= Sendnotes;
+        break;
+    case CMadmit:
+        if(p->edf == 0)
+            error("edf params");
+        if(e = edfadmit(p))
+            error(e);
+        break;
+    case CMextra:
+        if(p->edf == nil)
+            edfinit(p);
+        p->edf->flags |= Extratime;
+        break;
+    case CMexpel:
+        if(p->edf)
             edfstop(p);
-            p->edf->T = time/1000;  /* Edf times are in microseconds */
-            break;
-        case CMdeadline:
-            if(p->edf == nil)
-                edfinit(p);
-            if(e=parsetime(&time, cb->f[1]))
-                error(e);
-            edfstop(p);
-            p->edf->D = time/1000;
-            break;
-        case CMcost:
-            if(p->edf == nil)
-                edfinit(p);
-            if(e=parsetime(&time, cb->f[1]))
-                error(e);
-            edfstop(p);
-            p->edf->C = time/1000;
-            break;
-        case CMsporadic:
-            if(p->edf == nil)
-                edfinit(p);
-            p->edf->flags |= Sporadic;
-            break;
-        case CMdeadlinenotes:
-            if(p->edf == nil)
-                edfinit(p);
-            p->edf->flags |= Sendnotes;
-            break;
-        case CMadmit:
-            if(p->edf == 0)
-                error("edf params");
-            if(e = edfadmit(p))
-                error(e);
-            break;
-        case CMextra:
-            if(p->edf == nil)
-                edfinit(p);
-            p->edf->flags |= Extratime;
-            break;
-        case CMexpel:
-            if(p->edf)
-                edfstop(p);
-            break;
+        break;
 
     /*e: [[procctlreq()]] optional real-time commands */
 

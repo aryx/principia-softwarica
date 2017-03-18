@@ -97,12 +97,13 @@ cpuinit(void)
     cpu->perf.period = 1;
 
     m0 = CPUS(0);
+    /*s: [[cpuinit()]] it not cpu0 */
     if (cpu->cpuno != 0) {
         /* synchronise with cpu 0 */
         cpu->ticks = m0->ticks;
         cpu->fastclock = m0->fastclock;
     }
-    //machon(m->cpuno);
+    /*e: [[cpuinit()]] it not cpu0 */
 }
 /*e: function cpuinit(arm) */
 
@@ -110,7 +111,7 @@ cpuinit(void)
 void
 cpu0init(void)
 {
-    conf.ncpu = 0; // set in machon() instead (machon() called after cpuinit)
+    conf.ncpu = 0; // set in machon() instead (machon() is called after cpuinit)
 
     cpu->cpuno = 0;
     cpus[cpu->cpuno] = cpu;
@@ -538,19 +539,21 @@ arch_memorysummary(void) {
 void
 launchinit(int ncpus)
 {
-    int mach;
+    int xcpu;
     Cpu *mm;
     PTE *l1;
 
+    /*s: [[launchinit()]] sanity check ncpus(arm) */
     if(ncpus > MAXCPUS)
         ncpus = MAXCPUS;
-    for(mach = 1; mach < ncpus; mach++){
-        cpus[mach] = mm = mallocalign(CPUSIZE, CPUSIZE, 0, 0);
+    /*e: [[launchinit()]] sanity check ncpus(arm) */
+    for(xcpu = 1; xcpu < ncpus; xcpu++){
+        cpus[xcpu] = mm = mallocalign(CPUSIZE, CPUSIZE, 0, 0);
         l1 = mallocalign(L1SIZE, L1SIZE, 0, 0);
         if(mm == nil || l1 == nil)
             panic("launchinit");
         memset(mm, 0, CPUSIZE);
-        mm->cpuno = mach;
+        mm->cpuno = xcpu;
 
         memmove(l1, cpu->mmul1, L1SIZE);  /* clone cpu0's l1 table */
         cachedwbse(l1, L1SIZE);
@@ -559,8 +562,9 @@ launchinit(int ncpus)
 
     }
     cachedwbse(cpus, sizeof cpus);
-    if((mach = startcpus(ncpus)) < ncpus)
-            panic("only %d cpu%s started", mach, mach == 1? "" : "s");
+    xcpu = startcpus(ncpus);
+    if(xcpu < ncpus)
+            panic("only %d cpu%s started", xcpu, xcpu == 1? "" : "s");
 }
 /*e: function launchinit(arm) */
 
@@ -572,8 +576,8 @@ main(void)
     uint firmware, board;
     /*e: [[main()]] locals(arm) */
 
-    // initial assignment made to avoid circular dependencies in codegraph
     /*s: [[main()]] initial assignments for backward deps(arm) */
+    // initial assignments to avoid circular dependencies in codegraph
     // backward deps breaker!
     devtab = conf_devtab;
 
@@ -604,24 +608,23 @@ main(void)
     arch_isaconfig = main_arch_isaconfig;
     /*e: [[main()]] initial assignments for backward deps(arm) */
 
-    // Let's go!
-
-    cpu = (Cpu*)CPUADDR;
-
     /*s: [[main()]] clear bss(arm) */
     memset(edata, 0, end - edata);  /* clear bss */
     /*e: [[main()]] clear bss(arm) */
 
+    // Let's go!
+
+    cpu = (Cpu*)CPUADDR;
     cpu0init(); // cpu0 initialization (calls cpuinit())
-    mmuinit1((void*)L1); // finish mmu initialization after mmuinit0
+    mmuinit1((void*)L1); // finish mmu initialization started in mmuinit0
+    machon(0); // enable cpu0 for scheduling
 
-    machon(0);
-
+    /*s: [[main()]] parsing options and boot arguments(arm) */
     //optionsinit("/boot/boot boot"); // setup values for getconf() 
     //ataginit((Atag*)BOOTARGS); // from bootloader config
     // example of manual config:
     // TODO confname(``console'') = 1?
-
+    /*e: [[main()]] parsing options and boot arguments(arm) */
     confinit();     /* figures out amount of memory */
     xinit();
 
@@ -652,7 +655,7 @@ main(void)
     //TODO? kbdqinit(); // setup kbdq
     lineqinit(); // setup lineq
     timersinit();
-    swcursor_init(); //if(conf.monitor)
+    swcursor_init();
 
     arch_cpuidprint();
     archreset();
@@ -671,7 +674,9 @@ main(void)
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
 
+    /*s: [[main()]] start the other processors(arm) */
     launchinit(getncpus());
+    /*e: [[main()]] start the other processors(arm) */
 
     // schedule the only ready user process (the one created by userinit)
     schedinit();

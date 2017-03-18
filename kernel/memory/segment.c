@@ -162,8 +162,8 @@ putseg(Segment *s)
     if(s->pagedir != s->smallpagedir)
         free(s->pagedir);
     /*s: [[putseg()]] free profile */
-        if(s->profile != nil)
-            free(s->profile);
+    if(s->profile != nil)
+        free(s->profile);
     /*e: [[putseg()]] free profile */
     free(s);
 }

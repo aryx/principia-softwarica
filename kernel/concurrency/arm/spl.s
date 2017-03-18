@@ -70,12 +70,4 @@ TEXT splfhi(SB), 1, $-4
     RET
 /*e: function splfhi(arm) */
 
-/*s: function splflo(arm) */
-TEXT splflo(SB), 1, $-4
-    MOVW    CPSR, R0            /* turn on fiqs */
-    BIC $(PsrDfiq), R0, R1
-    MOVW    R1, CPSR
-    RET
-/*e: function splflo(arm) */
-
 /*e: concurrency/arm/spl.s */

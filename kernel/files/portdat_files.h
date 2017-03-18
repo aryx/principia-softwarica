@@ -332,33 +332,33 @@ struct Chan
 /*s: struct Evalue */
 struct Evalue
 {
-  // string
-  char  *name;
-  // option<array<byte>, usually a string but can be something else
-  byte  *value;
-  // nelem(Evalue.value), 
-  int len;
-
-  Qid qid;
+    // string
+    char  *name;
+    // option<array<byte>, usually a string but can be something else
+    byte  *value;
+    // nelem(Evalue.value), 
+    int len;
+    
+    Qid qid;
 };
 /*e: struct Evalue */
 
 /*s: struct Egrp */
 struct Egrp
 {
-  // array<ref_counted<Evalue>>
-  Evalue  **ent;
-  // used entries, <= ment
-  int nent;
-  // nelem(Egrp.ent), malloc'ed entries
-  int ment; 
-
-  ulong path; /* qid.path of next Evalue to be allocated */
-  ulong vers; /* of Egrp */
-
-  // extra
-  Ref;
-  RWlock;
+    // array<ref_counted<Evalue>>
+    Evalue  **ent;
+    // used entries, <= ment
+    int nent;
+    // nelem(Egrp.ent), malloc'ed entries
+    int ment; 
+    
+    ulong path; /* qid.path of next Evalue to be allocated */
+    ulong vers; /* of Egrp */
+    
+    // extra
+    Ref;
+    RWlock;
 };
 /*e: struct Egrp */
 

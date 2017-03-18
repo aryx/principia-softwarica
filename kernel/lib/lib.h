@@ -343,7 +343,7 @@ struct Waitmsg
 {
   int pid;    /* of loved one */ // pid of the child
   /*s: [[Waitmsg]] time field */
-    ulong time[3];  /* of loved one and descendants */
+  ulong time[3];  /* of loved one and descendants */
   /*e: [[Waitmsg]] time field */
   char  msg[ERRMAX];  /* actually variable-size in user mode */
 };

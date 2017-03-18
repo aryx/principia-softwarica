@@ -62,6 +62,7 @@ typedef struct Systimers Systimers;
 typedef struct Armtimer Armtimer;
 
 /*s: struct Systimers(arm) */
+// The order matters! the fields match the memory-mapped external registers.
 struct Systimers {
     u32int  cs;
     u32int  clo;
@@ -174,9 +175,12 @@ clockinit(void)
         t1 = arch_lcycles();
     }while(tn->clo != tend);
     t1 -= t0;
+
     cpu->cpuhz = 100 * t1;
     cpu->cpumhz = (cpu->cpuhz + Mhz/2 - 1) / Mhz;
+
     cpu->cyclefreq = cpu->cpuhz;
+
     if(cpu->cpuno == 0){
         tn->c3 = tn->clo - 1;
         tm = (Armtimer*)ARMTIMER;

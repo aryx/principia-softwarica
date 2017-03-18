@@ -114,15 +114,15 @@ lock(Lock *l)
         i = 0;
         while(l->key){
            /*s: [[lock()]] optional priority-inversion for real-time process */
-                       if(conf.ncpu < 2 && up && up->edf && (up->edf->flags & Admitted)){
-                           /*
-                            * Priority inversion, yield on a uniprocessor; on a
-                            * multiprocessor, the other processor will unlock
-                            */
-                           print("inversion %#p pc %#lux proc %lud held by pc %#lux proc %lud\n",
-                               l, pc, up ? up->pid : 0, l->pc, l->p ? l->p->pid : 0);
-                           up->edf->d = todget(nil);   /* yield to process with lock */
-                       }
+           if(conf.ncpu < 2 && up && up->edf && (up->edf->flags & Admitted)){
+               /*
+                * Priority inversion, yield on a uniprocessor; on a
+                * multiprocessor, the other processor will unlock
+                */
+               print("inversion %#p pc %#lux proc %lud held by pc %#lux proc %lud\n",
+                   l, pc, up ? up->pid : 0, l->pc, l->p ? l->p->pid : 0);
+               up->edf->d = todget(nil);   /* yield to process with lock */
+           }
            /*e: [[lock()]] optional priority-inversion for real-time process */
             if(i++ > 100000000){
                 i = 0;

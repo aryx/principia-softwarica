@@ -2,9 +2,9 @@
 // could be in dat_interrupts.h?
 /*s: enum IRQ(arm) */
 enum IRQ {
-    IRQtimer0   = 0,
-    IRQtimer1   = 1,
-    IRQtimer2   = 2,
+    IRQtimer0   = 0, // reserved by GPU?
+    IRQtimer1   = 1, // reserved by GPU?
+    IRQtimer2   = 2, // reserved by GPU?
     IRQtimer3   = 3,
 
     IRQclock    = IRQtimer3,

@@ -198,7 +198,7 @@ sysrfork(ulong* arg)
     }
 
     /*s: [[sysrfork()]] inherit hang */
-        p->hang = up->hang;
+    p->hang = up->hang;
     /*e: [[sysrfork()]] inherit hang */
     p->procmode = up->procmode;
 
@@ -438,15 +438,15 @@ sysexec(ulong* arg)
      * Args: pass 2: assemble; the pages will be faulted in
      */
     /*s: [[sysexec()]] tos settings */
-        tos = (Tos*)(TSTKTOP - sizeof(Tos));
+    tos = (Tos*)(TSTKTOP - sizeof(Tos));
 
-        tos->cyclefreq = cpu->cyclefreq;
-        arch_cycles((uvlong*)&tos->pcycles);
-        tos->pcycles = -tos->pcycles; // see comment above on Proc->pcycle
-        tos->kcycles = tos->pcycles;
-        tos->clock = 0;
-        // what about other fields? like pid? will be set in kexit! but could be
-        // done here? what about sysrfork? call kexit?
+    tos->cyclefreq = cpu->cyclefreq;
+    arch_cycles((uvlong*)&tos->pcycles);
+    tos->pcycles = -tos->pcycles; // see comment above on Proc->pcycle
+    tos->kcycles = tos->pcycles;
+    tos->clock = 0;
+    // what about other fields? like pid? will be set in kexit! but could be
+    // done here? what about sysrfork? call kexit?
     /*e: [[sysexec()]] tos settings */
 
     argv = (char**)(TSTKTOP - ssize);
@@ -591,8 +591,8 @@ sysexec(ulong* arg)
     qunlock(&up->debug);
 
     /*s: [[sysexec()]] if hang */
-        if(up->hang)
-            up->procctl = Proc_stopme;
+    if(up->hang)
+        up->procctl = Proc_stopme;
     /*e: [[sysexec()]] if hang */
 
     return arch_execregs(entry, ssize, nargs);
@@ -641,9 +641,9 @@ syssleep(ulong* arg)
     n = arg[0];
     if(n <= 0) {
         /*s: [[syssleep()]] optional [[edfyield()]] for real-time scheduling */
-                if (up->edf && (up->edf->flags & Admitted))
-                    edfyield();
-                else
+        if (up->edf && (up->edf->flags & Admitted))
+            edfyield();
+        else
         /*e: [[syssleep()]] optional [[edfyield()]] for real-time scheduling */
         yield();
         return 0;

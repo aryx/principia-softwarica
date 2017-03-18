@@ -238,9 +238,9 @@ enum Priority
     PriRoot   = 13,   /* base priority for root processes */
 
     /*s: constants for real-time priority */
-        PriRelease  = Npriq,  /* released edf processes */
-        PriEdf    = Npriq+1,  /* active edf processes */
-        PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
+    PriRelease  = Npriq,  /* released edf processes */
+    PriEdf    = Npriq+1,  /* active edf processes */
+    PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
     /*e: constants for real-time priority */
 };
 /*e: enum priority */
@@ -300,7 +300,7 @@ struct Edf {
 //--------------------------------------------------------------------
 enum {
     /*s: constant NERR */
-        NERR = 64,
+    NERR = 64,
     /*e: constant NERR */
 };
 
@@ -334,7 +334,7 @@ enum Procctl
     /*x: [[Procctl]] cases */
     Proc_tracesyscall,
     /*x: [[Procctl]] cases */
-        Proc_traceme,
+    Proc_traceme,
     /*x: [[Procctl]] cases */
     Proc_exitbig,
     /*e: [[Procctl]] cases */

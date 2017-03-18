@@ -62,13 +62,16 @@ struct Vpage0 {
 /*
  * interrupt control registers
  */
-// The order matters! the fields match the hardware memory mapped-IO.
+// The order matters! the fields match the memory-mapped external registers.
 struct Intregs {
     u32int  ARMpending;
     u32int  GPUpending[2];
+
     u32int  FIQctl;
+
     u32int  GPUenable[2];
     u32int  ARMenable;
+
     u32int  GPUdisable[2];
     u32int  ARMdisable;
 };
@@ -141,6 +144,7 @@ arch_trapinit(void)
         vpage0 = (Vpage0*)HVECTORS;
         memmove(vpage0->vectors, vectors, sizeof(vpage0->vectors));
         memmove(vpage0->vtable, vtable, sizeof(vpage0->vtable));
+
         cacheuwbinv();
         l2cacheuwbinv();
     }

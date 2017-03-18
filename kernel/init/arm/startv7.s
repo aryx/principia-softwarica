@@ -93,6 +93,7 @@ _ramZ:
 /*s: function _startpg(raspberry pi2)(arm) */
 TEXT _startpg(SB), 1, $-4
 
+    /*s: [[_startpg()]] enable cycle counter(raspberry pi2)(arm) */
     /*
      * enable cycle counter
      */
@@ -100,7 +101,7 @@ TEXT _startpg(SB), 1, $-4
     MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenacyc
     MOVW    $1, R1
     MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenapmnc
-
+    /*e: [[_startpg()]] enable cycle counter(raspberry pi2)(arm) */
     /*
      * call main and loop forever if it returns
      */
@@ -212,6 +213,7 @@ reset:
 /*s: function _startpg2(raspberry pi2)(arm) */
 TEXT _startpg2(SB), 1, $-4
 
+    /*s: [[_startpg2()]] enable cycle counter(raspberry pi2)(arm) */
     /*
      * enable cycle counter
      */
@@ -219,7 +221,7 @@ TEXT _startpg2(SB), 1, $-4
     MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenacyc
     MOVW    $1, R1
     MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenapmnc
-
+    /*e: [[_startpg2()]] enable cycle counter(raspberry pi2)(arm) */
     /*
      * call cpustart and loop forever if it returns
      */

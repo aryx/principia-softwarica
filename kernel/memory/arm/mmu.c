@@ -102,8 +102,8 @@ mmuinit1(void *a)
      * undo identity map of first MB of ram
      */
     l1[L1X(0)] = 0;
-    cachedwbse(&l1[L1X(0)], sizeof(PTE));
 
+    cachedwbse(&l1[L1X(0)], sizeof(PTE));
     mmuinvalidateaddr(0);
 }
 /*e: function mmuinit1(arm) */

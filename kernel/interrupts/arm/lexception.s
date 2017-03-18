@@ -50,6 +50,7 @@ TEXT _vsvc(SB), 1, $-4          /* SWI */
     MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
 
     /* get R(CPU) for this cpu */
+    /*s: [[_vsvc()]] set cpu register(arm) */
     CPUID(R1)
     SLL $2, R1          /* convert to word index */
     MOVW    $cpus(SB), R2
@@ -57,6 +58,7 @@ TEXT _vsvc(SB), 1, $-4          /* SWI */
     MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
     CMP $0, R(CPU)
     MOVW.EQ $CPUADDR, R0        /* paranoia: use CPUADDR if 0 */
+    /*e: [[_vsvc()]] set cpu register(arm) */
 
     MOVW    8(R(CPU)), R(UP)        /* up */ // Cpu->proc
 
@@ -180,13 +182,15 @@ _vswitch:
         MOVW    $setR12(SB), R12    /* Make sure we've got the kernel's SB loaded */
 
         /* get R(CPU) for this cpu */
+        /*s: [[_vswitch()]] set cpu register(arm) */
         CPUID(R1)
         SLL $2, R1          /* convert to word index */
         MOVW    $cpus(SB), R2
         ADD R1, R2
         MOVW    (R2), R(CPU)        /* m = cpus[cpuid] */
         CMP $0, R(CPU)
-        MOVW.EQ $CPUADDR, R(CPU)        /* paranoia: use CPUADDR if 0 */
+        MOVW.EQ $CPUADDR, R0        /* paranoia: use CPUADDR if 0 */
+        /*e: [[_vswitch()]] set cpu register(arm) */
 
         MOVW    8(R(CPU)), R(UP)        /* up */
 
