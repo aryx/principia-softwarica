@@ -650,14 +650,14 @@ main(void)
     setclkrate(ClkArm, 0);
 
     arch_trapinit();
-    clockinit();
+    clockinit(); // PB QEMU
 
     //TODO? kbdqinit(); // setup kbdq
     lineqinit(); // setup lineq
     timersinit();
     swcursor_init();
 
-    arch_cpuidprint();
+    arch_cpuidprint(); // PB QEMU
     archreset();
 
     procinit();

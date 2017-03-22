@@ -169,11 +169,11 @@ clockinit(void)
     tstart = tn->clo;
     do{
         t0 = arch_lcycles();
-    }while(tn->clo == tstart);
+    }while(tn->clo == tstart); // PB QEMU
     tend = tstart + 10000;
     do{
         t1 = arch_lcycles();
-    }while(tn->clo != tend);
+    }while(tn->clo != tend); // PB QEMU
     t1 -= t0;
 
     cpu->cpuhz = 100 * t1;
@@ -297,7 +297,7 @@ clock_arch_microdelay(int n)
     diff = n + 1;
     tn = (Systimers*)SYSTIMERS;
     now = tn->clo;
-    while(tn->clo - now < diff)
+    while(tn->clo - now < diff) // PB QEMU
         ;
 }
 /*e: function clock_arch_microdelay(arm) */
