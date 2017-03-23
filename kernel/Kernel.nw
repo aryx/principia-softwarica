@@ -654,6 +654,7 @@ provides to the user programs.
 
 %x86: PC vs Raspberry Pi?
 
+%http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/index.html
 
 \subsection{ARM CPU}
 
@@ -665,12 +666,13 @@ provides to the user programs.
 % More than x86!
 
 %references:
-% https://en.wikipedia.org/wiki/ARM_architecture
-% http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0301h/index.html
-% https://www.heyrick.co.uk/armwiki/Main_Page 
+% - https://en.wikipedia.org/wiki/ARM_architecture
+% - http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0301h/index.html
+% - https://www.heyrick.co.uk/armwiki/Main_Page 
 %  (RiscOS oriented, but still a few good pages)
-% https://courses.cs.washington.edu/courses/cse466/10au/pdfs/lectures/07-arm_overview.pdf 
+% - https://courses.cs.washington.edu/courses/cse466/10au/pdfs/lectures/07-arm_overview.pdf 
 %  (slides, small, very good)
+% - http://embedded-xinu.readthedocs.io/en/latest/arm/index.html
 
 <<constant BI2BY(arm)>>=
 #define BI2BY       8           /* bits per byte */
@@ -5452,7 +5454,7 @@ renameuser(char *old, char *new)
 {
     Proc *p, *ep;
 
-    ep = procalloc.arena+conf.nproc;
+    ep = procalloc.arena + conf.nproc;
     for(p = procalloc.arena; p < ep; p++)
         if(p->user!=nil && strcmp(old, p->user)==0)
             kstrdup(&p->user, new);
@@ -7530,6 +7532,8 @@ static Lock vctllock;
 
 % INTREGS!
 
+%http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-Interrupt-Controller.html
+
 <<struct Intregs(arm)>>=
 /*
  * interrupt control registers
@@ -7550,6 +7554,7 @@ struct Intregs {
 @
 % 2 int, so 64 bits for 64 possible IRQs.
 %not used: GPUdisable
+
 
 <<function irqenable(arm)>>=
 void
@@ -11223,11 +11228,14 @@ preempt(void)
 % * Use cycle counter for cycles()
 % */
 
+%http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
+
 % at SYSTIMERS VIRTIO
 <<struct Systimers(arm)>>=
 // The order matters! the fields match the memory-mapped external registers.
 struct Systimers {
     u32int  cs;
+
     u32int  clo;
     u32int  chi;
 
@@ -11636,14 +11644,14 @@ main(void)
     setclkrate(ClkArm, 0);
 
     arch_trapinit();
-    clockinit();
+    clockinit(); // PB QEMU
 
     //TODO? kbdqinit(); // setup kbdq
     lineqinit(); // setup lineq
     timersinit();
     swcursor_init();
 
-    arch_cpuidprint();
+    arch_cpuidprint(); // PB QEMU
     archreset();
 
     procinit();
@@ -12024,11 +12032,11 @@ clockinit(void)
     tstart = tn->clo;
     do{
         t0 = arch_lcycles();
-    }while(tn->clo == tstart);
+    }while(tn->clo == tstart); // PB QEMU
     tend = tstart + 10000;
     do{
         t1 = arch_lcycles();
-    }while(tn->clo != tend);
+    }while(tn->clo != tend); // PB QEMU
     t1 -= t0;
 
     cpu->cpuhz = 100 * t1;
@@ -21310,6 +21318,21 @@ QTEXCL = 0x20,    /* type bit for exclusive use files */
 
 % different capabilities? timer, clock, rtc, ??
 
+% See comment in clock.c
+%/*
+% * bcm283[56] timers
+% *  System timers run at 1MHz (timers 1 and 2 are used by GPU)
+% *  ARM timer usually runs at 250MHz (may be slower in low power modes)
+% *  Cycle counter runs at 700MHz (unless overclocked)
+% *    All are free-running up-counters
+% *  Cortex-a7 has local generic timers per cpu (which we run at 1MHz)
+% *
+% * Use system timer 3 (64 bits) for hzclock interrupts and fastticks
+% *   For smp on bcm2836, use local generic timer for interrupts on cpu1-3
+% * Use ARM timer (32 bits) for perfticks
+% * Use ARM timer to force immediate interrupt
+% * Use cycle counter for cycles()
+% */
 
 
 \section{Time units}
@@ -21474,7 +21497,7 @@ clock_arch_microdelay(int n)
     diff = n + 1;
     tn = (Systimers*)SYSTIMERS;
     now = tn->clo;
-    while(tn->clo - now < diff)
+    while(tn->clo - now < diff) // PB QEMU
         ;
 }
 @
@@ -27022,6 +27045,7 @@ case Qfpregs:
 #define BARRIERS    ISB; DSB
 @
 
+% http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-Memory-Barriers.html
 
 <<instruction ISB(arm)>>=
 #define ISB \
@@ -27187,18 +27211,22 @@ Soc soc = {
 \subsection{Extended control}
 
 <<[[CpCONTROL.CpMainctl]] other cases(arm)>>=
-#define CpCsbo (3<<22|1<<18|1<<16|017<<3)   /* must be 1 (armv7) */
-#define CpCsbz (CpCtre|1<<26|CpCve|1<<15|7<<7)  /* must be 0 (armv7) */
 #define CpCsw       (1<<10)     /* SW: SWP(B) enable (deprecated in v7) */
 #define CpCpredict  0x00000800  /* Z: branch prediction (armv7) */
 @
-% >> >> >> >> >> >> >> >>
+% >> 
 
 <<[[CpCONTROL.CpMainctl]] other cases(arm)>>=
 #define CpCve       (1<<24)     /* VE: intr vectors enable */
 #define CpCtre      (1<<28)     /* TRE: TEX remap enable */
 @
 % >> >>
+
+<<[[CpCONTROL.CpMainctl]] other cases(arm)>>=
+#define CpCsbo (3<<22|1<<18|1<<16|017<<3)       /* must be 1 (armv7) */
+#define CpCsbz (CpCtre|1<<26|CpCve|1<<15|7<<7)  /* must be 0 (armv7) */
+@
+% >> >> >> >> >> >> >>
 
 
 
@@ -27226,7 +27254,7 @@ Soc soc = {
 #define CpACl2en        (1<<1)  /* l2 cache enable; default 1 */
 
 /* cortex-a7 and cortex-a9 */
-#define CpACsmp         (1<<6)  /* SMP l1 caches coherence; needed for ldrex/strex */
+<<[[CpCONTROL.CpAuxctl]] other cases(arm)>>
 #define CpACl1pctl      (3<<13) /* l1 prefetch control */
 @
 % >> >> >> >> >> >> >> >> >>
@@ -27418,6 +27446,12 @@ l2ap(int ap)
 
 
 \section{SMP (ARM)}
+
+<<[[CpCONTROL.CpAuxctl]] other cases(arm)>>=
+#define CpACsmp         (1<<6)  /* SMP l1 caches coherence; needed for ldrex/strex */
+@
+%$
+% >>
 
 \subsection{Initialization adjustments}
 
@@ -27835,7 +27869,7 @@ arch_cpuidprint(void)
     char name[64];
 
     cputype2name(name, sizeof name);
-    arch_delay(50);             /* let uart catch up */
+    arch_delay(50);             /* let uart catch up */  // PB QEMU
     print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
 }
 @

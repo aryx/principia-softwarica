@@ -1750,7 +1750,7 @@ renameuser(char *old, char *new)
 {
     Proc *p, *ep;
 
-    ep = procalloc.arena+conf.nproc;
+    ep = procalloc.arena + conf.nproc;
     for(p = procalloc.arena; p < ep; p++)
         if(p->user!=nil && strcmp(old, p->user)==0)
             kstrdup(&p->user, new);

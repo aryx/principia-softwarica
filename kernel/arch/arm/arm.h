@@ -109,13 +109,14 @@
 #define CpCdcache   0x00000004  /* C: data cache on */
 #define CpCicache   0x00001000  /* I: instruction cache on */
 /*x: [[CpCONTROL.CpMainctl]] other cases(arm) */
-#define CpCsbo (3<<22|1<<18|1<<16|017<<3)   /* must be 1 (armv7) */
-#define CpCsbz (CpCtre|1<<26|CpCve|1<<15|7<<7)  /* must be 0 (armv7) */
 #define CpCsw       (1<<10)     /* SW: SWP(B) enable (deprecated in v7) */
 #define CpCpredict  0x00000800  /* Z: branch prediction (armv7) */
 /*x: [[CpCONTROL.CpMainctl]] other cases(arm) */
 #define CpCve       (1<<24)     /* VE: intr vectors enable */
 #define CpCtre      (1<<28)     /* TRE: TEX remap enable */
+/*x: [[CpCONTROL.CpMainctl]] other cases(arm) */
+#define CpCsbo (3<<22|1<<18|1<<16|017<<3)       /* must be 1 (armv7) */
+#define CpCsbz (CpCtre|1<<26|CpCve|1<<15|7<<7)  /* must be 0 (armv7) */
 /*e: [[CpCONTROL.CpMainctl]] other cases(arm) */
 /*e: type CpCONTROL CpMainctl(arm) */
 /*s: type CpCONTROL CpAuxctl(arm) */
@@ -138,7 +139,9 @@
 #define CpACl2en        (1<<1)  /* l2 cache enable; default 1 */
 
 /* cortex-a7 and cortex-a9 */
+/*s: [[CpCONTROL.CpAuxctl]] other cases(arm) */
 #define CpACsmp         (1<<6)  /* SMP l1 caches coherence; needed for ldrex/strex */
+/*e: [[CpCONTROL.CpAuxctl]] other cases(arm) */
 #define CpACl1pctl      (3<<13) /* l1 prefetch control */
 /*e: type CpCONTROL CpAuxctl(arm) */
 
