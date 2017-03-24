@@ -18266,6 +18266,10 @@ putstrn(char *str, int n)
 
 \subsubsection{[[iprint()]]}
 
+% when do you call iprint? internal print? interrupt-disable print
+% (like ilock)
+% Apparently good to avoid interlaces messages on SMP.
+
 <<global iprintscreenputs>>=
 bool iprintscreenputs = true;
 @ 
@@ -33559,9 +33563,18 @@ case 'D':
 
 \section{Serial line}
 
-% can demo with qemu?
+% Complex to debug kernel on Raspberry Pi because need to gets lots
+% of stuff working before being able to print a character on the screen:
+% Framebuffer, font, drawing primitives.
+% Alternative is to print text on serial line! 
+%x86: simpler with cga.c and builtin font support.
+
+% Can demo with Qemu? Can get output on console?
+
+\subsection{[[serialoq]]}
 
 <<global serialoq>>=
+// option<Queue>
 Queue*  serialoq;       /* serial console output */
 @ 
 
@@ -33615,60 +33628,59 @@ echoserialoq(char *buf, int n)
 
 
 <<[[putstrn0()]] serialoq handling>>=
-    /*
-     *   Convert \n to \r\n for serial
-     *   line consoles.  Locking of the queues is left up to the screen
-     *   or uart code.  Multi-line messages to serial consoles may get
-     *   interspersed with other messages.
-     */
+/*
+ *   Convert \n to \r\n for serial
+ *   line consoles.  Locking of the queues is left up to the screen
+ *   or uart code.  Multi-line messages to serial consoles may get
+ *   interspersed with other messages.
+ */
+<<[[putstrn0()]] if serialoq nil>>
+// else
 
-    if(serialoq == nil){
-        uartputs(str, n);
-        return;
-    }
-
-    while(n > 0) {
-        t = memchr(str, '\n', n);
-        if(t && !kbd.raw) {
-            m = t-str;
-            if(usewrite){
-                qwrite(serialoq, str, m);
-                qwrite(serialoq, "\r\n", 2);
-            } else {
-                qiwrite(serialoq, str, m);
-                qiwrite(serialoq, "\r\n", 2);
-            }
-            n -= m+1;
-            str = t+1;
+while(n > 0) {
+    t = memchr(str, '\n', n);
+    if(t && !kbd.raw) {
+        m = t-str;
+        if(usewrite){
+            qwrite(serialoq, str, m);
+            qwrite(serialoq, "\r\n", 2);
         } else {
-            if(usewrite)
-                qwrite(serialoq, str, n);
-            else
-                qiwrite(serialoq, str, n);
-            break;
+            qiwrite(serialoq, str, m);
+            qiwrite(serialoq, "\r\n", 2);
         }
+        n -= m+1;
+        str = t+1;
+    } else {
+        if(usewrite)
+            qwrite(serialoq, str, n);
+        else
+            qiwrite(serialoq, str, n);
+        break;
     }
+}
 @
 
+\subsection{[[uartputs()]]}
 
-
-% dead?
-<<function prflush>>=
-void
-prflush(void)
-{
-    ulong now;
-
-    now = cpu->ticks;
-    while(consactive())
-        if(cpu->ticks - now >= Arch_HZ)
-            break;
+<<[[putstrn0()]] if serialoq nil>>=
+if(serialoq == nil){
+    uartputs(str, n);
+    return;
 }
-@ 
+@
 
+%putstrn0 | iprint -> <>
+% void  uartputs(char*, int);
 
+\subsection{[[consuart]]}
 
+<<global consuart>>=
+Uart* consuart;
+@
 
+\subsection{[[Uart]], [[PhysUart]]}
+
+% ...
 
 \chapter{Profiling}
 
@@ -34052,6 +34064,20 @@ devcons_panic(char *fmt, ...)
     // lapic, but it seems to work still :)
     //arch_dumpstack();
     //exit(1);
+}
+@ 
+
+% devcons_panic -> <>
+<<function prflush>>=
+void
+prflush(void)
+{
+    ulong now;
+
+    now = cpu->ticks;
+    while(consactive())
+        if(cpu->ticks - now >= Arch_HZ)
+            break;
 }
 @ 
 
