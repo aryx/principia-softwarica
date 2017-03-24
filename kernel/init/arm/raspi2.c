@@ -175,7 +175,7 @@ l2ap(int ap)
 
 
 // in main.c
-extern void cpuinit(void);
+extern void arch__cpuinit(void);
 extern void machon(uint);
 
 /*s: function cpustart(raspberry pi2)(arm) */
@@ -185,13 +185,13 @@ cpustart(int xcpu)
     Mboxes *mb;
 
     up = nil;
-    cpuinit();
+    arch__cpuinit();
     mmuinit1((void*)cpu->mmul1);
 
     mb = (Mboxes*)(ARMLOCAL + Mboxregs);
     mb->clr[xcpu].doorbell = 1;
 
-    arch_trapinit();
+    arch__trapinit();
     clockinit();
     timersinit();
 

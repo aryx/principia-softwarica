@@ -112,10 +112,10 @@ arch_validalign(uintptr addr, unsigned align)
 }
 /*e: function arch_validalign(arm) */
 
-/*s: function kexit(arm) */
+/*s: function arch__kexit(arm) */
 /* go to user space */
 void
-kexit(Ureg*)
+arch__kexit(Ureg*)
 {
     /*s: [[kexit()]] tos adjustments */
     uvlong t;
@@ -133,7 +133,7 @@ kexit(Ureg*)
     /* make visible immediately to user proc */
     cachedwbinvse(tos, sizeof *tos);
 }
-/*e: function kexit(arm) */
+/*e: function arch__kexit(arm) */
 
 
 /*s: function linkproc(arm) */

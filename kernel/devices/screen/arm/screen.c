@@ -183,7 +183,7 @@ screenwin(void)
 
 
 void
-arch_screeninit(void)
+arch__screeninit(void)
 {
     uchar *fb;
     int set;

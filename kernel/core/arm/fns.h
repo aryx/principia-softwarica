@@ -19,18 +19,17 @@
 /*e: fns.h includes(arm) */
 
 // not classified yet
-void arch_cpuidprint(void);
+extern void arch_cpuidprint(void);
+
+// different signatures in archs or macro so cant factorize in portdat_xxx.h
+extern void  arch_touser(uintptr);
+extern int   arch_cmpswap(long*, long, long);
 /*s: macro getpgcolor(arm) */
 #define getpgcolor(a)   0
 /*e: macro getpgcolor(arm) */
-
-// different signatures in different arch so cant factorize
-void  arch_touser(uintptr);
-int   arch_cmpswap(long*, long, long);
 /*s: macro arch_cycles(arm) */
 #define arch_cycles(ip) *(ip) = arch_lcycles()
 /*e: macro arch_cycles(arm) */
-
 /*s: macro arch_countpagerefs(arm) */
 // same signatures but optimized away
 #define arch_countpagerefs(a, b)
@@ -39,14 +38,16 @@ int   arch_cmpswap(long*, long, long);
 #define arch_intrenable(i, f, a, b, n) irqenable((i), (f), (a))
 /*e: macro arch_intrenable(arm) */
 
-void dumpregs(Ureg*);
+extern int arch__notify(Ureg*);
+extern void arch__kexit(Ureg*);
+
+extern void dumpregs(Ureg*);
 
 
 extern void mmuinit1(void*);
 extern void mmuinvalidate(void);
 extern void mmuinvalidateaddr(u32int);
 
-extern void kexit(Ureg*);
 
 extern void irqenable(int, void (*)(Ureg*, void*), void*);
 

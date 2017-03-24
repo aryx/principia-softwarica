@@ -65,7 +65,7 @@ TEXT _vsvc(SB), 1, $-4          /* SWI */
     MOVW    R13, R0         /* first arg is pointer to ureg */
     SUB $8, R13         /* space for argument+link */
 
-    BL  syscall(SB)
+    BL  arch__syscall(SB)
 
     ADD $(8+4*15), R13      /* make r13 point to ureg->type */
     MOVW    8(R13), R14     /* restore link */
@@ -148,7 +148,7 @@ _vswitch:
         SUB $(4*2), R13     /* space for argument+link (for debugger) */
         MOVW    $0xdeaddead, R11    /* marker */
 
-        BL  trap(SB)
+        BL  arch__trap(SB)
 
         MOVW    $setR12(SB), R12    /* reload kernel's SB (ORLY?) */
         ADD $(4*2+4*15), R13    /* make r13 point to ureg->type */
@@ -197,7 +197,7 @@ _vswitch:
         MOVW    R13, R0         /* first arg is pointer to ureg */
         SUB $(4*2), R13     /* space for argument+link (for debugger) */
 
-        BL  trap(SB)
+        BL  arch__trap(SB)
 
         ADD $(4*2+4*15), R13    /* make r13 point to ureg->type */
         MOVW    8(R13), R14     /* restore link */

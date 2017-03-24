@@ -126,14 +126,12 @@ static char *trapnames[PsrMask+1] = {
 };
 /*e: global trapnames(arm) */
 
-extern int notify(Ureg*);
-
-/*s: function arch_trapinit(arm) */
+/*s: function arch__trapinit(arm) */
 /*
  *  set up for exceptions
  */
 void
-arch_trapinit(void)
+arch__trapinit(void)
 {
     Vpage0 *vpage0;
 
@@ -150,17 +148,17 @@ arch_trapinit(void)
     }
 
     /* set up the stacks for the interrupt modes */
-    /*s: [[arch_trapinit()]] set stack for other exception/processor-modes */
+    /*s: [[arch__trapinit()]] set stack for other exception/processor-modes */
     setr13(PsrMirq, cpu->sirq);
     setr13(PsrMabt, cpu->sabt);
     setr13(PsrMund, cpu->sund);
-    /*x: [[arch_trapinit()]] set stack for other exception/processor-modes */
+    /*x: [[arch__trapinit()]] set stack for other exception/processor-modes */
     setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
-    /*e: [[arch_trapinit()]] set stack for other exception/processor-modes */
+    /*e: [[arch__trapinit()]] set stack for other exception/processor-modes */
 
     arch_coherence();
 }
-/*e: function arch_trapinit(arm) */
+/*e: function arch__trapinit(arm) */
 
 /*s: function intrcpushutdown(arm) */
 void
@@ -436,12 +434,12 @@ writetomem(ulong inst)
 }
 /*e: function writetomem(arm) */
 
-/*s: function trap(arm) */
+/*s: function arch__trap(arm) */
 /*
  *  here on all exceptions other than syscall (SWI) and fiq
  */
 void
-trap(Ureg *ureg)
+arch__trap(Ureg *ureg)
 {
     bool user;
     bool clockintr;
@@ -657,12 +655,12 @@ trap(Ureg *ureg)
     if(user){
         /*s: [[trap()]] call possibly notify(arm) */
         if(up->procctl || up->nnote)
-            notify(ureg);
+            arch__notify(ureg);
         /*e: [[trap()]] call possibly notify(arm) */
-        kexit(ureg);
+        arch__kexit(ureg);
     }
 }
-/*e: function trap(arm) */
+/*e: function arch__trap(arm) */
 
 /*s: function isvalidaddr(arm) */
 int

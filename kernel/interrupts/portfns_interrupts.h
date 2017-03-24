@@ -4,6 +4,6 @@
 void  arch_intrenable(int, void (*)(Ureg*, void*), void*, int, char*);
 
 // <arch>/trap.c (called from main)
-void  arch_trapinit(void);
+void  arch__trapinit(void);
 
 /*e: portfns_interrupts.h */

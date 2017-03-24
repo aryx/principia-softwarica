@@ -157,8 +157,15 @@ Cmdtab proccmd[] = {
 
 /* Segment type from portdat.h */
 /*s: global sname */
-// hash<enum<segtype, string>>
-static char *sname[]={ "Text", "Data", "Bss", "Stack",   "Shared", "Phys", };
+// hash<enum<Segtype, string>>
+static char *sname[]={ 
+    [SG_TEXT]     = "Text", 
+    [SG_DATA]     = "Data", 
+    [SG_BSS]      = "Bss", 
+    [SG_STACK]    = "Stack", 
+    [SG_SHARED]   = "Shared", 
+    [SG_PHYSICAL] = "Phys"
+};
 /*e: global sname */
 
 /*s: devproc QXXX macros */
@@ -1753,9 +1760,11 @@ procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
     arch_kunmap(k);
     poperror();
 
- /* Ensure the process sees text page changes */
- if(s->flushme)
-  memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+    /*s: [[procctlmemio()]] set cachectl if flushme segment */
+    /* Ensure the process sees text page changes */
+    if(s->flushme)
+        memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+    /*e: [[procctlmemio()]] set cachectl if flushme segment */
 
     s->steal--;
 
@@ -1778,7 +1787,9 @@ text2data(Proc *p, Segment *s)
     incref(ps->image);
     ps->fstart = s->fstart;
     ps->flen = s->flen;
+    /*s: [[text2data()]] initialize other fields */
     ps->flushme = true;
+    /*e: [[text2data()]] initialize other fields */
 
     qlock(&p->seglock);
     for(i = 0; i < NSEG; i++)

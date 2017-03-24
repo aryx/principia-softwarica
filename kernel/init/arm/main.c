@@ -87,9 +87,9 @@ getconf(char *name)
 //*****************************************************************************
 // Cpu init
 //*****************************************************************************
-/*s: function cpuinit(arm) */
+/*s: function arch__cpuinit(arm) */
 void
-cpuinit(void)
+arch__cpuinit(void)
 {
     Cpu *m0;
 
@@ -97,31 +97,31 @@ cpuinit(void)
     cpu->perf.period = 1;
 
     m0 = CPUS(0);
-    /*s: [[cpuinit()]] it not cpu0 */
+    /*s: [[arch__cpuinit()]] it not cpu0 */
     if (cpu->cpuno != 0) {
         /* synchronise with cpu 0 */
         cpu->ticks = m0->ticks;
         cpu->fastclock = m0->fastclock;
     }
-    /*e: [[cpuinit()]] it not cpu0 */
+    /*e: [[arch__cpuinit()]] it not cpu0 */
 }
-/*e: function cpuinit(arm) */
+/*e: function arch__cpuinit(arm) */
 
-/*s: function cpu0init(arm) */
+/*s: function arch__cpu0init(arm) */
 void
-cpu0init(void)
+arch__cpu0init(void)
 {
     conf.ncpu = 0; // set in machon() instead (machon() is called after cpuinit)
 
     cpu->cpuno = 0;
     cpus[cpu->cpuno] = cpu;
 
-    cpuinit();
+    arch__cpuinit();
     active.exiting = 0;
 
     up = nil;
 }
-/*e: function cpu0init(arm) */
+/*e: function arch__cpu0init(arm) */
 
 /*s: function machon(arm) */
 /* enable scheduling of this cpu */
@@ -149,9 +149,9 @@ machon(uint xcpu)
 ulong   memsize = 128*1024*1024;
 /*e: global memsize(arm) */
 
-/*s: function confinit(arm) */
+/*s: function arch__confinit(arm) */
 void
-confinit(void)
+arch__confinit(void)
 {
     int i;
     char *p;
@@ -231,7 +231,7 @@ confinit(void)
          */
         imagmem->maxsize = kmem;
 }
-/*e: function confinit(arm) */
+/*e: function arch__confinit(arm) */
 
 //*****************************************************************************
 // First process init
@@ -296,12 +296,12 @@ init0(void)
 // see initcode in init.h (comes from ../port/initcode.c and init9.s
 
 extern uintptr bootargs(uintptr base);
-/*s: function userinit(arm) */
+/*s: function arch__userinit(arm) */
 /*
  *  create the first process
  */
 void
-userinit(void)
+arch__userinit(void)
 {
     Proc *p;
     Segment *s;
@@ -341,9 +341,9 @@ userinit(void)
      * shouldn't be the case here.
      */
     s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-    /*s: [[userinit()]] set flushme for stack segment */
+    /*s: [[arch__userinit()]] set flushme for stack segment */
     s->flushme = true;
-    /*e: [[userinit()]] set flushme for stack segment */
+    /*e: [[arch__userinit()]] set flushme for stack segment */
     p->seg[SSEG] = s;
     pg = newpage(true, nil, USTKTOP-BY2PG);
     segpage(s, pg);
@@ -358,9 +358,9 @@ userinit(void)
     s = newseg(SG_TEXT, UTZERO, 1); // initcode needs only 1 page
     p->seg[TSEG] = s;
     pg = newpage(true, nil, UTZERO);
-    /*s: [[userinit()]] set cachectl(arm) */
+    /*s: [[arch__userinit()]] set cachectl(arm) */
     memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
-    /*e: [[userinit()]] set cachectl(arm) */
+    /*e: [[arch__userinit()]] set cachectl(arm) */
     segpage(s, pg);
 
     k = arch_kmap(s->pagedir[0]->pagetab[0]);
@@ -370,7 +370,7 @@ userinit(void)
     // ready to go!
     ready(p);
 }
-/*e: function userinit(arm) */
+/*e: function arch__userinit(arm) */
 
 
 //*****************************************************************************
@@ -619,7 +619,7 @@ main(void)
     // Let's go!
 
     cpu = (Cpu*)CPUADDR;
-    cpu0init(); // cpu0 initialization (calls cpuinit())
+    arch__cpu0init(); // cpu0 initialization (calls arch__cpuinit())
     mmuinit1((void*)L1); // finish mmu initialization started in mmuinit0
     machon(0); // enable cpu0 for scheduling
 
@@ -629,12 +629,12 @@ main(void)
     // example of manual config:
     // TODO confname(``console'') = 1?
     /*e: [[main()]] parsing options and boot arguments(arm) */
-    confinit();     /* figures out amount of memory */
+    arch__confinit();     /* figures out amount of memory */
     xinit();
 
     uartconsinit();
 
-    arch_screeninit(); // screenputs = swconsole_screenputs
+    arch__screeninit(); // screenputs = swconsole_screenputs
     quotefmtinstall(); // libc printf initialization
 
     print("\nPlan 9 from Bell Labs\n"); // yeah!
@@ -653,7 +653,7 @@ main(void)
     /* set clock rate to arm_freq from config.txt (default pi1:700Mhz pi2:900MHz) */
     setclkrate(ClkArm, 0);
 
-    arch_trapinit();
+    arch__trapinit();
     clockinit(); // PB QEMU
 
     //TODO? kbdqinit(); // setup kbdq
@@ -676,7 +676,7 @@ main(void)
     swapinit(); // setup swapalloc
 
     // let's craft our first process (that will then exec("boot/boot"))
-    userinit();
+    arch__userinit();
 
     /*s: [[main()]] start the other processors(arm) */
     launchinit(getncpus());

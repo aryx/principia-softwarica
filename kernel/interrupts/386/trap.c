@@ -892,7 +892,7 @@ void syscall(Ureg* ureg)
 
     /*s: [[syscall()]] call noted() */
     if(scallnr == NOTED)
-        noted(ureg, *(ulong*)(sp+BY2WD));
+        arch__noted(ureg, *(ulong*)(sp+BY2WD));
     /*e: [[syscall()]] call noted() */
     /*s: [[syscall()]] call notify()(x86) */
     if(scallnr!=RFORK && (up->procctl || up->nnote)){

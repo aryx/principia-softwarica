@@ -1181,8 +1181,6 @@ struct Fbinfo {
 
 \section{Code organization}
 
-% port vs non-port.
-
 <<kernel basic includes>>=
 #include <u.h>
 #include "../port/lib.h"
@@ -1193,7 +1191,20 @@ struct Fbinfo {
 @ 
 %pad: I added the error.h
 
+\subsection{Portable vs arch-specific code}
+
+%pad:
+% I added some arch_ and Arch_ prefix on arch-specific functions/structures
+% called/used from port/. 
+% I added some arch__ for arch-specific functions not called from port
+% but that have almost the same signatures in different arch. Not called
+% from port because called from arch-specific code (e.g. interrupt code)
+% but in the end provides same functionalities in different archs.
+
+\subsection{Main headers}
+
 % u.h for uchar, uint, ... can be seen also as universal :)
+% arch-specific, but almost identical for x86 and arm
 
 % lib.h =~ libc like utilities, see Section XX
 \ifallcode
@@ -1230,6 +1241,8 @@ typedef int errorneg1;
 
 % mem.h see memory overview below.
 % Important constants such as address kernel.
+
+\subsection{Top directories}
 
 % dat.h, which includes a ../port/portdat.h
 %pad: was huge, too big, so I split.
@@ -1285,7 +1298,6 @@ typedef int errorneg1;
 %x86: same
 
 %missing compared to directories: arch/ conf/ docs/ filesystems/ lib/ 
-
 
 
 \ifallcode
@@ -6780,7 +6792,7 @@ TEXT _vsvc(SB), 1, $-4          /* SWI */
     MOVW    R13, R0         /* first arg is pointer to ureg */
     SUB $8, R13         /* space for argument+link */
 
-    BL  syscall(SB)
+    BL  arch__syscall(SB)
 
     ADD $(8+4*15), R13      /* make r13 point to ureg->type */
     MOVW    8(R13), R14     /* restore link */
@@ -6817,12 +6829,12 @@ Sargs sargs;    /* address of this is known by db */
 @ 
 %old: s -> sargs
 
-\subsection{[[syscall()]] (ARM)}
+\subsection{[[arch__syscall()]] (ARM)}
 
 % SWI -> EXCEPTION -> vectors -> vtable -> _vsvc -> <>
-<<function syscall(arm)>>=
+<<function arch__syscall(arm)>>=
 void
-syscall(Ureg* ureg)
+arch__syscall(Ureg* ureg)
 {
     int scallnr;
     long ret;
@@ -6892,10 +6904,9 @@ syscall(Ureg* ureg)
     <<[[syscall()]] call notify(arm)>>
 
     <<[[syscall()]] if delaysched(arm)>>
-    kexit(ureg);
+    arch__kexit(ureg);
 }
 @
-%could be called arch_syscall but called only from arch-specific code so ...
 %    /*  iprint("%s: syscall %s\n", up->text, sysctab[scallnr]?sysctab[scallnr]:"huh?"); */
 \t need Proc.pc?
 
@@ -7047,7 +7058,7 @@ _userexcep:
     MOVW    R13, R0         /* first arg is pointer to ureg */
     SUB $(4*2), R13     /* space for argument+link (for debugger) */
 
-    BL  trap(SB)
+    BL  arch__trap(SB)
 
     ADD $(4*2+4*15), R13    /* make r13 point to ureg->type */
     MOVW    8(R13), R14     /* restore link */
@@ -7086,7 +7097,7 @@ _userexcep:
     SUB $(4*2), R13     /* space for argument+link (for debugger) */
     MOVW    $0xdeaddead, R11    /* marker */
 
-    BL  trap(SB)
+    BL  arch__trap(SB)
 
     MOVW    $setR12(SB), R12    /* reload kernel's SB (ORLY?) */
     ADD $(4*2+4*15), R13    /* make r13 point to ureg->type */
@@ -7109,16 +7120,16 @@ _userexcep:
 @
 %$
 
-\subsection{[[trap()]] (ARM)}
+\subsection{[[arch__trap()]] (ARM)}
 
 
 % (_virq |  -> _vswitch) -> <>
-<<function trap(arm)>>=
+<<function arch__trap(arm)>>=
 /*
  *  here on all exceptions other than syscall (SWI) and fiq
  */
 void
-trap(Ureg *ureg)
+arch__trap(Ureg *ureg)
 {
     bool user;
     bool clockintr;
@@ -7157,17 +7168,16 @@ trap(Ureg *ureg)
 
     if(user){
         <<[[trap()]] call possibly notify(arm)>>
-        kexit(ureg);
+        arch__kexit(ureg);
     }
 }
 @
-%could be renamed arch_trap but called from arch-specific only
 % arch_splhi? who disabled interrupts?
 
-<<function kexit(arm)>>=
+<<function arch__kexit(arm)>>=
 /* go to user space */
 void
-kexit(Ureg*)
+arch__kexit(Ureg*)
 {
     <<[[kexit()]] tos adjustments>>
     tos->cyclefreq = cpu->cpuhz;
@@ -7179,7 +7189,6 @@ kexit(Ureg*)
 % should be called hook_before_exit_syscall note that
 % take Ureg*, so the address is in the stack and the actual
 % value are where?
-%could be renamed arch_kexit, but called from arch-specific only (trap())
 
 
 % divide by zero?
@@ -11605,17 +11614,17 @@ main(void)
     // Let's go!
 
     cpu = (Cpu*)CPUADDR;
-    cpu0init(); // cpu0 initialization (calls cpuinit())
+    arch__cpu0init(); // cpu0 initialization (calls arch__cpuinit())
     mmuinit1((void*)L1); // finish mmu initialization started in mmuinit0
     machon(0); // enable cpu0 for scheduling
 
     <<[[main()]] parsing options and boot arguments(arm)>>
-    confinit();     /* figures out amount of memory */
+    arch__confinit();     /* figures out amount of memory */
     xinit();
 
     uartconsinit();
 
-    arch_screeninit(); // screenputs = swconsole_screenputs
+    arch__screeninit(); // screenputs = swconsole_screenputs
     quotefmtinstall(); // libc printf initialization
 
     print("\nPlan 9 from Bell Labs\n"); // yeah!
@@ -11624,7 +11633,7 @@ main(void)
     /* set clock rate to arm_freq from config.txt (default pi1:700Mhz pi2:900MHz) */
     setclkrate(ClkArm, 0);
 
-    arch_trapinit();
+    arch__trapinit();
     clockinit(); // PB QEMU
 
     //TODO? kbdqinit(); // setup kbdq
@@ -11647,7 +11656,7 @@ main(void)
     swapinit(); // setup swapalloc
 
     // let's craft our first process (that will then exec("boot/boot"))
-    userinit();
+    arch__userinit();
 
     <<[[main()]] start the other processors(arm)>>
 
@@ -11673,25 +11682,25 @@ extern  char  end[];
 
 \subsection{[[cpu]] initialization (arm)}
 
-<<function cpu0init(arm)>>=
+<<function arch__cpu0init(arm)>>=
 void
-cpu0init(void)
+arch__cpu0init(void)
 {
     conf.ncpu = 0; // set in machon() instead (machon() is called after cpuinit)
 
     cpu->cpuno = 0;
     cpus[cpu->cpuno] = cpu;
 
-    cpuinit();
+    arch__cpuinit();
     active.exiting = 0;
 
     up = nil;
 }
 @
 
-<<function cpuinit(arm)>>=
+<<function arch__cpuinit(arm)>>=
 void
-cpuinit(void)
+arch__cpuinit(void)
 {
     Cpu *m0;
 
@@ -11699,7 +11708,7 @@ cpuinit(void)
     cpu->perf.period = 1;
 
     m0 = CPUS(0);
-    <<[[cpuinit()]] it not cpu0>>
+    <<[[arch__cpuinit()]] it not cpu0>>
 }
 @
 % done later:   //machon(m->cpuno);
@@ -11799,9 +11808,9 @@ ulong   memsize = 128*1024*1024;
 @
 
 
-<<function confinit(arm)>>=
+<<function arch__confinit(arm)>>=
 void
-confinit(void)
+arch__confinit(void)
 {
     int i;
     char *p;
@@ -11911,12 +11920,12 @@ struct Vpage0 {
 Nvec = 8,       /* # of vectors at start of lexception.s */
 @
 
-<<function arch_trapinit(arm)>>=
+<<function arch__trapinit(arm)>>=
 /*
  *  set up for exceptions
  */
 void
-arch_trapinit(void)
+arch__trapinit(void)
 {
     Vpage0 *vpage0;
 
@@ -11933,7 +11942,7 @@ arch_trapinit(void)
     }
 
     /* set up the stacks for the interrupt modes */
-    <<[[arch_trapinit()]] set stack for other exception/processor-modes>>
+    <<[[arch__trapinit()]] set stack for other exception/processor-modes>>
 
     arch_coherence();
 }
@@ -11958,7 +11967,7 @@ intrsoff(void)
 
 
 
-<<[[arch_trapinit()]] set stack for other exception/processor-modes>>=
+<<[[arch__trapinit()]] set stack for other exception/processor-modes>>=
 setr13(PsrMirq, cpu->sirq);
 setr13(PsrMabt, cpu->sabt);
 setr13(PsrMund, cpu->sund);
@@ -12340,12 +12349,12 @@ static uintptr sp;      /* XXX - must go - user stack of init proc */
 #define STACKALIGN(sp)  ((sp) & ~3)     /* bug: assure with alloc */
 @
 
-<<function userinit(arm)>>=
+<<function arch__userinit(arm)>>=
 /*
  *  create the first process
  */
 void
-userinit(void)
+arch__userinit(void)
 {
     Proc *p;
     Segment *s;
@@ -12385,7 +12394,7 @@ userinit(void)
      * shouldn't be the case here.
      */
     s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-    <<[[userinit()]] set flushme for stack segment>>
+    <<[[arch__userinit()]] set flushme for stack segment>>
     p->seg[SSEG] = s;
     pg = newpage(true, nil, USTKTOP-BY2PG);
     segpage(s, pg);
@@ -12400,7 +12409,7 @@ userinit(void)
     s = newseg(SG_TEXT, UTZERO, 1); // initcode needs only 1 page
     p->seg[TSEG] = s;
     pg = newpage(true, nil, UTZERO);
-    <<[[userinit()]] set cachectl(arm)>>
+    <<[[arch__userinit()]] set cachectl(arm)>>
     segpage(s, pg);
 
     k = arch_kmap(s->pagedir[0]->pagetab[0]);
@@ -22571,7 +22580,7 @@ Counter noteidalloc;
 
 
 <<struct Note>>=
-// a kind of unix signal
+// a kind of Unix signal
 struct Note
 {
     char  msg[ERRMAX];
@@ -22603,7 +22612,7 @@ NNOTE = 5,
 
 <<[[trap()]] call possibly notify(arm)>>=
 if(up->procctl || up->nnote)
-    notify(ureg);
+    arch__notify(ureg);
 @
 
 \subsection{[[sysnotify()]] (arm)}
@@ -22623,7 +22632,7 @@ sysnotify(ulong* arg)
 <<[[syscall()]] call notify(arm)>>=
 arch_splhi();
 if(scallnr != RFORK && (up->procctl || up->nnote))
-    notify(ureg);
+    arch__notify(ureg);
 @
 %x86: call arch_splhi inside the if (bug in bcm/?)
 
@@ -22639,13 +22648,13 @@ struct NFrame {
 @
 
 
-<<function notify(arm)>>=
+<<function arch__notify(arm)>>=
 /*
  *  Call user, if necessary, with note.
  *  Pass user the Ureg struct and the note on his stack.
  */
 int
-notify(Ureg* ureg)
+arch__notify(Ureg* ureg)
 {
     int l;
     Note *n;
@@ -22742,16 +22751,16 @@ sysnoted(ulong* arg)
 
 <<[[syscall()]] call noted()>>=
 if(scallnr == NOTED)
-    noted(ureg, *(ulong*)(sp+BY2WD));
+    arch__noted(ureg, *(ulong*)(sp+BY2WD));
 @
 
 
-<<function noted(arm)>>=
+<<function arch__noted(arm)>>=
 /*
  *   Return user to state before notify()
  */
 static void
-noted(Ureg* cur, uintptr arg0)
+arch__noted(Ureg* cur, uintptr arg0)
 {
     NFrame *nf;
     Ureg *nur;
@@ -27807,13 +27816,13 @@ cpustart(int xcpu)
     Mboxes *mb;
 
     up = nil;
-    cpuinit();
+    arch__cpuinit();
     mmuinit1((void*)cpu->mmul1);
 
     mb = (Mboxes*)(ARMLOCAL + Mboxregs);
     mb->clr[xcpu].doorbell = 1;
 
-    arch_trapinit();
+    arch__trapinit();
     clockinit();
     timersinit();
 
@@ -27833,7 +27842,7 @@ cpustart(int xcpu)
 %//pad: cpus[] set? and cpu->cpuno??
 
 
-<<[[cpuinit()]] it not cpu0>>=
+<<[[arch__cpuinit()]] it not cpu0>>=
 if (cpu->cpuno != 0) {
     /* synchronise with cpu 0 */
     cpu->ticks = m0->ticks;
@@ -28467,7 +28476,7 @@ if(page->cachectl[cpu->cpuno] == PG_TXTFLUSH){
 }
 @
 
-<<[[userinit()]] set cachectl(arm)>>=
+<<[[arch__userinit()]] set cachectl(arm)>>=
 memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
 @
 
@@ -28479,7 +28488,7 @@ bool	flushme;	/* maintain icache for this segment */
 <<[[sysexec()]] initialize other fields>>=
 ts->flushme = true;
 @
-<<[[userinit()]] set flushme for stack segment>>=
+<<[[arch__userinit()]] set flushme for stack segment>>=
 s->flushme = true;
 @
 %old: flushme++
@@ -28879,7 +28888,7 @@ if(irq >= IRQlocal)
 <<constant FIQSTKTOP(arm)>>=
 #define FIQSTKTOP   (KZERO+0x4000)      /* FIQ stack */
 @
-<<[[arch_trapinit()]] set stack for other exception/processor-modes>>=
+<<[[arch__trapinit()]] set stack for other exception/processor-modes>>=
 setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
 @
 %<<[[Cpu]] [[Arch]] save of first five registers fields(arm)>>=

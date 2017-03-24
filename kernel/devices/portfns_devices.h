@@ -60,7 +60,7 @@ extern void  arch_resetmouse(void);
 extern void  arch_setleds(Kbscan *kbscan);
 
 // screen/<arch>/screen.c (called from main)
-extern void  arch_screeninit(void);
+extern void  arch__screeninit(void);
 
 // sys/<arch>/devarch.c (called from arch specific)
 extern Dirtab* addarchfile(char*, int, long(*)(Chan*,void*,long,vlong), long(*)(Chan*,void*,long,vlong));

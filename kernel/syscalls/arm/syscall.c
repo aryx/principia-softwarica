@@ -24,12 +24,12 @@ struct NFrame {
 };
 /*e: struct NFrame(arm) */
 
-/*s: function noted(arm) */
+/*s: function arch__noted(arm) */
 /*
  *   Return user to state before notify()
  */
 static void
-noted(Ureg* cur, uintptr arg0)
+arch__noted(Ureg* cur, uintptr arg0)
 {
     NFrame *nf;
     Ureg *nur;
@@ -99,15 +99,15 @@ noted(Ureg* cur, uintptr arg0)
         pexit(up->lastnote.msg, up->lastnote.flag != NDebug);
     }
 }
-/*e: function noted(arm) */
+/*e: function arch__noted(arm) */
 
-/*s: function notify(arm) */
+/*s: function arch__notify(arm) */
 /*
  *  Call user, if necessary, with note.
  *  Pass user the Ureg struct and the note on his stack.
  */
 int
-notify(Ureg* ureg)
+arch__notify(Ureg* ureg)
 {
     int l;
     Note *n;
@@ -186,11 +186,11 @@ notify(Ureg* ureg)
 
     return 1;
 }
-/*e: function notify(arm) */
+/*e: function arch__notify(arm) */
 
-/*s: function syscall(arm) */
+/*s: function arch__syscall(arm) */
 void
-syscall(Ureg* ureg)
+arch__syscall(Ureg* ureg)
 {
     int scallnr;
     long ret;
@@ -325,12 +325,12 @@ syscall(Ureg* ureg)
 
     /*s: [[syscall()]] call noted() */
     if(scallnr == NOTED)
-        noted(ureg, *(ulong*)(sp+BY2WD));
+        arch__noted(ureg, *(ulong*)(sp+BY2WD));
     /*e: [[syscall()]] call noted() */
     /*s: [[syscall()]] call notify(arm) */
     arch_splhi();
     if(scallnr != RFORK && (up->procctl || up->nnote))
-        notify(ureg);
+        arch__notify(ureg);
     /*e: [[syscall()]] call notify(arm) */
 
     /*s: [[syscall()]] if delaysched(arm) */
@@ -340,9 +340,9 @@ syscall(Ureg* ureg)
         arch_splhi();
     }
     /*e: [[syscall()]] if delaysched(arm) */
-    kexit(ureg);
+    arch__kexit(ureg);
 }
-/*e: function syscall(arm) */
+/*e: function arch__syscall(arm) */
 
 /*s: function arch_execregs(arm) */
 long

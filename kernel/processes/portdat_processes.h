@@ -162,7 +162,7 @@ enum NoteKind
 /*e: enum notekind */
 
 /*s: struct Note */
-// a kind of unix signal
+// a kind of Unix signal
 struct Note
 {
     char  msg[ERRMAX];
