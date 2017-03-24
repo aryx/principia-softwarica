@@ -92,6 +92,22 @@ struct Pagetable
 };
 /*e: struct Pagetable */
 
+// used to be arch-specific, but many constants were used in port/ code
+/*s: type PTExxx */
+#define PTEVALID    (1<<0)
+#define PTERONLY    0
+#define PTEWRITE    (1<<1)
+/*s: [[PTExxx]] other cases */
+#define PTEUNCACHED (1<<4)
+/*x: [[PTExxx]] other cases */
+// x86 specific constants
+#define PTEUSER   (1<<2)
+#define PTEWT     (1<<3) // Write Through, e.g. VGA memory, mean??
+#define PTESIZE   (1<<7) // Big pages (x86 extension)
+#define PTEGLOBAL (1<<8) // do not clear from TLB kernel pages (x86 extension)
+/*e: [[PTExxx]] other cases */
+/*e: type PTExxx */
+
 /*s: struct KImage */
 // a KImage is essentially a channel to an executable or swapfile
 struct KImage

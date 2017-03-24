@@ -242,24 +242,6 @@
 
 #define PPN(x)    ((x)&~(BY2PG-1))
 
-/*s: constant PTExxx(x86) */
-/*
- *  physical MMU
- */
-#define PTEVALID  (1<<0)
-
-#define PTEWRITE  (1<<1)
-#define PTERONLY  (0<<1)
-
-#define PTEUNCACHED (1<<4)
-
-// x86 specific constants
-#define PTEUSER   (1<<2)
-#define PTEWT       (1<<3) // Write Through, e.g. VGA memory, mean??
-#define PTESIZE   (1<<7) // Big pages (x86 extension)
-#define PTEGLOBAL (1<<8) // do not clear from TLB kernel pages (x86 extension)
-/*e: constant PTExxx(x86) */
-
 /*
  * Macros for calculating offsets within the page directory base
  * and page tables. 

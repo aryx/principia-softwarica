@@ -170,18 +170,6 @@
 /*e: macro PPN(arm) */
 
 /*
- * With a little work these move to port.
- */
-/*s: type PTExxx(arm) */
-#define PTEVALID    (1<<0)
-#define PTERONLY    0
-#define PTEWRITE    (1<<1)
-/*s: [[PTExxx]] other cases(arm) */
-#define PTEUNCACHED (1<<2)
-/*e: [[PTExxx]] other cases(arm) */
-/*e: type PTExxx(arm) */
-
-/*
  * Physical machine information from here on.
  *  PHYS addresses as seen from the arm cpu.
  *  BUS  addresses as seen from the videocore gpu.
