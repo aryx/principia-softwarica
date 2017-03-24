@@ -65,6 +65,7 @@ typedef struct Armtimer Armtimer;
 // The order matters! the fields match the memory-mapped external registers.
 struct Systimers {
     u32int  cs;
+
     u32int  clo;
     u32int  chi;
 

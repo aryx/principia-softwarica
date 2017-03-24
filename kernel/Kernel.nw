@@ -4121,8 +4121,6 @@ struct Page
     phys_addr pa;     /* Physical address in memory */
     virt_addr va;     /* Virtual address for user */
 
-    <<[[Page]] other fields>>
-  
     // Why not Ref? to save space (same reason they use char below)
     // but that means needs to use Lock below to access this non-atomic ref.
     ushort  ref;      /* Reference count */ // Pages are shared!
@@ -4130,10 +4128,7 @@ struct Page
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
 
-    // enum<cachectl>??
-    char color;			/* Cache coloring */
-    // array<enum<cachectl>>
-    char cachectl[MAXCPUS];	/* Cache flushing control for putmmu */
+    <<[[Page]] other fields>>
 
     // extra
     Lock;
@@ -4168,7 +4163,7 @@ enum Modref
     PG_REF    = 0x02,   /* software referenced bit */
 };
 @
-% TODO LP split, put just PG_NOTHING for now
+% TODO LP split, put just PG_NOTHING for now?
 
 % PG_REF is set in fixfault when access for the first time the page
 %  why useful?
@@ -4211,7 +4206,6 @@ struct Palloc
 struct Palloc palloc;
 @
 
-% could merge with Confmem, because kbase and klimit could be removed
 <<struct Pallocmem>>=
 // memory banks for user memory, similar to Confmem (and RMap)
 struct Pallocmem
@@ -4220,6 +4214,7 @@ struct Pallocmem
     ulong npage;
 };
 @
+\l could merge with Confmem, because kbase and klimit could be removed
 
 
 <<[[Page]] extra fields>>=
@@ -4250,26 +4245,15 @@ newpage(bool clear, Segment **s, virt_addr va)
     Page *p;
     Arch_KMap *k;
     bool dontalloc;
- uchar ct;
-    int i, color;
+    int i; 
+    <<[[newpage()]] other locals>>
 
     lock(&palloc);
- color = getpgcolor(va);
 
     <<[[newpage()]] loop waiting freecount > highwater>>
 
     //when no color: p = palloc.head;
- /* First try for our colour */
- for(p = palloc.head; p; p = p->next)
-  if(p->color == color)
-   break;
-
- ct = PG_NOFLUSH;
- if(p == 0) {
-  p = palloc.head;
-  p->color = color;
-  ct = PG_NEWCOL;
- }
+    <<[[newpage()]] find free page p, set color and ct>>
 
     pageunchain(p);
 
@@ -4281,9 +4265,7 @@ newpage(bool clear, Segment **s, virt_addr va)
     p->ref = 1;
     p->va = va;
     p->modref = PG_NOTHING;
-
- for(i = 0; i < MAXCPUS; i++)
-  p->cachectl[i] = ct;
+    <<[[newpage()]] set cachectl using ct>>
 
     unlock(p);
     unlock(&palloc);
@@ -4298,7 +4280,6 @@ newpage(bool clear, Segment **s, virt_addr va)
 @
 % arch_kmap()? see later
 %old: was storing highwater in intermediate hw, useful?
-%old: stuff with cachectl I now removed
 
 <<function pageunchain>>=
 // assumes palloc is held
@@ -4428,16 +4409,23 @@ enum Segtype
 \t split enum
 
 <<global sname>>=
-// hash<enum<segtype, string>>
-static char *sname[]={ "Text", "Data", "Bss", "Stack",   "Shared", "Phys", };
+// hash<enum<Segtype, string>>
+static char *sname[]={ 
+    [SG_TEXT]     = "Text", 
+    [SG_DATA]     = "Data", 
+    [SG_BSS]      = "Bss", 
+    [SG_STACK]    = "Stack", 
+    [SG_SHARED]   = "Shared", 
+    [SG_PHYSICAL] = "Phys"
+};
 @
-%TODO: coupling, make sure they are in the same order ...
+%old: was not using designator, but dangerous with LP reordering cases
 
 <<struct Segment>>=
 // smalloc'ed by newseg()
 struct Segment
 {
-    // enum<segtype>
+    // enum<Segtype>
     ushort  type;   /* segment type */
   
     virt_addr base;   /* virtual base */
@@ -4452,7 +4440,6 @@ struct Segment
     Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
 
- bool	flushme;	/* maintain icache for this segment */
   
     <<[[Segment]] other fields>>
   
@@ -4461,7 +4448,6 @@ struct Segment
     QLock lk;
 };
 @
-%dead? int flushme;
 %old: map -> pagedir, ssegmap -> smallpagedir
 
 % Segment acts as a kind of Page directory per process, but
@@ -4888,7 +4874,7 @@ dupseg(Segment **seg, int segno, bool share)
         if(pt = s->pagedir[i])
             n->pagedir[i] = ptcpy(pt); // will actually share the pages
 
-    n->flushme = s->flushme;
+    <<[[dupseg()]] copy other fields>>
 
     if(s->ref > 1)
         procflushseg(s); // ??
@@ -4916,7 +4902,7 @@ data2txt(Segment *s)
     incref(ps->image);
     ps->fstart = s->fstart;
     ps->flen = s->flen;
-    ps->flushme = true;
+    <<[[data2txt()]] initialize other segment fields>>
 
     return ps;
 }
@@ -8315,11 +8301,7 @@ arch_putmmu(virt_addr va, uintptr pa, Page* page)
      *  on this mmu because the virtual cache is set associative
      *  rather than direct mapped.
      */
-    if(page->cachectl[cpu->cpuno] == PG_TXTFLUSH){
-        /* pio() sets PG_TXTFLUSH whenever a text pg has been written */
-        cacheiinv();
-        page->cachectl[cpu->cpuno] = PG_NOFLUSH;
-    }
+    <<[[arch_putmmu()]] if PG_TXTFLUSH, invalidate cache(arm)>>
     arch_checkmmu(va, PPN(pa));
 }
 @
@@ -8856,13 +8838,13 @@ KImage *img;
 @
 
 <<[[sysexec()]] get text segment ts via demand loading on tc>>=
-    /* attachimage returns a locked cache image */
-    img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
-    ts = img->s;
-    ts->flushme = true;
-    ts->fstart = 0;
-    ts->flen = sizeof(Exec)+text;
-    unlock(img);
+/* attachimage returns a locked cache image */
+img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
+ts = img->s;
+ts->fstart = 0;
+ts->flen = sizeof(Exec)+text;
+<<[[sysexec()]] initialize other fields>>
+unlock(img);
 @
 % the up->seg[TSEG] = ts used to be inslide the lock, but I don't think
 % it matters
@@ -8993,7 +8975,7 @@ retry:
             if(!pagedout(*p)){
                 /* another process did it for me */
                 putpage(new);
-    goto done; // not return, need cachectl stuff??
+                goto done; // =~ return, just need adjust cachectl before
             } else {
                 /* another process and the pager got in */
                 putpage(new);
@@ -9007,8 +8989,7 @@ retry:
         putswap(loadrec);
     }
 done:
- if(s->flushme)
-  memset((*p)->cachectl, PG_TXTFLUSH, sizeof((*p)->cachectl));
+<<[[pio()]] set cachectl if flushme segment>>
 }
 @
 % LP split for demand loading vs swapin
@@ -12171,29 +12152,28 @@ pageinit(void)
     Page *p;
     Pallocmem *pm;
     ulong m, np, k, vkb, pkb;
-    int color;
+    <<[[pageinit()]] other locals>>
 
     np = 0;
     for(i=0; i<nelem(palloc.mem); i++){
         pm = &palloc.mem[i];
         np += pm->npage;
     }
+
     palloc.pages = xalloc(np*sizeof(Page));
     if(palloc.pages == nil)
         panic("pageinit");
 
- color = 0;
     palloc.head = palloc.pages;
     p = palloc.head;
     for(i=0; i<nelem(palloc.mem); i++){
         pm = &palloc.mem[i];
-        for(j=0; j<pm->npage; j++){
+        for(j=0; j < pm->npage; j++){
             p->prev = p-1;
             p->next = p+1;
-            p->pa = pm->base+j*BY2PG;
-   p->color = color;
+            p->pa = pm->base + j*BY2PG;
             palloc.freecount++;
-   color = (color+1)%NCOLOR;
+            <<[[pageinit()]] set page color>>
             p++;
         }
     }
@@ -12223,7 +12203,7 @@ pageinit(void)
     print("%ldM swap\n", vkb/1024);
 }
 @
-
+\t LP split
 
 <<function swapinit>>=
 void
@@ -12405,7 +12385,7 @@ userinit(void)
      * shouldn't be the case here.
      */
     s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-    s->flushme++;
+    <<[[userinit()]] set flushme for stack segment>>
     p->seg[SSEG] = s;
     pg = newpage(true, nil, USTKTOP-BY2PG);
     segpage(s, pg);
@@ -12420,7 +12400,7 @@ userinit(void)
     s = newseg(SG_TEXT, UTZERO, 1); // initcode needs only 1 page
     p->seg[TSEG] = s;
     pg = newpage(true, nil, UTZERO);
-    memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+    <<[[userinit()]] set cachectl(arm)>>
     segpage(s, pg);
 
     k = arch_kmap(s->pagedir[0]->pagetab[0]);
@@ -23804,7 +23784,7 @@ syssegflush(ulong* arg)
         if(s == 0)
             error(Ebadarg);
 
-    s->flushme = true;
+    <<[[syssegflush()]] set flushme>>
     more:
         l = len;
         if(addr+l > s->top)
@@ -24778,9 +24758,7 @@ procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
     arch_kunmap(k);
     poperror();
 
- /* Ensure the process sees text page changes */
- if(s->flushme)
-  memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+    <<[[procctlmemio()]] set cachectl if flushme segment>>
 
     s->steal--;
 
@@ -24804,7 +24782,7 @@ text2data(Proc *p, Segment *s)
     incref(ps->image);
     ps->fstart = s->fstart;
     ps->flen = s->flen;
-    ps->flushme = true;
+    <<[[text2data()]] initialize other fields>>
 
     qlock(&p->seglock);
     for(i = 0; i < NSEG; i++)
@@ -28410,24 +28388,128 @@ MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenapmnc
 % 9atom also provides patches for PAE support and amd64 support
 
 \subsection{Page coloring}
-% page coloring, getpgcolor, cachectl, etc
-% but I've removed the code actually
-%update: put back because of bcm/? 
-\t seems unused though so remove again?
+\t seems unused in bcm/ too, so remove again?
 
-%old? in newpage
-%	for(i = 0; i < MAXMACH; i++)
-%		p->cachectl[i] = ct;
+<<[[Page]] other fields>>=
+// int [0..NCOLOR[
+char color;			/* Cache coloring */
+@
+
+<<[[pageinit()]] other locals>>=
+int color = 0;
+@
+<<[[pageinit()]] set page color>>=
+p->color = color;
+color = (color+1)%NCOLOR;
+@
+% so always 0 for arm
 
 <<macro getpgcolor(arm)>>=
 #define getpgcolor(a)   0
 @
-
-
 <<constant NCOLOR(arm)>>=
 #define NCOLOR  1       /* 1 level cache, don't worry about VCE's */
 @
 
+
+
+<<enum Cachectl>>=
+enum Cachectl {
+    PG_NOFLUSH	= 0,
+    PG_TXTFLUSH	= 1,		/* flush dcache and invalidate icache */
+
+    PG_NEWCOL	= 3,		/* page has been recolored */
+};
+@
+<<[[Page]] other fields>>=
+// array<enum<Cachectl>>
+char cachectl[MAXCPUS];	/* Cache flushing control for putmmu */
+@
+
+
+
+<<[[newpage()]] other locals>>=
+int color;
+// enum<Cachectl>
+uchar ct;
+@
+<<[[newpage()]] find free page p, set color and ct>>=
+color = getpgcolor(va);
+
+/* First try for our colour */
+for(p = palloc.head; p; p = p->next)
+     if(p->color == color)
+         break;
+
+ct = PG_NOFLUSH;
+if(p == nil) {
+    p = palloc.head;
+    p->color = color;
+    ct = PG_NEWCOL;
+}
+@
+
+<<[[newpage()]] set cachectl using ct>>=
+for(i = 0; i < MAXCPUS; i++)
+    p->cachectl[i] = ct;
+@
+
+
+% * Page coloring doesn't work
+% *  on this mmu because the virtual cache is set associative
+% *  rather than direct mapped.
+
+<<[[arch_putmmu()]] if PG_TXTFLUSH, invalidate cache(arm)>>=
+if(page->cachectl[cpu->cpuno] == PG_TXTFLUSH){
+    /* pio() sets PG_TXTFLUSH whenever a text pg has been written */
+    cacheiinv();
+    page->cachectl[cpu->cpuno] = PG_NOFLUSH;
+}
+@
+
+<<[[userinit()]] set cachectl(arm)>>=
+memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+@
+
+
+<<[[Segment]] other fields>>=
+bool	flushme;	/* maintain icache for this segment */
+@
+
+<<[[sysexec()]] initialize other fields>>=
+ts->flushme = true;
+@
+<<[[userinit()]] set flushme for stack segment>>=
+s->flushme = true;
+@
+%old: flushme++
+\l for stack segment??
+
+<<[[data2txt()]] initialize other segment fields>>=
+ps->flushme = true;
+@
+<<[[text2data()]] initialize other fields>>=
+ps->flushme = true;
+@
+<<[[dupseg()]] copy other fields>>=
+n->flushme = s->flushme;
+@
+
+
+<<[[syssegflush()]] set flushme>>=
+s->flushme = true;
+@
+<<[[pio()]] set cachectl if flushme segment>>=
+if(s->flushme)
+    memset((*p)->cachectl, PG_TXTFLUSH, sizeof((*p)->cachectl));
+@
+
+
+<<[[procctlmemio()]] set cachectl if flushme segment>>=
+/* Ensure the process sees text page changes */
+if(s->flushme)
+    memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+@
 
 \subsection{Extra segment types}
 

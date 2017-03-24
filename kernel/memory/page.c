@@ -25,29 +25,33 @@ pageinit(void)
     Page *p;
     Pallocmem *pm;
     ulong m, np, k, vkb, pkb;
-    int color;
+    /*s: [[pageinit()]] other locals */
+    int color = 0;
+    /*e: [[pageinit()]] other locals */
 
     np = 0;
     for(i=0; i<nelem(palloc.mem); i++){
         pm = &palloc.mem[i];
         np += pm->npage;
     }
+
     palloc.pages = xalloc(np*sizeof(Page));
     if(palloc.pages == nil)
         panic("pageinit");
 
- color = 0;
     palloc.head = palloc.pages;
     p = palloc.head;
     for(i=0; i<nelem(palloc.mem); i++){
         pm = &palloc.mem[i];
-        for(j=0; j<pm->npage; j++){
+        for(j=0; j < pm->npage; j++){
             p->prev = p-1;
             p->next = p+1;
-            p->pa = pm->base+j*BY2PG;
-   p->color = color;
+            p->pa = pm->base + j*BY2PG;
             palloc.freecount++;
-   color = (color+1)%NCOLOR;
+            /*s: [[pageinit()]] set page color */
+            p->color = color;
+            color = (color+1)%NCOLOR;
+            /*e: [[pageinit()]] set page color */
             p++;
         }
     }
@@ -156,11 +160,14 @@ newpage(bool clear, Segment **s, virt_addr va)
     Page *p;
     Arch_KMap *k;
     bool dontalloc;
- uchar ct;
-    int i, color;
+    int i; 
+    /*s: [[newpage()]] other locals */
+    int color;
+    // enum<Cachectl>
+    uchar ct;
+    /*e: [[newpage()]] other locals */
 
     lock(&palloc);
- color = getpgcolor(va);
 
     /*s: [[newpage()]] loop waiting freecount > highwater */
         for(;;) {
@@ -203,17 +210,21 @@ newpage(bool clear, Segment **s, virt_addr va)
     /*e: [[newpage()]] loop waiting freecount > highwater */
 
     //when no color: p = palloc.head;
- /* First try for our colour */
- for(p = palloc.head; p; p = p->next)
-  if(p->color == color)
-   break;
+    /*s: [[newpage()]] find free page p, set color and ct */
+    color = getpgcolor(va);
 
- ct = PG_NOFLUSH;
- if(p == 0) {
-  p = palloc.head;
-  p->color = color;
-  ct = PG_NEWCOL;
- }
+    /* First try for our colour */
+    for(p = palloc.head; p; p = p->next)
+         if(p->color == color)
+             break;
+
+    ct = PG_NOFLUSH;
+    if(p == nil) {
+        p = palloc.head;
+        p->color = color;
+        ct = PG_NEWCOL;
+    }
+    /*e: [[newpage()]] find free page p, set color and ct */
 
     pageunchain(p);
 
@@ -227,9 +238,10 @@ newpage(bool clear, Segment **s, virt_addr va)
     p->ref = 1;
     p->va = va;
     p->modref = PG_NOTHING;
-
- for(i = 0; i < MAXCPUS; i++)
-  p->cachectl[i] = ct;
+    /*s: [[newpage()]] set cachectl using ct */
+    for(i = 0; i < MAXCPUS; i++)
+        p->cachectl[i] = ct;
+    /*e: [[newpage()]] set cachectl using ct */
 
     unlock(p);
     unlock(&palloc);

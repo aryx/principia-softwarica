@@ -43,7 +43,9 @@ syssegflush(ulong* arg)
         if(s == 0)
             error(Ebadarg);
 
+    /*s: [[syssegflush()]] set flushme */
     s->flushme = true;
+    /*e: [[syssegflush()]] set flushme */
     more:
         l = len;
         if(addr+l > s->top)

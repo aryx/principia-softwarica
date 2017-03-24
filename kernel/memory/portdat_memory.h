@@ -21,12 +21,14 @@ enum Modref
 };
 /*e: enum modref */
 
+/*s: enum Cachectl */
 enum Cachectl {
- PG_NOFLUSH	= 0,
- PG_TXTFLUSH	= 1,		/* flush dcache and invalidate icache */
- PG_NEWCOL	= 3,		/* page has been recolored */
-};
+    PG_NOFLUSH	= 0,
+    PG_TXTFLUSH	= 1,		/* flush dcache and invalidate icache */
 
+    PG_NEWCOL	= 3,		/* page has been recolored */
+};
+/*e: enum Cachectl */
 
 /*s: struct Page */
 // Page metadata. We will allocate as many Page as to cover all physical memory
@@ -36,14 +38,6 @@ struct Page
     phys_addr pa;     /* Physical address in memory */
     virt_addr va;     /* Virtual address for user */
 
-    /*s: [[Page]] other fields */
-    // option<ref<Kimage>>
-    KImage  *image;     /* Associated binary image or swap image */
-    ulong daddr;      /* Disc address on image */
-    /*x: [[Page]] other fields */
-    ulong gen;      /* Generation counter for swap */
-    /*e: [[Page]] other fields */
-  
     // Why not Ref? to save space (same reason they use char below)
     // but that means needs to use Lock below to access this non-atomic ref.
     ushort  ref;      /* Reference count */ // Pages are shared!
@@ -51,10 +45,19 @@ struct Page
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
 
-    // enum<cachectl>??
+    /*s: [[Page]] other fields */
+    // option<ref<Kimage>>
+    KImage  *image;     /* Associated binary image or swap image */
+    ulong daddr;      /* Disc address on image */
+    /*x: [[Page]] other fields */
+    ulong gen;      /* Generation counter for swap */
+    /*x: [[Page]] other fields */
+    // int [0..NCOLOR[
     char color;			/* Cache coloring */
-    // array<enum<cachectl>>
+    /*x: [[Page]] other fields */
+    // array<enum<Cachectl>>
     char cachectl[MAXCPUS];	/* Cache flushing control for putmmu */
+    /*e: [[Page]] other fields */
 
     // extra
     Lock;
@@ -175,7 +178,7 @@ enum
 // smalloc'ed by newseg()
 struct Segment
 {
-    // enum<segtype>
+    // enum<Segtype>
     ushort  type;   /* segment type */
   
     virt_addr base;   /* virtual base */
@@ -190,7 +193,6 @@ struct Segment
     Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
 
- bool	flushme;	/* maintain icache for this segment */
   
     /*s: [[Segment]] other fields */
     KImage  *image;   /* text in file attached to this segment */
@@ -203,6 +205,8 @@ struct Segment
     ushort  steal;    /* Page stealer lock */
     /*x: [[Segment]] other fields */
     kern_addr2  profile;  /* Tick profile area */ // for TSEG only
+    /*x: [[Segment]] other fields */
+    bool	flushme;	/* maintain icache for this segment */
     /*x: [[Segment]] other fields */
     Physseg *pseg;
     /*x: [[Segment]] other fields */

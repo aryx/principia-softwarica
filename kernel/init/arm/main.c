@@ -341,7 +341,9 @@ userinit(void)
      * shouldn't be the case here.
      */
     s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-    s->flushme++;
+    /*s: [[userinit()]] set flushme for stack segment */
+    s->flushme = true;
+    /*e: [[userinit()]] set flushme for stack segment */
     p->seg[SSEG] = s;
     pg = newpage(true, nil, USTKTOP-BY2PG);
     segpage(s, pg);
@@ -356,7 +358,9 @@ userinit(void)
     s = newseg(SG_TEXT, UTZERO, 1); // initcode needs only 1 page
     p->seg[TSEG] = s;
     pg = newpage(true, nil, UTZERO);
+    /*s: [[userinit()]] set cachectl(arm) */
     memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+    /*e: [[userinit()]] set cachectl(arm) */
     segpage(s, pg);
 
     k = arch_kmap(s->pagedir[0]->pagetab[0]);

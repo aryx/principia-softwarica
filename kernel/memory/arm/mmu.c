@@ -306,11 +306,13 @@ arch_putmmu(virt_addr va, uintptr pa, Page* page)
      *  on this mmu because the virtual cache is set associative
      *  rather than direct mapped.
      */
+    /*s: [[arch_putmmu()]] if PG_TXTFLUSH, invalidate cache(arm) */
     if(page->cachectl[cpu->cpuno] == PG_TXTFLUSH){
         /* pio() sets PG_TXTFLUSH whenever a text pg has been written */
         cacheiinv();
         page->cachectl[cpu->cpuno] = PG_NOFLUSH;
     }
+    /*e: [[arch_putmmu()]] if PG_TXTFLUSH, invalidate cache(arm) */
     arch_checkmmu(va, PPN(pa));
 }
 /*e: function arch_putmmu(arm) */

@@ -529,13 +529,15 @@ sysexec(ulong* arg)
 
     /* Text.  Shared. Attaches to cache image if possible */
     /*s: [[sysexec()]] get text segment ts via demand loading on tc */
-        /* attachimage returns a locked cache image */
-        img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
-        ts = img->s;
-        ts->flushme = true;
-        ts->fstart = 0;
-        ts->flen = sizeof(Exec)+text;
-        unlock(img);
+    /* attachimage returns a locked cache image */
+    img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
+    ts = img->s;
+    ts->fstart = 0;
+    ts->flen = sizeof(Exec)+text;
+    /*s: [[sysexec()]] initialize other fields */
+    ts->flushme = true;
+    /*e: [[sysexec()]] initialize other fields */
+    unlock(img);
     /*e: [[sysexec()]] get text segment ts via demand loading on tc */
     up->seg[TSEG] = ts;
 

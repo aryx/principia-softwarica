@@ -29,6 +29,7 @@ Queue*  kbdq;           /* unprocessed console input */
 Queue*  lineq;          /* processed console input */
 /*e: global lineq */
 /*s: global serialoq */
+// option<Queue>
 Queue*  serialoq;       /* serial console output */
 /*e: global serialoq */
 /*s: global kprintoq */
@@ -221,39 +222,41 @@ putstrn0(char *str, int n, bool usewrite)
         screenputs(str, n);
 
     /*s: [[putstrn0()]] serialoq handling */
-        /*
-         *   Convert \n to \r\n for serial
-         *   line consoles.  Locking of the queues is left up to the screen
-         *   or uart code.  Multi-line messages to serial consoles may get
-         *   interspersed with other messages.
-         */
+    /*
+     *   Convert \n to \r\n for serial
+     *   line consoles.  Locking of the queues is left up to the screen
+     *   or uart code.  Multi-line messages to serial consoles may get
+     *   interspersed with other messages.
+     */
+    /*s: [[putstrn0()]] if serialoq nil */
+    if(serialoq == nil){
+        uartputs(str, n);
+        return;
+    }
+    /*e: [[putstrn0()]] if serialoq nil */
+    // else
 
-        if(serialoq == nil){
-            uartputs(str, n);
-            return;
-        }
-
-        while(n > 0) {
-            t = memchr(str, '\n', n);
-            if(t && !kbd.raw) {
-                m = t-str;
-                if(usewrite){
-                    qwrite(serialoq, str, m);
-                    qwrite(serialoq, "\r\n", 2);
-                } else {
-                    qiwrite(serialoq, str, m);
-                    qiwrite(serialoq, "\r\n", 2);
-                }
-                n -= m+1;
-                str = t+1;
+    while(n > 0) {
+        t = memchr(str, '\n', n);
+        if(t && !kbd.raw) {
+            m = t-str;
+            if(usewrite){
+                qwrite(serialoq, str, m);
+                qwrite(serialoq, "\r\n", 2);
             } else {
-                if(usewrite)
-                    qwrite(serialoq, str, n);
-                else
-                    qiwrite(serialoq, str, n);
-                break;
+                qiwrite(serialoq, str, m);
+                qiwrite(serialoq, "\r\n", 2);
             }
+            n -= m+1;
+            str = t+1;
+        } else {
+            if(usewrite)
+                qwrite(serialoq, str, n);
+            else
+                qiwrite(serialoq, str, n);
+            break;
         }
+    }
     /*e: [[putstrn0()]] serialoq handling */
 }
 /*e: function putstrn0 */

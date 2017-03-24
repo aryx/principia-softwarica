@@ -253,7 +253,9 @@ dupseg(Segment **seg, int segno, bool share)
         if(pt = s->pagedir[i])
             n->pagedir[i] = ptcpy(pt); // will actually share the pages
 
+    /*s: [[dupseg()]] copy other fields */
     n->flushme = s->flushme;
+    /*e: [[dupseg()]] copy other fields */
 
     if(s->ref > 1)
         procflushseg(s); // ??
@@ -820,7 +822,9 @@ data2txt(Segment *s)
     incref(ps->image);
     ps->fstart = s->fstart;
     ps->flen = s->flen;
+    /*s: [[data2txt()]] initialize other segment fields */
     ps->flushme = true;
+    /*e: [[data2txt()]] initialize other segment fields */
 
     return ps;
 }
