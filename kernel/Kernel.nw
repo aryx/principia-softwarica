@@ -186,6 +186,7 @@ processes?
 %  size for read? but then how know the size? it's a maxsize
 %  but if newlines it is passed before?
 
+
 %tags used for recurring themes:
 %x86: how ARM code relates to x86 (same/similar/very-different)
 %real-world: 
@@ -196,15 +197,14 @@ processes?
 % We chose plan9 kernel. A good basis for the other books.
 % Made by Unix master Ken Thompson! Unix 2.0 (see Principia.nw)
 
-% We will focus on code of 9 for Raspberry Pi. Simpler archi.
+% We will focus on code of 9 for Raspberry Pi, ARM archi. Simpler archi.
 % Will have (ARM) in section when ARM specific. But most of the code
-% in this book is portable code. The same code is used for 9 for x86.
+% in this book is portable code. The same code is used for x86 and arm.
 
 %Graphics and network in other books.
 
 %Some disadvantages of 9: 
-% - more general but also probably less efficient,
-% - no buffer cache really, 
+% - more general but also probably less efficient, e.g., no buffer cache, 
 % - graphic stack in the kernel,
 % - hardcoded split for kernel mem vs images mem and user mem,
 % - other stuff?
@@ -587,6 +587,9 @@ provides to the user programs.
 % API access via int 64 (but again the API is also
 % the filesystem layout and different fileservers)
 
+% Easy to add or reorder. Just then need to recompile everything. 
+% It takes 20 seconds. Beautiful.
+
 
 % no SELECT? how does listen to multiple devices at the same time?
 % how alts() in lib_thread can work?
@@ -631,13 +634,21 @@ provides to the user programs.
 
 % supervisor calls, system call, syscall, software interrupt
 
-\section{[[helloraw.c]]}
+\section{[[helloraw.c]] and [[helloraw.s]]}
 % always good to start with concrete example of interaction
 
-% illustrate a few syscalls!
+% print -> pwrite.
+% C convention vs syscall convention => R0 store PWRITE.
+
+% show asm so really low level!
+% PWRITE = 
+
+\section{[[minishell.c]]}
+
+% illustrate also a few syscalls?
 % illustrate also relation with shell?
 
-% show asm? so really low level!
+% reopen /dev/cons, pread, pwrite, fork, exec, await, exits, etc.
 
 \section{The Raspberry Pi machine (ARM)}
 
@@ -735,6 +746,7 @@ struct Ureg {
 % (and also of float registers, see Appendix).
 % Save PSR because contains the flag bits NZCV (dont care so much
 % about control bits because it should be PsrUsr always)
+\l Ureg.type not really a register no?
 
 % on qemu use C-Alt-2 and then 'info registers' 'info cpus' etc :)
 % qemu-system-arm. Actually lots of different ARM, just like PCs.
@@ -773,6 +785,9 @@ TEXT getcallerpc(SB), 1, $-4
 % #define PsrN        0x80000000      /* negative/less than */
 % @
 
+% Depending on the value of those flags, following instruction
+% like B.EQ will do different things, so really need to store/restore
+% those flags.
 
 
 \subsubsection{Processor modes}
@@ -803,7 +818,6 @@ TEXT getcallerpc(SB), 1, $-4
 
 
 % PSR controls also interrupts.
-
 
 <<type PsrDisable(arm)>>=
 #define PsrDirq     0x00000080      /* disable IRQ interrupts */
@@ -852,6 +866,8 @@ TEXT getcallerpc(SB), 1, $-4
 
 % PSR nice, but limited. For extra functionalities, enter coprocessors
 % and their registers.
+% Regular programs dont use those instructions (generate fault?).
+% Only useful for kernel.
 
 % http://infocenter.arm.com/help/topic/com.arm.doc.ddi0211k/Bihggafj.html
 
@@ -997,11 +1013,10 @@ struct Fbinfo {
 <<constant FRAMEBUFFER(arm)>>=
 #define FRAMEBUFFER 0xC0000000      /* video framebuffer */
 @
-% but used mostly in Graphics.nw?
-\t Physical address?
+% Virtual address mapped to physical Fbinfo.base returned by GPU.
+% Then used in Graphics.nw via gscreen->bdata
 
 \subsection{Memory-mapped IO}
-
 
 % Yet another way to access external registers. Not coprocessors
 % here but registers in external devices.
@@ -1013,11 +1028,6 @@ struct Fbinfo {
 % Soc.physio = 0x20000000
 \t define a constant PHYSIO(raspberry pi1)(arm)
 
-<<constant IOSIZE(arm)>>=
-#define IOSIZE      (16*MiB)
-@
-%BUS  addresses as seen from the videocore gpu.
-
 
 <<constant VIRTIO(arm)>>=
 #define VIRTIO      0x7E000000      /* i/o registers */
@@ -1027,6 +1037,13 @@ struct Fbinfo {
 %The +0x... is defined by the hardware. Normally PHYSIO+0x... but
 % we map PHYSIO to VIRTIO so VIRTIO+0x...
 % VIRTIO+IOSIZE = KZERO? no, ARMLOCAL, so still space before KZERO?
+
+<<constant IOSIZE(arm)>>=
+#define IOSIZE      (16*MiB)
+@
+%BUS  addresses as seen from the videocore gpu.
+
+
 
 <<constant SYSTIMERS(arm)>>=
 #define SYSTIMERS (VIRTIO+0x3000)
@@ -1909,7 +1926,7 @@ struct Confmem
 @ 
 % show concrete value for qemu! see C-t C-t m
 % will use that later! set in main() in confinit(), and use for xalloc, and palloc
-
+% Pallocmem is a slice of Confmem.
 
 
 <<globals confname and confvar>>=
@@ -1955,18 +1972,12 @@ struct Cpu
 {
     int cpuno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
     <<[[Cpu]] second field>>
-  
-    // ref<Proc>, or None if halting?
+      // ref<Proc>, or None if halting?
     Proc* proc;     /* current process on this processor */
 
     struct Arch_Cpu;
 
-
-    ulong ticks;      /* of the clock since boot time */
-
-    uvlong  cpuhz;
-    int cpumhz; // cpuhz / 1_000_000
-
+    <<[[Cpu]] time fields>>
     <<[[Cpu]] stat fields>>
     <<[[Cpu]] other fields>>
   
@@ -1984,6 +1995,13 @@ struct Cpu
 % A nice side effect is also that it avoids conflicts with libmach! 
 % There it acually makes sense to use the Mach name because they speak 
 % about a machine.
+
+<<[[Cpu]] time fields>>=
+ulong ticks;      /* of the clock since boot time */
+
+uvlong  cpuhz;
+int cpumhz; // cpuhz / 1_000_000
+@
 
 % more on ticks in Time chapter, number of clock interrupts
 % in hzclock():    cpu->ticks++;
@@ -5719,7 +5737,7 @@ arch_forkchild(Proc *p, Ureg *ureg)
     Ureg *cureg;
 
     p->sched.sp = (ulong)p->kstack+KSTACK-sizeof(Ureg);
-    p->sched.pc = (ulong)arch_forkret;
+    p->sched.pc = (ulong)arch__forkret;
 
     cureg = (Ureg*)(p->sched.sp);
     memmove(cureg, ureg, sizeof(Ureg));
@@ -5739,11 +5757,11 @@ arch_forkchild(Proc *p, Ureg *ureg)
 
 
 % sched? -> <> (as p->sched.pc <- arch_forkchild)
-<<function arch_forkret(arm)>>=
+<<function arch__forkret(arm)>>=
 /*
  *  here to jump to a newly forked process
  */
-TEXT arch_forkret(SB), 1, $-4
+TEXT arch__forkret(SB), 1, $-4
     ADD $(4*15), R13        /* make r13 point to ureg->type */
     MOVW    8(R13), R14     /* restore link */
     MOVW    4(R13), R0      /* restore SPSR */
@@ -7518,12 +7536,7 @@ static Lock vctllock;
 @
 %x86: same
 
-\subsection{[[arch_intrenable()]] (ARM)}
-
-<<macro arch_intrenable(arm)>>=
-#define arch_intrenable(i, f, a, b, n) irqenable((i), (f), (a))
-@
-% does not use b and n? what are those parameters?
+\subsection{[[Intregs]] (ARM)}
 
 % INTREGS!
 
@@ -7549,6 +7562,14 @@ struct Intregs {
 @
 % 2 int, so 64 bits for 64 possible IRQs.
 %not used: GPUdisable
+
+
+\subsection{[[arch_intrenable()]] (ARM)}
+
+<<macro arch_intrenable(arm)>>=
+#define arch_intrenable(i, f, a, b, n) irqenable((i), (f), (a))
+@
+% does not use b and n? what are those parameters?
 
 
 <<function irqenable(arm)>>=
@@ -10752,7 +10773,7 @@ char  *kstack;  /* known to l.s */
 % @
 
 
-\subsection{[[arch_gotolabel()]] (arm)}
+\subsection{[[arch_gotolabel()]] (ARM)}
 
 <<function arch_gotolabel(arm)>>=
 TEXT arch_gotolabel(SB), 1, $-4
@@ -10771,7 +10792,7 @@ TEXT arch_setlabel(SB), 1, $-4
     RET
 @
 
-\subsection{[[arch_mmuswitch()]] (arm)}
+\subsection{[[arch_mmuswitch()]] (ARM)}
 
 <<[[Cpu]] [[Arch]] mmu fields(arm)>>=
 int mmupid;
@@ -10825,7 +10846,7 @@ arch_mmuswitch(Proc* proc)
 
 
 
-\subsection{[[arch_procsave()]] (arm)}
+\subsection{[[arch_procsave()]] (ARM)}
 
 
 <<function arch_procsave(arm)>>=
@@ -11190,7 +11211,7 @@ preempt(void)
 % servicing an interrupt may have adjusted the readyness of higher priority
 % process so preempt!
 
-\subsection{Clock interrupt (arm)}
+\subsection{Clock interrupt (ARM)}
 % see also Time chapter
 
 % number of times per second we want to get a clock interrupt, called
@@ -11353,7 +11374,7 @@ procwired(Proc *p, int bm)
 % see EDF section
 
 
-\section{Halting (arm)}
+\section{Halting (ARM)}
 
 <<function arch_idlehands(raspberry pi1)(arm)>>=
 TEXT arch_idlehands(SB), $-4
@@ -11383,9 +11404,12 @@ TEXT arch_idlehands(SB), $-4
 \chapter{Initialization}
 %less: (ARM) in title
 
+% We could distribute the xxxinit functions before. It would help.
+% But it's nice to see all the init code together.
+
 \section{Booting the kernel}
 
-\subsection{Loading the kernel in physical memory (arm)}
+\subsection{Loading the kernel in physical memory (ARM)}
 
 %startup_elf.cd cheat. 
 %load whole file at 0x8000 and starts there
@@ -11395,7 +11419,7 @@ TEXT arch_idlehands(SB), $-4
 
 
 
-\subsection{First instructions (arm)}
+\subsection{First instructions (ARM)}
 
 % Setup the base pointer, stack pointer, supervisor mode.
 
@@ -11440,7 +11464,7 @@ TEXT _start(SB), 1, $-4
 
 
 
-\subsection{Basic pagination (arm)}
+\subsection{Basic pagination (ARM)}
 
 <<function armstart(raspberry pi1)(arm)>>=
 TEXT armstart(SB), 1, $-4
@@ -11582,7 +11606,7 @@ mmuinit(void *a)
 % Section so 1MB direct match. Big pages ...
 \t rename to mmuinit0
 
-\subsection{Jumping to C [[main()]] (arm)}
+\subsection{Jumping to C [[main()]] (ARM)}
 
 % assumes pagination done here
 <<function _startpg(raspberry pi1)(arm)>>=
@@ -11599,7 +11623,7 @@ TEXT _startpg(SB), 1, $-4
 @
 %$
 
-\section{Kernel initialization (arm)}
+\section{Kernel initialization (ARM)}
 
 <<function main(arm)>>=
 void
@@ -11680,7 +11704,7 @@ extern  char  edata[];
 extern  char  end[];
 @ 
 
-\subsection{[[cpu]] initialization (arm)}
+\subsection{[[cpu]] initialization (ARM)}
 
 <<function arch__cpu0init(arm)>>=
 void
@@ -11760,7 +11784,7 @@ cputype2name(char *buf, int size)
 
 %x86: complicated
 
-\subsection{Memory detection (arm)}
+\subsection{Memory detection (ARM)}
 
 
 <<function getramsize(arm)>>=
@@ -11781,7 +11805,7 @@ getramsize(Confmem *mem)
 %x86: so much more complicated
 
 
-\subsection{[[conf]] initialization (arm)}
+\subsection{[[conf]] initialization (ARM)}
 
 <<[[main()]] parsing options and boot arguments(arm)>>=
 //optionsinit("/boot/boot boot"); // setup values for getconf() 
@@ -11904,7 +11928,7 @@ arch__confinit(void)
 
 % see also cat /dev/swap
 
-\subsection{Exception vector initialization (arm)}
+\subsection{Exception vector initialization (ARM)}
 
 <<struct Vpage0(arm)>>=
 /*
@@ -12006,7 +12030,7 @@ TEXT setr13(SB), 1, $-4
 %$
 %banked register R13
 
-\subsection{Clock initialization (arm)}
+\subsection{Clock initialization (ARM)}
 
 <<function clockinit(arm)>>=
 void
@@ -12046,7 +12070,7 @@ clockinit(void)
 @
 % so will generate at Arch_HZ ?
 
-\subsection{Virtual memory initialisation (arm)}
+\subsection{Virtual memory initialisation (ARM)}
 % part 2
 
 <<function mmuinit1(arm)>>=
@@ -12278,7 +12302,7 @@ chandevreset(void)
 void  (*reset)(void); // done once at boot time
 @
 
-\subsection{Displaying hardware information}
+\subsection{Displaying hardware information (ARM)}
 
 <<[[main()]] locals(arm)>>=
 uint firmware, board;
@@ -12336,7 +12360,7 @@ getfirmware(void)
 @
 
 
-\section{The first process (arm)}
+\section{The first process (ARM)}
 
 % kernel code part of first process: init0
 % user code part of first process: initcode, which will then exec boot/boot!
