@@ -37,11 +37,11 @@ TEXT arch_touser(SB), 1, $-4
     RFE
 /*e: function arch_touser(arm) */
 
-/*s: function arch_forkret(arm) */
+/*s: function arch__forkret(arm) */
 /*
  *  here to jump to a newly forked process
  */
-TEXT arch_forkret(SB), 1, $-4
+TEXT arch__forkret(SB), 1, $-4
     ADD $(4*15), R13        /* make r13 point to ureg->type */
     MOVW    8(R13), R14     /* restore link */
     MOVW    4(R13), R0      /* restore SPSR */
@@ -49,5 +49,5 @@ TEXT arch_forkret(SB), 1, $-4
     MOVM.DB.S (R13), [R0-R14]   /* restore registers */
     ADD $8, R13         /* pop past ureg->{type+psr} */
     RFE             /* MOVM.IA.S.W (R13), [R15] */
-/*e: function arch_forkret(arm) */
+/*e: function arch__forkret(arm) */
 /*e: processes/arm/lproc.s */

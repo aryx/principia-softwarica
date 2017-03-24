@@ -378,7 +378,7 @@ arch_forkchild(Proc *p, Ureg *ureg)
     Ureg *cureg;
 
     p->sched.sp = (ulong)p->kstack+KSTACK-sizeof(Ureg);
-    p->sched.pc = (ulong)arch_forkret;
+    p->sched.pc = (ulong)arch__forkret;
 
     cureg = (Ureg*)(p->sched.sp);
     memmove(cureg, ureg, sizeof(Ureg));

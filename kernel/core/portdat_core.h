@@ -108,18 +108,17 @@ struct Cpu
     // must be second field at 0x04, used by arch_splhi()
     ulong splpc;      /* pc of last caller to arch_splhi */
     /*e: [[Cpu]] second field */
-  
-    // ref<Proc>, or None if halting?
+      // ref<Proc>, or None if halting?
     Proc* proc;     /* current process on this processor */
 
     struct Arch_Cpu;
 
-
+    /*s: [[Cpu]] time fields */
     ulong ticks;      /* of the clock since boot time */
 
     uvlong  cpuhz;
     int cpumhz; // cpuhz / 1_000_000
-
+    /*e: [[Cpu]] time fields */
     /*s: [[Cpu]] stat fields */
     Perf  perf;     /* performance counters */
     /*x: [[Cpu]] stat fields */
