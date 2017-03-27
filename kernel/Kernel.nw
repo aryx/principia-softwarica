@@ -2637,16 +2637,9 @@ TEXT    arch_tas(SB), $-4
 % return in R0, see C conventions.
 
 
-\section{[[arch_coherence()]] (ARM)}
-\t Put in SMP section? issue only when SMP no?
+%\section{[[arch_coherence()]] (ARM)}
+% now in Advanced topics; too subtle.
 
-<<function arm_arch_coherence(arm)>>=
-TEXT arm_arch_coherence(SB), $-4
-    BARRIERS
-    RET
-@
-%$
-%arch_coherence = arm_arch_coherence in main
 
 \section{Atomic [[arch_xinc()]] and [[arch_xdec()]] (ARM)}
 
@@ -17948,7 +17941,7 @@ kbdputmap(ushort m, ushort scanc, Rune r)
 \fi
 
 
-\section{The screen (arm)}
+\section{The screen (ARM)}
 
 <<constant VCBUFFER(arm)>>=
 #define VCBUFFER    (KZERO+0x3400)      /* videocore mailbox buffer */
@@ -26136,14 +26129,14 @@ if(indir && *argp==nil) {
 
 % [[select()]]? [[alt()]]?
 
-% other: Serial line, Scsi, see Kernel_extra.nw
+% other: Serial line, SCSI, see Kernel_extra.nw
 
-\section{Floating point (ARM)}
+\section{Floating point}
 
 % pretty important
 
 
-\subsection{ARM floating point coprocessors}
+\subsection{ARM floating point coprocessors (ARM)}
 
 <<[[Coprocessors]] other cases(arm)>>=
 #define CpFP        10          /* float FP, VFP cfg. */
@@ -26168,18 +26161,42 @@ uintptr fppc;           /* addr of last fault */
 int fpcnt;          /* how many consecutive at that addr */
 @
 
-\subsection{Floating point hooks}
+\subsection{Floating point hooks (ARM)}
 
 <<[[arch_forkchild()]] floating point(arm)>>=
 fpusysrforkchild(p, cureg, up);
+@
+<<function fpusysrforkchild(arm)>>=
+/*
+ * Called later in sysrfork() via the machine-dependent
+ * sysrforkchild() routine.
+ * Copy the parent FPU state to the child.
+ */
+void
+fpusysrforkchild(Proc *p, Ureg *, Proc *up)
+{
+    /* don't penalize the child, it hasn't done FP in a note handler. */
+    p->fpstate = up->fpstate & ~FPillegal;
+}
 @
 
 <<[[arch_procsetup()]] floating point(arm)>>=
 fpusysprocsetup(p);
 @
 
-
-
+<<function fpusysprocsetup(arm)>>=
+/*
+ * Disable the FPU.
+ * Called from sysexec() via sysprocsetup() to
+ * set the FPU for the new process.
+ */
+void
+fpusysprocsetup(Proc *p)
+{
+    p->fpstate = FPinit;
+    fpoff();
+}
+@
 
 
 <<[[arch_procsave()]] floating point(arm)>>=
@@ -26187,17 +26204,89 @@ fpusysprocsetup(p);
 fpuprocsave(p);
 @
 
+<<function fpuprocsave(arm)>>=
+/*
+ * Called from sched() and sleep() via the machine-dependent
+ * procsave() routine.
+ * About to go in to the scheduler.
+ * If the process wasn't using the FPU
+ * there's nothing to do.
+ */
+void
+fpuprocsave(Proc *p)
+{
+    if(p->fpstate == FPactive){
+        if(p->state == Moribund)
+            fpclear();
+        else{
+            /*
+             * Fpsave() stores without handling pending
+             * unmasked exeptions. Postnote() can't be called
+             * here as sleep() already has up->rlock, so
+             * the handling of pending exceptions is delayed
+             * until the process runs again and generates an
+             * emulation fault to activate the FPU.
+             */
+            fpsave(&p->fpsave);
+        }
+        p->fpstate = FPinactive;
+    }
+}
+@
+
 <<[[arch_procrestore()]] floating point(arm)>>=
 fpuprocrestore(p);
 @
-
+<<function fpuprocrestore(arm)>>=
+/*
+ * The process has been rescheduled and is about to run.
+ * Nothing to do here right now. If the process tries to use
+ * the FPU again it will cause a Device Not Available
+ * exception and the state will then be restored.
+ */
+void
+fpuprocrestore(Proc *)
+{
+}
+@
 
 
 <<[[syscall()]] if RFORK, handle floating point(arm)>>=
 if(scallnr == RFORK)
     fpusysrfork(ureg);
 @
+<<function fpusysrfork(arm)>>=
+/*
+ * Called early in the non-interruptible path of
+ * sysrfork() via the machine-dependent syscall() routine.
+ * Save the state so that it can be easily copied
+ * to the child process later.
+ */
+void
+fpusysrfork(Ureg*)
+{
+    if(up->fpstate == FPactive){
+        fpsave(&up->fpsave);
+        up->fpstate = FPinactive;
+    }
+}
+@
 
+<<function fpsave(arm)>>=
+/* should only be called if p->fpstate == FPactive */
+void
+fpsave(Arch_FPsave *fps)
+{
+    int n;
+
+    fpon();
+    fps->control = fps->status = fprd(Fpscr);
+    assert(cpu->fpnregs);
+    for (n = 0; n < cpu->fpnregs; n++)
+        fpsavereg(n, (uvlong *)fps->regs[n]);
+    fpoff();
+}
+@
 
 
 
@@ -26234,124 +26323,12 @@ fpunoted(void)
 }
 @
 
-<<function fpusysrfork(arm)>>=
-/*
- * Called early in the non-interruptible path of
- * sysrfork() via the machine-dependent syscall() routine.
- * Save the state so that it can be easily copied
- * to the child process later.
- */
-void
-fpusysrfork(Ureg*)
-{
-    if(up->fpstate == FPactive){
-        fpsave(&up->fpsave);
-        up->fpstate = FPinactive;
-    }
-}
-@
 
-<<function fpusysrforkchild(arm)>>=
-/*
- * Called later in sysrfork() via the machine-dependent
- * sysrforkchild() routine.
- * Copy the parent FPU state to the child.
- */
-void
-fpusysrforkchild(Proc *p, Ureg *, Proc *up)
-{
-    /* don't penalize the child, it hasn't done FP in a note handler. */
-    p->fpstate = up->fpstate & ~FPillegal;
-}
-@
 
-<<function fpsave(arm)>>=
-/* should only be called if p->fpstate == FPactive */
-void
-fpsave(Arch_FPsave *fps)
-{
-    int n;
 
-    fpon();
-    fps->control = fps->status = fprd(Fpscr);
-    assert(cpu->fpnregs);
-    for (n = 0; n < cpu->fpnregs; n++)
-        fpsavereg(n, (uvlong *)fps->regs[n]);
-    fpoff();
-}
-@
 
-<<function fprestore(arm)>>=
-static void
-fprestore(Proc *p)
-{
-    int n;
 
-    fpon();
-    fpwr(Fpscr, p->fpsave.control);
-    cpu->fpscr = fprd(Fpscr) & ~Allcc;
-    assert(cpu->fpnregs);
-    for (n = 0; n < cpu->fpnregs; n++)
-        fprestreg(n, *(uvlong *)p->fpsave.regs[n]);
-}
-@
 
-<<function fpuprocsave(arm)>>=
-/*
- * Called from sched() and sleep() via the machine-dependent
- * procsave() routine.
- * About to go in to the scheduler.
- * If the process wasn't using the FPU
- * there's nothing to do.
- */
-void
-fpuprocsave(Proc *p)
-{
-    if(p->fpstate == FPactive){
-        if(p->state == Moribund)
-            fpclear();
-        else{
-            /*
-             * Fpsave() stores without handling pending
-             * unmasked exeptions. Postnote() can't be called
-             * here as sleep() already has up->rlock, so
-             * the handling of pending exceptions is delayed
-             * until the process runs again and generates an
-             * emulation fault to activate the FPU.
-             */
-            fpsave(&p->fpsave);
-        }
-        p->fpstate = FPinactive;
-    }
-}
-@
-
-<<function fpuprocrestore(arm)>>=
-/*
- * The process has been rescheduled and is about to run.
- * Nothing to do here right now. If the process tries to use
- * the FPU again it will cause a Device Not Available
- * exception and the state will then be restored.
- */
-void
-fpuprocrestore(Proc *)
-{
-}
-@
-
-<<function fpusysprocsetup(arm)>>=
-/*
- * Disable the FPU.
- * Called from sysexec() via sysprocsetup() to
- * set the FPU for the new process.
- */
-void
-fpusysprocsetup(Proc *p)
-{
-    p->fpstate = FPinit;
-    fpoff();
-}
-@
 
 \subsection{[[coproc.c]]}
 
@@ -26926,7 +26903,7 @@ enum {
 %old: was in dat_arch.h
 
 
-\subsection{[[mathxxx()]] (arm)}
+\subsection{[[mathxxx()]] (ARM)}
 
 <<function mathnote(arm)>>=
 static void
@@ -26992,6 +26969,22 @@ mathemu(Ureg *)
     fpclear();
 }
 @
+
+<<function fprestore(arm)>>=
+static void
+fprestore(Proc *p)
+{
+    int n;
+
+    fpon();
+    fpwr(Fpscr, p->fpsave.control);
+    cpu->fpscr = fprd(Fpscr) & ~Allcc;
+    assert(cpu->fpnregs);
+    for (n = 0; n < cpu->fpnregs; n++)
+        fprestreg(n, *(uvlong *)p->fpsave.regs[n]);
+}
+@
+
 
 \subsection{XXX}
 
@@ -28082,6 +28075,17 @@ TEXT arch_lcycles(SB), 1, $-4
     RET
 @
 %$
+
+\subsection{[[arch_coherence()]] (ARM)}
+\t issue only when SMP?
+
+<<function arm_arch_coherence(arm)>>=
+TEXT arm_arch_coherence(SB), $-4
+    BARRIERS
+    RET
+@
+%$
+%arch_coherence = arm_arch_coherence in main
 
 \subsection{Cache adjustments}
 
