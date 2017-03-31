@@ -57,7 +57,7 @@
 /*x: [[CpSC primary registers]] other cases(arm) */
 #define CpTIMER     14          /* Generic timer (cortex-a7) */
 /*x: [[CpSC primary registers]] other cases(arm) */
-#define CpCLD       9        /* L2 Cache Lockdown, op1==1 */
+#define CpCLD       9        // Performance monitor
 /*e: [[CpSC primary registers]] other cases(arm) */
 /*e: type CpSC primary registers(arm) */
 
@@ -76,15 +76,13 @@
  * the cortex has more op1 codes for cache size, etc.
  */
 #define CpIDid      0           /* main ID */
-#define CpIDct      1           /* cache type */
-#define CpIDtlb     3           /* tlb type (cortex) */
 #define CpIDmpid    5           /* multiprocessor id (cortex) */
-#define CpIDrevid   6           /* extra revision ID */
-
+/*e: type CpID opcode2(arm) */
+/*s: type CpID CpIDid op1(arm) */
 /* CpIDid op1 values */
 #define CpIDcsize   1           /* cache size (cortex) */
 #define CpIDcssel   2           /* cache size select (cortex) */
-/*e: type CpID opcode2(arm) */
+/*e: type CpID CpIDid op1(arm) */
 
 /*s: type CpCONTROL opcode2(arm) */
 /*
@@ -124,34 +122,15 @@
  * CpCONTROL: op1==0, CRm==0, op2==CpAuxctl.
  * Auxiliary control register on cortex at least.
  */
-#define CpACcachenopipe     (1<<20) /* don't pipeline cache maint. */
-#define CpACcp15serial      (1<<18) /* serialise CP1[45] ops. */
-#define CpACcp15waitidle    (1<<17) /* CP1[45] wait-on-idle */
-#define CpACcp15pipeflush   (1<<16) /* CP1[45] flush pipeline */
-#define CpACneonissue1      (1<<12) /* neon single issue */
-#define CpACldstissue1      (1<<11) /* force single issue ld, st */
-#define CpACissue1      (1<<10) /* force single issue */
-#define CpACnobsm       (1<<7)  /* no branch size mispredicts */
-#define CpACibe         (1<<6)  /* cp15 invalidate & btb enable */
-#define CpACl1neon      (1<<5)  /* cache neon (FP) data in L1 cache */
-#define CpACasa         (1<<4)  /* enable speculative accesses */
-#define CpACl1pe        (1<<3)  /* l1 cache parity enable */
-#define CpACl2en        (1<<1)  /* l2 cache enable; default 1 */
-
 /* cortex-a7 and cortex-a9 */
-/*s: [[CpCONTROL.CpAuxctl]] other cases(arm) */
 #define CpACsmp         (1<<6)  /* SMP l1 caches coherence; needed for ldrex/strex */
-/*e: [[CpCONTROL.CpAuxctl]] other cases(arm) */
-#define CpACl1pctl      (3<<13) /* l1 prefetch control */
 /*e: type CpCONTROL CpAuxctl(arm) */
 
 /*s: type CpTTB(arm) */
 /*
  * CpTTB op1==0, Crm==0 opcode2 values.
  */
-#define CpTTB0      0
 #define CpTTB1      1           /* cortex */
-#define CpTTBctl    2           /* cortex */
 /*e: type CpTTB(arm) */
 
 /*s: type CpFSR(arm) */
@@ -168,39 +147,28 @@
  * In ARM-speak, 'flush' means invalidate and 'clean' means writeback.
  */
 #define CpCACHEintr 0           /* interrupt (op2==4) */
-#define CpCACHEisi  1           /* inner-sharable I cache (v7) */
-#define CpCACHEpaddr    4           /* 0: phys. addr (cortex) */
 #define CpCACHEinvi 5           /* instruction, branch table */
 #define CpCACHEinvd 6           /* data or unified */
 #define CpCACHEinvu 7           /* unified (not on cortex) */
-#define CpCACHEva2pa    8           /* va -> pa translation (cortex) */
 #define CpCACHEwb   10          /* writeback to PoC */
-#define CpCACHEwbu  11          /* writeback to PoU */
 #define CpCACHEwbi  14          /* writeback+invalidate (to PoC) */
 /*e: type CpCACHE secondary registers(arm) */
 /*s: type CpCACHE opcode2(arm) */
 #define CpCACHEall  0           /* entire (not for invd nor wb(i) on cortex) */
 #define CpCACHEse   1           /* single entry */
 #define CpCACHEsi   2           /* set/index (set/way) */
-#define CpCACHEtest 3           /* test loop */
 #define CpCACHEwait 4           /* wait (prefetch flush on cortex) */
-#define CpCACHEdmbarr   5           /* wb only (cortex) */
-#define CpCACHEflushbtc 6           /* flush branch-target cache (cortex) */
-#define CpCACHEflushbtse 7          /* ⋯ or just one entry in it (cortex) */
 /*e: type CpCACHE opcode2(arm) */
 
 /*s: type CpTLB secondary registers(arm) */
 /*
  * CpTLB Secondary (CRm) registers and opcode2 fields.
  */
-#define CpTLBinvi   5           /* instruction */
-#define CpTLBinvd   6           /* data */
 #define CpTLBinvu   7           /* unified */
 /*e: type CpTLB secondary registers(arm) */
 /*s: type CpTLB opcode2(arm) */
 #define CpTLBinv    0           /* invalidate all */
 #define CpTLBinvse  1           /* invalidate single entry */
-#define CpTBLasid   2           /* by ASID (cortex) */
 /*e: type CpTLB opcode2(arm) */
 
 /*s: type CpCLD secondary registers(arm) */
@@ -209,7 +177,6 @@
  */
 #define CpCLDena    12          /* enables */
 #define CpCLDcyc    13          /* cycle counter */
-#define CpCLDuser   14          /* user enable */
 /*e: type CpCLD secondary registers(arm) */
 /*s: type CpCLD opcode2(arm) */
 #define CpCLDenapmnc    0
@@ -220,7 +187,6 @@
 /*
  * CpTIMER op1==0 Crm and opcode2 registers (cortex-a7)
  */
-#define CpTIMERcntfrq   0
 #define CpTIMERphys     2
 
 #define CpTIMERphysval  0
@@ -244,7 +210,6 @@
 /*
  * CpCACHERANGE opcode2 fields for MCRR instruction (armv6)
  */
-#define CpCACHERANGEinvi    5       /* invalidate instruction  */
 #define CpCACHERANGEinvd    6       /* invalidate data */
 #define CpCACHERANGEdwb     12      /* writeback */
 #define CpCACHERANGEdwbi    14      /* writeback+invalidate */
@@ -256,17 +221,7 @@
 /*
  * CpTTB cache control bits
  */
-#define CpTTBnos    (1<<5)  /* only Inner cache shareable */
-#define CpTTBinc    (0<<0|0<<6) /* inner non-cacheable */
-#define CpTTBiwba   (0<<0|1<<6) /* inner write-back write-allocate */
-#define CpTTBiwt    (1<<0|0<<6) /* inner write-through */
-#define CpTTBiwb    (1<<0|1<<6) /* inner write-back no write-allocate */
-#define CpTTBonc    (0<<3)  /* outer non-cacheable */
-#define CpTTBowba   (1<<3)  /* outer write-back write-allocate */
-#define CpTTBowt    (2<<3)  /* outer write-through */
-#define CpTTBowb    (3<<3)  /* outer write-back no write-allocate */
 #define CpTTBs  (1<<1)  /* page table in shareable memory */
-#define CpTTBbase   ~0x7F       /* mask off control bits */
 /*e: type CpTTB cache control bits(arm) */
 
 /*

@@ -21,17 +21,19 @@ enum {
  */
 struct Arch_FPsave
 {
-    ulong   status;
-    ulong   control;
     /*
      * vfp3 with ieee fp regs; uvlong is sufficient for hardware but
      * each must be able to hold an Internal from fpi.h for sw emulation.
      */
     ulong   regs[Maxfpregs][3];
+    /*s: [[Proc]] [[Arch]] [[FPsave]] other fields */
+    int fpstate; // vs Proc.fpstate??
 
-    int fpstate;
+    ulong   status;
+    ulong   control;
 
     uintptr pc;     /* of failed fp instr. */
+    /*e: [[Proc]] [[Arch]] [[FPsave]] other fields */
 };
 /*e: struct Arch_FPsave(arm) */
 

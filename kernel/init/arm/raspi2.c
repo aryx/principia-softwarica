@@ -44,7 +44,7 @@ Soc soc = {
 
 /*s: struct Mbox(arm) */
 /*
- * Arm local regs for smp
+ * Arm local regs for SMP
  */
 struct Mbox {
     u32int  doorbell;

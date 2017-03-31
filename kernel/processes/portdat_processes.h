@@ -353,11 +353,10 @@ enum FPSaveStatus
 {
     /* this is a state */
     FPinit=   0,
+
     FPactive= 1,
     FPinactive= 2,
 
-    FPemu = 3, // used by bcm/ only
-  
     /* the following is a bit that can be or'd into the state */
     FPillegal=  0x100,
 };
@@ -605,8 +604,9 @@ struct Proc
     /*x: [[Proc]] other fields */
     ulong alarm;    /* Time of call */
     /*x: [[Proc]] other fields */
-    // enum<fpsavestatus>
+    // enum<FPSaveStatus>
     int fpstate;
+    /*x: [[Proc]] other fields */
     Arch_FPsave  fpsave;   /* address of this is known by db */
     /*x: [[Proc]] other fields */
     // ref_counted<Egrp>

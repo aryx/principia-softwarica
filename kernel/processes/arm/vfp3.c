@@ -15,7 +15,7 @@
 
 /*s: enum _anon_ (processes/arm/vfp3.c)(arm) */
 /* subarchitecture code in cpu->havefp */
-enum {
+enum VFPKind {
     VFPv2   = 2,
     VFPv3   = 3,
 };
@@ -123,12 +123,13 @@ havefp(void)
     }
     if (!gotfp) {
         print("fpon: no FP coprocessors\n");
-        cpu->havefpvalid = 1;
+        cpu->havefpvalid = true;
         return 0;
     }
-    cpu->fpon = 1;          /* don't panic */
+    cpu->fpon = true;          /* don't panic */
     sid = fprd(Fpsid);
-    cpu->fpon = 0;
+    cpu->fpon = false;
+
     switch((sid >> 16) & MASK(7)){
     case 0:             /* VFPv1 */
         break;
@@ -144,7 +145,7 @@ havefp(void)
     if (cpu->cpuno == 0)
         print("fp: %d registers, %s simd\n", cpu->fpnregs,
             (acc & Cpaccnosimd? " no": ""));
-    cpu->havefpvalid = 1;
+    cpu->havefpvalid = true;
     return 1;
 }
 /*e: function havefp(arm) */
@@ -160,7 +161,7 @@ fpoff(void)
 {
     if (cpu->fpon) {
         fpwr(Fpexc, 0);
-        cpu->fpon = 0;
+        cpu->fpon = false;
     }
 }
 /*e: function fpoff(arm) */
@@ -172,7 +173,7 @@ fpononly(void)
     if (!cpu->fpon && havefp()) {
         /* enable fp.  must be first operation on the FPUs. */
         fpwr(Fpexc, Fpenabled);
-        cpu->fpon = 1;
+        cpu->fpon = true;
     }
 }
 /*e: function fpononly(arm) */
@@ -188,7 +189,7 @@ fpcfg(void)
     /* clear pending exceptions; no traps in vfp3; all v7 ops are scalar */
     cpu->fpscr = Dn | Fz | FPRNR | (FPINVAL | FPZDIV | FPOVFL) & ~Alltraps;
     fpwr(Fpscr, cpu->fpscr);
-    cpu->fpconfiged = 1;
+    cpu->fpconfiged = true;
 
     if (printed)
         return;
@@ -480,8 +481,6 @@ static void
 mathemu(Ureg *)
 {
     switch(up->fpstate){
-    case FPemu:
-        error("illegal instruction: VFP opcode in emulated mode");
     case FPinit:
         fpinit();
         up->fpstate = FPactive;
@@ -612,23 +611,6 @@ fpuemu(Ureg* ureg)
     cop = (*(ulong *)pc >>  8) & MASK(4);
     if(cpu->fpon)
         fpstuck(pc);        /* debugging; could move down 1 line */
-//#define ISFPAOP(cp, op) ((cp) == CpOFPA && ISCPOP(op))
-
-//    if (ISFPAOP(cop, op)) {     /* old arm 7500 fpa opcode? */
-////      iprint("fpuemu: fpa instr %#8.8lux at %#p\n", *(ulong *)pc, pc);
-////      error("illegal instruction: old arm 7500 fpa opcode");
-//        s = arch_spllo();
-//        if(waserror()){
-//            arch_splx(s);
-//            nexterror();
-//        }
-//        error("ARM7500 instructions not supported; use 5l -f when linking");
-//        //nfp = fpiarm(ureg);   /* advances pc past emulated instr(s) */
-//        //if (nfp > 1)      /* could adjust this threshold */
-//        //  cpu->fppc = cpu->fpcnt = 0;
-//        //arch_splx(s);
-//        //poperror();
-//    } else 
     if (ISVFPOP(cop, op)) {  /* if vfp, fpu must be off */
         mathemu(ureg);      /* enable fpu & retry */
         nfp = 1;

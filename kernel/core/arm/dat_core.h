@@ -17,15 +17,20 @@ struct Arch_Cpu {
     int mmupid;
     /*e: [[Cpu]] [[Arch]] mmu fields(arm) */
     /*s: [[Cpu]] [[Arch]] float fields(arm) */
-    /* vfp2 or vfp3 fpu */
+    // option<VFPKind>, None = 0 /* vfp2 or vfp3 fpu */
     int havefp;
-    int havefpvalid;
-    int fpon;
-    int fpconfiged;
+    bool havefpvalid;
+    // 16 for VFPv2, 32 for VFPv3
     int fpnregs;
+    /*x: [[Cpu]] [[Arch]] float fields(arm) */
+    bool fpon;
+    /*x: [[Cpu]] [[Arch]] float fields(arm) */
     ulong   fpscr;          /* sw copy */
+    /*x: [[Cpu]] [[Arch]] float fields(arm) */
+    bool fpconfiged;
+    /*x: [[Cpu]] [[Arch]] float fields(arm) */
     int fppid;          /* pid of last fault */
-    uintptr fppc;           /* addr of last fault */
+    uintptr fppc;       /* addr of last fault */
     int fpcnt;          /* how many consecutive at that addr */
     /*e: [[Cpu]] [[Arch]] float fields(arm) */
     /*s: [[Cpu]] [[Arch]] save of first five registers fields(arm) */
