@@ -49,10 +49,11 @@
 #define CpDAC       3           /* Domain Access Control */
 #define CpFSR       5           /* Fault Status */
 #define CpFAR       6           /* Fault Address */
-#define CpCACHE     7           /* cache/write buffer control */
 #define CpTLB       8           /* TLB control */
 #define CpSPM       15          /* system performance monitor (arm1176) */
 /*s: [[CpSC primary registers]] other cases(arm) */
+#define CpCACHE     7           /* cache/write buffer control */
+/*x: [[CpSC primary registers]] other cases(arm) */
 #define CpID        0           /* ID and cache type */
 /*x: [[CpSC primary registers]] other cases(arm) */
 #define CpTIMER     14          /* Generic timer (cortex-a7) */

@@ -117,7 +117,7 @@ arch_validalign(uintptr addr, unsigned align)
 void
 arch__kexit(Ureg*)
 {
-    /*s: [[kexit()]] tos adjustments */
+    /*s: [[arch__kexit()]] tos adjustments */
     uvlong t;
     Tos *tos;
 
@@ -127,11 +127,12 @@ arch__kexit(Ureg*)
     tos->kcycles += t - up->kentry;
     tos->pcycles = up->pcycles;
     tos->pid = up->pid;
-    /*e: [[kexit()]] tos adjustments */
+    /*e: [[arch__kexit()]] tos adjustments */
     tos->cyclefreq = cpu->cpuhz;
-
+    /*s: [[arch__kexit()]] write back cache(arm) */
     /* make visible immediately to user proc */
     cachedwbinvse(tos, sizeof *tos);
+    /*e: [[arch__kexit()]] write back cache(arm) */
 }
 /*e: function arch__kexit(arm) */
 

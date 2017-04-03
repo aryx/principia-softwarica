@@ -15,10 +15,15 @@ TEXT armstart(SB), 1, $-4
      * invalidate caches and tlb
      */
     MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
-    BIC $(CpCdcache|CpCicache|CpCpredict|CpCmmu), R1 // Remove CpCpredict
+    BIC $(CpCmmu), R1
+    /*s: [[armstart()]] disable features(arm) */
+    BIC $(CpCdcache|CpCicache), R1
+    /*e: [[armstart()]] disable features(arm) */
     MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl
 
+    /*s: [[armstart()]] invalidate caches(arm) */
     MCR CpSC, 0, R0, C(CpCACHE), C(CpCACHEinvu), CpCACHEall
+    /*e: [[armstart()]] invalidate caches(arm) */
     MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
     ISB
 
@@ -55,7 +60,10 @@ _ramZ:
      * enable caches, mmu, and high vectors
      */
     MRC CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
-    ORR $(CpChv|CpCdcache|CpCicache|CpCmmu), R0
+    ORR $(CpCmmu|CpChv), R0
+    /*s: [[armstart()]] reenable features(arm) */
+    ORR $(CpCdcache|CpCicache), R0
+    /*e: [[armstart()]] reenable features(arm) */
     MCR CpSC, 0, R0, C(CpCONTROL), C(0), CpMainctl
     ISB
 
@@ -76,14 +84,15 @@ TEXT _startpg(SB), 1, $-4
      * enable cycle counter
      */
     MOVW    $1, R1
-    MCR CpSC, 0, R1, C(CpSPM), C(CpSPMperf), CpSPMctl // Not CpSPMcyc??
+    MCR CpSC, 0, R1, C(CpSPM), C(CpSPMperf), CpSPMctl
     /*e: [[_startpg()]] enable cycle counter(raspberry pi1)(arm) */
     /*
      * call main and loop forever if it returns
      */
     BL  main(SB)
-    B   0(PC)
 
+    // Unreached            
+    B   0(PC)
     BL  _div(SB)        /* hack to load _div, etc. */
 /*e: function _startpg(raspberry pi1)(arm) */
 

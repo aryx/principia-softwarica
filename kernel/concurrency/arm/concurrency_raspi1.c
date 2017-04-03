@@ -78,8 +78,10 @@ cas32(void* addr, u32int old, u32int new)
     if(r)
         *(u32int*)addr = new;
     arch_splx(s);
+    /*s: [[cas32()]] if address contained old value, call coherence(arm) */
     if (r)
         arch_coherence();
+    /*e: [[cas32()]] if address contained old value, call coherence(arm) */
     return r;
 }
 /*e: function cas32(arm) */

@@ -11,8 +11,10 @@
 struct Arch_Proc
 {
     /*s: [[Proc]] [[Arch]] memory fields(arm) */
+    // list<ref<Page> > pages used to store page tables
     Page*   mmul2;
     /*x: [[Proc]] [[Arch]] memory fields(arm) */
+    // list<ref<Page> > (next = Page.next)
     Page*   mmul2cache; /* free mmu pages */
     /*e: [[Proc]] [[Arch]] memory fields(arm) */
 };

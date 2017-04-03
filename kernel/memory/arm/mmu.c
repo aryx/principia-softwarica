@@ -102,8 +102,9 @@ mmuinit1(void *a)
      * undo identity map of first MB of ram
      */
     l1[L1X(0)] = 0;
-
+    /*s: [[mmuinit1()]] write back cache after adjusting page tables(arm) */
     cachedwbse(&l1[L1X(0)], sizeof(PTE));
+    /*e: [[mmuinit1()]] write back cache after adjusting page tables(arm) */
     mmuinvalidateaddr(0);
 }
 /*e: function mmuinit1(arm) */
@@ -154,8 +155,10 @@ arch_mmuswitch(Proc* proc)
 ***/
     cpu->mmupid = proc->pid;
 
+    /*s: [[arch_mmuswitch()]] write back and invalidate cache before switch(arm) */
     /* write back dirty and invalidate l1 caches */
     cacheuwbinv();
+    /*e: [[arch_mmuswitch()]] write back and invalidate cache before switch(arm) */
 
     if(proc->newtlb){
         mmul2empty(proc, 1);
@@ -176,9 +179,11 @@ arch_mmuswitch(Proc* proc)
             cpu->mmul1hi = x;
     }
 
+    /*s: [[arch_mmuswitch()]] write back cache after adjusting page tables(arm) */
     /* make sure map is in memory */
     /* could be smarter about how much? */
     cachedwbse(&l1[L1X(UZERO)], (L1hi - L1lo)*sizeof(PTE));
+    /*e: [[arch_mmuswitch()]] write back cache after adjusting page tables(arm) */
 
     /* lose any possible stale tlb entries */
     mmuinvalidate();
@@ -204,11 +209,11 @@ arch_mmurelease(Proc* proc)
 {
     Page *page, *next;
 
+    /*s: [[arch_mmurelease()]] invalidate cache before adjusting page tables(arm) */
     /* write back dirty and invalidate l1 caches */
     cacheuwbinv();
-
+    /*e: [[arch_mmurelease()]] invalidate cache before adjusting page tables(arm) */
     mmul2empty(proc, false);
-
     /*s: [[arch_mmurelease()]] free l2 page cache(arm) */
     for(page = proc->mmul2cache; page != nil; page = next){
         next = page->next;
@@ -220,13 +225,12 @@ arch_mmurelease(Proc* proc)
         wakeup(&palloc.freememr);
     proc->mmul2cache = nil;
     /*e: [[arch_mmurelease()]] free l2 page cache(arm) */
-
     mmul1empty();
-
+    /*s: [[arch_mmurelease()]] write back cache after adjusting page tables(arm) */
     /* make sure map is in memory */
     /* could be smarter about how much? */
     cachedwbse(&cpu->mmul1[L1X(UZERO)], (L1hi - L1lo)*sizeof(PTE));
-
+    /*e: [[arch_mmurelease()]] write back cache after adjusting page tables(arm) */
     /* lose any possible stale tlb entries */
     mmuinvalidate();
 }
@@ -244,26 +248,33 @@ arch_putmmu(virt_addr va, uintptr pa, Page* page)
     l1 = &cpu->mmul1[x];
     if(*l1 == Fault){
         /* wasteful - l2 pages only have 256 entries - fix */
-        if(up->mmul2cache == nil){
-            /* auxpg since we don't need much? memset if so */
-            pg = newpage(true, nil, 0);
-            pg->va = VA(arch_kmap(pg));
-        }
-        else{
+        /*s: [[arch_putmmu()]] if mmul2cache not empty(arm) */
+        if(up->mmul2cache != nil){
             pg = up->mmul2cache;
             up->mmul2cache = pg->next;
             memset(UINT2PTR(pg->va), 0, BY2PG);
         }
+        /*e: [[arch_putmmu()]] if mmul2cache not empty(arm) */
+        else{
+            /* auxpg since we don't need much? memset if so */
+            pg = newpage(true, nil, 0);
+            pg->va = VA(arch_kmap(pg));
+        }
         pg->daddr = x;
 
+        //add_list(pg, up->mmul2)
         pg->next = up->mmul2;
         up->mmul2 = pg;
 
+        /*s: [[arch_putmmu()]] write back cache before fixing va fault(arm) */
         /* force l2 page to memory */
         cachedwbse((void *)pg->va, BY2PG);
+        /*e: [[arch_putmmu()]] write back cache before fixing va fault(arm) */
 
         *l1 = PPN(pg->pa)|Dom0|Coarse;
+        /*s: [[arch_putmmu()]] write back cache after changing pde(arm) */
         cachedwbse(l1, sizeof *l1);
+        /*e: [[arch_putmmu()]] write back cache after changing pde(arm) */
 
         /*s: [[arch_putmmu()]] maintain mmul1lo and mmul1hi(arm) */
         if(x >= cpu->mmul1lo && x < cpu->mmul1hi){
@@ -295,7 +306,9 @@ arch_putmmu(virt_addr va, uintptr pa, Page* page)
         x |= L2AP(Uro);
 
     pte[L2X(va)] = PPN(pa)|x;
+    /*s: [[arch_putmmu()]] write back cache after changing pte(arm) */
     cachedwbse(&pte[L2X(va)], sizeof pte[0]);
+    /*e: [[arch_putmmu()]] write back cache after changing pte(arm) */
 
     /* clear out the current entry */
     mmuinvalidateaddr(PPN(va));
@@ -352,7 +365,9 @@ mmukmap(uintptr va, uintptr pa, usize size)
         *pte++ = (pa+n)|Dom0|L1AP(Krw)|Section;
         mmuinvalidateaddr(va+n);
     }
+    /*s: [[mmukmap()]] write back cache after changing page tables(arm) */
     cachedwbse(pte0, (uintptr)pte - (uintptr)pte0);
+    /*e: [[mmukmap()]] write back cache after changing page tables(arm) */
     return va + o;
 }
 /*e: function mmukmap(arm) */
@@ -378,7 +393,9 @@ arch_kmap(Page *p) {
 void
 arch_kunmap(Arch_KMap *k)
 {
+    /*s: [[arch_kunmap()]] write back cache for page(arm) */
     cachedwbinvse(k, BY2PG);
+    /*e: [[arch_kunmap()]] write back cache for page(arm) */
 }
 /*e: function arch_kunmap(arm) */
 /*e: memory/arm/mmu.c */

@@ -224,12 +224,16 @@ fbinit(bool set, int *width, int *height, int *depth)
         fbdefault(width, height, depth);
     /* Screen width must be a multiple of 16 */
     *width &= ~0xF;
+
     memset(fi, 0, sizeof(Fbinfo));
     fi->xres = fi->xresvirtual = *width;
     fi->yres = fi->yresvirtual = *height;
     fi->bpp = *depth;
+    /*s: [[fbinit()]] write back cache after modified fb info(arm) */
     cachedwbinvse(fi, sizeof(Fbinfo));
+    /*e: [[fbinit()]] write back cache after modified fb info(arm) */
     vcwrite(ChanFb, dmaaddr(fi));
+
     if(vcread(ChanFb) != 0)
         return nil;
     //TODO: fi->base is in virtual space?? how vcore knows about that? PADDR?

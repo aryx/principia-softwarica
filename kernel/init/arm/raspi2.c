@@ -29,10 +29,10 @@ Soc soc = {
     .dramsize   = 1024*MiB,
     .physio     = 0x3F000000,
      /*s: [[soc(raspberry pi2)]] other fields(arm) */
-     .armlocal   = 0x40000000,
-     /*x: [[soc(raspberry pi2)]] other fields(arm) */
      .l1ptedramattrs = Cached | Buffered | L1wralloc | L1sharable,
      .l2ptedramattrs = Cached | Buffered | L2wralloc | L2sharable,
+     /*x: [[soc(raspberry pi2)]] other fields(arm) */
+     .armlocal   = 0x40000000,
      /*x: [[soc(raspberry pi2)]] other fields(arm) */
      .busdram    = 0xC0000000,
      /*x: [[soc(raspberry pi2)]] other fields(arm) */

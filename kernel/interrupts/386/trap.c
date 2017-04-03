@@ -353,7 +353,7 @@ intrtime(Cpu*, int vno)
 void
 kexit(Ureg*)
 {
-    /*s: [[kexit()]] tos adjustments */
+    /*s: [[arch__kexit()]] tos adjustments */
     uvlong t;
     Tos *tos;
 
@@ -363,7 +363,7 @@ kexit(Ureg*)
     tos->kcycles += t - up->kentry;
     tos->pcycles = up->pcycles;
     tos->pid = up->pid;
-    /*e: [[kexit()]] tos adjustments */
+    /*e: [[arch__kexit()]] tos adjustments */
 }
 /*e: function kexit(x86) */
 

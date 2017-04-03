@@ -126,8 +126,12 @@ setupfpctlop(ulong instr[2], int opcode, int fpctlreg)
     instr[0] = opcode | fpctlreg << 16 | 0 << 12 | CpFP << 8;
     instr[1] = RETinst;
 
+    /*s: [[setupfpctlop()]] write back cache for modified instr(arm) */
     cachedwbse(instr, sizeof instrsz);
+    /*e: [[setupfpctlop()]] write back cache for modified instr(arm) */
+    /*s: [[setupfpctlop()]] invalidate instruction cache(arm) */
     cacheiinv();
+    /*e: [[setupfpctlop()]] invalidate instruction cache(arm) */
 }
 /*e: function setupfpctlop(arm) */
 
@@ -186,8 +190,12 @@ setupfpop(ulong instr[2], int opcode, int fpreg)
         instr[0] |= 1 << 22;        /* high bit of dfp reg # */
     instr[1] = RETinst;
 
+    /*s: [[setupfpop()]] write back cache for modified instr(arm) */
     cachedwbse(instr, sizeof instrsz);
+    /*e: [[setupfpop()]] write back cache for modified instr(arm) */
+    /*s: [[setupfpop()]] invalidate instruction cache(arm) */
     cacheiinv();
+    /*e: [[setupfpop()]] invalidate instruction cache(arm) */
 }
 /*e: function setupfpop(arm) */
 

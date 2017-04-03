@@ -264,10 +264,12 @@ unlock(Lock *l)
     /*e: [[unlock()]] sanity checks */
     l->cpu = nil;
     l->key = 0;
+    /*s: [[unlock()]] after modified key, call coherence */
     // for processor caches, to ensure the lock value is seen by other
     // processors so that if they were doing while(l->key) { ... } they
     // can finally exit the while loop.
     arch_coherence();
+    /*e: [[unlock()]] after modified key, call coherence */
 
     /*s: [[unlock()]] if delaysched */
     if(up && deccnt(&up->nlocks) == 0 && up->delaysched && arch_islo()){
@@ -309,9 +311,10 @@ iunlock(Lock *l)
     /*e: [[iunlock()]] sanity checks */
     sr = l->sr;
     l->cpu = nil;
-    arch_coherence(); // added in latest bcm/
     l->key = 0;
+    /*s: [[iunlock()]] after modified key, call coherence */
     arch_coherence();
+    /*e: [[iunlock()]] after modified key, call coherence */
     cpu->ilockdepth--;
     if(up)
         up->lastilock = nil;

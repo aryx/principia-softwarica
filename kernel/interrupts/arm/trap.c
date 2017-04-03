@@ -142,9 +142,10 @@ arch__trapinit(void)
         vpage0 = (Vpage0*)HVECTORS;
         memmove(vpage0->vectors, vectors, sizeof(vpage0->vectors));
         memmove(vpage0->vtable, vtable, sizeof(vpage0->vtable));
-
+        /*s: [[arch__trapinit()]] invalidate cache after adjust vectors(arm) */
         cacheuwbinv();
         l2cacheuwbinv();
+        /*e: [[arch__trapinit()]] invalidate cache after adjust vectors(arm) */
     }
 
     /* set up the stacks for the interrupt modes */
@@ -155,8 +156,9 @@ arch__trapinit(void)
     /*x: [[arch__trapinit()]] set stack for other exception/processor-modes */
     setr13(PsrMfiq, (u32int*)(FIQSTKTOP));
     /*e: [[arch__trapinit()]] set stack for other exception/processor-modes */
-
+    /*s: [[arch__trapinit()]] coherence(arm) */
     arch_coherence();
+    /*e: [[arch__trapinit()]] coherence(arm) */
 }
 /*e: function arch__trapinit(arm) */
 
@@ -239,12 +241,14 @@ irq(Ureg* ureg)
     for(v = vctl; v; v = v->next)
         if(v->cpu == cpu->cpuno && (*v->reg & v->mask) != 0){
             found = true;
+            /*s: [[irq()]] before dispatch(arm) */
             arch_coherence();
-
+            /*e: [[irq()]] before dispatch(arm) */
             // Dispatch
             v->f(ureg, v->a);
-
+            /*s: [[irq()]] after dispatch(arm) */
             arch_coherence();
+            /*e: [[irq()]] after dispatch(arm) */
             if(v->irq == IRQclock || v->irq == IRQcntps || v->irq == IRQcntpns)
                 clockintr = true;
         }

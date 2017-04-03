@@ -36,8 +36,9 @@ TEXT _start(SB), 1, $-4
      * do arch-dependent startup (no return)
      */
     BL  armstart(SB)
+        
+    // Unreached
     B   0(PC)
-
     RET
 /*e: function _start(arm) */
 /*e: init/arm/start.s */

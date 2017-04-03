@@ -254,7 +254,9 @@ init0(void)
 
     up->nerrlab = 0;
 
+    /*s: [[init0()]] coherence(arm) */
     arch_coherence();
+    /*e: [[init0()]] coherence(arm) */
     arch_spllo();
 
     /*

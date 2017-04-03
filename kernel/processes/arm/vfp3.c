@@ -39,10 +39,6 @@ enum {
     Fpex =      1u << 31,
     Fpenabled = 1 << 30,
     Fpdex =     1 << 29,    /* defined synch exception */
-//  Fp2v =      1 << 28,    /* Fpinst2 reg is valid */
-//  Fpvv =      1 << 27,    /* if Fpdex, vecitr is valid */
-//  Fptfv =     1 << 26,    /* trapped fault is valid */
-//  Fpvecitr =  MASK(3) << 8,
     /* FSR bits appear here */
     Fpmbc =     Fpdex,      /* bits exception handler must clear */
 
