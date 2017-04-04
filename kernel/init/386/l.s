@@ -23,6 +23,11 @@
 #define PTO(a)          (((((a))>>12) & 0x03FF)<<2)
 // <<2 because each PDE or PTE is 4 bytes.
 
+//TODO: now in portdat_memory.h but also accessed from assembly so dupe here
+#define PTEVALID    (1<<0)
+#define PTERONLY    0
+#define PTEWRITE    (1<<1)
+        
 //*****************************************************************************
 // Entry point!! (after jump from l_multiboot.s)
 //*****************************************************************************

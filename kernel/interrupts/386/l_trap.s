@@ -40,7 +40,7 @@ intrcommon:
 /*e: function _strayintrx(x86) */
 
 /*s: function forkret(x86) */
-TEXT arch_forkret(SB), $0
+TEXT arch__forkret(SB), $0
         POPL    AX
         POPAL
         POPL    GS

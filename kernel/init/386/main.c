@@ -913,7 +913,7 @@ void main(void)
 
     ioinit(); // does some getconf("ioexclude") so must be after options()
 
-    arch_screeninit(); // screenputs = cgascreenputs
+    arch__screeninit(); // screenputs = cgascreenputs
     quotefmtinstall(); // libc printf initialization
     i8250console(); // setup optional serial console if getconf("console") == 1
     print("\nPlan 9\n");
@@ -935,7 +935,7 @@ void main(void)
     if(i8237alloc != nil)
             i8237alloc(); // setup DMA, need low memory below 16MB
 
-    arch_trapinit();
+    arch__trapinit();
     arch_mmuinit();
 
     fpsavealloc();

@@ -44,7 +44,7 @@ ulong intrtimes[256][Ntimevec];
 // Forward decl
 //*****************************************************************************
 /*s: trap.c forward decl(x86) */
-void    noted(Ureg*, ulong);
+void    arch__noted(Ureg*, ulong);
 int     notify(Ureg*);
 void        dumpregs(Ureg*);
 
@@ -264,7 +264,7 @@ trapinit0(void)
 
 /*s: function trapinit(x86) */
 void
-arch_trapinit(void)
+arch__trapinit(void)
 {
     /*
      * Special traps.
@@ -1002,7 +1002,7 @@ notify(Ureg* ureg)
  *   Return user to state before notify()
  */
 void
-noted(Ureg* ureg, ulong arg0)
+arch__noted(Ureg* ureg, ulong arg0)
 {
     Ureg *nureg;
     ulong oureg, sp;
@@ -1228,7 +1228,7 @@ arch_forkchild(Proc *p, Ureg *ureg)
      *  - trap's argument (ur)
      */
     p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Ureg)+2*BY2WD);
-    p->sched.pc = (ulong)arch_forkret;
+    p->sched.pc = (ulong)arch__forkret;
 
     cureg = (Ureg*)(p->sched.sp+2*BY2WD);
     memmove(cureg, ureg, sizeof(Ureg));
