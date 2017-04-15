@@ -2,7 +2,6 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
-#include <draw_private.h>
 #include <font.h>
 
 // This file is one of the very few files linked by the kernel, because
