@@ -197,7 +197,10 @@ processes?
 %tags used for recurring themes:
 %x86: how ARM code relates to x86 (same/similar/very-different)
 %real-world: 
-%linux:
+%linux: how similar stuff works in Linux
+%xv6: how done in xv6 (and probably Unix v6)
+%ocaml: stuff better in ocaml than in C
+%c: stuff better in C than in ocaml
 
 \section{The \plan kernel: [[9]]}
 
@@ -214,6 +217,7 @@ processes?
 % - more general but also probably less efficient, e.g., no buffer cache, 
 % - graphic stack in the kernel,
 % - hardcoded split for kernel mem vs images mem and user mem,
+% - dupe memory management vs arch mmu?
 % - other stuff?
 
 
@@ -437,10 +441,13 @@ and we will now focus on the concrete services (API) a kernel
 provides to the user programs.
 
 
-\section{[[9]] syscall interface}
+\section{[[9]]'s syscall interface}
 
+%trans:
 % Saw general principles.
-% Will now focus on plan9 kernel. Plan9 is successor of Unix so share philosphy.
+% Will now focus on plan9 kernel. 
+%
+%Plan9 is successor of Unix so share philosphy.
 % Philosphy unix is everything is a file.
 % Philosphy plan9 is everything is a file server.
 % see 9.ps, excellent introduction to Plan9 advanced features
@@ -462,6 +469,12 @@ provides to the user programs.
 <<[[sys.h]] security syscalls>>
 #define	ERRSTR		39
 @ 
+%ocaml: use full ADT instead of int? But then more complex interface
+% to call kernel (need to know ocaml object format (or marshall format)).
+% Maybe use ADT only internally but expose simpler interface.
+%c: accessible also in assembly because assembler usually can use cpp too
+% (could also use cpp in OCaml though)
+
 % Only 39!
 %linux: more than 200 now? How many in Linux 0.01?
 
@@ -524,8 +537,7 @@ provides to the user programs.
 #define	FWSTAT		18
 @
 % why so many stat, ugly a bit. each time variant where take name
-% or file descriptor (the f stands for fd)
-% could remove maybe.
+% or file descriptor (the f stands for fd). Could remove maybe.
 
 <<[[sys.h]] namespace syscalls>>=
 #define	BIND		19
@@ -692,9 +704,6 @@ provides to the user programs.
 %  (slides, small, very good)
 % - http://embedded-xinu.readthedocs.io/en/latest/arm/index.html
 
-<<constant BI2BY(arm)>>=
-#define BI2BY       8           /* bits per byte */
-@
 <<constant BY2WD(arm)>>=
 #define BY2WD       4
 @
@@ -703,9 +712,15 @@ provides to the user programs.
 #define BY2V        8           /* only used in xalloc.c */
 @
 %dead:
-% <<constant BY2SE(arm)>>=
+% <<constant BY2SE(arm)>> =
 % #define BY2SE       4
 % @
+%dead:
+% <<constant BI2BY(arm)>> =
+% #define BI2BY       8           /* bits per byte */
+% @
+% seems unused on arm archi, and very rarely used on x86. Stupid constant.
+% A byte is always 8 bits.
 
 % ARM state, Thumb state, Jazelle state, but care only about
 % ARM state where instructions are 32 bits wide and word aligned.
@@ -744,6 +759,7 @@ struct Ureg {
     ulong   pc; /* interrupted addr */ // r15
 };
 @
+%c: can do union! (but maybe confusing)
 %x86: less regular naming
 %coupling: see  _vswitch and _userexcep
 
@@ -768,9 +784,12 @@ TEXT getcallerpc(SB), 1, $-4
     RET
 @
 %$
-% why not use R14? because will get caller of getcallerpc, not
+% Why not use R14? because will get caller of getcallerpc, not
 % caller of caller of getcallerpc. The -4 above indicates
 % no stack alloc for this func. So same SP than caller. 
+% How sure 0(R13) contains return address to caller of caller?
+% because caller called getcallerpc so it should store R14
+% in 0(R13)?
 
 \subsubsection{Program Status Register ([[PSR]])}
 
@@ -785,7 +804,7 @@ TEXT getcallerpc(SB), 1, $-4
 % CPSR
 
 %dead: non-control bits
-% <<type PsrArith(arm)>>=
+% <<type PsrArith(arm)>> =
 % #define PsrV        0x10000000      /* overflow */
 % #define PsrC        0x20000000      /* carry/borrow/extend */
 % #define PsrZ        0x40000000      /* zero */
@@ -843,6 +862,8 @@ TEXT getcallerpc(SB), 1, $-4
 %later: banked (shadow) registers.
 % so no need save R14, R13
 %(for FIQ also have shadow R8-R12)
+% introduce .S here? and automatic R13 kernel vs R13 user?
+% pretty important!
 
 %later: CPSR and SPSR.
 
@@ -977,6 +998,7 @@ TEXT getcallerpc(SB), 1, $-4
 #define BY2PG       (4*KiB)         /* bytes per page */
 @
 %x86: same
+%ocaml: bad name, it's more pg2by
 
 % page, 4096, so when give page address, don't need 12 low bits! PGSHIFT
 <<constant PGSHIFT(arm)>>=
@@ -1012,6 +1034,7 @@ TEXT getcallerpc(SB), 1, $-4
 <<constant VIRTIO(arm)>>=
 #define VIRTIO      0x7E000000      /* i/o registers */
 @
+%c: can have big numbers! no int vs Int32.t
 %why this value? 0x8000000 is start of kernel space.
 %max below is 0x7E0000000 + 300000 so still lots of space before 4Go.
 %The +0x... is defined by the hardware. Normally PHYSIO+0x... but
@@ -1023,7 +1046,8 @@ TEXT getcallerpc(SB), 1, $-4
 #define IOSIZE      (16*MiB)
 @
 %BUS  addresses as seen from the videocore gpu.
-
+\l so VIRTIO at 0x7F00000 would be enough
+\l used??
 
 
 <<constant SYSTIMERS(arm)>>=
@@ -1085,6 +1109,7 @@ struct Fbinfo {
     u32int  screensize;     /* returned by gpu */
 };
 @
+%c: easy to match directly the hardware (no need cstruct ocaml package)
 
 <<constant FRAMEBUFFER(arm)>>=
 #define FRAMEBUFFER 0xC0000000      /* video framebuffer */
@@ -1092,7 +1117,7 @@ struct Fbinfo {
 % Virtual address mapped to physical Fbinfo.base returned by GPU.
 % Then used in Graphics.nw via gscreen->bdata
 % Virtual address Must be after kernel, so safe to go to 0xC0000000
-% Why not 0xF? 
+% Why not 0xF? to allow for giant framebuffer? giant screen?
 
 \subsubsection{Input devices: USB keyboard and mouse}
 
@@ -1168,12 +1193,15 @@ struct Fbinfo {
 <<portdat.h macros>>=
 #define ROUND(s, sz)  (((s)+(sz-1)) & ~(sz-1))
 @
+%c: this is what C is good for, bit manip for efficient computation.
 %old: was in portdat.h but now in portfns.h, more logical
 %ex: ROUND(2045, 1024) -> 3072 (3 * 1024), it rounds up
 % the round down would be just: s&~(sz-1), ex: va &= ~(BY2PG-1);
 % BY2PG-1 means you get all the bits to 1, and then you reverse
 % so you really just reset the lower bits
 % rename ROUNDUP?
+%Works only if sz is a power of 2??
+\l vs ROUNDUP defined below
 
 <<portdat.h macros>>=
 #define MASK(v) ((1UL << (v)) - 1)  /* mask `v' bits wide */
@@ -1184,6 +1212,7 @@ struct Fbinfo {
 <<portdat.h macros>>=
 #define MIN(a, b) ((a) < (b)? (a): (b))
 @
+%c: inlining made easy under programmer's control
 
 <<portdat.h macros>>=
 // used in bcm/mmu.c
@@ -1220,7 +1249,7 @@ struct Fbinfo {
 @ 
 %pad: I added the error.h
 
-\subsection{Portable vs arch-specific code}
+\subsection{Portable versus arch-specific code}
 
 %pad:
 % I added some arch_ and Arch_ prefix on arch-specific functions/structures
@@ -1260,6 +1289,9 @@ typedef int error1;
 typedef int errorneg1;
 @ 
 \fi
+%ocaml: have also to define some of those. Use exn for errors though!
+% cleaner.
+
 % actually in the "Go in Go" tech talk by Pike, he mentionned
 % they had to annotate code using int when the int was really a bool :)
 % so they like bool (and types), they just didn't know better at that
@@ -1280,9 +1312,9 @@ typedef int errorneg1;
 % graph dependencies? (where remove artificial edges, or use thickness of edge?)
 
 <<dat.h includes(arm)>>=
-#include "../port/portdat_concurrency.h" // Lock (used in Cpu so must be before)
 #include "dat_core.h"                    // Arch_Cpu
 #include "../port/portdat_core.h"        // Cpu!!, Conf, Label
+#include "../port/portdat_concurrency.h" // Lock
 #include "dat_memory.h"                  // Arch_Proc
 #include "../port/portdat_memory.h"      // Page, Pagetable, Segment, KImage
 #include "../port/portdat_files.h"       // Chan!! Dev!!
@@ -1297,6 +1329,11 @@ typedef int errorneg1;
 #include "dat_arch.h"                    // Soc
 @
 %x86: pad: similar split in x86 (except dat_arch.h is earlier)
+%ocaml: similar code orga, but no need #include and split giant .h.
+% natural split over multiple .mli
+%c: can have very complex mutual dependencies (as long
+% as you use pointer to things, you do not need to define this thing)
+% in ocaml I have to go through intermediate ids (less efficient)
 
 % some dat_xxx.h before portdat_xxx.h sometimes because
 % the dat_xxx.h defines some arch specific structure referenced
@@ -1335,7 +1372,7 @@ typedef int errorneg1;
 % The code below does not break backward dependencies. 
 % See the other chunk with the same name below for the real dependency breaker.
 
-%<<portfns_core.h backward deps breaker>>=
+%<<portfns_core.h backward deps breaker>> =
 %int devcons_print(char*, ...);
 %int devcons_pprint(char*, ...);
 %void devcons_panic(char*, ...);
@@ -1372,7 +1409,7 @@ typedef int errorneg1;
 %% It does not work for iprint either because redeclared in memdraw.h.
 %% It does not work for coherence but need like that a pointer.
 %
-%<<portfns_core.h backward deps breaker>>=
+%<<portfns_core.h backward deps breaker>> =
 %#define print         devcons_print
 %//#define iprint        devcons_iprint
 %#define pprint        devcons_pprint
@@ -1401,7 +1438,7 @@ typedef int errorneg1;
 %//#define hook_ioalloc  devarch_hook_ioalloc
 %@
 %
-%<<portfns.c backward deps breaker>>=
+%<<portfns.c backward deps breaker>> =
 %void (*coherence)(void) = nil;
 %int (*iprint)(char*, ...) = nil;
 %@
@@ -1430,6 +1467,7 @@ void    (*dumpaproc)(Proc*);
 void    (*error)(char*);
 void    (*nexterror)(void);
 @
+%ocaml: use exn
 <<portfns_core.h backward deps breaker>>=
 // processes/proc.c
 void    (*sleep)(Rendez*, int(*)(void*), void*);
@@ -1438,6 +1476,7 @@ Proc*   (*wakeup)(Rendez*);
 void    (*sched)(void);
 void    (*ready)(Proc*);
 @
+%sched!!
 <<portfns_core.h backward deps breaker>>=
 // processes/proc.c
 Proc*   (*proctab)(int);
@@ -1461,6 +1500,8 @@ uvlong  (*arch_fastticks)(uvlong*);
 // time/<arch>/time.c
 void    (*arch_microdelay)(int);
 void    (*arch_delay)(int);
+@
+<<portfns_core.h backward deps breaker>>=
 // init/<arch>/main.c
 bool (*arch_isaconfig)(char*, int, ISAConf*);
 @
@@ -1520,7 +1561,7 @@ void (*arch_delay)(int) = nil;
 void (*arch_microdelay)(int) = nil;
 
 @
-
+%ocaml: hopefully less needed. Use hooks instead from the start?
 
 
 
@@ -1651,8 +1692,9 @@ typedef uintptr virt_addr;
 // kernel address (mostly physical + KZERO)
 typedef uintptr kern_addr;
 @
+%ocaml: newtypes, so enforce stronger typechecking!
 %x86: same => factorize?
-\l use user_addr instead of virt_addr?
+\t use user_addr instead of virt_addr! clearer (as I do in 9-ocaml)
 
 % all structure pointers in the code are kernel addresses.
 % e.g. Page*, Segment*, be it in fields or in globals.
@@ -1664,6 +1706,7 @@ typedef void* virt_addr3;
 typedef ulong* kern_addr2;
 typedef void* kern_addr3;
 @
+%ocaml: use unified typed for address
 %x86: same
 \fi
 %less: I think the void* is the best form, so should s/xxx_addr3/xxx_add/
@@ -1692,6 +1735,7 @@ typedef void* kern_addr3;
 <<constant CPUADDR(arm)>>=
 #define CPUADDR     (KZERO+0x2000)      /* Cpu structure */
 @
+%c: precise memory layout! can put things everywhere you want
 \t defines not as static global because need to do trick with SMP?
 % even when have extern register? Because still need to assign this register?
 % but could do MOVW $cpu(SB), R9? so no need hardcoded CPUADDR?
@@ -1706,6 +1750,15 @@ typedef void* kern_addr3;
 %x86: same
 
 % BY2PG in Overview now (= 1 Page (4Ko))
+
+<<constant USTKTOP(arm)>>=
+#define USTKTOP     0x20000000      /* user segment end +1 */
+@
+\l that's it? only 512 MB for virtual space?
+
+<<constant USTKSIZE(arm)>>=
+#define USTKSIZE    (8*1024*1024)       /* user stack size */
+@
 
 % because first page will be marked as protected to detect null pointer
 % dereference
@@ -1806,9 +1859,14 @@ arch_cankaddr(uintptr pa)
 <<typedef Syscall>>=
 typedef long Syscall(ulong*);
 @
+%ocaml: marshalled ADT instead of generic ulong*? still pb
+% for return value though. Need matching return value.
+%c: very generic interface and later cast (but good in the end?)
+
 % parameter = pointer in stack of user, start of array of parameters
 % Different syscalls have different parameters, so use ulong*
 % very generic pointer here.
+% So virt_addr above.
 
 <<systab.h>>=
 // used by systab.c but also by trap.c for certain codes
@@ -1839,6 +1897,8 @@ Syscall *systab[] = {
     [ERRSTR]    syserrstr,
 };
 @
+%c: function pointer! flexible! dispatch table or OO can be done.
+%ocaml: dispatch function directly
 
 <<global nsyscall>>=
 int nsyscall = nelem(systab);
@@ -1931,7 +1991,7 @@ Conf conf;
 struct Confmem
 {
     phys_addr base;
-    uintptr	limit; // used by bcm only
+    uintptr	limit; // used by bcm only. phys_addr too?
     ulong npage;
     <<[[Confmem]] other fields>>
 };
@@ -1947,6 +2007,7 @@ struct Confmem
 char *confname[MAXCONF];
 char *confval[MAXCONF];
 @
+%ocaml: use hashtbl
 
 <<constant MAXCONF>>=
 #define MAXCONF         64
@@ -1960,7 +2021,7 @@ int nconf;
 @ 
 
 <<function getconf>>=
-char* getconf2(char *name)
+char* getconf(char *name)
 {
         int i;
         for(i = 0; i < nconf; i++)
@@ -1997,6 +2058,7 @@ struct Cpu
     int stack[1];
 };
 @
+%c: idiom to access not specified size (CPUSIZE - other fields)
 %coupling: see 8(R(CPU)) in _vsvc code in bcm/, 12(R(CPU)) in cpureset
 %history: %old:
 % Cpu used to be called Mach, but in the end it didn't make sense.
@@ -2014,6 +2076,8 @@ ulong ticks;      /* of the clock since boot time */
 uvlong  cpuhz;
 int cpumhz; // cpuhz / 1_000_000
 @
+%c: long long support; No need boxed Int64
+\l mv later? need cpuhz and cpumhz?
 
 % more on ticks in Time chapter, number of clock interrupts
 % in hzclock():    cpu->ticks++;
@@ -2065,9 +2129,9 @@ struct Arch_Cpu {
 extern register Cpu* cpu;           /* R10 */
 @
 %x86: differs in different archi!
+%c: powerful! almost assembly level instruction from C
+%old: was called [[m]]. Xv6 also use the name 'cpu'.
 
-
-%old: was called [[m]]
 % (arm) because different in different archi. Can afford to use register
 % (which simplifies things a lot) in arm because ARM has lots of registers.
 
@@ -2086,7 +2150,8 @@ extern register Cpu* cpu;           /* R10 */
 // array<ref<Cpu>>
 Cpu* cpus[MAXCPUS];
 @
-%old: machaddr
+%old: machaddr. xv6 also use the name 'cpus'.
+
 % this is portable across all archs.
 
 
@@ -2097,6 +2162,7 @@ Cpu* cpus[MAXCPUS];
 %old: MAXMACH
 
 % why macro? because again in other archi it could be more complex
+%  but then why in portdat? (was originally elsewhere?)
 <<macro CPUS>>=
 #define CPUS(n)  (cpus[n])
 @
@@ -2113,6 +2179,7 @@ struct Active
     Lock;
 };
 @ 
+%c: bitset
 
 <<global active>>=
 struct Active active;
@@ -2203,6 +2270,7 @@ struct Arch_Proc
 int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate==nil)
 @
 
+% see Proc.pid also later.
 
 <<enum procstate>>=
 /* Process states, Proc.state */
@@ -2213,7 +2281,7 @@ enum Procstate
     <<[[Procstate]] cases>>
 };
 @ 
-
+%ocaml: need ADT? flat enum seems fine
 
 <<global statename>>=
 // hash<enum<Procstate>, string>, coupling: with enum Procstate
@@ -2237,6 +2305,7 @@ char *statename[] =
 %old: was not using designators, but because of LP the enum cases order
 % may change from one day to the other so have to use designators.
 %bugfix: "Rendez" -> "Rendezvous" in string
+%ocaml: factorize QueueingX stuff thanks to ADT
 
 % put /proc/#/status and part of Qstatus here? no too early
 % but maybe could put some of the state thing later in Proc section of
@@ -2245,6 +2314,8 @@ char *statename[] =
 <<global up(arm)>>=
 extern register Proc* up;           /* R9 */
 @
+%xv6: use 'proc' for that
+
 % again per processor!
 % R9 because declared after cpu in file and see \book{Compiler}.
 
@@ -2315,6 +2386,8 @@ struct Qid
 };
 @ 
 %coupling: this structure ir also defined in libc.h
+
+% uvlong for path? need that many unique identifier on one device?
 
 <<enum qidtype>>=
 /* bits in Qid.type */
@@ -2453,7 +2526,7 @@ Soc soc = {
 };
 @
 % soc.physio maps then to VIRTIO in mmuinit.
-
+% dram? why not just ram?
 
 
 
@@ -2530,9 +2603,14 @@ Soc soc = {
 %  producer/consumer)
 
 
-\section{[[arch_splhi()]], [[arch_spllo()]] (ARM)}
+\section{Interrupts disabling, [[arch_splhi()]], [[arch_spllo()]] (ARM)}
 
 % spl for Set Priority Level (see also glossary) legacy from UNIX code?
+% https://en.wikipedia.org/wiki/Spl_(Unix)
+
+% In a uniprocessor, you can do all the concurrency in the kernel
+% by just using slphi/spllo. But it does not scale to SMP. You want
+% finer-grained locks for that. Still important also in SMP to have splhi.
 
 <<function arch_splhi(arm)>>=
 // bool   arch_splhi(void);
@@ -2551,7 +2629,6 @@ TEXT arch_splhi(SB), 1, $-4
 % really a bool: PsrMirq if already in interrupt? so splx() can use that.
 
 % The splhi function is actually used quite a lot, not just internally in ilock
-
 \t make sure that if use arch_splhi, then no use of lock! (only canqlock is ok) 
 %datalog: can express invariant using datalog?
 
@@ -2608,12 +2685,12 @@ ulong splpc;      /* pc of last caller to arch_splhi */
 @ 
 % useful to debug wrong locks?
 
-\section{[[arch_tas()]] (ARM)}
+\section{Test and set, [[arch_tas()]] (ARM)}
 
 %http://g.oswego.edu/dl/jmm/cookbook.html for barrier, tas, etc
 % in different processors.
 
-% TAS is the building block of concurrency
+% TAS is the building block of concurrency primitives.
 
 % call we will see later as arch_tas(&lock->key)
 <<function arch_tas(raspberry pi1)(arm)>>=
@@ -2648,12 +2725,14 @@ TEXT    arch_tas(SB), $-4
 % now in Advanced topics; too subtle.
 
 
-\section{Atomic [[arch_xinc()]] and [[arch_xdec()]] (ARM)}
+\section{Atomic count, [[arch_xinc()]] and [[arch_xdec()]] (ARM)}
 
 % arch_tas() is to make sure one arrive first on something.
 % another fundamental concurrency operation is increment/decrement atomically
 % (actually can simulate second one with first, see Ref later, but can be
 % useful to have something faster on certain architecture)
+
+% x for exclusive? was better ainc, for atomic inc?
 
 % (lock -> inccnt) | _allocb -> <>
 <<function arch_xinc(arm)>>=
@@ -2667,10 +2746,13 @@ arch_xinc(long *p)
     arch_splx(s);
 }
 @
+%c: easy call from C assembly! just declare its prototype and
+% follow simple convention in assembly code
 %old: was called xinc? or _xinc? 
 \t conflict with libc version? cleanup this _xinc ainc mess
 
 % good enough when have only 1 processor! for SMP see Section~\ref{sec:smp}.
+\t add (raspberry pi1) in chunkname then?
 
 
 <<function arch_xdec(arm)>>=
@@ -2690,8 +2772,8 @@ arch_xdec(long *p)
 
 \section{Spin [[Lock]]}
 
-% arch_splhi good, but need finer granularity! Also does not
-%  really handle concurrency when have SMP.
+% arch_splhi good, but need finer granularity! 
+% Also does not really handle concurrency when have SMP.
 % arch_tas can be building block for more complex critical regions.
 
 
@@ -2705,65 +2787,38 @@ struct Lock
     <<[[Lock]] other fields>>
 };
 @ 
+%ocaml: make it a bool
 \l rename SpinLock?
 % actually have something similar at user level! see libc.h Lock
 % and also QLock, RLock, RWLock, etc.
 
 
-<<[[Lock]] debugging fields>>=
-// for debugging, the caller who did the lock()
-kern_addr pc; 
-@
 
 
-<<[[Lock]] debugging fields>>=
-// option<ref<Proc>>, None when key == 0
-Proc  *p; // the process who did the locking should be the same unlocking
-@
-<<[[Proc]] debugging fields>>=
-Lock* lastlock;
-@
-
-
-
-<<[[Lock]] other fields>>=
-// option<ref<Cpu>>, None when key = 0?
-Cpu  *cpu; // not that used, only in iprintcanlock apparently
-@
-\l can remove?
-
-
-% actually returns ret_code, 1 means ok but there was some contention
+\l actually returns ret_code, 1 means ok but there was some contention
 %  but does not look used, so TODO return void?
 <<function lock>>=
 int
 lock(Lock *l)
 {
     int i;
-    ulong pc;
+    <<[[lock()]] other locals>>
 
-    pc = getcallerpc(&l);
-
-    lockstats.locks++;
+    <<[[lock()]] start of lock, stat>>
     <<[[lock()]] increment nlocks>>
     if(arch_tas(&l->key) == 0){ // lock old value was 0, the lock was not held
-        if(up)
-            up->lastlock = l;
-        l->pc = pc;
-        l->p = up;
-        l->isilock = false;
-        l->cpu = CPUS(cpu->cpuno); // pad's third bugfix
+        <<[[lock()]] got the lock, update other fields>>
         <<lock ifdef LOCKCYCLES>>
         return 0;
     }
     //else
-    //the lock was already held, need to spin
 
     <<[[lock()]] decrement nlocks>>
+    <<[[lock()]] when lock already held, stat>>
 
-    lockstats.glare++;
+    // The lock was already held, need to spin
     for(;;){
-        lockstats.inglare++;
+    <<[[lock()]] in loop when lock already held, stat>>
         i = 0;
         while(l->key){
            <<[[lock()]] optional priority-inversion for real-time process>>
@@ -2775,11 +2830,7 @@ lock(Lock *l)
         // try again
         <<[[lock()]] increment nlocks>>
         if(arch_tas(&l->key) == 0){
-            if(up)
-                up->lastlock = l;
-            l->pc = pc;
-            l->p = up;
-            l->isilock = false;
+            <<[[lock()]] got the lock, update other fields>>
             <<lock ifdef LOCKCYCLES>>
             return 1;
         }
@@ -2793,6 +2844,50 @@ lock(Lock *l)
 %    // why not just l->cpu = cpu? because it would always be the same addr!
 
 %inccnt =~ arch_xinc
+
+% Same code when SMP! just arch_tas change on raspi2.
+
+
+<<[[Lock]] debugging fields>>=
+// for debugging, the caller who did the lock()
+kern_addr pc; 
+@
+
+
+<<[[Lock]] debugging fields>>=
+// option<ref<Proc>>, None when key == 0
+Proc  *p; // the process who did the locking should be the same unlocking
+@
+%c: complex graph relation with pointer! no need use intermediate
+% pid here, link directly to the Proc
+
+<<[[Proc]] debugging fields>>=
+Lock* lastlock;
+@
+%c: mutually recursive structure (ocaml can but tedious across modules)
+% (but also more complex to understand C code because of that)
+
+
+<<[[Lock]] other fields>>=
+// option<ref<Cpu>>, None when key = 0?
+Cpu  *cpu; // not that used, only in iprintcanlock apparently
+@
+\l can remove?
+
+
+<<[[lock()]] other locals>>=
+ulong pc = getcallerpc(&l);
+@
+<<[[lock()]] got the lock, update other fields>>=
+if(up)
+    up->lastlock = l;
+l->pc = pc;
+l->p = up;
+l->isilock = false;
+l->cpu = CPUS(cpu->cpuno); // pad's third bugfix
+@
+%other bugfix on forgot update l->cpu in for loop for same code
+
 
 <<function unlock>>=
 void
@@ -2808,7 +2903,8 @@ unlock(Lock *l)
     <<[[unlock()]] if delaysched>>
 }
 @ 
-
+%todo: miller added one coherence call before modification of key
+% which apparently makes more sense!
 
 
 <<[[unlock()]] sanity checks>>=
@@ -2833,13 +2929,7 @@ canlock(Lock *l)
         return false;
     }
     // else
-
-    if(up)
-        up->lastlock = l;
-    l->pc = getcallerpc(&l);
-    l->p = up;
-    l->cpu = CPUS(cpu->cpuno);
-    l->isilock = false;
+    <<[[canlock()]] lock not held, update other fields>>
     <<lock ifdef LOCKCYCLES>>
     return true;
 }
@@ -2851,7 +2941,15 @@ canlock(Lock *l)
 % of the enclosing structure :) Palloc after Page!
 
 
-
+<<[[canlock()]] lock not held, update other fields>>=
+if(up)
+    up->lastlock = l;
+l->p = up;
+l->pc = getcallerpc(&l);
+l->isilock = false;
+l->cpu = CPUS(cpu->cpuno);
+@
+\l quite similar to code in lock, could factorizr
 
 \section{Uninterruptable [[ILock]]}
 
@@ -2860,7 +2958,7 @@ canlock(Lock *l)
 typedef Lock ILock;
 @
 
-% can formalize a checking rule? if access any field
+\t can formalize a checking rule? if access any field
 % accessed from a xxxintr, then need to use ilock
 
 %ilock = interrupt safe version of lock (disable interruptions)
@@ -2947,7 +3045,7 @@ iunlock(Lock *l)
 }
 @ 
 % arch_coherence(); // added in latest bcm/ before modification of key.
-% why need coherence call before? (and after?)
+
 
 <<[[iunlock()]] sanity checks>>=
 if(l->key == 0)
@@ -2960,6 +3058,8 @@ if(arch_islo())
 
 \section{Waiting [[QLock]]}
 % can be seen also as a Waiting queue, Sleepable Lock?
+
+% when QLock vs just Lock?
 
 <<struct QLock>>=
 // Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h QLock)
@@ -2978,6 +3078,7 @@ struct KQLock
 };
 @ 
 %old: was QLock (but the typedef is still with QLock so no need change code)
+%ocaml: use Queue instead of head/tail
 
 % note that QLock use Lock! building block!
 
@@ -2994,6 +3095,7 @@ ulong qpc;    /* pc calling last blocking qlock */
 // list<ref<Proc>> KQlock.head or RWLock.head (or Procalloc.free)
 Proc  *qnext;   /* next process on queue for a QLock */
 @ 
+%ocaml: use Queue.t
 
 <<[[Procstate]] cases>>=
 Queueing, // see qlock()
@@ -3007,7 +3109,7 @@ qlock(QLock *q)
 
     <<[[qlock()]] sanity checks>>
     lock(&q->use);
-    rwstats.qlock++;
+    <<[[qlock()]] start of qlock, stat>>
     if(!q->locked) {
         q->locked = true;
         q->qpc = getcallerpc(&q);
@@ -3017,7 +3119,7 @@ qlock(QLock *q)
     // else
     if(up == nil)
         panic("qlock");
-    rwstats.qlockq++;
+    <<[[qlock()]] when qlock already held, stat>>
 
     // add_queue(q, up)
     p = q->tail;
@@ -3034,12 +3136,15 @@ qlock(QLock *q)
     up->state = Queueing;
     up->qpc = getcallerpc(&q);
     unlock(&q->use);
+
     // switch to another process! 
     sched(); 
     // will resume here when another process unlock() the lock and ready() us
     q->qpc = getcallerpc(&q);
 }
 @ 
+%ocaml: use sentinel instead of test of up?
+
 % call to sched() function! = kinda of a sleep
 % hmmm not dangerous? sched() sometimes if nlock > 0 actually returns!!
 
@@ -3105,6 +3210,7 @@ canqlock(QLock *q)
     return true;
 }
 @ 
+%ocaml: can use Module to reuse canlock instead of canqlock
 
 \section{Readers/Writer [[RWLock]]}
 
@@ -3132,6 +3238,7 @@ struct RWlock
 <<[[Procstate]] cases>>=
 QueueingR, // see rlock()
 @
+%ocaml: make it an argument of Queueing of readwrite option!
 
 <<function rlock>>=
 void
@@ -3343,7 +3450,7 @@ decref(Ref *r)
 <<struct Counter>>=
 typedef struct Ref Counter;
 @ 
-
+%pad: I introduced that?
 
 
 <<[[Proc]] synchronization fields>>=
@@ -3352,6 +3459,7 @@ typedef struct Ref Counter;
 // will eventually cause a rescheduling.
 Ref nlocks;   /* number of locks held by proc */
 @ 
+% need Ref here? need exclusion access across processors?
 
 <<[[lock()]] increment nlocks>>=
 if(up)
@@ -3424,6 +3532,9 @@ deccnt(Ref *r)
 [BRK]      sysbrk,
 @ 
 
+% Looks so simpler from user point of view :) but behind there
+% are lots of machinery to make this possible.
+
 %http://duartes.org/gustavo/blog/post/how-the-kernel-manages-your-memory/
 
 \section{Overview}
@@ -3460,11 +3571,20 @@ deccnt(Ref *r)
 % get the actual number (and try optimize? less % for kernel more for user,
 %  reduce Page data structure? less conf.nproc?
 
-\section{[[xalloc()]]}
+% hierarchy of allocator:
+%  - xalloc for big chunks (but small static list)
+%  - pool for finer chunks
+%  - (minor and major heap when in ocaml kernel)
+
+% Malloc has fragmentation. It would be inefficient to make
+% long-lived big structure interfere with those smalller/temporary structures.
+% (this is a similar opti in ocaml with the minor vs major heap)
+
+\section{Long-lived structure allocator, [[xalloc()]]}
 
 %// Memory allocator for long lived allocated structures
 %// e.g. array of Proc (procalloc), array of Pages (palloc.pages), but
-%// also pool provider for kernel malloc()
+%// It is also the pool provider for kernel malloc()
 %long lived because xalloc does not support well fragmentation
 % can only have certain number of disparate holes
 
@@ -3482,13 +3602,10 @@ deccnt(Ref *r)
 % alternatives? why not just free bitmaps? instead we use
 % free (linked) list below (and also for pages)
 
-<<constants holes>>=
-enum
-{
-    Nhole   = 128,
-    Magichole = 0x484F4C45,     /* HOLE */
-};
-@
+\subsection{[[Xalloc]]}
+
+%\subsection{[[Hole]]}
+
 
 <<struct Hole>>=
 struct Hole
@@ -3502,8 +3619,12 @@ struct Hole
     <<[[Hole]] extra fields>>
 };
 @
+\t phys_addr? I dont think so, it's a kern_addr!
+%c: impossible to define memory allocator in ocaml! need to resort to C!
 %phys_addr should be all < MAXKPA
 % they could use kern_addr, it would be simpler, require less conversions
+
+%\subsection{[[Xalloc]]}
 
 <<struct Xalloc>>=
 // Long lived data structure allocator (singleton)
@@ -3522,14 +3643,25 @@ struct Xalloc
     Lock;
 };
 @
+%old: I renamed fields: flist -> unused_slots, table -> sorted_hole
 % note that the hole entry is free means the metadata is free.
 % a used hole in sorted_holes means actually the hole entry is valid
 % and describe some free memory there
-
+%c: bootstrapped global array in Data section.
 
 <<[[Hole]] extra fields>>=
 Hole* next; // list<ref<Hole>> of Xalloc.sorted_holes or Xalloc.unused_slots
 @
+
+<<constants holes>>=
+enum
+{
+    Nhole   = 128,
+    Magichole = 0x484F4C45,     /* HOLE */
+};
+@
+
+\subsection{[[xlists]]}
 
 <<global xlists>>=
 static Xalloc   xlists;
@@ -3549,6 +3681,7 @@ static Xalloc   xlists;
 % for things that are never free (long-lived data structures e.g. procs,
 % pages, etc)
 
+\subsection{[[Xhdr]]}
 
 <<struct Xhdr>>=
 // What is the connection with Hole? A Hole that get used will gets
@@ -3564,6 +3697,8 @@ struct Xhdr
     char  data[]; // memory pointer returned by xalloc
 };
 @
+%c: idiom again for unspecified data block
+
 % so Confmem will be essentially a succession of either Xhdr, or
 % some free mem represented by a used slot Hole.
 
@@ -3572,6 +3707,8 @@ struct Xhdr
 % in spirit (and if xfree the top one then hole gets bigger, and if
 % free lower one, then a new hole is used (because of top addr sorted
 % requirment)
+
+\subsection{[[xalloc()]]}
 
 <<function xalloc>>=
 kern_addr3
@@ -3620,9 +3757,10 @@ xallocz(ulong size, bool zero)
         l = &h->next;
     }
     iunlock(&xlists);
-    return nil;
+    return nil; // panic? 
 }
 @
+%c: offsetof! complex introspection
 
 % this is very rarely used in the kernel
 % why use it at all? apparently in intrdisable, but why they dont
@@ -3637,13 +3775,22 @@ xfree(kern_addr3 p)
     Xhdr *x;
 
     x = (Xhdr*)((ulong)p - offsetof(Xhdr, data[0]));
-    if(x->magix != Magichole) {
-        xsummary();
-        panic("xfree(%#p) %#ux != %#lux", p, Magichole, x->magix);
-    }
+    <<[[xfree()]] sanity check magix mark>>
     xhole(PADDR((kern_addr)x), x->size);
 }
 @
+%c: hidden bookkeeping by playing with pointers and use of magic numbers
+% for semi-safety
+
+
+<<[[xfree()]] sanity check magix mark>>=
+if(x->magix != Magichole) {
+    xsummary();
+    panic("xfree(%#p) %#ux != %#lux", p, Magichole, x->magix);
+}
+@
+
+\subsection{[[xhole()]]}
 
 % This may have to allocate a new Hole from the free list.
 % called by xinit! This is the function that actually got memory
@@ -3704,7 +3851,7 @@ xhole(phys_addr addr, ulong size)
 }
 @
 
-%-----------------------------------------------------------------------
+\subsection{[[xmerge()]]}
 
 % used by malloc Pool below
 <<function xmerge>>=
@@ -3716,11 +3863,7 @@ xmerge(kern_addr3 vp, kern_addr3 vq)
     p = (Xhdr*)(((ulong)vp - offsetof(Xhdr, data[0])));
     q = (Xhdr*)(((ulong)vq - offsetof(Xhdr, data[0])));
 
-    if(p->magix != Magichole || q->magix != Magichole) {
-        <<[[xmerge()]] debug info when not magichole>>
-        panic("xmerge(%#p, %#p) bad magic %#lux, %#lux",
-            vp, vq, p->magix, q->magix);
-    }
+    <<[[xmerge()]] sanity check magix>>
     if((byte*)p+p->size == (byte*)q) {
         p->size += q->size;
         return true;
@@ -3729,22 +3872,30 @@ xmerge(kern_addr3 vp, kern_addr3 vq)
 }
 @
 
+<<[[xmerge()]] sanity check magix>>=
+if(p->magix != Magichole || q->magix != Magichole) {
+    <<[[xmerge()]] debug info when not magichole>>
+    panic("xmerge(%#p, %#p) bad magic %#lux, %#lux",
+        vp, vq, p->magix, q->magix);
+}
+@
+
 \ifallcode
 <<[[xmerge()]] debug info when not magichole>>=
-        int i;
-        ulong *wd;
-        void *badp;
+int i;
+ulong *wd;
+void *badp;
 
-        xsummary();
-        badp = (p->magix != Magichole? p: q);
-        wd = (ulong *)badp - 12;
-        for (i = 24; i-- > 0; ) {
-            print("%#p: %lux", wd, *wd);
-            if (wd == badp)
-                print(" <-");
-            print("\n");
-            wd++;
-        }
+xsummary();
+badp = (p->magix != Magichole? p: q);
+wd = (ulong *)badp - 12;
+for (i = 24; i-- > 0; ) {
+    print("%#p: %lux", wd, *wd);
+    if (wd == badp)
+        print(" <-");
+    print("\n");
+    wd++;
+}
 @
 \fi
 
@@ -3757,8 +3908,7 @@ xspanalloc(ulong size, int align, ulong span)
 {
     ulong a, v, t;
     a = (kern_addr)xalloc(size+align+span);
-    if(a == nilptr)
-        panic("xspanalloc: %lud %d %lux", size, align, span);
+    <<[[xspanalloc()]] sanity check a>>
 
     if(span > 2) {
         v = (a + span) & ~(span-1);
@@ -3779,9 +3929,15 @@ xspanalloc(ulong size, int align, ulong span)
 }
 @
 
+<<[[xspanalloc()]] sanity check a>>=
+if(a == nilptr)
+    panic("xspanalloc: %lud %d %lux", size, align, span);
+@
 
 
-\section{[[Pool]]}
+\section{Memory pools}
+
+\subsection{[[Pool]]}
 % pool allocation, aka arena?
 % yes, but used for a best-fit allocator I think
 
@@ -3828,6 +3984,8 @@ struct Private {
 };
 @
 
+\subsection{[[plock()]]}
+
 <<function plock>>=
 static void
 plock(Pool *p)
@@ -3841,7 +3999,11 @@ plock(Pool *p)
 }
 @
 
-% use ilock! don't want interrupt in middle of kernel malloc?
+% Use ilock! don't want interrupt in middle of kernel malloc?
+%  because interrupt code sometimes allocate stuff? in which case
+%  we could not get out of the interrupt? (same reason for nlock?)
+% Works with SMP? Yes because Lock will do mutual exclusion over all
+% processors.
 
 <<function punlock>>=
 static void
@@ -3862,6 +4024,8 @@ punlock(Pool *p)
 }
 @
 
+\subsection{[[pmainmem()]]}
+
 % note that no xfree() or xhole() here ... so it always grow
 % (which is good for the fragmentation issue of xalloc anyway)
 % kernel memory = 4Mo max? this is actually adjusted in confinit()
@@ -3872,12 +4036,15 @@ static Pool pmainmem = {
     .maxsize=   4*MB,
     .minarena=  128*KB,
     .quantum=   32,
+
     .alloc= xalloc,
     .merge= xmerge,
+
     .flags= POOL_TOLERANCE,
 
     .lock=plock,
     .unlock= punlock,
+
     .print= poolprint,
     .panic= ppanic,
 
@@ -3895,19 +4062,22 @@ static Pool pimagmem = {
     .maxsize=   16*MB,
     .minarena=  2*MB,
     .quantum=   32,
+
     .alloc= xalloc,
     .merge= xmerge,
+
     .flags= 0,
 
     .lock= plock,
     .unlock= punlock,
+
     .print= poolprint,
     .panic= ppanic,
 
     .private=   &pimagpriv,
 };
 @
-
+% xmerge !!!!! xalloc !!!!
 
 <<global mainmem and imagmem>>=
 // exported in include/pool.h, defined here!
@@ -3915,7 +4085,8 @@ Pool*   mainmem = &pmainmem;
 Pool*   imagmem = &pimagmem;
 @
 
-%--------------------------------------------------------------------------
+\subsection{[[poolprint()]]}
+
 
 <<function poolprint>>=
 /*
@@ -3960,24 +4131,29 @@ ppanic(Pool *p, char *fmt, ...)
 
 % the memcpy, memmove, functions of libc use malloc? probably not
 
+% This is for more short-lived or shorter structure.
+
+\subsection{[[malloc()]]}
+
 <<function malloc>>=
 kern_addr3
 malloc(ulong size)
 {
     kern_addr3 v;
 
-    v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
+    v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
     if(v == nil)
         return nil;
-    if(Npadlong){
-        v = (ulong*)v+Npadlong;
-        setmalloctag(v, getcallerpc(&size));
-        setrealloctag(v, 0);
-    }
+    <<[[malloc()]] if Npadlong>>
     memset(v, 0, size);
     return v;
 }
 @
+% memset 0 by default for kernel memory! used in a few places.
+
+% will set Npadlong later.
+
+%\subsection{[[free()]]}
 
 % note that don't need to precise the size here! because the size is stored
 % in section before the returned pointer in malloc
@@ -3994,6 +4170,110 @@ free(kern_addr3 v)
 % we are not sure free will be called again on x (for instance in sysexec()
 % we have a waserror finally handler that free even though if free and
 % didn't pop the error yet.
+
+% pointer arithmetic here with pointers, so equivalent of 
+% Npadlong * sizeof(ulong)
+
+\subsection{Sleeping [[smalloc()]]}
+
+% sleep malloc, probably can't be called from interrupt code! 
+% also memset to 0! so should be called smallocz no?
+<<function smalloc>>=
+// non failing malloc! will repeat until it can
+kern_addr3
+smalloc(ulong size)
+{
+    kern_addr3 v;
+
+    for(;;) {
+        v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
+        if(v != nil)
+            break;
+        // else
+        tsleep(&up->sleepr, returnfalse, 0, 100);
+    }
+    <<[[smalloc()]] if Npadlong>>
+    memset(v, 0, size); // clear
+    return v;
+}
+@
+% will see tsleep and rendez vous later. why use tsleep vs sched()?
+% because what state it would be? you want sleeping state, so that's what tsleep
+% is for!
+
+
+
+<<function returnfalse>>=
+// usually used as default callback for sleep/tsleep
+bool
+returnfalse(void*)
+{
+    return false;
+}
+@
+%old: return0
+
+
+\subsection{[[mallocxxx()]]}
+
+<<function mallocz>>=
+kern_addr3
+mallocz(ulong size, bool clr)
+{
+    kern_addr3 v;
+
+    v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
+    <<[[mallocz()]] if Npadlong>>
+    if(clr && v != nil)
+        memset(v, 0, size);
+    return v;
+}
+@
+
+% launchinit -> <>  (for cpus alignment)
+<<function mallocalign>>=
+kern_addr3
+mallocalign(ulong size, ulong align, long offset, ulong span)
+{
+    kern_addr3 v;
+
+    v = poolallocalign(mainmem, size  +Npadlong*sizeof(ulong), align, 
+                                offset-Npadlong*sizeof(ulong), span);
+    <<[[mallocalign()]] if Npadlong>>
+    if(v)
+        memset(v, 0, size);
+    return v;
+}
+@
+
+<<function realloc>>=
+kern_addr3
+realloc(kern_addr3 v, ulong size)
+{
+    kern_addr3 nv;
+
+    if(v != nil)
+        v = (ulong*)v - Npadlong;
+    <<[[realloc()]] if Npadlong>>
+
+    if(nv = poolrealloc(mainmem, v, size)){
+       <<[[realloc()]] readjust nv if Npadlong>>
+    }       
+    return nv;
+}
+@
+
+
+\subsection{malloc tags}
+
+<<[[malloc()]] if Npadlong>>=
+if(Npadlong){
+    v = (ulong*)v+Npadlong;
+    setmalloctag(v, getcallerpc(&size));
+    setrealloctag(v, 0);
+}
+@
+
 
 
 <<function setmalloctag>>=
@@ -4024,102 +4304,41 @@ setrealloctag(kern_addr3 v, kern_addr pc)
 @
 
 
-% sleep malloc, probably can't be called from interrupt code! 
-% also memset to 0! so should be called smallocz no?
-<<function smalloc>>=
-// non failing malloc! will repeat until it can
-kern_addr3
-smalloc(ulong size)
-{
-    kern_addr3 v;
 
-    for(;;) {
-        v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
-        if(v != nil)
-            break;
-        tsleep(&up->sleepr, returnfalse, 0, 100);
-    }
-    if(Npadlong){
-        v = (ulong*)v+Npadlong;
-        setmalloctag(v, getcallerpc(&size));
-    }
-    memset(v, 0, size); // clear
-    return v;
+<<[[smalloc()]] if Npadlong>>=
+if(Npadlong){
+    v = (ulong*)v+Npadlong;
+    setmalloctag(v, getcallerpc(&size));
 }
 @
-% will see tsleep and rendez vous later. why use tsleep vs sched()?
-% because what state it would be? you want sleeping state, so that's what tsleep
-% is for!
 
-<<function returnfalse>>=
-// usually used as default callback for sleep/tsleep
-bool
-returnfalse(void*)
-{
-    return false;
-}
-@
-%old: return0
-
-<<function mallocz>>=
-kern_addr3
-mallocz(ulong size, bool clr)
-{
-    kern_addr3 v;
-
-    v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
-    if(Npadlong && v != nil){
-        v = (ulong*)v+Npadlong;
-        setmalloctag(v, getcallerpc(&size));
-        setrealloctag(v, 0);
-    }
-    if(clr && v != nil)
-        memset(v, 0, size);
-    return v;
+<<[[mallocz()]] if Npadlong>>=
+if(Npadlong && v != nil){
+    v = (ulong*)v+Npadlong;
+    setmalloctag(v, getcallerpc(&size));
+    setrealloctag(v, 0);
 }
 @
 
 
-%-----------------------------------------------------------------------
-
-<<function mallocalign>>=
-kern_addr3
-mallocalign(ulong size, ulong align, long offset, ulong span)
-{
-    kern_addr3 v;
-
-    v = poolallocalign(mainmem, size+Npadlong*sizeof(ulong), align, 
-                           offset-Npadlong*sizeof(ulong), span);
-    if(Npadlong && v != nil){
-        v = (ulong*)v+Npadlong;
-        setmalloctag(v, getcallerpc(&size));
-        setrealloctag(v, 0);
-    }
-    if(v)
-        memset(v, 0, size);
-    return v;
+<<[[mallocalign()]] if Npadlong>>=
+if(Npadlong && v != nil){
+    v = (ulong*)v+Npadlong;
+    setmalloctag(v, getcallerpc(&size));
+    setrealloctag(v, 0);
 }
 @
 
-<<function realloc>>=
-kern_addr3
-realloc(kern_addr3 v, ulong size)
-{
-    kern_addr3 nv;
+<<[[realloc()]] if Npadlong>>=
+if(Npadlong !=0 && size != 0)
+    size += Npadlong*sizeof(ulong);
+@
 
-    if(v != nil)
-        v = (ulong*)v-Npadlong;
-    if(Npadlong !=0 && size != 0)
-        size += Npadlong*sizeof(ulong);
-
-    if(nv = poolrealloc(mainmem, v, size)){
-        nv = (ulong*)nv+Npadlong;
-        setrealloctag(nv, getcallerpc(&v));
-        if(v == nil)
-            setmalloctag(nv, getcallerpc(&v));
-    }       
-    return nv;
-}
+<<[[realloc()]] readjust nv if Npadlong>>=
+ nv = (ulong*)nv+Npadlong;
+ setrealloctag(nv, getcallerpc(&v));
+ if(v == nil)
+     setmalloctag(nv, getcallerpc(&v));
 @
 
 
@@ -4150,6 +4369,8 @@ realloc(kern_addr3 v, ulong size)
 % Page will be building blocks for memory for user. We'll see later that
 % they have a huge number of use.
 
+\subsection{[[Page]]}
+
 <<struct Page>>=
 // Page metadata. We will allocate as many Page as to cover all physical memory
 // available for the user. xalloc'ed in Palloc.pages
@@ -4162,7 +4383,7 @@ struct Page
     // but that means needs to use Lock below to access this non-atomic ref.
     ushort  ref;      /* Reference count */ // Pages are shared!
 
-    // set<enum<modref>>
+    // bitset<enum<Modref>>
     char  modref;     /* Simulated modify/reference bits */
 
     <<[[Page]] other fields>>
@@ -4172,6 +4393,10 @@ struct Page
     <<[[Page]] extra fields>>
 };
 @
+%c: bitset are convenient. Compact!
+%c: char! to optimize and have a compact structure layout (what does 5c though?)
+%linux: avoid redundant? use directly MMU to store this info?
+
 % use 'ref', will be used to share, copy on write!
 % note that pa is constant! set once and for all in pageinit and that's it
 \l pages also used for kernel stuff? like page table?
@@ -4183,7 +4408,8 @@ struct Page
 % less: rename PageInfo? Pte?
 
 %real-world: waste of space with all those Page? Linux use instead
-% memory-area so less waste?
+% memory-area so less waste? hmm but can we store refcount in MMU pte?
+% plan9 allows to share pages! We need a Ref!
 
 % when do we need va? 
 % - when it's part of a segment to check that in the boundary in segpage()
@@ -4200,6 +4426,7 @@ enum Modref
     PG_REF    = 0x02,   /* software referenced bit */
 };
 @
+%c: nice bitset (more efficient than ocaml record)
 % TODO LP split, put just PG_NOTHING for now?
 
 % PG_REF is set in fixfault when access for the first time the page
@@ -4210,15 +4437,12 @@ enum Modref
 %     can maybe if it was not modified just retrived it back from an KImage?
 
 
+\subsection{[[Palloc]]}
 
 <<struct Palloc>>=
 // Page Allocator (singleton)
 struct Palloc
 {
-    Pallocmem mem[4]; // = Conf.mem minus memory allocated for the kernel
-    // sum of mem.npage (which should be conf.upages)
-    ulong user;     /* how many user pages */
-  
     // array<Page>, xalloc'ed in pageinit(), huge, cover physical user space
     Page  *pages; /* array of all pages */ 
   
@@ -4229,6 +4453,7 @@ struct Palloc
 
     ulong freecount;    /* how many pages on free list now */
 
+    <<[[Palloc]] capacity fields>>
     <<[[Palloc]] other fields>>
   
     // extra
@@ -4236,12 +4461,28 @@ struct Palloc
     <<[[Palloc]] extra fields>>
 };
 @
+%c: embed links in page itself and reuse it for many things so save space again
 %datalog: can express invariant above about lock ordering?
+%ocaml: use special structure for double linked list, factorize once and for all
+%ocaml: use list of pair instead of Palloc.mem and pass it to pageinit;
+% no need store it forever in Palloc.
+%linux: avoid redundant? use directly MMU to store this info?
+
+% Why need double linked list?
 
 <<global palloc>>=
 // Page allocator
 struct Palloc palloc;
 @
+
+
+<<[[Palloc]] capacity fields>>=
+Pallocmem mem[4]; // = Conf.mem minus memory allocated for the kernel
+// sum of mem.npage (which should be conf.upages)
+ulong user;     /* how many user pages */
+@
+% not sure why need that in palloc itself. pageinit could use
+% a Confmem directly.
 
 <<struct Pallocmem>>=
 // memory banks for user memory, similar to Confmem (and RMap)
@@ -4252,6 +4493,7 @@ struct Pallocmem
 };
 @
 \l could merge with Confmem, because kbase and klimit could be removed
+%ocaml: just use of pair
 
 
 <<[[Page]] extra fields>>=
@@ -4260,18 +4502,14 @@ Page  *next; /* Lru free list */
 // list<ref<Page>> Palloc.tail
 Page  *prev; 
 @
+%c: can save space by putting pointer inside the struct. in ocaml a list
+% will require 2 pointers, one for the boxed elt, one for next. Here Just
+% next (C++ can also avoid the boxing in list<T> but then no virtual methods).
+%c: can save even more space by reusing pointer for many lists!
 
 
 
-
-
-<<function pagenumber>>=
-ulong
-pagenumber(Page *p)
-{
-    return p - palloc.pages;
-}
-@
+\subsection{[[newpage()]]}
 
 
 % can set s to nil at exit in case of ???
@@ -4280,9 +4518,6 @@ Page*
 newpage(bool clear, Segment **s, virt_addr va)
 {
     Page *p;
-    Arch_KMap *k;
-    bool dontalloc;
-    int i; 
     <<[[newpage()]] other locals>>
 
     lock(&palloc);
@@ -4306,17 +4541,37 @@ newpage(bool clear, Segment **s, virt_addr va)
 
     unlock(p);
     unlock(&palloc);
-
-    if(clear) {
-        k = arch_kmap(p);
-        memset((void*)VA(k), 0, BY2PG);
-        arch_kunmap(k);
-    }
+    <<[[newpage()]] if clear>>
     return p;
 }
 @
-% arch_kmap()? see later
+
 %old: was storing highwater in intermediate hw, useful?
+\l rename alloc_page?
+%ocaml: Can use generic 'alloc' name because full name is Page_allocator.alloc
+
+% what if no more free pages? see highwater stuff
+
+
+<<[[newpage()]] other locals>>=
+Arch_KMap *k;
+@
+<<[[newpage()]] if clear>>=
+if(clear) {
+    k = arch_kmap(p);
+    memset((void*)VA(k), 0, BY2PG);
+    arch_kunmap(k);
+}
+@
+% arch_kmap()? see later.
+% arch_kmap will instruct the arch mmu to map pa somewhere, at
+% least temporarily so can do the memset.
+% For arm, just use pa+KZERO and will modify the right place for ARM.
+% Could also call arch_putmmu here?
+% For other archi it can be more complex because have more memory than
+% 4Go or close to 4Go in which case have not enough virtual memspace to
+% use the pa+KZERO trick (see advanced topics chapter)
+
 
 <<function pageunchain>>=
 // assumes palloc is held
@@ -4336,9 +4591,11 @@ pageunchain(Page *p)
     else
         palloc.tail = p->prev;
     p->prev = p->next = nil;
+
     palloc.freecount--;
 }
 @
+%ocaml: use generic function for double linked list
 
 <<destructor putpage>>=
 void
@@ -4357,19 +4614,18 @@ putpage(PageOrSwap *p)
         unlock(&palloc);
         return;
     }
-
+    // else
     <<[[putpage]] if p has an image>>
     else 
         pagechainhead(p);
 
-    if(palloc.freememr.p != nil)
-        wakeup(&palloc.freememr);
-
+    <<[[putpage]] wakeup process waiting for freepage if any>>
     unlock(p);
     unlock(&palloc);
 }
 @
-% LP split freememr?
+%ocaml: Page_allocator.free
+\l rename free_page?
 
 
 
@@ -4380,6 +4636,7 @@ pagechainhead(Page *p)
 {
     if(canlock(&palloc))
         panic("pagechainhead");
+
     // add_head(p, palloc)
     if(palloc.head) {
         p->next = palloc.head;
@@ -4391,9 +4648,11 @@ pagechainhead(Page *p)
     }
     palloc.head = p;
     p->prev = nil;
+
     palloc.freecount++;
 }
 @
+%ocaml: use generic function for double linked list
 
 <<function pagechaintail>>=
 // assumes palloc is held
@@ -4414,9 +4673,12 @@ pagechaintail(Page *p)
     }
     palloc.tail = p;
     p->next = nil;
+
     palloc.freecount++;
 }
 @
+%ocaml: use generic function for double linked list
+
 % why chaintail? for Page Cache! see later
 
 % far more about Pages in Page fault section in virtual memory chapter
@@ -4427,7 +4689,6 @@ pagechaintail(Page *p)
 
 \section{[[Segment]] and [[Pagetable]]}
 
-% a bit like CS, DS, SS, etc. Maybe we should use Intel advanced features!
 <<enum segtype>>=
 /* Segment types */
 enum Segtype
@@ -4438,12 +4699,12 @@ enum Segtype
     SG_STACK  = 03,
     <<[[Segtype]] other cases>>
     SG_TYPE   = 07,   /* Mask type of segment */
-  
-    SG_RONLY  = 0040,   /* Segment is read only */
+
     <<[[Segtype]] other flags>>
 };
 @
-\t split enum
+%ocaml: use ADT so store extra info regarding text segment here?
+% (like daddr?)
 
 <<global sname>>=
 // hash<enum<Segtype, string>>
@@ -4452,11 +4713,14 @@ static char *sname[]={
     [SG_DATA]     = "Data", 
     [SG_BSS]      = "Bss", 
     [SG_STACK]    = "Stack", 
+
     [SG_SHARED]   = "Shared", 
     [SG_PHYSICAL] = "Phys"
 };
 @
 %old: was not using designator, but dangerous with LP reordering cases
+
+\subsection{[[Segment]]}
 
 <<struct Segment>>=
 // smalloc'ed by newseg()
@@ -4467,28 +4731,37 @@ struct Segment
   
     virt_addr base;   /* virtual base */
     virt_addr top;    /* virtual top */
-    ulong size;   /* size in pages */ // top - base / BY2PG?
+    ulong size;   /* size in pages */ // top - base / BY2PG
   
-    // Kind of a page directory table. Points to smallpagedir if small enough.
     // array<option<ref_own<Pagetable>>>, smalloc'ed (or smallpagedir alias)
-    // can map up to 2G of memory
     Pagetable **pagedir; // array of PAGEDIRSIZE max
-    // array<option<ref_own<Pagetable>>
-    Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
 
-  
     <<[[Segment]] other fields>>
   
     // extra
     Ref; // LOCK ORDERING: always do lock(img); lock(s) ??
-    QLock lk;
+    QLock lk; // FOR WHAT???
 };
 @
 %old: map -> pagedir, ssegmap -> smallpagedir
+%ocaml: use dynamic array so no need 2 sizes trick.
+%linux: I think they have a map_area structure similar to that,
+% but probably they avoid redundant and use directly MMU to store the
+% info stored in pagedir and pagetab.
+\l size -> nb_pages
+
+%pagedir is a Kind of a page directory table. 
+% (Points to smallpagedir if small enough)
+%Can map up to 2G of memory! (and can have multiple segments in a process)
+
+\l Why need process to wait on segment??
 
 % Segment acts as a kind of Page directory per process, but
 % archi-independent.
+
+% Store the type of the segment because will do different actions
+% in dupseg() and in fix_fault() depending on segment type!
 
 
 <<constant PAGEDIRSIZE(arm)>>=
@@ -4497,13 +4770,15 @@ struct Segment
 %x86: same
 %old: SEGMAPSIZE
 % why this size? 1984 Mo = 2Go - 16 Mo, not sure why
+% Because IOSIZE on arm??
+% And this is for one segment!
 
-<<constant SMALLPAGEDIRSIZE(arm)>>=
-#define SMALLPAGEDIRSIZE    16
-@
-%x86: same
-%old: SSEGMAPSIZE
 
+
+
+
+
+\subsection{[[Pagetable]]}
 
 <<struct Pagetable>>=
 // ptalloc'ed (malloc'ed)
@@ -4519,12 +4794,18 @@ struct Pagetable
     Page  **last;     /* Last used entry */
 };
 @
+%c: can specify statically size of array! dependent types
 %old: was called Pte, but really it's not a page table entry but
 % the whole pagetable!
 %old: pages -> pagetab
 
-% (first and last optimize a bit as many of the Page* can be null in pagetab)
+
+% first and last optimize a bit as many of the Page* can be null in pagetab.
+% Useful for Stack? big segment but used only at the end.
+\t but who needs to iterate? just freept and ptcopy? then useful opti?
+
 % actually really PageOrSwapOrNil!
+% Why use pointer? why not use int?
 
 <<constant PAGETABMAPMEM(arm)>>=
 #define PAGETABMAPMEM   (1024*1024) // 1MB
@@ -4543,7 +4824,7 @@ struct Pagetable
 % to PageInfo. each PageInfo speak about a page of 4Ko. so
 % with 256 PageInfo you can speak about 256 * 4096 = 1M of memory.
 % then later will have a segment that can have 1984 Pagetable,
-% and each of this Pagetable have 256 PageInfo so 1984 * 256 * 4096 = 2Go
+% and each of this Pagetable have 256 PageInfo so 1984 * 256 * 4096 =~ 2Go
 % of mapped virtual memory
 
 % start here glossary about PD, PT, PDX, PTX? because we'll use it in segpage
@@ -4564,13 +4845,16 @@ ptalloc(void)
 % note that use kernel memory here! and then we will user memory for the actual
 % pages
 
+% first point over last, last to first, so sure iteration will not do anything
+% C idiom.
+
+% pass segment because of SG_PHYICAL special case (ugly)
 <<destructor freept>>=
 void
 freept(Segment *s, Pagetable *p)
 {
     PageOrSwap **pte;
-    int ref;
-    Page *pt, **ptop;
+    <<[[freept()]] other locals>>
 
     switch(s->type&SG_TYPE) {
     <<[[freept()]] SG_PHYSICAL case>>
@@ -4584,6 +4868,7 @@ freept(Segment *s, Pagetable *p)
     free(p);
 }
 @
+%ocaml: use Gc for p itself, but still need manual call to putpage
 
 % does not really copy, it's more about sharing and reference counting
 % why not called duppte? to be more consistent with the rest?
@@ -4595,7 +4880,7 @@ ptcpy(Pagetable *old)
     PageOrSwap **src, **dst;
 
     new = ptalloc();
-    dst = &new->pagetab[old->first-old->pagetab];
+    dst = &new->pagetab[old->first - old->pagetab];
     new->first = dst;
     for(src = old->first; src <= old->last; src++, dst++)
         if(*src) {
@@ -4611,14 +4896,15 @@ ptcpy(Pagetable *old)
     return new;
 }
 @
+%ocaml: would be simpler if use index instead of pointers for first and last
+
 % why called copy? it looks like it shares, so when actually use copypage()?
 % because when not have RFMEM we do dupseg and ptcpy, but I don't see
 % how it's different since we still share. the pagedir and pagetab
 % are new, but they contain the same pointers ...
 
 
-
-
+\subsection{[[newseg()]]}
 
 % size is in pages (we really need dimention types)
 <<constructor newseg>>=
@@ -4628,11 +4914,10 @@ newseg(int type, virt_addr base, ulong size)
     Segment *s;
     int pagedirsize;
 
-    if(size > (PAGEDIRSIZE*PAGETABSIZE))
-        error(Enovmem);
-
+    <<[[newseg()]] sanity check size>>
     s = smalloc(sizeof(Segment));
-    s->ref = 1;
+
+    s->ref = 1; // Segment.Ref.ref
     s->type = type;
     s->base = base;
     s->top = base+(size*BY2PG);
@@ -4641,19 +4926,19 @@ newseg(int type, virt_addr base, ulong size)
     <<[[newseg()]] sema initialization>>
 
     pagedirsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
-    if(pagedirsize > nelem(s->smallpagedir)){
-        pagedirsize *= 2;
+
+    <<[[newseg()]] if pagedirsize small>>
+    else{
+        pagedirsize *= 2; // room for growing
         if(pagedirsize > PAGEDIRSIZE)
             pagedirsize = PAGEDIRSIZE; // pad's first bugfix :)
-        s->pagedir = smalloc(pagedirsize*sizeof(Pagetable*));
+        s->pagedir = smalloc(pagedirsize * sizeof(Pagetable*));
         s->pagedirsize = pagedirsize;
-    }else{
-        s->pagedir = s->smallpagedir;
-        s->pagedirsize = nelem(s->smallpagedir);
     }
     return s;
 }
 @
+\l size -> nb_pages
 %bug: see pad's bugfix above
 %
 % ok but who actually allocate the pages? allocate just pagedir here?
@@ -4662,16 +4947,21 @@ newseg(int type, virt_addr base, ulong size)
 % newpage() is called lazily, in fixfault or pio. Here just setup the limits
 % that fixfault will operate on.
 
+% Prepare for some growth. Opti so no need realloc.
+
+<<[[newseg()]] sanity check size>>=
+if(size > (PAGEDIRSIZE*PAGETABSIZE))
+    error(Enovmem);
+@
+
 <<destructor putseg>>=
 void
 putseg(Segment *s)
 {
     Pagetable **pde, **emap;
-    KImage *img;
+    <<[[putseg()]] other locals>>
 
-    if(s == nil)
-        return; // TODO: panic("putseg") instead?
-
+    <<[[putseg()]] sanity check s>>
     <<[[putseg()]] if s has an image>>
     else
         lock(s);
@@ -4681,6 +4971,7 @@ putseg(Segment *s)
         unlock(s);
         return;
     }
+    // else
     unlock(s);
 
     qlock(&s->lk);
@@ -4692,16 +4983,58 @@ putseg(Segment *s)
             freept(s, *pde);
 
     qunlock(&s->lk);
-    if(s->pagedir != s->smallpagedir)
+
+    <<[[putseg()]] if smallpagedir>>
+    else
         free(s->pagedir);
     <<[[putseg()]] free profile>>
     free(s);
 }
 @
+\t why need qlock? can not use regular lock for that?
+%ocaml: no need free here
 
+<<[[putseg()]] sanity check s>>=
+if(s == nil)
+    return; // TODO: panic("putseg") instead?
+@
+
+
+
+\subsection{[[smallpagedir]]}
+
+<<[[Segment]] other fields>>=
+// array<option<ref_own<Pagetable>>
+Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
+@
+%c: why use smallpagedir? to avoid an extra smalloc? anyway the segment
+% itself is malloced so no big win I think.
+
+<<constant SMALLPAGEDIRSIZE(arm)>>=
+#define SMALLPAGEDIRSIZE    16
+@
+%x86: same
+%old: SSEGMAPSIZE
+
+<<[[newseg()]] if pagedirsize small>>=
+if(pagedirsize <= nelem(s->smallpagedir)){
+    s->pagedir = s->smallpagedir;
+    s->pagedirsize = nelem(s->smallpagedir);
+}
+@
+%old: I reverted the condition to aspectize it
+
+<<[[putseg()]] if smallpagedir>>=
+if(s->pagedir == s->smallpagedir) {
+}
+@
+%old: I reverted the condition to aspectize it
+
+
+\subsection{Adding a page to a segment, [[segpage()]]}
 
 % used by userinit(), explain well relation between a Page and a segment
-% rename attach_page_to_segment?
+\l rename attach_page_to_segment?
 <<function segpage>>=
 void
 segpage(Segment *s, Page *p)
@@ -4710,8 +5043,7 @@ segpage(Segment *s, Page *p)
     ulong off;
     Page **pg;
 
-    if(p->va < s->base || p->va >= s->top)
-        panic("segpage");
+    <<[[segpage()]] sanity check page in range of segment>>
 
     off = p->va - s->base;
     pt = &s->pagedir[off/PAGETABMAPMEM]; // PDX
@@ -4727,12 +5059,25 @@ segpage(Segment *s, Page *p)
         (*pt)->last = pg;
 }
 @
-% could assert old value of *pg was 0?
+%c: ability to name address allows to factorize code (in ocaml
+% I have to repeat the array check and then array assignmenent)
+
+\l could assert old value of *pg was 0?
+
+<<[[segpage()]] sanity check page in range of segment>>=
+if(p->va < s->base || p->va >= s->top)
+    panic("segpage");
+@
+
+\subsection{Process segments}
+
+\subsubsection{[[Procseg]]}
 
 <<enum procseg>>=
 /*
  *  process memory segments - NSEG always last !
  */
+coupling: must start with SSEG, see sysexec loop
 enum Procseg
 {
     SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
@@ -4743,6 +5088,10 @@ enum Procseg
     NSEG // to count, see Proc.seg array
 };
 @
+%c: nice to have NSEG to be used for efficient map (see below)
+
+% Similar but different from SG_xxx segment kind.
+
 % a bit weird that SSEG first, but some code assumes that as they do
 % for i from SSEG to BSEG
 % there was a LSEG, not sure why, I've renamed it to _SEG0
@@ -4752,10 +5101,16 @@ enum Procseg
 Segment *seg[NSEG];
 QLock seglock;  /* locked whenever seg[] changes */
 @ 
+%c: nice to have efficient map like that. Can do in ocaml
+% but need use Obj. for doing ugly magic.
 
+\l why QLock for seglock? shared? multiple processor change change it
+% at the same time??
 
+\subsubsection{[[seg()]]}
 
-
+\l rename segment_of_addr
+% okaddr | ... -> <> 
 <<function seg>>=
 Segment*
 seg(Proc *p, virt_addr addr, bool dolock)
@@ -4781,6 +5136,16 @@ seg(Proc *p, virt_addr addr, bool dolock)
     return nil;
 }
 @
+%ocaml: use Hashtbl.iter (but less efficient)
+
+\l importance to have efficient order in seg[]? so Stack before the rest?
+
+\t when need dolock??
+
+\subsubsection{Addresses covering multiple segments, [[validaddr()]]}
+
+% will be used a lot later.
+
 
 <<function okaddr>>=
 /*
@@ -4809,8 +5174,18 @@ okaddr(virt_addr addr, ulong len, bool write)
     return false;
 }
 @
+\l rename ok_addr_range
 % the loop show a bit the limitation of just-paging model where all segments
 % are put next to each other and are not in independent memory space.
+
+% pprint? why no panic? 
+
+<<[[Segtype]] other flags>>=
+SG_RONLY  = 0040,   /* Segment is read only */
+@
+%c: can pack an enum and a bitset in one int!
+%used only for KImage stuff, so not primordial. Most sections are
+% modifiable! (even Text, grrr, auto-modifiable code is bad!)
 
 % arch_userpc() later.
 
@@ -4824,19 +5199,66 @@ validaddr(virt_addr addr, ulong len, bool write)
     }
 }
 @
+% will generate an error() so must use waserror in caller!
+
+%\subsubsection{[[vmemchr()]]}
+
+% v for verified? validated?
+
+% used by sysexec() and other syscalls
+% memchr on virtual address? and so that can span different pages, and 
+% even different segments! can generate faults? I think so.
+<<function vmemchr>>=
+/*
+ * &s[0] is known to be a valid address.
+ */
+void*
+vmemchr(virt_addr3 s, int c, int n)
+{
+    int m;
+    virt_addr a;
+    virt_addr3 t;
+
+    a = (virt_addr)s;
+    while(PGROUND(a) != PGROUND(a+n-1)){
+        /* spans pages; handle this page */
+        m = BY2PG - (a & (BY2PG-1));
+        t = memchr((void*)a, c, m);
+        if(t)
+            return t;
+        a += m;
+        n -= m;
+        if(a < KZERO)
+            validaddr(a, 1, false);
+    }
+
+    /* fits in one page */
+    return memchr((void*)a, c, n);
+}
+@
+% call validaddr so may raise an error!
+
+<<portdat.h macros>>=
+// BY2PG is defined in mem.h, which should always be included before "dat.h"!
+#define PGROUND(s)  ROUNDUP(s, BY2PG)
+@
 
 
+\subsubsection{[[dupseg()]]}
 
-% used by sysrfork(), dup or share actually
+% Why not passing Segment directly instead of seg array and segno below?
+% Because of the test on TSEG vs SG_DATA (for KImage?)
+
+% sysrfork -> <>  (dup or share actually)
 <<function dupseg>>=
 Segment*
 dupseg(Segment **seg, int segno, bool share)
 {
-    int i, size;
-    Pagetable *pt;
-    Segment *n, *s;
+    Segment *s;
+    Segment *n; // when allocate a new segment
+    <<[[dupseg()]] other locals>>
 
-    SET(n); //????
+    SET(n);
 
     s = seg[segno];
 
@@ -4846,102 +5268,281 @@ dupseg(Segment **seg, int segno, bool share)
         nexterror();
     }
     switch(s->type&SG_TYPE) {
-    case SG_TEXT:       /* New segment shares pt set */
-        goto sameseg;
-
-    case SG_DATA:       /* Copy on write plus demand load info */
-
-        if(segno == TSEG){ // why not SG_TEXT then?
-            poperror();
-            qunlock(&s->lk);
-            return data2txt(s);// ????
-        }
-
-        if(share)
-            goto sameseg; // threads! clone()
-
-        n = newseg(s->type, s->base, s->size);
-        <<[[dupseg()]] SG_DATA case, attach image to new segment n>>
-        break;
-
-    case SG_BSS:        /* Just copy on write */
-        if(share)
-            goto sameseg; // threads! clone()
-
-        n = newseg(s->type, s->base, s->size);
-        break;
-
-    case SG_STACK:
-        n = newseg(s->type, s->base, s->size);
-        break;
-
-    case SG_SHARED:
-    case SG_PHYSICAL:
-        goto sameseg;
-
+    <<[[dupseg()]] switch segment type cases>>
     }
     // not sameseg, we have allocated a new seg in n above
+    <<[[dupseg()]] when not goto sameseg, when allocated a new segment>>
 
-    size = s->pagedirsize;
-    for(i = 0; i < size; i++)
-        if(pt = s->pagedir[i])
-            n->pagedir[i] = ptcpy(pt); // will actually share the pages
-
-    <<[[dupseg()]] copy other fields>>
-
-    if(s->ref > 1)
-        procflushseg(s); // ??
     poperror();
     qunlock(&s->lk);
     return n;
 
 sameseg:
-    incref(s);
+    <<[[dupseg()]] in sameseg, when share a segment>>
+
     poperror();
     qunlock(&s->lk);
     return s;
 }
 @
+%ocaml: can use with_lock! no need all those qunlock guard before exn
+%ocaml: ugly control flow, can factorize with Or patterns?
 
 
-<<function data2txt>>=
-Segment*
-data2txt(Segment *s)
+
+
+<<[[dupseg()]] switch segment type cases>>=
+case SG_TEXT:       /* New segment shares pt set */
+    goto sameseg;
+@
+<<[[dupseg()]] in sameseg, when share a segment>>=
+incref(s);
+@
+
+
+<<[[dupseg()]] switch segment type cases>>=
+case SG_STACK:
+    n = newseg(s->type, s->base, s->size);
+    break;
+@
+<<[[dupseg()]] other locals>>=
+int i;
+int size; // pagedir
+Pagetable *pt;
+@
+<<[[dupseg()]] when not goto sameseg, when allocated a new segment>>=
+size = s->pagedirsize;
+for(i = 0; i < size; i++)
+    if(pt = s->pagedir[i])
+        n->pagedir[i] = ptcpy(pt); // will actually share the pages
+
+<<[[dupseg()]] copy other fields>>
+<<[[dupseg()]] if original segment was shared, flush it>>
+@
+% copy other fields: flushme, for advanced mm
+
+
+\t will share pages with ptcpy, so diff with sameseg code?
+% pagetable is a fresh array, but still reference the same pages!
+% so how copy on write? ptcpy does that? 
+% or because mmu is flushed so anyway there will be a page fault
+% in new proc to load in MMU and that's where we will do the
+% copy on write depending on the segment kind?
+
+
+
+
+
+<<[[dupseg()]] switch segment type cases>>=
+case SG_DATA:       /* Copy on write plus demand load info */
+    <<[[dupseg()]] when SG_DATA, if Text segment>>
+    if(share)
+        goto sameseg; // threads! clone()
+    // else
+    n = newseg(s->type, s->base, s->size);
+    <<[[dupseg()]] SG_DATA case, attach image to new segment n>>
+    break;
+@
+
+<<[[dupseg()]] switch segment type cases>>=
+case SG_BSS:        /* Just copy on write */
+    if(share)
+        goto sameseg; // threads! clone()
+    // else
+    n = newseg(s->type, s->base, s->size);
+    break;
+@
+%ocaml: use function really_copy and really_share instead of ugly control flow
+
+%\subsubsection{[[relocateseg()]]}
+% now later
+%\subsubsection{[[mfreeseg()]]}
+% now later
+
+
+\subsubsection{[[/proc/x/segment]]}
+
+<<[[procread()]] locals>>=
+Segment *sg;
+@
+<<[[procread()]] cases>>=
+case Qsegment:
+    j = 0;
+    for(i = 0; i < NSEG; i++) {
+        sg = p->seg[i];
+        if(sg == nil)
+            continue;
+        j += snprint(statbuf+j, sizeof statbuf - j,
+            "%-6s %c%c %.8lux %.8lux %4ld\n",
+            sname[sg->type&SG_TYPE],
+            sg->type&SG_RONLY ? 'R' : ' ',
+            sg->profile ? 'P' : ' ',
+            sg->base, sg->top, sg->ref);
+    }
+    if(offset >= j)
+        return 0;
+    if(offset+n > j)
+        n = j-offset;
+    if(n == 0 && offset == 0)
+        exhausted("segments");
+    memmove(a, &statbuf[offset], n);
+    return n;
+@
+
+
+
+
+\section{[[sysbrk()]]}
+
+<<syscall brk>>=
+// int brk(void*);
+long
+sysbrk(ulong* arg)
 {
-    Segment *ps;
+    return ibrk(arg[0], BSEG); // BSS, the heap size is changed
+}
+@ 
+% see segfree for the other segments, which also call ibrk
 
-    ps = newseg(SG_TEXT, s->base, s->size);
-    ps->image = s->image;
-    incref(ps->image);
-    ps->fstart = s->fstart;
-    ps->flen = s->flen;
-    <<[[data2txt()]] initialize other segment fields>>
+% return the current base when called with 0
+% ret_code?
+% sysbrk | syssegbrk -> <>
+<<function ibrk>>=
+long
+ibrk(virt_addr addr, int seg)
+{
+    Segment *s;
+    virt_addr newtop;
+    ulong newsize;
+    <<[[ibrk()]] other locals>>
 
-    return ps;
+    s = up->seg[seg];
+    <<[[ibrk()]] sanity check s>>
+    <<[[ibrk()]] if addr nil>>
+
+    qlock(&s->lk);
+
+    <<[[ibrk()]] if addr below base>>
+
+    newtop = PGROUND(addr);
+    newsize = (newtop - s->base)/BY2PG; // in nb pages
+
+    <<[[ibrk()]] if newtop lower than oldtop, shrink the segment>>
+    // else
+    <<[[ibrk()]] if newtop more than oldtop, extend the segment>>
+
 }
 @
-% LP split that? what is that?
+%ocaml: can use with_lock! instead of all those qunlock guards everywhere
+%old: I switched some ulong to virt_addr
 
-% used by sysexec() to relocate the stack that was in ESEG
-<<function relocateseg>>=
-void
-relocateseg(Segment *s, ulong offset)
-{
-    Page **pg, *x;
-    Pagetable *pt, **p, **endpt;
+% important to use smalloc? cant use malloc inside a qlock?
 
-    endpt = &s->pagedir[s->pagedirsize];
-    for(p = s->pagedir; p < endpt; p++) {
-        if(*p == nil)
-            continue;
-        pt = *p;
-        for(pg = pt->first; pg <= pt->last; pg++) {
-            if(x = *pg)
-                x->va += offset;
-        }
+<<[[ibrk()]] sanity check s>>=
+if(s == nil)
+    error(Ebadarg);
+@
+
+<<[[ibrk()]] if addr nil>>=
+if(addr == nilptr)
+    return s->base;
+@
+% who uses that? a form of introspection??
+
+<<[[ibrk()]] if addr below base>>=
+/* We may start with the bss overlapping the data */
+if(addr < s->base) {
+    if(seg != BSEG || up->seg[DSEG] == nil || addr < up->seg[DSEG]->base) {
+        qunlock(&s->lk);
+        error(Enovmem);
+    }
+    addr = s->base;
+}
+@
+% who uses that? 
+
+% the stack cannot go down? stack fixed size then!
+
+\subsection{Extending a segment}
+
+<<[[ibrk()]] other locals>>=
+int mapsize;
+Pagetable **map;
+@
+
+<<[[ibrk()]] if newtop more than oldtop, extend the segment>>=
+<<[[ibrk()]] sanity check newtop does not overlap other segments>>
+<<[[ibrk()]] sanity check newsize>>
+
+// similar to code in newseg()
+mapsize = ROUND(newsize, PAGETABSIZE)/PAGETABSIZE;
+// realloc
+if(mapsize > s->pagedirsize){
+    map = smalloc(mapsize*sizeof(Pagetable*));
+    memmove(map, s->pagedir, s->pagedirsize*sizeof(Pagetable*));
+    if(s->pagedir != s->smallpagedir)
+        free(s->pagedir);
+    s->pagedir = map;
+    s->pagedirsize = mapsize;
+}
+
+s->top = newtop;
+s->size = newsize;
+qunlock(&s->lk);
+return OK_0;
+@
+
+
+<<[[ibrk()]] other locals>>=
+Segment *ns;
+int i;
+@
+<<[[ibrk()]] sanity check newtop does not overlap other segments>>=
+for(i = 0; i < NSEG; i++) {
+    ns = up->seg[i];
+    if(ns == nil || ns == s)
+        continue;
+    if(newtop >= ns->base && newtop < ns->top) {
+        qunlock(&s->lk);
+        error(Esoverlap);
     }
 }
 @
+
+<<[[ibrk()]] sanity check newsize>>=
+if(newsize > (PAGEDIRSIZE*PAGETABSIZE)) {
+    qunlock(&s->lk);
+    error(Enovmem);
+}
+@
+
+\subsection{Shrinking a segment}
+
+
+<<[[ibrk()]] if newtop lower than oldtop, shrink the segment>>=
+if(newtop < s->top) {
+    /*
+     * do not shrink a segment shared with other procs, as the
+     * to-be-freed address space may have been passed to the kernel
+     * already by another proc and is past the validaddr stage.
+     */
+    if(s->ref > 1){
+        qunlock(&s->lk);
+        error(Einuse);
+    }
+    mfreeseg(s, newtop, (s->top-newtop)/BY2PG);
+    s->top = newtop;
+    s->size = newsize;
+    qunlock(&s->lk);
+    arch_flushmmu();
+    return OK_0;
+}
+@
+
+
+%\subsubsection{[[mfreeseg()]]}
+
+% m?? vs putseg?
 
 % used in ibrk() and segfree()
 % when called from ibrk() we know s->ref == 1, so the procflushseg
@@ -4999,10 +5600,7 @@ mfreeseg(Segment *s, ulong start, int pages)
         j = 0;
     }
 out:
-    /* flush this seg in all other processes */
-    if(s->ref > 1)
-        procflushseg(s);
-
+    <<[[mfreeseg()]] if segment was shared, flush it>>
     /* free the pages */
     for(pg = list; pg != nil; pg = list){
         list = list->next;
@@ -5011,171 +5609,6 @@ out:
 }
 @
 
-%-------------------------------------------------------------------------
-
-% used by sysexec() and other syscalls
-% memchr on virtual address? and so that can span different pages, and 
-% even different segments! can generate faults? I think so.
-<<function vmemchr>>=
-/*
- * &s[0] is known to be a valid address.
- */
-void*
-vmemchr(virt_addr3 s, int c, int n)
-{
-    int m;
-    virt_addr a;
-    virt_addr3 t;
-
-    a = (virt_addr)s;
-    while(PGROUND(a) != PGROUND(a+n-1)){
-        /* spans pages; handle this page */
-        m = BY2PG - (a & (BY2PG-1));
-        t = memchr((void*)a, c, m);
-        if(t)
-            return t;
-        a += m;
-        n -= m;
-        if(a < KZERO)
-            validaddr(a, 1, false);
-    }
-
-    /* fits in one page */
-    return memchr((void*)a, c, n);
-}
-@
-
-<<portdat.h macros>>=
-// BY2PG is defined in mem.h, which should always be included before "dat.h"!
-#define PGROUND(s)  ROUNDUP(s, BY2PG)
-@
-
-
-\subsection{[[/proc/x/segment]]}
-
-<<[[procread()]] cases>>=
-case Qsegment:
-    j = 0;
-    for(i = 0; i < NSEG; i++) {
-        sg = p->seg[i];
-        if(sg == nil)
-            continue;
-        j += snprint(statbuf+j, sizeof statbuf - j,
-            "%-6s %c%c %.8lux %.8lux %4ld\n",
-            sname[sg->type&SG_TYPE],
-            sg->type&SG_RONLY ? 'R' : ' ',
-            sg->profile ? 'P' : ' ',
-            sg->base, sg->top, sg->ref);
-    }
-    if(offset >= j)
-        return 0;
-    if(offset+n > j)
-        n = j-offset;
-    if(n == 0 && offset == 0)
-        exhausted("segments");
-    memmove(a, &statbuf[offset], n);
-    return n;
-@
-
-
-
-
-\section{[[sysbrk()]]}
-
-<<syscall brk>>=
-// int brk(void*);
-long
-sysbrk(ulong* arg)
-{
-    return ibrk(arg[0], BSEG); // BSS, the heap size is changed
-}
-@ 
-% see segfree for the other segments, which also call ibrk
-
-% return the current base when called with 0
-% ret_code?
-<<function ibrk>>=
-long
-ibrk(ulong addr, int seg)
-{
-    Segment *s, *ns;
-    ulong newtop, newsize;
-    int i, mapsize;
-    Pagetable **map;
-
-    s = up->seg[seg];
-    if(s == nil)
-        error(Ebadarg);
-
-    if(addr == nilptr)
-        return s->base;
-
-    qlock(&s->lk);
-
-    /* We may start with the bss overlapping the data */
-    if(addr < s->base) {
-        if(seg != BSEG || up->seg[DSEG] == nil || addr < up->seg[DSEG]->base) {
-            qunlock(&s->lk);
-            error(Enovmem);
-        }
-        addr = s->base;
-    }
-
-    newtop = PGROUND(addr);
-    newsize = (newtop-s->base)/BY2PG;
-    if(newtop < s->top) {
-        /*
-         * do not shrink a segment shared with other procs, as the
-         * to-be-freed address space may have been passed to the kernel
-         * already by another proc and is past the validaddr stage.
-         */
-        if(s->ref > 1){
-            qunlock(&s->lk);
-            error(Einuse);
-        }
-        mfreeseg(s, newtop, (s->top-newtop)/BY2PG);
-        s->top = newtop;
-        s->size = newsize;
-        qunlock(&s->lk);
-        arch_flushmmu();
-        return 0;
-    }
-
-    for(i = 0; i < NSEG; i++) {
-        ns = up->seg[i];
-        if(ns == nil || ns == s)
-            continue;
-        if(newtop >= ns->base && newtop < ns->top) {
-            qunlock(&s->lk);
-            error(Esoverlap);
-        }
-    }
-
-    if(newsize > (PAGEDIRSIZE*PAGETABSIZE)) {
-        qunlock(&s->lk);
-        error(Enovmem);
-    }
-
-    // similar to code in newseg()
-    mapsize = ROUND(newsize, PAGETABSIZE)/PAGETABSIZE;
-    if(mapsize > s->pagedirsize){
-        map = smalloc(mapsize*sizeof(Pagetable*));
-        memmove(map, s->pagedir, s->pagedirsize*sizeof(Pagetable*));
-        if(s->pagedir != s->smallpagedir)
-            free(s->pagedir);
-        s->pagedir = map;
-        s->pagedirsize = mapsize;
-    }
-
-    s->top = newtop;
-    s->size = newsize;
-    qunlock(&s->lk);
-    return 0;
-}
-@
-
-
-
 
 
 \chapter{Processes}
@@ -5183,55 +5616,95 @@ ibrk(ulong addr, int seg)
 <<[[systab]] process syscalls>>=
 [RFORK]     sysrfork,
 [EXEC]      sysexec,
-[EXITS]     sysexits,
 [AWAIT]     sysawait,
+[EXITS]     sysexits,
 @ 
 
 \section{Overview}
 
-\section{[[Proc]] and [[procalloc]]}
+% fork/exec Unix model! 
+% powerful. Can do pipe easily by forking, modifying env, and then exec.
+
+% plan9 use rfork vs fork because can fork different ressources, not
+% just process (memory, file descriptor, namespace!)
+% very general, very powerful (e.g., sandboxing is trivial, see Section~\ref{X})
+
+% plan9 also introduced exits with a string! not error code.
+
+% await also subtle. Can wait for children and children for parent.
+% Note that wait in parent will remember if children already finished!
+
+
+%real-world: Windows sucks for this. no fork/exec but many exec (lack
+% of orthogonality)
+%linux: zombie processes? Can happen in plan9?
+
+\section{Process allocation}
+
+%linux: used to be static array. Configured at compile-time?
+%xv6: use static array
+
+\subsection{Process ID, [[Proc.pid]]}
 
 <<[[Proc]] state fields>>=
 ulong pid;
 @
+% could have introduced before in Core chapter?
+
+<<global pidalloc>>=
+static Counter  pidalloc;
+@
+
+
+
+
+\subsection{[[Procalloc]]}
 
 <<struct Procalloc>>=
 struct Procalloc
 {
     // array<Proc>, xalloc'ed in procinit() (conf.nproc)
     Proc* arena;
-  
-    // list<ref<Proc>> (next = Proc.qnext, hmmm abuse qnext)
+    // list<ref<Proc>> (next = Proc.qnext)
     Proc* free;
 
-    // hash<Proc.pid, ref<Proc>> (next = Proc.pidhash)>
-    Proc* ht[128];
+    <<[[Procalloc]] other fields>>
   
     // extra
     Lock;
 };
 @ 
+%ocaml: Do not use special allocator? just use ocaml Gc 
+% (slower, more fragmentation, but ok)
 
 <<global procalloc>>=
 static struct Procalloc procalloc;
 @ 
+%ocaml: can reuse name 'allocator' (could also here because static)
 
+% Use special allocator where pre-allocated all proc because procs
+% are big long-lived structures, so want xalloc all of them.
 
 % reuse proc, but increment pidalloc each time, so 
 % if have ref to Proc, can save pid and make sure when resume
 % that the pid is the same. if not, means proc died and got reused.
 
-<<global pidalloc>>=
-static Counter  pidalloc;
-@ 
-
+\subsection{PID hashing}
 
 % this is used to get from pid to the Proc. For instance
 % useful in /proc/x/... to get the Proc of x. 
+
+<<[[Procalloc]] other fields>>=
+// hash<Proc.pid, ref<Proc>> (next = Proc.pidhash)>
+Proc* ht[128];
+@
+%ocaml: use a Hashtbl directly
+
 <<[[Proc]] extra fields>>=
 // hash<Proc.pid, ref<Proc>> Procalloc.ht
 Proc  *pidhash; /* next proc in pid hash */ 
 @
+%ocaml: use a Hashtbl directly
 
 % define phash(p) p->pid%nelem(procalloc.ht) ?
 
@@ -5249,7 +5722,7 @@ pidhash(Proc *p)
     unlock(&procalloc);
 }
 @ 
-
+%ocaml: Hashtbl.add
 
 <<function pidunhash>>=
 static void
@@ -5269,6 +5742,7 @@ pidunhash(Proc *p)
     unlock(&procalloc);
 }
 @ 
+%ocaml: Hashtbl.remove
 
 <<function procindex>>=
 int
@@ -5279,6 +5753,7 @@ procindex(ulong pid)
     int s;
 
     s = -1;
+    // hash_lookup(pid, procalloc.ht)
     h = pid % nelem(procalloc.ht);
     lock(&procalloc);
     for(p = procalloc.ht[h]; p != nil; p = p->pidhash)
@@ -5289,118 +5764,128 @@ procindex(ulong pid)
     unlock(&procalloc);
     return s;
 }
-@ 
+@
+%ocaml: Hashtbl.find (with a with_lock around)
 %pid_or_errorneg
 
-
-<<[[Proc]] state fields>>=
-// some debugging information, e.g. "New", "PageOut", or name of syscall
-char  *psstate; /* used by /proc/#/status */
-bool insyscall; // true when process inside a syscall
-
-// e.g. "*init*", or name of executable
-char  *text;
-@
-% text is used by pprint() to print the name of the process in addition
-% to its pid, which is convenient.
-
+\subsection{[[newproc()]]}
 
 <<[[Procstate]] cases>>=
 Scheding,
 @
+%used when newproc and in runproc. Rename Newproc? 
+% why not Ready in runproc instead?
 
 % dtor = pexit() + schedinit
+% sysrfork | kproc | arch_userinit -> <>
 <<constructor newproc>>=
 Proc*
 newproc(void)
 {
-    char msg[64];
     Proc *p;
+    <<[[newproc()]] other locals>>
 
     lock(&procalloc);
-    while((p = procalloc.free) == nil) {
-        unlock(&procalloc);
-
-        snprint(msg, sizeof msg, "no procs; %s forking", up?up->text:"kernel");
-        /*
-         * the situation is unlikely to heal itself.
-         * dump the proc table and restart by default.
-         * *noprocspersist in plan9.ini will yield the old
-         * behaviour of trying forever.
-         */
-        if(getconf("*noprocspersist") == nil)
-            noprocpanic(msg);
-        resrcwait(msg);
-        lock(&procalloc);
-    }
+    // =~ p = procalloc.free
+    <<[[newproc()]] set [[p]] to [[procalloc.free]] and wait if nil>>
     procalloc.free = p->qnext;
     unlock(&procalloc);
     p->qnext = nil;
 
     p->state = Scheding;
     p->pid = incref(&pidalloc);
-    p->noteid = incref(&noteidalloc);
-    if(p->pid==0 || p->noteid==0)
-        panic("pidalloc");
+    <<[[newproc()]] sanity check pid>>
     pidhash(p);
-    p->notepending = false;
-    p->notified = false;
-    p->psstate = "New";
-    p->cpu = nil;
-    if(p->kstack == nil)
-        p->kstack = smalloc(KSTACK);
-    kstrdup(&p->user, "*nouser");
-    kstrdup(&p->text, "*notext");
-    kstrdup(&p->args, "");
-    memset(p->seg, nilptr, sizeof p->seg);
-    p->nargs = 0;
-    p->setargs = false;
 
-    /* sched params */
-    procpriority(p, PriNormal, false);
-    p->lastcpu = nil;
-    p->wired = nil;
-    p->cpuavg = 0;
-    p->lastupdate = CPUS(0)->ticks*Scaling;
-    p->edf = nil;
-
-    p->parent = nil;
-    p->nchild = 0;
-    p->nwait = 0;
-    p->waitq = nil;
-
-    p->fgrp = nil;
-    p->pgrp = nil;
-    p->egrp = nil;
-    p->rgrp = nil;
-
-    <<[[newproc()]] fp init>>
-    p->kp = false;
-
-    p->pdbg = nil;
-    p->procctl = Proc_nothing;
-    p->syscalltrace = nil; 
-    p->trace = false;
-    p->dbgreg = nil;
-   
-    p->ureg = nil;
-    p->privatemem = false;
-    p->noswap = false;
-
-    p->nerrlab = 0;
-    p->errstr = p->errbuf0;
-    p->syserrstr = p->errbuf1;
-    p->errbuf0[0] = '\0';
-    p->errbuf1[0] = '\0';
-
-    p->nlocks.ref = 0;
-    p->delaysched = 0;
+    <<[[newproc()]] set fields of [[p]]>>
 
     return p;
 }
 @ 
+%ocaml: it tells you if you defined all the fields!
+%ocaml: better do that in sysrfork. 
 
-%----------------------------------------------------------------------------
+<<[[newproc()]] sanity check pid>>=
+if(p->pid==0)
+    panic("pidalloc");
+@
+% when can this happen? overflow on pidalloc??
+
+<<[[newproc()]] set fields of [[p]]>>=
+memset(p->seg, nilptr, sizeof p->seg);
+@
+% seen before
+
+
+
+<<[[Proc]] state fields>>=
+// some debugging information, e.g. "New", "PageOut", or name of syscall
+char  *psstate; /* used by /proc/#/status */
+// e.g. "*init*", or name of executable
+char  *text;
+@
+% text is used by pprint() to print the name of the process in addition
+% to its pid, which is convenient.
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->psstate = "New";
+kstrdup(&p->text, "*notext");
+@
+%ocaml: no kstrdup, string can be shared, no ownership complexity
+%free in sysrfork? leak? no cos kstrdup free if previously was allocated.
+
+
+<<[[newproc()]] set fields of [[p]]>>=
+if(p->kstack == nil)
+    p->kstack = smalloc(KSTACK);
+@
+%kstack!! very important! 
+%Proc.stack is the second field in Proc and is known from assembly
+% (with pc and sp).
+%per-process kernel stack vs main kernel stack!
+%alloc'ed once here since then reuse proc so reuse also its kstack.
+
+
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->cpu = nil;
+@
+% need this reverse mapping?
+
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->fgrp = nil;
+p->pgrp = nil;
+p->egrp = nil;
+p->rgrp = nil;
+@
+
+
+\subsection{No more processes}
+
+% useful feature?
+
+<<[[newproc()]] other locals>>=
+char msg[64];
+@
+
+<<[[newproc()]] set [[p]] to [[procalloc.free]] and wait if nil>>=
+while((p = procalloc.free) == nil) {
+    unlock(&procalloc);
+
+    snprint(msg, sizeof msg, "no procs; %s forking", up?up->text:"kernel");
+    /*
+     * the situation is unlikely to heal itself.
+     * dump the proc table and restart by default.
+     * *noprocspersist in plan9.ini will yield the old
+     * behaviour of trying forever.
+     */
+    if(getconf("*noprocspersist") == nil)
+        noprocpanic(msg);
+    resrcwait(msg);
+    lock(&procalloc);
+}
+@
 
 <<function noprocpanic>>=
 void
@@ -5451,7 +5936,7 @@ resrcwait(char *reason)
 @ 
 
 <<constant Whinesecs>>=
-    Whinesecs = 10,     /* frequency of out-of-resources printing */
+Whinesecs = 10,     /* frequency of out-of-resources printing */
 @
 
 
@@ -5470,24 +5955,14 @@ char  *user;
 
 % plan9 is not so much a multi-user OS?
 
-% put that in security section?
-<<function renameuser>>=
-/*
- *  change ownership to 'new' of all processes owned by 'old'.  Used when
- *  eve changes.
- */
-void
-renameuser(char *old, char *new)
-{
-    Proc *p, *ep;
+%linux: uid/gid part of process
 
-    ep = procalloc.arena + conf.nproc;
-    for(p = procalloc.arena; p < ep; p++)
-        if(p->user!=nil && strcmp(old, p->user)==0)
-            kstrdup(&p->user, new);
-}
-@ 
+<<[[newproc()]] set fields of [[p]]>>=
+kstrdup(&p->user, "*nouser");
+@
 
+
+% in boot.rc set hostname
 <<function hostownerwrite>>=
 /*
  *  called by devcons() for host owner/domain
@@ -5514,6 +5989,24 @@ hostownerwrite(char *a, int n)
 }
 @ 
 
+% put that in security section?
+% hostownerwrite -> <>
+<<function renameuser>>=
+/*
+ *  change ownership to 'new' of all processes owned by 'old'.  Used when
+ *  eve changes.
+ */
+void
+renameuser(char *old, char *new)
+{
+    Proc *p, *ep;
+
+    ep = procalloc.arena + conf.nproc;
+    for(p = procalloc.arena; p < ep; p++)
+        if(p->user!=nil && strcmp(old, p->user)==0)
+            kstrdup(&p->user, new);
+}
+@
 
 \section{[[sysrfork()]]}
 
@@ -5523,21 +6016,25 @@ enum Rfork
 {
     RFPROC      = (1<<4), // fork a new process!! (if unset then set props for up)
     RFMEM       = (1<<5), // share data and bss (kinda thread, a la Linux clone)
+
     RFNOWAIT    = (1<<6), // child will not leave a waitmsg
 
     RFNAMEG     = (1<<0), // copy namespace (if unset then share)
     RFENVG      = (1<<1), // copy environment variables (if unset then share)
     RFFDG       = (1<<2), // copy file descriptor table (if unset then share)
-
     RFCNAMEG    = (1<<10), // clean new namespace
     RFCENVG     = (1<<11), // clean new empty environment variables
     RFCFDG      = (1<<12), // clean new file descriptor table
 
     RFNOTEG     = (1<<3), // start new group for notes
     RFREND      = (1<<13), // start a new group for rendezvous
+
     RFNOMNT     = (1<<14), // # paths forbidden, sandboxing
 };
 @ 
+%ocaml: use record and ADT. Hard to see that RFMEM valid
+% only when RFPROC, or that can not have RFNAMEG and RFCNAMEG at the same time
+
 % explain? RF = resource fork, G = ? group? because of Fgrp, Egrp, Pgrp?
 
 % actually plan9 process can play the role of thread too, can share
@@ -5545,195 +6042,140 @@ enum Rfork
 % linux threads with raw syscalls:
 %  http://nullprogram.com/blog/2015/05/15/
 
-<<[[Proc]] state fields>>=
-ulong parentpid;
-@
 
 <<syscall rfork>>=
 // int rfork(int flags);
 long
 sysrfork(ulong* arg)
 {
-    Proc *p;
-    int i;
-    bool share;
-    Fgrp *ofg;
-    Pgrp *opg;
-    Rgrp *org;
-    Egrp *oeg;
-    ulong pid, flag;
-    Cpu *wm;
+    ulong flag;
+    <<[[sysrfork()]] other locals>>
 
     flag = arg[0];
     /* Check flags before we commit */
-    if((flag & (RFFDG|RFCFDG)) == (RFFDG|RFCFDG))
-        error(Ebadarg);
-    if((flag & (RFNAMEG|RFCNAMEG)) == (RFNAMEG|RFCNAMEG))
-        error(Ebadarg);
-    if((flag & (RFENVG|RFCENVG)) == (RFENVG|RFCENVG))
-        error(Ebadarg);
+    <<[[sysrfork()]] sanity check flags, clean or copy>>
 
-    if((flag&RFPROC) == 0) { // not a fork, just setting properties for up
-        if(flag & (RFMEM|RFNOWAIT))
-            error(Ebadarg);
-        if(flag & (RFFDG|RFCFDG)) {
-            ofg = up->fgrp;
-            if(flag & RFFDG)
-                up->fgrp = dupfgrp(ofg);
-            else
-                up->fgrp = dupfgrp(nil);
-            closefgrp(ofg);
-        }
-        if(flag & (RFNAMEG|RFCNAMEG)) {
-            opg = up->pgrp;
-            up->pgrp = newpgrp();
-            if(flag & RFNAMEG)
-                pgrpcpy(up->pgrp, opg);
-            <<[[sysrfork()]] inherit noattach, RFPROC==0 case>>
-            closepgrp(opg);
-        }
-       <<[[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==0 case>>
-        if(flag & RFREND) {
-            org = up->rgrp;
-            up->rgrp = newrgrp();
-            closergrp(org);
-        }
-        if(flag & (RFENVG|RFCENVG)) {
-            oeg = up->egrp;
-            up->egrp = smalloc(sizeof(Egrp)); // newegrp()
-            up->egrp->ref = 1;
-            if(flag & RFENVG)
-                envcpy(up->egrp, oeg);
-            closeegrp(oeg);
-        }
-        if(flag & RFNOTEG)
-            up->noteid = incref(&noteidalloc);
-        return 0;
-    }
-    // ok RFPROC is set, let's create a new process
-
-    p = newproc();
-    pid = p->pid;
-
-    p->sargs = up->sargs;
-    p->slash = up->slash;
-    p->dot = up->dot;
-    incref(p->dot);
-    memmove(p->note, up->note, sizeof(p->note));
-    p->privatemem = up->privatemem;
-    p->noswap = up->noswap;
-    p->nnote = up->nnote;
-    p->lastnote = up->lastnote;
-    p->notify = up->notify;
-    p->ureg = up->ureg;
-    <<[[sysrfork()]] propagate fpsave>>
-
-    /* Make a new set of memory segments */
-    share = flag & RFMEM;
-    qlock(&p->seglock);
-    if(waserror()){
-        qunlock(&p->seglock);
-        nexterror();
-    }
-    for(i = 0; i < NSEG; i++)
-        if(up->seg[i])
-            p->seg[i] = dupseg(up->seg, i, share);
-    qunlock(&p->seglock);
-    poperror();
-
-    /* File descriptors */
-    if(flag & (RFFDG|RFCFDG)) {
-        if(flag & RFFDG)
-            p->fgrp = dupfgrp(up->fgrp);
-        else
-            p->fgrp = dupfgrp(nil);
-    }
-    else {
-        p->fgrp = up->fgrp;
-        incref(p->fgrp);
-    }
-
-    /* Process groups */
-    if(flag & (RFNAMEG|RFCNAMEG)) {
-        p->pgrp = newpgrp();
-        if(flag & RFNAMEG)
-            pgrpcpy(p->pgrp, up->pgrp);
-        <<[[sysrfork()]] inherit noattach, RFPROC==1 case>>
-    }
-    else {
-        p->pgrp = up->pgrp;
-        incref(p->pgrp);
-    }
-    <<[[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==1 case>>
-
-    if(flag & RFREND)
-        p->rgrp = newrgrp();
-    else {
-        incref(up->rgrp);
-        p->rgrp = up->rgrp;
-    }
-
-    /* Environment group */
-    if(flag & (RFENVG|RFCENVG)) {
-        p->egrp = smalloc(sizeof(Egrp)); // newegrp
-        p->egrp->ref = 1;
-        if(flag & RFENVG)
-            envcpy(p->egrp, up->egrp);
-    }
-    else {
-        p->egrp = up->egrp;
-        incref(p->egrp);
-    }
-
-    <<[[sysrfork()]] inherit hang>>
-    p->procmode = up->procmode;
-
-    /* Craft a return frame which will cause the child to pop out of
-     * the scheduler in user mode with the return register zero
-     */
-    arch_forkchild(p, up->dbgreg);
-
-    p->parent = up;
-    p->parentpid = up->pid;
-    if(flag&RFNOWAIT)
-        p->parentpid = 0;
-    else {
-        lock(&up->exl);
-        up->nchild++;
-        unlock(&up->exl);
-    }
-    if((flag&RFNOTEG) == 0)
-        p->noteid = up->noteid;
-
-    <<[[sysrfork()]] propagate fpstate>>
-    <<[[sysrfork()]] setting time field>>
-
-    kstrdup(&p->text, up->text);
-    kstrdup(&p->user, up->user);
-
-    /*
-     *  since the bss/data segments are now shareable,
-     *  any mmu info about this process is now stale
-     *  (i.e. has bad properties) and has to be discarded.
-     */
-    arch_flushmmu();
-
-    p->basepri = up->basepri;
-    p->priority = up->basepri;
-    p->fixedpri = up->fixedpri;
-    p->lastcpu = up->lastcpu;
-    wm = up->wired;
-    if(wm)
-        procwired(p, wm->cpuno);
-
-    ready(p);
-    sched();
-    return pid;
+    <<[[sysrfork()]] if no [[RFPROC]], no new proc but property settings>>
+    // else
+    <<[[sysrfork()]] when [[RFPROC]], fork a new process>>
 }
 @ 
-% LP split
+
+
+\subsection{Fork, [[RFPROC]]}
+
+<<[[sysrfork()]] other locals>>=
+Proc *p;
+ulong pid;
+@
+
+<<[[sysrfork()]] when [[RFPROC]], fork a new process>>=
+p = newproc();
+pid = p->pid;
+
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>
+
+/* Make a new set of memory segments */
+<<[[sysrfork()]] copy or share memory segments>>
+
+/* File descriptors */
+<<[[sysrfork()]] copy, clean, or share file descriptors>>
+
+/* Process groups */ // Namespace
+<<[[sysrfork()]] copy, clean, or share namespace>>
+
+// Rendez vous group
+<<[[sysrfork()]] new or share rendezvous group>>
+
+/* Environment group */
+<<[[sysrfork()]] copy, clean, or share environment>>
+
+// Note group
+<<[[sysrfork()]] share or not note group>>
+
+/* Craft a return frame which will cause the child to pop out of
+ * the scheduler in user mode with the return register zero
+ */
+arch_forkchild(p, up->dbgreg);
+
+p->parent = up;
+p->parentpid = up->pid;
+<<[[sysrfork()]] wait or not for child>>
+
+<<[[sysrfork()]] setting time field>>
+
+/*
+ *  since the bss/data segments are now shareable,
+ *  any mmu info about this process is now stale
+ *  (i.e. has bad properties) and has to be discarded.
+ */
+arch_flushmmu();
+
+<<[[sysrfork()]] if parent is a wired proc>>
+
+ready(p);
+sched(); // !!!
+return pid;
+@
+%old: order of assignment used to be different. I grouped more
+% things together in the 'propagate fields'. Note group used to be after
+% arch_forkchild.
+
+% arch_forkchild of up->dbgreg? what is wrong with up->ureg?
+% anyway dbreg is a pointer to up->ureg (see arch__syscall)
+
+
+
+% ready! sched!! see chapter{scheduling}
+
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+kstrdup(&p->text, up->text);
+kstrdup(&p->user, up->user);
+@
+%old: used to be done near the end of sysrfork (does not matter probably)
+
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+p->slash = up->slash;
+p->dot = up->dot;
+incref(p->dot);
+@
+%ocaml: it tells you if you defined all the fields!
+%ocaml: use share() instead of separate assign and incref.
+
+
+
+
+\subsection{Memory sharing, [[RFMEM]]}
+
+%linux: clone system call
+
+<<[[sysrfork()]] other locals>>=
+bool share;
+int i;
+@
+<<[[sysrfork()]] copy or share memory segments>>=
+share = flag & RFMEM;
+qlock(&p->seglock);
+if(waserror()){
+    qunlock(&p->seglock);
+    nexterror();
+}
+for(i = 0; i < NSEG; i++)
+    if(up->seg[i])
+        p->seg[i] = dupseg(up->seg, i, share);
+qunlock(&p->seglock);
+poperror();
+@
+\t why seglock? p just got created; no concurrency. BUG?
+\t  or up->seglock? but same; there is multiple CPUs using same up.
+%ocaml: with_lock! no waserror/poperror/nexterror uglyness
 
 \subsection{[[arch_forkchild()]] (ARM)}
+
+%sched structure explained later in Context switch section.
+%The stack will contain value of all user registers.
+
+% pass the up->dbgreg of parent process!
 
 % sysrfork -> <>
 <<function arch_forkchild(arm)>>=
@@ -5747,13 +6189,12 @@ arch_forkchild(Proc *p, Ureg *ureg)
 {
     Ureg *cureg;
 
-    p->sched.sp = (ulong)p->kstack+KSTACK-sizeof(Ureg);
+    p->sched.sp = (ulong)p->kstack + KSTACK - sizeof(Ureg);
     p->sched.pc = (ulong)arch__forkret;
 
     cureg = (Ureg*)(p->sched.sp);
     memmove(cureg, ureg, sizeof(Ureg));
-
-    /* syscall returns 0 for child */
+    /* syscall returns 0 for child */ // adjust
     cureg->r0 = 0;
 
     /* Things from bottom of syscall which were never executed */
@@ -5765,6 +6206,10 @@ arch_forkchild(Proc *p, Ureg *ureg)
 @
 %x86: does not use R0 to return from syscall so need extra space in kstack
 %//print("%lud setting up for forking child %lud\n", up->pid, p->pid);
+
+<<[[Proc]] state fields>>=
+bool insyscall; // true when process inside a syscall
+@
 
 
 % sched? -> <> (as p->sched.pc <- arch_forkchild)
@@ -5782,11 +6227,177 @@ TEXT arch__forkret(SB), 1, $-4
     RFE             /* MOVM.IA.S.W (R13), [R15] */
 @
 %$
+% .S ?? for user banked register ?
+
+\subsection{File descriptors, [[RFFDG]], [[RFCFDG]]}
+
+<<[[sysrfork()]] sanity check flags, clean or copy>>=
+if((flag & (RFFDG|RFCFDG)) == (RFFDG|RFCFDG))
+    error(Ebadarg);
+@
+%ocaml: use proper type so no need check those cases? make it a bool?
+
+<<[[sysrfork()]] copy, clean, or share file descriptors>>=
+if(flag & (RFFDG|RFCFDG)) {
+    if(flag & RFFDG)
+        p->fgrp = dupfgrp(up->fgrp);
+    else
+        p->fgrp = dupfgrp(nil);
+}
+else {
+    p->fgrp = up->fgrp;
+    incref(p->fgrp);
+}
+@
+
+\subsection{Namespace, [[RFNAMEG]], [[RFCNAMEG]]}
+
+<<[[sysrfork()]] sanity check flags, clean or copy>>=
+if((flag & (RFNAMEG|RFCNAMEG)) == (RFNAMEG|RFCNAMEG))
+    error(Ebadarg);
+@
+
+<<[[sysrfork()]] copy, clean, or share namespace>>=
+if(flag & (RFNAMEG|RFCNAMEG)) {
+    p->pgrp = newpgrp();
+    if(flag & RFNAMEG)
+        pgrpcpy(p->pgrp, up->pgrp);
+    <<[[sysrfork()]] inherit noattach, RFPROC==1 case>>
+}
+else {
+    p->pgrp = up->pgrp;
+    incref(p->pgrp);
+}
+<<[[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==1 case>>
+@
+
+\subsection{Environment variables, [[RFENVG]], [[RFCENVG]]}
+%mv later?
+
+<<[[sysrfork()]] sanity check flags, clean or copy>>=
+if((flag & (RFENVG|RFCENVG)) == (RFENVG|RFCENVG))
+    error(Ebadarg);
+@
+
+<<[[sysrfork()]] copy, clean, or share environment>>=
+if(flag & (RFENVG|RFCENVG)) {
+    p->egrp = smalloc(sizeof(Egrp)); // newegrp
+    p->egrp->ref = 1;
+    if(flag & RFENVG)
+        envcpy(p->egrp, up->egrp);
+}
+else {
+    p->egrp = up->egrp;
+    incref(p->egrp);
+}
+@
+
+\subsection{Rendezvous group, [[RFREND]]}
+% mv later?
+
+<<[[sysrfork()]] new or share rendezvous group>>=
+if(flag & RFREND)
+    p->rgrp = newrgrp();
+else {
+    incref(up->rgrp);
+    p->rgrp = up->rgrp;
+}
+@
+
+\subsection{Note group, [[RFNOTEG]]}
+%mv later?
+
+<<[[sysrfork()]] share or not note group>>=
+if((flag&RFNOTEG) == 0)
+    p->noteid = up->noteid; // rectify what was done in newproc
+@
+
+\subsection{Process sharing settings (no [[RFPROC]])}
+
+<<[[sysrfork()]] other locals>>=
+Fgrp *ofg;
+Pgrp *opg;
+Egrp *oeg;
+Rgrp *org;
+@
+
+% this time no really sharing. 
+
+<<[[sysrfork()]] if no [[RFPROC]], no new proc but property settings>>=
+if((flag&RFPROC) == 0) { // not a fork, just setting properties for up
+    <<[[sysrfork()]] when no [[RFPROC]], sanity check flag>>
+
+    <<[[sysrfork()]] when no [[RFPROC]], clean or copy file descriptors>>
+
+    <<[[sysrfork()]] when no [[RFPROC]], clean or copy namespace>>
+
+    <<[[sysrfork()]] when no [[RFPROC]], clean or copy environment>>
+
+    <<[[sysrfork()]] when no [[RFPROC]], new rendez vous group>>
+
+    <<[[sysrfork()]] when no [[RFPROC]], new note group>>
+
+    return 0;
+}
+@
+%old: I reorder things to be more symetric like RFENVG now before RFREND
+
+<<[[sysrfork()]] when no [[RFPROC]], sanity check flag>>=
+if(flag & (RFMEM|RFNOWAIT))
+    error(Ebadarg);
+@
+%ocaml: better ADT for flags so no need those checks?
+
+
+<<[[sysrfork()]] when no [[RFPROC]], clean or copy file descriptors>>=
+if(flag & (RFFDG|RFCFDG)) {
+    ofg = up->fgrp;
+    if(flag & RFFDG)
+        up->fgrp = dupfgrp(ofg);
+    else
+        up->fgrp = dupfgrp(nil);
+    closefgrp(ofg);
+}
+@
+<<[[sysrfork()]] when no [[RFPROC]], clean or copy namespace>>=
+if(flag & (RFNAMEG|RFCNAMEG)) {
+    opg = up->pgrp;
+    up->pgrp = newpgrp();
+    if(flag & RFNAMEG)
+        pgrpcpy(up->pgrp, opg);
+    <<[[sysrfork()]] inherit noattach, RFPROC==0 case>>
+    closepgrp(opg);
+}
+<<[[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==0 case>>
+@
+
+<<[[sysrfork()]] when no [[RFPROC]], clean or copy environment>>=
+if(flag & (RFENVG|RFCENVG)) {
+    oeg = up->egrp;
+    up->egrp = smalloc(sizeof(Egrp)); // newegrp()
+    up->egrp->ref = 1;
+    if(flag & RFENVG)
+        envcpy(up->egrp, oeg);
+    closeegrp(oeg);
+}
+@
+<<[[sysrfork()]] when no [[RFPROC]], new rendez vous group>>=
+if(flag & RFREND) {
+    org = up->rgrp;
+    up->rgrp = newrgrp();
+    closergrp(org);
+}
+@
+
+<<[[sysrfork()]] when no [[RFPROC]], new note group>>=
+if(flag & RFNOTEG)
+    up->noteid = incref(&noteidalloc);
+@
+
 
 \section{[[sysexec()]]}
 
 %http://dbp-consulting.com/tutorials/debugging/linuxProgramStartup.html
-
 %http://lwn.net/Articles/630727/
 
 <<constant AOUT_MAGIC(arm)>>=
@@ -5796,7 +6407,6 @@ TEXT arch__forkret(SB), 1, $-4
 // E_MAGIC is defined in include/a.out.h
 #define AOUT_MAGIC  (E_MAGIC)
 @
-
 
 % struct Exec = binary header in include/a.out.h
 
@@ -5825,14 +6435,8 @@ Segment *s, *ts;
 @
 
 <<[[sysexec()]] locals>>=
-char **argv, **argp;
-char *a, *charp, *args;
-ulong ssize, spage, nargs, nbytes;
-@
-
-<<[[Proc]] state fields>>=
-char  *args;
-int nargs;    /* number of bytes of args */
+ulong ssize;
+ulong nargs;
 @
 
 
@@ -5847,7 +6451,6 @@ int i, n;
 long
 sysexec(ulong* arg)
 {
-
     <<[[sysexec()]] locals>>
 
     elem = nil;
@@ -5860,7 +6463,7 @@ sysexec(ulong* arg)
     }
     file = file0;
     for(;;){
-        // this will also adjust up->genbuf to contain the last element of file path
+        // this will also adjust up->genbuf to contain the last elt of file path
         <<[[sysexec()]] call namec() to get a channel in tc from file>>
         if(waserror()){
             cclose(tc);
@@ -5883,12 +6486,13 @@ sysexec(ulong* arg)
                 error(Ebadexec);
             break; /* for binary */
         }
-
         <<[[sysexec()]] process sharpbang>>
     }
+    // from break above
 
     data = l2be(exec.data);
     bss = l2be(exec.bss);
+
     t = UTROUND(UTZERO+sizeof(Exec)+text);
     // data is put at page boundary after text (see also _multibootentry)
     d = ROUND(t + data, BY2PG);
@@ -5897,153 +6501,27 @@ sysexec(ulong* arg)
     if(t >= KZERO || d >= KZERO || b >= KZERO)
         error(Ebadexec);
 
-    /*
-     * Args: pass 1: count
-     */
-    nargs = 0;
-    nbytes = 0;
+    <<[[sysexec()]] build args count>>
 
-    <<[[sysexec()]] nbytes tos adjustments>>
-    <<[[sysexec()]] if indir arg adjustments>>
+    <<[[sysexec()]] build temporary stack segment and qlock seglock>>
 
-    arch_validalign(arg[1], sizeof(char**));
-    argp = (char**)arg[1];
-    validaddr((ulong)argp, BY2WD, false);
-    while(*argp){
-        a = *argp++;
-        if(((ulong)argp&(BY2PG-1)) < BY2WD)
-            validaddr((ulong)argp, BY2WD, false);
-        validaddr((ulong)a, 1, false);
-        nbytes += ((char*)vmemchr(a, 0, 0x7FFFFFFF) - a) + 1;
-        nargs++;
-    }
-    ssize = BY2WD*(nargs+1) + ROUND(nbytes, BY2WD);
+    <<[[sysexec()]] build args>>
 
-    /*
-     * 8-byte align SP for those (e.g. sparc) that need it.
-     * arch_execregs() will subtract another 4 bytes for argc.
-     */
-    if((ssize+4) & 7)
-        ssize += 4;
-    spage = (ssize+(BY2PG-1)) >> PGSHIFT;
-
-    /*
-     * Build the stack segment, putting it in kernel virtual for the moment
-     */
-    if(spage > TSTKSIZ)
-        error(Enovmem);
-
-    qlock(&up->seglock);
-    if(waserror()){
-        qunlock(&up->seglock);
-        nexterror();
-    }
-    // why ESEG? and why not TSTKTOP?? ESEG because will free later
-    // the current SSEG. If we have an error in sysexec we don't want
-    // to have messed up with the current stack. TSTKTOP-USTKSIZE for
-    // the same reason, because we don't want overwrite old stack
-    // all of that will be relocated later.
-    up->seg[ESEG] = newseg(SG_STACK, TSTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-
-    /*
-     * Args: pass 2: assemble; the pages will be faulted in
-     */
-    <<[[sysexec()]] tos settings>>
-
-    argv = (char**)(TSTKTOP - ssize);
-    charp = (char*)(TSTKTOP - nbytes);
-    args = charp;
-    <<[[sysexec()]] if indir argp adjustments>>
-    else
-        argp = (char**)arg[1];
-
-    for(i=0; i<nargs; i++){
-        <<[[sysexec()]] if indir argp adjustments again>>
-        *argv++ = charp + (USTKTOP-TSTKTOP);
-        n = strlen(*argp) + 1;
-        memmove(charp, *argp++, n);
-        charp += n;
-    }
-    free(file0);
-    // file0 = nil? to avoid double free?
-
-    free(up->text);
-    up->text = elem;
-    elem = nil; /* so waserror() won't free elem */
-    USED(elem);
-
-    /* copy args; easiest from new process's stack */
-    n = charp - args;
-    if(n > 128) /* don't waste too much space on huge arg lists */
-        n = 128;
-    a = up->args;
-    up->args = nil;
-    free(a);
-    up->args = smalloc(n);
-    memmove(up->args, args, n);
-
-    if(n>0 && up->args[n-1]!='\0'){
-        /* make sure last arg is NUL-terminated */
-        /* put NUL at UTF-8 character boundary */
-        for(i=n-1; i>0; --i)
-            if(fullrune(up->args+i, n-i))
-                break;
-        up->args[i] = 0;
-        n = i+1;
-    }
-    up->nargs = n;
-
-    /*
-     * Committed.
-     * Free old memory.
-     * Special segments are maintained across exec
-     */
-    for(i = SSEG; i <= BSEG; i++) {
-        putseg(up->seg[i]);
-        /* prevent a second free if we have an error */
-        up->seg[i] = nil;
-    }
-    for(i = BSEG+1; i < NSEG; i++) {
-        s = up->seg[i];
-        if(s != nil && (s->type&SG_CEXEC)) { // close on exec
-            putseg(s);
-            up->seg[i] = nil;
-        }
-    }
+    <<[[sysexec()]] free old memory segments>>
 
     <<[[sysexec()]] close files marked as opened with close on exec>>
 
-    /* Text.  Shared. Attaches to cache image if possible */
-    <<[[sysexec()]] get text segment ts via demand loading on tc>>
-    up->seg[TSEG] = ts;
 
-    /* Data. Shared. */
-    s = newseg(SG_DATA, t, (d-t)>>PGSHIFT);
-    up->seg[DSEG] = s;
-    <<[[sysexec()]] adjust data segment s for demand loading on tc>>
+    <<[[sysexec()]] set Text segment>>
 
-    /* BSS. Zero fill on demand */
-    up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT); // 0 fill! see fixfault
+    <<[[sysexec()]] set Data segment>>
 
-    /*
-     * Move the stack
-     */
-    s = up->seg[ESEG];
-    up->seg[ESEG] = nil;
-    up->seg[SSEG] = s;
-    qunlock(&up->seglock);
-    poperror(); /* seglock */
-    poperror(); /* elem */ // really? I think this matches more the cclose(tc)
-    s->base = USTKTOP-USTKSIZE;
-    s->top = USTKTOP;
-    relocateseg(s, USTKTOP-TSTKTOP);
+    <<[[sysexec()]] set Bss segment>>
 
-    /*
-     *  '/' processes are higher priority (hack to make /ip more responsive).
-     */
-    if(devtab[tc->type]->dc == L'/')
-        up->basepri = PriRoot;
-    up->priority = up->basepri;
+    <<[[sysexec()]] relocate temporary stack segment, unlock seglock>>
+
+    <<[[sysexec()]] set prioriry of root processes>>
+
     poperror();
     cclose(tc); // tc has still a reference in the img
 
@@ -6054,10 +6532,7 @@ sysexec(ulong* arg)
     arch_flushmmu();
 
     qlock(&up->debug);
-    up->nnote = 0;
-    up->notify = nil;
-    up->notified = false;
-    up->privatemem = false;
+    <<[[sysexec()]] when hold debug lock, reset some fields>>
     arch_procsetup(up);
     qunlock(&up->debug);
 
@@ -6066,6 +6541,8 @@ sysexec(ulong* arg)
     return arch_execregs(entry, ssize, nargs);
 }
 @ 
+
+
 
 
 % could mv in lib.h? 
@@ -6085,8 +6562,125 @@ l2be(long l)
 #define UTROUND(t)  ROUNDUP((t), BY2PG)
 @
 %x86: same
-\l factorize with PGROUND?
+\t factorize with PGROUND? or just use ROUND(...BY2PG)
 
+% free old segments because they will be overwritten by new segments.
+
+<<[[sysexec()]] free old memory segments>>=
+/*
+ * Committed.
+ * Free old memory.
+ * Special segments are maintained across exec
+ */
+for(i = SSEG; i <= BSEG; i++) {
+    putseg(up->seg[i]);
+    /* prevent a second free if we have an error */
+    up->seg[i] = nil;
+}
+<<[[sysexec()]] free special segments if close on exec>>
+@
+
+%\subsection{[[arch_procsetup()]] (ARM)}
+
+% sysexec -> <>
+<<function arch_procsetup(arm)>>=
+/*
+ *  set mach dependent process state for a new process
+ */
+void
+arch_procsetup(Proc* p)
+{
+    <<[[arch_procsetup()]] floating point(arm)>>
+}
+@
+%x86: same floating point hook
+
+
+\subsection{Text segment}
+
+<<[[sysexec()]] set Text segment>>=
+/* Text.  Shared. Attaches to cache image if possible */
+<<[[sysexec()]] get text segment ts via demand loading on tc>>
+up->seg[TSEG] = ts;
+@
+% will see demand loading later
+
+\subsection{Data segment}
+
+<<[[sysexec()]] set Data segment>>=
+/* Data. Shared. */
+s = newseg(SG_DATA, t, (d-t)>>PGSHIFT);
+up->seg[DSEG] = s;
+<<[[sysexec()]] adjust data segment s for demand loading on tc>>
+@
+% same, will see demand loading later
+
+\subsection{Bss segment}
+
+<<[[sysexec()]] set Bss segment>>=
+/* BSS. Zero fill on demand */
+up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT);
+@
+% easy one
+
+% note that Bss segment under plan9 are filled with 0, but lazily
+% in fixfault.
+
+\subsection{Stack segment}
+
+% complex
+
+\subsubsection{Arguments count}
+
+<<[[Proc]] state fields>>=
+char  *args;
+int nargs;    /* number of bytes of args */
+@
+<<[[newproc()]] set fields of [[p]]>>=
+kstrdup(&p->args, "");
+p->nargs = 0;
+@
+
+
+
+<<[[sysexec()]] locals>>=
+char **argp;
+char *a, *args;
+ulong nbytes;
+@
+
+
+% nargs declared in lock in skeleton
+<<[[sysexec()]] build args count>>=
+/*
+ * Args: pass 1: count
+ */
+nargs = 0;
+nbytes = 0;
+
+<<[[sysexec()]] nbytes tos adjustments>>
+<<[[sysexec()]] if indir arg adjustments>>
+
+arch_validalign(arg[1], sizeof(char**));
+argp = (char**)arg[1];
+validaddr((ulong)argp, BY2WD, false);
+while(*argp){
+    a = *argp++;
+    if(((ulong)argp&(BY2PG-1)) < BY2WD)
+        validaddr((ulong)argp, BY2WD, false);
+    validaddr((ulong)a, 1, false);
+    nbytes += ((char*)vmemchr(a, 0, 0x7FFFFFFF) - a) + 1;
+    nargs++;
+}
+ssize = BY2WD*(nargs+1) + ROUND(nbytes, BY2WD);
+@
+
+
+\subsubsection{Temporary stack segment}
+
+\l why need add this stack segment in Proc.seg? because need to
+\l  access and write into it and so generate real page fault
+\l  that must be resolved?
 
 % Temporary STacK TOP
 <<constant TSTKTOP(arm)>>=
@@ -6101,30 +6695,139 @@ l2be(long l)
 @
 %x86: 100
 
-<<constant USTKTOP(arm)>>=
-#define USTKTOP     0x20000000      /* user segment end +1 */
+
+<<[[sysexec()]] locals>>=
+ulong spage;
 @
-\l that's it? only 512 MB for virtual space?
-
-<<constant USTKSIZE(arm)>>=
-#define USTKSIZE    (8*1024*1024)       /* user stack size */
-@
-
-
-\subsection{[[arch_procsetup()]] (ARM)}
-
-% sysexec -> <>
-<<function arch_procsetup(arm)>>=
+<<[[sysexec()]] build temporary stack segment and qlock seglock>>=
 /*
- *  set mach dependent process state for a new process
+ * 8-byte align SP for those (e.g. sparc) that need it.
+ * arch_execregs() will subtract another 4 bytes for argc.
  */
+if((ssize+4) & 7)
+    ssize += 4;
+spage = (ssize+(BY2PG-1)) >> PGSHIFT;
+
+/*
+ * Build the stack segment, putting it in kernel virtual for the moment
+ */
+if(spage > TSTKSIZ)
+    error(Enovmem);
+
+qlock(&up->seglock);
+if(waserror()){
+    qunlock(&up->seglock);
+    nexterror();
+}
+// why ESEG? and why not TSTKTOP?? ESEG because will free later
+// the current SSEG. If we have an error in sysexec we don't want
+// to have messed up with the current stack. TSTKTOP-USTKSIZE for
+// the same reason, because we don't want overwrite old stack
+// all of that will be relocated later.
+up->seg[ESEG] = newseg(SG_STACK, TSTKTOP-USTKSIZE, USTKSIZE/BY2PG);
+@
+
+
+\subsubsection{Arguments}
+
+<<[[sysexec()]] locals>>=
+char **argv;
+char *charp;
+@
+
+<<[[sysexec()]] build args>>=
+/*
+ * Args: pass 2: assemble; the pages will be faulted in
+ */
+<<[[sysexec()]] tos settings>>
+
+argv = (char**)(TSTKTOP - ssize);
+charp = (char*)(TSTKTOP - nbytes);
+args = charp;
+<<[[sysexec()]] if indir argp adjustments>>
+else
+    argp = (char**)arg[1];
+
+for(i=0; i<nargs; i++){
+    <<[[sysexec()]] if indir argp adjustments again>>
+    *argv++ = charp + (USTKTOP-TSTKTOP);
+    n = strlen(*argp) + 1;
+    memmove(charp, *argp++, n);
+    charp += n;
+}
+free(file0);
+// file0 = nil? to avoid double free?
+
+free(up->text);
+up->text = elem;
+elem = nil; /* so waserror() won't free elem */
+USED(elem);
+
+/* copy args; easiest from new process's stack */
+n = charp - args;
+if(n > 128) /* don't waste too much space on huge arg lists */
+    n = 128;
+a = up->args;
+up->args = nil;
+free(a);
+up->args = smalloc(n);
+memmove(up->args, args, n);
+
+if(n>0 && up->args[n-1]!='\0'){
+    /* make sure last arg is NUL-terminated */
+    /* put NUL at UTF-8 character boundary */
+    for(i=n-1; i>0; --i)
+        if(fullrune(up->args+i, n-i))
+            break;
+    up->args[i] = 0;
+    n = i+1;
+}
+up->nargs = n;
+@
+
+
+\subsubsection{Relocate temporary stack segment}
+
+
+<<[[sysexec()]] relocate temporary stack segment, unlock seglock>>=
+/*
+ * Move the stack
+ */
+s = up->seg[ESEG];
+up->seg[ESEG] = nil;
+up->seg[SSEG] = s;
+qunlock(&up->seglock);
+
+poperror(); /* seglock */
+poperror(); /* elem */ // really? I think this matches more the cclose(tc)
+s->base = USTKTOP-USTKSIZE;
+s->top = USTKTOP;
+relocateseg(s, USTKTOP-TSTKTOP);
+@
+
+
+% sysexec -> <>  (to relocate the stack that was in ESEG)
+<<function relocateseg>>=
 void
-arch_procsetup(Proc* p)
+relocateseg(Segment *s, ulong offset)
 {
-    <<[[arch_procsetup()]] floating point(arm)>>
+    Page **pg, *x;
+    Pagetable *pt, **p, **endpt;
+
+    endpt = &s->pagedir[s->pagedirsize];
+    for(p = s->pagedir; p < endpt; p++) {
+        if(*p == nil)
+            continue;
+        pt = *p;
+        for(pg = pt->first; pg <= pt->last; pg++) {
+            if(x = *pg)
+                x->va += offset;
+        }
+    }
 }
 @
-%x86: same floating point hook
+
+
 
 \subsection{[[arch_execregs()]] (ARM)}
 
@@ -6165,34 +6868,65 @@ arch_execregs(ulong entry, ulong ssize, ulong nargs)
 \section{[[sysawait()]]}
 % better show sysawait before sysexits, parent point of view, then child pov
 
-\t can have race where parent is calling wait too late
-\t  and the child already terminated?
-\t NO! you wait for child already terminated!! but kernel records
-\t  only last 128 finished children.
+% can have race where parent is calling wait too late
+%  and the child already terminated?
+% NO! you wait for child already terminated!! 
+% but kernel records only last 128 finished children.
 
 % can have zombies in plan9? no ... if parent exit
 % and have blocked children (on a pipe) then those children
 % will never finish? no they should finish because the fd of the pipe
 % will have been closed
 
+\subsection{Parent and children}
+
 <<[[Proc]] hierarchy fields>>=
-// option<ref<Proc>> nil for the boot process
+// option<ref<Proc>> (nil for the boot process)
 Proc  *parent;
 int nchild;   /* Number of living children */
 @
+%ocaml: just have parent pid, so no need the subtle check below
+% (but then slower of course)
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->parent = nil;
+p->nchild = 0;
+@
+% will be overwritten in sysrfork
+
+
+
+<<[[Proc]] state fields>>=
+// option<pid> (None = 0)
+ulong parentpid;
+@
+
 % subtle: it's useful to also have parentpid field because
 % the parent may have died, and so freed in procalloc and then
 % reused for another process! so have to check that 
 % parent->pid == (saved)parentpid
 % similar thing was done in quake3 :)
-% http://blog.noctua-software.com/entity-references.html
+%  http://blog.noctua-software.com/entity-references.html
+\t but then why need parent at all?
+
+\subsection{[[Waitmsg]] and [[Waitq]]}
 
 <<[[Proc]] hierarchy fields>>=
 // list<ref_own<Waitq>>> =~ list<ref_own<Waitmsg>>
 Waitq *waitq;   /* Exited processes wait children */
 int nwait;    /* Number of uncollected wait records */ // len(waitq)
-Lock  exl;    /* Lock count and waitq */
+Lock  exl;    /* Lock count and waitq */ // and nchild
 @
+%ocaml: list, and no need nwait
+
+% This lock makes sense. multiple processes on multiple processors
+% may access concurrently the wait data structure.
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->waitq = nil;
+p->nwait = 0;
+@
+
 
 % also in libc.h
 <<struct Waitmsg>>=
@@ -6203,6 +6937,7 @@ struct Waitmsg
   char  msg[ERRMAX];  /* actually variable-size in user mode */
 };
 @ 
+% msg must be last because of comment? like the stack[1] in Cpu?
 
 <<struct Waitq>>=
 // essentially a stack<ref_own<Waitmsg>>
@@ -6215,17 +6950,11 @@ struct Waitq
     Waitq *next;
 };
 @ 
+%ocaml: list
 
-<<[[Proc]] hierarchy fields>>=
-Rendez  waitr;    /* Place to hang out in wait */
-@ 
+\subsection{[[sysawait()]]}
 
-% when canqlock return false? who else access qwaitr? users via /proc/!
-% seems too subtle the need for this
-% put with the code for Qwait if want to talk about it
-<<[[Proc]] hierarchy fields>>=
-QLock qwaitr;
-@
+% interface is to pass a buffer in which waitmsg will be written
 
 <<syscall await>>=
 // int await(char *s, int n);
@@ -6240,8 +6969,7 @@ sysawait(ulong* arg)
     n = arg[1];
     validaddr(arg[0], n, true);
     pid = pwait(&w);
-    if(pid < 0)
-        return -1;
+    <<[[sysawait()]] sanity check pid>>
     i = snprint((char*)arg[0], n, "%d %lud %lud %lud %q",
         w.pid,
         <<[[sysawait()]] snprint time field arguments>>
@@ -6250,6 +6978,13 @@ sysawait(ulong* arg)
     return i;
 }
 @ 
+%ocaml: abuse string for types
+
+<<[[sysawait()]] sanity check pid>>=
+if(pid < 0)
+    return -1;
+@
+% when can this happen??
 
 <<function pwait>>=
 ulong
@@ -6258,22 +6993,13 @@ pwait(Waitmsg *w)
     ulong cpid; // child pid
     Waitq *wq;
 
-    if(!canqlock(&up->qwaitr))
-        error(Einuse); // someone is reading /proc/pid/wait?
+    <<[[pwait()]] lock qwaitr>>
 
-    if(waserror()) {
-        qunlock(&up->qwaitr);
-        nexterror();
-    }
+    <<[[pwait()]] sanity check process has children>>
 
-    lock(&up->exl);
-    if(up->nchild == 0 && up->waitq == nil) {
-        unlock(&up->exl);
-        error(Enochild);
-    }
-    unlock(&up->exl);
-
-    sleep(&up->waitr, haswaitq, up); // qwaitr is still locked
+    // sleep!
+    <<[[pwait()]] wait until has a waitq>>
+    // ok, got a waitmsg
 
     // wq = pop(up->waitq), // can't be null, see haswaitq()
     lock(&up->exl);
@@ -6282,8 +7008,7 @@ pwait(Waitmsg *w)
     up->nwait--;
     unlock(&up->exl);
 
-    qunlock(&up->qwaitr);
-    poperror();
+    <<[[pwait()]] unlock qwaitr>>
 
     if(w)
         memmove(w, &wq->w, sizeof(Waitmsg));
@@ -6292,7 +7017,31 @@ pwait(Waitmsg *w)
     return cpid;
 }
 @ 
+%ocaml: no memmove, and free
 
+<<[[pwait()]] sanity check process has children>>=
+lock(&up->exl);
+if(up->nchild == 0 && up->waitq == nil) {
+    unlock(&up->exl);
+    error(Enochild);
+}
+unlock(&up->exl);
+@
+
+
+
+\subsection{Rendez-vous, [[Proc.waitr]]}
+
+<<[[Proc]] hierarchy fields>>=
+Rendez  waitr;    /* Place to hang out in wait */
+@ 
+
+
+
+<<[[pwait()]] wait until has a waitq>>=
+sleep(&up->waitr, haswaitq, up); // qwaitr is still locked
+@
+%ocaml: pass closure?
 
 <<function haswaitq>>=
 int
@@ -6303,6 +7052,10 @@ haswaitq(void *x)
     return p->waitq != nil;
 }
 @ 
+%ocaml: no need ugly cast.
+
+% no need to lock p->exl???
+
 
 
 \section{[[sysexits()]]}
@@ -6324,29 +7077,40 @@ long
 sysexits(ulong* arg)
 {
     char *status;
-    char *inval = "invalid exit string";
     char buf[ERRMAX];
+    <<[[sysexits()]] other locals>>
 
     status = (char*)arg[0];
-    if(status){
-        if(waserror())
-            status = inval;
-        else{
-            validaddr((ulong)status, 1, false);
-            if(vmemchr(status, 0, ERRMAX) == 0){
-                memmove(buf, status, ERRMAX);
-                buf[ERRMAX-1] = 0;
-                status = buf;
-            }
-            poperror();
-        }
-
-    }
+    <<[[sysexits()]] sanity check status, copy string in buf>>
     pexit(status, /*freemem*/true);
+
     panic("pexit: should never reach this point");
     return -1; // unreachable
 }
 @ 
+
+<<[[sysexits()]] other locals>>=
+char *inval = "invalid exit string";
+@
+<<[[sysexits()]] sanity check status, copy string in buf>>=
+if(status){
+    if(waserror())
+        status = inval;
+    else{
+        // validaddr() and vmemchr() can generate error()
+        validaddr((ulong)status, 1, false);
+        if(vmemchr(status, 0, ERRMAX) == 0){
+            memmove(buf, status, ERRMAX);
+            buf[ERRMAX-1] = 0;
+            status = buf;
+        }
+        poperror();
+    }
+
+}
+@
+
+\subsection{[[pexit()]]}
 
 % != Dead. Why the logic of killing process is split in pexit()
 % here and schedinit()? Because to kill a process we need to free
@@ -6356,151 +7120,42 @@ sysexits(ulong* arg)
 % Note that we never free the per-process kernel stack so we could
 % in theory get rid of schedinit, but maybe it's more elegant that way.
 
-<<[[Procstate]] cases>>=
-Moribund,
-@
 
-% todo: split in purely deallocate stuff and then the children/parent part
 % rename freemem to addbroken? hmmm no
+% sysexits | linkproc | procctl | attachimage <>
 <<function pexit>>=
 void
 proc_pexit(char *exitstr, bool freemem)
 {
     Proc *p; // parent
-    Segment **s, **es;
-    long utime, stime;
-    Waitq *wq, *f, *next;
-    Fgrp *fgrp;
-    Egrp *egrp;
-    Rgrp *rgrp;
-    Pgrp *pgrp;
-    Chan *dot;
-    void (*pt)(Proc*, int, vlong);
+    <<[[pexit()]] other locals>>
 
-    if(up->syscalltrace)
-        free(up->syscalltrace);
-    up->alarm = 0;
-    if (up->tt)
-        timerdel(up);
-
+    <<[[pexit()]] at the start, free resources>>
     <<[[pexit()]] hook proctrace>>
+    <<[[pexit()]] nil out resources under lock and free them>>
 
-    /* nil out all the resources under lock (free later) */
-    qlock(&up->debug);
-    fgrp = up->fgrp;
-    up->fgrp = nil;
-    egrp = up->egrp;
-    up->egrp = nil;
-    rgrp = up->rgrp;
-    up->rgrp = nil;
-    pgrp = up->pgrp;
-    up->pgrp = nil;
-    dot = up->dot;
-    up->dot = nil;
-    qunlock(&up->debug);
-
-    if(fgrp)
-        closefgrp(fgrp);
-    if(egrp)
-        closeegrp(egrp);
-    if(rgrp)
-        closergrp(rgrp);
-    if(dot)
-        cclose(dot);
-    if(pgrp)
-        closepgrp(pgrp);
-
+    <<[[pexit()]] if a kernel process, do nothing about parent and child>>
+    else {
     /*
      * if not a kernel process and have a parent,
      * do some housekeeping.
      */
-    if(up->kp == false) {
         p = up->parent;
-        // no parent pointer, must be the very first process
-        if(p == nil) {
-            if(exitstr == nil)
-                exitstr = "unknown";
-            panic("boot process died: %s", exitstr);
-        }
-
+        <<[[pexit()]] sanity check parent pointer [[p]]>>
         while(waserror())
-            ;
+            ; // ????
 
-        wq = smalloc(sizeof(Waitq));
-        poperror();
-
-        wq->w.pid = up->pid;
-        <<[[pexit()]] set wait msg time field>>
-        if(exitstr && exitstr[0])
-            snprint(wq->w.msg, sizeof(wq->w.msg), "%s %lud: %s", up->text, up->pid, exitstr);
-        else
-            wq->w.msg[0] = '\0';
-
-        lock(&p->exl);
-        /*
-         * Check that parent is still alive.
-         */
-        // the parent pointer may not be your parent anymore, the parent
-        // could have died and its slot reallocated to another process
-        if(p->pid == up->parentpid && p->state != Broken) {
-            p->nchild--;
-            <<[[pexit()]] update TC time of parent>>
-            /*
-             * If there would be more than 128 wait records
-             * processes for my parent, then don't leave a wait
-             * record behind.  This helps prevent badly written
-             * daemon processes from accumulating lots of wait
-             * records.
-             */
-            if(p->nwait < 128) {
-                // push(wq, p->waitq)
-                wq->next = p->waitq;
-                p->waitq = wq;
-                p->nwait++;
-
-                wq = nil; // the parent will do the free
-                wakeup(&p->waitr); // haswaitq() is true now
-            }
-        }
-        unlock(&p->exl);
-        if(wq)
-            free(wq);
+        <<[[pexit()]] build waitq message [[wq]]>>
+        <<[[pexit()]] add [[wq]] message in parent process [[p]] waitq>>
     }
+    <<[[pexit()]] if not freemem, add process to broken processes list>>
 
-    // instead of a core dump we just keep the process around
-    if(!freemem)
-        addbroken(up); // will call sched()
+    <<[[pexit()]] free memory segments>>
 
-    qlock(&up->seglock);
-    //todo: rewrite using nelem(seg?)
-    es = &up->seg[NSEG];
-    for(s = up->seg; s < es; s++) {
-        if(*s) {
-            putseg(*s);
-            *s = nil;
-        }
-    }
-    qunlock(&up->seglock);
+    <<[[pexit()]] wakeup process waiting on waitr and unhash pid>>
+    <<[[pexit()]] free waitq>>
 
-    lock(&up->exl);     /* Prevent my children from leaving waits */
-    pidunhash(up);
-    // so my children will not generate a waitq, I will not be here anymore
-    up->pid = 0; 
-    wakeup(&up->waitr); // wakeup process reading /proc/pid/wait
-    unlock(&up->exl);
-
-    for(f = up->waitq; f; f = next) {
-        next = f->next;
-        free(f);
-    }
-
-    /* release debuggers */
-    qlock(&up->debug);
-    if(up->pdbg) {
-        wakeup(&up->pdbg->sleepr);
-        up->pdbg = nil;
-    }
-    qunlock(&up->debug);
+    <<[[pexit()]] release debuggers>>
 
     /* Sched must not loop for these locks */
     lock(&procalloc);
@@ -6516,9 +7171,177 @@ proc_pexit(char *exitstr, bool freemem)
 % (why not doing more simply arch_gotolabel(cpu->sched)? to reuse some of
 %  sched() code?)
 
+<<[[Procstate]] cases>>=
+Moribund,
+@
+
+
+% why lock procalloc and palloc? because dont want anybody
+% to reuse process before it has been freed in sched?
+
 % What about zombie process? There is no zombie in plan9!
 % Nicer design! the child write in the parent (if it has still one)
 % the information the parent may need and then die!
+
+
+<<[[pexit()]] sanity check parent pointer [[p]]>>=
+// no parent pointer, must be the very first process
+if(p == nil) {
+    if(exitstr == nil)
+        exitstr = "unknown";
+    panic("boot process died: %s", exitstr);
+}
+@
+% even with RFNOWAIT you have a parent pointer
+
+
+
+\subsection{Wait message}
+
+<<[[pexit()]] other locals>>=
+Waitq *wq;
+@
+<<[[pexit()]] build waitq message [[wq]]>>=
+wq = smalloc(sizeof(Waitq));
+poperror();
+
+wq->w.pid = up->pid;
+<<[[pexit()]] set wait msg time field>>
+if(exitstr && exitstr[0])
+    snprint(wq->w.msg, sizeof(wq->w.msg), "%s %lud: %s", up->text, up->pid, exitstr);
+else
+    wq->w.msg[0] = '\0';
+@
+
+
+<<[[pexit()]] add [[wq]] message in parent process [[p]] waitq>>=
+lock(&p->exl);
+/*
+ * Check that parent is still alive.
+ */
+// the parent pointer may not be your parent anymore, the parent
+// could have died and its slot reallocated to another process
+if(p->pid == up->parentpid && p->state != Broken) {
+    p->nchild--;
+    <<[[pexit()]] update TC time of parent>>
+    /*
+     * If there would be more than 128 wait records
+     * processes for my parent, then don't leave a wait
+     * record behind.  This helps prevent badly written
+     * daemon processes from accumulating lots of wait
+     * records.
+     */
+    if(p->nwait < 128) {
+        // push(wq, p->waitq)
+        wq->next = p->waitq;
+        p->waitq = wq;
+        p->nwait++;
+
+        wq = nil; // the parent will do the free
+        wakeup(&p->waitr); // haswaitq() is true now
+    }
+}
+unlock(&p->exl);
+if(wq)
+    free(wq);
+@
+
+
+<<[[pexit()]] wakeup process waiting on waitr and unhash pid>>=
+lock(&up->exl);     /* Prevent my children from leaving waits */
+pidunhash(up);
+// so my children will not generate a waitq, I will not be here anymore
+up->pid = 0; 
+wakeup(&up->waitr);
+unlock(&up->exl);
+@
+
+<<[[pexit()]] other locals>>=
+Waitq *f, *next;
+@
+<<[[pexit()]] free waitq>>=
+for(f = up->waitq; f; f = next) {
+    next = f->next;
+    free(f);
+}
+@
+%ocaml: use gc
+
+\subsection{Freeing resources}
+
+<<[[pexit()]] other locals>>=
+Segment **s, **es;
+@
+
+<<[[pexit()]] free memory segments>>=
+qlock(&up->seglock);
+es = &up->seg[NSEG];
+for(s = up->seg; s < es; s++) {
+    if(*s) {
+        putseg(*s);
+        *s = nil;
+    }
+}
+qunlock(&up->seglock);
+@
+\l rewrite using nelem(seg?)
+
+<<[[pexit()]] other locals>>=
+Fgrp *fgrp;
+Egrp *egrp;
+Rgrp *rgrp;
+Pgrp *pgrp;
+Chan *dot;
+@
+
+<<[[pexit()]] nil out resources under lock and free them>>=
+/* nil out all the resources under lock (free later) */
+qlock(&up->debug);
+fgrp = up->fgrp;
+up->fgrp = nil;
+egrp = up->egrp;
+up->egrp = nil;
+rgrp = up->rgrp;
+up->rgrp = nil;
+pgrp = up->pgrp;
+up->pgrp = nil;
+dot = up->dot;
+up->dot = nil;
+qunlock(&up->debug);
+
+if(fgrp)
+    closefgrp(fgrp);
+if(egrp)
+    closeegrp(egrp);
+if(rgrp)
+    closergrp(rgrp);
+if(dot)
+    cclose(dot);
+if(pgrp)
+    closepgrp(pgrp);
+@
+
+\subsection{No waiting for child, [[RFNOWAIT]]}
+
+% now that have seen sysawait and sysexits, can understand 
+% code of special sysrfork option RFNOWAIT
+%linux: nohup?
+
+% code subtle below.
+
+<<[[sysrfork()]] wait or not for child>>=
+if(flag&RFNOWAIT)
+    p->parentpid = 0;
+else {
+    lock(&up->exl);
+    up->nchild++;
+    unlock(&up->exl);
+}
+@
+% so we do not reset parent here? So a process always a Proc.parent
+% but not always a parentpid?
+
+
 
 \section{Kernel processes}
 
@@ -6531,6 +7354,10 @@ void  (*kpfun)(void*);
 void  *kparg;
 @
 
+<<[[newproc()]] set fields of [[p]]>>=
+p->kp = false;
+@
+
 <<function kproc>>=
 // kernel process (aka kernel_thread in Linux?)
 void
@@ -6540,10 +7367,10 @@ kproc(char *name, void (*func)(void *), void *arg)
     static Pgrp *kpgrp;
 
     p = newproc();
+    p->kp = true; // Kernel Process!
 
     p->psstate = nil;
     p->procmode = 0640;
-    p->kp = true; // Kernel Process
     p->ureg = nil;
     p->noswap = true;
 
@@ -6575,6 +7402,12 @@ kproc(char *name, void (*func)(void *), void *arg)
     ready(p);
 }
 @ 
+
+<<[[pexit()]] if a kernel process, do nothing about parent and child>>=
+if(up->kp) {
+}
+@
+%old: reverted cond so could aspectize (but yes silly code then)
 
 \subsection{[[arch_kprocchild()]] (ARM)}
 
@@ -6614,6 +7447,15 @@ linkproc(void)
 
 
 \section{Process control [[/proc/#/ctl]]}
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->pdbg = nil;
+p->procctl = Proc_nothing;
+p->syscalltrace = nil; 
+p->trace = false;
+p->dbgreg = nil;
+@
+
 
 % see /proc, /proc/x/ctl, procctl()
 % see section on Debugging where explain procctl
@@ -6798,6 +7640,11 @@ TEXT vtable(SB), 1, $-4
 
 % number in SWI is not used. R0 is used for the syscall number.
 
+% What is the value of R13 after an exception??
+%  for _vsvc it is the last value of the banked register R13 for
+%  supervisor mode (set in _start)
+\t also [R0-R14], (R13) ?? R13 of user vs R13 of kernel?
+
 <<function _vsvc(arm)>>=
 TEXT _vsvc(SB), 1, $-4          /* SWI */
     CLREX
@@ -6838,6 +7685,9 @@ TEXT _vsvc(SB), 1, $-4          /* SWI */
 \l factorize chunk that restore? seems similar in arch_forkret?
 \l  just need an extra ADD dollar 8, R13 and then identical.
 
+% argument for arg and link because even if use R0, convention
+% is to reserve space in stack in case callee need to use also R0
+
 \subsection{[[Sargs]]}
 
 <<constant MAXSYSARG>>=
@@ -6857,6 +7707,10 @@ struct Sargs
 Sargs sargs;    /* address of this is known by db */
 @ 
 %old: s -> sargs
+
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+p->sargs = up->sargs;
+@
 
 \subsection{[[arch__syscall()]] (ARM)}
 
@@ -7898,7 +8752,7 @@ Page*   mmul2;
 <<macro VA(arm)>>=
 #define VA(k)       ((uintptr)(k))
 @
-
+% mv with arch_kmap!
 
 
 
@@ -8191,7 +9045,7 @@ fault(virt_addr addr, bool read)
 % The big one! very important function!
 %ret_code
 <<function fixfault>>=
-int
+errorneg1
 fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 {
     int type;
@@ -8231,7 +9085,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         if(*pte == nil) {
             new = newpage(true, &s, addr); // true so clear! zeroed BSS & heap!
             if(s == nil) //?? when can be nil at exit?
-                return -1;
+                return ERROR_NEG1;
             *pte = new;
         }
         goto common;
@@ -8241,6 +9095,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         <<[[fixfault()]] page in for SG_DATA or swapin (SG_BSS, etc) pte if pagedout>>
 
         <<[[fixfault()]] if read and copy on write, adjust mmupte and break>>
+        // else
 
         lkp = *pte;
 
@@ -8270,7 +9125,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     if(doputmmu)
         arch_putmmu(addr, mmupte, *pte);
 
-    return 0; // OK
+    return OK_0;
 }
 @
 
@@ -8918,6 +9773,35 @@ n->flen = s->flen;
 @
 % for SG_TEXT it was sameseg and so was shared (with its image)
 
+
+
+
+% This is why we need to have both SG_xxx and Txxx? 
+% because can have a TEXT and SG_DATA?
+<<[[dupseg()]] when SG_DATA, if Text segment>>=
+if(segno == TSEG){ // why not SG_TEXT then?
+    poperror();
+    qunlock(&s->lk);
+    return data2txt(s);// ????
+}
+@
+<<function data2txt>>=
+Segment*
+data2txt(Segment *s)
+{
+    Segment *ps;
+
+    ps = newseg(SG_TEXT, s->base, s->size);
+    ps->image = s->image;
+    incref(ps->image);
+    ps->fstart = s->fstart;
+    ps->flen = s->flen;
+    <<[[data2txt()]] initialize other segment fields>>
+
+    return ps;
+}
+@
+
 \subsection{Paging in}
 
 <<function pagedout>>=
@@ -9176,6 +10060,9 @@ retry:
 
 \subsection{Collecting images}
 
+<<[[putseg()]] other locals>>=
+KImage *img;
+@
 <<[[putseg()]] if s has an image>>=
 img = s->image;
 if(img != nil) {
@@ -9392,27 +10279,6 @@ ulong nswap;    /* number of swap pages */
 @
 
 
-% good way to summary all we've seen
-<<[[consread()]] cases>>=
-    case Qswap:
-        snprint(tmp, sizeof tmp,
-            "%lud memory\n"
-            "%d pagesize\n"
-            "%lud kernel\n"
-            "%lud/%lud user\n"
-            "%lud/%lud swap\n"
-            "%lud/%lud kernel malloc\n"
-            "%lud/%lud kernel draw\n",
-            conf.npage*BY2PG,
-            BY2PG,
-            conf.npage-conf.upages,
-            palloc.user-palloc.freecount, palloc.user,
-            conf.nswap-swapalloc.free, conf.nswap,
-            mainmem->cursize, mainmem->maxsize,
-            imagmem->cursize, imagmem->maxsize);
-
-        return readstr((ulong)offset, buf, n, tmp);
-@
 
 % at the beginning empty ... especially swapinit() set swaping.notext to true
 % rename KImage?
@@ -9450,6 +10316,29 @@ newswap(void)
 }
 @
 
+\subsection{[[/dev/swap]]}
+
+% good way to summary all we've seen
+<<[[consread()]] cases>>=
+case Qswap:
+    snprint(tmp, sizeof tmp,
+        "%lud memory\n"
+        "%d pagesize\n"
+        "%lud kernel\n"
+        "%lud/%lud user\n"
+        "%lud/%lud swap\n"
+        "%lud/%lud kernel malloc\n"
+        "%lud/%lud kernel draw\n",
+        conf.npage*BY2PG,
+        BY2PG,
+        conf.npage-conf.upages,
+        palloc.user-palloc.freecount, palloc.user,
+        conf.nswap-swapalloc.free, conf.nswap,
+        mainmem->cursize, mainmem->maxsize,
+        imagmem->cursize, imagmem->maxsize);
+
+    return readstr((ulong)offset, buf, n, tmp);
+@
 
 \subsection{[[PageOrSwap]]}
 
@@ -9687,44 +10576,47 @@ out:
 
 % when swap is kicked in?
 
+<<[[newpage()]] other locals>>=
+bool dontalloc;
+@
 <<[[newpage()]] loop waiting freecount > highwater>>=
-    for(;;) {
-        if(palloc.freecount > swapalloc.highwater)
-            break;
-        if(up->kp && palloc.freecount > 0)
-            break;
+for(;;) {
+    if(palloc.freecount > swapalloc.highwater)
+        break;
+    if(up->kp && palloc.freecount > 0)
+        break;
 
-        // in highwater, not so many free pages, need to wait
+    // in highwater, not so many free pages, need to wait
 
-        unlock(&palloc);
-        dontalloc = false;
-        if(s && *s) {
-            qunlock(&((*s)->lk));
-            *s = nil;// !!
-            dontalloc = true;
-        }
-        qlock(&palloc.pwait);   /* Hold memory requesters here */
-
-        while(waserror())   /* Ignore interrupts */
-            ;
-
-        kickpager();
-        tsleep(&palloc.freememr, hasfreepages, 0, 1000);
-
-        poperror();
-        qunlock(&palloc.pwait);
-
-        /*
-         * If called from fault and we lost the segment from
-         * underneath don't waste time allocating and freeing
-         * a page. Fault will call newpage again when it has
-         * reacquired the segment locks
-         */
-        if(dontalloc)
-            return nil;
-
-        lock(&palloc);
+    unlock(&palloc);
+    dontalloc = false;
+    if(s && *s) {
+        qunlock(&((*s)->lk));
+        *s = nil;// !!
+        dontalloc = true;
     }
+    qlock(&palloc.pwait);   /* Hold memory requesters here */
+
+    while(waserror())   /* Ignore interrupts */
+        ;
+
+    kickpager();
+    tsleep(&palloc.freememr, hasfreepages, 0, 1000);
+
+    poperror();
+    qunlock(&palloc.pwait);
+
+    /*
+     * If called from fault and we lost the segment from
+     * underneath don't waste time allocating and freeing
+     * a page. Fault will call newpage again when it has
+     * reacquired the segment locks
+     */
+    if(dontalloc)
+        return nil;
+
+    lock(&palloc);
+}
 @
 
 <<[[Palloc]] extra fields>>=
@@ -9732,6 +10624,12 @@ Rendez  freememr; /* Sleep for free mem */ // hasfreepages()
 QLock pwait; /* Queue of procs waiting for memory */
 @
 %old: r -> freememr
+
+<<[[putpage]] wakeup process waiting for freepage if any>>=
+if(palloc.freememr.p != nil)
+    wakeup(&palloc.freememr);
+@
+% will see later sleep and wakeup!
 
 
 <<function hasfreepages>>=
@@ -9850,6 +10748,12 @@ needpages(void*)
 
 <<[[Proc]] memory fields>>=
 bool noswap;   /* process is not swappable */
+@
+<<[[newproc()]] set fields of [[p]]>>=
+p->noswap = false;
+@
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+p->noswap = up->noswap;
 @
 
 <<[[procctlreq()]] CMnoswap case>>=
@@ -10129,6 +11033,8 @@ enum Priority
 @ 
 % higher is higher priority.
 
+
+
 <<[[Proc]] scheduling fields>>=
 // enum<priority>
 ulong priority; /* priority level */
@@ -10136,6 +11042,13 @@ ulong priority; /* priority level */
 ulong basepri;  /* base priority level */
 bool fixedpri; /* priority level doesn't change */
 @ 
+
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+p->basepri = up->basepri;
+p->priority = up->basepri;
+p->fixedpri = up->fixedpri;
+p->lastcpu = up->lastcpu;
+@
 
 
 <<function procpriority>>=
@@ -10156,6 +11069,18 @@ else if(pri < 0)
     pri = 0;
 @
 
+
+
+
+<<[[newproc()]] set fields of [[p]]>>=
+/* sched params */
+procpriority(p, PriNormal, false);
+p->lastcpu = nil;
+p->wired = nil;
+p->cpuavg = 0;
+p->lastupdate = CPUS(0)->ticks*Scaling;
+p->edf = nil;
+@
 
 
 <<[[procctlreq()]] CMpri case>>=
@@ -10179,6 +11104,16 @@ case CMfixedpri:
 % complex, but essentially means echo 'fixedpri 3' > /proc/x/ctl
 
 
+
+
+<<[[sysexec()]] set prioriry of root processes>>=
+/*
+ *  '/' processes are higher priority (hack to make /ip more responsive).
+ */
+if(devtab[tc->type]->dc == L'/')
+    up->basepri = PriRoot;
+up->priority = up->basepri;
+@
 
 \section{The [[runq]]ueue}
 
@@ -10684,6 +11619,14 @@ reprioritize(Proc *p)
 <<[[Proc]] scheduling fields>>=
 ulong delaysched;
 @
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->nlocks.ref = 0;
+p->delaysched = 0;
+@
+%old: there was a certain order but with LP it's less previsible
+% but I think the order of field assignment does not matter
+
 
 <<[[sched()]] if complex condition increment delaysched and return>>=
 /*
@@ -11344,6 +12287,7 @@ hzclock(Ureg *ur)
 Cpu  *wired;
 @
 
+
 <<[[procctlreq()]] CMwired case>>=
 case CMwired:
     procwired(p, atoi(cb->f[1]));
@@ -11385,6 +12329,16 @@ procwired(Proc *p, int bm)
     p->lastcpu = p->wired;
 }
 @ 
+
+<<[[sysrfork()]] other locals>>=
+Cpu *wm;
+@
+
+<<[[sysrfork()]] if parent is a wired proc>>=
+wm = up->wired;
+if(wm)
+    procwired(p, wm->cpuno);
+@
 
 
 
@@ -11595,10 +12549,7 @@ mmuinit(void *a)
         // No L1ptedramattrs (Cached | Buffered) here, because volatile!
         l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section; 
     }
-    // for raspi2
-    pa = soc.armlocal;
-    if(pa)
-        l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
+    <<[[mmuinit()]] set armlocal virtual memory mapping(arm)>>
     
     /*
      * double map exception vectors at top of virtual memory
@@ -11850,11 +12801,7 @@ arch__confinit(void)
     ulong kpages;
     ulong kmem;
 
-    if((p = getconf("*maxmem")) != nil){
-        memsize = strtoul(p, 0, 0);
-        if (memsize < 16*MB)        /* sanity */
-            memsize = 16*MB;
-    }
+    <<[[arch__confinit()]] if maxmem boot parameter(arm)>>
     // simpler than for x86 :)
     getramsize(&conf.mem[0]);
 
@@ -11905,11 +12852,11 @@ arch__confinit(void)
      */
     kmem = kpages * BY2PG;
     kmem -= 
-          conf.upages*sizeof(Page)
-        + conf.nproc*sizeof(Proc)
-        + conf.nimage*sizeof(KImage)
+          conf.upages * sizeof(Page)
+        + conf.nproc  * sizeof(Proc)
+        + conf.nimage * sizeof(KImage)
         + conf.nswap
-        + conf.nswppo*sizeof(Page*); // pad's second bugfix :)
+        + conf.nswppo * sizeof(Page*); // pad's second bugfix :)
 
     // memory pool
     mainmem->maxsize = kmem;
@@ -11923,6 +12870,7 @@ arch__confinit(void)
         imagmem->maxsize = kmem;
 }
 @
+%c: sizeof useful for reflection and do your own memory allocator
 %pad: I introduced a kmem instead of abusing kpages
 %bug: see pad's bugfix above
 %    //if(0 && (p = getconf("service")) != nil){
@@ -11933,6 +12881,14 @@ arch__confinit(void)
 %    //}
 
 %references also mainmem, imagmem
+
+<<[[arch__confinit()]] if maxmem boot parameter(arm)>>=
+if((p = getconf("*maxmem")) != nil){
+    memsize = strtoul(p, 0, 0);
+    if (memsize < 16*MB)        /* sanity */
+        memsize = 16*MB;
+}
+@
 
 % see also cat /dev/swap
 
@@ -12003,6 +12959,8 @@ setr13(PsrMabt, cpu->sabt);
 setr13(PsrMund, cpu->sund);
 @
 
+% no need setr13(PsrMsvc), it is already set to CPUADDR+CPUSIZE-4
+% in _start()
 
 <<[[Cpu]] [[Arch]] save of first five registers fields(arm)>>=
 /* save areas for exceptions, hold R0-R4 */
@@ -12012,6 +12970,7 @@ u32int  sabt[5];
 @
 %dead: u32int  ssys[5];
 %dead: u32int  smon[5];        /* probably not needed */
+
 
 
 <<function setr13(arm)>>=
@@ -12079,6 +13038,7 @@ clockinit(void)
 \subsection{Virtual memory initialisation (ARM)}
 % part 2
 
+% main -> <>
 <<function mmuinit1(arm)>>=
 void
 mmuinit1(void *a)
@@ -12163,12 +13123,8 @@ procinit(void)
     Proc *p;
     int i;
 
-    procalloc.free = xalloc(conf.nproc*sizeof(Proc));
-    if(procalloc.free == nil){
-        xsummary();
-        panic("cannot allocate %lud procs (%ludMB)\n", 
-                      conf.nproc, conf.nproc*sizeof(Proc)/MB);
-    }
+    procalloc.free = xalloc(conf.nproc * sizeof(Proc));
+    <<[[procinit()]] sanity check [[procalloc.free]]>>
     procalloc.arena = procalloc.free;
 
     p = procalloc.free;
@@ -12178,6 +13134,14 @@ procinit(void)
 }
 @ 
 %old: old was called procinit0 to not conflict with devproc.c procinit
+
+<<[[procinit()]] sanity check [[procalloc.free]]>>=
+if(procalloc.free == nil){
+    xsummary();
+    panic("cannot allocate %lud procs (%ludMB)\n", 
+                  conf.nproc, conf.nproc*sizeof(Proc)/MB);
+}
+@
 
 
 <<function pageinit>>=
@@ -12196,9 +13160,8 @@ pageinit(void)
         np += pm->npage;
     }
 
-    palloc.pages = xalloc(np*sizeof(Page));
-    if(palloc.pages == nil)
-        panic("pageinit");
+    palloc.pages = xalloc(np * sizeof(Page));
+    <<[[pageinit()]] sanity check [[palloc.pages]]>>
 
     palloc.head = palloc.pages;
     p = palloc.head;
@@ -12241,21 +13204,32 @@ pageinit(void)
 @
 \t LP split
 
+<<[[pageinit()]] sanity check [[palloc.pages]]>>=
+if(palloc.pages == nil)
+    panic("pageinit");
+@
+
 <<function swapinit>>=
 void
 swapinit(void)
 {
     swapalloc.swmap = xalloc(conf.nswap);
+
     swapalloc.top = &swapalloc.swmap[conf.nswap];
     swapalloc.alloc = swapalloc.swmap;
     swapalloc.last = swapalloc.swmap;
     swapalloc.free = conf.nswap;
-    iolist = xalloc(conf.nswppo*sizeof(Page*));
-    if(swapalloc.swmap == nil || iolist == nil)
-        panic("swapinit: not enough memory");
 
+    iolist = xalloc(conf.nswppo*sizeof(Page*));
+
+    <<[[swapinit()]] sanity check xalloc return values>>
     swapimage.notext = true;
 }
+@
+
+<<[[swapinit()]] sanity check xalloc return values>>=
+if(swapalloc.swmap == nil || iolist == nil)
+    panic("swapinit: not enough memory");
 @
 
 <<constant NFREECHAN>>=
@@ -12269,9 +13243,8 @@ imageinit(void)
 {
     KImage *i, *ie;
 
-    imagealloc.free = xalloc(conf.nimage*sizeof(KImage));
-    if (imagealloc.free == nil)
-        panic("imageinit: no memory");
+    imagealloc.free = xalloc(conf.nimage * sizeof(KImage));
+    <<[[imageinit()]] sanity check [[imagealloc.free]]>>
     ie = &imagealloc.free[conf.nimage-1];
     for(i = imagealloc.free; i < ie; i++)
         i->next = i+1;
@@ -12282,6 +13255,10 @@ imageinit(void)
 @
 %old: was called initseg, not sure why
 
+<<[[imageinit()]] sanity check [[imagealloc.free]]>>=
+if (imagealloc.free == nil)
+    panic("imageinit: no memory");
+@
 
 
 \subsection{Device initialisation}
@@ -12506,11 +13483,17 @@ init0(void)
         poperror();
     }
     kproc("alarm", alarmkproc, nil); // ??
+
+    // !! Go to user space !!
     arch_touser(sp);
+
     assert(0);          /* shouldn't have returned */
 }
 @
 
+% sp !! 
+% How know will RET to start of initcode? have space for a.out header?
+% See comment below about UTZERO+0x20
 
 
 
@@ -12531,6 +13514,10 @@ void  (*init)(void);
 % diff with reset? this is done in a context of the first process
 % so maybe it can set some globals in up that will then be propagated
 % when forking? maybe could remove
+
+
+% MOVM.S  (R13), [R13] !!
+% kernel vs user R13?  .S?
 
 
 <<function arch_touser(arm)>>=
@@ -12639,6 +13626,8 @@ _loop:
 % TODO how is compiled char cons[] = "#c/cons";? not in data segment?
 %	$LD -l -R1 -s -o init.out init9.$O initcode.$O /386/lib/libc.a
 % so stripped? -s? -l ?
+% Small enough because plan9 linker include only objs that are necessary
+% and libc/ is written in a way where every function has its own object file.
 
 <<initcode.c>>=
 /*
@@ -13885,6 +14874,7 @@ syspread(ulong* arg)
 <<[[Dev]] methods>>=
 long  (*read)(Chan*, void*, long, vlong);
 @
+% user_addr
 
 <<function read>>=
 // long pread(int fd, void *buf, long nbytes, vlong offset);
@@ -16267,7 +17257,7 @@ int malen;      /* allocated length of mtpt */
 
 
 <<constant PATHMSLOP>>=
-    PATHMSLOP   = 20,
+PATHMSLOP   = 20,
 @
 
 
@@ -20722,7 +21712,7 @@ _allocb(int size)
     b->free = 0;
     b->flag = 0;
     b->ref = 0;
-    arch_xinc(&b->ref);
+    arch_xinc(&b->ref); // why not incref?? or at least inccnt?
 
     /* align start of data portion by rounding up */
     addr = (ulong)b;
@@ -21571,7 +22561,7 @@ struct Timer
     Tval  tticks;   /* tns converted to ticks */
     Tval  twhen;    /* ns represented in arch_fastticks */
 
-    <<[[Timer extra fields>>
+    <<[[Timer]] extra fields>>
     };
 @ 
 
@@ -21596,12 +22586,19 @@ struct Timers
 };
 @ 
 
-<<[[Timer extra fields>>=
+<<[[Timer]] extra fields>>=
 // list<Timer> of Timers.head
 Timer *tnext;
 // ref<list<Timer>> Timers.head
 Timers  *tt;    /* Timers queue this timer runs on */
 @
+
+<<[[pexit()]] at the start, free resources>>=
+if (up->tt)
+    timerdel(up);
+@
+%old: used to have an order and be at the start of pexit but not sure it matters
+
 
 
 <<function tadd>>=
@@ -21983,6 +22980,10 @@ sysalarm(ulong* arg)
 % have a [[Proc]] time field?
 <<[[Proc]] other fields>>=
 ulong alarm;    /* Time of call */
+@
+
+<<[[pexit()]] at the start, free resources>>=
+up->alarm = 0;
 @
 
 <<function procalarm>>=
@@ -22639,6 +23640,26 @@ struct Note
 };
 @ 
 
+<<[[newproc()]] set fields of [[p]]>>=
+p->noteid = incref(&noteidalloc);
+if(p->noteid==0)
+    panic("pidalloc");
+@
+%old: this was merged with assign of pid but better to aspectize and separate
+<<[[newproc()]] set fields of [[p]]>>=
+p->notepending = false;
+p->notified = false;
+@
+
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+memmove(p->note, up->note, sizeof(p->note));
+p->nnote = up->nnote;
+p->lastnote = up->lastnote;
+p->notify = up->notify;
+@
+
+
+
 
 <<[[Proc]] notes fields>>=
 Note  note[NNOTE];
@@ -22655,6 +23676,20 @@ Note  lastnote;
 
 void  *ureg;    /* User registers for notes */
 @ 
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->ureg = nil;
+@
+
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+p->ureg = up->ureg; // will be adjusted for R0??
+@
+
+<<[[sysexec()]] when hold debug lock, reset some fields>>=
+up->nnote = 0;
+up->notify = nil;
+up->notified = false;
+@
 
 <<constant NNOTE>>=
 NNOTE = 5,
@@ -23545,6 +24580,16 @@ SG_CEXEC  = 0100,   /* Detach at exec */
 @
 % not used at all in whole plan9, maybe could remove support for it
 
+<<[[sysexec()]] free special segments if close on exec>>=
+for(i = BSEG+1; i < NSEG; i++) {
+    s = up->seg[i];
+    if(s != nil && (s->type&SG_CEXEC)) { // close on exec
+        putseg(s);
+        up->seg[i] = nil;
+    }
+}
+@
+
 <<syscall segbrk>>=
 // void* segbrk(void *saddr, void *addr);
 long
@@ -23772,6 +24817,16 @@ syssegfree(ulong* arg)
 }
 @ 
 
+
+<<[[dupseg()]] if original segment was shared, flush it>>=
+if(s->ref > 1)
+    procflushseg(s); // ??
+@
+<<[[mfreeseg()]] if segment was shared, flush it>>=
+/* flush this seg in all other processes */
+if(s->ref > 1)
+    procflushseg(s);
+@
 
 % seems really expensive
 <<function procflushseg>>=
@@ -24395,6 +25450,15 @@ struct Broken
 struct Broken broken;
 @ 
 
+<<[[pexit()]] if not freemem, add process to broken processes list>>=
+// instead of a core dump we just keep the process around
+if(!freemem)
+    addbroken(up); // will call sched()
+@
+%when call pexit without freemem? 
+
+
+
 % when call via pexit(exitstr, freemem=false)
 <<function addbroken>>=
 void
@@ -24569,6 +25633,16 @@ case CMstart:
 Proc  *pdbg;    /* the debugging process */
 @
 
+<<[[pexit()]] release debuggers>>=
+/* release debuggers */
+qlock(&up->debug);
+if(up->pdbg) {
+    wakeup(&up->pdbg->sleepr);
+    up->pdbg = nil;
+}
+qunlock(&up->debug);
+@
+
 <<[[Proc]] debugger fields>>=
 QLock debug;    /* to access debugging elements */ // used for many things
 @
@@ -24664,9 +25738,12 @@ case CMhang:
 @
 
 
-<<[[sysrfork()]] inherit hang>>=
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
 p->hang = up->hang;
 @
+%old: used to be done later, after the copy/share/clean of the different
+% groups. Important?
+
 % so strace can trace child of process! actually create one thread
 % per child, see strace.c! but will it trace the syscall between
 % fork and exec? yes because up->procctl get inherited!
@@ -24969,6 +26046,11 @@ if(up->procctl == Proc_tracesyscall){
 % the 'inspect' mechanism needed
 <<[[Proc]] debugger fields>>=
 char  *syscalltrace;  /* syscall trace */
+@
+
+<<[[pexit()]] at the start, free resources>>=
+if(up->syscalltrace)
+    free(up->syscalltrace);
 @
 
 
@@ -25435,6 +26517,9 @@ if(pt)
     pt(p, SRun, 0);
 @
 
+<<[[pexit()]] other locals>>=
+void (*pt)(Proc*, int, vlong);
+@
 <<[[pexit()]] hook proctrace>>=
 pt = proctrace;
 if(pt)
@@ -25705,6 +26790,9 @@ ulong time[3];  /* of loved one and descendants */
 @
 % 3 = user, sys, real
 
+<<[[pexit()]] other locals>>=
+long utime, stime;
+@
 <<[[pexit()]] set wait msg time field>>=
 utime = up->time[TUser] + up->time[TCUser];
 stime = up->time[TSys] + up->time[TCSys];
@@ -26189,9 +27277,18 @@ enum FPSaveStatus
 // enum<FPSaveStatus>
 int fpstate;
 @
+<<[[newproc()]] set fields of [[p]]>>=
+<<[[newproc()]] fp init>>
+@
+
 <<[[newproc()]] fp init>>=
 p->fpstate = FPinit;
 @
+
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+<<[[sysrfork()]] propagate fpstate>>
+@
+
 <<[[sysrfork()]] propagate fpstate>>=
 /* don't penalize the child, it hasn't done FP in a note handler. */
 p->fpstate = up->fpstate & ~FPillegal;
@@ -26202,6 +27299,10 @@ p->fpstate = up->fpstate & ~FPillegal;
 
 <<[[Proc]] other fields>>=
 Arch_FPsave  fpsave;   /* address of this is known by db */
+@
+
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+<<[[sysrfork()]] propagate fpsave>>
 @
 
 <<[[sysrfork()]] propagate fpsave>>=
@@ -27454,10 +28555,28 @@ TEXT cacheiinv(SB), 1, $-4
 // can finally exit the while loop.
 arch_coherence();
 @
+%actually should be before modified key! see my question on 9fans
 
 <<[[iunlock()]] after modified key, call coherence>>=
 arch_coherence();
 @
+
+%richardmiller: see Barrier Litmus Tests and Cookbook",
+% and especially section 7.2 "Acquiring and Releasing a Lock".
+
+%from forsith:
+% "the calls are there to control the ordering (of stores in this case)
+% as seen by an observer, which depends on the memory ordering model of
+% a given processor or system implementation.
+% 
+% the sequence is clearing references in the lock, to the Proc and the
+% Mach on which it's running. we don't care about the order in which
+% those stores are observed. the first barrier ensures that all are
+% observable before the critical store to key that releases the Lock.
+% 
+% the second barrier ensures that once the lock is free, no further
+% store can be observed before the lock-clearing store has been
+% observed."
 
 
 <<[[irq()]] before dispatch(arm)>>=
@@ -27644,6 +28763,13 @@ uintptr armlocal;
 .armlocal   = 0x40000000,
 @
 % Physical address? so After PHYS_IO
+
+<<[[mmuinit()]] set armlocal virtual memory mapping(arm)>>=
+// for raspi2
+pa = soc.armlocal;
+if(pa)
+    l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
+@
 
 \subsection{Timer}
 
@@ -28356,6 +29482,7 @@ TEXT arm_arch_coherence(SB), $-4
 %arch_coherence = arm_arch_coherence in main
 
 \subsection{Cache adjustments}
+\l not really related to SMP? Mv in Raspberry Pi2 section?
 
 <<constant CACHELINESZ(raspberry pi2)(ram)>>=
 #define CACHELINESZ 64
@@ -28690,6 +29817,7 @@ Localmboxint    = 0x50,
 \t reuse ARMLOCAL
 
 \subsection{Cycle counter adjustments}
+\l mv in Raspberry Pi 2 section? not really related to SMP
 
 %cpu0
 <<[[_startpg()]] enable cycle counter(raspberry pi2)(arm)>>=
@@ -28784,6 +29912,9 @@ if(p == nil) {
 }
 @
 
+<<[[newpage()]] other locals>>=
+int i; 
+@
 <<[[newpage()]] set cachectl using ct>>=
 for(i = 0; i < MAXCPUS; i++)
     p->cachectl[i] = ct;
@@ -28859,6 +29990,13 @@ SG_PHYSICAL = 05,
 % SG_PHYSICAL used only for vga/vesa apparently
 
 
+<<[[dupseg()]] switch segment type cases>>=
+case SG_SHARED:
+case SG_PHYSICAL:
+    goto sameseg;
+
+@
+
 <<struct Physseg>>=
 struct Physseg
 {
@@ -28933,6 +30071,10 @@ addphysseg(Physseg* new)
 
 
 
+<<[[freept()]] other locals>>=
+int ref;
+Page *pt, **ptop;
+@
 <<[[freept()]] SG_PHYSICAL case>>=
 case SG_PHYSICAL:
     ptop = &p->pagetab[PAGETABSIZE];
@@ -29105,6 +30247,16 @@ portcountpagerefs(ulong *ref, int print)
 }
 @
 
+<<function pagenumber>>=
+ulong
+pagenumber(Page *p)
+{
+    return p - palloc.pages;
+}
+@
+%c: pointer arithmetic! no need store index in page
+
+% need that for?
 
 
 
@@ -30890,6 +32042,69 @@ Dev envdevtab = {
 
 \subsection{[[/proc/x/args]]}
 
+\subsection{[[/proc/x/wait]]}
+
+<<[[Proc]] hierarchy fields>>=
+QLock qwaitr;
+@
+
+<<[[procread()]] cases>>=
+case Qwait:
+    if(!canqlock(&p->qwaitr))
+        error(Einuse);
+
+    if(waserror()) {
+        qunlock(&p->qwaitr);
+        nexterror();
+    }
+
+    <<[[procread()]] when Qwait case, sanity check process has children>>
+    pid = p->pid;
+    while(p->waitq == nil) {
+        unlock(&p->exl);
+        sleep(&p->waitr, haswaitq, p);
+        if(p->pid != pid)
+            error(Eprocdied);
+        lock(&p->exl);
+    }
+    wq = p->waitq;
+    p->waitq = wq->next;
+    p->nwait--;
+    unlock(&p->exl);
+
+    qunlock(&p->qwaitr);
+    poperror();
+
+    n = snprint(a, n, "%d %lud %lud %lud %q",
+        wq->w.pid,
+        <<[[procread()]] Qwait case, snprint time field arguments>>
+        wq->w.msg);
+    free(wq);
+    return n;
+@
+
+<<[[procread()]] when Qwait case, sanity check process has children>>=
+// same in sysawait
+lock(&p->exl);
+if(up == p && p->nchild == 0 && p->waitq == 0) {
+    unlock(&p->exl);
+    error(Enochild);
+}
+@
+
+<<[[pwait()]] lock qwaitr>>=
+if(!canqlock(&up->qwaitr))
+    error(Einuse); // someone is reading /proc/pid/wait?
+if(waserror()) {
+    qunlock(&up->qwaitr);
+    nexterror();
+}
+@
+
+<<[[pwait()]] unlock qwaitr>>=
+qunlock(&up->qwaitr);
+poperror();
+@
 \subsection{Other [[/proc/x/xxx]]}
 
 \subsection{XXX}
@@ -30899,9 +32114,23 @@ ulong procmode; /* proc device default file mode */
 @
 % typedef openmode? perm?
 
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+p->procmode = up->procmode;
+@
+%old: used to be done after the clean/copy/share; important?
 
 <<[[Proc]] other fields>>=
 bool privatemem; /* proc does not let anyone read mem */
+@
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->privatemem = false;
+@
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+p->privatemem = up->privatemem;
+@
+<<[[sysexec()]] when hold debug lock, reset some fields>>=
+up->privatemem = false;
 @
 
 <<[[procctlreq()]] CMprivate case>>=
@@ -31121,7 +32350,7 @@ byte *rptr;
 ulong offset;
 Confmem *cm;
 Proc *p;
-Segment *sg, *s;
+Segment *s;
 Ureg kur;
 Waitq *wq;
 @
@@ -31257,41 +32486,6 @@ procread(Chan *c, void *va, long n, vlong off)
         memmove(a, statbuf+offset, n);
         return n;
 
-    case Qwait:
-        if(!canqlock(&p->qwaitr))
-            error(Einuse);
-
-        if(waserror()) {
-            qunlock(&p->qwaitr);
-            nexterror();
-        }
-
-        lock(&p->exl);
-        if(up == p && p->nchild == 0 && p->waitq == 0) {
-            unlock(&p->exl);
-            error(Enochild);
-        }
-        pid = p->pid;
-        while(p->waitq == 0) {
-            unlock(&p->exl);
-            sleep(&p->waitr, haswaitq, p);
-            if(p->pid != pid)
-                error(Eprocdied);
-            lock(&p->exl);
-        }
-        wq = p->waitq;
-        p->waitq = wq->next;
-        p->nwait--;
-        unlock(&p->exl);
-
-        qunlock(&p->qwaitr);
-        poperror();
-        n = snprint(a, n, "%d %lud %lud %lud %q",
-            wq->w.pid,
-            <<[[procread()]] Qwait case, snprint time field arguments>>
-            wq->w.msg);
-        free(wq);
-        return n;
 
 
     case Qnoteid:
@@ -31860,6 +33054,9 @@ procclose(Chan* c)
 <<[[Proc]] debugger fields>>=
 bool setargs;
 @ 
+<<[[newproc()]] set fields of [[p]]>>=
+p->setargs = false;
+@
 
 
 
@@ -33162,7 +34359,7 @@ randomread(void *xp, ulong n)
 \section{[[sysnop()]]}
 
 % use sysnop to show example of debugging session?
-%(was called sysr1) 
+%old: was called sysr1
 
 
 \section{Special keys and dumpers}
@@ -33245,7 +34442,7 @@ char *e, *p;
             return;
         case 'x':
             xsummary();
-            tmp = xalloc(1000);
+            tmp = xalloc(1000); // PAD: just to debug
             xalloc(1000);
             xfree(tmp);
             xsummary();
@@ -34056,6 +35253,10 @@ while(n > 0) {
 }
 @
 
+\subsection{[[uartconsinit()]]}
+
+% main -> <>
+
 \subsection{[[uartputs()]]}
 
 <<[[putstrn0()]] if serialoq nil>>=
@@ -34377,6 +35578,17 @@ struct TaslockStats
 };
 @
 
+<<[[lock()]] start of lock, stat>>=
+lockstats.locks++;
+@
+<<[[lock()]] when lock already held, stat>>=
+lockstats.glare++;
+@
+<<[[lock()]] in loop when lock already held, stat>>=
+lockstats.inglare++;
+@
+
+
 <<global lockstats>>=
 struct TaslockStats lockstats;
 @
@@ -34396,6 +35608,14 @@ struct QlockStats {
 
 <<global rwstats>>=
 struct QlockStats rwstats;
+@
+
+
+<<[[qlock()]] start of qlock, stat>>=
+rwstats.qlock++;
+@
+<<[[qlock()]] when qlock already held, stat>>=
+rwstats.qlockq++;
 @
 
 \subsection{[[Kimage]] statistics}
@@ -34578,6 +35798,15 @@ char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
 char  errbuf0[ERRMAX];
 char  errbuf1[ERRMAX];
 @ 
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->nerrlab = 0;
+p->errstr = p->errbuf0;
+p->syserrstr = p->errbuf1;
+p->errbuf0[0] = '\0';
+p->errbuf1[0] = '\0';
+@
+
 
 <<constant NERR>>=
 NERR = 64,
