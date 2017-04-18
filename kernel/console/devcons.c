@@ -553,7 +553,7 @@ echo(char *buf, int n)
                 return;
             case 'x':
                 xsummary();
-                tmp = xalloc(1000);
+                tmp = xalloc(1000); // PAD: just to debug
                 xalloc(1000);
                 xfree(tmp);
                 xsummary();
@@ -939,24 +939,24 @@ consread(Chan *c, void *buf, long n, vlong off)
     /*e: [[consread()]] Qcons case */
 
     /*s: [[consread()]] cases */
-        case Qswap:
-            snprint(tmp, sizeof tmp,
-                "%lud memory\n"
-                "%d pagesize\n"
-                "%lud kernel\n"
-                "%lud/%lud user\n"
-                "%lud/%lud swap\n"
-                "%lud/%lud kernel malloc\n"
-                "%lud/%lud kernel draw\n",
-                conf.npage*BY2PG,
-                BY2PG,
-                conf.npage-conf.upages,
-                palloc.user-palloc.freecount, palloc.user,
-                conf.nswap-swapalloc.free, conf.nswap,
-                mainmem->cursize, mainmem->maxsize,
-                imagmem->cursize, imagmem->maxsize);
+    case Qswap:
+        snprint(tmp, sizeof tmp,
+            "%lud memory\n"
+            "%d pagesize\n"
+            "%lud kernel\n"
+            "%lud/%lud user\n"
+            "%lud/%lud swap\n"
+            "%lud/%lud kernel malloc\n"
+            "%lud/%lud kernel draw\n",
+            conf.npage*BY2PG,
+            BY2PG,
+            conf.npage-conf.upages,
+            palloc.user-palloc.freecount, palloc.user,
+            conf.nswap-swapalloc.free, conf.nswap,
+            mainmem->cursize, mainmem->maxsize,
+            imagmem->cursize, imagmem->maxsize);
 
-            return readstr((ulong)offset, buf, n, tmp);
+        return readstr((ulong)offset, buf, n, tmp);
     /*x: [[consread()]] cases */
     case Qcputime:
         k = offset;

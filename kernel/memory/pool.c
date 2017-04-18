@@ -118,12 +118,15 @@ static Pool pmainmem = {
     .maxsize=   4*MB,
     .minarena=  128*KB,
     .quantum=   32,
+
     .alloc= xalloc,
     .merge= xmerge,
+
     .flags= POOL_TOLERANCE,
 
     .lock=plock,
     .unlock= punlock,
+
     .print= poolprint,
     .panic= ppanic,
 
@@ -138,12 +141,15 @@ static Pool pimagmem = {
     .maxsize=   16*MB,
     .minarena=  2*MB,
     .quantum=   32,
+
     .alloc= xalloc,
     .merge= xmerge,
+
     .flags= 0,
 
     .lock= plock,
     .unlock= punlock,
+
     .print= poolprint,
     .panic= ppanic,
 

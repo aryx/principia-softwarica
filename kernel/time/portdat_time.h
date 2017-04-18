@@ -34,12 +34,12 @@ struct Timer
     Tval  tticks;   /* tns converted to ticks */
     Tval  twhen;    /* ns represented in arch_fastticks */
 
-    /*s: [[Timer extra fields */
+    /*s: [[Timer]] extra fields */
     // list<Timer> of Timers.head
     Timer *tnext;
     // ref<list<Timer>> Timers.head
     Timers  *tt;    /* Timers queue this timer runs on */
-    /*e: [[Timer extra fields */
+    /*e: [[Timer]] extra fields */
     };
 /*e: struct Timer */
 

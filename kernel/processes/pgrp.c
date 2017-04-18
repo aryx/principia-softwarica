@@ -12,7 +12,7 @@
 
 enum {
    /*s: constant Whinesecs */
-       Whinesecs = 10,     /* frequency of out-of-resources printing */
+   Whinesecs = 10,     /* frequency of out-of-resources printing */
    /*e: constant Whinesecs */
 };
 

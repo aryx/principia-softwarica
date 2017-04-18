@@ -49,14 +49,18 @@ void
 swapinit(void)
 {
     swapalloc.swmap = xalloc(conf.nswap);
+
     swapalloc.top = &swapalloc.swmap[conf.nswap];
     swapalloc.alloc = swapalloc.swmap;
     swapalloc.last = swapalloc.swmap;
     swapalloc.free = conf.nswap;
+
     iolist = xalloc(conf.nswppo*sizeof(Page*));
+
+    /*s: [[swapinit()]] sanity check xalloc return values */
     if(swapalloc.swmap == nil || iolist == nil)
         panic("swapinit: not enough memory");
-
+    /*e: [[swapinit()]] sanity check xalloc return values */
     swapimage.notext = true;
 }
 /*e: function swapinit */

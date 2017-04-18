@@ -63,9 +63,11 @@ imageinit(void)
 {
     KImage *i, *ie;
 
-    imagealloc.free = xalloc(conf.nimage*sizeof(KImage));
+    imagealloc.free = xalloc(conf.nimage * sizeof(KImage));
+    /*s: [[imageinit()]] sanity check [[imagealloc.free]] */
     if (imagealloc.free == nil)
         panic("imageinit: no memory");
+    /*e: [[imageinit()]] sanity check [[imagealloc.free]] */
     ie = &imagealloc.free[conf.nimage-1];
     for(i = imagealloc.free; i < ie; i++)
         i->next = i+1;
@@ -86,11 +88,13 @@ newseg(int type, virt_addr base, ulong size)
     Segment *s;
     int pagedirsize;
 
+    /*s: [[newseg()]] sanity check size */
     if(size > (PAGEDIRSIZE*PAGETABSIZE))
         error(Enovmem);
-
+    /*e: [[newseg()]] sanity check size */
     s = smalloc(sizeof(Segment));
-    s->ref = 1;
+
+    s->ref = 1; // Segment.Ref.ref
     s->type = type;
     s->base = base;
     s->top = base+(size*BY2PG);
@@ -103,15 +107,19 @@ newseg(int type, virt_addr base, ulong size)
     /*e: [[newseg()]] sema initialization */
 
     pagedirsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
-    if(pagedirsize > nelem(s->smallpagedir)){
-        pagedirsize *= 2;
-        if(pagedirsize > PAGEDIRSIZE)
-            pagedirsize = PAGEDIRSIZE; // pad's first bugfix :)
-        s->pagedir = smalloc(pagedirsize*sizeof(Pagetable*));
-        s->pagedirsize = pagedirsize;
-    }else{
+
+    /*s: [[newseg()]] if pagedirsize small */
+    if(pagedirsize <= nelem(s->smallpagedir)){
         s->pagedir = s->smallpagedir;
         s->pagedirsize = nelem(s->smallpagedir);
+    }
+    /*e: [[newseg()]] if pagedirsize small */
+    else{
+        pagedirsize *= 2; // room for growing
+        if(pagedirsize > PAGEDIRSIZE)
+            pagedirsize = PAGEDIRSIZE; // pad's first bugfix :)
+        s->pagedir = smalloc(pagedirsize * sizeof(Pagetable*));
+        s->pagedirsize = pagedirsize;
     }
     return s;
 }
@@ -122,11 +130,14 @@ void
 putseg(Segment *s)
 {
     Pagetable **pde, **emap;
+    /*s: [[putseg()]] other locals */
     KImage *img;
+    /*e: [[putseg()]] other locals */
 
+    /*s: [[putseg()]] sanity check s */
     if(s == nil)
         return; // TODO: panic("putseg") instead?
-
+    /*e: [[putseg()]] sanity check s */
     /*s: [[putseg()]] if s has an image */
     img = s->image;
     if(img != nil) {
@@ -145,6 +156,7 @@ putseg(Segment *s)
         unlock(s);
         return;
     }
+    // else
     unlock(s);
 
     qlock(&s->lk);
@@ -159,7 +171,12 @@ putseg(Segment *s)
             freept(s, *pde);
 
     qunlock(&s->lk);
-    if(s->pagedir != s->smallpagedir)
+
+    /*s: [[putseg()]] if smallpagedir */
+    if(s->pagedir == s->smallpagedir) {
+    }
+    /*e: [[putseg()]] if smallpagedir */
+    else
         free(s->pagedir);
     /*s: [[putseg()]] free profile */
     if(s->profile != nil)
@@ -193,11 +210,15 @@ relocateseg(Segment *s, ulong offset)
 Segment*
 dupseg(Segment **seg, int segno, bool share)
 {
-    int i, size;
+    Segment *s;
+    Segment *n; // when allocate a new segment
+    /*s: [[dupseg()]] other locals */
+    int i;
+    int size; // pagedir
     Pagetable *pt;
-    Segment *n, *s;
+    /*e: [[dupseg()]] other locals */
 
-    SET(n); //????
+    SET(n);
 
     s = seg[segno];
 
@@ -207,20 +228,25 @@ dupseg(Segment **seg, int segno, bool share)
         nexterror();
     }
     switch(s->type&SG_TYPE) {
+    /*s: [[dupseg()]] switch segment type cases */
     case SG_TEXT:       /* New segment shares pt set */
         goto sameseg;
-
+    /*x: [[dupseg()]] switch segment type cases */
+    case SG_STACK:
+        n = newseg(s->type, s->base, s->size);
+        break;
+    /*x: [[dupseg()]] switch segment type cases */
     case SG_DATA:       /* Copy on write plus demand load info */
-
+        /*s: [[dupseg()]] when SG_DATA, if Text segment */
         if(segno == TSEG){ // why not SG_TEXT then?
             poperror();
             qunlock(&s->lk);
             return data2txt(s);// ????
         }
-
+        /*e: [[dupseg()]] when SG_DATA, if Text segment */
         if(share)
             goto sameseg; // threads! clone()
-
+        // else
         n = newseg(s->type, s->base, s->size);
         /*s: [[dupseg()]] SG_DATA case, attach image to new segment n */
         incref(s->image); // how sure non nil? data always attached to an img
@@ -229,25 +255,22 @@ dupseg(Segment **seg, int segno, bool share)
         n->flen = s->flen;
         /*e: [[dupseg()]] SG_DATA case, attach image to new segment n */
         break;
-
+    /*x: [[dupseg()]] switch segment type cases */
     case SG_BSS:        /* Just copy on write */
         if(share)
             goto sameseg; // threads! clone()
-
+        // else
         n = newseg(s->type, s->base, s->size);
         break;
-
-    case SG_STACK:
-        n = newseg(s->type, s->base, s->size);
-        break;
-
+    /*x: [[dupseg()]] switch segment type cases */
     case SG_SHARED:
     case SG_PHYSICAL:
         goto sameseg;
 
+    /*e: [[dupseg()]] switch segment type cases */
     }
     // not sameseg, we have allocated a new seg in n above
-
+    /*s: [[dupseg()]] when not goto sameseg, when allocated a new segment */
     size = s->pagedirsize;
     for(i = 0; i < size; i++)
         if(pt = s->pagedir[i])
@@ -256,15 +279,21 @@ dupseg(Segment **seg, int segno, bool share)
     /*s: [[dupseg()]] copy other fields */
     n->flushme = s->flushme;
     /*e: [[dupseg()]] copy other fields */
-
+    /*s: [[dupseg()]] if original segment was shared, flush it */
     if(s->ref > 1)
         procflushseg(s); // ??
+    /*e: [[dupseg()]] if original segment was shared, flush it */
+    /*e: [[dupseg()]] when not goto sameseg, when allocated a new segment */
+
     poperror();
     qunlock(&s->lk);
     return n;
 
 sameseg:
+    /*s: [[dupseg()]] in sameseg, when share a segment */
     incref(s);
+    /*e: [[dupseg()]] in sameseg, when share a segment */
+
     poperror();
     qunlock(&s->lk);
     return s;
@@ -279,8 +308,10 @@ segpage(Segment *s, Page *p)
     ulong off;
     Page **pg;
 
+    /*s: [[segpage()]] sanity check page in range of segment */
     if(p->va < s->base || p->va >= s->top)
         panic("segpage");
+    /*e: [[segpage()]] sanity check page in range of segment */
 
     off = p->va - s->base;
     pt = &s->pagedir[off/PAGETABMAPMEM]; // PDX
@@ -512,22 +543,32 @@ putimage(KImage *img)
 
 /*s: function ibrk */
 long
-ibrk(ulong addr, int seg)
+ibrk(virt_addr addr, int seg)
 {
-    Segment *s, *ns;
-    ulong newtop, newsize;
-    int i, mapsize;
+    Segment *s;
+    virt_addr newtop;
+    ulong newsize;
+    /*s: [[ibrk()]] other locals */
+    int mapsize;
     Pagetable **map;
+    /*x: [[ibrk()]] other locals */
+    Segment *ns;
+    int i;
+    /*e: [[ibrk()]] other locals */
 
     s = up->seg[seg];
+    /*s: [[ibrk()]] sanity check s */
     if(s == nil)
         error(Ebadarg);
-
+    /*e: [[ibrk()]] sanity check s */
+    /*s: [[ibrk()]] if addr nil */
     if(addr == nilptr)
         return s->base;
+    /*e: [[ibrk()]] if addr nil */
 
     qlock(&s->lk);
 
+    /*s: [[ibrk()]] if addr below base */
     /* We may start with the bss overlapping the data */
     if(addr < s->base) {
         if(seg != BSEG || up->seg[DSEG] == nil || addr < up->seg[DSEG]->base) {
@@ -536,9 +577,12 @@ ibrk(ulong addr, int seg)
         }
         addr = s->base;
     }
+    /*e: [[ibrk()]] if addr below base */
 
     newtop = PGROUND(addr);
-    newsize = (newtop-s->base)/BY2PG;
+    newsize = (newtop - s->base)/BY2PG; // in nb pages
+
+    /*s: [[ibrk()]] if newtop lower than oldtop, shrink the segment */
     if(newtop < s->top) {
         /*
          * do not shrink a segment shared with other procs, as the
@@ -554,9 +598,12 @@ ibrk(ulong addr, int seg)
         s->size = newsize;
         qunlock(&s->lk);
         arch_flushmmu();
-        return 0;
+        return OK_0;
     }
-
+    /*e: [[ibrk()]] if newtop lower than oldtop, shrink the segment */
+    // else
+    /*s: [[ibrk()]] if newtop more than oldtop, extend the segment */
+    /*s: [[ibrk()]] sanity check newtop does not overlap other segments */
     for(i = 0; i < NSEG; i++) {
         ns = up->seg[i];
         if(ns == nil || ns == s)
@@ -566,14 +613,17 @@ ibrk(ulong addr, int seg)
             error(Esoverlap);
         }
     }
-
+    /*e: [[ibrk()]] sanity check newtop does not overlap other segments */
+    /*s: [[ibrk()]] sanity check newsize */
     if(newsize > (PAGEDIRSIZE*PAGETABSIZE)) {
         qunlock(&s->lk);
         error(Enovmem);
     }
+    /*e: [[ibrk()]] sanity check newsize */
 
     // similar to code in newseg()
     mapsize = ROUND(newsize, PAGETABSIZE)/PAGETABSIZE;
+    // realloc
     if(mapsize > s->pagedirsize){
         map = smalloc(mapsize*sizeof(Pagetable*));
         memmove(map, s->pagedir, s->pagedirsize*sizeof(Pagetable*));
@@ -586,7 +636,9 @@ ibrk(ulong addr, int seg)
     s->top = newtop;
     s->size = newsize;
     qunlock(&s->lk);
-    return 0;
+    return OK_0;
+    /*e: [[ibrk()]] if newtop more than oldtop, extend the segment */
+
 }
 /*e: function ibrk */
 
@@ -646,10 +698,11 @@ mfreeseg(Segment *s, ulong start, int pages)
         j = 0;
     }
 out:
+    /*s: [[mfreeseg()]] if segment was shared, flush it */
     /* flush this seg in all other processes */
     if(s->ref > 1)
         procflushseg(s);
-
+    /*e: [[mfreeseg()]] if segment was shared, flush it */
     /* free the pages */
     for(pg = list; pg != nil; pg = list){
         list = list->next;

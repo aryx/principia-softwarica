@@ -77,22 +77,26 @@ int
 lock(Lock *l)
 {
     int i;
-    ulong pc;
+    /*s: [[lock()]] other locals */
+    ulong pc = getcallerpc(&l);
+    /*e: [[lock()]] other locals */
 
-    pc = getcallerpc(&l);
-
+    /*s: [[lock()]] start of lock, stat */
     lockstats.locks++;
+    /*e: [[lock()]] start of lock, stat */
     /*s: [[lock()]] increment nlocks */
     if(up)
         inccnt(&up->nlocks);    /* prevent being scheded */
     /*e: [[lock()]] increment nlocks */
     if(arch_tas(&l->key) == 0){ // lock old value was 0, the lock was not held
+        /*s: [[lock()]] got the lock, update other fields */
         if(up)
             up->lastlock = l;
         l->pc = pc;
         l->p = up;
         l->isilock = false;
         l->cpu = CPUS(cpu->cpuno); // pad's third bugfix
+        /*e: [[lock()]] got the lock, update other fields */
         /*s: lock ifdef LOCKCYCLES */
         #ifdef LOCKCYCLES
                 l->lockcycles = -arch_lcycles();
@@ -101,16 +105,20 @@ lock(Lock *l)
         return 0;
     }
     //else
-    //the lock was already held, need to spin
 
     /*s: [[lock()]] decrement nlocks */
     if(up)
         deccnt(&up->nlocks);
     /*e: [[lock()]] decrement nlocks */
-
+    /*s: [[lock()]] when lock already held, stat */
     lockstats.glare++;
+    /*e: [[lock()]] when lock already held, stat */
+
+    // The lock was already held, need to spin
     for(;;){
-        lockstats.inglare++;
+    /*s: [[lock()]] in loop when lock already held, stat */
+    lockstats.inglare++;
+    /*e: [[lock()]] in loop when lock already held, stat */
         i = 0;
         while(l->key){
            /*s: [[lock()]] optional priority-inversion for real-time process */
@@ -135,11 +143,14 @@ lock(Lock *l)
             inccnt(&up->nlocks);    /* prevent being scheded */
         /*e: [[lock()]] increment nlocks */
         if(arch_tas(&l->key) == 0){
+            /*s: [[lock()]] got the lock, update other fields */
             if(up)
                 up->lastlock = l;
             l->pc = pc;
             l->p = up;
             l->isilock = false;
+            l->cpu = CPUS(cpu->cpuno); // pad's third bugfix
+            /*e: [[lock()]] got the lock, update other fields */
             /*s: lock ifdef LOCKCYCLES */
             #ifdef LOCKCYCLES
                     l->lockcycles = -arch_lcycles();
@@ -223,13 +234,14 @@ canlock(Lock *l)
         return false;
     }
     // else
-
+    /*s: [[canlock()]] lock not held, update other fields */
     if(up)
         up->lastlock = l;
-    l->pc = getcallerpc(&l);
     l->p = up;
-    l->cpu = CPUS(cpu->cpuno);
+    l->pc = getcallerpc(&l);
     l->isilock = false;
+    l->cpu = CPUS(cpu->cpuno);
+    /*e: [[canlock()]] lock not held, update other fields */
     /*s: lock ifdef LOCKCYCLES */
     #ifdef LOCKCYCLES
             l->lockcycles = -arch_lcycles();

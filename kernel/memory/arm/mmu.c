@@ -73,10 +73,12 @@ mmuinit(void *a)
         // No L1ptedramattrs (Cached | Buffered) here, because volatile!
         l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section; 
     }
+    /*s: [[mmuinit()]] set armlocal virtual memory mapping(arm) */
     // for raspi2
     pa = soc.armlocal;
     if(pa)
         l1[L1X(va)] = pa|Dom0|L1AP(Krw)|Section;
+    /*e: [[mmuinit()]] set armlocal virtual memory mapping(arm) */
     
     /*
      * double map exception vectors at top of virtual memory

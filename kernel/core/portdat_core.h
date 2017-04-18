@@ -13,7 +13,7 @@
 struct Confmem
 {
     phys_addr base;
-    uintptr	limit; // used by bcm only
+    uintptr	limit; // used by bcm only. phys_addr too?
     ulong npage;
     /*s: [[Confmem]] other fields */
     kern_addr kbase; // KADDR(Confmem.base)

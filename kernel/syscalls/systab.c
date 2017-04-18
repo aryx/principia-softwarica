@@ -61,8 +61,8 @@ Syscall *systab[] = {
     /*s: [[systab]] process syscalls */
     [RFORK]     sysrfork,
     [EXEC]      sysexec,
-    [EXITS]     sysexits,
     [AWAIT]     sysawait,
+    [EXITS]     sysexits,
     /*e: [[systab]] process syscalls */
     /*s: [[systab]] memory syscalls */
     [BRK]      sysbrk,

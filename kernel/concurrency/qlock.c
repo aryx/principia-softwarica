@@ -37,7 +37,9 @@ qlock(QLock *q)
         panic("qlock: q %#p, key 5*\n", q);
     /*e: [[qlock()]] sanity checks */
     lock(&q->use);
+    /*s: [[qlock()]] start of qlock, stat */
     rwstats.qlock++;
+    /*e: [[qlock()]] start of qlock, stat */
     if(!q->locked) {
         q->locked = true;
         q->qpc = getcallerpc(&q);
@@ -47,7 +49,9 @@ qlock(QLock *q)
     // else
     if(up == nil)
         panic("qlock");
+    /*s: [[qlock()]] when qlock already held, stat */
     rwstats.qlockq++;
+    /*e: [[qlock()]] when qlock already held, stat */
 
     // add_queue(q, up)
     p = q->tail;
@@ -64,6 +68,7 @@ qlock(QLock *q)
     up->state = Queueing;
     up->qpc = getcallerpc(&q);
     unlock(&q->use);
+
     // switch to another process! 
     sched(); 
     // will resume here when another process unlock() the lock and ready() us

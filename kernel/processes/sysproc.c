@@ -17,18 +17,19 @@ enum Rfork
 {
     RFPROC      = (1<<4), // fork a new process!! (if unset then set props for up)
     RFMEM       = (1<<5), // share data and bss (kinda thread, a la Linux clone)
+
     RFNOWAIT    = (1<<6), // child will not leave a waitmsg
 
     RFNAMEG     = (1<<0), // copy namespace (if unset then share)
     RFENVG      = (1<<1), // copy environment variables (if unset then share)
     RFFDG       = (1<<2), // copy file descriptor table (if unset then share)
-
     RFCNAMEG    = (1<<10), // clean new namespace
     RFCENVG     = (1<<11), // clean new empty environment variables
     RFCFDG      = (1<<12), // clean new file descriptor table
 
     RFNOTEG     = (1<<3), // start new group for notes
     RFREND      = (1<<13), // start a new group for rendezvous
+
     RFNOMNT     = (1<<14), // # paths forbidden, sandboxing
 };
 /*e: enum rfork */
@@ -52,28 +53,43 @@ sysnop(ulong*)
 long
 sysrfork(ulong* arg)
 {
+    ulong flag;
+    /*s: [[sysrfork()]] other locals */
     Proc *p;
-    int i;
+    ulong pid;
+    /*x: [[sysrfork()]] other locals */
     bool share;
+    int i;
+    /*x: [[sysrfork()]] other locals */
     Fgrp *ofg;
     Pgrp *opg;
-    Rgrp *org;
     Egrp *oeg;
-    ulong pid, flag;
+    Rgrp *org;
+    /*x: [[sysrfork()]] other locals */
     Cpu *wm;
+    /*e: [[sysrfork()]] other locals */
 
     flag = arg[0];
     /* Check flags before we commit */
+    /*s: [[sysrfork()]] sanity check flags, clean or copy */
     if((flag & (RFFDG|RFCFDG)) == (RFFDG|RFCFDG))
         error(Ebadarg);
+    /*x: [[sysrfork()]] sanity check flags, clean or copy */
     if((flag & (RFNAMEG|RFCNAMEG)) == (RFNAMEG|RFCNAMEG))
         error(Ebadarg);
+    /*x: [[sysrfork()]] sanity check flags, clean or copy */
     if((flag & (RFENVG|RFCENVG)) == (RFENVG|RFCENVG))
         error(Ebadarg);
+    /*e: [[sysrfork()]] sanity check flags, clean or copy */
 
+    /*s: [[sysrfork()]] if no [[RFPROC]], no new proc but property settings */
     if((flag&RFPROC) == 0) { // not a fork, just setting properties for up
+        /*s: [[sysrfork()]] when no [[RFPROC]], sanity check flag */
         if(flag & (RFMEM|RFNOWAIT))
             error(Ebadarg);
+        /*e: [[sysrfork()]] when no [[RFPROC]], sanity check flag */
+
+        /*s: [[sysrfork()]] when no [[RFPROC]], clean or copy file descriptors */
         if(flag & (RFFDG|RFCFDG)) {
             ofg = up->fgrp;
             if(flag & RFFDG)
@@ -82,6 +98,9 @@ sysrfork(ulong* arg)
                 up->fgrp = dupfgrp(nil);
             closefgrp(ofg);
         }
+        /*e: [[sysrfork()]] when no [[RFPROC]], clean or copy file descriptors */
+
+        /*s: [[sysrfork()]] when no [[RFPROC]], clean or copy namespace */
         if(flag & (RFNAMEG|RFCNAMEG)) {
             opg = up->pgrp;
             up->pgrp = newpgrp();
@@ -93,15 +112,13 @@ sysrfork(ulong* arg)
             /*e: [[sysrfork()]] inherit noattach, RFPROC==0 case */
             closepgrp(opg);
         }
-       /*s: [[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==0 case */
-       if(flag & RFNOMNT)
-           up->pgrp->noattach = true;
-       /*e: [[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==0 case */
-        if(flag & RFREND) {
-            org = up->rgrp;
-            up->rgrp = newrgrp();
-            closergrp(org);
-        }
+        /*s: [[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==0 case */
+        if(flag & RFNOMNT)
+            up->pgrp->noattach = true;
+        /*e: [[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==0 case */
+        /*e: [[sysrfork()]] when no [[RFPROC]], clean or copy namespace */
+
+        /*s: [[sysrfork()]] when no [[RFPROC]], clean or copy environment */
         if(flag & (RFENVG|RFCENVG)) {
             oeg = up->egrp;
             up->egrp = smalloc(sizeof(Egrp)); // newegrp()
@@ -110,31 +127,71 @@ sysrfork(ulong* arg)
                 envcpy(up->egrp, oeg);
             closeegrp(oeg);
         }
+        /*e: [[sysrfork()]] when no [[RFPROC]], clean or copy environment */
+
+        /*s: [[sysrfork()]] when no [[RFPROC]], new rendez vous group */
+        if(flag & RFREND) {
+            org = up->rgrp;
+            up->rgrp = newrgrp();
+            closergrp(org);
+        }
+        /*e: [[sysrfork()]] when no [[RFPROC]], new rendez vous group */
+
+        /*s: [[sysrfork()]] when no [[RFPROC]], new note group */
         if(flag & RFNOTEG)
             up->noteid = incref(&noteidalloc);
+        /*e: [[sysrfork()]] when no [[RFPROC]], new note group */
+
         return 0;
     }
-    // ok RFPROC is set, let's create a new process
-
+    /*e: [[sysrfork()]] if no [[RFPROC]], no new proc but property settings */
+    // else
+    /*s: [[sysrfork()]] when [[RFPROC]], fork a new process */
     p = newproc();
     pid = p->pid;
 
-    p->sargs = up->sargs;
+    /*s: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
+    kstrdup(&p->text, up->text);
+    kstrdup(&p->user, up->user);
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
     p->slash = up->slash;
     p->dot = up->dot;
     incref(p->dot);
-    memmove(p->note, up->note, sizeof(p->note));
-    p->privatemem = up->privatemem;
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
+    p->sargs = up->sargs;
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
     p->noswap = up->noswap;
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
+    p->basepri = up->basepri;
+    p->priority = up->basepri;
+    p->fixedpri = up->fixedpri;
+    p->lastcpu = up->lastcpu;
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
+    memmove(p->note, up->note, sizeof(p->note));
     p->nnote = up->nnote;
     p->lastnote = up->lastnote;
     p->notify = up->notify;
-    p->ureg = up->ureg;
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
+    p->ureg = up->ureg; // will be adjusted for R0??
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
+    p->hang = up->hang;
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
+    /*s: [[sysrfork()]] propagate fpstate */
+    /* don't penalize the child, it hasn't done FP in a note handler. */
+    p->fpstate = up->fpstate & ~FPillegal;
+    /*e: [[sysrfork()]] propagate fpstate */
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
     /*s: [[sysrfork()]] propagate fpsave */
     p->fpsave = up->fpsave;
     /*e: [[sysrfork()]] propagate fpsave */
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
+    p->procmode = up->procmode;
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
+    p->privatemem = up->privatemem;
+    /*e: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
 
     /* Make a new set of memory segments */
+    /*s: [[sysrfork()]] copy or share memory segments */
     share = flag & RFMEM;
     qlock(&p->seglock);
     if(waserror()){
@@ -146,8 +203,10 @@ sysrfork(ulong* arg)
             p->seg[i] = dupseg(up->seg, i, share);
     qunlock(&p->seglock);
     poperror();
+    /*e: [[sysrfork()]] copy or share memory segments */
 
     /* File descriptors */
+    /*s: [[sysrfork()]] copy, clean, or share file descriptors */
     if(flag & (RFFDG|RFCFDG)) {
         if(flag & RFFDG)
             p->fgrp = dupfgrp(up->fgrp);
@@ -158,8 +217,10 @@ sysrfork(ulong* arg)
         p->fgrp = up->fgrp;
         incref(p->fgrp);
     }
+    /*e: [[sysrfork()]] copy, clean, or share file descriptors */
 
-    /* Process groups */
+    /* Process groups */ // Namespace
+    /*s: [[sysrfork()]] copy, clean, or share namespace */
     if(flag & (RFNAMEG|RFCNAMEG)) {
         p->pgrp = newpgrp();
         if(flag & RFNAMEG)
@@ -177,15 +238,20 @@ sysrfork(ulong* arg)
     if(flag & RFNOMNT)
         p->pgrp->noattach = true;
     /*e: [[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==1 case */
+    /*e: [[sysrfork()]] copy, clean, or share namespace */
 
+    // Rendez vous group
+    /*s: [[sysrfork()]] new or share rendezvous group */
     if(flag & RFREND)
         p->rgrp = newrgrp();
     else {
         incref(up->rgrp);
         p->rgrp = up->rgrp;
     }
+    /*e: [[sysrfork()]] new or share rendezvous group */
 
     /* Environment group */
+    /*s: [[sysrfork()]] copy, clean, or share environment */
     if(flag & (RFENVG|RFCENVG)) {
         p->egrp = smalloc(sizeof(Egrp)); // newegrp
         p->egrp->ref = 1;
@@ -196,11 +262,13 @@ sysrfork(ulong* arg)
         p->egrp = up->egrp;
         incref(p->egrp);
     }
+    /*e: [[sysrfork()]] copy, clean, or share environment */
 
-    /*s: [[sysrfork()]] inherit hang */
-    p->hang = up->hang;
-    /*e: [[sysrfork()]] inherit hang */
-    p->procmode = up->procmode;
+    // Note group
+    /*s: [[sysrfork()]] share or not note group */
+    if((flag&RFNOTEG) == 0)
+        p->noteid = up->noteid; // rectify what was done in newproc
+    /*e: [[sysrfork()]] share or not note group */
 
     /* Craft a return frame which will cause the child to pop out of
      * the scheduler in user mode with the return register zero
@@ -209,6 +277,7 @@ sysrfork(ulong* arg)
 
     p->parent = up;
     p->parentpid = up->pid;
+    /*s: [[sysrfork()]] wait or not for child */
     if(flag&RFNOWAIT)
         p->parentpid = 0;
     else {
@@ -216,20 +285,12 @@ sysrfork(ulong* arg)
         up->nchild++;
         unlock(&up->exl);
     }
-    if((flag&RFNOTEG) == 0)
-        p->noteid = up->noteid;
+    /*e: [[sysrfork()]] wait or not for child */
 
-    /*s: [[sysrfork()]] propagate fpstate */
-    /* don't penalize the child, it hasn't done FP in a note handler. */
-    p->fpstate = up->fpstate & ~FPillegal;
-    /*e: [[sysrfork()]] propagate fpstate */
     /*s: [[sysrfork()]] setting time field */
     memset(p->time, 0, sizeof(p->time));
     p->time[TReal] = CPUS(0)->ticks;
     /*e: [[sysrfork()]] setting time field */
-
-    kstrdup(&p->text, up->text);
-    kstrdup(&p->user, up->user);
 
     /*
      *  since the bss/data segments are now shareable,
@@ -238,17 +299,16 @@ sysrfork(ulong* arg)
      */
     arch_flushmmu();
 
-    p->basepri = up->basepri;
-    p->priority = up->basepri;
-    p->fixedpri = up->fixedpri;
-    p->lastcpu = up->lastcpu;
+    /*s: [[sysrfork()]] if parent is a wired proc */
     wm = up->wired;
     if(wm)
         procwired(p, wm->cpuno);
+    /*e: [[sysrfork()]] if parent is a wired proc */
 
     ready(p);
-    sched();
+    sched(); // !!!
     return pid;
+    /*e: [[sysrfork()]] when [[RFPROC]], fork a new process */
 }
 /*e: syscall rfork */
 
@@ -268,7 +328,6 @@ l2be(long l)
 long
 sysexec(ulong* arg)
 {
-
     /*s: [[sysexec()]] locals */
     char *file;
     char *elem; // last element of binary, for up->text
@@ -282,11 +341,19 @@ sysexec(ulong* arg)
     ulong t, d, b; // text, data, bss sizes in bytes rounded to pages
     Segment *s, *ts;
     /*x: [[sysexec()]] locals */
-    char **argv, **argp;
-    char *a, *charp, *args;
-    ulong ssize, spage, nargs, nbytes;
+    ulong ssize;
+    ulong nargs;
     /*x: [[sysexec()]] locals */
     int i, n;
+    /*x: [[sysexec()]] locals */
+    char **argp;
+    char *a, *args;
+    ulong nbytes;
+    /*x: [[sysexec()]] locals */
+    ulong spage;
+    /*x: [[sysexec()]] locals */
+    char **argv;
+    char *charp;
     /*x: [[sysexec()]] locals */
     KImage *img;
     /*x: [[sysexec()]] locals */
@@ -311,7 +378,7 @@ sysexec(ulong* arg)
     }
     file = file0;
     for(;;){
-        // this will also adjust up->genbuf to contain the last element of file path
+        // this will also adjust up->genbuf to contain the last elt of file path
         /*s: [[sysexec()]] call namec() to get a channel in tc from file */
         tc = namec(file, Aopen, OEXEC, 0);
         /*e: [[sysexec()]] call namec() to get a channel in tc from file */
@@ -336,7 +403,6 @@ sysexec(ulong* arg)
                 error(Ebadexec);
             break; /* for binary */
         }
-
         /*s: [[sysexec()]] process sharpbang */
         /*
          * Process #! /bin/sh args ...
@@ -364,9 +430,11 @@ sysexec(ulong* arg)
         cclose(tc);
         /*e: [[sysexec()]] process sharpbang */
     }
+    // from break above
 
     data = l2be(exec.data);
     bss = l2be(exec.bss);
+
     t = UTROUND(UTZERO+sizeof(Exec)+text);
     // data is put at page boundary after text (see also _multibootentry)
     d = ROUND(t + data, BY2PG);
@@ -375,6 +443,7 @@ sysexec(ulong* arg)
     if(t >= KZERO || d >= KZERO || b >= KZERO)
         error(Ebadexec);
 
+    /*s: [[sysexec()]] build args count */
     /*
      * Args: pass 1: count
      */
@@ -407,7 +476,9 @@ sysexec(ulong* arg)
         nargs++;
     }
     ssize = BY2WD*(nargs+1) + ROUND(nbytes, BY2WD);
+    /*e: [[sysexec()]] build args count */
 
+    /*s: [[sysexec()]] build temporary stack segment and qlock seglock */
     /*
      * 8-byte align SP for those (e.g. sparc) that need it.
      * arch_execregs() will subtract another 4 bytes for argc.
@@ -433,7 +504,9 @@ sysexec(ulong* arg)
     // the same reason, because we don't want overwrite old stack
     // all of that will be relocated later.
     up->seg[ESEG] = newseg(SG_STACK, TSTKTOP-USTKSIZE, USTKSIZE/BY2PG);
+    /*e: [[sysexec()]] build temporary stack segment and qlock seglock */
 
+    /*s: [[sysexec()]] build args */
     /*
      * Args: pass 2: assemble; the pages will be faulted in
      */
@@ -499,7 +572,9 @@ sysexec(ulong* arg)
         n = i+1;
     }
     up->nargs = n;
+    /*e: [[sysexec()]] build args */
 
+    /*s: [[sysexec()]] free old memory segments */
     /*
      * Committed.
      * Free old memory.
@@ -510,6 +585,7 @@ sysexec(ulong* arg)
         /* prevent a second free if we have an error */
         up->seg[i] = nil;
     }
+    /*s: [[sysexec()]] free special segments if close on exec */
     for(i = BSEG+1; i < NSEG; i++) {
         s = up->seg[i];
         if(s != nil && (s->type&SG_CEXEC)) { // close on exec
@@ -517,6 +593,8 @@ sysexec(ulong* arg)
             up->seg[i] = nil;
         }
     }
+    /*e: [[sysexec()]] free special segments if close on exec */
+    /*e: [[sysexec()]] free old memory segments */
 
     /*s: [[sysexec()]] close files marked as opened with close on exec */
     /*
@@ -527,6 +605,8 @@ sysexec(ulong* arg)
         fdclose(i, CCEXEC);
     /*e: [[sysexec()]] close files marked as opened with close on exec */
 
+
+    /*s: [[sysexec()]] set Text segment */
     /* Text.  Shared. Attaches to cache image if possible */
     /*s: [[sysexec()]] get text segment ts via demand loading on tc */
     /* attachimage returns a locked cache image */
@@ -540,7 +620,9 @@ sysexec(ulong* arg)
     unlock(img);
     /*e: [[sysexec()]] get text segment ts via demand loading on tc */
     up->seg[TSEG] = ts;
+    /*e: [[sysexec()]] set Text segment */
 
+    /*s: [[sysexec()]] set Data segment */
     /* Data. Shared. */
     s = newseg(SG_DATA, t, (d-t)>>PGSHIFT);
     up->seg[DSEG] = s;
@@ -552,10 +634,14 @@ sysexec(ulong* arg)
     s->flen = data;
     // data is also in binary
     /*e: [[sysexec()]] adjust data segment s for demand loading on tc */
+    /*e: [[sysexec()]] set Data segment */
 
+    /*s: [[sysexec()]] set Bss segment */
     /* BSS. Zero fill on demand */
-    up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT); // 0 fill! see fixfault
+    up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT);
+    /*e: [[sysexec()]] set Bss segment */
 
+    /*s: [[sysexec()]] relocate temporary stack segment, unlock seglock */
     /*
      * Move the stack
      */
@@ -563,18 +649,23 @@ sysexec(ulong* arg)
     up->seg[ESEG] = nil;
     up->seg[SSEG] = s;
     qunlock(&up->seglock);
+
     poperror(); /* seglock */
     poperror(); /* elem */ // really? I think this matches more the cclose(tc)
     s->base = USTKTOP-USTKSIZE;
     s->top = USTKTOP;
     relocateseg(s, USTKTOP-TSTKTOP);
+    /*e: [[sysexec()]] relocate temporary stack segment, unlock seglock */
 
+    /*s: [[sysexec()]] set prioriry of root processes */
     /*
      *  '/' processes are higher priority (hack to make /ip more responsive).
      */
     if(devtab[tc->type]->dc == L'/')
         up->basepri = PriRoot;
     up->priority = up->basepri;
+    /*e: [[sysexec()]] set prioriry of root processes */
+
     poperror();
     cclose(tc); // tc has still a reference in the img
 
@@ -585,10 +676,13 @@ sysexec(ulong* arg)
     arch_flushmmu();
 
     qlock(&up->debug);
+    /*s: [[sysexec()]] when hold debug lock, reset some fields */
     up->nnote = 0;
     up->notify = nil;
     up->notified = false;
+    /*x: [[sysexec()]] when hold debug lock, reset some fields */
     up->privatemem = false;
+    /*e: [[sysexec()]] when hold debug lock, reset some fields */
     arch_procsetup(up);
     qunlock(&up->debug);
 
@@ -672,14 +766,18 @@ long
 sysexits(ulong* arg)
 {
     char *status;
-    char *inval = "invalid exit string";
     char buf[ERRMAX];
+    /*s: [[sysexits()]] other locals */
+    char *inval = "invalid exit string";
+    /*e: [[sysexits()]] other locals */
 
     status = (char*)arg[0];
+    /*s: [[sysexits()]] sanity check status, copy string in buf */
     if(status){
         if(waserror())
             status = inval;
         else{
+            // validaddr() and vmemchr() can generate error()
             validaddr((ulong)status, 1, false);
             if(vmemchr(status, 0, ERRMAX) == 0){
                 memmove(buf, status, ERRMAX);
@@ -690,7 +788,9 @@ sysexits(ulong* arg)
         }
 
     }
+    /*e: [[sysexits()]] sanity check status, copy string in buf */
     pexit(status, /*freemem*/true);
+
     panic("pexit: should never reach this point");
     return -1; // unreachable
 }
@@ -709,8 +809,10 @@ sysawait(ulong* arg)
     n = arg[1];
     validaddr(arg[0], n, true);
     pid = pwait(&w);
+    /*s: [[sysawait()]] sanity check pid */
     if(pid < 0)
         return -1;
+    /*e: [[sysawait()]] sanity check pid */
     i = snprint((char*)arg[0], n, "%d %lud %lud %lud %q",
         w.pid,
         /*s: [[sysawait()]] snprint time field arguments */

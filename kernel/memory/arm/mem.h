@@ -143,9 +143,6 @@
 /*
  * Sizes
  */
-/*s: constant BI2BY(arm) */
-#define BI2BY       8           /* bits per byte */
-/*e: constant BI2BY(arm) */
 /*s: constant BY2WD(arm) */
 #define BY2WD       4
 /*e: constant BY2WD(arm) */

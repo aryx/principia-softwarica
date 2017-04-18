@@ -75,7 +75,7 @@ void    (*checkaddr)(ulong, Segment *, Page *);
 ulong   addr2check;
 
 /*s: function fixfault */
-int
+errorneg1
 fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 {
     int type;
@@ -118,7 +118,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         if(*pte == nil) {
             new = newpage(true, &s, addr); // true so clear! zeroed BSS & heap!
             if(s == nil) //?? when can be nil at exit?
-                return -1;
+                return ERROR_NEG1;
             *pte = new;
         }
         goto common;
@@ -141,6 +141,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
             break;
         }
         /*e: [[fixfault()]] if read and copy on write, adjust mmupte and break */
+        // else
 
         lkp = *pte;
 
@@ -200,7 +201,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     if(doputmmu)
         arch_putmmu(addr, mmupte, *pte);
 
-    return 0; // OK
+    return OK_0;
 }
 /*e: function fixfault */
 

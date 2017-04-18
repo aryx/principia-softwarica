@@ -68,6 +68,7 @@ uvlong  (*arch_fastticks)(uvlong*);
 // time/<arch>/time.c
 void    (*arch_microdelay)(int);
 void    (*arch_delay)(int);
+/*x: portfns_core.h backward deps breaker */
 // init/<arch>/main.c
 bool (*arch_isaconfig)(char*, int, ISAConf*);
 /*e: portfns_core.h backward deps breaker */

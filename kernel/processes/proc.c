@@ -753,10 +753,14 @@ noprocpanic(char *msg)
 Proc*
 newproc(void)
 {
-    char msg[64];
     Proc *p;
+    /*s: [[newproc()]] other locals */
+    char msg[64];
+    /*e: [[newproc()]] other locals */
 
     lock(&procalloc);
+    // =~ p = procalloc.free
+    /*s: [[newproc()]] set [[p]] to [[procalloc.free]] and wait if nil */
     while((p = procalloc.free) == nil) {
         unlock(&procalloc);
 
@@ -772,29 +776,56 @@ newproc(void)
         resrcwait(msg);
         lock(&procalloc);
     }
+    /*e: [[newproc()]] set [[p]] to [[procalloc.free]] and wait if nil */
     procalloc.free = p->qnext;
     unlock(&procalloc);
     p->qnext = nil;
 
     p->state = Scheding;
     p->pid = incref(&pidalloc);
-    p->noteid = incref(&noteidalloc);
-    if(p->pid==0 || p->noteid==0)
+    /*s: [[newproc()]] sanity check pid */
+    if(p->pid==0)
         panic("pidalloc");
+    /*e: [[newproc()]] sanity check pid */
     pidhash(p);
-    p->notepending = false;
-    p->notified = false;
+
+    /*s: [[newproc()]] set fields of [[p]] */
+    memset(p->seg, nilptr, sizeof p->seg);
+    /*x: [[newproc()]] set fields of [[p]] */
     p->psstate = "New";
-    p->cpu = nil;
+    kstrdup(&p->text, "*notext");
+    /*x: [[newproc()]] set fields of [[p]] */
     if(p->kstack == nil)
         p->kstack = smalloc(KSTACK);
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->cpu = nil;
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->fgrp = nil;
+    p->pgrp = nil;
+    p->egrp = nil;
+    p->rgrp = nil;
+    /*x: [[newproc()]] set fields of [[p]] */
     kstrdup(&p->user, "*nouser");
-    kstrdup(&p->text, "*notext");
+    /*x: [[newproc()]] set fields of [[p]] */
     kstrdup(&p->args, "");
-    memset(p->seg, nilptr, sizeof p->seg);
     p->nargs = 0;
-    p->setargs = false;
-
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->parent = nil;
+    p->nchild = 0;
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->waitq = nil;
+    p->nwait = 0;
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->kp = false;
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->pdbg = nil;
+    p->procctl = Proc_nothing;
+    p->syscalltrace = nil; 
+    p->trace = false;
+    p->dbgreg = nil;
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->noswap = false;
+    /*x: [[newproc()]] set fields of [[p]] */
     /* sched params */
     procpriority(p, PriNormal, false);
     p->lastcpu = nil;
@@ -802,40 +833,33 @@ newproc(void)
     p->cpuavg = 0;
     p->lastupdate = CPUS(0)->ticks*Scaling;
     p->edf = nil;
-
-    p->parent = nil;
-    p->nchild = 0;
-    p->nwait = 0;
-    p->waitq = nil;
-
-    p->fgrp = nil;
-    p->pgrp = nil;
-    p->egrp = nil;
-    p->rgrp = nil;
-
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->nlocks.ref = 0;
+    p->delaysched = 0;
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->noteid = incref(&noteidalloc);
+    if(p->noteid==0)
+        panic("pidalloc");
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->notepending = false;
+    p->notified = false;
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->ureg = nil;
+    /*x: [[newproc()]] set fields of [[p]] */
     /*s: [[newproc()]] fp init */
     p->fpstate = FPinit;
     /*e: [[newproc()]] fp init */
-    p->kp = false;
-
-    p->pdbg = nil;
-    p->procctl = Proc_nothing;
-    p->syscalltrace = nil; 
-    p->trace = false;
-    p->dbgreg = nil;
-   
-    p->ureg = nil;
+    /*x: [[newproc()]] set fields of [[p]] */
     p->privatemem = false;
-    p->noswap = false;
-
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->setargs = false;
+    /*x: [[newproc()]] set fields of [[p]] */
     p->nerrlab = 0;
     p->errstr = p->errbuf0;
     p->syserrstr = p->errbuf1;
     p->errbuf0[0] = '\0';
     p->errbuf1[0] = '\0';
-
-    p->nlocks.ref = 0;
-    p->delaysched = 0;
+    /*e: [[newproc()]] set fields of [[p]] */
 
     return p;
 }
@@ -900,12 +924,14 @@ procinit(void)
     Proc *p;
     int i;
 
-    procalloc.free = xalloc(conf.nproc*sizeof(Proc));
+    procalloc.free = xalloc(conf.nproc * sizeof(Proc));
+    /*s: [[procinit()]] sanity check [[procalloc.free]] */
     if(procalloc.free == nil){
         xsummary();
         panic("cannot allocate %lud procs (%ludMB)\n", 
                       conf.nproc, conf.nproc*sizeof(Proc)/MB);
     }
+    /*e: [[procinit()]] sanity check [[procalloc.free]] */
     procalloc.arena = procalloc.free;
 
     p = procalloc.free;
@@ -1259,28 +1285,39 @@ void
 proc_pexit(char *exitstr, bool freemem)
 {
     Proc *p; // parent
+    /*s: [[pexit()]] other locals */
+    Waitq *wq;
+    /*x: [[pexit()]] other locals */
+    Waitq *f, *next;
+    /*x: [[pexit()]] other locals */
     Segment **s, **es;
-    long utime, stime;
-    Waitq *wq, *f, *next;
+    /*x: [[pexit()]] other locals */
     Fgrp *fgrp;
     Egrp *egrp;
     Rgrp *rgrp;
     Pgrp *pgrp;
     Chan *dot;
+    /*x: [[pexit()]] other locals */
     void (*pt)(Proc*, int, vlong);
+    /*x: [[pexit()]] other locals */
+    long utime, stime;
+    /*e: [[pexit()]] other locals */
 
-    if(up->syscalltrace)
-        free(up->syscalltrace);
-    up->alarm = 0;
+    /*s: [[pexit()]] at the start, free resources */
     if (up->tt)
         timerdel(up);
-
+    /*x: [[pexit()]] at the start, free resources */
+    up->alarm = 0;
+    /*x: [[pexit()]] at the start, free resources */
+    if(up->syscalltrace)
+        free(up->syscalltrace);
+    /*e: [[pexit()]] at the start, free resources */
     /*s: [[pexit()]] hook proctrace */
     pt = proctrace;
     if(pt)
         pt(up, SDead, 0);
     /*e: [[pexit()]] hook proctrace */
-
+    /*s: [[pexit()]] nil out resources under lock and free them */
     /* nil out all the resources under lock (free later) */
     qlock(&up->debug);
     fgrp = up->fgrp;
@@ -1305,23 +1342,30 @@ proc_pexit(char *exitstr, bool freemem)
         cclose(dot);
     if(pgrp)
         closepgrp(pgrp);
+    /*e: [[pexit()]] nil out resources under lock and free them */
 
+    /*s: [[pexit()]] if a kernel process, do nothing about parent and child */
+    if(up->kp) {
+    }
+    /*e: [[pexit()]] if a kernel process, do nothing about parent and child */
+    else {
     /*
      * if not a kernel process and have a parent,
      * do some housekeeping.
      */
-    if(up->kp == false) {
         p = up->parent;
+        /*s: [[pexit()]] sanity check parent pointer [[p]] */
         // no parent pointer, must be the very first process
         if(p == nil) {
             if(exitstr == nil)
                 exitstr = "unknown";
             panic("boot process died: %s", exitstr);
         }
-
+        /*e: [[pexit()]] sanity check parent pointer [[p]] */
         while(waserror())
-            ;
+            ; // ????
 
+        /*s: [[pexit()]] build waitq message [[wq]] */
         wq = smalloc(sizeof(Waitq));
         poperror();
 
@@ -1338,7 +1382,8 @@ proc_pexit(char *exitstr, bool freemem)
             snprint(wq->w.msg, sizeof(wq->w.msg), "%s %lud: %s", up->text, up->pid, exitstr);
         else
             wq->w.msg[0] = '\0';
-
+        /*e: [[pexit()]] build waitq message [[wq]] */
+        /*s: [[pexit()]] add [[wq]] message in parent process [[p]] waitq */
         lock(&p->exl);
         /*
          * Check that parent is still alive.
@@ -1371,14 +1416,16 @@ proc_pexit(char *exitstr, bool freemem)
         unlock(&p->exl);
         if(wq)
             free(wq);
+        /*e: [[pexit()]] add [[wq]] message in parent process [[p]] waitq */
     }
-
+    /*s: [[pexit()]] if not freemem, add process to broken processes list */
     // instead of a core dump we just keep the process around
     if(!freemem)
         addbroken(up); // will call sched()
+    /*e: [[pexit()]] if not freemem, add process to broken processes list */
 
+    /*s: [[pexit()]] free memory segments */
     qlock(&up->seglock);
-    //todo: rewrite using nelem(seg?)
     es = &up->seg[NSEG];
     for(s = up->seg; s < es; s++) {
         if(*s) {
@@ -1387,19 +1434,24 @@ proc_pexit(char *exitstr, bool freemem)
         }
     }
     qunlock(&up->seglock);
+    /*e: [[pexit()]] free memory segments */
 
+    /*s: [[pexit()]] wakeup process waiting on waitr and unhash pid */
     lock(&up->exl);     /* Prevent my children from leaving waits */
     pidunhash(up);
     // so my children will not generate a waitq, I will not be here anymore
     up->pid = 0; 
-    wakeup(&up->waitr); // wakeup process reading /proc/pid/wait
+    wakeup(&up->waitr);
     unlock(&up->exl);
-
+    /*e: [[pexit()]] wakeup process waiting on waitr and unhash pid */
+    /*s: [[pexit()]] free waitq */
     for(f = up->waitq; f; f = next) {
         next = f->next;
         free(f);
     }
+    /*e: [[pexit()]] free waitq */
 
+    /*s: [[pexit()]] release debuggers */
     /* release debuggers */
     qlock(&up->debug);
     if(up->pdbg) {
@@ -1407,6 +1459,7 @@ proc_pexit(char *exitstr, bool freemem)
         up->pdbg = nil;
     }
     qunlock(&up->debug);
+    /*e: [[pexit()]] release debuggers */
 
     /* Sched must not loop for these locks */
     lock(&procalloc);
@@ -1439,22 +1492,29 @@ pwait(Waitmsg *w)
     ulong cpid; // child pid
     Waitq *wq;
 
+    /*s: [[pwait()]] lock qwaitr */
     if(!canqlock(&up->qwaitr))
         error(Einuse); // someone is reading /proc/pid/wait?
-
     if(waserror()) {
         qunlock(&up->qwaitr);
         nexterror();
     }
+    /*e: [[pwait()]] lock qwaitr */
 
+    /*s: [[pwait()]] sanity check process has children */
     lock(&up->exl);
     if(up->nchild == 0 && up->waitq == nil) {
         unlock(&up->exl);
         error(Enochild);
     }
     unlock(&up->exl);
+    /*e: [[pwait()]] sanity check process has children */
 
+    // sleep!
+    /*s: [[pwait()]] wait until has a waitq */
     sleep(&up->waitr, haswaitq, up); // qwaitr is still locked
+    /*e: [[pwait()]] wait until has a waitq */
+    // ok, got a waitmsg
 
     // wq = pop(up->waitq), // can't be null, see haswaitq()
     lock(&up->exl);
@@ -1463,8 +1523,10 @@ pwait(Waitmsg *w)
     up->nwait--;
     unlock(&up->exl);
 
+    /*s: [[pwait()]] unlock qwaitr */
     qunlock(&up->qwaitr);
     poperror();
+    /*e: [[pwait()]] unlock qwaitr */
 
     if(w)
         memmove(w, &wq->w, sizeof(Waitmsg));
@@ -1602,10 +1664,10 @@ kproc(char *name, void (*func)(void *), void *arg)
     static Pgrp *kpgrp;
 
     p = newproc();
+    p->kp = true; // Kernel Process!
 
     p->psstate = nil;
     p->procmode = 0640;
-    p->kp = true; // Kernel Process
     p->ureg = nil;
     p->noswap = true;
 
@@ -1855,6 +1917,7 @@ procindex(ulong pid)
     int s;
 
     s = -1;
+    // hash_lookup(pid, procalloc.ht)
     h = pid % nelem(procalloc.ht);
     lock(&procalloc);
     for(p = procalloc.ht[h]; p != nil; p = p->pidhash)

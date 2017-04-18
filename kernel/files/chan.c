@@ -25,7 +25,7 @@ enum
 PATHSLOP    = 20,
 /*e: constant PATHSLOP */
 /*s: constant PATHMSLOP */
-    PATHMSLOP   = 20,
+PATHMSLOP   = 20,
 /*e: constant PATHMSLOP */
 };
 

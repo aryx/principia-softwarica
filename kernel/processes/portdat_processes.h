@@ -55,6 +55,7 @@ extern  char* statename[];
 /*
  *  process memory segments - NSEG always last !
  */
+coupling: must start with SSEG, see sysexec loop
 enum Procseg
 {
     SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
@@ -387,18 +388,19 @@ struct Proc
     /*x: [[Proc]] state fields */
     // some debugging information, e.g. "New", "PageOut", or name of syscall
     char  *psstate; /* used by /proc/#/status */
-    bool insyscall; // true when process inside a syscall
-
     // e.g. "*init*", or name of executable
     char  *text;
     /*x: [[Proc]] state fields */
     // e.g.. "eve" (no uid/gid in plan9, because of its distributed nature?)
     char  *user;
     /*x: [[Proc]] state fields */
-    ulong parentpid;
+    bool insyscall; // true when process inside a syscall
     /*x: [[Proc]] state fields */
     char  *args;
     int nargs;    /* number of bytes of args */
+    /*x: [[Proc]] state fields */
+    // option<pid> (None = 0)
+    ulong parentpid;
     /*e: [[Proc]] state fields */
 //--------------------------------------------------------------------
 // Memory
@@ -486,14 +488,14 @@ struct Proc
 // Process hierarchy
 //--------------------------------------------------------------------
     /*s: [[Proc]] hierarchy fields */
-    // option<ref<Proc>> nil for the boot process
+    // option<ref<Proc>> (nil for the boot process)
     Proc  *parent;
     int nchild;   /* Number of living children */
     /*x: [[Proc]] hierarchy fields */
     // list<ref_own<Waitq>>> =~ list<ref_own<Waitmsg>>
     Waitq *waitq;   /* Exited processes wait children */
     int nwait;    /* Number of uncollected wait records */ // len(waitq)
-    Lock  exl;    /* Lock count and waitq */
+    Lock  exl;    /* Lock count and waitq */ // and nchild
     /*x: [[Proc]] hierarchy fields */
     Rendez  waitr;    /* Place to hang out in wait */
     /*x: [[Proc]] hierarchy fields */
@@ -660,12 +662,13 @@ struct Procalloc
 {
     // array<Proc>, xalloc'ed in procinit() (conf.nproc)
     Proc* arena;
-  
-    // list<ref<Proc>> (next = Proc.qnext, hmmm abuse qnext)
+    // list<ref<Proc>> (next = Proc.qnext)
     Proc* free;
 
+    /*s: [[Procalloc]] other fields */
     // hash<Proc.pid, ref<Proc>> (next = Proc.pidhash)>
     Proc* ht[128];
+    /*e: [[Procalloc]] other fields */
   
     // extra
     Lock;

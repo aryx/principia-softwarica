@@ -42,7 +42,7 @@ struct Page
     // but that means needs to use Lock below to access this non-atomic ref.
     ushort  ref;      /* Reference count */ // Pages are shared!
 
-    // set<enum<modref>>
+    // bitset<enum<Modref>>
     char  modref;     /* Simulated modify/reference bits */
 
     /*s: [[Page]] other fields */
@@ -149,9 +149,10 @@ enum Segtype
     SG_PHYSICAL = 05,
     /*e: [[Segtype]] other cases */
     SG_TYPE   = 07,   /* Mask type of segment */
-  
-    SG_RONLY  = 0040,   /* Segment is read only */
+
     /*s: [[Segtype]] other flags */
+    SG_RONLY  = 0040,   /* Segment is read only */
+    /*x: [[Segtype]] other flags */
     SG_CEXEC  = 0100,   /* Detach at exec */
     /*e: [[Segtype]] other flags */
 };
@@ -199,18 +200,16 @@ struct Segment
   
     virt_addr base;   /* virtual base */
     virt_addr top;    /* virtual top */
-    ulong size;   /* size in pages */ // top - base / BY2PG?
+    ulong size;   /* size in pages */ // top - base / BY2PG
   
-    // Kind of a page directory table. Points to smallpagedir if small enough.
     // array<option<ref_own<Pagetable>>>, smalloc'ed (or smallpagedir alias)
-    // can map up to 2G of memory
     Pagetable **pagedir; // array of PAGEDIRSIZE max
-    // array<option<ref_own<Pagetable>>
-    Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
 
-  
     /*s: [[Segment]] other fields */
+    // array<option<ref_own<Pagetable>>
+    Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
+    /*x: [[Segment]] other fields */
     KImage  *image;   /* text in file attached to this segment */
     /*x: [[Segment]] other fields */
     ulong fstart;   /* start address in file for demand load */
@@ -231,7 +230,7 @@ struct Segment
   
     // extra
     Ref; // LOCK ORDERING: always do lock(img); lock(s) ??
-    QLock lk;
+    QLock lk; // FOR WHAT???
 };
 /*e: struct Segment */
 
@@ -361,10 +360,6 @@ enum
 // Page Allocator (singleton)
 struct Palloc
 {
-    Pallocmem mem[4]; // = Conf.mem minus memory allocated for the kernel
-    // sum of mem.npage (which should be conf.upages)
-    ulong user;     /* how many user pages */
-  
     // array<Page>, xalloc'ed in pageinit(), huge, cover physical user space
     Page  *pages; /* array of all pages */ 
   
@@ -375,6 +370,11 @@ struct Palloc
 
     ulong freecount;    /* how many pages on free list now */
 
+    /*s: [[Palloc]] capacity fields */
+    Pallocmem mem[4]; // = Conf.mem minus memory allocated for the kernel
+    // sum of mem.npage (which should be conf.upages)
+    ulong user;     /* how many user pages */
+    /*e: [[Palloc]] capacity fields */
     /*s: [[Palloc]] other fields */
     // hash<Page.daddr, ref<Page>> (next = Page.hash)>
     Page  *hash[PGHSIZE];

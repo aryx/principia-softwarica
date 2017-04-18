@@ -91,12 +91,15 @@ smalloc(ulong size)
         v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
         if(v != nil)
             break;
+        // else
         tsleep(&up->sleepr, returnfalse, 0, 100);
     }
+    /*s: [[smalloc()]] if Npadlong */
     if(Npadlong){
         v = (ulong*)v+Npadlong;
         setmalloctag(v, getcallerpc(&size));
     }
+    /*e: [[smalloc()]] if Npadlong */
     memset(v, 0, size); // clear
     return v;
 }
@@ -108,14 +111,16 @@ malloc(ulong size)
 {
     kern_addr3 v;
 
-    v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
+    v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
     if(v == nil)
         return nil;
+    /*s: [[malloc()]] if Npadlong */
     if(Npadlong){
         v = (ulong*)v+Npadlong;
         setmalloctag(v, getcallerpc(&size));
         setrealloctag(v, 0);
     }
+    /*e: [[malloc()]] if Npadlong */
     memset(v, 0, size);
     return v;
 }
@@ -128,11 +133,13 @@ mallocz(ulong size, bool clr)
     kern_addr3 v;
 
     v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
+    /*s: [[mallocz()]] if Npadlong */
     if(Npadlong && v != nil){
         v = (ulong*)v+Npadlong;
         setmalloctag(v, getcallerpc(&size));
         setrealloctag(v, 0);
     }
+    /*e: [[mallocz()]] if Npadlong */
     if(clr && v != nil)
         memset(v, 0, size);
     return v;
@@ -145,13 +152,15 @@ mallocalign(ulong size, ulong align, long offset, ulong span)
 {
     kern_addr3 v;
 
-    v = poolallocalign(mainmem, size+Npadlong*sizeof(ulong), align, 
-                           offset-Npadlong*sizeof(ulong), span);
+    v = poolallocalign(mainmem, size  +Npadlong*sizeof(ulong), align, 
+                                offset-Npadlong*sizeof(ulong), span);
+    /*s: [[mallocalign()]] if Npadlong */
     if(Npadlong && v != nil){
         v = (ulong*)v+Npadlong;
         setmalloctag(v, getcallerpc(&size));
         setrealloctag(v, 0);
     }
+    /*e: [[mallocalign()]] if Npadlong */
     if(v)
         memset(v, 0, size);
     return v;
@@ -174,15 +183,19 @@ realloc(kern_addr3 v, ulong size)
     kern_addr3 nv;
 
     if(v != nil)
-        v = (ulong*)v-Npadlong;
+        v = (ulong*)v - Npadlong;
+    /*s: [[realloc()]] if Npadlong */
     if(Npadlong !=0 && size != 0)
         size += Npadlong*sizeof(ulong);
+    /*e: [[realloc()]] if Npadlong */
 
     if(nv = poolrealloc(mainmem, v, size)){
+       /*s: [[realloc()]] readjust nv if Npadlong */
         nv = (ulong*)nv+Npadlong;
         setrealloctag(nv, getcallerpc(&v));
         if(v == nil)
             setmalloctag(nv, getcallerpc(&v));
+       /*e: [[realloc()]] readjust nv if Npadlong */
     }       
     return nv;
 }

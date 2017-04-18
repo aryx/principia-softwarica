@@ -35,9 +35,11 @@ pageinit(void)
         np += pm->npage;
     }
 
-    palloc.pages = xalloc(np*sizeof(Page));
+    palloc.pages = xalloc(np * sizeof(Page));
+    /*s: [[pageinit()]] sanity check [[palloc.pages]] */
     if(palloc.pages == nil)
         panic("pageinit");
+    /*e: [[pageinit()]] sanity check [[palloc.pages]] */
 
     palloc.head = palloc.pages;
     p = palloc.head;
@@ -104,6 +106,7 @@ pageunchain(Page *p)
     else
         palloc.tail = p->prev;
     p->prev = p->next = nil;
+
     palloc.freecount--;
 }
 /*e: function pageunchain */
@@ -127,6 +130,7 @@ pagechaintail(Page *p)
     }
     palloc.tail = p;
     p->next = nil;
+
     palloc.freecount++;
 }
 /*e: function pagechaintail */
@@ -138,6 +142,7 @@ pagechainhead(Page *p)
 {
     if(canlock(&palloc))
         panic("pagechainhead");
+
     // add_head(p, palloc)
     if(palloc.head) {
         p->next = palloc.head;
@@ -149,6 +154,7 @@ pagechainhead(Page *p)
     }
     palloc.head = p;
     p->prev = nil;
+
     palloc.freecount++;
 }
 /*e: function pagechainhead */
@@ -158,55 +164,58 @@ Page*
 newpage(bool clear, Segment **s, virt_addr va)
 {
     Page *p;
-    Arch_KMap *k;
-    bool dontalloc;
-    int i; 
     /*s: [[newpage()]] other locals */
+    Arch_KMap *k;
+    /*x: [[newpage()]] other locals */
+    bool dontalloc;
+    /*x: [[newpage()]] other locals */
     int color;
     // enum<Cachectl>
     uchar ct;
+    /*x: [[newpage()]] other locals */
+    int i; 
     /*e: [[newpage()]] other locals */
 
     lock(&palloc);
 
     /*s: [[newpage()]] loop waiting freecount > highwater */
-        for(;;) {
-            if(palloc.freecount > swapalloc.highwater)
-                break;
-            if(up->kp && palloc.freecount > 0)
-                break;
+    for(;;) {
+        if(palloc.freecount > swapalloc.highwater)
+            break;
+        if(up->kp && palloc.freecount > 0)
+            break;
 
-            // in highwater, not so many free pages, need to wait
+        // in highwater, not so many free pages, need to wait
 
-            unlock(&palloc);
-            dontalloc = false;
-            if(s && *s) {
-                qunlock(&((*s)->lk));
-                *s = nil;// !!
-                dontalloc = true;
-            }
-            qlock(&palloc.pwait);   /* Hold memory requesters here */
-
-            while(waserror())   /* Ignore interrupts */
-                ;
-
-            kickpager();
-            tsleep(&palloc.freememr, hasfreepages, 0, 1000);
-
-            poperror();
-            qunlock(&palloc.pwait);
-
-            /*
-             * If called from fault and we lost the segment from
-             * underneath don't waste time allocating and freeing
-             * a page. Fault will call newpage again when it has
-             * reacquired the segment locks
-             */
-            if(dontalloc)
-                return nil;
-
-            lock(&palloc);
+        unlock(&palloc);
+        dontalloc = false;
+        if(s && *s) {
+            qunlock(&((*s)->lk));
+            *s = nil;// !!
+            dontalloc = true;
         }
+        qlock(&palloc.pwait);   /* Hold memory requesters here */
+
+        while(waserror())   /* Ignore interrupts */
+            ;
+
+        kickpager();
+        tsleep(&palloc.freememr, hasfreepages, 0, 1000);
+
+        poperror();
+        qunlock(&palloc.pwait);
+
+        /*
+         * If called from fault and we lost the segment from
+         * underneath don't waste time allocating and freeing
+         * a page. Fault will call newpage again when it has
+         * reacquired the segment locks
+         */
+        if(dontalloc)
+            return nil;
+
+        lock(&palloc);
+    }
     /*e: [[newpage()]] loop waiting freecount > highwater */
 
     //when no color: p = palloc.head;
@@ -245,12 +254,13 @@ newpage(bool clear, Segment **s, virt_addr va)
 
     unlock(p);
     unlock(&palloc);
-
+    /*s: [[newpage()]] if clear */
     if(clear) {
         k = arch_kmap(p);
         memset((void*)VA(k), 0, BY2PG);
         arch_kunmap(k);
     }
+    /*e: [[newpage()]] if clear */
     return p;
 }
 /*e: constructor newpage */
@@ -285,7 +295,7 @@ putpage(PageOrSwap *p)
         unlock(&palloc);
         return;
     }
-
+    // else
     /*s: [[putpage]] if p has an image */
     if(p->image && p->image != &swapimage)
         pagechaintail(p);
@@ -293,9 +303,10 @@ putpage(PageOrSwap *p)
     else 
         pagechainhead(p);
 
+    /*s: [[putpage]] wakeup process waiting for freepage if any */
     if(palloc.freememr.p != nil)
         wakeup(&palloc.freememr);
-
+    /*e: [[putpage]] wakeup process waiting for freepage if any */
     unlock(p);
     unlock(&palloc);
 }
@@ -553,7 +564,7 @@ ptcpy(Pagetable *old)
     PageOrSwap **src, **dst;
 
     new = ptalloc();
-    dst = &new->pagetab[old->first-old->pagetab];
+    dst = &new->pagetab[old->first - old->pagetab];
     new->first = dst;
     for(src = old->first; src <= old->last; src++, dst++)
         if(*src) {
@@ -591,8 +602,10 @@ void
 freept(Segment *s, Pagetable *p)
 {
     PageOrSwap **pte;
+    /*s: [[freept()]] other locals */
     int ref;
     Page *pt, **ptop;
+    /*e: [[freept()]] other locals */
 
     switch(s->type&SG_TYPE) {
     /*s: [[freept()]] SG_PHYSICAL case */

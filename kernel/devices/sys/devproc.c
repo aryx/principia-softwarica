@@ -163,6 +163,7 @@ static char *sname[]={
     [SG_DATA]     = "Data", 
     [SG_BSS]      = "Bss", 
     [SG_STACK]    = "Stack", 
+
     [SG_SHARED]   = "Shared", 
     [SG_PHYSICAL] = "Phys"
 };
@@ -762,6 +763,8 @@ static long
 procread(Chan *c, void *va, long n, vlong off)
 {
     /*s: [[procread()]] locals */
+    Segment *sg;
+    /*x: [[procread()]] locals */
     Mntwalk *mw;
     char flag[10];
     /*x: [[procread()]] locals */
@@ -773,7 +776,7 @@ procread(Chan *c, void *va, long n, vlong off)
     ulong offset;
     Confmem *cm;
     Proc *p;
-    Segment *sg, *s;
+    Segment *s;
     Ureg kur;
     Waitq *wq;
     /*e: [[procread()]] locals */
@@ -926,6 +929,48 @@ procread(Chan *c, void *va, long n, vlong off)
         memmove(a, ((char*)s->profile)+offset, n);
         return n;
     /*x: [[procread()]] cases */
+    case Qwait:
+        if(!canqlock(&p->qwaitr))
+            error(Einuse);
+
+        if(waserror()) {
+            qunlock(&p->qwaitr);
+            nexterror();
+        }
+
+        /*s: [[procread()]] when Qwait case, sanity check process has children */
+        // same in sysawait
+        lock(&p->exl);
+        if(up == p && p->nchild == 0 && p->waitq == 0) {
+            unlock(&p->exl);
+            error(Enochild);
+        }
+        /*e: [[procread()]] when Qwait case, sanity check process has children */
+        pid = p->pid;
+        while(p->waitq == nil) {
+            unlock(&p->exl);
+            sleep(&p->waitr, haswaitq, p);
+            if(p->pid != pid)
+                error(Eprocdied);
+            lock(&p->exl);
+        }
+        wq = p->waitq;
+        p->waitq = wq->next;
+        p->nwait--;
+        unlock(&p->exl);
+
+        qunlock(&p->qwaitr);
+        poperror();
+
+        n = snprint(a, n, "%d %lud %lud %lud %q",
+            wq->w.pid,
+            /*s: [[procread()]] Qwait case, snprint time field arguments */
+            wq->w.time[TUser], wq->w.time[TSys], wq->w.time[TReal],
+            /*e: [[procread()]] Qwait case, snprint time field arguments */
+            wq->w.msg);
+        free(wq);
+        return n;
+    /*x: [[procread()]] cases */
     case Qkregs:
         memset(&kur, 0, sizeof(Ureg));
         arch_setkernur(&kur, p);
@@ -1055,43 +1100,6 @@ procread(Chan *c, void *va, long n, vlong off)
         memmove(a, statbuf+offset, n);
         return n;
 
-    case Qwait:
-        if(!canqlock(&p->qwaitr))
-            error(Einuse);
-
-        if(waserror()) {
-            qunlock(&p->qwaitr);
-            nexterror();
-        }
-
-        lock(&p->exl);
-        if(up == p && p->nchild == 0 && p->waitq == 0) {
-            unlock(&p->exl);
-            error(Enochild);
-        }
-        pid = p->pid;
-        while(p->waitq == 0) {
-            unlock(&p->exl);
-            sleep(&p->waitr, haswaitq, p);
-            if(p->pid != pid)
-                error(Eprocdied);
-            lock(&p->exl);
-        }
-        wq = p->waitq;
-        p->waitq = wq->next;
-        p->nwait--;
-        unlock(&p->exl);
-
-        qunlock(&p->qwaitr);
-        poperror();
-        n = snprint(a, n, "%d %lud %lud %lud %q",
-            wq->w.pid,
-            /*s: [[procread()]] Qwait case, snprint time field arguments */
-            wq->w.time[TUser], wq->w.time[TSys], wq->w.time[TReal],
-            /*e: [[procread()]] Qwait case, snprint time field arguments */
-            wq->w.msg);
-        free(wq);
-        return n;
 
 
     case Qnoteid:

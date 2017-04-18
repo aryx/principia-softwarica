@@ -89,8 +89,10 @@ xspanalloc(ulong size, int align, ulong span)
 {
     ulong a, v, t;
     a = (kern_addr)xalloc(size+align+span);
+    /*s: [[xspanalloc()]] sanity check a */
     if(a == nilptr)
         panic("xspanalloc: %lud %d %lux", size, align, span);
+    /*e: [[xspanalloc()]] sanity check a */
 
     if(span > 2) {
         v = (a + span) & ~(span-1);
@@ -150,7 +152,7 @@ xallocz(ulong size, bool zero)
         l = &h->next;
     }
     iunlock(&xlists);
-    return nil;
+    return nil; // panic? 
 }
 /*e: function xallocz */
 
@@ -169,10 +171,12 @@ xfree(kern_addr3 p)
     Xhdr *x;
 
     x = (Xhdr*)((ulong)p - offsetof(Xhdr, data[0]));
+    /*s: [[xfree()]] sanity check magix mark */
     if(x->magix != Magichole) {
         xsummary();
         panic("xfree(%#p) %#ux != %#lux", p, Magichole, x->magix);
     }
+    /*e: [[xfree()]] sanity check magix mark */
     xhole(PADDR((kern_addr)x), x->size);
 }
 /*e: function xfree */
@@ -186,26 +190,28 @@ xmerge(kern_addr3 vp, kern_addr3 vq)
     p = (Xhdr*)(((ulong)vp - offsetof(Xhdr, data[0])));
     q = (Xhdr*)(((ulong)vq - offsetof(Xhdr, data[0])));
 
+    /*s: [[xmerge()]] sanity check magix */
     if(p->magix != Magichole || q->magix != Magichole) {
         /*s: [[xmerge()]] debug info when not magichole */
-                int i;
-                ulong *wd;
-                void *badp;
+        int i;
+        ulong *wd;
+        void *badp;
 
-                xsummary();
-                badp = (p->magix != Magichole? p: q);
-                wd = (ulong *)badp - 12;
-                for (i = 24; i-- > 0; ) {
-                    print("%#p: %lux", wd, *wd);
-                    if (wd == badp)
-                        print(" <-");
-                    print("\n");
-                    wd++;
-                }
+        xsummary();
+        badp = (p->magix != Magichole? p: q);
+        wd = (ulong *)badp - 12;
+        for (i = 24; i-- > 0; ) {
+            print("%#p: %lux", wd, *wd);
+            if (wd == badp)
+                print(" <-");
+            print("\n");
+            wd++;
+        }
         /*e: [[xmerge()]] debug info when not magichole */
         panic("xmerge(%#p, %#p) bad magic %#lux, %#lux",
             vp, vq, p->magix, q->magix);
     }
+    /*e: [[xmerge()]] sanity check magix */
     if((byte*)p+p->size == (byte*)q) {
         p->size += q->size;
         return true;

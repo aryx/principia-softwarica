@@ -159,11 +159,13 @@ arch__confinit(void)
     ulong kpages;
     ulong kmem;
 
+    /*s: [[arch__confinit()]] if maxmem boot parameter(arm) */
     if((p = getconf("*maxmem")) != nil){
         memsize = strtoul(p, 0, 0);
         if (memsize < 16*MB)        /* sanity */
             memsize = 16*MB;
     }
+    /*e: [[arch__confinit()]] if maxmem boot parameter(arm) */
     // simpler than for x86 :)
     getramsize(&conf.mem[0]);
 
@@ -214,11 +216,11 @@ arch__confinit(void)
      */
     kmem = kpages * BY2PG;
     kmem -= 
-          conf.upages*sizeof(Page)
-        + conf.nproc*sizeof(Proc)
-        + conf.nimage*sizeof(KImage)
+          conf.upages * sizeof(Page)
+        + conf.nproc  * sizeof(Proc)
+        + conf.nimage * sizeof(KImage)
         + conf.nswap
-        + conf.nswppo*sizeof(Page*); // pad's second bugfix :)
+        + conf.nswppo * sizeof(Page*); // pad's second bugfix :)
 
     // memory pool
     mainmem->maxsize = kmem;
@@ -289,7 +291,10 @@ init0(void)
         poperror();
     }
     kproc("alarm", alarmkproc, nil); // ??
+
+    // !! Go to user space !!
     arch_touser(sp);
+
     assert(0);          /* shouldn't have returned */
 }
 /*e: function init0(arm) */

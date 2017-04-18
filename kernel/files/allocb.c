@@ -40,7 +40,7 @@ _allocb(int size)
     b->free = 0;
     b->flag = 0;
     b->ref = 0;
-    arch_xinc(&b->ref);
+    arch_xinc(&b->ref); // why not incref?? or at least inccnt?
 
     /* align start of data portion by rounding up */
     addr = (ulong)b;

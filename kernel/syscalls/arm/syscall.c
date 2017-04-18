@@ -377,13 +377,12 @@ arch_forkchild(Proc *p, Ureg *ureg)
 {
     Ureg *cureg;
 
-    p->sched.sp = (ulong)p->kstack+KSTACK-sizeof(Ureg);
+    p->sched.sp = (ulong)p->kstack + KSTACK - sizeof(Ureg);
     p->sched.pc = (ulong)arch__forkret;
 
     cureg = (Ureg*)(p->sched.sp);
     memmove(cureg, ureg, sizeof(Ureg));
-
-    /* syscall returns 0 for child */
+    /* syscall returns 0 for child */ // adjust
     cureg->r0 = 0;
 
     /* Things from bottom of syscall which were never executed */
