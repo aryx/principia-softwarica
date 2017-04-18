@@ -55,7 +55,7 @@ extern  char* statename[];
 /*
  *  process memory segments - NSEG always last !
  */
-coupling: must start with SSEG, see sysexec loop
+//coupling: must start with SSEG, see sysexec loop
 enum Procseg
 {
     SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
