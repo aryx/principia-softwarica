@@ -9,6 +9,7 @@
 // This used to be in <arch>/, but its fields are used from port/, so the 
 // code must be portable!
 /*s: struct Lock */
+// a.k.a Spinlock
 struct Lock
 {
     ulong key; // 0 when unset, 1 (or 0xDEADDEAD) when acquired, could be a bool
@@ -41,6 +42,7 @@ typedef Lock ILock;
 
 /*s: struct QLock */
 // Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h QLock)
+// a.k.a Mutex
 struct KQLock
 {
     bool  locked;   /* flag */
@@ -71,8 +73,10 @@ struct RWlock
     // option<ref<Proc>> 
     Proc  *wproc;   /* writing proc */
   
+    /*s: [[RWlock]] debugging fields */
     uintptr wpc;    /* pc of writer */
-  
+    /*e: [[RWlock]] debugging fields */
+    // Extra  
     Lock  use;
 };
 /*e: struct RWlock */

@@ -38,7 +38,7 @@ struct Page
     phys_addr pa;     /* Physical address in memory */
     virt_addr va;     /* Virtual address for user */
 
-    // Why not Ref? to save space (same reason they use char below)
+    // Why not Ref? to save space (same reason for using 'char' below)
     // but that means needs to use Lock below to access this non-atomic ref.
     ushort  ref;      /* Reference count */ // Pages are shared!
 
@@ -255,7 +255,7 @@ struct Hole
     // between addr and top the memory is free, this is the "hole"
     phys_addr addr; 
     phys_addr top; 
-    ulong size; // top - addr
+    ulong size; // top - addr (in bytes)
 
     // Extra
     /*s: [[Hole]] extra fields */

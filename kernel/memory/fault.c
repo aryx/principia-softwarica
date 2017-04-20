@@ -392,8 +392,9 @@ seg(Proc *p, virt_addr addr, bool dolock)
         if(sg == nil)
             continue;
         if(addr >= sg->base && addr < sg->top) {
-            if(dolock == false)
+            if(!dolock)
                 return sg;
+            // else
 
             qlock(&sg->lk);
             // can have a race, need to check again

@@ -29,12 +29,14 @@ qlock(QLock *q)
     Proc *p;
 
     /*s: [[qlock()]] sanity checks */
-    if(cpu->ilockdepth != 0)
-        print("qlock: %#p: ilockdepth %d\n", getcallerpc(&q), cpu->ilockdepth);
-    if(up != nil && up->nlocks.ref)
-        print("qlock: %#p: nlocks %lud\n", getcallerpc(&q), up->nlocks.ref);
     if(q->use.key == 0x55555555) // dead code??
         panic("qlock: q %#p, key 5*\n", q);
+    /*x: [[qlock()]] sanity checks */
+    if(up != nil && up->nlocks.ref)
+        print("qlock: %#p: nlocks %lud\n", getcallerpc(&q), up->nlocks.ref);
+    /*x: [[qlock()]] sanity checks */
+    if(cpu->ilockdepth != 0)
+        print("qlock: %#p: ilockdepth %d\n", getcallerpc(&q), cpu->ilockdepth);
     /*e: [[qlock()]] sanity checks */
     lock(&q->use);
     /*s: [[qlock()]] start of qlock, stat */
@@ -47,8 +49,10 @@ qlock(QLock *q)
         return;
     }
     // else
+    /*s: [[qlock()]] sanity check up */
     if(up == nil)
         panic("qlock");
+    /*e: [[qlock()]] sanity check up */
     /*s: [[qlock()]] when qlock already held, stat */
     rwstats.qlockq++;
     /*e: [[qlock()]] when qlock already held, stat */
@@ -103,7 +107,7 @@ qunlock(QLock *q)
 
     lock(&q->use);
     /*s: [[qunlock()]] sanity checks */
-    if(q->locked == false)
+    if(!q->locked)
         print("qunlock called with qlock not held, from %#p\n",
             getcallerpc(&q));
     /*e: [[qunlock()]] sanity checks */
@@ -133,15 +137,18 @@ rlock(RWlock *q)
 
     lock(&q->use);
     rwstats.rlock++;
-    if(q->writer == false && q->head == nil){
+    if(!q->writer && q->head == nil){
         /* no writer, go for it */
         q->readers++;
         unlock(&q->use);
         return;
     }
+    // else, a writer or a waiting queue??
 
+    /*s: [[rlock()]] sanity check up */
     if(up == nil)
         panic("rlock");
+    /*e: [[rlock()]] sanity check up */
     rwstats.rlockq++;
 
     // add_queue(q, up)
@@ -172,6 +179,7 @@ runlock(RWlock *q)
         unlock(&q->use);
         return;
     }
+    // else, p != nil && q->readers == 0
 
     /* start waiting writer */
     if(p->state != QueueingW)
@@ -196,7 +204,7 @@ wlock(RWlock *q)
 
     lock(&q->use);
     rwstats.wlock++;
-    if(q->readers == 0 && q->writer == false){
+    if(q->readers == 0 && !q->writer){
         /* noone waiting, go for it */
         q->wpc = getcallerpc(&q);
         q->wproc = up;
@@ -204,10 +212,13 @@ wlock(RWlock *q)
         unlock(&q->use);
         return;
     }
+    // else, already a writer or readers
 
     /* wait */
+    /*s: [[wlock()]] sanity check up */
     if(up == nil)
         panic("wlock");
+    /*e: [[wlock()]] sanity check up */
     rwstats.wlockq++;
 
     // add_queue(q, up)

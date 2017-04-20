@@ -12,25 +12,26 @@
 // pad specific, could be in u.h
 /*s: pad basic types */
 typedef int bool;
-enum _bool {
+enum Bool {
   false = 0,
   true = 1
 };
+typedef ushort bool_ushort; //TODO: delete
 
 typedef uchar byte;
 
-typedef ushort bool_ushort; //TODO: delete
-
 typedef int fdt; // file descriptor type
 
-#define OK_0 0
-#define OK_1 1
-#define ERROR_0 0
-#define ERROR_1 1
-#define ERROR_NEG1 (-1)
 typedef int error0;
+#define ERROR_0 0
+#define OK_1 1
+
 typedef int error1;
+#define ERROR_1 1
+#define OK_0 0
+
 typedef int errorneg1;
+#define ERROR_NEG1 (-1)
 /*e: pad basic types */
 
 //#define nil (void*)0 in u.h

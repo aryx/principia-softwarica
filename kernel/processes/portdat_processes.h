@@ -74,7 +74,7 @@ enum Procseg
 enum
 {
    /*s: constant DELTAFD */
-       DELTAFD = 20    /* incremental increase in Fgrp.fd's */
+   DELTAFD = 20    /* incremental increase in Fgrp.fd's */
    /*e: constant DELTAFD */
 };
 
@@ -458,7 +458,7 @@ struct Proc
     // ref_counted<Chan>
     Chan  *dot; // The current directory
     /*x: [[Proc]] files fields */
-    // ref_counted<fgrp>
+    // ref_counted<Fgrp>
     Fgrp  *fgrp;    /* File descriptor group */
     /*x: [[Proc]] files fields */
     Fgrp  *closingfgrp; /* used during teardown */
@@ -658,6 +658,7 @@ struct Proc
 
 // Proc allocator (singleton), was actually in proc.c, but important so here
 /*s: struct Procalloc */
+// Process allocator
 struct Procalloc
 {
     // array<Proc>, xalloc'ed in procinit() (conf.nproc)

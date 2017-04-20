@@ -30,6 +30,7 @@ PATHMSLOP   = 20,
 };
 
 /*s: struct Chanalloc */
+// Channel allocator
 struct Chanalloc
 {
     //list<ref<Chan>> (next = Chan.next), the free one

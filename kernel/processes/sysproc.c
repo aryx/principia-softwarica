@@ -193,6 +193,7 @@ sysrfork(ulong* arg)
     /* Make a new set of memory segments */
     /*s: [[sysrfork()]] copy or share memory segments */
     share = flag & RFMEM;
+
     qlock(&p->seglock);
     if(waserror()){
         qunlock(&p->seglock);
@@ -218,7 +219,6 @@ sysrfork(ulong* arg)
         incref(p->fgrp);
     }
     /*e: [[sysrfork()]] copy, clean, or share file descriptors */
-
     /* Process groups */ // Namespace
     /*s: [[sysrfork()]] copy, clean, or share namespace */
     if(flag & (RFNAMEG|RFCNAMEG)) {
@@ -239,7 +239,6 @@ sysrfork(ulong* arg)
         p->pgrp->noattach = true;
     /*e: [[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==1 case */
     /*e: [[sysrfork()]] copy, clean, or share namespace */
-
     // Rendez vous group
     /*s: [[sysrfork()]] new or share rendezvous group */
     if(flag & RFREND)
@@ -249,7 +248,6 @@ sysrfork(ulong* arg)
         p->rgrp = up->rgrp;
     }
     /*e: [[sysrfork()]] new or share rendezvous group */
-
     /* Environment group */
     /*s: [[sysrfork()]] copy, clean, or share environment */
     if(flag & (RFENVG|RFCENVG)) {
@@ -263,7 +261,6 @@ sysrfork(ulong* arg)
         incref(p->egrp);
     }
     /*e: [[sysrfork()]] copy, clean, or share environment */
-
     // Note group
     /*s: [[sysrfork()]] share or not note group */
     if((flag&RFNOTEG) == 0)
@@ -338,7 +335,7 @@ sysexec(ulong* arg)
     Exec exec;
     ulong magic, text, entry, data, bss;
     /*x: [[sysexec()]] locals */
-    ulong t, d, b; // text, data, bss sizes in bytes rounded to pages
+    ulong t, d, b; // end of text/data/bss in address rounded to page
     Segment *s, *ts;
     /*x: [[sysexec()]] locals */
     ulong ssize;
@@ -401,6 +398,8 @@ sysexec(ulong* arg)
             || entry < UTZERO+sizeof(Exec)
             || entry >= UTZERO+sizeof(Exec)+text)
                 error(Ebadexec);
+
+            // else
             break; /* for binary */
         }
         /*s: [[sysexec()]] process sharpbang */
@@ -431,17 +430,20 @@ sysexec(ulong* arg)
         /*e: [[sysexec()]] process sharpbang */
     }
     // from break above
-
     data = l2be(exec.data);
     bss = l2be(exec.bss);
 
+    /*s: [[sysexec()]] compute end of text, data, bss segments */
     t = UTROUND(UTZERO+sizeof(Exec)+text);
-    // data is put at page boundary after text (see also _multibootentry)
+    // data is put at page boundary after text
     d = ROUND(t + data, BY2PG);
-    // note that not t + d + bss but t + data + bss here
+    // note that this is not d + bss here, but t + data + bss!
     b = ROUND(t + data + bss, BY2PG);
+
     if(t >= KZERO || d >= KZERO || b >= KZERO)
         error(Ebadexec);
+    /*e: [[sysexec()]] compute end of text, data, bss segments */
+
 
     /*s: [[sysexec()]] build args count */
     /*
@@ -766,9 +768,9 @@ long
 sysexits(ulong* arg)
 {
     char *status;
-    char buf[ERRMAX];
     /*s: [[sysexits()]] other locals */
     char *inval = "invalid exit string";
+    char buf[ERRMAX];
     /*e: [[sysexits()]] other locals */
 
     status = (char*)arg[0];
@@ -779,9 +781,9 @@ sysexits(ulong* arg)
         else{
             // validaddr() and vmemchr() can generate error()
             validaddr((ulong)status, 1, false);
-            if(vmemchr(status, 0, ERRMAX) == 0){
+            if(vmemchr(status, '\0', ERRMAX) == 0){
                 memmove(buf, status, ERRMAX);
-                buf[ERRMAX-1] = 0;
+                buf[ERRMAX-1] = '\0';
                 status = buf;
             }
             poperror();

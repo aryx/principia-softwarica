@@ -148,7 +148,7 @@ linkproc(void)
     up->kpfun(up->kparg);
     // should never reach this place?? kernel processes are supposed
     // to run forever??
-    pexit("kproc exiting", 0);
+    pexit("kproc exiting", false);
 }
 /*e: function linkproc(arm) */
 

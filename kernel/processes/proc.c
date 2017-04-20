@@ -1303,6 +1303,7 @@ proc_pexit(char *exitstr, bool freemem)
     long utime, stime;
     /*e: [[pexit()]] other locals */
 
+    // free 1
     /*s: [[pexit()]] at the start, free resources */
     if (up->tt)
         timerdel(up);
@@ -1317,6 +1318,7 @@ proc_pexit(char *exitstr, bool freemem)
     if(pt)
         pt(up, SDead, 0);
     /*e: [[pexit()]] hook proctrace */
+    // free 2
     /*s: [[pexit()]] nil out resources under lock and free them */
     /* nil out all the resources under lock (free later) */
     qlock(&up->debug);
@@ -1349,10 +1351,10 @@ proc_pexit(char *exitstr, bool freemem)
     }
     /*e: [[pexit()]] if a kernel process, do nothing about parent and child */
     else {
-    /*
-     * if not a kernel process and have a parent,
-     * do some housekeeping.
-     */
+        /*
+         * if not a kernel process and have a parent,
+         * do some housekeeping.
+         */
         p = up->parent;
         /*s: [[pexit()]] sanity check parent pointer [[p]] */
         // no parent pointer, must be the very first process
@@ -1365,9 +1367,10 @@ proc_pexit(char *exitstr, bool freemem)
         while(waserror())
             ; // ????
 
+        // exit/await and your parent
         /*s: [[pexit()]] build waitq message [[wq]] */
         wq = smalloc(sizeof(Waitq));
-        poperror();
+        poperror(); // of ????
 
         wq->w.pid = up->pid;
         /*s: [[pexit()]] set wait msg time field */
@@ -1424,6 +1427,7 @@ proc_pexit(char *exitstr, bool freemem)
         addbroken(up); // will call sched()
     /*e: [[pexit()]] if not freemem, add process to broken processes list */
 
+    // free 3, must be after built waitq because exitstr in one of the segment
     /*s: [[pexit()]] free memory segments */
     qlock(&up->seglock);
     es = &up->seg[NSEG];
@@ -1436,6 +1440,7 @@ proc_pexit(char *exitstr, bool freemem)
     qunlock(&up->seglock);
     /*e: [[pexit()]] free memory segments */
 
+    // exit/await and your (orphan) children
     /*s: [[pexit()]] wakeup process waiting on waitr and unhash pid */
     lock(&up->exl);     /* Prevent my children from leaving waits */
     pidunhash(up);
@@ -1444,13 +1449,15 @@ proc_pexit(char *exitstr, bool freemem)
     wakeup(&up->waitr);
     unlock(&up->exl);
     /*e: [[pexit()]] wakeup process waiting on waitr and unhash pid */
+
+    // free 4
     /*s: [[pexit()]] free waitq */
     for(f = up->waitq; f; f = next) {
         next = f->next;
         free(f);
     }
     /*e: [[pexit()]] free waitq */
-
+    // free 5
     /*s: [[pexit()]] release debuggers */
     /* release debuggers */
     qlock(&up->debug);
@@ -1516,8 +1523,8 @@ pwait(Waitmsg *w)
     /*e: [[pwait()]] wait until has a waitq */
     // ok, got a waitmsg
 
-    // wq = pop(up->waitq), // can't be null, see haswaitq()
     lock(&up->exl);
+    // wq = pop(up->waitq), // can't be null, see haswaitq()
     wq = up->waitq; 
     up->waitq = wq->next;
     up->nwait--;
@@ -1695,6 +1702,7 @@ kproc(char *name, void (*func)(void *), void *arg)
         kpgrp = newpgrp();
     p->pgrp = kpgrp;
     incref(kpgrp);
+
     /*s: [[kproc()]] setting time field */
     memset(p->time, 0, sizeof(p->time));
     p->time[TReal] = CPUS(0)->ticks;

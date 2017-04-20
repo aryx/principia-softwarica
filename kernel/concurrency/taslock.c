@@ -93,9 +93,11 @@ lock(Lock *l)
         if(up)
             up->lastlock = l;
         l->pc = pc;
-        l->p = up;
-        l->isilock = false;
         l->cpu = CPUS(cpu->cpuno); // pad's third bugfix
+        /*x: [[lock()]] got the lock, update other fields */
+        l->isilock = false;
+        /*x: [[lock()]] got the lock, update other fields */
+        l->p = up;
         /*e: [[lock()]] got the lock, update other fields */
         /*s: lock ifdef LOCKCYCLES */
         #ifdef LOCKCYCLES
@@ -147,9 +149,11 @@ lock(Lock *l)
             if(up)
                 up->lastlock = l;
             l->pc = pc;
-            l->p = up;
-            l->isilock = false;
             l->cpu = CPUS(cpu->cpuno); // pad's third bugfix
+            /*x: [[lock()]] got the lock, update other fields */
+            l->isilock = false;
+            /*x: [[lock()]] got the lock, update other fields */
+            l->p = up;
             /*e: [[lock()]] got the lock, update other fields */
             /*s: lock ifdef LOCKCYCLES */
             #ifdef LOCKCYCLES
@@ -202,14 +206,18 @@ ilock(Lock *l)
         }
     }
 acquire:
-    cpu->ilockdepth++;
+    /*s: [[ilock()]] got the lock, update other fields */
     if(up)
         up->lastilock = l;
+    l->isilock = true;
     l->sr = x;
     l->pc = pc;
-    l->p = up;
-    l->isilock = true;
     l->cpu = CPUS(cpu->cpuno);
+    /*x: [[ilock()]] got the lock, update other fields */
+    l->p = up;
+    /*x: [[ilock()]] got the lock, update other fields */
+    cpu->ilockdepth++;
+    /*e: [[ilock()]] got the lock, update other fields */
     /*s: lock ifdef LOCKCYCLES */
     #ifdef LOCKCYCLES
             l->lockcycles = -arch_lcycles();
@@ -234,14 +242,14 @@ canlock(Lock *l)
         return false;
     }
     // else
-    /*s: [[canlock()]] lock not held, update other fields */
+    /*s: [[canlock()]] lock was not already held, update other fields */
     if(up)
         up->lastlock = l;
-    l->p = up;
     l->pc = getcallerpc(&l);
-    l->isilock = false;
     l->cpu = CPUS(cpu->cpuno);
-    /*e: [[canlock()]] lock not held, update other fields */
+    /*x: [[canlock()]] lock was not already held, update other fields */
+    l->p = up;
+    /*e: [[canlock()]] lock was not already held, update other fields */
     /*s: lock ifdef LOCKCYCLES */
     #ifdef LOCKCYCLES
             l->lockcycles = -arch_lcycles();
@@ -269,8 +277,10 @@ unlock(Lock *l)
     /*s: [[unlock()]] sanity checks */
     if(l->key == 0)
         print("unlock: not locked: pc %#p\n", getcallerpc(&l));
+    /*x: [[unlock()]] sanity checks */
     if(l->isilock)
         print("unlock of ilock: pc %lux, held by %lux\n", getcallerpc(&l), l->pc);
+    /*x: [[unlock()]] sanity checks */
     if(l->p != up)
         print("unlock: up changed: pc %#p, acquired at pc %lux, lock p %#p, unlock up %#p\n", getcallerpc(&l), l->pc, l->p, up);
     /*e: [[unlock()]] sanity checks */
@@ -327,7 +337,9 @@ iunlock(Lock *l)
     /*s: [[iunlock()]] after modified key, call coherence */
     arch_coherence();
     /*e: [[iunlock()]] after modified key, call coherence */
+    /*s: [[iunlock()]] decrement ilockdepth */
     cpu->ilockdepth--;
+    /*e: [[iunlock()]] decrement ilockdepth */
     if(up)
         up->lastilock = nil;
     arch_splx(sr);
