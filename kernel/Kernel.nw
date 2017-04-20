@@ -126,14 +126,14 @@ Yoann Padioleau\\
 \texttt{yoann.padioleau@gmail.com}\\
 \\
 with code from\\
-Ken Thompson, 
-Rob Pike, 
-Dave Presotto, 
-Phil Winterbottom,
+Ken Thompson,
+Dave Presotto,
 and Richard Miller
 }
-% hmm actually this volume does not contain the networking code,
-%  so maybe can put just Pike and Thompson? or maybe just Thompson?
+% Rob Pike? (not sure, maybe just for the design)
+% Phil Winterbottom (but networking code is in \book{Network})
+% Presotto mostly for networking code but author of wakeup at least
+
 
 \maketitle 
 \onecolumn
@@ -1004,6 +1004,7 @@ TEXT getcallerpc(SB), 1, $-4
 <<constant PGSHIFT(arm)>>=
 #define PGSHIFT     12          /* log(BY2PG) */
 @
+%c: bitshifting everywhere :) instead of using x / BY2PG use x >> PGSHIFT
 %x86: same
 
 \subsection{Input/Output devices}
@@ -1140,6 +1141,11 @@ struct Fbinfo {
 #define GPIOREGS    (VIRTIO+0x200000)
 @
 
+%\subsection{Exceptions}
+
+% put INTREGS here, and HVECTORS
+% and explain quickly flow of exception
+
 %\subsection{Broadcom SoC boot sequence}
 
 
@@ -1208,6 +1214,7 @@ struct Fbinfo {
 @
 %old: was in bcm/dat.h but seems general
 % >>
+\t ??
 
 <<portdat.h macros>>=
 #define MIN(a, b) ((a) < (b)? (a): (b))
@@ -1219,11 +1226,13 @@ struct Fbinfo {
 #define FEXT(d, o, w) (((d)>>(o)) & ((1<<(w))-1)) 
 @
 % >> >> 
+\t ??
 
 <<portdat.h macros>>=
 #define HOWMANY(x, y) (((x)+((y)-1))/(y))
 #define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */
 @
+\t ??
 
 
 <<constant KiB(arm)>>=
@@ -1239,16 +1248,6 @@ struct Fbinfo {
 
 \section{Code organization}
 
-<<kernel basic includes>>=
-#include <u.h>
-#include "../port/lib.h"
-#include "../port/error.h"
-#include "mem.h"
-#include "dat.h"
-#include "fns.h"
-@ 
-%pad: I added the error.h
-
 \subsection{Portable versus arch-specific code}
 
 %pad:
@@ -1261,6 +1260,17 @@ struct Fbinfo {
 
 \subsection{Main headers}
 
+<<kernel basic includes>>=
+#include <u.h>
+#include "../port/lib.h"
+#include "../port/error.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+@ 
+%pad: I added the error.h
+
+
 % u.h for uchar, uint, ... can be seen also as universal :)
 % arch-specific, but almost identical for x86 and arm
 
@@ -1268,25 +1278,26 @@ struct Fbinfo {
 \ifallcode
 <<pad basic types>>=
 typedef int bool;
-enum _bool {
+enum Bool {
   false = 0,
   true = 1
 };
+typedef ushort bool_ushort; //TODO: delete
 
 typedef uchar byte;
 
-typedef ushort bool_ushort; //TODO: delete
-
 typedef int fdt; // file descriptor type
 
-#define OK_0 0
-#define OK_1 1
-#define ERROR_0 0
-#define ERROR_1 1
-#define ERROR_NEG1 (-1)
 typedef int error0;
+#define ERROR_0 0
+#define OK_1 1
+
 typedef int error1;
+#define ERROR_1 1
+#define OK_0 0
+
 typedef int errorneg1;
+#define ERROR_NEG1 (-1)
 @ 
 \fi
 %ocaml: have also to define some of those. Use exn for errors though!
@@ -1304,6 +1315,8 @@ typedef int errorneg1;
 % Important constants such as address kernel.
 
 \subsection{Top directories}
+
+\l have also a scheduler/ directory?
 
 % dat.h, which includes a ../port/portdat.h
 %pad: was huge, too big, so I split.
@@ -1913,6 +1926,10 @@ sysnop(ulong*)
     return 0;
 }
 @ 
+% print is a complex function! printing on the screen is not
+% trivial on Raspberry Pi! See \book{Graphics}?
+
+
 % the parameter virt_addr2 should be a pointer to the stack to the start
 % of the arguments
 
@@ -1968,8 +1985,10 @@ struct Conf
 };
 @ 
 %old: 'ulong monitor;'
-\l nproc used? have proc arena anyway no? yes it is used because we
-\l do not allocate too many Proc in confinit.
+
+% nproc used? Yes, we have a proc arena allocated by xalloc. 
+% we do not pre-allocate too many Proc in confinit because Proc is used
+% (and we use an optimized arena with xalloc to avoid fragmentation?)
 %// TODO arm 
 %//	ulong	hz;		/* processor cycle freq */
 %//	ulong	mhz;
@@ -2540,7 +2559,7 @@ Soc soc = {
 
 % Can start by talking about SMP cases where obvious that multiple
 % CPUs access shared meta-data about processes, and so need critical
-% region. Then can go to uniprocessor and talk about interrupt
+% regions and locks. Then can go to uniprocessor and talk about interrupts
 % and so there also the need of critical region and locks.
 
 % When you think about concurrency in a userspace program, you can have
@@ -2554,7 +2573,8 @@ Soc soc = {
 
 % In fact with input devices, even more source of concurrency! 
 
-% for userspace concurrency, see IPC chapter, here this is kernel concurrency!
+% for userspace concurrency, see IPC chapter;
+% here this is kernel concurrency!
 
 %Torvalds on semaphore vs spinlocks and mutual exclusion in general
 % http://yarchive.net/comp/linux/semaphores.html
@@ -2565,8 +2585,8 @@ Soc soc = {
 \section{Critical regions}
 
 % There are different code/data "regions": 
-% - user code/data
-% - kernel data about user process
+% - user code and user data
+% - kernel data about user processes
 % - kernel data
 % - kernel init code
 % - kernel code of syscalls (soft interrupt), acting on behalf of user process
@@ -2594,10 +2614,12 @@ Soc soc = {
 % where 2 processors can run at the same time 2 interrupt handlers for instance.
 % 
 % One must take care when using locks inside interrupts as one can deadlock
-% if the same lock was used in the enclosing syscall (hence ilock/iunlock)
+% if the same spinlock was used in the enclosing syscall (hence ilock/iunlock).
+% You can spin forever.
 %
-% For protecting kernel syscall code from interrupt kernel code: arch_splhi(), splo()
-% For very small critical region: taslock
+% For protecting kernel syscall code from interrupt kernel code: 
+%  arch_splhi(), splo()
+% For very small critical region: taslock (spinlock)
 % For bigger region, or when have lots of contention on a lock: qlock
 %  where the process will actually go to sleep (useful e.g. for IO queues
 %  producer/consumer)
@@ -2749,7 +2771,7 @@ arch_xinc(long *p)
 %c: easy call from C assembly! just declare its prototype and
 % follow simple convention in assembly code
 %old: was called xinc? or _xinc? 
-\t conflict with libc version? cleanup this _xinc ainc mess
+\t conflict with libc version? cleanup this _xinc ainc mess. rename atomic_inc
 
 % good enough when have only 1 processor! for SMP see Section~\ref{sec:smp}.
 \t add (raspberry pi1) in chunkname then?
@@ -2778,6 +2800,7 @@ arch_xdec(long *p)
 
 
 <<struct Lock>>=
+// a.k.a Spinlock
 struct Lock
 {
     ulong key; // 0 when unset, 1 (or 0xDEADDEAD) when acquired, could be a bool
@@ -2791,7 +2814,6 @@ struct Lock
 \l rename SpinLock?
 % actually have something similar at user level! see libc.h Lock
 % and also QLock, RLock, RWLock, etc.
-
 
 
 
@@ -2853,20 +2875,11 @@ lock(Lock *l)
 kern_addr pc; 
 @
 
-
-<<[[Lock]] debugging fields>>=
-// option<ref<Proc>>, None when key == 0
-Proc  *p; // the process who did the locking should be the same unlocking
-@
-%c: complex graph relation with pointer! no need use intermediate
-% pid here, link directly to the Proc
-
 <<[[Proc]] debugging fields>>=
 Lock* lastlock;
 @
 %c: mutually recursive structure (ocaml can but tedious across modules)
 % (but also more complex to understand C code because of that)
-
 
 <<[[Lock]] other fields>>=
 // option<ref<Cpu>>, None when key = 0?
@@ -2882,12 +2895,10 @@ ulong pc = getcallerpc(&l);
 if(up)
     up->lastlock = l;
 l->pc = pc;
-l->p = up;
-l->isilock = false;
 l->cpu = CPUS(cpu->cpuno); // pad's third bugfix
 @
 %other bugfix on forgot update l->cpu in for loop for same code
-
+%ocaml: use sentinel for up so need if(up)
 
 <<function unlock>>=
 void
@@ -2903,17 +2914,13 @@ unlock(Lock *l)
     <<[[unlock()]] if delaysched>>
 }
 @ 
-%todo: miller added one coherence call before modification of key
+%todo: Miller added one coherence call _before_ the modification of key
 % which apparently makes more sense!
 
 
 <<[[unlock()]] sanity checks>>=
 if(l->key == 0)
     print("unlock: not locked: pc %#p\n", getcallerpc(&l));
-if(l->isilock)
-    print("unlock of ilock: pc %lux, held by %lux\n", getcallerpc(&l), l->pc);
-if(l->p != up)
-    print("unlock: up changed: pc %#p, acquired at pc %lux, lock p %#p, unlock up %#p\n", getcallerpc(&l), l->pc, l->p, up);
 @
 
 % note that if it can it actually gets the lock. does not spin if it can not get it.
@@ -2929,7 +2936,7 @@ canlock(Lock *l)
         return false;
     }
     // else
-    <<[[canlock()]] lock not held, update other fields>>
+    <<[[canlock()]] lock was not already held, update other fields>>
     <<lock ifdef LOCKCYCLES>>
     return true;
 }
@@ -2941,41 +2948,39 @@ canlock(Lock *l)
 % of the enclosing structure :) Palloc after Page!
 
 
-<<[[canlock()]] lock not held, update other fields>>=
+<<[[canlock()]] lock was not already held, update other fields>>=
 if(up)
     up->lastlock = l;
-l->p = up;
 l->pc = getcallerpc(&l);
-l->isilock = false;
 l->cpu = CPUS(cpu->cpuno);
 @
-\l quite similar to code in lock, could factorizr
+\l quite similar to code in lock, could factorize
 
 \section{Uninterruptable [[ILock]]}
 
-% do we always use a Lock in a consistent way? In some cases I hope so
 <<struct ILock>>=
 typedef Lock ILock;
 @
+\t who uses Ilock in practice? device drivers?
 
+% do we always use a Lock in a consistent way? In some cases I hope so
 \t can formalize a checking rule? if access any field
 % accessed from a xxxintr, then need to use ilock
 
-%ilock = interrupt safe version of lock (disable interruptions)
+%ilock = interrupt safe version of lock (disable interrupts)
 
 <<[[Lock]] ilock fields>>=
 bool_ushort isilock; // false when from lock(), true when from ilock()
 ulong sr; // saved priority level when using ilock() to restore in iunlock()
 @ 
-%// Lock.sr was u32int on bcm/. Matters?
+%old: Lock.sr was u32int on bcm/. Matters? probably note.
+%ocaml: better separate types so no need for sanity checks unlocking an ilock
+% (and vice et versa)
 
 <<[[Proc]] debugging fields>>=
 Lock  *lastilock;
 @ 
 
-<<[[Cpu]] other fields>>=
-int ilockdepth;
-@ 
 
 % usage vs just arch_splhi? for critical regions between different interrupt handlers?
 <<function ilock>>=
@@ -3013,18 +3018,23 @@ ilock(Lock *l)
         }
     }
 acquire:
-    cpu->ilockdepth++;
-    if(up)
-        up->lastilock = l;
-    l->sr = x;
-    l->pc = pc;
-    l->p = up;
-    l->isilock = true;
-    l->cpu = CPUS(cpu->cpuno);
+    <<[[ilock()]] got the lock, update other fields>>
     <<lock ifdef LOCKCYCLES>>
 }
 @ 
+\t comment about 'Cannot also check ...'?
+\l aspectize the stats like for lock (or reuse chunkname?)
 
+
+<<[[ilock()]] got the lock, update other fields>>=
+if(up)
+    up->lastilock = l;
+l->isilock = true;
+l->sr = x;
+l->pc = pc;
+l->cpu = CPUS(cpu->cpuno);
+@
+%old: I changed the order of assigmeents
 
 <<function iunlock>>=
 void
@@ -3038,7 +3048,7 @@ iunlock(Lock *l)
     l->cpu = nil;
     l->key = 0;
     <<[[iunlock()]] after modified key, call coherence>>
-    cpu->ilockdepth--;
+    <<[[iunlock()]] decrement ilockdepth>>
     if(up)
         up->lastilock = nil;
     arch_splx(sr);
@@ -3046,6 +3056,7 @@ iunlock(Lock *l)
 @ 
 % arch_coherence(); // added in latest bcm/ before modification of key.
 
+% take care to splx only at the very end
 
 <<[[iunlock()]] sanity checks>>=
 if(l->key == 0)
@@ -3055,14 +3066,34 @@ if(!l->isilock)
 if(arch_islo())
     print("iunlock while lo: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
 @
+%ocaml: no need isilock check if use different types
+
+% what is this last check?
+
+
+<<[[lock()]] got the lock, update other fields>>=
+l->isilock = false;
+@
+<<[[canlock()]] lock not held, update other fields>>=
+l->isilock = false;
+@
+<<[[unlock()]] sanity checks>>=
+if(l->isilock)
+    print("unlock of ilock: pc %lux, held by %lux\n", getcallerpc(&l), l->pc);
+@
+%ocaml: no need islock sanity check when use different types
+
 
 \section{Waiting [[QLock]]}
 % can be seen also as a Waiting queue, Sleepable Lock?
+
+%ocaml: similar to mutex.mli
 
 % when QLock vs just Lock?
 
 <<struct QLock>>=
 // Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h QLock)
+// a.k.a Mutex
 struct KQLock
 {
     bool  locked;   /* flag */
@@ -3117,8 +3148,7 @@ qlock(QLock *q)
         return;
     }
     // else
-    if(up == nil)
-        panic("qlock");
+    <<[[qlock()]] sanity check up>>
     <<[[qlock()]] when qlock already held, stat>>
 
     // add_queue(q, up)
@@ -3143,19 +3173,23 @@ qlock(QLock *q)
     q->qpc = getcallerpc(&q);
 }
 @ 
-%ocaml: use sentinel instead of test of up?
+
+<<[[qlock()]] sanity check up>>=
+if(up == nil)
+    panic("qlock");
+@
+%ocaml: use sentinel fakeproc for up
+
 
 % call to sched() function! = kinda of a sleep
 % hmmm not dangerous? sched() sometimes if nlock > 0 actually returns!!
 
 <<[[qlock()]] sanity checks>>=
-if(cpu->ilockdepth != 0)
-    print("qlock: %#p: ilockdepth %d\n", getcallerpc(&q), cpu->ilockdepth);
-if(up != nil && up->nlocks.ref)
-    print("qlock: %#p: nlocks %lud\n", getcallerpc(&q), up->nlocks.ref);
 if(q->use.key == 0x55555555) // dead code??
     panic("qlock: q %#p, key 5*\n", q);
 @
+
+
 
 <<function qunlock>>=
 void
@@ -3185,10 +3219,13 @@ qunlock(QLock *q)
 %call to ready() function! could put the Ready state here then?
 
 <<[[qunlock()]] sanity checks>>=
-if(q->locked == false)
+if(!q->locked)
     print("qunlock called with qlock not held, from %#p\n",
         getcallerpc(&q));
 @
+
+% note that we do not check here if same process that qlock/qunlock.
+% example of cases where 2 different procs?
 
 % does not sleep if can not get it (but if can get it then it does!)
 % what is the point of using a qlock if everybody uses it via canqlock??
@@ -3214,7 +3251,13 @@ canqlock(QLock *q)
 
 \section{Readers/Writer [[RWLock]]}
 
-% used in Mhead, Pgrp, Egrp
+% used in Mhead, Pgrp, Egrp.
+
+% The code is quite subtle. There are lots of scenarios:
+%  reader1; reader2; done1; done2
+%  reader1; writer2; done1; done2
+%  reader1; writer2; reader2; ???
+% You dont want to strave writers, or readers.
 
 <<struct RWlock>>=
 struct RWlock
@@ -3229,11 +3272,23 @@ struct RWlock
     // option<ref<Proc>> 
     Proc  *wproc;   /* writing proc */
   
-    uintptr wpc;    /* pc of writer */
-  
+    <<[[RWlock]] debugging fields>>
+    // Extra  
     Lock  use;
 };
 @ 
+%ocaml: use Queue directly instead of multiple pointers. Polymorphic containers!
+
+% note that the list of waiting processes are writers or readers
+% processes waiting because there is one writer holding the lock.
+
+%   * readers wait when a writer hold the lock and a writer wait
+%   * when readers hold the lock (or another writer hold the lock).
+
+
+<<[[RWlock]] debugging fields>>=
+uintptr wpc;    /* pc of writer */
+@
 
 <<[[Procstate]] cases>>=
 QueueingR, // see rlock()
@@ -3248,15 +3303,15 @@ rlock(RWlock *q)
 
     lock(&q->use);
     rwstats.rlock++;
-    if(q->writer == false && q->head == nil){
+    if(!q->writer && q->head == nil){
         /* no writer, go for it */
         q->readers++;
         unlock(&q->use);
         return;
     }
+    // else, a writer or a waiting queue??
 
-    if(up == nil)
-        panic("rlock");
+    <<[[rlock()]] sanity check up>>
     rwstats.rlockq++;
 
     // add_queue(q, up)
@@ -3274,6 +3329,15 @@ rlock(RWlock *q)
     // will resume here when another process unlock() the lock and ready() us
 }
 @ 
+% subtle: when can have !writer and q->header != nil?
+\t when a writer finished and there was a queue of reader that
+% got freed gradually?
+
+<<[[rlock()]] sanity check up>>=
+if(up == nil)
+    panic("rlock");
+@
+%ocaml: use sentinel
 
 <<function runlock>>=
 void
@@ -3287,6 +3351,7 @@ runlock(RWlock *q)
         unlock(&q->use);
         return;
     }
+    // else, p != nil && q->readers == 0
 
     /* start waiting writer */
     if(p->state != QueueingW)
@@ -3302,6 +3367,9 @@ runlock(RWlock *q)
     ready(p);
 }
 @ 
+% when can have still readers but no waiting process?
+% when multiple readers came in, in which case we let them pass all!
+% they can use concurrently the data structure.
 
 <<[[Procstate]] cases>>=
 QueueingW, // see wlock()
@@ -3315,7 +3383,7 @@ wlock(RWlock *q)
 
     lock(&q->use);
     rwstats.wlock++;
-    if(q->readers == 0 && q->writer == false){
+    if(q->readers == 0 && !q->writer){
         /* noone waiting, go for it */
         q->wpc = getcallerpc(&q);
         q->wproc = up;
@@ -3323,10 +3391,10 @@ wlock(RWlock *q)
         unlock(&q->use);
         return;
     }
+    // else, already a writer or readers
 
     /* wait */
-    if(up == nil)
-        panic("wlock");
+    <<[[wlock()]] sanity check up>>
     rwstats.wlockq++;
 
     // add_queue(q, up)
@@ -3344,6 +3412,11 @@ wlock(RWlock *q)
 }
 @ 
 
+<<[[wlock()]] sanity check up>>=
+if(up == nil)
+    panic("wlock");
+@
+%ocaml: use sentinel
 
 <<function wunlock>>=
 void
@@ -3453,6 +3526,48 @@ typedef struct Ref Counter;
 %pad: I introduced that?
 
 
+
+\section{Safeguards}
+
+% Very easy to shoot yourself in the foot! Some bad interactions
+% between spinlock, qlock, and ilocks.
+
+\subsection{[[Lock.p]]}
+
+<<[[Lock]] debugging fields>>=
+// option<ref<Proc>>, None when key == 0
+Proc  *p; // the process who did the locking should be the same unlocking
+@
+%c: complex graph relation with pointer! no need use intermediate
+% pid here, link directly to the Proc
+
+<<[[lock()]] got the lock, update other fields>>=
+l->p = up;
+@
+<<[[canlock()]] lock was not already held, update other fields>>=
+l->p = up;
+@
+
+<<[[unlock()]] sanity checks>>=
+if(l->p != up)
+    print("unlock: up changed: pc %#p, acquired at pc %lux, lock p %#p, unlock up %#p\n", getcallerpc(&l), l->pc, l->p, up);
+@
+%old: used to be second check in a list of 3 checks, but with LP it's reordered
+% but I don't think it matters
+
+% Note that this check is not done for qunlock.
+
+
+<<[[ilock()]] got the lock, update other fields>>=
+l->p = up;
+@
+% note that we record the process doing the lock but there is no corresponding 
+% sanity check in iunlock. 
+\t Why? Because often used in interrupt context?
+
+
+\subsection{[[Proc.nlocks]]}
+
 <<[[Proc]] synchronization fields>>=
 // As long as the current process hold spinlocks (to kernel data structures),
 // we will not schedule another process in unlock(); only the last unlock
@@ -3496,6 +3611,41 @@ deccnt(Ref *r)
 @ 
 % actually used in Lock ... mutually recursive, but used for nlocks
 
+
+<<[[qlock()]] sanity checks>>=
+if(up != nil && up->nlocks.ref)
+    print("qlock: %#p: nlocks %lud\n", getcallerpc(&q), up->nlocks.ref);
+@
+
+% Note that nlocks concern spinlocks but the sanity check is in qlock!
+
+\subsection{[[Cpu.ilockdepth]]}
+
+<<[[Cpu]] other fields>>=
+int ilockdepth;
+@ 
+% could rename nilocks? 
+
+% no need atomic increment/decrement below
+% because used by only one cpu at a time! and no interrupt concurrency
+% because interrupt disabled.
+
+<<[[ilock()]] got the lock, update other fields>>=
+cpu->ilockdepth++;
+@
+<<[[iunlock()]] decrement ilockdepth>>=
+cpu->ilockdepth--;
+@
+
+<<[[qlock()]] sanity checks>>=
+if(cpu->ilockdepth != 0)
+    print("qlock: %#p: ilockdepth %d\n", getcallerpc(&q), cpu->ilockdepth);
+@
+% Important safeguards here! You dont want to sleep if you hold some
+% spinlocks or some ilocks!
+
+% Again, note that ilockdepth concern ilocks but the sanity check is in qlock!
+
 \section{Synchronization}
 % different from critical regions
 % what if want to do producer/consumer? 
@@ -3532,8 +3682,8 @@ deccnt(Ref *r)
 [BRK]      sysbrk,
 @ 
 
-% Looks so simpler from user point of view :) but behind there
-% are lots of machinery to make this possible.
+% Looks so simple from user point of view :) just brk()! 
+% but behind there are lots of machinery to make this possible.
 
 %http://duartes.org/gustavo/blog/post/how-the-kernel-manages-your-memory/
 
@@ -3573,6 +3723,7 @@ deccnt(Ref *r)
 
 % hierarchy of allocator:
 %  - xalloc for big chunks (but small static list)
+%    and also to handle possibly discontinuous free memory chunks (Confmem[4])
 %  - pool for finer chunks
 %  - (minor and major heap when in ocaml kernel)
 
@@ -3613,7 +3764,7 @@ struct Hole
     // between addr and top the memory is free, this is the "hole"
     phys_addr addr; 
     phys_addr top; 
-    ulong size; // top - addr
+    ulong size; // top - addr (in bytes)
 
     // Extra
     <<[[Hole]] extra fields>>
@@ -4176,6 +4327,8 @@ free(kern_addr3 v)
 
 \subsection{Sleeping [[smalloc()]]}
 
+\t Why allows that? useful feature? Complexify the code?
+
 % sleep malloc, probably can't be called from interrupt code! 
 % also memset to 0! so should be called smallocz no?
 <<function smalloc>>=
@@ -4197,6 +4350,8 @@ smalloc(ulong size)
     return v;
 }
 @
+%ocaml: use closures, no need returnfalse hack
+
 % will see tsleep and rendez vous later. why use tsleep vs sched()?
 % because what state it would be? you want sleeping state, so that's what tsleep
 % is for!
@@ -4211,6 +4366,7 @@ returnfalse(void*)
     return false;
 }
 @
+%ocaml: use closures, no need returnfalse hack
 %old: return0
 
 
@@ -4379,7 +4535,7 @@ struct Page
     phys_addr pa;     /* Physical address in memory */
     virt_addr va;     /* Virtual address for user */
 
-    // Why not Ref? to save space (same reason they use char below)
+    // Why not Ref? to save space (same reason for using 'char' below)
     // but that means needs to use Lock below to access this non-atomic ref.
     ushort  ref;      /* Reference count */ // Pages are shared!
 
@@ -4545,10 +4701,12 @@ newpage(bool clear, Segment **s, virt_addr va)
     return p;
 }
 @
-
+%ocaml: Can use generic 'alloc' name because full name is Page_allocator.alloc
 %old: was storing highwater in intermediate hw, useful?
 \l rename alloc_page?
-%ocaml: Can use generic 'alloc' name because full name is Page_allocator.alloc
+
+% Why need lock the page? anyway we are the only one using it for now.
+% The ref is set to 1. Just for concistency?
 
 % what if no more free pages? see highwater stuff
 
@@ -4755,10 +4913,17 @@ struct Segment
 % (Points to smallpagedir if small enough)
 %Can map up to 2G of memory! (and can have multiple segments in a process)
 
-\l Why need process to wait on segment??
+% Why not array of Page directly? because we will
+% use page fault to populate this array, so this array will be sparse
+% and so it is better to save space to go through a pagedir/pagatab
+% division (just like most MMU hardware do). It's a bit like a sparse
+% hashtable. pagedir/pagetab allows to implement efficiently a sparse array.
 
 % Segment acts as a kind of Page directory per process, but
 % archi-independent.
+
+\l Why need process to wait on segment?? segments shared by many,
+\l can be brk, detach, paged?
 
 % Store the type of the segment because will do different actions
 % in dupseg() and in fix_fault() depending on segment type!
@@ -4991,8 +5156,10 @@ putseg(Segment *s)
     free(s);
 }
 @
-\t why need qlock? can not use regular lock for that?
+\t why need qlock? can not use regular lock for that? why sleep (qlock) if
+\t  can not get the lock? who can hold lk for a long time?
 %ocaml: no need free here
+%ocaml: can use dec_and_is_zero 
 
 <<[[putseg()]] sanity check s>>=
 if(s == nil)
@@ -5064,6 +5231,8 @@ segpage(Segment *s, Page *p)
 
 \l could assert old value of *pg was 0?
 
+\t does not need to lock seglock? or done by caller?
+
 <<[[segpage()]] sanity check page in range of segment>>=
 if(p->va < s->base || p->va >= s->top)
     panic("segpage");
@@ -5077,7 +5246,7 @@ if(p->va < s->base || p->va >= s->top)
 /*
  *  process memory segments - NSEG always last !
  */
-coupling: must start with SSEG, see sysexec loop
+//coupling: must start with SSEG, see sysexec loop
 enum Procseg
 {
     SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
@@ -5089,12 +5258,15 @@ enum Procseg
 };
 @
 %c: nice to have NSEG to be used for efficient map (see below)
+%old: there was a LSEG, not sure why, I've renamed it to _SEG0
+
+% _SEGxxx because constants never used, but we still want 5 slots
+% so NSEG is higher.
 
 % Similar but different from SG_xxx segment kind.
 
 % a bit weird that SSEG first, but some code assumes that as they do
-% for i from SSEG to BSEG
-% there was a LSEG, not sure why, I've renamed it to _SEG0
+% for i from SSEG to BSEG.
 
 <<[[Proc]] memory fields>>=
 // hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed? ref_counted?
@@ -5104,8 +5276,10 @@ QLock seglock;  /* locked whenever seg[] changes */
 %c: nice to have efficient map like that. Can do in ocaml
 % but need use Obj. for doing ugly magic.
 
-\l why QLock for seglock? shared? multiple processor change change it
-% at the same time??
+\t why QLock for seglock? shared? multiple processor can change it
+% at the same time?? how? segments are shared but the segment array
+% itself is not shared. Because of concurrency with pager! which is
+% another kernel process so can run on another CPU.
 
 \subsubsection{[[seg()]]}
 
@@ -5123,8 +5297,9 @@ seg(Proc *p, virt_addr addr, bool dolock)
         if(sg == nil)
             continue;
         if(addr >= sg->base && addr < sg->top) {
-            if(dolock == false)
+            if(!dolock)
                 return sg;
+            // else
 
             qlock(&sg->lk);
             // can have a race, need to check again
@@ -5140,7 +5315,7 @@ seg(Proc *p, virt_addr addr, bool dolock)
 
 \l importance to have efficient order in seg[]? so Stack before the rest?
 
-\t when need dolock??
+\t when need dolock?? complex locking around segments ...
 
 \subsubsection{Addresses covering multiple segments, [[validaddr()]]}
 
@@ -5177,6 +5352,8 @@ okaddr(virt_addr addr, ulong len, bool write)
 \l rename ok_addr_range
 % the loop show a bit the limitation of just-paging model where all segments
 % are put next to each other and are not in independent memory space.
+
+% why not call seg with dolock = true? cant have race also here?
 
 % pprint? why no panic? 
 
@@ -5436,7 +5613,7 @@ ibrk(virt_addr addr, int seg)
 %ocaml: can use with_lock! instead of all those qunlock guards everywhere
 %old: I switched some ulong to virt_addr
 
-% important to use smalloc? cant use malloc inside a qlock?
+% 
 
 <<[[ibrk()]] sanity check s>>=
 if(s == nil)
@@ -5459,7 +5636,9 @@ if(addr < s->base) {
     addr = s->base;
 }
 @
-% who uses that? 
+% See sysexec! we use the extra bytes in the rounded page of the 
+% data segment for the BSS! 
+\t mv code later?
 
 % the stack cannot go down? stack fixed size then!
 
@@ -5491,6 +5670,9 @@ s->size = newsize;
 qunlock(&s->lk);
 return OK_0;
 @
+\t important to use smalloc? cant use malloc inside a qlock?
+% so give opportunity for pager to find pages? but pager find
+% pages for user not kernel?
 
 
 <<[[ibrk()]] other locals>>=
@@ -5661,6 +5843,7 @@ static Counter  pidalloc;
 \subsection{[[Procalloc]]}
 
 <<struct Procalloc>>=
+// Process allocator
 struct Procalloc
 {
     // array<Proc>, xalloc'ed in procinit() (conf.nproc)
@@ -5674,7 +5857,7 @@ struct Procalloc
     Lock;
 };
 @ 
-%ocaml: Do not use special allocator? just use ocaml Gc 
+%ocaml: Do not use special allocator? just use ocaml alloc and Gc to cleanup
 % (slower, more fragmentation, but ok)
 
 <<global procalloc>>=
@@ -5824,6 +6007,8 @@ char  *psstate; /* used by /proc/#/status */
 // e.g. "*init*", or name of executable
 char  *text;
 @
+%process string state or state for 'ps' command?
+
 % text is used by pprint() to print the name of the process in addition
 % to its pid, which is convenient.
 
@@ -6080,16 +6265,12 @@ pid = p->pid;
 
 /* File descriptors */
 <<[[sysrfork()]] copy, clean, or share file descriptors>>
-
 /* Process groups */ // Namespace
 <<[[sysrfork()]] copy, clean, or share namespace>>
-
 // Rendez vous group
 <<[[sysrfork()]] new or share rendezvous group>>
-
 /* Environment group */
 <<[[sysrfork()]] copy, clean, or share environment>>
-
 // Note group
 <<[[sysrfork()]] share or not note group>>
 
@@ -6133,6 +6314,7 @@ kstrdup(&p->text, up->text);
 kstrdup(&p->user, up->user);
 @
 %old: used to be done near the end of sysrfork (does not matter probably)
+%ocaml: no need kstrdup, share strings and safe (thx to Gc)
 
 <<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
 p->slash = up->slash;
@@ -6155,6 +6337,7 @@ int i;
 @
 <<[[sysrfork()]] copy or share memory segments>>=
 share = flag & RFMEM;
+
 qlock(&p->seglock);
 if(waserror()){
     qunlock(&p->seglock);
@@ -6256,6 +6439,7 @@ else {
 if((flag & (RFNAMEG|RFCNAMEG)) == (RFNAMEG|RFCNAMEG))
     error(Ebadarg);
 @
+%ocaml: use proper type so no need check those cases? make it a bool?
 
 <<[[sysrfork()]] copy, clean, or share namespace>>=
 if(flag & (RFNAMEG|RFCNAMEG)) {
@@ -6278,6 +6462,7 @@ else {
 if((flag & (RFENVG|RFCENVG)) == (RFENVG|RFCENVG))
     error(Ebadarg);
 @
+%ocaml: use proper type so no need check those cases? make it a bool?
 
 <<[[sysrfork()]] copy, clean, or share environment>>=
 if(flag & (RFENVG|RFCENVG)) {
@@ -6418,7 +6603,8 @@ char *file;
 char *elem; // last element of binary, for up->text
 char *file0;
 @
-% rename lastelem?
+% rename elem to lastelem?
+%ocaml: Filename.basename! Filename.dirname! Str.split!
 
 <<[[sysexec()]] locals>>=
 Chan *tc;
@@ -6428,17 +6614,22 @@ Chan *tc;
 Exec exec;
 ulong magic, text, entry, data, bss;
 @
+%c: nice file matching structure (Exec) and ability to use sizeof(Exec)
+%ocaml: why use extra locals that are redundant with the info in exec?
+% because use l2be but this should be done in parsing function
 
 <<[[sysexec()]] locals>>=
-ulong t, d, b; // text, data, bss sizes in bytes rounded to pages
+ulong t, d, b; // end of text/data/bss in address rounded to page
 Segment *s, *ts;
 @
+\l rename end_text, end_data, end_bss
 
 <<[[sysexec()]] locals>>=
 ulong ssize;
 ulong nargs;
 @
-
+% stack size and number of args are important locals used in the skeleton
+% below
 
 \ifallcode
 <<[[sysexec()]] locals>>=
@@ -6484,22 +6675,18 @@ sysexec(ulong* arg)
             || entry < UTZERO+sizeof(Exec)
             || entry >= UTZERO+sizeof(Exec)+text)
                 error(Ebadexec);
+
+            // else
             break; /* for binary */
         }
         <<[[sysexec()]] process sharpbang>>
     }
     // from break above
-
     data = l2be(exec.data);
     bss = l2be(exec.bss);
 
-    t = UTROUND(UTZERO+sizeof(Exec)+text);
-    // data is put at page boundary after text (see also _multibootentry)
-    d = ROUND(t + data, BY2PG);
-    // note that not t + d + bss but t + data + bss here
-    b = ROUND(t + data + bss, BY2PG);
-    if(t >= KZERO || d >= KZERO || b >= KZERO)
-        error(Ebadexec);
+    <<[[sysexec()]] compute end of text, data, bss segments>>
+
 
     <<[[sysexec()]] build args count>>
 
@@ -6541,7 +6728,21 @@ sysexec(ulong* arg)
     return arch_execregs(entry, ssize, nargs);
 }
 @ 
+% why for loop above? because of #! code?
 
+<<[[sysexec()]] compute end of text, data, bss segments>>=
+t = UTROUND(UTZERO+sizeof(Exec)+text);
+// data is put at page boundary after text
+d = ROUND(t + data, BY2PG);
+// note that this is not d + bss here, but t + data + bss!
+b = ROUND(t + data + bss, BY2PG);
+
+if(t >= KZERO || d >= KZERO || b >= KZERO)
+    error(Ebadexec);
+@
+% b = ROUND(t + data + bss, BY2PG);
+% This is special! it assumes BSS follows directly data segment
+% in memory! so it's not ROUND(d + bss, BY2PG)!
 
 
 
@@ -6557,12 +6758,14 @@ l2be(long l)
 }
 @ 
 % >> >> >>
+% a.out format use big-endian integers so l2be long from big-endian
+
 
 <<macro UTROUND(arm)>>=
 #define UTROUND(t)  ROUNDUP((t), BY2PG)
 @
 %x86: same
-\t factorize with PGROUND? or just use ROUND(...BY2PG)
+\t just use ROUND(...BY2PG)? why special macro? some arch constraint?
 
 % free old segments because they will be overwritten by new segments.
 
@@ -6579,6 +6782,8 @@ for(i = SSEG; i <= BSEG; i++) {
 }
 <<[[sysexec()]] free special segments if close on exec>>
 @
+% comment about second free??
+\t no seglock here?
 
 %\subsection{[[arch_procsetup()]] (ARM)}
 
@@ -6613,7 +6818,8 @@ s = newseg(SG_DATA, t, (d-t)>>PGSHIFT);
 up->seg[DSEG] = s;
 <<[[sysexec()]] adjust data segment s for demand loading on tc>>
 @
-% same, will see demand loading later
+% same, will see demand loading later.
+
 
 \subsection{Bss segment}
 
@@ -6622,6 +6828,7 @@ up->seg[DSEG] = s;
 up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT);
 @
 % easy one
+% note that the BSS may actually overlap on Data segment.
 
 % note that Bss segment under plan9 are filled with 0, but lazily
 % in fixfault.
@@ -7001,8 +7208,8 @@ pwait(Waitmsg *w)
     <<[[pwait()]] wait until has a waitq>>
     // ok, got a waitmsg
 
-    // wq = pop(up->waitq), // can't be null, see haswaitq()
     lock(&up->exl);
+    // wq = pop(up->waitq), // can't be null, see haswaitq()
     wq = up->waitq; 
     up->waitq = wq->next;
     up->nwait--;
@@ -7027,7 +7234,9 @@ if(up->nchild == 0 && up->waitq == nil) {
 }
 unlock(&up->exl);
 @
-
+% note that important to also add test on waitq, because when
+% a child exits before parent calls await, it decrements nchild
+% in the parent, but leave a message in the waitq!
 
 
 \subsection{Rendez-vous, [[Proc.waitr]]}
@@ -7053,15 +7262,16 @@ haswaitq(void *x)
 }
 @ 
 %ocaml: no need ugly cast.
-
-% no need to lock p->exl???
+\t no need to lock p->ex in haswaitql??? no because code doing wakeup
+\t  should hold the lock?
 
 
 
 \section{[[sysexits()]]}
 
 % return a string! far more useful than an exit code
-% as anyway will have then to interpret this error code
+% as anyway will have then to interpret this error code.
+% actually it's an optional string. Can also return nil.
 
 % semantic of exits? what happens if still have children?
 % the children will still be there! the parent closes all its
@@ -7077,7 +7287,6 @@ long
 sysexits(ulong* arg)
 {
     char *status;
-    char buf[ERRMAX];
     <<[[sysexits()]] other locals>>
 
     status = (char*)arg[0];
@@ -7091,6 +7300,7 @@ sysexits(ulong* arg)
 
 <<[[sysexits()]] other locals>>=
 char *inval = "invalid exit string";
+char buf[ERRMAX];
 @
 <<[[sysexits()]] sanity check status, copy string in buf>>=
 if(status){
@@ -7099,9 +7309,9 @@ if(status){
     else{
         // validaddr() and vmemchr() can generate error()
         validaddr((ulong)status, 1, false);
-        if(vmemchr(status, 0, ERRMAX) == 0){
+        if(vmemchr(status, '\0', ERRMAX) == 0){
             memmove(buf, status, ERRMAX);
-            buf[ERRMAX-1] = 0;
+            buf[ERRMAX-1] = '\0';
             status = buf;
         }
         poperror();
@@ -7109,6 +7319,8 @@ if(status){
 
 }
 @
+% if nil status, then status remains nil
+%ocaml: use empty string, so less checks
 
 \subsection{[[pexit()]]}
 
@@ -7130,31 +7342,38 @@ proc_pexit(char *exitstr, bool freemem)
     Proc *p; // parent
     <<[[pexit()]] other locals>>
 
+    // free 1
     <<[[pexit()]] at the start, free resources>>
     <<[[pexit()]] hook proctrace>>
+    // free 2
     <<[[pexit()]] nil out resources under lock and free them>>
 
     <<[[pexit()]] if a kernel process, do nothing about parent and child>>
     else {
-    /*
-     * if not a kernel process and have a parent,
-     * do some housekeeping.
-     */
+        /*
+         * if not a kernel process and have a parent,
+         * do some housekeeping.
+         */
         p = up->parent;
         <<[[pexit()]] sanity check parent pointer [[p]]>>
         while(waserror())
             ; // ????
 
+        // exit/await and your parent
         <<[[pexit()]] build waitq message [[wq]]>>
         <<[[pexit()]] add [[wq]] message in parent process [[p]] waitq>>
     }
     <<[[pexit()]] if not freemem, add process to broken processes list>>
 
+    // free 3, must be after built waitq because exitstr in one of the segment
     <<[[pexit()]] free memory segments>>
 
+    // exit/await and your (orphan) children
     <<[[pexit()]] wakeup process waiting on waitr and unhash pid>>
-    <<[[pexit()]] free waitq>>
 
+    // free 4
+    <<[[pexit()]] free waitq>>
+    // free 5
     <<[[pexit()]] release debuggers>>
 
     /* Sched must not loop for these locks */
@@ -7170,6 +7389,12 @@ proc_pexit(char *exitstr, bool freemem)
 @ 
 % (why not doing more simply arch_gotolabel(cpu->sched)? to reuse some of
 %  sched() code?)
+
+% why need lock procalloc and palloc?
+
+\t free split in 2 chunks. Important? Order matters? Some stuff
+\t are important to do before the proctrace?
+
 
 <<[[Procstate]] cases>>=
 Moribund,
@@ -7192,18 +7417,28 @@ if(p == nil) {
     panic("boot process died: %s", exitstr);
 }
 @
-% even with RFNOWAIT you have a parent pointer
+%ocaml: simpler always exit a string, less need to check for nil
+%alt: look if pid = 1?
 
+% even with RFNOWAIT you have a parent pointer.
+
+% But boot process does not die ultimately? it does not fork
+% and then die?
+% important to recognize boot process?
 
 
 \subsection{Wait message}
+
+\subsubsection{Wait message and your parent}
+
+% this is for my parent
 
 <<[[pexit()]] other locals>>=
 Waitq *wq;
 @
 <<[[pexit()]] build waitq message [[wq]]>>=
 wq = smalloc(sizeof(Waitq));
-poperror();
+poperror(); // of ????
 
 wq->w.pid = up->pid;
 <<[[pexit()]] set wait msg time field>>
@@ -7212,6 +7447,8 @@ if(exitstr && exitstr[0])
 else
     wq->w.msg[0] = '\0';
 @
+% why add text name and pid in string? pid is already in other wait
+% field. Convenient? Does it allow mk to give nice error messages?
 
 
 <<[[pexit()]] add [[wq]] message in parent process [[p]] waitq>>=
@@ -7245,8 +7482,12 @@ unlock(&p->exl);
 if(wq)
     free(wq);
 @
+% note that hold the lock while calling wakeup on waitr. Important.
+
+\subsubsection{Wait and my (orphan) children}
 
 
+% this is for my (orphan) children
 <<[[pexit()]] wakeup process waiting on waitr and unhash pid>>=
 lock(&up->exl);     /* Prevent my children from leaving waits */
 pidunhash(up);
@@ -7255,6 +7496,10 @@ up->pid = 0;
 wakeup(&up->waitr);
 unlock(&up->exl);
 @
+\t who waits for my waitr? BUG? for /proc/x/wait?
+
+\t this still does not free the process back to procarena free list
+\t  pidunhash just remove it from the hash
 
 <<[[pexit()]] other locals>>=
 Waitq *f, *next;
@@ -7269,10 +7514,11 @@ for(f = up->waitq; f; f = next) {
 
 \subsection{Freeing resources}
 
+% must be after built waitq because exitstr in one of the segment
+
 <<[[pexit()]] other locals>>=
 Segment **s, **es;
 @
-
 <<[[pexit()]] free memory segments>>=
 qlock(&up->seglock);
 es = &up->seg[NSEG];
@@ -7285,6 +7531,7 @@ for(s = up->seg; s < es; s++) {
 qunlock(&up->seglock);
 @
 \l rewrite using nelem(seg?)
+\l again, why need seglock? 
 
 <<[[pexit()]] other locals>>=
 Fgrp *fgrp;
@@ -7345,14 +7592,17 @@ else {
 
 \section{Kernel processes}
 
-% examples of kernel processes? page collector (pager), closing channel
-% collector (clunker?)
+% Examples of kernel processes? 
+%  - page collector (pager), 
+%  - closing channel collector (clunker?)
+%  - dead process collector?? (hmm, maybe done by sched() instead)
 
 <<[[Proc]] other fields>>=
 bool kp;   /* true if a kernel process */
 void  (*kpfun)(void*);
 void  *kparg;
 @
+%ocaml: just one field, (unit -> unit) option; closure!
 
 <<[[newproc()]] set fields of [[p]]>>=
 p->kp = false;
@@ -7398,16 +7648,21 @@ kproc(char *name, void (*func)(void *), void *arg)
         kpgrp = newpgrp();
     p->pgrp = kpgrp;
     incref(kpgrp);
+
     <<[[kproc()]] setting time field>>
     ready(p);
 }
 @ 
+% but no sched() here like in sysrfork.
+
+% No need segments as the kpfun uses kernel memory.
 
 <<[[pexit()]] if a kernel process, do nothing about parent and child>>=
 if(up->kp) {
 }
 @
 %old: reverted cond so could aspectize (but yes silly code then)
+%ocaml: kp has no parent anyway
 
 \subsection{[[arch_kprocchild()]] (ARM)}
 
@@ -7439,7 +7694,7 @@ linkproc(void)
     up->kpfun(up->kparg);
     // should never reach this place?? kernel processes are supposed
     // to run forever??
-    pexit("kproc exiting", 0);
+    pexit("kproc exiting", false);
 }
 @
 %x86: same
@@ -7447,15 +7702,6 @@ linkproc(void)
 
 
 \section{Process control [[/proc/#/ctl]]}
-
-<<[[newproc()]] set fields of [[p]]>>=
-p->pdbg = nil;
-p->procctl = Proc_nothing;
-p->syscalltrace = nil; 
-p->trace = false;
-p->dbgreg = nil;
-@
-
 
 % see /proc, /proc/x/ctl, procctl()
 % see section on Debugging where explain procctl
@@ -7496,6 +7742,15 @@ case CMkill:
         postnote(p, 0, "sys: killed", NExit);
     }
     break;
+@
+
+%XXX
+<<[[newproc()]] set fields of [[p]]>>=
+p->pdbg = nil;
+p->procctl = Proc_nothing;
+p->syscalltrace = nil; 
+p->trace = false;
+p->dbgreg = nil;
 @
 
 
@@ -12053,7 +12308,7 @@ proc_wakeup(Rendez *r)
     return p;
 }
 @ 
-
+% Presotto! and Richard Miller :)
 
 
 \section{Preemptive scheduling}
@@ -13741,6 +13996,7 @@ ushort  flag;
 
 
 <<struct Chanalloc>>=
+// Channel allocator
 struct Chanalloc
 {
     //list<ref<Chan>> (next = Chan.next), the free one
@@ -13754,6 +14010,8 @@ struct Chanalloc
     Lock;
 };
 @
+%c: yet another memory allocator.
+
 % not arena allocator, gradually allocated via malloc, but never freed.
 % fid is for devmnt. When chan are free the fid seems to be reused as is
 
@@ -13921,7 +14179,7 @@ devno(Rune c, bool user)
 @
 
 
-\section{File descriptors}
+\section{File descriptors, [[Fgrp]]}
 
 % why fds? otherwise have to pass a string to each operations.
 % also allow redirection trick with the fd0, fd1 convention
@@ -13943,7 +14201,7 @@ struct Fgrp
 
 
 <<[[Proc]] files fields>>=
-// ref_counted<fgrp>
+// ref_counted<Fgrp>
 Fgrp  *fgrp;    /* File descriptor group */
 @
 
@@ -13995,7 +14253,7 @@ dupfgrp(Fgrp *f)
 @ 
 
 <<constant DELTAFD>>=
-    DELTAFD = 20    /* incremental increase in Fgrp.fd's */
+DELTAFD = 20    /* incremental increase in Fgrp.fd's */
 @
 % another thing where allocate first more to amortize realloc cost
 % define a growing_array type?
@@ -14190,6 +14448,8 @@ openmode(ulong o)
     return o;
 }
 @
+%ocaml: if proper type no need this??
+
 % normalize, the OCEXEC ORCLOSE are actually put in c->flag, not c->mode
 % could introduce another type?
 
@@ -14874,7 +15134,8 @@ syspread(ulong* arg)
 <<[[Dev]] methods>>=
 long  (*read)(Chan*, void*, long, vlong);
 @
-% user_addr
+% user_addr? not always! see sysexec, we pass the address of a kernel local
+
 
 <<function read>>=
 // long pread(int fd, void *buf, long nbytes, vlong offset);
