@@ -684,6 +684,8 @@ provides to the user programs.
 
 %x86: PC vs Raspberry Pi?
 
+%https://www.raspberrypi.org/documentation/hardware/raspberrypi/
+%https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2835/README.md
 %http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/index.html
 
 \subsection{ARM CPU}
@@ -1057,6 +1059,7 @@ TEXT getcallerpc(SB), 1, $-4
 <<constant ARMTIMER(arm)>>=
 #define ARMTIMER (VIRTIO+0xB400)
 @
+% They do not work under QEMU I think.
 
 
 <<constant INTREGS(arm)>>=
@@ -1509,6 +1512,8 @@ void    (*arch_exit)(int);
 void    (*arch_coherence)(void);
 uvlong  (*arch_fastticks)(uvlong*);
 @
+\t change interface arch_fasttics, to not take anything because most calls
+\t  pass nil
 <<portfns_core.h backward deps breaker>>=
 // time/<arch>/time.c
 void    (*arch_microdelay)(int);
@@ -5536,7 +5541,10 @@ case SG_BSS:        /* Just copy on write */
 % now later
 
 
-\subsubsection{[[/proc/x/segment]]}
+\subsection{[[/proc/x/segment]]}
+
+% will understand later details, but cases below allow to
+% implement access to /proc/x/segment
 
 <<[[procread()]] locals>>=
 Segment *sg;
@@ -11803,7 +11811,7 @@ void
 updatecpu(Proc *p)
 {
     int n, t, ocpu;
-    int D = schedgain*Arch_HZ*Scaling;
+    int D = schedgain * Arch_HZ * Scaling;
 
     if(p->edf)
         return;
@@ -12495,6 +12503,8 @@ clockintr(Ureg *ureg, void*)
 @
 % >> 
 
+% 1<<3 to clear the interrupt from the 3 system time compare register
+% see http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
 
 % put in virtual memory section?
 <<[[Cpu]] other fields>>=
@@ -12944,16 +12954,17 @@ arch__cpu0init(void)
 void
 arch__cpuinit(void)
 {
-    Cpu *m0;
+    Cpu *cpu0;
 
     cpu->ticks = 1;
     cpu->perf.period = 1;
 
-    m0 = CPUS(0);
+    cpu0 = CPUS(0);
     <<[[arch__cpuinit()]] it not cpu0>>
 }
 @
 % done later:   //machon(m->cpuno);
+%old: m0 -> cpu0
 %dead:        cpu->delayloop = m0->delayloop;
 
 % now wait that mmuinit1 has been called.
@@ -13063,12 +13074,7 @@ arch__confinit(void)
     <<[[arch__confinit()]] if maxmem boot parameter(arm)>>
     // simpler than for x86 :)
     getramsize(&conf.mem[0]);
-
-    if(conf.mem[0].limit == 0){
-        conf.mem[0].base = 0;
-        conf.mem[0].limit = memsize;
-    }else if(p != nil)
-        conf.mem[0].limit = conf.mem[0].base + memsize;
+    <<[[arch__confinit()]] sanity check [[conf.mem[0]]](arm)>>
 
     conf.npage = 0;
     pa = PADDR(PGROUND(PTR2UINT(end)));
@@ -13149,6 +13155,18 @@ if((p = getconf("*maxmem")) != nil){
 }
 @
 
+<<[[arch__confinit()]] sanity check [[conf.mem[0]]](arm)>>=
+if(conf.mem[0].limit == 0){
+    conf.mem[0].base = 0;
+    conf.mem[0].limit = memsize;
+}
+<<[[arch__confinit()]] if maxmem parameter and limit mem is zero(arm)>>
+@
+
+<<[[arch__confinit()]] if maxmem parameter and limit mem is zero(arm)>>=
+else if(p != nil)
+    conf.mem[0].limit = conf.mem[0].base + memsize;
+@
 % see also cat /dev/swap
 
 \subsection{Exception vector initialization (ARM)}
@@ -13255,6 +13273,10 @@ TEXT setr13(SB), 1, $-4
 %banked register R13
 
 \subsection{Clock initialization (ARM)}
+
+% http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
+
+% 9 use system time compare register number 3 (tn->c3).
 
 <<function clockinit(arm)>>=
 void
@@ -19726,13 +19748,6 @@ consread(Chan *c, void *buf, long n, vlong off)
 
     <<[[consread()]] cases>>
 
-    case Qtime:
-        return readtime((ulong)offset, buf, n);
-
-    case Qbintime:
-        return readbintime(buf, n);
-        
-
 
     case Quser:
         return readstr((ulong)offset, buf, n, up->user);
@@ -19745,7 +19760,6 @@ consread(Chan *c, void *buf, long n, vlong off)
 
     case Qpgrpid:
         return readnum((ulong)offset, buf, n, up->pgrp->pgrpid, NUMSIZE);
-
 
     case Qnull:
         return 0;
@@ -19762,6 +19776,8 @@ consread(Chan *c, void *buf, long n, vlong off)
     return -1;
 }
 @
+%old: I tried to move gradually stuff from /dev/ to /sys, from
+% devcons.c to devsys.c
 
 <<method conswrite>>=
 static long
@@ -19779,17 +19795,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
     <<[[conswrite()]] Qcons case>>
 
     <<[[conswrite()]] cases>>
-
-    case Qtime:
-        if(!iseve())
-            error(Eperm);
-        return writetime(a, n);
-
-    case Qbintime:
-        if(!iseve())
-            error(Eperm);
-        return writebintime(a, n);
-
 
     case Quser:
         return userwrite(a, n);
@@ -22644,6 +22649,7 @@ typedef vlong   Tsec; // seconds
 @
 %pad: Tval was there, but I added the other one I think
 
+%linux: ticks are called jiffies?
 
 <<function tk2ms>>=
 /*
@@ -22686,6 +22692,7 @@ arch_us(void)
     return arch_fastticks(nil);
 }
 @
+% if 1 Mhz so 1000000 per second, so once every microsecond
 
 <<[[Cpu]] [[Arch]] other fields(arm)>>=
 uvlong  fastclock;      /* last sampled value */
@@ -22695,6 +22702,9 @@ uvlong  fastclock;      /* last sampled value */
 SystimerFreq    = 1*Mhz,
 @
 
+\t change interface arch_fasttics, to not take anything because most calls
+\t  pass nil
+\t just add another function system_timer_frequency()
 <<function clock_arch_fastticks(arm)>>=
 uvlong
 clock_arch_fastticks(uvlong *hz)
@@ -22719,6 +22729,8 @@ clock_arch_fastticks(uvlong *hz)
 }
 @
 % >> >>
+% see http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
+% for why do while loop over chi. It's because it can have changed.
 
 <<[[arch_us()]] if non-standard systimer frequency>>=
 if(SystimerFreq != 1*Mhz)
@@ -22799,6 +22811,7 @@ clock_arch_microdelay(int n)
         ;
 }
 @
+% what about tn->chi? can overflow
 
 <<function clock_arch_delay(arm)>>=
 void
@@ -22815,7 +22828,7 @@ clock_arch_delay(int n)
 struct Timer
 {
     /* Public interface */
-    // enum<timermode>
+    // enum<Timermode>
     int tmode;    /* See above */
     Tnano tns;    /* meaning defined by mode */ //nanosecond
     void  (*tf)(Ureg*, Timer*);
@@ -23029,8 +23042,8 @@ ulong fcallcount[MAXCPUS];
 @
 \fi
 
+%// called via i8253clock on x86
 <<interrupt callback timerintr>>=
-// called via i8253clock
 void
 timerintr(Ureg *u, Tval)
 {
@@ -23640,6 +23653,17 @@ vlong   fasthz;
 % for bin/date,
 % but can also set the time if you write into it
 
+<<[[consread()]] cases>>=
+case Qtime:
+    return readtime((ulong)offset, buf, n);
+@
+
+<<[[conswrite()]] cases>>=
+case Qtime:
+    if(!iseve())
+        error(Eperm);
+    return writetime(a, n);
+@
 <<function readtime>>=
 /*
  *  like the old #c/time but with added info.  Return
@@ -23690,7 +23714,19 @@ writetime(char *buf, int n)
 }
 @
 
-%----------------------------------------------------------------
+\section{[[/dev/bintime]]}
+
+<<[[consread()]] cases>>=
+case Qbintime:
+    return readbintime(buf, n);
+@
+
+<<[[conswrite()]] cases>>=
+case Qbintime:
+    if(!iseve())
+        error(Eperm);
+    return writebintime(a, n);
+@
 
 <<function readbintime>>=
 /*
@@ -28877,6 +28913,8 @@ if (r)
 
 \section{The Raspberry Pi 2 machine}
 
+%https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2836/README.md
+
 % Raspberry Pi 2 has 4 processors. Cortex-a7 (used in many smartphones).
 
 <<global soc(raspberry pi2)(arm)>>=
@@ -29044,6 +29082,8 @@ if(pa)
 <<[[CpSC primary registers]] other cases(arm)>>=
 #define CpTIMER     14          /* Generic timer (cortex-a7) */
 @
+
+% this one works on QEMU! The only one?
 
 <<type CpTIMER(arm)>>=
 /*
@@ -29541,8 +29581,8 @@ cpustart(int xcpu)
 <<[[arch__cpuinit()]] it not cpu0>>=
 if (cpu->cpuno != 0) {
     /* synchronise with cpu 0 */
-    cpu->ticks = m0->ticks;
-    cpu->fastclock = m0->fastclock;
+    cpu->ticks = cpu0->ticks;
+    cpu->fastclock = cpu0->fastclock;
 }
 @
 
@@ -29691,13 +29731,6 @@ tas0:
 
 \subsection{Timer adjustments}
 
-<<[[arch_timerset()]] if not cpu0>>=
-if(cpu->cpuno > 0){
-    cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
-    cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
-}
-@
-
 <<constant Localctl(arm)>>=
 Localctl    = 0x00,
 @
@@ -29737,6 +29770,15 @@ TEXT arch_lcycles(SB), 1, $-4
     RET
 @
 %$
+
+
+<<[[arch_timerset()]] if not cpu0>>=
+if(cpu->cpuno > 0){
+    cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
+    cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
+}
+@
+
 
 \subsection{[[arch_coherence()]] (ARM)}
 \t issue only when SMP?
@@ -30039,6 +30081,7 @@ inner:
     RET
 @
 %$
+% >>
 
 \subsection{IRQ adjustments}
 
@@ -32153,8 +32196,7 @@ ncmdfield(char *p, int n)
 %kind of an IPC? at least can communicate info from parent to child
 
 % in every langage globals are a convenient way to transmit info
-% from function down the line. Same here. except done in a universal
-% way.
+% from function down the line. Same here. except done in a universal way.
 
 \subsection{[[Egrp]]}
 
@@ -34559,8 +34601,8 @@ randomread(void *xp, ulong n)
 @
 
 <<[[consread()]] cases>>=
-    case Qrandom:
-        return randomread(buf, n);
+case Qrandom:
+    return randomread(buf, n);
 @
 
 
