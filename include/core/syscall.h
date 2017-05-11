@@ -241,7 +241,7 @@ extern	int		unmount(char*, char*);
 
 // time
 extern	long	alarm(ulong);
-extern	int		sleep(long);
+extern	int		sleep(long); //less: could be void (ulong). 0 means yield.
 
 // IPC
 extern	int		pipe(int*);

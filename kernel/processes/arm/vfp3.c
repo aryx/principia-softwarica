@@ -151,7 +151,6 @@ havefp(void)
  * these can be called to turn the fpu on or off for user procs,
  * not just at system start up or shutdown.
  */
-
 void
 fpoff(void)
 {
