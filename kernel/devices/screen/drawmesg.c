@@ -156,11 +156,12 @@ printmesg(char *fmt, uchar *a, bool plsprnt)
     char *p, *q;
     int s, left;
 
-    if(true || !plsprnt){ //old: 1 || !plsprnt
+    if(!plsprnt && !drawdebug){ //old: 1 || !plsprnt
         SET(s,q,p);
         USED(fmt, a, buf, p, q, s);
         return;
     }
+    // else, plsprnt || drawdebug
 
     q = buf;
     *q++ = *a++;
@@ -389,7 +390,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* free: 'f' id[4] */
         case 'f':
-            printmesg(fmt="L", a, true);
+            printmesg(fmt="L", a, false);
             m = 1+4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -870,7 +871,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
         case 'i':
-            printmesg(fmt="Llb", a, true);
+            printmesg(fmt="Llb", a, false);
             m = 1+4+4+1;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -966,7 +967,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* allocate screen: 'A' id[4] imageid[4] fillid[4] public[1] */
         case 'A':
-            printmesg(fmt="LLLb", a, true);
+            printmesg(fmt="LLLb", a, false);
             m = 1+4+4+4+1;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -993,7 +994,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* free screen: 'F' id[4] */
         case 'F':
-            printmesg(fmt="L", a, true);
+            printmesg(fmt="L", a, false);
             m = 1+4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -1123,7 +1124,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* toggle debugging: 'D' val[1] */
         case 'D':
-            printmesg(fmt="b", a, 0);
+            printmesg(fmt="b", a, false);
             m = 1+1;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
