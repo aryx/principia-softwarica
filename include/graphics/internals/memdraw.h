@@ -40,6 +40,7 @@ struct Memdata
 /*s: enum fxxx */
 enum {
     Frepl	= 1<<0,	/* is replicated */
+
     // derives from Memimage.chan
     Fgrey	= 1<<2,	/* is grey */
     Falpha	= 1<<3,	/* has explicit alpha */

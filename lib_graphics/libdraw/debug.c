@@ -14,10 +14,12 @@ drawsetdebug(bool v)
 {
     byte *a;
     a = bufimage(display, 1+1);
+    /*s: [[drawsetdebug()]] sanity check a */
     if(a == nil){
         fprint(2, "drawsetdebug: %r\n");
         return;
     }
+    /*e: [[drawsetdebug()]] sanity check a */
     a[0] = 'D';
     a[1] = v;
 }

@@ -5,8 +5,12 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
+/*s: macro DBG1 */
 #define DBG1 if(0) print
+/*e: macro DBG1 */
+/*s: macro DBG */
 #define DBG if(0) print
+/*e: macro DBG */
 
 /*s: struct Draw */
 struct Draw

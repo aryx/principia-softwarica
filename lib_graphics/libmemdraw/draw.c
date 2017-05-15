@@ -4,8 +4,12 @@
 #include <draw.h>
 #include <memdraw.h>
 
+/*s: macro DBG1 */
 #define DBG1 if(0) print
+/*e: macro DBG1 */
+/*s: macro DBG */
 #define DBG if(0) print
+/*e: macro DBG */
 
 /*s: global drawdebug */
 bool drawdebug;

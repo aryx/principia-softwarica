@@ -61,9 +61,11 @@ bufimage(Display *d, int n)
         return nil;
     }
     /*e: [[bufimage()]] sanity check n */
+    /*s: [[bufimage()]] flush if buffer full */
     if(d->bufp + n  >  d->buf + d->bufsize)
         if(doflush(d) < 0)
             return nil;
+    /*e: [[bufimage()]] flush if buffer full */
     p = d->bufp;
     d->bufp += n;
     return p;

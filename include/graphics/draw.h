@@ -462,10 +462,10 @@ extern Rectangle	Rpt(Point, Point);
 extern int			eqrect(Rectangle, Rectangle);
 
 /*s: function Dx */
-#define	Dx(r)	((r).max.x-(r).min.x)
+#define	Dx(r)	((r).max.x - (r).min.x)
 /*e: function Dx */
 /*s: function Dy */
-#define	Dy(r)	((r).max.y-(r).min.y)
+#define	Dy(r)	((r).max.y - (r).min.y)
 /*e: function Dy */
 
 extern Rectangle	rectaddpt(Rectangle, Point);

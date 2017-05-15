@@ -4,7 +4,9 @@
 #include <draw.h>
 #include <memdraw.h>
 
+/*s: macro DBG1 */
 #define DBG1 if(0) print
+/*e: macro DBG1 */
 
 /*s: function MUL */
 #define MUL(x, y, t)	(t = (x)*(y)+128, (t+(t>>8))>>8)
