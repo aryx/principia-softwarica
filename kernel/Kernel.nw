@@ -1728,29 +1728,37 @@ arch_isaconfig = main_arch_isaconfig;
 <<pad memory pointer types(arm)>>=
 // physical address
 typedef uintptr phys_addr;
-// virtual address (which should be a user address)
+// virtual address (a user_addr or kern_addr)
 typedef uintptr virt_addr;
+
+// user address (under KZERO)
+typedef uintptr user_addr;
 // kernel address (mostly physical + KZERO)
 typedef uintptr kern_addr;
 @
 %ocaml: newtypes, so enforce stronger typechecking!
 %x86: same => factorize?
-\t use user_addr instead of virt_addr! clearer (as I do in 9-ocaml)
+%pad: I introduced that
 
-% all structure pointers in the code are kernel addresses.
+% all structure pointers in the code are kern_addr.
 % e.g. Page*, Segment*, be it in fields or in globals.
+% There are very few places where accept virt_addr. Most of the time
+% it is easier a user_addr or a kerne_addr.
 
-\ifallcode
 <<pad memory pointer types(arm)>>=
-typedef ulong* virt_addr2;
-typedef void* virt_addr3;
-typedef ulong* kern_addr2;
-typedef void* kern_addr3;
+// wp = word pointer, vp = void pointer
+typedef ulong* virt_wp; 
+typedef void* virt_vp;
+typedef ulong* kern_wp;
+typedef void* kern_vp;
+typedef ulong* user_wp;
+typedef void* user_vp;
 @
 %ocaml: use unified typed for address
 %x86: same
-\fi
-%less: I think the void* is the best form, so should s/xxx_addr3/xxx_add/
+%less: I think the void* is the best form, so should s/xxx_vp/xxx_addr/
+%pad: I introduced that
+
 
 
 
@@ -1777,7 +1785,7 @@ typedef void* kern_addr3;
 #define CPUADDR     (KZERO+0x2000)      /* Cpu structure */
 @
 %c: precise memory layout! can put things everywhere you want
-\t defines not as static global because need to do trick with SMP?
+%smp: defined not as a simple global because need to do trick with SMP?
 % even when have extern register? Because still need to assign this register?
 % but could do MOVW $cpu(SB), R9? so no need hardcoded CPUADDR?
 
@@ -1805,7 +1813,7 @@ typedef void* kern_addr3;
 % dereference
 
 
-%phys_addr arch_paddr(kern_addr3 v)
+%phys_addr arch_paddr(kern_vp v)
 <<macro PADDR(arm)>>=
 #define PADDR(va)   PTR2UINT(PHYSDRAM | ((uintptr)(va) & ~KSEGM))
 @
@@ -1826,7 +1834,7 @@ typedef void* kern_addr3;
 \t simplify, remove KSEGM and PHYSDRAM.
 
 
-%kern_addr3 arch_kaddr(phys_addr pa)
+%kern_vp arch_kaddr(phys_addr pa)
 <<macro KADDR(arm)>>=
 #define KADDR(pa)   UINT2PTR(KZERO    | ((uintptr)(pa) & ~KSEGM))
 @
@@ -1851,7 +1859,7 @@ typedef void* kern_addr3;
  * If pa is not a valid argument to KADDR, return 0.
  */
 uintptr
-arch_cankaddr(uintptr pa)
+arch_cankaddr(phys_addr pa)
 {
     if(pa < memsize)        /* assumes PHYSDRAM is 0 */
         return memsize - pa;
@@ -1898,10 +1906,10 @@ arch_cankaddr(uintptr pa)
 
 % On the kernel side, generic interface for syscalls:
 <<typedef Syscall>>=
-typedef long Syscall(ulong*);
+typedef long Syscall(ulong*); // user_wp? or copied in Sargs?
 @
-%ocaml: marshalled ADT instead of generic ulong*? still pb
-% for return value though. Need matching return value.
+%ocaml: marshalled ADT instead of generic ulong*? 
+% need also ADT for return value though and special matching return value.
 %c: very generic interface and later cast (but good in the end?)
 
 % parameter = pointer in stack of user, start of array of parameters
@@ -1958,8 +1966,9 @@ sysnop(ulong*)
 % trivial on Raspberry Pi! See \book{Graphics}?
 
 
-% the parameter virt_addr2 should be a pointer to the stack to the start
-% of the arguments
+% The parameter should be a pointer to the stack to the start of the args?
+\t or args copy in Sargs?
+ 
 
 % SWI $0 for system call. Put value of syscall in R0 (see \book{Assembler}).
 % Then branch where? in HVECTORS and then vector -> vtable -> _vsvc.
@@ -2105,6 +2114,7 @@ struct Cpu
     int stack[1];
 };
 @
+%smp: obviously here because prepare the field for SMP coming later
 %c: idiom to access not specified size (CPUSIZE - other fields)
 %coupling: see 8(R(CPU)) in _vsvc code in bcm/, 12(R(CPU)) in cpureset
 %history: %old:
