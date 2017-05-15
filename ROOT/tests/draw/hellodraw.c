@@ -3,6 +3,8 @@
 
 #include <draw.h>
 
+extern void drawsetdebug(bool);
+
 void main(void) 
 {
   int result;
@@ -12,6 +14,8 @@ void main(void)
   if (result < 0) {
     exits("Error in initdraw");
   }
+  //drawsetdebug(true);
+  //flushimage(display, false);
 
   color = allocimage(display, Rect(0,0,1,1), RGBA32, true, DMagenta);
   draw(display->image, display->image->r, color, nil, ZP);
@@ -19,11 +23,12 @@ void main(void)
   line(display->image, 
        Pt(10, 10), 
        Pt(100, 100), Endsquare, Endsquare, 10, display->black, ZP);
+
   string(display->image, 
          Pt(200, 200), display->black, ZP, font, 
          "Hello Graphical World");
-  flushimage(display, true);
 
+  flushimage(display, true);
   sleep(5000); // msec
 
   // oops ... can overflow on desktop and other windows when run under rio
