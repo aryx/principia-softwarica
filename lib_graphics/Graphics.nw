@@ -1465,6 +1465,8 @@ is Figure~\ref{fig:hellodraw}, uses this API:
 @
 \n use view? no! use display->image directly so simpler. hellorio.c uses view!
 \l could introduce a alloccolor?
+%ocaml: use exn instead of error code, and return display instead
+% of using global (possible because does not use error code for return value)
 
 Here are a few important things to note in this program:
 
@@ -2033,7 +2035,7 @@ leading back to code in [[hellodraw.c]].
 \n use RBG24, not default config for Raspberry, but simpler
 \n could use CMAP8 instead of RGB24 for color, so need translation, but Complex
 \n .data point to Memdata intermediate first actually, but too suble for now.
-
+\t actually id is 0
 
 %trans:
 Figure~\ref{fig:soft-archi-directories} focused on the functions
@@ -2411,7 +2413,8 @@ Pt(int x, int y)
     return p;
 }
 @
-
+%ocaml: ocaml does not require some copy here. can return "shared value".
+%c: no allocation so convenient. No malloc/free needed.
 
 <<function eqpt>>=
 bool
@@ -2420,12 +2423,14 @@ eqpt(Point p, Point q)
     return p.x==q.x && p.y==q.y;
 }
 @
+%ocaml: builtin = does that
 
 
 <<global ZP>>=
 Point	ZP;
 @
 % Zero point, used a lot for default argument.
+%ocaml: explicit initialize instead of bss default 0 initialization
 
 % arithmetic on points
 
@@ -2438,6 +2443,8 @@ addpt(Point a, Point b)
     return a;
 }
 @
+%ocaml: factorize code of all binary operations 'binary op pt1 pt2'
+%ocaml: some copy involved (but in ocaml functional too so allocate new one)
 
 <<function subpt>>=
 Point
@@ -2550,7 +2557,7 @@ eqrect(Rectangle r, Rectangle s)
            r.min.y==s.min.y && r.max.y==s.max.y;
 }
 @
-
+%ocaml: builtin, no need define one
 
 <<global ZR>>=
 Rectangle ZR;
@@ -2559,12 +2566,13 @@ Rectangle ZR;
 
 
 <<function Dx>>=
-#define	Dx(r)	((r).max.x-(r).min.x)
+#define	Dx(r)	((r).max.x - (r).min.x)
 @
 % width
+%ocaml: no need macros, ocaml has a good cross module inliner!
 
 <<function Dy>>=
-#define	Dy(r)	((r).max.y-(r).min.y)
+#define	Dy(r)	((r).max.y - (r).min.y)
 @
 % height
 
@@ -2581,6 +2589,8 @@ rectaddpt(Rectangle r, Point p)
     return r;
 }
 @
+%ocaml: again can factorize by using higher-order function
+
 % p is kinda interpreted as a vector here
 
 <<function rectsubpt>>=
@@ -2598,6 +2608,27 @@ rectsubpt(Rectangle r, Point p)
 
 
 
+<<function ptinrect>>=
+bool
+ptinrect(Point p, Rectangle r)
+{
+    return p.x >= r.min.x && p.x < r.max.x &&
+           p.y >= r.min.y && p.y < r.max.y;
+}
+@
+% use strict < for max because max is not part of rectangle! 
+% first point outside
+
+
+<<function rectinrect>>=
+bool
+rectinrect(Rectangle r, Rectangle s)
+{
+    return s.min.x <= r.min.x && r.max.x <= s.max.x && 
+           s.min.y <= r.min.y && r.max.y <= s.max.y;
+}
+@
+% r is in s
 
 
 
@@ -2611,26 +2642,6 @@ rectXrect(Rectangle r, Rectangle s)
 @
 % FIGURE (check if intersection non empty)
 
-<<function rectinrect>>=
-bool
-rectinrect(Rectangle r, Rectangle s)
-{
-    return s.min.x <= r.min.x && r.max.x <= s.max.x && 
-           s.min.y <= r.min.y && r.max.y <= s.max.y;
-}
-@
-% r is in s
-
-<<function ptinrect>>=
-bool
-ptinrect(Point p, Rectangle r)
-{
-    return p.x >= r.min.x && p.x < r.max.x &&
-           p.y >= r.min.y && p.y < r.max.y;
-}
-@
-% use strict < for max because max is not part of rectangle! 
-% first point outside
 
 
 
@@ -2702,6 +2713,10 @@ struct Display
 // option<Display>
 Display	*display;
 @
+%ocaml: return value instead of using global? why need global?
+% can pass display to the line/draw/ellipse/... through Image.display
+% so not really need a global!
+
 % <> = ... <- initdraw
 % Could be returned instead? So API would be opendisplay()?
 % Easier that way? no need to pass it everywhere?
@@ -2734,6 +2749,7 @@ char	*devdir; // /dev in general
 char	*windir; // /dev in general
 @
 \t mv windir out of it? 
+\l useful? anyway it's always /dev
 
 
 % usually have draw(dstimg, rectangle, srcimg, maskimg)
@@ -2982,6 +2998,8 @@ struct Image
     <<[[Image]] extra fields>>
 };
 @
+%ocaml: mutual recursive type between Image and Display
+
 % ctor = allocimage (doing some RPC)
 
 % will see chan, the image format later (basically how many bytes
@@ -3113,6 +3131,7 @@ struct Memimage
 <<enum fxxx>>=
 enum {
     Frepl	= 1<<0,	/* is replicated */
+
     // derives from Memimage.chan
     Fgrey	= 1<<2,	/* is grey */
     Falpha	= 1<<3,	/* has explicit alpha */
@@ -3396,6 +3415,8 @@ if(d == nil)
 <<type channels>>=
 typedef ulong channels;
 @
+%ocaml: more complex type, than then get serialized/deserialized correctly
+%c: complex structure in one int by (ab)using bit operations
 
 % =~ image format. How many bits, what bytes represent which color.
 % This + rectangle = image resolution.
@@ -3439,6 +3460,7 @@ enum ImageChan {
 #define __DC(type, nbits)	((((type)&15)<<4)|((nbits)&15))
 @
 % >>
+%ocaml: use that only when serializing
 
 %extractor
 <<function NBITS>>=
@@ -3468,6 +3490,7 @@ enum ImageChan {
 @
 % >> >> >>
 
+% no Chan5 because it would not fit in 32 bits
 
 % most common image formats:
 
@@ -3519,11 +3542,13 @@ chantodepth(ulong c)
 if(TYPE(c) >= NChan || NBITS(c) > 8 || NBITS(c) <= 0)
     return 0; // warning?
 @
+%ocaml: no need for typep check; by construction correct
 
 <<[[chantodepth()]] sanity check n>>=
 if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
     return 0; // warning?
 @
+%ocaml: return exn! who checks return value of chantodepth?
 
 % strtochan, chantostr later.
 
@@ -3536,6 +3561,8 @@ if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
 typedef ulong rgba;
 @
 %pad: I introduced this type, less confusing
+%c: again, complex type (quadruple) by (ab)using a simple int
+%ocaml: use record (a bit more tedious to build colors from values)
 
 %old school graphics:
 % https://www.youtube.com/watch?v=Tfh0ytz8S0k&feature=youtu.be
@@ -3595,6 +3622,8 @@ enum
 
 % we will see different format, copy from one image to another,
 % so may need convert. Usually convert to common base: rgba(32).
+
+% Below pass img but just to get the channel of the image
 
 % memimagedraw -> <>
 <<function imgtorgba>>=
@@ -3830,6 +3859,7 @@ enum Drawop
 };
 @
 % 12 porter duff operators.
+% In practice use mostly?
 
 \l FIGUREs ? or delay to later?
 % http://www.svgopen.org/2005/papers/abstractsvgopen/ nice figure
@@ -4669,6 +4699,7 @@ initdraw(Errorfn error, char *fontname , char *label)
 }
 @
 %old:    char *dev = "/dev";  but was not even used for bind so ...
+%ocaml: return display instead
 
 % so even when run colors under terminal, it will not reuse /dev/draw/n,
 % it will open a new draw!
@@ -4691,16 +4722,21 @@ geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *wind
     return OK_1;
 }
 @
-% modify the global!
+%ocaml: less general, hardcode /dev, anyway who uses something different?
 
+% modify the global!
+\l care about being so general? devdir changes?
 
 
 <<[[geninitdraw()]] sanity check display>>=
 if(display == nil)
     return ERROR_NEG1;
 @
+%ocaml: no need, use exn instead
 
 % Errorfn in appendix.
+
+\t initdisplay is not enough to get a graphical window! 
 
 \subsection{[[initdisplay()]]}
 
@@ -4720,6 +4756,7 @@ Image *image;
 int n;
 @
 % why NINFO+1? because add a trailing \0 below
+\l aspectize reffd?
 
 <<constant NINFO>>=
 #define	NINFO	12*12
@@ -4814,9 +4851,12 @@ initdisplay(char *dev, char *win, Errorfn error)
 %    <<[[initdisplay()]] set isnew>>
 %    <<[[initdisplay()]] set display _isnewdisplay part1>>
 %    <<[[initdisplay()]] set display _isnewdisplay part2>>
-\l plus 5 for flush message? but flush is using only 1 byte now.
+\l plus 5 for flush message? flush is using only 1 byte now.
 
 % clipped if run under a window? how enforced? not enforced ...
+
+% the opaque and transparent seems counterintuitive, but
+% white means all colors. Black means no color.
 
 % strtochan later in Image IO chapter.
 % atoi = string to number. =~ scanf.
@@ -4828,7 +4868,7 @@ if(disp->bufsize <= 0)
     disp->bufsize = 8000;
 <<[[initdisplay()]] sanity check bufsize>>
 @
-% iounit in libc.h
+% iounit in libc.h which is?
 
 
 
@@ -4853,6 +4893,7 @@ t = strdup(win);
 if(t == nil)
     return nil;
 @
+%ocaml: no string overflow (also no need sanitize, hardcode /dev)
 
 
 %less: could reorganize error management like in Linux instead
@@ -4873,6 +4914,7 @@ Error1:
 if(ctlfd < 0)
     goto Error1;
 @
+%ocaml: use exn, and no need free, use GC
 
 <<[[initdisplay()]] sanity check read ctlfd>>=
 if(n < 12){
@@ -4883,6 +4925,7 @@ Error2:
 if(n==NINFO+1)
     n = NINFO;
 @
+%ocaml: should use finalize?
 
 <<[[initdisplay()]] sanity check datafd>>=
 if(datafd < 0)
@@ -4905,7 +4948,6 @@ Error4:
 }
 @
 
-
 <<[[initdisplay()]] sanity check image part1>>=
 if(0){
 Error5:
@@ -4914,6 +4956,7 @@ Error5:
     goto Error4;
 }
 @
+%ocaml: use GC to free automatically when exn
 
 <<[[initdisplay()]] sanity check image part2>>=
 if(image == nil)
@@ -4943,6 +4986,7 @@ if(disp->white == nil || disp->black == nil){
 
 \subsection{[[closedisplay()]]}
 
+% drawshutdown | <prog> -> <>
 <<function closedisplay>>=
 /*
  * Call with d unlocked.
@@ -4956,6 +5000,7 @@ closedisplay(Display *disp)
 @
 % can have multiple display? apparently.
 \l call with d unlocked? initdisplay comment says the opposite
+\t why need that? just let OS do that?
 
 
 % exit -> <> (atexit(<>) <- geninitdraw <- initdraw)
@@ -5665,7 +5710,6 @@ if(di == nil)
 
 
 
-
 \subsection{Writing in [[/dev/draw/x/data]]}
 \label{sec:drawwrite-drawmesg}
 % (and open)
@@ -5738,7 +5782,7 @@ case Qdata:
 % most of the boilerplate at least.
 
 % G = Get, P = Put
-% B = Binary? Bytes?
+% B = Binary? Bytes? Buffer?
 
 <<function BGSHORT>>=
 #define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))
@@ -5775,14 +5819,21 @@ bufimage(Display *d, int n)
     byte *p;
 
     <<[[bufimage()]] sanity check n>>
-    if(d->bufp + n  >  d->buf + d->bufsize)
-        if(doflush(d) < 0)
-            return nil;
+    <<[[bufimage()]] flush if buffer full>>
     p = d->bufp;
     d->bufp += n;
     return p;
 }
 @
+%ocaml: use ^ and simply add_buf and string buffer
+% instead of those bufimage and manual a+5, a+12, etc.
+
+<<[[bufimage()]] flush if buffer full>>=
+if(d->bufp + n  >  d->buf + d->bufsize)
+    if(doflush(d) < 0)
+        return nil;
+@
+%ocaml: use exn not nil return
 
 <<[[bufimage()]] sanity check n>>=
 if(n < 0 || n > d->bufsize){
@@ -5813,6 +5864,8 @@ doflush(Display *d)
     return OK_1;
 }
 @
+%ocaml: exn?
+
 % write!! trigger kernel side!
 
 <<[[doflush()]] sanity check nn>>=
@@ -5822,11 +5875,17 @@ if(nn != n){
     return ERROR_NEG1;
 }
 @
+%ocaml: use exn because anyway many places do not check the return value
+% of doflush or flushimage and just ignore if error
 
 % usually first letter is message kind. e.g., 'a' for alloc
 % 'l' for line.
 % in total =~ 20 messages?
 % compared to 120 messages in X11R4, and in X11R6?
+
+% how communicate error from API call? from kernel?
+% By having syscall returning error code when writing in /dev/draw/x/data
+% (can then use werrstr to know more about the error)
 
 \subsection{Step 3: unmarshalling and [[drawmesg()]]}
 % also called demarshalling, or deserializing
@@ -5973,6 +6032,7 @@ freeimage(Image *i)
 @
 \l why not _freeimage? be consistent at least, and why extra function?
 
+% need to free sometimes because resource used in the kernel! it takes space.
 
 
 \subsection{Marshalling}
@@ -6046,6 +6106,10 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, rgba val,
     return i;
 }
 @
+%ocaml: use exn instead of ignoring possible error when do
+% flushimage()
+\l could use BPRECT macro
+
 % A bit sad to have this duplicated info kernel and user side.
 % Have user side probably for programmer's convenient so he can
 %  have directly information about the image.
@@ -6058,7 +6122,7 @@ if(ai)
     i = ai;
 @
 % when pass an already allocated image to allocimage?
-
+\l when need that?
 
 
 
@@ -6069,6 +6133,7 @@ if(chan == 0){
     return nil;
 }
 @
+%ocaml: can not happen by construction when use proper type
 
 <<[[_allocimage()]] sanity check depth>>=
 if(depth == 0){
@@ -6082,6 +6147,7 @@ Error:
     return nil;
 }
 @
+%ocaml: exn
 
 <<[[_allocimage()]] sanity check a>>=
 if(a == nil)
@@ -6228,7 +6294,7 @@ drawrectangle(Rectangle *r, uchar *a)
     r->max.y = BGLONG(a+3*4);
 }
 @
-
+\l could do that also in the upper side in draw and have a putrectangle()
 
 
 
@@ -6241,7 +6307,7 @@ DImage *ll;
 <<[[drawmesg()]] cases>>=
 /* free: 'f' id[4] */
 case 'f':
-    printmesg(fmt="L", a, true);
+    printmesg(fmt="L", a, false);
     m = 1+4;
     <<[[drawmesg()]] sanity check n with m>>
     ll = drawlookup(client, BGLONG(a+1), false);
@@ -6250,7 +6316,7 @@ case 'f':
 
     continue;
 @
-
+%old: was passing true to printmesg but weird
 
 
 
@@ -6613,6 +6679,8 @@ flushimage(Display *d, bool visible)
 }
 @
 \l why not use global display instead? can have multiple one?
+%ocaml: use exn so less need of those intermediate flush?
+%ocaml: use 2 different functions so clearer interface than boolean arg
 %dead:
 %        <<[[flushimage()]] if isnew>>
 
@@ -6626,6 +6694,7 @@ if(d == nil)
     return OK_0;
 @
 % meh OK
+%ocaml: no need
 
 
 %dead: seems useless because unmarshalling code does not use extra passed info
@@ -6680,7 +6749,8 @@ if(visible){
     *d->bufp++ = 'v';	/* five bytes always reserved for this */
 }
 @
-% but now I dont use five, so still valid comment?
+% but now I dont use five, I use only 1 cos no more _isnew stuff
+% so invalid comment
 
 % see doflush in chapter Kernel/User bridge which finally writes
 % on /dev/draw/x/data
@@ -7372,7 +7442,7 @@ gendrawop(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1, 
     draw1(dst, &r, src, &p0, mask, &p1, op);
 }
 @
-
+%ocaml: have just draw and draw_gen
 
 
 
@@ -7487,6 +7557,7 @@ _setdrawop(Display *d, Drawop op)
 if(a == nil)
     return; // warning?
 @
+%ocaml: exn. ugly no way to know if error in C!
 
 <<[[_setdrawop()]] sanity check a>>=
 if(a == nil)
@@ -7539,7 +7610,7 @@ drawpoint(Point *p, uchar *a)
     p->y = BGLONG(a+1*4);
 }
 @
-
+%ocaml: can also have a bp_point()
 
 % from image id to Memimage through intermediate DImage.
 <<function drawimage>>=
@@ -9313,6 +9384,7 @@ if(a == nil){
     return;
 }
 @
+%ocaml: exn again
 
 \subsection{Unmarshalling}
 
@@ -13129,7 +13201,7 @@ if(b == nil){
 <<[[drawmesg()]] cases>>=
 /* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
 case 'i':
-    printmesg(fmt="Llb", a, true);
+    printmesg(fmt="Llb", a, false);
     m = 1+4+4+1;
     <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
@@ -13147,6 +13219,8 @@ case 'i':
     continue;
 
 @
+%old: was passing true to printmesg
+
 % so erase all previous chars
 
 <<[[drawmesg()]] when initialize font image and cache, sanity check dstid>>=
@@ -16334,7 +16408,7 @@ DImage *dsrc;
 <<[[drawmesg()]] cases>>=
 /* allocate screen: 'A' id[4] imageid[4] fillid[4] public[1] */
 case 'A':
-    printmesg(fmt="LLLb", a, true);
+    printmesg(fmt="LLLb", a, false);
     m = 1+4+4+4+1;
     <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
@@ -16348,6 +16422,7 @@ case 'A':
     continue;
 
 @
+%old: was passing true to printmesg
 
 <<[[drawmesg()]] when allocate screen, sanity check dstid>>=
 if(dstid == 0)
@@ -16372,7 +16447,7 @@ CScreen *cs;
 <<[[drawmesg()]] cases>>=
 /* free screen: 'F' id[4] */
 case 'F':
-    printmesg(fmt="L", a, true);
+    printmesg(fmt="L", a, false);
     m = 1+4;
     <<[[drawmesg()]] sanity check n with m>>
     drawlookupscreen(client, BGLONG(a+1), &cs);
@@ -16380,7 +16455,7 @@ case 'F':
     continue;
 
 @
-
+%old: was passing true to printmesg
 
 
 
@@ -18626,7 +18701,7 @@ Screen	*screen;
 <<[[geninitdraw()]] get window>>=
 snprint(buf, sizeof buf, "%s/winname", display->windir);
 if(gengetwindow(display, buf, &view, &screen, ref) < 0)
-    goto Error;
+   goto Error;
 @
 %old: was &screen, &_screen
 \l could call getwindow as it does this winname gymnastic
@@ -26273,7 +26348,7 @@ bool	_drawdebug = false;
 if(_drawdebug)
     fprint(2, "flushimage fail: d=%p: n=%d nn=%d %r\n", d, n, nn); /**/
 @
-
+%ocaml: use exn and always do the check, not only if _drawdebug
 
 
 
@@ -26301,33 +26376,52 @@ drawsetdebug(bool v)
 {
     byte *a;
     a = bufimage(display, 1+1);
-    if(a == nil){
-        fprint(2, "drawsetdebug: %r\n");
-        return;
-    }
+    <<[[drawsetdebug()]] sanity check a>>
     a[0] = 'D';
     a[1] = v;
 }
 @
 
-% libmemdrawn
+<<[[drawsetdebug()]] sanity check a>>=
+if(a == nil){
+    fprint(2, "drawsetdebug: %r\n");
+    return;
+}
+@
+
+% libmemdraw
 <<global drawdebug>>=
 bool drawdebug;
 @
 % rename? memdrawdebug?
 
 
+
 % Unmarshalling
 <<[[drawmesg()]] cases>>=
 /* toggle debugging: 'D' val[1] */
 case 'D':
-    printmesg(fmt="b", a, 0);
+    printmesg(fmt="b", a, false);
     m = 1+1;
     <<[[drawmesg()]] sanity check n with m>>
     drawdebug = a[1];
     continue;
 @
 
+% but not really used in the kernel. All the code that was using
+% drawdebug was actually commented (e.g., in libmemdraw/draw.c)
+
+
+<<macro DBG1>>=
+#define DBG1 if(0) print
+@
+\l mv in memdraw.h?
+\t if actually replace 0 by drawdebug, and enable debug, then
+\t  hellodraw just hangs
+
+<<macro DBG>>=
+#define DBG if(0) print
+@
 
 \section{Dumpers}
 
@@ -26411,6 +26505,8 @@ chantostr(char *buf, ulong cc)
 \subsection{Drawing commands}
 
 % to debug drawmesg()
+
+% drawmesg -> <>
 <<function printmesg>>=
 static void
 printmesg(char *fmt, uchar *a, bool plsprnt)
@@ -26419,11 +26515,12 @@ printmesg(char *fmt, uchar *a, bool plsprnt)
     char *p, *q;
     int s, left;
 
-    if(true || !plsprnt){ //old: 1 || !plsprnt
+    if(!plsprnt && !drawdebug){ //old: 1 || !plsprnt
         SET(s,q,p);
         USED(fmt, a, buf, p, q, s);
         return;
     }
+    // else, plsprnt || drawdebug
 
     q = buf;
     *q++ = *a++;
