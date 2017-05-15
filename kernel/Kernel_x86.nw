@@ -1575,6 +1575,8 @@ int lastintr; // debugging
 @
 \t actually unused in bcm/! so put in Arch_Cpu?
 
+
+
 <<function trap(x86)>>=
 /*
  *  All traps come here.  It is slower to have all traps call trap()
@@ -1708,6 +1710,39 @@ void trap(Ureg* ureg)
     }
 }
 @ 
+
+
+<<[[Proc]] scheduling fields>>=
+bool preempted;  /* true if this process hasn't finished the interrupt
+       *  that last preempted it
+       */
+@
+
+% ?? -> <>
+<<function preempt>>=
+/*
+ *  here at the end of non-clock interrupts to see if we should preempt the
+ *  current process.
+ */
+void
+preempt(void)
+{
+    if(up && up->state == Running)
+      if(up->preempted == false)
+        if(anyhigher())
+          if(!active.exiting){
+              cpu->readied = nil;   /* avoid cooperative scheduling */
+              up->preempted = true;
+              sched();
+              arch_splhi(); // still in interrupt context
+              up->preempted = false;
+          }
+    return;
+}
+@ 
+% servicing an interrupt may have adjusted the readyness of higher priority
+% process so preempt!
+
 
 
 <<function kexit(x86)>>=
