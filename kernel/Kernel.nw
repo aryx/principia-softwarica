@@ -2129,15 +2129,25 @@ struct Cpu
 
 <<[[Cpu]] time fields>>=
 ulong ticks;      /* of the clock since boot time */
+@
+% more on ticks in Time chapter. the "system clock"
+% increments ticks. so ticks = number of "system clock" interrupts.
+% in hzclock():    cpu->ticks++;
+% why use arch_fastticks() function when can simply use cpu->ticks?
+%  because fastticks are generated more frequently! faster ticks!
+%  ticks, fastticks, perfticks, cycles, lcycles, grrr
 
+
+<<[[Cpu]] time fields>>=
 uvlong  cpuhz;
 int cpumhz; // cpuhz / 1_000_000
 @
 %c: long long support; No need boxed Int64
-\l mv later? need cpuhz and cpumhz?
+% mv later? classic when speak about Cpu so maybe not too bad here.
 
-% more on ticks in Time chapter, number of clock interrupts
-% in hzclock():    cpu->ticks++;
+
+
+
 
 % not that the stack actually is until CPUSIZE
 <<constant CPUSIZE(arm)>>=
@@ -2185,6 +2195,7 @@ struct Arch_Cpu {
 <<global cpu(arm)>>=
 extern register Cpu* cpu;           /* R10 */
 @
+%smp:
 %x86: differs in different archi!
 %c: powerful! almost assembly level instruction from C
 %old: was called [[m]]. Xv6 also use the name 'cpu'.
@@ -2207,6 +2218,7 @@ extern register Cpu* cpu;           /* R10 */
 // array<ref<Cpu>>
 Cpu* cpus[MAXCPUS];
 @
+%smp:
 %old: machaddr. xv6 also use the name 'cpus'.
 
 % this is portable across all archs.
@@ -2215,8 +2227,10 @@ Cpu* cpus[MAXCPUS];
 <<constant MAXCPUS(arm)>>=
 #define MAXCPUS     4           /* max # cpus system can run */
 @
-% But on Raspberry Pi 1 only 1 really. On Pi 2? Pi 3?
+%smp:
 %old: MAXMACH
+
+% But on Raspberry Pi 1 only 1 really. On Pi 2? Pi 3?
 
 % why macro? because again in other archi it could be more complex
 %  but then why in portdat? (was originally elsewhere?)
@@ -2224,6 +2238,7 @@ Cpu* cpus[MAXCPUS];
 #define CPUS(n)  (cpus[n])
 @
 %old: MACHP
+%smp:
 
 <<struct Active>>=
 struct Active
@@ -2237,11 +2252,13 @@ struct Active
 };
 @ 
 %c: bitset
+%smp: SMP specific so maybe move later?
 
 <<global active>>=
 struct Active active;
 @ 
-
+%smp: mv later?
+\l why need this?
 
 \section{[[Proc]] and [[up]]}
 %(ARM)
@@ -2338,7 +2355,8 @@ enum Procstate
     <<[[Procstate]] cases>>
 };
 @ 
-%ocaml: need ADT? flat enum seems fine
+%ocaml: flat enum fine except for Queueing where better with ADT
+\l put Ready also here? quite important to see Running vs Ready
 
 <<global statename>>=
 // hash<enum<Procstate>, string>, coupling: with enum Procstate
@@ -2364,6 +2382,8 @@ char *statename[] =
 %bugfix: "Rendez" -> "Rendezvous" in string
 %ocaml: factorize QueueingX stuff thanks to ADT
 
+% Ready Running Wakeme are most important one.
+
 % put /proc/#/status and part of Qstatus here? no too early
 % but maybe could put some of the state thing later in Proc section of
 % Process chapter
@@ -2371,7 +2391,9 @@ char *statename[] =
 <<global up(arm)>>=
 extern register Proc* up;           /* R9 */
 @
+%smp: in a register again because convenient per-processor storage area
 %xv6: use 'proc' for that
+%ocaml: use Cpu.proc (but slower)
 
 % again per processor!
 % R9 because declared after cpu in file and see \book{Compiler}.
@@ -2568,7 +2590,7 @@ Dev** devtab = nil;
 <<struct Soc(arm)>>=
 struct Soc {            /* SoC dependent configuration */
     ulong   dramsize;
-    uintptr physio;
+    phys_addr physio;
     <<[[Soc]] bus fields>>
     <<[[Soc]] mmu fields>>
     <<[[Soc]] other fields>>
@@ -2669,8 +2691,9 @@ Soc soc = {
 % https://en.wikipedia.org/wiki/Spl_(Unix)
 
 % In a uniprocessor, you can do all the concurrency in the kernel
-% by just using slphi/spllo. But it does not scale to SMP. You want
-% finer-grained locks for that. Still important also in SMP to have splhi.
+% by just using slphi/spllo. But it does not scale to SMP.
+%smp: for smp You want finer-grained locks than splhi. 
+% Still important also in SMP to have splhi.
 
 <<function arch_splhi(arm)>>=
 // bool   arch_splhi(void);
@@ -2765,6 +2788,7 @@ TEXT    arch_tas(SB), $-4
 % so SWPW just ensure atomic instruction so interrupt will be done
 % either before or after SWPW
 
+%smp:
 % See Section~\ref{smp} for arch_tas() handling multiple processors!
 
 % SWPW works on SMP? Pi2 seems to use another instruction.
@@ -2904,7 +2928,18 @@ lock(Lock *l)
 
 %inccnt =~ arch_xinc
 
+%smp:
 % Same code when SMP! just arch_tas change on raspi2.
+% Note that this spinlocks are useful mainly in SMP context! 
+% If uniprocessor then who will free the lock while you spin?
+
+%Still, in uniprocessor useful also to have locks because way
+% to disable another process to run, so kinda act as a splhi
+% (see Proc.nlocks later). No mutual exclusion with interrup code (hence 
+% need for ilock below)
+% but mutual exclusion with other process! So when lock runq,
+% another process will not be scheduled and so will not have
+% the opportunity to modify runq.
 
 
 <<[[Lock]] debugging fields>>=
@@ -2998,7 +3033,8 @@ l->cpu = CPUS(cpu->cpuno);
 <<struct ILock>>=
 typedef Lock ILock;
 @
-\t who uses Ilock in practice? device drivers?
+% Who uses Ilock in practice? the global timers! 
+% device drivers?
 
 % do we always use a Lock in a consistent way? In some cases I hope so
 \t can formalize a checking rule? if access any field
@@ -3154,7 +3190,7 @@ struct KQLock
 kern_addr qpc;    /* pc of the holder */ // for debugging?
 @
 <<[[Proc]] debugging fields>>=
-ulong qpc;    /* pc calling last blocking qlock */
+kern_addr qpc;    /* pc calling last blocking qlock */
 @
 
 
@@ -3324,7 +3360,7 @@ struct RWlock
 
 
 <<[[RWlock]] debugging fields>>=
-uintptr wpc;    /* pc of writer */
+kern_addr wpc;    /* pc of writer */
 @
 
 <<[[Procstate]] cases>>=
@@ -3524,6 +3560,7 @@ canrlock(RWlock *q)
 struct Ref
 {
     long ref;
+
     Lock;
 };
 @ 
@@ -3607,11 +3644,16 @@ l->p = up;
 
 <<[[Proc]] synchronization fields>>=
 // As long as the current process hold spinlocks (to kernel data structures),
-// we will not schedule another process in unlock(); only the last unlock
-// will eventually cause a rescheduling.
+// we will not schedule another process in sched() or unlock(); 
+// only the last unlock will eventually cause a rescheduling.
 Ref nlocks;   /* number of locks held by proc */
 @ 
 % need Ref here? need exclusion access across processors?
+
+% The code that avoid the scheduling is in sched() and also in unlock().
+% see Section X.
+% Also checked in sleep().
+%ocaml: OCaml thread.ml does the same! so this is not just a safeguard.
 
 <<[[lock()]] increment nlocks>>=
 if(up)
@@ -3632,7 +3674,6 @@ inccnt(Ref *r)
 }
 @ 
 % so why use incref()/decref()? why not use arch_xinc()/arch_xdec()?
-
 
 <<function deccnt>>=
 static int
@@ -3682,6 +3723,8 @@ if(cpu->ilockdepth != 0)
 % spinlocks or some ilocks!
 
 % Again, note that ilockdepth concern ilocks but the sanity check is in qlock!
+
+% Another sanity check done on ilockdepth in sched()!!
 
 \section{Synchronization}
 % different from critical regions
@@ -3899,7 +3942,7 @@ struct Xhdr
 \subsection{[[xalloc()]]}
 
 <<function xalloc>>=
-kern_addr3
+kern_vp
 xalloc(ulong size)
 {
     return xallocz(size, true);
@@ -3907,7 +3950,7 @@ xalloc(ulong size)
 @
 
 <<function xallocz>>=
-kern_addr3
+kern_vp
 xallocz(ulong size, bool zero)
 {
     Xhdr *p;
@@ -3958,7 +4001,7 @@ xallocz(ulong size, bool zero)
 % gradually.
 <<function xfree>>=
 void
-xfree(kern_addr3 p)
+xfree(kern_vp p)
 {
     Xhdr *x;
 
@@ -4044,7 +4087,7 @@ xhole(phys_addr addr, ulong size)
 % used by malloc Pool below
 <<function xmerge>>=
 bool
-xmerge(kern_addr3 vp, kern_addr3 vq)
+xmerge(kern_vp vp, kern_vp vq)
 {
     Xhdr *p, *q;
 
@@ -4091,7 +4134,7 @@ for (i = 24; i-- > 0; ) {
 % e.g. xspanalloc(64*1024*i8237dma, BY2PG, 64*1024);
 % e.g. xspanalloc(4*BY2PG, BY2PG, 0);
 <<function xspanalloc>>=
-kern_addr3
+kern_vp
 xspanalloc(ulong size, int align, ulong span)
 {
     ulong a, v, t;
@@ -4113,7 +4156,7 @@ xspanalloc(ulong size, int align, ulong span)
     if(align > 1)
         v = (v + align) & ~(align-1);
 
-    return (kern_addr3)v;
+    return (kern_vp)v;
 }
 @
 
@@ -4216,7 +4259,7 @@ punlock(Pool *p)
 
 % note that no xfree() or xhole() here ... so it always grow
 % (which is good for the fragmentation issue of xalloc anyway)
-% kernel memory = 4Mo max? this is actually adjusted in confinit()
+% kernel memory = 4Mo max? this is actually adjusted in confinit()!
 <<global pmainmem>>=
 static Private pmainpriv;
 static Pool pmainmem = {
@@ -4324,10 +4367,10 @@ ppanic(Pool *p, char *fmt, ...)
 \subsection{[[malloc()]]}
 
 <<function malloc>>=
-kern_addr3
+kern_vp
 malloc(ulong size)
 {
-    kern_addr3 v;
+    kern_vp v;
 
     v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
     if(v == nil)
@@ -4347,7 +4390,7 @@ malloc(ulong size)
 % in section before the returned pointer in malloc
 <<function free>>=
 void
-free(kern_addr3 v)
+free(kern_vp v)
 {
     if(v != nil)
         poolfree(mainmem, (ulong*)v-Npadlong);
@@ -4370,10 +4413,10 @@ free(kern_addr3 v)
 % also memset to 0! so should be called smallocz no?
 <<function smalloc>>=
 // non failing malloc! will repeat until it can
-kern_addr3
+kern_vp
 smalloc(ulong size)
 {
-    kern_addr3 v;
+    kern_vp v;
 
     for(;;) {
         v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
@@ -4410,10 +4453,10 @@ returnfalse(void*)
 \subsection{[[mallocxxx()]]}
 
 <<function mallocz>>=
-kern_addr3
+kern_vp
 mallocz(ulong size, bool clr)
 {
-    kern_addr3 v;
+    kern_vp v;
 
     v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
     <<[[mallocz()]] if Npadlong>>
@@ -4425,10 +4468,10 @@ mallocz(ulong size, bool clr)
 
 % launchinit -> <>  (for cpus alignment)
 <<function mallocalign>>=
-kern_addr3
+kern_vp
 mallocalign(ulong size, ulong align, long offset, ulong span)
 {
-    kern_addr3 v;
+    kern_vp v;
 
     v = poolallocalign(mainmem, size  +Npadlong*sizeof(ulong), align, 
                                 offset-Npadlong*sizeof(ulong), span);
@@ -4440,10 +4483,10 @@ mallocalign(ulong size, ulong align, long offset, ulong span)
 @
 
 <<function realloc>>=
-kern_addr3
-realloc(kern_addr3 v, ulong size)
+kern_vp
+realloc(kern_vp v, ulong size)
 {
-    kern_addr3 nv;
+    kern_vp nv;
 
     if(v != nil)
         v = (ulong*)v - Npadlong;
@@ -4471,9 +4514,9 @@ if(Npadlong){
 
 <<function setmalloctag>>=
 void
-setmalloctag(kern_addr3 v, kern_addr pc)
+setmalloctag(kern_vp v, kern_addr pc)
 {
-    kern_addr2 u;
+    kern_wp u;
     USED(v, pc); //??
     if(Npadlong <= MallocOffset || v == nil)
         return;
@@ -4485,9 +4528,9 @@ setmalloctag(kern_addr3 v, kern_addr pc)
 
 <<function setrealloctag>>=
 void
-setrealloctag(kern_addr3 v, kern_addr pc)
+setrealloctag(kern_vp v, kern_addr pc)
 {
-    kern_addr2 u;
+    kern_wp u;
     USED(v, pc);
     if(Npadlong <= ReallocOffset || v == nil)
         return;
@@ -4570,7 +4613,7 @@ if(Npadlong !=0 && size != 0)
 struct Page
 {
     phys_addr pa;     /* Physical address in memory */
-    virt_addr va;     /* Virtual address for user */
+    user_addr va;     /* Virtual address for user */
 
     // Why not Ref? to save space (same reason for using 'char' below)
     // but that means needs to use Lock below to access this non-atomic ref.
@@ -4704,11 +4747,12 @@ Page  *prev;
 
 \subsection{[[newpage()]]}
 
+\l user_addr or virt_addr? kernel can call newpage for itself?
 
 % can set s to nil at exit in case of ???
 <<constructor newpage>>=
 Page*
-newpage(bool clear, Segment **s, virt_addr va)
+newpage(bool clear, Segment **s, user_addr va)
 {
     Page *p;
     <<[[newpage()]] other locals>>
@@ -4924,8 +4968,8 @@ struct Segment
     // enum<Segtype>
     ushort  type;   /* segment type */
   
-    virt_addr base;   /* virtual base */
-    virt_addr top;    /* virtual top */
+    user_addr base;   /* virtual base */
+    user_addr top;    /* virtual top */
     ulong size;   /* size in pages */ // top - base / BY2PG
   
     // array<option<ref_own<Pagetable>>>, smalloc'ed (or smallpagedir alias)
@@ -5111,7 +5155,7 @@ ptcpy(Pagetable *old)
 % size is in pages (we really need dimention types)
 <<constructor newseg>>=
 Segment *
-newseg(int type, virt_addr base, ulong size)
+newseg(int type, user_addr base, ulong size)
 {
     Segment *s;
     int pagedirsize;
@@ -5324,7 +5368,7 @@ QLock seglock;  /* locked whenever seg[] changes */
 % okaddr | ... -> <> 
 <<function seg>>=
 Segment*
-seg(Proc *p, virt_addr addr, bool dolock)
+seg(Proc *p, user_addr addr, bool dolock)
 {
     Segment **s, **et, *sg;
 
@@ -5364,7 +5408,7 @@ seg(Proc *p, virt_addr addr, bool dolock)
  * Called only in a system call
  */
 bool
-okaddr(virt_addr addr, ulong len, bool write)
+okaddr(user_addr addr, ulong len, bool write)
 {
     Segment *s;
 
@@ -5405,7 +5449,7 @@ SG_RONLY  = 0040,   /* Segment is read only */
 
 <<function validaddr>>=
 void
-validaddr(virt_addr addr, ulong len, bool write)
+validaddr(user_addr addr, ulong len, bool write)
 {
     if(!okaddr(addr, len, write)){
         postnote(up, 1, "sys: bad address in syscall", NDebug);
@@ -5422,18 +5466,19 @@ validaddr(virt_addr addr, ulong len, bool write)
 % used by sysexec() and other syscalls
 % memchr on virtual address? and so that can span different pages, and 
 % even different segments! can generate faults? I think so.
+\l user_vp or virt_vp?
 <<function vmemchr>>=
 /*
  * &s[0] is known to be a valid address.
  */
 void*
-vmemchr(virt_addr3 s, int c, int n)
+vmemchr(user_vp s, int c, int n)
 {
     int m;
-    virt_addr a;
-    virt_addr3 t;
+    user_addr a;
+    user_vp t;
 
-    a = (virt_addr)s;
+    a = (user_addr)s;
     while(PGROUND(a) != PGROUND(a+n-1)){
         /* spans pages; handle this page */
         m = BY2PG - (a & (BY2PG-1));
@@ -5626,10 +5671,10 @@ sysbrk(ulong* arg)
 % sysbrk | syssegbrk -> <>
 <<function ibrk>>=
 long
-ibrk(virt_addr addr, int seg)
+ibrk(user_addr addr, int seg)
 {
     Segment *s;
-    virt_addr newtop;
+    user_addr newtop;
     ulong newsize;
     <<[[ibrk()]] other locals>>
 
@@ -5997,7 +6042,8 @@ procindex(ulong pid)
 Scheding,
 @
 %used when newproc and in runproc. Rename Newproc? 
-% why not Ready in runproc instead?
+% why not Ready in runproc instead? because not ready yet to be
+% scheduled!! does not have its segment set.
 
 % dtor = pexit() + schedinit
 % sysrfork | kproc | arch_userinit -> <>
@@ -6060,22 +6106,11 @@ kstrdup(&p->text, "*notext");
 %free in sysrfork? leak? no cos kstrdup free if previously was allocated.
 
 
-<<[[newproc()]] set fields of [[p]]>>=
-if(p->kstack == nil)
-    p->kstack = smalloc(KSTACK);
-@
-%kstack!! very important! 
-%Proc.stack is the second field in Proc and is known from assembly
-% (with pc and sp).
-%per-process kernel stack vs main kernel stack!
-%alloc'ed once here since then reuse proc so reuse also its kstack.
+% put kstack here?
 
 
 
-<<[[newproc()]] set fields of [[p]]>>=
-p->cpu = nil;
-@
-% need this reverse mapping?
+
 
 
 <<[[newproc()]] set fields of [[p]]>>=
@@ -6341,6 +6376,8 @@ return pid;
 %old: order of assignment used to be different. I grouped more
 % things together in the 'propagate fields'. Note group used to be after
 % arch_forkchild.
+
+% return pid here! in child we will return 0 (see arch_forkchild below)
 
 % arch_forkchild of up->dbgreg? what is wrong with up->ureg?
 % anyway dbreg is a pointer to up->ureg (see arch__syscall)
@@ -6652,14 +6689,15 @@ Chan *tc;
 
 <<[[sysexec()]] locals>>=
 Exec exec;
-ulong magic, text, entry, data, bss;
+ulong magic;
+user_addr text, entry, data, bss;
 @
 %c: nice file matching structure (Exec) and ability to use sizeof(Exec)
 %ocaml: why use extra locals that are redundant with the info in exec?
 % because use l2be but this should be done in parsing function
 
 <<[[sysexec()]] locals>>=
-ulong t, d, b; // end of text/data/bss in address rounded to page
+user_addr t, d, b; // end of text/data/bss in address rounded to page
 Segment *s, *ts;
 @
 \l rename end_text, end_data, end_bss
@@ -6677,6 +6715,7 @@ int i, n;
 @
 \fi
 
+\l sysexec returns something??
 <<syscall exec>>=
 // void* exec(char *name, char* argv[]);
 long
@@ -7085,12 +7124,12 @@ relocateseg(Segment *s, ulong offset)
 % sysexec -> <>
 <<function arch_execregs(arm)>>=
 long
-arch_execregs(ulong entry, ulong ssize, ulong nargs)
+arch_execregs(user_addr entry, ulong ssize, ulong nargs)
 {
-    ulong *sp;
+    user_wp sp;
     Ureg *ureg;
 
-    sp = (ulong*)(USTKTOP - ssize);
+    sp = (user_wp)(USTKTOP - ssize);
     *--sp = nargs;
 
     ureg = up->dbgreg;
@@ -7106,6 +7145,7 @@ arch_execregs(ulong entry, ulong ssize, ulong nargs)
 @
 %//  memset(ureg, 0, 15*sizeof(ulong));
 %//print("%lud: EXECREGS pc %#ux sp %#ux nargs %ld\n", up->pid, ureg->pc, ureg->r13, nargs);
+\l returns something? who uses the result?
 
 % Tos later. Special stuff in user stack for faster profiling?
 
@@ -7162,6 +7202,7 @@ ulong parentpid;
 // list<ref_own<Waitq>>> =~ list<ref_own<Waitmsg>>
 Waitq *waitq;   /* Exited processes wait children */
 int nwait;    /* Number of uncollected wait records */ // len(waitq)
+
 Lock  exl;    /* Lock count and waitq */ // and nchild
 @
 %ocaml: list, and no need nwait
@@ -7290,8 +7331,9 @@ Rendez  waitr;    /* Place to hang out in wait */
 <<[[pwait()]] wait until has a waitq>>=
 sleep(&up->waitr, haswaitq, up); // qwaitr is still locked
 @
-%ocaml: pass closure?
+%ocaml: pass closure!
 
+% will be executed with up.rlock and up.waitr.lock held
 <<function haswaitq>>=
 int
 haswaitq(void *x)
@@ -7302,8 +7344,16 @@ haswaitq(void *x)
 }
 @ 
 %ocaml: no need ugly cast.
-\t no need to lock p->ex in haswaitql??? no because code doing wakeup
-\t  should hold the lock?
+\t no need to lock p->ex in haswaitql??? Because code doing wakeup
+\t  should hold the lock? No because the function f is tested only
+\t  once at sleep time to see whether need to sleep the first time.
+\t  It assumes the code doing the wakeup will make the condition true.
+\t and hold qwaitr!! code modifying wait will also hold qwaitr?
+\t I think we should lock p->ex, but because we just check wether nil
+\t  this should be atomic? Can have race where sleep because thought
+\t  there was no waitq and suddently it becomes filled? anyway if it
+\t  becomes filled in the mean time, we still have parent wakeing us up
+%bug?
 
 
 
@@ -7371,6 +7421,8 @@ if(status){
 % the main kernel stack which is exterior to the process.
 % Note that we never free the per-process kernel stack so we could
 % in theory get rid of schedinit, but maybe it's more elegant that way.
+% Also in schedinit we will call arch_mmurelease so sounds good
+% to do it from another context?
 
 
 % rename freemem to addbroken? hmmm no
@@ -7427,14 +7479,16 @@ proc_pexit(char *exitstr, bool freemem)
     panic("pexit: should never reach this point"); 
 }
 @ 
-% (why not doing more simply arch_gotolabel(cpu->sched)? to reuse some of
-%  sched() code?)
+
+\l why not doing more simply arch_gotolabel(cpu->sched)? to reuse some of
+\l  sched() code? which part?
 
 % why need lock procalloc and palloc?
 
 \t free split in 2 chunks. Important? Order matters? Some stuff
 \t are important to do before the proctrace?
 
+% need to split 
 
 <<[[Procstate]] cases>>=
 Moribund,
@@ -7466,6 +7520,31 @@ if(p == nil) {
 % and then die?
 % important to recognize boot process?
 
+\subsection{[[pexit()]] and [[schedinit()]]}
+
+% pexit -> sched (when up <> nil) -> schedinit 
+<<[[schedinit()]] switch process state cases>>=
+case Moribund:
+    up->state = Dead;
+    <<[[schedinit()]] optional real-time [[edfstop()]]>>
+    /*
+     * Holding locks from pexit:
+     *  procalloc
+     *  palloc
+     */
+    arch_mmurelease(up);
+
+    up->qnext = procalloc.free;
+    procalloc.free = up;
+
+    unlock(&palloc);
+    unlock(&procalloc);
+    break;
+@
+% complex again where logic of process termination is split
+% in two parts. This schedinit does lots of things.
+
+% Finally Dead
 
 \subsection{Wait message}
 
@@ -7738,7 +7817,8 @@ linkproc(void)
 }
 @
 %x86: same
-
+\l spllo? what if not? no timer interrupt when this process is running?
+\l  where the regular processes do their spllo?
 
 
 \section{Process control [[/proc/#/ctl]]}
@@ -7871,11 +7951,14 @@ static char *trapnames[PsrMask+1] = {
 
 \section{Exception [[vectors]]  (ARM)}
 
+% Exception vector is at address 0 on ARM! (Physical and later Virtual).
+% But not convenient so HVECTORS.
+% Saw HVECTORS before.
+
 % The vector below will be copied in trapinit()
 % and processor will be made error that exceptions should
 % be handled by the entries in this vector.
 
-% Saw HVECTORS before.
 
 % matches closely the processor mode. Each fault has almost a processor mode.
 <<global vectors(arm)>>=
@@ -8019,7 +8102,7 @@ arch__syscall(Ureg* ureg)
 {
     int scallnr;
     long ret;
-    ulong sp; // user_addr
+    user_addr sp;
     <<[[syscall()]] other locals(arm)>>
 
     <<[[syscall()]] sanity check call from userspace(arm)>>
@@ -9236,13 +9319,15 @@ arch_flushmmu(void)
 
 \subsection{[[faultarm()]] (ARM)}
 
+% virt_addr here? can be from kernel??
+
 % [interrupt] -> _vxxx -> vswitch -> trap -> <>
 <<function faultarm(arm)>>=
 /*
  *  called by trap to handle access faults
  */
 static void
-faultarm(Ureg *ureg, uintptr va, int user, bool read)
+faultarm(Ureg *ureg, virt_addr va, bool user, bool read)
 {
     bool insyscall;
     int n;
@@ -9277,6 +9362,7 @@ faultarm(Ureg *ureg, uintptr va, int user, bool read)
 \subsection{[[fault()]]}
 
 % ret_code2?
+% virt_addr here! can be from kernel??
 <<function fault>>=
 int
 fault(virt_addr addr, bool read)
@@ -9438,7 +9524,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 % fixfault -> <>
 <<function arch_putmmu(arm)>>=
 void
-arch_putmmu(virt_addr va, uintptr pa, Page* page)
+arch_putmmu(virt_addr va, phys_addr pa, Page* page)
 {
     int x;
     Page *pg;
@@ -9541,7 +9627,7 @@ if(x >= cpu->mmul1lo && x < cpu->mmul1hi){
 
 <<function arch_checkmmu(arm)>>=
 void
-arch_checkmmu(uintptr va, uintptr pa)
+arch_checkmmu(virt_addr va, phys_addr pa)
 {
     USED(va);
     USED(pa);
@@ -10491,7 +10577,7 @@ imagereclaim(void)
 {
     int n;
     Page *p;
-    uvlong ticks;
+    uvlong ticks; // fastticks
 
     irstats.calls++;
     /* Somebody is already cleaning the page cache */
@@ -11293,18 +11379,20 @@ setswapchan(Chan *c)
 
 
 \chapter{Scheduling}
-% virtual CPU?
-% less: could add (clock interrupt) in title? to related to Interrupt chapter
+%less: virtual CPU?
+%less: add (clock interrupt) in title? to relate to Interrupt chapter?
 
 \section{Overview}
 
-% in essence the main role of an OS is to manage programs and so in essence
+% In essence the main role of an OS is to manage programs and so in essence
 % it is first and foremost a scheduler! 
 
-% first part is cooperative scheduling, with sleep/wakeup
-%  and people calling sched themselves
-% then will see preemptive scheduling with interrupt clock
+% Key function is sched() (and its twin schedinit()).
 
+% First part is cooperative scheduling, with sleep/wakeup
+%  and people calling sched() themselves.
+% Then will see preemptive scheduling with interrupt clock
+%  that calls sched() after a certain quantum.
 
 % What a system would look like without (preemptive) scheduling?
 %  - a malicious/buggy process could never yield (see MacOS 9 ... windows 3.1)
@@ -11320,15 +11408,15 @@ setswapchan(Chan *c)
 <<constant Npriq>>=
 Npriq   = 20,   /* number of scheduler priority levels */
 @
+% number of priority queues
 
 <<enum priority>>=
 enum Priority 
 {
     PriNormal = 10,   /* base priority for normal processes */
     PriKproc  = 13,   /* base priority for kernel processes */
-    PriRoot   = 13,   /* base priority for root processes */
-
-    <<constants for real-time priority>>
+    <<[[Priority]] cases>>
+    <<[[Priority]] cases for real-time priority>>
 };
 @ 
 % higher is higher priority.
@@ -11336,31 +11424,45 @@ enum Priority
 
 
 <<[[Proc]] scheduling fields>>=
-// enum<priority>
+// enum<Priority>
 ulong priority; /* priority level */
-
-ulong basepri;  /* base priority level */
-bool fixedpri; /* priority level doesn't change */
-@ 
-
-<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
-p->basepri = up->basepri;
-p->priority = up->basepri;
-p->fixedpri = up->fixedpri;
-p->lastcpu = up->lastcpu;
 @
 
+
+
+<<[[newproc()]] set fields of [[p]]>>=
+/* sched params */
+procpriority(p, PriNormal, false);
+@
 
 <<function procpriority>>=
 void
 procpriority(Proc *p, int pri, bool fixed)
 {
     <<[[procpriority()]] sanity check pri>>
-    p->basepri = pri;
     p->priority = pri;
+
+    p->basepri = pri;
     p->fixedpri = fixed;
 }
 @ 
+
+<<[[Proc]] scheduling fields>>=
+// enum<Priority>
+ulong basepri;  /* base priority level */
+bool fixedpri; /* priority level doesn't change */
+@ 
+% basepri is original priority. Why? Because priority of a process
+% changes and gets adjusted, otherwise high-priority process would
+% starve completely lower-priority processes.
+
+
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+p->priority = up->basepri;
+p->basepri = up->basepri;
+p->fixedpri = up->fixedpri;
+@
+
 
 <<[[procpriority()]] sanity check pri>>=
 if(pri >= Npriq)
@@ -11368,19 +11470,8 @@ if(pri >= Npriq)
 else if(pri < 0)
     pri = 0;
 @
+%ocaml: less important because pb will be found later during array_bound checks
 
-
-
-
-<<[[newproc()]] set fields of [[p]]>>=
-/* sched params */
-procpriority(p, PriNormal, false);
-p->lastcpu = nil;
-p->wired = nil;
-p->cpuavg = 0;
-p->lastupdate = CPUS(0)->ticks*Scaling;
-p->edf = nil;
-@
 
 
 <<[[procctlreq()]] CMpri case>>=
@@ -11392,6 +11483,7 @@ case CMpri:
     break;
 @
 % complex, but essentially means echo 'pri 3' > /proc/x/ctl
+% see that regular user can not change prio above PriNormal
 
 <<[[procctlreq()]] CMfixedpri case>>=
 case CMfixedpri:
@@ -11406,6 +11498,10 @@ case CMfixedpri:
 
 
 
+<<[[Priority]] cases>>=
+PriRoot   = 13,   /* base priority for root processes */
+@
+
 <<[[sysexec()]] set prioriry of root processes>>=
 /*
  *  '/' processes are higher priority (hack to make /ip more responsive).
@@ -11415,18 +11511,24 @@ if(devtab[tc->type]->dc == L'/')
 up->priority = up->basepri;
 @
 
+
+
+
 \section{The [[runq]]ueue}
 
 <<constant Nrq>>=
 Nrq   = Npriq+2,  /* number of priority levels including real time */
 @
-% +2 because of Edf real-time scheduling
+% +2 because of Edf real-time scheduling. See Chapter~\ref{chap:edf}.
 
 <<global runq>>=
 // The run queue!!
 // hash<enum<priority>, queue<ref<Proc>>>
 Schedq  runq[Nrq];
 @ 
+%ocaml: use only one lock for the whole runq and put related 
+% runvec and nready in the same structure instead of separate globals.
+
 
 <<struct Schedq>>=
 // essentially a queue<ref<Proc>>
@@ -11440,21 +11542,31 @@ struct Schedq
     int n; 
   
     // extra
-    Lock;
+    Lock; // protects also the globals nrdy and runvec
 };
 @ 
+%ocaml: reuse Queue.t. 
+%ocaml: Could do Queue.t locked; with 'a locked.
+%ocaml: actually put lock with runq (because no need lock individual queues)
+
+% Why each queue has its own lock? anyway queueproc and dequeueproc
+%  lock the whole runq (by abusing runq[0])
+\t bug? lose space; no need a Lock per queue
 
 <<[[Proc]] extra fields>>=
 // list<ref<Proc>> of Schedq.head
 Proc  *rnext;   /* next process in run queue */
 @
+%ocaml: argh, yet another pointer and spread data structure.
 
-
+% The runq should contain only Ready process. Once you become
+% Running you are taken out of the runq.
 
 <<global runveq>>=
 // array<bool>, each bit i represents whether the runq at pri i has processes
 ulong   runvec; // coupling: sizeof(ulong) must be >= Nrq
 @ 
+%ocaml: put that in runq structure because lock protects it
 
 <<function anyready>>=
 bool
@@ -11463,11 +11575,14 @@ anyready(void)
     return runvec;
 }
 @ 
+\l no lock around? because not critical.
 
 <<global nrdy>>=
 int nrdy;
 @ 
+%ocaml: put that in runq structure (hmm but arch_idlehands needs easy access)
 
+% proc_ready -> <>
 <<function queueproc>>=
 /*
  * add a process to a scheduling queue
@@ -11479,7 +11594,7 @@ queueproc(Schedq *rq, Proc *p)
 
     pri = rq - runq;
     lock(runq);
-    p->priority = pri;
+    p->priority = pri; // because a priority can evolve
 
     // add_queue(p, rq)
     p->rnext = nil;
@@ -11496,12 +11611,19 @@ queueproc(Schedq *rq, Proc *p)
 }
 @ 
 %>>
+% note that abuse first queue to be a lock. lock(runq) is really 
+%  lock(runq[0])
+%ocaml: cleaner interface, add p prio
 
+\l why not more general interface queueproc(p, prio)? anyway use all runq
+\l  so why passing an rq?
+
+\l rename l to prev? or explain that it means left (and not last)
+% runproc -> <>
 <<function dequeueproc>>=
 /*
  *  try to remove a process from a scheduling queue (called arch_splhi)
  */
-// tp should belong to the queue
 Proc*
 dequeueproc(Schedq *rq, Proc *tp)
 {
@@ -11520,15 +11642,7 @@ dequeueproc(Schedq *rq, Proc *tp)
             break;
         l = p;
     }
-    // l should be nil most of the time, the queue probably didn't change
-
-    /*
-     *  p->cpu==nil only when process state is saved
-     */
-    if(p == nil || p->cpu){
-        unlock(runq);
-        return nil;
-    }
+    <<[[dequeueproc()]] return if process not found or already associated>>
 
     // remove_queue(p, rq)
     if(p->rnext == nil)
@@ -11537,34 +11651,60 @@ dequeueproc(Schedq *rq, Proc *tp)
         l->rnext = p->rnext;
     else
         rq->head = p->rnext;
+
     if(rq->head == nil)
         runvec &= ~(1<<(rq-runq));
     rq->n--;
-
     nrdy--;
-
-    if(p->state != Ready)
-        print("dequeueproc %s %lud %s\n", p->text, p->pid, statename[p->state]);
-
+    <<[[dequeueproc()]] sanity check p>>
     unlock(runq);
     return p;
 }
 @ 
 % >>
+% need to find back only because didnt lock in caller. Need to find back
+% in smp but also uniprocessor context because a schedule event
+% may have happened in the middle.
+%ocaml: simplify and lock in caller?
 
-\section{[[sched()]]}
-
-% address from cpus, not MACHADDR, could have used cpuno, don't want 0
-<<[[Proc]] scheduling fields>>=
-// option<ref<Cpu>>, null when not associated to a processor
-Cpu  *cpu;    /* processor running this proc */
+<<[[dequeueproc()]] return if process not found or already associated>>=
+/*
+ *  p->cpu==nil only when process state is saved
+ */
+if(p == nil || p->cpu){
+    unlock(runq);
+    return nil;
+}
 @
+%smp:
+% p == nil when got dequeued before lock.
+% p->cpu == nil when process state is saved?? when is that? 
+%  so when have p->cpu that means it has been associated and scheduled
+%  already? by another processor?
 
-% and more importantly cpu->proc!!  (so have proc->cpu and cpu->proc)
-% sched() will essentially do cpu->proc = newp; (or up = newp)
 
+<<[[dequeueproc()]] sanity check p>>=
+if(p->state != Ready)
+    print("dequeueproc %s %lud %s\n", p->text, p->pid, statename[p->state]);
+@
+% The invariant is that all processes in the runq are in Ready.
+% When become Running then you are dequeued.
 
-% actually why could not factorize code with sleep()?
+\section{The scheduler}
+
+\subsection{[[sched()]]}
+
+% The main function!
+% Will be called by many kernel code to call the scheduler to schedule
+% another process, so when up is not nil. Will also be called
+% at the very beginning by schedinit() when no process at all are running
+% and up is nil (and in fact also when up is not nil indirectly because
+% sched() calls schedinit which calls it back after resetting up).
+% We will see first the code for the second case. Easier cos subtle 
+% control flow between different contexts (stacks).
+
+% actually why could not factorize code with sleep()? because of
+% extra lock calls.
 <<function sched>>=
 /*
  *  If changing this routine, look also at sleep().  It
@@ -11573,71 +11713,84 @@ Cpu  *cpu;    /* processor running this proc */
 void
 proc_sched(void)
 {
-    Proc *p;
+    <<[[sched()]] locals>>
 
-    if(cpu->ilockdepth)
-        panic("cpu%d: ilockdepth %d, last lock %#p at %#p, sched called from %#p",
-            cpu->cpuno, cpu->ilockdepth, up? up->lastilock: nil,
-            (up && up->lastilock)? up->lastilock->pc: 0, getcallerpc(&p+2));
-    if(up){
-        <<[[sched()]] if complex condition increment delaysched and return>>
-        arch_splhi(); // schedinit requires this
-        cpu->cs++;
-
-        arch_procsave(up);
-        if(arch_setlabel(&up->sched)){
-            //
-            // here when the process has been scheduled back
-            // from a arch_gotolabel(up->sched) by another process, see below
-            //
-            arch_procrestore(up);
-            arch_spllo();
-            return;
-        }else{
-            //
-            // here to go to schedinit() (which will call sched() back)
-            //
-            arch_gotolabel(&cpu->sched); // goto schedinit()
-            panic("sched: should never reach this point");
-        }
-    }
-    // We should execute this code using the main kernel stack, as
-    // we should arrive here from schedinit().
-
-    p = runproc();
-    <<[[sched()]] optional guard for real-time process>>
-    {
-        updatecpu(p);
-        p->priority = reprioritize(p);
-    }
-    if(p != cpu->readied)
-        cpu->schedticks = cpu->ticks + Arch_HZ/10; // 100ms of allocated time
-    cpu->readied = nil;
-
-    cpu->proc = p;
-    up = p; // same instruction than previous line on some archi (e.g. x86)
-
-    up->state = Running;
-    up->cpu = CPUS(cpu->cpuno);
-
-    arch_mmuswitch(up);
-    arch_gotolabel(&up->sched);
+    <<[[sched()]] sanity check ilockdepth>>
+    <<[[sched()]] if up>>
+    // else
+    <<[[sched()]] if no up>>
 }
 @ 
-
-% Why going to schedinit()? Why not call sched() recursively? or goto common:
-% where we would do the p = runproc() ...? See below.
-
+%ocaml: change split and use schedinit for all the code related
+% when up is nil, and sched for all the code when up is not nil
 
 
+<<[[sched()]] locals>>=
+Proc *p;
+@
+<<[[sched()]] if no up>>=
+// We should execute this code using the main kernel stack, as
+// we should arrive here from schedinit()
 
-% less: have a [[Cpu]] scheduler fields? 
-% this not really related to contextswitch
-% the sched of the Cpu is to jump to schedinit that eventually calls sched()
+p = runproc();
+<<[[sched()]] after found process [[p]] to schedule, possibly update priority>>
+<<[[sched()]] if readied process, do not adjust schedticks>>
+else {
+    <<[[sched()]] after found a new proc, adjust schedticks>>
+}
+<<[[sched()]] reset readied>>
+
+cpu->proc = p;
+up = p; // same instruction than previous line on some archi (e.g. x86)
+
+up->state = Running;
+up->cpu = CPUS(cpu->cpuno);
+
+arch_mmuswitch(up);
+arch_gotolabel(&up->sched);
+@
+
+% We will see arch_gotolabel and labels soon.
+
+% address from cpus, not MACHADDR, could have used cpuno, don't want 0
+<<[[Proc]] scheduling fields>>=
+// option<ref<Cpu>>, null when not associated to a processor
+Cpu  *cpu;    /* processor running this proc */
+@
+% and more importantly cpu->proc!!  (so have proc->cpu and cpu->proc)
+% sched() will essentially do cpu->proc = newp; (or up = newp)
+%smp: Why need Proc.cpu? to know if process has been associated to 
+%  a processor which is used in dequeueproc.
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->cpu = nil;
+@
+% need this reverse mapping?
+
+
+
+
+<<[[sched()]] sanity check ilockdepth>>=
+if(cpu->ilockdepth)
+    panic("cpu%d: ilockdepth %d, last lock %#p at %#p, sched called from %#p",
+        cpu->cpuno, cpu->ilockdepth, up? up->lastilock: nil,
+        (up && up->lastilock)? up->lastilock->pc: 0, getcallerpc(&p+2));
+@
+
+
+
+
+\subsection{[[schedinit()]]}
+\l mv in Initialization chapter?
+
 <<[[Cpu]] other fields>>=
 Label sched;      /* scheduler wakeup */ // address of schedinit()
 @
+% less: have a [[Cpu]] scheduler fields? this not really related to ctx switch
+% the sched of the Cpu is to jump to schedinit that eventually calls sched()
 
+
+% main | sched (via gotolabel) -> <>
 <<function schedinit>>=
 /*
  * Always arch_splhi()'ed.
@@ -11645,48 +11798,15 @@ Label sched;      /* scheduler wakeup */ // address of schedinit()
 void
 schedinit(void)     /* never returns */
 {
-    Edf *e;
+    <<[[schedinit()]] locals>>
 
     arch_setlabel(&cpu->sched);
-
-    if(up) {
-        <<[[schedinit()]] optional real-time [[edfrecord()]]>>
-        //old: cpu->proc = nil;
-        // but now that on x86 up = cpu->proc and not cpu->externup
-        // we can't do that anymore. Is there a place that rely on
-        // cpu->proc and cpu-externup to not be in sync?
-        switch(up->state) {
-        case Running:
-            ready(up);
-            break;
-        case Moribund:
-            up->state = Dead;
-            <<[[schedinit()]] optional real-time [[edfstop()]]>>
-            /*
-             * Holding locks from pexit:
-             *  procalloc
-             *  palloc
-             */
-            arch_mmurelease(up);
-
-            up->qnext = procalloc.free;
-            procalloc.free = up;
-
-            unlock(&palloc);
-            unlock(&procalloc);
-            break;
-        }
-
-        up->cpu = nil;
-        updatecpu(up);
-
-        cpu->proc = nil;
-        up = nil; // same instruction than previous line on some archi (e.g. PC)
-    }
+    <<[[schedinit()]] after setlabel, if up>>
     // ok at this point up is nil
     sched();
 }
 @ 
+
 % Why the logic of scheduling is splitted between sched() and schedinit()?
 % could not gather? And doing so remove the need for Cpu->label?
 % I think it's related to the per-process stack.
@@ -11701,8 +11821,15 @@ schedinit(void)     /* never returns */
 % we could for a few more instructions use it)
 % todo: look in balestero's notes
 
+% Still could not change the split and do everything related to up == nil?
+% Why not do the runproc() in schedinit? why do that in sched()?
 
 
+\subsection{[[runproc()]]}
+
+% at this point there should be no Running! only some Ready
+
+% sched (when up <> nil) -> schedinit -> sched (when up == nil) -> <>
 <<function runproc>>=
 /*
  *  pick a process to run
@@ -11710,23 +11837,14 @@ schedinit(void)     /* never returns */
 Proc*
 runproc(void)
 {
-    Schedq *rq;
     Proc *p;
-    ulong start, now;
+    Schedq *rq;
     int i;
-    void (*pt)(Proc*, int, vlong);
+    <<[[runproc()]] other locals>>
 
-    start = arch_perfticks();
-
-    /* cooperative scheduling until the clock ticks */
-    if((p=cpu->readied) && p->cpu==nil && p->state==Ready && 
-      (p->wired == nil || p->wired == CPUS(cpu->cpuno)) && // pad's bugfix!
-      <<[[runproc()]] test for empty real-time scheduling queue>>
-    ){
-        skipscheds++;
-        rq = &runq[p->priority];
-        goto found;
-    }
+    <<[[runproc()]] start>>
+    <<[[runproc()]] cooperative scheduling if process readied>>
+    //else
 
     preempts++;
 
@@ -11736,7 +11854,8 @@ loop:
      *  or one that hasn't moved in a while (load balancing). Every
      *  time around the loop affinity goes down.
      */
-    arch_spllo();
+    arch_spllo(); // from schedinit()
+
     for(i = 0;; i++){
         /*
          *  find the highest priority target process that this
@@ -11753,17 +11872,13 @@ loop:
         // nothing found
         /* waste time or halt the CPU */
         arch_idlehands();
-
-        /* remember how much time we're here */
-        now = arch_perfticks();
-        cpu->perf.inidle += now-start;
-        start = now;
+        <<[[runproc()]] after arch_idlehands, before restarting loop>>
     }
 
 found:
     arch_splhi();
     p = dequeueproc(rq, p);
-    if(p == nil)
+    if(p == nil) // the runq may have changed between spllo and splhi
         goto loop;
 
     p->state = Scheding;
@@ -11775,160 +11890,200 @@ found:
 }
 @ 
 %bug: see pad's bugfix above
+%bug? no lock on runq when iterate over? What if another processor
+% modifies it in a weird order in which case get infinite loop?
+%smp: more complicated because of SMP
 
-\subsection{Adjusting priority}
+\t why not lock runq early so less need this find and deqeueproc
+% that may need to refind? 
+\t why spllo splhi dance? why allow an interrupt to come here?
+\t  anyway iterative over the runq should be fast?
+
+% So i > 0 means that will look for lower priority process if
+% find one with a good affinity with the current processor.
+% Note that in uniprocessor context, every process will have
+% affinity to cpu0 so code above is simpler. No need for loop on [[i]].
 
 <<[[Proc]] scheduling fields>>=
 Cpu *lastcpu;    /* processor this process last ran on */
 @
-
-
-
-
-% new typedef? Ttick_scaled?
-<<[[Proc]] scheduling fields>>=
-ulong lastupdate; // dimension?? ticks * Scaling;
-ulong cpuavg;    /* cpu average */
+% affinity!
+%smp: complexify things
+<<[[newproc()]] set fields of [[p]]>>=
+p->lastcpu = nil;
 @
-
-<<constant Scaling>>=
-Scaling=2,
-@
-<<constant Schedagain>>=
-schedgain = 30, /* units in seconds */
+<<[[sysrfork()]] when [[RFPROC]] propagate fields from up to p>>=
+p->lastcpu = up->lastcpu;
 @
 
 
-<<function updatecpu>>=
-/*
- * Update the cpu time average for this particular process,
- * which is about to change from up -> not up or vice versa.
- * p->lastupdate is the last time an updatecpu happened.
- *
- * The cpu time average is a decaying average that lasts
- * about D clock ticks.  D is chosen to be approximately
- * the cpu time of a cpu-intensive "quick job".  A job has to run
- * for approximately D clock ticks before we home in on its 
- * actual cpu usage.  Thus if you manage to get in and get out
- * quickly, you won't be penalized during your burst.  Once you
- * start using your share of the cpu for more than about D
- * clock ticks though, your p->cpu hits 1000 (1.0) and you end up 
- * below all the other quick jobs.  Interactive tasks, because
- * they basically always use less than their fair share of cpu,
- * will be rewarded.
- *
- * If the process has not been running, then we want to
- * apply the filter
- *
- *  cpu = cpu * (D-1)/D
- *
- * n times, yielding 
- * 
- *  cpu = cpu * ((D-1)/D)^n
- *
- * but D is big enough that this is approximately 
- *
- *  cpu = cpu * (D-n)/D
- *
- * so we use that instead.
- * 
- * If the process has been running, we apply the filter to
- * 1 - cpu, yielding a similar equation.  Note that cpu is 
- * stored in fixed point (* 1000).
- *
- * Updatecpu must be called before changing up, in order
- * to maintain accurate cpu usage statistics.  It can be called
- * at any time to bring the stats for a given proc up-to-date.
- */
-void
-updatecpu(Proc *p)
+
+\section{Context switch}
+% probably needs to see this section before sched() unless LP split
+% sched() as I did.
+
+%http://blog.tsunanet.net/2010/11/how-long-does-it-take-to-make-context.html
+
+\subsection{[[Label]]}
+
+<<struct Label>>=
+// =~ a jumpbuf in C, for coroutines
+struct Label
 {
-    int n, t, ocpu;
-    int D = schedgain * Arch_HZ * Scaling;
+    // or virt_addr? used also for saving context of user code?
+    kern_addr sp; 
+    kern_addr pc; 
+};
+@ 
+%ocaml: use Thread.t instead. need more than pc/sp in bytecode interpreter
+% context. Need trapsp, stack_low, stack_high, etc.
 
-    if(p->edf)
+% is this enough? what about the other registers? the kernel code assumes
+% compiles with kencc, so the only context we need is this.
+% no need save registers, the caller compiled code should have done
+% that before calling arch_setlabel(). Note that this is ok because
+% arch_gotolabel assumes we jump to other kernel code compiled via kencc!
+% for the user switch, this is not the same (also because can
+% be interrupted in the middle of anything) and so we save
+% everything.
+
+% cflow of syscall e.g. syssleep is: user -> kernel -> sleep ->
+% kernel switch arch_gotolabel -> return from kernel code (syscall or trap)
+% restore registers back from kernel code to user.
+
+<<[[Proc]] assembly fields>>=
+Label sched;    /* known to l.s */
+char  *kstack;  /* known to l.s */
+@ 
+%ocaml: A Thread.t includes both a stack (malloced) and a label (pc/sp/trapsp)
+\l need kstack? really known to l.s? in x86?
+
+% kstack is smalloc'ed in newproc()
+
+\subsection{Kernel stacks}
+
+% Saw Proc.kstack just before.
+
+<<[[newproc()]] set fields of [[p]]>>=
+if(p->kstack == nil)
+    p->kstack = smalloc(KSTACK);
+@
+%kstack!! very important! 
+%Proc.stack is the second field in Proc and is known from assembly
+% (with pc and sp).
+%per-process kernel stack vs main kernel stack!
+%alloc'ed once here since then reuse proc so reuse also its kstack.
+%ocaml: included when create a Thread.t
+
+<<constant KSTACK(arm)>>=
+#define KSTACK      (8*KiB)
+@
+%old: KSTKSIZE but useless intermediate
+% <<constant KSTKSIZE(arm)>>=
+% #define KSTKSIZE    (8*KiB)
+% @
+
+% Also cpu.stack! (stack[1]) and CPUADDR and CPUSIZE.
+
+
+\subsection{[[arch_gotolabel()]] (ARM)}
+
+<<function arch_gotolabel(arm)>>=
+TEXT arch_gotolabel(SB), 1, $-4
+    MOVW    0(R0), R13      /* sp */
+    MOVW    4(R0), R14      /* pc */
+    MOVW    $1, R0
+    RET
+@
+%ocaml: Thread.wakeup
+
+% similar to C setjmp longjmp?
+
+% schedinit | sched -> <>
+<<function arch_setlabel(arm)>>=
+TEXT arch_setlabel(SB), 1, $-4
+    MOVW    R13, 0(R0)      /* sp */
+    MOVW    R14, 4(R0)      /* pc */
+    MOVW    $0, R0
+    RET
+@
+%ocaml: Thread.sleep, will be resumed there
+
+% return value is different! 0 when done first time, and
+% 1 when comes back from a gotolabel
+
+\subsection{[[sched()]] and [[schedinit()]] dance}
+
+% at some point up will be set and the kernel will code
+% sched():
+
+<<[[sched()]] if up>>=
+if(up){
+    <<[[sched()]] when up, possibly increment delaysched and return>>
+    arch_splhi(); // schedinit requires this (also sensitive moment)
+    cpu->cs++;
+
+    arch_procsave(up);
+    if(arch_setlabel(&up->sched)){
+        //
+        // here when the process has been scheduled back
+        // from a arch_gotolabel(up->sched) by another process, see below
+        //
+        arch_procrestore(up);
+        arch_spllo();
         return;
-
-    t = CPUS(0)->ticks*Scaling + Scaling/2;
-    n = t - p->lastupdate;
-    p->lastupdate = t;
-
-    if(n == 0)
-        return;
-    if(n > D)
-        n = D;
-
-    ocpu = p->cpuavg;
-    if(p != up)
-        p->cpuavg = (ocpu*(D-n))/D;
-    else{
-        t = 1000 - ocpu;
-        t = (t*(D-n))/D;
-        p->cpuavg = 1000 - t;
+    }else{
+        //
+        // here to go to schedinit() (which will call sched() back)
+        //
+        arch_gotolabel(&cpu->sched); // goto schedinit()
+        panic("sched: should never reach this point");
     }
-
-//iprint("pid %d %s for %d cpu %d -> %d\n", p->pid,p==up?"active":"inactive",n, ocpu,p->cpuavg);
 }
-@ 
+@
 
+% Complex control flow! Need trace diagram! with different stacks.
 
-<<function reprioritize>>=
-/*
- * On average, p has used p->cpuavg of a cpu recently.
- * Its fair share is conf.ncpu/cpu->load of a cpu.  If it has been getting
- * too much, penalize it.  If it has been getting not enough, reward it.
- * I don't think you can get much more than your fair share that 
- * often, so most of the queues are for using less.  Having a priority
- * of 3 means you're just right.  Having a higher priority (up to p->basepri) 
- * means you're not using as much as you could.
- */
-int
-reprioritize(Proc *p)
-{
-    int fairshare, n, load, ratio;
+% Why going to schedinit()? Why not call sched() recursively? or goto common:
+% where we would do the p = runproc() ...? See long explanation before.
 
-    load = CPUS(0)->load;
-    if(load == 0)
-        return p->basepri;
+% Ok now in schedinit!
 
-    /*
-     *  fairshare = 1.000 * conf.nproc * 1.000/load,
-     * except the decimal point is moved three places
-     * on both load and fairshare.
-     */
-    fairshare = (conf.ncpu*1000*1000)/load;
-    n = p->cpuavg;
-    if(n == 0)
-        n = 1;
-    ratio = (fairshare+n/2) / n;
-    if(ratio > p->basepri)
-        ratio = p->basepri;
-    if(ratio < 0)
-        panic("reprioritize");
-//iprint("pid %d cpu %d load %d fair %d pri %d\n", p->pid, p->cpuavg, load, fairshare, ratio);
-    return ratio;
+<<[[schedinit()]] if up>>=
+if(up) {
+    <<[[schedinit()]] optional real-time [[edfrecord()]]>>
+    //old: cpu->proc = nil;
+    // but now that on x86 up = cpu->proc and not cpu->externup
+    // we can't do that anymore. Is there a place that rely on
+    // cpu->proc and cpu->externup to not be in sync?
+    switch(up->state) {
+    <<[[schedinit()]] switch process state cases>>
+    }
+    up->cpu = nil;
+    <<[[schedinit()]] updatecpu before reseting up>>
+    cpu->proc = nil;
+    up = nil; // same instruction than previous line on some archi (e.g. PC)
 }
-@ 
+@
+
+
+
+
+<<[[schedinit()]] switch process state cases>>=
+case Running:
+    ready(up);
+    break;
+@
+% was Running but now will just become Ready because the cpu
+% will schedule soon another process.
+
+% Moribund case seen before.
 
 
 \subsection{Delayed [[sched()]]}
 
-% when can have this situation? up->delaysched < 20
-% means sched() got called like 20 times, but impossible no?
 
-<<[[Proc]] scheduling fields>>=
-ulong delaysched;
-@
-
-<<[[newproc()]] set fields of [[p]]>>=
-p->nlocks.ref = 0;
-p->delaysched = 0;
-@
-%old: there was a certain order but with LP it's less previsible
-% but I think the order of field assignment does not matter
-
-
-<<[[sched()]] if complex condition increment delaysched and return>>=
+<<[[sched()]] when up, possibly increment delaysched and return>>=
 /*
  * Delay the sched until the process gives up the locks
  * it is holding.  This avoids dumb lock loops.
@@ -11951,11 +12106,45 @@ if(up->nlocks.ref)
       || procalloc.Lock.p == up){
 
         up->delaysched++;
-        delayedscheds++; // stats
+        delayedscheds++;
         return;
     }
+// else
 up->delaysched = 0;
 @
+% return so no reschedule
+
+% when can have up->delaysched > 20? If there is a bug
+% and process never released a spinlock in which case we still
+% reschedule because we dont want to hang forever the kernel
+% as the comment above say.
+
+
+<<[[Proc]] scheduling fields>>=
+ulong delaysched;
+@
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->nlocks.ref = 0;
+p->delaysched = 0;
+@
+%old: there was a certain order but with LP it's less previsible
+% but I think the order of field assignment does not matter
+
+
+% ok so if process got extra time just to release his spinlocks,
+% next time it unlocks we call sched()!
+
+<<[[unlock()]] if delaysched>>=
+if(up && deccnt(&up->nlocks) == 0 && up->delaysched && arch_islo()){
+    /*
+     * Call sched if the need arose while locks were held
+     * But, don't do it from interrupt routines, hence the arch_islo() test
+     */
+    sched();
+}
+@
+
 
 
 <<[[trap()]] if delaysched and clockintr>>=
@@ -11965,7 +12154,7 @@ if(up && up->delaysched && clockintr){
     arch_splhi();
 }
 @
-
+% splhi because when resume from sched we get into a spllo
 
 <<[[syscall()]] if delaysched(arm)>>=
 /* if we delayed sched because we held a lock, sched now */
@@ -11980,81 +12169,7 @@ if(up->delaysched){
 
 
 
-<<[[unlock()]] if delaysched>>=
-if(up && deccnt(&up->nlocks) == 0 && up->delaysched && arch_islo()){
-    /*
-     * Call sched if the need arose while locks were held
-     * But, don't do it from interrupt routines, hence the arch_islo() test
-     */
-    sched();
-}
-@
 
-
-\section{Context switch}
-% probably needs to see this section before sched()
-
-%http://blog.tsunanet.net/2010/11/how-long-does-it-take-to-make-context.html
-
-\subsection{[[Label]]}
-
-<<struct Label>>=
-// =~ a jumpbuf in C, for coroutines
-struct Label
-{
-    // or virt_addr? used also for saving context of user code?
-    kern_addr sp; 
-    kern_addr pc; 
-};
-@ 
-
-% is this enough? what about the other registers? the kernel code assumes
-% compiles with kencc, so the only context we need is this.
-% no need save registers, the caller compiled code should have done
-% that before calling arch_setlabel(). Note that this is ok because
-% arch_gotolabel assumes we jump to other kernel code compiled via kencc!
-% for the user switch, this is not the same (also because can
-% be interrupted in the middle of anything) and so we save
-% everything.
-
-% cflow of syscall e.g. syssleep is: user -> kernel -> sleep ->
-% kernel switch arch_gotolabel -> return from kernel code (syscall or trap)
-% restore registers back from kernel code to user.
-
-<<[[Proc]] assembly fields>>=
-Label sched;    /* known to l.s */
-char  *kstack;  /* known to l.s */
-@ 
-% kstack is smalloc'ed in newproc()
-
-
-<<constant KSTACK(arm)>>=
-#define KSTACK      (8*KiB)
-@
-%old: KSTKSIZE but useless intermediate
-% <<constant KSTKSIZE(arm)>>=
-% #define KSTKSIZE    (8*KiB)
-% @
-
-
-\subsection{[[arch_gotolabel()]] (ARM)}
-
-<<function arch_gotolabel(arm)>>=
-TEXT arch_gotolabel(SB), 1, $-4
-    MOVW    0(R0), R13      /* sp */
-    MOVW    4(R0), R14      /* pc */
-    MOVW    $1, R0
-    RET
-@
-% similar to C setjmp longjmp?
-
-<<function arch_setlabel(arm)>>=
-TEXT arch_setlabel(SB), 1, $-4
-    MOVW    R13, 0(R0)      /* sp */
-    MOVW    R14, 4(R0)      /* pc */
-    MOVW    $0, R0
-    RET
-@
 
 \subsection{[[arch_mmuswitch()]] (ARM)}
 
@@ -12142,12 +12257,9 @@ arch_procrestore(Proc* p)
 
 \section{Cooperative scheduling}
 
-% see sleep.ps in plan9 documents
+\subsection{[[yield()]]}
 
-%  sleep(similar to sched)/wakeup(calls ready)
-%  sleep/wakeup have a condition attached to it, and so a rendez vous,
-%  sched and ready are just altruistic, give back without asking
-
+% syssleep (when sleep 0) -> <>
 <<function yield>>=
 /*
  *  yield the processor and drop our priority
@@ -12156,22 +12268,23 @@ void
 yield(void)
 {
     if(anyready()){
-        /* pretend we just used 1/2 tick */
-        up->lastupdate -= Scaling/2;  
+        <<[[yield()]] adjust lastupdate before scheduling another process>>
         sched();
     }
 }
 @ 
+% not really used.
 
+\subsection{[[ready()]]}
 
 <<[[Procstate]] cases>>=
 Ready,
 @
 
-<<[[Cpu]] other fields>>=
-Proc* readied;    /* for runproc */
-@
+% Can go from Queueing -> Ready (in qunlock())
+% Can also go from Running -> Ready when scheduled out (in schedinit())
 
+% qunlock | runlock | wunlock | sysrfork | kproc | procctlreq | schedinit -> <>
 <<function ready>>=
 /*
  *  ready(p) picks a new priority for a process and sticks it in the
@@ -12180,19 +12293,17 @@ Proc* readied;    /* for runproc */
 void
 proc_ready(Proc *p)
 {
-    int s, pri;
+    int pri;
+    int s; // spl
     Schedq *rq;
-    void (*pt)(Proc*, int, vlong);
+    <<[[ready()]] other locals>>
 
     s = arch_splhi();
     <<[[ready()]] optional [[edfready()]] for real-time scheduling>>
 
-    if(up != p && (p->wired == nil || p->wired == CPUS(cpu->cpuno))) // pad fix
-        cpu->readied = p; /* group scheduling */
+    <<[[ready()]] possibly set [[cpu->readied]]>>
+    <<[[ready()]] update priority>>
 
-    updatecpu(p);
-    pri = reprioritize(p);
-    p->priority = pri;
     rq = &runq[pri];
     p->state = Ready;
     queueproc(rq, p);
@@ -12200,7 +12311,56 @@ proc_ready(Proc *p)
     arch_splx(s);
 }
 @ 
+% why need splhi? sensitive operation? because play with cpu?
+% Still, need splhi/splx and not just splhi/spllo because used
+% in different contexts.
 
+% who calls ready()? and sure calls sched() after? for sysrfork yes.
+
+% advanced feature? to favor cooperative scheduling?
+<<[[ready()]] possibly set [[cpu->readied]]>>=
+if(up != p && (p->wired == nil || p->wired == CPUS(cpu->cpuno))) // pad fix
+    cpu->readied = p; /* group scheduling */
+@
+
+<<[[Cpu]] other fields>>=
+Proc* readied;    /* for runproc */
+@
+% will work only if up also calls sched()
+
+
+% sched (when up <> nil) -> schedinit -> sched (when up == nil) -> <>
+<<[[runproc()]] cooperative scheduling if process readied>>=
+/* cooperative scheduling until the clock ticks */
+p=cpu->readied;
+if(p && p->cpu==nil && p->state==Ready && 
+  (p->wired == nil || p->wired == CPUS(cpu->cpuno)) && // pad's bugfix!
+  <<[[runproc()]] test for empty real-time scheduling queue>>
+){
+    skipscheds++;
+    rq = &runq[p->priority];
+    goto found;
+}
+@
+%old: p=cpu->readie was inside if but confusing
+
+% "until the clock ticks" because cpu->readied will be reset in hzsched!
+
+
+
+<<[[sched()]] reset readied>>=
+cpu->readied = nil;
+@
+
+
+
+\subsection{[[Rendez]]}
+
+% see sleep.ps in plan9 documents
+
+% sleep(similar to sched)/wakeup(calls ready)
+% sleep/wakeup have a condition attached to it, and so a rendez vous,
+% sched and ready are just altruistic, give back without asking.
 
 
 <<struct Rendez>>=
@@ -12208,7 +12368,8 @@ struct Rendez
 {
     // option<ref<Proc>>
     Proc  *p; // sleeping process
-    Lock;
+
+    Lock; // LOCK ORDERING: always do lock(r); lock(p->rlock);
 };
 @ 
 % similar DS in libc.h!
@@ -12222,15 +12383,28 @@ struct Rendez
 <<[[Proc]] synchronization fields>>=
 // option<ref<Rendez>>, can point to waitr, freememr, sleepr, etc
 Rendez  *r;   /* rendezvous point slept on */
-Lock  rlock;    /* sync sleep/wakeup with postnote */
 @
 
+<<[[Proc]] synchronization fields>>=
+Lock  rlock;    /* sync sleep/wakeup with postnote */
+@
+% need that if dont use postnote?
+% Need that because when we sleep we want to lock the rendez vous
+% and also the process that will now sleep on this rendez vous.
+
 % p->r, r->p
+
+\t why need those 2 locks? why is it so complicated to get rendez vous right?
+\t what if only 1 lock? what are the bad scenario?
+
+\subsection{[[sleep()]]}
 
 
 <<[[Procstate]] cases>>=
 Wakeme,
 @
+
+% splhi/splx because modify important up fields.
 
 <<function sleep>>=
 /*
@@ -12244,22 +12418,14 @@ Wakeme,
 void
 proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
 {
-    int s;
-    void (*pt)(Proc*, int, vlong);
+    int s; // spl
+    <<[[sleep()]] other locals>>
 
     s = arch_splhi();
-
-    if(up->nlocks.ref)
-        print("process %lud sleeps with %lud locks held, last lock %#p locked at pc %#lux, sleep called from %#p\n",
-            up->pid, up->nlocks.ref, up->lastlock, up->lastlock->pc, getcallerpc(&r));
-
+    <<[[sleep()]] sanity check nlocks>>
     lock(r);
     lock(&up->rlock);
-
-    if(r->p){
-        print("double sleep called from %#p, %lud %lud\n", getcallerpc(&r), r->p->pid, up->pid);
-        arch_dumpstack();
-    }
+    <<[[sleep()]] sanity check double sleep on this rendez vous>>
 
     /*
      *  Wakeup only knows there may be something to do by testing
@@ -12283,11 +12449,11 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
          *  change state and call scheduler
          */
         <<[[sleep()]] hook proctrace>>
-
         up->state = Wakeme;
         up->r = r;
 
-        // similar code to sched(), why not call sched()?
+        // similar code to sched(), why not call sched()? because of the unlock?
+
         /* statistics */
         cpu->cs++;
 
@@ -12304,21 +12470,32 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
              */
             unlock(&up->rlock);
             unlock(r);
+
             arch_gotolabel(&cpu->sched);
             panic("sleep: should never reach this point");
         }
     }
-
-    if(up->notepending) {
-        up->notepending = false;
-        arch_splx(s);
-        <<[[sleep()]] forceclosefgrp>>
-        error(Eintr);
-    }
-
+    <<[[sleep()]] if notepending>>
     arch_splx(s);
 }
 @ 
+
+
+<<[[sleep()]] sanity check nlocks>>=
+if(up->nlocks.ref)
+    print("process %lud sleeps with %lud locks held, last lock %#p locked at pc %#lux, sleep called from %#p\n",
+        up->pid, up->nlocks.ref, up->lastlock, up->lastlock->pc, getcallerpc(&r));
+@
+
+<<[[sleep()]] sanity check double sleep on this rendez vous>>=
+if(r->p){
+    print("double sleep called from %#p, %lud %lud\n", getcallerpc(&r), r->p->pid, up->pid);
+    arch_dumpstack();
+}
+@
+
+
+\subsection{[[wakeup()]]}
 
 <<function wakeup>>=
 /*
@@ -12331,7 +12508,7 @@ Proc*
 proc_wakeup(Rendez *r)
 {
     Proc *p;
-    int s;
+    int s; // spl
 
     s = arch_splhi();
     lock(r);
@@ -12339,10 +12516,7 @@ proc_wakeup(Rendez *r)
 
     if(p != nil){
         lock(&p->rlock);
-        if(p->state != Wakeme || p->r != r){
-            iprint("%p %p %d\n", p->r, r, p->state);
-            panic("wakeup: state");
-        }
+        <<[[wakeup()]] sanity check process state>>
         r->p = nil;
         p->r = nil;
         ready(p);
@@ -12356,12 +12530,45 @@ proc_wakeup(Rendez *r)
 % Presotto! and Richard Miller :)
 
 
+<<[[wakeup()]] sanity check process state>>=
+if(p->state != Wakeme || p->r != r){
+    iprint("%p %p %d\n", p->r, r, p->state);
+    panic("wakeup: state");
+}
+@
+
+
 \section{Preemptive scheduling}
+
+% Number of times per second we want to get a clock interrupt.
+% At each clock interrupt, a counter is incremented called a tick.
+
+
+<<constant Arch_HZ(arm)>>=
+#define Arch_HZ     100         /* clock frequency */
+@
+% 100 per second so every 10ms.
+% every 10ms increment cpu->tick (see hzclock)
+% so in one second cpu->tick has been incremented by Arch_HZ.
+
+
+\subsection{[[hzsched()]]}
 
 <<[[Cpu]] other fields>>=
 ulong schedticks;   /* next forced context switch */
 @
 
+<<[[sched()]] after found a new proc, adjust schedticks>>=
+cpu->schedticks = cpu->ticks + Arch_HZ/10; // 100ms of allocated time
+@
+% cpu->schedticks = cpu->ticks + Arch_HZ/10; // 100ms of allocated time
+% not so easy to understand :) Arch_HZ is 100 (100/sec there is a clock
+% event so a tick, so every second you add Arch_HZ to ticks,
+% so if you do ticks + Arch_HZ/10 you will wait 0.1 sec = 100ms
+
+
+
+% timerintr? -> hzclock -> <>
 <<function hzsched>>=
 /*
  *  here once per clock tick to see if we should resched
@@ -12369,10 +12576,7 @@ ulong schedticks;   /* next forced context switch */
 void
 hzsched(void)
 {
-    /* once a second, rebalance will reprioritize ready procs */
-    if(cpu->cpuno == 0)
-        rebalance();
-
+    <<[[hzsched()]] rebalance ready procs>>
     /* unless preempted, get to run for at least 100ms */
     if(anyhigher()
     || (!up->fixedpri && cpu->ticks > cpu->schedticks && anyready())){
@@ -12382,7 +12586,9 @@ hzsched(void)
     }
 }
 @ 
-
+% why not call sched() here? why going through delaysched?
+% because not in good context? need to wait be at right place in trap
+% to call sched()?
 
 
 <<function anyhigher>>=
@@ -12393,156 +12599,19 @@ anyhigher(void)
 }
 @ 
 % >>
-
-
-<<global balancetime>>=
-/*
- *  recalculate priorities once a second.  We need to do this
- *  since priorities will otherwise only be recalculated when
- *  the running process blocks.
- */
-ulong balancetime;
-@ 
-
-<<function rebalance>>=
-static void
-rebalance(void)
-{
-    int pri, npri, t, x;
-    Schedq *rq;
-    Proc *p;
-
-    t = cpu->ticks;
-    if(t - balancetime < Arch_HZ)
-        return;
-    balancetime = t;
-
-    for(pri=0, rq=runq; pri<Npriq; pri++, rq++){
-another:
-        p = rq->head;
-        if(p == nil)
-            continue;
-        if(p->lastcpu != CPUS(cpu->cpuno)) // this has been the source of comments on 9fans, todo look if bug (subject = rebalance() funny, nov30)
-            continue;
-        if(pri == p->basepri)
-            continue;
-        updatecpu(p);
-        npri = reprioritize(p);
-        if(npri != pri){
-            x = arch_splhi();
-            p = dequeueproc(rq, p);
-            if(p)
-                queueproc(&runq[npri], p);
-            arch_splx(x);
-            goto another;
-        }
-    }
-}
-@ 
+%c: nice :)
+% no lock again? because not critical?
 
 
 
-<<[[Proc]] scheduling fields>>=
-bool preempted;  /* true if this process hasn't finished the interrupt
-       *  that last preempted it
-       */
-@
-
-<<function preempt>>=
-/*
- *  here at the end of non-clock interrupts to see if we should preempt the
- *  current process.
- */
-void
-preempt(void)
-{
-    if(up && up->state == Running)
-      if(up->preempted == false)
-        if(anyhigher())
-          if(!active.exiting){
-              cpu->readied = nil;   /* avoid cooperative scheduling */
-              up->preempted = true;
-              sched();
-              arch_splhi(); // still in interrupt context
-              up->preempted = false;
-          }
-    return;
-}
-@ 
-% servicing an interrupt may have adjusted the readyness of higher priority
-% process so preempt!
-
-\subsection{Clock interrupt (ARM)}
-% see also Time chapter
-
-% number of times per second we want to get a clock interrupt, called
-% also a tick
-
-
-<<constant Arch_HZ(arm)>>=
-#define Arch_HZ     100         /* clock frequency */
-@
-% 100 per second so every 10ms.
-
-% See comment in clock.c
-%/*
-% * bcm283[56] timers
-% *  System timers run at 1MHz (timers 1 and 2 are used by GPU)
-% *  ARM timer usually runs at 250MHz (may be slower in low power modes)
-% *  Cycle counter runs at 700MHz (unless overclocked)
-% *    All are free-running up-counters
-% *  Cortex-a7 has local generic timers per cpu (which we run at 1MHz)
-% *
-% * Use system timer 3 (64 bits) for hzclock interrupts and fastticks
-% *   For smp on bcm2836, use local generic timer for interrupts on cpu1-3
-% * Use ARM timer (32 bits) for perfticks
-% * Use ARM timer to force immediate interrupt
-% * Use cycle counter for cycles()
-% */
-
-%http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
-
-% at SYSTIMERS VIRTIO
-<<struct Systimers(arm)>>=
-// The order matters! the fields match the memory-mapped external registers.
-struct Systimers {
-    u32int  cs;
-
-    u32int  clo;
-    u32int  chi;
-
-    u32int  c0;
-    u32int  c1;
-    u32int  c2;
-    u32int  c3;
-};
-@
-% Raspberry Pi has 4 timers, 4 IRQs.
-
-% see clockinit() later.
-
-% set by clockinit to IRQ3
-<<function clockintr(arm)>>=
-static void
-clockintr(Ureg *ureg, void*)
-{
-    Systimers *tn;
-
-    tn = (Systimers*)SYSTIMERS;
-    /* dismiss interrupt */
-    tn->cs = 1<<3;
-    timerintr(ureg, 0);
+<<[[sched()]] if readied process, do not adjust schedticks>>=
+if(p == cpu->readied) {
 }
 @
-% >> 
+%so will run in quantum of time of process who readied you
+%old: condition reverted so easier to aspectize
 
-% 1<<3 to clear the interrupt from the 3 system time compare register
-% see http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
-
-% put in virtual memory section?
-<<[[Cpu]] other fields>>=
-bool flushmmu;   /* make current proc flush it's mmu state */
-@
+\subsection{[[hzclock()]]}
 
 % ?timerintr? -> <>
 <<clock callback hzclock>>=
@@ -12550,37 +12619,50 @@ void
 hzclock(Ureg *ur)
 {
     cpu->ticks++;
-    if(cpu->proc) // why not using up here? why cpu->proc?
-        cpu->proc->pc = ur->pc;
+    <<[[hzclock()]] adjust pc of proc>>
+    <<[[hzclock()]] if flushmmu>>
+    <<[[hzclock()]] accounttime>>
+    <<[[hzclock()]] if kproftimer>>
 
-    if(cpu->flushmmu){
-        if(up)
-            arch_flushmmu();
-        cpu->flushmmu = false;
-    }
+    <<[[hzclock()]] if not active cpu, return>>
+    // else
+    <<[[hzclock()]] if exiting, exit>>
+    // else
 
-    accounttime();
-    //kmapinval();pc: bcm: a nope in both archs
-
-    if(kproftimer != nil)
-        kproftimer(ur->pc);
-
-    if((active.cpus & (1<<cpu->cpuno)) == 0)
-        return;
-
-    if(active.exiting) {
-        print("someone's exiting\n");
-        arch_exit(0);
-    }
-
-    checkalarms();
-
+    <<[[hzclock()]] check the alarms>>
     if(up && up->state == Running)
         hzsched();  /* in proc.c */
 }
 @ 
 % //todo: can be not Running? maybe if checkalarms resched?
+%    //kmapinval();pc: bcm: a nope in both archs
 
+% who calls hzclock is complicated. It's timerintr because
+% of some timeradd in timersinit. It relies on some timer interrupt.
+
+<<[[hzclock()]] adjust pc of proc>>=
+if(cpu->proc) // why not using up here? why cpu->proc?
+    cpu->proc->pc = ur->pc;
+@
+\t why need that?
+
+
+<<[[hzclock()]] if not active cpu, return>>=
+if((active.cpus & (1<<cpu->cpuno)) == 0)
+    return;
+@
+%smp:?
+
+<<[[hzclock()]] if exiting, exit>>=
+if(active.exiting) {
+    print("someone's exiting\n");
+    arch_exit(0);
+}
+@
+%smp:?
+
+%\subsection{[[preempt()]]}
+% not used in bcm/
 
 
 \section{Customized scheduling}
@@ -12589,6 +12671,12 @@ hzclock(Ureg *ur)
 Cpu  *wired;
 @
 
+<<[[newproc()]] set fields of [[p]]>>=
+p->wired = nil;
+@
+
+% seen a few places before where look if p->wired == nil before
+% deciding to schedule a process on a processor.
 
 <<[[procctlreq()]] CMwired case>>=
 case CMwired:
@@ -12635,21 +12723,251 @@ procwired(Proc *p, int bm)
 <<[[sysrfork()]] other locals>>=
 Cpu *wm;
 @
-
 <<[[sysrfork()]] if parent is a wired proc>>=
 wm = up->wired;
 if(wm)
     procwired(p, wm->cpuno);
 @
-
+% not sure why need to use a local for that.
 
 
 \section{Real-time scheduling}
 % see EDF section
 
+\section{Adjusting priority}
+
+\l move in advanced topics?
+
+% Once you have different priorities queues, you can not just
+% always take the process with higher priority. This would prevent
+% other process to run at all. So we need to adjust the priority
+% gradually.
+
+\subsection{[[reprioritize()]]}
+
+<<[[sched()]] after found process [[p]] to schedule, possibly update priority>>=
+<<[[sched()]] if real-time process then do nothing, do not reprioritize>>
+else {
+    updatecpu(p);
+    p->priority = reprioritize(p);
+}
+@
+
+<<[[ready()]] update priority>>=
+updatecpu(p);
+pri = reprioritize(p);
+p->priority = pri;
+@
+\l why pass through an intermediate prio? if remove pri then look more like
+\l  code above
+
+<<[[schedinit()]] updatecpu before reseting up>>=
+updatecpu(up);
+@
+
+
+
+
+% new typedef? Ttick_scaled?
+<<[[Proc]] scheduling fields>>=
+ulong lastupdate; // dimension?? ticks * Scaling;
+ulong cpuavg;    /* cpu average */
+@
+
+<<[[newproc()]] set fields of [[p]]>>=
+p->cpuavg = 0;
+p->lastupdate = CPUS(0)->ticks * Scaling;
+@
+
+
+<<constant Scaling>>=
+Scaling=2,
+@
+<<constant Schedagain>>=
+schedgain = 30, /* units in seconds */
+@
+
+<<[[yield()]] adjust lastupdate before scheduling another process>>=
+/* pretend we just used 1/2 tick */
+up->lastupdate -= Scaling/2;  
+@
+
+<<function updatecpu>>=
+/*
+ * Update the cpu time average for this particular process,
+ * which is about to change from up -> not up or vice versa.
+ * p->lastupdate is the last time an updatecpu happened.
+ *
+ * The cpu time average is a decaying average that lasts
+ * about D clock ticks.  D is chosen to be approximately
+ * the cpu time of a cpu-intensive "quick job".  A job has to run
+ * for approximately D clock ticks before we home in on its 
+ * actual cpu usage.  Thus if you manage to get in and get out
+ * quickly, you won't be penalized during your burst.  Once you
+ * start using your share of the cpu for more than about D
+ * clock ticks though, your p->cpu hits 1000 (1.0) and you end up 
+ * below all the other quick jobs.  Interactive tasks, because
+ * they basically always use less than their fair share of cpu,
+ * will be rewarded.
+ *
+ * If the process has not been running, then we want to
+ * apply the filter
+ *
+ *  cpu = cpu * (D-1)/D
+ *
+ * n times, yielding 
+ * 
+ *  cpu = cpu * ((D-1)/D)^n
+ *
+ * but D is big enough that this is approximately 
+ *
+ *  cpu = cpu * (D-n)/D
+ *
+ * so we use that instead.
+ * 
+ * If the process has been running, we apply the filter to
+ * 1 - cpu, yielding a similar equation.  Note that cpu is 
+ * stored in fixed point (* 1000).
+ *
+ * Updatecpu must be called before changing up, in order
+ * to maintain accurate cpu usage statistics.  It can be called
+ * at any time to bring the stats for a given proc up-to-date.
+ */
+void
+updatecpu(Proc *p)
+{
+    int n, t, ocpu;
+    int D = schedgain * Arch_HZ * Scaling;
+
+    <<[[updatecpu()]] return if real-time process>>
+
+    t = CPUS(0)->ticks*Scaling + Scaling/2;
+    n = t - p->lastupdate;
+    p->lastupdate = t;
+
+    if(n == 0)
+        return;
+    if(n > D)
+        n = D;
+
+    ocpu = p->cpuavg;
+    if(p != up)
+        p->cpuavg = (ocpu*(D-n))/D;
+    else{
+        t = 1000 - ocpu;
+        t = (t*(D-n))/D;
+        p->cpuavg = 1000 - t;
+    }
+
+}
+@ 
+%//iprint("pid %d %s for %d cpu %d -> %d\n", p->pid,p==up?"active":"inactive",n, ocpu,p->cpuavg);
+
+
+<<function reprioritize>>=
+/*
+ * On average, p has used p->cpuavg of a cpu recently.
+ * Its fair share is conf.ncpu/cpu->load of a cpu.  If it has been getting
+ * too much, penalize it.  If it has been getting not enough, reward it.
+ * I don't think you can get much more than your fair share that 
+ * often, so most of the queues are for using less.  Having a priority
+ * of 3 means you're just right.  Having a higher priority (up to p->basepri) 
+ * means you're not using as much as you could.
+ */
+int
+reprioritize(Proc *p)
+{
+    int fairshare, n, load, ratio;
+
+    load = CPUS(0)->load;
+    if(load == 0)
+        return p->basepri;
+
+    /*
+     *  fairshare = 1.000 * conf.nproc * 1.000/load,
+     * except the decimal point is moved three places
+     * on both load and fairshare.
+     */
+    fairshare = (conf.ncpu*1000*1000)/load;
+    n = p->cpuavg;
+    if(n == 0)
+        n = 1;
+    ratio = (fairshare+n/2) / n;
+    if(ratio > p->basepri)
+        ratio = p->basepri;
+    if(ratio < 0)
+        panic("reprioritize");
+//iprint("pid %d cpu %d load %d fair %d pri %d\n", p->pid, p->cpuavg, load, fairshare, ratio);
+    return ratio;
+}
+@ 
+
+\subsection{[[rebalance()]]}
+
+<<[[hzsched()]] rebalance ready procs>>=
+/* once a second, rebalance will reprioritize ready procs */
+if(cpu->cpuno == 0)
+    rebalance();
+@
+
+<<function rebalance>>=
+static void
+rebalance(void)
+{
+    int pri, npri, t, x;
+    Schedq *rq;
+    Proc *p;
+
+    <<[[rebalance()]] return if less than one second since last rebalance>>
+
+    for(pri=0, rq=runq; pri<Npriq; pri++, rq++){
+another:
+        p = rq->head;
+        if(p == nil)
+            continue;
+        if(p->lastcpu != CPUS(cpu->cpuno)) // this has been the source of comments on 9fans, todo look if bug (subject = rebalance() funny, nov30)
+            continue;
+        if(pri == p->basepri)
+            continue;
+        updatecpu(p);
+        npri = reprioritize(p);
+        if(npri != pri){
+            x = arch_splhi();
+            p = dequeueproc(rq, p);
+            if(p)
+                queueproc(&runq[npri], p);
+            arch_splx(x);
+            goto another;
+        }
+    }
+}
+@ 
+
+
+
+<<global balancetime>>=
+/*
+ *  recalculate priorities once a second.  We need to do this
+ *  since priorities will otherwise only be recalculated when
+ *  the running process blocks.
+ */
+ulong balancetime;
+@ 
+
+<<[[rebalance()]] return if less than one second since last rebalance>>=
+t = cpu->ticks;
+if(t - balancetime < Arch_HZ)
+    return;
+balancetime = t;
+@
+% Again, every second you add Arch_HZ to ticks, so if you check
+% for a diff in ticks of Arch_HZ, you have waited one second.
+
+
 
 \section{Halting (ARM)}
 
+% runproc -> <>
 <<function arch_idlehands(raspberry pi1)(arm)>>=
 TEXT arch_idlehands(SB), $-4
     MOVW    CPSR, R3
@@ -12666,9 +12984,1662 @@ TEXT arch_idlehands(SB), $-4
     RET
 @
 %$
-% nrdy is #processes in ready state?
+% nrdy is #processes in ready state
+
+% MCR.EQ?
+% Disable interrupts because hzclock will not help in finding a process to run.
+% We are here because we could not find any process to schedule.
+% Only something that increments nrdy can.
+\l but if process waiting for data from disk, IRQ of disk will not 
+\l  be able to wakeup anything?
 
 % see halting just before initializing :)
+%update: actually now see Time before Initializing
+
+
+
+
+
+
+\chapter{Time}
+\n too important chapter to be put later; works closely with Scheduling.
+\n also then can talk about important timersinit() in Initialization.
+
+<<[[systab]] time syscalls>>=
+[SLEEP]     syssleep,
+[ALARM]     sysalarm,
+@
+
+\section{Overview (arm)}
+
+% Saw Arch_HZ in Scheduling chapter. and hzclock().
+% Will see here how call hzclock() and other time related capabilities
+% for processes.
+
+% We have one machine timer, but we want many processes to have
+% different alarms. How? Just set timer for next one and once ellapsed then
+% set timer for next one. Need just one system timer counter.
+
+% different capabilities? timer, sleep, alarms, delay, clock, rtc, more ??
+
+% See comment in clock.c
+%/*
+% * bcm283[56] timers
+% *  System timers run at 1MHz (timers 1 and 2 are used by GPU)
+% *  ARM timer usually runs at 250MHz (may be slower in low power modes)
+% *  Cycle counter runs at 700MHz (unless overclocked)
+% *    All are free-running up-counters
+% *  Cortex-a7 has local generic timers per cpu (which we run at 1MHz)
+% *
+% * Use system timer 3 (64 bits) for hzclock interrupts and fastticks
+% *   For smp on bcm2836, use local generic timer for interrupts on cpu1-3
+% * Use ARM timer (32 bits) for perfticks
+% * Use ARM timer to force immediate interrupt
+% * Use cycle counter for cycles()
+% */
+
+% Note that clock timer will run at higher frequency than hzclock!
+% Because at each clock interrupt we might not only call hzclock
+% but also trigger alarms or functions connected to timers that run
+% at higher frequency than Arch_HZ.
+
+\section{Time units}
+
+\subsection{Seconds}
+
+<<type Txxx>>=
+typedef vlong   Tsec; // seconds
+typedef int     Tms; // milliseconds
+typedef vlong   Tmicro; // microseconds
+typedef vlong   Tnano; // nanoseconds
+@
+%pad: Tval was there, but I added the other one I think
+%ocaml: have cleaner types that are enforced. Right now in C too easy
+% to mix ulong and vlong for the same dimension.
+\l Tsec in vlong? how much to count seconds since 1970 unix time 0?
+\l Ts, Tms, Tus, Tns?
+
+<<macro MS2NS>>=
+#define MS2NS(n) (((vlong)(n))*1000000LL)
+@
+
+\subsection{Ticks}
+
+% ticks, fastticks, perfticks, cycles, lcycles, grrr
+
+% ticks are incremented every "system clock". "kernel clock"
+% which is different from hardware clock.
+
+% Saw Arch_HZ before.
+% in one second you have Arch_HZ ticks.
+% Each archi can define differently Arch_HZ but you want a high-enough
+% value for preemptive scheduling to work.
+
+<<type Txxx>>=
+typedef vlong   Tval; // ticks
+@
+\l why not uvlong? because do arithmetic operation on it and want to detect
+\l  negative value when do  next - now?
+
+%linux: ticks are called jiffies?
+
+<<macro TK2MS>>=
+#define TK2MS(x) ((x)*(1000/Arch_HZ))
+@
+% in one second you have Arch_HZ ticks
+% so x ticks correspond to x / Arch_HZ seconds, so x / Arch_HZ * 1000 ms
+% A tick is 10ms when Arch_HZ is 100.
+
+<<function tk2ms>>=
+/*
+ *  This tk2ms avoids overflows that the macro version is prone to.
+ *  It is a LOT slower so shouldn't be used if you're just converting
+ *  a delta.
+ */
+ulong
+tk2ms(ulong ticks)
+{
+    uvlong t, hz;
+
+    t = ticks;
+    hz = Arch_HZ;
+    t *= 1000L;
+    t = t/hz;
+    ticks = t;
+    return ticks;
+}
+@ 
+\l why not return t earlier?
+\t why ulong here for ticks? why sometimes ulong and sometimes vlong?
+
+<<function ms2tk>>=
+ulong
+ms2tk(ulong ms)
+{
+    <<[[ms2tk()]] overflow approximation>>
+    return (ms * Arch_HZ + 500) / 1000;
+}
+@ 
+% In one second Arch_HZ ticks, so in x ms, you get x / 1000 * Arch_HZ.
+% Why the +500? To approximate at upper value.
+% 1 ms is 0 tick when Arch_HZ is 100, but 5ms is approximated to 1 tick.
+
+<<[[ms2tk()]] overflow approximation>>=
+/* avoid overflows at the cost of precision */
+if(ms >= 1000000000 / Arch_HZ)
+    return (ms / 1000) * Arch_HZ;
+@
+%ocaml: can do better?
+
+\subsection{Fastticks (ARM)}
+
+% Finer grained than ticks. So can do decision on granularity finer
+% than a tick difference (10ms on Raspberry Pi).
+
+% On Raspberry Pi use system timer at 1Mhz! So 1 fasttick
+% every microsecond!
+
+<<constant SystimerFreq(arm)>>=
+SystimerFreq    = 1*Mhz,
+@
+% so far faster than Arch_HZ! 1 million per second = 1 every micro second.
+
+<<type Txxx>>=
+typedef vlong   Tfast; // fastticks
+typedef uvlong   Tufast; // fastticks
+@
+%pad: I introduced that
+%ocaml: a single type. Confusing to see those signed vs unsigned.
+\l should remove the ufast at some point? or the other?
+
+<<function arch_us(arm)>>=
+ulong // Tmicro
+arch_us(void)
+{
+    <<[[arch_us()]] if non-standard systimer frequency>>
+    return arch_fastticks(nil);
+}
+@
+%us is for microsecond! 
+\l but then ulong? not Tmicro?
+\l seems portable. Why arm specific?
+
+% if 1 Mhz so 1000000 per second, so once every microsecond
+% A fasttick is every microsecond, far finer-grained than tick every
+% 10 millisecond (so 10 000 microseconds).
+
+
+
+
+<<function clock_arch_fastticks(arm)>>=
+Tufast
+clock_arch_fastticks(uvlong *hz)
+{
+    Systimers *tn;
+    ulong lo, hi;
+    Tufast now;
+    int s;
+
+    <<[[arch_fastticks()]] if hz pointer given>>
+
+    tn = (Systimers*)SYSTIMERS;
+    s = arch_splhi();
+
+    do{
+        hi = tn->chi;
+        lo = tn->clo;
+    }while(tn->chi != hi);
+
+    now = (uvlong)hi<<32 | lo;
+    arch_splx(s);
+    return now;
+}
+@
+% >> >>
+% see http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
+% for why do while loop over chi. It's because it can have changed.
+
+%dead: clock_arch_fastticks
+%<<[[Cpu]] [[Arch]] other fields(arm)>>
+%Tufast  fastclock;      /* last sampled value */ // fastticks
+%@
+%dead: in 
+%    cpu->fastclock = now;
+%    arch_splx(s);
+%    return cpu->fastclock;
+
+
+<<[[arch_fastticks()]] if hz pointer given>>=
+if(hz)
+    *hz = SystimerFreq;
+@
+\t change interface arch_fastticks, to not take anything because most calls
+\t  pass nil
+\t just add another function system_timer_frequency()
+
+
+\section{Clock interrupt (ARM)}
+% see also Time chapter
+
+
+% See comment in clock.c
+%/*
+% * bcm283[56] timers
+% *  System timers run at 1MHz (timers 1 and 2 are used by GPU)
+% *  ARM timer usually runs at 250MHz (may be slower in low power modes)
+% *  Cycle counter runs at 700MHz (unless overclocked)
+% *    All are free-running up-counters
+% *  Cortex-a7 has local generic timers per cpu (which we run at 1MHz)
+% *
+% * Use system timer 3 (64 bits) for hzclock interrupts and fastticks
+% *   For smp on bcm2836, use local generic timer for interrupts on cpu1-3
+% * Use ARM timer (32 bits) for perfticks
+% * Use ARM timer to force immediate interrupt
+% * Use cycle counter for cycles()
+% */
+
+%http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
+
+% at SYSTIMERS VIRTIO
+<<struct Systimers(arm)>>=
+// The order matters! the fields match the memory-mapped external registers.
+struct Systimers {
+    u32int  cs;
+
+    u32int  clo;
+    u32int  chi;
+
+    u32int  c0;
+    u32int  c1;
+    u32int  c2;
+    u32int  c3;
+};
+@
+% Raspberry Pi has 4 timers, 4 IRQs.
+
+% see clockinit() later.
+
+% set by clockinit to IRQ3, see next chapter
+<<function clockintr(arm)>>=
+static void
+clockintr(Ureg *ureg, void*)
+{
+    Systimers *tn;
+
+    tn = (Systimers*)SYSTIMERS;
+    /* dismiss interrupt */
+    tn->cs = 1<<3;
+    // portable code
+    timerintr(ureg, 0);
+}
+@
+% >> 
+
+% 1<<3 to clear the interrupt from the 3 system time compare register
+% see http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
+
+
+\section{Timers}
+
+% capacity of machine is very low, just timer next point
+%  but have many processes, many timer needs, so need map
+%  all of that on very limited hardware power.
+
+\subsection{[[Timer]]}
+
+<<struct Timer>>=
+struct Timer
+{
+    /* Public interface */
+    // enum<Timermode>
+    int tmode;    /* See above */
+    Tnano tns;    /* meaning defined by mode */ //nanosecond
+
+    void  (*tf)(Ureg*, Timer*);
+    void  *ta; // extra argument (generic pointer)
+  
+    /* Internal */
+    Tfast  twhen;    /* ns represented in fastticks */
+    ILock; // LOCK ORDERING: ilock(timer); ilock(timers)
+
+    <<[[Timer]] extra fields>>
+    };
+@ 
+%ocaml: closure instead of ugly tf and ta
+%dead:    Tval  tticks;   /* tns converted to ticks */
+
+%Ilock! why? because timer are modified in timerintr, so in interrupt
+% context so cant just use spinlock otherwise interrupt would spin
+% forever sometimes.
+
+\l Why lock on timer itself? race? between which actors?
+
+\l Why timer callback need Ureg parameter?
+\l why pass Ureg? anyway in addclock0link we take some void(f)(void) callbacks
+
+<<enum timermode>>=
+/*
+ * fasttick timer interrupts
+ */
+enum Timermode 
+{
+    Trelative,  /* timer programmed in ns from now */
+    Tperiodic,  /* periodic timer, period in ns */
+};
+@ 
+%ocaml: ADT
+
+\subsection{[[Timers]] and CPU [[timers[[}
+
+<<struct Timers>>=
+struct Timers
+{
+    // list<Timer> (next = Timer.tnext)
+    Timer *head;
+    // extra
+    ILock;
+};
+@ 
+%ocaml: list
+
+
+<<[[Timer]] extra fields>>=
+// list<Timer> of Timers.head
+Timer *tnext;
+@
+
+
+<<[[Timer]] extra fields>>=
+// option<ref<list<Timer>> Timers.head (of one of global timers[MAXCPUS])
+Timers  *tt;    /* Timers queue this timer runs on */
+@
+%ocaml: use cpuid option instead to find in which list we hare
+
+% None when not active timer.
+
+% Complex graph, can access head of the list you're in.
+% So can delete a timer and find in which list it is.
+% There will be a list of timers per CPU (see [[timers]] below).
+
+<<global timers>>=
+static Timers timers[MAXCPUS];
+@ 
+
+
+\subsection{[[tadd()/tdel()]]}
+
+% timeradd | timerintr | addclock0link -> <>
+<<function tadd>>=
+static Tfast
+tadd(Timers *tt, Timer *nt)
+{
+    Timer *t, **last;
+
+    /* Called with tt locked */
+    <<[[tadd()]] sanity check nt>>
+    <<[[tadd()]] set [[nt->twhen]]>>
+
+    // insert_sorted(nt, tt, (a->twhen <=> b->twhen))
+    for(last = &tt->head; t = *last; last = &t->tnext){
+        if(t->twhen > nt->twhen)
+            break;
+    }
+    nt->tnext = *last;
+    *last = nt;
+
+    nt->tt = tt;
+    if(last == &tt->head)
+        return nt->twhen;
+    return 0;
+}
+@ 
+\l when twhen is not 0 at tadd() time? when add it again?
+
+
+<<[[tadd()]] sanity check nt>>=
+assert(nt->tt == nil);
+@
+% not active already
+
+
+<<[[tadd()]] set [[nt->twhen]]>>=
+switch(nt->tmode){
+case Trelative:
+    if(nt->tns <= 0)
+        nt->tns = 1;
+    nt->twhen = arch_fastticks(nil) + ns2fastticks(nt->tns);
+    break;
+case Tperiodic:
+    assert(nt->tns >= 100000);  /* At least 100 Âµs period */
+    if(nt->twhen == 0){
+        <<[[tadd()]] look if can combine with identical timer>>
+        else
+            nt->twhen = arch_fastticks(nil);
+    }
+    nt->twhen += ns2fastticks(nt->tns);
+    break;
+default:
+    panic("timer: impossible");
+    break;
+}
+@
+% twhen can be different than 0 when add a periodic timer again,
+% in which case for better periodicity we dont want to start
+% from now but from last twhen (which should be close to now).
+% Avoid gradual deviation?
+
+<<[[tadd()]] look if can combine with identical timer>>=
+/* look for another timer at same frequency for combining */
+for(t = tt->head; t; t = t->tnext){
+    if(t->tmode == Tperiodic && t->tns == nt->tns)
+        break;
+}
+if (t)
+    nt->twhen = t->twhen;
+@
+% nice opti, to avoid very small timer counter just because
+% start differ by very little.
+
+
+<<function tdel>>=
+static tfast
+tdel(Timer *dt)
+{
+    Timer *t, **last;
+    Timers *tt;
+
+    tt = dt->tt;
+    <<[[tdel()]] sanity check tt>>
+    // remove_list(dt, tt)
+    for(last = &tt->head; t = *last; last = &t->tnext){
+        if(t == dt){
+            assert(dt->tt);
+            dt->tt = nil;
+            *last = t->tnext;
+            break;
+        }
+    }
+    if(last == &tt->head && tt->head)
+        return tt->head->twhen;
+    return 0;
+}
+@ 
+
+<<[[tdel()]] sanity check tt>>=
+if (tt == nil)
+    return 0; //todo: panic instead
+@
+%ocaml: do that in caller and be stricter
+
+% Can happen because call timerdel which calls tdel in pexit and the timer
+% of the process was maybe not active? 
+% No! because call tdel only if there is a tt, so we should panic above.
+
+% In timerintr we can remove the timer. So Race? This is why
+% tt can become nil between start of timerdel and call to del?
+
+
+\subsection{[[timeradd()//timerdel()]]}
+
+
+% tsleep | timersinit | edfun | edfready -> <>
+<<function timeradd>>=
+/* add or modify a timer */
+void
+timeradd(Timer *nt)
+{
+    Timers *tt;
+    Tfast when;
+
+    /* Must lock Timer struct before Timers struct */
+    ilock(nt);
+
+    <<[[timeradd()]] if timer was already in a list>>
+    tt = &timers[cpu->cpuno];
+    ilock(tt);
+    when = tadd(tt, nt);
+    if(when)
+        arch_timerset(when);
+    iunlock(tt);
+    iunlock(nt);
+}
+@ 
+%ilock!
+
+<<[[timeradd()]] if timer was already in a list>>=
+if(tt = nt->tt){
+    ilock(tt);
+    tdel(nt);
+    iunlock(tt);
+}
+@
+% does not look tdel return value? what if new head in this tt?
+%  should call timerset for this processor? bug?
+% Not a pb because no timer callback will be called when the interrupt comes.
+% So those arch_timerset are some kind of optimizations.
+%ocaml: stricter? 
+
+
+<<[[pexit()]] at the start, free resources>>=
+if (up->tt)
+    timerdel(up);
+@
+%old: used to have an order and be at the start of pexit but not sure it matter
+\t when can have active timer and exits? 
+%ocaml: allocate timer dynamically so no need for that
+
+% pexit | tsleep | edfstop -> <>
+<<function timerdel>>=
+void
+timerdel(Timer *dt)
+{
+    Timers *tt;
+    Tfast when;
+
+    ilock(dt);
+    if(tt = dt->tt){
+        ilock(tt);
+        when = tdel(dt);
+        if(when && tt == &timers[cpu->cpuno])
+            arch_timerset(tt->head->twhen);
+        iunlock(tt);
+    }
+    iunlock(dt);
+}
+@ 
+\l when can not have a tt? 
+% note that check that on same processor! but if not same processor
+% then will get a fake time? Not a pb because no timer callback will be called
+\t 
+
+% once timer elapsed, need to remove it.
+
+% Can have race here where get tt, but then timer interrupt on
+% other processor that deletes it? so can call tdel with an inactive
+% timer?
+
+\subsection{[[arch_timerset()]] (arm)}
+
+% Saw clockinterrupt before and SYSTIMERS
+
+% timeradd -> <>
+<<function arch_timerset(arm)>>=
+void
+arch_timerset(Tfast next)
+{
+    Systimers *tn;
+    Tufast now;
+    long period;
+
+    now = arch_fastticks(nil);
+    period = next - now;
+    <<[[arch_timerset()]] sanitize period(arm)>>
+    <<[[arch_timerset()]] if not cpu0(arm)>>
+    else{
+        tn = (Systimers*)SYSTIMERS;
+        tn->c3 = (ulong)(now + period);
+    }
+}
+@
+% c3! so IRQTIMER3
+
+<<[[arch_timerset()]] sanitize period(arm)>>=
+if(period < MinPeriod)
+    period = MinPeriod;
+else if(period > MaxPeriod)
+    period = MaxPeriod;
+@
+
+<<constant MaxPeriod(arm)>>=
+MaxPeriod   = SystimerFreq / Arch_HZ,
+@
+<<constant MinPeriod(arm)>>=
+MinPeriod   = SystimerFreq / (100*Arch_HZ),
+@
+\t what is the logic behind this? why cant call timerset for max Hz? 
+\t  because we dont want to miss the next hzclock?
+
+
+\subsection{[[timerintr()]]}
+
+
+% clockintr(arm) | i8253clock(x86) -> <>
+<<interrupt callback timerintr>>=
+void
+timerintr(Ureg *u, Tval)
+{
+    Timer *t;
+    Timers *tt;
+    Tufast when, now;
+    bool callhzclock = false;
+    <<[[timerintr()]] other locals>>
+
+    <<[[timerintr()]] start, stat>>
+    tt = &timers[cpu->cpuno];
+    now = arch_fastticks(nil);
+    <<[[timerintr()]] sanity check now>>
+    ilock(tt);
+    <<[[timerintr()]] before loop, initialize count>>
+    while((t = tt->head) != nil){
+        /*
+         * No need to ilock t here: any manipulation of t
+         * requires tdel(t) and this must be done with a
+         * lock to tt held.  We have tt, so the tdel will
+         * wait until we're done
+         */
+        when = t->twhen;
+        if(when > now){
+            arch_timerset(when);
+            iunlock(tt);
+            if(callhzclock)
+                hzclock(u);
+            return;
+        }
+        // else
+        // pop_list(tt)
+        tt->head = t->tnext;
+        assert(t->tt == tt);
+        t->tt = nil;
+        <<[[timerintr()]] in timers loop, stat>>
+        iunlock(tt);
+
+        // call the callback
+        if(t->tf)
+            (*t->tf)(u, t);
+        else
+            callhzclock = true;
+
+        ilock(tt);
+        if(t->tmode == Tperiodic)
+            tadd(tt, t);
+        <<[[timerintr()]] end of timers loop, sanity check count>>
+    }
+    iunlock(tt); // unreachable?
+}
+@ 
+\l why special code for callhzclock? why not pass hzclock function
+\l when build timer in timersinit? 
+% because we want to call hzclock last when process a series of ellapsed timers?
+% Because hzclock calls hzsched? but hzsched just set delayscheds, so
+% we could call hzclock before. Because dont want to 
+% hold tt while calling hzclock? But we unlock/relock around the callback
+% so really no reason.
+
+% Not really need ilock because already in interrupt context and for
+% sure we use a local cpu list, but still good to indicate the
+% concurrency issue and also for defensive programming?
+
+% Note that different lock ordering! start by locking timers!
+% As comment said, the code above does not lock the timer,
+% and it should not! otherwise possible deadlock.
+
+% Note that the last iunlock should not be reach. If the list
+% can become empty, then we may have missed a call to hzclock!
+% But because when periodic timer we readd it to the list,
+% the list never gets empty
+
+% Note also no need check return value of tadd to call arch_timerset.
+% This will happen eventually later in the while loop.
+
+<<[[timerintr()]] sanity check now>>=
+if(now == 0)
+    panic("timerintr: zero arch_fastticks()");
+@
+
+
+<<[[timerintr()]] other locals>>=
+int count;
+@
+<<[[timerintr()]] before loop, initialize count>>=
+count = Maxtimerloops;
+@
+<<constant Maxtimerloops>>=
+Maxtimerloops = 20*1000,
+@
+
+<<[[timerintr()]] end of timers loop, sanity check count>>=
+if (--count <= 0) {
+    count = Maxtimerloops;
+    iprint("timerintr: probably stuck in while loop; "
+        "scrutinise clock.c or use faster cycle "
+        "counter\n");
+}
+@
+
+\subsection{Clock callbacks: [[addclock0link()]]}
+% very important! used a lot.
+
+<<function addclock0link>>=
+Timer*
+addclock0link(void (*f)(void), Tms ms)
+{
+    Timer *nt;
+    Tfast when;
+
+    <<[[addclock0link()]] sanity check timersinit>>
+
+    nt = malloc(sizeof(Timer));
+    <<[[addclock0link()]] sanity check nt>>
+    <<[[addclock0link()]] sanitize ms>>
+
+    nt->tns = (Tnano)ms * 1000000LL; // MS2NS(ms)
+    nt->tmode = Tperiodic;
+    nt->tt = nil;
+    nt->tf = (void (*)(Ureg*, Timer*))f;
+
+    // those clock callbacks are all done on the bootstrap processor
+    ilock(&timers[0]);
+    when = tadd(&timers[0], nt);
+    if(when)
+        arch_timerset(when);
+    iunlock(&timers[0]);
+    return nt;
+}
+@ 
+\l why clock0? to say low-level?
+\l why not call timeradd() but with forced processor number?
+\t how sure called in context when we are cpu0? assert?
+\t but then could simply call timeradd
+
+<<[[addclock0link()]] sanity check timersinit>>=
+if(!timersinited)
+    panic("addclock0link: timersinit not called yet");
+@
+<<[[addclock0link()]] sanity check nt>>=
+if(nt == nil)
+    error(Enomem);
+@
+%ocaml: default exn mechanism
+
+<<[[addclock0link()]] sanitize ms>>=
+/* Synchronize to hztimer if ms is 0 */
+if(ms == 0)
+    ms = 1000 / Arch_HZ; // tk2ms(1)
+@
+
+\subsection{Delay (ARM)}
+
+% This is used in kernel code itself. Sometimes need to wait
+% (especially in device drivers, when interact with some devices?)
+
+
+<<function clock_arch_microdelay(arm)>>=
+void
+clock_arch_microdelay(int n) // Tmicro
+{
+    Systimers *tn;
+    u32int now, diff;
+
+    diff = n + 1;
+    tn = (Systimers*)SYSTIMERS;
+    now = tn->clo;
+    while(tn->clo - now < diff)
+        ;
+}
+@
+%qemu: does not work
+
+% what about tn->chi? can overflow
+
+<<function clock_arch_delay(arm)>>=
+void
+clock_arch_delay(Tms n)
+{
+    while(--n >= 0)
+        arch_microdelay(1000);
+}
+@
+
+%\subsection{Initialisation}
+% now in Initialization chapter
+
+
+\section{[[syssleep()]]}
+
+<<[[Proc]] synchronization fields>>=
+Rendez  sleepr;    /* place for syssleep/debug/tsleep */
+@ 
+%old: was sleep, but pb because of my #define sleep proc_sleep
+%ocaml: allocate on demand. Anyway it is passed via Proc.trend
+% so no need to have it in static here (just a memory optimization).
+
+<<syscall sleep>>=
+// int sleep(long millisecs);
+long
+syssleep(ulong* arg)
+{
+    int n;
+    n = arg[0];
+    if(n <= 0) {
+        <<[[syssleep()]] optional [[edfyield()]] for real-time scheduling>>
+        yield();
+        return 0;
+    }
+    <<[[syssleep()]] sanitize n>>
+    tsleep(&up->sleepr, returnfalse, 0, n);
+    return 0;
+}
+@ 
+%ocaml: stricter, and no need return 0. Syscall.A.Void
+
+<<[[syssleep()]] sanitize n>>=
+if(n < TK2MS(1))
+    n = TK2MS(1);
+@
+% cant sleep less than 10ms because all sleep/machine rely on
+% timers which work with the "system clock" (hzclock).
+
+
+
+<<function tsleep>>=
+void
+proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
+{
+    <<[[tsleep()]] sanity check up timer>>
+    up->tns = MS2NS(ms);
+    up->tmode = Trelative;
+    up->tf = twakeup;
+
+    up->ta = up; // so can access r from wakeup
+    up->trend = r;
+
+    up->tfn = fn; // needed?
+
+    timeradd(up);
+
+    if(waserror()){
+        timerdel(up);
+        nexterror();
+    }
+    sleep(r, tfn, arg);
+    // back after sleep
+    <<[[tsleep()]] reset timer after sleep>>
+    poperror();
+}
+@ 
+%ocaml: pass closure so no need arg parameter. And reuse sleep name butin
+% different module (Time_rendez.sleep)
+\t when can have error? in sleep? in timerdel? 
+\t  because can be interrupted! in which case it should return -1 according
+\t  to man page
+\l why reset twhen? because tadd could do something wrong?
+
+<<[[tsleep()]] reset timer after sleep>>=
+if(up->tt)
+    timerdel(up);
+up->twhen = 0;
+@
+\t when can happen? if return from sleep means the timer got activated?
+
+
+
+<<[[tsleep()]] sanity check up timer>>=
+if (up->tt){
+    print("tsleep: timer active: mode %d, tf %#p\n", up->tmode, up->tf);
+    timerdel(up);
+}
+@
+\t when can this happen? who sets up->Timer except sleep?
+
+
+% time field?
+<<[[Proc]] other fields>>=
+Timer;      /* For tsleep and real-time */
+@
+<<[[Proc]] other fields>>=
+Rendez  *trend;
+int (*tfn)(void*);
+@
+\t why so complicated?
+%ocaml: use closure instead to pass the rendez vous to the timer callback
+
+<<function tfn>>=
+static int
+tfn(void *arg)
+{
+    return up->trend == nil || up->tfn(arg);
+}
+@ 
+% ???
+
+<<function twakeup>>=
+void
+twakeup(Ureg*, Timer *t)
+{
+    Proc *p;
+    Rendez *trend;
+
+    p = t->ta;
+    trend = p->trend;
+    p->trend = nil;
+    if(trend)
+        wakeup(trend);
+}
+@ 
+%ocaml: Time_rendez.wakeup that works by passing process in closure
+% so no need Timer.ta, and then Proc.trend
+\l when can have trend nil??
+
+\section{Alarms}
+
+<<struct Alarms>>=
+struct Alarms
+{
+    // sorted_list<ref<Proc> (next = Proc.palarm, sort_key = Proc.alarm)
+    Proc  *head;
+
+    // Extra
+    QLock;
+};
+@ 
+%ocaml: use list
+
+<<[[Proc]] extra fields>>=
+// Alarms.head chain?
+Proc  *palarm;  /* Next alarm time */
+@
+
+<<global alarms>>=
+static Alarms   alarms;
+@ 
+
+\section{[[sysalarm()]]}
+%related? tsleep, tsemacquire
+
+<<syscall alarm>>=
+// long alarm(unsigned long millisecs);
+long
+sysalarm(ulong* arg)
+{
+    return procalarm(arg[0]);
+}
+@ 
+
+% have a [[Proc]] time field?
+<<[[Proc]] other fields>>=
+// option<ticks>
+ulong alarm;    /* Time of call */ // Tval ticks
+@
+% time when the alarm will be triggered
+
+<<[[pexit()]] at the start, free resources>>=
+up->alarm = 0;
+@
+% should also remove it from alarms list, but putting 0 here
+% should be enough. If proc slot reused for another process and
+% he sets the alarm, then fine anyway.
+%ocaml: let Gc do its job
+\l race? between postnote and pexit?
+
+<<function procalarm>>=
+ulong
+procalarm(ulong time) // Tms
+{
+    Proc **l, *f;
+    ulong when, old; // Tval ticks
+
+    <<[[procalarm()]] compute remaining time in old alarm>>
+    <<[[procalarm()]] if time is zero, reset alarm>>
+    when = ms2tk(time) + CPUS(0)->ticks;
+    <<[[procalarm()]] sanitize when>>
+
+    qlock(&alarms);
+    l = &alarms.head;
+    // remove_list(up, alarms)
+    for(f = *l; f; f = f->palarm) {
+        if(up == f){
+            *l = up->palarm;
+            break;
+        }
+        l = &f->palarm;
+    }
+    up->palarm = nil;
+
+    // add_sorted_list(up, alarms)
+    if(alarms.head) {
+        l = &alarms.head;
+        for(f = *l; f; f = f->palarm) {
+            if((long)(f->alarm - when) >= 0) {
+                up->palarm = f;
+                *l = up;
+                goto done;
+            }
+            l = &f->palarm;
+        }
+        *l = up;
+    }
+    else
+        alarms.head = up;
+
+done:
+    up->alarm = when;
+    qunlock(&alarms);
+
+    return old;
+}
+@ 
+\l why use CPU0? each cpu has its own hzclock
+\l f -> p
+
+<<[[procalarm()]] compute remaining time in old alarm>>=
+if(up->alarm)
+    old = tk2ms(up->alarm - CPUS(0)->ticks);
+else
+    old = 0;
+@
+
+<<[[procalarm()]] if time is zero, reset alarm>>=
+if(time == 0) {
+    up->alarm = 0;
+    return old;
+}
+@
+\l remove it from alarms?
+
+<<[[procalarm()]] sanitize when>>=
+if(when == 0)       /* ticks have wrapped to 0? */
+    when = 1;   /* distinguish a wrapped alarm from no alarm */
+@
+%ocaml: ugly, use option for Proc.alarm so not the issue
+
+\subsection{[[alarmkproc()]]}
+
+<<global alarmr>>=
+static Rendez alarmr;
+@ 
+
+% Sometimes alarm of proc in alarms list became inactive
+% (pexit, sysalarm(0) reset). So need take care.
+%alt? remove it from list eagerly? 
+
+% sched? -> <> (as ? <- kproc <- init0 <- 
+<<kernel process alarmkproc>>=
+// Kernel Process for alarm management
+void
+alarmkproc(void*)
+{
+    Proc *rp;
+    ulong now;
+
+    for(;;){
+        now = CPUS(0)->ticks;
+
+        qlock(&alarms);
+        /*
+         * the odd test of now vs. rp->alarm is to cope with
+         * now wrapping around.
+         */
+        while((rp = alarms.head) && (long)(now - rp->alarm) >= 0){
+            if(rp->alarm != 0L){
+                if(canqlock(&rp->debug)){
+                    if(!waserror()){
+                        postnote(rp, 0, "alarm", NUser);
+                        poperror();
+                    }
+                    qunlock(&rp->debug);
+                    rp->alarm = 0L;
+                }else
+                    break;
+            }
+            alarms.head = rp->palarm;
+        }
+        qunlock(&alarms);
+
+        sleep(&alarmr, returnfalse, 0);
+    }
+}
+@ 
+\l why not use timer_set like when create timer for sleeping?
+\l  why let hz_clock to do that? why not timerintr?
+\l rp -> p
+
+\subsection{[[checkalarms()]]}
+
+<<[[hzclock()]] check the alarms>>=
+checkalarms();
+@
+% Why not inline code of alarmkproc here? 
+% Why go through intermediate kernel process? Because context
+% here is interrupt so need to return fast?
+
+<<function checkalarms>>=
+/*
+ *  called every clock tick
+ */
+void
+checkalarms(void)
+{
+    Proc *p;
+    ulong now;
+
+    p = alarms.head;
+    now = CPUS(0)->ticks;
+
+    if(p && (long)(now - p->alarm) >= 0)
+        wakeup(&alarmr);
+}
+@ 
+\l no lock? no big deal if wrong because alarmkproc will do the right thing
+
+
+\section{Time of day}
+\t separate from Time? Less important for understand in first chapters
+
+% see big comment at beginning of tod.c, in Kernel_extra.nw
+
+%https://blog.packagecloud.io/eng/2017/03/08/system-calls-are-much-slower-on-ec2/
+
+<<struct TOD>>=
+struct TOD {
+    bool init;       /* true if initialized */
+
+    ulong   cnt;
+
+    uvlong  multiplier; /* ns = off + (multiplier*ticks)>>31 */
+    uvlong  divider;    /* ticks = (divider*(ns-off))>>31 */
+    uvlong  umultiplier;/* Âµs = (Âµmultiplier*ticks)>>31 */
+    uvlong  udivider;   /* ticks = (Âµdivider*Âµs)>>31 */
+
+    vlong   hz;     /* frequency of fast clock */
+    vlong   last;       /* last reading of fast clock */
+
+    vlong   off;        /* offset from epoch to last */
+    vlong   lasttime;   /* last return value from todget */
+    vlong   delta;  /* add 'delta' each slow clock tick from sstart to send */
+
+    ulong   sstart;     /* ... */
+    ulong   send;       /* ... */
+
+    // Extra
+    Lock;
+};
+@ 
+
+
+<<global tod>>=
+struct TOD tod;
+@ 
+
+
+<<devcons.c Exxx errors>>=
+char *Ebadtimectl = "bad time control";
+@
+
+<<constant VLNUMSIZE>>=
+VLNUMSIZE=  22,
+@
+
+
+
+<<function todinit>>=
+void
+todinit(void)
+{
+    if(tod.init)
+        return;
+    ilock(&tod);
+    tod.init = true;           /* prevent reentry via arch_fastticks */
+    tod.last = arch_fastticks((uvlong *)&tod.hz);
+    iunlock(&tod);
+    todsetfreq(tod.hz);
+    addclock0link(todfix, 100);
+}
+@ 
+\l should have two functions instead of doing 2 things at once with
+\l  this arch_fastticks here
+
+<<function todsetfreq>>=
+/*
+ *  calculate multiplier
+ */
+void
+todsetfreq(vlong f)
+{
+    if (f <= 0)
+        panic("todsetfreq: freq %lld <= 0", f);
+    ilock(&tod);
+    tod.hz = f;
+
+    /* calculate multiplier for time conversion */
+    tod.multiplier  = mk64fract(TODFREQ, f);
+    tod.divider     = mk64fract(f, TODFREQ) + 1;
+    tod.umultiplier = mk64fract(MicroFREQ, f);
+    tod.udivider    = mk64fract(f, MicroFREQ) + 1;
+    iunlock(&tod);
+}
+@ 
+
+
+<<function todset>>=
+/*
+ *  Set the time of day struct
+ */
+void
+todset(vlong t, vlong delta, int n)
+{
+    if(!tod.init)
+        todinit();
+
+    ilock(&tod);
+    if(t >= 0){
+        tod.off = t;
+        tod.last = arch_fastticks(nil);
+        tod.lasttime = 0;
+        tod.delta = 0;
+        tod.sstart = tod.send;
+    } else {
+        if(n <= 0)
+            n = 1;
+        n *= Arch_HZ;
+        if(delta < 0 && n > -delta)
+            n = -delta;
+        if(delta > 0 && n > delta)
+            n = delta;
+        if (n == 0) {
+            iprint("todset: n == 0, delta == %lld\n", delta);
+            delta = 0;
+        } else
+            delta /= n;
+        tod.sstart = CPUS(0)->ticks;
+        tod.send = tod.sstart + n;
+        tod.delta = delta;
+    }
+    iunlock(&tod);
+}
+@ 
+
+% sysnsec | ?? -> <>
+<<function todget>>=
+/*
+ *  get time of day
+ */
+vlong
+todget(vlong *ticksp)
+{
+    uvlong x;
+    vlong ticks, diff;
+    ulong t;
+
+    if(!tod.init)
+        todinit();
+
+    /*
+     * we don't want time to pass twixt the measuring of arch_fastticks
+     * and grabbing tod.last.  Also none of the vlongs are atomic so
+     * we have to look at them inside the lock.
+     */
+    ilock(&tod);
+    tod.cnt++;
+    ticks = arch_fastticks(nil);
+
+    /* add in correction */
+    if(tod.sstart != tod.send){
+        t = CPUS(0)->ticks;
+        if(t >= tod.send)
+            t = tod.send;
+        tod.off = tod.off + tod.delta*(t - tod.sstart);
+        tod.sstart = t;
+    }
+
+    /* convert to epoch */
+    diff = ticks - tod.last;
+    if(diff < 0)
+        diff = 0;
+    arch_mul64fract(&x, diff, tod.multiplier);
+    x += tod.off;
+
+    /* time can't go backwards */
+    if(x < tod.lasttime)
+        x = tod.lasttime;
+    else
+        tod.lasttime = x;
+
+    iunlock(&tod);
+
+    if(ticksp != nil)
+        *ticksp = ticks;
+
+    return x;
+}
+@ 
+
+
+<<function todfix>>=
+/*
+ *  called regularly to avoid calculation overflows
+ */
+static void
+todfix(void)
+{
+    vlong ticks, diff;
+    uvlong x;
+
+    ticks = arch_fastticks(nil);
+
+    diff = ticks - tod.last;
+    if(diff > tod.hz){
+        ilock(&tod);
+
+        /* convert to epoch */
+        arch_mul64fract(&x, diff, tod.multiplier);
+if(x > 30000000000ULL) iprint("todfix %llud\n", x);
+        x += tod.off;
+
+        /* protect against overflows */
+        tod.last = ticks;
+        tod.off = x;
+
+        iunlock(&tod);
+    }
+}
+@ 
+
+
+<<function seconds>>=
+long
+seconds(void)
+{
+    return (vlong)todget(nil) / TODFREQ;
+}
+@ 
+
+
+<<[[arch_us()]] if non-standard systimer frequency>>=
+if(SystimerFreq != 1*Mhz)
+    return fastticks2us(arch_fastticks(nil));
+@
+
+<<function fastticks2us>>=
+uvlong
+fastticks2us(uvlong ticks)
+{
+    uvlong res;
+
+    if(!tod.init)
+        todinit();
+    arch_mul64fract(&res, ticks, tod.umultiplier);
+    return res;
+}
+@ 
+
+
+<<function ns2fastticks>>=
+/*
+ *  convert nanoseconds to fast ticks
+ */
+uvlong
+ns2fastticks(uvlong ns)
+{
+    uvlong res;
+
+    if(!tod.init)
+        todinit();
+    arch_mul64fract(&res, ns, tod.divider);
+    return res;
+}
+@ 
+
+<<function mk64fract>>=
+/*
+ * Make a 64 bit fixed point number that has a decimal point
+ * to the left of the low order 32 bits.  This is used with
+ * arch_mul64fract for converting twixt nanoseconds and arch_fastticks.
+ *
+ *  multiplier = (to<<32)/from
+ */
+uvlong
+mk64fract(uvlong to, uvlong from)
+{
+    return (to<<32) / from;
+}
+@ 
+
+
+
+
+
+
+
+
+
+\section{[[sysnsec()]]}
+
+%long
+%sysnsec(ulong *arg)
+%{
+%	validaddr(arg[0], sizeof(vlong), 1);
+%	validalign(arg[0], sizeof(vlong));
+%
+%	*(vlong*)arg[0] = todget(nil);
+%	return 0;
+%}
+
+\section{[[/dev/time]]}
+% for bin/date,
+% but can also set the time if you write into it
+
+<<[[consread()]] cases>>=
+case Qtime:
+    return readtime((ulong)offset, buf, n);
+@
+
+<<global fasthz>>=
+vlong   fasthz;
+@ 
+
+<<[[conswrite()]] cases>>=
+case Qtime:
+    if(!iseve())
+        error(Eperm);
+    return writetime(a, n);
+@
+<<function readtime>>=
+/*
+ *  like the old #c/time but with added info.  Return
+ *
+ *  secs    nanosecs    fastticks   fasthz
+ */
+static int
+readtime(ulong off, char *buf, int n)
+{
+    vlong   nsec, ticks;
+    long sec;
+    char str[7*NUMSIZE];
+
+    nsec = todget(&ticks);
+    if(fasthz == 0LL)
+        arch_fastticks((uvlong*)&fasthz);
+    sec = nsec/1000000000ULL;
+    snprint(str, sizeof(str), "%*lud %*llud %*llud %*llud ",
+        NUMSIZE-1, sec,
+        VLNUMSIZE-1, nsec,
+        VLNUMSIZE-1, ticks,
+        VLNUMSIZE-1, fasthz);
+    return readstr(off, buf, n, str);
+}
+@
+
+<<function writetime>>=
+/*
+ *  set the time in seconds
+ */
+static int
+writetime(char *buf, int n)
+{
+    char b[13];
+    long i;
+    vlong now;
+
+    if(n >= sizeof(b))
+        error(Ebadtimectl);
+    strncpy(b, buf, n);
+    b[n] = 0;
+    i = strtol(b, 0, 0);
+    if(i <= 0)
+        error(Ebadtimectl);
+    now = i*1000000000LL;
+    todset(now, 0, 0);
+    return n;
+}
+@
+
+\section{[[/dev/bintime]]}
+
+<<[[consread()]] cases>>=
+case Qbintime:
+    return readbintime(buf, n);
+@
+
+<<[[conswrite()]] cases>>=
+case Qbintime:
+    if(!iseve())
+        error(Eperm);
+    return writebintime(a, n);
+@
+
+<<function readbintime>>=
+/*
+ *  read binary time info.  all numbers are little endian.
+ *  ticks and nsec are syncronized.
+ */
+static int
+readbintime(char *buf, int n)
+{
+    int i;
+    vlong nsec, ticks;
+    byte *b = (byte*)buf;
+
+    i = 0;
+    if(fasthz == 0LL)
+        arch_fastticks((uvlong*)&fasthz);
+    nsec = todget(&ticks);
+    if(n >= 3*sizeof(uvlong)){
+        vlong2le(b+2*sizeof(uvlong), fasthz);
+        i += sizeof(uvlong);
+    }
+    if(n >= 2*sizeof(uvlong)){
+        vlong2le(b+sizeof(uvlong), ticks);
+        i += sizeof(uvlong);
+    }
+    if(n >= 8){
+        vlong2le(b, nsec);
+        i += sizeof(vlong);
+    }
+    return i;
+}
+@
+
+
+<<function writebintime>>=
+/*
+ *  set any of the following
+ *  - time in nsec
+ *  - nsec trim applied over some seconds
+ *  - clock frequency
+ */
+static int
+writebintime(char *buf, int n)
+{
+    byte *p;
+    vlong delta;
+    long period;
+
+    n--;
+    p = (byte*)buf + 1;
+    switch(*buf){
+    case 'n':
+        if(n < sizeof(vlong))
+            error(Ebadtimectl);
+        le2vlong(&delta, p);
+        todset(delta, 0, 0);
+        break;
+    case 'd':
+        if(n < sizeof(vlong)+sizeof(long))
+            error(Ebadtimectl);
+        p = le2vlong(&delta, p);
+        le2long(&period, p);
+        todset(-1, delta, period);
+        break;
+    case 'f':
+        if(n < sizeof(uvlong))
+            error(Ebadtimectl);
+        le2vlong(&fasthz, p);
+        if(fasthz <= 0)
+            error(Ebadtimectl);
+        todsetfreq(fasthz);
+        break;
+    }
+    return n;
+}
+@
+
+<<global uvorder>>=
+static uvlong uvorder = 0x0001020304050607ULL;
+@
+
+
+<<function le2vlong>>=
+static byte*
+le2vlong(vlong *to, byte *f)
+{
+    byte *t, *o;
+    int i;
+
+    t = (byte*)to;
+    o = (byte*)&uvorder;
+    for(i = 0; i < sizeof(vlong); i++)
+        t[o[i]] = f[i];
+    return f+sizeof(vlong);
+}
+@
+
+
+<<function vlong2le>>=
+static byte*
+vlong2le(byte *t, vlong from)
+{
+    byte *f, *o;
+    int i;
+
+    f = (byte*)&from;
+    o = (byte*)&uvorder;
+    for(i = 0; i < sizeof(vlong); i++)
+        t[i] = f[o[i]];
+    return t+sizeof(vlong);
+}
+@
+
+
+<<global order>>=
+static long order = 0x00010203;
+@
+
+
+<<function le2long>>=
+static byte*
+le2long(long *to, byte *f)
+{
+    byte *t, *o;
+    int i;
+
+    t = (byte*)to;
+    o = (byte*)&order;
+    for(i = 0; i < sizeof(long); i++)
+        t[o[i]] = f[i];
+    return f+sizeof(long);
+}
+@
+
+
+%\section{Real time clock, [[/dev/rtc]] (arm)}
+% RTC
+
+
+
+\section{Watchdog}
+
+% used in raspberry PI
+% useful automatic reboot when something get completely stuck?
 
 
 
@@ -12919,14 +14890,15 @@ main(void)
     setclkrate(ClkArm, 0);
 
     arch__trapinit();
-    clockinit(); // PB QEMU
+    clockinit(); // enable timer interrupts
 
     //TODO? kbdqinit(); // setup kbdq
     lineqinit(); // setup lineq
-    timersinit();
+
+    timersinit(); // set initial timer for timer interrupt
     swcursor_init();
 
-    arch_cpuidprint(); // PB QEMU
+    arch_cpuidprint();
     archreset();
 
     procinit();
@@ -12965,7 +14937,9 @@ extern  char  edata[];
 extern  char  end[];
 @ 
 
-\subsection{[[cpu]] initialization (ARM)}
+\subsection{[[cpu]] initialization}
+% not portable code, because (arm), but in practice most archi have same code
+% and manipulate only port data-structure
 
 <<function arch__cpu0init(arm)>>=
 void
@@ -12977,7 +14951,7 @@ arch__cpu0init(void)
     cpus[cpu->cpuno] = cpu;
 
     arch__cpuinit();
-    active.exiting = 0;
+    active.exiting = false;
 
     up = nil;
 }
@@ -13017,6 +14991,7 @@ machon(uint xcpu)
     unlock(&active);
 }
 @
+%smp: mv later?
 
 
 <<function arch_cpuidprint(raspberry pi1)(arm)>>=
@@ -13311,6 +15286,9 @@ TEXT setr13(SB), 1, $-4
 
 % 9 use system time compare register number 3 (tn->c3).
 
+% This just enable the timer interrupts.
+% You still need to add a timer (timersinit and arch_timerset).
+
 <<function clockinit(arm)>>=
 void
 clockinit(void)
@@ -13325,11 +15303,11 @@ clockinit(void)
     tstart = tn->clo;
     do{
         t0 = arch_lcycles();
-    }while(tn->clo == tstart); // PB QEMU
+    }while(tn->clo == tstart);
     tend = tstart + 10000;
     do{
         t1 = arch_lcycles();
-    }while(tn->clo != tend); // PB QEMU
+    }while(tn->clo != tend);
     t1 -= t0;
 
     cpu->cpuhz = 100 * t1;
@@ -13339,15 +15317,56 @@ clockinit(void)
 
     if(cpu->cpuno == 0){
         tn->c3 = tn->clo - 1;
+
         tm = (Armtimer*)ARMTIMER;
         tm->load = 0;
         tm->ctl = TmrPrescale1|CntEnable|CntWidth32;
+
         arch_intrenable(IRQtimer3, clockintr, nil, 0, "clock");
     }
     <<[[clockinit()]] if not cpu0>>
 }
 @
+%qemu: SYSTIMER and ARMTIMER are not supported so the while loop above
+% will loop forever
+
 % so will generate at Arch_HZ ?
+\l aspectize ARMTIMER? important?
+
+\subsection{Timer initialization}
+
+% note that portable code.
+
+<<global timersinited>>=
+static bool timersinited;
+@
+
+<<function timersinit>>=
+void
+timersinit(void)
+{
+    Timer *t;
+
+    timersinited = true;
+    todinit();
+
+    t = malloc(sizeof(Timer));
+    if(t == nil)
+        error(Enomem);
+    t->tmode = Tperiodic;
+    t->tt = nil;
+    t->tns = 1000000000 / Arch_HZ;
+    /*
+     * T->tf == nil means the HZ clock for this processor.
+     */
+    t->tf = nil;
+    timeradd(t);
+}
+@ 
+
+%    t->tns = 1000000000 / Arch_HZ;
+% 1million ns = 1 second, / Arch_HZ = time until next tick in nanoseconds
+
 
 \subsection{Virtual memory initialisation (ARM)}
 % part 2
@@ -13376,6 +15395,8 @@ mmuinit1(void *a)
 \subsection{Memory initialisation}
 
 %setup kernel memory xlists and also palloc.mem which is all about user memory
+
+\subsubsection{[[xinit()]]}
 
 <<function xinit>>=
 void
@@ -13429,6 +15450,7 @@ xinit(void)
 }
 @
 
+\subsubsection{[[procinit()]]}
 
 <<function procinit>>=
 void
@@ -13457,6 +15479,7 @@ if(procalloc.free == nil){
 }
 @
 
+\subsubsection{[[pageinit()]]}
 
 <<function pageinit>>=
 void
@@ -13523,6 +15546,8 @@ if(palloc.pages == nil)
     panic("pageinit");
 @
 
+\subsubsection{[[swapinit()]]}
+
 <<function swapinit>>=
 void
 swapinit(void)
@@ -13546,10 +15571,12 @@ if(swapalloc.swmap == nil || iolist == nil)
     panic("swapinit: not enough memory");
 @
 
+
+\subsubsection{[[imageinit()]]}
+
 <<constant NFREECHAN>>=
 #define NFREECHAN 64
 @
-
 
 <<function imageinit>>=
 void
@@ -13584,6 +15611,7 @@ chandevreset(void)
     int i;
 
     todinit();  /* avoid later reentry causing infinite recursion */
+
     for(i=0; devtab[i] != nil; i++) {
         print("reset %d, %s\n", i, devtab[i]->name);
         devtab[i]->reset();
@@ -13660,7 +15688,7 @@ getfirmware(void)
 % user code part of first process: initcode, which will then exec boot/boot!
 
 <<global sp(arm)>>=
-static uintptr sp;      /* XXX - must go - user stack of init proc */
+static user_addr sp;      /* XXX - must go - user stack of init proc */
 @
 
 <<macro STACKALIGN(arm)>>=
@@ -13765,7 +15793,7 @@ init0(void)
     up->nerrlab = 0;
 
     <<[[init0()]] coherence(arm)>>
-    arch_spllo();
+    arch_spllo(); // Allow interrupts!!!
 
     /*
      * These are o.k. because rootinit is null.
@@ -13804,6 +15832,10 @@ init0(void)
     assert(0);          /* shouldn't have returned */
 }
 @
+% Why alarmkproc here? why not earlier in main()? because want
+%  pid1 to be boot process? and kproc is using up->slash, up->dot
+%  so it needs a process to fork a few things from!
+\l  meh, not sure kproc use slash or dot anyway
 
 % sp !! 
 % How know will RET to start of initcode? have space for a.out header?
@@ -17814,7 +19846,7 @@ if(c->umc != nil){
 
 <<function unionread>>=
 long
-unionread(Chan *c, virt_addr3 va, long n)
+unionread(Chan *c, virt_vp va, long n)
 {
     int i;
     long nr;
@@ -19113,11 +21145,11 @@ kbdputcclock(void)
 % actually echo will echo back on screen and add in kbdq !!
 
 <<[[consinit()]] initializing things>>=
-    /*
-     * at 115200 baud, the 1024 char buffer takes 56 ms to process,
-     * processing it every 22 ms should be fine
-     */
-    addclock0link(kbdputcclock, 22);
+/*
+ * at 115200 baud, the 1024 char buffer takes 56 ms to process,
+ * processing it every 22 ms should be fine
+ */
+addclock0link(kbdputcclock, 22);
 @
 % todo: understand this comment ...
 
@@ -22636,1275 +24668,6 @@ QTEXCL = 0x20,    /* type bit for exclusive use files */
 
 %\part{Extra}
 
-\chapter{Time}
-
-<<[[systab]] time syscalls>>=
-[SLEEP]     syssleep,
-[ALARM]     sysalarm,
-@
-
-
-% what about delay() and microdelay()? but seems used only in panic path
-% so maybe not that interesting
-
-\section{Overview (arm)}
-
-% we have one machine timer, but we want many processes to have
-% different alarms.
-
-% different capabilities? timer, clock, rtc, ??
-
-% See comment in clock.c
-%/*
-% * bcm283[56] timers
-% *  System timers run at 1MHz (timers 1 and 2 are used by GPU)
-% *  ARM timer usually runs at 250MHz (may be slower in low power modes)
-% *  Cycle counter runs at 700MHz (unless overclocked)
-% *    All are free-running up-counters
-% *  Cortex-a7 has local generic timers per cpu (which we run at 1MHz)
-% *
-% * Use system timer 3 (64 bits) for hzclock interrupts and fastticks
-% *   For smp on bcm2836, use local generic timer for interrupts on cpu1-3
-% * Use ARM timer (32 bits) for perfticks
-% * Use ARM timer to force immediate interrupt
-% * Use cycle counter for cycles()
-% */
-
-
-\section{Time units}
-
-<<type Txxx>>=
-typedef vlong   Tval; // ticks
-typedef vlong   Tnano; // nanoseconds
-typedef vlong   Tmicro; // microseconds
-typedef int     Tms; // milliseconds
-typedef vlong   Tsec; // seconds
-@
-%pad: Tval was there, but I added the other one I think
-
-%linux: ticks are called jiffies?
-
-<<function tk2ms>>=
-/*
- *  This tk2ms avoids overflows that the macro version is prone to.
- *  It is a LOT slower so shouldn't be used if you're just converting
- *  a delta.
- */
-ulong
-tk2ms(ulong ticks)
-{
-    uvlong t, hz;
-
-    t = ticks;
-    hz = Arch_HZ;
-    t *= 1000L;
-    t = t/hz;
-    ticks = t;
-    return ticks;
-}
-@ 
-
-
-<<function ms2tk>>=
-ulong
-ms2tk(ulong ms)
-{
-    /* avoid overflows at the cost of precision */
-    if(ms >= 1000000000 / Arch_HZ)
-        return (ms / 1000) * Arch_HZ;
-    return (ms * Arch_HZ + 500) / 1000;
-}
-@ 
-
-
-<<function arch_us(arm)>>=
-ulong
-arch_us(void)
-{
-    <<[[arch_us()]] if non-standard systimer frequency>>
-    return arch_fastticks(nil);
-}
-@
-% if 1 Mhz so 1000000 per second, so once every microsecond
-
-<<[[Cpu]] [[Arch]] other fields(arm)>>=
-uvlong  fastclock;      /* last sampled value */
-@
-
-<<constant SystimerFreq(arm)>>=
-SystimerFreq    = 1*Mhz,
-@
-
-\t change interface arch_fasttics, to not take anything because most calls
-\t  pass nil
-\t just add another function system_timer_frequency()
-<<function clock_arch_fastticks(arm)>>=
-uvlong
-clock_arch_fastticks(uvlong *hz)
-{
-    Systimers *tn;
-    ulong lo, hi;
-    uvlong now;
-    int s;
-
-    if(hz)
-        *hz = SystimerFreq;
-    tn = (Systimers*)SYSTIMERS;
-    s = arch_splhi();
-    do{
-        hi = tn->chi;
-        lo = tn->clo;
-    }while(tn->chi != hi);
-    now = (uvlong)hi<<32 | lo;
-    cpu->fastclock = now;
-    arch_splx(s);
-    return cpu->fastclock;
-}
-@
-% >> >>
-% see http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
-% for why do while loop over chi. It's because it can have changed.
-
-<<[[arch_us()]] if non-standard systimer frequency>>=
-if(SystimerFreq != 1*Mhz)
-    return fastticks2us(arch_fastticks(nil));
-@
-
-\section{Timers}
-
-% capacity of machine is very low, just timer next point
-%  but have many processes, many timer needs, so need map
-%  all of that on very limited hardware power
-
-
-
-\subsection{[[arch_timerset()]] (arm)}
-
-% Saw clockinterrupt before and SYSTIMERS
-
-<<function arch_timerset(arm)>>=
-void
-arch_timerset(Tval next)
-{
-    Systimers *tn;
-    uvlong now;
-    long period;
-
-    now = arch_fastticks(nil);
-    period = next - now;
-    if(period < MinPeriod)
-        period = MinPeriod;
-    else if(period > MaxPeriod)
-        period = MaxPeriod;
-    <<[[arch_timerset()]] if not cpu0>>
-    else{
-        tn = (Systimers*)SYSTIMERS;
-        tn->c3 = (ulong)(now + period);
-    }
-}
-@
-
-<<constant MaxPeriod(arm)>>=
-MaxPeriod   = SystimerFreq / Arch_HZ,
-@
-<<constant MinPeriod(arm)>>=
-MinPeriod   = SystimerFreq / (100*Arch_HZ),
-@
-
-
-<<function armtimerset(arm)>>=
-void
-armtimerset(int n)
-{
-    Armtimer *tm;
-
-    tm = (Armtimer*)ARMTIMER;
-    if(n > 0){
-        tm->ctl |= TmrEnable|TmrIntEnable;
-        tm->load = n;
-    }else{
-        tm->load = 0;
-        tm->ctl &= ~(TmrEnable|TmrIntEnable);
-        tm->irq = 1;
-    }
-}
-@
-
-<<function clock_arch_microdelay(arm)>>=
-void
-clock_arch_microdelay(int n)
-{
-    Systimers *tn;
-    u32int now, diff;
-
-    diff = n + 1;
-    tn = (Systimers*)SYSTIMERS;
-    now = tn->clo;
-    while(tn->clo - now < diff) // PB QEMU
-        ;
-}
-@
-% what about tn->chi? can overflow
-
-<<function clock_arch_delay(arm)>>=
-void
-clock_arch_delay(int n)
-{
-    while(--n >= 0)
-        arch_microdelay(1000);
-}
-@
-
-\subsection{[[Timer]] and [[Timers]]}
-
-<<struct Timer>>=
-struct Timer
-{
-    /* Public interface */
-    // enum<Timermode>
-    int tmode;    /* See above */
-    Tnano tns;    /* meaning defined by mode */ //nanosecond
-    void  (*tf)(Ureg*, Timer*);
-    void  *ta;
-  
-    /* Internal */
-    Lock;
-    Tval  tticks;   /* tns converted to ticks */
-    Tval  twhen;    /* ns represented in arch_fastticks */
-
-    <<[[Timer]] extra fields>>
-    };
-@ 
-
-<<enum timermode>>=
-/*
- * fasttick timer interrupts
- */
-enum Timermode 
-{
-    Trelative,  /* timer programmed in ns from now */
-    Tperiodic,  /* periodic timer, period in ns */
-};
-@ 
-
-<<struct Timers>>=
-struct Timers
-{
-    // list<Timer> (next = Timer.tnext)
-    Timer *head;
-    // extra
-    Lock;
-};
-@ 
-
-<<[[Timer]] extra fields>>=
-// list<Timer> of Timers.head
-Timer *tnext;
-// ref<list<Timer>> Timers.head
-Timers  *tt;    /* Timers queue this timer runs on */
-@
-
-<<[[pexit()]] at the start, free resources>>=
-if (up->tt)
-    timerdel(up);
-@
-%old: used to have an order and be at the start of pexit but not sure it matters
-
-
-
-<<function tadd>>=
-static Tval
-tadd(Timers *tt, Timer *nt)
-{
-    Timer *t, **last;
-
-    /* Called with tt locked */
-    assert(nt->tt == nil);
-    switch(nt->tmode){
-    case Trelative:
-        if(nt->tns <= 0)
-            nt->tns = 1;
-        nt->twhen = arch_fastticks(nil) + ns2fastticks(nt->tns);
-        break;
-    case Tperiodic:
-        assert(nt->tns >= 100000);  /* At least 100 Âµs period */
-        if(nt->twhen == 0){
-            /* look for another timer at same frequency for combining */
-            for(t = tt->head; t; t = t->tnext){
-                if(t->tmode == Tperiodic && t->tns == nt->tns)
-                    break;
-            }
-            if (t)
-                nt->twhen = t->twhen;
-            else
-                nt->twhen = arch_fastticks(nil);
-        }
-        nt->twhen += ns2fastticks(nt->tns);
-        break;
-    default:
-        panic("timer: impossible");
-        break;
-    }
-
-    for(last = &tt->head; t = *last; last = &t->tnext){
-        if(t->twhen > nt->twhen)
-            break;
-    }
-    nt->tnext = *last;
-    *last = nt;
-    nt->tt = tt;
-    if(last == &tt->head)
-        return nt->twhen;
-    return 0;
-}
-@ 
-
-
-<<function tdel>>=
-static Tval
-tdel(Timer *dt)
-{
-    Timer *t, **last;
-    Timers *tt;
-
-    tt = dt->tt;
-    if (tt == nil)
-        return 0; // possible? panic("impossible") would be better no?
-    for(last = &tt->head; t = *last; last = &t->tnext){
-        if(t == dt){
-            assert(dt->tt);
-            dt->tt = nil;
-            *last = t->tnext;
-            break;
-        }
-    }
-    if(last == &tt->head && tt->head)
-        return tt->head->twhen;
-    return 0;
-}
-@ 
-
-\subsection{[[timers]]}
-
-<<global timers>>=
-static Timers timers[MAXCPUS];
-@ 
-
-<<function timeradd>>=
-/* add or modify a timer */
-void
-timeradd(Timer *nt)
-{
-    Timers *tt;
-    Tval when;
-
-    /* Must lock Timer struct before Timers struct */
-    ilock(nt);
-
-    if(tt = nt->tt){
-        ilock(tt);
-        tdel(nt);
-        iunlock(tt);
-    }
-
-    tt = &timers[cpu->cpuno];
-    ilock(tt);
-    when = tadd(tt, nt);
-    if(when)
-        arch_timerset(when);
-    iunlock(tt);
-    iunlock(nt);
-}
-@ 
-
-<<function timerdel>>=
-void
-timerdel(Timer *dt)
-{
-    Timers *tt;
-    Tval when;
-
-    ilock(dt);
-    if(tt = dt->tt){
-        ilock(tt);
-        when = tdel(dt);
-        if(when && tt == &timers[cpu->cpuno])
-            arch_timerset(tt->head->twhen);
-        iunlock(tt);
-    }
-    iunlock(dt);
-}
-@ 
-
-
-\subsection{Initialisation}
-
-<<global timersinited>>=
-static bool timersinited;
-@
-
-<<function timersinit>>=
-void
-timersinit(void)
-{
-    Timer *t;
-
-    timersinited = true;
-    todinit();
-
-    t = malloc(sizeof(Timer));
-    if(t == nil)
-        error(Enomem);
-    t->tmode = Tperiodic;
-    t->tt = nil;
-    t->tns = 1000000000 / Arch_HZ;
-    /*
-     * T->tf == nil means the HZ clock for this processor.
-     */
-    t->tf = nil;
-    timeradd(t);
-}
-@ 
-
-\subsection{[[timerintr()]]}
-
-\ifallcode
-<<clock.c statistics>>=
-ulong intrcount[MAXCPUS];
-ulong fcallcount[MAXCPUS];
-@
-\fi
-
-%// called via i8253clock on x86
-<<interrupt callback timerintr>>=
-void
-timerintr(Ureg *u, Tval)
-{
-    Timer *t;
-    Timers *tt;
-    uvlong when, now;
-    int count, callhzclock;
-
-    intrcount[cpu->cpuno]++;
-    callhzclock = 0;
-    tt = &timers[cpu->cpuno];
-    now = arch_fastticks(nil);
-    if(now == 0)
-        panic("timerintr: zero arch_fastticks()");
-    ilock(tt);
-    count = Maxtimerloops;
-    while((t = tt->head) != nil){
-        /*
-         * No need to ilock t here: any manipulation of t
-         * requires tdel(t) and this must be done with a
-         * lock to tt held.  We have tt, so the tdel will
-         * wait until we're done
-         */
-        when = t->twhen;
-        if(when > now){
-            arch_timerset(when);
-            iunlock(tt);
-            if(callhzclock)
-                hzclock(u);
-            return;
-        }
-        tt->head = t->tnext;
-        assert(t->tt == tt);
-        t->tt = nil;
-        fcallcount[cpu->cpuno]++;
-        iunlock(tt);
-        if(t->tf)
-            (*t->tf)(u, t);
-        else
-            callhzclock++;
-        ilock(tt);
-        if(t->tmode == Tperiodic)
-            tadd(tt, t);
-        if (--count <= 0) {
-            count = Maxtimerloops;
-            iprint("timerintr: probably stuck in while loop; "
-                "scrutinise clock.c or use faster cycle "
-                "counter\n");
-        }
-    }
-    iunlock(tt);
-}
-@ 
-
-<<constant Maxtimerloops>>=
-Maxtimerloops = 20*1000,
-@
-
-\subsection{Clock callbacks, [[addclock0link()]]}
-% very important! used a lot.
-
-<<function addclock0link>>=
-Timer*
-addclock0link(void (*f)(void), Tms ms)
-{
-    Timer *nt;
-    Tval when;
-
-    if(!timersinited)
-        panic("addclock0link: timersinit not called yet");
-
-    /* Synchronize to hztimer if ms is 0 */
-    nt = malloc(sizeof(Timer));
-    if(nt == nil)
-        error(Enomem);
-    if(ms == 0)
-        ms = 1000 / Arch_HZ;
-
-    nt->tns = (Tnano)ms*1000000LL;
-    nt->tmode = Tperiodic;
-    nt->tt = nil;
-    nt->tf = (void (*)(Ureg*, Timer*))f;
-
-    // those clock callbacks are all done on the bootstrap processor
-    //dupe: timeradd() but with forced processor number
-    ilock(&timers[0]);
-    when = tadd(&timers[0], nt);
-    if(when)
-        arch_timerset(when);
-    iunlock(&timers[0]);
-    return nt;
-}
-@ 
-\l why clock0? to say low-level?
-
-\section{[[syssleep()]]}
-
-<<[[Proc]] synchronization fields>>=
-Rendez  sleepr;    /* place for syssleep/debug/tsleep */
-@ 
-%old: was sleep, but pb because of my #define sleep proc_sleep
-
-<<syscall sleep>>=
-// int sleep(long millisecs);
-long
-syssleep(ulong* arg)
-{
-    int n;
-    n = arg[0];
-    if(n <= 0) {
-        <<[[syssleep()]] optional [[edfyield()]] for real-time scheduling>>
-        yield();
-        return 0;
-    }
-    if(n < TK2MS(1))
-        n = TK2MS(1);
-    tsleep(&up->sleepr, returnfalse, 0, n);
-    return 0;
-}
-@ 
-
-% time field?
-<<[[Proc]] other fields>>=
-Timer;      /* For tsleep and real-time */
-Rendez  *trend;
-int (*tfn)(void*);
-@
-
-<<function tsleep>>=
-void
-proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
-{
-    if (up->tt){
-        print("tsleep: timer active: mode %d, tf %#p\n", up->tmode, up->tf);
-        timerdel(up);
-    }
-    up->tns = MS2NS(ms);
-    up->tf = twakeup;
-    up->tmode = Trelative;
-    up->ta = up;
-    up->trend = r;
-    up->tfn = fn;
-    timeradd(up);
-
-    if(waserror()){
-        timerdel(up);
-        nexterror();
-    }
-    sleep(r, tfn, arg);
-    if(up->tt)
-        timerdel(up);
-    up->twhen = 0;
-    poperror();
-}
-@ 
-
-<<function tfn>>=
-static int
-tfn(void *arg)
-{
-    return up->trend == nil || up->tfn(arg);
-}
-@ 
-
-<<function twakeup>>=
-void
-twakeup(Ureg*, Timer *t)
-{
-    Proc *p;
-    Rendez *trend;
-
-    p = t->ta;
-    trend = p->trend;
-    p->trend = nil;
-    if(trend)
-        wakeup(trend);
-}
-@ 
-
-
-\section{[[sysalarm()]]}
-%related? tsleep, tsemacquire
-
-<<struct Alarms>>=
-struct Alarms
-{
-    // list<ref<Proc> (next = Proc.palarm)
-    Proc  *head;
-    // extra
-    QLock;
-};
-@ 
-
-<<[[Proc]] extra fields>>=
-// Alarms.head chain?
-Proc  *palarm;  /* Next alarm time */
-@
-
-<<global alarms>>=
-static Alarms   alarms;
-@ 
-
-<<syscall alarm>>=
-// long alarm(unsigned long millisecs);
-long
-sysalarm(ulong* arg)
-{
-    return procalarm(arg[0]);
-}
-@ 
-
-% have a [[Proc]] time field?
-<<[[Proc]] other fields>>=
-ulong alarm;    /* Time of call */
-@
-
-<<[[pexit()]] at the start, free resources>>=
-up->alarm = 0;
-@
-
-<<function procalarm>>=
-ulong
-procalarm(ulong time)
-{
-    Proc **l, *f;
-    ulong when, old;
-
-    if(up->alarm)
-        old = tk2ms(up->alarm - CPUS(0)->ticks);
-    else
-        old = 0;
-    if(time == 0) {
-        up->alarm = 0;
-        return old;
-    }
-    when = ms2tk(time)+CPUS(0)->ticks;
-    if(when == 0)       /* ticks have wrapped to 0? */
-        when = 1;   /* distinguish a wrapped alarm from no alarm */
-
-    qlock(&alarms);
-    l = &alarms.head;
-    for(f = *l; f; f = f->palarm) {
-        if(up == f){
-            *l = f->palarm;
-            break;
-        }
-        l = &f->palarm;
-    }
-
-    up->palarm = 0;
-    if(alarms.head) {
-        l = &alarms.head;
-        for(f = *l; f; f = f->palarm) {
-            if((long)(f->alarm - when) >= 0) {
-                up->palarm = f;
-                *l = up;
-                goto done;
-            }
-            l = &f->palarm;
-        }
-        *l = up;
-    }
-    else
-        alarms.head = up;
-done:
-    up->alarm = when;
-    qunlock(&alarms);
-
-    return old;
-}
-@ 
-
-
-
-
-
-<<global alarmr>>=
-static Rendez alarmr;
-@ 
-
-<<kernel process alarmkproc>>=
-// Kernel Process for alarm management
-void
-alarmkproc(void*)
-{
-    Proc *rp;
-    ulong now;
-
-    for(;;){
-        now = CPUS(0)->ticks;
-        qlock(&alarms);
-        /*
-         * the odd test of now vs. rp->alarm is to cope with
-         * now wrapping around.
-         */
-        while((rp = alarms.head) && (long)(now - rp->alarm) >= 0){
-            if(rp->alarm != 0L){
-                if(canqlock(&rp->debug)){
-                    if(!waserror()){
-                        postnote(rp, 0, "alarm", NUser);
-                        poperror();
-                    }
-                    qunlock(&rp->debug);
-                    rp->alarm = 0L;
-                }else
-                    break;
-            }
-            alarms.head = rp->palarm;
-        }
-        qunlock(&alarms);
-
-        sleep(&alarmr, returnfalse, 0);
-    }
-}
-@ 
-
-
-<<function checkalarms>>=
-/*
- *  called every clock tick
- */
-void
-checkalarms(void)
-{
-    Proc *p;
-    ulong now;
-
-    p = alarms.head;
-    now = CPUS(0)->ticks;
-
-    if(p && (long)(now - p->alarm) >= 0)
-        wakeup(&alarmr);
-}
-@ 
-
-
-\section{Time of day}
-
-% see big comment at beginning of tod.c, in kernel_extra
-
-%https://blog.packagecloud.io/eng/2017/03/08/system-calls-are-much-slower-on-ec2/
-
-<<struct TOD>>=
-struct TOD {
-    int init;       /* true if initialized */
-    ulong   cnt;
-    Lock;
-    uvlong  multiplier; /* ns = off + (multiplier*ticks)>>31 */
-    uvlong  divider;    /* ticks = (divider*(ns-off))>>31 */
-    uvlong  umultiplier;    /* Âµs = (Âµmultiplier*ticks)>>31 */
-    uvlong  udivider;   /* ticks = (Âµdivider*Âµs)>>31 */
-    vlong   hz;     /* frequency of fast clock */
-    vlong   last;       /* last reading of fast clock */
-    vlong   off;        /* offset from epoch to last */
-    vlong   lasttime;   /* last return value from todget */
-    vlong   delta;  /* add 'delta' each slow clock tick from sstart to send */
-    ulong   sstart;     /* ... */
-    ulong   send;       /* ... */
-};
-@ 
-
-
-<<global tod>>=
-struct TOD tod;
-@ 
-
-
-<<devcons.c Exxx errors>>=
-char *Ebadtimectl = "bad time control";
-@
-
-<<constant VLNUMSIZE>>=
-    VLNUMSIZE=  22,
-@
-
-
-
-<<function todinit>>=
-void
-todinit(void)
-{
-    if(tod.init)
-        return;
-    ilock(&tod);
-    tod.init = 1;           /* prevent reentry via arch_fastticks */
-    tod.last = arch_fastticks((uvlong *)&tod.hz);
-    iunlock(&tod);
-    todsetfreq(tod.hz);
-    addclock0link(todfix, 100);
-}
-@ 
-
-
-<<function todsetfreq>>=
-/*
- *  calculate multiplier
- */
-void
-todsetfreq(vlong f)
-{
-    if (f <= 0)
-        panic("todsetfreq: freq %lld <= 0", f);
-    ilock(&tod);
-    tod.hz = f;
-
-    /* calculate multiplier for time conversion */
-    tod.multiplier = mk64fract(TODFREQ, f);
-    tod.divider = mk64fract(f, TODFREQ) + 1;
-    tod.umultiplier = mk64fract(MicroFREQ, f);
-    tod.udivider = mk64fract(f, MicroFREQ) + 1;
-    iunlock(&tod);
-}
-@ 
-
-
-<<function todset>>=
-/*
- *  Set the time of day struct
- */
-void
-todset(vlong t, vlong delta, int n)
-{
-    if(!tod.init)
-        todinit();
-
-    ilock(&tod);
-    if(t >= 0){
-        tod.off = t;
-        tod.last = arch_fastticks(nil);
-        tod.lasttime = 0;
-        tod.delta = 0;
-        tod.sstart = tod.send;
-    } else {
-        if(n <= 0)
-            n = 1;
-        n *= Arch_HZ;
-        if(delta < 0 && n > -delta)
-            n = -delta;
-        if(delta > 0 && n > delta)
-            n = delta;
-        if (n == 0) {
-            iprint("todset: n == 0, delta == %lld\n", delta);
-            delta = 0;
-        } else
-            delta /= n;
-        tod.sstart = CPUS(0)->ticks;
-        tod.send = tod.sstart + n;
-        tod.delta = delta;
-    }
-    iunlock(&tod);
-}
-@ 
-
-
-<<function todget>>=
-/*
- *  get time of day
- */
-vlong
-todget(vlong *ticksp)
-{
-    uvlong x;
-    vlong ticks, diff;
-    ulong t;
-
-    if(!tod.init)
-        todinit();
-
-    /*
-     * we don't want time to pass twixt the measuring of arch_fastticks
-     * and grabbing tod.last.  Also none of the vlongs are atomic so
-     * we have to look at them inside the lock.
-     */
-    ilock(&tod);
-    tod.cnt++;
-    ticks = arch_fastticks(nil);
-
-    /* add in correction */
-    if(tod.sstart != tod.send){
-        t = CPUS(0)->ticks;
-        if(t >= tod.send)
-            t = tod.send;
-        tod.off = tod.off + tod.delta*(t - tod.sstart);
-        tod.sstart = t;
-    }
-
-    /* convert to epoch */
-    diff = ticks - tod.last;
-    if(diff < 0)
-        diff = 0;
-    arch_mul64fract(&x, diff, tod.multiplier);
-    x += tod.off;
-
-    /* time can't go backwards */
-    if(x < tod.lasttime)
-        x = tod.lasttime;
-    else
-        tod.lasttime = x;
-
-    iunlock(&tod);
-
-    if(ticksp != nil)
-        *ticksp = ticks;
-
-    return x;
-}
-@ 
-
-
-<<function todfix>>=
-/*
- *  called regularly to avoid calculation overflows
- */
-static void
-todfix(void)
-{
-    vlong ticks, diff;
-    uvlong x;
-
-    ticks = arch_fastticks(nil);
-
-    diff = ticks - tod.last;
-    if(diff > tod.hz){
-        ilock(&tod);
-
-        /* convert to epoch */
-        arch_mul64fract(&x, diff, tod.multiplier);
-if(x > 30000000000ULL) iprint("todfix %llud\n", x);
-        x += tod.off;
-
-        /* protect against overflows */
-        tod.last = ticks;
-        tod.off = x;
-
-        iunlock(&tod);
-    }
-}
-@ 
-
-
-<<function seconds>>=
-long
-seconds(void)
-{
-    return (vlong)todget(nil) / TODFREQ;
-}
-@ 
-
-
-<<function fastticks2us>>=
-uvlong
-fastticks2us(uvlong ticks)
-{
-    uvlong res;
-
-    if(!tod.init)
-        todinit();
-    arch_mul64fract(&res, ticks, tod.umultiplier);
-    return res;
-}
-@ 
-
-
-<<function ns2fastticks>>=
-/*
- *  convert nanoseconds to fast ticks
- */
-uvlong
-ns2fastticks(uvlong ns)
-{
-    uvlong res;
-
-    if(!tod.init)
-        todinit();
-    arch_mul64fract(&res, ns, tod.divider);
-    return res;
-}
-@ 
-
-<<function mk64fract>>=
-/*
- * Make a 64 bit fixed point number that has a decimal point
- * to the left of the low order 32 bits.  This is used with
- * arch_mul64fract for converting twixt nanoseconds and arch_fastticks.
- *
- *  multiplier = (to<<32)/from
- */
-uvlong
-mk64fract(uvlong to, uvlong from)
-{
-    return (to<<32) / from;
-}
-@ 
-
-
-
-
-
-
-
-<<global fasthz>>=
-vlong   fasthz;
-@ 
-
-
-\section{[[/dev/time]]}
-% for bin/date,
-% but can also set the time if you write into it
-
-<<[[consread()]] cases>>=
-case Qtime:
-    return readtime((ulong)offset, buf, n);
-@
-
-<<[[conswrite()]] cases>>=
-case Qtime:
-    if(!iseve())
-        error(Eperm);
-    return writetime(a, n);
-@
-<<function readtime>>=
-/*
- *  like the old #c/time but with added info.  Return
- *
- *  secs    nanosecs    fastticks   fasthz
- */
-static int
-readtime(ulong off, char *buf, int n)
-{
-    vlong   nsec, ticks;
-    long sec;
-    char str[7*NUMSIZE];
-
-    nsec = todget(&ticks);
-    if(fasthz == 0LL)
-        arch_fastticks((uvlong*)&fasthz);
-    sec = nsec/1000000000ULL;
-    snprint(str, sizeof(str), "%*lud %*llud %*llud %*llud ",
-        NUMSIZE-1, sec,
-        VLNUMSIZE-1, nsec,
-        VLNUMSIZE-1, ticks,
-        VLNUMSIZE-1, fasthz);
-    return readstr(off, buf, n, str);
-}
-@
-
-<<function writetime>>=
-/*
- *  set the time in seconds
- */
-static int
-writetime(char *buf, int n)
-{
-    char b[13];
-    long i;
-    vlong now;
-
-    if(n >= sizeof(b))
-        error(Ebadtimectl);
-    strncpy(b, buf, n);
-    b[n] = 0;
-    i = strtol(b, 0, 0);
-    if(i <= 0)
-        error(Ebadtimectl);
-    now = i*1000000000LL;
-    todset(now, 0, 0);
-    return n;
-}
-@
-
-\section{[[/dev/bintime]]}
-
-<<[[consread()]] cases>>=
-case Qbintime:
-    return readbintime(buf, n);
-@
-
-<<[[conswrite()]] cases>>=
-case Qbintime:
-    if(!iseve())
-        error(Eperm);
-    return writebintime(a, n);
-@
-
-<<function readbintime>>=
-/*
- *  read binary time info.  all numbers are little endian.
- *  ticks and nsec are syncronized.
- */
-static int
-readbintime(char *buf, int n)
-{
-    int i;
-    vlong nsec, ticks;
-    byte *b = (byte*)buf;
-
-    i = 0;
-    if(fasthz == 0LL)
-        arch_fastticks((uvlong*)&fasthz);
-    nsec = todget(&ticks);
-    if(n >= 3*sizeof(uvlong)){
-        vlong2le(b+2*sizeof(uvlong), fasthz);
-        i += sizeof(uvlong);
-    }
-    if(n >= 2*sizeof(uvlong)){
-        vlong2le(b+sizeof(uvlong), ticks);
-        i += sizeof(uvlong);
-    }
-    if(n >= 8){
-        vlong2le(b, nsec);
-        i += sizeof(vlong);
-    }
-    return i;
-}
-@
-
-
-<<function writebintime>>=
-/*
- *  set any of the following
- *  - time in nsec
- *  - nsec trim applied over some seconds
- *  - clock frequency
- */
-static int
-writebintime(char *buf, int n)
-{
-    byte *p;
-    vlong delta;
-    long period;
-
-    n--;
-    p = (byte*)buf + 1;
-    switch(*buf){
-    case 'n':
-        if(n < sizeof(vlong))
-            error(Ebadtimectl);
-        le2vlong(&delta, p);
-        todset(delta, 0, 0);
-        break;
-    case 'd':
-        if(n < sizeof(vlong)+sizeof(long))
-            error(Ebadtimectl);
-        p = le2vlong(&delta, p);
-        le2long(&period, p);
-        todset(-1, delta, period);
-        break;
-    case 'f':
-        if(n < sizeof(uvlong))
-            error(Ebadtimectl);
-        le2vlong(&fasthz, p);
-        if(fasthz <= 0)
-            error(Ebadtimectl);
-        todsetfreq(fasthz);
-        break;
-    }
-    return n;
-}
-@
-
-<<global uvorder>>=
-static uvlong uvorder = 0x0001020304050607ULL;
-@
-
-
-<<function le2vlong>>=
-static byte*
-le2vlong(vlong *to, byte *f)
-{
-    byte *t, *o;
-    int i;
-
-    t = (byte*)to;
-    o = (byte*)&uvorder;
-    for(i = 0; i < sizeof(vlong); i++)
-        t[o[i]] = f[i];
-    return f+sizeof(vlong);
-}
-@
-
-
-<<function vlong2le>>=
-static byte*
-vlong2le(byte *t, vlong from)
-{
-    byte *f, *o;
-    int i;
-
-    f = (byte*)&from;
-    o = (byte*)&uvorder;
-    for(i = 0; i < sizeof(vlong); i++)
-        t[i] = f[o[i]];
-    return t+sizeof(vlong);
-}
-@
-
-
-<<global order>>=
-static long order = 0x00010203;
-@
-
-
-<<function le2long>>=
-static byte*
-le2long(long *to, byte *f)
-{
-    byte *t, *o;
-    int i;
-
-    t = (byte*)to;
-    o = (byte*)&order;
-    for(i = 0; i < sizeof(long); i++)
-        t[o[i]] = f[i];
-    return f+sizeof(long);
-}
-@
-
-
-%\section{Real time clock, [[/dev/rtc]] (arm)}
-% RTC
-
-
-
-\section{Watchdog}
-
-% used in raspberry PI
-% useful automatic reboot when something get completely stuck?
-
 \chapter{IPC}
 
 % of course can use fs to communicate between process :)
@@ -23991,6 +24754,17 @@ p->nnote = up->nnote;
 p->lastnote = up->lastnote;
 p->notify = up->notify;
 @
+
+
+<<[[sleep()]] if notepending>>=
+if(up->notepending) {
+    up->notepending = false;
+    arch_splx(s);
+    <<[[sleep()]] forceclosefgrp>>
+    error(Eintr);
+}
+@
+%also in sleep:    if((*f)(arg) || up->notepending){ ... }
 
 
 
@@ -25213,6 +25987,19 @@ procflushseg(Segment *s)
 % or miss? when reallocated probably the tlb is flush anyway so safe?
 
 
+<<[[hzclock()]] if flushmmu>>=
+if(cpu->flushmmu){
+    if(up)
+        arch_flushmmu();
+    cpu->flushmmu = false;
+}
+@
+% put in virtual memory section?
+<<[[Cpu]] other fields>>=
+bool flushmmu;   /* make current proc flush it's mmu state */
+@
+
+
 
 
 <<syscall segflush>>=
@@ -26169,7 +26956,7 @@ ushort  steal;    /* Page stealer lock */
 
 <<function procctlmemio>>=
 int
-procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
+procctlmemio(Proc *p, ulong offset, int n, virt_vp va, bool read)
 {
     Arch_KMap *k;
     Pagetable *pt;
@@ -26839,12 +27626,18 @@ struct Traceevent {
 
 % could draw automata :)
 
+<<[[ready()]] other locals>>=
+void (*pt)(Proc*, int, vlong);
+@
 <<[[ready()]] hook proctrace>>=
 pt = proctrace;
 if(pt)
     pt(p, SReady, 0);
 @
 
+<<[[runproc()]] other locals>>=
+void (*pt)(Proc*, int, vlong);
+@
 <<[[runproc()]] hook proctrace>>=
 pt = proctrace;
 if(pt)
@@ -26861,6 +27654,9 @@ if(pt)
 @
 
 
+<<[[sleep()]] other locals>>=
+void (*pt)(Proc*, int, vlong);
+@
 <<[[sleep()]] hook proctrace>>=
 pt = proctrace;
 if(pt)
@@ -27160,7 +27956,7 @@ wq->w.time[TUser], wq->w.time[TSys], wq->w.time[TReal],
 % profile[xxx] where xxx corresponds to parts of the program 
 % that has been executed, also in ms
 <<[[Segment]] other fields>>=
-kern_addr2  profile;  /* Tick profile area */ // for TSEG only
+kern_wp  profile;  /* Tick profile area */ // for TSEG only
 @
 % why not put that in Proc instead? it's true it speaks about
 % elements of text segment. Also because then it can be used
@@ -28401,7 +29197,9 @@ int rv;
 /* look for floating point instructions to interpret */
 rv = fpuemu(ureg);
 @
-\t remove fpuemu and rv local
+\t remove fpuemu and rv local? 
+\t seems that there are still some float instructions not handled by 5l -f
+\t  e.g. on ocaml scheduler.c
 
 
 
@@ -29115,8 +29913,7 @@ if(pa)
 <<[[CpSC primary registers]] other cases(arm)>>=
 #define CpTIMER     14          /* Generic timer (cortex-a7) */
 @
-
-% this one works on QEMU! The only one?
+%qemu: this one works on QEMU! The only one.
 
 <<type CpTIMER(arm)>>=
 /*
@@ -29128,6 +29925,14 @@ if(pa)
 #define CpTIMERphysctl  1
 @
 %dead: #define CpTIMERcntfrq   0
+
+% complicated. Took me lots of time to make it work under QEMU.
+% Need use IRQLOCAL0, do not forget call to spllo()! need adjust
+% systemFreq.
+
+% Big timer that goes down. When arrive 0 then IRQ (if IRQ enabled).
+% Can write value in it in which case goes down from there.
+% Also can read value that always increment (64 bits).
 
 \subsection{Performance monitor}
 
@@ -29615,9 +30420,9 @@ cpustart(int xcpu)
 if (cpu->cpuno != 0) {
     /* synchronise with cpu 0 */
     cpu->ticks = cpu0->ticks;
-    cpu->fastclock = cpu0->fastclock;
 }
 @
+%dead:    cpu->fastclock = cpu0->fastclock;
 
 
 \subsubsection{Displaying processor information}
@@ -29629,10 +30434,11 @@ arch_cpuidprint(void)
     char name[64];
 
     cputype2name(name, sizeof name);
-    arch_delay(50);             /* let uart catch up */  // PB QEMU
+    arch_delay(50);             /* let uart catch up */
     print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
 }
 @
+%qemu: pb already on QEMU because arch_delay will loop forever
 
 <<function cputype2name(raspberry pi2)(arm)>>=
 char*
@@ -29780,6 +30586,10 @@ if(((cprdsc(0, CpID, CpIDfeat, 1) >> 16) & 0xF) != 0) {
     cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask);
 }
 @
+% the magic 0x06aaaaab is mentioned page 4 in
+% https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2836/QA7_rev3.4.pdf
+% It generates a divided of 19.2 which maybe related to the fact that
+% the frequency of a crystal is 19.2Mgz
 
 <<[[clockinit()]] if not cpu0>>=
 else
@@ -29805,7 +30615,7 @@ TEXT arch_lcycles(SB), 1, $-4
 %$
 
 
-<<[[arch_timerset()]] if not cpu0>>=
+<<[[arch_timerset()]] if not cpu0(arm)>>=
 if(cpu->cpuno > 0){
     cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
     cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
@@ -30123,6 +30933,7 @@ IRQlocal    = 96,
 IRQcntps    = IRQlocal + 0,
 IRQcntpns   = IRQlocal + 1,
 @
+% both concerns timers? meaning of ps and pns? secure and non-secure?
 
 <<[[Vctl]] other fields(arm)>>=
 int cpu;
@@ -30854,7 +31665,7 @@ arch_validalign(uintptr addr, unsigned align)
 
 \section{Real-time scheduling}
 
-<<constants for real-time priority>>=
+<<[[Priority]] cases for real-time priority>>=
 PriRelease  = Npriq,  /* released edf processes */
 PriEdf    = Npriq+1,  /* active edf processes */
 PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
@@ -30871,6 +31682,18 @@ if(edflock(p)){
 }
 @
 
+<<[[newproc()]] set fields of [[p]]>>=
+p->edf = nil;
+@
+
+<<[[updatecpu()]] return if real-time process>>=
+if(p->edf)
+    return;
+@
+
+<<[[schedinit()]] locals>>=
+Edf *e;
+@
 <<[[schedinit()]] optional real-time [[edfrecord()]]>>=
 if((e = up->edf) && (e->flags & Admitted))
     edfrecord(up);
@@ -30951,9 +31774,11 @@ case CMexpel:
 
 @
 
-<<[[sched()]] optional guard for real-time process>>=
-if(!p->edf)
+<<[[sched()]] if real-time process then do nothing, do not reprioritize>>=
+if(p->edf) {
+}
 @
+%old: was if(!p->edf) but then harder to read at sched() site
 
 <<[[pexit()]] optional [[edfstop()]] for real-time scheduling>>=
 edfstop(up);
@@ -35185,7 +36010,7 @@ ckfaultstuck(uintptr va)
 %//  runlock(&pg->ns);
 %//}
 
-\section{[[/bin/ktrace]] (arm)}
+\section{[[/bin/ktrace]] (ARM)}
 % rename /bin/kstracktrace?
 
 % getcallerpc nice trick
@@ -35624,7 +36449,7 @@ Uart* consuart;
 
 \chapter{Profiling}
 
-\section{[[/sys/sysstat]] (arm)}
+\section{[[/sys/sysstat]] (ARM)}
 
 <<[[Cpu]] stat fields>>=
 Perf  perf;     /* performance counters */
@@ -35650,11 +36475,33 @@ struct Perf
 };
 @ 
 
+
+
+<<[[runproc()]] other locals>>=
+ulong start, now;
+@
+<<[[runproc()]] start>>=
+start = arch_perfticks();
+@
+<<[[runproc()]] after arch_idlehands, before restarting loop>>=
+/* remember how much time we're here */
+now = arch_perfticks();
+cpu->perf.inidle += now-start;
+start = now;
+@
+
+
+
 <<[[Cpu]] stat fields>>=
 int load;
 @
 
-% called by hzclock, so every tick
+<<[[hzclock()]] accounttime>>=
+accounttime();
+@
+
+% called every tick
+% hzclock -> <>
 <<function accounttime>>=
 /*
  *  time accounting called by clock() splhi'd
@@ -35846,6 +36693,11 @@ case Qsysstat:
 
 % put back devkprof.c?
 
+<<[[hzclock()]] if kproftimer>>=
+if(kproftimer != nil)
+    kproftimer(ur->pc);
+@
+
 <<hook kproftimer>>=
 void (*kproftimer)(ulong);
 @ 
@@ -35979,11 +36831,25 @@ static struct Irstats  irstats;
 \subsection{Scheduling}
 
 <<proc.c statistics>>=
+long preempts;
 ulong delayedscheds;    /* statistics */
 long skipscheds;
-long preempts;
-//ulong load;
 @ 
+%dead? //ulong load;
+
+\subsection{Clock}
+
+<<clock.c statistics>>=
+ulong intrcount[MAXCPUS];
+ulong fcallcount[MAXCPUS];
+@
+% who uses that to report?
+
+    <<[[timerintr()]] start, stat>>
+    intrcount[cpu->cpuno]++;
+
+        <<[[timerintr()]] in timers loop, stat>>
+        fcallcount[cpu->cpuno]++;
 
 \chapter{Error Management}
 
