@@ -151,7 +151,7 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
             BPLONG(b+5, src->id);
             BPLONG(b+9, f->cacheimage->id);
             BPLONG(b+13, pt.x);
-            BPLONG(b+17, pt.y + f->ascent);
+            BPLONG(b+17, pt.y + f->ascent); // + ascent!
             BPLONG(b+21, clipr.min.x);
             BPLONG(b+25, clipr.min.y);
             BPLONG(b+29, clipr.max.x);

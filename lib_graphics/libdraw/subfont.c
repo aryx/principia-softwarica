@@ -35,6 +35,7 @@ getdefont(Display *d)
     }
     /*e: [[getdefont()]] adjust p if not word-aligned */
 
+    // header of the image
     ld = atoi(p+0*12);
     r.min.x = atoi(p+1*12);
     r.min.y = atoi(p+2*12);
@@ -56,8 +57,9 @@ getdefont(Display *d)
     }
     /*e: [[getdefont()]] sanity check n */
 
+    // header of the Fontchar
     hdr = p+n;
-    n = atoi(hdr);
+    n = atoi(hdr+0*12);
     p = hdr+3*12;
     fc = malloc(sizeof(Fontchar)*(n+1));
     /*s: [[getdefont()]] sanity check fc */

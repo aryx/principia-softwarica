@@ -28,14 +28,14 @@ enum
 };
 /*e: enum _anon_ (include/event.h)2 */
 
-/*s: struct Mouse */
+/*s: struct Mouse (include/event.h) */
 struct	Mouse
 {
     int		buttons;	/* bit array: LMR=124 */
     Point	xy;
     ulong	msec;
 };
-/*e: struct Mouse */
+/*e: struct Mouse (include/event.h) */
 
 /*s: struct Event */
 struct	Event
@@ -49,14 +49,14 @@ struct	Event
 };
 /*e: struct Event */
 
-/*s: struct Menu */
+/*s: struct Menu (include/event.h) */
 struct Menu
 {
     char	**item;
     char	*(*gen)(int);
     int	lasthit;
 };
-/*e: struct Menu */
+/*e: struct Menu (include/event.h) */
 
 /*
  * Events

@@ -22,8 +22,8 @@ _allocwindow(Image *i, Screen *s, Rectangle r, int ref, rgba val)
     if(i == nil)
         return nil;
     /*e: [[_allocwindow()]] sanity check i */
-    i->screen = s;
 
+    i->screen = s;
     // add_list(i, display->windows)
     i->next = s->display->windows;
     s->display->windows = i;

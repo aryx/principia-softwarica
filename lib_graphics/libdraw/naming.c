@@ -111,7 +111,7 @@ nameimage(Image *i, char *name, bool in)
     a = bufimage(i->display, 1+4+1+1+n);
     /*s: [[nameimage()]] sanity check a */
     if(a == nil)
-        return 0;
+        return ERROR_0;
     /*e: [[nameimage()]] sanity check a */
     a[0] = 'N';
     BPLONG(a+1, i->id);

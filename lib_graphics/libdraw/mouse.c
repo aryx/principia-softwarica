@@ -20,8 +20,10 @@ moveto(Mousectl *m, Point pt)
 errorneg1
 readmouse(Mousectl *mc)
 {
+    /*s: [[readmouse()]] flush image before reading mouse */
     if(mc->image)
         flushimage(mc->image->display, true);
+    /*e: [[readmouse()]] flush image before reading mouse */
     if(recv(mc->c, &mc->Mouse) < 0){
         fprint(2, "readmouse: %r\n");
         return ERROR_NEG1;
@@ -95,12 +97,17 @@ Mousectl*
 initmouse(char *file, Image *i)
 {
     Mousectl *mc;
-    char *t, *sl;
+    /*s: [[initmouse()]] other locals */
+    char *t;
+    char *sl;
+    /*e: [[initmouse()]] other locals */
 
     mc = mallocz(sizeof(Mousectl), true);
 
+    /*s: [[initmouse()]] sanitize file */
     if(file == nil)
         file = "/dev/mouse";
+    /*e: [[initmouse()]] sanitize file */
     mc->mfd = open(file, ORDWR|OCEXEC);
     /*s: [[initmouse()]] sanity check mfd */
     if(mc->mfd < 0 && strcmp(file, "/dev/mouse")==0){

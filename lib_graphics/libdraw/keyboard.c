@@ -62,8 +62,10 @@ initkeyboard(char *file)
         return nil;
     /*e: [[initkeyboard()]] sanity check kc */
 
+    /*s: [[initkeyboard()]] sanitize file */
     if(file == nil)
         file = "/dev/cons";
+    /*e: [[initkeyboard()]] sanitize file */
     kc->file = strdup(file);
     kc->consfd = open(file, ORDWR|OCEXEC);
 

@@ -217,15 +217,17 @@ allocimagemix(Display *d, ulong color1, ulong color3)
     /*e: [[allocimagemix()]] if depth less than 8 */
     else{	/* use a solid color, blended using alpha */
         t = allocimage(d, Rect(0,0,1,1), d->screenimage->chan, true, color1);
+        /*s: [[allocimagemix()]] sanity check t */
         if(t == nil)
             return nil;
-
+        /*e: [[allocimagemix()]] sanity check t */
         b = allocimage(d, Rect(0,0,1,1), d->screenimage->chan, true, color3);
+        /*s: [[allocimagemix()]] sanity check b */
         if(b == nil){
             freeimage(t);
             return nil;
         }
-
+        /*e: [[allocimagemix()]] sanity check b */
         draw(b, b->r, t, qmask, ZP);
         freeimage(t);
         return b;

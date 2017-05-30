@@ -148,7 +148,7 @@ enum ImageChan {
 /*e: function TYPE */
 /*s: enum ImageType */
 enum ImageType {
-    GREY1	= CHAN1(CGrey, 1), // used for masks, black and white
+    GREY1	= CHAN1(CGrey, 1), // used for masks, fonts (black and white)
     CMAP8	= CHAN1(CMap, 8), // PC graphics mode by default, 1 byte per pixel
     RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5), // Raspberry mode by default
     RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // flexible
@@ -354,6 +354,7 @@ enum RefreshMethod
     /* refresh methods */
     Refbackup	= 0,
     Refnone		= 1,
+
     Refmesg		= 2 // incomplete apparently
 };
 /*e: enum Refresh */

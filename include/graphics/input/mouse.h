@@ -14,7 +14,7 @@ enum Click {
 };
 /*e: enum Click */
 
-/*s: struct Mouse (include/mouse.h) */
+/*s: struct Mouse */
 struct	Mouse
 {
     Point	xy;
@@ -23,7 +23,7 @@ struct	Mouse
 
     ulong	msec;
 };
-/*e: struct Mouse (include/mouse.h) */
+/*e: struct Mouse */
 
 /*s: struct Mousectl */
 struct Mousectl
@@ -56,14 +56,17 @@ struct Mousectl
 /*e: struct Mousectl */
 
 //TODO: mv in menu.h?
-/*s: struct Menu (include/mouse.h) */
+/*s: struct Menu */
 struct Menu
 {
     char	**item;
+    /*s: [[Menu]] other fields */
     char	*(*gen)(int);
+    /*x: [[Menu]] other fields */
     int	lasthit;
+    /*e: [[Menu]] other fields */
 };
-/*e: struct Menu (include/mouse.h) */
+/*e: struct Menu */
 
 /*
  * Mouse
