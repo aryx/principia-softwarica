@@ -2813,6 +2813,10 @@ void redraw(void)
 @
 \l str[20] for size of rune buffer in Keyboardctl.c 
 \l  USED(argc); USED(argv);
+%ocaml: dont have to use global, can pass them to redraw
+% and can have initdraw return a display
+%ocaml: less nil, better interface with default values (or remove
+% useless genericity of the interface)
 
 Here are a few important things to note about 
 the skeleton of [[hellorio.c]], from top to bottom,
@@ -2971,6 +2975,7 @@ if(mousectl == nil)
 if(keyboardctl == nil)
   exits("can't find keyboard");
 @
+%ocaml: use exn
 
 In the rest of this book, I will usually not comment the 
 error-management code. Such code is often trivial (but necessary).
@@ -3002,6 +3007,8 @@ enum EventType {
 };
 @
 \l explain NALT? classic, like in Assembler.nw
+%ocaml: use ADT and typed channels instead of flat generic enum
+% so less need those .v, .c fields. and intermediate Alt type.
 
 [[hellorio]] needs to deal {\em simultaneously} with the mouse,
 keyboard, and windowing system. Indeed, the program can not just
@@ -3024,6 +3031,7 @@ This map is stored first in a local variable:
 // map<EventType, Alt>
 Alt alts[NALT+1];
 @
+%ocaml: specialized ADT directly
 
 %dup? 2/thread?
 Each value of this map (each ``alternative'') contains essentially a channel. 
@@ -3055,6 +3063,8 @@ alts[EResize].c = mousectl->resizec;
 alts[EResize].v = nil;
 alts[EResize].op = CHANRCV;
 @
+%ocaml: similar; use Event.wrap and Event.select and no need
+% intermediate Alt .c .v .op untyped, just use ADT
 
 The [[Alt.op]] field contains the type of {\em channel operation},
 Here, [[CHANRCV]] because the program is listening (receiving)
@@ -3185,6 +3195,7 @@ case EKey:
       exits("done");
     break;
 @
+%ocaml: how to use buffered channels with size in OCaml?
 
 For the resize event, the program just needs
 to call [[getwindow()]], which will update the global [[view]],
@@ -4935,6 +4946,7 @@ TODO
 
 %Display	*display; // set by initdraw()
 %display =~ /dev/draw handler
+%ocaml: do not use global, Draw.init returns a display
 
 %Image          *view; 
 %old: was called screen but was confusing because screen was of type Image*, 
@@ -4946,9 +4958,13 @@ TODO
 % was initialized in main() to screen, but now that I renamed in Graphics
 % screen to view, no need anymore this global
 % (this made me change screen to view in Graphics.nw)
+%ocaml: do not use global, Layer.init returns a view
 
 % view = full screen in rio context (unless run recursively).
 % but normally portion of the display for this window.
+
+%ocaml: do not use global for display and view,
+% get Draw.init to return them
 
 <<global viewr>>=
 Rectangle	viewr;
@@ -4969,15 +4985,18 @@ Rectangle	viewr;
 <<global mousectl>>=
 Mousectl	*mousectl;
 @
+%ocaml: need to be a global? no, but then true that need to pass it
+% around a lot
+
 % wrapper over /dev/mouse, channel wrapper
 % actually partially output? with cursor?
-
 
 % structure defined in keyboard.h
 <<global keyboardctl>>=
 Keyboardctl	*keyboardctl;
 @
 % wrapper over /dev/cons (set in raw mode), channel wrapper
+%ocaml: need to be a global? no, and no need to pass it around a lot
 
 
 
@@ -4985,6 +5004,8 @@ Keyboardctl	*keyboardctl;
 // alias for &mousectl->Mouse
 Mouse	*mouse;
 @
+%ocaml: not sure need this, can just dereference
+
 % explain inline struct
 
 
@@ -5015,6 +5036,8 @@ Screen	*desktop;
 <<global background>>=
 Image	*background;
 @
+%ocaml: this one does not need to be a global
+
 % used for desktop. It's actually a Color. in plan9 everything
 % are images, See Graphics.nw, colors, masks, windows, fonts, etc.
 % allocimage in main()
@@ -5024,6 +5047,9 @@ Image	*background;
 <<global red>>=
 Image	*red;
 @
+%ocaml: convenient to have this as a global. Passing around colors
+% is tedious
+
 % when moving around windows, the frame become red!
 %//Image	*lightgrey;
 
@@ -5118,7 +5144,7 @@ struct Window
 int	    id;       // visible through /mnt/wsys/winid
 char    name[32]; // visible through /mnt/wsys/winname
 @
-
+%ocaml: no hardcoded length, flexible string
 
 % counter
 <<global id>>=
@@ -5137,6 +5163,8 @@ Image	*i;
 % will be used by Graphics, e.g., topwindow(w->i) in wtop()
 % this is whole image, including its border, see sweep() and wmk()
 % shared with window process.
+% this is most of the time a layer but it can also be an image when
+% the window is hidden!
 
 <<[[Window]] graphics fields>>=
 /*
@@ -5179,12 +5207,16 @@ Ref;
 % when middle click on a window we want to keep it alive!
 % don't want someone else via /dev/... to delete it yet, otherwise
 % will get segfault if try to access some fields of this window!
+% When the application opens a /dev/ we also increment the counter.
+
+% For rio-in-C can have race? because of some proccreate? yes because
+% fs server is in another process.
 
 <<[[Window]] extra fields>>=
 QLock;
 @
-% need? threads are cooperatif so can have race??
-% have different process though
+\l need? threads are cooperatif so can have race??
+% have different process though, but still when need lock?
 
 
 
@@ -5200,13 +5232,15 @@ Window	**windows;
 % essence of windowing system right here!! manage many windows!!
 \l option above? seems like when delete there is a memmove
 %alt: called scenegraph in wayland
+%ocaml: use Hashtbl? because what when delete a window?
+% we do not reuses its id, so hole in array?
 
 % next free window
 <<global nwindow>>=
 int	nwindow;
 @
 % seems to be actually the size of windows
-
+%ocaml: Hashtbl.length?
 
 
 % each time a window get the focus, it becomes the topmost window
@@ -5236,14 +5270,16 @@ int	 	topped;
 Window	*input;
 @
 % should rename winput I think. or wcurrent (but there is wcurrent())
-% or just current. of focuswin.
+% or just 'current'. or 'focuswin'.
+% or just 'win'! a bit similar to cpu and up in Kernel.nw (but win can be
+%  used for locals? or we shouse use 'w' for locals?)
 % in rio(1) he uses the term "current"
 
 
 % also
 % - menuing, when in the middle of a menu action like 
 %    pointto(), sweep(), drag(), bandsize(), in which case even if the cursor
-%    is on a window, you dont want wsetcursor to change it
+%    is on a window, you dont want wsetcursor (<- cornercursor) to change it
 % - sweeping, when get system menu out, but this seems used
 %    very little
 % - moving (local to mousethread)
@@ -5294,6 +5330,7 @@ uint		q0; // cursor, where entered text go (and selection start)
 uint		q1; // selection end or same value than q0 when no selection
 @
 \l give name ``cursor''?
+%ocaml: use option for q1
 
 % user modify q0, by navigating.
 
@@ -5387,8 +5424,11 @@ struct Filsys
 };
 @
 %dead: int		pid;  was pid of proccreate(filsysproc), but not needed
+%ocaml: use Hashtbl directly for Filsys.fids
 
 % cfd will be published in /srv/rio.user.pid? but not that important
+% cfd will be shared by all the winshell processes that wish to
+% interact with the server!
 
 % [[user]] is needed for security purpose, make sure people making request
 %  to pipe are the same user
@@ -5404,12 +5444,11 @@ Filsys	*filsys;
 <<constant Nhash>>=
 #define Nhash 16
 @
-
 <<[[Fid]] extra fields>>=
 // list<Fid> (head = Filsys.fids[i])
 Fid		*next;
 @
-
+%ocaml: Hashtbl
 
 \subsection{File state, [[Fid]]}
 
@@ -5458,16 +5497,18 @@ Qid		qid;
 <<[[Fid]] extra fields>>=
 bool	busy;
 @
+%ocaml: do not reuse, alloc each time and let Gc handles things. No arena.
 
 % looks more like lookupfid than always newfid
 % ctor
+% -> <>
 <<function newfid>>=
 Fid*
 newfid(Filsys *fs, int fid)
 {
     Fid *f, *ff, **fh;
 
-    ff = nil;
+    ff = nil; // free fid
     fh = &fs->fids[fid&(Nhash-1)];
 
     // lookup_hash(fid, fs->fids)
@@ -5499,7 +5540,7 @@ newfid(Filsys *fs, int fid)
 <<[[Fid]] other fields>>=
 Window	*w;
 @
-% at some point requested file will be associated with corresponding
+% at some point requested file will be associated with corresponding window
 % because fid is given a qid (in attach/walk) which will encode
 % the windows id.
 % So full circle here! get back a Window!
@@ -5516,6 +5557,8 @@ Window	*w;
 // chan<ref<Xfid>> (listener = filsysproc, sender = xfidallocthread)
 Channel	*cxfidalloc;	/* chan(Xfid*) */
 @
+%ocaml: not sure we need an arena of worker, can create thread each time?
+ 
 
 % saw server will receive 9p request on pipe while reading filsys.sfd.
 % But potentially multiple windows, multiple processes
@@ -5704,7 +5747,7 @@ void threadmain(int argc, char *argv[])
 if(filsys == nil)
     fprint(STDERR, "rio: can't create file system server: %r\n");
 @
-
+%ocaml: exn in callee
 
 \section{Graphics initialization}
 
@@ -5733,12 +5776,14 @@ flushimage(display, true);
 @
 \l could call initdraw instead of geninitdraw
 % background is grey image color?
-
+%ocaml: use exn, and use les nil: better default interface
 
 <<[[main()]] sanity check desktop>>=
 if(desktop == nil)
     error("can't allocate desktop");
 @
+%ocaml: exn
+
 % ref to Error managment appendix?
 % also talk about derror argument to geninitdraw?
 
@@ -5754,6 +5799,7 @@ iconinit(void)
 }
 @
 % why iconinit? icon??
+%ocaml: use shorter alloc_color() and Color.mk2()
 
 \section{Mouse initialization}
 
@@ -5767,6 +5813,8 @@ if(mousectl == nil)
     error("can't find mouse");
 mouse = mousectl;
 @
+%ocaml: better interface without nil and use exn
+
 % cast here, access actually anonymous subfield of mousectl.
 % could pass /dev/mouse
 
@@ -5779,6 +5827,8 @@ keyboardctl = initkeyboard(nil);
 if(keyboardctl == nil)
     error("can't find keyboard");
 @
+%ocaml: better interface without nil and use exn
+
 % could pass /dev/mouse
 
 % Note that this creates a process too! ioproc.
@@ -5794,7 +5844,9 @@ if(keyboardctl == nil)
 // chan<unit> (listener = threadmain, sender = mousethread(Exit) | ?)
 Channel	*exitchan;	/* chan(int) */
 @
-% It's more chan(void) no?
+% It's more chan(void) no? 
+% For unix not because can return exit code, but true that for plan9
+% should really be a string instead
 
 % rio = waiting for many different kind of messages/"events"
 <<[[main()]] communication channels creation>>=
@@ -5810,6 +5862,7 @@ exitchan     = chancreate(sizeof(int), 0);
 <<constant STACK>>=
 #define	STACK	8192
 @
+%ocaml: default value that can grows 
 
 <<[[main()]] threads creation>>=
 timerinit();
@@ -5817,8 +5870,9 @@ timerinit();
 threadcreate(keyboardthread, nil, STACK);
 threadcreate(mousethread, nil, STACK);
 @
-% could pass keyboardctl, mousectl, etc instead of nil
-% but convenient to have them in globals.
+%ocaml: pass keyboardctl, mousectl, etc instead of nil
+
+% but convenient to have them in globals?
 
 % timerinit? later. need be before the other thread?
 
@@ -5871,6 +5925,8 @@ Rescue:
     return nil;
 }
 @
+%ocaml: need cxfidalloc? because have arena of workers? 
+% what if create each time a new thread?
 
 % filsysproc later
 
@@ -5900,13 +5956,18 @@ cexecpipe(fdt *p0, fdt *p1)
     return OK_0;
 }
 @
+%ocaml: no OCEXEC on unix? so if exec have to take care! to close
+% those things, so have to store them somewhere?
+%ocaml: need create 2 pipes? unix pipes are unidirectional?
+
 % comment about /srv??
+
 
 % close on exec for server? so keep only client fd?
 
 % See Kernel.nw for pipe and #| device.
 
-
+% two way pipes?
 
 
 
@@ -5922,11 +5983,13 @@ strcpy(buf, "Jean-Paul_Belmondo"); // lol
 if(fd >= 0){
     n = read(fd, buf, sizeof buf-1);
     if(n > 0)
-        buf[n] = 0;
+        buf[n] = '\0';
     close(fd);
 }
 fs->user = estrdup(buf);
 @
+%ocaml: let user = cat("/dev/user") |> String.concat "" 
+
 % useful beyond the /srv/rio.user.pid? Yes for security
 % the worker and filesystem make sure request match the owner of rio
 
@@ -5964,9 +6027,10 @@ xfidinit(void)
     return cxfidalloc;
 }
 @
+%ocaml: why need extra thread for getting Xfids?
+% can not just create them live? Because want an arena?
 
 % xfidallocthread later
-
 
 % regular threads, so no race between xfidxxx and winctl!
 
@@ -5999,10 +6063,13 @@ xfidinit(void)
 % kernel await some process to go on. So can have independent
 % activities working.
 
-%alt: quite similar to a kernel? interrupt handlers?
+%alt: quite similar to a kernel? use interrupt handlers then?
 
 % Efficiently Scheduling X Clients:
 %http://keithp.com/~keithp/talks/usenix2000/smart.html
+
+%ocaml: need less proc. No need for ioproc and filsysproc.
+% But need a process for the winshell!
 
 \section{Keyboard thread}
 
@@ -6055,17 +6122,22 @@ keyboardthread(void*)
 \t bug size 20? should have 21 if want put extra '\0'!
 
 % Rune! so super simple, no need to have Ctl, Alt, ... all of
-% those composed keys are Rune? Hmm but then cant intercept
-% when guy just type on Ctlr and release?
+% those composed keys are Rune? 
+\l Hmm but then can't intercept when guy just type on Ctlr and release?
 
 % pretty simple, send key to the window (window ck channel and thread) 
 % with the focus
 
 % null char put as end marker (could pass size instead?)
+%ocaml: pass a key at a time? Why need buffer of 20? 
+% otherwise not reactif enough?
 
-% why use alternate buffer? so can send with one and recv on the other?
-\t sendp ? vs send?
+% Why use alternate buffer? so can send with one and recv on the other.
+\l But anyway send is blocking no? or is it diff between sendp and send?
+%ocaml: values are transmitted by values, so no need use alternate buffers
 
+\t sendp ? vs send? send that does not wait for receiver to be ready?
+\t  but instead store in buffer?
 
 %alt: alternative to keyboard thread? select in rio? callback/interrupts?
 % why want to use thread for that?
@@ -6092,8 +6164,9 @@ enum {
     NALT
 };
 @
-% index for different Alt. Thread will look for multiple messages
-% on different channels.
+% index for different Alt. 
+% Thread will look for multiple messages on different channels
+% (just mouse event and resize event?)
 
 
 <<[[mousethread()]] locals>>=
@@ -6124,6 +6197,7 @@ mousethread(void*)
         }
 }
 @
+% classic, like hellorio.c
 
 <<[[mousethread()]] alts setup>>=
 // listen
@@ -6131,7 +6205,7 @@ alts[MMouse].c = mousectl->c;
 alts[MMouse].v = &mousectl->Mouse;
 alts[MMouse].op = CHANRCV;
 @
-% what would be the other Alt??
+% what would be the other Alt?? resize?
 
 %// chan<Mouse> (listener = mousethread, sender = ioproc(initkeyboard))
 %Channel* Mousectl.c;
@@ -6189,6 +6263,12 @@ Again:
 
 <<[[mousethread()]] Drain label>>
 @
+\l how a window can not have an image?
+%ocaml: no need to check if window has an image. It has one by construction.
+\l just like have winborder, could use wininside function instead
+\l  of call to ptinrect
+
+\l why store input in local winput? 
 
 % explain logical coordinates, even though rio does not do anymore
 % originwindow, so w->i->r and w->screenr ar the same so cancelled out)
@@ -6199,7 +6279,9 @@ Again:
 <<constant Selborder>>=
 Selborder		= 4,	/* border of selected window */
 @
+\l could rename frame_border, but frame is used for editor_widget
 %coupling with Borderwidth in draw.h? why not use same constant?
+% also abused as an enum with Selborder and Unselborder
 
 
 \subsection{Application mouse events}
@@ -6213,7 +6295,12 @@ if(inside &&
    ((mouse->buttons&1) || winput->mouseopen || scrolling))
      sending = true;
 @
-% if mouseopen then need relay all mouse messages
+%ocaml: buttons.left clearer than 1. Also more functional by
+% returning boolean insteaf of setting local sending
+
+% If mouseopen then need relay all mouse messages
+% If not, then relay at least left button because terminal uses
+%  for text selection and to move the text cursor
 
 % scrolling? when started click to scroll? or when automatic
 %  scrolling selected?
@@ -6235,7 +6322,7 @@ Sending:
     continue;
 }
 @
-
+%ocaml: no need backup mousectl value. Pass data by value in channels.
 
 \l could mv later
 <<[[mousethread()]] when sending mouse message to window, set the cursor>>=
@@ -6247,6 +6334,7 @@ if(mouse->buttons == 0){
     wsetcursor(winput, false);
 @
 % so when click button there is never a system cursor?
+%ocaml: set local back to false because of goto Again?
 
 % send until release button?
 
@@ -6262,22 +6350,14 @@ Window *w;
 <<[[mousethread()]] if not sending>>=
 w = wpointto(mouse->xy);
 
-/* change cursor if over anyone's border */
-if(w != nil)
-    cornercursor(w, mouse->xy, false);
-else
-    riosetcursor(nil, false);
-
+<<[[mousethread()]] when not sending, set cursor part1>>
 <<[[mousethread()]] if moving and buttons>>
+<<[[mousethread()]] when not sending, set cursor part2>>
 
-if(w != nil)
-    cornercursor(w, mouse->xy, false);
-
-<<[[mousethread()]] if buttons and was not sending>>
+<<[[mousethread()]] when not sending, if buttons>>
 moving = false;
 break;
 @
-% why 2 times cornercursor?
 
 % moving??
 
@@ -6303,9 +6383,26 @@ wpointto(Point pt)
 % thx to topped can find the topmost one under the cursor
 
 
+<<[[mousethread()]] when not sending, set cursor part1>>=
+/* change cursor if over anyone's border */
+if(w != nil)
+    cornercursor(w, mouse->xy, false);
+else
+    riosetcursor(nil, false);
+@
+<<[[mousethread()]] when not sending, set cursor part2>>=
+if(w != nil)
+    cornercursor(w, mouse->xy, false);
+@
+% why 2 times cornercursor? because moving in between??
+
+
+
+
+
 % hmmm, complicated dispatch function.
 % LP split more? and make more readable the action
-<<[[mousethread()]] if buttons and was not sending>>=
+<<[[mousethread()]] when not sending, if buttons>>=
 /* we're not sending the event, but if button is down maybe we should */
 if(mouse->buttons){
     /* w->topped will be zero or less if window has been bottomed */
@@ -6329,7 +6426,20 @@ if(mouse->buttons){
     }
 }
 @
+%ocaml: introduce under_mouse type with Nothing|CurrentWin|OtherWin
+% and then complex pattern matching so easier than all those if then else
+%ocaml: not sure want to goto Again. Complexity needed?
+
+\l but if w == winput then winput has to be topped! because wpointto
+\l would not have returned it no?
+
+\l how w can be nil after click on unfocused window? it can not be
+%ocaml: use top_win so by construction sure that we set the window
+
+
 % Drain?
+
+% argh, complex flow, complex conditions.
 
 
 
@@ -6345,6 +6455,10 @@ Drain:
     goto Again;	/* recalculate mouse position, cursor */
 @
 
+% note that readmouse does not access directly /dev/mouse.
+% It still listens on the channel connected to Mouse.thread_mouse
+% so there is concurrency issue. Only one place reads the channel
+% at a time. 
 
 
 \section{Window threads}
@@ -6449,7 +6563,7 @@ alts[WKey].op = CHANRCV;
 
 <<[[winctl()]] event loop cases>>=
 case WKey:
-    for(i=0; kbdr[i]!=L'\0'; i++)
+    for(i=0; kbdr[i] != L'\0'; i++)
         wkeyctl(w, kbdr[i]);
     break;
 @
@@ -6571,6 +6685,7 @@ case WCtl:
 % will see wctlmesg later
 
 
+
 %\subsection{[[/mnt/wsys/mouse]]  emitting}
 %\subsection{[[/mnt/wsys/cons]] emitting}
 %\subsection{[[/mnt/wsys/wctl]] emitting}
@@ -6583,13 +6698,14 @@ case WCtl:
 \n actually it's a process but it creates many threads indirectly
 
 
-% why a process? because block on fs->sfd! would block everything
-% else.
+% why a process? because block on fs->sfd! would block everything else.
+%ocaml: can be a thread!
 
 <<global messagesize>>=
 int	messagesize = 8192+IOHDRSZ;	/* good start */
 @
 % negociated with kernel in filsysversion in first message
+% IOHDRSZ defined in fcall.h
 
 %main -> filsysinit -> proccreate -> <>
 <<function filsysproc>>=
@@ -6638,6 +6754,8 @@ filsysproc(void *arg)
 }
 @
 %dead:    fs->pid = getpid();  was after threadsetname
+%ocaml: do not go through xfid allocator arena, just create each
+% time a new thread
 
 % why need send and recv? cant just recv?
 
@@ -6697,6 +6815,8 @@ if(fcall[x->req.type] == nil)
 
 
 \section{[[Xfid]] allocator thread}
+
+%ocaml: create each time a new thread so no need arena allocator
 
 <<enum Xxxx>>=
 enum { 
@@ -6786,6 +6906,7 @@ if(x->ref != 0){
 if(x->flushtag != -1)
     error("flushtag in allocate");
 @
+%ocaml: exn
 
 
 <<[[xfidallocthread()]] sanity check x when Free>>=
@@ -6827,6 +6948,8 @@ xfidctl(void *arg)
 
 % very nice, get code on channel (function pointer),
 % and start execute it!
+%ocaml: just create each time new thread with closured passed by!
+% not even need an arena allocator
 
 % how decref cannot be 0?
 
@@ -6838,7 +6961,7 @@ xfidctl(void *arg)
 \chapter{Cursors}
 \label{chap:cursor}
 
-%trans: before heart of rio and windows managment,
+%trans: before heart of rio and windows management,
 % easier part, cursors.
 
 \section{Cursor graphics}
@@ -7051,13 +7174,14 @@ Cursor l = {
 
 \section{Setting the cursor}
 
-% rio cursor, window managment, vs app cursor!
+% rio cursor, window management, vs app cursor!
 
 \subsection{[[riosetcursor()]]}
 
 <<global lastcursor>>=
 Cursor	*lastcursor;
 @
+%ocaml: not sure we want this opti
 
 <<function riosetcursor>>=
 void
@@ -7069,10 +7193,14 @@ riosetcursor(Cursor *p, bool force)
     lastcursor = p;
 }
 @
+%ocaml: no mousectl global
+%ocaml: no opti so can simply call Mouse.set_cursor without this wrapper
 
 % setcursor() from mouse.h, will write in /dev/cursor
 
 % what this force is all about? why sometimes need and sometimes not?
+% seems like an opti.
+
 
 \subsection{[[cornercursor()]]}
 
@@ -7087,6 +7215,10 @@ cornercursor(Window *w, Point p, bool force)
         wsetcursor(w, force);
 }
 @
+%ocaml: by construction w is not nil
+%ocaml: should have separate corner_cursor and corner_cursor_or_window_cursor
+% so no need menuing global
+
 % actually put cornercursor only if on the corner
 
 
@@ -7098,7 +7230,7 @@ winborder(Window *w, Point xy)
            !ptinrect(xy, insetrect(w->screenr, Selborder));
 }
 @
-
+%ocaml: pt_on_frame, and put it with pt_inside_frame
 
 % cornercursor -> <>
 <<function whichcorner>>=
@@ -7129,14 +7261,16 @@ portion(int x, int lo, int hi)
     return 1; // middle
 }
 @
-
+%ocaml: type
 
 \subsection{[[wsetcursor()]]}
 
 <<[[Window]] mouse fields>>=
 Cursor		cursor;
+// option<ref<Cursor>> (to Window.cursor when not None)
 Cursor		*cursorp;
 @
+%ocaml: just one field, that can be an option
 
 % each window can write on his own /dev/cursor
 % so when mouse over different windows, need to
@@ -7168,10 +7302,13 @@ wsetcursor(Window *w, bool force)
 %    if(!menuing)
 %        riosetcursor(p, force && !menuing);
 %  but !menuing obviously redundant and true
-
+%ocaml: can not have w == nil and img nil?
+\l how can have negative screen? or no img? or no w?
 
 % menuing means that are in the middle of a system action 
 % (sweep, move, reshape) in which case do not honor window cursor.
+\t but when in middle of system action, the mouse thread is suspended
+\t  anyway so how wsetcursor can be called??
 
 
 
@@ -7185,7 +7322,7 @@ wsetcursor(Window *w, bool force)
 
 \section{Overview}
 
-% in plan9, same program than window server.
+% In plan9, the window manager is the same program than the window server.
 %alt: separate program as in X11
 
 % Window management operations can be trigged in different ways:
@@ -7228,30 +7365,41 @@ button3menu(void)
     sweeping = false;
 }
 @
+%ocaml: Mouse.Right clearer than 3
 %old:
 %        if(Hidden > Exit){
 %        }
 %        /* else fall through */
 % tricks when Exit was an optional menu item disabled sometimes
 % but I made it always apparent now.
+\l should not be menuing here instead of sweeping?
 
 % displaying a menu with menuhit is drawing something! on top of what you
 % are currently! it's part of the drawing library! See Graphics.nw.
-% The menu is probably simply an overlapping window.
+% The menu is simply an overlapping window.
+
+% 3 means 3rd button.
 
 % mousectl->Mouse.xy will contain location to put the menu
+
+% Need cooperative threads? Otherwise can have concurrent access to mousectl.fd?
+% No, cos still in mouse_thread context, and readmouse() called from menuhit()
+% will read from the same channel in mousectl.c, not directly from fd.
 
 <<global sweeping>>=
 bool	sweeping;
 @
 % seems used when menu is out, but used very little
 % or when in middle of big action started in mousethread
+\l should be menuing?
 
 
 
 <<global menu3>>=
-Menu menu3 = { menu3str };
+Menu menu3 = { .item = menu3str };
 @
+% see Graphics.nw, this define only the first field.
+%pad: I qualified this field.
 
 <<global menu3str>>=
 char*		menu3str[100] = {
@@ -7264,6 +7412,7 @@ char*		menu3str[100] = {
  nil
 };
 @
+%ocaml: no intermediate enums, just pass a list of strings and closures
 %old: was in main()
 %  // pad:let's keep the Exit option!
 %  if(strstr(argv[0], ".out") == nil){
@@ -7273,7 +7422,7 @@ char*		menu3str[100] = {
 
 
 <<enum _anon_ (windows/rio/rio.c)>>=
-enum
+enum RightMenuCommand
 {
     New,
 
@@ -7287,6 +7436,7 @@ enum
     Hidden,
 };
 @
+%ocaml: no intermediate enums, just pass a list of strings and closures
 %pad: I introduced Hidden
 %old: used to be a global
 % <<global Hidden>>=
@@ -7297,6 +7447,8 @@ enum
 % When a window is hidden it's accessible in the right menu! 
 % hence the 100 below
 % see Section X later.
+
+% RightMenuCommands is similar to Wctlmesg but it's not the same.
 
 
 
@@ -7323,12 +7475,12 @@ bool moving = false;
 % when set moving to true?? when on window border!
 <<[[mousethread()]] set moving to true for some conditions>>=
 /* topped will be zero or less if window has been bottomed */
-if(sending == false && !scrolling 
+if(!sending && !scrolling 
    && winborder(winput, mouse->xy) && winput->topped > 0){
     moving = true;
 }
 @
-
+%old: sending == false
 
 
 <<[[mousethread()]] locals>>=
@@ -7373,13 +7525,15 @@ if(moving && (mouse->buttons&7)){
 \section{[[Wctlmesg]]}
 
 <<enum wctlmesgkind>>=
-enum	/* control messages */
+enum ControlMessage	/* control messages */
 {
     Reshaped, // Resized, Hide/Expose
     Moved,
     <<[[Wctlmesgkind]] cases>>
 };
 @
+%ocaml: ADT so Reshaped of Image.t
+
 % different than previous enum for the menu, here it's a message!
 % there is a 'd' at the end, Move -> Moved
 
@@ -7399,6 +7553,9 @@ struct Wctlmesg
     Image	*image;
 };
 @
+%ocaml: ADT so image and r only for appropriate enum
+% (for instance Reshaped just need an Image, no need for rectangle)
+
 % r? image? because some action involve a rectangle and image 
 % like when sweep which defines an area
 % (actually why need rectangle, image not enough?)
@@ -7416,6 +7573,7 @@ wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
     send(w->cctl, &wcm);
 }
 @
+%ocaml: ADT so build directly, no need intermediate function
 
 % from winctl event loop! to process on the window thread side a  Wctlmesg
 % winctl -> <>
@@ -7434,7 +7592,8 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
     return m;
 }
 @
-
+\l rename m to type, more consistent
+%ocaml: again because of ADT dont need extra arguments
 
 
 
@@ -7456,7 +7615,7 @@ case Wakeup:
 <<[[Wctlmesgkind]] cases>>=
 Refresh,
 @
-% seens called when close the mouse, maybe to restore frame
+% seems called when close the mouse, maybe to restore frame
 % maybe can put in Textual windows chapter
 
 % xfidclose (Qmouse) -> <>
@@ -7508,13 +7667,14 @@ wrefresh(Window *w, Rectangle)
 % via menu
 
 % most important operation. Link with draw.
-% link with external process.
+% Link with external process.
 
 <<[[button3menu()]] cases>>=
 case New:
     new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil);
     break;
 @
+% 0 is pid, first nil is dir and last nil is argv
 
 % sweep will let user specify a window geometry
 % and  allocate a window!
@@ -7526,7 +7686,7 @@ case New:
 
 % if pid == 0 then means create a new terminal process
 % otherwise, process already there, just need create window.
-% who call new with pid != 0? when externa process such as a shell
+% who call new with pid != 0? when external process such as a shell
 % want to access rio (via mount /srv/rio.user.pid ...) see chapter X
 
 %ctor!
@@ -7568,7 +7728,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 
     // create a new process
     <<[[new()]] if pid == 0, create winshell process and set pid>>
-    <<[[new()]] sanity check pid>>
+    <<[[new()]] sanity check pid received from winshell>>
     wsetpid(w, pid, true);
 
     // create a new layer
@@ -7581,14 +7741,21 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     return w;
 }
 @
+%ocaml: hashtbl instead of growing array
+%ocaml: do channel creation in wmk instead of split creation of things
+% in 2 places
+\l why return it? not used in caller anyway
+
 % always growing windows? never reuse when a window is closed?
 
 % cpid allow communicate pid of child process back to parent
 % and so winctl thread.
 %alt: need use channel? cant just get fork return integer value
-% simply? because use proccreate(winshell, and dont want to
-% block on fork? but proccreate could return pid no?
-% because anyway winshell is just a procexec
+% simply? because use proccreate(winshell, because dont want to
+% block on fork? but fork is fast no? not like blocking IO.
+% Also why not use return value from proccreate? it should return
+% the pid of winshell (which will then just procexec the shell)
+
 
 
 % seen those channels properties before
@@ -7598,6 +7765,9 @@ ck = chancreate(sizeof(Rune*), 0);
 cctl = chancreate(sizeof(Wctlmesg), 4);
 @
 % passed to wmk and set in Window fields.
+% could do that in wmk instead. not sure why it needs to be in new().
+%ocaml: I do that in wmk
+
 
 <<[[new()]] mc allocation>>=
 mc = emalloc(sizeof(Mousectl));
@@ -7606,8 +7776,9 @@ mc->image = i;
 mc->c = cm;
 @
 % local image, local channel
-% why copy mousectl?
+\t why copy mousectl? not enough to just get the channel?
 
+\l mc->image? but really they look for the display.
 
 
 
@@ -7619,6 +7790,7 @@ if(i == nil)
 if(cm==nil || ck==nil || cctl==nil)
     error("new: channel alloc failed");
 @
+%ocaml: exn, or can not happen by construction (for i)
 
 \subsection{[[Window]] allocation, [[wmk()]]}
 
@@ -7643,7 +7815,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     w->id = ++id;
     w->topped = ++topped;
 
-    <<[[wmk()]] channels creation>>
+    <<[[wmk()]] channels settings>>
 
     <<[[wmk()]] textual window settings>>
 
@@ -7660,12 +7832,14 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 @
 %old: I changed the order of some initialisations, to group textual window
 % stuff together
+\l why wborder here? will do it again in caller in wcurr ent
+
 
 \t wscrdraw??
 
 % about incref comment, see call to wclose in winshell after filsysmount
 
-<<[[wmk()]] channels creation>>=
+<<[[wmk()]] channels settings>>=
 w->mc = *mc;
 w->ck = ck;
 w->cctl = cctl;
@@ -7693,12 +7867,26 @@ wborder(Window *w, int type)
     border(w->i, w->i->r, Selborder, col, ZP);
 }
 @
+%ocaml: proper enum type for type instead of abusing Selborder
+\l rename draw_border?
+
 % will see col later
+
+<<global titlecol>>=
+static	Image	*titlecol;
+@
+<<global lighttitlecol>>=
+static	Image	*lighttitlecol;
+@
+% set in wmk
+%ocaml: set in main too, like red and background
+
 
 <<[[wborder()]] sanity check w>>=
 if(w->i == nil)
     return;
 @
+\l just return? no exn? because when hide a window there is no img?
 
 
 
@@ -7706,6 +7894,7 @@ if(w->i == nil)
 char		*dir; // /dev/wdir
 @
 % window working dir
+
 
 
 <<global startdir>>=
@@ -7721,10 +7910,14 @@ if(getwd(buf, sizeof buf) == nil)
 else
     startdir = estrdup(buf);
 @
+%ocaml: call getwd each time, useless opti cache in global startdir
 
+% reset optionally by new() parameter
 
 
 \subsection{Window process creation, [[winshell()]]}
+
+
 
 <<global rcargv>>=
 char *rcargv[] = { "rc", "-i", nil };
@@ -7753,7 +7946,14 @@ if(pid == 0){
     free(arg);
 }
 @
+%ocaml: build directly good argv, why special case rc for argv here and not
+% for cmd?
+
 % pass w so can communicate back with its winctl thread handler
+
+\t why use intermediate winshell and cpid? why not simply fork
+\t  here so no need also arg[] as can access this information directly.
+\t why proccreate/procexec intermediates?
 
 % wait for pid. pid will be passed to wsetpid, so know
 % which process we are connected to, and which one to kill if delete
@@ -7764,7 +7964,7 @@ if(pid == 0){
 
 
 
-<<[[new()]] sanity check pid>>=
+<<[[new()]] sanity check pid received from winshell>>=
 if(pid == 0){
     /* window creation failed */
     wsendctlmesg(w, Deleted, ZR, nil);
@@ -7801,6 +8001,7 @@ winshell(void *args)
     argv = arg[3];
     dir  = arg[4];
 
+    // copy namespace/file-descriptors/environment-variables (do not share)
     rfork(RFNAMEG|RFFDG|RFENVG);
 
     <<[[winshell()]] adjust namespace>>
@@ -7853,7 +8054,7 @@ wsetpid(Window *w, int pid, bool dolabel)
     w->notefd = fd;
 }
 @
-
+% how can have already a notefd?
 
 \subsection{Namespace adjustments, [[filsysmount()]]}
 
@@ -7899,7 +8100,7 @@ close(STDOUT);
 err = open("/dev/cons", OWRITE);
 <<[[winshell()]] sanity check err open cons stdout>>
 @
-
+% important!!
 
 
 
@@ -7959,7 +8160,7 @@ if(err < 0){
 <<[[Window]] id fields>>=
 uint		namecount;
 @
-% counter
+% counter, per window
 
 % new -> <>
 <<function wsetname>>=
@@ -8005,7 +8206,9 @@ fprint(STDERR, "rio: setname failed: %s\n", err);
 <<global menuing>>=
 bool menuing;/* menu action is pending; waiting for window to be indicated */
 @
-% should be called sweeping no?
+% should be called sweeping no? but there is already a sweeping global
+\t why need this global? who needs this information? another thread?
+\t  used in wsetcursor <- cornercursor to not honor window cursor
 
 % button3menu() | wctlnew() -> new() -> wmk () -> <>
 % ex:  new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil);
@@ -8013,9 +8216,9 @@ bool menuing;/* menu action is pending; waiting for window to be indicated */
 Image*
 sweep(void)
 {
-    Image *i, *oi;
-    Rectangle r;
     Point p0, p;
+    Rectangle r;
+    Image *i, *oi;
 
     i = nil;
 
@@ -8026,7 +8229,7 @@ sweep(void)
 
     p0 = onscreen(mouse->xy);
     p = p0;
-    r = Rpt(p0, p0);
+    r = Rpt(p0, p);
     oi = nil;
 
     while(mouse->buttons == 4){ // right click
@@ -8064,12 +8267,23 @@ sweep(void)
     return i;
 }
 @
-%old: use Rpt
+%old: I use Rpt now, before was:
 %    r.min = p0;
 %    r.max = p0;
+%ocaml: use enum instead of hardcoded integers for mouse buttons
+%ocaml: use state machine with ADT for state so easier to read?
+% the C code in the end has a complex flow. More explicit corner
+% cases like what when not click right directly.
 
-% Refnone first, so transparent!
-% Then Refbackup
+\l why need ugly stuff? cornercursor with force at true not enough?
+\l and why need menuing? to not wsetcursor? but anyway for sure we 
+\l  are on a border
+
+% note that Refnone first, then Refbackup.
+\l why? opti?
+
+% should flushimage here before returning instead of doing it in
+% the caller.
 
 % readmouse(mousectl), but does not conflict with mousethread??
 % or thread/channel lib gives priority to last one waiting on channel?
@@ -8088,13 +8302,14 @@ onscreen(Point p)
     return p;
 }
 @
-
+\l why need that? who uses clipr?
 
 
 <<[[sweep()]] sanity check i>>=
 if(i == nil)
     goto Rescue;
 @
+%ocaml: exn
 
 <<[[sweep()]] sanity check mouse buttons, i, and rectangle size>>=
 if(mouse->buttons != 0)
@@ -8102,18 +8317,20 @@ if(mouse->buttons != 0)
 if(i==nil || Dx(i->r)<100 || Dy(i->r)<3*font->height)
     goto Rescue;
 @
+%ocaml: can come here from different situations and ocaml code clearer for that
 
 
 <<[[sweep()]] Rescue handler>>=
- Rescue:
+Rescue:
     freeimage(i);
     i = nil;
-    cornercursor(input, mouse->xy, 1);
+    cornercursor(input, mouse->xy, true);
     while(mouse->buttons)
         readmouse(mousectl);
 @
-
-
+\l how can you arrive here while still button? in fact can arrive
+\l here either from button or not. See the goto rescue above.
+%ocaml: ugly that freeimage accept nil for image
 
 
 
@@ -8128,7 +8345,11 @@ if(i==nil || Dx(i->r)<100 || Dy(i->r)<3*font->height)
 <<[[mousethread()]] click on unfocused window, set w>>=
 w = wtop(mouse->xy);
 @
-% w is used for what then?
+%ocaml: pass directly 
+
+% w is used to check whether something was topped then
+% and whether some special click happened in which case
+% we may need to send the event to the app.
 
 
 % mousethread -> <>
@@ -8150,6 +8371,9 @@ wtop(Point pt)
     return w;
 }
 @
+%ocaml: pass w directly because do the wpointto() job in the caller already,
+% so also no need to sanity check w
+
 % saw wpointto before, for mousethread to identify windows under cursor
 
 % topwindow not enough? no because border is actually drawn
@@ -8177,7 +8401,8 @@ wcurrent(Window *w)
     <<[[wcurrent()]] wakeup w and oi>>
 }
 @
-
+\l why false to wsetcursor? because maybe w == oi in which case
+\l  no need to force a rewrite of the cursor. Last cursor was maybe ok.
 
 \l rename wrepaintborders?
 
@@ -8198,10 +8423,14 @@ wrepaint(Window *w)
 }
 @
 % if ! mouseopen then have a frame with scrollbar, so redraw it
+\l again setcursor? but done already in caller
+\l a bit of duplication with wcurrent, redo similar work with
+\l  check for w == input
 
 <<constant Unselborder>>=
 Unselborder		= 1,	/* border of unselected window */
 @
+%ocaml: proper enum, not abusing 1 and 4
 
 % this is where see difference of color between selected and unselected
 
@@ -8231,7 +8460,9 @@ delete(void)
         wsendctlmesg(w, Deleted, ZR, nil);
 }
 @
-% pointto != wpointto, = menu action we will see soon
+%ocaml: no need wrapper wsendctlmesg, build directly Cmd
+
+% pointto != wpointto, = mouse action we will see soon
 
 
 <<[[Wctlmesgkind]] cases>>=
@@ -8263,6 +8494,7 @@ case Deleted:
 if(w->deleted)
     break;
 @
+% how can happen? because can receive cmd from multiple places?
 
 % wctlmesg | wclose -> <>
 <<function wclosewin>>=
@@ -8292,6 +8524,7 @@ wclosewin(Window *w)
     error("unknown window in closewin");
 }
 @
+%ocaml: simply Hashtbl.remove, no need growing array uglyness
 %dead:
 %    Rectangle r;
 %             w->deleted = true; // again??
@@ -8299,7 +8532,11 @@ wclosewin(Window *w)
 %             /* move it off-screen to hide it, in case client is slow in letting it go */
 %             //if(0) originwindow(w->i, r.min, view->r.max);
 
+% why wsetcursor when reset input? should call riocursor instead no?
 
+% Note that freeimage on the layer will make it disappear from the screen
+
+% This is when w->i can be nil!!
 
 \subsection{[[deletetimeoutproc()]] and [[deletethread()]]}
 
@@ -8455,7 +8692,7 @@ case Exited:
     free(w);
     break;
 @
-
+%ocaml: Gc
 
 
 
@@ -8488,10 +8725,7 @@ pointto(bool wait)
 
     if(wait){
         while(mouse->buttons){
-            if(mouse->buttons!=4 && w != nil){	/* cancel */
-                cornercursor(input, mouse->xy, false);
-                w = nil;
-            }
+            <<[[pointto()]] cancel pointto if clicked another button>>
             readmouse(mousectl);
         }
         if(w != nil && wpointto(mouse->xy) != w)
@@ -8506,7 +8740,14 @@ pointto(bool wait)
 @
 % dont understand this force cursor thing, nor the cancel
 
-% 
+<<[[pointto()]] cancel pointto if clicked another button>>=
+if(mouse->buttons!=4 && w != nil){	/* cancel */
+    cornercursor(input, mouse->xy, false);
+    w = nil;
+}
+@
+%ocaml: useful feature?
+
 
 
 
@@ -8712,8 +8953,8 @@ case Reshaped:
     flushimage(display, true);
     break;
 @
-
-
+% no need check w != input because wcurrent already handles it
+\l flushimage useless because done already in wctlmesg
 
 
 
@@ -8722,8 +8963,8 @@ case Reshaped:
 bool	 	resized;
 @
 % why important to remember? for creating a resize
-% even to client listening to /mnt/wsys/mouse
-% a bit uglt
+% event to client listening to /mnt/wsys/mouse
+% a bit ugly
 \t put in Resize event section?
 
 <<function wresize>>=
@@ -8749,6 +8990,8 @@ wresize(Window *w, Image *i, bool move)
     w->mouse.counter++;
 }
 @
+% screenr set in caller (but we should maybe do it)
+
 % mouse counter ??? comes with resize thing?
 % yes, both case there is a new event in the queue to send
 % if process listen to /dev/mouse, he will get the event
@@ -8919,13 +9162,11 @@ cornerpt(Rectangle r, Point p, int which)
 \label{sec:window-hide}
 % via menu
 
-
 <<[[button3menu()]] cases>>=
 case Hide:
     hide();
     break;
 @
-
 
 \subsection{[[hide()]]}
 
@@ -8946,17 +9187,22 @@ hide(void)
 
 
 <<global hidden>>=
+// array<ref<Window>> (size valid = nhidden)
 Window	*hidden[100];
 @
-% hidden windows
-
 <<global nhidden>>=
 int		nhidden;
 @
+%ocaml: hashtbl instead of growing array?
+% hmm but then lose order in which the window were hidden in the menu
+% (important? could just sort?)
+
+% hidden windows
 
 
 
-% return -1, 0, 1, used in switch somewhere
+
+% return -1, 0, 1, used in switch somewhere (but not in hide())
 <<function whide>>=
 int
 whide(Window *w)
@@ -8977,8 +9223,11 @@ whide(Window *w)
     return 0;
 }
 @
-% allocimage is not allocwindow, and so it's in-memory image
+%ocaml: hashtbl
 
+% allocimage is not allocwindow, and so it's in-memory image!!
+
+% return 0?? means error cos could not allocate an image
 
 % related = command line hidden
 
@@ -8999,6 +9248,7 @@ for(i=0; i<nhidden; i++)
         break;
     }
 @
+%ocaml: Hashtbl.remove
 
 
 <<[[button3menu()]] menu3str adjustments with hidden windows>>=
@@ -9015,6 +9265,7 @@ default:
     unhide(i);
     break;
 @
+% default! because everything after Exit is for unhiding
 
 <<function unhide>>=
 void
@@ -9024,11 +9275,17 @@ unhide(int h)
 
     h -= Hidden;
     w = hidden[h];
-    if(w == nil)
-        return;
+    <<[[unhide()]] sanity check w>>
     wunhide(h);
 }
 @
+%ocaml: why wunhide(h) again? just pass w directly.
+
+<<[[unhide()]] sanity check w>>=
+if(w == nil)
+    return;
+@
+%ocaml: pass directly w, so no need sanity check
 
 <<function wunhide>>=
 int
@@ -9048,6 +9305,8 @@ wunhide(int h)
     return 0;
 }
 @
+%ocaml: Hashtbl.remove instead of resize array
+
 % back to allocwindow! Reshaped will make this image public again
 % via wsetname
 
@@ -9063,6 +9322,11 @@ wunhide(int h)
 % new -> ... -> winshell -> filsysmount
 %    if(mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf) < 0){
 % big missing piece.
+
+% Until now we have an app that can create rectangles on the
+% screen and move/resize/delete them. But for those rectangle
+% to be really window, they must have a process with the right
+% namespaces and the right fileserver to serve this namespace.
 
 % mount is in kernel and does the right thing when the argument
 % is a filedescriptor.
@@ -9107,7 +9371,7 @@ enum Qxxx
     QMAX,
 };
 @
-
+%ocaml: ADT? and qid <-> int converter?
 
 % window id + device enum id  -> final Qid
 <<function QID>>=
@@ -10924,7 +11188,7 @@ caseImage:
     fc.data = t;
     n = readwindow(i, t, r, off, cnt);	/* careful; fc.count is unsigned */
     if(n < 0){
-        buf[0] = 0;
+        buf[0] = '\0';
         errstr(buf, sizeof buf);
         filsysrespond(x->fs, x, &fc, buf);
     }else{
@@ -11134,14 +11398,6 @@ static	Image	*grey;
 
 <<global darkgrey>>=
 static	Image	*darkgrey;
-@
-
-<<global titlecol>>=
-static	Image	*titlecol;
-@
-
-<<global lighttitlecol>>=
-static	Image	*lighttitlecol;
 @
 
 
@@ -11604,10 +11860,7 @@ if(w->deleted)
 @
 
 <<global menu2>>=
-Menu menu2 =
-{
-    menu2str
-};
+Menu menu2 = { .item = menu2str };
 @
 
 <<global menu2str>>=
@@ -11677,6 +11930,8 @@ wmousectl(Window *w)
 }
 @
 % transform mouse even in key event :) for scrolling
+
+\t so always wclose??
 
 % see scrolling later, using but value
 
@@ -15443,6 +15698,7 @@ filsysauth(Filsys *fs, Xfid *x, Fid*)
 <<constant DEBUG>>=
 #define DEBUG false
 @
+%ocaml: flag of rio instead
 
 <<[[filsysinit()]] install dumper>>=
 fmtinstall('F', fcallfmt);
