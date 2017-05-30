@@ -7,7 +7,8 @@ int
 postnote(int group, int pid, char *note)
 {
     char file[128];
-    int f, r;
+    fdt f;
+    int r;
 
     switch(group) {
     case PNPROC:

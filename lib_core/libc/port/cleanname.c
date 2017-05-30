@@ -3,12 +3,12 @@
 #include <libc.h>
 
 /*s: macro SEP */
+#define SEP(x)  ((x)=='/' || (x) == '\0')
+/*e: macro SEP */
+/*s: function cleanname */
 /*
  * In place, rewrite name to compress multiple /, eliminate ., and process ..
  */
-#define SEP(x)  ((x)=='/' || (x) == 0)
-/*e: macro SEP */
-/*s: function cleanname */
 char*
 cleanname(char *name)
 {
@@ -20,6 +20,7 @@ cleanname(char *name)
 
     if(name[0] == '\0')
         return strcpy(name, ".");
+
     rooted = false;
     d0 = name;
     if(d0[0] == '#'){

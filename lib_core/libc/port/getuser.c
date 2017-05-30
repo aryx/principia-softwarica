@@ -3,11 +3,11 @@
 #include <libc.h>
 
 /*s: function getuser */
-char *
+char*
 getuser(void)
 {
     static char user[64];
-    int fd;
+    fdt fd;
     int n;
 
     fd = open("/dev/user", OREAD);
@@ -18,7 +18,7 @@ getuser(void)
     if(n <= 0)
         strcpy(user, "none");
     else
-        user[n] = 0;
+        user[n] = '\0';
     return user;
 }
 /*e: function getuser */

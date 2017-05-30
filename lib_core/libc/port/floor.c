@@ -6,7 +6,6 @@
  * floor and ceil-- greatest integer <= arg
  * (resp least >=)
  */
-
 double
 floor(double d)
 {

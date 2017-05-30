@@ -5,7 +5,7 @@
 
 /*s: function read9pmsg */
 int
-read9pmsg(int fd, void *abuf, uint n)
+read9pmsg(fdt fd, void *abuf, uint n)
 {
     int m, len;
     uchar *buf;

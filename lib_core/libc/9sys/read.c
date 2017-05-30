@@ -4,7 +4,7 @@
 
 /*s: function read */
 long
-read(int fd, void *buf, long n)
+read(fdt fd, void *buf, long n)
 {
     return pread(fd, buf, n, -1LL);
 }

@@ -17,7 +17,7 @@ utfrune(char *s, long c)
         c1 = *(uchar*)s;
         if(c1 < Runeself) { /* one byte rune */
             if(c1 == 0)
-                return 0;
+                return nil;
             if(c1 == c)
                 return s;
             s++;

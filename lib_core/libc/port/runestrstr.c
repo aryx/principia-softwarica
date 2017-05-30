@@ -27,7 +27,7 @@ runestrstr(Rune *s1, Rune *s2)
                 break;
         }
     }
-    return 0;
+    return nil;
 }
 /*e: function runestrstr */
 /*e: port/runestrstr.c */

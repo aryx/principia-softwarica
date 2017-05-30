@@ -7,10 +7,10 @@ int
 getpid(void)
 {
     char b[20];
-    int f;
+    fdt f;
 
     memset(b, 0, sizeof(b));
-    f = open("#c/pid", 0);
+    f = open("#c/pid", OREAD);
     if(f >= 0) {
         read(f, b, sizeof(b));
         close(f);

@@ -6,7 +6,8 @@
 char*
 getenv(char *name)
 {
-    int r, f;
+    int r;
+    fdt f;
     long s;
     char *ans;
     char *p, *ep, ename[100];

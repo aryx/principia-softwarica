@@ -4,7 +4,7 @@
 
 /*s: function readn */
 long
-readn(int f, void *av, long n)
+readn(fdt f, void *av, long n)
 {
     char *a;
     long m, t;

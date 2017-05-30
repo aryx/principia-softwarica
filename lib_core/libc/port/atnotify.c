@@ -33,11 +33,11 @@ int
 atnotify(int (*f)(void*, char*), int in)
 {
     int i, n, ret;
-    static int init;
+    static bool init;
 
     if(!init){
         notify(notifier);
-        init = 1;       /* assign = */
+        init = true;       /* assign = */
     }
     ret = 0;
     lock(&onnotlock);
@@ -53,13 +53,13 @@ atnotify(int (*f)(void*, char*), int in)
         for(i=0; i<NFN; i++)
             if(onnot[i]){
                 if(ret==0 && onnot[i]==f){
-                    onnot[i] = 0;
+                    onnot[i] = nil;
                     ret = 1;
                 }else
                     n++;
             }
         if(n == 0){
-            init = 0;
+            init = false;
             notify(0);
         }
     }

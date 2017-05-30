@@ -6,7 +6,7 @@
 int
 access(char *name, int mode)
 {
-    int fd;
+    fdt fd;
     Dir *db;
     static char omode[] = {
         0,

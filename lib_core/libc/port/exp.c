@@ -50,6 +50,7 @@ exp(double arg)
         return 0;
     if(arg > maxf)
         return Inf(1);
+
     arg *= log2e;
     ent = floor(arg);
     fract = (arg-ent) - 0.5;

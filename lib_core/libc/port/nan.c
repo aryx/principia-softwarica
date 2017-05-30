@@ -25,14 +25,14 @@ NaN(void)
 /*e: function NaN */
 
 /*s: function isNaN */
-int
+bool
 isNaN(double d)
 {
     FPdbleword a;
 
     a.x = d;
     if((a.hi & NANMASK) != NANEXP)
-        return 0;
+        return false;
     return !isInf(d, 0);
 }
 /*e: function isNaN */
@@ -52,19 +52,19 @@ Inf(int sign)
 /*e: function Inf */
 
 /*s: function isInf */
-int
+bool
 isInf(double d, int sign)
 {
     FPdbleword a;
 
     a.x = d;
     if(a.lo != 0)
-        return 0;
+        return false;
     if(a.hi == NANEXP)
         return sign >= 0;
     if(a.hi == (NANEXP|NANSIGN))
         return sign <= 0;
-    return 0;
+    return false;
 }
 /*e: function isInf */
 /*e: port/nan.c */

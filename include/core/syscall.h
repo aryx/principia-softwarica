@@ -83,18 +83,18 @@
 /* rfork */
 enum Rfork_flags
 {
- RFNAMEG		= (1<<0),
- RFENVG		= (1<<1),
- RFFDG		= (1<<2),
- RFNOTEG		= (1<<3),
- RFPROC		= (1<<4),
- RFMEM		= (1<<5),
- RFNOWAIT	= (1<<6),
- RFCNAMEG	= (1<<10),
- RFCENVG		= (1<<11),
- RFCFDG		= (1<<12),
- RFREND		= (1<<13),
- RFNOMNT		= (1<<14)
+    RFNAMEG  = (1<<0),
+    RFENVG   = (1<<1),
+    RFFDG    = (1<<2),
+    RFNOTEG  = (1<<3),
+    RFPROC   = (1<<4),
+    RFMEM    = (1<<5),
+    RFNOWAIT = (1<<6),
+    RFCNAMEG = (1<<10),
+    RFCENVG  = (1<<11),
+    RFCFDG   = (1<<12),
+    RFREND   = (1<<13),
+    RFNOMNT  = (1<<14)
 };
 /*e: type Rfork_flag */
 
@@ -130,7 +130,6 @@ struct Qid {
 /*e: type Qid */
 
 /*s: type DirEntry */
-// TODO should be renamed DirEntry really
 // a similar structure is defined in the kernel!
 struct Dir {
  /* system-modified data */
@@ -145,6 +144,7 @@ struct Dir {
  ulong	mtime;	/* last write time */
  vlong	length;	/* file length */
  char	*name;	/* last element of path */
+
  char	*uid;	/* owner name */
  char	*gid;	/* group name */
  char	*muid;	/* last modifier name */
@@ -156,6 +156,7 @@ struct Dir {
 struct Waitmsg {
  int	pid;		/* of loved one */
  ulong	time[3];	/* of loved one & descendants */
+ // ref_own?<string>?
  char	*msg;
 };
 /*e: type Waitmsg */

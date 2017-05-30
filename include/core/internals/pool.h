@@ -36,8 +36,9 @@ struct Pool {
 /*e: type Pool */
 
 extern void*	poolalloc(Pool*, ulong);
-extern void*	poolallocalign(Pool*, ulong, ulong, long, ulong);
 extern void	poolfree(Pool*, void*);
+
+extern void*	poolallocalign(Pool*, ulong, ulong, long, ulong);
 extern ulong	poolmsize(Pool*, void*);
 extern void*	poolrealloc(Pool*, void*, ulong);
 extern void	poolcheck(Pool*);

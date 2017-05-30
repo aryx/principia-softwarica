@@ -9,8 +9,8 @@ strdup(char *s)
     char *ns;
 
     ns = malloc(strlen(s) + 1);
-    if(ns == 0)
-        return 0;
+    if(ns == nil)
+        return nil;
     setmalloctag(ns, getcallerpc(&s));
 
     return strcpy(ns, s);

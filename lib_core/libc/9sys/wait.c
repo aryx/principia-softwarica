@@ -8,7 +8,8 @@ Waitmsg*
 wait(void)
 {
     int n, l;
-    char buf[512], *fld[5];
+    char buf[512];
+    char *fld[5];
     Waitmsg *w;
 
     n = await(buf, sizeof buf-1);

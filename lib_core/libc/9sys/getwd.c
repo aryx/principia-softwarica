@@ -8,7 +8,8 @@ static char *nsgetwd(char*, int);
 char*
 getwd(char *buf, int nbuf)
 {
-    int n, fd;
+    int n;
+    fdt fd;
 
     fd = open(".", OREAD);
     if(fd < 0)

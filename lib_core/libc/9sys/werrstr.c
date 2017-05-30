@@ -12,7 +12,7 @@ werrstr(char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+ERRMAX, fmt, arg);
     va_end(arg);
-    errstr(buf, ERRMAX);
+    errstr(buf, sizeof buf);
 }
 /*e: function werrstr */
 /*e: 9sys/werrstr.c */

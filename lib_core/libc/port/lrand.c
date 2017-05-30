@@ -2,12 +2,12 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: constant LEN */
 /*
  *  algorithm by
  *  D. P. Mitchell & J. A. Reeds
  */
 
+/*s: constant LEN */
 #define LEN 607
 /*e: constant LEN */
 /*s: constant TAP */

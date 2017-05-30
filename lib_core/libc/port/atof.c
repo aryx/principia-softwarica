@@ -6,7 +6,7 @@
 double
 atof(char *cp)
 {
-    return strtod(cp, 0);
+    return strtod(cp, nil);
 }
 /*e: function atof */
 /*e: port/atof.c */

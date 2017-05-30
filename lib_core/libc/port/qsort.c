@@ -5,6 +5,7 @@
 
 #include <u.h>
 
+/*s: type Sort */
 typedef
 struct
 {
@@ -12,6 +13,7 @@ struct
     void    (*swap)(char*, char*, long);
     long    es;
 } Sort;
+/*e: type Sort */
 
 /*s: function swapb */
 static  void

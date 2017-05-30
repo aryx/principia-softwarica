@@ -6,7 +6,7 @@
 int
 putenv(char *name, char *val)
 {
-    int f;
+    fdt f;
     char ename[100];
     long s;
 

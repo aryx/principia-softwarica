@@ -200,13 +200,17 @@ extern  void*   malloctopoolblock(void*);
 /*s: type Fmt */
 struct Fmt {
     uchar   runes;          /* output buffer is runes or chars? */
+
     void    *start;         /* of buffer */
     void    *to;            /* current place in the buffer */
     void    *stop;          /* end of the buffer; overwritten if flush fails */
+
     int     (*flush)(Fmt *);    /* called when to == stop */
     void    *farg;          /* to make flush a closure */
     int     nfmt;           /* num chars formatted so far */
+
     va_list args;           /* args passed to dofmt */
+
     int     r;          /* % format Rune */
     int     width;
     int     prec;
@@ -578,9 +582,10 @@ extern  int     canlock(Lock*);
 
 /*s: type QLp */
 struct QLp {
-    int inuse;
-    QLp *next;
     char    state;
+    int inuse;
+    // Extra
+    QLp *next;
 };
 /*e: type QLp */
 
@@ -588,6 +593,7 @@ struct QLp {
 struct QLock {
     Lock    lock;
     int locked;
+
     QLp *head;
     QLp     *tail;
 };
@@ -604,6 +610,7 @@ struct RWLock {
     Lock    lock;
     int readers;    /* number of readers */
     int writer;     /* number of writers */
+
     QLp *head;      /* list of waiting processes */
     QLp *tail;
 };
@@ -620,6 +627,7 @@ extern  int     canwlock(RWLock*);
 /*s: type Rendez */
 struct Rendez {
     QLock   *l;
+
     QLp *head;
     QLp *tail;
 };

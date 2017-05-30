@@ -109,7 +109,7 @@ modf(double d, double *ip)
         *ip = d;
         if(x.lo != 0 || (x.hi & 0xfffffL) != 0) /* NaN */
             return d;
-        /* ±Inf */
+        /* +/- Inf */
         x.hi &= 0x80000000L;
         return x.x;
     }

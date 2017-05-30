@@ -18,7 +18,7 @@ runestrchr(Rune *s, Rune c)
     while(c1 = *s++)
         if(c1 == c0)
             return s-1;
-    return 0;
+    return nil;
 }
 /*e: function runestrchr */
 /*e: port/runestrchr.c */

@@ -9,7 +9,7 @@ strchr(char *s, int c)
     char c0 = c;
     char c1;
 
-    if(c == 0) {
+    if(c == '\0') {
         while(*s++)
             ;
         return s-1;
@@ -18,7 +18,7 @@ strchr(char *s, int c)
     while(c1 = *s++)
         if(c1 == c0)
             return s-1;
-    return 0;
+    return nil;
 }
 /*e: function strchr */
 /*e: port/strchr.c */

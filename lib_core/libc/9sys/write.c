@@ -4,7 +4,7 @@
 
 /*s: function write */
 long
-write(int fd, void *buf, long n)
+write(fdt fd, void *buf, long n)
 {
     return pwrite(fd, buf, n, -1LL);
 }

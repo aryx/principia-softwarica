@@ -9,8 +9,8 @@ runestrdup(Rune *s)
     Rune *ns;
 
     ns = malloc(sizeof(Rune)*(runestrlen(s) + 1));
-    if(ns == 0)
-        return 0;
+    if(ns == nil)
+        return nil;
     setmalloctag(ns, getcallerpc(&s));
 
     return runestrcpy(ns, s);

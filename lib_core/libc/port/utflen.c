@@ -14,7 +14,7 @@ utflen(char *s)
     for(;;) {
         c = *(uchar*)s;
         if(c < Runeself) {
-            if(c == 0)
+            if(c == '\0')
                 return n;
             s++;
         } else
