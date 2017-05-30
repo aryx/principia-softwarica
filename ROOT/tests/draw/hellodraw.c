@@ -15,7 +15,7 @@ void main(void)
     exits("Error in initdraw");
   }
   //drawsetdebug(true);
-  //flushimage(display, false);
+  //flushimage(display, true);
 
   color = allocimage(display, Rect(0,0,1,1), RGBA32, true, DMagenta);
   draw(display->image, display->image->r, color, nil, ZP);
