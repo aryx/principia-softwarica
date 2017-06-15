@@ -1,3 +1,4 @@
+/*s: include/fcall.h */
 #pragma	src	"/sys/src/libc/9sys"
 #pragma	lib	"libc.a"
 
@@ -142,3 +143,4 @@ int	read9pmsg(fdt, void*, uint);
 #pragma	varargck	type	"F"	Fcall*
 #pragma	varargck	type	"M"	ulong
 #pragma	varargck	type	"D"	Dir*
+/*e: include/fcall.h */
