@@ -5896,6 +5896,8 @@ if(nn != n){
 %ocaml: use exn because anyway many places do not check the return value
 % of doflush or flushimage and just ignore if error
 
+% important to reset bufp! otherwise get into a loop
+
 % usually first letter is message kind. e.g., 'a' for alloc
 % 'l' for line.
 % in total =~ 20 messages?
@@ -5946,6 +5948,8 @@ drawmesg(Client *client, void *av, int n)
 }
 @
 %old:    /*  iprint("error: %s\n", up->errstr);  */
+%old: I put 'true' to printmesg, but then removed it because
+% it is normal that certain calls generate an error like allocscreen.
 
 % split in different messages chunks hence the while.
 % the switch will adjust m which contains the size for one message
@@ -16363,6 +16367,10 @@ allocscreen(Image *image, Image *fill, bool public)
 % can be accessible to other processes, so we need to find
 % an id not used by another process.
 
+% Note that each graphical app running under rio calls gengetwindow
+% which allocates a screen each time! so can not have more than
+% 25 graphical windows at the same time.
+
 <<[[allocscreen()]] sanity check images have same display>>=
 if(d != fill->display){
     werrstr("allocscreen: image and fill on different displays");
@@ -16549,6 +16557,9 @@ case 'A':
 
 @
 %old: was passing true to printmesg
+
+% Note that normal if some calls to allocate screen fail because
+% of the counter and retry approach in allocscreen()
 
 <<[[drawmesg()]] when allocate screen, sanity check dstid>>=
 if(dstid == 0)
@@ -18797,6 +18808,7 @@ Image	*view;
 % the whole screen for itself, so maybe it made sense to call this
 % variable screen. But view is good too, less confusing.
 % Actually rio uses a 'view' global assigned to screen.
+%ocaml: does not need to be a global
 
 % it is not the same than Display->image! (or Display->screenimage?)
 % it comes from gengetwindown so it is really the window image!
@@ -18817,7 +18829,8 @@ Screen	*screen;
 % gengetwindow(..., &screen) <- geninitdraw <- initdraw
 %old: was called _screen because screen was already use 
 %  (to actually an Image, hmm), but I s/screen/view so now screen is free.
-\t rename desktop (even if actually it's a subdesktop)
+%ocaml: does not need to be a global
+\t rename desktop? (even if actually it's a subdesktop)
 
 % screen is not screen of rio! it's actually a subscreen
 % where client can create window in. Need subscreen because
@@ -18857,9 +18870,9 @@ getwindow(Display *d, int ref)
     return gengetwindow(d, winname, &view, &screen, ref);
 }
 @
-% not sure why need that, every app should go through
-% initdraw and so should not call gengetwindow manually anyway.
-% or maybe rio uses that? but then could move that in rio's code!
+% every app go through initdraw and so should call gengetwindow, but
+% after a resize event it is the responsibility of the app to
+% call getwindow() to get your new 'view'.
 
 \subsection{[[gengetwindow()]]}
 
@@ -18905,7 +18918,9 @@ gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
         r = insetrect(image->r, Borderwidth);
     *winp = _allocwindow(*winp, *scrp, r, ref, DWhite);
     <<[[gengetwindow()]] sanity check winp>>
+
     // get logical coordinates when run under rio
+    // TODO: buggy!
     if(originwindow(*winp, Pt(0,0), r.min) <= 0)
       return ERROR_NEG1;
 
@@ -18991,6 +19006,8 @@ if(*winp != nil){
 @
 % not *winp = nil?
 
+\t call freescreen atexit? seems not, but then kernel knows
+% when graphical app terminate that can free the id of the screen?
 
 
 
@@ -26716,7 +26733,9 @@ writememimage(int fd, Memimage *i)
 }
 @
 
+\section{Video and animation}
 
+% https://github.com/leandromoreira/digital_video_introduction
 
 \chapter{Conclusion}
 \label{chap:conclusion}
@@ -26968,8 +26987,11 @@ printmesg(char *fmt, uchar *a, bool plsprnt)
     iprint("%.*s", (int)(q-buf), buf);
 }
 @
+%old: was 1 || plsprint == 0, so was always disabling printmesg,
+% but better to put !drawdebug instead of 1
 
-
+% the plsprint argument is just so can selectively decide which
+% calls to trace when debugging an issue.
 
 \section{Memory tags}
 
