@@ -274,7 +274,7 @@ drawmesg(Client *client, void *av, int n)
     a = av;
     if(waserror()){
         if(fmt) 
-            printmesg(fmt, a, true);
+            printmesg(fmt, a, false);
         nexterror();
     }
     while((n-=m) > 0){
