@@ -40,6 +40,11 @@
 % - better understand need for raw mode for keyboard input in addition to
 %   "edit" mode (with backspace handling and newline only for send)
 
+%thx to rio in ocaml: many things! 
+% - difference between mouse counter and mouseclicks queue
+% - why pass a channel in mouseread and not a mouse state
+% - 
+
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
 % - put all content of files in the Extra section, via 'pfff -lpize'
@@ -323,7 +328,7 @@ the display of text glyphs on the screen in the appropriate window?
 
 \t put in conclusion non-trivial adv algo and data structures seen? see comment
 %data-structures (beyond list/hashtbl):
-% - circular buffers (Window.mouse.queue)
+% - circular buffers (Window.mouse.queue) producer/consumer indexes
 % - growing arrays (windows (by 1), Window.r, Window.nraw, ...)
 
 %algorithms:
@@ -334,7 +339,7 @@ the display of text glyphs on the screen in the appropriate window?
 % - send and receive alts =~ select
 % - passing channels as parameters
 % - procs vs threads
-% - cooperative threads and no need for lock
+% - cooperative threads and no need for lock! 
 
 \section{The \plan{} windowing system: [[rio]]}
 \label{sec:rio}
@@ -515,7 +520,8 @@ the {terminal emulator} (e.g., [[xterm]] with 80~000 LOC),
 \n rxvt is 37 000 LOC so similar (said later)
 or the libraries required by clients
 to communicate with the display server (e.g., [[Xlib]] with 150~000 LOC).
-Xorg, in total, contains more than two orders of magnitude more code than [[rio]].
+Xorg, in total, contains more than two orders of magnitude more code 
+than [[rio]].
 
 
 Part of the reason for the enormous size of Xorg is that
@@ -622,7 +628,7 @@ as well as lots of code and subsystems of the Linux graphics stack
 (e.g., KMS, DRM, GEM, fbdev, evdev);
 this would add up to lots of code to explain.
 \l  a pile of layers with the kernel, soft archi diagrams looks complicated
-
+%https://drewdevault.com/2017/06/10/Introduction-to-Wayland.html
 
 \item Nano-X\furl{http://www.microwindows.org/}
 (previously known as MicroWindows) is a windowing system and graphics system
@@ -664,6 +670,7 @@ combined.
 %   https://books.google.com/books?id=DdbvBwAAQBAJ
 %other:
 % - MIR, very similar to Wayland; used only by Canonical.
+%   but seems now abandonned
 % - nuttx has some graphic and windowing stack apparently too!
 %   http://nuttx.org/doku.php?id=documentation:nxgraphics
 % - HelenOS Gui? https://www.youtube.com/watch?v=ZjqYRv2xOSw&feature=youtu.be
@@ -781,6 +788,7 @@ before reading this book.
 Note that [[rio]] is implemented as a filesystem in user space, 
 and uses the protocol 9P to communicate with the kernel. 
 Thus, it can also be useful to read the \book{Network}, which describes 9P.
+\t actually now in Libcore
 In the same way, I also suggest you to read the \book{Libcore},
 which explains the thread library, which is heavily used by [[rio]].
 
@@ -1462,6 +1470,7 @@ running under those terminals are connected to a
 (the master and the slave) managed by the kernel.
 Those pseudo-devices and connected themselves to the terminal program 
 in user space, as well as to the command-line application.
+% http://rachid.koucha.free.fr/tech_corner/pty_pdip.html
 %
 I must admit I do not fully understand how it works. % lol :)
 \l See X? In Wayland simpler?
@@ -3008,7 +3017,9 @@ enum EventType {
 @
 \l explain NALT? classic, like in Assembler.nw
 %ocaml: use ADT and typed channels instead of flat generic enum
-% so less need those .v, .c fields. and intermediate Alt type.
+% so less need those .v, .c fields. and intermediate Alt type
+% (but still need an intermediate event type that does the union of
+% the events for a particular thread)
 
 [[hellorio]] needs to deal {\em simultaneously} with the mouse,
 keyboard, and windowing system. Indeed, the program can not just
@@ -4995,8 +5006,9 @@ Mousectl	*mousectl;
 <<global keyboardctl>>=
 Keyboardctl	*keyboardctl;
 @
-% wrapper over /dev/cons (set in raw mode), channel wrapper
 %ocaml: need to be a global? no, and no need to pass it around a lot
+
+% wrapper over /dev/cons (set in raw mode), channel wrapper
 
 
 
@@ -5023,8 +5035,10 @@ Mouse	*mouse;
 <<global desktop>>=
 Screen	*desktop;
 @
-% = allocscreen(screen, background)
+%ocaml: again does not need to be a global
 %old: was called wscreen 
+
+% = allocscreen(screen, background)
 %TODO: rename to screen? or better desktop! or merge with the one in window.h?
 % but initdraw allocates by default a screen no? why not reuse
 %  this one? because screen by default has also border on it
@@ -5200,7 +5214,7 @@ char    *label;   // writable through /mnt/wsys/label
 %  label can be arbitrary size and /dev/label is writable
 
 
-
+\t adv topics? all those wclose, wclosechan, incref/decref are subtle
 <<[[Window]] extra fields>>=
 Ref;
 @
@@ -5225,22 +5239,22 @@ QLock;
 
 % grown in wmk()
 <<global window>>=
-// growing_array<option<ref_own<Window>>> (size = nwindow+1)
+// growing_array<ref_own<Window>> (size = nwindow+1)
 Window	**windows;
 @
 %old: was window but better to be windows!!!
 % essence of windowing system right here!! manage many windows!!
-\l option above? seems like when delete there is a memmove
+\l not option<> above, because when delete there is a memmove
 %alt: called scenegraph in wayland
-%ocaml: use Hashtbl? because what when delete a window?
-% we do not reuses its id, so hole in array?
+%ocaml: Hashtbl
 
 % next free window
 <<global nwindow>>=
 int	nwindow;
 @
+%ocaml: Hashtbl.length
+
 % seems to be actually the size of windows
-%ocaml: Hashtbl.length?
 
 
 % each time a window get the focus, it becomes the topmost window
@@ -5308,6 +5322,7 @@ bool	mouseopen;
 <<[[Window]] textual window fields, visible text>>
 <<[[Window]] textual window fields, graphics>>
 @
+%ocaml: group and put in separate structure?
 
 <<[[Window]] textual window fields, text data>>=
 // growing_array<Rune> (size = Window.maxr)
@@ -5315,6 +5330,8 @@ Rune		*r;
 uint		nr;	/* number of runes in window */
 uint		maxr;	/* number of runes allocated in r */
 @
+%ocaml: array carries its length, so no need maxr
+
 % see wcontents!
 
 
@@ -5332,6 +5349,15 @@ uint		q1; // selection end or same value than q0 when no selection
 \l give name ``cursor''?
 %ocaml: use option for q1
 
+% and nchars?
+
+<<[[Window]] textual window fields, visible text>>=
+uint		org;
+@
+% what is visible on the frame!
+% origin
+% FIGURE
+
 % user modify q0, by navigating.
 
 % output point? "division between characters the host has seen
@@ -5342,7 +5368,7 @@ uint		q1; // selection end or same value than q0 when no selection
 // index in Window.r
 uint		qh; // output point
 @
-% why qh??
+% qh for qursor host (host = application connected to terminal, e.g., rc)
 
 % process modify qh, by output stuff
 
@@ -5359,7 +5385,7 @@ uint		qh; // output point
 % Frame actually means image with text inside, with lines,
 %  which can be scrolled.
 
-<<[[Window]] textual window fields, visible text>>=
+<<[[Window]] textual window fields, graphics>>=
 Frame frm;
 @
 % Image is inside frame or cover frame too?
@@ -5436,6 +5462,8 @@ struct Filsys
 <<global filsys>>=
 Filsys	*filsys;
 @
+%ocaml: again, does not need to be a global
+
 % this is used only by winshell when calling filsysmount,
 %  which needs to know where the pipe is to communicate like
 %  everybody else with the rio fileserver
@@ -5452,8 +5480,13 @@ Fid		*next;
 
 \subsection{File state, [[Fid]]}
 
-% server need to maintain state of requested files,
+% server needs to maintain state of requested files,
 % just like kernel does with file descriptor state.
+
+% The client, and the kernel on behalf of the client, see files
+% as a fid. It creates a new fid internally when it encounters a new file.
+% Then it tells the server to use this new fid for the result of an attach
+% or a walk. The server then needs to remember what this fid was about.
 
 % when userspace filesystem, have notion of fid, Fcall message.
 
@@ -5473,6 +5506,7 @@ struct Fid
     <<[[Fid]] extra fields>>
 };
 @
+%ocaml: 'opened: option open_flag' instead of two fields
 
 %see docs/man/5/intro
 %a 32-bit unsigned integer that the client uses to identify
@@ -5501,7 +5535,7 @@ bool	busy;
 
 % looks more like lookupfid than always newfid
 % ctor
-% -> <>
+% filsysproc | filsyswalk -> <>
 <<function newfid>>=
 Fid*
 newfid(Filsys *fs, int fid)
@@ -5514,10 +5548,12 @@ newfid(Filsys *fs, int fid)
     // lookup_hash(fid, fs->fids)
     for(f=*fh; f; f=f->next) {
         if(f->fid == fid)
+            // found!
             return f;
-        else if(ff==nil && f->busy==false)
+        else if(ff==nil && !f->busy)
             ff = f;
     }
+    // else
     if(ff){
         ff->fid = fid;
         return ff;
@@ -5534,7 +5570,9 @@ newfid(Filsys *fs, int fid)
     return f;
 }
 @
-
+%ocaml: Hashtbl.add and Hashtbl.find
+% also bad to be both a lookup and create_if_not_there.
+% should be stricter and allows create only at a few places (Attach, Walk)
 
 
 <<[[Fid]] other fields>>=
@@ -5557,7 +5595,8 @@ Window	*w;
 // chan<ref<Xfid>> (listener = filsysproc, sender = xfidallocthread)
 Channel	*cxfidalloc;	/* chan(Xfid*) */
 @
-%ocaml: not sure we need an arena of worker, can create thread each time?
+%ocaml: not sure we need an arena of worker, can create thread each time
+% (too slow?)
  
 
 % saw server will receive 9p request on pipe while reading filsys.sfd.
@@ -5603,6 +5642,9 @@ struct Xfid
         <<[[Xfid]] extra fields>>
 };
 @
+%ocaml: no need buf, build directly ADT of answer. no need req too, pass
+% directly the parameter of the constructor to the operation.
+% no need channel for worker, create thread on the fly
 %old: was Fcall; but better to name field.
 \t Xfid.fs ? anyway can use the global filsys instead
 % The ref seems to be either 0 or 1, so used just to sanity check things
@@ -5611,7 +5653,7 @@ struct Xfid
 % buf? for filsysrespond? to write back? use same buffer
 % after have parsed?
 
-
+% store fs here because will need it to write back answer to client.
 
 
 \subsection{9P callbacks, [[fcall]]}
@@ -5654,7 +5696,13 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
     <<[[fcall]] other methods>>
 };
 @
+%ocaml: in C this occupes 126 pointers because the first 100
+% entries are not used by any Txxx. In OCaml can simply do a match
+% and dispatch. No need intermediate filsysxxx (which then
+% require to pass around lots of information as extra parameter)
+
 % create/remove forbidden, other stuff could be aspectized too
+
 
 % remember that Xfid is a Fcall, so signature make senses.
 % Get incoming request and handler to worker, and
@@ -5731,10 +5779,10 @@ void threadmain(int argc, char *argv[])
 }
 @
 %dead: written but never read
-%  <<global mainpid>>=
+%  <<global mainpid>> =
 %  int		mainpid;
 %  @
-%  <<[[main()]] set some globals>>=
+%  <<[[main()]] set some globals>> =
 %  mainpid = getpid();
 %  @
 
@@ -5774,9 +5822,9 @@ desktop = allocscreen(view, background, false);
 draw(view, viewr, background, nil, ZP);
 flushimage(display, true);
 @
+%ocaml: use exn, and use les nil: better default interface
 \l could call initdraw instead of geninitdraw
 % background is grey image color?
-%ocaml: use exn, and use les nil: better default interface
 
 <<[[main()]] sanity check desktop>>=
 if(desktop == nil)
@@ -5844,6 +5892,8 @@ if(keyboardctl == nil)
 // chan<unit> (listener = threadmain, sender = mousethread(Exit) | ?)
 Channel	*exitchan;	/* chan(int) */
 @
+%ocaml: typed channels! no need for comment!
+
 % It's more chan(void) no? 
 % For unix not because can return exit code, but true that for plan9
 % should really be a string instead
@@ -5926,14 +5976,14 @@ Rescue:
 }
 @
 %ocaml: need cxfidalloc? because have arena of workers? 
-% what if create each time a new thread?
+% what if create each time a new thread? too slow?
 
 % filsysproc later
 
 % user and pid are for
 %    // to create "/srv/rio.{user}.{pid}"
 % but maybe also more
-
+\l aspectize it
 
 % comm channel is a pipe this time, because it's between processes.
 
@@ -5957,41 +6007,18 @@ cexecpipe(fdt *p0, fdt *p1)
 }
 @
 %ocaml: no OCEXEC on unix? so if exec have to take care! to close
-% those things, so have to store them somewhere?
+% those things, so have to store them somewhere. Actually ocaml
+% has Unix.set_close_on_exec
 %ocaml: need create 2 pipes? unix pipes are unidirectional?
 
-% comment about /srv??
+% Note that ORDWR! pipes are both ways in Plan9.
+% So both sides can read/write on the pipe.
 
+% comment about /srv??
 
 % close on exec for server? so keep only client fd?
 
 % See Kernel.nw for pipe and #| device.
-
-% two way pipes?
-
-
-
-<<[[filsysinit()]] other locals>>=
-fdt fd;
-char buf[128];
-int n;
-@
-
-<<[[filsysinit()]] set fs user>>=
-fd = open("/dev/user", OREAD);
-strcpy(buf, "Jean-Paul_Belmondo"); // lol
-if(fd >= 0){
-    n = read(fd, buf, sizeof buf-1);
-    if(n > 0)
-        buf[n] = '\0';
-    close(fd);
-}
-fs->user = estrdup(buf);
-@
-%ocaml: let user = cat("/dev/user") |> String.concat "" 
-
-% useful beyond the /srv/rio.user.pid? Yes for security
-% the worker and filesystem make sure request match the owner of rio
 
 
 \subsection{Worker allocator, [[xfidinit()]]}
@@ -6123,7 +6150,7 @@ keyboardthread(void*)
 
 % Rune! so super simple, no need to have Ctl, Alt, ... all of
 % those composed keys are Rune? 
-\l Hmm but then can't intercept when guy just type on Ctlr and release?
+\l Hmm but then can't intercept when guy just type on Ctlr and release? Quake?
 
 % pretty simple, send key to the window (window ck channel and thread) 
 % with the focus
@@ -6302,8 +6329,9 @@ if(inside &&
 % If not, then relay at least left button because terminal uses
 %  for text selection and to move the text cursor
 
-% scrolling? when started click to scroll? or when automatic
-%  scrolling selected?
+% scrolling? when started click to scroll? 
+% No, when automatic scrolling selected.
+\t rename autoscroll
 
 <<[[mousethread()]] locals>>=
 Mouse tmp;
@@ -6381,6 +6409,8 @@ wpointto(Point pt)
 }
 @
 % thx to topped can find the topmost one under the cursor
+% (linear in number of windows though)
+%alt: maintain stack of windows?
 
 
 <<[[mousethread()]] when not sending, set cursor part1>>=
@@ -6394,7 +6424,7 @@ else
 if(w != nil)
     cornercursor(w, mouse->xy, false);
 @
-% why 2 times cornercursor? because moving in between??
+\l why 2 times cornercursor? because moving in between??
 
 
 
@@ -6481,7 +6511,8 @@ enum {
     NWALT 
 };
 @
-
+% there will be a lot more! especially for interacting with the
+% virtual devices mounted by the window
 
 
 
@@ -6497,7 +6528,6 @@ winctl(void *arg)
     Window *w = arg;
     // map<enum<Wxxx>, Alt>
     Alt alts[NWALT+1];
-    char buf[128]; // /dev/mouse interface
     <<[[winctl()]] other locals>>
     
     snprint(buf, sizeof buf, "winctl-id%d", w->id);
@@ -6525,8 +6555,6 @@ winctl(void *arg)
 % so even though it looks like size for interface to /dev/mouse, it was not
 \l why plus 1 on NWALT?
 
-%<<[[winctl()]] local initialisation>>=
-%@
 %old: 
 % npart = 0; was there, but better put with local decl.
 % lastb = -1; same
@@ -6582,8 +6610,7 @@ wkeyctl(Window *w, Rune r)
 {
     <<[[wkeyctl()]] locals>>
 
-    if(r == 0)
-        return;
+    <<[[wkeyctl()]] sanity check rune>>
     <<[[wkeyctl()]] return if window was deleted>>
 
     /* navigation keys work only when mouse is not open */
@@ -6598,7 +6625,11 @@ wkeyctl(Window *w, Rune r)
 \l actually it's not exactly when not rawing, because the if rawing
 \l  path is taken if w->rawing && other condition
 
-% when have rune 0?
+<<[[wkeyctl()]] sanity check rune>>=
+if(r == 0)
+    return;
+@
+\l when have rune 0?
 
 % will see those cases later when talk about graphical and textual windows.
 % will see actually relay to other channel.
@@ -6608,6 +6639,7 @@ wkeyctl(Window *w, Rune r)
 if(w->deleted)
     return;
 @
+\l how can be deleted and receive keyboard event?
 
 \subsection{Mouse events listening}
 
@@ -6620,9 +6652,8 @@ Mousectl	mc;
 
 % same DS than in mousethread
 
-\l why need whole Mousectl? why not just channel? because need c and resizec
-\l and a Mouse,
-\l so simpler to just take the whole Mousectl.
+% why need whole Mousectl? why not just channel? because need c and resizec
+% and a Mouse, so simpler to just take the whole Mousectl.
 \t simplify, have named Mouse, and then mch and resizech ?
 
 
@@ -6639,6 +6670,10 @@ alts[WMouse].op = CHANRCV;
 % see in mousethread for the application mouse event dispatch:
 %    send(winput->mc.c, &tmp);
 
+
+<<[[winctl()]] other locals>>=
+char buf[128]; // /dev/mouse interface
+@
 
 <<[[winctl()]] event loop cases>>=
 case WMouse:
@@ -6681,6 +6716,7 @@ case WCtl:
     }
     continue;
 @
+%ocaml: no need intermediate wctlmesg
 
 % will see wctlmesg later
 
@@ -6699,13 +6735,17 @@ case WCtl:
 
 
 % why a process? because block on fs->sfd! would block everything else.
-%ocaml: can be a thread!
+%ocaml: can be a thread thx to ThreadUnix.
 
 <<global messagesize>>=
 int	messagesize = 8192+IOHDRSZ;	/* good start */
 @
+%ocaml: a field in global 'fs' instead of global
+
 % negociated with kernel in filsysversion in first message
 % IOHDRSZ defined in fcall.h
+
+\subsection{[[filsysproc()]]}
 
 %main -> filsysinit -> proccreate -> <>
 <<function filsysproc>>=
@@ -6743,19 +6783,24 @@ filsysproc(void *arg)
             <<[[filsysproc()]] if x type is Tversion or Tauth>>
             else
                 f = newfid(fs, x->req.fid);
-
             x->f = f;
 
             // Dispatch
             x  = (*fcall[x->req.type])(fs, x, f);
         }
-        firstmessage = false;
+        <<[[filsysproc()]] end of loop>>
     }
 }
 @
 %dead:    fs->pid = getpid();  was after threadsetname
 %ocaml: do not go through xfid allocator arena, just create each
 % time a new thread
+%ocaml: do no go through intermediate buffer and read9pmsg/convM2S, do
+% both at once
+%ocaml: no need intermediate fcall global dispatch. Dispatch inline
+% with match.
+%ocaml: no newfid here! do it only in Attach or Walk, and for the other
+% cases use lookup_fid, not new_fid
 
 % why need send and recv? cant just recv?
 
@@ -6769,10 +6814,6 @@ filsysproc(void *arg)
 
 % read9pmsg, convM2S, see fcall.h
 
-<<global firstmessage>>=
-bool	firstmessage = true;
-@
-% needed to ensure filsysversion is first request sent
 
 
 % Note that filsysproc is a proccreate! need because blocking
@@ -6796,7 +6837,7 @@ if(n <= 0){
 if(x->req.type==Tversion || x->req.type==Tauth)
     f = nil;
 @
-
+% no fid for those fcalls.
 
 
 
@@ -6811,6 +6852,60 @@ Fcall fc;
 if(fcall[x->req.type] == nil)
     x = filsysrespond(fs, x, &fc, Ebadfcall);
 @
+% when can happen? if receive a response request, but this
+% means the kernel is buggy.
+
+
+\subsection{[[filsysversion()]]}
+
+<<[[fcall]] other methods>>=
+[Tversion] = filsysversion,
+@
+
+<<function filsysversion>>=
+static
+Xfid*
+filsysversion(Filsys *fs, Xfid *x, Fid*)
+{
+    Fcall fc;
+
+    <<[[filsysversion()]] sanity checks>>
+    // else
+    messagesize = x->req.msize;
+    fc.msize = messagesize;
+    fc.version = "9P2000";
+    return filsysrespond(fs, x, &fc, nil);
+}
+@
+%old: I reordered a bit so could put all sanity checks together
+
+% must answer with same values! otherwise mount syscall will fail
+
+
+<<global firstmessage>>=
+bool	firstmessage = true;
+@
+% needed to ensure filsysversion is first request sent
+
+<<[[filsysversion()]] sanity checks>>=
+if(!firstmessage)
+    return filsysrespond(x->fs, x, &fc, "version request not first message");
+@
+
+<<[[filsysproc()]] end of loop>>=
+firstmessage = false;
+@
+
+
+
+<<[[filsysversion()]] sanity checks>>=
+if(x->req.msize < 256)
+    return filsysrespond(x->fs, x, &fc, "version: message size too small");
+if(strncmp(x->req.version, "9P2000", 6) != 0)
+    return filsysrespond(x->fs, x, &fc, "unrecognized 9P version");
+@
+% why 256? need to write in one block data for /mnt/wsys/mouse
+% so need some basic space?
 
 
 
@@ -6907,6 +7002,7 @@ if(x->flushtag != -1)
     error("flushtag in allocate");
 @
 %ocaml: exn
+\l mv flushtag to later?
 
 
 <<[[xfidallocthread()]] sanity check x when Free>>=
@@ -6951,8 +7047,8 @@ xfidctl(void *arg)
 %ocaml: just create each time new thread with closured passed by!
 % not even need an arena allocator
 
-% how decref cannot be 0?
-
+\l how decref cannot be 0?
+\l how can share an xfid?? why need a Ref?
 
 
 
@@ -7181,7 +7277,7 @@ Cursor l = {
 <<global lastcursor>>=
 Cursor	*lastcursor;
 @
-%ocaml: not sure we want this opti
+%ocaml: not sure we need this opti
 
 <<function riosetcursor>>=
 void
@@ -7372,7 +7468,9 @@ button3menu(void)
 %        /* else fall through */
 % tricks when Exit was an optional menu item disabled sometimes
 % but I made it always apparent now.
-\l should not be menuing here instead of sweeping?
+\l should not be menuing here instead of sweeping? why need that?
+%  because app can write on its /dev/mouse to move cursor but would
+%  be weird in middle of menu action to get the cursor moved
 
 % displaying a menu with menuhit is drawing something! on top of what you
 % are currently! it's part of the drawing library! See Graphics.nw.
@@ -7389,9 +7487,10 @@ button3menu(void)
 <<global sweeping>>=
 bool	sweeping;
 @
-% seems used when menu is out, but used very little
-% or when in middle of big action started in mousethread
-\l should be menuing?
+% used to forbid some operations like write on /dev/mouse from app
+% to move the mouse, because sweeping means we are in the middle of
+% some actions from the user where the mouse should not move around
+\l should be menuing? to not confuse with sweep()
 
 
 
@@ -7439,7 +7538,7 @@ enum RightMenuCommand
 %ocaml: no intermediate enums, just pass a list of strings and closures
 %pad: I introduced Hidden
 %old: used to be a global
-% <<global Hidden>>=
+% <<global Hidden>> =
 % int	Hidden = Exit+1;
 % @
 
@@ -7593,69 +7692,12 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
 }
 @
 \l rename m to type, more consistent
-%ocaml: again because of ADT dont need extra arguments
+%ocaml: again because of ADT dont need extra arguments, and no
+% need default case (exhaustive check)
 
+\l what is the point of returning m if same than parameter?
+\l  because the switch can change it?
 
-
-
-
-
-\t distribute
-<<[[Wctlmesgkind]] cases>>=
-Wakeup,
-@
-
-% wcurrent | button2menu | xfidopen(Qwctl) --> <>
-<<[[wctlmesg()]] cases>>=
-case Wakeup:
-    break;
-@
-
-\t distribute
-<<[[Wctlmesgkind]] cases>>=
-Refresh,
-@
-% seems called when close the mouse, maybe to restore frame
-% maybe can put in Textual windows chapter
-
-% xfidclose (Qmouse) -> <>
-<<[[wctlmesg()]] cases>>=
-case Refresh:
-    if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
-        break;
-    if(!w->mouseopen)
-        wrefresh(w, r);
-    flushimage(display, true);
-    break;
-@
-
-<<function wrefresh>>=
-void
-wrefresh(Window *w, Rectangle)
-{
-    Frame *frm = &w->frm;
-
-    /* BUG: rectangle is ignored */
-    if(w == input)
-        wborder(w, Selborder);
-    else
-        wborder(w, Unselborder);
-    if(w->mouseopen)
-        return;
-    // else
-
-    draw(w->i, insetrect(w->i->r, Borderwidth), frm->cols[BACK], nil, 
-         w->i->r.min);
-    frm->ticked = 0;
-    if(frm->p0 > 0)
-        frdrawsel(frm, frptofchar(frm, 0), 0, frm->p0, 0);
-    if(frm->p1 < frm->nchars)
-        frdrawsel(frm, frptofchar(frm, frm->p1), frm->p1, frm->nchars, 0);
-    frdrawsel(frm, frptofchar(frm, frm->p0), frm->p0, frm->p1, 1);
-    w->lastsr = ZR;
-    wscrdraw(w);
-}
-@
 
 
 
@@ -7668,6 +7710,7 @@ wrefresh(Window *w, Rectangle)
 
 % most important operation. Link with draw.
 % Link with external process.
+% Start from the mouse!
 
 <<[[button3menu()]] cases>>=
 case New:
@@ -7745,6 +7788,8 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 %ocaml: do channel creation in wmk instead of split creation of things
 % in 2 places
 \l why return it? not used in caller anyway
+\l not too late to wsetname? can not have situation that child
+\l  execute too fast its mount?
 
 % always growing windows? never reuse when a window is closed?
 
@@ -7804,7 +7849,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     Window *w;
     Rectangle r;
 
-    <<[[wmk()]] cols initialisation>>
+    <<[[wmk()]] colors initialisation>>
 
     w = emalloc(sizeof(Window));
 
@@ -7816,7 +7861,6 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     w->topped = ++topped;
 
     <<[[wmk()]] channels settings>>
-
     <<[[wmk()]] textual window settings>>
 
     w->notefd = -1;
@@ -7832,19 +7876,20 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 @
 %old: I changed the order of some initialisations, to group textual window
 % stuff together
-\l why wborder here? will do it again in caller in wcurr ent
+\l why wborder here? will do it again in caller in wcurrent
 
 
-\t wscrdraw??
+\t wscrdraw?? need that so early?
 
 % about incref comment, see call to wclose in winshell after filsysmount
+\l subtle
 
 <<[[wmk()]] channels settings>>=
 w->mc = *mc;
 w->ck = ck;
 w->cctl = cctl;
 @
-
+%ocaml: build the channel in wmk, so no need pass them around from new()
 
 
 %\subsection{Window border}
@@ -7880,6 +7925,11 @@ static	Image	*lighttitlecol;
 @
 % set in wmk
 %ocaml: set in main too, like red and background
+
+<<[[wmk()]] extra colors initialisation>>=
+titlecol     = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreygreen);
+lighttitlecol= allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreygreen);
+@
 
 
 <<[[wborder()]] sanity check w>>=
@@ -7954,6 +8004,7 @@ if(pid == 0){
 \t why use intermediate winshell and cpid? why not simply fork
 \t  here so no need also arg[] as can access this information directly.
 \t why proccreate/procexec intermediates?
+\t because of code below? to better handle possible errors in child?
 
 % wait for pid. pid will be passed to wsetpid, so know
 % which process we are connected to, and which one to kill if delete
@@ -7972,7 +8023,7 @@ if(pid == 0){
     return nil;
 }
 @
-
+% this is why you use a cpid! because things can go wrong?
 
 
 % have already half of it, new, wmk, winctl thread creation,
@@ -8005,7 +8056,7 @@ winshell(void *args)
     rfork(RFNAMEG|RFFDG|RFENVG);
 
     <<[[winshell()]] adjust namespace>>
-    <<[[winshell()]] reassign STDIN/STDOUT>>
+    <<[[winshell()]] reassign STDIN/STDOUT after namespace adjustment>>
 
     if(wclose(w) == false){	/* remove extra ref hanging from creation */
         notify(nil);
@@ -8021,11 +8072,22 @@ winshell(void *args)
 @
 % remove extra ref, see comment in wmk
 
-% procexec? take a channel? to write pid there?
+% procexec take a channel to write pid there that the parent
+% is waiting for.
+
+% Will do also the close on exec (OCEXEC) set up earlier.
+
+%ocaml-found:
+% redirect stderr! important too because rc for example print its prompt
+%  on stderr (see Shell.nw)
+
 
 
 <<[[Window]] process fields>>=
 int		pid;
+@
+
+<<[[Window]] process fields>>=
 // /proc/<pid>/notepg
 fdt	 	notefd;
 @
@@ -8091,7 +8153,7 @@ filsysmount(Filsys *fs, int id)
 %pad: I added err
 
 
-<<[[winshell()]] reassign STDIN/STDOUT>>=
+<<[[winshell()]] reassign STDIN/STDOUT after namespace adjustment>>=
 // reassign stdin/stdout to virtualized /dev/cons from filsysmount
 close(STDIN);
 err = open("/dev/cons", OREAD);
@@ -8102,7 +8164,7 @@ err = open("/dev/cons", OWRITE);
 @
 % important!!
 
-
+% STDERR is done later by dupping STDOUT
 
 
 <<[[winshell()]] sanity check err open cons stdin>>=
@@ -8112,6 +8174,7 @@ if(err < 0){
     threadexits("/dev/cons");
 }
 @
+% so parent can know if something went wrong via pidc!
 
 <<[[winshell()]] sanity check err open cons stdout>>=
 if(err < 0){
@@ -8143,6 +8206,7 @@ if(err < 0){
     return ERROR_NEG1;
 }
 @
+%ocaml: exn
 
 \subsection{Public layer, [[wsetname()]]}
 
@@ -8161,6 +8225,11 @@ if(err < 0){
 uint		namecount;
 @
 % counter, per window
+
+% When resize a window, we need to create a new image and client
+% need to grab back again this image. Do we change the name
+% of this image? or the previous freeimage on the public image
+% also free its public name? Graphics.nw?
 
 % new -> <>
 <<function wsetname>>=
@@ -8186,8 +8255,10 @@ wsetname(Window *w)
 
 <<[[wsetname()]] if image name already in use, try another name>>=
 for(i='A'; i<='Z'; i++){
+    // ok try again
     if(nameimage(w->i, w->name, true) > 0)
         return;
+    // else, retry
 
     errstr(err, sizeof err);
     if(strcmp(err, "image name in use") != 0)
@@ -8195,7 +8266,8 @@ for(i='A'; i<='Z'; i++){
     w->name[n] = i;
     w->name[n+1] = '\0';
 }
-w->name[0] = 0;
+// else
+w->name[0] = '\0';
 fprint(STDERR, "rio: setname failed: %s\n", err);
 @
 
@@ -8314,7 +8386,7 @@ if(i == nil)
 <<[[sweep()]] sanity check mouse buttons, i, and rectangle size>>=
 if(mouse->buttons != 0)
     goto Rescue;
-if(i==nil || Dx(i->r)<100 || Dy(i->r)<3*font->height)
+if(i==nil || Dx(i->r) < 100 || Dy(i->r) < 3*font->height)
     goto Rescue;
 @
 %ocaml: can come here from different situations and ocaml code clearer for that
@@ -8363,7 +8435,7 @@ wtop(Point pt)
     if(w){
         if(w->topped == topped)
             return nil;
-        topwindow(w->i); // draw.h
+        topwindow(w->i); // window.h (was in draw.h)
         wcurrent(w);
         flushimage(display, true);
         w->topped = ++topped;
@@ -8413,7 +8485,7 @@ wrepaint(Window *w)
 {
 
     <<[[wrepaint()]] update cols>>
-    <<[[wrepaint()]] if mouse not opened>>
+    <<[[wrepaint()]] after updated cols, redraw content if mouse not opened>>
 
     if(w == input){
         wborder(w, Selborder);
@@ -8535,6 +8607,9 @@ wclosewin(Window *w)
 % why wsetcursor when reset input? should call riocursor instead no?
 
 % Note that freeimage on the layer will make it disappear from the screen
+\l but  then why need deletetimeoutproc? Because if the client use
+\l nameimage to get a reference to it, then its refcount in the kernel
+\l will be > 0 and so it will not disappear. This is why deletetimeoutproc!
 
 % This is when w->i can be nil!!
 
@@ -8553,6 +8628,8 @@ deletetimeoutproc(void *v)
     sendp(deletechan, s);
 }
 @
+%ocaml: a thread can sleep
+
 % separate process cos sleep is blocking
 
 
@@ -8598,7 +8675,9 @@ deletethread(void*)
     }
 }
 @
-% why freeimage here too? not enough in closewin?
+% why freeimage here too? not enough in closewin? no because got
+% a new reference to it when call namedimage. But the client
+% will still have one, hence originwindow.
 
 
 
@@ -8636,7 +8715,7 @@ winclosethread(void*)
     }
 }
 @
-
+\t ???
 
 
 
@@ -9193,7 +9272,7 @@ Window	*hidden[100];
 <<global nhidden>>=
 int		nhidden;
 @
-%ocaml: hashtbl instead of growing array?
+%ocaml: hashtbl instead of growing array.
 % hmm but then lose order in which the window were hidden in the menu
 % (important? could just sort?)
 
@@ -9223,7 +9302,7 @@ whide(Window *w)
     return 0;
 }
 @
-%ocaml: hashtbl
+%ocaml: Hashtbl
 
 % allocimage is not allocwindow, and so it's in-memory image!!
 
@@ -9258,7 +9337,7 @@ menu3str[i+Hidden] = nil;
 @
 
 \subsection{[[unhide()]]}
-
+% could be call show, but already uses wshow for something else
 
 <<[[button3menu()]] cases>>=
 default:
@@ -9337,7 +9416,7 @@ wunhide(int h)
 % so then what happens?
 % filsysproc is reading on fs->sfd, server side of the pipe
 
-% readp9msg, then create or get a worker (Xfid), 
+% read9pmsg, then create or get a worker (Xfid), 
 % set its field with the current p9 message, and then fcall
 % for right type of message. Then each fcall may proceed,
 % or call the worker to do more job.
@@ -9355,7 +9434,7 @@ wunhide(int h)
 \subsection{[[Qxxx]]}
 
 % Saw before
-%<<[[Fid]] other fields>>=
+%<<[[Fid]] other fields>> =
 %Qid		qid;
 %@
 
@@ -9371,14 +9450,18 @@ enum Qxxx
     QMAX,
 };
 @
-%ocaml: ADT? and qid <-> int converter?
+%ocaml: ADT, Dir | File of devid, and device struct to localize code
+% better instead of having the code to handle cons or mouse spread around.
+%c: easy int <-> symbolic name
 
-% window id + device enum id  -> final Qid
+% window id + qxx id  -> final Qid.path
 <<function QID>>=
 #define	QID(winid,qxxx)	((winid<<8)|(qxxx))
 @
 % what about overflow? hope will not have too many windows then
 %old: was w,q, but then confusing with q below
+%ocaml: confusing that use qid for many things. There is raw qid,
+% then parsed qid, then qid file, then qid path
 
 % Qid -> window id
 <<function WIN>>=
@@ -9389,7 +9472,7 @@ enum Qxxx
 <<function FILE>>=
 #define	FILE(q)	(((ulong)(q).path) & 0xFF)
 @
-
+%ocaml: use pair instead of 2 macros. filecode vs fileid vs qid
 
 
 \subsection{[[dirtab]]}
@@ -9405,7 +9488,7 @@ struct Dirtab
     uint	perm;
 };
 @
-% rename DirEntry (or DirEntryShort) like I want to do in kernel
+\l rename DirEntry (or DirEntryShort) like I want to do in kernel
 
 <<global dirtab>>=
 Dirtab dirtab[]=
@@ -9415,13 +9498,17 @@ Dirtab dirtab[]=
     { nil, }
 };
 @
+\l could use DMEXEC | DMREAD
+%ocaml: clearer perm, and remove redundant DMDIR
+% also separate root_entry from toplevel_entries as anyway lots of C code
+% does d++ to skip '.'
 
 
 <<[[Fid]] other fields>>=
 // ref<Dirtab>
 Dirtab	*dir;
 @
-\t it's a DirEntry! not Dirtab. rename field too!
+\t it's a DirEntryShort! not Dirtab. rename field too!
 
 % so for instance attach will set qid to Qdir
 % and dir to dirtable of root! 
@@ -9441,17 +9528,14 @@ filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
 {
     int n;
 
-    if(err){
-        fc->type = Rerror;
-        fc->ename = err;
-    }else
+    <<[[filsysrespond()]] if err>>
+    else
         fc->type = x->req.type+1; // Reply type just after Transmit type
 
     fc->fid = x->req.fid;
     fc->tag = x->req.tag;
 
-    if(x->buf == nil)
-        x->buf = malloc(messagesize);
+    <<[[filsysrespond()]] sanitize buf>>
     n = convS2M(fc, x->buf, messagesize);
     <<[[filsysrespond()]] sanity check n>>
 
@@ -9463,16 +9547,41 @@ filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
     return x;
 }
 @
-% but write on sfd goes where?
+%ocaml: build value with { req with ... }, no malloc, no convS2M
+% and explicit constructor for return value makes it clearer than
+% those fc->qid = xxx; fc->type = x->req.type+1
+
+% answer with same tag! so kernel can match the response to the question
+
+% but write on sfd goes where? pipe are bidirectional! so goes back
+% to clients_fd which is managed by the kernel on behalf of a client.
+
 % and what if multiple things write on it at the same time?
-%  filsysproc and any xfidctl thread can potentially call filsysrespond
+%  we write each time full message, so the kernel will execute the
+%  writes in a certain order without interleaving (syscall on a fd are atomics),
+%  and the tag/fid is used to identify the request, so they can arrive
+%  in any order it does not matter.
+% filsysproc and any xfidctl thread can potentially call filsysrespond
 \l could rename fc to r? for reply? but then confusing with rectangle
+
+<<[[filsysrespond()]] sanitize buf>>=
+if(x->buf == nil)
+    x->buf = malloc(messagesize);
+@
+% should never happen, buf set in filsysproc
 
 <<[[filsysrespond()]] sanity check n>>=
 if(n <= 0)
     error("convert error in convS2M");
 @
 
+<<[[filsysrespond()]] if err>>=
+if(err){
+    fc->type = Rerror;
+    fc->ename = err;
+}
+@
+%ocaml: separate function for error, not abusing filsysrespond last arg
 
 \section{Attach}
 
@@ -9482,6 +9591,7 @@ if(n <= 0)
 \t hmm used by filsysopen. But true that anyway it's in the Xfid so could
 \t remove (or remove it from Xfid)
 
+% -> <>
 <<function filsysattach>>=
 static
 Xfid*
@@ -9494,7 +9604,7 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
     f->busy = true;
     f->open = false;
 
-    f->qid.path = Qdir;
+    f->qid.path = Qdir; // no window id, Qdir valid for all
     f->qid.type = QTDIR;
     f->qid.vers = 0;
     f->dir = dirtab; // entry for "."
@@ -9505,12 +9615,15 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
     return nil;
 }
 @
-
+\l nrpart? partial rune. Aspectize!
+\l  set here back to 0 because reuse fids
+%ocaml: no reuse of fid so cleaner.
 
 % return nil, because worker has a job to do asynchronously so filsysproc
 % need allocate a new worker for next request.
 % once finished this worker will go back in xfidfree.
-
+\l requires really use a thread for that? Any blocking issue?
+\l  when write the answer? But then why for walk we dont do it too?
 
 <<[[filsysattach()]] locals>>=
 Fcall fc;
@@ -9526,6 +9639,14 @@ if(strcmp(x->req.uname, x->fs->user) != 0)
 % to client using x->buf space.
 
 \subsection{[[xfidattach()]]}
+
+<<global all>>=
+QLock	all;			/* BUG */
+@
+% I think it's mainly for wsys/ shared access
+% it protects access to windows and nwindow
+
+
 
 % filsysattach !-> <>
 <<function xfidattach>>=
@@ -9557,6 +9678,9 @@ xfidattach(Xfid *x)
     filsysrespond(x->fs, x, &fc, nil);
 }
 @
+%ocaml: less split between filsysattach and xfidattach 
+% and clearer answer message than setting f->qid in one func
+% and then fc.qid answer for Attach (not explicit) in other func
 
 %dead: old syntax
 %    if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
@@ -9587,6 +9711,8 @@ wlookid(int id)
     return nil;
 }
 @
+%ocaml: Hashtbl.find
+
 % need to do that only for attach. Further fid creation
 % will come from walk and can copy Fid.w field
 
@@ -9594,6 +9720,11 @@ wlookid(int id)
 % pass window id, and now this attach thing is connected
 % to the right window
 
+
+<<[[xfidattach()]] other locals>>=
+char *err = Eunkid;
+@
+% unknown id
 
 <<[[xfidattach()]] sanity check w>>=
 if(w == nil){
@@ -9603,6 +9734,190 @@ if(w == nil){
     return;
 }
 @
+% free back the fid with busy to false
+
+\section{Walk}
+
+% Walk is complex.
+% Clone, walk, multiple elements in one request. Subtle API.
+
+% Note that because union dir, normal that many of requests to walk
+% should fail. For instance [draw;new] for nwnames should fail!
+% It is not handled by rio (but by the draw device in the kernel)
+
+\subsection{[[filsyswalk()]]}
+
+% docs/man/5/walk
+
+% One message for full path. So efficient network wise,
+% no need back and forth for each path elements.
+% But that means filsyswalk need to redo part of the job
+% of the kernel in namei().
+
+% complicated ...
+
+
+<<function filsyswalk>>=
+static
+Xfid*
+filsyswalk(Filsys *fs, Xfid *x, Fid *f)
+{
+    Fcall fc;
+    Qid qid;
+    Dirtab *Dir;
+    int i;
+    int id;
+    uchar type;
+    ulong path;
+    Dirtab *d;
+    Window *w;
+    char *err;
+    <<[[filsyswalk()]] other locals>>
+
+    <<[[filsyswalk()]] sanity check if opened>>
+    <<[[filsyswalk()]] if clone walk message>>
+
+    fc.nwqid = 0;
+    err = nil;
+
+    /* update f->qid, f->dir only if walk completes */
+    qid = f->qid;
+    dir = f->dir;
+
+    if(x->req.nwname > 0){
+        for(i=0; i < x->req.nwname; i++){
+            <<[[filsyswalk()]] sanity check current qid is a directory>>
+            <<[[filsyswalk()]] if dotdot>>
+            <<[[filsyswalk()]] if Qwsys, then goto Accept>>
+            <<[[filsyswalk()]] if snarf>>
+            id = WIN(f->qid);
+            d = dirtab;
+            d++;	/* skip '.' */
+            for(; d->name; d++)
+                if(strcmp(x->req.wname[i], d->name) == 0){
+                    path = d->qid;
+                    type = d->type;
+                    dir = d;
+                    goto Accept;
+                }
+            break;	/* file not found */
+        }
+        <<[[filsyswalk()]] sanity check i and err>>
+    }
+    <<[[filsyswalk()]] sanity check err and nwqid>>
+    else if(fc.nwqid == x->req.nwname){
+        f->dir = dir;
+        f->qid = qid;
+    }
+
+    return filsysrespond(fs, x, &fc, err);
+}
+@
+
+<<[[filsyswalk()]] accept label and code>>=
+Accept:
+<<[[filsyswalk()]] sanity check path elements>>
+qid.type = type;
+qid.path = QID(id, path);
+qid.vers = 0;
+fc.wqid[fc.nwqid++] = qid;
+continue;
+@
+
+
+\subsection{Cloning [[fid]]}
+
+<<[[filsyswalk()]] other locals>>=
+Fid *nf = nil;
+@
+<<[[filsyswalk()]] if clone walk message>>=
+if(x->req.fid  != x->req.newfid){
+    /* BUG: check exists */
+    nf = newfid(fs, x->req.newfid);
+    <<[[filsyswalk()]] when clone walk message, sanity check nf>>
+    nf->busy = true;
+    nf->open = false;
+    nf->dir = f->dir;
+    nf->qid = f->qid;
+    nf->w = f->w;
+    incref(f->w);
+    nf->nrpart = 0;	/* not open, so must be zero */
+    f = nf;	/* walk f */
+}
+@
+%ocaml: use cleaner Request type where newfid is an option,
+% and also check does not exists
+
+% propagate w, so attach is only place where needs to wlookid.
+
+<<[[filsyswalk()]] when clone walk message, sanity check nf>>=
+if(nf->busy)
+    return filsysrespond(fs, x, &fc, "clone to busy fid");
+@
+
+
+
+\subsection{[[..]]}
+
+
+<<[[filsyswalk()]] if dotdot>>=
+if(strcmp(x->req.wname[i], "..") == 0){
+    type = QTDIR;
+    path = Qdir;
+    dir = dirtab;
+    <<[[filsyswalk()]] when in dotdot, if Qwsysdir adjust path>>
+    id = 0;
+    <<[[filsyswalk()]] Accept label and code>>
+}
+@
+% id 0, topdir does not need winid 
+\l but important to share it?
+
+
+\subsection{Error management}
+
+<<[[filsyswalk()]] sanity check if opened>>=
+if(f->open)
+    return filsysrespond(fs, x, &fc, "walk of open file");
+@
+
+<<[[filsyswalk()]] sanity check i and err>>=
+if(i==0 && err==nil)
+    err = Eexist;
+@
+% Eexist for "File does not exist"
+\l why check i == 0? return Eexist only if toplevel name is unknown?
+\l  for later entries we care less?
+
+<<[[filsyswalk()]] sanity check err and nwqid>>=
+if(err!=nil || fc.nwqid < x->req.nwname){
+    if(nf){
+        if(nf->w)
+            sendp(winclosechan, nf->w);
+        nf->open = false;
+        nf->busy = false;
+    }
+}
+@
+\l why close the window when error in path elements?
+
+<<[[filsyswalk()]] sanity check current qid is a directory>>=
+if(!(qid.type & QTDIR)){
+    err = Enotdir;
+    break;
+}
+@
+
+<<[[filsyswalk()]] sanity check path elements>>=
+if(i == MAXWELEM){
+    err = "name too long";
+    break;
+}
+@
+
+
+%\section{Flush}
+% adv topics now
 
 \section{Open}
 
@@ -9613,24 +9928,25 @@ static
 Xfid*
 filsysopen(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall fc;
-    int m;
+    <<[[filsysopen()]] locals>>
 
     <<[[filsysopen()]] sanity check mode>>
-        
     sendp(x->c, xfidopen);
     return nil;
-
-    Deny:
-    return filsysrespond(fs, x, &fc, Eperm);
+<<[[filsysopen()]] deny label>>
 }
 @
 
 % remember that x->mode is really x->Fcall.mode of union
 
+% return nil again to say to filsysproc to allocate a new worker
+% for next request. Cant reuse this buffer.
+
+<<[[filsysopen()]] locals>>=
+int m;
+@
 <<[[filsysopen()]] sanity check mode>>=
-/* can't truncate anything, so just disregard */
-x->req.mode &= ~(OTRUNC|OCEXEC);
+<<[[filsysopen()]] sanitize mode>>
 /* can't execute or remove anything */
 if(x->req.mode==OEXEC || (x->req.mode & ORCLOSE))
     goto Deny;
@@ -9653,6 +9969,20 @@ if(((f->dir->perm & ~(DMDIR|DMAPPEND)) & m) != m)
 @
 % look for 
 
+<<[[filsysopen()]] sanitize mode>>=
+/* can't truncate anything, so just disregard */
+x->req.mode &= ~(OTRUNC|OCEXEC);
+@
+
+
+<<[[filsysopen()]] locals>>=
+Fcall fc;
+@
+<<[[filsysopen()]] deny label>>=
+Deny:
+    return filsysrespond(fs, x, &fc, Eperm);
+@
+
 \subsection{[[xfidopen()]]}
 
 % how sure that have a x->f->w?  because cant open if not attach?
@@ -9661,9 +9991,8 @@ void
 xfidopen(Xfid *x)
 {
     Fcall fc;
-    Window *w;
+    Window *w = x->f->w;
 
-    w = x->f->w;
     <<[[xfidxxx()]] respond error if window was deleted>>
     switch(FILE(x->f->qid)){
     <<[[xfidopen()]] cases>>
@@ -9677,6 +10006,7 @@ xfidopen(Xfid *x)
     filsysrespond(x->fs, x, &fc, nil);
 }
 @
+%old: I put the x->f->w with declaration.
 
 <<[[xfidxxx()]] respond error if window was deleted>>=
 if(w->deleted){
@@ -9711,6 +10041,10 @@ filsysclunk(Filsys *fs, Xfid *x, Fid *f)
 }
 @
 
+% free back fid
+
+% when call clunk and not opened?
+
 % winclosechan ultimately call wclose which removes a reference
 % to the window, so looks similar to xfidclose ...
 % why not call wclose directly? to not block?
@@ -9723,10 +10057,9 @@ void
 xfidclose(Xfid *x)
 {
     Fcall fc;
-    Window *w;
+    Window *w = x->f->w;
     <<[[xfidclose()]] other locals>>
 
-    w = x->f->w;
     switch(FILE(x->f->qid)){
     <<[[xfidclose()]] cases>>
     }
@@ -9734,11 +10067,17 @@ xfidclose(Xfid *x)
     filsysrespond(x->fs, x, &fc, nil);
 }
 @
-% wclose(w)! remove one reference
+\l wclose(w)! remove one reference, but subtle why need that
+\t why?
 
 
 
 \section{Read}
+
+% This is how to get the content of "." after attached and walked,
+% by reading the fid of a directory.
+% See Qdir: case in filsysread
+
 
 \subsection{[[filsysread()]]}
 
@@ -9759,7 +10098,6 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
         sendp(x->c, xfidread);
         return nil;
     }
-
     // else, a directory
 
     o = x->req.offset;
@@ -9788,20 +10126,45 @@ if(b == nil)
     return filsysrespond(fs, x, &fc, "out of memory");
 @
 
+
+\subsection{Reading a directory}
+
+% important case! Qdir! (Qwsysdir will be explained later)
+
+<<[[filsysread()]] other locals>>=
+Dirtab *d;
+@
+<<[[filsysread()]] cases>>=
+case Qdir:
+case Qwsysdir:
+    d = dirtab;
+    d++;	/* first entry is '.' */
+    for(i=0; d->name != nil && i<e; i+=len){
+        len = dostat(fs, WIN(x->f->qid), d, b+n, x->req.count - n, clock);
+        if(len <= BIT16SZ)
+            break;
+        if(i >= o)
+            n += len;
+        d++;
+    }
+    break;
+@
+\l ugly encoding of error with dostat when return BIT16SZ ...
+%ocaml: exn?
+
 \subsection{[[xfidread()]]}
 
 <<function xfidread>>=
 void
 xfidread(Xfid *x)
 {
-    Window *w;
     uint qid;
     int off, cnt;
     Fcall fc;
     Fcall *req = &x->req;
+    Window *w = x->f->w;
     <<[[xfidread()]] other locals>>
     
-    w = x->f->w;
     <<[[xfidxxx()]] respond error if window was deleted>>
     qid = FILE(x->f->qid);
     off = req->offset;
@@ -9817,8 +10180,11 @@ xfidread(Xfid *x)
         }
 }
 @
+\l how default case can happen? should never happen by construction
+%ocaml: ADT and exhaustive check so no need default case
 
 % off, cnt, very important.
+% actually off not always respected ... Qmouse does not care about off
 % see read(2) API?
 
 \section{Write}
@@ -9834,6 +10200,8 @@ filsyswrite(Filsys*, Xfid *x, Fid*)
     return nil;
 }
 @
+% there is no way to write to a directory (checked by kernel?), so the code
+% of filsyswrite is simpler than filsysread
 
 \subsection{[[xfidwrite()]]}
 
@@ -9844,18 +10212,17 @@ xfidwrite(Xfid *x)
 {
     Fcall fc;
     Fcall *req = &x->req;
-    Window *w;
+    Window *w = x->f->w;
     uint qid;
     int off, cnt;
     char buf[256];
     <<[[xfidwrite()]] other locals>>
     
-    w = x->f->w;
     <<[[xfidxxx()]] respond error if window was deleted>>
     qid = FILE(x->f->qid);
     cnt = req->count;
     off = req->offset;
-    req->data[cnt] = 0;
+    req->data[cnt] = '\0';
 
     switch(qid){
     <<[[xfidwrite()]] cases>>
@@ -9901,8 +10268,7 @@ dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
     Dir d;
 
     d.qid.path = QID(id, dir->qid);
-    if(dir->qid == Qsnarf)
-        d.qid.vers = snarfversion;
+    <<[[dostat()]] adjust vers for snarf>>
     else
         d.qid.vers = 0;
     d.qid.type = dir->type;
@@ -9921,165 +10287,6 @@ dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
 
 
 
-
-\section{Walk TODO}
-
-\subsection{[[filsyswalk()]]}
-
-% docs/man/5/walk
-
-% One message for full path. So efficient network wise,
-% no need back and forth for each path elements.
-% But that means filsyswalk need to redo part of the job
-% of the kernel in namei().
-
-% complicated ...
-
-<<global all>>=
-QLock	all;			/* BUG */
-@
-% I think it's mainly for wsys/ shared access
-% it protects access to windows and nwindow
-
-
-\t todo, hard to understand
-<<function filsyswalk>>=
-static
-Xfid*
-filsyswalk(Filsys *fs, Xfid *x, Fid *f)
-{
-    Fcall fc;
-    Fid *nf;
-    int i, id;
-    uchar type;
-    ulong path;
-    Dirtab *d, *dir;
-    Window *w;
-    char *err;
-    Qid qid;
-
-    if(f->open)
-        return filsysrespond(fs, x, &fc, "walk of open file");
-    nf = nil;
-    if(x->req.fid  != x->req.newfid){
-        /* BUG: check exists */
-        nf = newfid(fs, x->req.newfid);
-        if(nf->busy)
-            return filsysrespond(fs, x, &fc, "clone to busy fid");
-        nf->busy = true;
-        nf->open = false;
-        nf->dir = f->dir;
-        nf->qid = f->qid;
-        nf->w = f->w;
-        incref(f->w);
-        nf->nrpart = 0;	/* not open, so must be zero */
-        f = nf;	/* walk f */
-    }
-
-    fc.nwqid = 0;
-    err = nil;
-
-    /* update f->qid, f->dir only if walk completes */
-    qid = f->qid;
-    dir = f->dir;
-
-    if(x->req.nwname > 0){
-        for(i=0; i < x->req.nwname; i++){
-            if((qid.type & QTDIR) == 0){
-                err = Enotdir;
-                break;
-            }
-            if(strcmp(x->req.wname[i], "..") == 0){
-                type = QTDIR;
-                path = Qdir;
-                dir = dirtab;
-                if(FILE(qid) == Qwsysdir)
-                    path = Qwsys;
-                id = 0;
-    Accept:
-                if(i == MAXWELEM){
-                    err = "name too long";
-                    break;
-                }
-                qid.type = type;
-                qid.vers = 0;
-                qid.path = QID(id, path);
-                fc.wqid[fc.nwqid++] = qid;
-                continue;
-            }
-
-            if(qid.path == Qwsys){
-                /* is it a numeric name? */
-                if(!numeric(x->req.wname[i]))
-                    break;
-                /* yes: it's a directory */
-                id = atoi(x->req.wname[i]);
-                qlock(&all);
-                w = wlookid(id);
-                if(w == nil){
-                    qunlock(&all);
-                    break;
-                }
-                path = Qwsysdir;
-                type = QTDIR;
-                qunlock(&all);
-                incref(w);
-                sendp(winclosechan, f->w);
-                f->w = w;
-                dir = dirtab;
-                goto Accept;
-            }
-        
-            if(snarffd>=0 && strcmp(x->req.wname[i], "snarf")==0)
-                break;	/* don't serve /dev/snarf if it's provided in the environment */
-            id = WIN(f->qid);
-            d = dirtab;
-            d++;	/* skip '.' */
-            for(; d->name; d++)
-                if(strcmp(x->req.wname[i], d->name) == 0){
-                    path = d->qid;
-                    type = d->type;
-                    dir = d;
-                    goto Accept;
-                }
-
-            break;	/* file not found */
-        }
-
-        if(i==0 && err==nil)
-            err = Eexist;
-    }
-
-    if(err!=nil || fc.nwqid < x->req.nwname){
-        if(nf){
-            if(nf->w)
-                sendp(winclosechan, nf->w);
-            nf->open = false;
-            nf->busy = false;
-        }
-    }else if(fc.nwqid == x->req.nwname){
-        f->dir = dir;
-        f->qid = qid;
-    }
-
-    return filsysrespond(fs, x, &fc, err);
-}
-@
-
-<<function numeric>>=
-static
-int
-numeric(char *s)
-{
-    for(; *s!='\0'; s++)
-        if(*s<'0' || '9'<*s)
-            return 0;
-    return 1;
-}
-@
-
-%\section{Flush}
-% adv topics now
 
 \section{Forbidden operations}
 
@@ -10137,8 +10344,8 @@ filsyswstat(Filsys *fs, Xfid *x, Fid*)
 \label{chap:virtual-devices}
 % [[/mnt/wsys/...]] 
 
-% remember that /mnt/wsys is unioned in /dev/ so access to /dev/cons
-% in client is really /mnt/wsys/cons handled by rio.
+% remember that /mnt/wsys is unioned in /dev/ so access to /dev/mouse
+% in client is really /mnt/wsys/mouse handled by rio.
 
 \section{[[/mnt/wsys/mouse]]}
 \n simpler than cons
@@ -10152,31 +10359,44 @@ Qmouse,
 { "mouse",		QTFILE,	Qmouse,		0600 },
 @
 
+% 0600 so read and write (but not execute)
+
 % xfidopen for Qmouse is now discussed in Graphical windows chapter.
 
+% discussions about mouse events sent to the window thread
+% are discussed before.
+% but the WMouse case if mouseopen is discussed in Graphical windows chapter
+% too.
+\l too much spread?
 
 \subsection{Reading part1}
 % and window.mouseread
 
 % So if client reads /dev/mouse (after it has been opened of course),
-% then we wait for mouse events to come to us by listening to mouseread!
+% then xfidread wait for mouse events to come by listening to mouseread!
 % The winctl itself listen for mouse events on w->mc.c from mousethread
 
 
 <<[[Window]] other fields>>=
-// chan<Mousereadmesg> (listener = xfidread(Qmouse), sender = winctl)
+// chan<chan<Mouse> > (listener = xfidread(Qmouse), sender = winctl)
 Channel		*mouseread;	/* chan(Mousereadmesg) */
 @
 <<[[wmk()]] channels creation>>=
 w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
 @
+%ocaml: typed channels! and nice mouse channel channel type!
 
-% why does not send Mouse directly? maybe because mouse state
-% at sending time is not good anymore at receiving time?
-% No, because sender send only when he has something he is ready
-% to send and it's queue anyway. Maybe because of the flushing?
-% because then on the other channel there is no alt with a flush
-% message? but could ...
+% Why chan of chan? why does not send Mouse directly? because mouse state
+% at sending time is not good anymore at receiving time!
+% See code in winctl where alts is on receive and send!
+% so the first message is really a sync message.
+% we could also send a fake mouse state and by convention ask for
+% another after, but cleaner to pass another channel.
+%
+% But sender send only when he has something he is ready
+% to send and it's queue anyway? It's queued but if too many
+% then head of queue is replaced, so really you want to wait
+% before sending the mouse state.
 
 <<struct Mousereadmesg>>=
 struct Mousereadmesg
@@ -10185,6 +10405,8 @@ struct Mousereadmesg
     Channel	*cm;		/* chan(Mouse) */
 };
 @
+%ocaml: no need intermediate structure. Channels are typed.
+
 % passing a channel in a Channel!
 % could be a Window field too no? first know if someone wants
 % a mouseread, then write on other channel the mouse
@@ -10238,6 +10460,12 @@ case Qmouse:
 @
 \l hide even more switch and code after? put alt(alts) how of it?
 
+%ocaml-found:
+% note that does not care about off. always respond the same thing.
+% because principle is that unix.read will start from last offset
+% (the kernel maintain a file pointer), but we dont care about this
+% offset!
+
 \subsection{Writing}
 
 % can move the mouse programatically :)
@@ -10280,6 +10508,7 @@ case Movemouse:
     wmovemouse(w, r.min);
     break;
 @
+% use of sweeping to forbid certain mouse move! finally.
 
 \section{[[/mnt/wsys/cons]]}
 
@@ -10333,8 +10562,11 @@ struct Stringpair	/* rune and nrune or byte and nbyte */
     int		ns;
 };
 @
-\t where this is used to send bytes on a channel?
+%ocaml: just pass a count
 
+% where this is used to send bytes on a channel? actually here!
+% when app read its /dev/cons we send bytes to the app.
+% when app writes to /dev/cons we receive full runes though
 
 <<enum _anon_ (windows/rio/xfid.c)3>>=
 enum { CRdata, CRflush, NCR };
@@ -10385,6 +10617,9 @@ case Qcons:
 @
 %bug: was alts.[NMR] = ... above, but it should be NCR
 
+% pass cnt from filsysread and return maybe less if partial rune
+% (and store what partial rune was read in w->nrpart)
+
 % here s and ns are byte and nbyte
 
 \subsection{Writing part1}
@@ -10408,7 +10643,9 @@ struct Conswritemesg
     Channel	*cw;		/* chan(Stringpair) */
 };
 @
-
+% Note that here it's rune! we send only full runes. If some bytes
+% do not form a full rune, we store it in window and we will use it for
+% the next write round
 
 <<enum _anon_ (windows/rio/xfid.c)2>>=
 enum { CWdata, CWflush, NCW };
@@ -10469,6 +10706,7 @@ case Qcons:
 
 % this time pass full rune, not byte
 
+\subsection{Bytes versus runes, partial runes}
 
 % we have stuff to write! stuff to write in the console,
 % but this time it must be Rune! cant pass half rune to winctl
@@ -10530,12 +10768,12 @@ Qconsctl,
 <<dirtab array elements>>=
 { "consctl",	QTFILE,	Qconsctl,	0200 },
 @
-
+% just write
 
 <<[[Window]] other fields>>=
 bool	ctlopen;
 @
-% exclusive access to /dev/consctl (why?)
+% exclusive access to /dev/consctl (why?) because sign of a mess otherwise?
 %old: bool_byte
 
 <<[[xfidopen()]] cases>>=
@@ -10547,7 +10785,7 @@ case Qconsctl:
     w->ctlopen = true;
     break;
 @
-
+% like for mouseopen
 
 <<[[xfidclose()]] cases>>=
 case Qconsctl:
@@ -10626,18 +10864,23 @@ Qwinname,
 <<[[xfidread()]] cases>>=
 case Qwinname:
     n = strlen(w->name);
-    if(n == 0){
-        filsysrespond(x->fs, x, &fc, "window has no name");
-        break;
-    }
+    <<[[xfidread()]] when Qwinname case, sanity check n>>
     t = estrdup(w->name);
     goto Text;
 @
+%ocaml: no need estrdup
 
 % very useful! basis for initdraw and gengetwindow!!
 
 % see goto Text later
 
+<<[[xfidread()]] when Qwinname case, sanity check n>>=
+if(n == 0){
+    filsysrespond(x->fs, x, &fc, "window has no name");
+    break;
+}
+@
+\l when can happen? if bug? if hidden?
 
 %alt: could pass by environment variable? hmm but then
 % external process not children of rio who wants to connect?
@@ -10717,7 +10960,7 @@ case Qmouse:
         wsendctlmesg(w, Refresh, w->i->r, nil);
     break;
 @
-% why Refresh ? when close the mouse?
+\l why Refresh ? when close the mouse?
 % put Refresh here?
 
 
@@ -10756,7 +10999,7 @@ if(strncmp(req->data, "rawoff", 6)==0 && w->rawing){
     break;
 }
 @
-
+\l useful rawing increment? so can write rawon multiple times? meh
 
 <<[[xfidclose()]] Qconsctl case, if rawing>>=
 if(w->rawing){
@@ -10764,6 +11007,8 @@ if(w->rawing){
     wsendctlmesg(w, Rawoff, ZR, nil);
 }
 @
+% so automatic rawoff on close. Convenient for rio when exit
+% that closes devices and restore to nice default.
 
 <<[[Wctlmesgkind]] cases>>=
 Rawon,
@@ -10795,10 +11040,12 @@ case Rawoff:
 <<[[Window]] mouse fields>>=
 Mouseinfo	mouse;
 @
+% There is also Window.Mouse which is a ctl and moustate state.
 
 <<struct Mouseinfo>>=
 struct Mouseinfo
 {
+    // queue of mouse clicks and releases
     Mousestate	queue[16];
 
     // consumer
@@ -10807,19 +11054,27 @@ struct Mouseinfo
     int	wi;	/* write index */
 
     bool	qfull;/* filled the queue; no more recording until client comes back */	
-
-    ulong	counter;	/* serial no. of last mouse event we received */
-    ulong	lastcounter;/* serial no. of last mouse event sent to client */
-
-    int	lastb;	/* last button state we received */
-
+    <<[[Mouseinfo]] other fields>>
 };	
 @
+%ocaml: use Queue.t, no need ri/wi, no need intermediate structure
 %old: was uchar for qfull
 
-\l need counter thing? not enough the ri != wi?
-\l  or is it because of resize where increment counter without
-\l  producing a thing in the queue?
+<<[[Mouseinfo]] other fields>>=
+ulong	counter;	/* serial no. of last mouse event we received */
+ulong	lastcounter;/* serial no. of last mouse event sent to client */
+@
+% Need counter thing? not enough the ri != wi? or queue length?
+% Because queue is just for clicks events! for move, we use just
+% counter and give current state when read.
+% Also because of resize where increment counter without
+%  producing a thing in the queue?
+
+<<[[Mouseinfo]] other fields>>=
+int	lastb;	/* last button state we received */
+@
+% to record only mouse clicks or releases, need to know what
+% was the previous state
 
 % producer/consumer, classic.
 
@@ -10830,7 +11085,11 @@ struct Mousestate
     ulong	counter;	/* serial no. of mouse event */
 };
 @
+%ocaml: no extra type, just use pair
+% and actually counter field not needed here
 
+\l why need counter in mousestate? because will be in queue
+\l and can be used to decice if too old? does not seem used right now ...
 
 \subsection{[[/mnt/wsys/mouse]]  reading part2}
 
@@ -10872,7 +11131,17 @@ if(w->mouseopen) {
     }
 }
 @
-% if same buttons, then no new event?
+%ocaml: just use Queue.t, no need play with index
+\l I dont think we need to pass the counter the xfidread
+
+% circular buffer
+
+% if same buttons, then no new event? so you dont get
+% the mouse events when you move? but hello rio seems to follow
+%  the mouse, so it gets the events?
+% Yes! because the queue here is just for the clicks/unlick.
+% for a move, the counter will be different and the read will just
+% read the current state (see below).
 
 \subsubsection{Consumer}
 % Consumer and producer, like in a pipe
@@ -10891,6 +11160,7 @@ mrm.cm = chancreate(sizeof(Mouse), 0);
 <<[[winctl()]] Wctl case, free channels if wctlmesg is Excited>>=
 chanfree(mrm.cm);
 @
+%ocaml: no need extra structure, no need chanfree (let gc do it)
 
 % if child process listening on mouseread, we can feed him
 % stuff in our queue
@@ -10914,9 +11184,10 @@ else
 % Remember that adjustments are made inside the for loop, so
 %  after each message has been processed, revisit the alts setting
 
-\t why need to go through 2 stages with the channel?
-\t  anyway we queue mouse events and we look for counters,
-\t  so we could send directly 
+% Why need to go through 2 stages with the channel?
+%  anyway we queue mouse events and we look for counters,
+%  so we could send directly? Maybe, but send what? the mouse state
+%  at the sending time here may not be good for receiving time!
 
 
 <<[[winctl()]] other locals>>=
@@ -10950,15 +11221,17 @@ case WMouseread:
 \subsection{Raw keys queue}
 
 <<[[Window]] graphical window fields>>=
-// array<Rune> (size = Window.nraw)
+// growing_array<Rune> (size = Window.nraw)
 Rune		*raw;
 uint		nraw;
 @
+%ocaml: just list, no need nraw
+
 % graphical window & keyboard field
 
-
-% in addition have runes from the text copied potentially by user
-% with the mouse after the output point.
+% In addition have runes from the text copied potentially by user
+% with the mouse after the output point when use
+% /dev/cons in non-raw mode.
 
 
 \subsection{[[/mnt/wsys/cons]] reading part2}
@@ -10976,12 +11249,13 @@ if(w->rawing && (w->mouseopen || w->q0 == w->nr)){
 @
 %old: I transposed the || arguments, clearer for now
 
-
 % if rawing and graphical mode, then dont care about output pointer.
 
 % faux ami, not a draw operation :) but w_add_raw
 
-% nr? q0? will see later
+% nr? q0? q0 is where entered text go and nr is number of runes
+% in growing rune array.
+
 % but because can have raw mode also for textual window,
 % in which case add rune (and no echo),
 % otherwise the "when not rawing" section will happen
@@ -10996,6 +11270,8 @@ waddraw(Window *w, Rune *r, int nr)
     w->nraw += nr;
 }
 @
+%ocaml: Queue.add
+
 % realloc at each key press??
 
 
@@ -11006,6 +11282,11 @@ while(w->nraw > 0){
     runemove(w->raw, w->raw+1, w->nraw);
 }
 @
+%ocaml: use queue
+
+% when switch back from rawon to rawoff, we need to process
+% back the raw keys as regular keys
+
 % wkeyctl will not loop back to same code now that rawing has been
 %  set off in xfidclose. It just feeds back the rune to 
 %  regular textual window mode.
@@ -11031,7 +11312,7 @@ crm.c2 = chancreate(sizeof(Stringpair), 0);
 chanfree(crm.c1);
 chanfree(crm.c2);
 @
-
+%ocaml: no need chanfree, no need intermediate type for pairs
 
 % when have key, it's send to app that listen on /dev/cons,
 % so we actually reemit here (what we have listened before on w->ck)
@@ -11073,7 +11354,7 @@ int i, c, wid;
 % app is reading /dev/cons for bytes, not Rune.
 
 
-
+% keys_out
 <<[[winctl()]] event loop cases>>=
 case WCread:
     recv(crm.c1, &pair);
@@ -11085,10 +11366,12 @@ case WCread:
 
     while(i<nb && (w->nraw > 0 || w->qh < w->nr)){
 
+        // raw mode
         if(w->qh == w->nr){
             wid = runetochar(t+i, &w->raw[0]);
             w->nraw--;
             runemove(w->raw, w->raw+1, w->nraw);
+        // buffered mode
         }else
             wid = runetochar(t+i, &w->r[w->qh++]);
 
@@ -11105,8 +11388,13 @@ case WCread:
     continue;
 @
 %old: again I reverted some ||
+\t aspectize buffered mode qh and nr
 
+% Everything between output point and last rune is sent.
+\t But not buffered? Yes, but will be ready for WCread only
+% when a newline has been entered?
 
+\subsubsection{Bytes versus runes, partial runes}
 
 % similar issue than in xfid where need store partial rune bytes
 
@@ -11139,6 +11427,7 @@ if(i)
 \section{Resize events}
 
 % actually abuse the mouse device for that, a big ugly.
+\l should have a /dev/resize, would be cleaner
 
 <<[[xfidread()]] when Qmouse, adjust c for resize message if resized>>=
 if(w->resized)
@@ -11149,6 +11438,8 @@ if(w->resized)
 
 
 \section{[[/mnt/wsys/window]]}
+
+% simple
 
 <<[[qid]] cases>>=
 Qwindow,
@@ -11229,12 +11520,16 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 \chapter{Textual Windows}
 \label{chap:textual-windows}
 
-% challenge is we don't want to change all our command line apps
-% to do some drawtext() ... we want backward compatibility, some
+% The challenge is that we don't want to change all our command-line apps
+% to do some drawtext() ... we want backward compatibility; some
 % kind of emulation! (and with more services thx to the mouse!)
 
 % it's relatively easy to have an xterm under plan9
-% thx to the fake /dev/cons
+% thx to the virtual /dev/cons
+
+% In fact terminal emulator can provide more services! select text
+% with mouse, copy paste. This means that can insert text at arbitrary
+% places, not just after output, so need keep track of those "cursors".
 
 %https://www.destroyallsoftware.com/talks/a-whole-new-world
 
@@ -11252,127 +11547,222 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 % https://github.com/k4m4/terminals-are-sexy
 
 \section{Textual window creation}
+\n parallel with 'Graphical window setup
+
+% FIGURE again with qh, q0, q1, nr, maxr
+% The model.
+
+% FIGURE scrollbar, frame, org (and nchars)
+% The view.
 
 % Saw window creation section before. Some additional setup
 % for textual windows we skipped.
 
-
-<<constants Scrollxxx>>=
-Scrollwid 		= 12,	/* width of scroll bar */
-Scrollgap 		= 4,	/* gap right of scroll bar */
-@
-\n could also put that in Scrolling section later, but then
-\n force to split wmk too much I think
-
-% FIGURE again?
-
 <<[[wmk()]] textual window settings>>=
-r = insetrect(i->r, Selborder+1);
-w->scrollr = r;
-w->scrollr.max.x = r.min.x+Scrollwid;
-
-r.min.x += Scrollwid+Scrollgap;
-frinit(&w->frm, r, font, i, cols);
-
-w->lastsr = ZR;
-w->frm.maxtab = maxtab * stringwidth(font, "0");
-w->scrolling = scrolling;
+<<[[wmk()]] textual window settings, set scrollbar>>
+<<[[wmk()]] textual window settings, set frame>>
 
 r = insetrect(w->i->r, Selborder);
 draw(w->i, r, cols[BACK], nil, w->frm.entire.min);
 @
-% entire is a frame property, set by frinit()
+\t entire is a frame property, set by frinit(), but seems
+\t  to be equal to r, and anyway it's sp and src is a color
+\t  so what's the point of this last argument? why not ZP?
 
 % will see cols soon
 
 % not mentionned is Window.r, nr, maxr, which are initialized
-% to 0 by emalloc(sizeof(Window)) in wmk.
+% to 0 by emalloc(sizeof(Window)) in wmk().
 % might be nice to initialize them explicitly to nil or 0
 % and say winsert will do first alloc.
 
-% similar code
-<<[[wresize()]] textual window updates>>=
-r = insetrect(i->r, Selborder+1);
+\subsection{Scrollbar}
+
+% saw Window.scrollr in core DS
+
+<<[[wmk()]] textual window settings, set scrollbar>>=
+r = insetrect(w->i->r, Selborder+1);
 w->scrollr = r;
 w->scrollr.max.x = r.min.x+Scrollwid;
-
-w->lastsr = ZR;
-
-r.min.x += Scrollwid+Scrollgap;
-
-if(move)
-    frsetrects(&w->frm, r, w->i);
-else{
-    frclear(&w->frm, false);
-    frinit(&w->frm, r, w->frm.font, w->i, cols);
-    wsetcols(w);
-
-    w->frm.maxtab = maxtab * stringwidth(w->frm.font, "0");
-
-    r = insetrect(w->i->r, Selborder);
-    draw(w->i, r, cols[BACK], nil, w->frm.entire.min);
-
-    wfill(w);
-    wsetselect(w, w->q0, w->q1);
-    wscrdraw(w);
-}
 @
-% useful opti to differentiate move and resize?
-% maybe could factorize more code with wmk creation.
-% Have a paint function! (see codemap)
 
-\section{Text widget, [[Frame]]}
+<<constants Scrollxxx>>=
+Scrollwid 		= 12,	/* width of scroll bar */
+@
+\n could also put that in Scrolling section later, but then
+\n force to split wmk too much I think
+
+% related to scrollbar is autoscroll
+<<[[wmk()]] textual window settings>>=
+w->scrolling = scrolling; // autoscroll
+@
+
+% will see scrollbar code at the end. 
+
+\subsection{Frame}
+\l bad name frame
+
+% saw Window.frm in core DS
+
+<<[[wmk()]] textual window settings, set frame>>=
+r = insetrect(w->i->r, Selborder+1);
+r.min.x += Scrollwid+Scrollgap;
+frinit(&w->frm, r, font, i, cols);
+<<[[wmk()]] textual window settings, extra frame settings>>
+@
+%old: I repeated the insetrect so easier to aspectize
+
+<<constants Scrollxxx>>=
+Scrollgap 		= 4,	/* gap right of scroll bar */
+@
+
+% will see frinit soon
+
+
+
+\section{Frame widget}
 \label{sec:frame-widget}
+% text widget really. in Gtk it's called the TextEditor even?
 
 % frame(2)
 % used by rio and sam, factorize code for Editable Text (widget)
-
 % mv in Widgets.nw?
 
 % It is actually not what is around the window. Bad name.
 % Rename maybe TextWidget?
-% 
+
+\subsection{[[Frame]]}
 
 <<struct Frame>>=
 struct Frame
 {
-    Display	*display;	/* on which frame appears */
-    Image	*b;		/* on which frame appears */
-
-    Image	*cols[NCOL];	/* text and background colors */
+    Image	*b;		    /* on which frame appears */
+    Rectangle	r;		/* in which text appears */
 
     Font	*font;		/* of chars in the frame */
+    Display	*display;	/* on which frame appears */
 
-    Rectangle	r;		/* in which text appears */
-    Rectangle	entire;		/* of full frame */
+    <<[[Frame]] colors>>
+    <<[[Frame]] text fields>>
+    <<[[Frame]] tick fields>>
+    <<[[Frame]] box fields>>
+    <<[[Frame]] scroll>>
 
-    void (*scroll)(Frame*, int); /* scroll function provided by application */
-
-    Frbox	*box;
-
-    ulong	p0, p1;		/* selection */
-
-    ushort	nbox, nalloc;
-    ushort	maxtab;		/* max size of tab, in pixels */
-
-    ushort	nchars;		/* # runes in frame */
-    ushort	nlines;		/* # lines with text */
-
-    ushort	maxlines;	/* total # lines in frame */
-    ushort	lastlinefull;	/* last line fills frame */
-
-    ushort	modified;	/* changed since frselect() */
-
-    Image	*tick;	/* typing tick */
-    Image	*tickback;	/* saved image under tick */
-    int		ticked;	/* flag: is tick onscreen? */
+    <<[[Frame]] other fields>>
 };
 @
 % the actual content is in the englobing data structure (e.g., Window.r)
+\l remove display? redundant with b->display anyway
+
+
+% important field, nchars.
+<<[[Frame]] text fields>>=
+ushort	nchars;		/* # runes in frame */
+@
+% FIGURE ? vs org?
+
+<<[[Frame]] text fields>>=
+ushort	nlines;		/* # lines with text */
+@
+
+
+%XXX
+<<[[Frame]] text fields>>=
+ushort	modified;	/* changed since frselect() */
+@
+<<[[Frame]] text fields>>=
+ushort	lastlinefull;	/* last line fills frame */
+@
+<<[[frinit()]] initialize other fields>>=
+f->lastlinefull = 0;
+@
+
+\subsection{[[frinit()]]}
+
+% libframe/
+% ... -> new -> wmk() -> <>
+<<function frinit>>=
+void
+frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
+{
+    frsetrects(f, r, b);
+    f->font = ft;
+    f->display = b->display;
+
+    f->nchars = 0;
+    f->nlines = 0;
+    <<[[frinit()]] initialize other fields>>
+}
+@
+%old: I reoredered some lines
+
+<<function frsetrects>>=
+void
+frsetrects(Frame *f, Rectangle r, Image *b)
+{
+    f->b = b;
+    f->entire = r;
+    f->r = r;
+    f->r.max.y -= (r.max.y-r.min.y) % f->font->height;
+    f->maxlines = (r.max.y-r.min.y) / f->font->height;
+}
+@
+%old: I reoredered a bit again
+\l could use Dy
+
+% adjust r to not write on last line
+
+<<[[Frame]] text fields>>=
+ushort	maxlines;	/* total # lines in frame */
+@
+
+<<[[Frame]] other fields>>=
+Rectangle	entire;		/* of full frame */
+@
+
+
+
+
+
+
+
+
+\subsection{[[frclear()]]}
+
+% called when Exited
+
+<<function frclear>>=
+void
+frclear(Frame *f, bool freeall)
+{
+    if(f->nbox)
+        _frdelbox(f, 0, f->nbox-1);
+    if(f->box)
+        free(f->box);
+    f->box = nil;
+    if(freeall){
+        freeimage(f->tick);
+        freeimage(f->tickback);
+        f->tick = nil;
+        f->tickback = nil;
+    }
+    f->ticked = false;
+}
+@
+%old: I reordered lines, more logical
+
+
+
+\subsection{Frame colors}
+
+<<[[Frame]] colors>>=
+Image	*cols[NCOL];	/* text and background colors */
+@
+
 
 % properties
 <<enum _anon_ (include/frame.h)>>=
-enum{
+enum FrameColors {
     BACK, // Background
     HIGH, // Background highlighted text
     BORD, // Border
@@ -11384,73 +11774,152 @@ enum{
 @
 \l rename enums? use full word?
 \t Bord is not the same that window border?
+%ocaml: full color names and use record
 
 % images/colors for the frame
 <<global cols>>=
 // map<Property, Color>
 static	Image	*cols[NCOL];
 @
+% note that this cols will sometimes be altered when unselect a terminal
+%  window so the main text becomes grey for example
 
+% cols global is passed to frinit() in wmk()
 
-<<global grey>>=
-static	Image	*grey;
+<<[[frinit()]] initialize other fields>>=
+if(cols != nil)
+    memmove(f->cols, cols, sizeof f->cols);
 @
 
-<<global darkgrey>>=
-static	Image	*darkgrey;
-@
 
-
-
-<<[[wmk()]] cols initialisation>>=
+<<[[wmk()]] colors initialisation>>=
 if(cols[0] == nil){
-    /* greys are multiples of 0x11111100+0xFF, 14* being palest */
-    grey     = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xEEEEEEFF);
-    darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
     cols[BACK] = display->white;
     cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xCCCCCCFF);
     cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x999999FF);
     cols[TEXT] = display->black;
     cols[HTEXT] = display->black;
-
-    titlecol     = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreygreen);
-    lighttitlecol= allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreygreen);
-    holdcol      = allocimage(display, Rect(0,0,1,1), CMAP8, true, DMedblue);
-    lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreyblue);
-    paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreyblue);
+    <<[[wmk()]] extra colors initialisation>>
+);
 }
 @
-% the cols will be inverted at some point.
+% the cols will be inverted at some point, this is why
+% store cols array in Frame and not use globals.
 
-% libframe/
-% ... -> new -> wmk() -> <>
-<<function frinit>>=
+
+% ?? -> wrepaint
+<<[[wrepaint()]] update cols>>=
+wsetcols(w);
+@
+
+% wrepaint | ... -> <>
+<<function wsetcols>>=
 void
-frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
+wsetcols(Window *w)
 {
-    f->font = ft;
-    f->display = b->display;
-    f->maxtab = 8 * stringwidth(ft, "0");
+    <<[[wsetcols()]] if holding>>
+    else
+        if(w == input)
+            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = display->black;
+        else
+            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = darkgrey;
+}
+@
+% invert color, but who then redraw the content?
 
-    f->nbox = 0;
-    f->nalloc = 0;
-    f->nchars = 0;
-    f->nlines = 0;
+<<global darkgrey>>=
+static	Image	*darkgrey;
+@
+% used for alternative BACK
+<<[[wmk()]] extra colors initialisation>>=
+/* greys are multiples of 0x11111100+0xFF, 14* being palest */
+darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
+@
 
-    f->p0 = 0;
-    f->p1 = 0;
-    f->box = 0;
-    f->lastlinefull = 0;
-    if(cols != nil)
-        memmove(f->cols, cols, sizeof f->cols);
-    frsetrects(f, r, b);
-    if(f->tick == nil && f->cols[BACK] != nil)
-        frinittick(f);
+%dead:
+%<<global grey>>
+%static	Image	*grey;
+%@
+%<<[[wmk()]] extra colors initialisation>>
+%grey     = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xEEEEEEFF);
+
+% will see far later the code using those cols[]
+
+
+
+\subsection{Frame tick}
+
+<<[[Frame]] tick fields>>=
+Image	*tick;	/* typing tick */
+Image	*tickback;	/* saved image under tick */
+bool	ticked;	/* flag: is tick onscreen? */
+@
+
+<<[[frinit()]] initialize other fields>>=
+if(f->tick == nil && f->cols[BACK] != nil)
+    frinittick(f);
+@
+
+<<constant FRTICKW>>=
+#define	FRTICKW	3
+@
+%width
+
+
+<<function frinittick>>=
+void
+frinittick(Frame *f)
+{
+    Image *b = f->display->screenimage;
+    Font *ft = f->font;
+
+    <<[[frinittick()]] free old tick>>
+    f->tick = allocimage(f->display, Rect(0, 0, FRTICKW, ft->height), b->chan, 0, DWhite);
+    <<[[frinittick()]] sanity check tick>>
+    <<[[frinittick()]] free old tickback>>
+    f->tickback = allocimage(f->display, f->tick->r, b->chan, 0, DWhite);
+    <<[[frinittick()]] sanity check tickback>>
+    /* background color */
+    draw(f->tick, f->tick->r, f->cols[BACK], nil, ZP);
+    /* vertical line */
+    draw(f->tick, Rect(FRTICKW/2, 0, FRTICKW/2+1, ft->height), f->cols[TEXT], nil, ZP);
+    /* box on each end */
+    draw(f->tick, Rect(0, 0, FRTICKW, FRTICKW), f->cols[TEXT], nil, ZP);
+    draw(f->tick, Rect(0, ft->height-FRTICKW, FRTICKW, ft->height), f->cols[TEXT], nil, ZP);
+}
+@
+%old: put assign with decl for b and ft
+
+% FIGURE screenshot
+
+<<[[frinittick()]] free old tick>>=
+if(f->tick)
+    freeimage(f->tick);
+@
+<<[[frinittick()]] sanity check tick>>=
+if(f->tick == nil)
+    return;
+@
+<<[[frinittick()]] free old tickback>>=
+if(f->tickback)
+    freeimage(f->tickback);
+@
+<<[[frinittick()]] sanity check tickback>>=
+if(f->tickback == nil){
+    freeimage(f->tick);
+    f->tick = nil;
+    return;
 }
 @
 
+\subsection{Frame boxes}
 
-\t in appendix?
+<<[[Frame]] box fields>>=
+Frbox	*box;
+ushort	nbox;
+ushort nalloc;
+@
+
 <<struct Frbox>>=
 struct Frbox
 {
@@ -11466,24 +11935,68 @@ struct Frbox
 };
 @
 
-
-
-
-
-<<global maxtab>>=
-int		maxtab = 0;
+<<[[frinit()]] initialize other fields>>=
+f->box = nil;
+f->nbox = 0;
+f->nalloc = 0;
 @
-<<[[main()]] locals>>=
-char *s;
+
+<<function _frdelbox>>=
+void
+_frdelbox(Frame *f, int n0, int n1)	/* inclusive */
+{
+    if(n0>=f->nbox || n1>=f->nbox || n1<n0)
+        drawerror(f->display, "_frdelbox");
+    _frfreebox(f, n0, n1);
+    _frclosebox(f, n0, n1);
+}
 @
-<<[[main()]] set some globals>>=
-s = getenv("tabstop");
-if(s != nil)
-    maxtab = strtol(s, nil, 0);
-if(maxtab == 0)
-    maxtab = 4;
-free(s);
+
+<<function _frfreebox>>=
+void
+_frfreebox(Frame *f, int n0, int n1)	/* inclusive */
+{
+    int i;
+
+    if(n1<n0)
+        return;
+    if(n0>=f->nbox || n1>=f->nbox)
+        drawerror(f->display, "_frfreebox");
+    n1++;
+    for(i=n0; i<n1; i++)
+        if(f->box[i].nrune >= 0)
+            free(f->box[i].ptr);
+}
 @
+
+<<function _frclosebox>>=
+void
+_frclosebox(Frame *f, int n0, int n1)	/* inclusive */
+{
+    int i;
+
+    if(n0>=f->nbox || n1>=f->nbox || n1<n0)
+        drawerror(f->display, "_frclosebox");
+    n1++;
+    for(i=n1; i<f->nbox; i++)
+        f->box[i-(n1-n0)] = f->box[i];
+    f->nbox -= n1-n0;
+}
+@
+
+
+
+\subsection{Frame selection}
+
+<<[[Frame]] text fields>>=
+ulong	p0, p1;		/* selection */
+@
+
+<<[[frinit()]] initialize other fields>>=
+f->p0 = 0;
+f->p1 = 0;
+@
+
 
 \section{Content modification}
 
@@ -11502,14 +12015,29 @@ free(s);
 
 % return q0 but might have been modified since winsert
 %  can get rid of some lines when too much memory space is used
+
+% will see later this code when type on a key:
+<<simplified code when entered a single rune [[r]] in a terminal>>=
+winsert(w, &r, 1, w->q0);
+wshow(w, w->q0);
+@
+% note that winsert might adjust w->q0!
+
+% so key functions are winsert and wshow!
+
+% Note that at beginning, q0, qh, org, ... are all set to 0.
+
+
+\subsection{[[winsert()]]}
+
+% wkeyctl -> <>
 <<function winsert>>=
 uint
 winsert(Window *w, Rune *r, int n, uint q0)
 {
     uint m;
 
-    if(n == 0)
-        return q0;
+    <<[[winsert()]] sanity check n>>
     <<[[winsert()]] if size of rune array is getting really big>>
     <<[[winsert()]] grow rune array if reach maxr>>
 
@@ -11519,22 +12047,53 @@ winsert(Window *w, Rune *r, int n, uint q0)
     runemove(w->r + q0, r, n);
     w->nr += n;
 
-    /* if output touches, advance selection, not qh; works best for keyboard and output */
-    if(q0 <= w->q0)
-        w->q0 += n; // move the q0 cursor
-    if(q0 <= w->q1)
-        w->q1 += n;
-    if(q0 < w->qh)
-        w->qh += n;
+    <<[[winsert()]] adjust cursors>>
 
-    <<[[winsert()]] update visible text>>
     return q0;
 }
 @
+
+%example:
+% so first time type a key, what happens? 
+% n = 1, r points just to one rune, org = 0, nr = 0, q0 = 0
+% So first runemove does nothing, then fill r and increment nr
+
+
+<<[[winsert()]] adjust cursors>>=
+/* if output touches, advance selection, not qh; works best for keyboard and output */
+if(q0 <= w->q0)
+    w->q0 += n; // move the q0 cursor
+if(q0 <= w->q1)
+    w->q1 += n;
+if(q0 < w->qh)
+    w->qh += n;
+
+if(q0 < w->org)
+    w->org += n;
+else
+   <<[[winsert()]] when [[q0 >= w->org]], possibly update visible text>>
+@
+
+%examlple: so w->q0 will be incremented by 1 but org and qh
+% will not change.
+
+% subtle <= vs < for qh. So when type character after
+% output point or on output point, then output point stays the same!
+
+% same way if insert at org point, then org point does not change
+
 % adjust cursors
 
 
+<<[[winsert()]] sanity check n>>=
+if(n == 0)
+    return q0;
+@
+\l when called with 0?
+
 % See also Efuns.nw?
+
+\subsection{Growing array}
 
 <<enum _anon_ (windows/rio/wind.c)>>=
 enum
@@ -11544,6 +12103,25 @@ enum
     MinWater	= 20000,	/* room to leave available when reallocating */
 };
 @
+
+<<[[winsert()]] grow rune array if reach maxr>>=
+if(w->nr+n > w->maxr){
+    /*
+     * Minimize realloc breakage:
+     *	Allocate at least MinWater
+     * 	Double allocation size each time
+     *	But don't go much above HiWater
+     */
+    m = max(min(2*(w->nr+n), HiWater), w->nr+n)+MinWater;
+    if(m > HiWater)
+        m = max(HiWater+MinWater, w->nr+n);
+    if(m > w->maxr){
+        w->r = runerealloc(w->r, m);
+        w->maxr = m;
+    }
+}
+@
+% realloc
 
 
 <<[[winsert()]] if size of rune array is getting really big>>=
@@ -11566,70 +12144,232 @@ if(w->nr + n > HiWater && q0 >= w->org && q0 >= w->qh){
 @
 % getting rid of some lines
 
-<<[[winsert()]] grow rune array if reach maxr>>=
-if(w->nr+n > w->maxr){
-    /*
-     * Minimize realloc breakage:
-     *	Allocate at least MinWater
-     * 	Double allocation size each time
-     *	But don't go much above HiWater
-     */
-    m = max(min(2*(w->nr+n), HiWater), w->nr+n)+MinWater;
-    if(m > HiWater)
-        m = max(HiWater+MinWater, w->nr+n);
-    if(m > w->maxr){
-        w->r = runerealloc(w->r, m);
-        w->maxr = m;
-    }
-}
-@
-% realloc
 
 \section{Content rendering}
 
-\subsection{Text color}
+\subsection{[[frinsert()]]}
 
-% ?? -> wrepaint
-<<[[wrepaint()]] update cols>>=
-wsetcols(w);
+<<[[winsert()]] when [[q0 >= w->org]], possibly update visible text>>=
+if(q0 <= w->org + w->frm.nchars)
+    frinsert(&w->frm, r, r+n, q0 - w->org); // echo back
+@
+% so if between w->org and w->org + w->frm.nchars
+
+%example: q0 is equal to org and nchars is 0 so 
+% condition is true at first.
+
+% insert runes in frame (r, r+n), and translate position to origin
+% (here 0 because q0 == w->org)
+
+
+
+<<struct points_frinsert>>=
+struct points_frinsert {
+    Point pt0, pt1;
+};
 @
 
-% wrepaint | ... -> <>
-<<function wsetcols>>=
+<<function frinsert>>=
 void
-wsetcols(Window *w)
+frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
 {
-    <<[[wsetcols()]] if holding>>
+    Point pt0, pt1, opt0, ppt0, ppt1, pt;
+    Frbox *b;
+    int n, n0, nn0, y;
+    ulong cn0;
+    Image *col;
+    Rectangle r;
+    static struct points_frinsert *pts;
+    static int nalloc=0;
+    int npts;
+
+    if(p0>f->nchars || sp==ep || f->b==nil)
+        return;
+    n0 = _frfindbox(f, 0, 0, p0);
+    cn0 = p0;
+    nn0 = n0;
+    pt0 = _frptofcharnb(f, p0, n0);
+    ppt0 = pt0;
+    opt0 = pt0;
+    pt1 = bxscan(f, sp, ep, &ppt0);
+    ppt1 = pt1;
+    if(n0 < f->nbox){
+        _frcklinewrap(f, &pt0, b = &f->box[n0]);	/* for frdrawsel() */
+        _frcklinewrap0(f, &ppt1, b);
+    }
+    f->modified = 1;
+    /*
+     * ppt0 and ppt1 are start and end of insertion as they will appear when
+     * insertion is complete. pt0 is current location of insertion position
+     * (p0); pt1 is terminal point (without line wrap) of insertion.
+     */
+    if(f->p0 == f->p1)
+        frtick(f, frptofchar(f, f->p0), 0);
+
+    /*
+     * Find point where old and new x's line up
+     * Invariants:
+     *	pt0 is where the next box (b, n0) is now
+     *	pt1 is where it will be after the insertion
+     * If pt1 goes off the rectangle, we can toss everything from there on
+     */
+    for(b = &f->box[n0],npts=0;
+         pt1.x!=pt0.x && pt1.y!=f->r.max.y && n0<f->nbox; b++,n0++,npts++){
+        _frcklinewrap(f, &pt0, b);
+        _frcklinewrap0(f, &pt1, b);
+        if(b->nrune > 0){
+            n = _frcanfit(f, pt1, b);
+            if(n == 0)
+                drawerror(f->display, "_frcanfit==0");
+            if(n != b->nrune){
+                _frsplitbox(f, n0, n);
+                b = &f->box[n0];
+            }
+        }
+        if(npts == nalloc){
+            pts = realloc(pts, (npts+DELTA)*sizeof(pts[0]));
+            nalloc += DELTA;
+            b = &f->box[n0];
+        }
+        pts[npts].pt0 = pt0;
+        pts[npts].pt1 = pt1;
+        /* has a text box overflowed off the frame? */
+        if(pt1.y == f->r.max.y)
+            break;
+        _fradvance(f, &pt0, b);
+        pt1.x += _frnewwid(f, pt1, b);
+        cn0 += NRUNE(b);
+    }
+    if(pt1.y > f->r.max.y)
+        drawerror(f->display, "frinsert pt1 too far");
+    if(pt1.y==f->r.max.y && n0<f->nbox){
+        f->nchars -= _frstrlen(f, n0);
+        _frdelbox(f, n0, f->nbox-1);
+    }
+    if(n0 == f->nbox)
+        f->nlines = (pt1.y-f->r.min.y)/f->font->height+(pt1.x>f->r.min.x);
+    else if(pt1.y!=pt0.y){
+        int q0, q1;
+
+        y = f->r.max.y;
+        q0 = pt0.y+f->font->height;
+        q1 = pt1.y+f->font->height;
+        f->nlines += (q1-q0)/f->font->height;
+        if(f->nlines > f->maxlines)
+            chopframe(f, ppt1, p0, nn0);
+        if(pt1.y < y){
+            r = f->r;
+            r.min.y = q1;
+            r.max.y = y;
+            if(q1 < y)
+                draw(f->b, r, f->b, nil, Pt(f->r.min.x, q0));
+            r.min = pt1;
+            r.max.x = pt1.x+(f->r.max.x-pt0.x);
+            r.max.y = q1;
+            draw(f->b, r, f->b, nil, pt0);
+        }
+    }
+    /*
+     * Move the old stuff down to make room.  The loop will move the stuff
+     * between the insertion and the point where the x's lined up.
+     * The draw()s above moved everything down after the point they lined up.
+     */
+    for((y=pt1.y==f->r.max.y?pt1.y:0),b = &f->box[n0-1]; --npts>=0; --b){
+        pt = pts[npts].pt1;
+        if(b->nrune > 0){
+            r.min = pt;
+            r.max = r.min;
+            r.max.x += b->wid;
+            r.max.y += f->font->height;
+            draw(f->b, r, f->b, nil, pts[npts].pt0);
+            /* clear bit hanging off right */
+            if(npts==0 && pt.y>pt0.y){
+                /*
+                 * first new char is bigger than first char we're
+                 * displacing, causing line wrap. ugly special case.
+                 */
+                r.min = opt0;
+                r.max = opt0;
+                r.max.x = f->r.max.x;
+                r.max.y += f->font->height;
+                if(f->p0<=cn0 && cn0<f->p1)	/* b+1 is inside selection */
+                    col = f->cols[HIGH];
+                else
+                    col = f->cols[BACK];
+                draw(f->b, r, col, nil, r.min);
+            }else if(pt.y < y){
+                r.min = pt;
+                r.max = pt;
+                r.min.x += b->wid;
+                r.max.x = f->r.max.x;
+                r.max.y += f->font->height;
+                if(f->p0<=cn0 && cn0<f->p1)	/* b+1 is inside selection */
+                    col = f->cols[HIGH];
+                else
+                    col = f->cols[BACK];
+                draw(f->b, r, col, nil, r.min);
+            }
+            y = pt.y;
+            cn0 -= b->nrune;
+        }else{
+            r.min = pt;
+            r.max = pt;
+            r.max.x += b->wid;
+            r.max.y += f->font->height;
+            if(r.max.x >= f->r.max.x)
+                r.max.x = f->r.max.x;
+            cn0--;
+            if(f->p0<=cn0 && cn0<f->p1)	/* b is inside selection */
+                col = f->cols[HIGH];
+            else
+                col = f->cols[BACK];
+            draw(f->b, r, col, nil, r.min);
+            y = 0;
+            if(pt.x == f->r.min.x)
+                y = pt.y;
+        }
+    }
+    /* insertion can extend the selection, so the condition here is different */
+    if(f->p0<p0 && p0<=f->p1)
+        col = f->cols[HIGH];
     else
-        if(w == input)
-            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = display->black;
-        else
-            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = darkgrey;
+        col = f->cols[BACK];
+    frselectpaint(f, ppt0, ppt1, col);
+    _frdrawtext(&frame, ppt0, f->cols[TEXT], col);
+    _fraddbox(f, nn0, frame.nbox);
+    for(n=0; n<frame.nbox; n++)
+        f->box[nn0+n] = frame.box[n];
+    if(nn0>0 && f->box[nn0-1].nrune>=0 && ppt0.x-f->box[nn0-1].wid>=f->r.min.x){
+        --nn0;
+        ppt0.x -= f->box[nn0].wid;
+    }
+    n0 += frame.nbox;
+    _frclean(f, ppt0, nn0, n0<f->nbox-1? n0+1 : n0);
+    f->nchars += frame.nchars;
+    if(f->p0 >= p0)
+        f->p0 += frame.nchars;
+    if(f->p0 > f->nchars)
+        f->p0 = f->nchars;
+    if(f->p1 >= p0)
+        f->p1 += frame.nchars;
+    if(f->p1 > f->nchars)
+        f->p1 = f->nchars;
+    if(f->p0 == f->p1)
+        frtick(f, frptofchar(f, f->p0), 1);
 }
 @
-% invert color, but who then redraw the content?
 
-\subsection{Text widget draw}
 
-<<[[wrepaint()]] if mouse not opened>>=
-if(!w->mouseopen)
-    frredraw(&w->frm);
-@
 
 \subsection{[[wshow()]]}
 
-<<[[Window]] textual window fields>>=
-uint		org;
-@
-% what is visible on the frame!
-\l could move in core DS, but used only now so maybe ok.
-
 % Window.nchars is in Frame!
 
-
-
-
 % mv cursor, show text where can see cursor q0
+
+% saw wshow(w, w->q0);
+
+% wkeyctl -> <>
 <<function wshow>>=
 void
 wshow(Window *w, uint q0)
@@ -11645,22 +12385,17 @@ wshow(Window *w, uint q0)
 }
 @
 
+%example: nchars have been modified by frinsert,
+% so q0 == qe
 
-<<[[winsert()]] update visible text>>=
-if(q0 < w->org)
-    w->org += n;
-else if(q0 <= w->org + w->frm.nchars)
-    frinsert(&w->frm, r, r+n, q0 - w->org); // echo back
-@
+% when can have q0 == qe but not be w=>nr?
+
 
 
 \subsection{[[wscrdraw()]]}
 
-<<[[Window]] other fields>>=
-Rectangle	lastsr;
-@
-% opti
 
+% wshow | wmk | wsetorigin -> <>
 <<function wscrdraw>>=
 void
 wscrdraw(Window *w)
@@ -11672,6 +12407,7 @@ wscrdraw(Window *w)
     <<[[wscrdraw()]] sanity check the window image>>
     r = w->scrollr;
     b = scrtmp;
+    // r1 is translation of r to (0,0)
     r1 = r;
     r1.min.x = 0;
     r1.max.x = Dx(r);
@@ -11690,6 +12426,53 @@ wscrdraw(Window *w)
     }
 }
 @
+
+
+<<function scrpos>>=
+static
+Rectangle
+scrpos(Rectangle r, uint p0, uint p1, uint tot)
+{
+    Rectangle q;
+    int h;
+
+    q = r;
+    h = q.max.y-q.min.y;
+    if(tot == 0)
+        return q;
+    if(tot > 1024*1024){
+        tot>>=10;
+        p0>>=10;
+        p1>>=10;
+    }
+    if(p0 > 0)
+        q.min.y += h*p0/tot;
+    if(p1 < tot)
+        q.max.y -= h*(tot-p1)/tot;
+    if(q.max.y < q.min.y+2){
+        if(q.min.y+2 <= r.max.y)
+            q.max.y = q.min.y+2;
+        else
+            q.min.y = q.max.y-2;
+    }
+    return q;
+}
+@
+
+
+
+<<[[Window]] other fields>>=
+Rectangle	lastsr;
+@
+% opti
+<<[[wmk()]] textual window settings, extra frame settings>>
+w->lastsr = ZR;
+@
+% not really frame settings? 
+<<[[wresize()]] textual window updates, reset lastsr>>=
+w->lastsr = ZR;
+@
+
 
 
 <<[[wscrdraw()]] sanity check the window image>>=
@@ -11739,9 +12522,34 @@ else{
 }
 @
 
+<<function wbacknl>>=
+uint
+wbacknl(Window *w, uint p, uint n)
+{
+    int i, j;
+
+    /* look for start of this line if n==0 */
+    if(n==0 && p>0 && w->r[p-1]!='\n')
+        n = 1;
+    i = n;
+    while(i-->0 && p>0){
+        --p;	/* it's at a newline now; back over it */
+        if(p == 0)
+            break;
+        /* at 128 chars, call it a line anyway */
+        for(j=128; --j>0 && p>0; p--)
+            if(w->r[p-1]=='\n')
+                break;
+    }
+    return p;
+}
+@
+
+
+
 <<function wsetorigin>>=
 void
-wsetorigin(Window *w, uint org, int exact)
+wsetorigin(Window *w, uint org, bool exact)
 {
     int i, a, fixup;
     Rune *r;
@@ -11822,126 +12630,41 @@ wfill(Window *w)
 
 
 
-\section{Mouse events}
+\subsection{Repainting}
 
-% no producer/consumer here, just click generating action,
-% textual windows do not read /mnt/wsys/mouse
-
-\subsection{Middle click menu}
-
-% certain condition = when !mouseopen
-<<[[mousethread()]] middle click under certain conditions>>=
-button2menu(winput);
+<<[[wrepaint()]] after updated cols, redraw content if mouse not opened>>=
+if(!w->mouseopen)
+    frredraw(&w->frm);
 @
+% optimization, just 
 
-% active only on actual window, not like right menu
-% mousethread -> event loop -> <>(winput)
-<<function button2menu>>=
+<<function frredraw>>=
 void
-button2menu(Window *w)
+frredraw(Frame *f)
 {
-    <<[[button2menu()]] return if window was deleted>>
+    bool ticked;
+    Point pt;
 
-    incref(w);
-    <<[[button2menu()]] menu2str adjustments for scrolling>>
-    switch(menuhit(2, mousectl, &menu2, desktop)){
-    <<[[button2menu()]] cases>>
-    }
-    wclose(w); // decref
-
-    wsendctlmesg(w, Wakeup, ZR, nil);
-    flushimage(display, true);
-}
-@
-
-<<[[button2menu()]] return if window was deleted>>=
-if(w->deleted)
-    return;
-@
-
-<<global menu2>>=
-Menu menu2 = { .item = menu2str };
-@
-
-<<global menu2str>>=
-char*		menu2str[] = {
- [Cut]		"cut",
- [Paste]	"paste",
- [Snarf]	"snarf",
- [Plumb]	"plumb",
- [Send]		"send",
- [Scroll]	"scroll",
- nil
-};
-@
-
-<<enum _anon_ (windows/rio/rio.c)2>>=
-enum
-{
-    Cut,
-    Paste,
-    Snarf,
-    Plumb,
-    Send,
-    Scroll,
-};
-@
-
-
-
-\subsection{Other clicks}
-
-<<[[winctl()]] WMouse case if not mouseopen>>=
-wmousectl(w);
-@
-
-% hmm can get middle click here? and right click?? but it should
-% have been intercepted before no?
-<<function wmousectl>>=
-void
-wmousectl(Window *w)
-{
-    int but;
-
-    if(w->mc.buttons == 1)
-        but = 1;
-    else if(w->mc.buttons == 2)
-        but = 2;
-    else if(w->mc.buttons == 4)
-        but = 3;
-    else{
-        if(w->mc.buttons == 8)
-            wkeyctl(w, Kscrolloneup);
-        if(w->mc.buttons == 16)
-            wkeyctl(w, Kscrollonedown);
+    if(f->p0 == f->p1){
+        ticked = f->ticked;
+        if(ticked)
+            frtick(f, frptofchar(f, f->p0), 0);
+        frdrawsel0(f, frptofchar(f, 0), 0, f->nchars, f->cols[BACK], f->cols[TEXT]);
+        if(ticked)
+            frtick(f, frptofchar(f, f->p0), 1);
         return;
     }
 
-    incref(w);		/* hold up window while we track */
-    <<[[wmousectl()]] goto Return if window was deleted>>
-
-    <<[[wmousectl()]] if pt in scrollbar>>
-    if(but == 1)
-        wselect(w);
-
-    /* else all is handled by main process */
-   Return:
-    wclose(w);
+    pt = frptofchar(f, 0);
+    pt = frdrawsel0(f, pt, 0, f->p0, f->cols[BACK], f->cols[TEXT]);
+    pt = frdrawsel0(f, pt, f->p0, f->p1, f->cols[HIGH], f->cols[HTEXT]);
+    pt = frdrawsel0(f, pt, f->p1, f->nchars, f->cols[BACK], f->cols[TEXT]);
 }
 @
-% transform mouse even in key event :) for scrolling
 
-\t so always wclose??
-
-% see scrolling later, using but value
-
-
-<<[[wmousectl()]] goto Return if window was deleted>>=
-if(w->deleted)
-    goto Return;
-@
 
 \section{Keyboard events}
+\n keyboard before mouse event here
 
 \subsection{Text input queue}
 
@@ -11983,7 +12706,7 @@ wshow(w, q0+1);
 @
 % insert, and move cursor after (and redisplay)
 
-
+% winsert will modify w->q0 no? so why use intermediate q0?
 
 
 
@@ -12004,7 +12727,8 @@ for(i = w->qh; i < w->nr; i++){
      }
  }
 @
-
+% get ready to send to WCread only if newline typed! otherwise buffered
+% until newline
 
 
 <<[[winctl()]] when WCRead, break if newline and handle EOF character>>=
@@ -12116,29 +12840,6 @@ case_Up:
 @
 
 
-
-<<function wbacknl>>=
-uint
-wbacknl(Window *w, uint p, uint n)
-{
-    int i, j;
-
-    /* look for start of this line if n==0 */
-    if(n==0 && p>0 && w->r[p-1]!='\n')
-        n = 1;
-    i = n;
-    while(i-->0 && p>0){
-        --p;	/* it's at a newline now; back over it */
-        if(p == 0)
-            break;
-        /* at 128 chars, call it a line anyway */
-        for(j=128; --j>0 && p>0; p--)
-            if(w->r[p-1]=='\n')
-                break;
-    }
-    return p;
-}
-@
 
 
 \subsubsection{Left}
@@ -12299,7 +13000,10 @@ wdelete(Window *w, uint q0, uint q1)
 
 \subsubsection{Interrupt}
 
-% 0x7F = Del? (see Kernel.nw )
+
+% how generate this 0x7F rune?
+% #define ... Del=        0x7F, in Kernel.nw
+% and seems to be used for kbtabaltgr so need Alt + ?
 
 <<[[wkeyctl()]] locals>>=
 int nr;
@@ -12334,8 +13038,45 @@ interruptproc(void *v)
 }
 @
 
+\t and then who handles this "interrupt" string? Kernel? each app?
+% when signal not handled then causes process to terminate?
 
 
+\subsubsection{Tab}
+
+
+<<[[Frame]] text fields>>=
+ushort	maxtab;		/* max size of tab, in pixels */
+@
+
+<<[[frinit()]] initialize other fields>>=
+f->maxtab = 8 * stringwidth(ft, "0");
+@
+
+
+
+<<[[wmk()]] textual window settings, extra frame settings>>=
+w->frm.maxtab = maxtab * stringwidth(font, "0");
+@
+% overwrite what was done in frinit
+<<[[wresize()]] textual window updates, extra frame settings>>=
+w->frm.maxtab = maxtab * stringwidth(w->frm.font, "0");
+@
+
+<<global maxtab>>=
+int		maxtab = 0;
+@
+<<[[main()]] locals>>=
+char *s;
+@
+<<[[main()]] set some globals>>=
+s = getenv("tabstop");
+if(s != nil)
+    maxtab = strtol(s, nil, 0);
+if(maxtab == 0)
+    maxtab = 4;
+free(s);
+@
 
 
 \section{Application output events}
@@ -12343,7 +13084,7 @@ interruptproc(void *v)
 
 \subsection{[[/mnt/wsys/cons]] writing part2}
 
-% when write on /dev/cons, then need update text.
+% when process writes on /dev/cons, then need update text.
 
 % process output string by writing on /dev/cons!
 % newline too, runes
@@ -12378,62 +13119,33 @@ alts[WCwrite].op = CHANSND;
 if(!w->scrolling && !w->mouseopen && w->qh >  w->org + w->frm.nchars)
     alts[WCwrite].op = CHANNOP;
 else
+    // scrolling || mouseopen || w->qh <= w->org + w->frm.nchars
     alts[WCwrite].op = CHANSND;
 @
-% ! mouseopen??
+
+\t scrolling -> autoscroll
+
+% accept conswrite from app if space to print them on the frame!
+% or if autoscroll
+% and if mouseopen?????
 
 
 
 
 <<[[winctl()]] other locals>>=
-Rune *rp, *bp, *tp, *up;
+Rune *rp;
 int nr;
-int initial;
-uint qh;
 @
-
 <<[[winctl()]] event loop cases>>=
 case WCwrite:
     recv(cwm.cw, &pair);
     rp = pair.s;
     nr = pair.ns;
 
-    bp = rp;
-    for(i=0; i<nr; i++) {
-        if(*bp++ == '\b'){
-            --bp;
-            initial = 0;
-            tp = runemalloc(nr);
-            runemove(tp, rp, i);
-            up = tp+i;
-            for(; i<nr; i++){
-                *up = *bp++;
-                if(*up == '\b')
-                    if(up == tp)
-                        initial++;
-                    else
-                        --up;
-                else
-                    up++;
-            }
-            if(initial){
-                if(initial > w->qh)
-                    initial = w->qh;
-                qh = w->qh-initial;
-                wdelete(w, qh, qh+initial);
-                w->qh = qh;
-            }
-            free(rp);
-            rp = tp;
-            nr = up-tp;
-            rp[nr] = 0;
-            break;
-        }
-    }
+    <<[[winctl()]] when WCwrite, if runes contains backspace>>
 
     w->qh = winsert(w, rp, nr, w->qh) + nr;
-    if(w->scrolling || w->mouseopen)
-        wshow(w, w->qh);
+    <<[[winctl()]] when WCwrite, if scrolling or mouseopen>>
     wsetselect(w, w->q0, w->q1);
     wscrdraw(w);
     free(rp);
@@ -12441,6 +13153,173 @@ case WCwrite:
 @
 
 
+
+<<[[winctl()]] when WCwrite, if scrolling or mouseopen>>=
+if(w->scrolling || w->mouseopen)
+    wshow(w, w->qh);
+@
+% ???
+
+<<[[winctl()]] other locals>>=
+Rune *bp, *tp, *up;
+int initial;
+uint qh;
+@
+<<[[winctl()]] when WCwrite, if runes contains backspace>>=
+bp = rp;
+for(i=0; i<nr; i++) {
+    if(*bp++ == '\b'){
+        --bp;
+        initial = 0;
+        tp = runemalloc(nr);
+        runemove(tp, rp, i);
+        up = tp+i;
+        for(; i<nr; i++){
+            *up = *bp++;
+            if(*up == '\b')
+                if(up == tp)
+                    initial++;
+                else
+                    --up;
+            else
+                up++;
+        }
+        if(initial){
+            if(initial > w->qh)
+                initial = w->qh;
+            qh = w->qh-initial;
+            wdelete(w, qh, qh+initial);
+            w->qh = qh;
+        }
+        free(rp);
+        rp = tp;
+        nr = up-tp;
+        rp[nr] = 0;
+        break;
+    }
+}
+@
+
+
+
+\section{Mouse events}
+
+% no producer/consumer here, just click generating action,
+% textual windows do not read /mnt/wsys/mouse
+
+\subsection{Middle click menu}
+
+% certain condition = when !mouseopen
+<<[[mousethread()]] middle click under certain conditions>>=
+button2menu(winput);
+@
+
+% active only on actual window, not like right menu
+% mousethread -> event loop -> <>(winput)
+<<function button2menu>>=
+void
+button2menu(Window *w)
+{
+    <<[[button2menu()]] return if window was deleted>>
+
+    incref(w);
+    <<[[button2menu()]] menu2str adjustments for scrolling>>
+    switch(menuhit(2, mousectl, &menu2, desktop)){
+    <<[[button2menu()]] cases>>
+    }
+    wclose(w); // decref
+
+    wsendctlmesg(w, Wakeup, ZR, nil);
+    flushimage(display, true);
+}
+@
+
+<<[[button2menu()]] return if window was deleted>>=
+if(w->deleted)
+    return;
+@
+
+<<global menu2>>=
+Menu menu2 = { .item = menu2str };
+@
+
+<<global menu2str>>=
+char*		menu2str[] = {
+ [Cut]		"cut",
+ [Paste]	"paste",
+ [Snarf]	"snarf",
+ [Plumb]	"plumb",
+ [Send]		"send",
+ [Scroll]	"scroll",
+ nil
+};
+@
+
+<<enum _anon_ (windows/rio/rio.c)2>>=
+enum
+{
+    Cut,
+    Paste,
+    Snarf,
+    Plumb,
+    Send,
+    Scroll,
+};
+@
+
+
+
+\subsection{Other clicks}
+
+<<[[winctl()]] WMouse case if not mouseopen>>=
+wmousectl(w);
+@
+
+% hmm can get middle click here? and right click?? but it should
+% have been intercepted before no?
+<<function wmousectl>>=
+void
+wmousectl(Window *w)
+{
+    int but;
+
+    if(w->mc.buttons == 1)
+        but = 1;
+    else if(w->mc.buttons == 2)
+        but = 2;
+    else if(w->mc.buttons == 4)
+        but = 3;
+    else{
+        if(w->mc.buttons == 8)
+            wkeyctl(w, Kscrolloneup);
+        if(w->mc.buttons == 16)
+            wkeyctl(w, Kscrollonedown);
+        return;
+    }
+
+    incref(w);		/* hold up window while we track */
+    <<[[wmousectl()]] goto Return if window was deleted>>
+
+    <<[[wmousectl()]] if pt in scrollbar>>
+    if(but == 1)
+        wselect(w);
+
+    /* else all is handled by main process */
+   Return:
+    wclose(w);
+}
+@
+% transform mouse even in key event :) for scrolling
+
+\t so always wclose??
+
+% see scrolling later, using but value
+
+
+<<[[wmousectl()]] goto Return if window was deleted>>=
+if(w->deleted)
+    goto Return;
+@
 
 \section{Word selection}
 % adv topics?
@@ -12728,6 +13607,7 @@ wsetselect(Window *w, uint q0, uint q1)
 % put snarf stuff here
 
 
+
 \section{Automatic scrolling mode}
 % hard to put in adv topics, this global is pretty important
 
@@ -12744,11 +13624,16 @@ case Scroll:
         wshow(w, w->nr);
     break;
 @
-
+% go to the end
 
 \section{Scroll bars}
 
 % seen Window.scrollr before
+
+<<[[Frame]] scroll>>=
+void (*scroll)(Frame*, int); /* scroll function provided by application */
+@
+
 
 <<[[mousethread()]] locals>>=
 bool scrolling = false;
@@ -12874,36 +13759,6 @@ freescrtemps(void)
 }
 @
 
-<<function scrpos>>=
-static
-Rectangle
-scrpos(Rectangle r, uint p0, uint p1, uint tot)
-{
-    Rectangle q;
-    int h;
-
-    q = r;
-    h = q.max.y-q.min.y;
-    if(tot == 0)
-        return q;
-    if(tot > 1024*1024){
-        tot>>=10;
-        p0>>=10;
-        p1>>=10;
-    }
-    if(p0 > 0)
-        q.min.y += h*p0/tot;
-    if(p1 < tot)
-        q.max.y -= h*(tot-p1)/tot;
-    if(q.max.y < q.min.y+2){
-        if(q.min.y+2 <= r.max.y)
-            q.max.y = q.min.y+2;
-        else
-            q.min.y = q.max.y-2;
-    }
-    return q;
-}
-@
 
 
 
@@ -12997,6 +13852,36 @@ wframescroll(Window *w, int dl)
 @
 
 
+\section{Resize}
+
+
+% similar code to wmk textual settings
+<<[[wresize()]] textual window updates>>=
+<<[[wresize()]] textual window updates, reset lastsr>>
+r = insetrect(i->r, Selborder+1);
+w->scrollr = r;
+w->scrollr.max.x = r.min.x+Scrollwid;
+
+r.min.x += Scrollwid+Scrollgap;
+
+if(move)
+    frsetrects(&w->frm, r, w->i);
+else{
+    frclear(&w->frm, false);
+    frinit(&w->frm, r, w->frm.font, w->i, cols);
+    wsetcols(w);
+    <<[[wresize()]] textual window updates, extra frame settings>>
+    r = insetrect(w->i->r, Selborder);
+    draw(w->i, r, cols[BACK], nil, w->frm.entire.min);
+
+    wfill(w);
+    wsetselect(w, w->q0, w->q1);
+    wscrdraw(w);
+}
+@
+% useful opti to differentiate move and resize?
+% maybe could factorize more code with wmk creation.
+% Have a paint function! (see codemap)
 
 
 \section{[[/mnt/wsys/text]]}
@@ -13167,6 +14052,46 @@ Dirtab dt;
 char buf[16];
 @
 
+
+<<[[filsyswalk()]] if Qwsys, then goto Accept>>=
+if(qid.path == Qwsys){
+    /* is it a numeric name? */
+    if(!numeric(x->req.wname[i]))
+        break;
+    /* yes: it's a directory */
+    id = atoi(x->req.wname[i]);
+    qlock(&all);
+    w = wlookid(id);
+    if(w == nil){
+        qunlock(&all);
+        break;
+    }
+    path = Qwsysdir;
+    type = QTDIR;
+    qunlock(&all);
+    incref(w);
+    sendp(winclosechan, f->w);
+    f->w = w;
+    dir = dirtab;
+    goto Accept;
+}
+@
+% again, why not wclose(w) directly? why winclosechan?
+
+% -> <>
+<<function numeric>>=
+static
+int
+numeric(char *s)
+{
+    for(; *s!='\0'; s++)
+        if(*s<'0' || '9'<*s)
+            return 0;
+    return 1;
+}
+@
+
+
 <<[[filsysread()]] cases>>=
 case Qwsys:
 
@@ -13202,25 +14127,9 @@ case Qwsys:
 Qwsysdir,		/* window directory, child of wsys */
 @
 
-
-<<[[filsysread()]] other locals>>=
-Dirtab *d;
-@
-
-<<[[filsysread()]] cases>>=
-case Qdir:
-case Qwsysdir:
-    d = dirtab;
-    d++;	/* first entry is '.' */
-    for(i=0; d->name != nil && i<e; i+=len){
-        len = dostat(fs, WIN(x->f->qid), d, b+n, x->req.count - n, clock);
-        if(len <= BIT16SZ)
-            break;
-        if(i >= o)
-            n += len;
-        d++;
-    }
-    break;
+<<[[filsyswalk()]] when in dotdot, if Qwsysdir adjust path>>=
+if(FILE(qid) == Qwsysdir)
+    path = Qwsys;
 @
 
 
@@ -13631,12 +14540,12 @@ post(char *name, char *envname, fdt srvfd)
 
 
 
+
 <<[[xfidattach()]] other locals>>=
 Rectangle r;
 int pid;
 bool hideit = false;
 bool scrollit;
-char *err = Eunkid;
 char *dir, errbuf[ERRMAX];
 Image *i;
 @
@@ -14411,6 +15320,12 @@ Qsnarf,
 { "snarf",		QTFILE,	Qsnarf,		0600 },
 @
 
+<<[[filsyswalk()]] if snarf>>=
+if(snarffd>=0 && strcmp(x->req.wname[i], "snarf")==0)
+    break;	/* don't serve /dev/snarf if it's provided in the environment */
+@
+
+
 <<[[xfidopen()]] cases>>=
 case Qsnarf:
     if(x->req.mode==ORDWR || x->req.mode==OWRITE){
@@ -14470,6 +15385,11 @@ case Qsnarf:
     break;
 @
 
+
+<<[[dostat()]] adjust vers for snarf>>=
+if(dir->qid == Qsnarf)
+    d.qid.vers = snarfversion;
+@
 
 <<global tsnarf>>=
 static	char	*tsnarf;
@@ -15146,6 +16066,11 @@ static	Image	*paleholdcol;
 static	Image	*lightholdcol;
 @
 
+<<[[wmk()]] extra colors initialisation>>=
+holdcol      = allocimage(display, Rect(0,0,1,1), CMAP8, true, DMedblue);
+lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreyblue);
+paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreyblue
+@
 
 % how set it up (dev/consctl or special key)
 
@@ -15626,40 +16551,40 @@ if(x->flushing){
 
 \section{Security}
 
+<<[[filsysinit()]] other locals>>=
+fdt fd;
+char buf[128];
+int n;
+@
+
+<<[[filsysinit()]] set fs user>>=
+fd = open("/dev/user", OREAD);
+strcpy(buf, "Jean-Paul_Belmondo"); // lol
+if(fd >= 0){
+    n = read(fd, buf, sizeof buf-1);
+    if(n > 0)
+        buf[n] = '\0';
+    close(fd);
+}
+fs->user = estrdup(buf);
+@
+%ocaml: let user = cat("/dev/user") |> String.concat "" 
+
+% useful beyond the /srv/rio.user.pid? Yes for security
+% the worker and filesystem make sure request match the owner of rio
+
+
+
+
+
 % none :( like X11? worse?
 % can draw everywhere ... so can fish applications.
 % BUT in the end security in macOS is just based on trusted
 % reviewed apps so they didn't really improved things.
 
-
 <<[[fcall]] other methods>>=
-[Tversion] = filsysversion,
 [Tauth]    = filsysauth,
 @
-
-<<function filsysversion>>=
-static
-Xfid*
-filsysversion(Filsys *fs, Xfid *x, Fid*)
-{
-    Fcall fc;
-
-    if(!firstmessage)
-        return filsysrespond(x->fs, x, &fc, "version request not first message");
-    if(x->req.msize < 256)
-        return filsysrespond(x->fs, x, &fc, "version: message size too small");
-
-    messagesize = x->req.msize;
-
-    fc.msize = messagesize;
-    if(strncmp(x->req.version, "9P2000", 6) != 0)
-        return filsysrespond(x->fs, x, &fc, "unrecognized 9P version");
-    // else
-    fc.version = "9P2000";
-    return filsysrespond(fs, x, &fc, nil);
-}
-@
-% why 256? 
 
 <<function filsysauth>>=
 static
@@ -15671,6 +16596,71 @@ filsysauth(Filsys *fs, Xfid *x, Fid*)
     return filsysrespond(fs, x, &fc, "rio: authentication not required");
 }
 @
+
+\section{TODO [[Wakeup]]}
+
+
+\t distribute
+<<[[Wctlmesgkind]] cases>>=
+Wakeup,
+@
+
+% wcurrent | button2menu | xfidopen(Qwctl) --> <>
+<<[[wctlmesg()]] cases>>=
+case Wakeup:
+    break;
+@
+\l what is the point? a nop?
+
+\section{TODO [[Refresh]]}
+
+\t distribute
+<<[[Wctlmesgkind]] cases>>=
+Refresh,
+@
+% seems called when close the mouse, maybe to restore frame
+% maybe can put in Textual windows chapter
+
+% xfidclose (Qmouse) -> <>
+<<[[wctlmesg()]] cases>>=
+case Refresh:
+    if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
+        break;
+    if(!w->mouseopen)
+        wrefresh(w, r);
+    flushimage(display, true);
+    break;
+@
+
+<<function wrefresh>>=
+void
+wrefresh(Window *w, Rectangle)
+{
+    Frame *frm = &w->frm;
+
+    /* BUG: rectangle is ignored */
+    if(w == input)
+        wborder(w, Selborder);
+    else
+        wborder(w, Unselborder);
+    if(w->mouseopen)
+        return;
+    // else
+
+    draw(w->i, insetrect(w->i->r, Borderwidth), frm->cols[BACK], nil, 
+         w->i->r.min);
+    frm->ticked = false;
+    if(frm->p0 > 0)
+        frdrawsel(frm, frptofchar(frm, 0), 0, frm->p0, 0);
+    if(frm->p1 < frm->nchars)
+        frdrawsel(frm, frptofchar(frm, frm->p1), frm->p1, frm->nchars, 0);
+    frdrawsel(frm, frptofchar(frm, frm->p0), frm->p0, frm->p1, 1);
+    w->lastsr = ZR;
+    wscrdraw(w);
+}
+@
+
+
 
 
 
