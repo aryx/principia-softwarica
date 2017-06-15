@@ -126,9 +126,10 @@ gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
         /*e: [[gengetwindow()]] return error */
     }
     /*e: [[gengetwindow()]] sanity check winp */
+    // PAD! commented for now cos buggy
     // get logical coordinates when run under rio
-    if(originwindow(*winp, Pt(0,0), r.min) <= 0)
-      return ERROR_NEG1;
+    //if(originwindow(*winp, Pt(0,0), r.min) <= 0)
+    //  return ERROR_NEG1;
 
     d->screenimage = *winp;
     assert((*winp)->chan != 0);

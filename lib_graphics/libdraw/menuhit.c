@@ -206,7 +206,7 @@ menuhit(int button, Mousectl *mc, Menu *menu, Screen *scr)
     int i;
     int lasti;
     char *item;
-    int nitem, nitemdrawn, 
+    int nitem, nitemdrawn;
     int maxwid, wid;
     Rectangle r, menur, textr;
     Image *b, *backup, *save;
