@@ -2781,6 +2781,7 @@ Here is the skeleton of [[hellorio.c]]:
 #include <draw.h>
 #include <mouse.h>
 #include <keyboard.h>
+
 #include <thread.h>
 
 Image *bgcolor;
@@ -5349,6 +5350,8 @@ uint		q1; // selection end or same value than q0 when no selection
 \l give name ``cursor''?
 %ocaml: use option for q1
 
+% use q0/q1 to not confuse with p0/p1 in libframe, called p0 for point 0.
+
 % and nchars?
 
 <<[[Window]] textual window fields, visible text>>=
@@ -5368,7 +5371,7 @@ uint		org;
 // index in Window.r
 uint		qh; // output point
 @
-% qh for qursor host (host = application connected to terminal, e.g., rc)
+% qh for host (host = application connected to terminal, e.g., rc)
 
 % process modify qh, by output stuff
 
@@ -5914,9 +5917,8 @@ exitchan     = chancreate(sizeof(int), 0);
 @
 %ocaml: default value that can grows 
 
-<<[[main()]] threads creation>>=
-timerinit();
 
+<<[[main()]] threads creation>>=
 threadcreate(keyboardthread, nil, STACK);
 threadcreate(mousethread, nil, STACK);
 @
@@ -5924,7 +5926,6 @@ threadcreate(mousethread, nil, STACK);
 
 % but convenient to have them in globals?
 
-% timerinit? later. need be before the other thread?
 
 % see also right menu and new create a new window and so a new thread!
 %  also each open of a /dev/ file creates a thread?
@@ -7860,15 +7861,14 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     w->id = ++id;
     w->topped = ++topped;
 
-    <<[[wmk()]] channels settings>>
-    <<[[wmk()]] textual window settings>>
-
-    w->notefd = -1;
-    w->dir = estrdup(startdir);
     w->label = estrdup("<unnamed>");
 
-    wborder(w, Selborder);
-    wscrdraw(w);
+    <<[[wmk()]] channels settings>>
+    <<[[wmk()]] textual window settings>>
+    <<[[wmk()]] process settings>>
+
+    <<[[wmk()]] drawing border>>
+    <<[[wmk()]] drawing scrollbar>>
 
     incref(w);	/* ref will be removed after mounting; avoids delete before ready to be deleted */
     return w;
@@ -7876,10 +7876,9 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 @
 %old: I changed the order of some initialisations, to group textual window
 % stuff together
-\l why wborder here? will do it again in caller in wcurrent
 
 
-\t wscrdraw?? need that so early?
+
 
 % about incref comment, see call to wclose in winshell after filsysmount
 \l subtle
@@ -7893,6 +7892,11 @@ w->cctl = cctl;
 
 
 %\subsection{Window border}
+
+<<[[wmk()]] drawing border>>=
+wborder(w, Selborder);
+@
+\l why wborder here? will do it again in caller in wcurrent
 
 <<function wborder>>=
 void
@@ -7939,6 +7943,11 @@ if(w->i == nil)
 \l just return? no exn? because when hide a window there is no img?
 
 
+
+<<[[wmk()]] process settings>>=
+w->notefd = -1;
+w->dir = estrdup(startdir);
+@
 
 <<[[Window]] other fields>>=
 char		*dir; // /dev/wdir
@@ -11623,6 +11632,8 @@ Scrollgap 		= 4,	/* gap right of scroll bar */
 \section{Frame widget}
 \label{sec:frame-widget}
 % text widget really. in Gtk it's called the TextEditor even?
+% In Efuns we use the same term though:
+%   "a frame: a view of a buffer for a window"
 
 % frame(2)
 % used by rio and sam, factorize code for Editable Text (widget)
@@ -11630,6 +11641,13 @@ Scrollgap 		= 4,	/* gap right of scroll bar */
 
 % It is actually not what is around the window. Bad name.
 % Rename maybe TextWidget?
+
+% Complex library. Why need that? Can't simply print lines of text?
+% Libframe handles tabs, fold long lines, handle mouse selection,
+% can insert and delete anywhere and adjust chars around.
+% Also handle unicode with possible variable-size chars (but
+% do that efficiently by storing widths in boxes).
+%ocaml: but should be simpler. code of frinsert is really long.
 
 \subsection{[[Frame]]}
 
@@ -11664,18 +11682,9 @@ ushort	nchars;		/* # runes in frame */
 <<[[Frame]] text fields>>=
 ushort	nlines;		/* # lines with text */
 @
+% will be maintained by? frinsert and frdelete?
 
 
-%XXX
-<<[[Frame]] text fields>>=
-ushort	modified;	/* changed since frselect() */
-@
-<<[[Frame]] text fields>>=
-ushort	lastlinefull;	/* last line fills frame */
-@
-<<[[frinit()]] initialize other fields>>=
-f->lastlinefull = 0;
-@
 
 \subsection{[[frinit()]]}
 
@@ -11722,12 +11731,7 @@ Rectangle	entire;		/* of full frame */
 
 
 
-
-
-
-
-
-\subsection{[[frclear()]]}
+%\subsection{[[frclear()]]}
 
 % called when Exited
 
@@ -11735,18 +11739,8 @@ Rectangle	entire;		/* of full frame */
 void
 frclear(Frame *f, bool freeall)
 {
-    if(f->nbox)
-        _frdelbox(f, 0, f->nbox-1);
-    if(f->box)
-        free(f->box);
-    f->box = nil;
-    if(freeall){
-        freeimage(f->tick);
-        freeimage(f->tickback);
-        f->tick = nil;
-        f->tickback = nil;
-    }
-    f->ticked = false;
+    <<[[frclear()]] free boxes>>
+    <<[[frclear()]] free ticks>>
 }
 @
 %old: I reordered lines, more logical
@@ -11912,27 +11906,25 @@ if(f->tickback == nil){
 }
 @
 
+
+<<[[frclear()]] free ticks>>=
+if(freeall){
+    freeimage(f->tick);
+    freeimage(f->tickback);
+    f->tick = nil;
+    f->tickback = nil;
+}
+f->ticked = false;
+@
+
+
 \subsection{Frame boxes}
 
 <<[[Frame]] box fields>>=
+// growing_array<Frbox> (size = nalloc, unused after nbox)
 Frbox	*box;
 ushort	nbox;
 ushort nalloc;
-@
-
-<<struct Frbox>>=
-struct Frbox
-{
-    long		wid;		/* in pixels */
-    long		nrune;		/* <0 ==> negate and treat as break char */
-    union{
-        uchar	*ptr;
-        struct{
-            short	bc;	/* break char */
-            short	minwid;
-        };
-    };
-};
 @
 
 <<[[frinit()]] initialize other fields>>=
@@ -11941,12 +11933,100 @@ f->nbox = 0;
 f->nalloc = 0;
 @
 
+
+\subsubsection{[[Frbox]]}
+
+<<struct Frbox>>=
+struct Frbox
+{
+    long		wid;		/* in pixels */
+
+    long		nrune;		/* <0 ==> negate and treat as break char */
+    union{
+        // array<byte> UTF8?
+        uchar	*ptr;
+        struct{
+            short	bc;	/* break char */
+            short	minwid;
+        };
+    };
+};
+@
+%ocaml: proper ADT instead of abuse negative integer for nrune
+\l ugly to use short for bc. Why not simply char? or Rune!
+
+% example of boxes?
+% - foo
+% - \n
+% - \b?
+% - artificial break?
+
+% minwid?
+
+% store wid so can know if overflow and need split box.
+% store if special char, e.g. newline or artificial break?
+
+<<function NRUNE>>=
+#define	NRUNE(b)	((b)->nrune < 0 ? 1 : (b)->nrune)
+@
+
+\subsubsection{Adding boxes}
+
+<<constant SLOP>>=
+#define	SLOP	25
+@
+
+<<function _fraddbox>>=
+void
+_fraddbox(Frame *f, int bn, int n)	/* add n boxes after bn, shift the rest up,
+                 * box[bn+n]==box[bn] */
+{
+    int i;
+
+    <<[[_fraddbox()]] sanity check bn>>
+    if(f->nbox+n > f->nalloc)
+        _frgrowbox(f, n+SLOP);
+    for(i=f->nbox; --i>=bn; )
+        f->box[i+n] = f->box[i];
+    f->nbox+=n;
+}
+@
+
+<<function _frgrowbox>>=
+void
+_frgrowbox(Frame *f, int delta)
+{
+    f->nalloc += delta;
+    f->box = realloc(f->box, f->nalloc*sizeof(Frbox));
+    <<[[_frgrowbox()]] sanity check box>>
+}
+@
+
+
+<<[[_fraddbox()]] sanity check bn>>=
+if(bn > f->nbox)
+    drawerror(f->display, "_fraddbox");
+@
+<<[[_frgrowbox()]] sanity check box>>=
+if(f->box == nil)
+    drawerror(f->display, "_frgrowbox");
+@
+
+\subsubsection{Free boxes}
+
+<<[[frclear()]] free boxes>>=
+if(f->nbox)
+    _frdelbox(f, 0, f->nbox-1);
+if(f->box)
+    free(f->box);
+f->box = nil;
+@
+
 <<function _frdelbox>>=
 void
 _frdelbox(Frame *f, int n0, int n1)	/* inclusive */
 {
-    if(n0>=f->nbox || n1>=f->nbox || n1<n0)
-        drawerror(f->display, "_frdelbox");
+    <<[[_frdelbox()]] sanity check n0 and n1>>
     _frfreebox(f, n0, n1);
     _frclosebox(f, n0, n1);
 }
@@ -11958,10 +12038,7 @@ _frfreebox(Frame *f, int n0, int n1)	/* inclusive */
 {
     int i;
 
-    if(n1<n0)
-        return;
-    if(n0>=f->nbox || n1>=f->nbox)
-        drawerror(f->display, "_frfreebox");
+    <<[[_frfreebox()]] sanity check n0 and n1>>
     n1++;
     for(i=n0; i<n1; i++)
         if(f->box[i].nrune >= 0)
@@ -11969,14 +12046,14 @@ _frfreebox(Frame *f, int n0, int n1)	/* inclusive */
 }
 @
 
+
 <<function _frclosebox>>=
 void
 _frclosebox(Frame *f, int n0, int n1)	/* inclusive */
 {
     int i;
 
-    if(n0>=f->nbox || n1>=f->nbox || n1<n0)
-        drawerror(f->display, "_frclosebox");
+    <<[[_frclosebox()]] sanity check n0 and n1>>
     n1++;
     for(i=n1; i<f->nbox; i++)
         f->box[i-(n1-n0)] = f->box[i];
@@ -11986,11 +12063,327 @@ _frclosebox(Frame *f, int n0, int n1)	/* inclusive */
 
 
 
+<<[[_frdelbox()]] sanity check n0 and n1>>=
+if(n0>=f->nbox || n1>=f->nbox || n1<n0)
+    drawerror(f->display, "_frdelbox");
+@
+<<[[_frfreebox()]] sanity check n0 and n1>>=
+if(n1<n0)
+    return;
+if(n0>=f->nbox || n1>=f->nbox)
+    drawerror(f->display, "_frfreebox");
+@
+<<[[_frclosebox()]] sanity check n0 and n1>>=
+if(n0>=f->nbox || n1>=f->nbox || n1<n0)
+    drawerror(f->display, "_frclosebox");
+@
+
+\subsection{Frame strings}
+
+<<constant CHUNK (windows/libframe/frstr.c)>>=
+#define	CHUNK	16
+@
+
+<<function ROUNDUP>>=
+#define	ROUNDUP(n)	((n+CHUNK)&~(CHUNK-1))
+@
+
+<<function _frallocstr>>=
+uchar *
+_frallocstr(Frame *f, unsigned n)
+{
+    uchar *p;
+
+    p = malloc(ROUNDUP(n));
+    if(p == 0)
+        drawerror(f->display, "out of memory");
+    return p;
+}
+@
+
+<<function _frinsure>>=
+void
+_frinsure(Frame *f, int bn, unsigned n)
+{
+    Frbox *b;
+    uchar *p;
+
+    b = &f->box[bn];
+    if(b->nrune < 0)
+        drawerror(f->display, "_frinsure");
+    if(ROUNDUP(b->nrune) > n)	/* > guarantees room for terminal NUL */
+        return;
+    p = _frallocstr(f, n);
+    b = &f->box[bn];
+    memmove(p, b->ptr, NBYTE(b)+1);
+    free(b->ptr);
+    b->ptr = p;
+}
+@
+
+
+\subsection{Frame rune position, point, and box number}
+
+% have:
+%  - type position_text (e.g., q0) (ulong)
+%  - type for position_frame (ulong)
+%  - type for boxnumber (ushort)
+%  - type position_point (Point.t)
+\l should use typedef
+
+% p = position_rune, bn = box number, pt = point
+
+\subsubsection{[[frptofchar()]]}
+
+% Frame point of p'th rune (point is upper left corner of rune)
+<<function frptofchar>>=
+Point
+frptofchar(Frame *f, ulong p)
+{
+    return _frptofcharptb(f, p, f->r.min, 0);
+}
+@
+
+<<function _frptofcharptb>>=
+Point
+_frptofcharptb(Frame *f, ulong p, Point pt, int bn)
+{
+    Frbox *b;
+    uchar *s;
+    int w, l;
+    Rune r;
+
+    for(b = &f->box[bn]; bn<f->nbox; bn++,b++){
+        _frcklinewrap(f, &pt, b);
+        l=NRUNE(b);
+        // p is in this box
+        if(p < l){
+            if(b->nrune > 0)
+                for(s=b->ptr; p>0; s+=w, p--){
+                    r = *s;
+                    if(r < Runeself)
+                        w = 1;
+                    else
+                        w = chartorune(&r, (char*)s);
+                    pt.x += stringnwidth(f->font, (char*)s, 1);
+                    <<[[_frptofcharptb()]] sanity check r and pt>>
+                }
+            break; // found it
+        }
+        // else
+        p -= l;
+        _fradvance(f, &pt, b);
+    }
+    return pt;
+}
+@
+\l ugly break, should use if then else
+
+%\subsubsection{[[_fradvance()]]}
+
+<<function _fradvance>>=
+void
+_fradvance(Frame *f, Point *p, Frbox *b)
+{
+    if(b->nrune<0 && b->bc=='\n'){
+        p->x = f->r.min.x;
+        p->y += f->font->height;
+    }else
+        p->x += b->wid;
+}
+@
+
+% see advantage of boxes here, already computed wid and know where breaks are
+
+<<[[_frptofcharptb()]] sanity check r and pt>>=
+if(r==0 || pt.x > f->r.max.x)
+    drawerror(f->display, "frptofchar");
+@
+
+%\subsubsection{[[_frcklinewrap()]]}
+
+<<function _frcklinewrap>>=
+void
+_frcklinewrap(Frame *f, Point *p, Frbox *b)
+{
+    if((b->nrune<0? b->minwid : b->wid) > f->r.max.x - p->x){
+        p->x = f->r.min.x;
+        p->y += f->font->height;
+    }
+}
+@
+% so not a box for artificial break? just have to check each time
+% if box overflow?
+
+<<function _frcklinewrap0>>=
+void
+_frcklinewrap0(Frame *f, Point *p, Frbox *b)
+{
+    if(_frcanfit(f, *p, b) == 0){
+        p->x = f->r.min.x;
+        p->y += f->font->height;
+    }
+}
+@
+
+% return int option, 0 = None
+<<function _frcanfit>>=
+int
+_frcanfit(Frame *f, Point pt, Frbox *b)
+{
+    int left, w, nr;
+    uchar *p;
+    Rune r;
+
+    left = f->r.max.x - pt.x;
+    if(b->nrune < 0)
+        return b->minwid <= left;
+    if(left >= b->wid)
+        return b->nrune;
+    for(nr=0,p=b->ptr; *p; p+=w,nr++){
+        r = *p;
+        if(r < Runeself)
+            w = 1;
+        else
+            w = chartorune(&r, (char*)p);
+        left -= stringnwidth(f->font, (char*)p, 1);
+        if(left < 0)
+            return nr;
+    }
+    drawerror(f->display, "_frcanfit can't");
+    return 0;
+}
+@
+
+
+
+
+% frptofchar bounded by nb boxes.
+\l when want to do bounded search?
+
+<<function _frptofcharnb>>=
+Point
+_frptofcharnb(Frame *f, ulong p, int nb)	/* doesn't do final _fradvance to next line */
+{
+    Point pt;
+    int nbox;
+
+    // save
+    nbox = f->nbox;
+    f->nbox = nb;
+    pt = _frptofcharptb(f, p, f->r.min, 0);
+    // restore
+    f->nbox = nbox;
+    return pt;
+}
+@
+\l why not call directly frptofchar?
+
+\subsubsection{[[frcharofpt()]]}
+
+<<function frcharofpt>>=
+ulong
+frcharofpt(Frame *f, Point pt)
+{
+    Point qt;
+    int w;
+    uchar *s;
+    Frbox *b;
+    int bn;
+    ulong p;
+    Rune r;
+
+    pt = _frgrid(f, pt);
+
+    qt = f->r.min;
+    // find the line
+    for(b=f->box, bn=0, p=0; bn < f->nbox && qt.y < pt.y; bn++,b++){
+        _frcklinewrap(f, &qt, b);
+        if(qt.y >= pt.y)
+            break;
+        _fradvance(f, &qt, b);
+        p += NRUNE(b);
+    }
+    // find the box in the line
+    for(; bn<f->nbox && qt.x<=pt.x; bn++,b++){
+        _frcklinewrap(f, &qt, b);
+        if(qt.y > pt.y)
+            break;
+        if(qt.x + b->wid > pt.x){
+            if(b->nrune < 0)
+                _fradvance(f, &qt, b);
+            else{
+                s = b->ptr;
+                for(;;){
+                    if((r = *s) < Runeself)
+                        w = 1;
+                    else
+                        w = chartorune(&r, (char*)s);
+                    <<[[frcharofpt()]] sanity check r>>
+                    qt.x += stringnwidth(f->font, (char*)s, 1);
+                    s += w;
+                    if(qt.x > pt.x)
+                        break;
+                    p++;
+                }
+            }
+        }else{
+            p += NRUNE(b);
+            _fradvance(f, &qt, b);
+        }
+    }
+    return p;
+}
+@
+
+<<function _frgrid>>=
+static
+Point
+_frgrid(Frame *f, Point p)
+{
+    p.y -= f->r.min.y;
+    p.y -= p.y%f->font->height;
+    p.y += f->r.min.y;
+    if(p.x > f->r.max.x)
+        p.x = f->r.max.x;
+    return p;
+}
+@
+
+<<[[frcharofpt()]] sanity check r>>=
+if(r == 0)
+    drawerror(f->display, "end of string in frcharofpt");
+@
+
+\subsubsection{[[_frdrawtext()]]}
+
+% the simple to draw text, just draw the boxes
+
+% frinsert -> <>
+<<function _frdrawtext>>=
+void
+_frdrawtext(Frame *f, Point pt, Image *text, Image *back)
+{
+    Frbox *b;
+    int nb;
+    static int x;
+
+    for(nb=0,b=f->box; nb<f->nbox; nb++, b++){
+        _frcklinewrap(f, &pt, b);
+        if(b->nrune >= 0){
+            stringbg(f->b, pt, text, ZP, f->font, (char*)b->ptr, back, ZP);
+        }
+        pt.x += b->wid;
+    }
+}
+@
+
 \subsection{Frame selection}
 
 <<[[Frame]] text fields>>=
 ulong	p0, p1;		/* selection */
 @
+% equivalent of q0 and q1 but translated to frame origin
 
 <<[[frinit()]] initialize other fields>>=
 f->p0 = 0;
@@ -12162,6 +12555,9 @@ if(q0 <= w->org + w->frm.nchars)
 % (here 0 because q0 == w->org)
 
 
+<<global frame>>=
+static Frame		frame;
+@
 
 <<struct points_frinsert>>=
 struct points_frinsert {
@@ -12169,22 +12565,31 @@ struct points_frinsert {
 };
 @
 
+<<[[frinsert()]] locals>>=
+Point pt0, pt1, opt0, ppt0, ppt1, pt;
+Frbox *b;
+int n, n0, nn0, y;
+ulong cn0;
+Image *col;
+Rectangle r;
+static struct points_frinsert *pts;
+static int nalloc=0;
+int npts;
+@
+
+<<constant DELTA>>=
+#define	DELTA	25
+@
+
 <<function frinsert>>=
 void
 frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
 {
-    Point pt0, pt1, opt0, ppt0, ppt1, pt;
-    Frbox *b;
-    int n, n0, nn0, y;
-    ulong cn0;
-    Image *col;
-    Rectangle r;
-    static struct points_frinsert *pts;
-    static int nalloc=0;
-    int npts;
+    <<[[frinsert()]] locals>>
 
     if(p0>f->nchars || sp==ep || f->b==nil)
         return;
+
     n0 = _frfindbox(f, 0, 0, p0);
     cn0 = p0;
     nn0 = n0;
@@ -12193,18 +12598,20 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
     opt0 = pt0;
     pt1 = bxscan(f, sp, ep, &ppt0);
     ppt1 = pt1;
+
     if(n0 < f->nbox){
-        _frcklinewrap(f, &pt0, b = &f->box[n0]);	/* for frdrawsel() */
+        b = &f->box[n0];
+        _frcklinewrap(f, &pt0, b);	/* for frdrawsel() */
         _frcklinewrap0(f, &ppt1, b);
     }
-    f->modified = 1;
+    f->modified = true;
     /*
      * ppt0 and ppt1 are start and end of insertion as they will appear when
      * insertion is complete. pt0 is current location of insertion position
      * (p0); pt1 is terminal point (without line wrap) of insertion.
      */
-    if(f->p0 == f->p1)
-        frtick(f, frptofchar(f, f->p0), 0);
+
+    <<[[frinsert()]] remove tick>>
 
     /*
      * Find point where old and new x's line up
@@ -12219,8 +12626,7 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
         _frcklinewrap0(f, &pt1, b);
         if(b->nrune > 0){
             n = _frcanfit(f, pt1, b);
-            if(n == 0)
-                drawerror(f->display, "_frcanfit==0");
+            <<[[frinsert()]] sanity check n canfit>>
             if(n != b->nrune){
                 _frsplitbox(f, n0, n);
                 b = &f->box[n0];
@@ -12334,8 +12740,11 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
         col = f->cols[HIGH];
     else
         col = f->cols[BACK];
+
     frselectpaint(f, ppt0, ppt1, col);
+
     _frdrawtext(&frame, ppt0, f->cols[TEXT], col);
+
     _fraddbox(f, nn0, frame.nbox);
     for(n=0; n<frame.nbox; n++)
         f->box[nn0+n] = frame.box[n];
@@ -12345,6 +12754,7 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
     }
     n0 += frame.nbox;
     _frclean(f, ppt0, nn0, n0<f->nbox-1? n0+1 : n0);
+
     f->nchars += frame.nchars;
     if(f->p0 >= p0)
         f->p0 += frame.nchars;
@@ -12354,11 +12764,467 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
         f->p1 += frame.nchars;
     if(f->p1 > f->nchars)
         f->p1 = f->nchars;
-    if(f->p0 == f->p1)
-        frtick(f, frptofchar(f, f->p0), 1);
+
+    <<[[frinsert()]] draw tick>>
 }
 @
 
+<<[[frinsert()]] sanity check n canfit>>=
+if(n == 0)
+    drawerror(f->display, "_frcanfit==0");
+@
+
+<<[[Frame]] text fields>>=
+bool	modified;	/* changed since frselect() */
+@
+%old: was ushort
+
+
+\subsubsection{[[_frfindbox()]]}
+
+<<function _frfindbox>>=
+/* find box containing q and put q on a box boundary */
+int
+_frfindbox(Frame *f, int bn, ulong p, ulong q)	
+{
+    Frbox *b;
+
+    for(b = &f->box[bn]; bn < f->nbox && p+NRUNE(b) <= q; bn++, b++)
+        p += NRUNE(b);
+    if(p != q)
+        _frsplitbox(f, bn++, (int)(q-p));
+    return bn;
+}
+@
+
+<<function _frsplitbox>>=
+void
+_frsplitbox(Frame *f, int bn, int n)
+{
+    dupbox(f, bn);
+    truncatebox(f, &f->box[bn], f->box[bn].nrune-n);
+    chopbox(f, &f->box[bn+1], n);
+}
+@
+
+<<function dupbox>>=
+static
+void
+dupbox(Frame *f, int bn)
+{
+    uchar *p;
+
+    if(f->box[bn].nrune < 0)
+        drawerror(f->display, "dupbox");
+    _fraddbox(f, bn, 1);
+    if(f->box[bn].nrune >= 0){
+        p = _frallocstr(f, NBYTE(&f->box[bn])+1);
+        strcpy((char*)p, (char*)f->box[bn].ptr);
+        f->box[bn+1].ptr = p;
+    }
+}
+@
+
+<<function NBYTE>>=
+#define	NBYTE(b)	strlen((char*)(b)->ptr)
+@
+
+
+<<function truncatebox>>=
+static
+void
+truncatebox(Frame *f, Frbox *b, int n)	/* drop last n chars; no allocation done */
+{
+    if(b->nrune<0 || b->nrune<n)
+        drawerror(f->display, "truncatebox");
+    b->nrune -= n;
+    runeindex(b->ptr, b->nrune)[0] = 0;
+    b->wid = stringwidth(f->font, (char *)b->ptr);
+}
+@
+
+<<function chopbox>>=
+static
+void
+chopbox(Frame *f, Frbox *b, int n)	/* drop first n chars; no allocation done */
+{
+    char *p;
+
+    if(b->nrune<0 || b->nrune<n)
+        drawerror(f->display, "chopbox");
+    p = (char*)runeindex(b->ptr, n);
+    memmove((char*)b->ptr, p, strlen(p)+1);
+    b->nrune -= n;
+    b->wid = stringwidth(f->font, (char *)b->ptr);
+}
+@
+
+<<function runeindex>>=
+static
+uchar*
+runeindex(uchar *p, int n)
+{
+    int i, w;
+    Rune rune;
+
+    for(i=0; i<n; i++,p+=w)
+        if(*p < Runeself)
+            w = 1;
+        else{
+            w = chartorune(&rune, (char*)p);
+            USED(rune);
+        }
+    return p;
+}
+@
+
+
+
+
+\subsubsection{[[bxscan()]]}
+
+<<constant TMPSIZE>>=
+#define	TMPSIZE	256
+@
+
+<<function bxscan>>=
+static
+Point
+bxscan(Frame *f, Rune *sp, Rune *ep, Point *ppt)
+{
+    int w, c, nb, delta, nl, nr, rw;
+    Frbox *b;
+    char *s, tmp[TMPSIZE+3];	/* +3 for rune overflow */
+    uchar *p;
+
+    frame.r = f->r;
+    frame.b = f->b;
+    frame.font = f->font;
+    frame.maxtab = f->maxtab;
+    frame.nbox = 0;
+    frame.nchars = 0;
+    memmove(frame.cols, f->cols, sizeof frame.cols);
+    delta = DELTA;
+    nl = 0;
+    for(nb=0; sp<ep && nl<=f->maxlines; nb++,frame.nbox++){
+        if(nb == frame.nalloc){
+            _frgrowbox(&frame, delta);
+            if(delta < 10000)
+                delta *= 2;
+        }
+        b = &frame.box[nb];
+        c = *sp;
+        if(c=='\t' || c=='\n'){
+            b->bc = c;
+            b->wid = 5000;
+            b->minwid = (c=='\n')? 0 : stringwidth(frame.font, " ");
+            b->nrune = -1;
+            if(c=='\n')
+                nl++;
+            frame.nchars++;
+            sp++;
+        }else{
+            s = tmp;
+            nr = 0;
+            w = 0;
+            while(sp < ep){
+                c = *sp;
+                if(c=='\t' || c=='\n')
+                    break;
+                rw = runetochar(s, sp);
+                if(s+rw >= tmp+TMPSIZE)
+                    break;
+                w += runestringnwidth(frame.font, sp, 1);
+                sp++;
+                s += rw;
+                nr++;
+            }
+            *s++ = 0;
+            p = _frallocstr(f, s-tmp);
+            b = &frame.box[nb];
+            b->ptr = p;
+            memmove(p, tmp, s-tmp);
+            b->wid = w;
+            b->nrune = nr;
+            frame.nchars += nr;
+        }
+    }
+    _frcklinewrap0(f, ppt, &frame.box[0]);
+    return _frdraw(&frame, *ppt);
+}
+@
+
+% frinsert -> bxscan -> <>
+<<function _frdraw>>=
+Point
+_frdraw(Frame *f, Point pt)
+{
+    Frbox *b;
+    int nb, n;
+
+    for(b=f->box,nb=0; nb<f->nbox; nb++, b++){
+        _frcklinewrap0(f, &pt, b);
+        if(pt.y == f->r.max.y){
+            f->nchars -= _frstrlen(f, nb);
+            _frdelbox(f, nb, f->nbox-1);
+            break;
+        }
+        if(b->nrune > 0){
+            n = _frcanfit(f, pt, b);
+            if(n == 0)
+                drawerror(f->display, "_frcanfit==0");
+            if(n != b->nrune){
+                _frsplitbox(f, nb, n);
+                b = &f->box[nb];
+            }
+            pt.x += b->wid;
+        }else{
+            if(b->bc == '\n'){
+                pt.x = f->r.min.x;
+                pt.y+=f->font->height;
+            }else
+                pt.x += _frnewwid(f, pt, b);
+        }
+    }
+    return pt;
+}
+@
+
+<<function _frnewwid>>=
+int
+_frnewwid(Frame *f, Point pt, Frbox *b)
+{
+    b->wid = _frnewwid0(f, pt, b);
+    return b->wid;
+}
+@
+
+<<function _frnewwid0>>=
+int
+_frnewwid0(Frame *f, Point pt, Frbox *b)
+{
+    int c, x;
+
+    c = f->r.max.x;
+    x = pt.x;
+    if(b->nrune>=0 || b->bc!='\t')
+        return b->wid;
+    if(x+b->minwid > c)
+        x = pt.x = f->r.min.x;
+    x += f->maxtab;
+    x -= (x-f->r.min.x)%f->maxtab;
+    if(x-pt.x<b->minwid || x>c)
+        x = pt.x+b->minwid;
+    return x-pt.x;
+}
+@
+
+<<function _frstrlen>>=
+int
+_frstrlen(Frame *f, int nb)
+{
+    int n;
+
+    for(n=0; nb<f->nbox; nb++)
+        n += NRUNE(&f->box[nb]);
+    return n;
+}
+@
+
+\subsubsection{[[_chopframe()]]}
+
+<<function chopframe>>=
+static
+void
+chopframe(Frame *f, Point pt, ulong p, int bn)
+{
+    Frbox *b;
+
+    for(b = &f->box[bn]; ; b++){
+        if(b >= &f->box[f->nbox])
+            drawerror(f->display, "endofframe");
+        _frcklinewrap(f, &pt, b);
+        if(pt.y >= f->r.max.y)
+            break;
+        p += NRUNE(b);
+        _fradvance(f, &pt, b);
+    }
+    f->nchars = p;
+    f->nlines = f->maxlines;
+    if(b<&f->box[f->nbox])				/* BUG */
+        _frdelbox(f, (int)(b-f->box), f->nbox-1);
+}
+@
+
+\subsubsection{[[_frclean()]]}
+
+<<function _frclean>>=
+void
+_frclean(Frame *f, Point pt, int n0, int n1)	/* look for mergeable boxes */
+{
+    Frbox *b;
+    int nb, c;
+
+    c = f->r.max.x;
+    for(nb=n0; nb<n1-1; nb++){
+        b = &f->box[nb];
+        _frcklinewrap(f, &pt, b);
+        while(b[0].nrune>=0 && nb<n1-1 && b[1].nrune>=0 && pt.x+b[0].wid+b[1].wid<c){
+            _frmergebox(f, nb);
+            n1--;
+            b = &f->box[nb];
+        }
+        _fradvance(f, &pt, &f->box[nb]);
+    }
+    for(; nb<f->nbox; nb++){
+        b = &f->box[nb];
+        _frcklinewrap(f, &pt, b);
+        _fradvance(f, &pt, &f->box[nb]);
+    }
+    f->lastlinefull = 0;
+    if(pt.y >= f->r.max.y)
+        f->lastlinefull = 1;
+}
+@
+
+<<function _frmergebox>>=
+void
+_frmergebox(Frame *f, int bn)		/* merge bn and bn+1 */
+{
+    Frbox *b;
+
+    b = &f->box[bn];
+    _frinsure(f, bn, NBYTE(&b[0])+NBYTE(&b[1])+1);
+    strcpy((char*)runeindex(b[0].ptr, b[0].nrune), (char*)b[1].ptr);
+    b[0].wid += b[1].wid;
+    b[0].nrune += b[1].nrune;
+    _frdelbox(f, bn+1, bn+1);
+}
+@
+
+
+
+\subsection{[[frdelete()]]}
+
+
+<<function frdelete>>=
+int
+frdelete(Frame *f, ulong p0, ulong p1)
+{
+    Point pt0, pt1, ppt0;
+    Frbox *b;
+    int n0, n1, n;
+    ulong cn1;
+    Rectangle r;
+    int nn0;
+    Image *col;
+
+    if(p0>=f->nchars || p0==p1 || f->b==nil)
+        return 0;
+    if(p1 > f->nchars)
+        p1 = f->nchars;
+    n0 = _frfindbox(f, 0, 0, p0);
+    if(n0 == f->nbox)
+        drawerror(f->display, "off end in frdelete");
+    n1 = _frfindbox(f, n0, p0, p1);
+    pt0 = _frptofcharnb(f, p0, n0);
+    pt1 = frptofchar(f, p1);
+    if(f->p0 == f->p1)
+        frtick(f, frptofchar(f, f->p0), 0);
+    nn0 = n0;
+    ppt0 = pt0;
+    _frfreebox(f, n0, n1-1);
+    f->modified = 1;
+
+    /*
+     * Invariants:
+     *  - pt0 points to beginning, pt1 points to end
+     *  - n0 is box containing beginning of stuff being deleted
+     *  - n1, b are box containing beginning of stuff to be kept after deletion
+     *  - cn1 is char position of n1
+     *  - f->p0 and f->p1 are not adjusted until after all deletion is done
+     */
+    b = &f->box[n1];
+    cn1 = p1;
+    while(pt1.x!=pt0.x && n1<f->nbox){
+        _frcklinewrap0(f, &pt0, b);
+        _frcklinewrap(f, &pt1, b);
+        n = _frcanfit(f, pt0, b);
+        if(n==0)
+            drawerror(f->display, "_frcanfit==0");
+        r.min = pt0;
+        r.max = pt0;
+        r.max.y += f->font->height;
+        if(b->nrune > 0){
+            if(n != b->nrune){
+                _frsplitbox(f, n1, n);
+                b = &f->box[n1];
+            }
+            r.max.x += b->wid;
+            draw(f->b, r, f->b, nil, pt1);
+            cn1 += b->nrune;
+        }else{
+            r.max.x += _frnewwid0(f, pt0, b);
+            if(r.max.x > f->r.max.x)
+                r.max.x = f->r.max.x;
+            col = f->cols[BACK];
+            if(f->p0<=cn1 && cn1<f->p1)
+                col = f->cols[HIGH];
+            draw(f->b, r, col, nil, pt0);
+            cn1++;
+        }
+        _fradvance(f, &pt1, b);
+        pt0.x += _frnewwid(f, pt0, b);
+        f->box[n0++] = f->box[n1++];
+        b++;
+    }
+    if(n1==f->nbox && pt0.x!=pt1.x)	/* deleting last thing in window; must clean up */
+        frselectpaint(f, pt0, pt1, f->cols[BACK]);
+    if(pt1.y != pt0.y){
+        Point pt2;
+
+        pt2 = _frptofcharptb(f, 32767, pt1, n1);
+        if(pt2.y > f->r.max.y)
+            drawerror(f->display, "frptofchar in frdelete");
+        if(n1 < f->nbox){
+            int q0, q1, q2;
+
+            q0 = pt0.y+f->font->height;
+            q1 = pt1.y+f->font->height;
+            q2 = pt2.y+f->font->height;
+            if(q2 > f->r.max.y)
+                q2 = f->r.max.y;
+            draw(f->b, Rect(pt0.x, pt0.y, pt0.x+(f->r.max.x-pt1.x), q0),
+                f->b, nil, pt1);
+            draw(f->b, Rect(f->r.min.x, q0, f->r.max.x, q0+(q2-q1)),
+                f->b, nil, Pt(f->r.min.x, q1));
+            frselectpaint(f, Pt(pt2.x, pt2.y-(pt1.y-pt0.y)), pt2, f->cols[BACK]);
+        }else
+            frselectpaint(f, pt0, pt2, f->cols[BACK]);
+    }
+    _frclosebox(f, n0, n1-1);
+    if(nn0>0 && f->box[nn0-1].nrune>=0 && ppt0.x-f->box[nn0-1].wid>=(int)f->r.min.x){
+        --nn0;
+        ppt0.x -= f->box[nn0].wid;
+    }
+    _frclean(f, ppt0, nn0, n0<f->nbox-1? n0+1 : n0);
+    if(f->p1 > p1)
+        f->p1 -= p1-p0;
+    else if(f->p1 > p0)
+        f->p1 = p0;
+    if(f->p0 > p1)
+        f->p0 -= p1-p0;
+    else if(f->p0 > p0)
+        f->p0 = p0;
+    f->nchars -= p1-p0;
+    if(f->p0 == f->p1)
+        frtick(f, frptofchar(f, f->p0), 1);
+    pt0 = frptofchar(f, f->nchars);
+    n = f->nlines;
+    f->nlines = (pt0.y-f->r.min.y)/f->font->height+(pt0.x>f->r.min.x);
+    return n - f->nlines;
+}
+@
 
 
 \subsection{[[wshow()]]}
@@ -12392,7 +13258,15 @@ wshow(Window *w, uint q0)
 
 
 
-\subsection{[[wscrdraw()]]}
+\subsection{Drawing the scrollbar, [[wscrdraw()]]}
+
+% w scroll draw
+
+<<[[wmk()]] drawing scrollbar>>=
+wscrdraw(w);
+@
+\l why in wmk? could be in caller. Anyway, wmk before
+% set scrollbar and frame, but does not draw them I think.
 
 
 % wshow | wmk | wsetorigin -> <>
@@ -12426,7 +13300,7 @@ wscrdraw(Window *w)
     }
 }
 @
-
+% just draw the scrollbar
 
 <<function scrpos>>=
 static
@@ -12464,7 +13338,7 @@ scrpos(Rectangle r, uint p0, uint p1, uint tot)
 <<[[Window]] other fields>>=
 Rectangle	lastsr;
 @
-% opti
+% opti, last scroll rectangle
 <<[[wmk()]] textual window settings, extra frame settings>>
 w->lastsr = ZR;
 @
@@ -12506,7 +13380,158 @@ scrtemps(void)
         error("scrtemps");
 }
 @
-% 32?
+% 32 for width of scrollbar? no was 12, so why 32?
+
+\subsection{Drawing the tick, [[frtick()]]}
+
+<<[[frinsert()]] remove tick>>=
+if(f->p0 == f->p1)
+    frtick(f, frptofchar(f, f->p0), false);
+@
+<<[[frinsert()]] draw tick>>=
+if(f->p0 == f->p1)
+    frtick(f, frptofchar(f, f->p0), true);
+@
+
+% drawing a tick or restoring what was under the tick
+% (a bit like for the mouse cursor)
+
+<<function frtick>>=
+void
+frtick(Frame *f, Point pt, bool ticked)
+{
+    Rectangle r;
+
+    if(f->ticked==ticked || f->tick==nil || !ptinrect(pt, f->r))
+        return;
+    pt.x--;	/* looks best just left of where requested */
+    r = Rect(pt.x, pt.y, pt.x+FRTICKW, pt.y+f->font->height);
+    /* can go into left border but not right */
+    if(r.max.x > f->r.max.x)
+        r.max.x = f->r.max.x;
+    if(ticked){
+        draw(f->tickback, f->tickback->r, f->b, nil, pt);
+        draw(f->b, r, f->tick, nil, ZP);
+    }else
+        draw(f->b, r, f->tickback, nil, ZP);
+    f->ticked = ticked;
+}
+@
+% modified f->ticked! this is why need to save old value of ticked
+% before calling frtick sometimes
+
+\subsection{Drawing the selection, [[frdrawsel()]]}
+
+% called also to draw what is not selected
+
+<<function frdrawsel>>=
+void
+frdrawsel(Frame *f, Point pt, ulong p0, ulong p1, bool issel)
+{
+    Image *back, *text;
+
+    if(f->ticked)
+        frtick(f, frptofchar(f, f->p0), false);
+
+    if(p0 == p1){
+        frtick(f, pt, issel);
+        return;
+    }
+    // else
+
+    if(issel){
+        back = f->cols[HIGH];
+        text = f->cols[HTEXT];
+    }else{
+        back = f->cols[BACK];
+        text = f->cols[TEXT];
+    }
+
+    frdrawsel0(f, pt, p0, p1, back, text);
+}
+@
+% pt is point of? p0?
+
+
+<<function frdrawsel0>>=
+Point
+frdrawsel0(Frame *f, Point pt, ulong p0, ulong p1, Image *back, Image *text)
+{
+    Frbox *b;
+    int nb, nr, w, x, trim;
+    Point qt;
+    uint p;
+    char *ptr;
+
+    p = 0;
+    b = f->box;
+    trim = 0;
+    for(nb=0; nb<f->nbox && p<p1; nb++){
+        //todo: nr = NRUNE(b);
+        nr = b->nrune;
+        if(nr < 0)
+            nr = 1;
+
+        if(p+nr <= p0)
+            goto Continue;
+        if(p >= p0){
+            qt = pt;
+            _frcklinewrap(f, &pt, b);
+            /* fill in the end of a wrapped line */
+            if(pt.y > qt.y)
+                draw(f->b, Rect(qt.x, qt.y, f->r.max.x, pt.y), back, nil, qt);
+        }
+        ptr = (char*)b->ptr;
+        if(p < p0){	/* beginning of region: advance into box */
+            ptr += nbytes(ptr, p0-p);
+            nr -= (p0-p);
+            p = p0;
+        }
+        trim = 0;
+        if(p+nr > p1){	/* end of region: trim box */
+            nr -= (p+nr)-p1;
+            trim = 1;
+        }
+        if(b->nrune<0 || nr==b->nrune)
+            w = b->wid;
+        else
+            w = stringnwidth(f->font, ptr, nr);
+        x = pt.x+w;
+        if(x > f->r.max.x)
+            x = f->r.max.x;
+        draw(f->b, Rect(pt.x, pt.y, x, pt.y+f->font->height), back, nil, pt);
+        if(b->nrune >= 0)
+            stringnbg(f->b, pt, text, ZP, f->font, ptr, nr, back, ZP);
+        pt.x += w;
+        Continue:
+        b++;
+        p += nr;
+    }
+    /* if this is end of last plain text box on wrapped line, fill to end of line */
+    if(p1>p0 &&  b>f->box && b<f->box+f->nbox && b[-1].nrune>0 && !trim){
+        qt = pt;
+        _frcklinewrap(f, &pt, b);
+        if(pt.y > qt.y)
+            draw(f->b, Rect(qt.x, qt.y, f->r.max.x, pt.y), back, nil, qt);
+    }
+    return pt;
+}
+@
+
+<<function nbytes>>=
+static int
+nbytes(char *s0, int nr)
+{
+    char *s;
+    Rune r;
+
+    s = s0;
+    while(--nr >= 0)
+        s += chartorune(&r, s);
+    return s-s0;
+}
+@
+
 
 \subsection{Moving the frame origin}
 
@@ -12589,6 +13614,14 @@ wsetorigin(Window *w, uint org, bool exact)
 }
 @
 
+<<[[Frame]] text fields>>=
+ushort	lastlinefull;	/* last line fills frame */
+@
+<<[[frinit()]] initialize other fields>>=
+f->lastlinefull = 0;
+@
+
+
 <<function wfill>>=
 void
 wfill(Window *w)
@@ -12629,6 +13662,140 @@ wfill(Window *w)
 
 
 
+\subsection{Selecting}
+
+<<function frselect>>=
+void
+frselect(Frame *f, Mousectl *mc)	/* when called, button 1 is down */
+{
+    ulong p0, p1, q;
+    Point mp, pt0, pt1, qt;
+    int reg, b, scrled;
+
+    mp = mc->xy;
+    b = mc->buttons;
+
+    f->modified = 0;
+    frdrawsel(f, frptofchar(f, f->p0), f->p0, f->p1, 0);
+    p0 = p1 = frcharofpt(f, mp);
+    f->p0 = p0;
+    f->p1 = p1;
+    pt0 = frptofchar(f, p0);
+    pt1 = frptofchar(f, p1);
+    frdrawsel(f, pt0, p0, p1, 1);
+    reg = 0;
+    do{
+        scrled = 0;
+        if(f->scroll){
+            if(mp.y < f->r.min.y){
+                (*f->scroll)(f, -(f->r.min.y-mp.y)/(int)f->font->height-1);
+                p0 = f->p1;
+                p1 = f->p0;
+                scrled = 1;
+            }else if(mp.y > f->r.max.y){
+                (*f->scroll)(f, (mp.y-f->r.max.y)/(int)f->font->height+1);
+                p0 = f->p0;
+                p1 = f->p1;
+                scrled = 1;
+            }
+            if(scrled){
+                if(reg != region(p1, p0))
+                    q = p0, p0 = p1, p1 = q;	/* undo the swap that will happen below */
+                pt0 = frptofchar(f, p0);
+                pt1 = frptofchar(f, p1);
+                reg = region(p1, p0);
+            }
+        }
+        q = frcharofpt(f, mp);
+        if(p1 != q){
+            if(reg != region(q, p0)){	/* crossed starting point; reset */
+                if(reg > 0)
+                    frdrawsel(f, pt0, p0, p1, 0);
+                else if(reg < 0)
+                    frdrawsel(f, pt1, p1, p0, 0);
+                p1 = p0;
+                pt1 = pt0;
+                reg = region(q, p0);
+                if(reg == 0)
+                    frdrawsel(f, pt0, p0, p1, 1);
+            }
+            qt = frptofchar(f, q);
+            if(reg > 0){
+                if(q > p1)
+                    frdrawsel(f, pt1, p1, q, 1);
+                else if(q < p1)
+                    frdrawsel(f, qt, q, p1, 0);
+            }else if(reg < 0){
+                if(q > p1)
+                    frdrawsel(f, pt1, p1, q, 0);
+                else
+                    frdrawsel(f, qt, q, p1, 1);
+            }
+            p1 = q;
+            pt1 = qt;
+        }
+        f->modified = 0;
+        if(p0 < p1) {
+            f->p0 = p0;
+            f->p1 = p1;
+        }
+        else {
+            f->p0 = p1;
+            f->p1 = p0;
+        }
+        if(scrled)
+            (*f->scroll)(f, 0);
+        flushimage(f->display, 1);
+        if(!scrled)
+            readmouse(mc);
+        mp = mc->xy;
+    }while(mc->buttons == b);
+}
+@
+
+<<function frselectpaint>>=
+void
+frselectpaint(Frame *f, Point p0, Point p1, Image *col)
+{
+    int n;
+    Point q0, q1;
+
+    q0 = p0;
+    q1 = p1;
+    q0.y += f->font->height;
+    q1.y += f->font->height;
+    n = (p1.y-p0.y)/f->font->height;
+    if(f->b == nil)
+        drawerror(f->display, "frselectpaint b==0");
+    if(p0.y == f->r.max.y)
+        return;
+    if(n == 0)
+        draw(f->b, Rpt(p0, q1), col, nil, ZP);
+    else{
+        if(p0.x >= f->r.max.x)
+            p0.x = f->r.max.x-1;
+        draw(f->b, Rect(p0.x, p0.y, f->r.max.x, q0.y), col, nil, ZP);
+        if(n > 1)
+            draw(f->b, Rect(f->r.min.x, q0.y, f->r.max.x, p1.y),
+                col, nil, ZP);
+        draw(f->b, Rect(f->r.min.x, p1.y, q1.x, q1.y),
+            col, nil, ZP);
+    }
+}
+@
+
+<<function region>>=
+static
+int
+region(int a, int b)
+{
+    if(a < b)
+        return -1;
+    if(a == b)
+        return 0;
+    return 1;
+}
+@
 
 \subsection{Repainting}
 
@@ -12648,16 +13815,17 @@ frredraw(Frame *f)
     if(f->p0 == f->p1){
         ticked = f->ticked;
         if(ticked)
-            frtick(f, frptofchar(f, f->p0), 0);
+            frtick(f, frptofchar(f, f->p0), false);
         frdrawsel0(f, frptofchar(f, 0), 0, f->nchars, f->cols[BACK], f->cols[TEXT]);
         if(ticked)
-            frtick(f, frptofchar(f, f->p0), 1);
+            frtick(f, frptofchar(f, f->p0), true);
         return;
     }
+    // else, selection
 
     pt = frptofchar(f, 0);
-    pt = frdrawsel0(f, pt, 0, f->p0, f->cols[BACK], f->cols[TEXT]);
-    pt = frdrawsel0(f, pt, f->p0, f->p1, f->cols[HIGH], f->cols[HTEXT]);
+    pt = frdrawsel0(f, pt, 0,     f->p0,     f->cols[BACK], f->cols[TEXT]);
+    pt = frdrawsel0(f, pt, f->p0, f->p1,     f->cols[HIGH], f->cols[HTEXT]);
     pt = frdrawsel0(f, pt, f->p1, f->nchars, f->cols[BACK], f->cols[TEXT]);
 }
 @
@@ -13626,7 +14794,10 @@ case Scroll:
 @
 % go to the end
 
-\section{Scroll bars}
+\section{Scroll bar interaction}
+
+% saw drawing of scroll bar before, showing where we are in the
+% "file", but can also click on scrollbar!
 
 % seen Window.scrollr before
 
@@ -15721,6 +16892,158 @@ windfilewidth(Window *w, uint q0, int oneelement)
 }
 @
 
+\subsubsection{[[complete()]]}
+% libcomplete
+
+<<function complete>>=
+Completion*
+complete(char *dir, char *s)
+{
+    long i, l, n, nfile, len, nbytes;
+    int fd, minlen;
+    Dir *dirp;
+    char **name, *p;
+    ulong* mode;
+    Completion *c;
+
+    if(strchr(s, '/') != nil){
+        werrstr("slash character in name argument to complete()");
+        return nil;
+    }
+
+    fd = open(dir, OREAD);
+    if(fd < 0)
+        return nil;
+
+    n = dirreadall(fd, &dirp);
+    if(n <= 0){
+        close(fd);
+        return nil;
+    }
+
+    /* find longest string, for allocation */
+    len = 0;
+    for(i=0; i<n; i++){
+        l = strlen(dirp[i].name) + 1 + 1; /* +1 for /   +1 for \0 */
+        if(l > len)
+            len = l;
+    }
+
+    name = malloc(n*sizeof(char*));
+    mode = malloc(n*sizeof(ulong));
+    c = malloc(sizeof(Completion) + len);
+    if(name == nil || mode == nil || c == nil)
+        goto Return;
+    memset(c, 0, sizeof(Completion));
+
+    /* find the matches */
+    len = strlen(s);
+    nfile = 0;
+    minlen = 1000000;
+    for(i=0; i<n; i++)
+        if(strncmp(s, dirp[i].name, len) == 0){
+            name[nfile] = dirp[i].name;
+            mode[nfile] = dirp[i].mode;
+            if(minlen > strlen(dirp[i].name))
+                minlen = strlen(dirp[i].name);
+            nfile++;
+        }
+
+    if(nfile > 0) {
+        /* report interesting results */
+        /* trim length back to longest common initial string */
+        for(i=1; i<nfile; i++)
+            minlen = longestprefixlength(name[0], name[i], minlen);
+
+        /* build the answer */
+        c->complete = (nfile == 1);
+        c->advance = c->complete || (minlen > len);
+        c->string = (char*)(c+1);
+        memmove(c->string, name[0]+len, minlen-len);
+        if(c->complete)
+            c->string[minlen++ - len] = (mode[0]&DMDIR)? '/' : ' ';
+        c->string[minlen - len] = '\0';
+        c->nmatch = nfile;
+    } else {
+        /* no match, so return all possible strings */
+        for(i=0; i<n; i++){
+            name[i] = dirp[i].name;
+            mode[i] = dirp[i].mode;
+        }
+        nfile = n;
+        c->nmatch = 0;
+    }
+
+    /* attach list of names */
+    nbytes = nfile * sizeof(char*);
+    for(i=0; i<nfile; i++)
+        nbytes += strlen(name[i]) + 1 + 1;
+    c->filename = malloc(nbytes);
+    if(c->filename == nil)
+        goto Return;
+    p = (char*)(c->filename + nfile);
+    for(i=0; i<nfile; i++){
+        c->filename[i] = p;
+        strcpy(p, name[i]);
+        p += strlen(p);
+        if(mode[i] & DMDIR)
+            *p++ = '/';
+        *p++ = '\0';
+    }
+    c->nfile = nfile;
+    qsort(c->filename, c->nfile, sizeof(c->filename[0]), strpcmp);
+
+  Return:
+    free(name);
+    free(mode);
+    free(dirp);
+    close(fd);
+    return c;
+}
+@
+
+
+<<function longestprefixlength>>=
+static int
+longestprefixlength(char *a, char *b, int n)
+{
+    int i, w;
+    Rune ra, rb;
+
+    for(i=0; i<n; i+=w){
+        w = chartorune(&ra, a);
+        chartorune(&rb, b);
+        if(ra != rb)
+            break;
+        a += w;
+        b += w;
+    }
+    return i;
+}
+@
+
+<<function freecompletion>>=
+void
+freecompletion(Completion *c)
+{
+    if(c){
+        free(c->filename);
+        free(c);
+    }
+}
+@
+
+<<function strpcmp>>=
+static int
+strpcmp(const void *va, const void *vb)
+{
+    char *a, *b;
+
+    a = *(char**)va;
+    b = *(char**)vb;
+    return strcmp(a, b);
+}
+@
 
 \subsection{[[/mnt/wsys/wdir]]}
 \label{sec:wdir}
@@ -16230,6 +17553,11 @@ struct Timer
     Timer	*next;
 };
 @
+
+<<[[main()]] threads creation>>=
+timerinit();
+@
+% need be before the other thread? or order does not matter?
 
 <<function timerinit>>=
 void
