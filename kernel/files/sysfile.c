@@ -268,7 +268,7 @@ sysclose(ulong* arg)
 
 /*s: function unionread */
 long
-unionread(Chan *c, virt_addr3 va, long n)
+unionread(Chan *c, virt_vp va, long n)
 {
     int i;
     long nr;

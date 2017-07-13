@@ -96,6 +96,7 @@ mntauth(Chan *c, char *spec)
 
 }
 
+/*s: function mntattach */
 static Chan*
 mntattach(char *muxattach)
 {
@@ -140,6 +141,7 @@ mntattach(char *muxattach)
         r->request.afid = bogus.authchan->fid;
     r->request.uname = up->user;
     r->request.aname = bogus.spec;
+
     mountrpc(m, r);
 
     c->qid = r->reply.qid;
@@ -156,6 +158,7 @@ mntattach(char *muxattach)
         c->flag |= CCACHE;
     return c;
 }
+/*e: function mntattach */
 
 Chan*
 mntchan(void)
@@ -172,6 +175,7 @@ mntchan(void)
     return c;
 }
 
+/*s: function mntwalk */
 static Walkqid*
 mntwalk(Chan *c, Chan *nc, char **name, int nname)
 {
@@ -253,6 +257,7 @@ mntwalk(Chan *c, Chan *nc, char **name, int nname)
     poperror();
     return wq;
 }
+/*e: function mntwalk */
 
 static int
 mntstat(Chan *c, uchar *dp, int n)
@@ -492,6 +497,7 @@ mntrdwr(int type, Chan *c, void *buf, long n, vlong off)
     return cnt;
 }
 
+/*s: function mountrpc */
 void
 mountrpc(Mnt *m, Mntrpc *r)
 {
@@ -525,7 +531,9 @@ mountrpc(Mnt *m, Mntrpc *r)
         error(Emountrpc);
     }
 }
+/*e: function mountrpc */
 
+/*s: function mountio */
 void
 mountio(Mnt *m, Mntrpc *r)
 {
@@ -582,6 +590,8 @@ mountio(Mnt *m, Mntrpc *r)
     poperror();
     mntflushfree(m, r);
 }
+/*e: function mountio */
+
 
 static int
 doread(Mnt *m, int len)

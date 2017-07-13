@@ -240,7 +240,7 @@ arch_mmurelease(Proc* proc)
 
 /*s: function arch_putmmu(arm) */
 void
-arch_putmmu(virt_addr va, uintptr pa, Page* page)
+arch_putmmu(virt_addr va, phys_addr pa, Page* page)
 {
     int x;
     Page *pg;
@@ -338,7 +338,7 @@ arch_putmmu(virt_addr va, uintptr pa, Page* page)
  * If pa is not a valid argument to KADDR, return 0.
  */
 uintptr
-arch_cankaddr(uintptr pa)
+arch_cankaddr(phys_addr pa)
 {
     if(pa < memsize)        /* assumes PHYSDRAM is 0 */
         return memsize - pa;
@@ -377,7 +377,7 @@ mmukmap(uintptr va, uintptr pa, usize size)
 
 /*s: function arch_checkmmu(arm) */
 void
-arch_checkmmu(uintptr va, uintptr pa)
+arch_checkmmu(virt_addr va, phys_addr pa)
 {
     USED(va);
     USED(pa);

@@ -162,9 +162,10 @@ sysrfork(ulong* arg)
     /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
     p->noswap = up->noswap;
     /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
-    p->basepri = up->basepri;
     p->priority = up->basepri;
+    p->basepri = up->basepri;
     p->fixedpri = up->fixedpri;
+    /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
     p->lastcpu = up->lastcpu;
     /*x: [[sysrfork()]] when [[RFPROC]] propagate fields from up to p */
     memmove(p->note, up->note, sizeof(p->note));
@@ -333,9 +334,10 @@ sysexec(ulong* arg)
     Chan *tc;
     /*x: [[sysexec()]] locals */
     Exec exec;
-    ulong magic, text, entry, data, bss;
+    ulong magic;
+    user_addr text, entry, data, bss;
     /*x: [[sysexec()]] locals */
-    ulong t, d, b; // end of text/data/bss in address rounded to page
+    user_addr t, d, b; // end of text/data/bss in address rounded to page
     Segment *s, *ts;
     /*x: [[sysexec()]] locals */
     ulong ssize;
@@ -746,8 +748,10 @@ syssleep(ulong* arg)
         yield();
         return 0;
     }
+    /*s: [[syssleep()]] sanitize n */
     if(n < TK2MS(1))
         n = TK2MS(1);
+    /*e: [[syssleep()]] sanitize n */
     tsleep(&up->sleepr, returnfalse, 0, n);
     return 0;
 }

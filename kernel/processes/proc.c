@@ -36,10 +36,9 @@ Counter noteidalloc;
 /*e: global noteidalloc */
 
 /*s: proc.c statistics */
+long preempts;
 ulong delayedscheds;    /* statistics */
 long skipscheds;
-long preempts;
-//ulong load;
 /*e: proc.c statistics */
 
 /*s: global pidalloc */
@@ -137,10 +136,12 @@ exhausted(char *resource)
 void
 schedinit(void)     /* never returns */
 {
+    /*s: [[schedinit()]] locals */
     Edf *e;
+    /*e: [[schedinit()]] locals */
 
     arch_setlabel(&cpu->sched);
-
+    /*s: [[schedinit()]] after setlabel, if up */
     if(up) {
         /*s: [[schedinit()]] optional real-time [[edfrecord()]] */
         if((e = up->edf) && (e->flags & Admitted))
@@ -149,11 +150,9 @@ schedinit(void)     /* never returns */
         //old: cpu->proc = nil;
         // but now that on x86 up = cpu->proc and not cpu->externup
         // we can't do that anymore. Is there a place that rely on
-        // cpu->proc and cpu-externup to not be in sync?
+        // cpu->proc and cpu->externup to not be in sync?
         switch(up->state) {
-        case Running:
-            ready(up);
-            break;
+        /*s: [[schedinit()]] switch process state cases */
         case Moribund:
             up->state = Dead;
             /*s: [[schedinit()]] optional real-time [[edfstop()]] */
@@ -175,14 +174,20 @@ schedinit(void)     /* never returns */
             unlock(&palloc);
             unlock(&procalloc);
             break;
+        /*x: [[schedinit()]] switch process state cases */
+        case Running:
+            ready(up);
+            break;
+        /*e: [[schedinit()]] switch process state cases */
         }
-
         up->cpu = nil;
+        /*s: [[schedinit()]] updatecpu before reseting up */
         updatecpu(up);
-
+        /*e: [[schedinit()]] updatecpu before reseting up */
         cpu->proc = nil;
         up = nil; // same instruction than previous line on some archi (e.g. PC)
     }
+    /*e: [[schedinit()]] after setlabel, if up */
     // ok at this point up is nil
     sched();
 }
@@ -196,14 +201,19 @@ schedinit(void)     /* never returns */
 void
 proc_sched(void)
 {
+    /*s: [[sched()]] locals */
     Proc *p;
+    /*e: [[sched()]] locals */
 
+    /*s: [[sched()]] sanity check ilockdepth */
     if(cpu->ilockdepth)
         panic("cpu%d: ilockdepth %d, last lock %#p at %#p, sched called from %#p",
             cpu->cpuno, cpu->ilockdepth, up? up->lastilock: nil,
             (up && up->lastilock)? up->lastilock->pc: 0, getcallerpc(&p+2));
+    /*e: [[sched()]] sanity check ilockdepth */
+    /*s: [[sched()]] if up */
     if(up){
-        /*s: [[sched()]] if complex condition increment delaysched and return */
+        /*s: [[sched()]] when up, possibly increment delaysched and return */
         /*
          * Delay the sched until the process gives up the locks
          * it is holding.  This avoids dumb lock loops.
@@ -226,12 +236,13 @@ proc_sched(void)
               || procalloc.Lock.p == up){
 
                 up->delaysched++;
-                delayedscheds++; // stats
+                delayedscheds++;
                 return;
             }
+        // else
         up->delaysched = 0;
-        /*e: [[sched()]] if complex condition increment delaysched and return */
-        arch_splhi(); // schedinit requires this
+        /*e: [[sched()]] when up, possibly increment delaysched and return */
+        arch_splhi(); // schedinit requires this (also sensitive moment)
         cpu->cs++;
 
         arch_procsave(up);
@@ -251,20 +262,35 @@ proc_sched(void)
             panic("sched: should never reach this point");
         }
     }
+    /*e: [[sched()]] if up */
+    // else
+    /*s: [[sched()]] if no up */
     // We should execute this code using the main kernel stack, as
-    // we should arrive here from schedinit().
+    // we should arrive here from schedinit()
 
     p = runproc();
-    /*s: [[sched()]] optional guard for real-time process */
-    if(!p->edf)
-    /*e: [[sched()]] optional guard for real-time process */
-    {
+    /*s: [[sched()]] after found process [[p]] to schedule, possibly update priority */
+    /*s: [[sched()]] if real-time process then do nothing, do not reprioritize */
+    if(p->edf) {
+    }
+    /*e: [[sched()]] if real-time process then do nothing, do not reprioritize */
+    else {
         updatecpu(p);
         p->priority = reprioritize(p);
     }
-    if(p != cpu->readied)
+    /*e: [[sched()]] after found process [[p]] to schedule, possibly update priority */
+    /*s: [[sched()]] if readied process, do not adjust schedticks */
+    if(p == cpu->readied) {
+    }
+    /*e: [[sched()]] if readied process, do not adjust schedticks */
+    else {
+        /*s: [[sched()]] after found a new proc, adjust schedticks */
         cpu->schedticks = cpu->ticks + Arch_HZ/10; // 100ms of allocated time
+        /*e: [[sched()]] after found a new proc, adjust schedticks */
+    }
+    /*s: [[sched()]] reset readied */
     cpu->readied = nil;
+    /*e: [[sched()]] reset readied */
 
     cpu->proc = p;
     up = p; // same instruction than previous line on some archi (e.g. x86)
@@ -274,6 +300,7 @@ proc_sched(void)
 
     arch_mmuswitch(up);
     arch_gotolabel(&up->sched);
+    /*e: [[sched()]] if no up */
 }
 /*e: function sched */
 
@@ -300,10 +327,11 @@ anyhigher(void)
 void
 hzsched(void)
 {
+    /*s: [[hzsched()]] rebalance ready procs */
     /* once a second, rebalance will reprioritize ready procs */
     if(cpu->cpuno == 0)
         rebalance();
-
+    /*e: [[hzsched()]] rebalance ready procs */
     /* unless preempted, get to run for at least 100ms */
     if(anyhigher()
     || (!up->fixedpri && cpu->ticks > cpu->schedticks && anyready())){
@@ -381,10 +409,12 @@ void
 updatecpu(Proc *p)
 {
     int n, t, ocpu;
-    int D = schedgain*Arch_HZ*Scaling;
+    int D = schedgain * Arch_HZ * Scaling;
 
+    /*s: [[updatecpu()]] return if real-time process */
     if(p->edf)
         return;
+    /*e: [[updatecpu()]] return if real-time process */
 
     t = CPUS(0)->ticks*Scaling + Scaling/2;
     n = t - p->lastupdate;
@@ -404,7 +434,6 @@ updatecpu(Proc *p)
         p->cpuavg = 1000 - t;
     }
 
-//iprint("pid %d %s for %d cpu %d -> %d\n", p->pid,p==up?"active":"inactive",n, ocpu,p->cpuavg);
 }
 /*e: function updatecpu */
 
@@ -457,7 +486,7 @@ queueproc(Schedq *rq, Proc *p)
 
     pri = rq - runq;
     lock(runq);
-    p->priority = pri;
+    p->priority = pri; // because a priority can evolve
 
     // add_queue(p, rq)
     p->rnext = nil;
@@ -478,7 +507,6 @@ queueproc(Schedq *rq, Proc *p)
 /*
  *  try to remove a process from a scheduling queue (called arch_splhi)
  */
-// tp should belong to the queue
 Proc*
 dequeueproc(Schedq *rq, Proc *tp)
 {
@@ -497,8 +525,7 @@ dequeueproc(Schedq *rq, Proc *tp)
             break;
         l = p;
     }
-    // l should be nil most of the time, the queue probably didn't change
-
+    /*s: [[dequeueproc()]] return if process not found or already associated */
     /*
      *  p->cpu==nil only when process state is saved
      */
@@ -506,6 +533,7 @@ dequeueproc(Schedq *rq, Proc *tp)
         unlock(runq);
         return nil;
     }
+    /*e: [[dequeueproc()]] return if process not found or already associated */
 
     // remove_queue(p, rq)
     if(p->rnext == nil)
@@ -514,15 +542,15 @@ dequeueproc(Schedq *rq, Proc *tp)
         l->rnext = p->rnext;
     else
         rq->head = p->rnext;
+
     if(rq->head == nil)
         runvec &= ~(1<<(rq-runq));
     rq->n--;
-
     nrdy--;
-
+    /*s: [[dequeueproc()]] sanity check p */
     if(p->state != Ready)
         print("dequeueproc %s %lud %s\n", p->text, p->pid, statename[p->state]);
-
+    /*e: [[dequeueproc()]] sanity check p */
     unlock(runq);
     return p;
 }
@@ -536,9 +564,12 @@ dequeueproc(Schedq *rq, Proc *tp)
 void
 proc_ready(Proc *p)
 {
-    int s, pri;
+    int pri;
+    int s; // spl
     Schedq *rq;
+    /*s: [[ready()]] other locals */
     void (*pt)(Proc*, int, vlong);
+    /*e: [[ready()]] other locals */
 
     s = arch_splhi();
     /*s: [[ready()]] optional [[edfready()]] for real-time scheduling */
@@ -548,12 +579,16 @@ proc_ready(Proc *p)
     }
     /*e: [[ready()]] optional [[edfready()]] for real-time scheduling */
 
+    /*s: [[ready()]] possibly set [[cpu->readied]] */
     if(up != p && (p->wired == nil || p->wired == CPUS(cpu->cpuno))) // pad fix
         cpu->readied = p; /* group scheduling */
-
+    /*e: [[ready()]] possibly set [[cpu->readied]] */
+    /*s: [[ready()]] update priority */
     updatecpu(p);
     pri = reprioritize(p);
     p->priority = pri;
+    /*e: [[ready()]] update priority */
+
     rq = &runq[pri];
     p->state = Ready;
     queueproc(rq, p);
@@ -574,8 +609,10 @@ void
 yield(void)
 {
     if(anyready()){
+        /*s: [[yield()]] adjust lastupdate before scheduling another process */
         /* pretend we just used 1/2 tick */
         up->lastupdate -= Scaling/2;  
+        /*e: [[yield()]] adjust lastupdate before scheduling another process */
         sched();
     }
 }
@@ -598,10 +635,12 @@ rebalance(void)
     Schedq *rq;
     Proc *p;
 
+    /*s: [[rebalance()]] return if less than one second since last rebalance */
     t = cpu->ticks;
     if(t - balancetime < Arch_HZ)
         return;
     balancetime = t;
+    /*e: [[rebalance()]] return if less than one second since last rebalance */
 
     for(pri=0, rq=runq; pri<Npriq; pri++, rq++){
 another:
@@ -633,16 +672,22 @@ another:
 Proc*
 runproc(void)
 {
-    Schedq *rq;
     Proc *p;
-    ulong start, now;
+    Schedq *rq;
     int i;
+    /*s: [[runproc()]] other locals */
     void (*pt)(Proc*, int, vlong);
+    /*x: [[runproc()]] other locals */
+    ulong start, now;
+    /*e: [[runproc()]] other locals */
 
+    /*s: [[runproc()]] start */
     start = arch_perfticks();
-
+    /*e: [[runproc()]] start */
+    /*s: [[runproc()]] cooperative scheduling if process readied */
     /* cooperative scheduling until the clock ticks */
-    if((p=cpu->readied) && p->cpu==nil && p->state==Ready && 
+    p=cpu->readied;
+    if(p && p->cpu==nil && p->state==Ready && 
       (p->wired == nil || p->wired == CPUS(cpu->cpuno)) && // pad's bugfix!
       /*s: [[runproc()]] test for empty real-time scheduling queue */
       runq[Nrq-1].head == nil && runq[Nrq-2].head == nil
@@ -652,6 +697,8 @@ runproc(void)
         rq = &runq[p->priority];
         goto found;
     }
+    /*e: [[runproc()]] cooperative scheduling if process readied */
+    //else
 
     preempts++;
 
@@ -661,7 +708,8 @@ loop:
      *  or one that hasn't moved in a while (load balancing). Every
      *  time around the loop affinity goes down.
      */
-    arch_spllo();
+    arch_spllo(); // from schedinit()
+
     for(i = 0;; i++){
         /*
          *  find the highest priority target process that this
@@ -678,17 +726,18 @@ loop:
         // nothing found
         /* waste time or halt the CPU */
         arch_idlehands();
-
+        /*s: [[runproc()]] after arch_idlehands, before restarting loop */
         /* remember how much time we're here */
         now = arch_perfticks();
         cpu->perf.inidle += now-start;
         start = now;
+        /*e: [[runproc()]] after arch_idlehands, before restarting loop */
     }
 
 found:
     arch_splhi();
     p = dequeueproc(rq, p);
-    if(p == nil)
+    if(p == nil) // the runq may have changed between spllo and splhi
         goto loop;
 
     p->state = Scheding;
@@ -795,11 +844,6 @@ newproc(void)
     p->psstate = "New";
     kstrdup(&p->text, "*notext");
     /*x: [[newproc()]] set fields of [[p]] */
-    if(p->kstack == nil)
-        p->kstack = smalloc(KSTACK);
-    /*x: [[newproc()]] set fields of [[p]] */
-    p->cpu = nil;
-    /*x: [[newproc()]] set fields of [[p]] */
     p->fgrp = nil;
     p->pgrp = nil;
     p->egrp = nil;
@@ -828,14 +872,21 @@ newproc(void)
     /*x: [[newproc()]] set fields of [[p]] */
     /* sched params */
     procpriority(p, PriNormal, false);
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->cpu = nil;
+    /*x: [[newproc()]] set fields of [[p]] */
     p->lastcpu = nil;
-    p->wired = nil;
-    p->cpuavg = 0;
-    p->lastupdate = CPUS(0)->ticks*Scaling;
-    p->edf = nil;
+    /*x: [[newproc()]] set fields of [[p]] */
+    if(p->kstack == nil)
+        p->kstack = smalloc(KSTACK);
     /*x: [[newproc()]] set fields of [[p]] */
     p->nlocks.ref = 0;
     p->delaysched = 0;
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->wired = nil;
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->cpuavg = 0;
+    p->lastupdate = CPUS(0)->ticks * Scaling;
     /*x: [[newproc()]] set fields of [[p]] */
     p->noteid = incref(&noteidalloc);
     if(p->noteid==0)
@@ -849,6 +900,8 @@ newproc(void)
     /*s: [[newproc()]] fp init */
     p->fpstate = FPinit;
     /*e: [[newproc()]] fp init */
+    /*x: [[newproc()]] set fields of [[p]] */
+    p->edf = nil;
     /*x: [[newproc()]] set fields of [[p]] */
     p->privatemem = false;
     /*x: [[newproc()]] set fields of [[p]] */
@@ -911,8 +964,9 @@ procpriority(Proc *p, int pri, bool fixed)
     else if(pri < 0)
         pri = 0;
     /*e: [[procpriority()]] sanity check pri */
-    p->basepri = pri;
     p->priority = pri;
+
+    p->basepri = pri;
     p->fixedpri = fixed;
 }
 /*e: function procpriority */
@@ -953,22 +1007,25 @@ procinit(void)
 void
 proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
 {
-    int s;
+    int s; // spl
+    /*s: [[sleep()]] other locals */
     void (*pt)(Proc*, int, vlong);
+    /*e: [[sleep()]] other locals */
 
     s = arch_splhi();
-
+    /*s: [[sleep()]] sanity check nlocks */
     if(up->nlocks.ref)
         print("process %lud sleeps with %lud locks held, last lock %#p locked at pc %#lux, sleep called from %#p\n",
             up->pid, up->nlocks.ref, up->lastlock, up->lastlock->pc, getcallerpc(&r));
-
+    /*e: [[sleep()]] sanity check nlocks */
     lock(r);
     lock(&up->rlock);
-
+    /*s: [[sleep()]] sanity check double sleep on this rendez vous */
     if(r->p){
         print("double sleep called from %#p, %lud %lud\n", getcallerpc(&r), r->p->pid, up->pid);
         arch_dumpstack();
     }
+    /*e: [[sleep()]] sanity check double sleep on this rendez vous */
 
     /*
      *  Wakeup only knows there may be something to do by testing
@@ -996,11 +1053,11 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
         if(pt)
             pt(up, SSleep, 0);
         /*e: [[sleep()]] hook proctrace */
-
         up->state = Wakeme;
         up->r = r;
 
-        // similar code to sched(), why not call sched()?
+        // similar code to sched(), why not call sched()? because of the unlock?
+
         /* statistics */
         cpu->cs++;
 
@@ -1017,11 +1074,12 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
              */
             unlock(&up->rlock);
             unlock(r);
+
             arch_gotolabel(&cpu->sched);
             panic("sleep: should never reach this point");
         }
     }
-
+    /*s: [[sleep()]] if notepending */
     if(up->notepending) {
         up->notepending = false;
         arch_splx(s);
@@ -1031,7 +1089,7 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
         /*e: [[sleep()]] forceclosefgrp */
         error(Eintr);
     }
-
+    /*e: [[sleep()]] if notepending */
     arch_splx(s);
 }
 /*e: function sleep */
@@ -1063,16 +1121,21 @@ twakeup(Ureg*, Timer *t)
 void
 proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
 {
+    /*s: [[tsleep()]] sanity check up timer */
     if (up->tt){
         print("tsleep: timer active: mode %d, tf %#p\n", up->tmode, up->tf);
         timerdel(up);
     }
+    /*e: [[tsleep()]] sanity check up timer */
     up->tns = MS2NS(ms);
-    up->tf = twakeup;
     up->tmode = Trelative;
-    up->ta = up;
+    up->tf = twakeup;
+
+    up->ta = up; // so can access r from wakeup
     up->trend = r;
-    up->tfn = fn;
+
+    up->tfn = fn; // needed?
+
     timeradd(up);
 
     if(waserror()){
@@ -1080,9 +1143,12 @@ proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
         nexterror();
     }
     sleep(r, tfn, arg);
+    // back after sleep
+    /*s: [[tsleep()]] reset timer after sleep */
     if(up->tt)
         timerdel(up);
     up->twhen = 0;
+    /*e: [[tsleep()]] reset timer after sleep */
     poperror();
 }
 /*e: function tsleep */
@@ -1098,7 +1164,7 @@ Proc*
 proc_wakeup(Rendez *r)
 {
     Proc *p;
-    int s;
+    int s; // spl
 
     s = arch_splhi();
     lock(r);
@@ -1106,10 +1172,12 @@ proc_wakeup(Rendez *r)
 
     if(p != nil){
         lock(&p->rlock);
+        /*s: [[wakeup()]] sanity check process state */
         if(p->state != Wakeme || p->r != r){
             iprint("%p %p %d\n", p->r, r, p->state);
             panic("wakeup: state");
         }
+        /*e: [[wakeup()]] sanity check process state */
         r->p = nil;
         p->r = nil;
         ready(p);

@@ -8,10 +8,10 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
+// in libc/arm/atom.s (use LDREX, STREX special instructions)
 extern long _xdec(long *p);
 extern long _xinc(long *p);
 
-// use libc version?? ok??
 long
 arch_xdec(long *p)
 {

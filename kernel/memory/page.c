@@ -161,7 +161,7 @@ pagechainhead(Page *p)
 
 /*s: constructor newpage */
 Page*
-newpage(bool clear, Segment **s, virt_addr va)
+newpage(bool clear, Segment **s, user_addr va)
 {
     Page *p;
     /*s: [[newpage()]] other locals */

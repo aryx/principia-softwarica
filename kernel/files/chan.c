@@ -38,7 +38,7 @@ struct Chanalloc
     //list<ref<Chan>> (next = Chan.link), the used one
     Chan    *list;
 
-    int fid; // could be a Counter, but already have a Lock anyway
+    int fid; // type could be 'Counter', but already have a Lock anyway
 
     // extra
     Lock;
@@ -109,6 +109,7 @@ chandevreset(void)
     int i;
 
     todinit();  /* avoid later reentry causing infinite recursion */
+
     for(i=0; devtab[i] != nil; i++) {
         print("reset %d, %s\n", i, devtab[i]->name);
         devtab[i]->reset();

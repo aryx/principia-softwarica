@@ -3,7 +3,7 @@
 #include "/sys/src/libc/9syscall/sys.h"
 
 /*s: typedef Syscall */
-typedef long Syscall(ulong*);
+typedef long Syscall(ulong*); // user_wp? or copied in Sargs?
 /*e: typedef Syscall */
 
 extern Syscall *systab[];

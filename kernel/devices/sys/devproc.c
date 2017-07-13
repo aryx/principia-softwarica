@@ -1710,7 +1710,7 @@ procstopped(void *a)
 
 /*s: function procctlmemio */
 int
-procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
+procctlmemio(Proc *p, ulong offset, int n, virt_vp va, bool read)
 {
     Arch_KMap *k;
     Pagetable *pt;

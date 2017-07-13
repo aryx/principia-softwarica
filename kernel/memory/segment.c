@@ -83,7 +83,7 @@ imageinit(void)
 
 /*s: constructor newseg */
 Segment *
-newseg(int type, virt_addr base, ulong size)
+newseg(int type, user_addr base, ulong size)
 {
     Segment *s;
     int pagedirsize;
@@ -421,7 +421,7 @@ imagereclaim(void)
 {
     int n;
     Page *p;
-    uvlong ticks;
+    uvlong ticks; // fastticks
 
     irstats.calls++;
     /* Somebody is already cleaning the page cache */
@@ -543,10 +543,10 @@ putimage(KImage *img)
 
 /*s: function ibrk */
 long
-ibrk(virt_addr addr, int seg)
+ibrk(user_addr addr, int seg)
 {
     Segment *s;
-    virt_addr newtop;
+    user_addr newtop;
     ulong newsize;
     /*s: [[ibrk()]] other locals */
     int mapsize;

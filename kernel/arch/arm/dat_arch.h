@@ -3,7 +3,7 @@
 /*s: struct Soc(arm) */
 struct Soc {            /* SoC dependent configuration */
     ulong   dramsize;
-    uintptr physio;
+    phys_addr physio;
     /*s: [[Soc]] bus fields */
     uintptr busdram;
     /*x: [[Soc]] bus fields */

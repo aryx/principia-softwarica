@@ -74,7 +74,7 @@ struct RWlock
     Proc  *wproc;   /* writing proc */
   
     /*s: [[RWlock]] debugging fields */
-    uintptr wpc;    /* pc of writer */
+    kern_addr wpc;    /* pc of writer */
     /*e: [[RWlock]] debugging fields */
     // Extra  
     Lock  use;
@@ -90,6 +90,7 @@ struct RWlock
 struct Ref
 {
     long ref;
+
     Lock;
 };
 /*e: struct Ref */
@@ -108,7 +109,8 @@ struct Rendez
 {
     // option<ref<Proc>>
     Proc  *p; // sleeping process
-    Lock;
+
+    Lock; // LOCK ORDERING: always do lock(r); lock(p->rlock);
 };
 /*e: struct Rendez */
 

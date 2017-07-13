@@ -12,7 +12,7 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: function arch_xdec(arm) */
+/*s: function arch_xdec(raspberry pi1)(arm) */
 long
 arch_xdec(long *p)
 {
@@ -23,9 +23,9 @@ arch_xdec(long *p)
     arch_splx(s);
     return v;
 }
-/*e: function arch_xdec(arm) */
+/*e: function arch_xdec(raspberry pi1)(arm) */
 
-/*s: function arch_xinc(arm) */
+/*s: function arch_xinc(raspberry pi1)(arm) */
 void
 arch_xinc(long *p)
 {
@@ -35,7 +35,7 @@ arch_xinc(long *p)
     ++*p;
     arch_splx(s);
 }
-/*e: function arch_xinc(arm) */
+/*e: function arch_xinc(raspberry pi1)(arm) */
 
 
 /*s: function ainc(arm) */

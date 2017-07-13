@@ -236,13 +236,14 @@ enum Priority
 {
     PriNormal = 10,   /* base priority for normal processes */
     PriKproc  = 13,   /* base priority for kernel processes */
+    /*s: [[Priority]] cases */
     PriRoot   = 13,   /* base priority for root processes */
-
-    /*s: constants for real-time priority */
+    /*e: [[Priority]] cases */
+    /*s: [[Priority]] cases for real-time priority */
     PriRelease  = Npriq,  /* released edf processes */
     PriEdf    = Npriq+1,  /* active edf processes */
     PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
-    /*e: constants for real-time priority */
+    /*e: [[Priority]] cases for real-time priority */
 };
 /*e: enum priority */
 
@@ -420,9 +421,10 @@ struct Proc
 // Scheduling
 //--------------------------------------------------------------------
     /*s: [[Proc]] scheduling fields */
-    // enum<priority>
+    // enum<Priority>
     ulong priority; /* priority level */
-
+    /*x: [[Proc]] scheduling fields */
+    // enum<Priority>
     ulong basepri;  /* base priority level */
     bool fixedpri; /* priority level doesn't change */
     /*x: [[Proc]] scheduling fields */
@@ -431,16 +433,12 @@ struct Proc
     /*x: [[Proc]] scheduling fields */
     Cpu *lastcpu;    /* processor this process last ran on */
     /*x: [[Proc]] scheduling fields */
-    ulong lastupdate; // dimension?? ticks * Scaling;
-    ulong cpuavg;    /* cpu average */
-    /*x: [[Proc]] scheduling fields */
     ulong delaysched;
     /*x: [[Proc]] scheduling fields */
-    bool preempted;  /* true if this process hasn't finished the interrupt
-           *  that last preempted it
-           */
-    /*x: [[Proc]] scheduling fields */
     Cpu  *wired;
+    /*x: [[Proc]] scheduling fields */
+    ulong lastupdate; // dimension?? ticks * Scaling;
+    ulong cpuavg;    /* cpu average */
     /*x: [[Proc]] scheduling fields */
     /*s: [[Proc]] optional [[edf]] field for real-time scheduling */
     // option<ref_own?<edf>>
@@ -448,6 +446,10 @@ struct Proc
     /*e: [[Proc]] optional [[edf]] field for real-time scheduling */
     /*x: [[Proc]] scheduling fields */
     ulong readytime;  /* time process came ready */
+    /*x: [[Proc]] scheduling fields */
+    bool preempted;  /* true if this process hasn't finished the interrupt
+           *  that last preempted it
+           */
     /*e: [[Proc]] scheduling fields */
 //--------------------------------------------------------------------
 // Files
@@ -495,6 +497,7 @@ struct Proc
     // list<ref_own<Waitq>>> =~ list<ref_own<Waitmsg>>
     Waitq *waitq;   /* Exited processes wait children */
     int nwait;    /* Number of uncollected wait records */ // len(waitq)
+
     Lock  exl;    /* Lock count and waitq */ // and nchild
     /*x: [[Proc]] hierarchy fields */
     Rendez  waitr;    /* Place to hang out in wait */
@@ -506,12 +509,13 @@ struct Proc
 //--------------------------------------------------------------------
     /*s: [[Proc]] synchronization fields */
     // As long as the current process hold spinlocks (to kernel data structures),
-    // we will not schedule another process in unlock(); only the last unlock
-    // will eventually cause a rescheduling.
+    // we will not schedule another process in sched() or unlock(); 
+    // only the last unlock will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
     /*x: [[Proc]] synchronization fields */
     // option<ref<Rendez>>, can point to waitr, freememr, sleepr, etc
     Rendez  *r;   /* rendezvous point slept on */
+    /*x: [[Proc]] synchronization fields */
     Lock  rlock;    /* sync sleep/wakeup with postnote */
     /*x: [[Proc]] synchronization fields */
     Rendez  sleepr;    /* place for syssleep/debug/tsleep */
@@ -565,7 +569,7 @@ struct Proc
     /*x: [[Proc]] debugging fields */
     Lock  *lastilock;
     /*x: [[Proc]] debugging fields */
-    ulong qpc;    /* pc calling last blocking qlock */
+    kern_addr qpc;    /* pc calling last blocking qlock */
     /*e: [[Proc]] debugging fields */
 //--------------------------------------------------------------------
 // For debugger, strace
@@ -598,13 +602,15 @@ struct Proc
     /*x: [[Proc]] other fields */
     Sargs sargs;    /* address of this is known by db */
     /*x: [[Proc]] other fields */
-    char  genbuf[128];  /* buffer used e.g. for last name element from namec */
-    /*x: [[Proc]] other fields */
     Timer;      /* For tsleep and real-time */
+    /*x: [[Proc]] other fields */
     Rendez  *trend;
     int (*tfn)(void*);
     /*x: [[Proc]] other fields */
-    ulong alarm;    /* Time of call */
+    // option<ticks>
+    ulong alarm;    /* Time of call */ // Tval ticks
+    /*x: [[Proc]] other fields */
+    char  genbuf[128];  /* buffer used e.g. for last name element from namec */
     /*x: [[Proc]] other fields */
     // enum<FPSaveStatus>
     int fpstate;
@@ -689,7 +695,7 @@ struct Schedq
     int n; 
   
     // extra
-    Lock;
+    Lock; // protects also the globals nrdy and runvec
 };
 /*e: struct Schedq */
 // hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
@@ -699,9 +705,10 @@ struct Schedq
 /*s: struct Alarms */
 struct Alarms
 {
-    // list<ref<Proc> (next = Proc.palarm)
+    // sorted_list<ref<Proc> (next = Proc.palarm, sort_key = Proc.alarm)
     Proc  *head;
-    // extra
+
+    // Extra
     QLock;
 };
 /*e: struct Alarms */

@@ -90,7 +90,7 @@ arch_cpuidprint(void)
     char name[64];
 
     cputype2name(name, sizeof name);
-    arch_delay(50);             /* let uart catch up */  // PB QEMU
+    arch_delay(50);             /* let uart catch up */
     print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
 }
 /*e: function arch_cpuidprint(raspberry pi2)(arm) */

@@ -387,7 +387,7 @@ ckfaultstuck(uintptr va)
  *  called by trap to handle access faults
  */
 static void
-faultarm(Ureg *ureg, uintptr va, int user, bool read)
+faultarm(Ureg *ureg, virt_addr va, bool user, bool read)
 {
     bool insyscall;
     int n;

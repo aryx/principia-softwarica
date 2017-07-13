@@ -194,7 +194,7 @@ arch__syscall(Ureg* ureg)
 {
     int scallnr;
     long ret;
-    ulong sp; // user_addr
+    user_addr sp;
     /*s: [[syscall()]] other locals(arm) */
     char *e;
     u32int s;
@@ -346,12 +346,12 @@ arch__syscall(Ureg* ureg)
 
 /*s: function arch_execregs(arm) */
 long
-arch_execregs(ulong entry, ulong ssize, ulong nargs)
+arch_execregs(user_addr entry, ulong ssize, ulong nargs)
 {
-    ulong *sp;
+    user_wp sp;
     Ureg *ureg;
 
-    sp = (ulong*)(USTKTOP - ssize);
+    sp = (user_wp)(USTKTOP - ssize);
     *--sp = nargs;
 
     ureg = up->dbgreg;

@@ -741,7 +741,7 @@ enum{
 enum
 {
     /*s: constant VLNUMSIZE */
-        VLNUMSIZE=  22,
+    VLNUMSIZE=  22,
     /*e: constant VLNUMSIZE */
 };
 
@@ -777,11 +777,11 @@ static void
 consinit(void)
 {
     /*s: [[consinit()]] initializing things */
-        /*
-         * at 115200 baud, the 1024 char buffer takes 56 ms to process,
-         * processing it every 22 ms should be fine
-         */
-        addclock0link(kbdputcclock, 22);
+    /*
+     * at 115200 baud, the 1024 char buffer takes 56 ms to process,
+     * processing it every 22 ms should be fine
+     */
+    addclock0link(kbdputcclock, 22);
     /*x: [[consinit()]] initializing things */
     todinit();
     randominit();
@@ -951,12 +951,18 @@ consread(Chan *c, void *buf, long n, vlong off)
             conf.npage*BY2PG,
             BY2PG,
             conf.npage-conf.upages,
-            palloc.user-palloc.freecount, palloc.user,
-            conf.nswap-swapalloc.free, conf.nswap,
+            palloc.user - palloc.freecount, palloc.user,
+            conf.nswap - swapalloc.free, conf.nswap,
             mainmem->cursize, mainmem->maxsize,
             imagmem->cursize, imagmem->maxsize);
 
         return readstr((ulong)offset, buf, n, tmp);
+    /*x: [[consread()]] cases */
+    case Qtime:
+        return readtime((ulong)offset, buf, n);
+    /*x: [[consread()]] cases */
+    case Qbintime:
+        return readbintime(buf, n);
     /*x: [[consread()]] cases */
     case Qcputime:
         k = offset;
@@ -976,8 +982,8 @@ consread(Chan *c, void *buf, long n, vlong off)
         memmove(buf, tmp+k, n);
         return n;
     /*x: [[consread()]] cases */
-        case Qrandom:
-            return randomread(buf, n);
+    case Qrandom:
+        return randomread(buf, n);
     /*x: [[consread()]] cases */
     case Qkmesg:
         /*
@@ -999,13 +1005,6 @@ consread(Chan *c, void *buf, long n, vlong off)
         return qread(kprintoq, buf, n);
     /*e: [[consread()]] cases */
 
-    case Qtime:
-        return readtime((ulong)offset, buf, n);
-
-    case Qbintime:
-        return readbintime(buf, n);
-        
-
 
     case Quser:
         return readstr((ulong)offset, buf, n, up->user);
@@ -1018,7 +1017,6 @@ consread(Chan *c, void *buf, long n, vlong off)
 
     case Qpgrpid:
         return readnum((ulong)offset, buf, n, up->pgrp->pgrpid, NUMSIZE);
-
 
     case Qnull:
         return 0;
@@ -1092,6 +1090,16 @@ conswrite(Chan *c, void *va, long n, vlong off)
         setswapchan(swc);
         break;
     /*x: [[conswrite()]] cases */
+    case Qtime:
+        if(!iseve())
+            error(Eperm);
+        return writetime(a, n);
+    /*x: [[conswrite()]] cases */
+    case Qbintime:
+        if(!iseve())
+            error(Eperm);
+        return writebintime(a, n);
+    /*x: [[conswrite()]] cases */
     case Qconsctl:
         if(n >= sizeof(buf))
             n = sizeof(buf)-1;
@@ -1118,17 +1126,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
         }
         break;
     /*e: [[conswrite()]] cases */
-
-    case Qtime:
-        if(!iseve())
-            error(Eperm);
-        return writetime(a, n);
-
-    case Qbintime:
-        if(!iseve())
-            error(Eperm);
-        return writebintime(a, n);
-
 
     case Quser:
         return userwrite(a, n);

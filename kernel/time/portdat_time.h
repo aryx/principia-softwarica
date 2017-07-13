@@ -12,32 +12,37 @@ enum Timermode
 /*e: enum timermode */
 
 /*s: type Txxx */
-typedef vlong   Tval; // ticks
-typedef vlong   Tnano; // nanoseconds
-typedef vlong   Tmicro; // microseconds
-typedef int     Tms; // milliseconds
 typedef vlong   Tsec; // seconds
+typedef int     Tms; // milliseconds
+typedef vlong   Tmicro; // microseconds
+typedef vlong   Tnano; // nanoseconds
+/*x: type Txxx */
+typedef vlong   Tval; // ticks
+/*x: type Txxx */
+typedef vlong   Tfast; // fastticks
+typedef uvlong   Tufast; // fastticks
 /*e: type Txxx */
 
 /*s: struct Timer */
 struct Timer
 {
     /* Public interface */
-    // enum<timermode>
+    // enum<Timermode>
     int tmode;    /* See above */
     Tnano tns;    /* meaning defined by mode */ //nanosecond
+
     void  (*tf)(Ureg*, Timer*);
-    void  *ta;
+    void  *ta; // extra argument (generic pointer)
   
     /* Internal */
-    Lock;
-    Tval  tticks;   /* tns converted to ticks */
-    Tval  twhen;    /* ns represented in arch_fastticks */
+    Tfast  twhen;    /* ns represented in fastticks */
+    ILock; // LOCK ORDERING: ilock(timer); ilock(timers)
 
     /*s: [[Timer]] extra fields */
     // list<Timer> of Timers.head
     Timer *tnext;
-    // ref<list<Timer>> Timers.head
+    /*x: [[Timer]] extra fields */
+    // option<ref<list<Timer>> Timers.head (of one of global timers[MAXCPUS])
     Timers  *tt;    /* Timers queue this timer runs on */
     /*e: [[Timer]] extra fields */
     };
@@ -50,7 +55,7 @@ struct Timers
     // list<Timer> (next = Timer.tnext)
     Timer *head;
     // extra
-    Lock;
+    ILock;
 };
 /*e: struct Timers */
 

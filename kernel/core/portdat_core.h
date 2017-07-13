@@ -115,7 +115,7 @@ struct Cpu
 
     /*s: [[Cpu]] time fields */
     ulong ticks;      /* of the clock since boot time */
-
+    /*x: [[Cpu]] time fields */
     uvlong  cpuhz;
     int cpumhz; // cpuhz / 1_000_000
     /*e: [[Cpu]] time fields */

@@ -120,6 +120,7 @@ clockintr(Ureg *ureg, void*)
     tn = (Systimers*)SYSTIMERS;
     /* dismiss interrupt */
     tn->cs = 1<<3;
+    // portable code
     timerintr(ureg, 0);
 }
 /*e: function clockintr(arm) */
@@ -170,11 +171,11 @@ clockinit(void)
     tstart = tn->clo;
     do{
         t0 = arch_lcycles();
-    }while(tn->clo == tstart); // PB QEMU
+    }while(tn->clo == tstart);
     tend = tstart + 10000;
     do{
         t1 = arch_lcycles();
-    }while(tn->clo != tend); // PB QEMU
+    }while(tn->clo != tend);
     t1 -= t0;
 
     cpu->cpuhz = 100 * t1;
@@ -184,9 +185,11 @@ clockinit(void)
 
     if(cpu->cpuno == 0){
         tn->c3 = tn->clo - 1;
+
         tm = (Armtimer*)ARMTIMER;
         tm->load = 0;
         tm->ctl = TmrPrescale1|CntEnable|CntWidth32;
+
         arch_intrenable(IRQtimer3, clockintr, nil, 0, "clock");
     }
     /*s: [[clockinit()]] if not cpu0 */
@@ -198,24 +201,26 @@ clockinit(void)
 
 /*s: function arch_timerset(arm) */
 void
-arch_timerset(Tval next)
+arch_timerset(Tfast next)
 {
     Systimers *tn;
-    uvlong now;
+    Tufast now;
     long period;
 
     now = arch_fastticks(nil);
     period = next - now;
+    /*s: [[arch_timerset()]] sanitize period(arm) */
     if(period < MinPeriod)
         period = MinPeriod;
     else if(period > MaxPeriod)
         period = MaxPeriod;
-    /*s: [[arch_timerset()]] if not cpu0 */
+    /*e: [[arch_timerset()]] sanitize period(arm) */
+    /*s: [[arch_timerset()]] if not cpu0(arm) */
     if(cpu->cpuno > 0){
         cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysval, period);
         cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Enable);
     }
-    /*e: [[arch_timerset()]] if not cpu0 */
+    /*e: [[arch_timerset()]] if not cpu0(arm) */
     else{
         tn = (Systimers*)SYSTIMERS;
         tn->c3 = (ulong)(now + period);
@@ -224,26 +229,30 @@ arch_timerset(Tval next)
 /*e: function arch_timerset(arm) */
 
 /*s: function clock_arch_fastticks(arm) */
-uvlong
+Tufast
 clock_arch_fastticks(uvlong *hz)
 {
     Systimers *tn;
     ulong lo, hi;
-    uvlong now;
+    Tufast now;
     int s;
 
+    /*s: [[arch_fastticks()]] if hz pointer given */
     if(hz)
         *hz = SystimerFreq;
+    /*e: [[arch_fastticks()]] if hz pointer given */
+
     tn = (Systimers*)SYSTIMERS;
     s = arch_splhi();
+
     do{
         hi = tn->chi;
         lo = tn->clo;
     }while(tn->chi != hi);
+
     now = (uvlong)hi<<32 | lo;
-    cpu->fastclock = now;
     arch_splx(s);
-    return cpu->fastclock;
+    return now;
 }
 /*e: function clock_arch_fastticks(arm) */
 
@@ -277,7 +286,7 @@ armtimerset(int n)
 /*e: function armtimerset(arm) */
 
 /*s: function arch_us(arm) */
-ulong
+ulong // Tmicro
 arch_us(void)
 {
     /*s: [[arch_us()]] if non-standard systimer frequency */
@@ -290,7 +299,7 @@ arch_us(void)
 
 /*s: function clock_arch_microdelay(arm) */
 void
-clock_arch_microdelay(int n)
+clock_arch_microdelay(int n) // Tmicro
 {
     Systimers *tn;
     u32int now, diff;
@@ -298,14 +307,14 @@ clock_arch_microdelay(int n)
     diff = n + 1;
     tn = (Systimers*)SYSTIMERS;
     now = tn->clo;
-    while(tn->clo - now < diff) // PB QEMU
+    while(tn->clo - now < diff)
         ;
 }
 /*e: function clock_arch_microdelay(arm) */
 
 /*s: function clock_arch_delay(arm) */
 void
-clock_arch_delay(int n)
+clock_arch_delay(Tms n)
 {
     while(--n >= 0)
         arch_microdelay(1000);

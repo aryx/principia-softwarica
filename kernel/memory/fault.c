@@ -317,7 +317,7 @@ if(s->flushme)
  * Called only in a system call
  */
 bool
-okaddr(virt_addr addr, ulong len, bool write)
+okaddr(user_addr addr, ulong len, bool write)
 {
     Segment *s;
 
@@ -342,7 +342,7 @@ okaddr(virt_addr addr, ulong len, bool write)
 
 /*s: function validaddr */
 void
-validaddr(virt_addr addr, ulong len, bool write)
+validaddr(user_addr addr, ulong len, bool write)
 {
     if(!okaddr(addr, len, write)){
         postnote(up, 1, "sys: bad address in syscall", NDebug);
@@ -356,13 +356,13 @@ validaddr(virt_addr addr, ulong len, bool write)
  * &s[0] is known to be a valid address.
  */
 void*
-vmemchr(virt_addr3 s, int c, int n)
+vmemchr(user_vp s, int c, int n)
 {
     int m;
-    virt_addr a;
-    virt_addr3 t;
+    user_addr a;
+    user_vp t;
 
-    a = (virt_addr)s;
+    a = (user_addr)s;
     while(PGROUND(a) != PGROUND(a+n-1)){
         /* spans pages; handle this page */
         m = BY2PG - (a & (BY2PG-1));
@@ -382,7 +382,7 @@ vmemchr(virt_addr3 s, int c, int n)
 
 /*s: function seg */
 Segment*
-seg(Proc *p, virt_addr addr, bool dolock)
+seg(Proc *p, user_addr addr, bool dolock)
 {
     Segment **s, **et, *sg;
 

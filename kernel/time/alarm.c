@@ -25,6 +25,7 @@ alarmkproc(void*)
 
     for(;;){
         now = CPUS(0)->ticks;
+
         qlock(&alarms);
         /*
          * the odd test of now vs. rp->alarm is to cope with
@@ -71,34 +72,42 @@ checkalarms(void)
 
 /*s: function procalarm */
 ulong
-procalarm(ulong time)
+procalarm(ulong time) // Tms
 {
     Proc **l, *f;
-    ulong when, old;
+    ulong when, old; // Tval ticks
 
+    /*s: [[procalarm()]] compute remaining time in old alarm */
     if(up->alarm)
         old = tk2ms(up->alarm - CPUS(0)->ticks);
     else
         old = 0;
+    /*e: [[procalarm()]] compute remaining time in old alarm */
+    /*s: [[procalarm()]] if time is zero, reset alarm */
     if(time == 0) {
         up->alarm = 0;
         return old;
     }
-    when = ms2tk(time)+CPUS(0)->ticks;
+    /*e: [[procalarm()]] if time is zero, reset alarm */
+    when = ms2tk(time) + CPUS(0)->ticks;
+    /*s: [[procalarm()]] sanitize when */
     if(when == 0)       /* ticks have wrapped to 0? */
         when = 1;   /* distinguish a wrapped alarm from no alarm */
+    /*e: [[procalarm()]] sanitize when */
 
     qlock(&alarms);
     l = &alarms.head;
+    // remove_list(up, alarms)
     for(f = *l; f; f = f->palarm) {
         if(up == f){
-            *l = f->palarm;
+            *l = up->palarm;
             break;
         }
         l = &f->palarm;
     }
+    up->palarm = nil;
 
-    up->palarm = 0;
+    // add_sorted_list(up, alarms)
     if(alarms.head) {
         l = &alarms.head;
         for(f = *l; f; f = f->palarm) {
@@ -113,6 +122,7 @@ procalarm(ulong time)
     }
     else
         alarms.head = up;
+
 done:
     up->alarm = when;
     qunlock(&alarms);

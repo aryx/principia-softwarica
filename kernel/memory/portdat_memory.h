@@ -36,7 +36,7 @@ enum Cachectl {
 struct Page
 {
     phys_addr pa;     /* Physical address in memory */
-    virt_addr va;     /* Virtual address for user */
+    user_addr va;     /* Virtual address for user */
 
     // Why not Ref? to save space (same reason for using 'char' below)
     // but that means needs to use Lock below to access this non-atomic ref.
@@ -198,8 +198,8 @@ struct Segment
     // enum<Segtype>
     ushort  type;   /* segment type */
   
-    virt_addr base;   /* virtual base */
-    virt_addr top;    /* virtual top */
+    user_addr base;   /* virtual base */
+    user_addr top;    /* virtual top */
     ulong size;   /* size in pages */ // top - base / BY2PG
   
     // array<option<ref_own<Pagetable>>>, smalloc'ed (or smallpagedir alias)
@@ -219,7 +219,7 @@ struct Segment
     /*x: [[Segment]] other fields */
     ushort  steal;    /* Page stealer lock */
     /*x: [[Segment]] other fields */
-    kern_addr2  profile;  /* Tick profile area */ // for TSEG only
+    kern_wp  profile;  /* Tick profile area */ // for TSEG only
     /*x: [[Segment]] other fields */
     bool	flushme;	/* maintain icache for this segment */
     /*x: [[Segment]] other fields */

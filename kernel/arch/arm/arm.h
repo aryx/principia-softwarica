@@ -240,12 +240,10 @@
 /*s: type PageDirGranularity(arm) */
 #define Coarse      (Mbz|1)         /* L1 */
 #define Section     (Mbz|2)         /* L1 1MB */
-#define Fine        (Mbz|3)         /* L1 */
 /*e: type PageDirGranularity(arm) */
 /*s: type PageTableGranularity(arm) */
 #define Large       0x00000001      /* L2 64KB */
 #define Small       0x00000002      /* L2 4KB */
-#define Tiny        0x00000003      /* L2 1KB: not in v7 */
 /*e: type PageTableGranularity(arm) */
 
 /*s: type PageTableEntryAttribute1(arm) */

@@ -52,9 +52,9 @@ enum {
 
 /*s: function setmalloctag */
 void
-setmalloctag(kern_addr3 v, kern_addr pc)
+setmalloctag(kern_vp v, kern_addr pc)
 {
-    kern_addr2 u;
+    kern_wp u;
     USED(v, pc); //??
     if(Npadlong <= MallocOffset || v == nil)
         return;
@@ -65,9 +65,9 @@ setmalloctag(kern_addr3 v, kern_addr pc)
 
 /*s: function setrealloctag */
 void
-setrealloctag(kern_addr3 v, kern_addr pc)
+setrealloctag(kern_vp v, kern_addr pc)
 {
-    kern_addr2 u;
+    kern_wp u;
     USED(v, pc);
     if(Npadlong <= ReallocOffset || v == nil)
         return;
@@ -82,10 +82,10 @@ setrealloctag(kern_addr3 v, kern_addr pc)
 
 /*s: function smalloc */
 // non failing malloc! will repeat until it can
-kern_addr3
+kern_vp
 smalloc(ulong size)
 {
-    kern_addr3 v;
+    kern_vp v;
 
     for(;;) {
         v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
@@ -106,10 +106,10 @@ smalloc(ulong size)
 /*e: function smalloc */
 
 /*s: function malloc */
-kern_addr3
+kern_vp
 malloc(ulong size)
 {
-    kern_addr3 v;
+    kern_vp v;
 
     v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
     if(v == nil)
@@ -127,10 +127,10 @@ malloc(ulong size)
 /*e: function malloc */
 
 /*s: function mallocz */
-kern_addr3
+kern_vp
 mallocz(ulong size, bool clr)
 {
-    kern_addr3 v;
+    kern_vp v;
 
     v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
     /*s: [[mallocz()]] if Npadlong */
@@ -147,10 +147,10 @@ mallocz(ulong size, bool clr)
 /*e: function mallocz */
 
 /*s: function mallocalign */
-kern_addr3
+kern_vp
 mallocalign(ulong size, ulong align, long offset, ulong span)
 {
-    kern_addr3 v;
+    kern_vp v;
 
     v = poolallocalign(mainmem, size  +Npadlong*sizeof(ulong), align, 
                                 offset-Npadlong*sizeof(ulong), span);
@@ -169,7 +169,7 @@ mallocalign(ulong size, ulong align, long offset, ulong span)
 
 /*s: function free */
 void
-free(kern_addr3 v)
+free(kern_vp v)
 {
     if(v != nil)
         poolfree(mainmem, (ulong*)v-Npadlong);
@@ -177,10 +177,10 @@ free(kern_addr3 v)
 /*e: function free */
 
 /*s: function realloc */
-kern_addr3
-realloc(kern_addr3 v, ulong size)
+kern_vp
+realloc(kern_vp v, ulong size)
 {
-    kern_addr3 nv;
+    kern_vp nv;
 
     if(v != nil)
         v = (ulong*)v - Npadlong;

@@ -91,17 +91,16 @@ getconf(char *name)
 void
 arch__cpuinit(void)
 {
-    Cpu *m0;
+    Cpu *cpu0;
 
     cpu->ticks = 1;
     cpu->perf.period = 1;
 
-    m0 = CPUS(0);
+    cpu0 = CPUS(0);
     /*s: [[arch__cpuinit()]] it not cpu0 */
     if (cpu->cpuno != 0) {
         /* synchronise with cpu 0 */
-        cpu->ticks = m0->ticks;
-        cpu->fastclock = m0->fastclock;
+        cpu->ticks = cpu0->ticks;
     }
     /*e: [[arch__cpuinit()]] it not cpu0 */
 }
@@ -117,7 +116,7 @@ arch__cpu0init(void)
     cpus[cpu->cpuno] = cpu;
 
     arch__cpuinit();
-    active.exiting = 0;
+    active.exiting = false;
 
     up = nil;
 }
@@ -168,12 +167,16 @@ arch__confinit(void)
     /*e: [[arch__confinit()]] if maxmem boot parameter(arm) */
     // simpler than for x86 :)
     getramsize(&conf.mem[0]);
-
+    /*s: [[arch__confinit()]] sanity check [[conf.mem[0]]](arm) */
     if(conf.mem[0].limit == 0){
         conf.mem[0].base = 0;
         conf.mem[0].limit = memsize;
-    }else if(p != nil)
+    }
+    /*s: [[arch__confinit()]] if maxmem parameter and limit mem is zero(arm) */
+    else if(p != nil)
         conf.mem[0].limit = conf.mem[0].base + memsize;
+    /*e: [[arch__confinit()]] if maxmem parameter and limit mem is zero(arm) */
+    /*e: [[arch__confinit()]] sanity check [[conf.mem[0]]](arm) */
 
     conf.npage = 0;
     pa = PADDR(PGROUND(PTR2UINT(end)));
@@ -240,7 +243,7 @@ arch__confinit(void)
 //*****************************************************************************
 
 /*s: global sp(arm) */
-static uintptr sp;      /* XXX - must go - user stack of init proc */
+static user_addr sp;      /* XXX - must go - user stack of init proc */
 /*e: global sp(arm) */
 
 // kernel space instructions executed by first process
@@ -259,7 +262,7 @@ init0(void)
     /*s: [[init0()]] coherence(arm) */
     arch_coherence();
     /*e: [[init0()]] coherence(arm) */
-    arch_spllo();
+    arch_spllo(); // Allow interrupts!!!
 
     /*
      * These are o.k. because rootinit is null.
@@ -661,14 +664,15 @@ main(void)
     setclkrate(ClkArm, 0);
 
     arch__trapinit();
-    clockinit(); // PB QEMU
+    clockinit(); // enable timer interrupts
 
     //TODO? kbdqinit(); // setup kbdq
     lineqinit(); // setup lineq
-    timersinit();
+
+    timersinit(); // set initial timer for timer interrupt
     swcursor_init();
 
-    arch_cpuidprint(); // PB QEMU
+    arch_cpuidprint();
     archreset();
 
     procinit();

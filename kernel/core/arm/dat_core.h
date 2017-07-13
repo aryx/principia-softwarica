@@ -39,9 +39,6 @@ struct Arch_Cpu {
     u32int  sund[5];
     u32int  sabt[5];
     /*e: [[Cpu]] [[Arch]] save of first five registers fields(arm) */
-    /*s: [[Cpu]] [[Arch]] other fields(arm) */
-    uvlong  fastclock;      /* last sampled value */
-    /*e: [[Cpu]] [[Arch]] other fields(arm) */
 };
 /*e: struct Arch_Cpu(arm) */
 /*e: core/arm/dat_core.h */

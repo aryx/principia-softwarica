@@ -46,20 +46,27 @@ static void todfix(void);
 
 /*s: struct TOD */
 struct TOD {
-    int init;       /* true if initialized */
+    bool init;       /* true if initialized */
+
     ulong   cnt;
-    Lock;
+
     uvlong  multiplier; /* ns = off + (multiplier*ticks)>>31 */
     uvlong  divider;    /* ticks = (divider*(ns-off))>>31 */
-    uvlong  umultiplier;    /* Âµs = (Âµmultiplier*ticks)>>31 */
+    uvlong  umultiplier;/* Âµs = (Âµmultiplier*ticks)>>31 */
     uvlong  udivider;   /* ticks = (Âµdivider*Âµs)>>31 */
+
     vlong   hz;     /* frequency of fast clock */
     vlong   last;       /* last reading of fast clock */
+
     vlong   off;        /* offset from epoch to last */
     vlong   lasttime;   /* last return value from todget */
     vlong   delta;  /* add 'delta' each slow clock tick from sstart to send */
+
     ulong   sstart;     /* ... */
     ulong   send;       /* ... */
+
+    // Extra
+    Lock;
 };
 /*e: struct TOD */
 /*s: global tod */
@@ -73,7 +80,7 @@ todinit(void)
     if(tod.init)
         return;
     ilock(&tod);
-    tod.init = 1;           /* prevent reentry via arch_fastticks */
+    tod.init = true;           /* prevent reentry via arch_fastticks */
     tod.last = arch_fastticks((uvlong *)&tod.hz);
     iunlock(&tod);
     todsetfreq(tod.hz);
@@ -94,10 +101,10 @@ todsetfreq(vlong f)
     tod.hz = f;
 
     /* calculate multiplier for time conversion */
-    tod.multiplier = mk64fract(TODFREQ, f);
-    tod.divider = mk64fract(f, TODFREQ) + 1;
+    tod.multiplier  = mk64fract(TODFREQ, f);
+    tod.divider     = mk64fract(f, TODFREQ) + 1;
     tod.umultiplier = mk64fract(MicroFREQ, f);
-    tod.udivider = mk64fract(f, MicroFREQ) + 1;
+    tod.udivider    = mk64fract(f, MicroFREQ) + 1;
     iunlock(&tod);
 }
 /*e: function todsetfreq */

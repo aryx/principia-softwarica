@@ -84,7 +84,7 @@ xinit(void)
 //*****************************************************************************
 
 /*s: function xspanalloc */
-kern_addr3
+kern_vp
 xspanalloc(ulong size, int align, ulong span)
 {
     ulong a, v, t;
@@ -109,12 +109,12 @@ xspanalloc(ulong size, int align, ulong span)
     if(align > 1)
         v = (v + align) & ~(align-1);
 
-    return (kern_addr3)v;
+    return (kern_vp)v;
 }
 /*e: function xspanalloc */
 
 /*s: function xallocz */
-kern_addr3
+kern_vp
 xallocz(ulong size, bool zero)
 {
     Xhdr *p;
@@ -157,7 +157,7 @@ xallocz(ulong size, bool zero)
 /*e: function xallocz */
 
 /*s: function xalloc */
-kern_addr3
+kern_vp
 xalloc(ulong size)
 {
     return xallocz(size, true);
@@ -166,7 +166,7 @@ xalloc(ulong size)
 
 /*s: function xfree */
 void
-xfree(kern_addr3 p)
+xfree(kern_vp p)
 {
     Xhdr *x;
 
@@ -183,7 +183,7 @@ xfree(kern_addr3 p)
 
 /*s: function xmerge */
 bool
-xmerge(kern_addr3 vp, kern_addr3 vq)
+xmerge(kern_vp vp, kern_vp vq)
 {
     Xhdr *p, *q;
 
