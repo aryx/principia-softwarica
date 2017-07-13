@@ -2434,7 +2434,8 @@ it is the device representing the {terminal}.
 %
 The [[/dev/cons]] interface defined by the kernel is simple:
 a program reading from [[/dev/cons]] will read characters from the keyboard;
-\n actually unicode
+\n actually unicode, 
+\t actually utf8 encoding of runes!
 a program writing to [[/dev/cons]] will output text on the screen.
 \n classic text-based user interface
 %
@@ -5160,6 +5161,7 @@ int	    id;       // visible through /mnt/wsys/winid
 char    name[32]; // visible through /mnt/wsys/winname
 @
 %ocaml: no hardcoded length, flexible string
+\l could rename winname
 
 % counter
 <<global id>>=
@@ -5788,6 +5790,10 @@ void threadmain(int argc, char *argv[])
 %  <<[[main()]] set some globals>> =
 %  mainpid = getpid();
 %  @
+\t why need killprocs and threadexitsall? exit not enough?
+\t  need killprocs at least because if you exit it will not kill other procs?
+\t  but then why need threadexitsall?
+%ocaml: just Unix.exit? anyway just one proc and many threads.
 
 
 % exitchan later, but a channel! when Exit menu in rio via mouse,
@@ -6333,6 +6339,7 @@ if(inside &&
 % scrolling? when started click to scroll? 
 % No, when automatic scrolling selected.
 \t rename autoscroll
+\l but still, why send to app then?
 
 <<[[mousethread()]] locals>>=
 Mouse tmp;
@@ -6571,7 +6578,7 @@ winctl(void *arg)
 // chan<Rune, 20> (listener = winctl, sender = keyboardthread)
 Channel	*ck;		/* chan(Rune[10]) */
 @
-% it's Rune[20] actually no?
+% it's Rune[20] actually no? wrong comment?
 
 % saw send(input->ck) before in keyboard thread.
 % so trace of key: 
@@ -6626,11 +6633,16 @@ wkeyctl(Window *w, Rune r)
 \l actually it's not exactly when not rawing, because the if rawing
 \l  path is taken if w->rawing && other condition
 
+% a bit complicated because rio allows weird combinations like
+% mouseopen and buffered mode, or not mouseopend and raw mode.
+% In last case we want the special navigation keys to still work.
+
 <<[[wkeyctl()]] sanity check rune>>=
 if(r == 0)
     return;
 @
-\l when have rune 0?
+\l when have rune 0? winctl calls us for sure with r != L'\0'
+\l then dead code? other callers of wkeyctl/
 
 % will see those cases later when talk about graphical and textual windows.
 % will see actually relay to other channel.
@@ -6694,6 +6706,7 @@ case WMouse:
 Channel	*cctl;		/* chan(Wctlmesg)[20] */
 @
 \l ctlch ? more consistent?
+\l again why queue of 20? 1 not enough?
 
 <<[[winctl()]] other locals>>=
 Wctlmesg wcm;
@@ -7297,6 +7310,7 @@ riosetcursor(Cursor *p, bool force)
 
 % what this force is all about? why sometimes need and sometimes not?
 % seems like an opti.
+\l when need to force? when does not need to force and can leverage opti?
 
 
 \subsection{[[cornercursor()]]}
@@ -7897,6 +7911,7 @@ w->cctl = cctl;
 wborder(w, Selborder);
 @
 \l why wborder here? will do it again in caller in wcurrent
+\l  because can hideit but still want the drawing done on the off-screen img?
 
 <<function wborder>>=
 void
@@ -7975,7 +7990,6 @@ else
 
 
 \subsection{Window process creation, [[winshell()]]}
-
 
 
 <<global rcargv>>=
@@ -8485,8 +8499,6 @@ wcurrent(Window *w)
 \l why false to wsetcursor? because maybe w == oi in which case
 \l  no need to force a rewrite of the cursor. Last cursor was maybe ok.
 
-\l rename wrepaintborders?
-
 % wcurrent | ... -> <>
 <<function wrepaint>>=
 void
@@ -8507,6 +8519,10 @@ wrepaint(Window *w)
 \l again setcursor? but done already in caller
 \l a bit of duplication with wcurrent, redo similar work with
 \l  check for w == input
+
+% rename wrepaintborders? no, because will also repaint the scrollbar
+% and all text in terminal with other color sometimes!
+
 
 <<constant Unselborder>>=
 Unselborder		= 1,	/* border of unselected window */
@@ -8555,6 +8571,14 @@ Deleted,
 bool	deleted;
 @
 %old: bool_byte
+\t needed because can still have pending request on window namespace?
+\t  so at least in the fileserver we can give a better response when
+\t  an operation on a deleted window is requested?
+
+% why delete complex? because attached process, because attached img!
+% need to wait for external process, but can not wait too much
+% hence timeout below.
+
 
 
 <<[[wctlmesg()]] cases>>=
@@ -8685,8 +8709,8 @@ deletethread(void*)
 }
 @
 % why freeimage here too? not enough in closewin? no because got
-% a new reference to it when call namedimage. But the client
-% will still have one, hence originwindow.
+% a new reference to it when call namedimage. But note that the client
+% will still have one, hence originwindow done above.
 
 
 
@@ -8738,18 +8762,28 @@ wclose(Window *w)
     i = decref(w);
     if(i > 0)
         return false;
+    <<[[wclose()]] sanity check i>>
+    <<[[wclose()]] sanity check w>>
 
-    if(i < 0)
-        error("negative ref count");
-    if(!w->deleted)
-        wclosewin(w);
     wsendctlmesg(w, Exited, ZR, nil);
     return true;
 }
 @
 % decref? but does one incref in new(), decref in winshell,
 %  via wclose, then incref in?? xfidattach??
+% so wait that everything was closed properly? But if delete window
+%  dont want to wait!
 
+
+<<[[wclose()]] sanity check i>>=
+if(i < 0)
+    error("negative ref count");
+@
+<<[[wclose()]] sanity check w>>=
+if(!w->deleted)
+    wclosewin(w);
+@
+\l when can this happen? 
 
 <<[[Wctlmesgkind]] cases>>=
 Exited,
@@ -8780,7 +8814,7 @@ case Exited:
     free(w);
     break;
 @
-%ocaml: Gc
+%ocaml: Gc for most of it
 
 
 
@@ -9347,6 +9381,7 @@ menu3str[i+Hidden] = nil;
 
 \subsection{[[unhide()]]}
 % could be call show, but already uses wshow for something else
+%ocaml: use show, because have module so no ambiguity with Terminal.show
 
 <<[[button3menu()]] cases>>=
 default:
@@ -10057,6 +10092,9 @@ filsysclunk(Filsys *fs, Xfid *x, Fid *f)
 % winclosechan ultimately call wclose which removes a reference
 % to the window, so looks similar to xfidclose ...
 % why not call wclose directly? to not block?
+\t why need to keep refcount of Window? when reach 0 and not asked
+% by user to close the window? When do exit() which ultimately 
+% call close on all the devices?
 
 \subsection{[[xfidclose()]]}
 
@@ -10078,7 +10116,8 @@ xfidclose(Xfid *x)
 @
 \l wclose(w)! remove one reference, but subtle why need that
 \t why?
-
+% here we do not use wclosechan because we are already in a thread,
+% so can afford to wait for wclose to finish
 
 
 \section{Read}
@@ -10530,12 +10569,13 @@ Qcons,
 { "cons",		QTFILE,	Qcons,		0600 },
 @
 
+% utf8! not rune, not char, utf8!
 
 \subsection{Reading part1}
 
 % So if client reads /dev/cons,
 % then we wait for key event to come to us by listening to consread!
-% The winctl itself listen for key events on w->ck from keyboardthread
+% The winctl itself listen for key events (rune) on w->ck from keyboardthread
 
 <<[[Window]] other fields>>=
 // chan<Consreadmesg> (listener = xfidread(Qcons), sender = winctl)
@@ -11403,7 +11443,8 @@ case WCread:
 \t But not buffered? Yes, but will be ready for WCread only
 % when a newline has been entered?
 
-\subsubsection{Bytes versus runes, partial runes}
+\subsubsection{Runes vs bytes, partial runes}
+% this time not bytes vs runes but runes vs bytes (or other way around?)
 
 % similar issue than in xfid where need store partial rune bytes
 
@@ -11550,6 +11591,7 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 % so many new terminals in recent years:
 % - yaft https://github.com/uobikiemukot/yaft
 % - alacritty terminal in rust using opengl
+%   https://github.com/jwilm/alacritty
 % - kitty also opengl based terminal
 % - ...
 
@@ -11574,9 +11616,11 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 r = insetrect(w->i->r, Selborder);
 draw(w->i, r, cols[BACK], nil, w->frm.entire.min);
 @
+%ocaml: separate in different terminal.ml module instead of window.alloc
 \t entire is a frame property, set by frinit(), but seems
 \t  to be equal to r, and anyway it's sp and src is a color
 \t  so what's the point of this last argument? why not ZP?
+\t also why need to draw that? anyway first repaint will erase that
 
 % will see cols soon
 
@@ -11598,6 +11642,7 @@ w->scrollr.max.x = r.min.x+Scrollwid;
 <<constants Scrollxxx>>=
 Scrollwid 		= 12,	/* width of scroll bar */
 @
+%ocaml: use better name, so no need comment
 \n could also put that in Scrolling section later, but then
 \n force to split wmk too much I think
 
@@ -11620,6 +11665,8 @@ frinit(&w->frm, r, font, i, cols);
 <<[[wmk()]] textual window settings, extra frame settings>>
 @
 %old: I repeated the insetrect so easier to aspectize
+%ocaml: no need to repeat, because construct new rectangle each time
+% so no side effect on r when set scrollr
 
 <<constants Scrollxxx>>=
 Scrollgap 		= 4,	/* gap right of scroll bar */
@@ -11671,6 +11718,7 @@ struct Frame
 @
 % the actual content is in the englobing data structure (e.g., Window.r)
 \l remove display? redundant with b->display anyway
+\l rename b to img?
 
 
 % important field, nchars.
@@ -11719,7 +11767,8 @@ frsetrects(Frame *f, Rectangle r, Image *b)
 %old: I reoredered a bit again
 \l could use Dy
 
-% adjust r to not write on last line
+% adjust r to not write on last line that may not contain enough
+% pixels for a full height (hence the modulo)
 
 <<[[Frame]] text fields>>=
 ushort	maxlines;	/* total # lines in frame */
@@ -11728,7 +11777,7 @@ ushort	maxlines;	/* total # lines in frame */
 <<[[Frame]] other fields>>=
 Rectangle	entire;		/* of full frame */
 @
-
+\l why need entire and r? r not enough?
 
 
 %\subsection{[[frclear()]]}
@@ -11752,6 +11801,7 @@ frclear(Frame *f, bool freeall)
 <<[[Frame]] colors>>=
 Image	*cols[NCOL];	/* text and background colors */
 @
+%ocaml: pass colors to repaint_content function instead
 
 
 % properties
@@ -11806,6 +11856,7 @@ if(cols[0] == nil){
 wsetcols(w);
 @
 
+
 % wrepaint | ... -> <>
 <<function wsetcols>>=
 void
@@ -11819,6 +11870,9 @@ wsetcols(Window *w)
             w->frm.cols[TEXT] = w->frm.cols[HTEXT] = darkgrey;
 }
 @
+%ocaml: pass set of colors to drawing function instead of modifying fields
+% and just store is_selected in Terminal. Only necessary field.
+
 % invert color, but who then redraw the content?
 
 <<global darkgrey>>=
@@ -11846,18 +11900,25 @@ darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
 <<[[Frame]] tick fields>>=
 Image	*tick;	/* typing tick */
 Image	*tickback;	/* saved image under tick */
+@
+%ocaml: if use painter model where draw each time from scratch
+% on top of each other, then no need tickback
+
+<<[[Frame]] tick fields>>=
 bool	ticked;	/* flag: is tick onscreen? */
 @
+% when selection with mouse, then no tick
 
 <<[[frinit()]] initialize other fields>>=
 if(f->tick == nil && f->cols[BACK] != nil)
     frinittick(f);
 @
+%ocaml: Common.once
 
 <<constant FRTICKW>>=
 #define	FRTICKW	3
 @
-%width
+%fr tick width
 
 
 <<function frinittick>>=
@@ -11871,7 +11932,7 @@ frinittick(Frame *f)
     f->tick = allocimage(f->display, Rect(0, 0, FRTICKW, ft->height), b->chan, 0, DWhite);
     <<[[frinittick()]] sanity check tick>>
     <<[[frinittick()]] free old tickback>>
-    f->tickback = allocimage(f->display, f->tick->r, b->chan, 0, DWhite);
+    f->tickback = allocimage(f->display, f->tick->r, b->chan, false, DWhite);
     <<[[frinittick()]] sanity check tickback>>
     /* background color */
     draw(f->tick, f->tick->r, f->cols[BACK], nil, ZP);
@@ -11883,6 +11944,7 @@ frinittick(Frame *f)
 }
 @
 %old: put assign with decl for b and ft
+%ocaml: Common.once
 
 % FIGURE screenshot
 
@@ -11894,6 +11956,7 @@ if(f->tick)
 if(f->tick == nil)
     return;
 @
+%ocaml: exn at least?
 <<[[frinittick()]] free old tickback>>=
 if(f->tickback)
     freeimage(f->tickback);
@@ -11916,7 +11979,7 @@ if(freeall){
 }
 f->ticked = false;
 @
-
+%ocaml: Gc
 
 \subsection{Frame boxes}
 
@@ -12095,7 +12158,7 @@ _frallocstr(Frame *f, unsigned n)
     uchar *p;
 
     p = malloc(ROUNDUP(n));
-    if(p == 0)
+    if(p == nil)
         drawerror(f->display, "out of memory");
     return p;
 }
@@ -12414,7 +12477,7 @@ f->p1 = 0;
 winsert(w, &r, 1, w->q0);
 wshow(w, w->q0);
 @
-% note that winsert might adjust w->q0!
+% note that winsert (might) adjust w->q0!
 
 % so key functions are winsert and wshow!
 
@@ -12546,6 +12609,8 @@ if(w->nr + n > HiWater && q0 >= w->org && q0 >= w->qh){
 if(q0 <= w->org + w->frm.nchars)
     frinsert(&w->frm, r, r+n, q0 - w->org); // echo back
 @
+%ocaml: redraw from scratch model instead, far far simpler!
+
 % so if between w->org and w->org + w->frm.nchars
 
 %example: q0 is equal to org and nchars is 0 so 
@@ -13231,7 +13296,8 @@ frdelete(Frame *f, ulong p0, ulong p1)
 
 % Window.nchars is in Frame!
 
-% mv cursor, show text where can see cursor q0
+% show text where can see q0.
+% Note that it does not move the cursor. Just org is possibly changed.
 
 % saw wshow(w, w->q0);
 
@@ -13261,7 +13327,6 @@ wshow(Window *w, uint q0)
 \subsection{Drawing the scrollbar, [[wscrdraw()]]}
 
 % w scroll draw
-
 <<[[wmk()]] drawing scrollbar>>=
 wscrdraw(w);
 @
@@ -13281,7 +13346,7 @@ wscrdraw(Window *w)
     <<[[wscrdraw()]] sanity check the window image>>
     r = w->scrollr;
     b = scrtmp;
-    // r1 is translation of r to (0,0)
+    // r1 is translation of r to (0,...)
     r1 = r;
     r1.min.x = 0;
     r1.max.x = Dx(r);
@@ -13293,14 +13358,18 @@ wscrdraw(Window *w)
         r1 = rectsubpt(r1, r1.min);
         draw(b, r1, w->frm.cols[BORD], nil, ZP);
         draw(b, r2, w->frm.cols[BACK], nil, ZP);
+        // little separation line
         r2.min.x = r2.max.x-1;
         draw(b, r2, w->frm.cols[BORD], nil, ZP);
 
+        // transfer back to main image
         draw(w->i, r, b, nil, Pt(0, r1.min.y));
     }
 }
 @
-% just draw the scrollbar
+
+
+% FIGURE? where can see r, r1, r2, r3
 
 <<function scrpos>>=
 static
@@ -13311,35 +13380,46 @@ scrpos(Rectangle r, uint p0, uint p1, uint tot)
     int h;
 
     q = r;
-    h = q.max.y-q.min.y;
+    h = q.max.y - q.min.y; // Dy(r)
     if(tot == 0)
         return q;
-    if(tot > 1024*1024){
-        tot>>=10;
-        p0>>=10;
-        p1>>=10;
-    }
+    <<[[scrpos()]] adjust integers if total is big>>
     if(p0 > 0)
-        q.min.y += h*p0/tot;
+        q.min.y += h*p0 / tot;
     if(p1 < tot)
-        q.max.y -= h*(tot-p1)/tot;
-    if(q.max.y < q.min.y+2){
-        if(q.min.y+2 <= r.max.y)
-            q.max.y = q.min.y+2;
-        else
-            q.min.y = q.max.y-2;
-    }
+        q.max.y -= h*(tot-p1) / tot;
+
+    <<[[scrpos()]] last adjustments>>
     return q;
 }
 @
+\l if p0 
+% FIGURE?
 
+<<[[scrpos()]] last adjustments>>=
+if(q.max.y < q.min.y+2){
+    if(q.min.y+2 <= r.max.y)
+        q.max.y = q.min.y+2;
+    else
+        q.min.y = q.max.y-2;
+}
+@
+% enlarge a bit if really small rectangle, at least 2 pixels
 
+<<[[scrpos()]] adjust integers if total is big>>=
+if(tot > 1024*1024){
+    tot>>=10;
+    p0>>=10;
+    p1>>=10;
+}
+@
+\l needed? for overflow?
 
 <<[[Window]] other fields>>=
 Rectangle	lastsr;
 @
 % opti, last scroll rectangle
-<<[[wmk()]] textual window settings, extra frame settings>>
+<<[[wmk()]] textual window settings, extra frame settings>>=
 w->lastsr = ZR;
 @
 % not really frame settings? 
@@ -13364,6 +13444,7 @@ static Image *scrtmp;
 <<constant BIG>>=
 BIG			= 3,	/* factor by which window dimension can exceed screen */
 @
+% but weird if window bigger than view. Anyway, it's just a safe value
 
 <<function scrtemps>>=
 static
@@ -13376,11 +13457,17 @@ scrtemps(void)
         return;
     h = BIG * Dy(view->r);
     scrtmp = allocimage(display, Rect(0, 0, 32, h), view->chan, false, DWhite);
-    if(scrtmp == nil)
-        error("scrtemps");
+    <<[[scrtemps()]] sanity check scrtmp>>
 }
 @
+%ocaml: use Common.once, so can inline the code in the caller
+
 % 32 for width of scrollbar? no was 12, so why 32?
+
+<<[[scrtemps()]] sanity check scrtmp>>=
+if(scrtmp == nil)
+    error("scrtemps");
+@
 
 \subsection{Drawing the tick, [[frtick()]]}
 
@@ -13405,7 +13492,7 @@ frtick(Frame *f, Point pt, bool ticked)
     if(f->ticked==ticked || f->tick==nil || !ptinrect(pt, f->r))
         return;
     pt.x--;	/* looks best just left of where requested */
-    r = Rect(pt.x, pt.y, pt.x+FRTICKW, pt.y+f->font->height);
+    r = Rect(pt.x, pt.y, pt.x + FRTICKW, pt.y + f->font->height);
     /* can go into left border but not right */
     if(r.max.x > f->r.max.x)
         r.max.x = f->r.max.x;
@@ -13420,7 +13507,7 @@ frtick(Frame *f, Point pt, bool ticked)
 % modified f->ticked! this is why need to save old value of ticked
 % before calling frtick sometimes
 
-\subsection{Drawing the selection, [[frdrawsel()]]}
+\subsection{Drawing the text and the selection, [[frdrawsel()]]}
 
 % called also to draw what is not selected
 
@@ -13535,6 +13622,8 @@ nbytes(char *s0, int nr)
 
 \subsection{Moving the frame origin}
 
+% complicated again ...
+
 <<[[wshow()]] else, when q0 is out of scope>>=
 else{
     nl = 4 * w->frm.maxlines / 5;
@@ -13542,6 +13631,7 @@ else{
     /* avoid going backwards if trying to go forwards - long lines! */
     if(!(q0 > w->org && q < w->org))
         wsetorigin(w, q, true);
+
     while(q0 > w->org + w->frm.nchars)
         wsetorigin(w, w->org+1, false);
 }
@@ -13556,6 +13646,7 @@ wbacknl(Window *w, uint p, uint n)
     /* look for start of this line if n==0 */
     if(n==0 && p>0 && w->r[p-1]!='\n')
         n = 1;
+
     i = n;
     while(i-->0 && p>0){
         --p;	/* it's at a newline now; back over it */
@@ -13614,6 +13705,7 @@ wsetorigin(Window *w, uint org, bool exact)
 }
 @
 
+
 <<[[Frame]] text fields>>=
 ushort	lastlinefull;	/* last line fills frame */
 @
@@ -13663,6 +13755,61 @@ wfill(Window *w)
 
 
 \subsection{Selecting}
+
+<<function wsetselect>>=
+void
+wsetselect(Window *w, uint q0, uint q1)
+{
+    int p0, p1;
+    Frame *frm = &w->frm;
+
+    /* w->p0 and w->p1 are always right; w->q0 and w->q1 may be off */
+    w->q0 = q0;
+    w->q1 = q1;
+    /* compute desired p0,p1 from q0,q1 */
+    p0 = q0-w->org;
+    p1 = q1-w->org;
+    if(p0 < 0)
+        p0 = 0;
+    if(p1 < 0)
+        p1 = 0;
+    if(p0 > frm->nchars)
+        p0 = frm->nchars;
+    if(p1 > frm->nchars)
+        p1 = frm->nchars;
+    if(p0 == frm->p0 && p1 == frm->p1)
+        return;
+
+    /* screen disagrees with desired selection */
+    if(frm->p1 <= p0 || p1 <= frm->p0 || p0==p1 || frm->p1 == frm->p0){
+        /* no overlap or too easy to bother trying */
+        frdrawsel(frm, frptofchar(frm, frm->p0), frm->p0, frm->p1, 0);
+        frdrawsel(frm, frptofchar(frm, p0), p0, p1, 1);
+        goto Return;
+    }
+    /* overlap; avoid unnecessary painting */
+    if(p0 < frm->p0){
+        /* extend selection backwards */
+        frdrawsel(frm, frptofchar(frm, p0), p0, frm->p0, 1);
+    }else if(p0 > frm->p0){
+        /* trim first part of selection */
+        frdrawsel(frm, frptofchar(frm, frm->p0), frm->p0, p0, 0);
+    }
+    if(p1 > frm->p1){
+        /* extend selection forwards */
+        frdrawsel(frm, frptofchar(frm, frm->p1), frm->p1, p1, 1);
+    }else if(p1 < frm->p1){
+        /* trim last part of selection */
+        frdrawsel(frm, frptofchar(frm, p1), p1, frm->p1, 0);
+    }
+
+    Return:
+    frm->p0 = p0;
+    frm->p1 = p1;
+}
+@
+
+
 
 <<function frselect>>=
 void
@@ -13803,7 +13950,8 @@ region(int a, int b)
 if(!w->mouseopen)
     frredraw(&w->frm);
 @
-% optimization, just 
+% need to redraw text with different colors when a window is
+% selected or not.
 
 <<function frredraw>>=
 void
@@ -13816,12 +13964,13 @@ frredraw(Frame *f)
         ticked = f->ticked;
         if(ticked)
             frtick(f, frptofchar(f, f->p0), false);
+        // redraw the text
         frdrawsel0(f, frptofchar(f, 0), 0, f->nchars, f->cols[BACK], f->cols[TEXT]);
         if(ticked)
             frtick(f, frptofchar(f, f->p0), true);
         return;
     }
-    // else, selection
+    // else, redraw the selection and the text
 
     pt = frptofchar(f, 0);
     pt = frdrawsel0(f, pt, 0,     f->p0,     f->cols[BACK], f->cols[TEXT]);
@@ -13829,6 +13978,11 @@ frredraw(Frame *f)
     pt = frdrawsel0(f, pt, f->p1, f->nchars, f->cols[BACK], f->cols[TEXT]);
 }
 @
+%ocaml: tick/tickback because does not use a redraw from scratch simple model
+
+% scrollbar is not redrawn here. wscrdraw is called only when
+% things change. No need to redraw when select/unselect a window
+% because the scrollbar will not change.
 
 
 \section{Keyboard events}
@@ -13840,8 +13994,6 @@ frredraw(Frame *f)
 % see core DS chapter
 % (not necessarily keyboard event actually, can have put text after
 % output point because of copy paste)
-
-% output point!
 
 
 \subsection{[[/mnt/wsys/cons]] reading part3}
@@ -13874,7 +14026,8 @@ wshow(w, q0+1);
 @
 % insert, and move cursor after (and redisplay)
 
-% winsert will modify w->q0 no? so why use intermediate q0?
+% winsert will modify w->q0. 
+\l So why use intermediate q0?
 
 
 
@@ -13895,9 +14048,24 @@ for(i = w->qh; i < w->nr; i++){
      }
  }
 @
+%c: for loop and break are sometimes nice? or miss opportunity in ocaml
+% for nicer higher-order function?
+
 % get ready to send to WCread only if newline typed! otherwise buffered
 % until newline
 
+
+%    while(i<nb && (w->nraw > 0 || w->qh < w->nr)){
+%        // raw mode
+%        if(w->qh == w->nr){
+%        // buffered mode
+%         ...
+%        }else
+%            wid = runetochar(t+i, &w->r[w->qh++]);
+%        i += wid;
+%        <<[[winctl()]] when WCRead, break if newline and handle EOF character>>
+%        }
+\l should duplicate code with 2 different loops so easier to aspectize
 
 <<[[winctl()]] when WCRead, break if newline and handle EOF character>>=
 c = t[i-wid];	/* knows break characters fit in a byte */
@@ -13930,6 +14098,7 @@ default:
     ; // no return! fallthrough
 }
 @
+% this will work for buffered and raw mode.
 
 <<[[wkeyctl()]] locals>>=
 uint q1;
@@ -13944,6 +14113,7 @@ case Khome:
     wshow(w, 0);
     return;
 @
+% which key on my laptop?
 
 <<[[wkeyctl()]] when mouse not opened, switch key cases>>=
 case Kend:
@@ -14061,22 +14231,22 @@ case 0x01:	/* ^A: beginning of line */
     return;
 @
 
+% why this name? wbswidth? what's the parameter? it's not really used.
 <<function wbswidth>>=
 int
 wbswidth(Window *w, Rune c)
 {
-    uint q, eq, stop;
+    uint q, stop;
     Rune r;
-    int skipping;
+    <<[[wbswidth()]] other locals>>
 
-    /* there is known to be at least one character to erase */
-    if(c == 0x08)	/* ^H: erase character */
-        return 1;
+    <<[[wbswidth()]] return if erase character>>
+
     q = w->q0;
     stop = 0;
     if(q > w->qh)
         stop = w->qh;
-    skipping = true;
+
     while(q > stop){
         r = w->r[q-1];
         if(r == '\n'){		/* eat at most one more character */
@@ -14084,19 +14254,12 @@ wbswidth(Window *w, Rune c)
                 --q;
             break; 
         }
-        if(c == 0x17){
-            eq = isalnum(r);
-            if(eq && skipping)	/* found one; stop skipping */
-                skipping = false;
-            else if(!eq && !skipping)
-                break;
-        }
+        <<[[wbswidth()]] if [[c == 0x17]]>>
         --q;
     }
     return w->q0-q;
 }
 @
-
 
 
 
@@ -14113,16 +14276,49 @@ case 0x17:	/* ^W: erase word */
     nb = wbswidth(w, r);
     q1 = w->q0;
     q0 = q1-nb;
-    if(q0 < w->org){
-        q0 = w->org;
-        nb = q1-q0;
-    }
+    <<[[wkeyctl()]] when erase keys, adjust q0 and nb if before org>>
     if(nb > 0){
         wdelete(w, q0, q0+nb);
         wsetselect(w, q0, q0);
     }
     return;
 @
+% for backspace nb is 1
+\l use of q1 here confusing with w->q1
+
+
+<<[[wbswidth()]] return if erase character>>=
+/* there is known to be at least one character to erase */
+if(c == 0x08)	/* ^H: erase character */
+    return 1;
+@
+% just one character to Delete
+
+
+% called when want to erase word
+<<[[wbswidth()]] other locals>>=
+bool skipping = true;
+uint eq;
+@
+<<[[wbswidth()]] if [[c == 0x17]]>>=
+if(c == 0x17){
+    eq = isalnum(r);
+    if(eq && skipping)	/* found one; stop skipping */
+        skipping = false;
+    else if(!eq && !skipping)
+        break;
+}
+@
+
+
+
+<<[[wkeyctl()]] when erase keys, adjust q0 and nb if before org>>=
+if(q0 < w->org){
+    q0 = w->org;
+    nb = q1-q0;
+}
+@
+
 
 
 <<function wdelete>>=
@@ -14133,37 +14329,59 @@ wdelete(Window *w, uint q0, uint q1)
     Frame *frm = &w->frm;
 
     n = q1-q0;
-    if(n == 0)
-        return;
+    <<[[wdelete()]] sanity check n>>
     runemove(w->r+q0, w->r+q1, w->nr-q1);
     w->nr -= n;
-    if(q0 < w->q0)
-        w->q0 -= min(n, w->q0-q0);
-    if(q0 < w->q1)
-        w->q1 -= min(n, w->q1-q0);
-    if(q1 < w->qh)
-        w->qh -= n;
-    else if(q0 < w->qh)
-        w->qh = q0;
-    if(q1 <= w->org)
-        w->org -= n;
-    else if(q0 < w->org + frm->nchars){
-        p1 = q1 - w->org;
-        if(p1 > frm->nchars)
-            p1 = frm->nchars;
-        if(q0 < w->org){
-            w->org = q0;
-            p0 = 0;
-        }else
-            p0 = q0 - w->org;
-        frdelete(frm, p0, p1);
-        wfill(w);
-    }
+
+    <<[[wdelete()]] adjust cursors>>
 }
 @
+% similar to winsert (and call to frinsert)
+
+% FIGURE of blit
+
+<<[[wdelete()]] sanity check n>>=
+if(n == 0)
+    return;
+@
+
+<<[[wdelete()]] adjust cursors>>=
+if(q0 < w->q0)
+    w->q0 -= min(n, w->q0-q0);
+if(q0 < w->q1)
+    w->q1 -= min(n, w->q1-q0);
+
+if(q1 < w->qh)
+    w->qh -= n;
+else if(q0 < w->qh)
+    w->qh = q0;
+
+if(q1 <= w->org)
+    w->org -= n;
+else
+   <<[[wdelete()]] when [[q1 > w->org]], possibly update visible text>>
+@
+% FIGURE again
+
+\l what if delete part of selection?
 
 
+<<[[wdelete()]] when [[q1 > w->org]], possibly update visible text>>=
+if(q0 < w->org + frm->nchars){
+    p1 = q1 - w->org;
+    if(p1 > frm->nchars)
+        p1 = frm->nchars;
+    if(q0 < w->org){
+        w->org = q0;
+        p0 = 0;
+    }else
+        p0 = q0 - w->org;
 
+    frdelete(frm, p0, p1);
+    wfill(w);
+}
+@
+%ocaml: simply call repaint
 
 
 \subsubsection{Interrupt}
@@ -14249,7 +14467,6 @@ free(s);
 
 \section{Application output events}
 
-
 \subsection{[[/mnt/wsys/cons]] writing part2}
 
 % when process writes on /dev/cons, then need update text.
@@ -14316,10 +14533,11 @@ case WCwrite:
     <<[[winctl()]] when WCwrite, if scrolling or mouseopen>>
     wsetselect(w, w->q0, w->q1);
     wscrdraw(w);
+
     free(rp);
     break;
 @
-
+%ocaml: repaint
 
 
 <<[[winctl()]] when WCwrite, if scrolling or mouseopen>>=
@@ -14367,7 +14585,7 @@ for(i=0; i<nr; i++) {
     }
 }
 @
-
+% output can emit backspace? ugly.
 
 
 \section{Mouse events}
@@ -14489,290 +14707,11 @@ if(w->deleted)
     goto Return;
 @
 
-\section{Word selection}
-% adv topics?
+%\section{Word selection}
+% adv topics
 
-<<global clickwin>>=
-static Window	*clickwin;
-@
-
-<<global clickmsec>>=
-static uint	clickmsec;
-@
-
-<<global selectwin>>=
-static Window	*selectwin;
-@
-
-<<global selectq>>=
-static uint	selectq;
-@
-
-
-
-<<function wselect>>=
-void
-wselect(Window *w)
-{
-    uint q0, q1;
-    int b, x, y, first;
-    Frame *frm = &w->frm;
-
-    first = 1;
-    selectwin = w;
-    /*
-     * Double-click immediately if it might make sense.
-     */
-    b = w->mc.buttons;
-    q0 = w->q0;
-    q1 = w->q1;
-    selectq = w->org + frcharofpt(frm, w->mc.xy);
-    if(clickwin==w && w->mc.msec-clickmsec<500)
-    if(q0==q1 && selectq==w->q0){
-        wdoubleclick(w, &q0, &q1);
-        wsetselect(w, q0, q1);
-        flushimage(display, 1);
-        x = w->mc.xy.x;
-        y = w->mc.xy.y;
-        /* stay here until something interesting happens */
-        do
-            readmouse(&w->mc);
-        while(w->mc.buttons==b && abs(w->mc.xy.x-x)<3 && abs(w->mc.xy.y-y)<3);
-        w->mc.xy.x = x;	/* in case we're calling frselect */
-        w->mc.xy.y = y;
-        q0 = w->q0;	/* may have changed */
-        q1 = w->q1;
-        selectq = q0;
-    }
-    if(w->mc.buttons == b){
-        frm->scroll = framescroll;
-        frselect(frm, &w->mc);
-        /* horrible botch: while asleep, may have lost selection altogether */
-        if(selectq > w->nr)
-            selectq = w->org + frm->p0;
-        frm->scroll = nil;
-        if(selectq < w->org)
-            q0 = selectq;
-        else
-            q0 = w->org + frm->p0;
-        if(selectq > w->org + frm->nchars)
-            q1 = selectq;
-        else
-            q1 = w->org + frm->p1;
-    }
-    if(q0 == q1){
-        if(q0==w->q0 && clickwin==w && w->mc.msec-clickmsec<500){
-            wdoubleclick(w, &q0, &q1);
-            clickwin = nil;
-        }else{
-            clickwin = w;
-            clickmsec = w->mc.msec;
-        }
-    }else
-        clickwin = nil;
-    wsetselect(w, q0, q1);
-    flushimage(display, 1);
-    while(w->mc.buttons){
-        w->mc.msec = 0;
-        b = w->mc.buttons;
-        if(b & 6){
-            if(b & 2){
-                wsnarf(w);
-                wcut(w);
-            }else{
-                if(first){
-                    first = 0;
-                    getsnarf();
-                }
-                wpaste(w);
-            }
-        }
-        wscrdraw(w);
-        flushimage(display, 1);
-        while(w->mc.buttons == b)
-            readmouse(&w->mc);
-        clickwin = nil;
-    }
-}
-@
-
-
-
-
-<<global left1>>=
-static Rune left1[] =  { L'{', L'[', L'(', L'<', L'«', 0 };
-@
-
-<<global right1>>=
-static Rune right1[] = { L'}', L']', L')', L'>', L'»', 0 };
-@
-
-<<global left2>>=
-static Rune left2[] =  { L'\n', 0 };
-@
-
-<<global left3>>=
-static Rune left3[] =  { L'\'', L'"', L'`', 0 };
-@
-
-<<global left>>=
-Rune *left[] = {
-    left1,
-    left2,
-    left3,
-    nil
-};
-@
-
-<<global right>>=
-Rune *right[] = {
-    right1,
-    left2,
-    left3,
-    nil
-};
-@
-
-
-
-<<function wdoubleclick>>=
-void
-wdoubleclick(Window *w, uint *q0, uint *q1)
-{
-    int c, i;
-    Rune *r, *l, *p;
-    uint q;
-
-    for(i=0; left[i]!=nil; i++){
-        q = *q0;
-        l = left[i];
-        r = right[i];
-        /* try matching character to left, looking right */
-        if(q == 0)
-            c = '\n';
-        else
-            c = w->r[q-1];
-        p = strrune(l, c);
-        if(p != nil){
-            if(wclickmatch(w, c, r[p-l], 1, &q))
-                *q1 = q-(c!='\n');
-            return;
-        }
-        /* try matching character to right, looking left */
-        if(q == w->nr)
-            c = '\n';
-        else
-            c = w->r[q];
-        p = strrune(r, c);
-        if(p != nil){
-            if(wclickmatch(w, c, l[p-r], -1, &q)){
-                *q1 = *q0+(*q0<w->nr && c=='\n');
-                *q0 = q;
-                if(c!='\n' || q!=0 || w->r[0]=='\n')
-                    (*q0)++;
-            }
-            return;
-        }
-    }
-    /* try filling out word to right */
-    while(*q1<w->nr && isalnum(w->r[*q1]))
-        (*q1)++;
-    /* try filling out word to left */
-    while(*q0>0 && isalnum(w->r[*q0-1]))
-        (*q0)--;
-}
-@
-
-
-<<function wclickmatch>>=
-int
-wclickmatch(Window *w, int cl, int cr, int dir, uint *q)
-{
-    Rune c;
-    int nest;
-
-    nest = 1;
-    for(;;){
-        if(dir > 0){
-            if(*q == w->nr)
-                break;
-            c = w->r[*q];
-            (*q)++;
-        }else{
-            if(*q == 0)
-                break;
-            (*q)--;
-            c = w->r[*q];
-        }
-        if(c == cr){
-            if(--nest==0)
-                return 1;
-        }else if(c == cl)
-            nest++;
-    }
-    return cl=='\n' && nest==1;
-}
-@
-
-
-<<function wsetselect>>=
-void
-wsetselect(Window *w, uint q0, uint q1)
-{
-    int p0, p1;
-    Frame *frm = &w->frm;
-
-    /* w->p0 and w->p1 are always right; w->q0 and w->q1 may be off */
-    w->q0 = q0;
-    w->q1 = q1;
-    /* compute desired p0,p1 from q0,q1 */
-    p0 = q0-w->org;
-    p1 = q1-w->org;
-    if(p0 < 0)
-        p0 = 0;
-    if(p1 < 0)
-        p1 = 0;
-    if(p0 > frm->nchars)
-        p0 = frm->nchars;
-    if(p1 > frm->nchars)
-        p1 = frm->nchars;
-    if(p0 == frm->p0 && p1 == frm->p1)
-        return;
-
-    /* screen disagrees with desired selection */
-    if(frm->p1 <= p0 || p1 <= frm->p0 || p0==p1 || frm->p1 == frm->p0){
-        /* no overlap or too easy to bother trying */
-        frdrawsel(frm, frptofchar(frm, frm->p0), frm->p0, frm->p1, 0);
-        frdrawsel(frm, frptofchar(frm, p0), p0, p1, 1);
-        goto Return;
-    }
-    /* overlap; avoid unnecessary painting */
-    if(p0 < frm->p0){
-        /* extend selection backwards */
-        frdrawsel(frm, frptofchar(frm, p0), p0, frm->p0, 1);
-    }else if(p0 > frm->p0){
-        /* trim first part of selection */
-        frdrawsel(frm, frptofchar(frm, frm->p0), frm->p0, p0, 0);
-    }
-    if(p1 > frm->p1){
-        /* extend selection forwards */
-        frdrawsel(frm, frptofchar(frm, frm->p1), frm->p1, p1, 1);
-    }else if(p1 < frm->p1){
-        /* trim last part of selection */
-        frdrawsel(frm, frptofchar(frm, p1), p1, frm->p1, 0);
-    }
-
-    Return:
-    frm->p0 = p0;
-    frm->p1 = p1;
-}
-@
-
-
-
-\section{Cut, Copy, Paste}
-% adv topics?
-% put snarf stuff here
+%\section{Cut, Copy, Paste}
+% adv topics
 
 
 
@@ -15094,6 +15033,8 @@ wcontents(Window *w, int *ip)
 @
 % runetobyte libc
 
+% What happens if you do cat /dev/text from a window?
+% Infinite?
 
 \chapter{Windowing System Files}
 \label{chap:window-files}
@@ -16377,7 +16318,10 @@ if(w->deleted)
     continue;
 @
 
-\section{Snarf}
+
+\section{Advanced terminal editing}
+
+\subsection{Snarf}
 \label{sec:snarf}
 %\subsection{[[/dev/snarf]]}
 
@@ -16388,7 +16332,7 @@ if(r != 0x7F){ // 0x7F = Interrupt key
 }
 @
 
-\subsection{Snarf menu}
+\subsubsection{Snarf menu}
 
 <<[[button2menu()]] cases>>=
 case Cut:
@@ -16481,7 +16425,7 @@ wpaste(Window *w)
 
 
 
-\subsection{[[/mnt/wsys/snarf]]}
+\subsubsection{[[/mnt/wsys/snarf]]}
 
 <<[[qid]] cases>>=
 Qsnarf,
@@ -16652,8 +16596,9 @@ getsnarf(void)
 
 
 
-\section{Plumb}
+\subsection{Plumb}
 \label{sec:plumb}
+
 
 <<[[button2menu()]] cases>>=
 case Plumb:
@@ -16743,7 +16688,615 @@ struct Plumbattr
 @
 
 
-\section{Auto complete}
+<<function plumbsendtext>>=
+int
+plumbsendtext(int fd, char *src, char *dst, char *wdir, char *data)
+{
+    Plumbmsg m;
+
+    m.src = src;
+    m.dst = dst;
+    m.wdir = wdir;
+    m.type = "text";
+    m.attr = nil;
+    m.ndata = strlen(data);
+    m.data = data;
+    return plumbsend(fd, &m);
+}
+@
+
+
+
+\subsubsection{Plumb messages}
+
+<<function plumbopen>>=
+int
+plumbopen(char *name, int omode)
+{
+    int fd, f;
+    char *s, *plumber;
+    char buf[128], err[ERRMAX];
+
+    if(name[0] == '/')
+        return open(name, omode);
+        
+    /* find elusive plumber */
+    if(access("/mnt/plumb/send", AWRITE) >= 0)
+        plumber = "/mnt/plumb";
+    else if(access("/mnt/term/mnt/plumb/send", AWRITE) >= 0)
+        plumber = "/mnt/term/mnt/plumb";
+    else{
+        /* last resort: try mounting service */
+        plumber = "/mnt/plumb";
+        s = getenv("plumbsrv");
+        if(s == nil)
+            return -1;
+        f = open(s, ORDWR);
+        free(s);
+        if(f < 0)
+            return -1;
+        if(mount(f, -1, "/mnt/plumb", MREPL, "") < 0){
+            close(f);
+            return -1;
+        }
+        if(access("/mnt/plumb/send", AWRITE) < 0)
+            return -1;
+    }
+
+    snprint(buf, sizeof buf, "%s/%s", plumber, name);
+    fd = open(buf, omode);
+    if(fd >= 0)
+        return fd;
+
+    /* try creating port; used by non-standard plumb implementations */
+    rerrstr(err, sizeof err);
+    fd = create(buf, omode, 0600);
+    if(fd >= 0)
+        return fd;
+    errstr(err, sizeof err);
+
+    return -1;
+}
+@
+
+<<function Strlen>>=
+static int
+Strlen(char *s)
+{
+    if(s == nil)
+        return 0;
+    return strlen(s);
+}
+@
+
+<<function Strcpy>>=
+static char*
+Strcpy(char *s, char *t)
+{
+    if(t == nil)
+        return s;
+    return strcpy(s, t) + strlen(t);
+}
+@
+
+<<function quote>>=
+/* quote attribute value, if necessary */
+static char*
+quote(char *s, char *buf, char *bufe)
+{
+    char *t;
+    int c;
+
+    if(s == nil){
+        buf[0] = '\0';
+        return buf;
+    }
+    if(strpbrk(s, " '=\t") == nil)
+        return s;
+    t = buf;
+    *t++ = '\'';
+    while(t < bufe-2){
+        c = *s++;
+        if(c == '\0')
+            break;
+        *t++ = c;
+        if(c == '\'')
+            *t++ = c;
+    }
+    *t++ = '\'';
+    *t = '\0';
+    return buf;
+}
+@
+
+<<function plumbpackattr>>=
+char*
+plumbpackattr(Plumbattr *attr)
+{
+    int n;
+    Plumbattr *a;
+    char *s, *t, *buf, *bufe;
+
+    if(attr == nil)
+        return nil;
+    if((buf = malloc(4096)) == nil)
+        return nil;
+    bufe = buf + 4096;
+    n = 0;
+    for(a=attr; a!=nil; a=a->next)
+        n += Strlen(a->name) + 1 + Strlen(quote(a->value, buf, bufe)) + 1;
+    s = malloc(n);
+    if(s == nil) {
+        free(buf);
+        return nil;
+    }
+    t = s;
+    *t = '\0';
+    for(a=attr; a!=nil; a=a->next){
+        if(t != s)
+            *t++ = ' ';
+        strcpy(t, a->name);
+        strcat(t, "=");
+        strcat(t, quote(a->value, buf, bufe));
+        t += strlen(t);
+    }
+    if(t > s+n)
+        abort();
+    free(buf);
+    return s;
+}
+@
+
+<<function plumblookup>>=
+char*
+plumblookup(Plumbattr *attr, char *name)
+{
+    while(attr){
+        if(strcmp(attr->name, name) == 0)
+            return attr->value;
+        attr = attr->next;
+    }
+    return nil;
+}
+@
+
+<<function plumbpack>>=
+char*
+plumbpack(Plumbmsg *m, int *np)
+{
+    int n, ndata;
+    char *buf, *p, *attr;
+
+    ndata = m->ndata;
+    if(ndata < 0)
+        ndata = Strlen(m->data);
+    attr = plumbpackattr(m->attr);
+    n = Strlen(m->src)+1 + Strlen(m->dst)+1 + Strlen(m->wdir)+1 +
+        Strlen(m->type)+1 + Strlen(attr)+1 + 16 + ndata;
+    buf = malloc(n+1);	/* +1 for '\0' */
+    if(buf == nil){
+        free(attr);
+        return nil;
+    }
+    p = Strcpy(buf, m->src);
+    *p++ = '\n';
+    p = Strcpy(p, m->dst);
+    *p++ = '\n';
+    p = Strcpy(p, m->wdir);
+    *p++ = '\n';
+    p = Strcpy(p, m->type);
+    *p++ = '\n';
+    p = Strcpy(p, attr);
+    *p++ = '\n';
+    p += sprint(p, "%d\n", ndata);
+    memmove(p, m->data, ndata);
+    *np = (p-buf)+ndata;
+    buf[*np] = '\0';	/* null terminate just in case */
+    if(*np >= n+1)
+        abort();
+    free(attr);
+    return buf;
+}
+@
+
+<<function plumbsend>>=
+int
+plumbsend(int fd, Plumbmsg *m)
+{
+    char *buf;
+    int n;
+
+    buf = plumbpack(m, &n);
+    if(buf == nil)
+        return -1;
+    n = write(fd, buf, n);
+    free(buf);
+    return n;
+}
+@
+
+<<function plumbline>>=
+static int
+plumbline(char **linep, char *buf, int i, int n, int *bad)
+{
+    int starti;
+    char *p;
+
+    starti = i;
+    while(i<n && buf[i]!='\n')
+        i++;
+    if(i == n)
+        *bad = 1;
+    else{
+        p = malloc((i-starti) + 1);
+        if(p == nil)
+            *bad = 1;
+        else{
+            memmove(p, buf+starti, i-starti);
+            p[i-starti] = '\0';
+        }
+        *linep = p;
+        i++;
+    }
+    return i;
+}
+@
+
+<<function plumbfree>>=
+void
+plumbfree(Plumbmsg *m)
+{
+    Plumbattr *a, *next;
+
+    free(m->src);
+    free(m->dst);
+    free(m->wdir);
+    free(m->type);
+    for(a=m->attr; a!=nil; a=next){
+        next = a->next;
+        free(a->name);
+        free(a->value);
+        free(a);
+    }
+    free(m->data);
+    free(m);
+}
+@
+
+<<function plumbunpackattr>>=
+Plumbattr*
+plumbunpackattr(char *p)
+{
+    Plumbattr *attr, *prev, *a;
+    char *q, *v, *buf, *bufe;
+    int c, quoting;
+
+    buf = malloc(4096);
+    if(buf == nil)
+        return nil;
+    bufe = buf + 4096;
+    attr = prev = nil;
+    while(*p!='\0' && *p!='\n'){
+        while(*p==' ' || *p=='\t')
+            p++;
+        if(*p == '\0')
+            break;
+        for(q=p; *q!='\0' && *q!='\n' && *q!=' ' && *q!='\t'; q++)
+            if(*q == '=')
+                break;
+        if(*q != '=')
+            break;	/* malformed attribute */
+        a = malloc(sizeof(Plumbattr));
+        if(a == nil)
+            break;
+        a->name = malloc(q-p+1);
+        if(a->name == nil){
+            free(a);
+            break;
+        }
+        memmove(a->name, p, q-p);
+        a->name[q-p] = '\0';
+        /* process quotes in value */
+        q++;	/* skip '=' */
+        v = buf;
+        quoting = 0;
+        while(*q!='\0' && *q!='\n'){
+            if(v >= bufe)
+                break;
+            c = *q++;
+            if(quoting){
+                if(c == '\''){
+                    if(*q == '\'')
+                        q++;
+                    else{
+                        quoting = 0;
+                        continue;
+                    }
+                }
+            }else{
+                if(c==' ' || c=='\t')
+                    break;
+                if(c == '\''){
+                    quoting = 1;
+                    continue;
+                }
+            }
+            *v++ = c;
+        }
+        a->value = malloc(v-buf+1);
+        if(a->value == nil){
+            free(a->name);
+            free(a);
+            break;
+        }
+        memmove(a->value, buf, v-buf);
+        a->value[v-buf] = '\0';
+        a->next = nil;
+        if(prev == nil)
+            attr = a;
+        else
+            prev->next = a;
+        prev = a;
+        p = q;
+    }
+    free(buf);
+    return attr;
+}
+@
+
+<<function plumbaddattr>>=
+Plumbattr*
+plumbaddattr(Plumbattr *attr, Plumbattr *new)
+{
+    Plumbattr *l;
+
+    l = attr;
+    if(l == nil)
+        return new;
+    while(l->next != nil)
+        l = l->next;
+    l->next = new;
+    return attr;
+}
+@
+
+<<function plumbdelattr>>=
+Plumbattr*
+plumbdelattr(Plumbattr *attr, char *name)
+{
+    Plumbattr *l, *prev;
+
+    prev = nil;
+    for(l=attr; l!=nil; l=l->next){
+        if(strcmp(name, l->name) == 0)
+            break;
+        prev = l;
+    }
+    if(l == nil)
+        return nil;
+    if(prev)
+        prev->next = l->next;
+    else
+        attr = l->next;
+    free(l->name);
+    free(l->value);
+    free(l);
+    return attr;
+}
+@
+
+<<function plumbunpackpartial>>=
+Plumbmsg*
+plumbunpackpartial(char *buf, int n, int *morep)
+{
+    Plumbmsg *m;
+    int i, bad;
+    char *ntext, *attr;
+
+    m = malloc(sizeof(Plumbmsg));
+    if(m == nil)
+        return nil;
+    memset(m, 0, sizeof(Plumbmsg));
+    if(morep != nil)
+        *morep = 0;
+    bad = 0;
+    i = plumbline(&m->src, buf, 0, n, &bad);
+    i = plumbline(&m->dst, buf, i, n, &bad);
+    i = plumbline(&m->wdir, buf, i, n, &bad);
+    i = plumbline(&m->type, buf, i, n, &bad);
+    i = plumbline(&attr, buf, i, n, &bad);
+    i = plumbline(&ntext, buf, i, n, &bad);
+    if(bad){
+        plumbfree(m);
+        return nil;
+    }
+    m->attr = plumbunpackattr(attr);
+    free(attr);
+    m->ndata = atoi(ntext);
+    if(m->ndata != n-i){
+        bad = 1;
+        if(morep!=nil && m->ndata>n-i)
+            *morep = m->ndata - (n-i);
+    }
+    free(ntext);
+    if(!bad){
+        m->data = malloc(n-i+1);	/* +1 for '\0' */
+        if(m->data == nil)
+            bad = 1;
+        else{
+            memmove(m->data, buf+i, m->ndata);
+            m->ndata = n-i;
+            /* null-terminate in case it's text */
+            m->data[m->ndata] = '\0';
+        }
+    }
+    if(bad){
+        plumbfree(m);
+        m = nil;
+    }
+    return m;
+}
+@
+
+<<function plumbunpack>>=
+Plumbmsg*
+plumbunpack(char *buf, int n)
+{
+    return plumbunpackpartial(buf, n, nil);
+}
+@
+
+<<function plumbrecv>>=
+Plumbmsg*
+plumbrecv(int fd)
+{
+    char *buf;
+    Plumbmsg *m;
+    int n, more;
+
+    buf = malloc(8192);
+    if(buf == nil)
+        return nil;
+    n = read(fd, buf, 8192);
+    m = nil;
+    if(n > 0){
+        m = plumbunpackpartial(buf, n, &more);
+        if(m==nil && more>0){
+            /* we now know how many more bytes to read for complete message */
+            buf = realloc(buf, n+more);
+            if(buf == nil)
+                return nil;
+            if(readn(fd, buf+n, more) == more)
+                m = plumbunpackpartial(buf, n+more, nil);
+        }
+    }
+    free(buf);
+    return m;
+}
+@
+
+
+\subsubsection{Event-based plumbing}
+
+
+<<struct EQueue>>=
+struct EQueue
+{
+    int		id;
+    char		*buf;
+    int		nbuf;
+    EQueue	*next;
+};
+@
+
+<<global equeue>>=
+static	EQueue	*equeue;
+@
+
+<<global eqlock>>=
+static	Lock		eqlock;
+@
+
+<<function partial>>=
+static
+int
+partial(int id, Event *e, uchar *b, int n)
+{
+    EQueue *eq, *p;
+    int nmore;
+
+    lock(&eqlock);
+    for(eq = equeue; eq != nil; eq = eq->next)
+        if(eq->id == id)
+            break;
+    unlock(&eqlock);
+    if(eq == nil)
+        return 0;
+    /* partial message exists for this id */
+    eq->buf = realloc(eq->buf, eq->nbuf+n);
+    if(eq->buf == nil)
+        drawerror(display, "eplumb: cannot allocate buffer");
+    memmove(eq->buf+eq->nbuf, b, n);
+    eq->nbuf += n;
+    e->v = plumbunpackpartial((char*)eq->buf, eq->nbuf, &nmore);
+    if(nmore == 0){	/* no more to read in this message */
+        lock(&eqlock);
+        if(eq == equeue)
+            equeue = eq->next;
+        else{
+            for(p = equeue; p!=nil && p->next!=eq; p = p->next)
+                ;
+            if(p == nil)
+                drawerror(display, "eplumb: bad event queue");
+            p->next = eq->next;
+        }
+        unlock(&eqlock);
+        free(eq->buf);
+        free(eq);
+    }
+    return 1;
+}
+@
+
+<<function addpartial>>=
+static
+void
+addpartial(int id, char *b, int n)
+{
+    EQueue *eq;
+
+    eq = malloc(sizeof(EQueue));
+    if(eq == nil)
+        return;
+    eq->id = id;
+    eq->nbuf = n;
+    eq->buf = malloc(n);
+    if(eq->buf == nil){
+        free(eq);
+        return;
+    }
+    memmove(eq->buf, b, n);
+    lock(&eqlock);
+    eq->next = equeue;
+    equeue = eq;
+    unlock(&eqlock);
+}
+@
+
+<<function plumbevent>>=
+static
+int
+plumbevent(int id, Event *e, uchar *b, int n)
+{
+    int nmore;
+
+    if(partial(id, e, b, n) == 0){
+        /* no partial message already waiting for this id */
+        e->v = plumbunpackpartial((char*)b, n, &nmore);
+        if(nmore > 0)	/* incomplete message */
+            addpartial(id, (char*)b, n);
+    }
+    if(e->v == nil)
+        return 0;
+    return id;
+}
+@
+
+<<function eplumb>>=
+int
+eplumb(int key, char *port)
+{
+    int fd;
+
+    fd = plumbopen(port, OREAD|OCEXEC);
+    if(fd < 0)
+        return -1;
+    return estartfn(key, fd, 8192, plumbevent);
+}
+@
+
+
+\subsection{Auto complete}
 \label{sec:completion}
 
 <<[[wkeyctl()]] special key cases and no special mode>>=
@@ -17045,7 +17598,7 @@ strpcmp(const void *va, const void *vb)
 }
 @
 
-\subsection{[[/mnt/wsys/wdir]]}
+\subsubsection{[[/mnt/wsys/wdir]]}
 \label{sec:wdir}
 % dead? I don't see any good use of w->dir. or use for
 %  pluminb via wdir (flowing from w->dir).
@@ -17098,23 +17651,250 @@ case Qwdir:
 @
 
 
+\subsection{Word selection}
+
+<<global clickwin>>=
+static Window	*clickwin;
+@
+
+<<global clickmsec>>=
+static uint	clickmsec;
+@
+
+<<global selectwin>>=
+static Window	*selectwin;
+@
+
+<<global selectq>>=
+static uint	selectq;
+@
+
+
+
+<<function wselect>>=
+void
+wselect(Window *w)
+{
+    uint q0, q1;
+    int b, x, y, first;
+    Frame *frm = &w->frm;
+
+    first = 1;
+    selectwin = w;
+    /*
+     * Double-click immediately if it might make sense.
+     */
+    b = w->mc.buttons;
+    q0 = w->q0;
+    q1 = w->q1;
+    selectq = w->org + frcharofpt(frm, w->mc.xy);
+    if(clickwin==w && w->mc.msec-clickmsec<500)
+    if(q0==q1 && selectq==w->q0){
+        wdoubleclick(w, &q0, &q1);
+        wsetselect(w, q0, q1);
+        flushimage(display, 1);
+        x = w->mc.xy.x;
+        y = w->mc.xy.y;
+        /* stay here until something interesting happens */
+        do
+            readmouse(&w->mc);
+        while(w->mc.buttons==b && abs(w->mc.xy.x-x)<3 && abs(w->mc.xy.y-y)<3);
+        w->mc.xy.x = x;	/* in case we're calling frselect */
+        w->mc.xy.y = y;
+        q0 = w->q0;	/* may have changed */
+        q1 = w->q1;
+        selectq = q0;
+    }
+    if(w->mc.buttons == b){
+        frm->scroll = framescroll;
+        frselect(frm, &w->mc);
+        /* horrible botch: while asleep, may have lost selection altogether */
+        if(selectq > w->nr)
+            selectq = w->org + frm->p0;
+        frm->scroll = nil;
+        if(selectq < w->org)
+            q0 = selectq;
+        else
+            q0 = w->org + frm->p0;
+        if(selectq > w->org + frm->nchars)
+            q1 = selectq;
+        else
+            q1 = w->org + frm->p1;
+    }
+    if(q0 == q1){
+        if(q0==w->q0 && clickwin==w && w->mc.msec-clickmsec<500){
+            wdoubleclick(w, &q0, &q1);
+            clickwin = nil;
+        }else{
+            clickwin = w;
+            clickmsec = w->mc.msec;
+        }
+    }else
+        clickwin = nil;
+    wsetselect(w, q0, q1);
+    flushimage(display, 1);
+    while(w->mc.buttons){
+        w->mc.msec = 0;
+        b = w->mc.buttons;
+        if(b & 6){
+            if(b & 2){
+                wsnarf(w);
+                wcut(w);
+            }else{
+                if(first){
+                    first = 0;
+                    getsnarf();
+                }
+                wpaste(w);
+            }
+        }
+        wscrdraw(w);
+        flushimage(display, 1);
+        while(w->mc.buttons == b)
+            readmouse(&w->mc);
+        clickwin = nil;
+    }
+}
+@
+
+
+
+
+<<global left1>>=
+static Rune left1[] =  { L'{', L'[', L'(', L'<', L'«', 0 };
+@
+
+<<global right1>>=
+static Rune right1[] = { L'}', L']', L')', L'>', L'»', 0 };
+@
+
+<<global left2>>=
+static Rune left2[] =  { L'\n', 0 };
+@
+
+<<global left3>>=
+static Rune left3[] =  { L'\'', L'"', L'`', 0 };
+@
+
+<<global left>>=
+Rune *left[] = {
+    left1,
+    left2,
+    left3,
+    nil
+};
+@
+
+<<global right>>=
+Rune *right[] = {
+    right1,
+    left2,
+    left3,
+    nil
+};
+@
+
+
+
+<<function wdoubleclick>>=
+void
+wdoubleclick(Window *w, uint *q0, uint *q1)
+{
+    int c, i;
+    Rune *r, *l, *p;
+    uint q;
+
+    for(i=0; left[i]!=nil; i++){
+        q = *q0;
+        l = left[i];
+        r = right[i];
+        /* try matching character to left, looking right */
+        if(q == 0)
+            c = '\n';
+        else
+            c = w->r[q-1];
+        p = strrune(l, c);
+        if(p != nil){
+            if(wclickmatch(w, c, r[p-l], 1, &q))
+                *q1 = q-(c!='\n');
+            return;
+        }
+        /* try matching character to right, looking left */
+        if(q == w->nr)
+            c = '\n';
+        else
+            c = w->r[q];
+        p = strrune(r, c);
+        if(p != nil){
+            if(wclickmatch(w, c, l[p-r], -1, &q)){
+                *q1 = *q0+(*q0<w->nr && c=='\n');
+                *q0 = q;
+                if(c!='\n' || q!=0 || w->r[0]=='\n')
+                    (*q0)++;
+            }
+            return;
+        }
+    }
+    /* try filling out word to right */
+    while(*q1<w->nr && isalnum(w->r[*q1]))
+        (*q1)++;
+    /* try filling out word to left */
+    while(*q0>0 && isalnum(w->r[*q0-1]))
+        (*q0)--;
+}
+@
+
+
+<<function wclickmatch>>=
+int
+wclickmatch(Window *w, int cl, int cr, int dir, uint *q)
+{
+    Rune c;
+    int nest;
+
+    nest = 1;
+    for(;;){
+        if(dir > 0){
+            if(*q == w->nr)
+                break;
+            c = w->r[*q];
+            (*q)++;
+        }else{
+            if(*q == 0)
+                break;
+            (*q)--;
+            c = w->r[*q];
+        }
+        if(c == cr){
+            if(--nest==0)
+                return 1;
+        }else if(c == cl)
+            nest++;
+    }
+    return cl=='\n' && nest==1;
+}
+@
+
+
+
 \section{Automatic scrolling, [[rio -s]]}
 
 
 <<global scrolling>>=
 bool		scrolling;
 @
-\t rename autoscroll too
+\t rename autoscroll too (w->autoscroll and global autoscroll)
 
 <<[[main()]] command line processing>>=
 case 's':
     scrolling = true;
     break;
 @
-% who uses that then? default mode in new()?
+% who uses that then? thread_window to decide or not
+% to read more from process stdout (see 'qh vs q0 || scrolling')
 
-% and then who set w->scrolling to true?
-
+% and then wmk set w->scrolling to default global value in scrolling
+% passed when new()
 
 
 \section{Initial command, [[rio -i]]}
@@ -17508,7 +18288,7 @@ killprocs(void)
 
 \section{Timer}
 
-% seems only used by wscrsleep so maybe should be put in adv topics,
+% seems only used by wscrsleep so maybe should be in adv topics,
 %  but maybe it's an interesting thing to show
 
 <<global clockfd>>=
@@ -18357,6 +19137,8 @@ runetobyte(Rune *r, int n, int *ip)
 
 % statusbar
 % winwatch
+
+% See Windows_extra.nw
 
 \chapter{Extra Code}
 
