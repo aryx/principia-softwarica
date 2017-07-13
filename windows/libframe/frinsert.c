@@ -116,6 +116,7 @@ struct points_frinsert {
 void
 frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
 {
+    /*s: [[frinsert()]] locals */
     Point pt0, pt1, opt0, ppt0, ppt1, pt;
     Frbox *b;
     int n, n0, nn0, y;
@@ -125,9 +126,11 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
     static struct points_frinsert *pts;
     static int nalloc=0;
     int npts;
+    /*e: [[frinsert()]] locals */
 
     if(p0>f->nchars || sp==ep || f->b==nil)
         return;
+
     n0 = _frfindbox(f, 0, 0, p0);
     cn0 = p0;
     nn0 = n0;
@@ -136,18 +139,23 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
     opt0 = pt0;
     pt1 = bxscan(f, sp, ep, &ppt0);
     ppt1 = pt1;
+
     if(n0 < f->nbox){
-        _frcklinewrap(f, &pt0, b = &f->box[n0]);	/* for frdrawsel() */
+        b = &f->box[n0];
+        _frcklinewrap(f, &pt0, b);	/* for frdrawsel() */
         _frcklinewrap0(f, &ppt1, b);
     }
-    f->modified = 1;
+    f->modified = true;
     /*
      * ppt0 and ppt1 are start and end of insertion as they will appear when
      * insertion is complete. pt0 is current location of insertion position
      * (p0); pt1 is terminal point (without line wrap) of insertion.
      */
+
+    /*s: [[frinsert()]] remove tick */
     if(f->p0 == f->p1)
-        frtick(f, frptofchar(f, f->p0), 0);
+        frtick(f, frptofchar(f, f->p0), false);
+    /*e: [[frinsert()]] remove tick */
 
     /*
      * Find point where old and new x's line up
@@ -162,8 +170,10 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
         _frcklinewrap0(f, &pt1, b);
         if(b->nrune > 0){
             n = _frcanfit(f, pt1, b);
+            /*s: [[frinsert()]] sanity check n canfit */
             if(n == 0)
                 drawerror(f->display, "_frcanfit==0");
+            /*e: [[frinsert()]] sanity check n canfit */
             if(n != b->nrune){
                 _frsplitbox(f, n0, n);
                 b = &f->box[n0];
@@ -277,8 +287,11 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
         col = f->cols[HIGH];
     else
         col = f->cols[BACK];
+
     frselectpaint(f, ppt0, ppt1, col);
+
     _frdrawtext(&frame, ppt0, f->cols[TEXT], col);
+
     _fraddbox(f, nn0, frame.nbox);
     for(n=0; n<frame.nbox; n++)
         f->box[nn0+n] = frame.box[n];
@@ -288,6 +301,7 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
     }
     n0 += frame.nbox;
     _frclean(f, ppt0, nn0, n0<f->nbox-1? n0+1 : n0);
+
     f->nchars += frame.nchars;
     if(f->p0 >= p0)
         f->p0 += frame.nchars;
@@ -297,8 +311,11 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
         f->p1 += frame.nchars;
     if(f->p1 > f->nchars)
         f->p1 = f->nchars;
+
+    /*s: [[frinsert()]] draw tick */
     if(f->p0 == f->p1)
-        frtick(f, frptofchar(f, f->p0), 1);
+        frtick(f, frptofchar(f, f->p0), true);
+    /*e: [[frinsert()]] draw tick */
 }
 /*e: function frinsert */
 /*e: windows/libframe/frinsert.c */

@@ -17,8 +17,10 @@ _fraddbox(Frame *f, int bn, int n)	/* add n boxes after bn, shift the rest up,
 {
     int i;
 
+    /*s: [[_fraddbox()]] sanity check bn */
     if(bn > f->nbox)
         drawerror(f->display, "_fraddbox");
+    /*e: [[_fraddbox()]] sanity check bn */
     if(f->nbox+n > f->nalloc)
         _frgrowbox(f, n+SLOP);
     for(i=f->nbox; --i>=bn; )
@@ -33,8 +35,10 @@ _frclosebox(Frame *f, int n0, int n1)	/* inclusive */
 {
     int i;
 
+    /*s: [[_frclosebox()]] sanity check n0 and n1 */
     if(n0>=f->nbox || n1>=f->nbox || n1<n0)
         drawerror(f->display, "_frclosebox");
+    /*e: [[_frclosebox()]] sanity check n0 and n1 */
     n1++;
     for(i=n1; i<f->nbox; i++)
         f->box[i-(n1-n0)] = f->box[i];
@@ -46,8 +50,10 @@ _frclosebox(Frame *f, int n0, int n1)	/* inclusive */
 void
 _frdelbox(Frame *f, int n0, int n1)	/* inclusive */
 {
+    /*s: [[_frdelbox()]] sanity check n0 and n1 */
     if(n0>=f->nbox || n1>=f->nbox || n1<n0)
         drawerror(f->display, "_frdelbox");
+    /*e: [[_frdelbox()]] sanity check n0 and n1 */
     _frfreebox(f, n0, n1);
     _frclosebox(f, n0, n1);
 }
@@ -59,10 +65,12 @@ _frfreebox(Frame *f, int n0, int n1)	/* inclusive */
 {
     int i;
 
+    /*s: [[_frfreebox()]] sanity check n0 and n1 */
     if(n1<n0)
         return;
     if(n0>=f->nbox || n1>=f->nbox)
         drawerror(f->display, "_frfreebox");
+    /*e: [[_frfreebox()]] sanity check n0 and n1 */
     n1++;
     for(i=n0; i<n1; i++)
         if(f->box[i].nrune >= 0)
@@ -76,8 +84,10 @@ _frgrowbox(Frame *f, int delta)
 {
     f->nalloc += delta;
     f->box = realloc(f->box, f->nalloc*sizeof(Frbox));
-    if(f->box == 0)
+    /*s: [[_frgrowbox()]] sanity check box */
+    if(f->box == nil)
         drawerror(f->display, "_frgrowbox");
+    /*e: [[_frgrowbox()]] sanity check box */
 }
 /*e: function _frgrowbox */
 
@@ -173,12 +183,13 @@ _frmergebox(Frame *f, int bn)		/* merge bn and bn+1 */
 /*e: function _frmergebox */
 
 /*s: function _frfindbox */
+/* find box containing q and put q on a box boundary */
 int
-_frfindbox(Frame *f, int bn, ulong p, ulong q)	/* find box containing q and put q on a box boundary */
+_frfindbox(Frame *f, int bn, ulong p, ulong q)	
 {
     Frbox *b;
 
-    for(b = &f->box[bn]; bn<f->nbox && p+NRUNE(b)<=q; bn++, b++)
+    for(b = &f->box[bn]; bn < f->nbox && p+NRUNE(b) <= q; bn++, b++)
         p += NRUNE(b);
     if(p != q)
         _frsplitbox(f, bn++, (int)(q-p));

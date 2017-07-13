@@ -40,17 +40,18 @@ nbytes(char *s0, int nr)
 
 /*s: function frdrawsel */
 void
-frdrawsel(Frame *f, Point pt, ulong p0, ulong p1, int issel)
+frdrawsel(Frame *f, Point pt, ulong p0, ulong p1, bool issel)
 {
     Image *back, *text;
 
     if(f->ticked)
-        frtick(f, frptofchar(f, f->p0), 0);
+        frtick(f, frptofchar(f, f->p0), false);
 
     if(p0 == p1){
         frtick(f, pt, issel);
         return;
     }
+    // else
 
     if(issel){
         back = f->cols[HIGH];
@@ -78,9 +79,11 @@ frdrawsel0(Frame *f, Point pt, ulong p0, ulong p1, Image *back, Image *text)
     b = f->box;
     trim = 0;
     for(nb=0; nb<f->nbox && p<p1; nb++){
+        //todo: nr = NRUNE(b);
         nr = b->nrune;
         if(nr < 0)
             nr = 1;
+
         if(p+nr <= p0)
             goto Continue;
         if(p >= p0){
@@ -131,33 +134,34 @@ frdrawsel0(Frame *f, Point pt, ulong p0, ulong p1, Image *back, Image *text)
 void
 frredraw(Frame *f)
 {
-    int ticked;
+    bool ticked;
     Point pt;
 
     if(f->p0 == f->p1){
         ticked = f->ticked;
         if(ticked)
-            frtick(f, frptofchar(f, f->p0), 0);
+            frtick(f, frptofchar(f, f->p0), false);
         frdrawsel0(f, frptofchar(f, 0), 0, f->nchars, f->cols[BACK], f->cols[TEXT]);
         if(ticked)
-            frtick(f, frptofchar(f, f->p0), 1);
+            frtick(f, frptofchar(f, f->p0), true);
         return;
     }
+    // else, selection
 
     pt = frptofchar(f, 0);
-    pt = frdrawsel0(f, pt, 0, f->p0, f->cols[BACK], f->cols[TEXT]);
-    pt = frdrawsel0(f, pt, f->p0, f->p1, f->cols[HIGH], f->cols[HTEXT]);
+    pt = frdrawsel0(f, pt, 0,     f->p0,     f->cols[BACK], f->cols[TEXT]);
+    pt = frdrawsel0(f, pt, f->p0, f->p1,     f->cols[HIGH], f->cols[HTEXT]);
     pt = frdrawsel0(f, pt, f->p1, f->nchars, f->cols[BACK], f->cols[TEXT]);
 }
 /*e: function frredraw */
 
 /*s: function frtick */
 void
-frtick(Frame *f, Point pt, int ticked)
+frtick(Frame *f, Point pt, bool ticked)
 {
     Rectangle r;
 
-    if(f->ticked==ticked || f->tick==0 || !ptinrect(pt, f->r))
+    if(f->ticked==ticked || f->tick==nil || !ptinrect(pt, f->r))
         return;
     pt.x--;	/* looks best just left of where requested */
     r = Rect(pt.x, pt.y, pt.x+FRTICKW, pt.y+f->font->height);

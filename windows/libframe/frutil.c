@@ -14,7 +14,7 @@ _frcanfit(Frame *f, Point pt, Frbox *b)
     uchar *p;
     Rune r;
 
-    left = f->r.max.x-pt.x;
+    left = f->r.max.x - pt.x;
     if(b->nrune < 0)
         return b->minwid <= left;
     if(left >= b->wid)
@@ -38,7 +38,7 @@ _frcanfit(Frame *f, Point pt, Frbox *b)
 void
 _frcklinewrap(Frame *f, Point *p, Frbox *b)
 {
-    if((b->nrune<0? b->minwid : b->wid) > f->r.max.x-p->x){
+    if((b->nrune<0? b->minwid : b->wid) > f->r.max.x - p->x){
         p->x = f->r.min.x;
         p->y += f->font->height;
     }

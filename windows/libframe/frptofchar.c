@@ -10,26 +10,32 @@
 Point
 _frptofcharptb(Frame *f, ulong p, Point pt, int bn)
 {
-    uchar *s;
     Frbox *b;
+    uchar *s;
     int w, l;
     Rune r;
 
     for(b = &f->box[bn]; bn<f->nbox; bn++,b++){
         _frcklinewrap(f, &pt, b);
-        if(p < (l=NRUNE(b))){
+        l=NRUNE(b);
+        // p is in this box
+        if(p < l){
             if(b->nrune > 0)
                 for(s=b->ptr; p>0; s+=w, p--){
-                    if((r = *s) < Runeself)
+                    r = *s;
+                    if(r < Runeself)
                         w = 1;
                     else
                         w = chartorune(&r, (char*)s);
                     pt.x += stringnwidth(f->font, (char*)s, 1);
-                    if(r==0 || pt.x>f->r.max.x)
+                    /*s: [[_frptofcharptb()]] sanity check r and pt */
+                    if(r==0 || pt.x > f->r.max.x)
                         drawerror(f->display, "frptofchar");
+                    /*e: [[_frptofcharptb()]] sanity check r and pt */
                 }
-            break;
+            break; // found it
         }
+        // else
         p -= l;
         _fradvance(f, &pt, b);
     }
@@ -52,9 +58,11 @@ _frptofcharnb(Frame *f, ulong p, int nb)	/* doesn't do final _fradvance to next 
     Point pt;
     int nbox;
 
+    // save
     nbox = f->nbox;
     f->nbox = nb;
     pt = _frptofcharptb(f, p, f->r.min, 0);
+    // restore
     f->nbox = nbox;
     return pt;
 }
@@ -79,26 +87,30 @@ ulong
 frcharofpt(Frame *f, Point pt)
 {
     Point qt;
-    int w, bn;
+    int w;
     uchar *s;
     Frbox *b;
+    int bn;
     ulong p;
     Rune r;
 
     pt = _frgrid(f, pt);
+
     qt = f->r.min;
-    for(b=f->box,bn=0,p=0; bn<f->nbox && qt.y<pt.y; bn++,b++){
+    // find the line
+    for(b=f->box, bn=0, p=0; bn < f->nbox && qt.y < pt.y; bn++,b++){
         _frcklinewrap(f, &qt, b);
         if(qt.y >= pt.y)
             break;
         _fradvance(f, &qt, b);
         p += NRUNE(b);
     }
+    // find the box in the line
     for(; bn<f->nbox && qt.x<=pt.x; bn++,b++){
         _frcklinewrap(f, &qt, b);
         if(qt.y > pt.y)
             break;
-        if(qt.x+b->wid > pt.x){
+        if(qt.x + b->wid > pt.x){
             if(b->nrune < 0)
                 _fradvance(f, &qt, b);
             else{
@@ -108,8 +120,10 @@ frcharofpt(Frame *f, Point pt)
                         w = 1;
                     else
                         w = chartorune(&r, (char*)s);
+                    /*s: [[frcharofpt()]] sanity check r */
                     if(r == 0)
                         drawerror(f->display, "end of string in frcharofpt");
+                    /*e: [[frcharofpt()]] sanity check r */
                     qt.x += stringnwidth(f->font, (char*)s, 1);
                     s += w;
                     if(qt.x > pt.x)
