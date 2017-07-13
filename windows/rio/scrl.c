@@ -86,6 +86,7 @@ wscrdraw(Window *w)
     /*e: [[wscrdraw()]] sanity check the window image */
     r = w->scrollr;
     b = scrtmp;
+    // r1 is translation of r to (0,0)
     r1 = r;
     r1.min.x = 0;
     r1.max.x = Dx(r);

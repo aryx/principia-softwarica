@@ -24,17 +24,22 @@ filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
 {
     int n;
 
+    /*s: [[filsysrespond()]] if err */
     if(err){
         fc->type = Rerror;
         fc->ename = err;
-    }else
+    }
+    /*e: [[filsysrespond()]] if err */
+    else
         fc->type = x->req.type+1; // Reply type just after Transmit type
 
     fc->fid = x->req.fid;
     fc->tag = x->req.tag;
 
+    /*s: [[filsysrespond()]] sanitize buf */
     if(x->buf == nil)
         x->buf = malloc(messagesize);
+    /*e: [[filsysrespond()]] sanitize buf */
     n = convS2M(fc, x->buf, messagesize);
     /*s: [[filsysrespond()]] sanity check n */
     if(n <= 0)
@@ -63,5 +68,4 @@ filsyscancel(Xfid *x)
     }
 }
 /*e: function filsyscancel */
-
 /*e: windows/rio/9p.c */

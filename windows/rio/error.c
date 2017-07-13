@@ -13,7 +13,6 @@ bool errorshouldabort = false;
 char Eperm[] = "permission denied";
 /*e: global Eperm */
 
-
 /*s: function error */
 void
 error(char *s)
@@ -25,7 +24,6 @@ error(char *s)
 }
 /*e: function error */
 
-
 /*s: function derror */
 void
 derror(Display*, char *errorstr)
@@ -33,5 +31,4 @@ derror(Display*, char *errorstr)
     error(errorstr);
 }
 /*e: function derror */
-
 /*e: windows/rio/error.c */

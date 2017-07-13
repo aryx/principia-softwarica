@@ -37,7 +37,7 @@ Image	*red;
 /*e: global red */
 
 /*s: global window */
-// growing_array<option<ref_own<Window>>> (size = nwindow+1)
+// growing_array<ref_own<Window>> (size = nwindow+1)
 Window	**windows;
 /*e: global window */
 /*s: global wkeyboard */
@@ -75,6 +75,7 @@ QLock	all;			/* BUG */
 Filsys	*filsys;
 /*e: global filsys */
 /*s: global hidden */
+// array<ref<Window>> (size valid = nhidden)
 Window	*hidden[100];
 /*e: global hidden */
 /*s: global nhidden */
@@ -104,5 +105,4 @@ int		snarfversion;	/* updated each time it is written */
 /*s: global maxtab */
 int		maxtab = 0;
 /*e: global maxtab */
-
 /*e: windows/rio/globals.c */

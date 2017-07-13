@@ -26,7 +26,6 @@ enum {
 };
 /*e: enum Mxxx */
 
-
 /*s: function keyboardhide */
 /*
  * Button 6 - keyboard toggle - has been pressed.
@@ -199,7 +198,7 @@ mousethread(void*)
                 /*e: [[mousethread()]] set scrolling */
                 /*s: [[mousethread()]] set moving to true for some conditions */
                 /* topped will be zero or less if window has been bottomed */
-                if(sending == false && !scrolling 
+                if(!sending && !scrolling 
                    && winborder(winput, mouse->xy) && winput->topped > 0){
                     moving = true;
                 }
@@ -236,12 +235,13 @@ mousethread(void*)
             /*s: [[mousethread()]] if not sending */
             w = wpointto(mouse->xy);
 
+            /*s: [[mousethread()]] when not sending, set cursor part1 */
             /* change cursor if over anyone's border */
             if(w != nil)
                 cornercursor(w, mouse->xy, false);
             else
                 riosetcursor(nil, false);
-
+            /*e: [[mousethread()]] when not sending, set cursor part1 */
             /*s: [[mousethread()]] if moving and buttons */
             if(moving && (mouse->buttons&7)){
                 oin = winput;
@@ -266,11 +266,12 @@ mousethread(void*)
                 }
             }
             /*e: [[mousethread()]] if moving and buttons */
-
+            /*s: [[mousethread()]] when not sending, set cursor part2 */
             if(w != nil)
                 cornercursor(w, mouse->xy, false);
+            /*e: [[mousethread()]] when not sending, set cursor part2 */
 
-            /*s: [[mousethread()]] if buttons and was not sending */
+            /*s: [[mousethread()]] when not sending, if buttons */
             /* we're not sending the event, but if button is down maybe we should */
             if(mouse->buttons){
                 /* w->topped will be zero or less if window has been bottomed */
@@ -299,7 +300,7 @@ mousethread(void*)
                     goto Drain;
                 }
             }
-            /*e: [[mousethread()]] if buttons and was not sending */
+            /*e: [[mousethread()]] when not sending, if buttons */
             moving = false;
             break;
             /*e: [[mousethread()]] if not sending */
@@ -320,5 +321,4 @@ mousethread(void*)
         }
 }
 /*e: function mousethread */
-
 /*e: windows/rio/thread_mouse.c */

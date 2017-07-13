@@ -158,5 +158,4 @@ runetobyte(Rune *r, int n, int *ip)
     return s;
 }
 /*e: function runetobyte */
-
 /*e: windows/rio/util.c */

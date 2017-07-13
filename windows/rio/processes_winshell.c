@@ -33,6 +33,7 @@ winshell(void *args)
     argv = arg[3];
     dir  = arg[4];
 
+    // copy namespace/file-descriptors/environment-variables (do not share)
     rfork(RFNAMEG|RFFDG|RFENVG);
 
     /*s: [[winshell()]] adjust namespace */
@@ -45,7 +46,7 @@ winshell(void *args)
     }
     /*e: [[winshell()]] sanity check err filsysmount */
     /*e: [[winshell()]] adjust namespace */
-    /*s: [[winshell()]] reassign STDIN/STDOUT */
+    /*s: [[winshell()]] reassign STDIN/STDOUT after namespace adjustment */
     // reassign stdin/stdout to virtualized /dev/cons from filsysmount
     close(STDIN);
     err = open("/dev/cons", OREAD);
@@ -65,7 +66,7 @@ winshell(void *args)
         threadexits("open");	/* BUG? was terminate() */
     }
     /*e: [[winshell()]] sanity check err open cons stdout */
-    /*e: [[winshell()]] reassign STDIN/STDOUT */
+    /*e: [[winshell()]] reassign STDIN/STDOUT after namespace adjustment */
 
     if(wclose(w) == false){	/* remove extra ref hanging from creation */
         notify(nil);
@@ -79,5 +80,4 @@ winshell(void *args)
     }
 }
 /*e: function winshell */
-
 /*e: windows/rio/processes_winshell.c */

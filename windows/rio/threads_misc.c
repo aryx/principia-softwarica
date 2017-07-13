@@ -16,7 +16,6 @@
 #include "dat.h"
 #include "fns.h"
 
-
 /*s: function winclosethread */
 /* thread to allow fsysproc to synchronize window closing with main proc */
 void
@@ -56,5 +55,4 @@ deletethread(void*)
     }
 }
 /*e: function deletethread */
-
 /*e: windows/rio/threads_misc.c */

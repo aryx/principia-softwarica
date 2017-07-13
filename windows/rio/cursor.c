@@ -18,7 +18,6 @@
 Cursor	*lastcursor;
 /*e: global lastcursor */
 
-
 /*s: function riosetcursor */
 void
 riosetcursor(Cursor *p, bool force)
@@ -29,5 +28,4 @@ riosetcursor(Cursor *p, bool force)
     lastcursor = p;
 }
 /*e: function riosetcursor */
-
 /*e: windows/rio/cursor.c */

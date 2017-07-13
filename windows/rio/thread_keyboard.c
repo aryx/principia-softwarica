@@ -44,5 +44,4 @@ keyboardthread(void*)
     }
 }
 /*e: function keyboardthread */
-
 /*e: windows/rio/thread_keyboard.c */

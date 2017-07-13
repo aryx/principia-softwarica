@@ -17,7 +17,6 @@
 #include "dat.h"
 #include "fns.h"
 
-
 /*s: enum Wxxx */
 enum { 
     WKey, 
@@ -48,7 +47,6 @@ deletetimeoutproc(void *v)
 }
 /*e: function deletetimeoutproc */
 
-
 /*s: function wctlmesg */
 int
 wctlmesg(Window *w, int m, Rectangle r, Image *i)
@@ -57,17 +55,6 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
 
     switch(m){
     /*s: [[wctlmesg()]] cases */
-    case Wakeup:
-        break;
-    /*x: [[wctlmesg()]] cases */
-    case Refresh:
-        if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
-            break;
-        if(!w->mouseopen)
-            wrefresh(w, r);
-        flushimage(display, true);
-        break;
-    /*x: [[wctlmesg()]] cases */
     case Deleted:
         /*s: [[wctlmesg()]] break if window was deleted */
         if(w->deleted)
@@ -148,6 +135,17 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         wrepaint(w);
         flushimage(display, true);
         break;
+    /*x: [[wctlmesg()]] cases */
+    case Wakeup:
+        break;
+    /*x: [[wctlmesg()]] cases */
+    case Refresh:
+        if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
+            break;
+        if(!w->mouseopen)
+            wrefresh(w, r);
+        flushimage(display, true);
+        break;
     /*e: [[wctlmesg()]] cases */
     default:
         error("unknown control message");
@@ -157,7 +155,6 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
 }
 /*e: function wctlmesg */
 
-
 /*s: function winctl */
 void
 winctl(void *arg)
@@ -165,9 +162,10 @@ winctl(void *arg)
     Window *w = arg;
     // map<enum<Wxxx>, Alt>
     Alt alts[NWALT+1];
-    char buf[128]; // /dev/mouse interface
     /*s: [[winctl()]] other locals */
     Rune *kbdr;
+    /*x: [[winctl()]] other locals */
+    char buf[128]; // /dev/mouse interface
     /*x: [[winctl()]] other locals */
     Wctlmesg wcm;
     /*x: [[winctl()]] other locals */
@@ -190,8 +188,10 @@ winctl(void *arg)
     /*x: [[winctl()]] other locals */
     Conswritemesg cwm;
     /*x: [[winctl()]] other locals */
-    Rune *rp, *bp, *tp, *up;
+    Rune *rp;
     int nr;
+    /*x: [[winctl()]] other locals */
+    Rune *bp, *tp, *up;
     int initial;
     uint qh;
     /*x: [[winctl()]] other locals */
@@ -278,6 +278,7 @@ winctl(void *arg)
         if(!w->scrolling && !w->mouseopen && w->qh >  w->org + w->frm.nchars)
             alts[WCwrite].op = CHANNOP;
         else
+            // scrolling || mouseopen || w->qh <= w->org + w->frm.nchars
             alts[WCwrite].op = CHANSND;
         /*x: [[winctl()]] alts adjustments */
         if(w->deleted || !w->wctlready)
@@ -290,7 +291,7 @@ winctl(void *arg)
         switch(alt(alts)){
         /*s: [[winctl()]] event loop cases */
         case WKey:
-            for(i=0; kbdr[i]!=L'\0'; i++)
+            for(i=0; kbdr[i] != L'\0'; i++)
                 wkeyctl(w, kbdr[i]);
             break;
         /*x: [[winctl()]] event loop cases */
@@ -371,10 +372,12 @@ winctl(void *arg)
 
             while(i<nb && (w->nraw > 0 || w->qh < w->nr)){
 
+                // raw mode
                 if(w->qh == w->nr){
                     wid = runetochar(t+i, &w->raw[0]);
                     w->nraw--;
                     runemove(w->raw, w->raw+1, w->nraw);
+                // buffered mode
                 }else
                     wid = runetochar(t+i, &w->r[w->qh++]);
 
@@ -410,6 +413,7 @@ winctl(void *arg)
             rp = pair.s;
             nr = pair.ns;
 
+            /*s: [[winctl()]] when WCwrite, if runes contains backspace */
             bp = rp;
             for(i=0; i<nr; i++) {
                 if(*bp++ == '\b'){
@@ -442,10 +446,13 @@ winctl(void *arg)
                     break;
                 }
             }
+            /*e: [[winctl()]] when WCwrite, if runes contains backspace */
 
             w->qh = winsert(w, rp, nr, w->qh) + nr;
+            /*s: [[winctl()]] when WCwrite, if scrolling or mouseopen */
             if(w->scrolling || w->mouseopen)
                 wshow(w, w->qh);
+            /*e: [[winctl()]] when WCwrite, if scrolling or mouseopen */
             wsetselect(w, w->q0, w->q1);
             wscrdraw(w);
             free(rp);
@@ -479,6 +486,4 @@ winctl(void *arg)
     }
 }
 /*e: function winctl */
-
-
 /*e: windows/rio/threads_window.c */

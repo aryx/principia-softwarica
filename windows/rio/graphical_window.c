@@ -23,5 +23,4 @@ waddraw(Window *w, Rune *r, int nr)
     w->nraw += nr;
 }
 /*e: function waddraw */
-
 /*e: windows/rio/graphical_window.c */

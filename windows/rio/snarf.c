@@ -78,5 +78,4 @@ getsnarf(void)
     }
 }
 /*e: function getsnarf */
-
 /*e: windows/rio/snarf.c */

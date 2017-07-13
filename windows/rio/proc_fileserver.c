@@ -80,13 +80,14 @@ filsysproc(void *arg)
             /*e: [[filsysproc()]] if x type is Tversion or Tauth */
             else
                 f = newfid(fs, x->req.fid);
-
             x->f = f;
 
             // Dispatch
             x  = (*fcall[x->req.type])(fs, x, f);
         }
+        /*s: [[filsysproc()]] end of loop */
         firstmessage = false;
+        /*e: [[filsysproc()]] end of loop */
     }
 }
 /*e: function filsysproc */
@@ -137,13 +138,13 @@ filsysinit(Channel *cxfidalloc)
     int pid;
     Filsys *fs;
     /*s: [[filsysinit()]] other locals */
-    fdt fd;
-    char buf[128];
-    int n;
-    /*x: [[filsysinit()]] other locals */
     fdt p0;
     // chan<??> (listener = ??, sender = ??)
     Channel *c;
+    /*x: [[filsysinit()]] other locals */
+    fdt fd;
+    char buf[128];
+    int n;
     /*e: [[filsysinit()]] other locals */
 
     /*s: [[filsysinit()]] install dumper */
@@ -164,7 +165,7 @@ filsysinit(Channel *cxfidalloc)
     if(fd >= 0){
         n = read(fd, buf, sizeof buf-1);
         if(n > 0)
-            buf[n] = 0;
+            buf[n] = '\0';
         close(fd);
     }
     fs->user = estrdup(buf);
@@ -245,6 +246,4 @@ filsysmount(Filsys *fs, int id)
     return OK_0;
 }
 /*e: function filsysmount */
-
-
 /*e: windows/rio/proc_fileserver.c */

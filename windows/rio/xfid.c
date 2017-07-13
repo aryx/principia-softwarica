@@ -81,11 +81,12 @@ xfidattach(Xfid *x)
     Window *w = nil;
     bool newlymade = false;
     /*s: [[xfidattach()]] other locals */
+    char *err = Eunkid;
+    /*x: [[xfidattach()]] other locals */
     Rectangle r;
     int pid;
     bool hideit = false;
     bool scrollit;
-    char *err = Eunkid;
     char *dir, errbuf[ERRMAX];
     Image *i;
     /*e: [[xfidattach()]] other locals */
@@ -147,9 +148,8 @@ void
 xfidopen(Xfid *x)
 {
     Fcall fc;
-    Window *w;
+    Window *w = x->f->w;
 
-    w = x->f->w;
     /*s: [[xfidxxx()]] respond error if window was deleted */
     if(w->deleted){
         filsysrespond(x->fs, x, &fc, Edeleted);
@@ -236,12 +236,11 @@ void
 xfidclose(Xfid *x)
 {
     Fcall fc;
-    Window *w;
+    Window *w = x->f->w;
     /*s: [[xfidclose()]] other locals */
     int nb, nulls;
     /*e: [[xfidclose()]] other locals */
 
-    w = x->f->w;
     switch(FILE(x->f->qid)){
     /*s: [[xfidclose()]] cases */
     case Qconsctl:
@@ -326,7 +325,7 @@ xfidwrite(Xfid *x)
 {
     Fcall fc;
     Fcall *req = &x->req;
-    Window *w;
+    Window *w = x->f->w;
     uint qid;
     int off, cnt;
     char buf[256];
@@ -345,7 +344,6 @@ xfidwrite(Xfid *x)
     int c;
     /*e: [[xfidwrite()]] other locals */
     
-    w = x->f->w;
     /*s: [[xfidxxx()]] respond error if window was deleted */
     if(w->deleted){
         filsysrespond(x->fs, x, &fc, Edeleted);
@@ -355,7 +353,7 @@ xfidwrite(Xfid *x)
     qid = FILE(x->f->qid);
     cnt = req->count;
     off = req->offset;
-    req->data[cnt] = 0;
+    req->data[cnt] = '\0';
 
     switch(qid){
     /*s: [[xfidwrite()]] cases */
@@ -607,11 +605,11 @@ enum { WCRdata, WCRflush, NWCR };
 void
 xfidread(Xfid *x)
 {
-    Window *w;
     uint qid;
     int off, cnt;
     Fcall fc;
     Fcall *req = &x->req;
+    Window *w = x->f->w;
     /*s: [[xfidread()]] other locals */
     Alt alts[NCR+1];
     Mousereadmesg mrm;
@@ -631,7 +629,6 @@ xfidread(Xfid *x)
     Consreadmesg cwrm;
     /*e: [[xfidread()]] other locals */
     
-    w = x->f->w;
     /*s: [[xfidxxx()]] respond error if window was deleted */
     if(w->deleted){
         filsysrespond(x->fs, x, &fc, Edeleted);
@@ -758,10 +755,12 @@ xfidread(Xfid *x)
     /*x: [[xfidread()]] cases */
     case Qwinname:
         n = strlen(w->name);
+        /*s: [[xfidread()]] when Qwinname case, sanity check n */
         if(n == 0){
             filsysrespond(x->fs, x, &fc, "window has no name");
             break;
         }
+        /*e: [[xfidread()]] when Qwinname case, sanity check n */
         t = estrdup(w->name);
         goto Text;
     /*x: [[xfidread()]] cases */
@@ -786,7 +785,7 @@ xfidread(Xfid *x)
         fc.data = t;
         n = readwindow(i, t, r, off, cnt);	/* careful; fc.count is unsigned */
         if(n < 0){
-            buf[0] = 0;
+            buf[0] = '\0';
             errstr(buf, sizeof buf);
             filsysrespond(x->fs, x, &fc, buf);
         }else{
@@ -924,5 +923,4 @@ xfidread(Xfid *x)
         }
 }
 /*e: function xfidread */
-
 /*e: windows/rio/xfid.c */

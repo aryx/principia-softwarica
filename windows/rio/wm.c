@@ -26,7 +26,7 @@
 //----------------------------------------------------------------------------
 
 /*s: enum _anon_ (windows/rio/rio.c) */
-enum
+enum RightMenuCommand
 {
     New,
 
@@ -54,9 +54,8 @@ char*		menu3str[100] = {
 /*e: global menu3str */
 
 /*s: global menu3 */
-Menu menu3 = { menu3str };
+Menu menu3 = { .item = menu3str };
 /*e: global menu3 */
-
 
 //----------------------------------------------------------------------------
 // Helpers
@@ -124,8 +123,6 @@ cornercursor(Window *w, Point p, bool force)
 }
 /*e: function cornercursor */
 
-
-
 //----------------------------------------------------------------------------
 // Mouse actions
 //----------------------------------------------------------------------------
@@ -149,10 +146,12 @@ pointto(bool wait)
 
     if(wait){
         while(mouse->buttons){
+            /*s: [[pointto()]] cancel pointto if clicked another button */
             if(mouse->buttons!=4 && w != nil){	/* cancel */
                 cornercursor(input, mouse->xy, false);
                 w = nil;
             }
+            /*e: [[pointto()]] cancel pointto if clicked another button */
             readmouse(mousectl);
         }
         if(w != nil && wpointto(mouse->xy) != w)
@@ -165,8 +164,6 @@ pointto(bool wait)
     return w;
 }
 /*e: function pointto */
-
-
 
 
 /*s: function onscreen */
@@ -185,9 +182,9 @@ onscreen(Point p)
 Image*
 sweep(void)
 {
-    Image *i, *oi;
-    Rectangle r;
     Point p0, p;
+    Rectangle r;
+    Image *i, *oi;
 
     i = nil;
 
@@ -198,7 +195,7 @@ sweep(void)
 
     p0 = onscreen(mouse->xy);
     p = p0;
-    r = Rpt(p0, p0);
+    r = Rpt(p0, p);
     oi = nil;
 
     while(mouse->buttons == 4){ // right click
@@ -226,7 +223,7 @@ sweep(void)
     /*s: [[sweep()]] sanity check mouse buttons, i, and rectangle size */
     if(mouse->buttons != 0)
         goto Rescue;
-    if(i==nil || Dx(i->r)<100 || Dy(i->r)<3*font->height)
+    if(i==nil || Dx(i->r) < 100 || Dy(i->r) < 3*font->height)
         goto Rescue;
     /*e: [[sweep()]] sanity check mouse buttons, i, and rectangle size */
     oi = i;
@@ -240,10 +237,10 @@ sweep(void)
     cornercursor(input, mouse->xy, true);
     goto Return;
 /*s: [[sweep()]] Rescue handler */
- Rescue:
+Rescue:
     freeimage(i);
     i = nil;
-    cornercursor(input, mouse->xy, 1);
+    cornercursor(input, mouse->xy, true);
     while(mouse->buttons)
         readmouse(mousectl);
 /*e: [[sweep()]] Rescue handler */
@@ -254,9 +251,6 @@ sweep(void)
     return i;
 }
 /*e: function sweep */
-
-
-
 
 
 
@@ -480,7 +474,6 @@ bandsize(Window *w)
 }
 /*e: function bandsize */
 
-
 //----------------------------------------------------------------------------
 // Window management
 //----------------------------------------------------------------------------
@@ -592,19 +585,18 @@ unhide(int h)
 
     h -= Hidden;
     w = hidden[h];
+    /*s: [[unhide()]] sanity check w */
     if(w == nil)
         return;
+    /*e: [[unhide()]] sanity check w */
     wunhide(h);
 }
 /*e: function unhide */
 
 
-
-
 /*s: global rcargv */
 char *rcargv[] = { "rc", "-i", nil };
 /*e: global rcargv */
-
 
 /*s: function new */
 Window*
@@ -682,14 +674,14 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
         free(arg);
     }
     /*e: [[new()]] if pid == 0, create winshell process and set pid */
-    /*s: [[new()]] sanity check pid */
+    /*s: [[new()]] sanity check pid received from winshell */
     if(pid == 0){
         /* window creation failed */
         wsendctlmesg(w, Deleted, ZR, nil);
         chanfree(cpid);
         return nil;
     }
-    /*e: [[new()]] sanity check pid */
+    /*e: [[new()]] sanity check pid received from winshell */
     wsetpid(w, pid, true);
 
     // create a new layer
@@ -703,11 +695,9 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 }
 /*e: function new */
 
-
 //----------------------------------------------------------------------------
 // Entry point
 //----------------------------------------------------------------------------
-
 
 /*s: function button3menu */
 void
@@ -758,5 +748,4 @@ button3menu(void)
     sweeping = false;
 }
 /*e: function button3menu */
-
 /*e: windows/rio/wm.c */

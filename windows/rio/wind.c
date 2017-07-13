@@ -26,9 +26,6 @@ static	int	id;
 // map<Property, Color>
 static	Image	*cols[NCOL];
 /*e: global cols */
-/*s: global grey */
-static	Image	*grey;
-/*e: global grey */
 /*s: global darkgrey */
 static	Image	*darkgrey;
 /*e: global darkgrey */
@@ -122,24 +119,27 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     Window *w;
     Rectangle r;
 
-    /*s: [[wmk()]] cols initialisation */
+    /*s: [[wmk()]] colors initialisation */
     if(cols[0] == nil){
-        /* greys are multiples of 0x11111100+0xFF, 14* being palest */
-        grey     = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xEEEEEEFF);
-        darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
         cols[BACK] = display->white;
         cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xCCCCCCFF);
         cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x999999FF);
         cols[TEXT] = display->black;
         cols[HTEXT] = display->black;
-
+        /*s: [[wmk()]] extra colors initialisation */
         titlecol     = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreygreen);
         lighttitlecol= allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreygreen);
+        /*x: [[wmk()]] extra colors initialisation */
+        /* greys are multiples of 0x11111100+0xFF, 14* being palest */
+        darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
+        /*x: [[wmk()]] extra colors initialisation */
         holdcol      = allocimage(display, Rect(0,0,1,1), CMAP8, true, DMedblue);
         lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreyblue);
-        paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreyblue);
+        paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreyblue
+        /*e: [[wmk()]] extra colors initialisation */
+    );
     }
-    /*e: [[wmk()]] cols initialisation */
+    /*e: [[wmk()]] colors initialisation */
 
     w = emalloc(sizeof(Window));
 
@@ -150,42 +150,46 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     w->id = ++id;
     w->topped = ++topped;
 
-    /*s: [[wmk()]] channels creation */
+    w->label = estrdup("<unnamed>");
+
+    /*s: [[wmk()]] channels settings */
     w->mc = *mc;
     w->ck = ck;
     w->cctl = cctl;
-    /*x: [[wmk()]] channels creation */
-    w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
-    /*x: [[wmk()]] channels creation */
-    w->consread =  chancreate(sizeof(Consreadmesg), 0);
-    /*x: [[wmk()]] channels creation */
-    w->conswrite = chancreate(sizeof(Conswritemesg), 0);
-    /*x: [[wmk()]] channels creation */
-    w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
-    /*e: [[wmk()]] channels creation */
-
+    /*e: [[wmk()]] channels settings */
     /*s: [[wmk()]] textual window settings */
-    r = insetrect(i->r, Selborder+1);
+    /*s: [[wmk()]] textual window settings, set scrollbar */
+    r = insetrect(w->i->r, Selborder+1);
     w->scrollr = r;
     w->scrollr.max.x = r.min.x+Scrollwid;
-
+    /*e: [[wmk()]] textual window settings, set scrollbar */
+    /*s: [[wmk()]] textual window settings, set frame */
+    r = insetrect(w->i->r, Selborder+1);
     r.min.x += Scrollwid+Scrollgap;
     frinit(&w->frm, r, font, i, cols);
-
+    /*s: [[wmk()]] textual window settings, extra frame settings */
     w->lastsr = ZR;
+    /*x: [[wmk()]] textual window settings, extra frame settings */
     w->frm.maxtab = maxtab * stringwidth(font, "0");
-    w->scrolling = scrolling;
+    /*e: [[wmk()]] textual window settings, extra frame settings */
+    /*e: [[wmk()]] textual window settings, set frame */
 
     r = insetrect(w->i->r, Selborder);
     draw(w->i, r, cols[BACK], nil, w->frm.entire.min);
+    /*x: [[wmk()]] textual window settings */
+    w->scrolling = scrolling; // autoscroll
     /*e: [[wmk()]] textual window settings */
-
+    /*s: [[wmk()]] process settings */
     w->notefd = -1;
     w->dir = estrdup(startdir);
-    w->label = estrdup("<unnamed>");
+    /*e: [[wmk()]] process settings */
 
+    /*s: [[wmk()]] drawing border */
     wborder(w, Selborder);
+    /*e: [[wmk()]] drawing border */
+    /*s: [[wmk()]] drawing scrollbar */
     wscrdraw(w);
+    /*e: [[wmk()]] drawing scrollbar */
 
     incref(w);	/* ref will be removed after mounting; avoids delete before ready to be deleted */
     return w;
@@ -206,8 +210,10 @@ wsetname(Window *w)
     // else
     /*s: [[wsetname()]] if image name already in use, try another name */
     for(i='A'; i<='Z'; i++){
+        // ok try again
         if(nameimage(w->i, w->name, true) > 0)
             return;
+        // else, retry
 
         errstr(err, sizeof err);
         if(strcmp(err, "image name in use") != 0)
@@ -215,7 +221,8 @@ wsetname(Window *w)
         w->name[n] = i;
         w->name[n+1] = '\0';
     }
-    w->name[0] = 0;
+    // else
+    w->name[0] = '\0';
     fprint(STDERR, "rio: setname failed: %s\n", err);
     /*e: [[wsetname()]] if image name already in use, try another name */
 }
@@ -236,11 +243,12 @@ wresize(Window *w, Image *i, bool move)
     w->mc.image = i;
 
     /*s: [[wresize()]] textual window updates */
+    /*s: [[wresize()]] textual window updates, reset lastsr */
+    w->lastsr = ZR;
+    /*e: [[wresize()]] textual window updates, reset lastsr */
     r = insetrect(i->r, Selborder+1);
     w->scrollr = r;
     w->scrollr.max.x = r.min.x+Scrollwid;
-
-    w->lastsr = ZR;
 
     r.min.x += Scrollwid+Scrollgap;
 
@@ -250,9 +258,9 @@ wresize(Window *w, Image *i, bool move)
         frclear(&w->frm, false);
         frinit(&w->frm, r, w->frm.font, w->i, cols);
         wsetcols(w);
-
+        /*s: [[wresize()]] textual window updates, extra frame settings */
         w->frm.maxtab = maxtab * stringwidth(w->frm.font, "0");
-
+        /*e: [[wresize()]] textual window updates, extra frame settings */
         r = insetrect(w->i->r, Selborder);
         draw(w->i, r, cols[BACK], nil, w->frm.entire.min);
 
@@ -287,7 +295,7 @@ wrefresh(Window *w, Rectangle)
 
     draw(w->i, insetrect(w->i->r, Borderwidth), frm->cols[BACK], nil, 
          w->i->r.min);
-    frm->ticked = 0;
+    frm->ticked = false;
     if(frm->p0 > 0)
         frdrawsel(frm, frptofchar(frm, 0), 0, frm->p0, 0);
     if(frm->p1 < frm->nchars)
@@ -307,17 +315,19 @@ wclose(Window *w)
     i = decref(w);
     if(i > 0)
         return false;
-
+    /*s: [[wclose()]] sanity check i */
     if(i < 0)
         error("negative ref count");
+    /*e: [[wclose()]] sanity check i */
+    /*s: [[wclose()]] sanity check w */
     if(!w->deleted)
         wclosewin(w);
+    /*e: [[wclose()]] sanity check w */
+
     wsendctlmesg(w, Exited, ZR, nil);
     return true;
 }
 /*e: function wclose */
-
-
 
 
 
@@ -330,10 +340,10 @@ wrepaint(Window *w)
     /*s: [[wrepaint()]] update cols */
     wsetcols(w);
     /*e: [[wrepaint()]] update cols */
-    /*s: [[wrepaint()]] if mouse not opened */
+    /*s: [[wrepaint()]] after updated cols, redraw content if mouse not opened */
     if(!w->mouseopen)
         frredraw(&w->frm);
-    /*e: [[wrepaint()]] if mouse not opened */
+    /*e: [[wrepaint()]] after updated cols, redraw content if mouse not opened */
 
     if(w == input){
         wborder(w, Selborder);
@@ -455,7 +465,7 @@ wtop(Point pt)
     if(w){
         if(w->topped == topped)
             return nil;
-        topwindow(w->i); // draw.h
+        topwindow(w->i); // window.h (was in draw.h)
         wcurrent(w);
         flushimage(display, true);
         w->topped = ++topped;
@@ -563,6 +573,4 @@ wsetpid(Window *w, int pid, bool dolabel)
     w->notefd = fd;
 }
 /*e: function wsetpid */
-
-
 /*e: windows/rio/wind.c */

@@ -1,5 +1,6 @@
 /*s: windows/rio/dat.h */
 
+// forward decls
 typedef	struct	Window Window;
 typedef	struct	Wctlmesg Wctlmesg;
 typedef	struct	Filsys Filsys;
@@ -95,6 +96,7 @@ enum
     /*e: constant Unselborder */
     /*s: constants Scrollxxx */
     Scrollwid 		= 12,	/* width of scroll bar */
+    /*x: constants Scrollxxx */
     Scrollgap 		= 4,	/* gap right of scroll bar */
     /*e: constants Scrollxxx */
     /*s: constant BIG */
@@ -108,15 +110,11 @@ enum
 /*e: constant DEBUG */
 
 /*s: enum wctlmesgkind */
-enum	/* control messages */
+enum ControlMessage	/* control messages */
 {
     Reshaped, // Resized, Hide/Expose
     Moved,
     /*s: [[Wctlmesgkind]] cases */
-    Wakeup,
-    /*x: [[Wctlmesgkind]] cases */
-    Refresh,
-    /*x: [[Wctlmesgkind]] cases */
     Deleted,
     /*x: [[Wctlmesgkind]] cases */
     Exited,
@@ -128,6 +126,10 @@ enum	/* control messages */
     /*x: [[Wctlmesgkind]] cases */
     Holdon,
     Holdoff,
+    /*x: [[Wctlmesgkind]] cases */
+    Wakeup,
+    /*x: [[Wctlmesgkind]] cases */
+    Refresh,
     /*e: [[Wctlmesgkind]] cases */
 };
 /*e: enum wctlmesgkind */
@@ -188,6 +190,7 @@ struct Mousestate
 /*s: struct Mouseinfo */
 struct Mouseinfo
 {
+    // queue of mouse clicks and releases
     Mousestate	queue[16];
 
     // consumer
@@ -196,12 +199,12 @@ struct Mouseinfo
     int	wi;	/* write index */
 
     bool	qfull;/* filled the queue; no more recording until client comes back */	
-
+    /*s: [[Mouseinfo]] other fields */
     ulong	counter;	/* serial no. of last mouse event we received */
     ulong	lastcounter;/* serial no. of last mouse event sent to client */
-
+    /*x: [[Mouseinfo]] other fields */
     int	lastb;	/* last button state we received */
-
+    /*e: [[Mouseinfo]] other fields */
 };	
 /*e: struct Mouseinfo */
 
@@ -242,6 +245,7 @@ struct Window
     Mousectl	mc;
     /*x: [[Window]] mouse fields */
     Cursor		cursor;
+    // option<ref<Cursor>> (to Window.cursor when not None)
     Cursor		*cursorp;
     /*x: [[Window]] mouse fields */
     Mouseinfo	mouse;
@@ -268,6 +272,7 @@ struct Window
     //--------------------------------------------------------------------
     /*s: [[Window]] process fields */
     int		pid;
+    /*x: [[Window]] process fields */
     // /proc/<pid>/notepg
     fdt	 	notefd;
     /*e: [[Window]] process fields */
@@ -305,13 +310,13 @@ struct Window
     uint		qh; // output point
     /*e: [[Window]] textual window fields, text cursors */
     /*s: [[Window]] textual window fields, visible text */
-    Frame frm;
+    uint		org;
     /*e: [[Window]] textual window fields, visible text */
     /*s: [[Window]] textual window fields, graphics */
+    Frame frm;
+    /*x: [[Window]] textual window fields, graphics */
     Rectangle	scrollr;
     /*e: [[Window]] textual window fields, graphics */
-    /*x: [[Window]] textual window fields */
-    uint		org;
     /*e: [[Window]] textual window fields */
 
     //--------------------------------------------------------------------
@@ -320,7 +325,7 @@ struct Window
     /*s: [[Window]] graphical window fields */
     bool	mouseopen;
     /*x: [[Window]] graphical window fields */
-    // array<Rune> (size = Window.nraw)
+    // growing_array<Rune> (size = Window.nraw)
     Rune		*raw;
     uint		nraw;
     /*e: [[Window]] graphical window fields */
@@ -335,7 +340,7 @@ struct Window
     /*x: [[Window]] other fields */
     bool	 	resized;
     /*x: [[Window]] other fields */
-    // chan<Mousereadmesg> (listener = xfidread(Qmouse), sender = winctl)
+    // chan<chan<Mouse> > (listener = xfidread(Qmouse), sender = winctl)
     Channel		*mouseread;	/* chan(Mousereadmesg) */
     /*x: [[Window]] other fields */
     // chan<Consreadmesg> (listener = xfidread(Qcons), sender = winctl)
@@ -445,7 +450,6 @@ struct Xfid
 };
 /*e: struct Xfid */
 
-
 /*s: constant Nhash */
 #define Nhash 16
 /*e: constant Nhash */
@@ -470,7 +474,6 @@ struct Filsys
     /*e: [[Filsys]] other fields */
 };
 /*e: struct Filsys */
-
 
 /*s: struct Timer */
 struct Timer
@@ -552,5 +555,4 @@ extern int		nsnarf;
 // error.c
 extern bool		errorshouldabort;
 extern char Eperm[];
-
 /*e: windows/rio/dat.h */

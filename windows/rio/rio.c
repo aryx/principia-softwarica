@@ -216,14 +216,14 @@ void threadmain(int argc, char *argv[])
     winclosechan = chancreate(sizeof(Window*), 0);
     /*e: [[main()]] communication channels creation */
     /*s: [[main()]] threads creation */
-    timerinit();
-
     threadcreate(keyboardthread, nil, STACK);
     threadcreate(mousethread, nil, STACK);
     /*x: [[main()]] threads creation */
     threadcreate(deletethread, nil, STACK);
     /*x: [[main()]] threads creation */
     threadcreate(winclosethread, nil, STACK);
+    /*x: [[main()]] threads creation */
+    timerinit();
     /*e: [[main()]] threads creation */
 
     // Rio, a filesystem server
@@ -261,5 +261,4 @@ void threadmain(int argc, char *argv[])
     threadexitsall(nil);
 }
 /*e: function threadmain */
-
 /*e: windows/rio/rio.c */

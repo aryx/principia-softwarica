@@ -132,5 +132,4 @@ char* 	estrdup(char*);
 // error.c
 void    derror(Display*, char *); // for main.c
 void	error(char*);
-
 /*e: windows/rio/fns.h */

@@ -14,7 +14,6 @@
 #include <plumb.h>
 #include <complete.h>
 
-
 #include "dat.h"
 #include "fns.h"
 
@@ -52,10 +51,7 @@ char*		menu2str[] = {
 /*e: global menu2str */
 
 /*s: global menu2 */
-Menu menu2 =
-{
-    menu2str
-};
+Menu menu2 = { .item = menu2str };
 /*e: global menu2 */
 
 /*s: global clickwin */
@@ -71,12 +67,9 @@ static Window	*selectwin;
 static uint	selectq;
 /*e: global selectq */
 
-
-
 //----------------------------------------------------------------------------
 // Completion
 //----------------------------------------------------------------------------
-
 
 /*s: function windfilewidth */
 int
@@ -193,7 +186,6 @@ namecomplete(Window *w)
     return rp;
 }
 /*e: function namecomplete */
-
 
 //----------------------------------------------------------------------------
 // Editor
@@ -335,7 +327,7 @@ wbacknl(Window *w, uint p, uint n)
 
 /*s: function wsetorigin */
 void
-wsetorigin(Window *w, uint org, int exact)
+wsetorigin(Window *w, uint org, bool exact)
 {
     int i, a, fixup;
     Rune *r;
@@ -461,8 +453,10 @@ winsert(Window *w, Rune *r, int n, uint q0)
 {
     uint m;
 
+    /*s: [[winsert()]] sanity check n */
     if(n == 0)
         return q0;
+    /*e: [[winsert()]] sanity check n */
     /*s: [[winsert()]] if size of rune array is getting really big */
     if(w->nr + n > HiWater && q0 >= w->org && q0 >= w->qh){
         m = min(HiWater-LoWater, min(w->org, w->qh));
@@ -505,6 +499,7 @@ winsert(Window *w, Rune *r, int n, uint q0)
     runemove(w->r + q0, r, n);
     w->nr += n;
 
+    /*s: [[winsert()]] adjust cursors */
     /* if output touches, advance selection, not qh; works best for keyboard and output */
     if(q0 <= w->q0)
         w->q0 += n; // move the q0 cursor
@@ -513,12 +508,15 @@ winsert(Window *w, Rune *r, int n, uint q0)
     if(q0 < w->qh)
         w->qh += n;
 
-    /*s: [[winsert()]] update visible text */
     if(q0 < w->org)
         w->org += n;
-    else if(q0 <= w->org + w->frm.nchars)
-        frinsert(&w->frm, r, r+n, q0 - w->org); // echo back
-    /*e: [[winsert()]] update visible text */
+    else
+       /*s: [[winsert()]] when [[q0 >= w->org]], possibly update visible text */
+       if(q0 <= w->org + w->frm.nchars)
+           frinsert(&w->frm, r, r+n, q0 - w->org); // echo back
+       /*e: [[winsert()]] when [[q0 >= w->org]], possibly update visible text */
+    /*e: [[winsert()]] adjust cursors */
+
     return q0;
 }
 /*e: function winsert */
@@ -531,7 +529,6 @@ wcontents(Window *w, int *ip)
     return runetobyte(w->r, w->nr, ip);
 }
 /*e: function wcontents */
-
 
 //----------------------------------------------------------------------------
 // Cut/copy/paste
@@ -582,7 +579,6 @@ wpaste(Window *w)
 }
 /*e: function wpaste */
 
-
 //----------------------------------------------------------------------------
 // Scrolling
 //----------------------------------------------------------------------------
@@ -629,7 +625,6 @@ framescroll(Frame *f, int dl)
     wframescroll(selectwin, dl);
 }
 /*e: function framescroll */
-
 
 //----------------------------------------------------------------------------
 // Selection
@@ -745,8 +740,6 @@ wdoubleclick(Window *w, uint *q0, uint *q1)
 /*e: function wdoubleclick */
 
 
-
-
 /*s: function wselect */
 void
 wselect(Window *w)
@@ -837,8 +830,6 @@ wselect(Window *w)
 // Clicking
 //----------------------------------------------------------------------------
 
-
-
 //----------------------------------------------------------------------------
 // Plumb
 //----------------------------------------------------------------------------
@@ -889,12 +880,9 @@ wplumb(Window *w)
 }
 /*e: function wplumb */
 
-
-
 //----------------------------------------------------------------------------
 // Middle click
 //----------------------------------------------------------------------------
-
 
 /*s: function button2menu */
 void
@@ -965,8 +953,6 @@ button2menu(Window *w)
 }
 /*e: function button2menu */
 
-
-
 //----------------------------------------------------------------------------
 // Mouse dispatch
 //----------------------------------------------------------------------------
@@ -1017,7 +1003,6 @@ wmousectl(Window *w)
 // Key dispatch
 //----------------------------------------------------------------------------
 
-
 /*s: function interruptproc */
 /*
  * Need to do this in a separate proc because if process we're interrupting
@@ -1034,8 +1019,6 @@ interruptproc(void *v)
 }
 /*e: function interruptproc */
 
-
-
 /*s: function wkeyctl */
 void
 wkeyctl(Window *w, Rune r)
@@ -1051,8 +1034,10 @@ wkeyctl(Window *w, Rune r)
     int *notefd;
     /*e: [[wkeyctl()]] locals */
 
+    /*s: [[wkeyctl()]] sanity check rune */
     if(r == 0)
         return;
+    /*e: [[wkeyctl()]] sanity check rune */
     /*s: [[wkeyctl()]] return if window was deleted */
     if(w->deleted)
         return;
@@ -1225,5 +1210,4 @@ wkeyctl(Window *w, Rune r)
     /*e: [[wkeyctl()]] when not rawing */
 }
 /*e: function wkeyctl */
-
 /*e: windows/rio/terminal.c */

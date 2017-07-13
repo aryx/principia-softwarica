@@ -40,7 +40,6 @@ enum {
 };
 /*e: enum Xxxx */
 
-
 /*s: function xfidctl */
 void
 xfidctl(void *arg)
@@ -64,7 +63,6 @@ xfidctl(void *arg)
     }
 }
 /*e: function xfidctl */
-
 
 /*s: function xfidflush */
 void
@@ -96,7 +94,6 @@ xfidflush(Xfid *x)
     filsysrespond(x->fs, x, &fc, nil);
 }
 /*e: function xfidflush */
-
 
 /*s: function xfidallocthread */
 void
@@ -176,6 +173,4 @@ xfidinit(void)
     return cxfidalloc;
 }
 /*e: function xfidinit */
-
-
 /*e: windows/rio/threads_worker.c */
