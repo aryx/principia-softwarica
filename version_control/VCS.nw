@@ -237,6 +237,8 @@ Here are other candidates that were considered but ultimately discarded:
 
 %http://manishearth.github.io/blog/2017/03/05/understanding-git-filter-branch/
 
+%https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain
+
 
 \section{Getting started}
 
@@ -288,6 +290,21 @@ License.
 % Could get that with copy, but better organized, and storing
 % deltas has efficiency implications. 
 %update: actually git does not really use delta. really more a content tracker.
+%update: actually can use delta, but for packfile.
+
+% need have different versions, different version id.
+%git: use simple scheme: not v1, v2, ... but sha1 of content!
+% then get for free consistency checking
+
+% then need to have not just version of one file but version
+% of a tree.
+%git: have tree structure which references other blob id and other trees.
+% if a full subtree does not change, then share reference.
+
+% then commit information.
+%git: again use object for that. then easy to reference
+% a tree version by referencing a commit id.
+% Also then can have references, symbolic references.
 
 % Also by having delta
 % and message associated with it help explore history. Git log, git
@@ -352,6 +369,11 @@ License.
 
 \section{Code organization}
 
+% requires also:
+% - zlib
+% - sha1
+% - binascii
+
 \section{Software architecture}
 
 % plumbing vs porcelain
@@ -370,10 +392,29 @@ License.
 %  - patch parsing/generation
 %  - fastimport/fastexport
 
-\section{SHA-1}
+\section{Bytes}
 
-% used for consistency checking, for identifying, for indexing, for folders.
+<<constant porcelain.DEFAULT_ENCODING>>=
+DEFAULT_ENCODING = 'utf-8'
+@
+% see to_bytes()
+
+% Why need speak about encoding early?
+% Can not just use bytes everywhere? filenames mentionned in
+% tree objects are utf8? the content of blob might be utf8 but we do not care.
+
+\section{SHA1}
+
+% used for versioning, identifying, consistency checking, for indexing, 
+% for folders.
 % SHA underlies lots of things in git.
+
+% sha1 returns number of 20 bytes.
+% Given that 1 byte can be encoded by 2 hex (e.g. 255 = 0xFF),
+% then you need 40 hex number to represent a sha1.
+
+% hexsha type! 40 bytes number as number in hexa.
+% (each byte is actually encoding only 16 values, an hexadecimal number)
 
 %for more information on SHA1:
 % http://www-cs-students.stanford.edu/~blynn/gitmagic/ch08.html
@@ -386,6 +427,8 @@ def sha_to_hex(sha):
     assert len(hexsha) == 40, "Incorrect length of sha1 string: %d" % hexsha
     return hexsha
 @
+% by 'string' I think it means series of 20 bytes
+% representing an sha (binary sha)
 
 <<function hex_to_sha>>=
 def hex_to_sha(hex):
@@ -411,7 +454,7 @@ def valid_hexsha(hex):
         return True
 @
 
-
+% see sha1() later.
 
 \section{Repository}
 
@@ -492,6 +535,7 @@ def hex_to_filename(path, hex):
     return os.path.join(path, dir, file)
 
 @
+% encode stuff?
 
 <<function filename_to_hex>>=
 def filename_to_hex(filename):
@@ -553,7 +597,7 @@ def __init__(self, object_store, refs):
 @
 
 
-% repo = object store and refs in object store.
+% repo = object store and refs in object store. Simple.
 % In fact can use r[xx] to access transparently either:
 
 <<[[BaseRepo]] methods>>=
@@ -581,6 +625,8 @@ def __getitem__(self, name):
 % can do r[xxx] or r.object_store[xxx]
 % self.refs and self.object_store are themselvesdictionary classes 
 
+% can use hexsha or binsha? 20,40?
+
 <<[[BaseRepo]] methods>>=
 def __setitem__(self, name, value):
     """Set a ref.
@@ -597,8 +643,9 @@ def __setitem__(self, name, value):
             raise TypeError(value)
     else:
         raise ValueError(name)
-
 @
+
+\t allow bytes value not shafile? what for? who uses that? can comment?
 
 <<[[BaseRepo]] methods>>=
 def __delitem__(self, name):
@@ -615,6 +662,8 @@ def __delitem__(self, name):
 
 
 \section{Object store}
+
+% git really is a content addressable storage engine.
 
 <<class DiskObjectStore>>=
 class DiskObjectStore(PackBasedObjectStore):
@@ -697,8 +746,9 @@ def get_raw(self, name):
 
     <<[[PackBasedObjectStore.get_raw()]] look in alternates>>
     raise KeyError(hexsha)
-
 @
+
+\t why this binsha and hexsha dance? why allow both?
 
 % so as_raw_string, and later from_fraw_string. useless a bit
 
@@ -716,6 +766,8 @@ def as_raw_string(self):
 % actually call serialize 1 time and deserialize 2 times?
 
 \section{Objects}
+
+%https://git-scm.com/book/en/v2/Git-Internals-Git-Objects
 
 \subsection{[[ShaFile]]}
 
@@ -756,12 +808,13 @@ def sha(self):
     return self._sha
 
 @
+% sha1() from ?
 
 <<[[ShaFile]] methods>>=
 def _header(self):
-    return object_header(self.type, self.raw_length())
-
+    return object_header(self.type_num, self.raw_length())
 @
+%bug: was self.type, but deprecated
 
 
 <<[[ShaFile]] methods>>=
@@ -1133,15 +1186,16 @@ def add(self, name, mode, hexsha):
     :param name: The name of the entry, as a string.
     :param hexsha: The hex SHA of the entry as a string.
     """
-    if isinstance(name, int) and isinstance(mode, bytes):
-        (name, mode) = (mode, name)
-        warnings.warn(
-            "Please use Tree.add(name, mode, hexsha)",
-            category=DeprecationWarning, stacklevel=2)
     self._entries[name] = mode, hexsha
     self._needs_serialization = True
-
 @
+
+%deprecated:
+%    if isinstance(name, int) and isinstance(mode, bytes):
+%        (name, mode) = (mode, name)
+%        warnings.warn(
+%            "Please use Tree.add(name, mode, hexsha)",
+%            category=DeprecationWarning, stacklevel=2)
 
 
 <<[[Tree]] methods>>=
@@ -1243,6 +1297,9 @@ def check(self):
 
 
 \section{References}
+
+%https://git-scm.com/book/en/v2/Git-Internals-Git-References
+%references vs symbolic references.
 
 <<class DiskRefsContainer>>=
 class DiskRefsContainer(RefsContainer):
@@ -1880,6 +1937,59 @@ def set_symbolic_ref(self, name, other):
 
 @
 
+<<[[RefsContainer]] methods>>=
+def _check_refname(self, name):
+    """Ensure a refname is valid and lives in refs or is HEAD.
+
+    HEAD is not a valid refname according to git-check-ref-format, but this
+    class needs to be able to touch HEAD. Also, check_ref_format expects
+    refnames without the leading 'refs/', but this class requires that
+    so it cannot touch anything outside the refs dir (or HEAD).
+
+    :param name: The name of the reference.
+    :raises KeyError: if a refname is not HEAD or is otherwise not valid.
+    """
+    if name in (b'HEAD', b'refs/stash'):
+        return
+    if not name.startswith(b'refs/') or not check_ref_format(name[5:]):
+        raise RefFormatError(name)
+
+@
+
+<<function refs.check_ref_format>>=
+def check_ref_format(refname):
+    """Check if a refname is correctly formatted.
+
+    Implements all the same rules as git-check-ref-format[1].
+
+    [1] http://www.kernel.org/pub/software/scm/git/docs/git-check-ref-format.html
+
+    :param refname: The refname to check
+    :return: True if refname is valid, False otherwise
+    """
+    # These could be combined into one big expression, but are listed separately
+    # to parallel [1].
+    if b'/.' in refname or refname.startswith(b'.'):
+        return False
+    if b'/' not in refname:
+        return False
+    if b'..' in refname:
+        return False
+    for i, c in enumerate(refname):
+        if ord(refname[i:i+1]) < 0o40 or c in BAD_REF_CHARS:
+            return False
+    if refname[-1] in b'/.':
+        return False
+    if refname.endswith(b'.lock'):
+        return False
+    if b'@{' in refname:
+        return False
+    if b'\\' in refname:
+        return False
+    return True
+@
+
+
 <<constant refs.SYMREF>>=
 SYMREF = b'ref: '
 @
@@ -1915,6 +2025,7 @@ def refpath(self, name):
 def _init_files(self, bare):
     """Initialize a default set of named files."""
     from dulwich.config import ConfigFile
+
     self._put_named_file('description', b"Unnamed repository")
     f = BytesIO()
     cf = ConfigFile()
@@ -1974,7 +2085,7 @@ class cmd_clone(Command):
 
 <<function porcelain.clone>>=
 def clone(source, target=None, bare=False, checkout=None,
-          errstream=default_bytes_err_stream, outstream=None,
+          errstream=default_bytes_err_stream,
           origin=b"origin"):
     """Clone a local or remote git repository.
 
@@ -1983,15 +2094,8 @@ def clone(source, target=None, bare=False, checkout=None,
     :param bare: Whether or not to create a bare repository
     :param checkout: Whether or not to check-out HEAD after cloning
     :param errstream: Optional stream to write progress to
-    :param outstream: Optional stream to write progress to (deprecated)
     :return: The new repository
     """
-    if outstream is not None:
-        import warnings
-        warnings.warn(
-            "outstream= has been deprecated in favour of errstream=.",
-            DeprecationWarning, stacklevel=3)
-        errstream = outstream
 
     if checkout is None:
         checkout = (not bare)
@@ -2045,6 +2149,16 @@ def clone(source, target=None, bare=False, checkout=None,
     return r
 @
 
+%deprecated:
+% outstream=None,
+%     :param outstream: Optional stream to write progress to (deprecated)
+%     if outstream is not None:
+%         import warnings
+%         warnings.warn(
+%             "outstream= has been deprecated in favour of errstream=.",
+%             DeprecationWarning, stacklevel=3)
+%         errstream = outstream
+
 
 <<[[GitClient]] methods>>=
 def fetch(self, path, target, determine_wants=None, progress=None):
@@ -2087,6 +2201,13 @@ def get_refs(self, path):
     raise NotImplementedError(self.get_refs)
 
 @
+
+<<[[RefsContainer]] methods>>=
+def import_refs(self, base, other):
+    for name, value in other.items():
+        self[b'/'.join((base, name))] = value
+@
+
 
 <<[[LocalGitClient]] methods>>=
 def fetch(self, path, target, determine_wants=None, progress=None):
@@ -2197,8 +2318,9 @@ def _parse_file(cls, f):
         obj = cls._parse_object_header(map, f)
         obj._parse_object(map)
     return obj
-
 @
+
+% map for ? mmap? f.read is Gifile.read?
 
 <<[[ShaFile]] methods>>=
 @staticmethod
@@ -2308,7 +2430,7 @@ def from_raw_string(type_num, string, sha=None):
 
 
 
-% porcelain.branch_create | porcelain.tag_create -> <>
+% porcelain.show | porcelain.branch_create | porcelain.tag_create -> <>
 <<function objectspec.parse_object>>=
 def parse_object(repo, objectish):
     """Parse a string referring to an object.
@@ -2563,6 +2685,8 @@ def parse_tree(text, strict=False):
         yield (name, mode, hexsha)
 @
 
+%\section{[[git show]]}
+%here?
 
 \section{Index}
 
@@ -3583,6 +3707,9 @@ def branch_delete(repo, name):
 
 \chapter{Pulling and Pushing}
 
+\section{Refspecs}
+
+%https://git-scm.com/book/en/v2/Git-Internals-The-Refspec
 
 \section{[[git pull]]}
 
@@ -3637,6 +3764,88 @@ def pull(repo, remote_location=None, refspecs=None,
         # Perform 'git checkout .' - syncs staged changes
         tree = r[b"HEAD"].tree
         r.reset_index()
+@
+
+
+<<function objectspec.parse_reftuples>>=
+def parse_reftuples(lh_container, rh_container, refspecs):
+    """Parse a list of reftuple specs to a list of reftuples.
+
+    :param lh_container: A RefsContainer object
+    :param hh_container: A RefsContainer object
+    :param refspecs: A list of refspecs or a string
+    :return: A list of refs
+    :raise KeyError: If one of the refs can not be found
+    """
+    if not isinstance(refspecs, list):
+        refspecs = [refspecs]
+    ret = []
+    # TODO: Support * in refspecs
+    for refspec in refspecs:
+        ret.append(parse_reftuple(lh_container, rh_container, refspec))
+    return ret
+@
+
+<<function objectspec.parse_reftuple>>=
+def parse_reftuple(lh_container, rh_container, refspec):
+    """Parse a reftuple spec.
+
+    :param lh_container: A RefsContainer object
+    :param hh_container: A RefsContainer object
+    :param refspec: A string
+    :return: A tuple with left and right ref
+    :raise KeyError: If one of the refs can not be found
+    """
+    if refspec.startswith(b"+"):
+        force = True
+        refspec = refspec[1:]
+    else:
+        force = False
+    refspec = to_bytes(refspec)
+    if b":" in refspec:
+        (lh, rh) = refspec.split(b":")
+    else:
+        lh = rh = refspec
+    if lh == b"":
+        lh = None
+    else:
+        lh = parse_ref(lh_container, lh)
+    if rh == b"":
+        rh = None
+    else:
+        try:
+            rh = parse_ref(rh_container, rh)
+        except KeyError:
+            # TODO: check force?
+            if not b"/" in rh:
+                rh = b"refs/heads/" + rh
+    return (lh, rh, force)
+@
+
+
+<<function objectspec.parse_ref>>=
+def parse_ref(container, refspec):
+    """Parse a string referring to a reference.
+
+    :param container: A RefsContainer object
+    :param refspec: A string referring to a ref
+    :return: A ref
+    :raise KeyError: If the ref can not be found
+    """
+    refspec = to_bytes(refspec)
+    possible_refs = [
+        refspec,
+        b"refs/" + refspec,
+        b"refs/tags/" + refspec,
+        b"refs/heads/" + refspec,
+        b"refs/remotes/" + refspec,
+        b"refs/remotes/" + refspec + b"/HEAD"
+    ]
+    for ref in possible_refs:
+        if ref in container:
+            return ref
+    else:
+        raise KeyError(refspec)
 @
 
 \section{[[git push]]}
@@ -3732,15 +3941,75 @@ def log(repo=".", paths=None, outstream=sys.stdout, max_entries=None,
 @
 
 
+<<function porcelain.print_name_status>>=
+def print_name_status(changes):
+    """Print a simple status summary, listing changed files.
+    """
+    for change in changes:
+        if not change:
+            continue
+        if isinstance(change, list):
+            change = change[0]
+        if change.type == CHANGE_ADD:
+            path1 = change.new.path
+            path2 = ''
+            kind = 'A'
+        elif change.type == CHANGE_DELETE:
+            path1 = change.old.path
+            path2 = ''
+            kind = 'D'
+        elif change.type == CHANGE_MODIFY:
+            path1 = change.new.path
+            path2 = ''
+            kind = 'M'
+        elif change.type in RENAME_CHANGE_TYPES:
+            path1 = change.old.path
+            path2 = change.new.path
+            if change.type == CHANGE_RENAME:
+                kind = 'R'
+            elif change.type == CHANGE_COPY:
+                kind = 'C'
+        yield '%-8s%-20s%-20s' % (kind, path1, path2)
+@
+
+<<function porcelain.print_commit>>=
+def print_commit(commit, decode, outstream=sys.stdout):
+    """Write a human-readable commit log entry.
+
+    :param commit: A `Commit` object
+    :param outstream: A stream file to write to
+    """
+    outstream.write("-" * 50 + "\n")
+    outstream.write("commit: " + commit.id.decode('ascii') + "\n")
+    if len(commit.parents) > 1:
+        outstream.write(
+            "merge: " +
+            "...".join([c.decode('ascii') for c in commit.parents[1:]]) + "\n")
+    outstream.write("Author: " + decode(commit.author) + "\n")
+    if commit.author != commit.committer:
+        outstream.write("Committer: " + decode(commit.committer) + "\n")
+
+    time_tuple = time.gmtime(commit.author_time + commit.author_timezone)
+    time_str = time.strftime("%a %b %d %Y %H:%M:%S", time_tuple)
+    timezone_str = format_timezone(commit.author_timezone).decode('ascii')
+    outstream.write("Date:   " + time_str + " " + timezone_str + "\n")
+    outstream.write("\n")
+    outstream.write(decode(commit.message) + "\n")
+    outstream.write("\n")
+@
+
+
 \section{Walker}
 
 \section{[[git show]]}
+% can be useful to understand formats
 
 <<function cmd_show>>=
 class cmd_show(Command):
 
     def run(self, args):
         opts, args = getopt(args, "", [])
+
         porcelain.show(".", args)
 @
 
@@ -3760,6 +4029,7 @@ def show(repo=".", objects=None, outstream=sys.stdout,
         objects = ["HEAD"]
     if not isinstance(objects, list):
         objects = [objects]
+
     with open_repo_closing(repo) as r:
         for objectish in objects:
             o = parse_object(r, objectish)
@@ -3770,6 +4040,72 @@ def show(repo=".", objects=None, outstream=sys.stdout,
                 def decode(x):
                     return x.decode(default_encoding)
             show_object(r, o, decode, outstream)
+@
+
+
+<<function porcelain.show_object>>=
+def show_object(repo, obj, decode, outstream):
+    return {
+        b"tree": show_tree,
+        b"blob": show_blob,
+        b"commit": show_commit,
+        b"tag": show_tag,
+            }[obj.type_name](repo, obj, decode, outstream)
+@
+
+\subsection{Commit}
+
+<<function porcelain.commit_decode>>=
+def commit_decode(commit, contents, default_encoding=DEFAULT_ENCODING):
+    if commit.encoding is not None:
+        return contents.decode(commit.encoding, "replace")
+    return contents.decode(default_encoding, "replace")
+@
+
+<<function porcelain.show_commit>>=
+def show_commit(repo, commit, decode, outstream=sys.stdout):
+    """Show a commit to a stream.
+
+    :param repo: A `Repo` object
+    :param commit: A `Commit` object
+    :param decode: Function for decoding bytes to unicode string
+    :param outstream: Stream to write to
+    """
+    print_commit(commit, decode=decode, outstream=outstream)
+    parent_commit = repo[commit.parents[0]]
+    write_tree_diff(
+        outstream, repo.object_store, parent_commit.tree, commit.tree)
+@
+% print_commit() before
+
+\subsection{Blob}
+
+<<function porcelain.show_blob>>=
+def show_blob(repo, blob, decode, outstream=sys.stdout):
+    """Write a blob to a stream.
+
+    :param repo: A `Repo` object
+    :param blob: A `Blob` object
+    :param decode: Function for decoding bytes to unicode string
+    :param outstream: A stream file to write to
+    """
+    outstream.write(decode(blob.data))
+
+@
+
+\subsection{Tree}
+
+<<function porcelain.show_tree>>=
+def show_tree(repo, tree, decode, outstream=sys.stdout):
+    """Print a tree to a stream.
+
+    :param repo: A `Repo` object
+    :param tree: A `Tree` object
+    :param decode: Function for decoding bytes to unicode string
+    :param outstream: Stream to write to
+    """
+    for n in tree:
+        outstream.write(decode(n) + "\n")
 @
 
 \section{[[git diff]]}
@@ -3850,6 +4186,42 @@ def status(repo="."):
 <<type GitStatus>>=
 # Module level tuple definition for status output
 GitStatus = namedtuple('GitStatus', 'staged unstaged untracked')
+@
+
+
+<<function porcelain.get_tree_changes>>=
+def get_tree_changes(repo):
+    """Return add/delete/modify changes to tree by comparing index to HEAD.
+
+    :param repo: repo path or object
+    :return: dict with lists for each type of change
+    """
+    with open_repo_closing(repo) as r:
+        index = r.open_index()
+
+        # Compares the Index to the HEAD & determines changes
+        # Iterate through the changes and report add/delete/modify
+        # TODO: call out to dulwich.diff_tree somehow.
+        tracked_changes = {
+            'add': [],
+            'delete': [],
+            'modify': [],
+        }
+        try:
+            tree_id = r[b'HEAD'].tree
+        except KeyError:
+            tree_id = None
+
+        for change in index.changes_from_tree(r.object_store, tree_id):
+            if not change[0][0]:
+                tracked_changes['add'].append(change[0][1])
+            elif not change[0][1]:
+                tracked_changes['delete'].append(change[0][0])
+            elif change[0][0] == change[0][1]:
+                tracked_changes['modify'].append(change[0][0])
+            else:
+                raise AssertionError('git mv ops not yet supported')
+        return tracked_changes
 @
 
 \section{[[git grep]]}
@@ -4143,6 +4515,25 @@ def archive(self, path, committish, write_data, progress=None,
             SIDE_BAND_CHANNEL_FATAL: write_error})
 @
 
+<<function client.read_pkt_refs>>=
+def read_pkt_refs(proto):
+    server_capabilities = None
+    refs = {}
+    # Receive refs from server
+    for pkt in proto.read_pkt_seq():
+        (sha, ref) = pkt.rstrip(b'\n').split(None, 1)
+        if sha == b'ERR':
+            raise GitProtocolError(ref)
+        if server_capabilities is None:
+            (ref, server_capabilities) = extract_capabilities(ref)
+        refs[ref] = sha
+
+    if len(refs) == 0:
+        return None, set([])
+    if refs == {CAPABILITIES_REF: ZERO_SHA}:
+        refs = {}
+    return refs, set(server_capabilities)
+@
 
 <<class TCPGitClient>>=
 class TCPGitClient(TraditionalGitClient):
@@ -4219,11 +4610,28 @@ def _connect(self, cmd, path):
     return proto, lambda: _fileno_can_read(s)
 @
 
+<<function client._fileno_can_read>>=
+def _fileno_can_read(fileno):
+    """Check if a file descriptor is readable."""
+    return len(select.select([fileno], [], [], 0)[0]) > 0
+@
+
 \section{Server}
 
 \chapter{Advanced Topics}
 
 \section{Tags}
+
+<<[[Tag]] methods>>=
+@classmethod
+def from_path(cls, filename):
+    tag = ShaFile.from_path(filename)
+    if not isinstance(tag, cls):
+        raise NotTagError(filename)
+    return tag
+
+@
+%dead?
 
 % why need tags? not simply refs?
 
@@ -4397,6 +4805,34 @@ def _serialize(self):
 @
 
 
+<<function porcelain.show_tag>>=
+def show_tag(repo, tag, decode, outstream=sys.stdout):
+    """Print a tag to a stream.
+
+    :param repo: A `Repo` object
+    :param tag: A `Tag` object
+    :param decode: Function for decoding bytes to unicode string
+    :param outstream: Stream to write to
+    """
+    print_tag(tag, decode, outstream)
+    show_object(repo, repo[tag.object[1]], outstream)
+@
+
+<<function porcelain.print_tag>>=
+def print_tag(tag, decode, outstream=sys.stdout):
+    """Write a human-readable tag.
+
+    :param tag: A `Tag` object
+    :param decode: Function for decoding bytes to unicode string
+    :param outstream: A stream to write to
+    """
+    outstream.write("Tagger: " + decode(tag.tagger) + "\n")
+    outstream.write("Date:   " + decode(tag.tag_time) + "\n")
+    outstream.write("\n")
+    outstream.write(decode(tag.message) + "\n")
+    outstream.write("\n")
+@
+
 \subsection{[[git tag]]}
 
 <<function cmd_tag>>=
@@ -4412,14 +4848,14 @@ class cmd_tag(Command):
 @
 % should call tag_create here instead
 
-<<function porcelain.tag>>=
-def tag(*args, **kwargs):
-    import warnings
-    warnings.warn("tag has been deprecated in favour of tag_create.",
-                  DeprecationWarning)
-    return tag_create(*args, **kwargs)
-
-@
+%deprecated:
+%<<function porcelain.tag>>=
+%def tag(*args, **kwargs):
+%    import warnings
+%    warnings.warn("tag has been deprecated in favour of tag_create.",
+%                  DeprecationWarning)
+%    return tag_create(*args, **kwargs)
+%@
 
 <<function porcelain.tag_create>>=
 def tag_create(
@@ -4558,6 +4994,8 @@ def format_reflog_line(old_sha, new_sha, committer, timestamp, timezone,
 <<constant object_store.PACKDIR>>=
 PACKDIR = 'pack'
 @
+
+%https://git-scm.com/book/en/v2/Git-Internals-Packfiles
 
 \subsection{Modifications}
 
@@ -4901,6 +5339,18 @@ for key in self.get_packed_refs():
 
 <<[[DiskRefsContainer.allkeys()]] look in packed refs>>=
 allkeys.update(self.get_packed_refs())
+@
+
+<<[[RefsContainer]] methods>>=
+def get_packed_refs(self):
+    """Get contents of the packed-refs file.
+
+    :return: Dictionary mapping ref names to SHA1s
+
+    :note: Will return an empty dictionary when no packed-refs file is
+        present.
+    """
+    raise NotImplementedError(self.get_packed_refs)
 @
 
 <<[[DiskRefsContainer]] methods>>=
@@ -6564,6 +7014,11 @@ class GitFastExporter(object):
         return marker
 @
 
+<<function fastexport.split_email>>=
+def split_email(text):
+    (name, email) = text.rsplit(b" <", 1)
+    return (name, email.rstrip(b">"))
+@
 
 <<class GitImportProcessor>>=
 class GitImportProcessor(processor.ImportProcessor):
@@ -6685,6 +7140,67 @@ class GitImportProcessor(processor.ImportProcessor):
 @
 
 \section{Advanced client/server capabilities}
+
+\subsection{Report status}
+
+<<class ReportStatusParser>>=
+class ReportStatusParser(object):
+    """Handle status as reported by servers with 'report-status' capability.
+    """
+
+    def __init__(self):
+        self._done = False
+        self._pack_status = None
+        self._ref_status_ok = True
+        self._ref_statuses = []
+
+    def check(self):
+        """Check if there were any errors and, if so, raise exceptions.
+
+        :raise SendPackError: Raised when the server could not unpack
+        :raise UpdateRefsError: Raised when refs could not be updated
+        """
+        if self._pack_status not in (b'unpack ok', None):
+            raise SendPackError(self._pack_status)
+        if not self._ref_status_ok:
+            ref_status = {}
+            ok = set()
+            for status in self._ref_statuses:
+                if b' ' not in status:
+                    # malformed response, move on to the next one
+                    continue
+                status, ref = status.split(b' ', 1)
+
+                if status == b'ng':
+                    if b' ' in ref:
+                        ref, status = ref.split(b' ', 1)
+                else:
+                    ok.add(ref)
+                ref_status[ref] = status
+            # TODO(jelmer): don't assume encoding of refs is ascii.
+            raise UpdateRefsError(', '.join([
+                ref.decode('ascii') for ref in ref_status if ref not in ok]) +
+                ' failed to update', ref_status=ref_status)
+
+    def handle_packet(self, pkt):
+        """Handle a packet.
+
+        :raise GitProtocolError: Raised when packets are received after a
+            flush packet.
+        """
+        if self._done:
+            raise GitProtocolError("received more data after status report")
+        if pkt is None:
+            self._done = True
+            return
+        if self._pack_status is None:
+            self._pack_status = pkt.strip()
+        else:
+            ref_status = pkt.strip()
+            self._ref_statuses.append(ref_status)
+            if not ref_status.startswith(b'ok '):
+                self._ref_status_ok = False
+@
 
 \subsection{Quiet}
 
@@ -7037,9 +7553,11 @@ def parse_submodules(config):
 
 \section{Legacy objects}
 
+% actually legacy object are standard format of git.
+
 <<[[ShaFile._parse_file()]] if legacy object>>=
 if cls._is_legacy_object(map):
-    raise AssertionError('use legacy format')
+    #pad: raise AssertionError('use legacy format')
     obj = cls._parse_legacy_object_header(map, f)
     obj._parse_legacy_object(map)
 @
@@ -7264,6 +7782,35 @@ def get_peeled(self, name):
 
 \section{Configuration file, [[.git/config]]}
 
+<<[[BaseRepo]] methods>>=
+def get_config(self):
+    """Retrieve the config object.
+
+    :return: `ConfigFile` object for the ``.git/config`` file.
+    """
+    raise NotImplementedError(self.get_config)
+@
+
+% porcelain.clone | Repo.reset_index -> <>
+<<[[Repo]] methods>>=
+def get_config(self):
+    """Retrieve the config object.
+
+    :return: `ConfigFile` object for the ``.git/config`` file.
+    """
+    from dulwich.config import ConfigFile
+    path = os.path.join(self._controldir, 'config')
+    try:
+        return ConfigFile.from_path(path)
+    except (IOError, OSError) as e:
+        if e.errno != errno.ENOENT:
+            raise
+        ret = ConfigFile()
+        ret.path = path
+        return ret
+@
+%``
+
 
 <<class ConfigFile>>=
 class ConfigFile(ConfigDict):
@@ -7432,6 +7979,92 @@ def from_file(cls, f):
     return ret
 @
 
+<<function config._strip_comments>>=
+def _strip_comments(line):
+    line = line.split(b"#")[0]
+    line = line.split(b";")[0]
+    return line
+@
+
+<<function config._check_variable_name>>=
+def _check_variable_name(name):
+    for i in range(len(name)):
+        c = name[i:i+1]
+        if not c.isalnum() and c != b'-':
+            return False
+    return True
+@
+
+<<function config._check_section_name>>=
+def _check_section_name(name):
+    for i in range(len(name)):
+        c = name[i:i+1]
+        if not c.isalnum() and c not in (b'-', b'.'):
+            return False
+    return True
+@
+
+<<function config._parse_string>>=
+def _parse_string(value):
+    value = bytearray(value.strip())
+    ret = bytearray()
+    whitespace = bytearray()
+    in_quotes = False
+    i = 0
+    while i < len(value):
+        c = value[i]
+        if c == ord(b"\\"):
+            i += 1
+            try:
+                v = _ESCAPE_TABLE[value[i]]
+            except IndexError:
+                raise ValueError(
+                    "escape character in %r at %d before end of string" %
+                    (value, i))
+            except KeyError:
+                raise ValueError(
+                    "escape character followed by unknown character "
+                    "%s at %d in %r" % (value[i], i, value))
+            if whitespace:
+                ret.extend(whitespace)
+                whitespace = bytearray()
+            ret.append(v)
+        elif c == ord(b"\""):
+            in_quotes = (not in_quotes)
+        elif c in _COMMENT_CHARS and not in_quotes:
+            # the rest of the line is a comment
+            break
+        elif c in _WHITESPACE_CHARS:
+            whitespace.append(c)
+        else:
+            if whitespace:
+                ret.extend(whitespace)
+                whitespace = bytearray()
+            ret.append(c)
+        i += 1
+
+    if in_quotes:
+        raise ValueError("missing end quote")
+
+    return bytes(ret)
+@
+
+<<constant config._ESCAPE_TABLE>>=
+_ESCAPE_TABLE = {
+    ord(b"\\"): ord(b"\\"),
+    ord(b"\""): ord(b"\""),
+    ord(b"n"): ord(b"\n"),
+    ord(b"t"): ord(b"\t"),
+    ord(b"b"): ord(b"\b"),
+    }
+@
+<<constant config._COMMENT_CHARS>>=
+_COMMENT_CHARS = [ord(b"#"), ord(b";")]
+@
+<<constant config._WHITESPACE_CHARS>>=
+_WHITESPACE_CHARS = [ord(b"\t"), ord(b" ")]
+@
+
 <<[[ConfigFile]] methods>>=
 @classmethod
 def from_path(cls, path):
@@ -7475,6 +8108,27 @@ def write_to_file(self, f):
             f.write(b"\t" + key + b" = " + value + b"\n")
 @
 
+<<function config._format_string>>=
+def _format_string(value):
+    if (value.startswith(b" ") or
+            value.startswith(b"\t") or
+            value.endswith(b" ") or
+            b'#' in value or
+            value.endswith(b"\t")):
+        return b'"' + _escape_value(value) + b'"'
+    else:
+        return _escape_value(value)
+@
+
+<<function config._escape_value>>=
+def _escape_value(value):
+    """Escape a value."""
+    value = value.replace(b"\\", b"\\\\")
+    value = value.replace(b"\n", b"\\n")
+    value = value.replace(b"\t", b"\\t")
+    value = value.replace(b"\"", b"\\\"")
+    return value
+@
 
 
 <<[[ConfigDict]] methods>>=
@@ -7909,14 +8563,6 @@ get_ssh_vendor = SubprocessSSHVendor
 class SSHVendor(object):
     """A client side SSH implementation."""
 
-    def connect_ssh(self, host, command, username=None, port=None):
-        # This function was deprecated in 0.9.1
-        import warnings
-        warnings.warn(
-            "SSHVendor.connect_ssh has been renamed to SSHVendor.run_command",
-            DeprecationWarning)
-        return self.run_command(host, command, username=username, port=port)
-
     def run_command(self, host, command, username=None, port=None):
         """Connect to an SSH server.
 
@@ -7930,6 +8576,15 @@ class SSHVendor(object):
         """
         raise NotImplementedError(self.run_command)
 @
+
+%deprecated:
+%    def connect_ssh(self, host, command, username=None, port=None):
+%        # This function was deprecated in 0.9.1
+%        import warnings
+%        warnings.warn(
+%            "SSHVendor.connect_ssh has been renamed to SSHVendor.run_command",
+%            DeprecationWarning)
+%        return self.run_command(host, command, username=username, port=port)
 
 <<class SubprocessSSHVendor>>=
 class SubprocessSSHVendor(SSHVendor):
@@ -8205,6 +8860,32 @@ class HttpGitClient(GitClient):
         refs, _ = self._discover_references(
             b"git-upload-pack", url)
         return refs
+@
+
+
+<<function client.default_user_agent_string>>=
+def default_user_agent_string():
+    return "dulwich/%s" % ".".join([str(x) for x in dulwich.__version__])
+@
+
+<<function client.default_urllib2_opener>>=
+def default_urllib2_opener(config):
+    if config is not None:
+        proxy_server = config.get("http", "proxy")
+    else:
+        proxy_server = None
+    handlers = []
+    if proxy_server is not None:
+        handlers.append(urllib2.ProxyHandler({"http": proxy_server}))
+    opener = urllib2.build_opener(*handlers)
+    if config is not None:
+        user_agent = config.get("http", "useragent")
+    else:
+        user_agent = None
+    if user_agent is None:
+        user_agent = default_user_agent_string()
+    opener.addheaders = [('User-agent', user_agent)]
+    return opener
 @
 
 \section{[[git://]] server}
