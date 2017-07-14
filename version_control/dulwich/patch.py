@@ -1,4 +1,4 @@
-# nw_s: patch.py |b879377a98632acc17074b29f6fcf71e#
+# nw_s: patch.py |0dca1727b1ee2e2d3c581317d02a0ec9#
 # patch.py -- For dealing with packed-style patches.
 # Copyright (C) 2009-2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -38,7 +38,7 @@ from dulwich.objects import (
 
 FIRST_FEW_BYTES = 8000
 
-
+# nw_s: function patch.write_commit_patch |57d65235d2cb778bacdf997d504df097#
 def write_commit_patch(f, commit, contents, progress, version=None, encoding=None):
     """Write a individual file patch.
 
@@ -73,8 +73,9 @@ def write_commit_patch(f, commit, contents, progress, version=None, encoding=Non
         f.write(b"Dulwich %d.%d.%d\n" % dulwich_version)
     else:
         f.write(version.encode(encoding) + b"\n")
+# nw_e: function patch.write_commit_patch #
 
-
+# nw_s: function patch.get_summary |8a12f5251f396500fd20cc34ab4efaec#
 def get_summary(commit):
     """Determine the summary line for use in a filename.
 
@@ -82,6 +83,7 @@ def get_summary(commit):
     :return: Summary string
     """
     return commit.message.splitlines()[0].replace(" ", "-")
+# nw_e: function patch.get_summary #
 
 
 # nw_s: function patch.unified_diff |782c29693b1b280ccec0f3e8a2faf821#
@@ -116,19 +118,22 @@ def unified_diff(a, b, fromfile, tofile, n=3):
                     yield b'+' + line
 # nw_e: function patch.unified_diff #
 
+# nw_s: function patch.is_binary |8889b9c44ed459fd586fa228276bdb3d#
 def is_binary(content):
     """See if the first few bytes contain any null characters.
 
     :param content: Bytestring to check for binary content
     """
     return b'\0' in content[:FIRST_FEW_BYTES]
+# nw_e: function patch.is_binary #
 
-
+# nw_s: function patch.shortid |92c25b9db25bb4efa2eb6c1df5deacd3#
 def shortid(hexsha):
     if hexsha is None:
         return b"0" * 7
     else:
         return hexsha[:7]
+# nw_e: function patch.shortid #
 
 # nw_s: function patch.patch_filename |a28bfbeed6592e20b3f31434db61618d#
 def patch_filename(p, root):
@@ -272,7 +277,7 @@ def git_am_patch_split(f, encoding=None):
     return parse_patch_message(msg, encoding)
 # nw_e: function patch.git_am_patch_split #
 
-
+# nw_s: function patch.parse_patch_message |f1b1121d4e40814c69f3fd3e2dbb36bc#
 def parse_patch_message(msg, encoding=None):
     """Extract a Commit object and patch from an e-mail message.
 
@@ -318,4 +323,5 @@ def parse_patch_message(msg, encoding=None):
     except StopIteration:
         version = None
     return c, diff, version
+# nw_e: function patch.parse_patch_message #
 # nw_e: patch.py #

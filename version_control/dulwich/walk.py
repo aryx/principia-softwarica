@@ -1,4 +1,4 @@
-# nw_s: dulwich/walk.py |be1d9ec6a5e0387f0341c7cb23819cb8#
+# nw_s: dulwich/walk.py |e1d2c2cadf40e3e2f7b8cd35804677c6#
 # walk.py -- General implementation of walking commits and their contents.
 # Copyright (C) 2010 Google, Inc.
 #
@@ -43,15 +43,21 @@ from dulwich.objects import (
     Tag,
     )
 
+# nw_s: type walk.ORDER |b9a955812da13fd06b3f9c5487832e3f#
 ORDER_DATE = 'date'
 ORDER_TOPO = 'topo'
+# nw_e: type walk.ORDER #
 
+# nw_s: constant walk.ALL_ORDERS |8cfd9c0d64d6fc12b79fc67c15e4aa42#
 ALL_ORDERS = (ORDER_DATE, ORDER_TOPO)
+# nw_e: constant walk.ALL_ORDERS #
 
+# nw_s: constant walk._MAX_EXTRA_COMMITS |96b3529b65d8a8534b333b8d6b3faf96#
 # Maximum number of commits to walk past a commit time boundary.
 _MAX_EXTRA_COMMITS = 5
+# nw_e: constant walk._MAX_EXTRA_COMMITS #
 
-
+# nw_s: class WalkEntry |32f66811fd50548282f909b9ace59928#
 class WalkEntry(object):
     """Object encapsulating a single result from a walk."""
 
@@ -120,8 +126,9 @@ class WalkEntry(object):
     def __repr__(self):
         return '<WalkEntry commit=%s, changes=%r>' % (
           self.commit.id, self.changes())
+# nw_e: class WalkEntry #
 
-
+# nw_s: class _CommitTimeQueue |d7c25adcb817f7eb78ce7f179b2985ba#
 class _CommitTimeQueue(object):
     """Priority queue of WalkEntry objects by commit time."""
 
@@ -226,8 +233,9 @@ class _CommitTimeQueue(object):
         return None
 
     __next__ = next
+# nw_e: class _CommitTimeQueue #
 
-
+# nw_s: class Walker |29139c5619ba9d1c8cc1c6405f42aa13#
 class Walker(object):
     """Object for performing a walk of commits in a store.
 
@@ -381,8 +389,9 @@ class Walker(object):
 
     def __iter__(self):
         return iter(self._reorder(iter(self._next, None)))
+# nw_e: class Walker #
 
-
+# nw_s: function walk._topo_reorder |7b01fe7538d5d4c19c4e2f4958f991ec#
 def _topo_reorder(entries, get_parents=lambda commit: commit.parents):
     """Reorder an iterable of entries topologically.
 
@@ -416,4 +425,5 @@ def _topo_reorder(entries, get_parents=lambda commit: commit.parents):
                 if parent_entry:
                     todo.appendleft(parent_entry)
         yield entry
+# nw_e: function walk._topo_reorder #
 # nw_e: dulwich/walk.py #

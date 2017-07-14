@@ -1,4 +1,4 @@
-# nw_s: dulwich/objects.py |3838a29a832cd2dd0ebf5285175bbf26#
+# nw_s: dulwich/objects.py |c5bcda67c2b51bb5a4cd47585bab2e87#
 # objects.py -- Access to base git objects
 # Copyright (C) 2007 James Westby <jw+debian@jameswestby.net>
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
@@ -43,23 +43,29 @@ from dulwich.errors import (
     )
 from dulwich.file import GitFile
 
-
+# nw_s: constant objects.ZERO_SHA |108c8920015a317044badd807e8dc4b6#
 ZERO_SHA = b'0' * 40
+# nw_e: constant objects.ZERO_SHA #
 
+# nw_s: constants objects.commits_HEADER |1bbad1a7d8df76d90783eda7916b9a43#
 # Header fields for commits
 _TREE_HEADER = b'tree'
 _PARENT_HEADER = b'parent'
 _AUTHOR_HEADER = b'author'
+
 _COMMITTER_HEADER = b'committer'
 _ENCODING_HEADER = b'encoding'
 _MERGETAG_HEADER = b'mergetag'
 _GPGSIG_HEADER = b'gpgsig'
+# nw_e: constants objects.commits_HEADER #
 
+# nw_s: constants objects.objects_HEADER |1c2a9e04c394060ddd194ebc8e89da4b#
 # Header fields for objects
 _OBJECT_HEADER = b'object'
 _TYPE_HEADER = b'type'
 _TAG_HEADER = b'tag'
 _TAGGER_HEADER = b'tagger'
+# nw_e: constants objects.objects_HEADER #
 
 
 # nw_s: constant S_IFGITLINK |cd08f9e822e536fb5480045cb9b32e8f#
@@ -1298,18 +1304,18 @@ class Commit(ShaFile):
         "tree", "Tree that is the state of this commit")
 
     # nw_e: [[Commit]] methods #
-    # nw_s: [[Commit]] methods |0cd7e57b050b9d98a98626477560b702#
-    # nw_s: method Common._get_parents |c78795930531579145261947c3873e08#
+    # nw_s: [[Commit]] methods |4633319a4b7da12a6765732015859c55#
+    # nw_s: method Commit._get_parents |c78795930531579145261947c3873e08#
     def _get_parents(self):
         """Return a list of parents of this commit."""
         return self._parents
-    # nw_e: method Common._get_parents #
-    # nw_s: method Common._set_parents |650c5a864d79317ba0fa40abe096559c#
+    # nw_e: method Commit._get_parents #
+    # nw_s: method Commit._set_parents |650c5a864d79317ba0fa40abe096559c#
     def _set_parents(self, value):
         """Set a list of parents of this commit."""
         self._needs_serialization = True
         self._parents = value
-    # nw_e: method Common._set_parents #
+    # nw_e: method Commit._set_parents #
     parents = property(_get_parents, _set_parents,
                        doc="Parents of this commit, by their SHA1.")
     # nw_e: [[Commit]] methods #

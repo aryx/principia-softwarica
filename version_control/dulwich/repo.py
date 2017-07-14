@@ -1,4 +1,4 @@
-# nw_s: dulwich/repo.py |198a265be5edd9ff90914a436988229e#
+# nw_s: dulwich/repo.py |0ffe065432de4c399343bf57191f8e1b#
 # repo.py -- For dealing with git repositories.
 # Copyright (C) 2007 James Westby <jw+debian@jameswestby.net>
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
@@ -110,8 +110,12 @@ INDEX_FILENAME = "index"
 # nw_s: constant repo.COMMONDIR |c89efbea91f2a3f559048a7574108648#
 COMMONDIR = 'commondir'
 # nw_e: constant repo.COMMONDIR #
+# nw_s: constant repo.GITDIR |3702dc9bf4f7e63706e5374aad0bad29#
 GITDIR = 'gitdir'
+# nw_e: constant repo.GITDIR #
+# nw_s: constant repo.WORKTREES |9a4090bbee5c058130f81ffc9023ad64#
 WORKTREES = 'worktrees'
+# nw_e: constant repo.WORKTREES #
 
 # nw_s: constant repo.BASE_DIRECTORIES |b934885afb88eb35d4d9163b919a2473#
 BASE_DIRECTORIES = [
@@ -261,12 +265,15 @@ class BaseRepo(object):
         else:
             raise ValueError(name)
     # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |2ee64063b4a62bf47f40068a2d1c3147#
+    # nw_s: [[BaseRepo]] methods |844e05dbc277bc06e356b2108cbefbc3#
     def _init_files(self, bare):
         """Initialize a default set of named files."""
         from dulwich.config import ConfigFile
 
         self._put_named_file('description', b"Unnamed repository")
+        self._put_named_file(os.path.join('info', 'exclude'), b'')
+
+        # nw_s: [[BaseRepo.__init_files()]] create config file |520b8fcb86d952b43666cbc61be8020c#
         f = BytesIO()
         cf = ConfigFile()
         cf.set(b"core", b"repositoryformatversion", b"0")
@@ -279,8 +286,141 @@ class BaseRepo(object):
         cf.set(b"core", b"logallrefupdates", True)
         cf.write_to_file(f)
         self._put_named_file('config', f.getvalue())
-        self._put_named_file(os.path.join('info', 'exclude'), b'')
+        # nw_e: [[BaseRepo.__init_files()]] create config file #
+    # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |482c014b4e76e37d166eb457dbe50d86#
+    def get_named_file(self, path):
+        """Get a file from the control dir with a specific name.
 
+        Although the filename should be interpreted as a filename relative to
+        the control dir in a disk-based Repo, the object returned need not be
+        pointing to a file in that location.
+
+        :param path: The path to the file, relative to the control dir.
+        :return: An open file object, or None if the file does not exist.
+        """
+        raise NotImplementedError(self.get_named_file)
+    # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |da2a13bde3a6a75942985dfb548590bb#
+    def _put_named_file(self, path, contents):
+        """Write a file to the control dir with the given name and contents.
+
+        :param path: The path to the file, relative to the control dir.
+        :param contents: A string to write to the file.
+        """
+        raise NotImplementedError(self._put_named_file)
+    # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |9d2cf566a2c68a14f86cde11f6b43b00#
+    def fetch(self, target, determine_wants=None, progress=None):
+        """Fetch objects into another repository.
+
+        :param target: The target repository
+        :param determine_wants: Optional function to determine what refs to
+            fetch.
+        :param progress: Optional progress function
+        :return: The local refs
+        """
+        if determine_wants is None:
+            determine_wants = target.object_store.determine_wants_all
+        target.object_store.add_objects(
+            self.fetch_objects(determine_wants, target.get_graph_walker(),
+                               progress))
+        return self.get_refs()
+    # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |a6963cadb430cd09e54eeea4cce870ff#
+    def fetch_objects(self, determine_wants, graph_walker, progress,
+                      get_tagged=None):
+        """Fetch the missing objects required for a set of revisions.
+
+        :param determine_wants: Function that takes a dictionary with heads
+            and returns the list of heads to fetch.
+        :param graph_walker: Object that can iterate over the list of revisions
+            to fetch and has an "ack" method that will be called to acknowledge
+            that a revision is present.
+        :param progress: Simple progress function that will be called with
+            updated progress strings.
+        :param get_tagged: Function that returns a dict of pointed-to sha ->
+            tag sha for including tags.
+        :return: iterator over objects, with __len__ implemented
+        """
+        wants = determine_wants(self.get_refs())
+        if not isinstance(wants, list):
+            raise TypeError("determine_wants() did not return a list")
+
+        shallows = getattr(graph_walker, 'shallow', frozenset())
+        unshallows = getattr(graph_walker, 'unshallow', frozenset())
+
+        if wants == []:
+            # TODO(dborowitz): find a way to short-circuit that doesn't change
+            # this interface.
+
+            if shallows or unshallows:
+                # Do not send a pack in shallow short-circuit path
+                return None
+
+            return []
+
+        # If the graph walker is set up with an implementation that can
+        # ACK/NAK to the wire, it will write data to the client through
+        # this call as a side-effect.
+        haves = self.object_store.find_common_revisions(graph_walker)
+
+        # Deal with shallow requests separately because the haves do
+        # not reflect what objects are missing
+        if shallows or unshallows:
+            # TODO: filter the haves commits from iter_shas. the specific
+            # commits aren't missing.
+            haves = []
+
+        def get_parents(commit):
+            if commit.id in shallows:
+                return []
+            return self.get_parents(commit.id, commit)
+
+        return self.object_store.iter_shas(
+          self.object_store.find_missing_objects(
+              haves, wants, progress,
+              get_tagged,
+              get_parents=get_parents))
+    # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |025c6bb705d0f15d66fe4a6801e79ae4#
+    def get_parents(self, sha, commit=None):
+        """Retrieve the parents of a specific commit.
+
+        If the specific commit is a graftpoint, the graft parents
+        will be returned instead.
+
+        :param sha: SHA of the commit for which to retrieve the parents
+        :param commit: Optional commit matching the sha
+        :return: List of parents
+        """
+
+        # nw_s: [[BaseRepo.get_parents()]] look if graftpoint |351181d23a45288c3f697e14b809bcf7#
+        try:
+            return self._graftpoints[sha]
+        except KeyError:
+        # nw_e: [[BaseRepo.get_parents()]] look if graftpoint #
+            #// else
+            if commit is None:
+                commit = self[sha]
+            return commit.parents
+    # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |262c4be8b87d976fc154a5614acd746d#
+    def get_refs(self):
+        """Get dictionary with all refs.
+
+        :return: A ``dict`` mapping ref names to SHA1s
+        """
+        return self.refs.as_dict()
+    # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |5d41521158cd9ae62df66941d07f7237#
+    def open_index(self):
+        """Open the index for this repository.
+
+        :raise NoIndexPresent: If no index is present
+        :return: The matching `Index`
+        """
+        raise NotImplementedError(self.open_index)
     # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |bb79ef4273920ccc9efded43a31160a6#
     def get_graph_walker(self, heads=None):
@@ -295,6 +435,44 @@ class BaseRepo(object):
         if heads is None:
             heads = self.refs.as_dict(b'refs/heads').values()
         return ObjectStoreGraphWalker(heads, self.get_parents)
+    # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |9b4f4e4b70c298d819d6a53f1424f8a7#
+    def get_walker(self, include=None, *args, **kwargs):
+        """Obtain a walker for this repository.
+
+        :param include: Iterable of SHAs of commits to include along with their
+            ancestors. Defaults to [HEAD]
+        :param exclude: Iterable of SHAs of commits to exclude along with their
+            ancestors, overriding includes.
+        :param order: ORDER_* constant specifying the order of results.
+            Anything other than ORDER_DATE may result in O(n) memory usage.
+        :param reverse: If True, reverse the order of output, requiring O(n)
+            memory.
+        :param max_entries: The maximum number of entries to yield, or None for
+            no limit.
+        :param paths: Iterable of file or subtree paths to show entries for.
+        :param rename_detector: diff.RenameDetector object for detecting
+            renames.
+        :param follow: If True, follow path across renames/copies. Forces a
+            default rename_detector.
+        :param since: Timestamp to list commits after.
+        :param until: Timestamp to list commits before.
+        :param queue_cls: A class to use for a queue of commits, supporting the
+            iterator protocol. The constructor takes a single argument, the
+            Walker.
+        :return: A `Walker` object
+        """
+        from dulwich.walk import Walker
+        if include is None:
+            include = [self.head()]
+        if isinstance(include, str):
+            include = [include]
+
+        kwargs['get_parents'] = lambda commit: self.get_parents(
+            commit.id, commit)
+
+        return Walker(self.object_store, include, *args, **kwargs)
+
     # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |189a345b4fdd173659a7cbb7ec6d8355#
     def do_commit(self, message=None, committer=None,
@@ -414,7 +592,15 @@ class BaseRepo(object):
 
         return c.id
     # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |4b96cc8e4f34e891afdde58bb6b08c20#
+    # nw_s: [[BaseRepo]] methods |29ea96dee85769477cd2b1aa8724ec11#
+    def _get_user_identity(self):
+        """Determine the identity to use for new commits.
+        """
+        config = self.get_config_stack()
+        return (config.get((b"user", ), b"name") + b" <" +
+                config.get((b"user", ), b"email") + b">")
+    # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |856df577c3f4158131e7b7fb1ab76431#
     def _add_graftpoints(self, updated_graftpoints):
         """Add or modify graftpoints
 
@@ -427,9 +613,8 @@ class BaseRepo(object):
                 check_hexsha(sha, 'Invalid graftpoint')
 
         self._graftpoints.update(updated_graftpoints)
-
     # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |09d206e660acb4bb3d414c2c9211cc9e#
+    # nw_s: [[BaseRepo]] methods |0fb9b22f8184d2acab70400f80c1d009#
     def _remove_graftpoints(self, to_remove=[]):
         """Remove graftpoints
 
@@ -437,7 +622,6 @@ class BaseRepo(object):
         """
         for sha in to_remove:
             del self._graftpoints[sha]
-
     # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |33dd24af28c8691a5ed6ae921a9602b4#
     def get_peeled(self, ref):
@@ -453,6 +637,14 @@ class BaseRepo(object):
             return cached
         return self.object_store.peel_sha(self.refs[ref]).id
     # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |f4dac773fc29bb887c7f634383eccc04#
+    def _determine_file_mode(self):
+        """Probe the file-system to determine whether permissions can be trusted.
+
+        :return: True if permissions can be trusted, False otherwise.
+        """
+        raise NotImplementedError(self._determine_file_mode)
+    # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |f0df7295180d252bf7f3ccc6678e555f#
     def get_config(self):
         """Retrieve the config object.
@@ -461,139 +653,13 @@ class BaseRepo(object):
         """
         raise NotImplementedError(self.get_config)
     # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |977284cdb0922c8dc2c96cb3401e4561#
-    def _determine_file_mode(self):
-        """Probe the file-system to determine whether permissions can be trusted.
-
-        :return: True if permissions can be trusted, False otherwise.
-        """
-        raise NotImplementedError(self._determine_file_mode)
-
-    # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |8256aab48702db0e1a5e365b241eff6b#
-    def get_named_file(self, path):
-        """Get a file from the control dir with a specific name.
-
-        Although the filename should be interpreted as a filename relative to
-        the control dir in a disk-based Repo, the object returned need not be
-        pointing to a file in that location.
-
-        :param path: The path to the file, relative to the control dir.
-        :return: An open file object, or None if the file does not exist.
-        """
-        raise NotImplementedError(self.get_named_file)
-
-    # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |ac579ebd72a3b8c60271f94d32969760#
-    def _put_named_file(self, path, contents):
-        """Write a file to the control dir with the given name and contents.
-
-        :param path: The path to the file, relative to the control dir.
-        :param contents: A string to write to the file.
-        """
-        raise NotImplementedError(self._put_named_file)
-
-    # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |b10d45bb71a383e23815a891fe688a51#
-    def open_index(self):
-        """Open the index for this repository.
-
-        :raise NoIndexPresent: If no index is present
-        :return: The matching `Index`
-        """
-        raise NotImplementedError(self.open_index)
-
-    # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |9d2cf566a2c68a14f86cde11f6b43b00#
-    def fetch(self, target, determine_wants=None, progress=None):
-        """Fetch objects into another repository.
-
-        :param target: The target repository
-        :param determine_wants: Optional function to determine what refs to
-            fetch.
-        :param progress: Optional progress function
-        :return: The local refs
-        """
-        if determine_wants is None:
-            determine_wants = target.object_store.determine_wants_all
-        target.object_store.add_objects(
-            self.fetch_objects(determine_wants, target.get_graph_walker(),
-                               progress))
-        return self.get_refs()
-    # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |7583b30773dcaad7a5702842c9ece1bd#
-    def fetch_objects(self, determine_wants, graph_walker, progress,
-                      get_tagged=None):
-        """Fetch the missing objects required for a set of revisions.
-
-        :param determine_wants: Function that takes a dictionary with heads
-            and returns the list of heads to fetch.
-        :param graph_walker: Object that can iterate over the list of revisions
-            to fetch and has an "ack" method that will be called to acknowledge
-            that a revision is present.
-        :param progress: Simple progress function that will be called with
-            updated progress strings.
-        :param get_tagged: Function that returns a dict of pointed-to sha ->
-            tag sha for including tags.
-        :return: iterator over objects, with __len__ implemented
-        """
-        wants = determine_wants(self.get_refs())
-        if not isinstance(wants, list):
-            raise TypeError("determine_wants() did not return a list")
-
-        shallows = getattr(graph_walker, 'shallow', frozenset())
-        unshallows = getattr(graph_walker, 'unshallow', frozenset())
-
-        if wants == []:
-            # TODO(dborowitz): find a way to short-circuit that doesn't change
-            # this interface.
-
-            if shallows or unshallows:
-                # Do not send a pack in shallow short-circuit path
-                return None
-
-            return []
-
-        # If the graph walker is set up with an implementation that can
-        # ACK/NAK to the wire, it will write data to the client through
-        # this call as a side-effect.
-        haves = self.object_store.find_common_revisions(graph_walker)
-
-        # Deal with shallow requests separately because the haves do
-        # not reflect what objects are missing
-        if shallows or unshallows:
-            # TODO: filter the haves commits from iter_shas. the specific
-            # commits aren't missing.
-            haves = []
-
-        def get_parents(commit):
-            if commit.id in shallows:
-                return []
-            return self.get_parents(commit.id, commit)
-
-        return self.object_store.iter_shas(
-          self.object_store.find_missing_objects(
-              haves, wants, progress,
-              get_tagged,
-              get_parents=get_parents))
-
-    # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |80d2348cbd693838ae89003f09a3c712#
-    def get_refs(self):
-        """Get dictionary with all refs.
-
-        :return: A ``dict`` mapping ref names to SHA1s
-        """
-        return self.refs.as_dict()
-
-    # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |1e98799a7360b1489187d0d3d8fcd066#
     def head(self):
         """Return the SHA1 pointed at by HEAD."""
         return self.refs[b'HEAD']
 
     # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |940b5e4399c1a4b4fb688a51755e7872#
+    # nw_s: [[BaseRepo]] methods |1e9fe860bb5f83b698e8a3dbe924fe12#
     def _get_object(self, sha, cls):
         assert len(sha) in (20, 40)
         ret = self.get_object(sha)
@@ -610,7 +676,6 @@ class BaseRepo(object):
                 raise Exception("Type invalid: %r != %r" % (
                   ret.type_name, cls.type_name))
         return ret
-
     # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |6cb5d8f525f6bfc80ac6534dc4c92232#
     def get_object(self, sha):
@@ -621,26 +686,6 @@ class BaseRepo(object):
         :raise KeyError: when the object can not be found
         """
         return self.object_store[sha]
-    # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |ce619e220c3a5a6b104428d02a9a1375#
-    def get_parents(self, sha, commit=None):
-        """Retrieve the parents of a specific commit.
-
-        If the specific commit is a graftpoint, the graft parents
-        will be returned instead.
-
-        :param sha: SHA of the commit for which to retrieve the parents
-        :param commit: Optional commit matching the sha
-        :return: List of parents
-        """
-
-        try:
-            return self._graftpoints[sha]
-        except KeyError:
-            if commit is None:
-                commit = self[sha]
-            return commit.parents
-
     # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |6fae4e45ea0b4e5fd61f5ee78a1a99c7#
     def get_description(self):
@@ -676,44 +721,6 @@ class BaseRepo(object):
         return StackedConfig(backends, writable=backends[0])
 
     # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |9b4f4e4b70c298d819d6a53f1424f8a7#
-    def get_walker(self, include=None, *args, **kwargs):
-        """Obtain a walker for this repository.
-
-        :param include: Iterable of SHAs of commits to include along with their
-            ancestors. Defaults to [HEAD]
-        :param exclude: Iterable of SHAs of commits to exclude along with their
-            ancestors, overriding includes.
-        :param order: ORDER_* constant specifying the order of results.
-            Anything other than ORDER_DATE may result in O(n) memory usage.
-        :param reverse: If True, reverse the order of output, requiring O(n)
-            memory.
-        :param max_entries: The maximum number of entries to yield, or None for
-            no limit.
-        :param paths: Iterable of file or subtree paths to show entries for.
-        :param rename_detector: diff.RenameDetector object for detecting
-            renames.
-        :param follow: If True, follow path across renames/copies. Forces a
-            default rename_detector.
-        :param since: Timestamp to list commits after.
-        :param until: Timestamp to list commits before.
-        :param queue_cls: A class to use for a queue of commits, supporting the
-            iterator protocol. The constructor takes a single argument, the
-            Walker.
-        :return: A `Walker` object
-        """
-        from dulwich.walk import Walker
-        if include is None:
-            include = [self.head()]
-        if isinstance(include, str):
-            include = [include]
-
-        kwargs['get_parents'] = lambda commit: self.get_parents(
-            commit.id, commit)
-
-        return Walker(self.object_store, include, *args, **kwargs)
-
-    # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |1a588c24a7fb726a57707dfa451d01df#
     def __contains__(self, name):
         """Check if a specific Git object or ref is present.
@@ -724,15 +731,6 @@ class BaseRepo(object):
             return name in self.object_store or name in self.refs
         else:
             return name in self.refs
-
-    # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |88a4429e93e4c4f3936922d992c78d8f#
-    def _get_user_identity(self):
-        """Determine the identity to use for new commits.
-        """
-        config = self.get_config_stack()
-        return (config.get((b"user", ), b"name") + b" <" +
-                config.get((b"user", ), b"email") + b">")
 
     # nw_e: [[BaseRepo]] methods #
 # nw_e: class BaseRepo #
@@ -762,7 +760,7 @@ class Repo(BaseRepo):
     To create a new repository, use the Repo.init class method.
     """
 
-    # nw_s: [[Repo]] methods |688af116faae3acab52dea236518e356#
+    # nw_s: [[Repo]] methods |fa3c26c6337c02b2cfd64bd47561244f#
     def __init__(self, root):
         hidden_path = os.path.join(root, CONTROLDIR)
         if os.path.isdir(os.path.join(hidden_path, OBJECTDIR)):
@@ -804,17 +802,20 @@ class Repo(BaseRepo):
         self.path = root
         object_store = DiskObjectStore(
             os.path.join(self.commondir(), OBJECTDIR))
-        refs = DiskRefsContainer(self.commondir(), self._controldir)
+        refs = DiskRefsContainer(
+            self.commondir(), self._controldir)
 
         BaseRepo.__init__(self, object_store, refs)
 
-        # nw_s: [[Repo.__init__()]] grafts |c515f86b6b62acb967f07d6821fd03d2#
+        # nw_s: [[Repo.__init__()]] grafts |891e85fbfd1632681538966b8d6192f0#
         self._graftpoints = {}
         graft_file = self.get_named_file(os.path.join("info", "grafts"),
                                          basedir=self.commondir())
         if graft_file:
             with graft_file:
                 self._graftpoints.update(parse_graftpoints(graft_file))
+        # nw_e: [[Repo.__init__()]] grafts #
+        # nw_s: [[Repo.__init__()]] grafts |7a098e0019b07eed485ad71ccf9b254a#
         graft_file = self.get_named_file("shallow",
                                          basedir=self.commondir())
         if graft_file:
@@ -867,6 +868,31 @@ class Repo(BaseRepo):
         main working tree."""
 
         return self._commondir
+    # nw_e: [[Repo]] methods #
+    # nw_s: [[Repo]] methods |541c094f00505993ea93f54e7d3564a4#
+    def get_named_file(self, path, basedir=None):
+        """Get a file from the control dir with a specific name.
+
+        Although the filename should be interpreted as a filename relative to
+        the control dir in a disk-based Repo, the object returned need not be
+        pointing to a file in that location.
+
+        :param path: The path to the file, relative to the control dir.
+        :param basedir: Optional argument that specifies an alternative to the
+            control dir.
+        :return: An open file object, or None if the file does not exist.
+        """
+        # TODO(dborowitz): sanitize filenames, since this is used directly by
+        # the dumb web serving code.
+        if basedir is None:
+            basedir = self.controldir()
+        path = path.lstrip(os.path.sep)
+        try:
+            return open(os.path.join(basedir, path), 'rb')
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                return None
+            raise
     # nw_e: [[Repo]] methods #
     # nw_s: [[Repo]] methods |a0c8612f93c36d9742fb2f5bec636b3c#
     def _put_named_file(self, path, contents):
@@ -965,6 +991,27 @@ class Repo(BaseRepo):
                 index[tree_path] = index_entry_from_stat(st, blob.id, 0)
         index.write()
     # nw_e: [[Repo]] methods #
+    # nw_s: [[Repo]] methods |268d1c7600078f8e7393c4f8273040a5#
+    def _determine_file_mode(self):
+        """Probe the file-system to determine whether permissions can be trusted.
+
+        :return: True if permissions can be trusted, False otherwise.
+        """
+        fname = os.path.join(self.path, '.probe-permissions')
+        with open(fname, 'w') as f:
+            f.write('')
+
+        st1 = os.lstat(fname)
+        os.chmod(fname, st1.st_mode ^ stat.S_IXUSR)
+        st2 = os.lstat(fname)
+
+        os.unlink(fname)
+
+        mode_differs = st1.st_mode != st2.st_mode
+        st2_has_exec = (st2.st_mode & stat.S_IXUSR) != 0
+
+        return mode_differs and st2_has_exec
+    # nw_e: [[Repo]] methods #
     # nw_s: [[Repo]] methods |49d7ccc33bcee41200f87cc32cbb9d7e#
     def get_config(self):
         """Retrieve the config object.
@@ -1028,52 +1075,6 @@ class Repo(BaseRepo):
     def controldir(self):
         """Return the path of the control directory."""
         return self._controldir
-    # nw_e: [[Repo]] methods #
-    # nw_s: [[Repo]] methods |268d1c7600078f8e7393c4f8273040a5#
-    def _determine_file_mode(self):
-        """Probe the file-system to determine whether permissions can be trusted.
-
-        :return: True if permissions can be trusted, False otherwise.
-        """
-        fname = os.path.join(self.path, '.probe-permissions')
-        with open(fname, 'w') as f:
-            f.write('')
-
-        st1 = os.lstat(fname)
-        os.chmod(fname, st1.st_mode ^ stat.S_IXUSR)
-        st2 = os.lstat(fname)
-
-        os.unlink(fname)
-
-        mode_differs = st1.st_mode != st2.st_mode
-        st2_has_exec = (st2.st_mode & stat.S_IXUSR) != 0
-
-        return mode_differs and st2_has_exec
-    # nw_e: [[Repo]] methods #
-    # nw_s: [[Repo]] methods |541c094f00505993ea93f54e7d3564a4#
-    def get_named_file(self, path, basedir=None):
-        """Get a file from the control dir with a specific name.
-
-        Although the filename should be interpreted as a filename relative to
-        the control dir in a disk-based Repo, the object returned need not be
-        pointing to a file in that location.
-
-        :param path: The path to the file, relative to the control dir.
-        :param basedir: Optional argument that specifies an alternative to the
-            control dir.
-        :return: An open file object, or None if the file does not exist.
-        """
-        # TODO(dborowitz): sanitize filenames, since this is used directly by
-        # the dumb web serving code.
-        if basedir is None:
-            basedir = self.controldir()
-        path = path.lstrip(os.path.sep)
-        try:
-            return open(os.path.join(basedir, path), 'rb')
-        except (IOError, OSError) as e:
-            if e.errno == errno.ENOENT:
-                return None
-            raise
     # nw_e: [[Repo]] methods #
     # nw_s: [[Repo]] methods |9e41db693cf325fbaf5e665ac3254e51#
     def clone(self, target_path, mkdir=True, bare=False,

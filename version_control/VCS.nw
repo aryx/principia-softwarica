@@ -169,7 +169,8 @@ Here are other candidates that were considered but ultimately discarded:
 \end{itemize}
 
 % In the end I picked a mix between git and mercurial: git, but
-% implemented in the language used for mercurial (Python).
+% implemented in the language used for mercurial (Python)
+% by the guy who apparently has been involved in bazaar :)
 
 %https://building-git.launchrock.com/
 %https://blog.jcoglan.com/2017/02/12/the-myers-diff-algorithm-part-1/
@@ -379,11 +380,14 @@ License.
 % - difflib
 
 
-% diff.py, diff_tree.py, patch.py
+% diff_tree.py, patch.py
 
 \section{Software architecture}
 
-% plumbing vs porcelain
+% plumbing vs porcelain in original git version,
+% because Linus started with very low-level commands for
+% essentially a content addressable storage engine
+% but not very important here. 
 
 \section{Book structure}
 
@@ -545,7 +549,7 @@ REFSDIR_HEADS = 'heads'
 @
 
 % Tags later. Hooks later.
-% info??
+% info?? useful for grafts and?
 
 <<constant repo.OBJECTDIR>>=
 OBJECTDIR = 'objects'
@@ -601,7 +605,8 @@ def __init__(self, root):
     self.path = root
     object_store = DiskObjectStore(
         os.path.join(self.commondir(), OBJECTDIR))
-    refs = DiskRefsContainer(self.commondir(), self._controldir)
+    refs = DiskRefsContainer(
+        self.commondir(), self._controldir)
 
     BaseRepo.__init__(self, object_store, refs)
 
@@ -974,19 +979,19 @@ tree = serializable_property(
 
 @
 <<[[Commit]] methods>>=
-<<method Common._get_parents>>
-<<method Common._set_parents>>
+<<method Commit._get_parents>>
+<<method Commit._set_parents>>
 parents = property(_get_parents, _set_parents,
                    doc="Parents of this commit, by their SHA1.")
 @
 
-<<method Common._get_parents>>=
+<<method Commit._get_parents>>=
 def _get_parents(self):
     """Return a list of parents of this commit."""
     return self._parents
 @
 
-<<method Common._set_parents>>=
+<<method Commit._set_parents>>=
 def _set_parents(self, value):
     """Set a list of parents of this commit."""
     self._needs_serialization = True
@@ -1138,6 +1143,18 @@ def check_identity(identity, error_msg):
             or identity.find(b'>', email_end + 1) >= 0
             or not identity.endswith(b'>')):
         raise ObjectFormatException(error_msg)
+@
+
+<<constants objects.commits_HEADER>>=
+# Header fields for commits
+_TREE_HEADER = b'tree'
+_PARENT_HEADER = b'parent'
+_AUTHOR_HEADER = b'author'
+
+_COMMITTER_HEADER = b'committer'
+_ENCODING_HEADER = b'encoding'
+_MERGETAG_HEADER = b'mergetag'
+_GPGSIG_HEADER = b'gpgsig'
 @
 
 <<[[Commit.check()]] check message>>=
@@ -1387,6 +1404,73 @@ def __getitem__(self, name):
 @
 
 % follow() later
+
+<<[[RefsContainer]] methods>>=
+def __setitem__(self, name, ref):
+    """Set a reference name to point to the given SHA1.
+
+    This method follows all symbolic references if applicable for the
+    subclass.
+
+    :note: This method unconditionally overwrites the contents of a
+        reference. To update atomically only if the reference has not
+        changed, use set_if_equals().
+    :param name: The refname to set.
+    :param ref: The new sha the refname will refer to.
+    """
+    self.set_if_equals(name, None, ref)
+@
+
+<<[[RefsContainer]] methods>>=
+def set_if_equals(self, name, old_ref, new_ref):
+    """Set a refname to new_ref only if it currently equals old_ref.
+
+    This method follows all symbolic references if applicable for the
+    subclass, and can be used to perform an atomic compare-and-swap
+    operation.
+
+    :param name: The refname to set.
+    :param old_ref: The old sha the refname must refer to, or None to set
+        unconditionally.
+    :param new_ref: The new sha the refname will refer to.
+    :return: True if the set was successful, False otherwise.
+    """
+    raise NotImplementedError(self.set_if_equals)
+@
+
+
+<<[[RefsContainer]] methods>>=
+def __delitem__(self, name):
+    """Remove a refname.
+
+    This method does not follow symbolic references, even if applicable for
+    the subclass.
+
+    :note: This method unconditionally deletes the contents of a reference.
+        To delete atomically only if the reference has not changed, use
+        remove_if_equals().
+
+    :param name: The refname to delete.
+    """
+    self.remove_if_equals(name, None)
+@
+
+<<[[RefsContainer]] methods>>=
+def remove_if_equals(self, name, old_ref):
+    """Remove a refname only if it currently equals old_ref.
+
+    This method does not follow symbolic references, even if applicable for
+    the subclass. It can be used to perform an atomic compare-and-delete
+    operation.
+
+    :param name: The refname to delete.
+    :param old_ref: The old sha the refname must refer to, or None to delete
+        unconditionally.
+    :return: True if the delete was successful, False otherwise.
+    """
+    raise NotImplementedError(self.remove_if_equals)
+@
+
 
 \section{The index}
 % Staging area
@@ -1786,7 +1870,7 @@ For a list of supported commands, see 'dulwich help -a'.
 """)
 @
 
-\section{[[main()]]}
+\section{[Entry point}
 
 <<toplevel main>>=
 <<sanity check [[sys.argv]]>>
@@ -1987,6 +2071,10 @@ def set_symbolic_ref(self, name, other):
 
 @
 
+<<constant refs.SYMREF>>=
+SYMREF = b'ref: '
+@
+
 <<[[RefsContainer]] methods>>=
 def _check_refname(self, name):
     """Ensure a refname is valid and lives in refs or is HEAD.
@@ -2039,10 +2127,10 @@ def check_ref_format(refname):
     return True
 @
 
-
-<<constant refs.SYMREF>>=
-SYMREF = b'ref: '
+<<constant refs.BAD_REF_CHARS>>=
+BAD_REF_CHARS = set(b'\177 ~^:?*[')
 @
+
 
 
 
@@ -2077,25 +2165,61 @@ def _init_files(self, bare):
     from dulwich.config import ConfigFile
 
     self._put_named_file('description', b"Unnamed repository")
-    f = BytesIO()
-    cf = ConfigFile()
-    cf.set(b"core", b"repositoryformatversion", b"0")
-    if self._determine_file_mode():
-        cf.set(b"core", b"filemode", True)
-    else:
-        cf.set(b"core", b"filemode", False)
-
-    cf.set(b"core", b"bare", bare)
-    cf.set(b"core", b"logallrefupdates", True)
-    cf.write_to_file(f)
-    self._put_named_file('config', f.getvalue())
     self._put_named_file(os.path.join('info', 'exclude'), b'')
 
+    <<[[BaseRepo.__init_files()]] create config file>>
+@
+%pad: reorder _put_named_file, put simpler stuff first
+
+
+<<[[BaseRepo]] methods>>=
+def get_named_file(self, path):
+    """Get a file from the control dir with a specific name.
+
+    Although the filename should be interpreted as a filename relative to
+    the control dir in a disk-based Repo, the object returned need not be
+    pointing to a file in that location.
+
+    :param path: The path to the file, relative to the control dir.
+    :return: An open file object, or None if the file does not exist.
+    """
+    raise NotImplementedError(self.get_named_file)
+@
+<<[[Repo]] methods>>=
+def get_named_file(self, path, basedir=None):
+    """Get a file from the control dir with a specific name.
+
+    Although the filename should be interpreted as a filename relative to
+    the control dir in a disk-based Repo, the object returned need not be
+    pointing to a file in that location.
+
+    :param path: The path to the file, relative to the control dir.
+    :param basedir: Optional argument that specifies an alternative to the
+        control dir.
+    :return: An open file object, or None if the file does not exist.
+    """
+    # TODO(dborowitz): sanitize filenames, since this is used directly by
+    # the dumb web serving code.
+    if basedir is None:
+        basedir = self.controldir()
+    path = path.lstrip(os.path.sep)
+    try:
+        return open(os.path.join(basedir, path), 'rb')
+    except (IOError, OSError) as e:
+        if e.errno == errno.ENOENT:
+            return None
+        raise
 @
 
-% see config file later
+<<[[BaseRepo]] methods>>=
+def _put_named_file(self, path, contents):
+    """Write a file to the control dir with the given name and contents.
 
-
+    :param path: The path to the file, relative to the control dir.
+    :param contents: A string to write to the file.
+    """
+    raise NotImplementedError(self._put_named_file)
+@
 <<[[Repo]] methods>>=
 def _put_named_file(self, path, contents):
     """Write a file to the control dir with the given name and contents.
@@ -2108,10 +2232,17 @@ def _put_named_file(self, path, contents):
         f.write(contents)
 @
 
-%\subsection{[[GitFile]]}
 
+
+\section{Copying a repository}
+
+% well, can just do cp :) 
+% will see clone later, but useful more in networking context
+% (and even there cp would be better thx to NFS)
 
 \section{Cloning a repository, [[git clone]]}
+
+% mv in Networking?
 
 <<function cmd_clone>>=
 class cmd_clone(Command):
@@ -2199,6 +2330,7 @@ def clone(source, target=None, bare=False, checkout=None,
     return r
 @
 
+
 %deprecated:
 % outstream=None,
 %     :param outstream: Optional stream to write progress to (deprecated)
@@ -2276,6 +2408,127 @@ def fetch(self, path, target, determine_wants=None, progress=None):
                        progress=progress)
 @
 
+<<[[BaseRepo]] methods>>=
+def fetch(self, target, determine_wants=None, progress=None):
+    """Fetch objects into another repository.
+
+    :param target: The target repository
+    :param determine_wants: Optional function to determine what refs to
+        fetch.
+    :param progress: Optional progress function
+    :return: The local refs
+    """
+    if determine_wants is None:
+        determine_wants = target.object_store.determine_wants_all
+    target.object_store.add_objects(
+        self.fetch_objects(determine_wants, target.get_graph_walker(),
+                           progress))
+    return self.get_refs()
+@
+
+<<[[BaseRepo]] methods>>=
+def fetch_objects(self, determine_wants, graph_walker, progress,
+                  get_tagged=None):
+    """Fetch the missing objects required for a set of revisions.
+
+    :param determine_wants: Function that takes a dictionary with heads
+        and returns the list of heads to fetch.
+    :param graph_walker: Object that can iterate over the list of revisions
+        to fetch and has an "ack" method that will be called to acknowledge
+        that a revision is present.
+    :param progress: Simple progress function that will be called with
+        updated progress strings.
+    :param get_tagged: Function that returns a dict of pointed-to sha ->
+        tag sha for including tags.
+    :return: iterator over objects, with __len__ implemented
+    """
+    wants = determine_wants(self.get_refs())
+    if not isinstance(wants, list):
+        raise TypeError("determine_wants() did not return a list")
+
+    shallows = getattr(graph_walker, 'shallow', frozenset())
+    unshallows = getattr(graph_walker, 'unshallow', frozenset())
+
+    if wants == []:
+        # TODO(dborowitz): find a way to short-circuit that doesn't change
+        # this interface.
+
+        if shallows or unshallows:
+            # Do not send a pack in shallow short-circuit path
+            return None
+
+        return []
+
+    # If the graph walker is set up with an implementation that can
+    # ACK/NAK to the wire, it will write data to the client through
+    # this call as a side-effect.
+    haves = self.object_store.find_common_revisions(graph_walker)
+
+    # Deal with shallow requests separately because the haves do
+    # not reflect what objects are missing
+    if shallows or unshallows:
+        # TODO: filter the haves commits from iter_shas. the specific
+        # commits aren't missing.
+        haves = []
+
+    def get_parents(commit):
+        if commit.id in shallows:
+            return []
+        return self.get_parents(commit.id, commit)
+
+    return self.object_store.iter_shas(
+      self.object_store.find_missing_objects(
+          haves, wants, progress,
+          get_tagged,
+          get_parents=get_parents))
+@
+
+% ?? -> <>
+<<[[BaseRepo]] methods>>=
+def get_parents(self, sha, commit=None):
+    """Retrieve the parents of a specific commit.
+
+    If the specific commit is a graftpoint, the graft parents
+    will be returned instead.
+
+    :param sha: SHA of the commit for which to retrieve the parents
+    :param commit: Optional commit matching the sha
+    :return: List of parents
+    """
+
+    <<[[BaseRepo.get_parents()]] look if graftpoint>>
+        #// else
+        if commit is None:
+            commit = self[sha]
+        return commit.parents
+@
+
+
+<<[[BaseObjectStore]] methods>>=
+def find_common_revisions(self, graphwalker):
+    """Find which revisions this store has in common using graphwalker.
+
+    :param graphwalker: A graphwalker object.
+    :return: List of SHAs that are in common
+    """
+    haves = []
+    sha = next(graphwalker)
+    while sha:
+        if sha in self:
+            haves.append(sha)
+            graphwalker.ack(sha)
+        sha = next(graphwalker)
+    return haves
+@
+
+<<[[BaseRepo]] methods>>=
+def get_refs(self):
+    """Get dictionary with all refs.
+
+    :return: A ``dict`` mapping ref names to SHA1s
+    """
+    return self.refs.as_dict()
+@
 
 <<[[LocalGitClient]] methods>>=
 def get_refs(self, path):
@@ -2303,84 +2556,14 @@ def determine_wants_all(self, refs):
             not sha == ZERO_SHA]
 @
 
-\section{Graph walker}
-
-% useful only for packs?
-
-<<[[BaseRepo]] methods>>=
-def get_graph_walker(self, heads=None):
-    """Retrieve a graph walker.
-
-    A graph walker is used by a remote repository (or proxy)
-    to find out which objects are present in this repository.
-
-    :param heads: Repository heads to use (optional)
-    :return: A graph walker object
-    """
-    if heads is None:
-        heads = self.refs.as_dict(b'refs/heads').values()
-    return ObjectStoreGraphWalker(heads, self.get_parents)
+<<constant objects.ZERO_SHA>>=
+ZERO_SHA = b'0' * 40
 @
 
-<<class ObjectStoreGraphWalker>>=
-class ObjectStoreGraphWalker(object):
-    """Graph walker that finds what commits are missing from an object store.
+\section{Checking out a repository, [[git checkout]]}
 
-    :ivar heads: Revisions without descendants in the local repo
-    :ivar get_parents: Function to retrieve parents in the local repo
-    """
-
-    def __init__(self, local_heads, get_parents):
-        """Create a new instance.
-
-        :param local_heads: Heads to start search with
-        :param get_parents: Function for finding the parents of a SHA1.
-        """
-        self.heads = set(local_heads)
-        self.get_parents = get_parents
-        self.parents = {}
-
-    def ack(self, sha):
-        """Ack that a revision and its ancestors are present in the source."""
-        if len(sha) != 40:
-            raise ValueError("unexpected sha %r received" % sha)
-        ancestors = set([sha])
-
-        # stop if we run out of heads to remove
-        while self.heads:
-            for a in ancestors:
-                if a in self.heads:
-                    self.heads.remove(a)
-
-            # collect all ancestors
-            new_ancestors = set()
-            for a in ancestors:
-                ps = self.parents.get(a)
-                if ps is not None:
-                    new_ancestors.update(ps)
-                self.parents[a] = None
-
-            # no more ancestors; stop
-            if not new_ancestors:
-                break
-
-            ancestors = new_ancestors
-
-    def next(self):
-        """Iterate over ancestors of heads in the target."""
-        if self.heads:
-            ret = self.heads.pop()
-            ps = self.get_parents(ret)
-            self.parents[ret] = ps
-            self.heads.update(
-                [p for p in ps if p not in self.parents])
-            return ret
-        return None
-
-    __next__ = next
-@
-
-\section{Checking out a repository}
+% if cp -a just .git. Then can checkout by doing
+% git checkout
 
 % porcelain.reset | porcelain.clone -> <>
 <<[[Repo]] methods>>=
@@ -2576,10 +2759,10 @@ def index_entry_from_stat(stat_val, hex_sha, flags, mode=None):
             stat_val.st_gid, stat_val.st_size, hex_sha, flags)
 @
 
-
-
 %\section{Fast Import/Export}
 %adv topics
+
+
 
 \chapter{Reading from a Repository}
 
@@ -3054,6 +3237,16 @@ def parse_tree(text, strict=False):
 %here?
 
 \section{Index}
+
+<<[[BaseRepo]] methods>>=
+def open_index(self):
+    """Open the index for this repository.
+
+    :raise NoIndexPresent: If no index is present
+    :return: The matching `Index`
+    """
+    raise NotImplementedError(self.open_index)
+@
 
 % porcelain.add -> <>
 <<[[Repo]] methods>>=
@@ -3593,6 +3786,653 @@ def write_cache_time(f, t):
 
 \section{Refs}
 
+<<[[DiskRefsContainer]] methods>>=
+def set_if_equals(self, name, old_ref, new_ref):
+    """Set a refname to new_ref only if it currently equals old_ref.
+
+    This method follows all symbolic references, and can be used to perform
+    an atomic compare-and-swap operation.
+
+    :param name: The refname to set.
+    :param old_ref: The old sha the refname must refer to, or None to set
+        unconditionally.
+    :param new_ref: The new sha the refname will refer to.
+    :return: True if the set was successful, False otherwise.
+    """
+    self._check_refname(name)
+    try:
+        realnames, _ = self.follow(name)
+        realname = realnames[-1]
+    except (KeyError, IndexError):
+        realname = name
+    filename = self.refpath(realname)
+    ensure_dir_exists(os.path.dirname(filename))
+    with GitFile(filename, 'wb') as f:
+        if old_ref is not None:
+            try:
+                # read again while holding the lock
+                orig_ref = self.read_loose_ref(realname)
+                if orig_ref is None:
+                    orig_ref = self.get_packed_refs().get(realname, ZERO_SHA)
+                if orig_ref != old_ref:
+                    f.abort()
+                    return False
+            except (OSError, IOError):
+                f.abort()
+                raise
+        try:
+            f.write(new_ref + b'\n')
+        except (OSError, IOError):
+            f.abort()
+            raise
+    return True
+@
+
+<<function file.ensure_dir_exists>>=
+def ensure_dir_exists(dirname):
+    """Ensure a directory exists, creating if necessary."""
+    try:
+        os.makedirs(dirname)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+@
+
+<<[[DiskRefsContainer]] methods>>=
+def add_if_new(self, name, ref):
+    """Add a new reference only if it does not already exist.
+
+    This method follows symrefs, and only ensures that the last ref in the
+    chain does not exist.
+
+    :param name: The refname to set.
+    :param ref: The new sha the refname will refer to.
+    :return: True if the add was successful, False otherwise.
+    """
+    try:
+        realnames, contents = self.follow(name)
+        if contents is not None:
+            return False
+        realname = realnames[-1]
+    except (KeyError, IndexError):
+        realname = name
+    self._check_refname(realname)
+    filename = self.refpath(realname)
+    ensure_dir_exists(os.path.dirname(filename))
+    with GitFile(filename, 'wb') as f:
+        if os.path.exists(filename) or name in self.get_packed_refs():
+            f.abort()
+            return False
+        try:
+            f.write(ref + b'\n')
+        except (OSError, IOError):
+            f.abort()
+            raise
+    return True
+
+@
+
+<<[[DiskRefsContainer]] methods>>=
+def remove_if_equals(self, name, old_ref):
+    """Remove a refname only if it currently equals old_ref.
+
+    This method does not follow symbolic references. It can be used to
+    perform an atomic compare-and-delete operation.
+
+    :param name: The refname to delete.
+    :param old_ref: The old sha the refname must refer to, or None to delete
+        unconditionally.
+    :return: True if the delete was successful, False otherwise.
+    """
+    self._check_refname(name)
+    filename = self.refpath(name)
+    ensure_dir_exists(os.path.dirname(filename))
+    f = GitFile(filename, 'wb')
+    try:
+        if old_ref is not None:
+            orig_ref = self.read_loose_ref(name)
+            if orig_ref is None:
+                orig_ref = self.get_packed_refs().get(name, ZERO_SHA)
+            if orig_ref != old_ref:
+                return False
+        # may only be packed
+        try:
+            os.remove(filename)
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise
+        self._remove_packed_ref(name)
+    finally:
+        # never write, we just wanted the lock
+        f.abort()
+    return True
+@
+
+\chapter{Walking a Repository}
+
+\section{Graph walker}
+
+% useful only for packs?
+
+<<[[BaseRepo]] methods>>=
+def get_graph_walker(self, heads=None):
+    """Retrieve a graph walker.
+
+    A graph walker is used by a remote repository (or proxy)
+    to find out which objects are present in this repository.
+
+    :param heads: Repository heads to use (optional)
+    :return: A graph walker object
+    """
+    if heads is None:
+        heads = self.refs.as_dict(b'refs/heads').values()
+    return ObjectStoreGraphWalker(heads, self.get_parents)
+@
+
+<<[[RefsContainer]] methods>>=
+def as_dict(self, base=None):
+    """Return the contents of this container as a dictionary.
+
+    """
+    ret = {}
+    keys = self.keys(base)
+    if base is None:
+        base = b''
+    else:
+        base = base.rstrip(b'/')
+    for key in keys:
+        try:
+            ret[key] = self[(base + b'/' + key).strip(b'/')]
+        except KeyError:
+            continue  # Unable to resolve
+
+    return ret
+@
+
+<<class ObjectStoreGraphWalker>>=
+class ObjectStoreGraphWalker(object):
+    """Graph walker that finds what commits are missing from an object store.
+
+    :ivar heads: Revisions without descendants in the local repo
+    :ivar get_parents: Function to retrieve parents in the local repo
+    """
+
+    def __init__(self, local_heads, get_parents):
+        """Create a new instance.
+
+        :param local_heads: Heads to start search with
+        :param get_parents: Function for finding the parents of a SHA1.
+        """
+        self.heads = set(local_heads)
+        self.get_parents = get_parents
+        self.parents = {}
+
+    def ack(self, sha):
+        """Ack that a revision and its ancestors are present in the source."""
+        if len(sha) != 40:
+            raise ValueError("unexpected sha %r received" % sha)
+        ancestors = set([sha])
+
+        # stop if we run out of heads to remove
+        while self.heads:
+            for a in ancestors:
+                if a in self.heads:
+                    self.heads.remove(a)
+
+            # collect all ancestors
+            new_ancestors = set()
+            for a in ancestors:
+                ps = self.parents.get(a)
+                if ps is not None:
+                    new_ancestors.update(ps)
+                self.parents[a] = None
+
+            # no more ancestors; stop
+            if not new_ancestors:
+                break
+
+            ancestors = new_ancestors
+
+    def next(self):
+        """Iterate over ancestors of heads in the target."""
+        if self.heads:
+            ret = self.heads.pop()
+            ps = self.get_parents(ret)
+            self.parents[ret] = ps
+            self.heads.update(
+                [p for p in ps if p not in self.parents])
+            return ret
+        return None
+
+    __next__ = next
+@
+
+<<[[BaseRepo]] methods>>=
+def get_walker(self, include=None, *args, **kwargs):
+    """Obtain a walker for this repository.
+
+    :param include: Iterable of SHAs of commits to include along with their
+        ancestors. Defaults to [HEAD]
+    :param exclude: Iterable of SHAs of commits to exclude along with their
+        ancestors, overriding includes.
+    :param order: ORDER_* constant specifying the order of results.
+        Anything other than ORDER_DATE may result in O(n) memory usage.
+    :param reverse: If True, reverse the order of output, requiring O(n)
+        memory.
+    :param max_entries: The maximum number of entries to yield, or None for
+        no limit.
+    :param paths: Iterable of file or subtree paths to show entries for.
+    :param rename_detector: diff.RenameDetector object for detecting
+        renames.
+    :param follow: If True, follow path across renames/copies. Forces a
+        default rename_detector.
+    :param since: Timestamp to list commits after.
+    :param until: Timestamp to list commits before.
+    :param queue_cls: A class to use for a queue of commits, supporting the
+        iterator protocol. The constructor takes a single argument, the
+        Walker.
+    :return: A `Walker` object
+    """
+    from dulwich.walk import Walker
+    if include is None:
+        include = [self.head()]
+    if isinstance(include, str):
+        include = [include]
+
+    kwargs['get_parents'] = lambda commit: self.get_parents(
+        commit.id, commit)
+
+    return Walker(self.object_store, include, *args, **kwargs)
+
+@
+
+<<type walk.ORDER>>=
+ORDER_DATE = 'date'
+ORDER_TOPO = 'topo'
+@
+%ocaml: enum
+
+<<constant walk.ALL_ORDERS>>=
+ALL_ORDERS = (ORDER_DATE, ORDER_TOPO)
+@
+
+<<class Walker>>=
+class Walker(object):
+    """Object for performing a walk of commits in a store.
+
+    Walker objects are initialized with a store and other options and can then
+    be treated as iterators of Commit objects.
+    """
+
+    def __init__(self, store, include, exclude=None, order=ORDER_DATE,
+                 reverse=False, max_entries=None, paths=None,
+                 rename_detector=None, follow=False, since=None, until=None,
+                 get_parents=lambda commit: commit.parents,
+                 queue_cls=_CommitTimeQueue):
+        """Constructor.
+
+        :param store: ObjectStore instance for looking up objects.
+        :param include: Iterable of SHAs of commits to include along with their
+            ancestors.
+        :param exclude: Iterable of SHAs of commits to exclude along with their
+            ancestors, overriding includes.
+        :param order: ORDER_* constant specifying the order of results. Anything
+            other than ORDER_DATE may result in O(n) memory usage.
+        :param reverse: If True, reverse the order of output, requiring O(n)
+            memory.
+        :param max_entries: The maximum number of entries to yield, or None for
+            no limit.
+        :param paths: Iterable of file or subtree paths to show entries for.
+        :param rename_detector: diff.RenameDetector object for detecting
+            renames.
+        :param follow: If True, follow path across renames/copies. Forces a
+            default rename_detector.
+        :param since: Timestamp to list commits after.
+        :param until: Timestamp to list commits before.
+        :param get_parents: Method to retrieve the parents of a commit
+        :param queue_cls: A class to use for a queue of commits, supporting the
+            iterator protocol. The constructor takes a single argument, the
+            Walker.
+        """
+        # Note: when adding arguments to this method, please also update
+        # dulwich.repo.BaseRepo.get_walker
+        if order not in ALL_ORDERS:
+            raise ValueError('Unknown walk order %s' % order)
+        self.store = store
+        if isinstance(include, bytes):
+            # TODO(jelmer): Really, this should require a single type.
+            # Print deprecation warning here?
+            include = [include]
+        self.include = include
+        self.excluded = set(exclude or [])
+        self.order = order
+        self.reverse = reverse
+        self.max_entries = max_entries
+        self.paths = paths and set(paths) or None
+        if follow and not rename_detector:
+            rename_detector = RenameDetector(store)
+        self.rename_detector = rename_detector
+        self.get_parents = get_parents
+        self.follow = follow
+        self.since = since
+        self.until = until
+
+        self._num_entries = 0
+        self._queue = queue_cls(self)
+        self._out_queue = collections.deque()
+
+    def _path_matches(self, changed_path):
+        if changed_path is None:
+            return False
+        for followed_path in self.paths:
+            if changed_path == followed_path:
+                return True
+            if (changed_path.startswith(followed_path) and
+                    changed_path[len(followed_path)] == b'/'[0]):
+                return True
+        return False
+
+    def _change_matches(self, change):
+        if not change:
+            return False
+
+        old_path = change.old.path
+        new_path = change.new.path
+        if self._path_matches(new_path):
+            if self.follow and change.type in RENAME_CHANGE_TYPES:
+                self.paths.add(old_path)
+                self.paths.remove(new_path)
+            return True
+        elif self._path_matches(old_path):
+            return True
+        return False
+
+    def _should_return(self, entry):
+        """Determine if a walk entry should be returned..
+
+        :param entry: The WalkEntry to consider.
+        :return: True if the WalkEntry should be returned by this walk, or False
+            otherwise (e.g. if it doesn't match any requested paths).
+        """
+        commit = entry.commit
+        if self.since is not None and commit.commit_time < self.since:
+            return False
+        if self.until is not None and commit.commit_time > self.until:
+            return False
+        if commit.id in self.excluded:
+            return False
+
+        if self.paths is None:
+            return True
+
+        if len(self.get_parents(commit)) > 1:
+            for path_changes in entry.changes():
+                # For merge commits, only include changes with conflicts for
+                # this path. Since a rename conflict may include different
+                # old.paths, we have to check all of them.
+                for change in path_changes:
+                    if self._change_matches(change):
+                        return True
+        else:
+            for change in entry.changes():
+                if self._change_matches(change):
+                    return True
+        return None
+
+    def _next(self):
+        max_entries = self.max_entries
+        while max_entries is None or self._num_entries < max_entries:
+            entry = next(self._queue)
+            if entry is not None:
+                self._out_queue.append(entry)
+            if entry is None or len(self._out_queue) > _MAX_EXTRA_COMMITS:
+                if not self._out_queue:
+                    return None
+                entry = self._out_queue.popleft()
+                if self._should_return(entry):
+                    self._num_entries += 1
+                    return entry
+        return None
+
+    def _reorder(self, results):
+        """Possibly reorder a results iterator.
+
+        :param results: An iterator of WalkEntry objects, in the order returned
+            from the queue_cls.
+        :return: An iterator or list of WalkEntry objects, in the order required
+            by the Walker.
+        """
+        if self.order == ORDER_TOPO:
+            results = _topo_reorder(results, self.get_parents)
+        if self.reverse:
+            results = reversed(list(results))
+        return results
+
+    def __iter__(self):
+        return iter(self._reorder(iter(self._next, None)))
+@
+
+<<constant walk._MAX_EXTRA_COMMITS>>=
+# Maximum number of commits to walk past a commit time boundary.
+_MAX_EXTRA_COMMITS = 5
+@
+
+<<function walk._topo_reorder>>=
+def _topo_reorder(entries, get_parents=lambda commit: commit.parents):
+    """Reorder an iterable of entries topologically.
+
+    This works best assuming the entries are already in almost-topological
+    order, e.g. in commit time order.
+
+    :param entries: An iterable of WalkEntry objects.
+    :param get_parents: Optional function for getting the parents of a commit.
+    :return: iterator over WalkEntry objects from entries in FIFO order, except
+        where a parent would be yielded before any of its children.
+    """
+    todo = collections.deque()
+    pending = {}
+    num_children = defaultdict(int)
+    for entry in entries:
+        todo.append(entry)
+        for p in get_parents(entry.commit):
+            num_children[p] += 1
+
+    while todo:
+        entry = todo.popleft()
+        commit = entry.commit
+        commit_id = commit.id
+        if num_children[commit_id]:
+            pending[commit_id] = entry
+            continue
+        for parent_id in get_parents(commit):
+            num_children[parent_id] -= 1
+            if not num_children[parent_id]:
+                parent_entry = pending.pop(parent_id, None)
+                if parent_entry:
+                    todo.appendleft(parent_entry)
+        yield entry
+@
+
+<<class WalkEntry>>=
+class WalkEntry(object):
+    """Object encapsulating a single result from a walk."""
+
+    def __init__(self, walker, commit):
+        self.commit = commit
+        self._store = walker.store
+        self._get_parents = walker.get_parents
+        self._changes = {}
+        self._rename_detector = walker.rename_detector
+
+    def changes(self, path_prefix=None):
+        """Get the tree changes for this entry.
+
+        :param path_prefix: Portion of the path in the repository to
+            use to filter changes. Must be a directory name. Must be
+            a full, valid, path reference (no partial names or wildcards).
+        :return: For commits with up to one parent, a list of TreeChange
+            objects; if the commit has no parents, these will be relative to the
+            empty tree. For merge commits, a list of lists of TreeChange
+            objects; see dulwich.diff.tree_changes_for_merge.
+        """
+        cached = self._changes.get(path_prefix)
+        if cached is None:
+            commit = self.commit
+            if not self._get_parents(commit):
+                changes_func = tree_changes
+                parent = None
+            elif len(self._get_parents(commit)) == 1:
+                changes_func = tree_changes
+                parent = self._store[self._get_parents(commit)[0]].tree
+                if path_prefix:
+                    mode, subtree_sha = parent.lookup_path(
+                        self._store.__getitem__,
+                        path_prefix,
+                    )
+                    parent = self._store[subtree_sha]
+            else:
+                changes_func = tree_changes_for_merge
+                parent = [self._store[p].tree for p in self._get_parents(commit)]
+                if path_prefix:
+                    parent_trees = [self._store[p] for p in parent]
+                    parent = []
+                    for p in parent_trees:
+                        try:
+                            mode, st = p.lookup_path(
+                                self._store.__getitem__,
+                                path_prefix,
+                            )
+                        except KeyError:
+                            pass
+                        else:
+                            parent.append(st)
+            commit_tree_sha = commit.tree
+            if path_prefix:
+                commit_tree = self._store[commit_tree_sha]
+                mode, commit_tree_sha = commit_tree.lookup_path(
+                    self._store.__getitem__,
+                    path_prefix,
+                )
+            cached = list(changes_func(
+              self._store, parent, commit_tree_sha,
+              rename_detector=self._rename_detector))
+            self._changes[path_prefix] = cached
+        return self._changes[path_prefix]
+
+    def __repr__(self):
+        return '<WalkEntry commit=%s, changes=%r>' % (
+          self.commit.id, self.changes())
+@
+
+<<class _CommitTimeQueue>>=
+class _CommitTimeQueue(object):
+    """Priority queue of WalkEntry objects by commit time."""
+
+    def __init__(self, walker):
+        self._walker = walker
+        self._store = walker.store
+        self._get_parents = walker.get_parents
+        self._excluded = walker.excluded
+        self._pq = []
+        self._pq_set = set()
+        self._seen = set()
+        self._done = set()
+        self._min_time = walker.since
+        self._last = None
+        self._extra_commits_left = _MAX_EXTRA_COMMITS
+        self._is_finished = False
+
+        for commit_id in chain(walker.include, walker.excluded):
+            self._push(commit_id)
+
+    def _push(self, object_id):
+        try:
+            obj = self._store[object_id]
+        except KeyError:
+            raise MissingCommitError(object_id)
+        if isinstance(obj, Tag):
+            self._push(obj.object[1])
+            return
+        # TODO(jelmer): What to do about non-Commit and non-Tag objects?
+        commit = obj
+        if commit.id not in self._pq_set and commit.id not in self._done:
+            heapq.heappush(self._pq, (-commit.commit_time, commit))
+            self._pq_set.add(commit.id)
+            self._seen.add(commit.id)
+
+    def _exclude_parents(self, commit):
+        excluded = self._excluded
+        seen = self._seen
+        todo = [commit]
+        while todo:
+            commit = todo.pop()
+            for parent in self._get_parents(commit):
+                if parent not in excluded and parent in seen:
+                    # TODO: This is inefficient unless the object store does
+                    # some caching (which DiskObjectStore currently does not).
+                    # We could either add caching in this class or pass around
+                    # parsed queue entry objects instead of commits.
+                    todo.append(self._store[parent])
+                excluded.add(parent)
+
+    def next(self):
+        if self._is_finished:
+            return None
+        while self._pq:
+            _, commit = heapq.heappop(self._pq)
+            sha = commit.id
+            self._pq_set.remove(sha)
+            if sha in self._done:
+                continue
+            self._done.add(sha)
+
+            for parent_id in self._get_parents(commit):
+                self._push(parent_id)
+
+            reset_extra_commits = True
+            is_excluded = sha in self._excluded
+            if is_excluded:
+                self._exclude_parents(commit)
+                if self._pq and all(c.id in self._excluded
+                                    for _, c in self._pq):
+                    _, n = self._pq[0]
+                    if self._last and n.commit_time >= self._last.commit_time:
+                        # If the next commit is newer than the last one, we need
+                        # to keep walking in case its parents (which we may not
+                        # have seen yet) are excluded. This gives the excluded
+                        # set a chance to "catch up" while the commit is still
+                        # in the Walker's output queue.
+                        reset_extra_commits = True
+                    else:
+                        reset_extra_commits = False
+
+            if (self._min_time is not None and
+                commit.commit_time < self._min_time):
+                # We want to stop walking at min_time, but commits at the
+                # boundary may be out of order with respect to their parents. So
+                # we walk _MAX_EXTRA_COMMITS more commits once we hit this
+                # boundary.
+                reset_extra_commits = False
+
+            if reset_extra_commits:
+                # We're not at a boundary, so reset the counter.
+                self._extra_commits_left = _MAX_EXTRA_COMMITS
+            else:
+                self._extra_commits_left -= 1
+                if not self._extra_commits_left:
+                    break
+
+            if not is_excluded:
+                self._last = commit
+                return WalkEntry(self._walker, commit)
+        self._is_finished = True
+        return None
+
+    __next__ = next
+@
+
+
+
 \chapter{Staging a Diff}
 
 \section{Adding files, [[git add]]}
@@ -3913,6 +4753,21 @@ def do_commit(self, message=None, committer=None,
     return c.id
 @
 
+<<[[BaseRepo]] methods>>=
+def _get_user_identity(self):
+    """Determine the identity to use for new commits.
+    """
+    config = self.get_config_stack()
+    return (config.get((b"user", ), b"name") + b" <" +
+            config.get((b"user", ), b"email") + b">")
+@
+
+<<[[RefsContainer]] methods>>=
+def add_if_new(self, name, ref):
+    """Add a new reference only if it does not already exist."""
+    raise NotImplementedError(self.add_if_new)
+@
+
 
 
 <<[[Index]] methods>>=
@@ -3999,6 +4854,9 @@ def pathjoin(*args):
 % in gitless, it really is like you had 2 separate dirs with 2
 %  separate working versions!
 
+
+% Again can simply use cp and create another repo.
+
 \section{Listing branches, [[git branch]]}
 
 % ??? -> <>
@@ -4047,6 +4905,23 @@ def subkeys(self, base):
 @
 
 % allkeys in Parsing chapter
+
+<<[[DiskRefsContainer]] methods>>=
+def subkeys(self, base):
+    subkeys = set()
+    path = self.refpath(base)
+    for root, dirs, files in os.walk(path):
+        dir = root[len(path):].strip(os.path.sep).replace(os.path.sep, "/")
+        for filename in files:
+            refname = (("%s/%s" % (dir, filename))
+                       .strip("/").encode(sys.getfilesystemencoding()))
+            # check_ref_format requires at least one /, so we prepend the
+            # base before calling it.
+            if check_ref_format(base + b'/' + refname):
+                subkeys.add(refname)
+    <<[[DiskRefsContainer.subkeys()]] look in packed refs>>
+    return subkeys
+@
 
 
 \section{Creating branches, [[git checkout -b]]}
@@ -4156,6 +5031,13 @@ def pull(repo, remote_location=None, refspecs=None,
         r.reset_index()
 @
 
+<<constant default_bytes_out_stream>>=
+default_bytes_out_stream = getattr(sys.stdout, 'buffer', sys.stdout)
+@
+
+<<constant default_bytes_err_stream>>=
+default_bytes_err_stream = getattr(sys.stderr, 'buffer', sys.stderr)
+@
 
 <<function objectspec.parse_reftuples>>=
 def parse_reftuples(lh_container, rh_container, refspecs):
@@ -4363,6 +5245,7 @@ def log(repo=".", paths=None, outstream=sys.stdout, max_entries=None,
 @
 
 
+
 <<function porcelain.print_name_status>>=
 def print_name_status(changes):
     """Print a simple status summary, listing changed files.
@@ -4424,8 +5307,6 @@ def print_commit(commit, decode, outstream=sys.stdout):
     outstream.write("\n")
 @
 
-
-\section{Walker}
 
 \section{[[git show]]}
 % can be useful to understand formats
@@ -4787,6 +5668,15 @@ def write_object_diff(f, store, old_file, new_file, diff_binary=False):
             old_path, new_path))
 @
 
+<<function patch.is_binary>>=
+def is_binary(content):
+    """See if the first few bytes contain any null characters.
+
+    :param content: Bytestring to check for binary content
+    """
+    return b'\0' in content[:FIRST_FEW_BYTES]
+@
+
 <<function patch.patch_filename>>=
 def patch_filename(p, root):
     if p is None:
@@ -4819,6 +5709,14 @@ def gen_diff_header(paths, modes, shas):
     if new_mode is not None:
         yield (" %o" % new_mode).encode('ascii')
     yield b"\n"
+@
+
+<<function patch.shortid>>=
+def shortid(hexsha):
+    if hexsha is None:
+        return b"0" * 7
+    else:
+        return hexsha[:7]
 @
 
 <<function patch.unified_diff>>=
@@ -5109,7 +6007,9 @@ def get_transport_and_path_from_url(url, config=None, **kwargs):
     raise ValueError("unknown scheme '%s'" % parsed.scheme)
 @
 
-
+<<constant protocol.TCP_GIT_PORT>>=
+TCP_GIT_PORT = 9418
+@
 
 \section{[[git://]] protocol}
 
@@ -5120,6 +6020,15 @@ self._fetch_capabilities = set(FETCH_CAPABILITIES)
 self._fetch_capabilities.add(capability_agent())
 self._send_capabilities = set(SEND_CAPABILITIES)
 self._send_capabilities.add(capability_agent())
+@
+
+<<function protocol.capability_agent>>=
+def capability_agent():
+    return CAPABILITY_AGENT + b'=' + agent_string()
+@
+<<function protocol.agent_string>>=
+def agent_string():
+    return ('dulwich/%d.%d.%d' % dulwich.__version__).encode('ascii')
 @
 
 <<constant client.FETCH_CAPABILITIES>>=
@@ -5537,7 +6446,14 @@ message = serializable_property(
     "message", "The message attached to this tag")
 @
 
-
+<<constants objects.objects_HEADER>>=
+# Header fields for objects
+_OBJECT_HEADER = b'object'
+_TYPE_HEADER = b'type'
+_TAG_HEADER = b'tag'
+_TAGGER_HEADER = b'tagger'
+@
+%bug? should be called tag?
 
 <<[[Tag]] methods>>=
 def check(self):
@@ -5677,6 +6593,10 @@ def from_path(cls, filename):
 @
 %dead?
 
+
+<<constant refs.ANNOTATED_TAG_SUFFIX>>=
+ANNOTATED_TAG_SUFFIX = b'^{}'
+@
 
 \subsubsection{[[git tag]]}
 
@@ -5839,6 +6759,8 @@ def format_reflog_line(old_sha, new_sha, committer, timestamp, timezone,
 self._graftpoints = {}
 @
 
+\subsubsection{Reading graft files}
+
 <<[[Repo.__init__()]] grafts>>=
 self._graftpoints = {}
 graft_file = self.get_named_file(os.path.join("info", "grafts"),
@@ -5846,41 +6768,16 @@ graft_file = self.get_named_file(os.path.join("info", "grafts"),
 if graft_file:
     with graft_file:
         self._graftpoints.update(parse_graftpoints(graft_file))
+@
+
+<<[[Repo.__init__()]] grafts>>=
 graft_file = self.get_named_file("shallow",
                                  basedir=self.commondir())
 if graft_file:
     with graft_file:
         self._graftpoints.update(parse_graftpoints(graft_file))
 @
-
-
-<<[[BaseRepo]] methods>>=
-def _add_graftpoints(self, updated_graftpoints):
-    """Add or modify graftpoints
-
-    :param updated_graftpoints: Dict of commit shas to list of parent shas
-    """
-
-    # Simple validation
-    for commit, parents in updated_graftpoints.items():
-        for sha in [commit] + parents:
-            check_hexsha(sha, 'Invalid graftpoint')
-
-    self._graftpoints.update(updated_graftpoints)
-
-@
-
-<<[[BaseRepo]] methods>>=
-def _remove_graftpoints(self, to_remove=[]):
-    """Remove graftpoints
-
-    :param to_remove: List of commit shas
-    """
-    for sha in to_remove:
-        del self._graftpoints[sha]
-
-@
-
+% shallow? deprecated format?
 
 <<function parse_graftpoints>>=
 def parse_graftpoints(graftpoints):
@@ -5913,6 +6810,36 @@ def parse_graftpoints(graftpoints):
     return grafts
 @
 
+\subsubsection{Writing graft files}
+
+<<[[BaseRepo]] methods>>=
+def _add_graftpoints(self, updated_graftpoints):
+    """Add or modify graftpoints
+
+    :param updated_graftpoints: Dict of commit shas to list of parent shas
+    """
+
+    # Simple validation
+    for commit, parents in updated_graftpoints.items():
+        for sha in [commit] + parents:
+            check_hexsha(sha, 'Invalid graftpoint')
+
+    self._graftpoints.update(updated_graftpoints)
+@
+%dead? API
+
+<<[[BaseRepo]] methods>>=
+def _remove_graftpoints(self, to_remove=[]):
+    """Remove graftpoints
+
+    :param to_remove: List of commit shas
+    """
+    for sha in to_remove:
+        del self._graftpoints[sha]
+@
+%dead? API
+
+
 <<function serialize_graftpoints>>=
 def serialize_graftpoints(graftpoints):
     """Convert a dictionary of grafts into string
@@ -5934,6 +6861,16 @@ def serialize_graftpoints(graftpoints):
             graft_lines.append(commit)
     return b'\n'.join(graft_lines)
 
+@
+%dead? API?
+
+\subsubsection{Using graft file}
+
+% walker? -> <>
+<<[[BaseRepo.get_parents()]] look if graftpoint>>=
+try:
+    return self._graftpoints[sha]
+except KeyError:
 @
 
 \subsection{Submodules}
@@ -6596,6 +7533,88 @@ def keep(self, msg=None):
 
 \subsection{Writing}
 
+<<function pack.write_pack>>=
+def write_pack(filename, objects, deltify=None, delta_window_size=None):
+    """Write a new pack data file.
+
+    :param filename: Path to the new pack file (without .pack extension)
+    :param objects: Iterable of (object, path) tuples to write.
+        Should provide __len__
+    :param window_size: Delta window size
+    :param deltify: Whether to deltify pack objects
+    :return: Tuple with checksum of pack file and index file
+    """
+    with GitFile(filename + '.pack', 'wb') as f:
+        entries, data_sum = write_pack_objects(
+            f, objects, delta_window_size=delta_window_size, deltify=deltify)
+    entries = sorted([(k, v[0], v[1]) for (k, v) in entries.items()])
+    with GitFile(filename + '.idx', 'wb') as f:
+        return data_sum, write_pack_index_v2(f, entries, data_sum)
+@
+
+<<function pack.write_pack_header>>=
+def write_pack_header(f, num_objects):
+    """Write a pack header for the given number of objects."""
+    f.write(b'PACK')                          # Pack header
+    f.write(struct.pack(b'>L', 2))            # Pack version
+    f.write(struct.pack(b'>L', num_objects))  # Number of objects in pack
+@
+
+<<function pack.write_pack_object>>=
+def write_pack_object(f, type, object, sha=None):
+    """Write pack object to a file.
+
+    :param f: File to write to
+    :param type: Numeric type of the object
+    :param object: Object to write
+    :return: Tuple with offset at which the object was written, and crc32
+    """
+    if type in DELTA_TYPES:
+        delta_base, object = object
+    else:
+        delta_base = None
+    header = bytes(pack_object_header(type, delta_base, len(object)))
+    comp_data = zlib.compress(object)
+    crc32 = 0
+    for data in (header, comp_data):
+        f.write(data)
+        if sha is not None:
+            sha.update(data)
+        crc32 = binascii.crc32(data, crc32)
+    return crc32 & 0xffffffff
+@
+
+<<function pack_object_header>>=
+def pack_object_header(type_num, delta_base, size):
+    """Create a pack object header for the given object info.
+
+    :param type_num: Numeric type of the object.
+    :param delta_base: Delta base offset or ref, or None for whole objects.
+    :param size: Uncompressed object size.
+    :return: A header for a packed object.
+    """
+    header = []
+    c = (type_num << 4) | (size & 15)
+    size >>= 4
+    while size:
+        header.append(c | 0x80)
+        c = size & 0x7f
+        size >>= 7
+    header.append(c)
+    if type_num == OFS_DELTA:
+        ret = [delta_base & 0x7f]
+        delta_base >>= 7
+        while delta_base:
+            delta_base -= 1
+            ret.insert(0, 0x80 | (delta_base & 0x7f))
+            delta_base >>= 7
+        header.extend(ret)
+    elif type_num == REF_DELTA:
+        assert len(delta_base) == 20
+        header += delta_base
+    return bytearray(header)
+@
+
 <<function pack.write_pack_objects>>=
 def write_pack_objects(f, objects, delta_window_size=None, deltify=False):
     """Write a new pack data file.
@@ -6647,6 +7666,16 @@ def write_pack_data(f, num_records, records):
     return entries, f.write_sha()
 @
 
+<<constant pack.OFS_DELTA>>=
+OFS_DELTA = 6
+@
+<<constant pack.REF_DELTA>>=
+REF_DELTA = 7
+@
+
+<<constant pack.DELTA_TYPES>>=
+DELTA_TYPES = (OFS_DELTA, REF_DELTA)
+@
 
 \subsection{Modifications}
 
@@ -7102,6 +8131,70 @@ def get_packed_refs(self):
 
 @
 
+<<function refs.read_packed_refs_with_peeled>>=
+def read_packed_refs_with_peeled(f):
+    """Read a packed refs file including peeled refs.
+
+    Assumes the "# pack-refs with: peeled" line was already read. Yields tuples
+    with ref names, SHA1s, and peeled SHA1s (or None).
+
+    :param f: file-like object to read from, seek'ed to the second line
+    """
+    last = None
+    for l in f:
+        if l[0] == b'#':
+            continue
+        l = l.rstrip(b'\r\n')
+        if l.startswith(b'^'):
+            if not last:
+                raise PackedRefsException("unexpected peeled ref line")
+            if not valid_hexsha(l[1:]):
+                raise PackedRefsException("Invalid hex sha %r" % l[1:])
+            sha, name = _split_ref_line(last)
+            last = None
+            yield (sha, name, l[1:])
+        else:
+            if last:
+                sha, name = _split_ref_line(last)
+                yield (sha, name, None)
+            last = l
+    if last:
+        sha, name = _split_ref_line(last)
+        yield (sha, name, None)
+@
+
+<<function refs._split_ref_line>>=
+def _split_ref_line(line):
+    """Split a single ref line into a tuple of SHA1 and name."""
+    fields = line.rstrip(b'\n\r').split(b' ')
+    if len(fields) != 2:
+        raise PackedRefsException("invalid ref line %r" % line)
+    sha, name = fields
+    if not valid_hexsha(sha):
+        raise PackedRefsException("Invalid hex sha %r" % sha)
+    if not check_ref_format(name):
+        raise PackedRefsException("invalid ref name %r" % name)
+    return (sha, name)
+@
+
+
+<<function refs.read_packed_refs>>=
+def read_packed_refs(f):
+    """Read a packed refs file.
+
+    :param f: file-like object to read from
+    :return: Iterator over tuples with SHA1s and ref names.
+    """
+    for l in f:
+        if l.startswith(b'#'):
+            # Comment
+            continue
+        if l.startswith(b'^'):
+            raise PackedRefsException(
+              "found peeled ref in packed-refs without peeled")
+        yield _split_ref_line(l)
+@
+
 <<[[DiskRefsContainer]] methods>>=
 def _remove_packed_ref(self, name):
     if self._packed_refs is None:
@@ -7123,7 +8216,24 @@ def _remove_packed_ref(self, name):
         f.close()
     finally:
         f.abort()
+@
 
+<<function refs.write_packed_refs>>=
+def write_packed_refs(f, packed_refs, peeled_refs=None):
+    """Write a packed refs file.
+
+    :param f: empty file-like object to write to
+    :param packed_refs: dict of refname to sha of packed refs to write
+    :param peeled_refs: dict of refname to peeled value of sha
+    """
+    if peeled_refs is None:
+        peeled_refs = {}
+    else:
+        f.write(b'# pack-refs with: peeled\n')
+    for refname in sorted(packed_refs.keys()):
+        f.write(git_line(packed_refs[refname], refname))
+        if refname in peeled_refs:
+            f.write(b'^' + peeled_refs[refname] + b'\n')
 @
 
 \subsubsection{[[GitClient]]}
@@ -7376,8 +8486,9 @@ def send_pack(self, path, update_refs, generate_pack_contents,
                     progress('unable to remove %s' % refname)
 
     return new_refs
-
 @
+
+
 
 <<[[LocalGitClient]] methods>>=
 def fetch_pack(self, path, determine_wants, graph_walker, pack_data,
@@ -7404,6 +8515,350 @@ def fetch_pack(self, path, determine_wants, graph_walker, pack_data,
         write_pack_objects(ProtocolFile(None, pack_data), objects_iter)
         return r.get_refs()
 
+@
+
+<<class ProtocolFile>>=
+class ProtocolFile(object):
+    """A dummy file for network ops that expect file-like objects."""
+
+    def __init__(self, read, write):
+        self.read = read
+        self.write = write
+
+    def tell(self):
+        pass
+
+    def close(self):
+        pass
+@
+
+\subsection{Delta}
+
+<<constant pack.DEFAULT_PACK_DELTA_WINDOW_SIZE>>=
+DEFAULT_PACK_DELTA_WINDOW_SIZE = 10
+@
+
+<<constant pack._MAX_COPY_LEN>>=
+# The length of delta compression copy operations in version 2 packs is limited
+# to 64K.  To copy more, we use several copy operations.  Version 3 packs allow
+# 24-bit lengths in copy operations, but we always make version 2 packs.
+_MAX_COPY_LEN = 0xffff
+@
+
+<<function pack.create_delta>>=
+def create_delta(base_buf, target_buf):
+    """Use python difflib to work out how to transform base_buf to target_buf.
+
+    :param base_buf: Base buffer
+    :param target_buf: Target buffer
+    """
+    assert isinstance(base_buf, bytes)
+    assert isinstance(target_buf, bytes)
+    out_buf = bytearray()
+    # write delta header
+    out_buf += _delta_encode_size(len(base_buf))
+    out_buf += _delta_encode_size(len(target_buf))
+    # write out delta opcodes
+    seq = difflib.SequenceMatcher(a=base_buf, b=target_buf)
+    for opcode, i1, i2, j1, j2 in seq.get_opcodes():
+        # Git patch opcodes don't care about deletes!
+        # if opcode == 'replace' or opcode == 'delete':
+        #    pass
+        if opcode == 'equal':
+            # If they are equal, unpacker will use data from base_buf
+            # Write out an opcode that says what range to use
+            copy_start = i1
+            copy_len = i2 - i1
+            while copy_len > 0:
+                to_copy = min(copy_len, _MAX_COPY_LEN)
+                out_buf += _encode_copy_operation(copy_start, to_copy)
+                copy_start += to_copy
+                copy_len -= to_copy
+        if opcode == 'replace' or opcode == 'insert':
+            # If we are replacing a range or adding one, then we just
+            # output it to the stream (prefixed by its size)
+            s = j2 - j1
+            o = j1
+            while s > 127:
+                out_buf.append(127)
+                out_buf += bytearray(target_buf[o:o+127])
+                s -= 127
+                o += 127
+            out_buf.append(s)
+            out_buf += bytearray(target_buf[o:o+s])
+    return bytes(out_buf)
+@
+
+<<function pack._delta_encode_size>>=
+def _delta_encode_size(size):
+    ret = bytearray()
+    c = size & 0x7f
+    size >>= 7
+    while size:
+        ret.append(c | 0x80)
+        c = size & 0x7f
+        size >>= 7
+    ret.append(c)
+    return ret
+@
+
+<<function pack._encode_copy_operation>>=
+def _encode_copy_operation(start, length):
+    scratch = []
+    op = 0x80
+    for i in range(4):
+        if start & 0xff << i*8:
+            scratch.append((start >> i*8) & 0xff)
+            op |= 1 << i
+    for i in range(2):
+        if length & 0xff << i*8:
+            scratch.append((length >> i*8) & 0xff)
+            op |= 1 << (4+i)
+    return bytearray([op] + scratch)
+@
+
+
+<<function pack.deltify_pack_objects>>=
+def deltify_pack_objects(objects, window_size=None):
+    """Generate deltas for pack objects.
+
+    :param objects: An iterable of (object, path) tuples to deltify.
+    :param window_size: Window size; None for default
+    :return: Iterator over type_num, object id, delta_base, content
+        delta_base is None for full text entries
+    """
+    if window_size is None:
+        window_size = DEFAULT_PACK_DELTA_WINDOW_SIZE
+    # Build a list of objects ordered by the magic Linus heuristic
+    # This helps us find good objects to diff against us
+    magic = []
+    for obj, path in objects:
+        magic.append((obj.type_num, path, -obj.raw_length(), obj))
+    magic.sort()
+
+    possible_bases = deque()
+
+    for type_num, path, neg_length, o in magic:
+        raw = o.as_raw_string()
+        winner = raw
+        winner_base = None
+        for base in possible_bases:
+            if base.type_num != type_num:
+                continue
+            delta = create_delta(base.as_raw_string(), raw)
+            if len(delta) < len(winner):
+                winner_base = base.sha().digest()
+                winner = delta
+        yield type_num, o.sha().digest(), winner_base, winner
+        possible_bases.appendleft(o)
+        while len(possible_bases) > window_size:
+            possible_bases.pop()
+@
+
+<<class DeltaChainIterator>>=
+class DeltaChainIterator(object):
+    """Abstract iterator over pack data based on delta chains.
+
+    Each object in the pack is guaranteed to be inflated exactly once,
+    regardless of how many objects reference it as a delta base. As a result,
+    memory usage is proportional to the length of the longest delta chain.
+
+    Subclasses can override _result to define the result type of the iterator.
+    By default, results are UnpackedObjects with the following members set:
+
+    * offset
+    * obj_type_num
+    * obj_chunks
+    * pack_type_num
+    * delta_base     (for delta types)
+    * comp_chunks    (if _include_comp is True)
+    * decomp_chunks
+    * decomp_len
+    * crc32          (if _compute_crc32 is True)
+    """
+
+    _compute_crc32 = False
+    _include_comp = False
+
+    def __init__(self, file_obj, resolve_ext_ref=None):
+        self._file = file_obj
+        self._resolve_ext_ref = resolve_ext_ref
+        self._pending_ofs = defaultdict(list)
+        self._pending_ref = defaultdict(list)
+        self._full_ofs = []
+        self._shas = {}
+        self._ext_refs = []
+
+    @classmethod
+    def for_pack_data(cls, pack_data, resolve_ext_ref=None):
+        walker = cls(None, resolve_ext_ref=resolve_ext_ref)
+        walker.set_pack_data(pack_data)
+        for unpacked in pack_data._iter_unpacked():
+            walker.record(unpacked)
+        return walker
+
+    def record(self, unpacked):
+        type_num = unpacked.pack_type_num
+        offset = unpacked.offset
+        if type_num == OFS_DELTA:
+            base_offset = offset - unpacked.delta_base
+            self._pending_ofs[base_offset].append(offset)
+        elif type_num == REF_DELTA:
+            self._pending_ref[unpacked.delta_base].append(offset)
+        else:
+            self._full_ofs.append((offset, type_num))
+
+    def set_pack_data(self, pack_data):
+        self._file = pack_data._file
+
+    def _walk_all_chains(self):
+        for offset, type_num in self._full_ofs:
+            for result in self._follow_chain(offset, type_num, None):
+                yield result
+        for result in self._walk_ref_chains():
+            yield result
+        assert not self._pending_ofs
+
+    def _ensure_no_pending(self):
+        if self._pending_ref:
+            raise KeyError([sha_to_hex(s) for s in self._pending_ref])
+
+    def _walk_ref_chains(self):
+        if not self._resolve_ext_ref:
+            self._ensure_no_pending()
+            return
+
+        for base_sha, pending in sorted(self._pending_ref.items()):
+            if base_sha not in self._pending_ref:
+                continue
+            try:
+                type_num, chunks = self._resolve_ext_ref(base_sha)
+            except KeyError:
+                # Not an external ref, but may depend on one. Either it will
+                # get popped via a _follow_chain call, or we will raise an
+                # error below.
+                continue
+            self._ext_refs.append(base_sha)
+            self._pending_ref.pop(base_sha)
+            for new_offset in pending:
+                for result in self._follow_chain(new_offset, type_num, chunks):
+                    yield result
+
+        self._ensure_no_pending()
+
+    def _result(self, unpacked):
+        return unpacked
+
+    def _resolve_object(self, offset, obj_type_num, base_chunks):
+        self._file.seek(offset)
+        unpacked, _ = unpack_object(
+          self._file.read, include_comp=self._include_comp,
+          compute_crc32=self._compute_crc32)
+        unpacked.offset = offset
+        if base_chunks is None:
+            assert unpacked.pack_type_num == obj_type_num
+        else:
+            assert unpacked.pack_type_num in DELTA_TYPES
+            unpacked.obj_type_num = obj_type_num
+            unpacked.obj_chunks = apply_delta(base_chunks,
+                                              unpacked.decomp_chunks)
+        return unpacked
+
+    def _follow_chain(self, offset, obj_type_num, base_chunks):
+        # Unlike PackData.get_object_at, there is no need to cache offsets as
+        # this approach by design inflates each object exactly once.
+        todo = [(offset, obj_type_num, base_chunks)]
+        for offset, obj_type_num, base_chunks in todo:
+            unpacked = self._resolve_object(offset, obj_type_num, base_chunks)
+            yield self._result(unpacked)
+
+            unblocked = chain(self._pending_ofs.pop(unpacked.offset, []),
+                              self._pending_ref.pop(unpacked.sha(), []))
+            todo.extend(
+                (new_offset, unpacked.obj_type_num, unpacked.obj_chunks)
+                for new_offset in unblocked)
+
+    def __iter__(self):
+        return self._walk_all_chains()
+
+    def ext_refs(self):
+        return self._ext_refs
+@
+
+<<function pack.apply_delta>>=
+def apply_delta(src_buf, delta):
+    """Based on the similar function in git's patch-delta.c.
+
+    :param src_buf: Source buffer
+    :param delta: Delta instructions
+    """
+    if not isinstance(src_buf, bytes):
+        src_buf = b''.join(src_buf)
+    if not isinstance(delta, bytes):
+        delta = b''.join(delta)
+    out = []
+    index = 0
+    delta_length = len(delta)
+
+    def get_delta_header_size(delta, index):
+        size = 0
+        i = 0
+        while delta:
+            cmd = ord(delta[index:index+1])
+            index += 1
+            size |= (cmd & ~0x80) << i
+            i += 7
+            if not cmd & 0x80:
+                break
+        return size, index
+    src_size, index = get_delta_header_size(delta, index)
+    dest_size, index = get_delta_header_size(delta, index)
+    assert src_size == len(src_buf), '%d vs %d' % (src_size, len(src_buf))
+    while index < delta_length:
+        cmd = ord(delta[index:index+1])
+        index += 1
+        if cmd & 0x80:
+            cp_off = 0
+            for i in range(4):
+                if cmd & (1 << i):
+                    x = ord(delta[index:index+1])
+                    index += 1
+                    cp_off |= x << (i * 8)
+            cp_size = 0
+            # Version 3 packs can contain copy sizes larger than 64K.
+            for i in range(3):
+                if cmd & (1 << (4+i)):
+                    x = ord(delta[index:index+1])
+                    index += 1
+                    cp_size |= x << (i * 8)
+            if cp_size == 0:
+                cp_size = 0x10000
+            if (cp_off + cp_size < cp_size or
+                    cp_off + cp_size > src_size or
+                    cp_size > dest_size):
+                break
+            out.append(src_buf[cp_off:cp_off+cp_size])
+        elif cmd != 0:
+            out.append(delta[index:index+cmd])
+            index += cmd
+        else:
+            raise ApplyDeltaError('Invalid opcode 0')
+
+    if index != delta_length:
+        raise ApplyDeltaError('delta not empty: %r' % delta[index:])
+
+    if dest_size != chunks_length(out):
+        raise ApplyDeltaError('dest size incorrect')
+
+    return out
+@
+
+<<function pack.chunks_length>>=
+def chunks_length(chunks):
+    if isinstance(chunks, bytes):
+        return len(chunks)
+    else:
+        return sum(imap(len, chunks))
 @
 
 \subsection{Misc}
@@ -7945,6 +9400,16 @@ def get_object_at(self, offset):
     return (unpacked.pack_type_num, unpacked._obj())
 @
 
+
+<<function pack._compute_object_size>>=
+def _compute_object_size(value):
+    """Compute the size of a unresolved object for use with LRUSizeCache."""
+    (num, obj) = value
+    if num in DELTA_TYPES:
+        return chunks_length(obj[1])
+    return chunks_length(obj)
+@
+
 <<function read_pack_header>>=
 def read_pack_header(read):
     """Read the header of a pack file.
@@ -7965,6 +9430,34 @@ def read_pack_header(read):
     return (version, num_objects)
 @
 
+
+<<function pack.compute_file_sha>>=
+def compute_file_sha(f, start_ofs=0, end_ofs=0, buffer_size=1 << 16):
+    """Hash a portion of a file into a new SHA.
+
+    :param f: A file-like object to read from that supports seek().
+    :param start_ofs: The offset in the file to start reading at.
+    :param end_ofs: The offset in the file to end reading at, relative to the
+        end of the file.
+    :param buffer_size: A buffer size for reading.
+    :return: A new SHA object updated with data read from the file.
+    """
+    sha = sha1()
+    f.seek(0, SEEK_END)
+    length = f.tell()
+    if (end_ofs < 0 and length + end_ofs < start_ofs) or end_ofs > length:
+        raise AssertionError(
+            "Attempt to read beyond file length. "
+            "start_ofs: %d, end_ofs: %d, file length: %d" % (
+                start_ofs, end_ofs, length))
+    todo = length + end_ofs - start_ofs
+    f.seek(start_ofs)
+    while todo:
+        data = f.read(min(todo, buffer_size))
+        sha.update(data)
+        todo -= len(data)
+    return sha
+@
 
 \subsection{[[UnpackObject]]}
 
@@ -8046,6 +9539,19 @@ class UnpackedObject(object):
     def __repr__(self):
         data = ['%s=%r' % (s, getattr(self, s)) for s in self.__slots__]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(data))
+@
+
+<<function pack.obj_sha>>=
+def obj_sha(type, chunks):
+    """Compute the SHA for a numeric type and object chunks."""
+    sha = sha1()
+    sha.update(object_header(type, chunks_length(chunks)))
+    if isinstance(chunks, bytes):
+        sha.update(chunks)
+    else:
+        for chunk in chunks:
+            sha.update(chunk)
+    return sha.digest()
 @
 
 <<[[ShaFile]] methods>>=
@@ -9907,6 +11413,202 @@ def _complete_thin_pack(self, f, path, copier, indexer):
 %            os.rename(path, pack_base_name + '.pack')
 %    else:
 
+<<class PackStreamReader>>=
+class PackStreamReader(object):
+    """Class to read a pack stream.
+
+    The pack is read from a ReceivableProtocol using read() or recv() as
+    appropriate.
+    """
+
+    def __init__(self, read_all, read_some=None, zlib_bufsize=_ZLIB_BUFSIZE):
+        self.read_all = read_all
+        if read_some is None:
+            self.read_some = read_all
+        else:
+            self.read_some = read_some
+        self.sha = sha1()
+        self._offset = 0
+        self._rbuf = BytesIO()
+        # trailer is a deque to avoid memory allocation on small reads
+        self._trailer = deque()
+        self._zlib_bufsize = zlib_bufsize
+
+    def _read(self, read, size):
+        """Read up to size bytes using the given callback.
+
+        As a side effect, update the verifier's hash (excluding the last 20
+        bytes read).
+
+        :param read: The read callback to read from.
+        :param size: The maximum number of bytes to read; the particular
+            behavior is callback-specific.
+        """
+        data = read(size)
+
+        # maintain a trailer of the last 20 bytes we've read
+        n = len(data)
+        self._offset += n
+        tn = len(self._trailer)
+        if n >= 20:
+            to_pop = tn
+            to_add = 20
+        else:
+            to_pop = max(n + tn - 20, 0)
+            to_add = n
+        self.sha.update(
+            bytes(bytearray([self._trailer.popleft() for _ in range(to_pop)])))
+        self._trailer.extend(data[-to_add:])
+
+        # hash everything but the trailer
+        self.sha.update(data[:-to_add])
+        return data
+
+    def _buf_len(self):
+        buf = self._rbuf
+        start = buf.tell()
+        buf.seek(0, SEEK_END)
+        end = buf.tell()
+        buf.seek(start)
+        return end - start
+
+    @property
+    def offset(self):
+        return self._offset - self._buf_len()
+
+    def read(self, size):
+        """Read, blocking until size bytes are read."""
+        buf_len = self._buf_len()
+        if buf_len >= size:
+            return self._rbuf.read(size)
+        buf_data = self._rbuf.read()
+        self._rbuf = BytesIO()
+        return buf_data + self._read(self.read_all, size - buf_len)
+
+    def recv(self, size):
+        """Read up to size bytes, blocking until one byte is read."""
+        buf_len = self._buf_len()
+        if buf_len:
+            data = self._rbuf.read(size)
+            if size >= buf_len:
+                self._rbuf = BytesIO()
+            return data
+        return self._read(self.read_some, size)
+
+    def __len__(self):
+        return self._num_objects
+
+    def read_objects(self, compute_crc32=False):
+        """Read the objects in this pack file.
+
+        :param compute_crc32: If True, compute the CRC32 of the compressed
+            data. If False, the returned CRC32 will be None.
+        :return: Iterator over UnpackedObjects with the following members set:
+            offset
+            obj_type_num
+            obj_chunks (for non-delta types)
+            delta_base (for delta types)
+            decomp_chunks
+            decomp_len
+            crc32 (if compute_crc32 is True)
+        :raise ChecksumMismatch: if the checksum of the pack contents does not
+            match the checksum in the pack trailer.
+        :raise zlib.error: if an error occurred during zlib decompression.
+        :raise IOError: if an error occurred writing to the output file.
+        """
+        pack_version, self._num_objects = read_pack_header(self.read)
+        if pack_version is None:
+            return
+
+        for i in range(self._num_objects):
+            offset = self.offset
+            unpacked, unused = unpack_object(
+              self.read, read_some=self.recv, compute_crc32=compute_crc32,
+              zlib_bufsize=self._zlib_bufsize)
+            unpacked.offset = offset
+
+            # prepend any unused data to current read buffer
+            buf = BytesIO()
+            buf.write(unused)
+            buf.write(self._rbuf.read())
+            buf.seek(0)
+            self._rbuf = buf
+
+            yield unpacked
+
+        if self._buf_len() < 20:
+            # If the read buffer is full, then the last read() got the whole
+            # trailer off the wire. If not, it means there is still some of the
+            # trailer to read. We need to read() all 20 bytes; N come from the
+            # read buffer and (20 - N) come from the wire.
+            self.read(20)
+
+        pack_sha = bytearray(self._trailer)
+        if pack_sha != self.sha.digest():
+            raise ChecksumMismatch(sha_to_hex(pack_sha), self.sha.hexdigest())
+@
+
+
+<<class PackIndexer>>=
+class PackIndexer(DeltaChainIterator):
+    """Delta chain iterator that yields index entries."""
+
+    _compute_crc32 = True
+
+    def _result(self, unpacked):
+        return unpacked.sha(), unpacked.offset, unpacked.crc32
+@
+
+<<class PackInflater>>=
+class PackInflater(DeltaChainIterator):
+    """Delta chain iterator that yields ShaFile objects."""
+
+    def _result(self, unpacked):
+        return unpacked.sha_file()
+@
+
+<<class PackStreamCopier>>=
+class PackStreamCopier(PackStreamReader):
+    """Class to verify a pack stream as it is being read.
+
+    The pack is read from a ReceivableProtocol using read() or recv() as
+    appropriate and written out to the given file-like object.
+    """
+
+    def __init__(self, read_all, read_some, outfile, delta_iter=None):
+        """Initialize the copier.
+
+        :param read_all: Read function that blocks until the number of
+            requested bytes are read.
+        :param read_some: Read function that returns at least one byte, but may
+            not return the number of bytes requested.
+        :param outfile: File-like object to write output through.
+        :param delta_iter: Optional DeltaChainIterator to record deltas as we
+            read them.
+        """
+        super(PackStreamCopier, self).__init__(read_all, read_some=read_some)
+        self.outfile = outfile
+        self._delta_iter = delta_iter
+
+    def _read(self, read, size):
+        """Read data from the read callback and write it to the file."""
+        data = super(PackStreamCopier, self)._read(read, size)
+        self.outfile.write(data)
+        return data
+
+    def verify(self):
+        """Verify a pack stream and write it to the output file.
+
+        See PackStreamReader.iterobjects for a list of exceptions this may
+        throw.
+        """
+        if self._delta_iter:
+            for unpacked in self.read_objects():
+                self._delta_iter.record(unpacked)
+        else:
+            for _ in self.read_objects():
+                pass
+@
 
 \subsection{Side band 64k}
 
@@ -10163,6 +11865,52 @@ def get_peeled(self, name):
 
 
 \section{Configuration file, [[.git/config]]}
+
+<<[[BaseRepo.__init_files()]] create config file>>=
+f = BytesIO()
+cf = ConfigFile()
+cf.set(b"core", b"repositoryformatversion", b"0")
+if self._determine_file_mode():
+    cf.set(b"core", b"filemode", True)
+else:
+    cf.set(b"core", b"filemode", False)
+
+cf.set(b"core", b"bare", bare)
+cf.set(b"core", b"logallrefupdates", True)
+cf.write_to_file(f)
+self._put_named_file('config', f.getvalue())
+@
+
+<<[[BaseRepo]] methods>>=
+def _determine_file_mode(self):
+    """Probe the file-system to determine whether permissions can be trusted.
+
+    :return: True if permissions can be trusted, False otherwise.
+    """
+    raise NotImplementedError(self._determine_file_mode)
+@
+<<[[Repo]] methods>>=
+def _determine_file_mode(self):
+    """Probe the file-system to determine whether permissions can be trusted.
+
+    :return: True if permissions can be trusted, False otherwise.
+    """
+    fname = os.path.join(self.path, '.probe-permissions')
+    with open(fname, 'w') as f:
+        f.write('')
+
+    st1 = os.lstat(fname)
+    os.chmod(fname, st1.st_mode ^ stat.S_IXUSR)
+    st2 = os.lstat(fname)
+
+    os.unlink(fname)
+
+    mode_differs = st1.st_mode != st2.st_mode
+    st2_has_exec = (st2.st_mode & stat.S_IXUSR) != 0
+
+    return mode_differs and st2_has_exec
+@
+
 
 <<[[BaseRepo]] methods>>=
 def get_config(self):
@@ -11028,6 +12776,35 @@ def default_urllib2_opener(config):
     return opener
 @
 
+\subsection{Info refs}
+
+<<function refs.read_info_refs>>=
+def read_info_refs(f):
+    ret = {}
+    for l in f.readlines():
+        (sha, name) = l.rstrip(b"\r\n").split(b"\t", 1)
+        ret[name] = sha
+    return ret
+@
+
+<<function refs.write_info_refs>>=
+def write_info_refs(refs, store):
+    """Generate info refs."""
+    for name, sha in sorted(refs.items()):
+        # get_refs() includes HEAD as a special case, but we don't want to
+        # advertise it
+        if name == b'HEAD':
+            continue
+        try:
+            o = store[sha]
+        except KeyError:
+            continue
+        peeled = store.peel_sha(sha)
+        yield o.id + b'\t' + name + b'\n'
+        if o.id != peeled.id:
+            yield peeled.id + b'\t' + name + ANNOTATED_TAG_SUFFIX + b'\n'
+@
+
 \section{[[git://]] server}
 % git smart http protocol
 
@@ -11506,6 +13283,12 @@ def remote_add(repo, name, url):
         c.set(section, b"url", url)
         c.write_to_path()
 @
+
+<<exception RemoteExists>>=
+class RemoteExists(Exception):
+    """Raised when the remote already exists."""
+@
+
 
 \subsection{[[git ls-remote]]}
 

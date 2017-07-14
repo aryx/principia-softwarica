@@ -887,7 +887,7 @@ class LocalGitClient(GitClient):
         return cls(**kwargs)
 
     # nw_e: [[LocalGitClient]] methods #
-    # nw_s: [[LocalGitClient]] methods |28d55430ad2d4801fba756b688ea7c43#
+    # nw_s: [[LocalGitClient]] methods |b8248be4af6e45c826a4f561d4e81666#
     def send_pack(self, path, update_refs, generate_pack_contents,
                   progress=None, write_pack=write_pack_objects):
         """Upload a pack to a remote repository.
@@ -942,7 +942,6 @@ class LocalGitClient(GitClient):
                         progress('unable to remove %s' % refname)
 
         return new_refs
-
     # nw_e: [[LocalGitClient]] methods #
     # nw_s: [[LocalGitClient]] methods |8987c807abac0e98e94fa2df097b4fa8#
     def fetch_pack(self, path, determine_wants, graph_walker, pack_data,

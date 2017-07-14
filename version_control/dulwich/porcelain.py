@@ -1,4 +1,4 @@
-# nw_s: dulwich/porcelain.py |51427ff4a4924fc2f1a0b21a64917d32#
+# nw_s: dulwich/porcelain.py |bd92eec832a7f64e90db36bab7c88303#
 # porcelain.py -- Porcelain-like layer on top of Dulwich
 # Copyright (C) 2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -118,23 +118,29 @@ from dulwich.server import (
 GitStatus = namedtuple('GitStatus', 'staged unstaged untracked')
 # nw_e: type GitStatus #
 
+# nw_s: constant default_bytes_out_stream |f1e8c56a105f74bebd772716a775ccf1#
 default_bytes_out_stream = getattr(sys.stdout, 'buffer', sys.stdout)
+# nw_e: constant default_bytes_out_stream #
+# nw_s: constant default_bytes_err_stream |9605006e06d89aebb10e3885c1f8d63c#
 default_bytes_err_stream = getattr(sys.stderr, 'buffer', sys.stderr)
+# nw_e: constant default_bytes_err_stream #
 
 # nw_s: constant porcelain.DEFAULT_ENCODING |9bca321287bb4198a61a70a620fce008#
 DEFAULT_ENCODING = 'utf-8'
 # nw_e: constant porcelain.DEFAULT_ENCODING #
 
-
+# nw_s: exception RemoteExists |e19bca0075a1503342777f82789bcb89#
 class RemoteExists(Exception):
     """Raised when the remote already exists."""
+# nw_e: exception RemoteExists #
 
-
+# nw_s: function open_repo |0946ec55f428ccfbcd2173b16768c1ea#
 def open_repo(path_or_repo):
     """Open an argument that can be a repository or a path for a repository."""
     if isinstance(path_or_repo, BaseRepo):
         return path_or_repo
     return Repo(path_or_repo)
+# nw_e: function open_repo #
 
 # nw_s: function _noop_context_manager |95de2b89668234e10a6fdfcb63b03cd9#
 @contextmanager

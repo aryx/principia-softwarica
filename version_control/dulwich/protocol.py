@@ -1,4 +1,4 @@
-# nw_s: protocol.py |e0cf38992038a150fbcec991fa0cd623#
+# nw_s: protocol.py |46a2b222da3ee5ea778ef396b5afc270#
 # protocol.py -- Shared parts of the git protocols
 # Copyright (C) 2008 John Carr <john.carr@unrouted.co.uk>
 # Copyright (C) 2008-2012 Jelmer Vernooij <jelmer@samba.org>
@@ -35,7 +35,9 @@ from dulwich.errors import (
     GitProtocolError,
     )
 
+# nw_s: constant protocol.TCP_GIT_PORT |3c9e3983d922e7d9d9986775e7b94ae3#
 TCP_GIT_PORT = 9418
+# nw_e: constant protocol.TCP_GIT_PORT #
 
 ZERO_SHA = b"0" * 40
 
@@ -69,13 +71,15 @@ CAPABILITY_AGENT = b'agent'
 CAPABILITIES_REF = b'capabilities^{}'
 
 
+# nw_s: function protocol.agent_string |48845148ca72ec80ea0ad6c14272a459#
 def agent_string():
     return ('dulwich/%d.%d.%d' % dulwich.__version__).encode('ascii')
+# nw_e: function protocol.agent_string #
 
-
+# nw_s: function protocol.capability_agent |9ecf94b3d6c90ac0270cd3ddc102aa21#
 def capability_agent():
     return CAPABILITY_AGENT + b'=' + agent_string()
-
+# nw_e: function protocol.capability_agent #
 
 COMMAND_DEEPEN = b'deepen'
 COMMAND_SHALLOW = b'shallow'
@@ -84,7 +88,7 @@ COMMAND_DONE = b'done'
 COMMAND_WANT = b'want'
 COMMAND_HAVE = b'have'
 
-
+# nw_s: class ProtocolFile |6cc199f9f2d046dde913424bb19a2365#
 class ProtocolFile(object):
     """A dummy file for network ops that expect file-like objects."""
 
@@ -97,6 +101,7 @@ class ProtocolFile(object):
 
     def close(self):
         pass
+# nw_e: class ProtocolFile #
 
 
 def pkt_line(data):

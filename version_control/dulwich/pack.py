@@ -1,4 +1,4 @@
-# nw_s: dulwich/pack.py |804fbcf4d93350bedfc1cb7f70e7c127#
+# nw_s: dulwich/pack.py |be94f2cbdbb470ca3b77e1a1ac9a19a2#
 # pack.py -- For dealing with packed git objects.
 # Copyright (C) 2007 James Westby <jw+debian@jameswestby.net>
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
@@ -89,13 +89,20 @@ from dulwich.objects import (
     object_header,
     )
 
-
+# nw_s: constant pack.OFS_DELTA |2f74ad5d7198feb61451834676cc9112#
 OFS_DELTA = 6
+# nw_e: constant pack.OFS_DELTA #
+# nw_s: constant pack.REF_DELTA |d3d1a3d01c33804e82fce57579e696e9#
 REF_DELTA = 7
+# nw_e: constant pack.REF_DELTA #
 
+# nw_s: constant pack.DELTA_TYPES |6fd9d9a7c24991524e79b007c399c59b#
 DELTA_TYPES = (OFS_DELTA, REF_DELTA)
+# nw_e: constant pack.DELTA_TYPES #
 
+# nw_s: constant pack.DEFAULT_PACK_DELTA_WINDOW_SIZE |57f571e26e9e2c52dca8feb8983e8bcd#
 DEFAULT_PACK_DELTA_WINDOW_SIZE = 10
+# nw_e: constant pack.DEFAULT_PACK_DELTA_WINDOW_SIZE #
 
 
 # nw_s: function pack.take_msb_bytes |935f449d6ceea46775c1bf1b6079a500#
@@ -682,12 +689,13 @@ def read_pack_header(read):
     return (version, num_objects)
 # nw_e: function read_pack_header #
 
-
+# nw_s: function pack.chunks_length |9ba258e4880b1efbb6d979d5e16dd7b9#
 def chunks_length(chunks):
     if isinstance(chunks, bytes):
         return len(chunks)
     else:
         return sum(imap(len, chunks))
+# nw_e: function pack.chunks_length #
 
 # nw_s: function unpack_object |34c2eddecd9b1cfdaa633769a1591ad0#
 def unpack_object(read_all, read_some=None, compute_crc32=False,
@@ -753,14 +761,17 @@ def unpack_object(read_all, read_some=None, compute_crc32=False,
     return unpacked, unused
 # nw_e: function unpack_object #
 
+# nw_s: function pack._compute_object_size |260e3498ae1d46e4bac7c9087e66a9cd#
 def _compute_object_size(value):
     """Compute the size of a unresolved object for use with LRUSizeCache."""
     (num, obj) = value
     if num in DELTA_TYPES:
         return chunks_length(obj[1])
     return chunks_length(obj)
+# nw_e: function pack._compute_object_size #
 
 
+# nw_s: class PackStreamReader |52d9f5613bc24ec7b24adc54a4d330a1#
 class PackStreamReader(object):
     """Class to read a pack stream.
 
@@ -893,8 +904,9 @@ class PackStreamReader(object):
         pack_sha = bytearray(self._trailer)
         if pack_sha != self.sha.digest():
             raise ChecksumMismatch(sha_to_hex(pack_sha), self.sha.hexdigest())
+# nw_e: class PackStreamReader #
 
-
+# nw_s: class PackStreamCopier |d761310bcb593e1a8c22a72f89144484#
 class PackStreamCopier(PackStreamReader):
     """Class to verify a pack stream as it is being read.
 
@@ -935,8 +947,10 @@ class PackStreamCopier(PackStreamReader):
         else:
             for _ in self.read_objects():
                 pass
+# nw_e: class PackStreamCopier #
 
 
+# nw_s: function pack.obj_sha |228820d9be584356a8607fc870841129#
 def obj_sha(type, chunks):
     """Compute the SHA for a numeric type and object chunks."""
     sha = sha1()
@@ -947,8 +961,9 @@ def obj_sha(type, chunks):
         for chunk in chunks:
             sha.update(chunk)
     return sha.digest()
+# nw_e: function pack.obj_sha #
 
-
+# nw_s: function pack.compute_file_sha |dd6b72f19195445dbf3bcc663e63e6ce#
 def compute_file_sha(f, start_ofs=0, end_ofs=0, buffer_size=1 << 16):
     """Hash a portion of a file into a new SHA.
 
@@ -974,6 +989,7 @@ def compute_file_sha(f, start_ofs=0, end_ofs=0, buffer_size=1 << 16):
         sha.update(data)
         todo -= len(data)
     return sha
+# nw_e: function pack.compute_file_sha #
 
 # nw_s: class PackData |558215ce7fd9fe18e2ae74bd8aa3b6d3#
 class PackData(object):
@@ -1256,8 +1272,7 @@ class PackData(object):
     # nw_e: [[PackData]] methods #
 # nw_e: class PackData #
 
-
-
+# nw_s: class DeltaChainIterator |e08006968a7ef06e19c272cdffb27765#
 class DeltaChainIterator(object):
     """Abstract iterator over pack data based on delta chains.
 
@@ -1385,8 +1400,9 @@ class DeltaChainIterator(object):
 
     def ext_refs(self):
         return self._ext_refs
+# nw_e: class DeltaChainIterator #
 
-
+# nw_s: class PackIndexer |8e73a983ae1bb8c408882c0d703e1ad1#
 class PackIndexer(DeltaChainIterator):
     """Delta chain iterator that yields index entries."""
 
@@ -1394,13 +1410,15 @@ class PackIndexer(DeltaChainIterator):
 
     def _result(self, unpacked):
         return unpacked.sha(), unpacked.offset, unpacked.crc32
+# nw_e: class PackIndexer #
 
-
+# nw_s: class PackInflater |840cbb39edead163352770167c3ec545#
 class PackInflater(DeltaChainIterator):
     """Delta chain iterator that yields ShaFile objects."""
 
     def _result(self, unpacked):
         return unpacked.sha_file()
+# nw_e: class PackInflater #
 
 # nw_s: class SHA1Reader |d034756f609c29ab0419efb6c26848f1#
 class SHA1Reader(object):
@@ -1461,7 +1479,7 @@ class SHA1Writer(object):
 # nw_e: class SHA1Writer #
 
 
-
+# nw_s: function pack_object_header |b33af899bf74f74ea14374064a4aa36d#
 def pack_object_header(type_num, delta_base, size):
     """Create a pack object header for the given object info.
 
@@ -1490,8 +1508,9 @@ def pack_object_header(type_num, delta_base, size):
         assert len(delta_base) == 20
         header += delta_base
     return bytearray(header)
+# nw_e: function pack_object_header #
 
-
+# nw_s: function pack.write_pack_object |8b3c1c3db75c1a535899eff216033e6a#
 def write_pack_object(f, type, object, sha=None):
     """Write pack object to a file.
 
@@ -1513,8 +1532,9 @@ def write_pack_object(f, type, object, sha=None):
             sha.update(data)
         crc32 = binascii.crc32(data, crc32)
     return crc32 & 0xffffffff
+# nw_e: function pack.write_pack_object #
 
-
+# nw_s: function pack.write_pack |f4dd0354e63af0ed55b1e41db7ee935f#
 def write_pack(filename, objects, deltify=None, delta_window_size=None):
     """Write a new pack data file.
 
@@ -1531,15 +1551,17 @@ def write_pack(filename, objects, deltify=None, delta_window_size=None):
     entries = sorted([(k, v[0], v[1]) for (k, v) in entries.items()])
     with GitFile(filename + '.idx', 'wb') as f:
         return data_sum, write_pack_index_v2(f, entries, data_sum)
+# nw_e: function pack.write_pack #
 
-
+# nw_s: function pack.write_pack_header |a84b0482ba14e6283e7e967a2460657b#
 def write_pack_header(f, num_objects):
     """Write a pack header for the given number of objects."""
     f.write(b'PACK')                          # Pack header
     f.write(struct.pack(b'>L', 2))            # Pack version
     f.write(struct.pack(b'>L', num_objects))  # Number of objects in pack
+# nw_e: function pack.write_pack_header #
 
-
+# nw_s: function pack.deltify_pack_objects |43b2c1403c527af96905ebb1d55dca6d#
 def deltify_pack_objects(objects, window_size=None):
     """Generate deltas for pack objects.
 
@@ -1574,6 +1596,7 @@ def deltify_pack_objects(objects, window_size=None):
         possible_bases.appendleft(o)
         while len(possible_bases) > window_size:
             possible_bases.pop()
+# nw_e: function pack.deltify_pack_objects #
 
 # nw_s: function pack.write_pack_objects |e85c4e78b722b5a6dee726ff52a10399#
 def write_pack_objects(f, objects, delta_window_size=None, deltify=False):
@@ -1654,6 +1677,7 @@ def write_pack_index_v1(f, entries, pack_checksum):
     return f.write_sha()
 # nw_e: function write_pack_index_v1 #
 
+# nw_s: function pack._delta_encode_size |e66ab25fcb2dcbf0a8d67e595cdb2711#
 def _delta_encode_size(size):
     ret = bytearray()
     c = size & 0x7f
@@ -1664,14 +1688,17 @@ def _delta_encode_size(size):
         size >>= 7
     ret.append(c)
     return ret
+# nw_e: function pack._delta_encode_size #
 
-
+# nw_s: constant pack._MAX_COPY_LEN |3535f9297b577c72d3fbe864b1a7870a#
 # The length of delta compression copy operations in version 2 packs is limited
 # to 64K.  To copy more, we use several copy operations.  Version 3 packs allow
 # 24-bit lengths in copy operations, but we always make version 2 packs.
 _MAX_COPY_LEN = 0xffff
+# nw_e: constant pack._MAX_COPY_LEN #
 
 
+# nw_s: function pack._encode_copy_operation |d1b3702d7f8caee07ededa90232aa17f#
 def _encode_copy_operation(start, length):
     scratch = []
     op = 0x80
@@ -1684,8 +1711,9 @@ def _encode_copy_operation(start, length):
             scratch.append((length >> i*8) & 0xff)
             op |= 1 << (4+i)
     return bytearray([op] + scratch)
+# nw_e: function pack._encode_copy_operation #
 
-
+# nw_s: function pack.create_delta |6d5ee339e6578f77ff1b99f7edf36f7f#
 def create_delta(base_buf, target_buf):
     """Use python difflib to work out how to transform base_buf to target_buf.
 
@@ -1727,8 +1755,9 @@ def create_delta(base_buf, target_buf):
             out_buf.append(s)
             out_buf += bytearray(target_buf[o:o+s])
     return bytes(out_buf)
+# nw_e: function pack.create_delta #
 
-
+# nw_s: function pack.apply_delta |9bb20d5ca1bc3843d575061549a3086c#
 def apply_delta(src_buf, delta):
     """Based on the similar function in git's patch-delta.c.
 
@@ -1794,6 +1823,7 @@ def apply_delta(src_buf, delta):
         raise ApplyDeltaError('dest size incorrect')
 
     return out
+# nw_e: function pack.apply_delta #
 
 # nw_s: function write_pack_index_v2 |c4195f01dad755f7764d44559d1fd4a2#
 def write_pack_index_v2(f, entries, pack_checksum):

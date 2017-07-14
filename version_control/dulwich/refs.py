@@ -1,4 +1,4 @@
-# nw_s: refs.py |9dafd9c0a4543c485c4f768b545f755b#
+# nw_s: refs.py |87dd03d77019ab6532f6ec49f2d6f898#
 # refs.py -- For dealing with git refs
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -45,9 +45,15 @@ from dulwich.file import (
 # nw_s: constant refs.SYMREF |c5e7859f5b53ca84a0cdcfc2f90f8f24#
 SYMREF = b'ref: '
 # nw_e: constant refs.SYMREF #
+# nw_s: constant refs.LOCAL_BRANCH_PREFIX |5862203e9828d3b781772e57d05e528c#
 LOCAL_BRANCH_PREFIX = b'refs/heads/'
+# nw_e: constant refs.LOCAL_BRANCH_PREFIX #
+# nw_s: constant refs.BAD_REF_CHARS |ef0a1d4818f3712e12d2f9a575ad3146#
 BAD_REF_CHARS = set(b'\177 ~^:?*[')
+# nw_e: constant refs.BAD_REF_CHARS #
+# nw_s: constant refs.ANNOTATED_TAG_SUFFIX |33bef4b0b2620043e4c92c383f0d508c#
 ANNOTATED_TAG_SUFFIX = b'^{}'
+# nw_e: constant refs.ANNOTATED_TAG_SUFFIX #
 
 # nw_s: function refs.check_ref_format |02160bb4ddc0f0fe52666fb076896362#
 def check_ref_format(refname):
@@ -97,6 +103,67 @@ class RefsContainer(object):
             raise KeyError(name)
         return sha
 
+    # nw_e: [[RefsContainer]] methods #
+    # nw_s: [[RefsContainer]] methods |ecb75ed7fed6324d133e128570f9b651#
+    def __setitem__(self, name, ref):
+        """Set a reference name to point to the given SHA1.
+
+        This method follows all symbolic references if applicable for the
+        subclass.
+
+        :note: This method unconditionally overwrites the contents of a
+            reference. To update atomically only if the reference has not
+            changed, use set_if_equals().
+        :param name: The refname to set.
+        :param ref: The new sha the refname will refer to.
+        """
+        self.set_if_equals(name, None, ref)
+    # nw_e: [[RefsContainer]] methods #
+    # nw_s: [[RefsContainer]] methods |7e735ee2caf94d1d556c3a999217f0d9#
+    def set_if_equals(self, name, old_ref, new_ref):
+        """Set a refname to new_ref only if it currently equals old_ref.
+
+        This method follows all symbolic references if applicable for the
+        subclass, and can be used to perform an atomic compare-and-swap
+        operation.
+
+        :param name: The refname to set.
+        :param old_ref: The old sha the refname must refer to, or None to set
+            unconditionally.
+        :param new_ref: The new sha the refname will refer to.
+        :return: True if the set was successful, False otherwise.
+        """
+        raise NotImplementedError(self.set_if_equals)
+    # nw_e: [[RefsContainer]] methods #
+    # nw_s: [[RefsContainer]] methods |b4cb912ec8b467e3bbda0aa5f625338b#
+    def __delitem__(self, name):
+        """Remove a refname.
+
+        This method does not follow symbolic references, even if applicable for
+        the subclass.
+
+        :note: This method unconditionally deletes the contents of a reference.
+            To delete atomically only if the reference has not changed, use
+            remove_if_equals().
+
+        :param name: The refname to delete.
+        """
+        self.remove_if_equals(name, None)
+    # nw_e: [[RefsContainer]] methods #
+    # nw_s: [[RefsContainer]] methods |281755ec8115161f2fd17d128cd5da77#
+    def remove_if_equals(self, name, old_ref):
+        """Remove a refname only if it currently equals old_ref.
+
+        This method does not follow symbolic references, even if applicable for
+        the subclass. It can be used to perform an atomic compare-and-delete
+        operation.
+
+        :param name: The refname to delete.
+        :param old_ref: The old sha the refname must refer to, or None to delete
+            unconditionally.
+        :return: True if the delete was successful, False otherwise.
+        """
+        raise NotImplementedError(self.remove_if_equals)
     # nw_e: [[RefsContainer]] methods #
     # nw_s: [[RefsContainer]] methods |4bae65d91c63ff1021501626482dc6d9#
     def set_symbolic_ref(self, name, other):
@@ -182,6 +249,30 @@ class RefsContainer(object):
         raise NotImplementedError(self.allkeys)
 
     # nw_e: [[RefsContainer]] methods #
+    # nw_s: [[RefsContainer]] methods |f37055994b125c137e36c4423f43bf40#
+    def as_dict(self, base=None):
+        """Return the contents of this container as a dictionary.
+
+        """
+        ret = {}
+        keys = self.keys(base)
+        if base is None:
+            base = b''
+        else:
+            base = base.rstrip(b'/')
+        for key in keys:
+            try:
+                ret[key] = self[(base + b'/' + key).strip(b'/')]
+            except KeyError:
+                continue  # Unable to resolve
+
+        return ret
+    # nw_e: [[RefsContainer]] methods #
+    # nw_s: [[RefsContainer]] methods |03bdce0d72dfd118407a06ecdb181b36#
+    def add_if_new(self, name, ref):
+        """Add a new reference only if it does not already exist."""
+        raise NotImplementedError(self.add_if_new)
+    # nw_e: [[RefsContainer]] methods #
     # nw_s: [[RefsContainer]] methods |64f5deff428a545a1052942a01ebc9ea#
     def keys(self, base=None):
         """Refs present in this container.
@@ -234,102 +325,12 @@ class RefsContainer(object):
         """
         return None
     # nw_e: [[RefsContainer]] methods #
-    # nw_s: [[RefsContainer]] methods |b6a60354ef8fca6a8ee142086baec9d4#
-    def as_dict(self, base=None):
-        """Return the contents of this container as a dictionary.
-
-        """
-        ret = {}
-        keys = self.keys(base)
-        if base is None:
-            base = b''
-        else:
-            base = base.rstrip(b'/')
-        for key in keys:
-            try:
-                ret[key] = self[(base + b'/' + key).strip(b'/')]
-            except KeyError:
-                continue  # Unable to resolve
-
-        return ret
-
-    # nw_e: [[RefsContainer]] methods #
     # nw_s: [[RefsContainer]] methods |8613c95915f588c5cc574a862cd6a2ff#
     def __contains__(self, refname):
         if self.read_ref(refname):
             return True
         return False
 
-    # nw_e: [[RefsContainer]] methods #
-    # nw_s: [[RefsContainer]] methods |05a8e20f48963c0a74f6f6c553e94655#
-    def set_if_equals(self, name, old_ref, new_ref):
-        """Set a refname to new_ref only if it currently equals old_ref.
-
-        This method follows all symbolic references if applicable for the
-        subclass, and can be used to perform an atomic compare-and-swap
-        operation.
-
-        :param name: The refname to set.
-        :param old_ref: The old sha the refname must refer to, or None to set
-            unconditionally.
-        :param new_ref: The new sha the refname will refer to.
-        :return: True if the set was successful, False otherwise.
-        """
-        raise NotImplementedError(self.set_if_equals)
-
-    # nw_e: [[RefsContainer]] methods #
-    # nw_s: [[RefsContainer]] methods |a94c1359646a4cb14f4ff10dd24f12ae#
-    def add_if_new(self, name, ref):
-        """Add a new reference only if it does not already exist."""
-        raise NotImplementedError(self.add_if_new)
-
-    # nw_e: [[RefsContainer]] methods #
-    # nw_s: [[RefsContainer]] methods |03e69741e1b948eab7221ace00d5833e#
-    def remove_if_equals(self, name, old_ref):
-        """Remove a refname only if it currently equals old_ref.
-
-        This method does not follow symbolic references, even if applicable for
-        the subclass. It can be used to perform an atomic compare-and-delete
-        operation.
-
-        :param name: The refname to delete.
-        :param old_ref: The old sha the refname must refer to, or None to delete
-            unconditionally.
-        :return: True if the delete was successful, False otherwise.
-        """
-        raise NotImplementedError(self.remove_if_equals)
-
-    # nw_e: [[RefsContainer]] methods #
-    # nw_s: [[RefsContainer]] methods |024fbb74c5a77aa48e4d464d0c732a64#
-    def __setitem__(self, name, ref):
-        """Set a reference name to point to the given SHA1.
-
-        This method follows all symbolic references if applicable for the
-        subclass.
-
-        :note: This method unconditionally overwrites the contents of a
-            reference. To update atomically only if the reference has not
-            changed, use set_if_equals().
-        :param name: The refname to set.
-        :param ref: The new sha the refname will refer to.
-        """
-        self.set_if_equals(name, None, ref)
-
-    # nw_e: [[RefsContainer]] methods #
-    # nw_s: [[RefsContainer]] methods |b4cb912ec8b467e3bbda0aa5f625338b#
-    def __delitem__(self, name):
-        """Remove a refname.
-
-        This method does not follow symbolic references, even if applicable for
-        the subclass.
-
-        :note: This method unconditionally deletes the contents of a reference.
-            To delete atomically only if the reference has not changed, use
-            remove_if_equals().
-
-        :param name: The refname to delete.
-        """
-        self.remove_if_equals(name, None)
     # nw_e: [[RefsContainer]] methods #
 # nw_e: class RefsContainer #
 
@@ -526,112 +527,7 @@ class DiskRefsContainer(RefsContainer):
         return allkeys
 
     # nw_e: [[DiskRefsContainer]] methods #
-    # nw_s: [[DiskRefsContainer]] methods |5151b7d4eda7e7b22ea29c554b0d0cb8#
-    def get_packed_refs(self):
-        """Get contents of the packed-refs file.
-
-        :return: Dictionary mapping ref names to SHA1s
-
-        :note: Will return an empty dictionary when no packed-refs file is
-            present.
-        """
-        # TODO: invalidate the cache on repacking
-        if self._packed_refs is None:
-            # set both to empty because we want _peeled_refs to be
-            # None if and only if _packed_refs is also None.
-            self._packed_refs = {}
-            self._peeled_refs = {}
-            path = os.path.join(self.path, 'packed-refs')
-            try:
-                f = GitFile(path, 'rb')
-            except IOError as e:
-                if e.errno == errno.ENOENT:
-                    return {}
-                raise
-            with f:
-                first_line = next(iter(f)).rstrip()
-                if (first_line.startswith(b'# pack-refs') and b' peeled' in
-                        first_line):
-                    for sha, name, peeled in read_packed_refs_with_peeled(f):
-                        self._packed_refs[name] = sha
-                        if peeled:
-                            self._peeled_refs[name] = peeled
-                else:
-                    f.seek(0)
-                    for sha, name in read_packed_refs(f):
-                        self._packed_refs[name] = sha
-        return self._packed_refs
-
-    # nw_e: [[DiskRefsContainer]] methods #
-    # nw_s: [[DiskRefsContainer]] methods |c5f4bdcda93ca931a6595952df1df181#
-    def _remove_packed_ref(self, name):
-        if self._packed_refs is None:
-            return
-        filename = os.path.join(self.path, 'packed-refs')
-        # reread cached refs from disk, while holding the lock
-        f = GitFile(filename, 'wb')
-        try:
-            self._packed_refs = None
-            self.get_packed_refs()
-
-            if name not in self._packed_refs:
-                return
-
-            del self._packed_refs[name]
-            if name in self._peeled_refs:
-                del self._peeled_refs[name]
-            write_packed_refs(f, self._packed_refs, self._peeled_refs)
-            f.close()
-        finally:
-            f.abort()
-
-    # nw_e: [[DiskRefsContainer]] methods #
-    # nw_s: [[DiskRefsContainer]] methods |af2dcafc48608d69c6af61570ff42099#
-    def get_peeled(self, name):
-        """Return the cached peeled value of a ref, if available.
-
-        :param name: Name of the ref to peel
-        :return: The peeled value of the ref. If the ref is known not point to a
-            tag, this will be the SHA the ref refers to. If the ref may point to
-            a tag, but no cached information is available, None is returned.
-        """
-        self.get_packed_refs()
-        if self._peeled_refs is None or name not in self._packed_refs:
-            # No cache: no peeled refs were read, or this ref is loose
-            return None
-        if name in self._peeled_refs:
-            return self._peeled_refs[name]
-        else:
-            # Known not peelable
-            return self[name]
-
-    # nw_e: [[DiskRefsContainer]] methods #
-    # nw_s: [[DiskRefsContainer]] methods |902a417959676b3de52c62da519f6a4b#
-    def __repr__(self):
-        return "%s(%r)" % (self.__class__.__name__, self.path)
-    # nw_e: [[DiskRefsContainer]] methods #
-    # nw_s: [[DiskRefsContainer]] methods |471399e734b63124463d2dce31ce43e1#
-    def subkeys(self, base):
-        subkeys = set()
-        path = self.refpath(base)
-        for root, dirs, files in os.walk(path):
-            dir = root[len(path):].strip(os.path.sep).replace(os.path.sep, "/")
-            for filename in files:
-                refname = (("%s/%s" % (dir, filename))
-                           .strip("/").encode(sys.getfilesystemencoding()))
-                # check_ref_format requires at least one /, so we prepend the
-                # base before calling it.
-                if check_ref_format(base + b'/' + refname):
-                    subkeys.add(refname)
-        # nw_s: [[DiskRefsContainer.subkeys()]] look in packed refs |68c6a4f5942b6383b6a9a8746774dec1#
-        for key in self.get_packed_refs():
-            if key.startswith(base):
-                subkeys.add(key[len(base):].strip(b'/'))
-        # nw_e: [[DiskRefsContainer.subkeys()]] look in packed refs #
-        return subkeys
-
-    # nw_e: [[DiskRefsContainer]] methods #
-    # nw_s: [[DiskRefsContainer]] methods |6b6250a57672ef1a42102a6e6ad454fb#
+    # nw_s: [[DiskRefsContainer]] methods |b158863828dd464ae0ee39df89a2d344#
     def set_if_equals(self, name, old_ref, new_ref):
         """Set a refname to new_ref only if it currently equals old_ref.
 
@@ -671,7 +567,6 @@ class DiskRefsContainer(RefsContainer):
                 f.abort()
                 raise
         return True
-
     # nw_e: [[DiskRefsContainer]] methods #
     # nw_s: [[DiskRefsContainer]] methods |84a759165be8e4dfed789384303d7910#
     def add_if_new(self, name, ref):
@@ -741,8 +636,112 @@ class DiskRefsContainer(RefsContainer):
             f.abort()
         return True
     # nw_e: [[DiskRefsContainer]] methods #
+    # nw_s: [[DiskRefsContainer]] methods |bf159aeb21dee7611b0c5112b8d33bb3#
+    def subkeys(self, base):
+        subkeys = set()
+        path = self.refpath(base)
+        for root, dirs, files in os.walk(path):
+            dir = root[len(path):].strip(os.path.sep).replace(os.path.sep, "/")
+            for filename in files:
+                refname = (("%s/%s" % (dir, filename))
+                           .strip("/").encode(sys.getfilesystemencoding()))
+                # check_ref_format requires at least one /, so we prepend the
+                # base before calling it.
+                if check_ref_format(base + b'/' + refname):
+                    subkeys.add(refname)
+        # nw_s: [[DiskRefsContainer.subkeys()]] look in packed refs |68c6a4f5942b6383b6a9a8746774dec1#
+        for key in self.get_packed_refs():
+            if key.startswith(base):
+                subkeys.add(key[len(base):].strip(b'/'))
+        # nw_e: [[DiskRefsContainer.subkeys()]] look in packed refs #
+        return subkeys
+    # nw_e: [[DiskRefsContainer]] methods #
+    # nw_s: [[DiskRefsContainer]] methods |5151b7d4eda7e7b22ea29c554b0d0cb8#
+    def get_packed_refs(self):
+        """Get contents of the packed-refs file.
+
+        :return: Dictionary mapping ref names to SHA1s
+
+        :note: Will return an empty dictionary when no packed-refs file is
+            present.
+        """
+        # TODO: invalidate the cache on repacking
+        if self._packed_refs is None:
+            # set both to empty because we want _peeled_refs to be
+            # None if and only if _packed_refs is also None.
+            self._packed_refs = {}
+            self._peeled_refs = {}
+            path = os.path.join(self.path, 'packed-refs')
+            try:
+                f = GitFile(path, 'rb')
+            except IOError as e:
+                if e.errno == errno.ENOENT:
+                    return {}
+                raise
+            with f:
+                first_line = next(iter(f)).rstrip()
+                if (first_line.startswith(b'# pack-refs') and b' peeled' in
+                        first_line):
+                    for sha, name, peeled in read_packed_refs_with_peeled(f):
+                        self._packed_refs[name] = sha
+                        if peeled:
+                            self._peeled_refs[name] = peeled
+                else:
+                    f.seek(0)
+                    for sha, name in read_packed_refs(f):
+                        self._packed_refs[name] = sha
+        return self._packed_refs
+
+    # nw_e: [[DiskRefsContainer]] methods #
+    # nw_s: [[DiskRefsContainer]] methods |7dacce98add98658c6d532f75b3d86d7#
+    def _remove_packed_ref(self, name):
+        if self._packed_refs is None:
+            return
+        filename = os.path.join(self.path, 'packed-refs')
+        # reread cached refs from disk, while holding the lock
+        f = GitFile(filename, 'wb')
+        try:
+            self._packed_refs = None
+            self.get_packed_refs()
+
+            if name not in self._packed_refs:
+                return
+
+            del self._packed_refs[name]
+            if name in self._peeled_refs:
+                del self._peeled_refs[name]
+            write_packed_refs(f, self._packed_refs, self._peeled_refs)
+            f.close()
+        finally:
+            f.abort()
+    # nw_e: [[DiskRefsContainer]] methods #
+    # nw_s: [[DiskRefsContainer]] methods |af2dcafc48608d69c6af61570ff42099#
+    def get_peeled(self, name):
+        """Return the cached peeled value of a ref, if available.
+
+        :param name: Name of the ref to peel
+        :return: The peeled value of the ref. If the ref is known not point to a
+            tag, this will be the SHA the ref refers to. If the ref may point to
+            a tag, but no cached information is available, None is returned.
+        """
+        self.get_packed_refs()
+        if self._peeled_refs is None or name not in self._packed_refs:
+            # No cache: no peeled refs were read, or this ref is loose
+            return None
+        if name in self._peeled_refs:
+            return self._peeled_refs[name]
+        else:
+            # Known not peelable
+            return self[name]
+
+    # nw_e: [[DiskRefsContainer]] methods #
+    # nw_s: [[DiskRefsContainer]] methods |902a417959676b3de52c62da519f6a4b#
+    def __repr__(self):
+        return "%s(%r)" % (self.__class__.__name__, self.path)
+    # nw_e: [[DiskRefsContainer]] methods #
 # nw_e: class DiskRefsContainer #
 
+# nw_s: function refs._split_ref_line |9905c4eabbbfe21a2c545fe24afad392#
 def _split_ref_line(line):
     """Split a single ref line into a tuple of SHA1 and name."""
     fields = line.rstrip(b'\n\r').split(b' ')
@@ -754,8 +753,9 @@ def _split_ref_line(line):
     if not check_ref_format(name):
         raise PackedRefsException("invalid ref name %r" % name)
     return (sha, name)
+# nw_e: function refs._split_ref_line #
 
-
+# nw_s: function refs.read_packed_refs |9e5e8eb6ceff44d77166433e5ebd4601#
 def read_packed_refs(f):
     """Read a packed refs file.
 
@@ -770,8 +770,9 @@ def read_packed_refs(f):
             raise PackedRefsException(
               "found peeled ref in packed-refs without peeled")
         yield _split_ref_line(l)
+# nw_e: function refs.read_packed_refs #
 
-
+# nw_s: function refs.read_packed_refs_with_peeled |88463a02433d219a1029842d4d45ed66#
 def read_packed_refs_with_peeled(f):
     """Read a packed refs file including peeled refs.
 
@@ -801,8 +802,9 @@ def read_packed_refs_with_peeled(f):
     if last:
         sha, name = _split_ref_line(last)
         yield (sha, name, None)
+# nw_e: function refs.read_packed_refs_with_peeled #
 
-
+# nw_s: function refs.write_packed_refs |59a4824a1d0eeecdd90cee80a212df9a#
 def write_packed_refs(f, packed_refs, peeled_refs=None):
     """Write a packed refs file.
 
@@ -818,16 +820,18 @@ def write_packed_refs(f, packed_refs, peeled_refs=None):
         f.write(git_line(packed_refs[refname], refname))
         if refname in peeled_refs:
             f.write(b'^' + peeled_refs[refname] + b'\n')
+# nw_e: function refs.write_packed_refs #
 
-
+# nw_s: function refs.read_info_refs |40957dfd2266d638331fb308d4d44501#
 def read_info_refs(f):
     ret = {}
     for l in f.readlines():
         (sha, name) = l.rstrip(b"\r\n").split(b"\t", 1)
         ret[name] = sha
     return ret
+# nw_e: function refs.read_info_refs #
 
-
+# nw_s: function refs.write_info_refs |53afbae485185b96c7f52805e123d0cd#
 def write_info_refs(refs, store):
     """Generate info refs."""
     for name, sha in sorted(refs.items()):
@@ -843,7 +847,9 @@ def write_info_refs(refs, store):
         yield o.id + b'\t' + name + b'\n'
         if o.id != peeled.id:
             yield peeled.id + b'\t' + name + ANNOTATED_TAG_SUFFIX + b'\n'
+# nw_e: function refs.write_info_refs #
 
-
+# nw_s: function is_local_branch |295b3cb5455b81c07c8899da936c57bf#
 is_local_branch = lambda x: x.startswith(b'refs/heads/')
+# nw_e: function is_local_branch #
 # nw_e: refs.py #

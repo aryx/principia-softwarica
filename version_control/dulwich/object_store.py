@@ -91,6 +91,22 @@ class BaseObjectStore(object):
         """
         raise NotImplementedError(self.get_raw)
     # nw_e: [[BaseObjectStore]] methods #
+    # nw_s: [[BaseObjectStore]] methods |4d5dffb38c4d47455876d58128011ad9#
+    def find_common_revisions(self, graphwalker):
+        """Find which revisions this store has in common using graphwalker.
+
+        :param graphwalker: A graphwalker object.
+        :return: List of SHAs that are in common
+        """
+        haves = []
+        sha = next(graphwalker)
+        while sha:
+            if sha in self:
+                haves.append(sha)
+                graphwalker.ack(sha)
+            sha = next(graphwalker)
+        return haves
+    # nw_e: [[BaseObjectStore]] methods #
     # nw_s: [[BaseObjectStore]] methods |c7fe52ae216adab5d42c2eaf406fa0a4#
     def determine_wants_all(self, refs):
         return [sha for (ref, sha) in refs.items()
@@ -264,22 +280,6 @@ class BaseObjectStore(object):
     def close(self):
         """Close any files opened by this object store."""
         # Default implementation is a NO-OP
-    # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |4d5dffb38c4d47455876d58128011ad9#
-    def find_common_revisions(self, graphwalker):
-        """Find which revisions this store has in common using graphwalker.
-
-        :param graphwalker: A graphwalker object.
-        :return: List of SHAs that are in common
-        """
-        haves = []
-        sha = next(graphwalker)
-        while sha:
-            if sha in self:
-                haves.append(sha)
-                graphwalker.ack(sha)
-            sha = next(graphwalker)
-        return haves
     # nw_e: [[BaseObjectStore]] methods #
 # nw_e: class BaseObjectStore #
 
