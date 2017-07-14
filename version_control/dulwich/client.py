@@ -1,4 +1,4 @@
-# nw_s: dulwich/client.py |be55bb89dee5d5263cd5afab622663de#
+# nw_s: dulwich/client.py |da2e7affb459abd5fbb2cde9b3a309be#
 # client.py -- Implementation of the client side git protocols
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -100,11 +100,11 @@ from dulwich.refs import (
     read_info_refs,
     )
 
-
+# nw_s: function client._fileno_can_read |aa0d3ab47eaf9a639b9b34b259601532#
 def _fileno_can_read(fileno):
     """Check if a file descriptor is readable."""
     return len(select.select([fileno], [], [], 0)[0]) > 0
-
+# nw_e: function client._fileno_can_read #
 
 # nw_s: constant client.COMMON_CAPABILITIES |e46abe912b898da5ad28de420070da24#
 COMMON_CAPABILITIES = [CAPABILITY_OFS_DELTA, CAPABILITY_SIDE_BAND_64K]
@@ -119,7 +119,7 @@ FETCH_CAPABILITIES = ([CAPABILITY_THIN_PACK,
 SEND_CAPABILITIES = [CAPABILITY_REPORT_STATUS] + COMMON_CAPABILITIES
 # nw_e: constant client.SEND_CAPABILITIES #
 
-
+# nw_s: class ReportStatusParser |6049afb804cc5e7af6e935b90ad19e43#
 class ReportStatusParser(object):
     """Handle status as reported by servers with 'report-status' capability.
     """
@@ -176,8 +176,9 @@ class ReportStatusParser(object):
             self._ref_statuses.append(ref_status)
             if not ref_status.startswith(b'ok '):
                 self._ref_status_ok = False
+# nw_e: class ReportStatusParser #
 
-
+# nw_s: function client.read_pkt_refs |5aea46be9a7d77318d1b0702c1592a6c#
 def read_pkt_refs(proto):
     server_capabilities = None
     refs = {}
@@ -195,6 +196,7 @@ def read_pkt_refs(proto):
     if refs == {CAPABILITIES_REF: ZERO_SHA}:
         refs = {}
     return refs, set(server_capabilities)
+# nw_e: function client.read_pkt_refs #
 
 # nw_s: class GitClient |d04bc6e79944a8a1533e0d4c28a4e2b5#
 # TODO(durin42): this doesn't correctly degrade if the server doesn't
@@ -506,45 +508,6 @@ class GitClient(object):
             else:
                 if cb is not None:
                     cb(pkt)
-
-    # nw_e: [[GitClient]] methods #
-    # nw_s: [[GitClient]] methods |d8f510f2069e32ccd7cb2c39ff4f7577#
-    def _parse_status_report(self, proto):
-        unpack = proto.read_pkt_line().strip()
-        if unpack != b'unpack ok':
-            st = True
-            # flush remaining error data
-            while st is not None:
-                st = proto.read_pkt_line()
-            raise SendPackError(unpack)
-        statuses = []
-        errs = False
-        ref_status = proto.read_pkt_line()
-        while ref_status:
-            ref_status = ref_status.strip()
-            statuses.append(ref_status)
-            if not ref_status.startswith(b'ok '):
-                errs = True
-            ref_status = proto.read_pkt_line()
-
-        if errs:
-            ref_status = {}
-            ok = set()
-            for status in statuses:
-                if b' ' not in status:
-                    # malformed response, move on to the next one
-                    continue
-                status, ref = status.split(b' ', 1)
-
-                if status == b'ng':
-                    if b' ' in ref:
-                        ref, status = ref.split(b' ', 1)
-                else:
-                    ok.add(ref)
-                ref_status[ref] = status
-            raise UpdateRefsError(', '.join([
-                ref for ref in ref_status if ref not in ok]) +
-                b' failed to update', ref_status=ref_status)
 
     # nw_e: [[GitClient]] methods #
 # nw_e: class GitClient #
@@ -1014,17 +977,9 @@ class LocalGitClient(GitClient):
 default_local_git_client_cls = LocalGitClient
 # nw_e: class default_local_git_client_cls #
 
-# nw_s: class SSHVendor |e7489df061f761e95410b20c1de33db9#
+# nw_s: class SSHVendor |cb037dbc76a69d75c5e34a5a020bb62b#
 class SSHVendor(object):
     """A client side SSH implementation."""
-
-    def connect_ssh(self, host, command, username=None, port=None):
-        # This function was deprecated in 0.9.1
-        import warnings
-        warnings.warn(
-            "SSHVendor.connect_ssh has been renamed to SSHVendor.run_command",
-            DeprecationWarning)
-        return self.run_command(host, command, username=username, port=port)
 
     def run_command(self, host, command, username=None, port=None):
         """Connect to an SSH server.
@@ -1126,10 +1081,12 @@ class SSHGitClient(TraditionalGitClient):
 # nw_e: class SSHGitClient #
 
 
+# nw_s: function client.default_user_agent_string |96407247255d7ed9db024e250c90a8a7#
 def default_user_agent_string():
     return "dulwich/%s" % ".".join([str(x) for x in dulwich.__version__])
+# nw_e: function client.default_user_agent_string #
 
-
+# nw_s: function client.default_urllib2_opener |8c2ecd94dacafe0ccf30c0a32dc4ad3c#
 def default_urllib2_opener(config):
     if config is not None:
         proxy_server = config.get("http", "proxy")
@@ -1147,6 +1104,7 @@ def default_urllib2_opener(config):
         user_agent = default_user_agent_string()
     opener.addheaders = [('User-agent', user_agent)]
     return opener
+# nw_e: function client.default_urllib2_opener #
 
 # nw_s: class HttpGitClient |67e01ef0a2bdfac63609726bb116dd4a#
 class HttpGitClient(GitClient):

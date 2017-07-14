@@ -1,4 +1,4 @@
-# nw_s: dulwich/objects.py |1335f288cc2d5fbe6673ba01961a5de7#
+# nw_s: dulwich/objects.py |6e9412f667b384d8fd6d636270beff1d#
 # objects.py -- Access to base git objects
 # Copyright (C) 2007 James Westby <jw+debian@jameswestby.net>
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
@@ -76,13 +76,14 @@ def S_ISGITLINK(m):
     return (stat.S_IFMT(m) == S_IFGITLINK)
 # nw_e: function objects.S_ISGITLINK #
 
-
+# nw_s: function objects._decompress |08b89e6c8a0e5df1d590db189506412e#
 def _decompress(string):
     dcomp = zlib.decompressobj()
     dcomped = dcomp.decompress(string)
     dcomped += dcomp.flush()
     return dcomped
 
+# nw_e: function objects._decompress #
 
 # nw_s: function sha_to_hex |37a337a5f01f96e35311cbc23857a54d#
 def sha_to_hex(sha):
@@ -270,10 +271,9 @@ class ShaFile(object):
         return self._sha
 
     # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |288f5871779d68e1d8f80d6541384c80#
+    # nw_s: [[ShaFile]] methods |bc04d579d28b964932ad3150708a2334#
     def _header(self):
-        return object_header(self.type, self.raw_length())
-
+        return object_header(self.type_num, self.raw_length())
     # nw_e: [[ShaFile]] methods #
     # nw_s: [[ShaFile]] methods |3942ad35f4eebc4b5b543760bef8d6c3#
     def check(self):
@@ -351,13 +351,13 @@ class ShaFile(object):
             raise ObjectFormatException("invalid object header")
 
     # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |72ae3ec93065ec012df37e7495aa21e9#
+    # nw_s: [[ShaFile]] methods |52ebd1ab36f6cc2c7096faa35bfc72c2#
     @classmethod
     def _parse_file(cls, f):
         map = f.read()
-        # nw_s: [[ShaFile._parse_file()]] if legacy object |6fc92d85845181e0731a14772d459638#
+        # nw_s: [[ShaFile._parse_file()]] if legacy object |e65697fd9ca23c3255e2970ae31d9bdc#
         if cls._is_legacy_object(map):
-            raise AssertionError('use legacy format')
+            #pad: raise AssertionError('use legacy format')
             obj = cls._parse_legacy_object_header(map, f)
             obj._parse_legacy_object(map)
         # nw_e: [[ShaFile._parse_file()]] if legacy object #
@@ -365,7 +365,6 @@ class ShaFile(object):
             obj = cls._parse_object_header(map, f)
             obj._parse_object(map)
         return obj
-
     # nw_e: [[ShaFile]] methods #
     # nw_s: [[ShaFile]] methods |9ead8628b09b24e6d8437e64be7fac91#
     @staticmethod
@@ -560,22 +559,6 @@ class ShaFile(object):
             self.id)
 
     # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |ca6c853441145e9a530168ae78d346c7#
-    def get_type(self):
-        """Return the type number for this object class."""
-        return self.type_num
-
-    # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |acf1c91038b983d13de3468dee71add5#
-    def set_type(self, type):
-        """Set the type number for this object class."""
-        self.type_num = type
-
-    # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |75df43ef1cb319b29243e9caed094a56#
-    # DEPRECATED: use type_num or type_name as needed.
-    type = property(get_type, set_type)
-    # nw_e: [[ShaFile]] methods #
     # nw_s: [[ShaFile]] methods |639e961afb8c2c8778cc97cfa742b19e#
     def __ne__(self, other):
         return not isinstance(other, ShaFile) or self.id != other.id
@@ -591,19 +574,17 @@ class ShaFile(object):
         return isinstance(other, ShaFile) and self.id == other.id
 
     # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |96213cbaebdbcc5a970b446bb3288af6#
+    # nw_s: [[ShaFile]] methods |5dfef3f1454bb8e79a42e9803793475f#
     def __lt__(self, other):
         if not isinstance(other, ShaFile):
             raise TypeError
         return self.id < other.id
-
     # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |d7780464abc8e8e336e11ebc5beecfdd#
+    # nw_s: [[ShaFile]] methods |d97dc5e877f0f1e89b38292255583946#
     def __le__(self, other):
         if not isinstance(other, ShaFile):
             raise TypeError
         return self.id <= other.id
-
     # nw_e: [[ShaFile]] methods #
     # nw_s: [[ShaFile]] methods |990ce7b522e60075a898e191049e9f4d#
     def __cmp__(self, other):
@@ -774,6 +755,15 @@ class Tag(ShaFile):
     __slots__ = ('_tag_timezone_neg_utc', '_name', '_object_sha',
                  '_object_class', '_tag_time', '_tag_timezone',
                  '_tagger', '_message')
+    # nw_s: [[Tag]] methods |2c5f4a720b17e14994def89838f5c222#
+    @classmethod
+    def from_path(cls, filename):
+        tag = ShaFile.from_path(filename)
+        if not isinstance(tag, cls):
+            raise NotTagError(filename)
+        return tag
+
+    # nw_e: [[Tag]] methods #
     # nw_s: [[Tag]] methods |3092715d5039a061b615cfec02884d1f#
     def __init__(self):
         super(Tag, self).__init__()
@@ -909,15 +899,6 @@ class Tag(ShaFile):
             chunks.append(b'\n') # To close headers
             chunks.append(self._message)
         return chunks
-
-    # nw_e: [[Tag]] methods #
-    # nw_s: [[Tag]] methods |2c5f4a720b17e14994def89838f5c222#
-    @classmethod
-    def from_path(cls, filename):
-        tag = ShaFile.from_path(filename)
-        if not isinstance(tag, cls):
-            raise NotTagError(filename)
-        return tag
 
     # nw_e: [[Tag]] methods #
 
@@ -1068,7 +1049,7 @@ class Tree(ShaFile):
             last = entry
 
     # nw_e: [[Tree]] methods #
-    # nw_s: [[Tree]] methods |883e288fb55b79c815935f3d4991e4af#
+    # nw_s: [[Tree]] methods |455f77463f4e48490a40be5fa6c28400#
     def add(self, name, mode, hexsha):
         """Add an entry to the tree.
 
@@ -1077,14 +1058,8 @@ class Tree(ShaFile):
         :param name: The name of the entry, as a string.
         :param hexsha: The hex SHA of the entry as a string.
         """
-        if isinstance(name, int) and isinstance(mode, bytes):
-            (name, mode) = (mode, name)
-            warnings.warn(
-                "Please use Tree.add(name, mode, hexsha)",
-                category=DeprecationWarning, stacklevel=2)
         self._entries[name] = mode, hexsha
         self._needs_serialization = True
-
     # nw_e: [[Tree]] methods #
     # nw_s: [[Tree]] methods |5d51fe69d0dd1caff9eed703042c6228#
     def __getitem__(self, name):
@@ -1521,7 +1496,6 @@ for cls in OBJECT_CLASSES:
     _TYPE_MAP[cls.type_name] = cls
     _TYPE_MAP[cls.type_num] = cls
 # nw_e: [[objects.py]] toplevel #
-
 
 
 # Hold on to the pure-python implementations for testing

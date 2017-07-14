@@ -1,4 +1,4 @@
-# nw_s: dulwich/porcelain.py |3259459f33778241ae9625b508bbebc8#
+# nw_s: dulwich/porcelain.py |51427ff4a4924fc2f1a0b21a64917d32#
 # porcelain.py -- Porcelain-like layer on top of Dulwich
 # Copyright (C) 2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -121,8 +121,9 @@ GitStatus = namedtuple('GitStatus', 'staged unstaged untracked')
 default_bytes_out_stream = getattr(sys.stdout, 'buffer', sys.stdout)
 default_bytes_err_stream = getattr(sys.stderr, 'buffer', sys.stderr)
 
-
+# nw_s: constant porcelain.DEFAULT_ENCODING |9bca321287bb4198a61a70a620fce008#
 DEFAULT_ENCODING = 'utf-8'
+# nw_e: constant porcelain.DEFAULT_ENCODING #
 
 
 class RemoteExists(Exception):
@@ -252,9 +253,9 @@ def init(path=".", bare=False):
         return Repo.init(path)
 # nw_e: function porcelain.init #
 
-# nw_s: function porcelain.clone |07eb3ccf0e731eeda4918a07c888b7cc#
+# nw_s: function porcelain.clone |5a6e0a64418082646b610671e02882e8#
 def clone(source, target=None, bare=False, checkout=None,
-          errstream=default_bytes_err_stream, outstream=None,
+          errstream=default_bytes_err_stream,
           origin=b"origin"):
     """Clone a local or remote git repository.
 
@@ -263,15 +264,8 @@ def clone(source, target=None, bare=False, checkout=None,
     :param bare: Whether or not to create a bare repository
     :param checkout: Whether or not to check-out HEAD after cloning
     :param errstream: Optional stream to write progress to
-    :param outstream: Optional stream to write progress to (deprecated)
     :return: The new repository
     """
-    if outstream is not None:
-        import warnings
-        warnings.warn(
-            "outstream= has been deprecated in favour of errstream=.",
-            DeprecationWarning, stacklevel=3)
-        errstream = outstream
 
     if checkout is None:
         checkout = (not bare)
@@ -367,13 +361,14 @@ def rm(repo=".", paths=None):
         index.write()
 # nw_e: function porcelain.rm #
 
-
+# nw_s: function porcelain.commit_decode |90f653101be5189ccc54fbcf5c3f49d5#
 def commit_decode(commit, contents, default_encoding=DEFAULT_ENCODING):
     if commit.encoding is not None:
         return contents.decode(commit.encoding, "replace")
     return contents.decode(default_encoding, "replace")
+# nw_e: function porcelain.commit_decode #
 
-
+# nw_s: function porcelain.print_commit |8408b976921ca23d85626b32bc4bbf9e#
 def print_commit(commit, decode, outstream=sys.stdout):
     """Write a human-readable commit log entry.
 
@@ -397,8 +392,9 @@ def print_commit(commit, decode, outstream=sys.stdout):
     outstream.write("\n")
     outstream.write(decode(commit.message) + "\n")
     outstream.write("\n")
+# nw_e: function porcelain.print_commit #
 
-
+# nw_s: function porcelain.print_tag |c0d2d893086fd3e8497df5601deeaf8e#
 def print_tag(tag, decode, outstream=sys.stdout):
     """Write a human-readable tag.
 
@@ -411,8 +407,9 @@ def print_tag(tag, decode, outstream=sys.stdout):
     outstream.write("\n")
     outstream.write(decode(tag.message) + "\n")
     outstream.write("\n")
+# nw_e: function porcelain.print_tag #
 
-
+# nw_s: function porcelain.show_blob |cf0068d9d0c663c2c340ed73595eb4a6#
 def show_blob(repo, blob, decode, outstream=sys.stdout):
     """Write a blob to a stream.
 
@@ -423,7 +420,9 @@ def show_blob(repo, blob, decode, outstream=sys.stdout):
     """
     outstream.write(decode(blob.data))
 
+# nw_e: function porcelain.show_blob #
 
+# nw_s: function porcelain.show_commit |cac98c7387e542691f5f85aa52b52dc5#
 def show_commit(repo, commit, decode, outstream=sys.stdout):
     """Show a commit to a stream.
 
@@ -436,8 +435,9 @@ def show_commit(repo, commit, decode, outstream=sys.stdout):
     parent_commit = repo[commit.parents[0]]
     write_tree_diff(
         outstream, repo.object_store, parent_commit.tree, commit.tree)
+# nw_e: function porcelain.show_commit #
 
-
+# nw_s: function porcelain.show_tree |95c49ab87dff93be9d2faa2887cc4610#
 def show_tree(repo, tree, decode, outstream=sys.stdout):
     """Print a tree to a stream.
 
@@ -448,8 +448,9 @@ def show_tree(repo, tree, decode, outstream=sys.stdout):
     """
     for n in tree:
         outstream.write(decode(n) + "\n")
+# nw_e: function porcelain.show_tree #
 
-
+# nw_s: function porcelain.show_tag |8b42fd3d40d4be099972fc0b6cdcc4fa#
 def show_tag(repo, tag, decode, outstream=sys.stdout):
     """Print a tag to a stream.
 
@@ -460,8 +461,9 @@ def show_tag(repo, tag, decode, outstream=sys.stdout):
     """
     print_tag(tag, decode, outstream)
     show_object(repo, repo[tag.object[1]], outstream)
+# nw_e: function porcelain.show_tag #
 
-
+# nw_s: function porcelain.show_object |4782ec2d467947e415761631b8749858#
 def show_object(repo, obj, decode, outstream):
     return {
         b"tree": show_tree,
@@ -469,8 +471,9 @@ def show_object(repo, obj, decode, outstream):
         b"commit": show_commit,
         b"tag": show_tag,
             }[obj.type_name](repo, obj, decode, outstream)
+# nw_e: function porcelain.show_object #
 
-
+# nw_s: function porcelain.print_name_status |a9612b72071c03df94c1027becdcd10e#
 def print_name_status(changes):
     """Print a simple status summary, listing changed files.
     """
@@ -499,6 +502,7 @@ def print_name_status(changes):
             elif change.type == CHANGE_COPY:
                 kind = 'C'
         yield '%-8s%-20s%-20s' % (kind, path1, path2)
+# nw_e: function porcelain.print_name_status #
 
 # nw_s: function porcelain.log |e74a0fadbcead9ca526b0fbf9e8f1978#
 def log(repo=".", paths=None, outstream=sys.stdout, max_entries=None,
@@ -524,7 +528,7 @@ def log(repo=".", paths=None, outstream=sys.stdout, max_entries=None,
                     [l+'\n' for l in print_name_status(entry.changes())])
 # nw_e: function porcelain.log #
 
-# nw_s: function porcelain.show |25e9c76e618752ea3d422a2103edb9e8#
+# nw_s: function porcelain.show |887c636423cc0171471c5a9b89f19e8a#
 # TODO(jelmer): better default for encoding?
 def show(repo=".", objects=None, outstream=sys.stdout,
          default_encoding=DEFAULT_ENCODING):
@@ -540,6 +544,7 @@ def show(repo=".", objects=None, outstream=sys.stdout,
         objects = ["HEAD"]
     if not isinstance(objects, list):
         objects = [objects]
+
     with open_repo_closing(repo) as r:
         for objectish in objects:
             o = parse_object(r, objectish)
@@ -578,15 +583,6 @@ def rev_list(repo, commits, outstream=sys.stdout):
             outstream.write(entry.commit.id + b"\n")
 
 # nw_e: function porcelain.rev_list #
-
-# nw_s: function porcelain.tag |357dedac617bf45215cdb1919a4c44ce#
-def tag(*args, **kwargs):
-    import warnings
-    warnings.warn("tag has been deprecated in favour of tag_create.",
-                  DeprecationWarning)
-    return tag_create(*args, **kwargs)
-
-# nw_e: function porcelain.tag #
 
 # nw_s: function porcelain.tag_create |f3eb7b8f76ad10acdcc5a4a14bb3ed0f#
 def tag_create(
@@ -645,13 +641,6 @@ def tag_list(repo, outstream=sys.stdout):
         tags = sorted(r.refs.as_dict(b"refs/tags"))
         return tags
 # nw_e: function porcelain.tag_list #
-
-def list_tags(*args, **kwargs):
-    import warnings
-    warnings.warn("list_tags has been deprecated in favour of tag_list.",
-                  DeprecationWarning)
-    return tag_list(*args, **kwargs)
-
 
 # nw_s: function porcelain.tag_delete |e5bcbd524f2e1ea56e5ce3882bf03ede#
 def tag_delete(repo, name):
@@ -812,7 +801,7 @@ def get_untracked_paths(frompath, basepath, index):
 # nw_e: function porcelain.get_untracked_paths #
 
 
-
+# nw_s: function porcelain.get_tree_changes |82db312c22b893c58883b31a5a3014bf#
 def get_tree_changes(repo):
     """Return add/delete/modify changes to tree by comparing index to HEAD.
 
@@ -845,6 +834,7 @@ def get_tree_changes(repo):
             else:
                 raise AssertionError('git mv ops not yet supported')
         return tracked_changes
+# nw_e: function porcelain.get_tree_changes #
 
 # nw_s: function porcelain.daemon |58c96831eb0dc539a0226f4c18c6138e#
 def daemon(path=".", address=None, port=None):

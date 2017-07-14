@@ -1,4 +1,4 @@
-# nw_s: refs.py |89c85a32a0d41ebf403828777362f0cb#
+# nw_s: refs.py |9dafd9c0a4543c485c4f768b545f755b#
 # refs.py -- For dealing with git refs
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -49,7 +49,7 @@ LOCAL_BRANCH_PREFIX = b'refs/heads/'
 BAD_REF_CHARS = set(b'\177 ~^:?*[')
 ANNOTATED_TAG_SUFFIX = b'^{}'
 
-
+# nw_s: function refs.check_ref_format |02160bb4ddc0f0fe52666fb076896362#
 def check_ref_format(refname):
     """Check if a refname is correctly formatted.
 
@@ -80,6 +80,7 @@ def check_ref_format(refname):
     if b'\\' in refname:
         return False
     return True
+# nw_e: function refs.check_ref_format #
 
 # nw_s: class RefsContainer |20ed8827faf07d0dcee6ce87c80fd11d#
 class RefsContainer(object):
@@ -105,6 +106,29 @@ class RefsContainer(object):
         :param other: Name of the ref to point at
         """
         raise NotImplementedError(self.set_symbolic_ref)
+    # nw_e: [[RefsContainer]] methods #
+    # nw_s: [[RefsContainer]] methods |b34ecfb678b193c035a2b01419b204a0#
+    def _check_refname(self, name):
+        """Ensure a refname is valid and lives in refs or is HEAD.
+
+        HEAD is not a valid refname according to git-check-ref-format, but this
+        class needs to be able to touch HEAD. Also, check_ref_format expects
+        refnames without the leading 'refs/', but this class requires that
+        so it cannot touch anything outside the refs dir (or HEAD).
+
+        :param name: The name of the reference.
+        :raises KeyError: if a refname is not HEAD or is otherwise not valid.
+        """
+        if name in (b'HEAD', b'refs/stash'):
+            return
+        if not name.startswith(b'refs/') or not check_ref_format(name[5:]):
+            raise RefFormatError(name)
+
+    # nw_e: [[RefsContainer]] methods #
+    # nw_s: [[RefsContainer]] methods |597e56d1d48da6690474a9699d3e2815#
+    def import_refs(self, base, other):
+        for name, value in other.items():
+            self[b'/'.join((base, name))] = value
     # nw_e: [[RefsContainer]] methods #
     # nw_s: [[RefsContainer]] methods |d052fec904a0ebc683760638c209e14e#
     def follow(self, name):
@@ -188,6 +212,17 @@ class RefsContainer(object):
         return keys
 
     # nw_e: [[RefsContainer]] methods #
+    # nw_s: [[RefsContainer]] methods |f372f3961e8d39e0036f8650b968e842#
+    def get_packed_refs(self):
+        """Get contents of the packed-refs file.
+
+        :return: Dictionary mapping ref names to SHA1s
+
+        :note: Will return an empty dictionary when no packed-refs file is
+            present.
+        """
+        raise NotImplementedError(self.get_packed_refs)
+    # nw_e: [[RefsContainer]] methods #
     # nw_s: [[RefsContainer]] methods |24dc564b127acef0466cd9c6868eb5b6#
     def get_peeled(self, name):
         """Return the cached peeled value of a ref, if available.
@@ -198,24 +233,6 @@ class RefsContainer(object):
             a tag, but no cached information is available, None is returned.
         """
         return None
-    # nw_e: [[RefsContainer]] methods #
-    # nw_s: [[RefsContainer]] methods |0b57e14ae3135fa3cb4468ccee81634e#
-    def get_packed_refs(self):
-        """Get contents of the packed-refs file.
-
-        :return: Dictionary mapping ref names to SHA1s
-
-        :note: Will return an empty dictionary when no packed-refs file is
-            present.
-        """
-        raise NotImplementedError(self.get_packed_refs)
-
-    # nw_e: [[RefsContainer]] methods #
-    # nw_s: [[RefsContainer]] methods |7544e182981f41d3b9a18eda907049b7#
-    def import_refs(self, base, other):
-        for name, value in other.items():
-            self[b'/'.join((base, name))] = value
-
     # nw_e: [[RefsContainer]] methods #
     # nw_s: [[RefsContainer]] methods |b6a60354ef8fca6a8ee142086baec9d4#
     def as_dict(self, base=None):
@@ -235,36 +252,6 @@ class RefsContainer(object):
                 continue  # Unable to resolve
 
         return ret
-
-    # nw_e: [[RefsContainer]] methods #
-    # nw_s: [[RefsContainer]] methods |b34ecfb678b193c035a2b01419b204a0#
-    def _check_refname(self, name):
-        """Ensure a refname is valid and lives in refs or is HEAD.
-
-        HEAD is not a valid refname according to git-check-ref-format, but this
-        class needs to be able to touch HEAD. Also, check_ref_format expects
-        refnames without the leading 'refs/', but this class requires that
-        so it cannot touch anything outside the refs dir (or HEAD).
-
-        :param name: The name of the reference.
-        :raises KeyError: if a refname is not HEAD or is otherwise not valid.
-        """
-        if name in (b'HEAD', b'refs/stash'):
-            return
-        if not name.startswith(b'refs/') or not check_ref_format(name[5:]):
-            raise RefFormatError(name)
-
-    # nw_e: [[RefsContainer]] methods #
-    # nw_s: [[RefsContainer]] methods |3c76b9f5a732333e614ace721efad98c#
-    def _follow(self, name):
-        import warnings
-        warnings.warn(
-            "RefsContainer._follow is deprecated. Use RefsContainer.follow instead.",
-            DeprecationWarning)
-        refnames, contents = self.follow(name)
-        if not refnames:
-            return (None, contents)
-        return (refnames[-1], contents)
 
     # nw_e: [[RefsContainer]] methods #
     # nw_s: [[RefsContainer]] methods |8613c95915f588c5cc574a862cd6a2ff#
@@ -408,7 +395,7 @@ class DictRefsContainer(RefsContainer):
         self._peeled.update(peeled)
 # nw_e: class DictRefsContainer #
 
-
+# nw_s: class InfoRefsContainer |ea9e554ceb9e4d8d31999187bb51abf8#
 class InfoRefsContainer(RefsContainer):
     """Refs container that reads refs from a info/refs file."""
 
@@ -441,6 +428,7 @@ class InfoRefsContainer(RefsContainer):
             return self._peeled[name]
         except KeyError:
             return self._refs[name]
+# nw_e: class InfoRefsContainer #
 
 # nw_s: class DiskRefsContainer |19f7b5ddcbc5317b164b02e6da4105a3#
 class DiskRefsContainer(RefsContainer):

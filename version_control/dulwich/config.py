@@ -1,4 +1,4 @@
-# nw_s: dulwich/config.py |c785aa1f0d55673ee2b3a21e99859a86#
+# nw_s: dulwich/config.py |804f8f5ca1e4933e67b4667554ccf2e4#
 # config.py - Reading and writing Git config files
 # Copyright (C) 2011-2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -204,7 +204,7 @@ class ConfigDict(Config, MutableMapping):
     # nw_e: [[ConfigDict]] methods #
 # nw_e: class ConfigDict #
 
-
+# nw_s: function config._format_string |db75440e7010d4905989b462937548bf#
 def _format_string(value):
     if (value.startswith(b" ") or
             value.startswith(b"\t") or
@@ -214,8 +214,9 @@ def _format_string(value):
         return b'"' + _escape_value(value) + b'"'
     else:
         return _escape_value(value)
+# nw_e: function config._format_string #
 
-
+# nw_s: constant config._ESCAPE_TABLE |88622e2b064cf7ea30f83ee98a74e6d6#
 _ESCAPE_TABLE = {
     ord(b"\\"): ord(b"\\"),
     ord(b"\""): ord(b"\""),
@@ -223,10 +224,15 @@ _ESCAPE_TABLE = {
     ord(b"t"): ord(b"\t"),
     ord(b"b"): ord(b"\b"),
     }
+# nw_e: constant config._ESCAPE_TABLE #
+# nw_s: constant config._COMMENT_CHARS |6adbf8581ac3543aa1075841af01d7c7#
 _COMMENT_CHARS = [ord(b"#"), ord(b";")]
+# nw_e: constant config._COMMENT_CHARS #
+# nw_s: constant config._WHITESPACE_CHARS |21f9251b4987173ca26cfd8238c1f76a#
 _WHITESPACE_CHARS = [ord(b"\t"), ord(b" ")]
+# nw_e: constant config._WHITESPACE_CHARS #
 
-
+# nw_s: function config._parse_string |02e184f12c5185713f7d07aa047dec0d#
 def _parse_string(value):
     value = bytearray(value.strip())
     ret = bytearray()
@@ -269,8 +275,9 @@ def _parse_string(value):
         raise ValueError("missing end quote")
 
     return bytes(ret)
+# nw_e: function config._parse_string #
 
-
+# nw_s: function config._escape_value |cdfe220c72d52de6e78994afa71a7b44#
 def _escape_value(value):
     """Escape a value."""
     value = value.replace(b"\\", b"\\\\")
@@ -278,28 +285,32 @@ def _escape_value(value):
     value = value.replace(b"\t", b"\\t")
     value = value.replace(b"\"", b"\\\"")
     return value
+# nw_e: function config._escape_value #
 
-
+# nw_s: function config._check_variable_name |17c1ac8581bc5b5077660b96506000aa#
 def _check_variable_name(name):
     for i in range(len(name)):
         c = name[i:i+1]
         if not c.isalnum() and c != b'-':
             return False
     return True
+# nw_e: function config._check_variable_name #
 
-
+# nw_s: function config._check_section_name |212f1eec93e17a4076a7f6f6cdbd4664#
 def _check_section_name(name):
     for i in range(len(name)):
         c = name[i:i+1]
         if not c.isalnum() and c not in (b'-', b'.'):
             return False
     return True
+# nw_e: function config._check_section_name #
 
-
+# nw_s: function config._strip_comments |2474126c70ff27063bf2edef9d75ff66#
 def _strip_comments(line):
     line = line.split(b"#")[0]
     line = line.split(b";")[0]
     return line
+# nw_e: function config._strip_comments #
 
 
 # nw_s: class ConfigFile |a3152b98627d497ea5b0dd56c415943c#

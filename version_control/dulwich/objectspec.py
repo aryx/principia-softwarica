@@ -1,4 +1,4 @@
-# nw_s: objectspec.py |9d45aa98ece3bc580e5710ef41f913cb#
+# nw_s: objectspec.py |b6bb400698e521cdd549b050dc00405b#
 # objectspec.py -- Object specification
 # Copyright (C) 2014 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -43,6 +43,7 @@ def parse_object(repo, objectish):
     return repo[objectish]
 # nw_e: function objectspec.parse_object #
 
+# nw_s: function objectspec.parse_ref |a3e08a127177acb9072f81a676532901#
 def parse_ref(container, refspec):
     """Parse a string referring to a reference.
 
@@ -65,8 +66,9 @@ def parse_ref(container, refspec):
             return ref
     else:
         raise KeyError(refspec)
+# nw_e: function objectspec.parse_ref #
 
-
+# nw_s: function objectspec.parse_reftuple |70e109158aa465a3f380278473dc4535#
 def parse_reftuple(lh_container, rh_container, refspec):
     """Parse a reftuple spec.
 
@@ -100,8 +102,9 @@ def parse_reftuple(lh_container, rh_container, refspec):
             if not b"/" in rh:
                 rh = b"refs/heads/" + rh
     return (lh, rh, force)
+# nw_e: function objectspec.parse_reftuple #
 
-
+# nw_s: function objectspec.parse_reftuples |96b902ec06725c5ccc1b2861c5784cef#
 def parse_reftuples(lh_container, rh_container, refspecs):
     """Parse a list of reftuple specs to a list of reftuples.
 
@@ -118,7 +121,7 @@ def parse_reftuples(lh_container, rh_container, refspecs):
     for refspec in refspecs:
         ret.append(parse_reftuple(lh_container, rh_container, refspec))
     return ret
-
+# nw_e: function objectspec.parse_reftuples #
 
 def parse_refs(container, refspecs):
     """Parse a list of refspecs to a list of refs.

@@ -295,7 +295,7 @@ class BaseObjectStore(object):
 # nw_s: class PackBasedObjectStore |2aa10e132cb355b1b271f75268b284d2#
 class PackBasedObjectStore(BaseObjectStore):
 
-    # nw_s: [[PackBasedObjectStore]] methods |e58fc75083e09e9498877f48d49eaff5#
+    # nw_s: [[PackBasedObjectStore]] methods |9a319ffecc142c24993d1c23c8430900#
     def get_raw(self, name):
         """Obtain the raw text for an object.
 
@@ -332,7 +332,6 @@ class PackBasedObjectStore(BaseObjectStore):
                 pass
         # nw_e: [[PackBasedObjectStore.get_raw()]] look in alternates #
         raise KeyError(hexsha)
-
     # nw_e: [[PackBasedObjectStore]] methods #
     # nw_s: [[PackBasedObjectStore]] methods |330afc55dae8d41b74e74879e7771eef#
     def contains_packed(self, sha):

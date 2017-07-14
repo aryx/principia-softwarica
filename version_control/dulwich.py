@@ -277,11 +277,12 @@ class cmd_symbolic_ref(Command):
 
 # nw_e: function cmd_symbolic_ref #
 
-# nw_s: function cmd_show |bbca45a13b0ba7683a71b979fbad5e7e#
+# nw_s: function cmd_show |28404a4f8bca2f13fbdd34d88bae4883#
 class cmd_show(Command):
 
     def run(self, args):
         opts, args = getopt(args, "", [])
+
         porcelain.show(".", args)
 # nw_e: function cmd_show #
 

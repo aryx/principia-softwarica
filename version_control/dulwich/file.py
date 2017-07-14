@@ -1,4 +1,4 @@
-# nw_s: dulwich/file.py |b8a6b2d584b8f64ce07103cd672ba872#
+# nw_s: dulwich/file.py |749ac8086d461737aba5b7661a1763df#
 # file.py -- Safe access to git files
 # Copyright (C) 2010 Google, Inc.
 #
@@ -28,6 +28,7 @@ import os
 import sys
 import tempfile
 
+# nw_s: function file.ensure_dir_exists |060fe495574f03f262aac463896b1a55#
 def ensure_dir_exists(dirname):
     """Ensure a directory exists, creating if necessary."""
     try:
@@ -35,6 +36,7 @@ def ensure_dir_exists(dirname):
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise
+# nw_e: function file.ensure_dir_exists #
 
 # nw_s: function GitFile |66797e186f0578ff84775f2e5473fe4c#
 def GitFile(filename, mode='rb', bufsize=-1):

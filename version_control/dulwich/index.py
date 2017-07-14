@@ -1,4 +1,4 @@
-# nw_s: dulwich/index.py |94baf15f7a27f9c515f4242728355af2#
+# nw_s: dulwich/index.py |e60f518872f62463649d33078040ad5d#
 # index.py -- File parser/writer for the git index file
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -391,18 +391,6 @@ def commit_tree(object_store, blobs):
         return tree.id
     return build_tree(b'')
 # nw_e: function index.commit_tree #
-
-
-
-def commit_index(object_store, index):
-    """Create a new tree from an index.
-
-    :param object_store: Object store to save the tree in
-    :param index: Index file
-    :note: This function is deprecated, use index.commit() instead.
-    :return: Root tree sha.
-    """
-    return commit_tree(object_store, index.iterblobs())
 
 
 def changes_from_tree(names, lookup_entry, object_store, tree,

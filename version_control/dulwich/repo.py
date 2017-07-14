@@ -233,7 +233,7 @@ class BaseRepo(object):
         except RefFormatError:
             raise KeyError(name)
     # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |5048293fbaa0f8855a7a3852974260c6#
+    # nw_s: [[BaseRepo]] methods |b73b982f630b9a05beb532915c30aff6#
     def __setitem__(self, name, value):
         """Set a ref.
 
@@ -249,7 +249,6 @@ class BaseRepo(object):
                 raise TypeError(value)
         else:
             raise ValueError(name)
-
     # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |c0c1bb3838565d1bfcd9bb3e591d5714#
     def __delitem__(self, name):
@@ -262,10 +261,11 @@ class BaseRepo(object):
         else:
             raise ValueError(name)
     # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |49e71d0c8e4b28405d8eb4adc226ee06#
+    # nw_s: [[BaseRepo]] methods |2ee64063b4a62bf47f40068a2d1c3147#
     def _init_files(self, bare):
         """Initialize a default set of named files."""
         from dulwich.config import ConfigFile
+
         self._put_named_file('description', b"Unnamed repository")
         f = BytesIO()
         cf = ConfigFile()
@@ -439,6 +439,14 @@ class BaseRepo(object):
             return cached
         return self.object_store.peel_sha(self.refs[ref]).id
     # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |f0df7295180d252bf7f3ccc6678e555f#
+    def get_config(self):
+        """Retrieve the config object.
+
+        :return: `ConfigFile` object for the ``.git/config`` file.
+        """
+        raise NotImplementedError(self.get_config)
+    # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |977284cdb0922c8dc2c96cb3401e4561#
     def _determine_file_mode(self):
         """Probe the file-system to determine whether permissions can be trusted.
@@ -606,7 +614,7 @@ class BaseRepo(object):
         return ret
 
     # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |74a33910ff61dad8861f638d745a3646#
+    # nw_s: [[BaseRepo]] methods |6cb5d8f525f6bfc80ac6534dc4c92232#
     def get_object(self, sha):
         """Retrieve the object with the specified SHA.
 
@@ -615,7 +623,6 @@ class BaseRepo(object):
         :raise KeyError: when the object can not be found
         """
         return self.object_store[sha]
-
     # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |ce619e220c3a5a6b104428d02a9a1375#
     def get_parents(self, sha, commit=None):
@@ -635,15 +642,6 @@ class BaseRepo(object):
             if commit is None:
                 commit = self[sha]
             return commit.parents
-
-    # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |a1f9371391c08af6f22918492629cad4#
-    def get_config(self):
-        """Retrieve the config object.
-
-        :return: `ConfigFile` object for the ``.git/config`` file.
-        """
-        raise NotImplementedError(self.get_config)
 
     # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |6fae4e45ea0b4e5fd61f5ee78a1a99c7#
@@ -969,6 +967,23 @@ class Repo(BaseRepo):
             honor_filemode=honor_filemode,
             validate_path_element=validate_path_element)
     # nw_e: [[Repo]] methods #
+    # nw_s: [[Repo]] methods |49d7ccc33bcee41200f87cc32cbb9d7e#
+    def get_config(self):
+        """Retrieve the config object.
+
+        :return: `ConfigFile` object for the ``.git/config`` file.
+        """
+        from dulwich.config import ConfigFile
+        path = os.path.join(self._controldir, 'config')
+        try:
+            return ConfigFile.from_path(path)
+        except (IOError, OSError) as e:
+            if e.errno != errno.ENOENT:
+                raise
+            ret = ConfigFile()
+            ret.path = path
+            return ret
+    # nw_e: [[Repo]] methods #
     # nw_s: [[Repo]] methods |c1d0686cf0b9179c85c57a01f6a4cd4f#
     @classmethod
     def init_bare(cls, path, mkdir=False):
@@ -1107,23 +1122,6 @@ class Repo(BaseRepo):
                 target.reset_index()
 
         return target
-    # nw_e: [[Repo]] methods #
-    # nw_s: [[Repo]] methods |49d7ccc33bcee41200f87cc32cbb9d7e#
-    def get_config(self):
-        """Retrieve the config object.
-
-        :return: `ConfigFile` object for the ``.git/config`` file.
-        """
-        from dulwich.config import ConfigFile
-        path = os.path.join(self._controldir, 'config')
-        try:
-            return ConfigFile.from_path(path)
-        except (IOError, OSError) as e:
-            if e.errno != errno.ENOENT:
-                raise
-            ret = ConfigFile()
-            ret.path = path
-            return ret
     # nw_e: [[Repo]] methods #
     # nw_s: [[Repo]] methods |c3fdd59aa3ba753f4adae36f95319e2e#
     def get_description(self):

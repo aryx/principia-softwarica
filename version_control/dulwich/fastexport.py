@@ -1,4 +1,4 @@
-# nw_s: fastexport.py |b3fa20826fa1d192a4f2bd669698dcfd#
+# nw_s: fastexport.py |7b3d91fb33c2659de397ea88af195188#
 # __init__.py -- Fast export/import functionality
 # Copyright (C) 2010-2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -45,10 +45,11 @@ from fastimport import (
 
 import stat
 
-
+# nw_s: function fastexport.split_email |db556bfad1f73c37f9540eb4a541b654#
 def split_email(text):
     (name, email) = text.rsplit(b" <", 1)
     return (name, email.rstrip(b">"))
+# nw_e: function fastexport.split_email #
 
 # nw_s: class GitFastExporter |c9a394f8f6e5093f1c3d18d24d2aad7e#
 class GitFastExporter(object):
