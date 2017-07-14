@@ -1,4 +1,4 @@
-# nw_s: dulwich.py |310c0f0701b39141f2fb8161619b1402#
+# nw_s: dulwich.py |045e5869faa12edd4eef0fa0317aad78#
 #!/usr/bin/python -u
 #
 # dulwich - Simple command-line interface to Dulwich
@@ -36,10 +36,12 @@ from getopt import getopt
 import optparse
 import signal
 
+# nw_s: [[dulwich.py]] toplevel, interrupt signal |806bb19e9fd4426453b65a0b774eaae3#
 def signal_int(signal, frame):
     sys.exit(1)
 
 signal.signal(signal.SIGINT, signal_int)
+# nw_e: [[dulwich.py]] toplevel, interrupt signal #
 
 from dulwich import porcelain
 from dulwich.client import get_transport_and_path
@@ -403,7 +405,7 @@ class cmd_web_daemon(Command):
 
 # nw_e: function cmd_web_daemon #
 
-# nw_s: function cmd_receive_pack |971c83c50e29bd08815f67874c632a94#
+# nw_s: function cmd_receive_pack |84575c0e59475db4a1cf0ca5a16a0610#
 class cmd_receive_pack(Command):
 
     def run(self, args):
@@ -413,11 +415,11 @@ class cmd_receive_pack(Command):
             gitdir = args[0]
         else:
             gitdir = '.'
-        porcelain.receive_pack(gitdir)
 
+        porcelain.receive_pack(gitdir)
 # nw_e: function cmd_receive_pack #
 
-# nw_s: function cmd_upload_pack |65c778e3ffa1d8c31e791aca9e9ff0b0#
+# nw_s: function cmd_upload_pack |8a4db76c8cd17ae4c0d1be4b57117ac3#
 class cmd_upload_pack(Command):
 
     def run(self, args):
@@ -427,6 +429,7 @@ class cmd_upload_pack(Command):
             gitdir = args[0]
         else:
             gitdir = '.'
+
         porcelain.upload_pack(gitdir)
 # nw_e: function cmd_upload_pack #
 

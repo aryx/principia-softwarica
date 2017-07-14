@@ -1,4 +1,4 @@
-# nw_s: dulwich/pack.py |1f47de464f17698b05dd0b51fc790431#
+# nw_s: dulwich/pack.py |804fbcf4d93350bedfc1cb7f70e7c127#
 # pack.py -- For dealing with packed git objects.
 # Copyright (C) 2007 James Westby <jw+debian@jameswestby.net>
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
@@ -95,10 +95,10 @@ REF_DELTA = 7
 
 DELTA_TYPES = (OFS_DELTA, REF_DELTA)
 
-
 DEFAULT_PACK_DELTA_WINDOW_SIZE = 10
 
 
+# nw_s: function pack.take_msb_bytes |935f449d6ceea46775c1bf1b6079a500#
 def take_msb_bytes(read, crc32=None):
     """Read bytes marked with most significant bit.
 
@@ -111,8 +111,9 @@ def take_msb_bytes(read, crc32=None):
             crc32 = binascii.crc32(b, crc32)
         ret.append(ord(b[:1]))
     return ret, crc32
+# nw_e: function pack.take_msb_bytes #
 
-
+# nw_s: class UnpackedObject |b4bc55ad379ab3f08ac0d28545e0eabe#
 class UnpackedObject(object):
     """Class encapsulating an object unpacked from a pack file.
 
@@ -190,11 +191,13 @@ class UnpackedObject(object):
     def __repr__(self):
         data = ['%s=%r' % (s, getattr(self, s)) for s in self.__slots__]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(data))
+# nw_e: class UnpackedObject #
 
-
+# nw_s: constant pack._ZLIB_BUFSIZE |836de84d4a9b0d8cb08715641c70a500#
 _ZLIB_BUFSIZE = 4096
+# nw_e: constant pack._ZLIB_BUFSIZE #
 
-
+# nw_s: function pack.read_zlib_chunks |8c732fe31181887404845754f39db1a5#
 def read_zlib_chunks(read_some, unpacked, include_comp=False,
                      buffer_size=_ZLIB_BUFSIZE):
     """Read zlib data from a buffer.
@@ -254,8 +257,9 @@ def read_zlib_chunks(read_some, unpacked, include_comp=False,
     if include_comp:
         unpacked.comp_chunks = comp_chunks
     return unused
+# nw_e: function pack.read_zlib_chunks #
 
-
+# nw_s: function pack.iter_sha1 |595f07312776caeaa02375192ad8e1f4#
 def iter_sha1(iter):
     """Return the hexdigest of the SHA1 over a set of names.
 
@@ -266,8 +270,9 @@ def iter_sha1(iter):
     for name in iter:
         sha.update(name)
     return sha.hexdigest().encode('ascii')
+# nw_e: function pack.iter_sha1 #
 
-
+# nw_s: function pack.load_pack_index |3b12b01ce424d898e7286ec1813fb81d#
 def load_pack_index(path):
     """Load an index file by path.
 
@@ -276,8 +281,9 @@ def load_pack_index(path):
     """
     with GitFile(path, 'rb') as f:
         return load_pack_index_file(path, f)
+# nw_e: function pack.load_pack_index #
 
-
+# nw_s: function pack._load_file_contents |e23d0b4451c9819b5104ba8e96eaff01#
 def _load_file_contents(f, size=None):
     try:
         fd = f.fileno()
@@ -298,8 +304,9 @@ def _load_file_contents(f, size=None):
     contents = f.read()
     size = len(contents)
     return contents, size
+# nw_e: function pack._load_file_contents #
 
-
+# nw_s: function pack.load_pack_index_file |af03ae6261f7cbb7571979d5d94ba5ac#
 def load_pack_index_file(path, f):
     """Load an index file from a file-like object.
 
@@ -317,8 +324,9 @@ def load_pack_index_file(path, f):
             raise KeyError('Unknown pack index format %d' % version)
     else:
         return PackIndex1(path, file=f, contents=contents, size=size)
+# nw_e: function pack.load_pack_index_file #
 
-
+# nw_s: function pack.bisect_find_sha |926f3ecf5c6cd0c384240383777b8c0f#
 def bisect_find_sha(start, end, sha, unpack_name):
     """Find a SHA in a data blob with sorted SHAs.
 
@@ -339,6 +347,8 @@ def bisect_find_sha(start, end, sha, unpack_name):
         else:
             return i
     return None
+# nw_e: function pack.bisect_find_sha #
+
 
 # nw_s: class PackIndex |270951f5bbac5f1357c5f1c9bec74b8f#
 class PackIndex(object):
@@ -583,6 +593,7 @@ class FilePackIndex(PackIndex):
 
 # nw_e: class FilePackIndex #
 
+# nw_s: class PackIndex1 |82531314e05aa9aab9b5382ca2233abc#
 class PackIndex1(FilePackIndex):
     """Version 1 Pack Index file."""
 
@@ -608,7 +619,9 @@ class PackIndex1(FilePackIndex):
         # Not stored in v1 index files
         return None
 
+# nw_e: class PackIndex1 #
 
+# nw_s: class PackIndex2 |4b2980a81544d2632c4a61a2c0211feb#
 class PackIndex2(FilePackIndex):
     """Version 2 Pack Index file."""
 
@@ -647,7 +660,9 @@ class PackIndex2(FilePackIndex):
         return unpack_from('>L', self._contents,
                            self._crc32_table_offset + i * 4)[0]
 
+# nw_e: class PackIndex2 #
 
+# nw_s: function read_pack_header |07e8a2d02456a05ae5a300cf3fda10dd#
 def read_pack_header(read):
     """Read the header of a pack file.
 
@@ -665,6 +680,7 @@ def read_pack_header(read):
         raise AssertionError('Version was %d' % version)
     (num_objects,) = unpack_from(b'>L', header, 8)
     return (version, num_objects)
+# nw_e: function read_pack_header #
 
 
 def chunks_length(chunks):
@@ -673,7 +689,7 @@ def chunks_length(chunks):
     else:
         return sum(imap(len, chunks))
 
-
+# nw_s: function unpack_object |34c2eddecd9b1cfdaa633769a1591ad0#
 def unpack_object(read_all, read_some=None, compute_crc32=False,
                   include_comp=False, zlib_bufsize=_ZLIB_BUFSIZE):
     """Unpack a Git object.
@@ -735,7 +751,7 @@ def unpack_object(read_all, read_some=None, compute_crc32=False,
     unused = read_zlib_chunks(read_some, unpacked, buffer_size=zlib_bufsize,
                               include_comp=include_comp)
     return unpacked, unused
-
+# nw_e: function unpack_object #
 
 def _compute_object_size(value):
     """Compute the size of a unresolved object for use with LRUSizeCache."""
@@ -1559,7 +1575,7 @@ def deltify_pack_objects(objects, window_size=None):
         while len(possible_bases) > window_size:
             possible_bases.pop()
 
-
+# nw_s: function pack.write_pack_objects |e85c4e78b722b5a6dee726ff52a10399#
 def write_pack_objects(f, objects, delta_window_size=None, deltify=False):
     """Write a new pack data file.
 
@@ -1579,8 +1595,9 @@ def write_pack_objects(f, objects, delta_window_size=None, deltify=False):
             for (o, path) in objects)
 
     return write_pack_data(f, len(objects), pack_contents)
+# nw_e: function pack.write_pack_objects #
 
-
+# nw_s: function pack.write_pack_data |909f3fa0df56082ddd9464f579d7ecbc#
 def write_pack_data(f, num_records, records):
     """Write a new pack data file.
 
@@ -1607,8 +1624,10 @@ def write_pack_data(f, num_records, records):
         crc32 = write_pack_object(f, type_num, raw)
         entries[object_id] = (offset, crc32)
     return entries, f.write_sha()
+# nw_e: function pack.write_pack_data #
 
 
+# nw_s: function write_pack_index_v1 |976fc34a3ef6d17452df7abee2f58b92#
 def write_pack_index_v1(f, entries, pack_checksum):
     """Write a new pack index file.
 
@@ -1633,7 +1652,7 @@ def write_pack_index_v1(f, entries, pack_checksum):
     assert len(pack_checksum) == 20
     f.write(pack_checksum)
     return f.write_sha()
-
+# nw_e: function write_pack_index_v1 #
 
 def _delta_encode_size(size):
     ret = bytearray()
@@ -1776,7 +1795,7 @@ def apply_delta(src_buf, delta):
 
     return out
 
-
+# nw_s: function write_pack_index_v2 |c4195f01dad755f7764d44559d1fd4a2#
 def write_pack_index_v2(f, entries, pack_checksum):
     """Write a new pack index file.
 
@@ -1812,9 +1831,11 @@ def write_pack_index_v2(f, entries, pack_checksum):
     assert len(pack_checksum) == 20
     f.write(pack_checksum)
     return f.write_sha()
+# nw_e: function write_pack_index_v2 #
 
-
+# nw_s: function write_pack_index |77f06d0739203295c866600ff5bd769e#
 write_pack_index = write_pack_index_v2
+# nw_e: function write_pack_index #
 
 # nw_s: class Pack |accaf7c8cf2e55e43454cf17fb428abb#
 class Pack(object):
@@ -2018,7 +2039,6 @@ class Pack(object):
         return '%s(%r)' % (self.__class__.__name__, self._basename)
     # nw_e: [[Pack]] methods #
 # nw_e: class Pack #
-
 
 
 try:

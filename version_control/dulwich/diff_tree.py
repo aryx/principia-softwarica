@@ -1,4 +1,4 @@
-# nw_s: diff_tree.py |8a006a2feb7b3b52382d3658bddaabec#
+# nw_s: diff_tree.py |d2b2a5a60b696b32cb51499175a64647#
 # diff_tree.py -- Utilities for diffing files and trees.
 # Copyright (C) 2010 Google, Inc.
 #
@@ -21,6 +21,7 @@
 #
 # nw_e: dulwich license #
 """Utilities for diffing files and trees."""
+
 import sys
 from collections import (
     defaultdict,
@@ -46,16 +47,26 @@ CHANGE_COPY = 'copy'
 CHANGE_UNCHANGED = 'unchanged'
 # nw_e: type CHANGE #
 
+# nw_s: constant diff_tree.RENAME_CHANGE_TYPES |2eb736bb9350180f9632d0d8d144bf4f#
 RENAME_CHANGE_TYPES = (CHANGE_RENAME, CHANGE_COPY)
+# nw_e: constant diff_tree.RENAME_CHANGE_TYPES #
 
 # nw_s: constant diff_tree._NULL_ENTRY |c10c15c01142c80ca02707ea68b29217#
 _NULL_ENTRY = TreeEntry(None, None, None)
 # nw_e: constant diff_tree._NULL_ENTRY #
 
+# nw_s: constant diff_tree._MAX_SCORE |852a4d9e665987866af2ee2541643082#
 _MAX_SCORE = 100
+# nw_e: constant diff_tree._MAX_SCORE #
+# nw_s: constant diff_tree.RENAME_THRESHOLD |39f09c1ff776e20ca2552307b7ce8560#
 RENAME_THRESHOLD = 60
+# nw_e: constant diff_tree.RENAME_THRESHOLD #
+# nw_s: constant diff_tree.MAX_FILES |26cabcc7dcf47e7d767ed89d7b5f22e8#
 MAX_FILES = 200
+# nw_e: constant diff_tree.MAX_FILES #
+# nw_s: constant diff_tree.REWRITE_THRESHOLD |9626753ec071562b44b78d7595d71877#
 REWRITE_THRESHOLD = None
+# nw_e: constant diff_tree.REWRITE_THRESHOLD #
 
 # nw_s: class TreeChange |ca339110cad654f3a2574c4e75cb4b83#
 class TreeChange(namedtuple('TreeChange', ['type', 'old', 'new'])):
@@ -292,9 +303,11 @@ def tree_changes_for_merge(store, parent_tree_ids, tree_id,
             yield changes
 
 
+# nw_s: constant diff_tree._BLOCK_SIZE |1e78057701d3aeaed63b98100f73cb14#
 _BLOCK_SIZE = 64
+# nw_e: constant diff_tree._BLOCK_SIZE #
 
-
+# nw_s: function diff_tree._count_blocks |c5ac437061dfe96bef59fce87beea49e#
 def _count_blocks(obj):
     """Count the blocks in an object.
 
@@ -328,8 +341,9 @@ def _count_blocks(obj):
         last_block = block_getvalue()
         block_counts[hash(last_block)] += len(last_block)
     return block_counts
+# nw_e: function diff_tree._count_blocks #
 
-
+# nw_s: function diff_tree._common_bytes |ee2c7696641b487fea422be9c1464ff8#
 def _common_bytes(blocks1, blocks2):
     """Count the number of common bytes in two block count dicts.
 
@@ -347,8 +361,9 @@ def _common_bytes(blocks1, blocks2):
         if count2:
             score += min(count1, count2)
     return score
+# nw_e: function diff_tree._common_bytes #
 
-
+# nw_s: function diff_tree._similarity_score |56edaf310797c9d6ddb62b9a061515f8#
 def _similarity_score(obj1, obj2, block_cache=None):
     """Compute a similarity score for two objects.
 
@@ -372,8 +387,9 @@ def _similarity_score(obj1, obj2, block_cache=None):
     if not max_size:
         return _MAX_SCORE
     return int(float(common_bytes) * _MAX_SCORE / max_size)
+# nw_e: function diff_tree._similarity_score #
 
-
+# nw_s: function diff_tree._tree_change_key |250b61c2ea509c7be28a00eca6ddafbd#
 def _tree_change_key(entry):
     # Sort by old path then new path. If only one exists, use it for both keys.
     path1 = entry.old.path
@@ -383,6 +399,7 @@ def _tree_change_key(entry):
     if path2 is None:
         path2 = path1
     return (path1, path2)
+# nw_e: function diff_tree._tree_change_key #
 
 # nw_s: class RenameDetector |5862704f037c90357b4c0d95337824de#
 class RenameDetector(object):

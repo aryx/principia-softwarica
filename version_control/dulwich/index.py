@@ -1,4 +1,4 @@
-# nw_s: dulwich/index.py |e60f518872f62463649d33078040ad5d#
+# nw_s: dulwich/index.py |3583ca0031119bce624b9b0f99199b4d#
 # index.py -- File parser/writer for the git index file
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -50,7 +50,7 @@ IndexEntry = collections.namedtuple(
         'flags'])
 # nw_e: type IndexEntry #
 
-
+# nw_s: function index.pathsplit |b73cae439589607497d9bf0ba22c7fbf#
 def pathsplit(path):
     """Split a /-delimited path into a directory part and a basename.
 
@@ -63,15 +63,17 @@ def pathsplit(path):
         return (b"", path)
     else:
         return (dirname, basename)
+# nw_e: function index.pathsplit #
 
-
+# nw_s: function index.pathjoin |fd1fb149887eb4fd9c58ed9443c3dfe8#
 def pathjoin(*args):
     """Join a /-delimited path.
 
     """
     return b"/".join([p for p in args if p])
+# nw_e: function index.pathjoin #
 
-
+# nw_s: function index.read_cache_time |052479542dac7ea48e962342991fe4c1#
 def read_cache_time(f):
     """Read a cache time.
 
@@ -79,8 +81,9 @@ def read_cache_time(f):
     :return: Tuple with seconds and nanoseconds
     """
     return struct.unpack(">LL", f.read(8))
+# nw_e: function index.read_cache_time #
 
-
+# nw_s: function index.write_cache_time |0e936e007ebf93667a2c35c71df2875d#
 def write_cache_time(f, t):
     """Write a cache time.
 
@@ -95,6 +98,7 @@ def write_cache_time(f, t):
     elif not isinstance(t, tuple):
         raise TypeError(t)
     f.write(struct.pack(">LL", *t))
+# nw_e: function index.write_cache_time #
 
 # nw_s: function index.read_cache_entry |a9f93d1414698c2b248ebf1db904d7cf#
 def read_cache_entry(f):
@@ -147,7 +151,7 @@ def read_index(f):
         yield read_cache_entry(f)
 # nw_e: function read_index #
 
-
+# nw_s: function read_index_dict |9a3fcf0c75aeb79428da929d4c5632c2#
 def read_index_dict(f):
     """Read an index file and return it as a dictionary.
 
@@ -157,7 +161,7 @@ def read_index_dict(f):
     for x in read_index(f):
         ret[x[0]] = IndexEntry(*x[1:])
     return ret
-
+# nw_e: function read_index_dict #
 
 # nw_s: function write_index |b286166ed44d4ebd48b4ae55a35b4f74#
 def write_index(f, entries):
@@ -183,7 +187,7 @@ def write_index_dict(f, entries):
     write_index(f, entries_list)
 # nw_e: function write_index_dict #
 
-
+# nw_s: function index.cleanup_mode |9b2c554fd4aaec8dd54ce406af136a4e#
 def cleanup_mode(mode):
     """Cleanup a mode value.
 
@@ -200,6 +204,7 @@ def cleanup_mode(mode):
     ret = stat.S_IFREG | 0o644
     ret |= (mode & 0o111)
     return ret
+# nw_e: function index.cleanup_mode #
 
 # nw_s: class Index |d08138f8e8637be60f5c884594bfacd1#
 class Index(object):
@@ -281,6 +286,23 @@ class Index(object):
         """
         return commit_tree(object_store, self.iterblobs())
     # nw_e: [[Index]] methods #
+    # nw_s: [[Index]] methods |5ff0a1b157867f13405d93308f631c30#
+    def changes_from_tree(self, object_store, tree, want_unchanged=False):
+        """Find the differences between the contents of this index and a tree.
+
+        :param object_store: Object store to use for retrieving tree contents
+        :param tree: SHA1 of the root tree
+        :param want_unchanged: Whether unchanged files should be reported
+        :return: Iterator over tuples with (oldpath, newpath), (oldmode, newmode), (oldsha, newsha)
+        """
+        def lookup_entry(path):
+            entry = self[path]
+            return entry.sha, entry.mode
+        for (name, mode, sha) in changes_from_tree(self._byname.keys(),
+                lookup_entry, object_store, tree,
+                want_unchanged=want_unchanged):
+            yield (name, mode, sha)
+    # nw_e: [[Index]] methods #
     # nw_s: [[Index]] methods |9e5681f0bbcbd5460a22f18f2904ec82#
     def __repr__(self):
         return "%s(%r)" % (self.__class__.__name__, self._filename)
@@ -312,13 +334,12 @@ class Index(object):
         return self[path].mode
 
     # nw_e: [[Index]] methods #
-    # nw_s: [[Index]] methods |c9a4e446562dde07049edc8e8635db18#
+    # nw_s: [[Index]] methods |879316496682ceed5c29d5706a5082e6#
     def iterblobs(self):
         """Iterate over path, sha, mode tuples for use with commit_tree."""
         for path in self:
             entry = self[path]
             yield path, entry.sha, cleanup_mode(entry.mode)
-
     # nw_e: [[Index]] methods #
     # nw_s: [[Index]] methods |43a374dc67b48049b40d54e2e4c495b7#
     def iteritems(self):
@@ -329,24 +350,6 @@ class Index(object):
     def update(self, entries):
         for name, value in entries.items():
             self[name] = value
-
-    # nw_e: [[Index]] methods #
-    # nw_s: [[Index]] methods |f96c5b292dea57643e7e8cce1f1dd3d5#
-    def changes_from_tree(self, object_store, tree, want_unchanged=False):
-        """Find the differences between the contents of this index and a tree.
-
-        :param object_store: Object store to use for retrieving tree contents
-        :param tree: SHA1 of the root tree
-        :param want_unchanged: Whether unchanged files should be reported
-        :return: Iterator over tuples with (oldpath, newpath), (oldmode, newmode), (oldsha, newsha)
-        """
-        def lookup_entry(path):
-            entry = self[path]
-            return entry.sha, entry.mode
-        for (name, mode, sha) in changes_from_tree(self._byname.keys(),
-                lookup_entry, object_store, tree,
-                want_unchanged=want_unchanged):
-            yield (name, mode, sha)
 
     # nw_e: [[Index]] methods #
 # nw_e: class Index #
@@ -392,7 +395,7 @@ def commit_tree(object_store, blobs):
     return build_tree(b'')
 # nw_e: function index.commit_tree #
 
-
+# nw_s: function index.changes_from_tree |fb181269a9f9299ce04a4b9434bf962e#
 def changes_from_tree(names, lookup_entry, object_store, tree,
         want_unchanged=False):
     """Find the differences between the contents of a tree and
@@ -428,8 +431,9 @@ def changes_from_tree(names, lookup_entry, object_store, tree,
             pass
         else:
             yield ((None, name), (None, other_mode), (None, other_sha))
+# nw_e: function index.changes_from_tree #
 
-
+# nw_s: function index.index_entry_from_stat |ede195789312cd664fe77cb530b82893#
 def index_entry_from_stat(stat_val, hex_sha, flags, mode=None):
     """Create a new index entry from a stat value.
 
@@ -442,6 +446,8 @@ def index_entry_from_stat(stat_val, hex_sha, flags, mode=None):
     return (stat_val.st_ctime, stat_val.st_mtime, stat_val.st_dev,
             stat_val.st_ino, mode, stat_val.st_uid,
             stat_val.st_gid, stat_val.st_size, hex_sha, flags)
+# nw_e: function index.index_entry_from_stat #
+
 
 # nw_s: function build_file_from_blob |8bcd88e93657e2237be4a543c7cc88d2#
 def build_file_from_blob(blob, mode, target_path, honor_filemode=True):
@@ -483,13 +489,17 @@ def build_file_from_blob(blob, mode, target_path, honor_filemode=True):
     return os.lstat(target_path)
 # nw_e: function build_file_from_blob #
 
+# nw_s: constant index.INVALID_DOTNAMES |11794855ba5a07a25ea8a1ebedb635c4#
 INVALID_DOTNAMES = (b".git", b".", b"..", b"")
+# nw_e: constant index.INVALID_DOTNAMES #
 
 
+# nw_s: function index.validate_path_element_default |cb4cbda72ea9f5073a07cc913064981a#
 def validate_path_element_default(element):
     return element.lower() not in INVALID_DOTNAMES
+# nw_e: function index.validate_path_element_default #
 
-
+# nw_s: function index.validate_path |00a75c4fc7b7085002b7a68a7bafae7f#
 def validate_path(path, element_validator=validate_path_element_default):
     """Default path validator that just checks for .git/."""
     parts = path.split(b"/")
@@ -498,6 +508,7 @@ def validate_path(path, element_validator=validate_path_element_default):
             return False
     else:
         return True
+# nw_e: function index.validate_path #
 
 
 # nw_s: function build_index_from_tree |8244added04a2e3658b84c6083716598#
@@ -573,7 +584,7 @@ def blob_from_path_and_stat(fs_path, st):
     return blob
 # nw_e: function index.blob_from_path_and_stat #
 
-
+# nw_s: function index.get_unstaged_changes |680fc036907e68d4a88745e1e2581f0a#
 def get_unstaged_changes(index, root_path):
     """Walk through an index and check for differences against working tree.
 
@@ -604,11 +615,13 @@ def get_unstaged_changes(index, root_path):
         else:
             if blob.id != entry.sha:
                 yield tree_path
+# nw_e: function index.get_unstaged_changes #
 
-
+# nw_s: constant index.os_sep_bytes |09f4625ac796b98e787789b04e2c11fd#
 os_sep_bytes = os.sep.encode('ascii')
+# nw_e: constant index.os_sep_bytes #
 
-
+# nw_s: function index._tree_to_fs_path |68d191366ce09fe305c26e3b1b86fec3#
 def _tree_to_fs_path(root_path, tree_path):
     """Convert a git tree path to a file system path.
 
@@ -623,8 +636,9 @@ def _tree_to_fs_path(root_path, tree_path):
     else:
         sep_corrected_path = tree_path
     return os.path.join(root_path, sep_corrected_path)
+# nw_e: function index._tree_to_fs_path #
 
-
+# nw_s: function index._fs_to_tree_path |16de446362345824e5200d6a288a0ad5#
 def _fs_to_tree_path(fs_path, fs_encoding=None):
     """Convert a file system path to a git tree path.
 
@@ -644,4 +658,5 @@ def _fs_to_tree_path(fs_path, fs_encoding=None):
     else:
         tree_path = fs_path_bytes
     return tree_path
+# nw_e: function index._fs_to_tree_path #
 # nw_e: dulwich/index.py #

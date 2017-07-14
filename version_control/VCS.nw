@@ -239,6 +239,8 @@ Here are other candidates that were considered but ultimately discarded:
 
 %https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain
 
+%git v0:
+% https://github.com/git/git/commit/e83c5163316f89bfbde7d9ab23ca2e25604af290
 
 \section{Getting started}
 
@@ -296,7 +298,7 @@ License.
 %git: use simple scheme: not v1, v2, ... but sha1 of content!
 % then get for free consistency checking
 
-% then need to have not just version of one file but version
+% then need to have not just version of one file (RCS) but version
 % of a tree.
 %git: have tree structure which references other blob id and other trees.
 % if a full subtree does not change, then share reference.
@@ -305,6 +307,7 @@ License.
 %git: again use object for that. then easy to reference
 % a tree version by referencing a commit id.
 % Also then can have references, symbolic references.
+% Also have parents! so full history on how you got there.
 
 % Also by having delta
 % and message associated with it help explore history. Git log, git
@@ -459,6 +462,30 @@ def valid_hexsha(hex):
 @
 
 % see sha1() later.
+
+
+<<class FixedSha>>=
+class FixedSha(object):
+    """SHA object that behaves like hashlib's but is given a fixed value."""
+
+    __slots__ = ('_hexsha', '_sha')
+
+    def __init__(self, hexsha):
+        if getattr(hexsha, 'encode', None) is not None:
+            hexsha = hexsha.encode('ascii')
+        if not isinstance(hexsha, bytes):
+            raise TypeError('Expected bytes for hexsha, got %r' % hexsha)
+        self._hexsha = hexsha
+        self._sha = hex_to_sha(hexsha)
+
+    def digest(self):
+        """Return the raw SHA digest."""
+        return self._sha
+
+    def hexdigest(self):
+        """Return the hex SHA digest."""
+        return self._hexsha.decode('ascii')
+@
 
 \section{Repository}
 
@@ -816,11 +843,15 @@ def sha(self):
 @
 % sha1() from ?
 
+
 <<[[ShaFile]] methods>>=
-def _header(self):
-    return object_header(self.type_num, self.raw_length())
+def raw_length(self):
+    """Returns the length of the raw string of this object."""
+    ret = 0
+    for chunk in self.as_raw_chunks():
+        ret += len(chunk)
+    return ret
 @
-%bug: was self.type, but deprecated
 
 
 <<[[ShaFile]] methods>>=
@@ -1128,7 +1159,7 @@ for field, _ in _parse_message(self._chunked_text):
 @
 
 
-\subsection{[[Tree]]}
+\subsection{[[Tree]] and [[TreeEntry]]}
 
 <<class Tree>>=
 class Tree(ShaFile):
@@ -1230,6 +1261,19 @@ def __delitem__(self, name):
     del self._entries[name]
     self._needs_serialization = True
 
+@
+
+
+
+<<class TreeEntry>>=
+class TreeEntry(namedtuple('TreeEntry', ['path', 'mode', 'sha'])):
+    """Named tuple encapsulating a single tree entry."""
+
+    def in_path(self, path):
+        """Return a copy of this entry with the given path prepended."""
+        if not isinstance(self.path, bytes):
+            raise TypeError('Expected bytes for path, got %r' % path)
+        return TreeEntry(posixpath.join(path, self.path), self.mode, self.sha)
 @
 
 
@@ -2259,9 +2303,283 @@ def determine_wants_all(self, refs):
             not sha == ZERO_SHA]
 @
 
+\section{Graph walker}
+
+% useful only for packs?
+
+<<[[BaseRepo]] methods>>=
+def get_graph_walker(self, heads=None):
+    """Retrieve a graph walker.
+
+    A graph walker is used by a remote repository (or proxy)
+    to find out which objects are present in this repository.
+
+    :param heads: Repository heads to use (optional)
+    :return: A graph walker object
+    """
+    if heads is None:
+        heads = self.refs.as_dict(b'refs/heads').values()
+    return ObjectStoreGraphWalker(heads, self.get_parents)
+@
+
+<<class ObjectStoreGraphWalker>>=
+class ObjectStoreGraphWalker(object):
+    """Graph walker that finds what commits are missing from an object store.
+
+    :ivar heads: Revisions without descendants in the local repo
+    :ivar get_parents: Function to retrieve parents in the local repo
+    """
+
+    def __init__(self, local_heads, get_parents):
+        """Create a new instance.
+
+        :param local_heads: Heads to start search with
+        :param get_parents: Function for finding the parents of a SHA1.
+        """
+        self.heads = set(local_heads)
+        self.get_parents = get_parents
+        self.parents = {}
+
+    def ack(self, sha):
+        """Ack that a revision and its ancestors are present in the source."""
+        if len(sha) != 40:
+            raise ValueError("unexpected sha %r received" % sha)
+        ancestors = set([sha])
+
+        # stop if we run out of heads to remove
+        while self.heads:
+            for a in ancestors:
+                if a in self.heads:
+                    self.heads.remove(a)
+
+            # collect all ancestors
+            new_ancestors = set()
+            for a in ancestors:
+                ps = self.parents.get(a)
+                if ps is not None:
+                    new_ancestors.update(ps)
+                self.parents[a] = None
+
+            # no more ancestors; stop
+            if not new_ancestors:
+                break
+
+            ancestors = new_ancestors
+
+    def next(self):
+        """Iterate over ancestors of heads in the target."""
+        if self.heads:
+            ret = self.heads.pop()
+            ps = self.get_parents(ret)
+            self.parents[ret] = ps
+            self.heads.update(
+                [p for p in ps if p not in self.parents])
+            return ret
+        return None
+
+    __next__ = next
+@
+
+\section{Checking out a repository}
+
+% porcelain.reset | porcelain.clone -> <>
+<<[[Repo]] methods>>=
+def reset_index(self, tree=None):
+    """Reset the index back to a specific tree.
+
+    :param tree: Tree SHA to reset to, None for current HEAD tree.
+    """
+    from dulwich.index import (
+        build_index_from_tree,
+        validate_path_element_default,
+        validate_path_element_ntfs,
+        )
+    if tree is None:
+        tree = self[b'HEAD'].tree
+    config = self.get_config()
+    honor_filemode = config.get_boolean(
+        'core', 'filemode', os.name != "nt")
+    validate_path_element = validate_path_element_default
+    return build_index_from_tree(
+        self.path, self.index_path(), self.object_store, tree,
+        honor_filemode=honor_filemode,
+        validate_path_element=validate_path_element)
+@
+
+%win32:
+%    if config.get_boolean('core', 'core.protectNTFS', os.name == "nt"):
+%        validate_path_element = validate_path_element_ntfs
+%    else:
+
+%def validate_path_element_ntfs(element):
+%    stripped = element.rstrip(b". ").lower()
+%    if stripped in INVALID_DOTNAMES:
+%        return False
+%    if stripped == b"git~1":
+%        return False
+%    return True
+
+
+<<function build_index_from_tree>>=
+def build_index_from_tree(root_path, index_path, object_store, tree_id,
+                          honor_filemode=True,
+                          validate_path_element=validate_path_element_default):
+    """Generate and materialize index from a tree
+
+    :param tree_id: Tree to materialize
+    :param root_path: Target dir for materialized index files
+    :param index_path: Target path for generated index
+    :param object_store: Non-empty object store holding tree contents
+    :param honor_filemode: An optional flag to honor core.filemode setting in
+        config file, default is core.filemode=True, change executable bit
+    :param validate_path_element: Function to validate path elements to check out;
+        default just refuses .git and .. directories.
+
+    :note:: existing index is wiped and contents are not merged
+        in a working dir. Suitable only for fresh clones.
+    """
+
+    index = Index(index_path)
+    if not isinstance(root_path, bytes):
+        root_path = root_path.encode(sys.getfilesystemencoding())
+
+    for entry in object_store.iter_tree_contents(tree_id):
+        if not validate_path(entry.path, validate_path_element):
+            continue
+        full_path = _tree_to_fs_path(root_path, entry.path)
+
+        if not os.path.exists(os.path.dirname(full_path)):
+            os.makedirs(os.path.dirname(full_path))
+
+        # TODO(jelmer): Merge new index into working tree
+        if S_ISGITLINK(entry.mode):
+            if not os.path.isdir(full_path):
+                os.mkdir(full_path)
+            st = os.lstat(full_path)
+            # TODO(jelmer): record and return submodule paths
+        else:
+            obj = object_store[entry.sha]
+            st = build_file_from_blob(
+                obj, entry.mode, full_path, honor_filemode=honor_filemode)
+        # Add file to index
+        if not honor_filemode or S_ISGITLINK(entry.mode):
+            # we can not use tuple slicing to build a new tuple,
+            # because on windows that will convert the times to
+            # longs, which causes errors further along
+            st_tuple = (entry.mode, st.st_ino, st.st_dev, st.st_nlink,
+                        st.st_uid, st.st_gid, st.st_size, st.st_atime,
+                        st.st_mtime, st.st_ctime)
+            st = st.__class__(st_tuple)
+        index[entry.path] = index_entry_from_stat(st, entry.sha, 0)
+
+    index.write()
+@
+
+<<[[BaseObjectStore]] methods>>=
+def iter_tree_contents(self, tree_id, include_trees=False):
+    """Iterate the contents of a tree and all subtrees.
+
+    Iteration is depth-first pre-order, as in e.g. os.walk.
+
+    :param tree_id: SHA1 of the tree.
+    :param include_trees: If True, include tree objects in the iteration.
+    :return: Iterator over TreeEntry namedtuples for all the objects in a
+        tree.
+    """
+    for entry, _ in walk_trees(self, tree_id, None):
+        if not stat.S_ISDIR(entry.mode) or include_trees:
+            yield entry
+@
+
+
+<<function index.validate_path>>=
+def validate_path(path, element_validator=validate_path_element_default):
+    """Default path validator that just checks for .git/."""
+    parts = path.split(b"/")
+    for p in parts:
+        if not element_validator(p):
+            return False
+    else:
+        return True
+@
+
+<<constant index.INVALID_DOTNAMES>>=
+INVALID_DOTNAMES = (b".git", b".", b"..", b"")
+@
+
+<<function index.validate_path_element_default>>=
+def validate_path_element_default(element):
+    return element.lower() not in INVALID_DOTNAMES
+@
+
+<<function build_file_from_blob>>=
+def build_file_from_blob(blob, mode, target_path, honor_filemode=True):
+    """Build a file or symlink on disk based on a Git object.
+
+    :param obj: The git object
+    :param mode: File mode
+    :param target_path: Path to write to
+    :param honor_filemode: An optional flag to honor core.filemode setting in
+        config file, default is core.filemode=True, change executable bit
+    :return: stat object for the file
+    """
+    try:
+        oldstat = os.lstat(target_path)
+    except OSError as e:
+        if e.errno == errno.ENOENT:
+            oldstat = None
+        else:
+            raise
+    contents = blob.as_raw_string()
+    if stat.S_ISLNK(mode):
+        # FIXME: This will fail on Windows. What should we do instead?
+        if oldstat:
+            os.unlink(target_path)
+        os.symlink(contents, target_path)
+    else:
+        if oldstat is not None and oldstat.st_size == len(contents):
+            with open(target_path, 'rb') as f:
+                if f.read() == contents:
+                    return oldstat
+
+        with open(target_path, 'wb') as f:
+            # Write out file
+            f.write(contents)
+
+        if honor_filemode:
+            os.chmod(target_path, mode)
+
+    return os.lstat(target_path)
+@
+
+%win32:
+%        if sys.platform == 'win32' and sys.version_info[0] == 3:
+%            # os.readlink on Python3 on Windows requires a unicode string.
+%            # TODO(jelmer): Don't assume tree_encoding == fs_encoding
+%            tree_encoding = sys.getfilesystemencoding()
+%            contents = contents.decode(tree_encoding)
+%            target_path = target_path.decode(tree_encoding)
+
+
+<<function index.index_entry_from_stat>>=
+def index_entry_from_stat(stat_val, hex_sha, flags, mode=None):
+    """Create a new index entry from a stat value.
+
+    :param stat_val: POSIX stat_result instance
+    :param hex_sha: Hex sha of the object
+    :param flags: Index flags
+    """
+    if mode is None:
+        mode = cleanup_mode(stat_val.st_mode)
+    return (stat_val.st_ctime, stat_val.st_mtime, stat_val.st_dev,
+            stat_val.st_ino, mode, stat_val.st_uid,
+            stat_val.st_gid, stat_val.st_size, hex_sha, flags)
+@
 
 
 
+%\section{Fast Import/Export}
+%adv topics
 
 \chapter{Reading from a Repository}
 
@@ -2458,6 +2776,19 @@ def to_bytes(text):
     return text
 @
 
+
+<<[[ShaFile]] methods>>=
+@classmethod
+def from_string(cls, string):
+    """Create a ShaFile from a string."""
+    obj = cls()
+    obj.set_raw_string(string)
+    return obj
+@
+
+
+
+
 \subsection{Commit}
 
 % ?? -> <>
@@ -2585,6 +2916,34 @@ def _parse_message(chunks):
         yield (None, f.read())
 
     f.close()
+@
+
+
+<<function objects.parse_timezone>>=
+def parse_timezone(text):
+    """Parse a timezone text fragment (e.g. '+0100').
+
+    :param text: Text to parse.
+    :return: Tuple with timezone as seconds difference to UTC
+        and a boolean indicating whether this was a UTC timezone
+        prefixed with a negative sign (-0000).
+    """
+    # cgit parses the first character as the sign, and the rest
+    #  as an integer (using strtol), which could also be negative.
+    #  We do the same for compatibility. See #697828.
+    if not text[0] in b'+-':
+        raise ValueError("Timezone must start with + or - (%(text)s)" % vars())
+    sign = text[:1]
+    offset = int(text[1:])
+    if sign == b'-':
+        offset = -offset
+    unnecessary_negative_timezone = (offset >= 0 and sign == b'-')
+    signum = (offset < 0) and -1 or 1
+    offset = abs(offset)
+    hours = int(offset / 100)
+    minutes = (offset % 100)
+    return (signum * (hours * 3600 + minutes * 60),
+            unnecessary_negative_timezone)
 @
 
 
@@ -2801,6 +3160,16 @@ def read_cache_entry(f):
             sha_to_hex(sha), flags & ~0x0fff)
 @
 
+<<function index.read_cache_time>>=
+def read_cache_time(f):
+    """Read a cache time.
+
+    :param f: File-like object to read from
+    :return: Tuple with seconds and nanoseconds
+    """
+    return struct.unpack(">LL", f.read(8))
+@
+
 \section{Refs}
 
 % RefsContainer.__getitem__ -> <>
@@ -2912,6 +3281,21 @@ def allkeys(self):
 
 \section{Objects}
 
+<<[[ShaFile]] methods>>=
+def _header(self):
+    return object_header(self.type_num, self.raw_length())
+@
+%bug: was self.type, but deprecated
+
+<<function objects.object_header>>=
+def object_header(num_type, length):
+    """Return an object header for the given numeric type and text length."""
+    return (object_class(num_type).type_name +
+            b' ' + str(length).encode('ascii') + b'\0')
+@
+
+
+
 
 <<[[BaseObjectStore]] methods>>=
 def add_object(self, obj):
@@ -2994,7 +3378,31 @@ def _serialize(self):
     chunks.append(b'\n')  # There must be a new line after the headers
     chunks.append(self._message)
     return chunks
+@
 
+
+<<function objects.git_line>>=
+def git_line(*items):
+    """Formats items into a space sepreated line."""
+    return b' '.join(items) + b'\n'
+@
+
+<<function objects.format_timezone>>=
+def format_timezone(offset, unnecessary_negative_timezone=False):
+    """Format a timezone for Git serialization.
+
+    :param offset: Timezone offset as seconds difference to UTC
+    :param unnecessary_negative_timezone: Whether to use a minus sign for
+        UTC or positive timezones (-0000 and --700 rather than +0000 / +0700).
+    """
+    if offset % 60 != 0:
+        raise ValueError("Unable to handle non-minute offset.")
+    if offset < 0 or unnecessary_negative_timezone:
+        sign = '-'
+        offset = -offset
+    else:
+        sign = '+'
+    return ('%c%02d%02d' % (sign, offset / 3600, (offset / 60) % 60)).encode('ascii')
 @
 
 
@@ -3012,6 +3420,56 @@ def _serialize(self):
 <<[[Tree]] methods>>=
 def _serialize(self):
     return list(serialize_tree(self.iteritems()))
+@
+
+<<[[Tree]] methods>>=
+def iteritems(self, name_order=False):
+    """Iterate over entries.
+
+    :param name_order: If True, iterate in name order instead of tree
+        order.
+    :return: Iterator over (name, mode, sha) tuples
+    """
+    return sorted_tree_items(self._entries, name_order)
+@
+
+<<function object.sorted_tree_items>>=
+def sorted_tree_items(entries, name_order):
+    """Iterate over a tree entries dictionary.
+
+    :param name_order: If True, iterate entries in order of their name. If
+        False, iterate entries in tree order, that is, treat subtree entries as
+        having '/' appended.
+    :param entries: Dictionary mapping names to (mode, sha) tuples
+    :return: Iterator over (name, mode, hexsha)
+    """
+    key_func = name_order and key_entry_name_order or key_entry
+    for name, entry in sorted(entries.items(), key=key_func):
+        mode, hexsha = entry
+        # Stricter type checks than normal to mirror checks in the C version.
+        mode = int(mode)
+        if not isinstance(hexsha, bytes):
+            raise TypeError('Expected bytes for SHA, got %r' % hexsha)
+        yield TreeEntry(name, mode, hexsha)
+@
+
+<<function object.key_entry>>=
+def key_entry(entry):
+    """Sort key for tree entry.
+
+    :param entry: (name, value) tuplee
+    """
+    (name, value) = entry
+    if stat.S_ISDIR(value[0]):
+        name += b'/'
+    return name
+@
+
+<<function object.key_entry_name_order>>=
+def key_entry_name_order(entry):
+    """Sort key for tree entry in name order."""
+    return entry[0]
+
 @
 
 <<function object.serialize_tree>>=
@@ -3114,6 +3572,23 @@ def write_cache_entry(f, entry):
     f.write(name)
     real_size = ((f.tell() - beginoffset + 8) & ~7)
     f.write(b'\0' * ((beginoffset + real_size) - f.tell()))
+@
+
+<<function index.write_cache_time>>=
+def write_cache_time(f, t):
+    """Write a cache time.
+
+    :param f: File-like object to write to
+    :param t: Time to write (as int, float or tuple with secs and nsecs)
+    """
+    if isinstance(t, int):
+        t = (t, 0)
+    elif isinstance(t, float):
+        (secs, nsecs) = divmod(t, 1.0)
+        t = (int(secs), int(nsecs * 1000000000))
+    elif not isinstance(t, tuple):
+        raise TypeError(t)
+    f.write(struct.pack(">LL", *t))
 @
 
 \section{Refs}
@@ -3246,6 +3721,29 @@ def stage(self, fs_paths):
     index.write()
 @
 
+<<function index._fs_to_tree_path>>=
+def _fs_to_tree_path(fs_path, fs_encoding=None):
+    """Convert a file system path to a git tree path.
+
+    :param fs_path: File system path.
+    :param fs_encoding: File system encoding
+
+    :return:  Git tree path as bytes
+    """
+    if fs_encoding is None:
+        fs_encoding = sys.getfilesystemencoding()
+    if not isinstance(fs_path, bytes):
+        fs_path_bytes = fs_path.encode(fs_encoding)
+    else:
+        fs_path_bytes = fs_path
+    if os_sep_bytes != b'/':
+        tree_path = fs_path_bytes.replace(os_sep_bytes, b'/')
+    else:
+        tree_path = fs_path_bytes
+    return tree_path
+@
+
+
 
 \section{[[git reset]]}
 
@@ -3284,146 +3782,6 @@ def reset(repo, mode, committish="HEAD"):
         r.reset_index(tree)
 @
 
-% porcelain.reset | porcelain.clone -> <>
-<<[[Repo]] methods>>=
-def reset_index(self, tree=None):
-    """Reset the index back to a specific tree.
-
-    :param tree: Tree SHA to reset to, None for current HEAD tree.
-    """
-    from dulwich.index import (
-        build_index_from_tree,
-        validate_path_element_default,
-        validate_path_element_ntfs,
-        )
-    if tree is None:
-        tree = self[b'HEAD'].tree
-    config = self.get_config()
-    honor_filemode = config.get_boolean(
-        'core', 'filemode', os.name != "nt")
-    validate_path_element = validate_path_element_default
-    return build_index_from_tree(
-        self.path, self.index_path(), self.object_store, tree,
-        honor_filemode=honor_filemode,
-        validate_path_element=validate_path_element)
-@
-
-%win32:
-%    if config.get_boolean('core', 'core.protectNTFS', os.name == "nt"):
-%        validate_path_element = validate_path_element_ntfs
-%    else:
-
-%def validate_path_element_ntfs(element):
-%    stripped = element.rstrip(b". ").lower()
-%    if stripped in INVALID_DOTNAMES:
-%        return False
-%    if stripped == b"git~1":
-%        return False
-%    return True
-
-
-<<function build_index_from_tree>>=
-def build_index_from_tree(root_path, index_path, object_store, tree_id,
-                          honor_filemode=True,
-                          validate_path_element=validate_path_element_default):
-    """Generate and materialize index from a tree
-
-    :param tree_id: Tree to materialize
-    :param root_path: Target dir for materialized index files
-    :param index_path: Target path for generated index
-    :param object_store: Non-empty object store holding tree contents
-    :param honor_filemode: An optional flag to honor core.filemode setting in
-        config file, default is core.filemode=True, change executable bit
-    :param validate_path_element: Function to validate path elements to check out;
-        default just refuses .git and .. directories.
-
-    :note:: existing index is wiped and contents are not merged
-        in a working dir. Suitable only for fresh clones.
-    """
-
-    index = Index(index_path)
-    if not isinstance(root_path, bytes):
-        root_path = root_path.encode(sys.getfilesystemencoding())
-
-    for entry in object_store.iter_tree_contents(tree_id):
-        if not validate_path(entry.path, validate_path_element):
-            continue
-        full_path = _tree_to_fs_path(root_path, entry.path)
-
-        if not os.path.exists(os.path.dirname(full_path)):
-            os.makedirs(os.path.dirname(full_path))
-
-        # TODO(jelmer): Merge new index into working tree
-        if S_ISGITLINK(entry.mode):
-            if not os.path.isdir(full_path):
-                os.mkdir(full_path)
-            st = os.lstat(full_path)
-            # TODO(jelmer): record and return submodule paths
-        else:
-            obj = object_store[entry.sha]
-            st = build_file_from_blob(
-                obj, entry.mode, full_path, honor_filemode=honor_filemode)
-        # Add file to index
-        if not honor_filemode or S_ISGITLINK(entry.mode):
-            # we can not use tuple slicing to build a new tuple,
-            # because on windows that will convert the times to
-            # longs, which causes errors further along
-            st_tuple = (entry.mode, st.st_ino, st.st_dev, st.st_nlink,
-                        st.st_uid, st.st_gid, st.st_size, st.st_atime,
-                        st.st_mtime, st.st_ctime)
-            st = st.__class__(st_tuple)
-        index[entry.path] = index_entry_from_stat(st, entry.sha, 0)
-
-    index.write()
-@
-
-<<function build_file_from_blob>>=
-def build_file_from_blob(blob, mode, target_path, honor_filemode=True):
-    """Build a file or symlink on disk based on a Git object.
-
-    :param obj: The git object
-    :param mode: File mode
-    :param target_path: Path to write to
-    :param honor_filemode: An optional flag to honor core.filemode setting in
-        config file, default is core.filemode=True, change executable bit
-    :return: stat object for the file
-    """
-    try:
-        oldstat = os.lstat(target_path)
-    except OSError as e:
-        if e.errno == errno.ENOENT:
-            oldstat = None
-        else:
-            raise
-    contents = blob.as_raw_string()
-    if stat.S_ISLNK(mode):
-        # FIXME: This will fail on Windows. What should we do instead?
-        if oldstat:
-            os.unlink(target_path)
-        os.symlink(contents, target_path)
-    else:
-        if oldstat is not None and oldstat.st_size == len(contents):
-            with open(target_path, 'rb') as f:
-                if f.read() == contents:
-                    return oldstat
-
-        with open(target_path, 'wb') as f:
-            # Write out file
-            f.write(contents)
-
-        if honor_filemode:
-            os.chmod(target_path, mode)
-
-    return os.lstat(target_path)
-@
-
-%win32:
-%        if sys.platform == 'win32' and sys.version_info[0] == 3:
-%            # os.readlink on Python3 on Windows requires a unicode string.
-%            # TODO(jelmer): Don't assume tree_encoding == fs_encoding
-%            tree_encoding = sys.getfilesystemencoding()
-%            contents = contents.decode(tree_encoding)
-%            target_path = target_path.decode(tree_encoding)
 
 \chapter{Committing a Diff}
 
@@ -3608,6 +3966,31 @@ def commit_tree(object_store, blobs):
     return build_tree(b'')
 @
 
+
+
+<<function index.pathsplit>>=
+def pathsplit(path):
+    """Split a /-delimited path into a directory part and a basename.
+
+    :param path: The path to split.
+    :return: Tuple with directory name and basename
+    """
+    try:
+        (dirname, basename) = path.rsplit(b"/", 1)
+    except ValueError:
+        return (b"", path)
+    else:
+        return (dirname, basename)
+@
+
+<<function index.pathjoin>>=
+def pathjoin(*args):
+    """Join a /-delimited path.
+
+    """
+    return b"/".join([p for p in args if p])
+@
+
 \chapter{Branching}
 % purpose: parallel development
 % gitless records working version of files, so can easily switch branch!
@@ -3710,6 +4093,7 @@ def branch_delete(repo, name):
             del r.refs[b"refs/heads/" + name]
 @
 
+\chapter{Merging}
 
 \chapter{Pulling and Pushing}
 
@@ -3904,6 +4288,38 @@ def push(repo, remote_location, refspecs,
 
 \chapter{Inspecting}
 
+\section{[[TreeChange]]}
+
+<<type CHANGE>>=
+# TreeChange type constants.
+CHANGE_ADD = 'add'
+CHANGE_MODIFY = 'modify'
+CHANGE_DELETE = 'delete'
+CHANGE_RENAME = 'rename'
+CHANGE_COPY = 'copy'
+CHANGE_UNCHANGED = 'unchanged'
+@
+%ocaml: enum
+
+<<class TreeChange>>=
+class TreeChange(namedtuple('TreeChange', ['type', 'old', 'new'])):
+    """Named tuple a single change between two trees."""
+
+    @classmethod
+    def add(cls, new):
+        return cls(CHANGE_ADD, _NULL_ENTRY, new)
+
+    @classmethod
+    def delete(cls, old):
+        return cls(CHANGE_DELETE, old, _NULL_ENTRY)
+@
+
+<<constant diff_tree._NULL_ENTRY>>=
+_NULL_ENTRY = TreeEntry(None, None, None)
+@
+
+
+
 \section{[[git log]]}
 
 <<function cmd_log>>=
@@ -3976,6 +4392,10 @@ def print_name_status(changes):
             elif change.type == CHANGE_COPY:
                 kind = 'C'
         yield '%-8s%-20s%-20s' % (kind, path1, path2)
+@
+
+<<constant diff_tree.RENAME_CHANGE_TYPES>>=
+RENAME_CHANGE_TYPES = (CHANGE_RENAME, CHANGE_COPY)
 @
 
 <<function porcelain.print_commit>>=
@@ -4153,50 +4573,27 @@ def write_tree_diff(f, store, old_tree, new_tree, diff_binary=False):
                                     diff_binary=diff_binary)
 @
 
-\subsection{[[TreeChange]]}
-
-<<type CHANGE>>=
-# TreeChange type constants.
-CHANGE_ADD = 'add'
-CHANGE_MODIFY = 'modify'
-CHANGE_DELETE = 'delete'
-CHANGE_RENAME = 'rename'
-CHANGE_COPY = 'copy'
-CHANGE_UNCHANGED = 'unchanged'
-@
-%ocaml: enum
-
-<<class TreeChange>>=
-class TreeChange(namedtuple('TreeChange', ['type', 'old', 'new'])):
-    """Named tuple a single change between two trees."""
-
-    @classmethod
-    def add(cls, new):
-        return cls(CHANGE_ADD, _NULL_ENTRY, new)
-
-    @classmethod
-    def delete(cls, old):
-        return cls(CHANGE_DELETE, old, _NULL_ENTRY)
-@
-
-<<constant diff_tree._NULL_ENTRY>>=
-_NULL_ENTRY = TreeEntry(None, None, None)
-@
-
-
-<<class TreeEntry>>=
-class TreeEntry(namedtuple('TreeEntry', ['path', 'mode', 'sha'])):
-    """Named tuple encapsulating a single tree entry."""
-
-    def in_path(self, path):
-        """Return a copy of this entry with the given path prepended."""
-        if not isinstance(self.path, bytes):
-            raise TypeError('Expected bytes for path, got %r' % path)
-        return TreeEntry(posixpath.join(path, self.path), self.mode, self.sha)
-@
 
 
 \subsection{[[tree_changes]]}
+
+<<[[BaseObjectStore]] methods>>=
+def tree_changes(self, source, target, want_unchanged=False):
+    """Find the differences between the contents of two trees
+
+    :param source: SHA1 of the source tree
+    :param target: SHA1 of the target tree
+    :param want_unchanged: Whether unchanged files should be reported
+    :return: Iterator over tuples with
+        (oldpath, newpath), (oldmode, newmode), (oldsha, newsha)
+    """
+    for change in tree_changes(self, source, target,
+                               want_unchanged=want_unchanged):
+        yield ((change.old.path, change.new.path),
+               (change.old.mode, change.new.mode),
+               (change.old.sha, change.new.sha))
+@
+
 
 <<function diff_tree.tree_changes>>=
 def tree_changes(store, tree1_id, tree2_id, want_unchanged=False,
@@ -4517,6 +4914,40 @@ def status(repo="."):
 GitStatus = namedtuple('GitStatus', 'staged unstaged untracked')
 @
 
+<<function index.get_unstaged_changes>>=
+def get_unstaged_changes(index, root_path):
+    """Walk through an index and check for differences against working tree.
+
+    :param index: index to check
+    :param root_path: path in which to find files
+    :return: iterator over paths with unstaged changes
+    """
+    # For each entry in the index check the sha1 & ensure not staged
+    if not isinstance(root_path, bytes):
+        root_path = root_path.encode(sys.getfilesystemencoding())
+
+    for tree_path, entry in index.iteritems():
+        full_path = _tree_to_fs_path(root_path, tree_path)
+        # TODO(jelmer): handle S_ISGITLINK(entry.mode) here
+        try:
+            blob = blob_from_path_and_stat(full_path, os.lstat(full_path))
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise
+            # The file was removed, so we assume that counts as
+            # different from whatever file used to exist.
+            yield tree_path
+        except IOError as e:
+            if e.errno != errno.EISDIR:
+                raise
+            # The file was changed to a directory, so consider it removed.
+            yield tree_path
+        else:
+            if blob.id != entry.sha:
+                yield tree_path
+@
+
+
 
 <<function porcelain.get_tree_changes>>=
 def get_tree_changes(repo):
@@ -4552,6 +4983,87 @@ def get_tree_changes(repo):
                 raise AssertionError('git mv ops not yet supported')
         return tracked_changes
 @
+
+
+<<[[Index]] methods>>=
+def changes_from_tree(self, object_store, tree, want_unchanged=False):
+    """Find the differences between the contents of this index and a tree.
+
+    :param object_store: Object store to use for retrieving tree contents
+    :param tree: SHA1 of the root tree
+    :param want_unchanged: Whether unchanged files should be reported
+    :return: Iterator over tuples with (oldpath, newpath), (oldmode, newmode), (oldsha, newsha)
+    """
+    def lookup_entry(path):
+        entry = self[path]
+        return entry.sha, entry.mode
+    for (name, mode, sha) in changes_from_tree(self._byname.keys(),
+            lookup_entry, object_store, tree,
+            want_unchanged=want_unchanged):
+        yield (name, mode, sha)
+@
+
+
+<<function index.changes_from_tree>>=
+def changes_from_tree(names, lookup_entry, object_store, tree,
+        want_unchanged=False):
+    """Find the differences between the contents of a tree and
+    a working copy.
+
+    :param names: Iterable of names in the working copy
+    :param lookup_entry: Function to lookup an entry in the working copy
+    :param object_store: Object store to use for retrieving tree contents
+    :param tree: SHA1 of the root tree, or None for an empty tree
+    :param want_unchanged: Whether unchanged files should be reported
+    :return: Iterator over tuples with (oldpath, newpath), (oldmode, newmode),
+        (oldsha, newsha)
+    """
+    other_names = set(names)
+
+    if tree is not None:
+        for (name, mode, sha) in object_store.iter_tree_contents(tree):
+            try:
+                (other_sha, other_mode) = lookup_entry(name)
+            except KeyError:
+                # Was removed
+                yield ((name, None), (mode, None), (sha, None))
+            else:
+                other_names.remove(name)
+                if (want_unchanged or other_sha != sha or other_mode != mode):
+                    yield ((name, name), (mode, other_mode), (sha, other_sha))
+
+    # Mention added files
+    for name in other_names:
+        try:
+            (other_sha, other_mode) = lookup_entry(name)
+        except KeyError:
+            pass
+        else:
+            yield ((None, name), (None, other_mode), (None, other_sha))
+@
+
+
+<<function index._tree_to_fs_path>>=
+def _tree_to_fs_path(root_path, tree_path):
+    """Convert a git tree path to a file system path.
+
+    :param root_path: Root filesystem path
+    :param tree_path: Git tree path as bytes
+
+    :return: File system path.
+    """
+    assert isinstance(tree_path, bytes)
+    if os_sep_bytes != b'/':
+        sep_corrected_path = tree_path.replace(b'/', os_sep_bytes)
+    else:
+        sep_corrected_path = tree_path
+    return os.path.join(root_path, sep_corrected_path)
+@
+
+<<constant index.os_sep_bytes>>=
+os_sep_bytes = os.sep.encode('ascii')
+@
+
 
 \section{[[git grep]]}
 
@@ -4949,18 +5461,9 @@ def _fileno_can_read(fileno):
 
 \chapter{Advanced Topics}
 
-\section{Tags}
+\section{Advanced features}
 
-<<[[Tag]] methods>>=
-@classmethod
-def from_path(cls, filename):
-    tag = ShaFile.from_path(filename)
-    if not isinstance(tag, cls):
-        raise NotTagError(filename)
-    return tag
-
-@
-%dead?
+\subsection{Tags}
 
 % why need tags? not simply refs?
 
@@ -5162,7 +5665,20 @@ def print_tag(tag, decode, outstream=sys.stdout):
     outstream.write("\n")
 @
 
-\subsection{[[git tag]]}
+
+<<[[Tag]] methods>>=
+@classmethod
+def from_path(cls, filename):
+    tag = ShaFile.from_path(filename)
+    if not isinstance(tag, cls):
+        raise NotTagError(filename)
+    return tag
+
+@
+%dead?
+
+
+\subsubsection{[[git tag]]}
 
 <<function cmd_tag>>=
 class cmd_tag(Command):
@@ -5262,7 +5778,7 @@ def tag_delete(repo, name):
             del r.refs[b"refs/tags/" + name]
 @
 
-\section{Reflog}
+\subsection{Reflog}
 
 <<function read_reflog>>=
 def read_reflog(f):
@@ -5317,6 +5833,529 @@ def format_reflog_line(old_sha, new_sha, committer, timestamp, timezone,
 
 @
 
+\subsection{Grafts}
+
+<<[[BaseRepo.__init__()]] grafts>>=
+self._graftpoints = {}
+@
+
+<<[[Repo.__init__()]] grafts>>=
+self._graftpoints = {}
+graft_file = self.get_named_file(os.path.join("info", "grafts"),
+                                 basedir=self.commondir())
+if graft_file:
+    with graft_file:
+        self._graftpoints.update(parse_graftpoints(graft_file))
+graft_file = self.get_named_file("shallow",
+                                 basedir=self.commondir())
+if graft_file:
+    with graft_file:
+        self._graftpoints.update(parse_graftpoints(graft_file))
+@
+
+
+<<[[BaseRepo]] methods>>=
+def _add_graftpoints(self, updated_graftpoints):
+    """Add or modify graftpoints
+
+    :param updated_graftpoints: Dict of commit shas to list of parent shas
+    """
+
+    # Simple validation
+    for commit, parents in updated_graftpoints.items():
+        for sha in [commit] + parents:
+            check_hexsha(sha, 'Invalid graftpoint')
+
+    self._graftpoints.update(updated_graftpoints)
+
+@
+
+<<[[BaseRepo]] methods>>=
+def _remove_graftpoints(self, to_remove=[]):
+    """Remove graftpoints
+
+    :param to_remove: List of commit shas
+    """
+    for sha in to_remove:
+        del self._graftpoints[sha]
+
+@
+
+
+<<function parse_graftpoints>>=
+def parse_graftpoints(graftpoints):
+    """Convert a list of graftpoints into a dict
+
+    :param graftpoints: Iterator of graftpoint lines
+
+    Each line is formatted as:
+        <commit sha1> <parent sha1> [<parent sha1>]*
+
+    Resulting dictionary is:
+        <commit sha1>: [<parent sha1>*]
+
+    https://git.wiki.kernel.org/index.php/GraftPoint
+    """
+    grafts = {}
+    for l in graftpoints:
+        raw_graft = l.split(None, 1)
+
+        commit = raw_graft[0]
+        if len(raw_graft) == 2:
+            parents = raw_graft[1].split()
+        else:
+            parents = []
+
+        for sha in [commit] + parents:
+            check_hexsha(sha, 'Invalid graftpoint')
+
+        grafts[commit] = parents
+    return grafts
+@
+
+<<function serialize_graftpoints>>=
+def serialize_graftpoints(graftpoints):
+    """Convert a dictionary of grafts into string
+
+    The graft dictionary is:
+        <commit sha1>: [<parent sha1>*]
+
+    Each line is formatted as:
+        <commit sha1> <parent sha1> [<parent sha1>]*
+
+    https://git.wiki.kernel.org/index.php/GraftPoint
+
+    """
+    graft_lines = []
+    for commit, parents in graftpoints.items():
+        if parents:
+            graft_lines.append(commit + b' ' + b' '.join(parents))
+        else:
+            graft_lines.append(commit)
+    return b'\n'.join(graft_lines)
+
+@
+
+\subsection{Submodules}
+
+<<constant S_IFGITLINK>>=
+S_IFGITLINK = 0o160000
+@
+
+<<function objects.S_ISGITLINK>>=
+def S_ISGITLINK(m):
+    """Check if a mode indicates a submodule.
+
+    :param m: Mode to check
+    :return: a ``boolean``
+    """
+    return (stat.S_IFMT(m) == S_IFGITLINK)
+@
+% `` ``
+
+<<class StackedConfig>>=
+class StackedConfig(Config):
+    """Configuration which reads from multiple config files.."""
+
+    <<[[StackedConfig]] methods>>
+@
+
+<<[[StackedConfig]] methods>>=
+def __init__(self, backends, writable=None):
+    self.backends = backends
+    self.writable = writable
+@
+
+
+<<[[StackedConfig]] methods>>=
+@classmethod
+def default_backends(cls):
+    """Retrieve the default configuration.
+
+    See git-config(1) for details on the files searched.
+    """
+    paths = []
+    paths.append(os.path.expanduser("~/.gitconfig"))
+
+    xdg_config_home = os.environ.get(
+        "XDG_CONFIG_HOME", os.path.expanduser("~/.config/"),
+    )
+    paths.append(os.path.join(xdg_config_home, "git", "config"))
+
+    if "GIT_CONFIG_NOSYSTEM" not in os.environ:
+        paths.append("/etc/gitconfig")
+
+    backends = []
+    for path in paths:
+        try:
+            cf = ConfigFile.from_path(path)
+        except (IOError, OSError) as e:
+            if e.errno != errno.ENOENT:
+                raise
+            else:
+                continue
+        backends.append(cf)
+    return backends
+
+@
+
+<<[[StackedConfig]] methods>>=
+def get(self, section, name):
+    for backend in self.backends:
+        try:
+            return backend.get(section, name)
+        except KeyError:
+            pass
+    raise KeyError(name)
+
+@
+
+<<[[StackedConfig]] methods>>=
+def set(self, section, name, value):
+    if self.writable is None:
+        raise NotImplementedError(self.set)
+    return self.writable.set(section, name, value)
+@
+
+<<function config.parse_submodules>>=
+def parse_submodules(config):
+    """Parse a gitmodules GitConfig file, returning submodules.
+
+   :param config: A `ConfigFile`
+   :return: list of tuples (submodule path, url, name),
+       where name is quoted part of the section's name.
+    """
+    for section in config.keys():
+        section_kind, section_name = section
+        if section_kind == b'submodule':
+            sm_path = config.get(section, b'path')
+            sm_url = config.get(section, b'url')
+            yield (sm_path, sm_url, section_name)
+@
+
+
+\subsection{hooks, [[.git/hooks/]]}
+
+<<[[BaseRepo.__init__()]] hooks>>=
+self.hooks = {}
+@
+
+<<class Hook>>=
+class Hook(object):
+    """Generic hook object."""
+
+    <<[[Hook]] methods>>
+@
+
+<<[[Hook]] methods>>=
+def execute(self, *args):
+    """Execute the hook with the given args
+
+    :param args: argument list to hook
+    :raise HookError: hook execution failure
+    :return: a hook may return a useful value
+    """
+    raise NotImplementedError(self.execute)
+@
+
+<<class ShellHook>>=
+class ShellHook(Hook):
+    """Hook by executable file
+
+    Implements standard githooks(5) [0]:
+
+    [0] http://www.kernel.org/pub/software/scm/git/docs/githooks.html
+    """
+
+    <<[[ShellHook]] methods>>
+@
+
+<<[[ShellHook]] methods>>=
+def __init__(self, name, path, numparam,
+             pre_exec_callback=None, post_exec_callback=None):
+    """Setup shell hook definition
+
+    :param name: name of hook for error messages
+    :param path: absolute path to executable file
+    :param numparam: number of requirements parameters
+    :param pre_exec_callback: closure for setup before execution
+        Defaults to None. Takes in the variable argument list from the
+        execute functions and returns a modified argument list for the
+        shell hook.
+    :param post_exec_callback: closure for cleanup after execution
+        Defaults to None. Takes in a boolean for hook success and the
+        modified argument list and returns the final hook return value
+        if applicable
+    """
+    self.name = name
+    self.filepath = path
+    self.numparam = numparam
+
+    self.pre_exec_callback = pre_exec_callback
+    self.post_exec_callback = post_exec_callback
+@
+
+%win32:
+%    if sys.version_info[0] == 2 and sys.platform == 'win32':
+%        # Python 2 on windows does not support unicode file paths
+%        # http://bugs.python.org/issue1759845
+%        self.filepath = self.filepath.encode(sys.getfilesystemencoding())
+
+<<[[ShellHook]] methods>>=
+def execute(self, *args):
+    """Execute the hook with given args"""
+
+    if len(args) != self.numparam:
+        raise HookError("Hook %s executed with wrong number of args. \
+                        Expected %d. Saw %d. args: %s"
+                        % (self.name, self.numparam, len(args), args))
+
+    if (self.pre_exec_callback is not None):
+        args = self.pre_exec_callback(*args)
+
+    try:
+        ret = subprocess.call([self.filepath] + list(args))
+        if ret != 0:
+            if (self.post_exec_callback is not None):
+                self.post_exec_callback(0, *args)
+            raise HookError("Hook %s exited with non-zero status"
+                            % (self.name))
+        if (self.post_exec_callback is not None):
+            return self.post_exec_callback(1, *args)
+    except OSError:  # no file. silent failure.
+        if (self.post_exec_callback is not None):
+            self.post_exec_callback(0, *args)
+@
+
+
+<<[[Repo.__init__()]] hooks>>=
+self.hooks['pre-commit'] = PreCommitShellHook(self.controldir())
+self.hooks['commit-msg'] = CommitMsgShellHook(self.controldir())
+self.hooks['post-commit'] = PostCommitShellHook(self.controldir())
+@
+
+
+<<class PreCommitShellHook>>=
+class PreCommitShellHook(ShellHook):
+    """pre-commit shell hook"""
+
+    def __init__(self, controldir):
+        filepath = os.path.join(controldir, 'hooks', 'pre-commit')
+
+        ShellHook.__init__(self, 'pre-commit', filepath, 0)
+@
+
+<<class PostCommitShellHook>>=
+class PostCommitShellHook(ShellHook):
+    """post-commit shell hook"""
+
+    def __init__(self, controldir):
+        filepath = os.path.join(controldir, 'hooks', 'post-commit')
+
+        ShellHook.__init__(self, 'post-commit', filepath, 0)
+@
+
+<<class CommitMsgShellHook>>=
+class CommitMsgShellHook(ShellHook):
+    """commit-msg shell hook
+
+    :param args[0]: commit message
+    :return: new commit message or None
+    """
+
+    def __init__(self, controldir):
+        filepath = os.path.join(controldir, 'hooks', 'commit-msg')
+
+        def prepare_msg(*args):
+            (fd, path) = tempfile.mkstemp()
+
+            with os.fdopen(fd, 'wb') as f:
+                f.write(args[0])
+
+            return (path,)
+
+        def clean_msg(success, *args):
+            if success:
+                with open(args[0], 'rb') as f:
+                    new_msg = f.read()
+                os.unlink(args[0])
+                return new_msg
+            os.unlink(args[0])
+
+        ShellHook.__init__(self, 'commit-msg', filepath, 1,
+                           prepare_msg, clean_msg)
+@
+
+
+
+
+<<[[BaseRepo.do_commit()]] execute pre-commit hook>>=
+try:
+    self.hooks['pre-commit'].execute()
+except HookError as e:
+    raise CommitError(e)
+except KeyError:  # no hook defined, silent fallthrough
+    pass
+@
+
+<<[[BaseRepo.do_commit()]] execute commit-msg hook>>=
+try:
+    c.message = self.hooks['commit-msg'].execute(message)
+    if c.message is None:
+        c.message = message
+except HookError as e:
+    raise CommitError(e)
+except KeyError:  # no hook defined, message not modified
+    c.message = message
+@
+
+<<[[BaseRepo.do_commit()]] execute post-commit hook>>=
+try:
+    self.hooks['post-commit'].execute()
+except HookError as e:  # silent failure
+    warnings.warn("post-commit hook failed: %s" % e, UserWarning)
+except KeyError:  # no hook defined, silent fallthrough
+    pass
+@
+
+\subsection{Ignore files, [[.gitignore]]}
+
+%For details for the matching rules, see https://git-scm.com/docs/gitignore
+
+<<class IgnoreFilter>>=
+class IgnoreFilter(object):
+
+    def __init__(self, patterns):
+        self._patterns = []
+        for pattern in patterns:
+            self.append_pattern(pattern)
+
+    def append_pattern(self, pattern):
+        """Add a pattern to the set."""
+        self._patterns.append(pattern)
+
+    def is_ignored(self, path):
+        """Check whether a path is ignored.
+
+        For directories, include a trailing slash.
+
+        :return: None if file is not mentioned, True if it is included, False
+            if it is explicitly excluded.
+        """
+        status = None
+        for pattern in self._patterns:
+            if pattern[0:1] == b'!':
+                if match_pattern(path, pattern[1:]):
+                    status = False
+            else:
+                if pattern[0:1] == b'\\':
+                    pattern = pattern[1:]
+                if match_pattern(path, pattern):
+                    status = True
+        return status
+
+@
+
+<<function ignore.match_pattern>>=
+def match_pattern(path, pattern):
+    """Match a gitignore-style pattern against a path.
+
+    :param path: Path to match
+    :param pattern: Pattern to match
+    :return: bool indicating whether the pattern matched
+    """
+    re_pattern = translate(pattern)
+    return re.match(re_pattern, path)
+@
+
+
+<<function ignore.translate>>=
+def translate(pat):
+    """Translate a shell PATTERN to a regular expression.
+
+    There is no way to quote meta-characters.
+
+    Originally copied from fnmatch in Python 2.7, but modified for Dulwich
+    to cope with features in Git ignore patterns.
+    """
+
+    res = b'(?ms)'
+
+    if b'/' not in pat[:-1]:
+        # If there's no slash, this is a filename-based match
+        res = res + b'(.*/)?'
+
+    if pat.startswith(b'**/'):
+        # Leading **/
+        pat = pat[2:]
+        res = res + b'(.*/)?'
+
+    if pat.startswith(b'/'):
+        pat = pat[1:]
+
+    i, n = 0, len(pat)
+
+    while i < n:
+        if pat[i:i+3] == b'/**':
+            res = res + b'(/.*)?'
+            i = i+3
+            continue
+        c = pat[i:i+1]
+        i = i+1
+        if c == b'*':
+            res = res + b'[^/]+'
+        elif c == b'?':
+            res = res + b'.'
+        elif c == b'[':
+            j = i
+            if j < n and pat[j:j+1] == b'!':
+                j = j+1
+            if j < n and pat[j:j+1] == b']':
+                j = j+1
+            while j < n and pat[j:j+1] != b']':
+                j = j+1
+            if j >= n:
+                res = res + b'\\['
+            else:
+                stuff = pat[i:j].replace(b'\\', b'\\\\')
+                i = j+1
+                if stuff.startswith(b'!'):
+                    stuff = b'^' + stuff[1:]
+                elif stuff.startswith(b'^'):
+                    stuff = b'\\' + stuff
+                res = res + b'[' + stuff + b']'
+        else:
+            res = res + re.escape(c)
+
+    if not res.endswith(b'/'):
+        res = res + b'/?'
+
+    return res + b'\Z'
+@
+
+<<class IgnoreFilterStack>>=
+class IgnoreFilterStack(object):
+    """Check for ignore status in multiple filters."""
+
+    def __init__(self, filters):
+        self._filters = filters
+
+    def is_ignored(self, path):
+        """Check whether a path is explicitly included or excluded in ignores.
+
+        :param path: Path to check
+        :return: None if the file is not mentioned, True if it is included,
+            False if it is explicitly excluded.
+        """
+        status = None
+        for filter in self._filters:
+            status = filter.is_ignored(path)
+            if status is not None:
+                return status
+        return status
+@
+
+
 \section{Pack}
 % kinda an optimization
 
@@ -5325,6 +6364,289 @@ PACKDIR = 'pack'
 @
 
 %https://git-scm.com/book/en/v2/Git-Internals-Packfiles
+
+\subsection{[[Pack]]}
+
+<<class Pack>>=
+class Pack(object):
+    """A Git pack object."""
+
+    <<[[Pack]] methods>>
+@
+
+<<[[Pack]] methods>>=
+def __init__(self, basename, resolve_ext_ref=None):
+    self._basename = basename
+    self._data = None
+    self._idx = None
+    self._idx_path = self._basename + '.idx'
+    self._data_path = self._basename + '.pack'
+    self._data_load = lambda: PackData(self._data_path)
+    self._idx_load = lambda: load_pack_index(self._idx_path)
+    self.resolve_ext_ref = resolve_ext_ref
+@
+
+% data and idx.
+
+
+<<[[Pack]] methods>>=
+@classmethod
+def from_lazy_objects(self, data_fn, idx_fn):
+    """Create a new pack object from callables to load pack data and
+    index objects."""
+    ret = Pack('')
+    ret._data_load = data_fn
+    ret._idx_load = idx_fn
+    return ret
+
+@
+
+<<[[Pack]] methods>>=
+@classmethod
+def from_objects(self, data, idx):
+    """Create a new pack object from pack data and index objects."""
+    ret = Pack('')
+    ret._data_load = lambda: data
+    ret._idx_load = lambda: idx
+    return ret
+
+@
+
+<<[[Pack]] methods>>=
+def name(self):
+    """The SHA over the SHAs of the objects in this pack."""
+    return self.index.objects_sha1()
+
+@
+
+<<[[Pack]] methods>>=
+@property
+def data(self):
+    """The pack data object being used."""
+    if self._data is None:
+        self._data = self._data_load()
+        self._data.pack = self
+        self.check_length_and_checksum()
+    return self._data
+
+@
+
+<<[[Pack]] methods>>=
+@property
+def index(self):
+    """The index being used.
+
+    :note: This may be an in-memory index
+    """
+    if self._idx is None:
+        self._idx = self._idx_load()
+    return self._idx
+
+@
+
+<<[[Pack]] methods>>=
+def close(self):
+    if self._data is not None:
+        self._data.close()
+    if self._idx is not None:
+        self._idx.close()
+
+@
+
+<<[[Pack]] methods>>=
+def __enter__(self):
+    return self
+
+@
+
+<<[[Pack]] methods>>=
+def __exit__(self, exc_type, exc_val, exc_tb):
+    self.close()
+
+@
+
+<<[[Pack]] methods>>=
+def __eq__(self, other):
+    return isinstance(self, type(other)) and self.index == other.index
+
+@
+
+<<[[Pack]] methods>>=
+def __len__(self):
+    """Number of entries in this pack."""
+    return len(self.index)
+
+@
+
+
+<<[[Pack]] methods>>=
+def __iter__(self):
+    """Iterate over all the sha1s of the objects in this pack."""
+    return iter(self.index)
+
+@
+
+<<[[Pack]] methods>>=
+def check_length_and_checksum(self):
+    """Sanity check the length and checksum of the pack index and data."""
+    assert len(self.index) == len(self.data)
+    idx_stored_checksum = self.index.get_pack_checksum()
+    data_stored_checksum = self.data.get_stored_checksum()
+    if idx_stored_checksum != data_stored_checksum:
+        raise ChecksumMismatch(sha_to_hex(idx_stored_checksum),
+                               sha_to_hex(data_stored_checksum))
+
+@
+
+<<[[Pack]] methods>>=
+def check(self):
+    """Check the integrity of this pack.
+
+    :raise ChecksumMismatch: if a checksum for the index or data is wrong
+    """
+    self.index.check()
+    self.data.check()
+    for obj in self.iterobjects():
+        obj.check()
+    # TODO: object connectivity checks
+
+@
+
+<<[[Pack]] methods>>=
+def get_stored_checksum(self):
+    return self.data.get_stored_checksum()
+
+@
+
+<<[[Pack]] methods>>=
+def __contains__(self, sha1):
+    """Check whether this pack contains a particular SHA1."""
+    try:
+        self.index.object_index(sha1)
+        return True
+    except KeyError:
+        return False
+
+@
+
+<<[[Pack]] methods>>=
+def get_raw(self, sha1):
+    offset = self.index.object_index(sha1)
+    obj_type, obj = self.data.get_object_at(offset)
+    type_num, chunks = self.data.resolve_object(offset, obj_type, obj)
+    return type_num, b''.join(chunks)
+
+@
+
+<<[[Pack]] methods>>=
+def __getitem__(self, sha1):
+    """Retrieve the specified SHA1."""
+    type, uncomp = self.get_raw(sha1)
+    return ShaFile.from_raw_string(type, uncomp, sha=sha1)
+
+@
+
+<<[[Pack]] methods>>=
+def iterobjects(self):
+    """Iterate over the objects in this pack."""
+    return iter(PackInflater.for_pack_data(
+        self.data, resolve_ext_ref=self.resolve_ext_ref))
+
+@
+
+<<[[Pack]] methods>>=
+def pack_tuples(self):
+    """Provide an iterable for use with write_pack_objects.
+
+    :return: Object that can iterate over (object, path) tuples
+        and provides __len__
+    """
+    class PackTupleIterable(object):
+
+        def __init__(self, pack):
+            self.pack = pack
+
+        def __len__(self):
+            return len(self.pack)
+
+        def __iter__(self):
+            return ((o, None) for o in self.pack.iterobjects())
+
+    return PackTupleIterable(self)
+
+@
+
+<<[[Pack]] methods>>=
+def keep(self, msg=None):
+    """Add a .keep file for the pack, preventing git from garbage collecting it.
+
+    :param msg: A message written inside the .keep file; can be used later
+        to determine whether or not a .keep file is obsolete.
+    :return: The path of the .keep file, as a string.
+    """
+    keepfile_name = '%s.keep' % self._basename
+    with GitFile(keepfile_name, 'wb') as keepfile:
+        if msg:
+            keepfile.write(msg)
+            keepfile.write(b'\n')
+    return keepfile_name
+@
+
+\subsection{Reading}
+
+\subsection{Writing}
+
+<<function pack.write_pack_objects>>=
+def write_pack_objects(f, objects, delta_window_size=None, deltify=False):
+    """Write a new pack data file.
+
+    :param f: File to write to
+    :param objects: Iterable of (object, path) tuples to write.
+        Should provide __len__
+    :param window_size: Sliding window size for searching for deltas;
+                        Set to None for default window size.
+    :param deltify: Whether to deltify objects
+    :return: Dict mapping id -> (offset, crc32 checksum), pack checksum
+    """
+    if deltify:
+        pack_contents = deltify_pack_objects(objects, delta_window_size)
+    else:
+        pack_contents = (
+            (o.type_num, o.sha().digest(), None, o.as_raw_string())
+            for (o, path) in objects)
+
+    return write_pack_data(f, len(objects), pack_contents)
+@
+
+<<function pack.write_pack_data>>=
+def write_pack_data(f, num_records, records):
+    """Write a new pack data file.
+
+    :param f: File to write to
+    :param num_records: Number of records
+    :param records: Iterator over type_num, object_id, delta_base, raw
+    :return: Dict mapping id -> (offset, crc32 checksum), pack checksum
+    """
+    # Write the pack
+    entries = {}
+    f = SHA1Writer(f)
+    write_pack_header(f, num_records)
+    for type_num, object_id, delta_base, raw in records:
+        offset = f.offset()
+        if delta_base is not None:
+            try:
+                base_offset, base_crc32 = entries[delta_base]
+            except KeyError:
+                type_num = REF_DELTA
+                raw = (delta_base, raw)
+            else:
+                type_num = OFS_DELTA
+                raw = (offset - base_offset, raw)
+        crc32 = write_pack_object(f, type_num, raw)
+        entries[object_id] = (offset, crc32)
+    return entries, f.write_sha()
+@
+
 
 \subsection{Modifications}
 
@@ -5432,12 +6754,6 @@ def _iter_alternate_objects(self):
 
 @
 
-<<[[PackBasedObjectStore]] methods>>=
-def _iter_loose_objects(self):
-    """Iterate over the SHAs of all loose objects."""
-    raise NotImplementedError(self._iter_loose_objects)
-
-@
 
 <<[[PackBasedObjectStore]] methods>>=
 def _get_loose_object(self, sha):
@@ -5445,11 +6761,6 @@ def _get_loose_object(self, sha):
 
 @
 
-<<[[PackBasedObjectStore]] methods>>=
-def _remove_loose_object(self, sha):
-    raise NotImplementedError(self._remove_loose_object)
-
-@
 
 <<[[PackBasedObjectStore]] methods>>=
 def pack_loose_objects(self):
@@ -5464,7 +6775,30 @@ def pack_loose_objects(self):
     for obj, path in objects:
         self._remove_loose_object(obj.id)
     return len(objects)
+@
 
+<<[[PackBasedObjectStore]] methods>>=
+def _iter_loose_objects(self):
+    """Iterate over the SHAs of all loose objects."""
+    raise NotImplementedError(self._iter_loose_objects)
+@
+
+<<[[DiskObjectStore]] methods>>=
+def _iter_loose_objects(self):
+    for base in os.listdir(self.path):
+        if len(base) != 2:
+            continue
+        for rest in os.listdir(os.path.join(self.path, base)):
+            yield (base+rest).encode(sys.getfilesystemencoding())
+@
+
+<<[[PackBasedObjectStore]] methods>>=
+def _remove_loose_object(self, sha):
+    raise NotImplementedError(self._remove_loose_object)
+@
+<<[[DiskObjectStore]] methods>>=
+def _remove_loose_object(self, sha):
+    os.remove(self._get_shafile_path(sha))
 @
 
 
@@ -5509,6 +6843,11 @@ def __iter__(self):
 
 @
 
+<<[[BaseObjectStore]] methods>>=
+def contains_loose(self, sha):
+    """Check if a particular object is present by SHA1 and is loose."""
+    raise NotImplementedError(self.contains_loose)
+@
 <<[[PackBasedObjectStore]] methods>>=
 def contains_loose(self, sha):
     """Check if a particular object is present by SHA1 and is loose.
@@ -5516,7 +6855,6 @@ def contains_loose(self, sha):
     This does not check alternates.
     """
     return self._get_loose_object(sha) is not None
-
 @
 
 <<[[PackBasedObjectStore.get_raw()]] look in packs>>=
@@ -5582,7 +6920,19 @@ def _get_pack_basepath(self, entries):
     # TODO: Handle self.pack_dir being bytes
     suffix = suffix.decode('ascii')
     return os.path.join(self.pack_dir, "pack-" + suffix)
+@
 
+<<function pack.iter_sha1>>=
+def iter_sha1(iter):
+    """Return the hexdigest of the SHA1 over a set of names.
+
+    :param iter: Iterator over string objects
+    :return: 40-byte hex sha1 digest
+    """
+    sha = sha1()
+    for name in iter:
+        sha.update(name)
+    return sha.hexdigest().encode('ascii')
 @
 
 
@@ -5645,13 +6995,45 @@ def generate_pack_contents(self, have, want, progress=None):
     :param progress: Optional progress reporting method
     """
     return self.iter_shas(self.find_missing_objects(have, want, progress))
+@
 
+<<[[BaseObjectStore]] methods>>=
+def find_missing_objects(self, haves, wants, progress=None,
+                         get_tagged=None,
+                         get_parents=lambda commit: commit.parents):
+    """Find the missing objects required for a set of revisions.
+
+    :param haves: Iterable over SHAs already in common.
+    :param wants: Iterable over SHAs of objects to fetch.
+    :param progress: Simple progress function that will be called with
+        updated progress strings.
+    :param get_tagged: Function that returns a dict of pointed-to sha ->
+        tag sha for including tags.
+    :param get_parents: Optional function for getting the parents of a
+        commit.
+    :return: Iterator over (sha, path) pairs.
+    """
+    finder = MissingObjectFinder(self, haves, wants, progress, get_tagged,
+                                 get_parents=get_parents)
+    return iter(finder.next, None)
+@
+
+<<[[BaseObjectStore]] methods>>=
+def iter_shas(self, shas):
+    """Iterate over the objects for the specified shas.
+
+    :param shas: Iterable object with SHAs
+    :return: Object iterator
+    """
+    return ObjectStoreIterator(self, shas)
 @
 
 <<[[PackBasedObjectStore]] methods>>=
 def __init__(self):
     self._pack_cache = {}
 @
+
+
 
 \subsubsection{[[RefsContainer]]}
 
@@ -6024,229 +7406,259 @@ def fetch_pack(self, path, determine_wants, graph_walker, pack_data,
 
 @
 
-\subsection{[[Pack]]}
+\subsection{Misc}
 
-<<class Pack>>=
-class Pack(object):
-    """A Git pack object."""
+\subsubsection{[[MissingObjectFinder]]}
 
-    <<[[Pack]] methods>>
-@
+<<class MissingObjectFinder>>=
+class MissingObjectFinder(object):
+    """Find the objects missing from another object store.
 
-<<[[Pack]] methods>>=
-def __init__(self, basename, resolve_ext_ref=None):
-    self._basename = basename
-    self._data = None
-    self._idx = None
-    self._idx_path = self._basename + '.idx'
-    self._data_path = self._basename + '.pack'
-    self._data_load = lambda: PackData(self._data_path)
-    self._idx_load = lambda: load_pack_index(self._idx_path)
-    self.resolve_ext_ref = resolve_ext_ref
-@
-
-<<[[Pack]] methods>>=
-@classmethod
-def from_lazy_objects(self, data_fn, idx_fn):
-    """Create a new pack object from callables to load pack data and
-    index objects."""
-    ret = Pack('')
-    ret._data_load = data_fn
-    ret._idx_load = idx_fn
-    return ret
-
-@
-
-<<[[Pack]] methods>>=
-@classmethod
-def from_objects(self, data, idx):
-    """Create a new pack object from pack data and index objects."""
-    ret = Pack('')
-    ret._data_load = lambda: data
-    ret._idx_load = lambda: idx
-    return ret
-
-@
-
-<<[[Pack]] methods>>=
-def name(self):
-    """The SHA over the SHAs of the objects in this pack."""
-    return self.index.objects_sha1()
-
-@
-
-<<[[Pack]] methods>>=
-@property
-def data(self):
-    """The pack data object being used."""
-    if self._data is None:
-        self._data = self._data_load()
-        self._data.pack = self
-        self.check_length_and_checksum()
-    return self._data
-
-@
-
-<<[[Pack]] methods>>=
-@property
-def index(self):
-    """The index being used.
-
-    :note: This may be an in-memory index
+    :param object_store: Object store containing at least all objects to be
+        sent
+    :param haves: SHA1s of commits not to send (already present in target)
+    :param wants: SHA1s of commits to send
+    :param progress: Optional function to report progress to.
+    :param get_tagged: Function that returns a dict of pointed-to sha -> tag
+        sha for including tags.
+    :param get_parents: Optional function for getting the parents of a commit.
+    :param tagged: dict of pointed-to sha -> tag sha for including tags
     """
-    if self._idx is None:
-        self._idx = self._idx_load()
-    return self._idx
 
+    def __init__(self, object_store, haves, wants, progress=None,
+                 get_tagged=None, get_parents=lambda commit: commit.parents):
+        self.object_store = object_store
+        self._get_parents = get_parents
+        # process Commits and Tags differently
+        # Note, while haves may list commits/tags not available locally,
+        # and such SHAs would get filtered out by _split_commits_and_tags,
+        # wants shall list only known SHAs, and otherwise
+        # _split_commits_and_tags fails with KeyError
+        have_commits, have_tags, have_others = (
+            _split_commits_and_tags(object_store, haves, True))
+        want_commits, want_tags, want_others = (
+            _split_commits_and_tags(object_store, wants, False))
+        # all_ancestors is a set of commits that shall not be sent
+        # (complete repository up to 'haves')
+        all_ancestors = object_store._collect_ancestors(
+            have_commits, get_parents=self._get_parents)[0]
+        # all_missing - complete set of commits between haves and wants
+        # common - commits from all_ancestors we hit into while
+        # traversing parent hierarchy of wants
+        missing_commits, common_commits = object_store._collect_ancestors(
+            want_commits, all_ancestors, get_parents=self._get_parents)
+        self.sha_done = set()
+        # Now, fill sha_done with commits and revisions of
+        # files and directories known to be both locally
+        # and on target. Thus these commits and files
+        # won't get selected for fetch
+        for h in common_commits:
+            self.sha_done.add(h)
+            cmt = object_store[h]
+            _collect_filetree_revs(object_store, cmt.tree, self.sha_done)
+        # record tags we have as visited, too
+        for t in have_tags:
+            self.sha_done.add(t)
+
+        missing_tags = want_tags.difference(have_tags)
+        missing_others = want_others.difference(have_others)
+        # in fact, what we 'want' is commits, tags, and others
+        # we've found missing
+        wants = missing_commits.union(missing_tags)
+        wants = wants.union(missing_others)
+
+        self.objects_to_send = set([(w, None, False) for w in wants])
+
+        if progress is None:
+            self.progress = lambda x: None
+        else:
+            self.progress = progress
+        self._tagged = get_tagged and get_tagged() or {}
+
+    def add_todo(self, entries):
+        self.objects_to_send.update([e for e in entries
+                                     if not e[0] in self.sha_done])
+
+    def next(self):
+        while True:
+            if not self.objects_to_send:
+                return None
+            (sha, name, leaf) = self.objects_to_send.pop()
+            if sha not in self.sha_done:
+                break
+        if not leaf:
+            o = self.object_store[sha]
+            if isinstance(o, Commit):
+                self.add_todo([(o.tree, "", False)])
+            elif isinstance(o, Tree):
+                self.add_todo([(s, n, not stat.S_ISDIR(m))
+                               for n, m, s in o.iteritems()
+                               if not S_ISGITLINK(m)])
+            elif isinstance(o, Tag):
+                self.add_todo([(o.object[1], None, False)])
+        if sha in self._tagged:
+            self.add_todo([(self._tagged[sha], None, True)])
+        self.sha_done.add(sha)
+        self.progress(("counting objects: %d\r" %
+                       len(self.sha_done)).encode('ascii'))
+        return (sha, name)
+
+    __next__ = next
 @
 
-<<[[Pack]] methods>>=
-def close(self):
-    if self._data is not None:
-        self._data.close()
-    if self._idx is not None:
-        self._idx.close()
 
-@
+<<[[BaseObjectStore]] methods>>=
+def _collect_ancestors(self, heads, common=set(),
+                       get_parents=lambda commit: commit.parents):
+    """Collect all ancestors of heads up to (excluding) those in common.
 
-<<[[Pack]] methods>>=
-def __enter__(self):
-    return self
-
-@
-
-<<[[Pack]] methods>>=
-def __exit__(self, exc_type, exc_val, exc_tb):
-    self.close()
-
-@
-
-<<[[Pack]] methods>>=
-def __eq__(self, other):
-    return isinstance(self, type(other)) and self.index == other.index
-
-@
-
-<<[[Pack]] methods>>=
-def __len__(self):
-    """Number of entries in this pack."""
-    return len(self.index)
-
-@
-
-
-<<[[Pack]] methods>>=
-def __iter__(self):
-    """Iterate over all the sha1s of the objects in this pack."""
-    return iter(self.index)
-
-@
-
-<<[[Pack]] methods>>=
-def check_length_and_checksum(self):
-    """Sanity check the length and checksum of the pack index and data."""
-    assert len(self.index) == len(self.data)
-    idx_stored_checksum = self.index.get_pack_checksum()
-    data_stored_checksum = self.data.get_stored_checksum()
-    if idx_stored_checksum != data_stored_checksum:
-        raise ChecksumMismatch(sha_to_hex(idx_stored_checksum),
-                               sha_to_hex(data_stored_checksum))
-
-@
-
-<<[[Pack]] methods>>=
-def check(self):
-    """Check the integrity of this pack.
-
-    :raise ChecksumMismatch: if a checksum for the index or data is wrong
+    :param heads: commits to start from
+    :param common: commits to end at, or empty set to walk repository
+        completely
+    :param get_parents: Optional function for getting the parents of a
+        commit.
+    :return: a tuple (A, B) where A - all commits reachable
+        from heads but not present in common, B - common (shared) elements
+        that are directly reachable from heads
     """
-    self.index.check()
-    self.data.check()
-    for obj in self.iterobjects():
-        obj.check()
-    # TODO: object connectivity checks
-
+    bases = set()
+    commits = set()
+    queue = []
+    queue.extend(heads)
+    while queue:
+        e = queue.pop(0)
+        if e in common:
+            bases.add(e)
+        elif e not in commits:
+            commits.add(e)
+            cmt = self[e]
+            queue.extend(get_parents(cmt))
+    return (commits, bases)
 @
 
-<<[[Pack]] methods>>=
-def get_stored_checksum(self):
-    return self.data.get_stored_checksum()
+<<function object_store._collect_filetree_revs>>=
+def _collect_filetree_revs(obj_store, tree_sha, kset):
+    """Collect SHA1s of files and directories for specified tree.
 
-@
-
-<<[[Pack]] methods>>=
-def __contains__(self, sha1):
-    """Check whether this pack contains a particular SHA1."""
-    try:
-        self.index.object_index(sha1)
-        return True
-    except KeyError:
-        return False
-
-@
-
-<<[[Pack]] methods>>=
-def get_raw(self, sha1):
-    offset = self.index.object_index(sha1)
-    obj_type, obj = self.data.get_object_at(offset)
-    type_num, chunks = self.data.resolve_object(offset, obj_type, obj)
-    return type_num, b''.join(chunks)
-
-@
-
-<<[[Pack]] methods>>=
-def __getitem__(self, sha1):
-    """Retrieve the specified SHA1."""
-    type, uncomp = self.get_raw(sha1)
-    return ShaFile.from_raw_string(type, uncomp, sha=sha1)
-
-@
-
-<<[[Pack]] methods>>=
-def iterobjects(self):
-    """Iterate over the objects in this pack."""
-    return iter(PackInflater.for_pack_data(
-        self.data, resolve_ext_ref=self.resolve_ext_ref))
-
-@
-
-<<[[Pack]] methods>>=
-def pack_tuples(self):
-    """Provide an iterable for use with write_pack_objects.
-
-    :return: Object that can iterate over (object, path) tuples
-        and provides __len__
+    :param obj_store: Object store to get objects by SHA from
+    :param tree_sha: tree reference to walk
+    :param kset: set to fill with references to files and directories
     """
-    class PackTupleIterable(object):
-
-        def __init__(self, pack):
-            self.pack = pack
-
-        def __len__(self):
-            return len(self.pack)
-
-        def __iter__(self):
-            return ((o, None) for o in self.pack.iterobjects())
-
-    return PackTupleIterable(self)
-
+    filetree = obj_store[tree_sha]
+    for name, mode, sha in filetree.iteritems():
+        if not S_ISGITLINK(mode) and sha not in kset:
+            kset.add(sha)
+            if stat.S_ISDIR(mode):
+                _collect_filetree_revs(obj_store, sha, kset)
 @
 
-<<[[Pack]] methods>>=
-def keep(self, msg=None):
-    """Add a .keep file for the pack, preventing git from garbage collecting it.
+<<function object_store._split_commits_and_tags>>=
+def _split_commits_and_tags(obj_store, lst, ignore_unknown=False):
+    """Split object id list into three lists with commit, tag, and other SHAs.
 
-    :param msg: A message written inside the .keep file; can be used later
-        to determine whether or not a .keep file is obsolete.
-    :return: The path of the .keep file, as a string.
+    Commits referenced by tags are included into commits
+    list as well. Only SHA1s known in this repository will get
+    through, and unless ignore_unknown argument is True, KeyError
+    is thrown for SHA1 missing in the repository
+
+    :param obj_store: Object store to get objects by SHA1 from
+    :param lst: Collection of commit and tag SHAs
+    :param ignore_unknown: True to skip SHA1 missing in the repository
+        silently.
+    :return: A tuple of (commits, tags, others) SHA1s
     """
-    keepfile_name = '%s.keep' % self._basename
-    with GitFile(keepfile_name, 'wb') as keepfile:
-        if msg:
-            keepfile.write(msg)
-            keepfile.write(b'\n')
-    return keepfile_name
+    commits = set()
+    tags = set()
+    others = set()
+    for e in lst:
+        try:
+            o = obj_store[e]
+        except KeyError:
+            if not ignore_unknown:
+                raise
+        else:
+            if isinstance(o, Commit):
+                commits.add(e)
+            elif isinstance(o, Tag):
+                tags.add(e)
+                tagged = o.object[1]
+                c, t, o = _split_commits_and_tags(
+                    obj_store, [tagged], ignore_unknown=ignore_unknown)
+                commits |= c
+                tags |= t
+                others |= o
+            else:
+                others.add(e)
+    return (commits, tags, others)
 @
+
+\subsubsection{[[ObjectStoreIterator]]}
+
+<<class ObjectStoreIterator>>=
+class ObjectStoreIterator(ObjectIterator):
+    """ObjectIterator that works on top of an ObjectStore."""
+
+    def __init__(self, store, sha_iter):
+        """Create a new ObjectIterator.
+
+        :param store: Object store to retrieve from
+        :param sha_iter: Iterator over (sha, path) tuples
+        """
+        self.store = store
+        self.sha_iter = sha_iter
+        self._shas = []
+
+    def __iter__(self):
+        """Yield tuple with next object and path."""
+        for sha, path in self.itershas():
+            yield self.store[sha], path
+
+    def iterobjects(self):
+        """Iterate over just the objects."""
+        for o, path in self:
+            yield o
+
+    def itershas(self):
+        """Iterate over the SHAs."""
+        for sha in self._shas:
+            yield sha
+        for sha in self.sha_iter:
+            self._shas.append(sha)
+            yield sha
+
+    def __contains__(self, needle):
+        """Check if an object is present.
+
+        :note: This checks if the object is present in
+            the underlying object store, not if it would
+            be yielded by the iterator.
+
+        :param needle: SHA1 of the object to check for
+        """
+        return needle in self.store
+
+    def __getitem__(self, key):
+        """Find an object by SHA1.
+
+        :note: This retrieves the object from the underlying
+            object store. It will also succeed if the object would
+            not be returned by the iterator.
+        """
+        return self.store[key]
+
+    def __len__(self):
+        """Return the number of objects."""
+        return len(list(self.itershas()))
+@
+
+<<class ObjectIterator>>=
+class ObjectIterator(object):
+    """Interface for iterating over objects."""
+
+    def iterobjects(self):
+        raise NotImplementedError(self.iterobjects)
+@
+
 
 \subsection{[[PackData]]}
 
@@ -6533,8 +7945,179 @@ def get_object_at(self, offset):
     return (unpacked.pack_type_num, unpacked._obj())
 @
 
+<<function read_pack_header>>=
+def read_pack_header(read):
+    """Read the header of a pack file.
+
+    :param read: Read function
+    :return: Tuple of (pack version, number of objects). If no data is
+        available to read, returns (None, None).
+    """
+    header = read(12)
+    if not header:
+        return None, None
+    if header[:4] != b'PACK':
+        raise AssertionError('Invalid pack header %r' % header)
+    (version,) = unpack_from(b'>L', header, 4)
+    if version not in (2, 3):
+        raise AssertionError('Version was %d' % version)
+    (num_objects,) = unpack_from(b'>L', header, 8)
+    return (version, num_objects)
+@
+
+
+\subsection{[[UnpackObject]]}
+
+<<class UnpackedObject>>=
+class UnpackedObject(object):
+    """Class encapsulating an object unpacked from a pack file.
+
+    These objects should only be created from within unpack_object. Most
+    members start out as empty and are filled in at various points by
+    read_zlib_chunks, unpack_object, DeltaChainIterator, etc.
+
+    End users of this object should take care that the function they're getting
+    this object from is guaranteed to set the members they need.
+    """
+
+    __slots__ = [
+      'offset',         # Offset in its pack.
+      '_sha',           # Cached binary SHA.
+      'obj_type_num',   # Type of this object.
+      'obj_chunks',     # Decompressed and delta-resolved chunks.
+      'pack_type_num',  # Type of this object in the pack (may be a delta).
+      'delta_base',     # Delta base offset or SHA.
+      'comp_chunks',    # Compressed object chunks.
+      'decomp_chunks',  # Decompressed object chunks.
+      'decomp_len',     # Decompressed length of this object.
+      'crc32',          # CRC32.
+      ]
+
+    # TODO(dborowitz): read_zlib_chunks and unpack_object could very well be
+    # methods of this object.
+    def __init__(self, pack_type_num, delta_base, decomp_len, crc32):
+        self.offset = None
+        self._sha = None
+        self.pack_type_num = pack_type_num
+        self.delta_base = delta_base
+        self.comp_chunks = None
+        self.decomp_chunks = []
+        self.decomp_len = decomp_len
+        self.crc32 = crc32
+
+        if pack_type_num in DELTA_TYPES:
+            self.obj_type_num = None
+            self.obj_chunks = None
+        else:
+            self.obj_type_num = pack_type_num
+            self.obj_chunks = self.decomp_chunks
+            self.delta_base = delta_base
+
+    def sha(self):
+        """Return the binary SHA of this object."""
+        if self._sha is None:
+            self._sha = obj_sha(self.obj_type_num, self.obj_chunks)
+        return self._sha
+
+    def sha_file(self):
+        """Return a ShaFile from this object."""
+        return ShaFile.from_raw_chunks(self.obj_type_num, self.obj_chunks)
+
+    # Only provided for backwards compatibility with code that expects either
+    # chunks or a delta tuple.
+    def _obj(self):
+        """Return the decompressed chunks, or (delta base, delta chunks)."""
+        if self.pack_type_num in DELTA_TYPES:
+            return (self.delta_base, self.decomp_chunks)
+        else:
+            return self.decomp_chunks
+
+    def __eq__(self, other):
+        if not isinstance(other, UnpackedObject):
+            return False
+        for slot in self.__slots__:
+            if getattr(self, slot) != getattr(other, slot):
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __repr__(self):
+        data = ['%s=%r' % (s, getattr(self, s)) for s in self.__slots__]
+        return '%s(%s)' % (self.__class__.__name__, ', '.join(data))
+@
+
+<<[[ShaFile]] methods>>=
+@staticmethod
+def from_raw_chunks(type_num, chunks, sha=None):
+    """Creates an object of the indicated type from the raw chunks given.
+
+    :param type_num: The numeric type of the object.
+    :param chunks: An iterable of the raw uncompressed contents.
+    :param sha: Optional known sha for the object
+    """
+    obj = object_class(type_num)()
+    obj.set_raw_chunks(chunks, sha)
+    return obj
+@
 
 \subsection{[[PackIndex]]}
+
+<<function pack.load_pack_index>>=
+def load_pack_index(path):
+    """Load an index file by path.
+
+    :param filename: Path to the index file
+    :return: A PackIndex loaded from the given path
+    """
+    with GitFile(path, 'rb') as f:
+        return load_pack_index_file(path, f)
+@
+
+<<function pack.load_pack_index_file>>=
+def load_pack_index_file(path, f):
+    """Load an index file from a file-like object.
+
+    :param path: Path for the index file
+    :param f: File-like object
+    :return: A PackIndex loaded from the given file
+    """
+    contents, size = _load_file_contents(f)
+    if contents[:4] == b'\377tOc':
+        version = struct.unpack(b'>L', contents[4:8])[0]
+        if version == 2:
+            return PackIndex2(
+                path, file=f, contents=contents, size=size)
+        else:
+            raise KeyError('Unknown pack index format %d' % version)
+    else:
+        return PackIndex1(path, file=f, contents=contents, size=size)
+@
+
+<<function pack._load_file_contents>>=
+def _load_file_contents(f, size=None):
+    try:
+        fd = f.fileno()
+    except (UnsupportedOperation, AttributeError):
+        fd = None
+    # Attempt to use mmap if possible
+    if fd is not None:
+        if size is None:
+            size = os.fstat(fd).st_size
+        if has_mmap:
+            try:
+                contents = mmap.mmap(fd, size, access=mmap.ACCESS_READ)
+            except mmap.error:
+                # Perhaps a socket?
+                pass
+            else:
+                return contents, size
+    contents = f.read()
+    size = len(contents)
+    return contents, size
+@
+
 
 <<class PackIndex>>=
 class PackIndex(object):
@@ -6748,7 +8331,322 @@ class FilePackIndex(PackIndex):
 
 @
 
-\subsection{[[git pack-objects]]}
+
+<<function pack.bisect_find_sha>>=
+def bisect_find_sha(start, end, sha, unpack_name):
+    """Find a SHA in a data blob with sorted SHAs.
+
+    :param start: Start index of range to search
+    :param end: End index of range to search
+    :param sha: Sha to find
+    :param unpack_name: Callback to retrieve SHA by index
+    :return: Index of the SHA, or None if it wasn't found
+    """
+    assert start <= end
+    while start <= end:
+        i = (start + end) // 2
+        file_sha = unpack_name(i)
+        if file_sha < sha:
+            start = i + 1
+        elif file_sha > sha:
+            end = i - 1
+        else:
+            return i
+    return None
+@
+
+\subsubsection{Index pack v1}
+
+<<class PackIndex1>>=
+class PackIndex1(FilePackIndex):
+    """Version 1 Pack Index file."""
+
+    def __init__(self, filename, file=None, contents=None, size=None):
+        super(PackIndex1, self).__init__(filename, file, contents, size)
+        self.version = 1
+        self._fan_out_table = self._read_fan_out_table(0)
+
+    def _unpack_entry(self, i):
+        (offset, name) = unpack_from('>L20s', self._contents,
+                                     (0x100 * 4) + (i * 24))
+        return (name, offset, None)
+
+    def _unpack_name(self, i):
+        offset = (0x100 * 4) + (i * 24) + 4
+        return self._contents[offset:offset+20]
+
+    def _unpack_offset(self, i):
+        offset = (0x100 * 4) + (i * 24)
+        return unpack_from('>L', self._contents, offset)[0]
+
+    def _unpack_crc32_checksum(self, i):
+        # Not stored in v1 index files
+        return None
+
+@
+
+<<function write_pack_index_v1>>=
+def write_pack_index_v1(f, entries, pack_checksum):
+    """Write a new pack index file.
+
+    :param f: A file-like object to write to
+    :param entries: List of tuples with object name (sha), offset_in_pack,
+        and crc32_checksum.
+    :param pack_checksum: Checksum of the pack file.
+    :return: The SHA of the written index file
+    """
+    f = SHA1Writer(f)
+    fan_out_table = defaultdict(lambda: 0)
+    for (name, offset, entry_checksum) in entries:
+        fan_out_table[ord(name[:1])] += 1
+    # Fan-out table
+    for i in range(0x100):
+        f.write(struct.pack('>L', fan_out_table[i]))
+        fan_out_table[i+1] += fan_out_table[i]
+    for (name, offset, entry_checksum) in entries:
+        if not (offset <= 0xffffffff):
+            raise TypeError("pack format 1 only supports offsets < 2Gb")
+        f.write(struct.pack('>L20s', offset, name))
+    assert len(pack_checksum) == 20
+    f.write(pack_checksum)
+    return f.write_sha()
+@
+
+\subsubsection{Index pack v2}
+
+<<function write_pack_index>>=
+write_pack_index = write_pack_index_v2
+@
+
+<<class PackIndex2>>=
+class PackIndex2(FilePackIndex):
+    """Version 2 Pack Index file."""
+
+    def __init__(self, filename, file=None, contents=None, size=None):
+        super(PackIndex2, self).__init__(filename, file, contents, size)
+        if self._contents[:4] != b'\377tOc':
+            raise AssertionError('Not a v2 pack index file')
+        (self.version, ) = unpack_from(b'>L', self._contents, 4)
+        if self.version != 2:
+            raise AssertionError('Version was %d' % self.version)
+        self._fan_out_table = self._read_fan_out_table(8)
+        self._name_table_offset = 8 + 0x100 * 4
+        self._crc32_table_offset = self._name_table_offset + 20 * len(self)
+        self._pack_offset_table_offset = (self._crc32_table_offset +
+                                          4 * len(self))
+        self._pack_offset_largetable_offset = (
+            self._pack_offset_table_offset + 4 * len(self))
+
+    def _unpack_entry(self, i):
+        return (self._unpack_name(i), self._unpack_offset(i),
+                self._unpack_crc32_checksum(i))
+
+    def _unpack_name(self, i):
+        offset = self._name_table_offset + i * 20
+        return self._contents[offset:offset+20]
+
+    def _unpack_offset(self, i):
+        offset = self._pack_offset_table_offset + i * 4
+        offset = unpack_from('>L', self._contents, offset)[0]
+        if offset & (2**31):
+            offset = self._pack_offset_largetable_offset + (offset&(2**31-1)) * 8
+            offset = unpack_from('>Q', self._contents, offset)[0]
+        return offset
+
+    def _unpack_crc32_checksum(self, i):
+        return unpack_from('>L', self._contents,
+                           self._crc32_table_offset + i * 4)[0]
+
+@
+
+<<function write_pack_index_v2>>=
+def write_pack_index_v2(f, entries, pack_checksum):
+    """Write a new pack index file.
+
+    :param f: File-like object to write to
+    :param entries: List of tuples with object name (sha), offset_in_pack, and
+        crc32_checksum.
+    :param pack_checksum: Checksum of the pack file.
+    :return: The SHA of the index file written
+    """
+    f = SHA1Writer(f)
+    f.write(b'\377tOc')  # Magic!
+    f.write(struct.pack('>L', 2))
+    fan_out_table = defaultdict(lambda: 0)
+    for (name, offset, entry_checksum) in entries:
+        fan_out_table[ord(name[:1])] += 1
+    # Fan-out table
+    largetable = []
+    for i in range(0x100):
+        f.write(struct.pack(b'>L', fan_out_table[i]))
+        fan_out_table[i+1] += fan_out_table[i]
+    for (name, offset, entry_checksum) in entries:
+        f.write(name)
+    for (name, offset, entry_checksum) in entries:
+        f.write(struct.pack(b'>L', entry_checksum))
+    for (name, offset, entry_checksum) in entries:
+        if offset < 2**31:
+            f.write(struct.pack(b'>L', offset))
+        else:
+            f.write(struct.pack(b'>L', 2**31 + len(largetable)))
+            largetable.append(offset)
+    for offset in largetable:
+        f.write(struct.pack(b'>Q', offset))
+    assert len(pack_checksum) == 20
+    f.write(pack_checksum)
+    return f.write_sha()
+@
+
+\subsection{[[unpack_object()]]}
+
+<<constant pack._ZLIB_BUFSIZE>>=
+_ZLIB_BUFSIZE = 4096
+@
+
+<<function unpack_object>>=
+def unpack_object(read_all, read_some=None, compute_crc32=False,
+                  include_comp=False, zlib_bufsize=_ZLIB_BUFSIZE):
+    """Unpack a Git object.
+
+    :param read_all: Read function that blocks until the number of requested
+        bytes are read.
+    :param read_some: Read function that returns at least one byte, but may not
+        return the number of bytes requested.
+    :param compute_crc32: If True, compute the CRC32 of the compressed data. If
+        False, the returned CRC32 will be None.
+    :param include_comp: If True, include compressed data in the result.
+    :param zlib_bufsize: An optional buffer size for zlib operations.
+    :return: A tuple of (unpacked, unused), where unused is the unused data
+        leftover from decompression, and unpacked in an UnpackedObject with
+        the following attrs set:
+
+        * obj_chunks     (for non-delta types)
+        * pack_type_num
+        * delta_base     (for delta types)
+        * comp_chunks    (if include_comp is True)
+        * decomp_chunks
+        * decomp_len
+        * crc32          (if compute_crc32 is True)
+    """
+    if read_some is None:
+        read_some = read_all
+    if compute_crc32:
+        crc32 = 0
+    else:
+        crc32 = None
+
+    bytes, crc32 = take_msb_bytes(read_all, crc32=crc32)
+    type_num = (bytes[0] >> 4) & 0x07
+    size = bytes[0] & 0x0f
+    for i, byte in enumerate(bytes[1:]):
+        size += (byte & 0x7f) << ((i * 7) + 4)
+
+    raw_base = len(bytes)
+    if type_num == OFS_DELTA:
+        bytes, crc32 = take_msb_bytes(read_all, crc32=crc32)
+        raw_base += len(bytes)
+        if bytes[-1] & 0x80:
+            raise AssertionError
+        delta_base_offset = bytes[0] & 0x7f
+        for byte in bytes[1:]:
+            delta_base_offset += 1
+            delta_base_offset <<= 7
+            delta_base_offset += (byte & 0x7f)
+        delta_base = delta_base_offset
+    elif type_num == REF_DELTA:
+        delta_base = read_all(20)
+        if compute_crc32:
+            crc32 = binascii.crc32(delta_base, crc32)
+        raw_base += 20
+    else:
+        delta_base = None
+
+    unpacked = UnpackedObject(type_num, delta_base, size, crc32)
+    unused = read_zlib_chunks(read_some, unpacked, buffer_size=zlib_bufsize,
+                              include_comp=include_comp)
+    return unpacked, unused
+@
+
+<<function pack.take_msb_bytes>>=
+def take_msb_bytes(read, crc32=None):
+    """Read bytes marked with most significant bit.
+
+    :param read: Read function
+    """
+    ret = []
+    while len(ret) == 0 or ret[-1] & 0x80:
+        b = read(1)
+        if crc32 is not None:
+            crc32 = binascii.crc32(b, crc32)
+        ret.append(ord(b[:1]))
+    return ret, crc32
+@
+
+<<function pack.read_zlib_chunks>>=
+def read_zlib_chunks(read_some, unpacked, include_comp=False,
+                     buffer_size=_ZLIB_BUFSIZE):
+    """Read zlib data from a buffer.
+
+    This function requires that the buffer have additional data following the
+    compressed data, which is guaranteed to be the case for git pack files.
+
+    :param read_some: Read function that returns at least one byte, but may
+        return less than the requested size.
+    :param unpacked: An UnpackedObject to write result data to. If its crc32
+        attr is not None, the CRC32 of the compressed bytes will be computed
+        using this starting CRC32.
+        After this function, will have the following attrs set:
+        * comp_chunks    (if include_comp is True)
+        * decomp_chunks
+        * decomp_len
+        * crc32
+    :param include_comp: If True, include compressed data in the result.
+    :param buffer_size: Size of the read buffer.
+    :return: Leftover unused data from the decompression.
+    :raise zlib.error: if a decompression error occurred.
+    """
+    if unpacked.decomp_len <= -1:
+        raise ValueError('non-negative zlib data stream size expected')
+    decomp_obj = zlib.decompressobj()
+
+    comp_chunks = []
+    decomp_chunks = unpacked.decomp_chunks
+    decomp_len = 0
+    crc32 = unpacked.crc32
+
+    while True:
+        add = read_some(buffer_size)
+        if not add:
+            raise zlib.error('EOF before end of zlib stream')
+        comp_chunks.append(add)
+        decomp = decomp_obj.decompress(add)
+        decomp_len += len(decomp)
+        decomp_chunks.append(decomp)
+        unused = decomp_obj.unused_data
+        if unused:
+            left = len(unused)
+            if crc32 is not None:
+                crc32 = binascii.crc32(add[:-left], crc32)
+            if include_comp:
+                comp_chunks[-1] = add[:-left]
+            break
+        elif crc32 is not None:
+            crc32 = binascii.crc32(add, crc32)
+    if crc32 is not None:
+        crc32 &= 0xffffffff
+
+    if decomp_len != unpacked.decomp_len:
+        raise zlib.error('decompressed data does not match expected size')
+
+    unpacked.crc32 = crc32
+    if include_comp:
+        unpacked.comp_chunks = comp_chunks
+    return unused
+@
+
+\subsection{Pack commands}
+
+\subsubsection{[[git pack-objects]]}
 
 <<function cmd_pack_objects>>=
 class cmd_pack_objects(Command):
@@ -6794,7 +8692,7 @@ def pack_objects(repo, object_ids, packf, idxf, delta_window_size=None):
         write_pack_index(idxf, entries, data_sum)
 @
 
-\subsection{[[git repack]]}
+\subsubsection{[[git repack]]}
 
 <<function cmd_repack>>=
 class cmd_repack(Command):
@@ -6819,7 +8717,7 @@ def repack(repo):
         r.object_store.pack_loose_objects()
 @
 
-\subsection{[[git fetch-pack]]}
+\subsubsection{[[git fetch-pack]]}
 
 <<function cmd_fetch_pack>>=
 class cmd_fetch_pack(Command):
@@ -6836,7 +8734,7 @@ class cmd_fetch_pack(Command):
         client.fetch(path, r, determine_wants)
 @
 
-\subsection{[[git receive-pack]]}
+\subsubsection{[[git receive-pack]]}
 
 <<function cmd_receive_pack>>=
 class cmd_receive_pack(Command):
@@ -6848,8 +8746,8 @@ class cmd_receive_pack(Command):
             gitdir = args[0]
         else:
             gitdir = '.'
-        porcelain.receive_pack(gitdir)
 
+        porcelain.receive_pack(gitdir)
 @
 
 <<function porcelain.receive_pack>>=
@@ -6877,7 +8775,7 @@ def receive_pack(path=".", inf=None, outf=None):
     return 0
 @
 
-\subsection{[[git upload-pack]]}
+\subsubsection{[[git upload-pack]]}
 
 <<function cmd_upload_pack>>=
 class cmd_upload_pack(Command):
@@ -6889,6 +8787,7 @@ class cmd_upload_pack(Command):
             gitdir = args[0]
         else:
             gitdir = '.'
+
         porcelain.upload_pack(gitdir)
 @
 
@@ -6920,6 +8819,10 @@ def upload_pack(path=".", inf=None, outf=None):
 \section{Optimizations}
 
 \subsection{LRU cache}
+
+<<constant lru_cache._null_key>>=
+_null_key = object()
+@
 
 <<class _LRUNode>>=
 class _LRUNode(object):
@@ -7272,7 +9175,10 @@ class LRUSizeCache(LRUCache):
             self._after_cleanup_size = min(after_cleanup_size, self._max_size)
 @
 
-\subsection{fast Import/export}
+\section{Fast Import/export}
+
+% another way to clone a repo?
+%$ git fast-export --all | (cd /empty/repository && git fast-import)
 
 <<class GitFastExporter>>=
 class GitFastExporter(object):
@@ -7702,6 +9608,119 @@ class RenameDetector(object):
 
 @
 
+<<function diff_tree._tree_change_key>>=
+def _tree_change_key(entry):
+    # Sort by old path then new path. If only one exists, use it for both keys.
+    path1 = entry.old.path
+    path2 = entry.new.path
+    if path1 is None:
+        path1 = path2
+    if path2 is None:
+        path2 = path1
+    return (path1, path2)
+@
+
+<<constant diff_tree.MAX_FILES>>=
+MAX_FILES = 200
+@
+
+<<constant diff_tree._MAX_SCORE>>=
+_MAX_SCORE = 100
+@
+
+<<constant diff_tree.RENAME_THRESHOLD>>=
+RENAME_THRESHOLD = 60
+@
+<<constant diff_tree.REWRITE_THRESHOLD>>=
+REWRITE_THRESHOLD = None
+@
+
+<<function diff_tree._similarity_score>>=
+def _similarity_score(obj1, obj2, block_cache=None):
+    """Compute a similarity score for two objects.
+
+    :param obj1: The first object to score.
+    :param obj2: The second object to score.
+    :param block_cache: An optional dict of SHA to block counts to cache
+        results between calls.
+    :return: The similarity score between the two objects, defined as the
+        number of bytes in common between the two objects divided by the
+        maximum size, scaled to the range 0-100.
+    """
+    if block_cache is None:
+        block_cache = {}
+    if obj1.id not in block_cache:
+        block_cache[obj1.id] = _count_blocks(obj1)
+    if obj2.id not in block_cache:
+        block_cache[obj2.id] = _count_blocks(obj2)
+
+    common_bytes = _common_bytes(block_cache[obj1.id], block_cache[obj2.id])
+    max_size = max(obj1.raw_length(), obj2.raw_length())
+    if not max_size:
+        return _MAX_SCORE
+    return int(float(common_bytes) * _MAX_SCORE / max_size)
+@
+
+<<function diff_tree._common_bytes>>=
+def _common_bytes(blocks1, blocks2):
+    """Count the number of common bytes in two block count dicts.
+
+    :param block1: The first dict of block hashcode -> total bytes.
+    :param block2: The second dict of block hashcode -> total bytes.
+    :return: The number of bytes in common between blocks1 and blocks2. This is
+        only approximate due to possible hash collisions.
+    """
+    # Iterate over the smaller of the two dicts, since this is symmetrical.
+    if len(blocks1) > len(blocks2):
+        blocks1, blocks2 = blocks2, blocks1
+    score = 0
+    for block, count1 in blocks1.items():
+        count2 = blocks2.get(block)
+        if count2:
+            score += min(count1, count2)
+    return score
+@
+
+<<constant diff_tree._BLOCK_SIZE>>=
+_BLOCK_SIZE = 64
+@
+
+<<function diff_tree._count_blocks>>=
+def _count_blocks(obj):
+    """Count the blocks in an object.
+
+    Splits the data into blocks either on lines or <=64-byte chunks of lines.
+
+    :param obj: The object to count blocks for.
+    :return: A dict of block hashcode -> total bytes occurring.
+    """
+    block_counts = defaultdict(int)
+    block = BytesIO()
+    n = 0
+
+    # Cache attrs as locals to avoid expensive lookups in the inner loop.
+    block_write = block.write
+    block_seek = block.seek
+    block_truncate = block.truncate
+    block_getvalue = block.getvalue
+
+    for c in chain(*obj.as_raw_chunks()):
+        if sys.version_info[0] == 3:
+            c = c.to_bytes(1, 'big')
+        block_write(c)
+        n += 1
+        if c == b'\n' or n == _BLOCK_SIZE:
+            value = block_getvalue()
+            block_counts[hash(value)] += len(value)
+            block_seek(0)
+            block_truncate()
+            n = 0
+    if n > 0:
+        last_block = block_getvalue()
+        block_counts[hash(last_block)] += len(last_block)
+    return block_counts
+@
+
 \section{Advanced client/server capabilities}
 
 \subsection{Report status}
@@ -7912,206 +9931,6 @@ def _read_side_band64k_data(self, proto, channel_callbacks):
             if cb is not None:
                 cb(pkt)
 
-@
-
-\section{Grafts}
-
-<<[[BaseRepo.__init__()]] grafts>>=
-self._graftpoints = {}
-@
-
-<<[[Repo.__init__()]] grafts>>=
-self._graftpoints = {}
-graft_file = self.get_named_file(os.path.join("info", "grafts"),
-                                 basedir=self.commondir())
-if graft_file:
-    with graft_file:
-        self._graftpoints.update(parse_graftpoints(graft_file))
-graft_file = self.get_named_file("shallow",
-                                 basedir=self.commondir())
-if graft_file:
-    with graft_file:
-        self._graftpoints.update(parse_graftpoints(graft_file))
-@
-
-
-<<[[BaseRepo]] methods>>=
-def _add_graftpoints(self, updated_graftpoints):
-    """Add or modify graftpoints
-
-    :param updated_graftpoints: Dict of commit shas to list of parent shas
-    """
-
-    # Simple validation
-    for commit, parents in updated_graftpoints.items():
-        for sha in [commit] + parents:
-            check_hexsha(sha, 'Invalid graftpoint')
-
-    self._graftpoints.update(updated_graftpoints)
-
-@
-
-<<[[BaseRepo]] methods>>=
-def _remove_graftpoints(self, to_remove=[]):
-    """Remove graftpoints
-
-    :param to_remove: List of commit shas
-    """
-    for sha in to_remove:
-        del self._graftpoints[sha]
-
-@
-
-
-<<function parse_graftpoints>>=
-def parse_graftpoints(graftpoints):
-    """Convert a list of graftpoints into a dict
-
-    :param graftpoints: Iterator of graftpoint lines
-
-    Each line is formatted as:
-        <commit sha1> <parent sha1> [<parent sha1>]*
-
-    Resulting dictionary is:
-        <commit sha1>: [<parent sha1>*]
-
-    https://git.wiki.kernel.org/index.php/GraftPoint
-    """
-    grafts = {}
-    for l in graftpoints:
-        raw_graft = l.split(None, 1)
-
-        commit = raw_graft[0]
-        if len(raw_graft) == 2:
-            parents = raw_graft[1].split()
-        else:
-            parents = []
-
-        for sha in [commit] + parents:
-            check_hexsha(sha, 'Invalid graftpoint')
-
-        grafts[commit] = parents
-    return grafts
-@
-
-<<function serialize_graftpoints>>=
-def serialize_graftpoints(graftpoints):
-    """Convert a dictionary of grafts into string
-
-    The graft dictionary is:
-        <commit sha1>: [<parent sha1>*]
-
-    Each line is formatted as:
-        <commit sha1> <parent sha1> [<parent sha1>]*
-
-    https://git.wiki.kernel.org/index.php/GraftPoint
-
-    """
-    graft_lines = []
-    for commit, parents in graftpoints.items():
-        if parents:
-            graft_lines.append(commit + b' ' + b' '.join(parents))
-        else:
-            graft_lines.append(commit)
-    return b'\n'.join(graft_lines)
-
-@
-
-\section{Submodules}
-
-<<constant S_IFGITLINK>>=
-S_IFGITLINK = 0o160000
-@
-
-<<function objects.S_ISGITLINK>>=
-def S_ISGITLINK(m):
-    """Check if a mode indicates a submodule.
-
-    :param m: Mode to check
-    :return: a ``boolean``
-    """
-    return (stat.S_IFMT(m) == S_IFGITLINK)
-@
-% `` ``
-
-<<class StackedConfig>>=
-class StackedConfig(Config):
-    """Configuration which reads from multiple config files.."""
-
-    <<[[StackedConfig]] methods>>
-@
-
-<<[[StackedConfig]] methods>>=
-def __init__(self, backends, writable=None):
-    self.backends = backends
-    self.writable = writable
-@
-
-
-<<[[StackedConfig]] methods>>=
-@classmethod
-def default_backends(cls):
-    """Retrieve the default configuration.
-
-    See git-config(1) for details on the files searched.
-    """
-    paths = []
-    paths.append(os.path.expanduser("~/.gitconfig"))
-
-    xdg_config_home = os.environ.get(
-        "XDG_CONFIG_HOME", os.path.expanduser("~/.config/"),
-    )
-    paths.append(os.path.join(xdg_config_home, "git", "config"))
-
-    if "GIT_CONFIG_NOSYSTEM" not in os.environ:
-        paths.append("/etc/gitconfig")
-
-    backends = []
-    for path in paths:
-        try:
-            cf = ConfigFile.from_path(path)
-        except (IOError, OSError) as e:
-            if e.errno != errno.ENOENT:
-                raise
-            else:
-                continue
-        backends.append(cf)
-    return backends
-
-@
-
-<<[[StackedConfig]] methods>>=
-def get(self, section, name):
-    for backend in self.backends:
-        try:
-            return backend.get(section, name)
-        except KeyError:
-            pass
-    raise KeyError(name)
-
-@
-
-<<[[StackedConfig]] methods>>=
-def set(self, section, name, value):
-    if self.writable is None:
-        raise NotImplementedError(self.set)
-    return self.writable.set(section, name, value)
-@
-
-<<function config.parse_submodules>>=
-def parse_submodules(config):
-    """Parse a gitmodules GitConfig file, returning submodules.
-
-   :param config: A `ConfigFile`
-   :return: list of tuples (submodule path, url, name),
-       where name is quoted part of the section's name.
-    """
-    for section in config.keys():
-        section_kind, section_name = section
-        if section_kind == b'submodule':
-            sm_path = config.get(section, b'path')
-            sm_url = config.get(section, b'url')
-            yield (sm_path, sm_url, section_name)
 @
 
 \section{Legacy objects}
@@ -8786,248 +10605,6 @@ def iteritems(self, section):
 <<[[ConfigDict]] methods>>=
 def itersections(self):
     return self._values.keys()
-@
-
-\section{hooks, [[.git/hooks/]]}
-
-<<[[BaseRepo.__init__()]] hooks>>=
-self.hooks = {}
-@
-
-<<class Hook>>=
-class Hook(object):
-    """Generic hook object."""
-
-    <<[[Hook]] methods>>
-@
-
-<<[[Hook]] methods>>=
-def execute(self, *args):
-    """Execute the hook with the given args
-
-    :param args: argument list to hook
-    :raise HookError: hook execution failure
-    :return: a hook may return a useful value
-    """
-    raise NotImplementedError(self.execute)
-@
-
-<<class ShellHook>>=
-class ShellHook(Hook):
-    """Hook by executable file
-
-    Implements standard githooks(5) [0]:
-
-    [0] http://www.kernel.org/pub/software/scm/git/docs/githooks.html
-    """
-
-    <<[[ShellHook]] methods>>
-@
-
-<<[[ShellHook]] methods>>=
-def __init__(self, name, path, numparam,
-             pre_exec_callback=None, post_exec_callback=None):
-    """Setup shell hook definition
-
-    :param name: name of hook for error messages
-    :param path: absolute path to executable file
-    :param numparam: number of requirements parameters
-    :param pre_exec_callback: closure for setup before execution
-        Defaults to None. Takes in the variable argument list from the
-        execute functions and returns a modified argument list for the
-        shell hook.
-    :param post_exec_callback: closure for cleanup after execution
-        Defaults to None. Takes in a boolean for hook success and the
-        modified argument list and returns the final hook return value
-        if applicable
-    """
-    self.name = name
-    self.filepath = path
-    self.numparam = numparam
-
-    self.pre_exec_callback = pre_exec_callback
-    self.post_exec_callback = post_exec_callback
-@
-
-%win32:
-%    if sys.version_info[0] == 2 and sys.platform == 'win32':
-%        # Python 2 on windows does not support unicode file paths
-%        # http://bugs.python.org/issue1759845
-%        self.filepath = self.filepath.encode(sys.getfilesystemencoding())
-
-<<[[ShellHook]] methods>>=
-def execute(self, *args):
-    """Execute the hook with given args"""
-
-    if len(args) != self.numparam:
-        raise HookError("Hook %s executed with wrong number of args. \
-                        Expected %d. Saw %d. args: %s"
-                        % (self.name, self.numparam, len(args), args))
-
-    if (self.pre_exec_callback is not None):
-        args = self.pre_exec_callback(*args)
-
-    try:
-        ret = subprocess.call([self.filepath] + list(args))
-        if ret != 0:
-            if (self.post_exec_callback is not None):
-                self.post_exec_callback(0, *args)
-            raise HookError("Hook %s exited with non-zero status"
-                            % (self.name))
-        if (self.post_exec_callback is not None):
-            return self.post_exec_callback(1, *args)
-    except OSError:  # no file. silent failure.
-        if (self.post_exec_callback is not None):
-            self.post_exec_callback(0, *args)
-@
-
-
-<<[[Repo.__init__()]] hooks>>=
-self.hooks['pre-commit'] = PreCommitShellHook(self.controldir())
-self.hooks['commit-msg'] = CommitMsgShellHook(self.controldir())
-self.hooks['post-commit'] = PostCommitShellHook(self.controldir())
-@
-
-
-<<class PreCommitShellHook>>=
-class PreCommitShellHook(ShellHook):
-    """pre-commit shell hook"""
-
-    def __init__(self, controldir):
-        filepath = os.path.join(controldir, 'hooks', 'pre-commit')
-
-        ShellHook.__init__(self, 'pre-commit', filepath, 0)
-@
-
-<<class PostCommitShellHook>>=
-class PostCommitShellHook(ShellHook):
-    """post-commit shell hook"""
-
-    def __init__(self, controldir):
-        filepath = os.path.join(controldir, 'hooks', 'post-commit')
-
-        ShellHook.__init__(self, 'post-commit', filepath, 0)
-@
-
-<<class CommitMsgShellHook>>=
-class CommitMsgShellHook(ShellHook):
-    """commit-msg shell hook
-
-    :param args[0]: commit message
-    :return: new commit message or None
-    """
-
-    def __init__(self, controldir):
-        filepath = os.path.join(controldir, 'hooks', 'commit-msg')
-
-        def prepare_msg(*args):
-            (fd, path) = tempfile.mkstemp()
-
-            with os.fdopen(fd, 'wb') as f:
-                f.write(args[0])
-
-            return (path,)
-
-        def clean_msg(success, *args):
-            if success:
-                with open(args[0], 'rb') as f:
-                    new_msg = f.read()
-                os.unlink(args[0])
-                return new_msg
-            os.unlink(args[0])
-
-        ShellHook.__init__(self, 'commit-msg', filepath, 1,
-                           prepare_msg, clean_msg)
-@
-
-
-
-
-<<[[BaseRepo.do_commit()]] execute pre-commit hook>>=
-try:
-    self.hooks['pre-commit'].execute()
-except HookError as e:
-    raise CommitError(e)
-except KeyError:  # no hook defined, silent fallthrough
-    pass
-@
-
-<<[[BaseRepo.do_commit()]] execute commit-msg hook>>=
-try:
-    c.message = self.hooks['commit-msg'].execute(message)
-    if c.message is None:
-        c.message = message
-except HookError as e:
-    raise CommitError(e)
-except KeyError:  # no hook defined, message not modified
-    c.message = message
-@
-
-<<[[BaseRepo.do_commit()]] execute post-commit hook>>=
-try:
-    self.hooks['post-commit'].execute()
-except HookError as e:  # silent failure
-    warnings.warn("post-commit hook failed: %s" % e, UserWarning)
-except KeyError:  # no hook defined, silent fallthrough
-    pass
-@
-
-\section{Ignore files, [[.gitignore]]}
-
-<<class IgnoreFilter>>=
-class IgnoreFilter(object):
-
-    def __init__(self, patterns):
-        self._patterns = []
-        for pattern in patterns:
-            self.append_pattern(pattern)
-
-    def append_pattern(self, pattern):
-        """Add a pattern to the set."""
-        self._patterns.append(pattern)
-
-    def is_ignored(self, path):
-        """Check whether a path is ignored.
-
-        For directories, include a trailing slash.
-
-        :return: None if file is not mentioned, True if it is included, False
-            if it is explicitly excluded.
-        """
-        status = None
-        for pattern in self._patterns:
-            if pattern[0:1] == b'!':
-                if match_pattern(path, pattern[1:]):
-                    status = False
-            else:
-                if pattern[0:1] == b'\\':
-                    pattern = pattern[1:]
-                if match_pattern(path, pattern):
-                    status = True
-        return status
-
-@
-
-<<class IgnoreFilterStack>>=
-class IgnoreFilterStack(object):
-    """Check for ignore status in multiple filters."""
-
-    def __init__(self, filters):
-        self._filters = filters
-
-    def is_ignored(self, path):
-        """Check whether a path is explicitly included or excluded in ignores.
-
-        :param path: Path to check
-        :return: None if the file is not mentioned, True if it is included,
-            False if it is explicitly excluded.
-        """
-        status = None
-        for filter in self._filters:
-            status = filter.is_ignored(path)
-            if status is not None:
-                return status
-        return status
 @
 
 \section{Other clients}
@@ -9856,6 +11433,24 @@ def ls_tree(repo, tree_ish=None, outstream=sys.stdout, recursive=False,
         list_tree(r.object_store, treeid, "")
 @
 
+<<function object.pretty_format_tree_entry>>=
+def pretty_format_tree_entry(name, mode, hexsha, encoding="utf-8"):
+    """Pretty format tree entry.
+
+    :param name: Name of the directory entry
+    :param mode: Mode of entry
+    :param hexsha: Hexsha of the referenced object
+    :return: string describing the tree entry
+    """
+    if mode & stat.S_IFDIR:
+        kind = "tree"
+    else:
+        kind = "blob"
+    return "%04o %s %s\t%s\n" % (
+            mode, kind, hexsha.decode('ascii'),
+            name.decode(encoding, 'replace'))
+@
+
 \subsection{[[git remote add]]}
 
 <<function cmd_remote>>=
@@ -10331,6 +11926,16 @@ class MemoryObjectStore(BaseObjectStore):
             raise
         else:
             commit()
+@
+
+<<[[ShaFile]] methods>>=
+def copy(self):
+    """Create a new copy of this SHA1 object from its raw string"""
+    obj_class = object_class(self.get_type())
+    return obj_class.from_raw_string(
+        self.get_type(),
+        self.as_raw_string(),
+        self.id)
 @
 
 <<class DictRefsContainer>>=

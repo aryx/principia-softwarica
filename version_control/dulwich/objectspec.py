@@ -1,4 +1,4 @@
-# nw_s: objectspec.py |b6bb400698e521cdd549b050dc00405b#
+# nw_s: objectspec.py |4d954d7e0a2af46baf78989c212f84ba#
 # objectspec.py -- Object specification
 # Copyright (C) 2014 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -123,6 +123,7 @@ def parse_reftuples(lh_container, rh_container, refspecs):
     return ret
 # nw_e: function objectspec.parse_reftuples #
 
+# nw_s: function objectspec.parse_refs |fb48601d86cbf89e1de6db2c3fac8cf8#
 def parse_refs(container, refspecs):
     """Parse a list of refspecs to a list of refs.
 
@@ -138,8 +139,9 @@ def parse_refs(container, refspecs):
     for refspec in refspecs:
         ret.append(parse_ref(container, refspec))
     return ret
+# nw_e: function objectspec.parse_refs #
 
-
+# nw_s: function objectspec.parse_commit_range |0462bc4736b13fdb2d16c5a3c5f7f5d4#
 def parse_commit_range(repo, committishs):
     """Parse a string referring to a range of commits.
 
@@ -152,8 +154,9 @@ def parse_commit_range(repo, committishs):
     committishs = to_bytes(committishs)
     # TODO(jelmer): Support more than a single commit..
     return iter([parse_commit(repo, committishs)])
+# nw_e: function objectspec.parse_commit_range #
 
-
+# nw_s: function objectspec.parse_commit |49a0ab7b752d2e6c086dcd537daa9670#
 def parse_commit(repo, committish):
     """Parse a string referring to a single commit.
 
@@ -165,7 +168,7 @@ def parse_commit(repo, committish):
     """
     committish = to_bytes(committish)
     return repo[committish] # For now..
-
+# nw_e: function objectspec.parse_commit #
 
 # TODO: parse_path_in_tree(), which handles e.g. v1.0:Documentation
 # nw_e: objectspec.py #

@@ -1,4 +1,4 @@
-# nw_s: ignore.py |d501a348e5311a5f3caaaeb771dff773#
+# nw_s: ignore.py |a68825384b83631987254202aa5c5aaf#
 # Copyright (C) 2017 Jelmer Vernooij <jelmer@jelmer.uk>
 #
 # nw_s: dulwich license |4f4806644f741500c5d9caa7c853fdcc#
@@ -26,7 +26,7 @@ For details for the matching rules, see https://git-scm.com/docs/gitignore
 
 import re
 
-
+# nw_s: function ignore.translate |c6e53cd3ed7f23223d1fed94a9369e66#
 def translate(pat):
     """Translate a shell PATTERN to a regular expression.
 
@@ -88,8 +88,9 @@ def translate(pat):
         res = res + b'/?'
 
     return res + b'\Z'
+# nw_e: function ignore.translate #
 
-
+# nw_s: function ignore.read_ignore_patterns |64a8c456b13b0d8c0039e64111107dc3#
 def read_ignore_patterns(f):
     """Read a git ignore file.
 
@@ -114,8 +115,9 @@ def read_ignore_patterns(f):
         l = l.replace(b'\\ ', b' ')
 
         yield l
+# nw_e: function ignore.read_ignore_patterns #
 
-
+# nw_s: function ignore.match_pattern |7b9d17e9979fd8b25e153a9d51581d1c#
 def match_pattern(path, pattern):
     """Match a gitignore-style pattern against a path.
 
@@ -125,6 +127,7 @@ def match_pattern(path, pattern):
     """
     re_pattern = translate(pattern)
     return re.match(re_pattern, path)
+# nw_e: function ignore.match_pattern #
 
 # nw_s: class IgnoreFilter |16cc2137c64dcc5952f71f62d5c135ad#
 class IgnoreFilter(object):

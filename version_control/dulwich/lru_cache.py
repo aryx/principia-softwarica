@@ -1,4 +1,4 @@
-# nw_s: dulwich/lru_cache.py |e22a57838d34c3975cdc683cc21c48ea#
+# nw_s: dulwich/lru_cache.py |361a6720198809ed57cc613f7abdf0c5#
 # lru_cache.py -- Simple LRU cache for dulwich
 # Copyright (C) 2006, 2008 Canonical Ltd
 #
@@ -22,7 +22,9 @@
 # nw_e: dulwich license #
 """A simple least-recently-used (LRU) cache."""
 
+# nw_s: constant lru_cache._null_key |2977e7c42b9216023537b93cdf10d119#
 _null_key = object()
+# nw_e: constant lru_cache._null_key #
 
 # nw_s: class _LRUNode |d5eab47dbd4f9a68e98bfa2faf368638#
 class _LRUNode(object):

@@ -1,4 +1,4 @@
-# nw_s: object_store.py |8e37a3f9f7602dbe430b954b06f82b77#
+# nw_s: object_store.py |2ea4eb84f736f085e0922bf85c20cd81#
 # object_store.py -- Object store for git objects
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
 #                         and others
@@ -97,6 +97,21 @@ class BaseObjectStore(object):
                 if sha not in self and not ref.endswith(b"^{}") and
                 not sha == ZERO_SHA]
     # nw_e: [[BaseObjectStore]] methods #
+    # nw_s: [[BaseObjectStore]] methods |066d76a53ad49f50f8d329aabc543e45#
+    def iter_tree_contents(self, tree_id, include_trees=False):
+        """Iterate the contents of a tree and all subtrees.
+
+        Iteration is depth-first pre-order, as in e.g. os.walk.
+
+        :param tree_id: SHA1 of the tree.
+        :param include_trees: If True, include tree objects in the iteration.
+        :return: Iterator over TreeEntry namedtuples for all the objects in a
+            tree.
+        """
+        for entry, _ in walk_trees(self, tree_id, None):
+            if not stat.S_ISDIR(entry.mode) or include_trees:
+                yield entry
+    # nw_e: [[BaseObjectStore]] methods #
     # nw_s: [[BaseObjectStore]] methods |98853481c6c9785417f791680a972332#
     def add_object(self, obj):
         """Add a single object to this object store.
@@ -104,6 +119,22 @@ class BaseObjectStore(object):
         """
         raise NotImplementedError(self.add_object)
 
+    # nw_e: [[BaseObjectStore]] methods #
+    # nw_s: [[BaseObjectStore]] methods |ec120d182179e281730eac52f69c191c#
+    def tree_changes(self, source, target, want_unchanged=False):
+        """Find the differences between the contents of two trees
+
+        :param source: SHA1 of the source tree
+        :param target: SHA1 of the target tree
+        :param want_unchanged: Whether unchanged files should be reported
+        :return: Iterator over tuples with
+            (oldpath, newpath), (oldmode, newmode), (oldsha, newsha)
+        """
+        for change in tree_changes(self, source, target,
+                                   want_unchanged=want_unchanged):
+            yield ((change.old.path, change.new.path),
+                   (change.old.mode, change.new.mode),
+                   (change.old.sha, change.new.sha))
     # nw_e: [[BaseObjectStore]] methods #
     # nw_s: [[BaseObjectStore]] methods |0324f9adff754db199206f3994e19ac7#
     @property
@@ -126,7 +157,12 @@ class BaseObjectStore(object):
         """
         raise NotImplementedError(self.add_objects)
     # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |674fe36e685252b4c48fd1f253ab11ca#
+    # nw_s: [[BaseObjectStore]] methods |108d55ff4096311de635bda5b2100eee#
+    def contains_loose(self, sha):
+        """Check if a particular object is present by SHA1 and is loose."""
+        raise NotImplementedError(self.contains_loose)
+    # nw_e: [[BaseObjectStore]] methods #
+    # nw_s: [[BaseObjectStore]] methods |b85502719992fedb9340111c7d20ca01#
     def generate_pack_contents(self, have, want, progress=None):
         """Iterate over the contents of a pack file.
 
@@ -135,90 +171,8 @@ class BaseObjectStore(object):
         :param progress: Optional progress reporting method
         """
         return self.iter_shas(self.find_missing_objects(have, want, progress))
-
     # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |6631d7ae475be793e86d9d7669de54f0#
-    def peel_sha(self, sha):
-        """Peel all tags from a SHA.
-
-        :param sha: The object SHA to peel.
-        :return: The fully-peeled SHA1 of a tag object, after peeling all
-            intermediate tags; if the original ref does not point to a tag,
-            this will equal the original SHA1.
-        """
-        obj = self[sha]
-        obj_class = object_class(obj.type_name)
-        while obj_class is Tag:
-            obj_class, sha = obj.object
-            obj = self[sha]
-        return obj
-
-    # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |f5e87d93be65cdfb695401f0a5a83abe#
-    def iter_shas(self, shas):
-        """Iterate over the objects for the specified shas.
-
-        :param shas: Iterable object with SHAs
-        :return: Object iterator
-        """
-        return ObjectStoreIterator(self, shas)
-
-    # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |8333a1f1c872e88ddbde11fa3acb38bd#
-    def contains_loose(self, sha):
-        """Check if a particular object is present by SHA1 and is loose."""
-        raise NotImplementedError(self.contains_loose)
-
-    # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |d86372a7b6eced53c332e0e6e0822225#
-    def __contains__(self, sha):
-        """Check if a particular object is present by SHA1.
-
-        This method makes no distinction between loose and packed objects.
-        """
-        return self.contains_packed(sha) or self.contains_loose(sha)
-
-    # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |b4c081c28ea7116e32c0e7bca1358e6b#
-    def __iter__(self):
-        """Iterate over the SHAs that are present in this store."""
-        raise NotImplementedError(self.__iter__)
-
-    # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |35c69baf3c315c2c96574fc639adc66c#
-    def tree_changes(self, source, target, want_unchanged=False):
-        """Find the differences between the contents of two trees
-
-        :param source: SHA1 of the source tree
-        :param target: SHA1 of the target tree
-        :param want_unchanged: Whether unchanged files should be reported
-        :return: Iterator over tuples with
-            (oldpath, newpath), (oldmode, newmode), (oldsha, newsha)
-        """
-        for change in tree_changes(self, source, target,
-                                   want_unchanged=want_unchanged):
-            yield ((change.old.path, change.new.path),
-                   (change.old.mode, change.new.mode),
-                   (change.old.sha, change.new.sha))
-
-    # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |8a26a8c50308a23f13e0923429210e28#
-    def iter_tree_contents(self, tree_id, include_trees=False):
-        """Iterate the contents of a tree and all subtrees.
-
-        Iteration is depth-first pre-order, as in e.g. os.walk.
-
-        :param tree_id: SHA1 of the tree.
-        :param include_trees: If True, include tree objects in the iteration.
-        :return: Iterator over TreeEntry namedtuples for all the objects in a
-            tree.
-        """
-        for entry, _ in walk_trees(self, tree_id, None):
-            if not stat.S_ISDIR(entry.mode) or include_trees:
-                yield entry
-
-    # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |174923ce5df8083c3f0f915a33dfbccf#
+    # nw_s: [[BaseObjectStore]] methods |55f6bb08e6466a4d191bfb6c55a03a6f#
     def find_missing_objects(self, haves, wants, progress=None,
                              get_tagged=None,
                              get_parents=lambda commit: commit.parents):
@@ -237,26 +191,17 @@ class BaseObjectStore(object):
         finder = MissingObjectFinder(self, haves, wants, progress, get_tagged,
                                      get_parents=get_parents)
         return iter(finder.next, None)
-
     # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |922c9b8bc3bb6d48cd11ac9b5383326c#
-    def find_common_revisions(self, graphwalker):
-        """Find which revisions this store has in common using graphwalker.
+    # nw_s: [[BaseObjectStore]] methods |6febde8916adcd43cbc3faa6164d94d7#
+    def iter_shas(self, shas):
+        """Iterate over the objects for the specified shas.
 
-        :param graphwalker: A graphwalker object.
-        :return: List of SHAs that are in common
+        :param shas: Iterable object with SHAs
+        :return: Object iterator
         """
-        haves = []
-        sha = next(graphwalker)
-        while sha:
-            if sha in self:
-                haves.append(sha)
-                graphwalker.ack(sha)
-            sha = next(graphwalker)
-        return haves
-
+        return ObjectStoreIterator(self, shas)
     # nw_e: [[BaseObjectStore]] methods #
-    # nw_s: [[BaseObjectStore]] methods |dadc49bb8034def6533f20ccfbf1d483#
+    # nw_s: [[BaseObjectStore]] methods |5eb73c7212a896c052ba1da6908048e4#
     def _collect_ancestors(self, heads, common=set(),
                            get_parents=lambda commit: commit.parents):
         """Collect all ancestors of heads up to (excluding) those in common.
@@ -283,12 +228,58 @@ class BaseObjectStore(object):
                 cmt = self[e]
                 queue.extend(get_parents(cmt))
         return (commits, bases)
+    # nw_e: [[BaseObjectStore]] methods #
+    # nw_s: [[BaseObjectStore]] methods |6631d7ae475be793e86d9d7669de54f0#
+    def peel_sha(self, sha):
+        """Peel all tags from a SHA.
+
+        :param sha: The object SHA to peel.
+        :return: The fully-peeled SHA1 of a tag object, after peeling all
+            intermediate tags; if the original ref does not point to a tag,
+            this will equal the original SHA1.
+        """
+        obj = self[sha]
+        obj_class = object_class(obj.type_name)
+        while obj_class is Tag:
+            obj_class, sha = obj.object
+            obj = self[sha]
+        return obj
+
+    # nw_e: [[BaseObjectStore]] methods #
+    # nw_s: [[BaseObjectStore]] methods |75c1e8d5d4a418bee00b563af51c107c#
+    def __contains__(self, sha):
+        """Check if a particular object is present by SHA1.
+
+        This method makes no distinction between loose and packed objects.
+        """
+        return self.contains_packed(sha) or self.contains_loose(sha)
+    # nw_e: [[BaseObjectStore]] methods #
+    # nw_s: [[BaseObjectStore]] methods |b4c081c28ea7116e32c0e7bca1358e6b#
+    def __iter__(self):
+        """Iterate over the SHAs that are present in this store."""
+        raise NotImplementedError(self.__iter__)
 
     # nw_e: [[BaseObjectStore]] methods #
     # nw_s: [[BaseObjectStore]] methods |5629abfd8ab10d1dbb6ff05ca12b80ff#
     def close(self):
         """Close any files opened by this object store."""
         # Default implementation is a NO-OP
+    # nw_e: [[BaseObjectStore]] methods #
+    # nw_s: [[BaseObjectStore]] methods |4d5dffb38c4d47455876d58128011ad9#
+    def find_common_revisions(self, graphwalker):
+        """Find which revisions this store has in common using graphwalker.
+
+        :param graphwalker: A graphwalker object.
+        :return: List of SHAs that are in common
+        """
+        haves = []
+        sha = next(graphwalker)
+        while sha:
+            if sha in self:
+                haves.append(sha)
+                graphwalker.ack(sha)
+            sha = next(graphwalker)
+        return haves
     # nw_e: [[BaseObjectStore]] methods #
 # nw_e: class BaseObjectStore #
 
@@ -400,23 +391,12 @@ class PackBasedObjectStore(BaseObjectStore):
                 yield alternate_object
 
     # nw_e: [[PackBasedObjectStore]] methods #
-    # nw_s: [[PackBasedObjectStore]] methods |10b5358e4c75ab726bd9289ddac25db5#
-    def _iter_loose_objects(self):
-        """Iterate over the SHAs of all loose objects."""
-        raise NotImplementedError(self._iter_loose_objects)
-
-    # nw_e: [[PackBasedObjectStore]] methods #
     # nw_s: [[PackBasedObjectStore]] methods |0168eabb2dc894975e91f35d4256555d#
     def _get_loose_object(self, sha):
         raise NotImplementedError(self._get_loose_object)
 
     # nw_e: [[PackBasedObjectStore]] methods #
-    # nw_s: [[PackBasedObjectStore]] methods |c66a644c6ff75d086f6fcb326c3ca543#
-    def _remove_loose_object(self, sha):
-        raise NotImplementedError(self._remove_loose_object)
-
-    # nw_e: [[PackBasedObjectStore]] methods #
-    # nw_s: [[PackBasedObjectStore]] methods |258fbdb89b55d570d44b5e3f9e913b71#
+    # nw_s: [[PackBasedObjectStore]] methods |c866fbc63ea3a65f3fe327ef7c243438#
     def pack_loose_objects(self):
         """Pack loose objects.
 
@@ -429,7 +409,15 @@ class PackBasedObjectStore(BaseObjectStore):
         for obj, path in objects:
             self._remove_loose_object(obj.id)
         return len(objects)
-
+    # nw_e: [[PackBasedObjectStore]] methods #
+    # nw_s: [[PackBasedObjectStore]] methods |f0d498e1d1ec6c200b93e75dcf6863ee#
+    def _iter_loose_objects(self):
+        """Iterate over the SHAs of all loose objects."""
+        raise NotImplementedError(self._iter_loose_objects)
+    # nw_e: [[PackBasedObjectStore]] methods #
+    # nw_s: [[PackBasedObjectStore]] methods |7da121568d5a64b23312b126ea78f9ba#
+    def _remove_loose_object(self, sha):
+        raise NotImplementedError(self._remove_loose_object)
     # nw_e: [[PackBasedObjectStore]] methods #
     # nw_s: [[PackBasedObjectStore]] methods |6fa3216fb1acb1809f285f6b58a9fb66#
     def add_objects(self, objects):
@@ -460,14 +448,13 @@ class PackBasedObjectStore(BaseObjectStore):
         return chain(*iterables)
 
     # nw_e: [[PackBasedObjectStore]] methods #
-    # nw_s: [[PackBasedObjectStore]] methods |9b6b517a7cd904bc5fbe6e8e765f7c71#
+    # nw_s: [[PackBasedObjectStore]] methods |10025ef61cc7725f1f5913fa596500bd#
     def contains_loose(self, sha):
         """Check if a particular object is present by SHA1 and is loose.
 
         This does not check alternates.
         """
         return self._get_loose_object(sha) is not None
-
     # nw_e: [[PackBasedObjectStore]] methods #
     # nw_s: [[PackBasedObjectStore]] methods |0236256bad5e5df006257e11e6470fc7#
     def __init__(self):
@@ -552,6 +539,18 @@ class DiskObjectStore(PackBasedObjectStore):
         with GitFile(path, 'wb') as f:
             f.write(obj.as_legacy_object())
     # nw_e: [[DiskObjectStore]] methods #
+    # nw_s: [[DiskObjectStore]] methods |79c897efe02af137762f7420784f0e4b#
+    def _iter_loose_objects(self):
+        for base in os.listdir(self.path):
+            if len(base) != 2:
+                continue
+            for rest in os.listdir(os.path.join(self.path, base)):
+                yield (base+rest).encode(sys.getfilesystemencoding())
+    # nw_e: [[DiskObjectStore]] methods #
+    # nw_s: [[DiskObjectStore]] methods |ba8f486248a4c00fa2b01137a29e5d02#
+    def _remove_loose_object(self, sha):
+        os.remove(self._get_shafile_path(sha))
+    # nw_e: [[DiskObjectStore]] methods #
     # nw_s: [[DiskObjectStore]] methods |279c36eb205e7916a242474c1f4e497e#
     def _update_pack_cache(self):
         try:
@@ -593,13 +592,12 @@ class DiskObjectStore(PackBasedObjectStore):
             raise
 
     # nw_e: [[DiskObjectStore]] methods #
-    # nw_s: [[DiskObjectStore]] methods |805f32405a8412240897044a45a355ff#
+    # nw_s: [[DiskObjectStore]] methods |5776e0180ec6c1c9a07a2ef0dd68b62d#
     def _get_pack_basepath(self, entries):
         suffix = iter_sha1(entry[0] for entry in entries)
         # TODO: Handle self.pack_dir being bytes
         suffix = suffix.decode('ascii')
         return os.path.join(self.pack_dir, "pack-" + suffix)
-
     # nw_e: [[DiskObjectStore]] methods #
     # nw_s: [[DiskObjectStore]] methods |8ab15146a9b9355ed6cf44a58c3d2495#
     def move_in_pack(self, path):
@@ -790,20 +788,6 @@ class DiskObjectStore(PackBasedObjectStore):
     def __repr__(self):
         return "<%s(%r)>" % (self.__class__.__name__, self.path)
     # nw_e: [[DiskObjectStore]] methods #
-    # nw_s: [[DiskObjectStore]] methods |132cf5fad206c7c08260c2a771e4bd9f#
-    def _iter_loose_objects(self):
-        for base in os.listdir(self.path):
-            if len(base) != 2:
-                continue
-            for rest in os.listdir(os.path.join(self.path, base)):
-                yield (base+rest).encode(sys.getfilesystemencoding())
-
-    # nw_e: [[DiskObjectStore]] methods #
-    # nw_s: [[DiskObjectStore]] methods |a86be7000c4f1731b1b60abfa5d99dbd#
-    def _remove_loose_object(self, sha):
-        os.remove(self._get_shafile_path(sha))
-
-    # nw_e: [[DiskObjectStore]] methods #
 # nw_e: class DiskObjectStore #
 
 # nw_s: class MemoryObjectStore |279537b9abd6be5a90c074be184dbf69#
@@ -939,6 +923,7 @@ class MemoryObjectStore(BaseObjectStore):
             commit()
 # nw_e: class MemoryObjectStore #
 
+# nw_s: class ObjectImporter |c78a510ae4e1736ffd5b9edf496aec8d#
 class ObjectImporter(object):
     """Interface for importing objects."""
 
@@ -956,15 +941,17 @@ class ObjectImporter(object):
     def finish(self, object):
         """Finish the import and write objects to disk."""
         raise NotImplementedError(self.finish)
+# nw_e: class ObjectImporter #
 
-
+# nw_s: class ObjectIterator |e6fac778a96c6149d92443f52a76513f#
 class ObjectIterator(object):
     """Interface for iterating over objects."""
 
     def iterobjects(self):
         raise NotImplementedError(self.iterobjects)
+# nw_e: class ObjectIterator #
 
-
+# nw_s: class ObjectStoreIterator |4f720b65e5cdd6e5c127a93366930a23#
 class ObjectStoreIterator(ObjectIterator):
     """ObjectIterator that works on top of an ObjectStore."""
 
@@ -1019,8 +1006,9 @@ class ObjectStoreIterator(ObjectIterator):
     def __len__(self):
         """Return the number of objects."""
         return len(list(self.itershas()))
+# nw_e: class ObjectStoreIterator #
 
-
+# nw_s: function object_store.tree_lookup_path |2ae878910ec6c03dae6df48e4bd7afa9#
 def tree_lookup_path(lookup_obj, root_sha, path):
     """Look up an object in a Git tree.
 
@@ -1033,8 +1021,9 @@ def tree_lookup_path(lookup_obj, root_sha, path):
     if not isinstance(tree, Tree):
         raise NotTreeError(root_sha)
     return tree.lookup_path(lookup_obj, path)
+# nw_e: function object_store.tree_lookup_path #
 
-
+# nw_s: function object_store._collect_filetree_revs |c4179ede6ca01e9286a88fdf4f7ebdc6#
 def _collect_filetree_revs(obj_store, tree_sha, kset):
     """Collect SHA1s of files and directories for specified tree.
 
@@ -1048,8 +1037,9 @@ def _collect_filetree_revs(obj_store, tree_sha, kset):
             kset.add(sha)
             if stat.S_ISDIR(mode):
                 _collect_filetree_revs(obj_store, sha, kset)
+# nw_e: function object_store._collect_filetree_revs #
 
-
+# nw_s: function object_store._split_commits_and_tags |724d0a1a12dfb6cc75c19a2159a5c76d#
 def _split_commits_and_tags(obj_store, lst, ignore_unknown=False):
     """Split object id list into three lists with commit, tag, and other SHAs.
 
@@ -1087,8 +1077,9 @@ def _split_commits_and_tags(obj_store, lst, ignore_unknown=False):
             else:
                 others.add(e)
     return (commits, tags, others)
+# nw_e: function object_store._split_commits_and_tags #
 
-
+# nw_s: class MissingObjectFinder |0ff5d848767b60fa12941ee066df74b0#
 class MissingObjectFinder(object):
     """Find the objects missing from another object store.
 
@@ -1182,8 +1173,9 @@ class MissingObjectFinder(object):
         return (sha, name)
 
     __next__ = next
+# nw_e: class MissingObjectFinder #
 
-
+# nw_s: class ObjectStoreGraphWalker |146034f3f462624249a79c920c4954db#
 class ObjectStoreGraphWalker(object):
     """Graph walker that finds what commits are missing from an object store.
 
@@ -1239,4 +1231,5 @@ class ObjectStoreGraphWalker(object):
         return None
 
     __next__ = next
+# nw_e: class ObjectStoreGraphWalker #
 # nw_e: object_store.py #

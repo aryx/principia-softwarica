@@ -282,6 +282,20 @@ class BaseRepo(object):
         self._put_named_file(os.path.join('info', 'exclude'), b'')
 
     # nw_e: [[BaseRepo]] methods #
+    # nw_s: [[BaseRepo]] methods |bb79ef4273920ccc9efded43a31160a6#
+    def get_graph_walker(self, heads=None):
+        """Retrieve a graph walker.
+
+        A graph walker is used by a remote repository (or proxy)
+        to find out which objects are present in this repository.
+
+        :param heads: Repository heads to use (optional)
+        :return: A graph walker object
+        """
+        if heads is None:
+            heads = self.refs.as_dict(b'refs/heads').values()
+        return ObjectStoreGraphWalker(heads, self.get_parents)
+    # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |189a345b4fdd173659a7cbb7ec6d8355#
     def do_commit(self, message=None, committer=None,
                   author=None, commit_timestamp=None,
@@ -490,7 +504,7 @@ class BaseRepo(object):
         raise NotImplementedError(self.open_index)
 
     # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |d8973edd8e054c14b17dafb70a6a0fa9#
+    # nw_s: [[BaseRepo]] methods |9d2cf566a2c68a14f86cde11f6b43b00#
     def fetch(self, target, determine_wants=None, progress=None):
         """Fetch objects into another repository.
 
@@ -506,7 +520,6 @@ class BaseRepo(object):
             self.fetch_objects(determine_wants, target.get_graph_walker(),
                                progress))
         return self.get_refs()
-
     # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |7583b30773dcaad7a5702842c9ece1bd#
     def fetch_objects(self, determine_wants, graph_walker, progress,
@@ -563,21 +576,6 @@ class BaseRepo(object):
               haves, wants, progress,
               get_tagged,
               get_parents=get_parents))
-
-    # nw_e: [[BaseRepo]] methods #
-    # nw_s: [[BaseRepo]] methods |9f54332b850f93cfe7dd8252ee6d449e#
-    def get_graph_walker(self, heads=None):
-        """Retrieve a graph walker.
-
-        A graph walker is used by a remote repository (or proxy)
-        to find out which objects are present in this repository.
-
-        :param heads: Repository heads to use (optional)
-        :return: A graph walker object
-        """
-        if heads is None:
-            heads = self.refs.as_dict(b'refs/heads').values()
-        return ObjectStoreGraphWalker(heads, self.get_parents)
 
     # nw_e: [[BaseRepo]] methods #
     # nw_s: [[BaseRepo]] methods |80d2348cbd693838ae89003f09a3c712#
@@ -881,6 +879,28 @@ class Repo(BaseRepo):
         with GitFile(os.path.join(self.controldir(), path), 'wb') as f:
             f.write(contents)
     # nw_e: [[Repo]] methods #
+    # nw_s: [[Repo]] methods |1aaf18aed700022316330dc8733ce71c#
+    def reset_index(self, tree=None):
+        """Reset the index back to a specific tree.
+
+        :param tree: Tree SHA to reset to, None for current HEAD tree.
+        """
+        from dulwich.index import (
+            build_index_from_tree,
+            validate_path_element_default,
+            validate_path_element_ntfs,
+            )
+        if tree is None:
+            tree = self[b'HEAD'].tree
+        config = self.get_config()
+        honor_filemode = config.get_boolean(
+            'core', 'filemode', os.name != "nt")
+        validate_path_element = validate_path_element_default
+        return build_index_from_tree(
+            self.path, self.index_path(), self.object_store, tree,
+            honor_filemode=honor_filemode,
+            validate_path_element=validate_path_element)
+    # nw_e: [[Repo]] methods #
     # nw_s: [[Repo]] methods |183df170a5d5d17145a45617459abcf2#
     def open_index(self):
         """Open the index for this repository.
@@ -944,28 +964,6 @@ class Repo(BaseRepo):
                 self.object_store.add_object(blob)
                 index[tree_path] = index_entry_from_stat(st, blob.id, 0)
         index.write()
-    # nw_e: [[Repo]] methods #
-    # nw_s: [[Repo]] methods |1aaf18aed700022316330dc8733ce71c#
-    def reset_index(self, tree=None):
-        """Reset the index back to a specific tree.
-
-        :param tree: Tree SHA to reset to, None for current HEAD tree.
-        """
-        from dulwich.index import (
-            build_index_from_tree,
-            validate_path_element_default,
-            validate_path_element_ntfs,
-            )
-        if tree is None:
-            tree = self[b'HEAD'].tree
-        config = self.get_config()
-        honor_filemode = config.get_boolean(
-            'core', 'filemode', os.name != "nt")
-        validate_path_element = validate_path_element_default
-        return build_index_from_tree(
-            self.path, self.index_path(), self.object_store, tree,
-            honor_filemode=honor_filemode,
-            validate_path_element=validate_path_element)
     # nw_e: [[Repo]] methods #
     # nw_s: [[Repo]] methods |49d7ccc33bcee41200f87cc32cbb9d7e#
     def get_config(self):

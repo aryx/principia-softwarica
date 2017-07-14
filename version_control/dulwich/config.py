@@ -1,4 +1,4 @@
-# nw_s: dulwich/config.py |804f8f5ca1e4933e67b4667554ccf2e4#
+# nw_s: dulwich/config.py |ff99d5c193771c127a729a8059be1e02#
 # config.py - Reading and writing Git config files
 # Copyright (C) 2011-2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -35,7 +35,6 @@ from collections import (
     OrderedDict,
     MutableMapping,
     )
-
 
 from dulwich.file import GitFile
 

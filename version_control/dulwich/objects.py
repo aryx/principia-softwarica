@@ -1,4 +1,4 @@
-# nw_s: dulwich/objects.py |fc79ec4eb9e71f242cc773c11e5c6d2a#
+# nw_s: dulwich/objects.py |3838a29a832cd2dd0ebf5285175bbf26#
 # objects.py -- Access to base git objects
 # Copyright (C) 2007 James Westby <jw+debian@jameswestby.net>
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
@@ -146,13 +146,12 @@ def filename_to_hex(filename):
     return hex
 # nw_e: function filename_to_hex #
 
-
-
-
+# nw_s: function objects.object_header |b1ab1c56d35b72ec72a14bbe143f5800#
 def object_header(num_type, length):
     """Return an object header for the given numeric type and text length."""
     return (object_class(num_type).type_name +
             b' ' + str(length).encode('ascii') + b'\0')
+# nw_e: function objects.object_header #
 
 # nw_s: function serializable_property |fe7d281f7ae936f697d0d4a8cb88d8fe#
 def serializable_property(name, docstring=None):
@@ -208,12 +207,13 @@ def check_identity(identity, error_msg):
         raise ObjectFormatException(error_msg)
 # nw_e: function objects.check_identity #
 
-
+# nw_s: function objects.git_line |632080916258f4566c5da77cfc2abb64#
 def git_line(*items):
     """Formats items into a space sepreated line."""
     return b' '.join(items) + b'\n'
+# nw_e: function objects.git_line #
 
-
+# nw_s: class FixedSha |852327e1d902f05ca0317ea6adf6f621#
 class FixedSha(object):
     """SHA object that behaves like hashlib's but is given a fixed value."""
 
@@ -234,6 +234,7 @@ class FixedSha(object):
     def hexdigest(self):
         """Return the hex SHA digest."""
         return self._hexsha.decode('ascii')
+# nw_e: class FixedSha #
 
 # nw_s: class ShaFile |0fbe504d96a57540b87cd61ed5c37772#
 class ShaFile(object):
@@ -271,9 +272,13 @@ class ShaFile(object):
         return self._sha
 
     # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |bc04d579d28b964932ad3150708a2334#
-    def _header(self):
-        return object_header(self.type_num, self.raw_length())
+    # nw_s: [[ShaFile]] methods |22a938d36e23662a51c25d796c12e029#
+    def raw_length(self):
+        """Returns the length of the raw string of this object."""
+        ret = 0
+        for chunk in self.as_raw_chunks():
+            ret += len(chunk)
+        return ret
     # nw_e: [[ShaFile]] methods #
     # nw_s: [[ShaFile]] methods |3942ad35f4eebc4b5b543760bef8d6c3#
     def check(self):
@@ -430,10 +435,35 @@ class ShaFile(object):
         return obj
 
     # nw_e: [[ShaFile]] methods #
+    # nw_s: [[ShaFile]] methods |76befcde88811130c00aab0bb6cb423a#
+    @classmethod
+    def from_string(cls, string):
+        """Create a ShaFile from a string."""
+        obj = cls()
+        obj.set_raw_string(string)
+        return obj
+    # nw_e: [[ShaFile]] methods #
+    # nw_s: [[ShaFile]] methods |bc04d579d28b964932ad3150708a2334#
+    def _header(self):
+        return object_header(self.type_num, self.raw_length())
+    # nw_e: [[ShaFile]] methods #
     # nw_s: [[ShaFile]] methods |5e2f08e0e6a9358233cca0163a1d6759#
     def _serialize(self):
         raise NotImplementedError(self._serialize)
 
+    # nw_e: [[ShaFile]] methods #
+    # nw_s: [[ShaFile]] methods |e62ff903050448bb761aac46750f45b3#
+    @staticmethod
+    def from_raw_chunks(type_num, chunks, sha=None):
+        """Creates an object of the indicated type from the raw chunks given.
+
+        :param type_num: The numeric type of the object.
+        :param chunks: An iterable of the raw uncompressed contents.
+        :param sha: Optional known sha for the object
+        """
+        obj = object_class(type_num)()
+        obj.set_raw_chunks(chunks, sha)
+        return obj
     # nw_e: [[ShaFile]] methods #
     # nw_s: [[ShaFile]] methods |1d171b56fc6a79d0b1b6a6bef8faaa78#
     @classmethod
@@ -499,6 +529,15 @@ class ShaFile(object):
     def __repr__(self):
         return "<%s %s>" % (self.__class__.__name__, self.id)
     # nw_e: [[ShaFile]] methods #
+    # nw_s: [[ShaFile]] methods |c3b3c22275a1b5c565414e0fd1d03733#
+    def copy(self):
+        """Create a new copy of this SHA1 object from its raw string"""
+        obj_class = object_class(self.get_type())
+        return obj_class.from_raw_string(
+            self.get_type(),
+            self.as_raw_string(),
+            self.id)
+    # nw_e: [[ShaFile]] methods #
     # nw_s: [[ShaFile]] methods |8b8ade229d1c62f5e1f6e7682efef28b#
     def __str__(self):
         """Return raw string serialization of this object."""
@@ -511,53 +550,10 @@ class ShaFile(object):
         return hash(self.id)
 
     # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |593aeccb068cc1ce523f66a51f733d77#
+    # nw_s: [[ShaFile]] methods |3946ec3b951574fecedd38a92357708a#
     def as_pretty_string(self):
         """Return a string representing this object, fit for display."""
         return self.as_raw_string()
-
-    # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |dea703bb68701f6fadd7b9b7578a91bb#
-    @staticmethod
-    def from_raw_chunks(type_num, chunks, sha=None):
-        """Creates an object of the indicated type from the raw chunks given.
-
-        :param type_num: The numeric type of the object.
-        :param chunks: An iterable of the raw uncompressed contents.
-        :param sha: Optional known sha for the object
-        """
-        obj = object_class(type_num)()
-        obj.set_raw_chunks(chunks, sha)
-        return obj
-
-    # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |4e39a2996ca82b8da27c655fb1fb4e91#
-    @classmethod
-    def from_string(cls, string):
-        """Create a ShaFile from a string."""
-        obj = cls()
-        obj.set_raw_string(string)
-        return obj
-
-    # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |cf9d6c3f0d741a4b83817b3f15eaed4c#
-    def raw_length(self):
-        """Returns the length of the raw string of this object."""
-        ret = 0
-        for chunk in self.as_raw_chunks():
-            ret += len(chunk)
-        return ret
-
-    # nw_e: [[ShaFile]] methods #
-    # nw_s: [[ShaFile]] methods |8c4e48d26173aee3c007f15cd474baad#
-    def copy(self):
-        """Create a new copy of this SHA1 object from its raw string"""
-        obj_class = object_class(self.get_type())
-        return obj_class.from_raw_string(
-            self.get_type(),
-            self.as_raw_string(),
-            self.id)
-
     # nw_e: [[ShaFile]] methods #
     # nw_s: [[ShaFile]] methods |639e961afb8c2c8778cc97cfa742b19e#
     def __ne__(self, other):
@@ -755,15 +751,6 @@ class Tag(ShaFile):
     __slots__ = ('_tag_timezone_neg_utc', '_name', '_object_sha',
                  '_object_class', '_tag_time', '_tag_timezone',
                  '_tagger', '_message')
-    # nw_s: [[Tag]] methods |2c5f4a720b17e14994def89838f5c222#
-    @classmethod
-    def from_path(cls, filename):
-        tag = ShaFile.from_path(filename)
-        if not isinstance(tag, cls):
-            raise NotTagError(filename)
-        return tag
-
-    # nw_e: [[Tag]] methods #
     # nw_s: [[Tag]] methods |3092715d5039a061b615cfec02884d1f#
     def __init__(self):
         super(Tag, self).__init__()
@@ -901,6 +888,15 @@ class Tag(ShaFile):
         return chunks
 
     # nw_e: [[Tag]] methods #
+    # nw_s: [[Tag]] methods |2c5f4a720b17e14994def89838f5c222#
+    @classmethod
+    def from_path(cls, filename):
+        tag = ShaFile.from_path(filename)
+        if not isinstance(tag, cls):
+            raise NotTagError(filename)
+        return tag
+
+    # nw_e: [[Tag]] methods #
 
 # nw_e: class Tag #
 
@@ -955,7 +951,7 @@ def serialize_tree(items):
         yield ("%04o" % mode).encode('ascii') + b' ' + name + b'\0' + hex_to_sha(hexsha)
 # nw_e: function object.serialize_tree #
 
-
+# nw_s: function object.sorted_tree_items |48834d606081ee2c5788f105687db88b#
 def sorted_tree_items(entries, name_order):
     """Iterate over a tree entries dictionary.
 
@@ -973,8 +969,9 @@ def sorted_tree_items(entries, name_order):
         if not isinstance(hexsha, bytes):
             raise TypeError('Expected bytes for SHA, got %r' % hexsha)
         yield TreeEntry(name, mode, hexsha)
+# nw_e: function object.sorted_tree_items #
 
-
+# nw_s: function object.key_entry |0af0236b15518e39ee0c187755652713#
 def key_entry(entry):
     """Sort key for tree entry.
 
@@ -984,13 +981,16 @@ def key_entry(entry):
     if stat.S_ISDIR(value[0]):
         name += b'/'
     return name
+# nw_e: function object.key_entry #
 
-
+# nw_s: function object.key_entry_name_order |a983934ef28df7cd492c3407dbba22e8#
 def key_entry_name_order(entry):
     """Sort key for tree entry in name order."""
     return entry[0]
 
+# nw_e: function object.key_entry_name_order #
 
+# nw_s: function object.pretty_format_tree_entry |af716748fb72f7016bd97bdb577233db#
 def pretty_format_tree_entry(name, mode, hexsha, encoding="utf-8"):
     """Pretty format tree entry.
 
@@ -1006,6 +1006,7 @@ def pretty_format_tree_entry(name, mode, hexsha, encoding="utf-8"):
     return "%04o %s %s\t%s\n" % (
             mode, kind, hexsha.decode('ascii'),
             name.decode(encoding, 'replace'))
+# nw_e: function object.pretty_format_tree_entry #
 
 # nw_s: class Tree |800d5fbdf7a1b8aea53513c9652e9231#
 class Tree(ShaFile):
@@ -1112,6 +1113,16 @@ class Tree(ShaFile):
     def _serialize(self):
         return list(serialize_tree(self.iteritems()))
     # nw_e: [[Tree]] methods #
+    # nw_s: [[Tree]] methods |4d83523acbefb50459e5f14e849a1b7e#
+    def iteritems(self, name_order=False):
+        """Iterate over entries.
+
+        :param name_order: If True, iterate in name order instead of tree
+            order.
+        :return: Iterator over (name, mode, sha) tuples
+        """
+        return sorted_tree_items(self._entries, name_order)
+    # nw_e: [[Tree]] methods #
     # nw_s: [[Tree]] methods |2469bc0a5f793b2331ec85143c6b179f#
     def __contains__(self, name):
         return name in self._entries
@@ -1127,17 +1138,6 @@ class Tree(ShaFile):
         return iter(self._entries)
 
     # nw_e: [[Tree]] methods #
-    # nw_s: [[Tree]] methods |f0283ec78c93fafe8ef719954c73ec1c#
-    def iteritems(self, name_order=False):
-        """Iterate over entries.
-
-        :param name_order: If True, iterate in name order instead of tree
-            order.
-        :return: Iterator over (name, mode, sha) tuples
-        """
-        return sorted_tree_items(self._entries, name_order)
-
-    # nw_e: [[Tree]] methods #
     # nw_s: [[Tree]] methods |72ceeb7cb4e7b9ab0448d0c7640dd8b9#
     def items(self):
         """Return the sorted entries in this tree.
@@ -1147,13 +1147,12 @@ class Tree(ShaFile):
         return list(self.iteritems())
 
     # nw_e: [[Tree]] methods #
-    # nw_s: [[Tree]] methods |4007aff5295be783abf530961272d573#
+    # nw_s: [[Tree]] methods |a45d14dbab3c7ed7cb6b70ad10eab2ec#
     def as_pretty_string(self):
         text = []
         for name, mode, hexsha in self.iteritems():
             text.append(pretty_format_tree_entry(name, mode, hexsha))
         return "".join(text)
-
     # nw_e: [[Tree]] methods #
     # nw_s: [[Tree]] methods |b5510e04c198d200552aa0737d3b5b5a#
     def lookup_path(self, lookup_obj, path):
@@ -1178,7 +1177,7 @@ class Tree(ShaFile):
 # nw_e: class Tree #
 
 
-
+# nw_s: function objects.parse_timezone |6d5cacaf3015cd40d4954b02ee72ea09#
 def parse_timezone(text):
     """Parse a timezone text fragment (e.g. '+0100').
 
@@ -1203,8 +1202,9 @@ def parse_timezone(text):
     minutes = (offset % 100)
     return (signum * (hours * 3600 + minutes * 60),
             unnecessary_negative_timezone)
+# nw_e: function objects.parse_timezone #
 
-
+# nw_s: function objects.format_timezone |05356740d788d317a096f91979da24c8#
 def format_timezone(offset, unnecessary_negative_timezone=False):
     """Format a timezone for Git serialization.
 
@@ -1220,6 +1220,7 @@ def format_timezone(offset, unnecessary_negative_timezone=False):
     else:
         sign = '+'
     return ('%c%02d%02d' % (sign, offset / 3600, (offset / 60) % 60)).encode('ascii')
+# nw_e: function objects.format_timezone #
 
 # nw_s: function objects.parse_commit |95209456761b717bbf0150a5ad04b4a7#
 def parse_commit(chunks):
@@ -1434,7 +1435,7 @@ class Commit(ShaFile):
              self._commit_timezone_neg_utc)) = commit_info
 
     # nw_e: [[Commit]] methods #
-    # nw_s: [[Commit]] methods |98b66aff5419b9760105e805ba091a13#
+    # nw_s: [[Commit]] methods |f09d6d6eed61829a766eeb92bc91109f#
     def _serialize(self):
         chunks = []
         tree_bytes = self._tree.id if isinstance(self._tree, Tree) else self._tree
@@ -1475,7 +1476,6 @@ class Commit(ShaFile):
         chunks.append(b'\n')  # There must be a new line after the headers
         chunks.append(self._message)
         return chunks
-
     # nw_e: [[Commit]] methods #
 # nw_e: class Commit #
 
