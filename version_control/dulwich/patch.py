@@ -1,4 +1,4 @@
-# nw_s: patch.py |22c2b415f8ae7fce7ba49e32604640e3#
+# nw_s: patch.py |b879377a98632acc17074b29f6fcf71e#
 # patch.py -- For dealing with packed-style patches.
 # Copyright (C) 2009-2013 Jelmer Vernooij <jelmer@samba.org>
 #
@@ -84,6 +84,7 @@ def get_summary(commit):
     return commit.message.splitlines()[0].replace(" ", "-")
 
 
+# nw_s: function patch.unified_diff |782c29693b1b280ccec0f3e8a2faf821#
 def unified_diff(a, b, fromfile, tofile, n=3):
     """difflib.unified_diff that doesn't write any dates or trailing spaces.
 
@@ -113,7 +114,7 @@ def unified_diff(a, b, fromfile, tofile, n=3):
                     if not line[-1:] == b'\n':
                         line += b'\n\\ No newline at end of file\n'
                     yield b'+' + line
-
+# nw_e: function patch.unified_diff #
 
 def is_binary(content):
     """See if the first few bytes contain any null characters.
@@ -129,14 +130,15 @@ def shortid(hexsha):
     else:
         return hexsha[:7]
 
-
+# nw_s: function patch.patch_filename |a28bfbeed6592e20b3f31434db61618d#
 def patch_filename(p, root):
     if p is None:
         return b"/dev/null"
     else:
         return root + b"/" + p
+# nw_e: function patch.patch_filename #
 
-
+# nw_s: function patch.write_object_diff |bedf09157ff555f511385a53714b4c9e#
 def write_object_diff(f, store, old_file, new_file, diff_binary=False):
     """Write the diff for an object.
 
@@ -176,8 +178,9 @@ def write_object_diff(f, store, old_file, new_file, diff_binary=False):
     else:
         f.writelines(unified_diff(lines(old_content), lines(new_content),
             old_path, new_path))
+# nw_e: function patch.write_object_diff #
 
-
+# nw_s: function patch.gen_diff_header |cb6d240871f01f4bc7e023be9c943d92#
 # TODO(jelmer): Support writing unicode, rather than bytes.
 def gen_diff_header(paths, modes, shas):
     """Write a blob diff header.
@@ -201,8 +204,9 @@ def gen_diff_header(paths, modes, shas):
     if new_mode is not None:
         yield (" %o" % new_mode).encode('ascii')
     yield b"\n"
+# nw_e: function patch.gen_diff_header #
 
-
+# nw_s: function patch.write_blob_diff |c6721207fab21d698ab6e88e75c1caed#
 # TODO(jelmer): Support writing unicode, rather than bytes.
 def write_blob_diff(f, old_file, new_file):
     """Write blob diff.
@@ -229,8 +233,9 @@ def write_blob_diff(f, old_file, new_file):
     new_contents = lines(new_blob)
     f.writelines(unified_diff(old_contents, new_contents,
         old_path, new_path))
+# nw_e: function patch.write_blob_diff #
 
-
+# nw_s: function patch.write_tree_diff |874b64983a25a31b906e4c66be969fdf#
 # TODO(jelmer): Support writing unicode, rather than bytes.
 def write_tree_diff(f, store, old_tree, new_tree, diff_binary=False):
     """Write tree diff.
@@ -246,8 +251,9 @@ def write_tree_diff(f, store, old_tree, new_tree, diff_binary=False):
         write_object_diff(f, store, (oldpath, oldmode, oldsha),
                                     (newpath, newmode, newsha),
                                     diff_binary=diff_binary)
+# nw_e: function patch.write_tree_diff #
 
-
+# nw_s: function patch.git_am_patch_split |c6666c7441069b402addce9d908dd845#
 def git_am_patch_split(f, encoding=None):
     """Parse a git-am-style patch and split it up into bits.
 
@@ -264,6 +270,7 @@ def git_am_patch_split(f, encoding=None):
         parser = email.parser.Parser()
         msg = parser.parsestr(contents)
     return parse_patch_message(msg, encoding)
+# nw_e: function patch.git_am_patch_split #
 
 
 def parse_patch_message(msg, encoding=None):

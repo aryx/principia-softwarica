@@ -469,179 +469,30 @@ from dulwich.objects import (
     TreeEntry,
     )
 
-
-# TreeChange type constants.
-CHANGE_ADD = 'add'
-CHANGE_MODIFY = 'modify'
-CHANGE_DELETE = 'delete'
-CHANGE_RENAME = 'rename'
-CHANGE_COPY = 'copy'
-CHANGE_UNCHANGED = 'unchanged'
+<<type CHANGE>>
 
 RENAME_CHANGE_TYPES = (CHANGE_RENAME, CHANGE_COPY)
 
-_NULL_ENTRY = TreeEntry(None, None, None)
+<<constant diff_tree._NULL_ENTRY>>
 
 _MAX_SCORE = 100
 RENAME_THRESHOLD = 60
 MAX_FILES = 200
 REWRITE_THRESHOLD = None
 
+<<class TreeChange>>
 
-class TreeChange(namedtuple('TreeChange', ['type', 'old', 'new'])):
-    """Named tuple a single change between two trees."""
+<<constant diff_tree._tree_entries>>
 
-    @classmethod
-    def add(cls, new):
-        return cls(CHANGE_ADD, _NULL_ENTRY, new)
+<<constant diff_tree._merge_entries>>
 
-    @classmethod
-    def delete(cls, old):
-        return cls(CHANGE_DELETE, old, _NULL_ENTRY)
+<<function diff_tree._is_tree>>
 
+<<function diff_tree.walk_trees>>
 
-def _tree_entries(path, tree):
-    result = []
-    if not tree:
-        return result
-    for entry in tree.iteritems(name_order=True):
-        result.append(entry.in_path(path))
-    return result
+<<function diff_tree._skip_tree>>
 
-
-def _merge_entries(path, tree1, tree2):
-    """Merge the entries of two trees.
-
-    :param path: A path to prepend to all tree entry names.
-    :param tree1: The first Tree object to iterate, or None.
-    :param tree2: The second Tree object to iterate, or None.
-    :return: A list of pairs of TreeEntry objects for each pair of entries in
-        the trees. If an entry exists in one tree but not the other, the other
-        entry will have all attributes set to None. If neither entry's path is
-        None, they are guaranteed to match.
-    """
-    entries1 = _tree_entries(path, tree1)
-    entries2 = _tree_entries(path, tree2)
-    i1 = i2 = 0
-    len1 = len(entries1)
-    len2 = len(entries2)
-
-    result = []
-    while i1 < len1 and i2 < len2:
-        entry1 = entries1[i1]
-        entry2 = entries2[i2]
-        if entry1.path < entry2.path:
-            result.append((entry1, _NULL_ENTRY))
-            i1 += 1
-        elif entry1.path > entry2.path:
-            result.append((_NULL_ENTRY, entry2))
-            i2 += 1
-        else:
-            result.append((entry1, entry2))
-            i1 += 1
-            i2 += 1
-    for i in range(i1, len1):
-        result.append((entries1[i], _NULL_ENTRY))
-    for i in range(i2, len2):
-        result.append((_NULL_ENTRY, entries2[i]))
-    return result
-
-
-def _is_tree(entry):
-    mode = entry.mode
-    if mode is None:
-        return False
-    return stat.S_ISDIR(mode)
-
-
-def walk_trees(store, tree1_id, tree2_id, prune_identical=False):
-    """Recursively walk all the entries of two trees.
-
-    Iteration is depth-first pre-order, as in e.g. os.walk.
-
-    :param store: An ObjectStore for looking up objects.
-    :param tree1_id: The SHA of the first Tree object to iterate, or None.
-    :param tree2_id: The SHA of the second Tree object to iterate, or None.
-    :param prune_identical: If True, identical subtrees will not be walked.
-    :return: Iterator over Pairs of TreeEntry objects for each pair of entries
-        in the trees and their subtrees recursively. If an entry exists in one
-        tree but not the other, the other entry will have all attributes set
-        to None. If neither entry's path is None, they are guaranteed to
-        match.
-    """
-    # This could be fairly easily generalized to >2 trees if we find a use
-    # case.
-    mode1 = tree1_id and stat.S_IFDIR or None
-    mode2 = tree2_id and stat.S_IFDIR or None
-    todo = [(TreeEntry(b'', mode1, tree1_id), TreeEntry(b'', mode2, tree2_id))]
-    while todo:
-        entry1, entry2 = todo.pop()
-        is_tree1 = _is_tree(entry1)
-        is_tree2 = _is_tree(entry2)
-        if prune_identical and is_tree1 and is_tree2 and entry1 == entry2:
-            continue
-
-        tree1 = is_tree1 and store[entry1.sha] or None
-        tree2 = is_tree2 and store[entry2.sha] or None
-        path = entry1.path or entry2.path
-        todo.extend(reversed(_merge_entries(path, tree1, tree2)))
-        yield entry1, entry2
-
-
-def _skip_tree(entry):
-    if entry.mode is None or stat.S_ISDIR(entry.mode):
-        return _NULL_ENTRY
-    return entry
-
-
-def tree_changes(store, tree1_id, tree2_id, want_unchanged=False,
-                 rename_detector=None):
-    """Find the differences between the contents of two trees.
-
-    :param store: An ObjectStore for looking up objects.
-    :param tree1_id: The SHA of the source tree.
-    :param tree2_id: The SHA of the target tree.
-    :param want_unchanged: If True, include TreeChanges for unmodified entries
-        as well.
-    :param rename_detector: RenameDetector object for detecting renames.
-    :return: Iterator over TreeChange instances for each change between the
-        source and target tree.
-    """
-    if (rename_detector is not None and tree1_id is not None and
-            tree2_id is not None):
-        for change in rename_detector.changes_with_renames(
-                tree1_id, tree2_id, want_unchanged=want_unchanged):
-            yield change
-        return
-
-    entries = walk_trees(store, tree1_id, tree2_id,
-                         prune_identical=(not want_unchanged))
-    for entry1, entry2 in entries:
-        if entry1 == entry2 and not want_unchanged:
-            continue
-
-        # Treat entries for trees as missing.
-        entry1 = _skip_tree(entry1)
-        entry2 = _skip_tree(entry2)
-
-        if entry1 != _NULL_ENTRY and entry2 != _NULL_ENTRY:
-            if stat.S_IFMT(entry1.mode) != stat.S_IFMT(entry2.mode):
-                # File type changed: report as delete/add.
-                yield TreeChange.delete(entry1)
-                entry1 = _NULL_ENTRY
-                change_type = CHANGE_ADD
-            elif entry1 == entry2:
-                change_type = CHANGE_UNCHANGED
-            else:
-                change_type = CHANGE_MODIFY
-        elif entry1 != _NULL_ENTRY:
-            change_type = CHANGE_DELETE
-        elif entry2 != _NULL_ENTRY:
-            change_type = CHANGE_ADD
-        else:
-            # Both were None because at least one was a tree.
-            continue
-        yield TreeChange(change_type, entry1, entry2)
+<<function diff_tree.tree_changes>>
 
 
 def _all_eq(seq, key, value):
@@ -804,225 +655,7 @@ def _tree_change_key(entry):
         path2 = path1
     return (path1, path2)
 
-
-class RenameDetector(object):
-    """Object for handling rename detection between two trees."""
-
-    def __init__(self, store, rename_threshold=RENAME_THRESHOLD,
-                 max_files=MAX_FILES,
-                 rewrite_threshold=REWRITE_THRESHOLD,
-                 find_copies_harder=False):
-        """Initialize the rename detector.
-
-        :param store: An ObjectStore for looking up objects.
-        :param rename_threshold: The threshold similarity score for considering
-            an add/delete pair to be a rename/copy; see _similarity_score.
-        :param max_files: The maximum number of adds and deletes to consider,
-            or None for no limit. The detector is guaranteed to compare no more
-            than max_files ** 2 add/delete pairs. This limit is provided
-            because rename detection can be quadratic in the project size. If
-            the limit is exceeded, no content rename detection is attempted.
-        :param rewrite_threshold: The threshold similarity score below which a
-            modify should be considered a delete/add, or None to not break
-            modifies; see _similarity_score.
-        :param find_copies_harder: If True, consider unmodified files when
-            detecting copies.
-        """
-        self._store = store
-        self._rename_threshold = rename_threshold
-        self._rewrite_threshold = rewrite_threshold
-        self._max_files = max_files
-        self._find_copies_harder = find_copies_harder
-        self._want_unchanged = False
-
-    def _reset(self):
-        self._adds = []
-        self._deletes = []
-        self._changes = []
-
-    def _should_split(self, change):
-        if (self._rewrite_threshold is None or change.type != CHANGE_MODIFY or
-                change.old.sha == change.new.sha):
-            return False
-        old_obj = self._store[change.old.sha]
-        new_obj = self._store[change.new.sha]
-        return _similarity_score(old_obj, new_obj) < self._rewrite_threshold
-
-    def _add_change(self, change):
-        if change.type == CHANGE_ADD:
-            self._adds.append(change)
-        elif change.type == CHANGE_DELETE:
-            self._deletes.append(change)
-        elif self._should_split(change):
-            self._deletes.append(TreeChange.delete(change.old))
-            self._adds.append(TreeChange.add(change.new))
-        elif ((self._find_copies_harder and change.type == CHANGE_UNCHANGED)
-              or change.type == CHANGE_MODIFY):
-            # Treat all modifies as potential deletes for rename detection,
-            # but don't split them (to avoid spurious renames). Setting
-            # find_copies_harder means we treat unchanged the same as
-            # modified.
-            self._deletes.append(change)
-        else:
-            self._changes.append(change)
-
-    def _collect_changes(self, tree1_id, tree2_id):
-        want_unchanged = self._find_copies_harder or self._want_unchanged
-        for change in tree_changes(self._store, tree1_id, tree2_id,
-                                   want_unchanged=want_unchanged):
-            self._add_change(change)
-
-    def _prune(self, add_paths, delete_paths):
-        self._adds = [a for a in self._adds if a.new.path not in add_paths]
-        self._deletes = [d for d in self._deletes
-                         if d.old.path not in delete_paths]
-
-    def _find_exact_renames(self):
-        add_map = defaultdict(list)
-        for add in self._adds:
-            add_map[add.new.sha].append(add.new)
-        delete_map = defaultdict(list)
-        for delete in self._deletes:
-            # Keep track of whether the delete was actually marked as a delete.
-            # If not, it needs to be marked as a copy.
-            is_delete = delete.type == CHANGE_DELETE
-            delete_map[delete.old.sha].append((delete.old, is_delete))
-
-        add_paths = set()
-        delete_paths = set()
-        for sha, sha_deletes in delete_map.items():
-            sha_adds = add_map[sha]
-            for (old, is_delete), new in zip(sha_deletes, sha_adds):
-                if stat.S_IFMT(old.mode) != stat.S_IFMT(new.mode):
-                    continue
-                if is_delete:
-                    delete_paths.add(old.path)
-                add_paths.add(new.path)
-                new_type = is_delete and CHANGE_RENAME or CHANGE_COPY
-                self._changes.append(TreeChange(new_type, old, new))
-
-            num_extra_adds = len(sha_adds) - len(sha_deletes)
-            # TODO(dborowitz): Less arbitrary way of dealing with extra copies.
-            old = sha_deletes[0][0]
-            if num_extra_adds > 0:
-                for new in sha_adds[-num_extra_adds:]:
-                    add_paths.add(new.path)
-                    self._changes.append(TreeChange(CHANGE_COPY, old, new))
-        self._prune(add_paths, delete_paths)
-
-    def _should_find_content_renames(self):
-        return len(self._adds) * len(self._deletes) <= self._max_files ** 2
-
-    def _rename_type(self, check_paths, delete, add):
-        if check_paths and delete.old.path == add.new.path:
-            # If the paths match, this must be a split modify, so make sure it
-            # comes out as a modify.
-            return CHANGE_MODIFY
-        elif delete.type != CHANGE_DELETE:
-            # If it's in deletes but not marked as a delete, it must have been
-            # added due to find_copies_harder, and needs to be marked as a
-            # copy.
-            return CHANGE_COPY
-        return CHANGE_RENAME
-
-    def _find_content_rename_candidates(self):
-        candidates = self._candidates = []
-        # TODO: Optimizations:
-        #  - Compare object sizes before counting blocks.
-        #  - Skip if delete's S_IFMT differs from all adds.
-        #  - Skip if adds or deletes is empty.
-        # Match C git's behavior of not attempting to find content renames if
-        # the matrix size exceeds the threshold.
-        if not self._should_find_content_renames():
-            return
-
-        block_cache = {}
-        check_paths = self._rename_threshold is not None
-        for delete in self._deletes:
-            if S_ISGITLINK(delete.old.mode):
-                continue  # Git links don't exist in this repo.
-            old_sha = delete.old.sha
-            old_obj = self._store[old_sha]
-            block_cache[old_sha] = _count_blocks(old_obj)
-            for add in self._adds:
-                if stat.S_IFMT(delete.old.mode) != stat.S_IFMT(add.new.mode):
-                    continue
-                new_obj = self._store[add.new.sha]
-                score = _similarity_score(old_obj, new_obj,
-                                          block_cache=block_cache)
-                if score > self._rename_threshold:
-                    new_type = self._rename_type(check_paths, delete, add)
-                    rename = TreeChange(new_type, delete.old, add.new)
-                    candidates.append((-score, rename))
-
-    def _choose_content_renames(self):
-        # Sort scores from highest to lowest, but keep names in ascending
-        # order.
-        self._candidates.sort()
-
-        delete_paths = set()
-        add_paths = set()
-        for _, change in self._candidates:
-            new_path = change.new.path
-            if new_path in add_paths:
-                continue
-            old_path = change.old.path
-            orig_type = change.type
-            if old_path in delete_paths:
-                change = TreeChange(CHANGE_COPY, change.old, change.new)
-
-            # If the candidate was originally a copy, that means it came from a
-            # modified or unchanged path, so we don't want to prune it.
-            if orig_type != CHANGE_COPY:
-                delete_paths.add(old_path)
-            add_paths.add(new_path)
-            self._changes.append(change)
-        self._prune(add_paths, delete_paths)
-
-    def _join_modifies(self):
-        if self._rewrite_threshold is None:
-            return
-
-        modifies = {}
-        delete_map = dict((d.old.path, d) for d in self._deletes)
-        for add in self._adds:
-            path = add.new.path
-            delete = delete_map.get(path)
-            if (delete is not None and
-                    stat.S_IFMT(delete.old.mode) == stat.S_IFMT(add.new.mode)):
-                modifies[path] = TreeChange(CHANGE_MODIFY, delete.old, add.new)
-
-        self._adds = [a for a in self._adds if a.new.path not in modifies]
-        self._deletes = [a for a in self._deletes if a.new.path not in
-                         modifies]
-        self._changes += modifies.values()
-
-    def _sorted_changes(self):
-        result = []
-        result.extend(self._adds)
-        result.extend(self._deletes)
-        result.extend(self._changes)
-        result.sort(key=_tree_change_key)
-        return result
-
-    def _prune_unchanged(self):
-        if self._want_unchanged:
-            return
-        self._deletes = [
-            d for d in self._deletes if d.type != CHANGE_UNCHANGED]
-
-    def changes_with_renames(self, tree1_id, tree2_id, want_unchanged=False):
-        """Iterate TreeChanges between two tree SHAs, with rename detection."""
-        self._reset()
-        self._want_unchanged = want_unchanged
-        self._collect_changes(tree1_id, tree2_id)
-        self._find_exact_renames()
-        self._find_content_rename_candidates()
-        self._choose_content_renames()
-        self._join_modifies()
-        self._prune_unchanged()
-        return self._sorted_changes()
-
+<<class RenameDetector>>
 
 # Hold on to the pure-python implementations for testing.
 _is_tree_py = _is_tree
@@ -2761,14 +2394,7 @@ class FixedSha(object):
 
 <<class Tag>>
 
-class TreeEntry(namedtuple('TreeEntry', ['path', 'mode', 'sha'])):
-    """Named tuple encapsulating a single tree entry."""
-
-    def in_path(self, path):
-        """Return a copy of this entry with the given path prepended."""
-        if not isinstance(self.path, bytes):
-            raise TypeError('Expected bytes for path, got %r' % path)
-        return TreeEntry(posixpath.join(path, self.path), self.mode, self.sha)
+<<class TreeEntry>>
 
 <<function object.parse_tree>>
 
@@ -4206,6 +3832,57 @@ except ImportError:
 
 \subsection{[[patch.py]]}
 
+<<function patch.write_blob_diff>>=
+# TODO(jelmer): Support writing unicode, rather than bytes.
+def write_blob_diff(f, old_file, new_file):
+    """Write blob diff.
+
+    :param f: File-like object to write to
+    :param old_file: (path, mode, hexsha) tuple (None if nonexisting)
+    :param new_file: (path, mode, hexsha) tuple (None if nonexisting)
+
+    :note: The use of write_object_diff is recommended over this function.
+    """
+    (old_path, old_mode, old_blob) = old_file
+    (new_path, new_mode, new_blob) = new_file
+    old_path = patch_filename(old_path, b"a")
+    new_path = patch_filename(new_path, b"b")
+    def lines(blob):
+        if blob is not None:
+            return blob.splitlines()
+        else:
+            return []
+    f.writelines(gen_diff_header(
+        (old_path, new_path), (old_mode, new_mode),
+        (getattr(old_blob, "id", None), getattr(new_blob, "id", None))))
+    old_contents = lines(old_blob)
+    new_contents = lines(new_blob)
+    f.writelines(unified_diff(old_contents, new_contents,
+        old_path, new_path))
+@
+%dead?
+
+<<function patch.git_am_patch_split>>=
+def git_am_patch_split(f, encoding=None):
+    """Parse a git-am-style patch and split it up into bits.
+
+    :param f: File-like object to parse
+    :param encoding: Encoding to use when creating Git objects
+    :return: Tuple with commit object, diff contents and git version
+    """
+    encoding = encoding or getattr(f, "encoding", "ascii")
+    contents = f.read()
+    if isinstance(contents, bytes) and getattr(email.parser, "BytesParser", None):
+        parser = email.parser.BytesParser()
+        msg = parser.parsebytes(contents)
+    else:
+        parser = email.parser.Parser()
+        msg = parser.parsestr(contents)
+    return parse_patch_message(msg, encoding)
+@
+%dead?
+
+%---------------------------------------------------------------------------
 <<patch.py>>=
 # patch.py -- For dealing with packed-style patches.
 # Copyright (C) 2009-2013 Jelmer Vernooij <jelmer@samba.org>
@@ -4275,36 +3952,7 @@ def get_summary(commit):
     return commit.message.splitlines()[0].replace(" ", "-")
 
 
-def unified_diff(a, b, fromfile, tofile, n=3):
-    """difflib.unified_diff that doesn't write any dates or trailing spaces.
-
-    Based on the same function in Python2.6.5-rc2's difflib.py
-    """
-    started = False
-    for group in SequenceMatcher(None, a, b).get_grouped_opcodes(n):
-        if not started:
-            yield b'--- ' + fromfile + b'\n'
-            yield b'+++ ' + tofile + b'\n'
-            started = True
-        i1, i2, j1, j2 = group[0][1], group[-1][2], group[0][3], group[-1][4]
-        sizes = "@@ -%d,%d +%d,%d @@\n" % (i1+1, i2-i1, j1+1, j2-j1)
-        yield sizes.encode('ascii')
-        for tag, i1, i2, j1, j2 in group:
-            if tag == 'equal':
-                for line in a[i1:i2]:
-                    yield b' ' + line
-                continue
-            if tag == 'replace' or tag == 'delete':
-                for line in a[i1:i2]:
-                    if not line[-1:] == b'\n':
-                        line += b'\n\\ No newline at end of file\n'
-                    yield b'-' + line
-            if tag == 'replace' or tag == 'insert':
-                for line in b[j1:j2]:
-                    if not line[-1:] == b'\n':
-                        line += b'\n\\ No newline at end of file\n'
-                    yield b'+' + line
-
+<<function patch.unified_diff>>
 
 def is_binary(content):
     """See if the first few bytes contain any null characters.
@@ -4320,141 +3968,17 @@ def shortid(hexsha):
     else:
         return hexsha[:7]
 
+<<function patch.patch_filename>>
 
-def patch_filename(p, root):
-    if p is None:
-        return b"/dev/null"
-    else:
-        return root + b"/" + p
+<<function patch.write_object_diff>>
 
+<<function patch.gen_diff_header>>
 
-def write_object_diff(f, store, old_file, new_file, diff_binary=False):
-    """Write the diff for an object.
+<<function patch.write_blob_diff>>
 
-    :param f: File-like object to write to
-    :param store: Store to retrieve objects from, if necessary
-    :param old_file: (path, mode, hexsha) tuple
-    :param new_file: (path, mode, hexsha) tuple
-    :param diff_binary: Whether to diff files even if they
-        are considered binary files by is_binary().
+<<function patch.write_tree_diff>>
 
-    :note: the tuple elements should be None for nonexistant files
-    """
-    (old_path, old_mode, old_id) = old_file
-    (new_path, new_mode, new_id) = new_file
-    old_path = patch_filename(old_path, b"a")
-    new_path = patch_filename(new_path, b"b")
-    def content(mode, hexsha):
-        if hexsha is None:
-            return Blob.from_string(b'')
-        elif S_ISGITLINK(mode):
-            return Blob.from_string(b"Submodule commit " + hexsha + b"\n")
-        else:
-            return store[hexsha]
-
-    def lines(content):
-        if not content:
-            return []
-        else:
-            return content.splitlines()
-    f.writelines(gen_diff_header(
-        (old_path, new_path), (old_mode, new_mode), (old_id, new_id)))
-    old_content = content(old_mode, old_id)
-    new_content = content(new_mode, new_id)
-    if not diff_binary and (
-            is_binary(old_content.data) or is_binary(new_content.data)):
-        f.write(b"Binary files " + old_path + b" and " + new_path + b" differ\n")
-    else:
-        f.writelines(unified_diff(lines(old_content), lines(new_content),
-            old_path, new_path))
-
-
-# TODO(jelmer): Support writing unicode, rather than bytes.
-def gen_diff_header(paths, modes, shas):
-    """Write a blob diff header.
-
-    :param paths: Tuple with old and new path
-    :param modes: Tuple with old and new modes
-    :param shas: Tuple with old and new shas
-    """
-    (old_path, new_path) = paths
-    (old_mode, new_mode) = modes
-    (old_sha, new_sha) = shas
-    yield b"diff --git " + old_path + b" " + new_path + b"\n"
-    if old_mode != new_mode:
-        if new_mode is not None:
-            if old_mode is not None:
-                yield ("old mode %o\n" % old_mode).encode('ascii')
-            yield ("new mode %o\n" % new_mode).encode('ascii')
-        else:
-            yield ("deleted mode %o\n" % old_mode).encode('ascii')
-    yield b"index " + shortid(old_sha) + b".." + shortid(new_sha)
-    if new_mode is not None:
-        yield (" %o" % new_mode).encode('ascii')
-    yield b"\n"
-
-
-# TODO(jelmer): Support writing unicode, rather than bytes.
-def write_blob_diff(f, old_file, new_file):
-    """Write blob diff.
-
-    :param f: File-like object to write to
-    :param old_file: (path, mode, hexsha) tuple (None if nonexisting)
-    :param new_file: (path, mode, hexsha) tuple (None if nonexisting)
-
-    :note: The use of write_object_diff is recommended over this function.
-    """
-    (old_path, old_mode, old_blob) = old_file
-    (new_path, new_mode, new_blob) = new_file
-    old_path = patch_filename(old_path, b"a")
-    new_path = patch_filename(new_path, b"b")
-    def lines(blob):
-        if blob is not None:
-            return blob.splitlines()
-        else:
-            return []
-    f.writelines(gen_diff_header(
-        (old_path, new_path), (old_mode, new_mode),
-        (getattr(old_blob, "id", None), getattr(new_blob, "id", None))))
-    old_contents = lines(old_blob)
-    new_contents = lines(new_blob)
-    f.writelines(unified_diff(old_contents, new_contents,
-        old_path, new_path))
-
-
-# TODO(jelmer): Support writing unicode, rather than bytes.
-def write_tree_diff(f, store, old_tree, new_tree, diff_binary=False):
-    """Write tree diff.
-
-    :param f: File-like object to write to.
-    :param old_tree: Old tree id
-    :param new_tree: New tree id
-    :param diff_binary: Whether to diff files even if they
-        are considered binary files by is_binary().
-    """
-    changes = store.tree_changes(old_tree, new_tree)
-    for (oldpath, newpath), (oldmode, newmode), (oldsha, newsha) in changes:
-        write_object_diff(f, store, (oldpath, oldmode, oldsha),
-                                    (newpath, newmode, newsha),
-                                    diff_binary=diff_binary)
-
-
-def git_am_patch_split(f, encoding=None):
-    """Parse a git-am-style patch and split it up into bits.
-
-    :param f: File-like object to parse
-    :param encoding: Encoding to use when creating Git objects
-    :return: Tuple with commit object, diff contents and git version
-    """
-    encoding = encoding or getattr(f, "encoding", "ascii")
-    contents = f.read()
-    if isinstance(contents, bytes) and getattr(email.parser, "BytesParser", None):
-        parser = email.parser.BytesParser()
-        msg = parser.parsebytes(contents)
-    else:
-        parser = email.parser.Parser()
-        msg = parser.parsestr(contents)
-    return parse_patch_message(msg, encoding)
+<<function patch.git_am_patch_split>>
 
 
 def parse_patch_message(msg, encoding=None):

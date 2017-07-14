@@ -1,4 +1,4 @@
-# nw_s: dulwich/objects.py |6e9412f667b384d8fd6d636270beff1d#
+# nw_s: dulwich/objects.py |fc79ec4eb9e71f242cc773c11e5c6d2a#
 # objects.py -- Access to base git objects
 # Copyright (C) 2007 James Westby <jw+debian@jameswestby.net>
 # Copyright (C) 2008-2013 Jelmer Vernooij <jelmer@samba.org>
@@ -904,6 +904,7 @@ class Tag(ShaFile):
 
 # nw_e: class Tag #
 
+# nw_s: class TreeEntry |be266a59ecb27019faa85dd38c7fa0d5#
 class TreeEntry(namedtuple('TreeEntry', ['path', 'mode', 'sha'])):
     """Named tuple encapsulating a single tree entry."""
 
@@ -912,6 +913,7 @@ class TreeEntry(namedtuple('TreeEntry', ['path', 'mode', 'sha'])):
         if not isinstance(self.path, bytes):
             raise TypeError('Expected bytes for path, got %r' % path)
         return TreeEntry(posixpath.join(path, self.path), self.mode, self.sha)
+# nw_e: class TreeEntry #
 
 # nw_s: function object.parse_tree |e2e52336ccad080b1bb822ac90e71756#
 def parse_tree(text, strict=False):

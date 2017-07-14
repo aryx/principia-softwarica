@@ -136,7 +136,7 @@ class cmd_log(Command):
                       outstream=sys.stdout)
 # nw_e: function cmd_log #
 
-# nw_s: function cmd_diff |4d4394342e988944a5d22ecd58018e1f#
+# nw_s: function cmd_diff |49cefef536a40ef053802407395b41b9#
 class cmd_diff(Command):
 
     def run(self, args):
@@ -152,7 +152,6 @@ class cmd_diff(Command):
         parent_commit = r[commit.parents[0]]
 
         write_tree_diff(sys.stdout, r.object_store, parent_commit.tree, commit.tree)
-
 # nw_e: function cmd_diff #
 
 # nw_s: function cmd_dump_pack |c293e284be60eeb94beadbba171aae8d#

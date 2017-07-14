@@ -1,4 +1,4 @@
-# nw_s: diff_tree.py |ba947b3c4074516ea44d4a0794d40404#
+# nw_s: diff_tree.py |8a006a2feb7b3b52382d3658bddaabec#
 # diff_tree.py -- Utilities for diffing files and trees.
 # Copyright (C) 2010 Google, Inc.
 #
@@ -36,7 +36,7 @@ from dulwich.objects import (
     TreeEntry,
     )
 
-
+# nw_s: type CHANGE |284023215354aaf0bb3ec8595f6b9314#
 # TreeChange type constants.
 CHANGE_ADD = 'add'
 CHANGE_MODIFY = 'modify'
@@ -44,17 +44,20 @@ CHANGE_DELETE = 'delete'
 CHANGE_RENAME = 'rename'
 CHANGE_COPY = 'copy'
 CHANGE_UNCHANGED = 'unchanged'
+# nw_e: type CHANGE #
 
 RENAME_CHANGE_TYPES = (CHANGE_RENAME, CHANGE_COPY)
 
+# nw_s: constant diff_tree._NULL_ENTRY |c10c15c01142c80ca02707ea68b29217#
 _NULL_ENTRY = TreeEntry(None, None, None)
+# nw_e: constant diff_tree._NULL_ENTRY #
 
 _MAX_SCORE = 100
 RENAME_THRESHOLD = 60
 MAX_FILES = 200
 REWRITE_THRESHOLD = None
 
-
+# nw_s: class TreeChange |ca339110cad654f3a2574c4e75cb4b83#
 class TreeChange(namedtuple('TreeChange', ['type', 'old', 'new'])):
     """Named tuple a single change between two trees."""
 
@@ -65,8 +68,9 @@ class TreeChange(namedtuple('TreeChange', ['type', 'old', 'new'])):
     @classmethod
     def delete(cls, old):
         return cls(CHANGE_DELETE, old, _NULL_ENTRY)
+# nw_e: class TreeChange #
 
-
+# nw_s: constant diff_tree._tree_entries |d198a821a23c8de8da098721c8986f87#
 def _tree_entries(path, tree):
     result = []
     if not tree:
@@ -74,8 +78,9 @@ def _tree_entries(path, tree):
     for entry in tree.iteritems(name_order=True):
         result.append(entry.in_path(path))
     return result
+# nw_e: constant diff_tree._tree_entries #
 
-
+# nw_s: constant diff_tree._merge_entries |6eecbeed44fec662a88002faa931e623#
 def _merge_entries(path, tree1, tree2):
     """Merge the entries of two trees.
 
@@ -112,15 +117,17 @@ def _merge_entries(path, tree1, tree2):
     for i in range(i2, len2):
         result.append((_NULL_ENTRY, entries2[i]))
     return result
+# nw_e: constant diff_tree._merge_entries #
 
-
+# nw_s: function diff_tree._is_tree |ea3194fb07d7c10543dafdba9f184944#
 def _is_tree(entry):
     mode = entry.mode
     if mode is None:
         return False
     return stat.S_ISDIR(mode)
+# nw_e: function diff_tree._is_tree #
 
-
+# nw_s: function diff_tree.walk_trees |18982754e88b4d1fdff574af49d9e96c#
 def walk_trees(store, tree1_id, tree2_id, prune_identical=False):
     """Recursively walk all the entries of two trees.
 
@@ -153,14 +160,16 @@ def walk_trees(store, tree1_id, tree2_id, prune_identical=False):
         path = entry1.path or entry2.path
         todo.extend(reversed(_merge_entries(path, tree1, tree2)))
         yield entry1, entry2
+# nw_e: function diff_tree.walk_trees #
 
-
+# nw_s: function diff_tree._skip_tree |b92a9924615dc45c9ec02f13ec8bb954#
 def _skip_tree(entry):
     if entry.mode is None or stat.S_ISDIR(entry.mode):
         return _NULL_ENTRY
     return entry
+# nw_e: function diff_tree._skip_tree #
 
-
+# nw_s: function diff_tree.tree_changes |b8f7a07e7d2d17b72ec2d4f3eb57c915#
 def tree_changes(store, tree1_id, tree2_id, want_unchanged=False,
                  rename_detector=None):
     """Find the differences between the contents of two trees.
@@ -174,12 +183,15 @@ def tree_changes(store, tree1_id, tree2_id, want_unchanged=False,
     :return: Iterator over TreeChange instances for each change between the
         source and target tree.
     """
+    # nw_s: [[diff_tree.tree_changes()]] if rename detection |5bed2c0f4d1920a281494396e63b7a10#
     if (rename_detector is not None and tree1_id is not None and
             tree2_id is not None):
         for change in rename_detector.changes_with_renames(
                 tree1_id, tree2_id, want_unchanged=want_unchanged):
             yield change
         return
+    # nw_e: [[diff_tree.tree_changes()]] if rename detection #
+    #// else
 
     entries = walk_trees(store, tree1_id, tree2_id,
                          prune_identical=(not want_unchanged))
@@ -209,6 +221,7 @@ def tree_changes(store, tree1_id, tree2_id, want_unchanged=False,
             # Both were None because at least one was a tree.
             continue
         yield TreeChange(change_type, entry1, entry2)
+# nw_e: function diff_tree.tree_changes #
 
 
 def _all_eq(seq, key, value):
@@ -371,7 +384,7 @@ def _tree_change_key(entry):
         path2 = path1
     return (path1, path2)
 
-
+# nw_s: class RenameDetector |5862704f037c90357b4c0d95337824de#
 class RenameDetector(object):
     """Object for handling rename detection between two trees."""
 
@@ -590,6 +603,7 @@ class RenameDetector(object):
         self._prune_unchanged()
         return self._sorted_changes()
 
+# nw_e: class RenameDetector #
 
 # Hold on to the pure-python implementations for testing.
 _is_tree_py = _is_tree
