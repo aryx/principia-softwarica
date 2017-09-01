@@ -4,12 +4,16 @@
 
 #define	VERSION9P	"9P2000"
 
+/*s: constant MAXWELEM */
 #define	MAXWELEM	16
+/*e: constant MAXWELEM */
 
-typedef
+typedef struct	Fcall Fcall;
+
+/*s: type Fcall */
 struct	Fcall
 {
-    // enum<Txxx>
+    // enum<FcallType>
 	uchar	type;
 
 	u32int	fid;
@@ -62,36 +66,52 @@ struct	Fcall
 			uchar	*stat;		/* Twstat, Rstat */
 		};
 	};
-} Fcall;
+};
+/*e: type Fcall */
 
-
+/*s: macros GBITxxx */
 #define	GBIT8(p)	((p)[0])
 #define	GBIT16(p)	((p)[0]|((p)[1]<<8))
 #define	GBIT32(p)	((p)[0]|((p)[1]<<8)|((p)[2]<<16)|((p)[3]<<24))
 #define	GBIT64(p)	((u32int)((p)[0]|((p)[1]<<8)|((p)[2]<<16)|((p)[3]<<24)) |\
 				((vlong)((p)[4]|((p)[5]<<8)|((p)[6]<<16)|((p)[7]<<24)) << 32))
+/*e: macros GBITxxx */
 
+/*s: macros PBITxxx */
 #define	PBIT8(p,v)	(p)[0]=(v)
 #define	PBIT16(p,v)	do{(p)[0]=(v);(p)[1]=(v)>>8;}while(0)
 #define	PBIT32(p,v)	do{(p)[0]=(v);(p)[1]=(v)>>8;(p)[2]=(v)>>16;(p)[3]=(v)>>24;}while(0)
 #define	PBIT64(p,v)	do{(p)[0]=(v);(p)[1]=(v)>>8;(p)[2]=(v)>>16;(p)[3]=(v)>>24;\
 			(p)[4]=(v)>>32;(p)[5]=(v)>>40;(p)[6]=(v)>>48;(p)[7]=(v)>>56;}while(0)
+/*e: macros PBITxxx */
 
+/*s: macros BITxxx */
 #define	BIT8SZ		1
 #define	BIT16SZ		2
 #define	BIT32SZ		4
 #define	BIT64SZ		8
-#define	QIDSZ	(BIT8SZ+BIT32SZ+BIT64SZ)
+/*e: macros BITxxx */
 
+/*s: constant QIDSZ */
+#define	QIDSZ	(BIT8SZ+BIT32SZ+BIT64SZ)
+/*e: constant QIDSZ */
+
+/*s: constant STATFIXLEN */
 /* STATFIXLEN includes leading 16-bit count */
 /* The count, however, excludes itself; total size is BIT16SZ+count */
 #define STATFIXLEN	(BIT16SZ+QIDSZ+5*BIT16SZ+4*BIT32SZ+1*BIT64SZ)	/* amount of fixed length data in a stat buffer */
+/*e: constant STATFIXLEN */
+
 
 #define	NOTAG		(ushort)~0U	/* Dummy tag */
 #define	NOFID		(u32int)~0U	/* Dummy fid */
-#define	IOHDRSZ		24	/* ample room for Twrite/Rread header (iounit) */
 
-enum
+/*s: constant IOHDRSZ */
+#define	IOHDRSZ		24	/* ample room for Twrite/Rread header (iounit) */
+/*e: constant IOHDRSZ */
+
+/*s: type FcallType */
+enum FcallType
 {
 	Tversion =	100,
 	Rversion,
@@ -121,8 +141,11 @@ enum
 	Rstat,
 	Twstat =	126,
 	Rwstat,
+
 	Tmax,
 };
+/*e: type FcallType */
+
 
 uint	convM2S(uchar*, uint, Fcall*);
 uint	convS2M(Fcall*, uchar*, uint);

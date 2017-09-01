@@ -24,9 +24,11 @@ fcallfmt(Fmt *fmt)
 
     e = buf+sizeof(buf);
     f = va_arg(fmt->args, Fcall*);
+
     type = f->type;
     fid = f->fid;
     tag = f->tag;
+
     switch(type){
     case Tversion:  /* 100 */
         seprint(buf, e, "Tversion tag %ud msize %ud version '%s'", tag, f->msize, f->version);
@@ -160,12 +162,14 @@ qidtype(char *s, uchar t)
     p = s;
     if(t & QTDIR)
         *p++ = 'd';
+
     if(t & QTAPPEND)
         *p++ = 'a';
     if(t & QTEXCL)
         *p++ = 'l';
     if(t & QTAUTH)
         *p++ = 'A';
+
     *p = '\0';
     return s;
 }

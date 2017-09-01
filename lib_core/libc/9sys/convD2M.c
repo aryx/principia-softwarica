@@ -60,24 +60,27 @@ convD2M(Dir *d, uchar *buf, uint nbuf)
     p += BIT16SZ;
 
     if(ss > nbuf)
-        return BIT16SZ;
+        return BIT16SZ; // ugly error code
 
     PBIT16(p, d->type);
     p += BIT16SZ;
     PBIT32(p, d->dev);
     p += BIT32SZ;
+
     PBIT8(p, d->qid.type);
     p += BIT8SZ;
     PBIT32(p, d->qid.vers);
     p += BIT32SZ;
     PBIT64(p, d->qid.path);
     p += BIT64SZ;
+
     PBIT32(p, d->mode);
     p += BIT32SZ;
     PBIT32(p, d->atime);
     p += BIT32SZ;
     PBIT32(p, d->mtime);
     p += BIT32SZ;
+
     PBIT64(p, d->length);
     p += BIT64SZ;
 

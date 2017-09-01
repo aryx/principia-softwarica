@@ -69,9 +69,6 @@ sizeS2M(Fcall *f)
 
     switch(f->type)
     {
-    default:
-        return 0;
-
     case Tversion:
         n += BIT32SZ;
         n += stringsz(f->version);
@@ -197,13 +194,16 @@ sizeS2M(Fcall *f)
 
     case Rwstat:
         break;
+    default:
+        return 0;
+
     }
     return n;
 }
 /*e: function sizeS2M */
 
 /*s: function convS2M */
-uint
+error0
 convS2M(Fcall *f, uchar *ap, uint nap)
 {
     uchar *p;
@@ -211,14 +211,15 @@ convS2M(Fcall *f, uchar *ap, uint nap)
 
     size = sizeS2M(f);
     if(size == 0)
-        return 0;
+        return ERROR_0;
     if(size > nap)
-        return 0;
+        return ERROR_0;
 
     p = (uchar*)ap;
 
     PBIT32(p, size);
     p += BIT32SZ;
+
     PBIT8(p, f->type);
     p += BIT8SZ;
     PBIT16(p, f->tag);
@@ -226,9 +227,6 @@ convS2M(Fcall *f, uchar *ap, uint nap)
 
     switch(f->type)
     {
-    default:
-        return 0;
-
     case Tversion:
         PBIT32(p, f->msize);
         p += BIT32SZ;
@@ -264,7 +262,7 @@ convS2M(Fcall *f, uchar *ap, uint nap)
         PBIT16(p, f->nwname);
         p += BIT16SZ;
         if(f->nwname > MAXWELEM)
-            return 0;
+            return ERROR_0;
         for(i=0; i<f->nwname; i++)
             p = pstring(p, f->wname[i]);
         break;
@@ -353,7 +351,7 @@ convS2M(Fcall *f, uchar *ap, uint nap)
         PBIT16(p, f->nwqid);
         p += BIT16SZ;
         if(f->nwqid > MAXWELEM)
-            return 0;
+            return ERROR_0;
         for(i=0; i<f->nwqid; i++)
             p = pqid(p, &f->wqid[i]);
         break;
@@ -392,9 +390,12 @@ convS2M(Fcall *f, uchar *ap, uint nap)
 
     case Rwstat:
         break;
+    default:
+        return ERROR_0;
+
     }
     if(size != p-ap)
-        return 0;
+        return ERROR_0;
     return size;
 }
 /*e: function convS2M */
