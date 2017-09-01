@@ -1021,7 +1021,59 @@ extern Pool*	imagmem;
 <<type Pool_flag>>
 @
 
+\subsection{[[include/pool.h]]}
 
+<<include/fcall.h>>=
+#pragma	src	"/sys/src/libc/9sys"
+#pragma	lib	"libc.a"
+
+#define	VERSION9P	"9P2000"
+
+<<constant MAXWELEM>>
+
+typedef struct	Fcall Fcall;
+
+<<type Fcall>>
+
+<<macros GBITxxx>>
+
+<<macros PBITxxx>>
+
+<<macros BITxxx>>
+
+<<constant QIDSZ>>
+
+<<constant STATFIXLEN>>
+
+
+#define	NOTAG		(ushort)~0U	/* Dummy tag */
+#define	NOFID		(u32int)~0U	/* Dummy fid */
+
+<<constant IOHDRSZ>>
+
+<<type FcallType>>
+
+
+uint	convM2S(uchar*, uint, Fcall*);
+uint	convS2M(Fcall*, uchar*, uint);
+uint	sizeS2M(Fcall*);
+
+int		statcheck(uchar *abuf, uint nbuf);
+uint	convM2D(uchar*, uint, Dir*, char*);
+uint	convD2M(Dir*, uchar*, uint);
+uint	sizeD2M(Dir*);
+
+// dumpers
+int	fcallfmt(Fmt*);
+int	dirfmt(Fmt*);
+int	dirmodefmt(Fmt*);
+
+int	read9pmsg(fdt, void*, uint);
+
+#pragma	varargck	type	"F"	Fcall*
+#pragma	varargck	type	"M"	ulong
+#pragma	varargck	type	"D"	Dir*
+@
 
 
 \section{[[lib_core/libc/port]]}
@@ -7089,81 +7141,6 @@ sizeD2M(Dir *d)
 }
 @
 
-<<function convD2M>>=
-uint
-convD2M(Dir *d, uchar *buf, uint nbuf)
-{
-    uchar *p, *ebuf;
-    char *sv[4];
-    int i, ns, nsv[4], ss;
-
-    if(nbuf < BIT16SZ)
-        return 0;
-
-    p = buf;
-    ebuf = buf + nbuf;
-
-    sv[0] = d->name;
-    sv[1] = d->uid;
-    sv[2] = d->gid;
-    sv[3] = d->muid;
-
-    ns = 0;
-    for(i = 0; i < 4; i++){
-        if(sv[i])
-            nsv[i] = strlen(sv[i]);
-        else
-            nsv[i] = 0;
-        ns += nsv[i];
-    }
-
-    ss = STATFIXLEN + ns;
-
-    /* set size before erroring, so user can know how much is needed */
-    /* note that length excludes count field itself */
-    PBIT16(p, ss-BIT16SZ);
-    p += BIT16SZ;
-
-    if(ss > nbuf)
-        return BIT16SZ;
-
-    PBIT16(p, d->type);
-    p += BIT16SZ;
-    PBIT32(p, d->dev);
-    p += BIT32SZ;
-    PBIT8(p, d->qid.type);
-    p += BIT8SZ;
-    PBIT32(p, d->qid.vers);
-    p += BIT32SZ;
-    PBIT64(p, d->qid.path);
-    p += BIT64SZ;
-    PBIT32(p, d->mode);
-    p += BIT32SZ;
-    PBIT32(p, d->atime);
-    p += BIT32SZ;
-    PBIT32(p, d->mtime);
-    p += BIT32SZ;
-    PBIT64(p, d->length);
-    p += BIT64SZ;
-
-    for(i = 0; i < 4; i++){
-        ns = nsv[i];
-        if(p + ns + BIT16SZ > ebuf)
-            return 0;
-        PBIT16(p, ns);
-        p += BIT16SZ;
-        if(ns)
-            memmove(p, sv[i], ns);
-        p += ns;
-    }
-
-    if(ss != p - buf)
-        return 0;
-
-    return p - buf;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -7211,72 +7188,6 @@ statcheck(uchar *buf, uint nbuf)
 static char nullstring[] = "";
 @
 
-<<function convM2D>>=
-uint
-convM2D(uchar *buf, uint nbuf, Dir *d, char *strs)
-{
-    uchar *p, *ebuf;
-    char *sv[4];
-    int i, ns;
-
-    if(nbuf < STATFIXLEN)
-        return 0; 
-
-    p = buf;
-    ebuf = buf + nbuf;
-
-    p += BIT16SZ;   /* ignore size */
-    d->type = GBIT16(p);
-    p += BIT16SZ;
-    d->dev = GBIT32(p);
-    p += BIT32SZ;
-    d->qid.type = GBIT8(p);
-    p += BIT8SZ;
-    d->qid.vers = GBIT32(p);
-    p += BIT32SZ;
-    d->qid.path = GBIT64(p);
-    p += BIT64SZ;
-    d->mode = GBIT32(p);
-    p += BIT32SZ;
-    d->atime = GBIT32(p);
-    p += BIT32SZ;
-    d->mtime = GBIT32(p);
-    p += BIT32SZ;
-    d->length = GBIT64(p);
-    p += BIT64SZ;
-
-    for(i = 0; i < 4; i++){
-        if(p + BIT16SZ > ebuf)
-            return 0;
-        ns = GBIT16(p);
-        p += BIT16SZ;
-        if(p + ns > ebuf)
-            return 0;
-        if(strs){
-            sv[i] = strs;
-            memmove(strs, p, ns);
-            strs += ns;
-            *strs++ = '\0';
-        }
-        p += ns;
-    }
-
-    if(strs){
-        d->name = sv[0];
-        d->uid = sv[1];
-        d->gid = sv[2];
-        d->muid = sv[3];
-    }else{
-        d->name = nullstring;
-        d->uid = nullstring;
-        d->gid = nullstring;
-        d->muid = nullstring;
-    }
-    
-    return p - buf;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -7294,45 +7205,6 @@ convM2D(uchar *buf, uint nbuf, Dir *d, char *strs)
 
 
 \subsection*{[[9sys/convM2S.c]]}
-
-<<function gstring>>=
-static
-uchar*
-gstring(uchar *p, uchar *ep, char **s)
-{
-    uint n;
-
-    if(p+BIT16SZ > ep)
-        return nil;
-    n = GBIT16(p);
-    p += BIT16SZ - 1;
-    if(p+n+1 > ep)
-        return nil;
-    /* move it down, on top of count, to make room for '\0' */
-    memmove(p, p + 1, n);
-    p[n] = '\0';
-    *s = (char*)p;
-    p += n+1;
-    return p;
-}
-@
-
-<<function gqid>>=
-static
-uchar*
-gqid(uchar *p, uchar *ep, Qid *q)
-{
-    if(p+QIDSZ > ep)
-        return nil;
-    q->type = GBIT8(p);
-    p += BIT8SZ;
-    q->vers = GBIT32(p);
-    p += BIT32SZ;
-    q->path = GBIT64(p);
-    p += BIT64SZ;
-    return p;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -7352,204 +7224,7 @@ gqid(uchar *p, uchar *ep, Qid *q)
 
 \subsection*{[[9sys/convS2M.c]]}
 
-<<function pstring>>=
-static
-uchar*
-pstring(uchar *p, char *s)
-{
-    uint n;
 
-    if(s == nil){
-        PBIT16(p, 0);
-        p += BIT16SZ;
-        return p;
-    }
-
-    n = strlen(s);
-    /*
-     * We are moving the string before the length,
-     * so you can S2M a struct into an existing message
-     */
-    memmove(p + BIT16SZ, s, n);
-    PBIT16(p, n);
-    p += n + BIT16SZ;
-    return p;
-}
-@
-
-<<function pqid>>=
-static
-uchar*
-pqid(uchar *p, Qid *q)
-{
-    PBIT8(p, q->type);
-    p += BIT8SZ;
-    PBIT32(p, q->vers);
-    p += BIT32SZ;
-    PBIT64(p, q->path);
-    p += BIT64SZ;
-    return p;
-}
-@
-
-<<function stringsz>>=
-static
-uint
-stringsz(char *s)
-{
-    if(s == nil)
-        return BIT16SZ;
-
-    return BIT16SZ+strlen(s);
-}
-@
-
-<<function sizeS2M>>=
-uint
-sizeS2M(Fcall *f)
-{
-    uint n;
-    int i;
-
-    n = 0;
-    n += BIT32SZ;   /* size */
-    n += BIT8SZ;    /* type */
-    n += BIT16SZ;   /* tag */
-
-    switch(f->type)
-    {
-    default:
-        return 0;
-
-    case Tversion:
-        n += BIT32SZ;
-        n += stringsz(f->version);
-        break;
-
-    case Tflush:
-        n += BIT16SZ;
-        break;
-
-    case Tauth:
-        n += BIT32SZ;
-        n += stringsz(f->uname);
-        n += stringsz(f->aname);
-        break;
-
-    case Tattach:
-        n += BIT32SZ;
-        n += BIT32SZ;
-        n += stringsz(f->uname);
-        n += stringsz(f->aname);
-        break;
-
-    case Twalk:
-        n += BIT32SZ;
-        n += BIT32SZ;
-        n += BIT16SZ;
-        for(i=0; i<f->nwname; i++)
-            n += stringsz(f->wname[i]);
-        break;
-
-    case Topen:
-        n += BIT32SZ;
-        n += BIT8SZ;
-        break;
-
-    case Tcreate:
-        n += BIT32SZ;
-        n += stringsz(f->name);
-        n += BIT32SZ;
-        n += BIT8SZ;
-        break;
-
-    case Tread:
-        n += BIT32SZ;
-        n += BIT64SZ;
-        n += BIT32SZ;
-        break;
-
-    case Twrite:
-        n += BIT32SZ;
-        n += BIT64SZ;
-        n += BIT32SZ;
-        n += f->count;
-        break;
-
-    case Tclunk:
-    case Tremove:
-        n += BIT32SZ;
-        break;
-
-    case Tstat:
-        n += BIT32SZ;
-        break;
-
-    case Twstat:
-        n += BIT32SZ;
-        n += BIT16SZ;
-        n += f->nstat;
-        break;
-/*
- */
-
-    case Rversion:
-        n += BIT32SZ;
-        n += stringsz(f->version);
-        break;
-
-    case Rerror:
-        n += stringsz(f->ename);
-        break;
-
-    case Rflush:
-        break;
-
-    case Rauth:
-        n += QIDSZ;
-        break;
-
-    case Rattach:
-        n += QIDSZ;
-        break;
-
-    case Rwalk:
-        n += BIT16SZ;
-        n += f->nwqid*QIDSZ;
-        break;
-
-    case Ropen:
-    case Rcreate:
-        n += QIDSZ;
-        n += BIT32SZ;
-        break;
-
-    case Rread:
-        n += BIT32SZ;
-        n += f->count;
-        break;
-
-    case Rwrite:
-        n += BIT32SZ;
-        break;
-
-    case Rclunk:
-        break;
-
-    case Rremove:
-        break;
-
-    case Rstat:
-        n += BIT16SZ;
-        n += f->nstat;
-        break;
-
-    case Rwstat:
-        break;
-    }
-    return n;
-}
-@
 
 
 %-------------------------------------------------------------
