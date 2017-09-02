@@ -76,25 +76,36 @@ typedef struct IOchunk IOchunk;
 /*
  * mem routines
  */
+extern  void*   memset(void*, int, ulong);
 extern  void*   memcpy(void*, void*, ulong);
 extern  int     memcmp(void*, void*, ulong);
-extern  void*   memset(void*, int, ulong);
 extern  void*   memchr(void*, int, ulong);
 
+// less useful?
 extern  void*   memmove(void*, void*, ulong);
 extern  void*   memccpy(void*, void*, int, ulong);
+
+
 
 /*
  * string routines
  */
+// memxxx equivalent, but with special handling for '\0' (no need pass ulong)
 extern  char*   strcpy(char*, char*);
 extern  int     strcmp(char*, char*);
-extern  char*   strcat(char*, char*);
 extern  char*   strchr(char*, int);
-extern  char*   strdup(char*);
+extern  char*   strrchr(char*, int);
+
+
 extern  long    strlen(char*);
+extern  char*   strdup(char*);
+extern  char*   strcat(char*, char*);
 extern  char*   strstr(char*, char*);
 
+extern  int tolower(int);
+extern  int toupper(int);
+
+// less useful?
 extern  char*   strecpy(char*, char*, char*);
 extern  char*   strncat(char*, char*, long);
 extern  char*   strncpy(char*, char*, long);
@@ -102,8 +113,6 @@ extern  int     strncmp(char*, char*, long);
 
 extern  char*   strpbrk(char*, char*);
 
-extern  char*   strrchr(char*, int);
-extern  char*   strtok(char*, char*);
 extern  long    strspn(char*, char*);
 extern  long    strcspn(char*, char*);
 
@@ -111,6 +120,7 @@ extern  int     cistrncmp(char*, char*, int);
 extern  int     cistrcmp(char*, char*);
 extern  char*   cistrstr(char*, char*);
 
+extern  char*   strtok(char*, char*);
 extern  int     tokenize(char*, char**, int);
 
 enum
@@ -138,56 +148,72 @@ enum
 /*
  * rune routines
  */
-extern  int runetochar(char*, Rune*);
+// char <-> rune conversion
 extern  int chartorune(Rune*, char*);
-extern  int runelen(long);
+extern  int runetochar(char*, Rune*);
 
+// strxxx equivalent for rune
+extern  Rune*   runestrcpy(Rune*, Rune*);
+extern  int     runestrcmp(Rune*, Rune*);
+extern  Rune*   runestrchr(Rune*, Rune);
+extern  Rune*   runestrrchr(Rune*, Rune);
+
+extern  long    runestrlen(Rune*);
+extern  Rune*   runestrdup(Rune*);
+extern  Rune*   runestrcat(Rune*, Rune*);
+extern  Rune*   runestrstr(Rune*, Rune*);
+
+// less useful
+extern  Rune*   runestrecpy(Rune*, Rune*, Rune*);
+extern  Rune*   runestrncpy(Rune*, Rune*, long);
+extern  Rune*   runestrncat(Rune*, Rune*, long);
+extern  int     runestrncmp(Rune*, Rune*, long);
+
+extern  Rune    tolowerrune(Rune);
+extern  Rune    toupperrune(Rune);
+
+extern  int isalpharune(Rune);
+extern  int isdigitrune(Rune);
+extern  int islowerrune(Rune);
+extern  int isspacerune(Rune);
+extern  int isupperrune(Rune);
+
+// ??
+extern  int istitlerune(Rune);
+extern  Rune    tobaserune(Rune);
+extern  int isbaserune(Rune);
+extern  Rune    totitlerune(Rune);
+
+// ?????
+extern  int runelen(long);
 extern  int runenlen(Rune*, int);
 extern  int fullrune(char*, int);
+
+// strxxx equivalent for utf
 extern  int utflen(char*);
-extern  int utfnlen(char*, long);
 extern  char*   utfrune(char*, long);
+
+// less useful?
+extern  int utfnlen(char*, long);
 extern  char*   utfrrune(char*, long);
 extern  char*   utfutf(char*, char*);
 extern  char*   utfecpy(char*, char*, char*);
 
-extern  Rune*   runestrcat(Rune*, Rune*);
-extern  Rune*   runestrchr(Rune*, Rune);
-extern  int     runestrcmp(Rune*, Rune*);
-extern  Rune*   runestrcpy(Rune*, Rune*);
-extern  Rune*   runestrncpy(Rune*, Rune*, long);
-extern  Rune*   runestrecpy(Rune*, Rune*, Rune*);
-extern  Rune*   runestrdup(Rune*);
-extern  Rune*   runestrncat(Rune*, Rune*, long);
-extern  int     runestrncmp(Rune*, Rune*, long);
-extern  Rune*   runestrrchr(Rune*, Rune);
-extern  long    runestrlen(Rune*);
-extern  Rune*   runestrstr(Rune*, Rune*);
-
-extern  Rune    tolowerrune(Rune);
-extern  Rune    totitlerune(Rune);
-extern  Rune    toupperrune(Rune);
-extern  Rune    tobaserune(Rune);
-extern  int isalpharune(Rune);
-extern  int isbaserune(Rune);
-extern  int isdigitrune(Rune);
-extern  int islowerrune(Rune);
-extern  int isspacerune(Rune);
-extern  int istitlerune(Rune);
-extern  int isupperrune(Rune);
 
 /*
  * malloc
  */
 extern  void*   malloc(ulong);
-extern  void*   mallocz(ulong, bool);
 extern  void    free(void*);
 
-extern  ulong   msize(void*);
-extern  void*   mallocalign(ulong, ulong, long, ulong);
+// less useful
+extern  void*   mallocz(ulong, bool);
 extern  void*   calloc(ulong, ulong);
 extern  void*   realloc(void*, ulong);
+extern  ulong   msize(void*);
+extern  void*   mallocalign(ulong, ulong, long, ulong);
 
+// internals
 extern  void    setmalloctag(void*, ulong);
 extern  void    setrealloctag(void*, ulong);
 extern  ulong   getmalloctag(void*);
@@ -240,18 +266,22 @@ enum Fmt_flag {
 
 // pad: used to be just print()? but for cg transformed in a pointer func
 extern  int     (*print)(char*, ...);
-extern  char*   seprint(char*, char*, char*, ...);
-extern  int     snprint(char*, int, char*, ...);
-extern  char*   smprint(char*, ...);
 extern  int     sprint(char*, char*, ...);
 extern  int     fprint(int, char*, ...);
 
-extern  char*   vseprint(char*, char*, char*, va_list);
-extern  int     vsnprint(char*, int, char*, va_list);
-extern  char*   vsmprint(char*, va_list);
 extern  int     vfprint(int, char*, va_list);
+extern  char*   vseprint(char*, char*, char*, va_list);
 
 extern  int     runesprint(Rune*, char*, ...);
+
+// less useful
+extern  char*   seprint(char*, char*, char*, ...);
+extern  int     snprint(char*, int, char*, ...);
+extern  char*   smprint(char*, ...);
+
+extern  int     vsnprint(char*, int, char*, va_list);
+extern  char*   vsmprint(char*, va_list);
+
 extern  int     runesnprint(Rune*, int, char*, ...);
 extern  Rune*   runeseprint(Rune*, Rune*, char*, ...);
 extern  Rune*   runesmprint(char*, ...);
@@ -367,12 +397,15 @@ extern  int     needsrcquote(int);
  * random number
  */
 extern  void    srand(long);
+
 extern  int     rand(void);
+extern  double  frand(void);
 extern  int     nrand(int);
+extern  ulong   truerand(void);         /* uses /dev/random */
+
+// less useful
 extern  long    lrand(void);
 extern  long    lnrand(long);
-extern  double  frand(void);
-extern  ulong   truerand(void);         /* uses /dev/random */
 extern  ulong   ntruerand(ulong);       /* uses /dev/random */
 
 /*
@@ -384,6 +417,8 @@ extern  double  frexp(double, int*);
 extern  double  ldexp(double, int);
 extern  double  modf(double, double*);
 extern  double  pow10(int);
+
+#define HUGE    3.4028234e38
 
 
 extern  double  NaN(void);
@@ -403,6 +438,9 @@ extern  double  sqrt(double);
 extern  double  hypot(double, double);
 extern  double  fmod(double, double);
 
+#define PIO2    1.570796326794896619231e0
+#define PI  (PIO2+PIO2)
+
 extern  double  sin(double);
 extern  double  cos(double);
 extern  double  tan(double);
@@ -414,6 +452,20 @@ extern  double  sinh(double);
 extern  double  cosh(double);
 extern  double  tanh(double);
 
+
+// conversion
+extern  double  atof(char*);
+extern  int     atoi(char*);
+extern  long    atol(char*);
+extern  vlong   atoll(char*);
+
+extern  double  strtod(char*, char**);
+extern  long    strtol(char*, char**, int);
+extern  ulong   strtoul(char*, char**, int);
+extern  vlong   strtoll(char*, char**, int);
+extern  uvlong  strtoull(char*, char**, int);
+
+// internals?
 extern  ulong   getfcr(void);
 extern  void    setfsr(ulong);
 extern  ulong   getfsr(void);
@@ -422,10 +474,6 @@ extern  void    setfcr(ulong);
 extern  ulong   umuldiv(ulong, ulong, ulong);
 extern  long    muldiv(long, long, long);
 
-
-#define HUGE    3.4028234e38
-#define PIO2    1.570796326794896619231e0
-#define PI  (PIO2+PIO2)
 
 /*
  * Time-of-day
@@ -447,81 +495,28 @@ struct Tm {
 };
 /*e: type Tm */
 
+extern  long    time(long*);
+
+extern  double  cputime(void);
+extern  vlong   nsec(void);
+
 extern  Tm*     gmtime(long);
 extern  Tm*     localtime(long);
+
+extern  long    tm2sec(Tm*);
+
+// less useful?
 extern  char*   asctime(Tm*);
 extern  char*   ctime(long);
-extern  double  cputime(void);
 extern  long    times(long*);
-extern  long    tm2sec(Tm*);
-extern  vlong   nsec(void);
 
 extern  void    cycles(uvlong*);    /* 64-bit value of the cycle counter if there is one, 0 if there isn't */
 
-extern  long    time(long*);
 
 
 /*
  * one-of-a-kind
  */
-enum
-{
-    PNPROC      = 1,
-    PNGROUP     = 2,
-};
-
-// debugging tools
-/*s: macro assert */
-#define assert(x)   do{ if(x) {} else _assert("x"); }while(0)
-/*e: macro assert */
-extern  void    (*_assert)(char*);
-extern  void    perror(char*);
-extern  void    sysfatal(char*, ...);
-extern  void    syslog(int, char*, char*, ...);
-
-extern  uintptr getcallerpc(void*);
-
-#pragma varargck    argpos  sysfatal    1
-#pragma varargck    argpos  syslog  3
-
-// concurrency
-extern  int     setjmp(jmp_buf);
-extern  void    longjmp(jmp_buf, int);
-extern  void    notejmp(void*, jmp_buf, int);
-
-// IPC
-extern  int     postnote(int, int, char *);
-extern  int     atexit(void(*)(void));
-extern  void    atexitdont(void(*)(void));
-extern  int     atnotify(int(*)(void*, char*), int);
-
-// conversion
-extern  double  atof(char*);
-extern  int     atoi(char*);
-extern  long    atol(char*);
-extern  vlong   atoll(char*);
-
-extern  double  strtod(char*, char**);
-extern  long    strtol(char*, char**, int);
-extern  ulong   strtoul(char*, char**, int);
-extern  vlong   strtoll(char*, char**, int);
-extern  uvlong  strtoull(char*, char**, int);
-
-// encryption
-extern  int decrypt(void*, void*, int);
-extern  int encrypt(void*, void*, int);
-extern  int netcrypt(void*, void*);
-
-extern  int dec64(uchar*, int, char*, int);
-extern  int enc64(char*, int, uchar*, int);
-extern  int dec32(uchar*, int, char*, int);
-extern  int enc32(char*, int, uchar*, int);
-extern  int dec16(uchar*, int, char*, int);
-extern  int enc16(char*, int, uchar*, int);
-
-
-extern  int tolower(int);
-extern  int toupper(int);
 
 // misc
 extern  double  charstod(int(*)(void*), void*);
@@ -538,6 +533,24 @@ extern  int     iounit(fdt);
 // ugly redefined by user code? see statusbar.c
 extern  void    qsort(void*, long, long, int (*)(void*, void*));
 
+
+
+/*
+| debugging tools 
+*/
+
+/*s: macro assert */
+#define assert(x)   do{ if(x) {} else _assert("x"); }while(0)
+/*e: macro assert */
+extern  void    (*_assert)(char*);
+extern  void    perror(char*);
+extern  void    sysfatal(char*, ...);
+extern  void    syslog(int, char*, char*, ...);
+
+#pragma varargck    argpos  sysfatal    1
+#pragma varargck    argpos  syslog  3
+
+extern  uintptr getcallerpc(void*);
 
 /*
  *  profiling
@@ -556,10 +569,33 @@ enum Profiling {
 extern  void    prof(void (*fn)(void*), void *arg, int entries, int what);
 
 /*
+ | concurrency
+ */
+extern  int     setjmp(jmp_buf);
+extern  void    longjmp(jmp_buf, int);
+extern  void    notejmp(void*, jmp_buf, int);
+
+// IPC
+/*s: type PostnoteKind */
+enum
+{
+    PNPROC      = 1,
+    PNGROUP     = 2,
+};
+/*e: type PostnoteKind */
+extern  int     postnote(int, int, char *);
+extern  int     atnotify(int(*)(void*, char*), int);
+
+extern  int     atexit(void(*)(void));
+extern  void    atexitdont(void(*)(void));
+
+
+/*
  * atomic
  */
 extern long    ainc(long*);
 extern long    adec(long*);
+
 extern int     cas32(u32int*, u32int, u32int);
 extern int     casp(void**, void*, void*);
 extern int     casl(ulong*, ulong, ulong);
@@ -599,10 +635,10 @@ struct QLock {
 };
 /*e: type QLock */
 
-
 extern  void    qlock(QLock*);
 extern  void    qunlock(QLock*);
 extern  int     canqlock(QLock*);
+
 extern  void    _qlockinit(void* (*)(void*, void*));    /* called only by the thread library */
 
 /*s: type RWLock */
@@ -635,6 +671,7 @@ struct Rendez {
 
 extern  void    rsleep(Rendez*);    /* unlocks r->l, sleeps, locks r->l again */
 extern  int     rwakeup(Rendez*);
+
 extern  int     rwakeupall(Rendez*);
 extern  void**  privalloc(void);
 extern  void    privfree(void**);
@@ -651,12 +688,6 @@ extern  int     hangup(int);
 extern  int     listen(char*, char*);
 extern  char*   netmkaddr(char*, char*, char*);
 extern  int     reject(int, char*, char*);
-
-/*
- *  encryption
- */
-extern  int pushssl(int, char*, char*, char*, int*);
-extern  int pushtls(int, char*, char*, int, char*, char*);
 
 /*
  *  network services
@@ -676,6 +707,25 @@ struct NetConnInfo {
 /*e: type NetConnInfo */
 extern  NetConnInfo*    getnetconninfo(char*, int);
 extern  void            freenetconninfo(NetConnInfo*);
+
+/*
+ *  encryption
+ */
+extern  int pushssl(int, char*, char*, char*, int*);
+extern  int pushtls(int, char*, char*, int, char*, char*);
+
+// encryption
+extern  int decrypt(void*, void*, int);
+extern  int encrypt(void*, void*, int);
+extern  int netcrypt(void*, void*);
+
+extern  int dec64(uchar*, int, char*, int);
+extern  int enc64(char*, int, uchar*, int);
+extern  int dec32(uchar*, int, char*, int);
+extern  int enc32(char*, int, uchar*, int);
+extern  int dec16(uchar*, int, char*, int);
+extern  int enc16(char*, int, uchar*, int);
+
 
 /*
  * system calls
