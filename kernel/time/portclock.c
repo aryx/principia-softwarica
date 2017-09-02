@@ -86,7 +86,7 @@ tadd(Timers *tt, Timer *nt)
 /*e: function tadd */
 
 /*s: function tdel */
-static tfast
+static Tfast
 tdel(Timer *dt)
 {
     Timer *t, **last;

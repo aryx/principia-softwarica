@@ -18,6 +18,9 @@ enum misc_constants
 typedef uintptr phys_addr;
 // virtual address (which should be a user address)
 typedef uintptr virt_addr;
+
+// user address (under KZERO)
+typedef uintptr user_addr;
 // kernel address (mostly physical + KZERO)
 typedef uintptr kern_addr;
 /*x: pad memory pointer types(x86) */
@@ -25,6 +28,15 @@ typedef ulong* kern_addr2;
 typedef ulong* virt_addr2;
 typedef void* virt_addr3;
 typedef void* kern_addr3;
+
+// wp = word pointer, vp = void pointer
+typedef ulong* virt_wp; 
+typedef void* virt_vp;
+typedef ulong* kern_wp;
+typedef void* kern_vp;
+typedef ulong* user_wp;
+typedef void* user_vp;
+
 /*e: pad memory pointer types(x86) */
 
 #include "dat_forward.h"

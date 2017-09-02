@@ -147,8 +147,8 @@ enum FcallType
 /*e: type FcallType */
 
 
-uint    convM2S(uchar*, uint, Fcall*);
-uint    convS2M(Fcall*, uchar*, uint);
+error0    convM2S(uchar*, uint, Fcall*);
+error0    convS2M(Fcall*, uchar*, uint);
 uint    sizeS2M(Fcall*);
 
 int     statcheck(uchar *abuf, uint nbuf);
