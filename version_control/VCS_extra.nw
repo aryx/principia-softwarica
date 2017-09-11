@@ -134,120 +134,6 @@ open Common
 
 \subsection*{[[version_control/changes.ml]]}
 
-<<function Changes.skip_tree_and_adjust_path>>=
-let skip_tree_and_adjust_path read_blob dirpath entry_opt =
-  match entry_opt with
-  | Some { Tree.perm = Tree.Dir } -> None
-  | Some { Tree.perm = Tree.Commit } -> failwith "submodule not supported"
-  | Some x -> Some ({ Change.
-    path = Filename.concat dirpath x.Tree.name;
-    mode = Index.mode_of_perm x.Tree.perm;
-    
-    (* todo: do that later? once know we will return a change with this entry?
-     * make it lazy?
-     *)
-    content = lazy (read_blob x.Tree.node);
-  }, x.Tree.node)
-  | None -> None
-@
-
-<<function Changes.content_from_path_and_stat_index>>=
-(* similar to Repository.content_from_path_and_unix_stat *)
-let content_from_path_and_stat_index path stat_info =
-  match stat_info.Index.mode with
-  | Index.Link ->
-    Unix.readlink path
-  | Index.Normal | Index.Exec ->
-      path |> Common.with_file_in (fun ch ->
-        ch |> IO.input_channel |> IO.read_all
-      )
-  | Index.Gitlink -> failwith "submodule not supported"
-@
-
-<<function Changes.changes_tree_vs_tree>>=
-(* see also Cmd_diff.changes_index_vs_worktree
- *     and  Cmd_status.changes_index_vs_HEAD
- *)
-let changes_tree_vs_tree read_tree read_blob tree1 tree2 =
-  let changes = ref [] in
-  let add x = Common.push x changes in
-  Tree.walk_trees read_tree "" (fun dirpath entry1_opt entry2_opt ->
-    (* if entries are directories, then we would be called again
-     * with their individual files, so safe to skip the dir entries.
-     *)
-    let entry1_opt = skip_tree_and_adjust_path read_blob dirpath entry1_opt in
-    let entry2_opt = skip_tree_and_adjust_path read_blob dirpath entry2_opt in
-    
-    match entry1_opt, entry2_opt with
-    | None, None -> ()
-    | Some (a, asha), Some (b, bsha) ->
-      (match () with
-      (* file type changed reported as delete/add (meh) *)
-      | _ when a.Change.mode <> b.Change.mode ->
-        add (Change.Del a);
-        add (Change.Add b);
-      | _ when asha <> bsha ->
-        add (Change.Modify (a, b))
-      | _ -> ()
-      )
-    | Some (a,_), None -> add (Change.Del a)
-    | None, Some (b,_) -> add (Change.Add b)
-  ) tree1 tree2 ;
-  List.rev !changes
-@
-
-
-<<function Changes.changes_index_vs_tree>>=
-(* some commonalities with Repository.set_worktree_and_index_to_tree *)
-let changes_index_vs_tree read_tree index treeid =
-  let tree = read_tree treeid in
-
-  let h_in_index_and_head = Hashtbl.create 101 in
-  let hindex = 
-    index 
-    |> List.map (fun entry -> entry.Index.name, entry)
-    |> Hashtbl_.of_list
-  in
-  let changes = ref [] in
-
-  tree |> Tree.walk_tree read_tree "" (fun relpath entry_head ->
-    let perm = entry_head.Tree.perm in
-    match perm with
-    | Tree.Dir -> ()
-    | Tree.Commit -> failwith "submodule not yet supported"
-    | Tree.Normal | Tree.Exec | Tree.Link ->
-      try
-        let entry_index = Hashtbl.find hindex relpath in
-        Hashtbl.add h_in_index_and_head relpath true;
-        (* less: if change mode, then report as del/add *)
-        if entry_head.Tree.node <> entry_index.Index.id
-        then changes |> Common.push (Change.Modify (
-          { Change.path = relpath; 
-            mode = Index.mode_of_perm perm; 
-            content = lazy (raise (Impossible "not called")); },
-          { Change.path = relpath; 
-            mode = entry_index.Index.stats.Index.mode;
-            content = lazy (raise (Impossible "not called")); }
-        ))
-      with Not_found ->
-        changes |> Common.push (Change.Del { Change.
-             path = relpath;
-             mode = Index.mode_of_perm perm;
-             content = lazy (raise (Impossible "not called"));
-                                           });
-  );
-  index |> List.iter (fun entry ->
-    if not (Hashtbl.mem h_in_index_and_head entry.Index.name)
-    then changes |> Common.push (Change.Add { Change.
-             path = entry.Index.name;
-             mode = entry.Index.stats.Index.mode;                                            content = lazy (raise (Impossible "not called")); }
-    )
-  );
-  (* less: sort by path *)
-  List.rev !changes
-@
-
-
 %-------------------------------------------------------------
 
 <<version_control/changes.ml>>=
@@ -287,23 +173,6 @@ open Common
 
 
 \subsection*{[[version_control/changes.mli]]}
-
-<<signature Changes.changes_tree_vs_tree>>=
-(* for git show commit *)
-val changes_tree_vs_tree: 
-  (Tree.hash -> Tree.t) ->
-  (Blob.hash -> Change.content) ->
-  Tree.t -> Tree.t -> Change.t list
-@
-
-
-<<signature Changes.changes_index_vs_tree>>=
-(* for git status (to compare index vs HEAD) *)
-val changes_index_vs_tree:
-  (Tree.hash -> Tree.t) ->
-  Index.t -> Tree.hash -> Change.t list
-@
-
 
 %-------------------------------------------------------------
 
@@ -387,60 +256,6 @@ open Common
 
 \subsection*{[[version_control/client_local.ml]]}
 
-
-<<function Client_local.collect_filetree>>=
-let rec collect_filetree read_tree treeid have_sha =
-  let tree = read_tree treeid in
-  tree |> List.iter (fun entry ->
-    let sha = entry.Tree.node in
-    if not (Hashtbl.mem have_sha sha) then begin
-      Hashtbl.add have_sha sha true;
-      match entry.Tree.perm with
-      | Tree.Normal | Tree.Exec | Tree.Link -> ()
-      | Tree.Dir ->  collect_filetree read_tree sha have_sha
-      | Tree.Commit -> failwith "submodule not supported yet"
-    end
-  )
-@
-
-
-<<function Client_local.fetch_objects>>=
-let fetch_objects src dst =
-  (* less: determine_wants from pull command *)
-  let top_wanted_commits = [Repository.follow_ref_some src Refs.Head] in
-  (* less: shallows? unshallows? *)
-  let top_common_commits = find_top_common_commits src dst in
-  iter_missing_objects top_common_commits top_wanted_commits src 
-    (fun sha1 obj_opt ->
-    (* less: opti: copy raw files directly without unmarshalling/marshalling *)
-    let obj = 
-      match obj_opt with
-      | None -> Repository.read_obj src sha1
-      | Some obj -> obj
-    in
-    (* todo: count objects progress *)
-    (* pr2 (spf "adding %s" (Hexsha.of_sha sha1)); *)
-    let sha2 = Repository.add_obj dst obj in
-    assert (sha1 = sha2)
-  )
-@
-
-<<signature Client_local.mk_client>>=
-val mk_client: Common.filename -> Client.t
-@
-<<function Client_local.mk_client>>=
-let mk_client path =
-  { Client.
-    url = path;
-    fetch = (fun dst ->
-      let src = Repository.open_ path in
-      fetch_objects src dst;
-      (* less: all_refs *)
-      Repository.follow_ref_some src Refs.Head
-   );
-  }
-@
-
 %-------------------------------------------------------------
 
 <<version_control/client_local.ml>>=
@@ -512,15 +327,12 @@ open Common
 
 \subsection*{[[version_control/clients.mli]]}
 
-
-
 %-------------------------------------------------------------
 
 <<version_control/clients.mli>>=
 
 <<signature Clients.client_of_url>>
 @
-
 
 \subsection*{[[version_control/cmd.ml]]}
 
@@ -857,30 +669,6 @@ open Common
 
 \subsection*{[[version_control/commit.ml]]}
 
-
-<<signature Commit.collect_ancestors>>=
-val collect_ancestors: 
-  (hash -> t) ->  hash list -> (hash, bool) Hashtbl.t -> 
-  (hash, bool) Hashtbl.t
-@
-<<function Commit.collect_ancestors>>=
-(* similar to walk_history but with exposed hdone hash *)
-let collect_ancestors read_commit top_commits hdone =
-  let hcommits = Hashtbl.create 101 in
-  let rec aux sha =
-    if Hashtbl.mem hdone sha
-    then ()
-    else begin
-      Hashtbl.add hdone sha true;
-      Hashtbl.add hcommits sha true;
-      let commit = read_commit sha in
-      commit.parents |> List.iter aux
-    end
-  in
-  top_commits |> List.iter aux;
-  hcommits
-@
-
 %-------------------------------------------------------------
 
 <<version_control/commit.ml>>=
@@ -910,6 +698,7 @@ open Common
 <<function Commit.walk_history>>
 
 (* for git pull *)
+
 <<function Commit.collect_ancestors>>
 
 
@@ -1050,8 +839,6 @@ open Common
 %@
 %module SimpleDiff = Diff_simple.Make(String)
 
-
-
 %-------------------------------------------------------------
 
 <<version_control/diff.ml>>=
@@ -1172,132 +959,11 @@ open Common
 
 <<type Diff_myers.edit>>
 
-module type SeqType = sig
-  type t
-  type elem
-  val get : t -> int -> elem
-  val length : t -> int
-end
+<<signature Diff_myers.SeqType>>
 
-module type S = sig
-  type t
-  type elem
+<<signature Diff_myers.S>>
 
-  val lcs :
-      ?equal:(elem -> elem -> bool) ->
-      t -> t -> elem common list
-
-  val diff :
-      ?equal:(elem -> elem -> bool) ->
-      t -> t -> elem edit list
-
-  val fold_left :
-      ?equal:(elem -> elem -> bool) ->
-      f:('a -> elem edit -> 'a) ->
-      init:'a ->
-      t -> t -> 'a
-
-  val iter :
-      ?equal:(elem -> elem -> bool) ->
-      f:(elem edit -> unit) ->
-      t -> t -> unit
-end
-
-module Make(M : SeqType) : (S with type t = M.t and type elem = M.elem) = struct
-  type t = M.t
-  type elem = M.elem
-
-  let lcs ?(equal = (=)) a b =
-    let n = M.length a in
-    let m = M.length b in
-    let mn = m + n in
-    let sz = 2 * mn + 1 in
-    let vd = Array.make sz 0 in
-    let vl = Array.make sz 0 in
-    let vr = Array.make sz [] in
-    let get v i = Array.get v (i + mn) in
-    let set v i x = Array.set v (i + mn) x in
-    let finish () =
-      let rec loop i maxl r =
-        if i > mn then
-          List.rev r
-        else if get vl i > maxl then
-          loop (i + 1) (get vl i) (get vr i)
-        else
-          loop (i + 1) maxl r
-      in loop (- mn) 0 []
-    in
-    if mn = 0 then
-      []
-    else
-      (* For d <- 0 to mn Do *)
-      let rec dloop d =
-        assert (d <= mn);
-        (* For k <- -d to d in steps of 2 Do *)
-        let rec kloop k =
-          if k > d then
-            dloop @@ d + 1
-          else
-            let x, l, r =
-              if k = -d || (k <> d && get vd (k - 1) < get vd (k + 1)) then
-                get vd (k + 1), get vl (k + 1), get vr (k + 1)
-              else
-                get vd (k - 1) + 1, get vl (k - 1), get vr (k - 1)
-            in
-            let x, y, l, r =
-              let rec xyloop x y l r =
-                if x < n && y < m && equal (M.get a x) (M.get b y) then
-                  xyloop (x + 1) (y + 1) (l + 1) (`Common(x, y, M.get a x) :: r)
-                else
-                  x, y, l, r
-              in xyloop x (x - k) l r
-            in
-            set vd k x;
-            set vl k l;
-            set vr k r;
-            if x >= n && y >= m then
-              (* Stop *)
-              finish ()
-            else
-              kloop @@ k + 2
-        in kloop @@ -d
-      in dloop 0
-
-  let fold_left ?(equal = (=)) ~f ~init a b =
-    let ff x y = f y x in
-    let fold_map f g x from to_ init =
-      let rec loop i init =
-        if i >= to_ then
-          init
-        else
-          loop (i + 1) (f (g i @@ M.get x i) init)
-      in loop from init
-    in
-    let added i x = `Added (i, x) in
-    let removed i x = `Removed (i, x) in
-    let rec loop cs apos bpos init =
-      match cs with
-      | [] ->
-          init
-          |> fold_map ff removed a apos (M.length a)
-          |> fold_map ff added b bpos (M.length b)
-      | `Common (aoff, boff, _) as e :: rest ->
-          init
-          |> fold_map ff removed a apos aoff
-          |> fold_map ff added b bpos boff
-          |> ff e
-          |> loop rest (aoff + 1) (boff + 1)
-    in loop (lcs ~equal a b) 0 0 init
-
-  let diff ?(equal = (=)) a b =
-    fold_left ~equal ~f:(fun xs x -> x::xs) ~init:[] a b
-
-  let iter ?(equal = (=)) ~f a b =
-    fold_left a b
-      ~equal
-      ~f:(fun () x -> f x)
-      ~init:()
-end
+<<module Diff_myers.Make>>
 @
 
 
@@ -1316,92 +982,13 @@ end
 
 <<type Diff_myers.common>>
 
-(** an element of lcs of seq1 and seq2 *)
-
 <<type Diff_myers.edit>>
 
-(** an element of diff of seq1 and seq2. *)
+<<signature Diff_myers.SeqType>>
 
-module type SeqType = sig
-  type t
-  (** The type of the sequence. *)
+<<signature Diff_myers.S>>
 
-  type elem
-  (** The type of the elements of the sequence. *)
-
-  val get : t -> int -> elem
-  (** [get t n] returns [n]-th element of the sequence [t]. *)
-
-  val length : t -> int
-  (** [length t] returns the length of the sequence [t]. *)
-end
-(** Input signature of {!Diff.Make}. *)
-
-module type S = sig
-  type t
-  (** The type of input sequence. *)
-
-  type elem
-  (** The type of the elemenents of result / input sequence. *)
-
-  val lcs :
-      ?equal:(elem -> elem -> bool) ->
-      t -> t -> elem common list
-  (**
-     [lcs ~equal seq1 seq2] computes the LCS (longest common sequence) of
-     [seq1] and [seq2].
-     Elements of [seq1] and [seq2] are compared with [equal].
-     [equal] defaults to [Pervasives.(=)].
-
-     Elements of lcs are [`Common (pos1, pos2, e)]
-     where [e] is an element, [pos1] is a position in [seq1],
-     and [pos2] is a position in [seq2].
-   *)
-
-  val diff :
-      ?equal:(elem -> elem -> bool) ->
-      t -> t -> elem edit list
-  (**
-     [diff ~equal seq1 seq2] computes the diff of [seq1] and [seq2].
-     Elements of [seq1] and [seq2] are compared with [equal].
-
-     Elements only in [seq1] are represented as [`Removed (pos, e)]
-     where [e] is an element, and [pos] is a position in [seq1];
-     those only in [seq2] are represented as [`Added (pos, e)]
-     where [e] is an element, and [pos] is a position in [seq2];
-     those common in [seq1] and [seq2] are represented as
-     [`Common (pos1, pos2, e)]
-     where [e] is an element, [pos1] is a position in [seq1],
-     and [pos2] is a position in [seq2].
-   *)
-
-  val fold_left :
-      ?equal:(elem -> elem -> bool) ->
-      f:('a -> elem edit -> 'a) ->
-      init:'a ->
-      t -> t -> 'a
-  (**
-     [fold_left ~equal ~f ~init seq1 seq2] is same as
-     [diff ~equal seq1 seq2 |> ListLabels.fold_left ~f ~init],
-     but does not create an intermediate list.
-   *)
-
-  val iter :
-      ?equal:(elem -> elem -> bool) ->
-      f:(elem edit -> unit) ->
-      t -> t -> unit
-  (**
-     [iter ~equal ~f seq1 seq2] is same as
-     [diff ~equal seq1 seq2 |> ListLabels.iter ~f],
-     but does not create an intermediate list.
-   *)
-end
-(** Output signature of {!Diff.Make}. *)
-
-module Make :
-  functor (M : SeqType) -> (S with type t = M.t and type elem = M.elem)
-(** Functor building an implementation of the diff structure
-    given a sequence type.  *)
+<<signature Diff_myers.Make>>
 @
 
 
@@ -1829,26 +1416,6 @@ end
 
 \subsection*{[[version_control/hexsha.ml]]}
 
-
-<<signature Hexsha.read>>=
-val read: IO.input -> t
-@
-<<function Hexsha.read>>=
-let read ch =
-  let s = IO.really_nread ch 40 in
-  assert (is_hexsha s);
-  s
-@
-
-<<signature Hexsha.write>>=
-val write: 'a IO.output -> t -> unit
-@
-<<function Hexsha.write>>=
-let write ch x =
-  IO.nwrite ch x
-@
-
-
 %-------------------------------------------------------------
 
 <<version_control/hexsha.ml>>=
@@ -1932,49 +1499,6 @@ and hexa2 =
 
 \subsection*{[[version_control/index.ml]]}
 
-
-<<function Index.stat_info_of_lstats>>=
-let stat_info_of_lstats stats = 
-    { ctime = { lsb32 = Int32.of_float stats.Unix.st_ctime; nsec = 0l };
-      mtime = { lsb32 = Int32.of_float stats.Unix.st_mtime; nsec = 0l };
-      dev = Int32.of_int stats.Unix.st_dev;
-      inode = Int32.of_int stats.Unix.st_ino;
-      mode = 
-        (match stats.Unix.st_kind, stats.Unix.st_perm with
-        | Unix.S_REG, p -> 
-          if p land 0o100 = 0o100 
-          then Exec 
-          else Normal
-        | Unix.S_LNK, _ -> Link
-        | _ -> failwith (spf "unsupported file type")
-        );
-      uid = Int32.of_int stats.Unix.st_uid;
-      gid = Int32.of_int stats.Unix.st_gid;
-      size = Int32.of_int stats.Unix.st_size;
-    }
-@
-
-
-<<function Index.perm_of_mode>>=
-let perm_of_mode mode = 
-  match mode with
-  | Normal -> Tree.Normal
-  | Exec -> Tree.Exec
-  | Link -> Tree.Link
-  | Gitlink -> Tree.Commit (* sure? *)
-@
-
-<<function Index.mode_of_perm>>=
-let mode_of_perm perm = 
-  match perm with
-  | Tree.Normal -> Normal
-  | Tree.Exec -> Exec
-  | Tree.Link -> Link
-  | Tree.Commit -> Gitlink
-  | Tree.Dir -> failwith "index entry does not support Tree.dir perm"
-@
-
-
 %-------------------------------------------------------------
 
 <<version_control/index.ml>>=
@@ -2026,7 +1550,6 @@ let compare_entries e1 e2 =
 <<function Index.perm_of_mode>>
 
 <<function Index.mode_of_perm>>
-
 
 (*****************************************************************************)
 (* Add/Del *)
@@ -2093,26 +1616,6 @@ let compare_entries e1 e2 =
 
 \subsection*{[[version_control/index.mli]]}
 
-<<signature Index.stat_info_of_lstats>>=
-val stat_info_of_lstats: Unix.stats -> stat_info
-@
-
-<<signature Index.mode_of_perm>>=
-val mode_of_perm: Tree.perm -> mode
-@
-
-<<signature Index.perm_of_mode>>=
-val perm_of_mode: mode -> Tree.perm
-@
-
-
-
-<<signature Index.tree_of_index>>=
-val tree_of_index: t -> (* add_obj *)(Tree.t -> Tree.hash) -> Tree.hash
-(* todo: index_of_tree *)
-@
-
-
 %-------------------------------------------------------------
 
 <<version_control/index.mli>>=
@@ -2155,8 +1658,8 @@ open Common
 (*****************************************************************************)
 (* An OCaml port of git, a distributed version control system.
  *
- * Some of the code of ogit derives from dulwich (a clone of git in Python)
- * and ocaml-git (a clone of git in OCaml).
+ * Some of the code derives from dulwich (a clone of git in Python)
+ * and ocaml-git (another clone of git in OCaml).
  *
  * Main limitations compared to git/dulwich/ocaml-git:
  *  -??
@@ -2251,10 +1754,6 @@ open Common
 <<type Objects.t>>
 
 (*****************************************************************************)
-(* Helpers *)
-(*****************************************************************************)
-
-(*****************************************************************************)
 (* IO *)
 (*****************************************************************************)
 
@@ -2339,78 +1838,6 @@ open Common
 
 
 \subsection*{[[version_control/repository.ml]]}
-
-<<function Repository.with_file_out_with_lock>>=
-(* todo: see code of _Gitfile.__init__ O_EXCL ... *)
-let with_file_out_with_lock f file =
-  (* todo: create .lock file and then rename *)
-  Common.with_file_out f file
-@
-
-<<function Repository.with_opendir>>=
-(* less: use finalize *)
-let with_opendir f dir =
-  let handle = Unix.opendir dir in
-  let res = f handle in
-  Unix.closedir handle;
-  res
-@
-
-<<function Repository.walk_dir>>=
-(* inspired from os.path.walk in Python *)
-let rec walk_dir f dir =
-  dir |> with_opendir (fun handle ->
-    let dirs = ref [] in
-    let files = ref [] in
-    try 
-      while true do
-        let s = Unix.readdir handle in
-        (* git specific here *)
-        if s <> "." && s <> ".." && s <> ".git" then begin
-          let path = Filename.concat dir s in
-          let st = Unix.lstat path in
-          (match st.Unix.st_kind with
-          | Unix.S_DIR -> Common.push s dirs
-          | _ -> Common.push s files
-          )
-        end
-      done
-    with End_of_file ->
-      let dirs = List.rev !dirs in
-      let files = List.rev !files in
-      f dir dirs files;
-      dirs |> List.iter (fun s ->
-        walk_dir f (Filename.concat dir s)
-      )
-  )
-@
-
-
-<<function Repository.set_ref>>=
-let set_ref r aref newh =
-  let (refs, _) = follow_ref r aref in
-  let lastref = List.hd (List.rev refs) in
-  let file = ref_to_filename r lastref in
-  file |> with_file_out_with_lock (fun ch ->
-    ch |> IO.output_channel |> IO_.with_close_out 
-        (Refs.write (Refs.Hash newh))
-  )
-@
-
-
-
-
-
-
-
-<<function Repository.has_obj>>=
-let has_obj r h =
-  let path = h |> Hexsha.of_sha |> hexsha_to_filename r in
-  Sys.file_exists path
-@
-
-
-
 
 %-------------------------------------------------------------
 
@@ -2543,44 +1970,6 @@ open Common
 
 \subsection*{[[version_control/repository.mli]]}
 
-
-<<signature Repository.has_obj>>=
-val has_obj: t -> Sha1.t -> bool
-@
-
-
-
-<<signature Repository.set_ref>>=
-(* better than write_ref, will follow symbolic ref *)
-val set_ref: t -> Refs.t -> Commit.hash -> unit
-@
-
-
-<<signature Repository.add_ref_if_new>>=
-val add_ref_if_new: t -> Refs.t -> Refs.ref_content -> bool
-@
-
-<<signature Repository.set_ref_if_same_old>>=
-val set_ref_if_same_old: t -> Refs.t -> Sha1.t -> Sha1.t -> bool
-@
-
-
-
-
-<<signature Repository.commit_index>>=
-val commit_index: 
-  t -> User.t (* author *) -> User.t (* committer *) -> string (* msg *) -> unit
-@
-
-
-<<signature Repository.walk_dir>>=
-val walk_dir: 
-  (Common.filename -> Common.filename list -> Common.filename list -> unit) ->
-  Common.filename ->
-  unit
-@
-
-
 %-------------------------------------------------------------
 
 <<version_control/repository.mli>>=
@@ -2632,25 +2021,6 @@ val walk_dir:
 
 
 \subsection*{[[version_control/sha1.ml]]}
-
-<<signature Sha1.read>>=
-val read: IO.input -> t
-@
-<<function Sha1.read>>=
-let read ch =
-  let s = IO.really_nread ch 20 in
-  assert (is_sha s);
-  s
-@
-
-
-<<signature Sha1.write>>=
-val write: 'a IO.output -> t -> unit
-@
-<<function Sha1.write>>=
-let write ch x =
-  IO.nwrite ch x
-@
 
 %-------------------------------------------------------------
 
@@ -2715,73 +2085,6 @@ open Common
 
 \subsection*{[[version_control/tree.ml]]}
 
-
-<<function Tree.walk_tree>>=
-(* we must visit in sorted order, so the caller of walk_tree can rely on 'f'
- * being called in order (so it can easily create for example sorted 
- * index entries while visiting a tree)
- *)
-let rec walk_tree read_tree dirpath f xs =
-  xs |> List.iter (fun entry ->
-    let relpath = Filename.concat dirpath entry.name in
-    f relpath entry;
-    match entry.perm with
-    | Dir ->
-      walk_tree read_tree relpath f (read_tree entry.node)
-    | Commit ->
-      failwith "submodule not supported yet"
-    | Normal | Exec | Link -> ()
-  )
-@
-
-<<function Tree.walk_trees>>=
-let rec walk_trees read_tree dirpath f xs ys =
-  let g dirpath entry1_opt entry2_opt =
-    f dirpath entry1_opt entry2_opt;
-    (match entry1_opt, entry2_opt with
-    | Some { perm = Dir; name = str; node = sha }, None ->
-      walk_trees read_tree (Filename.concat dirpath str) f
-        (read_tree sha) []
-    | None, Some { perm = Dir; name = str; node = sha } ->
-      walk_trees read_tree (Filename.concat dirpath str) f
-        [] (read_tree sha)
-    | Some { perm = Dir; name = str1; node = sha1 },
-      Some { perm = Dir; name = str2; node = sha2 } ->
-      assert (str1 = str2);
-        (* todo: could skip if sha1 = sha2 here, useful opti *)
-        walk_trees read_tree (Filename.concat dirpath str1) f
-          (read_tree sha1) (read_tree sha2)
-    | None, None -> raise (Impossible "two None in walk_trees.g")
-    (* no directories, no need to recurse *)
-    | Some _, None
-    | None, Some _
-    | Some _, Some _
-      -> ()
-    )
-  in
-  match xs, ys with
-  | [], [] -> ()
-  | x::xs, [] ->
-    g dirpath (Some x) None;
-    walk_trees read_tree dirpath f xs ys
-  | [], y::ys ->
-    g dirpath None (Some y);
-    walk_trees read_tree dirpath f xs ys
-  | x::xs, y::ys ->
-    (match x.name <=> y.name with
-    | Equal -> 
-      g dirpath (Some x) (Some y);
-      walk_trees read_tree dirpath f xs ys
-    | Inf -> 
-      g dirpath (Some x) None;
-      walk_trees read_tree dirpath f xs (y::ys)
-    | Sup ->
-      g dirpath None (Some y);
-      walk_trees read_tree dirpath f (x::xs) ys
-    )
-@
-
-
 %-------------------------------------------------------------
 
 <<version_control/tree.ml>>=
@@ -2843,20 +2146,6 @@ open Common
 
 
 \subsection*{[[version_control/tree.mli]]}
-
-
-<<signature Tree.walk_tree>>=
-val walk_tree: 
-  (hash -> t) -> Common.filename (* dir *) -> 
-  (Common.filename -> entry -> unit) -> t -> unit
-@
-
-<<signature Tree.walk_trees>>=
-val walk_trees:
-  (hash -> t) -> Common.filename (* dir *) ->
-  (Common.filename -> entry option -> entry option -> unit) -> t -> t -> unit
-@
-
 
 %-------------------------------------------------------------
 
@@ -2987,21 +2276,6 @@ val walk_trees:
 
 \subsection*{[[version_control/unzip.mli]]}
 
-<<signature Unzip.inflate>>=
-val inflate : ?header:bool -> IO.input -> IO.input
-(** wrap an input using "inflate" decompression algorithm. raises [Error] if
-  an error occurs (this can only be caused by malformed input data). *)
-@
-
-<<signature Unzip.inflate_init>>=
-val inflate_init : ?header:bool -> IO.input -> t
-@
-
-<<signature Unzip.inflate_data>>=
-val inflate_data : t -> bytes -> int -> int -> int
-@
-
-
 %-------------------------------------------------------------
 
 <<version_control/unzip.mli>>=
@@ -3118,104 +2392,6 @@ open Common
 
 \subsection*{[[version_control/zlib.ml]]}
 
-<<exception Zlib.Error>>=
-exception Error of string * string
-@
-
-<<toplevel Zlib._1>>=
-let _ =
-  Callback.register_exception "Zlib.Error" (Error("",""))
-@
-
-<<type Zlib.flush_command>>=
-type flush_command =
-    Z_NO_FLUSH
-  | Z_SYNC_FLUSH
-  | Z_FULL_FLUSH
-  | Z_FINISH
-@
-
-<<constant Zlib.buffer_size>>=
-let buffer_size = 1024
-@
-
-<<function Zlib.compress>>=
-let compress ?(level = 6) ?(header = true) refill flush =
-  let inbuf = Bytes.create buffer_size
-  and outbuf = Bytes.create buffer_size in
-  let zs = deflate_init level header in
-  let rec compr inpos inavail =
-    if inavail = 0 then begin
-      let incount = refill inbuf in
-      if incount = 0 then compr_finish() else compr 0 incount
-    end else begin
-      let (_, used_in, used_out) =
-        deflate zs inbuf inpos inavail outbuf 0 buffer_size Z_NO_FLUSH in
-      flush outbuf used_out;
-      compr (inpos + used_in) (inavail - used_in)
-    end
-  and compr_finish () =
-    let (finished, _, used_out) =
-       deflate zs inbuf 0 0 outbuf 0 buffer_size Z_FINISH in
-    flush outbuf used_out;
-    if not finished then compr_finish()
-  in
-    compr 0 0;
-    deflate_end zs
-@
-
-<<function Zlib.compress_direct>>=
-let compress_direct  ?(level = 6) ?(header = true) flush =
-  let outbuf = Bytes.create buffer_size in
-  let zs = deflate_init level header in
-  let rec compr inbuf inpos inavail =
-    if inavail = 0 then ()
-    else begin
-      let (_, used_in, used_out) =
-        deflate zs inbuf inpos inavail outbuf 0 buffer_size Z_NO_FLUSH in
-      flush outbuf used_out;
-      compr inbuf (inpos + used_in) (inavail - used_in)
-    end
-  and compr_finish () =
-    let (finished, _, used_out) =
-      deflate zs (Bytes.unsafe_of_string "") 0 0
-                 outbuf 0 buffer_size Z_FINISH in
-    flush outbuf used_out;
-    if not finished then compr_finish()
-  in
-  compr, compr_finish
-@
-
-<<function Zlib.uncompress>>=
-let uncompress ?(header = true) refill flush =
-  let inbuf = Bytes.create buffer_size
-  and outbuf = Bytes.create buffer_size in
-  let zs = inflate_init header in
-  let rec uncompr inpos inavail =
-    if inavail = 0 then begin
-      let incount = refill inbuf in
-      if incount = 0 then uncompr_finish true else uncompr 0 incount
-    end else begin
-      let (finished, used_in, used_out) =
-        inflate zs inbuf inpos inavail outbuf 0 buffer_size Z_SYNC_FLUSH in
-      flush outbuf used_out;
-      if not finished then uncompr (inpos + used_in) (inavail - used_in)
-    end
-  and uncompr_finish first_finish =
-    (* Gotcha: if there is no header, inflate requires an extra "dummy" byte
-       after the compressed stream in order to complete decompression
-       and return finished = true. *)
-    let dummy_byte = if first_finish && not header then 1 else 0 in
-    let (finished, _, used_out) =
-       inflate zs inbuf 0 dummy_byte outbuf 0 buffer_size Z_SYNC_FLUSH in
-    flush outbuf used_out;
-    if not finished then uncompr_finish false
-  in
-    uncompr 0 0;
-    inflate_end zs
-@
-
-
 %-------------------------------------------------------------
 
 <<version_control/zlib.ml>>=
@@ -3259,24 +2435,6 @@ external update_crc_string: int32 -> string -> int -> int -> int32
 
 
 \subsection*{[[version_control/zlib.mli]]}
-
-<<signature Zlib.compress>>=
-val compress:
-  ?level: int -> ?header: bool -> 
-  (bytes -> int) -> (bytes -> int -> unit) -> unit
-@
-
-<<signature Zlib.compress_direct>>=
-val compress_direct:
-  ?level: int -> ?header: bool -> (bytes -> int -> unit) ->
-  (bytes -> int -> int -> unit) * (unit -> unit)
-@
-
-<<signature Zlib.uncompress>>=
-val uncompress:
-  ?header: bool -> (bytes -> int) -> (bytes -> int -> unit) -> unit
-@
-
 
 %-------------------------------------------------------------
 
