@@ -1,29 +1,17 @@
-** import of dulwich at this commit:
-
-commit b501e4d3a867ab18c3c1de7cc38a439cba4e90a6
-Author: Segev Finer <segev208@gmail.com>
-Date:   Wed Jul 5 20:16:08 2017 +0300
-
-    gitignore patterns without a trailing slash should match directories too.
-    
-    gitignore patterns with a trailing slash should match both directories
-    and files, while patterns with a trailing slash should match only
-    directories.
-
-** todo
-
-*** aspectize error management and write_pkt_line(NONE)
+** TODO
 
 *** regression synced dulwich
 was not working anymore at last sync
 
+*** aspectize error management and write_pkt_line(NONE)
+
 *** aspectize peeled
+
+*** aspectize capabilities
 
 *** where is used LRU?
 same as file cache of ocaml-git? (and weaktbl)
 just for cache of unserialized objects?
-
-*** aspectize capabilities
 
 ** mkfile 
 
@@ -64,17 +52,19 @@ SRC_VIEWS=dulwich.py \
 
 \chapter{Introduction}
 
-\section{Motivations}
-
 \section{The version control system [[git]] ([[dulwich]])}
 
-\section{Other version control systems}
+** import of dulwich at this commit:
 
-\section{Getting started}
+commit b501e4d3a867ab18c3c1de7cc38a439cba4e90a6
+Author: Segev Finer <segev208@gmail.com>
+Date:   Wed Jul 5 20:16:08 2017 +0300
 
-\section{Requirements}
-
-\section{About this document}
+    gitignore patterns without a trailing slash should match directories too.
+    
+    gitignore patterns with a trailing slash should match both directories
+    and files, while patterns with a trailing slash should match only
+    directories.
 
 \section{Copyright}
 
@@ -102,39 +92,7 @@ License.
 #
 @
 
-\section{Acknowledgments}
-
 \chapter{Overview}
-
-\section{VCS principles}
-
-\subsection{Repository}
-
-\subsection{[[diff]] and [[patch]]}
-
-\subsection{Commit}
-
-\subsection{Concurrent development}
-
-\subsection{Branch}
-
-\subsection{Merging}
-
-\subsection{Conflicts}
-
-\subsection{Pulling and pushing}
-
-\section{[[git]] services}
-
-\section{Repository format, [[.git/]]}
-
-\section{A toy session}
-
-\section{Code organization}
-
-\section{Software architecture}
-
-\section{Book structure}
 
 %###############################################################################
 
@@ -163,9 +121,6 @@ def sha_to_hex(sha):
 % by 'string' I think it means series of 20 bytes representing an sha 
 % (binsha).
 
-% git should internally use always binsha, except when need
-% read or write to user (and when need access loose object)
-
 <<function hex_to_sha>>=
 def hex_to_sha(hex):
     """Takes a hex sha and returns a binary sha"""
@@ -189,7 +144,6 @@ def valid_hexsha(hex):
         return True
 @
 
-% see sha1() function later.
 
 
 \section{Repository}
@@ -229,7 +183,9 @@ class BaseRepo(object):
 CONTROLDIR = '.git'
 @
 % also called commondir when non-bare repo.
-%ocaml: dotgit is a better name than controldir
+%ocaml: dotgit is a better name than controldir, also
+% no need intermediate constant, should be used at very
+% few places
 
 <<constant repo.BASE_DIRECTORIES>>=
 BASE_DIRECTORIES = [
@@ -253,8 +209,6 @@ REFSDIR_TAGS = 'tags'
 REFSDIR_HEADS = 'heads'
 @
 
-% Tags later. Hooks later.
-% info?? useful for grafts and?
 
 <<constant repo.OBJECTDIR>>=
 OBJECTDIR = 'objects'
@@ -319,7 +273,8 @@ def __init__(self, root):
     <<[[Repo.__init__()]] grafts>>
     <<[[Repo.__init__()]] hooks>>
 @
-
+%ocaml: no [] access for object store and refs, loaded
+% on demand, so no need initialize DiskXxx.
 
 <<[[BaseRepo]] methods>>=
 def __init__(self, object_store, refs):
@@ -700,7 +655,6 @@ def serializable_property(name, docstring=None):
 % in git so you should always construct another object.
 
 \subsection{[[Blob]]}
-% =~ file content (but no name, name is in tree)
 
 <<class Blob>>=
 class Blob(ShaFile):
@@ -1117,7 +1071,6 @@ for field, _ in _parse_message(self._chunked_text):
 
 \section{References}
 
-
 <<class DiskRefsContainer>>=
 class DiskRefsContainer(RefsContainer):
     """Refs container that reads refs from disk."""
@@ -1175,8 +1128,6 @@ def __setitem__(self, name, ref):
     self.set_if_equals(name, None, ref)
 @
 
-% why important atomic? because when push, you will write to another
-% repo, and you will modify refs possibly? so need atomic?
 
 
 
@@ -2695,10 +2646,6 @@ def add_object(self, obj):
 @
 % so it uses the legacy format?
 
-% should warn if add obj already there?
-% No! deduplication! if you add a file that hash to content of already
-% existing file, then great
-
 % obj.id here, so ShaFile will compute its own id.
 \t but how when build object from scratch? then have just
 \t deserialized content, so no sha yet ...
@@ -3252,9 +3199,6 @@ def rm(repo=".", paths=None):
 
 \section{[[Repo.stage()]]}
 
-% build a series of tree objects if different from last one?
-% No, commit does that. Here we just add blobs.
-
 % porcelain.add -> <>
 <<[[Repo]] methods>>=
 def stage(self, fs_paths):
@@ -3353,7 +3297,6 @@ def blob_from_path_and_stat(fs_path, st):
             blob.data = os.readlink(fs_path)
     return blob
 @
-% blob can be a symlink! git allows to store symlinks.
 
 % but then no sha! so when add_object it will call serialize
 % and compute sha?
@@ -3588,8 +3531,6 @@ def commit_tree(object_store, blobs):
 @
 \t too slow? each time a commit it rebuilds all tree and add objs?
 
-% FIGURE for trees.
-% It maps relative path of dir to dir content
 %ocaml: much better with types!
 
 <<function index.commit_tree.add_tree>>=
@@ -3638,10 +3579,6 @@ def build_tree(path):
     return tree.id
 @
 
-
-
-
-
 <<function index.pathjoin>>=
 def pathjoin(*args):
     """Join a /-delimited path.
@@ -3649,8 +3586,6 @@ def pathjoin(*args):
     """
     return b"/".join([p for p in args if p])
 @
-
-
 
 
 \section{Storing the author and committer}
@@ -3735,11 +3670,6 @@ def follow(self, name):
 
 
 %            ok = self.refs.set_if_equals(ref, old_head, c.id)
-
-%concurrency:
-% need atomic operations for updating the refs, because
-% push/pull will modify other repos that may be concurrently
-% accessed by another user at the same time.
 
 \subsection{Updating an existing ref}
 
@@ -4272,6 +4202,7 @@ def reset(repo, mode, committish="HEAD"):
 
 
 \chapter{Merging}
+
 \section{merge}
 
 % ??? -> <>
@@ -4344,7 +4275,6 @@ def tree_changes_for_merge(store, parent_tree_ids, tree_id,
 \chapter{Inspecting}
 
 \section{[[git show]]}
-% can be useful to understand formats
 
 <<function cmd_show>>=
 class cmd_show(Command):
@@ -4410,6 +4340,7 @@ def show_blob(repo, blob, decode, outstream=sys.stdout):
     """
     outstream.write(decode(blob.data))
 @
+%ocaml: useless :param, just use types!
 
 \subsection{Tree}
 
@@ -4425,7 +4356,6 @@ def show_tree(repo, tree, decode, outstream=sys.stdout):
     for n in tree:
         outstream.write(decode(n) + "\n")
 @
-% git adds a '/' suffix when it's a dir
 
 \l apparently displays only the name, but why? n is the whole entry
 % not just the key no? or because itertree returns just the key?
@@ -4860,8 +4790,6 @@ if not diff_binary and (
 \section{Graph walker}
 \l make it a chapter? Walking a Repository?
 
-% actually a DAG of commits, not a graph of commits.
-
 % A bit complicated:
 %  - Walker
 %  - CommitQueue
@@ -5191,7 +5119,6 @@ def _should_return(self, entry):
 
 
 \subsection{[[Walker]] extra features}
-\l mv in advanced topics?
 
 \subsubsection{max entries}
 
@@ -5836,9 +5763,6 @@ if not paths:
         r.open_index()))
 @
 \l should do that? should ask before at least no?
-
-% what about .ignore?
-
 
 \chapter{Pulling and Pushing}
 
@@ -6686,11 +6610,6 @@ def as_dict(self, base=None):
 
 \subsection{[[ObjectStoreGraphWalker]]}
 
-% subtle. Will iterate over the graph from the heads,
-% which can be long, but while doing so, it can be instructed to 
-% skip some ancestors because the src repo already has them (via ack()),
-% which is then faster.
-
 <<class ObjectStoreGraphWalker>>=
 class ObjectStoreGraphWalker(object):
     """Graph walker that finds what commits are missing from an object store.
@@ -7069,8 +6988,6 @@ def get_transport_and_path_from_url(url, config=None, **kwargs):
     raise ValueError("unknown scheme '%s'" % parsed.scheme)
 @
 
-% ssh and http in adv topics.
-% in this chapter we will focus on git://
 
 <<[[GitClient]] methods>>=
 @classmethod
@@ -13187,9 +13104,6 @@ def upload_pack(path=".", inf=None, outf=None):
 \section{Fast Import/export}
 % another opti? why need that?
 
-% another way to clone a repo?
-%$ git fast-export --all | (cd /empty/repository && git fast-import)
-
 <<class GitFastExporter>>=
 class GitFastExporter(object):
     """Generate a fast-export output stream for Git objects."""
@@ -13472,10 +13386,6 @@ def add_alternate_path(self, path):
 \section{Peeled}
 
 % seems related to tags, so move with Tags?
-
-%https://stackoverflow.com/questions/26492303/what-does-peel-mean-in-git
-
-\t ??
 
 <<[[BaseObjectStore]] methods>>=
 def peel_sha(self, sha):
@@ -15181,11 +15091,6 @@ def update_server_info(repo="."):
 
 \chapter{Conclusion}
 
-
-
-
-
-
 \appendix
 
 \chapter{Debugging}
@@ -15643,7 +15548,6 @@ if self.report_activity:
 %\section{Status report}
 % ?
 
-\chapter{Profiling}
 
 \chapter{Error Management}
 
@@ -15838,23 +15742,6 @@ class ObjectFormatException(FileFormatException):
     """Indicates an error parsing an object."""
 @
 
-\chapter{Algorithms}
-
-\section{SHA1}
-
-\section{Zip}
-
-\section{Unzip}
-
-\section{Diff}
-
-\section{Diff3}
-
-\chapter{Extra Code}
-
-\chapter{Glossary}
-
-\chapter*{Indexes}
 
 \end{document}
 

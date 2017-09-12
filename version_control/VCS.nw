@@ -13,9 +13,9 @@
 
 %thx to LP, I changed for the better a few things:
 % - have a set of cmd_xxx.ml files 
-%   (dulwich had big porcelain.py and dulwich.py, 
-%    ocaml-git had just ogit.ml,
-%    git have many git-xxx.c but too many; porcelain vs plumb is useless)
+%   (dulwich has big porcelain.py and dulwich.py files, 
+%    ocaml-git has just ogit.ml,
+%    git has many git-xxx.c but too many; porcelain vs plumb is useless)
 
 %thx to codemap/codegraph/scheck:
 % - TODO use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -32,7 +32,7 @@
 % - merge and MERGE_HEADS state?
 
 %history LP-ization:
-% * wanted to LPize camp (simplified clone of darcs (still in Haskell))
+% * wanted to LPize camp (simplified clone of darcs, also in Haskell)
 % * LPized finally dulwich (clone of git in Python)
 % - skeleton, mostly copy paste of Template.nw skeleton
 % - put all content of files in the Extra section, via 'pfff -lpize'
@@ -147,11 +147,11 @@ Here are a few questions I hope this book will answer:
 %git: packs, sha1 deduplicating (but not delta/diff really), pack compression
 % deduplicating blob but also sharing of trees!
 
-% how represent changeset?
+% how to represent changeset?
 
-% How allow concurrent development? 
+% How to allow concurrent development? 
 
-% How allow parallel development?
+% How to allow parallel development?
 
 % What is merge algorithm? When safe? When conflict?
 
@@ -164,8 +164,8 @@ Here are a few questions I hope this book will answer:
 
 %algo: (appendix)
 % - sha1
-% - unzip
-% - zip (with huffman inside, adler32, lzh)
+% - unzip (with huffman inside, adler32, lzh)
+% - zip
 % - diff
 % - diff3
 
@@ -173,6 +173,7 @@ Here are a few questions I hope this book will answer:
 
 % Chose git. Actually clone of git written in OCaml
 % (other clones dulwich, even other ocaml clones, ocaml-git, hmm).
+% 5000? LOC.
 
 % Git popular. Also github! far easier collaboration in open source world.
 % Before pain create repo to collaborate. Need server, start and config
@@ -194,7 +195,7 @@ Here are other candidates that were considered but ultimately discarded:
 
 \item RCS
 % 24~000 LOC, but too limited, just one file, no branch, no concurrent work
-% (and already 24 000 LOC, insane)
+% (and already 24 000 LOC, insane, why? too subtle diff representation?)
 
 \item CVS
 % 160 000 LOC, with rcs.c at 8000 LOC, hmm,
@@ -238,7 +239,8 @@ Here are other candidates that were considered but ultimately discarded:
 % - gnu arch (aka tla 273 000 LOC)
 % - bazaar (477 000 LOC)
 %   https://www.jelmer.uk/pages/bzr-a-retrospective.html
-% - monotone (99 000 LOC for 1.1)
+% - monotone (99 000 LOC for 1.1), apparently good source of inspiration
+%   for git with DAG of sha1
 % - pijul, initially in OCaml (3000 LOC), then in Rust, but seems to have 
 %   a slow development
 %git alternate porcelain:
@@ -316,17 +318,19 @@ Here are other candidates that were considered but ultimately discarded:
 \section{Copyright}
 
 I wrote most of the code in this document. 
-The code is licensed under the GNU General Public License as published by the 
-Free Software Foundation; version 2.0.
 
-<<copyright gut>>=
+<<copyright ocamlgit>>=
 (* Copyright 2017 Yoann Padioleau, see copyright.txt *)
 @
+
+The code is licensed under the 
+GNU Lesser General Public License version 2.1
+as published by the Free Software Foundation.
 
 I sometimes took inspiration from code written by Thomas Gazagnaire 
 for [[ocaml-git]] (another clone of [[git]] in OCaml but intented to be used
 as a library).
-% why not extend explained later?
+\l why not extend explained later? talk about mirage?
 
 <<copyright ocaml-git>>=
 (*
@@ -448,13 +452,12 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 @
 \fi
 
-The prose is mine and is licensed under the GNU Free Documentation License.
-
+The prose is mine and is licensed under the \license.
 
 \section{Acknowledgments}
 
-I would like to acknowledge the author of [[dulwich]],
-a clone of [[git]] in Python, Jelmer Vernooij.
+I would like to acknowledge the author of [[dulwich]]
+(a clone of [[git]] in Python) Jelmer Vernooij.
 % I took inspiration from code from dulwich. Easier to understand than git.
 % Also Thomas gazanaire.
 % Finally Torvalds, for clever VCS. 
@@ -593,6 +596,9 @@ Before showing the source code of [[ocamlgit]] in the following chapters,
 
 \section{A toy session}
 
+% See book to learn about how to use git. Here just
+% quick session, quick tutorial.
+
 %dup: 
 % use git below, but really ocamlgit, try compatible UI.
 
@@ -647,6 +653,14 @@ Before showing the source code of [[ocamlgit]] in the following chapters,
 
 \subsection{Binary SHA1}
 
+% sha1 returns number of 20 bytes.
+
+<<type Sha1.t>>=
+(* a 20 bytes number (really a string of length 20) *)
+type t = bytes
+@
+
+
 <<signature Sha1.sha1>>=
 (* computes SHA1 of a series of bytes *) 
 val sha1: bytes -> t
@@ -658,12 +672,6 @@ val sha1: bytes -> t
 %for more information on SHA1:
 % http://www-cs-students.stanford.edu/~blynn/gitmagic/ch08.html
 
-% sha1 returns number of 20 bytes.
-
-<<type Sha1.t>>=
-(* a 20 bytes number (really a string of length 20) *)
-type t = bytes
-@
 
 <<signature Sha1.is_sha>>=
 val is_sha: t -> bool
@@ -674,9 +682,10 @@ let is_sha x =
   Bytes.length x = 20
 @
 
+
 \subsection{Hexadecimal SHA1}
 
-% sha1 used in git to identify things (e.g., commit).
+% SHA1 used in git to identify things (e.g., commit).
 % Not easy enter binary data. Enter Hexsha, can be input
 % easily.
 
@@ -703,8 +712,11 @@ let is_hexsha x =
   *)
 @
 
-% git should internally use always (binary)sha, except when need
-% read or write to user (and when need access loose object)
+% git should internally use always binsha, except when need
+% read or write to user (and when need access loose object).
+% actually commit also contains hexsha.
+
+
 
 <<signature Hexsha.of_sha>>=
 val of_sha: Sha1.t -> t
@@ -787,7 +799,7 @@ let invalid_arg fmt =
 % set of objects, and then refs of this object, where some objects can
 % be commit.
 
-% work tree and metadata.
+% worktree and metadata (dotgit)
 
 <<type Repository.t>>=
 type t = {
@@ -800,6 +812,7 @@ type t = {
   (* less: compression level config field? *)
 }
 @
+\n dotgit could be called commondir or controldir when have bare repo.
 
 % Hooks later.
 % info?? useful for grafts and?
@@ -807,6 +820,8 @@ type t = {
 % Most operations will take repo as first argument.
 
 % Repo contains objects and refs (see next 2 sections).
+%python: [] accessors for repo.object_store and repo.refs
+% (and even [] for repo itself for objectish)
 
 \section{Objects}
 
@@ -816,6 +831,7 @@ type t = {
 
 % git really is a content addressable storage engine.
 
+% internal functions not exposed in repository.mli
 <<function Repository.hexsha_to_filename>>=
 (* for loose objects *)
 let hexsha_to_filename r hexsha =
@@ -823,7 +839,7 @@ let hexsha_to_filename r hexsha =
   let file = String.sub hexsha 2 (String.length hexsha - 2) in
   r.dotgit / "objects" / dir / file
 @
-%python: nice syntax for substring access
+%python: nice syntax for string access like hex[:2] and hex[2:]
 
 <<function Repository.hexsha_to_dirname>>=
 let hexsha_to_dirname r hexsha =
@@ -838,6 +854,7 @@ let hexsha_to_dirname r hexsha =
 %python: nice overloading of [] (but bad to abuse it) to access object
 % store.
 
+% will see open_ later.
 
 \subsection{Objects}
 
@@ -1009,6 +1026,7 @@ let default_head_content =
   OtherRef "refs/heads/master"
 @
 
+% disk!
 <<function Repository.ref_to_filename>>=
 let ref_to_filename r aref =
   match aref with
@@ -1191,6 +1209,7 @@ let client_of_url url =
     then Client_local.mk_client url
     else failwith (spf "remote repository URL not supported: %s" url)
 @
+\t LP split
 
 \chapter{Main Functions}
 
@@ -1347,7 +1366,7 @@ exception ShowUsage
 
 
 
-\section{[[git help]]}
+\section{Getting help: [[git help]]}
 
 <<constant Cmd_help.list_extra>>=
 let list_extra = ref false
@@ -1379,7 +1398,7 @@ let rec cmd = { Cmd.
 
 \chapter{Initializing a Repository}
 
-\section{Creating a fresh repository, [[git init]]}
+\section{Creating a fresh repository: [[git init]]}
 
 <<constant Cmd_init.cmd>>=
 let cmd = { Cmd.
@@ -1433,6 +1452,7 @@ let init root =
   (* less: config file, description, hooks, etc *)
   pr (spf "Initialized empty Git repository in %s" (root / ".git"))
 @
+\t LP split ref, put later
 
 <<constant Repository.TODOOPERATOR>>=
 let (/) = Filename.concat
@@ -1450,7 +1470,7 @@ let dirperm = 0o750
 
 %\subsection{Named files}
 
-\section{Cloning a repository, [[git clone]]}
+\section{Cloning a repository: [[git clone]]}
 
 % Other common way to initialize a repo is clone! Copy from
 % network location (or local too, but less useful).
@@ -1497,12 +1517,13 @@ let open_ root =
     }
   else failwith (spf "Not a git repository at %s" root)
 @
+%todo: bar repo, 
 
 % Index.read later.
 
 
 
-%\section{Checking out a repository, [[git checkout]]}
+%\section{Checking out a repository: [[git checkout]]}
 % if cp -a just .git, then can checkout by doing git checkout.
 
 %\section{Fast Import/Export}
@@ -1511,6 +1532,7 @@ let open_ root =
 
 
 \chapter{Reading from a Repository}
+\t should enforce that read every bytes
 
 \section{Objects}
 
@@ -1529,6 +1551,9 @@ let read_obj r h =
     ch |> IO.input_channel |> Compression.decompress |> Objects.read
   )
 @
+\l loose vs pack objects
+
+% when reading no need lock, so simply with_file_in.
 
 <<signature Compression.decompress>>=
 val decompress: 
@@ -1772,6 +1797,7 @@ let read_ref r aref =
   let input = IO.input_channel ch in
   Refs.read input
 @
+\l loose vs pack refs
 \t why not Common.with_file_in and list of |> ?
 
 <<signature Refs.read>>=
@@ -1806,7 +1832,7 @@ let read_objectish r objectish =
 
 
 
-
+% useful function, used at many places (not just read_objectish)
 <<signature Repository.follow_ref>>=
 val follow_ref: t -> Refs.t -> Refs.t list * Commit.hash option
 @
@@ -1976,6 +2002,11 @@ let add_obj r obj =
   end
 @
 
+% should warn if add obj already there?
+% No! deduplication! if you add a file that hash to content of already
+% existing file, then great
+
+
 <<signature Objects.write>>=
 (* will not compress, will return unserialized content for sha1 computation *)
 val write: t -> bytes IO.output -> unit
@@ -2003,10 +2034,6 @@ let write obj ch =
   IO.nwrite ch body
 @
 
-
-% should warn if add obj already there?
-% No! deduplication! if you add a file that hash to content of already
-% existing file, then great
 
 
 % because when write object, write its size.
@@ -2156,6 +2183,8 @@ let write_ref r aref content =
   file |> with_file_out_with_lock (fun ch ->
     ch |> IO.output_channel |> IO_.with_close_out (Refs.write content))
 @
+\l check_refname? git-check-ref-format
+%    [1] http://www.kernel.org/pub/software/scm/git/docs/git-check-ref-format.html
 
 <<signature Refs.write>>=
 val write: ref_content -> unit IO.output -> unit
@@ -2261,10 +2290,11 @@ let write_time ch time =
 %\chapter{Walking a Repository}
 
 \chapter{Staging a Diff}
+% gitless says staging is not necessary
 
 % Ok enough introduction. Now ready for real commands again!
 
-\section{Adding files, [[git add]]}
+\section{Adding files: [[git add]]}
 
 <<constant Cmd_add.cmd>>=
 let cmd = { Cmd.
@@ -2328,6 +2358,7 @@ let add_in_index r relpaths =
   );
   write_index r
 @
+\l sanitize fs_path (win32)
 
 <<signature Index.add_entry>>=
 val add_entry: t -> entry -> t
@@ -2362,7 +2393,7 @@ let content_from_path_and_unix_stat full_path stat =
 % blob can be a symlink! git allows to store symlinks.
 
 
-\section{Removing files, [[git rm]]}
+\section{Removing files: [[git rm]]}
 
 <<constant Cmd_rm.cmd>>=
 let cmd = { Cmd.
@@ -2426,7 +2457,7 @@ let rec remove_entry idx name =
 
 \chapter{Committing a Diff}
 
-\section{Committing the index, [[git commit]]}
+\section{Committing the index: [[git commit]]}
 
 <<constant Cmd_commit.cmd>>=
 let cmd = { Cmd.
@@ -2476,6 +2507,7 @@ let cmd = { Cmd.
   );
 }
 @
+\t LP split
 
 <<constant Cmd_commit.author>>=
 let author = ref ""
@@ -2537,9 +2569,10 @@ let commit_index r author committer message =
   (* todo: execute post-commit hook *)
   ()
 @
+\t LP split
 
 
-\section{Computing the tree, [[index.tree_of_index()]]}
+\section{Computing the tree: [[index.tree_of_index()]]}
 
 <<type Index.dirs>>=
 type dirs = (string (* full relpath of dir *), dir) Hashtbl.t
@@ -2591,6 +2624,8 @@ let rec add_dir dirs dirpath =
 @
 
 
+% FIGURE for trees.
+% It maps relative path of dir to dir content
 
 
 
@@ -2648,6 +2683,9 @@ let perm_of_mode mode =
 % need atomic operations for updating the refs, because
 % push/pull will modify other repos that may be concurrently
 % accessed by another user at the same time.
+
+% why important atomic? because when push, you will write to another
+% repo, and you will modify refs possibly? so need atomic?
 
 \subsection{Updating an existing ref}
 
@@ -2756,7 +2794,7 @@ let del_force = ref false
 @
 
 
-\section{Listing branches, [[git branch]]}
+\section{Listing branches: [[git branch]]}
 
 <<function Cmd_branch.list_branches>>=
 (* less: remote_flag set with --all to also list remote refs *)
@@ -2839,7 +2877,7 @@ let with_opendir f dir =
   res
 @
 
-\section{Creating branches, [[git branch <name>]]}
+\section{Creating a branch: [[git branch <name>]]}
 
 <<function Cmd_branch.create_branch>>=
 let create_branch r name (* sha *) =
@@ -2856,7 +2894,7 @@ let create_branch r name (* sha *) =
 
 % and then usually checkout!
 
-\section{Deleting branches, [[git branch -d <name>]]}
+\section{Deleting a branch: [[git branch -d <name>]]}
 
 <<function Cmd_branch.delete_branch>>=
 let delete_branch r name force =
@@ -2879,7 +2917,7 @@ let del_ref r aref =
   Unix.unlink file
 @
 
-\section{checking out branches, [[git checkout]]}
+\section{checking out a branch: [[git checkout]]}
 
 <<constant Cmd_checkout.cmd>>=
 let cmd = { Cmd.
@@ -2934,14 +2972,14 @@ let checkout r str =
 
   | _ -> raise Cmd.ShowUsage
 @
-
+\t LP split
 
 % reset_index use for checkout!
 
 % build_index and also set worktree from tree.
 
 
-\subsection{Index from a tree, [[set_worktree_and_index_to_tree()]]}
+\subsection{Index from a tree: [[set_worktree_and_index_to_tree()]]}
 
 <<signature Repository.set_worktree_and_index_to_tree>>=
 val set_worktree_and_index_to_tree:
@@ -2988,6 +3026,9 @@ let set_worktree_and_index_to_tree r tree =
   )
   (* less: delete if a dir became empty, just walk_dir? *)
 @
+
+\t should also delete file not present in old version but were in
+\t  current version
 
 <<signature Tree.walk_tree>>=
 val walk_tree: 
@@ -3058,7 +3099,7 @@ let build_file_from_blob fullpath blob perm =
 %\subsection{[[validate_path()]]}
 
 
-\section{Resetting branches, [[git reset]]}
+\section{Resetting a branch: [[git reset]]}
 
 <<constant Cmd_reset.cmd>>=
 let cmd = { Cmd.
@@ -3167,9 +3208,9 @@ let reset_hard r =
 
 % 3-way merge algorithm? diff3?
 
-\section{merge}
+\section{merge: [[git merge]]}
 
-\section{Rebase}
+\section{Rebase: [[git rebase]]}
 
 \section{Cherry-picking}
 
@@ -3179,7 +3220,7 @@ let reset_hard r =
 
 \chapter{Inspecting}
 
-\section{[[git show]]}
+\section{Content of an object: [[git show]]}
 % can be useful to understand formats
 
 <<constant Cmd_show.cmd>>=
@@ -3271,7 +3312,7 @@ let show x =
 @
 
 % print_commit() before
-% write_tree_diff later (for git diff)
+% write_tree_diff in caller.
 
 <<signature User.string_of_date>>=
 (* for show *)
@@ -3359,7 +3400,7 @@ type item = string
 
 % Again diff not part of core DS. Used for inspecting.
 
-\section{[[git diff]]}
+\section{File differences: [[git diff]]}
 
 <<constant Cmd_diff.cmd>>=
 let cmd = { Cmd.
@@ -3601,12 +3642,6 @@ let print_header nctx_before nold nnew =
 
 % actually a DAG of commits, not a graph of commits.
 
-% A bit complicated:
-%  - Walker
-%  - CommitQueue
-%  - WalkerEntry
-% and many options that operates at different levels
-
 \t used outside git log? so just put inside git log?
 
 <<signature Commit.walk_history>>=
@@ -3663,7 +3698,7 @@ let walk_graph r f =
 \subsubsection{Topological order}
 
 
-\section{[[git log]]}
+\section{Commit history: [[git log]]}
 
 <<constant Cmd_log.cmd>>=
 let cmd = { Cmd.
@@ -3873,7 +3908,7 @@ let print_commit sha commit =
   ()
 @
 
-\subsection{Commit diff summary, [[git log --name-status]]}
+\subsection{Commit diff summary: [[git log --name-status]]}
 
 <<function Cmd_log.print_change>>=
 let print_change change =
@@ -3886,7 +3921,7 @@ let print_change change =
     pr (spf "M       %s" entry1.Change.path)
 @
 
-\section{[[git status]]}
+\section{File status: [[git status]]}
 
 <<constant Cmd_status.cmd>>=
 let cmd = { Cmd.
@@ -4134,7 +4169,7 @@ let untracked r =
 % (e.g., compute top_commons)
 
 
-\section{[[git pull]]}
+\section{Pulling updates: [[git pull]]}
 
 % saw get_transport_and_path before in core DS and its default
 % implem to LocalGitClient
@@ -4321,7 +4356,7 @@ let has_obj r h =
 
 % see graphwalker in next section
 
-\subsubsection{Determine the references wanted}
+%\subsubsection{Determine the references wanted}
 % will see some refinements later where can ask only HEAD.
 
 
@@ -4401,7 +4436,7 @@ let iter_missing_objects top_common_commits top_wanted_commits src f =
     missing commit_sha false
   )
 @
-
+\t LP split
 
 <<function Client_local.collect_filetree>>=
 let rec collect_filetree read_tree treeid have_sha =
@@ -4447,7 +4482,7 @@ let collect_ancestors read_commit top_commits hdone =
 
 \subsubsection{Adding Objects}
 
-\subsubsection{Shallow requests}
+%\subsubsection{Shallow requests}
 % advanced topic? related to graft? related to git clone --depth?
 
 
@@ -4498,6 +4533,7 @@ let (mk_graph_walker: Repository.t -> graph_walker) = fun r ->
   let todos_next_round = ref [] in
   let last_round = ref None in
   let hdone = Hashtbl.create 101 in
+
   { next = (fun () ->
     todos := !todos_next_round @ !todos;
     todos_next_round := [];
@@ -4516,6 +4552,7 @@ let (mk_graph_walker: Repository.t -> graph_walker) = fun r ->
       );
       Some x
     );
+
     ack = (fun commit_sha ->
       (* less: do weird loop where recurse also over parents as in dulwich? *)
       match !last_round with
@@ -4540,7 +4577,7 @@ let (mk_graph_walker: Repository.t -> graph_walker) = fun r ->
 % commit, then we need to filter its parents from the todos.
 
 
-\section{[[git push]]}
+\section{Pushing changes: [[git push]]}
 
 % Not really needed. The other guy can just pull from yours.
 % In fact restrictions about pushing where can only push
@@ -4602,7 +4639,7 @@ let push src_repo url_dst =
 
 
 
-\section{Cloning a repository, [[git clone]]}
+\section{Cloning a repository: [[git clone]]}
 
 % In the end, quite similar to git pull; we just pull everything.
 
@@ -4650,6 +4687,7 @@ let clone url path_dst =
 
 \subsection{Importing refs}
 
+\t clone should import refs, not just HEAD
 
 \section{Packs}
 
@@ -4695,7 +4733,7 @@ let clone url path_dst =
 \section{Client}
 
 \subsection{Local client}
-
+% seen before, can be used for NFS too!
 
 \subsection{[[git://]]}
 
@@ -4738,12 +4776,11 @@ let mk_client url =
 \section{Server}
 
 
-\subsection{[[TCPGitServer]]}
+%\subsection{[[TCPGitServer]]}
 
+%\subsection{[[FileSystemBackend]]}
 
-\subsection{[[FileSystemBackend]]}
-
-\subsection{[[Handler]]}
+%\subsection{[[Handler]]}
 
 \subsection{[[git-upload-pack]]}
 % when pull
@@ -4756,7 +4793,8 @@ let mk_client url =
 
 \chapter{Advanced Topics}
 
-\section{Bytes}
+\section{Bytes vs ASCII vs UTF8}
+% Encoding.
 
 % Git doc says git is agnostic to encoding. Just treat filenames
 % and file content as bytes. But for commit messages, assume utf8,
@@ -4780,14 +4818,18 @@ let mk_client url =
 
 \subsubsection{[[Tag.t]]}
 
+\subsubsection{IO}
+
 
 \subsubsection{[[git tag]]}
 
 % to create, list, delete
 
 \subsubsection{[[git clone]] and tags}
+% should import tags
 
 \subsubsection{[[git pull]] and tags}
+% should split_commit_and_tags (see dulwich)
 
 \subsection{Reflog}
 
@@ -4841,9 +4883,9 @@ let mk_client url =
 
 \subsubsection{Initialization}
 
-\subsubsection{Config.t]]}
+\subsubsection{[[Config.t]]}
 
-\subsubsection{Parsing}
+\subsubsection{Reading}
 
 \subsubsection{Writing}
 
@@ -4860,6 +4902,7 @@ let mk_client url =
 %\section{Advanced diff capabilities}
 \subsection{Rename detection}
 
+% useful to have git log tracking a file through rename
 
 \section{Optimizations}
 
@@ -5052,6 +5095,7 @@ let cmd = { Cmd.
   );
 }
 @
+\l git dump pack
 
 <<constant Cmd_dump.raw>>=
 let raw = ref false
@@ -5155,6 +5199,7 @@ let test_sha1 () =
 \chapter{Profiling}
 
 \chapter{Error Management}
+% centralize all errors? have a error.ml?
 
 \chapter{Utilities}
 
