@@ -28,8 +28,10 @@
 %   (harder to understand non functional code using lots of globals)
 
 %thx to this manual, better understand VCS (and git):
-% - intuition of Torvalds for a stupid content tracker
+% - intuition of Torvalds for a stupid content tracker with very
+%   different strategies
 % - merge and MERGE_HEADS state?
+% - beauty of design using SHA1 used for so many things (Graydon Hoare?)
 
 %history LP-ization:
 % * wanted to LPize camp (simplified clone of darcs, also in Haskell)
@@ -95,7 +97,7 @@
 %******************************************************************************
 \title{
 {\Huge 
-Principia Softwarica: The Version Control System [[ocamlgit]]
+Principia Softwarica: The Version Control System (OCaml)[[git]]
 }\\
 {version 0.1}
 }
@@ -112,7 +114,12 @@ Yoann Padioleau
 \onecolumn
 \hrule
 \input{../docs/latex/Copyright}
-%\input{../docs/latex/CopyrightPlan9}
+%nope: \input{../docs/latex/CopyrightPlan9}
+\begin{quote}
+The source code is Copyright \copyright{} 2017 Yoann Padioleau.\\
+Permission is granted to copy, distribute, and/or modify the source code
+under the terms of the GNU Lesser General Public License version 2.1.
+\end{quote}
 \hrule
 \twocolumn
 
@@ -129,96 +136,275 @@ Yoann Padioleau
 \chapter{Introduction}
 
 The goal of this book is to explain with full details the source code of
-a {version control system} (VCS).
+a {version control system}.
 
 \section{Motivations}
 
-Why a VCS? 
+Why a version control system (VCS)?
 Because I think you are a better programmer if
-you fully understand how things work under the hood.
-% useful for developer, but really useful (and mandatory) when working
-% with other developers on same program to collaborate.
+you fully understand how things work under the hood, and
+%dup: Make.nw
+a VCS is one of the tools a programmer uses the most.
+\l manage source code! track evolution! vital product of programmer labor!
+%
+Indeed, for projects with a single developer, a VCS is convenient
+to keep track of changes; it allows the programmer to easily go back to
+past versions if he messed things up.
+\l also git grep, git bisect, git revert, ... (said later?)
+%
+For projects with multiple developers, a VCS is almost mandatory;
+it allows programmers to collaborate with each other and even to work
+and modify the same files concurrently.
+\l also git blame, ... (said later?)
+
+\n def
+A VCS manages {efficiently} changes to a file or set of files 
+(e.g., the source code of a program). 
+%src: SCCS paper
+It allows to {store} and {retrieve} past versions of a file, and to {record}
+{who} made each change, {when}, {where}, and {why}.
+\l Important cos program changes all the time! bugs/features/maintenance/opti
+\l need 'system' to help 'control versions' otherwise chaos.
+\l introduce checkin/checkout, delta so can talk about it in next section?
+%
+You can use a VCS not only to manage source code but also text-based
+documents (e.g., the source of this book), configuration files, 
+and even binaries.
+\n e.g., images, but not good IMHO to store binaries.
+\l Word/Excel/Google-Docs/Wikipedia have their own VCS.
+
+%dup: Make.nw
+\l not as interesting as kernel/compiler, but necessary!
+\l bootstrapping issues!
+\l many nice algos. interesting study.
 
 Here are a few questions I hope this book will answer:
 \begin{itemize}
-\item TODO
-% how to store efficiently versions. 
-% Delta? How save space?
-%git: packs, sha1 deduplicating (but not delta/diff really), pack compression
-% deduplicating blob but also sharing of trees!
 
-% how to represent changeset?
+%dup: Make.nw
+\item What are the fundamental concepts of a VCS? 
+\n repo (file db), commit (changeset), branches, diff, merge
+What are the core algorithms behind a VCS?
+\n diff, diff3, zip/unzip, sha1, 
 
-% How to allow concurrent development? 
+\item How does a VCS store efficiently multiple versions of a file?
+\l store efficiently past versions of set of files
+\n delta (diff), reversed-delta
+%git: sha1 deduplicating (but not delta/diff really), compression,
+% dedup of blob but also of (sub)trees, pack delta and compression
 
-% How to allow parallel development?
+\item How does a VCS represent changes to a set of files?
+\n changeset tree, other?
+%git: tree sha1
 
-% What is merge algorithm? When safe? When conflict?
+\item How does a VCS allow multiple users to work and 
+modify the same files at the same time?
+\l pseudo simultaneously
+How can a VCS help coordinate the actions of multiple users?
+\l concurrent development
+\n locks, merge
+
+\item How does a VCS allow parallel developments?
+How can some developers work on the main release, some developers
+on experimental features, and some other developers on fixing bugs
+on previous releases shipped to customers all at the same time?
+What is a branch?
+How does a VCS reconcile multiple branches?
+%What are the differences between concurrent and parallel development?
+%src: 7 concurrency book:
+% - concurrent program has multiple logical threads of control. These threads
+%   may or may not run in parallel (can interleave)
+% - parallel program runs more quickly than a sequential program by
+%   executing different parts of the computation simultaneously (in //).
+%   It may or may not have more than one logical thread of control.
+
+\item What is a merge algorithm? When is a merge safe? 
+What is a merge conflict? How does a VCS resolve conflicts?
+\n it does not resolve conflicts! it lets user, too complicated, ok to delegate
 
 \end{itemize}
 
-%tags:
- %git:
+\t put in conclusion non-trivial adv algo and data structures seen? see comment
+%data-structures (beyond list/hashtbl): (use lists, hashtbl)
+% - crypto SHA1 DAG (authentificated from the root!) of commit
+% - Merkel Trees (related to version DAG)
+% - Huffman?
 
-%data-structures:
-
-%algo: (appendix)
+%algorithms (beyond search/sort): (appendix)
 % - sha1
 % - unzip (with huffman inside, adler32, lzh)
 % - zip
 % - diff
-% - diff3
+% - diff3 (aka merge)
+
+
+%tags used in this file for different recurring themes::
+ %git: %rcs: %cvs: %sccs: 
+ %facebook: my facebook experience using a VCS (mostly SVN -> git -> hg)
+ %
+ %toc: %trans: %dup: %example: %chunks:
+
 
 \section{The version control system [[git]] (and [[ocamlgit]])}
+\label{sec:vcs-git-ocamlgit}
 
-% Chose git. Actually clone of git written in OCaml
-% (other clones dulwich, even other ocaml clones, ocaml-git, hmm).
-% 5000? LOC.
-
-% Git popular. Also github! far easier collaboration in open source world.
-% Before pain create repo to collaborate. Need server, start and config
-% CVS server there, password, etc. Now just create on github and clone!
-
-% git does not track changes, it track states! so very different approach
-% which in the end I think simplify many things.
-
-%% just say git but really ocamlgit 
+I will explain in this book the code of the VCS 
+[[ocamlgit]]\furl{https://github.com/aryx/plan9-ocaml/tree/master/version_control}, which contains about 6200 lines of code (LOC).
 \n [[gut]] shortand? meh, confusing. ocamlgit and git should have same UI.
+%
+As its name suggests, [[ocamlgit]] is written in OCaml and is a clone
+of the popular VCS 
+[[git]]\furl{https://git-scm.com/}, which is written in C.
 
-% Stored as diffs? apparently not. Just compressed and indexed by sha.
-% If same content, then same id.
+As opposed to most books in \principia, I could not choose a \plan
+program for this book because there is no \plan VCS.
+\l (they rely on fs?) /n/sources/?
+%
+There are many open source \unix VCSs with different user interfaces, storage
+strategies, concurrent models, features, etc. I will present
+a few of those VCSs in Section~\ref{sec:other-vcs}.
+%
+For this book, I decided to base the presentation on [[git]] because
+[[git]] is one of the most popular VCS in the open source community.
+Moreover, when coupled with the hosting website 
+GitHub\furl{https://github.com}, 
+[[git]] makes it really easy for people to collaborate with each other.
+\n mercurial has bitbucket, but still github better interface IMHO
+
+However, [[git]] is a rather large project with more
+than 200 000 LOC. It is impossible to present all this code
+in a book of a reasonable size.
+%
+There are a few clones of [[git]] written in higher-level languages than C,
+for example, [[dulwich]]\furl{https://www.dulwich.io/} written
+in Python with only 16 000 LOC.
+%
+I could have based this book on [[dulwich]], but this would introduce
+another language in the \principia book series in addition
+to C (used for most of the books) 
+and OCaml (used for the editor, web browser, and code generators books).
+%
+This would also require to present the code of the Python interpreter,
+which contains more than 170 000 lines of C code.
+\n and far more of Python code (not counting test and third-party C libs)
+%
+Instead, I decided to port the Python code of [[dulwich]] to OCaml, resulting
+in [[ocamlgit]], and to present the code of [[ocamlgit]].
+\l other ocaml clones, ocaml-git, but meh
+\l not as efficient as git, not as famous as Torvalds for coding style,
+\l  but not too bad (bench?) and easier entry point to then look code of git.
+
 
 \section{Other version control systems}
+\label{sec:other-vcs}
+%me: manual backups -> RCS -> CVS -> PRCS -> git -> darcs -> SVN -> git -> hg
 
-Here are other candidates that were considered but ultimately discarded:
+Here are a few VCSs that I considered for this book, but
+which I ultimately discarded:
 \begin{itemize}
 
-%SCCS and CSSC? first one! and \cite
+\item The Revision Control System
+(RCS)~\cite{rcs}\furl{https://www.gnu.org/software/rcs/}
+was the first open source VCS.
+\l really?
+Like its predecessor, the Source Code Control System
+(SCCS)~\cite{sccs}\furl{http://sccs.sourceforge.net/},
+\n RCS closed in 1982, free in 1990 (SCCS closed in 1976, free in 2006)
+\n CSSC alternative OSS version of SCCS
+RCS uses {\em deltas} to store efficiently the past versions of a file. 
+However, RCS improves over SCCS by using {\em reverse-deltas} to 
+enable the user to also retrieve quickly the last version of a file
+(a recurring operation).
+\l but blaming is faster with SCCS
 
-\item RCS
-% 24~000 LOC, but too limited, just one file, no branch, no concurrent work
-% (and already 24 000 LOC, insane, why? too subtle diff representation?)
-%\cite
-% and SRC wrapper from ESR?
+RCS is still a reasonable choice to manage a small project
+with a single developer or a small set of developers who can 
+share access to a common directory (e.g., by using NFS and symbolic links).
+%
+However, the use of {\em locks} in RCS to forbid multiple developers
+to modify the same file and its focus on individual files make
+% Mostly single file. treat files separately. Each has different version. 
+%  can be used for multiple files, but abuse shell (wildcard on ,v)
+%  but not really good for projects with subdirs.
+RCS inadequate for large projects with many independent developers.
+%
+Finally, even if RCS is very limited compared to modern VCSs like [[git]],
+RCS still contains more than 17 500 LOC
+\n (not including testsuite, but small anyway)
+\l Why? too subtle diff representation?
+\n has kinda branch, and rcsmerge, and tags, but addition hacks
+\l SRC wrapper from ESR? 
+\l PRCS better at grouping (P = Project) http://prcs.sourceforge.net/
 
-\item CVS
-% 160 000 LOC, with rcs.c at 8000 LOC, hmm,
-% concurrent, but branch is really tedious
-%\cite
 
-\item git
-% series of DVCS (BitKeeper, monotone, codeville, arch, etc.)
-% 489 000 LOC
-% very good, but big codebase in C, and complicated (e.g. rebase)
-% has an article in AOSA book 1 or 2
-% first commit was actually small:
-%  https://github.com/git/git/commit/e83c5163316f89bfbde7d9ab23ca2e25604af290
-% could use that, but incomplete.
-% also libgit2, LOC? share code with git?
+\item The Concurrent Versions System
+CVS~\cite{cvs}\furl{http://www.nongnu.org/cvs/},
+was the most popular VCS for over a decade
+\n STUG award 2003
+before distributed VCS (e.g., [[git]]) took over.
+%
+CVS introduced a few important innovations.
+%
+First, CVS was designed to operate on a set of files, possibly organized
+in a tree\footnote{RCS can operate on multiple files by using shell 
+wildcards, but it was not designed for it.}.
+With CVS, you can group together related changes to a set of files 
+and you can easily retrieve past versions of a whole project.
+\n can with RCS, with tags, or date, but again not really designed for
+\l not atomic commit though (said later?)
+%
+Second, CVS allows multiple users to work and modify the same files
+concurrently. CVS relies on a {\em merge} program instead of locks.
+\l  who commit first always succeeds and second need to update and merge!
+%
+Finally, CVS introduced later a {\em client/server} architecture 
+where a {\em repository} could be stored on a remote machine.
+\n TCP/IP really made took off.
+When coupled with the free hosting site
+Sourceforge\furl{https://sourceforge.net}, 
+CVS allowed developers to easily start and collaborate on new projects.
+\l but branch and parallel development is really tedious (said later?)
 
-\item mercurial
-%mercurial (147 000 LOC, core = 84 000 LOC)
-%   core of 1.0 is? maybe not that bad
+CVS started as a set of shell scripts using RCS as backend.
+However, today CVS is a very large C program with more than
+80 000 LOC.
+\n not third-party libs (diff/zlib/lib/os2/NT/vms) and sanity.sh
+The backend file [[src/rcs.s]] contains already 9000 LOC.
+\l reputed difficult to understand, hence SVN
+
+\n I presented a bit git before
+\item [[git]]\furl{https://git-scm.com} was originally created
+by Linus Torvalds around 2005 to manage the source code of the Linux kernel.
+It followed a series of
+distributed VCSs (e.g., Arch, Monotone, Bazaar, BitKeeper) designed
+to overcome the main limitations of CVS, a centralized VCS.
+%
+A distributed VCS (DVCS) makes it easy and cheap to create {\em branches}
+representing parallel developments, and to reconcile later
+those branches.
+\l also atomic, consistent checks! fast! done the right way!
+Moreover, with a DVCS a developer can also work offline.
+\l no need central server, peer-to-peer.
+
+As explained in Section~\ref{sec:vcs-git-ocamlgit}, [[git]]
+is a large program with more than 200 000 LOC spread over more than 400 files
+(not including the tests, GUIs, and extra contributions).
+%
+The first version of [[git]] was small and contained only 1000 LOC\footnote{
+\url{https://github.com/git/git/commit/e83c5163316f89bfbde7d9ab23ca2e25604af290}}.
+However it contained only a few low-level commands that were not easy to use.
+\l also libgit2, LOC? share code with git?
+
+\item Mercurial~\cite{hgbook}\furl{https://www.mercurial-scm.org/}
+is another popular DVCS started by another Linux kernel programmer
+around 2005.
+\l after BitKeeper fiasco
+It is mostly written in Python and relies on a few C files for critical
+operations. Its code is arguably easier to understand than [[git]]
+but it still contains more than 100 000 LOC spread over more than 170 files
+(not including the tests, extensions, and extra contributions).
+\l core of 1.0 is? maybe not that bad
+\l bitbucket equivalent of github
 
 \end{itemize}
 
@@ -228,10 +414,12 @@ Here are other candidates that were considered but ultimately discarded:
 
 %industry:
 % - perforce
-% - sourcesafe
+% - microsoft visual sourcesafe
+% - rational clearcase
 % - bitkeeper (main inspiration for git)
 %history:
-% - SCCS and modern version CSSC
+% - SCCS http://sccs.sourceforge.net
+%   and modern version CSSC
 %   https://www.gnu.org/software/cssc/
 %other:
 % - subversion (630 000 LOC, hmm)
@@ -239,22 +427,24 @@ Here are other candidates that were considered but ultimately discarded:
 % - darcs 80 000 LOC (using literate haskell), maybe good candidate, simpler
 %   model, arguably simpler than git (rebase for free?), some patch theory.
 %   But code looks actually awful. Lots of boilerplate. Huge types.
-% - Camp is a simplified version at 6300 LOC
-%   a mini darcs. Simple? Elegant? Arguably more powerful. < 10 000 LOC.
-%   Can be good opportunity also to read some haskell code. Maybe can then
-%   port the code to OCaml.
-% - gnu arch (aka tla 273 000 LOC)
-% - bazaar (477 000 LOC)
+% - gnu arch (aka tla 273 000 LOC) described as very complicated by many
+% - bazaar (477 000 LOC) and bazaar-NG
 %   https://www.jelmer.uk/pages/bzr-a-retrospective.html
 % - monotone (99 000 LOC for 1.1), apparently good source of inspiration
-%   for git with DAG of sha1
+%   for git because introduced the DAG of SHA1
+% - codeville, by Bram Cohen of Bittorrent fame
 % - pijul, initially in OCaml (3000 LOC), then in Rust, but seems to have 
 %   a slow development
+% - fossil
 %git alternate porcelain:
 % - gitless, a better design for git, great paper:
 %   http://people.csail.mit.edu/sperezde/pre-print-oopsla16.pdf
 %   (can implement this design with dulwich?)
 %mini:
+% - camp is a simplified version at 6300 LOC
+%   a mini darcs. Simple? Elegant? Arguably more powerful. < 10 000 LOC.
+%   Can be good opportunity also to read some haskell code. Maybe can then
+%   port the code to OCaml.
 % - http://benhoyt.com/writings/pygit/ 500 LOC to push to github,
 %   with init/add/commit/push/status/diff/, very nice, but simplified
 %   so only support toplevel files, no subdirs (so no subtree).
@@ -287,33 +477,26 @@ Here are other candidates that were considered but ultimately discarded:
 
 %https://en.wikipedia.org/wiki/List_of_revision_control_software
 %http://www.catb.org/esr/writings/version-control/version-control.html
+%http://better-scm.shlomifish.org/comparison/comparison.html
 
 %future:
 % - my semantic-vcs proposal!
 %   related: https://www.semanticmerge.com/
 % - gitless design  http://people.csail.mit.edu/sperezde/pre-print-oopsla16.pdf
 %   that uses pygit2 (a binding to libgit2)
+% - CRDTs? inspired by merge in VCS?
+% - use git model for more things, like in mirage and irmin?
 
 
-%git docs:
-% - https://www.kernel.org/pub/software/scm/git/docs/user-manual.html#birdview-on-the-source-code
-% - https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain
-% - git v0:
-%   https://github.com/git/git/commit/e83c5163316f89bfbde7d9ab23ca2e25604af290
-% - git from the bottom up (great, I read it while at FB)
-% - https://building-git.launchrock.com/ 
-%   learn git by building your own, an expansion of a blog on git, e.g.:
-%   https://blog.jcoglan.com/2017/05/08/merging-with-diff3/
-%   https://blog.jcoglan.com/2017/02/12/the-myers-diff-algorithm-part-1/
-% - https://codewords.recurse.com/issues/two/git-from-the-inside-out
-% - http://eagain.net/articles/git-for-computer-scientists/
-% - https://stevebennett.me/2012/02/24/10-things-i-hate-about-git/
-% - Bram cohen vs torvalds on deep algo in git:
-%   http://www.wincent.com/a/about/wincent/weblog/archives/2007/07/a_look_back_bra.php
-% - http://manishearth.github.io/blog/2017/03/05/understanding-git-filter-branch
 
 \section{Getting started}
 \label{sec:getting-started}
+
+% get source :)
+
+%bootstrap: need ocamlgit to get ocamlgit :) 
+% or use git
+% or just use tar.gz (and extra patches)
 
 \section{Requirements}
 
@@ -479,42 +662,102 @@ I would like to acknowledge the author of [[dulwich]]
 Before showing the source code of [[ocamlgit]] in the following chapters, 
 %toc:
 
-\section{VCS principles}
+\section{Version control system principles}
 
-% See Misfits paper, great summary of essential purposes.
-% See also git from the bottom up intro with nice glossary
-% (repo, index, working tree, commit, branch, tag, master, HEAD)
-% (but maybe some are too git specific?)
+% nice docs:
+% - ten innovations in the history of vcs:
+%    http://www.flourish.org/2011/12/astonishments-ten-in-the-history-of-version-control/
+% - https://betterexplained.com/articles/a-visual-guide-to-version-control/
+% - Misfits paper, great summary of essential purposes.
+% - git from the bottom up intro with nice glossary
+% - Mercurial chapter in AOSA book.
+% - Git chapter in AOSA book.
+% - dulwich/docs/ but very limited.
 
-% ten innovations in the history of vcs:
-% http://www.flourish.org/2011/12/astonishments-ten-in-the-history-of-version-control/
-% free easy hosting is in it? a la github?
+%trans:
+% how if no VCS? manual backups, tarballs, email patches?
+% (\footnote{how Linux done for a long time}, human VCS) :) )
+% no git blame. discipline.
+%src: SCCS paper
+% Code changes all the time. Bugs, experimentatl features, optims.
+%  not just current version but last year's (still supported) and next year!
+%  maintenance old code. Chaos if no tool, if no discipline.
 
-% see Mercurial chapter in AOSA book.
+% VCS, SCM?
 
-% Some stuff in dulwich/docs/ but very limited.
+% try be general and add %git: for git instantiation of general principles
+\subsection{The repository}
 
+% history of a project.
+
+\subsubsection{Metadata}
+% file version database
+% metadata (RCS/,v, .git/objects/, CVS/CVSRoot and other dir or server, etc.)
+% metadata and data in fact. past versions are really data.
 
 % First, store past versions. Can go back in time if made a mistake.
-% Could get that with copy, but better organized, and storing
-% deltas has efficiency implications. 
+% Could get that with copy, but need discipline, filename encoding
+%  better organized, and storing deltas has efficiency implications. 
 %update: actually git does not really use delta. really more a content tracker.
 %update: actually can use delta, but for packfile.
 
 % Time filesystem could do that, e.g. cd /2016/01/01/project/.
 % Can even be encoded efficiently (deltas backup system, deduplication).
 % But need special fs. And VCS provides additional nice services
-% like commit message (but could have a history.txt file in the project,
+% like commit message, and git blame!! who, when, why, where!
+% (but could have a history.txt file in the project,
 % and also symlinks to tag version at specific time).
 
-% need have different versions, different version id.
-%git: use simple scheme: not v1, v2, ... but sha1 of content!
-% then get for free consistency checking
+% Different storage strategy.
+% Some use per-file history [[,v]], flat dirs (.git/objects/), 
+% Berkely DB (SVN), Sqlite (monotone), changesets (?)
+
+
+\subsubsection{Working copy}
+% working tree
+
+% checkout, checkin
+
+% So can use any editor to edit!
+% (departure from Word/Excel where versions and editing are using same tool)
+
+%rcs: checkout
+
+\subsubsection{Changeset}
+
+% set of logical changes as an individual group (atomic).
+
+%cvs: not atomic?
 
 % then need to have not just version of one file (RCS) but version
 % of a tree.
 %git: have tree structure which references other blob id and other trees.
 % if a full subtree does not change, then share reference.
+
+% single-file history, or whole-tree history.
+
+% - release/level discipline, so update release for all files at certain
+%   point
+% - use date
+% - use tag
+
+% or simply use commit id in modern VCSs :)
+
+
+
+\subsection{The commit}
+
+%dup: intro/motivations
+% who, when, what/where, and why.
+
+% attach note to changeset.
+% incredibly useful for git blame! can help find bugs, see related
+% code because related changes!
+
+% record who made change, what change, and even why! great resource.
+% git blame!
+
+%rcs: checkin
 
 % then commit information.
 %git: again use object for that. then easy to reference
@@ -522,52 +765,31 @@ Before showing the source code of [[ocamlgit]] in the following chapters,
 % Also then can have references, symbolic references.
 % Also have parents! so full history on how you got there.
 
-% Also by having delta
-% and message associated with it help explore history. Git log, git
-% blame are fantastic tool, even in single-user mode. To know
-% code related to a line, the message of this patch, etc.
-% Also in multi-user mode good to know the author, test plan, test
-% files, coupled code, etc.
-% I used it a lot to understand code at Facebook.
-
-% Then when work in groups, useful to have way to work concurrently,
-% to not pass his copy and wait for the "token". Concurrent
-% techniques are lock, or better optimistic and later merge.
-
-% Branches are also very useful. Work on different tasks, different
-% branches. Can juggle between those.
-
-% What brings distributed then? More convenient than centralized.
-% Less imposing. Nice to have everything locally. Just more general.
-% Can do centralized with distributed (e.g. "main" repo on github
-% is the main thing to pull from).
-
-% Finally github is fantastic. Easy to setup and start sharing work.
-
-% on changesets vs snapshot-based VCS
-%https://web.archive.org/web/20100327150715/sourcefrog.net/weblog/software/vc/derivatives.html
-
-
-% try be general and add %git: for git instantiation of general principles
-\subsection{Repository}
-% history
-% metadata (RCS/,v, .git/objects/, CVS/CVSRoot and distant server, etc.)
-
-% single-file history, or whole-tree history.
-% changeset
-
-% some fs could do that, /2016/08/29/projects/hello/
-
-\subsection{Commit}
-
-% attach note to changeset.
-% incredibly useful for git blame! can help find bugs, see related
-% code because related changes!
 
 \subsubsection{Version identifier}
+
+% version, revision.
+
+% need have different versions, different version id.
+%git: use simple scheme: not v1, v2, ... but sha1 of content!
+% then get for free consistency checking
+
+% release.level
+% so one way to organize set of files and have changeset by having
+% all developers increment release (but then need modify every file? RCS
+% does not accept empty updates)
+
+%sccs: introduced extra lettre for different customer, so 1.2.p
+
 % 1.1, 1.2,
 %git:
-%  or sha1!
+%  or sha1! identified by its content! file content! but can
+%  also scale to set of files! or tree! or commit!
+%  has some advantages.
+%Also in distributed settings, how can have global identifier?
+% each user need tags its version number with its name?
+% another thing where sha1 is good, they are stable across machines,
+% they are global!
 
 
 \subsubsection{[[diff]]}
@@ -577,41 +799,141 @@ Before showing the source code of [[ocamlgit]] in the following chapters,
 % diff can be used also internally in VCS to efficiently store deltas.
 %git: used in pack only
 
+% Also by having delta
+% and message associated with it help explore history. Git log, git
+% blame are fantastic tool, even in single-user mode. To know
+% code related to a line, the message of this patch, etc.
+% Also in multi-user mode good to know the author, test plan, test
+% files, coupled code, etc.
+% I used it a lot to understand code at Facebook.
+
+% Usually diff at line-level. So add/delete a line are the primitives
+% (since SCCS). Fine granularity for source code.
+
+
 \subsubsection{[[patch]]}
+
+%dual of diff
+% (also some fuzzy apply algorithm)
+
 % first years of Linux was managed just with patches.
 % tarballs and patches. linux-mm still use patches (quilt).
 
+%\subsection{Revision graph}
+% RCS was a tree, but then when introduce real branches get merges and a DAG!
+% head, tip, branch, fork, merge, root, trunk, ... lots of graph words.
+%\subsubsection{A mainline} 
+%\subsubsection{A tree of branches} 
+%\subsubsection{A direct-acyclic graph of merges} 
 
 \subsection{Concurrent development}
 % locks? or optimistic merging!
 
+% When multiple developers, may modify same file, dont want one
+% to overwrite change of other. Need control access to shared
+% resource, the source file.
+% How?
+
+% Then when work in groups, useful to have way to work concurrently,
+% to not pass his copy and wait for the "token". Concurrent
+% techniques are lock, or better optimistic and later merge.
+
 \subsubsection{Locks}
+
+% Simple.
+
 % but easy to forget to unlock, and really annoying for other.
 % RCS.
+
+% Locks make sense only with centralized model.
 
 \subsubsection{Merging}
 % surprisingly, it works!
 % CVS.
 
+% but need update first. 
+%facebook: What if time update and time commit long
+% so always another guy in the middle.
+
 \subsubsection{Merge conflicts}
+
+% show conflict with <<<< === >>>>
 
 \subsection{Parallel development}
 
-\subsubsection{Branch}
-% CVS got it, but complicated.
-% git far easier.
+% like concurrent, but longer time-scale. Does not expect to merge
+% immediately.
 
-\subsection{Centralized vs distributed}
+\subsubsection{Branch}
+
+% Branches are also very useful. Work on different tasks, different
+% branches. Can juggle between those.
+
+% - temp fixes (never merged)
+% - parallel devel for experimental feature (may be merged)
+% - real fork (may be merged)
+
+% RCS had branches, but per-file! tedious.
+% CVS got it, but complicated, because was relying on RCS.
+% git far easier! because every different repo/user is a branch! because
+%  distributed, so had to get merge right and fast!
+
+% Saw merge before, but merge really make sense with branching.
+% Useful to branch and merge. 
+% Also useful for branch and merge on a peer-to-peer basis
+% (networking)
+
+\subsubsection{Merge}
+
+\subsubsection{A direct acyclic graph}
+
+% really important. line, then tree, then DAG!
+% Lots of terminology about graph (HEAD, tip, ...)
+
+% Previous VCS did not record relation between changeset (which
+% requires identify changeset), and so merge could also not work good?
+
+%\subsection{Variants}
+\subsection{Centralized versus distributed}
 % pulling and pushing
 
 % but in both cases pull and push.
 
-% github kinda centralize, but still independent repo! can work offline.
+% github kinda centralize, but still independent repo! can work offline
+
+% decentralized so no need access permission! Can fork, work,
+% commit locally, and then ask for master to merge you.
+
+% What brings distributed then? More convenient than centralized.
+% Less imposing. Nice to have everything locally. Just more general.
+% Can do centralized with distributed (e.g. "main" repo on github
+% is the main thing to pull from).
+
+% When distributed, not centralized, so no need path to shared repo
+% or CVSROOT and so no need concepts such as module as in CVS.
+% (actually there is concept of submodule and gitlink)
+% Have different projects? Use different repo! Simple.
+
+%\subsection{Snapshot versus changeset}
+% on changesets vs snapshot-based VCS
+%https://web.archive.org/web/20100327150715/sourcefrog.net/weblog/software/vc/derivatives.html
+% snapshot fast to go back to previous version. No delta application.
+% Just copy blob!
+
+%\subsection{Hosting}
+%\subsection{Github}
+% sourceforge before.
+% Finally github is fantastic. Easy to setup and start sharing work.
+
+% Before pain create repo to collaborate. Need server, start and config
+% CVS server there, password, etc. Now just create on github and clone!
 
 %\subsection{Git}
 % many more concepts: 
 % index, HEAD, master, working tree, sha1
 % but quite git specific.
+
+
 
 \section{[[git]] command-line interface}
 
@@ -626,17 +948,47 @@ Before showing the source code of [[ocamlgit]] in the following chapters,
 
 \subsection{[[git]] concepts}
 
-% sha1, 
+%git docs:
+% - https://www.kernel.org/pub/software/scm/git/docs/user-manual.html#birdview-on-the-source-code
+% - https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain
+% - git v0:
+%   https://github.com/git/git/commit/e83c5163316f89bfbde7d9ab23ca2e25604af290
+% - git from the bottom up (great, I read it while at FB)
+% - https://building-git.launchrock.com/ 
+%   learn git by building your own, an expansion of a blog on git, e.g.:
+%   https://blog.jcoglan.com/2017/05/08/merging-with-diff3/
+%   https://blog.jcoglan.com/2017/02/12/the-myers-diff-algorithm-part-1/
+% - https://codewords.recurse.com/issues/two/git-from-the-inside-out
+% - http://eagain.net/articles/git-for-computer-scientists/
+% - https://stevebennett.me/2012/02/24/10-things-i-hate-about-git/
+% - Bram cohen vs torvalds on deep algo in git:
+%   http://www.wincent.com/a/about/wincent/weblog/archives/2007/07/a_look_back_bra.php
+% - http://manishearth.github.io/blog/2017/03/05/understanding-git-filter-branch
+
+% git does not track changes, it track states! so very different approach
+% which in the end I think simplify many things.
+
+% Stored as diffs? apparently not. Just compressed and indexed by sha.
+% If same content, then same id.
+
+% sha1! essential for consistency checking anyway!
 % objects: blob, tree, commit
 % sha1 graph (DAG)
 % refs: HEAD, refname, refcontent
-% index
+%  branch, tag, remote, master
+% stage area (and index)
 % working tree
+
+
+% snapshot-based (so fast, at potentially cost of disk space, always
+% tradeoff). No delta app.
 
 \subsection{Repository format: [[.git/]]}
 
 % really object store and then .git/refs/ and using sha1 can encode
 % many idioms (branches, origin for push/pull, tags, stash)
+
+% $ tree .git (after created basic command in Getting started)
 
 % objects/!!
 % refs/heads/
@@ -653,6 +1005,11 @@ Before showing the source code of [[ocamlgit]] in the following chapters,
 
 %dup: 
 % use git below, but really ocamlgit, try compatible UI.
+
+% maybe show how certain commands modify .git/
+% but should say better docs:
+% - http://eagain.net/articles/git-for-computer-scientists/
+% - git from the bottom up (great, I read it while at FB)
 
 % git init
 % git add
@@ -690,22 +1047,31 @@ Before showing the source code of [[ocamlgit]] in the following chapters,
 % essentially a content addressable storage engine
 % but not very important here. 
 
+% pretty simple: 
+% Main -> cmds -> cmd_xxx -> cmd | repository -> objects -> 
+%   blob|Commit(User)|Tree|Index|Refs...
+% and then client/server on the side of repo too with different clients
+% and then compression|unzip|zlib, IO, diff_myers, hexsha, sha1
+
 \section{Book structure}
 
 %###############################################################################
 
 \chapter{Core Data Structures}
 
-\section{SHA1}
+\section{Secure Hash Algorithm (SHA1) hashes}
+\n Secure, not Simple.
 
 % used for 
 %  - identifying (and versioning), 
 %  - consistency checking, 
 %  - indexing (and also for folders), 
-%  - deduplicating.
+%  - deduplicating (good for rename detection too)
 % SHA1 underlies lots of things in git.
 
-\subsection{Binary SHA1}
+%sccs: used checksum (as opposed to RCS) to detect corrupted history files
+
+\subsection{Binary hashes}
 
 % sha1 is large number of 20 bytes.
 
@@ -737,7 +1103,7 @@ let is_sha x =
 \n extra checks? forbidden bytes? I dont think so.
 
 
-\subsection{Hexadecimal SHA1}
+\subsection{Hexadecimal hashes}
 
 % SHA1 used in git to identify things (e.g., commit).
 % Not easy enter binary data. Enter Hexsha, can be input
@@ -850,7 +1216,7 @@ let to_char x y =
 
 
 
-\section{Repository}
+\section{[[Repository.t]]}
 
 % a repo is really a set of commits,
 % and also set of names of commits (branches, tags, HEAD).
@@ -878,11 +1244,12 @@ type t = {
 
 % Most operations will take repo as first argument.
 
+%trans:
 % Repo contains objects and refs (see next 2 sections).
 %python: [] accessors for repo.object_store and repo.refs
 % (and even [] for repo itself for objectish)
 
-\section{Objects}
+\section{[[Objects.t]]}
 
 %https://git-scm.com/book/en/v2/Git-Internals-Git-Objects
 
@@ -924,7 +1291,7 @@ let hexsha_to_dirname r hexsha =
 % will see open_() later.
 
 
-\subsection{Blob}
+\subsection{[[Blob.t]]}
 % =~ file content (but no name, name is in tree)
 
 <<type Blob.t>>=
@@ -937,7 +1304,15 @@ type hash = Sha1.t
 % Later will want to specify that sha1 corresponds to a blob, so
 % use type alias for readability (but not really typechecked)
 
-\subsection{Tree}
+
+% But no interleave deltas (SCCS), reverse deltas (RCS).
+% Each modif generates new blob! disk is cheap now!
+% But dedup!
+% deduplicating! empty file! copy of file.
+% And will see soon compressed on disk!
+% And will see later more optim with pack files and deltas.
+
+\subsection{[[Tree.t]]}
 % =~ directories =~ project content.
 
 %"It doesn't bother trying to store per-file histories;
@@ -964,6 +1339,9 @@ type entry = {
 @
 %old: use id instead of node, so more consistent with Index.entry.id
 
+% Name can contain space, utf8, whatever! 
+% (seemed to be a pb in many other SCMs)
+
 <<type Tree.perm>>=
 (* very similar to Index.mode, but with also a 'Dir' *)
 type perm = 
@@ -973,8 +1351,19 @@ type perm =
   | Dir
   <<[[Tree.perm]] cases>>
 @
+% Nice simplification :) just needs that!
+% Dont care about permission, time, inode-id, etc. 
 
-\subsection{Commit}
+% deduplicating! share subdir if no change.
+
+%alt: flat list of revision number for each file? how retrive file?
+% if renamed? if removed?
+
+% Merkel trees?
+% Can reference entire tree with just hash of root tree! because
+% This tree itself is hashed by its content.
+
+\subsection{[[Commit.t]]}
 
 % =~ history
 % each commit has a tree and a parent, so can trace history of full project.
@@ -1006,6 +1395,10 @@ type t = {
   date : int64 * tz_offset(*option*);
 }
 @
+
+%rcs: %sccs: had 2 digits for the year for a long time and was
+% using local time
+
 <<type User.tz_offset>>=
 type tz_offset = {
   sign: sign;
@@ -1017,6 +1410,12 @@ type tz_offset = {
 <<type User.sign>>=
 type sign = Plus | Minus
 @
+
+
+% Fast checkout. Give me commit and I can grab
+% all files from object store (looking firs tree and then
+% going recursively grabbing blobs on the way).
+%rcs: innovated over slow sccs by storing diffs in reverse! fast checkout.
 
 \section{References}
 
@@ -1038,6 +1437,8 @@ type sign = Plus | Minus
 %https://git-scm.com/book/en/v2/Git-Internals-Git-References
 %references vs symbolic references.
 
+\subsection{Reference names}
+
 <<type Refs.refname>>=
 (* should always start with "refs/", see is_valid_refname() later *)
 type refname = string (* e.g. "refs/heads/master" *)
@@ -1052,6 +1453,7 @@ let is_valid_refname str =
   (* todo: git-check-ref-format *)
 @
 
+\subsection{[[HEAD]]}
 
 <<type Refs.t>>=
 type t =
@@ -1070,6 +1472,20 @@ let string_of_ref = function
 @
 
 
+\subsection{Reference store}
+%similar to Object store, indeed .git/ is mostly objects and refs (and index)
+
+% disk!
+<<function Repository.ref_to_filename>>=
+let ref_to_filename r aref =
+  match aref with
+  | Refs.Head -> r.dotgit / "HEAD"
+  (* less: win32: should actually replace '/' in name *)
+  | Refs.Ref name -> r.dotgit / name
+@
+
+\subsection{Reference content}
+
 <<type Refs.ref_content>>=
 type ref_content =
   (* the final value when follow all the pointers *)
@@ -1086,14 +1502,8 @@ let default_head_content =
   OtherRef "refs/heads/master"
 @
 
-% disk!
-<<function Repository.ref_to_filename>>=
-let ref_to_filename r aref =
-  match aref with
-  | Refs.Head -> r.dotgit / "HEAD"
-  (* less: win32: should actually replace '/' in name *)
-  | Refs.Ref name -> r.dotgit / name
-@
+
+\subsection{Objectish references}
 
 <<type Repository.objectish>>=
 (* todo: handle ^ like HEAD^, so need more complex objectish parser *)
@@ -1112,7 +1522,7 @@ type objectish =
 %branch is shorter name than Refs.
 
 
-\section{The index}
+\section{[[Index.t]]}
 % Staging area.
 
 % To know diff between working tree and HEAD.
@@ -1239,10 +1649,12 @@ let stat_info_of_lstats stats =
 
 % adv topics, but referenced many times (especially in Networking chapter).
 
-\section{Client}
+\section{Networking}
 
 % for git://, ssh://, but also for local.
 % Abstracted behind Client interface.
+
+\subsection{[[Client.t]]}
 
 <<type Client.t>>=
 type t = {
@@ -1277,13 +1689,20 @@ let client_of_url url =
 
 % Will see Client_local.mk_client later and match url cases later too.
 
+\subsection{[[Server.t]]}
+
+
+
+
+
+
 \chapter{Main Functions}
 
 %trans: before main(), important type.
 % git works with commands, git cmd args
 % where each command have own options and actions.
 
-\section{Commands}
+\section{Main commands}
 
 \subsection{[[Cmd.t]]}
 
@@ -1302,6 +1721,8 @@ type t = {
 % but not worth it. With split cmd_xxx.ml can have different globals in
 % those different files.
 
+%cvs: the one who introduced cvs xxx style instead of many programs? 
+% (ci/co/...)
 
 \subsection{[[Cmds.main_commands]]}
 
@@ -1464,9 +1885,11 @@ let rec cmd = { Cmd.
 % will have also 'git cmd --help' later.
 
 
-\chapter{Initializing a Repository}
+\chapter{Creating a Repository}
+\n Initializing? reserved for 'creating empty', so would match only git init
 
-\section{Creating a fresh repository: [[git init]]}
+\section{Initializing a repository: [[git init]]}
+% Creating a fresh repository
 
 <<constant Cmd_init.cmd>>=
 let cmd = { Cmd.
@@ -1543,7 +1966,7 @@ let dirperm = 0o750
 
 % Will see clone also later
 
-\section{Copying a repository}
+\section{Copying a repository: [[cp -r]]}
 
 % well, can just do cp :) 
 % Can also use branch, see later.
@@ -1554,6 +1977,8 @@ let dirperm = 0o750
 % will see clone later, but useful more in networking context
 % (and even there cp would be better thx to NFS)
 
+% clone creates a connexion to original repo. cp does not.
+% no remote and push/pull.
 
 
 \section{Opening a repository}
@@ -1641,16 +2066,6 @@ let read_obj r h =
 
 % when reading no need lock, so simply with_file_in.
 
-<<signature Compression.decompress>>=
-val decompress: 
-  IO.input -> IO.input
-@
-<<function Compression.decompress>>=
-let decompress ch = 
-  Unzip.inflate ch
-@
-% See appendix for Unzip.inflate().
-
 
 <<signature Objects.read>>=
 (* assumes input is in decompressed form *)
@@ -1670,7 +2085,21 @@ let read ch =
   | str -> failwith (spf "Objects.read: invalid header: %s" str)
 @
 
-\subsection{Blob}
+\subsection{Decompression}
+
+<<signature Compression.decompress>>=
+val decompress: 
+  IO.input -> IO.input
+@
+<<function Compression.decompress>>=
+let decompress ch = 
+  Unzip.inflate ch
+@
+% See appendix for Unzip.inflate().
+
+
+
+\subsection{Reading a blob}
 
 <<[[Objects.read()]] match str cases>>=
 | "blob"   -> Blob   (Blob.read ch2)
@@ -1695,7 +2124,7 @@ let read_blob r h =
   | _ -> failwith "read_commit: was expecting a blob"
 @
 
-\subsection{Tree}
+\subsection{Reading a tree}
 
 <<[[Objects.read()]] match str cases>>=
 | "tree"   -> Tree   (Tree.read ch2)
@@ -1765,7 +2194,7 @@ let read_tree r h =
   | _ -> failwith "read_commit: was expecting a tree"
 @
 
-\subsection{Commit}
+\subsection{Reading a commit}
 
 <<[[Objects.read()]] match str cases>>=
 | "commit" -> Commit (Commit.read ch2)
@@ -1875,7 +2304,7 @@ let read_commit r h =
 %here?
 
 
-\section{Refs}
+\section{References}
 
 <<signature Repository.read_ref>>=
 val read_ref: t -> Refs.t -> Refs.ref_content
@@ -1902,25 +2331,6 @@ let read ch =
   | _ -> Hash (str |> IO.input_string |> Hexsha.read |> Hexsha.to_sha)
 @
 %$
-
-%\section{Objectish}
-
-<<signature Repository.read_objectish>>=
-val read_objectish: t -> objectish -> Objects.t
-@
-<<function Repository.read_objectish>>=
-let read_objectish r objectish =
-  match objectish with
-  | ObjByRef aref -> 
-    (match follow_ref r aref |> snd with
-    | None -> failwith (spf "could not resolve %s" (Refs.string_of_ref aref))
-    | Some sha -> 
-      read_obj r sha
-    )
-  | ObjByHex hexsha ->
-    let sha = Hexsha.to_sha hexsha in
-    read_obj r sha
-@
 
 
 
@@ -1955,6 +2365,27 @@ let follow_ref_some r aref =
   match follow_ref r aref |> snd with
   | Some sha -> sha
   | None -> failwith (spf "could not follow %s" (Refs.string_of_ref aref))
+@
+
+
+
+%\section{Objectish}
+
+<<signature Repository.read_objectish>>=
+val read_objectish: t -> objectish -> Objects.t
+@
+<<function Repository.read_objectish>>=
+let read_objectish r objectish =
+  match objectish with
+  | ObjByRef aref -> 
+    (match follow_ref r aref |> snd with
+    | None -> failwith (spf "could not resolve %s" (Refs.string_of_ref aref))
+    | Some sha -> 
+      read_obj r sha
+    )
+  | ObjByHex hexsha ->
+    let sha = Hexsha.to_sha hexsha in
+    read_obj r sha
 @
 
 
@@ -2068,6 +2499,8 @@ let read_mode ch =
 
 \chapter{Writing to a Repository}
 
+% dual.
+
 \section{Objects}
 
 <<signature Repository.add_obj>>=
@@ -2153,7 +2586,15 @@ let compress ic oc =
 @
 % See appendix for Zlib.compress
 
+% So bench? what overhead over working copy uses git to
+% store all past versions?
+
 \subsection{Locking}
+
+% Locking here is different from lock on files.
+% Concurrent updates to same .git file are not permitted
+% (anyway less a pb with git because objects are immutable,
+% but still need to modify reference files! especially HEAD)
 
 <<function Repository.with_file_out_with_lock>>=
 (* todo: see code of _Gitfile.__init__ O_EXCL ... *)
@@ -2161,9 +2602,10 @@ let with_file_out_with_lock f file =
   (* todo: create .lock file and then rename *)
   Common.with_file_out f file
 @
+% but really need that for objects?
 
 
-\subsection{Blob}
+\subsection{Writing a blob}
 
 <<signature Blob.write>>=
 (* does not write the header, does not compress *)
@@ -2175,7 +2617,7 @@ let write blob ch =
 @
 
 
-\subsection{Tree}
+\subsection{Writing a tree}
 
 <<signature Tree.write>>=
 (* does not write the header, does not compress *)
@@ -2214,7 +2656,7 @@ let string_of_perm = function
 @
 
 
-\subsection{Commit}
+\subsection{Writing a commit}
 
 <<signature Commit.write>>=
 (* does not write the header, does not compress *)
@@ -2267,7 +2709,7 @@ let write_date ch (date, tz) =
   IO.nwrite ch (spf "%s%02d%02d" sign tz.hours tz.min)
 @
 
-\section{Refs}
+\section{References}
 
 <<signature Repository.write_ref>>=
 val write_ref: t -> Refs.t -> Refs.ref_content -> unit
@@ -2387,9 +2829,13 @@ let write_time ch time =
 %\chapter{Walking a Repository}
 
 \chapter{Staging a Diff}
-% gitless says staging is not necessary
 
+%trans:
 % Ok enough introduction. Now ready for real commands again!
+
+% gitless says staging is not necessary.
+% But if modified a b c and want different commits, then can!
+% (can even use magit-status and pick each changes!)
 
 \section{Adding files: [[git add]]}
 
@@ -2421,6 +2867,8 @@ let add r relpaths =
 
 % build a series of tree objects if different from last one?
 % No, commit does that. Here we just add blobs.
+
+\section{Creating a blob from a file}
 
 <<signature Repository.add_in_index>>=
 val add_in_index: t -> Common.filename list -> unit
@@ -2482,6 +2930,9 @@ let content_from_path_and_unix_stat full_path stat =
 
 % blob can be a symlink! git allows to store symlinks.
 
+% Order of operation is important. Always in a consistent state.
+% Will add index entry only if blob has been added! if failure after
+% blob created, no pb!
 
 \section{Removing files: [[git rm]]}
 
@@ -2536,10 +2987,19 @@ let rec remove_entry idx name =
 % when rm, we just want to build from index a tree without
 % this entry. Simple.
 
+\section{Renaming files: [[git mv]]}
+
+% huge debate. How to track rename of files and dirs.
+%cvs: was terrible at renaming
+
+%git: Just add and rm.
+% Note that same sha1 when rename, because same content, so no space lost.
+% Also can be used to quickly detect renames when explore history.
 
 \chapter{Committing a Diff}
 
 \section{Committing the index: [[git commit]]}
+%snapshotting the index?
 
 <<constant Cmd_commit.cmd>>=
 let cmd = { Cmd.
@@ -2624,7 +3084,7 @@ let commit_index r author committer message =
 
 
 
-\section{Tree from an index}
+\section{Computing the tree from an index}
 
 % FIGURE, flat index to tree.
 
@@ -2780,7 +3240,9 @@ in
 % why important atomic? because when push, you will write to another
 % repo, and you will modify refs possibly? so need atomic?
 
-\subsection{Updating an existing ref}
+%cvs: CVS was first to consider a set of files, but it was not atomic!
+
+\subsection{Updating an existing reference}
 
 
 <<signature Repository.set_ref_if_same_old>>=
@@ -2806,7 +3268,7 @@ let set_ref_if_same_old r aref oldh newh =
   with Not_found -> false
 @
 
-\subsection{Creating a ref (first commit)}
+\subsection{Creating a new reference (first commit)}
 
 <<signature Repository.add_ref_if_new>>=
 val add_ref_if_new: t -> Refs.t -> Refs.ref_content -> bool
@@ -2830,6 +3292,7 @@ let add_ref_if_new r aref refval =
 
 
 \chapter{Branching}
+% fork
 
 % purpose: parallel development (!= concurrent development)
 % gitless records working version of files, so can easily switch branch!
@@ -2981,6 +3444,7 @@ let create_branch r name (* sha *) =
   then failwith (spf "could not create branch '%s'" name)
 @
 
+% cheap! (ok checkout takes time)
 % and then usually checkout!
 
 <<[[Cmd_branch.create_branch()]] sanity check refname>>=
@@ -3012,7 +3476,9 @@ let del_ref r aref =
   Unix.unlink file
 @
 
-\section{checking out a branch: [[git checkout]]}
+% git gc
+
+\section{Checking out a branch: [[git checkout]]}
 
 <<constant Cmd_checkout.cmd>>=
 let cmd = { Cmd.
@@ -3061,18 +3527,6 @@ let checkout r str =
 
 % build_index and also set worktree from tree.
 
-<<[[Cmd_checkout.checkout()]] cases>>=
-| _ when Hexsha.is_hexsha str ->
-  let commitid = Hexsha.to_sha str in
-  let commit = Repository.read_commit r commitid in
-  let treeid = commit.Commit.tree in
-  let tree = Repository.read_tree r treeid in
-  (* todo: order of operation? set ref before index? reverse? *)
-  Repository.write_ref r (Refs.Head) (Refs.Hash commitid);
-  Repository.set_worktree_and_index_to_tree r tree;
-  pr (spf "Note: checking out '%s'." str);
-  pr ("You are in 'detached HEAD' state");
-@
 
 
 <<function Cmd_checkout.update>>=
@@ -3081,7 +3535,7 @@ let update r =
   raise Todo
 @
 
-\subsection{Index (and worktree) from a tree}
+\subsection{Computing the index (and worktree) from a tree}
 % opposite of what we saw before for git commit.
 
 <<signature Repository.set_worktree_and_index_to_tree>>=
@@ -3157,7 +3611,7 @@ let rec walk_tree read_tree dirpath f xs =
 % there is also walk_trees, later.
 
 
-\subsection{[[build_file_from_blob()]]}
+\subsection{Creating a file from a blob}
 
 <<function Repository.build_file_from_blob>>=
 let build_file_from_blob fullpath blob perm =
@@ -3197,6 +3651,26 @@ let build_file_from_blob fullpath blob perm =
   Unix.lstat fullpath
 @
 
+
+\subsection{Checking out an old version}
+
+<<[[Cmd_checkout.checkout()]] cases>>=
+| _ when Hexsha.is_hexsha str ->
+  let commitid = Hexsha.to_sha str in
+  let commit = Repository.read_commit r commitid in
+  let treeid = commit.Commit.tree in
+  let tree = Repository.read_tree r treeid in
+  (* todo: order of operation? set ref before index? reverse? *)
+  Repository.write_ref r (Refs.Head) (Refs.Hash commitid);
+  Repository.set_worktree_and_index_to_tree r tree;
+  pr (spf "Note: checking out '%s'." str);
+  pr ("You are in 'detached HEAD' state");
+@
+
+% convenient to go back! but then can not modify that! 
+
+%gitless: shows that as a misfit, detached.
+% but can create branch from that point at least
 
 %\subsection{[[validate_path()]]}
 
@@ -3255,6 +3729,10 @@ let reset_hard r =
 \chapter{Merging}
 % "Integrating changes" in misfit paper
 
+%trans: after branch, of course dual is merge
+
+% for // devel but also concurrent devel. everyone is a branch.
+
 % ??? no code in dulwich for merge? or just do_commit with multiple
 % parents? the <<< >>> conflict is not part of git but can be third-party?
 
@@ -3311,9 +3789,13 @@ let reset_hard r =
 
 \section{merge: [[git merge]]}
 
+% Pb of history-sensitive merging? If share some patches? Arch better?
+% Or just completely forget the pb and do a general 3-way merge from
+% base and just care about final state of both branches?
+
 \section{Rebase: [[git rebase]]}
 
-\section{Cherry-picking: [[git cherry-pick]]}
+\section{Cherry-pick: [[git cherry-pick]]}
 
 
 
@@ -3321,7 +3803,7 @@ let reset_hard r =
 
 \chapter{Inspecting}
 
-\section{Content of an object: [[git show]]}
+\section{Showing the content of an object: [[git show]]}
 % can be useful to understand formats
 
 <<constant Cmd_show.cmd>>=
@@ -3350,7 +3832,7 @@ let show r objectish =
   <<[[Cmd_show.show()]] match obj cases>>
 @
 
-\subsection{Blob}
+\subsection{Showing a blob}
 
 <<[[Cmd_show.show()]] match obj cases>>=
 | Objects.Blob x -> 
@@ -3366,7 +3848,7 @@ let show x =
 @
 
 
-\subsection{Tree}
+\subsection{Showing a tree}
 
 <<[[Cmd_show.show()]] match obj cases>>=
 | Objects.Tree x ->
@@ -3390,7 +3872,10 @@ let show xs =
 @
 % git adds a '/' suffix when it's a dir
 
-\subsection{Commit}
+\subsection{Showing a commit}
+
+% So can be used after git log to show the diff!
+
 
 <<[[Cmd_show.show()]] match obj cases>>=
 | Objects.Commit x -> 
@@ -3449,6 +3934,10 @@ let char_of_sign = function
   | Minus -> '-'
 @
 
+\subsection{Showing an old version of a file}
+
+% git show /path/:@?? ^ ? or different command?
+
 \section{Changes}
 
 %trans:
@@ -3488,9 +3977,9 @@ type content = bytes
 % Note that changes used only for inspecting. Not part of core DS.
 % Git store content, not diff (well except in Pack, see later).
 
-%\subsection{Worktree vs index}
-%\subsection{Index vs tree}
-%\subsection{Tree vs tree}
+%\subsection{Worktree versus index}
+%\subsection{Index versus tree}
+%\subsection{Tree versus tree}
 
 \subsection{File changes}
 
@@ -3512,7 +4001,7 @@ type item = string
 
 % Again diff not part of core DS. Used for inspecting.
 
-\section{File differences: [[git diff]]}
+\section{Showing file differences: [[git diff]]}
 
 <<constant Cmd_diff.cmd>>=
 let cmd = { Cmd.
@@ -3540,6 +4029,8 @@ let diff_worktree_vs_index r =
 @
 
 \subsection{Computing tree changes}
+
+% naive version. Want heuristics for rename detection!
 
 <<signature Changes.changes_worktree_vs_index>>=
 (* for git diff and git status *)
@@ -3611,6 +4102,8 @@ let content_from_path_and_stat_index path stat_info =
 
 \subsection{Computing file changes}
 
+% naive version. Want heuristics for block-move detection!
+
 % string below is Change.content
 <<signature Diff.diff>>=
 val diff: string -> string -> diff
@@ -3655,7 +4148,7 @@ module StringDiff = Diff_myers.Make(struct
 end)
 @
 
-\subsection{Showing changes, [[Diff_unified.show_change()]]}
+\subsection{Showing changes}
 
 <<signature Diff_unified.show_change>>=
 val show_change: Change.t -> unit
@@ -3747,7 +4240,7 @@ let print_header nctx_before nold nnew =
 @
 
 
-\section{Graph walker}
+\section{Commit history walker}
 \l make it a chapter? Walking a Repository?
 \t rename History walker? or commit history walker? so less confusing
 \t  with object store walker?
@@ -3755,6 +4248,8 @@ let print_header nctx_before nold nnew =
 % actually a DAG of commits, not a graph of commits.
 
 \t used outside git log? so just put inside git log?
+
+\subsection{Basic walker}
 
 <<signature Commit.walk_history>>=
 val walk_history:  
@@ -3792,7 +4287,7 @@ let walk_graph r f =
 *)
 @
 
-\subsection{[[Walker]] extra features}
+\subsection{Extra features}
 \l mv in advanced topics?
 
 \subsubsection{max entries}
@@ -3810,7 +4305,7 @@ let walk_graph r f =
 \subsubsection{Topological order}
 
 
-\section{Commit history: [[git log]]}
+\section{Showing the commit history: [[git log]]}
 
 <<constant Cmd_log.cmd>>=
 let cmd = { Cmd.
@@ -3871,7 +4366,7 @@ let name_status = ref false
 
 
 
-\subsection{Tree vs tree}
+\subsection{Comparing trees}
 
 
 <<signature Changes.changes_tree_vs_tree>>=
@@ -4021,7 +4516,7 @@ let print_commit sha commit =
   ()
 @
 
-\subsection{Commit diff summary: [[git log --name-status]]}
+\subsection{Diff summary: [[git log --name-status]]}
 
 <<function Cmd_log.print_change>>=
 let print_change change =
@@ -4034,7 +4529,15 @@ let print_change change =
     pr (spf "M       %s" entry1.Change.path)
 @
 
-\section{File status: [[git status]]}
+\subsection{Showing differences between past versions}
+% git show sha1?
+
+\subsection{Showing the history of a file or directory, [[git log <path>]]}
+
+% Format of git does not make this fast, as opposed to CVS.
+% More reliable when rename?
+
+\section{Showing file status: [[git status]]}
 
 <<constant Cmd_status.cmd>>=
 let cmd = { Cmd.
@@ -4144,7 +4647,8 @@ let status_of_repository r =
 @
 
 
-\subsection{Index vs HEAD (staged)}
+\subsection{Staged modifications}
+%Comparing the index to the [[HEAD]] (
 
 <<function Cmd_status.changes_index_vs_HEAD>>=
 let changes_index_vs_HEAD r =
@@ -4213,12 +4717,14 @@ let changes_index_vs_tree read_tree index treeid =
 @
 
 
-\subsection{Worktree vs index (unstaged)}
+\subsection{Unstaged modifications}
+%Comparing the worktree to the index (
 
 \l should also put delete (D) or modified (M) information here
 
 
-\subsection{Worktree not in index (untracked)}
+\subsection{Untracked files}
+% Finding files in worktree and not in the index ()
 
 <<function Cmd_status.untracked>>=
 (* todo: need parse .gitignore *)
@@ -4246,7 +4752,13 @@ let untracked r =
 % what about .ignore?
 
 
-\chapter{Pulling and Pushing}
+\chapter{Exchanging}
+% Collaborating?
+
+% In centralized, when you commit it also "publish" to central repo
+% for other to see. In distributed, commit and publish are decoupled.
+% You commit and then you push somewhere.
+
 
 % Pulling requires merging. When you diverge on master from the remote,
 % then pulling is similar to merging where master and origin/master
@@ -4280,8 +4792,10 @@ let untracked r =
 % but it's not always the case, so the code below must handle both cases
 % (e.g., compute top_commons)
 
+% Note that sha1 allow global namespace! can safely pull commits
+% from someone else, can know if same because sha1!!
 
-\section{Pulling updates: [[git pull]]}
+\section{Pulling updates from another repository: [[git pull]]}
 
 % saw get_transport_and_path before in core DS and its default
 % implem to LocalGitClient
@@ -4597,7 +5111,7 @@ let collect_ancestors read_commit top_commits hdone =
 % advanced topic? related to graft? related to git clone --depth?
 
 
-\subsection{Fetching refs}
+\subsection{Fetching references}
 
 \subsubsection{Refspecs}
 
@@ -4609,6 +5123,9 @@ let collect_ancestors read_commit top_commits hdone =
 
 \subsection{Fetching objects in a pack}
 
+%\subsection{Diff statistics}
+% nice that git pull after updating also display diffstat for each 
+% updated file and the create/delete.
 
 \section{Object store walker}
 
@@ -4686,7 +5203,7 @@ let (mk_graph_walker: Repository.t -> graph_walker) = fun r ->
 % commit, then we need to filter its parents from the todos.
 
 
-\section{Pushing changes: [[git push]]}
+\section{Pushing changes to another repository: [[git push]]}
 
 % Not really needed. The other guy can just pull from yours.
 % In fact restrictions about pushing where can only push
@@ -4742,8 +5259,10 @@ let push src_repo url_dst =
   )
 @
 
+\subsection{Sending objects (locally)}
+% dummy protocol?
 
-\subsection{Sending objects (in a pack)}
+\subsection{Sending objects in a pack}
 
 
 
@@ -4790,11 +5309,9 @@ let clone url path_dst =
 
 % determine_wants is about the refs, not the objects.
 
-\subsection{Importing refs}
+\subsection{Importing references}
 
 \t clone should import refs, not just HEAD
-
-\section{Packs}
 
 
 
@@ -4839,12 +5356,12 @@ let clone url path_dst =
 % see Adv topics.
 
 
-\section{Client}
+\section{[[git://]] client}
 
-\subsection{Local client}
+%\subsection{Local client}
 % seen before, can be used for NFS too!
 
-\subsection{[[git://]]}
+%\subsection{[[git://]]}
 
 <<signature Client_git.mk_client>>=
 val mk_client: Common.filename -> Client.t
@@ -4860,7 +5377,7 @@ let mk_client url =
 % so pass the target graph walker and way to write on target to
 % client fetch_pack
 
-\subsection{Fetch pack}
+\subsection{Fetching pack files}
 
 
 % pack_data is target add_pack f.write()
@@ -4879,10 +5396,10 @@ let mk_client url =
 \subsubsection{[[_handle_upload_pack_tail()]]}
 
 
-\subsection{Send pack}
+\subsection{Sending pack files}
 
 
-\section{Server}
+\section{[[git://]] server}
 
 
 %\subsection{[[TCPGitServer]]}
@@ -4899,10 +5416,45 @@ let mk_client url =
 % when push
 
 
+\chapter{Debugging Support}
+
+%trans:
+% not only manage changes, go to past versions.
+% Can also help debug issues.
+
+\section{Identifying the version of a buggy program}
+
+% Useful to get version from binary version!
+% RCS had this with $Id$ and ident program.
+
+% Git does not support $Id: as in CVS.
+% Alternative?? 
+% No $Log:, but anyway can use git log.
+% other useful keywords?
+
+\section{Finding the buggy diff: [[git bisect]]}
+% great tool, I should use it more, but requires discipline
+% and good commits with good hooks
+
+% How goes when multiple paths between 2 versions (diamond)?
+
+\section{Blaming the buggy code: [[git blame]]}
+% aka annotate
+
+% great tool again. See who, why, and also see related changes!
+% Can infer what to do by looking at past commit
+% (see my facebook experience!)
+
+% related: git log <path>
+
+%\chapter{Development Support}
+% Tags
+% Hooks
+ 
 
 \chapter{Advanced Topics}
 
-\section{Bytes vs ASCII vs UTF8}
+\section{Bytes versus ASCII versus UTF-8}
 % Encoding.
 
 % Git doc says git is agnostic to encoding. Just treat filenames
@@ -4914,11 +5466,26 @@ let mk_client url =
 % tree objects are utf8? the content of blob might be utf8 but we do not care.
 
 
+\section{Reliability and signals}
+
+% First, immutable object store and order of operation (a la ext2fs?)
+% leaves state of repo in consistent state always!
+% Only tricky part is update references! and done via lock to be atomic.
+
+% What if C-c in middle of operations?
+% Handled by atomic ref update?
+
 \section{Advanced features}
 
 \subsection{Tags}
 
 % Why need tags? Why not simply refs?
+% Because refs just point to something but can not have meta-data.
+% If you dont want to give any comment about a version and that
+% its name is enough, then you just need a ref. Otherwise
+% you need a ref to an object (container) containing itself
+% ref to a version and metadata: The tag.
+
 % As opposed to a ref (or branch), it always refer to the same commit!
 % Just a name to a commit. Also can have a description text.
 
@@ -5047,14 +5614,14 @@ let mk_client url =
 
 
 
-\subsection{hooks, [[.git/hooks/]]}
+\subsection{hooks: [[.git/hooks/]]}
 
 %self.hooks['pre-commit'] = PreCommitShellHook(self.controldir())
 %self.hooks['commit-msg'] = CommitMsgShellHook(self.controldir())
 %self.hooks['post-commit'] = PostCommitShellHook(self.controldir())
 
 
-\subsection{Configuration file, [[.git/config]]}
+\subsection{Configuration file: [[.git/config]]}
 
 % ex of use:
 %config = self.get_config()
@@ -5071,7 +5638,7 @@ let mk_client url =
 
 \subsubsection{Stacked config, [[~/.gitconfig]] and [[.git/config]]}
 
-\subsection{Ignore file, [[.gitignore]]}
+\subsection{Ignore file: [[.gitignore]]}
 
 %For details for the matching rules, see https://git-scm.com/docs/gitignore
 
@@ -5084,12 +5651,17 @@ let mk_client url =
 
 % useful to have git log tracking a file through rename
 
+%\subsection{Refactorings}
+% Nice feature of darcs is token rename patch! So do CEs
+% when merge another branch!
+
+
 \section{Optimizations}
 
 %\subsection{LRU cache}
 % Needs that for?
 
-\section{Pack}
+\section{Pack files}
 
 % kinda an optimization.
 % Complex code.
@@ -5119,12 +5691,13 @@ let mk_client url =
 
 \subsection{Delta}
 
-\subsection{Pack Data}
+\subsection{Pack data}
 
-\subsection{Unpacked Object}
+%\subsection{Unpacked Object}
 
+\subsection{Pack index}
 
-\subsection{Pack Index}
+% Diff discussed in OASA vol II section 6.7 
 
 \subsubsection{Index pack v1}
 
@@ -5146,7 +5719,7 @@ let mk_client url =
 
 \subsubsection{[[git receive-pack]]}
 
-\section{Fast Import/export}
+\section{Fast import and export}
 % another opti? why need that?
 
 % another way to clone a repo?
@@ -5156,22 +5729,20 @@ let mk_client url =
 
 \t ??? related to pack files?
 
-\section{Peeled}
-
+%\section{Peeled}
 % seems related to tags, so move with Tags?
-
 %https://stackoverflow.com/questions/26492303/what-does-peel-mean-in-git
 
 \section{Other clients}
 
-\subsection{[[ssh://]] client}
+\subsection{[[ssh://]]}
 
 <<[[Clients.client_of_url()]] match url cases>>=
 | s when s =~ "^ssh://" -> 
   failwith "ssh not supported"
 @
 
-\subsection{[[http://]] client}
+\subsection{[[http://]]}
 
 <<[[Clients.client_of_url()]] match url cases>>=
 | s when s =~ "^http://" -> 
@@ -5185,7 +5756,7 @@ let mk_client url =
 
 %\subsection{[[git web-daemon]]}
 
-\subsection{[[http://]] server}
+\subsection{[[http://]]}
 % git smart http protocol
 
 % also cgit? nice web interface to explore repo?
@@ -5219,6 +5790,21 @@ let mk_client url =
 
 \section{Other commands}
 
+%\subsection{[[git blame]]}
+% Debugging support section
+
+\subsection{[[git revert]]}
+
+\subsection{[[git archive]]}
+% create tarball from git repo
+
+\subsection{[[git grep]]}
+% pretty useful
+
+
+\section{Plumbing commands}
+% original git is plumbing vs porcelain
+
 \subsection{[[git fetch]]}
 
 \subsection{[[git symbolic-ref]]}
@@ -5238,12 +5824,18 @@ let mk_client url =
 
 \subsection{[[git ls-remote]]}
 
-\subsection{[[git archive]]}
-% create tarball from git repo
+\section{Security}
 
-\subsection{[[git grep]]}
-% pretty useful
+% Ownership?
+% Less an issue with git because distribute VCS, so anybody
+% can have own copy of entire repo (not just of work tree).
+% So no need special admin of RCS/foo.c,v 
 
+%rcs: rely on unix permission (give foo.c,v to a group) and
+% can have additional access (restriction list)
+
+% How protect who can modify a repo?
+%sccs: could even limit to certain dirs or files what someone could modify
 
 \chapter{Conclusion}
 
@@ -6217,6 +6809,9 @@ let uncompress ?(header = true) refill flush =
 
 \section{Diff}
 
+% \cite{James and McIlroy - 1976}
+% \cite{Myers - 19??}
+
 %https://blog.jcoglan.com/2017/02/12/the-myers-diff-algorithm-part-1/
 \t use regular types
 
@@ -6422,6 +7017,7 @@ end
 
 
 \section{Diff3}
+% aka merge
 
 \chapter{Extra Code}
 
