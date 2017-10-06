@@ -17,16 +17,6 @@
 %    ocaml-git has just ogit.ml,
 %    git has many git-xxx.c but too many; porcelain vs plumb is useless)
 
-%thx to codemap/codegraph/scheck:
-% - TODO use cg to reduce backward deps, introduce globals.c, utils.c,
-%   (harder to understand non layered code)
-% - TODO use scheck to remove deadcode, dead prototypes, useless export
-%   or mv as forward decl
-%   (harder to understand big interface files)
-% - TODO use cg to reduce number of globals by moving them closer to the
-%   relevant file (or even function), better cluster the code
-%   (harder to understand non functional code using lots of globals)
-
 %thx to this manual, I better understand VCSs (and git):
 % - intuition of Torvalds for a stupid content tracker with very
 %   different strategies
@@ -110,6 +100,7 @@ with code from\\
 Yoann Padioleau
 }
 \maketitle 
+\l Jelmer Vernooij, Thomas Gazagnaire
 
 \onecolumn
 \hrule
@@ -157,7 +148,7 @@ VCSs allow to {store} and {retrieve} past versions of a file, and to {record}
 \l introduce checkin/checkout, delta so can talk about it in next section?
 \l store/retrieve/track and coordinate work of multiple people.
 %
-They are mostly used by programmers but
+VCSs are mostly used by programmers but
 you can use a VCS to manage any text-based document
 (e.g., the source of this book), configuration files, and even binaries.
 \n e.g., images, but not good IMHO to store binaries.
@@ -186,18 +177,20 @@ Here are a few questions I hope this book will answer:
 \item What are the fundamental concepts of a VCS? 
 \n repo (file db), commit (changeset), branches, version DAG
 What are the core algorithms behind a VCS?
-\n diff, diff3 (merge), zip/unzip, delta?, sha1 (at least consistency check)
+\n delta? (diff?), diff3 (merge), zip/unzip, sha1 (at least consistency check)
 
 \item How does a VCS store efficiently multiple versions of a file?
 \l store efficiently past versions of set of files
-\l what if rename file? or delete?
 \n delta (diff), reversed-delta
 %git: sha1 deduplicating (but not delta/diff really), compression,
 % dedup of blob but also of (sub)trees, pack delta and compression
 
-\item How does a VCS represent changes to a set of files?
+\item How does a VCS represent changes to a file, or changes 
+to set of files? 
 \n changeset tree, other?
 %git: does not record change but state!
+How does a VCS represent the addition, deletion, or renaming of a file?
+\n CVS Attic is a mess, git simple model for rename (del/add)
 
 \item How does a VCS allow multiple users to work on and 
 modify the same files at the same time?
@@ -262,11 +255,11 @@ of the popular VCS
 Git\furl{https://git-scm.com/}, which is written in C.
 
 As opposed to most books in \principia, I could not choose a \plan
-program for this book because there is no \plan VCS.
+program for this book because there are no \plan VCSs.
 \l (they rely on fs?) /n/sources/? (said later?)
 %
 There are many open source \unix VCSs with different user interfaces, storage
-strategies, concurrency models, features, etc. I will present
+strategies, concurrency models, or features. I will present
 a few of those VCSs in Section~\ref{sec:other-vcs}.
 %
 For this book, I decided to base the presentation on Git because
@@ -286,10 +279,10 @@ in Python with only 16 000 LOC.
 %
 I could have based this book on Dulwich, but this would introduce
 another language in the \principia book series in addition
-to C (used for most of the books) 
-and OCaml (used for the editor, web browser, and code generators books).
+to C (used in most of the books) 
+and OCaml (used in the editor, web browser, and code generators books).
 %
-This would in turn require to present the code of the Python interpreter,
+This would also in turn require to present the code of the Python interpreter,
 which contains more than 170 000 lines of C code.
 \n and far more of Python code (not counting test and third-party C libs)
 %
@@ -335,7 +328,7 @@ to modify the same file and its focus on individual files make
 %  but not really good for projects with subdirs.
 RCS inadequate for large projects with many independent developers.
 %
-Finally, even if RCS is very limited compared to modern VCSs like Git,
+Moreover, even if RCS is very limited compared to modern VCSs like Git,
 RCS still contains more than 17 500 LOC.
 \n (not including testsuite, but small anyway)
 \l Why? too subtle diff representation?
@@ -348,10 +341,9 @@ RCS still contains more than 17 500 LOC.
 CVS~\cite{cvs}\furl{http://www.nongnu.org/cvs/}
 was the most popular VCS for over a decade
 before distributed VCS (e.g., Git) took over.
-\n STUG award 2003
 %
 CVS introduced a few important innovations.
-%
+\n STUG award 2003
 First, CVS was designed to operate on a set of files 
 at once\footnote{RCS can operate on multiple files by using shell 
 wildcards, but it was not designed for it.}, 
@@ -389,14 +381,16 @@ The backend file [[src/rcs.s]] contains already 9000 LOC.
 by Linus Torvalds in 2005 to manage the source code of the Linux kernel.
 It followed a series of
 {\em distributed VCSs} (e.g., Arch, Monotone, Bazaar, BitKeeper) 
-designed to overcome the main limitations of CVS
-(a {centralized VCS}).
+designed to overcome the main limitations of CVS (a {centralized VCS}).
 %
-A distributed VCS (DVCS) makes it easy and cheap to create {\em branches}
+Because a distributed VCS (DVCS) does not require access to a
+central repository, it allows developers to work independently offline.
+%
+A DVCS makes it easy and cheap to create {\em branches}
 representing parallel developments, and to reconcile later those branches.
+\l has to, because everybody is a branch (said later?)
 \l also atomic, consistency checks! fast! done the right way!
-Moreover, with a DVCS a developer can also work offline.
-\l no need central server, peer-to-peer (said later?)
+\l peer-to-peer (said later?)
 
 As explained in Section~\ref{sec:vcs-git-ocamlgit}, Git
 is a large program with more than 200~000 LOC spread over more than 400 files
@@ -405,11 +399,14 @@ is a large program with more than 200~000 LOC spread over more than 400 files
 The first version of Git was small and contained only 1000 LOC\footnote{
 \url{https://github.com/git/git/commit/e83c5163316f89bfbde7d9ab23ca2e25604af290}}.
 However it contained only a few low-level commands that were not easy to use.
+This forced programmers to develop and use an extra program 
+([[cogito]]\furl{http://git.or.cz/cogito/}), which
+provided an extra layer of higher-level commands (called {\em porcelain}).
 \l also libgit2, LOC? share code with git?
 
 \item Mercurial~\cite{hgbook}\furl{https://www.mercurial-scm.org/}
 is another popular DVCS started by another Linux kernel programmer
-in 2005.
+(Matt Mackal) in 2005.
 \l after BitKeeper fiasco
 It is mostly written in Python and relies on a few C files for critical
 operations. Its code is arguably easier to understand than Git
@@ -425,37 +422,37 @@ but it still contains more than 100~000 LOC spread over more than 170 files
 % by the guy who apparently has been involved in bazaar :)
 
 %industry:
-% - perforce
-% - microsoft visual sourcesafe
-% - rational clearcase
+% - Perforce
+% - Microsoft Visual Sourcesafe
+% - Rational Clearcase
 % - Sun TeamWare (distributed VCS on top of SCCS), atomic updates
 % - BitKeeper (main inspiration for git), followed TeamWare
 %history:
 % - SCCS http://sccs.sourceforge.net
-%   and modern version CSSC
-%   https://www.gnu.org/software/cssc/
+%   and modern version CSSC https://www.gnu.org/software/cssc/
 %other:
-% - subversion (630 000 LOC, hmm)
+% - Subversion (630 000 LOC, hmm)
 %other DVCSs:
-% - darcs 80 000 LOC (using literate haskell), maybe good candidate, simpler
+% - Darcs 80 000 LOC (using literate haskell), maybe good candidate, simpler
 %   model, arguably simpler than git (rebase for free?), some patch theory.
 %   But code looks actually awful. Lots of boilerplate. Huge types.
-% - gnu arch (aka tla 273 000 LOC) described as very complicated by many
-% - bazaar (477 000 LOC) and bazaar-NG
+% - GNU Arch (aka tla 273 000 LOC) described as very complicated by many
+%   but seems like one of the first DVCS
+% - Bazaar (477 000 LOC) and bazaar-NG
 %   https://www.jelmer.uk/pages/bzr-a-retrospective.html
-% - monotone (99 000 LOC for 1.1), apparently good source of inspiration
-%   for git because introduced the DAG of SHA1
-% - codeville, by Bram Cohen of Bittorrent fame
-% - pijul, initially in OCaml (3000 LOC), then in Rust, but seems to have 
+% - Monotone (99 000 LOC for 1.1), apparently good source of inspiration
+%   for Git because introduced the DAG of SHA1; focused a lot on security
+% - Codeville, by Bram Cohen of Bittorrent fame
+% - Pijul, initially in OCaml (3000 LOC), then in Rust, but seems to have 
 %   a slow development
-% - fossil
+% - Fossil??
 %git alternate porcelain:
-% - gitless, a better design for git, great paper:
+% - Gitless, a better design for git, great paper:
 %   http://people.csail.mit.edu/sperezde/pre-print-oopsla16.pdf
 %   (can implement this design with dulwich?)
 %mini:
-% - camp is a simplified version at 6300 LOC
-%   a mini darcs. Simple? Elegant? Arguably more powerful. < 10 000 LOC.
+% - Camp is a simplified version at 6300 LOC
+%   a mini Darcs. Simple? Elegant? Arguably more powerful. < 10 000 LOC.
 %   Can be good opportunity also to read some haskell code. Maybe can then
 %   port the code to OCaml.
 % - http://benhoyt.com/writings/pygit/ 500 LOC to push to github,
@@ -466,7 +463,7 @@ but it still contains more than 100~000 LOC spread over more than 170 files
 % - gg 7000 LOC, but no locking, no push, and requires external diff.
 %   http://www-cs-students.stanford.edu/~blynn/gg/
 %   this guy also wrote a book on Git "Git Magic"
-% - src, by raymond, wrapper around RCS
+% - SRC, by raymond, wrapper around RCS
 %   http://www.catb.org/esr/src/
 %clones in other languages (all clones of git actually):
 % - dulwich: git written in python (15000 LOC (without tests))
@@ -513,12 +510,13 @@ To play with [[ocamlgit]], you will first need to install it
 by following the instructions at~\urlinstallbis\footnote{
 %bootstrap: 
 As you follow the document in the Wiki, you will see that
-you will need a VCS program ([[git]]) to install another 
+you will need a VCS program ([[git]]) to get the source of another 
 VCS program ([[ocamlgit]]).
 This is similar to bootstrapping issues in compilers.
-To avoid those issues, I could provide instead an archive file 
-of [[ocamlgit]] (e.g., [[ocamlgit-0.1.tar.gz]]).
-\n and extra patches
+However, it is easy to avoid those issues by providing
+instead an archive file of [[ocamlgit]] (e.g., [[ocamlgit-0.1.tar.gz]]).
+\n and extra patches 
+\l but then need wget or browser and network stack 
 }.
 Once installed, you can test [[ocamlgit]] under \plan or \unix with
 the following commands:
@@ -531,18 +529,22 @@ the following commands:
 Initialized empty Git repository in ./.git
 5 $ echo "Hello Git" > hello.txt
 6 $ ocamlgit add hello.txt
-7 $ ocamlgit commit -m "first commit"
+7 $ ocamlgit commit -m "first commit" 
 ...
 \end{verbatim}
+\l implicit pad author when use commit. and date?
 
-The command in Line~4 {initializes} a new {repository} by
+The command in Line~4 {initializes} a new {\em repository} by
 creating the appropriate {metadata} in the [[/tests/hello/.git/]]
 subdirectory.
 %
-Line~6 then {adds} the new file [[hello.txt]] to the {\em staging area} of Git.
-\l also called the index
+Line~6 then {adds} the new file [[hello.txt]] to the {\em staging area} of Git
+(I will explain later in Section~\ref{sec:staging-area} what is the staging
+area).
+\l same than index? no index is internal DS for managing stage area
 Finally, Line~7 {\em commits} what was staged to the repository and {labels}
 this commit with the {message} ``first commit''.
+\l and author and date?
 
 \label{sec:git-abbrev}
 In the rest of this document, I will often abbreviate 
@@ -557,8 +559,6 @@ When the interfaces differ, I will explicitely use [[ocamlgit]].
 
 
 
-
-
 \section{Requirements}
 
 Because most of this book is made of OCaml source code, 
@@ -566,12 +566,13 @@ you will need to know the
 OCaml programming language~\cite{ocaml-ref-manual} to understand it.
 %
 The code of [[ocamlgit]] uses only the core language of OCaml, and none
-of its advanced features (e.g., functors, objects, labels, 
-polymorphic variants, GADTs),
-thus a knowledge of Caml~\cite{caml-leroy}, 
+of its advanced features 
+(e.g., functors, objects, labels, polymorphic variants, GADTs),
+thus a knowledge of 
+Caml~\cite{caml-leroy}, 
 Standard ML~\cite{ml-working-programmer}, or 
-any of the dialect of ML (e.g., F\#, Elm) should be enough 
-to understand this book.
+any of the dialect of ML (e.g., F\#, Elm) 
+should be enough to understand this book.
 
 You do not need to know Git, or more generally any VCSs,
 to understand this book.
@@ -620,7 +621,8 @@ Dulwich\furl{https://www.dulwich.io/}.
 @
 
 I also sometimes took inspiration from code written by Thomas Gazagnaire 
-for [[ocaml-git]] (another clone of Git in OCaml but intented to be used
+for [[ocaml-git]]\furl{https://github.com/mirage/ocaml-git}
+(another clone of Git in OCaml but intented to be used
 as a library in the MirageOS ecosystem\furl{https://mirage.io/}).
 \l explain more later?
 
@@ -756,18 +758,23 @@ Dulwich provided an easier path towards understanding
 the concepts and implementation of Git.
 \l Also Thomas gazanaire.
 %
-I would like also to thank Linus Torvalds, the original author of Git.
-Many of his design decisions seem simple and obvious
-in retrospect but they are not: most VCSs chose different
-designs
+I would like also to thank Linus Torvalds, the original author of Git,
+for designing this simple but powerful VCS.
+%
+Many of his design decisions seem obvious
+in retrospect but they are not: most VCSs chose different designs
 (for the storage, 
 file permissions, 
 renames,
 etc.)
-\l snapshot-based > changeset, SHA1 DAG (but monotone), simple perms,
-\l  GMT time, etc.
+\l snapshot-based > changeset?, SHA1 DAG (but Monotone), GMT time, etc.
 which in the end are more complicated
 and usually less efficient than in Git.
+\l ocamlgit only 6400 LOC (C bigger but original C 1000 LOC), far more powerful 
+\l than RCS 30 000, in big part due to simple but clever design of Git
+
+
+
 
 
 \chapter{Overview}
@@ -775,11 +782,8 @@ and usually less efficient than in Git.
 %trans: %dup: Assembler.nw
 Before showing the source code of [[ocamlgit]] in the following chapters, 
 %toc: %dup: Assembler.nw
-I first give an overview in this chapter
-of the general principles of a VCS.
-%
-I also quickly describe the command-line interface of 
-[[ocamlgit]],
+I first give an overview in this chapter of the general principles of a VCS.
+I also quickly describe the command-line interface of [[ocamlgit]],
 \l (and so of [[git]] too),
 the format of a Git repository, and show a simple terminal session using
 [[ocamlgit]] to illustrate its major features.
@@ -800,9 +804,13 @@ to understand the code I will show later.
 % - Git chapter in AOSA book (meh)
 % - dulwich/docs/ (very limited)
 
-%trans:
-% how if no VCS? manual backups, tarballs, email back and forth
-% patches?
+%without:
+One way to understand the core principles and features of a VCS
+is to see how people are struggling when they are managing
+documents that evolves (e.g., source code, LaTeX files, notes) without
+a VCS.
+
+%manual backups, tarballs, email back and forth patches?
 % (\footnote{how Linux done for a long time}, human VCS) :) )
 % no git blame. discipline.
 %src: SCCS paper
@@ -810,11 +818,11 @@ to understand the code I will show later.
 %  not just current version but last year's (still supported) and next year!
 %  maintenance old code. Chaos if no tool, if no discipline.
 
-% VCS vs SCM?
+\l VCS vs SCM?
 
 %toc:
-% store and retrive past version
-% track change
+% store and retrieve past versions
+% track changes
 % help multiple developers to collaborate
 
 % try be general and add %git: for git instantiation of general principles
@@ -947,8 +955,9 @@ to understand the code I will show later.
 
 % sometimes people use commit and diff and patch interchangebly.
 
-% diff can be used also internally in VCS to efficiently store deltas.
+% diff can be used especially internally in VCS to efficiently store deltas.
 %git: used in pack only
+% It got used after as a way to display changes? (and later for coccinelle!)
 
 % Also by having delta
 % and message associated with it help explore history. Git log, git
@@ -965,6 +974,8 @@ to understand the code I will show later.
 
 
 \subsubsection{[[patch]]}
+
+% diff -u, unified format.
 
 %dual of diff. One create diff on his machine, other can apply patch on his.
 % (also some fuzzy apply algorithm).
@@ -989,9 +1000,15 @@ to understand the code I will show later.
 % to not pass his copy and wait for the "token". Concurrent
 % techniques are lock, or better optimistic and later merge.
 
+%\subsubsection{Shared space}
+%if collaborate, need shared space (hmm with DVCS no, except central repo
+% sometimes)
+
 \subsubsection{Locks}
 
 % Simple.
+
+% NFS symlinks
 
 % but easy to forget to unlock, and really annoying for other.
 % RCS.
@@ -1038,6 +1055,8 @@ to understand the code I will show later.
 % git far easier! because every different repo/user is a branch! because
 %  distributed, so had to get merge right and fast!
 
+% so line, then tree, then DAG.
+
 % Saw merge before, but merge really make sense with branching.
 % Useful to branch and merge. 
 % Also useful for branch and merge on a peer-to-peer basis
@@ -1046,6 +1065,8 @@ to understand the code I will show later.
 \subsubsection{Merging}
 
 % Same, but usually bigger, and can get complicated?
+
+% Real VCS needs cheap branches and good (heuristics) merging.
 
 %\subsection{Revision graph}
 % RCS was a tree, but then when introduce real branches get merges and a DAG!
@@ -1121,7 +1142,7 @@ to the one of the program [[git]]. This is why I will often use
 [[git]] as an alias for [[ocamlgit]] in the rest of this document.
 
 The command-line interface of [[git]] is pretty simple:
-%dup: (but use git not ocamlgit) intro/getting-started
+%dup: (but use git not ocamlgit this time) intro/getting-started
 \begin{verbatim}
 $ git
 usage: git <init|add|rm|commit|branch|checkout|reset|...> [options]
@@ -1131,37 +1152,39 @@ $ git add hello.txt
 $ git commit -m "first commit"
 \end{verbatim}
 % git <cmd> [-options] <extra arguments>
+\l implicit pad author for commit? and date?
 
 [[git]] takes first a {\em command} as its first argument and then
 options and extra arguments specific to this command.
+\l git uses also some common options for all its commands (but not ocamlgit)
 %
 For example the command 
 [[init]] does not need any extra arguments, but
-[[add]] requires the name of a file or directory (or even multiple names), and 
+[[add]] requires at least the name of a file or directory, and 
 [[commit]] usually requires command-line flags.
 %chunks:
 I will gradually describe the [[git]] commands, their
 options, and implementations in the following chapters.
-
+%alt:
+\l vcs <cmd> simpler than having 10 command-line /bin programs (started by CVS?)
 
 \section{[[hello/.git/]]}
 
 %trans: ?
-
 %toc:
 In this section, I will give a short tutorial on Git. 
 I will explain the main commands of [[git]] by using a terminal session
 starting from an empty [[hello/]] directory.
-%
+%trans:
 I will continue the series of commands I introduced 
 in Section~\ref{sec:getting-started}.
 %
 I will also describe the semantics of those commands by showing
-their effects on the Git metadata stored under the 
-[[hello/.git/]] subdirectory.
+their effects on the Git metadata stored under the [[hello/.git/]] subdirectory.
+%
 This will hopefully help you to understand the code of
 those commands I will present later.
-%toc:
+%trans: %toc:
 However, before showing this terminal session, I need to present the main
 concepts behind Git, some Git-specific terminology, and
 the format of the [[.git/]] repository.
@@ -1182,137 +1205,750 @@ the format of the [[.git/]] repository.
 % - Bram cohen vs torvalds on deep algo in git:
 %   http://www.wincent.com/a/about/wincent/weblog/archives/2007/07/a_look_back_bra.php
 
+%trans:
+To understand how Git is implemented, and 
+to some degree to learn how to use Git effectively,
+you need to know the few concepts underlying Git.
 %toc:
-% 4 importance concepts, Git object store, SHA1 (double DAG) Merkel Tree?
-% Git references, and Git staging area.
-% correspond to main DS (chapter X).
+Those concepts are 
+%toc:
+the {object store}, 
+\l (SHA1 (double DAG) Merkel Tree?)
+the {reference}, and 
+the {staging area}.
+%
+They correspond also to the main data structures
+of [[ocamlgit]], which I will describe fully in Chapter~\ref{chap:core-ds}.
+%toc:
+The following sections will give an overview of those data structures. 
 
 \subsubsection{Content-addressable storage system}
 
-% At its core, content addressable storage.
-% content = objects. 3 kinds of objects: blob, tree, commit.
+%torvalds:
+To really understand Git, you need to realize that at its core,
+Git is a simple {\em content-addressable storage system}.
+\l stupid content tracker, as said by torvalds in his first commit
+%
+Given the {\em hash} of a content (Git uses SHA1 hashes, as explained below), 
+Git can retrieve back the full corresponding content.
+%
+Git internally is simply a {\em persistent hash table}, also known
+as a {\em key/value store}.
+
+\n the value
+In this store, Git manipulates mainly three kinds of values (known
+as {\em objects} in Git terminology):
+\l hence {object store}
+the blob, the tree, and the commit
+(you will see another kind of objects in Section~\ref{sec:tags} with the tag).
+%
+A {\em blob} represents the content of a file.
+A {\em tree} assigns mainly names to blobs or other subtrees. Finally,
+a {\em commit} associates to a specific toplevel tree
+a message, an author, a date, and zero or more {\em parent} commits.
+%
+In addition to those objects, Git maintains also {references}
+to specific commits and an index of specific blobs as explained 
+in the next sections.
+
+%\subsubsection{SHA1 objects DAG}
+
+\n the key
+Regarding the keys of the store, Git uses the 
+SHA1 algorithm~\cite{sha1,rfc3174}
+to compute the hash of an object.
+This algorithm associates an almost unique number of 160 bits
+(which amounts to 20 bytes, or 40 digits in hexadecimal format) to 
+any content of arbitrary length.
+\l message digest (MD as in MD5), actually message must be < 2^64
+Appendix~\ref{sec:sha1-algo} presents the code of this algorithm
+and gives more information on SHA1.
+%
+For example, given the content [[Hello Git\n]], SHA1 will return
+the number [[9f4d96d5b00d98959ea9960f069585ce42b1349a]]
+in hexadecimal format.
+\l here not interesting because hash longer than content, but
+\l in general opposite. Arbitrary length.
 
 
-% later index.
 
-% git does not track changes, it track states! so very different approach
+SHA1 is a complex {cryptographic hash function}. It is outside
+the scope of this book to explain how it works, but
+what is important is that SHA1 is an almost perfect hash function:
+\l gperf?
+given two different content, there is an almost zero probability
+that SHA1 will return the same hash number. 
+Such an event is called a {\em collision}, and in practice it
+should never happen.
+%
+Thanks to this almost perfect hash function, Git can {identify}
+any content of any length with just a 20 bytes number.
+%
+In Git, the SHA1 of a file is similar to the {\em inode} of
+a file in a filesystem (see the \book{Kernel})\footnote{
+%torvalds:
+The author of Git, Linus Torvalds, is also the author of Linux,
+which explains why he chose a design inspired by filesystems.
+}.
+%
+In the tree object, which associates names to blobs, Git
+uses the SHA1 of a blob to identify this blob. In the same way,
+in the commit object, Git uses the SHA1 of a tree to identify
+the toplevel tree a commit refers to.
+%
+Figure~\ref{fig:objects-sha1-dag} presents the content of the Git objects
+and their relationships after the addition of another
+commit after the last command in Section~\ref{sec:getting-started}.
+
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+commit 19d977...-----+
+|tree:               |   tree 2f092e...-------+      blob 9f4d96...+
+| 2f092e... ---------+-->| hello.txt 9f4d96.--+----->| Hello Git   |
+|parents:            |   +--------------------+      |             |
+| None               |                            +->|             |
+|Author: pad         |                            |  +-------------+
+| <todo@todo>        |                            |
+|Date: Fri Sep 29    |                            |
+| 14:04:46 2017 -0700|                            |
+|Message:            |                            |
+| first commit       |                            |
++--------------------+                            |
+                   ^                              |  blob 452a53...+
+                   |                              |  |baaaaaaaaaa  |
+commit 5d9dfe...---+---+   tree 0c4b27...-------+ |+>|aaaaaaaaaaa  |
+|tree:             |   | +-+ dir1 7e8bb2...     | || |aaaaaaaaaar  |
+| 0c4b27...--------+---+-+>| hello.txt 9f4d96.--+-+| +-------------+
+|parents:          |   | | +--------------------+  |
+| 19d977-----------+   | |                         |
+|Author: pad           | |   tree 7e8bb2...-----+  |
+| <todo@todo>          | +-->| bar.txt 452a53.--+--+ blob 96ea4a...+
+|Date: Fri Sep 29      |     | foo.txt 96ea4a.--+--->| fooooooooo  |
+| 14:26:23 2017 -0700  |     +------------------+    | oooooooooo  |
+|Message:              |                             | oooooooooo  |
+| second commit, subdir|                             +-------------+
++----------------------+
+\end{verbatim}
+\caption{Git objects relationships.}\label{fig:objects-sha1-dag}
+\end{figure}
+\t comment figure
+
+
+\l so back to content-addressable storage, given hash xxx
+\l  Git can retrieve quickly blob content.
+
+\l similar to FS. Tree, files. But differences.
+\l First DAG! blob can have multiple parents
+\l  (also when add in index, some blob get multiple parents)
+\l tree can refer same blob, same subtree. DAG.
+\l   Like versioned FS.
+
+\l SHA1 used for many things for Git (said later?)
+\l SHA1 dedup (said later)
+%torvalds:
+\l SHA1 checking .not just for identify, also for checking. signature
+\l   Make sure what get back what was put. Essential for VCS for torvalds
+\l SHA1 to index key/value
+
+\l git does not track changes, it track states! so very different approach
 % which in the end I think simplify many things.
 % snapshot-based (so fast, at potentially cost of disk space, always
 % tradeoff). No delta app.
 
-% Stored as diffs? apparently not. Just compressed and indexed by sha.
+\l Stored as diffs? apparently not. Just compressed and indexed by sha.
 % If same content, then same id.
 % No delta (well more on this later with packing).
 
-% sha1! essential for consistency checking anyway!
-% objects: blob, tree, commit
-
-\subsubsection{SHA1 DAG}
-
-% SHA1 tree DAG (also when add index, some blob get multiple parents)
-% SHA1 commit DAG
 
 \subsubsection{References}
+\l and the commit graph
 
-% refs: HEAD, refname, refcontent
-%  branch, remote, master (tag)
+%\subsubsection{SHA1 Commit DAG}
+
+Commit objects are linked together, 
+as shown in Figure~\ref{fig:objects-sha1-dag}
+with the second commit linked to the first commit
+through the [[parents]] field of the object.
+%
+Those links represent the history of the repository, also known
+as its {\em log}.
+%
+Because a commit can have multiple parents 
+(in the case of a {\em merge}, as explained below),
+the log forms a {\em graph}, or more specifically 
+a {\em direct acyclic graph} (DAG).
+
+
+Figure~\ref{fig:commit-dag} shows such a graph for a series of
+commits following the first two commits of Figure~\ref{fig:objects-sha1-dag}.
+%
+In this example, a developer {\em forked} first 
+an experimental branch called [[branch1]] 
+(I will explain how to create a branch in Section~\ref{sec:create-branch})
+following the second commit of Figure~\ref{fig:objects-sha1-dag}. 
+%
+At the same time, development on the main branch, called the 
+{\em master branch} in Git terminology, continued and saw two commits:
+[[commit4]] and [[commit6]].
+%
+The experimental branch got {\em merged} later at [[commit7]]
+(I will explain in Section~\ref{sec:git-merge} how to merge branches).
+This is why this commit has two parents.
+%
+Later on, a developer created another branch called [[experiment]] that
+remained {active} and did not get merged yet; 
+it follows in parallel the development of the {master branch}.
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+       master
++-------------------+
+|commit1 (19d977...)|
++--------+----------+
+         |
++--------v----------+    Fork (branch)
+|commit2 (5d9dfe...)|----------+
++--------+----------+          |
+         |             branch1 |
+         |            +--------v-------+
+ +-------v--------+   |    commit3     |
+ |    commit4     |   +--------+-------+
+ +-------+--------+            |
+         |            +--------v-------+
+ +-------v--------+   |    commit5     |
+ |    commit6     |   +-------+--------+
+ +-------+--------+           |
+         |                    |
+ +-------v--------+           |
+ |commit7 (merge) |<----------+
+ +-------+--------+          Merge
+         |
+ +-------v--------+     Fork (branch)            -
+ |    commit8     |---------------+
+ +-------+--------+<------refs/remotes/origin/master
+         |                        |
+ +-------v--------+               |
+ |    commit10    |     experiment|
+ +----------------+         +-----+->-------+
+         ^                  |    commit9    |
+         |                  +---------------+
+         |                          ^
+         |                          |
+ refs/heads/master          refs/heads/experiment
+          ^
+           \------\
+                   \
+                   HEAD
+\end{verbatim}
+\caption{Commit graph and references.}\label{fig:commit-dag}
+\end{figure}
+
+% branches, fork, and then merge!
+\l second DAG. commit can have multiple parents
+
+%trans: %dup: overview/hello.git/concepts/content-addressable
+As I mentionned briefly in the previous section, 
+Git maintains, in addition to the object store, {\em references} to
+specific commit objects. 
+%
+Those references have a {name} and a {content}.
+%
+For example, in Figure~\ref{fig:commit-dag}, the reference named
+[[refs/heads/experiment]]
+points to the last commit of the [[experiment]] branch, and so
+its content is the SHA1 of the [[commit9]] object.
+
+
+Git maintains also a {special reference} called the {\em HEAD}
+which points to the last commit of the {\em current branch}.
+Its content is usually not the a SHA1 but the name of another reference.
+%
+By default, [[HEAD]] points to the master branch, as shown in 
+Figure~\ref{fig:commit-dag}, and so its content is
+the string [[ref: refs/heads/master]],
+and [[refs/heads/master]] contains the SHA1 of the last 
+commit of the master branch.
+%
+When you switch branch
+(I will explain how to switch branch in Section~\ref{sec:switch-branch}),
+the content of the [[HEAD]] will change.
+
+
+All the references that are pointing to the last commit of a branch
+are called {\em heads} in Git terminology and starts with [[refs/heads/]].
+In Figure~\ref{fig:commit-dag} those heads are [[refs/heads/experiment]]
+and [[refs/heads/master]].
+
+Git maintains a final set of special references called
+the {\em remotes}, for example [[refs/remotes/origin/master]]
+in Figure~\ref{fig:commit-dag}. Those references are used 
+when people are collaborating with each other and will be fully explained
+in Chapter~\ref{chap:exchanging}.
+\l commit at last synchro and so local commits diverging from remote
 
 % really object store and then .git/refs/ and using sha1 can encode
 % many idioms (branches, origin for push/pull, tags, stash)
 
 \subsubsection{Staging area}
 
-% stage area (and index)
-% working tree
+%trans:
+The last important concept is the {\em staging area}, which is specfic
+to Git.
+%
+Git operates mainly on three different areas, as shown at
+the top of Figure~\ref{fig:git-areas}:
+the working copy, containing the current state of the files,
+the repository, containing all past versions of a file and the state
+of the files at the last commit, and
+the staging area, containing what will be the next commit.
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+
+Repository          Staging               working
+  (HEAD)              area                  copy
+             |                     |
+ foo.txt     |                     |     foo.txt
+             |                     |     (unmodified)
+             |                     |
+ bar.txt     |                     |     bar.txt
+             |                     |     (modified)
+             |                 git add
+ foobar.txt  | foobar.txt   <------+---  foobar.txt
+             | (staged)            |     (modified)
+             |                 git rm    (misc.txt)
+ misc.txt    | misc.txt       <----+---- (deleted)
+             | (marked for delete) |
+             |                     |
+             |                     |    untracked.txt
+         git commit                |
+       <-----+------               |
+\end{verbatim}
+\caption{Git areas.}\label{fig:git-areas}
+\end{figure}
+\l put remote1 and remote2 too?
+
+After you {modified} a set of files in your working copy,
+for example, [[bar.txt]], [[foobar.txt]], and [[misc.txt]]
+in the right of Figure~\ref{fig:git-areas}, you need to
+indicate which of those files and modifications should be part
+of the next commit.
+%
+To do so, you need to mark those files by using the command
+[[git add]] (or [[git rm]] if you want to mark for deletion a file).
+%
+Note that you must use [[git add]] to add a new file to the repository.
+In that case the file is now {\em tracked} by Git.
+%
+You must also use [[git add]] when you modified a tracked file
+to mark it for the next commit.
+%
+Once you marked all the relevant files, you can use the command [[git commit]]
+to commit the modifications to the repository.
+\l also git add --patch for interactively adding hunks (used by magit?)
+For example, in Figure~\ref{fig:git-areas} only the modifications
+to [[foobar.txt]] and the deletion of [[misc.txt]] will be part
+of the next commit, and not the modifications to [[bar.txt]].
+
+You can sometimes avoid manipulating explicitely the staging area 
+by using instead the command [[git commit -a]] to automatically commit all
+the modifications to the tracked files.
+However, the staging area and [[git add]] gives more flexibility
+to the user by allowing to split a set of modifications in multiple
+commits. For example in Figure~\ref{fig:git-areas} the modification
+to [[bar.txt]] can be put in another commit.
+%gitless: useless area
+
+% git status, modified, staged, or untracked.
+
+Internally, Git uses a data structure called the {\em index}
+(also known as {\em directory cache})
+to manage the staging area.
+%
+I will explain later in Section~\ref{sec:index} why
+this data structure is a sort of index.
 
 
-% shorten: repo, diff
 
 \subsection{Repository format: [[.git/]]}
 
+%trans: 
+Now that you know the main concepts and data structures underlying Git, 
+it will be easy to understand the format of the [[.git/]] directory.
+%
+Here is the sligtly edited output of the \unix command 
+[[tree]]\footnote{See \url{http://mama.indstate.edu/users/ice/tree/}
+for more information about the [[tree]] program. The [[-F]] option
+used in the terminal session above is to add the special mark [['/']]
+at the end of directory names.
+}
+applied on the [[.git/]] directory after the last command in 
+Section~\ref{sec:getting-started}:
 
-% $ tree .git (after created basic command in Getting started)
-
-% objects/!!
-% .git/objects/(hex)sha-dir/(hex)sha1-file
-% refs/heads/
-% refs/HEAD?
-% refs/tags/
-% refs/remote/origin/
-
-% hooks/
-% info/
+\begin{verbatim}
+8 $ tree -F .git/
+.git/
+|-- HEAD
+...
+|-- index
+|-- objects
+|   |-- 2f/
+|   |   `-- 092e9cadfc1eb4a6d2febfddb941f4c1fe6fd6
+|   |-- 19/
+|   |   `-- d977a48d1d7b7ae8d520dd66190702dd4fb5bc
+|   |-- 9f/
+|   |   `-- 4d96d5b00d98959ea9960f069585ce42b1349a
+......
+`-- refs/
+    |-- heads/
+    |   `-- master
+.....
+\end{verbatim}
+\n more elided to simplify
+%|-- COMMIT_EDITMSG
+%|-- branches/
+%|-- config
+%|-- description
+%|-- hooks/
+%...
+%|-- info/
+%|   `-- exclude
+%|-- logs/
+%|   |-- HEAD
+%|   `-- refs/
+%|       `-- heads/
+%|           `-- master
+%`-- refs/
+%    `-- tags/
 
 \l encoding UTF8 for filenames.
 % https://github.com/git/git/blob/master/Documentation/i18n.txt
 
+The objects of the key/value store are simply stored in separate
+files under [[.git/objects/]]. The hexadecimal digits of the
+SHA1 of the object is split in two parts: the first two digits are used
+for the directory name containing the object and the remaining
+digits for the filename of the object. For example, the file
+[[.git/objects/9f/4d96d5b00d98959ea9960f069585ce42b1349a]] contains
+the blob of [[Hello Git\n]] (see Figure~\ref{fig:objects-sha1-dag}).
+
+Git uses the first two digits of the SHA1 to classify objects
+in separate folders to avoid having too many files in the same
+directory. Indeed, this would slow down filesystem operations
+such as opening a file given its SHA1 key
+(see the \book{Kernel} for more information on the performance
+of filesystem operations), a recurring operation under Git.
+
+The references are also stored simply in separate files.
+Git uses the name of the reference as the path to a file
+under [[.git/refs/]].
+
+Finally, the index and the HEAD are stored directly under [[.git/]].
+
 \subsection{A terminal session using [[git]]}
 
 %trans:
-% I can finally present tutorial on main commands.
-% (same as in Section X).
-% Here just quick session, quick tutorial.
-% See book to learn about how to use git
-
-%dup: use git below, but really ocamlgit, try compatible UI.
-
-% Show how certain commands modify .git/
-% but should say better docs or I was inspired from:
+I can finally present the tutorial on how to use a few of the main commands
+of Git. I can now also describe the semantics of those commands.
+%
+I will start from the same commands than in Section~\ref{sec:getting-started},
+but I will also explain this time how those commands modify
+files under [[.git/]] (by using mainly the output of the [[tree]] command,
+as in the previous section).
+%inspiration:
 % - http://eagain.net/articles/git-for-computer-scientists/
 % - git from the bottom up (great, I read it while at FB)
 
+\l Here just quick session, quick tutorial.See book to learn how to use git
+%dup: use git below, but really ocamlgit, try compatible UI.
+
 \subsubsection{Creating a repository}
 
-% git init
+Here are the commands to create a fresh new repository:
 
-% tree .git/
+%dup: (but uses git not ocamlgit and add tree command) intro/getting-started
+\begin{verbatim}
+1 $ cd /tests/
+2 $ mkdir hello
+3 $ cd hello/
+4 $ git init
+Initialized empty Git repository in ./.git
+5 $ tree -F .git/
+.git/
+|-- HEAD
+...
+|-- objects/
+`-- refs/
+    |-- heads/
+6 $ cat .git/HEAD
+ref: refs/heads/master
+\end{verbatim}
+\t normally give realpath not ./.git
+%|-- branches/
+%|-- config
+%|-- description
+%|-- hooks/
+% ...
+%|-- info/
+%|   `-- exclude
+%...
+%|   |-- info/
+%|   `-- pack/
+%...
+%    `-- tags/
+
+The [[init]] command creates just the directory structure
+under [[.git/]], without any objects or references in it.
+%
+There is also not yet an index file.
+%
+There is a [[HEAD]] file, but its contents ([[ref: refs/heads/master]])
+references an head that does not exist yet under [[.git/refs/heads/]].
 
 \subsubsection{Staging a diff}
 
-% git add
-%%git rm
+Here is the command to add a new file to the repository:
 
-% tree .git/, see new blob! and modifed index
+\begin{verbatim}
+1 $ echo "Hello Git" > hello.txt
+2 $ git add hello.txt
+3 $ tree -F .git/
+.git/
+|-- HEAD
+...
+|-- index
+...
+|-- objects/
+|   |-- 9f/
+|   |   `-- 4d96d5b00d98959ea9960f069585ce42b1349a
+...
+`-- refs/
+    |-- heads/
+4 $ cat .git/objects/9f/4d96d5b00d98959ea9960f069585ce42b1349a 
+x^K\312\311OR04`\360H\315\311\311Wp\317,\341^B^@4\201^Ec
+\end{verbatim}
+\l git rm
+
+
+Adding the first file in a repository has two effects.
+%
+First, it creates a new {blob object} in 
+[[.git/objects/9f/4d96d5b00d98959ea9960f069585ce42b1349a]]
+containing essentially the compressed form of the content of the added file.
+I will fully explain in Chapter~\ref{chap:reading} the format
+of a blob on the disk.
+\n can now understand compression/decompression in code orga tabular
+\l dedup discuss here? and git does not track changes but state?
+%
+Second, it also creates the index file. Again, I will describe
+precisely the format of the index file in Chapter~\ref{chap:reading},
+but the index essentially associates to every tracked filenames
+the SHA1 of the blob corresponding to the filename. In the
+example above, the index will associate to the filename [[hello.txt]]
+the SHA1 [[9f4d96d5b00d98959ea9960f069585ce42b1349a]].
+
+
+Note that you must use the command [[add]] to add a new file
+to the repository when the file was not yet {tracked} by
+the repository. However, you must also use the command [[add]]
+to stage the modifications on a tracked file as in 
+Figure~\ref{fig:git-areas}.
+%
+In that case, the [[add]] command also creates a new blob with the
+current content of the file and updates the index so the filename
+of the added file now points to the SHA1 of the new blob.
+%
+\t so if use git add again, no effect, because same blob, already there
+\l and same index.
+
 
 \subsubsection{Committing a diff}
 
-% git commit
+Here is the command to commit to the repository what was previously
+staged:
 
-% tree .git/, new tree, new commit, new ref!
+\begin{verbatim}
+1 $ git commit -m "first commit"
+2 $ tree -F .git/
+.git/
+|-- HEAD
+|-- index
+|-- objects/
+|   |-- 2f/
+|   |   `-- 092e9cadfc1eb4a6d2febfddb941f4c1fe6fd6
+|   |-- 19/
+|   |   `-- d977a48d1d7b7ae8d520dd66190702dd4fb5bc
+|   |-- 9f/
+|   |   `-- 4d96d5b00d98959ea9960f069585ce42b1349a
+`-- refs/
+    |-- heads/
+    |   `-- master
+3 $ cat .git/refs/heads/master
+19d977a48d1d7b7ae8d520dd66190702dd4fb5bc
+\end{verbatim}
+\t normally gives more output when commit something [master (root-commit)...]
+%|-- COMMIT_EDITMSG
+%|-- branches/
+%|-- config
+%|-- description
+%|-- hooks/
+%|-- info/
+%|   `-- exclude
+%|-- logs/
+%|   |-- HEAD
+%|   `-- refs/
+%|       `-- heads/
+%|           `-- master
+%...
+%|   |-- info/
+%|   `-- pack/
+%...
+%    `-- tags/
 
-\subsubsection{Inspecting objects}
-
-% git log
-% (and then git show of commitid)
-
-% git show
-% commit, tree, blob
+The [[commit]] command has three effects.
+%
+First, it creates a new {tree object}, in the example above
+[[.git/objects/2f/092e9cadfc1eb4a6d2febfddb941f4c1fe6fd6]]
+(see Figure~\ref{fig:objects-sha1-dag} for the content of this tree).
+The content of this tree object derives from the content of the index.
+%
+Second, it creates a new {commit object}, here
+[[.git/objects/19/d977a48d1d7b7ae8d520dd66190702dd4fb5bc]],
+referencing the newly created tree object
+(again, see Figure~\ref{fig:objects-sha1-dag} for the content of this commit).
+%
+Finally, it updates the content of the head of the current branch
+([[refs/heads/master]] according to the content of [[.git/HEAD]])
+to contain the SHA1 of the newly created commit object
+(here [[19d977a48d1d7b7ae8d520dd66190702dd4fb5bc]]).
+\l note that first commit, so create first time refs/heads/master file
 
 \subsubsection{Managing branches}
 
-% git branch foo
+Here is the command to create a new branch:
 
-% simply .git/refs/
+\begin{verbatim}
+1 $ git branch foo
+2 $ tree -F .git/
+.git/
+HEAD
+...
+`-- refs/
+    |-- heads/
+    |   |-- foo
+    |   `-- master
+...
+3 $ cat .git/HEAD 
+ref: refs/heads/master
+4 $ cat .git/refs/heads/master
+19d977a48d1d7b7ae8d520dd66190702dd4fb5bc
+5 $ cat .git/refs/heads/foo
+19d977a48d1d7b7ae8d520dd66190702dd4fb5bc
+\end{verbatim}
 
-% git checkout foo
-% ...
-% git checkout master
+Creating a new branch is an extremely cheap operation under Git. 
+%
+It consists just in adding a file under [[.git/refs/heads/]]
+with the name of the new branch (here [[.git/refs/heads/foo]]),
+and whose content is the SHA1 commit of the current branch
+(here [[19d977a48d1d7b7ae8d520dd66190702dd4fb5bc]]).
+%
+Creating a branch does not switch to this branch though.
+
+Here is the command to switch to the new branch:
+
+\begin{verbatim}
+1 $ git checkout foo
+Switched to branch 'foo'
+2 $ cat .git/HEAD
+ref: refs/heads/foo
+\end{verbatim}
+
+Switching to a branch is a more costly operation. It modifies
+[[HEAD]] but also recompute the index from all the tree
+objects referenced from the commit of the head of the new branch.
+It also updates all the files so that they contain the content of
+the blob referenced in the index.
+
+\subsubsection{Inspecting objects}
+\label{sec:git-show-examples}
+
+Git provides a few commands to query the repository.
+%
+The first one, [[show]], shows the content of a Git object.
+It takes the SHA1 of an object as a parameter and pretty print
+its content. Here are a few examples of this command:
+
+\begin{verbatim}
+1 $ tree -F .git/
+...
+|-- objects/
+|   |-- 2f/
+|   |   `-- 092e9cadfc1eb4a6d2febfddb941f4c1fe6fd6
+|   |-- 19/
+|   |   `-- d977a48d1d7b7ae8d520dd66190702dd4fb5bc
+|   |-- 9f/
+|   |   `-- 4d96d5b00d98959ea9960f069585ce42b1349a
+...
+2 $ git show 9f4d96d5b00d98959ea9960f069585ce42b1349a
+Hello Git
+3 $ git show 2f092e9cadfc1eb4a6d2febfddb941f4c1fe6fd6
+tree 2f092e9cadfc1eb4a6d2febfddb941f4c1fe6fd6
+
+hello.txt
+4 $ git show 19d977a48d1d7b7ae8d520dd66190702dd4fb5bc
+commit 19d977a48d1d7b7ae8d520dd66190702dd4fb5bc
+Author: pad  <todo@todo>
+Date:   Fri Sep 29 14:04:46 2017 -0700
+
+    first commit
+
+diff --git a/hello.txt b/hello.txt
+new file mode 100644
+index 0000000..9f4d96d
+--- /dev/null
++++ b/hello.txt
+@@ -0,0 +1 @@
++Hello Git
+\end{verbatim}
+\t need fix ocamlgit to output that diff format
+\l would be nice to have tree SHA1 reference from commit and also
+\l SHA1 reference of blobs in the tree.
+
+The command [[show]] simply opens the appropriate file under [[.git/objects/]],
+decompresses the file, and finally displays its content.
+
+Another important query command is [[log]] to see the full history
+of the repository. Here is the output of this command on the
+repository we used this far:
+
+\begin{verbatim}
+1 $ git log
+commit 19d977a48d1d7b7ae8d520dd66190702dd4fb5bc
+Author: pad  <todo@todo>
+Date:   Fri Sep 29 14:04:46 2017 -0700
+
+    first commit
+\end{verbatim}
+
 
 \subsubsection{Other commands}
 
-% git merge foo
+%chunks:
+There are a few other important commands: 
+[[merge]], 
+[[status]], 
+[[diff]],
+[[clone]], 
+[[pull]], or 
+[[push]], 
+but I will introduce them gradually in this document.
 
-% git status
-% git diff
-
-% git clone
-% (remote)
-% git pull
-% git push
 
 \section{Code organization}
 
-%dup: (and adapted) from Assembler.nw
+%dup: (and heavily adapted) from Assembler.nw
 Table~\ref{tab:code-orga} presents short descriptions
 of the source files used by [[ocamlgit]]
 %together with the main entities (e.g., types, functions) the file defines,
@@ -1344,9 +1980,9 @@ getting help                       & \ref{chap:main}              & [[cmd_help.m
 creating a repository     & \ref{chap:creating}              & [[cmd_init.ml]] &    \\
 %\midrule
 reading from a repository & \ref{chap:reading}              & [[decompression.ml]] &    \\
-%\midrule
+%\midrule compressed data
 writing to a repository   & \ref{chap:writing}              & [[compression.ml]] &    \\
-%\midrule
+%\midrule and compressing data
 staging a diff            & \ref{chap:staging}              & [[cmd_add.ml]] [[cmd_rm.ml]]  &    \\ % [[cmd_mv.ml]]
 %\midrule
 committing a diff         & \ref{chap:committing}              & [[cmd_commit.ml]]           &    \\
@@ -1406,7 +2042,8 @@ Total           &               &            &                & 6196  \\
 \label{sec:archi}
 
 Figure~\ref{fig:controlflow} describes the main {modules}
-of [[ocamlgit]] and their main dependencies. 
+of [[ocamlgit]] and their main dependencies.
+\n hidden client/pull/push stuff and reduced deps 
 Those dependencies correspond rougly also to the main control 
 flow of [[ocamlgit]].
 %
@@ -1421,7 +2058,7 @@ command, for example, [[Cmd_add.cmd]] if the first argument
 to [[ocamlgit]] was [[add]].
 %
 Each command usually processes the remaining command-line arguments
-to [[ocamlgit]] and use functions from the API provided by
+to [[ocamlgit]] and uses functions from the API provided by
 the [[Repository]] module. This API contains functions to
 open a repository ([[open_()]]),
 read an object ([[read_obj()]]),
@@ -1516,7 +2153,7 @@ The following chapters will describe the main commands of [[ocamlgit]],
 which rely on the code of the previous chapters to manipulate the files
 under [[.git/]]:
 Chapter~\ref{chap:staging} will present the code to add files in
-the Git staging area,
+the staging area,
 Chapter~\ref{chap:committing} the code to commit what was staged, 
 Chapter~\ref{chap:branching} the code to manipulate branches,
 Chapter~\ref{chap:merging} the code to merge branches,
@@ -1527,10 +2164,13 @@ Chapter~\ref{chap:networking} the code to exchange those commits through
 the network.
 %
 In Chapter~\ref{chap:debugging} I will present Git commands that are
-useful for the developer to debug his program. % to help develop! not just store/retrieve
-Chapter~\ref{chap:advanced} presents advanced features of Git 
+useful for developers to develop and debug programs when the 
+source code of those programs is managed by Git. 
+% to help develop! not just store/retrieve
+Chapter~\ref{chap:advanced-features} presents advanced features of Git 
 that I did not present before to simplify the explanations,
-for instance, {tags}.
+for instance, {Tags}.
+\t packing chapter and advanced topics now
 %
 Finally, Chapter~\ref{chap:conclusion} concludes
 and gives pointers to other books in the \principia series.
@@ -1554,6 +2194,18 @@ the algorithm to compute the differences between two files).
 
 \chapter{Core Data Structures}
 \label{chap:core-ds}
+
+\begin{verse}
+\begin{flushright}
+  {\it Show me your code and conceal your data structures, and I shall
+    continue to be mystified. Show me your data structures, and I
+    won't usually need your code; it'll be obvious.\\
+    ~\\
+    Fred Brooks}
+\end{flushright}
+\end{verse}
+
+%toc:
 
 \section{Secure Hash Algorithm (SHA1) hashes}
 \n Secure, not Simple.
@@ -1727,7 +2379,8 @@ let of_string_fast s =
 % Repository type is main type. Main API functions take
 % repo as first parameter.
 
-% Store path worktree and metadata (dotgit).
+% Store path worktree, path metadata (dotgit),
+% and also index. 3 main areas.
 
 <<type Repository.t>>=
 type t = {
@@ -1736,7 +2389,7 @@ type t = {
   (* less: on bare repo this could be the toplevel dir *)
   dotgit: Common.filename;
 
-  <<[[Repository.t]] other fields>>
+  <<[[Repository.t]] index field>>
   (* less: compression level config field? *)
 }
 @
@@ -1754,7 +2407,7 @@ type t = {
 
 
 %trans:
-% Repo contains objects and refs (see next 2 sections).
+% dotgit contains objects and refs (see next 2 sections).
 %python: [] accessors for repo.object_store and repo.refs
 % (and even [] for repo itself for objectish)
 
@@ -2053,13 +2706,19 @@ type objectish =
 
 
 \section{[[Index.t]]}
+\label{sec:index}
 % Staging area, Initially called DIRC, directory cache?
+
+%trans:
+% Seen in Section X staging area. Marks. But in practice
+% not set of files with marks. Instead full set of files
+% and current blob SHA1.
 
 % To know diff between working tree and HEAD.
 %gitless: misfit paper says that you do not need staging area and that in fact
 %  it causes misfits
 
-<<[[Repository.t]] other fields>>=
+<<[[Repository.t]] index field>>=
 mutable index: Index.t;
 @
 
@@ -2439,7 +3098,7 @@ let rec cmd = { Cmd.
 % Different ways to create a repo. 
 % Most common is create fresh repo, other is clone.
 
-\section{Initializing a repository: [[git init]]}
+\section{Initializing a new repository: [[git init]]}
 % Creating a fresh repository
 
 <<constant Cmd_init.cmd>>=
@@ -2510,7 +3169,7 @@ let dirperm = 0o750
 
 %\subsection{Named files}
 
-\section{Copying a repository: [[cp -r]]}
+\section{Copying an existing repository: [[cp -r]]}
 
 % well, can just do cp :) simple! DVCS power!
 
@@ -2526,7 +3185,7 @@ let dirperm = 0o750
 % no remote and push/pull.
 
 
-\section{Cloning a repository: [[git clone]]}
+\section{Cloning an existing repository: [[git clone]]}
 
 % Other common way to initialize a repo is clone! Copy from
 % network location (or local too, but less useful).
@@ -2670,6 +3329,7 @@ let decompress ch =
 
 
 \subsection{Reading a blob}
+
 
 <<[[Objects.read()]] match str cases>>=
 | "blob"   -> Blob   (Blob.read ch2)
@@ -4041,6 +4701,7 @@ let with_opendir f dir =
 @
 
 \section{Creating a branch: [[git branch <name>]]}
+\label{sec:create-branch}
 
 <<function Cmd_branch.create_branch>>=
 let create_branch r name (* sha *) =
@@ -4088,6 +4749,9 @@ let del_ref r aref =
 % git gc
 
 \section{Checking out a branch: [[git checkout]]}
+\label{sec:switch-branch}
+\l switching branch
+
 
 <<constant Cmd_checkout.cmd>>=
 let cmd = { Cmd.
@@ -4261,26 +4925,6 @@ let build_file_from_blob fullpath blob perm =
 @
 
 
-\subsection{Checking out an old version}
-
-<<[[Cmd_checkout.checkout()]] cases>>=
-| _ when Hexsha.is_hexsha str ->
-  let commitid = Hexsha.to_sha str in
-  let commit = Repository.read_commit r commitid in
-  let treeid = commit.Commit.tree in
-  let tree = Repository.read_tree r treeid in
-  (* todo: order of operation? set ref before index? reverse? *)
-  Repository.write_ref r (Refs.Head) (Refs.Hash commitid);
-  Repository.set_worktree_and_index_to_tree r tree;
-  pr (spf "Note: checking out '%s'." str);
-  pr ("You are in 'detached HEAD' state");
-@
-
-% convenient to go back! but then can not modify that! 
-
-%gitless: shows that as a misfit, detached.
-% but can create branch from that point at least
-
 %\subsection{[[validate_path()]]}
 
 
@@ -4402,6 +5046,7 @@ let reset_hard r =
 %https://tahoe-lafs.org/~zooko/badmerge/simple.html
 
 \section{merge: [[git merge]]}
+\label{sec:git-merge}
 
 % Pb of history-sensitive merging? If share some patches? Arch better?
 % Or just completely forget the pb and do a general 3-way merge from
@@ -4561,12 +5206,6 @@ let char_of_sign = function
   | Plus -> '+'
   | Minus -> '-'
 @
-
-\subsection{Showing an old version of a file}
-
-% git show /path/:@?? ^ ? or different command?
-
-% Just get commit, tree and follow path until blob.
 
 \section{Changes}
 
@@ -5159,14 +5798,6 @@ let print_change change =
     pr (spf "M       %s" entry1.Change.path)
 @
 
-\subsection{Showing differences between past versions}
-% git show sha1?
-
-\subsection{Showing the history of a file or directory, [[git log <path>]]}
-
-% Format of git does not make this fast, as opposed to CVS.
-% More reliable when rename?
-
 \section{Showing file status: [[git status]]}
 
 <<constant Cmd_status.cmd>>=
@@ -5381,6 +6012,44 @@ let untracked r =
 @
 
 % what about .ignore?
+
+
+\section{Archeology}
+
+\subsection{Checking out an old version}
+
+<<[[Cmd_checkout.checkout()]] cases>>=
+| _ when Hexsha.is_hexsha str ->
+  let commitid = Hexsha.to_sha str in
+  let commit = Repository.read_commit r commitid in
+  let treeid = commit.Commit.tree in
+  let tree = Repository.read_tree r treeid in
+  (* todo: order of operation? set ref before index? reverse? *)
+  Repository.write_ref r (Refs.Head) (Refs.Hash commitid);
+  Repository.set_worktree_and_index_to_tree r tree;
+  pr (spf "Note: checking out '%s'." str);
+  pr ("You are in 'detached HEAD' state");
+@
+
+% convenient to go back! but then can not modify that! 
+
+%gitless: shows that as a misfit, detached.
+% but can create branch from that point at least
+
+\subsection{Showing an old version of a file}
+
+% git show /path/:@?? ^ ? or different command?
+
+% Just get commit, tree and follow path until blob.
+
+
+\subsection{Showing differences between past versions}
+% git show sha1?
+
+\subsection{Showing the history of a file or directory, [[git log <path>]]}
+
+% Format of git does not make this fast, as opposed to CVS.
+% More reliable when rename?
 
 
 \chapter{Exchanging}
@@ -6054,6 +6723,65 @@ let mk_client url =
 \subsection{[[git-receive-pack]]}
 % when push
 
+\chapter{Packing}
+
+% kinda an optimization.
+% Complex code.
+
+%https://git-scm.com/book/en/v2/Git-Internals-Packfiles
+
+\section{[[Pack.t]]}
+
+\subsection{Pack data}
+
+\subsection{Pack Index}
+
+\subsubsection{Index pack v1}
+
+
+\subsubsection{Index pack v2}
+
+\section{IO}
+
+\subsection{Reading}
+
+\subsection{Writing}
+
+\section{Modifications}
+
+\subsection{Object Store}
+
+% pack dir
+
+% loose vs pack objects
+
+\subsection{Refs}
+
+% packed refs
+% peeled refs??
+
+\section{Delta}
+
+%\subsection{Unpacked Object}
+
+% Diff discussed in OASA vol II section 6.7 
+
+
+\section{Pack commands}
+
+\subsection{[[git pack-objects]]}
+
+
+\subsection{[[git repack]]}
+
+\subsection{[[git fetch-pack]]}
+
+% similar to git pull, but will not update the references.
+\t but then lost? graph walker will not find them back?
+
+
+\subsection{[[git receive-pack]]}
+
 
 \chapter{Debugging Support}
 \label{chap:debugging}
@@ -6096,33 +6824,12 @@ let mk_client url =
 % pretty useful
 
 
-\chapter{Advanced Topics}
-\label{chap:advanced}
 
-\section{Bytes versus ASCII versus UTF-8}
-% Encoding.
+\chapter{Advanced Features}
+\label{chap:advanced-features}
 
-% Git doc says git is agnostic to encoding. Just treat filenames
-% and file content as bytes. But for commit messages, assume utf8,
-% if not then have to specify an encoding commit tag?
-
-% Why need speak about encoding early?
-% Can not just use bytes everywhere? filenames mentionned in
-% tree objects are utf8? the content of blob might be utf8 but we do not care.
-
-
-\section{Reliability and signals}
-
-% First, immutable object store and order of operation (a la ext2fs?)
-% leaves state of repo in consistent state always!
-% Only tricky part is update references! and done via lock to be atomic.
-
-% What if C-c in middle of operations?
-% Handled by atomic ref update?
-
-\section{Advanced features}
-
-\subsection{Tags}
+\section{Tags}
+\label{sec:tags}
 
 % Why need tags? Why not simply refs?
 % Because refs just point to something but can not have meta-data.
@@ -6137,7 +6844,7 @@ let mk_client url =
 % Can do tags by abusing refs/tags/xxx. In fact in pfff seems like
 % github did that to create tags ...
 
-\subsubsection{[[Tag.t]]}
+\subsection{[[Tag.t]]}
 
 <<[[Objects.t]] cases>>=
 (*  | Tag of Tag.t *)
@@ -6147,7 +6854,7 @@ let mk_client url =
 (* ObjByTag *)
 @
 
-\subsubsection{IO}
+\subsection{IO}
 
 <<[[Objects.read()]] match str cases>>=
 (* "tag" -> Tag (Tag.read raw) *)
@@ -6161,17 +6868,17 @@ let mk_client url =
 <<[[Cmd_show.show()]] match obj cases>>=
 @
 
-\subsubsection{[[git tag]]}
+\subsection{[[git tag]]}
 
 % to create, list, delete
 
-\subsubsection{[[git clone]] and tags}
+\subsection{[[git clone]] and tags}
 % should import tags
 
-\subsubsection{[[git pull]] and tags}
+\subsection{[[git pull]] and tags}
 % should split_commit_and_tags (see dulwich)
 
-\subsection{Reflog}
+\section{Reflog}
 
 % quite simple, just an history of the content of a ref.
 % So very meta, refs allow to access the history of files,
@@ -6184,24 +6891,24 @@ let mk_client url =
 % update a ref, it should update the reflog of this ref!
 
 
-\subsection{Stash}
+\section{Stash}
 % again, just a ref?
 
-\subsubsection{[[git stash]]}
+\subsection{[[git stash]]}
 % pretty useful in the end
 
-\subsection{Grafts}
+\section{Grafts}
 
 % I used this feature to represent the full history of Linux from 0.01 to 2.6!
 
-\subsubsection{Reading a graft file}
+\subsection{Reading a graft file}
 
-\subsubsection{Writing a graft file}
+\subsection{Writing a graft file}
 
-\subsubsection{Using a graft file}
+\subsection{Using a graft file}
 
 
-\subsection{Submodules}
+\section{Submodules}
 
 %S_IFGITLINK = 0o160000
 % hack to encode submodule?
@@ -6259,31 +6966,31 @@ let mk_client url =
 
 
 
-\subsection{hooks: [[.git/hooks/]]}
+\section{hooks: [[.git/hooks/]]}
 
 %self.hooks['pre-commit'] = PreCommitShellHook(self.controldir())
 %self.hooks['commit-msg'] = CommitMsgShellHook(self.controldir())
 %self.hooks['post-commit'] = PostCommitShellHook(self.controldir())
 
 
-\subsection{Configuration file: [[.git/config]]}
+\section{Configuration file: [[.git/config]]}
 
 % ex of use:
 %config = self.get_config()
 %honor_filemode = config.get_boolean(
 %    'core', 'filemode', os.name != "nt")
 
-\subsubsection{Initialization}
+\subsection{Initialization}
 
-\subsubsection{[[Config.t]]}
+\subsection{[[Config.t]]}
 
-\subsubsection{Reading}
+\subsection{Reading}
 
-\subsubsection{Writing}
+\subsection{Writing}
 
-\subsubsection{Stacked config, [[~/.gitconfig]] and [[.git/config]]}
+\subsection{Stacked config, [[~/.gitconfig]] and [[.git/config]]}
 
-\subsection{Ignore file: [[.gitignore]]}
+\section{Ignore file: [[.gitignore]]}
 
 %For details for the matching rules, see https://git-scm.com/docs/gitignore
 
@@ -6292,7 +6999,7 @@ let mk_client url =
 
 
 %\section{Advanced diff capabilities}
-\subsection{Rename detection}
+\section{Rename detection}
 
 % useful to have git log tracking a file through rename
 
@@ -6301,68 +7008,56 @@ let mk_client url =
 % when merge another branch!
 
 
+\section{Advanced commands}
+
+%\subsection{[[git blame]]}
+% Debugging support section
+
+\subsection{[[git revert]]}
+
+\subsection{[[git archive]]}
+% create tarball from git repo
+
+%\subsection{[[git grep]]}
+% now in Debugging support chapter
+
+\subsection{[[git filter-branch]]}
+% useful?
+
+% http://manishearth.github.io/blog/2017/03/05/understanding-git-filter-branch
+
+
+\chapter{Advanced Topics}
+\label{chap:advanced-topics}
+
+\section{Bytes versus ASCII versus UTF-8}
+% Encoding.
+
+% Git doc says git is agnostic to encoding. Just treat filenames
+% and file content as bytes. But for commit messages, assume utf8,
+% if not then have to specify an encoding commit tag?
+
+% Why need speak about encoding early?
+% Can not just use bytes everywhere? filenames mentionned in
+% tree objects are utf8? the content of blob might be utf8 but we do not care.
+
+
+\section{Reliability and signals}
+
+% First, immutable object store and order of operation (a la ext2fs?)
+% leaves state of repo in consistent state always!
+% Only tricky part is update references! and done via lock to be atomic.
+
+% What if C-c in middle of operations?
+% Handled by atomic ref update?
+
+%\section{Advanced features}
+% now in separate chapter
+
 \section{Optimizations}
 
 %\subsection{LRU cache}
 % Needs that for?
-
-\section{Pack files}
-
-% kinda an optimization.
-% Complex code.
-
-%https://git-scm.com/book/en/v2/Git-Internals-Packfiles
-
-\subsection{[[Pack.t]]}
-
-% data and idx.
-
-\subsection{Reading}
-
-\subsection{Writing}
-
-\subsection{Modifications}
-
-\subsubsection{Object Store}
-
-% pack dir
-
-% loose vs pack objects
-
-\subsubsection{Refs}
-
-% packed refs
-% peeled refs??
-
-\subsection{Delta}
-
-\subsection{Pack data}
-
-%\subsection{Unpacked Object}
-
-\subsection{Pack index}
-
-% Diff discussed in OASA vol II section 6.7 
-
-\subsubsection{Index pack v1}
-
-
-\subsubsection{Index pack v2}
-
-\subsection{Pack commands}
-
-\subsubsection{[[git pack-objects]]}
-
-
-\subsubsection{[[git repack]]}
-
-\subsubsection{[[git fetch-pack]]}
-
-% similar to git pull, but will not update the references.
-\t but then lost? graph walker will not find them back?
-
-
-\subsubsection{[[git receive-pack]]}
 
 \section{Fast import and export}
 % another opti? why need that?
@@ -6432,24 +7127,6 @@ let mk_client url =
 \subsection{[[.git]] file}
 % linked working tree? see docstring of commondir()
 
-
-\section{Other commands}
-
-%\subsection{[[git blame]]}
-% Debugging support section
-
-\subsection{[[git revert]]}
-
-\subsection{[[git archive]]}
-% create tarball from git repo
-
-%\subsection{[[git grep]]}
-% now in Debugging support chapter
-
-\subsection{[[git filter-branch]]}
-% useful?
-
-% http://manishearth.github.io/blog/2017/03/05/understanding-git-filter-branch
 
 \section{Plumbing commands}
 % original git is plumbing vs porcelain
@@ -6706,6 +7383,10 @@ let read_key_space_value_newline ch k f =
 \label{chap:algorithms}
 
 \section{SHA1}
+\label{sec:sha1-algo}
+
+% follow principles used for MD4 and MD5 by Ronald Rivest.
+
 
 <<function Sha1.sha1>>=
 (* sha-1 digest. Based on pseudo-code of RFC 3174.
