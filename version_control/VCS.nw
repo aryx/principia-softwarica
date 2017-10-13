@@ -292,6 +292,9 @@ in [[ocamlgit]], and to present the code of [[ocamlgit]].
 \l not as efficient as git, not as famous as Torvalds for coding style,
 \l  but not too bad (bench?) and easier entry point to then look code of git.
 
+% related book:
+% - https://building-git.launchrock.com/ 
+
 
 \section{Other version control systems}
 \label{sec:other-vcs}
@@ -334,7 +337,6 @@ RCS still contains more than 17 500 LOC.
 \l Why? too subtle diff representation?
 \n has kinda branch, and rcsmerge, and tags, but hacks
 \l SRC wrapper from ESR? 
-\l PRCS better at grouping (P = Project) http://prcs.sourceforge.net/
 
 
 \item The Concurrent Versions System
@@ -438,6 +440,8 @@ for more than an order of magnitude less code (6500 LOC).
 %   and modern version CSSC https://www.gnu.org/software/cssc/
 %other:
 % - Subversion (630 000 LOC, hmm)
+% - PRCS http://prcs.sourceforge.net/ P for project, better than RCS and
+%   CVS for grouping. Kinda snapshot based
 %other DVCSs:
 % - Darcs 80 000 LOC (using literate haskell), maybe good candidate, simpler
 %   model, arguably simpler than git (rebase for free?), some patch theory.
@@ -3226,7 +3230,9 @@ let init root =
   add_ref_if_new r Refs.Head Refs.default_head_content |> ignore;
 
   (* less: config file, description, hooks, etc *)
-  pr (spf "Initialized empty Git repository in %s" (root / ".git"))
+  Sys.chdir root;
+  let absolute = Sys.getcwd () in
+  pr (spf "Initialized empty Git repository in %s" (absolute / ".git/"))
 @
 
 % will see add_ref_if_new later.
@@ -3679,7 +3685,7 @@ let follow_ref_some r aref =
 %\section{Objectish}
 
 <<signature Repository.read_objectish>>=
-val read_objectish: t -> objectish -> Objects.t
+val read_objectish: t -> objectish -> Sha1.t * Objects.t
 @
 <<function Repository.read_objectish>>=
 let read_objectish r objectish =
@@ -3688,11 +3694,11 @@ let read_objectish r objectish =
     (match follow_ref r aref |> snd with
     | None -> failwith (spf "could not resolve %s" (Refs.string_of_ref aref))
     | Some sha -> 
-      read_obj r sha
+      sha, read_obj r sha
     )
   | ObjByHex hexsha ->
     let sha = Hexsha.to_sha hexsha in
-    read_obj r sha
+    sha, read_obj r sha
 @
 
 
@@ -4157,7 +4163,8 @@ let cmd = { Cmd.
   help = " <file>..."; (* less: pathspec? *)
   options = [
     (* todo: --interactive, --patch for picking, --force (if ignored) 
-     * --all
+     * --all, 
+     * --recursive
      *)
   ];
   f = (fun args ->
@@ -5178,7 +5185,7 @@ let cmd = { Cmd.
 
 <<function Cmd_show.show>>=
 let show r objectish =
-  let obj = Repository.read_objectish r objectish in
+  let sha, obj = Repository.read_objectish r objectish in
   match obj with
   <<[[Cmd_show.show()]] match obj cases>>
 @
@@ -5195,7 +5202,7 @@ val show: t -> unit
 @
 <<function Blob.show>>=
 let show x =
-  pr x
+  print_string x
 @
 
 
@@ -5204,7 +5211,7 @@ let show x =
 <<[[Cmd_show.show()]] match obj cases>>=
 | Objects.Tree x ->
   (* =~ git ls-tree --names-only *)
-  pr "tree\n"; (* less: put sha of tree *)
+  pr (spf "tree %s\n" (Hexsha.of_sha sha));
   Tree.show x
 @
 
@@ -5230,11 +5237,17 @@ let show xs =
 
 <<[[Cmd_show.show()]] match obj cases>>=
 | Objects.Commit x -> 
-  pr "commit"; (* less: put sha of commit *)
+  pr (spf "commit %s" (Hexsha.of_sha sha));
   Commit.show x;
   let tree2 = Repository.read_tree r x.Commit.tree in
-  let parent1 = Repository.read_commit r (List.hd x.Commit.parents) in
-  let tree1 = Repository.read_tree r parent1.Commit.tree in
+  let tree1 = 
+    try 
+      let parent1 = Repository.read_commit r (List.hd x.Commit.parents) in
+      Repository.read_tree r parent1.Commit.tree 
+    with Failure _ ->
+    (* no parent *)
+      []
+  in
   let changes = 
     Changes.changes_tree_vs_tree 
       (Repository.read_tree r) 
@@ -6125,6 +6138,10 @@ let untracked r =
 
 \subsection{Showing differences between past versions}
 % git show sha1?
+
+%cvs: not easy in CVS to "display all changes made by a user in his last
+% commit (src: prcs paper). Because internally CVS still uses RCS and
+% so a commit is a group of single-file RCS operations.
 
 \subsection{Showing the history of a file or directory: [[git log <path>]]}
 
@@ -7208,6 +7225,7 @@ let mk_client url =
 
 \section{Fast import and export}
 % another opti? why need that?
+% to collaborate with other VCS? like import SVN in git?
 
 % another way to clone a repo?
 %$ git fast-export --all | (cd /empty/repository && git fast-import)
