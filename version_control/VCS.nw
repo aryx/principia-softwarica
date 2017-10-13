@@ -7485,98 +7485,74 @@ let read_key_space_value_newline ch k f =
 
 \chapter{Algorithms}
 \label{chap:algorithms}
+\l put before Conclusion? instead of in appendix?
+
+%pad: (** are my comments **)
 
 \section{SHA1}
 \label{sec:sha1-algo}
 
-% follow principles used for MD4 and MD5 by Ronald Rivest.
+% Wikipedia says SHA1 follows the principles used for 
+% MD4 and MD5 by Ronald Rivest.
+% I can explain how it works, but not really why it works.
+% Out of scope of this book.
 
+% The MD4 Message Digest Algorithm - Ronald L. Rivest
+% CRYPTO 90, Springer Verlag
+% Define motivations (but old one), and design goals (good one),
+% and implem, but does not explain why it works. Still the algorithm
+% is simpler and use less weird constants, so maybe more intuitive to
+% see why it works and why it's hard to reverse.
+
+
+<<[[Sha1.sha1()]] operator shortcuts for Int32>>=
+let ( lor )  = Int32.logor in
+let ( lxor ) = Int32.logxor in
+let ( land ) = Int32.logand in
+let ( ++ )   = Int32.add in
+let lnot     = Int32.lognot in
+let sr       = Int32.shift_right in
+let sl       = Int32.shift_left in
+let cls n x = (sl x n) lor (Int32.shift_right_logical x (32 - n)) in
+@
+
+% simple algo: first pads input parameter to get multiple of 64, then
+% for each block of 64 bytes, store numbers in array of 16 elements,
+% and update h0/h1/h2/h3/h4 components of final SHA1 number.
+% Finally combine those h0/... to form the final 20 bytes number.
 
 <<function Sha1.sha1>>=
 (* sha-1 digest. Based on pseudo-code of RFC 3174.
    Slow and ugly but does the job. *)
 let sha1 s =
-  let sha_1_pad s =
-    let len = String.length s in
-    let blen = 8 * len in
-    let rem = len mod 64 in
-    let mlen = if rem > 55 then len + 128 - rem else len + 64 - rem in
-    let m = Bytes.create mlen in
-    Bytes.blit_string s 0 m 0 len;
-    Bytes.fill m len (mlen - len) '\x00';
-    Bytes.set m len '\x80';
-    if Sys.word_size > 32 then begin
-      Bytes.set m (mlen - 8) (Char.unsafe_chr (blen lsr 56 land 0xFF));
-      Bytes.set m (mlen - 7) (Char.unsafe_chr (blen lsr 48 land 0xFF));
-      Bytes.set m (mlen - 6) (Char.unsafe_chr (blen lsr 40 land 0xFF));
-      Bytes.set m (mlen - 5) (Char.unsafe_chr (blen lsr 32 land 0xFF));
-    end;
-    Bytes.set m (mlen - 4) (Char.unsafe_chr (blen lsr 24 land 0xFF));
-    Bytes.set m (mlen - 3) (Char.unsafe_chr (blen lsr 16 land 0xFF));
-    Bytes.set m (mlen - 2) (Char.unsafe_chr (blen lsr 8 land 0xFF));
-    Bytes.set m (mlen - 1) (Char.unsafe_chr (blen land 0xFF));
-    m
-  in
-  (* Operations on int32 *)
+  <<function sha_1_pad>>
   let ( &&& ) = ( land ) in
-  let ( lor ) = Int32.logor in
-  let ( lxor ) = Int32.logxor in
-  let ( land ) = Int32.logand in
-  let ( ++ ) = Int32.add in
-  let lnot = Int32.lognot in
-  let sr = Int32.shift_right in
-  let sl = Int32.shift_left in
-  let cls n x = (sl x n) lor (Int32.shift_right_logical x (32 - n)) in
+  (* Operations on int32 *)
+  <<[[Sha1.sha1()]] operator shortcuts for Int32>>
   (* Start *)
   let m = sha_1_pad s in
   let w = Array.make 16 0l in
+
+  (** components of the 20 bytes SHA1 (5 * 4 bytes (Int32 with 'l' suffix)) **)
   let h0 = ref 0x67452301l in
   let h1 = ref 0xEFCDAB89l in
   let h2 = ref 0x98BADCFEl in
   let h3 = ref 0x10325476l in
   let h4 = ref 0xC3D2E1F0l in
+
   let a = ref 0l in
   let b = ref 0l in
   let c = ref 0l in
   let d = ref 0l in
   let e = ref 0l in
-  for i = 0 to ((Bytes.length m) / 64) - 1 do              (* For each block *)
+
+  (* For each block *)
+  for i = 0 to ((Bytes.length m) / 64) - 1 do
     (* Fill w *)
-    let base = i * 64 in
-    for j = 0 to 15 do
-      let k = base + (j * 4) in
-      w.(j) <- sl (Int32.of_int (Char.code @@ Bytes.get m k)) 24 lor
-               sl (Int32.of_int (Char.code @@ Bytes.get m (k + 1))) 16 lor
-               sl (Int32.of_int (Char.code @@ Bytes.get m (k + 2))) 8 lor
-               (Int32.of_int (Char.code @@ Bytes.get m (k + 3)))
-    done;
+    <<[[Sha1.sha1()]] fill [[w]] for each block [[i]]>>
     (* Loop *)
     a := !h0; b := !h1; c := !h2; d := !h3; e := !h4;
-    for t = 0 to 79 do
-      let f, k =
-        if t <= 19 then (!b land !c) lor ((lnot !b) land !d), 0x5A827999l else
-        if t <= 39 then !b lxor !c lxor !d, 0x6ED9EBA1l else
-        if t <= 59 then
-          (!b land !c) lor (!b land !d) lor (!c land !d), 0x8F1BBCDCl
-        else
-        !b lxor !c lxor !d, 0xCA62C1D6l
-      in
-      let s = t &&& 0xF in
-      if (t >= 16) then begin
-        w.(s) <- cls 1 begin
-            w.((s + 13) &&& 0xF) lxor
-            w.((s + 8) &&& 0xF) lxor
-            w.((s + 2) &&& 0xF) lxor
-            w.(s)
-          end
-      end;
-      let temp = (cls 5 !a) ++ f ++ !e ++ w.(s) ++ k in
-      e := !d;
-      d := !c;
-      c := cls 30 !b;
-      b := !a;
-      a := temp;
-    done;
+    <<[[Sha1.sha1()]] loop from 0 to 79 for each block [[i]]>>
     (* Update *)
     h0 := !h0 ++ !a;
     h1 := !h1 ++ !b;
@@ -7584,19 +7560,93 @@ let sha1 s =
     h3 := !h3 ++ !d;
     h4 := !h4 ++ !e
   done;
+
+  (** the result hash number of 20 bytes *)
   let h = Bytes.create 20 in
-  let i2s h k i =
-    Bytes.set h k (Char.unsafe_chr ((Int32.to_int (sr i 24)) &&& 0xFF));
-    Bytes.set h (k + 1) (Char.unsafe_chr ((Int32.to_int (sr i 16)) &&& 0xFF));
-    Bytes.set h (k + 2) (Char.unsafe_chr ((Int32.to_int (sr i 8)) &&& 0xFF));
-    Bytes.set h (k + 3) (Char.unsafe_chr ((Int32.to_int i) &&& 0xFF));
-  in
+  <<function i2s>>
   i2s h 0 !h0;
   i2s h 4 !h1;
   i2s h 8 !h2;
   i2s h 12 !h3;
   i2s h 16 !h4;
   Bytes.unsafe_to_string h
+@
+
+% most significant bit first (big-endian)
+<<function i2s>>=
+let i2s h k i =
+  Bytes.set h k       (Char.unsafe_chr ((Int32.to_int (sr i 24)) &&& 0xFF));
+  Bytes.set h (k + 1) (Char.unsafe_chr ((Int32.to_int (sr i 16)) &&& 0xFF));
+  Bytes.set h (k + 2) (Char.unsafe_chr ((Int32.to_int (sr i 8))  &&& 0xFF));
+  Bytes.set h (k + 3) (Char.unsafe_chr ((Int32.to_int i)         &&& 0xFF));
+in
+@
+\l could reuse one of function used in assembler or linker that does same
+
+%trans:
+% and now the details:
+
+<<[[Sha1.sha1()]] fill [[w]] for each block [[i]]>>=
+let base = i * 64 in
+for j = 0 to 15 do
+  let k = base + (j * 4) in
+  w.(j) <- sl (Int32.of_int (Char.code @@ Bytes.get m k)) 24 lor
+           sl (Int32.of_int (Char.code @@ Bytes.get m (k + 1))) 16 lor
+           sl (Int32.of_int (Char.code @@ Bytes.get m (k + 2))) 8 lor
+           (Int32.of_int (Char.code @@ Bytes.get m (k + 3)))
+done;
+@
+<<[[Sha1.sha1()]] loop from 0 to 79 for each block [[i]]>>=
+for t = 0 to 79 do
+  let f, k =
+    if t <= 19 then (!b land !c) lor ((lnot !b) land !d), 0x5A827999l else
+    if t <= 39 then !b lxor !c lxor !d, 0x6ED9EBA1l else
+    if t <= 59 then
+      (!b land !c) lor (!b land !d) lor (!c land !d), 0x8F1BBCDCl
+    else
+    !b lxor !c lxor !d, 0xCA62C1D6l
+  in
+  let s = t &&& 0xF in
+  if (t >= 16) then begin
+    w.(s) <- cls 1 begin
+        w.((s + 13) &&& 0xF) lxor
+        w.((s + 8) &&& 0xF) lxor
+        w.((s + 2) &&& 0xF) lxor
+        w.(s)
+      end
+  end;
+  let temp = (cls 5 !a) ++ f ++ !e ++ w.(s) ++ k in
+  e := !d;
+  d := !c;
+  c := cls 30 !b;
+  b := !a;
+  a := temp;
+done;
+@
+% why 0 to 79? why magical 79?
+
+<<function sha_1_pad>>=
+let sha_1_pad s =
+  let len = String.length s in
+  let blen = 8 * len in
+  let rem = len mod 64 in
+  let mlen = if rem > 55 then len + 128 - rem else len + 64 - rem in
+  let m = Bytes.create mlen in
+  Bytes.blit_string s 0 m 0 len;
+  Bytes.fill m len (mlen - len) '\x00';
+  Bytes.set m len '\x80';
+  if Sys.word_size > 32 then begin
+    Bytes.set m (mlen - 8) (Char.unsafe_chr (blen lsr 56 land 0xFF));
+    Bytes.set m (mlen - 7) (Char.unsafe_chr (blen lsr 48 land 0xFF));
+    Bytes.set m (mlen - 6) (Char.unsafe_chr (blen lsr 40 land 0xFF));
+    Bytes.set m (mlen - 5) (Char.unsafe_chr (blen lsr 32 land 0xFF));
+  end;
+  Bytes.set m (mlen - 4) (Char.unsafe_chr (blen lsr 24 land 0xFF));
+  Bytes.set m (mlen - 3) (Char.unsafe_chr (blen lsr 16 land 0xFF));
+  Bytes.set m (mlen - 2) (Char.unsafe_chr (blen lsr 8 land 0xFF));
+  Bytes.set m (mlen - 1) (Char.unsafe_chr (blen land 0xFF));
+  m
+in
 @
 
 \section{Unzip}
@@ -7607,61 +7657,124 @@ val inflate : ?header:bool -> IO.input -> IO.input
 (** wrap an input using "inflate" decompression algorithm. raises [Error] if
   an error occurs (this can only be caused by malformed input data). *)
 @
+% opposite of deflate.
+\t remove ?header everywhere? useful?
+
+\subsection{Overview}
+
+%https://en.wikipedia.org/wiki/DEFLATE
+%RFC 1951 for deflate file format (great)
+%RFC 1950 for zlib format which adds adler-32 checksum for data corruption
+% detection. zlib stream.
+%http://zlib.net/feldspar.html great article on DEFLATE: 
+
+% Deflate is a Mix of Huffman encoding with LZ77 sliding-window compression.
+% Deflate is a very well engineered and optimized algorithm.
+
+%https://www.cs.duke.edu/courses/spring03/cps296.5/papers/ziv_lempel_1977_universal_algorithm.pdf
+% implemented in ocaml by Gazanaire (and used in decompress later)
+
+% More efficient than 'compress' (which uses LZW)
+% https://en.wikipedia.org/wiki/Lempel%E2%80%93Ziv%E2%80%93Welch
+% Used by gzip, zlib library, GIF, PNG, and of course DOS pkzip.
+% http://stackoverflow.com/questions/20762094/how-are-zlib-gzip-and-zip-related-what-do-they-have-in-common-and-how-are-they/20765054#20765054
+
+% A nice implem in Python? covers also bzip2.
+% http://www.paul.sladen.org/projects/pyflate/
+
+% See also plan9 libflate/
+
+% FIGURE with Head, Block, CData, and final block and end-of-block markers
 
 
+\subsection{Data structures}
 
+% huffman encoding
 <<type Unzip.huffman>>=
 type huffman =
-  | Found of int
+  (** Leaf *)
+  | Found of int (** 0..288 *)
+  (** Node *)
   | NeedBit of huffman * huffman
-  | NeedBits of int * huffman array
+  <<[[Unzip.huffman]] cases>>
 @
 
-<<type Unzip.adler32>>=
-type adler32 = {
-  mutable a1 : int;
-  mutable a2 : int;
-}
-@
+% Alphabet is 0-288 (0-255 + 256 for end of block + 257..288 for lz77 backref)
+% but 257..288 is not enough range to encode big distance, so need extra
+% bits, and again specialized encoding so frequent distances take less space.
+% In fact the 257..288 encodes the length of the backref, not the distance.
+% The distance encoding can even use another huffman tree! wow.
 
+% sliding window compression (lz77)
 <<type Unzip.window>>=
 type window = {
   mutable wbuffer : bytes;
   mutable wpos : int;
-  wcrc : adler32;
+  <<[[Unzip.window]] other fields>>
 }
 @
 
+<<constant Unzip.window_size>>=
+let window_size = 1 lsl 15
+@
+% 32K
+<<constant Unzip.buffer_size>>=
+let buffer_size = 1 lsl 16
+@
+\l why double? cos will need to blit when reach buffer_size?
+\t apparently not, so why?
+%FIGURE
+
+<<function Unzip.window_create>>=
+let window_create () = {
+    wbuffer = Bytes.create buffer_size;
+    wpos = 0;
+    <<[[Unzip.window_create()]] set other fields>>
+  }
+@
+%old: was taking a size argument, but it was unused
+
+
+% automata zstream
 <<type Unzip.state>>=
 type state =
   | Head
+
   | Block
   | CData
-  | Flat
-  | Crc
-  | Dist
-  | DistOne
+
   | Done
+  <<[[Unzip.state]] other cases>>
 @
 
+% zlib stream
 <<type Unzip.t>>=
 type t = {
-  mutable znbits : int;
-  mutable zbits : int;
-  mutable zstate : state;
-  mutable zfinal : bool;
-  mutable zhuffman : huffman;
-  mutable zhuffdist : huffman option;
-  mutable zlen : int;
-  mutable zdist : int;
-  mutable zneeded : int;
-  mutable zoutput : bytes;
-  mutable zoutpos : int;
-  zinput : IO.input;
-  zlengths : int array;
-  zwindow : window;
+  mutable zstate    : state;
+
+  mutable zhuffman  : huffman;
+  zwindow  : window;
+
+  (** input *)
+  zinput   : IO.input;
+  mutable zneeded   : int;
+
+  (** output *)
+  mutable zoutput   : bytes;
+  mutable zoutpos   : int;
+
+  <<[[Unzip.t]] other fields>>
 }
 @
+
+<<[[Unzip.t]] other fields>>=
+mutable zfinal    : bool;
+@
+% final block (will do different things when read end-of-block if it
+% is end-of-_final_-block
+
+
+\subsection{Error management}
 
 <<type Unzip.error_msg>>=
 type error_msg =
@@ -7675,200 +7788,31 @@ type error_msg =
 <<exception Unzip.Error>>=
 exception Error of error_msg
 @
+% classic Leroy style error management (except miss the [[ppf]] error printer)
 
 <<function Unzip.error>>=
 let error msg = raise (Error msg)
 @
 
-<<function Unzip.tree_depth>>=
-let rec tree_depth = function
-  | Found _ -> 0
-  | NeedBits _ -> assert false
-  | NeedBit (a,b) ->
-    1 + min (tree_depth a) (tree_depth b)
+\subsection{IO helpers}
+
+\subsubsection{Input bits helpers}
+
+<<[[Unzip.t]] other fields>>=
+(** usually a byte, but can contained more *)
+mutable zbits     : int;
+(** unread (not consumed) bits in zbits (usually 0..8, but can be more) *)
+mutable znbits    : int;
+@
+\l could use byte type? (char)
+
+<<function Unzip.reset_bits>>=
+let reset_bits z =
+  z.zbits <- 0;
+  z.znbits <- 0
 @
 
-<<function Unzip.tree_compress>>=
-let rec tree_compress t =
-  match tree_depth t with
-  | 0 -> t
-  | 1 ->
-    (match t with
-    | NeedBit (a,b) -> NeedBit (tree_compress a,tree_compress b)
-    | _ -> assert false)
-  | d ->
-    let size = 1 lsl d in
-    let tbl = Array.make size (Found (-1)) in
-    tree_walk tbl 0 0 d t;
-    NeedBits (d,tbl)
 
-and tree_walk tbl p cd d = function
-  | NeedBit (a,b) when d > 0 ->
-    tree_walk tbl p (cd + 1) (d-1) a;
-    tree_walk tbl (p lor (1 lsl cd)) (cd + 1) (d-1) b;
-  | t ->
-    Array.set tbl p (tree_compress t)
-@
-
-<<function Unzip.make_huffman>>=
-let make_huffman lengths pos nlengths maxbits =
-  let counts = Array.make maxbits 0 in
-  for i = 0 to nlengths - 1 do
-    let p = Array.unsafe_get lengths (i + pos) in
-    if p >= maxbits then error Invalid_huffman;
-    Array.unsafe_set counts p (Array.unsafe_get counts p + 1);
-  done;
-  let code = ref 0 in
-  let tmp = Array.make maxbits 0 in
-  for i = 1 to maxbits - 2 do
-    code := (!code + Array.unsafe_get counts i) lsl 1;
-    Array.unsafe_set tmp i !code;
-  done;
-  let bits = Hashtbl.create 0 in
-  for i = 0 to nlengths - 1 do
-    let l = Array.unsafe_get lengths (i + pos) in
-    if l <> 0 then begin
-      let n = Array.unsafe_get tmp (l - 1) in
-      Array.unsafe_set tmp (l - 1) (n + 1);
-      Hashtbl.add bits (n,l) i;
-    end;
-  done;
-  let rec tree_make v l =
-    if l > maxbits then error Invalid_huffman;
-    try
-      Found (Hashtbl.find bits (v,l))
-    with
-      Not_found ->
-        NeedBit (tree_make (v lsl 1) (l + 1) , tree_make (v lsl 1 lor 1) (l + 1))
-  in
-  tree_compress (NeedBit (tree_make 0 1 , tree_make 1 1))
-@
-
-<<function Unzip.adler32_create>>=
-let adler32_create() = {
-  a1 = 1;
-  a2 = 0;
-}
-@
-
-<<function Unzip.adler32_update>>=
-let adler32_update a s p l =
-  let p = ref p in
-  for i = 0 to l - 1 do
-    let c = int_of_char (Bytes.unsafe_get s !p) in
-    a.a1 <- (a.a1 + c) mod 65521;
-    a.a2 <- (a.a2 + a.a1) mod 65521;
-    incr p;
-  done
-@
-
-<<function Unzip.adler32_read>>=
-let adler32_read ch =
-  let a2a = IO.read_byte ch in
-  let a2b = IO.read_byte ch in
-  let a1a = IO.read_byte ch in
-  let a1b = IO.read_byte ch in
-  {
-    a1 = (a1a lsl 8) lor a1b;
-    a2 = (a2a lsl 8) lor a2b;
-  }
-@
-
-<<constant Unzip.window_size>>=
-let window_size = 1 lsl 15
-@
-
-<<constant Unzip.buffer_size>>=
-let buffer_size = 1 lsl 16
-@
-
-<<function Unzip.window_create>>=
-let window_create size = {
-    wbuffer = Bytes.create buffer_size;
-    wpos = 0;
-    wcrc = adler32_create()
-  }
-@
-
-<<function Unzip.window_slide>>=
-let window_slide w = 
-  adler32_update w.wcrc w.wbuffer 0 window_size;
-  let b = Bytes.create buffer_size in
-  w.wpos <- w.wpos - window_size;
-  Bytes.unsafe_blit w.wbuffer window_size b 0 w.wpos;
-  w.wbuffer <- b
-@
-
-<<function Unzip.window_add_bytes>>=
-let window_add_bytes w s p len =
-  if w.wpos + len > buffer_size then window_slide w;
-  Bytes.unsafe_blit s p w.wbuffer w.wpos len;
-  w.wpos <- w.wpos + len
-@
-
-<<function Unzip.window_add_char>>=
-let window_add_char w c =
-  if w.wpos = buffer_size then window_slide w;
-  Bytes.unsafe_set w.wbuffer w.wpos c;
-  w.wpos <- w.wpos + 1
-@
-
-<<function Unzip.window_get_last_char>>=
-let window_get_last_char w =
-  Bytes.unsafe_get w.wbuffer (w.wpos - 1)
-@
-
-<<function Unzip.window_available>>=
-let window_available w =
-  w.wpos
-@
-
-<<function Unzip.window_checksum>>=
-let window_checksum w =
-  adler32_update w.wcrc w.wbuffer 0 w.wpos;
-  w.wcrc
-@
-
-<<constant Unzip.len_extra_bits_tbl>>=
-let len_extra_bits_tbl = [|0;0;0;0;0;0;0;0;1;1;1;1;2;2;2;2;3;3;3;3;4;4;4;4;5;5;5;5;0;-1;-1|]
-@
-
-<<constant Unzip.len_base_val_tbl>>=
-let len_base_val_tbl = [|3;4;5;6;7;8;9;10;11;13;15;17;19;23;27;31;35;43;51;59;67;83;99;115;131;163;195;227;258|]
-@
-
-<<constant Unzip.dist_extra_bits_tbl>>=
-let dist_extra_bits_tbl = [|0;0;0;0;1;1;2;2;3;3;4;4;5;5;6;6;7;7;8;8;9;9;10;10;11;11;12;12;13;13;-1;-1|]
-@
-
-<<constant Unzip.dist_base_val_tbl>>=
-let dist_base_val_tbl = [|1;2;3;4;5;7;9;13;17;25;33;49;65;97;129;193;257;385;513;769;1025;1537;2049;3073;4097;6145;8193;12289;16385;24577|]
-@
-
-<<constant Unzip.code_lengths_pos>>=
-let code_lengths_pos = [|16;17;18;0;8;7;9;6;10;5;11;4;12;3;13;2;14;1;15|]
-@
-
-<<constant Unzip.fixed_huffman>>=
-let fixed_huffman = make_huffman (Array.init 288 (fun n ->
-                  if n <= 143 then 8
-                  else if n <= 255 then 9
-                  else if n <= 279 then 7
-                  else 8
-                )) 0 288 10
-@
-
-<<function Unzip.get_bits>>=
-let get_bits z n =
-  while z.znbits < n do
-    z.zbits <- z.zbits lor ((IO.read_byte z.zinput) lsl z.znbits);
-    z.znbits <- z.znbits + 8;
-  done;
-  let b = z.zbits land (1 lsl n - 1) in
-  z.znbits <- z.znbits - n;
-  z.zbits <- z.zbits lsr n;
-  b
-@
 
 <<function Unzip.get_bit>>=
 let get_bit z =
@@ -7881,7 +7825,405 @@ let get_bit z =
   z.zbits <- z.zbits lsr 1;
   b
 @
+\l again could just call get_bits z 1?
 
+<<function Unzip.get_bits>>=
+let get_bits z n =
+  while z.znbits < n do
+    z.zbits <- z.zbits lor ((IO.read_byte z.zinput) lsl z.znbits);
+    z.znbits <- z.znbits + 8;
+  done;
+  let b = z.zbits land (1 lsl n - 1) in
+  z.znbits <- z.znbits - n;
+  z.zbits <- z.zbits lsr n;
+  b
+@
+\l could sanity check n < Int.bit_size
+
+% get_rev_bits later
+
+
+\subsubsection{Output helpers}
+
+<<function Unzip.add_char>>=
+let add_char z c =
+  <<[[Unzip.add_char()]] add character to window>>
+  Bytes.unsafe_set z.zoutput z.zoutpos c;
+  z.zneeded <- z.zneeded - 1;
+  z.zoutpos <- z.zoutpos + 1
+@
+\l why not call add_bytes with 1?
+\l could use safe version. No need optimize those Bytes.set
+
+<<function Unzip.add_bytes>>=
+let add_bytes z s p l =
+  <<[[Unzip.add_bytes()]] add bytes to window>>
+  Bytes.unsafe_blit s p z.zoutput z.zoutpos l;
+  z.zneeded <- z.zneeded - l;
+  z.zoutpos <- z.zoutpos + l
+@
+
+% will see window stuff later.
+
+\subsection{Huffman trees}
+
+<<function Unzip.apply_huffman>>=
+let rec apply_huffman z = function
+  | Found n -> n
+  | NeedBit (a,b) -> apply_huffman z (if get_bit z then b else a)
+ <<[[Unzip.apply_huffman()]] other cases>>
+@
+
+%\subsubsection{Building an huffman tree}
+
+<<constant Unzip.fixed_huffman>>=
+let fixed_huffman = 
+  make_huffman (Array.init 288 (fun n ->
+    if n <= 143 then 8
+    else if n <= 255 then 9
+    else if n <= 279 then 7
+    else 8
+  )) 0 288 10
+@
+% longer codelengths for chars between 144 and 255, because less used
+% chars? and then use less bits for lz77 length/distance
+
+% See deflate article, if put rules on how to build huffman tree, then
+% an huffman tree can be encoded by just giving the codelengths for each
+% character of the alphabet.
+
+% pos is usually 0. Not 0 only for some calls for dynamic huffman.
+<<function Unzip.make_huffman>>=
+let make_huffman lengths pos nlengths maxbits =
+
+  let counts = Array.make maxbits 0 in
+  for i = 0 to nlengths - 1 do
+    let p = Array.unsafe_get lengths (i + pos) in
+    <<[[Unzip.make_huffman()]] sanity check codelength [[p]]>>
+    Array.unsafe_set counts p (Array.unsafe_get counts p + 1);
+  done;
+
+  let code = ref 0 in
+  let tmp = Array.make maxbits 0 in
+  for i = 1 to maxbits - 2 do
+    code := (!code + Array.unsafe_get counts i) lsl 1;
+    Array.unsafe_set tmp i !code;
+  done;
+
+  let bits = Hashtbl.create 0 in
+  for i = 0 to nlengths - 1 do
+    let l = Array.unsafe_get lengths (i + pos) in
+    if l <> 0 then begin
+      let n = Array.unsafe_get tmp (l - 1) in
+      Array.unsafe_set tmp (l - 1) (n + 1);
+      Hashtbl.add bits (n,l) i;
+    end;
+  done;
+
+  <<function Unzip.tree_make>>
+  tree_compress 
+    (NeedBit (tree_make 0 1, tree_make 1 1))
+@
+\t need more LP split, not trivial
+
+<<function Unzip.tree_make>>=
+let rec tree_make v l =
+  <<[[Unzip.tree_make()]] sanity check [[l]]>>
+  try
+    Found (Hashtbl.find bits (v,l))
+  with
+    Not_found ->
+      NeedBit (tree_make (v lsl 1) (l + 1) , tree_make (v lsl 1 lor 1) (l + 1))
+in
+@
+
+<<[[Unzip.tree_make()]] sanity check [[l]]>>=
+if l > maxbits then error Invalid_huffman;
+@
+
+<<[[Unzip.make_huffman()]] sanity check codelength [[p]]>>=
+if p >= maxbits then error Invalid_huffman;
+@
+\subsection{Sliding Window back references}
+
+<<[[Unzip.add_char()]] add character to window>>=
+window_add_char z.zwindow c;
+@
+<<[[Unzip.add_bytes()]] add bytes to window>>=
+window_add_bytes z.zwindow s p l;
+@
+
+<<function Unzip.window_add_char>>=
+let window_add_char w c =
+  <<[[Unzip.window_add_char()]] slide window if reached end of buffer>>
+  Bytes.unsafe_set w.wbuffer w.wpos c;
+  w.wpos <- w.wpos + 1
+@
+<<function Unzip.window_add_bytes>>=
+let window_add_bytes w s p len =
+  <<[[Unzip.window_add_bytes()]] slide window if reached end of buffer>>
+  Bytes.unsafe_blit s p w.wbuffer w.wpos len;
+  w.wpos <- w.wpos + len
+@
+
+
+<<[[Unzip.window_add_char()]] slide window if reached end of buffer>>=
+if w.wpos = buffer_size 
+then window_slide w;
+@
+<<[[Unzip.window_add_bytes()]] slide window if reached end of buffer>>=
+if w.wpos + len > buffer_size 
+then window_slide w;
+@
+
+<<function Unzip.window_slide>>=
+let window_slide w = 
+  <<Unzip.window_slide()]] update crc before blit>>
+  let b = Bytes.create buffer_size in
+  w.wpos <- w.wpos - window_size;
+  Bytes.unsafe_blit w.wbuffer window_size b 0 w.wpos;
+  w.wbuffer <- b
+@
+\t why need 64K buffer then? if create new buffer each time anyway?
+
+% inflate_loop (when in Block and n > 256) -> <>
+<<function Unzip.window_available>>=
+let window_available w =
+  w.wpos
+@
+
+\subsection{Entry point}
+
+%trans: now ready finally for full algorithm.
+
+% inflate means decompress
+
+<<function Unzip.inflate>>=
+let inflate ?(header=true) ch =
+  let z = inflate_init ~header ch in
+  let s = Bytes.create 1 in
+  IO.create_in
+    ~input:(fun s p l ->
+      let n = inflate_data z s p l in
+      if n = 0 
+      then raise IO.No_more_input;
+      n
+    )
+    ~close:(fun () ->
+      IO.close_in ch
+    )
+    (** special case of ~input for 1 byte *)
+    ~read:(fun() ->
+      let l = inflate_data z s 0 1 in
+      if l = 1 
+      then Bytes.unsafe_get s 0 
+      else raise IO.No_more_input
+    )
+@
+% IO.create_in use a growing byte buffer!
+
+<<signature Unzip.inflate_init>>=
+val inflate_init : ?header:bool -> IO.input -> t
+@
+<<function Unzip.inflate_init>>=
+let inflate_init ?(header=true) ch = 
+  {
+    zstate = (if header then Head else Block);
+    zinput = ch;
+    zneeded = 0;
+    zfinal = false;
+
+    zoutput = Bytes.empty;
+    zoutpos = 0;
+
+    zhuffman = fixed_huffman;
+    zhuffdist = None;
+
+    zwindow = window_create ();
+
+    zbits = 0;
+    znbits = 0;
+
+    zlen = 0;
+    zdist = 0;
+    zlengths = Array.make 19 (-1);
+  }
+@
+%old:    zwindow = window_create (1 lsl 15) but argument was not used and
+% anyway he should have used window_size instead of this hardcoded constant
+
+
+<<signature Unzip.inflate_data>>=
+val inflate_data : t -> bytes -> int -> int -> int
+@
+<<function Unzip.inflate_data>>=
+let inflate_data z s pos len =
+  <<[[Unzip.inflate_data()]] sanity check parameters>>
+  z.zneeded <- len;
+  z.zoutpos <- pos;
+  z.zoutput <- s;
+  try
+    if len > 0 
+    then inflate_loop z;
+    len - z.zneeded
+  with IO.No_more_input -> error Truncated_data
+@
+% return number of characters consumed, at the end
+% zneeded should be 0 so we should return len (unless found
+% end of block earlier than len)
+
+<<[[Unzip.inflate_data()]] sanity check parameters>>=
+if pos < 0 || len < 0 || pos + len > Bytes.length s 
+then invalid_arg "inflate_data";
+@
+
+
+<<function Unzip.inflate_loop>>=
+let rec inflate_loop z =
+  match z.zstate with
+  <<[[Unzip.inflate_loop()]] match state cases>>
+@
+
+\subsubsection{Head}
+
+% See RFC1950 and zlib stream format
+<<[[Unzip.inflate_loop()]] match state cases>>=
+| Head ->
+  let cmf = IO.read_byte z.zinput in
+  <<[[Unzip.inflate_loop()]] when in Head state, sanity check [[cmf]]>>
+  let flg = IO.read_byte z.zinput in
+  <<[[Unzip.inflate_loop()]] when in Head state, sanity check [[flg]]>>
+  z.zstate <- Block;
+  inflate_loop z
+@
+%  (*let fcheck = flg land 31 in*)
+%  (*let flevel = flg lsr 6 in*)
+
+% cmf compression mode and flag?
+
+<<[[Unzip.inflate_loop()]] when in Head state, sanity check [[cmf]]>>=
+let cm     = cmf land 15 in
+let cinfo  = cmf lsr 4 in
+if cm <> 8 || cinfo <> 7 
+then error Invalid_data;
+@
+% see RFC 1950? 
+% cm for 'compression method'
+% https://stackoverflow.com/questions/20762094/how-are-zlib-gzip-and-zip-related-what-do-they-have-in-common-and-how-are-they/20765054#20765054
+% cm = 8 is for deflate format
+% cinfo = 7 = window size? (32K)?
+
+<<[[Unzip.inflate_loop()]] when in Head state, sanity check [[flg]]>>=
+let fdict = flg land 32 <> 0 in
+if (cmf lsl 8 + flg) mod 31 <> 0 
+then error Invalid_data;
+if fdict 
+then error Unsupported_dictionary;
+@
+% see RFC 1950?
+
+\subsubsection{Block}
+
+<<[[Unzip.inflate_loop()]] match state cases>>=
+| Block ->
+  z.zfinal <- get_bit z;
+  let btype = get_bits z 2 in
+  (match btype with
+  <<[[Unzip.inflate_loop()]] when in Block state, match block type cases>>
+  | _ ->
+    error Invalid_data
+  )
+@
+% final block, useful when reach end of block in CData
+
+% get_bit first call will set z.bits buffer.
+
+<<[[Unzip.inflate_loop()]] when in Block state, match block type cases>>=
+| 1 -> (* fixed Huffman *)
+  z.zhuffman <- fixed_huffman;
+  z.zhuffdist <- None;
+  z.zstate <- CData;
+  inflate_loop z
+@
+
+
+\subsubsection{CData}
+
+<<[[Unzip.inflate_loop()]] match state cases>>=
+| CData ->
+  match apply_huffman z z.zhuffman with
+  <<[[Unzip.inflate_loop()]] when in CData state, match apply huffman cases>>
+@
+% So first compression here, huffman for alphabet encoding
+
+<<[[Unzip.inflate_loop()]] when in CData state, match apply huffman cases>>=
+| n when n < 256 ->
+  add_char z (Char.unsafe_chr n);
+  if z.zneeded > 0  
+  then inflate_loop z
+@
+% byte as-is
+
+<<[[Unzip.inflate_loop()]] when in CData state, match apply huffman cases>>=
+| 256 ->
+  z.zstate <- if z.zfinal then Crc else Block;
+  inflate_loop z
+@
+% end of block character
+
+% lz77 backref. more complex.
+<<[[Unzip.inflate_loop()]] when in CData state, match apply huffman cases>>=
+| n ->
+  let n = n - 257 in
+  <<[[Unzip.inflate_loop()]] when in CData state, when backref, compute zlen>>
+  <<[[Unzip.inflate_loop()]] when in CData state, when backref, compute zdist>>
+
+  if z.zdist > window_available z.zwindow 
+  then error Invalid_data;
+  z.zstate <- (if z.zdist = 1 then DistOne else Dist);
+  inflate_loop z
+@
+% So second compression here, lz77 sliding window backref
+
+<<[[Unzip.t]] other fields>>=
+mutable zlen      : int;
+@
+<<[[Unzip.t]] other fields>>=
+mutable zdist     : int;
+@
+
+\paragraph{[[zlen]]}
+
+<<[[Unzip.inflate_loop()]] when in CData state, when backref, compute zlen>>=
+let extra_bits = Array.unsafe_get len_extra_bits_tbl n in
+if extra_bits = -1 
+then error Invalid_data;
+z.zlen <- (Array.unsafe_get len_base_val_tbl n) + (get_bits z extra_bits);
+@
+
+<<constant Unzip.len_extra_bits_tbl>>=
+let len_extra_bits_tbl = [|0;0;0;0;0;0;0;0;1;1;1;1;2;2;2;2;3;3;3;3;4;4;4;4;5;5;5;5;0;-1;-1|]
+@
+
+<<constant Unzip.len_base_val_tbl>>=
+let len_base_val_tbl = [|3;4;5;6;7;8;9;10;11;13;15;17;19;23;27;31;35;43;51;59;67;83;99;115;131;163;195;227;258|]
+@
+
+\paragraph{[[zdist]]}
+
+<<[[Unzip.inflate_loop()]] when in CData state, when backref, compute zdist>>=
+let dist_code = 
+  match z.zhuffdist with 
+  | None -> get_rev_bits z 5 
+  <<[[Unzip.inflate_loop()]] compute dist_code, match [[zhuffdist]] cases>>
+in
+let extra_bits = Array.unsafe_get dist_extra_bits_tbl dist_code in
+if extra_bits = -1 
+then error Invalid_data;
+z.zdist <- (Array.unsafe_get dist_base_val_tbl dist_code) + (get_bits z extra_bits);
+@
+
+% for distance
 <<function Unzip.get_rev_bits>>=
 let rec get_rev_bits z n =
   if n = 0 then
@@ -7892,26 +8234,56 @@ let rec get_rev_bits z n =
     get_rev_bits z (n-1)
 @
 
-<<function Unzip.reset_bits>>=
-let reset_bits z =
-  z.zbits <- 0;
-  z.znbits <- 0
+<<constant Unzip.dist_extra_bits_tbl>>=
+let dist_extra_bits_tbl = [|0;0;0;0;1;1;2;2;3;3;4;4;5;5;6;6;7;7;8;8;9;9;10;10;11;11;12;12;13;13;-1;-1|]
 @
 
-<<function Unzip.add_bytes>>=
-let add_bytes z s p l =
-  window_add_bytes z.zwindow s p l;
-  Bytes.unsafe_blit s p z.zoutput z.zoutpos l;
-  z.zneeded <- z.zneeded - l;
-  z.zoutpos <- z.zoutpos + l
+<<constant Unzip.dist_base_val_tbl>>=
+let dist_base_val_tbl = [|1;2;3;4;5;7;9;13;17;25;33;49;65;97;129;193;257;385;513;769;1025;1537;2049;3073;4097;6145;8193;12289;16385;24577|]
 @
 
-<<function Unzip.add_char>>=
-let add_char z c =
-  window_add_char z.zwindow c;
-  Bytes.unsafe_set z.zoutput z.zoutpos c;
-  z.zneeded <- z.zneeded - 1;
-  z.zoutpos <- z.zoutpos + 1
+\subsubsection{Dist}
+
+<<[[Unzip.state]] other cases>>=
+| Dist
+@
+
+<<[[Unzip.inflate_loop()]] match state cases>>=
+| Dist ->
+  while z.zlen > 0 && z.zneeded > 0 do
+    let len = min z.zneeded (min z.zlen z.zdist) in
+    add_dist z z.zdist len;
+    z.zlen <- z.zlen - len;
+  done;
+  if z.zlen = 0 
+  then z.zstate <- CData;
+  if z.zneeded > 0 
+  then inflate_loop z
+@
+% The loop is because zlen can be more than what is available in
+% the sliding window when they use the trick of repeating sequence.
+
+<<function Unzip.add_dist>>=
+let add_dist z d l =
+  add_bytes z z.zwindow.wbuffer (z.zwindow.wpos - d) l
+@
+% finally.
+
+
+<<[[Unzip.state]] other cases>>=
+| DistOne
+@
+% optimization?
+
+<<[[Unzip.inflate_loop()]] match state cases>>=
+| DistOne ->
+  let len = min z.zlen z.zneeded in
+  add_dist_one z len;
+  z.zlen <- z.zlen - len;
+  if z.zlen = 0 
+  then z.zstate <- CData;
+  if z.zneeded > 0 
+  then inflate_loop z
 @
 
 <<function Unzip.add_dist_one>>=
@@ -7921,16 +8293,195 @@ let add_dist_one z n =
   add_bytes z s 0 n
 @
 
-<<function Unzip.add_dist>>=
-let add_dist z d l =
-  add_bytes z z.zwindow.wbuffer (z.zwindow.wpos - d) l
+<<function Unzip.window_get_last_char>>=
+let window_get_last_char w =
+  Bytes.unsafe_get w.wbuffer (w.wpos - 1)
 @
 
-<<function Unzip.apply_huffman>>=
-let rec apply_huffman z = function
-  | Found n -> n
-  | NeedBit (a,b) -> apply_huffman z (if get_bit z then b else a)
-  | NeedBits (n,t) -> apply_huffman z (Array.unsafe_get t (get_bits z n))
+
+
+\subsubsection{CRC}
+
+% when end of final block
+<<[[Unzip.state]] other cases>>=
+| Crc
+@
+
+<<[[Unzip.inflate_loop()]] match state cases>>=
+| Crc ->
+  <<[[Unzip.inflate_loop()]] when in Crc state, check adler32 checksum>>
+  z.zstate <- Done;
+  inflate_loop z
+@
+
+\subsubsection{Done}
+
+<<[[Unzip.inflate_loop()]] match state cases>>=
+| Done ->
+  ()
+@
+
+
+\subsection{Advanced features}
+
+\subsubsection{Adler32 CRC}
+
+% Communication? Redundancy Check?
+
+%A painless guide to CRC error detection algorithms
+%http://www.zlib.net/crc_v3.txt
+
+% Part of zlib, not deflate.
+
+% faster than CRC32 algorithm and low probability of undetected errors
+<<type Unzip.adler32>>=
+type adler32 = {
+  mutable a1 : int;
+  mutable a2 : int;
+}
+@
+
+<<[[Unzip.window]] other fields>>=
+wcrc : adler32;
+@
+% See Appendix 9 of RFC 1950
+
+<<[[Unzip.window_create()]] set other fields>>=
+wcrc = adler32_create();
+@
+
+<<function Unzip.adler32_create>>=
+let adler32_create() = {
+  a1 = 1;
+  a2 = 0;
+}
+@
+
+<<Unzip.window_slide()]] update crc before blit>>=
+adler32_update w.wcrc w.wbuffer 0 window_size;
+@
+
+% libflate contains more optimized code where some loops
+% are probably unfolded.
+
+<<function Unzip.adler32_update>>=
+let adler32_update a s p l =
+  let p = ref p in
+  for i = 0 to l - 1 do
+    let c = int_of_char (Bytes.unsafe_get s !p) in
+    a.a1 <- (a.a1 + c) mod 65521;
+    a.a2 <- (a.a2 + a.a1) mod 65521;
+    incr p;
+  done
+@
+% let base = 65521 largest primer smaller than 65536
+
+% Logic behind those 2 numbers? Proof that it works better than other CRC?
+
+<<[[Unzip.inflate_loop()]] when in Crc state, check adler32 checksum>>=
+let calc = window_checksum z.zwindow in
+let crc = adler32_read z.zinput in
+if calc <> crc 
+then error Invalid_crc;
+@
+
+<<function Unzip.window_checksum>>=
+let window_checksum w =
+  adler32_update w.wcrc w.wbuffer 0 w.wpos;
+  w.wcrc
+@
+
+
+% IO in zlib stream
+<<function Unzip.adler32_read>>=
+let adler32_read ch =
+  let a2a = IO.read_byte ch in
+  let a2b = IO.read_byte ch in
+  let a1a = IO.read_byte ch in
+  let a1b = IO.read_byte ch in
+  {
+    a1 = (a1a lsl 8) lor a1b;
+    a2 = (a2a lsl 8) lor a2b;
+  }
+@
+
+
+\subsubsection{No compression block type}
+
+<<[[Unzip.inflate_loop()]] when in Block state, match block type cases>>=
+| 0 -> (* no compression *)
+  z.zlen <- IO.LittleEndian.read_ui16 z.zinput;
+  let nlen = IO.LittleEndian.read_ui16 z.zinput in
+  if nlen <> 0xffff - z.zlen 
+  then error Invalid_data;
+  z.zstate <- Flat;
+  inflate_loop z;
+  reset_bits z
+@
+
+% compressed already compressed? will lose space, so better
+% acknowledge that sometimes better not do anything
+
+<<[[Unzip.state]] other cases>>=
+| Flat
+@
+
+% uncompressed block
+<<[[Unzip.inflate_loop()]] match state cases>>=
+| Flat ->
+  let rlen = min z.zlen z.zneeded in
+  let str = IO.nread z.zinput rlen in
+  let len = Bytes.length str in
+  z.zlen <- z.zlen - len;
+  add_bytes z str 0 len;
+  if z.zlen = 0 
+  then z.zstate <- (if z.zfinal then Crc else Block);
+  if z.zneeded > 0 
+  then inflate_loop z
+@
+
+\subsubsection{Specialized huffman tree}
+
+% Maybe more complex part of DEFLATE, the way the huffman tree is encoded.
+
+% Dynamic Huffman vs static huffman
+
+<<[[Unzip.inflate_loop()]] when in Block state, match block type cases>>=
+| 2 -> (* dynamic Huffman *)
+  let hlit = get_bits z 5 + 257 in
+  let hdist = get_bits z 5 + 1 in
+  let hclen = get_bits z 4 + 4 in
+  for i = 0 to hclen - 1 do
+    Array.unsafe_set z.zlengths (Array.unsafe_get code_lengths_pos i) (get_bits z 3);
+  done;
+  for i = hclen to 18 do
+    Array.unsafe_set z.zlengths (Array.unsafe_get code_lengths_pos i) 0;
+  done;
+  z.zhuffman <- make_huffman z.zlengths 0 19 8;
+  let lengths = Array.make (hlit + hdist) 0 in
+  inflate_lengths z lengths (hlit + hdist);
+  z.zhuffdist <- Some (make_huffman lengths hlit hdist 16);
+  z.zhuffman <- make_huffman lengths 0 hlit 16;      
+  z.zstate <- CData;
+  inflate_loop z
+@
+
+<<[[Unzip.t]] other fields>>=
+zlengths : int array;
+@
+
+
+<<[[Unzip.t]] other fields>>=
+mutable zhuffdist : huffman option;
+@
+
+<<[[Unzip.inflate_loop()]] compute dist_code, match [[zhuffdist]] cases>>=
+| Some h -> 
+  apply_huffman z h
+@
+
+<<constant Unzip.code_lengths_pos>>=
+let code_lengths_pos = [|16;17;18;0;8;7;9;6;10;5;11;4;12;3;13;2;14;1;15|]
 @
 
 <<function Unzip.inflate_lengths>>=
@@ -7963,171 +8514,50 @@ let inflate_lengths z a max =
   done
 @
 
-<<function Unzip.inflate_loop>>=
-let rec inflate_loop z =
-  match z.zstate with
-  | Head ->
-    let cmf = IO.read_byte z.zinput in
-    let cm = cmf land 15 in
-    let cinfo = cmf lsr 4 in
-    if cm <> 8 || cinfo <> 7 then error Invalid_data;
-    let flg = IO.read_byte z.zinput in
-    (*let fcheck = flg land 31 in*)
-    let fdict = flg land 32 <> 0 in
-    (*let flevel = flg lsr 6 in*)
-    if (cmf lsl 8 + flg) mod 31 <> 0 then error Invalid_data;
-    if fdict then error Unsupported_dictionary;
-    z.zstate <- Block;
-    inflate_loop z
-  | Crc ->
-    let calc = window_checksum z.zwindow in
-    let crc = adler32_read z.zinput in
-    if calc <> crc then error Invalid_crc;
-    z.zstate <- Done;
-    inflate_loop z
-  | Done ->
-    ()
-  | Block ->
-    z.zfinal <- get_bit z;
-    let btype = get_bits z 2 in
-    (match btype with
-    | 0 -> (* no compression *)
-      z.zlen <- IO.LittleEndian.read_ui16 z.zinput;
-      let nlen = IO.LittleEndian.read_ui16 z.zinput in
-      if nlen <> 0xffff - z.zlen then error Invalid_data;
-      z.zstate <- Flat;
-      inflate_loop z;
-      reset_bits z
-    | 1 -> (* fixed Huffman *)
-      z.zhuffman <- fixed_huffman;
-      z.zhuffdist <- None;
-      z.zstate <- CData;
-      inflate_loop z
-    | 2 -> (* dynamic Huffman *)
-      let hlit = get_bits z 5 + 257 in
-      let hdist = get_bits z 5 + 1 in
-      let hclen = get_bits z 4 + 4 in
-      for i = 0 to hclen - 1 do
-        Array.unsafe_set z.zlengths (Array.unsafe_get code_lengths_pos i) (get_bits z 3);
-      done;
-      for i = hclen to 18 do
-        Array.unsafe_set z.zlengths (Array.unsafe_get code_lengths_pos i) 0;
-      done;
-      z.zhuffman <- make_huffman z.zlengths 0 19 8;
-      let lengths = Array.make (hlit + hdist) 0 in
-      inflate_lengths z lengths (hlit + hdist);
-      z.zhuffdist <- Some (make_huffman lengths hlit hdist 16);
-      z.zhuffman <- make_huffman lengths 0 hlit 16;      
-      z.zstate <- CData;
-      inflate_loop z
-    | _ ->
-      error Invalid_data)
-  | Flat ->
-    let rlen = min z.zlen z.zneeded in
-    let str = IO.nread z.zinput rlen in
-    let len = Bytes.length str in
-    z.zlen <- z.zlen - len;
-    add_bytes z str 0 len;
-    if z.zlen = 0 then z.zstate <- (if z.zfinal then Crc else Block);
-    if z.zneeded > 0 then inflate_loop z
-  | DistOne ->
-    let len = min z.zlen z.zneeded in
-    add_dist_one z len;
-    z.zlen <- z.zlen - len;
-    if z.zlen = 0 then z.zstate <- CData;
-    if z.zneeded > 0 then inflate_loop z
-  | Dist ->
-    while z.zlen > 0 && z.zneeded > 0 do
-      let len = min z.zneeded (min z.zlen z.zdist) in
-      add_dist z z.zdist len;
-      z.zlen <- z.zlen - len;
-    done;
-    if z.zlen = 0 then z.zstate <- CData;
-    if z.zneeded > 0 then inflate_loop z
-  | CData ->
-    match apply_huffman z z.zhuffman with
-    | n when n < 256 ->
-      add_char z (Char.unsafe_chr n);
-      if z.zneeded > 0 then inflate_loop z
-    | 256 ->
-      z.zstate <- if z.zfinal then Crc else Block;
-      inflate_loop z
-    | n ->
-      let n = n - 257 in
-      let extra_bits = Array.unsafe_get len_extra_bits_tbl n in
-      if extra_bits = -1 then error Invalid_data;
-      z.zlen <- (Array.unsafe_get len_base_val_tbl n) + (get_bits z extra_bits);
-      let dist_code = (match z.zhuffdist with None -> get_rev_bits z 5 | Some h -> apply_huffman z h) in
-      let extra_bits = Array.unsafe_get dist_extra_bits_tbl dist_code in
-      if extra_bits = -1 then error Invalid_data;
-      z.zdist <- (Array.unsafe_get dist_base_val_tbl dist_code) + (get_bits z extra_bits);
-      if z.zdist > window_available z.zwindow then error Invalid_data;
-      z.zstate <- (if z.zdist = 1 then DistOne else Dist);
-      inflate_loop z
+\subsection{Optimizations}
+
+<<[[Unzip.huffman]] cases>>=
+(** Opti *)
+| NeedBits of int * huffman array
+@
+<<[[Unzip.apply_huffman()]] other cases>>=
+| NeedBits (n,t) -> apply_huffman z (Array.unsafe_get t (get_bits z n))
 @
 
-<<signature Unzip.inflate_data>>=
-val inflate_data : t -> bytes -> int -> int -> int
-@
-<<function Unzip.inflate_data>>=
-let inflate_data z s pos len =
-  if pos < 0 || len < 0 || pos + len > Bytes.length s then invalid_arg "inflate_data";
-  z.zneeded <- len;
-  z.zoutpos <- pos;
-  z.zoutput <- s;
-  try
-    if len > 0 then inflate_loop z;
-    len - z.zneeded
-  with
-    IO.No_more_input -> error Truncated_data
+<<function Unzip.tree_compress>>=
+let rec tree_compress t =
+  match tree_depth t with
+  | 0 -> t
+  | 1 ->
+    (match t with
+    | NeedBit (a,b) -> NeedBit (tree_compress a,tree_compress b)
+    | _ -> assert false)
+  | d ->
+    let size = 1 lsl d in
+    let tbl = Array.make size (Found (-1)) in
+    tree_walk tbl 0 0 d t;
+    NeedBits (d,tbl)
+
+and tree_walk tbl p cd d = function
+  | NeedBit (a,b) when d > 0 ->
+    tree_walk tbl p (cd + 1) (d-1) a;
+    tree_walk tbl (p lor (1 lsl cd)) (cd + 1) (d-1) b;
+  | t ->
+    Array.set tbl p (tree_compress t)
 @
 
-<<signature Unzip.inflate_init>>=
-val inflate_init : ?header:bool -> IO.input -> t
+<<function Unzip.tree_depth>>=
+let rec tree_depth = function
+  | Found _ -> 0
+  | NeedBit (a,b) ->
+    1 + min (tree_depth a) (tree_depth b)
+  | NeedBits _ -> assert false
 @
-<<function Unzip.inflate_init>>=
-let inflate_init ?(header=true) ch = 
-  {
-    zfinal = false;
-    zhuffman = fixed_huffman;
-    zhuffdist = None;
-    zlen = 0;
-    zdist = 0;
-    zstate = (if header then Head else Block);
-    zinput = ch;
-    zbits = 0;
-    znbits = 0;
-    zneeded = 0;
-    zoutput = Bytes.empty;
-    zoutpos = 0;
-    zlengths = Array.make 19 (-1);
-    zwindow = window_create (1 lsl 15)
-  }
-@
-
-<<function Unzip.inflate>>=
-let inflate ?(header=true) ch =
-  let z = inflate_init ~header ch in
-  let s = Bytes.create 1 in
-  IO.create_in
-    ~read:(fun() ->
-      let l = inflate_data z s 0 1 in
-      if l = 1 then Bytes.unsafe_get s 0 else raise IO.No_more_input
-    )
-    ~input:(fun s p l ->
-      let n = inflate_data z s p l in
-      if n = 0 then raise IO.No_more_input;
-      n
-    )
-    ~close:(fun () ->
-      IO.close_in ch
-    )
-@
+% so NeedBits used only after tree_compress pass
 
 
 \section{Zip}
 
-%https://www.cs.duke.edu/courses/spring03/cps296.5/papers/ziv_lempel_1977_universal_algorithm.pdf
 
 % entry point:
 <<signature Zlib.compress>>=
@@ -8249,12 +8679,18 @@ let uncompress ?(header = true) refill flush =
     inflate_end zs
 @
 
+
 \section{Diff}
 
+% Basic edit distance algo (see Gusfeld book)
 % \cite{James and McIlroy - 1976}
 % \cite{Myers - 19??}
+%   https://blog.jcoglan.com/2017/02/12/the-myers-diff-algorithm-part-1/
+% patience diff
+%  https://blog.jcoglan.com/2017/09/19/the-patience-diff-algorithm/
 
-%https://blog.jcoglan.com/2017/02/12/the-myers-diff-algorithm-part-1/
+%http://pynash.org/2013/02/26/diff-in-50-lines/
+
 \t use regular types, I say in Requirements ocamlgit does not use adv feature
 
 <<type Diff_myers.common>>=
@@ -8461,8 +8897,13 @@ end
 \section{Diff3}
 % aka merge
 
-%   https://blog.jcoglan.com/2017/05/08/merging-with-diff3/
+% No paper really explaining diff3 algorithm. There is the diffutils manual
+% and some comments in the source code according to Pierce's Diff3 
+% formalization paper.
 
+% A Formal Investigation of Diff3 (Pierce et al.)
+
+% https://blog.jcoglan.com/2017/05/08/merging-with-diff3/
 \chapter{Extra Code}
 
 \ifallcode
