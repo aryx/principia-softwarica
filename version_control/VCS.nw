@@ -8700,6 +8700,8 @@ let uncompress ?(header = true) refill flush =
 
 \section{Diff}
 
+\subsection{Overview}
+
 % Basic edit distance algo (see Gusfield book)
 % \cite{James and McIlroy - 1976}
 % \cite{Myers - 1985}
@@ -8710,6 +8712,98 @@ let uncompress ?(header = true) refill flush =
 %http://pynash.org/2013/02/26/diff-in-50-lines/
 
 \t use regular types, I say in Requirements ocamlgit does not use adv feature
+
+<<signature Diff_basic.diff>>=
+val diff: string array -> string array -> Diff.diff
+@
+
+\subsection{Data structures}
+
+% Saw Diff.diff with Equal | Deleted | Added in chapter X.
+
+\subsection{Edit distance basic algorithm}
+
+
+<<function Diff_basic.diff>>=
+let diff arr1 arr2 =
+  (* opti: string to int *)
+
+  let mat = matrix_distance arr1 arr2 in
+  let trace = traceback_transcript arr1 arr2 mat in
+  List.rev trace
+
+  (* opti: get back string from int *)
+(*
+  let arr1, arr2, revh = hash_strings arr1 arr2 in
+  |> List.map (function 
+      | Diff.Added i -> Diff.Added (revh.(i))
+      | Diff.Deleted i -> Diff.Deleted (revh.(i))
+      | Diff.Equal i -> Diff.Equal (revh.(i))
+  )
+*)
+@
+
+<<function Diff_basic.matrix_distance>>=
+let matrix_distance arr1 arr2 = 
+  let n = Array.length arr1 in
+  let m = Array.length arr2 in 
+  (* this can be big ... *)
+  let mat = Array.make_matrix (n+1) (m+1) 0 in
+  let t i j = 
+    if Array.get arr1 (i-1) = Array.get arr2 (j-1)
+    then 0
+    else 1 
+  in
+  let min3 a b c = min (min a b) c in
+
+  begin
+    for i = 0 to n do
+      mat.(i).(0) <- i
+    done;
+    for j = 0 to m do
+      mat.(0).(j) <- j;
+    done;
+    (* this can be long ... *)
+    for i = 1 to n do
+      for j = 1 to m do
+        mat.(i).(j) <- 
+          min3 (mat.(i).(j-1) + 1) 
+               (mat.(i-1).(j) + 1) 
+               (mat.(i-1).(j-1) + t i j)
+      done
+    done;
+    mat
+  end
+@
+
+<<function Diff_basic.traceback_transcript>>=
+(* extract the traceback from the matrice (Gusfield P221) *)
+let traceback_transcript arr1 arr2 mat =
+  let n = Array.length arr1 in
+  let m = Array.length arr2 in 
+  let get_orig_arr arr i = arr.(i-1) in
+  (* you need Figure 11.3 P222 of Gusfield book to understand the code below *)
+  let rec aux i j =
+    let x = mat.(i).(j) in
+    match () with
+    | _ when i = 0 && j = 0 -> []
+    | _ when i = 0 -> (Diff.Added (get_orig_arr arr2 j))::aux (i) (j-1)
+    | _ when j = 0 -> (Diff.Deleted (get_orig_arr arr1 i))::aux (i-1) (j)
+    | _ when x = mat.(i-1).(j) + 1 -> 
+      (Diff.Deleted (get_orig_arr arr1 i))::aux (i-1) (j)
+    | _ when x = mat.(i).(j-1) + 1 -> 
+      (Diff.Added (get_orig_arr arr2 j))::aux (i) (j-1)
+    | _ -> 
+      if x = mat.(i-1).(j-1)
+      then Diff.Equal (get_orig_arr arr1 (i))::aux (i-1) (j-1)
+      else (Diff.Deleted (get_orig_arr arr1 i))::
+           (Diff.Added (get_orig_arr arr2 j))::
+           aux (i-1) (j-1)
+  in
+  aux n m
+@
+
+\subsection{Myers algorithm}
 
 <<type Diff_myers.common>>=
 (** an element of lcs of seq1 and seq2 *)
