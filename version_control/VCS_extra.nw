@@ -642,7 +642,42 @@ open Common
 <<copyright ocamlgit>>
 open Common
 
+let (/) = Filename.concat
+
 <<function Cmd_test.test_sha1>>
+
+let test_unzip () =
+  Unzip.debug := true;
+  let dir = ".git/objects" in
+  dir |> Repository.walk_dir (fun path dirs files ->
+    files |> List.iter (fun file ->
+      let file = path / file in
+      pr file;
+      let chan = open_in file in
+      let input = IO.input_channel chan in
+      let unzipped = Unzip.inflate input in
+      let _str = IO.read_all unzipped in 
+      ()
+    )
+  )
+
+
+let test_diff file1 file2 =
+  let read_all path = 
+      path |> Common.with_file_in (fun ch ->
+        ch |> IO.input_channel |> IO.read_all
+      )
+  in
+  let content1 = read_all file1 in
+  let content2 = read_all file2 in
+
+  let diffs = Diffs.diff content1 content2 in
+  if not (diffs |> List.for_all (function Diff.Equal _ -> true | _ -> false))
+  then begin
+    pr (spf "diff --git %s %s" file1 file2);
+    (* less: display change of modes *)
+    Diff_unified.show_unified_diff diffs
+  end
 
 <<constant Cmd_test.cmd>>
 
@@ -788,52 +823,6 @@ open Common
 
 \subsection*{[[version_control/diff.ml]]}
 
-%
-%<<function Diff.diff_buggy>>=
-%(*
-%SimpleDiff is buggy!
-%Here is an example of output after an ogit diff (with some debugging 
-%information):
-%
-%diff --git a/authors.txt b/authors.txt
-%["Yoann Padioleau\n"; "\n"; "except \n"; " - lex/ by Xavier Leroy (from ocaml)\n"; " - lib_core/stdlib/ by Xavier Leroy et al. (from ocaml)\n"; " - version_control/sha.ml by Daniel Bunzli (from uuidm)\n"; " - version_control/hexsha.ml by Thomas Gazagnaire (from ocaml-hex)\n"; " - version_control/zlib.ml by Xavier Leroy (from camlzip)\n"; " - version_control/unzip.ml by Nicolas Canasse (from extlib)\n"; " - commons/IO.ml by Nicolas Canasse (from exblib)\n"]
-%["Yoann Padioleau\n"; "\n"; "xxx\n"; "except \n"; " - lex/ by Xavier Leroy (from ocaml)\n"; " - lib_core/stdlib/ by Xavier Leroy et al. (from ocaml)\n"; " - version_control/sha.ml by Daniel Bunzli (from uuidm)\n"; " - version_control/hexsha.ml by Thomas Gazagnaire (from ocaml-hex)\n"; " - version_control/zlib.ml by Xavier Leroy (from camlzip)\n"; " - version_control/unzip.ml by Nicolas Canasse (from extlib)\n"; " - commons/IO.ml by Nicolas Canasse (from exblib)\n"]
-%[(()); Tag1 (("Yoann Padioleau\n")); Tag2 (("\n", "xxx\n", "except \n", " - lex/ by Xavier Leroy (from ocaml)\n", " - lib_core/stdlib/ by Xavier Leroy et al. (from ocaml)\n", " - version_control/sha.ml by Daniel Bunzli (from uuidm)\n", " - version_control/hexsha.ml by Thomas Gazagnaire (from ocaml-hex)\n", " - version_control/zlib.ml by Xavier Leroy (from camlzip)\n", " - version_control/unzip.ml by Nicolas Canasse (from extlib)\n", " - commons/IO.ml by Nicolas Canasse (from exblib)\n"))]
-%+Yoann Padioleau
-% 
-% xxx
-% except 
-%  - lex/ by Xavier Leroy (from ocaml)
-%  - lib_core/stdlib/ by Xavier Leroy et al. (from ocaml)
-%  - version_control/sha.ml by Daniel Bunzli (from uuidm)
-%  - version_control/hexsha.ml by Thomas Gazagnaire (from ocaml-hex)
-%  - version_control/zlib.ml by Xavier Leroy (from camlzip)
-%  - version_control/unzip.ml by Nicolas Canasse (from extlib)
-%  - commons/IO.ml by Nicolas Canasse (from exblib)
-%
-%-----------
-%SimpleDiff says the diff is the addition of 'Yoann Padioleau' but it's not!
-%It's in both content. The diff should be the addition of 'xxx'.
-%*)
-%
-%let diff_buggy str1 str2 =
-%  let xs = split_lines str1 in
-%  let ys = split_lines str2 in
-%  pr2_gen xs;
-%  pr2_gen ys;
-%  let res = SimpleDiff.get_diff (Array.of_list xs) (Array.of_list ys) in
-%  pr2_gen res;
-%  res |> List.map (function
-%    | SimpleDiff.Equal arr   -> 
-%      arr |> Array.to_list |> List.map (fun x -> Equal x)
-%    | SimpleDiff.Deleted arr -> 
-%      arr |> Array.to_list |> List.map (fun x -> Deleted x)
-%    | SimpleDiff.Added arr   -> 
-%      arr |> Array.to_list |> List.map (fun x -> Added x)
-%  )
-%@
-%module SimpleDiff = Diff_simple.Make(String)
-
 %-------------------------------------------------------------
 
 <<version_control/diff.ml>>=
@@ -843,33 +832,6 @@ open Common
 (*****************************************************************************)
 (* Prelude *)
 (*****************************************************************************)
-(* Compute the differences between 2 files line-wise.
- *
- * alternatives:
- *  - simple diff: https://github.com/gjaldon/simple-diff
- *    (an ocaml port of https://github.com/paulgb/simplediff )
- *    http://collaboration.cmc.ec.gc.ca/science/rpn/biblio/ddj/Website/articles/DDJ/1988/8807/8807c/8807c.htm
- *    simple, but no diff -u support by default
- *    and seems buggy!
- *  - myers: https://github.com/leque/ocaml-diff port of
- *    "Eugene Myers, An O(ND) Difference Algorithm and Its Variations, 
- *    Algorithmica Vol. 1 No. 2, pp. 251-266, 1986."
- *    https://stackoverflow.com/questions/42635889/myers-diff-algorithm-vs-hunt-mcilroy-algorithm
- *  - patience diff: https://github.com/janestreet/patdiff
- *    support also colored output, and word diff, but heavily modularized
- *    https://blog.jcoglan.com/2017/09/19/the-patience-diff-algorithm/
- *    https://blog.jcoglan.com/2017/09/28/implementing-patience-diff/
- *  - plan9 diff (in plan9/utilities/string/diff/)
- *    not Myers's diff
- *  - gnu diff (in plan9/ape_cmd/diff)
- *    use Myers?
- *  - http://pynash.org/2013/02/26/diff-in-50-lines/ 
- *    (in python, and talk about python difflib)
- *  - Heckle diff mentionned in diff3.py
- *    "P. Heckel. ``A technique for isolating differences between files.''
- *     Communications of the ACM, Vol. 21, No. 4, page 264, April 1978."
- * 
- *)
 
 (*****************************************************************************)
 (* Types *)
@@ -881,18 +843,6 @@ open Common
 
 <<type Diff.diff>>
 
-(*****************************************************************************)
-(* Helpers *)
-(*****************************************************************************)
-<<function Diff.split_lines>>
-
-(*****************************************************************************)
-(* Entry point *)
-(*****************************************************************************)
-
-<<module Diff.StringDiff>>
-
-<<function Diff.diff>>
 @
 
 
@@ -908,8 +858,6 @@ open Common
 
 <<type Diff.diff>>
 
-
-<<signature Diff.diff>>
 @
 
 
@@ -1200,7 +1148,129 @@ open Common
 <<version_control/diff_unified.mli>>=
 
 <<signature Diff_unified.show_change>>
+
+(* internals *)
+val show_unified_diff: Diff.diff -> unit
 @
+
+
+\subsection*{[[version_control/diffs.ml]]}
+
+%
+%<<function Diff.diff_buggy>>=
+%(*
+%SimpleDiff is buggy!
+%Here is an example of output after an ogit diff (with some debugging 
+%information):
+%
+%diff --git a/authors.txt b/authors.txt
+%["Yoann Padioleau\n"; "\n"; "except \n"; " - lex/ by Xavier Leroy (from ocaml)\n"; " - lib_core/stdlib/ by Xavier Leroy et al. (from ocaml)\n"; " - version_control/sha.ml by Daniel Bunzli (from uuidm)\n"; " - version_control/hexsha.ml by Thomas Gazagnaire (from ocaml-hex)\n"; " - version_control/zlib.ml by Xavier Leroy (from camlzip)\n"; " - version_control/unzip.ml by Nicolas Canasse (from extlib)\n"; " - commons/IO.ml by Nicolas Canasse (from exblib)\n"]
+%["Yoann Padioleau\n"; "\n"; "xxx\n"; "except \n"; " - lex/ by Xavier Leroy (from ocaml)\n"; " - lib_core/stdlib/ by Xavier Leroy et al. (from ocaml)\n"; " - version_control/sha.ml by Daniel Bunzli (from uuidm)\n"; " - version_control/hexsha.ml by Thomas Gazagnaire (from ocaml-hex)\n"; " - version_control/zlib.ml by Xavier Leroy (from camlzip)\n"; " - version_control/unzip.ml by Nicolas Canasse (from extlib)\n"; " - commons/IO.ml by Nicolas Canasse (from exblib)\n"]
+%[(()); Tag1 (("Yoann Padioleau\n")); Tag2 (("\n", "xxx\n", "except \n", " - lex/ by Xavier Leroy (from ocaml)\n", " - lib_core/stdlib/ by Xavier Leroy et al. (from ocaml)\n", " - version_control/sha.ml by Daniel Bunzli (from uuidm)\n", " - version_control/hexsha.ml by Thomas Gazagnaire (from ocaml-hex)\n", " - version_control/zlib.ml by Xavier Leroy (from camlzip)\n", " - version_control/unzip.ml by Nicolas Canasse (from extlib)\n", " - commons/IO.ml by Nicolas Canasse (from exblib)\n"))]
+%+Yoann Padioleau
+% 
+% xxx
+% except 
+%  - lex/ by Xavier Leroy (from ocaml)
+%  - lib_core/stdlib/ by Xavier Leroy et al. (from ocaml)
+%  - version_control/sha.ml by Daniel Bunzli (from uuidm)
+%  - version_control/hexsha.ml by Thomas Gazagnaire (from ocaml-hex)
+%  - version_control/zlib.ml by Xavier Leroy (from camlzip)
+%  - version_control/unzip.ml by Nicolas Canasse (from extlib)
+%  - commons/IO.ml by Nicolas Canasse (from exblib)
+%
+%-----------
+%SimpleDiff says the diff is the addition of 'Yoann Padioleau' but it's not!
+%It's in both content. The diff should be the addition of 'xxx'.
+%*)
+%
+%let diff_buggy str1 str2 =
+%  let xs = split_lines str1 in
+%  let ys = split_lines str2 in
+%  pr2_gen xs;
+%  pr2_gen ys;
+%  let res = SimpleDiff.get_diff (Array.of_list xs) (Array.of_list ys) in
+%  pr2_gen res;
+%  res |> List.map (function
+%    | SimpleDiff.Equal arr   -> 
+%      arr |> Array.to_list |> List.map (fun x -> Equal x)
+%    | SimpleDiff.Deleted arr -> 
+%      arr |> Array.to_list |> List.map (fun x -> Deleted x)
+%    | SimpleDiff.Added arr   -> 
+%      arr |> Array.to_list |> List.map (fun x -> Added x)
+%  )
+%@
+%module SimpleDiff = Diff_simple.Make(String)
+
+%-------------------------------------------------------------
+
+<<version_control/diffs.ml>>=
+<<copyright ocamlgit>>
+open Common
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* Compute the differences between two files line-wise.
+ *
+ * alternatives:
+ *  - Basic diff using simple edit distance algorithm
+ *    but O(nm) time and space complexity (space especially is bad)
+ *  - Simple diff: https://github.com/gjaldon/simple-diff
+ *    (an OCaml port of https://github.com/paulgb/simplediff )
+ *    http://collaboration.cmc.ec.gc.ca/science/rpn/biblio/ddj/Website/articles/DDJ/1988/8807/8807c/8807c.htm
+ *    simple, but no diff -u support by default
+ *    and seems buggy!
+ *  - Hunt and Mcilroy UNIX diff, the original diff program
+ *    rely on pair of lines which are the same in both files
+ *    (but if the two files contain blank lines, then very bad complexity)
+ *  - Myers's diff: https://github.com/leque/ocaml-diff port of
+ *    "Eugene Myers, An O(ND) Difference Algorithm and Its Variations, 
+ *    Algorithmica Vol. 1 No. 2, pp. 251-266, 1986."
+ *    https://stackoverflow.com/questions/42635889/myers-diff-algorithm-vs-hunt-mcilroy-algorithm
+ *    Apparently Ukkonen discovered independently the same algorithm
+ *    Good if the edit distance is small, but very bad if both files are
+ *    very different.
+ *  - Bram Cohen's Patience diff: https://github.com/janestreet/patdiff
+ *    support also colored output, and word diff, but heavily modularized
+ *    https://blog.jcoglan.com/2017/09/19/the-patience-diff-algorithm/
+ *    https://blog.jcoglan.com/2017/09/28/implementing-patience-diff/
+ *  - Plan9 diff (in plan9/utilities/string/diff/)
+ *    not Myers's diff
+ *  - GNU diff (in plan9/ape_cmd/diff)
+ *    is based on Myers's algorithm
+ *  - http://pynash.org/2013/02/26/diff-in-50-lines/ 
+ *    implement Mcilroy in Python (also talk about Python difflib)
+ *  - Heckle diff mentionned in diff3.py
+ *    "P. Heckel. ``A technique for isolating differences between files.''
+ *     Communications of the ACM, Vol. 21, No. 4, page 264, April 1978."
+ * 
+ *)
+
+(*****************************************************************************)
+(* Helpers *)
+(*****************************************************************************)
+<<function Diffs.split_lines>>
+
+(*****************************************************************************)
+(* Entry point *)
+(*****************************************************************************)
+
+<<module Diffs.StringDiff>>
+
+<<function Diffs.diff>>
+@
+
+
+\subsection*{[[version_control/diffs.mli]]}
+
+%-------------------------------------------------------------
+
+<<version_control/diffs.mli>>=
+
+<<signature Diffs.diff>>
+@
+
 
 
 \subsection*{[[version_control/dump.ml]]}
@@ -2173,6 +2243,8 @@ open Common
 <<version_control/unzip.ml>>=
 <<copyright ocaml-unzip>>
 
+let debug = ref false
+
 <<type Unzip.huffman>>
 
 
@@ -2311,6 +2383,10 @@ type t
 
 <<signature Unzip.inflate_init>>
 <<signature Unzip.inflate_data>>
+
+(* internal *)
+val debug: bool ref
+
 @
 
 

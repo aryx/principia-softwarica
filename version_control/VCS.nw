@@ -3045,6 +3045,7 @@ let _ =
 
 <<function Main.main>>=
 let main () =
+  Gc.set {(Gc.get ()) with Gc.stack_limit = 1000 * 1024 * 1024};
   <<[[Main.main()]] sanity check arguments>>
   else begin
     let cmd = 
@@ -5344,15 +5345,15 @@ type content = bytes
 \subsection{File changes}
 
 <<type Diff.diff>>=
-type diff = diff_elem list
+type diff = (item diff_elem) list
 @
 
 <<type Diff.diff_elem>>=
 (* similar to change.ml, but for content of the file *)
-type diff_elem = 
-  | Added of item
-  | Deleted of item
-  | Equal of item
+type 'item diff_elem = 
+  | Added   of 'item
+  | Deleted of 'item
+  | Equal   of 'item
 @
 
 <<type Diff.item>>=
@@ -5465,24 +5466,27 @@ let content_from_path_and_stat_index path stat_info =
 % naive version. Want heuristics for block-move detection!
 
 % string below is Change.content
-<<signature Diff.diff>>=
-val diff: string -> string -> diff
+<<signature Diffs.diff>>=
+val diff: string -> string -> Diff.diff
 @
 % see appendix
-<<function Diff.diff>>=
+<<function Diffs.diff>>=
 (* seems correct *)
 let diff str1 str2 =
   let xs = split_lines str1 in
   let ys = split_lines str2 in
+  Diff_basic.diff (Array.of_list xs) (Array.of_list ys)
+(*
   let res = StringDiff.diff (Array.of_list xs) (Array.of_list ys) in
   res |> List.rev |> List.map (function
-    | `Common (_, _, s) -> Equal s
-    | `Removed (_, s) -> Deleted s
-    | `Added (_, s) -> Added s
+    | `Common (_, _, s) -> Diff.Equal s
+    | `Removed (_, s) -> Diff.Deleted s
+    | `Added (_, s) -> Diff.Added s
   )
+*)
 @
 
-<<function Diff.split_lines>>=
+<<function Diffs.split_lines>>=
 let split_lines str =
   (* alt: let xs = Str.full_split (Str.regexp "\n") str in *)
   let rec aux start = 
@@ -5499,7 +5503,7 @@ let split_lines str =
 @
 
 
-<<module Diff.StringDiff>>=
+<<module Diffs.StringDiff>>=
 module StringDiff = Diff_myers.Make(struct
   type t = string array
   type elem = string
@@ -5528,7 +5532,7 @@ let show_change change =
       ("a/" ^ entry1.Change.path, entry1.Change.content), 
       ("b/" ^ entry2.Change.path, entry2.Change.content)
   in
-  let diffs = Diff.diff (Lazy.force old_content) (Lazy.force new_content) in
+  let diffs = Diffs.diff (Lazy.force old_content) (Lazy.force new_content) in
   if not (diffs |> List.for_all (function Diff.Equal _ -> true | _ -> false))
   then begin
     pr (spf "diff --git %s %s" old_path new_path);
@@ -7385,6 +7389,9 @@ let cmd = { Cmd.
   f = (fun args ->
     match args with
     | ["sha1"] -> test_sha1 ()
+    | ["unzip"] -> test_unzip ()
+    | ["diff";file1;file2] -> test_diff file1 file2
+    | ["diff"] -> failwith "missing arguments to diff (diff <file1> <file2>)"
     | _ -> failwith (spf "test command [%s] not supported"
                        (String.concat ";" args))
   );
@@ -7921,10 +7928,10 @@ let make_huffman lengths pos nlengths maxbits =
   done;
 
   <<function Unzip.tree_make>>
-  tree_compress 
     (NeedBit (tree_make 0 1, tree_make 1 1))
 @
 \t need more LP split, not trivial
+%opti: tree_compress (NeedBit ...)
 
 <<function Unzip.tree_make>>=
 let rec tree_make v l =
@@ -8140,6 +8147,7 @@ then error Unsupported_dictionary;
 
 <<[[Unzip.inflate_loop()]] when in Block state, match block type cases>>=
 | 1 -> (* fixed Huffman *)
+  if !debug then print_string "Unzip: Fixed Huffman\n";
   z.zhuffman <- fixed_huffman;
   z.zhuffdist <- None;
   z.zstate <- CData;
@@ -8151,8 +8159,9 @@ then error Unsupported_dictionary;
 
 <<[[Unzip.inflate_loop()]] match state cases>>=
 | CData ->
-  match apply_huffman z z.zhuffman with
+  (match apply_huffman z z.zhuffman with
   <<[[Unzip.inflate_loop()]] when in CData state, match apply huffman cases>>
+  )
 @
 % So first compression here, huffman for alphabet encoding
 
@@ -8180,10 +8189,11 @@ then error Unsupported_dictionary;
 
   if z.zdist > window_available z.zwindow 
   then error Invalid_data;
-  z.zstate <- (if z.zdist = 1 then DistOne else Dist);
+  z.zstate <- Dist;
   inflate_loop z
 @
 % So second compression here, lz77 sliding window backref
+%opti:  z.zstate <- (if z.zdist = 1 then DistOne else Dist);
 
 <<[[Unzip.t]] other fields>>=
 mutable zlen      : int;
@@ -8268,35 +8278,6 @@ let add_dist z d l =
   add_bytes z z.zwindow.wbuffer (z.zwindow.wpos - d) l
 @
 % finally.
-
-
-<<[[Unzip.state]] other cases>>=
-| DistOne
-@
-% optimization?
-
-<<[[Unzip.inflate_loop()]] match state cases>>=
-| DistOne ->
-  let len = min z.zlen z.zneeded in
-  add_dist_one z len;
-  z.zlen <- z.zlen - len;
-  if z.zlen = 0 
-  then z.zstate <- CData;
-  if z.zneeded > 0 
-  then inflate_loop z
-@
-
-<<function Unzip.add_dist_one>>=
-let add_dist_one z n =
-  let c = window_get_last_char z.zwindow in
-  let s = Bytes.make n c in
-  add_bytes z s 0 n
-@
-
-<<function Unzip.window_get_last_char>>=
-let window_get_last_char w =
-  Bytes.unsafe_get w.wbuffer (w.wpos - 1)
-@
 
 
 
@@ -8410,6 +8391,7 @@ let adler32_read ch =
 
 <<[[Unzip.inflate_loop()]] when in Block state, match block type cases>>=
 | 0 -> (* no compression *)
+  if !debug then print_string "Unzip: no compression\n";
   z.zlen <- IO.LittleEndian.read_ui16 z.zinput;
   let nlen = IO.LittleEndian.read_ui16 z.zinput in
   if nlen <> 0xffff - z.zlen 
@@ -8444,10 +8426,12 @@ let adler32_read ch =
 
 % Maybe more complex part of DEFLATE, the way the huffman tree is encoded.
 
-% Dynamic Huffman vs static huffman
+% Dynamic Huffman vs static huffman.
+% This format is often used. 
 
 <<[[Unzip.inflate_loop()]] when in Block state, match block type cases>>=
 | 2 -> (* dynamic Huffman *)
+  if !debug then print_string "Unzip: Dynamic Huffman\n";
   let hlit = get_bits z 5 + 257 in
   let hdist = get_bits z 5 + 1 in
   let hclen = get_bits z 4 + 4 in
@@ -8469,7 +8453,6 @@ let adler32_read ch =
 <<[[Unzip.t]] other fields>>=
 zlengths : int array;
 @
-
 
 <<[[Unzip.t]] other fields>>=
 mutable zhuffdist : huffman option;
@@ -8516,6 +8499,8 @@ let inflate_lengths z a max =
 
 \subsection{Optimizations}
 
+\subsubsection{[[NeedBits]]}
+
 <<[[Unzip.huffman]] cases>>=
 (** Opti *)
 | NeedBits of int * huffman array
@@ -8554,6 +8539,39 @@ let rec tree_depth = function
   | NeedBits _ -> assert false
 @
 % so NeedBits used only after tree_compress pass
+
+\subsubsection{[[DistOne]]}
+
+<<[[Unzip.state]] other cases>>=
+| DistOne
+@
+% optimization?
+
+<<[[Unzip.inflate_loop()]] match state cases>>=
+| DistOne ->
+  if !debug then print_string "Unzip: DistOne\n";
+  let len = min z.zlen z.zneeded in
+  add_dist_one z len;
+  z.zlen <- z.zlen - len;
+  if z.zlen = 0 
+  then z.zstate <- CData;
+  if z.zneeded > 0 
+  then inflate_loop z
+@
+
+<<function Unzip.add_dist_one>>=
+let add_dist_one z n =
+  let c = window_get_last_char z.zwindow in
+  let s = Bytes.make n c in
+  add_bytes z s 0 n
+@
+
+<<function Unzip.window_get_last_char>>=
+let window_get_last_char w =
+  Bytes.unsafe_get w.wbuffer (w.wpos - 1)
+@
+
+
 
 
 \section{Zip}
@@ -8682,7 +8700,7 @@ let uncompress ?(header = true) refill flush =
 
 \section{Diff}
 
-% Basic edit distance algo (see Gusfeld book)
+% Basic edit distance algo (see Gusfield book)
 % \cite{James and McIlroy - 1976}
 % \cite{Myers - 19??}
 %   https://blog.jcoglan.com/2017/02/12/the-myers-diff-algorithm-part-1/
