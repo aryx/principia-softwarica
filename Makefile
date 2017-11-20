@@ -119,6 +119,7 @@ lpdistclean:
 visual2:
 	~/pfff/codemap.opt -no_legend -symlinks -filter nw -ft 1.0 .
 
+VERSION=9
 NOWEB=~/github/syncweb/scripts/noweblatex
 pdf:
 	$(NOWEB) Principia.nw > Principia.tex

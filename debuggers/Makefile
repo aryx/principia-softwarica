@@ -9,7 +9,9 @@ include $(TOP)/docs/latex/Makefile.common
 # Literate Programming rules
 ##############################################################################
 
+VERSION=2
 DOC=Debugger
+
 
 # set of noweb (.nw) files
 # must be in the same order of the #include for syncweb multi files support

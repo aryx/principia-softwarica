@@ -9,6 +9,7 @@ include $(TOP)/docs/latex/Makefile.common
 # Literate Programming rules
 ##############################################################################
 
+VERSION=2
 TEXMAIN=CompilerGenerator.nw
 TEX=CompilerGenerator.tex
 
