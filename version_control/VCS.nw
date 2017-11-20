@@ -3162,13 +3162,13 @@ mutable index: Index.t;
 
 
 
-\section{Pack files}
+%\section{Pack files}
 
 % pack objects, pack refs, pack-idx.
 % Compression, delta.
 % Adv topics, but referenced many times (especially in Networking chapter).
 
-\section{Networking}
+%\section{Networking}
 
 % for git://, ssh://, but also for local.
 % Abstracted behind Client interface.
@@ -3212,382 +3212,6 @@ let client_of_url url =
 \subsection{[[Server.t]]}
 
 
-
-
-
-
-\chapter{Main Functions}
-\label{chap:main}
-
-% Entry point Main.main().
-
-%toc: before main(), important type.
-% git works with commands, git cmd args
-% where each command have own options and actions.
-
-\section{Main commands}
-
-\subsection{[[Cmd.t]]}
-
-<<type Cmd.t>>=
-type t = {
-  name: string;
-  help: string;
-  options: (Arg.key * Arg.spec * Arg.doc) list;
-
-  (* the command! *)
-  f: string list -> unit;
-  (* less: man: when do git -help get short help, and with --help man page *)
-}
-@
-%alt: use of 'Term.()' and '$' to not require globals for flags (src: ocaml-git)
-% but not worth it. With split cmd_xxx.ml can have different globals in
-% those different files.
-
-%cvs: the one who introduced cvs xxx style instead of many programs? 
-% (ci/co/...)
-
-\subsection{[[Cmds.main_commands]]}
-
-<<constant Cmds.main_commands>>=
-let main_commands = [
-  (* creating *)
-  Cmd_init.cmd;
-  Cmd_add.cmd;
-  Cmd_rm.cmd;
-  Cmd_commit.cmd;
-
-  (* branching *)
-  Cmd_branch.cmd;
-  Cmd_checkout.cmd;
-  Cmd_reset.cmd;
-  
-  (* inspecting *)
-  Cmd_show.cmd;
-  Cmd_diff.cmd;
-  Cmd_log.cmd;
-  Cmd_status.cmd;
-
-  (* networking *)
-  Cmd_pull.cmd;
-  Cmd_push.cmd;
-  Cmd_clone.cmd;
-]
-@
-%todo: no merge 
-%less: rebase
-
-%chunks:
-% will see in next chapters code for each of those commands.
-
-% There is also extra_commands (for debugging) and Cmd_help.cmd (for help).
-
-\section{[[Main.main()]]}
-
-<<toplevel Main._1>>=
-let _ =
-  main ()
-@
-
-
-<<function Main.main>>=
-let main () =
-  Gc.set {(Gc.get ()) with Gc.stack_limit = 1000 * 1024 * 1024};
-  <<[[Main.main()]] sanity check arguments>>
-  else begin
-    let cmd = 
-      try 
-        Hashtbl.find hcommands Sys.argv.(1) 
-      with Not_found ->
-        <<[[Main.main()]] print usage and exit>>
-    in
-    <<[[Main.main()]] execute [[cmd]]>>
-  end
-@
-
-
-<<constant Main.hcommands>>=
-let hcommands = 
-  commands |> List.map (fun cmd -> cmd.Cmd.name, cmd) |> Hashtbl_.of_list
-@
-
-<<constant Main.commands>>=
-let commands = List.flatten [
-  Cmds.main_commands;
-  Cmds.extra_commands;
-  [Cmd_help.cmd];
-]
-@
-%ocaml:
-% Cmd_help reference itself main_commands, and ocaml forbids
-% mutually recursive dependencies, so here it is.
-% Extra is for git help vs git help --all?
-
-%dup: Make.nw?
-% Sanity check. obvious but necessary. will not comment
-
-<<[[Main.main()]] sanity check arguments>>=
-if Array.length Sys.argv < 2
-then begin
-  <<[[Main.main()]] print usage and exit>>
-end
-@
-% git cmd xxx so at least 2.
-
-<<[[Main.main()]] print usage and exit>>=
-pr2 (usage ());
-exit 1
-@
-
-<<function Main.usage>>=
-let usage () =
-  spf "usage: ocamlgit <%s> [options]"
-    (String.concat "|" (commands |> List.map (fun cmd -> cmd.Cmd.name)))
-@
-% See Section~{sec:git-command-line}
-
-
-% compute arguments and dispatch command callback.
-
-<<[[Main.main()]] execute [[cmd]]>>=
-let argv = Array.sub Sys.argv 1 (Array.length Sys.argv -1) in
-let usage_msg_cmd = spf "usage: %s %s%s"
-  (Filename.basename Sys.argv.(0))
-  cmd.Cmd.name
-  cmd.Cmd.help
-in
-let remaining_args = ref [] in
-<<[[Main.main()]] parse [[argv]] for [[cmd]] options and remaining args>>
-(* finally! *)
-try 
-  cmd.Cmd.f (List.rev !remaining_args)
-with 
-  | Cmd.ShowUsage ->
-    Arg.usage (Arg.align cmd.Cmd.options) usage_msg_cmd;
-    exit 1
-@
-
-<<exception Cmd.ShowUsage>>=
-(* f can raise ShowUsage which will be catched by caller in main.ml *)
-exception ShowUsage
-@
-
-
-<<[[Main.main()]] parse [[argv]] for [[cmd]] options and remaining args>>=
-(try 
- (* todo: look if --help and factorize treatment of usage for subcmds *)
-   Arg.parse_argv argv (Arg.align cmd.Cmd.options) 
-     (fun arg -> Common.push arg remaining_args) usage_msg_cmd;
- with Arg.Bad str | Arg.Help str->  
-   prerr_string str;
-   exit 1
-);
-@
-
-
-
-
-\section{Getting help: [[git help]]}
-
-% First command example, simple:
-
-<<constant Cmd_help.list_extra>>=
-let list_extra = ref false
-@
-
-<<constant Cmd_help.cmd>>=
-let rec cmd = { Cmd.
-  name = "help";
-  help = "";
-  options = ["-a", Arg.Set list_extra, " see all commands"];
-  f = (fun args ->
-    let xs = 
-      if !list_extra
-      then Cmds.main_commands @ Cmds.extra_commands @ [cmd]
-      else Cmds.main_commands
-    in
-    pr ("Available commands: ");
-    xs |> List.iter (fun cmd ->
-      pr (spf "  %s" cmd.Cmd.name);
-    );
-  );
-}
-@
-%ocaml:
-% let rec, subtle! not a function but still!
-
-
-% will have also 'git cmd --help' later.
-
-
-\chapter{Creating a Repository}
-\label{chap:creating}
-\n Initializing? reserved for 'creating empty', so would match only git init
-
-% Different ways to create a repo. 
-% Most common is create fresh repo, other is clone.
-
-\section{Initializing a new repository: [[git init]]}
-% Creating a fresh repository
-
-<<constant Cmd_init.cmd>>=
-let cmd = { Cmd.
-  name = "init";
-  help = " [directory]";
-  options = [
-   (* less: -bare, --quiet *)
-  ];
-  f = (fun args ->
-    match args with
-    | []    -> Repository.init "."
-    | [dir] -> Repository.init dir
-    | _ -> raise Cmd.ShowUsage
-  );
-}
-@
-
-<<signature Repository.init>>=
-val init: Common.filename -> unit
-@
-<<function Repository.init>>=
-let init root =
-  if not (Sys.file_exists root)
-  then Unix.mkdir root dirperm;
-
-  (* less: bare argument? so no .git/ prefix? *)
-  let dirs = [
-    ".git";
-    ".git/objects";
-    ".git/refs";
-    ".git/refs/heads";
-    ".git/refs/tags";
-    ".git/refs/remote";
-    ".git/refs/remote/origin";
-    ".git/hooks";
-    ".git/info";
-  ] in
-  dirs |> List.iter (fun dir ->
-    (* less: exn if already there? *)
-    Unix.mkdir (root / dir) dirperm;
-  );
-  let r = {
-    worktree = root;
-    dotgit = root / ".git";
-    index = Index.empty;
-  } in
-  add_ref_if_new r Refs.Head Refs.default_head_content |> ignore;
-
-  (* less: config file, description, hooks, etc *)
-  Sys.chdir root;
-  let absolute = Sys.getcwd () in
-  pr (spf "Initialized empty Git repository in %s" (absolute / ".git/"))
-@
-
-% will see add_ref_if_new later.
-
-
-<<constant Repository.dirperm>>=
-(* rwxr-x--- *)
-let dirperm = 0o750
-@
-
-
-%\subsection{Common directory}
-% To abstract diff between bare and normal repository
-
-%\subsection{Named files}
-
-\section{Copying an existing repository: [[cp -r]]}
-
-% well, can just do cp :) simple! DVCS power!
-
-% Can also use branch, see later.
-% actually at FB some people (Ola?) were prefering copy to
-% branch cos git was not scaling enough when lots of files
-% so switching branch was too slow (but doing cd /other/repo was fast)
-
-% will see clone later, but useful more in networking context
-% (and even there cp would be better thx to NFS)
-
-% clone creates a connexion to original repo. cp does not.
-% no remote and push/pull.
-
-
-\section{Cloning an existing repository: [[git clone]]}
-
-% Other common way to initialize a repo is clone! Copy from
-% network location (or local too, but less useful).
-
-% Will see clone code later.
-
-% Diff with cp? take URL! (could NFS), and
-% then connect local to remote for futur pull/push.
-
-%\section{Checking out a repository: [[git checkout]]}
-% if cp -a just .git, then can checkout by doing git checkout.
-
-%\section{Fast Import/Export}
-%adv topics
-
-
-\section{Opening a repository}
-% will see later most op need a Repository.t structure representing
-% an existing repo.
-
-<<signature Repository.open_>>=
-val open_: Common.filename -> t
-@
-% not open cos conflict with ocaml keyword
-<<function Repository.open_>>=
-let open_ root = 
-  let path = root / ".git" in
-  if Sys.file_exists path &&
-     (Unix.stat path).Unix.st_kind = Unix.S_DIR
-  then 
-    { worktree = root;
-      dotgit = path;
-      (* less: grafts, hooks *)
-      index = 
-        if Sys.file_exists (path / "index")
-        then 
-          (path / "index") |> Common.with_file_in (fun ch ->
-            ch |> IO.input_channel |> Index.read)
-        else Index.empty
-    }
-  else failwith (spf "Not a git repository at %s" root)
-@
-%todo: bar repo, 
-\l cant used index_to_filename cos no repo yet, sad.
-
-% See appendix for IO.xxx, Common.with_file_in
-% Will see Index.read later.
-
-% Most git commands can operate from the top dir of a object
-% or any subdirectory. Convenient, git add foo.txt from
-% any dir, no need go back to top.
-% But internally simple have canonical representation of
-% path and always use relative path to top dir.
-% Enter find_root_... helper function used first in many commands.
-
-<<signature Repository.find_dotgit_root_and_open>>=
-val find_root_open_and_adjust_paths: 
- Common.filename list -> t * Common.filename list
-@
-<<function Repository.find_dotgit_root_and_open>>=
-let find_root_open_and_adjust_paths paths = 
-  (* todo: allow git from different location *)
-  let r = open_ "." in
-  (* todo: support also absolute paths and transform in relpaths *)
-  let relpaths = paths |> List.map (fun path ->
-    if Filename.is_relative path
-    then 
-      (* todo: may have to adjust if root was not pwd *)
-      path
-    else failwith (spf "TODO: Not a relative path: %s" path)
-    )
-  in
-  r, relpaths
-@
 
 
 
@@ -4388,6 +4012,382 @@ let write_time ch time =
 
 
 %\chapter{Walking a Repository}
+
+\chapter{Main Functions}
+\label{chap:main}
+
+% Entry point Main.main().
+
+%toc: before main(), important type.
+% git works with commands, git cmd args
+% where each command have own options and actions.
+
+\section{Main commands}
+
+\subsection{[[Cmd.t]]}
+
+<<type Cmd.t>>=
+type t = {
+  name: string;
+  help: string;
+  options: (Arg.key * Arg.spec * Arg.doc) list;
+
+  (* the command! *)
+  f: string list -> unit;
+  (* less: man: when do git -help get short help, and with --help man page *)
+}
+@
+%alt: use of 'Term.()' and '$' to not require globals for flags (src: ocaml-git)
+% but not worth it. With split cmd_xxx.ml can have different globals in
+% those different files.
+
+%cvs: the one who introduced cvs xxx style instead of many programs? 
+% (ci/co/...)
+
+\subsection{[[Cmds.main_commands]]}
+
+<<constant Cmds.main_commands>>=
+let main_commands = [
+  (* creating *)
+  Cmd_init.cmd;
+  Cmd_add.cmd;
+  Cmd_rm.cmd;
+  Cmd_commit.cmd;
+
+  (* branching *)
+  Cmd_branch.cmd;
+  Cmd_checkout.cmd;
+  Cmd_reset.cmd;
+  
+  (* inspecting *)
+  Cmd_show.cmd;
+  Cmd_diff.cmd;
+  Cmd_log.cmd;
+  Cmd_status.cmd;
+
+  (* networking *)
+  Cmd_pull.cmd;
+  Cmd_push.cmd;
+  Cmd_clone.cmd;
+]
+@
+%todo: no merge 
+%less: rebase
+
+%chunks:
+% will see in next chapters code for each of those commands.
+
+% There is also extra_commands (for debugging) and Cmd_help.cmd (for help).
+
+\section{[[Main.main()]]}
+
+<<toplevel Main._1>>=
+let _ =
+  main ()
+@
+
+
+<<function Main.main>>=
+let main () =
+  Gc.set {(Gc.get ()) with Gc.stack_limit = 1000 * 1024 * 1024};
+  <<[[Main.main()]] sanity check arguments>>
+  else begin
+    let cmd = 
+      try 
+        Hashtbl.find hcommands Sys.argv.(1) 
+      with Not_found ->
+        <<[[Main.main()]] print usage and exit>>
+    in
+    <<[[Main.main()]] execute [[cmd]]>>
+  end
+@
+
+
+<<constant Main.hcommands>>=
+let hcommands = 
+  commands |> List.map (fun cmd -> cmd.Cmd.name, cmd) |> Hashtbl_.of_list
+@
+
+<<constant Main.commands>>=
+let commands = List.flatten [
+  Cmds.main_commands;
+  Cmds.extra_commands;
+  [Cmd_help.cmd];
+]
+@
+%ocaml:
+% Cmd_help reference itself main_commands, and ocaml forbids
+% mutually recursive dependencies, so here it is.
+% Extra is for git help vs git help --all?
+
+%dup: Make.nw?
+% Sanity check. obvious but necessary. will not comment
+
+<<[[Main.main()]] sanity check arguments>>=
+if Array.length Sys.argv < 2
+then begin
+  <<[[Main.main()]] print usage and exit>>
+end
+@
+% git cmd xxx so at least 2.
+
+<<[[Main.main()]] print usage and exit>>=
+pr2 (usage ());
+exit 1
+@
+
+<<function Main.usage>>=
+let usage () =
+  spf "usage: ocamlgit <%s> [options]"
+    (String.concat "|" (commands |> List.map (fun cmd -> cmd.Cmd.name)))
+@
+% See Section~{sec:git-command-line}
+
+
+% compute arguments and dispatch command callback.
+
+<<[[Main.main()]] execute [[cmd]]>>=
+let argv = Array.sub Sys.argv 1 (Array.length Sys.argv -1) in
+let usage_msg_cmd = spf "usage: %s %s%s"
+  (Filename.basename Sys.argv.(0))
+  cmd.Cmd.name
+  cmd.Cmd.help
+in
+let remaining_args = ref [] in
+<<[[Main.main()]] parse [[argv]] for [[cmd]] options and remaining args>>
+(* finally! *)
+try 
+  cmd.Cmd.f (List.rev !remaining_args)
+with 
+  | Cmd.ShowUsage ->
+    Arg.usage (Arg.align cmd.Cmd.options) usage_msg_cmd;
+    exit 1
+@
+
+<<exception Cmd.ShowUsage>>=
+(* f can raise ShowUsage which will be catched by caller in main.ml *)
+exception ShowUsage
+@
+
+
+<<[[Main.main()]] parse [[argv]] for [[cmd]] options and remaining args>>=
+(try 
+ (* todo: look if --help and factorize treatment of usage for subcmds *)
+   Arg.parse_argv argv (Arg.align cmd.Cmd.options) 
+     (fun arg -> Common.push arg remaining_args) usage_msg_cmd;
+ with Arg.Bad str | Arg.Help str->  
+   prerr_string str;
+   exit 1
+);
+@
+
+
+
+
+\section{Getting help: [[git help]]}
+
+% First command example, simple:
+
+<<constant Cmd_help.list_extra>>=
+let list_extra = ref false
+@
+
+<<constant Cmd_help.cmd>>=
+let rec cmd = { Cmd.
+  name = "help";
+  help = "";
+  options = ["-a", Arg.Set list_extra, " see all commands"];
+  f = (fun args ->
+    let xs = 
+      if !list_extra
+      then Cmds.main_commands @ Cmds.extra_commands @ [cmd]
+      else Cmds.main_commands
+    in
+    pr ("Available commands: ");
+    xs |> List.iter (fun cmd ->
+      pr (spf "  %s" cmd.Cmd.name);
+    );
+  );
+}
+@
+%ocaml:
+% let rec, subtle! not a function but still!
+
+
+% will have also 'git cmd --help' later.
+
+
+\chapter{Creating a Repository}
+\label{chap:creating}
+\n Initializing? reserved for 'creating empty', so would match only git init
+
+% Different ways to create a repo. 
+% Most common is create fresh repo, other is clone.
+
+\section{Initializing a new repository: [[git init]]}
+% Creating a fresh repository
+
+<<constant Cmd_init.cmd>>=
+let cmd = { Cmd.
+  name = "init";
+  help = " [directory]";
+  options = [
+   (* less: -bare, --quiet *)
+  ];
+  f = (fun args ->
+    match args with
+    | []    -> Repository.init "."
+    | [dir] -> Repository.init dir
+    | _ -> raise Cmd.ShowUsage
+  );
+}
+@
+
+<<signature Repository.init>>=
+val init: Common.filename -> unit
+@
+<<function Repository.init>>=
+let init root =
+  if not (Sys.file_exists root)
+  then Unix.mkdir root dirperm;
+
+  (* less: bare argument? so no .git/ prefix? *)
+  let dirs = [
+    ".git";
+    ".git/objects";
+    ".git/refs";
+    ".git/refs/heads";
+    ".git/refs/tags";
+    ".git/refs/remote";
+    ".git/refs/remote/origin";
+    ".git/hooks";
+    ".git/info";
+  ] in
+  dirs |> List.iter (fun dir ->
+    (* less: exn if already there? *)
+    Unix.mkdir (root / dir) dirperm;
+  );
+  let r = {
+    worktree = root;
+    dotgit = root / ".git";
+    index = Index.empty;
+  } in
+  add_ref_if_new r Refs.Head Refs.default_head_content |> ignore;
+
+  (* less: config file, description, hooks, etc *)
+  Sys.chdir root;
+  let absolute = Sys.getcwd () in
+  pr (spf "Initialized empty Git repository in %s" (absolute / ".git/"))
+@
+
+% will see add_ref_if_new later.
+
+
+<<constant Repository.dirperm>>=
+(* rwxr-x--- *)
+let dirperm = 0o750
+@
+
+
+%\subsection{Common directory}
+% To abstract diff between bare and normal repository
+
+%\subsection{Named files}
+
+\section{Copying an existing repository: [[cp -r]]}
+
+% well, can just do cp :) simple! DVCS power!
+
+% Can also use branch, see later.
+% actually at FB some people (Ola?) were prefering copy to
+% branch cos git was not scaling enough when lots of files
+% so switching branch was too slow (but doing cd /other/repo was fast)
+
+% will see clone later, but useful more in networking context
+% (and even there cp would be better thx to NFS)
+
+% clone creates a connexion to original repo. cp does not.
+% no remote and push/pull.
+
+
+\section{Cloning an existing repository: [[git clone]]}
+
+% Other common way to initialize a repo is clone! Copy from
+% network location (or local too, but less useful).
+
+% Will see clone code later.
+
+% Diff with cp? take URL! (could NFS), and
+% then connect local to remote for futur pull/push.
+
+%\section{Checking out a repository: [[git checkout]]}
+% if cp -a just .git, then can checkout by doing git checkout.
+
+%\section{Fast Import/Export}
+%adv topics
+
+
+\section{Opening a repository}
+% will see later most op need a Repository.t structure representing
+% an existing repo.
+
+<<signature Repository.open_>>=
+val open_: Common.filename -> t
+@
+% not open cos conflict with ocaml keyword
+<<function Repository.open_>>=
+let open_ root = 
+  let path = root / ".git" in
+  if Sys.file_exists path &&
+     (Unix.stat path).Unix.st_kind = Unix.S_DIR
+  then 
+    { worktree = root;
+      dotgit = path;
+      (* less: grafts, hooks *)
+      index = 
+        if Sys.file_exists (path / "index")
+        then 
+          (path / "index") |> Common.with_file_in (fun ch ->
+            ch |> IO.input_channel |> Index.read)
+        else Index.empty
+    }
+  else failwith (spf "Not a git repository at %s" root)
+@
+%todo: bar repo, 
+\l cant used index_to_filename cos no repo yet, sad.
+
+% See appendix for IO.xxx, Common.with_file_in
+% Will see Index.read later.
+
+% Most git commands can operate from the top dir of a object
+% or any subdirectory. Convenient, git add foo.txt from
+% any dir, no need go back to top.
+% But internally simple have canonical representation of
+% path and always use relative path to top dir.
+% Enter find_root_... helper function used first in many commands.
+
+<<signature Repository.find_dotgit_root_and_open>>=
+val find_root_open_and_adjust_paths: 
+ Common.filename list -> t * Common.filename list
+@
+<<function Repository.find_dotgit_root_and_open>>=
+let find_root_open_and_adjust_paths paths = 
+  (* todo: allow git from different location *)
+  let r = open_ "." in
+  (* todo: support also absolute paths and transform in relpaths *)
+  let relpaths = paths |> List.map (fun path ->
+    if Filename.is_relative path
+    then 
+      (* todo: may have to adjust if root was not pwd *)
+      path
+    else failwith (spf "TODO: Not a relative path: %s" path)
+    )
+  in
+  r, relpaths
+@
+
+
+
 
 \chapter{Staging a Diff}
 \label{chap:staging}
