@@ -2583,7 +2583,7 @@ let to_byte hex1 hex2 =
     | 'a'..'f' -> Char.code hex - (Char.code 'a' + 10)
     | _ -> 
       raise (Invalid_argument 
-              (spf "Hex.to_byte: %d is an invalid hexadecimal digit" (Char.code hex))
+              (spf "Hex.to_byte: %d is an invalid hexadecimal digit" (Char.code hex)))
   in
   Char.chr (((code hex1) lsl 4) + (code hex2))
 @
@@ -2639,8 +2639,8 @@ This time, each byte generates two characters:
 
 <<[[Hexsha.of_sha()]] fill [[buf]]>>=
 for i = 0 to n - 1 do
-  buf.(i * 2)       <- hexa1.(Char.code (s.[i]));
-  buf.((i * 2) + 1) <- hexa2.(Char.code (s.[i]));
+  buf.[i * 2]       <- hexa1.[Char.code (s.[i])];
+  buf.[(i * 2) + 1] <- hexa2.[Char.code (s.[i])];
 done;
 @
 
@@ -2929,14 +2929,15 @@ but also the date of the commit and the timezone of the author.
 type t = {
   name : string;
   email: string;
-  date : int64 * timezone_offset;
+  date : int64 (* seconds *) * timezone_offset;
 }
 @
 %old: tz_offset (*option*)
 \t int64, seconds, no 2032 issues
 
 <<type User.tz_offset>>=
-type timezone_offset = int; (* +/- hours, [-12, +12] *)
+type timezone_offset = int (* +/- hours, [-12, +12] *)
+@
 
 %old:
 % <<type User.tz_offset>>=
@@ -3249,7 +3250,7 @@ val mk_entry: Common.filename -> Sha1.t -> Unix.stats -> entry
 @
 <<function Index.mk_entry>>=
 let mk_entry relpath sha stats =
-  { name = relpath;
+  { path = relpath;
     id = sha;
     stats = stat_info_of_lstats stats;
   }
@@ -3541,21 +3542,20 @@ let read ch =
   let sign = IO.read ch in
   let hours = IO.nread_string ch 2 in
   let mins = IO.nread_string ch 2 in
+  (* stricter: *)
+  if int_of_string mins <> 0
+  then failwith "User.read: timezeone with minutes not supported";
+
   { name = String.sub name 0 (String.length name - 1);
     email = email;
-    date = (Int64.of_string seconds,
-            {
-              sign = sign_of_char sign;
-              hours = int_of_string hours;
-              min = int_of_string mins;
-            });
+    date = (Int64.of_string seconds, (sign_of_char sign) (int_of_string hours));
   }
 @
 
 <<function User.sign_of_char>>=
 let sign_of_char = function
-  | '+' -> Plus
-  | '-' -> Minus
+  | '+' -> (fun x -> +x )
+  | '-' -> (fun x -> - x)
   | c -> failwith (spf "User.sign_of_string: not a sign, got %c" c)
 @
 
@@ -3644,7 +3644,7 @@ let follow_ref_some r aref =
 val read_objectish: t -> objectish -> Sha1.t * Objects.t
 @
 <<function Repository.read_objectish>>=
-let read_objectish r objectish =
+let rec read_objectish r objectish =
   match objectish with
   | ObjByRef aref -> 
     (match follow_ref r aref |> snd with
@@ -3655,6 +3655,8 @@ let read_objectish r objectish =
   | ObjByHex hexsha ->
     let sha = Hexsha.to_sha hexsha in
     sha, read_obj r sha
+  | ObjByBranch str ->
+    read_objectish r (ObjByRef (Refs.Ref ("refs/heads/" ^ str)))
 @
 
 
@@ -3710,11 +3712,11 @@ let read_entry ch =
   in
   if (stage <> 0)
   then failwith (spf "stage is not 0: %d" stage);
-  let name = IO.really_nread_string ch len in
+  let path = IO.really_nread_string ch len in
   let c = IO.read ch in
   if c <> '\000'
   then failwith "Index.read_entry: expecting null char after name";
-  let len = 63 + String.length name in
+  let len = 63 + String.length path in
   let pad = 
     match len mod 8 with
     | 0 -> 0
@@ -3722,7 +3724,7 @@ let read_entry ch =
   in
   let _zeros = IO.really_nread ch pad in
   (* less: assert zeros *)
-  { stats; id; name }
+  { stats; id; path }
 @
 %old: was using stage
 
@@ -3975,8 +3977,7 @@ let write ch user =
 let write_date ch (date, tz) =
   IO.nwrite ch (Int64.to_string date);
   IO.write ch ' ';
-  let sign = match tz.sign with Plus -> "+" | Minus -> "-" in
-  IO.nwrite ch (spf "%s%02d%02d" sign tz.hours tz.min)
+  IO.nwrite ch (spf "%c%02d%02d" (char_of_sign tz) (abs tz) 0)
 @
 
 \section{References}
@@ -4048,10 +4049,10 @@ let write idx ch =
 let write_entry ch e =
   write_stat_info ch e.stats;
   Sha1.write ch e.id;
-  let flags = (0 lsl 12 + String.length e.name) land 0x3FFF in
+  let flags = (0 lsl 12 + String.length e.path) land 0x3FFF in
   IO.BigEndian.write_ui16 ch flags;
-  IO.nwrite ch e.name;
-  let len = 63 + String.length e.name in
+  IO.nwrite ch e.path;
+  let len = 63 + String.length e.path in
   let pad = 
     match len mod 8 with
     | 0 -> 0
@@ -4202,7 +4203,7 @@ let main () =
   else begin
     let cmd = 
       try 
-        commands |> List.find (fun cmd -> cmd.name = Sys.argv.(1))
+        commands |> List.find (fun cmd -> cmd.Cmd.name = Sys.argv.(1))
       with Not_found ->
         <<[[Main.main()]] print usage and exit>>
     in
@@ -4276,7 +4277,7 @@ usage message specific to the command, and finally to process
 the new [[argv]] to separate flags and options from the remaining
 arguments of the command:
 
-<<[[Main.main()]] execute [[cmd]]>>=
+<<[[Main.main()]] execute [[cmd.f]]>>=
 let argv = Array.sub Sys.argv 1 (Array.length Sys.argv -1) in
 let usage_msg_cmd = spf "usage: %s %s%s"
   (Filename.basename Sys.argv.(0))
@@ -4642,7 +4643,7 @@ let rec add_entry idx entry =
   match idx with
   | [] -> [entry]
   | x::xs ->
-    (match entry.name <=> x.name with
+    (match entry.path <=> x.path with
     | Sup -> x::(add_entry xs entry)
     (* replacing old entry is ok *)
     | Equal -> entry::xs
@@ -4711,7 +4712,7 @@ let rec remove_entry idx name =
   match idx with
   | [] -> failwith (spf "The file %s is not in the index" name)
   | x::xs ->
-    (match name <=> x.name with
+    (match name <=> x.path with
     | Sup -> x::(remove_entry xs name)
     | Equal -> xs
     (* the entries are sorted *)
@@ -4855,7 +4856,7 @@ let tree_of_index idx add_tree_obj =
   Hashtbl.add dirs "." (ref []);
   (* populate dirs *)
   idx |> List.iter (fun entry ->
-    let relpath = entry.name in
+    let relpath = entry.path in
     let (dir, base) = Filename.dirname relpath, Filename.basename relpath in
     let dir = add_dir dirs dir in
     dir := (File (base, entry))::!dir
@@ -4927,12 +4928,7 @@ let perm_of_mode mode =
 <<[[Cmd_commit.cmd]] compute [[today]]>>=
 let today = 
   (Int64.of_float (Unix.time ()),
-   { User.
- (* todo: use localtime vs gmtime? *)
-     sign = User.Minus;
-     hours = 7; (* SF *)
-     min = 0;
-   })
+   (* todo: use localtime vs gmtime? *) -7 (* SF *))
 in
 @
 
@@ -5314,7 +5310,7 @@ val set_worktree_and_index_to_tree:
 let set_worktree_and_index_to_tree r tree =
   (* todo: need lock on index? on worktree? *)
   let hcurrent = 
-    r.index |> List.map (fun e -> e.Index.name, false) |> Hashtbl_.of_list in
+    r.index |> List.map (fun e -> e.Index.path, false) |> Hashtbl_.of_list in
   let new_index = ref [] in
   (* less: honor file mode from config file? *)
   tree |> Tree.walk_tree (read_tree r) "" (fun relpath entry ->
@@ -5684,7 +5680,7 @@ let show x =
 
 <<signature User.string_of_date>>=
 (* for show *)
-val string_of_date: (int64 * tz_offset) -> string
+val string_of_date: (int64 * timezone_offset) -> string
 @
 
 <<function User.string_of_date>>=
@@ -5696,13 +5692,13 @@ let string_of_date (date, tz) =
     (Date.string_of_day tm.Unix.tm_wday) (Date.string_of_month tm.Unix.tm_mon) 
     tm.Unix.tm_mday 
     tm.Unix.tm_hour tm.Unix.tm_min tm.Unix.tm_sec (tm.Unix.tm_year + 1900)
-    (char_of_sign tz.sign) tz.hours tz.min
+    (char_of_sign tz) (abs tz) 0
 @
 
 <<function User.char_of_sign>>=
 let char_of_sign = function
-  | Plus -> '+'
-  | Minus -> '-'
+  | x when x >= 0 -> '+'
+  | _ -> '-'
 @
 
 \section{Representing changes}
@@ -5815,14 +5811,14 @@ val changes_worktree_vs_index:
 let changes_worktree_vs_index read_blob worktree index =
   index |> List.map (fun entry ->
     let old_stat = entry.Index.stats in
-    let path = Filename.concat worktree entry.Index.name in
+    let path = Filename.concat worktree entry.Index.path in
     let new_stat_opt = 
       try Some (Unix.lstat path |> Index.stat_info_of_lstats)
       with Unix.Unix_error _ -> None
     in
     match new_stat_opt with
     | None -> 
-      [Change.Del { Change.path = entry.Index.name;
+      [Change.Del { Change.path = entry.Index.path;
                     mode = old_stat.Index.mode;
                     content = lazy (read_blob entry.Index.id);
                   }]
@@ -5832,20 +5828,20 @@ let changes_worktree_vs_index read_blob worktree index =
       | _ when new_stat.Index.mtime = old_stat.Index.mtime -> []
       (* a change of mode is converted in a del/add *)
       | _ when new_stat.Index.mode <> old_stat.Index.mode ->
-        [Change.Del { Change.path = entry.Index.name;
+        [Change.Del { Change.path = entry.Index.path;
                       mode = old_stat.Index.mode;
                       content = lazy (read_blob entry.Index.id)};
-         Change.Add { Change.path = entry.Index.name;
+         Change.Add { Change.path = entry.Index.path;
                       mode = new_stat.Index.mode;
                       content = lazy 
                         (content_from_path_and_stat_index path new_stat)}
           ]
       | _ -> 
         [Change.Modify (
-          { Change.path = entry.Index.name;
+          { Change.path = entry.Index.path;
             mode = old_stat.Index.mode;
             content = lazy (read_blob entry.Index.id) },
-          { Change.path = entry.Index.name;
+          { Change.path = entry.Index.path;
             mode = new_stat.Index.mode;
             content = lazy 
               (content_from_path_and_stat_index path new_stat) }
@@ -6422,7 +6418,7 @@ let changes_index_vs_tree read_tree index treeid =
   let h_in_index_and_head = Hashtbl.create 101 in
   let hindex = 
     index 
-    |> List.map (fun entry -> entry.Index.name, entry)
+    |> List.map (fun entry -> entry.Index.path, entry)
     |> Hashtbl_.of_list
   in
   let changes = ref [] in
@@ -6454,9 +6450,9 @@ let changes_index_vs_tree read_tree index treeid =
                                            });
   );
   index |> List.iter (fun entry ->
-    if not (Hashtbl.mem h_in_index_and_head entry.Index.name)
+    if not (Hashtbl.mem h_in_index_and_head entry.Index.path)
     then changes |> Common.push (Change.Add { Change.
-             path = entry.Index.name;
+             path = entry.Index.path;
              mode = entry.Index.stats.Index.mode;                                            content = lazy (raise (Impossible "not called")); }
     )
   );
@@ -6478,7 +6474,7 @@ let changes_index_vs_tree read_tree index treeid =
 (* todo: need parse .gitignore *)
 let untracked r =
   let h = r.Repository.index 
-      |> List.map (fun entry -> entry.Index.name, true) 
+      |> List.map (fun entry -> entry.Index.path, true) 
       |> Hashtbl_.of_list 
   in
   let res = ref [] in
@@ -8747,7 +8743,7 @@ let diff a b =
         |> append_map added   b bpos boff
         |> (fun y -> (Diff.Equal x)::y)
         |> loop rest (aoff + 1) (boff + 1)
-  in loop (lcs a b) 0 0 []
+  in loop (lcs a b) 0 0 [] |> List.rev
 @
 
 
@@ -9321,7 +9317,11 @@ let cmd = { Cmd.
     | ["sha1"] -> test_sha1 ()
     | ["unzip"] -> test_unzip ()
     | ["diff";file1;file2] -> test_diff file1 file2
-    | ["diff"] -> failwith "missing arguments to diff (diff <file1> <file2>)"
+    | ["diff"] -> 
+      failwith "missing arguments to diff (diff <file1> <file2>)"
+    | ["diff3";file1;file2;file3] -> test_diff3 file1 file2 file3
+    | ["diff3"] -> 
+      failwith "missing arguments to diff3 (diff3 <orig> <filea> <fileb>)"
     | _ -> failwith (spf "test command [%s] not supported"
                        (String.concat ";" args))
   );
