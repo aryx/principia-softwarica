@@ -7467,6 +7467,8 @@ done;
 @
 % why 0 to 79? why magical 79?
 
+\subsection{Padding}
+
 <<function sha_1_pad>>=
 let sha_1_pad s =
   let len = String.length s in
@@ -7654,7 +7656,7 @@ let reset_bits z =
   z.znbits <- 0
 @
 
-
+% Could use IO.in_bits type that encapsulate this.
 
 <<function Unzip.get_bit>>=
 let get_bit z =
@@ -7766,6 +7768,7 @@ let make_huffman lengths pos nlengths maxbits =
     (NeedBit (tree_make 0 1, tree_make 1 1))
 @
 \t need more LP split, not trivial
+\t replace those unsafe_get
 %opti: tree_compress (NeedBit ...)
 
 <<function Unzip.tree_make>>=
@@ -7843,10 +7846,10 @@ let window_available w =
 <<function Unzip.inflate>>=
 let inflate ?(header=true) ch =
   let z = inflate_init ~header ch in
-  let s = Bytes.create 1 in
+  let tmp = Bytes.create 1 in
   IO.create_in
-    ~input:(fun s p l ->
-      let n = inflate_data z s p l in
+    ~input:(fun s pos len ->
+      let n = inflate_data z s pos len in
       if n = 0 
       then raise IO.No_more_input;
       n
@@ -7856,9 +7859,9 @@ let inflate ?(header=true) ch =
     )
     (** special case of ~input for 1 byte *)
     ~read:(fun() ->
-      let l = inflate_data z s 0 1 in
+      let l = inflate_data z tmp 0 1 in
       if l = 1 
-      then Bytes.unsafe_get s 0 
+      then Bytes.unsafe_get tmp 0 
       else raise IO.No_more_input
     )
 @
@@ -8797,6 +8800,7 @@ let diff a b =
   Unix.readlink full_path
 @
 
+% see also use of lstat() before, not stat()
 
 \section{Splitting a large repository: submodules}
 
@@ -8966,7 +8970,7 @@ let diff a b =
 \subsection{[[git pull]] and tags}
 % should split_commit_and_tags (see dulwich)
 
-\section{Reflog}
+\section{Storing past versions of the heads: the reflog}
 
 % quite simple, just an history of the content of a ref.
 % So very meta, refs allow to access the history of files,
@@ -8978,6 +8982,7 @@ let diff a b =
 % but code of dulwich does not maintain reflog. When you
 % update a ref, it should update the reflog of this ref!
 
+\subsection{[[git reflog]]}
 
 \section{Stash}
 % again, just a ref?
@@ -9314,14 +9319,22 @@ let cmd = { Cmd.
   options = [];
   f = (fun args ->
     match args with
-    | ["sha1"] -> test_sha1 ()
-    | ["unzip"] -> test_unzip ()
+    | ["sha1"; str] -> test_sha1 str
+    | ["sha1"] -> test_sha1 "what is up, doc?"
+
     | ["diff";file1;file2] -> test_diff file1 file2
     | ["diff"] -> 
       failwith "missing arguments to diff (diff <file1> <file2>)"
+
     | ["diff3";file1;file2;file3] -> test_diff3 file1 file2 file3
     | ["diff3"] -> 
       failwith "missing arguments to diff3 (diff3 <orig> <filea> <fileb>)"
+
+    | ["unzip"; file] -> test_unzip file
+    | ["zip"; file] -> test_zip file
+
+    | ["unzip_all_objects"] -> test_unzip_all_objects ()
+
     | _ -> failwith (spf "test command [%s] not supported"
                        (String.concat ";" args))
   );
@@ -9330,11 +9343,8 @@ let cmd = { Cmd.
 
 <<function Cmd_test.test_sha1>>=
 (* see https://git-scm.com/book/en/v2/Git-Internals-Git-Objects *)
-let test_sha1 () =
-  let content = "what is up, doc?"
-    (*"test content\n"  *)
-  in
-  let header = "blob 16\000" in
+let test_sha1 content =
+  let header = spf "blob %d\000" (String.length content) in
   let store = header ^ content in
 
   let sha = Sha1.sha1 store in
