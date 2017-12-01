@@ -1,6 +1,5 @@
 \documentclass[12pt]{report}
-%12pt
-%twocolumn, landscape
+%12pt, twocolumn, landscape
 
 %******************************************************************************
 % Prelude
@@ -21,7 +20,7 @@
 
 %thx to this manual, I better understand VCSs (and git):
 % - intuition of Torvalds for a stupid content tracker with very
-%   different strategies
+%   different strategies (e.g., rename handled at query time) 
 % - merge and MERGE_HEADS state?
 % - beauty of design using SHA1 used for so many things (Graydon Hoare?)
 
@@ -42,8 +41,8 @@
 % - aspecify advanced features! remove useless features
 % * port dulwich to OCaml thx to lpized version of dulwich
 % * LPized my ocaml port of dulwich
-% - TODO add figures
-% - TODO add explanations
+% - SEMI add figures
+% - SEMI add explanations
 
 %------------------------------------------------------------------------------
 % Packages
@@ -79,6 +78,7 @@
 % ifallcode is used for:
 % - extra copyright 
 % - file skeleton, extra signatures (stuff in Extra.nw)
+% - todos in code in chunks
 
 
 \begin{document}
@@ -151,7 +151,7 @@ VCSs allow to {store} and {retrieve} past versions of a file, and to {record}
 \l store/retrieve/track and coordinate work of multiple people.
 %
 VCSs are mostly used by programmers but
-you can use a VCS to manage any text-based document
+you can use a VCS to manage any text-based documents
 (e.g., the source of this book), configuration files, and even binaries.
 \n e.g., images, but not good IMHO to store binaries.
 \l Word/Excel/Google-Docs/Wikipedia have their own VCS.
@@ -171,6 +171,7 @@ even to work on and modify the same files concurrently.
 \l not as interesting as kernel/compiler, but necessary!
 \n bootstrapping issues (said later)
 \l many nice algos. interesting study.
+\t copy building-git.launchrock pitch?
 
 Here are a few questions I hope this book will answer:
 \begin{itemize}
@@ -225,7 +226,7 @@ What is a merge conflict? How does a VCS resolve conflicts?
 
 %companies:
 \t Important, companies invest in VCS: Facebook (mercurial, git), Google? (Perforce?),
-\t  Microsoft (Sourcesafe, Git), Sun (before bitkeeper stuff?), 
+\t  Microsoft (Sourcesafe, Visual Team Source Control, Git), Sun (TeamWare), IBM
 \t Apple? amazon? netflix?
 
 \t put in conclusion non-trivial adv algo and data structures seen? see comment
@@ -275,6 +276,10 @@ Moreover, when coupled with the hosting website
 GitHub\furl{https://github.com}, 
 Git makes it really easy for people to collaborate with each other.
 \n mercurial/bitbucket, CVS/sourceforge/savannah but GitHub better interface
+\l Cf OCaml experiment with Github vs CVS/Mantis, no match! Easy to setup.
+\n  very low barrier
+\l Meta: OCaml, lang of ocamlgit, now under github itself! so can use ocamlgit
+\l  to get code of ocaml :)
 
 However, Git is a rather large project with more
 than 200 000 LOC. It is impossible to present all this code
@@ -296,16 +301,12 @@ which contains more than 170 000 lines of C code.
 Instead, I decided to port the Python code of Dulwich to OCaml, resulting
 in [[ocamlgit]], and to present the code of [[ocamlgit]].
 \n other ocaml clones ocaml-git (said later)
-\l not as efficient as git, not as famous as Torvalds for coding style,
-\l  but not too bad (bench?) and easier entry point to then look code of git.
-
-% related book:
-% - https://building-git.launchrock.com/ 
-
+\n in fact I LPized first full code of dulwich, which helped understanding it
 
 \section{Other version control systems}
 \label{sec:other-vcs}
-%me: manual backups -> RCS -> CVS -> PRCS -> git -> darcs -> SVN -> git -> hg
+%me: manual backups -> RCS -> CVS -> PRCS -> git -> darcs -> 
+% (FB-in) SVN -> git -> hg -> (FB-out) git
 
 Here are a few VCSs that I considered for this book, but
 which I ultimately discarded:
@@ -334,7 +335,7 @@ share access to a common directory
 (for example, by using NFS and symbolic links).
 %
 However, the use of {\em locks} in RCS to forbid multiple developers
-to modify the same file and its focus on individual files make
+to modify the same file at the same time and its focus on individual files make
 % Mostly single file. treat files separately. Each has different version. 
 %  can be used for multiple files, but abuse shell (wildcard on ,v)
 %  but not really good for projects with subdirs.
@@ -351,7 +352,7 @@ RCS still contains more than 17 500 LOC.
 \item The Concurrent Versions System
 CVS~\cite{cvs}\furl{http://www.nongnu.org/cvs/}
 was the most popular VCS for over a decade
-before distributed VCS (e.g., Git) took over.
+before distributed VCSs (e.g., Git) took over.
 %
 CVS introduced a few important innovations.
 \n STUG award 2003
@@ -361,19 +362,20 @@ wildcards, but it was not designed for it.},
 with files possibly organized in a tree.
 \n RCS cannot do that.
 With CVS, you can group together related changes to a set of files 
-and you can easily retrieve past versions of a whole project.
+and you can easily retrieve past versions of a whole {project}.
 \l not atomic commit though, SVN fixed that (said later?)
 \n can with RCS, with tags, or date, but again not really designed for
 %
 Secondly, CVS allows multiple users to work on and modify the same
 files concurrently (hence the 'C' in CVS).
-CVS relies on a [[merge]] program instead of locks.
-(Section~\ref{sec:diff3-algo} will present the Diff3 algorithm 
-underlying this [[merge]] program).
+CVS relies on the [[merge]] program instead of locks.
+(Section~\ref{sec:diff3-algo} will present the Diff3 algorithm which
+underlies the [[merge]] program).
 \l who commit first always succeeds and snd needs update and merge (said later)
 %
 Finally, CVS introduced later in 1995 a {\em client/server} architecture 
 where a {\em repository} could be stored on a remote machine.
+\t should find a way to define repo before, and so no need em here
 \n TCP/IP really made took off, but was done later, not in 1986.
 When coupled with the free hosting site
 Sourceforge\furl{https://sourceforge.net}, 
@@ -393,14 +395,17 @@ The backend file [[src/rcs.s]] contains already 9000 LOC.
 \item Git~\cite{git-book}\furl{https://git-scm.com} was originally created
 by Linus Torvalds in 2005 to manage the source code of the Linux kernel.
 It followed a series of
-{\em distributed VCSs} (e.g., Arch, Monotone, Bazaar, BitKeeper) 
+{\em distributed VCSs} 
+(e.g., TeamWare, BitKeeper, Arch, Darcs, Monotone, Bazaar) 
 designed to overcome the main limitations of CVS (a {centralized VCS}).
 %
 Because a distributed VCS (DVCS) does not require access to a
 central repository, it allows developers to work independently offline.
 %
 A DVCS makes it also easy and cheap to create {\em branches}
-representing parallel developments, and to reconcile later those branches.
+representing parallel developments, and to reconcile later those branches
+(see Section~\ref{sec:distributed-vs-centralized} for more discussions
+on the advantages of distributed VCSs over centralized VCSs).
 \l has to, because everybody is a branch (said later?)
 \l also atomic, consistency checks! fast! done the right way!
 \l peer-to-peer (said later?)
@@ -419,9 +424,12 @@ but added many more lines of code.
 \t count? Now integrated in Git but Git also bigger 
 \l also libgit2, LOC? share code with git?
 
+% related book:
+% - https://building-git.launchrock.com/ 
+
 \item Mercurial~\cite{hgbook}\furl{https://www.mercurial-scm.org/}
-is another popular DVCS started by another Linux kernel programmer
-(Matt Mackal) in 2005.
+is another popular DVCS started also in 2005 by another 
+Linux kernel programmer: Matt Mackal.
 \l after BitKeeper fiasco
 It is mostly written in Python and relies only on a few C files for critical
 operations. Its code is arguably easier to understand than Git
@@ -441,7 +449,7 @@ of the major innovations in the development of VCSs.
 
 \begin{figure}[!]\centering
 \begin{verbatim}
-1975  | VCS idea, delta, locks
+1975  | VCS idea, repository, delta, locks
       | (SCCS)
       |
       |
@@ -449,15 +457,12 @@ of the major innovations in the development of VCSs.
       | (CVS)
       |
       |
-1995  | networking
+1995  | networking, collaboration through Internet
       | (CVS)
       |
       |
 2005  | Distributed
-      | (Git, Mercurial, ...)
-      |
-      |
-2015  | ???
+      | (TeamWare, BitKeeper, Git, Mercurial, ...)
       |
       |
       v
@@ -465,6 +470,12 @@ of the major innovations in the development of VCSs.
 \caption{Version control systems timeline.}\label{fig:timeline-vcs}
 \end{figure}
 \n algos: Diff, Diff3, Zip, Sha1
+\t actually first distributed Sun Workshop Teamware; wikipedia says '1990?'
+\t  and Bitkeeper was 2000
+\l and in 2015?
+%      |
+%2015  | ???
+%      |
 
 
 [[ocamlgit]] is not as efficient and complete as Git or Mercurial, 
@@ -472,6 +483,8 @@ but it provides almost all of the essential features of those programs
 %dup: intro/ocamlgit
 with more than an order of magnitude less code (6500 LOC).
 \l could bench ocamlgit vs git? also percentage commands covered in Cheat sheet?
+\l not as efficient as git, not as famous as Torvalds for coding style,
+\l  but not too bad (bench?) and easier entry point to then look code of git.
 
 %industry:
 % - Perforce
@@ -591,6 +604,9 @@ the following commands:
 \t implement --author
 \n alternative is to have config file, but need explain that
 \n no need --comitter here
+\l more? 2nd modif with 2nd commit and then go back?
+\l  but then need explain checkout, HEAD^, too complex? or use git revert?
+\l  but it's a commit, because distributed, so complex again.
 
 The command in Line~4 {initializes} a new {\em repository} by
 creating the appropriate {metadata} in the [[/tests/hello/.git/]]
@@ -601,7 +617,8 @@ Line~7 then {adds} the new file [[hello.txt]] to the {\em staging area} of Git
 a staging area).
 \l same than index? no index is internal DS for managing stage area
 Finally, Line~8 {\em commits} what was staged to the repository and {records}
-this commit with the {message} ``first commit''.
+this commit with the {message} ``first commit'' and the
+author [[pad]]\footnote{This is my nickname}.
 \l and author and date?
 
 \label{sec:git-abbrev}
@@ -817,7 +834,8 @@ Indeed, I used mainly the code of Dulwich to write the code of [[ocamlgit]].
 Dulwich provided an easier path towards understanding
 the concepts and implementation of Git.
 \l Also Thomas gazanaire.
-%
+
+
 I would like also to thank Linus Torvalds, the original author of Git,
 for designing this simple but powerful VCS.
 %
@@ -825,7 +843,7 @@ Many of his design decisions seem obvious
 in retrospect but they are not: most VCSs chose different designs
 (for the storage, 
 file permissions, 
-renames,
+for the way to handle renames,
 etc.)
 \l snapshot-based > changeset?, SHA1 DAG (but Monotone), GMT time, etc.
 which in the end are more complicated
@@ -845,7 +863,7 @@ Before showing the source code of [[ocamlgit]] in the following chapters,
 I first give an overview in this chapter of the general principles of a VCS.
 I also quickly describe the command-line interface of [[ocamlgit]],
 \l (and so of [[git]] too),
-the format of a Git repository, and use a simple terminal session containing
+the format of a Git repository, and I use a simple terminal session containing
 [[ocamlgit]] commands to illustrate its major features.
 %dup: Assembler.nw
 Finally, I define terms, explain how the code is organized, 
@@ -881,27 +899,41 @@ to understand the code I will show later.
 
 %toc:
 The main requirements for a modern VCS are to be able to
-store past versions of a file,
+store past versions of a set of files,
 \l and retrieve, and actually set of files
-to track changes, 
-and to help multiple developers collaborate with each other by supporting
+to track the changes to those files, 
+and to help multiple developers to collaborate with each other 
+on those files by supporting
 concurrent and parallel development (I will explain soon the differences
 between those two kinds of development).
 %
 The next sections will each give more details about those requirements.
-I will also try to present the major techniques used by popular VCSs to satisfy
-those requirements. Finally, I will discuss two different architectures 
-for VCSs: centralized and distributed.
+I will also try to present the major techniques used by popular VCSs 
+to satisfy those requirements. 
+%
+Finally, I will discuss two different architectures for VCSs: 
+centralized and distributed.
 
 % try be general and add %git: for git instantiation of general principles
 \subsection{Storing past versions}
 
+The first requirement of a VCS is to store past versions of a file,
+hence the 'V' in VCS. However, there is also an 'S' in VCS, which means
+it must be done in a systematic way. 
+\l and with user in 'C'ontrol, or in a Controlled way
 %without:
-%One way to understand the core principles and features of a VCS
-%is to see how people are struggling when they are managing
-%documents that evolves (e.g., source code, LaTeX files, notes) without
-%a VCS.
-\t too difficult?
+Indeed, one way to understand the usefulness of a VCS
+is to see how people are struggling when they are managing
+documents that evolves (e.g., source code, LaTeX files, notes) without
+a VCS.
+%
+In that situation, people often uses [[cp]] to {\em backup} files, but it is
+inefficient space-wise and error-prone. 
+\l but backup where?
+%It is easy to forget to backup.
+\l but with VCS you have to remember too to commit
+
+
 
 %trans:
 % first purpose of VCS is store (and also retrieve) past versions.
@@ -919,8 +951,11 @@ for VCSs: centralized and distributed.
 \subsubsection{The repository}
 %\subsubsection{Metadata}
 
+% RCS/, CVS/CVSRoot in each dir, .git/ toplevel (hidden by default with ls)
+
 % Actually def of repo? just .git/? or .git/ + working files?
 % so kinda of topdir?
+% Can mean whole thing or just metadata depending on context. Fuzzy.
 
 % No fs, no hidden meta-data, 
 % so need use filesystem as a db.
@@ -940,6 +975,8 @@ for VCSs: centralized and distributed.
 % Berkely DB (SVN), Sqlite (monotone), changesets (?)
 
 \subsubsection{Working copy}
+% you work on copy from repo (hence name)
+
 % working tree
 
 % checkout, checkin
@@ -1110,6 +1147,9 @@ for VCSs: centralized and distributed.
 %facebook: What if time update and time commit long
 % so always another guy in the middle.
 
+% Actually CVS did not have atomic commit of multiple files at the
+% same time. Files were still treated separately.
+
 \subsubsection{Merge conflicts}
 
 % show conflict with <<<< === >>>>
@@ -1170,6 +1210,7 @@ for VCSs: centralized and distributed.
 
 %\subsection{Variants}
 \subsection{Centralized versus distributed}
+\label{sec:distributed-vs-centralized}
 % pulling and pushing
 
 % but in both cases pull and push.
@@ -1222,12 +1263,12 @@ command-line interface of [[ocamlgit]] is almost identical
 to the one of the program [[git]]. This is why I will often use
 [[git]] as an alias for [[ocamlgit]] in the rest of this document.
 
-The command-line interface of [[git]] is pretty simple:
+The command-line interface of [[git]] (and [[ocamlgit]]) is pretty simple:
 %dup: (but use git not ocamlgit this time) intro/getting-started
 \begin{verbatim}
 1 $ git
 2 usage: git <init|add|rm|commit|branch|checkout|reset|...> [options]
-3 % git init
+3 $ git init
 4 Initialized empty Git repository in /tests/hello/.git/
 5 $ git add hello.txt
 6 $ git commit -m "first commit" --author "pad <todo@todo>"
@@ -1239,9 +1280,9 @@ options and extra arguments specific to this command.
 \l git uses also some common options for all its commands (but not ocamlgit)
 %
 For example, the command 
-[[init]] Line~3 does not need any extra arguments, but
-[[add]] Line~5 requires at least the name of a file or directory, and 
-[[commit]] Line~6 usually requires command-line flags.
+[[init]] at Line~3 does not need any extra arguments, but
+[[add]] at Line~5 requires at least the name of a file or directory, and 
+[[commit]] at Line~6 usually requires command-line flags.
 %chunks:
 I will gradually describe the different [[git]] commands, their
 options, and implementations in the following chapters.
@@ -1281,9 +1322,10 @@ the {\em staging area}.
 They correspond also to [[ocamlgit]]'s main data structures,
 which I will describe fully in Chapter~\ref{chap:core-ds}.
 %toc:
-The following sections will give an overview of those data structures. 
+The following sections will just give an overview of those data structures. 
 
 \subsection{Object store}
+\label{sec:object-store}
 
 %torvalds:
 To really understand Git, you need to realize that at its core,
@@ -1301,12 +1343,17 @@ as a {\em key/value store}.
 In this store, Git manipulates mainly three kinds of values, known
 as {\em objects} in Git terminology (hence the term {\em object store}):
 \begin{itemize}
-\item A {\em blob}: to represent the content of a file
+\item A {\em blob}: to represent the content of a file at
+a specific time.
+\l version
+\l can also be symlinkk content hence use of Blob and not File (also because
+\l  specific to a time)
 
 \item A {\em tree}: to assign names to blobs or other subtrees
 
 \item A {\em commit}: to associate to a specific toplevel tree
 a message, an author, a date, and zero or more {\em parent} commits
+\n also file types
 
 \end{itemize}
 
@@ -1331,7 +1378,7 @@ any content of arbitrary length.
 Section~\ref{sec:sha1-algo} presents the code of this algorithm
 and gives more information on SHA1.
 %
-For example, given the content [[Hello Git\n]], SHA1 will return
+For example, given the content [[Hello Git\n]], the SHA1 algorithm will return
 the number [[9f4d96d5b00d98959ea9960f069585ce42b1349a]]
 in hexadecimal format.
 %
@@ -1342,8 +1389,8 @@ are far bigger than 20 bytes.
 
 
 SHA1 is a complex {cryptographic hash function}. It is outside
-the scope of this book to explain how it works, but
-what is important is that SHA1 is an almost perfect hash function:
+the scope of this book to explain how and why it works, but
+what is important for Git is that SHA1 is an almost perfect hash function:
 \l gperf?
 given two different content, there is an almost zero probability
 that SHA1 will return the same hash number. 
@@ -1359,7 +1406,8 @@ on filesystems and inodes)\footnote{
 %torvalds:
 The author of Git, Linus Torvalds, is also the author of Linux,
 which explains why he chose a design inspired by filesystems.
-}.
+},
+except it references a specific version of a file.
 %
 In the tree object, which associates names to blobs, Git
 uses the SHA1 of a blob to identify this blob. In the same way,
@@ -1368,51 +1416,53 @@ the toplevel tree a commit refers to.
 
 
 
-Figure~\ref{fig:objects-sha1-dag} presents the content of the Git objects
-and their relationships in the Git repository created 
+Figure~\ref{fig:objects-sha1-dag} presents the Git objects
+(and their relationships) of the Git repository created 
 in Section~\ref{sec:getting-started} after the addition of another commit.
 %
-The first commit, which added [[hello.txt]], is at the top of 
+The first commit, which added [[hello.txt]], is at the top left of 
 Figure~\ref{fig:objects-sha1-dag}.
 The second commit, below, added the two files [[foo.txt]] and [[bar.txt]]
-under a directory [[dir1/]].
+under a directory [[dir1/]], and also modified [[hello.txt]].
 %
 I will describe soon in Section~\ref{sec:repository-format} 
-how those Git objects are stored on the disk
+how Git stores those objects on the disk.
+\t Same file, 2 blobs. Versioned. Sometimes 2 files, same blob. Dedup.
+\t But each version store entirely. Seems naive compared to RCS deltas.
+\t But gzip, and later will see pack to optimize.
 
 \begin{figure}[!]\centering
 \begin{verbatim}
 commit 19d977...-----+
 |tree:               |   tree 2f092e...-------+      blob 9f4d96...+
-| 2f092e... ---------+-->| hello.txt 9f4d96.--+----->| Hello Git   |
+| 2f092e... ---------+-->| hello.txt 9f4d96.--+----->|Hello Git    |
 |parents:            |   +--------------------+      |             |
-| None               |                            +->|             |
-|Author: pad         |                            |  +-------------+
-| <todo@todo>        |                            |
-|Date: Fri Sep 29    |                            |
-| 14:04:46 2017 -0700|                            |
-|Message:            |                            |
-| first commit       |                            |
-+--------------------+                            |
-                   ^                              |  blob 452a53...+
-                   |                              |  |baaaaaaaaaa  |
-commit 5d9dfe...---+---+   tree 0c4b27...-------+ |+>|aaaaaaaaaaa  |
-|tree:             |   | +-+ dir1 7e8bb2...     | || |aaaaaaaaaar  |
-| 0c4b27...--------+---+-+>| hello.txt 9f4d96.--+-+| +-------------+
-|parents:          |   | | +--------------------+  |
-| 19d977-----------+   | |                         |
-|Author: pad           | |   tree 7e8bb2...-----+  |
-| <todo@todo>          | +-->| bar.txt 452a53.--+--+ blob 96ea4a...+
-|Date: Fri Sep 29      |     | foo.txt 96ea4a.--+--->| fooooooooo  |
-| 14:26:23 2017 -0700  |     +------------------+    | oooooooooo  |
-|Message:              |                             | oooooooooo  |
-| second commit, subdir|                             +-------------+
-+----------------------+
+| None               |                               |             |
+|Author: pad         |                               +-------------+
+| <todo@todo>        |
+|Date: Fri Sep 29    |                               blob 557db0...+
+| 14:04:46 2017 -0700|                            +->|Hello World  |
+|Message:            |                            |  |             |
+| first commit       |  +->tree 0c4b27...-------+ |  |             |
++--------------------+  | ++ dir1 7e8bb2...     | |  +-------------+
+                   ^    | || hello.txt 557db0...+-+
+                   |    | |+--------------------+
+commit 5d9dfe...---+---+| |
+|tree:             |   || |                          blob 452a53...+
+| 0c4b27...--------+---++ |                          |baaaaaaaaaa  |
+|parents:          |   |  |                        +>|aaaaaaaaaaa  |
+| 19d977-----------+   |  |                        | |aaaaaaaaaar  |
+|Author: pad           |  |  tree 7e8bb2...-----+  | +-------------+
+| <todo@todo>          |  +->| bar.txt 452a53.--+--+
+|Date: Fri Sep 29      |     | foo.txt 96ea4a.--+--+ blob 96ea4a...+
+| 14:26:23 2017 -0700  |     +------------------+  | | fooooooooo  |
+|Message:              |                           +>| oooooooooo  |
+| second commit, subdir|                             | oooooooooo  |
++----------------------+                             +-------------+
 \end{verbatim}
-\caption{Git objects relationships.}\label{fig:objects-sha1-dag}
+\caption{Git objects relationships for [[hello/.git]] after two commits.}
+\label{fig:objects-sha1-dag}
 \end{figure}
-\t comment figure
-
 
 \l so back to content-addressable storage, given hash xxx
 \l  Git can retrieve quickly blob content.
@@ -1450,12 +1500,12 @@ through the [[parents]] field of the object.
 Those links represent the history of the repository, also known
 as its {\em log}.
 %
-Because a commit can have multiple parents 
-(in the case of a {\em merge}, as explained below),
-the log forms a {\em graph}, or more specifically 
+A commit can have multiple parents
+in the case of a {\em merge} 
+(I will explain in Section~\ref{sec:git-merge} how to merge branches in Git).
+Thus, the log forms a {\em graph}, or more specifically 
 a {\em direct acyclic graph} (DAG).
-
-
+%
 Figure~\ref{fig:commit-dag} shows such a graph for an additional series of
 commits following the first two commits of Figure~\ref{fig:objects-sha1-dag}.
 %
@@ -1471,7 +1521,7 @@ At the same time, development on the main branch, called the
 [[commit4]] and [[commit6]].
 %
 The experimental branch got {\em merged} later at [[commit7]]
-(I will explain in Section~\ref{sec:git-merge} how to merge branches).
+(I will explain in Section~\ref{sec:git-merge} how to merge branches in Git).
 This is why this commit has two parents.
 %
 Later on, a developer created another branch called [[experiment]] that
@@ -1527,6 +1577,7 @@ it follows in parallel the development of the {master branch}.
 
 
 \subsection{References}
+\label{sec:references}
 \l and the commit graph
 
 %trans: %dup: overview/hello.git/concepts/content-addressable
@@ -1595,7 +1646,8 @@ the top of Figure~\ref{fig:git-areas}:
 \item The {\em repository} contains all past versions of all the files 
 including the state of the files at the last commit
 
-\item The {\em staging area} contains what will be the next commit
+\item The {\em staging area} contains what the user wants to commit
+next
 \end{enumerate}
 
 \begin{figure}[!]\centering
@@ -1630,31 +1682,34 @@ at the right of Figure~\ref{fig:git-areas}, you need to
 indicate which of those files and modifications should be part
 of the next commit.
 %
-To do so, you need to mark those files by using the command
+To do so, you need to {\em mark} those files by using the command
 [[git add]] (or [[git rm]] if you want to mark for deletion a file).
 %
-After you created a new repository, you must also use [[git add]] to add a 
-new file to the repository.
-In that case the file is said to be {\em tracked} in Git terminology.
+%After you created a new repository, you must also use [[git add]] to add a 
+%new file to the repository.
+%In that case the file is said to be {\em tracked} in Git terminology.
 %
-Then, you must use [[git add]] when you modify a tracked file
-to mark it for the next commit.
+%Then, you must use [[git add]] when you modify a tracked file
+%to mark it for the next commit.
 
 
 Once you marked all the relevant files, you can use the command [[git commit]]
 to commit the modifications to the repository.
 \l also git add --patch for interactively adding hunks (used by magit?)
-For example, in Figure~\ref{fig:git-areas} only the modifications
+For example, in Figure~\ref{fig:git-areas}, only the modifications
 to [[foo.txt]] and the deletion of [[misc.txt]] will be part
 of the next commit, and not the modifications to [[bar.txt]].
 
+Once you add a file in a repository, the file is said to be
+{\em tracked} in Git terminology.
+%
 You can sometimes avoid manipulating explicitely the staging area 
 by using instead the command [[git commit -a]] to automatically commit all
 the modifications to the tracked files.
 %
 However, the staging area and [[git add]] give more flexibility
 to the user by allowing to split a set of modifications in multiple
-commits. For example in Figure~\ref{fig:git-areas} the modification
+commits. For example, in Figure~\ref{fig:git-areas}, the modification
 to [[bar.txt]] can be put in another commit.
 %gitless: useless area
 
@@ -1676,7 +1731,7 @@ this data structure is called an index.
 Now that you know the main concepts and data structures underlying Git, 
 it will be easy to understand the format of the [[.git/]] directory.
 %
-Here is the sligtly edited output of the \unix command [[tree]]
+Here is the sligtly edited output of the \unix command [[tree]],
 which recursively explores a directory and displays its content as a tree
 \footnote{See \url{http://mama.indstate.edu/users/ice/tree/}
 for more information about the [[tree]] program. The [[-F]] option
@@ -1685,11 +1740,14 @@ at the end of directory names, to help differentiate regular files from
 subdirectories.
 }.
 \n actually now also in utilities/misc/tree.ml
-The command is applied here to the [[.git/]] directory after the 
-last command in Section~\ref{sec:getting-started}:
+The command is applied here to the [[/tests/hello/.git/]] directory after the 
+last command in Section~\ref{sec:getting-started},
+when the repository contained just one commit:
 
 \begin{verbatim}
-8 $ tree -F .git/
+1 $ pwd
+/tests/hello
+2 $ tree -F .git/
 .git/
 |-- HEAD
 ...
@@ -1735,14 +1793,16 @@ the remaining digits for the filename of the object.
 %
 For example, the file
 [[.git/objects/9f/4d96d5b00d98959ea9960f069585ce42b1349a]] contains
-the blob of [[Hello Git\n]] (see Figure~\ref{fig:objects-sha1-dag}).
+the blob of [[Hello Git\n]] (see the blob
+and its SHA1 at the top right of Figure~\ref{fig:objects-sha1-dag}).
 
 Git uses the first two digits of the SHA1 to classify objects
 in separate folders to avoid having too many files in the same
 directory. Indeed, this would slow down filesystem operations
-such as opening a file referenced by a specific SHA1 key
+such as opening a file referenced by a specific SHA1 key,
+a recurring operation under Git
 (see the \book{Kernel} for more information on the performance
-of filesystem operations), a recurring operation under Git.
+of filesystem operations).
 
 The references are also stored simply in separate files.
 Git uses the name of the reference as the path to a file
@@ -1754,11 +1814,13 @@ in separate files.
 
 
 \section{[[hello/.git/]]}
+\label{sec:git-tutorial}
+%\subsection{A terminal session using [[git]]}
 
 %trans: ?
 \t some trans?
 %toc:
-In this section, I will give a short tutorial on Git. 
+In this section, I will give a short tutorial on how to use Git. 
 I will explain the main commands of [[git]] by using a terminal session
 starting from an empty [[hello/]] directory.
 %trans:
@@ -1766,19 +1828,17 @@ I will continue the series of commands I introduced
 in Section~\ref{sec:getting-started}.
 %
 I will also describe the semantics of those commands by showing
-their effects on the Git metadata stored under the [[hello/.git/]] subdirectory.
+their effects on the Git metadata stored under the [[hello/.git/]] subdirectory
 (by using mainly the output of the [[tree]] command,
 as in the previous section).
 %
 This will hopefully help you to understand the code of
-those commands I will present later.
+those commands I will present later in the following chapters.
 %trans: %toc:
 %However, before showing this terminal session, I need to present the main
 %concepts behind Git, some Git-specific terminology, and
 %the format of the [[.git/]] repository.
 
-%\subsection{A terminal session using [[git]]}
-\label{sec:git-tutorial}
 
 %trans:
 %I can finally present the tutorial on how to use a few of the main commands
@@ -1796,8 +1856,9 @@ those commands I will present later.
 %dup: use git below, but really ocamlgit, try compatible UI.
 
 \subsection{Creating a repository}
+\label{sec:git-tutorial-init}
 
-Here are commands to create a fresh new repository:
+Here are the commands to create a fresh new repository:
 
 %dup: (but uses git not ocamlgit and add tree command) intro/getting-started
 \begin{verbatim}
@@ -1830,16 +1891,19 @@ ref: refs/heads/master
 %    `-- tags/
 
 The [[init]] command creates just the directory structure
-under [[.git/]], without any objects or references in it.
+under [[.git/]], without any objects or references in it
+(the [[.git/objects/]] and [[.git/refs/heads]] are empty directories above).
 %
 There is also not yet an index file.
 %
-There is a [[HEAD]] file, but its contents ([[ref: refs/heads/master]])
+There is a [[HEAD]] file, but its contents,
+shown with command~6 above 
 references an head that does not exist yet under [[.git/refs/heads/]].
 
 \subsection{Staging a diff}
 
-Here is the command to add a new file to the repository:
+Here is the command to add a new file (or a new version
+of a file) to the repository:
 
 \begin{verbatim}
 1 $ echo "Hello Git" > hello.txt
@@ -1878,24 +1942,27 @@ of a blob on the disk.
 precisely the format of the index file in Chapter~\ref{chap:reading},
 but the index essentially associates to every tracked filenames by
 the repository
-the SHA1 of the blob corresponding to the filename. 
+the SHA1 of the blob {\em currently} corresponding to the filename. 
+%
 In the example above, the index will associate to the filename [[hello.txt]]
 the SHA1 [[9f4d96...]].
 
 \end{enumerate}
 
-
+%dup: ?
 You must use the command [[add]] to add a new file
 to the repository, when the file was not yet {tracked} by
 the repository. However, you must also use the command [[add]]
 to stage the modifications on a tracked file as in 
 Figure~\ref{fig:git-areas}.
+\l really new version of a file
 %dup: above
 %
 In that case, the [[add]] command also creates a new blob with the
 current content of the file. It also updates the index so the filename
 of the added file now points to the SHA1 of the new blob.
-%
+
+
 Note that using [[git add]] on an unmodified file will have no effect. Indeed,
 Git will compute the SHA1 of the current content, which will be
 identical to the SHA1 of an existing blob. Updating the index will have also
@@ -1956,7 +2023,7 @@ The [[commit]] command has three effects:
 This tree derives from the content of the index. Because the repository
 contains only one directory (the toplevel root containing just [[hello.txt]]), 
 [[git commit]] will create just one tree object, but in general when
-a project has many directories, [[commit]] may create many new tree objects.
+a project has many directories [[git commit]] may create many new tree objects.
 \t share! dedup!
 
 \item The creation of a new {commit object}, here
@@ -1968,15 +2035,17 @@ and its relationship to the tree object).
 \item The update of the content of the head of the current branch
 ([[refs/heads/master]] according to the content of [[.git/HEAD]])
 to contain the SHA1 of the newly created commit object
-(here [[19d977...]]), as shown by the third shell command above.
+(here [[19d977...]]), as shown by command~3 above.
 \l note that first commit, so create first time refs/heads/master file
 \end{enumerate}
 
 Note that it can be tedious to specify each time on the command-line
 your name and email through the [[--author]] flag of [[git commit]].
-Git can also leverage a configuration file containing this
+Git can also leverage a configuration file containing such
 information in a [[.gitconfig]] file in your home directory
 as explained in Section~\ref{sec:gitconfig}.
+
+\l \subsection{New version of a file}
 
 \subsection{Managing branches}
 \label{sec:create-branch-tutorial}
@@ -2018,21 +2087,23 @@ with the name of the new branch (here [[.git/refs/heads/experiment]]),
 and the SHA1 commit of the current branch
 for its content (here [[19d977...]]).
 %
-However, creating a branch does not switch to this branch.
+However, creating a branch does not switch to this branch as shown
+by command~3 above.
 
 \label{sec:switch-branch-tutorial}
 Here is the command to switch to the new branch:
 
 \begin{verbatim}
-1 $ git checkout experiment
+6 $ git checkout experiment
 Switched to branch 'experiment'
-2 $ cat .git/HEAD
+7 $ cat .git/HEAD
 ref: refs/heads/experiment
 \end{verbatim}
 
 Switching to a branch is usually a more costly operation.
 %
-It modifies [[HEAD]], which is fast, 
+[[git checkout]] modifies [[HEAD]] (as shown by command~7 above), 
+which is fast, 
 but it also recomputes the index from the tree
 object that is referenced in the commit of the head of the new branch,
 as well as from all its subtrees
@@ -2040,7 +2111,7 @@ as well as from all its subtrees
 of this operation).
 %
 It also updates all the files so that they contain the content of
-the blob referenced in the index.
+the blobs referenced in the index.
 %
 The more the new branch differs from the current branch, the more
 costly switching to this new branch will be.
@@ -2054,7 +2125,7 @@ They are also useful for doing some archeology on the history of a project,
 as explained in Section~\ref{sec:archeology}.
 %
 The first of those commands, [[show]], shows the content of a Git object.
-It takes the SHA1 of an object as a parameter (in hexadecimal format)
+[[git show]] takes the SHA1 of an object as a parameter (in hexadecimal format)
 \l or objectish ref?
 and pretty prints its content in a readable format.
 %
@@ -2113,6 +2184,10 @@ Date:   Fri Sep 29 14:04:46 2017 -0700
     first commit
 \end{verbatim}
 
+The command [[log]] mainly opens [[.git/HEAD]] to get a reference
+to the last commit. Then, it goes through the parent links of the
+commit object to recursively explore all the linked commit 
+objects (stored again under [[.git/objects/]]).
 
 \subsection{Other commands}
 
@@ -2123,12 +2198,12 @@ Date:   Fri Sep 29 14:04:46 2017 -0700
 
 %chunks:
 There are a few other important Git commands: 
-[[merge]], 
-[[status]], 
-[[diff]],
-[[clone]], 
-[[pull]], or 
-[[push]], 
+[[git merge]], 
+[[git status]], 
+[[git diff]],
+[[git clone]], 
+[[git pull]], or 
+[[git push]], 
 but I will introduce them later in this document.
 
 
@@ -2202,7 +2277,7 @@ networking clients    & \ref{chap:networking}              & [[clients.ml]]  &  
 core algorithms           & \ref{chap:algorithms}             & [[sha1.ml]] [[zip.ml]] [[unzip.ml]] [[diff_basic.ml]] [[diff_myers.ml]] [[diff3.ml]]  &    \\ % (sha1.mli before)
 \midrule
 
-advanced features                & \ref{chap:advanced-features}              &   &    \\ %reflog.ml stash.ml graft.ml submodule.ml hook.ml
+advanced features                & \ref{chap:advanced-features}              & [[config.ml]] [[ignore.ml]]  &    \\ %reflog.ml stash.ml graft.ml submodule.ml hooks.ml
 % config.ml ignore.ml rename.ml
 advanced commands                & \ref{chap:advanced-commands}              & [[tag.ml]]  &    \\ %cmd_bisect.ml cmd_revert.ml cmd_blame.ml cmd_grep.ml cmd_archive.ml
 % cmd_plumb_fetch.ml
@@ -2267,7 +2342,7 @@ Internally, the [[Repository]] module relies on the
 [[Objects]], [[Refs]], and [[Index]] modules to read and write
 files under the [[.git/]] directory 
 (e.g., [[Index.read()]] and [[Index.write()]] to respectively read and
-write the index file).
+write the index file in [[.git/index]]).
 \l explain Blob/Tree/Commit ?
 %
 Those modules in turn rely on algorithms 
@@ -2277,6 +2352,7 @@ to merge two files coming from a common base file ([[Diff3.diff3()]]),
 or to compress ([[Zip.deflate()]]) 
 and decompress ([[Unzip.inflate()]]) data.
 \l explain pull/push and clients? not enough space? too complicated for now?
+\l say that in rest of doc will use SHA1 to mean SHA1 hash (shorter)
 
 \begin{figure}[!]\centering
 \begin{verbatim}
@@ -2338,7 +2414,7 @@ The rest of the book is organized as follows.
 I will start by describing the core data structures of [[ocamlgit]]
 in Chapter~\ref{chap:core-ds}.
 Chapter~\ref{chap:reading} and Chapter~\ref{chap:writing} 
-contains the code to respectively read and write those
+contains respectively the code to read and write those
 data structures on the disk in files under [[.git/]].
 %
 Then, I will switch to a top-down approach, starting with 
@@ -2358,7 +2434,8 @@ the staging area,
 Chapter~\ref{chap:committing} the code to commit what was staged, 
 Chapter~\ref{chap:branching} the code to create and switch branches,
 Chapter~\ref{chap:merging} the code to merge branches, and finally
-Chapter~\ref{chap:inspecting} the code to inspect Git objects.
+Chapter~\ref{chap:inspecting} the code to query the repository.
+\l inspect Git objects.
 %
 Chapter~\ref{chap:packing} presents the code to pack and compress objects,
 which is an important optimization.
@@ -2377,19 +2454,20 @@ the algorithm to compute the SHA1 of any string, or
 the algorithm to compute the differences between two files).
 %
 Then, I will present advanced functionalities of Git 
-that I did not present before to simplify the explanations:
-Chapter~\ref{chap:advanced-features} presents advanced features,
-for instance, the [[.gitconfig]] configuration file,
-Chapter~\ref{chap:advanced-commands} presents advanced commands,
-for instance, [[git tags]],
+that I did not present before to simplify the explanations.
+Starting with Chapter~\ref{chap:advanced-features} I will presents advanced 
+features, for instance, the [[.gitconfig]] configuration file.
+In Chapter~\ref{chap:advanced-commands} I will present advanced commands,
+for instance, [[git tags]].
 %for example commands that are useful for developers to develop 
 %and debug programs (e.g., [[git bisect]]) when the  source code of 
 %those programs is managed by Git, 
 % to help develop! not just store/retrieve
-and Chapter~\ref{chap:advanced-networking} presents advanced networking options,
+Finally in Chapter~\ref{chap:advanced-networking} I will present advanced 
+networking options,
 for instance, a Git client and Git server using the [[http://]] protocol.
 %
-Finally, Chapter~\ref{chap:conclusion} concludes
+Chapter~\ref{chap:conclusion} concludes
 and gives pointers to other books in the \principia series.
 \l really what the conclusion does? no much pointers I think
 
@@ -2458,7 +2536,7 @@ as explained in the following sections.
 
 %dup: overview/hello.git/concept/object-store
 As I mentioned in Section~\ref{sec:git-sha1-intro}, an SHA1 hash
-is a 160 bits number, which can be encoded as a sequence of 20 bytes.
+is a 160 bits number. Such a number can be encoded as a sequence of 20 bytes.
 
 <<type Sha1.t>>=
 (* a 20 bytes number (really a string of length 20) *)
@@ -2569,9 +2647,9 @@ let to_sha s =
 %  to_helper ~empty_return:"" ~create:Bytes.create ~set:Bytes.set hex
 %@
 
-The function relies on a nested function that iterates over
+The function [[to_sha()]] relies on the nested function below to iterate over
 all the pairs of characters in the hexadecimal hash and
-generates one byte from each pair:
+to generate one byte from each pair:
 
 <<[[Hexsha.to_sha()]] fill [[buf]]>>=
 let rec aux i =
@@ -2777,7 +2855,7 @@ let (/) = Filename.concat
 \section{[[Objects.t]]}
 
 %dup: overview/hello.git/git-concepts core-ds
-As I explained in Section~\ref{sec:git-concepts-and-ds}, 
+As I explained in Section~\ref{sec:object-store}, 
 Git uses internally mainly three kinds of objects, as expressed
 by the following type:
 
@@ -2832,7 +2910,7 @@ type hash = Sha1.t
 \label{sec:tree-type}
 % =~ directories =~ project content.
 
-A tree is an ordered list of {entries}, where each entry
+A tree is an ordered list of {entries} where each entry
 associates to a name a Git object through its (binary) SHA1.
 
 %"It doesn't bother trying to store per-file histories;
@@ -2856,6 +2934,7 @@ type entry = {
 }
 @
 %old: use id instead of node, so more consistent with Index.entry.id
+%crossref: Sha1.t (said above indirectly)
 
 
 <<type Tree.hash>>=
@@ -2874,7 +2953,7 @@ as expressed by the type below:
 % (seemed to be a pb in many other SCMs)
 
 <<type Tree.perm>>=
-(* very similar to Index.mode, but with also a 'Dir' *)
+(* similar to Index.mode, but with also a 'Dir' *)
 type perm = 
   | Normal
   | Dir
@@ -2888,6 +2967,7 @@ type perm =
 
 I will present in Chapter~\ref{chap:advanced-features} a few 
 more file types supported by Git (e.g., symbolic links, submodules).
+\n ref{sec:symlinks} ref{sec:submodules}
 
 Note that a tree entry does not specify the used id ([[uid]]) or
 group id ([[gid]]) of a file, or the read-write-execute
@@ -2932,9 +3012,15 @@ type t = {
   author   : User.t;
   message  : string;
   <<[[Commit.t]] extra fields>>
-  (* less: encoding, gpgsig, mergetag, extra *)
 }
 @
+%crossref: Tree.hash (again indirectly via text above)
+
+\ifallcode
+<<[[Commit.t]] extra fields>>=
+(* less: encoding, gpgsig, mergetag, extra *)
+@
+\fi
 
 <<type Commit.hash>>=
 and hash = Sha1.t
@@ -2992,7 +3078,7 @@ committer: User.t;
 
 \section{References}
 
-As I explained in Section~\ref{sec:git-concepts-and-ds}, references,
+As I explained in Section~\ref{sec:references}, references,
 which are mainly stored under [[.git/refs/]], are another
 fundamental data structure of Git. 
 %toc
@@ -3077,6 +3163,7 @@ let string_of_ref = function
 
 Most references contain the SHA1 hexadecimal hash of a commit, but 
 they can also contain the name of another reference:
+\l actually type below use Commit.hash, so more consistent, but on disk its hexa
 
 <<type Refs.ref_content>>=
 type ref_content =
@@ -3085,6 +3172,8 @@ type ref_content =
   (* pointer (may contain sha1 or another pointer again) *)
   | OtherRef of refname
 @
+%crossref: Commit.hash (said in text)
+
 
 By default, [[HEAD]] points to another reference:
 
@@ -3134,7 +3223,13 @@ type objectish =
   <<[[Repository.objectish]] cases>>
 @
 \l branch is shorter name than Refs.
-%todo:  ObjByShortHex
+%crossref: Hexsha.t, Refs.t
+
+\ifallcode
+<<[[Repository.objectish]] cases>>=
+(* todo:  ObjByShortHex *)
+@
+\fi
 
 
 \section{[[Index.t]]}
@@ -3153,7 +3248,7 @@ let index_to_filename r =
 
 An index is a sorted list of entries (similar to [[Tree.t]]
 in Section~\ref{sec:tree-type}) where each entry associates
-a path to an SHA1 binary hash.
+to a path an SHA1 binary hash.
 
 % Seen in Section X staging area. Marks. But in practice
 % not set of files with marks. Instead full set of files
@@ -3183,9 +3278,12 @@ type entry = {
 @
 %old: stage : int; (*?? *)
 
-As opposed to [[Tree.entry]], an index entry
+As opposed to [[Tree.entry]], an [[Index.entry]]
 contains a path to a file (e.g., [[dir/bar.txt]]), not 
 the {basename} of file or directory.
+%crossref:
+Indeed, the type of the [[id]] field above refers only to the SHA1 of a blob.
+%%dup: even if not checked statically
 %
 Moreover, instead of a small set of file types, an index entry
 contains the full \unix stat of a file (including its [[uid]] and [[gid]]):
@@ -3216,7 +3314,8 @@ type stat_info = {
 \l useful dev/inode?
 
 An index entry is specific to a user.
-The goal of the index, which was initially called the {\em directory cache},
+The goal of the index, which was initially called the {\em directory cache}
+in the first version of Git,
 is to access quickly information about a tracked file,
 for example the timestamp of a file at the moment it was checkout.
 
@@ -3241,7 +3340,7 @@ and time = {
 \t more than int64 here? nano second also in repo?
 
 Most Git commands will need information from the index 
-(e.g., [[git commit]]), and will modify the index (e.g., [[git add]]),
+(e.g., [[git commit]]), or will modify the index (e.g., [[git add]]),
 so the index is one of the fields of the [[Repository.t]] structure:
 
 <<[[Repository.t]] index field>>=
@@ -3298,7 +3397,7 @@ let stat_info_of_lstats stats =
       size = Int32.of_int stats.Unix.st_size;
     }
 @
-
+\l nsec is 01? OCaml API limitations?
 
 
 %\section{Pack files}
@@ -3328,14 +3427,15 @@ let stat_info_of_lstats stats =
 %trans:
 Now that you know the types of the core data structures and how
 they are represented in memory, we can look at the format of
-those data structures on the disk. In this chapter, we will
-also describe the code that reads those data structures from the disk,
+those data structures on the disk. In this chapter, I will
+describe the code that reads those data structures from the disk,
 with the code of 
 [[Repository.read_obj()]], 
-[[Repository.read_ref()]]], and 
+[[Repository.read_ref()]], and 
 [[Repository.read_index()]].
 %
-The next chapter will describe to write those data structures on the disk.
+The next chapter will describe the code that writes those data 
+structures on the disk.
 
 % Saw init, does not create objects, just create dirs.
 % Create also index. Will see later commands adding
@@ -3343,6 +3443,7 @@ The next chapter will describe to write those data structures on the disk.
 % This chapter focus on all reading API.
 
 \section{Objects}
+\label{sec:Repository-read-obj-TODO}
 
 % repo * sha -> path -> (channel -> IO.input) -> decompress -> deserialize
 
@@ -3401,6 +3502,7 @@ let decompress ch =
 
 
 \subsection{Reading a blob}
+\label{sec:Blob-read-TODO}
 
 
 <<[[Objects.read()]] match str cases>>=
@@ -3423,10 +3525,12 @@ val read_blob: t -> Sha1.t -> Blob.t
 let read_blob r h =
   match read_obj r h with
   | Objects.Blob x -> x
-  | _ -> failwith "read_commit: was expecting a blob"
+  | _ -> failwith "read_blob: was expecting a blob"
 @
 
 \subsection{Reading a tree}
+\label{sec:Tree-read-TODO}
+\label{sec:Repository-read-tree}
 
 <<[[Objects.read()]] match str cases>>=
 | "tree"   -> Tree   (Tree.read ch2)
@@ -3493,10 +3597,12 @@ val read_tree: t -> Sha1.t -> Tree.t
 let read_tree r h =
   match read_obj r h with
   | Objects.Tree x -> x
-  | _ -> failwith "read_commit: was expecting a tree"
+  | _ -> failwith "read_tree: was expecting a tree"
 @
 
 \subsection{Reading a commit}
+\label{sec:Commit-read-TODO}
+\label{sec:Repository-read-commit}
 
 <<[[Objects.read()]] match str cases>>=
 | "commit" -> Commit (Commit.read ch2)
@@ -3546,6 +3652,7 @@ let read ch =
   }
 @
 
+%crossref: Hexsha.read
 % As opposed to Tree, the Commit contains sha in Hexsha form
 <<signature Hexsha.read>>=
 val read: IO.input -> t
@@ -3557,6 +3664,8 @@ let read ch =
   s
 @
 
+%crossref: Hexsha.to_sha
+% but in core DS only Sha1.t, so convert
 
 
 <<signature User.read>>=
@@ -3606,6 +3715,8 @@ let read_commit r h =
 
 
 \section{References}
+\label{sec:Repository-read-ref}
+
 
 References use a simpler format, and are stored in {plain text}.
 
@@ -3634,13 +3745,18 @@ let read ch =
   | _ -> Hash (str |> IO.input_string |> Hexsha.read |> Hexsha.to_sha)
 @
 %$
+%crossref: Regexp_matched1 in appendix
 
-
+\label{sec:Repository-follow-refTODO}
+Most of the time, you want to follow a reference until you
+get an SHA1 hash.
 
 % useful function, used at many places (not just read_objectish)
 <<signature Repository.follow_ref>>=
 val follow_ref: t -> Refs.t -> Refs.t list * Commit.hash option
 @
+\t type return list of refs on ``path''
+
 <<function Repository.follow_ref>>=
 let rec follow_ref r aref =
   (* less: check if depth > 5? *)
@@ -3696,6 +3812,7 @@ let rec read_objectish r objectish =
 
 
 \section{Index}
+\label{sec:Index-read}
 
 % flat list.
 % fast so not compressed.
@@ -3818,6 +3935,7 @@ you have seen in Chapter~\ref{chap:reading}.
 \l dual.
 
 \section{Objects}
+\label{sec:Repository-add-obj}
 
 <<signature Repository.add_obj>>=
 val add_obj: t -> Objects.t -> Sha1.t
@@ -3829,9 +3947,7 @@ let add_obj r obj =
   let sha = Sha1.sha1 bytes in
   let hexsha = Hexsha.of_sha sha in
   let file = hexsha_to_filename r hexsha in
-  let dir = Filename.dirname file in
-  if not (Sys.file_exists dir)
-  then Unix.mkdir dir dirperm;
+  <<[[Repository.add_obj()]] create directory if it does not exist>>
   if (Sys.file_exists file)
   then sha (* deduplication! nothing to write, can share objects *)
   else begin
@@ -3846,10 +3962,20 @@ let add_obj r obj =
 @
 %old:  let dir = hexsha_to_dirname r hexsha in
 
+%crossref: Hexsha.of_sha again hexsha_to_filename
+
+<<[[Repository.add_obj()]] create directory if it does not exist>>=
+let dir = Filename.dirname file in
+if not (Sys.file_exists dir)
+then Unix.mkdir dir dirperm;
+@
+
 % should warn if add obj already there?
 % No! deduplication! if you add a file that hash to content of already
 % existing file, then great
 
+%crossref: with_file_out_with_lock
+\t with_file_out_with_lock later
 
 <<signature Objects.write>>=
 (* will not compress, will return unserialized content for sha1 computation *)
@@ -3907,6 +4033,7 @@ let compress ic oc =
 % store all past versions?
 
 \subsection{Locking}
+\label{sec:lock-writing-file}
 
 % Locking here is different from lock on files.
 % Concurrent updates to same .git file are not permitted
@@ -3923,6 +4050,7 @@ let with_file_out_with_lock f file =
 
 
 \subsection{Writing a blob}
+\label{sec:Blob-write}
 
 <<signature Blob.write>>=
 (* does not write the header, does not compress *)
@@ -3935,6 +4063,7 @@ let write blob ch =
 
 
 \subsection{Writing a tree}
+\label{sec:Tree-write-TODO}
 
 <<signature Tree.write>>=
 (* does not write the header, does not compress *)
@@ -3974,6 +4103,7 @@ let string_of_perm = function
 
 
 \subsection{Writing a commit}
+\label{sec:Commit-write-TODO}
 
 <<signature Commit.write>>=
 (* does not write the header, does not compress *)
@@ -3999,7 +4129,7 @@ let write commit ch =
   IO.write ch '\n';
   IO.nwrite ch commit.message
 @
-
+%crossref: Hexsha.write, Hexsha.of_sha
 
 <<signature Hexsha.write>>=
 val write: 'a IO.output -> t -> unit
@@ -4026,6 +4156,7 @@ let write_date ch (date, tz) =
 @
 
 \section{References}
+\label{sec:Repository-write-ref}
 
 <<signature Repository.write_ref>>=
 val write_ref: t -> Refs.t -> Refs.ref_content -> unit
@@ -4039,6 +4170,7 @@ let write_ref r aref content =
 @
 \l check_refname? git-check-ref-format
 %    [1] http://www.kernel.org/pub/software/scm/git/docs/git-check-ref-format.html
+%crossref: with_file_out_with_lock
 
 <<signature Refs.write>>=
 val write: ref_content -> unit IO.output -> unit
@@ -4055,6 +4187,7 @@ let write content ch =
 
 
 \section{Index}
+\label{sec:Repository-write-index}
 
 % used in init, with empty index.
 
@@ -4068,6 +4201,7 @@ let write_index r =
     ch |> IO.output_channel |> IO_.with_close_out (Index.write r.index)
   )
 @
+%crossref: with_file_out_with_lock
 
 
 <<signature Index.write>>=
@@ -4164,8 +4298,8 @@ The next chapters will then describe the code of the main Git commands.
 [[ocamlgit]] is a single program, but it consists really of a set
 of independent mini-programs: the different Git commands.
 %
-Just like [[ocamlgit]] itself, 
-each of those mini-programs have
+Each of those mini-programs, 
+like [[ocamlgit]] itself, have
 a name,
 some usage documentation,
 and a set of command-line options, hence the following type:
@@ -4349,10 +4483,10 @@ with
 @
 
 The exception below will be used from command callbacks to indicate
-that something is wrong with the command-line arguments:
+that something was wrong with the command-line arguments:
 
 <<exception Cmd.ShowUsage>>=
-(* f can raise ShowUsage which will be catched by caller in main.ml *)
+(* Cmd.f can raise ShowUsage. It will be catched by Main.main *)
 exception ShowUsage
 @
 
@@ -4409,6 +4543,7 @@ let rec cmd = { Cmd.
 Note that this command references itself, 
 hence the [[rec]] keyword above.
 \l not a function but still rec
+%crossref:
 Moreover, this command also references [[Cmds.Main_commands]];
 this is why [[Cmd_help.cmd]] could not be part of the list
 of main commands earlier in Section~\ref{sec:main-commands}
@@ -4451,7 +4586,7 @@ a Git repository.
 The simplest way to create a new repository is to run
 the command [[git init]] from a directory, as shown in
 Section~\ref{sec:getting-started}.
-%
+%trans-dull:
 Here is the code describing this command:
 
 <<constant Cmd_init.cmd>>=
@@ -4459,7 +4594,7 @@ let cmd = { Cmd.
   name = "init";
   usage = " [directory]";
   options = [
-   (* less: -bare, --quiet *)
+   <<[[Cmd_init.cmd]] command-line options>>
   ];
   f = (fun args ->
     match args with
@@ -4470,7 +4605,15 @@ let cmd = { Cmd.
 }
 @
 
-As I explained in Section~\ref{sec:git-tutorial}, initializing
+%crossref: Cmd.ShowUsage
+
+\ifallcode
+<<[[Cmd_init.cmd]] command-line options>>=
+(* less: -bare, --quiet *)
+@
+\fi
+
+As I explained in Section~\ref{sec:git-tutorial-init}, initializing
 a fresh repository consists mainly in creating a directory
 structure under [[.git/]], without any objects in it.
 
@@ -4514,8 +4657,10 @@ let dirperm = 0o750
 
 [[git init]] also creates the special reference [[HEAD]] stored
 in [[.git/HEAD]], and initializes its content with
-a reference to the master branch (see the content
-of [[Refs.default_head_content]] in Section~\ref{sec:reference-content}).
+a reference to the master branch 
+%crossref:
+(see the content of [[Refs.default_head_content]] in 
+Section~\ref{sec:reference-content}).
 
 <<[[Repository.init()]] create [[.git/HEAD]]>>=
 let r = {
@@ -4526,7 +4671,12 @@ let r = {
 add_ref_if_new r Refs.Head Refs.default_head_content |> ignore;
 @
 \l will see add_ref_if_new later.
+%crossref: Index.empty
 
+%crossref:
+I will explain the code of [[add_ref_if_new()]] later
+in Section~\ref{sec:add-ref-if-new} and why it has
+[[_if_new]] in its name.
 
 %\subsection{Common directory}
 % To abstract diff between bare and normal repository
@@ -4542,6 +4692,8 @@ one with a simple command such as [[cp -r]].
 This is also an easy way to create a new branch, even
 though it is not an optimal one (space and speed-wise).
 \l can also use branch, see later.
+You wull see a more efficient way to manage branches
+in Chapter~\ref{chap:branching}.
 
 \t actually at FB some people (Ola?) were prefering copy to
 % branch cos git was not scaling enough when lots of files
@@ -4577,7 +4729,7 @@ IO_.ml            cmd_checkout.ml  diff.mli          refs.ml
 Cloning a repository does not just copy it; it also keeps
 a reference to the remote repository 
 (in [[refs/remotes/origin/HEAD]]). This reference will allow
-later to {push} and {pull} updates from the repository
+later to {\em push} and {\em pull} updates from the repository
 (see Chapter~\ref{chap:exchanging}).
 
 I will describe the code of [[git clone]] later in 
@@ -4615,7 +4767,6 @@ let open_ root =
     { worktree = root;
       dotgit = path;
       <<[[Repository.open_()]] other fields settings>>
-      (* less: grafts, hooks *)
     }
   else failwith (spf "Not a git repository at %s" root)
 @
@@ -4624,7 +4775,7 @@ let open_ root =
 
 As I explained in Section~\ref{sec:index}, most Git commands
 will also need to read or write information in the index,
-so opening a repository also reads the index:
+so opening a repository also reads its index:
 
 <<[[Repository.open_()]] other fields settings>>=
 index = 
@@ -4635,17 +4786,30 @@ index =
    else Index.empty
   );
 @
+%crossref: Index.empty
+
+\ifallcode
+<<[[Repository.open_()]] other fields settings>>=
+(* less: grafts, hooks *)
+@
+\fi
 
 % See appendix for IO.xxx, Common.with_file_in
-% Will see Index.read later.
+
+%crossref:
+I described in Section~\ref{sec:Index-read} the code of [[Index.read()]]
+called above.
+
 
 It is convenient for the user to be able to run a Git command
 from anywhere inside the repository, not just from its root.
 \l For example in Section~\ref{}, git add from dir1.
 However, it is simpler, while implementing the code of the
 different Git commands, to assume that every paths are
-relative to the root of the repository. For example, an index
-entry must contain only such a relative path.
+relative to the root of the repository.
+Avoiding variation in data usually simplifies things.
+Moreover, some data structures such as the index entries 
+must contain relative paths.
 %
 The function below allows to satisfy both requirements
 by converting any filenames given on the command-line
@@ -4704,11 +4868,12 @@ in Section~\ref{sec:staging-area}).
 % But if modified a b c and want different commits, then can!
 % (can even use magit-status and pick each changes!)
 This chapter is concerned only with the first part: the staging.
-The next chapter will cover the second part: the commit.
+The next chapter will cover the commit.
 
 \section{Adding files: [[git add]]}
 % Adding and modifying
 
+%trans-dull:
 Here is the code of the command to add a file or set of files
 to the staging area:
 
@@ -4717,10 +4882,7 @@ let cmd = { Cmd.
   name = "add";
   usage = " <file>..."; (* less: pathspec? *)
   options = [
-    (* todo: --interactive, --patch for picking, --force (if ignored) 
-     * --all, 
-     * --recursive
-     *)
+    <<[[Cmd_add.cmd]] command-line options>>
   ];
   f = (fun args ->
     match args with
@@ -4733,14 +4895,27 @@ let cmd = { Cmd.
 }
 @
 
+\ifallcode
+<<[[Cmd_add.cmd]] command-line options>>=
+(* todo: --interactive, --patch for picking, --force (if ignored) 
+ * --all, 
+ * --recursive
+ *)
+@
+\fi
+
 %dup: overview/hello.git/staging
 Note that you must use [[git add]] both when adding a new file to
 the repository and when adding a new version of a file that
-was already in the repository (also called a {tracked} file).
+was already in the repository.
+%(also called a {tracked} file).
 %
 In some senses, Git does not care whether the file is new 
-or not. In both cases, Git just adds the file in the stating
-area, which is managed by the index.
+or not. In both cases, Git just adds the current version
+of a file in the staging area.
+
+Adding files to the staging area translates internally in adding
+them to the index:
 
 <<function Cmd_add.add>>=
 let add r relpaths = 
@@ -4771,7 +4946,6 @@ val add_in_index: t -> Common.filename list -> unit
 % if git add again same file then old object is useless (git gc).
 
 <<function Repository.add_in_index>>=
-(* old: was called stage() in dulwich *)
 let add_in_index r relpaths =
   <<[[Repository.add_in_index()]] sanity check [[relpaths]]>>
   relpaths |> List.iter (fun relpath ->
@@ -4779,16 +4953,21 @@ let add_in_index r relpaths =
   );
   write_index r
 @
+%old: was called stage() in dulwich
 \l sanitize fs_path (win32)
+
+%crossref:
+I described before in Section~\ref{sec:Repository-write-index}
+the code of [[Repository.write_index()]] called above.
 
 <<[[Repository.add_in_index()]] sanity check [[relpaths]]>>=
 assert (relpaths |> List.for_all Filename.is_relative);
 @
 
 Adding a file in the index 
-creates first a new blob object with the content of the added file, then 
-adds the blob to the object store, and finally
-add (or replace) an entry in the index:
+creates first a new blob object with the content of the added file.
+Then, [[add_in_index()]] adds the blob to the object store, and finally
+adds (or replaces) an entry in the index:
 
 <<[[Repository.add_in_index()]] adding [[relpath]]>>=
 let full_path = r.worktree / relpath in
@@ -4804,10 +4983,15 @@ let entry = Index.mk_entry relpath sha stat in
 r.index <- Index.add_entry r.index entry;
 @
 
+%crossref:
+I described the general function [[Repository.add_obj()]] called above
+in Section~\ref{sec:Repository-add-obj}, and the specific
+code it uses to write a blob in Section~\ref{sec:Blob-write}.
+%crossref: Index.mk_entry (meh)
+
 Note that the code above uses [[Unix.lstat()]], and not [[Unix.stat()]] 
 to deal with symbolic links (see Section~\ref{sec:symlinks} for
 more information on how Git handles symblic links).
-
 
 Remember from Section~\ref{sec:index} that the index contains
 sorted entries, so [[add_entry]] below must add the new entry
@@ -4829,6 +5013,14 @@ let rec add_entry idx entry =
     | Inf -> entry::x::xs
     )
 @
+%crossref:
+The [[<=>]] operator used above is not a standard OCaml operator.
+It is inspired by a similar operator in Perl that compares
+values. It returns 
+[[Equal]] if both values are equal,
+[[Sup]] if the first value is superior to the second one, or
+[[Inf]] if it is inferior.
+I show the code of [[<=>]] in Appendix~\ref{chap:utilities}.
 
 <<function Repository.content_from_path_and_unix_stat>>=
 let content_from_path_and_unix_stat full_path stat =
@@ -4841,6 +5033,7 @@ let content_from_path_and_unix_stat full_path stat =
   | _ -> failwith (spf "Repository.add_in_index: %s kind not handled" 
                      full_path)
 @
+\n not Blob.read here! even though same function called in the end.
 
 % blob can be a symlink! git allows to store symlinks.
 
@@ -4855,7 +5048,7 @@ let cmd = { Cmd.
   name = "rm";
   usage = " [options] <file>...";
   options = [
-  (* less: -f force, -r recursive, --quiet *)
+    <<[[Cmd_rm.cmd]] command-line options>>
   ];
   f = (fun args ->
     match args with
@@ -4867,15 +5060,21 @@ let cmd = { Cmd.
 }
 @
 
-Removing a file or set of files is even simpler. We just need to remove
-some entries from the index and write back the index.
+\ifallcode
+<<[[Cmd_rm.cmd]] command-line options>>=
+(* less: -f force, -r recursive, --quiet *)
+@
+\fi
+
+The code for removing a file or set of files is even simpler. 
+We just need to remove some entries from the index and write back the index.
 %
-Indeed, as you will see in Chapter~\ref{sec:committing}, committing
+Indeed, as you will see in Chapter~\ref{chap:committing}, committing
 what was staged consists mainly in creating a set of tree objects
 from the flat list of files in the index. 
 %
 If a file is not anymore in the index, then it will also not 
-be part of one of those trees.
+be part of any of those trees.
 
 
 <<function Cmd_rm.rm>>=
@@ -4891,6 +5090,8 @@ let rm r relpaths =
 %  (* removing is simpler than adding; no need to add blobs in
 %   * the object store, so can just use functions from Index
 %   *)
+
+%crossref: Repository.write_index again
 
 [[Index.remove_entry()]] just does the opposite
 of [[Index.add_entry()]] in the previous section
@@ -4937,39 +5138,53 @@ let rec remove_entry idx name =
 \chapter{Committing a Diff}
 \label{chap:committing}
 
+%trans:
+In this chapter, you will see the second step of the commit process:
+the commit itself, which will use what was staged in the previous chapter.
+%toc: ?
+
 \section{Committing the index: [[git commit]]}
-%snapshotting the index?
+\l snapshotting the index?
+
+%trans-dull:
+Here is the code describing the [[git commit]] command:
 
 <<constant Cmd_commit.cmd>>=
 let cmd = { Cmd.
   name = "commit";
   usage = " [options]"; (* less: <pathspec>... *)
   options = [
-    "-m",        Arg.Set_string message, " commit message";
-    "--message", Arg.Set_string message, " commit message";
-    "--author", Arg.Set_string author, " <author> override author";
-    "--committer", Arg.Set_string author, " ";
-    (* less: commit mesg option: --file, --date, --signoff *)
-    (* less: commit content options: -a, --interactive, --patch *)
-    (* todo: --amend *)
+    <<[[Cmd_commit.cmd]] command-line options>>
   ];
   f = (fun args ->
     match args with
     | [] -> 
       let r, _ = Repository.find_root_open_and_adjust_paths [] in
       <<[[Cmd_commit.cmd]] compute [[today]]>>
-      <<[[Cmd_commit.cmd]] compute [[author]]>>
-      <<[[Cmd_commit.cmd]] compute [[committer]]>>
+      <<[[Cmd_commit.cmd]] compute [[author]] user>>
+      <<[[Cmd_commit.cmd]] compute [[committer]] user>>
       commit r author committer !message
-
     | xs -> raise Cmd.ShowUsage
   );
 }
 @
+%old: was '<author> override author' but does not if no .gitconfig
 
-<<constant Cmd_commit.message>>=
-let message = ref ""
+\ifallcode
+<<[[Cmd_commit.cmd]] command-line options>>=
+(* less: commit mesg option: --file, --date, --signoff *)
+(* less: commit content options: -a, --interactive, --patch *)
+(* todo: --amend *)
 @
+\fi
+
+[[git commit]] accepts a few flags from the command-line
+to specify the commit message or author.
+\t alternatives is EDITOR or config file
+I will present those flags later in this chapter.
+%
+What matters for now is that in the end [[Cmd_commit.commit()]]
+below will be called with the appropriate author, committer, and message.
 
 <<function Cmd_commit.commit>>=
 let commit r author committer message =
@@ -4982,50 +5197,90 @@ let commit r author committer message =
   Repository.commit_index r author committer message
 @
 
+%dup: overview/???
+As I mentioned previously, committing a Diff consists mainly
+internally in transforming the current index in a set of tree objects
+as well as a commit object as shown in Figure~\ref{fig:index-to-trees}.
 
 <<signature Repository.commit_index>>=
 val commit_index: 
   t -> User.t (* author *) -> User.t (* committer *) -> string (* msg *) -> unit
 @
+
+%crossref:
+Most of the heavy work in the code below is done by
+[[Index.trees_of_index()]], which I will present in the next section.
+%crossref:
+Some of the code below deals with commits that merge multiple branches,
+which I will describe later in Section~\ref{sec:git-commit-merge}.
+
 <<function Repository.commit_index>>=
 let commit_index r author committer message =
   let aref = Refs.Head in
-  let tree = Index.tree_of_index r.index 
+  let root_tree = Index.trees_of_index r.index 
     (fun t -> add_obj r (Objects.Tree t)) 
   in
   (* todo: execute pre-commit hook *)
-
-  (* less: Try to read commit message from .git/MERGE_MSG *)
-  let message = message in
+  <<[[Repository.commit_index()]] read merge message if needed>>
   (* todo: execute commit-msg hook *)
-
   let commit = { Commit. parents = []; tree; author; committer; message } in
 
   let ok =
     match follow_ref r aref |> snd with
+    | None ->
+      (* first commit so refs/heads/master does not even exist yet *)
+      let sha = add_obj r (Objects.Commit commit) in
+      <<[[Repository.commit_index()]] add ref when first commit>>
     | Some old_head ->
-      (* less: merge_heads from .git/MERGE_HEADS *)
-      let merge_heads = [] in
+      <<[[Repository.commit_index()]] set [[merge_heads]]>>
       let commit = { commit with Commit.parents = old_head :: merge_heads } in
       let sha = add_obj r (Objects.Commit commit) in
-      set_ref_if_same_old r aref old_head sha
-    | None ->
-      (* maybe first commit so refs/heads/master may not even exist yet *)
-      let commit = { commit with Commit.parents = [] } in
-      let sha = add_obj r (Objects.Commit commit) in
-      add_ref_if_new r aref (Refs.Hash sha)
+      <<[[Repository.commit_index()]] update ref when not first commit>>
   in
   if not ok
   then failwith (spf "%s changed during commit" (Refs.string_of_ref aref));
   (* todo: execute post-commit hook *)
   ()
 @
+%crossref: add_obj for Tree and Commits
+\t explain why pass func instead of calling it from Index directly.
+\t to avoid mutual recursive modules. 
 
+\section{Computing the trees from an index}
 
+The algorithm to transform an index in a set of trees operates in two steps:
+\begin{enumerate}
 
-\section{Computing the tree from an index}
+\item The algorithm goes though all the files in the index to group them
+by directories while populating the local hashtable [[dirs]]
+
+\item The algorithm builds tree objects by going recursively through
+the hashtable [[dirs]] and returns the SHA1 hash of the toplevel tree
+
+\end{enumerate}
 
 % FIGURE, flat index to tree.
+
+%trans-dull:
+Here is the type and skeleton of [[Index.trees_of_index()]]:
+
+<<signature Index.tree_of_index>>=
+val trees_of_index: t -> (* add_obj *)(Tree.t -> Tree.hash) -> Tree.hash
+@
+<<function Index.tree_of_index>>=
+let trees_of_index idx add_tree_obj =
+  let (dirs: dirs) = Hashtbl.create 11 in
+  (* populate dirs *)
+  <<[[Index.tree_of_index()]] populate [[dirs]]>>
+  (* build trees *)
+  <<[[Index.tree_of_index()]] build trees from [[dirs]]>>
+@
+
+\subsection{Grouping index files by directories}
+
+%trans-dull:
+Here is the type of the hashtbl [[dirs]] grouping files 
+by directory:
 
 <<type Index.dirs>>=
 type dirs = (string (* full relpath of dir *), dir) Hashtbl.t
@@ -5040,38 +5295,30 @@ type dir = dir_entry list ref
     | File of string (* basename *) * entry
 @
 
+%trans-dull:
+Here is the code to populate the [[dirs]] hashtable:
 
+<<[[Index.tree_of_index()]] populate [[dirs]]>>=
+Hashtbl.add dirs "." (ref []);
+idx |> List.iter (fun entry ->
+  let relpath = entry.path in
+  let (dirpath, base) = Filename.dirname relpath, Filename.basename relpath in
+  let dir = find_dir dirs dirpath in
+  dir := (File (base, entry))::!dir
+);
+@
 
-<<signature Index.tree_of_index>>=
-val tree_of_index: t -> (* add_obj *)(Tree.t -> Tree.hash) -> Tree.hash
-@
-<<function Index.tree_of_index>>=
-let tree_of_index idx add_tree_obj =
-  let (dirs: dirs) = Hashtbl.create 11 in
-  Hashtbl.add dirs "." (ref []);
-  (* populate dirs *)
-  idx |> List.iter (fun entry ->
-    let relpath = entry.path in
-    let (dir, base) = Filename.dirname relpath, Filename.basename relpath in
-    let dir = add_dir dirs dir in
-    dir := (File (base, entry))::!dir
-  );
-  (* build trees *)
-  build_trees dirs "." add_tree_obj
-@
+%trans-dull:
+Finding the directory of a file uses the function below:
 
 <<function Index.add_dir>>=
-let rec add_dir dirs dirpath =
+let rec find_dir dirs dirpath =
   try 
     Hashtbl.find dirs dirpath
   with Not_found ->
     let newdir = ref [] in
     Hashtbl.add dirs dirpath newdir;
-    let (parent, base) = 
-      Filename.dirname dirpath, Filename.basename dirpath in
-    (* !recursive call! should stop at some point because "." is in dirs *)
-    let dir = add_dir dirs parent in
-    dir := Subdir (base)::!dir;
+    <<[[Index.add_dir()]] recurse on parent of [[dirpath]]>>
     newdir
 @
 
@@ -5079,7 +5326,31 @@ let rec add_dir dirs dirpath =
 % FIGURE for trees.
 % It maps relative path of dir to dir content
 
+Note that adding a new directory in [[dirs]] requires also to
+recursively add its parent:
 
+<<[[Index.add_dir()]] recurse on parent of [[dirpath]]>>=
+let (parent, base) = 
+  Filename.dirname dirpath, Filename.basename dirpath in
+(* !recursive call! should stop at some point because "." is in dirs *)
+let dir = find_dir dirs parent in
+dir := Subdir (base)::!dir;
+@
+
+The recursion stops because [[dirs]] is initialized with an
+entry for [['.']] and [[Filename.dirname]] eventually returns [['.']]
+when it reaches the toplevel directory.
+
+\subsection{Building trees from directories}
+
+%trans-dull:
+Here is the second step of the [[trees_of_index()]] algorithm,
+which builds a set of trees from [[dirs]] recursively starting
+from the root directory [['.']].
+
+<<[[Index.tree_of_index()]] build trees from [[dirs]]>>=
+build_trees dirs "." add_tree_obj
+@
 
 <<function Index.build_trees>>=
 let rec build_trees dirs dirpath add_tree_obj =
@@ -5097,6 +5368,7 @@ let rec build_trees dirs dirpath add_tree_obj =
          perm = perm_of_mode entry.stats.mode;
         }
       | Subdir base ->
+        (* recurse *)
         let sha = 
           build_trees dirs (Filename.concat dirpath base) add_tree_obj in
         {Tree. perm = Tree.Dir; name = base; id = sha }
@@ -5104,6 +5376,17 @@ let rec build_trees dirs dirpath add_tree_obj =
   in
   add_tree_obj tree
 @
+
+The function [[add_tree_obj()]] above will not only add a tree object
+the repository. It will also return its SHA1.
+%
+Its value ([[fun t -> add_obj (Tree t)]]) is passed down to
+[[build_trees]] from [[commit_index()]].
+
+
+%trans-dull:
+The code above relies on the helper function below to
+convert an [[Index.mode]] to a [[Tree.perm]]:
 
 <<signature Index.perm_of_mode>>=
 val perm_of_mode: mode -> Tree.perm
@@ -5118,22 +5401,20 @@ let perm_of_mode mode =
 @
 
 
-\section{Storing the author and committer}
+\section{Storing the date, author, and committer}
 
-<<[[Cmd_commit.cmd]] compute [[today]]>>=
-let today = 
-  (Int64.of_float (Unix.time ()),
-   (* todo: use localtime vs gmtime? *) -7 (* SF *))
-in
+%trans:
+Once [[commit_index()]] computed the toplevel tree object
+from the index, setting the other fields of the commit
+object is trivial.
+
+<<[[Cmd_commit.cmd]] command-line options>>=
+"--author",    Arg.Set_string author, " <author>";
 @
-
-
 <<constant Cmd_commit.author>>=
 let author = ref ""
 @
-<<constant Cmd_commit.committer>>=
-let committer = ref ""
-@
+
 
 <<[[Cmd_commit.cmd]] compute [[author]]>>=
 (* todo: read from .git/config or ~/.gitconfig *)
@@ -5147,6 +5428,24 @@ let author =
   else raise Todo (* need parse author string *)
 in
 @
+
+
+<<[[Cmd_commit.cmd]] compute [[today]]>>=
+let today = 
+  (Int64.of_float (Unix.time ()),
+   (* todo: use localtime vs gmtime? *) -7 (* SF *))
+in
+@
+
+
+
+
+<<[[Cmd_commit.cmd]] command-line options>>=
+"--committer", Arg.Set_string comitter, " <author>";
+@
+<<constant Cmd_commit.committer>>=
+let committer = ref ""
+@
 <<[[Cmd_commit.cmd]] compute [[committer]]>>=
 let committer =
   if !committer = ""
@@ -5156,31 +5455,113 @@ in
 @
 
 
-
 % Use config for default, see adv topics.
 
 \section{Recording the message}
 
+<<[[Cmd_commit.cmd]] command-line options>>=
+"-m",        Arg.Set_string message, " <msg> commit message";
+"--message", Arg.Set_string message, " <msg> commit message";
+@
+<<constant Cmd_commit.message>>=
+let message = ref ""
+@
+\t EDITOR here?
+
 
 \section{Updating [[HEAD]] atomically}
 
-% HEAD by default
+%trans:
+The last operation of [[commit_index()]] is to update [[HEAD]]
+to point to the newly created commit object.
+%
+In fact, [[git commit]] does not update [[HEAD]] itself but
+the head pointed by [[HEAD]] (e.g., [[.git/refs/heads/master]]),
+hence the use of [[follow_ref()]] in the code of the next sections.
+%
+Updating this head must be done atomically.
+\t why atomically?
+%CVS:
+\t CVS was first to consider set of files, but it did not have atomic update of
+\t multiple files.
+\t Here either everything goes, or nothing!
+%
+To do so, [[commit_index()]] rely on two different functions
+to handle two different situations:
+\begin{enumerate}
+\item When this is the first commit and [[HEAD]] points to an head
+that does not exist yet. In that case it calls [[add_ref_if_new()]].
+
+\item When there was already an older previous commit.
+In that case it calls [[set_ref_if_same_old()]].
+\end{enumerate}
 
 %concurrency:
 % need atomic operations for updating the refs, because
 % push/pull will modify other repos that may be concurrently
 % accessed by another user at the same time.
-
-% why important atomic? because when push, you will write to another
+%why important atomic? because when push, you will write to another
 % repo, and you will modify refs possibly? so need atomic?
-
-%cvs: CVS was first to consider a set of files, but it was not atomic!
 
 %torvalds: simple, just need update the ref! no need lock
 % on set of files (immutable hashed objects), just lock
 % one ref, refs/heads/master (or other branch name)
 
 % Can have pb, in which case just stale objects? (git gc)
+
+<<[[Repository.commit_index()]] add ref when first commit>>=
+add_ref_if_new r aref (Refs.Hash sha)
+@
+<<[[Repository.commit_index()]] update ref when not first commit>>=
+set_ref_if_same_old r aref old_head sha
+@
+
+Both functions above return a boolean indicating whether the
+operation could be done atomically.
+%
+For example, [[set_ref_if_same_old()]] will return false
+if while modifying the reference, another process modified
+it before and the current value is not anymore the old one
+read before.
+
+\subsection{Creating a new reference (first commit)}
+\label{sec:add-ref-if-new}
+
+Creating the first commit and the first head atomically
+requires to make sure that while creating the reference file,
+nobody else created the same file.
+\t race between time read ref and see no sha and time write file
+\t not that with_file_out_with_lock not enough.
+%, so that the reference is indeed a new reference 
+% (hence the name of the function).
+%
+
+<<signature Repository.add_ref_if_new>>=
+val add_ref_if_new: t -> Refs.t -> Refs.ref_content -> bool
+@
+<<function Repository.add_ref_if_new>>=
+let add_ref_if_new r aref refval =
+  let (refs, shaopt) = follow_ref r aref in
+  if shaopt <> None
+  then false
+  else begin
+    let lastref = List.hd (List.rev refs) in
+    let file = ref_to_filename r lastref in
+    (* todo: ensure dirname exists *)
+    file |> with_file_out_with_lock (fun ch ->
+      (* todo: check file does not exist aleady; then return false! *)
+      ch |> IO.output_channel |> IO_.with_close_out (Refs.write refval);
+      true
+    )
+  end
+@
+%crossref: ref_to_filename, follow_ref
+%crossref: with_file_out_with_lock 
+\ref{sec:lock-writing-file}
+
+%crossref:
+I described the code of [[Refs.write()]] before in
+Section~\ref{sec:Repository-write-ref}.
 
 \subsection{Updating an existing reference}
 
@@ -5208,37 +5589,24 @@ let set_ref_if_same_old r aref oldh newh =
   with Not_found -> false
 @
 
-\subsection{Creating a new reference (first commit)}
-
-<<signature Repository.add_ref_if_new>>=
-val add_ref_if_new: t -> Refs.t -> Refs.ref_content -> bool
-@
-<<function Repository.add_ref_if_new>>=
-let add_ref_if_new r aref refval =
-  let (refs, shaopt) = follow_ref r aref in
-  if shaopt <> None
-  then false
-  else begin
-    let lastref = List.hd (List.rev refs) in
-    let file = ref_to_filename r lastref in
-    (* todo: ensure dirname exists *)
-    file |> with_file_out_with_lock (fun ch ->
-      (* todo: check file does not exist aleady *)
-      ch |> IO.output_channel |> IO_.with_close_out (Refs.write refval)
-    );
-    true
-  end
-@
-
-
 \chapter{Branching}
 \label{chap:branching}
-
 % branching, aka fork.
+
+In this chapter, you will see the code to manipulate branches.
+Git uses the same command, [[git branch]], whose code is below, to 
+list,
+create, and
+delete branches
+depending on the command-line arguments.
+%
+You will also see in this chapter the code of 
+[[git checkout]] to switch between branches, and 
+[[git reset]] to reset all modifications done while working on the
+current branch.
 
 %dup: (but expanded?) intro/motivations
 % purpose: parallel development (!= concurrent development)
-% 
 
 %gitless: records working version of files, so can easily switch branch!
 % no problem if got uncommitted stuff in current dir or untracked file
@@ -5266,26 +5634,12 @@ let cmd = { Cmd.
    or: ocamlgit branch [options] (-d | -D) <branchname>
 ";
   options = [
-    "-d",       Arg.Set del_flag, " delete fully merged branch";
-    "--delete", Arg.Set del_flag, " delete fully merged branch";
-    "-D",       Arg.Set del_force, " delete branch (even if not merged)";
-    (* less: --merged, --no-merged, --all for listing 
-     *  --move to rename branch
-     *  --force (force creation, deletion, rename)
-    *)
+    <<[[Cmd_branch.cmd]] command-line options>>
   ];
   f = (fun args ->
     let r, _ = Repository.find_root_open_and_adjust_paths [] in
     match args with
-    | [] -> list_branches r
-    | [name] ->
-      (match () with
-      | _ when !del_flag  -> delete_branch r name false
-      | _ when !del_force -> delete_branch r name true
-      | _ -> create_branch r name
-      )
-    | [name;objectish] ->
-      raise Todo
+    <<[[Cmd_branch.cmd]] match args cases>>
     | _ -> raise Cmd.ShowUsage
   );
 }
@@ -5293,15 +5647,44 @@ let cmd = { Cmd.
 %pijul: use 'fork' and 'delete-branch' as commands instead of 
 % abusing branch for everything
 
-<<constant Cmd_branch.del_flag>>=
-let del_flag = ref false
-@
-<<constant Cmd_branch.del_force>>=
-let del_force = ref false
-@
 
+\ifallcode
+<<[[Cmd_branch.cmd]] match args cases>>=
+| [name;objectish] ->
+  raise Todo
+@
+\fi
+
+\ifallcode
+<<[[Cmd_branch.cmd]] command-line options>>=
+(* less: --merged, --no-merged, --all for listing 
+ *  --move to rename branch
+ *  --force (force creation, deletion, rename)
+*)
+@
+\fi
 
 \section{Listing branches: [[git branch]]}
+
+To list the set of {active} branches, you just need to call
+[[git branch]] without any argument:
+
+<<[[Cmd_branch.cmd]] match args cases>>=
+| [] -> list_branches r
+@
+
+Here is the output of [[git branch]] on a repository with
+only two branches. 
+[[git branch]] {marks} the current branch with a [[*]] before its name.
+
+\begin{verbatim}
+1 $ git branch
+  experiment
+* master
+\end{verbatim}
+
+%trans-dull:
+Here is the code of [[list_branches()]]:
 
 <<function Cmd_branch.list_branches>>=
 (* less: remote_flag set with --all to also list remote refs *)
@@ -5320,6 +5703,15 @@ let list_branches r =
       pr (spf "%s%s" prefix short)
   )
 @
+%crossref: Regexp_.matched1 in appendix
+
+%crossref:
+I described in Section~\ref{sec:Repository-read-ref} the code
+of [[Repository.read_ref()]].
+%
+Thanks to the simplicity of how Git stores references on the disk,
+getting all the references consists just in walking
+the [[.git/refs/]] directory:
 
 <<signature Repository.all_refs>>=
 val all_refs: t -> Refs.refname list
@@ -5329,7 +5721,7 @@ let all_refs r =
   let root = r.dotgit ^ "/" in
   let rootlen = String.length root in
   let res = ref [] in
-  (root / "refs") |> walk_dir (fun path dirs files ->
+  (root / "refs") |> walk_dir (fun path _dirs files ->
     files |> List.iter (fun file ->
       (* less: replace os.path.sep *)
       let dir = String.sub path rootlen (String.length path - rootlen) in
@@ -5340,57 +5732,42 @@ let all_refs r =
   List.rev !res
 @
 
-% all_refs | ?? -> <>
-<<signature Repository.walk_dir>>=
-val walk_dir: 
-  (Common.filename -> Common.filename list -> Common.filename list -> unit) ->
-  Common.filename ->
-  unit
-@
-<<function Repository.walk_dir>>=
-(* inspired from os.path.walk in Python *)
-let rec walk_dir f dir =
-  dir |> with_opendir (fun handle ->
-    let dirs = ref [] in
-    let files = ref [] in
-    try 
-      while true do
-        let s = Unix.readdir handle in
-        (* git specific here *)
-        if s <> "." && s <> ".." && s <> ".git" then begin
-          let path = Filename.concat dir s in
-          let st = Unix.lstat path in
-          (match st.Unix.st_kind with
-          | Unix.S_DIR -> Common.push s dirs
-          | _ -> Common.push s files
-          )
-        end
-      done
-    with End_of_file ->
-      let dirs = List.rev !dirs in
-      let files = List.rev !files in
-      f dir dirs files;
-      dirs |> List.iter (fun s ->
-        walk_dir f (Filename.concat dir s)
-      )
-  )
-@
+%crossref: walk_dir appendix
+The code above relies on the utility function [[walk_dir()]]
+to explore recursively a directory 
+(see Appendix~\ref{chap:utilities} for its code).
+%
+This function takes a callback function and a directory as parameters
+and calls the callback for each subdirectories of the directory parameter.
+%
+The callback is called with three arguments: 
+the path of the current subdirectory,
+the immediate subdirectories in this subdirectory, and 
+the immediate files in this subdirectory.
 
-<<function Repository.with_opendir>>=
-(* less: use finalize *)
-let with_opendir f dir =
-  let handle = Unix.opendir dir in
-  let res = f handle in
-  Unix.closedir handle;
-  res
-@
+
 
 \section{Creating a branch: [[git branch <name>]]}
 \label{sec:create-branch}
 
+To create a new branch, you need to call [[git branch]] with one
+argument: the name of the desired branch.
+
+<<[[Cmd_branch.cmd]] match args cases>>=
+
+| [name] ->
+  (match () with
+  <<[[Cmd_branch.cmd]] when one argument, when flags cases>>
+  | _ -> create_branch r name
+  )
+@
+
+%repeat_code:
+Creating a branch simply creates a new reference with the same
+SHA1 than the SHA1 of the last commit in the current branch:
+
 <<function Cmd_branch.create_branch>>=
 let create_branch r name (* sha *) =
-  let all_refs = Repository.all_refs r in
   let refname = "refs/heads/" ^ name in
   <<[[Cmd_branch.create_branch()]] sanity check refname>>
   let sha = Repository.follow_ref_some r (Refs.Head) in
@@ -5398,11 +5775,13 @@ let create_branch r name (* sha *) =
   if not ok
   then failwith (spf "could not create branch '%s'" name)
 @
+%crossref: follow_ref_some and add_ref_if_new talked before
 
 % cheap! (ok checkout takes time)
 % and then usually checkout!
 
 <<[[Cmd_branch.create_branch()]] sanity check refname>>=
+let all_refs = Repository.all_refs r in
 if List.mem refname all_refs
 (* less: unless -force *)
 then failwith (spf "A branch named '%s' already exists." name);
@@ -5410,17 +5789,46 @@ then failwith (spf "A branch named '%s' already exists." name);
 
 \section{Deleting a branch: [[git branch -d <name>]]}
 
+%trans:
+Finally, to delete a branch, adds the [[-d]] (or [[-D]]) command-line
+flag before the name of the branch:
+
+<<[[Cmd_branch.cmd]] command-line options>>=
+"-d",       Arg.Set del_flag, " delete fully merged branch";
+"--delete", Arg.Set del_flag, " delete fully merged branch";
+@
+<<constant Cmd_branch.del_flag>>=
+let del_flag = ref false
+@
+<<[[Cmd_branch.cmd]] when one argument, when flags cases>>=
+| _ when !del_flag  -> delete_branch r name false
+@
+
+
+
+<<[[Cmd_branch.cmd]] when one argument, when flags cases>>=
+| _ when !del_force -> delete_branch r name true
+@
+<<[[Cmd_branch.cmd]] command-line options>>=
+"-D",       Arg.Set del_force, " delete branch (even if not merged)";
+@
+<<constant Cmd_branch.del_force>>=
+let del_force = ref false
+@
+
+
 <<function Cmd_branch.delete_branch>>=
 let delete_branch r name force =
   let refname = "refs/heads/" ^ name in
   let aref = Refs.Ref refname in
   let sha = Repository.follow_ref_some r aref in
-  if not force
-  (* todo: detect if fully merged branch! *)    
-  then ();
+  <<[[Cmd_branch.delete_branch()]] sanity check if branch merged unless force>>
   Repository.del_ref r aref;
   pr (spf "Deleted branch %s (was %s)" name (Hexsha.of_sha sha))
 @
+
+Deleting a branch consists simply in deleting a reference file
+under [[.git/refs]]:
 
 <<signature Repository.del_ref>>=
 val del_ref: t -> Refs.t -> unit
@@ -5433,10 +5841,21 @@ let del_ref r aref =
 
 % git gc
 
+
+<<[[Cmd_branch.delete_branch()]] sanity check if branch merged unless force>>=
+if not force
+(* todo: detect if fully merged branch! *)    
+then ();
+@
+
 \section{Checking out a branch: [[git checkout]]}
 \label{sec:switch-branch}
 \l switching branch
 
+%trans:
+To switch to another branch, Git uses another command: [[git checkout]].
+%rcs: back from rcs to use checkout?
+\n git checkout can also be used to create a branch with -b, but redundant
 
 <<constant Cmd_checkout.cmd>>=
 let cmd = { Cmd.
@@ -5446,19 +5865,38 @@ let cmd = { Cmd.
    or: ocamlgit checkout [options]
 ";
   options = [
-    (* less: --detach, --patch?
-     * -b create and checkout a branch
-     *)
+   <<[[Cmd_checkout.cmd]] command-line options>>
   ];
   f = (fun args ->
     let r, _ = Repository.find_root_open_and_adjust_paths [] in
     match args with
-    | [] -> update r
-    | [str] -> checkout r str
+    <<[[Cmd_checkout.cmd]] match args cases>>
     | _ -> raise Cmd.ShowUsage
   );
 }
 @
+
+\ifallcode
+<<[[Cmd_checkout.cmd]] command-line options>>=
+ (* less: --detach, --patch?
+  * -b create and checkout a branch
+  *)
+@
+\fi
+
+This command has also multiple operation modes depending on the
+its command-line arguments.
+%
+With an argument, [[git checkout]] will switch the current branch:
+
+<<[[Cmd_checkout.cmd]] match args cases>>=
+| [str] -> checkout r str
+@
+
+This argument can be the name of a branch (e.g., [[git checkout experiment]]),
+but also a string denotting a past commit (e.g., [[git checkout 19d977]]).
+%
+Here is the code below to deal with a branch name as an argument:
 
 <<function Cmd_checkout.checkout>>=
 let checkout r str =
@@ -5469,16 +5907,30 @@ let checkout r str =
   | _ when List.mem refname all_refs ->
     let commitid = Repository.follow_ref_some r (Refs.Ref refname) in
     let commit = Repository.read_commit r commitid in
-    let treeid = commit.Commit.tree in
-    let tree = Repository.read_tree r treeid in
+    let tree = Repository.read_tree r commit.Commit.tree in
+
     (* todo: order of operation? set ref before index? reverse? *)
     Repository.write_ref r (Refs.Head) (Refs.OtherRef refname);
     Repository.set_worktree_and_index_to_tree r tree;
     pr (spf "Switched to branch '%s'" str);
     (* less: if master, then check if up-to-date with origin/master *)
+
   <<[[Cmd_checkout.checkout()]] cases>>
   | _ -> raise Cmd.ShowUsage
 @
+
+To checkout a branch, the code above first finds the commit
+associated with the reference of the branch, 
+then reads it from the disk
+%crossref:
+(see the code of [[Repository.read_commit()]] in 
+Section~\ref{sec:Repository-read-commit}), and then read its
+tree 
+(see the code of [[Repository.read_tree()]] in
+Section~\ref{sec:Repository-read-tree}).
+Then, most of the heavy work is done by 
+[[Repository.set_worktree_and_index_to_tree()]], which I will present
+in the next section.
 
 
 % reset_index use for checkout!
@@ -5487,13 +5939,16 @@ let checkout r str =
 
 
 
+<<[[Cmd_checkout.cmd]] match args cases>>=
+| [] -> update r
+@
 <<function Cmd_checkout.update>>=
 (* Your branch is up-to-date with 'origin/master'. *)
 let update r =
   raise Todo
 @
 
-\subsection{Computing the index (and worktree) from a tree}
+\subsection{Computing the index (and work tree) from trees}
 \label{sec:index-from-tree}
 % opposite of what we saw before for git commit.
 
@@ -5616,30 +6071,47 @@ let build_file_from_blob fullpath blob perm =
 
 \section{Resetting a branch: [[git reset]]}
 
+Resetting a branch is useful for example you want to quickly
+undo the modifications you have done to your working files.
+\t other examples?
+%
+To do so you must use the [[git reset]] command with
+the [[-hard]] command-line flag.
+%
+Indeed, there are multiple ways to reset a branch, as shown
+by the code and flags below:
+
 <<constant Cmd_reset.cmd>>=
 let cmd = { Cmd.
   name = "reset";
   usage = " [options] ";
-(* less: or: git reset <paths>... *)
   options = [
-    "--hard", Arg.Set hard, " reset HEAD, index and working tree";
-    "--soft", Arg.Set soft, " reset only HEAD";
-    "--mixed", Arg.Set mixed, " reset HEAD and index";
-    (* less: --patch, --quiet, --merge *)
+    <<[[Cmd_reset.cmd]] command-line options>>
   ];
   f = (fun args ->
     let r, _ = Repository.find_root_open_and_adjust_paths [] in
     match args with
     | [] -> 
-      if !soft || !mixed || not !hard
-      then begin
-        pr2 "only --hard supported";
-        raise Cmd.ShowUsage
-      end;
-      reset_hard r
+      (match () with
+      <<[[Cmd_reset.cmd.f()]] when no args, cases>>
+      )
     | _ -> raise Cmd.ShowUsage
   );
 }
+@
+
+
+\ifallcode
+<<[[Cmd_reset.cmd]] command-line options>>=
+(* less: or: git reset <paths>... *)
+(* less: --patch, --quiet, --merge *)
+@
+\fi
+
+<<[[Cmd_reset.cmd]] command-line options>>=
+"--hard", Arg.Set hard, " reset HEAD, index and working tree";
+"--soft", Arg.Set soft, " reset only HEAD";
+"--mixed", Arg.Set mixed, " reset HEAD and index";
 @
 
 <<constant Cmd_reset.hard>>=
@@ -5652,13 +6124,21 @@ let soft = ref false
 let mixed = ref false
 @
 
+<<[[Cmd_reset.cmd.f()]] when no args, cases>>=
+| _ when !hard -> reset_hard r
+@
+
+A hard reset is equivalent to checking out again
+the commit of the current branch, and so the code
+below can reuse [[Repository.set_worktree_and_index_to_tree()]]
+used for the code of [[git checkout]].
 
 <<function Cmd_reset.reset_hard>>=
 let reset_hard r =
   let commitid = Repository.follow_ref_some r (Refs.Head) in
   let commit = Repository.read_commit r commitid in
-  let treeid = commit.Commit.tree in
-  let tree = Repository.read_tree r treeid in
+  let tree = Repository.read_tree r commit.Commit.tree in
+
   Repository.set_worktree_and_index_to_tree r tree;
   pr (spf "HEAD is now at %s %s" 
         (String.sub (Hexsha.of_sha commitid) 0 6)
@@ -5666,6 +6146,14 @@ let reset_hard r =
 @
 
 \t should also reset selectively files or dirs
+
+<<[[Cmd_reset.cmd.f()]] if not hard reset>>=
+if !soft || !mixed || not !hard
+then begin
+  pr2 "only --hard supported";
+  raise Cmd.ShowUsage
+end
+@
 
 \chapter{Merging}
 \label{chap:merging}
@@ -5750,6 +6238,17 @@ let reset_hard r =
 \section{Merging conflicts}
 % talked about it in principles
 
+\section{Committing merged branches: [[git commit]]}
+\label{sec:git-commit-merge}
+
+<<[[Repository.commit_index()]] read merge message if needed>>=
+(* less: Try to read commit message from .git/MERGE_MSG *)
+@
+
+<<[[Repository.commit_index()]] set [[merge_heads]]>>=
+(* less: merge_heads from .git/MERGE_HEADS *)
+let merge_heads = [] in
+@
 
 \chapter{Inspecting}
 \label{chap:inspecting}
@@ -6671,6 +7170,9 @@ let untracked r =
 \section{Archeology}
 \label{sec:archeology}
 
+\t original advantage of VCS, to go back if messed things up in time.
+\t Undo power!
+
 \subsection{Checking out an old version}
 
 <<[[Cmd_checkout.checkout()]] cases>>=
@@ -7494,6 +7996,14 @@ let mk_client url =
 % http://www-cs-students.stanford.edu/~blynn/gitmagic/ch08.html
 
 \subsection{Overview}
+
+% SHA1 is many things: hashing, and secure.
+% For hashing, simple, ex: str -> int32 by adding (Knuth gives famous
+% hash func?) (and then usually used with modulo to access hashtbl array bucket)
+% Secure because hard to reverse (but simple hash can?)
+% and cant produce alternate doc with same sig (message digest).
+% Secure, but Git does not really care about that. Really care about
+% hashing with almost 0 collision.
 
 % Wikipedia says SHA1 follows the principles used for 
 % MD4 and MD5 by Ronald Rivest.
@@ -8996,6 +9506,7 @@ let diff a b =
 
 
 \section{Diff3}
+\label{sec:diff3-algo}
 % aka merge
 
 \subsection{Overview}
@@ -9026,6 +9537,7 @@ let diff a b =
 
 
 \section{Tracking symbolic links}
+\label{sec:symlinks}
 
 <<[[Tree.perm]] cases>>=
 | Link
@@ -9262,6 +9774,9 @@ let diff a b =
 
 \subsection{Reverting a change: [[git revert]]}
 % 
+
+%dup: inspecting/archeology?
+\t Undo power
 
 \subsection{Finding the author of some code: [[git blame]]}
 % aka annotate
@@ -9620,11 +10135,63 @@ Gc.set {(Gc.get ()) with Gc.stack_limit = 1000 * 1024 * 1024};
 
 \section{Common functions}
 
+% |>
+% now standard actually
+
+% pr2
+
+% <=>
+
+\section{File utilities}
+
 % Common.with_file_in
 
-% |>
-% pr2
-% <=>
+\section{Directory utilities}
+
+% all_refs | ?? -> <>
+<<signature Repository.walk_dir>>=
+val walk_dir: 
+  (Common.dirname -> Common.dirname list -> Common.filename list -> unit) ->
+  Common.filename ->
+  unit
+@
+<<function Repository.walk_dir>>=
+(* inspired from os.path.walk in Python *)
+let rec walk_dir f dir =
+  dir |> with_opendir (fun handle ->
+    let dirs = ref [] in
+    let files = ref [] in
+    try 
+      while true do
+        let s = Unix.readdir handle in
+        (* git specific here *)
+        if s <> "." && s <> ".." && s <> ".git" then begin
+          let path = Filename.concat dir s in
+          let st = Unix.lstat path in
+          (match st.Unix.st_kind with
+          | Unix.S_DIR -> Common.push s dirs
+          | _ -> Common.push s files
+          )
+        end
+      done
+    with End_of_file ->
+      let dirs = List.rev !dirs in
+      let files = List.rev !files in
+      f dir dirs files;
+      dirs |> List.iter (fun s ->
+        walk_dir f (Filename.concat dir s)
+      )
+  )
+@
+
+<<function Repository.with_opendir>>=
+(* less: use finalize *)
+let with_opendir f dir =
+  let handle = Unix.opendir dir in
+  let res = f handle in
+  Unix.closedir handle;
+  res
+@
 
 \section{Generalized IO}
 
@@ -9717,6 +10284,7 @@ let read_key_space_value_newline ch k f =
 
 \begin{verbatim}
 VCS = Version Control System
+DVCS = Distributed Version Control System
 SHA1 = Secure Hash Algorithm 1
 URL = Uniform Resource Locator
 \end{verbatim}
