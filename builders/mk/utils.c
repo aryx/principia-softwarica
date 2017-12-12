@@ -1,7 +1,7 @@
 /*s: mk/utils.c */
 #include "mk.h"
 
-/*s: function Malloc */
+/*s: function [[Malloc]] */
 void*
 Malloc(int n)
 {
@@ -14,9 +14,9 @@ Malloc(int n)
     }
     return s;
 }
-/*e: function Malloc */
+/*e: function [[Malloc]] */
 
-/*s: function Realloc */
+/*s: function [[Realloc]] */
 void *
 Realloc(void *s, int n)
 {
@@ -30,5 +30,5 @@ Realloc(void *s, int n)
     }
     return s;
 }
-/*e: function Realloc */
+/*e: function [[Realloc]] */
 /*e: mk/utils.c */

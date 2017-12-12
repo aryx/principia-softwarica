@@ -1,20 +1,20 @@
 /*s: mk/env.c */
 #include	"mk.h"
 
-/*s: constant ENVQUANTA */
+/*s: constant [[ENVQUANTA]] */
 #define ENVQUANTA 10
-/*e: constant ENVQUANTA */
+/*e: constant [[ENVQUANTA]] */
 
-/*s: global envy */
+/*s: global [[envy]] */
 // growing_array<ShellEnvVar> (endmarker = (nil,nil), size = envinsert.envsize)
 ShellEnvVar	*shellenv;
-/*e: global envy */
-/*s: global nextv */
+/*e: global [[envy]] */
+/*s: global [[nextv]] */
 // idx for next free entry in shellenv array
 static int nextv;
-/*e: global nextv */
+/*e: global [[nextv]] */
 
-/*s: global myenv */
+/*s: global [[myenv]] */
 static char	*specialvars[] =
 {
     "target",
@@ -45,9 +45,9 @@ static char	*specialvars[] =
     /*e: [[myenv]] other array elements */
     0,
 };
-/*e: global myenv */
+/*e: global [[myenv]] */
 
-/*s: function initenv */
+/*s: function [[initenv]] */
 void
 inithash(void)
 {
@@ -58,9 +58,9 @@ inithash(void)
 
     readenv();				/* o.s. dependent */
 }
-/*e: function initenv */
+/*e: function [[initenv]] */
 
-/*s: function envinsert */
+/*s: function [[envinsert]] */
 static void
 envinsert(char *name, Word *value)
 {
@@ -79,9 +79,9 @@ envinsert(char *name, Word *value)
     shellenv[nextv].values = value;
     nextv++;
 }
-/*e: function envinsert */
+/*e: function [[envinsert]] */
 
-/*s: function envupd */
+/*s: function [[envupd]] */
 static void
 envupd(char *name, Word *value)
 {
@@ -100,18 +100,18 @@ envupd(char *name, Word *value)
     envinsert(nil,nil);
     /*e: [[envupd()]] if variable not found */
 }
-/*e: function envupd */
+/*e: function [[envupd]] */
 
-/*s: function ecopy */
+/*s: function [[ecopy]] */
 static void
 ecopy(Symtab *s)
 {
     char **p;
 
-    /*s: [[ecopy()]] return and do not copy if S_NOEXPORT symbol */
+    /*s: [[ecopy()]] return and do not copy if [[S_NOEXPORT]] symbol */
     if(symlook(s->name, S_NOEXPORT, nil))
         return;
-    /*e: [[ecopy()]] return and do not copy if S_NOEXPORT symbol */
+    /*e: [[ecopy()]] return and do not copy if [[S_NOEXPORT]] symbol */
     /*s: [[ecopy()]] return and do not copy if conflict with mk internal variable */
     for(p = specialvars; *p; p++)
         if(strcmp(*p, s->name) == 0)
@@ -120,9 +120,9 @@ ecopy(Symtab *s)
      // else
      envinsert(s->name, s->u.ptr);
 }
-/*e: function ecopy */
+/*e: function [[ecopy]] */
 
-/*s: function execinit */
+/*s: function [[execinit]] */
 void
 initenv(void)
 {
@@ -140,9 +140,9 @@ initenv(void)
     // end marker
     envinsert(nil, nil);
 }
-/*e: function execinit */
+/*e: function [[execinit]] */
 
-/*s: function buildenv */
+/*s: function [[buildenv]] */
 ShellEnvVar*
 buildenv(Job *j, int slot)
 {
@@ -214,5 +214,5 @@ buildenv(Job *j, int slot)
 
     return shellenv;
 }
-/*e: function buildenv */
+/*e: function [[buildenv]] */
 /*e: mk/env.c */

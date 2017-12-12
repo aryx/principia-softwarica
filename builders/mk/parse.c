@@ -6,7 +6,7 @@ void	ipush(void);
 static int   rhead(char *, Word **, Word **, int *, char **);
 static char* rbody(Biobuf*);
 
-/*s: function parse */
+/*s: function [[parse]] */
 void
 parse(char *f, fdt fd, bool varoverride)
 {
@@ -151,9 +151,9 @@ parse(char *f, fdt fd, bool varoverride)
     ipop();
     /*e: [[parse()]] end, pop */
 }
-/*e: function parse */
+/*e: function [[parse]] */
 
-/*s: function addrules */
+/*s: function [[addrules]] */
 void
 addrules(Word *targets, Word *prereqs, char *recipe, 
          int attr, int hline, char *prog)
@@ -175,9 +175,9 @@ addrules(Word *targets, Word *prereqs, char *recipe,
     for(w = targets; w; w = w->next)
         addrule(w->s, prereqs, recipe, targets, attr, hline, prog);
 }
-/*e: function addrules */
+/*e: function [[addrules]] */
 
-/*s: function rhead */
+/*s: function [[rhead]] */
 static int
 rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
 {
@@ -310,9 +310,9 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
 
     return sep;
 }
-/*e: function rhead */
+/*e: function [[rhead]] */
 
-/*s: function rbody */
+/*s: function [[rbody]] */
 static char *
 rbody(Biobuf *in)
 {
@@ -355,9 +355,9 @@ rbody(Biobuf *in)
 
     return p;
 }
-/*e: function rbody */
+/*e: function [[rbody]] */
 
-/*s: struct input */
+/*s: struct [[input]] */
 struct Input
 {
     char *file;
@@ -369,13 +369,13 @@ struct Input
     struct Input *next;
     /*e: [[Input]] extra fields */
 };
-/*e: struct input */
-/*s: global inputs */
+/*e: struct [[input]] */
+/*s: global [[inputs]] */
 // list<ref_own<Input>> (next = Input.next)
 static struct Input *inputs = nil;
-/*e: global inputs */
+/*e: global [[inputs]] */
 
-/*s: function ipush */
+/*s: function [[ipush]] */
 void
 ipush(void)
 {
@@ -395,9 +395,9 @@ ipush(void)
         in->next = me;
     }
 }
-/*e: function ipush */
+/*e: function [[ipush]] */
 
-/*s: function ipop */
+/*s: function [[ipop]] */
 void
 ipop(void)
 {
@@ -418,6 +418,6 @@ ipop(void)
     mkinline = me->line;
     free((char *)me);
 }
-/*e: function ipop */
+/*e: function [[ipop]] */
 
 /*e: mk/parse.c */

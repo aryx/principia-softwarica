@@ -1,16 +1,16 @@
 /*s: mk/plan9.c */
 #include	"mk.h"
 
-/*s: global shell */
+/*s: global [[shell]] */
 char 	*shell =	"/bin/rc";
-/*e: global shell */
-/*s: global shellname */
+/*e: global [[shell]] */
+/*s: global [[shellname]] */
 char 	*shellname =	"rc";
-/*e: global shellname */
+/*e: global [[shellname]] */
 
 static	Word	*encodenulls(char*, int);
 
-/*s: function readenv */
+/*s: function [[readenv]] */
 void
 readenv(void)
 {
@@ -75,9 +75,9 @@ readenv(void)
     }
     close(envdir);
 }
-/*e: function readenv */
+/*e: function [[readenv]] */
 
-/*s: function encodenulls */
+/*s: function [[encodenulls]] */
 /* break string of values into words at 01's or nulls*/
 static Word *
 encodenulls(char *s, int n)
@@ -104,9 +104,9 @@ encodenulls(char *s, int n)
         head = newword("");
     return head;
 }
-/*e: function encodenulls */
+/*e: function [[encodenulls]] */
 
-/*s: function exportenv */
+/*s: function [[exportenv]] */
 /* as well as 01's, change blanks to nulls, so that rc will
  * treat the words as separate arguments
  */
@@ -172,9 +172,9 @@ exportenv(ShellEnvVar *e)
         close(f);
     }
 }
-/*e: function exportenv */
+/*e: function [[exportenv]] */
 
-/*s: function waitfor */
+/*s: function [[waitfor]] */
 int
 waitfor(char *msg)
 {
@@ -191,17 +191,17 @@ waitfor(char *msg)
     free(w);
     return pid;
 }
-/*e: function waitfor */
+/*e: function [[waitfor]] */
 
-/*s: function expunge */
+/*s: function [[expunge]] */
 void
 expunge(int pid, char *msg)
 {
     postnote(PNPROC, pid, msg);
 }
-/*e: function expunge */
+/*e: function [[expunge]] */
 
-/*s: function execsh */
+/*s: function [[execsh]] */
 int
 execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
 {
@@ -315,9 +315,9 @@ execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
     /*e: [[execsh()]] in parent, if buf, close other side of pipe and read output */
     return pid1;
 }
-/*e: function execsh */
+/*e: function [[execsh]] */
 
-/*s: function pipecmd */
+/*s: function [[pipecmd]] */
 int
 pipecmd(char *cmd, ShellEnvVar *e, int *fd)
 {
@@ -357,9 +357,9 @@ pipecmd(char *cmd, ShellEnvVar *e, int *fd)
     }
     return pid;
 }
-/*e: function pipecmd */
+/*e: function [[pipecmd]] */
 
-/*s: function Exit */
+/*s: function [[Exit]] */
 void
 Exit(void)
 {
@@ -367,9 +367,9 @@ Exit(void)
         ;
     exits("error");
 }
-/*e: function Exit */
+/*e: function [[Exit]] */
 
-/*s: function notifyf */
+/*s: function [[notifyf]] */
 int
 notifyf(void *a, char *msg)
 {
@@ -388,17 +388,17 @@ notifyf(void *a, char *msg)
     killchildren(msg);
     return -1;
 }
-/*e: function notifyf */
+/*e: function [[notifyf]] */
 
-/*s: function catchnotes */
+/*s: function [[catchnotes]] */
 void
 catchnotes()
 {
     atnotify(notifyf, 1);
 }
-/*e: function catchnotes */
+/*e: function [[catchnotes]] */
 
-/*s: function maketmp */
+/*s: function [[maketmp]] */
 char*
 maketmp(void)
 {
@@ -407,9 +407,9 @@ maketmp(void)
     mktemp(temp);
     return temp;
 }
-/*e: function maketmp */
+/*e: function [[maketmp]] */
 
-/*s: function chgtime */
+/*s: function [[chgtime]] */
 int
 chgtime(char *name)
 {
@@ -422,9 +422,9 @@ chgtime(char *name)
     }
     return close(create(name, OWRITE, 0666));
 }
-/*e: function chgtime */
+/*e: function [[chgtime]] */
 
-/*s: function rcopy */
+/*s: function [[rcopy]] */
 void
 rcopy(char **to, Resub *match, int n)
 {
@@ -444,9 +444,9 @@ rcopy(char **to, Resub *match, int n)
             *to = 0;
     }
 }
-/*e: function rcopy */
+/*e: function [[rcopy]] */
 
-/*s: function dirtime */
+/*s: function [[dirtime]] */
 void
 dirtime(char *dir, char *path)
 {
@@ -474,9 +474,9 @@ dirtime(char *dir, char *path)
         close(fd);
     }
 }
-/*e: function dirtime */
+/*e: function [[dirtime]] */
 
-/*s: function bulkmtime */
+/*s: function [[bulkmtime]] */
 void
 bulkmtime(char *dir)
 {
@@ -502,9 +502,9 @@ bulkmtime(char *dir)
     symlook(ss, S_BULKED, (void*)ss);
     dirtime(s, buf);
 }
-/*e: function bulkmtime */
+/*e: function [[bulkmtime]] */
 
-/*s: function mkmtime */
+/*s: function [[mkmtime]] */
 ulong
 mkmtime(char *name, bool force)
 {
@@ -557,6 +557,6 @@ mkmtime(char *name, bool force)
 
     return t;
 }
-/*e: function mkmtime */
+/*e: function [[mkmtime]] */
 
 /*e: mk/plan9.c */

@@ -1,15 +1,15 @@
 /*s: mk/var.c */
 #include	"mk.h"
 
-/*s: function setvar */
+/*s: function [[setvar]] */
 void
 setvar(char *name, void *value)
 {
     symlook(name, S_VAR, value)->u.ptr = value;
 }
-/*e: function setvar */
+/*e: function [[setvar]] */
 
-/*s: function shname */
+/*s: function [[shname]] */
 char *
 shname(char *a)
 {
@@ -24,5 +24,5 @@ shname(char *a)
     }
     return a;
 }
-/*e: function shname */
+/*e: function [[shname]] */
 /*e: mk/var.c */

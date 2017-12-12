@@ -12,7 +12,7 @@ static void sched(void);
 static void pnew(int, int);
 static void pdelete(Process *);
 
-/*s: struct RunEvent */
+/*s: struct [[RunEvent]] */
 struct RunEvent {
     // option<Pid> (None = 0)
     int pid;
@@ -20,23 +20,23 @@ struct RunEvent {
     // ref_own<Job>
     Job *job;
 };
-/*e: struct RunEvent */
+/*e: struct [[RunEvent]] */
 
-/*s: global events */
+/*s: global [[events]] */
 // growing_array<Runevent> (size = nevents (== nproclimit))
 static RunEvent *events;
-/*e: global events */
-/*s: global nevents */
+/*e: global [[events]] */
+/*s: global [[nevents]] */
 static int nevents;
-/*e: global nevents */
-/*s: global nrunning */
+/*e: global [[nevents]] */
+/*s: global [[nrunning]] */
 static int nrunning;
-/*e: global nrunning */
-/*s: global nproclimit */
+/*e: global [[nrunning]] */
+/*s: global [[nproclimit]] */
 static int nproclimit;
-/*e: global nproclimit */
+/*e: global [[nproclimit]] */
 
-/*s: struct Process */
+/*s: struct [[Process]] */
 struct Process {
     int pid;
     int status;
@@ -45,17 +45,17 @@ struct Process {
     // double_list<ref_own<Process> backward, forward
     Process *b, *f;
 };
-/*e: struct Process */
-/*s: global phead */
+/*e: struct [[Process]] */
+/*s: global [[phead]] */
 // double_list<ref_own<Process> (next = Process.f)
 static Process *phead;
-/*e: global phead */
-/*s: global pfree */
+/*e: global [[phead]] */
+/*s: global [[pfree]] */
 // double_list<ref_own<Process> (next = Process.f)
 static Process *pfree;
-/*e: global pfree */
+/*e: global [[pfree]] */
 
-/*s: function run */
+/*s: function [[run]] */
 void
 run(Job *j)
 {
@@ -74,9 +74,9 @@ run(Job *j)
     if(nrunning < nproclimit)
         sched();
 }
-/*e: function run */
+/*e: function [[run]] */
 
-/*s: function sched */
+/*s: function [[sched]] */
 static void
 sched(void)
 {
@@ -100,10 +100,10 @@ sched(void)
     // j = pop(jobs)
     j = jobs;
     jobs = j->next;
-    /*s: [[sched()]] if DEBUG(D_EXEC) */
+    /*s: [[sched()]] if [[DEBUG(D_EXEC)]] */
     if(DEBUG(D_EXEC))
         fprint(STDOUT, "firing up job for target %s\n", wtos(j->t, ' '));
-    /*e: [[sched()]] if DEBUG(D_EXEC) */
+    /*e: [[sched()]] if [[DEBUG(D_EXEC)]] */
 
     slot = nextslot();
     events[slot].job = j;
@@ -134,11 +134,11 @@ sched(void)
     }
     /*e: [[sched()]] if dry mode or touch mode, alternate to execsh */
     else {
-       /*s: [[sched()]] if DEBUG(D_EXEC) print recipe */
+       /*s: [[sched()]] if [[DEBUG(D_EXEC)]] print recipe */
        if(DEBUG(D_EXEC))
            fprint(STDOUT, "recipe='%s'\n", j->r->recipe);
        Bflush(&bout);
-       /*e: [[sched()]] if DEBUG(D_EXEC) print recipe */
+       /*e: [[sched()]] if [[DEBUG(D_EXEC)]] print recipe */
         flags = "-e";
        /*s: [[sched()]] reset flags if NOMINUSE rule */
        if (j->r->attr&NOMINUSE)
@@ -150,15 +150,15 @@ sched(void)
 
         usage();
         nrunning++;
-       /*s: [[sched()]] if DEBUG(D_EXEC) print pid */
+       /*s: [[sched()]] if [[DEBUG(D_EXEC)]] print pid */
        if(DEBUG(D_EXEC))
            fprint(STDOUT, "pid for target %s = %d\n", wtos(j->t, ' '), events[slot].pid);
-       /*e: [[sched()]] if DEBUG(D_EXEC) print pid */
+       /*e: [[sched()]] if [[DEBUG(D_EXEC)]] print pid */
     }
 }
-/*e: function sched */
+/*e: function [[sched]] */
 
-/*s: function waitup */
+/*s: function [[waitup]] */
 int
 waitup(int echildok, int *retstatus)
 {
@@ -208,10 +208,10 @@ again:		/* rogue processes */
         }
     }
     /*e: [[waitup()]] if no more children */
-    /*s: [[waitup()]] if DEBUG(D_EXEC) print pid */
+    /*s: [[waitup()]] if [[DEBUG(D_EXEC)]] print pid */
     if(DEBUG(D_EXEC))
         fprint(STDOUT, "waitup got pid=%d, status='%s'\n", pid, buf);
-    /*e: [[waitup()]] if DEBUG(D_EXEC) print pid */
+    /*e: [[waitup()]] if [[DEBUG(D_EXEC)]] print pid */
     /*s: [[waitup()]] if retstatus, check if matching pid */
     if(retstatus && pid == *retstatus){
         *retstatus = buf[0]? 1:0;
@@ -222,10 +222,10 @@ again:		/* rogue processes */
     slot = pidslot(pid);
     /*s: [[waitup()]] if slot not found, not a job pid, update process list */
     if(slot < 0){
-       /*s: [[waitup()]] if DEBUG(D_EXEC) and slot < 0 */
+       /*s: [[waitup()]] if [[DEBUG(D_EXEC)]] and slot < 0 */
         if(DEBUG(D_EXEC))
             fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
-       /*e: [[waitup()]] if DEBUG(D_EXEC) and slot < 0 */
+       /*e: [[waitup()]] if [[DEBUG(D_EXEC)]] and slot < 0 */
         pnew(pid, buf[0]? 1:0);
         goto again;
     }
@@ -288,9 +288,9 @@ again:		/* rogue processes */
         sched();
     return JOB_ENDED;
 }
-/*e: function waitup */
+/*e: function [[waitup]] */
 
-/*s: function nproc */
+/*s: function [[nproc]] */
 void
 nproc(void)
 {
@@ -304,10 +304,10 @@ nproc(void)
     }
     if(nproclimit < 1)
         nproclimit = 1;
-    /*s: [[nproc()]] if DEBUG(D_EXEC) */
+    /*s: [[nproc()]] if [[DEBUG(D_EXEC)]] */
     if(DEBUG(D_EXEC))
         fprint(STDERR, "nprocs = %d\n", nproclimit);
-    /*e: [[nproc()]] if DEBUG(D_EXEC) */
+    /*e: [[nproc()]] if [[DEBUG(D_EXEC)]] */
 
     /*s: [[nproc()]] grow nevents if necessary */
     if(nproclimit > nevents){
@@ -322,9 +322,9 @@ nproc(void)
     }
     /*e: [[nproc()]] grow nevents if necessary */
 }
-/*e: function nproc */
+/*e: function [[nproc]] */
 
-/*s: function nextslot */
+/*s: function [[nextslot]] */
 int
 nextslot(void)
 {
@@ -336,9 +336,9 @@ nextslot(void)
     assert(/*out of slots!!*/ false);
     return 0;	/* cyntax */
 }
-/*e: function nextslot */
+/*e: function [[nextslot]] */
 
-/*s: function pidslot */
+/*s: function [[pidslot]] */
 int
 pidslot(int pid)
 {
@@ -348,16 +348,16 @@ pidslot(int pid)
         if(events[i].pid == pid) 
             return i;
     // else
-    /*s: [[pidslot()]] if DEBUG(D_EXEC) */
+    /*s: [[pidslot()]] if [[DEBUG(D_EXEC)]] */
     if(DEBUG(D_EXEC))
         fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
-    /*e: [[pidslot()]] if DEBUG(D_EXEC) */
+    /*e: [[pidslot()]] if [[DEBUG(D_EXEC)]] */
     return -1;
 }
-/*e: function pidslot */
+/*e: function [[pidslot]] */
 
 
-/*s: function pnew */
+/*s: function [[pnew]] */
 static void
 pnew(int pid, int status)
 {
@@ -380,9 +380,9 @@ pnew(int pid, int status)
         p->f->b = p;
     p->b = nil;
 }
-/*e: function pnew */
+/*e: function [[pnew]] */
 
-/*s: function pdelete */
+/*s: function [[pdelete]] */
 static void
 pdelete(Process *p)
 {
@@ -396,9 +396,9 @@ pdelete(Process *p)
     p->f = pfree;
     pfree = p;
 }
-/*e: function pdelete */
+/*e: function [[pdelete]] */
 
-/*s: function killchildren */
+/*s: function [[killchildren]] */
 void
 killchildren(char *msg)
 {
@@ -419,17 +419,17 @@ killchildren(char *msg)
     Bprint(&bout, "mk: %s\n", msg);
     Exit();
 }
-/*e: function killchildren */
+/*e: function [[killchildren]] */
 
-/*s: global tslot */
+/*s: global [[tslot]] */
 // map<nrunning, int>
 static ulong tslot[1000];
-/*e: global tslot */
-/*s: global tick */
+/*e: global [[tslot]] */
+/*s: global [[tick]] */
 static ulong tick;
-/*e: global tick */
+/*e: global [[tick]] */
 
-/*s: function usage */
+/*s: function [[usage]] */
 void
 usage(void)
 {
@@ -440,9 +440,9 @@ usage(void)
         tslot[nrunning] += t - tick;
     tick = t;
 }
-/*e: function usage */
+/*e: function [[usage]] */
 
-/*s: function prusage */
+/*s: function [[prusage]] */
 void
 prusage(void)
 {
@@ -452,5 +452,5 @@ prusage(void)
     for(i = 0; i <= nevents; i++)
         fprint(STDOUT, "%d: %lud\n", i, tslot[i]);
 }
-/*e: function prusage */
+/*e: function [[prusage]] */
 /*e: mk/run.c */

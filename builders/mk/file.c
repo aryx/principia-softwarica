@@ -3,7 +3,7 @@
 
 /* table-driven version in bootes dump of 12/31/96 */
 
-/*s: function timeof */
+/*s: function [[timeof]] */
 ulong
 timeof(char *name, bool force)
 {
@@ -35,9 +35,9 @@ timeof(char *name, bool force)
     return t;
     /*e: [[timeof()]] if not force, use time cache */
 }
-/*e: function timeof */
+/*e: function [[timeof]] */
 
-/*s: function touch */
+/*s: function [[touch]] */
 void
 touch(char *name)
 {
@@ -53,9 +53,9 @@ touch(char *name)
         Exit();
     }
 }
-/*e: function touch */
+/*e: function [[touch]] */
 
-/*s: function delete */
+/*s: function [[delete]] */
 void
 delete(char *name)
 {
@@ -65,9 +65,9 @@ delete(char *name)
     } else
         fprint(STDERR, "hoon off; mk can't delete archive members\n");
 }
-/*e: function delete */
+/*e: function [[delete]] */
 
-/*s: function timeinit */
+/*s: function [[timeinit]] */
 void
 timeinit(char *s)
 {
@@ -100,5 +100,5 @@ timeinit(char *s)
         }
     }
 }
-/*e: function timeinit */
+/*e: function [[timeinit]] */
 /*e: mk/file.c */

@@ -26,7 +26,7 @@ newjob(Rule *r, Node *nlist, char *stem, char **match,
 }
 /*e: constructor newjob */
 
-/*s: function dorecipe */
+/*s: function [[dorecipe]] */
 void
 dorecipe(Node *node, bool *did)
 {
@@ -195,6 +195,6 @@ dorecipe(Node *node, bool *did)
     *did = true; // finally
     return;
 }
-/*e: function dorecipe */
+/*e: function [[dorecipe]] */
 
 /*e: mk/recipe.c */

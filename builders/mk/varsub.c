@@ -8,7 +8,7 @@ static	Word		*extractpat(char*, char**, char*, char*);
 static	int		submatch(char*, Word*, Word*, int*, char**);
 static	Word		*varmatch(char *);
 
-/*s: function varsub */
+/*s: function [[varsub]] */
 Word*
 varsub(char **s)
 {
@@ -31,9 +31,9 @@ varsub(char **s)
     freebuf(buf);
     return w;
 }
-/*e: function varsub */
+/*e: function [[varsub]] */
 
-/*s: function varname */
+/*s: function [[varname]] */
 /*
  *	extract a variable name
  */
@@ -65,9 +65,9 @@ varname(char **s)
     insert(buf, '\0');
     return buf;
 }
-/*e: function varname */
+/*e: function [[varname]] */
 
-/*s: function varmatch */
+/*s: function [[varmatch]] */
 static Word*
 varmatch(char *name)
 {
@@ -83,9 +83,9 @@ varmatch(char *name)
     }
     return nil;
 }
-/*e: function varmatch */
+/*e: function [[varmatch]] */
 
-/*s: function expandvar */
+/*s: function [[expandvar]] */
 static Word*
 expandvar(char **s)
 {
@@ -132,9 +132,9 @@ expandvar(char **s)
     freebuf(buf);
     return w;
 }
-/*e: function expandvar */
+/*e: function [[expandvar]] */
 
-/*s: function extractpat */
+/*s: function [[extractpat]] */
 static Word*
 extractpat(char *s, char **r, char *term, char *end)
 {
@@ -157,9 +157,9 @@ extractpat(char *s, char **r, char *term, char *end)
     }
     return w;
 }
-/*e: function extractpat */
+/*e: function [[extractpat]] */
 
-/*s: function subsub */
+/*s: function [[subsub]] */
 static Word*
 subsub(Word *v, char *s, char *end)
 {
@@ -239,9 +239,9 @@ subsub(Word *v, char *s, char *end)
     freewords(d);
     return head;
 }
-/*e: function subsub */
+/*e: function [[subsub]] */
 
-/*s: function submatch */
+/*s: function [[submatch]] */
 static bool
 submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 {
@@ -272,10 +272,10 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
         return false;
     return true;
 }
-/*e: function submatch */
+/*e: function [[submatch]] */
 
 
-/*s: function nextword */
+/*s: function [[nextword]] */
 /*
  *	break out a word from a string handling quotes, executions,
  *	and variable expansions.
@@ -400,9 +400,9 @@ out:
     freebuf(buf);
     return head;
 }
-/*e: function nextword */
+/*e: function [[nextword]] */
 
-/*s: function stow */
+/*s: function [[stow]] */
 Word *
 stow(char *s)
 {
@@ -433,6 +433,6 @@ stow(char *s)
     /*e: [[stow()]] if head still nil */
     return head;
 }
-/*e: function stow */
+/*e: function [[stow]] */
 
 /*e: mk/varsub.c */

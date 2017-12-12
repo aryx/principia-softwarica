@@ -1,19 +1,19 @@
 /*s: mk/rc.c */
 #include	"mk.h"
 
-/*s: global termchars */
+/*s: global [[termchars]] */
 char	*termchars = "=' \t";	/*used in parse.c to isolate assignment attribute*/
-/*e: global termchars */
-/*s: global shflags */
+/*e: global [[termchars]] */
+/*s: global [[shflags]] */
 char	*shflags = "-I";	/* rc flag to force non-interactive mode */
-/*e: global shflags */
+/*e: global [[shflags]] */
 
 /*
  *	This file contains functions that depend on rc's syntax.  Most
  *	of the routines extract strings observing rc's escape conventions
  */
 
-/*s: function squote */
+/*s: function [[squote]] */
 /*
  *	skip a token in single quotes.
  */
@@ -39,9 +39,9 @@ squote(char *cp)
     fprint(STDERR, "missing closing '\n");
     return nil;
 }
-/*e: function squote */
+/*e: function [[squote]] */
 
-/*s: function charin */
+/*s: function [[charin]] */
 /*
  *	Search a string for characters in a pattern set.
  *	Characters in quotes and variable generators are escaped.
@@ -91,9 +91,9 @@ charin(char *cp, char *pat)
     /*e: [[charin()]] sanity check vargen */
     return nil;
 }
-/*e: function charin */
+/*e: function [[charin]] */
 
-/*s: function expandquote */
+/*s: function [[expandquote]] */
 /*
  *	extract an escaped token.  Possible escape chars are single-quote,
  *	double-quote, and backslash.  Only the first is valid for rc. The
@@ -121,9 +121,9 @@ expandquote(char *s, Rune r, Bufblock *buf)
     }
     return nil;
 }
-/*e: function expandquote */
+/*e: function [[expandquote]] */
 
-/*s: function escapetoken */
+/*s: function [[escapetoken]] */
 /*
  *	Input an escaped token.  Possible escape chars are single-quote,
  *	double-quote and backslash.  Only the first is a valid escape for
@@ -161,9 +161,9 @@ escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
     fprint(STDERR, "missing closing %c\n", esc);
     return ERROR_0;
 }
-/*e: function escapetoken */
+/*e: function [[escapetoken]] */
 
-/*s: function copysingle */
+/*s: function [[copysingle]] */
 /*
  *	copy a single-quoted string; s points to char after opening quote
  */
@@ -180,9 +180,9 @@ copysingle(char *s, Bufblock *buf)
     }
     return s;
 }
-/*e: function copysingle */
+/*e: function [[copysingle]] */
 
-/*s: function copyq */
+/*s: function [[copyq]] */
 /*
  *	check for quoted strings.  backquotes are handled here; single quotes above.
  *	s points to char after opening quote, q.
@@ -207,5 +207,5 @@ copyq(char *s, Rune q, Bufblock *buf)
     }
     return s;
 }
-/*e: function copyq */
+/*e: function [[copyq]] */
 /*e: mk/rc.c */

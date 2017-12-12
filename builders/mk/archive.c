@@ -5,7 +5,7 @@
 static void atimes(char *);
 static char *split(char*, char**);
 
-/*s: function atimeof */
+/*s: function [[atimeof]] */
 ulong
 atimeof(int force, char *name)
 {
@@ -37,9 +37,9 @@ atimeof(int force, char *name)
         return sym->u.value;
     return 0;
 }
-/*e: function atimeof */
+/*e: function [[atimeof]] */
 
-/*s: function atouch */
+/*s: function [[atouch]] */
 void
 atouch(char *name)
 {
@@ -81,9 +81,9 @@ atouch(char *name)
     }
     close(fd);
 }
-/*e: function atouch */
+/*e: function [[atouch]] */
 
-/*s: function atimes */
+/*s: function [[atimes]] */
 static void
 atimes(char *ar)
 {
@@ -126,9 +126,9 @@ atimes(char *ar)
     }
     close(fd);
 }
-/*e: function atimes */
+/*e: function [[atimes]] */
 
-/*s: function type */
+/*s: function [[type]] */
 static int
 type(char *file)
 {
@@ -150,9 +150,9 @@ type(char *file)
     close(fd);
     return strncmp(ARMAG, buf, SARMAG) == 0;
 }
-/*e: function type */
+/*e: function [[type]] */
 
-/*s: function split */
+/*s: function [[split]] */
 static char*
 split(char *name, char **member)
 {
@@ -174,5 +174,5 @@ split(char *name, char **member)
     }
     return nil;
 }
-/*e: function split */
+/*e: function [[split]] */
 /*e: mk/archive.c */

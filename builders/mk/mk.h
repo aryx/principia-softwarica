@@ -15,7 +15,7 @@ typedef struct ShellEnvVar ShellEnvVar;
 typedef struct Job Job;
 typedef struct Bufblock Bufblock;
 
-/*s: struct Bufblock */
+/*s: struct [[Bufblock]] */
 struct Bufblock
 {
     char 		*start;
@@ -27,9 +27,9 @@ struct Bufblock
     // Extra
     struct Bufblock *next;
 };
-/*e: struct Bufblock */
+/*e: struct [[Bufblock]] */
 
-/*s: struct Word */
+/*s: struct [[Word]] */
 struct Word
 {
     // ref_own<string>
@@ -41,13 +41,13 @@ struct Word
     struct Word 	*next;
     /*e: [[Word]] extra fields */
 };
-/*e: struct Word */
+/*e: struct [[Word]] */
 
 // used by main and parse.c
 extern Word *target1;
 
 
-/*s: struct Envy */
+/*s: struct [[Envy]] */
 struct ShellEnvVar
 {
     // ref<string>, the key
@@ -56,11 +56,11 @@ struct ShellEnvVar
     // list<ref_own<string>>, the value
     Word 		*values;
 };
-/*e: struct Envy */
+/*e: struct [[Envy]] */
 
 extern ShellEnvVar *shellenv;
 
-/*s: struct Rule */
+/*s: struct [[Rule]] */
 struct Rule
 {
     // ref_own<string>
@@ -97,11 +97,11 @@ struct Rule
     struct Rule	*chain;		/* hashed per target */
     /*e: [[Rule]] extra fields */
 };
-/*e: struct Rule */
+/*e: struct [[Rule]] */
 
 extern Rule *rules, *metarules, *patrule;
 
-/*s: enum Rule_attr */
+/*s: enum [[Rule_attr]] */
 enum Rule_attr {
     META   = 0x0001,
     /*s: [[Rule_attr]] cases */
@@ -118,23 +118,23 @@ enum Rule_attr {
     NOVIRT = 0x0100,
     /*e: [[Rule_attr]] cases */
 };
-/*e: enum Rule_attr */
+/*e: enum [[Rule_attr]] */
 
-/*s: macro empty_recipe */
+/*s: macro [[empty_recipe]] */
 #define empty_recipe(r) (!r->recipe || !*r->recipe)
-/*e: macro empty_recipe */
-/*s: macro empty_prereqs */
+/*e: macro [[empty_recipe]] */
+/*s: macro [[empty_prereqs]] */
 #define empty_prereqs(r) (!r->prereqs || !r->prereqs->s || !*r->prereqs->s)
-/*e: macro empty_prereqs */
-/*s: macro empty_words */
+/*e: macro [[empty_prereqs]] */
+/*s: macro [[empty_words]] */
 #define empty_words(w) ((w) == nil || (w)->s == nil || (w)->s[0] == '\0')
-/*e: macro empty_words */
+/*e: macro [[empty_words]] */
 
-/*s: constant NREGEXP */
+/*s: constant [[NREGEXP]] */
 #define		NREGEXP		10
-/*e: constant NREGEXP */
+/*e: constant [[NREGEXP]] */
 
-/*s: struct Arc */
+/*s: struct [[Arc]] */
 struct Arc
 {
     // option<ref<Node>>, the other node in the arc (the dependency)
@@ -159,9 +159,9 @@ struct Arc
     struct Arc	*next;
     /*e: [[Arc]] extra fields */
 };
-/*e: struct Arc */
+/*e: struct [[Arc]] */
 
-/*s: struct Node */
+/*s: struct [[Node]] */
 struct Node
 {
     // ref_own<string>, usually a filename, or a virtual target like 'clean'
@@ -184,9 +184,9 @@ struct Node
     struct Node	*next;		/* list for a rule */
     /*e: [[Node]] extra fields */
 };
-/*e: struct Node */
+/*e: struct [[Node]] */
 
-/*s: enum Node_flag */
+/*s: enum [[Node_flag]] */
 enum Node_flag {
     /*s: [[Node_flag]] cases */
     NOTMADE    = 0x0020,
@@ -213,12 +213,12 @@ enum Node_flag {
     PRETENDING = 0x0010,
     /*e: [[Node_flag]] cases */
 };
-/*e: enum Node_flag */
-/*s: function MADESET */
+/*e: enum [[Node_flag]] */
+/*s: function [[MADESET]] */
 #define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
-/*e: function MADESET */
+/*e: function [[MADESET]] */
 
-/*s: struct Job */
+/*s: struct [[Job]] */
 struct Job
 {
     // ref<Rule>
@@ -249,11 +249,11 @@ struct Job
     struct Job	*next;
     /*e: [[Job]] extra fields */
 };
-/*e: struct Job */
+/*e: struct [[Job]] */
 
 extern Job *jobs;
 
-/*s: struct Symtab */
+/*s: struct [[Symtab]] */
 struct Symtab
 {
     // the key: (name x space)
@@ -276,9 +276,9 @@ struct Symtab
     struct Symtab	*next;
     /*e: [[Symtab]] extra fields */
 };
-/*e: struct Symtab */
+/*e: struct [[Symtab]] */
 
-/*s: enum Namespace */
+/*s: enum [[Namespace]] */
 enum Namespace {
     S_VAR,	/* variable -> value */ // value is a list of words
     /*s: [[Sxxx]] cases */
@@ -305,9 +305,9 @@ enum Namespace {
     S_BULKED,	/* we have bulked this dir */
     /*e: [[Sxxx]] cases */
 };
-/*e: enum Namespace */
+/*e: enum [[Namespace]] */
 
-/*s: type WaitupParam */
+/*s: type [[WaitupParam]] */
 enum WaitupParam { 
   EMPTY_CHILDREN_IS_OK = 1, 
   EMPTY_CHILDREN_IS_ERROR = -1, 
@@ -316,14 +316,14 @@ enum WaitupParam {
   EMPTY_CHILDREN_IS_ERROR3 = -3,
   /*e: [[WaitupParam]] other cases */
 };
-/*e: type WaitupParam */
-/*s: type WaitupResult */
+/*e: type [[WaitupParam]] */
+/*s: type [[WaitupResult]] */
 enum WaitupResult { 
   JOB_ENDED = 0, 
   EMPTY_CHILDREN = 1, 
   NOT_A_JOB_PROCESS = -1 
 };
-/*e: type WaitupResult */
+/*e: type [[WaitupResult]] */
 
 extern	int	debug;
 extern	bool	nflag, tflag, iflag, kflag, aflag;
@@ -334,28 +334,28 @@ extern	char	*termchars;
 extern	char 	*shflags;
 extern int runerrs;
 
-/*s: function SYNERR */
+/*s: function [[SYNERR]] */
 #define	SYNERR(l)	(fprint(STDERR, "mk: %s:%d: syntax error; ", \
                             infile, ((l)>=0)? (l) : mkinline))
-/*e: function SYNERR */
-/*s: function RERR */
+/*e: function [[SYNERR]] */
+/*s: function [[RERR]] */
 //#define	RERR(r)		(fprint(STDERR, "mk: %s:%d: rule error; ", (r)->file, (r)->line))
-/*e: function RERR */
-/*s: constant NAMEBLOCK */
+/*e: function [[RERR]] */
+/*s: constant [[NAMEBLOCK]] */
 #define	NAMEBLOCK	1000
-/*e: constant NAMEBLOCK */
-/*s: constant BIGBLOCK */
+/*e: constant [[NAMEBLOCK]] */
+/*s: constant [[BIGBLOCK]] */
 #define	BIGBLOCK	20000
-/*e: constant BIGBLOCK */
+/*e: constant [[BIGBLOCK]] */
 
-/*s: function SEP */
+/*s: function [[SEP]] */
 //#define	SEP(c)		(((c)==' ')||((c)=='\t')||((c)=='\n'))
-/*e: function SEP */
-/*s: function WORDCHR */
+/*e: function [[SEP]] */
+/*s: function [[WORDCHR]] */
 #define WORDCHR(r)	((r) > ' ' && !utfrune("!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~", (r)))
-/*e: function WORDCHR */
+/*e: function [[WORDCHR]] */
 
-/*s: enum Dxxx */
+/*s: enum [[Dxxx]] */
 enum Dxxx {
     // for rules
     D_PARSE =		0x01,
@@ -367,14 +367,14 @@ enum Dxxx {
     // tracing some calls
     D_TRACE  =		0x08,
 };
-/*e: enum Dxxx */
-/*s: function DEBUG */
+/*e: enum [[Dxxx]] */
+/*s: function [[DEBUG]] */
 #define	DEBUG(x)	(debug&(x))
-/*e: function DEBUG */
+/*e: function [[DEBUG]] */
 
-/*s: function PERCENT */
+/*s: function [[PERCENT]] */
 #define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
-/*e: function PERCENT */
+/*e: function [[PERCENT]] */
 
 #include	"fns.h"
 /*e: mk/mk.h */

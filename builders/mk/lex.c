@@ -3,7 +3,7 @@
 
 static	int	bquote(Biobuf*, Bufblock*);
 
-/*s: function assline */
+/*s: function [[assline]] */
 /*
  *	Assemble a line skipping blank lines, comments, and eliding
  *	escaped newlines
@@ -71,9 +71,9 @@ eof:
     insert(buf, '\0');
     return *(bufcontent(buf)) != '\0';
 }
-/*e: function assline */
+/*e: function [[assline]] */
 
-/*s: function bquote */
+/*s: function [[bquote]] */
 /*
  *	assemble a back-quoted shell command into a buffer
  */
@@ -120,9 +120,9 @@ bquote(Biobuf *bp, Bufblock *buf)
     fprint(STDERR, "missing closing %c after `\n", term);
     return ERROR_0;
 }
-/*e: function bquote */
+/*e: function [[bquote]] */
 
-/*s: function nextrune */
+/*s: function [[nextrune]] */
 /*
  *	get next character stripping escaped newlines
  *	the flag specifies whether escaped newlines are to be elided or
@@ -156,5 +156,5 @@ nextrune(Biobuf *bp, bool elide)
         return c;
     }
 }
-/*e: function nextrune */
+/*e: function [[nextrune]] */
 /*e: mk/lex.c */

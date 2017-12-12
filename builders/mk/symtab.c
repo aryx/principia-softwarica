@@ -1,18 +1,18 @@
 /*s: mk/symtab.c */
 #include	"mk.h"
 
-/*s: constant NHASH */
+/*s: constant [[NHASH]] */
 #define	NHASH	4099
-/*e: constant NHASH */
-/*s: constant HASHMUL */
+/*e: constant [[NHASH]] */
+/*s: constant [[HASHMUL]] */
 #define	HASHMUL	79L	/* this is a good value */
-/*e: constant HASHMUL */
-/*s: global hash */
+/*e: constant [[HASHMUL]] */
+/*s: global [[hash]] */
 // hash<(string * enum<Namespace>), 'a> (next = Symtab.next in bucket)
 static Symtab *hash[NHASH];
-/*e: global hash */
+/*e: global [[hash]] */
 
-/*s: function symlook */
+/*s: function [[symlook]] */
 Symtab*
 symlook(char *sym, int space, void *install)
 {
@@ -52,9 +52,9 @@ symlook(char *sym, int space, void *install)
     return s;
     /*e: [[symlook()]] if symbol not found */
 }
-/*e: function symlook */
+/*e: function [[symlook]] */
 
-/*s: function symtraverse */
+/*s: function [[symtraverse]] */
 void
 symtraverse(int space, void (*fn)(Symtab*))
 {
@@ -65,9 +65,9 @@ symtraverse(int space, void (*fn)(Symtab*))
             if(ss->space == space)
                 (*fn)(ss);
 }
-/*e: function symtraverse */
+/*e: function [[symtraverse]] */
 
-/*s: function symstat */
+/*s: function [[symstat]] */
 void
 symstat(void)
 {
@@ -85,5 +85,5 @@ symstat(void)
         if(l[n]) 
             Bprint(&bout, "%d of length %d\n", l[n], n);
 }
-/*e: function symstat */
+/*e: function [[symstat]] */
 /*e: mk/symtab.c */

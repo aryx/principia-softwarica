@@ -1,23 +1,23 @@
 /*s: mk/rule.c */
 #include	"mk.h"
 
-/*s: global lr */
+/*s: global [[lr]] */
 // option<ref<Rule>> (head = rules)
 static Rule *lr;
-/*e: global lr */
-/*s: global lmr */
+/*e: global [[lr]] */
+/*s: global [[lmr]] */
 // option<ref<Rule>> (head = metarules)
 static Rule *lmr;
-/*e: global lmr */
+/*e: global [[lmr]] */
 
-/*s: global nrules */
+/*s: global [[nrules]] */
 static int nrules = 0;
-/*e: global nrules */
+/*e: global [[nrules]] */
 
 static int rcmp(Rule *r, char *target, Word *tail);
 
 
-/*s: function addrule */
+/*s: function [[addrule]] */
 void
 addrule(char *target, Word *prereqs, char *recipe, 
         Word *alltargets, int attr, int hline, char *prog)
@@ -118,10 +118,10 @@ addrule(char *target, Word *prereqs, char *recipe,
         /*e: [[addrule()]] if simple rule */
     }
 }
-/*e: function addrule */
+/*e: function [[addrule]] */
 
 
-/*s: function rcmp */
+/*s: function [[rcmp]] */
 static int
 rcmp(Rule *r, char *target, Word *prereqs)
 {
@@ -134,9 +134,9 @@ rcmp(Rule *r, char *target, Word *prereqs)
             return 1;
     return (w || prereqs);
 }
-/*e: function rcmp */
+/*e: function [[rcmp]] */
 
-/*s: function rulecnt */
+/*s: function [[rulecnt]] */
 char*
 rulecnt(void)
 {
@@ -146,9 +146,9 @@ rulecnt(void)
     memset(s, 0, nrules);
     return s;
 }
-/*e: function rulecnt */
+/*e: function [[rulecnt]] */
 
-/*s: function regerror */
+/*s: function [[regerror]] */
 //@Scheck: not dead, called via regcomp() when have regexp syntax error
 void regerror(char *s)
 {
@@ -160,5 +160,5 @@ void regerror(char *s)
             infile, mkinline, s);
     Exit();
 }
-/*e: function regerror */
+/*e: function [[regerror]] */
 /*e: mk/rule.c */

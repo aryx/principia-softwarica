@@ -15,7 +15,7 @@ newword(char *s)
 /*e: constructor newword */
 
 
-/*s: function wtos */
+/*s: function [[wtos]] */
 char *
 wtos(Word *w, int sep)
 {
@@ -35,9 +35,9 @@ wtos(Word *w, int sep)
     freebuf(buf);
     return cp;
 }
-/*e: function wtos */
+/*e: function [[wtos]] */
 
-/*s: function wdup */
+/*s: function [[wdup]] */
 Word*
 wdup(Word *w)
 {
@@ -55,7 +55,7 @@ wdup(Word *w)
     }
     return head;
 }
-/*e: function wdup */
+/*e: function [[wdup]] */
 
 /*s: destructor freewords */
 void
@@ -73,7 +73,7 @@ freewords(Word *w)
 /*e: destructor freewords */
 
 // was in recipe.c before
-/*s: function addw */
+/*s: function [[addw]] */
 void
 addw(Word *w, char *s)
 {
@@ -85,6 +85,6 @@ addw(Word *w, char *s)
     }
     lastw->next = newword(s);
 }
-/*e: function addw */
+/*e: function [[addw]] */
 
 /*e: mk/word.c */

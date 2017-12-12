@@ -4,11 +4,11 @@
 void clrmade(Node*);
 void work(Node*, bool*, Node*, Arc*);
 
-/*s: global runerrs */
+/*s: global [[runerrs]] */
 int runerrs;
-/*e: global runerrs */
+/*e: global [[runerrs]] */
 
-/*s: function mk */
+/*s: function [[mk]] */
 void
 mk(char *target)
 {
@@ -27,12 +27,12 @@ mk(char *target)
     /*e: [[mk()]] initializations */
 
     root = graph(target);
-    /*s: [[mk()]] if DEBUG(D_GRAPH) */
+    /*s: [[mk()]] if [[DEBUG(D_GRAPH)]] */
     if(DEBUG(D_GRAPH)){
         dumpn("new target\n", root);
         Bflush(&bout);
     }
-    /*e: [[mk()]] if DEBUG(D_GRAPH) */
+    /*e: [[mk()]] if [[DEBUG(D_GRAPH)]] */
     clrmade(root);
 
     while(root->flags&NOTMADE){
@@ -64,9 +64,9 @@ mk(char *target)
         Bprint(&bout, "mk: '%s' is up to date\n", root->name);
     return;
 }
-/*e: function mk */
+/*e: function [[mk]] */
 
-/*s: function clrmade */
+/*s: function [[clrmade]] */
 void
 clrmade(Node *n)
 {
@@ -83,9 +83,9 @@ clrmade(Node *n)
             // recurse
             clrmade(a->n);
 }
-/*e: function clrmade */
+/*e: function [[clrmade]] */
 
-/*s: function unpretend */
+/*s: function [[unpretend]] */
 static void
 unpretend(Node *n)
 {
@@ -93,9 +93,9 @@ unpretend(Node *n)
     n->flags &= ~(CANPRETEND|PRETENDING);
     n->time = 0;
 }
-/*e: function unpretend */
+/*e: function [[unpretend]] */
 
-/*s: function work */
+/*s: function [[work]] */
 void
 work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
 {
@@ -238,9 +238,9 @@ work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
         /*e: [[work()]] some arcs, a node */
     }
 }
-/*e: function work */
+/*e: function [[work]] */
 
-/*s: function update */
+/*s: function [[update]] */
 void
 update(Node *node, bool fake)
 {
@@ -277,9 +277,9 @@ update(Node *node, bool fake)
         /*e: [[update()]] set outofdate prereqs if arc prog */
     }
 }
-/*e: function update */
+/*e: function [[update]] */
 
-/*s: function pcmp */
+/*s: function [[pcmp]] */
 static int
 pcmp(char *prog, char *p, char *q)
 {
@@ -293,9 +293,9 @@ pcmp(char *prog, char *p, char *q)
         ;
     return (pid? 2:1);
 }
-/*e: function pcmp */
+/*e: function [[pcmp]] */
 
-/*s: function outofdate */
+/*s: function [[outofdate]] */
 bool
 outofdate(Node *node, Arc *arc, bool eval)
 {
@@ -338,5 +338,5 @@ outofdate(Node *node, Arc *arc, bool eval)
          */
         return node->time < arc->n->time;
 }
-/*e: function outofdate */
+/*e: function [[outofdate]] */
 /*e: mk/mk.c */

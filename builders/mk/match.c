@@ -1,7 +1,7 @@
 /*s: mk/match.c */
 #include	"mk.h"
 
-/*s: function match */
+/*s: function [[match]] */
 bool
 match(char *name, char *template,    char *stem)
 {
@@ -40,9 +40,9 @@ match(char *name, char *template,    char *stem)
 
     return true;
 }
-/*e: function match */
+/*e: function [[match]] */
 
-/*s: function subst */
+/*s: function [[subst]] */
 void
 subst(char *stem, char *template,   char *dest, int dlen)
 {
@@ -67,5 +67,5 @@ subst(char *stem, char *template,   char *dest, int dlen)
     }
     *dest = '\0';
 }
-/*e: function subst */
+/*e: function [[subst]] */
 /*e: mk/match.c */

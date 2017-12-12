@@ -53,7 +53,7 @@ dumpj(char *s, Job *j, int all)
 }
 /*e: dumper dumpj */
 
-/*s: function print1 */
+/*s: function [[print1]] */
 static void
 print1(Symtab *s)
 {
@@ -64,7 +64,7 @@ print1(Symtab *s)
         Bprint(&bout, "'%s'", w->s);
     Bprint(&bout, "\n");
 }
-/*e: function print1 */
+/*e: function [[print1]] */
 
 /*s: dumper dumpv */
 void

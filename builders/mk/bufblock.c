@@ -1,12 +1,12 @@
 /*s: mk/bufblock.c */
 #include	"mk.h"
 
-/*s: global freelist */
+/*s: global [[freelist]] */
 static Bufblock *freelist;
-/*e: global freelist */
-/*s: constant QUANTA */
+/*e: global [[freelist]] */
+/*s: constant [[QUANTA]] */
 #define	QUANTA	4096
-/*e: constant QUANTA */
+/*e: constant [[QUANTA]] */
 
 /*s: constructor newbuf */
 Bufblock *
@@ -39,7 +39,7 @@ freebuf(Bufblock *p)
 }
 /*e: destructor freebuf */
 
-/*s: function growbuf */
+/*s: function [[growbuf]] */
 void
 growbuf(Bufblock *p)
 {
@@ -68,9 +68,9 @@ growbuf(Bufblock *p)
     }
     p->current = p->start+n-QUANTA;
 }
-/*e: function growbuf */
+/*e: function [[growbuf]] */
 
-/*s: function bufcpy */
+/*s: function [[bufcpy]] */
 void
 bufcpy(Bufblock *buf, char *cp, int n)
 {
@@ -78,9 +78,9 @@ bufcpy(Bufblock *buf, char *cp, int n)
     while (n--)
         insert(buf, *cp++);
 }
-/*e: function bufcpy */
+/*e: function [[bufcpy]] */
 
-/*s: function insert */
+/*s: function [[insert]] */
 void
 insert(Bufblock *buf, int c)
 {
@@ -89,9 +89,9 @@ insert(Bufblock *buf, int c)
         growbuf(buf);
     *buf->current++ = c;
 }
-/*e: function insert */
+/*e: function [[insert]] */
 
-/*s: function rinsert */
+/*s: function [[rinsert]] */
 void
 rinsert(Bufblock *buf, Rune r)
 {
@@ -103,5 +103,5 @@ rinsert(Bufblock *buf, Rune r)
     runetochar(buf->current, &r);
     buf->current += n;
 }
-/*e: function rinsert */
+/*e: function [[rinsert]] */
 /*e: mk/bufblock.c */

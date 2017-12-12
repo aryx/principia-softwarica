@@ -1,29 +1,29 @@
 /*s: mk/main.c */
 #include	"mk.h"
 
-/*s: constant MKFILE */
+/*s: constant [[MKFILE]] */
 #define	MKFILE		"mkfile"
-/*e: constant MKFILE */
+/*e: constant [[MKFILE]] */
 
-/*s: global version */
+/*s: global [[version]] */
 static char *version = "@(#)mk general release 4 (plan 9)";
-/*e: global version */
+/*e: global [[version]] */
 
 // see also globals.c
 
-/*s: global uflag */
+/*s: global [[uflag]] */
 bool uflag = false;
-/*e: global uflag */
+/*e: global [[uflag]] */
 
 void badusage(void);
 
 #ifdef	PROF
-/*s: global buf */
+/*s: global [[buf]] */
 short buf[10000];
-/*e: global buf */
+/*e: global [[buf]] */
 #endif
 
-/*s: function main */
+/*s: function [[main]] */
 void
 main(int argc, char **argv)
 {
@@ -231,14 +231,14 @@ main(int argc, char **argv)
             parse(MKFILE, open(MKFILE, OREAD), false);
     } else
         parse(f, open(f, OREAD), false);
-    /*s: [[main()]] if DEBUG(D_PARSE) */
+    /*s: [[main()]] if [[DEBUG(D_PARSE)]] */
     if(DEBUG(D_PARSE)){
         dumpw("default targets", target1);
         dumpr("rules", rules);
         dumpr("metarules", metarules);
         dumpv("variables");
     }
-    /*e: [[main()]] if DEBUG(D_PARSE) */
+    /*e: [[main()]] if [[DEBUG(D_PARSE)]] */
     /*e: [[main()]] parsing mkfile, call [[parse()]] */
 
     // Building the graph, finding out-of-date files
@@ -316,9 +316,9 @@ main(int argc, char **argv)
 
     exits(nil);
 }
-/*e: function main */
+/*e: function [[main]] */
 
-/*s: function badusage */
+/*s: function [[badusage]] */
 void
 badusage(void)
 {
@@ -327,5 +327,5 @@ badusage(void)
            "Usage: mk [-f file] [-(n|a|e|t|k|i)] [-d[egp]] [targets ...]\n");
     Exit();
 }
-/*e: function badusage */
+/*e: function [[badusage]] */
 /*e: mk/main.c */

@@ -12,11 +12,11 @@ static void cyclechk(Node *);
 static void ambiguous(Node *);
 static void attribute(Node *);
 
-/*s: global nreps */
+/*s: global [[nreps]] */
 int nreps = 1;
-/*e: global nreps */
+/*e: global [[nreps]] */
 
-/*s: function graph */
+/*s: function [[graph]] */
 Node*
 graph(char *target)
 {
@@ -51,9 +51,9 @@ graph(char *target)
 
     return root;
 }
-/*e: function graph */
+/*e: function [[graph]] */
 
-/*s: function applyrules */
+/*s: function [[applyrules]] */
 static Node*
 applyrules(char *target, char *cnt)
 {
@@ -197,9 +197,9 @@ applyrules(char *target, char *cnt)
 
     return node;
 }
-/*e: function applyrules */
+/*e: function [[applyrules]] */
 
-/*s: function nrep */
+/*s: function [[nrep]] */
 void
 nrep(void)
 {
@@ -214,14 +214,14 @@ nrep(void)
     }
     if(nreps < 1)
         nreps = 1;
-    /*s: [[nrep()]] if DEBUG(D_GRAPH) */
+    /*s: [[nrep()]] if [[DEBUG(D_GRAPH)]] */
     if(DEBUG(D_GRAPH))
         Bprint(&bout, "nreps = %d\n", nreps);
-    /*e: [[nrep()]] if DEBUG(D_GRAPH) */
+    /*e: [[nrep()]] if [[DEBUG(D_GRAPH)]] */
 }
-/*e: function nrep */
+/*e: function [[nrep]] */
 
-/*s: function togo */
+/*s: function [[togo]] */
 static void
 togo(Node *node)
 {
@@ -240,9 +240,9 @@ togo(Node *node)
             }
         }
 }
-/*e: function togo */
+/*e: function [[togo]] */
 
-/*s: function vacuous */
+/*s: function [[vacuous]] */
 static bool
 vacuous(Node *node)
 {
@@ -277,7 +277,7 @@ vacuous(Node *node)
     }
     return vac;
 }
-/*e: function vacuous */
+/*e: function [[vacuous]] */
 
 /*s: constructor newnode */
 static Node*
@@ -333,7 +333,7 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 /*e: constructor newarc */
 
 
-/*s: function trace */
+/*s: function [[trace]] */
 static void
 trace(char *s, Arc *a)
 {
@@ -353,9 +353,9 @@ trace(char *s, Arc *a)
     }
     fprint(STDERR, "\n");
 }
-/*e: function trace */
+/*e: function [[trace]] */
 
-/*s: function cyclechk */
+/*s: function [[cyclechk]] */
 static void
 cyclechk(Node *n)
 {
@@ -371,9 +371,9 @@ cyclechk(Node *n)
             cyclechk(a->n);
     n->flags &= ~CYCLE;
 }
-/*e: function cyclechk */
+/*e: function [[cyclechk]] */
 
-/*s: function ambiguous */
+/*s: function [[ambiguous]] */
 static void
 ambiguous(Node *n)
 {
@@ -426,9 +426,9 @@ ambiguous(Node *n)
     togo(n);
     /*e: [[ambiguous()]] get rid of all skipped arcs */
 }
-/*e: function ambiguous */
+/*e: function [[ambiguous]] */
 
-/*s: function attribute */
+/*s: function [[attribute]] */
 static void
 attribute(Node *n)
 {
@@ -454,5 +454,5 @@ attribute(Node *n)
         n->time = 0;
     /*e: [[attribute()]] if virtual node */
 }
-/*e: function attribute */
+/*e: function [[attribute]] */
 /*e: mk/graph.c */

@@ -5,7 +5,7 @@ static char *vexpand(char*, ShellEnvVar*, Bufblock*);
 static char *shquote(char*, Rune, Bufblock*);
 static char *shbquote(char*, Bufblock*);
 
-/*s: function shprint */
+/*s: function [[shprint]] */
 void
 shprint(char *s, ShellEnvVar *env, Bufblock *buf)
 {
@@ -24,9 +24,9 @@ shprint(char *s, ShellEnvVar *env, Bufblock *buf)
     }
     insert(buf, 0);
 }
-/*e: function shprint */
+/*e: function [[shprint]] */
 
-/*s: function mygetenv */
+/*s: function [[mygetenv]] */
 static char*
 mygetenv(char *name, ShellEnvVar *env)
 {
@@ -44,9 +44,9 @@ mygetenv(char *name, ShellEnvVar *env)
     }
     return nil;
 }
-/*e: function mygetenv */
+/*e: function [[mygetenv]] */
 
-/*s: function vexpand */
+/*s: function [[vexpand]] */
 static char*
 vexpand(char *w, ShellEnvVar *env, Bufblock *buf)
 {
@@ -80,9 +80,9 @@ vexpand(char *w, ShellEnvVar *env, Bufblock *buf)
 
     return q;
 }
-/*e: function vexpand */
+/*e: function [[vexpand]] */
 
-/*s: function front */
+/*s: function [[front]] */
 void
 front(char *s)
 {
@@ -105,5 +105,5 @@ front(char *s)
     *t = 0;
     free(q);
 }
-/*e: function front */
+/*e: function [[front]] */
 /*e: mk/shprint.c */
