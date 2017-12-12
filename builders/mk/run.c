@@ -406,15 +406,15 @@ killchildren(char *msg)
     Process *p;
     /*e: [[killchildren()]] locals */
 
-    kflag = true;	/* to make sure waitup doesn't exit */
     jobs = nil;		/* make sure no more get scheduled */
+    kflag = true;	/* to make sure waitup doesn't exit */
 
     /*s: [[killchildren()]] expunge not-job processes */
     for(p = phead; p; p = p->f)
         expunge(p->pid, msg);
     /*e: [[killchildren()]] expunge not-job processes */
 
-    while(waitup(EMPTY_CHILDREN_IS_OK, (int *)nil) == 0)
+    while(waitup(EMPTY_CHILDREN_IS_OK, (int *)nil) == JOB_ENDED)
         ;
     Bprint(&bout, "mk: %s\n", msg);
     Exit();

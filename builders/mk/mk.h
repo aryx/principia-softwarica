@@ -36,10 +36,10 @@ struct Word
     char 		*s;
 
     // Extra
-    /*s: [[Word]] Extra fields */
+    /*s: [[Word]] extra fields */
     // list<ref_own<Word>>
     struct Word 	*next;
-    /*e: [[Word]] Extra fields */
+    /*e: [[Word]] extra fields */
 };
 /*e: struct Word */
 
