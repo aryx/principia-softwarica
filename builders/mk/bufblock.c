@@ -8,7 +8,7 @@ static Bufblock *freelist;
 #define	QUANTA	4096
 /*e: constant [[QUANTA]] */
 
-/*s: constructor newbuf */
+/*s: constructor [[newbuf]] */
 Bufblock *
 newbuf(void)
 {
@@ -28,16 +28,16 @@ newbuf(void)
 
     return p;
 }
-/*e: constructor newbuf */
+/*e: constructor [[newbuf]] */
 
-/*s: destructor freebuf */
+/*s: destructor [[freebuf]] */
 void
 freebuf(Bufblock *p)
 {
     p->next = freelist;
     freelist = p;
 }
-/*e: destructor freebuf */
+/*e: destructor [[freebuf]] */
 
 /*s: function [[growbuf]] */
 void

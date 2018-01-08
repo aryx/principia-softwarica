@@ -1,7 +1,7 @@
 /*s: mk/recipe.c */
 #include	"mk.h"
 
-/*s: constructor newjob */
+/*s: constructor [[newjob]] */
 Job*
 newjob(Rule *r, Node *nlist, char *stem, char **match, 
        Word *allprereqs, Word *newprereqs, 
@@ -24,7 +24,7 @@ newjob(Rule *r, Node *nlist, char *stem, char **match,
     j->next = nil;
     return j;
 }
-/*e: constructor newjob */
+/*e: constructor [[newjob]] */
 
 /*s: function [[dorecipe]] */
 void

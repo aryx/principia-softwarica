@@ -47,7 +47,7 @@ static char	*specialvars[] =
 };
 /*e: global [[myenv]] */
 
-/*s: function [[initenv]] */
+/*s: function [[inithash]] */
 void
 inithash(void)
 {
@@ -58,7 +58,7 @@ inithash(void)
 
     readenv();				/* o.s. dependent */
 }
-/*e: function [[initenv]] */
+/*e: function [[inithash]] */
 
 /*s: function [[envinsert]] */
 static void
@@ -122,7 +122,7 @@ ecopy(Symtab *s)
 }
 /*e: function [[ecopy]] */
 
-/*s: function [[execinit]] */
+/*s: function [[initenv]] */
 void
 initenv(void)
 {
@@ -140,7 +140,7 @@ initenv(void)
     // end marker
     envinsert(nil, nil);
 }
-/*e: function [[execinit]] */
+/*e: function [[initenv]] */
 
 /*s: function [[buildenv]] */
 ShellEnvVar*

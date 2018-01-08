@@ -279,7 +279,7 @@ vacuous(Node *node)
 }
 /*e: function [[vacuous]] */
 
-/*s: constructor newnode */
+/*s: constructor [[newnode]] */
 static Node*
 newnode(char *name)
 {
@@ -307,9 +307,9 @@ newnode(char *name)
     /*e: [[newnode()]] debug */
     return node;
 }
-/*e: constructor newnode */
+/*e: constructor [[newnode]] */
 
-/*s: constructor newarc */
+/*s: constructor [[newarc]] */
 Arc*
 newarc(Node *n, Rule *r, char *stem, Resub *match)
 {
@@ -330,7 +330,7 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     /*e: [[newarc()]] set other fields */
     return a;
 }
-/*e: constructor newarc */
+/*e: constructor [[newarc]] */
 
 
 /*s: function [[trace]] */

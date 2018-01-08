@@ -1,7 +1,7 @@
 /*s: mk/word.c */
 #include	"mk.h"
 
-/*s: constructor newword */
+/*s: constructor [[newword]] */
 Word*
 newword(char *s)
 {
@@ -12,7 +12,7 @@ newword(char *s)
     w->next = nil;
     return w;
 }
-/*e: constructor newword */
+/*e: constructor [[newword]] */
 
 
 /*s: function [[wtos]] */
@@ -57,7 +57,7 @@ wdup(Word *w)
 }
 /*e: function [[wdup]] */
 
-/*s: destructor freewords */
+/*s: destructor [[freewords]] */
 void
 freewords(Word *w)
 {
@@ -70,7 +70,7 @@ freewords(Word *w)
         free(v);
     }
 }
-/*e: destructor freewords */
+/*e: destructor [[freewords]] */
 
 // was in recipe.c before
 /*s: function [[addw]] */
