@@ -1,7 +1,7 @@
 /*s: linkers/5l/fmt.c */
 #include "l.h"
 
-/*s: function Pconv(arm) */
+/*s: function [[Pconv]](arm) */
 // Prog -> string
 int
 Pconv(Fmt *fp)
@@ -41,9 +41,9 @@ Pconv(Fmt *fp)
     }
     return fmtstrcpy(fp, str);
 }
-/*e: function Pconv(arm) */
+/*e: function [[Pconv]](arm) */
 
-/*s: function Aconv(arm) */
+/*s: function [[Aconv]](arm) */
 // enum<Opcode> -> string
 int
 Aconv(Fmt *fp)
@@ -57,9 +57,9 @@ Aconv(Fmt *fp)
         s = anames[a];
     return fmtstrcpy(fp, s);
 }
-/*e: function Aconv(arm) */
+/*e: function [[Aconv]](arm) */
 
-/*s: global strcond(arm) */
+/*s: global [[strcond]](arm) */
 char*	strcond[16] =
 {
     ".EQ",
@@ -79,9 +79,9 @@ char*	strcond[16] =
     "",
     ".NV"
 };
-/*e: global strcond(arm) */
+/*e: global [[strcond]](arm) */
 
-/*s: function Cconv(arm) */
+/*s: function [[Cconv]](arm) */
 int
 Cconv(Fmt *fp)
 {
@@ -100,9 +100,9 @@ Cconv(Fmt *fp)
         strcat(s, ".U");
     return fmtstrcpy(fp, s);
 }
-/*e: function Cconv(arm) */
+/*e: function [[Cconv]](arm) */
 
-/*s: function Dconv(arm) */
+/*s: function [[Dconv]](arm) */
 // Adr -> string
 int
 Dconv(Fmt *fp)
@@ -230,9 +230,9 @@ Dconv(Fmt *fp)
     }
     return fmtstrcpy(fp, str);
 }
-/*e: function Dconv(arm) */
+/*e: function [[Dconv]](arm) */
 
-/*s: function Nconv(arm) */
+/*s: function [[Nconv]](arm) */
 int
 Nconv(Fmt *fp)
 {
@@ -282,9 +282,9 @@ Nconv(Fmt *fp)
     }
     return fmtstrcpy(fp, str);
 }
-/*e: function Nconv(arm) */
+/*e: function [[Nconv]](arm) */
 
-/*s: function Sconv(arm) */
+/*s: function [[Sconv]](arm) */
 // string -> string
 int
 Sconv(Fmt *fp)
@@ -327,10 +327,10 @@ Sconv(Fmt *fp)
     *p = '\0';
     return fmtstrcpy(fp, str);
 }
-/*e: function Sconv(arm) */
+/*e: function [[Sconv]](arm) */
 
 
-/*s: function listinit(arm) */
+/*s: function [[listinit]](arm) */
 void
 listinit(void)
 {
@@ -342,14 +342,14 @@ listinit(void)
     fmtinstall('P', Pconv);
     fmtinstall('S', Sconv);
 }
-/*e: function listinit(arm) */
+/*e: function [[listinit]](arm) */
 
-/*s: function prasm(arm) */
+/*s: function [[prasm]](arm) */
 void
 prasm(Prog *p)
 {
     print("%P\n", p);
 }
-/*e: function prasm(arm) */
+/*e: function [[prasm]](arm) */
 
 /*e: linkers/5l/fmt.c */

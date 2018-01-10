@@ -1,7 +1,7 @@
 /*s: linkers/5l/float.c */
 #include	"l.h"
 
-/*s: function ieeedtof */
+/*s: function [[ieeedtof]] */
 /// main -> objfile -> ldobj -> <>
 long
 ieeedtof(Ieee *e)
@@ -28,9 +28,9 @@ ieeedtof(Ieee *e)
     v |= e->h & 0x80000000L;
     return v;
 }
-/*e: function ieeedtof */
+/*e: function [[ieeedtof]] */
 
-/*s: function ieeedtod */
+/*s: function [[ieeedtod]] */
 /// Dconv -> <>
 double
 ieeedtod(Ieee *ieeep)
@@ -56,9 +56,9 @@ ieeedtod(Ieee *ieeep)
     exp -= (1L<<10) - 2L;
     return ldexp(fr, exp);
 }
-/*e: function ieeedtod */
+/*e: function [[ieeedtod]] */
 
-/*s: global chipfloats(arm) */
+/*s: global [[chipfloats]](arm) */
 static Ieee chipfloats[] = {
     {0x00000000, 0x00000000}, /* 0 */
     {0x00000000, 0x3ff00000}, /* 1 */
@@ -69,9 +69,9 @@ static Ieee chipfloats[] = {
     {0x00000000, 0x3fe00000}, /* .5 */
     {0x00000000, 0x40240000}, /* 10 */
 };
-/*e: global chipfloats(arm) */
+/*e: global [[chipfloats]](arm) */
 
-/*s: function chipfloat(arm) */
+/*s: function [[chipfloat]](arm) */
 int
 chipfloat(Ieee *e)
 {
@@ -87,6 +87,6 @@ chipfloat(Ieee *e)
     }
     return -1;
 }
-/*e: function chipfloat(arm) */
+/*e: function [[chipfloat]](arm) */
 
 /*e: linkers/5l/float.c */

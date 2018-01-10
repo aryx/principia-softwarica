@@ -3,7 +3,7 @@
 
 // vs include/elf.h? and libmach/elf.h?
 
-/*s: enum _anon_ (linkers/8l/elf.h) */
+/*s: enum ElfHeaderSizes */
 enum {
     Ehdr32sz	= 52,
     Phdr32sz	= 32,
@@ -13,7 +13,7 @@ enum {
     Phdr64sz	= 56,
     Shdr64sz	= 64,
 };
-/*e: enum _anon_ (linkers/8l/elf.h) */
+/*e: enum ElfHeaderSizes */
 
 typedef void (*Putl)(long);
 

@@ -1,7 +1,7 @@
 /*s: linkers/5l/debugging.c */
 #include	"l.h"
 
-/*s: function putsymb */
+/*s: function [[putsymb]] */
 void
 putsymb(char *s, int t, long v, int ver)
 {
@@ -60,9 +60,9 @@ putsymb(char *s, int t, long v, int ver)
     }
     /*e: [[putsymb()]] debug */
 }
-/*e: function putsymb */
+/*e: function [[putsymb]] */
 
-/*s: function asmsym(arm) */
+/*s: function [[asmsym]](arm) */
 /// main -> asmb -> <>
 void
 asmsym(void)
@@ -138,13 +138,13 @@ asmsym(void)
         Bflush(&bso);
     }
 }
-/*e: function asmsym(arm) */
+/*e: function [[asmsym]](arm) */
 
 
-/*s: constant MINLC(arm) */
+/*s: constant [[MINLC]](arm) */
 #define	MINLC	4
-/*e: constant MINLC(arm) */
-/*s: function asmlc */
+/*e: constant [[MINLC]](arm) */
+/*s: function [[asmlc]] */
 void
 asmlc(void)
 {
@@ -239,6 +239,6 @@ asmlc(void)
         Bprint(&bso, "lcsize = %ld\n", lcsize);
     Bflush(&bso);
 }
-/*e: function asmlc */
+/*e: function [[asmlc]] */
 
 /*e: linkers/5l/debugging.c */

@@ -9,15 +9,15 @@ char	*noname		= "<none>";
 char	symname[]	= SYMDEF;
 /*e: global symname linker */
 
-/*s: global version */
+/*s: global [[version]] */
 int	version = 0;
-/*e: global version */
+/*e: global [[version]] */
 
-/*s: global literal(arm) */
+/*s: global [[literal]](arm) */
 char	literal[32];
-/*e: global literal(arm) */
+/*e: global [[literal]](arm) */
 
-/*s: function isobjfile */
+/*s: function [[isobjfile]] */
 int
 isobjfile(char *f)
 {
@@ -39,10 +39,10 @@ isobjfile(char *f)
     Bterm(b);
     return v;
 }
-/*e: function isobjfile */
+/*e: function [[isobjfile]] */
 
 
-/*s: function inopd(arm) */
+/*s: function [[inopd]](arm) */
 /// main -> objfile -> ldobj -> <>
 static int
 inopd(byte *p, Adr *a, Sym *h[])
@@ -76,7 +76,7 @@ inopd(byte *p, Adr *a, Sym *h[])
     /*e: [[inopd()]] sanity check symbol range */
     a->sym = h[symidx];
     a->symkind = p[3];
-    /*s: [[inopd()]] sanity check D_CONST */
+    /*s: [[inopd()]] sanity check [[D_CONST]] */
     if(a->type == D_CONST && a->symkind != N_NONE) {
         a->type = D_ADDR;
         //print("missing D_CONST -> D_ADDR\n");
@@ -88,7 +88,7 @@ inopd(byte *p, Adr *a, Sym *h[])
     //    p[0] = ALAST+1;
     //    return 0;	/*  force real diagnostic */
     //}
-    /*e: [[inopd()]] sanity check D_CONST */
+    /*e: [[inopd()]] sanity check [[D_CONST]] */
 
     size = 4;
 
@@ -141,7 +141,7 @@ inopd(byte *p, Adr *a, Sym *h[])
         return 0;	/*  force real diagnostic */
 
     }
-    /*s: [[inopd()]] adjust curauto for N_LOCAL or N_PARAM symkind */
+    /*s: [[inopd()]] adjust curauto for [[N_LOCAL]] or [[N_PARAM]] symkind */
     s = a->sym;
     t = a->symkind;
     l = a->offset;
@@ -169,15 +169,15 @@ inopd(byte *p, Adr *a, Sym *h[])
         u->link = curauto;
         curauto = u;
     }
-    /*e: [[inopd()]] adjust curauto for N_LOCAL or N_PARAM symkind */
+    /*e: [[inopd()]] adjust curauto for [[N_LOCAL]] or [[N_PARAM]] symkind */
 
     return size;
 }
-/*e: function inopd(arm) */
+/*e: function [[inopd]](arm) */
 
 
 
-/*s: function collapsefrog */
+/*s: function [[collapsefrog]] */
 static void
 collapsefrog(Sym *s)
 {
@@ -215,9 +215,9 @@ collapsefrog(Sym *s)
 out:
     histfrog[histfrogp-1] = s;
 }
-/*e: function collapsefrog */
+/*e: function [[collapsefrog]] */
 
-/*s: function nopout */
+/*s: function [[nopout]] */
 static void
 nopout(Prog *p)
 {
@@ -225,10 +225,10 @@ nopout(Prog *p)
     p->from.type = D_NONE;
     p->to.type = D_NONE;
 }
-/*e: function nopout */
+/*e: function [[nopout]] */
 
 
-/*s: function ldobj(arm) */
+/*s: function [[ldobj]](arm) */
 /// main -> objfile -> <>
 void
 ldobj(fdt f, long c, char *pn)
@@ -397,25 +397,25 @@ loop:
         if((k == N_EXTERN || k == N_INTERN) && s->type == SNONE)
             s->type = SXREF;
 
-        /*s: [[ldobj()]] when ANAME opcode, if N_FILE */
+        /*s: [[ldobj()]] when ANAME opcode, if [[N_FILE]] */
         if(k == N_FILE) {
             if(s->type != SFILE) {
                 s->type = SFILE;
                 histgen++;
                 s->value = histgen;
             }
-            /*s: [[ldobj()]] when ANAME opcode, if N_FILE, update histfrogp */
+            /*s: [[ldobj()]] when ANAME opcode, if [[N_FILE]], update histfrogp */
             if(histfrogp < MAXHIST) {
                 histfrog[histfrogp] = s;
                 histfrogp++;
             } 
-            /*e: [[ldobj()]] when ANAME opcode, if N_FILE, update histfrogp */
-            /*s: [[ldobj()]] when ANAME opcode, if N_FILE, if no more space in histfrog */
+            /*e: [[ldobj()]] when ANAME opcode, if [[N_FILE]], update histfrogp */
+            /*s: [[ldobj()]] when ANAME opcode, if [[N_FILE]], if no more space in histfrog */
             else
                     collapsefrog(s);
-            /*e: [[ldobj()]] when ANAME opcode, if N_FILE, if no more space in histfrog */
+            /*e: [[ldobj()]] when ANAME opcode, if [[N_FILE]], if no more space in histfrog */
         }
-        /*e: [[ldobj()]] when ANAME opcode, if N_FILE */
+        /*e: [[ldobj()]] when ANAME opcode, if [[N_FILE]] */
         goto loop;
     }
     /*e: [[ldobj()]] if ANAME or ASIGNAME(arm) */
@@ -684,9 +684,9 @@ loop:
 eof:
     diag("truncated object file: %s", pn);
 }
-/*e: function ldobj(arm) */
+/*e: function [[ldobj]](arm) */
 
-/*s: function objfile */
+/*s: function [[objfile]] */
 /// main | loadlib  -> <>
 void
 objfile(char *file)
@@ -829,6 +829,6 @@ objfile(char *file)
         close(f);
     /*e: [[objfile()]] when file is a library */
 }
-/*e: function objfile */
+/*e: function [[objfile]] */
 
 /*e: linkers/5l/obj.c */

@@ -1,21 +1,21 @@
 /*s: linkers/5l/io.c */
 #include	"l.h"
 
-/*s: global buf */
+/*s: global [[buf]] */
 union Buf buf;
-/*e: global buf */
+/*e: global [[buf]] */
 
-/*s: global cbc */
+/*s: global [[cbc]] */
 // remaining bytes in buf.obuf
 int	cbc;
-/*e: global cbc */
-/*s: global cbp */
+/*e: global [[cbc]] */
+/*s: global [[cbp]] */
 // array<byte> (slice of buf.obuf) 
 char*	cbp;
-/*e: global cbp */
+/*e: global [[cbp]] */
 
 
-/*s: function readsome */
+/*s: function [[readsome]] */
 byte*
 readsome(fdt f, byte *buf, byte *good, byte *stop, int max)
 {
@@ -32,10 +32,10 @@ readsome(fdt f, byte *buf, byte *good, byte *stop, int max)
         return nil;
     return stop + n;
 }
-/*e: function readsome */
+/*e: function [[readsome]] */
 
 
-/*s: function strnput(arm) */
+/*s: function [[strnput]](arm) */
 void
 strnput(char *s, int n)
 {
@@ -46,9 +46,9 @@ strnput(char *s, int n)
     for(; n > 0; n--)
         cput(0);
 }
-/*e: function strnput(arm) */
+/*e: function [[strnput]](arm) */
 
-/*s: function cput(arm) */
+/*s: function [[cput]](arm) */
 void
 cput(int c)
 {
@@ -58,9 +58,9 @@ cput(int c)
     if(cbc <= 0)
         cflush();
 }
-/*e: function cput(arm) */
+/*e: function [[cput]](arm) */
 
-/*s: function wput(arm) */
+/*s: function [[wput]](arm) */
 void
 wput(long l)
 {
@@ -72,9 +72,9 @@ wput(long l)
     if(cbc <= 0)
         cflush();
 }
-/*e: function wput(arm) */
+/*e: function [[wput]](arm) */
 
-/*s: function wputl(arm) */
+/*s: function [[wputl]](arm) */
 void
 wputl(long l)
 {
@@ -86,9 +86,9 @@ wputl(long l)
     if(cbc <= 0)
         cflush();
 }
-/*e: function wputl(arm) */
+/*e: function [[wputl]](arm) */
 
-/*s: function lput(arm) */
+/*s: function [[lput]](arm) */
 void
 lput(long l)
 {
@@ -102,9 +102,9 @@ lput(long l)
     if(cbc <= 0)
         cflush();
 }
-/*e: function lput(arm) */
+/*e: function [[lput]](arm) */
 
-/*s: function lputl(arm) */
+/*s: function [[lputl]](arm) */
 void
 lputl(long l)
 {
@@ -118,9 +118,9 @@ lputl(long l)
     if(cbc <= 0)
         cflush();
 }
-/*e: function lputl(arm) */
+/*e: function [[lputl]](arm) */
 
-/*s: function cflush */
+/*s: function [[cflush]] */
 void
 cflush(void)
 {
@@ -133,6 +133,6 @@ cflush(void)
     cbp = buf.obuf;
     cbc = sizeof(buf.obuf);
 }
-/*e: function cflush */
+/*e: function [[cflush]] */
 
 /*e: linkers/5l/io.c */

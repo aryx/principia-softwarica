@@ -2,7 +2,7 @@
 #include	"l.h"
 #include	"m.h"
 
-/*s: function entryvalue(arm) */
+/*s: function [[entryvalue]](arm) */
 long
 entryvalue(void)
 {
@@ -33,9 +33,9 @@ entryvalue(void)
         return 0;
     }
 }
-/*e: function entryvalue(arm) */
+/*e: function [[entryvalue]](arm) */
 
-/*s: function asmb(arm) */
+/*s: function [[asmb]](arm) */
 /// main -> <>
 void
 asmb(void)
@@ -218,6 +218,6 @@ asmb(void)
 
     cflush();
 }
-/*e: function asmb(arm) */
+/*e: function [[asmb]](arm) */
 
 /*e: linkers/5l/asm.c */

@@ -4,7 +4,7 @@
 // forward decls
 void    xfol(Prog*);
 
-/*s: function brchain(arm) */
+/*s: function [[brchain]](arm) */
 static Prog*
 brchain(Prog *p)
 {
@@ -17,9 +17,9 @@ brchain(Prog *p)
     }
     return P;
 }
-/*e: function brchain(arm) */
+/*e: function [[brchain]](arm) */
 
-/*s: function relinv(arm) */
+/*s: function [[relinv]](arm) */
 int
 relinv(int a)
 {
@@ -42,9 +42,9 @@ relinv(int a)
     diag("unknown relation: %s", anames[a]);
     return a;
 }
-/*e: function relinv(arm) */
+/*e: function [[relinv]](arm) */
 
-/*s: function follow */
+/*s: function [[follow]] */
 void
 follow(void)
 {
@@ -59,9 +59,9 @@ follow(void)
     lastp->link = P;
     firstp = firstp->link;
 }
-/*e: function follow */
+/*e: function [[follow]] */
 
-/*s: function xfol(arm) */
+/*s: function [[xfol]](arm) */
 void
 xfol(Prog *p)
 {
@@ -194,12 +194,12 @@ loop:
     p = p->link;
     goto loop;
 }
-/*e: function xfol(arm) */
+/*e: function [[xfol]](arm) */
 
-/*s: constant LOG */
+/*s: constant [[LOG]] */
 #define	LOG	5
-/*e: constant LOG */
-/*s: function mkfwd */
+/*e: constant [[LOG]] */
+/*s: function [[mkfwd]] */
 /// main -> patch -> <>
 void
 mkfwd(void)
@@ -247,9 +247,9 @@ mkfwd(void)
         /*e: [[mkfwd()]] in for loop, add forward links from past p in lst to p */
     }
 }
-/*e: function mkfwd */
+/*e: function [[mkfwd]] */
 
-/*s: function brloop(arm) */
+/*s: function [[brloop]](arm) */
 /// main -> patch -> <>
 Prog*
 brloop(Prog *p)
@@ -270,9 +270,9 @@ brloop(Prog *p)
     }
     return P;
 }
-/*e: function brloop(arm) */
+/*e: function [[brloop]](arm) */
 
-/*s: function patch(arm) */
+/*s: function [[patch]](arm) */
 /// main -> <>
 void
 patch(void)
@@ -367,6 +367,6 @@ patch(void)
     }
     /*e: [[patch()]] optimisation pass */
 }
-/*e: function patch(arm) */
+/*e: function [[patch]](arm) */
 
 /*e: linkers/5l/pass.c */

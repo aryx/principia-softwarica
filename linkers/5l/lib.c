@@ -1,32 +1,32 @@
 /*s: linkers/5l/lib.c */
 #include	"l.h"
 
-/*s: global library */
+/*s: global [[library]] */
 // array<option<filename>>
 char*	library[50];
-/*e: global library */
-/*s: global libraryobj */
+/*e: global [[library]] */
+/*s: global [[libraryobj]] */
 char*	libraryobj[50];
-/*e: global libraryobj */
-/*s: global libraryp */
+/*e: global [[libraryobj]] */
+/*s: global [[libraryp]] */
 // index of first free entry in library array
 int	libraryp;
-/*e: global libraryp */
+/*e: global [[libraryp]] */
 
-/*s: global libdir */
+/*s: global [[libdir]] */
 // growing_array<dirname>
 char**	libdir;
-/*e: global libdir */
-/*s: global nlibdir */
+/*e: global [[libdir]] */
+/*s: global [[nlibdir]] */
 // index of next free entry in libdir
 int	nlibdir	= 0;
-/*e: global nlibdir */
-/*s: global maxlibdir */
+/*e: global [[nlibdir]] */
+/*s: global [[maxlibdir]] */
 // index of last free entry in libdir
 static	int	maxlibdir = 0;
-/*e: global maxlibdir */
+/*e: global [[maxlibdir]] */
 
-/*s: function addlibpath */
+/*s: function [[addlibpath]] */
 void
 addlibpath(char *arg)
 {
@@ -52,9 +52,9 @@ addlibpath(char *arg)
 
     libdir[nlibdir++] = strdup(arg);
 }
-/*e: function addlibpath */
+/*e: function [[addlibpath]] */
 
-/*s: function findlib */
+/*s: function [[findlib]] */
 char*
 findlib(char *file)
 {
@@ -68,9 +68,9 @@ findlib(char *file)
     }
     return nil;
 }
-/*e: function findlib */
+/*e: function [[findlib]] */
 
-/*s: function loadlib */
+/*s: function [[loadlib]] */
 void
 loadlib(void)
 {
@@ -95,9 +95,9 @@ loop:
                  }
     /*e: [[loadlib()]] if xrefresolv */
 }
-/*e: function loadlib */
+/*e: function [[loadlib]] */
 
-/*s: function addlib */
+/*s: function [[addlib]] */
 /// ldobj(case AHISTORY and local_line == -1 special mark) -> <>
 void
 addlib(char *obj)
@@ -184,5 +184,5 @@ addlib(char *obj)
     libraryobj[libraryp] = p;
     libraryp++;
 }
-/*e: function addlib */
+/*e: function [[addlib]] */
 /*e: linkers/5l/lib.c */

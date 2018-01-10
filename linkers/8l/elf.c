@@ -20,7 +20,7 @@ enum {
 };
 /*e: enum _anon_ (linkers/8l/elf.c) */
 
-/*s: function elfident */
+/*s: function [[elfident]] */
 void
 elfident(int bo, int class)
 {
@@ -38,9 +38,9 @@ elfident(int bo, int class)
     }
     strnput("", 7);
 }
-/*e: function elfident */
+/*e: function [[elfident]] */
 
-/*s: function elfstrtab */
+/*s: function [[elfstrtab]] */
 void
 elfstrtab(void)
 {
@@ -54,9 +54,9 @@ elfstrtab(void)
     cput(0);
     cput(0);
 }
-/*e: function elfstrtab */
+/*e: function [[elfstrtab]] */
 
-/*s: function elf32phdr */
+/*s: function [[elf32phdr]] */
 void
 elf32phdr(void (*putl)(long), ulong type, ulong off, ulong vaddr, ulong paddr,
     ulong filesz, ulong memsz, ulong prots, ulong align)
@@ -70,9 +70,9 @@ elf32phdr(void (*putl)(long), ulong type, ulong off, ulong vaddr, ulong paddr,
     putl(prots);
     putl(align);
 }
-/*e: function elf32phdr */
+/*e: function [[elf32phdr]] */
 
-/*s: function elf32shdr */
+/*s: function [[elf32shdr]] */
 void
 elf32shdr(void (*putl)(long), ulong name, ulong type, ulong flags, ulong vaddr,
     ulong off, ulong sectsz, ulong link, ulong addnl, ulong align,
@@ -89,9 +89,9 @@ elf32shdr(void (*putl)(long), ulong name, ulong type, ulong flags, ulong vaddr,
     putl(align);
     putl(entsz);
 }
-/*e: function elf32shdr */
+/*e: function [[elf32shdr]] */
 
-/*s: function elf32sectab */
+/*s: function [[elf32sectab]] */
 static void
 elf32sectab(void (*putl)(long))
 {
@@ -104,9 +104,9 @@ elf32sectab(void (*putl)(long))
         HEADR+textsize+datsize+symsize+3*Shdr32sz, 14, 0, 0, 1, 0);
     elfstrtab();
 }
-/*e: function elf32sectab */
+/*e: function [[elf32sectab]] */
 
-/*s: function elf32 */
+/*s: function [[elf32]] */
 /* if addpsects > 0, putpsects must emit exactly that many psects. */
 void
 elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl))
@@ -172,5 +172,5 @@ elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl))
     if(debug['S'])
         elf32sectab(putl);
 }
-/*e: function elf32 */
+/*e: function [[elf32]] */
 /*e: linkers/8l/elf.c */

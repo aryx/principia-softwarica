@@ -2,7 +2,7 @@
 #include	"l.h"
 #include	"m.h"
 
-/*s: function oprrr(arm) */
+/*s: function [[oprrr]](arm) */
 long
 oprrr(int a, int sc)
 {
@@ -87,9 +87,9 @@ oprrr(int a, int sc)
     prasm(curp);
     return 0;
 }
-/*e: function oprrr(arm) */
+/*e: function [[oprrr]](arm) */
 
-/*s: function opvfprrr(arm) */
+/*s: function [[opvfprrr]](arm) */
 long
 opvfprrr(int a, int sc)
 {
@@ -123,9 +123,9 @@ opvfprrr(int a, int sc)
     prasm(curp);
     return 0;
 }
-/*e: function opvfprrr(arm) */
+/*e: function [[opvfprrr]](arm) */
 
-/*s: function opbra(arm) */
+/*s: function [[opbra]](arm) */
 long
 opbra(int a, int sc)
 {
@@ -165,9 +165,9 @@ opbra(int a, int sc)
     prasm(curp);
     return 0;
 }
-/*e: function opbra(arm) */
+/*e: function [[opbra]](arm) */
 
-/*s: function olr(arm) */
+/*s: function [[olr]](arm) */
 long
 olr(int a, int sc, long v, int b, int rt)
 {
@@ -214,9 +214,9 @@ olr(int a, int sc, long v, int b, int rt)
     o |= (b<<16) | (rt<<12) | v;
     return o;
 }
-/*e: function olr(arm) */
+/*e: function [[olr]](arm) */
 
-/*s: function olhr(arm) */
+/*s: function [[olhr]](arm) */
 long
 olhr(long v, int b, int r, int sc)
 {
@@ -242,18 +242,18 @@ olhr(long v, int b, int r, int sc)
     o |= r << 12;
     return o;
 }
-/*e: function olhr(arm) */
+/*e: function [[olhr]](arm) */
 
-/*s: function osr(arm) */
+/*s: function [[osr]](arm) */
 long
 osr(int a, int sc, int r, long v, int b)
 {
 
     return olr(a, sc, v, b, r) ^ (1<<20); // STR, unset (via xor) bit 20
 }
-/*e: function osr(arm) */
+/*e: function [[osr]](arm) */
 
-/*s: function oshr(arm) */
+/*s: function [[oshr]](arm) */
 long
 oshr(int r, long v, int b, int sc)
 {
@@ -262,45 +262,45 @@ oshr(int r, long v, int b, int sc)
     o = olhr(v, b, r, sc) ^ (1<<20);
     return o;
 }
-/*e: function oshr(arm) */
+/*e: function [[oshr]](arm) */
     
 
-/*s: function olrr(arm) */
+/*s: function [[olrr]](arm) */
 long
 olrr(int a, int sc, int i, int b, int r)
 {
 
     return olr(a, sc, i, b, r) | (1<<25); // Rm not immediate offset
 }
-/*e: function olrr(arm) */
+/*e: function [[olrr]](arm) */
 
-/*s: function olhrr(arm) */
+/*s: function [[olhrr]](arm) */
 long
 olhrr(int i, int b, int r, int sc)
 {
     return olhr(i, b, r, sc) ^ (1<<22);
 }
-/*e: function olhrr(arm) */
+/*e: function [[olhrr]](arm) */
 
-/*s: function osrr(arm) */
+/*s: function [[osrr]](arm) */
 long
 osrr(int a, int sc, int r, int i, int b)
 {
 
     return olrr(a, sc, i, b, r) ^ (1<<20); // STR
 }
-/*e: function osrr(arm) */
+/*e: function [[osrr]](arm) */
 
-/*s: function oshrr(arm) */
+/*s: function [[oshrr]](arm) */
 long
 oshrr(int r, int i, int b, int sc)
 {
     return olhr(i, b, r, sc) ^ ((1<<22) | (1<<20));
 }
-/*e: function oshrr(arm) */
+/*e: function [[oshrr]](arm) */
 
 
-/*s: function ovfpmem(arm) */
+/*s: function [[ovfpmem]](arm) */
 long
 ovfpmem(int a, int r, long v, int b, int sc, Prog *p)
 {
@@ -333,9 +333,9 @@ ovfpmem(int a, int r, long v, int b, int sc, Prog *p)
     }
     return o;
 }
-/*e: function ovfpmem(arm) */
+/*e: function [[ovfpmem]](arm) */
 
-/*s: function ofsr(arm) */
+/*s: function [[ofsr]](arm) */
 long
 ofsr(int a, int r, long v, int b, int sc, Prog *p)
 {
@@ -375,22 +375,22 @@ ofsr(int a, int r, long v, int b, int sc, Prog *p)
     }
     return o;
 }
-/*e: function ofsr(arm) */
+/*e: function [[ofsr]](arm) */
 
-/*s: function omvl(arm) */
+/*s: function [[omvl]](arm) */
 long
 omvl(Prog *p, Adr *a, int dr)
 {	
     long v, o1;
 
-    /*s: [[omvl()]] when C_LCON case */
+    /*s: [[omvl()]] when [[C_LCON]] case */
     if(p->cond) {
         // C_LCON case with Pool
         v = p->cond->pc - p->pc - 8;
         // =~ LDR v(R15), R11
         o1 = olr(AMOVW, p->scond&C_SCOND, v, REGPC, dr);
     }
-    /*e: [[omvl()]] when C_LCON case */
+    /*e: [[omvl()]] when [[C_LCON]] case */
     else {
         // C_NCON case
         aclass(a);
@@ -407,10 +407,10 @@ omvl(Prog *p, Adr *a, int dr)
     }
     return o1;
 }
-/*e: function omvl(arm) */
+/*e: function [[omvl]](arm) */
 
 
-/*s: function asmout(arm) */
+/*s: function [[asmout]](arm) */
 /// main -> asmb -> for p { <> }
 void
 asmout(Prog *p, Optab *o)
@@ -1339,6 +1339,6 @@ asmout(Prog *p, Optab *o)
     /*e: [[asmout()]] switch on size cases */
     }
 }
-/*e: function asmout(arm) */
+/*e: function [[asmout]](arm) */
 
 /*e: linkers/5l/codegen.c */

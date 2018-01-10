@@ -1,7 +1,7 @@
 /*s: linkers/5l/profile.c */
 #include	"l.h"
 
-/*s: function doprof1(arm) */
+/*s: function [[doprof1]](arm) */
 void
 doprof1(void)
 {
@@ -107,9 +107,9 @@ doprof1(void)
     s->type = SBSS;
     s->value = n*4;
 }
-/*e: function doprof1(arm) */
+/*e: function [[doprof1]](arm) */
 
-/*s: global brcond(arm) */
+/*s: global [[brcond]](arm) */
 static int brcond[] = 
  {ABEQ, ABNE, 
   ABHS, ABLO, 
@@ -118,9 +118,9 @@ static int brcond[] =
   ABHI, ABLS, 
   ABGE, ABLT, 
   ABGT, ABLE};
-/*e: global brcond(arm) */
+/*e: global [[brcond]](arm) */
 
-/*s: function doprof2(arm) */
+/*s: function [[doprof2]](arm) */
 void
 doprof2(void)
 {
@@ -148,15 +148,15 @@ doprof2(void)
         if(p->as == ATEXT) {
             if(p->from.sym == s2) {
                 ps2 = p;
-                /*s: [[doprof2()]] set TEXT attribute of _profin or _profout */
+                /*s: [[doprof2()]] set TEXT attribute of [[_profin]] or [[_profout]] */
                 p->reg = NOPROF;
-                /*e: [[doprof2()]] set TEXT attribute of _profin or _profout */
+                /*e: [[doprof2()]] set TEXT attribute of [[_profin]] or [[_profout]] */
             }
             if(p->from.sym == s4) {
                 ps4 = p;
-                /*s: [[doprof2()]] set TEXT attribute of _profin or _profout */
+                /*s: [[doprof2()]] set TEXT attribute of [[_profin]] or [[_profout]] */
                 p->reg = NOPROF;
-                /*e: [[doprof2()]] set TEXT attribute of _profin or _profout */
+                /*e: [[doprof2()]] set TEXT attribute of [[_profin]] or [[_profout]] */
             }
         }
     }
@@ -259,6 +259,6 @@ doprof2(void)
         }
     }
 }
-/*e: function doprof2(arm) */
+/*e: function [[doprof2]](arm) */
 
 /*e: linkers/5l/profile.c */

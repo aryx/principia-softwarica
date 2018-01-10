@@ -1,7 +1,7 @@
 /*s: linkers/5l/utils.c */
 #include "l.h"
 
-/*s: function log */
+/*s: function [[log]] */
 void mylog(char *fmt, ...) {
 
     va_list arg;
@@ -11,9 +11,9 @@ void mylog(char *fmt, ...) {
     va_end(arg);
     Bflush(&bso);
 }
-/*e: function log */
+/*e: function [[log]] */
 
-/*s: constructor prg */
+/*s: constructor [[prg]] */
 Prog*
 prg(void)
 {
@@ -23,9 +23,9 @@ prg(void)
     *p = zprg;
     return p;
 }
-/*e: constructor prg */
+/*e: constructor [[prg]] */
 
-/*s: function lookup */
+/*s: function [[lookup]] */
 Sym*
 lookup(char *symb, int v)
 {
@@ -77,9 +77,9 @@ lookup(char *symb, int v)
     return sym;
     /*e: [[lookup()]] if symbol name not found */
 }
-/*e: function lookup */
+/*e: function [[lookup]] */
 
-/*s: function atolwhex */
+/*s: function [[atolwhex]] */
 long
 atolwhex(char *s)
 {
@@ -119,9 +119,9 @@ atolwhex(char *s)
         n = -n;
     return n;
 }
-/*e: function atolwhex */
+/*e: function [[atolwhex]] */
 
-/*s: function rnd */
+/*s: function [[rnd]] */
 long
 rnd(long v, long r)
 {
@@ -140,9 +140,9 @@ rnd(long v, long r)
     v -= c;
     return v;
 }
-/*e: function rnd */
+/*e: function [[rnd]] */
 
-/*s: function fileexists */
+/*s: function [[fileexists]] */
 int
 fileexists(char *s)
 {
@@ -151,17 +151,17 @@ fileexists(char *s)
     /* it's fine if stat result doesn't fit in dirbuf, since even then the file exists */
     return stat(s, dirbuf, sizeof(dirbuf)) >= 0;
 }
-/*e: function fileexists */
+/*e: function [[fileexists]] */
 
-/*s: global hunk */
+/*s: global [[hunk]] */
 char*	hunk;
-/*e: global hunk */
-/*s: global nhunk */
+/*e: global [[hunk]] */
+/*s: global [[nhunk]] */
 long	nhunk;
-/*e: global nhunk */
+/*e: global [[nhunk]] */
 // thunk defined in globals.c because also used by main.c for profiling report
 
-/*s: function gethunk */
+/*s: function [[gethunk]] */
 static void
 gethunk(void)
 {
@@ -183,9 +183,9 @@ gethunk(void)
     nhunk = nh;
     thunk += nh;
 }
-/*e: function gethunk */
+/*e: function [[gethunk]] */
 
-/*s: function malloc */
+/*s: function [[malloc]] */
 /*
  * fake malloc
  */
@@ -205,22 +205,22 @@ malloc(ulong n)
     hunk += n;
     return p;
 }
-/*e: function malloc */
+/*e: function [[malloc]] */
 
-/*s: function free */
+/*s: function [[free]] */
 void
 free(void *p)
 {
     USED(p);
 }
-/*e: function free */
+/*e: function [[free]] */
 
-/*s: function setmalloctag */
+/*s: function [[setmalloctag]] */
 //@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
 void setmalloctag(void *v, ulong pc)
 {
     USED(v, pc);
 }
-/*e: function setmalloctag */
+/*e: function [[setmalloctag]] */
 
 /*e: linkers/5l/utils.c */

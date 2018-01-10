@@ -2,15 +2,15 @@
 #include	"l.h"
 #include	"m.h"
 
-/*s: global oprange(arm) */
+/*s: global [[oprange]](arm) */
 // map<enum<Opcode>, Oprange>
 Oprange	oprange[ALAST];
-/*e: global oprange(arm) */
-/*s: global xcmp(arm) */
+/*e: global [[oprange]](arm) */
+/*s: global [[xcmp]](arm) */
 bool	xcmp[C_GOK+1][C_GOK+1];
-/*e: global xcmp(arm) */
+/*e: global [[xcmp]](arm) */
 
-/*s: function cmp(arm) */
+/*s: function [[cmp]](arm) */
 bool
 cmp(int a, int b)
 {
@@ -69,9 +69,9 @@ cmp(int a, int b)
     }
     return false;
 }
-/*e: function cmp(arm) */
+/*e: function [[cmp]](arm) */
 
-/*s: function ocmp(arm) */
+/*s: function [[ocmp]](arm) */
 /// main -> buildop -> qsort(..., <>)
 int
 ocmp(const void *a, const void *b)
@@ -107,9 +107,9 @@ ocmp(const void *a, const void *b)
         return n;
     return 0;
 }
-/*e: function ocmp(arm) */
+/*e: function [[ocmp]](arm) */
 
-/*s: function buildop(arm) */
+/*s: function [[buildop]](arm) */
 /// main -> <>
 void
 buildop(void)
@@ -286,10 +286,10 @@ buildop(void)
         }
     }
 }
-/*e: function buildop(arm) */
+/*e: function [[buildop]](arm) */
 
 
-/*s: function regoff(arm) */
+/*s: function [[regoff]](arm) */
 long
 regoff(Adr *a)
 {
@@ -298,9 +298,9 @@ regoff(Adr *a)
     aclass(a);
     return instoffset;
 }
-/*e: function regoff(arm) */
+/*e: function [[regoff]](arm) */
 
-/*s: function immrot(arm) */
+/*s: function [[immrot]](arm) */
 // ulong -> option<long> (None = 0)
 long
 immrot(ulong v)
@@ -318,9 +318,9 @@ immrot(ulong v)
     }
     return 0;
 }
-/*e: function immrot(arm) */
+/*e: function [[immrot]](arm) */
 
-/*s: function immaddr(arm) */
+/*s: function [[immaddr]](arm) */
 // ulong -> option<long> (None = 0)
 long
 immaddr(long v)
@@ -335,17 +335,17 @@ immaddr(long v)
             (1<<24);	/* pre indexing */
     return 0;
 }
-/*e: function immaddr(arm) */
+/*e: function [[immaddr]](arm) */
 
-/*s: function immfloat(arm) */
+/*s: function [[immfloat]](arm) */
 static int
 immfloat(long v)
 {
     return (v & 0xC03) == 0;/* offset will fit in floating-point load/store */
 }
-/*e: function immfloat(arm) */
+/*e: function [[immfloat]](arm) */
 
-/*s: function immhalf(arm) */
+/*s: function [[immhalf]](arm) */
 static int
 immhalf(long v)
 {
@@ -358,9 +358,9 @@ immhalf(long v)
             (1<<24);	/* pre indexing */
     return 0;
 }
-/*e: function immhalf(arm) */
+/*e: function [[immhalf]](arm) */
 
-/*s: function aclass(arm) */
+/*s: function [[aclass]](arm) */
 // oplook | ... -> <>
 int
 aclass(Adr *a)
@@ -393,21 +393,21 @@ aclass(Adr *a)
     /*x: [[aclass()]] switch type cases */
     case D_OREG:
         switch(a->symkind) {
-        /*s: [[aclass()]] D_OREG case, switch symkind cases */
+        /*s: [[aclass()]] [[D_OREG]] case, switch symkind cases */
         case N_NONE:
             instoffset = a->offset;
             t = immaddr(instoffset);
             if(t) {
-                /*s: [[aclass()]] if immfloat for N_NONE symbol */
+                /*s: [[aclass()]] if immfloat for [[N_NONE]] symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFOREG : C_FOREG;
                     /* n.b. that [C_FOREG] will also satisfy immrot */
-                /*e: [[aclass()]] if immfloat for N_NONE symbol */
-                /*s: [[aclass()]] if immhalf for N_NONE symbol */
+                /*e: [[aclass()]] if immfloat for [[N_NONE]] symbol */
+                /*s: [[aclass()]] if immhalf for [[N_NONE]] symbol */
                  /* n.b. that immhalf() will also satisfy immrot */
                 if(immhalf(instoffset))	
                     return C_HOREG;
-                /*e: [[aclass()]] if immhalf for N_NONE symbol */
+                /*e: [[aclass()]] if immhalf for [[N_NONE]] symbol */
                 if(immrot(instoffset))
                     return C_SROREG;
                 return C_SOREG;
@@ -415,25 +415,25 @@ aclass(Adr *a)
             if(immrot(instoffset))
                 return C_ROREG;
             return C_LOREG;
-        /*x: [[aclass()]] D_OREG case, switch symkind cases */
+        /*x: [[aclass()]] [[D_OREG]] case, switch symkind cases */
         case N_EXTERN:
         case N_INTERN:
-            /*s: [[aclass()]] D_OREG case, N_EXTERN case, sanity check a */
+            /*s: [[aclass()]] [[D_OREG]] case, [[N_EXTERN]] case, sanity check a */
             if(a->sym == nil || a->sym->name == nil) {
                 print("null sym external\n");
                 print("%D\n", a);
                 return C_GOK;
             }
-            /*e: [[aclass()]] D_OREG case, N_EXTERN case, sanity check a */
+            /*e: [[aclass()]] [[D_OREG]] case, [[N_EXTERN]] case, sanity check a */
             s = a->sym;
             t = s->type;
-            /*s: [[aclass()]] D_OREG case, N_EXTERN case, sanity check t */
+            /*s: [[aclass()]] [[D_OREG]] case, [[N_EXTERN]] case, sanity check t */
             if(t == SNONE || t == SXREF) {
                 diag("undefined external: %s in %s", s->name, TNAME);
                 s->type = SDATA;
             }
-            /*e: [[aclass()]] D_OREG case, N_EXTERN case, sanity check t */
-            /*s: [[aclass()]] when D_OREG and external symbol and dlm */
+            /*e: [[aclass()]] [[D_OREG]] case, [[N_EXTERN]] case, sanity check t */
+            /*s: [[aclass()]] when [[D_OREG]] and external symbol and dlm */
             if(dlm) {
                 switch(t) {
                 case STEXT: case SSTRING:
@@ -447,67 +447,67 @@ aclass(Adr *a)
                 }
                 return C_ADDR;
             }
-            /*e: [[aclass()]] when D_OREG and external symbol and dlm */
+            /*e: [[aclass()]] when [[D_OREG]] and external symbol and dlm */
             instoffset = s->value + a->offset - BIG;
             t = immaddr(instoffset);
             if(t) {
-                /*s: [[aclass()]] if immfloat for N_EXTERN symbol */
+                /*s: [[aclass()]] if immfloat for [[N_EXTERN]] symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFEXT : C_FEXT;
-                /*e: [[aclass()]] if immfloat for N_EXTERN symbol */
-                /*s: [[aclass()]] if immhalf for N_EXTERN symbol */
+                /*e: [[aclass()]] if immfloat for [[N_EXTERN]] symbol */
+                /*s: [[aclass()]] if immhalf for [[N_EXTERN]] symbol */
                 if(immhalf(instoffset))
                     return C_HEXT;
-                /*e: [[aclass()]] if immhalf for N_EXTERN symbol */
+                /*e: [[aclass()]] if immhalf for [[N_EXTERN]] symbol */
                 return C_SEXT;
             }
             return C_LEXT;
-        /*x: [[aclass()]] D_OREG case, switch symkind cases */
+        /*x: [[aclass()]] [[D_OREG]] case, switch symkind cases */
         case N_LOCAL:
             instoffset = autosize + a->offset;
             t = immaddr(instoffset);
             if(t){
-                /*s: [[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol */
+                /*s: [[aclass()]] if immfloat for [[N_LOCAL]] or [[N_PARAM]] symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
-                /*e: [[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol */
-                /*s: [[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol */
+                /*e: [[aclass()]] if immfloat for [[N_LOCAL]] or [[N_PARAM]] symbol */
+                /*s: [[aclass()]] if immhalf for [[N_LOCAL]] or [[N_PARAM]] symbol */
                 if(immhalf(instoffset))
                     return C_HAUTO;
-                /*e: [[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol */
+                /*e: [[aclass()]] if immhalf for [[N_LOCAL]] or [[N_PARAM]] symbol */
                 return C_SAUTO;
             }
             return C_LAUTO;
-        /*x: [[aclass()]] D_OREG case, switch symkind cases */
+        /*x: [[aclass()]] [[D_OREG]] case, switch symkind cases */
         case N_PARAM:
             instoffset = autosize + 4L + a->offset;
             t = immaddr(instoffset);
             if(t){
-                /*s: [[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol */
+                /*s: [[aclass()]] if immfloat for [[N_LOCAL]] or [[N_PARAM]] symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
-                /*e: [[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol */
-                /*s: [[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol */
+                /*e: [[aclass()]] if immfloat for [[N_LOCAL]] or [[N_PARAM]] symbol */
+                /*s: [[aclass()]] if immhalf for [[N_LOCAL]] or [[N_PARAM]] symbol */
                 if(immhalf(instoffset))
                     return C_HAUTO;
-                /*e: [[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol */
+                /*e: [[aclass()]] if immhalf for [[N_LOCAL]] or [[N_PARAM]] symbol */
                 return C_SAUTO;
             }
             return C_LAUTO;
-        /*e: [[aclass()]] D_OREG case, switch symkind cases */
+        /*e: [[aclass()]] [[D_OREG]] case, switch symkind cases */
         }
         return C_GOK;
     /*x: [[aclass()]] switch type cases */
     case D_ADDR:
         switch(a->symkind) {
-        /*s: [[aclass()]] D_ADDR case, switch symkind cases */
+        /*s: [[aclass()]] [[D_ADDR]] case, switch symkind cases */
         case N_EXTERN:
         case N_INTERN:
             s = a->sym;
-            /*s: [[aclass()]] D_ADDR case, N_EXTERN case, sanity check s */
+            /*s: [[aclass()]] [[D_ADDR]] case, [[N_EXTERN]] case, sanity check s */
             if(s == S) // no warning?
                 break;
-            /*e: [[aclass()]] D_ADDR case, N_EXTERN case, sanity check s */
+            /*e: [[aclass()]] [[D_ADDR]] case, [[N_EXTERN]] case, sanity check s */
             switch(s->type) {
             case STEXT: case SSTRING: case SUNDEF:
                 instoffset = s->value + a->offset;
@@ -517,12 +517,12 @@ aclass(Adr *a)
                 s->type = SDATA;
                 // Fall through
             case SDATA: case SBSS: case SDATA1:
-                /*s: [[aclass()]] in D_ADDR case, SDATA case, if dlm */
+                /*s: [[aclass()]] in [[D_ADDR]] case, [[SDATA]] case, if dlm */
                 if(dlm) {
                     instoffset = s->value + a->offset + INITDAT;
                     return C_LCON;
                 }
-                /*e: [[aclass()]] in D_ADDR case, SDATA case, if dlm */
+                /*e: [[aclass()]] in [[D_ADDR]] case, [[SDATA]] case, if dlm */
                 instoffset = s->value + a->offset - BIG;
                 if(immrot(instoffset) && instoffset != 0) {// VERY IMPORTANT != 0
                      return C_RECON;
@@ -533,18 +533,18 @@ aclass(Adr *a)
             }
             diag("unknown section for %s", s->name);
             break;
-        /*x: [[aclass()]] D_ADDR case, switch symkind cases */
+        /*x: [[aclass()]] [[D_ADDR]] case, switch symkind cases */
         case N_LOCAL:
             instoffset = autosize + a->offset;
             goto aconsize;
-        /*x: [[aclass()]] D_ADDR case, switch symkind cases */
+        /*x: [[aclass()]] [[D_ADDR]] case, switch symkind cases */
         case N_PARAM:
             instoffset = autosize + a->offset + 4L;
             goto aconsize;
-        /*x: [[aclass()]] D_ADDR case, switch symkind cases */
+        /*x: [[aclass()]] [[D_ADDR]] case, switch symkind cases */
         aconsize:
             return immrot(instoffset)? C_RACON : C_LACON;
-        /*e: [[aclass()]] D_ADDR case, switch symkind cases */
+        /*e: [[aclass()]] [[D_ADDR]] case, switch symkind cases */
         }
         return C_GOK;
     /*x: [[aclass()]] switch type cases */
@@ -567,9 +567,9 @@ aclass(Adr *a)
     }
     return C_GOK;
 }
-/*e: function aclass(arm) */
+/*e: function [[aclass]](arm) */
 
-/*s: function oplook(arm) */
+/*s: function [[oplook]](arm) */
 /// main -> (dotext | asmb) -> <>
 Optab*
 oplook(Prog *p)
@@ -665,6 +665,6 @@ oplook(Prog *p)
     return o;
     /*e: [[oplook()]] illegal combination error */
 }
-/*e: function oplook(arm) */
+/*e: function [[oplook]](arm) */
 
 /*e: linkers/5l/span.c */

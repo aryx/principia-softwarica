@@ -1,11 +1,11 @@
 /*s: linkers/5l/error.c */
 #include "l.h"
 
-/*s: global nerrors */
+/*s: global [[nerrors]] */
 int	nerrors = 0;
-/*e: global nerrors */
+/*e: global [[nerrors]] */
 
-/*s: function errorexit */
+/*s: function [[errorexit]] */
 void
 errorexit(void)
 {
@@ -17,9 +17,9 @@ errorexit(void)
     }
     exits(0);
 }
-/*e: function errorexit */
+/*e: function [[errorexit]] */
 
-/*s: function diag */
+/*s: function [[diag]] */
 void
 diag(char *fmt, ...)
 {
@@ -41,5 +41,5 @@ diag(char *fmt, ...)
         errorexit();
     }
 }
-/*e: function diag */
+/*e: function [[diag]] */
 /*e: linkers/5l/error.c */

@@ -10,7 +10,7 @@ usage(void)
 }
 /*e: function usage, linker */
 
-/*s: function undef */
+/*s: function [[undef]] */
 /// main -> <>
 void
 undef(void)
@@ -23,9 +23,9 @@ undef(void)
             if(s->type == SXREF)
                 diag("%s: not defined", s->name);
 }
-/*e: function undef */
+/*e: function [[undef]] */
 
-/*s: function main(arm) */
+/*s: function [[main]](arm) */
 void
 main(int argc, char *argv[])
 {
@@ -296,6 +296,6 @@ out:
     /*e: [[main()]] profile report */
     errorexit();
 }
-/*e: function main(arm) */
+/*e: function [[main]](arm) */
 
 /*e: linkers/5l/main.c */

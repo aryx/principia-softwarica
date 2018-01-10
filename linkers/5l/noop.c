@@ -1,33 +1,33 @@
 /*s: linkers/5l/noop.c */
 #include	"l.h"
 
-/*s: global sym_div(arm) */
+/*s: global [[sym_div]](arm) */
 static	Sym*	sym_div;
-/*e: global sym_div(arm) */
-/*s: global sym_divu(arm) */
+/*e: global [[sym_div]](arm) */
+/*s: global [[sym_divu]](arm) */
 static	Sym*	sym_divu;
-/*e: global sym_divu(arm) */
-/*s: global sym_mod(arm) */
+/*e: global [[sym_divu]](arm) */
+/*s: global [[sym_mod]](arm) */
 static	Sym*	sym_mod;
-/*e: global sym_mod(arm) */
-/*s: global sym_modu(arm) */
+/*e: global [[sym_mod]](arm) */
+/*s: global [[sym_modu]](arm) */
 static	Sym*	sym_modu;
-/*e: global sym_modu(arm) */
+/*e: global [[sym_modu]](arm) */
 
-/*s: global prog_div(arm) */
+/*s: global [[prog_div]](arm) */
 Prog*	prog_div;
-/*e: global prog_div(arm) */
-/*s: global prog_divu(arm) */
+/*e: global [[prog_div]](arm) */
+/*s: global [[prog_divu]](arm) */
 Prog*	prog_divu;
-/*e: global prog_divu(arm) */
-/*s: global prog_mod(arm) */
+/*e: global [[prog_divu]](arm) */
+/*s: global [[prog_mod]](arm) */
 Prog*	prog_mod;
-/*e: global prog_mod(arm) */
-/*s: global prog_modu(arm) */
+/*e: global [[prog_mod]](arm) */
+/*s: global [[prog_modu]](arm) */
 Prog*	prog_modu;
-/*e: global prog_modu(arm) */
+/*e: global [[prog_modu]](arm) */
 
-/*s: function noops(arm) */
+/*s: function [[noops]](arm) */
 /// main -> <>
 void
 noops(void)
@@ -309,9 +309,9 @@ noops(void)
         }
     }
 }
-/*e: function noops(arm) */
+/*e: function [[noops]](arm) */
 
-/*s: function sigdiv(arm) */
+/*s: function [[sigdiv]](arm) */
 static void
 sigdiv(char *n)
 {
@@ -325,9 +325,9 @@ sigdiv(char *n)
     else if(s->type == SNONE || s->type == SXREF)
         s->type = SUNDEF;
 }
-/*e: function sigdiv(arm) */
+/*e: function [[sigdiv]](arm) */
 
-/*s: function divsig(arm) */
+/*s: function [[divsig]](arm) */
 void
 divsig(void)
 {
@@ -336,9 +336,9 @@ divsig(void)
     sigdiv("_mod");
     sigdiv("_modu");
 }
-/*e: function divsig(arm) */
+/*e: function [[divsig]](arm) */
 
-/*s: function sdiv(arm) */
+/*s: function [[sdiv]](arm) */
 static void
 sdiv(Sym *s)
 {
@@ -352,9 +352,9 @@ sdiv(Sym *s)
     else if(s->type != STEXT)
         diag("undefined: %s", s->name);
 }
-/*e: function sdiv(arm) */
+/*e: function [[sdiv]](arm) */
 
-/*s: function initdiv(arm) */
+/*s: function [[initdiv]](arm) */
 void
 initdiv(void)
 {
@@ -401,9 +401,9 @@ initdiv(void)
         prog_modu = curtext;
     }
 }
-/*e: function initdiv(arm) */
+/*e: function [[initdiv]](arm) */
 
-/*s: function nocache(arm) */
+/*s: function [[nocache]](arm) */
 void
 nocache(Prog *p)
 {
@@ -411,5 +411,5 @@ nocache(Prog *p)
     p->from.class = 0;
     p->to.class = 0;
 }
-/*e: function nocache(arm) */
+/*e: function [[nocache]](arm) */
 /*e: linkers/5l/noop.c */

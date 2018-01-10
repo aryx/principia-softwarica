@@ -4,20 +4,20 @@
 // forward decls
 typedef struct Reloc Reloc;
 
-/*s: enum _anon_ (linkers/5l/span.c)(arm) */
+/*s: enum SpanConstants(arm) */
 enum{
     ABSD = 0,
     ABSU = 1,
     RELD = 2,
     RELU = 3,
 };
-/*e: enum _anon_ (linkers/5l/span.c)(arm) */
+/*e: enum SpanConstants(arm) */
 
-/*s: global modemap */
+/*s: global [[modemap]] */
 int modemap[4] = { 0, 1, -1, 2, };
-/*e: global modemap */
+/*e: global [[modemap]] */
 
-/*s: struct Reloc */
+/*s: struct [[Reloc]] */
 struct Reloc
 {
     int n;
@@ -25,29 +25,29 @@ struct Reloc
     byte *m;
     ulong *a;
 };
-/*e: struct Reloc */
+/*e: struct [[Reloc]] */
 
-/*s: global rels */
+/*s: global [[rels]] */
 Reloc rels;
-/*e: global rels */
+/*e: global [[rels]] */
 
 
-/*s: global imports */
+/*s: global [[imports]] */
 int	imports;
-/*e: global imports */
-/*s: global nimports */
+/*e: global [[imports]] */
+/*s: global [[nimports]] */
 int nimports;
-/*e: global nimports */
-/*s: global exports */
+/*e: global [[nimports]] */
+/*s: global [[exports]] */
 int	exports;
-/*e: global exports */
-/*s: global nexports */
+/*e: global [[exports]] */
+/*s: global [[nexports]] */
 int nexports;
-/*e: global nexports */
+/*e: global [[nexports]] */
 
 
 
-/*s: function zerosig */
+/*s: function [[zerosig]] */
 void
 zerosig(char *sp)
 {
@@ -56,9 +56,9 @@ zerosig(char *sp)
     s = lookup(sp, 0);
     s->sig = 0;
 }
-/*e: function zerosig */
+/*e: function [[zerosig]] */
 
-/*s: function readundefs */
+/*s: function [[readundefs]] */
 void
 readundefs(char *f, int t)
 {
@@ -99,9 +99,9 @@ readundefs(char *f, int t)
     }
     Bterm(b);
 }
-/*e: function readundefs */
+/*e: function [[readundefs]] */
 
-/*s: function undefsym */
+/*s: function [[undefsym]] */
 void
 undefsym(Sym *s)
 {
@@ -116,9 +116,9 @@ undefsym(Sym *s)
     s->type = SUNDEF;
     imports++;
 }
-/*e: function undefsym */
+/*e: function [[undefsym]] */
 
-/*s: function import(arm) */
+/*s: function [[import]](arm) */
 void
 import(void)
 {
@@ -132,18 +132,18 @@ import(void)
                 Bprint(&bso, "IMPORT: %s sig=%lux v=%ld\n", s->name, s->sig, s->value);
             }
 }
-/*e: function import(arm) */
+/*e: function [[import]](arm) */
 
-/*s: function ckoff */
+/*s: function [[ckoff]] */
 void
 ckoff(Sym *s, long v)
 {
     if(v < 0 || v >= 1<<Roffset)
         diag("relocation offset %ld for %s out of range", v, s->name);
 }
-/*e: function ckoff */
+/*e: function [[ckoff]] */
 
-/*s: function newdata(arm) */
+/*s: function [[newdata]](arm) */
 static Prog*
 newdata(Sym *s, int o, int w, int t)
 {
@@ -164,9 +164,9 @@ newdata(Sym *s, int o, int w, int t)
 
     return p;
 }
-/*e: function newdata(arm) */
+/*e: function [[newdata]](arm) */
 
-/*s: function export(arm) */
+/*s: function [[export]](arm) */
 void
 export(void)
 {
@@ -263,11 +263,11 @@ export(void)
     exports = ne;
     free(esyms);
 }
-/*e: function export(arm) */
+/*e: function [[export]](arm) */
 
 
 
-/*s: function grow */
+/*s: function [[grow]] */
 static void
 grow(Reloc *r)
 {
@@ -286,9 +286,9 @@ grow(Reloc *r)
     free(m);
     free(a);
 }
-/*e: function grow */
+/*e: function [[grow]] */
 
-/*s: function dynreloc(arm) */
+/*s: function [[dynreloc]](arm) */
 void
 dynreloc(Sym *s, long v, int abs)
 {
@@ -325,9 +325,9 @@ dynreloc(Sym *s, long v, int abs)
     a[i] = v;
     r->n++;
 }
-/*e: function dynreloc(arm) */
+/*e: function [[dynreloc]](arm) */
 
-/*s: function sput */
+/*s: function [[sput]] */
 static int
 sput(char *s)
 {
@@ -339,9 +339,9 @@ sput(char *s)
     cput(0);
     return  s-p+1;
 }
-/*e: function sput */
+/*e: function [[sput]] */
 
-/*s: function asmdyn */
+/*s: function [[asmdyn]] */
 void
 asmdyn()
 {
@@ -407,6 +407,6 @@ asmdyn()
     DBG("import table entries = %d\n", imports);
     DBG("export table entries = %d\n", exports);
 }
-/*e: function asmdyn */
+/*e: function [[asmdyn]] */
 
 /*e: linkers/5l/dynamic.c */

@@ -1,29 +1,29 @@
 /*s: linkers/5l/datagen.c */
 #include	"l.h"
 
-/*s: constant Dbufslop */
+/*s: constant [[Dbufslop]] */
 #define	Dbufslop	100
-/*e: constant Dbufslop */
+/*e: constant [[Dbufslop]] */
 
-/*s: global inuxi1 */
+/*s: global [[inuxi1]] */
 char	inuxi1[1];
-/*e: global inuxi1 */
-/*s: global inuxi2 */
+/*e: global [[inuxi1]] */
+/*s: global [[inuxi2]] */
 char	inuxi2[2];
-/*e: global inuxi2 */
-/*s: global inuxi4 */
+/*e: global [[inuxi2]] */
+/*s: global [[inuxi4]] */
 char	inuxi4[4];
-/*e: global inuxi4 */
+/*e: global [[inuxi4]] */
 
-/*s: global fnuxi4 */
+/*s: global [[fnuxi4]] */
 char	fnuxi4[4];
-/*e: global fnuxi4 */
-/*s: global fnuxi8 */
+/*e: global [[fnuxi4]] */
+/*s: global [[fnuxi8]] */
 char	fnuxi8[8];
-/*e: global fnuxi8 */
+/*e: global [[fnuxi8]] */
 
 
-/*s: function find1 */
+/*s: function [[find1]] */
 int
 find1(long l, int c)
 {
@@ -36,9 +36,9 @@ find1(long l, int c)
             return i;
     return 0;
 }
-/*e: function find1 */
+/*e: function [[find1]] */
 
-/*s: function nuxiinit(arm) */
+/*s: function [[nuxiinit]](arm) */
 void
 nuxiinit(void)
 {
@@ -86,10 +86,10 @@ nuxiinit(void)
     /*e: [[nuxiinit()]] debug */
     Bflush(&bso);
 }
-/*e: function nuxiinit(arm) */
+/*e: function [[nuxiinit]](arm) */
 
 
-/*s: function datblk(arm) */
+/*s: function [[datblk]](arm) */
 void
 datblk(long s, long n, bool sstring)
 {
@@ -160,30 +160,30 @@ datblk(long s, long n, bool sstring)
         /*x: [[datblk()]] switch type of destination cases */
         case D_CONST: case D_ADDR:
             d = p->to.offset;
-            /*s: [[datblk()]] if D_ADDR case */
+            /*s: [[datblk()]] if [[D_ADDR]] case */
             v = p->to.sym;
             if(v) {
                 switch(v->type) {
-                /*s: [[datblk()]] in D_ADDR case, switch symbol type cases */
+                /*s: [[datblk()]] in [[D_ADDR]] case, switch symbol type cases */
                 case STEXT: case SSTRING:
                     d += p->to.sym->value;
                     break;
                 case SDATA: case SBSS:
                     d += p->to.sym->value + INITDAT;
                     break;
-                /*x: [[datblk()]] in D_ADDR case, switch symbol type cases */
+                /*x: [[datblk()]] in [[D_ADDR]] case, switch symbol type cases */
                 case SUNDEF:
                     ckoff(v, d);
                     d += p->to.sym->value;
                     break;
-                /*e: [[datblk()]] in D_ADDR case, switch symbol type cases */
+                /*e: [[datblk()]] in [[D_ADDR]] case, switch symbol type cases */
                 }
                 /*s: [[datblk()]] if dynamic module(arm) */
                 if(dlm)
                     dynreloc(v, a+INITDAT, 1);
                 /*e: [[datblk()]] if dynamic module(arm) */
             }
-            /*e: [[datblk()]] if D_ADDR case */
+            /*e: [[datblk()]] if [[D_ADDR]] case */
             cast = (char*)&d;
 
             switch(c) {
@@ -240,6 +240,6 @@ datblk(long s, long n, bool sstring)
     }
     write(cout, buf.dbuf, n);
 }
-/*e: function datblk(arm) */
+/*e: function [[datblk]](arm) */
 
 /*e: linkers/5l/datagen.c */

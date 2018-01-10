@@ -18,7 +18,7 @@ typedef struct  Auto    Auto;
 typedef struct  Prog    Prog;
 typedef struct  Sym     Sym;
 
-/*s: struct Adr(arm) */
+/*s: struct [[Adr]](arm) */
 struct  Adr
 {
     // enum<Operand_kind> (D_NONE by default)
@@ -47,9 +47,9 @@ struct  Adr
     Auto*   autom;
     /*e: [[Adr]] other fields */
 };
-/*e: struct Adr(arm) */
+/*e: struct [[Adr]](arm) */
 
-/*s: struct Prog(arm) */
+/*s: struct [[Prog]](arm) */
 struct  Prog
 {
     //enum<Opcode>
@@ -91,12 +91,12 @@ struct  Prog
     Prog*   link;
     /*e: [[Prog]] extra fields */
 };
-/*e: struct Prog(arm) */
-/*s: constant P */
+/*e: struct [[Prog]](arm) */
+/*s: constant [[P]] */
 #define P       ((Prog*)nil)
-/*e: constant P */
+/*e: constant [[P]] */
 
-/*s: struct Sym */
+/*s: struct [[Sym]] */
 struct  Sym
 {
     // The key
@@ -136,12 +136,12 @@ struct  Sym
     Sym*    link;
     /*e: [[Sym]] extra fields */
 };
-/*e: struct Sym */
-/*s: constant S */
+/*e: struct [[Sym]] */
+/*s: constant [[S]] */
 #define S       ((Sym*)nil)
-/*e: constant S */
+/*e: constant [[S]] */
 
-/*s: enum Section(arm) */
+/*s: enum [[Section]](arm) */
 enum Section
 {
     SNONE = 0,
@@ -164,9 +164,9 @@ enum Section
     SSTRING, // arm
     /*e: [[Section]] cases */
 };
-/*e: enum Section(arm) */
+/*e: enum [[Section]](arm) */
 
-/*s: enum Mark(arm) */
+/*s: enum [[Mark]](arm) */
 /* mark flags */
 enum Mark {
     /*s: [[Mark]] cases */
@@ -175,9 +175,9 @@ enum Mark {
     FOLL        = 1<<0,
     /*e: [[Mark]] cases */
 };
-/*e: enum Mark(arm) */
+/*e: enum [[Mark]](arm) */
 
-/*s: enum headtype(arm) */
+/*s: enum [[headtype]](arm) */
 /*
  *  -H0                     no header
  *  -H2 -T4128 -R4096       is plan9 format
@@ -188,9 +188,9 @@ enum Headtype {
      H_PLAN9 = 2, // a.k.a H_AOUT
      H_ELF = 7,
 };
-/*e: enum headtype(arm) */
+/*e: enum [[headtype]](arm) */
 
-/*s: struct Auto(arm) */
+/*s: struct [[Auto]](arm) */
 struct  Auto
 {
     // enum<Sym_kind> (N_LOCAL, N_PARAM, or N_FILE/N_LINE)
@@ -206,24 +206,24 @@ struct  Auto
     Auto*   link;
     /*e: [[Auto]] extra fields */
 };
-/*e: struct Auto(arm) */
+/*e: struct [[Auto]](arm) */
 
-/*s: enum rxxx */
+/*s: enum [[rxxx]] */
 enum rxxx {
     Roffset = 22,       /* no. bits for offset in relocation address */
     Rindex  = 10,       /* no. bits for index in relocation address */
 };
-/*e: enum rxxx */
-/*s: enum misc_constant(arm) */
+/*e: enum [[rxxx]] */
+/*s: enum [[misc_constant]](arm) */
 enum misc_constants {
-    /*s: constant BIG */
+    /*s: constant [[BIG]] */
     //BIG       = (1<<12)-4,
     BIG     = 0,
-    /*e: constant BIG */
+    /*e: constant [[BIG]] */
 
-    /*s: constant STRINGSZ */
+    /*s: constant [[STRINGSZ]] */
     STRINGSZ    = 200,
-    /*e: constant STRINGSZ */
+    /*e: constant [[STRINGSZ]] */
     /*s: constant NHASH linker */
     NHASH       = 10007,
     /*e: constant NHASH linker */
@@ -231,27 +231,27 @@ enum misc_constants {
     NHUNK       = 100000,
     /*e: constant NHUNK linker */
 
-    /*s: constant MINSIZ */
+    /*s: constant [[MINSIZ]] */
     MINSIZ      = 64,
-    /*e: constant MINSIZ */
-    /*s: constant MAXIO */
+    /*e: constant [[MINSIZ]] */
+    /*s: constant [[MAXIO]] */
     MAXIO       = 8192,
-    /*e: constant MAXIO */
-    /*s: constant MAXHIST */
+    /*e: constant [[MAXIO]] */
+    /*s: constant [[MAXHIST]] */
     MAXHIST     = 20,   /* limit of path elements for history symbols */
-    /*e: constant MAXHIST */
+    /*e: constant [[MAXHIST]] */
 };
-/*e: enum misc_constant(arm) */
+/*e: enum [[misc_constant]](arm) */
 
-/*s: constant SIGNINTERN(arm) */
+/*s: constant [[SIGNINTERN]](arm) */
 #define SIGNINTERN  (1729*325*1729)
-/*e: constant SIGNINTERN(arm) */
+/*e: constant [[SIGNINTERN]](arm) */
 
-/*s: constant LIBNAMELEN */
+/*s: constant [[LIBNAMELEN]] */
 #define LIBNAMELEN  300
-/*e: constant LIBNAMELEN */
+/*e: constant [[LIBNAMELEN]] */
 
-/*s: struct Buf */
+/*s: struct [[Buf]] */
 union Buf
 {
     struct
@@ -261,7 +261,7 @@ union Buf
     };
     char    dbuf[1]; // variable size
 };
-/*e: struct Buf */
+/*e: struct [[Buf]] */
 
 //----------------------------------------------------------------------------
 // Globals
@@ -316,9 +316,9 @@ extern  long    symsize;
 extern  long    lcsize;
 
 extern  char*   noname;
-/*s: constant TNAME(arm) */
+/*s: constant [[TNAME]](arm) */
 #define TNAME (curtext && curtext->from.sym ? curtext->from.sym->name : noname)
-/*e: constant TNAME(arm) */
+/*e: constant [[TNAME]](arm) */
 
 
 // debugging support
@@ -337,9 +337,9 @@ extern  bool dlm;
 extern  char*   EXPTAB;
 
 extern  Prog    undefp;
-/*s: constant UP */
+/*s: constant [[UP]] */
 #define UP  (&undefp)
-/*e: constant UP */
+/*e: constant [[UP]] */
 
 // debugging
 extern  bool    debug[128];
@@ -460,9 +460,9 @@ long    atolwhex(char*);
 long    rnd(long, long);
 int     fileexists(char*);
 void  mylog(char*, ...);
-/*s: macro DBG */
+/*s: macro [[DBG]] */
 #define DBG if(debug['v']) mylog
-/*e: macro DBG */
+/*e: macro [[DBG]] */
 
 // fmt.c (dumpers)
 void listinit(void);

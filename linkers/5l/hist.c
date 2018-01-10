@@ -1,7 +1,7 @@
 /*s: linkers/5l/hist.c */
 #include	"l.h"
 
-/*s: function addhist */
+/*s: function [[addhist]] */
 void
 addhist(long line, int type)
 {
@@ -33,9 +33,9 @@ addhist(long line, int type)
     }
     /*e: [[addhist()]] set symbol name to filename using compact encoding */
 }
-/*e: function addhist */
+/*e: function [[addhist]] */
 
-/*s: function histtoauto */
+/*s: function [[histtoauto]] */
 /// ldobj (case AEND | ATEXT) -> <>
 void
 histtoauto(void)
@@ -50,6 +50,6 @@ histtoauto(void)
         curauto = l;
     }
 }
-/*e: function histtoauto */
+/*e: function [[histtoauto]] */
 
 /*e: linkers/5l/hist.c */

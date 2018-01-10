@@ -2,23 +2,23 @@
 #include	"l.h"
 #include	"m.h"
 
-/*s: global pool(arm) */
+/*s: global [[pool]](arm) */
 static struct {
     // PC of first instruction referencing the pool
     ulong	start;
     // a multiple of 4
     ulong	size;
 } pool;
-/*e: global pool(arm) */
+/*e: global [[pool]](arm) */
 
-/*s: global blitrl(arm) */
+/*s: global [[blitrl]](arm) */
 // list<ref_own<prog>> (next = Prog.link)
 Prog*	blitrl;
-/*e: global blitrl(arm) */
-/*s: global elitrl(arm) */
+/*e: global [[blitrl]](arm) */
+/*s: global [[elitrl]](arm) */
 // ref<Prog> (end from = blitrl)
 Prog*	elitrl;
-/*e: global elitrl(arm) */
+/*e: global [[elitrl]](arm) */
 
 void	checkpool(Prog*);
 void 	flushpool(Prog*, int);
@@ -26,7 +26,7 @@ void    addpool(Prog*, Adr*);
 
 
 
-/*s: function xdefine(arm) */
+/*s: function [[xdefine]](arm) */
 void
 xdefine(char *p, int t, long v)
 {
@@ -38,10 +38,10 @@ xdefine(char *p, int t, long v)
         s->value = v;
     }
 }
-/*e: function xdefine(arm) */
+/*e: function [[xdefine]](arm) */
 
 
-/*s: function dodata(arm) */
+/*s: function [[dodata]](arm) */
 /// main -> <>
 void
 dodata(void)
@@ -173,9 +173,9 @@ dodata(void)
     xdefine("setR12", SDATA, 0L+BIG);
     /*e: [[dodata()]] define special symbols */
 }
-/*e: function dodata(arm) */
+/*e: function [[dodata]](arm) */
 
-/*s: function span(arm) */
+/*s: function [[span]](arm) */
 /// main -> <>
 void
 dotext(void)
@@ -291,12 +291,12 @@ dotext(void)
         INITDAT = rnd(c, INITRND);
     DBG("tsize = %lux\n", textsize);
 }
-/*e: function span(arm) */
+/*e: function [[span]](arm) */
 
 
 
 
-/*s: function checkpool(arm) */
+/*s: function [[checkpool]](arm) */
 void
 checkpool(Prog *p)
 {
@@ -315,9 +315,9 @@ checkpool(Prog *p)
         flushpool(p, true);
     /*e: [[checkpool()]] if special condition */
 }
-/*e: function checkpool(arm) */
+/*e: function [[checkpool]](arm) */
 
-/*s: function flushpool(arm) */
+/*s: function [[flushpool]](arm) */
 /// (dotext -> checkpool) | dotext -> <>
 void
 flushpool(Prog *p, bool skip)
@@ -354,9 +354,9 @@ flushpool(Prog *p, bool skip)
         pool.start = 0;
     }
 }
-/*e: function flushpool(arm) */
+/*e: function [[flushpool]](arm) */
 
-/*s: function addpool(arm) */
+/*s: function [[addpool]](arm) */
 void
 addpool(Prog *p, Adr *a)
 {
@@ -427,6 +427,6 @@ addpool(Prog *p, Adr *a)
     // for omvl()!
     p->cond = q;
 }
-/*e: function addpool(arm) */
+/*e: function [[addpool]](arm) */
 
 /*e: linkers/5l/layout.c */
