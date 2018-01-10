@@ -1,3 +1,5 @@
+// this is used by codegraph or syncweb/indexer
+
 // from include/386/u.h
 #define va_start(list, start) list =\
 	(sizeof(start) < 4?\
