@@ -1032,6 +1032,17 @@ asmout(Prog *p, Optab *o)
         o2 = ofsr(p->as, p->to.reg, 0, REGTMP, p->scond, p) | (1<<20);
         break;
     /*x: [[asmout()]] switch on type cases */
+    /* old arm 7500 fp using coprocessor 1 (1<<8) */
+    case 56:	/* move to FP[CS]R */
+        o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
+        o1 |= ((p->to.reg+1)<<21) | (p->from.reg << 12);
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    case 57:	/* move from FP[CS]R */
+        o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
+        o1 |= ((p->from.reg+1)<<21) | (p->to.reg<<12) | (1<<20);
+        break;
+    /*x: [[asmout()]] switch on type cases */
     /* VFP ops: */
     case 74:	/* vfp floating point arith */
         o1 = opvfprrr(p->as, p->scond);
@@ -1081,17 +1092,6 @@ asmout(Prog *p, Optab *o)
             o2 = 0x0e100a10;	/* VMOV R,F */
             o2 |= (p->scond & C_SCOND) << 28 | FREGTMP<<16 | rt<<12;
         }
-        break;
-    /*x: [[asmout()]] switch on type cases */
-    /* old arm 7500 fp using coprocessor 1 (1<<8) */
-    case 56:	/* move to FP[CS]R */
-        o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
-        o1 |= ((p->to.reg+1)<<21) | (p->from.reg << 12);
-        break;
-    /*x: [[asmout()]] switch on type cases */
-    case 57:	/* move from FP[CS]R */
-        o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
-        o1 |= ((p->from.reg+1)<<21) | (p->to.reg<<12) | (1<<20);
         break;
     /*x: [[asmout()]] switch on type cases */
     case 16:	/* div r,[r,]r */

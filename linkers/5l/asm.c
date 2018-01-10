@@ -19,6 +19,7 @@ entryvalue(void)
 
     switch(s->type) {
     case SNONE:
+        // could warn no _main found?
         return INITTEXT; // no _main, start at beginning of binary then
     case STEXT:
         return s->value;
