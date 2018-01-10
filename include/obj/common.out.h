@@ -1,11 +1,12 @@
 /*s: include/common.out.h */
 
+// The entities below were originally in some xxx/y.out.h, but were always
+// the same in all architecture, hence the factorization below.
+
 /*s: constant NSYM */
 #define	NSYM	50
 /*e: constant NSYM */
 
-// It was originally in some xxx/y.out.h, but was always the same in 
-// all architecture, hence the factorization here.
 /*s: struct ieee */
 /*
  * this is the simulated IEEE floating point
@@ -18,5 +19,5 @@ struct	ieee
                     ms-man	0x000fffff */
 };
 /*e: struct ieee */
-typedef	struct	ieee	Ieee;
+typedef	struct ieee Ieee;
 /*e: include/common.out.h */

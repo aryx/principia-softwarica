@@ -51,7 +51,7 @@ typedef struct  Hist Hist;
 #define EOF     (-1)
 /*e: constant EOF */
 /*s: constant IGN */
-#define IGN     (-2)
+#define IGN     (-2) // Ignore
 /*e: constant IGN */
 /*s: function GETC */
 /// main -> assemble -> yyparse -> yylex -> <>

@@ -52,12 +52,15 @@ getsym(void)
         c = getc();
         if(isalnum(c) || c == '_' || c >= Runeself)
             continue;
+        // else
         unget(c);
         break;
     }
     *cp = '\0';
+    /*s: [[getsym()]] sanity check cp */
     if(cp > symb+NSYMB-4)
         yyerror("symbol too large: %s", symb);
+    /*e: [[getsym()]] sanity check cp */
     return lookup();
 }
 /*e: function getsym */
@@ -92,7 +95,8 @@ getcom(void)
     int c;
 
     for(;;) {
-        c = getnsc();
+        c = getnsc(); // skip whitespaces
+
         if(c != '/')
             break;
         c = getc();
@@ -172,10 +176,11 @@ struct
     "endif",    macend,
 
     "include",  macinc,
+    "line",     maclin,
     "define",   macdef,
     "undef",    macund,
+
     "pragma",   macprag,
-    "line",     maclin,
     0
 };
 /*e: global mactab */
@@ -189,20 +194,25 @@ domacro(void)
     Sym *s;
 
     s = getsym();
+    /*s: [[domacro()]] set s to endif symbol if no symbol */
     if(s == S)
         s = slookup("endif");
+    /*e: [[domacro()]] set s to endif symbol if no symbol */
 
     for(i=0; mactab[i].macname; i++)
         if(strcmp(s->name, mactab[i].macname) == 0) {
+            // dispatch!
             if(mactab[i].macf)
-                // dispatcher!
                 (*mactab[i].macf)();
             else
                 macif(i);
             return;
         }
+    // else
+    /*s: [[domacro()]] handle unknown directives */
     yyerror("unknown #: %s", s->name);
     macend();
+    /*e: [[domacro()]] handle unknown directives */
 }
 /*e: function domacro */
 
@@ -573,21 +583,32 @@ toobig:
 void
 macinc(void)
 {
-    int c0;
-    int c, i;
+    char *hp;
+    int n;
     fdt f = -1;
-    char str[STRINGSZ], *hp;
+    /*s: [[macinc()]] other locals */
+    char str[STRINGSZ];
+    int c, cend;
+    /*x: [[macinc()]] other locals */
+    int i;
+    /*e: [[macinc()]] other locals */
 
-    c0 = getnsc();
-    if(c0 != '"') {
-        c = c0;
-        if(c0 != '<')
+    // lexing
+
+    /*s: [[macinc()]] lexing the included filename */
+    cend = getnsc();
+    if(cend != '"') {
+        if(cend != '<') {
+            c = cend;
             goto bad;
-        c0 = '>';
+        }
+        cend = '>';
     }
-    for(hp = str;;) {
+    // cend = '"' or '>'
+    hp = str;
+    for(;;) {
         c = getc();
-        if(c == c0)
+        if(c == cend)
             break;
         if(c == '\n')
             goto bad;
@@ -595,43 +616,58 @@ macinc(void)
     }
     *hp = '\0';
 
+    /*s: [[macinc()]] finish parsing the line */
     c = getcom();
     if(c != '\n')
         goto bad;
+    /*e: [[macinc()]] finish parsing the line */
+    /*e: [[macinc()]] lexing the included filename */
 
+    // action
+
+    /*s: [[macinc()]] find and store the included filename full path in [[symb]] */
     for(i=0; i<ninclude; i++) {
-        if(i == 0 && c0 == '>')
+        /*s: [[macinc()]] skipped first entry for system headers */
+        if(i == 0 && cend == '>') // do not look in '.' for system headers
             continue;
+        /*e: [[macinc()]] skipped first entry for system headers */
         strcpy(symb, include[i]);
         strcat(symb, "/");
+        /*s: [[macinc()]] normalize path */
         if(strcmp(symb, "./") == 0)
             symb[0] = '\0';
+        /*e: [[macinc()]] normalize path */
         strcat(symb, str);
 
-        f = open(symb, 0);
+        f = open(symb, OREAD);
         if(f >= 0)
             break;
-
+        // else, try another directory
     }
+    // could not find a directory, maybe it was an absolute path
     if(f < 0)
         strcpy(symb, str);
-    c = strlen(symb) + 1;
+    /*e: [[macinc()]] find and store the included filename full path in [[symb]] */
 
-    while(c & 3)
-        c++;
-    hp = malloc(c);
+    n = strlen(symb) + 1;
 
-    memcpy(hp, symb, c);
+    while(n & 3)
+        n++;
+    hp = malloc(n);
+    memcpy(hp, symb, n);
 
     newio();
     pushio();
     newfile(hp, f);
+
     return;
 
+/*s: [[macinc()]] bad */
 bad:
     unget(c);
     yyerror("syntax in #include");
     macend();
+/*e: [[macinc()]] bad */
 }
 /*e: function macinc */
 
@@ -640,25 +676,41 @@ void
 maclin(void)
 {
     char *cp;
-    int c;
     long n;
+    int size;
+    /*s: [[maclin()]] other locals */
+    int c;
+    /*e: [[maclin()]] other locals */
+
+    // lexing
+
+    /*s: [[maclin()]] lexing the line [[n]] and filename in [[symb]] */
+    // the line number
 
     n = getnsn();
+
+    // the (optional) filename
+
     c = getc();
     if(n < 0)
         goto bad;
 
     for(;;) {
+        /*s: [[maclin()]] skipping whitespaces */
         if(c == ' ' || c == '\t') {
             c = getc();
             continue;
         }
+        /*e: [[maclin()]] skipping whitespaces */
         if(c == '"')
             break;
+        /*s: [[maclin()]] if no filename */
         if(c == '\n') {
             strcpy(symb, "<noname>");
             goto nn;
         }
+        /*e: [[maclin()]] if no filename */
+        // else
         goto bad;
     }
     cp = symb;
@@ -669,28 +721,35 @@ maclin(void)
         *cp++ = c;
     }
     *cp = '\0';
+
+    /*s: [[maclin()]] finish parsing the line */
     c = getcom();
     if(c != '\n')
         goto bad;
+    /*e: [[maclin()]] finish parsing the line */
+    /*e: [[maclin()]] lexing the line [[n]] and filename in [[symb]] */
 
+    // action
 nn:
-    c = strlen(symb) + 1;
+    size = strlen(symb) + 1;
 
-    while(c & 3)
-        c++;
-    cp = malloc(c);
+    while(size & 3)
+        size++;
+    cp = malloc(size);
 
-    memcpy(cp, symb, c);
+    memcpy(cp, symb, size);
 
     /*s: [[maclin()]] call linehist */
     linehist(cp, n);
     /*e: [[maclin()]] call linehist */
     return;
 
+/*s: [[maclin()]] bad */
 bad:
     unget(c);
     yyerror("syntax in #line");
     macend();
+/*e: [[maclin()]] bad */
 }
 /*e: function maclin */
 

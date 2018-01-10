@@ -49,11 +49,12 @@ struct Fi fi;
 char	symb[NSYMB];
 /*e: global symb */
 /*s: global peekc */
-// option<Rune> (None = IGN)
+// option<char> (None = IGN)
 int	peekc = IGN;
 /*e: global peekc */
 
 /*s: global include */
+// array<option<string>> (size = ninclude)
 char*	include[NINCLUDE];
 /*e: global include */
 /*s: global ninclude */

@@ -53,7 +53,7 @@ extern  Gen nullgen;
 
 // lex.c (for y.tab.c, main.c)
 /*s: signature yylex */
-// unit -> (enum<token_code> | -1 (EOF) | Rune)
+// unit -> (enum<token_code> | -1 (EOF) | char)
 long    yylex(void);
 /*e: signature yylex */
 void    cinit(void);

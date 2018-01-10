@@ -20,12 +20,14 @@ lookup(void)
 {
     Sym *sym;
     long h;
-    char *p;
     int c;
     int len;
+    /*s: [[lookup()]] other locals */
+    char *p;
+    /*e: [[lookup()]] other locals */
 
     /*s: [[lookup()]] compute hash value [[h]] of [[symb]] */
-    // h = hashcode(symb)
+    // h = hashcode(symb); len = strlen(symb)
     h = 0;
     for(p=symb; c = *p; p++)
         h = h+h+h + c;

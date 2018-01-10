@@ -27,7 +27,7 @@ enum Register {
     REGSB =     12, // static base
     REGSP =     13, // stack pointer
 
-    // reserved by the ARM machine
+    // reserved by the ARM processor
     REGLINK =   14,
     REGPC =     15,
 

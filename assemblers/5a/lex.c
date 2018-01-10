@@ -9,7 +9,7 @@ struct Itab
 
     //enum<token_code>
     ushort	type;
-    //enum<Opcode|Register|...> | int
+    //enum<Opcode> | enum<Register> | ... | int
     ushort	value;
 };
 /*e: struct Itab(arm) */
@@ -245,11 +245,13 @@ struct Itab itab[] =
 void
 cinit(void)
 {
+    /*s: [[cinit()]] locals */
     Sym *s;
     int i;
+    /*e: [[cinit()]] locals */
 
     /*s: [[cinit()]] nullgen initialization */
-    nullgen.type    = D_NONE; // no type set yet
+    nullgen.type    = D_NONE; // no operand type set yet
     nullgen.reg     = R_NONE;
     nullgen.symkind = N_NONE;
     nullgen.sym = S;
@@ -300,7 +302,7 @@ syminit(Sym *sym)
 long
 yylex(void)
 {
-    int c; // Rune?
+    int c;
     /*s: [[yylex()]] locals */
     int c1;
     /*x: [[yylex()]] locals */
@@ -308,12 +310,16 @@ yylex(void)
     char *cp;
     // ref<Symbol> (owner = hash)
     Sym *s;
+    /*x: [[yylex()]] locals */
+    int baselog2;
+    /*x: [[yylex()]] locals */
+    int i;
     /*e: [[yylex()]] locals */
 
     /*s: [[yylex()]] peekc handling, starting part */
     c = peekc;
     if(c != IGN) {
-        peekc = IGN; // consumed
+        peekc = IGN; // consume the extra character saved in peekc
         goto l1; // skip the GETC(), we already have a character in c
     }
     /*e: [[yylex()]] peekc handling, starting part */
@@ -321,7 +327,6 @@ l0:
     c = GETC();
 l1:
     if(c == EOF) {
-        peekc = EOF; // needed?
         return EOF;
     }
 
@@ -335,6 +340,7 @@ l1:
         // ignore spaces
         goto l0;
     }
+    // else
 
     /*s: [[yylex()]] before switch, if isxxx */
     if(isalpha(c))
@@ -348,11 +354,11 @@ l1:
     case '/':
         c1 = GETC();
         if(c1 == '/') {
-            // '/''/' read, skip everything until next '\n'
+            // '/''/' read; skip everything until next '\n'
             for(;;) {
                 c = GETC();
                 if(c == '\n')
-                    goto l1;
+                    goto l1; // which will convert the \n in c in a ';'
                 if(c == EOF) {
                     yyerror("eof in comment");
                     errorexit();
@@ -360,10 +366,10 @@ l1:
             }
         }
         if(c1 == '*') {
-            // '/''*' read, skip everything until next '*''/'
+            // '/''*' read; skip everything until next '*''/'
             for(;;) {
                 c = GETC();
-                while(c == '*') {
+                while(c == '*') { // not an if! to handle /** not finished */
                     c = GETC();
                     if(c == '/')
                         goto l0;
@@ -393,7 +399,7 @@ l1:
         peekc = c;
 
         *cp = '\0';
-        s = lookup(); // uses symb global and so cp
+        s = lookup(); // uses symb global (referenced by cp)
         /*s: [[yylex()]] if macro symbol */
         if(s->macro) {
             newio();
@@ -414,8 +420,6 @@ l1:
             goto l0;
         }
         /*e: [[yylex()]] if macro symbol */
-        if(s->type == 0) // when can this happen?
-            s->type = LNAME;
         /*s: [[yylex()]] in identifier case, set yylval */
         if(s->type == LNAME || s->type == LLAB || s->type == LVAR) {
             yylval.sym = s;
@@ -430,41 +434,48 @@ l1:
         cp = symb;
         if(c != '0')
             goto dc;
-
+        // else, read a '0', maybe the start of an hexadecimal number
         /*s: [[yylex()]] in number case, 0xxx handling */
         *cp++ = c;
         c = GETC();
-        c1 = 3; // 2^3, for octal
+        baselog2 = 3; // 2^3, for octal
         if(c == 'x' || c == 'X') {
-            c1 = 4; // 2^4, for hexa
+            baselog2 = 4; // 2^4, for hexadecimal
             c = GETC();
         } 
         else if(c < '0' || c > '7')
             goto dc;
+
         yylval.lval = 0;
         for(;;) {
             if(c >= '0' && c <= '9') {
-                if(c > '7' && c1 == 3)
+                if(c > '7' && baselog2 == 3)
                     break;
-                yylval.lval <<= c1;
+                yylval.lval <<= baselog2;
                 yylval.lval += c - '0';
                 c = GETC();
                 continue;
             }
-            if(c1 == 3)
+            // else
+            if(baselog2 == 3)
                 break;
+            // else
+            /*s: [[yylex()]] in number case, 0xxx handling, normalize letters */
             if(c >= 'A' && c <= 'F')
                 // c = lowercase(c)
                 c += 'a' - 'A';
+            /*e: [[yylex()]] in number case, 0xxx handling, normalize letters */
             if(c >= 'a' && c <= 'f') {
-                yylval.lval <<= c1;
+                yylval.lval <<= baselog2;
                 yylval.lval += c - 'a' + 10;
                 c = GETC();
                 continue;
             }
             break;
         }
-        goto ncu;
+
+        peekc = c;
+        return LCONST;
         /*e: [[yylex()]] in number case, 0xxx handling */
 
     /*s: [[yylex()]] in number case, decimal dc label handling */
@@ -484,11 +495,6 @@ l1:
         *cp = '\0';
         yylval.lval = strtol(symb, nil, 10);
 
-    /*s: [[yylex()]] in number case, in decimal case, ncu suffix label handling */
-    ncu:
-        while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
-            c = GETC();
-    /*e: [[yylex()]] in number case, in decimal case, ncu suffix label handling */
         peekc = c;
         return LCONST;
     /*e: [[yylex()]] in number case, decimal dc label handling */
@@ -531,18 +537,19 @@ l1:
     /*x: [[yylex()]] switch c cases */
     case '.':
         c = GETC();
-        if(isalpha(c)) {
+        if(isalpha(c)) { // an identifier
             cp = symb;
             *cp++ = '.';
             goto aloop;
         }
-        if(isdigit(c)) {
+        if(isdigit(c)) { // a float
             cp = symb;
             *cp++ = '.';
             goto casedot;
         }
+        // else
         peekc = c;
-        return '.'; // used case?
+        return '.'; // a single '.'
     /*x: [[yylex()]] switch c cases */
     case '\'':
         c = escchar('\'');
@@ -559,16 +566,16 @@ l1:
     case '"':
         memcpy(yylval.sval, nullgen.sval, sizeof(yylval.sval));
         cp = yylval.sval;
-        c1 = 0;
+        i = 0;
         for(;;) {
             c = escchar('"');
             if(c == EOF)
                 break;
-            if(c1 < sizeof(yylval.sval))
+            if(i < sizeof(yylval.sval))
                 *cp++ = c;
-            c1++;
+            i++;
         }
-        if(c1 > sizeof(yylval.sval))
+        if(i > sizeof(yylval.sval))
             yyerror("string constant too long");
         return LSCONST;
     /*x: [[yylex()]] switch c cases */

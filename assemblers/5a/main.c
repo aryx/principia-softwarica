@@ -9,21 +9,23 @@ void	cclean(void);
 void
 main(int argc, char *argv[])
 {
+    errorn err;
     /*s: [[main()]] locals */
     char *p;
     /*x: [[main()]] locals */
     int nout, nproc, status;
     int i, c;
     /*e: [[main()]] locals */
-    /*s: [[main()]] debug initialization */
-    memset(debug, false, sizeof(debug));
-    /*e: [[main()]] debug initialization */
 
     thechar = '5';
     thestring = "arm";
 
     cinit();
+    /*s: [[main()]] remaining initializations */
     include[ninclude++] = ".";
+    /*x: [[main()]] remaining initializations */
+    memset(debug, false, sizeof(debug));
+    /*e: [[main()]] remaining initializations */
 
     ARGBEGIN {
     /*s: [[main()]] command line processing */
@@ -96,35 +98,40 @@ main(int argc, char *argv[])
         }
     }
     /*e: [[main()]] multiple files handling */
+    // else
 
-    if(assemble(argv[0]))
+    err = assemble(argv[0]);
+    if(err > 0)
         errorexit();
-    exits(nil);
+    else
+        exits(nil);
 }
 /*e: function main(arm) */
 
 /*s: function assemble */
-error1
+errorn
 assemble(char *infile)
 {
     fdt of; // outfile
-    char *p;
     /*s: [[assemble()]] locals */
-    int i;
-    /*x: [[assemble()]] locals */
     char ofile[100];
     /*x: [[assemble()]] locals */
+    char *p;
+    /*x: [[assemble()]] locals */
     char incfile[20];
+    /*x: [[assemble()]] locals */
+    int i;
     /*e: [[assemble()]] locals */
 
     /*s: [[assemble()]] set p to basename(infile) and adjust include */
     // p = basename(infile)
-    // include[0] = dirname(infile); 
     strcpy(ofile, infile);
     p = utfrrune(ofile, '/');
     if(p) {
-        include[0] = ofile;
         *p++ = '\0';
+        /*s: [[assemble()]] adjust first entry in include with dirname infile */
+        include[0] = ofile;
+        /*e: [[assemble()]] adjust first entry in include with dirname infile */
     } else
         p = ofile;
     /*e: [[assemble()]] set p to basename(infile) and adjust include */
@@ -145,42 +152,43 @@ assemble(char *infile)
             outfile = "/dev/null";
         /*e: [[assemble()]] set outfile to {basename(infile)}.{thechar} */
     }
-    /*s: [[assemble()]] setinclude("/{thestring}/include") or INCLUDE */
+    /*s: [[assemble()]] setinclude("/{thestring}/include") or use INCLUDE */
     p = getenv("INCLUDE");
     if(p) {
         setinclude(p);
     } else {
-        if(systemtype(Plan9)) {
-            sprint(incfile,"/%s/include", thestring);
-            setinclude(strdup(incfile));
-        }
+         sprint(incfile,"/%s/include", thestring);
+         setinclude(strdup(incfile));
     }
-    /*e: [[assemble()]] setinclude("/{thestring}/include") or INCLUDE */
+    /*e: [[assemble()]] setinclude("/{thestring}/include") or use INCLUDE */
 
     of = mycreat(outfile, 0664);
+    /*s: [[assemble()]] sanity check [[of]] */
     if(of < 0) {
         yyerror("%ca: cannot create %s", thechar, outfile);
         errorexit();
     }
+    /*e: [[assemble()]] sanity check [[of]] */
     Binit(&obuf, of, OWRITE);
 
+    // Pass 1
     pass = 1;
-
     pinit(infile);
     /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
     /*e: [[assemble()]] init Dlist after pinit */
-    yyparse(); // calls outcode() but does almost nothing when pass == 1
-
+    yyparse(); // calls outcode(), which does almost nothing when pass == 1
+    /*s: [[assemble()]] sanity check nerrors */
     if(nerrors) {
         cclean();
         return nerrors;
     }
+    /*e: [[assemble()]] sanity check nerrors */
 
+    // Pass 2
     pass = 2;
-    outhist(); // file history information at the beginning of the object
-
+    outhist(); // output file/line history information in object file
     pinit(infile);
     /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)

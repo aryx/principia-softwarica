@@ -11,16 +11,22 @@ setinclude(char *p)
 {
     int i;
 
+    /*s: [[setinclude()]] sanity check p */
     if(p == nil)
         return;
+    /*e: [[setinclude()]] sanity check p */
+    /*s: [[setinclude()]] check if include already added */
     for(i=1; i < ninclude; i++)
         if(strcmp(p, include[i]) == 0)
             return;
-
+    /*e: [[setinclude()]] check if include already added */
+    /*s: [[setinclude()]] check if too many entries in include */
     if(ninclude >= nelem(include)) {
         yyerror("ninclude too small %d", nelem(include));
         exits("ninclude");
     }
+    /*e: [[setinclude()]] check if too many entries in include */
+    // else
     include[ninclude++] = p;
 }
 /*e: function setinclude */
@@ -32,10 +38,12 @@ pushio(void)
     Io *i;
 
     i = iostack;
+    /*s: [[pushio()]] sanity check i */
     if(i == I) {
         yyerror("botch in pushio");
         errorexit();
     }
+    /*e: [[pushio()]] sanity check i */
     // save current position in includer
     i->p = fi.p;
     i->c = fi.c;
@@ -54,14 +62,16 @@ newio(void)
 
     i = iofree;
     if(i == I) {
+        /*s: [[newio()]] sanity check depth of macro expansion */
         pushdepth++;
         if(pushdepth > 1000) {
             yyerror("macro/io expansion too deep");
             errorexit();
         }
-        //todo: check error code?
+        /*e: [[newio()]] sanity check depth of macro expansion */
         i = alloc(sizeof(Io));
     } else
+        // pop(iofree)
         iofree = i->link;
     /*e: [[newio()]] allocate a new Io in [[i]] or find a free one */
     ionext = i;
@@ -85,11 +95,13 @@ newfile(char *s, fdt f)
 
     i->f = f;
     if(i->f == FD_NONE)
-        i->f = open(s, 0);
+        i->f = open(s, OREAD);
+    /*s: [[newfile()]] sanity check [[i->f]] */
     if(i->f < 0) {
         yyerror("%ca: %r: %s", thechar, s);
         errorexit();
     }
+    /*e: [[newfile()]] sanity check [[i->f]] */
     fi.c = 0;
     /*s: [[newfile()]] call linehist */
     linehist(s, 0);
@@ -360,12 +372,13 @@ getc(void)
 {
     int c;
 
+    /*s: [[getc()]] peekc handling */
     c = peekc;
     if(c != IGN) {
         peekc = IGN;
         return c;
     }
-
+    /*e: [[getc()]] peekc handling */
     c = GETC();
 
     if(c == '\n')
@@ -406,14 +419,19 @@ unget(int c)
 int
 escchar(int e)
 {
-    int c, l;
+    int c;
+    /*s: [[escchar()]] other locals */
+    int l;
+    /*e: [[escchar()]] other locals */
 
 loop:
-    c = getc(); // not GETC
+    c = getc();
+    /*s: [[escchar()]] sanity check if newline */
     if(c == '\n') {
-        yyerror("newline in string");
+        yyerror("newline in character or string");
         return EOF;
     }
+    /*e: [[escchar()]] sanity check if newline */
     if(c != '\\') {
         if(c == e)
             return EOF;
@@ -439,20 +457,21 @@ loop:
     /*e: [[escchar()]] if octal character */
     switch(c)
     {
-    case '\n':	goto loop; // multi line strings
-
+    /*s: [[escchar()]] switch cases */
     case 'n':	return '\n';
     case 't':	return '\t';
     case 'b':	return '\b';
     case 'r':	return '\r';
     case 'f':	return '\f';
-
-    /*s: [[escchar()]] switch cases */
+    /*x: [[escchar()]] switch cases */
     case 'a':	return 0x07;
     case 'v':	return 0x0b;
     case 'z':	return 0x00;
+    /*x: [[escchar()]] switch cases */
+    case '\n':	goto loop; // multi line strings
     /*e: [[escchar()]] switch cases */
     }
+    // else (e.g., '\'', '\\')
     return c;
 }
 /*e: function escchar */
@@ -475,10 +494,6 @@ pinit(char *f)
     /*s: [[pinit()]] initializations */
     peekc = IGN;
     /*x: [[pinit()]] initializations */
-    for(i=0; i<NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            s->macro = nil;
-    /*x: [[pinit()]] initializations */
     pc = 0;
     /*x: [[pinit()]] initializations */
     symcounter = 1;
@@ -486,6 +501,10 @@ pinit(char *f)
         h[i].symkind = 0; // N_NONE
         h[i].sym = S;
     }
+    /*x: [[pinit()]] initializations */
+    for(i=0; i<NHASH; i++)
+        for(s = hash[i]; s != S; s = s->link)
+            s->macro = nil;
     /*e: [[pinit()]] initializations */
 }
 /*e: function pinit */
@@ -498,13 +517,14 @@ filbuf(void)
 
 loop:
     i = iostack;
+    /*s: [[filbuf()]] if no more input files in the stack */
     if(i == I)
         return EOF;
-    if(i->f < 0) // When this happens?
-        goto pop; 
+    /*e: [[filbuf()]] if no more input files in the stack */
 
-    // system call! fill really the buffer
+    // system call! fill the buffer
     fi.c = read(i->f, i->b, BUFSIZ) - 1;
+    /*s: [[filbuf()]] if no more character to read */
     if(fi.c < 0) {
         close(i->f);
         /*s: [[filbuf()]] when close file, call linehist */
@@ -512,6 +532,8 @@ loop:
         /*e: [[filbuf()]] when close file, call linehist */
         goto pop;
     }
+    /*e: [[filbuf()]] if no more character to read */
+    // else
     fi.p = i->b + 1;
     return i->b[0];
 
@@ -525,13 +547,16 @@ pop:
 
     // i = top(iostack), the fresh top of the stack input file
     i = iostack;
+    /*s: [[filbuf()]] if no more input files in the stack */
     if(i == I)
         return EOF;
+    /*e: [[filbuf()]] if no more input files in the stack */
     // restore file pointers
     fi.p = i->p;
     fi.c = i->c;
     if(--fi.c < 0)
         goto loop;
+    // else, return one character
     return *fi.p++;
 /*e: [[filbuf()]] pop */
 }
