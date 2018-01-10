@@ -3,11 +3,11 @@
 // The entities below were originally in some xxx/y.out.h, but were always
 // the same in all architecture, hence the factorization below.
 
-/*s: constant NSYM */
+/*s: constant [[NSYM]] */
 #define	NSYM	50
-/*e: constant NSYM */
+/*e: constant [[NSYM]] */
 
-/*s: struct ieee */
+/*s: struct [[ieee]] */
 /*
  * this is the simulated IEEE floating point
  */
@@ -18,6 +18,6 @@ struct	ieee
                     exp		0x7ff00000
                     ms-man	0x000fffff */
 };
-/*e: struct ieee */
+/*e: struct [[ieee]] */
 typedef	struct ieee Ieee;
 /*e: include/common.out.h */

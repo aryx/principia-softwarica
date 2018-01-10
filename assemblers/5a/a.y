@@ -51,42 +51,42 @@
 %token  <lval>  LCOND
 %token  <lval>  LS LAT
 /*e: token declarations(arm) */
-/*s: type declarations(arm) */
+/*s: type [[declarations]](arm) */
 %type   <genval> imsr
 %type   <genval> imm shift reg
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <genval>   gen 
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <genval>   ximm
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <lval>  regi
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <lval>  rcon
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <genval> ioreg ireg
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <genval>   name 
 %type   <lval>  offset
 %type   <lval>  pointer
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <genval>   nireg 
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <genval>   rel
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <lval>  cond
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <lval>  con expr 
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type <genval> freg fcon frcon
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <genval>   regreg
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <lval>  reglist
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <lval>  creg
-/*x: type declarations(arm) */
+/*x: type [[declarations]](arm) */
 %type   <lval>  oexpr 
-/*e: type declarations(arm) */
+/*e: type [[declarations]](arm) */
 %%
 /*s: grammar(arm) */
 /*s: prog rule(arm) */

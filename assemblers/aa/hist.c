@@ -1,7 +1,7 @@
 /*s: assemblers/aa/hist.c */
 #include "aa.h"
 
-/*s: function linehist */
+/*s: function [[linehist]] */
 /// (pinit | macinc -> newfile) | (GETC -> filbuf) | maclin -> <>
 void
 linehist(char *f, int local_line)
@@ -34,9 +34,9 @@ linehist(char *f, int local_line)
     ehist->link = h;
     ehist = h;
 }
-/*e: function linehist */
+/*e: function [[linehist]] */
 
-/*s: function prfile */
+/*s: function [[prfile]] */
 /// yyerror -> <>
 void
 prfile(long l)
@@ -90,6 +90,6 @@ prfile(long l)
         print("%s:%ld ", a[i].filename, 
                          (long)(l - a[i].global_line + a[i].local_line + 1));
 }
-/*e: function prfile */
+/*e: function [[prfile]] */
 
 /*e: assemblers/aa/hist.c */

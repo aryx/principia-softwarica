@@ -4,7 +4,7 @@
 // so take care when changing those types to not alter the order
 // (or to recompile carefully everything).
 
-/*s: enum regxxx(arm) */
+/*s: enum [[regxxx]](arm) */
 enum Register {
     /*s: [[Register]] compiler conventions cases */
     // reserved by compiler, calling conventions
@@ -33,12 +33,12 @@ enum Register {
 
     NREG = 16,
 };
-/*e: enum regxxx(arm) */
-/*s: constant R_NONE(arm) */
+/*e: enum [[regxxx]](arm) */
+/*s: constant [[R_NONE]](arm) */
 #define R_NONE 16
-/*e: constant R_NONE(arm) */
+/*e: constant [[R_NONE]](arm) */
 
-/*s: enum fregister(arm) */
+/*s: enum [[fregister]](arm) */
 enum Fregister {
     FREGRET = 0,
     /* compiler allocates register variables F0 up */
@@ -48,9 +48,9 @@ enum Fregister {
 
     NFREG = 8,
 };
-/*e: enum fregister(arm) */
+/*e: enum [[fregister]](arm) */
 
-/*s: enum opcode(arm) */
+/*s: enum [[opcode]](arm) */
 // coupling: with 5c/enam.c
 enum Opcode
 {
@@ -216,9 +216,9 @@ enum Opcode
 
     ALAST,
 };
-/*e: enum opcode(arm) */
+/*e: enum [[opcode]](arm) */
 
-/*s: enum operand_kind(arm) */
+/*s: enum [[operand_kind]](arm) */
 enum Operand_kind {
     D_NONE,
 
@@ -244,9 +244,9 @@ enum Operand_kind {
     D_PSR,
     /*e: [[Operand_kind]] cases */
 };
-/*e: enum operand_kind(arm) */
+/*e: enum [[operand_kind]](arm) */
 
-/*s: enum sym_kind(arm) */
+/*s: enum [[sym_kind]](arm) */
 enum Sym_kind {
     N_NONE,
 
@@ -261,46 +261,46 @@ enum Sym_kind {
     N_LINE, // used by linker only
     /*e: [[Sym_kind]] cases */
 };
-/*e: enum sym_kind(arm) */
+/*e: enum [[sym_kind]](arm) */
 
-/*s: constant NSNAME */
+/*s: constant [[NSNAME]] */
 #define NSNAME      8
-/*e: constant NSNAME */
+/*e: constant [[NSNAME]] */
 
 // Attributes
-/*s: constant NOPROF(arm) */
+/*s: constant [[NOPROF]](arm) */
 #define NOPROF      (1<<0)
-/*e: constant NOPROF(arm) */
-/*s: constant DUPOK(arm) */
+/*e: constant [[NOPROF]](arm) */
+/*s: constant [[DUPOK]](arm) */
 #define DUPOK       (1<<1)
-/*e: constant DUPOK(arm) */
+/*e: constant [[DUPOK]](arm) */
 
-/*s: constant C_SCOND(arm) */
+/*s: constant [[C_SCOND]](arm) */
 /* scond byte */
 #define C_SCOND ((1<<4)-1)
-/*e: constant C_SCOND(arm) */
-/*s: constant C_SBIT(arm) */
+/*e: constant [[C_SCOND]](arm) */
+/*s: constant [[C_SBIT]](arm) */
 #define C_SBIT  (1<<4)
-/*e: constant C_SBIT(arm) */
-/*s: constant C_PBIT(arm) */
+/*e: constant [[C_SBIT]](arm) */
+/*s: constant [[C_PBIT]](arm) */
 #define C_PBIT  (1<<5)
-/*e: constant C_PBIT(arm) */
-/*s: constant C_WBIT(arm) */
+/*e: constant [[C_PBIT]](arm) */
+/*s: constant [[C_WBIT]](arm) */
 #define C_WBIT  (1<<6)
-/*e: constant C_WBIT(arm) */
-/*s: constant C_FBIT(arm) */
+/*e: constant [[C_WBIT]](arm) */
+/*s: constant [[C_FBIT]](arm) */
 #define C_FBIT  (1<<7)  /* psr flags-only */
-/*e: constant C_FBIT(arm) */
-/*s: constant C_UBIT(arm) */
+/*e: constant [[C_FBIT]](arm) */
+/*s: constant [[C_UBIT]](arm) */
 #define C_UBIT  (1<<7)  /* up bit */
-/*e: constant C_UBIT(arm) */
+/*e: constant [[C_UBIT]](arm) */
 
 #define COND_ALWAYS 14
 
-/*s: constant SYMDEF(arm) */
+/*s: constant [[SYMDEF]](arm) */
 /*
  * this is the ranlib header
  */
 #define SYMDEF  "__.SYMDEF"
-/*e: constant SYMDEF(arm) */
+/*e: constant [[SYMDEF]](arm) */
 /*e: include/arm/5.out.h */

@@ -5,7 +5,7 @@
  * common code for all the assemblers
  */
 
-/*s: function setinclude */
+/*s: function [[setinclude]] */
 void
 setinclude(char *p)
 {
@@ -29,9 +29,9 @@ setinclude(char *p)
     // else
     include[ninclude++] = p;
 }
-/*e: function setinclude */
+/*e: function [[setinclude]] */
 
-/*s: function pushio */
+/*s: function [[pushio]] */
 void
 pushio(void)
 {
@@ -48,9 +48,9 @@ pushio(void)
     i->p = fi.p;
     i->c = fi.c;
 }
-/*e: function pushio */
+/*e: function [[pushio]] */
 
-/*s: function newio */
+/*s: function [[newio]] */
 /// main -> assemble -> pinit -> <>; newfile
 void
 newio(void)
@@ -78,9 +78,9 @@ newio(void)
     i->f = FD_NONE;
     i->c = 0;
 }
-/*e: function newio */
+/*e: function [[newio]] */
 
-/*s: function newfile */
+/*s: function [[newfile]] */
 /// main -> assemble -> pinit -> { newio; <> }
 /// yylex -> macinc -> <>
 void
@@ -107,7 +107,7 @@ newfile(char *s, fdt f)
     linehist(s, 0);
     /*e: [[newfile()]] call linehist */
 }
-/*e: function newfile */
+/*e: function [[newfile]] */
 
 // this was hard to factorize in aa/, so this is copy pasted
 // in each assembler (8a/, va/, etc)
@@ -366,7 +366,7 @@ newfile(char *s, fdt f)
 
 
 
-/*s: function getc */
+/*s: function [[getc]] */
 int
 getc(void)
 {
@@ -389,9 +389,9 @@ getc(void)
     }
     return c;
 }
-/*e: function getc */
+/*e: function [[getc]] */
 
-/*s: function getnsc */
+/*s: function [[getnsc]] */
 int
 getnsc(void)
 {
@@ -403,9 +403,9 @@ getnsc(void)
             return c;
     }
 }
-/*e: function getnsc */
+/*e: function [[getnsc]] */
 
-/*s: function unget */
+/*s: function [[unget]] */
 void
 unget(int c)
 {
@@ -413,9 +413,9 @@ unget(int c)
     if(c == '\n')
         lineno--;
 }
-/*e: function unget */
+/*e: function [[unget]] */
 
-/*s: function escchar */
+/*s: function [[escchar]] */
 int
 escchar(int e)
 {
@@ -474,9 +474,9 @@ loop:
     // else (e.g., '\'', '\\')
     return c;
 }
-/*e: function escchar */
+/*e: function [[escchar]] */
 
-/*s: function pinit */
+/*s: function [[pinit]] */
 /// main -> assemble -> { <> ; yyparse } x 2
 void
 pinit(char *f)
@@ -507,9 +507,9 @@ pinit(char *f)
             s->macro = nil;
     /*e: [[pinit()]] initializations */
 }
-/*e: function pinit */
+/*e: function [[pinit]] */
 
-/*s: function filbuf */
+/*s: function [[filbuf]] */
 int
 filbuf(void)
 {
@@ -560,6 +560,6 @@ pop:
     return *fi.p++;
 /*e: [[filbuf()]] pop */
 }
-/*e: function filbuf */
+/*e: function [[filbuf]] */
 
 /*e: assemblers/aa/lexbody.c */

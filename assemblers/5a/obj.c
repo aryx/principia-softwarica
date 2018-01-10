@@ -1,7 +1,7 @@
 /*s: assemblers/5a/obj.c */
 #include "a.h"
 
-/*s: function zname(arm) */
+/*s: function [[zname]](arm) */
 /// outcode -> <>
 void
 zname(char *n, int symkind, int symidx)
@@ -16,9 +16,9 @@ zname(char *n, int symkind, int symidx)
     }
     Bputc(&obuf, '\0');
 }
-/*e: function zname(arm) */
+/*e: function [[zname]](arm) */
 
-/*s: function zaddr(arm) */
+/*s: function [[zaddr]](arm) */
 /// main -> assemble -> yyparse -> outcode -> <>
 void
 outopd(Gen *a, int symidx)
@@ -94,9 +94,9 @@ outopd(Gen *a, int symidx)
 
     }
 }
-/*e: function zaddr(arm) */
+/*e: function [[zaddr]](arm) */
 
-/*s: global bcode(arm) */
+/*s: global [[bcode]](arm) */
 static int bcode[] =
 {
     ABEQ,
@@ -116,9 +116,9 @@ static int bcode[] =
     AB,
     ANOP,
 };
-/*e: global bcode(arm) */
+/*e: global [[bcode]](arm) */
 
-/*s: function symidx_of_symopt */
+/*s: function [[symidx_of_symopt]] */
 int
 symidx_of_symopt(Sym *sym, int symkind)
 {
@@ -147,9 +147,9 @@ symidx_of_symopt(Sym *sym, int symkind)
     }
     return idx;
 }
-/*e: function symidx_of_symopt */
+/*e: function [[symidx_of_symopt]] */
 
-/*s: function outcode(arm) */
+/*s: function [[outcode]](arm) */
 /// main -> assemble -> yyparse -> <>
 void
 outcode(int opcode, int scond,  Gen *g1, int reg, Gen *g2)
@@ -198,9 +198,9 @@ out:
     if(opcode != AGLOBL && opcode != ADATA)
         pc++;
 }
-/*e: function outcode(arm) */
+/*e: function [[outcode]](arm) */
 
-/*s: function outhist(arm) */
+/*s: function [[outhist]](arm) */
 /// main -> assemble -> <> (at beginning of pass 2)
 void
 outhist(void)
@@ -273,6 +273,6 @@ outhist(void)
         outopd(&g, 0);
     }
 }
-/*e: function outhist(arm) */
+/*e: function [[outhist]](arm) */
 
 /*e: assemblers/5a/obj.c */

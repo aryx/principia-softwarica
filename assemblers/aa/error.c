@@ -1,7 +1,7 @@
 /*s: assemblers/aa/error.c */
 #include "aa.h"
 
-/*s: function errorexit */
+/*s: function [[errorexit]] */
 /// main | assemble | yyerror | ... -> <>
 void
 errorexit(void)
@@ -11,9 +11,9 @@ errorexit(void)
         remove(outfile);
     exits("error");
 }
-/*e: function errorexit */
+/*e: function [[errorexit]] */
 
-/*s: function yyerror */
+/*s: function [[yyerror]] */
 /// assemble | yylex | yyparse | ... -> <>
 void
 yyerror(char *a, ...)
@@ -45,6 +45,6 @@ yyerror(char *a, ...)
         errorexit();
     }
 }
-/*e: function yyerror */
+/*e: function [[yyerror]] */
 
 /*e: assemblers/aa/error.c */

@@ -5,7 +5,7 @@
 int		assemble(char*);
 void	cclean(void);
 
-/*s: function main(arm) */
+/*s: function [[main]](arm) */
 void
 main(int argc, char *argv[])
 {
@@ -106,9 +106,9 @@ main(int argc, char *argv[])
     else
         exits(nil);
 }
-/*e: function main(arm) */
+/*e: function [[main]](arm) */
 
-/*s: function assemble */
+/*s: function [[assemble]] */
 errorn
 assemble(char *infile)
 {
@@ -199,9 +199,9 @@ assemble(char *infile)
     cclean();
     return nerrors;
 }
-/*e: function assemble */
+/*e: function [[assemble]] */
 
-/*s: function cclean(arm) */
+/*s: function [[cclean]](arm) */
 /// main -> assemble -> <>
 void
 cclean(void)
@@ -210,6 +210,6 @@ cclean(void)
     outcode(AEND, Always, &nullgen, R_NONE, &nullgen);
     Bflush(&obuf);
 }
-/*e: function cclean(arm) */
+/*e: function [[cclean]](arm) */
 
 /*e: assemblers/5a/main.c */

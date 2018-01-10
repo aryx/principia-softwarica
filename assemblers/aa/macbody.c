@@ -10,11 +10,11 @@ void	maclin(void);
 void	macif(int);
 void	macend(void);
 
-/*s: constant VARMAC */
+/*s: constant [[VARMAC]] */
 #define VARMAC 0x80
-/*e: constant VARMAC */
+/*e: constant [[VARMAC]] */
 
-/*s: function getnsn */
+/*s: function [[getnsn]] */
 long
 getnsn(void)
 {
@@ -32,9 +32,9 @@ getnsn(void)
     unget(c);
     return n;
 }
-/*e: function getnsn */
+/*e: function [[getnsn]] */
 
-/*s: function getsym */
+/*s: function [[getsym]] */
 Sym*
 getsym(void)
 {
@@ -63,9 +63,9 @@ getsym(void)
     /*e: [[getsym()]] sanity check cp */
     return lookup();
 }
-/*e: function getsym */
+/*e: function [[getsym]] */
 
-/*s: function getsymdots */
+/*s: function [[getsymdots]] */
 Sym*
 getsymdots(bool *dots)
 {
@@ -86,9 +86,9 @@ getsymdots(bool *dots)
     *dots = true;
     return slookup("__VA_ARGS__");
 }
-/*e: function getsymdots */
+/*e: function [[getsymdots]] */
 
-/*s: function getcom */
+/*s: function [[getcom]] */
 int
 getcom(void)
 {
@@ -127,9 +127,9 @@ getcom(void)
     }
     return c;
 }
-/*e: function getcom */
+/*e: function [[getcom]] */
 
-/*s: function dodefine */
+/*s: function [[dodefine]] */
 void
 dodefine(char *cp)
 {
@@ -161,9 +161,9 @@ dodefine(char *cp)
         print("#define (-D) %s %s\n", s->name, s->macro+1);
     /*e: [[dodefine()]] debug */
 }
-/*e: function dodefine */
+/*e: function [[dodefine]] */
 
-/*s: global mactab */
+/*s: global [[mactab]] */
 struct
 {
     char    *macname;
@@ -183,9 +183,9 @@ struct
     "pragma",   macprag,
     0
 };
-/*e: global mactab */
+/*e: global [[mactab]] */
 
-/*s: function domacro */
+/*s: function [[domacro]] */
 /// main -> assemble -> yyparse -> yylex -> <>
 void
 domacro(void)
@@ -214,9 +214,9 @@ domacro(void)
     macend();
     /*e: [[domacro()]] handle unknown directives */
 }
-/*e: function domacro */
+/*e: function [[domacro]] */
 
-/*s: function macund */
+/*s: function [[macund]] */
 void
 macund(void)
 {
@@ -230,12 +230,12 @@ macund(void)
     }
     s->macro = nil;
 }
-/*e: function macund */
+/*e: function [[macund]] */
 
-/*s: constant NARG */
+/*s: constant [[NARG]] */
 #define	NARG	25
-/*e: constant NARG */
-/*s: function macdef */
+/*e: constant [[NARG]] */
+/*s: function [[macdef]] */
 void
 macdef(void)
 {
@@ -414,9 +414,9 @@ bad:
         yyerror("syntax in #define: %s", s->name);
     macend();
 }
-/*e: function macdef */
+/*e: function [[macdef]] */
 
-/*s: function macexpand */
+/*s: function [[macexpand]] */
 void
 macexpand(Sym *s, char *b)
 {
@@ -577,9 +577,9 @@ toobig:
     yyerror("too much text in macro expansion: %s", s->name);
     *b = 0;
 }
-/*e: function macexpand */
+/*e: function [[macexpand]] */
 
-/*s: function macinc */
+/*s: function [[macinc]] */
 void
 macinc(void)
 {
@@ -669,9 +669,9 @@ bad:
     macend();
 /*e: [[macinc()]] bad */
 }
-/*e: function macinc */
+/*e: function [[macinc]] */
 
-/*s: function maclin */
+/*s: function [[maclin]] */
 void
 maclin(void)
 {
@@ -751,9 +751,9 @@ bad:
     macend();
 /*e: [[maclin()]] bad */
 }
-/*e: function maclin */
+/*e: function [[maclin]] */
 
-/*s: function macif */
+/*s: function [[macif]] */
 void
 macif(int f)
 {
@@ -810,9 +810,9 @@ bad:
     yyerror("syntax in #if(n)def");
     macend();
 }
-/*e: function macif */
+/*e: function [[macif]] */
 
-/*s: function macprag */
+/*s: function [[macprag]] */
 void
 macprag(void)
 {
@@ -886,9 +886,9 @@ macprag(void)
         return;
     }
 }
-/*e: function macprag */
+/*e: function [[macprag]] */
 
-/*s: function macend */
+/*s: function [[macend]] */
 void
 macend(void)
 {
@@ -900,6 +900,6 @@ macend(void)
             return;
     }
 }
-/*e: function macend */
+/*e: function [[macend]] */
 
 /*e: assemblers/aa/macbody.c */

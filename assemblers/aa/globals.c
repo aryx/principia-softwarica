@@ -1,108 +1,108 @@
 /*s: assemblers/aa/globals.c */
 #include "aa.h"
 
-/*s: global hash */
+/*s: global [[hash]] */
 // hash<string, ref_own<Sym>> (next = Sym.link in bucket)
 Sym*	hash[NHASH];
-/*e: global hash */
-/*s: global pc */
+/*e: global [[hash]] */
+/*s: global [[pc]] */
 long	pc;
-/*e: global pc */
-/*s: global outfile */
+/*e: global [[pc]] */
+/*s: global [[outfile]] */
 char*	outfile = nil;
-/*e: global outfile */
-/*s: global obuf */
+/*e: global [[outfile]] */
+/*s: global [[obuf]] */
 Biobuf	obuf;
-/*e: global obuf */
-/*s: global pass */
+/*e: global [[obuf]] */
+/*s: global [[pass]] */
 // 1|2
 int	pass;
-/*e: global pass */
-/*s: global pathname */
+/*e: global [[pass]] */
+/*s: global [[pathname]] */
 char*	pathname;
-/*e: global pathname */
+/*e: global [[pathname]] */
 
-/*s: global thechar */
+/*s: global [[thechar]] */
 int	thechar;
-/*e: global thechar */
-/*s: global thestring */
+/*e: global [[thechar]] */
+/*s: global [[thestring]] */
 char*	thestring;
-/*e: global thestring */
+/*e: global [[thestring]] */
 
-/*s: global iostack */
+/*s: global [[iostack]] */
 // list<ref_own<Io> (next = Io.link)
 Io*	iostack = I;
-/*e: global iostack */
-/*s: global iofree */
+/*e: global [[iostack]] */
+/*s: global [[iofree]] */
 // list<ref<Io>> (next = Io.link)
 Io*	iofree = I;
-/*e: global iofree */
-/*s: global ionext */
+/*e: global [[iofree]] */
+/*s: global [[ionext]] */
 // option<ref<Io>>
 Io*	ionext;
-/*e: global ionext */
-/*s: global fi */
+/*e: global [[ionext]] */
+/*s: global [[fi]] */
 struct Fi fi;
-/*e: global fi */
+/*e: global [[fi]] */
 
-/*s: global symb */
+/*s: global [[symb]] */
 char	symb[NSYMB];
-/*e: global symb */
-/*s: global peekc */
+/*e: global [[symb]] */
+/*s: global [[peekc]] */
 // option<char> (None = IGN)
 int	peekc = IGN;
-/*e: global peekc */
+/*e: global [[peekc]] */
 
-/*s: global include */
+/*s: global [[include]] */
 // array<option<string>> (size = ninclude)
 char*	include[NINCLUDE];
-/*e: global include */
-/*s: global ninclude */
+/*e: global [[include]] */
+/*s: global [[ninclude]] */
 int	ninclude;
-/*e: global ninclude */
-/*s: global Dlist */
+/*e: global [[ninclude]] */
+/*s: global [[Dlist]] */
 char*	Dlist[30];
-/*e: global Dlist */
-/*s: global nDlist */
+/*e: global [[Dlist]] */
+/*s: global [[nDlist]] */
 int	nDlist;
-/*e: global nDlist */
+/*e: global [[nDlist]] */
 
-/*s: global h */
+/*s: global [[h]] */
 // array<Htab>
 struct Htab h[NSYM];
-/*e: global h */
-/*s: global symcounter */
+/*e: global [[h]] */
+/*s: global [[symcounter]] */
 int	symcounter;
-/*e: global symcounter */
+/*e: global [[symcounter]] */
 
-/*s: global lineno */
+/*s: global [[lineno]] */
 long	lineno;
-/*e: global lineno */
-/*s: global hist */
+/*e: global [[lineno]] */
+/*s: global [[hist]] */
 // list<ref_own<Hist>> (next = Hist.link)
 Hist*	hist;
-/*e: global hist */
-/*s: global ehist */
+/*e: global [[hist]] */
+/*s: global [[ehist]] */
 // ref<Hist> (end from = hist)
 Hist*	ehist;
-/*e: global ehist */
+/*e: global [[ehist]] */
 
-/*s: global debug */
+/*s: global [[debug]] */
 bool	debug[256];
-/*e: global debug */
+/*e: global [[debug]] */
 
-/*s: global nerrors */
+/*s: global [[nerrors]] */
 int	nerrors = 0;
-/*e: global nerrors */
+/*e: global [[nerrors]] */
 
-/*s: global hunk */
+/*s: global [[hunk]] */
 char*	hunk;
-/*e: global hunk */
-/*s: global nhunk */
+/*e: global [[hunk]] */
+/*s: global [[nhunk]] */
 long	nhunk = 0;
-/*e: global nhunk */
-/*s: global thunk */
+/*e: global [[nhunk]] */
+/*s: global [[thunk]] */
 long	thunk;
-/*e: global thunk */
+/*e: global [[thunk]] */
 
 /*e: assemblers/aa/globals.c */

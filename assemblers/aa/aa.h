@@ -22,44 +22,44 @@ typedef struct  Sym Sym;
 typedef struct  Io Io;
 typedef struct  Hist Hist;
 
-/*s: constant MAXALIGN */
+/*s: constant [[MAXALIGN]] */
 #define MAXALIGN 7
-/*e: constant MAXALIGN */
-/*s: constant NSYMB */
+/*e: constant [[MAXALIGN]] */
+/*s: constant [[NSYMB]] */
 #define NSYMB       500
-/*e: constant NSYMB */
-/*s: constant BUFSIZ */
+/*e: constant [[NSYMB]] */
+/*s: constant [[BUFSIZ]] */
 #define BUFSIZ      8192
-/*e: constant BUFSIZ */
-/*s: constant HISTSZ */
+/*e: constant [[BUFSIZ]] */
+/*s: constant [[HISTSZ]] */
 #define HISTSZ      20
-/*e: constant HISTSZ */
-/*s: constant NINCLUDE */
+/*e: constant [[HISTSZ]] */
+/*s: constant [[NINCLUDE]] */
 #define NINCLUDE    10
-/*e: constant NINCLUDE */
-/*s: constant NHUNK */
+/*e: constant [[NINCLUDE]] */
+/*s: constant [[NHUNK]] */
 #define NHUNK       10000
-/*e: constant NHUNK */
-/*s: constant NHASH */
+/*e: constant [[NHUNK]] */
+/*s: constant [[NHASH]] */
 #define NHASH       503
-/*e: constant NHASH */
-/*s: constant STRINGSZ */
+/*e: constant [[NHASH]] */
+/*s: constant [[STRINGSZ]] */
 #define STRINGSZ    200
-/*e: constant STRINGSZ */
+/*e: constant [[STRINGSZ]] */
 
-/*s: constant EOF */
+/*s: constant [[EOF]] */
 #define EOF     (-1)
-/*e: constant EOF */
-/*s: constant IGN */
+/*e: constant [[EOF]] */
+/*s: constant [[IGN]] */
 #define IGN     (-2) // Ignore
-/*e: constant IGN */
-/*s: function GETC */
+/*e: constant [[IGN]] */
+/*s: function [[GETC]] */
 /// main -> assemble -> yyparse -> yylex -> <>
 #define GETC()      ((--fi.c < 0) ? filbuf() : *fi.p++ & 0xff)
-/*e: function GETC */
+/*e: function [[GETC]] */
 
 
-/*s: struct Sym */
+/*s: struct [[Sym]] */
 struct  Sym
 {
     // Sym is (ab)used to represent many things in the assembler:
@@ -98,12 +98,12 @@ struct  Sym
     Sym*    link;
     /*e: [[Sym]] extra fields */
 };
-/*e: struct Sym */
-/*s: constant S */
+/*e: struct [[Sym]] */
+/*s: constant [[S]] */
 #define S   ((Sym*)nil)
-/*e: constant S */
+/*e: constant [[S]] */
 
-/*s: struct Fi */
+/*s: struct [[Fi]] */
 struct Fi
 {
     // ref<char> (target = Io.b)
@@ -111,9 +111,9 @@ struct Fi
     // remaining characters in Io.b to read
     int     c;
 };
-/*e: struct Fi */
+/*e: struct [[Fi]] */
 
-/*s: struct Io */
+/*s: struct [[Io]] */
 struct  Io
 {
     // option<fdt> (None = FD_NONE)
@@ -131,16 +131,16 @@ struct  Io
     Io* link;
     /*e: [[Io]] extra fields */
 };
-/*e: struct Io */
-/*s: constant I */
+/*e: struct [[Io]] */
+/*s: constant [[I]] */
 #define I   ((Io*)nil)
-/*e: constant I */
+/*e: constant [[I]] */
 
-/*s: constant FD_NONE */
+/*s: constant [[FD_NONE]] */
 #define FD_NONE (-1)
-/*e: constant FD_NONE */
+/*e: constant [[FD_NONE]] */
 
-/*s: struct Htab */
+/*s: struct [[Htab]] */
 struct Htab
 {
     // option<ref<Sym>>
@@ -148,9 +148,9 @@ struct Htab
     //enum<Sym_kind>
     short   symkind;
 };
-/*e: struct Htab */
+/*e: struct [[Htab]] */
 
-/*s: struct Hist */
+/*s: struct [[Hist]] */
 struct  Hist
 {
     // option<ref_own<string> (None = nil = a ``pop'')
@@ -167,10 +167,10 @@ struct  Hist
     Hist*   link;
     /*e: [[Hist]] extra fields */
 };
-/*e: struct Hist */
-/*s: constant H */
+/*e: struct [[Hist]] */
+/*s: constant [[H]] */
 #define H   ((Hist*)nil)
-/*e: constant H */
+/*e: constant [[H]] */
 
 //----------------------------------------------------------------------------
 // Globals
@@ -270,7 +270,7 @@ int mywait(int*);
 int mycreat(char*, int);
 
 
-/*s: enum _anon_ (assemblers/aa/aa.h) */
+/*s: enum platform */
 /*
  *  system-dependent stuff from ../cc/compat.c
  */
@@ -279,5 +279,5 @@ enum    /* keep in synch with ../cc/cc.h */
     Plan9   = 1<<0,
     Unix    = 1<<1,
 };
-/*e: enum _anon_ (assemblers/aa/aa.h) */
+/*e: enum platform */
 /*e: assemblers/aa/aa.h */

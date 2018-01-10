@@ -4,7 +4,7 @@
 // syminit() in lookup() depends on LNAME token defined in a.y,
 // so it can't be defined here.
 
-/*s: function slookup */
+/*s: function [[slookup]] */
 Sym*
 slookup(char *s)
 {
@@ -12,9 +12,9 @@ slookup(char *s)
     strcpy(symb, s);
     return lookup();
 }
-/*e: function slookup */
+/*e: function [[slookup]] */
 
-/*s: function lookup */
+/*s: function [[lookup]] */
 Sym*
 lookup(void)
 {
@@ -60,5 +60,5 @@ lookup(void)
     return sym;
     /*e: [[lookup()]] if symbol name not found */
 }
-/*e: function lookup */
+/*e: function [[lookup]] */
 /*e: assemblers/aa/lookup.c */

@@ -2,7 +2,7 @@
 #include "a.h"
 #include "y.tab.h"
 
-/*s: struct Itab(arm) */
+/*s: struct [[Itab]](arm) */
 struct Itab
 {
     char	*name;
@@ -12,9 +12,9 @@ struct Itab
     //enum<Opcode> | enum<Register> | ... | int
     ushort	value;
 };
-/*e: struct Itab(arm) */
+/*e: struct [[Itab]](arm) */
 
-/*s: global itab(arm) */
+/*s: global [[itab]](arm) */
 // map<string, (token_code * token_value)>
 struct Itab itab[] =
 {
@@ -238,9 +238,9 @@ struct Itab itab[] =
     /*e: [[itab]] elements */
     0
 };
-/*e: global itab(arm) */
+/*e: global [[itab]](arm) */
 
-/*s: function cinit(arm) */
+/*s: function [[cinit]](arm) */
 /// main -> <>
 void
 cinit(void)
@@ -280,16 +280,16 @@ cinit(void)
     }
     /*e: [[cinit()]] pathname initialization from cwd */
 }
-/*e: function cinit(arm) */
+/*e: function [[cinit]](arm) */
 
-/*s: function syminit */
+/*s: function [[syminit]] */
 void
 syminit(Sym *sym)
 {
     sym->type = LNAME;
     sym->value = 0;
 }
-/*e: function syminit */
+/*e: function [[syminit]] */
 
 // now use aa.a8
 //#include "../cc/lexbody"
@@ -297,7 +297,7 @@ syminit(Sym *sym)
 
 // used to be in ../cc/lexbody and factorized between assemblers by
 // using #include, but ugly, so I copy pasted the function for now
-/*s: function yylex */
+/*s: function [[yylex]] */
 /// main -> assemble -> yyparse -> <>
 long
 yylex(void)
@@ -591,7 +591,7 @@ l1:
     /*e: [[yylex()]] peekc handling, ending part */
     return c;
 }
-/*e: function yylex */
+/*e: function [[yylex]] */
 
 // #include "../cc/macbody"
 /*e: assemblers/5a/lex.c */

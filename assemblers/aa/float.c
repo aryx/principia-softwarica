@@ -1,7 +1,7 @@
 /*s: assemblers/aa/float.c */
 #include "aa.h"
 
-/*s: function ieeedtod */
+/*s: function [[ieeedtod]] */
 void
 ieeedtod(Ieee *ieee, double native)
 {
@@ -30,6 +30,6 @@ ieeedtod(Ieee *ieee, double native)
     ieee->l <<= 16;
     ieee->l |= (long)(fr*f);
 }
-/*e: function ieeedtod */
+/*e: function [[ieeedtod]] */
 
 /*e: assemblers/aa/float.c */

@@ -1,7 +1,7 @@
 /*s: assemblers/aa/utils.c */
 #include "aa.h"
 
-/*s: function gethunk */
+/*s: function [[gethunk]] */
 void
 gethunk(void)
 {
@@ -21,9 +21,9 @@ gethunk(void)
     nhunk = nh;
     thunk += nh;
 }
-/*e: function gethunk */
+/*e: function [[gethunk]] */
 
-/*s: function alloc */
+/*s: function [[alloc]] */
 /*
  * real allocs
  */
@@ -45,9 +45,9 @@ alloc(long n)
 
     return p;
 }
-/*e: function alloc */
+/*e: function [[alloc]] */
 
-/*s: function allocn */
+/*s: function [[allocn]] */
 void*
 allocn(void *p, long on, long n)
 {
@@ -68,20 +68,20 @@ allocn(void *p, long on, long n)
     nhunk -= n;
     return p;
 }
-/*e: function allocn */
+/*e: function [[allocn]] */
 
 
 
-/*s: function mycreat */
+/*s: function [[mycreat]] */
 int
 mycreat(char *n, int p)
 {
 
     return create(n, 1, p);
 }
-/*e: function mycreat */
+/*e: function [[mycreat]] */
 
-/*s: function mywait */
+/*s: function [[mywait]] */
 int
 mywait(int *s)
 {
@@ -99,23 +99,23 @@ mywait(int *s)
         return p;
     }
 }
-/*e: function mywait */
+/*e: function [[mywait]] */
 
-/*s: function systemtype */
+/*s: function [[systemtype]] */
 int
 systemtype(int sys)
 {
     return sys & Plan9;
 }
-/*e: function systemtype */
+/*e: function [[systemtype]] */
 
-/*s: function pathchar */
+/*s: function [[pathchar]] */
 int
 pathchar(void)
 {
     return '/';
 }
-/*e: function pathchar */
+/*e: function [[pathchar]] */
 
 
 /*e: assemblers/aa/utils.c */
