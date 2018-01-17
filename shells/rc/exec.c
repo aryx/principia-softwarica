@@ -660,12 +660,15 @@ list2str(word *words)
     char *value, *s, *t;
     int len = 0;
     word *ap;
+
     for(ap = words;ap;ap = ap->next)
-        len+=1+strlen(ap->word);
+        len += 1+strlen(ap->word);
     value = emalloc(len+1);
+
     s = value;
     for(ap = words;ap;ap = ap->next){
-        for(t = ap->word;*t;) *s++=*t++;
+        for(t = ap->word;*t;) 
+            *s++=*t++;
         *s++=' ';
     }
     if(s==value)
@@ -681,6 +684,7 @@ Xmatch(void)
 {
     word *p;
     char *subject;
+
     subject = list2str(runq->argv->words);
     setstatus("no match");
     for(p = runq->argv->next->words;p;p = p->next)
@@ -700,11 +704,12 @@ Xcase(void)
 {
     word *p;
     char *s;
-    int ok = 0;
+    bool ok = false;
+
     s = list2str(runq->argv->next->words);
     for(p = runq->argv->words;p;p = p->next){
         if(match(s, p->word, '\0')){
-            ok = 1;
+            ok = true;
             break;
         }
     }
@@ -949,21 +954,25 @@ Xcount(void)
     char *s, *t;
     int n;
     char num[12];
+
     if(count(runq->argv->words)!=1){
         Xerror1("variable name not singleton!");
         return;
     }
     s = runq->argv->words->word;
     deglob(s);
+
+    // n = int_of_string(s)
     n = 0;
-    for(t = s;'0'<=*t && *t<='9';t++) n = n*10+*t-'0';
+    for(t = s;'0'<=*t && *t<='9';t++) 
+        n = n*10 + *t - '0';
     if(n==0 || *t){
         a = vlook(s)->val;
         inttoascii(num, count(a));
     }
     else{
         a = vlook("*")->val;
-        inttoascii(num, a && 1<=n && n<=count(a)?1:0);
+        inttoascii(num, (a && 1<=n && n<=count(a)) ? 1 : 0);
     }
     poplist();
     pushword(num);
@@ -1049,12 +1058,13 @@ Xdelfn(void)
 {
     var *v;
     word *a;
+
     for(a = runq->argv->words;a;a = a->next){
         v = gvlook(a->word);
         if(v->fn)
             codefree(v->fn);
-        v->fn = 0;
-        v->fnchanged = 1;
+        v->fn = nil;
+        v->fnchanged = true;
     }
     poplist();
 }

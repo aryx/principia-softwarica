@@ -450,8 +450,10 @@ execdot(void)
         first = false;
     }
     /*e: [[execdot()]] if first */
+    /*s: [[execdot()]] if not first execution */
     else
         eflagok = true;
+    /*e: [[execdot()]] if not first execution */
 
     popword(); // "."
     if(p->argv->words && strcmp(p->argv->words->word, "-i")==0){
@@ -518,6 +520,7 @@ void
 execflag(void)
 {
     char *letter, *val;
+
     switch(count(runq->argv->words)){
     case 2:
         setstatus(flag[(uchar)runq->argv->words->next->word[0]]?"":"flag not set");

@@ -229,15 +229,15 @@ union Code rdfns[4];
 void
 execfinit(void)
 {
-    static int first = 1;
+    static bool first = true;
     if(first){
         rdfns[0].i = 1;
         rdfns[1].f = Xrdfn;
         rdfns[2].f = Xjump;
         rdfns[3].i = 1;
-        first = 0;
+        first = false;
     }
-    Xpopm();
+    Xpopm(); // pop_list()
     envdir = open("/env", 0);
     if(envdir<0){
         pfmt(err, "rc: can't open /env: %r\n");

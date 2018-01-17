@@ -70,6 +70,7 @@ cmd:
 |   cmd OROR cmd        {$$=tree2(OROR, $1, $3);}
 /*x: cmd rule other cases */
 |   BANG cmd            {$$=mung1($1, $2);}
+/*x: cmd rule other cases */
 |   TWIDDLE word words  {$$=mung2($1, $2, $3);}
 /*x: cmd rule other cases */
 |   cmd PIPE cmd        {$$=mung2($2, $1, $3);}

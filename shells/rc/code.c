@@ -336,7 +336,7 @@ outcode(tree *t, bool eflag)
             emitf(Xfn);
             p = emiti(0);
             emits(fnstr(c1));
-            outcode(c1, eflag);
+            outcode(c1, eflag); // body of the function
             emitf(Xunlocal);	/* get rid of $* */ //$
             emitf(Xreturn);
             stuffdot(p);
@@ -489,35 +489,45 @@ codeswitch(tree *t, bool eflag)
     int out;		/* jump here to leave switch */
     int nextcase;	/* patch jump address to next case */
     tree *tt;
+
+    // c1 is BRACE { ; ; ; }
     if(c1->child[0]==nil
-    || c1->child[0]->type!=';'
+    || c1->child[0]->type != ';'
     || !iscase(c1->child[0]->child[0])){
         yyerror("case missing in switch");
         return;
     }
+
     emitf(Xmark);
     outcode(c0, eflag);
     emitf(Xjump);
+
     nextcase = emiti(0);
     out = emitf(Xjump);
     leave = emiti(0);
+
     stuffdot(nextcase);
+
+    // from now on c0, c1, ... refer to this new t
     t = c1->child[0];
     while(t->type==';'){
         tt = c1;
         emitf(Xmark);
-        for(t = c0->child[0];t->type==ARGLIST;t = c0) outcode(c1, eflag);
+        for(t = c0->child[0];t->type==ARGLIST;t = c0) 
+            outcode(c1, eflag);
         emitf(Xcase);
         nextcase = emiti(0);
         t = tt;
         for(;;){
             if(t->type==';'){
-                if(iscase(c0)) break;
+                if(iscase(c0)) 
+                    break;
                 outcode(c0, eflag);
                 t = c1;
             }
             else{
-                if(!iscase(t)) outcode(t, eflag);
+                if(!iscase(t)) 
+                    outcode(t, eflag);
                 break;
             }
         }
