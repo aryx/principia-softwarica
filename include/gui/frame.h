@@ -68,6 +68,7 @@ struct Frame
     /*s: [[Frame]] tick fields */
     Image	*tick;	/* typing tick */
     Image	*tickback;	/* saved image under tick */
+    /*x: [[Frame]] tick fields */
     bool	ticked;	/* flag: is tick onscreen? */
     /*e: [[Frame]] tick fields */
     /*s: [[Frame]] box fields */
