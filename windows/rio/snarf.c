@@ -14,19 +14,19 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: global snarffd */
+/*s: global [[snarffd]] */
 fdt		snarffd;
-/*e: global snarffd */
+/*e: global [[snarffd]] */
 
-/*s: global snarf */
+/*s: global [[snarf]] */
 Rune*	snarf;
-/*e: global snarf */
-/*s: global nsnarf */
+/*e: global [[snarf]] */
+/*s: global [[nsnarf]] */
 int		nsnarf;
-/*e: global nsnarf */
+/*e: global [[nsnarf]] */
 
 
-/*s: function putsnarf */
+/*s: function [[putsnarf]] */
 /*
  * /dev/snarf updates when the file is closed, so we must open our own
  * fd here rather than use snarffd
@@ -51,9 +51,9 @@ putsnarf(void)
     }
     close(fd);
 }
-/*e: function putsnarf */
+/*e: function [[putsnarf]] */
 
-/*s: function getsnarf */
+/*s: function [[getsnarf]] */
 void
 getsnarf(void)
 {
@@ -77,5 +77,5 @@ getsnarf(void)
         free(sn);
     }
 }
-/*e: function getsnarf */
+/*e: function [[getsnarf]] */
 /*e: windows/rio/snarf.c */

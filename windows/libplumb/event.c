@@ -7,7 +7,7 @@
 
 typedef struct EQueue EQueue;
 
-/*s: struct EQueue */
+/*s: struct [[EQueue]] */
 struct EQueue
 {
     int		id;
@@ -15,16 +15,16 @@ struct EQueue
     int		nbuf;
     EQueue	*next;
 };
-/*e: struct EQueue */
+/*e: struct [[EQueue]] */
 
-/*s: global equeue */
+/*s: global [[equeue]] */
 static	EQueue	*equeue;
-/*e: global equeue */
-/*s: global eqlock */
+/*e: global [[equeue]] */
+/*s: global [[eqlock]] */
 static	Lock		eqlock;
-/*e: global eqlock */
+/*e: global [[eqlock]] */
 
-/*s: function partial */
+/*s: function [[partial]] */
 static
 int
 partial(int id, Event *e, uchar *b, int n)
@@ -63,9 +63,9 @@ partial(int id, Event *e, uchar *b, int n)
     }
     return 1;
 }
-/*e: function partial */
+/*e: function [[partial]] */
 
-/*s: function addpartial */
+/*s: function [[addpartial]] */
 static
 void
 addpartial(int id, char *b, int n)
@@ -88,9 +88,9 @@ addpartial(int id, char *b, int n)
     equeue = eq;
     unlock(&eqlock);
 }
-/*e: function addpartial */
+/*e: function [[addpartial]] */
 
-/*s: function plumbevent */
+/*s: function [[plumbevent]] */
 static
 int
 plumbevent(int id, Event *e, uchar *b, int n)
@@ -107,9 +107,9 @@ plumbevent(int id, Event *e, uchar *b, int n)
         return 0;
     return id;
 }
-/*e: function plumbevent */
+/*e: function [[plumbevent]] */
 
-/*s: function eplumb */
+/*s: function [[eplumb]] */
 int
 eplumb(int key, char *port)
 {
@@ -120,5 +120,5 @@ eplumb(int key, char *port)
         return -1;
     return estartfn(key, fd, 8192, plumbevent);
 }
-/*e: function eplumb */
+/*e: function [[eplumb]] */
 /*e: windows/libplumb/event.c */

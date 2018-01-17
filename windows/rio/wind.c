@@ -15,40 +15,40 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: global topped */
+/*s: global [[topped]] */
 static	int		topped;
-/*e: global topped */
-/*s: global id */
+/*e: global [[topped]] */
+/*s: global [[id]] */
 static	int	id;
-/*e: global id */
+/*e: global [[id]] */
 
-/*s: global cols */
+/*s: global [[cols]] */
 // map<Property, Color>
 static	Image	*cols[NCOL];
-/*e: global cols */
-/*s: global darkgrey */
+/*e: global [[cols]] */
+/*s: global [[darkgrey]] */
 static	Image	*darkgrey;
-/*e: global darkgrey */
+/*e: global [[darkgrey]] */
 
 
-/*s: global titlecol */
+/*s: global [[titlecol]] */
 static	Image	*titlecol;
-/*e: global titlecol */
-/*s: global lighttitlecol */
+/*e: global [[titlecol]] */
+/*s: global [[lighttitlecol]] */
 static	Image	*lighttitlecol;
-/*e: global lighttitlecol */
-/*s: global holdcol */
+/*e: global [[lighttitlecol]] */
+/*s: global [[holdcol]] */
 static	Image	*holdcol;
-/*e: global holdcol */
-/*s: global lightholdcol */
+/*e: global [[holdcol]] */
+/*s: global [[lightholdcol]] */
 static	Image	*lightholdcol;
-/*e: global lightholdcol */
-/*s: global paleholdcol */
+/*e: global [[lightholdcol]] */
+/*s: global [[paleholdcol]] */
 static	Image	*paleholdcol;
-/*e: global paleholdcol */
+/*e: global [[paleholdcol]] */
 
 
-/*s: function wsendctlmesg */
+/*s: function [[wsendctlmesg]] */
 void
 wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
 {
@@ -60,10 +60,10 @@ wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
 
     send(w->cctl, &wcm);
 }
-/*e: function wsendctlmesg */
+/*e: function [[wsendctlmesg]] */
 
 
-/*s: function wborder */
+/*s: function [[wborder]] */
 void
 wborder(Window *w, int type)
 {
@@ -90,9 +90,9 @@ wborder(Window *w, int type)
 
     border(w->i, w->i->r, Selborder, col, ZP);
 }
-/*e: function wborder */
+/*e: function [[wborder]] */
 
-/*s: function wsetcols */
+/*s: function [[wsetcols]] */
 void
 wsetcols(Window *w)
 {
@@ -109,10 +109,10 @@ wsetcols(Window *w)
         else
             w->frm.cols[TEXT] = w->frm.cols[HTEXT] = darkgrey;
 }
-/*e: function wsetcols */
+/*e: function [[wsetcols]] */
 
 
-/*s: function wmk */
+/*s: function [[wmk]] */
 Window*
 wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 {
@@ -194,9 +194,9 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     incref(w);	/* ref will be removed after mounting; avoids delete before ready to be deleted */
     return w;
 }
-/*e: function wmk */
+/*e: function [[wmk]] */
 
-/*s: function wsetname */
+/*s: function [[wsetname]] */
 void
 wsetname(Window *w)
 {
@@ -226,9 +226,9 @@ wsetname(Window *w)
     fprint(STDERR, "rio: setname failed: %s\n", err);
     /*e: [[wsetname()]] if image name already in use, try another name */
 }
-/*e: function wsetname */
+/*e: function [[wsetname]] */
 
-/*s: function wresize */
+/*s: function [[wresize]] */
 void
 wresize(Window *w, Image *i, bool move)
 {
@@ -276,9 +276,9 @@ wresize(Window *w, Image *i, bool move)
     w->resized = true;
     w->mouse.counter++;
 }
-/*e: function wresize */
+/*e: function [[wresize]] */
 
-/*s: function wrefresh */
+/*s: function [[wrefresh]] */
 void
 wrefresh(Window *w, Rectangle)
 {
@@ -304,9 +304,9 @@ wrefresh(Window *w, Rectangle)
     w->lastsr = ZR;
     wscrdraw(w);
 }
-/*e: function wrefresh */
+/*e: function [[wrefresh]] */
 
-/*s: function wclose */
+/*s: function [[wclose]] */
 bool
 wclose(Window *w)
 {
@@ -327,12 +327,12 @@ wclose(Window *w)
     wsendctlmesg(w, Exited, ZR, nil);
     return true;
 }
-/*e: function wclose */
+/*e: function [[wclose]] */
 
 
 
 
-/*s: function wrepaint */
+/*s: function [[wrepaint]] */
 void
 wrepaint(Window *w)
 {
@@ -351,20 +351,20 @@ wrepaint(Window *w)
     }else
         wborder(w, Unselborder);
 }
-/*e: function wrepaint */
+/*e: function [[wrepaint]] */
 
 
-/*s: function winborder */
+/*s: function [[winborder]] */
 bool
 winborder(Window *w, Point xy)
 {
     return ptinrect(xy, w->screenr) && 
            !ptinrect(xy, insetrect(w->screenr, Selborder));
 }
-/*e: function winborder */
+/*e: function [[winborder]] */
 
 
-/*s: function wmovemouse */
+/*s: function [[wmovemouse]] */
 /*
  * Convert back to physical coordinates
  */
@@ -375,10 +375,10 @@ wmovemouse(Window *w, Point p)
     p.y += w->screenr.min.y - w->i->r.min.y;
     moveto(mousectl, p);
 }
-/*e: function wmovemouse */
+/*e: function [[wmovemouse]] */
 
 
-/*s: function wpointto */
+/*s: function [[wpointto]] */
 Window*
 wpointto(Point pt)
 {
@@ -395,9 +395,9 @@ wpointto(Point pt)
     }
     return w;
 }
-/*e: function wpointto */
+/*e: function [[wpointto]] */
 
-/*s: function wcurrent */
+/*s: function [[wcurrent]] */
 void
 wcurrent(Window *w)
 {
@@ -430,9 +430,9 @@ wcurrent(Window *w)
     }
     /*e: [[wcurrent()]] wakeup w and oi */
 }
-/*e: function wcurrent */
+/*e: function [[wcurrent]] */
 
-/*s: function wsetcursor */
+/*s: function [[wsetcursor]] */
 void
 wsetcursor(Window *w, bool force)
 {
@@ -452,10 +452,10 @@ wsetcursor(Window *w, bool force)
     if(!menuing)
         riosetcursor(p, force);
 }
-/*e: function wsetcursor */
+/*e: function [[wsetcursor]] */
 
 
-/*s: function wtop */
+/*s: function [[wtop]] */
 Window*
 wtop(Point pt)
 {
@@ -472,9 +472,9 @@ wtop(Point pt)
     }
     return w;
 }
-/*e: function wtop */
+/*e: function [[wtop]] */
 
-/*s: function wtopme */
+/*s: function [[wtopme]] */
 void
 wtopme(Window *w)
 {
@@ -484,9 +484,9 @@ wtopme(Window *w)
         w->topped = ++topped;
     }
 }
-/*e: function wtopme */
+/*e: function [[wtopme]] */
 
-/*s: function wbottomme */
+/*s: function [[wbottomme]] */
 void
 wbottomme(Window *w)
 {
@@ -496,9 +496,9 @@ wbottomme(Window *w)
         w->topped = - ++topped;
     }
 }
-/*e: function wbottomme */
+/*e: function [[wbottomme]] */
 
-/*s: function wlookid */
+/*s: function [[wlookid]] */
 Window*
 wlookid(int id)
 {
@@ -509,9 +509,9 @@ wlookid(int id)
             return windows[i];
     return nil;
 }
-/*e: function wlookid */
+/*e: function [[wlookid]] */
 
-/*s: function wclosewin */
+/*s: function [[wclosewin]] */
 void
 wclosewin(Window *w)
 {
@@ -549,9 +549,9 @@ wclosewin(Window *w)
         }
     error("unknown window in closewin");
 }
-/*e: function wclosewin */
+/*e: function [[wclosewin]] */
 
-/*s: function wsetpid */
+/*s: function [[wsetpid]] */
 void
 wsetpid(Window *w, int pid, bool dolabel)
 {
@@ -572,5 +572,5 @@ wsetpid(Window *w, int pid, bool dolabel)
         close(w->notefd);
     w->notefd = fd;
 }
-/*e: function wsetpid */
+/*e: function [[wsetpid]] */
 /*e: windows/rio/wind.c */

@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "plumb.h"
 
-/*s: function plumbsendtext */
+/*s: function [[plumbsendtext]] */
 int
 plumbsendtext(int fd, char *src, char *dst, char *wdir, char *data)
 {
@@ -18,5 +18,5 @@ plumbsendtext(int fd, char *src, char *dst, char *wdir, char *data)
     m.data = data;
     return plumbsend(fd, &m);
 }
-/*e: function plumbsendtext */
+/*e: function [[plumbsendtext]] */
 /*e: windows/libplumb/plumbsendtext.c */

@@ -6,7 +6,7 @@
 #include <mouse.h>
 #include <frame.h>
 
-/*s: function _frcanfit */
+/*s: function [[_frcanfit]] */
 int
 _frcanfit(Frame *f, Point pt, Frbox *b)
 {
@@ -32,9 +32,9 @@ _frcanfit(Frame *f, Point pt, Frbox *b)
     drawerror(f->display, "_frcanfit can't");
     return 0;
 }
-/*e: function _frcanfit */
+/*e: function [[_frcanfit]] */
 
-/*s: function _frcklinewrap */
+/*s: function [[_frcklinewrap]] */
 void
 _frcklinewrap(Frame *f, Point *p, Frbox *b)
 {
@@ -43,9 +43,9 @@ _frcklinewrap(Frame *f, Point *p, Frbox *b)
         p->y += f->font->height;
     }
 }
-/*e: function _frcklinewrap */
+/*e: function [[_frcklinewrap]] */
 
-/*s: function _frcklinewrap0 */
+/*s: function [[_frcklinewrap0]] */
 void
 _frcklinewrap0(Frame *f, Point *p, Frbox *b)
 {
@@ -54,9 +54,9 @@ _frcklinewrap0(Frame *f, Point *p, Frbox *b)
         p->y += f->font->height;
     }
 }
-/*e: function _frcklinewrap0 */
+/*e: function [[_frcklinewrap0]] */
 
-/*s: function _fradvance */
+/*s: function [[_fradvance]] */
 void
 _fradvance(Frame *f, Point *p, Frbox *b)
 {
@@ -66,18 +66,18 @@ _fradvance(Frame *f, Point *p, Frbox *b)
     }else
         p->x += b->wid;
 }
-/*e: function _fradvance */
+/*e: function [[_fradvance]] */
 
-/*s: function _frnewwid */
+/*s: function [[_frnewwid]] */
 int
 _frnewwid(Frame *f, Point pt, Frbox *b)
 {
     b->wid = _frnewwid0(f, pt, b);
     return b->wid;
 }
-/*e: function _frnewwid */
+/*e: function [[_frnewwid]] */
 
-/*s: function _frnewwid0 */
+/*s: function [[_frnewwid0]] */
 int
 _frnewwid0(Frame *f, Point pt, Frbox *b)
 {
@@ -95,9 +95,9 @@ _frnewwid0(Frame *f, Point pt, Frbox *b)
         x = pt.x+b->minwid;
     return x-pt.x;
 }
-/*e: function _frnewwid0 */
+/*e: function [[_frnewwid0]] */
 
-/*s: function _frclean */
+/*s: function [[_frclean]] */
 void
 _frclean(Frame *f, Point pt, int n0, int n1)	/* look for mergeable boxes */
 {
@@ -124,5 +124,5 @@ _frclean(Frame *f, Point pt, int n0, int n1)	/* look for mergeable boxes */
     if(pt.y >= f->r.max.y)
         f->lastlinefull = 1;
 }
-/*e: function _frclean */
+/*e: function [[_frclean]] */
 /*e: windows/libframe/frutil.c */

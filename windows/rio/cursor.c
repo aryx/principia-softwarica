@@ -14,11 +14,11 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: global lastcursor */
+/*s: global [[lastcursor]] */
 Cursor	*lastcursor;
-/*e: global lastcursor */
+/*e: global [[lastcursor]] */
 
-/*s: function riosetcursor */
+/*s: function [[riosetcursor]] */
 void
 riosetcursor(Cursor *p, bool force)
 {
@@ -27,5 +27,5 @@ riosetcursor(Cursor *p, bool force)
     setcursor(mousectl, p);
     lastcursor = p;
 }
-/*e: function riosetcursor */
+/*e: function [[riosetcursor]] */
 /*e: windows/rio/cursor.c */

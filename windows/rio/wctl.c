@@ -16,14 +16,14 @@
 
 #include <ctype.h>
 
-/*s: global Ebadwr */
+/*s: global [[Ebadwr]] */
 char	Ebadwr[]		= "bad rectangle in wctl request";
-/*e: global Ebadwr */
-/*s: global Ewalloc */
+/*e: global [[Ebadwr]] */
+/*s: global [[Ewalloc]] */
 char	Ewalloc[]		= "window allocation failed in wctl request";
-/*e: global Ewalloc */
+/*e: global [[Ewalloc]] */
 
-/*s: enum _anon_ (windows/rio/wctl.c) */
+/*s: enum [[_anon_ (windows/rio/wctl.c)]] */
 /* >= Top are disallowed if mouse button is pressed */
 enum
 {
@@ -40,9 +40,9 @@ enum
     Unhide,
     Delete,
 };
-/*e: enum _anon_ (windows/rio/wctl.c) */
+/*e: enum [[_anon_ (windows/rio/wctl.c)]] */
 
-/*s: global cmds */
+/*s: global [[cmds]] */
 static char *cmds[] = {
     [New]	= "new",
     [Resize]	= "resize",
@@ -58,9 +58,9 @@ static char *cmds[] = {
     [Delete]	= "delete",
     nil
 };
-/*e: global cmds */
+/*e: global [[cmds]] */
 
-/*s: enum _anon_ (windows/rio/wctl.c)2 */
+/*s: enum [[_anon_ (windows/rio/wctl.c)]]2 */
 enum
 {
     Cd,
@@ -80,9 +80,9 @@ enum
     Scrolling,
     Noscrolling,
 };
-/*e: enum _anon_ (windows/rio/wctl.c)2 */
+/*e: enum [[_anon_ (windows/rio/wctl.c)]]2 */
 
-/*s: global params */
+/*s: global [[params]] */
 static char *params[] = {
     [Cd] 			= "-cd",
     [Deltax]			= "-dx",
@@ -99,10 +99,10 @@ static char *params[] = {
     [Noscrolling]		= "-noscroll",
     nil
 };
-/*e: global params */
+/*e: global [[params]] */
 
 
-/*s: function word */
+/*s: function [[word]] */
 static
 int
 word(char **sp, char *tab[])
@@ -123,9 +123,9 @@ word(char **sp, char *tab[])
     }
     return -1;
 }
-/*e: function word */
+/*e: function [[word]] */
 
-/*s: function set */
+/*s: function [[set]] */
 int
 set(int sign, int neg, int abs, int pos)
 {
@@ -135,9 +135,9 @@ set(int sign, int neg, int abs, int pos)
         return pos;
     return abs;
 }
-/*e: function set */
+/*e: function [[set]] */
 
-/*s: function newrect */
+/*s: function [[newrect]] */
 Rectangle
 newrect(void)
 {
@@ -153,9 +153,9 @@ newrect(void)
 
     return Rect(minx, miny, minx+dx, miny+dy);
 }
-/*e: function newrect */
+/*e: function [[newrect]] */
 
-/*s: function shift */
+/*s: function [[shift]] */
 void
 shift(int *minp, int *maxp, int min, int max)
 {
@@ -168,9 +168,9 @@ shift(int *minp, int *maxp, int min, int max)
         *maxp = max;
     }
 }
-/*e: function shift */
+/*e: function [[shift]] */
 
-/*s: function rectonscreen */
+/*s: function [[rectonscreen]] */
 Rectangle
 rectonscreen(Rectangle r)
 {
@@ -178,9 +178,9 @@ rectonscreen(Rectangle r)
     shift(&r.min.y, &r.max.y, view->r.min.y, view->r.max.y);
     return r;
 }
-/*e: function rectonscreen */
+/*e: function [[rectonscreen]] */
 
-/*s: function riostrtol */
+/*s: function [[riostrtol]] */
 /* permit square brackets, in the manner of %R */
 int
 riostrtol(char *s, char **t)
@@ -197,10 +197,10 @@ riostrtol(char *s, char **t)
             (*t)++;
     return n;
 }
-/*e: function riostrtol */
+/*e: function [[riostrtol]] */
 
 
-/*s: function parsewctl */
+/*s: function [[parsewctl]] */
 int
 parsewctl(char **argp, Rectangle r, Rectangle *rp, int *pidp, int *idp, int *hiddenp, int *scrollingp, char **cdp, char *s, char *err)
 {
@@ -320,9 +320,9 @@ parsewctl(char **argp, Rectangle r, Rectangle *rp, int *pidp, int *idp, int *hid
 
     return cmd;
 }
-/*e: function parsewctl */
+/*e: function [[parsewctl]] */
 
-/*s: function wctlnew */
+/*s: function [[wctlnew]] */
 int
 wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir, char *err)
 {
@@ -360,9 +360,9 @@ wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir,
     free(argv);	/* when new() returns, argv and args have been copied */
     return 1;
 }
-/*e: function wctlnew */
+/*e: function [[wctlnew]] */
 
-/*s: function writewctl */
+/*s: function [[writewctl]] */
 int
 writewctl(Xfid *x, char *err)
 {
@@ -478,9 +478,9 @@ writewctl(Xfid *x, char *err)
     strcpy(err, "invalid wctl message");
     return -1;
 }
-/*e: function writewctl */
+/*e: function [[writewctl]] */
 
-/*s: function wctlthread */
+/*s: function [[wctlthread]] */
 void
 wctlthread(void *v)
 {
@@ -504,9 +504,9 @@ wctlthread(void *v)
         free(buf);
     }
 }
-/*e: function wctlthread */
+/*e: function [[wctlthread]] */
 
-/*s: function wctlproc */
+/*s: function [[wctlproc]] */
 void
 wctlproc(void *v)
 {
@@ -534,5 +534,5 @@ wctlproc(void *v)
         sendp(c, buf);
     }
 }
-/*e: function wctlproc */
+/*e: function [[wctlproc]] */
 /*e: windows/rio/wctl.c */

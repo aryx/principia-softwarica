@@ -6,7 +6,7 @@
 #include <mouse.h>
 #include <frame.h>
 
-/*s: function _frptofcharptb */
+/*s: function [[_frptofcharptb]] */
 Point
 _frptofcharptb(Frame *f, ulong p, Point pt, int bn)
 {
@@ -41,17 +41,17 @@ _frptofcharptb(Frame *f, ulong p, Point pt, int bn)
     }
     return pt;
 }
-/*e: function _frptofcharptb */
+/*e: function [[_frptofcharptb]] */
 
-/*s: function frptofchar */
+/*s: function [[frptofchar]] */
 Point
 frptofchar(Frame *f, ulong p)
 {
     return _frptofcharptb(f, p, f->r.min, 0);
 }
-/*e: function frptofchar */
+/*e: function [[frptofchar]] */
 
-/*s: function _frptofcharnb */
+/*s: function [[_frptofcharnb]] */
 Point
 _frptofcharnb(Frame *f, ulong p, int nb)	/* doesn't do final _fradvance to next line */
 {
@@ -66,9 +66,9 @@ _frptofcharnb(Frame *f, ulong p, int nb)	/* doesn't do final _fradvance to next 
     f->nbox = nbox;
     return pt;
 }
-/*e: function _frptofcharnb */
+/*e: function [[_frptofcharnb]] */
 
-/*s: function _frgrid */
+/*s: function [[_frgrid]] */
 static
 Point
 _frgrid(Frame *f, Point p)
@@ -80,9 +80,9 @@ _frgrid(Frame *f, Point p)
         p.x = f->r.max.x;
     return p;
 }
-/*e: function _frgrid */
+/*e: function [[_frgrid]] */
 
-/*s: function frcharofpt */
+/*s: function [[frcharofpt]] */
 ulong
 frcharofpt(Frame *f, Point pt)
 {
@@ -138,5 +138,5 @@ frcharofpt(Frame *f, Point pt)
     }
     return p;
 }
-/*e: function frcharofpt */
+/*e: function [[frcharofpt]] */
 /*e: windows/libframe/frptofchar.c */

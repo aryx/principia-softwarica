@@ -16,63 +16,63 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: constant MAXSNARF */
+/*s: constant [[MAXSNARF]] */
 #define	MAXSNARF	100*1024
-/*e: constant MAXSNARF */
+/*e: constant [[MAXSNARF]] */
 
-/*s: global Einuse */
+/*s: global [[Einuse]] */
 char Einuse[] =		"file in use";
-/*e: global Einuse */
-/*s: global Edeleted */
+/*e: global [[Einuse]] */
+/*s: global [[Edeleted]] */
 char Edeleted[] =	"window deleted";
-/*e: global Edeleted */
-/*s: global Ebadreq */
+/*e: global [[Edeleted]] */
+/*s: global [[Ebadreq]] */
 char Ebadreq[] =	"bad graphics request";
-/*e: global Ebadreq */
-/*s: global Etooshort */
+/*e: global [[Ebadreq]] */
+/*s: global [[Etooshort]] */
 char Etooshort[] =	"buffer too small";
-/*e: global Etooshort */
-/*s: global Ebadtile */
+/*e: global [[Etooshort]] */
+/*s: global [[Ebadtile]] */
 char Ebadtile[] =	"unknown tile";
-/*e: global Ebadtile */
-/*s: global Eshort */
+/*e: global [[Ebadtile]] */
+/*s: global [[Eshort]] */
 char Eshort[] =		"short i/o request";
-/*e: global Eshort */
-/*s: global Elong */
+/*e: global [[Eshort]] */
+/*s: global [[Elong]] */
 char Elong[] = 		"snarf buffer too long";
-/*e: global Elong */
-/*s: global Eunkid */
+/*e: global [[Elong]] */
+/*s: global [[Eunkid]] */
 char Eunkid[] = 	"unknown id in attach";
-/*e: global Eunkid */
-/*s: global Ebadrect */
+/*e: global [[Eunkid]] */
+/*s: global [[Ebadrect]] */
 char Ebadrect[] = 	"bad rectangle in attach";
-/*e: global Ebadrect */
-/*s: global Ewindow */
+/*e: global [[Ebadrect]] */
+/*s: global [[Ewindow]] */
 char Ewindow[] = 	"cannot make window";
-/*e: global Ewindow */
-/*s: global Enowindow */
+/*e: global [[Ewindow]] */
+/*s: global [[Enowindow]] */
 char Enowindow[] = 	"window has no image";
-/*e: global Enowindow */
-/*s: global Ebadmouse */
+/*e: global [[Enowindow]] */
+/*s: global [[Ebadmouse]] */
 char Ebadmouse[] = 	"bad format on /dev/mouse";
-/*e: global Ebadmouse */
-/*s: global Ebadwrect */
+/*e: global [[Ebadmouse]] */
+/*s: global [[Ebadwrect]] */
 char Ebadwrect[] = 	"rectangle outside screen";
-/*e: global Ebadwrect */
-/*s: global Ebadoffset */
+/*e: global [[Ebadwrect]] */
+/*s: global [[Ebadoffset]] */
 char Ebadoffset[] = 	"window read not on scan line boundary";
-/*e: global Ebadoffset */
+/*e: global [[Ebadoffset]] */
 
-/*s: global tsnarf */
+/*s: global [[tsnarf]] */
 static	char	*tsnarf;
-/*e: global tsnarf */
-/*s: global ntsnarf */
+/*e: global [[tsnarf]] */
+/*s: global [[ntsnarf]] */
 static	int	ntsnarf;
-/*e: global ntsnarf */
+/*e: global [[ntsnarf]] */
 
 
 
-/*s: function xfidattach */
+/*s: function [[xfidattach]] */
 void
 xfidattach(Xfid *x)
 {
@@ -141,9 +141,9 @@ xfidattach(Xfid *x)
 
     filsysrespond(x->fs, x, &fc, nil);
 }
-/*e: function xfidattach */
+/*e: function [[xfidattach]] */
 
-/*s: function xfidopen */
+/*s: function [[xfidopen]] */
 void
 xfidopen(Xfid *x)
 {
@@ -229,9 +229,9 @@ xfidopen(Xfid *x)
     fc.iounit = messagesize-IOHDRSZ;
     filsysrespond(x->fs, x, &fc, nil);
 }
-/*e: function xfidopen */
+/*e: function [[xfidopen]] */
 
-/*s: function xfidclose */
+/*s: function [[xfidclose]] */
 void
 xfidclose(Xfid *x)
 {
@@ -292,10 +292,10 @@ xfidclose(Xfid *x)
     wclose(w);
     filsysrespond(x->fs, x, &fc, nil);
 }
-/*e: function xfidclose */
+/*e: function [[xfidclose]] */
 
 
-/*s: function keyboardsend */
+/*s: function [[keyboardsend]] */
 /*
  * Used by /dev/kbdin
  */
@@ -312,14 +312,14 @@ keyboardsend(char *s, int cnt)
         send(keyboardctl->c, &r[i]);
     free(r);
 }
-/*e: function keyboardsend */
+/*e: function [[keyboardsend]] */
 
 
-/*s: enum _anon_ (windows/rio/xfid.c)2 */
+/*s: enum [[_anon_ (windows/rio/xfid.c)]]2 */
 enum { CWdata, CWflush, NCW };
-/*e: enum _anon_ (windows/rio/xfid.c)2 */
+/*e: enum [[_anon_ (windows/rio/xfid.c)]]2 */
 
-/*s: function xfidwrite */
+/*s: function [[xfidwrite]] */
 void
 xfidwrite(Xfid *x)
 {
@@ -569,9 +569,9 @@ xfidwrite(Xfid *x)
     fc.count = cnt;
     filsysrespond(x->fs, x, &fc, nil);
 }
-/*e: function xfidwrite */
+/*e: function [[xfidwrite]] */
 
-/*s: function readwindow */
+/*s: function [[readwindow]] */
 int
 readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 {
@@ -589,19 +589,19 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
         return 0;
     return unloadimage(i, r, (uchar*)t, n);
 }
-/*e: function readwindow */
+/*e: function [[readwindow]] */
 
-/*s: enum _anon_ (windows/rio/xfid.c)3 */
+/*s: enum [[_anon_ (windows/rio/xfid.c)]]3 */
 enum { CRdata, CRflush, NCR };
-/*e: enum _anon_ (windows/rio/xfid.c)3 */
-/*s: enum _anon_ (windows/rio/xfid.c)4 */
+/*e: enum [[_anon_ (windows/rio/xfid.c)]]3 */
+/*s: enum [[_anon_ (windows/rio/xfid.c)]]4 */
 enum { MRdata, MRflush, NMR };
-/*e: enum _anon_ (windows/rio/xfid.c)4 */
-/*s: enum _anon_ (windows/rio/xfid.c)5 */
+/*e: enum [[_anon_ (windows/rio/xfid.c)]]4 */
+/*s: enum [[_anon_ (windows/rio/xfid.c)]]5 */
 enum { WCRdata, WCRflush, NWCR };
-/*e: enum _anon_ (windows/rio/xfid.c)5 */
+/*e: enum [[_anon_ (windows/rio/xfid.c)]]5 */
 
-/*s: function xfidread */
+/*s: function [[xfidread]] */
 void
 xfidread(Xfid *x)
 {
@@ -922,5 +922,5 @@ xfidread(Xfid *x)
         break;
         }
 }
-/*e: function xfidread */
+/*e: function [[xfidread]] */
 /*e: windows/rio/xfid.c */

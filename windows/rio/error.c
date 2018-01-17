@@ -4,16 +4,16 @@
 #include <draw.h>
 #include <thread.h>
 
-/*s: global errorshouldabort */
+/*s: global [[errorshouldabort]] */
 bool errorshouldabort = false;
-/*e: global errorshouldabort */
+/*e: global [[errorshouldabort]] */
 
 // could be in 9p.c too
-/*s: global Eperm */
+/*s: global [[Eperm]] */
 char Eperm[] = "permission denied";
-/*e: global Eperm */
+/*e: global [[Eperm]] */
 
-/*s: function error */
+/*s: function [[error]] */
 void
 error(char *s)
 {
@@ -22,13 +22,13 @@ error(char *s)
         abort();
     threadexitsall("error");
 }
-/*e: function error */
+/*e: function [[error]] */
 
-/*s: function derror */
+/*s: function [[derror]] */
 void
 derror(Display*, char *errorstr)
 {
     error(errorstr);
 }
-/*e: function derror */
+/*e: function [[derror]] */
 /*e: windows/rio/error.c */

@@ -23,26 +23,26 @@
  * company at 1‑800‑543‑3002.
  */
 
-/*s: global fontname */
+/*s: global [[fontname]] */
 char		*fontname;
-/*e: global fontname */
+/*e: global [[fontname]] */
 
-/*s: global kbdargv */
+/*s: global [[kbdargv]] */
 char *kbdargv[] = { "rc", "-c", nil, nil };
-/*e: global kbdargv */
+/*e: global [[kbdargv]] */
 
 
-/*s: function usage */
+/*s: function [[usage]] */
 void
 usage(void)
 {
     fprint(STDERR, "usage: rio [-f font] [-i initcmd] [-k kbdcmd] [-s]\n");
     exits("usage");
 }
-/*e: function usage */
+/*e: function [[usage]] */
 
 
-/*s: function initcmd */
+/*s: function [[initcmd]] */
 void
 initcmd(void *arg)
 {
@@ -54,9 +54,9 @@ initcmd(void *arg)
     fprint(STDERR, "rio: exec failed: %r\n");
     exits("exec");
 }
-/*e: function initcmd */
+/*e: function [[initcmd]] */
 
-/*s: global oknotes */
+/*s: global [[oknotes]] */
 char *oknotes[] =
 {
     "delete",
@@ -65,9 +65,9 @@ char *oknotes[] =
     "exit",
     nil
 };
-/*e: global oknotes */
+/*e: global [[oknotes]] */
 
-/*s: function killprocs */
+/*s: function [[killprocs]] */
 void
 killprocs(void)
 {
@@ -76,10 +76,10 @@ killprocs(void)
     for(i=0; i<nwindow; i++)
         postnote(PNGROUP, windows[i]->pid, "hangup");
 }
-/*e: function killprocs */
+/*e: function [[killprocs]] */
 
 
-/*s: function shutdown */
+/*s: function [[shutdown]] */
 int
 shutdown(void *, char *msg)
 {
@@ -97,10 +97,10 @@ shutdown(void *, char *msg)
     exits(msg);
     return 0;
 }
-/*e: function shutdown */
+/*e: function [[shutdown]] */
 
 
-/*s: function threadmain */
+/*s: function [[threadmain]] */
 void threadmain(int argc, char *argv[])
 {
     /*s: [[main()]] locals */
@@ -260,5 +260,5 @@ void threadmain(int argc, char *argv[])
     killprocs();
     threadexitsall(nil);
 }
-/*e: function threadmain */
+/*e: function [[threadmain]] */
 /*e: windows/rio/rio.c */

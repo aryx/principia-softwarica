@@ -6,7 +6,7 @@
 #include <mouse.h>
 #include <frame.h>
 
-/*s: function frdelete */
+/*s: function [[frdelete]] */
 int
 frdelete(Frame *f, ulong p0, ulong p1)
 {
@@ -123,5 +123,5 @@ frdelete(Frame *f, ulong p0, ulong p1)
     f->nlines = (pt0.y-f->r.min.y)/f->font->height+(pt0.x>f->r.min.x);
     return n - f->nlines;
 }
-/*e: function frdelete */
+/*e: function [[frdelete]] */
 /*e: windows/libframe/frdelete.c */

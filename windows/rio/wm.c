@@ -25,7 +25,7 @@
 // Menu
 //----------------------------------------------------------------------------
 
-/*s: enum _anon_ (windows/rio/rio.c) */
+/*s: enum [[_anon_ (windows/rio/rio.c)]] */
 enum RightMenuCommand
 {
     New,
@@ -39,9 +39,9 @@ enum RightMenuCommand
 
     Hidden,
 };
-/*e: enum _anon_ (windows/rio/rio.c) */
+/*e: enum [[_anon_ (windows/rio/rio.c)]] */
 
-/*s: global menu3str */
+/*s: global [[menu3str]] */
 char*		menu3str[100] = {
  [New]		"New",
  [Reshape]	"Resize",
@@ -51,17 +51,17 @@ char*		menu3str[100] = {
  [Exit]		"Exit",
  nil
 };
-/*e: global menu3str */
+/*e: global [[menu3str]] */
 
-/*s: global menu3 */
+/*s: global [[menu3]] */
 Menu menu3 = { .item = menu3str };
-/*e: global menu3 */
+/*e: global [[menu3]] */
 
 //----------------------------------------------------------------------------
 // Helpers
 //----------------------------------------------------------------------------
 
-/*s: function goodrect */
+/*s: function [[goodrect]] */
 /*
  * Check that newly created window will be of manageable size
  */
@@ -82,10 +82,10 @@ goodrect(Rectangle r)
         return 0;
     return 1;
 }
-/*e: function goodrect */
+/*e: function [[goodrect]] */
 
 
-/*s: function portion */
+/*s: function [[portion]] */
 int
 portion(int x, int lo, int hi)
 {
@@ -98,9 +98,9 @@ portion(int x, int lo, int hi)
         return 2; // below
     return 1; // middle
 }
-/*e: function portion */
+/*e: function [[portion]] */
 
-/*s: function whichcorner */
+/*s: function [[whichcorner]] */
 int
 whichcorner(Window *w, Point p)
 {
@@ -110,9 +110,9 @@ whichcorner(Window *w, Point p)
     j = portion(p.y, w->screenr.min.y, w->screenr.max.y);
     return 3*j + i;
 }
-/*e: function whichcorner */
+/*e: function [[whichcorner]] */
 
-/*s: function cornercursor */
+/*s: function [[cornercursor]] */
 void
 cornercursor(Window *w, Point p, bool force)
 {
@@ -121,13 +121,13 @@ cornercursor(Window *w, Point p, bool force)
     else
         wsetcursor(w, force);
 }
-/*e: function cornercursor */
+/*e: function [[cornercursor]] */
 
 //----------------------------------------------------------------------------
 // Mouse actions
 //----------------------------------------------------------------------------
 
-/*s: function pointto */
+/*s: function [[pointto]] */
 Window*
 pointto(bool wait)
 {
@@ -163,10 +163,10 @@ pointto(bool wait)
     menuing = false;
     return w;
 }
-/*e: function pointto */
+/*e: function [[pointto]] */
 
 
-/*s: function onscreen */
+/*s: function [[onscreen]] */
 Point
 onscreen(Point p)
 {
@@ -176,9 +176,9 @@ onscreen(Point p)
     p.y = min(view->clipr.max.y, p.y);
     return p;
 }
-/*e: function onscreen */
+/*e: function [[onscreen]] */
 
-/*s: function sweep */
+/*s: function [[sweep]] */
 Image*
 sweep(void)
 {
@@ -250,11 +250,11 @@ Rescue:
     menuing = false;
     return i;
 }
-/*e: function sweep */
+/*e: function [[sweep]] */
 
 
 
-/*s: function drawedge */
+/*s: function [[drawedge]] */
 void
 drawedge(Image **bp, Rectangle r)
 {
@@ -266,9 +266,9 @@ drawedge(Image **bp, Rectangle r)
         *bp = allocwindow(desktop, r, Refbackup, DRed);
     }
 }
-/*e: function drawedge */
+/*e: function [[drawedge]] */
 
-/*s: function drawborder */
+/*s: function [[drawborder]] */
 void
 drawborder(Rectangle r, bool show)
 {
@@ -287,9 +287,9 @@ drawborder(Rectangle r, bool show)
         drawedge(&b[3], Rect(r.min.x+Borderwidth, r.max.y-Borderwidth, r.max.x-Borderwidth, r.max.y));
     }
 }
-/*e: function drawborder */
+/*e: function [[drawborder]] */
 
-/*s: function drag */
+/*s: function [[drag]] */
 Image*
 drag(Window *w, Rectangle *rp)
 {
@@ -345,11 +345,11 @@ drag(Window *w, Rectangle *rp)
     *rp = r;
     return ni;
 }
-/*e: function drag */
+/*e: function [[drag]] */
 
 
 
-/*s: function cornerpt */
+/*s: function [[cornerpt]] */
 Point
 cornerpt(Rectangle r, Point p, int which)
 {
@@ -381,9 +381,9 @@ cornerpt(Rectangle r, Point p, int which)
     }
     return p;
 }
-/*e: function cornerpt */
+/*e: function [[cornerpt]] */
 
-/*s: function whichrect */
+/*s: function [[whichrect]] */
 Rectangle
 whichrect(Rectangle r, Point p, int which)
 {
@@ -415,9 +415,9 @@ whichrect(Rectangle r, Point p, int which)
     }
     return canonrect(r);
 }
-/*e: function whichrect */
+/*e: function [[whichrect]] */
 
-/*s: function bandsize */
+/*s: function [[bandsize]] */
 Image*
 bandsize(Window *w)
 {
@@ -472,13 +472,13 @@ bandsize(Window *w)
     border(i, r, Selborder, red, ZP);
     return i;
 }
-/*e: function bandsize */
+/*e: function [[bandsize]] */
 
 //----------------------------------------------------------------------------
 // Window management
 //----------------------------------------------------------------------------
 
-/*s: function delete */
+/*s: function [[delete]] */
 void
 delete(void)
 {
@@ -488,9 +488,9 @@ delete(void)
     if(w)
         wsendctlmesg(w, Deleted, ZR, nil);
 }
-/*e: function delete */
+/*e: function [[delete]] */
 
-/*s: function resize */
+/*s: function [[resize]] */
 void
 resize(void)
 {
@@ -504,9 +504,9 @@ resize(void)
     if(i)
         wsendctlmesg(w, Reshaped, i->r, i);
 }
-/*e: function resize */
+/*e: function [[resize]] */
 
-/*s: function move */
+/*s: function [[move]] */
 void
 move(void)
 {
@@ -522,9 +522,9 @@ move(void)
         wsendctlmesg(w, Moved, r, i);
     cornercursor(input, mouse->xy, true);
 }
-/*e: function move */
+/*e: function [[move]] */
 
-/*s: function whide */
+/*s: function [[whide]] */
 int
 whide(Window *w)
 {
@@ -543,9 +543,9 @@ whide(Window *w)
     }
     return 0;
 }
-/*e: function whide */
+/*e: function [[whide]] */
 
-/*s: function wunhide */
+/*s: function [[wunhide]] */
 int
 wunhide(int h)
 {
@@ -562,9 +562,9 @@ wunhide(int h)
     }
     return 0;
 }
-/*e: function wunhide */
+/*e: function [[wunhide]] */
 
-/*s: function hide */
+/*s: function [[hide]] */
 void
 hide(void)
 {
@@ -575,9 +575,9 @@ hide(void)
         return;
     whide(w);
 }
-/*e: function hide */
+/*e: function [[hide]] */
 
-/*s: function unhide */
+/*s: function [[unhide]] */
 void
 unhide(int h)
 {
@@ -591,14 +591,14 @@ unhide(int h)
     /*e: [[unhide()]] sanity check w */
     wunhide(h);
 }
-/*e: function unhide */
+/*e: function [[unhide]] */
 
 
-/*s: global rcargv */
+/*s: global [[rcargv]] */
 char *rcargv[] = { "rc", "-i", nil };
-/*e: global rcargv */
+/*e: global [[rcargv]] */
 
-/*s: function new */
+/*s: function [[new]] */
 Window*
 new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **argv)
 {
@@ -693,13 +693,13 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     chanfree(cpid);
     return w;
 }
-/*e: function new */
+/*e: function [[new]] */
 
 //----------------------------------------------------------------------------
 // Entry point
 //----------------------------------------------------------------------------
 
-/*s: function button3menu */
+/*s: function [[button3menu]] */
 void
 button3menu(void)
 {
@@ -747,5 +747,5 @@ button3menu(void)
     }
     sweeping = false;
 }
-/*e: function button3menu */
+/*e: function [[button3menu]] */
 /*e: windows/rio/wm.c */

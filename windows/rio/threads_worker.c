@@ -14,33 +14,33 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: global xfidfree */
+/*s: global [[xfidfree]] */
 // list<ref_own<Xfid>> (next = Xfid.free)
 static	Xfid	*xfidfree;
-/*e: global xfidfree */
-/*s: global xfid */
+/*e: global [[xfidfree]] */
+/*s: global [[xfid]] */
 // list<ref_own<Xfid>> (next = Xfid.next)
 static	Xfid	*xfid;
-/*e: global xfid */
-/*s: global cxfidalloc */
+/*e: global [[xfid]] */
+/*s: global [[cxfidalloc]] */
 // chan<ref<Xfid>> (listener = filsysproc, sender = xfidallocthread)
 static	Channel	*cxfidalloc;	/* chan(Xfid*) */
-/*e: global cxfidalloc */
-/*s: global cxfidfree */
+/*e: global [[cxfidalloc]] */
+/*s: global [[cxfidfree]] */
 // chan<ref<Xfid>> (listner = ??, sender = ??)
 static	Channel	*cxfidfree;	/* chan(Xfid*) */
-/*e: global cxfidfree */
+/*e: global [[cxfidfree]] */
 
-/*s: enum Xxxx */
+/*s: enum [[Xxxx]] */
 enum { 
     Alloc, 
     Free, 
 
     N 
 };
-/*e: enum Xxxx */
+/*e: enum [[Xxxx]] */
 
-/*s: function xfidctl */
+/*s: function [[xfidctl]] */
 void
 xfidctl(void *arg)
 {
@@ -62,9 +62,9 @@ xfidctl(void *arg)
             sendp(cxfidfree, x);
     }
 }
-/*e: function xfidctl */
+/*e: function [[xfidctl]] */
 
-/*s: function xfidflush */
+/*s: function [[xfidflush]] */
 void
 xfidflush(Xfid *x)
 {
@@ -93,9 +93,9 @@ xfidflush(Xfid *x)
         }
     filsysrespond(x->fs, x, &fc, nil);
 }
-/*e: function xfidflush */
+/*e: function [[xfidflush]] */
 
-/*s: function xfidallocthread */
+/*s: function [[xfidallocthread]] */
 void
 xfidallocthread(void*)
 {
@@ -161,9 +161,9 @@ xfidallocthread(void*)
         }
     }
 }
-/*e: function xfidallocthread */
+/*e: function [[xfidallocthread]] */
 
-/*s: function xfidinit */
+/*s: function [[xfidinit]] */
 Channel*
 xfidinit(void)
 {
@@ -172,5 +172,5 @@ xfidinit(void)
     threadcreate(xfidallocthread, nil, STACK);
     return cxfidalloc;
 }
-/*e: function xfidinit */
+/*e: function [[xfidinit]] */
 /*e: windows/rio/threads_worker.c */

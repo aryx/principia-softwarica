@@ -20,7 +20,7 @@ typedef	struct	Timer Timer;
 // Data structures and constants
 //----------------------------------------------------------------------------
 
-/*s: enum qid */
+/*s: enum [[qid]] */
 enum Qxxx
 {
     Qdir,			/* /dev for this window */
@@ -60,56 +60,56 @@ enum Qxxx
 
     QMAX,
 };
-/*e: enum qid */
+/*e: enum [[qid]] */
 
-/*s: function QID */
+/*s: function [[QID]] */
 #define	QID(winid,qxxx)	((winid<<8)|(qxxx))
-/*e: function QID */
-/*s: function WIN */
+/*e: function [[QID]] */
+/*s: function [[WIN]] */
 #define	WIN(q)	((((ulong)(q).path)>>8) & 0xFFFFFF)
-/*e: function WIN */
-/*s: function FILE */
+/*e: function [[WIN]] */
+/*s: function [[FILE]] */
 #define	FILE(q)	(((ulong)(q).path) & 0xFF)
-/*e: function FILE */
+/*e: function [[FILE]] */
 
 
-/*s: enum _anon_ (windows/rio/dat.h)2 */
+/*s: enum [[_anon_ (windows/rio/dat.h)]]2 */
 enum
 {
     Kscrolloneup = KF|0x20,
     Kscrollonedown = KF|0x21,
 };
-/*e: enum _anon_ (windows/rio/dat.h)2 */
+/*e: enum [[_anon_ (windows/rio/dat.h)]]2 */
 
-/*s: constant STACK */
+/*s: constant [[STACK]] */
 #define	STACK	8192
-/*e: constant STACK */
+/*e: constant [[STACK]] */
 
-/*s: enum _anon_ (windows/rio/dat.h)3 */
+/*s: enum [[_anon_ (windows/rio/dat.h)]]3 */
 enum
 {
-    /*s: constant Selborder */
+    /*s: constant [[Selborder]] */
     Selborder		= 4,	/* border of selected window */
-    /*e: constant Selborder */
-    /*s: constant Unselborder */
+    /*e: constant [[Selborder]] */
+    /*s: constant [[Unselborder]] */
     Unselborder		= 1,	/* border of unselected window */
-    /*e: constant Unselborder */
+    /*e: constant [[Unselborder]] */
     /*s: constants Scrollxxx */
     Scrollwid 		= 12,	/* width of scroll bar */
     /*x: constants Scrollxxx */
     Scrollgap 		= 4,	/* gap right of scroll bar */
     /*e: constants Scrollxxx */
-    /*s: constant BIG */
+    /*s: constant [[BIG]] */
     BIG			= 3,	/* factor by which window dimension can exceed screen */
-    /*e: constant BIG */
+    /*e: constant [[BIG]] */
 };
-/*e: enum _anon_ (windows/rio/dat.h)3 */
+/*e: enum [[_anon_ (windows/rio/dat.h)]]3 */
 
-/*s: constant DEBUG */
+/*s: constant [[DEBUG]] */
 #define DEBUG false
-/*e: constant DEBUG */
+/*e: constant [[DEBUG]] */
 
-/*s: enum wctlmesgkind */
+/*s: enum [[wctlmesgkind]] */
 enum ControlMessage	/* control messages */
 {
     Reshaped, // Resized, Hide/Expose
@@ -132,9 +132,9 @@ enum ControlMessage	/* control messages */
     Refresh,
     /*e: [[Wctlmesgkind]] cases */
 };
-/*e: enum wctlmesgkind */
+/*e: enum [[wctlmesgkind]] */
 
-/*s: struct Wctlmesg */
+/*s: struct [[Wctlmesg]] */
 struct Wctlmesg
 {
     // enum<Wctlmesgkind>
@@ -143,17 +143,17 @@ struct Wctlmesg
     Rectangle	r;
     Image	*image;
 };
-/*e: struct Wctlmesg */
+/*e: struct [[Wctlmesg]] */
 
-/*s: struct Conswritemesg */
+/*s: struct [[Conswritemesg]] */
 struct Conswritemesg
 {
     // chan<ref<array<Rune>> (listener = winctl, sender = xfidwrite(Qcons))
     Channel	*cw;		/* chan(Stringpair) */
 };
-/*e: struct Conswritemesg */
+/*e: struct [[Conswritemesg]] */
 
-/*s: struct Consreadmesg */
+/*s: struct [[Consreadmesg]] */
 struct Consreadmesg
 {
     // chan<ref<array<Rune>> (listener = winctl, sender = xfidread(Qcons))
@@ -161,33 +161,33 @@ struct Consreadmesg
     // chan<ref<array<Rune>> (listener = xdidread(Qcons), sender = winctl)
     Channel	*c2;		/* chan(tuple(char*, int) == Stringpair) */
 };
-/*e: struct Consreadmesg */
+/*e: struct [[Consreadmesg]] */
 
-/*s: struct Mousereadmesg */
+/*s: struct [[Mousereadmesg]] */
 struct Mousereadmesg
 {
     // chan<Mouse> (listener = xfidread(Qmouse), sender = winctl)
     Channel	*cm;		/* chan(Mouse) */
 };
-/*e: struct Mousereadmesg */
+/*e: struct [[Mousereadmesg]] */
 
-/*s: struct Stringpair */
+/*s: struct [[Stringpair]] */
 struct Stringpair	/* rune and nrune or byte and nbyte */
 {
     void	*s;
     int		ns;
 };
-/*e: struct Stringpair */
+/*e: struct [[Stringpair]] */
 
-/*s: struct Mousestate */
+/*s: struct [[Mousestate]] */
 struct Mousestate
 {
     Mouse;
     ulong	counter;	/* serial no. of mouse event */
 };
-/*e: struct Mousestate */
+/*e: struct [[Mousestate]] */
 
-/*s: struct Mouseinfo */
+/*s: struct [[Mouseinfo]] */
 struct Mouseinfo
 {
     // queue of mouse clicks and releases
@@ -206,9 +206,9 @@ struct Mouseinfo
     int	lastb;	/* last button state we received */
     /*e: [[Mouseinfo]] other fields */
 };	
-/*e: struct Mouseinfo */
+/*e: struct [[Mouseinfo]] */
 
-/*s: struct Window */
+/*s: struct [[Window]] */
 struct Window
 {
     //--------------------------------------------------------------------
@@ -369,9 +369,9 @@ struct Window
     QLock;
     /*e: [[Window]] extra fields */
 };
-/*e: struct Window */
+/*e: struct [[Window]] */
 
-/*s: struct Dirtab */
+/*s: struct [[Dirtab]] */
 struct Dirtab
 {
     char	*name;
@@ -381,9 +381,9 @@ struct Dirtab
     uint	qid;
     uint	perm;
 };
-/*e: struct Dirtab */
+/*e: struct [[Dirtab]] */
 
-/*s: struct Fid */
+/*s: struct [[Fid]] */
 struct Fid
 {
     // the key
@@ -413,9 +413,9 @@ struct Fid
     bool	busy;
     /*e: [[Fid]] extra fields */
 };
-/*e: struct Fid */
+/*e: struct [[Fid]] */
 
-/*s: struct Xfid */
+/*s: struct [[Xfid]] */
 struct Xfid
 {
         // incoming parsed request
@@ -448,13 +448,13 @@ struct Xfid
         Xfid	*free;
         /*e: [[Xfid]] extra fields */
 };
-/*e: struct Xfid */
+/*e: struct [[Xfid]] */
 
-/*s: constant Nhash */
+/*s: constant [[Nhash]] */
 #define Nhash 16
-/*e: constant Nhash */
+/*e: constant [[Nhash]] */
 
-/*s: struct Filsys */
+/*s: struct [[Filsys]] */
 struct Filsys
 {
     // client
@@ -473,9 +473,9 @@ struct Filsys
     Channel	*cxfidalloc;	/* chan(Xfid*) */
     /*e: [[Filsys]] other fields */
 };
-/*e: struct Filsys */
+/*e: struct [[Filsys]] */
 
-/*s: struct Timer */
+/*s: struct [[Timer]] */
 struct Timer
 {
     int		dt;
@@ -483,7 +483,7 @@ struct Timer
     Channel	*c;	/* chan(int) */
     Timer	*next;
 };
-/*e: struct Timer */
+/*e: struct [[Timer]] */
 
 //----------------------------------------------------------------------------
 // Globals

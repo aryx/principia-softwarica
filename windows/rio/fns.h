@@ -119,15 +119,15 @@ void*	erealloc(void*, uint);
 void* 	emalloc(uint);
 char* 	estrdup(char*);
 
-/*s: function runemalloc */
+/*s: function [[runemalloc]] */
 #define	runemalloc(n)		malloc((n)*sizeof(Rune))
-/*e: function runemalloc */
-/*s: function runerealloc */
+/*e: function [[runemalloc]] */
+/*s: function [[runerealloc]] */
 #define	runerealloc(a, n)	realloc(a, (n)*sizeof(Rune))
-/*e: function runerealloc */
-/*s: function runemove */
+/*e: function [[runerealloc]] */
+/*s: function [[runemove]] */
 #define	runemove(a, b, n)	memmove(a, b, (n)*sizeof(Rune))
-/*e: function runemove */
+/*e: function [[runemove]] */
 
 // error.c
 void    derror(Display*, char *); // for main.c

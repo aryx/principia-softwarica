@@ -6,7 +6,7 @@
 #include <mouse.h>
 #include <frame.h>
 
-/*s: function _frdrawtext */
+/*s: function [[_frdrawtext]] */
 void
 _frdrawtext(Frame *f, Point pt, Image *text, Image *back)
 {
@@ -22,9 +22,9 @@ _frdrawtext(Frame *f, Point pt, Image *text, Image *back)
         pt.x += b->wid;
     }
 }
-/*e: function _frdrawtext */
+/*e: function [[_frdrawtext]] */
 
-/*s: function nbytes */
+/*s: function [[nbytes]] */
 static int
 nbytes(char *s0, int nr)
 {
@@ -36,9 +36,9 @@ nbytes(char *s0, int nr)
         s += chartorune(&r, s);
     return s-s0;
 }
-/*e: function nbytes */
+/*e: function [[nbytes]] */
 
-/*s: function frdrawsel */
+/*s: function [[frdrawsel]] */
 void
 frdrawsel(Frame *f, Point pt, ulong p0, ulong p1, bool issel)
 {
@@ -63,9 +63,9 @@ frdrawsel(Frame *f, Point pt, ulong p0, ulong p1, bool issel)
 
     frdrawsel0(f, pt, p0, p1, back, text);
 }
-/*e: function frdrawsel */
+/*e: function [[frdrawsel]] */
 
-/*s: function frdrawsel0 */
+/*s: function [[frdrawsel0]] */
 Point
 frdrawsel0(Frame *f, Point pt, ulong p0, ulong p1, Image *back, Image *text)
 {
@@ -128,9 +128,9 @@ frdrawsel0(Frame *f, Point pt, ulong p0, ulong p1, Image *back, Image *text)
     }
     return pt;
 }
-/*e: function frdrawsel0 */
+/*e: function [[frdrawsel0]] */
 
-/*s: function frredraw */
+/*s: function [[frredraw]] */
 void
 frredraw(Frame *f)
 {
@@ -154,9 +154,9 @@ frredraw(Frame *f)
     pt = frdrawsel0(f, pt, f->p0, f->p1,     f->cols[HIGH], f->cols[HTEXT]);
     pt = frdrawsel0(f, pt, f->p1, f->nchars, f->cols[BACK], f->cols[TEXT]);
 }
-/*e: function frredraw */
+/*e: function [[frredraw]] */
 
-/*s: function frtick */
+/*s: function [[frtick]] */
 void
 frtick(Frame *f, Point pt, bool ticked)
 {
@@ -176,9 +176,9 @@ frtick(Frame *f, Point pt, bool ticked)
         draw(f->b, r, f->tickback, nil, ZP);
     f->ticked = ticked;
 }
-/*e: function frtick */
+/*e: function [[frtick]] */
 
-/*s: function _frdraw */
+/*s: function [[_frdraw]] */
 Point
 _frdraw(Frame *f, Point pt)
 {
@@ -211,9 +211,9 @@ _frdraw(Frame *f, Point pt)
     }
     return pt;
 }
-/*e: function _frdraw */
+/*e: function [[_frdraw]] */
 
-/*s: function _frstrlen */
+/*s: function [[_frstrlen]] */
 int
 _frstrlen(Frame *f, int nb)
 {
@@ -223,5 +223,5 @@ _frstrlen(Frame *f, int nb)
         n += NRUNE(&f->box[nb]);
     return n;
 }
-/*e: function _frstrlen */
+/*e: function [[_frstrlen]] */
 /*e: windows/libframe/frdraw.c */

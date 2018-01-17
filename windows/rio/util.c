@@ -12,7 +12,7 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: function cvttorunes */
+/*s: function [[cvttorunes]] */
 void
 cvttorunes(char *p, int n, Rune *r, int *nb, int *nr, int *nulls)
 {
@@ -45,10 +45,10 @@ cvttorunes(char *p, int n, Rune *r, int *nb, int *nr, int *nulls)
     *nb = (char*)q-p;
     *nr = s-r;
 }
-/*e: function cvttorunes */
+/*e: function [[cvttorunes]] */
 
 
-/*s: function erealloc */
+/*s: function [[erealloc]] */
 void*
 erealloc(void *p, uint n)
 {
@@ -57,9 +57,9 @@ erealloc(void *p, uint n)
         error("realloc failed");
     return p;
 }
-/*e: function erealloc */
+/*e: function [[erealloc]] */
 
-/*s: function emalloc */
+/*s: function [[emalloc]] */
 void*
 emalloc(uint n)
 {
@@ -71,9 +71,9 @@ emalloc(uint n)
     memset(p, 0, n);
     return p;
 }
-/*e: function emalloc */
+/*e: function [[emalloc]] */
 
-/*s: function estrdup */
+/*s: function [[estrdup]] */
 char*
 estrdup(char *s)
 {
@@ -85,9 +85,9 @@ estrdup(char *s)
     strcpy(p, s);
     return p;
 }
-/*e: function estrdup */
+/*e: function [[estrdup]] */
 
-/*s: function isalnum */
+/*s: function [[isalnum]] */
 //@Scheck: not dead, but conflict with the one in ctype.h
 int isalnum(Rune c)
 {
@@ -104,9 +104,9 @@ int isalnum(Rune c)
         return false;
     return true;
 }
-/*e: function isalnum */
+/*e: function [[isalnum]] */
 
-/*s: function strrune */
+/*s: function [[strrune]] */
 Rune*
 strrune(Rune *s, Rune c)
 {
@@ -123,9 +123,9 @@ strrune(Rune *s, Rune c)
             return s-1;
     return nil;
 }
-/*e: function strrune */
+/*e: function [[strrune]] */
 
-/*s: function min */
+/*s: function [[min]] */
 int
 min(int a, int b)
 {
@@ -133,7 +133,7 @@ min(int a, int b)
         return a;
     return b;
 }
-/*e: function min */
+/*e: function [[min]] */
 
 /*s: function max (windows/rio/util.c) */
 int
@@ -145,7 +145,7 @@ max(int a, int b)
 }
 /*e: function max (windows/rio/util.c) */
 
-/*s: function runetobyte */
+/*s: function [[runetobyte]] */
 char*
 runetobyte(Rune *r, int n, int *ip)
 {
@@ -157,5 +157,5 @@ runetobyte(Rune *r, int n, int *ip)
     *ip = m;
     return s;
 }
-/*e: function runetobyte */
+/*e: function [[runetobyte]] */
 /*e: windows/rio/util.c */

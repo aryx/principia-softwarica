@@ -16,7 +16,7 @@
 typedef struct Plumbattr Plumbattr;
 typedef struct Plumbmsg Plumbmsg;
 
-/*s: struct Plumbmsg */
+/*s: struct [[Plumbmsg]] */
 struct Plumbmsg
 {
     char		*src;
@@ -27,16 +27,16 @@ struct Plumbmsg
     int			ndata;
     char		*data;
 };
-/*e: struct Plumbmsg */
+/*e: struct [[Plumbmsg]] */
 
-/*s: struct Plumbattr */
+/*s: struct [[Plumbattr]] */
 struct Plumbattr
 {
     char		*name;
     char		*value;
     Plumbattr		*next;
 };
-/*e: struct Plumbattr */
+/*e: struct [[Plumbattr]] */
 
 int		    plumbsend(int, Plumbmsg*);
 int		    plumbsendtext(int, char*, char*, char*, char*);

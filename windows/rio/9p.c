@@ -14,11 +14,11 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: global messagesize */
+/*s: global [[messagesize]] */
 int	messagesize = 8192+IOHDRSZ;	/* good start */
-/*e: global messagesize */
+/*e: global [[messagesize]] */
 
-/*s: function filsysrespond */
+/*s: function [[filsysrespond]] */
 Xfid*
 filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
 {
@@ -56,9 +56,9 @@ filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
     x->buf = nil;
     return x;
 }
-/*e: function filsysrespond */
+/*e: function [[filsysrespond]] */
 
-/*s: function filsyscancel */
+/*s: function [[filsyscancel]] */
 void
 filsyscancel(Xfid *x)
 {
@@ -67,5 +67,5 @@ filsyscancel(Xfid *x)
         x->buf = nil;
     }
 }
-/*e: function filsyscancel */
+/*e: function [[filsyscancel]] */
 /*e: windows/rio/9p.c */

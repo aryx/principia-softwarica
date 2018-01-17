@@ -15,94 +15,94 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: global mousectl */
+/*s: global [[mousectl]] */
 Mousectl	*mousectl;
-/*e: global mousectl */
-/*s: global mouse */
+/*e: global [[mousectl]] */
+/*s: global [[mouse]] */
 // alias for &mousectl->Mouse
 Mouse	*mouse;
-/*e: global mouse */
-/*s: global keyboardctl */
+/*e: global [[mouse]] */
+/*s: global [[keyboardctl]] */
 Keyboardctl	*keyboardctl;
-/*e: global keyboardctl */
+/*e: global [[keyboardctl]] */
 
-/*s: global desktop */
+/*s: global [[desktop]] */
 Screen	*desktop;
-/*e: global desktop */
-/*s: global background */
+/*e: global [[desktop]] */
+/*s: global [[background]] */
 Image	*background;
-/*e: global background */
-/*s: global red */
+/*e: global [[background]] */
+/*s: global [[red]] */
 Image	*red;
-/*e: global red */
+/*e: global [[red]] */
 
-/*s: global window */
+/*s: global [[window]] */
 // growing_array<ref_own<Window>> (size = nwindow+1)
 Window	**windows;
-/*e: global window */
-/*s: global wkeyboard */
+/*e: global [[window]] */
+/*s: global [[wkeyboard]] */
 Window	*wkeyboard;	/* window of simulated keyboard */
-/*e: global wkeyboard */
-/*s: global nwindow */
+/*e: global [[wkeyboard]] */
+/*s: global [[nwindow]] */
 int	nwindow;
-/*e: global nwindow */
+/*e: global [[nwindow]] */
 
 
-/*s: global exitchan */
+/*s: global [[exitchan]] */
 // chan<unit> (listener = threadmain, sender = mousethread(Exit) | ?)
 Channel	*exitchan;	/* chan(int) */
-/*e: global exitchan */
+/*e: global [[exitchan]] */
 
-/*s: global winclosechan */
+/*s: global [[winclosechan]] */
 // chan<ref<Window>> (listener = winclosethread, sender = filsyswalk | filsysclunk )
 Channel	*winclosechan; /* chan(Window*); */
-/*e: global winclosechan */
+/*e: global [[winclosechan]] */
 
-/*s: global deletechan */
+/*s: global [[deletechan]] */
 // chan<string> (listener = deletethread, sender = deletetimeoutproc)
 Channel* deletechan;
-/*e: global deletechan */
+/*e: global [[deletechan]] */
 
 
-/*s: global input */
+/*s: global [[input]] */
 //option<ref<Window>>, the window with the focus! the window to send input to
 Window	*input;
-/*e: global input */
-/*s: global all */
+/*e: global [[input]] */
+/*s: global [[all]] */
 QLock	all;			/* BUG */
-/*e: global all */
-/*s: global filsys */
+/*e: global [[all]] */
+/*s: global [[filsys]] */
 Filsys	*filsys;
-/*e: global filsys */
-/*s: global hidden */
+/*e: global [[filsys]] */
+/*s: global [[hidden]] */
 // array<ref<Window>> (size valid = nhidden)
 Window	*hidden[100];
-/*e: global hidden */
-/*s: global nhidden */
+/*e: global [[hidden]] */
+/*s: global [[nhidden]] */
 int		nhidden;
-/*e: global nhidden */
-/*s: global scrolling */
+/*e: global [[nhidden]] */
+/*s: global [[scrolling]] */
 bool		scrolling;
-/*e: global scrolling */
+/*e: global [[scrolling]] */
 
 
-/*s: global startdir */
+/*s: global [[startdir]] */
 char		*startdir;
-/*e: global startdir */
-/*s: global sweeping */
+/*e: global [[startdir]] */
+/*s: global [[sweeping]] */
 bool	sweeping;
-/*e: global sweeping */
-/*s: global wctlfd */
+/*e: global [[sweeping]] */
+/*s: global [[wctlfd]] */
 int	wctlfd;
-/*e: global wctlfd */
-/*s: global menuing */
+/*e: global [[wctlfd]] */
+/*s: global [[menuing]] */
 bool menuing;/* menu action is pending; waiting for window to be indicated */
-/*e: global menuing */
-/*s: global snarfversion */
+/*e: global [[menuing]] */
+/*s: global [[snarfversion]] */
 int		snarfversion;	/* updated each time it is written */
-/*e: global snarfversion */
+/*e: global [[snarfversion]] */
 
-/*s: global maxtab */
+/*s: global [[maxtab]] */
 int		maxtab = 0;
-/*e: global maxtab */
+/*e: global [[maxtab]] */
 /*e: windows/rio/globals.c */

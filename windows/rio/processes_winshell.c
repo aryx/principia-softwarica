@@ -14,7 +14,7 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: function winshell */
+/*s: function [[winshell]] */
 void
 winshell(void *args)
 {
@@ -79,5 +79,5 @@ winshell(void *args)
         _exits("exec failed"); // should never be reached
     }
 }
-/*e: function winshell */
+/*e: function [[winshell]] */
 /*e: windows/rio/processes_winshell.c */

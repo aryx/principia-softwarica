@@ -16,7 +16,7 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: enum Mxxx */
+/*s: enum [[Mxxx]] */
 enum {
     MMouse,
     /*s: [[Mxxx]] cases */
@@ -24,9 +24,9 @@ enum {
     /*e: [[Mxxx]] cases */
     NALT
 };
-/*e: enum Mxxx */
+/*e: enum [[Mxxx]] */
 
-/*s: function keyboardhide */
+/*s: function [[keyboardhide]] */
 /*
  * Button 6 - keyboard toggle - has been pressed.
  * Send event to keyboard, wait for button up, send that.
@@ -42,13 +42,13 @@ keyboardhide(void)
     while(mouse->buttons & (1<<5));
     send(wkeyboard->mc.c, mouse);
 }
-/*e: function keyboardhide */
+/*e: function [[keyboardhide]] */
 
-/*s: global viewr */
+/*s: global [[viewr]] */
 Rectangle	viewr;
-/*e: global viewr */
+/*e: global [[viewr]] */
 
-/*s: function resized */
+/*s: function [[resized]] */
 void
 resized(void)
 {
@@ -108,10 +108,10 @@ resized(void)
     viewr = view->r;
     flushimage(display, true);
 }
-/*e: function resized */
+/*e: function [[resized]] */
 
 
-/*s: function mousethread */
+/*s: function [[mousethread]] */
 void
 mousethread(void*)
 {
@@ -320,5 +320,5 @@ mousethread(void*)
         /*e: [[mousethread()]] event loop cases */
         }
 }
-/*e: function mousethread */
+/*e: function [[mousethread]] */
 /*e: windows/rio/thread_mouse.c */

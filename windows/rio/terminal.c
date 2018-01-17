@@ -17,16 +17,16 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: enum _anon_ (windows/rio/wind.c) */
+/*s: enum [[_anon_ (windows/rio/wind.c)]] */
 enum
 {
     HiWater	= 640000,	/* max size of history */
     LoWater	= 400000,	/* min size of history after max'ed */
     MinWater	= 20000,	/* room to leave available when reallocating */
 };
-/*e: enum _anon_ (windows/rio/wind.c) */
+/*e: enum [[_anon_ (windows/rio/wind.c)]] */
 
-/*s: enum _anon_ (windows/rio/rio.c)2 */
+/*s: enum [[_anon_ (windows/rio/rio.c)]]2 */
 enum
 {
     Cut,
@@ -36,9 +36,9 @@ enum
     Send,
     Scroll,
 };
-/*e: enum _anon_ (windows/rio/rio.c)2 */
+/*e: enum [[_anon_ (windows/rio/rio.c)]]2 */
 
-/*s: global menu2str */
+/*s: global [[menu2str]] */
 char*		menu2str[] = {
  [Cut]		"cut",
  [Paste]	"paste",
@@ -48,30 +48,30 @@ char*		menu2str[] = {
  [Scroll]	"scroll",
  nil
 };
-/*e: global menu2str */
+/*e: global [[menu2str]] */
 
-/*s: global menu2 */
+/*s: global [[menu2]] */
 Menu menu2 = { .item = menu2str };
-/*e: global menu2 */
+/*e: global [[menu2]] */
 
-/*s: global clickwin */
+/*s: global [[clickwin]] */
 static Window	*clickwin;
-/*e: global clickwin */
-/*s: global clickmsec */
+/*e: global [[clickwin]] */
+/*s: global [[clickmsec]] */
 static uint	clickmsec;
-/*e: global clickmsec */
-/*s: global selectwin */
+/*e: global [[clickmsec]] */
+/*s: global [[selectwin]] */
 static Window	*selectwin;
-/*e: global selectwin */
-/*s: global selectq */
+/*e: global [[selectwin]] */
+/*s: global [[selectq]] */
 static uint	selectq;
-/*e: global selectq */
+/*e: global [[selectq]] */
 
 //----------------------------------------------------------------------------
 // Completion
 //----------------------------------------------------------------------------
 
-/*s: function windfilewidth */
+/*s: function [[windfilewidth]] */
 int
 windfilewidth(Window *w, uint q0, int oneelement)
 {
@@ -89,9 +89,9 @@ windfilewidth(Window *w, uint q0, int oneelement)
     }
     return q0-q;
 }
-/*e: function windfilewidth */
+/*e: function [[windfilewidth]] */
 
-/*s: function showcandidates */
+/*s: function [[showcandidates]] */
 void
 showcandidates(Window *w, Completion *c)
 {
@@ -130,9 +130,9 @@ showcandidates(Window *w, Completion *c)
     free(rp);
     wsetselect(w, q0+nr, q0+nr);
 }
-/*e: function showcandidates */
+/*e: function [[showcandidates]] */
 
-/*s: function namecomplete */
+/*s: function [[namecomplete]] */
 Rune*
 namecomplete(Window *w)
 {
@@ -185,13 +185,13 @@ namecomplete(Window *w)
     free(str);
     return rp;
 }
-/*e: function namecomplete */
+/*e: function [[namecomplete]] */
 
 //----------------------------------------------------------------------------
 // Editor
 //----------------------------------------------------------------------------
 
-/*s: function wbswidth */
+/*s: function [[wbswidth]] */
 int
 wbswidth(Window *w, Rune c)
 {
@@ -233,9 +233,9 @@ wbswidth(Window *w, Rune c)
     }
     return w->q0-q;
 }
-/*e: function wbswidth */
+/*e: function [[wbswidth]] */
 
-/*s: function wfill */
+/*s: function [[wfill]] */
 void
 wfill(Window *w)
 {
@@ -270,10 +270,10 @@ wfill(Window *w)
     } while(frm->lastlinefull == false);
     free(rp);
 }
-/*e: function wfill */
+/*e: function [[wfill]] */
 
 
-/*s: function wdelete */
+/*s: function [[wdelete]] */
 void
 wdelete(Window *w, uint q0, uint q1)
 {
@@ -319,9 +319,9 @@ wdelete(Window *w, uint q0, uint q1)
        /*e: [[wdelete()]] when [[q1 > w->org]], possibly update visible text */
     /*e: [[wdelete()]] adjust cursors */
 }
-/*e: function wdelete */
+/*e: function [[wdelete]] */
 
-/*s: function wbacknl */
+/*s: function [[wbacknl]] */
 uint
 wbacknl(Window *w, uint p, uint n)
 {
@@ -343,9 +343,9 @@ wbacknl(Window *w, uint p, uint n)
     }
     return p;
 }
-/*e: function wbacknl */
+/*e: function [[wbacknl]] */
 
-/*s: function wsetorigin */
+/*s: function [[wsetorigin]] */
 void
 wsetorigin(Window *w, uint org, bool exact)
 {
@@ -385,10 +385,10 @@ wsetorigin(Window *w, uint org, bool exact)
     if(fixup && frm->p1 > frm->p0)
         frdrawsel(frm, frptofchar(frm, frm->p1-1), frm->p1-1, frm->p1, 1);
 }
-/*e: function wsetorigin */
+/*e: function [[wsetorigin]] */
 
 
-/*s: function wshow */
+/*s: function [[wshow]] */
 void
 wshow(Window *w, uint q0)
 {
@@ -412,10 +412,10 @@ wshow(Window *w, uint q0)
     }
     /*e: [[wshow()]] else, when q0 is out of scope */
 }
-/*e: function wshow */
+/*e: function [[wshow]] */
 
 
-/*s: function wsetselect */
+/*s: function [[wsetselect]] */
 void
 wsetselect(Window *w, uint q0, uint q1)
 {
@@ -466,9 +466,9 @@ wsetselect(Window *w, uint q0, uint q1)
     frm->p0 = p0;
     frm->p1 = p1;
 }
-/*e: function wsetselect */
+/*e: function [[wsetselect]] */
 
-/*s: function winsert */
+/*s: function [[winsert]] */
 uint
 winsert(Window *w, Rune *r, int n, uint q0)
 {
@@ -540,22 +540,22 @@ winsert(Window *w, Rune *r, int n, uint q0)
 
     return q0;
 }
-/*e: function winsert */
+/*e: function [[winsert]] */
 
 
-/*s: function wcontents */
+/*s: function [[wcontents]] */
 char*
 wcontents(Window *w, int *ip)
 {
     return runetobyte(w->r, w->nr, ip);
 }
-/*e: function wcontents */
+/*e: function [[wcontents]] */
 
 //----------------------------------------------------------------------------
 // Cut/copy/paste
 //----------------------------------------------------------------------------
 
-/*s: function wsnarf */
+/*s: function [[wsnarf]] */
 void
 wsnarf(Window *w)
 {
@@ -567,9 +567,9 @@ wsnarf(Window *w)
     runemove(snarf, w->r+w->q0, nsnarf);
     putsnarf();
 }
-/*e: function wsnarf */
+/*e: function [[wsnarf]] */
 
-/*s: function wcut */
+/*s: function [[wcut]] */
 void
 wcut(Window *w)
 {
@@ -578,9 +578,9 @@ wcut(Window *w)
     wdelete(w, w->q0, w->q1);
     wsetselect(w, w->q0, w->q0);
 }
-/*e: function wcut */
+/*e: function [[wcut]] */
 
-/*s: function wpaste */
+/*s: function [[wpaste]] */
 void
 wpaste(Window *w)
 {
@@ -598,13 +598,13 @@ wpaste(Window *w)
         wsetselect(w, q0, q0+nsnarf);
     }
 }
-/*e: function wpaste */
+/*e: function [[wpaste]] */
 
 //----------------------------------------------------------------------------
 // Scrolling
 //----------------------------------------------------------------------------
 
-/*s: function wframescroll */
+/*s: function [[wframescroll]] */
 void
 wframescroll(Window *w, int dl)
 {
@@ -632,9 +632,9 @@ wframescroll(Window *w, int dl)
     }
     wsetorigin(w, q0, true);
 }
-/*e: function wframescroll */
+/*e: function [[wframescroll]] */
 
-/*s: function framescroll */
+/*s: function [[framescroll]] */
 /*
  * called from frame library
  */
@@ -645,13 +645,13 @@ framescroll(Frame *f, int dl)
         error("frameselect not right frame");
     wframescroll(selectwin, dl);
 }
-/*e: function framescroll */
+/*e: function [[framescroll]] */
 
 //----------------------------------------------------------------------------
 // Selection
 //----------------------------------------------------------------------------
 
-/*s: function wclickmatch */
+/*s: function [[wclickmatch]] */
 int
 wclickmatch(Window *w, int cl, int cr, int dir, uint *q)
 {
@@ -679,40 +679,40 @@ wclickmatch(Window *w, int cl, int cr, int dir, uint *q)
     }
     return cl=='\n' && nest==1;
 }
-/*e: function wclickmatch */
+/*e: function [[wclickmatch]] */
 
 
-/*s: global left1 */
+/*s: global [[left1]] */
 static Rune left1[] =  { L'{', L'[', L'(', L'<', L'«', 0 };
-/*e: global left1 */
-/*s: global right1 */
+/*e: global [[left1]] */
+/*s: global [[right1]] */
 static Rune right1[] = { L'}', L']', L')', L'>', L'»', 0 };
-/*e: global right1 */
-/*s: global left2 */
+/*e: global [[right1]] */
+/*s: global [[left2]] */
 static Rune left2[] =  { L'\n', 0 };
-/*e: global left2 */
-/*s: global left3 */
+/*e: global [[left2]] */
+/*s: global [[left3]] */
 static Rune left3[] =  { L'\'', L'"', L'`', 0 };
-/*e: global left3 */
+/*e: global [[left3]] */
 
-/*s: global left */
+/*s: global [[left]] */
 Rune *left[] = {
     left1,
     left2,
     left3,
     nil
 };
-/*e: global left */
-/*s: global right */
+/*e: global [[left]] */
+/*s: global [[right]] */
 Rune *right[] = {
     right1,
     left2,
     left3,
     nil
 };
-/*e: global right */
+/*e: global [[right]] */
 
-/*s: function wdoubleclick */
+/*s: function [[wdoubleclick]] */
 void
 wdoubleclick(Window *w, uint *q0, uint *q1)
 {
@@ -758,10 +758,10 @@ wdoubleclick(Window *w, uint *q0, uint *q1)
     while(*q0>0 && isalnum(w->r[*q0-1]))
         (*q0)--;
 }
-/*e: function wdoubleclick */
+/*e: function [[wdoubleclick]] */
 
 
-/*s: function wselect */
+/*s: function [[wselect]] */
 void
 wselect(Window *w)
 {
@@ -845,7 +845,7 @@ wselect(Window *w)
         clickwin = nil;
     }
 }
-/*e: function wselect */
+/*e: function [[wselect]] */
 
 //----------------------------------------------------------------------------
 // Clicking
@@ -855,7 +855,7 @@ wselect(Window *w)
 // Plumb
 //----------------------------------------------------------------------------
 
-/*s: function wplumb */
+/*s: function [[wplumb]] */
 void
 wplumb(Window *w)
 {
@@ -899,13 +899,13 @@ wplumb(Window *w)
     }
     plumbfree(m);
 }
-/*e: function wplumb */
+/*e: function [[wplumb]] */
 
 //----------------------------------------------------------------------------
 // Middle click
 //----------------------------------------------------------------------------
 
-/*s: function button2menu */
+/*s: function [[button2menu]] */
 void
 button2menu(Window *w)
 {
@@ -972,13 +972,13 @@ button2menu(Window *w)
     wsendctlmesg(w, Wakeup, ZR, nil);
     flushimage(display, true);
 }
-/*e: function button2menu */
+/*e: function [[button2menu]] */
 
 //----------------------------------------------------------------------------
 // Mouse dispatch
 //----------------------------------------------------------------------------
 
-/*s: function wmousectl */
+/*s: function [[wmousectl]] */
 void
 wmousectl(Window *w)
 {
@@ -1018,13 +1018,13 @@ wmousectl(Window *w)
    Return:
     wclose(w);
 }
-/*e: function wmousectl */
+/*e: function [[wmousectl]] */
 
 //----------------------------------------------------------------------------
 // Key dispatch
 //----------------------------------------------------------------------------
 
-/*s: function interruptproc */
+/*s: function [[interruptproc]] */
 /*
  * Need to do this in a separate proc because if process we're interrupting
  * is dying and trying to print tombstone, kernel is blocked holding p->debug lock.
@@ -1038,9 +1038,9 @@ interruptproc(void *v)
     write(*notefd, "interrupt", 9);
     free(notefd);
 }
-/*e: function interruptproc */
+/*e: function [[interruptproc]] */
 
-/*s: function wkeyctl */
+/*s: function [[wkeyctl]] */
 void
 wkeyctl(Window *w, Rune r)
 {
@@ -1232,5 +1232,5 @@ wkeyctl(Window *w, Rune r)
     /*e: [[wkeyctl()]] ordinary character */
     /*e: [[wkeyctl()]] when not rawing */
 }
-/*e: function wkeyctl */
+/*e: function [[wkeyctl]] */
 /*e: windows/rio/terminal.c */

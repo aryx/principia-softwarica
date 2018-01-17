@@ -6,7 +6,7 @@
 #include <mouse.h>
 #include <frame.h>
 
-/*s: function region */
+/*s: function [[region]] */
 static
 int
 region(int a, int b)
@@ -17,9 +17,9 @@ region(int a, int b)
         return 0;
     return 1;
 }
-/*e: function region */
+/*e: function [[region]] */
 
-/*s: function frselect */
+/*s: function [[frselect]] */
 void
 frselect(Frame *f, Mousectl *mc)	/* when called, button 1 is down */
 {
@@ -106,9 +106,9 @@ frselect(Frame *f, Mousectl *mc)	/* when called, button 1 is down */
         mp = mc->xy;
     }while(mc->buttons == b);
 }
-/*e: function frselect */
+/*e: function [[frselect]] */
 
-/*s: function frselectpaint */
+/*s: function [[frselectpaint]] */
 void
 frselectpaint(Frame *f, Point p0, Point p1, Image *col)
 {
@@ -137,5 +137,5 @@ frselectpaint(Frame *f, Point p0, Point p1, Image *col)
             col, nil, ZP);
     }
 }
-/*e: function frselectpaint */
+/*e: function [[frselectpaint]] */
 /*e: windows/libframe/frselect.c */

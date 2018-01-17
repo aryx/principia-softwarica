@@ -14,7 +14,7 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: function keyboardthread */
+/*s: function [[keyboardthread]] */
 void
 keyboardthread(void*)
 {
@@ -43,5 +43,5 @@ keyboardthread(void*)
             sendp(input->ck, rp);
     }
 }
-/*e: function keyboardthread */
+/*e: function [[keyboardthread]] */
 /*e: windows/rio/thread_keyboard.c */

@@ -27,7 +27,7 @@ char	srvpipe[64];
 char	srvwctl[64];
 /*e: global srvwctl (windows/rio/fsys.c) */
 
-/*s: function filsysproc */
+/*s: function [[filsysproc]] */
 static
 void
 filsysproc(void *arg)
@@ -90,9 +90,9 @@ filsysproc(void *arg)
         /*e: [[filsysproc()]] end of loop */
     }
 }
-/*e: function filsysproc */
+/*e: function [[filsysproc]] */
 
-/*s: function cexecpipe */
+/*s: function [[cexecpipe]] */
 /*
  * Build pipe with OCEXEC set on second fd.
  * Can't put it on both because we want to post one in /srv.
@@ -110,9 +110,9 @@ cexecpipe(fdt *p0, fdt *p1)
         return ERROR_NEG1;
     return OK_0;
 }
-/*e: function cexecpipe */
+/*e: function [[cexecpipe]] */
 
-/*s: function post */
+/*s: function [[post]] */
 void
 post(char *name, char *envname, fdt srvfd)
 {
@@ -128,10 +128,10 @@ post(char *name, char *envname, fdt srvfd)
 
     putenv(envname, name);
 }
-/*e: function post */
+/*e: function [[post]] */
 
 
-/*s: function filsysinit */
+/*s: function [[filsysinit]] */
 Filsys*
 filsysinit(Channel *cxfidalloc)
 {
@@ -215,9 +215,9 @@ Rescue:
     free(fs);
     return nil;
 }
-/*e: function filsysinit */
+/*e: function [[filsysinit]] */
 
-/*s: function filsysmount */
+/*s: function [[filsysmount]] */
 /*
  * Called only from a different FD group
  */
@@ -245,5 +245,5 @@ filsysmount(Filsys *fs, int id)
     /*e: [[filsysmount()]] sanity check err bind */
     return OK_0;
 }
-/*e: function filsysmount */
+/*e: function [[filsysmount]] */
 /*e: windows/rio/proc_fileserver.c */

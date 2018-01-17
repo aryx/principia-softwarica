@@ -17,7 +17,7 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: enum Wxxx */
+/*s: enum [[Wxxx]] */
 enum { 
     WKey, 
     WMouse, 
@@ -34,9 +34,9 @@ enum {
 
     NWALT 
 };
-/*e: enum Wxxx */
+/*e: enum [[Wxxx]] */
 
-/*s: function deletetimeoutproc */
+/*s: function [[deletetimeoutproc]] */
 void
 deletetimeoutproc(void *v)
 {
@@ -45,9 +45,9 @@ deletetimeoutproc(void *v)
     sleep(750);	/* remove window from screen after 3/4 of a second */
     sendp(deletechan, s);
 }
-/*e: function deletetimeoutproc */
+/*e: function [[deletetimeoutproc]] */
 
-/*s: function wctlmesg */
+/*s: function [[wctlmesg]] */
 int
 wctlmesg(Window *w, int m, Rectangle r, Image *i)
 {
@@ -153,9 +153,9 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
     }
     return m;
 }
-/*e: function wctlmesg */
+/*e: function [[wctlmesg]] */
 
-/*s: function winctl */
+/*s: function [[winctl]] */
 void
 winctl(void *arg)
 {
@@ -486,5 +486,5 @@ winctl(void *arg)
             flushimage(display, true);
     }
 }
-/*e: function winctl */
+/*e: function [[winctl]] */
 /*e: windows/rio/threads_window.c */

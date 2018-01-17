@@ -9,11 +9,11 @@
 /*s: constant CHUNK (windows/libframe/frstr.c) */
 #define	CHUNK	16
 /*e: constant CHUNK (windows/libframe/frstr.c) */
-/*s: function ROUNDUP */
+/*s: function [[ROUNDUP]] */
 #define	ROUNDUP(n)	((n+CHUNK)&~(CHUNK-1))
-/*e: function ROUNDUP */
+/*e: function [[ROUNDUP]] */
 
-/*s: function _frallocstr */
+/*s: function [[_frallocstr]] */
 uchar *
 _frallocstr(Frame *f, unsigned n)
 {
@@ -24,9 +24,9 @@ _frallocstr(Frame *f, unsigned n)
         drawerror(f->display, "out of memory");
     return p;
 }
-/*e: function _frallocstr */
+/*e: function [[_frallocstr]] */
 
-/*s: function _frinsure */
+/*s: function [[_frinsure]] */
 void
 _frinsure(Frame *f, int bn, unsigned n)
 {
@@ -44,5 +44,5 @@ _frinsure(Frame *f, int bn, unsigned n)
     free(b->ptr);
     b->ptr = p;
 }
-/*e: function _frinsure */
+/*e: function [[_frinsure]] */
 /*e: windows/libframe/frstr.c */

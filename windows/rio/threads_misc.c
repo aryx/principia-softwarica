@@ -16,7 +16,7 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: function winclosethread */
+/*s: function [[winclosethread]] */
 /* thread to allow fsysproc to synchronize window closing with main proc */
 void
 winclosethread(void*)
@@ -30,9 +30,9 @@ winclosethread(void*)
         wclose(w);
     }
 }
-/*e: function winclosethread */
+/*e: function [[winclosethread]] */
 
-/*s: function deletethread */
+/*s: function [[deletethread]] */
 /* thread to make Deleted windows that the client still holds disappear offscreen after an interval */
 void
 deletethread(void*)
@@ -54,5 +54,5 @@ deletethread(void*)
         free(s);
     }
 }
-/*e: function deletethread */
+/*e: function [[deletethread]] */
 /*e: windows/rio/threads_misc.c */

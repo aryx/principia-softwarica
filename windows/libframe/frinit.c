@@ -6,7 +6,7 @@
 #include <mouse.h>
 #include <frame.h>
 
-/*s: function frinit */
+/*s: function [[frinit]] */
 void
 frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
 {
@@ -35,9 +35,9 @@ frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
     f->maxtab = 8 * stringwidth(ft, "0");
     /*e: [[frinit()]] initialize other fields */
 }
-/*e: function frinit */
+/*e: function [[frinit]] */
 
-/*s: function frinittick */
+/*s: function [[frinittick]] */
 void
 frinittick(Frame *f)
 {
@@ -73,9 +73,9 @@ frinittick(Frame *f)
     draw(f->tick, Rect(0, 0, FRTICKW, FRTICKW), f->cols[TEXT], nil, ZP);
     draw(f->tick, Rect(0, ft->height-FRTICKW, FRTICKW, ft->height), f->cols[TEXT], nil, ZP);
 }
-/*e: function frinittick */
+/*e: function [[frinittick]] */
 
-/*s: function frsetrects */
+/*s: function [[frsetrects]] */
 void
 frsetrects(Frame *f, Rectangle r, Image *b)
 {
@@ -85,9 +85,9 @@ frsetrects(Frame *f, Rectangle r, Image *b)
     f->r.max.y -= (r.max.y-r.min.y) % f->font->height;
     f->maxlines = (r.max.y-r.min.y) / f->font->height;
 }
-/*e: function frsetrects */
+/*e: function [[frsetrects]] */
 
-/*s: function frclear */
+/*s: function [[frclear]] */
 void
 frclear(Frame *f, bool freeall)
 {
@@ -108,5 +108,5 @@ frclear(Frame *f, bool freeall)
     f->ticked = false;
     /*e: [[frclear()]] free ticks */
 }
-/*e: function frclear */
+/*e: function [[frclear]] */
 /*e: windows/libframe/frinit.c */

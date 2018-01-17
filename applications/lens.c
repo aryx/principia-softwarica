@@ -6,14 +6,14 @@
 #include <window.h>
 #include <event.h>
 
-/*s: enum _anon_ (windows/apps/lens.c) */
+/*s: enum [[_anon_ (windows/apps/lens.c)]] */
 enum {
     Edge = 5,
     Maxmag = 16
 };
-/*e: enum _anon_ (windows/apps/lens.c) */
+/*e: enum [[_anon_ (windows/apps/lens.c)]] */
 
-/*s: enum _anon_ (windows/apps/lens.c)2 */
+/*s: enum [[_anon_ (windows/apps/lens.c)]]2 */
 enum {
     Mzoom,
     Munzoom,
@@ -21,9 +21,9 @@ enum {
     Mredraw,
     Mexit
 };
-/*e: enum _anon_ (windows/apps/lens.c)2 */
+/*e: enum [[_anon_ (windows/apps/lens.c)]]2 */
 
-/*s: global menustr */
+/*s: global [[menustr]] */
 static char *menustr[] = {
     "zoom",
     "unzoom",
@@ -32,7 +32,7 @@ static char *menustr[] = {
     "exit",
     nil
 };
-/*e: global menustr */
+/*e: global [[menustr]] */
 
 /*s: global menu (windows/apps/lens.c) */
 static Menu menu = {
@@ -42,41 +42,41 @@ static Menu menu = {
 };
 /*e: global menu (windows/apps/lens.c) */
 
-/*s: global lastp */
+/*s: global [[lastp]] */
 static Point lastp;
-/*e: global lastp */
+/*e: global [[lastp]] */
 /*s: global red (windows/apps/lens.c) */
 static Image *red;
 /*e: global red (windows/apps/lens.c) */
 /*s: global tmp (windows/apps/lens.c) */
 static Image *tmp;
 /*e: global tmp (windows/apps/lens.c) */
-/*s: global grid */
+/*s: global [[grid]] */
 static Image *grid;
-/*e: global grid */
-/*s: global chequer */
+/*e: global [[grid]] */
+/*s: global [[chequer]] */
 static Image *chequer;
-/*e: global chequer */
-/*s: global screenfd */
+/*e: global [[chequer]] */
+/*s: global [[screenfd]] */
 static int	screenfd;
-/*e: global screenfd */
-/*s: global mag */
+/*e: global [[screenfd]] */
+/*s: global [[mag]] */
 static int	mag = 4;
-/*e: global mag */
-/*s: global showgrid */
+/*e: global [[mag]] */
+/*s: global [[showgrid]] */
 static int	showgrid = 0;
-/*e: global showgrid */
-/*s: global screenr */
+/*e: global [[showgrid]] */
+/*s: global [[screenr]] */
 static Rectangle	screenr;
-/*e: global screenr */
-/*s: global screenbuf */
+/*e: global [[screenr]] */
+/*s: global [[screenbuf]] */
 static uchar	*screenbuf;
-/*e: global screenbuf */
+/*e: global [[screenbuf]] */
 
 void magnify(void);
 void makegrid(void);
 
-/*s: function drawit */
+/*s: function [[drawit]] */
 void
 drawit(void)
 {
@@ -87,11 +87,11 @@ drawit(void)
     draw(view, r, tmp, nil, tmp->r.min);
     flushimage(display, true);
 }
-/*e: function drawit */
+/*e: function [[drawit]] */
 
-/*s: global bypp */
+/*s: global [[bypp]] */
 static int bypp;
-/*e: global bypp */
+/*e: global [[bypp]] */
 
 /*s: function main (windows/apps/lens.c) */
 void
@@ -214,7 +214,7 @@ main(int argc, char *argv[])
 }
 /*e: function main (windows/apps/lens.c) */
 
-/*s: function makegrid */
+/*s: function [[makegrid]] */
 void
 makegrid(void)
 {
@@ -235,7 +235,7 @@ makegrid(void)
         }
     }
 }
-/*e: function makegrid */
+/*e: function [[makegrid]] */
 
 /*s: function eresized (windows/apps/lens.c) */
 void
@@ -255,7 +255,7 @@ eresized(int new)
 }
 /*e: function eresized (windows/apps/lens.c) */
 
-/*s: function magnify */
+/*s: function [[magnify]] */
 void
 magnify(void)
 {
@@ -312,5 +312,5 @@ magnify(void)
     if (showgrid && mag && grid)
         draw(tmp, tmp->r, grid, nil, mulpt(Pt(xoff, yoff), mag));
 }
-/*e: function magnify */
+/*e: function [[magnify]] */
 /*e: windows/apps/lens.c */

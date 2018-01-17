@@ -5,7 +5,7 @@
 typedef struct Frbox Frbox;
 typedef struct Frame Frame;
 
-/*s: enum _anon_ (include/frame.h) */
+/*s: enum [[_anon_ (include/frame.h)]] */
 enum FrameColors {
     BACK, // Background
     HIGH, // Background highlighted text
@@ -15,13 +15,13 @@ enum FrameColors {
 
     NCOL
 };
-/*e: enum _anon_ (include/frame.h) */
+/*e: enum [[_anon_ (include/frame.h)]] */
 
-/*s: constant FRTICKW */
+/*s: constant [[FRTICKW]] */
 #define	FRTICKW	3
-/*e: constant FRTICKW */
+/*e: constant [[FRTICKW]] */
 
-/*s: struct Frbox */
+/*s: struct [[Frbox]] */
 struct Frbox
 {
     long		wid;		/* in pixels */
@@ -36,9 +36,9 @@ struct Frbox
         };
     };
 };
-/*e: struct Frbox */
+/*e: struct [[Frbox]] */
 
-/*s: struct Frame */
+/*s: struct [[Frame]] */
 struct Frame
 {
     Image	*b;		    /* on which frame appears */
@@ -85,7 +85,7 @@ struct Frame
     Rectangle	entire;		/* of full frame */
     /*e: [[Frame]] other fields */
 };
-/*e: struct Frame */
+/*e: struct [[Frame]] */
 
 ulong	frcharofpt(Frame*, Point);
 Point	frptofchar(Frame*, ulong);
@@ -132,10 +132,10 @@ void	frinittick(Frame*);
 
 void	frredraw(Frame*);
 
-/*s: function NRUNE */
+/*s: function [[NRUNE]] */
 #define	NRUNE(b)	((b)->nrune < 0 ? 1 : (b)->nrune)
-/*e: function NRUNE */
-/*s: function NBYTE */
+/*e: function [[NRUNE]] */
+/*s: function [[NBYTE]] */
 #define	NBYTE(b)	strlen((char*)(b)->ptr)
-/*e: function NBYTE */
+/*e: function [[NBYTE]] */
 /*e: include/frame.h */

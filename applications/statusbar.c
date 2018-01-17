@@ -6,35 +6,35 @@
 #include <bio.h>
 #include <event.h>
 
-/*s: enum _anon_ (windows/apps/statusbar.c) */
+/*s: enum [[_anon_ (windows/apps/statusbar.c)]] */
 enum {PNCTL=3};
-/*e: enum _anon_ (windows/apps/statusbar.c) */
+/*e: enum [[_anon_ (windows/apps/statusbar.c)]] */
 
 static char* rdenv(char*);
 int newwin(char*);
 Rectangle screenrect(void);
 
-/*s: global nokill */
+/*s: global [[nokill]] */
 static int nokill;
-/*e: global nokill */
-/*s: global textmode */
+/*e: global [[nokill]] */
+/*s: global [[textmode]] */
 static int textmode;
-/*e: global textmode */
-/*s: global title */
+/*e: global [[textmode]] */
+/*s: global [[title]] */
 static char *title;
-/*e: global title */
+/*e: global [[title]] */
 
-/*s: global light */
+/*s: global [[light]] */
 static Image *light;
-/*e: global light */
-/*s: global dark */
+/*e: global [[light]] */
+/*s: global [[dark]] */
 static Image *dark;
-/*e: global dark */
+/*e: global [[dark]] */
 /*s: global text (windows/apps/statusbar.c) */
 static Image *text;
 /*e: global text (windows/apps/statusbar.c) */
 
-/*s: function initcolor */
+/*s: function [[initcolor]] */
 static void
 initcolor(void)
 {
@@ -42,27 +42,27 @@ initcolor(void)
     light = allocimagemix(display, DPalegreen, DWhite);
     dark = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DDarkgreen);
 }
-/*e: function initcolor */
+/*e: function [[initcolor]] */
 
-/*s: global rbar */
+/*s: global [[rbar]] */
 static Rectangle rbar;
-/*e: global rbar */
-/*s: global ptext */
+/*e: global [[rbar]] */
+/*s: global [[ptext]] */
 static Point ptext;
-/*e: global ptext */
+/*e: global [[ptext]] */
 static vlong n, d;
-/*s: global last */
+/*s: global [[last]] */
 static int last;
-/*e: global last */
+/*e: global [[last]] */
 /*s: global lastp (windows/apps/statusbar.c) */
 static int lastp = -1;
 /*e: global lastp (windows/apps/statusbar.c) */
 
-/*s: global backup */
+/*s: global [[backup]] */
 static char backup[80];
-/*e: global backup */
+/*e: global [[backup]] */
 
-/*s: function drawbar */
+/*s: function [[drawbar]] */
 void
 drawbar(void)
 {
@@ -122,7 +122,7 @@ drawbar(void)
     }
     flushimage(display, 1);
 }
-/*e: function drawbar */
+/*e: function [[drawbar]] */
 
 /*s: function eresized (windows/apps/statusbar.c) */
 void
@@ -154,7 +154,7 @@ eresized(int new)
 }
 /*e: function eresized (windows/apps/statusbar.c) */
 
-/*s: function bar */
+/*s: function [[bar]] */
 void
 bar(Biobuf *b)
 {
@@ -191,7 +191,7 @@ bar(Biobuf *b)
     }
     postnote(PNCTL, child, "kill");
 }
-/*e: function bar */
+/*e: function [[bar]] */
 
 
 /*s: function usage (windows/apps/statusbar.c) */
@@ -254,7 +254,7 @@ main(int argc, char **argv)
 /*e: function main (windows/apps/statusbar.c) */
 
 
-/*s: function rdenv */
+/*s: function [[rdenv]] */
 /* all code below this line should be in the library, but is stolen from colors instead */
 static char*
 rdenv(char *name)
@@ -277,9 +277,9 @@ rdenv(char *name)
     close(fd);
     return v;
 }
-/*e: function rdenv */
+/*e: function [[rdenv]] */
 
-/*s: function newwin */
+/*s: function [[newwin]] */
 int
 newwin(char *win)
 {
@@ -342,9 +342,9 @@ newwin(char *win)
 //	wctlfd = open("/dev/wctl", OWRITE);
     return 0;
 }
-/*e: function newwin */
+/*e: function [[newwin]] */
 
-/*s: function screenrect */
+/*s: function [[screenrect]] */
 Rectangle
 screenrect(void)
 {
@@ -365,9 +365,9 @@ screenrect(void)
     close(fd);
     return Rect(atoi(buf+12), atoi(buf+24), atoi(buf+36), atoi(buf+48));
 }
-/*e: function screenrect */
+/*e: function [[screenrect]] */
 
-/*s: function postnote */
+/*s: function [[postnote]] */
 int
 postnote(int group, int pid, char *note)
 {
@@ -400,5 +400,5 @@ postnote(int group, int pid, char *note)
     close(f);
     return 0;
 }
-/*e: function postnote */
+/*e: function [[postnote]] */
 /*e: windows/apps/statusbar.c */

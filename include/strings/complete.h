@@ -4,7 +4,7 @@
 
 typedef struct Completion Completion;
 
-/*s: struct Completion */
+/*s: struct [[Completion]] */
 struct Completion{
     uchar advance;	/* whether forward progress has been made */
     uchar complete;	/* whether the completion now represents a file or directory */
@@ -13,7 +13,7 @@ struct Completion{
     int nfile;		/* number of files returned */
     char **filename;	/* their names */
 };
-/*e: struct Completion */
+/*e: struct [[Completion]] */
 
 Completion* 	complete(char *dir, char *s);
 void 		freecompletion(Completion*);

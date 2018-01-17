@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "plumb.h"
 
-/*s: function plumbopen */
+/*s: function [[plumbopen]] */
 int
 plumbopen(char *name, int omode)
 {
@@ -51,9 +51,9 @@ plumbopen(char *name, int omode)
 
     return -1;
 }
-/*e: function plumbopen */
+/*e: function [[plumbopen]] */
 
-/*s: function Strlen */
+/*s: function [[Strlen]] */
 static int
 Strlen(char *s)
 {
@@ -61,9 +61,9 @@ Strlen(char *s)
         return 0;
     return strlen(s);
 }
-/*e: function Strlen */
+/*e: function [[Strlen]] */
 
-/*s: function Strcpy */
+/*s: function [[Strcpy]] */
 static char*
 Strcpy(char *s, char *t)
 {
@@ -71,9 +71,9 @@ Strcpy(char *s, char *t)
         return s;
     return strcpy(s, t) + strlen(t);
 }
-/*e: function Strcpy */
+/*e: function [[Strcpy]] */
 
-/*s: function quote */
+/*s: function [[quote]] */
 /* quote attribute value, if necessary */
 static char*
 quote(char *s, char *buf, char *bufe)
@@ -101,9 +101,9 @@ quote(char *s, char *buf, char *bufe)
     *t = '\0';
     return buf;
 }
-/*e: function quote */
+/*e: function [[quote]] */
 
-/*s: function plumbpackattr */
+/*s: function [[plumbpackattr]] */
 char*
 plumbpackattr(Plumbattr *attr)
 {
@@ -139,9 +139,9 @@ plumbpackattr(Plumbattr *attr)
     free(buf);
     return s;
 }
-/*e: function plumbpackattr */
+/*e: function [[plumbpackattr]] */
 
-/*s: function plumblookup */
+/*s: function [[plumblookup]] */
 char*
 plumblookup(Plumbattr *attr, char *name)
 {
@@ -152,9 +152,9 @@ plumblookup(Plumbattr *attr, char *name)
     }
     return nil;
 }
-/*e: function plumblookup */
+/*e: function [[plumblookup]] */
 
-/*s: function plumbpack */
+/*s: function [[plumbpack]] */
 char*
 plumbpack(Plumbmsg *m, int *np)
 {
@@ -191,9 +191,9 @@ plumbpack(Plumbmsg *m, int *np)
     free(attr);
     return buf;
 }
-/*e: function plumbpack */
+/*e: function [[plumbpack]] */
 
-/*s: function plumbsend */
+/*s: function [[plumbsend]] */
 int
 plumbsend(int fd, Plumbmsg *m)
 {
@@ -207,9 +207,9 @@ plumbsend(int fd, Plumbmsg *m)
     free(buf);
     return n;
 }
-/*e: function plumbsend */
+/*e: function [[plumbsend]] */
 
-/*s: function plumbline */
+/*s: function [[plumbline]] */
 static int
 plumbline(char **linep, char *buf, int i, int n, int *bad)
 {
@@ -234,9 +234,9 @@ plumbline(char **linep, char *buf, int i, int n, int *bad)
     }
     return i;
 }
-/*e: function plumbline */
+/*e: function [[plumbline]] */
 
-/*s: function plumbfree */
+/*s: function [[plumbfree]] */
 void
 plumbfree(Plumbmsg *m)
 {
@@ -255,9 +255,9 @@ plumbfree(Plumbmsg *m)
     free(m->data);
     free(m);
 }
-/*e: function plumbfree */
+/*e: function [[plumbfree]] */
 
-/*s: function plumbunpackattr */
+/*s: function [[plumbunpackattr]] */
 Plumbattr*
 plumbunpackattr(char *p)
 {
@@ -336,9 +336,9 @@ plumbunpackattr(char *p)
     free(buf);
     return attr;
 }
-/*e: function plumbunpackattr */
+/*e: function [[plumbunpackattr]] */
 
-/*s: function plumbaddattr */
+/*s: function [[plumbaddattr]] */
 Plumbattr*
 plumbaddattr(Plumbattr *attr, Plumbattr *new)
 {
@@ -352,9 +352,9 @@ plumbaddattr(Plumbattr *attr, Plumbattr *new)
     l->next = new;
     return attr;
 }
-/*e: function plumbaddattr */
+/*e: function [[plumbaddattr]] */
 
-/*s: function plumbdelattr */
+/*s: function [[plumbdelattr]] */
 Plumbattr*
 plumbdelattr(Plumbattr *attr, char *name)
 {
@@ -377,9 +377,9 @@ plumbdelattr(Plumbattr *attr, char *name)
     free(l);
     return attr;
 }
-/*e: function plumbdelattr */
+/*e: function [[plumbdelattr]] */
 
-/*s: function plumbunpackpartial */
+/*s: function [[plumbunpackpartial]] */
 Plumbmsg*
 plumbunpackpartial(char *buf, int n, int *morep)
 {
@@ -430,17 +430,17 @@ plumbunpackpartial(char *buf, int n, int *morep)
     }
     return m;
 }
-/*e: function plumbunpackpartial */
+/*e: function [[plumbunpackpartial]] */
 
-/*s: function plumbunpack */
+/*s: function [[plumbunpack]] */
 Plumbmsg*
 plumbunpack(char *buf, int n)
 {
     return plumbunpackpartial(buf, n, nil);
 }
-/*e: function plumbunpack */
+/*e: function [[plumbunpack]] */
 
-/*s: function plumbrecv */
+/*s: function [[plumbrecv]] */
 Plumbmsg*
 plumbrecv(int fd)
 {
@@ -467,5 +467,5 @@ plumbrecv(int fd)
     free(buf);
     return m;
 }
-/*e: function plumbrecv */
+/*e: function [[plumbrecv]] */
 /*e: windows/libplumb/mesg.c */

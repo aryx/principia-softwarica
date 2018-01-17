@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "complete.h"
 
-/*s: function longestprefixlength */
+/*s: function [[longestprefixlength]] */
 static int
 longestprefixlength(char *a, char *b, int n)
 {
@@ -20,9 +20,9 @@ longestprefixlength(char *a, char *b, int n)
     }
     return i;
 }
-/*e: function longestprefixlength */
+/*e: function [[longestprefixlength]] */
 
-/*s: function freecompletion */
+/*s: function [[freecompletion]] */
 void
 freecompletion(Completion *c)
 {
@@ -31,9 +31,9 @@ freecompletion(Completion *c)
         free(c);
     }
 }
-/*e: function freecompletion */
+/*e: function [[freecompletion]] */
 
-/*s: function strpcmp */
+/*s: function [[strpcmp]] */
 static int
 strpcmp(const void *va, const void *vb)
 {
@@ -43,9 +43,9 @@ strpcmp(const void *va, const void *vb)
     b = *(char**)vb;
     return strcmp(a, b);
 }
-/*e: function strpcmp */
+/*e: function [[strpcmp]] */
 
-/*s: function complete */
+/*s: function [[complete]] */
 Completion*
 complete(char *dir, char *s)
 {
@@ -150,5 +150,5 @@ complete(char *dir, char *s)
     close(fd);
     return c;
 }
-/*e: function complete */
+/*e: function [[complete]] */
 /*e: windows/libcomplete/complete.c */

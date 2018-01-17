@@ -12,11 +12,11 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: global scrtmp */
+/*s: global [[scrtmp]] */
 static Image *scrtmp;
-/*e: global scrtmp */
+/*e: global [[scrtmp]] */
 
-/*s: function scrtemps */
+/*s: function [[scrtemps]] */
 static
 void
 scrtemps(void)
@@ -32,18 +32,18 @@ scrtemps(void)
         error("scrtemps");
     /*e: [[scrtemps()]] sanity check scrtmp */
 }
-/*e: function scrtemps */
+/*e: function [[scrtemps]] */
 
-/*s: function freescrtemps */
+/*s: function [[freescrtemps]] */
 void
 freescrtemps(void)
 {
     freeimage(scrtmp);
     scrtmp = nil;
 }
-/*e: function freescrtemps */
+/*e: function [[freescrtemps]] */
 
-/*s: function scrpos */
+/*s: function [[scrpos]] */
 static
 Rectangle
 scrpos(Rectangle r, uint p0, uint p1, uint tot)
@@ -77,9 +77,9 @@ scrpos(Rectangle r, uint p0, uint p1, uint tot)
     /*e: [[scrpos()]] last adjustments */
     return q;
 }
-/*e: function scrpos */
+/*e: function [[scrpos]] */
 
-/*s: function wscrdraw */
+/*s: function [[wscrdraw]] */
 void
 wscrdraw(Window *w)
 {
@@ -113,9 +113,9 @@ wscrdraw(Window *w)
         draw(w->i, r, b, nil, Pt(0, r1.min.y));
     }
 }
-/*e: function wscrdraw */
+/*e: function [[wscrdraw]] */
 
-/*s: function wscrsleep */
+/*s: function [[wscrsleep]] */
 void
 wscrsleep(Window *w, uint dt)
 {
@@ -146,9 +146,9 @@ wscrsleep(Window *w, uint dt)
             break;
         }
 }
-/*e: function wscrsleep */
+/*e: function [[wscrsleep]] */
 
-/*s: function wscroll */
+/*s: function [[wscroll]] */
 void
 wscroll(Window *w, int but)
 {
@@ -209,5 +209,5 @@ wscroll(Window *w, int but)
     while(w->mc.buttons)
         readmouse(&w->mc);
 }
-/*e: function wscroll */
+/*e: function [[wscroll]] */
 /*e: windows/rio/scrl.c */

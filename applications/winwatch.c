@@ -10,45 +10,45 @@
 extern Point _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, int len, Rectangle clipr, Image *bg, Point bgp, Drawop op);
 
 typedef struct Win Win;
-/*s: struct Win */
+/*s: struct [[Win]] */
 struct Win {
     int n;
     int dirty;
     char *label;
     Rectangle r;
 };
-/*e: struct Win */
+/*e: struct [[Win]] */
 
 
 
-/*s: global exclude */
+/*s: global [[exclude]] */
 static Reprog  *exclude  = nil;
-/*e: global exclude */
-/*s: global win */
+/*e: global [[exclude]] */
+/*s: global [[win]] */
 static Win *win;
-/*e: global win */
-/*s: global nwin */
+/*e: global [[win]] */
+/*s: global [[nwin]] */
 static int nwin;
-/*e: global nwin */
-/*s: global mwin */
+/*e: global [[nwin]] */
+/*s: global [[mwin]] */
 static int mwin;
-/*e: global mwin */
-/*s: global onwin */
+/*e: global [[mwin]] */
+/*s: global [[onwin]] */
 static int onwin;
-/*e: global onwin */
+/*e: global [[onwin]] */
 static int rows, cols;
-/*s: global lightblue */
+/*s: global [[lightblue]] */
 static Image *lightblue;
-/*e: global lightblue */
+/*e: global [[lightblue]] */
 
 extern Font *font;
 
-/*s: enum _anon_ (windows/apps/winwatch.c) */
+/*s: enum [[_anon_ (windows/apps/winwatch.c)]] */
 enum {
     PAD = 3,
     MARGIN = 5
 };
-/*e: enum _anon_ (windows/apps/winwatch.c) */
+/*e: enum [[_anon_ (windows/apps/winwatch.c)]] */
 
 /*s: function erealloc (windows/apps/winwatch.c) */
 static void*
@@ -93,7 +93,7 @@ estrdup(char *s)
 /*e: function estrdup (windows/apps/winwatch.c) */
 
 
-/*s: function refreshwin */
+/*s: function [[refreshwin]] */
 static void
 refreshwin(void)
 {
@@ -147,9 +147,9 @@ refreshwin(void)
     nwin = nw;
     close(fd);
 }
-/*e: function refreshwin */
+/*e: function [[refreshwin]] */
 
-/*s: function drawnowin */
+/*s: function [[drawnowin]] */
 static void
 drawnowin(int i)
 {
@@ -160,9 +160,9 @@ drawnowin(int i)
                 MARGIN+(PAD+Dy(r))*(i%rows))), view->r.min);
     draw(view, insetrect(r, -1), lightblue, nil, ZP);
 }
-/*e: function drawnowin */
+/*e: function [[drawnowin]] */
 
-/*s: function drawwin */
+/*s: function [[drawwin]] */
 static void
 drawwin(int i)
 {
@@ -173,9 +173,9 @@ drawwin(int i)
     border(view, win[i].r, 1, display->black, ZP);	
     win[i].dirty = 0;
 }
-/*e: function drawwin */
+/*e: function [[drawwin]] */
 
-/*s: function geometry */
+/*s: function [[geometry]] */
 static int
 geometry(void)
 {
@@ -199,7 +199,7 @@ geometry(void)
 
     return z;
 }
-/*e: function geometry */
+/*e: function [[geometry]] */
 
 /*s: function redraw (windows/apps/winwatch.c) */
 static void
@@ -232,7 +232,7 @@ eresized(int new)
 }
 /*e: function eresized (windows/apps/winwatch.c) */
 
-/*s: function click */
+/*s: function [[click]] */
 static void
 click(Mouse m)
 {
@@ -273,7 +273,7 @@ click(Mouse m)
     write(fd, "current\n", 8);
     close(fd);
 }
-/*e: function click */
+/*e: function [[click]] */
 
 /*s: function usage (windows/apps/winwatch.c) */
 static void

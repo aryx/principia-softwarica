@@ -12,41 +12,41 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: global ctimer */
+/*s: global [[ctimer]] */
 // chan<?> (listener = ?, sender = ?)
 static Channel*	ctimer;	/* chan(Timer*)[100] */
-/*e: global ctimer */
-/*s: global timer */
+/*e: global [[ctimer]] */
+/*s: global [[timer]] */
 static Timer *timer;
-/*e: global timer */
+/*e: global [[timer]] */
 
-/*s: function msec */
+/*s: function [[msec]] */
 static
 uint
 msec(void)
 {
     return nsec()/1000000;
 }
-/*e: function msec */
+/*e: function [[msec]] */
 
-/*s: function timerstop */
+/*s: function [[timerstop]] */
 void
 timerstop(Timer *t)
 {
     t->next = timer;
     timer = t;
 }
-/*e: function timerstop */
+/*e: function [[timerstop]] */
 
-/*s: function timercancel */
+/*s: function [[timercancel]] */
 void
 timercancel(Timer *t)
 {
     t->cancel = true;
 }
-/*e: function timercancel */
+/*e: function [[timercancel]] */
 
-/*s: function timerproc */
+/*s: function [[timerproc]] */
 static
 void
 timerproc(void*)
@@ -106,18 +106,18 @@ timerproc(void*)
             goto gotit;
     }
 }
-/*e: function timerproc */
+/*e: function [[timerproc]] */
 
-/*s: function timerinit */
+/*s: function [[timerinit]] */
 void
 timerinit(void)
 {
     ctimer = chancreate(sizeof(Timer*), 100);
     proccreate(timerproc, nil, STACK);
 }
-/*e: function timerinit */
+/*e: function [[timerinit]] */
 
-/*s: function timerstart */
+/*s: function [[timerstart]] */
 /*
  * timeralloc() and timerfree() don't lock, so can only be
  * called from the main proc.
@@ -140,5 +140,5 @@ timerstart(int dt)
     sendp(ctimer, t);
     return t;
 }
-/*e: function timerstart */
+/*e: function [[timerstart]] */
 /*e: windows/rio/time.c */

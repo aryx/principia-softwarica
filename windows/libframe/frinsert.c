@@ -6,17 +6,17 @@
 #include <mouse.h>
 #include <frame.h>
 
-/*s: constant DELTA */
+/*s: constant [[DELTA]] */
 #define	DELTA	25
-/*e: constant DELTA */
-/*s: constant TMPSIZE */
+/*e: constant [[DELTA]] */
+/*s: constant [[TMPSIZE]] */
 #define	TMPSIZE	256
-/*e: constant TMPSIZE */
-/*s: global frame */
+/*e: constant [[TMPSIZE]] */
+/*s: global [[frame]] */
 static Frame		frame;
-/*e: global frame */
+/*e: global [[frame]] */
 
-/*s: function bxscan */
+/*s: function [[bxscan]] */
 static
 Point
 bxscan(Frame *f, Rune *sp, Rune *ep, Point *ppt)
@@ -81,9 +81,9 @@ bxscan(Frame *f, Rune *sp, Rune *ep, Point *ppt)
     _frcklinewrap0(f, ppt, &frame.box[0]);
     return _frdraw(&frame, *ppt);
 }
-/*e: function bxscan */
+/*e: function [[bxscan]] */
 
-/*s: function chopframe */
+/*s: function [[chopframe]] */
 static
 void
 chopframe(Frame *f, Point pt, ulong p, int bn)
@@ -104,15 +104,15 @@ chopframe(Frame *f, Point pt, ulong p, int bn)
     if(b<&f->box[f->nbox])				/* BUG */
         _frdelbox(f, (int)(b-f->box), f->nbox-1);
 }
-/*e: function chopframe */
+/*e: function [[chopframe]] */
 
-/*s: struct points_frinsert */
+/*s: struct [[points_frinsert]] */
 struct points_frinsert {
     Point pt0, pt1;
 };
-/*e: struct points_frinsert */
+/*e: struct [[points_frinsert]] */
 
-/*s: function frinsert */
+/*s: function [[frinsert]] */
 void
 frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
 {
@@ -317,5 +317,5 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
         frtick(f, frptofchar(f, f->p0), true);
     /*e: [[frinsert()]] draw tick */
 }
-/*e: function frinsert */
+/*e: function [[frinsert]] */
 /*e: windows/libframe/frinsert.c */

@@ -12,21 +12,21 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: global Eexist */
+/*s: global [[Eexist]] */
 char Eexist[] = "file does not exist";
-/*e: global Eexist */
-/*s: global Enotdir */
+/*e: global [[Eexist]] */
+/*s: global [[Enotdir]] */
 char Enotdir[] = "not a directory";
-/*e: global Enotdir */
-/*s: global Ebadfcall */
+/*e: global [[Enotdir]] */
+/*s: global [[Ebadfcall]] */
 char	Ebadfcall[] = "bad fcall type";
-/*e: global Ebadfcall */
-/*s: global Eoffset */
+/*e: global [[Ebadfcall]] */
+/*s: global [[Eoffset]] */
 char	Eoffset[] = "illegal offset";
-/*e: global Eoffset */
+/*e: global [[Eoffset]] */
 
 
-/*s: global dirtab */
+/*s: global [[dirtab]] */
 Dirtab dirtab[]=
 {
     { ".",		QTDIR,	Qdir,		0500|DMDIR },
@@ -63,18 +63,18 @@ Dirtab dirtab[]=
     /*e: dirtab array elements */
     { nil, }
 };
-/*e: global dirtab */
+/*e: global [[dirtab]] */
 
 static uint		getclock(void);
 Fid*		newfid(Filsys*, int);
 static int		dostat(Filsys*, int, Dirtab*, uchar*, int, uint);
 
-/*s: global clockfd */
+/*s: global [[clockfd]] */
 fdt	clockfd;
-/*e: global clockfd */
-/*s: global firstmessage */
+/*e: global [[clockfd]] */
+/*s: global [[firstmessage]] */
 bool	firstmessage = true;
-/*e: global firstmessage */
+/*e: global [[firstmessage]] */
 
 static	Xfid*	filsysflush(Filsys*, Xfid*, Fid*);
 static	Xfid*	filsysversion(Filsys*, Xfid*, Fid*);
@@ -91,7 +91,7 @@ static	Xfid*	filsysremove(Filsys*, Xfid*, Fid*);
 static	Xfid*	filsysstat(Filsys*, Xfid*, Fid*);
 static	Xfid*	filsyswstat(Filsys*, Xfid*, Fid*);
 
-/*s: global fcall */
+/*s: global [[fcall]] */
 Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
 {
     [Tattach]  = filsysattach,
@@ -116,10 +116,10 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
     [Tauth]    = filsysauth,
     /*e: [[fcall]] other methods */
 };
-/*e: global fcall */
+/*e: global [[fcall]] */
 
 
-/*s: function filsysversion */
+/*s: function [[filsysversion]] */
 static
 Xfid*
 filsysversion(Filsys *fs, Xfid *x, Fid*)
@@ -141,9 +141,9 @@ filsysversion(Filsys *fs, Xfid *x, Fid*)
     fc.version = "9P2000";
     return filsysrespond(fs, x, &fc, nil);
 }
-/*e: function filsysversion */
+/*e: function [[filsysversion]] */
 
-/*s: function filsysauth */
+/*s: function [[filsysauth]] */
 static
 Xfid*
 filsysauth(Filsys *fs, Xfid *x, Fid*)
@@ -152,9 +152,9 @@ filsysauth(Filsys *fs, Xfid *x, Fid*)
 
     return filsysrespond(fs, x, &fc, "rio: authentication not required");
 }
-/*e: function filsysauth */
+/*e: function [[filsysauth]] */
 
-/*s: function filsysflush */
+/*s: function [[filsysflush]] */
 static
 Xfid*
 filsysflush(Filsys*, Xfid *x, Fid*)
@@ -162,9 +162,9 @@ filsysflush(Filsys*, Xfid *x, Fid*)
     sendp(x->c, xfidflush);
     return nil;
 }
-/*e: function filsysflush */
+/*e: function [[filsysflush]] */
 
-/*s: function filsysattach */
+/*s: function [[filsysattach]] */
 static
 Xfid*
 filsysattach(Filsys *, Xfid *x, Fid *f)
@@ -191,9 +191,9 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
     sendp(x->c, xfidattach);
     return nil;
 }
-/*e: function filsysattach */
+/*e: function [[filsysattach]] */
 
-/*s: function numeric */
+/*s: function [[numeric]] */
 static
 int
 numeric(char *s)
@@ -203,9 +203,9 @@ numeric(char *s)
             return 0;
     return 1;
 }
-/*e: function numeric */
+/*e: function [[numeric]] */
 
-/*s: function filsyswalk */
+/*s: function [[filsyswalk]] */
 static
 Xfid*
 filsyswalk(Filsys *fs, Xfid *x, Fid *f)
@@ -349,9 +349,9 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
 
     return filsysrespond(fs, x, &fc, err);
 }
-/*e: function filsyswalk */
+/*e: function [[filsyswalk]] */
 
-/*s: function filsysopen */
+/*s: function [[filsysopen]] */
 static
 Xfid*
 filsysopen(Filsys *fs, Xfid *x, Fid *f)
@@ -394,9 +394,9 @@ Deny:
     return filsysrespond(fs, x, &fc, Eperm);
 /*e: [[filsysopen()]] deny label */
 }
-/*e: function filsysopen */
+/*e: function [[filsysopen]] */
 
-/*s: function filsyscreate */
+/*s: function [[filsyscreate]] */
 static
 Xfid*
 filsyscreate(Filsys *fs, Xfid *x, Fid*)
@@ -405,18 +405,18 @@ filsyscreate(Filsys *fs, Xfid *x, Fid*)
 
     return filsysrespond(fs, x, &fc, Eperm);
 }
-/*e: function filsyscreate */
+/*e: function [[filsyscreate]] */
 
-/*s: function idcmp */
+/*s: function [[idcmp]] */
 static
 int
 idcmp(void *a, void *b)
 {
     return *(int*)a - *(int*)b;
 }
-/*e: function idcmp */
+/*e: function [[idcmp]] */
 
-/*s: function filsysread */
+/*s: function [[filsysread]] */
 static
 Xfid*
 filsysread(Filsys *fs, Xfid *x, Fid *f)
@@ -502,9 +502,9 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
     free(b);
     return x;
 }
-/*e: function filsysread */
+/*e: function [[filsysread]] */
 
-/*s: function filsyswrite */
+/*s: function [[filsyswrite]] */
 static
 Xfid*
 filsyswrite(Filsys*, Xfid *x, Fid*)
@@ -512,9 +512,9 @@ filsyswrite(Filsys*, Xfid *x, Fid*)
     sendp(x->c, xfidwrite);
     return nil;
 }
-/*e: function filsyswrite */
+/*e: function [[filsyswrite]] */
 
-/*s: function filsysclunk */
+/*s: function [[filsysclunk]] */
 static
 Xfid*
 filsysclunk(Filsys *fs, Xfid *x, Fid *f)
@@ -534,9 +534,9 @@ filsysclunk(Filsys *fs, Xfid *x, Fid *f)
     f->open = false;
     return filsysrespond(fs, x, &fc, nil);
 }
-/*e: function filsysclunk */
+/*e: function [[filsysclunk]] */
 
-/*s: function filsysremove */
+/*s: function [[filsysremove]] */
 static
 Xfid*
 filsysremove(Filsys *fs, Xfid *x, Fid*)
@@ -545,9 +545,9 @@ filsysremove(Filsys *fs, Xfid *x, Fid*)
 
     return filsysrespond(fs, x, &fc, Eperm);
 }
-/*e: function filsysremove */
+/*e: function [[filsysremove]] */
 
-/*s: function filsysstat */
+/*s: function [[filsysstat]] */
 static
 Xfid*
 filsysstat(Filsys *fs, Xfid *x, Fid *f)
@@ -560,9 +560,9 @@ filsysstat(Filsys *fs, Xfid *x, Fid *f)
     free(fc.stat);
     return x;
 }
-/*e: function filsysstat */
+/*e: function [[filsysstat]] */
 
-/*s: function filsyswstat */
+/*s: function [[filsyswstat]] */
 static
 Xfid*
 filsyswstat(Filsys *fs, Xfid *x, Fid*)
@@ -571,9 +571,9 @@ filsyswstat(Filsys *fs, Xfid *x, Fid*)
 
     return filsysrespond(fs, x, &fc, Eperm);
 }
-/*e: function filsyswstat */
+/*e: function [[filsyswstat]] */
 
-/*s: function newfid */
+/*s: function [[newfid]] */
 Fid*
 newfid(Filsys *fs, int fid)
 {
@@ -606,9 +606,9 @@ newfid(Filsys *fs, int fid)
 
     return f;
 }
-/*e: function newfid */
+/*e: function [[newfid]] */
 
-/*s: function getclock */
+/*s: function [[getclock]] */
 static
 uint
 getclock(void)
@@ -619,9 +619,9 @@ getclock(void)
     read(clockfd, buf, sizeof buf);
     return atoi(buf);
 }
-/*e: function getclock */
+/*e: function [[getclock]] */
 
-/*s: function dostat */
+/*s: function [[dostat]] */
 static
 int
 dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
@@ -647,5 +647,5 @@ dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
 
     return convD2M(&d, buf, nbuf);
 }
-/*e: function dostat */
+/*e: function [[dostat]] */
 /*e: windows/rio/fsys.c */

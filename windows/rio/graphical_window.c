@@ -14,7 +14,7 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: function waddraw */
+/*s: function [[waddraw]] */
 void
 waddraw(Window *w, Rune *r, int nr)
 {
@@ -22,5 +22,5 @@ waddraw(Window *w, Rune *r, int nr)
     runemove(w->raw + w->nraw, r, nr);
     w->nraw += nr;
 }
-/*e: function waddraw */
+/*e: function [[waddraw]] */
 /*e: windows/rio/graphical_window.c */
