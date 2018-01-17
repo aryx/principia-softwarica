@@ -4,7 +4,7 @@
 #include "io.h"
 #include "fns.h"
 
-/*s: function emalloc */
+/*s: function [[emalloc]] */
 void *
 emalloc(long n)
 {
@@ -15,9 +15,9 @@ emalloc(long n)
 /*	if(err){ pfmt(err, "malloc %d->%p\n", n, p); flush(err); } /**/
     return p;
 }
-/*e: function emalloc */
+/*e: function [[emalloc]] */
 
-/*s: function efree */
+/*s: function [[efree]] */
 void
 efree(void *p)
 {
@@ -25,11 +25,11 @@ efree(void *p)
         free(p);
     else pfmt(err, "free 0\n");
 }
-/*e: function efree */
+/*e: function [[efree]] */
 extern bool lastword;
 extern bool lastdol;
 
-/*s: function yyerror */
+/*s: function [[yyerror]] */
 void
 yyerror(char *m)
 {
@@ -54,12 +54,12 @@ yyerror(char *m)
     nerror++;
     setvar("status", newword(m, (word *)nil));
 }
-/*e: function yyerror */
-/*s: global bp */
+/*e: function [[yyerror]] */
+/*s: global [[bp]] */
 char *bp;
-/*e: global bp */
+/*e: global [[bp]] */
 
-/*s: function iacvt */
+/*s: function [[iacvt]] */
 static void
 iacvt(int n)
 {
@@ -71,9 +71,9 @@ iacvt(int n)
         iacvt(n/10);
     *bp++=n%10+'0';
 }
-/*e: function iacvt */
+/*e: function [[iacvt]] */
 
-/*s: function inttoascii */
+/*s: function [[inttoascii]] */
 void
 inttoascii(char *s, long n)
 {
@@ -81,9 +81,9 @@ inttoascii(char *s, long n)
     iacvt(n);
     *bp='\0';
 }
-/*e: function inttoascii */
+/*e: function [[inttoascii]] */
 
-/*s: function panic */
+/*s: function [[panic]] */
 void
 panic(char *s, int n)
 {
@@ -93,5 +93,5 @@ panic(char *s, int n)
     flush(err);
     Abort();
 }
-/*e: function panic */
+/*e: function [[panic]] */
 /*e: rc/subr.c */

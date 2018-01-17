@@ -3,20 +3,20 @@
 #include "io.h"
 #include "fns.h"
 #include "x.tab.h"
-/*s: global nl */
+/*s: global [[nl]] */
 char nl='\n';		/* change to semicolon for bourne-proofing */
-/*e: global nl */
-/*s: constant c0 */
+/*e: global [[nl]] */
+/*s: constant [[c0]] */
 #define	c0	t->child[0]
-/*e: constant c0 */
-/*s: constant c1 */
+/*e: constant [[c0]] */
+/*s: constant [[c1]] */
 #define	c1	t->child[1]
-/*e: constant c1 */
-/*s: constant c2 */
+/*e: constant [[c1]] */
+/*s: constant [[c2]] */
 #define	c2	t->child[2]
-/*e: constant c2 */
+/*e: constant [[c2]] */
 
-/*s: function pdeglob */
+/*s: function [[pdeglob]] */
 void
 pdeglob(io *f, char *s)
 {
@@ -26,9 +26,9 @@ pdeglob(io *f, char *s)
         pchr(f, *s++);
     }
 }
-/*e: function pdeglob */
+/*e: function [[pdeglob]] */
 
-/*s: function pcmd */
+/*s: function [[pcmd]] */
 void
 pcmd(io *f, tree *t)
 {
@@ -143,5 +143,5 @@ pcmd(io *f, tree *t)
         break;
     }
 }
-/*e: function pcmd */
+/*e: function [[pcmd]] */
 /*e: rc/pcmd.c */

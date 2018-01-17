@@ -9,15 +9,15 @@
 int getnext(void);
 
 
-/*s: function wordchr */
+/*s: function [[wordchr]] */
 int
 wordchr(int c)
 {
     return !strchr("\n \t#;&|^$=`'{}()<>", c) && c!=EOF;
 }
-/*e: function wordchr */
+/*e: function [[wordchr]] */
 
-/*s: function idchr */
+/*s: function [[idchr]] */
 int
 idchr(int c)
 {
@@ -28,22 +28,22 @@ idchr(int c)
      */
     return c > ' ' && !strchr("!\"#$%&'()+,-./:;<=>?@[\\]^`{|}~", c);
 }
-/*e: function idchr */
+/*e: function [[idchr]] */
 
-/*s: global future */
+/*s: global [[future]] */
 int future = EOF;
-/*e: global future */
-/*s: global doprompt */
+/*e: global [[future]] */
+/*s: global [[doprompt]] */
 bool doprompt = true;
-/*e: global doprompt */
-/*s: global inquote */
+/*e: global [[doprompt]] */
+/*s: global [[inquote]] */
 bool inquote;
-/*e: global inquote */
-/*s: global incomm */
+/*e: global [[inquote]] */
+/*s: global [[incomm]] */
 bool incomm;
-/*e: global incomm */
+/*e: global [[incomm]] */
 
-/*s: function nextc */
+/*s: function [[nextc]] */
 /*
  * Look ahead in the input stream
  */
@@ -54,8 +54,8 @@ nextc(void)
         future = getnext();
     return future;
 }
-/*e: function nextc */
-/*s: function advance */
+/*e: function [[nextc]] */
+/*s: function [[advance]] */
 /*
  * Consume the lookahead character.
  */
@@ -69,8 +69,8 @@ advance(void)
     future = EOF;
     return c;
 }
-/*e: function advance */
-/*s: function getnext */
+/*e: function [[advance]] */
+/*s: function [[getnext]] */
 /*
  * read a character from the input stream
  */	
@@ -133,9 +133,9 @@ getnext(void)
 
     return c;
 }
-/*e: function getnext */
+/*e: function [[getnext]] */
 
-/*s: function pprompt */
+/*s: function [[pprompt]] */
 void
 pprompt(void)
 {
@@ -156,9 +156,9 @@ pprompt(void)
     runq->lineno++;
     doprompt = false;
 }
-/*e: function pprompt */
+/*e: function [[pprompt]] */
 
-/*s: function skipwhite */
+/*s: function [[skipwhite]] */
 void
 skipwhite(void)
 {
@@ -183,9 +183,9 @@ skipwhite(void)
             return;
     }
 }
-/*e: function skipwhite */
+/*e: function [[skipwhite]] */
 
-/*s: function skipnl */
+/*s: function [[skipnl]] */
 void
 skipnl(void)
 {
@@ -199,9 +199,9 @@ skipnl(void)
         advance();
     }
 }
-/*e: function skipnl */
+/*e: function [[skipnl]] */
 
-/*s: function nextis */
+/*s: function [[nextis]] */
 bool
 nextis(int c)
 {
@@ -211,9 +211,9 @@ nextis(int c)
     }
     return false;
 }
-/*e: function nextis */
+/*e: function [[nextis]] */
 
-/*s: function addtok */
+/*s: function [[addtok]] */
 char*
 addtok(char *p, int val)
 {
@@ -227,9 +227,9 @@ addtok(char *p, int val)
     *p++=val;
     return p;
 }
-/*e: function addtok */
+/*e: function [[addtok]] */
 
-/*s: function addutf */
+/*s: function [[addutf]] */
 char*
 addutf(char *p, int c)
 {
@@ -251,16 +251,16 @@ addutf(char *p, int c)
     }
     return p;
 }
-/*e: function addutf */
+/*e: function [[addutf]] */
 
-/*s: global lastdol */
+/*s: global [[lastdol]] */
 bool lastdol;	/* was the last token read '$' or '$#' or '"'? */
-/*e: global lastdol */
+/*e: global [[lastdol]] */
 /*s: global lastword (rc/lex.c) */
 bool lastword;	/* was the last token read a word or compound word terminator? */
 /*e: global lastword (rc/lex.c) */
 
-/*s: function yylex */
+/*s: function [[yylex]] */
 //@Scheck: called from yyparse()
 int yylex(void)
 {
@@ -511,5 +511,5 @@ int yylex(void)
     return t->type;
     /*e: [[yylex()]] if c is a word character */
 }
-/*e: function yylex */
+/*e: function [[yylex]] */
 /*e: rc/lex.c */

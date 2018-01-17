@@ -15,22 +15,22 @@
 /*s: constant c2 (rc/code.c) */
 #define	c2	t->child[2]
 /*e: constant c2 (rc/code.c) */
-/*s: global codep */
+/*s: global [[codep]] */
 // idx in codebuf
 int codep;
-/*e: global codep */
-/*s: global ncode */
+/*e: global [[codep]] */
+/*s: global [[ncode]] */
 int ncode;
-/*e: global ncode */
-/*s: function emitf */
+/*e: global [[ncode]] */
+/*s: function [[emitf]] */
 #define	emitf(x) ((codep!=ncode || morecode()), codebuf[codep].f = (x), codep++)
-/*e: function emitf */
-/*s: function emiti */
+/*e: function [[emitf]] */
+/*s: function [[emiti]] */
 #define	emiti(x) ((codep!=ncode || morecode()), codebuf[codep].i = (x), codep++)
-/*e: function emiti */
-/*s: function emits */
+/*e: function [[emiti]] */
+/*s: function [[emits]] */
 #define	emits(x) ((codep!=ncode || morecode()), codebuf[codep].s = (x), codep++)
-/*e: function emits */
+/*e: function [[emits]] */
 void stuffdot(int);
 char *fnstr(tree*);
 void outcode(tree*, int);
@@ -39,7 +39,7 @@ int iscase(tree*);
 code *codecopy(code*);
 void codefree(code*);
 
-/*s: function morecode */
+/*s: function [[morecode]] */
 //@Scheck: used by the macros above (why marked as dead then??? TODO)
 int morecode(void)
 {
@@ -49,9 +49,9 @@ int morecode(void)
         panic("Can't realloc %d bytes in morecode!", ncode*sizeof(code));
     return OK_0;
 }
-/*e: function morecode */
+/*e: function [[morecode]] */
 
-/*s: function stuffdot */
+/*s: function [[stuffdot]] */
 void
 stuffdot(int a)
 {
@@ -59,9 +59,9 @@ stuffdot(int a)
         panic("Bad address %d in stuffdot", a);
     codebuf[a].i = codep;
 }
-/*e: function stuffdot */
+/*e: function [[stuffdot]] */
 
-/*s: function compile */
+/*s: function [[compile]] */
 //@Scheck: called from syn.y
 error0 compile(tree *t)
 {
@@ -87,18 +87,18 @@ error0 compile(tree *t)
 
     return OK_1;
 }
-/*e: function compile */
+/*e: function [[compile]] */
 
-/*s: function cleanhere */
+/*s: function [[cleanhere]] */
 void
 cleanhere(char *f)
 {
     emitf(Xdelhere);
     emits(strdup(f));
 }
-/*e: function cleanhere */
+/*e: function [[cleanhere]] */
 
-/*s: function fnstr */
+/*s: function [[fnstr]] */
 char*
 fnstr(tree *t)
 {
@@ -115,9 +115,9 @@ fnstr(tree *t)
     closeio(f);
     return v;
 }
-/*e: function fnstr */
+/*e: function [[fnstr]] */
 
-/*s: function outcode */
+/*s: function [[outcode]] */
 void
 outcode(tree *t, bool eflag)
 {
@@ -460,8 +460,8 @@ outcode(tree *t, bool eflag)
            runq->iflast = c0->type==IF;
     /*e: [[outcode()]] set iflast after switch */
 }
-/*e: function outcode */
-/*s: function codeswitch */
+/*e: function [[outcode]] */
+/*s: function [[codeswitch]] */
 /*
  * switch code looks like this:
  *	Xmark
@@ -538,9 +538,9 @@ codeswitch(tree *t, bool eflag)
     stuffdot(leave);
     emitf(Xpopm);
 }
-/*e: function codeswitch */
+/*e: function [[codeswitch]] */
 
-/*s: function iscase */
+/*s: function [[iscase]] */
 bool
 iscase(tree *t)
 {
@@ -549,18 +549,18 @@ iscase(tree *t)
     do { t = c0; } while(t->type==ARGLIST);
     return t->type==WORD && !t->quoted && strcmp(t->str, "case")==0;
 }
-/*e: function iscase */
+/*e: function [[iscase]] */
 
-/*s: function codecopy */
+/*s: function [[codecopy]] */
 code*
 codecopy(code *cp)
 {
     cp[0].i++;
     return cp;
 }
-/*e: function codecopy */
+/*e: function [[codecopy]] */
 
-/*s: function codefree */
+/*s: function [[codefree]] */
 void
 codefree(code *cp)
 {
@@ -588,5 +588,5 @@ codefree(code *cp)
     }
     efree((char *)cp);
 }
-/*e: function codefree */
+/*e: function [[codefree]] */
 /*e: rc/code.c */

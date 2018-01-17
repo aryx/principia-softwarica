@@ -3,9 +3,9 @@
 #include "exec.h"
 #include "fns.h"
 #include "io.h"
-extern char *Signame[];
+extern char *signame[];
 
-/*s: function dotrap */
+/*s: function [[dotrap]] */
 void
 dotrap(void)
 {
@@ -21,7 +21,7 @@ dotrap(void)
         --ntrap;
         if(getpid()!=mypid) 
             Exit(getstatus());
-        trapreq = vlook(Signame[i]);
+        trapreq = vlook(signame[i]);
         if(trapreq->fn){
             start(trapreq->fn, trapreq->pc, (struct Var *)nil);
             runq->local = newvar(strdup("*"), runq->local);
@@ -43,5 +43,5 @@ dotrap(void)
             Exit(getstatus());
     }
 }
-/*e: function dotrap */
+/*e: function [[dotrap]] */
 /*e: rc/trap.c */

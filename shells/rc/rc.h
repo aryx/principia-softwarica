@@ -9,15 +9,15 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: constant NSIG */
+/*s: constant [[NSIG]] */
 #define	NSIG	32
-/*e: constant NSIG */
-/*s: constant SIGINT */
+/*e: constant [[NSIG]] */
+/*s: constant [[SIGINT]] */
 #define	SIGINT	2
-/*e: constant SIGINT */
-/*s: constant SIGQUIT */
+/*e: constant [[SIGINT]] */
+/*s: constant [[SIGQUIT]] */
 #define	SIGQUIT	3
-/*e: constant SIGQUIT */
+/*e: constant [[SIGQUIT]] */
 
 //#define fcntl(fd, op, arg) /* unix compatibility */
 //#define F_SETFD  
@@ -28,15 +28,15 @@
 //#endif
 
 #ifndef ERRMAX
-/*s: constant ERRMAX */
+/*s: constant [[ERRMAX]] */
 #define ERRMAX 128
-/*e: constant ERRMAX */
+/*e: constant [[ERRMAX]] */
 #endif
 
-/*s: constant YYMAXDEPTH */
+/*s: constant [[YYMAXDEPTH]] */
 //@Scheck: used in y.tab.c
 #define	YYMAXDEPTH	500
-/*e: constant YYMAXDEPTH */
+/*e: constant [[YYMAXDEPTH]] */
 
 //#ifndef YYPREFIX
 #ifndef PAREN
@@ -60,7 +60,7 @@ typedef struct Builtin builtin;
 #pragma incomplete io
 //#endif
 
-/*s: struct tree */
+/*s: struct [[Tree]] */
 struct Tree {
 
     // either<enum<Token_kind>, char>
@@ -90,7 +90,7 @@ struct Tree {
     tree	*next;
     /*e: [[Tree]] extra fields */
 };
-/*e: struct tree */
+/*e: struct [[Tree]] */
 
 tree *newtree(void);
 tree *token(char*, int);
@@ -108,7 +108,7 @@ tree *simplemung(tree*);
 tree *heredoc(tree*);
 
 
-/*s: struct code */
+/*s: struct [[Code]] */
 /*
  * The first word of any code vector is a reference count.
  * Always create a new reference to a code vector by calling codecopy(.).
@@ -119,40 +119,40 @@ union Code {
     int	i;
     char	*s;
 };
-/*e: struct code */
+/*e: struct [[Code]] */
 
 extern char *promptstr;
 extern bool doprompt;
 
-/*s: constant NTOK */
+/*s: constant [[NTOK]] */
 #define	NTOK	8192		/* maximum bytes in a word (token) */
-/*e: constant NTOK */
+/*e: constant [[NTOK]] */
 
 extern char tok[NTOK + UTFmax];
 
-/*s: constant APPEND */
+/*s: constant [[APPEND]] */
 #define	APPEND	1
-/*e: constant APPEND */
-/*s: constant WRITE */
+/*e: constant [[APPEND]] */
+/*s: constant [[WRITE]] */
 #define	WRITE	2
-/*e: constant WRITE */
-/*s: constant READ */
+/*e: constant [[WRITE]] */
+/*s: constant [[READ]] */
 #define	READ	3
-/*e: constant READ */
-/*s: constant HERE */
+/*e: constant [[READ]] */
+/*s: constant [[HERE]] */
 #define	HERE	4
-/*e: constant HERE */
-/*s: constant DUPFD */
+/*e: constant [[HERE]] */
+/*s: constant [[DUPFD]] */
 #define	DUPFD	5
-/*e: constant DUPFD */
-/*s: constant CLOSE */
+/*e: constant [[DUPFD]] */
+/*s: constant [[CLOSE]] */
 #define	CLOSE	6
-/*e: constant CLOSE */
-/*s: constant RDWR */
+/*e: constant [[CLOSE]] */
+/*s: constant [[RDWR]] */
 #define RDWR	7
-/*e: constant RDWR */
+/*e: constant [[RDWR]] */
 
-/*s: struct var */
+/*s: struct [[Var]] */
 struct Var {
     // key
     char	*name;		/* ascii name */
@@ -171,15 +171,15 @@ struct Var {
     var	*next;		/* next on hash or local list */
     /*e: [[Var]] extra fields */
 };
-/*e: struct var */
+/*e: struct [[Var]] */
 
 var *vlook(char*);
 var *gvlook(char*);
 var *newvar(char*, var*);
 
-/*s: constant NVAR */
+/*s: constant [[NVAR]] */
 #define	NVAR	521
-/*e: constant NVAR */
+/*e: constant [[NVAR]] */
 extern var *gvar[NVAR];		/* hash for globals */
 
 #define	new(type)	((type *)emalloc(sizeof(type)))
@@ -188,16 +188,16 @@ void *emalloc(long);
 void *Malloc(ulong);
 void efree(void *);
 
-/*s: struct here */
+/*s: struct [[Here]] */
 struct Here {
     tree	*tag;
     char	*name;
     struct Here *next;
 };
-/*e: struct here */
+/*e: struct [[Here]] */
 extern int mypid;
 
-/*s: constant GLOB */
+/*s: constant [[GLOB]] */
 /*
  * Glob character escape in strings:
  *	In a string, GLOB must be followed by *?[ or GLOB.
@@ -207,10 +207,10 @@ extern int mypid;
  *	GLOBGLOB matches GLOB
  */
 #define	GLOB	'\001'
-/*e: constant GLOB */
+/*e: constant [[GLOB]] */
 
 extern int nerror;	/* number of errors encountered during compilation */
-/*s: constant PRD */
+/*s: constant [[PRD]] */
 /*
  * Which fds are the reading/writing end of a pipe?
  * Unfortunately, this can vary from system to system.
@@ -218,10 +218,10 @@ extern int nerror;	/* number of errors encountered during compilation */
  * work on plan 9.
  */
 #define	PRD	0
-/*e: constant PRD */
-/*s: constant PWR */
+/*e: constant [[PRD]] */
+/*s: constant [[PWR]] */
 #define	PWR	1
-/*e: constant PWR */
+/*e: constant [[PWR]] */
 
 extern char *Rcmain;
 extern char *Fdprefix;

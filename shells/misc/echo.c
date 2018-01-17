@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function main */
+/*s: function [[main]] */
 void
 main(int argc, char *argv[])
 {
@@ -40,5 +40,5 @@ main(int argc, char *argv[])
 
     exits((char *)nil);
 }
-/*e: function main */
+/*e: function [[main]] */
 /*e: misc/echo.c */

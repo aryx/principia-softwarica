@@ -14,14 +14,14 @@ char**	mkargv(word*);
 void	delwaitpid(int);
 int	havewaitpid(int);
 
-/*s: enum _anon_ (rc/plan9.c) */
+/*s: enum [[MiscPlan9]] */
 enum {
     Maxenvname = 256,	/* undocumented limit */
 };
-/*e: enum _anon_ (rc/plan9.c) */
+/*e: enum [[MiscPlan9]] */
 
-/*s: global Signame */
-char *Signame[] = {
+/*s: global [[signame]] */
+char *signame[] = {
     "sigexit",	
     "sighup",	
     "sigint",	
@@ -32,8 +32,8 @@ char *Signame[] = {
     "sigterm",
     0
 };
-/*e: global Signame */
-/*s: global syssigname */
+/*e: global [[signame]] */
+/*s: global [[syssigname]] */
 char *syssigname[] = {
     "exit",		/* can't happen */
     "hangup",
@@ -45,19 +45,19 @@ char *syssigname[] = {
     "term",
     0
 };
-/*e: global syssigname */
-/*s: global Rcmain */
+/*e: global [[syssigname]] */
+/*s: global [[Rcmain]] */
 char *Rcmain = "/rc/lib/rcmain";
-/*e: global Rcmain */
-/*s: global Fdprefix */
+/*e: global [[Rcmain]] */
+/*s: global [[Fdprefix]] */
 char *Fdprefix = "/fd/";
-/*e: global Fdprefix */
+/*e: global [[Fdprefix]] */
 
 void execfinit(void);
 void execnewpgrp(void);
 
-/*s: global Builtin */
-builtin Builtin[] = {
+/*s: global [[builtins]] */
+builtin builtins[] = {
     "cd",		execcd,
     "exit",		execexit,
     ".",		execdot,
@@ -74,9 +74,9 @@ builtin Builtin[] = {
     "flag",		execflag,
     0
 };
-/*e: global Builtin */
+/*e: global [[builtins]] */
 
-/*s: function execnewpgrp */
+/*s: function [[execnewpgrp]] */
 void
 execnewpgrp(void)
 {
@@ -125,9 +125,9 @@ execnewpgrp(void)
         setstatus("");
     poplist();
 }
-/*e: function execnewpgrp */
+/*e: function [[execnewpgrp]] */
 
-/*s: function Vinit */
+/*s: function [[Vinit]] */
 void
 Vinit(void)
 {
@@ -181,12 +181,12 @@ Vinit(void)
     }
     close(dir);
 }
-/*e: function Vinit */
-/*s: global envdir */
+/*e: function [[Vinit]] */
+/*s: global [[envdir]] */
 int envdir;
-/*e: global envdir */
+/*e: global [[envdir]] */
 
-/*s: function Xrdfn */
+/*s: function [[Xrdfn]] */
 void
 Xrdfn(void)
 {
@@ -220,12 +220,12 @@ Xrdfn(void)
     close(envdir);
     Xreturn();
 }
-/*e: function Xrdfn */
-/*s: global rdfns */
+/*e: function [[Xrdfn]] */
+/*s: global [[rdfns]] */
 union Code rdfns[4];
-/*e: global rdfns */
+/*e: global [[rdfns]] */
 
-/*s: function execfinit */
+/*s: function [[execfinit]] */
 void
 execfinit(void)
 {
@@ -245,9 +245,9 @@ execfinit(void)
     }
     start(rdfns, 1, runq->local);
 }
-/*e: function execfinit */
+/*e: function [[execfinit]] */
 
-/*s: function Waitfor */
+/*s: function [[Waitfor]] */
 int
 Waitfor(int pid, int)
 {
@@ -283,9 +283,9 @@ Waitfor(int pid, int)
         return -1;
     return 0;
 }
-/*e: function Waitfor */
+/*e: function [[Waitfor]] */
 
-/*s: function mkargv */
+/*s: function [[mkargv]] */
 char **
 mkargv(word *a)
 {
@@ -297,9 +297,9 @@ mkargv(word *a)
     *argp = nil;
     return argv;
 }
-/*e: function mkargv */
+/*e: function [[mkargv]] */
 
-/*s: function addenv */
+/*s: function [[addenv]] */
 void
 addenv(var *v)
 {
@@ -334,9 +334,9 @@ addenv(var *v)
         }
     }
 }
-/*e: function addenv */
+/*e: function [[addenv]] */
 
-/*s: function updenvlocal */
+/*s: function [[updenvlocal]] */
 void
 updenvlocal(var *v)
 {
@@ -345,9 +345,9 @@ updenvlocal(var *v)
         addenv(v);
     }
 }
-/*e: function updenvlocal */
+/*e: function [[updenvlocal]] */
 
-/*s: function Updenv */
+/*s: function [[Updenv]] */
 void
 Updenv(void)
 {
@@ -359,10 +359,10 @@ Updenv(void)
     if(runq)
         updenvlocal(runq->local);
 }
-/*e: function Updenv */
+/*e: function [[Updenv]] */
 
 
-/*s: function Execute */
+/*s: function [[Execute]] */
 void
 Execute(word *args, word *path)
 {
@@ -411,12 +411,12 @@ Execute(word *args, word *path)
     pfmt(err, "%s: %s\n", argv[1], errstr);
     efree((char *)argv);
 }
-/*e: function Execute */
-/*s: constant NDIR */
+/*e: function [[Execute]] */
+/*s: constant [[NDIR]] */
 #define	NDIR	256		/* shoud be a better way */
-/*e: constant NDIR */
+/*e: constant [[NDIR]] */
 
-/*s: function Globsize */
+/*s: function [[Globsize]] */
 int
 Globsize(char *p)
 {
@@ -433,20 +433,23 @@ Globsize(char *p)
     }
     return isglob?globlen:0;
 }
-/*e: function Globsize */
-/*s: constant NFD */
+/*e: function [[Globsize]] */
+/*s: constant [[NFD]] */
 #define	NFD	50
-/*e: constant NFD */
+/*e: constant [[NFD]] */
 
-/*s: global dir */
-struct{
+/*s: struct [[DirEntryWrapper]] */
+struct DirEntryWrapper {
     Dir	*dbuf;
     int	i;
     int	n;
-}dir[NFD];
-/*e: global dir */
+};
+/*e: struct [[DirEntryWrapper]] */
+/*s: global [[dir]] */
+struct DirEntryWrapper dir[NFD];
+/*e: global [[dir]] */
 
-/*s: function Opendir */
+/*s: function [[Opendir]] */
 int
 Opendir(char *name)
 {
@@ -468,9 +471,9 @@ Opendir(char *name)
     close(f);
     return -1;
 }
-/*e: function Opendir */
+/*e: function [[Opendir]] */
 
-/*s: function trimdirs */
+/*s: function [[trimdirs]] */
 static int
 trimdirs(Dir *d, int nd)
 {
@@ -481,9 +484,9 @@ trimdirs(Dir *d, int nd)
             d[w++] = d[r];
     return w;
 }
-/*e: function trimdirs */
+/*e: function [[trimdirs]] */
 
-/*s: function Readdir */
+/*s: function [[Readdir]] */
 /*
  * onlydirs is advisory -- it means you only
  * need to return the directories.  it's okay to
@@ -520,9 +523,9 @@ Again:
     dir[f].i++;
     return 1;
 }
-/*e: function Readdir */
+/*e: function [[Readdir]] */
 
-/*s: function Closedir */
+/*s: function [[Closedir]] */
 void
 Closedir(int f)
 {
@@ -534,11 +537,11 @@ Closedir(int f)
     }
     close(f);
 }
-/*e: function Closedir */
-/*s: global interrupted */
+/*e: function [[Closedir]] */
+/*s: global [[interrupted]] */
 bool interrupted = false;
-/*e: global interrupted */
-/*s: function notifyf */
+/*e: global [[interrupted]] */
+/*s: function [[notifyf]] */
 void
 notifyf(void*, char *s)
 {
@@ -563,49 +566,49 @@ Out:
     }
     noted(NCONT);
 }
-/*e: function notifyf */
+/*e: function [[notifyf]] */
 
-/*s: function Trapinit */
+/*s: function [[Trapinit]] */
 void
 Trapinit(void)
 {
     notify(notifyf);
 }
-/*e: function Trapinit */
+/*e: function [[Trapinit]] */
 
-/*s: function Unlink */
+/*s: function [[Unlink]] */
 void
 Unlink(char *name)
 {
     remove(name);
 }
-/*e: function Unlink */
+/*e: function [[Unlink]] */
 
-/*s: function Write */
+/*s: function [[Write]] */
 long
 Write(int fd, void *buf, long cnt)
 {
     return write(fd, buf, cnt);
 }
-/*e: function Write */
+/*e: function [[Write]] */
 
-/*s: function Read */
+/*s: function [[Read]] */
 long
 Read(int fd, void *buf, long cnt)
 {
     return read(fd, buf, cnt);
 }
-/*e: function Read */
+/*e: function [[Read]] */
 
-/*s: function Seek */
+/*s: function [[Seek]] */
 long
 Seek(int fd, long cnt, long whence)
 {
     return seek(fd, cnt, whence);
 }
-/*e: function Seek */
+/*e: function [[Seek]] */
 
-/*s: function Executable */
+/*s: function [[Executable]] */
 bool
 Executable(char *file)
 {
@@ -619,33 +622,33 @@ Executable(char *file)
     free(statbuf);
     return ret;
 }
-/*e: function Executable */
+/*e: function [[Executable]] */
 
-/*s: function Creat */
+/*s: function [[Creat]] */
 int
 Creat(char *file)
 {
     return create(file, 1, 0666L);
 }
-/*e: function Creat */
+/*e: function [[Creat]] */
 
-/*s: function Dup */
+/*s: function [[Dup]] */
 int
 Dup(int a, int b)
 {
     return dup(a, b);
 }
-/*e: function Dup */
+/*e: function [[Dup]] */
 
-/*s: function Dup1 */
+/*s: function [[Dup1]] */
 int
 Dup1(int)
 {
     return -1;
 }
-/*e: function Dup1 */
+/*e: function [[Dup1]] */
 
-/*s: function Exit */
+/*s: function [[Exit]] */
 void
 Exit(char *stat)
 {
@@ -653,25 +656,25 @@ Exit(char *stat)
     setstatus(stat);
     exits(truestatus() ? "" : getstatus());
 }
-/*e: function Exit */
+/*e: function [[Exit]] */
 
-/*s: function Eintr */
+/*s: function [[Eintr]] */
 bool
 Eintr(void)
 {
     return interrupted;
 }
-/*e: function Eintr */
+/*e: function [[Eintr]] */
 
-/*s: function Noerror */
+/*s: function [[Noerror]] */
 void
 Noerror(void)
 {
     interrupted = false;
 }
-/*e: function Noerror */
+/*e: function [[Noerror]] */
 
-/*s: function Isatty */
+/*s: function [[Isatty]] */
 bool
 Isatty(fdt fd)
 {
@@ -687,9 +690,9 @@ Isatty(fdt fd)
     /* might be /mnt/term/dev/cons */
     return strlen(buf) >= 9 && strcmp(buf+strlen(buf)-9, "/dev/cons") == 0;
 }
-/*e: function Isatty */
+/*e: function [[Isatty]] */
 
-/*s: function Abort */
+/*s: function [[Abort]] */
 void
 Abort(void)
 {
@@ -697,33 +700,33 @@ Abort(void)
     flush(err);
     Exit("aborting");
 }
-/*e: function Abort */
+/*e: function [[Abort]] */
 
-/*s: function Memcpy */
+/*s: function [[Memcpy]] */
 void
 Memcpy(void *a, void *b, long n)
 {
     memmove(a, b, n);
 }
-/*e: function Memcpy */
+/*e: function [[Memcpy]] */
 
-/*s: function Malloc */
+/*s: function [[Malloc]] */
 void*
 Malloc(ulong n)
 {
     return mallocz(n, 1);
 }
-/*e: function Malloc */
+/*e: function [[Malloc]] */
 
-/*s: global waitpids */
+/*s: global [[waitpids]] */
 // growing_array<pid> (but really a list)
 int *waitpids;
-/*e: global waitpids */
-/*s: global nwaitpids */
+/*e: global [[waitpids]] */
+/*s: global [[nwaitpids]] */
 int nwaitpids;
-/*e: global nwaitpids */
+/*e: global [[nwaitpids]] */
 
-/*s: function addwaitpid */
+/*s: function [[addwaitpid]] */
 void
 addwaitpid(int pid)
 {
@@ -732,9 +735,9 @@ addwaitpid(int pid)
         panic("Can't realloc %d waitpids", nwaitpids+1);
     waitpids[nwaitpids++] = pid;
 }
-/*e: function addwaitpid */
+/*e: function [[addwaitpid]] */
 
-/*s: function delwaitpid */
+/*s: function [[delwaitpid]] */
 void
 delwaitpid(int pid)
 {
@@ -745,17 +748,17 @@ delwaitpid(int pid)
             waitpids[w++] = waitpids[r];
     nwaitpids = w;
 }
-/*e: function delwaitpid */
+/*e: function [[delwaitpid]] */
 
-/*s: function clearwaitpids */
+/*s: function [[clearwaitpids]] */
 void
 clearwaitpids(void)
 {
     nwaitpids = 0;
 }
-/*e: function clearwaitpids */
+/*e: function [[clearwaitpids]] */
 
-/*s: function havewaitpid */
+/*s: function [[havewaitpid]] */
 bool
 havewaitpid(int pid)
 {
@@ -766,14 +769,14 @@ havewaitpid(int pid)
             return true;
     return false;
 }
-/*e: function havewaitpid */
+/*e: function [[havewaitpid]] */
 
-/*s: function _efgfmt */
+/*s: function [[_efgfmt]] */
 /* avoid loading any floating-point library code */
 //@Scheck: weird, probably linker trick
 int _efgfmt(Fmt *)
 {
     return -1;
 }
-/*e: function _efgfmt */
+/*e: function [[_efgfmt]] */
 /*e: rc/plan9.c */

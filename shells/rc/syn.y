@@ -39,14 +39,14 @@
 %right '$' COUNT '"'
 %left SUB
 /*e: priority and associativity declarations */
-/*s: type declarations */
+/*s: type [[declarations]] */
 %type<tree> line cmd simple word comword
-/*x: type declarations */
+/*x: type [[declarations]] */
 %type<tree> first keyword words
 %type<tree> paren brace body cmdsa cmdsan assign epilog redir
 %type<tree> FOR IN WHILE IF NOT SWITCH FN
 %type<tree> TWIDDLE BANG SUBSHELL  REDIR DUP PIPE    WORD
-/*e: type declarations */
+/*e: type [[declarations]] */
 
 %%
 /*s: grammar */

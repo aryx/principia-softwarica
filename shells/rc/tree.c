@@ -7,11 +7,11 @@
 
 void freetree(tree*);
 
-/*s: global treenodes */
+/*s: global [[treenodes]] */
 // list<ref_own<Tree>> (next = Tree.next)
 tree *treenodes;
-/*e: global treenodes */
-/*s: function newtree */
+/*e: global [[treenodes]] */
+/*s: function [[newtree]] */
 /*
  * create and clear a new tree node, and add it
  * to the node list.
@@ -29,9 +29,9 @@ newtree(void)
 
     return t;
 }
-/*e: function newtree */
+/*e: function [[newtree]] */
 
-/*s: function freenodes */
+/*s: function [[freenodes]] */
 void
 freenodes(void)
 {
@@ -44,25 +44,25 @@ freenodes(void)
     }
     treenodes = nil;
 }
-/*e: function freenodes */
+/*e: function [[freenodes]] */
 
-/*s: function tree1 */
+/*s: function [[tree1]] */
 tree*
 tree1(int type, tree *c0)
 {
     return tree3(type, c0, (tree *)nil, (tree *)nil);
 }
-/*e: function tree1 */
+/*e: function [[tree1]] */
 
-/*s: function tree2 */
+/*s: function [[tree2]] */
 //@Scheck: used by syn.y
 tree* tree2(int type, tree *c0, tree *c1)
 {
     return tree3(type, c0, c1, (tree *)nil);
 }
-/*e: function tree2 */
+/*e: function [[tree2]] */
 
-/*s: function tree3 */
+/*s: function [[tree3]] */
 tree*
 tree3(int type, tree *c0, tree *c1, tree *c2)
 {
@@ -84,18 +84,18 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
     t->child[2] = c2;
     return t;
 }
-/*e: function tree3 */
+/*e: function [[tree3]] */
 
-/*s: function mung1 */
+/*s: function [[mung1]] */
 //@Scheck: used by syn.y
 tree* mung1(tree *t, tree *c0)
 {
     t->child[0] = c0;
     return t;
 }
-/*e: function mung1 */
+/*e: function [[mung1]] */
 
-/*s: function mung2 */
+/*s: function [[mung2]] */
 //@Scheck: used by syn.y
 tree* mung2(tree *t, tree *c0, tree *c1)
 {
@@ -103,9 +103,9 @@ tree* mung2(tree *t, tree *c0, tree *c1)
     t->child[1] = c1;
     return t;
 }
-/*e: function mung2 */
+/*e: function [[mung2]] */
 
-/*s: function mung3 */
+/*s: function [[mung3]] */
 //@Scheck: used by syn.y
 tree* mung3(tree *t, tree *c0, tree *c1, tree *c2)
 {
@@ -114,9 +114,9 @@ tree* mung3(tree *t, tree *c0, tree *c1, tree *c2)
     t->child[2] = c2;
     return t;
 }
-/*e: function mung3 */
+/*e: function [[mung3]] */
 
-/*s: function epimung */
+/*s: function [[epimung]] */
 //@Scheck: used by syn.y
 tree* epimung(tree *comp, tree *epi)
 {
@@ -127,8 +127,8 @@ tree* epimung(tree *comp, tree *epi)
     p->child[1] = comp;
     return epi;
 }
-/*e: function epimung */
-/*s: function simplemung */
+/*e: function [[epimung]] */
+/*s: function [[simplemung]] */
 /*
  * Add a SIMPLE node at the root of t and percolate all the redirections
  * up to the root.
@@ -157,9 +157,9 @@ tree* simplemung(tree *t)
     /*e: [[simplemung()]] percolate redirections up to the root */
     return t;
 }
-/*e: function simplemung */
+/*e: function [[simplemung]] */
 
-/*s: function token */
+/*s: function [[token]] */
 tree*
 token(char *str, int type)
 {
@@ -169,6 +169,6 @@ token(char *str, int type)
     t->str = strdup(str);
     return t;
 }
-/*e: function token */
+/*e: function [[token]] */
 
 /*e: rc/tree.c */

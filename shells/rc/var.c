@@ -4,7 +4,7 @@
 #include "fns.h"
 #include "x.tab.h"
 
-/*s: function hash */
+/*s: function [[hash]] */
 unsigned
 hash(char *as, int n)
 {
@@ -17,21 +17,24 @@ hash(char *as, int n)
         h += *s++ * i++;
     return h % n;
 }
-/*e: function hash */
+/*e: function [[hash]] */
 
-/*s: constant NKW */
+/*s: constant [[NKW]] */
 #define	NKW	30
-/*e: constant NKW */
-/*s: global kw */
+/*e: constant [[NKW]] */
+/*s: struct [[Kw]] */
 struct Kw {
     char *name;
     int type;
 
     struct Kw *next;
-} *kw[NKW];
-/*e: global kw */
+};
+/*e: struct [[Kw]] */
+/*s: global [[kw]] */
+struct Kw *kw[NKW];
+/*e: global [[kw]] */
 
-/*s: function kenter */
+/*s: function [[kenter]] */
 void
 kenter(int type, char *name)
 {
@@ -42,9 +45,9 @@ kenter(int type, char *name)
     p->next = kw[h];
     kw[h] = p;
 }
-/*e: function kenter */
+/*e: function [[kenter]] */
 
-/*s: function kinit */
+/*s: function [[kinit]] */
 void
 kinit(void)
 {
@@ -60,9 +63,9 @@ kinit(void)
     kenter(BANG, "!");
     kenter(SUBSHELL, "@");
 }
-/*e: function kinit */
+/*e: function [[kinit]] */
 
-/*s: function klook */
+/*s: function [[klook]] */
 tree*
 klook(char *name)
 {
@@ -76,9 +79,9 @@ klook(char *name)
         }
     return t;
 }
-/*e: function klook */
+/*e: function [[klook]] */
 
-/*s: function gvlook */
+/*s: function [[gvlook]] */
 var*
 gvlook(char *name)
 {
@@ -91,9 +94,9 @@ gvlook(char *name)
     gvar[h] = newvar(strdup(name), gvar[h]);
     return gvar[h];
 }
-/*e: function gvlook */
+/*e: function [[gvlook]] */
 
-/*s: function vlook */
+/*s: function [[vlook]] */
 var*
 vlook(char *name)
 {
@@ -105,9 +108,9 @@ vlook(char *name)
 
     return gvlook(name);
 }
-/*e: function vlook */
+/*e: function [[vlook]] */
 
-/*s: function setvar */
+/*s: function [[setvar]] */
 void
 setvar(char *name, word *val)
 {
@@ -116,5 +119,5 @@ setvar(char *name, word *val)
     v->val = val;
     v->changed = true;
 }
-/*e: function setvar */
+/*e: function [[setvar]] */
 /*e: rc/var.c */

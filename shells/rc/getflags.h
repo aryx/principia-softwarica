@@ -1,7 +1,7 @@
 /*s: rc/getflags.h */
-/*s: constant NFLAG */
+/*s: constant [[NFLAG]] */
 #define	NFLAG	128
-/*e: constant NFLAG */
+/*e: constant [[NFLAG]] */
 
 extern char **flag[NFLAG];
 extern char *flagset[];

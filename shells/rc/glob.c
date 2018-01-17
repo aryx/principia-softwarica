@@ -5,13 +5,13 @@
 
 int	matchfn(void*, void*);
 
-/*s: global globname */
+/*s: global [[globname]] */
 char *globname;
-/*e: global globname */
-/*s: global globv */
+/*e: global [[globname]] */
+/*s: global [[globv]] */
 struct Word *globv;
-/*e: global globv */
-/*s: function deglob */
+/*e: global [[globv]] */
+/*s: function [[deglob]] */
 /*
  * delete all the GLOB marks from s, in place
  */
@@ -26,17 +26,17 @@ deglob(void *as)
         *s++=*t;
     }while(*t++);
 }
-/*e: function deglob */
+/*e: function [[deglob]] */
 
-/*s: function globcmp */
+/*s: function [[globcmp]] */
 int
 globcmp(const void *s, const void *t)
 {
     return strcmp(*(char**)s, *(char**)t);
 }
-/*e: function globcmp */
+/*e: function [[globcmp]] */
 
-/*s: function globsort */
+/*s: function [[globsort]] */
 void
 globsort(word *left, word *right)
 {
@@ -50,8 +50,8 @@ globsort(word *left, word *right)
     for(a = left,n = 0;a!=right;a = a->next,n++) a->word = list[n];
     efree((char *)list);
 }
-/*e: function globsort */
-/*s: function globdir */
+/*e: function [[globsort]] */
+/*s: function [[globdir]] */
 /*
  * Push names prefixed by globname and suffixed by a match of p onto the astack.
  * namep points to the end of the prefix in globname.
@@ -96,8 +96,8 @@ globdir(uchar *p, uchar *namep)
     }
     Closedir(f);
 }
-/*e: function globdir */
-/*s: function glob */
+/*e: function [[globdir]] */
+/*s: function [[glob]] */
 /*
  * Push all file names matched by p on the current thread's stack.
  * If there are no matches, the list consists of p.
@@ -125,9 +125,9 @@ glob(void *ap)
     else
         globsort(globv, svglobv);
 }
-/*e: function glob */
+/*e: function [[glob]] */
 
-/*s: function equtf */
+/*s: function [[equtf]] */
 /*
  * Do p and q point at equal utf codes
  */
@@ -142,9 +142,9 @@ equtf(uchar *p, uchar *q)
     chartorune(&qr, (char*)q);
     return pr == qr;
 }
-/*e: function equtf */
+/*e: function [[equtf]] */
 
-/*s: function nextutf */
+/*s: function [[nextutf]] */
 /*
  * Return a pointer to the next utf code in the string,
  * not jumping past nuls in broken utf codes!
@@ -155,9 +155,9 @@ nextutf(uchar *p)
     Rune dummy;
     return p + chartorune(&dummy, (char*)p);
 }
-/*e: function nextutf */
+/*e: function [[nextutf]] */
 
-/*s: function unicode */
+/*s: function [[unicode]] */
 /*
  * Convert the utf code at *p to a unicode value
  */
@@ -169,9 +169,9 @@ unicode(uchar *p)
     chartorune(&r, (char*)p);
     return r;
 }
-/*e: function unicode */
+/*e: function [[unicode]] */
 
-/*s: function matchfn */
+/*s: function [[matchfn]] */
 /*
  * Does the string s match the pattern p
  * . and .. are only matched by patterns starting with .
@@ -188,9 +188,9 @@ matchfn(void *as, void *ap)
         return false;
     return match(s, p, '/');
 }
-/*e: function matchfn */
+/*e: function [[matchfn]] */
 
-/*s: function match */
+/*s: function [[match]] */
 bool
 match(void *as, void *ap, int stop)
 {
@@ -254,9 +254,9 @@ match(void *as, void *ap, int stop)
     }
     return *s=='\0';
 }
-/*e: function match */
+/*e: function [[match]] */
 
-/*s: function globlist1 */
+/*s: function [[globlist1]] */
 void
 globlist1(word *gl)
 {
@@ -265,9 +265,9 @@ globlist1(word *gl)
         glob(gl->word);
     }
 }
-/*e: function globlist1 */
+/*e: function [[globlist1]] */
 
-/*s: function globlist */
+/*s: function [[globlist]] */
 void
 globlist(void)
 {
@@ -285,5 +285,5 @@ globlist(void)
         runq->argv->words = globv;
     }
 }
-/*e: function globlist */
+/*e: function [[globlist]] */
 /*e: rc/glob.c */

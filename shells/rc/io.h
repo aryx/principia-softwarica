@@ -2,17 +2,17 @@
 /*s: constant EOF (rc/io.h) */
 #define	EOF	(-1)
 /*e: constant EOF (rc/io.h) */
-/*s: constant NBUF */
+/*s: constant [[NBUF]] */
 #define	NBUF	512
-/*e: constant NBUF */
+/*e: constant [[NBUF]] */
 
-/*s: struct io */
+/*s: struct [[Io]] */
 struct Io {
     fdt	fd;
     byte	*bufp, *ebuf, *strp;
     byte	buf[NBUF];
 };
-/*e: struct io */
+/*e: struct [[Io]] */
 
 extern io *err;
 

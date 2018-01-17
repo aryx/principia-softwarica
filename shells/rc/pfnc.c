@@ -4,7 +4,7 @@
 #include "io.h"
 #include "fns.h"
 
-/*s: global fname */
+/*s: global [[fname]] */
 struct{
     void	(*f)(void);
     char	*name;
@@ -56,9 +56,9 @@ struct{
     Xwrite, "Xwrite",
     0
 };
-/*e: global fname */
+/*e: global [[fname]] */
 
-/*s: function pfnc */
+/*s: function [[pfnc]] */
 void
 pfnc(io *fd, thread *t)
 {
@@ -79,5 +79,5 @@ pfnc(io *fd, thread *t)
     pchr(fd, '\n');
     flush(fd);
 }
-/*e: function pfnc */
+/*e: function [[pfnc]] */
 /*e: rc/pfnc.c */

@@ -15,7 +15,7 @@ extern void Xdelhere(void), Xpopredir(void), Xsub(void), Xeflag(void), Xsettrue(
 extern void Xerror(char*);
 extern void Xerror1(char*);
 
-/*s: struct word */
+/*s: struct [[Word]] */
 /*
  * word lists are in correct order,
  * i.e. word0->word1->word2->word3->nil
@@ -26,8 +26,8 @@ struct Word {
     // Extra
     word *next;
 };
-/*e: struct word */
-/*s: struct list */
+/*e: struct [[Word]] */
+/*s: struct [[List]] */
 struct List {
     // list<ref_own<Word>> (next = Word.next)
     word *words;
@@ -35,11 +35,11 @@ struct List {
     // Extra
     list *next;
 };
-/*e: struct list */
+/*e: struct [[List]] */
 word *newword(char *, word *);
 word *copywords(word *, word *);
 
-/*s: struct redir */
+/*s: struct [[Redir]] */
 struct Redir {
     // enum<redirection_kind_bis>
     char type;	/* what to do */
@@ -53,24 +53,24 @@ struct Redir {
     struct Redir *next;		/* what else to do (reverse order) */
     /*e: [[Redir]] extra fields */
 };
-/*e: struct redir */
+/*e: struct [[Redir]] */
 
-/*s: constant NSTATUS */
+/*s: constant [[NSTATUS]] */
 #define	NSTATUS	ERRMAX			/* length of status (from plan 9) */
-/*e: constant NSTATUS */
-/*s: constant ROPEN */
+/*e: constant [[NSTATUS]] */
+/*s: constant [[ROPEN]] */
 /*
  * redir types
  */
 #define	ROPEN	1			/* dup2(from, to); close(from); */
-/*e: constant ROPEN */
-/*s: constant RDUP */
+/*e: constant [[ROPEN]] */
+/*s: constant [[RDUP]] */
 #define	RDUP	2			/* dup2(from, to); */
-/*e: constant RDUP */
-/*s: constant RCLOSE */
+/*e: constant [[RDUP]] */
+/*s: constant [[RCLOSE]] */
 #define	RCLOSE	3			/* close(from); */
-/*e: constant RCLOSE */
-/*s: struct thread */
+/*e: constant [[RCLOSE]] */
+/*s: struct [[Thread]] */
 struct Thread {
     union Code *code;		/* code for this thread */
     int pc;			/* code[pc] is the next instruction */
@@ -108,7 +108,7 @@ struct Thread {
     thread *ret;		/* who continues when this finishes */
     /*e: [[Thread]] extra fields */
 };
-/*e: struct thread */
+/*e: struct [[Thread]] */
 
 code *codecopy(code*);
 
@@ -118,13 +118,13 @@ extern int ntrap;		/* number of outstanding traps */
 extern int trap[NSIG];		/* number of outstanding traps per type */
 extern bool eflagok;		/* kludge flag so that -e doesn't exit in startup */
 
-/*s: struct builtin */
+/*s: struct [[Builtin]] */
 struct Builtin {
     char *name;
     void (*fnc)(void);
 };
-/*e: struct builtin */
-extern struct Builtin Builtin[];
+/*e: struct [[Builtin]] */
+extern struct Builtin builtins[];
 
 void execcd(void);
 void execwhatis(void);

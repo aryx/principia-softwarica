@@ -12,7 +12,7 @@ word*	searchpath(char*);
 void execfunc(var*);
 int	mapfd(int);
 
-/*s: function exitnext */
+/*s: function [[exitnext]] */
 /*
  * Search through the following code to see if we're just going to exit.
  */
@@ -23,9 +23,9 @@ exitnext(void){
         c++;
     return c->f==Xexit;
 }
-/*e: function exitnext */
+/*e: function [[exitnext]] */
 
-/*s: function Xsimple */
+/*s: function [[Xsimple]] */
 void
 Xsimple(void)
 {
@@ -74,7 +74,7 @@ Xsimple(void)
             popword();
         }
         /*e: [[Xsimple()]] if argv0 is the builtin keyword */
-        for(bp = Builtin;bp->name;bp++)
+        for(bp = builtins;bp->name;bp++)
             if(strcmp(a->word, bp->name)==0){
                 (*bp->fnc)();
                 return;
@@ -103,12 +103,12 @@ Xsimple(void)
         }
     }
 }
-/*e: function Xsimple */
-/*s: global nullpath */
+/*e: function [[Xsimple]] */
+/*s: global [[nullpath]] */
 struct Word nullpath = { "", nil};
-/*e: global nullpath */
+/*e: global [[nullpath]] */
 
-/*s: function doredir */
+/*s: function [[doredir]] */
 void
 doredir(redir *rp)
 {
@@ -136,9 +136,9 @@ doredir(redir *rp)
         }
     }
 }
-/*e: function doredir */
+/*e: function [[doredir]] */
 
-/*s: function searchpath */
+/*s: function [[searchpath]] */
 word*
 searchpath(char *w)
 {
@@ -152,9 +152,9 @@ searchpath(char *w)
         path=&nullpath;
     return path;
 }
-/*e: function searchpath */
+/*e: function [[searchpath]] */
 
-/*s: function execexec */
+/*s: function [[execexec]] */
 void
 execexec(void)
 {
@@ -173,9 +173,9 @@ execexec(void)
     // should not be reached! unless command did not exist
     poplist();
 }
-/*e: function execexec */
+/*e: function [[execexec]] */
 
-/*s: function execfunc */
+/*s: function [[execfunc]] */
 void
 execfunc(var *func)
 {
@@ -190,9 +190,9 @@ execfunc(var *func)
     runq->local->val = starval;
     runq->local->changed = true;
 }
-/*e: function execfunc */
+/*e: function [[execfunc]] */
 
-/*s: function dochdir */
+/*s: function [[dochdir]] */
 errorneg1
 dochdir(char *word)
 {
@@ -213,9 +213,9 @@ dochdir(char *word)
     }
     return OK_1;
 }
-/*e: function dochdir */
+/*e: function [[dochdir]] */
 
-/*s: function appfile */
+/*s: function [[appfile]] */
 static char *
 appfile(char *dir, char *comp)
 {
@@ -232,9 +232,9 @@ appfile(char *dir, char *comp)
     p[complen] = '\0';
     return s;
 }
-/*e: function appfile */
+/*e: function [[appfile]] */
 
-/*s: function execcd */
+/*s: function [[execcd]] */
 void
 execcd(void)
 {
@@ -285,9 +285,9 @@ execcd(void)
     }
     poplist();
 }
-/*e: function execcd */
+/*e: function [[execcd]] */
 
-/*s: function execexit */
+/*s: function [[execexit]] */
 void
 execexit(void)
 {
@@ -302,9 +302,9 @@ execexit(void)
         Xexit();
     }
 }
-/*e: function execexit */
+/*e: function [[execexit]] */
 
-/*s: function execshift */
+/*s: function [[execshift]] */
 void
 execshift(void)
 {
@@ -335,9 +335,9 @@ execshift(void)
     setstatus("");
     poplist();
 }
-/*e: function execshift */
+/*e: function [[execshift]] */
 
-/*s: function mapfd */
+/*s: function [[mapfd]] */
 int
 mapfd(int fd)
 {
@@ -357,12 +357,12 @@ mapfd(int fd)
     }
     return fd;
 }
-/*e: function mapfd */
-/*s: global rdcmds */
+/*e: function [[mapfd]] */
+/*s: global [[rdcmds]] */
 union Code rdcmds[4];
-/*e: global rdcmds */
+/*e: global [[rdcmds]] */
 
-/*s: function execcmds */
+/*s: function [[execcmds]] */
 void
 execcmds(io *f)
 {
@@ -378,9 +378,9 @@ execcmds(io *f)
     runq->cmdfd = f;
     runq->iflast = false;
 }
-/*e: function execcmds */
+/*e: function [[execcmds]] */
 
-/*s: function execeval */
+/*s: function [[execeval]] */
 void
 execeval(void)
 {
@@ -408,12 +408,12 @@ execeval(void)
     execcmds(opencore(cmdline, len));
     efree(cmdline);
 }
-/*e: function execeval */
-/*s: global dotcmds */
+/*e: function [[execeval]] */
+/*s: global [[dotcmds]] */
 union Code dotcmds[14];
-/*e: global dotcmds */
+/*e: global [[dotcmds]] */
 
-/*s: function execdot */
+/*s: function [[execdot]] */
 void
 execdot(void)
 {
@@ -513,9 +513,9 @@ execdot(void)
 
     ndot++;
 }
-/*e: function execdot */
+/*e: function [[execdot]] */
 
-/*s: function execflag */
+/*s: function [[execflag]] */
 void
 execflag(void)
 {
@@ -544,9 +544,9 @@ execflag(void)
     }
     poplist();
 }
-/*e: function execflag */
+/*e: function [[execflag]] */
 
-/*s: function execwhatis */
+/*s: function [[execwhatis]] */
 void
 execwhatis(void){	/* mildly wrong -- should fork before writing */
     word *a, *b, *path;
@@ -588,7 +588,7 @@ execwhatis(void){	/* mildly wrong -- should fork before writing */
         if(v->fn)
             pfmt(out, "fn %q %s\n", v->name, v->fn[v->pc-1].s);
         else{
-            for(bp = Builtin;bp->name;bp++)
+            for(bp = builtins;bp->name;bp++)
                 if(strcmp(a->word, bp->name)==0){
                     pfmt(out, "builtin %s\n", a->word);
                     break;
@@ -617,9 +617,9 @@ execwhatis(void){	/* mildly wrong -- should fork before writing */
     poplist();
     flush(err);
 }
-/*e: function execwhatis */
+/*e: function [[execwhatis]] */
 
-/*s: function execwait */
+/*s: function [[execwait]] */
 void
 execwait(void)
 {
@@ -636,5 +636,5 @@ execwait(void)
     }
     poplist();
 }
-/*e: function execwait */
+/*e: function [[execwait]] */
 /*e: rc/simple.c */

@@ -3,78 +3,78 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: constant MAXLINE */
+/*s: constant [[MAXLINE]] */
 #define MAXLINE 200		/* maximum line length */
-/*e: constant MAXLINE */
-/*s: constant WORD */
+/*e: constant [[MAXLINE]] */
+/*s: constant [[WORD]] */
 #define WORD 256		/* token code for words */
-/*e: constant WORD */
-/*s: constant EOF */
+/*e: constant [[WORD]] */
+/*s: constant [[EOF]] */
 #define EOF -1			/* token code for end of file */
-/*e: constant EOF */
-/*s: function ispunct */
+/*e: constant [[EOF]] */
+/*s: function [[ispunct]] */
 #define ispunct(c)		(c=='|' || c=='&' || c==';' || c=='<' || \
                  c=='>' || c=='(' || c==')' || c=='\n')
-/*e: function ispunct */
-/*s: function isspace */
+/*e: function [[ispunct]] */
+/*s: function [[isspace]] */
 #define isspace(c)		(c==' ' || c=='\t')
-/*e: function isspace */
-/*s: function execute */
+/*e: function [[isspace]] */
+/*s: function [[execute]] */
 #define execute(np)		(ignored = (np? (*(np)->op)(np) : 0))
-/*e: function execute */
+/*e: function [[execute]] */
 
 typedef struct Node	Node;
-/*s: struct Node */
+/*s: struct [[Node]] */
 struct Node {			/* parse tree node */
     int (*op)(Node *); 	/* operator function */
     Node *args[2];		/* argument nodes */
     char *argv[100];	/* argument pointers */
     char *io[3];		/* i/o redirection */
 };
-/*e: struct Node */
+/*e: struct [[Node]] */
 
-/*s: global nodes */
+/*s: global [[nodes]] */
 Node	nodes[25];		/* node pool */
-/*e: global nodes */
-/*s: global nfree */
+/*e: global [[nodes]] */
+/*s: global [[nfree]] */
 Node	*nfree;			/* next available node */
-/*e: global nfree */
-/*s: global strspace */
+/*e: global [[nfree]] */
+/*s: global [[strspace]] */
 char	strspace[10*MAXLINE];	/* string storage */
-/*e: global strspace */
-/*s: global sfree */
+/*e: global [[strspace]] */
+/*s: global [[sfree]] */
 char	*sfree;			/* next free character in strspace */
-/*e: global sfree */
-/*s: global t */
+/*e: global [[sfree]] */
+/*s: global [[t]] */
 int	t;			/* current token code */
-/*e: global t */
-/*s: global token */
+/*e: global [[t]] */
+/*s: global [[token]] */
 char 	*token;			/* current token text (in strspace) */
-/*e: global token */
-/*s: global putback */
+/*e: global [[token]] */
+/*s: global [[putback]] */
 int	putback = 0;		/* lookahead */
-/*e: global putback */
-/*s: global status */
+/*e: global [[putback]] */
+/*s: global [[status]] */
 char	status[256];		/* exit status of most recent command */
-/*e: global status */
-/*s: global cflag */
+/*e: global [[status]] */
+/*s: global [[cflag]] */
 int	cflag = 0;		/* command is argument to sh */
-/*e: global cflag */
-/*s: global tflag */
+/*e: global [[cflag]] */
+/*s: global [[tflag]] */
 int	tflag = 0;		/* read only one line */
-/*e: global tflag */
-/*s: global interactive */
+/*e: global [[tflag]] */
+/*s: global [[interactive]] */
 bool	interactive = false;	/* prompt */
-/*e: global interactive */
-/*s: global cflagp */
+/*e: global [[interactive]] */
+/*s: global [[cflagp]] */
 char	*cflagp;		/* command line for cflag */
-/*e: global cflagp */
-/*s: global path */
+/*e: global [[cflagp]] */
+/*s: global [[path]] */
 char	*path[] ={"/bin", 0};
-/*e: global path */
-/*s: global ignored */
+/*e: global [[path]] */
+/*s: global [[ignored]] */
 int	ignored;
-/*e: global ignored */
+/*e: global [[ignored]] */
 
 // lexer
 int	gettoken(void);
@@ -141,7 +141,7 @@ main(int argc, char *argv[])
 }
 /*e: function main (sh/sh.c) */
 
-/*s: function alloc */
+/*s: function [[alloc]] */
 /* alloc - allocate for op and return a node */
 Node*
 alloc(int (*op)(Node *))
@@ -157,9 +157,9 @@ alloc(int (*op)(Node *))
     exits("node storage overflow");
     return nil;
 }
-/*e: function alloc */
+/*e: function [[alloc]] */
 
-/*s: function builtin */
+/*s: function [[builtin]] */
 /* builtin - check np for builtin command and, if found, execute it */
 bool
 builtin(Node *np)
@@ -247,9 +247,9 @@ builtin(Node *np)
     // no builtin found
     return false;
 }
-/*e: function builtin */
+/*e: function [[builtin]] */
 
-/*s: function command */
+/*s: function [[command]] */
 /* command - ( list ) [ ( < | > | >> ) word ]* | simple */
 Node*
 command(void)
@@ -267,9 +267,9 @@ command(void)
             return nil;
     return np;
 }
-/*e: function command */
+/*e: function [[command]] */
 
-/*s: function getch */
+/*s: function [[getch]] */
 /* getch - get next, possibly pushed back, input character */
 int
 getch(void)
@@ -298,9 +298,9 @@ getch(void)
         return EOF;
     return c;
 }
-/*e: function getch */
+/*e: function [[getch]] */
 
-/*s: function gettoken */
+/*s: function [[gettoken]] */
 /* gettoken - get next token into string space, return token code */
 int
 gettoken(void)
@@ -324,9 +324,9 @@ gettoken(void)
     putback = c;
     return WORD;
 }
-/*e: function gettoken */
+/*e: function [[gettoken]] */
 
-/*s: function list */
+/*s: function [[list]] */
 /* list - pipeline ( ( ; | & ) pipeline )* [ ; | & ]  (not LL(1), but ok) */
 Node*
 list(void)
@@ -351,9 +351,9 @@ list(void)
         np->op = xwait;
     return np;
 }
-/*e: function list */
+/*e: function [[list]] */
 
-/*s: function error */
+/*s: function [[error]] */
 /* error - print error message s, prefixed by t */
 void
 error(char *s, char *t)
@@ -364,9 +364,9 @@ error(char *s, char *t)
     errstr(buf, sizeof buf);
     fprint(2, ": %s\n", buf);
 }
-/*e: function error */
+/*e: function [[error]] */
 
-/*s: function pipeline */
+/*s: function [[pipeline]] */
 /* pipeline - command ( | command )* */
 Node*
 pipeline(void)
@@ -385,9 +385,9 @@ pipeline(void)
     }
     return np;
 }
-/*e: function pipeline */
+/*e: function [[pipeline]] */
 
-/*s: function redirect */
+/*s: function [[redirect]] */
 /* redirect - redirect i/o according to np->io[] values */
 void
 redirect(Node *np)
@@ -420,9 +420,9 @@ redirect(Node *np)
         seek(1, 0, 2);
     }
 }
-/*e: function redirect */
+/*e: function [[redirect]] */
 
-/*s: function setio */
+/*s: function [[setio]] */
 /* setio - ( < | > | >> ) word; fill in np->io[] */
 error0
 setio(Node *np)
@@ -443,9 +443,9 @@ setio(Node *np)
         return ERROR_0;
     return OK_1;
 }
-/*e: function setio */
+/*e: function [[setio]] */
             
-/*s: function simple */
+/*s: function [[simple]] */
 /* simple - word ( [ < | > | >> ] word )* */
 Node*
 simple(void)
@@ -465,9 +465,9 @@ simple(void)
     np->argv[n] = 0;
     return np;
 }
-/*e: function simple */
+/*e: function [[simple]] */
 
-/*s: function xpipeline */
+/*s: function [[xpipeline]] */
 /* xpipeline - execute cmd | cmd */
 int
 xpipeline(Node *np)
@@ -505,9 +505,9 @@ xpipeline(Node *np)
     close(fd[1]);
     return pid;
 }
-/*e: function xpipeline */
+/*e: function [[xpipeline]] */
 
-/*s: function xsimple */
+/*s: function [[xsimple]] */
 /* xsimple - execute a simple command */
 int
 xsimple(Node *np)
@@ -536,9 +536,9 @@ xsimple(Node *np)
     exits("not found");
     return -1;		// suppress compiler warnings
 }
-/*e: function xsimple */
+/*e: function [[xsimple]] */
 
-/*s: function xsubshell */
+/*s: function [[xsubshell]] */
 /* xsubshell - execute (cmd) */
 int
 xsubshell(Node *np)
@@ -555,9 +555,9 @@ xsubshell(Node *np)
     exits(status);
     return -1;		// suppress compiler warnings
 }
-/*e: function xsubshell */
+/*e: function [[xsubshell]] */
 
-/*s: function xnowait */
+/*s: function [[xnowait]] */
 /* xnowait - execute cmd & */
 int
 xnowait(Node *np)
@@ -570,9 +570,9 @@ xnowait(Node *np)
         fprint(2, "%d\n", pid);
     return 0;
 }
-/*e: function xnowait */
+/*e: function [[xnowait]] */
 
-/*s: function xwait */
+/*s: function [[xwait]] */
 /* xwait - execute cmd ; */
 int xwait(Node *np)
 {
@@ -596,5 +596,5 @@ int xwait(Node *np)
     }
     return 0;
 }
-/*e: function xwait */
+/*e: function [[xwait]] */
 /*e: sh/sh.c */

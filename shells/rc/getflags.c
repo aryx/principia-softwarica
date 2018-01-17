@@ -9,41 +9,41 @@ static void errn(char*, int);
 static void errs(char*);
 static void errc(int);
 
-/*s: global flagset */
+/*s: global [[flagset]] */
 char *flagset[] = {"<flag>"};
-/*e: global flagset */
-/*s: global flag */
+/*e: global [[flagset]] */
+/*s: global [[flag]] */
 // map<char, option<array<string>>>
 char **flag[NFLAG];
-/*e: global flag */
-/*s: global cmdname */
+/*e: global [[flag]] */
+/*s: global [[cmdname]] */
 char *cmdname;
-/*e: global cmdname */
-/*s: global flagarg */
+/*e: global [[cmdname]] */
+/*s: global [[flagarg]] */
 static char *flagarg="";
-/*e: global flagarg */
-/*s: global reason */
+/*e: global [[flagarg]] */
+/*s: global [[reason]] */
 static int reason;
-/*e: global reason */
+/*e: global [[reason]] */
 
-/*s: constant RESET */
+/*s: constant [[RESET]] */
 #define	RESET	1
-/*e: constant RESET */
-/*s: constant FEWARGS */
+/*e: constant [[RESET]] */
+/*s: constant [[FEWARGS]] */
 #define	FEWARGS	2
-/*e: constant FEWARGS */
-/*s: constant FLAGSYN */
+/*e: constant [[FEWARGS]] */
+/*s: constant [[FLAGSYN]] */
 #define	FLAGSYN	3
-/*e: constant FLAGSYN */
-/*s: constant BADFLAG */
+/*e: constant [[FLAGSYN]] */
+/*s: constant [[BADFLAG]] */
 #define	BADFLAG	4
-/*e: constant BADFLAG */
+/*e: constant [[BADFLAG]] */
 
-/*s: global badflag */
+/*s: global [[badflag]] */
 static int badflag;
-/*e: global badflag */
+/*e: global [[badflag]] */
 
-/*s: function getflags */
+/*s: function [[getflags]] */
 int
 getflags(int argc, char *argv[], char *flags, int stop)
 {
@@ -100,18 +100,18 @@ getflags(int argc, char *argv[], char *flags, int stop)
     }
     return argc;
 }
-/*e: function getflags */
+/*e: function [[getflags]] */
 
-/*s: function reverse */
+/*s: function [[reverse]] */
 static void
 reverse(char **p, char **q)
 {
     char *t;
     for(;p<q;p++,--q){ t=*p; *p=*q; *q = t; }
 }
-/*e: function reverse */
+/*e: function [[reverse]] */
 
-/*s: function scanflag */
+/*s: function [[scanflag]] */
 static int
 scanflag(int c, char *f)
 {
@@ -145,9 +145,9 @@ scanflag(int c, char *f)
     badflag = c;
     return -1;
 }
-/*e: function scanflag */
+/*e: function [[scanflag]] */
 
-/*s: function usage */
+/*s: function [[usage]] */
 void
 usage(char *tail)
 {
@@ -240,34 +240,34 @@ usage(char *tail)
     errs("\n");
     Exit("bad flags");
 }
-/*e: function usage */
+/*e: function [[usage]] */
 
-/*s: function errn */
+/*s: function [[errn]] */
 static void
 errn(char *s, int count)
 {
     while(count){ errc(*s++); --count; }
 }
-/*e: function errn */
+/*e: function [[errn]] */
 
-/*s: function errs */
+/*s: function [[errs]] */
 static void
 errs(char *s)
 {
     while(*s) errc(*s++);
 }
-/*e: function errs */
+/*e: function [[errs]] */
 /*s: constant NBUF (rc/getflags.c) */
 #define	NBUF	80
 /*e: constant NBUF (rc/getflags.c) */
-/*s: global buf */
+/*s: global [[buf]] */
 static char buf[NBUF];
-/*e: global buf */
-/*s: global bufp */
+/*e: global [[buf]] */
+/*s: global [[bufp]] */
 static char *bufp = buf;
-/*e: global bufp */
+/*e: global [[bufp]] */
 
-/*s: function errc */
+/*s: function [[errc]] */
 static void
 errc(int c)
 {
@@ -277,5 +277,5 @@ errc(int c)
         bufp = buf;
     }
 }
-/*e: function errc */
+/*e: function [[errc]] */
 /*e: rc/getflags.c */

@@ -4,13 +4,13 @@
 #include "io.h"
 #include "fns.h"
 
-/*s: enum _anon_ */
+/*s: enum [[MiscConstants]] */
 enum { Stralloc = 100, };
-/*e: enum _anon_ */
+/*e: enum [[MiscConstants]] */
 
-/*s: global pfmtnest */
+/*s: global [[pfmtnest]] */
 int pfmtnest = 0;
-/*e: global pfmtnest */
+/*e: global [[pfmtnest]] */
 
 int emptybuf(io*);
 int fullbuf(io*, int);
@@ -21,7 +21,7 @@ void pval(io*, word*);
 void pquo(io*, char*);
 void pwrd(io*, char*);
 
-/*s: function pfmt */
+/*s: function [[pfmt]] */
 void
 pfmt(io *f, char *fmt, ...)
 {
@@ -81,9 +81,9 @@ pfmt(io *f, char *fmt, ...)
     if(--pfmtnest==0)
         flush(f);
 }
-/*e: function pfmt */
+/*e: function [[pfmt]] */
 
-/*s: function pchr */
+/*s: function [[pchr]] */
 void
 pchr(io *b, int c)
 {
@@ -91,9 +91,9 @@ pchr(io *b, int c)
         fullbuf(b, c);
     else *b->bufp++=c;
 }
-/*e: function pchr */
+/*e: function [[pchr]] */
 
-/*s: function rchr */
+/*s: function [[rchr]] */
 int
 rchr(io *b)
 {
@@ -101,9 +101,9 @@ rchr(io *b)
         return emptybuf(b);
     return *b->bufp++;
 }
-/*e: function rchr */
+/*e: function [[rchr]] */
 
-/*s: function rutf */
+/*s: function [[rutf]] */
 int
 rutf(io *b, char *buf, Rune *r)
 {
@@ -132,9 +132,9 @@ rutf(io *b, char *buf, Rune *r)
     *r = Runeerror;
     return runetochar(buf, r);
 }
-/*e: function rutf */
+/*e: function [[rutf]] */
 
-/*s: function pquo */
+/*s: function [[pquo]] */
 void
 pquo(io *f, char *s)
 {
@@ -145,9 +145,9 @@ pquo(io *f, char *s)
         else pchr(f, *s);
     pchr(f, '\'');
 }
-/*e: function pquo */
+/*e: function [[pquo]] */
 
-/*s: function pwrd */
+/*s: function [[pwrd]] */
 void
 pwrd(io *f, char *s)
 {
@@ -157,9 +157,9 @@ pwrd(io *f, char *s)
         pquo(f, s);
     else pstr(f, s);
 }
-/*e: function pwrd */
+/*e: function [[pwrd]] */
 
-/*s: function pptr */
+/*s: function [[pptr]] */
 void
 pptr(io *f, void *v)
 {
@@ -172,9 +172,9 @@ pptr(io *f, void *v)
 
     for(n = 28;n>=0;n-=4) pchr(f, "0123456789ABCDEF"[(p>>n)&0xF]);
 }
-/*e: function pptr */
+/*e: function [[pptr]] */
 
-/*s: function pstr */
+/*s: function [[pstr]] */
 void
 pstr(io *f, char *s)
 {
@@ -182,9 +182,9 @@ pstr(io *f, char *s)
         s="(null)";
     while(*s) pchr(f, *s++);
 }
-/*e: function pstr */
+/*e: function [[pstr]] */
 
-/*s: function pdec */
+/*s: function [[pdec]] */
 void
 pdec(io *f, int n)
 {
@@ -206,9 +206,9 @@ pdec(io *f, int n)
         pdec(f, n/10);
     pchr(f, n%10+'0');
 }
-/*e: function pdec */
+/*e: function [[pdec]] */
 
-/*s: function poct */
+/*s: function [[poct]] */
 void
 poct(io *f, unsigned int n)
 {
@@ -216,9 +216,9 @@ poct(io *f, unsigned int n)
         poct(f, n>>3);
     pchr(f, (n&7)+'0');
 }
-/*e: function poct */
+/*e: function [[poct]] */
 
-/*s: function pval */
+/*s: function [[pval]] */
 void
 pval(io *f, word *a)
 {
@@ -231,18 +231,18 @@ pval(io *f, word *a)
         pwrd(f, (char *)a->word);
     }
 }
-/*e: function pval */
+/*e: function [[pval]] */
 
-/*s: function fullbuf */
+/*s: function [[fullbuf]] */
 int
 fullbuf(io *f, int c)
 {
     flush(f);
     return *f->bufp++=c;
 }
-/*e: function fullbuf */
+/*e: function [[fullbuf]] */
 
-/*s: function flush */
+/*s: function [[flush]] */
 void
 flush(io *f)
 {
@@ -268,9 +268,9 @@ flush(io *f)
         f->ebuf = f->buf+NBUF;
     }
 }
-/*e: function flush */
+/*e: function [[flush]] */
 
-/*s: function openfd */
+/*s: function [[openfd]] */
 io*
 openfd(fdt fd)
 {
@@ -280,9 +280,9 @@ openfd(fdt fd)
     f->strp = nil;
     return f;
 }
-/*e: function openfd */
+/*e: function [[openfd]] */
 
-/*s: function openstr */
+/*s: function [[openstr]] */
 io*
 openstr(void)
 {
@@ -294,8 +294,8 @@ openstr(void)
     memset(f->bufp, '\0', Stralloc+1);
     return f;
 }
-/*e: function openstr */
-/*s: function opencore */
+/*e: function [[openstr]] */
+/*s: function [[opencore]] */
 /*
  * Open a corebuffer to read.  EOF occurs after reading len
  * characters from buf.
@@ -313,9 +313,9 @@ opencore(char *s, int len)
     Memcpy(buf, s, len);
     return f;
 }
-/*e: function opencore */
+/*e: function [[opencore]] */
 
-/*s: function closeio */
+/*s: function [[closeio]] */
 void
 closeio(io *io)
 {
@@ -325,9 +325,9 @@ closeio(io *io)
         efree(io->strp);
     efree(io);
 }
-/*e: function closeio */
+/*e: function [[closeio]] */
 
-/*s: function emptybuf */
+/*s: function [[emptybuf]] */
 int
 emptybuf(io *f)
 {
@@ -337,5 +337,5 @@ emptybuf(io *f)
     f->ebuf = f->buf + n;
     return *f->bufp++;
 }
-/*e: function emptybuf */
+/*e: function [[emptybuf]] */
 /*e: rc/io.c */

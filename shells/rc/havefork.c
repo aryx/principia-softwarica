@@ -6,7 +6,7 @@
 #include "fns.h"
 #include <string.h>
 
-/*s: function Xasync */
+/*s: function [[Xasync]] */
 void
 Xasync(void)
 {
@@ -39,9 +39,9 @@ Xasync(void)
         break;
     }
 }
-/*e: function Xasync */
+/*e: function [[Xasync]] */
 
-/*s: function Xpipe */
+/*s: function [[Xpipe]] */
 void
 Xpipe(void)
 {
@@ -78,9 +78,9 @@ Xpipe(void)
         break;
     }
 }
-/*e: function Xpipe */
+/*e: function [[Xpipe]] */
 
-/*s: function Xbackq */
+/*s: function [[Xbackq]] */
 /*
  * Who should wait for the exit from the fork?
  */
@@ -151,9 +151,9 @@ Xbackq(void)
         return;
     }
 }
-/*e: function Xbackq */
+/*e: function [[Xbackq]] */
 
-/*s: function Xpipefd */
+/*s: function [[Xpipefd]] */
 void
 Xpipefd(void)
 {
@@ -196,9 +196,9 @@ Xpipefd(void)
         break;
     }
 }
-/*e: function Xpipefd */
+/*e: function [[Xpipefd]] */
 
-/*s: function Xsubshell */
+/*s: function [[Xsubshell]] */
 void
 Xsubshell(void)
 {
@@ -219,9 +219,9 @@ Xsubshell(void)
         break;
     }
 }
-/*e: function Xsubshell */
+/*e: function [[Xsubshell]] */
 
-/*s: function execforkexec */
+/*s: function [[execforkexec]] */
 int
 execforkexec(void)
 {
@@ -248,5 +248,5 @@ execforkexec(void)
     addwaitpid(pid);
     return pid;
 }
-/*e: function execforkexec */
+/*e: function [[execforkexec]] */
 /*e: rc/havefork.c */

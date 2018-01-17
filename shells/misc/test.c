@@ -13,22 +13,22 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function EQ */
+/*s: function [[EQ]] */
 #define EQ(a,b)	((tmp=a)==0?0:(strcmp(tmp,b)==0))
-/*e: function EQ */
+/*e: function [[EQ]] */
 
-/*s: global ap */
+/*s: global [[ap]] */
 int	ap;
-/*e: global ap */
-/*s: global ac */
+/*e: global [[ap]] */
+/*s: global [[ac]] */
 int	ac;
-/*e: global ac */
-/*s: global av */
+/*e: global [[ac]] */
+/*s: global [[av]] */
 char	**av;
-/*e: global av */
-/*s: global tmp */
+/*e: global [[av]] */
+/*s: global [[tmp]] */
 static char	*tmp;
-/*e: global tmp */
+/*e: global [[tmp]] */
 
 void	synbad(char *, char *);
 int	fsizep(char *);
@@ -70,7 +70,7 @@ main(int argc, char *argv[])
 }
 /*e: function main (misc/test.c) */
 
-/*s: function nxtarg */
+/*s: function [[nxtarg]] */
 char *
 nxtarg(int mt)
 {
@@ -83,9 +83,9 @@ nxtarg(int mt)
     }
     return(av[ap++]);
 }
-/*e: function nxtarg */
+/*e: function [[nxtarg]] */
 
-/*s: function nxtintarg */
+/*s: function [[nxtintarg]] */
 bool
 nxtintarg(int *pans)
 {
@@ -95,9 +95,9 @@ nxtintarg(int *pans)
     }
     return false;
 }
-/*e: function nxtintarg */
+/*e: function [[nxtintarg]] */
 
-/*s: function e */
+/*s: function [[e]] */
 int
 e(void)
 {
@@ -109,9 +109,9 @@ e(void)
     ap--;
     return(p1);
 }
-/*e: function e */
+/*e: function [[e]] */
 
-/*s: function e1 */
+/*s: function [[e1]] */
 int
 e1(void)
 {
@@ -123,9 +123,9 @@ e1(void)
     ap--;
     return(p1);
 }
-/*e: function e1 */
+/*e: function [[e1]] */
 
-/*s: function e2 */
+/*s: function [[e2]] */
 int
 e2(void)
 {
@@ -134,9 +134,9 @@ e2(void)
     ap--;
     return(e3());
 }
-/*e: function e2 */
+/*e: function [[e2]] */
 
-/*s: function e3 */
+/*s: function [[e3]] */
 bool
 e3(void)
 {
@@ -245,17 +245,17 @@ e3(void)
     synbad("unknown operator ",p2);
     return false;		/* to shut ken up */
 }
-/*e: function e3 */
+/*e: function [[e3]] */
 
-/*s: function tio */
+/*s: function [[tio]] */
 bool
 tio(char *a, int f)
 {
     return access (a, f) >= 0;
 }
-/*e: function tio */
+/*e: function [[tio]] */
 
-/*s: function hasmode */
+/*s: function [[hasmode]] */
 /*
  * note that the name strings pointed to by Dir members are
  * allocated with the Dir itself (by the same call to malloc),
@@ -275,17 +275,17 @@ hasmode(char *f, ulong m)
     free(dir);
     return r;
 }
-/*e: function hasmode */
+/*e: function [[hasmode]] */
 
-/*s: function isdir */
+/*s: function [[isdir]] */
 bool
 isdir(char *f)
 {
     return hasmode(f, DMDIR);
 }
-/*e: function isdir */
+/*e: function [[isdir]] */
 
-/*s: function isreg */
+/*s: function [[isreg]] */
 bool
 isreg(char *f)
 {
@@ -299,9 +299,9 @@ isreg(char *f)
     free(dir);
     return r;
 }
-/*e: function isreg */
+/*e: function [[isreg]] */
 
-/*s: function isatty */
+/*s: function [[isatty]] */
 int
 isatty(int fd)
 {
@@ -319,9 +319,9 @@ isatty(int fd)
     free(d2);
     return r;
 }
-/*e: function isatty */
+/*e: function [[isatty]] */
 
-/*s: function fsizep */
+/*s: function [[fsizep]] */
 bool
 fsizep(char *f)
 {
@@ -335,9 +335,9 @@ fsizep(char *f)
     free(dir);
     return r;
 }
-/*e: function fsizep */
+/*e: function [[fsizep]] */
 
-/*s: function synbad */
+/*s: function [[synbad]] */
 void
 synbad(char *s1, char *s2)
 {
@@ -351,9 +351,9 @@ synbad(char *s1, char *s2)
     write(2, "\n", 1);
     exits("bad syntax");
 }
-/*e: function synbad */
+/*e: function [[synbad]] */
 
-/*s: function isint */
+/*s: function [[isint]] */
 int
 isint(char *s, int *pans)
 {
@@ -362,9 +362,9 @@ isint(char *s, int *pans)
     *pans = strtol(s, &ep, 0);
     return (*ep == 0);
 }
-/*e: function isint */
+/*e: function [[isint]] */
 
-/*s: function isolder */
+/*s: function [[isolder]] */
 bool
 isolder(char *pin, char *f)
 {
@@ -423,9 +423,9 @@ isolder(char *pin, char *f)
     free(dir);
     return r;
 }
-/*e: function isolder */
+/*e: function [[isolder]] */
 
-/*s: function isolderthan */
+/*s: function [[isolderthan]] */
 int
 isolderthan(char *a, char *b)
 {
@@ -442,9 +442,9 @@ isolderthan(char *a, char *b)
     free(bd);
     return r;
 }
-/*e: function isolderthan */
+/*e: function [[isolderthan]] */
 
-/*s: function isnewerthan */
+/*s: function [[isnewerthan]] */
 int
 isnewerthan(char *a, char *b)
 {
@@ -461,5 +461,5 @@ isnewerthan(char *a, char *b)
     free(bd);
     return r;
 }
-/*e: function isnewerthan */
+/*e: function [[isnewerthan]] */
 /*e: misc/test.c */

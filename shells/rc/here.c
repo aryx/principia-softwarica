@@ -5,26 +5,26 @@
 #include "fns.h"
 #include "x.tab.h"
 
-/*s: global here */
+/*s: global [[here]] */
 struct Here *here;
-/*e: global here */
-/*s: global ehere */
+/*e: global [[here]] */
+/*s: global [[ehere]] */
 struct Here **ehere;
-/*e: global ehere */
-/*s: global ser */
+/*e: global [[ehere]] */
+/*s: global [[ser]] */
 int ser = 0;
-/*e: global ser */
+/*e: global [[ser]] */
 /*s: global tmp (rc/here.c) */
 char tmp[] = "/tmp/here0000.0000";
 /*e: global tmp (rc/here.c) */
-/*s: global hex */
+/*s: global [[hex]] */
 char hex[] = "0123456789abcdef";
-/*e: global hex */
+/*e: global [[hex]] */
 
 void psubst(io*, uchar*);
 void pstrs(io*, word*);
 
-/*s: function hexnum */
+/*s: function [[hexnum]] */
 void
 hexnum(char *p, int n)
 {
@@ -33,9 +33,9 @@ hexnum(char *p, int n)
     *p++ = hex[(n>>4)&0xF];
     *p = hex[n&0xF];
 }
-/*e: function hexnum */
+/*e: function [[hexnum]] */
 
-/*s: function heredoc */
+/*s: function [[heredoc]] */
 //@Scheck: used by syn.y
 tree* heredoc(tree *tag)
 {
@@ -55,17 +55,17 @@ tree* heredoc(tree *tag)
     h->name = strdup(tmp);
     return token(tmp, WORD);
 }
-/*e: function heredoc */
+/*e: function [[heredoc]] */
 
-/*s: constant NLINE */
+/*s: constant [[NLINE]] */
 /*
  * bug: lines longer than NLINE get split -- this can cause spurious
  * missubstitution, or a misrecognized EOF marker.
  */
 #define	NLINE	4096
-/*e: constant NLINE */
+/*e: constant [[NLINE]] */
 
-/*s: function readhere */
+/*s: function [[readhere]] */
 void
 readhere(void)
 {
@@ -111,9 +111,9 @@ readhere(void)
     here = nil;
     doprompt = true;
 }
-/*e: function readhere */
+/*e: function [[readhere]] */
 
-/*s: function psubst */
+/*s: function [[psubst]] */
 void
 psubst(io *f, uchar *s)
 {
@@ -160,9 +160,9 @@ psubst(io *f, uchar *s)
         }
     }
 }
-/*e: function psubst */
+/*e: function [[psubst]] */
 
-/*s: function pstrs */
+/*s: function [[pstrs]] */
 void
 pstrs(io *f, word *a)
 {
@@ -175,5 +175,5 @@ pstrs(io *f, word *a)
         pstr(f, a->word);
     }
 }
-/*e: function pstrs */
+/*e: function [[pstrs]] */
 /*e: rc/here.c */

@@ -7,14 +7,14 @@
 
 char*	list2str(word*);
 
-/*s: global argv0 */
+/*s: global [[argv0]] */
 /*
  * Start executing the given code at the given pc with the given redirection
  */
 char *argv0="rc";
-/*e: global argv0 */
+/*e: global [[argv0]] */
 
-/*s: function start */
+/*s: function [[start]] */
 void
 start(code *c, int pc, var *local)
 {
@@ -40,9 +40,9 @@ start(code *c, int pc, var *local)
     p->ret = runq;
     runq = p;
 }
-/*e: function start */
+/*e: function [[start]] */
 
-/*s: function newword */
+/*s: function [[newword]] */
 word*
 newword(char *wd, word *next)
 {
@@ -51,9 +51,9 @@ newword(char *wd, word *next)
     p->next = next;
     return p;
 }
-/*e: function newword */
+/*e: function [[newword]] */
 
-/*s: function pushword */
+/*s: function [[pushword]] */
 void
 pushword(char *wd)
 {
@@ -61,9 +61,9 @@ pushword(char *wd)
         panic("pushword but no argv!", 0);
     runq->argv->words = newword(wd, runq->argv->words);
 }
-/*e: function pushword */
+/*e: function [[pushword]] */
 
-/*s: function popword */
+/*s: function [[popword]] */
 void
 popword(void)
 {
@@ -81,9 +81,9 @@ popword(void)
     efree(p->word);
     efree((char *)p);
 }
-/*e: function popword */
+/*e: function [[popword]] */
 
-/*s: function freelist */
+/*s: function [[freelist]] */
 void
 freelist(word *w)
 {
@@ -95,9 +95,9 @@ freelist(word *w)
         w = nw;
     }
 }
-/*e: function freelist */
+/*e: function [[freelist]] */
 
-/*s: function pushlist */
+/*s: function [[pushlist]] */
 void
 pushlist(void)
 {
@@ -108,9 +108,9 @@ pushlist(void)
     p->words = nil;
     runq->argv = p;
 }
-/*e: function pushlist */
+/*e: function [[pushlist]] */
 
-/*s: function poplist */
+/*s: function [[poplist]] */
 void
 poplist(void)
 {
@@ -121,9 +121,9 @@ poplist(void)
     runq->argv = p->next;
     efree((char *)p);
 }
-/*e: function poplist */
+/*e: function [[poplist]] */
 
-/*s: function count */
+/*s: function [[count]] */
 int
 count(word *w)
 {
@@ -132,9 +132,9 @@ count(word *w)
         w = w->next;
     return n;
 }
-/*e: function count */
+/*e: function [[count]] */
 
-/*s: function pushredir */
+/*s: function [[pushredir]] */
 void
 pushredir(int type, int from, int to)
 {
@@ -147,9 +147,9 @@ pushredir(int type, int from, int to)
     rp->next = runq->redir;
     runq->redir = rp;
 }
-/*e: function pushredir */
+/*e: function [[pushredir]] */
 
-/*s: function newvar */
+/*s: function [[newvar]] */
 var*
 newvar(char *name, var *next)
 {
@@ -164,7 +164,7 @@ newvar(char *name, var *next)
     v->next = next;
     return v;
 }
-/*e: function newvar */
+/*e: function [[newvar]] */
 
 /*
  * get command line flags.
@@ -336,7 +336,7 @@ void main(int argc, char *argv[])
  * Xwrite(file)[fd]			open file to write
  */
 
-/*s: function Xappend */
+/*s: function [[Xappend]] */
 void
 Xappend(void)
 {
@@ -363,52 +363,52 @@ Xappend(void)
     runq->pc++;
     poplist();
 }
-/*e: function Xappend */
+/*e: function [[Xappend]] */
 
-/*s: function Xsettrue */
+/*s: function [[Xsettrue]] */
 void
 Xsettrue(void)
 {
     setstatus("");
 }
-/*e: function Xsettrue */
+/*e: function [[Xsettrue]] */
 
-/*s: function Xbang */
+/*s: function [[Xbang]] */
 void
 Xbang(void)
 {
     setstatus(truestatus()? "false" : "");
 }
-/*e: function Xbang */
+/*e: function [[Xbang]] */
 
-/*s: function Xclose */
+/*s: function [[Xclose]] */
 void
 Xclose(void)
 {
     pushredir(RCLOSE, runq->code[runq->pc].i, 0);
     runq->pc++;
 }
-/*e: function Xclose */
+/*e: function [[Xclose]] */
 
-/*s: function Xdup */
+/*s: function [[Xdup]] */
 void
 Xdup(void)
 {
     pushredir(RDUP, runq->code[runq->pc].i, runq->code[runq->pc+1].i);
     runq->pc+=2;
 }
-/*e: function Xdup */
+/*e: function [[Xdup]] */
 
-/*s: function Xeflag */
+/*s: function [[Xeflag]] */
 void
 Xeflag(void)
 {
     if(eflagok && !truestatus()) 
         Xexit();
 }
-/*e: function Xeflag */
+/*e: function [[Xeflag]] */
 
-/*s: function Xexit */
+/*s: function [[Xexit]] */
 void
 Xexit(void)
 {
@@ -432,21 +432,21 @@ Xexit(void)
     }
     Exit(getstatus());
 }
-/*e: function Xexit */
+/*e: function [[Xexit]] */
 
-/*s: function Xfalse */
+/*s: function [[Xfalse]] */
 void
 Xfalse(void)
 {
     if(truestatus()) runq->pc = runq->code[runq->pc].i;
     else runq->pc++;
 }
-/*e: function Xfalse */
-/*s: global ifnot */
+/*e: function [[Xfalse]] */
+/*s: global [[ifnot]] */
 bool ifnot;		/* dynamic if not flag */
-/*e: global ifnot */
+/*e: global [[ifnot]] */
 
-/*s: function Xifnot */
+/*s: function [[Xifnot]] */
 void
 Xifnot(void)
 {
@@ -455,33 +455,33 @@ Xifnot(void)
     else
         runq->pc = runq->code[runq->pc].i;
 }
-/*e: function Xifnot */
+/*e: function [[Xifnot]] */
 
-/*s: function Xjump */
+/*s: function [[Xjump]] */
 void
 Xjump(void)
 {
     runq->pc = runq->code[runq->pc].i;
 }
-/*e: function Xjump */
+/*e: function [[Xjump]] */
 
-/*s: function Xmark */
+/*s: function [[Xmark]] */
 void
 Xmark(void)
 {
     pushlist();
 }
-/*e: function Xmark */
+/*e: function [[Xmark]] */
 
-/*s: function Xpopm */
+/*s: function [[Xpopm]] */
 void
 Xpopm(void)
 {
     poplist();
 }
-/*e: function Xpopm */
+/*e: function [[Xpopm]] */
 
-/*s: function Xread */
+/*s: function [[Xread]] */
 void
 Xread(void)
 {
@@ -507,9 +507,9 @@ Xread(void)
     runq->pc++;
     poplist();
 }
-/*e: function Xread */
+/*e: function [[Xread]] */
 
-/*s: function Xrdwr */
+/*s: function [[Xrdwr]] */
 void
 Xrdwr(void)
 {
@@ -536,18 +536,18 @@ Xrdwr(void)
     runq->pc++;
     poplist();
 }
-/*e: function Xrdwr */
+/*e: function [[Xrdwr]] */
 
-/*s: function turfredir */
+/*s: function [[turfredir]] */
 void
 turfredir(void)
 {
     while(runq->redir != runq->startredir)
         Xpopredir();
 }
-/*e: function turfredir */
+/*e: function [[turfredir]] */
 
-/*s: function Xpopredir */
+/*s: function [[Xpopredir]] */
 void
 Xpopredir(void)
 {
@@ -564,9 +564,9 @@ Xpopredir(void)
 
     efree((char *)rp);
 }
-/*e: function Xpopredir */
+/*e: function [[Xpopredir]] */
 
-/*s: function Xreturn */
+/*s: function [[Xreturn]] */
 void
 Xreturn(void)
 {
@@ -586,18 +586,18 @@ Xreturn(void)
     if(runq==nil)
         Exit(getstatus());
 }
-/*e: function Xreturn */
+/*e: function [[Xreturn]] */
 
-/*s: function Xtrue */
+/*s: function [[Xtrue]] */
 void
 Xtrue(void)
 {
     if(truestatus()) runq->pc++;
     else runq->pc = runq->code[runq->pc].i;
 }
-/*e: function Xtrue */
+/*e: function [[Xtrue]] */
 
-/*s: function Xif */
+/*s: function [[Xif]] */
 void
 Xif(void)
 {
@@ -607,25 +607,25 @@ Xif(void)
     else 
         runq->pc = runq->code[runq->pc].i;
 }
-/*e: function Xif */
+/*e: function [[Xif]] */
 
-/*s: function Xwastrue */
+/*s: function [[Xwastrue]] */
 void
 Xwastrue(void)
 {
     ifnot = false;
 }
-/*e: function Xwastrue */
+/*e: function [[Xwastrue]] */
 
-/*s: function Xword */
+/*s: function [[Xword]] */
 void
 Xword(void)
 {
     pushword(runq->code[runq->pc++].s);
 }
-/*e: function Xword */
+/*e: function [[Xword]] */
 
-/*s: function Xwrite */
+/*s: function [[Xwrite]] */
 void
 Xwrite(void)
 {
@@ -651,9 +651,9 @@ Xwrite(void)
     runq->pc++;
     poplist();
 }
-/*e: function Xwrite */
+/*e: function [[Xwrite]] */
 
-/*s: function list2str */
+/*s: function [[list2str]] */
 char*
 list2str(word *words)
 {
@@ -676,9 +676,9 @@ list2str(word *words)
     else s[-1]='\0';
     return value;
 }
-/*e: function list2str */
+/*e: function [[list2str]] */
 
-/*s: function Xmatch */
+/*s: function [[Xmatch]] */
 void
 Xmatch(void)
 {
@@ -696,9 +696,9 @@ Xmatch(void)
     poplist();
     poplist();
 }
-/*e: function Xmatch */
+/*e: function [[Xmatch]] */
 
-/*s: function Xcase */
+/*s: function [[Xcase]] */
 void
 Xcase(void)
 {
@@ -720,9 +720,9 @@ Xcase(void)
         runq->pc = runq->code[runq->pc].i;
     poplist();
 }
-/*e: function Xcase */
+/*e: function [[Xcase]] */
 
-/*s: function conclist */
+/*s: function [[conclist]] */
 word*
 conclist(word *lp, word *rp, word *tail)
 {
@@ -738,9 +738,9 @@ conclist(word *lp, word *rp, word *tail)
     efree(buf);
     return v;
 }
-/*e: function conclist */
+/*e: function [[conclist]] */
 
-/*s: function Xconc */
+/*s: function [[Xconc]] */
 void
 Xconc(void)
 {
@@ -763,9 +763,9 @@ Xconc(void)
     poplist();
     runq->argv->words = vp;
 }
-/*e: function Xconc */
+/*e: function [[Xconc]] */
 
-/*s: function Xassign */
+/*s: function [[Xassign]] */
 void
 Xassign(void)
 {
@@ -785,8 +785,8 @@ Xassign(void)
     runq->argv->words = nil;
     poplist();
 }
-/*e: function Xassign */
-/*s: function copywords */
+/*e: function [[Xassign]] */
+/*s: function [[copywords]] */
 /*
  * copy arglist a, adding the copy to the front of tail
  */
@@ -801,9 +801,9 @@ copywords(word *a, word *tail)
     *end = tail;
     return v;
 }
-/*e: function copywords */
+/*e: function [[copywords]] */
 
-/*s: function Xdol */
+/*s: function [[Xdol]] */
 void
 Xdol(void)
 {
@@ -836,9 +836,9 @@ Xdol(void)
     poplist();
     runq->argv->words = a;
 }
-/*e: function Xdol */
+/*e: function [[Xdol]] */
 
-/*s: function Xqdol */
+/*s: function [[Xqdol]] */
 void
 Xqdol(void)
 {
@@ -872,9 +872,9 @@ Xqdol(void)
     pushword(s);
     efree(s);
 }
-/*e: function Xqdol */
+/*e: function [[Xqdol]] */
 
-/*s: function copynwords */
+/*s: function [[copynwords]] */
 word*
 copynwords(word *a, word *tail, int n)
 {
@@ -889,9 +889,9 @@ copynwords(word *a, word *tail, int n)
     *end = tail;
     return v;
 }
-/*e: function copynwords */
+/*e: function [[copynwords]] */
 
-/*s: function subwords */
+/*s: function [[subwords]] */
 word*
 subwords(word *val, int len, word *sub, word *a)
 {
@@ -923,9 +923,9 @@ subwords(word *val, int len, word *sub, word *a)
         val = val->next;
     return copynwords(val, a, m+1);
 }
-/*e: function subwords */
+/*e: function [[subwords]] */
 
-/*s: function Xsub */
+/*s: function [[Xsub]] */
 void
 Xsub(void)
 {
@@ -944,9 +944,9 @@ Xsub(void)
     poplist();
     runq->argv->words = a;
 }
-/*e: function Xsub */
+/*e: function [[Xsub]] */
 
-/*s: function Xcount */
+/*s: function [[Xcount]] */
 void
 Xcount(void)
 {
@@ -977,9 +977,9 @@ Xcount(void)
     poplist();
     pushword(num);
 }
-/*e: function Xcount */
+/*e: function [[Xcount]] */
 
-/*s: function Xlocal */
+/*s: function [[Xlocal]] */
 void
 Xlocal(void)
 {
@@ -997,9 +997,9 @@ Xlocal(void)
     runq->argv->words = nil;
     poplist();
 }
-/*e: function Xlocal */
+/*e: function [[Xlocal]] */
 
-/*s: function Xunlocal */
+/*s: function [[Xunlocal]] */
 void
 Xunlocal(void)
 {
@@ -1013,9 +1013,9 @@ Xunlocal(void)
     freewords(v->val);
     efree((char *)v);
 }
-/*e: function Xunlocal */
+/*e: function [[Xunlocal]] */
 
-/*s: function freewords */
+/*s: function [[freewords]] */
 void
 freewords(word *w)
 {
@@ -1027,9 +1027,9 @@ freewords(word *w)
         w = nw;
     }
 }
-/*e: function freewords */
+/*e: function [[freewords]] */
 
-/*s: function Xfn */
+/*s: function [[Xfn]] */
 void
 Xfn(void)
 {
@@ -1050,9 +1050,9 @@ Xfn(void)
     runq->pc = end;
     poplist();
 }
-/*e: function Xfn */
+/*e: function [[Xfn]] */
 
-/*s: function Xdelfn */
+/*s: function [[Xdelfn]] */
 void
 Xdelfn(void)
 {
@@ -1068,9 +1068,9 @@ Xdelfn(void)
     }
     poplist();
 }
-/*e: function Xdelfn */
+/*e: function [[Xdelfn]] */
 
-/*s: function concstatus */
+/*s: function [[concstatus]] */
 char*
 concstatus(char *s, char *t)
 {
@@ -1084,9 +1084,9 @@ concstatus(char *s, char *t)
     v[NSTATUS]='\0';
     return v;
 }
-/*e: function concstatus */
+/*e: function [[concstatus]] */
 
-/*s: function Xpipewait */
+/*s: function [[Xpipewait]] */
 void
 Xpipewait(void)
 {
@@ -1101,9 +1101,9 @@ Xpipewait(void)
         setstatus(concstatus(getstatus(), status));
     }
 }
-/*e: function Xpipewait */
+/*e: function [[Xpipewait]] */
 
-/*s: function Xrdcmds */
+/*s: function [[Xrdcmds]] */
 void
 Xrdcmds(void)
 {
@@ -1164,9 +1164,9 @@ Xrdcmds(void)
     }
     freenodes(); // allocated in yyparse()
 }
-/*e: function Xrdcmds */
+/*e: function [[Xrdcmds]] */
 
-/*s: function Xerror */
+/*s: function [[Xerror]] */
 void
 Xerror(char *s)
 {
@@ -1180,9 +1180,9 @@ Xerror(char *s)
     while(!runq->iflag) 
         Xreturn();
 }
-/*e: function Xerror */
+/*e: function [[Xerror]] */
 
-/*s: function Xerror1 */
+/*s: function [[Xerror1]] */
 void
 Xerror1(char *s)
 {
@@ -1196,26 +1196,26 @@ Xerror1(char *s)
     while(!runq->iflag) 
         Xreturn();
 }
-/*e: function Xerror1 */
+/*e: function [[Xerror1]] */
 
-/*s: function setstatus */
+/*s: function [[setstatus]] */
 void
 setstatus(char *s)
 {
     setvar("status", newword(s, (word *)nil));
 }
-/*e: function setstatus */
+/*e: function [[setstatus]] */
 
-/*s: function getstatus */
+/*s: function [[getstatus]] */
 char*
 getstatus(void)
 {
     var *status = vlook("status");
     return status->val ? status->val->word : "";
 }
-/*e: function getstatus */
+/*e: function [[getstatus]] */
 
-/*s: function truestatus */
+/*s: function [[truestatus]] */
 bool
 truestatus(void)
 {
@@ -1225,17 +1225,17 @@ truestatus(void)
             return false;
     return true;
 }
-/*e: function truestatus */
+/*e: function [[truestatus]] */
 
-/*s: function Xdelhere */
+/*s: function [[Xdelhere]] */
 void
 Xdelhere(void)
 {
     Unlink(runq->code[runq->pc++].s);
 }
-/*e: function Xdelhere */
+/*e: function [[Xdelhere]] */
 
-/*s: function Xfor */
+/*s: function [[Xfor]] */
 void
 Xfor(void)
 {
@@ -1252,13 +1252,13 @@ Xfor(void)
         runq->pc++;
     }
 }
-/*e: function Xfor */
+/*e: function [[Xfor]] */
 
-/*s: function Xglob */
+/*s: function [[Xglob]] */
 void
 Xglob(void)
 {
     globlist();
 }
-/*e: function Xglob */
+/*e: function [[Xglob]] */
 /*e: rc/exec.c */
