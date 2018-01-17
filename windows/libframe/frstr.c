@@ -20,7 +20,7 @@ _frallocstr(Frame *f, unsigned n)
     uchar *p;
 
     p = malloc(ROUNDUP(n));
-    if(p == 0)
+    if(p == nil)
         drawerror(f->display, "out of memory");
     return p;
 }

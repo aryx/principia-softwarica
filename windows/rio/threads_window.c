@@ -455,6 +455,7 @@ winctl(void *arg)
             /*e: [[winctl()]] when WCwrite, if scrolling or mouseopen */
             wsetselect(w, w->q0, w->q1);
             wscrdraw(w);
+
             free(rp);
             break;
         /*x: [[winctl()]] event loop cases */

@@ -141,12 +141,13 @@ frredraw(Frame *f)
         ticked = f->ticked;
         if(ticked)
             frtick(f, frptofchar(f, f->p0), false);
+        // redraw the text
         frdrawsel0(f, frptofchar(f, 0), 0, f->nchars, f->cols[BACK], f->cols[TEXT]);
         if(ticked)
             frtick(f, frptofchar(f, f->p0), true);
         return;
     }
-    // else, selection
+    // else, redraw the selection and the text
 
     pt = frptofchar(f, 0);
     pt = frdrawsel0(f, pt, 0,     f->p0,     f->cols[BACK], f->cols[TEXT]);
@@ -164,7 +165,7 @@ frtick(Frame *f, Point pt, bool ticked)
     if(f->ticked==ticked || f->tick==nil || !ptinrect(pt, f->r))
         return;
     pt.x--;	/* looks best just left of where requested */
-    r = Rect(pt.x, pt.y, pt.x+FRTICKW, pt.y+f->font->height);
+    r = Rect(pt.x, pt.y, pt.x + FRTICKW, pt.y + f->font->height);
     /* can go into left border but not right */
     if(r.max.x > f->r.max.x)
         r.max.x = f->r.max.x;

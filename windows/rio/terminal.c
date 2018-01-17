@@ -195,18 +195,24 @@ namecomplete(Window *w)
 int
 wbswidth(Window *w, Rune c)
 {
-    uint q, eq, stop;
+    uint q, stop;
     Rune r;
-    int skipping;
+    /*s: [[wbswidth()]] other locals */
+    bool skipping = true;
+    uint eq;
+    /*e: [[wbswidth()]] other locals */
 
+    /*s: [[wbswidth()]] return if erase character */
     /* there is known to be at least one character to erase */
     if(c == 0x08)	/* ^H: erase character */
         return 1;
+    /*e: [[wbswidth()]] return if erase character */
+
     q = w->q0;
     stop = 0;
     if(q > w->qh)
         stop = w->qh;
-    skipping = true;
+
     while(q > stop){
         r = w->r[q-1];
         if(r == '\n'){		/* eat at most one more character */
@@ -214,6 +220,7 @@ wbswidth(Window *w, Rune c)
                 --q;
             break; 
         }
+        /*s: [[wbswidth()]] if [[c == 0x17]] */
         if(c == 0x17){
             eq = isalnum(r);
             if(eq && skipping)	/* found one; stop skipping */
@@ -221,6 +228,7 @@ wbswidth(Window *w, Rune c)
             else if(!eq && !skipping)
                 break;
         }
+        /*e: [[wbswidth()]] if [[c == 0x17]] */
         --q;
     }
     return w->q0-q;
@@ -273,32 +281,43 @@ wdelete(Window *w, uint q0, uint q1)
     Frame *frm = &w->frm;
 
     n = q1-q0;
+    /*s: [[wdelete()]] sanity check n */
     if(n == 0)
         return;
+    /*e: [[wdelete()]] sanity check n */
     runemove(w->r+q0, w->r+q1, w->nr-q1);
     w->nr -= n;
+
+    /*s: [[wdelete()]] adjust cursors */
     if(q0 < w->q0)
         w->q0 -= min(n, w->q0-q0);
     if(q0 < w->q1)
         w->q1 -= min(n, w->q1-q0);
+
     if(q1 < w->qh)
         w->qh -= n;
     else if(q0 < w->qh)
         w->qh = q0;
+
     if(q1 <= w->org)
         w->org -= n;
-    else if(q0 < w->org + frm->nchars){
-        p1 = q1 - w->org;
-        if(p1 > frm->nchars)
-            p1 = frm->nchars;
-        if(q0 < w->org){
-            w->org = q0;
-            p0 = 0;
-        }else
-            p0 = q0 - w->org;
-        frdelete(frm, p0, p1);
-        wfill(w);
-    }
+    else
+       /*s: [[wdelete()]] when [[q1 > w->org]], possibly update visible text */
+       if(q0 < w->org + frm->nchars){
+           p1 = q1 - w->org;
+           if(p1 > frm->nchars)
+               p1 = frm->nchars;
+           if(q0 < w->org){
+               w->org = q0;
+               p0 = 0;
+           }else
+               p0 = q0 - w->org;
+
+           frdelete(frm, p0, p1);
+           wfill(w);
+       }
+       /*e: [[wdelete()]] when [[q1 > w->org]], possibly update visible text */
+    /*e: [[wdelete()]] adjust cursors */
 }
 /*e: function wdelete */
 
@@ -311,6 +330,7 @@ wbacknl(Window *w, uint p, uint n)
     /* look for start of this line if n==0 */
     if(n==0 && p>0 && w->r[p-1]!='\n')
         n = 1;
+
     i = n;
     while(i-->0 && p>0){
         --p;	/* it's at a newline now; back over it */
@@ -386,6 +406,7 @@ wshow(Window *w, uint q0)
         /* avoid going backwards if trying to go forwards - long lines! */
         if(!(q0 > w->org && q < w->org))
             wsetorigin(w, q, true);
+
         while(q0 > w->org + w->frm.nchars)
             wsetorigin(w, w->org+1, false);
     }
@@ -1168,10 +1189,12 @@ wkeyctl(Window *w, Rune r)
         nb = wbswidth(w, r);
         q1 = w->q0;
         q0 = q1-nb;
+        /*s: [[wkeyctl()]] when erase keys, adjust q0 and nb if before org */
         if(q0 < w->org){
             q0 = w->org;
             nb = q1-q0;
         }
+        /*e: [[wkeyctl()]] when erase keys, adjust q0 and nb if before org */
         if(nb > 0){
             wdelete(w, q0, q0+nb);
             wsetselect(w, q0, q0);

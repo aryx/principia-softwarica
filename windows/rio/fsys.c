@@ -76,7 +76,6 @@ fdt	clockfd;
 bool	firstmessage = true;
 /*e: global firstmessage */
 
-
 static	Xfid*	filsysflush(Filsys*, Xfid*, Fid*);
 static	Xfid*	filsysversion(Filsys*, Xfid*, Fid*);
 static	Xfid*	filsysauth(Filsys*, Xfid*, Fid*);
@@ -106,19 +105,18 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
     [Tstat]    = filsysstat,
 
     /*s: [[fcall]] other methods */
+    [Tversion] = filsysversion,
+    /*x: [[fcall]] other methods */
     [Tcreate]  = filsyscreate,
     [Tremove]  = filsysremove,
     [Twstat]   = filsyswstat,
     /*x: [[fcall]] other methods */
     [Tflush]   = filsysflush,
     /*x: [[fcall]] other methods */
-    [Tversion] = filsysversion,
     [Tauth]    = filsysauth,
     /*e: [[fcall]] other methods */
 };
 /*e: global fcall */
-
-
 
 
 /*s: function filsysversion */
@@ -128,17 +126,18 @@ filsysversion(Filsys *fs, Xfid *x, Fid*)
 {
     Fcall fc;
 
+    /*s: [[filsysversion()]] sanity checks */
     if(!firstmessage)
         return filsysrespond(x->fs, x, &fc, "version request not first message");
+    /*x: [[filsysversion()]] sanity checks */
     if(x->req.msize < 256)
         return filsysrespond(x->fs, x, &fc, "version: message size too small");
-
-    messagesize = x->req.msize;
-
-    fc.msize = messagesize;
     if(strncmp(x->req.version, "9P2000", 6) != 0)
         return filsysrespond(x->fs, x, &fc, "unrecognized 9P version");
+    /*e: [[filsysversion()]] sanity checks */
     // else
+    messagesize = x->req.msize;
+    fc.msize = messagesize;
     fc.version = "9P2000";
     return filsysrespond(fs, x, &fc, nil);
 }
@@ -182,7 +181,7 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
     f->busy = true;
     f->open = false;
 
-    f->qid.path = Qdir;
+    f->qid.path = Qdir; // no window id, Qdir valid for all
     f->qid.type = QTDIR;
     f->qid.vers = 0;
     f->dir = dirtab; // entry for "."
@@ -212,23 +211,31 @@ Xfid*
 filsyswalk(Filsys *fs, Xfid *x, Fid *f)
 {
     Fcall fc;
-    Fid *nf;
-    int i, id;
+    Qid qid;
+    Dirtab *dir;
+    int i;
+    int id;
     uchar type;
     ulong path;
-    Dirtab *d, *dir;
+    Dirtab *d;
     Window *w;
     char *err;
-    Qid qid;
+    /*s: [[filsyswalk()]] other locals */
+    Fid *nf = nil;
+    /*e: [[filsyswalk()]] other locals */
 
+    /*s: [[filsyswalk()]] sanity check if opened */
     if(f->open)
         return filsysrespond(fs, x, &fc, "walk of open file");
-    nf = nil;
+    /*e: [[filsyswalk()]] sanity check if opened */
+    /*s: [[filsyswalk()]] if clone walk message */
     if(x->req.fid  != x->req.newfid){
         /* BUG: check exists */
         nf = newfid(fs, x->req.newfid);
+        /*s: [[filsyswalk()]] when clone walk message, sanity check nf */
         if(nf->busy)
             return filsysrespond(fs, x, &fc, "clone to busy fid");
+        /*e: [[filsyswalk()]] when clone walk message, sanity check nf */
         nf->busy = true;
         nf->open = false;
         nf->dir = f->dir;
@@ -238,6 +245,7 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
         nf->nrpart = 0;	/* not open, so must be zero */
         f = nf;	/* walk f */
     }
+    /*e: [[filsyswalk()]] if clone walk message */
 
     fc.nwqid = 0;
     err = nil;
@@ -248,29 +256,39 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
 
     if(x->req.nwname > 0){
         for(i=0; i < x->req.nwname; i++){
-            if((qid.type & QTDIR) == 0){
+            /*s: [[filsyswalk()]] sanity check current qid is a directory */
+            if(!(qid.type & QTDIR)){
                 err = Enotdir;
                 break;
             }
+            /*e: [[filsyswalk()]] sanity check current qid is a directory */
+            /*s: [[filsyswalk()]] if dotdot */
             if(strcmp(x->req.wname[i], "..") == 0){
                 type = QTDIR;
                 path = Qdir;
                 dir = dirtab;
+                /*s: [[filsyswalk()]] when in dotdot, if Qwsysdir adjust path */
                 if(FILE(qid) == Qwsysdir)
                     path = Qwsys;
+                /*e: [[filsyswalk()]] when in dotdot, if Qwsysdir adjust path */
                 id = 0;
-    Accept:
+                /*s: [[filsyswalk()]] accept label and code */
+                Accept:
+                /*s: [[filsyswalk()]] sanity check path elements */
                 if(i == MAXWELEM){
                     err = "name too long";
                     break;
                 }
+                /*e: [[filsyswalk()]] sanity check path elements */
                 qid.type = type;
-                qid.vers = 0;
                 qid.path = QID(id, path);
+                qid.vers = 0;
                 fc.wqid[fc.nwqid++] = qid;
                 continue;
+                /*e: [[filsyswalk()]] accept label and code */
             }
-
+            /*e: [[filsyswalk()]] if dotdot */
+            /*s: [[filsyswalk()]] if Qwsys, then goto Accept */
             if(qid.path == Qwsys){
                 /* is it a numeric name? */
                 if(!numeric(x->req.wname[i]))
@@ -292,9 +310,11 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
                 dir = dirtab;
                 goto Accept;
             }
-        
+            /*e: [[filsyswalk()]] if Qwsys, then goto Accept */
+            /*s: [[filsyswalk()]] if snarf */
             if(snarffd>=0 && strcmp(x->req.wname[i], "snarf")==0)
                 break;	/* don't serve /dev/snarf if it's provided in the environment */
+            /*e: [[filsyswalk()]] if snarf */
             id = WIN(f->qid);
             d = dirtab;
             d++;	/* skip '.' */
@@ -305,14 +325,14 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
                     dir = d;
                     goto Accept;
                 }
-
             break;	/* file not found */
         }
-
+        /*s: [[filsyswalk()]] sanity check i and err */
         if(i==0 && err==nil)
             err = Eexist;
+        /*e: [[filsyswalk()]] sanity check i and err */
     }
-
+    /*s: [[filsyswalk()]] sanity check err and nwqid */
     if(err!=nil || fc.nwqid < x->req.nwname){
         if(nf){
             if(nf->w)
@@ -320,7 +340,9 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
             nf->open = false;
             nf->busy = false;
         }
-    }else if(fc.nwqid == x->req.nwname){
+    }
+    /*e: [[filsyswalk()]] sanity check err and nwqid */
+    else if(fc.nwqid == x->req.nwname){
         f->dir = dir;
         f->qid = qid;
     }
@@ -334,12 +356,17 @@ static
 Xfid*
 filsysopen(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall fc;
+    /*s: [[filsysopen()]] locals */
     int m;
+    /*x: [[filsysopen()]] locals */
+    Fcall fc;
+    /*e: [[filsysopen()]] locals */
 
     /*s: [[filsysopen()]] sanity check mode */
+    /*s: [[filsysopen()]] sanitize mode */
     /* can't truncate anything, so just disregard */
     x->req.mode &= ~(OTRUNC|OCEXEC);
+    /*e: [[filsysopen()]] sanitize mode */
     /* can't execute or remove anything */
     if(x->req.mode==OEXEC || (x->req.mode & ORCLOSE))
         goto Deny;
@@ -360,12 +387,12 @@ filsysopen(Filsys *fs, Xfid *x, Fid *f)
     if(((f->dir->perm & ~(DMDIR|DMAPPEND)) & m) != m)
         goto Deny;
     /*e: [[filsysopen()]] sanity check mode */
-        
     sendp(x->c, xfidopen);
     return nil;
-
-    Deny:
+/*s: [[filsysopen()]] deny label */
+Deny:
     return filsysrespond(fs, x, &fc, Eperm);
+/*e: [[filsysopen()]] deny label */
 }
 /*e: function filsysopen */
 
@@ -400,20 +427,19 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
     int n;
     Fcall fc;
     /*s: [[filsysread()]] other locals */
+    Dirtab *d;
+    /*x: [[filsysread()]] other locals */
     int i, j, k;
     int len;
     int *ids;
     Dirtab dt;
     char buf[16];
-    /*x: [[filsysread()]] other locals */
-    Dirtab *d;
     /*e: [[filsysread()]] other locals */
 
     if(!(f->qid.type & QTDIR)){
         sendp(x->c, xfidread);
         return nil;
     }
-
     // else, a directory
 
     o = x->req.offset;
@@ -428,6 +454,20 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
     n = 0;
     switch(FILE(f->qid)){
     /*s: [[filsysread()]] cases */
+    case Qdir:
+    case Qwsysdir:
+        d = dirtab;
+        d++;	/* first entry is '.' */
+        for(i=0; d->name != nil && i<e; i+=len){
+            len = dostat(fs, WIN(x->f->qid), d, b+n, x->req.count - n, clock);
+            if(len <= BIT16SZ)
+                break;
+            if(i >= o)
+                n += len;
+            d++;
+        }
+        break;
+    /*x: [[filsysread()]] cases */
     case Qwsys:
 
         qlock(&all);
@@ -452,20 +492,6 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
             j++;
         }
         free(ids);
-        break;
-    /*x: [[filsysread()]] cases */
-    case Qdir:
-    case Qwsysdir:
-        d = dirtab;
-        d++;	/* first entry is '.' */
-        for(i=0; d->name != nil && i<e; i+=len){
-            len = dostat(fs, WIN(x->f->qid), d, b+n, x->req.count - n, clock);
-            if(len <= BIT16SZ)
-                break;
-            if(i >= o)
-                n += len;
-            d++;
-        }
         break;
     /*e: [[filsysread()]] cases */
     }
@@ -553,16 +579,18 @@ newfid(Filsys *fs, int fid)
 {
     Fid *f, *ff, **fh;
 
-    ff = nil;
+    ff = nil; // free fid
     fh = &fs->fids[fid&(Nhash-1)];
 
     // lookup_hash(fid, fs->fids)
     for(f=*fh; f; f=f->next) {
         if(f->fid == fid)
+            // found!
             return f;
-        else if(ff==nil && f->busy==false)
+        else if(ff==nil && !f->busy)
             ff = f;
     }
+    // else
     if(ff){
         ff->fid = fid;
         return ff;
@@ -601,8 +629,10 @@ dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
     Dir d;
 
     d.qid.path = QID(id, dir->qid);
+    /*s: [[dostat()]] adjust vers for snarf */
     if(dir->qid == Qsnarf)
         d.qid.vers = snarfversion;
+    /*e: [[dostat()]] adjust vers for snarf */
     else
         d.qid.vers = 0;
     d.qid.type = dir->type;

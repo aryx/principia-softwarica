@@ -57,7 +57,7 @@ frinittick(Frame *f)
     if(f->tickback)
         freeimage(f->tickback);
     /*e: [[frinittick()]] free old tickback */
-    f->tickback = allocimage(f->display, f->tick->r, b->chan, 0, DWhite);
+    f->tickback = allocimage(f->display, f->tick->r, b->chan, false, DWhite);
     /*s: [[frinittick()]] sanity check tickback */
     if(f->tickback == nil){
         freeimage(f->tick);

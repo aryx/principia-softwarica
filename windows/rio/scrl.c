@@ -27,8 +27,10 @@ scrtemps(void)
         return;
     h = BIG * Dy(view->r);
     scrtmp = allocimage(display, Rect(0, 0, 32, h), view->chan, false, DWhite);
+    /*s: [[scrtemps()]] sanity check scrtmp */
     if(scrtmp == nil)
         error("scrtemps");
+    /*e: [[scrtemps()]] sanity check scrtmp */
 }
 /*e: function scrtemps */
 
@@ -50,24 +52,29 @@ scrpos(Rectangle r, uint p0, uint p1, uint tot)
     int h;
 
     q = r;
-    h = q.max.y-q.min.y;
+    h = q.max.y - q.min.y; // Dy(r)
     if(tot == 0)
         return q;
+    /*s: [[scrpos()]] adjust integers if total is big */
     if(tot > 1024*1024){
         tot>>=10;
         p0>>=10;
         p1>>=10;
     }
+    /*e: [[scrpos()]] adjust integers if total is big */
     if(p0 > 0)
-        q.min.y += h*p0/tot;
+        q.min.y += h*p0 / tot;
     if(p1 < tot)
-        q.max.y -= h*(tot-p1)/tot;
+        q.max.y -= h*(tot-p1) / tot;
+
+    /*s: [[scrpos()]] last adjustments */
     if(q.max.y < q.min.y+2){
         if(q.min.y+2 <= r.max.y)
             q.max.y = q.min.y+2;
         else
             q.min.y = q.max.y-2;
     }
+    /*e: [[scrpos()]] last adjustments */
     return q;
 }
 /*e: function scrpos */
@@ -86,7 +93,7 @@ wscrdraw(Window *w)
     /*e: [[wscrdraw()]] sanity check the window image */
     r = w->scrollr;
     b = scrtmp;
-    // r1 is translation of r to (0,0)
+    // r1 is translation of r to (0,...)
     r1 = r;
     r1.min.x = 0;
     r1.max.x = Dx(r);
@@ -98,9 +105,11 @@ wscrdraw(Window *w)
         r1 = rectsubpt(r1, r1.min);
         draw(b, r1, w->frm.cols[BORD], nil, ZP);
         draw(b, r2, w->frm.cols[BACK], nil, ZP);
+        // little separation line
         r2.min.x = r2.max.x-1;
         draw(b, r2, w->frm.cols[BORD], nil, ZP);
 
+        // transfer back to main image
         draw(w->i, r, b, nil, Pt(0, r1.min.y));
     }
 }
