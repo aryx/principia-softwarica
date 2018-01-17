@@ -19,7 +19,7 @@ void	adecl(int, Type*, Sym*);
 void	pdecl(int, Type*, Sym*);
 void	tmerge(Type*, Sym*);
 
-/*s: function dodecl */
+/*s: function [[dodecl]] */
 Node*
 dodecl(void (*f)(int,Type*,Sym*), int class, Type *t, Node *n)
 {
@@ -153,9 +153,9 @@ loop:
     lastdcltype = t;
     return n;
 }
-/*e: function dodecl */
+/*e: function [[dodecl]] */
 
-/*s: function mkstatic */
+/*s: function [[mkstatic]] */
 Sym*
 mkstatic(Sym *s)
 {
@@ -176,9 +176,9 @@ mkstatic(Sym *s)
     }
     return s1;
 }
-/*e: function mkstatic */
+/*e: function [[mkstatic]] */
 
-/*s: function tcopy */
+/*s: function [[tcopy]] */
 /*
  * make a copy of a typedef
  * the problem is to split out incomplete
@@ -206,9 +206,9 @@ tcopy(Type *t)
     }
     return t;
 }
-/*e: function tcopy */
+/*e: function [[tcopy]] */
 
-/*s: function doinit */
+/*s: function [[doinit]] */
 Node*
 doinit(Sym *s, Type *t, long o, Node *a)
 {
@@ -249,9 +249,9 @@ doinit(Sym *s, Type *t, long o, Node *a)
 
     return a;
 }
-/*e: function doinit */
+/*e: function [[doinit]] */
 
-/*s: function peekinit */
+/*s: function [[peekinit]] */
 /*
  * get next major operator,
  * dont advance initlist.
@@ -272,9 +272,9 @@ loop:
     }
     return a;
 }
-/*e: function peekinit */
+/*e: function [[peekinit]] */
 
-/*s: function nextinit */
+/*s: function [[nextinit]] */
 /*
  * consume and return next element on
  * initlist. expand strings.
@@ -313,9 +313,9 @@ nextinit(void)
     initlist = n;
     return a;
 }
-/*e: function nextinit */
+/*e: function [[nextinit]] */
 
-/*s: function isstruct */
+/*s: function [[isstruct]] */
 bool
 isstruct(Node *a, Type *t)
 {
@@ -351,9 +351,9 @@ isstruct(Node *a, Type *t)
         return true;
     return false;
 }
-/*e: function isstruct */
+/*e: function [[isstruct]] */
 
-/*s: function init1 */
+/*s: function [[init1]] */
 Node*
 init1(Sym *s, Type *t, long o, int exflag)
 {
@@ -583,9 +583,9 @@ init1(Sym *s, Type *t, long o, int exflag)
         return Z;
     }
 }
-/*e: function init1 */
+/*e: function [[init1]] */
 
-/*s: function newlist */
+/*s: function [[newlist]] */
 Node*
 newlist(Node *l, Node *r)
 {
@@ -595,9 +595,9 @@ newlist(Node *l, Node *r)
         return r;
     return new(OLIST, l, r);
 }
-/*e: function newlist */
+/*e: function [[newlist]] */
 
-/*s: function sualign */
+/*s: function [[sualign]] */
 //@Scheck: not dead, used by cc.y
 void sualign(Type *t)
 {
@@ -665,9 +665,9 @@ void sualign(Type *t)
         break;
     }
 }
-/*e: function sualign */
+/*e: function [[sualign]] */
 
-/*s: function round */
+/*s: function [[round]] */
 long
 round(long v, int w)
 {
@@ -682,9 +682,9 @@ round(long v, int w)
         v += w-r;
     return v;
 }
-/*e: function round */
+/*e: function [[round]] */
 
-/*s: function ofnproto */
+/*s: function [[ofnproto]] */
 Type*
 ofnproto(Node *n)
 {
@@ -708,16 +708,16 @@ ofnproto(Node *n)
     }
     return T;
 }
-/*e: function ofnproto */
+/*e: function [[ofnproto]] */
 
-/*s: constant ANSIPROTO */
+/*s: constant [[ANSIPROTO]] */
 #define	ANSIPROTO	1
-/*e: constant ANSIPROTO */
-/*s: constant OLDPROTO */
+/*e: constant [[ANSIPROTO]] */
+/*s: constant [[OLDPROTO]] */
 #define	OLDPROTO	2
-/*e: constant OLDPROTO */
+/*e: constant [[OLDPROTO]] */
 
-/*s: function argmark */
+/*s: function [[argmark]] */
 //@Scheck: not dead, used by cc.y
 void argmark(Node *n, int pass)
 {
@@ -750,9 +750,9 @@ void argmark(Node *n, int pass)
     stkoff = 0;
     /*e: [[argmark()]] finalizations */
 }
-/*e: function argmark */
+/*e: function [[argmark]] */
 
-/*s: function walkparam */
+/*s: function [[walkparam]] */
 void
 walkparam(Node *n, int pass)
 {
@@ -833,9 +833,9 @@ loop:
 
     }
 }
-/*e: function walkparam */
+/*e: function [[walkparam]] */
 
-/*s: function markdcl */
+/*s: function [[markdcl]] */
 //@Scheck: used by cc.y
 void markdcl(void)
 {
@@ -852,9 +852,9 @@ void markdcl(void)
 
     autobn = blockno;
 }
-/*e: function markdcl */
+/*e: function [[markdcl]] */
 
-/*s: function revertdcl */
+/*s: function [[revertdcl]] */
 //@Scheck: used by cc.y
 Node* revertdcl(void)
 {
@@ -965,9 +965,9 @@ Node* revertdcl(void)
     }
     return n;
 }
-/*e: function revertdcl */
+/*e: function [[revertdcl]] */
 
-/*s: function fnproto */
+/*s: function [[fnproto]] */
 Type*
 fnproto(Node *n)
 {
@@ -983,9 +983,9 @@ fnproto(Node *n)
     /*e: [[fnproto()]] old prototype style handling */
     return fnproto1(n->right);
 }
-/*e: function fnproto */
+/*e: function [[fnproto]] */
 
-/*s: function anyproto */
+/*s: function [[anyproto]] */
 bool
 anyproto(Node *n)
 {
@@ -1008,9 +1008,9 @@ loop:
     }
     return r | OLDPROTO;
 }
-/*e: function anyproto */
+/*e: function [[anyproto]] */
 
-/*s: function fnproto1 */
+/*s: function [[fnproto1]] */
 Type*
 fnproto1(Node *n)
 {
@@ -1048,18 +1048,18 @@ fnproto1(Node *n)
     diag(n, "unknown op in fnproto");
     return T;
 }
-/*e: function fnproto1 */
+/*e: function [[fnproto1]] */
 
-/*s: function dbgdecl */
+/*s: function [[dbgdecl]] */
 void
 dbgdecl(Sym *s)
 {
     print("decl \"%s\": C=%s [B=%d:O=%ld] T=%T\n",
         s->name, cnames[s->class], s->block, s->offset, s->type);
 }
-/*e: function dbgdecl */
+/*e: function [[dbgdecl]] */
 
-/*s: function push */
+/*s: function [[push]] */
 Decl*
 push(void)
 {
@@ -1072,9 +1072,9 @@ push(void)
 
     return d;
 }
-/*e: function push */
+/*e: function [[push]] */
 
-/*s: function push1 */
+/*s: function [[push1]] */
 Decl*
 push1(Sym *s)
 {
@@ -1096,9 +1096,9 @@ push1(Sym *s)
 
     return d;
 }
-/*e: function push1 */
+/*e: function [[push1]] */
 
-/*s: function sametype */
+/*s: function [[sametype]] */
 bool
 sametype(Type *t1, Type *t2)
 {
@@ -1107,9 +1107,9 @@ sametype(Type *t1, Type *t2)
         return true;
     return rsametype(t1, t2, 5, true);
 }
-/*e: function sametype */
+/*e: function [[sametype]] */
 
-/*s: function rsametype */
+/*s: function [[rsametype]] */
 bool
 rsametype(Type *t1, Type *t2, int n, bool f)
 {
@@ -1206,18 +1206,18 @@ rsametype(Type *t1, Type *t2, int n, bool f)
         /*e: [[rsametype()]] if f and not -V, allow void star */
     }
 }
-/*e: function rsametype */
+/*e: function [[rsametype]] */
 
 typedef struct Typetab Typetab;
 
-/*s: struct Typetab */
+/*s: struct [[Typetab]] */
 struct Typetab {
     int n;
     Type **a;
 };
-/*e: struct Typetab */
+/*e: struct [[Typetab]] */
 
-/*s: function sigind */
+/*s: function [[sigind]] */
 static int
 sigind(Type *t, Typetab *tt)
 {
@@ -1240,9 +1240,9 @@ sigind(Type *t, Typetab *tt)
     a[tt->n++] = t;
     return -1;
 }
-/*e: function sigind */
+/*e: function [[sigind]] */
 
-/*s: function signat */
+/*s: function [[signat]] */
 static ulong
 signat(Type *t, Typetab *tt)
 {
@@ -1280,9 +1280,9 @@ signat(Type *t, Typetab *tt)
     }
     return s;
 }
-/*e: function signat */
+/*e: function [[signat]] */
 
-/*s: function signature */
+/*s: function [[signature]] */
 ulong
 signature(Type *t)
 {
@@ -1295,9 +1295,9 @@ signature(Type *t)
     free(tt.a);
     return s;
 }
-/*e: function signature */
+/*e: function [[signature]] */
 
-/*s: function sign */
+/*s: function [[sign]] */
 ulong
 sign(Sym *s)
 {
@@ -1313,9 +1313,9 @@ sign(Sym *s)
         v = SIGNINTERN;
     return v;
 }
-/*e: function sign */
+/*e: function [[sign]] */
 
-/*s: function snap */
+/*s: function [[snap]] */
 void
 snap(Type *t)
 {
@@ -1325,9 +1325,9 @@ snap(Type *t)
         t->width = t->tag->suetag->width;
     }
 }
-/*e: function snap */
+/*e: function [[snap]] */
 
-/*s: function dotag */
+/*s: function [[dotag]] */
 //@Scheck: used by cc.y
 Type* dotag(Sym *s, int et, int bn)
 {
@@ -1361,9 +1361,9 @@ Type* dotag(Sym *s, int et, int bn)
 
     return s->suetag;
 }
-/*e: function dotag */
+/*e: function [[dotag]] */
 
-/*s: function dcllabel */
+/*s: function [[dcllabel]] */
 //@Scheck: used by cc.y
 Node* dcllabel(Sym *s, bool defcontext)
 {
@@ -1412,9 +1412,9 @@ Node* dcllabel(Sym *s, bool defcontext)
     /*e: [[dcllabel()]] debug declaration */
     return n;
 }
-/*e: function dcllabel */
+/*e: function [[dcllabel]] */
 
-/*s: function paramconv */
+/*s: function [[paramconv]] */
 Type*
 paramconv(Type *t, bool f)
 {
@@ -1452,9 +1452,9 @@ paramconv(Type *t, bool f)
     }
     return t;
 }
-/*e: function paramconv */
+/*e: function [[paramconv]] */
 
-/*s: function adecl */
+/*s: function [[adecl]] */
 void
 adecl(int c, Type *t, Sym *s)
 {
@@ -1525,9 +1525,9 @@ adecl(int c, Type *t, Sym *s)
     /*e: [[adecl()]] switch class cases */
     }
 }
-/*e: function adecl */
+/*e: function [[adecl]] */
 
-/*s: function pdecl */
+/*s: function [[pdecl]] */
 void
 pdecl(int class, Type *t, Sym *s)
 {
@@ -1554,9 +1554,9 @@ pdecl(int class, Type *t, Sym *s)
     /*e: [[pdecl()]] sanity check type */
     adecl(class, t, s);
 }
-/*e: function pdecl */
+/*e: function [[pdecl]] */
 
-/*s: function xdecl */
+/*s: function [[xdecl]] */
 void
 xdecl(int class, Type *t, Sym *s)
 {
@@ -1622,9 +1622,9 @@ xdecl(int class, Type *t, Sym *s)
     s->block = 0;
     s->offset = o;
 }
-/*e: function xdecl */
+/*e: function [[xdecl]] */
 
-/*s: function tmerge */
+/*s: function [[tmerge]] */
 void
 tmerge(Type *t1, Sym *s)
 {
@@ -1697,9 +1697,9 @@ tmerge(Type *t1, Sym *s)
         t2 = t2->link;
     }
 }
-/*e: function tmerge */
+/*e: function [[tmerge]] */
 
-/*s: function edecl */
+/*s: function [[edecl]] */
 //@Scheck: used by cc.y
 void edecl(int c, Type *t, Sym *s)
 {
@@ -1743,9 +1743,9 @@ void edecl(int c, Type *t, Sym *s)
         strl->down = t;
     strl = t;
 }
-/*e: function edecl */
+/*e: function [[edecl]] */
 
-/*s: function maxtype */
+/*s: function [[maxtype]] */
 /*
  * this routine is very suspect.
  * ANSI requires the enum type to
@@ -1767,9 +1767,9 @@ maxtype(Type *t1, Type *t2)
         return t1;
     return t2;
 }
-/*e: function maxtype */
+/*e: function [[maxtype]] */
 
-/*s: function doenum */
+/*s: function [[doenum]] */
 //@Scheck: used by cc.y
 void doenum(Sym *s, Node *n)
 {
@@ -1824,9 +1824,9 @@ void doenum(Sym *s, Node *n)
     acidvar(s);
     /*e: [[doenum()]] debugging support */
 }
-/*e: function doenum */
+/*e: function [[doenum]] */
 
-/*s: function symadjust */
+/*s: function [[symadjust]] */
 void
 symadjust(Sym *s, Node *n, long del)
 {
@@ -1851,9 +1851,9 @@ symadjust(Sym *s, Node *n, long del)
 
     }
 }
-/*e: function symadjust */
+/*e: function [[symadjust]] */
 
-/*s: function contig */
+/*s: function [[contig]] */
 //@Scheck: used by cc.y
 Node* contig(Sym *s, Node *n, long v)
 {
@@ -1955,5 +1955,5 @@ if not, bail
 no:
     return n;
 }
-/*e: function contig */
+/*e: function [[contig]] */
 /*e: cc/dcl.c */

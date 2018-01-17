@@ -4,23 +4,23 @@
 typedef	struct	Ftab	Ftab;
 typedef	struct	Gtab	Gtab;
 
-/*s: struct Ftab */
+/*s: struct [[Ftab]] */
 struct	Ftab
 {
     char	op;
     char*	name;
     char	typ;
 };
-/*e: struct Ftab */
-/*s: struct Gtab */
+/*e: struct [[Ftab]] */
+/*s: struct [[Gtab]] */
 struct	Gtab
 {
     char	etype;
     char*	name;
 };
-/*e: struct Gtab */
+/*e: struct [[Gtab]] */
 
-/*s: global gtabinit */
+/*s: global [[gtabinit]] */
 Gtab	gtabinit[NTYPE] =
 {
     TCHAR,		"c",
@@ -38,8 +38,8 @@ Gtab	gtabinit[NTYPE] =
 
     TXXX
 };
-/*e: global gtabinit */
-/*s: global ftabinit */
+/*e: global [[gtabinit]] */
+/*s: global [[ftabinit]] */
 Ftab	ftabinit[OEND] =
 {
     OADD,		"add",		1,
@@ -95,9 +95,9 @@ Ftab	ftabinit[OEND] =
 
     OXXX,
 };
-/*e: global ftabinit */
+/*e: global [[ftabinit]] */
 
-/*s: function isfunct */
+/*s: function [[isfunct]] */
 bool
 isfunct(Node *n)
 {
@@ -292,8 +292,8 @@ bad:
     n->type = T;
     return true;
 }
-/*e: function isfunct */
-/*s: function dclfunct */
+/*e: function [[isfunct]] */
+/*s: function [[dclfunct]] */
 void
 dclfunct(Type *t, Sym *s)
 {
@@ -404,5 +404,5 @@ dclfunct(Type *t, Sym *s)
 bad:
     diag(Z, "dclfunct bad %T %s\n", t, s->name);
 }
-/*e: function dclfunct */
+/*e: function [[dclfunct]] */
 /*e: cc/funct.c */

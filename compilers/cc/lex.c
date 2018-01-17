@@ -20,9 +20,9 @@ void	setinclude(char*);
 
 
 #ifndef	CPP
-/*s: constant CPP */
+/*s: constant [[CPP]] */
 #define	CPP	"/bin/cpp"
-/*e: constant CPP */
+/*e: constant [[CPP]] */
 #endif
 
 /*
@@ -53,7 +53,7 @@ void	setinclude(char*);
  *	-.		Inhibit search for includes in source directory
  */
 
-/*s: function main */
+/*s: function [[main]] */
 //@Scheck: not dead, entry point :)
 void main(int argc, char *argv[])
 {
@@ -188,9 +188,9 @@ void main(int argc, char *argv[])
         errorexit();
     exits(nil);
 }
-/*e: function main */
+/*e: function [[main]] */
 
-/*s: function compile */
+/*s: function [[compile]] */
 int
 compile(char *infile, char **defs, int ndef)
 {
@@ -360,10 +360,10 @@ compile(char *infile, char **defs, int ndef)
         gclean();
     return nerrors;
 }
-/*e: function compile */
+/*e: function [[compile]] */
 
 
-/*s: function pushio */
+/*s: function [[pushio]] */
 void
 pushio(void)
 {
@@ -377,9 +377,9 @@ pushio(void)
     i->p = fi.p;
     i->c = fi.c;
 }
-/*e: function pushio */
+/*e: function [[pushio]] */
 
-/*s: function newio */
+/*s: function [[newio]] */
 void
 newio(void)
 {
@@ -406,9 +406,9 @@ newio(void)
     i->f = -1;
     ionext = i;
 }
-/*e: function newio */
+/*e: function [[newio]] */
 
-/*s: function newfile */
+/*s: function [[newfile]] */
 void
 newfile(char *s, int f)
 {
@@ -437,10 +437,10 @@ newfile(char *s, int f)
     linehist(s, 0);
     /*e: [[newfile()]] call linehist */
 }
-/*e: function newfile */
+/*e: function [[newfile]] */
 
 
-/*s: function slookup */
+/*s: function [[slookup]] */
 Sym*
 slookup(char *s)
 {
@@ -448,9 +448,9 @@ slookup(char *s)
     strcpy(symb, s);
     return lookup();
 }
-/*e: function slookup */
+/*e: function [[slookup]] */
 
-/*s: function lookup */
+/*s: function [[lookup]] */
 Sym*
 lookup(void)
 {
@@ -492,9 +492,9 @@ lookup(void)
 
     return s;
 }
-/*e: function lookup */
+/*e: function [[lookup]] */
 
-/*s: function syminit */
+/*s: function [[syminit]] */
 void
 syminit(Sym *s)
 {
@@ -511,22 +511,22 @@ syminit(Sym *s)
     s->aused = false;
     /*e: [[syminit()]] remaining initialisations */
 }
-/*e: function syminit */
+/*e: function [[syminit]] */
 
-/*s: constant EOF */
+/*s: constant [[EOF]] */
 #define	EOF	(-1)
-/*e: constant EOF */
-/*s: constant IGN */
+/*e: constant [[EOF]] */
+/*s: constant [[IGN]] */
 #define	IGN	(-2)
-/*e: constant IGN */
-/*s: constant ESC */
+/*e: constant [[IGN]] */
+/*s: constant [[ESC]] */
 #define	ESC	(Runemask+1)		/* Rune flag: a literal byte */
-/*e: constant ESC */
-/*s: function GETC */
+/*e: constant [[ESC]] */
+/*s: function [[GETC]] */
 #define	GETC()	((--fi.c < 0)? filbuf(): (*fi.p++ & 0xff))
-/*e: function GETC */
+/*e: function [[GETC]] */
 
-/*s: enum numxxx */
+/*s: enum [[numxxx]] */
 enum Numxxx
 {
     Numdec		= 1<<0,
@@ -538,9 +538,9 @@ enum Numxxx
     /*e: [[Numxxx]] cases */
     Numflt		= 1<<4,
 };
-/*e: enum numxxx */
+/*e: enum [[numxxx]] */
 
-/*s: function yylex */
+/*s: function [[yylex]] */
 //@Scheck: not dead, called by yyparse
 long yylex(void)
 {
@@ -1085,10 +1085,10 @@ caseout:
     return LDCONST;
 /*e: [[yylex()]] labels */
 }
-/*e: function yylex */
+/*e: function [[yylex]] */
 
 
-/*s: function mpatov */
+/*s: function [[mpatov]] */
 /*
  * convert a string, s, to vlong in *v
  * return conversion overflow.
@@ -1157,9 +1157,9 @@ bad:
     *v = ~0;
     return true;
 }
-/*e: function mpatov */
+/*e: function [[mpatov]] */
 
-/*s: function getc */
+/*s: function [[getc]] */
 int
 getc(void)
 {
@@ -1182,9 +1182,9 @@ getc(void)
     }
     return c;
 }
-/*e: function getc */
+/*e: function [[getc]] */
 
-/*s: function getr */
+/*s: function [[getr]] */
 long
 getr(void)
 {
@@ -1214,9 +1214,9 @@ loop:
     }
     return rune;
 }
-/*e: function getr */
+/*e: function [[getr]] */
 
-/*s: function getnsc */
+/*s: function [[getnsc]] */
 int
 getnsc(void)
 {
@@ -1243,9 +1243,9 @@ getnsc(void)
     }
     return -1; // unreachable
 }
-/*e: function getnsc */
+/*e: function [[getnsc]] */
 
-/*s: function unget */
+/*s: function [[unget]] */
 void
 unget(int c)
 {
@@ -1254,9 +1254,9 @@ unget(int c)
     if(c == '\n')
         lineno--;
 }
-/*e: function unget */
+/*e: function [[unget]] */
 
-/*s: function escchar */
+/*s: function [[escchar]] */
 long
 escchar(long e, int longflg, bool escflg)
 {
@@ -1347,9 +1347,9 @@ loop:
     }
     return c;
 }
-/*e: function escchar */
+/*e: function [[escchar]] */
 
-/*s: global itab */
+/*s: global [[itab]] */
 struct
 {
     char	*name;
@@ -1411,9 +1411,9 @@ struct
     /*e: [[itab]] entries, kencc extensions */
     0
 };
-/*e: global itab */
+/*e: global [[itab]] */
 
-/*s: function cinit */
+/*s: function [[cinit]] */
 void
 cinit(void)
 {
@@ -1509,9 +1509,9 @@ cinit(void)
     fmtinstall('L', Lconv);
     /*e: [[cinit()]] fmtinstall */
 }
-/*e: function cinit */
+/*e: function [[cinit]] */
 
-/*s: function filbuf */
+/*s: function [[filbuf]] */
 int
 filbuf(void)
 {
@@ -1554,11 +1554,11 @@ pop:
     return *fi.p++ & 0xff;
 /*e: [[filbuf()]] pop */
 }
-/*e: function filbuf */
+/*e: function [[filbuf]] */
 
 
 
-/*s: function Oconv */
+/*s: function [[Oconv]] */
 // enum<Node_kind> -> unit
 int Oconv(Fmt *fp)
 {
@@ -1570,9 +1570,9 @@ int Oconv(Fmt *fp)
 
     return fmtstrcpy(fp, onames[a]);
 }
-/*e: function Oconv */
+/*e: function [[Oconv]] */
 
-/*s: struct Atab */
+/*s: struct [[Atab]] */
 struct Atab
     {
         Hist*	incl;	/* start of this include file */
@@ -1580,9 +1580,9 @@ struct Atab
         Hist*	line;	/* start of this #line directive */
         long	ldel;	/* delta line number to apply to #line */
 };
-/*e: struct Atab */
+/*e: struct [[Atab]] */
 
-/*s: function Lconv */
+/*s: function [[Lconv]] */
 // int -> string?
 int
 Lconv(Fmt *fp)
@@ -1647,9 +1647,9 @@ Lconv(Fmt *fp)
 
     return fmtstrcpy(fp, str);
 }
-/*e: function Lconv */
+/*e: function [[Lconv]] */
 
-/*s: function Tconv */
+/*s: function [[Tconv]] */
 // option<Type> -> string
 int
 Tconv(Fmt *fp)
@@ -1709,9 +1709,9 @@ Tconv(Fmt *fp)
     }
     return fmtstrcpy(fp, str);
 }
-/*e: function Tconv */
+/*e: function [[Tconv]] */
 
-/*s: function FNconv */
+/*s: function [[FNconv]] */
 // option<Node identifier cases> -> string
 int
 FNconv(Fmt *fp)
@@ -1725,9 +1725,9 @@ FNconv(Fmt *fp)
         str = n->sym->name;
     return fmtstrcpy(fp, str);
 }
-/*e: function FNconv */
+/*e: function [[FNconv]] */
 
-/*s: function Qconv */
+/*s: function [[Qconv]] */
 // ??
 int
 Qconv(Fmt *fp)
@@ -1749,9 +1749,9 @@ Qconv(Fmt *fp)
     }
     return fmtstrcpy(fp, str);
 }
-/*e: function Qconv */
+/*e: function [[Qconv]] */
 
-/*s: function VBconv */
+/*s: function [[VBconv]] */
 // ??
 int
 VBconv(Fmt *fp)
@@ -1776,9 +1776,9 @@ VBconv(Fmt *fp)
 
     return fmtstrcpy(fp, str);
 }
-/*e: function VBconv */
+/*e: function [[VBconv]] */
 
-/*s: function setinclude */
+/*s: function [[setinclude]] */
 void
 setinclude(char *p)
 {
@@ -1814,5 +1814,5 @@ setinclude(char *p)
         p = e+1;
     }
 }
-/*e: function setinclude */
+/*e: function [[setinclude]] */
 /*e: cc/lex.c */

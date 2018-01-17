@@ -1,7 +1,7 @@
 /*s: cc/bits.c */
 #include	"cc.h"
 
-/*s: function bor */
+/*s: function [[bor]] */
 Bits
 bor(Bits a, Bits b)
 {
@@ -12,9 +12,9 @@ bor(Bits a, Bits b)
         c.b[i] = a.b[i] | b.b[i];
     return c;
 }
-/*e: function bor */
+/*e: function [[bor]] */
 
-/*s: function bany */
+/*s: function [[bany]] */
 /*
 Bits
 bnot(Bits a)
@@ -38,9 +38,9 @@ bany(Bits *a)
             return 1;
     return 0;
 }
-/*e: function bany */
+/*e: function [[bany]] */
 
-/*s: function beq */
+/*s: function [[beq]] */
 int
 beq(Bits a, Bits b)
 {
@@ -51,9 +51,9 @@ beq(Bits a, Bits b)
             return 0;
     return 1;
 }
-/*e: function beq */
+/*e: function [[beq]] */
 
-/*s: function bnum */
+/*s: function [[bnum]] */
 int
 bnum(Bits a)
 {
@@ -66,9 +66,9 @@ bnum(Bits a)
     diag(Z, "bad in bnum");
     return 0;
 }
-/*e: function bnum */
+/*e: function [[bnum]] */
 
-/*s: function blsh */
+/*s: function [[blsh]] */
 Bits
 blsh(uint n)
 {
@@ -78,9 +78,9 @@ blsh(uint n)
     c.b[n/32] = 1L << (n%32);
     return c;
 }
-/*e: function blsh */
+/*e: function [[blsh]] */
 
-/*s: function bset */
+/*s: function [[bset]] */
 //@Scheck: also defined as a macro in gc.h, TODO fix that!
 int bset(Bits a, uint n)
 {
@@ -88,5 +88,5 @@ int bset(Bits a, uint n)
         return 1;
     return 0;
 }
-/*e: function bset */
+/*e: function [[bset]] */
 /*e: cc/bits.c */

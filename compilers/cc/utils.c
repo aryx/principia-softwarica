@@ -1,7 +1,7 @@
 /*s: cc/utils.c */
 #include "cc.h"
 
-/*s: function errorexit */
+/*s: function [[errorexit]] */
 void
 errorexit(void)
 {
@@ -9,9 +9,9 @@ errorexit(void)
         remove(outfile);
     exits("error");
 }
-/*e: function errorexit */
+/*e: function [[errorexit]] */
 
-/*s: function gethunk */
+/*s: function [[gethunk]] */
 void
 gethunk(void)
 {
@@ -31,9 +31,9 @@ gethunk(void)
     nhunk = nh;
     thunk += nh;
 }
-/*e: function gethunk */
+/*e: function [[gethunk]] */
 
-/*s: function alloc */
+/*s: function [[alloc]] */
 /*
  * real allocs
  */
@@ -53,9 +53,9 @@ alloc(long n)
     hunk += n;
     return p;
 }
-/*e: function alloc */
+/*e: function [[alloc]] */
 
-/*s: function allocn */
+/*s: function [[allocn]] */
 void*
 allocn(void *p, long on, long n)
 {
@@ -74,9 +74,9 @@ allocn(void *p, long on, long n)
     nhunk -= n;
     return p;
 }
-/*e: function allocn */
+/*e: function [[allocn]] */
 
-/*s: function yyerror */
+/*s: function [[yyerror]] */
 void
 yyerror(char *fmt, ...)
 {
@@ -105,6 +105,6 @@ yyerror(char *fmt, ...)
         errorexit();
     }
 }
-/*e: function yyerror */
+/*e: function [[yyerror]] */
 
 /*e: cc/utils.c */

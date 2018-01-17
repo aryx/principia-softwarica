@@ -3,7 +3,7 @@
 
 int xtramodes(Reg*, Adr*);
 
-/*s: function peep(arm) */
+/*s: function [[peep]](arm) */
 void
 peep(void)
 {
@@ -202,9 +202,9 @@ loop1:
 
     predicate();
 }
-/*e: function peep(arm) */
+/*e: function [[peep]](arm) */
 
-/*s: function excise(arm) */
+/*s: function [[excise]](arm) */
 void
 excise(Reg *r)
 {
@@ -217,9 +217,9 @@ excise(Reg *r)
     p->to = zprog.to;
     p->reg = zprog.reg; /**/
 }
-/*e: function excise(arm) */
+/*e: function [[excise]](arm) */
 
-/*s: function uniqp */
+/*s: function [[uniqp]] */
 Reg*
 uniqp(Reg *r)
 {
@@ -235,9 +235,9 @@ uniqp(Reg *r)
             return R;
     return r1;
 }
-/*e: function uniqp */
+/*e: function [[uniqp]] */
 
-/*s: function uniqs */
+/*s: function [[uniqs]] */
 Reg*
 uniqs(Reg *r)
 {
@@ -253,9 +253,9 @@ uniqs(Reg *r)
             return R;
     return r1;
 }
-/*e: function uniqs */
+/*e: function [[uniqs]] */
 
-/*s: function regtyp(arm) */
+/*s: function [[regtyp]](arm) */
 int
 regtyp(Adr *a)
 {
@@ -266,9 +266,9 @@ regtyp(Adr *a)
         return 1;
     return 0;
 }
-/*e: function regtyp(arm) */
+/*e: function [[regtyp]](arm) */
 
-/*s: function subprop(arm) */
+/*s: function [[subprop]](arm) */
 /*
  * the idea is to substitute
  * one register for another
@@ -388,9 +388,9 @@ gotit:
         print("%P last\n", r->prog);
     return 1;
 }
-/*e: function subprop(arm) */
+/*e: function [[subprop]](arm) */
 
-/*s: function copyprop */
+/*s: function [[copyprop]] */
 /*
  * The idea is to remove redundant copies.
  *	v1->v2	F=0
@@ -419,9 +419,9 @@ copyprop(Reg *r0)
         r->active = 0;
     return copy1(v1, v2, r0->s1, 0);
 }
-/*e: function copyprop */
+/*e: function [[copyprop]] */
 
-/*s: function copy1 */
+/*s: function [[copy1]] */
 int
 copy1(Adr *v1, Adr *v2, Reg *r, int f)
 {
@@ -498,9 +498,9 @@ copy1(Adr *v1, Adr *v2, Reg *r, int f)
     }
     return 1;
 }
-/*e: function copy1 */
+/*e: function [[copy1]] */
 
-/*s: function constprop(arm) */
+/*s: function [[constprop]](arm) */
 /*
  * The idea is to remove redundant constants.
  *	$c1->v1
@@ -539,9 +539,9 @@ constprop(Adr *c1, Adr *v1, Reg *r)
             constprop(c1, v1, r->s2);
     }
 }
-/*e: function constprop(arm) */
+/*e: function [[constprop]](arm) */
 
-/*s: function FAIL(arm) */
+/*s: function [[FAIL]](arm) */
 /*
  * ASLL x,y,w
  * .. (not use w, not set x y w)
@@ -554,8 +554,8 @@ constprop(Adr *c1, Adr *v1, Reg *r)
  * ..
  */
 #define FAIL(msg) { if(debug['H']) print("\t%s; FAILURE\n", msg); return 0; }
-/*e: function FAIL(arm) */
-/*s: function shiftprop(arm) */
+/*e: function [[FAIL]](arm) */
+/*s: function [[shiftprop]](arm) */
 int
 shiftprop(Reg *r)
 {
@@ -696,9 +696,9 @@ shiftprop(Reg *r)
         print("\t=>%P\tSUCCEED\n", p2);
     return 1;
 }
-/*e: function shiftprop(arm) */
+/*e: function [[shiftprop]](arm) */
 
-/*s: function findpre(arm) */
+/*s: function [[findpre]](arm) */
 Reg*
 findpre(Reg *r, Adr *v)
 {
@@ -718,9 +718,9 @@ findpre(Reg *r, Adr *v)
     }
     return R;
 }
-/*e: function findpre(arm) */
+/*e: function [[findpre]](arm) */
 
-/*s: function findinc(arm) */
+/*s: function [[findinc]](arm) */
 Reg*
 findinc(Reg *r, Reg *r2, Adr *v)
 {
@@ -746,9 +746,9 @@ findinc(Reg *r, Reg *r2, Adr *v)
     }
     return R;
 }
-/*e: function findinc(arm) */
+/*e: function [[findinc]](arm) */
 
-/*s: function nochange(arm) */
+/*s: function [[nochange]](arm) */
 int
 nochange(Reg *r, Reg *r2, Prog *p)
 {
@@ -780,9 +780,9 @@ nochange(Reg *r, Reg *r2, Prog *p)
     }
     return 1;
 }
-/*e: function nochange(arm) */
+/*e: function [[nochange]](arm) */
 
-/*s: function findu1(arm) */
+/*s: function [[findu1]](arm) */
 int
 findu1(Reg *r, Adr *v)
 {
@@ -804,9 +804,9 @@ findu1(Reg *r, Adr *v)
     }
     return 0;
 }
-/*e: function findu1(arm) */
+/*e: function [[findu1]](arm) */
 
-/*s: function finduse(arm) */
+/*s: function [[finduse]](arm) */
 int
 finduse(Reg *r, Adr *v)
 {
@@ -816,9 +816,9 @@ finduse(Reg *r, Adr *v)
         r1->active = 0;
     return findu1(r, v);
 }
-/*e: function finduse(arm) */
+/*e: function [[finduse]](arm) */
 
-/*s: function xtramodes(arm) */
+/*s: function [[xtramodes]](arm) */
 int
 xtramodes(Reg *r, Adr *a)
 {
@@ -901,9 +901,9 @@ xtramodes(Reg *r, Adr *a)
     }
     return 0;
 }
-/*e: function xtramodes(arm) */
+/*e: function [[xtramodes]](arm) */
 
-/*s: function copyu(arm) */
+/*s: function [[copyu]](arm) */
 /*
  * return
  * 1 if v only used (and substitute),
@@ -1126,9 +1126,9 @@ copyu(Prog *p, Adr *v, Adr *s)
         return 0;
     }
 }
-/*e: function copyu(arm) */
+/*e: function [[copyu]](arm) */
 
-/*s: function a2type(arm) */
+/*s: function [[a2type]](arm) */
 int
 a2type(Prog *p)
 {
@@ -1167,9 +1167,9 @@ a2type(Prog *p)
     }
     return D_NONE;
 }
-/*e: function a2type(arm) */
+/*e: function [[a2type]](arm) */
 
-/*s: function copyas(arm) */
+/*s: function [[copyas]](arm) */
 /*
  * direct reference,
  * could be set/use depending on
@@ -1193,9 +1193,9 @@ copyas(Adr *a, Adr *v)
     }
     return 0;
 }
-/*e: function copyas(arm) */
+/*e: function [[copyas]](arm) */
 
-/*s: function copyau(arm) */
+/*s: function [[copyau]](arm) */
 /*
  * either direct or indirect
  */
@@ -1219,9 +1219,9 @@ copyau(Adr *a, Adr *v)
     }
     return 0;
 }
-/*e: function copyau(arm) */
+/*e: function [[copyau]](arm) */
 
-/*s: function copyau1(arm) */
+/*s: function [[copyau1]](arm) */
 int
 copyau1(Prog *p, Adr *v)
 {
@@ -1236,9 +1236,9 @@ copyau1(Prog *p, Adr *v)
     }
     return 0;
 }
-/*e: function copyau1(arm) */
+/*e: function [[copyau1]](arm) */
 
-/*s: function copysub(arm) */
+/*s: function [[copysub]](arm) */
 /*
  * substitute s for v in a
  * return failure to substitute
@@ -1260,9 +1260,9 @@ copysub(Adr *a, Adr *v, Adr *s, int f)
     }
     return 0;
 }
-/*e: function copysub(arm) */
+/*e: function [[copysub]](arm) */
 
-/*s: function copysub1(arm) */
+/*s: function [[copysub1]](arm) */
 int
 copysub1(Prog *p1, Adr *v, Adr *s, int f)
 {
@@ -1272,9 +1272,9 @@ copysub1(Prog *p1, Adr *v, Adr *s, int f)
         p1->reg = s->reg;
     return 0;
 }
-/*e: function copysub1(arm) */
+/*e: function [[copysub1]](arm) */
 
-/*s: global predinfo(arm) */
+/*s: global [[predinfo]](arm) */
 struct {
     int opcode;
     int notopcode;
@@ -1296,18 +1296,18 @@ struct {
     { ABGT,	ABLE,	0xC,	0xD, }, 
     { ABLE,	ABGT,	0xD,	0xC, }, 
 }; 
-/*e: global predinfo(arm) */
+/*e: global [[predinfo]](arm) */
 
-/*s: struct Joininfo */
+/*s: struct [[Joininfo]] */
 typedef struct Joininfo {
     Reg *start;
     Reg *last;
     Reg *end;
     int len;
 } Joininfo;
-/*e: struct Joininfo */
+/*e: struct [[Joininfo]] */
 
-/*s: enum _anon_(arm) */
+/*s: enum [[_anon_]](arm) */
 enum {
     Join,
     Split,
@@ -1316,7 +1316,7 @@ enum {
     Setcond,
     Toolong
 };
-/*e: enum _anon_(arm) */
+/*e: enum [[_anon_]](arm) */
     
 /*s: enum _anon_ (5c/peep.c)(arm) */
 enum {
@@ -1327,15 +1327,15 @@ enum {
 };
 /*e: enum _anon_ (5c/peep.c)(arm) */
 
-/*s: function isbranch(arm) */
+/*s: function [[isbranch]](arm) */
 int 
 isbranch(Prog *p)
 {
     return (ABEQ <= p->as) && (p->as <= ABLE); 
 }
-/*e: function isbranch(arm) */
+/*e: function [[isbranch]](arm) */
 
-/*s: function predicable(arm) */
+/*s: function [[predicable]](arm) */
 int
 predicable(Prog *p)
 {
@@ -1357,9 +1357,9 @@ predicable(Prog *p)
         return 0; 
     return 1; 
 }
-/*e: function predicable(arm) */
+/*e: function [[predicable]](arm) */
 
-/*s: function modifiescpsr(arm) */
+/*s: function [[modifiescpsr]](arm) */
 /* 
  * Depends on an analysis of the encodings performed by 5l. 
  * These seem to be all of the opcodes that lead to the "S" bit
@@ -1383,9 +1383,9 @@ modifiescpsr(Prog *p)
         || p->as == AMODU
         || p->as == ABL;
 } 
-/*e: function modifiescpsr(arm) */
+/*e: function [[modifiescpsr]](arm) */
 
-/*s: function joinsplit(arm) */
+/*s: function [[joinsplit]](arm) */
 /*
  * Find the maximal chain of instructions starting with r which could
  * be executed conditionally
@@ -1425,9 +1425,9 @@ joinsplit(Reg *r, Joininfo *j)
     j->end = r;
     return Toolong;
 }
-/*e: function joinsplit(arm) */
+/*e: function [[joinsplit]](arm) */
 
-/*s: function successor(arm) */
+/*s: function [[successor]](arm) */
 Reg *
 successor(Reg *r)
 {
@@ -1436,9 +1436,9 @@ successor(Reg *r)
     else
         return r->s2; 
 }
-/*e: function successor(arm) */
+/*e: function [[successor]](arm) */
 
-/*s: function applypred(arm) */
+/*s: function [[applypred]](arm) */
 void
 applypred(Reg *rstart, Joininfo *j, int cond, int branch)
 {
@@ -1473,9 +1473,9 @@ applypred(Reg *rstart, Joininfo *j, int cond, int branch)
             break;
     }
 }
-/*e: function applypred(arm) */
+/*e: function [[applypred]](arm) */
 
-/*s: function predicate(arm) */
+/*s: function [[predicate]](arm) */
 void
 predicate(void)
 {	
@@ -1505,5 +1505,5 @@ predicate(void)
         } 
     } 
 }
-/*e: function predicate(arm) */
+/*e: function [[predicate]](arm) */
 /*e: 5c/peep.c */

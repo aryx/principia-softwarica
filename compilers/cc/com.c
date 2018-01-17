@@ -8,19 +8,19 @@ int	tlvalue(Node*);
 typedef struct Com Com;
 typedef struct Big Big;
 
-/*s: struct Com */
+/*s: struct [[Com]] */
 struct Com
 {
     int	n;
     Node	*t[500];
 };
-/*e: struct Com */
+/*e: struct [[Com]] */
 
 int compar(Node*, int);
 static void comma(Node*);
 static Node*	commas(Com*, Node*);
 
-/*s: function complex */
+/*s: function [[complex]] */
 void
 complex(Node *n)
 {
@@ -69,7 +69,7 @@ complex(Node *n)
             prtree(n, "x complex");
     /*e: [[complex()]] debug tree after xcom */
 }
-/*e: function complex */
+/*e: function [[complex]] */
 
 /*s: enum _anon_ (cc/com.c) */
 enum
@@ -80,7 +80,7 @@ enum
 };
 /*e: enum _anon_ (cc/com.c) */
 
-/*s: function tcom */
+/*s: function [[tcom]] */
 /*
  * evaluate types
  * evaluate lvalues (addable == 1)
@@ -91,9 +91,9 @@ tcom(Node *n)
 
     return tcomo(n, ADDROF);
 }
-/*e: function tcom */
+/*e: function [[tcom]] */
 
-/*s: function tcomo */
+/*s: function [[tcomo]] */
 bool
 tcomo(Node *n, int f)
 {
@@ -916,9 +916,9 @@ bad:
     n->type = T;
     return true;
 }
-/*e: function tcomo */
+/*e: function [[tcomo]] */
 
-/*s: function tcoma */
+/*s: function [[tcoma]] */
 bool
 tcoma(Node *l, Node *n, Type *t, bool f)
 {
@@ -1017,9 +1017,9 @@ tcoma(Node *l, Node *n, Type *t, bool f)
     }
     return false; // everything is fine
 }
-/*e: function tcoma */
+/*e: function [[tcoma]] */
 
-/*s: function tcomd */
+/*s: function [[tcomd]] */
 bool
 tcomd(Node *n)
 {
@@ -1038,9 +1038,9 @@ tcomd(Node *n)
     /*e: [[tcomd()]] convert field access in offset */
     return false;
 }
-/*e: function tcomd */
+/*e: function [[tcomd]] */
 
-/*s: function tcomx */
+/*s: function [[tcomx]] */
 bool
 tcomx(Node *n)
 {
@@ -1089,9 +1089,9 @@ tcomx(Node *n)
     }
     return e;
 }
-/*e: function tcomx */
+/*e: function [[tcomx]] */
 
-/*s: function tlvalue */
+/*s: function [[tlvalue]] */
 bool
 tlvalue(Node *n)
 {
@@ -1102,9 +1102,9 @@ tlvalue(Node *n)
     }
     return false;
 }
-/*e: function tlvalue */
+/*e: function [[tlvalue]] */
 
-/*s: function comargs */
+/*s: function [[comargs]] */
 /*
  * hoist comma operators out of expressions
  *	(a,b) OP c => (a, b OP c)
@@ -1121,9 +1121,9 @@ comargs(Com *com, Node *n)
     }
     return commas(com, n);
 }
-/*e: function comargs */
+/*e: function [[comargs]] */
 
-/*s: function commas */
+/*s: function [[commas]] */
 static Node*
 commas(Com *com, Node *n)
 {
@@ -1173,9 +1173,9 @@ commas(Com *com, Node *n)
         n->right = commas(com, n->right);
     return n;
 }
-/*e: function commas */
+/*e: function [[commas]] */
 
-/*s: function comma */
+/*s: function [[comma]] */
 static void
 comma(Node *n)
 {
@@ -1209,9 +1209,9 @@ if(debug['y']) prtree(n, "final");
     }else if(n != nn)
         fatal(n, "odd tree");
 }
-/*e: function comma */
+/*e: function [[comma]] */
 
-/*s: function ccom */
+/*s: function [[ccom]] */
 /*
  *	general rewrite
  *	(IND(ADDR x)) ==> x
@@ -1504,25 +1504,25 @@ loop:
             evconst(n);
     }
 }
-/*e: function ccom */
+/*e: function [[ccom]] */
 
-/*s: global cmps */
+/*s: global [[cmps]] */
 /*	OEQ, ONE, OLE, OLS, OLT, OLO, OGE, OHS, OGT, OHI */
 static char *cmps[12] = 
 {
     "==", "!=", "<=", "<=", "<", "<", ">=", ">=", ">", ">",
 };
-/*e: global cmps */
+/*e: global [[cmps]] */
 
-/*s: struct Big */
+/*s: struct [[Big]] */
 /* 128-bit numbers */
 struct Big
 {
     vlong a;
     uvlong b;
 };
-/*e: struct Big */
-/*s: function cmp */
+/*e: struct [[Big]] */
+/*s: function [[cmp]] */
 static int
 cmp(Big x, Big y)
 {
@@ -1538,8 +1538,8 @@ cmp(Big x, Big y)
     }
     return 0;
 }
-/*e: function cmp */
-/*s: function add */
+/*e: function [[cmp]] */
+/*s: function [[add]] */
 static Big
 add(Big x, int y)
 {
@@ -1553,9 +1553,9 @@ add(Big x, int y)
         x.a--;
     return x;
 } 
-/*e: function add */
+/*e: function [[add]] */
 
-/*s: function big */
+/*s: function [[big]] */
 Big
 big(vlong a, uvlong b)
 {
@@ -1565,9 +1565,9 @@ big(vlong a, uvlong b)
     x.b = b;
     return x;
 }
-/*e: function big */
+/*e: function [[big]] */
 
-/*s: function compar */
+/*s: function [[compar]] */
 int
 compar(Node *n, int reverse)
 {
@@ -1695,6 +1695,6 @@ useless:
     warn(n, "useless or misleading comparison: %s", cmpbuf);
     return 0;
 }
-/*e: function compar */
+/*e: function [[compar]] */
 
 /*e: cc/com.c */

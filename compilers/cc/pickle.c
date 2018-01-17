@@ -10,11 +10,11 @@ static char *kwd[] =
     "$union", "$whatis", "$while",
 };
 /*e: global kwd (cc/pickle.c) */
-/*s: global picklestr */
+/*s: global [[picklestr]] */
 static char picklestr[] = "\tpickle(s, un, ";
-/*e: global picklestr */
+/*e: global [[picklestr]] */
 
-/*s: function pmap */
+/*s: function [[pmap]] */
 static char*
 pmap(char *s)
 {
@@ -35,9 +35,9 @@ pmap(char *s)
     }
     return s;
 }
-/*e: function pmap */
+/*e: function [[pmap]] */
 
-/*s: function picklesue */
+/*s: function [[picklesue]] */
 Sym*
 picklesue(Type *t)
 {
@@ -51,12 +51,12 @@ picklesue(Type *t)
                 return s;
     return 0;
 }
-/*e: function picklesue */
+/*e: function [[picklesue]] */
 
-/*s: global picklechar */
+/*s: global [[picklechar]] */
 char	picklechar[NTYPE];
-/*e: global picklechar */
-/*s: global picklecinit */
+/*e: global [[picklechar]] */
+/*s: global [[picklecinit]] */
 Init	picklecinit[] =
 {
     TCHAR,		'C',	0,
@@ -73,9 +73,9 @@ Init	picklecinit[] =
     TIND,		'X',	0,
     -1,		0,	0,
 };
-/*e: global picklecinit */
+/*e: global [[picklecinit]] */
 
-/*s: function pickleinit */
+/*s: function [[pickleinit]] */
 static void
 pickleinit(void)
 {
@@ -94,9 +94,9 @@ pickleinit(void)
     }
     
 }
-/*e: function pickleinit */
+/*e: function [[pickleinit]] */
 
-/*s: function picklemember */
+/*s: function [[picklemember]] */
 void
 picklemember(Type *t, long off)
 {
@@ -165,9 +165,9 @@ picklemember(Type *t, long off)
         break;
     }
 }
-/*e: function picklemember */
+/*e: function [[picklemember]] */
 
-/*s: function pickletype */
+/*s: function [[pickletype]] */
 void
 pickletype(Type *t)
 {
@@ -217,6 +217,6 @@ pickletype(Type *t)
         break;
     }
 }
-/*e: function pickletype */
+/*e: function [[pickletype]] */
 
 /*e: cc/pickle.c */

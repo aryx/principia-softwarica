@@ -49,7 +49,7 @@ pathchar(void)
  return '/';
 }
 
-/*s: function malloc */
+/*s: function [[malloc]] */
 /*
  * fake mallocs
  */
@@ -58,19 +58,19 @@ malloc(ulong n)
 {
     return alloc(n);
 }
-/*e: function malloc */
+/*e: function [[malloc]] */
 
-/*s: function free */
+/*s: function [[free]] */
 void
 free(void*)
 {
 }
-/*e: function free */
+/*e: function [[free]] */
 
-/*s: function setmalloctag */
+/*s: function [[setmalloctag]] */
 //@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
 void setmalloctag(void*, ulong)
 {
 }
-/*e: function setmalloctag */
+/*e: function [[setmalloctag]] */
 /*e: cc/compat.c */

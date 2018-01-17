@@ -2,7 +2,7 @@
 #include	"cc.h"
 #include	"y.tab.h"
 
-/*s: enum fxxx */
+/*s: enum [[fxxx]] */
 enum fxxx
 {
     Fnone	= 0,
@@ -15,54 +15,54 @@ enum fxxx
 
     Fverb	= 10,
 };
-/*e: enum fxxx */
+/*e: enum [[fxxx]] */
 
 typedef	struct	Tprot	Tprot;
-/*s: struct Tprot */
+/*s: struct [[Tprot]] */
 struct	Tprot
 {
     Type*	type;
     Bits	flag;
     Tprot*	link;
 };
-/*e: struct Tprot */
+/*e: struct [[Tprot]] */
 
 typedef	struct	Tname	Tname;
-/*s: struct Tname */
+/*s: struct [[Tname]] */
 struct	Tname
 {
     char*	name;
     int		param;
     Tname*	link;
 };
-/*e: struct Tname */
+/*e: struct [[Tname]] */
 
-/*s: global indchar */
+/*s: global [[indchar]] */
 static	Type*	indchar;
-/*e: global indchar */
-/*s: global flagbits */
+/*e: global [[indchar]] */
+/*s: global [[flagbits]] */
 static	uchar	flagbits[512];
-/*e: global flagbits */
-/*s: global fmtbuf */
+/*e: global [[flagbits]] */
+/*s: global [[fmtbuf]] */
 static	char	fmtbuf[100];
-/*e: global fmtbuf */
-/*s: global lastadj */
+/*e: global [[fmtbuf]] */
+/*s: global [[lastadj]] */
 static	int	lastadj;
-/*e: global lastadj */
-/*s: global lastverb */
+/*e: global [[lastadj]] */
+/*s: global [[lastverb]] */
 static	int	lastverb;
-/*e: global lastverb */
-/*s: global nstar */
+/*e: global [[lastverb]] */
+/*s: global [[nstar]] */
 static	int	nstar;
-/*e: global nstar */
-/*s: global tprot */
+/*e: global [[nstar]] */
+/*s: global [[tprot]] */
 static	Tprot*	tprot;
-/*e: global tprot */
-/*s: global tname */
+/*e: global [[tprot]] */
+/*s: global [[tname]] */
 static	Tname*	tname;
-/*e: global tname */
+/*e: global [[tname]] */
 
-/*s: function argflag */
+/*s: function [[argflag]] */
 void
 argflag(int c, int v)
 {
@@ -86,9 +86,9 @@ argflag(int c, int v)
         break;
     }
 }
-/*e: function argflag */
+/*e: function [[argflag]] */
 
-/*s: function getflag */
+/*s: function [[getflag]] */
 Bits
 getflag(char *s)
 {
@@ -126,9 +126,9 @@ getflag(char *s)
     *fmt = 0;
     return flag;
 }
-/*e: function getflag */
+/*e: function [[getflag]] */
 
-/*s: function arginit */
+/*s: function [[arginit]] */
 void
 arginit(void)
 {
@@ -159,9 +159,9 @@ arginit(void)
     flagbits['x'] = flagbits['o'];
     flagbits['X'] = flagbits['o'];
 }
-/*e: function arginit */
+/*e: function [[arginit]] */
 
-/*s: function nextarg */
+/*s: function [[nextarg]] */
 Node*
 nextarg(Node *n, Node **a)
 {
@@ -176,9 +176,9 @@ nextarg(Node *n, Node **a)
     *a = n;
     return Z;
 }
-/*e: function nextarg */
+/*e: function [[nextarg]] */
 
-/*s: function checkargs */
+/*s: function [[checkargs]] */
 void
 checkargs(Node *nn, char *s, int pos)
 {
@@ -243,9 +243,9 @@ checkargs(Node *nn, char *s, int pos)
     loop:;
     }
 }
-/*e: function checkargs */
+/*e: function [[checkargs]] */
 
-/*s: function dpcheck */
+/*s: function [[dpcheck]] */
 void
 dpcheck(Node *n)
 {
@@ -287,10 +287,10 @@ dpcheck(Node *n)
     s = a->left->cstring;
     checkargs(b, s, l->param);
 }
-/*e: function dpcheck */
+/*e: function [[dpcheck]] */
 
 
-/*s: function pragpack */
+/*s: function [[pragpack]] */
 void
 pragpack(void)
 {
@@ -314,9 +314,9 @@ pragpack(void)
             print("%4ld: pack off\n", lineno);
     /*e: [[pragpack()]] debug if [[-f]] */
 }
-/*e: function pragpack */
+/*e: function [[pragpack]] */
 
-/*s: function newname */
+/*s: function [[newname]] */
 void
 newname(char *s, int p)
 {
@@ -334,9 +334,9 @@ newname(char *s, int p)
     l->link = tname;
     tname = l;
 }
-/*e: function newname */
+/*e: function [[newname]] */
 
-/*s: function newprot */
+/*s: function [[newprot]] */
 void
 newprot(Sym *m, Type *t, char *s)
 {
@@ -357,9 +357,9 @@ newprot(Sym *m, Type *t, char *s)
     l->link = tprot;
     tprot = l;
 }
-/*e: function newprot */
+/*e: function [[newprot]] */
 
-/*s: function pragvararg */
+/*s: function [[pragvararg]] */
 void
 pragvararg(void)
 {
@@ -443,9 +443,9 @@ out:
     while(getnsc() != '\n')
         ;
 }
-/*e: function pragvararg */
+/*e: function [[pragvararg]] */
 
-/*s: function pragfpround */
+/*s: function [[pragfpround]] */
 void
 pragfpround(void)
 {
@@ -467,9 +467,9 @@ pragfpround(void)
         else
             print("%4ld: fproundflg off\n", lineno);
 }
-/*e: function pragfpround */
+/*e: function [[pragfpround]] */
 
-/*s: function pragprofile */
+/*s: function [[pragprofile]] */
 void
 pragprofile(void)
 {
@@ -493,9 +493,9 @@ pragprofile(void)
             print("%4ld: profileflg off\n", lineno);
     /*e: [[pragprofile()]] debug if [[-f]] */
 }
-/*e: function pragprofile */
+/*e: function [[pragprofile]] */
 
-/*s: function pragincomplete */
+/*s: function [[pragincomplete]] */
 void
 pragincomplete(void)
 {
@@ -549,6 +549,6 @@ out:
     if(debug['f'])
         print("%s incomplete\n", s->name);
 }
-/*e: function pragincomplete */
+/*e: function [[pragincomplete]] */
 
 /*e: cc/dpchk.c */

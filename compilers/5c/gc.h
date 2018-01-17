@@ -9,36 +9,36 @@
  * Arm
  */
 
-/*s: constant SZ_CHAR(arm) */
+/*s: constant [[SZ_CHAR]](arm) */
 #define	SZ_CHAR		1
-/*e: constant SZ_CHAR(arm) */
-/*s: constant SZ_SHORT(arm) */
+/*e: constant [[SZ_CHAR]](arm) */
+/*s: constant [[SZ_SHORT]](arm) */
 #define	SZ_SHORT	2
-/*e: constant SZ_SHORT(arm) */
-/*s: constant SZ_INT(arm) */
+/*e: constant [[SZ_SHORT]](arm) */
+/*s: constant [[SZ_INT]](arm) */
 #define	SZ_INT		4
-/*e: constant SZ_INT(arm) */
-/*s: constant SZ_LONG(arm) */
+/*e: constant [[SZ_INT]](arm) */
+/*s: constant [[SZ_LONG]](arm) */
 #define	SZ_LONG		4
-/*e: constant SZ_LONG(arm) */
-/*s: constant SZ_IND(arm) */
+/*e: constant [[SZ_LONG]](arm) */
+/*s: constant [[SZ_IND]](arm) */
 #define	SZ_IND		4
-/*e: constant SZ_IND(arm) */
-/*s: constant SZ_FLOAT(arm) */
+/*e: constant [[SZ_IND]](arm) */
+/*s: constant [[SZ_FLOAT]](arm) */
 #define	SZ_FLOAT	4
-/*e: constant SZ_FLOAT(arm) */
-/*s: constant SZ_VLONG(arm) */
+/*e: constant [[SZ_FLOAT]](arm) */
+/*s: constant [[SZ_VLONG]](arm) */
 #define	SZ_VLONG	8
-/*e: constant SZ_VLONG(arm) */
-/*s: constant SZ_DOUBLE(arm) */
+/*e: constant [[SZ_VLONG]](arm) */
+/*s: constant [[SZ_DOUBLE]](arm) */
 #define	SZ_DOUBLE	8
-/*e: constant SZ_DOUBLE(arm) */
-/*s: constant FNX(arm) */
+/*e: constant [[SZ_DOUBLE]](arm) */
+/*s: constant [[FNX]](arm) */
 #define	FNX		100
-/*e: constant FNX(arm) */
-/*s: constant BTRUE(arm) */
+/*e: constant [[FNX]](arm) */
+/*s: constant [[BTRUE]](arm) */
 #define	BTRUE		0x1000
-/*e: constant BTRUE(arm) */
+/*e: constant [[BTRUE]](arm) */
 
 typedef	struct	Adr		Adr;
 typedef	struct	Prog	Prog;
@@ -51,7 +51,7 @@ typedef	struct	Reg		Reg;
 typedef	struct	Rgn		Rgn;
 
 
-/*s: struct Adr(arm) */
+/*s: struct [[Adr]](arm) */
 struct	Adr
 {
     // enum<Operand_kind> (D_NONE by default)
@@ -75,15 +75,15 @@ struct	Adr
     char	etype;
     /*e: [[Adr]] type fields(arm) */
 };
-/*e: struct Adr(arm) */
-/*s: constant A */
+/*e: struct [[Adr]](arm) */
+/*s: constant [[A]] */
 #define	A	((Adr*)nil)
-/*e: constant A */
+/*e: constant [[A]] */
 
-/*s: constant INDEXED(arm) */
+/*s: constant [[INDEXED]](arm) */
 #define	INDEXED	9
-/*e: constant INDEXED(arm) */
-/*s: struct Prog(arm) */
+/*e: constant [[INDEXED]](arm) */
+/*s: struct [[Prog]](arm) */
 struct	Prog
 {
     // enum<Opcode>, from 5.out.h
@@ -109,12 +109,12 @@ struct	Prog
     Prog*	link;
     /*e: [[Prog]] extra fields(arm) */
 };
-/*e: struct Prog(arm) */
-/*s: constant P */
+/*e: struct [[Prog]](arm) */
+/*s: constant [[P]] */
 #define	P	((Prog*)nil)
-/*e: constant P */
+/*e: constant [[P]] */
 
-/*s: struct Case */
+/*s: struct [[Case]] */
 struct	Case
 {
     vlong	val;
@@ -124,36 +124,36 @@ struct	Case
 
     Case*	link;
 };
-/*e: struct Case */
-/*s: constant C */
+/*e: struct [[Case]] */
+/*s: constant [[C]] */
 #define	C	((Case*)nil)
-/*e: constant C */
+/*e: constant [[C]] */
 
-/*s: struct C1 */
+/*s: struct [[C1]] */
 struct	C1
 {
     vlong	val;
     long	label;
 };
-/*e: struct C1 */
+/*e: struct [[C1]] */
 
-/*s: struct Multab(arm) */
+/*s: struct [[Multab]](arm) */
 struct	Multab
 {
     long	val;
     char	code[20];
 };
-/*e: struct Multab(arm) */
+/*e: struct [[Multab]](arm) */
 
-/*s: struct Hintab(arm) */
+/*s: struct [[Hintab]](arm) */
 struct	Hintab
 {
     ushort	val;
     char	hint[10];
 };
-/*e: struct Hintab(arm) */
+/*e: struct [[Hintab]](arm) */
 
-/*s: struct Var */
+/*s: struct [[Var]] */
 struct	Var
 {
     Sym*	sym;
@@ -163,9 +163,9 @@ struct	Var
     char	etype;
     long	offset;
 };
-/*e: struct Var */
+/*e: struct [[Var]] */
 
-/*s: struct Reg */
+/*s: struct [[Reg]] */
 struct	Reg
 {
     long	pc;
@@ -198,15 +198,15 @@ struct	Reg
 
     Prog*	prog;
 };
-/*e: struct Reg */
-/*s: constant R */
+/*e: struct [[Reg]] */
+/*s: constant [[R]] */
 #define	R	((Reg*)nil)
-/*e: constant R */
+/*e: constant [[R]] */
 
-/*s: constant NRGN(arm) */
+/*s: constant [[NRGN]](arm) */
 #define	NRGN	1000		/* was 600; raised for paranoia.c */
-/*e: constant NRGN(arm) */
-/*s: struct Rgn */
+/*e: constant [[NRGN]](arm) */
+/*s: struct [[Rgn]] */
 struct	Rgn
 {
     Reg*	enter;
@@ -214,7 +214,7 @@ struct	Rgn
     short	varno;
     short	regno;
 };
-/*e: struct Rgn */
+/*e: struct [[Rgn]] */
 
 extern	long	breakpc;
 extern	long	nbreak;
@@ -247,26 +247,26 @@ extern	long	exregoffset;
 extern	long	exfregoffset;
 extern	int	suppress;
 
-/*s: function LOAD(arm) */
+/*s: function [[LOAD]](arm) */
 #define	LOAD(r)		(~r->refbehind.b[z] & r->refahead.b[z])
-/*e: function LOAD(arm) */
-/*s: function STORE(arm) */
+/*e: function [[LOAD]](arm) */
+/*s: function [[STORE]](arm) */
 #define	STORE(r)	(~r->calbehind.b[z] & r->calahead.b[z])
-/*e: function STORE(arm) */
+/*e: function [[STORE]](arm) */
 
-/*s: function bset(arm) */
+/*s: function [[bset]](arm) */
 #define	bset(a,n)	((a).b[(n)/32]&(1L<<(n)%32))
-/*e: function bset(arm) */
+/*e: function [[bset]](arm) */
 
-/*s: constant CLOAD(arm) */
+/*s: constant [[CLOAD]](arm) */
 #define	CLOAD	4
-/*e: constant CLOAD(arm) */
-/*s: constant CREF(arm) */
+/*e: constant [[CLOAD]](arm) */
+/*s: constant [[CREF]](arm) */
 #define	CREF	5
-/*e: constant CREF(arm) */
-/*s: constant LOOP(arm) */
+/*e: constant [[CREF]](arm) */
+/*s: constant [[LOOP]](arm) */
 #define	LOOP	3
-/*e: constant LOOP(arm) */
+/*e: constant [[LOOP]](arm) */
 
 extern	Rgn	region[NRGN];
 extern	Rgn*	rgp;

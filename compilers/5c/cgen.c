@@ -1,15 +1,15 @@
 /*s: 5c/cgen.c */
 #include "gc.h"
 
-/*s: function cgen(arm) */
+/*s: function [[cgen]](arm) */
 void
 cgen(Node *n, Node *nn)
 {
     cgenrel(n, nn, false);
 }
-/*e: function cgen(arm) */
+/*e: function [[cgen]](arm) */
 
-/*s: function cgenrel(arm) */
+/*s: function [[cgenrel]](arm) */
 void
 cgenrel(Node *n, Node *nn, bool inrel)
 {
@@ -663,9 +663,9 @@ cgenrel(Node *n, Node *nn, bool inrel)
     }
     return;
 }
-/*e: function cgenrel(arm) */
+/*e: function [[cgenrel]](arm) */
 
-/*s: function reglcgen(arm) */
+/*s: function [[reglcgen]](arm) */
 void
 reglcgen(Node *t, Node *n, Node *nn)
 {
@@ -705,9 +705,9 @@ reglcgen(Node *t, Node *n, Node *nn)
     lcgen(n, t);
     regind(t, n);
 }
-/*e: function reglcgen(arm) */
+/*e: function [[reglcgen]](arm) */
 
-/*s: function reglpcgen(arm) */
+/*s: function [[reglpcgen]](arm) */
 void
 reglpcgen(Node *n, Node *nn, int f)
 {
@@ -724,9 +724,9 @@ reglpcgen(Node *n, Node *nn, int f)
     }
     nn->type = t;
 }
-/*e: function reglpcgen(arm) */
+/*e: function [[reglpcgen]](arm) */
 
-/*s: function lcgen(arm) */
+/*s: function [[lcgen]](arm) */
 void
 lcgen(Node *n, Node *nn)
 {
@@ -790,9 +790,9 @@ lcgen(Node *n, Node *nn)
 
     }
 }
-/*e: function lcgen(arm) */
+/*e: function [[lcgen]](arm) */
 
-/*s: function bcgen */
+/*s: function [[bcgen]] */
 void
 bcgen(Node *n, bool btrue)
 {
@@ -802,9 +802,9 @@ bcgen(Node *n, bool btrue)
     else
         boolgen(n, btrue, Z);
 }
-/*e: function bcgen */
+/*e: function [[bcgen]] */
 
-/*s: function boolgen(arm) */
+/*s: function [[boolgen]](arm) */
 void
 boolgen(Node *n, int btrue, Node *nn)
 {
@@ -973,9 +973,9 @@ boolgen(Node *n, int btrue, Node *nn)
     }
     cursafe = curs;
 }
-/*e: function boolgen(arm) */
+/*e: function [[boolgen]](arm) */
 
-/*s: function sugen(arm) */
+/*s: function [[sugen]](arm) */
 void
 sugen(Node *n, Node *nn, long w)
 {
@@ -1307,5 +1307,5 @@ out:
     regfree(&nod1);
     regfree(&nod2);
 }
-/*e: function sugen(arm) */
+/*e: function [[sugen]](arm) */
 /*e: 5c/cgen.c */

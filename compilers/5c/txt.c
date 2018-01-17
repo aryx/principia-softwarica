@@ -1,11 +1,11 @@
 /*s: 5c/txt.c */
 #include "gc.h"
 
-/*s: global resvreg(arm) */
+/*s: global [[resvreg]](arm) */
 static	char	resvreg[nelem(reg)];
-/*e: global resvreg(arm) */
+/*e: global [[resvreg]](arm) */
 
-/*s: function ginit(arm) */
+/*s: function [[ginit]](arm) */
 void
 ginit(void)
 {
@@ -119,9 +119,9 @@ ginit(void)
     reg[REGEXT-1] = 1; // R9
     /*e: [[ginit()]] reg and resvreg initialisation */
 }
-/*e: function ginit(arm) */
+/*e: function [[ginit]](arm) */
 
-/*s: function gclean(arm) */
+/*s: function [[gclean]](arm) */
 void
 gclean(void)
 {
@@ -175,9 +175,9 @@ gclean(void)
     // generate the whole output file using outbuf global
     outcode();
 }
-/*e: function gclean(arm) */
+/*e: function [[gclean]](arm) */
 
-/*s: function nextpc */
+/*s: function [[nextpc]] */
 void
 nextpc(void)
 {
@@ -196,9 +196,9 @@ nextpc(void)
     lastp->link = p;
     lastp = p;
 }
-/*e: function nextpc */
+/*e: function [[nextpc]] */
 
-/*s: function gargs */
+/*s: function [[gargs]] */
 void
 gargs(Node *n, Node *tn1, Node *tn2)
 {
@@ -216,9 +216,9 @@ gargs(Node *n, Node *tn1, Node *tn2)
 
     cursafe = regs;
 }
-/*e: function gargs */
+/*e: function [[gargs]] */
 
-/*s: function garg1(arm) */
+/*s: function [[garg1]](arm) */
 void
 garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
 {
@@ -278,36 +278,36 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
         regfree(tn1);
     }
 }
-/*e: function garg1(arm) */
+/*e: function [[garg1]](arm) */
 
-/*s: function nodconst */
+/*s: function [[nodconst]] */
 Node*
 nodconst(long v)
 {
     constnode.vconst = v;
     return &constnode;
 }
-/*e: function nodconst */
+/*e: function [[nodconst]] */
 
-/*s: function nod32const(arm) */
+/*s: function [[nod32const]](arm) */
 Node*
 nod32const(vlong v)
 {
     constnode.vconst = v & MASK(32);
     return &constnode;
 }
-/*e: function nod32const(arm) */
+/*e: function [[nod32const]](arm) */
 
-/*s: function nodfconst */
+/*s: function [[nodfconst]] */
 Node*
 nodfconst(double d)
 {
     fconstnode.fconst = d;
     return &fconstnode;
 }
-/*e: function nodfconst */
+/*e: function [[nodfconst]] */
 
-/*s: function nodreg(arm) */
+/*s: function [[nodreg]](arm) */
 void
 nodreg(Node *n, Node *nn, int reg)
 {
@@ -316,9 +316,9 @@ nodreg(Node *n, Node *nn, int reg)
     n->type = nn->type;
     n->lineno = nn->lineno;
 }
-/*e: function nodreg(arm) */
+/*e: function [[nodreg]](arm) */
 
-/*s: function regret(arm) */
+/*s: function [[regret]](arm) */
 void
 regret(Node *n/*OUT*/, Node *nn/*IN*/)
 {
@@ -332,9 +332,9 @@ regret(Node *n/*OUT*/, Node *nn/*IN*/)
     nodreg(n, nn, r);
     reg[r]++;
 }
-/*e: function regret(arm) */
+/*e: function [[regret]](arm) */
 
-/*s: function tmpreg(arm) */
+/*s: function [[tmpreg]](arm) */
 int
 tmpreg(void)
 {
@@ -346,9 +346,9 @@ tmpreg(void)
     diag(Z, "out of fixed registers");
     return 0;
 }
-/*e: function tmpreg(arm) */
+/*e: function [[tmpreg]](arm) */
 
-/*s: function regalloc(arm) */
+/*s: function [[regalloc]](arm) */
 void
 regalloc(Node *n, Node *tn, Node *o)
 {
@@ -433,9 +433,9 @@ out:
         lasti = 0;
 
 }
-/*e: function regalloc(arm) */
+/*e: function [[regalloc]](arm) */
 
-/*s: function regialloc */
+/*s: function [[regialloc]] */
 void
 regialloc(Node *n, Node *tn, Node *o)
 {
@@ -445,9 +445,9 @@ regialloc(Node *n, Node *tn, Node *o)
     nod.type = types[TIND];
     regalloc(n, &nod, o);
 }
-/*e: function regialloc */
+/*e: function [[regialloc]] */
 
-/*s: function regfree(arm) */
+/*s: function [[regfree]](arm) */
 void
 regfree(Node *n)
 {
@@ -470,9 +470,9 @@ regfree(Node *n)
 err:
     diag(n, "error in regfree: %d", i);
 }
-/*e: function regfree(arm) */
+/*e: function [[regfree]](arm) */
 
-/*s: function regsalloc */
+/*s: function [[regsalloc]] */
 void
 regsalloc(Node *n, Node *nn)
 {
@@ -484,9 +484,9 @@ regsalloc(Node *n, Node *nn)
     n->etype = nn->type->etype;
     n->lineno = nn->lineno;
 }
-/*e: function regsalloc */
+/*e: function [[regsalloc]] */
 
-/*s: function regaalloc1(arm) */
+/*s: function [[regaalloc1]](arm) */
 void
 regaalloc1(Node *n, Node *nn)
 {
@@ -496,9 +496,9 @@ regaalloc1(Node *n, Node *nn)
     curarg = align(curarg, nn->type, Aarg2);
     maxargsafe = maxround(maxargsafe, cursafe+curarg);
 }
-/*e: function regaalloc1(arm) */
+/*e: function [[regaalloc1]](arm) */
 
-/*s: function regaalloc(arm) */
+/*s: function [[regaalloc]](arm) */
 void
 regaalloc(Node *n, Node *nn)
 {
@@ -512,9 +512,9 @@ regaalloc(Node *n, Node *nn)
     curarg = align(curarg, nn->type, Aarg2);
     maxargsafe = maxround(maxargsafe, cursafe+curarg);
 }
-/*e: function regaalloc(arm) */
+/*e: function [[regaalloc]](arm) */
 
-/*s: function regind */
+/*s: function [[regind]] */
 void
 regind(Node *n, Node *nn)
 {
@@ -526,9 +526,9 @@ regind(Node *n, Node *nn)
     n->op = OINDREG;
     n->type = nn->type;
 }
-/*e: function regind */
+/*e: function [[regind]] */
 
-/*s: function raddr(arm) */
+/*s: function [[raddr]](arm) */
 void
 raddr(Node *n, Prog *p)
 {
@@ -544,9 +544,9 @@ raddr(Node *n, Prog *p)
     } else
         p->reg = a.reg;
 }
-/*e: function raddr(arm) */
+/*e: function [[raddr]](arm) */
 
-/*s: function naddr(arm) */
+/*s: function [[naddr]](arm) */
 void
 naddr(Node *n, Adr *a)
 {
@@ -663,9 +663,9 @@ naddr(Node *n, Adr *a)
 
     }
 }
-/*e: function naddr(arm) */
+/*e: function [[naddr]](arm) */
 
-/*s: function gmovm(arm) */
+/*s: function [[gmovm]](arm) */
 void
 gmovm(Node *f, Node *t, int w)
 {
@@ -674,9 +674,9 @@ gmovm(Node *f, Node *t, int w)
     if(w)
         p->scond |= C_WBIT;
 }
-/*e: function gmovm(arm) */
+/*e: function [[gmovm]](arm) */
 
-/*s: function gmove(arm) */
+/*s: function [[gmove]](arm) */
 void
 gmove(Node *f, Node *t)
 {
@@ -1042,9 +1042,9 @@ gmove(Node *f, Node *t)
 
     gins(a, f, t);
 }
-/*e: function gmove(arm) */
+/*e: function [[gmove]](arm) */
 
-/*s: function gmover(arm) */
+/*s: function [[gmover]](arm) */
 void
 gmover(Node *f, Node *t)
 {
@@ -1074,9 +1074,9 @@ gmover(Node *f, Node *t)
     else
         gins(a, f, t);
 }
-/*e: function gmover(arm) */
+/*e: function [[gmover]](arm) */
 
-/*s: function gins(arm) */
+/*s: function [[gins]](arm) */
 void
 gins(int a, Node *f, Node *t)
 {
@@ -1094,9 +1094,9 @@ gins(int a, Node *f, Node *t)
         print("%P\n", p);
     /*e: [[gins()]] debug */
 }
-/*e: function gins(arm) */
+/*e: function [[gins]](arm) */
 
-/*s: function gopcode(arm) */
+/*s: function [[gopcode]](arm) */
 void
 gopcode(int o, Node *f1, Node *f2, Node *t)
 {
@@ -1334,9 +1334,9 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         print("%P\n", p);
     /*e: [[gopcode()]] debug */
 }
-/*e: function gopcode(arm) */
+/*e: function [[gopcode]](arm) */
 
-/*s: function samaddr */
+/*s: function [[samaddr]] */
 bool
 samaddr(Node *f, Node *t)
 {
@@ -1349,9 +1349,9 @@ samaddr(Node *f, Node *t)
     }
     return false;
 }
-/*e: function samaddr */
+/*e: function [[samaddr]] */
 
-/*s: function gbranch(arm) */
+/*s: function [[gbranch]](arm) */
 void
 gbranch(int o)
 {
@@ -1369,9 +1369,9 @@ gbranch(int o)
     }
     p->as = a;
 }
-/*e: function gbranch(arm) */
+/*e: function [[gbranch]](arm) */
 
-/*s: function patch */
+/*s: function [[patch]] */
 void
 patch(Prog *op, long pc)
 {
@@ -1379,9 +1379,9 @@ patch(Prog *op, long pc)
     op->to.type = D_BRANCH;
     op->to.offset = pc;
 }
-/*e: function patch */
+/*e: function [[patch]] */
 
-/*s: function gpseudo(arm) */
+/*s: function [[gpseudo]](arm) */
 void
 gpseudo(int a, Sym *s, Node *n)
 {
@@ -1400,9 +1400,9 @@ gpseudo(int a, Sym *s, Node *n)
     if(a == ADATA || a == AGLOBL)
         pc--;
 }
-/*e: function gpseudo(arm) */
+/*e: function [[gpseudo]](arm) */
 
-/*s: function sconst(arm) */
+/*s: function [[sconst]](arm) */
 bool
 sconst(Node *n)
 {
@@ -1423,9 +1423,9 @@ sconst(Node *n)
     }
     return false;
 }
-/*e: function sconst(arm) */
+/*e: function [[sconst]](arm) */
 
-/*s: function sval(arm) */
+/*s: function [[sval]](arm) */
 int
 sval(long v)
 {
@@ -1440,9 +1440,9 @@ sval(long v)
     }
     return 0;
 }
-/*e: function sval(arm) */
+/*e: function [[sval]](arm) */
 
-/*s: function exreg(arm) */
+/*s: function [[exreg]](arm) */
 long
 exreg(Type *t)
 {
@@ -1472,9 +1472,9 @@ exreg(Type *t)
     }
     return 0;
 }
-/*e: function exreg(arm) */
+/*e: function [[exreg]](arm) */
 
-/*s: global ewidth */
+/*s: global [[ewidth]] */
 schar	ewidth[NTYPE] =
 {
     [TXXX] = -1,		
@@ -1500,9 +1500,9 @@ schar	ewidth[NTYPE] =
     [TUNION] = -1,		
     [TENUM] = SZ_INT,		
 };
-/*e: global ewidth */
+/*e: global [[ewidth]] */
 
-/*s: global ncast */
+/*s: global [[ncast]] */
 long	ncast[NTYPE] =
 {
     [TXXX] = 0,				
@@ -1526,5 +1526,5 @@ long	ncast[NTYPE] =
     [TUNION] = BUNION,				
     [TENUM] = 0,				
 };
-/*e: global ncast */
+/*e: global [[ncast]] */
 /*e: 5c/txt.c */

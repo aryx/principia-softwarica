@@ -19,55 +19,55 @@ typedef	struct	Bits	Bits;
 
 typedef	Rune	TRune;	/* target system type */
 
-/*s: constant NHUNK */
+/*s: constant [[NHUNK]] */
 #define	NHUNK		50000L
-/*e: constant NHUNK */
-/*s: constant BUFSIZ */
+/*e: constant [[NHUNK]] */
+/*s: constant [[BUFSIZ]] */
 #define	BUFSIZ		8192
-/*e: constant BUFSIZ */
-/*s: constant NSYMB */
+/*e: constant [[BUFSIZ]] */
+/*s: constant [[NSYMB]] */
 #define	NSYMB		1500
-/*e: constant NSYMB */
-/*s: constant NHASH */
+/*e: constant [[NSYMB]] */
+/*s: constant [[NHASH]] */
 #define	NHASH		1024
-/*e: constant NHASH */
-/*s: constant STRINGSZ */
+/*e: constant [[NHASH]] */
+/*s: constant [[STRINGSZ]] */
 #define	STRINGSZ	200
-/*e: constant STRINGSZ */
-/*s: constant HISTSZ */
+/*e: constant [[STRINGSZ]] */
+/*s: constant [[HISTSZ]] */
 #define	HISTSZ		20
-/*e: constant HISTSZ */
-/*s: constant YYMAXDEPTH */
+/*e: constant [[HISTSZ]] */
+/*s: constant [[YYMAXDEPTH]] */
 #define YYMAXDEPTH	1500
-/*e: constant YYMAXDEPTH */
-/*s: constant NTERM */
+/*e: constant [[YYMAXDEPTH]] */
+/*s: constant [[NTERM]] */
 #define	NTERM		10
-/*e: constant NTERM */
-/*s: constant MAXALIGN */
+/*e: constant [[NTERM]] */
+/*s: constant [[MAXALIGN]] */
 #define	MAXALIGN	7
-/*e: constant MAXALIGN */
+/*e: constant [[MAXALIGN]] */
 
-/*s: function SIGN */
+/*s: function [[SIGN]] */
 #define	SIGN(n)		(1ULL<<(n-1))
-/*e: function SIGN */
-/*s: function MASK */
+/*e: function [[SIGN]] */
+/*s: function [[MASK]] */
 #define	MASK(n)		(SIGN(n)|(SIGN(n)-1))
-/*e: function MASK */
+/*e: function [[MASK]] */
 
-/*s: constant BITS */
+/*s: constant [[BITS]] */
 #define	BITS	5
-/*e: constant BITS */
-/*s: constant NVAR */
+/*e: constant [[BITS]] */
+/*s: constant [[NVAR]] */
 #define	NVAR	(BITS*sizeof(ulong)*8)
-/*e: constant NVAR */
-/*s: struct Bits */
+/*e: constant [[NVAR]] */
+/*s: struct [[Bits]] */
 struct	Bits
 {
     ulong	b[BITS];
 };
-/*e: struct Bits */
+/*e: struct [[Bits]] */
 
-/*s: struct Node */
+/*s: struct [[Node]] */
 struct	Node
 {
     // enum<node_kind>
@@ -143,12 +143,12 @@ struct	Node
     char	nodegarb;
     /*e: [[Node]] parsing helper fields */
 };
-/*e: struct Node */
-/*s: constant Z */
+/*e: struct [[Node]] */
+/*s: constant [[Z]] */
 #define	Z	((Node*)nil)
-/*e: constant Z */
+/*e: constant [[Z]] */
 
-/*s: struct Sym */
+/*s: struct [[Sym]] */
 struct	Sym
 {
     // Symbolic names are used for: 
@@ -225,12 +225,12 @@ struct	Sym
     Sym*	link;
     /*e: [[Sym]] extra fields */
 };
-/*e: struct Sym */
-/*s: constant S */
+/*e: struct [[Sym]] */
+/*s: constant [[S]] */
 #define	S	((Sym*)nil)
-/*e: constant S */
+/*e: constant [[S]] */
 
-/*s: enum signature */
+/*s: enum [[signature]] */
 enum signature {
     SIGNONE = 0,
     SIGDONE = 1,
@@ -239,9 +239,9 @@ enum signature {
     // ???
     SIGNINTERN = 1729*325*1729,
 };
-/*e: enum signature */
+/*e: enum [[signature]] */
 
-/*s: struct Decl */
+/*s: struct [[Decl]] */
 struct	Decl
 {
     Sym*	sym;
@@ -266,12 +266,12 @@ struct	Decl
     Decl*	link;
     /*e: [[Decl]] extra fields */
 };
-/*e: struct Decl */
-/*s: constant D */
+/*e: struct [[Decl]] */
+/*s: constant [[D]] */
 #define	D	((Decl*)nil)
-/*e: constant D */
+/*e: constant [[D]] */
 
-/*s: struct Type */
+/*s: struct [[Type]] */
 struct	Type
 {
     // enum<type_kind>
@@ -307,25 +307,25 @@ struct	Type
     Funct*	funct;
     /*e: [[Type]] other fields */
 };
-/*e: struct Type */
-/*s: constant T */
+/*e: struct [[Type]] */
+/*s: constant [[T]] */
 #define	T	((Type*)nil)
-/*e: constant T */
-/*s: constant NODECL */
+/*e: constant [[T]] */
+/*s: constant [[NODECL]] */
 #define	NODECL	((void(*)(int, Type*, Sym*)) nil)
-/*e: constant NODECL */
+/*e: constant [[NODECL]] */
 
-/*s: struct Init */
+/*s: struct [[Init]] */
 struct	Init			/* general purpose initialization */
 {
     int		code;
     ulong	value;
     char*	s;
 };
-/*e: struct Init */
+/*e: struct [[Init]] */
 
 
-/*s: struct Fi */
+/*s: struct [[Fi]] */
 struct Fi
 {
     // ref<char> (target = Io.b)
@@ -333,10 +333,10 @@ struct Fi
     // remaining characters in Io.b to read
     int	c;
 };
-/*e: struct Fi */
+/*e: struct [[Fi]] */
 extern struct Fi fi;
 
-/*s: struct Io */
+/*s: struct [[Io]] */
 struct	Io
 {
     // option<fdt> (None = -1)
@@ -354,12 +354,12 @@ struct	Io
     Io*	link;
     /*e: [[Io]] extra fields */
 };
-/*e: struct Io */
-/*s: constant I */
+/*e: struct [[Io]] */
+/*s: constant [[I]] */
 #define	I	((Io*)nil)
-/*e: constant I */
+/*e: constant [[I]] */
 
-/*s: struct Hist */
+/*s: struct [[Hist]] */
 struct	Hist
 {
     // option<ref_own<string> (None = nil = a ``pop'')
@@ -375,29 +375,29 @@ struct	Hist
     Hist*	link;
     /*e: [[Hist]] extra fields */
 };
-/*e: struct Hist */
-/*s: constant H */
+/*e: struct [[Hist]] */
+/*s: constant [[H]] */
 #define	H	((Hist*)nil)
-/*e: constant H */
+/*e: constant [[H]] */
 extern Hist*	hist;
 
-/*s: struct Term */
+/*s: struct [[Term]] */
 struct	Term
 {
     vlong	mult;
     Node	*node;
 };
-/*e: struct Term */
+/*e: struct [[Term]] */
 
-/*s: enum os */
+/*s: enum [[os]] */
 enum os				/* also in ../{8a,5a,0a}.h */
 {
     Plan9	= 1<<0,
     Unix	= 1<<1,
     //Windows	= 1<<2,
 };
-/*e: enum os */
-/*s: enum node_kind */
+/*e: enum [[os]] */
+/*s: enum [[node_kind]] */
 enum Node_kind
 {
     OXXX,
@@ -575,8 +575,8 @@ enum Node_kind
 
     OEND
 };
-/*e: enum node_kind */
-/*s: enum type_kind */
+/*e: enum [[node_kind]] */
+/*s: enum [[type_kind]] */
 enum Type_kind
 {
     TXXX,
@@ -621,8 +621,8 @@ enum Type_kind
 
     NTYPE,
 };
-/*e: enum type_kind */
-/*s: enum type_kind_bis */
+/*e: enum [[type_kind]] */
+/*s: enum [[type_kind_bis]] */
 enum type_kind_bis {
     // ----------------------------------------------------------------------
     // Type (see separate Type_kind)
@@ -667,13 +667,13 @@ enum type_kind_bis {
 
     NALLTYPES,
 
-    /*s: constant TRUNE */
+    /*s: constant [[TRUNE]] */
     /* adapt size of Rune to target system's size */
     TRUNE = sizeof(TRune)==4? TUINT: TUSHORT,
-    /*e: constant TRUNE */
+    /*e: constant [[TRUNE]] */
 };
-/*e: enum type_kind_bis */
-/*s: enum align */
+/*e: enum [[type_kind_bis]] */
+/*s: enum [[align]] */
 enum align
 {
     Axxx,
@@ -688,8 +688,8 @@ enum align
 
     NALIGN,
 };
-/*e: enum align */
-/*s: enum dxxx */
+/*e: enum [[align]] */
+/*s: enum [[dxxx]] */
 enum Namespace
 {
     DMARK, // special mark to help separate the different scopes
@@ -698,8 +698,8 @@ enum Namespace
     DSUE,  // struct/union/enum tags
     DLABEL,// labels, goto
 };
-/*e: enum dxxx */
-/*s: enum storage_class */
+/*e: enum [[dxxx]] */
+/*s: enum [[storage_class]] */
 enum Storage_class
 {
     CXXX,
@@ -723,8 +723,8 @@ enum Storage_class
 
     NCTYPES,
 };
-/*e: enum storage_class */
-/*s: enum qualifier */
+/*e: enum [[storage_class]] */
+/*s: enum [[qualifier]] */
 enum Qualifier
 {
     GXXX		= 0, // None
@@ -738,8 +738,8 @@ enum Qualifier
     /*e: [[Qualifier]] other cases */
 
 };
-/*e: enum qualifier */
-/*s: enum bxxx */
+/*e: enum [[qualifier]] */
+/*s: enum [[bxxx]] */
 enum Bxxx
 {
     BCHAR		= 1L<<TCHAR,
@@ -790,18 +790,18 @@ enum Bxxx
     BNUMBER		= BINTEGER | BFLOAT|BDOUBLE,
     /*e: [[Bxxx]] constants */
 };
-/*e: enum bxxx */
+/*e: enum [[bxxx]] */
 
-/*s: struct Funct */
+/*s: struct [[Funct]] */
 struct	Funct
 {
     Sym*	sym[OEND];
     Sym*	castto[NTYPE];
     Sym*	castfr[NTYPE];
 };
-/*e: struct Funct */
+/*e: struct [[Funct]] */
 
-/*s: struct En */
+/*s: struct [[En]] */
 struct En
 {
     Type*	tenum;		/* type of entire enum */
@@ -811,7 +811,7 @@ struct En
     double	floatenum;	/* value of current enum */ // for floats enums
     /*e: [[En]] value fields */
 };
-/*e: struct En */
+/*e: struct [[En]] */
 extern struct En en;
 
 extern	int	autobn;

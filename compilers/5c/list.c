@@ -1,7 +1,7 @@
 /*s: 5c/list.c */
 #include "gc.h"
 
-/*s: function listinit(arm) */
+/*s: function [[listinit]](arm) */
 void
 listinit(void)
 {
@@ -14,9 +14,9 @@ listinit(void)
     fmtinstall('D', Dconv);
     fmtinstall('R', Rconv);
 }
-/*e: function listinit(arm) */
+/*e: function [[listinit]](arm) */
 
-/*s: function Bconv */
+/*s: function [[Bconv]] */
 // Bits -> string
 int
 Bconv(Fmt *fp)
@@ -43,18 +43,18 @@ Bconv(Fmt *fp)
     }
     return fmtstrcpy(fp, str);
 }
-/*e: function Bconv */
+/*e: function [[Bconv]] */
 
-/*s: global extra(arm) */
+/*s: global [[extra]](arm) */
 char *extra [] = {
     ".EQ", ".NE", ".CS", ".CC", 
     ".MI", ".PL", ".VS", ".VC", 
     ".HI", ".LS", ".GE", ".LT", 
     ".GT", ".LE", "", ".NV",
 };
-/*e: global extra(arm) */
+/*e: global [[extra]](arm) */
 
-/*s: function Pconv(arm) */
+/*s: function [[Pconv]](arm) */
 // Prog -> string
 int
 Pconv(Fmt *fp)
@@ -99,9 +99,9 @@ Pconv(Fmt *fp)
         snprint(str, sizeof(str), "	%A%s	%D,F%d,%D", a, sc, &p->from, p->reg, &p->to);
     return fmtstrcpy(fp, str);
 }
-/*e: function Pconv(arm) */
+/*e: function [[Pconv]](arm) */
 
-/*s: function Aconv */
+/*s: function [[Aconv]] */
 // enum<opcode_kind> -> string
 int
 Aconv(Fmt *fp)
@@ -115,9 +115,9 @@ Aconv(Fmt *fp)
         s = anames[a];
     return fmtstrcpy(fp, s);
 }
-/*e: function Aconv */
+/*e: function [[Aconv]] */
 
-/*s: function Dconv(arm) */
+/*s: function [[Dconv]](arm) */
 int
 Dconv(Fmt *fp)
 {
@@ -196,9 +196,9 @@ Dconv(Fmt *fp)
     }
     return fmtstrcpy(fp, str);
 }
-/*e: function Dconv(arm) */
+/*e: function [[Dconv]](arm) */
 
-/*s: function Rconv(arm) */
+/*s: function [[Rconv]](arm) */
 // enum<operand_kind(register-only??)> -> string
 int
 Rconv(Fmt *fp)
@@ -230,9 +230,9 @@ Rconv(Fmt *fp)
     }
     return fmtstrcpy(fp, str);
 }
-/*e: function Rconv(arm) */
+/*e: function [[Rconv]](arm) */
 
-/*s: function Sconv(arm) */
+/*s: function [[Sconv]](arm) */
 int
 Sconv(Fmt *fp)
 {
@@ -279,9 +279,9 @@ Sconv(Fmt *fp)
     *p = 0;
     return fmtstrcpy(fp, str);
 }
-/*e: function Sconv(arm) */
+/*e: function [[Sconv]](arm) */
 
-/*s: function Nconv(arm) */
+/*s: function [[Nconv]](arm) */
 int
 Nconv(Fmt *fp)
 {
@@ -324,5 +324,5 @@ Nconv(Fmt *fp)
 out:
     return fmtstrcpy(fp, str);
 }
-/*e: function Nconv(arm) */
+/*e: function [[Nconv]](arm) */
 /*e: 5c/list.c */

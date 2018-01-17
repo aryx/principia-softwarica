@@ -1,168 +1,168 @@
 /*s: 5c/globals2.c */
 #include "gc.h"
 
-/*s: global breakpc */
+/*s: global [[breakpc]] */
 // option<pc>, None = -1
 long	breakpc;
-/*e: global breakpc */
-/*s: global nbreak */
+/*e: global [[breakpc]] */
+/*s: global [[nbreak]] */
 long nbreak;
-/*e: global nbreak */
-/*s: global cases */
+/*e: global [[nbreak]] */
+/*s: global [[cases]] */
 Case*	cases;
-/*x: global cases */
+/*x: global [[cases]] */
 Case*	cases;
-/*e: global cases */
-/*s: global constnode */
+/*e: global [[cases]] */
+/*s: global [[constnode]] */
 Node	constnode;
-/*e: global constnode */
-/*s: global fconstnode */
+/*e: global [[constnode]] */
+/*s: global [[fconstnode]] */
 Node	fconstnode;
-/*e: global fconstnode */
-/*s: global continpc */
+/*e: global [[fconstnode]] */
+/*s: global [[continpc]] */
 // option<pc>, None = -1
 long	continpc;
-/*e: global continpc */
+/*e: global [[continpc]] */
 
-/*s: global curarg */
+/*s: global [[curarg]] */
 long	curarg;
-/*e: global curarg */
-/*s: global cursafe */
+/*e: global [[curarg]] */
+/*s: global [[cursafe]] */
 long	cursafe;
-/*e: global cursafe */
+/*e: global [[cursafe]] */
 
-/*s: global firstp */
+/*s: global [[firstp]] */
 // list<ref_own<Prog> (next = Prog.link, last = lastp)
 Prog*	firstp;
-/*e: global firstp */
-/*s: global lastp */
+/*e: global [[firstp]] */
+/*s: global [[lastp]] */
 // ref<Prog> (head = firstp)
 Prog*	lastp;
-/*e: global lastp */
+/*e: global [[lastp]] */
 
-/*s: global maxargsafe */
+/*s: global [[maxargsafe]] */
 long	maxargsafe;
-/*e: global maxargsafe */
+/*e: global [[maxargsafe]] */
 
-/*s: global mnstring */
+/*s: global [[mnstring]] */
 int	mnstring;
-/*e: global mnstring */
-/*s: global multab(arm) */
+/*e: global [[mnstring]] */
+/*s: global [[multab]](arm) */
 Multab	multab[20];
-/*e: global multab(arm) */
-/*s: global hintabsize(arm) */
+/*e: global [[multab]](arm) */
+/*s: global [[hintabsize]](arm) */
 int	hintabsize;
-/*e: global hintabsize(arm) */
-/*s: global nodrat */
+/*e: global [[hintabsize]](arm) */
+/*s: global [[nodrat]] */
 Node*	nodrat;
-/*e: global nodrat */
-/*s: global nodret */
+/*e: global [[nodrat]] */
+/*s: global [[nodret]] */
 Node*	nodret;
-/*e: global nodret */
-/*s: global nodsafe */
+/*e: global [[nodret]] */
+/*s: global [[nodsafe]] */
 Node*	nodsafe;
-/*e: global nodsafe */
-/*s: global nrathole */
+/*e: global [[nodsafe]] */
+/*s: global [[nrathole]] */
 long	nrathole;
-/*e: global nrathole */
-/*s: global nstring */
+/*e: global [[nrathole]] */
+/*s: global [[nstring]] */
 long	nstring;
-/*e: global nstring */
-/*s: global p */
+/*e: global [[nstring]] */
+/*s: global [[p]] */
 Prog*	p;
-/*e: global p */
-/*s: global pc */
+/*e: global [[p]] */
+/*s: global [[pc]] */
 long	pc;
-/*e: global pc */
-/*s: global regnode */
+/*e: global [[pc]] */
+/*s: global [[regnode]] */
 Node	regnode;
-/*e: global regnode */
-/*s: global string */
+/*e: global [[regnode]] */
+/*s: global [[string]] */
 char	string[NSNAME];
-/*e: global string */
-/*s: global symrathole */
+/*e: global [[string]] */
+/*s: global [[symrathole]] */
 Sym*	symrathole;
-/*e: global symrathole */
-/*s: global znode */
+/*e: global [[symrathole]] */
+/*s: global [[znode]] */
 Node	znode;
-/*e: global znode */
-/*s: global zprog */
+/*e: global [[znode]] */
+/*s: global [[zprog]] */
 Prog	zprog;
-/*e: global zprog */
-/*s: global reg(arm) */
+/*e: global [[zprog]] */
+/*s: global [[reg]](arm) */
 // map<enum<registr>, int>
 char	reg[NREG+NFREG];
-/*e: global reg(arm) */
-/*s: global exregoffset */
+/*e: global [[reg]](arm) */
+/*s: global [[exregoffset]] */
 long	exregoffset;
-/*e: global exregoffset */
-/*s: global exfregoffset */
+/*e: global [[exregoffset]] */
+/*s: global [[exfregoffset]] */
 long	exfregoffset;
-/*e: global exfregoffset */
-/*s: global suppress */
+/*e: global [[exfregoffset]] */
+/*s: global [[suppress]] */
 bool	suppress;
-/*e: global suppress */
+/*e: global [[suppress]] */
 
-/*s: global region */
+/*s: global [[region]] */
 Rgn	region[NRGN];
-/*e: global region */
-/*s: global rgp */
+/*e: global [[region]] */
+/*s: global [[rgp]] */
 Rgn*	rgp;
-/*e: global rgp */
-/*s: global nregion */
+/*e: global [[rgp]] */
+/*s: global [[nregion]] */
 int	nregion;
-/*e: global nregion */
+/*e: global [[nregion]] */
 
-/*s: global externs */
+/*s: global [[externs]] */
 Bits	externs;
-/*e: global externs */
-/*s: global params */
+/*e: global [[externs]] */
+/*s: global [[params]] */
 Bits	params;
-/*e: global params */
-/*s: global consts */
+/*e: global [[params]] */
+/*s: global [[consts]] */
 Bits	consts;
-/*e: global consts */
-/*s: global addrs */
+/*e: global [[consts]] */
+/*s: global [[addrs]] */
 Bits	addrs;
-/*e: global addrs */
+/*e: global [[addrs]] */
 
-/*s: global regbits */
+/*s: global [[regbits]] */
 long	regbits;
-/*e: global regbits */
-/*s: global exregbits */
+/*e: global [[regbits]] */
+/*s: global [[exregbits]] */
 long	exregbits;
-/*e: global exregbits */
+/*e: global [[exregbits]] */
 
-/*s: global change */
+/*s: global [[change]] */
 int	change;
-/*e: global change */
+/*e: global [[change]] */
 
-/*s: global firstr */
+/*s: global [[firstr]] */
 Reg*	firstr;
-/*e: global firstr */
-/*s: global lastr */
+/*e: global [[firstr]] */
+/*s: global [[lastr]] */
 Reg*	lastr;
-/*e: global lastr */
-/*s: global zreg */
+/*e: global [[lastr]] */
+/*s: global [[zreg]] */
 Reg	zreg;
-/*e: global zreg */
-/*s: global freer */
+/*e: global [[zreg]] */
+/*s: global [[freer]] */
 Reg*	freer;
-/*e: global freer */
-/*s: global var */
+/*e: global [[freer]] */
+/*s: global [[var]] */
 Var	var[NVAR];
-/*e: global var */
-/*s: global nvar */
+/*e: global [[var]] */
+/*s: global [[nvar]] */
 int	nvar;
-/*e: global nvar */
+/*e: global [[nvar]] */
 
-/*s: global idom */
+/*s: global [[idom]] */
 long*	idom;
-/*e: global idom */
-/*s: global rpo2r */
+/*e: global [[idom]] */
+/*s: global [[rpo2r]] */
 Reg**	rpo2r;
-/*e: global rpo2r */
-/*s: global maxnr */
+/*e: global [[rpo2r]] */
+/*s: global [[maxnr]] */
 long	maxnr;
-/*e: global maxnr */
+/*e: global [[maxnr]] */
 /*e: 5c/globals2.c */

@@ -77,30 +77,30 @@
 
 %right  LMM LPP LMG '.' '[' '('
 /*e: priority and associativity declarations */
-/*s: type declarations */
+/*s: type [[declarations]] */
 %type   <node>  name tag 
 %type   <node>  stmnt   block slist ulstmnt labels label forexpr
 %type   <node>  expr    cexpr lexpr  xuexpr uexpr pexpr  elist  string lstring
 %type   <node>  adecl   qual init ilist  adlist qlist  arglist
 %type   <node>  xdecor xdecor2 edecor  abdecor abdecor1 abdecor2 abdecor3
 %type   <node>  zexpr zelist zcexpr zarglist
-/*x: type declarations */
+/*x: type [[declarations]] */
 %type   <sym>   ltag
-/*x: type declarations */
+/*x: type [[declarations]] */
 %type   <lval>  tname cname gname
-/*x: type declarations */
+/*x: type [[declarations]] */
 %type   <lval>   gcname   gctname
-/*x: type declarations */
+/*x: type [[declarations]] */
 %type   <type> tlist
-/*x: type declarations */
+/*x: type [[declarations]] */
 %type   <tycl>  types
-/*x: type declarations */
+/*x: type [[declarations]] */
 %type   <lval>  gctnlist gcnlist zgnlist
-/*x: type declarations */
+/*x: type [[declarations]] */
 %type   <type>  complex
-/*x: type declarations */
+/*x: type [[declarations]] */
 %type   <type> sbody
-/*e: type declarations */
+/*e: type [[declarations]] */
 %%
 /*s: grammar */
 prog:

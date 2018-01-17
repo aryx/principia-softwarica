@@ -1,7 +1,7 @@
 /*s: 5c/swt.c */
 #include "gc.h"
 
-/*s: function swit1(arm) */
+/*s: function [[swit1]](arm) */
 void
 swit1(C1 *q, int nc, long def, Node *n)
 {
@@ -11,9 +11,9 @@ swit1(C1 *q, int nc, long def, Node *n)
     swit2(q, nc, def, n, &tn);
     regfree(&tn);
 }
-/*e: function swit1(arm) */
+/*e: function [[swit1]](arm) */
 
-/*s: function swit2(arm) */
+/*s: function [[swit2]](arm) */
 void
 swit2(C1 *q, int nc, long def, Node *n, Node *tn)
 {
@@ -82,9 +82,9 @@ direct:
     gbranch(OGOTO);		/* so that regopt() won't be confused */
     patch(p, def);
 }
-/*e: function swit2(arm) */
+/*e: function [[swit2]](arm) */
 
-/*s: function bitload(arm) */
+/*s: function [[bitload]](arm) */
 void
 bitload(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
 {
@@ -123,9 +123,9 @@ bitload(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
                 gopcode(OASHR, nodconst(sh), Z, n1);
     }
 }
-/*e: function bitload(arm) */
+/*e: function [[bitload]](arm) */
 
-/*s: function bitstore(arm) */
+/*s: function [[bitstore]](arm) */
 void
 bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
 {
@@ -158,9 +158,9 @@ bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
     regfree(n2);
     regfree(n3);
 }
-/*e: function bitstore(arm) */
+/*e: function [[bitstore]](arm) */
 
-/*s: function outstring(arm) */
+/*s: function [[outstring]](arm) */
 long
 outstring(char *s, long n)
 {
@@ -187,9 +187,9 @@ outstring(char *s, long n)
     }
     return r;
 }
-/*e: function outstring(arm) */
+/*e: function [[outstring]](arm) */
 
-/*s: function mulcon(arm) */
+/*s: function [[mulcon]](arm) */
 bool
 mulcon(Node *n, Node *nn)
 {
@@ -286,9 +286,9 @@ loop:
     p += 2;
     goto loop;
 }
-/*e: function mulcon(arm) */
+/*e: function [[mulcon]](arm) */
 
-/*s: function gextern(arm) */
+/*s: function [[gextern]](arm) */
 void
 gextern(Sym *s, Node *a, long o, long w)
 {
@@ -316,14 +316,14 @@ gextern(Sym *s, Node *a, long o, long w)
             p->to.type = D_CONST; // D_ADDR?
     }
 }
-/*e: function gextern(arm) */
+/*e: function [[gextern]](arm) */
 
 void	zname(Biobuf*, Sym*, int);
 char*	zaddr(char*, Adr*, int);
 void	zwrite(Biobuf*, Prog*, int, int);
 void	outhist(Biobuf*);
 
-/*s: function zwrite(arm) */
+/*s: function [[zwrite]](arm) */
 void
 zwrite(Biobuf *b, Prog *p, int sf, int st)
 {
@@ -340,16 +340,16 @@ zwrite(Biobuf *b, Prog *p, int sf, int st)
     bp = zaddr(bp, &p->to, st);
     Bwrite(b, bf, bp-bf);
 }
-/*e: function zwrite(arm) */
+/*e: function [[zwrite]](arm) */
 
-/*s: struct Htab */
+/*s: struct [[Htab]] */
 struct Htab { 
     Sym *sym; 
     short type; 
 };
-/*e: struct Htab */
+/*e: struct [[Htab]] */
 
-/*s: function outcode(arm) */
+/*s: function [[outcode]](arm) */
 void
 outcode(void)
 {
@@ -425,9 +425,9 @@ outcode(void)
     firstp = P;
     lastp = P;
 }
-/*e: function outcode(arm) */
+/*e: function [[outcode]](arm) */
 
-/*s: function outhist(arm) */
+/*s: function [[outhist]](arm) */
 void
 outhist(Biobuf *b)
 {
@@ -495,9 +495,9 @@ outhist(Biobuf *b)
         zwrite(b, &pg, 0, 0);
     }
 }
-/*e: function outhist(arm) */
+/*e: function [[outhist]](arm) */
 
-/*s: function zname(arm) */
+/*s: function [[zname]](arm) */
 void
 zname(Biobuf *b, Sym *s, int t)
 {
@@ -532,9 +532,9 @@ zname(Biobuf *b, Sym *s, int t)
     }
     Bwrite(b, n, strlen(n)+1);
 }
-/*e: function zname(arm) */
+/*e: function [[zname]](arm) */
 
-/*s: function zaddr(arm) */
+/*s: function [[zaddr]](arm) */
 char*
 zaddr(char *bp, Adr *a, int s)
 {
@@ -600,9 +600,9 @@ zaddr(char *bp, Adr *a, int s)
     }
     return bp;
 }
-/*e: function zaddr(arm) */
+/*e: function [[zaddr]](arm) */
 
-/*s: function align(arm) */
+/*s: function [[align]](arm) */
 long
 align(long i, Type *t, int op)
 {
@@ -673,9 +673,9 @@ align(long i, Type *t, int op)
         print("align %s %ld %T = %ld\n", bnames[op], i, t, o);
     return o;
 }
-/*e: function align(arm) */
+/*e: function [[align]](arm) */
 
-/*s: function maxround */
+/*s: function [[maxround]] */
 long
 maxround(long max, long v)
 {
@@ -684,5 +684,5 @@ maxround(long max, long v)
         return v;
     return max;
 }
-/*e: function maxround */
+/*e: function [[maxround]] */
 /*e: 5c/swt.c */

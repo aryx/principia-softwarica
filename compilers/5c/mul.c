@@ -11,24 +11,24 @@
  *	sub	r0,r1,r2
  */
 
-/*s: global maxmulops(arm) */
+/*s: global [[maxmulops]](arm) */
 static  int	maxmulops = 3;	/* max # of ops to replace mul with */
-/*e: global maxmulops(arm) */
-/*s: global multabp(arm) */
+/*e: global [[maxmulops]](arm) */
+/*s: global [[multabp]](arm) */
 static	int	multabp;
-/*e: global multabp(arm) */
-/*s: global mulval(arm) */
+/*e: global [[multabp]](arm) */
+/*s: global [[mulval]](arm) */
 static	long	mulval;
-/*e: global mulval(arm) */
-/*s: global mulcp(arm) */
+/*e: global [[mulval]](arm) */
+/*s: global [[mulcp]](arm) */
 static	char*	mulcp;
-/*e: global mulcp(arm) */
-/*s: global valmax(arm) */
+/*e: global [[mulcp]](arm) */
+/*s: global [[valmax]](arm) */
 static	long	valmax;
-/*e: global valmax(arm) */
-/*s: global shmax(arm) */
+/*e: global [[valmax]](arm) */
+/*s: global [[shmax]](arm) */
 static	int	shmax;
-/*e: global shmax(arm) */
+/*e: global [[shmax]](arm) */
 
 static int	docode(char *hp, char *cp, int r0, int r1);
 static int	gen1(int len);
@@ -44,7 +44,7 @@ enum
 };
 /*e: enum _anon_ (5c/mul.c)(arm) */
 
-/*s: function mulcon0(arm) */
+/*s: function [[mulcon0]](arm) */
 Multab*
 mulcon0(long v)
 {
@@ -141,9 +141,9 @@ no:
     m->code[0] = 0;
     return 0;
 }
-/*e: function mulcon0(arm) */
+/*e: function [[mulcon0]](arm) */
 
-/*s: function docode(arm) */
+/*s: function [[docode]](arm) */
 static int
 docode(char *hp, char *cp, int r0, int r1)
 {
@@ -229,9 +229,9 @@ out:
     cp[-1] = i+'0';
     return 1;
 }
-/*e: function docode(arm) */
+/*e: function [[docode]](arm) */
 
-/*s: function gen1(arm) */
+/*s: function [[gen1]](arm) */
 static int
 gen1(int len)
 {
@@ -253,9 +253,9 @@ gen1(int len)
         }
     return 0;
 }
-/*e: function gen1(arm) */
+/*e: function [[gen1]](arm) */
 
-/*s: function gen2(arm) */
+/*s: function [[gen2]](arm) */
 static int
 gen2(int len, long r1)
 {
@@ -305,9 +305,9 @@ out:
     *--mulcp = i;
     return 1;
 }
-/*e: function gen2(arm) */
+/*e: function [[gen2]](arm) */
 
-/*s: function gen3(arm) */
+/*s: function [[gen3]](arm) */
 static int
 gen3(int len, long r0, long r1, int flag)
 {
@@ -448,9 +448,9 @@ out:
     *--mulcp = i;
     return 1;
 }
-/*e: function gen3(arm) */
+/*e: function [[gen3]](arm) */
 
-/*s: global hintab(arm) */
+/*s: global [[hintab]](arm) */
 /*
  * hint table has numbers that
  * the search algorithm fails on.
@@ -632,7 +632,7 @@ Hintab	hintab[] =
     62750,	"e+f--+g+",
     64750,	"b+f+d+p-",
 };
-/*e: global hintab(arm) */
+/*e: global [[hintab]](arm) */
 /*s: global hintabsize (5c/mul.c)(arm) */
 int	hintabsize	= nelem(hintab);
 /*e: global hintabsize (5c/mul.c)(arm) */

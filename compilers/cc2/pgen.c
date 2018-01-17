@@ -5,7 +5,7 @@ void	gen(Node*);
 void	usedset(Node*, int);
 int		bcomplex(Node*, Node*);
 
-/*s: function codgen */
+/*s: function [[codgen]] */
 //@Scheck: used by cc.y
 void codgen(Node *n, Node *nn)
 {
@@ -105,9 +105,9 @@ void codgen(Node *n, Node *nn)
     
     sp->to.offset += maxargsafe;
 }
-/*e: function codgen */
+/*e: function [[codgen]] */
 
-/*s: function supgen */
+/*s: function [[supgen]] */
 void
 supgen(Node *n)
 {
@@ -133,9 +133,9 @@ supgen(Node *n)
     warnreach = owarn;
     suppress--;
 }
-/*e: function supgen */
+/*e: function [[supgen]] */
 
-/*s: function uncomma */
+/*s: function [[uncomma]] */
 Node*
 uncomma(Node *n)
 {
@@ -145,9 +145,9 @@ uncomma(Node *n)
     }
     return n;
 }
-/*e: function uncomma */
+/*e: function [[uncomma]] */
 
-/*s: function gen */
+/*s: function [[gen]] */
 void
 gen(Node *n)
 {
@@ -660,9 +660,9 @@ loop:
     /*e: [[gen()]] switch node kind cases */
     }
 }
-/*e: function gen */
+/*e: function [[gen]] */
 
-/*s: function usedset */
+/*s: function [[usedset]] */
 void
 usedset(Node *n, int o)
 {
@@ -688,9 +688,9 @@ usedset(Node *n, int o)
     /*e: [[usedset()]] switch node op cases */
     }
 }
-/*e: function usedset */
+/*e: function [[usedset]] */
 
-/*s: function bcomplex */
+/*s: function [[bcomplex]] */
 bool
 bcomplex(Node *n, Node *c)
 {
@@ -719,5 +719,5 @@ bcomplex(Node *n, Node *c)
 
     return false; // no error
 }
-/*e: function bcomplex */
+/*e: function [[bcomplex]] */
 /*e: cc2/pgen.c */

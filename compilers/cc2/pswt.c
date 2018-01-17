@@ -1,7 +1,7 @@
 /*s: cc2/pswt.c */
 #include "gc.h"
 
-/*s: function swcmp */
+/*s: function [[swcmp]] */
 int
 swcmp(const void *a1, const void *a2)
 {
@@ -13,9 +13,9 @@ swcmp(const void *a1, const void *a2)
         return -1;
     return p1->val > p2->val;
 }
-/*e: function swcmp */
+/*e: function [[swcmp]] */
 
-/*s: function doswit */
+/*s: function [[doswit]] */
 void
 doswit(Node *n)
 {
@@ -128,9 +128,9 @@ doswit(Node *n)
         //if(0){for(int k=0; k<nh; k++)print("k*=%d h=%#llux lab=%ld\n", k, (vlong)iqh[k].val,  iqh[k].label);}
     swit1(iqh, nh, def, vr[1]);
 }
-/*e: function doswit */
+/*e: function [[doswit]] */
 
-/*s: function casf */
+/*s: function [[casf]] */
 void
 casf(void)
 {
@@ -140,9 +140,9 @@ casf(void)
     c->link = cases;
     cases = c;
 }
-/*e: function casf */
+/*e: function [[casf]] */
 
-/*s: function outlstring */
+/*s: function [[outlstring]] */
 long
 outlstring(TRune *s, long n)
 {
@@ -170,9 +170,9 @@ outlstring(TRune *s, long n)
     }
     return r;
 }
-/*e: function outlstring */
+/*e: function [[outlstring]] */
 
-/*s: function nullwarn */
+/*s: function [[nullwarn]] */
 void
 nullwarn(Node *l, Node *r)
 {
@@ -182,9 +182,9 @@ nullwarn(Node *l, Node *r)
     if(r != Z)
         cgen(r, Z);
 }
-/*e: function nullwarn */
+/*e: function [[nullwarn]] */
 
-/*s: function ieeedtod */
+/*s: function [[ieeedtod]] */
 void
 ieeedtod(Ieee *ieee, double native)
 {
@@ -213,5 +213,5 @@ ieeedtod(Ieee *ieee, double native)
     ieee->l <<= 16;
     ieee->l |= (long)(fr*f);
 }
-/*e: function ieeedtod */
+/*e: function [[ieeedtod]] */
 /*e: cc2/pswt.c */

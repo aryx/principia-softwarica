@@ -1,5 +1,5 @@
 /*s: 5c/enam.c */
-/*s: global anames(arm) */
+/*s: global [[anames]](arm) */
 char*	anames[] =
 {
     "XXX",
@@ -95,5 +95,5 @@ char*	anames[] =
     "INIT",
     "LAST",
 };
-/*e: global anames(arm) */
+/*e: global [[anames]](arm) */
 /*e: 5c/enam.c */

@@ -1,7 +1,7 @@
 /*s: 5c/sgen.c */
 #include "gc.h"
 
-/*s: function noretval(arm) */
+/*s: function [[noretval]](arm) */
 void
 noretval(int n)
 {
@@ -17,9 +17,9 @@ noretval(int n)
         p->to.reg = FREGRET;
     }
 }
-/*e: function noretval(arm) */
+/*e: function [[noretval]](arm) */
 
-/*s: function xcom(arm) */
+/*s: function [[xcom]](arm) */
 /*
  *	calculate addressability as follows
  *		CONST ==> 20		$value
@@ -238,5 +238,5 @@ xcom(Node *n)
     }
     /*e: [[xcom()]] set complex if addable less than 10 */
 }
-/*e: function xcom(arm) */
+/*e: function [[xcom]](arm) */
 /*e: 5c/sgen.c */

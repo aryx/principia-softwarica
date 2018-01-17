@@ -7,7 +7,7 @@ int	acomcmp1(const void*, const void*);
 int	acomcmp2(const void*, const void*);
 int	addo(Node*);
 
-/*s: function acast */
+/*s: function [[acast]] */
 static Node*
 acast(Type *t, Node *n)
 {
@@ -19,9 +19,9 @@ acast(Type *t, Node *n)
     }
     return n;
 }
-/*e: function acast */
+/*e: function [[acast]] */
 
-/*s: function evconst */
+/*s: function [[evconst]] */
 void
 evconst(Node *n)
 {
@@ -246,9 +246,9 @@ evconst(Node *n)
     n->oldop = n->op;
     n->op = OCONST;
 }
-/*e: function evconst */
+/*e: function [[evconst]] */
 
-/*s: function acom */
+/*s: function [[acom]] */
 void
 acom(Node *n)
 {
@@ -315,9 +315,9 @@ acom(Node *n)
         acom2(n, t);
     n->type = t;
 }
-/*e: function acom */
+/*e: function [[acom]] */
 
-/*s: function acomcmp1 */
+/*s: function [[acomcmp1]] */
 int
 acomcmp1(const void *a1, const void *a2)
 {
@@ -348,9 +348,9 @@ acomcmp1(const void *a1, const void *a2)
         return 1;
     return -1;
 }
-/*e: function acomcmp1 */
+/*e: function [[acomcmp1]] */
 
-/*s: function acomcmp2 */
+/*s: function [[acomcmp2]] */
 int
 acomcmp2(const void *a1, const void *a2)
 {
@@ -369,9 +369,9 @@ acomcmp2(const void *a1, const void *a2)
         return 1;
     return -1;
 }
-/*e: function acomcmp2 */
+/*e: function [[acomcmp2]] */
 
-/*s: function acom2 */
+/*s: function [[acom2]] */
 void
 acom2(Node *n, Type *t)
 {
@@ -532,9 +532,9 @@ acom2(Node *n, Type *t)
     }
     *n = *l;
 }
-/*e: function acom2 */
+/*e: function [[acom2]] */
 
-/*s: function acom1 */
+/*s: function [[acom1]] */
 void
 acom1(vlong v, Node *n)
 {
@@ -592,9 +592,9 @@ acom1(vlong v, Node *n)
         diag(n, "not addo");
     }
 }
-/*e: function acom1 */
+/*e: function [[acom1]] */
 
-/*s: function addo */
+/*s: function [[addo]] */
 int
 addo(Node *n)
 {
@@ -622,5 +622,5 @@ addo(Node *n)
     }
     return 0;
 }
-/*e: function addo */
+/*e: function [[addo]] */
 /*e: cc/scon.c */

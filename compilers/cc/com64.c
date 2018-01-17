@@ -1,181 +1,181 @@
 /*s: cc/com64.c */
 #include "cc.h"
 
-/*s: constant FNX */
+/*s: constant [[FNX]] */
 /*
  * this is machine dependent, but it is totally
  * common on all of the 64-bit symulating machines.
  */
 
 #define	FNX	100	/* botch -- redefinition */
-/*e: constant FNX */
+/*e: constant [[FNX]] */
 
-/*s: global nodaddv */
+/*s: global [[nodaddv]] */
 Node*	nodaddv;
-/*e: global nodaddv */
-/*s: global nodsubv */
+/*e: global [[nodaddv]] */
+/*s: global [[nodsubv]] */
 Node*	nodsubv;
-/*e: global nodsubv */
-/*s: global nodmulv */
+/*e: global [[nodsubv]] */
+/*s: global [[nodmulv]] */
 Node*	nodmulv;
-/*e: global nodmulv */
-/*s: global noddivv */
+/*e: global [[nodmulv]] */
+/*s: global [[noddivv]] */
 Node*	noddivv;
-/*e: global noddivv */
-/*s: global noddivvu */
+/*e: global [[noddivv]] */
+/*s: global [[noddivvu]] */
 Node*	noddivvu;
-/*e: global noddivvu */
-/*s: global nodmodv */
+/*e: global [[noddivvu]] */
+/*s: global [[nodmodv]] */
 Node*	nodmodv;
-/*e: global nodmodv */
-/*s: global nodmodvu */
+/*e: global [[nodmodv]] */
+/*s: global [[nodmodvu]] */
 Node*	nodmodvu;
-/*e: global nodmodvu */
-/*s: global nodlshv */
+/*e: global [[nodmodvu]] */
+/*s: global [[nodlshv]] */
 Node*	nodlshv;
-/*e: global nodlshv */
-/*s: global nodrshav */
+/*e: global [[nodlshv]] */
+/*s: global [[nodrshav]] */
 Node*	nodrshav;
-/*e: global nodrshav */
-/*s: global nodrshlv */
+/*e: global [[nodrshav]] */
+/*s: global [[nodrshlv]] */
 Node*	nodrshlv;
-/*e: global nodrshlv */
-/*s: global nodandv */
+/*e: global [[nodrshlv]] */
+/*s: global [[nodandv]] */
 Node*	nodandv;
-/*e: global nodandv */
-/*s: global nodorv */
+/*e: global [[nodandv]] */
+/*s: global [[nodorv]] */
 Node*	nodorv;
-/*e: global nodorv */
-/*s: global nodxorv */
+/*e: global [[nodorv]] */
+/*s: global [[nodxorv]] */
 Node*	nodxorv;
-/*e: global nodxorv */
-/*s: global nodnegv */
+/*e: global [[nodxorv]] */
+/*s: global [[nodnegv]] */
 Node*	nodnegv;
-/*e: global nodnegv */
-/*s: global nodcomv */
+/*e: global [[nodnegv]] */
+/*s: global [[nodcomv]] */
 Node*	nodcomv;
-/*e: global nodcomv */
+/*e: global [[nodcomv]] */
 
-/*s: global nodtestv */
+/*s: global [[nodtestv]] */
 Node*	nodtestv;
-/*e: global nodtestv */
-/*s: global nodeqv */
+/*e: global [[nodtestv]] */
+/*s: global [[nodeqv]] */
 Node*	nodeqv;
-/*e: global nodeqv */
-/*s: global nodnev */
+/*e: global [[nodeqv]] */
+/*s: global [[nodnev]] */
 Node*	nodnev;
-/*e: global nodnev */
-/*s: global nodlev */
+/*e: global [[nodnev]] */
+/*s: global [[nodlev]] */
 Node*	nodlev;
-/*e: global nodlev */
-/*s: global nodltv */
+/*e: global [[nodlev]] */
+/*s: global [[nodltv]] */
 Node*	nodltv;
-/*e: global nodltv */
-/*s: global nodgev */
+/*e: global [[nodltv]] */
+/*s: global [[nodgev]] */
 Node*	nodgev;
-/*e: global nodgev */
-/*s: global nodgtv */
+/*e: global [[nodgev]] */
+/*s: global [[nodgtv]] */
 Node*	nodgtv;
-/*e: global nodgtv */
-/*s: global nodhiv */
+/*e: global [[nodgtv]] */
+/*s: global [[nodhiv]] */
 Node*	nodhiv;
-/*e: global nodhiv */
-/*s: global nodhsv */
+/*e: global [[nodhiv]] */
+/*s: global [[nodhsv]] */
 Node*	nodhsv;
-/*e: global nodhsv */
-/*s: global nodlov */
+/*e: global [[nodhsv]] */
+/*s: global [[nodlov]] */
 Node*	nodlov;
-/*e: global nodlov */
-/*s: global nodlsv */
+/*e: global [[nodlov]] */
+/*s: global [[nodlsv]] */
 Node*	nodlsv;
-/*e: global nodlsv */
+/*e: global [[nodlsv]] */
 
-/*s: global nodf2v */
+/*s: global [[nodf2v]] */
 Node*	nodf2v;
-/*e: global nodf2v */
-/*s: global nodd2v */
+/*e: global [[nodf2v]] */
+/*s: global [[nodd2v]] */
 Node*	nodd2v;
-/*e: global nodd2v */
-/*s: global nodp2v */
+/*e: global [[nodd2v]] */
+/*s: global [[nodp2v]] */
 Node*	nodp2v;
-/*e: global nodp2v */
-/*s: global nodsi2v */
+/*e: global [[nodp2v]] */
+/*s: global [[nodsi2v]] */
 Node*	nodsi2v;
-/*e: global nodsi2v */
-/*s: global nodui2v */
+/*e: global [[nodsi2v]] */
+/*s: global [[nodui2v]] */
 Node*	nodui2v;
-/*e: global nodui2v */
-/*s: global nodsl2v */
+/*e: global [[nodui2v]] */
+/*s: global [[nodsl2v]] */
 Node*	nodsl2v;
-/*e: global nodsl2v */
-/*s: global nodul2v */
+/*e: global [[nodsl2v]] */
+/*s: global [[nodul2v]] */
 Node*	nodul2v;
-/*e: global nodul2v */
-/*s: global nodsh2v */
+/*e: global [[nodul2v]] */
+/*s: global [[nodsh2v]] */
 Node*	nodsh2v;
-/*e: global nodsh2v */
-/*s: global noduh2v */
+/*e: global [[nodsh2v]] */
+/*s: global [[noduh2v]] */
 Node*	noduh2v;
-/*e: global noduh2v */
-/*s: global nodsc2v */
+/*e: global [[noduh2v]] */
+/*s: global [[nodsc2v]] */
 Node*	nodsc2v;
-/*e: global nodsc2v */
-/*s: global noduc2v */
+/*e: global [[nodsc2v]] */
+/*s: global [[noduc2v]] */
 Node*	noduc2v;
-/*e: global noduc2v */
+/*e: global [[noduc2v]] */
 
-/*s: global nodv2f */
+/*s: global [[nodv2f]] */
 Node*	nodv2f;
-/*e: global nodv2f */
-/*s: global nodv2d */
+/*e: global [[nodv2f]] */
+/*s: global [[nodv2d]] */
 Node*	nodv2d;
-/*e: global nodv2d */
-/*s: global nodv2ui */
+/*e: global [[nodv2d]] */
+/*s: global [[nodv2ui]] */
 Node*	nodv2ui;
-/*e: global nodv2ui */
-/*s: global nodv2si */
+/*e: global [[nodv2ui]] */
+/*s: global [[nodv2si]] */
 Node*	nodv2si;
-/*e: global nodv2si */
-/*s: global nodv2ul */
+/*e: global [[nodv2si]] */
+/*s: global [[nodv2ul]] */
 Node*	nodv2ul;
-/*e: global nodv2ul */
-/*s: global nodv2sl */
+/*e: global [[nodv2ul]] */
+/*s: global [[nodv2sl]] */
 Node*	nodv2sl;
-/*e: global nodv2sl */
-/*s: global nodv2uh */
+/*e: global [[nodv2sl]] */
+/*s: global [[nodv2uh]] */
 Node*	nodv2uh;
-/*e: global nodv2uh */
-/*s: global nodv2sh */
+/*e: global [[nodv2uh]] */
+/*s: global [[nodv2sh]] */
 Node*	nodv2sh;
-/*e: global nodv2sh */
-/*s: global nodv2uc */
+/*e: global [[nodv2sh]] */
+/*s: global [[nodv2uc]] */
 Node*	nodv2uc;
-/*e: global nodv2uc */
-/*s: global nodv2sc */
+/*e: global [[nodv2uc]] */
+/*s: global [[nodv2sc]] */
 Node*	nodv2sc;
-/*e: global nodv2sc */
+/*e: global [[nodv2sc]] */
 
-/*s: global nodvpp */
+/*s: global [[nodvpp]] */
 Node*	nodvpp;
-/*e: global nodvpp */
-/*s: global nodppv */
+/*e: global [[nodvpp]] */
+/*s: global [[nodppv]] */
 Node*	nodppv;
-/*e: global nodppv */
-/*s: global nodvmm */
+/*e: global [[nodppv]] */
+/*s: global [[nodvmm]] */
 Node*	nodvmm;
-/*e: global nodvmm */
-/*s: global nodmmv */
+/*e: global [[nodvmm]] */
+/*s: global [[nodmmv]] */
 Node*	nodmmv;
-/*e: global nodmmv */
+/*e: global [[nodmmv]] */
 
-/*s: global nodvasop */
+/*s: global [[nodvasop]] */
 Node*	nodvasop;
-/*e: global nodvasop */
+/*e: global [[nodvasop]] */
 
-/*s: global etconv */
+/*s: global [[etconv]] */
 char	etconv[NTYPE];	/* for _vasop */
-/*e: global etconv */
-/*s: global initetconv */
+/*e: global [[etconv]] */
+/*s: global [[initetconv]] */
 Init	initetconv[] =
 {
     TCHAR,		1,	0,
@@ -190,9 +190,9 @@ Init	initetconv[] =
     TUINT,		10,	0,
     -1,		0,	0,
 };
-/*e: global initetconv */
+/*e: global [[initetconv]] */
 
-/*s: function fvn */
+/*s: function [[fvn]] */
 Node*
 fvn(char *name, int type)
 {
@@ -210,9 +210,9 @@ fvn(char *name, int type)
     n->complex = 0;
     return n;
 }
-/*e: function fvn */
+/*e: function [[fvn]] */
 
-/*s: function com64init */
+/*s: function [[com64init]] */
 void
 com64init(void)
 {
@@ -279,9 +279,9 @@ com64init(void)
     for(p = initetconv; p->code >= 0; p++)
         etconv[p->code] = p->value;
 }
-/*e: function com64init */
+/*e: function [[com64init]] */
 
-/*s: function com64 */
+/*s: function [[com64]] */
 bool
 com64(Node *n)
 {
@@ -668,9 +668,9 @@ setasop:
 
     return true;
 }
-/*e: function com64 */
+/*e: function [[com64]] */
 
-/*s: function bool64 */
+/*s: function [[bool64]] */
 void
 bool64(Node *n)
 {
@@ -691,9 +691,9 @@ bool64(Node *n)
         n->type = types[TLONG];
     }
 }
-/*e: function bool64 */
+/*e: function [[bool64]] */
 
-/*s: function convvtox */
+/*s: function [[convvtox]] */
 vlong
 convvtox(vlong c, int et)
 {
@@ -706,5 +706,5 @@ convvtox(vlong c, int et)
             c |= ~MASK(n);
     return c;
 }
-/*e: function convvtox */
+/*e: function [[convvtox]] */
 /*e: cc/com64.c */

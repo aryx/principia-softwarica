@@ -6,7 +6,7 @@ long	dotoffset(Type*, Type*, Node*);
 
 extern	char	tab[NTYPE][NTYPE];
 
-/*s: function new */
+/*s: function [[new]] */
 Node*
 new(int t, Node *l, Node *r)
 {
@@ -30,9 +30,9 @@ new(int t, Node *l, Node *r)
 
     return n;
 }
-/*e: function new */
+/*e: function [[new]] */
 
-/*s: function new1 */
+/*s: function [[new1]] */
 Node*
 new1(int o, Node *l, Node *r)
 {
@@ -42,9 +42,9 @@ new1(int o, Node *l, Node *r)
     n->lineno = nearln;
     return n;
 }
-/*e: function new1 */
+/*e: function [[new1]] */
 
-/*s: function prtree */
+/*s: function [[prtree]] */
 void
 prtree(Node *n, char *s)
 {
@@ -53,9 +53,9 @@ prtree(Node *n, char *s)
     prtree1(n, 0, false);
     print("\n");
 }
-/*e: function prtree */
+/*e: function [[prtree]] */
 
-/*s: function prtree1 */
+/*s: function [[prtree1]] */
 void
 prtree1(Node *n, int d, bool f)
 {
@@ -139,9 +139,9 @@ prtree1(Node *n, int d, bool f)
     if(i & 1)
         prtree1(n->right, d, true);
 }
-/*e: function prtree1 */
+/*e: function [[prtree1]] */
 
-/*s: function typ */
+/*s: function [[typ]] */
 Type*
 typ(int et, Type *d)
 {
@@ -163,9 +163,9 @@ typ(int et, Type *d)
 
     return t;
 }
-/*e: function typ */
+/*e: function [[typ]] */
 
-/*s: function copytyp */
+/*s: function [[copytyp]] */
 Type*
 copytyp(Type *t)
 {
@@ -175,9 +175,9 @@ copytyp(Type *t)
     *nt = *t;
     return nt;
 }
-/*e: function copytyp */
+/*e: function [[copytyp]] */
 
-/*s: function garbt */
+/*s: function [[garbt]] */
 //@Scheck: used by cc.y
 Type* garbt(Type *t, long b)
 {
@@ -190,9 +190,9 @@ Type* garbt(Type *t, long b)
     }
     return t;
 }
-/*e: function garbt */
+/*e: function [[garbt]] */
 
-/*s: function simpleg */
+/*s: function [[simpleg]] */
 int
 simpleg(long b)
 {
@@ -205,9 +205,9 @@ simpleg(long b)
     }
     return GXXX;
 }
-/*e: function simpleg */
+/*e: function [[simpleg]] */
 
-/*s: function simplec */
+/*s: function [[simplec]] */
 //@Scheck: used by cc.y
 int simplec(long b)
 {
@@ -242,9 +242,9 @@ int simplec(long b)
     diag(Z, "illegal combination of classes %Q", b);
     return CXXX;
 }
-/*e: function simplec */
+/*e: function [[simplec]] */
 
-/*s: function simplet */
+/*s: function [[simplet]] */
 Type*
 simplet(long b)
 {
@@ -314,9 +314,9 @@ simplet(long b)
     diag(Z, "illegal combination of types %Q", b);
     return types[TINT];
 }
-/*e: function simplet */
+/*e: function [[simplet]] */
 
-/*s: function stcompat */
+/*s: function [[stcompat]] */
 bool
 stcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
@@ -349,9 +349,9 @@ stcompat(Node *n, Type *t1, Type *t2, long ttab[])
     }
     return true;
 }
-/*e: function stcompat */
+/*e: function [[stcompat]] */
 
-/*s: function tcompat */
+/*s: function [[tcompat]] */
 bool
 tcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
@@ -369,9 +369,9 @@ tcompat(Node *n, Type *t1, Type *t2, long ttab[])
     }
     return false;
 }
-/*e: function tcompat */
+/*e: function [[tcompat]] */
 
-/*s: function makedot */
+/*s: function [[makedot]] */
 void
 makedot(Node *n, Type *t, long o)
 {
@@ -421,9 +421,9 @@ makedot(Node *n, Type *t, long o)
     n->left = n1;
     n->right = Z;
 }
-/*e: function makedot */
+/*e: function [[makedot]] */
 
-/*s: function dotsearch */
+/*s: function [[dotsearch]] */
 Type*
 dotsearch(Sym *s, Type *t, Node *n, long *off)
 {
@@ -483,9 +483,9 @@ ambig:
     diag(n, "ambiguous structure element: %s", s->name);
     return xt;
 }
-/*e: function dotsearch */
+/*e: function [[dotsearch]] */
 
-/*s: function dotoffset */
+/*s: function [[dotoffset]] */
 long
 dotoffset(Type *st, Type *lt, Node *n)
 {
@@ -544,9 +544,9 @@ ambig:
     diag(n, "ambiguous unnamed structure element");
     return o;
 }
-/*e: function dotoffset */
+/*e: function [[dotoffset]] */
 
-/*s: function allfloat */
+/*s: function [[allfloat]] */
 /*
  * look into tree for floating point constant expressions
  */
@@ -578,9 +578,9 @@ allfloat(Node *n, bool flag)
     }
     return false;
 }
-/*e: function allfloat */
+/*e: function [[allfloat]] */
 
-/*s: function constas */
+/*s: function [[constas]] */
 void
 constas(Node *n, Type *il, Type *ir)
 {
@@ -611,18 +611,18 @@ constas(Node *n, Type *il, Type *ir)
             }
     }
 }
-/*e: function constas */
+/*e: function [[constas]] */
 
-/*s: function typeext1 */
+/*s: function [[typeext1]] */
 void
 typeext1(Type *st, Node *l)
 {
     if(st->etype == TFLOAT && allfloat(l, false))
         allfloat(l, true);
 }
-/*e: function typeext1 */
+/*e: function [[typeext1]] */
 
-/*s: function typeext */
+/*s: function [[typeext]] */
 void
 typeext(Type *st, Node *l)
 {
@@ -690,9 +690,9 @@ typeext(Type *st, Node *l)
     }
     /*e: [[typeext()]] unnamed substructure handling */
 }
-/*e: function typeext */
+/*e: function [[typeext]] */
 
-/*s: function nocast */
+/*s: function [[nocast]] */
 /*
  * a cast that generates no code
  * (same size move)
@@ -715,9 +715,9 @@ nocast(Type *t1, Type *t2)
         return true;
     return false;
 }
-/*e: function nocast */
+/*e: function [[nocast]] */
 
-/*s: function nilcast */
+/*s: function [[nilcast]] */
 /*
  * a cast that has a noop semantic
  * (small to large, convert)
@@ -749,9 +749,9 @@ nilcast(Type *t1, Type *t2)
     }
     return false;
 }
-/*e: function nilcast */
+/*e: function [[nilcast]] */
 
-/*s: function arith */
+/*s: function [[arith]] */
 /*
  * "the usual arithmetic conversions are performed"
  */
@@ -900,9 +900,9 @@ arith(Node *n, bool f)
 bad:
     diag(n, "pointer addition not fully declared: %T", n->type->link);
 }
-/*e: function arith */
+/*e: function [[arith]] */
 
-/*s: function simplifyshift */
+/*s: function [[simplifyshift]] */
 /*
  * try to rewrite shift & mask
  */
@@ -1042,9 +1042,9 @@ if(debug['<'])prtree(n, "rewrite2");
     n->left->right->vconst = c1;
     n->left->op = o;
 }
-/*e: function simplifyshift */
+/*e: function [[simplifyshift]] */
 
-/*s: function side */
+/*s: function [[side]] */
 bool
 side(Node *n)
 {
@@ -1104,9 +1104,9 @@ loop:
     // OFUNC/OAS/OASADD/...
     return true;
 }
-/*e: function side */
+/*e: function [[side]] */
 
-/*s: function vconst */
+/*s: function [[vconst]] */
 int
 vconst(Node *n)
 {
@@ -1155,9 +1155,9 @@ vconst(Node *n)
 no:
     return -159;	/* first uninteresting constant */
 }
-/*e: function vconst */
+/*e: function [[vconst]] */
 
-/*s: function log2 */
+/*s: function [[log2]] */
 /*
  * return log(n) if n is a power of 2 constant
  */
@@ -1180,9 +1180,9 @@ log2(uvlong v)
         return s;
     return -1;
 }
-/*e: function log2 */
+/*e: function [[log2]] */
 
-/*s: function vlog */
+/*s: function [[vlog]] */
 int
 vlog(Node *n)
 {
@@ -1196,9 +1196,9 @@ vlog(Node *n)
 bad:
     return -1;
 }
-/*e: function vlog */
+/*e: function [[vlog]] */
 
-/*s: function topbit */
+/*s: function [[topbit]] */
 int
 topbit(ulong v)
 {
@@ -1208,9 +1208,9 @@ topbit(ulong v)
         v >>= 1;
     return i;
 }
-/*e: function topbit */
+/*e: function [[topbit]] */
 
-/*s: function relcon */
+/*s: function [[relcon]] */
 /*
  * try to cast a constant down
  * rather than cast a variable up
@@ -1243,9 +1243,9 @@ relcon(Node *l, Node *r)
     l->type = r->left->type;
     *r = *r->left;
 }
-/*e: function relcon */
+/*e: function [[relcon]] */
 
-/*s: function relindex */
+/*s: function [[relindex]] */
 int
 relindex(int o)
 {
@@ -1266,9 +1266,9 @@ relindex(int o)
     }
     return -1; // unreachable
 }
-/*e: function relindex */
+/*e: function [[relindex]] */
 
-/*s: function invert */
+/*s: function [[invert]] */
 Node*
 invert(Node *n)
 {
@@ -1287,9 +1287,9 @@ invert(Node *n)
     i->left = n;
     return i;
 }
-/*e: function invert */
+/*e: function [[invert]] */
 
-/*s: function bitno */
+/*s: function [[bitno]] */
 int
 bitno(long b)
 {
@@ -1301,9 +1301,9 @@ bitno(long b)
     diag(Z, "bad in bitno");
     return 0;
 }
-/*e: function bitno */
+/*e: function [[bitno]] */
 
-/*s: function typebitor */
+/*s: function [[typebitor]] */
 //@Scheck: used by cc.y
 long typebitor(long a, long b)
 {
@@ -1317,9 +1317,9 @@ long typebitor(long a, long b)
             warn(Z, "once is enough: %Q", a & b);
     return c;
 }
-/*e: function typebitor */
+/*e: function [[typebitor]] */
 
-/*s: function diag */
+/*s: function [[diag]] */
 void
 diag(Node *n, char *fmt, ...)
 {
@@ -1349,9 +1349,9 @@ diag(Node *n, char *fmt, ...)
         errorexit();
     }
 }
-/*e: function diag */
+/*e: function [[diag]] */
 
-/*s: function warn */
+/*s: function [[warn]] */
 void
 warn(Node *n, char *fmt, ...)
 {
@@ -1377,9 +1377,9 @@ warn(Node *n, char *fmt, ...)
         /*e: [[warn()]] if -v */
     }
 }
-/*e: function warn */
+/*e: function [[warn]] */
 
-/*s: function fatal */
+/*s: function [[fatal]] */
 void
 fatal(Node *n, char *fmt, ...)
 {
@@ -1405,21 +1405,21 @@ fatal(Node *n, char *fmt, ...)
     nerrors++;
     errorexit();
 }
-/*e: function fatal */
+/*e: function [[fatal]] */
 
-/*s: global thash1 */
+/*s: global [[thash1]] */
 ulong	thash1	= 0x2edab8c9;
-/*e: global thash1 */
-/*s: global thash2 */
+/*e: global [[thash1]] */
+/*s: global [[thash2]] */
 ulong	thash2	= 0x1dc74fb8;
-/*e: global thash2 */
-/*s: global thash3 */
+/*e: global [[thash2]] */
+/*s: global [[thash3]] */
 ulong	thash3	= 0x1f241331;
-/*e: global thash3 */
-/*s: global thash */
+/*e: global [[thash3]] */
+/*s: global [[thash]] */
 ulong	thash[NALLTYPES];
-/*e: global thash */
-/*s: global thashinit */
+/*e: global [[thash]] */
+/*s: global [[thashinit]] */
 Init	thashinit[] =
 {
     TXXX,		0x17527bbd,	0,
@@ -1450,12 +1450,12 @@ Init	thashinit[] =
 
     -1,		0,		0,
 };
-/*e: global thashinit */
+/*e: global [[thashinit]] */
 
-/*s: global bnames */
+/*s: global [[bnames]] */
 char*	bnames[NALIGN];
-/*e: global bnames */
-/*s: global bnamesinit */
+/*e: global [[bnames]] */
+/*s: global [[bnamesinit]] */
 Init	bnamesinit[] =
 {
     Axxx,	0,	"Axxx",
@@ -1469,12 +1469,12 @@ Init	bnamesinit[] =
     Aaut3,	0,	"aut3",
     -1,	0,	0,
 };
-/*e: global bnamesinit */
+/*e: global [[bnamesinit]] */
 
-/*s: global tnames */
+/*s: global [[tnames]] */
 char*	tnames[NALLTYPES];
-/*e: global tnames */
-/*s: global tnamesinit */
+/*e: global [[tnames]] */
+/*s: global [[tnamesinit]] */
 Init	tnamesinit[] =
 {
     TXXX,		0,	"TXXX",
@@ -1503,12 +1503,12 @@ Init	tnamesinit[] =
 
     -1,		0,	0,
 };
-/*e: global tnamesinit */
+/*e: global [[tnamesinit]] */
 
-/*s: global gnames */
+/*s: global [[gnames]] */
 char*	gnames[NGTYPES];
-/*e: global gnames */
-/*s: global gnamesinit */
+/*e: global [[gnames]] */
+/*s: global [[gnamesinit]] */
 Init	gnamesinit[] =
 {
     GXXX,		0,	"GXXX",
@@ -1517,12 +1517,12 @@ Init	gnamesinit[] =
     GVOLATILE|GCONSTNT,	0,	"CONST-VOLATILE",
     -1,			0,	0,
 };
-/*e: global gnamesinit */
+/*e: global [[gnamesinit]] */
 
-/*s: global qnames */
+/*s: global [[qnames]] */
 char*	qnames[NALLTYPES];
-/*e: global qnames */
-/*s: global qnamesinit */
+/*e: global [[qnames]] */
+/*s: global [[qnamesinit]] */
 Init	qnamesinit[] =
 {
     TXXX      ,		0,	"TXXX",
@@ -1562,11 +1562,11 @@ Init	qnamesinit[] =
 
     -1,		0,	0,
 };
-/*e: global qnamesinit */
-/*s: global cnames */
+/*e: global [[qnamesinit]] */
+/*s: global [[cnames]] */
 char*	cnames[NCTYPES];
-/*e: global cnames */
-/*s: global cnamesinit */
+/*e: global [[cnames]] */
+/*s: global [[cnamesinit]] */
 Init	cnamesinit[] =
 {
     CXXX     ,		0,	"CXXX",
@@ -1581,12 +1581,12 @@ Init	cnamesinit[] =
     CEXREG   ,		0,	"EXREG",
     -1,			0,	0,
 };
-/*e: global cnamesinit */
+/*e: global [[cnamesinit]] */
 
-/*s: global onames */
+/*s: global [[onames]] */
 char*	onames[OEND+1];
-/*e: global onames */
-/*s: global onamesinit */
+/*e: global [[onames]] */
+/*s: global [[onamesinit]] */
 Init	onamesinit[] =
 {
     OXXX,		0,	"OXXX",
@@ -1683,157 +1683,157 @@ Init	onamesinit[] =
     OEND,		0,	"END",
     -1,		0,	0,
 };
-/*e: global onamesinit */
+/*e: global [[onamesinit]] */
 
-/*s: global comrel */
+/*s: global [[comrel]] */
 /*	OEQ, ONE, OLE, OLS, OLT, OLO, OGE, OHS, OGT, OHI */
 char	comrel[12] =
 {
     ONE, OEQ, OGT, OHI, OGE, OHS, OLT, OLO, OLE, OLS,
 };
-/*e: global comrel */
-/*s: global invrel */
+/*e: global [[comrel]] */
+/*s: global [[invrel]] */
 char	invrel[12] =
 {
     OEQ, ONE, OGE, OHS, OGT, OHI, OLE, OLS, OLT, OLO,
 };
-/*e: global invrel */
-/*s: global logrel */
+/*e: global [[invrel]] */
+/*s: global [[logrel]] */
 char	logrel[12] =
 {
     OEQ, ONE, OLS, OLS, OLO, OLO, OHS, OHS, OHI, OHI,
 };
-/*e: global logrel */
+/*e: global [[logrel]] */
 
-/*s: global typei */
+/*s: global [[typei]] */
 // set<Type_kind>
 char	typei[NTYPE];
-/*e: global typei */
-/*s: global typeiinit */
+/*e: global [[typei]] */
+/*s: global [[typeiinit]] */
 int	typeiinit[] =
 {
     TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TVLONG, TUVLONG, -1,
 };
-/*e: global typeiinit */
-/*s: global typeu */
+/*e: global [[typeiinit]] */
+/*s: global [[typeu]] */
 char	typeu[NTYPE];
-/*e: global typeu */
-/*s: global typeuinit */
+/*e: global [[typeu]] */
+/*s: global [[typeuinit]] */
 int	typeuinit[] =
 {
     TUCHAR, TUSHORT, TUINT, TULONG, TUVLONG, TIND, -1,
 };
-/*e: global typeuinit */
+/*e: global [[typeuinit]] */
 
-/*s: global typesuv */
+/*s: global [[typesuv]] */
 char	typesuv[NTYPE];
-/*e: global typesuv */
-/*s: global typesuvinit */
+/*e: global [[typesuv]] */
+/*s: global [[typesuvinit]] */
 int	typesuvinit[] =
 {
     TVLONG, TUVLONG, TSTRUCT, TUNION, -1,
 };
-/*e: global typesuvinit */
+/*e: global [[typesuvinit]] */
 
 // not used on ARM
-/*s: global typechlv */
+/*s: global [[typechlv]] */
 char	typechlv[NTYPE];
-/*e: global typechlv */
-/*s: global typeil */
+/*e: global [[typechlv]] */
+/*s: global [[typeil]] */
 char	typeil[NTYPE];
-/*e: global typeil */
-/*s: global typeilinit */
+/*e: global [[typeil]] */
+/*s: global [[typeilinit]] */
 int	typeilinit[] =
 {
     TINT, TUINT, TLONG, TULONG, -1,
 };
-/*e: global typeilinit */
+/*e: global [[typeilinit]] */
 
-/*s: global typeilp */
+/*s: global [[typeilp]] */
 char	typeilp[NTYPE];
-/*e: global typeilp */
-/*s: global typeilpinit */
+/*e: global [[typeilp]] */
+/*s: global [[typeilpinit]] */
 int	typeilpinit[] =
 {
     TINT, TUINT, TLONG, TULONG, TIND, -1
 };
-/*e: global typeilpinit */
+/*e: global [[typeilpinit]] */
 
-/*s: global typechl */
+/*s: global [[typechl]] */
 char	typechl[NTYPE];
-/*e: global typechl */
-/*s: global typechlinit */
+/*e: global [[typechl]] */
+/*s: global [[typechlinit]] */
 int	typechlinit[] =
 {
     TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, -1,
 };
-/*e: global typechlinit */
+/*e: global [[typechlinit]] */
 
-/*s: global typechlp */
+/*s: global [[typechlp]] */
 char	typechlp[NTYPE];
-/*e: global typechlp */
-/*s: global typechlpinit */
+/*e: global [[typechlp]] */
+/*s: global [[typechlpinit]] */
 int	typechlpinit[] =
 {
     TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TIND, -1,
 };
-/*e: global typechlpinit */
+/*e: global [[typechlpinit]] */
 
-/*s: global typechlpfd */
+/*s: global [[typechlpfd]] */
 char	typechlpfd[NTYPE];
-/*e: global typechlpfd */
-/*s: global typechlpfdinit */
+/*e: global [[typechlpfd]] */
+/*s: global [[typechlpfdinit]] */
 int	typechlpfdinit[] =
 {
     TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TFLOAT, TDOUBLE, TIND, -1,
 };
-/*e: global typechlpfdinit */
+/*e: global [[typechlpfdinit]] */
 
-/*s: global typev */
+/*s: global [[typev]] */
 char	typev[NTYPE];
-/*e: global typev */
-/*s: global typevinit */
+/*e: global [[typev]] */
+/*s: global [[typevinit]] */
 int	typevinit[] =
 {
     TVLONG,	TUVLONG, -1,
 };
-/*e: global typevinit */
+/*e: global [[typevinit]] */
 
-/*s: global typefd */
+/*s: global [[typefd]] */
 char	typefd[NTYPE];
-/*e: global typefd */
-/*s: global typefdinit */
+/*e: global [[typefd]] */
+/*s: global [[typefdinit]] */
 int	typefdinit[] =
 {
     TFLOAT, TDOUBLE, -1,
 };
-/*e: global typefdinit */
+/*e: global [[typefdinit]] */
 
-/*s: global typeaf */
+/*s: global [[typeaf]] */
 char	typeaf[NTYPE];
-/*e: global typeaf */
-/*s: global typeafinit */
+/*e: global [[typeaf]] */
+/*s: global [[typeafinit]] */
 int	typeafinit[] =
 {
     TFUNC, TARRAY, -1,
 };
-/*e: global typeafinit */
+/*e: global [[typeafinit]] */
 
-/*s: global typesu */
+/*s: global [[typesu]] */
 char	typesu[NTYPE];
-/*e: global typesu */
-/*s: global typesuinit */
+/*e: global [[typesu]] */
+/*s: global [[typesuinit]] */
 int	typesuinit[] =
 {
     TSTRUCT, TUNION, -1,
 };
-/*e: global typesuinit */
+/*e: global [[typesuinit]] */
 
-/*s: global tasign */
+/*s: global [[tasign]] */
 // map<Type_kind, set<Type_kind> >
 long	tasign[NTYPE];
-/*e: global tasign */
-/*s: global tasigninit */
+/*e: global [[tasign]] */
+/*s: global [[tasigninit]] */
 Init	tasigninit[] =
 {
     TCHAR,		BNUMBER,	0,
@@ -1855,12 +1855,12 @@ Init	tasigninit[] =
     TUNION,		BUNION,		0,
     -1,		0,		0,
 };
-/*e: global tasigninit */
+/*e: global [[tasigninit]] */
 
-/*s: global tasadd */
+/*s: global [[tasadd]] */
 long	tasadd[NTYPE];
-/*e: global tasadd */
-/*s: global tasaddinit */
+/*e: global [[tasadd]] */
+/*s: global [[tasaddinit]] */
 Init	tasaddinit[] =
 {
     TCHAR,		BNUMBER,	0,
@@ -1880,12 +1880,12 @@ Init	tasaddinit[] =
     TIND,		BINTEGER,	0,
     -1,		0,		0,
 };
-/*e: global tasaddinit */
+/*e: global [[tasaddinit]] */
 
-/*s: global tcast */
+/*s: global [[tcast]] */
 long	tcast[NTYPE];
-/*e: global tcast */
-/*s: global tcastinit */
+/*e: global [[tcast]] */
+/*s: global [[tcastinit]] */
 Init	tcastinit[] =
 {
     TCHAR,		BNUMBER|BIND|BVOID,	0,
@@ -1908,12 +1908,12 @@ Init	tcastinit[] =
     TUNION,		BUNION|BVOID,		0,
     -1,		0,			0,
 };
-/*e: global tcastinit */
+/*e: global [[tcastinit]] */
 
-/*s: global tadd */
+/*s: global [[tadd]] */
 long	tadd[NTYPE];
-/*e: global tadd */
-/*s: global taddinit */
+/*e: global [[tadd]] */
+/*s: global [[taddinit]] */
 Init	taddinit[] =
 {
     TCHAR,		BNUMBER|BIND,	0,
@@ -1932,12 +1932,12 @@ Init	taddinit[] =
     TIND,		BINTEGER,	0,
     -1,		0,		0,
 };
-/*e: global taddinit */
+/*e: global [[taddinit]] */
 
-/*s: global tsub */
+/*s: global [[tsub]] */
 long	tsub[NTYPE];
-/*e: global tsub */
-/*s: global tsubinit */
+/*e: global [[tsub]] */
+/*s: global [[tsubinit]] */
 Init	tsubinit[] =
 {
     TCHAR,		BNUMBER,	0,
@@ -1956,12 +1956,12 @@ Init	tsubinit[] =
     TIND,		BINTEGER|BIND,	0,
     -1,		0,		0,
 };
-/*e: global tsubinit */
+/*e: global [[tsubinit]] */
 
-/*s: global tmul */
+/*s: global [[tmul]] */
 long	tmul[NTYPE];
-/*e: global tmul */
-/*s: global tmulinit */
+/*e: global [[tmul]] */
+/*s: global [[tmulinit]] */
 Init	tmulinit[] =
 {
     TCHAR,		BNUMBER,	0,
@@ -1979,12 +1979,12 @@ Init	tmulinit[] =
     TDOUBLE,	BNUMBER,	0,
     -1,		0,		0,
 };
-/*e: global tmulinit */
+/*e: global [[tmulinit]] */
 
-/*s: global tand */
+/*s: global [[tand]] */
 long	tand[NTYPE];
-/*e: global tand */
-/*s: global tandinit */
+/*e: global [[tand]] */
+/*s: global [[tandinit]] */
 Init	tandinit[] =
 {
     TCHAR,		BINTEGER,	0,
@@ -2001,12 +2001,12 @@ Init	tandinit[] =
     TUVLONG,	BINTEGER,	0,
     -1,		0,		0,
 };
-/*e: global tandinit */
+/*e: global [[tandinit]] */
 
-/*s: global trel */
+/*s: global [[trel]] */
 long	trel[NTYPE];
-/*e: global trel */
-/*s: global trelinit */
+/*e: global [[trel]] */
+/*s: global [[trelinit]] */
 Init	trelinit[] =
 {
     TCHAR,		BNUMBER,	0,
@@ -2026,44 +2026,44 @@ Init	trelinit[] =
     TIND,		BIND,		0,
     -1,		0,		0,
 };
-/*e: global trelinit */
+/*e: global [[trelinit]] */
 
-/*s: global tfunct */
+/*s: global [[tfunct]] */
 long	tfunct[1] =
 {
     BFUNC,
 };
-/*e: global tfunct */
+/*e: global [[tfunct]] */
 
-/*s: global tindir */
+/*s: global [[tindir]] */
 long	tindir[1] =
 {
     BIND,
 };
-/*e: global tindir */
+/*e: global [[tindir]] */
 
-/*s: global tdot */
+/*s: global [[tdot]] */
 long	tdot[1] =
 {
     BSTRUCT|BUNION,
 };
-/*e: global tdot */
+/*e: global [[tdot]] */
 
-/*s: global tnot */
+/*s: global [[tnot]] */
 long	tnot[1] =
 {
     BNUMBER|BIND,
 };
-/*e: global tnot */
+/*e: global [[tnot]] */
 
-/*s: global targ */
+/*s: global [[targ]] */
 long	targ[1] =
 {
     BNUMBER|BIND|BSTRUCT|BUNION,
 };
-/*e: global targ */
+/*e: global [[targ]] */
 
-/*s: global tab */
+/*s: global [[tab]] */
 char	tab[NTYPE][NTYPE] =
 {
   [TXXX] =	{ 0,
@@ -2111,9 +2111,9 @@ char	tab[NTYPE][NTYPE] =
              TIND, TIND, TIND, TIND, TIND, [TIND] = TIND,
         },
 };
-/*e: global tab */
+/*e: global [[tab]] */
 
-/*s: function urk */
+/*s: function [[urk]] */
 void
 urk(char *name, int max, int i)
 {
@@ -2122,9 +2122,9 @@ urk(char *name, int max, int i)
         exits("init");
     }
 }
-/*e: function urk */
+/*e: function [[urk]] */
 
-/*s: function tinit */
+/*s: function [[tinit]] */
 void
 tinit(void)
 {
@@ -2262,9 +2262,9 @@ tinit(void)
     typecmplx = typesuv;
     /*e: [[tinit()]] initialise 32 bits defaults type sets */
 }
-/*e: function tinit */
+/*e: function [[tinit]] */
 
-/*s: function deadhead */
+/*s: function [[deadhead]] */
 /*
  * return true if it is impossible to jump into the middle of n.
  */
@@ -2320,21 +2320,21 @@ loop:
     }
     return true;
 }
-/*e: function deadhead */
+/*e: function [[deadhead]] */
 
-/*s: function deadheads */
+/*s: function [[deadheads]] */
 bool
 deadheads(Node *c)
 {
     return deadhead(c->left, false) && deadhead(c->right, false);
 }
-/*e: function deadheads */
+/*e: function [[deadheads]] */
 
-/*s: function mixedasop */
+/*s: function [[mixedasop]] */
 bool
 mixedasop(Type *l, Type *r)
 {
     return !typefd[l->etype] && typefd[r->etype];
 }
-/*e: function mixedasop */
+/*e: function [[mixedasop]] */
 /*e: cc/sub.c */

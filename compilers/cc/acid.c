@@ -1,7 +1,7 @@
 /*s: cc/acid.c */
 #include "cc.h"
 
-/*s: global kwd */
+/*s: global [[kwd]] */
 static char *kwd[] =
 {
     "$adt", "$aggr", "$append", "$builtin", "$complex", "$defn",
@@ -9,9 +9,9 @@ static char *kwd[] =
     "$local", "$loop", "$return", "$tail", "$then",
     "$union", "$whatis", "$while",
 };
-/*e: global kwd */
+/*e: global [[kwd]] */
 
-/*s: function amap */
+/*s: function [[amap]] */
 char*
 amap(char *s)
 {
@@ -32,9 +32,9 @@ amap(char *s)
     }
     return s;
 }
-/*e: function amap */
+/*e: function [[amap]] */
 
-/*s: function acidsue */
+/*s: function [[acidsue]] */
 Sym*
 acidsue(Type *t)
 {
@@ -48,9 +48,9 @@ acidsue(Type *t)
                 return s;
     return 0;
 }
-/*e: function acidsue */
+/*e: function [[acidsue]] */
 
-/*s: function acidfun */
+/*s: function [[acidfun]] */
 Sym*
 acidfun(Type *t)
 {
@@ -63,12 +63,12 @@ acidfun(Type *t)
                 return s;
     return 0;
 }
-/*e: function acidfun */
+/*e: function [[acidfun]] */
 
-/*s: global acidchar */
+/*s: global [[acidchar]] */
 char	acidchar[NTYPE];
-/*e: global acidchar */
-/*s: global acidcinit */
+/*e: global [[acidchar]] */
+/*s: global [[acidcinit]] */
 Init	acidcinit[] =
 {
     TCHAR,		'C',	0,
@@ -85,9 +85,9 @@ Init	acidcinit[] =
     TIND,		'X',	0,
     -1,		0,	0,
 };
-/*e: global acidcinit */
+/*e: global [[acidcinit]] */
 
-/*s: function acidinit */
+/*s: function [[acidinit]] */
 static void
 acidinit(void)
 {
@@ -108,9 +108,9 @@ acidinit(void)
         acidchar[TIND] = 'Y';
     
 }
-/*e: function acidinit */
+/*e: function [[acidinit]] */
 
-/*s: function acidmember */
+/*s: function [[acidmember]] */
 void
 acidmember(Type *t, long off, int flag)
 {
@@ -208,9 +208,9 @@ acidmember(Type *t, long off, int flag)
         break;
     }
 }
-/*e: function acidmember */
+/*e: function [[acidmember]] */
 
-/*s: function acidtype */
+/*s: function [[acidtype]] */
 void
 acidtype(Type *t)
 {
@@ -272,9 +272,9 @@ acidtype(Type *t)
 
     }
 }
-/*e: function acidtype */
+/*e: function [[acidtype]] */
 
-/*s: function acidvar */
+/*s: function [[acidvar]] */
 void
 acidvar(Sym *s)
 {
@@ -332,5 +332,5 @@ acidvar(Sym *s)
         break;
     }
 }
-/*e: function acidvar */
+/*e: function [[acidvar]] */
 /*e: cc/acid.c */
