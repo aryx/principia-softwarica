@@ -1,4 +1,4 @@
-/*s: globals.c */
+/*s: rc/globals.c */
 #include "rc.h"
 #include "exec.h"
 
@@ -52,4 +52,4 @@ int trap[NSIG];				/* number of outstanding traps per type */
 bool eflagok;	/* kludge flag so that -e doesn't exit in startup */
 /*e: global [[eflagok]] */
 
-/*e: globals.c */
+/*e: rc/globals.c */
