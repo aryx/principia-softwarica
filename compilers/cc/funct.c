@@ -322,7 +322,7 @@ dclfunct(Type *t, Sym *s)
         goto bad;
 
     f = alloc(sizeof(*f));
-    for(o=0; o<sizeof(f->sym); o++)
+    for(o=0; o<sizeof(f->sym); o++) // bugfix?nelem(f->sym) in latest plan9
         f->sym[o] = S;
 
     t->funct = f;

@@ -261,6 +261,7 @@ macdef(void)
     int c;
     Sym *a;
     /*x: [[macdef()]] other locals */
+    //option<char> (None = 0, either ' or ")
     int ischr; // quote character
     int len;
     /*x: [[macdef()]] other locals */

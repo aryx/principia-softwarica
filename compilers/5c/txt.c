@@ -111,11 +111,12 @@ ginit(void)
     reg[REGSP] = 1;
     reg[REGLINK] = 1;
     reg[REGPC] = 1;
+    /*x: [[ginit()]] reg and resvreg initialisation */
+    memmove(resvreg, reg, sizeof(reg));
+    /*x: [[ginit()]] reg and resvreg initialisation */
     /* keep two external registers */
     reg[REGEXT] = 1; // R10
     reg[REGEXT-1] = 1; // R9
-    /*x: [[ginit()]] reg and resvreg initialisation */
-    memmove(resvreg, reg, sizeof(reg));
     /*e: [[ginit()]] reg and resvreg initialisation */
 }
 /*e: function ginit(arm) */
