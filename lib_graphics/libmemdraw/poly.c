@@ -14,10 +14,10 @@ mempoly(Memimage *dst, Point *vert, int nvert, int end0, int end1, int radius, M
     int e0, e1;
     Point d;
 
-    /*s: [[mempoly() sanity check nvert */
+    /*s: [[mempoly()]] sanity check nvert */
     if(nvert < 2)
         return;
-    /*e: [[mempoly() sanity check nvert */
+    /*e: [[mempoly()]] sanity check nvert */
     d = subpt(sp, vert[0]); // to compensate for addpt below
     for(i=1; i<nvert; i++){
         /*s: [[mempoly()]] set endlines e0 and e1 */

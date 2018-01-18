@@ -153,7 +153,7 @@ enum ImageType {
     RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5), // Raspberry mode by default
     RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // flexible
     ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
-    /*s: [[ImageType] cases */
+    /*s: [[ImageType]] cases */
     GREY2	= CHAN1(CGrey, 2),
     GREY4	= CHAN1(CGrey, 4),
     GREY8	= CHAN1(CGrey, 8),
@@ -161,12 +161,12 @@ enum ImageType {
     RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
     RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
     BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
-    /*x: [[ImageType] cases */
+    /*x: [[ImageType]] cases */
     ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
 
     XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
     XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
-    /*e: [[ImageType] cases */
+    /*e: [[ImageType]] cases */
 };
 /*e: enum ImageType */
 /*s: type channels */
