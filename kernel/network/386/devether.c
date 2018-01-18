@@ -16,7 +16,7 @@
 static Ether *etherxx[MaxEther];
 /*e: global etherxx (kernel) */
 
-/*s: function etherattach */
+/*s: function [[etherattach]] */
 Chan*
 etherattach(char* spec)
 {
@@ -46,48 +46,48 @@ etherattach(char* spec)
     poperror();
     return chan;
 }
-/*e: function etherattach */
+/*e: function [[etherattach]] */
 
-/*s: function etherwalk */
+/*s: function [[etherwalk]] */
 static Walkqid*
 etherwalk(Chan* chan, Chan* nchan, char** name, int nname)
 {
     return netifwalk(etherxx[chan->dev], chan, nchan, name, nname);
 }
-/*e: function etherwalk */
+/*e: function [[etherwalk]] */
 
-/*s: function etherstat */
+/*s: function [[etherstat]] */
 static int
 etherstat(Chan* chan, uchar* dp, int n)
 {
     return netifstat(etherxx[chan->dev], chan, dp, n);
 }
-/*e: function etherstat */
+/*e: function [[etherstat]] */
 
-/*s: function etheropen */
+/*s: function [[etheropen]] */
 static Chan*
 etheropen(Chan* chan, int omode)
 {
     return netifopen(etherxx[chan->dev], chan, omode);
 }
-/*e: function etheropen */
+/*e: function [[etheropen]] */
 
-/*s: function ethercreate */
+/*s: function [[ethercreate]] */
 static void
 ethercreate(Chan*, char*, int, ulong)
 {
 }
-/*e: function ethercreate */
+/*e: function [[ethercreate]] */
 
-/*s: function etherclose */
+/*s: function [[etherclose]] */
 static void
 etherclose(Chan* chan)
 {
     netifclose(etherxx[chan->dev], chan);
 }
-/*e: function etherclose */
+/*e: function [[etherclose]] */
 
-/*s: function etherread */
+/*s: function [[etherread]] */
 static long
 etherread(Chan* chan, void* buf, long n, vlong off)
 {
@@ -108,25 +108,25 @@ etherread(Chan* chan, void* buf, long n, vlong off)
 
     return netifread(ether, chan, buf, n, offset);
 }
-/*e: function etherread */
+/*e: function [[etherread]] */
 
-/*s: function etherbread */
+/*s: function [[etherbread]] */
 static Block*
 etherbread(Chan* chan, long n, ulong offset)
 {
     return netifbread(etherxx[chan->dev], chan, n, offset);
 }
-/*e: function etherbread */
+/*e: function [[etherbread]] */
 
-/*s: function etherwstat */
+/*s: function [[etherwstat]] */
 static int
 etherwstat(Chan* chan, uchar* dp, int n)
 {
     return netifwstat(etherxx[chan->dev], chan, dp, n);
 }
-/*e: function etherwstat */
+/*e: function [[etherwstat]] */
 
-/*s: function etherrtrace */
+/*s: function [[etherrtrace]] */
 static void
 etherrtrace(Netfile* f, Etherpkt* pkt, int len)
 {
@@ -153,9 +153,9 @@ etherrtrace(Netfile* f, Etherpkt* pkt, int len)
     bp->wp += 64;
     qpass(f->in, bp);
 }
-/*e: function etherrtrace */
+/*e: function [[etherrtrace]] */
 
-/*s: function etheriq */
+/*s: function [[etheriq]] */
 Block*
 etheriq(Ether* ether, Block* bp, int fromwire)
 {
@@ -237,9 +237,9 @@ etheriq(Ether* ether, Block* bp, int fromwire)
 
     return bp;
 }
-/*e: function etheriq */
+/*e: function [[etheriq]] */
 
-/*s: function etheroq */
+/*s: function [[etheroq]] */
 static int
 etheroq(Ether* ether, Block* bp)
 {
@@ -277,9 +277,9 @@ etheroq(Ether* ether, Block* bp)
 
     return len;
 }
-/*e: function etheroq */
+/*e: function [[etheroq]] */
 
-/*s: function etherwrite */
+/*s: function [[etherwrite]] */
 static long
 etherwrite(Chan* chan, void* buf, long n, vlong)
 {
@@ -327,9 +327,9 @@ etherwrite(Chan* chan, void* buf, long n, vlong)
 
     return etheroq(ether, bp);
 }
-/*e: function etherwrite */
+/*e: function [[etherwrite]] */
 
-/*s: function etherbwrite */
+/*s: function [[etherbwrite]] */
 static long
 etherbwrite(Chan* chan, Block* bp, ulong)
 {
@@ -360,16 +360,16 @@ etherbwrite(Chan* chan, Block* bp, ulong)
 
     return etheroq(ether, bp);
 }
-/*e: function etherbwrite */
+/*e: function [[etherbwrite]] */
 
-/*s: global cards */
+/*s: global [[cards]] */
 static struct {
     char*   type;
     int (*reset)(Ether*);
 } cards[MaxEther+1];
-/*e: global cards */
+/*e: global [[cards]] */
 
-/*s: function addethercard */
+/*s: function [[addethercard]] */
 void
 addethercard(char* t, int (*r)(Ether*))
 {
@@ -381,9 +381,9 @@ addethercard(char* t, int (*r)(Ether*))
     cards[ncard].reset = r;
     ncard++;
 }
-/*e: function addethercard */
+/*e: function [[addethercard]] */
 
-/*s: function parseether (kernel/network/386/devether.c) */
+/*s: function [[parseether]]([[(kernel/network/386/devether.c)]]) */
 int
 parseether(uchar *to, char *from)
 {
@@ -406,9 +406,9 @@ parseether(uchar *to, char *from)
     }
     return 0;
 }
-/*e: function parseether (kernel/network/386/devether.c) */
+/*e: function [[parseether]]([[(kernel/network/386/devether.c)]]) */
 
-/*s: function etherprobe */
+/*s: function [[etherprobe]] */
 static Ether*
 etherprobe(int cardno, int ctlrno)
 {
@@ -519,9 +519,9 @@ etherprobe(int cardno, int ctlrno)
 
     return ether;
 }
-/*e: function etherprobe */
+/*e: function [[etherprobe]] */
 
-/*s: function etherreset */
+/*s: function [[etherreset]] */
 static void
 etherreset(void)
 {
@@ -551,9 +551,9 @@ etherreset(void)
         ctlrno++;
     }
 }
-/*e: function etherreset */
+/*e: function [[etherreset]] */
 
-/*s: function ethershutdown */
+/*s: function [[ethershutdown]] */
 static void
 ethershutdown(void)
 {
@@ -571,9 +571,9 @@ ethershutdown(void)
         (*ether->shutdown)(ether);
     }
 }
-/*e: function ethershutdown */
+/*e: function [[ethershutdown]] */
 
-/*s: global etherdevtab */
+/*s: global [[etherdevtab]] */
 Dev etherdevtab = {
     .dc       =    'l',
     .name     =    "ether",
@@ -595,13 +595,13 @@ Dev etherdevtab = {
     .bwrite   =    etherbwrite,
     .remove   =    devremove,
 };
-/*e: global etherdevtab */
+/*e: global [[etherdevtab]] */
 
-/*s: constant POLY */
+/*s: constant [[POLY]] */
 #define POLY 0xedb88320
-/*e: constant POLY */
+/*e: constant [[POLY]] */
 
-/*s: function ethercrc */
+/*s: function [[ethercrc]] */
 /* really slow 32 bit crc for ethers */
 ulong
 ethercrc(uchar *p, int len)
@@ -619,5 +619,5 @@ ethercrc(uchar *p, int len)
   }
   return crc;
 }
-/*e: function ethercrc */
+/*e: function [[ethercrc]] */
 /*e: kernel/network/386/devether.c */

@@ -1,7 +1,7 @@
 /*s: kernel/network/386/ether8390.h */
 
 typedef struct Dp8390 Dp8390;
-/*s: struct Dp8390 */
+/*s: struct [[Dp8390]] */
 /*
  * Ctlr for the boards using the National Semiconductor DP8390
  * and SMC 83C90 Network Interface Controller.
@@ -30,28 +30,28 @@ struct Dp8390 {
     // Extra
     Lock;
 };
-/*e: struct Dp8390 */
+/*e: struct [[Dp8390]] */
 
-/*s: constant Dp8390BufSz */
+/*s: constant [[Dp8390BufSz]] */
 #define Dp8390BufSz	256
-/*e: constant Dp8390BufSz */
+/*e: constant [[Dp8390BufSz]] */
 
 extern int dp8390reset(Ether*);
 extern void *dp8390read(Dp8390*, void*, ulong, ulong);
 extern void dp8390getea(Ether*, uchar*);
 extern void dp8390setea(Ether*);
 
-/*s: macro regr */
+/*s: macro [[regr]] */
 /*
  * x86-specific code.
  */
 #define regr(c, r)	inb((c)->port+(r))
-/*e: macro regr */
-/*s: macro regw */
+/*e: macro [[regr]] */
+/*s: macro [[regw]] */
 #define regw(c, r, v)	outb((c)->port+(r), (v))
-/*e: macro regw */
+/*e: macro [[regw]] */
 
-/*s: function rdread */
+/*s: function [[rdread]] */
 static void
 rdread(Dp8390* ctlr, void* to, int len)
 {
@@ -69,9 +69,9 @@ rdread(Dp8390* ctlr, void* to, int len)
         break;
     }
 }
-/*e: function rdread */
+/*e: function [[rdread]] */
 
-/*s: function rdwrite */
+/*s: function [[rdwrite]] */
 static void
 rdwrite(Dp8390* ctlr, void* from, int len)
 {
@@ -89,5 +89,5 @@ rdwrite(Dp8390* ctlr, void* from, int len)
         break;
     }
 }
-/*e: function rdwrite */
+/*e: function [[rdwrite]] */
 /*e: kernel/network/386/ether8390.h */

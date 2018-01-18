@@ -32,7 +32,7 @@
 //  [OSPF]      "OSPF",
 //};
 
-/*s: global v6Unspecified */
+/*s: global [[v6Unspecified]] */
 /*
  *  well known IPv6 addresses
  */
@@ -42,33 +42,33 @@ ipaddr v6Unspecified = {
     0, 0, 0, 0,
     0, 0, 0, 0
 };
-/*e: global v6Unspecified */
-/*s: global v6loopback (kernel/network/ip/ipaux.c) */
+/*e: global [[v6Unspecified]] */
+/*s: global [[v6loopback]]([[(kernel/network/ip/ipaux.c)]]) */
 ipaddr v6loopback = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0x01
 };
-/*e: global v6loopback (kernel/network/ip/ipaux.c) */
+/*e: global [[v6loopback]]([[(kernel/network/ip/ipaux.c)]]) */
 
-/*s: global v6linklocal (kernel/network/ip/ipaux.c) */
+/*s: global [[v6linklocal]]([[(kernel/network/ip/ipaux.c)]]) */
 ipaddr v6linklocal = {
     0xfe, 0x80, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0
 };
-/*e: global v6linklocal (kernel/network/ip/ipaux.c) */
+/*e: global [[v6linklocal]]([[(kernel/network/ip/ipaux.c)]]) */
 //ipaddr v6linklocalmask = {
 //  0xff, 0xff, 0xff, 0xff,
 //  0xff, 0xff, 0xff, 0xff,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0
-/*s: global v6llpreflen (kernel/network/ip/ipaux.c) */
+/*s: global [[v6llpreflen]]([[(kernel/network/ip/ipaux.c)]]) */
 //};
 int v6llpreflen = 8;    /* link-local prefix length in bytes */
-/*e: global v6llpreflen (kernel/network/ip/ipaux.c) */
+/*e: global [[v6llpreflen]]([[(kernel/network/ip/ipaux.c)]]) */
 
 //ipaddr v6multicast = {
 //  0xff, 0, 0, 0,
@@ -82,7 +82,7 @@ int v6llpreflen = 8;    /* link-local prefix length in bytes */
 //  0, 0, 0, 0,
 //  0, 0, 0, 0
 //};
-/*s: global v6allnodesN */
+/*s: global [[v6allnodesN]] */
 //int v6mcpreflen = 1;  /* multicast prefix length */
 
 ipaddr v6allnodesN = {
@@ -91,13 +91,13 @@ ipaddr v6allnodesN = {
     0, 0, 0, 0,
     0, 0, 0, 0x01
 };
-/*e: global v6allnodesN */
+/*e: global [[v6allnodesN]] */
 //ipaddr v6allroutersN = {
 //  0xff, 0x01, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0x02
-/*s: global v6allnodesNmask */
+/*s: global [[v6allnodesNmask]] */
 //};
 ipaddr v6allnodesNmask = {
     0xff, 0xff, 0, 0,
@@ -105,8 +105,8 @@ ipaddr v6allnodesNmask = {
     0, 0, 0, 0,
     0, 0, 0, 0
 };
-/*e: global v6allnodesNmask */
-/*s: global v6allnodesL */
+/*e: global [[v6allnodesNmask]] */
+/*s: global [[v6allnodesL]] */
 //int v6aNpreflen = 2;  /* all nodes (N) prefix */
 
 ipaddr v6allnodesL = {
@@ -115,13 +115,13 @@ ipaddr v6allnodesL = {
     0, 0, 0, 0,
     0, 0, 0, 0x01
 };
-/*e: global v6allnodesL */
+/*e: global [[v6allnodesL]] */
 //ipaddr v6allroutersL = {
 //  0xff, 0x02, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0x02
-/*s: global v6allnodesLmask */
+/*s: global [[v6allnodesLmask]] */
 //};
 ipaddr v6allnodesLmask = {
     0xff, 0xff, 0, 0,
@@ -129,8 +129,8 @@ ipaddr v6allnodesLmask = {
     0, 0, 0, 0,
     0, 0, 0, 0
 };
-/*e: global v6allnodesLmask */
-/*s: global v6solicitednode (kernel/network/ip/ipaux.c) */
+/*e: global [[v6allnodesLmask]] */
+/*s: global [[v6solicitednode]]([[(kernel/network/ip/ipaux.c)]]) */
 //int v6aLpreflen = 2;  /* all nodes (L) prefix */
 
 ipaddr v6solicitednode = {
@@ -139,7 +139,7 @@ ipaddr v6solicitednode = {
     0, 0, 0, 0x01,
     0xff, 0, 0, 0
 };
-/*e: global v6solicitednode (kernel/network/ip/ipaux.c) */
+/*e: global [[v6solicitednode]]([[(kernel/network/ip/ipaux.c)]]) */
 //ipaddr v6solicitednodemask = {
 //  0xff, 0xff, 0xff, 0xff,
 //  0xff, 0xff, 0xff, 0xff,
@@ -148,7 +148,7 @@ ipaddr v6solicitednode = {
 //};
 //int v6snpreflen = 13;
 
-/*s: function ptclcsum */
+/*s: function [[ptclcsum]] */
 ushort
 ptclcsum(Block *bp, int offset, int len)
 {
@@ -205,16 +205,16 @@ ptclcsum(Block *bp, int offset, int len)
 
     return ~losum & 0xffff;
 }
-/*e: function ptclcsum */
+/*e: function [[ptclcsum]] */
 
-/*s: enum _anon_ (kernel/network/ip/ipaux.c) */
+/*s: enum [[_anon_ (kernel/network/ip/ipaux.c)]] */
 enum
 {
     Isprefix= 16,
 };
-/*e: enum _anon_ (kernel/network/ip/ipaux.c) */
+/*e: enum [[_anon_ (kernel/network/ip/ipaux.c)]] */
 
-/*s: function ipv62smcast */
+/*s: function [[ipv62smcast]] */
 //#define CLASS(p) ((*(uchar*)(p))>>6)
 
 void
@@ -226,10 +226,10 @@ ipv62smcast(uchar *smcast, uchar *a)
     smcast[14] = a[14];
     smcast[15] = a[15];
 }
-/*e: function ipv62smcast */
+/*e: function [[ipv62smcast]] */
 
 
-/*s: function parsemac */
+/*s: function [[parsemac]] */
 /*
  *  parse a hex mac address
  */
@@ -257,9 +257,9 @@ parsemac(uchar *to, char *from, int len)
     }
     return i;
 }
-/*e: function parsemac */
+/*e: function [[parsemac]] */
 
-/*s: function iphash */
+/*s: function [[iphash]] */
 /*
  *  hashing tcp, udp, ... connections
  */
@@ -269,9 +269,9 @@ iphash(ipaddr sa, ushort sp, ipaddr da, ushort dp)
     return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) 
       % Nipht; // pad's first network bugfix :)
 }
-/*e: function iphash */
+/*e: function [[iphash]] */
 
-/*s: function iphtadd */
+/*s: function [[iphtadd]] */
 void
 iphtadd(Ipht *ht, Conv *c)
 {
@@ -303,9 +303,9 @@ iphtadd(Ipht *ht, Conv *c)
     ht->tab[hv] = h;
     unlock(ht);
 }
-/*e: function iphtadd */
+/*e: function [[iphtadd]] */
 
-/*s: function iphtrem */
+/*s: function [[iphtrem]] */
 void
 iphtrem(Ipht *ht, Conv *c)
 {
@@ -324,9 +324,9 @@ iphtrem(Ipht *ht, Conv *c)
         }
     unlock(ht);
 }
-/*e: function iphtrem */
+/*e: function [[iphtrem]] */
 
-/*s: function iphtlook */
+/*s: function [[iphtlook]] */
 /* look for a matching conversation with the following precedence
  *  connected && raddr,rport,laddr,lport
  *  announced && laddr,lport
@@ -403,5 +403,5 @@ iphtlook(Ipht *ht, ipaddr sa, ushort sp, ipaddr da, ushort dp)
     unlock(ht);
     return nil;
 }
-/*e: function iphtlook */
+/*e: function [[iphtlook]] */
 /*e: kernel/network/ip/ipaux.c */

@@ -4,7 +4,7 @@
 #include <ctype.h>
 #include <ip.h>
 
-/*s: function findfield */
+/*s: function [[findfield]] */
 static char*
 findfield(char *name, char **f, int n)
 {
@@ -15,9 +15,9 @@ findfield(char *name, char **f, int n)
             return f[i+1];
     return "";
 }
-/*e: function findfield */
+/*e: function [[findfield]] */
 
-/*s: function _readipifc */
+/*s: function [[_readipifc]] */
 static Ipifc**
 _readipifc(char *file, Ipifc **l, int index)
 {
@@ -104,9 +104,9 @@ lose:
 
     return l;
 }
-/*e: function _readipifc */
+/*e: function [[_readipifc]] */
 
-/*s: function _freeifc */
+/*s: function [[_freeifc]] */
 static void
 _freeifc(Ipifc *ifc)
 {
@@ -124,9 +124,9 @@ _freeifc(Ipifc *ifc)
         free(ifc);
     }
 }
-/*e: function _freeifc */
+/*e: function [[_freeifc]] */
 
-/*s: function readipifc */
+/*s: function [[readipifc]] */
 Ipifc*
 readipifc(char *net, Ipifc *ifc, int index)
 {
@@ -168,5 +168,5 @@ readipifc(char *net, Ipifc *ifc, int index)
 
     return ifc;
 }
-/*e: function readipifc */
+/*e: function [[readipifc]] */
 /*e: lib_networking/libip/readipifc.c */

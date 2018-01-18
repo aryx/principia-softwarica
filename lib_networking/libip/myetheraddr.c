@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <ip.h>
 
-/*s: function myetheraddr */
+/*s: function [[myetheraddr]] */
 errorneg1
 myetheraddr(uchar *to, char *dev)
 {
@@ -28,5 +28,5 @@ myetheraddr(uchar *to, char *dev)
     parseether(to, buf);
     return OK_0;
 }
-/*e: function myetheraddr */
+/*e: function [[myetheraddr]] */
 /*e: lib_networking/libip/myetheraddr.c */

@@ -7,7 +7,7 @@ typedef struct Netaddr  Netaddr;
 typedef struct Netfile  Netfile;
 typedef struct Netif  Netif;
 
-/*s: enum _anon_ (kernel/network/netif.h) */
+/*s: enum [[_anon_ (kernel/network/netif.h)]] */
 enum
 {
   Nmaxaddr= 64,
@@ -24,22 +24,22 @@ enum
   Nifstatqid,
   Nmtuqid,
 };
-/*e: enum _anon_ (kernel/network/netif.h) */
+/*e: enum [[_anon_ (kernel/network/netif.h)]] */
 
-/*s: macro NETTYPE */
+/*s: macro [[NETTYPE]] */
 /*
  *  Macros to manage Qid's used for multiplexed devices
  */
 #define NETTYPE(x)  (((ulong)x)&0x1f)
-/*e: macro NETTYPE */
-/*s: macro NETID */
+/*e: macro [[NETTYPE]] */
+/*s: macro [[NETID]] */
 #define NETID(x)  ((((ulong)x))>>5)
-/*e: macro NETID */
-/*s: macro NETQID */
+/*e: macro [[NETID]] */
+/*s: macro [[NETQID]] */
 #define NETQID(i,t) ((((ulong)i)<<5)|(t))
-/*e: macro NETQID */
+/*e: macro [[NETQID]] */
 
-/*s: struct Netfile */
+/*s: struct [[Netfile]] */
 /*
  *  one per multiplexed connection
  */
@@ -63,9 +63,9 @@ struct Netfile
   // Extra
   QLock;
 };
-/*e: struct Netfile */
+/*e: struct [[Netfile]] */
 
-/*s: struct Netaddr */
+/*s: struct [[Netaddr]] */
 /*
  *  a network address
  */
@@ -76,7 +76,7 @@ struct Netaddr
   uchar addr[Nmaxaddr];
   int ref;
 };
-/*e: struct Netaddr */
+/*e: struct [[Netaddr]] */
 
 /*s: struct Netif (kernel) */
 /*
@@ -157,15 +157,15 @@ int netifwstat(Netif*, Chan*, uchar*, int);
 int netifstat(Netif*, Chan*, uchar*, int);
 int activemulti(Netif*, uchar*, int);
 
-/*s: enum _anon_ (kernel/network/netif.h)2 */
+/*s: enum [[_anon_ (kernel/network/netif.h)2]] */
 /*
  *  Ethernet specific
  */
 enum
 {
-  /*s: constant Eaddrlen */
+  /*s: constant [[Eaddrlen]] */
   Eaddrlen= 6,
-  /*e: constant Eaddrlen */
+  /*e: constant [[Eaddrlen]] */
   ETHERMINTU =  60,   /* minimum transmit size */
   ETHERMAXTU =  1514,   /* maximum transmit size */
   ETHERHDRSIZE =  14,   /* size of an ethernet header */
@@ -176,13 +176,13 @@ enum
 
   ETIP6   = 0x86DD,
 };
-/*e: enum _anon_ (kernel/network/netif.h)2 */
+/*e: enum [[_anon_ (kernel/network/netif.h)2]] */
 
 /*s: typedef eaddr */
 typedef uchar eaddr[Eaddrlen];
 /*e: typedef eaddr */
 
-/*s: struct Etherpkt */
+/*s: struct [[Etherpkt]] */
 struct Etherpkt
 {
   eaddr d;
@@ -191,7 +191,7 @@ struct Etherpkt
 
   uchar data[1500];
 };
-/*e: struct Etherpkt */
+/*e: struct [[Etherpkt]] */
 
 
 /*e: kernel/network/netif.h */

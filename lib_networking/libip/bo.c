@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <ip.h>
 
-/*s: function hnputv */
+/*s: function [[hnputv]] */
 void
 hnputv(void *p, uvlong v)
 {
@@ -19,9 +19,9 @@ hnputv(void *p, uvlong v)
     a[6] = v>>8;
     a[7] = v;
 }
-/*e: function hnputv */
+/*e: function [[hnputv]] */
 
-/*s: function hnputl */
+/*s: function [[hnputl]] */
 void
 hnputl(void *p, uint v)
 {
@@ -33,9 +33,9 @@ hnputl(void *p, uint v)
     a[2] = v>>8;
     a[3] = v;
 }
-/*e: function hnputl */
+/*e: function [[hnputl]] */
 
-/*s: function hnputs */
+/*s: function [[hnputs]] */
 void
 hnputs(void *p, ushort v)
 {
@@ -45,9 +45,9 @@ hnputs(void *p, ushort v)
     a[0] = v>>8;
     a[1] = v;
 }
-/*e: function hnputs */
+/*e: function [[hnputs]] */
 
-/*s: function nhgetv */
+/*s: function [[nhgetv]] */
 uvlong
 nhgetv(void *p)
 {
@@ -65,9 +65,9 @@ nhgetv(void *p)
     v |= a[7]<<0;
     return v;
 }
-/*e: function nhgetv */
+/*e: function [[nhgetv]] */
 
-/*s: function nhgetl */
+/*s: function [[nhgetl]] */
 uint
 nhgetl(void *p)
 {
@@ -76,9 +76,9 @@ nhgetl(void *p)
     a = p;
     return (a[0]<<24)|(a[1]<<16)|(a[2]<<8)|(a[3]<<0);
 }
-/*e: function nhgetl */
+/*e: function [[nhgetl]] */
 
-/*s: function nhgets */
+/*s: function [[nhgets]] */
 ushort
 nhgets(void *p)
 {
@@ -87,5 +87,5 @@ nhgets(void *p)
     a = p;
     return (a[0]<<8)|(a[1]<<0);
 }
-/*e: function nhgets */
+/*e: function [[nhgets]] */
 /*e: lib_networking/libip/bo.c */

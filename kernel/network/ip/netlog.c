@@ -7,13 +7,13 @@
 #include    "../port/error.h"
 #include    "../ip/ip.h"
 
-/*s: enum _anon_ (kernel/network/ip/netlog.c) */
+/*s: enum [[_anon_ (kernel/network/ip/netlog.c)]] */
 enum {
     Nlog        = 16*1024,
 };
-/*e: enum _anon_ (kernel/network/ip/netlog.c) */
+/*e: enum [[_anon_ (kernel/network/ip/netlog.c)]] */
 
-/*s: struct Netlog */
+/*s: struct [[Netlog]] */
 /*
  *  action log
  */
@@ -37,16 +37,16 @@ struct Netlog {
     QLock;
     Rendez;
 };
-/*e: struct Netlog */
+/*e: struct [[Netlog]] */
 
-/*s: struct Netlogflag */
+/*s: struct [[Netlogflag]] */
 typedef struct Netlogflag {
     char*   name;
     int mask;
 } Netlogflag;
-/*e: struct Netlogflag */
+/*e: struct [[Netlogflag]] */
 
-/*s: global flags */
+/*s: global [[flags]] */
 static Netlogflag flags[] =
 {
     { "ppp",    Logppp, },
@@ -64,39 +64,39 @@ static Netlogflag flags[] =
     { "esp",    Logesp, },
     { nil,      0, },
 };
-/*e: global flags */
+/*e: global [[flags]] */
 
-/*s: global Ebadnetctl */
+/*s: global [[Ebadnetctl]] */
 char Ebadnetctl[] = "too few arguments for netlog control message";
-/*e: global Ebadnetctl */
+/*e: global [[Ebadnetctl]] */
 
-/*s: enum _anon_ (kernel/network/ip/netlog.c)2 */
+/*s: enum [[_anon_ (kernel/network/ip/netlog.c)2]] */
 enum
 {
     CMset,
     CMclear,
     CMonly,
 };
-/*e: enum _anon_ (kernel/network/ip/netlog.c)2 */
+/*e: enum [[_anon_ (kernel/network/ip/netlog.c)2]] */
 
-/*s: global routecmd */
+/*s: global [[routecmd]] */
 static
 Cmdtab routecmd[] = {
     CMset,      "set",      0,
     CMclear,    "clear",    0,
     CMonly,     "only",     0,
 };
-/*e: global routecmd */
+/*e: global [[routecmd]] */
 
-/*s: function netloginit */
+/*s: function [[netloginit]] */
 void
 netloginit(Fs *f)
 {
     f->alog = smalloc(sizeof(Netlog));
 }
-/*e: function netloginit */
+/*e: function [[netloginit]] */
 
-/*s: function netlogopen */
+/*s: function [[netlogopen]] */
 void
 netlogopen(Fs *f)
 {
@@ -117,9 +117,9 @@ netlogopen(Fs *f)
     unlock(f->alog);
     poperror();
 }
-/*e: function netlogopen */
+/*e: function [[netlogopen]] */
 
-/*s: function netlogclose */
+/*s: function [[netlogclose]] */
 void
 netlogclose(Fs *f)
 {
@@ -136,9 +136,9 @@ netlogclose(Fs *f)
     unlock(f->alog);
     poperror();
 }
-/*e: function netlogclose */
+/*e: function [[netlogclose]] */
 
-/*s: function netlogready */
+/*s: function [[netlogready]] */
 static bool
 netlogready(void *a)
 {
@@ -146,9 +146,9 @@ netlogready(void *a)
 
     return f->alog->len;
 }
-/*e: function netlogready */
+/*e: function [[netlogready]] */
 
-/*s: function netlogread */
+/*s: function [[netlogread]] */
 long
 netlogread(Fs *f, void *a, ulong, long n)
 {
@@ -193,9 +193,9 @@ netlogread(Fs *f, void *a, ulong, long n)
 
     return n;
 }
-/*e: function netlogread */
+/*e: function [[netlogread]] */
 
-/*s: function netlogctl */
+/*s: function [[netlogctl]] */
 void
 netlogctl(Fs *f, char* s, int n)
 {
@@ -255,9 +255,9 @@ netlogctl(Fs *f, char* s, int n)
     free(cb);
     poperror();
 }
-/*e: function netlogctl */
+/*e: function [[netlogctl]] */
 
-/*s: function netlog */
+/*s: function [[netlog]] */
 void
 netlog(Fs *f, int mask, char *fmt, ...)
 {
@@ -295,5 +295,5 @@ netlog(Fs *f, int mask, char *fmt, ...)
 
     wakeup(f->alog);
 }
-/*e: function netlog */
+/*e: function [[netlog]] */
 /*e: kernel/network/ip/netlog.c */

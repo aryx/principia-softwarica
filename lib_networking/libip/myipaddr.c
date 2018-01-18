@@ -3,24 +3,24 @@
 #include <libc.h>
 #include <ip.h>
 
-/*s: global loopbacknet */
+/*s: global [[loopbacknet]] */
 static ipaddr loopbacknet = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
     127, 0, 0, 0
 };
-/*e: global loopbacknet */
-/*s: global loopbackmask */
+/*e: global [[loopbacknet]] */
+/*s: global [[loopbackmask]] */
 static ipaddr loopbackmask = {
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
     0xff, 0, 0, 0
 };
-/*e: global loopbackmask */
+/*e: global [[loopbackmask]] */
 
-/*s: function myipaddr */
+/*s: function [[myipaddr]] */
 /* find first ip addr that isn't the friggin loopback address
  * unless there are no others 
  */
@@ -47,5 +47,5 @@ myipaddr(ipaddr ip, char *net)
     ipmove(ip, IPnoaddr);
     return ERROR_NEG1;
 }
-/*e: function myipaddr */
+/*e: function [[myipaddr]] */
 /*e: lib_networking/libip/myipaddr.c */

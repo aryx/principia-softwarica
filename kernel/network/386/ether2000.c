@@ -24,30 +24,30 @@
  * and a reset port.
  */
 
-/*s: enum _anon_ (kernel/network/386/ether2000.c) */
+/*s: enum [[_anon_ (kernel/network/386/ether2000.c)]] */
 enum {
     Data		= 0x10,		/* offset from I/O base of data port */
     Reset		= 0x1F,		/* offset from I/O base of reset port */
 };
-/*e: enum _anon_ (kernel/network/386/ether2000.c) */
+/*e: enum [[_anon_ (kernel/network/386/ether2000.c)]] */
 
 typedef struct Ctlr Ctlr;
-/*s: struct Ctlr (kernel/network/386/ether2000.c) */
+/*s: struct [[Ctlr]]([[(kernel/network/386/ether2000.c)]]) */
 struct Ctlr {
     Pcidev*	pcidev;
     Ctlr*	next;
     int	active;
 };
-/*e: struct Ctlr (kernel/network/386/ether2000.c) */
+/*e: struct [[Ctlr]]([[(kernel/network/386/ether2000.c)]]) */
 
-/*s: global ctlrhead (kernel/network/386/ether2000.c) */
+/*s: global [[ctlrhead]]([[(kernel/network/386/ether2000.c)]]) */
 static Ctlr* ctlrhead;
-/*e: global ctlrhead (kernel/network/386/ether2000.c) */
-/*s: global ctlrtail (kernel/network/386/ether2000.c) */
+/*e: global [[ctlrhead]]([[(kernel/network/386/ether2000.c)]]) */
+/*s: global [[ctlrtail]]([[(kernel/network/386/ether2000.c)]]) */
 static Ctlr* ctlrtail;
-/*e: global ctlrtail (kernel/network/386/ether2000.c) */
+/*e: global [[ctlrtail]]([[(kernel/network/386/ether2000.c)]]) */
 
-/*s: global ne2000pci */
+/*s: global [[ne2000pci]] */
 static struct {
     char*	name;
     int	id;
@@ -56,9 +56,9 @@ static struct {
     { "Winbond 89C940",	(0x0940<<16)|0x1050, },
     { nil },
 };
-/*e: global ne2000pci */
+/*e: global [[ne2000pci]] */
 
-/*s: function ne2000match */
+/*s: function [[ne2000match]] */
 static Ctlr*
 ne2000match(Ether* edev, int id)
 {
@@ -94,9 +94,9 @@ ne2000match(Ether* edev, int id)
 
     return nil;
 }
-/*e: function ne2000match */
+/*e: function [[ne2000match]] */
 
-/*s: function ne2000pnp */
+/*s: function [[ne2000pnp]] */
 static void
 ne2000pnp(Ether* edev)
 {
@@ -146,9 +146,9 @@ ne2000pnp(Ether* edev)
             break;
     }
 }
-/*e: function ne2000pnp */
+/*e: function [[ne2000pnp]] */
 
-/*s: function ne2000reset */
+/*s: function [[ne2000reset]] */
 static errorneg1
 ne2000reset(Ether* edev)
 {
@@ -250,13 +250,13 @@ ne2000reset(Ether* edev)
 
     return OK_0;
 }
-/*e: function ne2000reset */
+/*e: function [[ne2000reset]] */
 
-/*s: function ether2000link */
+/*s: function [[ether2000link]] */
 void
 ether2000link(void)
 {
     addethercard("NE2000", ne2000reset);
 }
-/*e: function ether2000link */
+/*e: function [[ether2000link]] */
 /*e: kernel/network/386/ether2000.c */

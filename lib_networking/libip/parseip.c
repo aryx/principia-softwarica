@@ -4,7 +4,7 @@
 #include <ctype.h>
 #include <ip.h>
 
-/*s: function v4parseip */
+/*s: function [[v4parseip]] */
 char*
 v4parseip(ipv4 to, char *from)
 {
@@ -38,17 +38,17 @@ v4parseip(ipv4 to, char *from)
     }
     return p;
 }
-/*e: function v4parseip */
+/*e: function [[v4parseip]] */
 
-/*s: function ipcharok */
+/*s: function [[ipcharok]] */
 static int
 ipcharok(int c)
 {
     return c == '.' || c == ':' || isascii(c) && isxdigit(c);
 }
-/*e: function ipcharok */
+/*e: function [[ipcharok]] */
 
-/*s: function delimchar */
+/*s: function [[delimchar]] */
 static bool
 delimchar(int c)
 {
@@ -58,9 +58,9 @@ delimchar(int c)
         return false;
     return true;
 }
-/*e: function delimchar */
+/*e: function [[delimchar]] */
 
-/*s: function parseip */
+/*s: function [[parseip]] */
 /*
  * `from' may contain an address followed by other characters,
  * at least in /boot, so we permit whitespace (and more) after the address.
@@ -124,9 +124,9 @@ parseip(ipaddr to, char *from)
     } else
         return 6;
 }
-/*e: function parseip */
+/*e: function [[parseip]] */
 
-/*s: function parseipmask */
+/*s: function [[parseipmask]] */
 /*
  *  hack to allow ip v4 masks to be entered in the old
  *  style
@@ -169,6 +169,6 @@ parseipmask(uchar *to, char *from)
     }
     return x;
 }
-/*e: function parseipmask */
+/*e: function [[parseipmask]] */
 
 /*e: lib_networking/libip/parseip.c */

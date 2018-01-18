@@ -2,18 +2,18 @@
 #pragma	src	"/sys/src/libip"
 #pragma	lib	"libip.a"
 
-/*s: enum _anon_ */
+/*s: enum [[_anon_]] */
 enum 
 {
-    /*s: constant IPaddrlen */
+    /*s: constant [[IPaddrlen]] */
     IPaddrlen=	16,
-    /*e: constant IPaddrlen */
-    /*s: constant IPv4addrlen */
+    /*e: constant [[IPaddrlen]] */
+    /*s: constant [[IPv4addrlen]] */
     IPv4addrlen=	4,
-    /*e: constant IPv4addrlen */
-    /*s: constant IPv4off */
+    /*e: constant [[IPv4addrlen]] */
+    /*s: constant [[IPv4off]] */
     IPv4off=	12,
-    /*e: constant IPv4off */
+    /*e: constant [[IPv4off]] */
 
     IPllen=		4,
     IPV4HDR_LEN=	20,
@@ -22,7 +22,7 @@ enum
     IP_VER4= 	0x40,
     IP_VER6=	0x60,
 };
-/*e: enum _anon_ */
+/*e: enum [[_anon_]] */
 
 /*s: typedef ipv4 */
 typedef uchar ipv4[IPv4addrlen];
@@ -69,7 +69,7 @@ struct Iplifc
 };
 /*e: struct Iplifc (user) */
 
-/*s: struct Ipv6rp */
+/*s: struct [[Ipv6rp]] */
 /* default values, one per stack */
 struct Ipv6rp
 {
@@ -83,7 +83,7 @@ struct Ipv6rp
     int	ttl;
     int	routerlt;	
 };
-/*e: struct Ipv6rp */
+/*e: struct [[Ipv6rp]] */
 
 /*s: struct Ipifc (user) */
 /* actual interface */
@@ -118,14 +118,14 @@ struct Ipifc
 };
 /*e: struct Ipifc (user) */
 
-/*s: macro ISIPV6MCAST */
+/*s: macro [[ISIPV6MCAST]] */
 #define ISIPV6MCAST(addr)	((addr)[0] == 0xff)
-/*e: macro ISIPV6MCAST */
-/*s: macro ISIPV6LINKLOCAL */
+/*e: macro [[ISIPV6MCAST]] */
+/*s: macro [[ISIPV6LINKLOCAL]] */
 #define ISIPV6LINKLOCAL(addr) ((addr)[0] == 0xfe && ((addr)[1] & 0xc0) == 0x80)
-/*e: macro ISIPV6LINKLOCAL */
+/*e: macro [[ISIPV6LINKLOCAL]] */
 
-/*s: enum _anon_ (include/net/ip.h) */
+/*s: enum [[_anon_ (include/net/ip.h)]] */
 /*
  * ipv6 constants
  * `ra' is `router advertisement', `rs' is `router solicitation'.
@@ -171,10 +171,10 @@ enum {
     V6retranstimer	= 1000,
     V6initprobedelay= 5000,
 };
-/*e: enum _anon_ (include/net/ip.h) */
+/*e: enum [[_anon_ (include/net/ip.h)]] */
 
 
-/*s: struct Ip6hdr */
+/*s: struct [[Ip6hdr]] */
 /* V6 header on the wire */
 struct Ip6hdr {
     uchar	vcf[4];		/* version:4, traffic class:8, flow label:20 */
@@ -185,9 +185,9 @@ struct Ip6hdr {
     ipaddr	dst;	/* destination address */
     uchar	payload[];
 };
-/*e: struct Ip6hdr */
+/*e: struct [[Ip6hdr]] */
 
-/*s: struct Icmp6hdr */
+/*s: struct [[Icmp6hdr]] */
 /*
  *  user-level icmpv6 with control message "headers"
  */
@@ -196,14 +196,14 @@ struct Icmp6hdr {
     ipaddr	laddr;	/* local address */
     ipaddr	raddr;	/* remote address */
 };
-/*e: struct Icmp6hdr */
+/*e: struct [[Icmp6hdr]] */
 
-/*s: constant Udphdrsize */
+/*s: constant [[Udphdrsize]] */
 /*
  *  user level udp headers with control message "headers"
  */
 #define Udphdrsize 52 /* size of a Udphdr */
-/*e: constant Udphdrsize */
+/*e: constant [[Udphdrsize]] */
 
 /*s: struct Udphdr (user) */
 struct Udphdr
@@ -245,12 +245,12 @@ ushort	ptclbsum(uchar*, int);
 int		v6tov4(uchar*, uchar*);
 void	v4tov6(uchar*, uchar*);
 
-/*s: macro ipcmp */
+/*s: macro [[ipcmp]] */
 #define	ipcmp(x, y) memcmp(x, y, IPaddrlen)
-/*e: macro ipcmp */
-/*s: macro ipmove */
+/*e: macro [[ipcmp]] */
+/*s: macro [[ipmove]] */
 #define	ipmove(x, y) memmove(x, y, IPaddrlen)
-/*e: macro ipmove */
+/*e: macro [[ipmove]] */
 
 extern ipaddr IPv4bcast;
 extern ipaddr IPv4bcastobs;
@@ -260,9 +260,9 @@ extern ipaddr IPnoaddr;
 extern ipaddr v4prefix;
 extern ipaddr IPallbits;
 
-/*s: macro CLASS */
+/*s: macro [[CLASS]] */
 #define CLASS(p) ((*(uchar*)(p))>>6)
-/*e: macro CLASS */
+/*e: macro [[CLASS]] */
 
 #pragma	varargck	type	"I"	uchar*
 #pragma	varargck	type	"V"	uchar*

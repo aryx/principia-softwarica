@@ -12,25 +12,25 @@ static void walkadd(Fs*, Route**, Route*);
 static void addnode(Fs*, Route**, Route*);
 static void calcd(Route*);
 
-/*s: global v4freelist */
+/*s: global [[v4freelist]] */
 /* these are used for all instances of IP */
 static Route*   v4freelist;
-/*e: global v4freelist */
-/*s: global v4routegeneration */
+/*e: global [[v4freelist]] */
+/*s: global [[v4routegeneration]] */
 static ulong v4routegeneration;
-/*e: global v4routegeneration */
-/*s: global routelock */
+/*e: global [[v4routegeneration]] */
+/*s: global [[routelock]] */
 static RWlock   routelock;
-/*e: global routelock */
+/*e: global [[routelock]] */
 
-/*s: global v6freelist */
+/*s: global [[v6freelist]] */
 static Route*   v6freelist;
-/*e: global v6freelist */
-/*s: global v6routegeneration */
+/*e: global [[v6freelist]] */
+/*s: global [[v6routegeneration]] */
 static ulong v6routegeneration;
-/*e: global v6routegeneration */
+/*e: global [[v6routegeneration]] */
 
-/*s: function freeroute */
+/*s: function [[freeroute]] */
 static void
 freeroute(Route *r)
 {
@@ -47,9 +47,9 @@ freeroute(Route *r)
     r->mid = *l;
     *l = r;
 }
-/*e: function freeroute */
+/*e: function [[freeroute]] */
 
-/*s: function allocroute */
+/*s: function [[allocroute]] */
 static Route*
 allocroute(int type)
 {
@@ -84,9 +84,9 @@ allocroute(int type)
 
     return r;
 }
-/*e: function allocroute */
+/*e: function [[allocroute]] */
 
-/*s: function addqueue */
+/*s: function [[addqueue]] */
 static void
 addqueue(Route **q, Route *r)
 {
@@ -100,9 +100,9 @@ addqueue(Route **q, Route *r)
     *q = l;
     l->left = r;
 }
-/*e: function addqueue */
+/*e: function [[addqueue]] */
 
-/*s: function lcmp */
+/*s: function [[lcmp]] */
 /*
  *   compare 2 v6 addresses
  */
@@ -119,9 +119,9 @@ lcmp(ulong *a, ulong *b)
     }
     return 0;
 }
-/*e: function lcmp */
+/*e: function [[lcmp]] */
 
-/*s: enum _anon_ (kernel/network/ip/iproute.c) */
+/*s: enum [[_anon_ (kernel/network/ip/iproute.c)]] */
 /*
  *  compare 2 v4 or v6 ranges
  */
@@ -133,9 +133,9 @@ enum
     Rcontains,
     Rcontained,
 };
-/*e: enum _anon_ (kernel/network/ip/iproute.c) */
+/*e: enum [[_anon_ (kernel/network/ip/iproute.c)]] */
 
-/*s: function rangecompare */
+/*s: function [[rangecompare]] */
 static int
 rangecompare(Route *a, Route *b)
 {
@@ -174,9 +174,9 @@ rangecompare(Route *a, Route *b)
     return Rcontained;
     /*e: [[rangecompare()]] if ipv6 routes */
 }
-/*e: function rangecompare */
+/*e: function [[rangecompare]] */
 
-/*s: function copygate */
+/*s: function [[copygate]] */
 static void
 copygate(Route *old, Route *new)
 {
@@ -185,9 +185,9 @@ copygate(Route *old, Route *new)
     else
         memmove(old->v6.gate, new->v6.gate, IPaddrlen);
 }
-/*e: function copygate */
+/*e: function [[copygate]] */
 
-/*s: function walkadd */
+/*s: function [[walkadd]] */
 /*
  *  walk down a tree adding nodes back in
  */
@@ -206,9 +206,9 @@ walkadd(Fs *f, Route **root, Route *p)
     if(r)
         walkadd(f, root, r);
 }
-/*e: function walkadd */
+/*e: function [[walkadd]] */
 
-/*s: function calcd */
+/*s: function [[calcd]] */
 /*
  *  calculate depth
  */
@@ -232,9 +232,9 @@ calcd(Route *p)
         p->depth = d+1;
     }
 }
-/*e: function calcd */
+/*e: function [[calcd]] */
 
-/*s: function balancetree */
+/*s: function [[balancetree]] */
 /*
  *  balance the tree at the current node
  */
@@ -269,9 +269,9 @@ balancetree(Route **cur)
     } else
         calcd(p);
 }
-/*e: function balancetree */
+/*e: function [[balancetree]] */
 
-/*s: function addnode */
+/*s: function [[addnode]] */
 /*
  *  add a new node to the tree
  */
@@ -326,13 +326,13 @@ addnode(Fs *f, Route **cur, Route *new)
 
     balancetree(cur);
 }
-/*e: function addnode */
+/*e: function [[addnode]] */
 
-/*s: macro V4H */
+/*s: macro [[V4H]] */
 #define V4H(a)  ((a&0x07ffffff)>>(32-Lroot-5))
-/*e: macro V4H */
+/*e: macro [[V4H]] */
 
-/*s: function v4addroute */
+/*s: function [[v4addroute]] */
 void
 v4addroute(Fs *f, char *tag, ipv4 a, ipv4 mask, ipv4 gate, int type)
 {
@@ -369,12 +369,12 @@ v4addroute(Fs *f, char *tag, ipv4 a, ipv4 mask, ipv4 gate, int type)
 
     ipifcaddroute(f, Rv4, a, mask, gate, type);
 }
-/*e: function v4addroute */
+/*e: function [[v4addroute]] */
 
-/*s: macro V6H */
+/*s: macro [[V6H]] */
 #define V6H(a)  (((a)[IPllen-1] & 0x07ffffff)>>(32-Lroot-5))
-/*e: macro V6H */
-/*s: function v6addroute */
+/*e: macro [[V6H]] */
+/*s: function [[v6addroute]] */
 //#define ISDFLT(a, mask, tag) ((ipcmp((a),v6Unspecified)==0) && (ipcmp((mask),v6Unspecified)==0) && (strcmp((tag), "ra")!=0))
 
 void
@@ -419,9 +419,9 @@ v6addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type)
 
     ipifcaddroute(f, 0, a, mask, gate, type);
 }
-/*e: function v6addroute */
+/*e: function [[v6addroute]] */
 
-/*s: function looknode */
+/*s: function [[looknode]] */
 Route**
 looknode(Route **cur, Route *r)
 {
@@ -449,9 +449,9 @@ looknode(Route **cur, Route *r)
         }
     }
 }
-/*e: function looknode */
+/*e: function [[looknode]] */
 
-/*s: function v4delroute */
+/*s: function [[v4delroute]] */
 void
 v4delroute(Fs *f, ipv4 a, ipv4 mask, bool dolock)
 {
@@ -492,9 +492,9 @@ v4delroute(Fs *f, ipv4 a, ipv4 mask, bool dolock)
 
     ipifcremroute(f, Rv4, a, mask);
 }
-/*e: function v4delroute */
+/*e: function [[v4delroute]] */
 
-/*s: function v6delroute */
+/*s: function [[v6delroute]] */
 void
 v6delroute(Fs *f, uchar *a, uchar *mask, int dolock)
 {
@@ -538,9 +538,9 @@ v6delroute(Fs *f, uchar *a, uchar *mask, int dolock)
 
     ipifcremroute(f, 0, a, mask);
 }
-/*e: function v6delroute */
+/*e: function [[v6delroute]] */
 
-/*s: function v4lookup */
+/*s: function [[v4lookup]] */
 Route*
 v4lookup(Fs *f, ipv4 a, Conv *c)
 {
@@ -592,9 +592,9 @@ v4lookup(Fs *f, ipv4 a, Conv *c)
 
     return q;
 }
-/*e: function v4lookup */
+/*e: function [[v4lookup]] */
 
-/*s: function v6lookup */
+/*s: function [[v6lookup]] */
 Route*
 v6lookup(Fs *f, uchar *a, Conv *c)
 {
@@ -665,9 +665,9 @@ next:       ;
 
     return q;
 }
-/*e: function v6lookup */
+/*e: function [[v6lookup]] */
 
-/*s: function routetype */
+/*s: function [[routetype]] */
 void
 routetype(int type, char *p)
 {
@@ -688,13 +688,13 @@ routetype(int type, char *p)
     if(type & Rptpt)
         *p = 'p';
 }
-/*e: function routetype */
+/*e: function [[routetype]] */
 
-/*s: global rformat */
+/*s: global [[rformat]] */
 static char *rformat = "%-15I %-4M %-15I %4.4s %4.4s %3s\n";
-/*e: global rformat */
+/*e: global [[rformat]] */
 
-/*s: function convroute */
+/*s: function [[convroute]] */
 void
 convroute(Route *r, uchar *addr, uchar *mask, uchar *gate, char *t, int *nifc)
 {
@@ -722,9 +722,9 @@ convroute(Route *r, uchar *addr, uchar *mask, uchar *gate, char *t, int *nifc)
     else
         *nifc = -1;
 }
-/*e: function convroute */
+/*e: function [[convroute]] */
 
-/*s: function sprintroute */
+/*s: function [[sprintroute]] */
 /*
  *  this code is not in rr to reduce stack size
  */
@@ -753,9 +753,9 @@ sprintroute(Route *r, Routewalk *rw)
     } else
         rw->p = p;
 }
-/*e: function sprintroute */
+/*e: function [[sprintroute]] */
 
-/*s: function rr */
+/*s: function [[rr]] */
 /*
  *  recurse descending tree, applying the function in Routewalk
  */
@@ -787,9 +787,9 @@ rr(Route *r, Routewalk *rw)
 
     return rr(r->right, rw);
 }
-/*e: function rr */
+/*e: function [[rr]] */
 
-/*s: function ipwalkroutes */
+/*s: function [[ipwalkroutes]] */
 void
 ipwalkroutes(Fs *f, Routewalk *rw)
 {
@@ -806,9 +806,9 @@ ipwalkroutes(Fs *f, Routewalk *rw)
     }
     runlock(&routelock);
 }
-/*e: function ipwalkroutes */
+/*e: function [[ipwalkroutes]] */
 
-/*s: function routeread */
+/*s: function [[routeread]] */
 long
 routeread(Fs *f, char *p, ulong offset, int n)
 {
@@ -823,9 +823,9 @@ routeread(Fs *f, char *p, ulong offset, int n)
 
     return rw.p - p;
 }
-/*e: function routeread */
+/*e: function [[routeread]] */
 
-/*s: function delroute */
+/*s: function [[delroute]] */
 /*
  *  this code is not in routeflush to reduce stack size
  */
@@ -842,9 +842,9 @@ delroute(Fs *f, Route *r, int dolock)
     else
         v6delroute(f, addr, mask, dolock);
 }
-/*e: function delroute */
+/*e: function [[delroute]] */
 
-/*s: function routeflush */
+/*s: function [[routeflush]] */
 /*
  *  recurse until one route is deleted
  *    returns 0 if nothing is deleted, 1 otherwise
@@ -868,9 +868,9 @@ routeflush(Fs *f, Route *r, char *tag)
     }
     return 0;
 }
-/*e: function routeflush */
+/*e: function [[routeflush]] */
 
-/*s: function iproute */
+/*s: function [[iproute]] */
 Route *
 iproute(Fs *fs, ipaddr ip)
 {
@@ -879,9 +879,9 @@ iproute(Fs *fs, ipaddr ip)
     else
         return v6lookup(fs, ip, nil);
 }
-/*e: function iproute */
+/*e: function [[iproute]] */
 
-/*s: function printroute */
+/*s: function [[printroute]] */
 static void
 printroute(Route *r)
 {
@@ -897,9 +897,9 @@ printroute(Route *r)
     }
     print(rformat, addr, mask, gate, t, r->tag, iname);
 }
-/*e: function printroute */
+/*e: function [[printroute]] */
 
-/*s: function routewrite */
+/*s: function [[routewrite]] */
 long
 routewrite(Fs *f, Chan *c, char *p, int n)
 {
@@ -982,5 +982,5 @@ routewrite(Fs *f, Chan *c, char *p, int n)
     free(cb);
     return n;
 }
-/*e: function routewrite */
+/*e: function [[routewrite]] */
 /*e: kernel/network/ip/iproute.c */

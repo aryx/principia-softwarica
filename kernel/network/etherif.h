@@ -1,12 +1,12 @@
 /*s: kernel/network/etherif.h */
-/*s: enum _anon_ (kernel/network/etherif.h) */
+/*s: enum [[_anon_ (kernel/network/etherif.h)]] */
 enum {
-  /*s: constant MaxEther */
+  /*s: constant [[MaxEther]] */
   MaxEther  = 48, //bcm: 4 
-  /*e: constant MaxEther */
+  /*e: constant [[MaxEther]] */
   Ntypes    = 8,
 };
-/*e: enum _anon_ (kernel/network/etherif.h) */
+/*e: enum [[_anon_ (kernel/network/etherif.h)]] */
 
 typedef struct Ether Ether;
 /*s: struct Ether (kernel) */
@@ -64,10 +64,10 @@ extern void addethercard(char*, int(*)(Ether*));
 extern ulong ethercrc(uchar*, int);
 //extern int parseether(uchar*, char*);
 
-/*s: macro NEXT */
+/*s: macro [[NEXT]] */
 #define NEXT(x, l)  (((x)+1)%(l))
-/*e: macro NEXT */
-/*s: macro PREV */
+/*e: macro [[NEXT]] */
+/*s: macro [[PREV]] */
 #define PREV(x, l)  (((x) == 0) ? (l)-1: (x)-1)
-/*e: macro PREV */
+/*e: macro [[PREV]] */
 /*e: kernel/network/etherif.h */

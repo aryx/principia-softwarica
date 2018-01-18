@@ -11,7 +11,7 @@
 #include "ip.h"
 #include "ipv6.h"
 
-/*s: enum _anon_ (kernel/network/ip/icmp6.c) */
+/*s: enum [[_anon_ (kernel/network/ip/icmp6.c)]] */
 enum
 {
     InMsgs6,
@@ -29,23 +29,23 @@ enum
 
     Nstats6,
 };
-/*e: enum _anon_ (kernel/network/ip/icmp6.c) */
+/*e: enum [[_anon_ (kernel/network/ip/icmp6.c)]] */
 
-/*s: enum _anon_ (kernel/network/ip/icmp6.c)2 */
+/*s: enum [[_anon_ (kernel/network/ip/icmp6.c)2]] */
 enum {
     ICMP_USEAD6 = 40,
 };
-/*e: enum _anon_ (kernel/network/ip/icmp6.c)2 */
+/*e: enum [[_anon_ (kernel/network/ip/icmp6.c)2]] */
 
-/*s: enum _anon_ (kernel/network/ip/icmp6.c)3 */
+/*s: enum [[_anon_ (kernel/network/ip/icmp6.c)3]] */
 enum {
     Oflag   = 1<<5,
     Sflag   = 1<<6,
     Rflag   = 1<<7,
 };
-/*e: enum _anon_ (kernel/network/ip/icmp6.c)3 */
+/*e: enum [[_anon_ (kernel/network/ip/icmp6.c)3]] */
 
-/*s: enum _anon_ (kernel/network/ip/icmp6.c)4 */
+/*s: enum [[_anon_ (kernel/network/ip/icmp6.c)4]] */
 enum {
     /* ICMPv6 types */
     EchoReply   = 0,
@@ -74,7 +74,7 @@ enum {
 
     Maxtype6    = 137,
 };
-/*e: enum _anon_ (kernel/network/ip/icmp6.c)4 */
+/*e: enum [[_anon_ (kernel/network/ip/icmp6.c)4]] */
 
 /* on-the-wire packet formats */
 typedef struct IPICMP IPICMP;
@@ -90,31 +90,31 @@ typedef struct NdiscC NdiscC;
     uchar   icmpid[2]; \
     uchar   seq[2]
 
-/*s: struct IPICMP */
+/*s: struct [[IPICMP]] */
 struct IPICMP {
     ICMPHDR;
     uchar   payload[];
 };
-/*e: struct IPICMP */
+/*e: struct [[IPICMP]] */
 
-/*s: constant IPICMPSZ */
+/*s: constant [[IPICMPSZ]] */
 #define IPICMPSZ offsetof(IPICMP, payload[0])
-/*e: constant IPICMPSZ */
+/*e: constant [[IPICMPSZ]] */
 
-/*s: struct NdiscC */
+/*s: struct [[NdiscC]] */
 // used though NDISCSZ macro below
 struct NdiscC {
     ICMPHDR;
     uchar   target[IPaddrlen];
     uchar   payload[];
 };
-/*e: struct NdiscC */
+/*e: struct [[NdiscC]] */
 
-/*s: constant NDISCSZ */
+/*s: constant [[NDISCSZ]] */
 #define NDISCSZ offsetof(NdiscC, payload[0])
-/*e: constant NDISCSZ */
+/*e: constant [[NDISCSZ]] */
 
-/*s: struct Ndpkt */
+/*s: struct [[Ndpkt]] */
 struct Ndpkt {
     ICMPHDR;
     uchar   target[IPaddrlen];
@@ -124,13 +124,13 @@ struct Ndpkt {
     uchar   lnaddr[6];  /* link-layer address */
     uchar   payload[];
 };
-/*e: struct Ndpkt */
+/*e: struct [[Ndpkt]] */
 
-/*s: constant NDPKTSZ */
+/*s: constant [[NDPKTSZ]] */
 #define NDPKTSZ offsetof(Ndpkt, payload[0])
-/*e: constant NDPKTSZ */
+/*e: constant [[NDPKTSZ]] */
 
-/*s: struct Icmppriv6 */
+/*s: struct [[Icmppriv6]] */
 typedef struct Icmppriv6
 {
     ulong   stats[Nstats6];
@@ -139,17 +139,17 @@ typedef struct Icmppriv6
     ulong   in[Maxtype6+1];
     ulong   out[Maxtype6+1];
 } Icmppriv6;
-/*e: struct Icmppriv6 */
+/*e: struct [[Icmppriv6]] */
 
-/*s: struct Icmpcb6 */
+/*s: struct [[Icmpcb6]] */
 typedef struct Icmpcb6
 {
     QLock;
     uchar   headers;
 } Icmpcb6;
-/*e: struct Icmpcb6 */
+/*e: struct [[Icmpcb6]] */
 
-/*s: global icmpnames6 */
+/*s: global [[icmpnames6]] */
 char *icmpnames6[Maxtype6+1] =
 {
 [EchoReply]     "EchoReply",
@@ -175,9 +175,9 @@ char *icmpnames6[Maxtype6+1] =
 [NbrAdvert]     "NbrAdvert",
 [RedirectV6]        "RedirectV6",
 };
-/*e: global icmpnames6 */
+/*e: global [[icmpnames6]] */
 
-/*s: global statnames6 */
+/*s: global [[statnames6]] */
 static char *statnames6[Nstats6] =
 {
 [InMsgs6]   "InMsgs",
@@ -193,9 +193,9 @@ static char *statnames6[Nstats6] =
 [AddrmxpErrs6]  "AddrmxpErrs",
 [RouterAddrErrs6]   "RouterAddrErrs",
 };
-/*e: global statnames6 */
+/*e: global [[statnames6]] */
 
-/*s: global unreachcode (kernel/network/ip/icmp6.c) */
+/*s: global [[unreachcode]]([[(kernel/network/ip/icmp6.c)]]) */
 static char *unreachcode[] =
 {
 [Icmp6_no_route]    "no route to destination",
@@ -207,20 +207,20 @@ static char *unreachcode[] =
 [Icmp6_rej_route]   "reject route to destination",
 [Icmp6_unknown]     "icmp unreachable: unknown code",
 };
-/*e: global unreachcode (kernel/network/ip/icmp6.c) */
+/*e: global [[unreachcode]]([[(kernel/network/ip/icmp6.c)]]) */
 
 static void icmpkick6(void *x, Block *bp);
 
-/*s: function icmpcreate6 */
+/*s: function [[icmpcreate6]] */
 static void
 icmpcreate6(Conv *c)
 {
     c->rq = qopen(64*1024, Qmsg, 0, c);
     c->wq = qbypass(icmpkick6, c);
 }
-/*e: function icmpcreate6 */
+/*e: function [[icmpcreate6]] */
 
-/*s: function set_cksum */
+/*s: function [[set_cksum]] */
 static void
 set_cksum(Block *bp)
 {
@@ -234,9 +234,9 @@ set_cksum(Block *bp)
     hnputs(p->cksum, ptclcsum(bp, 0, blocklen(bp)));
     p->proto = ICMPv6;
 }
-/*e: function set_cksum */
+/*e: function [[set_cksum]] */
 
-/*s: function newIPICMP */
+/*s: function [[newIPICMP]] */
 static Block *
 newIPICMP(int packetlen)
 {
@@ -247,9 +247,9 @@ newIPICMP(int packetlen)
     memset(nbp->rp, 0, packetlen);
     return nbp;
 }
-/*e: function newIPICMP */
+/*e: function [[newIPICMP]] */
 
-/*s: function icmpadvise6 */
+/*s: function [[icmpadvise6]] */
 void
 icmpadvise6(Proto *icmp, Block *bp, char *msg)
 {
@@ -270,9 +270,9 @@ icmpadvise6(Proto *icmp, Block *bp, char *msg)
     }
     freeblist(bp);
 }
-/*e: function icmpadvise6 */
+/*e: function [[icmpadvise6]] */
 
-/*s: function icmpkick6 */
+/*s: function [[icmpkick6]] */
 static void
 icmpkick6(void *x, Block *bp)
 {
@@ -318,9 +318,9 @@ icmpkick6(void *x, Block *bp)
         ipriv->out[p->type]++;
     ipoput6(c->p->f, bp, 0, c->ttl, c->tos, nil);
 }
-/*e: function icmpkick6 */
+/*e: function [[icmpkick6]] */
 
-/*s: function icmpctl6 */
+/*s: function [[icmpctl6]] */
 char*
 icmpctl6(Conv *c, char **argv, int argc)
 {
@@ -333,9 +333,9 @@ icmpctl6(Conv *c, char **argv, int argc)
     }
     return "unknown control request";
 }
-/*e: function icmpctl6 */
+/*e: function [[icmpctl6]] */
 
-/*s: function goticmpkt6 */
+/*s: function [[goticmpkt6]] */
 static void
 goticmpkt6(Proto *icmp, Block *bp, int muxkey)
 {
@@ -364,9 +364,9 @@ goticmpkt6(Proto *icmp, Block *bp, int muxkey)
 
     freeblist(bp);
 }
-/*e: function goticmpkt6 */
+/*e: function [[goticmpkt6]] */
 
-/*s: function mkechoreply6 */
+/*s: function [[mkechoreply6]] */
 static Block *
 mkechoreply6(Block *bp, Ipifc *ifc)
 {
@@ -383,9 +383,9 @@ mkechoreply6(Block *bp, Ipifc *ifc)
     set_cksum(bp);
     return bp;
 }
-/*e: function mkechoreply6 */
+/*e: function [[mkechoreply6]] */
 
-/*s: function icmpns */
+/*s: function [[icmpns]] */
 /*
  * sends out an ICMPv6 neighbor solicitation
  *  suni == SRC_UNSPEC or SRC_UNI,
@@ -431,9 +431,9 @@ icmpns(Fs *f, uchar* src, int suni, uchar* targ, int tuni, uchar* mac)
     netlog(f, Logicmp, "sending neighbor solicitation %I\n", targ);
     ipoput6(f, nbp, 0, MAXTTL, DFLTTOS, nil);
 }
-/*e: function icmpns */
+/*e: function [[icmpns]] */
 
-/*s: function icmpna */
+/*s: function [[icmpna]] */
 /*
  * sends out an ICMPv6 neighbor advertisement. pktflags == RSO flags.
  */
@@ -468,9 +468,9 @@ icmpna(Fs *f, uchar* src, uchar* dst, uchar* targ, uchar* mac, uchar flags)
     netlog(f, Logicmp, "sending neighbor advertisement %I\n", src);
     ipoput6(f, nbp, 0, MAXTTL, DFLTTOS, nil);
 }
-/*e: function icmpna */
+/*e: function [[icmpna]] */
 
-/*s: function icmphostunr */
+/*s: function [[icmphostunr]] */
 extern void
 icmphostunr(Fs *f, Ipifc *ifc, Block *bp, int code, int free)
 {
@@ -524,9 +524,9 @@ clean:
     runlock(ifc);
     freeblist(bp);
 }
-/*e: function icmphostunr */
+/*e: function [[icmphostunr]] */
 
-/*s: function icmpttlexceeded6 */
+/*s: function [[icmpttlexceeded6]] */
 extern void
 icmpttlexceeded6(Fs *f, Ipifc *ifc, Block *bp)
 {
@@ -565,9 +565,9 @@ icmpttlexceeded6(Fs *f, Ipifc *ifc, Block *bp)
     ipriv->out[TimeExceedV6]++;
     ipoput6(f, nbp, 0, MAXTTL, DFLTTOS, nil);
 }
-/*e: function icmpttlexceeded6 */
+/*e: function [[icmpttlexceeded6]] */
 
-/*s: function icmppkttoobig6 */
+/*s: function [[icmppkttoobig6]] */
 extern void
 icmppkttoobig6(Fs *f, Ipifc *ifc, Block *bp)
 {
@@ -607,9 +607,9 @@ icmppkttoobig6(Fs *f, Ipifc *ifc, Block *bp)
     ipriv->out[PacketTooBigV6]++;
     ipoput6(f, nbp, 0, MAXTTL, DFLTTOS, nil);
 }
-/*e: function icmppkttoobig6 */
+/*e: function [[icmppkttoobig6]] */
 
-/*s: function valid */
+/*s: function [[valid]] */
 /*
  * RFC 2461, pages 39-40, pages 57-58.
  */
@@ -747,9 +747,9 @@ err:
     ipriv->stats[InErrors6]++;
     return 0;
 }
-/*e: function valid */
+/*e: function [[valid]] */
 
-/*s: function targettype */
+/*s: function [[targettype]] */
 static int
 targettype(Fs *f, Ipifc *ifc, uchar *target)
 {
@@ -772,9 +772,9 @@ targettype(Fs *f, Ipifc *ifc, uchar *target)
     runlock(ifc);
     return 0;
 }
-/*e: function targettype */
+/*e: function [[targettype]] */
 
-/*s: function icmpiput6 */
+/*s: function [[icmpiput6]] */
 static void
 icmpiput6(Proto *icmp, Ipifc *ipifc, Block *bp)
 {
@@ -916,9 +916,9 @@ icmpiput6(Proto *icmp, Ipifc *ipifc, Block *bp)
 raise:
     freeblist(bp);
 }
-/*e: function icmpiput6 */
+/*e: function [[icmpiput6]] */
 
-/*s: function icmpstats6 */
+/*s: function [[icmpstats6]] */
 int
 icmpstats6(Proto *icmp6, char *buf, int len)
 {
@@ -941,7 +941,7 @@ icmpstats6(Proto *icmp6, char *buf, int len)
  */
     return p - buf;
 }
-/*e: function icmpstats6 */
+/*e: function [[icmpstats6]] */
 
 
 /* import from icmp.c */
@@ -950,7 +950,7 @@ extern char*    icmpannounce(Conv *c, char **argv, int argc);
 extern char*    icmpconnect(Conv *c, char **argv, int argc);
 extern void icmpclose(Conv *c);
 
-/*s: function icmp6init */
+/*s: function [[icmp6init]] */
 void
 icmp6init(Fs *fs)
 {
@@ -974,5 +974,5 @@ icmp6init(Fs *fs)
 
     Fsproto(fs, icmp6);
 }
-/*e: function icmp6init */
+/*e: function [[icmp6init]] */
 /*e: kernel/network/ip/icmp6.c */

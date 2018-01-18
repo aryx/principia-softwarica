@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <ip.h>
 
-/*s: function main */
+/*s: function [[main]] */
 void
 main(void)
 {
@@ -21,5 +21,5 @@ main(void)
             print("\t%I %M %I\n", lifc->ip, lifc->mask, lifc->net);
     }
 }
-/*e: function main */
+/*e: function [[main]] */
 /*e: lib_networking/libip/tests/testreadipifc.c */

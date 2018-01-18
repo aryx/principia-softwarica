@@ -8,30 +8,30 @@
 
 #include "ip.h"
 
-/*s: function nullbind */
+/*s: function [[nullbind]] */
 static void
 nullbind(Ipifc*, int, char**)
 {
     error("cannot bind null device");
 }
-/*e: function nullbind */
+/*e: function [[nullbind]] */
 
-/*s: function nullunbind */
+/*s: function [[nullunbind]] */
 static void
 nullunbind(Ipifc*)
 {
 }
-/*e: function nullunbind */
+/*e: function [[nullunbind]] */
 
-/*s: function nullbwrite */
+/*s: function [[nullbwrite]] */
 static void
 nullbwrite(Ipifc*, Block*, int, uchar*)
 {
     error("nullbwrite");
 }
-/*e: function nullbwrite */
+/*e: function [[nullbwrite]] */
 
-/*s: global nullmedium */
+/*s: global [[nullmedium]] */
 Medium nullmedium =
 {
     .name=      "null",
@@ -41,13 +41,13 @@ Medium nullmedium =
 
     .bwrite=    nullbwrite,
 };
-/*e: global nullmedium */
+/*e: global [[nullmedium]] */
 
-/*s: function nullmediumlink */
+/*s: function [[nullmediumlink]] */
 void
 nullmediumlink(void)
 {
     addipmedium(&nullmedium);
 }
-/*e: function nullmediumlink */
+/*e: function [[nullmediumlink]] */
 /*e: kernel/network/ip/nullmedium.c */

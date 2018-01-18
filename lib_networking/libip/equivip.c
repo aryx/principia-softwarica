@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <ip.h>
 
-/*s: function equivip4 */
+/*s: function [[equivip4]] */
 bool
 equivip4(ipv4 a, ipv4 b)
 {
@@ -14,9 +14,9 @@ equivip4(ipv4 a, ipv4 b)
             return false;
     return true;
 }
-/*e: function equivip4 */
+/*e: function [[equivip4]] */
 
-/*s: function equivip6 */
+/*s: function [[equivip6]] */
 bool
 equivip6(uchar *a, uchar *b)
 {
@@ -27,5 +27,5 @@ equivip6(uchar *a, uchar *b)
             return false;
     return true;
 }
-/*e: function equivip6 */
+/*e: function [[equivip6]] */
 /*e: lib_networking/libip/equivip.c */

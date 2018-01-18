@@ -10,25 +10,25 @@
 
 typedef struct LB LB;
 
-/*s: enum _anon_ (kernel/network/ip/loopbackmedium.c) */
+/*s: enum [[_anon_ (kernel/network/ip/loopbackmedium.c)]] */
 enum
 {
     Maxtu=  16*1024,
 };
-/*e: enum _anon_ (kernel/network/ip/loopbackmedium.c) */
+/*e: enum [[_anon_ (kernel/network/ip/loopbackmedium.c)]] */
 
-/*s: struct LB */
+/*s: struct [[LB]] */
 struct LB
 {
     Queue   *q;
     Fs  *f;
     Proc    *readp;
 };
-/*e: struct LB */
+/*e: struct [[LB]] */
 
 static void loopbackread(void *a);
 
-/*s: function loopbackbind */
+/*s: function [[loopbackbind]] */
 static void
 loopbackbind(Ipifc *ifc, int, char**)
 {
@@ -43,9 +43,9 @@ loopbackbind(Ipifc *ifc, int, char**)
     kproc("loopbackread", loopbackread, ifc);
 
 }
-/*e: function loopbackbind */
+/*e: function [[loopbackbind]] */
 
-/*s: function loopbackunbind */
+/*s: function [[loopbackunbind]] */
 static void
 loopbackunbind(Ipifc *ifc)
 {
@@ -62,9 +62,9 @@ loopbackunbind(Ipifc *ifc)
     qfree(lb->q);
     free(lb);
 }
-/*e: function loopbackunbind */
+/*e: function [[loopbackunbind]] */
 
-/*s: function loopbackbwrite */
+/*s: function [[loopbackbwrite]] */
 static void
 loopbackbwrite(Ipifc *ifc, Block *bp, int, uchar*)
 {
@@ -75,9 +75,9 @@ loopbackbwrite(Ipifc *ifc, Block *bp, int, uchar*)
         ifc->outerr++;
     ifc->out++;
 }
-/*e: function loopbackbwrite */
+/*e: function [[loopbackbwrite]] */
 
-/*s: function loopbackread */
+/*s: function [[loopbackread]] */
 static void
 loopbackread(void *a)
 {
@@ -113,9 +113,9 @@ loopbackread(void *a)
         poperror();
     }
 }
-/*e: function loopbackread */
+/*e: function [[loopbackread]] */
 
-/*s: global loopbackmedium */
+/*s: global [[loopbackmedium]] */
 Medium loopbackmedium =
 {
     .name=      "loopback",
@@ -129,13 +129,13 @@ Medium loopbackmedium =
     .unbind=    loopbackunbind,
     .bwrite=    loopbackbwrite,
 };
-/*e: global loopbackmedium */
+/*e: global [[loopbackmedium]] */
 
-/*s: function loopbackmediumlink */
+/*s: function [[loopbackmediumlink]] */
 void
 loopbackmediumlink(void)
 {
     addipmedium(&loopbackmedium);
 }
-/*e: function loopbackmediumlink */
+/*e: function [[loopbackmediumlink]] */
 /*e: kernel/network/ip/loopbackmedium.c */

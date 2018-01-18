@@ -10,45 +10,45 @@
 #include    "ipv6.h"
 
 
-/*s: constant DPRINT */
+/*s: constant [[DPRINT]] */
 #define DPRINT if(0)print
-/*e: constant DPRINT */
+/*e: constant [[DPRINT]] */
 
-/*s: enum _anon_ (kernel/network/ip/udp.c) */
+/*s: enum [[_anon_ (kernel/network/ip/udp.c)]] */
 enum
 {
-    /*s: constant UDP_UDPHDR_SZ */
+    /*s: constant [[UDP_UDPHDR_SZ]] */
     UDP_UDPHDR_SZ   = 8,
-    /*e: constant UDP_UDPHDR_SZ */
+    /*e: constant [[UDP_UDPHDR_SZ]] */
 
-    /*s: constant UDP4_PHDR_OFF */
+    /*s: constant [[UDP4_PHDR_OFF]] */
     UDP4_PHDR_OFF = 8,
-    /*e: constant UDP4_PHDR_OFF */
-    /*s: constant UDP4_PHDR_SZ */
+    /*e: constant [[UDP4_PHDR_OFF]] */
+    /*s: constant [[UDP4_PHDR_SZ]] */
     UDP4_PHDR_SZ = 12,
-    /*e: constant UDP4_PHDR_SZ */
-    /*s: constant UDP4_IPHDR_SZ */
+    /*e: constant [[UDP4_PHDR_SZ]] */
+    /*s: constant [[UDP4_IPHDR_SZ]] */
     UDP4_IPHDR_SZ = 20,
-    /*e: constant UDP4_IPHDR_SZ */
+    /*e: constant [[UDP4_IPHDR_SZ]] */
 
-    /*s: constant UDP6_xxx */
+    /*s: constant [[UDP6_xxx]] */
     UDP6_IPHDR_SZ = 40,
     UDP6_PHDR_SZ = 40,
     UDP6_PHDR_OFF = 0,
-    /*e: constant UDP6_xxx */
-    /*s: constant IP_UDPPROTO */
+    /*e: constant [[UDP6_xxx]] */
+    /*s: constant [[IP_UDPPROTO]] */
     IP_UDPPROTO = 17,
-    /*e: constant IP_UDPPROTO */
+    /*e: constant [[IP_UDPPROTO]] */
 
-    /*s: constant UDP_USEAD7 */
+    /*s: constant [[UDP_USEAD7]] */
     UDP_USEAD7  = 52,
-    /*e: constant UDP_USEAD7 */
+    /*e: constant [[UDP_USEAD7]] */
 
     Udprxms     = 200,
     Udptickms   = 100,
     Udpmaxxmit  = 10,
 };
-/*e: enum _anon_ (kernel/network/ip/udp.c) */
+/*e: enum [[_anon_ (kernel/network/ip/udp.c)]] */
 
 // forward decl
 typedef struct Udp4hdr Udp4hdr;
@@ -61,7 +61,7 @@ typedef struct Udpcb Udpcb;
 void udpkick(void *x, Block *bp);
 
 
-/*s: struct Udp4hdr */
+/*s: struct [[Udp4hdr]] */
 struct Udp4hdr
 {
     /* ip header */
@@ -83,9 +83,9 @@ struct Udp4hdr
     uchar   udplen[2];  /* data length */
     uchar   udpcksum[2];    /* Checksum */
 };
-/*e: struct Udp4hdr */
+/*e: struct [[Udp4hdr]] */
 
-/*s: struct Udp6hdr */
+/*s: struct [[Udp6hdr]] */
 struct Udp6hdr {
     uchar viclfl[4];
     uchar len[2];
@@ -100,9 +100,9 @@ struct Udp6hdr {
     uchar   udplen[2];  /* data length */
     uchar   udpcksum[2];    /* Checksum */
 };
-/*e: struct Udp6hdr */
+/*e: struct [[Udp6hdr]] */
 
-/*s: struct Udpstats */
+/*s: struct [[Udpstats]] */
 /* MIB II counters */
 struct Udpstats
 {
@@ -111,9 +111,9 @@ struct Udpstats
     ulong   udpInErrors;
     uvlong  udpOutDatagrams;
 };
-/*e: struct Udpstats */
+/*e: struct [[Udpstats]] */
 
-/*s: struct Udppriv */
+/*s: struct [[Udppriv]] */
 struct Udppriv
 {
     // hash<(ipaddr * port) , ref<Conv>>
@@ -127,12 +127,12 @@ struct Udppriv
     ulong       lenerr;         /* short packet */
     /*e: [[Udppriv]] stat fields */
 };
-/*e: struct Udppriv */
+/*e: struct [[Udppriv]] */
 
 /*
  *  protocol specific part of Conv
  */
-/*s: struct Udpcb */
+/*s: struct [[Udpcb]] */
 struct Udpcb
 {
     QLock;
@@ -140,9 +140,9 @@ struct Udpcb
     uchar   headers;
     /*e: [[Idpcb]] other fields */
 };
-/*e: struct Udpcb */
+/*e: struct [[Udpcb]] */
 
-/*s: function udpconnect */
+/*s: function [[udpconnect]] */
 static char*
 udpconnect(Conv *c, char **argv, int argc)
 {
@@ -159,10 +159,10 @@ udpconnect(Conv *c, char **argv, int argc)
     iphtadd(&upriv->ht, c);
     return nil;
 }
-/*e: function udpconnect */
+/*e: function [[udpconnect]] */
 
 
-/*s: function udpstate */
+/*s: function [[udpstate]] */
 static int
 udpstate(Conv *cv, char *state, int n)
 {
@@ -172,9 +172,9 @@ udpstate(Conv *cv, char *state, int n)
         cv->wq ? qlen(cv->wq) : 0
     );
 }
-/*e: function udpstate */
+/*e: function [[udpstate]] */
 
-/*s: function udpannounce */
+/*s: function [[udpannounce]] */
 static char*
 udpannounce(Conv *c, char** argv, int argc)
 {
@@ -192,18 +192,18 @@ udpannounce(Conv *c, char** argv, int argc)
 
     return nil;
 }
-/*e: function udpannounce */
+/*e: function [[udpannounce]] */
 
-/*s: function udpcreate */
+/*s: function [[udpcreate]] */
 static void
 udpcreate(Conv *cv)
 {
     cv->rq = qopen(128*1024, Qmsg, 0, 0);
     cv->wq = qbypass(udpkick, cv);
 }
-/*e: function udpcreate */
+/*e: function [[udpcreate]] */
 
-/*s: function udpclose */
+/*s: function [[udpclose]] */
 static void
 udpclose(Conv *c)
 {
@@ -225,9 +225,9 @@ udpclose(Conv *c)
     ucb = (Udpcb*)c->ptcl;
     ucb->headers = 0;
 }
-/*e: function udpclose */
+/*e: function [[udpclose]] */
 
-/*s: function udpkick */
+/*s: function [[udpkick]] */
 void
 udpkick(void *x, Block *bp)
 {
@@ -392,9 +392,9 @@ udpkick(void *x, Block *bp)
     }
     upriv->ustats.udpOutDatagrams++;
 }
-/*e: function udpkick */
+/*e: function [[udpkick]] */
 
-/*s: function udpiput */
+/*s: function [[udpiput]] */
 void
 udpiput(Proto *udp, Ipifc *ifc, Block *bp)
 {
@@ -615,9 +615,9 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
     qunlock(c);
 
 }
-/*e: function udpiput */
+/*e: function [[udpiput]] */
 
-/*s: function udpctl */
+/*s: function [[udpctl]] */
 char*
 udpctl(Conv *c, char **f, int n)
 {
@@ -632,9 +632,9 @@ udpctl(Conv *c, char **f, int n)
     }
     return "unknown control request";
 }
-/*e: function udpctl */
+/*e: function [[udpctl]] */
 
-/*s: function udpadvise */
+/*s: function [[udpadvise]] */
 void
 udpadvise(Proto *udp, Block *bp, char *msg)
 {
@@ -689,9 +689,9 @@ udpadvise(Proto *udp, Block *bp, char *msg)
     qunlock(udp);
     freeblist(bp);
 }
-/*e: function udpadvise */
+/*e: function [[udpadvise]] */
 
-/*s: function udpstats */
+/*s: function [[udpstats]] */
 int
 udpstats(Proto *udp, char *buf, int len)
 {
@@ -705,9 +705,9 @@ udpstats(Proto *udp, char *buf, int len)
         upriv->ustats.udpInErrors,
         upriv->ustats.udpOutDatagrams);
 }
-/*e: function udpstats */
+/*e: function [[udpstats]] */
 
-/*s: function udpinit */
+/*s: function [[udpinit]] */
 void
 udpinit(Fs *fs)
 {
@@ -738,5 +738,5 @@ udpinit(Fs *fs)
 
     Fsproto(fs, udp);
 }
-/*e: function udpinit */
+/*e: function [[udpinit]] */
 /*e: kernel/network/ip/udp.c */

@@ -10,7 +10,7 @@
 
 typedef struct Icmppriv Icmppriv;
 
-/*s: struct Icmp */
+/*s: struct [[Icmp]] */
 typedef struct Icmp {
     // ip header
     uchar   vihl;       /* Version and header length */
@@ -32,9 +32,9 @@ typedef struct Icmp {
     uchar   seq[2];
     uchar   data[1];
 } Icmp;
-/*e: struct Icmp */
+/*e: struct [[Icmp]] */
 
-/*s: enum _anon_ (kernel/network/ip/icmp.c) */
+/*s: enum [[_anon_ (kernel/network/ip/icmp.c)]] */
 enum {          /* Packet Types */
     EchoReply   = 0,
     Unreachable = 3,
@@ -52,16 +52,16 @@ enum {          /* Packet Types */
 
     Maxtype     = 18,
 };
-/*e: enum _anon_ (kernel/network/ip/icmp.c) */
+/*e: enum [[_anon_ (kernel/network/ip/icmp.c)]] */
 
-/*s: enum _anon_ (kernel/network/ip/icmp.c)2 */
+/*s: enum [[_anon_ (kernel/network/ip/icmp.c)2]] */
 enum
 {
     MinAdvise   = 24,   /* minimum needed for us to advise another protocol */
 };
-/*e: enum _anon_ (kernel/network/ip/icmp.c)2 */
+/*e: enum [[_anon_ (kernel/network/ip/icmp.c)2]] */
 
-/*s: global icmpnames */
+/*s: global [[icmpnames]] */
 char *icmpnames[Maxtype+1] =
 {
 [EchoReply]     "EchoReply",
@@ -78,17 +78,17 @@ char *icmpnames[Maxtype+1] =
 [AddrMaskRequest]   "AddrMaskRequest",
 [AddrMaskReply  ]   "AddrMaskReply  ",
 };
-/*e: global icmpnames */
+/*e: global [[icmpnames]] */
 
-/*s: enum _anon_ (kernel/network/ip/icmp.c)3 */
+/*s: enum [[_anon_ (kernel/network/ip/icmp.c)3]] */
 enum {
     IP_ICMPPROTO    = 1,
     ICMP_IPSIZE = 20,
     ICMP_HDRSIZE    = 8,
 };
-/*e: enum _anon_ (kernel/network/ip/icmp.c)3 */
+/*e: enum [[_anon_ (kernel/network/ip/icmp.c)3]] */
 
-/*s: enum _anon_ (kernel/network/ip/icmp.c)4 */
+/*s: enum [[_anon_ (kernel/network/ip/icmp.c)4]] */
 enum
 {
     InMsgs,
@@ -100,9 +100,9 @@ enum
 
     Nstats,
 };
-/*e: enum _anon_ (kernel/network/ip/icmp.c)4 */
+/*e: enum [[_anon_ (kernel/network/ip/icmp.c)4]] */
 
-/*s: global statnames (kernel/network/ip/icmp.c) */
+/*s: global [[statnames]]([[(kernel/network/ip/icmp.c)]]) */
 static char *statnames[Nstats] =
 {
 [InMsgs]    "InMsgs",
@@ -112,9 +112,9 @@ static char *statnames[Nstats] =
 [LenErrs]   "LenErrs",
 [HlenErrs]  "HlenErrs",
 };
-/*e: global statnames (kernel/network/ip/icmp.c) */
+/*e: global [[statnames]]([[(kernel/network/ip/icmp.c)]]) */
 
-/*s: struct Icmppriv */
+/*s: struct [[Icmppriv]] */
 struct Icmppriv
 {
     ulong   stats[Nstats];
@@ -123,20 +123,20 @@ struct Icmppriv
     ulong   in[Maxtype+1];
     ulong   out[Maxtype+1];
 };
-/*e: struct Icmppriv */
+/*e: struct [[Icmppriv]] */
 
 static void icmpkick(void *x, Block*);
 
-/*s: function icmpcreate */
+/*s: function [[icmpcreate]] */
 static void
 icmpcreate(Conv *c)
 {
     c->rq = qopen(64*1024, Qmsg, 0, c);
     c->wq = qbypass(icmpkick, c);
 }
-/*e: function icmpcreate */
+/*e: function [[icmpcreate]] */
 
-/*s: function icmpconnect */
+/*s: function [[icmpconnect]] */
 extern char*
 icmpconnect(Conv *c, char **argv, int argc)
 {
@@ -149,9 +149,9 @@ icmpconnect(Conv *c, char **argv, int argc)
 
     return nil;
 }
-/*e: function icmpconnect */
+/*e: function [[icmpconnect]] */
 
-/*s: function icmpstate */
+/*s: function [[icmpstate]] */
 extern int
 icmpstate(Conv *c, char *state, int n)
 {
@@ -162,9 +162,9 @@ icmpstate(Conv *c, char *state, int n)
         c->wq ? qlen(c->wq) : 0
     );
 }
-/*e: function icmpstate */
+/*e: function [[icmpstate]] */
 
-/*s: function icmpannounce */
+/*s: function [[icmpannounce]] */
 extern char*
 icmpannounce(Conv *c, char **argv, int argc)
 {
@@ -177,9 +177,9 @@ icmpannounce(Conv *c, char **argv, int argc)
 
     return nil;
 }
-/*e: function icmpannounce */
+/*e: function [[icmpannounce]] */
 
-/*s: function icmpclose */
+/*s: function [[icmpclose]] */
 extern void
 icmpclose(Conv *c)
 {
@@ -189,9 +189,9 @@ icmpclose(Conv *c)
     ipmove(c->raddr, IPnoaddr);
     c->lport = 0;
 }
-/*e: function icmpclose */
+/*e: function [[icmpclose]] */
 
-/*s: function icmpkick */
+/*s: function [[icmpkick]] */
 static void
 icmpkick(void *x, Block *bp)
 {
@@ -221,9 +221,9 @@ icmpkick(void *x, Block *bp)
     ipriv->stats[OutMsgs]++;
     ipoput4(c->p->f, bp, 0, c->ttl, c->tos, nil);
 }
-/*e: function icmpkick */
+/*e: function [[icmpkick]] */
 
-/*s: function icmpttlexceeded */
+/*s: function [[icmpttlexceeded]] */
 extern void
 icmpttlexceeded(Fs *f, uchar *ia, Block *bp)
 {
@@ -250,9 +250,9 @@ icmpttlexceeded(Fs *f, uchar *ia, Block *bp)
     ipoput4(f, nbp, 0, MAXTTL, DFLTTOS, nil);
 
 }
-/*e: function icmpttlexceeded */
+/*e: function [[icmpttlexceeded]] */
 
-/*s: function icmpunreachable */
+/*s: function [[icmpunreachable]] */
 static void
 icmpunreachable(Fs *f, Block *bp, int code, int seq)
 {
@@ -290,25 +290,25 @@ icmpunreachable(Fs *f, Block *bp, int code, int seq)
     hnputs(np->cksum, ptclcsum(nbp, ICMP_IPSIZE, blocklen(nbp) - ICMP_IPSIZE));
     ipoput4(f, nbp, 0, MAXTTL, DFLTTOS, nil);
 }
-/*e: function icmpunreachable */
+/*e: function [[icmpunreachable]] */
 
-/*s: function icmpnoconv */
+/*s: function [[icmpnoconv]] */
 extern void
 icmpnoconv(Fs *f, Block *bp)
 {
     icmpunreachable(f, bp, 3, 0);
 }
-/*e: function icmpnoconv */
+/*e: function [[icmpnoconv]] */
 
-/*s: function icmpcantfrag */
+/*s: function [[icmpcantfrag]] */
 extern void
 icmpcantfrag(Fs *f, Block *bp, int mtu)
 {
     icmpunreachable(f, bp, 4, mtu);
 }
-/*e: function icmpcantfrag */
+/*e: function [[icmpcantfrag]] */
 
-/*s: function goticmpkt */
+/*s: function [[goticmpkt]] */
 static void
 goticmpkt(Proto *icmp, Block *bp)
 {
@@ -333,9 +333,9 @@ goticmpkt(Proto *icmp, Block *bp)
     }
     freeblist(bp);
 }
-/*e: function goticmpkt */
+/*e: function [[goticmpkt]] */
 
-/*s: function mkechoreply */
+/*s: function [[mkechoreply]] */
 static Block *
 mkechoreply(Block *bp)
 {
@@ -353,9 +353,9 @@ mkechoreply(Block *bp)
 
     return bp;
 }
-/*e: function mkechoreply */
+/*e: function [[mkechoreply]] */
 
-/*s: global unreachcode */
+/*s: global [[unreachcode]] */
 static char *unreachcode[] =
 {
 [0] "net unreachable",
@@ -365,9 +365,9 @@ static char *unreachcode[] =
 [4] "fragmentation needed and DF set",
 [5] "source route failed",
 };
-/*e: global unreachcode */
+/*e: global [[unreachcode]] */
 
-/*s: function icmpiput */
+/*s: function [[icmpiput]] */
 static void
 icmpiput(Proto *icmp, Ipifc*, Block *bp)
 {
@@ -470,9 +470,9 @@ icmpiput(Proto *icmp, Ipifc*, Block *bp)
 raise:
     freeblist(bp);
 }
-/*e: function icmpiput */
+/*e: function [[icmpiput]] */
 
-/*s: function icmpadvise */
+/*s: function [[icmpadvise]] */
 void
 icmpadvise(Proto *icmp, Block *bp, char *msg)
 {
@@ -496,9 +496,9 @@ icmpadvise(Proto *icmp, Block *bp, char *msg)
     }
     freeblist(bp);
 }
-/*e: function icmpadvise */
+/*e: function [[icmpadvise]] */
 
-/*s: function icmpstats */
+/*s: function [[icmpstats]] */
 int
 icmpstats(Proto *icmp, char *buf, int len)
 {
@@ -519,9 +519,9 @@ icmpstats(Proto *icmp, char *buf, int len)
     }
     return p - buf;
 }
-/*e: function icmpstats */
+/*e: function [[icmpstats]] */
 
-/*s: function icmpinit */
+/*s: function [[icmpinit]] */
 void
 icmpinit(Fs *fs)
 {
@@ -546,5 +546,5 @@ icmpinit(Fs *fs)
 
     Fsproto(fs, icmp);
 }
-/*e: function icmpinit */
+/*e: function [[icmpinit]] */
 /*e: kernel/network/ip/icmp.c */

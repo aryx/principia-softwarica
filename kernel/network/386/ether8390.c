@@ -15,7 +15,7 @@
 
 #include "ether8390.h"
 
-/*s: enum _anon_ (kernel/network/386/ether8390.c)0 */
+/*s: enum [[_anon_ (kernel/network/386/ether8390.c)0]] */
 enum {					/* NIC core registers */
     Cr		= 0x00,		/* command register, all pages */
 
@@ -54,9 +54,9 @@ enum {					/* NIC core registers */
     Curr		= 0x07,		/* current page register */
     Mar0		= 0x08,		/* multicast address register 0 */
 };
-/*e: enum _anon_ (kernel/network/386/ether8390.c)0 */
+/*e: enum [[_anon_ (kernel/network/386/ether8390.c)0]] */
 
-/*s: enum _anon_ (kernel/network/386/ether8390.c)1 */
+/*s: enum [[_anon_ (kernel/network/386/ether8390.c)1]] */
 enum {					/* Cr */
     Stp		= 0x01,		/* stop */
     Sta		= 0x02,		/* start */
@@ -74,9 +74,9 @@ enum {					/* Cr */
     Page1		= Ps0,
     Page2		= Ps1,
 };
-/*e: enum _anon_ (kernel/network/386/ether8390.c)1 */
+/*e: enum [[_anon_ (kernel/network/386/ether8390.c)1]] */
 
-/*s: enum _anon_ (kernel/network/386/ether8390.c)2 */
+/*s: enum [[_anon_ (kernel/network/386/ether8390.c)2]] */
 enum {					/* Isr/Imr */
     Prx		= 0x01,		/* packet received */
     Ptx		= 0x02,		/* packet transmitted */
@@ -87,9 +87,9 @@ enum {					/* Isr/Imr */
     Rdc		= 0x40,		/* remote DMA complete */
     Rst		= 0x80,		/* reset status */
 };
-/*e: enum _anon_ (kernel/network/386/ether8390.c)2 */
+/*e: enum [[_anon_ (kernel/network/386/ether8390.c)2]] */
 
-/*s: enum _anon_ (kernel/network/386/ether8390.c)3 */
+/*s: enum [[_anon_ (kernel/network/386/ether8390.c)3]] */
 enum {					/* Dcr */
     Wts		= 0x01,		/* word transfer select */
     Bos		= 0x02,		/* byte order select */
@@ -103,9 +103,9 @@ enum {					/* Dcr */
     Ft4WORD		= Ft1,
     Ft6WORD		= Ft1|Ft0,
 };
-/*e: enum _anon_ (kernel/network/386/ether8390.c)3 */
+/*e: enum [[_anon_ (kernel/network/386/ether8390.c)3]] */
 
-/*s: enum _anon_ (kernel/network/386/ether8390.c)4 */
+/*s: enum [[_anon_ (kernel/network/386/ether8390.c)4]] */
 enum {					/* Tcr */
     Crc		= 0x01,		/* inhibit CRC */
     Lb0		= 0x02,		/* encoded loopback control */
@@ -117,9 +117,9 @@ enum {					/* Tcr */
     Atd		= 0x08,		/* auto transmit disable */
     Ofst		= 0x10,		/* collision offset enable */
 };
-/*e: enum _anon_ (kernel/network/386/ether8390.c)4 */
+/*e: enum [[_anon_ (kernel/network/386/ether8390.c)4]] */
 
-/*s: enum _anon_ (kernel/network/386/ether8390.c)5 */
+/*s: enum [[_anon_ (kernel/network/386/ether8390.c)5]] */
 enum {					/* Tsr */
     Ptxok		= 0x01,		/* packet transmitted */
     Col		= 0x04,		/* transmit collided */
@@ -129,9 +129,9 @@ enum {					/* Tsr */
     Cdh		= 0x40,		/* CD heartbeat */
     Owc		= 0x80,		/* out of window collision */
 };
-/*e: enum _anon_ (kernel/network/386/ether8390.c)5 */
+/*e: enum [[_anon_ (kernel/network/386/ether8390.c)5]] */
 
-/*s: enum _anon_ (kernel/network/386/ether8390.c)6 */
+/*s: enum [[_anon_ (kernel/network/386/ether8390.c)6]] */
 enum {					/* Rcr */
     Sep		= 0x01,		/* save errored packets */
     Ar		= 0x02,		/* accept runt packets */
@@ -140,9 +140,9 @@ enum {					/* Rcr */
     Pro		= 0x10,		/* promiscuous physical */
     Mon		= 0x20,		/* monitor mode */
 };
-/*e: enum _anon_ (kernel/network/386/ether8390.c)6 */
+/*e: enum [[_anon_ (kernel/network/386/ether8390.c)6]] */
 
-/*s: enum _anon_ (kernel/network/386/ether8390.c)7 */
+/*s: enum [[_anon_ (kernel/network/386/ether8390.c)7]] */
 enum {					/* Rsr */
     Prxok		= 0x01,		/* packet received intact */
     Crce		= 0x02,		/* CRC error */
@@ -153,22 +153,22 @@ enum {					/* Rsr */
     Dis		= 0x40,		/* receiver disabled */
     Dfr		= 0x80,		/* deferring */
 };
-/*e: enum _anon_ (kernel/network/386/ether8390.c)7 */
+/*e: enum [[_anon_ (kernel/network/386/ether8390.c)7]] */
 
 typedef struct Hdr Hdr;
 
 
-/*s: struct Hdr (kernel/network/386/ether8390.c) */
+/*s: struct [[Hdr]]([[(kernel/network/386/ether8390.c)]]) */
 struct Hdr {
     uchar	status;
     uchar	next;
     uchar	len0;
     uchar	len1;
 };
-/*e: struct Hdr (kernel/network/386/ether8390.c) */
+/*e: struct [[Hdr]]([[(kernel/network/386/ether8390.c)]]) */
 
 
-/*s: function dp8390setea */
+/*s: function [[dp8390setea]] */
 void
 dp8390setea(Ether* ether)
 {
@@ -193,9 +193,9 @@ dp8390setea(Ether* ether)
     regw(ctlr, Cr, cr);
     iunlock(ctlr);
 }
-/*e: function dp8390setea */
+/*e: function [[dp8390setea]] */
 
-/*s: function _dp8390read */
+/*s: function [[_dp8390read]] */
 static void*
 _dp8390read(Dp8390* ctlr, void* to, ulong from, ulong len)
 {
@@ -242,9 +242,9 @@ _dp8390read(Dp8390* ctlr, void* to, ulong from, ulong len)
 
     return to;
 }
-/*e: function _dp8390read */
+/*e: function [[_dp8390read]] */
 
-/*s: function dp8390read */
+/*s: function [[dp8390read]] */
 void*
 dp8390read(Dp8390* ctlr, void* to, ulong from, ulong len)
 {
@@ -256,9 +256,9 @@ dp8390read(Dp8390* ctlr, void* to, ulong from, ulong len)
 
     return v;
 }
-/*e: function dp8390read */
+/*e: function [[dp8390read]] */
 
-/*s: function dp8390write */
+/*s: function [[dp8390write]] */
 static void*
 dp8390write(Dp8390* ctlr, ulong to, void* from, ulong len)
 {
@@ -342,9 +342,9 @@ top:
 
     return (void*)to;
 }
-/*e: function dp8390write */
+/*e: function [[dp8390write]] */
 
-/*s: function ringinit */
+/*s: function [[ringinit]] */
 static void
 ringinit(Dp8390* ctlr)
 {
@@ -358,9 +358,9 @@ ringinit(Dp8390* ctlr)
 
     ctlr->nxtpkt = ctlr->pstart;
 }
-/*e: function ringinit */
+/*e: function [[ringinit]] */
 
-/*s: function getcurr */
+/*s: function [[getcurr]] */
 static uchar
 getcurr(Dp8390* ctlr)
 {
@@ -373,9 +373,9 @@ getcurr(Dp8390* ctlr)
 
     return curr;
 }
-/*e: function getcurr */
+/*e: function [[getcurr]] */
 
-/*s: function receive (kernel/network/386/ether8390.c) */
+/*s: function [[receive]]([[(kernel/network/386/ether8390.c)]]) */
 static void
 receive(Ether* ether)
 {
@@ -466,9 +466,9 @@ receive(Ether* ether)
         regw(ctlr, Bnry, hdr.next);
     }
 }
-/*e: function receive (kernel/network/386/ether8390.c) */
+/*e: function [[receive]]([[(kernel/network/386/ether8390.c)]]) */
 
-/*s: function txstart */
+/*s: function [[txstart]] */
 static void
 txstart(Ether* ether)
 {
@@ -516,9 +516,9 @@ txstart(Ether* ether)
     ether->outpackets++;
     ctlr->txbusy = 1;
 }
-/*e: function txstart */
+/*e: function [[txstart]] */
 
-/*s: function transmit (kernel/network/386/ether8390.c) */
+/*s: function [[transmit]]([[(kernel/network/386/ether8390.c)]]) */
 static void
 transmit(Ether* ether)
 {
@@ -530,9 +530,9 @@ transmit(Ether* ether)
     txstart(ether);
     iunlock(ctlr);
 }
-/*e: function transmit (kernel/network/386/ether8390.c) */
+/*e: function [[transmit]]([[(kernel/network/386/ether8390.c)]]) */
 
-/*s: function overflow */
+/*s: function [[overflow]] */
 static void
 overflow(Ether *ether)
 {
@@ -565,9 +565,9 @@ overflow(Ether *ether)
     if(resend)
         regw(ctlr, Cr, Page0|RdABORT|Txp|Sta);
 }
-/*e: function overflow */
+/*e: function [[overflow]] */
 
-/*s: function interrupt (kernel/network/386/ether8390.c) */
+/*s: function [[interrupt]]([[(kernel/network/386/ether8390.c)]]) */
 static void
 interrupt(Ureg*, void* arg)
 {
@@ -630,13 +630,13 @@ interrupt(Ureg*, void* arg)
     regw(ctlr, Imr, Cnt|Ovw|Txe|Rxe|Ptx|Prx);
     iunlock(ctlr);
 }
-/*e: function interrupt (kernel/network/386/ether8390.c) */
+/*e: function [[interrupt]]([[(kernel/network/386/ether8390.c)]]) */
 
-/*s: global allmar */
+/*s: global [[allmar]] */
 static uchar allmar[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-/*e: global allmar */
+/*e: global [[allmar]] */
 
-/*s: function setfilter */
+/*s: function [[setfilter]] */
 static void
 setfilter(Ether *ether, Dp8390 *ctlr)
 {
@@ -662,9 +662,9 @@ setfilter(Ether *ether, Dp8390 *ctlr)
     }
     regw(ctlr, Rcr, r);
 }
-/*e: function setfilter */
+/*e: function [[setfilter]] */
 
-/*s: function promiscuous */
+/*s: function [[promiscuous]] */
 static void
 promiscuous(void *arg, int )
 {
@@ -678,9 +678,9 @@ promiscuous(void *arg, int )
     setfilter(ether, ctlr);
     iunlock(ctlr);
 }
-/*e: function promiscuous */
+/*e: function [[promiscuous]] */
 
-/*s: function setbit */
+/*s: function [[setbit]] */
 static void
 setbit(Dp8390 *ctlr, int bit, int on)
 {
@@ -698,13 +698,13 @@ setbit(Dp8390 *ctlr, int bit, int on)
         }
     }
 }
-/*e: function setbit */
+/*e: function [[setbit]] */
 
-/*s: global reverse */
+/*s: global [[reverse]] */
 static uchar reverse[64];
-/*e: global reverse */
+/*e: global [[reverse]] */
 
-/*s: function multicast */
+/*s: function [[multicast]] */
 static void
 multicast(void* arg, uchar *addr, int on)
 {
@@ -730,9 +730,9 @@ multicast(void* arg, uchar *addr, int on)
     setfilter(ether, ctlr);
     iunlock(ctlr);
 }
-/*e: function multicast */
+/*e: function [[multicast]] */
 
-/*s: function attach */
+/*s: function [[attach]] */
 static void
 attach(Ether* ether)
 {
@@ -765,9 +765,9 @@ attach(Ether* ether)
     iunlock(ctlr);
     USED(r);
 }
-/*e: function attach */
+/*e: function [[attach]] */
 
-/*s: function disable */
+/*s: function [[disable]] */
 static void
 disable(Dp8390* ctlr)
 {
@@ -787,9 +787,9 @@ disable(Dp8390* ctlr)
     for(timo = 10000; (regr(ctlr, Isr) & Rst) == 0 && timo; timo--)
             ;
 }
-/*e: function disable */
+/*e: function [[disable]] */
 
-/*s: function shutdown */
+/*s: function [[shutdown]] */
 static void
 shutdown(Ether *ether)
 {
@@ -798,9 +798,9 @@ shutdown(Ether *ether)
     ctlr = ether->ctlr;
     disable(ctlr);
 }
-/*e: function shutdown */
+/*e: function [[shutdown]] */
 
-/*s: function dp8390reset */
+/*s: function [[dp8390reset]] */
 int
 dp8390reset(Ether* ether)
 {
@@ -863,5 +863,5 @@ dp8390reset(Ether* ether)
 
     return 0;
 }
-/*e: function dp8390reset */
+/*e: function [[dp8390reset]] */
 /*e: kernel/network/386/ether8390.c */

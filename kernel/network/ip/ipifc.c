@@ -15,23 +15,23 @@ extern char*    ipifcadd6(Ipifc *ifc, char**argv, int argc);
 extern char*    ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp);
 extern char*    ipifcrem(Ipifc *ifc, char **argv, int argc);
 
-/*s: enum _anon_ (kernel/network/ip/ipifc.c) */
+/*s: enum [[_anon_ (kernel/network/ip/ipifc.c)]] */
 enum {
-    /*s: constant Maxmedia */
+    /*s: constant [[Maxmedia]] */
     Maxmedia    = 32,
-    /*e: constant Maxmedia */
+    /*e: constant [[Maxmedia]] */
     Nself       = Maxmedia*5,
     NHASH       = 1<<6,
     NCACHE      = 256,
     QMAX        = 192*1024-1,
 };
-/*e: enum _anon_ (kernel/network/ip/ipifc.c) */
+/*e: enum [[_anon_ (kernel/network/ip/ipifc.c)]] */
 
-/*s: global media */
+/*s: global [[media]] */
 Medium *media[Maxmedia] = { 0 };
-/*e: global media */
+/*e: global [[media]] */
 
-/*s: struct Ipself */
+/*s: struct [[Ipself]] */
 /*
  *  cache of local addresses (addresses we answer to)
  */
@@ -48,9 +48,9 @@ struct Ipself
     Iplink  *link;      /* binding twixt Ipself and Ipifc */
     Ipself  *next;      /* free list */
 };
-/*e: struct Ipself */
+/*e: struct [[Ipself]] */
 
-/*s: struct Ipselftab */
+/*s: struct [[Ipselftab]] */
 struct Ipselftab
 {
     int inited;
@@ -62,30 +62,30 @@ struct Ipselftab
     QLock;
 
 };
-/*e: struct Ipselftab */
+/*e: struct [[Ipselftab]] */
 
 /*
  *  Multicast addresses are chained onto a Chan so that
  *  we can remove them when the Chan is closed.
  */
 typedef struct Ipmcast Ipmcast;
-/*s: struct Ipmcast */
+/*s: struct [[Ipmcast]] */
 struct Ipmcast
 {
     Ipmcast *next;
     ipaddr   ma;  /* multicast address */
     ipaddr   ia;  /* interface address */
 };
-/*e: struct Ipmcast */
+/*e: struct [[Ipmcast]] */
 
-/*s: macro hashipa */
+/*s: macro [[hashipa]] */
 /* quick hash for ip addresses */
 #define hashipa(a) ( ( ((a)[IPaddrlen-2]<<8) | (a)[IPaddrlen-1] )%NHASH )
-/*e: macro hashipa */
+/*e: macro [[hashipa]] */
 
-/*s: global tifc */
+/*s: global [[tifc]] */
 static char tifc[] = "ifc ";
-/*e: global tifc */
+/*e: global [[tifc]] */
 
 static void addselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, uchar *a, int type);
 static void remselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, uchar *a);
@@ -94,7 +94,7 @@ static char*    ipifcleavemulti(Ipifc *ifc, char **argv, int argc);
 static void ipifcregisterproxy(Fs*, Ipifc*, uchar*);
 static char*    ipifcremlifc(Ipifc*, Iplifc*);
 
-/*s: function addipmedium */
+/*s: function [[addipmedium]] */
 /*
  *  link in a new medium
  */
@@ -109,9 +109,9 @@ addipmedium(Medium *med)
             break;
         }
 }
-/*e: function addipmedium */
+/*e: function [[addipmedium]] */
 
-/*s: function ipfindmedium */
+/*s: function [[ipfindmedium]] */
 /*
  *  find the medium with this name
  */
@@ -125,9 +125,9 @@ ipfindmedium(char *name)
             break;
     return *mp;
 }
-/*e: function ipfindmedium */
+/*e: function [[ipfindmedium]] */
 
-/*s: function ipifcbind */
+/*s: function [[ipifcbind]] */
 /*
  *  attach a device (or pkt driver) to the interface.
  *  called with cv locked
@@ -200,9 +200,9 @@ ipifcbind(Conv *cv, char **argv, int argc)
 
     return nil;
 }
-/*e: function ipifcbind */
+/*e: function [[ipifcbind]] */
 
-/*s: function ipifcunbind */
+/*s: function [[ipifcunbind]] */
 /*
  *  detach a device from an interface, close the interface
  *  called with ifc->conv closed
@@ -251,19 +251,19 @@ ipifcunbind(Ipifc *ifc)
     poperror();
     return nil;
 }
-/*e: function ipifcunbind */
+/*e: function [[ipifcunbind]] */
 
-/*s: global sfixedformat */
+/*s: global [[sfixedformat]] */
 char sfixedformat[] = "device %s maxtu %d sendra %d recvra %d mflag %d oflag"
 " %d maxraint %d minraint %d linkmtu %d reachtime %d rxmitra %d ttl %d routerlt"
 " %d pktin %lud pktout %lud errin %lud errout %lud\n";
-/*e: global sfixedformat */
+/*e: global [[sfixedformat]] */
 
-/*s: global slineformat */
+/*s: global [[slineformat]] */
 char slineformat[] = "  %-40I %-10M %-40I %-12lud %-12lud\n";
-/*e: global slineformat */
+/*e: global [[slineformat]] */
 
-/*s: function ipifcstate */
+/*s: function [[ipifcstate]] */
 static int
 ipifcstate(Conv *c, char *state, int n)
 {
@@ -288,9 +288,9 @@ ipifcstate(Conv *c, char *state, int n)
     runlock(ifc);
     return m;
 }
-/*e: function ipifcstate */
+/*e: function [[ipifcstate]] */
 
-/*s: function ipifclocal */
+/*s: function [[ipifclocal]] */
 static int
 ipifclocal(Conv *c, char *state, int n)
 {
@@ -312,9 +312,9 @@ ipifclocal(Conv *c, char *state, int n)
     runlock(ifc);
     return m;
 }
-/*e: function ipifclocal */
+/*e: function [[ipifclocal]] */
 
-/*s: function ipifcinuse */
+/*s: function [[ipifcinuse]] */
 static int
 ipifcinuse(Conv *c)
 {
@@ -323,9 +323,9 @@ ipifcinuse(Conv *c)
     ifc = (Ipifc*)c->ptcl;
     return ifc->m != nil;
 }
-/*e: function ipifcinuse */
+/*e: function [[ipifcinuse]] */
 
-/*s: function ipifckick */
+/*s: function [[ipifckick]] */
 /*
  *  called when a process writes to an interface's 'data'
  */
@@ -356,9 +356,9 @@ ipifckick(void *x)
     runlock(ifc);
     poperror();
 }
-/*e: function ipifckick */
+/*e: function [[ipifckick]] */
 
-/*s: function ipifccreate */
+/*s: function [[ipifccreate]] */
 /*
  *  called when a new ipifc structure is created
  */
@@ -378,9 +378,9 @@ ipifccreate(Conv *cv)
     ifc->conv = cv;
     ifc->reassemble = false;
 }
-/*e: function ipifccreate */
+/*e: function [[ipifccreate]] */
 
-/*s: function ipifcclose */
+/*s: function [[ipifcclose]] */
 /*
  *  called after last close of ipifc data or ctl
  *  called with c locked, we must unlock
@@ -396,9 +396,9 @@ ipifcclose(Conv *c)
     if(m && m->unbindonclose)
         ipifcunbind(ifc);
 }
-/*e: function ipifcclose */
+/*e: function [[ipifcclose]] */
 
-/*s: function ipifcsetmtu */
+/*s: function [[ipifcsetmtu]] */
 /*
  *  change an interface's mtu
  */
@@ -415,9 +415,9 @@ ipifcsetmtu(Ipifc *ifc, char **argv, int argc)
     ifc->maxtu = mtu;
     return nil;
 }
-/*e: function ipifcsetmtu */
+/*e: function [[ipifcsetmtu]] */
 
-/*s: function ipifcadd */
+/*s: function [[ipifcadd]] */
 /*
  *  add an address to an interface.
  */
@@ -639,9 +639,9 @@ out:
     /*e: [[ipifcadd()]] if ipv6 tentative and broacast */
     return nil;
 }
-/*e: function ipifcadd */
+/*e: function [[ipifcadd]] */
 
-/*s: function ipifcremlifc */
+/*s: function [[ipifcremlifc]] */
 /*
  *  remove a logical interface from an ifc
  *  always called with ifc wlock'd
@@ -687,9 +687,9 @@ ipifcremlifc(Ipifc *ifc, Iplifc *lifc)
     free(lifc);
     return nil;
 }
-/*e: function ipifcremlifc */
+/*e: function [[ipifcremlifc]] */
 
-/*s: function ipifcrem */
+/*s: function [[ipifcrem]] */
 /*
  *  remove an address from an interface.
  *  called with c->car locked
@@ -731,9 +731,9 @@ ipifcrem(Ipifc *ifc, char **argv, int argc)
     wunlock(ifc);
     return rv;
 }
-/*e: function ipifcrem */
+/*e: function [[ipifcrem]] */
 
-/*s: function ipifcaddroute */
+/*s: function [[ipifcaddroute]] */
 /*
  * distribute routes to active interfaces like the
  * TRIP linecards
@@ -755,9 +755,9 @@ ipifcaddroute(Fs *f, int vers, uchar *addr, uchar *mask, uchar *gate, int type)
         }
     }
 }
-/*e: function ipifcaddroute */
+/*e: function [[ipifcaddroute]] */
 
-/*s: function ipifcremroute */
+/*s: function [[ipifcremroute]] */
 void
 ipifcremroute(Fs *f, int vers, uchar *addr, uchar *mask)
 {
@@ -775,9 +775,9 @@ ipifcremroute(Fs *f, int vers, uchar *addr, uchar *mask)
         }
     }
 }
-/*e: function ipifcremroute */
+/*e: function [[ipifcremroute]] */
 
-/*s: function ipifcconnect */
+/*s: function [[ipifcconnect]] */
 /*
  *  associate an address with the interface.  This wipes out any previous
  *  addresses.  This is a macro that means, remove all the old interfaces
@@ -814,9 +814,9 @@ ipifcconnect(Conv* c, char **argv, int argc)
     Fsconnected(c, nil);
     return nil;
 }
-/*e: function ipifcconnect */
+/*e: function [[ipifcconnect]] */
 
-/*s: function ipifcra6 */
+/*s: function [[ipifcra6]] */
 char*
 ipifcra6(Ipifc *ifc, char **argv, int argc)
 {
@@ -866,9 +866,9 @@ ipifcra6(Ipifc *ifc, char **argv, int argc)
     }
     return nil;
 }
-/*e: function ipifcra6 */
+/*e: function [[ipifcra6]] */
 
-/*s: function ipifcctl */
+/*s: function [[ipifcctl]] */
 /*
  *  non-standard control messages.
  *  called with cv->car locked.
@@ -925,17 +925,17 @@ ipifcctl(Conv* cv, char** argv, int argc)
 
     return "unsupported ctl";
 }
-/*e: function ipifcctl */
+/*e: function [[ipifcctl]] */
 
-/*s: function ipifcstats */
+/*s: function [[ipifcstats]] */
 int
 ipifcstats(Proto *ipifc, char *buf, int len)
 {
     return ipstats(ipifc->f, buf, len);
 }
-/*e: function ipifcstats */
+/*e: function [[ipifcstats]] */
 
-/*s: function ipifcinit */
+/*s: function [[ipifcinit]] */
 void
 ipifcinit(Fs *f)
 {
@@ -973,9 +973,9 @@ ipifcinit(Fs *f)
 
     Fsproto(f, ipifc);
 }
-/*e: function ipifcinit */
+/*e: function [[ipifcinit]] */
 
-/*s: function addselfcache */
+/*s: function [[addselfcache]] */
 /*
  *  add to self routing cache
  *  called with c->car locked
@@ -1038,9 +1038,9 @@ addselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, ipaddr a, int type)
 
     qunlock(f->self);
 }
-/*e: function addselfcache */
+/*e: function [[addselfcache]] */
 
-/*s: global freeiplink */
+/*s: global [[freeiplink]] */
 /*
  *  These structures are unlinked from their chains while
  *  other threads may be using them.  To avoid excessive locking,
@@ -1048,12 +1048,12 @@ addselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, ipaddr a, int type)
  *  called with f->self locked
  */
 static Iplink *freeiplink;
-/*e: global freeiplink */
-/*s: global freeipself */
+/*e: global [[freeiplink]] */
+/*s: global [[freeipself]] */
 static Ipself *freeipself;
-/*e: global freeipself */
+/*e: global [[freeipself]] */
 
-/*s: function iplinkfree */
+/*s: function [[iplinkfree]] */
 static void
 iplinkfree(Iplink *p)
 {
@@ -1073,9 +1073,9 @@ iplinkfree(Iplink *p)
     p->next = nil;
     *l = p;
 }
-/*e: function iplinkfree */
+/*e: function [[iplinkfree]] */
 
-/*s: function ipselffree */
+/*s: function [[ipselffree]] */
 static void
 ipselffree(Ipself *p)
 {
@@ -1095,9 +1095,9 @@ ipselffree(Ipself *p)
     p->next = nil;
     *l = p;
 }
-/*e: function ipselffree */
+/*e: function [[ipselffree]] */
 
-/*s: function remselfcache */
+/*s: function [[remselfcache]] */
 /*
  *  Decrement reference for this address on this link.
  *  Unlink from selftab if this is the last ref.
@@ -1181,19 +1181,19 @@ remselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, ipaddr a)
 out:
     qunlock(f->self);
 }
-/*e: function remselfcache */
+/*e: function [[remselfcache]] */
 
-/*s: global stformat */
+/*s: global [[stformat]] */
 static char *stformat = "%-44.44I %2.2d %4.4s\n";
-/*e: global stformat */
-/*s: enum _anon_ (kernel/network/ip/ipifc.c)2 */
+/*e: global [[stformat]] */
+/*s: enum [[_anon_ (kernel/network/ip/ipifc.c)2]] */
 enum
 {
     Nstformat= 41,
 };
-/*e: enum _anon_ (kernel/network/ip/ipifc.c)2 */
+/*e: enum [[_anon_ (kernel/network/ip/ipifc.c)2]] */
 
-/*s: function ipselftabread */
+/*s: function [[ipselftabread]] */
 long
 ipselftabread(Fs *f, char *cp, ulong offset, int n)
 {
@@ -1221,9 +1221,9 @@ ipselftabread(Fs *f, char *cp, ulong offset, int n)
     qunlock(f->self);
     return m;
 }
-/*e: function ipselftabread */
+/*e: function [[ipselftabread]] */
 
-/*s: function iptentative */
+/*s: function [[iptentative]] */
 int
 iptentative(Fs *f, uchar *addr)
 {
@@ -1236,9 +1236,9 @@ iptentative(Fs *f, uchar *addr)
     }
     return 0;
 }
-/*e: function iptentative */
+/*e: function [[iptentative]] */
 
-/*s: function ipforme */
+/*s: function [[ipforme]] */
 /*
  *  returns
  *  0       - no match
@@ -1262,9 +1262,9 @@ ipforme(Fs *f, ipaddr addr)
         return Runi;
     return 0;
 }
-/*e: function ipforme */
+/*e: function [[ipforme]] */
 
-/*s: function findipifc */
+/*s: function [[findipifc]] */
 /*
  *  find the ifc on same net as the remote system.  If none,
  *  return nil.
@@ -1313,9 +1313,9 @@ findipifc(Fs *f, ipaddr remote, int type)
     /*e: [[findipifc()]] if broadcast or multicast route */
     return nil;
 }
-/*e: function findipifc */
+/*e: function [[findipifc]] */
 
-/*s: enum _anon_ (kernel/network/ip/ipifc.c)3 */
+/*s: enum [[_anon_ (kernel/network/ip/ipifc.c)3]] */
 enum {
     unknownv6,      /* UGH */
 //  multicastv6,
@@ -1323,9 +1323,9 @@ enum {
     linklocalv6,
     globalv6,
 };
-/*e: enum _anon_ (kernel/network/ip/ipifc.c)3 */
+/*e: enum [[_anon_ (kernel/network/ip/ipifc.c)3]] */
 
-/*s: function v6addrtype */
+/*s: function [[v6addrtype]] */
 int
 v6addrtype(uchar *addr)
 {
@@ -1337,14 +1337,14 @@ v6addrtype(uchar *addr)
     else
         return globalv6;
 }
-/*e: function v6addrtype */
+/*e: function [[v6addrtype]] */
 
-/*s: macro v6addrcurr */
+/*s: macro [[v6addrcurr]] */
 #define v6addrcurr(lifc) ((lifc)->preflt == ~0L || \
             (lifc)->origint + (lifc)->preflt >= NOW/1000)
-/*e: macro v6addrcurr */
+/*e: macro [[v6addrcurr]] */
 
-/*s: function findprimaryipv6 */
+/*s: function [[findprimaryipv6]] */
 static void
 findprimaryipv6(Fs *f, uchar *local)
 {
@@ -1376,9 +1376,9 @@ findprimaryipv6(Fs *f, uchar *local)
         }
     }
 }
-/*e: function findprimaryipv6 */
+/*e: function [[findprimaryipv6]] */
 
-/*s: function findprimaryipv4 */
+/*s: function [[findprimaryipv4]] */
 /*
  *  returns first ip address configured
  */
@@ -1401,9 +1401,9 @@ findprimaryipv4(Fs *f, uchar *local)
         }
     }
 }
-/*e: function findprimaryipv4 */
+/*e: function [[findprimaryipv4]] */
 
-/*s: function findlocalip */
+/*s: function [[findlocalip]] */
 /*
  *  find the local address 'closest' to the remote system, copy it to
  *  local and return the ifc for that address
@@ -1489,9 +1489,9 @@ findlocalip(Fs *f, uchar *local, uchar *remote)
 out:
     qunlock(f->ipifc);
 }
-/*e: function findlocalip */
+/*e: function [[findlocalip]] */
 
-/*s: function ipv4local */
+/*s: function [[ipv4local]] */
 /*
  *  return first v4 address associated with an interface
  */
@@ -1508,9 +1508,9 @@ ipv4local(Ipifc *ifc, uchar *addr)
     }
     return 0;
 }
-/*e: function ipv4local */
+/*e: function [[ipv4local]] */
 
-/*s: function ipv6local */
+/*s: function [[ipv6local]] */
 /*
  *  return first v6 address associated with an interface
  */
@@ -1527,9 +1527,9 @@ ipv6local(Ipifc *ifc, uchar *addr)
     }
     return 0;
 }
-/*e: function ipv6local */
+/*e: function [[ipv6local]] */
 
-/*s: function ipv6anylocal */
+/*s: function [[ipv6anylocal]] */
 int
 ipv6anylocal(Ipifc *ifc, uchar *addr)
 {
@@ -1543,9 +1543,9 @@ ipv6anylocal(Ipifc *ifc, uchar *addr)
     }
     return SRC_UNSPEC;
 }
-/*e: function ipv6anylocal */
+/*e: function [[ipv6anylocal]] */
 
-/*s: function iplocalonifc */
+/*s: function [[iplocalonifc]] */
 /*
  *  see if this address is bound to the interface
  */
@@ -1559,10 +1559,10 @@ iplocalonifc(Ipifc *ifc, uchar *ip)
             return lifc;
     return nil;
 }
-/*e: function iplocalonifc */
+/*e: function [[iplocalonifc]] */
 
 
-/*s: function ipproxyifc */
+/*s: function [[ipproxyifc]] */
 /*
  *  See if we're proxying for this address on this interface
  */
@@ -1586,9 +1586,9 @@ ipproxyifc(Fs *f, Ipifc *ifc, uchar *ip)
     }
     return 0;
 }
-/*e: function ipproxyifc */
+/*e: function [[ipproxyifc]] */
 
-/*s: function ipismulticast */
+/*s: function [[ipismulticast]] */
 /*
  *  return multicast version if any
  */
@@ -1603,7 +1603,7 @@ ipismulticast(uchar *ip)
         return V6;
     return 0;
 }
-/*e: function ipismulticast */
+/*e: function [[ipismulticast]] */
 
 //int
 //ipisbm(uchar *ip)
@@ -1620,7 +1620,7 @@ ipismulticast(uchar *ip)
 //}
 
 
-/*s: function ipifcaddmulti */
+/*s: function [[ipifcaddmulti]] */
 /*
  *  add a multicast address to an interface, called with c->car locked
  */
@@ -1660,10 +1660,10 @@ ipifcaddmulti(Conv *c, uchar *ma, uchar *ia)
         poperror();
     }
 }
-/*e: function ipifcaddmulti */
+/*e: function [[ipifcaddmulti]] */
 
 
-/*s: function ipifcremmulti */
+/*s: function [[ipifcremmulti]] */
 /*
  *  remove a multicast address from an interface, called with c->car locked
  */
@@ -1707,9 +1707,9 @@ ipifcremmulti(Conv *c, uchar *ma, uchar *ia)
 
     free(multi);
 }
-/*e: function ipifcremmulti */
+/*e: function [[ipifcremmulti]] */
 
-/*s: function ipifcjoinmulti */
+/*s: function [[ipifcjoinmulti]] */
 /*
  *  make lifc's join and leave multicast groups
  */
@@ -1719,18 +1719,18 @@ ipifcjoinmulti(Ipifc *ifc, char **argv, int argc)
     USED(ifc, argv, argc);
     return nil;
 }
-/*e: function ipifcjoinmulti */
+/*e: function [[ipifcjoinmulti]] */
 
-/*s: function ipifcleavemulti */
+/*s: function [[ipifcleavemulti]] */
 static char*
 ipifcleavemulti(Ipifc *ifc, char **argv, int argc)
 {
     USED(ifc, argv, argc);
     return nil;
 }
-/*e: function ipifcleavemulti */
+/*e: function [[ipifcleavemulti]] */
 
-/*s: function ipifcregisterproxy */
+/*s: function [[ipifcregisterproxy]] */
 static void
 ipifcregisterproxy(Fs *f, Ipifc *ifc, uchar *ip)
 {
@@ -1788,7 +1788,7 @@ ipifcregisterproxy(Fs *f, Ipifc *ifc, uchar *ip)
         }
     }
 }
-/*e: function ipifcregisterproxy */
+/*e: function [[ipifcregisterproxy]] */
 
 
 /* added for new v6 mesg types */
@@ -1807,15 +1807,15 @@ ipifcregisterproxy(Fs *f, Ipifc *ifc, uchar *ip)
 //
 //  v6delroute(f, v6Unspecified, v6Unspecified, 1);
 //  v6addroute(f, "ra", v6Unspecified, v6Unspecified, gate, 0);
-/*s: enum _anon_ (kernel/network/ip/ipifc.c)4 */
+/*s: enum [[_anon_ (kernel/network/ip/ipifc.c)4]] */
 //}
 
 enum {
     Ngates = 3,
 };
-/*e: enum _anon_ (kernel/network/ip/ipifc.c)4 */
+/*e: enum [[_anon_ (kernel/network/ip/ipifc.c)4]] */
 
-/*s: function ipifcadd6 */
+/*s: function [[ipifcadd6]] */
 char*
 ipifcadd6(Ipifc *ifc, char**argv, int argc)
 {
@@ -1872,5 +1872,5 @@ ipifcadd6(Ipifc *ifc, char**argv, int argc)
 
     return ipifcadd(ifc, params, 3, 0, lifc);
 }
-/*e: function ipifcadd6 */
+/*e: function [[ipifcadd6]] */
 /*e: kernel/network/ip/ipifc.c */

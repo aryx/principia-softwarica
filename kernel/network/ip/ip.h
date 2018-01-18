@@ -39,70 +39,70 @@ typedef struct  v6params  v6params;
 #pragma incomplete IP
 #pragma incomplete Netlog
 
-/*s: enum _anon_ (kernel/network/ip/ip.h) */
+/*s: enum [[_anon_ (kernel/network/ip/ip.h)]] */
 enum
 {
   Addrlen=  64,
-  /*s: constant Maxproto */
+  /*s: constant [[Maxproto]] */
   Maxproto= 20,
-  /*e: constant Maxproto */
-  /*s: constant Nhash */
+  /*e: constant [[Maxproto]] */
+  /*s: constant [[Nhash]] */
   Nhash=    64,
-  /*e: constant Nhash */
+  /*e: constant [[Nhash]] */
   Maxincall=  32, /* max. conn.s in listen q not accepted yet */
-  /*s: constant Nchans */
+  /*s: constant [[Nchans]] */
   Nchans=   1024,
-  /*e: constant Nchans */
+  /*e: constant [[Nchans]] */
   MAClen=   16,   /* longest mac address */
 
-  /*s: constant MAXTTL */
+  /*s: constant [[MAXTTL]] */
   MAXTTL=   255,
-  /*e: constant MAXTTL */
+  /*e: constant [[MAXTTL]] */
   DFLTTOS=  0,
 
-  /*s: constant IPaddrlen */
+  /*s: constant [[IPaddrlen]] */
   IPaddrlen=	16,
-  /*e: constant IPaddrlen */
-  /*s: constant IPv4addrlen */
+  /*e: constant [[IPaddrlen]] */
+  /*s: constant [[IPv4addrlen]] */
   IPv4addrlen=	4,
-  /*e: constant IPv4addrlen */
-  /*s: constant IPv4off */
+  /*e: constant [[IPv4addrlen]] */
+  /*s: constant [[IPv4off]] */
   IPv4off=	12,
-  /*e: constant IPv4off */
+  /*e: constant [[IPv4off]] */
   IPllen=   4,
 
-  /*s: constant IP_VER4 */
+  /*s: constant [[IP_VER4]] */
   IP_VER4=  0x40,
-  /*e: constant IP_VER4 */
-  /*s: constant IP_HLEN4 */
+  /*e: constant [[IP_VER4]] */
+  /*s: constant [[IP_HLEN4]] */
   IP_HLEN4= 5,    /* v4: Header length in words */
-  /*e: constant IP_HLEN4 */
+  /*e: constant [[IP_HLEN4]] */
   IP_VER6=  0x60,
 
   IP_DF=    0x4000,   /* v4: Don't fragment */
   IP_MF=    0x2000,   /* v4: More fragments */
   IP4HDR=   20,   /* sizeof(Ip4hdr) */
 
-  /*s: constant IP_MAX */
+  /*s: constant [[IP_MAX]] */
   IP_MAX=   64*1024,  /* Max. Internet packet size, v4 & v6 */
-  /*e: constant IP_MAX */
+  /*e: constant [[IP_MAX]] */
 
-  /*s: constant Lroot */
+  /*s: constant [[Lroot]] */
   /* 2^Lroot trees in the root table */
   Lroot=    10,
-  /*e: constant Lroot */
+  /*e: constant [[Lroot]] */
 
   Maxpath = 64,
 };
-/*e: enum _anon_ (kernel/network/ip/ip.h) */
+/*e: enum [[_anon_ (kernel/network/ip/ip.h)]] */
 
-/*s: enum ip_version */
+/*s: enum [[ip_version]] */
 /* ip versions */
 enum ip_version {
   V4=   4,
   V6=   6,
 };
-/*e: enum ip_version */
+/*e: enum [[ip_version]] */
 
 /*s: typedef ipv4 */
 typedef uchar ipv4[IPv4addrlen];
@@ -120,7 +120,7 @@ typedef uchar* ipv4or6;
 typedef uchar* ipv4p;
 /*e: typedef ipv4p */
 
-/*s: enum conversation_state */
+/*s: enum [[conversation_state]] */
 enum conversation_state
 {
   Idle=   0,
@@ -131,9 +131,9 @@ enum conversation_state
   Connecting= 3,
   Connected=  4,
 };
-/*e: enum conversation_state */
+/*e: enum [[conversation_state]] */
 
-/*s: enum _anon_ (kernel/network/ip/ip.h)3 */
+/*s: enum [[_anon_ (kernel/network/ip/ip.h)3]] */
 /* MIB II counters */
 enum mib_two_counters
 {
@@ -168,9 +168,9 @@ enum mib_two_counters
 
   Nipstats,
 };
-/*e: enum _anon_ (kernel/network/ip/ip.h)3 */
+/*e: enum [[_anon_ (kernel/network/ip/ip.h)3]] */
 
-/*s: struct Fragment4 */
+/*s: struct [[Fragment4]] */
 struct Fragment4
 {
   // list<ref_own<Block>> ? next = Block.???
@@ -187,9 +187,9 @@ struct Fragment4
   Fragment4*  next;
   /*e: [[Fragment4]] extra fields */
 };
-/*e: struct Fragment4 */
+/*e: struct [[Fragment4]] */
 
-/*s: struct Fragment6 */
+/*s: struct [[Fragment6]] */
 struct Fragment6
 {
   Block*  blist;
@@ -199,9 +199,9 @@ struct Fragment6
   uint  id;
   ulong   age;
 };
-/*e: struct Fragment6 */
+/*e: struct [[Fragment6]] */
 
-/*s: struct Ipfrag */
+/*s: struct [[Ipfrag]] */
 //@Scheck: used only for its macro below, could maybe simplify?
 struct Ipfrag
 {
@@ -210,11 +210,11 @@ struct Ipfrag
 
   uchar payload[];
 };
-/*e: struct Ipfrag */
+/*e: struct [[Ipfrag]] */
 
-/*s: constant IPFRAGSZ */
+/*s: constant [[IPFRAGSZ]] */
 #define IPFRAGSZ offsetof(Ipfrag, payload[0])
-/*e: constant IPFRAGSZ */
+/*e: constant [[IPFRAGSZ]] */
 
 /*s: struct IP (kernel) */
 /* an instance of IP */
@@ -247,7 +247,7 @@ struct IP
 };
 /*e: struct IP (kernel) */
 
-/*s: struct Ip4hdr */
+/*s: struct [[Ip4hdr]] */
 /* on the wire packet header */
 struct Ip4hdr
 {
@@ -266,7 +266,7 @@ struct Ip4hdr
   ipv4 src;   /* IP source */
   ipv4 dst;   /* IP destination */
 };
-/*e: struct Ip4hdr */
+/*e: struct [[Ip4hdr]] */
 
 /*s: struct Conv (kernel) */
 /*
@@ -440,7 +440,7 @@ struct Iplifc
 };
 /*e: struct Iplifc (kernel) */
 
-/*s: struct Iplink */
+/*s: struct [[Iplink]] */
 /* binding twixt Ipself and Iplifc */
 struct Iplink
 {
@@ -455,11 +455,11 @@ struct Iplink
   Iplink  *selflink;  /* next link for this local address */
   Iplink  *lifclink;  /* next link for this ifc */
 };
-/*e: struct Iplink */
+/*e: struct [[Iplink]] */
 
 /* rfc 2461, pp.40—43. */
 
-/*s: struct Routerparams */
+/*s: struct [[Routerparams]] */
 /* default values, one per stack */
 struct Routerparams {
   int mflag;    /* flag: managed address configuration */
@@ -472,13 +472,13 @@ struct Routerparams {
   int ttl;    /* cur hop count limit */
   int routerlt; /* router lifetime */
 };
-/*e: struct Routerparams */
+/*e: struct [[Routerparams]] */
 
-/*s: struct Hostparams */
+/*s: struct [[Hostparams]] */
 struct Hostparams {
   int rxmithost;
 };
-/*e: struct Hostparams */
+/*e: struct [[Hostparams]] */
 
 /*s: struct Ipifc (kernel) */
 struct Ipifc
@@ -528,7 +528,7 @@ struct Ipifc
 };
 /*e: struct Ipifc (kernel) */
 
-/*s: struct Ipmulti */
+/*s: struct [[Ipmulti]] */
 /*
  *  one per multicast-lifc pair used by a Conv
  */
@@ -538,18 +538,18 @@ struct Ipmulti
   ipaddr ia;
   Ipmulti *next;
 };
-/*e: struct Ipmulti */
+/*e: struct [[Ipmulti]] */
 
-/*s: enum _anon_ (kernel/network/ip/ip.h)4 */
+/*s: enum [[_anon_ (kernel/network/ip/ip.h)4]] */
 enum
 {
-  /*s: constant Nipht */
+  /*s: constant [[Nipht]] */
   Nipht=    521,  /* convenient prime */
-  /*e: constant Nipht */
+  /*e: constant [[Nipht]] */
 };
-/*e: enum _anon_ (kernel/network/ip/ip.h)4 */
+/*e: enum [[_anon_ (kernel/network/ip/ip.h)4]] */
 
-/*s: enum matchtype */
+/*s: enum [[matchtype]] */
 enum matchtype {
   IPmatchexact= 0,  /* match on 4 tuple */
 
@@ -558,9 +558,9 @@ enum matchtype {
   IPmatchaddr,    /* addr!* */
   IPmatchpa,    /* addr!port */
 };
-/*e: enum matchtype */
+/*e: enum [[matchtype]] */
 
-/*s: struct Iphash */
+/*s: struct [[Iphash]] */
 struct Iphash
 {
   Conv  *c;
@@ -570,8 +570,8 @@ struct Iphash
   // Extra
   Iphash  *next;
 };
-/*e: struct Iphash */
-/*s: struct Ipht */
+/*e: struct [[Iphash]] */
+/*s: struct [[Ipht]] */
 /*
  *  hash table for 2 ip addresses + 2 ports
  */
@@ -583,7 +583,7 @@ struct Ipht
   // Extra
   Lock;
 };
-/*e: struct Ipht */
+/*e: struct [[Ipht]] */
 
 void iphtadd(Ipht*, Conv*);
 void iphtrem(Ipht*, Conv*);
@@ -710,7 +710,7 @@ struct Fs
 };
 /*e: struct Fs (kernel) */
 
-/*s: struct v6router */
+/*s: struct [[v6router]] */
 /* one per default router known to host */
 struct v6router {
   uchar inuse;
@@ -720,9 +720,9 @@ struct v6router {
   long  ltorigin;
   Routerparams  rp;
 };
-/*e: struct v6router */
+/*e: struct [[v6router]] */
 
-/*s: struct v6params */
+/*s: struct [[v6params]] */
 struct v6params
 {
   Routerparams  rp;   /* v6 params, one copy per node now */
@@ -731,7 +731,7 @@ struct v6params
   int   cdrouter; /* uses only v6rlist[cdrouter] if   */
           /* cdrouter >= 0. */
 };
-/*e: struct v6params */
+/*e: struct [[v6params]] */
 
 int Fsconnected(Conv*, char*);
 Conv* Fsnewcall(Conv*, uchar*, ushort, uchar*, ushort, uchar);
@@ -746,7 +746,7 @@ char* Fsstdannounce(Conv*, char**, int);
 //char* Fsstdbind(Conv*, char**, int);
 ulong scalednconv(void);
 //void  closeconv(Conv*);
-/*s: enum _anon_ (kernel/network/ip/ip.h)5 */
+/*s: enum [[_anon_ (kernel/network/ip/ip.h)5]] */
 /*
  *  logging
  */
@@ -769,7 +769,7 @@ enum
   Logesp=   1<<17,
   Logtcpwin=  1<<18,
 };
-/*e: enum _anon_ (kernel/network/ip/ip.h)5 */
+/*e: enum [[_anon_ (kernel/network/ip/ip.h)5]] */
 
 void  netloginit(Fs*);
 void  netlogopen(Fs*);
@@ -793,7 +793,7 @@ typedef struct Routewalk Routewalk;
 typedef struct V4route V4route;
 typedef struct V6route V6route;
 
-/*s: enum _anon_ (kernel/network/ip/ip.h)6 */
+/*s: enum [[_anon_ (kernel/network/ip/ip.h)6]] */
 enum route_type
 {
   /* type bits */
@@ -809,9 +809,9 @@ enum route_type
 
   Rproxy=   (1<<6),   /* this route should be proxied */
 };
-/*e: enum _anon_ (kernel/network/ip/ip.h)6 */
+/*e: enum [[_anon_ (kernel/network/ip/ip.h)6]] */
 
-/*s: struct Routewalk */
+/*s: struct [[Routewalk]] */
 struct Routewalk
 {
   int o;
@@ -821,7 +821,7 @@ struct Routewalk
   void* state;
   void  (*walk)(Route*, Routewalk*);
 };
-/*e: struct Routewalk */
+/*e: struct [[Routewalk]] */
 
 /*s: struct RouteTree (kernel) */
 struct  RouteTree
@@ -849,7 +849,7 @@ struct  RouteTree
 };
 /*e: struct RouteTree (kernel) */
 
-/*s: struct V4route */
+/*s: struct [[V4route]] */
 struct V4route
 {
   iplong address;
@@ -857,16 +857,16 @@ struct V4route
 
   ipv4 gate;
 };
-/*e: struct V4route */
+/*e: struct [[V4route]] */
 
-/*s: struct V6route */
+/*s: struct [[V6route]] */
 struct V6route
 {
   ulong address[IPllen];
   ulong endaddress[IPllen];
   uchar gate[IPaddrlen];
 };
-/*e: struct V6route */
+/*e: struct [[V6route]] */
 
 /*s: struct Route (kernel) */
 struct Route
@@ -900,7 +900,7 @@ extern void routetype(int, char*);
  *  devip.c
  */
 
-/*s: struct IPaux */
+/*s: struct [[IPaux]] */
 /*
  *  Hanging off every ip channel's ->aux is the following structure.
  *  It maintains the state used by devip and iproute.
@@ -910,14 +910,14 @@ struct IPaux
   char  *owner;   /* the user that did the attach */
   char  tag[4];
 };
-/*e: struct IPaux */
+/*e: struct [[IPaux]] */
 
 extern IPaux* newipaux(char*, char*);
 
 /*
  *  arp.c
  */
-/*s: struct Arpent */
+/*s: struct [[Arpent]] */
 struct Arpent
 {
   ipaddr ip;
@@ -940,7 +940,7 @@ struct Arpent
   // Extra
   Arpent* hash;
 };
-/*e: struct Arpent */
+/*e: struct [[Arpent]] */
 
 extern void arpinit(Fs*);
 extern int  arpread(Arp*, char*, ulong, int);
@@ -966,12 +966,12 @@ extern void v4tov6(uchar *v6, uchar *v4);
 extern int  v6tov4(uchar *v4, uchar *v6);
 extern int  eipfmt(Fmt*);
 
-/*s: macro ipmove (kernel/network/ip/ip.h) */
+/*s: macro [[ipmove]]([[(kernel/network/ip/ip.h)]]) */
 #define ipmove(x, y) memmove(x, y, IPaddrlen)
-/*e: macro ipmove (kernel/network/ip/ip.h) */
-/*s: macro ipcmp (kernel/network/ip/ip.h) */
+/*e: macro [[ipmove]]([[(kernel/network/ip/ip.h)]]) */
+/*s: macro [[ipcmp]]([[(kernel/network/ip/ip.h)]]) */
 #define ipcmp(x, y) ( (x)[IPaddrlen-1] != (y)[IPaddrlen-1] || memcmp(x, y, IPaddrlen) )
-/*e: macro ipcmp (kernel/network/ip/ip.h) */
+/*e: macro [[ipcmp]]([[(kernel/network/ip/ip.h)]]) */
 
 extern ipaddr IPv4bcast;
 extern ipaddr IPnoaddr;
@@ -981,9 +981,9 @@ extern ipaddr IPallbits;
 //extern ipaddr IPv4allsys;
 //extern ipaddr IPv4allrouter;
 
-/*s: constant NOW */
+/*s: constant [[NOW]] */
 #define NOW TK2MS(CPUS(0)->ticks)
-/*e: constant NOW */
+/*e: constant [[NOW]] */
 
 /*
  *  media

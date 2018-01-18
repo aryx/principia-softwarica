@@ -3,17 +3,17 @@
 #include	<libc.h>
 #include	<ip.h>
 
-/*s: global endian */
+/*s: global [[endian]] */
 static	short	endian	= 1;
-/*e: global endian */
-/*s: global aendian */
+/*e: global [[endian]] */
+/*s: global [[aendian]] */
 static	uchar*	aendian	= (uchar*)&endian;
-/*e: global aendian */
-/*s: constant LITTLE */
+/*e: global [[aendian]] */
+/*s: constant [[LITTLE]] */
 #define	LITTLE	*aendian
-/*e: constant LITTLE */
+/*e: constant [[LITTLE]] */
 
-/*s: function ptclbsum */
+/*s: function [[ptclbsum]] */
 ushort
 ptclbsum(uchar *addr, int len)
 {
@@ -74,5 +74,5 @@ ptclbsum(uchar *addr, int len)
 
     return losum & 0xffff;
 }
-/*e: function ptclbsum */
+/*e: function [[ptclbsum]] */
 /*e: lib_networking/libip/ptclbsum.c */

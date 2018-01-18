@@ -14,27 +14,27 @@ typedef struct Etherhdr Etherhdr;
 typedef struct  Etherrock Etherrock;
 typedef struct Etherarp Etherarp;
 
-/*s: struct Etherhdr */
+/*s: struct [[Etherhdr]] */
 struct Etherhdr
 {
     eaddr   d;
     eaddr   s;
     uchar   t[2];
 };
-/*e: struct Etherhdr */
+/*e: struct [[Etherhdr]] */
 
-/*s: global ipbroadcast */
+/*s: global [[ipbroadcast]] */
 static ipaddr ipbroadcast = {
     0xff,0xff,0xff,0xff,
     0xff,0xff,0xff,0xff,
     0xff,0xff,0xff,0xff,
     0xff,0xff,0xff,0xff,
 };
-/*e: global ipbroadcast */
+/*e: global [[ipbroadcast]] */
 
-/*s: global etherbroadcast */
+/*s: global [[etherbroadcast]] */
 static eaddr etherbroadcast = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-/*e: global etherbroadcast */
+/*e: global [[etherbroadcast]] */
 
 static void etherread4(void *a);
 static void etherread6(void *a);
@@ -77,7 +77,7 @@ Medium ethermedium =
 };
 /*e: global ethermedium (kernel) */
 
-/*s: global gbemedium */
+/*s: global [[gbemedium]] */
 Medium gbemedium =
 {
 .name=      "gbe",
@@ -94,9 +94,9 @@ Medium gbemedium =
 .areg=      sendgarp,
 .pref2addr= etherpref2addr,
 };
-/*e: global gbemedium */
+/*e: global [[gbemedium]] */
 
-/*s: struct Etherrock */
+/*s: struct [[Etherrock]] */
 struct Etherrock
 {
     Fs  *f;     /* file system we belong to */
@@ -109,9 +109,9 @@ struct Etherrock
     Chan    *mchan6;    /* Data channel for v6 */
     Chan    *cchan6;    /* Control channel for v6 */
 };
-/*e: struct Etherrock */
+/*e: struct [[Etherrock]] */
 
-/*s: enum _anon_ (kernel/network/ip/ethermedium.c) */
+/*s: enum [[_anon_ (kernel/network/ip/ethermedium.c)]] */
 /*
  *  ethernet arp request
  */
@@ -120,9 +120,9 @@ enum
     ARPREQUEST  = 1,
     ARPREPLY    = 2,
 };
-/*e: enum _anon_ (kernel/network/ip/ethermedium.c) */
+/*e: enum [[_anon_ (kernel/network/ip/ethermedium.c)]] */
 
-/*s: struct Etherarp */
+/*s: struct [[Etherarp]] */
 struct Etherarp
 {
     uchar   d[6];
@@ -138,13 +138,13 @@ struct Etherarp
     uchar   tha[6];
     uchar   tpa[4];
 };
-/*e: struct Etherarp */
+/*e: struct [[Etherarp]] */
 
-/*s: global nbmsg */
+/*s: global [[nbmsg]] */
 static char *nbmsg = "nonblocking";
-/*e: global nbmsg */
+/*e: global [[nbmsg]] */
 
-/*s: function etherbind */
+/*s: function [[etherbind]] */
 /*
  *  called to bind an IP ifc to an ethernet device
  *  called with ifc wlock'd
@@ -259,9 +259,9 @@ etherbind(Ipifc *ifc, int argc, char **argv)
     kproc("recvarpproc", recvarpproc, ifc);
     kproc("etherread6", etherread6, ifc);
 }
-/*e: function etherbind */
+/*e: function [[etherbind]] */
 
-/*s: function etherunbind */
+/*s: function [[etherunbind]] */
 /*
  *  called with ifc wlock'd
  */
@@ -294,9 +294,9 @@ etherunbind(Ipifc *ifc)
 
     free(er);
 }
-/*e: function etherunbind */
+/*e: function [[etherunbind]] */
 
-/*s: function etherbwrite (kernel/network/ip/ethermedium.c) */
+/*s: function [[etherbwrite]]([[(kernel/network/ip/ethermedium.c)]]) */
 /*
  *  called by ipoput with a single block to write with ifc rlock'd
  */
@@ -356,10 +356,10 @@ etherbwrite(Ipifc *ifc, Block *bp, int version, uchar *ip)
     }
     ifc->out++;
 }
-/*e: function etherbwrite (kernel/network/ip/ethermedium.c) */
+/*e: function [[etherbwrite]]([[(kernel/network/ip/ethermedium.c)]]) */
 
 
-/*s: function etherread4 */
+/*s: function [[etherread4]] */
 /*
  *  process to read from the ethernet
  */
@@ -397,10 +397,10 @@ etherread4(void *a)
         poperror();
     }
 }
-/*e: function etherread4 */
+/*e: function [[etherread4]] */
 
 
-/*s: function etherread6 */
+/*s: function [[etherread6]] */
 /*
  *  process to read from the ethernet, IPv6
  */
@@ -438,9 +438,9 @@ etherread6(void *a)
         poperror();
     }
 }
-/*e: function etherread6 */
+/*e: function [[etherread6]] */
 
-/*s: function etheraddmulti */
+/*s: function [[etheraddmulti]] */
 static void
 etheraddmulti(Ipifc *ifc, uchar *a, uchar *)
 {
@@ -462,9 +462,9 @@ etheraddmulti(Ipifc *ifc, uchar *a, uchar *)
         panic("etheraddmulti: version %d", version);
     }
 }
-/*e: function etheraddmulti */
+/*e: function [[etheraddmulti]] */
 
-/*s: function etherremmulti */
+/*s: function [[etherremmulti]] */
 static void
 etherremmulti(Ipifc *ifc, uchar *a, uchar *)
 {
@@ -486,9 +486,9 @@ etherremmulti(Ipifc *ifc, uchar *a, uchar *)
         panic("etherremmulti: version %d", version);
     }
 }
-/*e: function etherremmulti */
+/*e: function [[etherremmulti]] */
 
-/*s: function sendarp */
+/*s: function [[sendarp]] */
 /*
  *  send an ethernet arp
  *  (only v4, v6 uses the neighbor discovery, rfc1970)
@@ -541,9 +541,9 @@ sendarp(Ipifc *ifc, Arpent *a)
 
     devtab[er->achan->type]->bwrite(er->achan, bp, 0);
 }
-/*e: function sendarp */
+/*e: function [[sendarp]] */
 
-/*s: function resolveaddr6 */
+/*s: function [[resolveaddr6]] */
 static void
 resolveaddr6(Ipifc *ifc, Arpent *a)
 {
@@ -580,9 +580,9 @@ resolveaddr6(Ipifc *ifc, Arpent *a)
     if(sflag = ipv6anylocal(ifc, ipsrc))
         icmpns(er->f, ipsrc, sflag, a->ip, TARG_MULTI, ifc->mac);
 }
-/*e: function resolveaddr6 */
+/*e: function [[resolveaddr6]] */
 
-/*s: function sendgarp */
+/*s: function [[sendgarp]] */
 /*
  *  send a gratuitous arp to refresh arp caches
  */
@@ -620,9 +620,9 @@ sendgarp(Ipifc *ifc, uchar *ip)
 
     devtab[er->achan->type]->bwrite(er->achan, bp, 0);
 }
-/*e: function sendgarp */
+/*e: function [[sendgarp]] */
 
-/*s: function recvarp */
+/*s: function [[recvarp]] */
 static void
 recvarp(Ipifc *ifc)
 {
@@ -719,9 +719,9 @@ recvarp(Ipifc *ifc)
     }
     freeb(ebp);
 }
-/*e: function recvarp */
+/*e: function [[recvarp]] */
 
-/*s: function recvarpproc */
+/*s: function [[recvarpproc]] */
 static void
 recvarpproc(void *v)
 {
@@ -736,9 +736,9 @@ recvarpproc(void *v)
     for(;;)
         recvarp(ifc);
 }
-/*e: function recvarpproc */
+/*e: function [[recvarpproc]] */
 
-/*s: function multicastea */
+/*s: function [[multicastea]] */
 static int
 multicastea(uchar *ea, uchar *ip)
 {
@@ -764,9 +764,9 @@ multicastea(uchar *ea, uchar *ip)
     }
     return x;
 }
-/*e: function multicastea */
+/*e: function [[multicastea]] */
 
-/*s: function multicastarp */
+/*s: function [[multicastarp]] */
 /*
  *  fill in an arp entry for broadcast or multicast
  *  addresses.  Return the first queued packet for the
@@ -796,19 +796,19 @@ multicastarp(Fs *f, Arpent *a, Medium *medium, uchar *mac)
     /* let arp take care of it */
     return nil;
 }
-/*e: function multicastarp */
+/*e: function [[multicastarp]] */
 
-/*s: function ethermediumlink */
+/*s: function [[ethermediumlink]] */
 void
 ethermediumlink(void)
 {
     addipmedium(&ethermedium);
     addipmedium(&gbemedium);
 }
-/*e: function ethermediumlink */
+/*e: function [[ethermediumlink]] */
 
 
-/*s: function etherpref2addr */
+/*s: function [[etherpref2addr]] */
 static void
 etherpref2addr(uchar *pref, uchar *ea)
 {
@@ -821,5 +821,5 @@ etherpref2addr(uchar *pref, uchar *ea)
     pref[14] = ea[4];
     pref[15] = ea[5];
 }
-/*e: function etherpref2addr */
+/*e: function [[etherpref2addr]] */
 /*e: kernel/network/ip/ethermedium.c */

@@ -1,5 +1,5 @@
 /*s: kernel/network/ip/ipv6.h */
-/*s: macro isv6mcast */
+/*s: macro [[isv6mcast]] */
 /*
  * Internet Protocol Version 6
  *
@@ -17,19 +17,19 @@
  * prefix is fc00::/7, scope is global, routing is limited to roughly a site.
  */
 #define isv6mcast(addr)   ((addr)[0] == 0xff)
-/*e: macro isv6mcast */
-/*s: macro islinklocal */
+/*e: macro [[isv6mcast]] */
+/*s: macro [[islinklocal]] */
 #define islinklocal(addr) ((addr)[0] == 0xfe && ((addr)[1] & 0xc0) == 0x80)
-/*e: macro islinklocal */
+/*e: macro [[islinklocal]] */
 
-/*s: macro optexsts */
+/*s: macro [[optexsts]] */
 #define optexsts(np)  (nhgets((np)->ploadlen) > 24)
-/*e: macro optexsts */
-/*s: macro issmcast */
+/*e: macro [[optexsts]] */
+/*s: macro [[issmcast]] */
 #define issmcast(addr)  (memcmp((addr), v6solicitednode, 13) == 0)
-/*e: macro issmcast */
+/*e: macro [[issmcast]] */
 
-/*s: enum _anon_ (kernel/network/ip/ipv6.h) */
+/*s: enum [[_anon_ (kernel/network/ip/ipv6.h)]] */
 enum {        /* Header Types */
   HBH   = 0,  /* hop-by-hop multicast routing protocol */
   ICMP    = 1,
@@ -55,9 +55,9 @@ enum {        /* Header Types */
 
   Maxhdrtype  = 256,
 };
-/*e: enum _anon_ (kernel/network/ip/ipv6.h) */
+/*e: enum [[_anon_ (kernel/network/ip/ipv6.h)]] */
 
-/*s: enum _anon_ (kernel/network/ip/ipv6.h)2 */
+/*s: enum [[_anon_ (kernel/network/ip/ipv6.h)2]] */
 enum {
   /* multicast flags and scopes */
 
@@ -119,7 +119,7 @@ enum {
   MAX_MULTICAST_SOLICIT = 3,
   RETRANS_TIMER   = 1000,
 };
-/*e: enum _anon_ (kernel/network/ip/ipv6.h)2 */
+/*e: enum [[_anon_ (kernel/network/ip/ipv6.h)2]] */
 
 typedef struct Ip6hdr Ip6hdr;
 typedef struct Opthdr Opthdr;
@@ -135,12 +135,12 @@ typedef struct Fraghdr6 Fraghdr6;
   uchar src[IPaddrlen]; \
   uchar dst[IPaddrlen]
 
-/*s: struct Ip6hdr (kernel/network/ip/ipv6.h) */
+/*s: struct [[Ip6hdr]]([[(kernel/network/ip/ipv6.h)]]) */
 struct  Ip6hdr {
   IPV6HDR;
   uchar payload[];
 };
-/*e: struct Ip6hdr (kernel/network/ip/ipv6.h) */
+/*e: struct [[Ip6hdr]]([[(kernel/network/ip/ipv6.h)]]) */
 
 //struct  Opthdr {    /* unused */
 //  uchar nexthdr;
@@ -158,7 +158,7 @@ struct  Ip6hdr {
 //  uchar len;
 //  uchar rtetype;
 //  uchar segrem;
-/*s: struct Fraghdr6 */
+/*s: struct [[Fraghdr6]] */
 //};
 
 struct  Fraghdr6 {
@@ -167,7 +167,7 @@ struct  Fraghdr6 {
   uchar offsetRM[2];  /* Offset, Res, M flag */
   uchar id[4];
 };
-/*e: struct Fraghdr6 */
+/*e: struct [[Fraghdr6]] */
 
 extern uchar v6allnodesN[IPaddrlen];
 extern uchar v6allnodesL[IPaddrlen];

@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <ip.h>
 
-/*s: global IPv4bcast */
+/*s: global [[IPv4bcast]] */
 /*
  *  well known IP addresses
  */
@@ -14,8 +14,8 @@ ipaddr IPv4bcast = {
 
     0xff, 0xff, 0xff, 0xff
 };
-/*e: global IPv4bcast */
-/*s: global IPv4allsys */
+/*e: global [[IPv4bcast]] */
+/*s: global [[IPv4allsys]] */
 ipaddr IPv4allsys = {
     0, 0, 0, 0,
     0, 0, 0, 0,
@@ -23,8 +23,8 @@ ipaddr IPv4allsys = {
 
     0xe0, 0, 0, 0x01
 };
-/*e: global IPv4allsys */
-/*s: global IPv4allrouter */
+/*e: global [[IPv4allsys]] */
+/*s: global [[IPv4allrouter]] */
 ipaddr IPv4allrouter = {
     0, 0, 0, 0,
     0, 0, 0, 0,
@@ -32,20 +32,20 @@ ipaddr IPv4allrouter = {
 
     0xe0, 0, 0, 0x02
 };
-/*e: global IPv4allrouter */
-/*s: global IPallbits */
+/*e: global [[IPv4allrouter]] */
+/*s: global [[IPallbits]] */
 ipaddr IPallbits = {
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff
 };
-/*e: global IPallbits */
-/*s: global IPnoaddr */
+/*e: global [[IPallbits]] */
+/*s: global [[IPnoaddr]] */
 ipaddr IPnoaddr;
-/*e: global IPnoaddr */
+/*e: global [[IPnoaddr]] */
 
-/*s: global v4prefix */
+/*s: global [[v4prefix]] */
 /*
  *  prefix of all v4 addresses
  */
@@ -58,17 +58,17 @@ ipaddr v4prefix = {
     // rest are ipv4 numbers
     0, 0, 0, 0
 };
-/*e: global v4prefix */
+/*e: global [[v4prefix]] */
 
-/*s: function isv4 */
+/*s: function [[isv4]] */
 bool
 isv4(ipaddr ip)
 {
     return memcmp(ip, v4prefix, IPv4off) == 0;
 }
-/*e: function isv4 */
+/*e: function [[isv4]] */
 
-/*s: function v4tov6 */
+/*s: function [[v4tov6]] */
 /*
  *  the following routines are unrolled with no memset's to speed
  *  up the usual case
@@ -85,9 +85,9 @@ v4tov6(ipaddr v6, ipv4 v4)
     v6[14] = v4[2];
     v6[15] = v4[3];
 }
-/*e: function v4tov6 */
+/*e: function [[v4tov6]] */
 
-/*s: function v6tov4 */
+/*s: function [[v6tov4]] */
 errorneg1
 v6tov4(ipv4 v4, ipaddr v6)
 {
@@ -110,5 +110,5 @@ v6tov4(ipv4 v4, ipaddr v6)
     }
     /*e: [[v6tov4()]] else if ipv6 address */
 }
-/*e: function v6tov4 */
+/*e: function [[v6tov4]] */
 /*e: lib_networking/libip/ipaux.c */

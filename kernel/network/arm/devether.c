@@ -12,11 +12,11 @@
 
 extern int archether(unsigned ctlno, Ether *ether);
 
-/*s: global etherxx(arm) */
+/*s: global [[etherxx]](arm) */
 static Ether *etherxx[MaxEther];
-/*e: global etherxx(arm) */
+/*e: global [[etherxx]](arm) */
 
-/*s: function etherattach(arm) */
+/*s: function [[etherattach]](arm) */
 Chan*
 etherattach(char* spec)
 {
@@ -46,48 +46,48 @@ etherattach(char* spec)
     poperror();
     return chan;
 }
-/*e: function etherattach(arm) */
+/*e: function [[etherattach]](arm) */
 
-/*s: function etherwalk(arm) */
+/*s: function [[etherwalk]](arm) */
 static Walkqid*
 etherwalk(Chan* chan, Chan* nchan, char** name, int nname)
 {
     return netifwalk(etherxx[chan->dev], chan, nchan, name, nname);
 }
-/*e: function etherwalk(arm) */
+/*e: function [[etherwalk]](arm) */
 
-/*s: function etherstat(arm) */
+/*s: function [[etherstat]](arm) */
 static int
 etherstat(Chan* chan, uchar* dp, int n)
 {
     return netifstat(etherxx[chan->dev], chan, dp, n);
 }
-/*e: function etherstat(arm) */
+/*e: function [[etherstat]](arm) */
 
-/*s: function etheropen(arm) */
+/*s: function [[etheropen]](arm) */
 static Chan*
 etheropen(Chan* chan, int omode)
 {
     return netifopen(etherxx[chan->dev], chan, omode);
 }
-/*e: function etheropen(arm) */
+/*e: function [[etheropen]](arm) */
 
-/*s: function ethercreate(arm) */
+/*s: function [[ethercreate]](arm) */
 static void
 ethercreate(Chan*, char*, int, ulong)
 {
 }
-/*e: function ethercreate(arm) */
+/*e: function [[ethercreate]](arm) */
 
-/*s: function etherclose(arm) */
+/*s: function [[etherclose]](arm) */
 static void
 etherclose(Chan* chan)
 {
     netifclose(etherxx[chan->dev], chan);
 }
-/*e: function etherclose(arm) */
+/*e: function [[etherclose]](arm) */
 
-/*s: function etherread(arm) */
+/*s: function [[etherread]](arm) */
 static long
 etherread(Chan* chan, void* buf, long n, vlong off)
 {
@@ -108,25 +108,25 @@ etherread(Chan* chan, void* buf, long n, vlong off)
 
     return netifread(ether, chan, buf, n, offset);
 }
-/*e: function etherread(arm) */
+/*e: function [[etherread]](arm) */
 
-/*s: function etherbread(arm) */
+/*s: function [[etherbread]](arm) */
 static Block*
 etherbread(Chan* chan, long n, ulong offset)
 {
     return netifbread(etherxx[chan->dev], chan, n, offset);
 }
-/*e: function etherbread(arm) */
+/*e: function [[etherbread]](arm) */
 
-/*s: function etherwstat(arm) */
+/*s: function [[etherwstat]](arm) */
 static int
 etherwstat(Chan* chan, uchar* dp, int n)
 {
     return netifwstat(etherxx[chan->dev], chan, dp, n);
 }
-/*e: function etherwstat(arm) */
+/*e: function [[etherwstat]](arm) */
 
-/*s: function etherrtrace(arm) */
+/*s: function [[etherrtrace]](arm) */
 static void
 etherrtrace(Netfile* f, Etherpkt* pkt, int len)
 {
@@ -153,9 +153,9 @@ etherrtrace(Netfile* f, Etherpkt* pkt, int len)
     bp->wp += 64;
     qpass(f->in, bp);
 }
-/*e: function etherrtrace(arm) */
+/*e: function [[etherrtrace]](arm) */
 
-/*s: function etheriq(arm) */
+/*s: function [[etheriq]](arm) */
 Block*
 etheriq(Ether* ether, Block* bp, int fromwire)
 {
@@ -229,9 +229,9 @@ etheriq(Ether* ether, Block* bp, int fromwire)
     }
     return bp;
 }
-/*e: function etheriq(arm) */
+/*e: function [[etheriq]](arm) */
 
-/*s: function etheroq(arm) */
+/*s: function [[etheroq]](arm) */
 static int
 etheroq(Ether* ether, Block* bp)
 {
@@ -267,9 +267,9 @@ etheroq(Ether* ether, Block* bp)
 
     return len;
 }
-/*e: function etheroq(arm) */
+/*e: function [[etheroq]](arm) */
 
-/*s: function etherwrite(arm) */
+/*s: function [[etherwrite]](arm) */
 static long
 etherwrite(Chan* chan, void* buf, long n, vlong)
 {
@@ -317,9 +317,9 @@ etherwrite(Chan* chan, void* buf, long n, vlong)
 
     return etheroq(ether, bp);
 }
-/*e: function etherwrite(arm) */
+/*e: function [[etherwrite]](arm) */
 
-/*s: function etherbwrite(arm) */
+/*s: function [[etherbwrite]](arm) */
 static long
 etherbwrite(Chan* chan, Block* bp, ulong)
 {
@@ -350,16 +350,16 @@ etherbwrite(Chan* chan, Block* bp, ulong)
 
     return etheroq(ether, bp);
 }
-/*e: function etherbwrite(arm) */
+/*e: function [[etherbwrite]](arm) */
 
-/*s: global cards(arm) */
+/*s: global [[cards]](arm) */
 static struct {
     char*	type;
     int	(*reset)(Ether*);
 } cards[MaxEther+1];
-/*e: global cards(arm) */
+/*e: global [[cards]](arm) */
 
-/*s: function addethercard(arm) */
+/*s: function [[addethercard]](arm) */
 void
 addethercard(char* t, int (*r)(Ether*))
 {
@@ -371,9 +371,9 @@ addethercard(char* t, int (*r)(Ether*))
     cards[ncard].reset = r;
     ncard++;
 }
-/*e: function addethercard(arm) */
+/*e: function [[addethercard]](arm) */
 
-/*s: function parseether(arm) */
+/*s: function [[parseether]](arm) */
 int
 parseether(uchar *to, char *from)
 {
@@ -396,9 +396,9 @@ parseether(uchar *to, char *from)
     }
     return 0;
 }
-/*e: function parseether(arm) */
+/*e: function [[parseether]](arm) */
 
-/*s: function etherreset(arm) */
+/*s: function [[etherreset]](arm) */
 static void
 etherreset(void)
 {
@@ -481,9 +481,9 @@ etherreset(void)
     if(ether)
         free(ether);
 }
-/*e: function etherreset(arm) */
+/*e: function [[etherreset]](arm) */
 
-/*s: function ethershutdown(arm) */
+/*s: function [[ethershutdown]](arm) */
 static void
 ethershutdown(void)
 {
@@ -501,14 +501,14 @@ ethershutdown(void)
         (*ether->shutdown)(ether);
     }
 }
-/*e: function ethershutdown(arm) */
+/*e: function [[ethershutdown]](arm) */
 
 
-/*s: constant POLY(arm) */
+/*s: constant [[POLY]](arm) */
 #define POLY 0xedb88320
-/*e: constant POLY(arm) */
+/*e: constant [[POLY]](arm) */
 
-/*s: function ethercrc(arm) */
+/*s: function [[ethercrc]](arm) */
 /* really slow 32 bit crc for ethers */
 ulong
 ethercrc(uchar *p, int len)
@@ -526,9 +526,9 @@ ethercrc(uchar *p, int len)
     }
     return crc;
 }
-/*e: function ethercrc(arm) */
+/*e: function [[ethercrc]](arm) */
 
-/*s: function dumpoq(arm) */
+/*s: function [[dumpoq]](arm) */
 void
 dumpoq(Queue *oq)
 {
@@ -541,9 +541,9 @@ dumpoq(Queue *oq)
     else
         print("outq %d ", qlen(oq));
 }
-/*e: function dumpoq(arm) */
+/*e: function [[dumpoq]](arm) */
 
-/*s: function dumpnetif(arm) */
+/*s: function [[dumpnetif]](arm) */
 void
 dumpnetif(Netif *netif)
 {
@@ -555,9 +555,9 @@ dumpnetif(Netif *netif)
         netif->crcs + netif->oerrs + netif->frames + netif->overflows +
         netif->buffs + netif->soverflows);
 }
-/*e: function dumpnetif(arm) */
+/*e: function [[dumpnetif]](arm) */
 
-/*s: global etherdevtab(arm) */
+/*s: global [[etherdevtab]](arm) */
 Dev etherdevtab = {
     .dc = 'l',
     .name = "ether",
@@ -578,5 +578,5 @@ Dev etherdevtab = {
     .remove = devremove,
     .wstat = etherwstat,
 };
-/*e: global etherdevtab(arm) */
+/*e: global [[etherdevtab]](arm) */
 /*e: kernel/network/arm/devether.c */

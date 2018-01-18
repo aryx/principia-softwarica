@@ -13,7 +13,7 @@ typedef struct Ilcb Ilcb;
 typedef struct Ilhdr Ilhdr;
 typedef struct Ilpriv Ilpriv;
 
-/*s: enum _anon_ (kernel/network/ip/il.c) */
+/*s: enum [[_anon_ (kernel/network/ip/il.c)]] */
 enum il_state				/* Connection state */
 {
     Ilclosed,
@@ -26,9 +26,9 @@ enum il_state				/* Connection state */
 
     Ilopening,		/* only for file server */
 };
-/*e: enum _anon_ (kernel/network/ip/il.c) */
+/*e: enum [[_anon_ (kernel/network/ip/il.c)]] */
 
-/*s: global ilstates */
+/*s: global [[ilstates]] */
 char	*ilstates[] = 
 { 
     "Closed",
@@ -39,9 +39,9 @@ char	*ilstates[] =
     "Closing",
     "Opening",		/* only for file server */
 };
-/*e: global ilstates */
+/*e: global [[ilstates]] */
 
-/*s: enum _anon_ (kernel/network/ip/il.c)2 */
+/*s: enum [[_anon_ (kernel/network/ip/il.c)2]] */
 enum				/* Packet types */
 {
     Ilsync,
@@ -52,9 +52,9 @@ enum				/* Packet types */
     Ilstate,
     Ilclose,
 };
-/*e: enum _anon_ (kernel/network/ip/il.c)2 */
+/*e: enum [[_anon_ (kernel/network/ip/il.c)2]] */
 
-/*s: global iltype */
+/*s: global [[iltype]] */
 char	*iltype[] = 
 {	
     "sync",
@@ -65,9 +65,9 @@ char	*iltype[] =
     "state",
     "close" 
 };
-/*e: global iltype */
+/*e: global [[iltype]] */
 
-/*s: enum _anon_ (kernel/network/ip/il.c)3 */
+/*s: enum [[_anon_ (kernel/network/ip/il.c)3]] */
 enum
 {
     Seconds		= 1000,
@@ -92,16 +92,16 @@ enum
     Maxrq		= 64*1024,
     /*e: constant Maxrq(IL) */
 };
-/*e: enum _anon_ (kernel/network/ip/il.c)3 */
+/*e: enum [[_anon_ (kernel/network/ip/il.c)3]] */
 
-/*s: enum _anon_ (kernel/network/ip/il.c)4 */
+/*s: enum [[_anon_ (kernel/network/ip/il.c)4]] */
 enum
 {
     Nqt=	8,
 };
-/*e: enum _anon_ (kernel/network/ip/il.c)4 */
+/*e: enum [[_anon_ (kernel/network/ip/il.c)4]] */
 
-/*s: struct Ilcb */
+/*s: struct [[Ilcb]] */
 struct Ilcb			/* Control block */
 {
     // enum<il_state>
@@ -146,30 +146,30 @@ struct Ilcb			/* Control block */
     int	rttlen;		/* Length of rttack packet */
     uvlong	rttstart;	/* Time we issued rttack packet */
 };
-/*e: struct Ilcb */
+/*e: struct [[Ilcb]] */
 
-/*s: enum _anon_ (kernel/network/ip/il.c)5 */
+/*s: enum [[_anon_ (kernel/network/ip/il.c)5]] */
 enum
 {
-    /*s: constant IL_xxxSIZE */
+    /*s: constant [[IL_xxxSIZE]] */
     IL_IPSIZE 	= 20,
     IL_HDRSIZE	= 18,	
-    /*e: constant IL_xxxSIZE */
-    /*s: constant IP_ILPROTO */
+    /*e: constant [[IL_xxxSIZE]] */
+    /*s: constant [[IP_ILPROTO]] */
     IP_ILPROTO	= 40,
-    /*e: constant IP_ILPROTO */
+    /*e: constant [[IP_ILPROTO]] */
 
 };
-/*e: enum _anon_ (kernel/network/ip/il.c)5 */
+/*e: enum [[_anon_ (kernel/network/ip/il.c)5]] */
 
-/*s: enum mode (kernel/network/ip/il.c) */
+/*s: enum [[mode]]([[(kernel/network/ip/il.c)]]) */
 enum mode {
     IL_LISTEN	= 0,
     IL_CONNECT	= 1,
 };
-/*e: enum mode (kernel/network/ip/il.c) */
+/*e: enum [[mode]]([[(kernel/network/ip/il.c)]]) */
 
-/*s: struct Ilhdr */
+/*s: struct [[Ilhdr]] */
 struct Ilhdr
 {
     /* ip header */
@@ -195,9 +195,9 @@ struct Ilhdr
     uchar	ilid[4];	/* Sequence id */
     uchar	ilack[4];	/* Acked sequence */
 };
-/*e: struct Ilhdr */
+/*e: struct [[Ilhdr]] */
 
-/*s: enum _anon_ (kernel/network/ip/il.c)6 */
+/*s: enum [[_anon_ (kernel/network/ip/il.c)6]] */
 enum il_stat
 {
     InMsgs,
@@ -213,9 +213,9 @@ enum il_stat
 
     Nstats,
 };
-/*e: enum _anon_ (kernel/network/ip/il.c)6 */
+/*e: enum [[_anon_ (kernel/network/ip/il.c)6]] */
 
-/*s: global statnames (kernel/network/ip/il.c) */
+/*s: global [[statnames]]([[(kernel/network/ip/il.c)]]) */
 static char *statnames[] =
 {
 [InMsgs]	"InMsgs",
@@ -229,9 +229,9 @@ static char *statnames[] =
 [DupBytes]	"DupBytes",
 [DroppedMsgs]	"DroppedMsgs",
 };
-/*e: global statnames (kernel/network/ip/il.c) */
+/*e: global [[statnames]]([[(kernel/network/ip/il.c)]]) */
 
-/*s: struct Ilpriv */
+/*s: struct [[Ilpriv]] */
 struct Ilpriv
 {
     Ipht	ht;
@@ -254,7 +254,7 @@ struct Ilpriv
     int	ackprocstarted;
     QLock	apl;
 };
-/*e: struct Ilpriv */
+/*e: struct [[Ilpriv]] */
 
 /* state for query/dataquery messages */
 
@@ -279,17 +279,17 @@ void	ilreject(Fs*, Ilhdr*);
 void	illocalclose(Conv *c);
 
 
-/*s: global ilcksum */
+/*s: global [[ilcksum]] */
 bool 	ilcksum = true;
-/*e: global ilcksum */
-/*s: global scalexxx */
+/*e: global [[ilcksum]] */
+/*s: global [[scalexxx]] */
 static	ulong	scalediv, scalemul;
-/*e: global scalexxx */
-/*s: global etime */
+/*e: global [[scalexxx]] */
+/*s: global [[etime]] */
 static	char	*etime = "connection timed out";
-/*e: global etime */
+/*e: global [[etime]] */
 
-/*s: function ilconnect */
+/*s: function [[ilconnect]] */
 static char*
 ilconnect(Conv *c, char **argv, int argc)
 {
@@ -313,9 +313,9 @@ ilconnect(Conv *c, char **argv, int argc)
         return err;
     return ilstart(c, IL_CONNECT, fast);
 }
-/*e: function ilconnect */
+/*e: function [[ilconnect]] */
 
-/*s: function ilstate */
+/*s: function [[ilstate]] */
 static int
 ilstate(Conv *c, char *state, int n)
 {
@@ -329,9 +329,9 @@ ilstate(Conv *c, char *state, int n)
         ic->delay>>LogAGain, ic->rate>>LogAGain, ic->mdev>>LogDGain,
         ic->unackedbytes, ic->rxtot, ic->rxquery, ic->maxrtt);
 }
-/*e: function ilstate */
+/*e: function [[ilstate]] */
 
-/*s: function ilinuse */
+/*s: function [[ilinuse]] */
 static int
 ilinuse(Conv *c)
 {
@@ -341,9 +341,9 @@ ilinuse(Conv *c)
     return ic->state != Ilclosed;
 
 }
-/*e: function ilinuse */
+/*e: function [[ilinuse]] */
 
-/*s: function ilannounce */
+/*s: function [[ilannounce]] */
 /* called with c locked */
 static char*
 ilannounce(Conv *c, char **argv, int argc)
@@ -360,9 +360,9 @@ ilannounce(Conv *c, char **argv, int argc)
 
     return nil;
 }
-/*e: function ilannounce */
+/*e: function [[ilannounce]] */
 
-/*s: function illocalclose */
+/*s: function [[illocalclose]] */
 void
 illocalclose(Conv *c)
 {
@@ -376,9 +376,9 @@ illocalclose(Conv *c)
     ipmove(c->laddr, IPnoaddr);
     c->lport = 0;
 }
-/*e: function illocalclose */
+/*e: function [[illocalclose]] */
 
-/*s: function ilclose */
+/*s: function [[ilclose]] */
 static void
 ilclose(Conv *c)
 {
@@ -407,9 +407,9 @@ ilclose(Conv *c)
     }
     ilfreeq(ic);
 }
-/*e: function ilclose */
+/*e: function [[ilclose]] */
 
-/*s: function ilkick */
+/*s: function [[ilkick]] */
 void
 ilkick(void *x, Block *bp)
 {
@@ -491,18 +491,18 @@ ilkick(void *x, Block *bp)
 
     priv->stats[OutMsgs]++;
 }
-/*e: function ilkick */
+/*e: function [[ilkick]] */
 
-/*s: function ilcreate */
+/*s: function [[ilcreate]] */
 static void
 ilcreate(Conv *c)
 {
     c->rq = qopen(Maxrq, 0, 0, c);
     c->wq = qbypass(ilkick, c);
 }
-/*e: function ilcreate */
+/*e: function [[ilcreate]] */
 
-/*s: function ilxstats */
+/*s: function [[ilxstats]] */
 int
 ilxstats(Proto *il, char *buf, int len)
 {
@@ -517,9 +517,9 @@ ilxstats(Proto *il, char *buf, int len)
         p = seprint(p, e, "%s: %llud\n", statnames[i], priv->stats[i]);
     return p - buf;
 }
-/*e: function ilxstats */
+/*e: function [[ilxstats]] */
 
-/*s: function ilackq */
+/*s: function [[ilackq]] */
 void
 ilackq(Ilcb *ic, Block *bp)
 {
@@ -538,9 +538,9 @@ ilackq(Ilcb *ic, Block *bp)
     np->list = nil;
     ic->unackedbytes += n;
 }
-/*e: function ilackq */
+/*e: function [[ilackq]] */
 
-/*s: function ilrttcalc */
+/*s: function [[ilrttcalc]] */
 static
 void
 ilrttcalc(Ilcb *ic, Block *bp)
@@ -583,9 +583,9 @@ ilrttcalc(Ilcb *ic, Block *bp)
     if(rtt > ic->maxrtt)
         ic->maxrtt = rtt;
 }
-/*e: function ilrttcalc */
+/*e: function [[ilrttcalc]] */
 
-/*s: function ilackto */
+/*s: function [[ilackto]] */
 void
 ilackto(Ilcb *ic, ulong ackto, Block *bp)
 {
@@ -616,9 +616,9 @@ ilackto(Ilcb *ic, ulong ackto, Block *bp)
     }
     qunlock(&ic->ackq);
 }
-/*e: function ilackto */
+/*e: function [[ilackto]] */
 
-/*s: function iliput */
+/*s: function [[iliput]] */
 void
 iliput(Proto *il, Ipifc*, Block *bp)
 {
@@ -722,9 +722,9 @@ iliput(Proto *il, Ipifc*, Block *bp)
 raise:
     freeblist(bp);
 }
-/*e: function iliput */
+/*e: function [[iliput]] */
 
-/*s: function _ilprocess */
+/*s: function [[_ilprocess]] */
 void
 _ilprocess(Conv *s, Ilhdr *h, Block *bp)
 {
@@ -891,9 +891,9 @@ _ilprocess(Conv *s, Ilhdr *h, Block *bp)
         break;
     }
 }
-/*e: function _ilprocess */
+/*e: function [[_ilprocess]] */
 
-/*s: function ilrexmit */
+/*s: function [[ilrexmit]] */
 void
 ilrexmit(Ilcb *ic)
 {
@@ -937,9 +937,9 @@ ilrexmit(Ilcb *ic)
     priv = c->p->priv;
     priv->rexmit++;
 }
-/*e: function ilrexmit */
+/*e: function [[ilrexmit]] */
 
-/*s: function ilprocess */
+/*s: function [[ilprocess]] */
 /* DEBUG */
 void
 ilprocess(Conv *s, Ilhdr *h, Block *bp)
@@ -958,9 +958,9 @@ ilprocess(Conv *s, Ilhdr *h, Block *bp)
 
     //netlog(s->p->f, Logilmsg, "%11s rcv %lud snt %lud\n", ilstates[ic->state], ic->recvd, ic->next);
 }
-/*e: function ilprocess */
+/*e: function [[ilprocess]] */
 
-/*s: function ilhangup */
+/*s: function [[ilhangup]] */
 void
 ilhangup(Conv *s, char *msg)
 {
@@ -980,9 +980,9 @@ ilhangup(Conv *s, char *msg)
     if(callout)
         Fsconnected(s, msg);
 }
-/*e: function ilhangup */
+/*e: function [[ilhangup]] */
 
-/*s: function ilpullup */
+/*s: function [[ilpullup]] */
 void
 ilpullup(Conv *s)
 {
@@ -1032,9 +1032,9 @@ ilpullup(Conv *s)
     }
     qunlock(&ic->outo);
 }
-/*e: function ilpullup */
+/*e: function [[ilpullup]] */
 
-/*s: function iloutoforder */
+/*s: function [[iloutoforder]] */
 void
 iloutoforder(Conv *s, Ilhdr *h, Block *bp)
 {
@@ -1085,9 +1085,9 @@ iloutoforder(Conv *s, Ilhdr *h, Block *bp)
     }
     qunlock(&ic->outo);
 }
-/*e: function iloutoforder */
+/*e: function [[iloutoforder]] */
 
-/*s: function ilsendctl */
+/*s: function [[ilsendctl]] */
 void
 ilsendctl(Conv *ipc, Ilhdr *inih, int type, ulong id, ulong ack, int ilspec)
 {
@@ -1149,9 +1149,9 @@ if(ipc->p==nil)
 
     ipoput4(ipc->p->f, bp, false, ttl, tos, ipc);
 }
-/*e: function ilsendctl */
+/*e: function [[ilsendctl]] */
 
-/*s: function ilreject */
+/*s: function [[ilreject]] */
 void
 ilreject(Fs *f, Ilhdr *inih)
 {
@@ -1185,9 +1185,9 @@ ilreject(Fs *f, Ilhdr *inih)
 
     ipoput4(f, bp, 0, MAXTTL, DFLTTOS, nil);
 }
-/*e: function ilreject */
+/*e: function [[ilreject]] */
 
-/*s: function ilsettimeout */
+/*s: function [[ilsettimeout]] */
 void
 ilsettimeout(Ilcb *ic)
 {
@@ -1201,9 +1201,9 @@ ilsettimeout(Ilcb *ic)
         pt = MaxTimeout;
     ic->timeout = NOW + pt;
 }
-/*e: function ilsettimeout */
+/*e: function [[ilsettimeout]] */
 
-/*s: function ilbackoff */
+/*s: function [[ilbackoff]] */
 void
 ilbackoff(Ilcb *ic)
 {
@@ -1225,13 +1225,13 @@ ilbackoff(Ilcb *ic)
 
     ic->rexmit++;
 }
-/*e: function ilbackoff */
+/*e: function [[ilbackoff]] */
 
-/*s: constant Tfuture */
+/*s: constant [[Tfuture]] */
 // complain if two numbers not within an hour of each other
 #define Tfuture (1000*60*60)
-/*e: constant Tfuture */
-/*s: function later */
+/*e: constant [[Tfuture]] */
+/*s: function [[later]] */
 int
 later(ulong t1, ulong t2, char *x)
 {
@@ -1250,9 +1250,9 @@ later(ulong t1, ulong t2, char *x)
     }
     return 0;
 }
-/*e: function later */
+/*e: function [[later]] */
 
-/*s: function ilackproc */
+/*s: function [[ilackproc]] */
 void
 ilackproc(void *x)
 {
@@ -1328,9 +1328,9 @@ loop:
     }
     goto loop;
 }
-/*e: function ilackproc */
+/*e: function [[ilackproc]] */
 
-/*s: function ilcbinit */
+/*s: function [[ilcbinit]] */
 void
 ilcbinit(Ilcb *ic)
 {
@@ -1355,9 +1355,9 @@ ilcbinit(Ilcb *ic)
     ic->lastrecv = NOW;	/* or we'll timeout right away */
     ilsettimeout(ic);
 }
-/*e: function ilcbinit */
+/*e: function [[ilcbinit]] */
 
-/*s: function ilstart */
+/*s: function [[ilstart]] */
 char*
 ilstart(Conv *c, int type, bool fasttimeout)
 {
@@ -1409,9 +1409,9 @@ ilstart(Conv *c, int type, bool fasttimeout)
 
     return nil;
 }
-/*e: function ilstart */
+/*e: function [[ilstart]] */
 
-/*s: function ilfreeq */
+/*s: function [[ilfreeq]] */
 void
 ilfreeq(Ilcb *ic)
 {
@@ -1433,9 +1433,9 @@ ilfreeq(Ilcb *ic)
     ic->outoforder = nil;
     qunlock(&ic->outo);
 }
-/*e: function ilfreeq */
+/*e: function [[ilfreeq]] */
 
-/*s: function iladvise */
+/*s: function [[iladvise]] */
 void
 iladvise(Proto *il, Block *bp, char *msg)
 {
@@ -1473,9 +1473,9 @@ iladvise(Proto *il, Block *bp, char *msg)
     qunlock(il);
     freeblist(bp);
 }
-/*e: function iladvise */
+/*e: function [[iladvise]] */
 
-/*s: function ilnextqt */
+/*s: function [[ilnextqt]] */
 int
 ilnextqt(Ilcb *ic)
 {
@@ -1492,9 +1492,9 @@ ilnextqt(Ilcb *ic)
 
     return x;
 }
-/*e: function ilnextqt */
+/*e: function [[ilnextqt]] */
 
-/*s: function inittimescale */
+/*s: function [[inittimescale]] */
 /* calculate scale constants that converts fast ticks to ms (more or less) */
 static void
 inittimescale(void)
@@ -1510,9 +1510,9 @@ inittimescale(void)
         scalemul = 1000/hz;
     }
 }
-/*e: function inittimescale */
+/*e: function [[inittimescale]] */
 
-/*s: function ilinit */
+/*s: function [[ilinit]] */
 void
 ilinit(Fs *f)
 {
@@ -1547,5 +1547,5 @@ ilinit(Fs *f)
 
     Fsproto(f, il);
 }
-/*e: function ilinit */
+/*e: function [[ilinit]] */
 /*e: kernel/network/ip/il.c */

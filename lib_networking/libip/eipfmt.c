@@ -3,14 +3,14 @@
 #include <libc.h>
 #include <ip.h>
 
-/*s: enum _anon_ (lib_networking/libip/eipfmt.c) */
+/*s: enum [[_anon_ (lib_networking/libip/eipfmt.c)]] */
 enum
 {
     Isprefix= 16,
 };
-/*e: enum _anon_ (lib_networking/libip/eipfmt.c) */
+/*e: enum [[_anon_ (lib_networking/libip/eipfmt.c)]] */
 
-/*s: global prefixvals */
+/*s: global [[prefixvals]] */
 uchar prefixvals[256] =
 {
 [0x00] 0 | Isprefix,
@@ -23,9 +23,9 @@ uchar prefixvals[256] =
 [0xFE] 7 | Isprefix,
 [0xFF] 8 | Isprefix,
 };
-/*e: global prefixvals */
+/*e: global [[prefixvals]] */
 
-/*s: function eipfmt */
+/*s: function [[eipfmt]] */
 int
 eipfmt(Fmt *f)
 {
@@ -114,5 +114,5 @@ common:
     }
     return fmtstrcpy(f, "(eipfmt)");
 }
-/*e: function eipfmt */
+/*e: function [[eipfmt]] */
 /*e: lib_networking/libip/eipfmt.c */

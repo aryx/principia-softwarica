@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function parseether */
+/*s: function [[parseether]] */
 errorneg1
 parseether(uchar* to, char *from)
 {
@@ -25,5 +25,5 @@ parseether(uchar* to, char *from)
     }
     return OK_0;
 }
-/*e: function parseether */
+/*e: function [[parseether]] */
 /*e: lib_networking/libip/parseether.c */
