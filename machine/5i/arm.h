@@ -87,8 +87,8 @@ enum opcode {
     CMUL    = 64,
     /*x: arith/logic opcodes */
     CARITH0 = 0,  // r,r,r
-    CARITH1 = 16, // r<>r, r, r
-    CARITH2 = 32, // r<>#, r, r
+    CARITH1 = 16, // r<>#, r, r
+    CARITH2 = 32, // r<>r, r, r
     /*x: arith/logic opcodes */
     CARITH3 = 48, // i,r,r
     /*x: arith/logic opcodes */
@@ -125,7 +125,7 @@ enum opcode {
     CBLOC   = 84,
     /*e: memory opcodes */
     // -----------------------------------------
-    // Branching opcodes
+    // Control flow opcodes
     // -----------------------------------------
     /*s: branching opcodes */
     OB = 86,
@@ -134,15 +134,13 @@ enum opcode {
     CBRANCH = 86,
     /*e: branching opcodes */
     // -----------------------------------------
-    // Syscall opcode
+    // Syscall opcodes
     // -----------------------------------------
     /*s: syscall opcodes */
     OSWI = 88,
     /*e: syscall opcodes */
 
-    // -----------------------------------------
-    // Other opcodes
-    // -----------------------------------------
+    // for opcodes not handled by 5i
     OUNDEF   = 89
 };
 /*e: enum opcode */
@@ -219,6 +217,9 @@ struct Registers
     int			instr_opcode; // arm_class(reg.instr)
     Inst*		ip;    // &itab[reg.instr_opcode]
     /*x: [[Registers]] other fields */
+    int	cbit; // carry bit?
+    int	cout;
+    /*x: [[Registers]] other fields */
     // actually only 4 bits (16 possibilities)
     int	instr_cond;
     /*x: [[Registers]] other fields */
@@ -227,9 +228,6 @@ struct Registers
     /*x: [[Registers]] other fields */
     long	cc1;
     long	cc2;
-    /*x: [[Registers]] other fields */
-    int	cbit; // carry bit?
-    int	cout;
     /*e: [[Registers]] other fields */
 };
 /*e: struct Registers */

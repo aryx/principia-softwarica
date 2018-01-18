@@ -18,6 +18,7 @@ fatal(bool syserr, char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
+
     s = "5i: %s\n";
     if(syserr)
         s = "5i: %s: %r\n";
@@ -36,6 +37,7 @@ itrace(char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
+
     Bprint(bout, "%8lux %.8lux %2d %s\n", 
                      reg.ar, reg.instr, reg.instr_opcode, buf);	
     Bflush(bout);
@@ -84,7 +86,7 @@ emalloc(ulong size)
     if(a == nil)
         fatal(false, "no memory");
 
-    memset(a, 0, size);
+    memset(a, 0, size); //!!
     return a;
 }
 /*e: function emalloc */

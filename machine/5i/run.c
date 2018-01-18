@@ -60,7 +60,7 @@ static	char*	cond[16] =
 Inst itab[] =
 {
   /*s: [[itab]] elements */
-  [OUNDEF] =  { undef,		"UNDEF", Imisc},
+  [OUNDEF] =  { &undef,		"UNDEF", Imisc},
   /*x: [[itab]] elements */
   [OMUL]    =  { Imul,	"MUL",	Iarith },
   [OMULA]   =  { Imula,	"MULA",	Iarith },	
@@ -83,7 +83,7 @@ Inst itab[] =
   [OBIC] =  { Idp0,		"BIC",	Iarith },	
   [OMVN] =  { Idp0,		"MVN",	Iarith },	
   /*x: [[itab]] elements */
-  // r<>r, r, r
+  // r<>#, r, r
   [OAND +CARITH1] =  { Idp1,		"AND",	Iarith },	
   [OEOR +CARITH1] =  { Idp1,		"EOR",	Iarith },	
   [OSUB +CARITH1] =  { Idp1,		"SUB",	Iarith },	
@@ -101,7 +101,7 @@ Inst itab[] =
   [OBIC +CARITH1] =  { Idp1,		"BIC",	Iarith },	
   [OMVN +CARITH1] =  { Idp1,		"MVN",	Iarith },	
   /*x: [[itab]] elements */
-  // r<>#, r, r
+  // r<>r, r, r
   [OAND +CARITH2] =  { Idp2,		"AND",	Iarith },	
   [OEOR +CARITH2] =  { Idp2,		"EOR",	Iarith },	
   [OSUB +CARITH2] =  { Idp2,		"SUB",	Iarith },	
@@ -169,6 +169,7 @@ Inst itab[] =
   /*x: [[itab]] elements */
   // branch
   [OB]  =  { Ib,	"B",	Ibranch },
+  /*x: [[itab]] elements */
   [OBL] =  { Ibl,	"BL",	Ibranch },
   /*x: [[itab]] elements */
   [OSWI] =  { Ssyscall,		"SWI",	Isyscall },
@@ -321,6 +322,7 @@ undef(instruction inst)
 int
 arm_class(instruction w)
 {
+    // between 0 and 7
     int class;
     // enum<opcode>
     int op;
@@ -359,6 +361,7 @@ arm_class(instruction w)
         /*e: [[arm_class()]] class 0, if x is 0x9 */
         /*s: [[arm_class()]] class 0, if x has 0x9 bits */
         if((x & 0x9) == 0x9) {		/* ld/st byte/half s/u */
+             //                          OxxBU?               OSTx?
              op = CMEM_BASIS + CMEM2 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
              break;
         }
@@ -383,10 +386,12 @@ arm_class(instruction w)
      break;
     /*x: [[arm_class()]] class cases */
     case 2:	/* load/store byte/word i(r) */
+     //                            OxxB?              OSTx?
      op = CMEM_BASIS + CMEM0 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
      break;
     /*x: [[arm_class()]] class cases */
     case 3:	/* load/store byte/word (r)(r) */
+     //                            OxxB?              OSTx?
      op = CMEM_BASIS + CMEM1 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
      break;
     /*x: [[arm_class()]] class cases */
@@ -417,6 +422,7 @@ arm_class(instruction w)
 long
 shift(long v, int st, int sc, bool isreg)
 {
+    /*s: [[shift()]] if sc is 0 */
     if(sc == 0) {
         switch(st) {
         case 0:	/* logical left */
@@ -438,6 +444,7 @@ shift(long v, int st, int sc, bool isreg)
             }
         }
     }
+    /*e: [[shift()]] if sc is 0 */
     else {
         switch(st) {
         case 0:	/* logical left */
@@ -493,6 +500,7 @@ dpex(instruction inst, long o1, long o2, int rd)
         reg.r[rd] = o1 ^ o2;
         cbit = true;
         break;
+    /*x: [[dpex()]] switch arith/logic opcode cases */
     case OBIC:
         reg.r[rd] = o1 & ~o2;
         cbit = true;
@@ -518,32 +526,6 @@ dpex(instruction inst, long o1, long o2, int rd)
             reg.cc1 = o2;
             reg.cc2 = -o1;
             reg.compare_op = CCcmp;
-        }
-        return;
-    /*x: [[dpex()]] switch arith/logic opcode cases */
-    case OSUB:
-        reg.r[rd] = o1 - o2;
-        // Fallthrough
-    case OCMP:
-        if(inst & Sbit) {
-            reg.cc1 = o1;
-            reg.cc2 = o2;
-            reg.compare_op = CCcmp;
-        }
-        return;
-    /*x: [[dpex()]] switch arith/logic opcode cases */
-    case  OTST:
-        if(inst & Sbit) {
-            reg.cc1 = o1;
-            reg.cc2 = o2;
-            reg.compare_op = CCtst;
-        }
-        return;
-    case  OTEQ:
-        if(inst & Sbit) { // not always true?
-            reg.cc1 = o1;
-            reg.cc2 = o2;
-            reg.compare_op = CCteq;
         }
         return;
     /*x: [[dpex()]] switch arith/logic opcode cases */
@@ -577,6 +559,32 @@ dpex(instruction inst, long o1, long o2, int rd)
         reg.r[rd] = ~o2;
         cbit = true;
         break;
+    /*x: [[dpex()]] switch arith/logic opcode cases */
+    case OSUB:
+        reg.r[rd] = o1 - o2;
+        // Fallthrough
+    case OCMP:
+        if(inst & Sbit) {
+            reg.cc1 = o1;
+            reg.cc2 = o2;
+            reg.compare_op = CCcmp;
+        }
+        return;
+    /*x: [[dpex()]] switch arith/logic opcode cases */
+    case  OTST:
+        if(inst & Sbit) {
+            reg.cc1 = o1;
+            reg.cc2 = o2;
+            reg.compare_op = CCtst;
+        }
+        return;
+    case  OTEQ:
+        if(inst & Sbit) { // not always true?
+            reg.cc1 = o1;
+            reg.cc2 = o2;
+            reg.compare_op = CCteq;
+        }
+        return;
     /*e: [[dpex()]] switch arith/logic opcode cases */
     }
     /*s: [[dpex()]] if Sbit */
@@ -606,12 +614,15 @@ Idp0(instruction inst)
     rm = inst & 0xf;
 
     o1 = reg.r[rn];
+    /*s: [[adjust o1 if rn is REGPC */
     if(rn == REGPC)
         o1 += 8;
-
+    /*e: [[adjust o1 if rn is REGPC */
     o2 = reg.r[rm];
+    /*s: [[adjust o2 if rm is REGPC */
     if(rm == REGPC)
         o2 += 8;
+    /*e: [[adjust o2 if rm is REGPC */
 
     dpex(inst, o1, o2, rd);
 
@@ -646,15 +657,17 @@ Idp1(instruction inst)
     sc = (inst>>7) & 0x1f;
 
     o1 = reg.r[rn];
+    /*s: [[adjust o1 if rn is REGPC */
     if(rn == REGPC)
         o1 += 8;
-
+    /*e: [[adjust o1 if rn is REGPC */
     o2 = reg.r[rm];
+    /*s: [[adjust o2 if rm is REGPC */
     if(rm == REGPC)
         o2 += 8;
+    /*e: [[adjust o2 if rm is REGPC */
 
     o2 = shift(o2, st, sc, false);
-
     dpex(inst, o1, o2, rd);
 
     /*s: [[Idp1()]] trace */
@@ -687,19 +700,22 @@ Idp2(instruction inst)
     rs = (inst>>8) & 0xf;
 
     o1 = reg.r[rn];
+    /*s: [[adjust o1 if rn is REGPC */
     if(rn == REGPC)
         o1 += 8;
-
+    /*e: [[adjust o1 if rn is REGPC */
     o2 = reg.r[rm];
+    /*s: [[adjust o2 if rm is REGPC */
     if(rm == REGPC)
         o2 += 8;
-
+    /*e: [[adjust o2 if rm is REGPC */
     o3 = reg.r[rs];
+    /*s: [[adjust o3 if rs is REGPC */
     if(rs == REGPC)
         o3 += 8;
+    /*e: [[adjust o3 if rs is REGPC */
 
     o2 = shift(o2, st, o3, true);
-
     dpex(inst, o1, o2, rd);
 
     /*s: [[Idp2()]] trace */
@@ -728,12 +744,14 @@ Idp3(instruction inst)
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
     o1 = reg.r[rn];
+    /*s: [[adjust o1 if rn is REGPC */
     if(rn == REGPC)
         o1 += 8;
+    /*e: [[adjust o1 if rn is REGPC */
 
     o2 = inst & 0xff;
     sc = (inst>>7) & 0x1e;
-    o2 = (o2 >> sc) | (o2 << (32 - sc));
+    o2 = (o2 >> sc) | (o2 << (32 - sc)); // rotate
 
     dpex(inst, o1, o2, rd);
 
@@ -842,9 +860,10 @@ void
 Iswap(instruction inst)
 {
     int rn, rd, rm;
-    ulong address, value, bbit;
+    ulong address, value;
+    bool bbit;
 
-    bbit = inst & (1<<22);
+    bbit = inst & (1<<22); // BU?
 
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
@@ -864,9 +883,7 @@ Iswap(instruction inst)
     if(trace) {
         char *bw, *dotc;
 
-        bw = "";
-        if(bbit)
-            bw = "B";
+        bw = bbit? "B" : "";
         dotc = cond[reg.instr_cond];
 
         itrace("SWP%s%s\t#%x(R%d),R%d #%lux=#%x",
@@ -886,14 +903,15 @@ void
 Imem1(instruction inst)
 {
     int rn, rd, off, rm, sc, st;
-    ulong address, value, pbit, ubit, bbit, wbit, lbit, bit25;
+    ulong address, value;
+    bool prebit, ubit, bbit, wbit, lbit, bit25;
 
-    bit25 = inst & (1<<25);
-    pbit = inst & (1<<24);
-    ubit = inst & (1<<23);
-    bbit = inst & (1<<22);
-    wbit = inst & (1<<21);
-    lbit = inst & (1<<20);
+    bit25 = inst & (1<<25); // rm or I?
+    prebit = inst & (1<<24); // Pre indexing?
+    ubit = inst & (1<<23); // Up offset?
+    bbit = inst & (1<<22); // Byte or Word?
+    wbit = inst & (1<<21); // Write back address in rn?
+    lbit = inst & (1<<20); // LDR or STR?
 
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
@@ -901,7 +919,9 @@ Imem1(instruction inst)
     SET(st);
     SET(sc);
     SET(rm);
+
     if(bit25) {
+        // rm<>I(...)
         rm = inst & 0xf;
         st = (inst>>5) & 0x3;
         sc = (inst>>7) & 0x1f;
@@ -910,18 +930,21 @@ Imem1(instruction inst)
             off += 8;
         off = shift(off, st, sc, false);
     } else {
+        // I(...)
         off = inst & 0xfff;
     }
+
     if(!ubit)
         off = -off;
     if(rn == REGPC)
         off += 8;
 
     address = reg.r[rn];
-    if(pbit)
+    if(prebit)
         address += off;
 
     if(lbit) {
+        // LDR
         if(bbit)
             value = getmem_b(address);
         else
@@ -930,6 +953,7 @@ Imem1(instruction inst)
             value -= 4;
         reg.r[rd] = value;
     } else {
+        // STR
         value = reg.r[rd];
         if(rd == REGPC)
             value -= 4;
@@ -938,22 +962,19 @@ Imem1(instruction inst)
         else
             putmem_w(address, value);
     }
-    if(!(pbit && !wbit))
+    if(!prebit || wbit)
         reg.r[rn] += off;
 
     /*s: [[Imem1()]] trace */
     if(trace) {
         char *bw, *dotp, *dotc;
 
-        bw = "W";
-        if(bbit)
-            bw = "BU";
-        dotp = "";
-        if(!pbit)
-            dotp = ".P";
+        bw = bbit ? "BU" : "W";
+        dotp = prebit? "" : ".P";
         dotc = cond[reg.instr_cond];
 
         if(lbit) {
+            // LDR
             if(!bit25)
                 itrace("MOV%s%s%s\t#%x(R%d),R%d #%lux=#%x",
                     bw, dotp, dotc,
@@ -965,6 +986,7 @@ Imem1(instruction inst)
                     rm, shtype[st], sc, rn, rd,
                     address, value);
         } else {
+            // STR
             if(!bit25)
                 itrace("MOV%s%s%s\tR%d,#%x(R%d) #%lux=#%x",
                     bw, dotp, dotc,
@@ -989,23 +1011,27 @@ void
 Imem2(instruction inst)
 {
     int rn, rd, off, rm;
-    ulong address, value, pbit, ubit, hbit, sbit, wbit, lbit, bit22;
+    ulong address, value;
+    bool prebit, ubit, hbit, sbit, wbit, lbit, bit22;
 
-    pbit = inst & (1<<24);
-    ubit = inst & (1<<23);
+    prebit = inst & (1<<24); // Pre indexing?
+    ubit = inst & (1<<23); // Up offset?
     bit22 = inst & (1<<22);
-    wbit = inst & (1<<21);
-    lbit = inst & (1<<20);
-    sbit = inst & (1<<6);
-    hbit = inst & (1<<5);
+    wbit = inst & (1<<21); // Write back address in rn
+    lbit = inst & (1<<20); // LDR or STR?
+
+    sbit = inst & (1<<6); // Signed?
+    hbit = inst & (1<<5); // Half word or byte?
 
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
 
     SET(rm);
     if(bit22) {
+        // I(...)
         off = ((inst>>4) & 0xf0) | (inst & 0xf);
     } else {
+        // rm(...)
         rm = inst & 0xf;
         off = reg.r[rm];
         if(rm == REGPC)
@@ -1017,10 +1043,11 @@ Imem2(instruction inst)
         off += 8;
 
     address = reg.r[rn];
-    if(pbit)
+    if(prebit)
         address += off;
 
     if(lbit) {
+        // LDR
         if(hbit) {
             value = getmem_h(address);
             if(sbit && (value & 0x8000))
@@ -1034,6 +1061,7 @@ Imem2(instruction inst)
             value -= 4;
         reg.r[rd] = value;
     } else {
+        // STR
         value = reg.r[rd];
         if(rd == REGPC)
             value -= 4;
@@ -1043,19 +1071,15 @@ Imem2(instruction inst)
             putmem_b(address, value);
         }
     }
-    if(!(pbit && !wbit))
+    if(!prebit || wbit)
         reg.r[rn] += off;
 
     /*s: [[Imem2()]] trace */
     if(trace) {
         char *hb, *dotp, *dotc;
 
-        hb = "B";
-        if(hbit)
-            hb = "H";
-        dotp = "";
-        if(!pbit)
-            dotp = ".P";
+        hb = hbit? "H" : "B";
+        dotp = prebit? "" : ".P";
         dotc = cond[reg.instr_cond];
 
         if(lbit) {
@@ -1090,11 +1114,11 @@ Imem2(instruction inst)
 void
 Ilsm(instruction inst)
 {
-    char pbit, ubit, sbit, wbit, lbit;
+    bool prebit, ubit, sbit, wbit, lbit;
     int i, rn, reglist;
     ulong address, predelta, postdelta;
 
-    pbit = (inst>>24) & 0x1;
+    prebit = (inst>>24) & 0x1;
     ubit = (inst>>23) & 0x1;
     sbit = (inst>>22) & 0x1;
     wbit = (inst>>21) & 0x1;
@@ -1109,7 +1133,7 @@ Ilsm(instruction inst)
 
     address = reg.r[rn];
 
-    if(pbit) {
+    if(prebit) {
         predelta = 4;
         postdelta = 0;
     } else {
@@ -1146,7 +1170,7 @@ Ilsm(instruction inst)
     /*s: [[Ilsm()]] trace */
     if(trace) {
         itrace("%s.%c%c\tR%d=%lux%s, <%lux>",
-            (lbit ? "LDM" : "STM"), (ubit ? 'I' : 'D'), (pbit ? 'B' : 'A'),
+            (lbit ? "LDM" : "STM"), (ubit ? 'I' : 'D'), (prebit ? 'B' : 'A'),
             rn, reg.r[rn], (wbit ? "!" : ""), reglist);
     }
     /*e: [[Ilsm()]] trace */
@@ -1160,9 +1184,7 @@ Ib(instruction inst)
     long v;
 
     v = inst & 0xffffff; // 24 bits
-    v = reg.r[REGPC] + 8 + 
-        ((v << 8) 
-          >> 6);
+    v = reg.r[REGPC] + (v << 2) + 8;
     /*s: [[Ib()]] trace */
     if(trace)
         itrace("B%s\t#%lux", cond[reg.instr_cond], v);
@@ -1179,9 +1201,7 @@ Ibl(instruction inst)
     Symbol s;
 
     v = inst & 0xffffff;
-    v = reg.r[REGPC] + 8 + 
-           ((v << 8) 
-               >> 6);
+    v = reg.r[REGPC] + (v << 2) + 8;
     /*s: [[Ibl()]] trace */
     if(trace)
         itrace("BL%s\t#%lux", cond[reg.instr_cond], v);
