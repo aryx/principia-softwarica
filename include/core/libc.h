@@ -96,7 +96,6 @@ extern  int     strcmp(char*, char*);
 extern  char*   strchr(char*, int);
 extern  char*   strrchr(char*, int);
 
-
 extern  long    strlen(char*);
 extern  char*   strdup(char*);
 extern  char*   strcat(char*, char*);
@@ -148,6 +147,7 @@ enum
 /*
  * rune routines
  */
+
 // char <-> rune conversion
 extern  int chartorune(Rune*, char*);
 extern  int runetochar(char*, Rune*);
@@ -175,14 +175,14 @@ extern  Rune    toupperrune(Rune);
 extern  int isalpharune(Rune);
 extern  int isdigitrune(Rune);
 extern  int islowerrune(Rune);
-extern  int isspacerune(Rune);
 extern  int isupperrune(Rune);
+extern  int isspacerune(Rune);
 
 // ??
-extern  int istitlerune(Rune);
-extern  Rune    tobaserune(Rune);
-extern  int isbaserune(Rune);
 extern  Rune    totitlerune(Rune);
+extern  Rune    tobaserune(Rune);
+extern  int istitlerune(Rune);
+extern  int isbaserune(Rune);
 
 // ?????
 extern  int runelen(long);
@@ -198,7 +198,6 @@ extern  int utfnlen(char*, long);
 extern  char*   utfrrune(char*, long);
 extern  char*   utfutf(char*, char*);
 extern  char*   utfecpy(char*, char*, char*);
-
 
 /*
  * malloc
@@ -267,9 +266,9 @@ enum Fmt_flag {
 // pad: used to be just print()? but for cg transformed in a pointer func
 extern  int     (*print)(char*, ...);
 extern  int     sprint(char*, char*, ...);
-extern  int     fprint(int, char*, ...);
+extern  int     fprint(fdt, char*, ...);
 
-extern  int     vfprint(int, char*, va_list);
+extern  int     vfprint(fdt, char*, va_list);
 extern  char*   vseprint(char*, char*, char*, va_list);
 
 extern  int     runesprint(Rune*, char*, ...);
@@ -282,15 +281,16 @@ extern  char*   smprint(char*, ...);
 extern  int     vsnprint(char*, int, char*, va_list);
 extern  char*   vsmprint(char*, va_list);
 
-extern  int     runesnprint(Rune*, int, char*, ...);
 extern  Rune*   runeseprint(Rune*, Rune*, char*, ...);
+extern  int     runesnprint(Rune*, int, char*, ...);
 extern  Rune*   runesmprint(char*, ...);
 
-extern  int     runevsnprint(Rune*, int, char*, va_list);
 extern  Rune*   runevseprint(Rune*, Rune*, char*, va_list);
+extern  int     runevsnprint(Rune*, int, char*, va_list);
 extern  Rune*   runevsmprint(char*, va_list);
 
 extern  int     fmtfdinit(Fmt*, int, char*, int);
+
 extern  int     fmtfdflush(Fmt*);
 extern  int     fmtstrinit(Fmt*);
 extern  char*   fmtstrflush(Fmt*);
@@ -367,6 +367,7 @@ extern  Rune*   runefmtstrflush(Fmt*);
 
 
 extern  int fmtinstall(int, int (*)(Fmt*));
+
 extern  int dofmt(Fmt*, char*);
 extern  int dorfmt(Fmt*, Rune*);
 extern  int fmtprint(Fmt*, char*, ...);
@@ -420,7 +421,6 @@ extern  double  pow10(int);
 
 #define HUGE    3.4028234e38
 
-
 extern  double  NaN(void);
 extern  double  Inf(int);
 extern  int     isNaN(double);
@@ -473,6 +473,7 @@ extern  void    setfcr(ulong);
 
 extern  ulong   umuldiv(ulong, ulong, ulong);
 extern  long    muldiv(long, long, long);
+
 
 
 /*
@@ -534,10 +535,9 @@ extern  int     iounit(fdt);
 extern  void    qsort(void*, long, long, int (*)(void*, void*));
 
 
-
 /*
-| debugging tools 
-*/
+ | debugging tools 
+ */
 
 /*s: macro assert */
 #define assert(x)   do{ if(x) {} else _assert("x"); }while(0)
@@ -568,9 +568,11 @@ enum Profiling {
 
 extern  void    prof(void (*fn)(void*), void *arg, int entries, int what);
 
+
 /*
  | concurrency
  */
+
 extern  int     setjmp(jmp_buf);
 extern  void    longjmp(jmp_buf, int);
 extern  void    notejmp(void*, jmp_buf, int);
@@ -588,7 +590,6 @@ extern  int     atnotify(int(*)(void*, char*), int);
 
 extern  int     atexit(void(*)(void));
 extern  void    atexitdont(void(*)(void));
-
 
 /*
  * atomic
@@ -707,6 +708,7 @@ struct NetConnInfo {
 /*e: type NetConnInfo */
 extern  NetConnInfo*    getnetconninfo(char*, int);
 extern  void            freenetconninfo(NetConnInfo*);
+
 
 /*
  *  encryption
