@@ -8,9 +8,9 @@
 #include "arm.h"
 /*e: basic includes */
 
-/*s: macro XCAST */
+/*s: macro [[XCAST]] */
 #define XCAST(a) (uvlong)(ulong)a
-/*e: macro XCAST */
+/*e: macro [[XCAST]] */
 
 // forward decl
 void	undef(ulong);
@@ -36,7 +36,7 @@ int arm_class(instruction w);
 
 //static	int	dummy;
 
-/*s: global shtype */
+/*s: global [[shtype]] */
 static	char*	shtype[4] =
 {
     "<<",
@@ -44,8 +44,8 @@ static	char*	shtype[4] =
     "->",
     "@>",
 };
-/*e: global shtype */
-/*s: global cond */
+/*e: global [[shtype]] */
+/*s: global [[cond]] */
 static	char*	cond[16] =
 {
     ".EQ",	".NE",	".HS",	".LO",
@@ -53,9 +53,9 @@ static	char*	cond[16] =
     ".HI",	".LS",	".GE",	".LT",
     ".GT",	".LE",	"",	".NO",
 };
-/*e: global cond */
+/*e: global [[cond]] */
 
-/*s: global itab */
+/*s: global [[itab]] */
 //map<enum<opcode>, Inst>
 Inst itab[] =
 {
@@ -176,10 +176,10 @@ Inst itab[] =
   /*e: [[itab]] elements */
   { 0 }
 };
-/*e: global itab */
+/*e: global [[itab]] */
 
 
-/*s: function runcmp */
+/*s: function [[runcmp]] */
 bool
 runcmp(void)
 {
@@ -206,9 +206,9 @@ runcmp(void)
         return false;
     }
 }
-/*e: function runcmp */
+/*e: function [[runcmp]] */
 
-/*s: function runteq */
+/*s: function [[runteq]] */
 bool
 runteq(void)
 {
@@ -228,9 +228,9 @@ runteq(void)
         return false;
     }
 }
-/*e: function runteq */
+/*e: function [[runteq]] */
 
-/*s: function runtst */
+/*s: function [[runtst]] */
 bool
 runtst(void)
 {
@@ -250,9 +250,9 @@ runtst(void)
         return false;
     }
 }
-/*e: function runtst */
+/*e: function [[runtst]] */
 
-/*s: function run */
+/*s: function [[run]] */
 void
 run(void)
 {
@@ -268,7 +268,7 @@ run(void)
         /*s: [[run()]] set reg.cond */
         reg.instr_cond = (reg.instr>>28) & 0xf;
         /*e: [[run()]] set reg.cond */
-        /*s: [[run()]] switch reg.compare_op to set execute */
+        /*s: [[run()]] switch [[reg.compare_op]] to set [[execute]] */
         switch(reg.compare_op) {
         case CCcmp:
             execute = runcmp(); // use reg.instr_cond
@@ -284,7 +284,7 @@ run(void)
                 reg.compare_op);
             return;
         }
-        /*e: [[run()]] switch reg.compare_op to set execute */
+        /*e: [[run()]] switch [[reg.compare_op]] to set [[execute]] */
 
         if(execute) {
             /*s: [[run()]] profile current instruction class */
@@ -306,9 +306,9 @@ run(void)
         /*e: [[run()]] check for breakpoints */
     } while(--count);
 }
-/*e: function run */
+/*e: function [[run]] */
 
-/*s: function undef */
+/*s: function [[undef]] */
 void
 undef(instruction inst)
 {
@@ -316,9 +316,9 @@ undef(instruction inst)
         reg.r[REGPC], inst, reg.instr_opcode);
     longjmp(errjmp, 0);
 }
-/*e: function undef */
+/*e: function [[undef]] */
 
-/*s: function arm_class */
+/*s: function [[arm_class]] */
 int
 arm_class(instruction w)
 {
@@ -416,9 +416,9 @@ arm_class(instruction w)
     }
     return op;
 }
-/*e: function arm_class */
+/*e: function [[arm_class]] */
 
-/*s: function shift */
+/*s: function [[shift]] */
 long
 shift(long v, int st, int sc, bool isreg)
 {
@@ -478,9 +478,9 @@ shift(long v, int st, int sc, bool isreg)
     }
     return v;
 }
-/*e: function shift */
+/*e: function [[shift]] */
 
-/*s: function dpex */
+/*s: function [[dpex]] */
 void
 dpex(instruction inst, long o1, long o2, int rd)
 {
@@ -597,9 +597,9 @@ dpex(instruction inst, long o1, long o2, int rd)
     }
     /*e: [[dpex()]] if Sbit */
 }
-/*e: function dpex */
+/*e: function [[dpex]] */
 
-/*s: function Idp0 */
+/*s: function [[Idp0]] */
 /*
  * data processing instruction R,R,R
  */
@@ -614,15 +614,15 @@ Idp0(instruction inst)
     rm = inst & 0xf;
 
     o1 = reg.r[rn];
-    /*s: [[adjust o1 if rn is REGPC */
+    /*s: adjust o1 if rn is REGPC */
     if(rn == REGPC)
         o1 += 8;
-    /*e: [[adjust o1 if rn is REGPC */
+    /*e: adjust o1 if rn is REGPC */
     o2 = reg.r[rm];
-    /*s: [[adjust o2 if rm is REGPC */
+    /*s: adjust o2 if rm is REGPC */
     if(rm == REGPC)
         o2 += 8;
-    /*e: [[adjust o2 if rm is REGPC */
+    /*e: adjust o2 if rm is REGPC */
 
     dpex(inst, o1, o2, rd);
 
@@ -638,9 +638,9 @@ Idp0(instruction inst)
         reg.r[rd] -= 4;
     /*e: [[Idpx()]] compensate REGPC */
 }
-/*e: function Idp0 */
+/*e: function [[Idp0]] */
 
-/*s: function Idp1 */
+/*s: function [[Idp1]] */
 /*
  * data processing instruction (R<>#),R,R
  */
@@ -657,15 +657,15 @@ Idp1(instruction inst)
     sc = (inst>>7) & 0x1f;
 
     o1 = reg.r[rn];
-    /*s: [[adjust o1 if rn is REGPC */
+    /*s: adjust o1 if rn is REGPC */
     if(rn == REGPC)
         o1 += 8;
-    /*e: [[adjust o1 if rn is REGPC */
+    /*e: adjust o1 if rn is REGPC */
     o2 = reg.r[rm];
-    /*s: [[adjust o2 if rm is REGPC */
+    /*s: adjust o2 if rm is REGPC */
     if(rm == REGPC)
         o2 += 8;
-    /*e: [[adjust o2 if rm is REGPC */
+    /*e: adjust o2 if rm is REGPC */
 
     o2 = shift(o2, st, sc, false);
     dpex(inst, o1, o2, rd);
@@ -681,9 +681,9 @@ Idp1(instruction inst)
         reg.r[rd] -= 4;
     /*e: [[Idpx()]] compensate REGPC */
 }
-/*e: function Idp1 */
+/*e: function [[Idp1]] */
 
-/*s: function Idp2 */
+/*s: function [[Idp2]] */
 /*
  * data processing instruction (R<>R),R,R
  */
@@ -700,20 +700,20 @@ Idp2(instruction inst)
     rs = (inst>>8) & 0xf;
 
     o1 = reg.r[rn];
-    /*s: [[adjust o1 if rn is REGPC */
+    /*s: adjust o1 if rn is REGPC */
     if(rn == REGPC)
         o1 += 8;
-    /*e: [[adjust o1 if rn is REGPC */
+    /*e: adjust o1 if rn is REGPC */
     o2 = reg.r[rm];
-    /*s: [[adjust o2 if rm is REGPC */
+    /*s: adjust o2 if rm is REGPC */
     if(rm == REGPC)
         o2 += 8;
-    /*e: [[adjust o2 if rm is REGPC */
+    /*e: adjust o2 if rm is REGPC */
     o3 = reg.r[rs];
-    /*s: [[adjust o3 if rs is REGPC */
+    /*s: adjust o3 if rs is REGPC */
     if(rs == REGPC)
         o3 += 8;
-    /*e: [[adjust o3 if rs is REGPC */
+    /*e: adjust o3 if rs is REGPC */
 
     o2 = shift(o2, st, o3, true);
     dpex(inst, o1, o2, rd);
@@ -729,9 +729,9 @@ Idp2(instruction inst)
         reg.r[rd] -= 4;
     /*e: [[Idpx()]] compensate REGPC */
 }
-/*e: function Idp2 */
+/*e: function [[Idp2]] */
 
-/*s: function Idp3 */
+/*s: function [[Idp3]] */
 /*
  * data processing instruction #<>#,R,R
  */
@@ -744,10 +744,10 @@ Idp3(instruction inst)
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
     o1 = reg.r[rn];
-    /*s: [[adjust o1 if rn is REGPC */
+    /*s: adjust o1 if rn is REGPC */
     if(rn == REGPC)
         o1 += 8;
-    /*e: [[adjust o1 if rn is REGPC */
+    /*e: adjust o1 if rn is REGPC */
 
     o2 = inst & 0xff;
     sc = (inst>>7) & 0x1e;
@@ -766,9 +766,9 @@ Idp3(instruction inst)
         reg.r[rd] -= 4;
     /*e: [[Idpx()]] compensate REGPC */
 }
-/*e: function Idp3 */
+/*e: function [[Idp3]] */
 
-/*s: function Imul */
+/*s: function [[Imul]] */
 void
 Imul(instruction inst)
 {
@@ -790,9 +790,9 @@ Imul(instruction inst)
             reg.r[rd]);
     /*e: [[Imul()]] trace */
 }
-/*e: function Imul */
+/*e: function [[Imul]] */
 
-/*s: function Imull */
+/*s: function [[Imull]] */
 void
 Imull(instruction inst)
 {
@@ -828,9 +828,9 @@ Imull(instruction inst)
             v);
     /*e: [[Imull()]] trace */
 }
-/*e: function Imull */
+/*e: function [[Imull]] */
 
-/*s: function Imula */
+/*s: function [[Imula]] */
 void
 Imula(instruction inst)
 {
@@ -853,9 +853,9 @@ Imula(instruction inst)
             reg.r[rd]);
     /*e: [[Imula()]] trace */
 }
-/*e: function Imula */
+/*e: function [[Imula]] */
 
-/*s: function Iswap */
+/*s: function [[Iswap]] */
 void
 Iswap(instruction inst)
 {
@@ -893,9 +893,9 @@ Iswap(instruction inst)
     }
     /*e: [[Iswap()]] trace */
 }
-/*e: function Iswap */
+/*e: function [[Iswap]] */
 
-/*s: function Imem1 */
+/*s: function [[Imem1]] */
 /*
  * load/store word/byte
  */
@@ -1001,9 +1001,9 @@ Imem1(instruction inst)
     }
     /*e: [[Imem1()]] trace */
 }
-/*e: function Imem1 */
+/*e: function [[Imem1]] */
 
-/*s: function Imem2 */
+/*s: function [[Imem2]] */
 /*
  * load/store unsigned byte/half word
  */
@@ -1108,9 +1108,9 @@ Imem2(instruction inst)
     }
     /*e: [[Imem2()]] trace */
 }
-/*e: function Imem2 */
+/*e: function [[Imem2]] */
 
-/*s: function Ilsm */
+/*s: function [[Ilsm]] */
 void
 Ilsm(instruction inst)
 {
@@ -1175,9 +1175,9 @@ Ilsm(instruction inst)
     }
     /*e: [[Ilsm()]] trace */
 }
-/*e: function Ilsm */
+/*e: function [[Ilsm]] */
 
-/*s: function Ib */
+/*s: function [[Ib]] */
 void
 Ib(instruction inst)
 {
@@ -1191,9 +1191,9 @@ Ib(instruction inst)
     /*e: [[Ib()]] trace */
     reg.r[REGPC] = v - 4;
 }
-/*e: function Ib */
+/*e: function [[Ib]] */
 
-/*s: function Ibl */
+/*s: function [[Ibl]] */
 void
 Ibl(instruction inst)
 {
@@ -1219,5 +1219,5 @@ Ibl(instruction inst)
     reg.r[REGLINK] = reg.r[REGPC] + 4;
     reg.r[REGPC] = v - 4;
 }
-/*e: function Ibl */
+/*e: function [[Ibl]] */
 /*e: machine/5i/run.c */

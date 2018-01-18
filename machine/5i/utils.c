@@ -8,7 +8,7 @@
 #include "arm.h"
 /*e: basic includes */
 
-/*s: function fatal */
+/*s: function [[fatal]] */
 void
 fatal(bool syserr, char *fmt, ...)
 {
@@ -25,9 +25,9 @@ fatal(bool syserr, char *fmt, ...)
     fprint(STDERR, s, buf);
     exits(buf);
 }
-/*e: function fatal */
+/*e: function [[fatal]] */
 
-/*s: function itrace */
+/*s: function [[itrace]] */
 void
 itrace(char *fmt, ...)
 {
@@ -42,9 +42,9 @@ itrace(char *fmt, ...)
                      reg.ar, reg.instr, reg.instr_opcode, buf);	
     Bflush(bout);
 }
-/*e: function itrace */
+/*e: function [[itrace]] */
 
-/*s: function dumpreg */
+/*s: function [[dumpreg]] */
 void
 dumpreg(void)
 {
@@ -60,23 +60,23 @@ dumpreg(void)
     }
     Bprint(bout, "\n");
 }
-/*e: function dumpreg */
+/*e: function [[dumpreg]] */
 
-/*s: function dumpfreg */
+/*s: function [[dumpfreg]] */
 void
 dumpfreg(void)
 {
 }
-/*e: function dumpfreg */
+/*e: function [[dumpfreg]] */
 
-/*s: function dumpdreg */
+/*s: function [[dumpdreg]] */
 void
 dumpdreg(void)
 {
 }
-/*e: function dumpdreg */
+/*e: function [[dumpdreg]] */
 
-/*s: function emalloc */
+/*s: function [[emalloc]] */
 void *
 emalloc(ulong size)
 {
@@ -89,9 +89,9 @@ emalloc(ulong size)
     memset(a, 0, size); //!!
     return a;
 }
-/*e: function emalloc */
+/*e: function [[emalloc]] */
 
-/*s: function erealloc */
+/*s: function [[erealloc]] */
 void *
 erealloc(void *a, ulong oldsize, ulong size)
 {
@@ -106,5 +106,5 @@ erealloc(void *a, ulong oldsize, ulong size)
     memmove(n, a, size);
     return n;
 }
-/*e: function erealloc */
+/*e: function [[erealloc]] */
 /*e: machine/5i/utils.c */

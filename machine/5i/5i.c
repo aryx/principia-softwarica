@@ -10,17 +10,17 @@
 
 #include <tos.h>
 
-/*s: global file */
+/*s: global [[file]] */
 char*	file = "5.out";
-/*e: global file */
-/*s: global bxxx */
+/*e: global [[file]] */
+/*s: global [[bxxx]] */
 Biobuf	bi, bo;
-/*e: global bxxx */
-/*s: global fhdr */
+/*e: global [[bxxx]] */
+/*s: global [[fhdr]] */
 Fhdr	fhdr;
-/*e: global fhdr */
+/*e: global [[fhdr]] */
 
-/*s: function initmemory */
+/*s: function [[initmemory]] */
 void
 initmemory(void)
 {
@@ -77,9 +77,9 @@ initmemory(void)
 
     reg.r[REGPC] = fhdr.entry;
 }
-/*e: function initmemory */
+/*e: function [[initmemory]] */
 
-/*s: function inithdr */
+/*s: function [[inithdr]] */
 void
 inithdr(fdt fd)
 {
@@ -110,9 +110,9 @@ inithdr(fdt fd)
     /*e: [[inithdr()]] mach initialisation */
 
 }
-/*e: function inithdr */
+/*e: function [[inithdr]] */
 
-/*s: function initstk */
+/*s: function [[initstk]] */
 void
 initstk(int argc, char *argv[])
 {
@@ -172,9 +172,9 @@ initstk(int argc, char *argv[])
     putmem_w(sp, 0);
 
 }
-/*e: function initstk */
+/*e: function [[initstk]] */
 
-/*s: function main */
+/*s: function [[main]] */
 //@Scheck: entry point!
 void main(int argc, char **argv)
 {
@@ -209,5 +209,5 @@ void main(int argc, char **argv)
 
     cmd();
 }
-/*e: function main */
+/*e: function [[main]] */
 /*e: machine/5i/5i.c */

@@ -16,7 +16,7 @@ typedef	struct	Breakpoint	Breakpoint;
 typedef ulong instruction;
 /*e: typedef instruction */
 
-/*s: enum breakpoint_kind */
+/*s: enum [[breakpoint_kind]] */
 enum breakpoint_kind
 {
     Instruction		= 1,
@@ -27,9 +27,9 @@ enum breakpoint_kind
 
     Equal		= 4|8,
 };
-/*e: enum breakpoint_kind */
+/*e: enum [[breakpoint_kind]] */
 
-/*s: struct Breakpoint */
+/*s: struct [[Breakpoint]] */
 struct Breakpoint
 {
     //enum<breakpoint_kind>
@@ -44,9 +44,9 @@ struct Breakpoint
     Breakpoint*	next;		/* Link to next one */
     /*e: [[Breakpoint]] extra fields */
 };
-/*e: struct Breakpoint */
+/*e: struct [[Breakpoint]] */
 
-/*s: enum ixxx */
+/*s: enum [[ixxx]] */
 enum opcode_category
 {
     Iarith,
@@ -55,10 +55,10 @@ enum opcode_category
     Isyscall,
     Imisc,
 };
-/*e: enum ixxx */
+/*e: enum [[ixxx]] */
 
 // added by pad
-/*s: enum opcode */
+/*s: enum [[opcode]] */
 enum opcode {
     // -----------------------------------------
     // Arithmetic and logic opcodes
@@ -143,13 +143,13 @@ enum opcode {
     // for opcodes not handled by 5i
     OUNDEF   = 89
 };
-/*e: enum opcode */
+/*e: enum [[opcode]] */
 
-/*s: constant Nmaxtlb */
+/*s: constant [[Nmaxtlb]] */
 #define Nmaxtlb 64
-/*e: constant Nmaxtlb */
+/*e: constant [[Nmaxtlb]] */
 
-/*s: enum regxxx */
+/*s: enum [[regxxx]] */
 enum
 {
     REGARG	= 0,
@@ -159,9 +159,9 @@ enum
     REGLINK	= 14,
     REGPC	= 15,
 };
-/*e: enum regxxx */
+/*e: enum [[regxxx]] */
 
-/*s: struct Tlb */
+/*s: struct [[Tlb]] */
 struct Tlb
 {
     bool	on;			/* Being updated */
@@ -172,9 +172,9 @@ struct Tlb
     int	hit;			/* Number of successful tag matches */
     int	miss;			/* Number of failed tag matches */
 };		
-/*e: struct Tlb */
+/*e: struct [[Tlb]] */
 
-/*s: struct Icache */
+/*s: struct [[Icache]] */
 struct Icache
 {
     bool	on;			/* Turned on */
@@ -185,10 +185,10 @@ struct Icache
     int*	(*hash)(ulong);	/* Hash function */
     char*	hashtext;		/* What the function looks like */
 };
-/*e: struct Icache */
+/*e: struct [[Icache]] */
 
 
-/*s: struct Inst */
+/*s: struct [[Inst]] */
 struct Inst
 {
     void 	(*func)(instruction);
@@ -203,9 +203,9 @@ struct Inst
     int	useddelay;
     /*e: [[Inst]] profiling fields */
 };
-/*e: struct Inst */
+/*e: struct [[Inst]] */
 
-/*s: struct Registers */
+/*s: struct [[Registers]] */
 struct Registers
 {
     long	r[16];
@@ -230,9 +230,9 @@ struct Registers
     long	cc2;
     /*e: [[Registers]] other fields */
 };
-/*e: struct Registers */
+/*e: struct [[Registers]] */
 
-/*s: enum memxxx */
+/*s: enum [[memxxx]] */
 // for memio()
 enum
 {
@@ -240,18 +240,18 @@ enum
     MemReadstring,
     MemWrite,
 };
-/*e: enum memxxx */
+/*e: enum [[memxxx]] */
 
-/*s: enum compare_op */
+/*s: enum [[compare_op]] */
 enum compare_op
 {
     CCcmp, 
     CCtst,
     CCteq,
 };
-/*e: enum compare_op */
+/*e: enum [[compare_op]] */
 
-/*s: enum segment_kind */
+/*s: enum [[segment_kind]] */
 enum segment_kind
 {
     Text,
@@ -261,9 +261,9 @@ enum segment_kind
 
     Nseg,
 };
-/*e: enum segment_kind */
+/*e: enum [[segment_kind]] */
 
-/*s: struct Segment */
+/*s: struct [[Segment]] */
 struct Segment
 {
     // enum<segment_kind>
@@ -284,15 +284,15 @@ struct Segment
     int	refs;
     /*e: [[Segment]] profiling fields */
 };
-/*e: struct Segment */
+/*e: struct [[Segment]] */
 
-/*s: struct Memory */
+/*s: struct [[Memory]] */
 struct Memory
 {
     //map<enum<segment_kind>, Segment>
     Segment	seg[Nseg];
 };
-/*e: struct Memory */
+/*e: struct [[Memory]] */
 
 // for cmd.c
 void		run(void);
@@ -384,7 +384,7 @@ extern	int		cmdcount;
 extern	int		nopcount;
 extern	ulong*		iprof;
 
-/*s: enum _anon_ (machine/5i/arm.h)7 */
+/*s: enum [[_anon_ (machine/5i/arm.h)]]7 */
 enum
 {
     /* Plan9 Kernel constants */
@@ -395,15 +395,15 @@ enum
     STACKTOP	= 0x80000000,
     STACKSIZE	= 0x10000,
 
-    /*s: constant PROFGRAN */
+    /*s: constant [[PROFGRAN]] */
     PROFGRAN	= 4,
-    /*e: constant PROFGRAN */
-    /*s: constant Sbit */
+    /*e: constant [[PROFGRAN]] */
+    /*s: constant [[Sbit]] */
     Sbit		= 1<<20,
-    /*e: constant Sbit */
-    /*s: constant SIGNBIT */
+    /*e: constant [[Sbit]] */
+    /*s: constant [[SIGNBIT]] */
     SIGNBIT		= 0x80000000,
-    /*e: constant SIGNBIT */
+    /*e: constant [[SIGNBIT]] */
 };
-/*e: enum _anon_ (machine/5i/arm.h)7 */
+/*e: enum [[_anon_ (machine/5i/arm.h)]]7 */
 /*e: machine/5i/arm.h */

@@ -10,7 +10,7 @@
 
 #include <ctype.h>
 
-/*s: function dobplist */
+/*s: function [[dobplist]] */
 void
 dobplist(void)
 {
@@ -52,9 +52,9 @@ dobplist(void)
         Bprint(bout, "\n");
     }
 }
-/*e: function dobplist */
+/*e: function [[dobplist]] */
 
-/*s: function breakpoint */
+/*s: function [[breakpoint]] */
 void
 breakpoint(char *addr, char *cp)
 {
@@ -91,9 +91,9 @@ breakpoint(char *addr, char *cp)
     b->next = bplist;
     bplist = b;
 }
-/*e: function breakpoint */
+/*e: function [[breakpoint]] */
 
-/*s: function delbpt */
+/*s: function [[delbpt]] */
 void
 delbpt(char *addr)
 {
@@ -115,9 +115,9 @@ delbpt(char *addr)
 
     Bprint(bout, "no breakpoint\n");
 }
-/*e: function delbpt */
+/*e: function [[delbpt]] */
 
-/*s: function brkchk */
+/*s: function [[brkchk]] */
 void
 brkchk(ulong addr, int type)
 {
@@ -139,5 +139,5 @@ brkchk(ulong addr, int type)
         }
     }	
 }
-/*e: function brkchk */
+/*e: function [[brkchk]] */
 /*e: machine/5i/bpt.c */

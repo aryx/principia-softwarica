@@ -10,17 +10,17 @@
 
 #include <ctype.h>
 
-/*s: global fmt */
+/*s: global [[fmt]] */
 char	fmt = 'X';
-/*e: global fmt */
-/*s: global width */
+/*e: global [[fmt]] */
+/*s: global [[width]] */
 int	width = 60;
-/*e: global width */
-/*s: global inc */
+/*e: global [[width]] */
+/*s: global [[inc]] */
 int	inc;
-/*e: global inc */
+/*e: global [[inc]] */
 
-/*s: function reset */
+/*s: function [[reset]] */
 void
 reset(void)
 {
@@ -44,9 +44,9 @@ reset(void)
     for(b = bplist; b; b = b->next)
         b->done = b->count;
 }
-/*e: function reset */
+/*e: function [[reset]] */
 
-/*s: function nextc */
+/*s: function [[nextc]] */
 char*
 nextc(char *p)
 {
@@ -58,9 +58,9 @@ nextc(char *p)
 
     return p;
 }
-/*e: function nextc */
+/*e: function [[nextc]] */
 
-/*s: function numsym */
+/*s: function [[numsym]] */
 char*
 numsym(char *addr, ulong *val)
 {
@@ -93,9 +93,9 @@ numsym(char *addr, ulong *val)
     }
     return addr;
 }
-/*e: function numsym */
+/*e: function [[numsym]] */
 
-/*s: function expr */
+/*s: function [[expr]] */
 ulong
 expr(char *addr)
 {
@@ -136,9 +136,9 @@ expr(char *addr)
 
     return t;
 }
-/*e: function expr */
+/*e: function [[expr]] */
 
-/*s: function buildargv */
+/*s: function [[buildargv]] */
 int
 buildargv(char *str, char **args, int max)
 {
@@ -165,9 +165,9 @@ buildargv(char *str, char **args, int max)
     }
     return na;
 }
-/*e: function buildargv */
+/*e: function [[buildargv]] */
 
-/*s: function colon */
+/*s: function [[colon]] */
 void
 colon(char *addr, char *cp)
 {
@@ -234,9 +234,9 @@ colon(char *addr, char *cp)
     /*e: [[colon()]] print current instruction */
     Bprint(bout, "\n");
 }
-/*e: function colon */
+/*e: function [[colon]] */
 
-/*s: function dollar */
+/*s: function [[dollar]] */
 void
 dollar(char *cp)
 {
@@ -339,9 +339,9 @@ dollar(char *cp)
 
     }
 }
-/*e: function dollar */
+/*e: function [[dollar]] */
 
-/*s: function pfmt */
+/*s: function [[pfmt]] */
 int
 pfmt(char fmt, int mem, ulong val)
 {
@@ -508,9 +508,9 @@ pfmt(char fmt, int mem, ulong val)
     }
     return c;
 }
-/*e: function pfmt */
+/*e: function [[pfmt]] */
 
-/*s: function eval */
+/*s: function [[eval]] */
 void
 eval(char *addr, char *p)
 {
@@ -525,9 +525,9 @@ eval(char *addr, char *p)
     pfmt(*p, 0, val);
     Bprint(bout, "\n");
 }
-/*e: function eval */
+/*e: function [[eval]] */
 
-/*s: function quesie */
+/*s: function [[quesie]] */
 void
 quesie(char *p)
 {
@@ -574,9 +574,9 @@ quesie(char *p)
     }
     Bprint(bout, "\n");
 }
-/*e: function quesie */
+/*e: function [[quesie]] */
 
-/*s: function catcher */
+/*s: function [[catcher]] */
 void
 catcher(void *a, char *msg)
 {
@@ -593,9 +593,9 @@ catcher(void *a, char *msg)
     print("5i\n");
     noted(NCONT);
 }
-/*e: function catcher */
+/*e: function [[catcher]] */
 
-/*s: function setreg */
+/*s: function [[setreg]] */
 void
 setreg(char *addr, char *cp)
 {
@@ -620,9 +620,9 @@ setreg(char *addr, char *cp)
     }
     Bprint(bout, "bad register\n");
 }
-/*e: function setreg */
+/*e: function [[setreg]] */
 
-/*s: function cmd */
+/*s: function [[cmd]] */
 void
 cmd(void)
 {
@@ -723,5 +723,5 @@ cmd(void)
         }
     }
 }
-/*e: function cmd */
+/*e: function [[cmd]] */
 /*e: machine/5i/cmd.c */

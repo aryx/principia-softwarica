@@ -8,11 +8,11 @@
 #include "arm.h"
 /*e: basic includes */
 
-/*s: constant STRINGSZ */
+/*s: constant [[STRINGSZ]] */
 #define	STRINGSZ	128
-/*e: constant STRINGSZ */
+/*e: constant [[STRINGSZ]] */
 
-/*s: function printsource */
+/*s: function [[printsource]] */
 /*
  *	print the value of dot as file:line
  */
@@ -24,9 +24,9 @@ printsource(long dot)
     if (fileline(str, STRINGSZ, dot))
         Bprint(bout, "%s", str);
 }
-/*e: function printsource */
+/*e: function [[printsource]] */
 
-/*s: function printlocals */
+/*s: function [[printlocals]] */
 void
 printlocals(Symbol *fn, ulong fp)
 {
@@ -40,9 +40,9 @@ printlocals(Symbol *fn, ulong fp)
         Bprint(bout, "\t%s=#%lux\n", s.name, getmem_4(fp-s.value));
     }
 }
-/*e: function printlocals */
+/*e: function [[printlocals]] */
 
-/*s: function printparams */
+/*s: function [[printparams]] */
 void
 printparams(Symbol *fn, ulong fp)
 {
@@ -61,16 +61,16 @@ printparams(Symbol *fn, ulong fp)
     }
     Bprint(bout, ") ");
 }
-/*e: function printparams */
+/*e: function [[printparams]] */
 
-/*s: constant STARTSYM */
+/*s: constant [[STARTSYM]] */
 #define STARTSYM	"_main"
-/*e: constant STARTSYM */
-/*s: constant FRAMENAME */
+/*e: constant [[STARTSYM]] */
+/*s: constant [[FRAMENAME]] */
 #define	FRAMENAME	".frame"
-/*e: constant FRAMENAME */
+/*e: constant [[FRAMENAME]] */
 
-/*s: function stktrace */
+/*s: function [[stktrace]] */
 void
 stktrace(int modif)
 {
@@ -111,5 +111,5 @@ stktrace(int modif)
         }
     }
 }
-/*e: function stktrace */
+/*e: function [[stktrace]] */
 /*e: machine/5i/symbols.c */

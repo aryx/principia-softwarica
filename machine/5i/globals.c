@@ -13,68 +13,68 @@
 //in run.c
 //Inst itab[];
 
-/*s: global reg */
+/*s: global [[reg]] */
 Registers reg;
-/*e: global reg */
-/*s: global memory */
+/*e: global [[reg]] */
+/*s: global [[memory]] */
 Memory memory;
-/*e: global memory */
-/*s: global text */
+/*e: global [[memory]] */
+/*s: global [[text]] */
 fdt text;
-/*e: global text */
-/*s: global trace */
+/*e: global [[text]] */
+/*s: global [[trace]] */
 bool trace;
-/*e: global trace */
-/*s: global sysdbg */
+/*e: global [[trace]] */
+/*s: global [[sysdbg]] */
 bool sysdbg;
-/*e: global sysdbg */
-/*s: global calltree */
+/*e: global [[sysdbg]] */
+/*s: global [[calltree]] */
 bool calltree;
-/*e: global calltree */
-/*s: global icache */
+/*e: global [[calltree]] */
+/*s: global [[icache]] */
 Icache icache;
-/*e: global icache */
-/*s: global tlb */
+/*e: global [[icache]] */
+/*s: global [[tlb]] */
 Tlb tlb;
-/*e: global tlb */
-/*s: global count */
+/*e: global [[tlb]] */
+/*s: global [[count]] */
 int count;
-/*e: global count */
-/*s: global errjmp */
+/*e: global [[count]] */
+/*s: global [[errjmp]] */
 jmp_buf errjmp;
-/*e: global errjmp */
-/*s: global bplist */
+/*e: global [[errjmp]] */
+/*s: global [[bplist]] */
 // list<Breakpoint> (next = Breakpoint.next)
 Breakpoint *bplist;
-/*e: global bplist */
-/*s: global atbpt */
+/*e: global [[bplist]] */
+/*s: global [[atbpt]] */
 bool atbpt;
-/*e: global atbpt */
-/*s: global membpt */
+/*e: global [[atbpt]] */
+/*s: global [[membpt]] */
 bool membpt;
-/*e: global membpt */
-/*s: global cmdcount */
+/*e: global [[membpt]] */
+/*s: global [[cmdcount]] */
 int cmdcount;
-/*e: global cmdcount */
-/*s: global nopcount */
+/*e: global [[cmdcount]] */
+/*s: global [[nopcount]] */
 int nopcount;
-/*e: global nopcount */
-/*s: global dot */
+/*e: global [[nopcount]] */
+/*s: global [[dot]] */
 uintptr dot;
-/*e: global dot */
-/*s: global bixxx */
+/*e: global [[dot]] */
+/*s: global [[bixxx]] */
 Biobuf *bin, *bout;
-/*e: global bixxx */
-/*s: global iprof */
+/*e: global [[bixxx]] */
+/*s: global [[iprof]] */
 ulong *iprof;
-/*e: global iprof */
-/*s: global symmap */
+/*e: global [[iprof]] */
+/*s: global [[symmap]] */
 Map *symmap;		
-/*e: global symmap */
-/*s: global datasize */
+/*e: global [[symmap]] */
+/*s: global [[datasize]] */
 int	datasize;
-/*e: global datasize */
-/*s: global textbase */
+/*e: global [[datasize]] */
+/*s: global [[textbase]] */
 uintptr	textbase;
-/*e: global textbase */
+/*e: global [[textbase]] */
 /*e: machine/5i/globals.c */

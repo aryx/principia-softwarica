@@ -9,20 +9,20 @@
 /*e: basic includes */
 
 //#define	ODIRLEN	116	/* compatibility; used in _stat etc. */
-/*s: constant OERRLEN */
+/*s: constant [[OERRLEN]] */
 #define	OERRLEN	64	/* compatibility; used in _stat etc. */
-/*e: constant OERRLEN */
+/*e: constant [[OERRLEN]] */
 
-/*s: global errbuf */
+/*s: global [[errbuf]] */
 char 	errbuf[ERRMAX];
-/*e: global errbuf */
-/*s: global nofunc */
+/*e: global [[errbuf]] */
+/*s: global [[nofunc]] */
 ulong	nofunc;
-/*e: global nofunc */
+/*e: global [[nofunc]] */
 
 #include "/sys/src/libc/9syscall/sys.h"
 
-/*s: global sysctab */
+/*s: global [[sysctab]] */
 char*	sysctab[] =
 {
     [NOP]		"Nop",
@@ -63,9 +63,9 @@ char*	sysctab[] =
     [PWRITE]	"Pwrite",
     [AWAIT]		"Await",
 };
-/*e: global sysctab */
+/*e: global [[sysctab]] */
 
-/*s: function sysnop */
+/*s: function [[sysnop]] */
 void
 sysnop(void)
 {
@@ -75,9 +75,9 @@ sysnop(void)
         itrace("nop()");
     /*e: [[sysnop]] strace */
 }
-/*e: function sysnop */
+/*e: function [[sysnop]] */
 
-/*s: function syserrstr */
+/*s: function [[syserrstr]] */
 void
 syserrstr(void)
 {
@@ -96,8 +96,8 @@ syserrstr(void)
     reg.r[REGRET] = n;
     
 }
-/*e: function syserrstr */
-/*s: function sysbind */
+/*e: function [[syserrstr]] */
+/*s: function [[sysbind]] */
 void
 sysbind(void)
 { 
@@ -119,9 +119,9 @@ sysbind(void)
 
     reg.r[REGRET] = n;
 }
-/*e: function sysbind */
+/*e: function [[sysbind]] */
 
-/*s: function sysfd2path */
+/*s: function [[sysfd2path]] */
 void
 sysfd2path(void)
 {
@@ -148,9 +148,9 @@ sysfd2path(void)
     reg.r[REGRET] = n;
     
 }
-/*e: function sysfd2path */
+/*e: function [[sysfd2path]] */
 
-/*s: function syschdir */
+/*s: function [[syschdir]] */
 void
 syschdir(void)
 { 
@@ -169,9 +169,9 @@ syschdir(void)
 
     reg.r[REGRET] = n;
 }
-/*e: function syschdir */
+/*e: function [[syschdir]] */
 
-/*s: function sysclose */
+/*s: function [[sysclose]] */
 void
 sysclose(void)
 {
@@ -187,9 +187,9 @@ sysclose(void)
         errstr(errbuf, sizeof errbuf);
     reg.r[REGRET] = n;
 }
-/*e: function sysclose */
+/*e: function [[sysclose]] */
 
-/*s: function sysdup */
+/*s: function [[sysdup]] */
 void
 sysdup(void)
 {
@@ -206,9 +206,9 @@ sysdup(void)
         errstr(errbuf, sizeof errbuf);
     reg.r[REGRET] = n;
 }
-/*e: function sysdup */
+/*e: function [[sysdup]] */
 
-/*s: function sysexits */
+/*s: function [[sysexits]] */
 void
 sysexits(void)
 {
@@ -228,9 +228,9 @@ sysexits(void)
     else
         Bprint(bout, "exits(0)\n");
 }
-/*e: function sysexits */
+/*e: function [[sysexits]] */
 
-/*s: function sysopen */
+/*s: function [[sysopen]] */
 void
 sysopen(void)
 {
@@ -251,9 +251,9 @@ sysopen(void)
 
     reg.r[REGRET] = n;
 };
-/*e: function sysopen */
+/*e: function [[sysopen]] */
 
-/*s: function sysread */
+/*s: function [[sysread]] */
 void
 sysread(vlong offset)
 {
@@ -297,17 +297,17 @@ sysread(vlong offset)
     free(buf);
     reg.r[REGRET] = n;
 }
-/*e: function sysread */
+/*e: function [[sysread]] */
 
-/*s: function syspread */
+/*s: function [[syspread]] */
 void
 syspread(void)
 {
     sysread(getmem_v(reg.r[REGSP]+16));
 }
-/*e: function syspread */
+/*e: function [[syspread]] */
 
-/*s: function sysseek */
+/*s: function [[sysseek]] */
 void
 sysseek(void)
 {
@@ -329,9 +329,9 @@ sysseek(void)
 
     putmem_v(retp, v);
 }
-/*e: function sysseek */
+/*e: function [[sysseek]] */
 
-/*s: function syssleep */
+/*s: function [[syssleep]] */
 void
 syssleep(void)
 {
@@ -348,9 +348,9 @@ syssleep(void)
 
     reg.r[REGRET] = n;
 }
-/*e: function syssleep */
+/*e: function [[syssleep]] */
 
-/*s: function sysstat */
+/*s: function [[sysstat]] */
 void
 sysstat(void)
 {
@@ -376,9 +376,9 @@ sysstat(void)
     }
     reg.r[REGRET] = n;
 }
-/*e: function sysstat */
+/*e: function [[sysstat]] */
 
-/*s: function sysfstat */
+/*s: function [[sysfstat]] */
 void
 sysfstat(void)
 {
@@ -404,9 +404,9 @@ sysfstat(void)
         memio((char*)buf, edir, n, MemWrite);
     reg.r[REGRET] = n;
 }
-/*e: function sysfstat */
+/*e: function [[sysfstat]] */
 
-/*s: function syswrite */
+/*s: function [[syswrite]] */
 void
 syswrite(vlong offset)
 {
@@ -432,17 +432,17 @@ syswrite(vlong offset)
 
     reg.r[REGRET] = n;
 }
-/*e: function syswrite */
+/*e: function [[syswrite]] */
 
-/*s: function syspwrite */
+/*s: function [[syspwrite]] */
 void
 syspwrite(void)
 {
     syswrite(getmem_v(reg.r[REGSP]+16));
 }
-/*e: function syspwrite */
+/*e: function [[syspwrite]] */
 
-/*s: function syspipe */
+/*s: function [[syspipe]] */
 void
 syspipe(void)
 {
@@ -462,9 +462,9 @@ syspipe(void)
     }
     reg.r[REGRET] = n;
 }
-/*e: function syspipe */
+/*e: function [[syspipe]] */
 
-/*s: function syscreate */
+/*s: function [[syscreate]] */
 void
 syscreate(void)
 {
@@ -485,9 +485,9 @@ syscreate(void)
 
     reg.r[REGRET] = n;
 }
-/*e: function syscreate */
+/*e: function [[syscreate]] */
 
-/*s: function sysbrk */
+/*s: function [[sysbrk]] */
 void
 sysbrk(void)
 {
@@ -518,9 +518,9 @@ sysbrk(void)
 
     reg.r[REGRET] = 0;	
 }
-/*e: function sysbrk */
+/*e: function [[sysbrk]] */
 
-/*s: function sysremove */
+/*s: function [[sysremove]] */
 void
 sysremove(void)
 {
@@ -538,9 +538,9 @@ sysremove(void)
         errstr(errbuf, sizeof errbuf);
     reg.r[REGRET] = n;
 }
-/*e: function sysremove */
+/*e: function [[sysremove]] */
 
-/*s: function sysnotify */
+/*s: function [[sysnotify]] */
 void
 sysnotify(void)
 {
@@ -550,151 +550,151 @@ sysnotify(void)
 
     reg.r[REGRET] = 0;
 }
-/*e: function sysnotify */
+/*e: function [[sysnotify]] */
 
 
 
 
-/*s: function sysawait */
+/*s: function [[sysawait]] */
 void
 sysawait(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function sysawait */
-/*s: function sysrfork */
+/*e: function [[sysawait]] */
+/*s: function [[sysrfork]] */
 void
 sysrfork(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function sysrfork */
-/*s: function syswstat */
+/*e: function [[sysrfork]] */
+/*s: function [[syswstat]] */
 void
 syswstat(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function syswstat */
-/*s: function sysfwstat */
+/*e: function [[syswstat]] */
+/*s: function [[sysfwstat]] */
 void
 sysfwstat(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function sysfwstat */
-/*s: function sysnoted */
+/*e: function [[sysfwstat]] */
+/*s: function [[sysnoted]] */
 void
 sysnoted(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function sysnoted */
-/*s: function syssegattach */
+/*e: function [[sysnoted]] */
+/*s: function [[syssegattach]] */
 void
 syssegattach(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function syssegattach */
-/*s: function syssegdetach */
+/*e: function [[syssegattach]] */
+/*s: function [[syssegdetach]] */
 void
 syssegdetach(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function syssegdetach */
-/*s: function syssegfree */
+/*e: function [[syssegdetach]] */
+/*s: function [[syssegfree]] */
 void
 syssegfree(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function syssegfree */
-/*s: function syssegflush */
+/*e: function [[syssegfree]] */
+/*s: function [[syssegflush]] */
 void
 syssegflush(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function syssegflush */
-/*s: function sysrendezvous */
+/*e: function [[syssegflush]] */
+/*s: function [[sysrendezvous]] */
 void
 sysrendezvous(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function sysrendezvous */
-/*s: function sysunmount */
+/*e: function [[sysrendezvous]] */
+/*s: function [[sysunmount]] */
 void
 sysunmount(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function sysunmount */
+/*e: function [[sysunmount]] */
 
-/*s: function syssegbrk */
+/*s: function [[syssegbrk]] */
 void
 syssegbrk(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function syssegbrk */
-/*s: function sysmount */
+/*e: function [[syssegbrk]] */
+/*s: function [[sysmount]] */
 void
 sysmount(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function sysmount */
-/*s: function sysalarm */
+/*e: function [[sysmount]] */
+/*s: function [[sysalarm]] */
 void
 sysalarm(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function sysalarm */
-/*s: function sysexec */
+/*e: function [[sysalarm]] */
+/*s: function [[sysexec]] */
 void
 sysexec(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function sysexec */
+/*e: function [[sysexec]] */
 
-/*s: function sysfauth */
+/*s: function [[sysfauth]] */
 void
 sysfauth(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function sysfauth */
-/*s: function sysfversion */
+/*e: function [[sysfauth]] */
+/*s: function [[sysfversion]] */
 void
 sysfversion(void)
 {
     Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
-/*e: function sysfversion */
+/*e: function [[sysfversion]] */
 
-/*s: global systab */
+/*s: global [[systab]] */
 void	(*systab[])(void) =
 {
     [NOP]		sysnop,
@@ -746,9 +746,9 @@ void	(*systab[])(void) =
 
     [ERRSTR]	syserrstr,
 };
-/*e: global systab */
+/*e: global [[systab]] */
 
-/*s: function Ssyscall */
+/*s: function [[Ssyscall]] */
 void
 Ssyscall(instruction _unused)
 {
@@ -772,5 +772,5 @@ Ssyscall(instruction _unused)
 
     Bflush(bout);
 }
-/*e: function Ssyscall */
+/*e: function [[Ssyscall]] */
 /*e: machine/5i/syscall.c */

@@ -8,17 +8,17 @@
 #include "arm.h"
 /*e: basic includes */
 
-/*s: function Percent */
+/*s: function [[Percent]] */
 #define Percent(num, max)	((max)?((num)*100)/(max):0)
-/*e: function Percent */
+/*e: function [[Percent]] */
 
 typedef struct Prof Prof;
 
-/*s: global tables */
+/*s: global [[tables]] */
 Inst *tables[] = { itab, 0 };
-/*e: global tables */
+/*e: global [[tables]] */
 
-/*s: function isum */
+/*s: function [[isum]] */
 void
 isum(void)
 {
@@ -108,9 +108,9 @@ isum(void)
     Bprint(bout, "%-8ud %3d%% Program total delay slots\n",
             nopcount, Percent(nopcount, total));
 }
-/*e: function isum */
+/*e: function [[isum]] */
 
-/*s: function tlbsum */
+/*s: function [[tlbsum]] */
 void
 tlbsum(void)
 {
@@ -125,13 +125,13 @@ tlbsum(void)
     Bprint(bout, "%-8d Tlb misses\n", tlb.miss);
     Bprint(bout, "%7d%% Hit rate\n", Percent(tlb.hit, tlb.hit+tlb.miss));
 }
-/*e: function tlbsum */
+/*e: function [[tlbsum]] */
 
-/*s: global stype */
+/*s: global [[stype]] */
 char *stype[] = { "Stack", "Text", "Data", "Bss" };
-/*e: global stype */
+/*e: global [[stype]] */
 
-/*s: function segsum */
+/*s: function [[segsum]] */
 void
 segsum(void)
 {
@@ -146,21 +146,21 @@ segsum(void)
                 stype[i], s->base, s->end, s->rss*BY2PG, s->refs);
     }
 }
-/*e: function segsum */
+/*e: function [[segsum]] */
 
-/*s: struct Prof */
+/*s: struct [[Prof]] */
 struct Prof
 {
     Symbol	s;
     long	count;
 };
-/*e: struct Prof */
-/*s: global aprof */
+/*e: struct [[Prof]] */
+/*s: global [[aprof]] */
 // can't use prof, conflict with libc.h prof()
 Prof	aprof[5000];
-/*e: global aprof */
+/*e: global [[aprof]] */
 
-/*s: function profcmp */
+/*s: function [[profcmp]] */
 int
 profcmp(void *va, void *vb)
 {
@@ -170,9 +170,9 @@ profcmp(void *va, void *vb)
     b = vb;
     return b->count - a->count;
 }
-/*e: function profcmp */
+/*e: function [[profcmp]] */
 
-/*s: function iprofile */
+/*s: function [[iprofile]] */
 void
 iprofile(void)
 {
@@ -219,5 +219,5 @@ iprofile(void)
     }
     memset(prof, 0, sizeof(Prof)*i);
 }
-/*e: function iprofile */
+/*e: function [[iprofile]] */
 /*e: machine/5i/stats.c */

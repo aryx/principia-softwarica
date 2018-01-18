@@ -8,12 +8,12 @@
 #include "arm.h"
 /*e: basic includes */
 
-/*s: function updateicache */
+/*s: function [[updateicache]] */
 void
 updateicache(uintptr addr)
 {
     USED(addr);
 }
-/*e: function updateicache */
+/*e: function [[updateicache]] */
 
 /*e: machine/5i/icache.c */

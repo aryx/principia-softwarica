@@ -10,7 +10,7 @@
 
 void*		page_of_vaddr(ulong);
 
-/*s: function ifetch */
+/*s: function [[ifetch]] */
 instruction
 ifetch(uintptr addr)
 {
@@ -32,9 +32,9 @@ ifetch(uintptr addr)
 
     return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
 }
-/*e: function ifetch */
+/*e: function [[ifetch]] */
 
-/*s: function getmem_4 */
+/*s: function [[getmem_4]] */
 ulong
 getmem_4(uintptr addr)
 {
@@ -46,9 +46,9 @@ getmem_4(uintptr addr)
         val = (val>>8) | (getmem_b(addr++)<<24);
     return val;
 }
-/*e: function getmem_4 */
+/*e: function [[getmem_4]] */
 
-/*s: function getmem_2 */
+/*s: function [[getmem_2]] */
 ulong
 getmem_2(uintptr addr)
 {
@@ -60,9 +60,9 @@ getmem_2(uintptr addr)
         val = (val>>8) | (getmem_b(addr++)<<16);
     return val;
 }
-/*e: function getmem_2 */
+/*e: function [[getmem_2]] */
 
-/*s: function getmem_w */
+/*s: function [[getmem_w]] */
 ulong
 getmem_w(uintptr addr)
 {
@@ -87,9 +87,9 @@ getmem_w(uintptr addr)
 
     return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
 }
-/*e: function getmem_w */
+/*e: function [[getmem_w]] */
 
-/*s: function getmem_h */
+/*s: function [[getmem_h]] */
 ushort
 getmem_h(uintptr addr)
 {
@@ -114,9 +114,9 @@ getmem_h(uintptr addr)
 
     return va[1]<<8 | va[0];
 }
-/*e: function getmem_h */
+/*e: function [[getmem_h]] */
 
-/*s: function getmem_b */
+/*s: function [[getmem_b]] */
 byte
 getmem_b(uintptr addr)
 {
@@ -131,17 +131,17 @@ getmem_b(uintptr addr)
     va += addr&(BY2PG-1);
     return va[0];
 }
-/*e: function getmem_b */
+/*e: function [[getmem_b]] */
 
-/*s: function getmem_v */
+/*s: function [[getmem_v]] */
 uvlong
 getmem_v(uintptr addr)
 {
     return ((uvlong)getmem_w(addr+4) << 32) | getmem_w(addr);
 }
-/*e: function getmem_v */
+/*e: function [[getmem_v]] */
 
-/*s: function putmem_h */
+/*s: function [[putmem_h]] */
 void
 putmem_h(uintptr addr, ushort data)
 {
@@ -163,9 +163,9 @@ putmem_h(uintptr addr, ushort data)
         brkchk(addr, Write);
     /*e: [[putmem_x()]] if membpt */
 }
-/*e: function putmem_h */
+/*e: function [[putmem_h]] */
 
-/*s: function putmem_w */
+/*s: function [[putmem_w]] */
 void
 putmem_w(uintptr addr, ulong data)
 {
@@ -189,9 +189,9 @@ putmem_w(uintptr addr, ulong data)
         brkchk(addr, Write);
     /*e: [[putmem_x()]] if membpt */
 }
-/*e: function putmem_w */
+/*e: function [[putmem_w]] */
 
-/*s: function putmem_b */
+/*s: function [[putmem_b]] */
 void
 putmem_b(uintptr addr, byte data)
 {
@@ -206,18 +206,18 @@ putmem_b(uintptr addr, byte data)
         brkchk(addr, Write);
     /*e: [[putmem_x()]] if membpt */
 }
-/*e: function putmem_b */
+/*e: function [[putmem_b]] */
 
-/*s: function putmem_v */
+/*s: function [[putmem_v]] */
 void
 putmem_v(uintptr addr, uvlong data)
 {
     putmem_w(addr, data);	/* two stages, to catch brkchk */
     putmem_w(addr+4, data>>32);
 }
-/*e: function putmem_v */
+/*e: function [[putmem_v]] */
 
-/*s: function memio */
+/*s: function [[memio]] */
 char *
 memio(char *mb, uintptr mem, int size, int dir)
 {
@@ -254,9 +254,9 @@ memio(char *mb, uintptr mem, int size, int dir)
     }
     return buf;
 }
-/*e: function memio */
+/*e: function [[memio]] */
 
-/*s: function dotlb */
+/*s: function [[dotlb]] */
 void
 dotlb(uintptr vaddr)
 {
@@ -274,9 +274,9 @@ dotlb(uintptr vaddr)
     tlb.miss++;
     tlb.tlbent[lnrand(tlb.tlbsize)] = vaddr;
 }
-/*e: function dotlb */
+/*e: function [[dotlb]] */
 
-/*s: function page_of_vaddr */
+/*s: function [[page_of_vaddr]] */
 void*
 page_of_vaddr(uintptr addr)
 {
@@ -343,5 +343,5 @@ page_of_vaddr(uintptr addr)
     longjmp(errjmp, 0);
     return nil;		/*to stop compiler whining*/
 }
-/*e: function page_of_vaddr */
+/*e: function [[page_of_vaddr]] */
 /*e: machine/5i/mem.c */
