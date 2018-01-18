@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <draw_private.h>
 
-/*s: function namedimage */
+/*s: function [[namedimage]] */
 Image*
 namedimage(Display *d, char *name)
 {
@@ -96,9 +96,9 @@ namedimage(Display *d, char *name)
     return i;
     /*e: [[namedimage()]] body */
 }
-/*e: function namedimage */
+/*e: function [[namedimage]] */
 
-/*s: function nameimage */
+/*s: function [[nameimage]] */
 error0
 nameimage(Image *i, char *name, bool in)
 {
@@ -124,6 +124,6 @@ nameimage(Image *i, char *name, bool in)
     return OK_1;
     /*e: [[nameimage()]] body */
 }
-/*e: function nameimage */
+/*e: function [[nameimage]] */
 
 /*e: lib_graphics/libdraw/naming.c */

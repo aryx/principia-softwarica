@@ -15,7 +15,7 @@ typedef struct	Fontchar Fontchar;
 #pragma incomplete Memlayer
 #pragma incomplete Fontchar
 
-/*s: struct Memdata */
+/*s: struct [[Memdata]] */
 /*
  * Memdata is allocated from main pool, but .data from the image pool.
  * Memdata is allocated separately to permit patching its pointer after
@@ -35,9 +35,9 @@ struct Memdata
     // Extra
     int		ref;		/* number of Memimages using this data */
 };
-/*e: struct Memdata */
+/*e: struct [[Memdata]] */
 
-/*s: enum fxxx */
+/*s: enum [[fxxx]] */
 enum {
     Frepl	= 1<<0,	/* is replicated */
 
@@ -47,9 +47,9 @@ enum {
     Fcmap	= 1<<4,	/* has cmap channel */
     Fbytes	= 1<<5,	/* has only 8-bit channels */
 };
-/*e: enum fxxx */
+/*e: enum [[fxxx]] */
 
-/*s: struct Memimage */
+/*s: struct [[Memimage]] */
 struct Memimage
 {
     Rectangle	r;		/* rectangle in data area, local coords */
@@ -85,9 +85,9 @@ struct Memimage
     Memcmap	*cmap;
     /*e: [[MemImage]] other fields */
 };
-/*e: struct Memimage */
+/*e: struct [[Memimage]] */
 
-/*s: struct Memcmap */
+/*s: struct [[Memcmap]] */
 struct Memcmap
 {
     // map<colorcmap8, (reg8, green8, blue8)>
@@ -95,9 +95,9 @@ struct Memcmap
     // map<(red4,green4,blue4), colorcmap8)
     byte	rgb2cmap[16*16*16];
 };
-/*e: struct Memcmap */
+/*e: struct [[Memcmap]] */
 
-/*s: struct Memsubfont */
+/*s: struct [[Memsubfont]] */
 /*
  * Subfonts
  *
@@ -121,9 +121,9 @@ struct	Memsubfont
     uchar	height;		/* height of bitmap */
     char	ascent;		/* top of bitmap to baseline */
 };
-/*e: struct Memsubfont */
+/*e: struct [[Memsubfont]] */
 
-/*s: enum _anon_ (include/memdraw.h)2 */
+/*s: enum [[_anon_ (include/memdraw.h)2]] */
 /*
  * Encapsulated parameters and information for sub-draw routines.
  */
@@ -136,9 +136,9 @@ enum Drawparams {
 
     Fullmask=1<<4, // fully opaque mask
 };
-/*e: enum _anon_ (include/memdraw.h)2 */
+/*e: enum [[_anon_ (include/memdraw.h)2]] */
 //TODO: internal to draw.c?
-/*s: struct Memdrawparam */
+/*s: struct [[Memdrawparam]] */
 struct	Memdrawparam
 {
     Memimage *dst;
@@ -165,7 +165,7 @@ struct	Memdrawparam
     rgba  mrgba;	/* mval in rgba */
     /*e: [[Memdrawparam]] other fields */
 };
-/*e: struct Memdrawparam */
+/*e: struct [[Memdrawparam]] */
 
 /*
  * Memimage management
@@ -247,10 +247,10 @@ extern void	_memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Poi
 extern void	_memfillpolysc(Memimage*, Point*, int, int, Memimage*, Point, int, int, int, int);
 
 // used by color.c and alphadraw.c now (and test files)
-/*s: function RGB2K */
+/*s: function [[RGB2K]] */
 /* perfect approximation to NTSC = .299r+.587g+.114b when 0 ≤ r,g,b < 256 */
 #define RGB2K(r,g,b)	((156763*(r)+307758*(g)+59769*(b))>>19)
-/*e: function RGB2K */
+/*e: function [[RGB2K]] */
 
 /*
  * Kernel interface

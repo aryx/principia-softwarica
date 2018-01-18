@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: function memlorigin */
+/*s: function [[memlorigin]] */
 /*
  * Place i so i->r.min = log, i->layer->screenr.min == scr.
 */
@@ -129,9 +129,9 @@ memlorigin(Memimage *i, Point log, Point scr)
     return 1;
     /*e: [[memlorigin()]] move window */
 }
-/*e: function memlorigin */
+/*e: function [[memlorigin]] */
 
-/*s: function memlnorefresh */
+/*s: function [[memlnorefresh]] */
 void
 memlnorefresh(Memimage *l, Rectangle r, void *v)
 {
@@ -139,5 +139,5 @@ memlnorefresh(Memimage *l, Rectangle r, void *v)
     USED(r.min.x);
     USED(v);
 }
-/*e: function memlnorefresh */
+/*e: function [[memlnorefresh]] */
 /*e: lib_graphics/libmemlayer/lorigin.c */

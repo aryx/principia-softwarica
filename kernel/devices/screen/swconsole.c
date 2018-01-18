@@ -30,35 +30,35 @@ enum {
     Tabstop     = 4,
 };
 
-/*s: global swconsole_screenlock */
+/*s: global [[swconsole_screenlock]] */
 Lock      swconsole_screenlock;
-/*e: global swconsole_screenlock */
+/*e: global [[swconsole_screenlock]] */
 
-/*s: global curpos */
+/*s: global [[curpos]] */
 Point     swconsole_curpos;
-/*e: global curpos */
+/*e: global [[curpos]] */
 
 /*s: global window bis */
 Rectangle swconsole_window;
 /*e: global window bis */
 
-/*s: global conscol */
+/*s: global [[conscol]] */
 Memimage *swconsole_conscol;
-/*e: global conscol */
+/*e: global [[conscol]] */
 
-/*s: global back2 */
+/*s: global [[back2]] */
 Memimage *swconsole_back;
-/*e: global back2 */
+/*e: global [[back2]] */
 
-/*s: global memdefont2 */
+/*s: global [[memdefont2]] */
 Memsubfont *swconsole_memdefont;
-/*e: global memdefont2 */
+/*e: global [[memdefont2]] */
 
 /*s: global swconsole h w */
 static int h, w;
 /*e: global swconsole h w */
 
-/*s: function swconsole_init */
+/*s: function [[swconsole_init]] */
 void swconsole_init(void)
 {
     Rectangle r;
@@ -75,9 +75,9 @@ void swconsole_init(void)
     swconsole_window = insetrect(r, 4);
     memimagedraw(gscreen, swconsole_window, memwhite, ZP, memopaque, ZP, S);
 }
-/*e: function swconsole_init */
+/*e: function [[swconsole_init]] */
 
-/*s: function swconsole_scroll */
+/*s: function [[swconsole_scroll]] */
 void
 swconsole_scroll(void)
 {
@@ -98,9 +98,9 @@ swconsole_scroll(void)
 
     swconsole_curpos.y -= o;
 }
-/*e: function swconsole_scroll */
+/*e: function [[swconsole_scroll]] */
 
-/*s: function swconsole_screenputc */
+/*s: function [[swconsole_screenputc]] */
 void
 swconsole_screenputc(char *buf)
 {
@@ -173,9 +173,9 @@ swconsole_screenputc(char *buf)
         break;
     }
 }
-/*e: function swconsole_screenputc */
+/*e: function [[swconsole_screenputc]] */
 
-/*s: function swconsole_screenputs */
+/*s: function [[swconsole_screenputs]] */
 void
 swconsole_screenputs(char *s, int n)
 {
@@ -206,6 +206,6 @@ swconsole_screenputs(char *s, int n)
     }
     unlock(&swconsole_screenlock);
 }
-/*e: function swconsole_screenputs */
+/*e: function [[swconsole_screenputs]] */
 
 /*e: kernel/devices/screen/swconsole.c */

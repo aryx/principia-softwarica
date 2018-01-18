@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <memdraw.h>
 
-/*s: function byteaddr */
+/*s: function [[byteaddr]] */
 byte*
 byteaddr(Memimage *i, Point p)
 {
@@ -29,9 +29,9 @@ byteaddr(Memimage *i, Point p)
     else
         return a + p.x * (i->depth/8);
 }
-/*e: function byteaddr */
+/*e: function [[byteaddr]] */
 
-/*s: function wordaddr */
+/*s: function [[wordaddr]] */
 /*
  * Wordaddr is deprecated.
  */
@@ -40,9 +40,9 @@ wordaddr(Memimage *i, Point p)
 {
     return (ulong*) ((uintptr)byteaddr(i, p) & ~(sizeof(ulong)-1));
 }
-/*e: function wordaddr */
+/*e: function [[wordaddr]] */
 
-/*s: function pixelbits */
+/*s: function [[pixelbits]] */
 ulong
 pixelbits(Memimage *i, Point pt)
 {
@@ -90,6 +90,6 @@ pixelbits(Memimage *i, Point pt)
     /*e: [[pixelbits()]] duplicate byte if depth less than 32 */
     return val;
 }
-/*e: function pixelbits */
+/*e: function [[pixelbits]] */
 
 /*e: lib_graphics/libmemdraw/resolution.c */

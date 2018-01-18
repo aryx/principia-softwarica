@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <draw.h>
 
-/*s: function drawerror */
+/*s: function [[drawerror]] */
 void
 drawerror(Display *d, char *s)
 {
@@ -17,6 +17,6 @@ drawerror(Display *d, char *s)
         exits(s); // extreme!
     }
 }
-/*e: function drawerror */
+/*e: function [[drawerror]] */
 
 /*e: lib_graphics/libdraw/error.c */

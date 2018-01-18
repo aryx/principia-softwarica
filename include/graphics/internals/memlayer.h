@@ -7,7 +7,7 @@
 typedef struct Memscreen Memscreen;
 typedef void (*Refreshfn)(Memimage*, Rectangle, void*);
 
-/*s: struct Memscreen */
+/*s: struct [[Memscreen]] */
 struct Memscreen
 {
     Memimage	*image;		/* upon which all layers are drawn */
@@ -20,9 +20,9 @@ struct Memscreen
     Memimage	*rearmost;	/* rearmost layer on screen */
     /*e: [[Memscreen]] stack windows fields */
 };
-/*e: struct Memscreen */
+/*e: struct [[Memscreen]] */
 
-/*s: struct Memlayer */
+/*s: struct [[Memlayer]] */
 struct Memlayer
 {
     Rectangle		screenr;	/* true position of layer on screen */
@@ -47,7 +47,7 @@ struct Memlayer
     bool		clear;	/* layer is fully visible */
     /*e: [[Memlayer]] other fields */
 };
-/*e: struct Memlayer */
+/*e: struct [[Memlayer]] */
 
 /*
  * These functions accept local coordinates

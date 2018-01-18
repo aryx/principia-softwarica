@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: function memlalloc */
+/*s: function [[memlalloc]] */
 Memimage*
 memlalloc(Memscreen *s, Rectangle screenr, Refreshfn refreshfn, void *refreshptr, rgba val)
 {
@@ -111,5 +111,5 @@ memlalloc(Memscreen *s, Rectangle screenr, Refreshfn refreshfn, void *refreshptr
     /*e: [[memlalloc()]] paint with requested color */
     return n;
 }
-/*e: function memlalloc */
+/*e: function [[memlalloc]] */
 /*e: lib_graphics/libmemlayer/lalloc.c */

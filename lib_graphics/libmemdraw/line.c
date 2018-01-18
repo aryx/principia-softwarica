@@ -5,16 +5,16 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: enum _anon_ (lib_graphics/libmemdraw/line.c) */
+/*s: enum [[_anon_]]([[(lib_graphics/libmemdraw/line.c)]]) */
 enum
 {
     Arrow1 = 8,
     Arrow2 = 10,
     Arrow3 = 3,
 };
-/*e: enum _anon_ (lib_graphics/libmemdraw/line.c) */
+/*e: enum [[_anon_]]([[(lib_graphics/libmemdraw/line.c)]]) */
 
-/*s: function membrush */
+/*s: function [[membrush]] */
 static Memimage*
 membrush(int radius)
 {
@@ -33,9 +33,9 @@ membrush(int radius)
 
     return brush;
 }
-/*e: function membrush */
+/*e: function [[membrush]] */
 
-/*s: function discend */
+/*s: function [[discend]] */
 static
 void
 discend(Point p, int radius, Memimage *dst, Memimage *src, Point dsrc, int op)
@@ -52,9 +52,9 @@ discend(Point p, int radius, Memimage *dst, Memimage *src, Point dsrc, int op)
         memdraw(dst, r, src, addpt(r.min, dsrc), disc, Pt(0,0), op);
     }
 }
-/*e: function discend */
+/*e: function [[discend]] */
 
-/*s: function arrowend */
+/*s: function [[arrowend]] */
 static
 void
 arrowend(Point tip, Point *pp, int end, int sin, int cos, int radius)
@@ -88,9 +88,9 @@ arrowend(Point tip, Point *pp, int end, int sin, int cos, int radius)
     pp->x = tip.x+(-(2*radius+1)*sin/2-x1*cos);		/* lower side of shaft */
     pp->y = tip.y+((2*radius+1)*cos/2-x1*sin);
 }
-/*e: function arrowend */
+/*e: function [[arrowend]] */
 
-/*s: function _memimageline */
+/*s: function [[_memimageline]] */
 void
 _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memimage *src, Point sp, Rectangle clipr, int op)
 {
@@ -262,9 +262,9 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
     return;
     /*e: [[_memimageline()]] when arbitrary lines */
 }
-/*e: function _memimageline */
+/*e: function [[_memimageline]] */
 
-/*s: function addbbox */
+/*s: function [[addbbox]] */
 /*
  * Simple-minded conservative code to compute bounding box of line.
  * Result is probably a little larger than it needs to be.
@@ -282,9 +282,9 @@ addbbox(Rectangle *r, Point p)
     if(r->max.y < p.y+1)
         r->max.y = p.y+1;
 }
-/*e: function addbbox */
+/*e: function [[addbbox]] */
 
-/*s: function memlineendsize */
+/*s: function [[memlineendsize]] */
 int
 memlineendsize(int end)
 {
@@ -298,9 +298,9 @@ memlineendsize(int end)
         x3 = (end>>23) & 0x1FF;
     return x3;
 }
-/*e: function memlineendsize */
+/*e: function [[memlineendsize]] */
 
-/*s: function lmax */
+/*s: function [[lmax]] */
 static
 int
 lmax(int a, int b)
@@ -309,9 +309,9 @@ lmax(int a, int b)
         return a;
     return b;
 }
-/*e: function lmax */
+/*e: function [[lmax]] */
 
-/*s: function memlinebbox */
+/*s: function [[memlinebbox]] */
 Rectangle
 memlinebbox(Point p0, Point p1, int end0, int end1, int radius)
 {
@@ -328,5 +328,5 @@ memlinebbox(Point p0, Point p1, int end0, int end1, int radius)
     addbbox(&r, r1.max);
     return r;
 }
-/*e: function memlinebbox */
+/*e: function [[memlinebbox]] */
 /*e: lib_graphics/libmemdraw/line.c */

@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <draw_private.h>
 
-/*s: function _setdrawop */
+/*s: function [[_setdrawop]] */
 void
 _setdrawop(Display *d, Drawop op)
 {
@@ -20,9 +20,9 @@ _setdrawop(Display *d, Drawop op)
         a[1] = op;
     }
 }
-/*e: function _setdrawop */
+/*e: function [[_setdrawop]] */
         
-/*s: function draw1 */
+/*s: function [[draw1]] */
 static void
 draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, Drawop op)
 {
@@ -55,41 +55,41 @@ draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, D
     BPLONG(a+37, p1->x);
     BPLONG(a+41, p1->y);
 }
-/*e: function draw1 */
+/*e: function [[draw1]] */
 
-/*s: function draw */
+/*s: function [[draw]] */
 void
 draw(Image *dst, Rectangle r, Image *src, Image *mask, Point p1)
 {
     draw1(dst, &r, src, &p1, mask, &p1, SoverD);
 }
-/*e: function draw */
+/*e: function [[draw]] */
 
-/*s: function drawop */
+/*s: function [[drawop]] */
 void
 drawop(Image *dst, Rectangle r, Image *src, Image *mask, Point p1, Drawop op)
 {
     draw1(dst, &r, src, &p1, mask, &p1, op);
 }
-/*e: function drawop */
+/*e: function [[drawop]] */
 
-/*s: function gendraw */
+/*s: function [[gendraw]] */
 void
 gendraw(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1)
 {
     draw1(dst, &r, src, &p0, mask, &p1, SoverD);
 }
-/*e: function gendraw */
+/*e: function [[gendraw]] */
 
-/*s: function gendrawop */
+/*s: function [[gendrawop]] */
 void
 gendrawop(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1, Drawop op)
 {
     draw1(dst, &r, src, &p0, mask, &p1, op);
 }
-/*e: function gendrawop */
+/*e: function [[gendrawop]] */
 
-/*s: function border */
+/*s: function [[border]] */
 void
 border(Image *im, Rectangle r, int i, Image *color, Point sp)
 {
@@ -111,5 +111,5 @@ border(Image *im, Rectangle r, int i, Image *color, Point sp)
     draw(im, Rect(r.max.x-i, r.min.y+i,   r.max.x, r.max.y-i),
         color, nil, Pt(sp.x+Dx(r)-i, sp.y+i));
 }
-/*e: function border */
+/*e: function [[border]] */
 /*e: lib_graphics/libdraw/draw.c */

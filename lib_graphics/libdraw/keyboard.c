@@ -5,7 +5,7 @@
 #include <thread.h>
 #include <keyboard.h>
 
-/*s: function _ioproc */
+/*s: function [[_ioproc]] */
 static
 void
 _ioproc(void *arg)
@@ -39,17 +39,17 @@ _ioproc(void *arg)
         n += m;
     }
 }
-/*e: function _ioproc */
+/*e: function [[_ioproc]] */
 
-/*s: function ctlkeyboard */
+/*s: function [[ctlkeyboard]] */
 int
 ctlkeyboard(Keyboardctl *kc, char *m)
 {
     return write(kc->ctlfd, m, strlen(m));
 }
-/*e: function ctlkeyboard */
+/*e: function [[ctlkeyboard]] */
 
-/*s: function initkeyboard */
+/*s: function [[initkeyboard]] */
 Keyboardctl*
 initkeyboard(char *file)
 {
@@ -101,10 +101,10 @@ initkeyboard(char *file)
 
     return kc;
 }
-/*e: function initkeyboard */
+/*e: function [[initkeyboard]] */
 
 
-/*s: function closekeyboard */
+/*s: function [[closekeyboard]] */
 void
 closekeyboard(Keyboardctl *kc)
 {
@@ -118,7 +118,7 @@ closekeyboard(Keyboardctl *kc)
     free(kc->c);
     free(kc);
 }
-/*e: function closekeyboard */
+/*e: function [[closekeyboard]] */
 
 
 /*e: lib_graphics/libdraw/keyboard.c */

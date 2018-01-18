@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: function memldelete */
+/*s: function [[memldelete]] */
 void
 memldelete(Memimage *i)
 {
@@ -41,9 +41,9 @@ memldelete(Memimage *i)
     free(l);
     freememimage(i);
 }
-/*e: function memldelete */
+/*e: function [[memldelete]] */
 
-/*s: function memlfree */
+/*s: function [[memlfree]] */
 /*
  * Just free the data structures, don't do graphics
  */
@@ -57,9 +57,9 @@ memlfree(Memimage *i)
     free(l);
     freememimage(i);
 }
-/*e: function memlfree */
+/*e: function [[memlfree]] */
 
-/*s: function _memlsetclear */
+/*s: function [[_memlsetclear]] */
 void
 _memlsetclear(Memscreen *s)
 {
@@ -77,5 +77,5 @@ _memlsetclear(Memscreen *s)
                 }
     }
 }
-/*e: function _memlsetclear */
+/*e: function [[_memlsetclear]] */
 /*e: lib_graphics/libmemlayer/ldelete.c */

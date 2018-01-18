@@ -15,23 +15,23 @@
 
 #include    "devdraw.h"
 
-/*s: global screenimage */
+/*s: global [[screenimage]] */
 Memimage    *screenimage;
-/*e: global screenimage */
-/*s: global screendimage */
+/*e: global [[screenimage]] */
+/*s: global [[screendimage]] */
 static  DImage* screendimage;
-/*e: global screendimage */
+/*e: global [[screendimage]] */
 
-/*s: global screenname */
+/*s: global [[screenname]] */
 char    screenname[40];
-/*e: global screenname */
-/*s: global screennameid */
+/*e: global [[screenname]] */
+/*s: global [[screennameid]] */
 // gensym
 static  int screennameid;
-/*e: global screennameid */
+/*e: global [[screennameid]] */
 
 
-/*s: function makescreenimage */
+/*s: function [[makescreenimage]] */
 static DImage*
 makescreenimage(void)
 {
@@ -95,9 +95,9 @@ makescreenimage(void)
 
     return di;
 }
-/*e: function makescreenimage */
+/*e: function [[makescreenimage]] */
 
-/*s: function initscreenimage */
+/*s: function [[initscreenimage]] */
 error0
 initscreenimage(void)
 {
@@ -119,9 +119,9 @@ initscreenimage(void)
     /*e: [[initscreenimage()]] other initializations */
     return OK_1;
 }
-/*e: function initscreenimage */
+/*e: function [[initscreenimage]] */
 
-/*s: function deletescreenimage */
+/*s: function [[deletescreenimage]] */
 void
 deletescreenimage(void)
 {
@@ -137,9 +137,9 @@ deletescreenimage(void)
     }
     dunlock();
 }
-/*e: function deletescreenimage */
+/*e: function [[deletescreenimage]] */
 
-/*s: function resetscreenimage */
+/*s: function [[resetscreenimage]] */
 void
 resetscreenimage(void)
 {
@@ -147,6 +147,6 @@ resetscreenimage(void)
     initscreenimage();
     dunlock();
 }
-/*e: function resetscreenimage */
+/*e: function [[resetscreenimage]] */
 
 /*e: kernel/devices/screen/drawinit.c */

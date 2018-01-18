@@ -8,7 +8,7 @@
 // of defontdata. Do not add functions in this file with complex dependencies,
 // otherwise they will be linked also with the kernel.
 
-/*s: global defontdata */
+/*s: global [[defontdata]] */
 /*
  * lucm/latin1.9, in uncompressed form
  */
@@ -389,13 +389,13 @@ defontdata[] =
 0x02,0x0f,0x00,0x09,0xee,0x08,0x03,0x0f,0x00,0x09,0xf7,0x08,0x02,0x0f,0x00,0x09,
 0x00,0x09,0x00,0x00,0x00,0x00,
 };
-/*e: global defontdata */
+/*e: global [[defontdata]] */
 
-/*s: global sizeofdefont */
+/*s: global [[sizeofdefont]] */
 int	sizeofdefont = sizeof defontdata;
-/*e: global sizeofdefont */
+/*e: global [[sizeofdefont]] */
 
-/*s: function _unpackinfo */
+/*s: function [[_unpackinfo]] */
 void
 _unpackinfo(Fontchar *fc, byte *p, int n)
 {
@@ -413,6 +413,6 @@ _unpackinfo(Fontchar *fc, byte *p, int n)
         p += 6;
     }
 }
-/*e: function _unpackinfo */
+/*e: function [[_unpackinfo]] */
 
 /*e: lib_graphics/libdraw/defont.c */

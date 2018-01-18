@@ -5,7 +5,7 @@
 #include <draw_private.h>
 #include <font.h>
 
-/*s: function skip */
+/*s: function [[skip]] */
 static char*
 skip(char *s)
 {
@@ -13,10 +13,10 @@ skip(char *s)
         s++;
     return s;
 }
-/*e: function skip */
+/*e: function [[skip]] */
 
 
-/*s: function openfont */
+/*s: function [[openfont]] */
 Font*
 openfont(Display *d, char *name)
 {
@@ -64,9 +64,9 @@ openfont(Display *d, char *name)
     free(buf);
     return fnt;
 }
-/*e: function openfont */
+/*e: function [[openfont]] */
 
-/*s: function buildfont */
+/*s: function [[buildfont]] */
 Font*
 buildfont(Display *d, char *buf, char *name)
 {
@@ -206,9 +206,9 @@ buildfont(Display *d, char *buf, char *name)
     } while(*s);
     return fnt;
 }
-/*e: function buildfont */
+/*e: function [[buildfont]] */
 
-/*s: function freefont */
+/*s: function [[freefont]] */
 void
 freefont(Font *f)
 {
@@ -245,5 +245,5 @@ freefont(Font *f)
     free(f->name);
     free(f);
 }
-/*e: function freefont */
+/*e: function [[freefont]] */
 /*e: lib_graphics/libdraw/font.c */

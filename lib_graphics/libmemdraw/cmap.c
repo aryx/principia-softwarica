@@ -7,7 +7,7 @@
 #include <draw.h>
 #include <memdraw.h>
 
-/*s: global def */
+/*s: global [[def]] */
 static Memcmap def = {
 /* cmap2rgb */ {
     0x00,0x00,0x00,0x00,0x00,0x44,0x00,0x00,0x88,0x00,0x00,0xcc,0x00,0x44,0x00,0x00,
@@ -318,11 +318,11 @@ static Memcmap def = {
     0xfc,0xfc,0xfc,0xfd,0xfd,0xfd,0xfd,0xfd,0xed,0xfe,0xfe,0xfe,0xfe,0xee,0xff,0xff,
 }
 };
-/*e: global def */
-/*s: global memdefcmap */
+/*e: global [[def]] */
+/*s: global [[memdefcmap]] */
 Memcmap *memdefcmap = &def;
-/*e: global memdefcmap */
-/*s: function _memmkcmap */
+/*e: global [[memdefcmap]] */
+/*s: function [[_memmkcmap]] */
 void _memmkcmap(void){}
-/*e: function _memmkcmap */
+/*e: function [[_memmkcmap]] */
 /*e: lib_graphics/libmemdraw/cmap.c */

@@ -4,16 +4,16 @@
 #include <draw.h>
 #include <memdraw.h>
 
-/*s: macro DBG1 */
+/*s: macro [[DBG1]] */
 #define DBG1 if(0) print
-/*e: macro DBG1 */
-/*s: macro DBG */
+/*e: macro [[DBG1]] */
+/*s: macro [[DBG]] */
 #define DBG if(0) print
-/*e: macro DBG */
+/*e: macro [[DBG]] */
 
-/*s: global drawdebug */
+/*s: global [[drawdebug]] */
 bool drawdebug;
-/*e: global drawdebug */
+/*e: global [[drawdebug]] */
 
 typedef int Subdraw(Memdrawparam*);
 static Subdraw chardraw, memoptdraw;
@@ -26,7 +26,7 @@ ulong rgbatoimg(Memimage*, ulong);
 // in resolution.c
 ulong pixelbits(Memimage*, Point);
 
-/*s: function memimagedraw */
+/*s: function [[memimagedraw]] */
 void
 memimagedraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
 {
@@ -150,9 +150,9 @@ memimagedraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask
     alphadraw(&par);
     DBG("alphadraw handled\n");
 }
-/*e: function memimagedraw */
+/*e: function [[memimagedraw]] */
 
-/*s: function drawclip */
+/*s: function [[drawclip]] */
 /*
  * Clip the destination rectangle further based on the properties of the 
  * source and mask rectangles.  Once the destination rectangle is properly
@@ -287,11 +287,11 @@ drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, 
 
     return true;
 }
-/*e: function drawclip */
+/*e: function [[drawclip]] */
 
 
 
-/*s: function memsets */
+/*s: function [[memsets]] */
 static void
 memsets(void *vp, ushort val, int n)
 {
@@ -302,9 +302,9 @@ memsets(void *vp, ushort val, int n)
     while(p<ep)
         *p++ = val;
 }
-/*e: function memsets */
+/*e: function [[memsets]] */
 
-/*s: function memsetl */
+/*s: function [[memsetl]] */
 void
 memsetl(void *vp, ulong val, int n)
 {
@@ -315,9 +315,9 @@ memsetl(void *vp, ulong val, int n)
     while(p < ep)
         *p++ = val;
 }
-/*e: function memsetl */
+/*e: function [[memsetl]] */
 
-/*s: function memset24 */
+/*s: function [[memset24]] */
 void
 memset24(void *vp, ulong val, int n)
 {
@@ -336,9 +336,9 @@ memset24(void *vp, ulong val, int n)
         *p++ = c;
     }
 }
-/*e: function memset24 */
+/*e: function [[memset24]] */
 
-/*s: function memoptdraw */
+/*s: function [[memoptdraw]] */
 static bool
 memoptdraw(Memdrawparam *par)
 {
@@ -619,9 +619,9 @@ memoptdraw(Memdrawparam *par)
     /*e: [[memoptdraw()]] if 1 bit mask, src, and dest */
     return false;	
 }
-/*e: function memoptdraw */
+/*e: function [[memoptdraw]] */
 
-/*s: function chardraw */
+/*s: function [[chardraw]] */
 /*
  * Boolean character drawing.
  * Solid opaque color through a 1-bit greyscale mask.
@@ -765,6 +765,6 @@ chardraw(Memdrawparam *par)
     DBG1("\n");	
     return 1;	
 }
-/*e: function chardraw */
+/*e: function [[chardraw]] */
 
 /*e: lib_graphics/libmemdraw/draw.c */

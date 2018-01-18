@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <draw_private.h>
 
-/*s: function readimage */
+/*s: function [[readimage]] */
 Image*
 readimage(Display *d, fdt fd, bool dolock)
 {
@@ -183,7 +183,7 @@ readimage(Display *d, fdt fd, bool dolock)
     free(tmp);
     return i;
 }
-/*e: function readimage */
+/*e: function [[readimage]] */
 
 // writeimage() is in compressed.c. It does not support the 
 // regular (uncompressed) format.

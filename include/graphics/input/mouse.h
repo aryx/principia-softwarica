@@ -6,15 +6,15 @@ typedef struct	Cursor Cursor;
 typedef struct	Menu Menu;
 typedef struct 	Mousectl Mousectl;
 
-/*s: enum Click */
+/*s: enum [[Click]] */
 enum Click {
     CLICK_LEFT = 1,
     CLICK_MIDDLE = 2,
     CLICK_RIGHT = 4,
 };
-/*e: enum Click */
+/*e: enum [[Click]] */
 
-/*s: struct Mouse */
+/*s: struct [[Mouse]] */
 struct	Mouse
 {
     Point	xy;
@@ -23,9 +23,9 @@ struct	Mouse
 
     ulong	msec;
 };
-/*e: struct Mouse */
+/*e: struct [[Mouse]] */
 
-/*s: struct Mousectl */
+/*s: struct [[Mousectl]] */
 struct Mousectl
 {
     Mouse;
@@ -53,10 +53,10 @@ struct Mousectl
     fdt		cfd;		/* to cursor file */
     /*e: [[Mousectl]] cursor field */
 };
-/*e: struct Mousectl */
+/*e: struct [[Mousectl]] */
 
 //TODO: mv in menu.h?
-/*s: struct Menu */
+/*s: struct [[Menu]] */
 struct Menu
 {
     char	**item;
@@ -66,7 +66,7 @@ struct Menu
     int	lasthit;
     /*e: [[Menu]] other fields */
 };
-/*e: struct Menu */
+/*e: struct [[Menu]] */
 
 /*
  * Mouse

@@ -6,13 +6,13 @@
 #include <window.h>
 #include <font.h>
 
-/*s: global deffontname */
+/*s: global [[deffontname]] */
 static char deffontname[] = "*default*";
-/*e: global deffontname */
+/*e: global [[deffontname]] */
 
 static void _closedisplay(Display*, int);
 
-/*s: function drawshutdown */
+/*s: function [[drawshutdown]] */
 /* note handler */
 static void
 drawshutdown(void)
@@ -25,9 +25,9 @@ drawshutdown(void)
         _closedisplay(d, true);
     }
 }
-/*e: function drawshutdown */
+/*e: function [[drawshutdown]] */
 
-/*s: function geninitdraw */
+/*s: function [[geninitdraw]] */
 errorneg1
 geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *windir, int ref)
 {
@@ -134,9 +134,9 @@ geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *wind
 
     return OK_1;
 }
-/*e: function geninitdraw */
+/*e: function [[geninitdraw]] */
 
-/*s: function initdraw */
+/*s: function [[initdraw]] */
 errorneg1
 initdraw(Errorfn error, char *fontname , char *label)
 {
@@ -147,13 +147,13 @@ initdraw(Errorfn error, char *fontname , char *label)
     }
     return geninitdraw("/dev", error, fontname, label, "/dev", Refnone);
 }
-/*e: function initdraw */
+/*e: function [[initdraw]] */
 
-/*s: constant NINFO */
+/*s: constant [[NINFO]] */
 #define	NINFO	12*12
-/*e: constant NINFO */
+/*e: constant [[NINFO]] */
 
-/*s: function initdisplay */
+/*s: function [[initdisplay]] */
 Display*
 initdisplay(char *dev, char *win, Errorfn error)
 {
@@ -326,9 +326,9 @@ initdisplay(char *dev, char *win, Errorfn error)
 
     return disp;
 }
-/*e: function initdisplay */
+/*e: function [[initdisplay]] */
 
-/*s: function closedisplay */
+/*s: function [[closedisplay]] */
 /*
  * Call with d unlocked.
  * Note that disp->defaultfont and defaultsubfont are not freed here.
@@ -338,9 +338,9 @@ closedisplay(Display *disp)
 {
     _closedisplay(disp, false);
 }
-/*e: function closedisplay */
+/*e: function [[closedisplay]] */
 
-/*s: function _closedisplay */
+/*s: function [[_closedisplay]] */
 static void
 _closedisplay(Display *disp, bool isshutdown)
 {
@@ -386,6 +386,6 @@ _closedisplay(Display *disp, bool isshutdown)
     qunlock(&disp->qlock);
     free(disp);
 }
-/*e: function _closedisplay */
+/*e: function [[_closedisplay]] */
 
 /*e: lib_graphics/libdraw/init.c */

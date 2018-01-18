@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: function lhideop */
+/*s: function [[lhideop]] */
 /*
  * Hide puts that portion of screenr now on the screen into the window's
  * save area.
@@ -31,9 +31,9 @@ lhideop(Memimage *src, Rectangle screenr, Rectangle clipr, void *etc, bool insav
         memdraw(l->save, r, src, screenr.min, nil, screenr.min, S);
     }
 }
-/*e: function lhideop */
+/*e: function [[lhideop]] */
 
-/*s: function memlhide */
+/*s: function [[memlhide]] */
 void
 memlhide(Memimage *i, Rectangle screenr)
 {
@@ -44,9 +44,9 @@ memlhide(Memimage *i, Rectangle screenr)
 
     _memlayerop(lhideop, i, screenr, screenr, i->layer);
 }
-/*e: function memlhide */
+/*e: function [[memlhide]] */
 
-/*s: function lexposeop */
+/*s: function [[lexposeop]] */
 static
 void
 lexposeop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool insave)
@@ -65,9 +65,9 @@ lexposeop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool ins
         l->refreshfn(dst, r, l->refreshptr);
     /*e: [[lexposeop()]] if not save but refresh method */
 }
-/*e: function lexposeop */
+/*e: function [[lexposeop]] */
 
-/*s: function memlexpose */
+/*s: function [[memlexpose]] */
 void
 memlexpose(Memimage *i, Rectangle screenr)
 {
@@ -75,5 +75,5 @@ memlexpose(Memimage *i, Rectangle screenr)
         return;
     _memlayerop(lexposeop, i, screenr, screenr, i->layer);
 }
-/*e: function memlexpose */
+/*e: function [[memlexpose]] */
 /*e: lib_graphics/libmemlayer/lhide.c */

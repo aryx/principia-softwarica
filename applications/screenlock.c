@@ -8,28 +8,28 @@
 #include <thread.h>
 #include <auth.h>
 
-/*s: global pic */
+/*s: global [[pic]] */
 static char pic[] = "/lib/bunny.bit";
-/*e: global pic */
+/*e: global [[pic]] */
 
-/*s: global vgactl */
+/*s: global [[vgactl]] */
 static int vgactl;
-/*e: global vgactl */
-/*s: global debug */
+/*e: global [[vgactl]] */
+/*s: global [[debug]] */
 static int debug;
-/*e: global debug */
-/*s: global doblank */
+/*e: global [[debug]] */
+/*s: global [[doblank]] */
 static int doblank;
-/*e: global doblank */
-/*s: global chatty */
+/*e: global [[doblank]] */
+/*s: global [[chatty]] */
 static int chatty = 0;
-/*e: global chatty */
+/*e: global [[chatty]] */
 
-/*s: global user */
+/*s: global [[user]] */
 static char user[256];
-/*e: global user */
+/*e: global [[user]] */
 
-/*s: function blankscreen */
+/*s: function [[blankscreen]] */
 static void
 blankscreen(bool blank)
 {
@@ -39,7 +39,7 @@ blankscreen(bool blank)
     if(fprint(vgactl, blank? "blank": "unblank") < 0)
         fprint(2, "blankscreen: can't blank: %r\n");
 }
-/*e: function blankscreen */
+/*e: function [[blankscreen]] */
 
 /*s: function error (windows/apps/screenlock.c) */
 static void
@@ -70,7 +70,7 @@ usage(void)
 /*e: function usage (windows/apps/screenlock.c) */
 
 
-/*s: function readfile */
+/*s: function [[readfile]] */
 static void
 readfile(char *name, char *buf, int nbuf, int addnul)
 {
@@ -86,9 +86,9 @@ readfile(char *name, char *buf, int nbuf, int addnul)
     if(addnul)
         buf[nbuf] = '\0';
 }
-/*e: function readfile */
+/*e: function [[readfile]] */
 
-/*s: function readline */
+/*s: function [[readline]] */
 static void
 readline(char *buf, int nbuf)
 {
@@ -110,9 +110,9 @@ readline(char *buf, int nbuf)
             buf[i++] = c;
     buf[i] = '\0';
 }
-/*e: function readline */
+/*e: function [[readline]] */
 
-/*s: function checkpassword */
+/*s: function [[checkpassword]] */
 static void
 checkpassword(void)
 {
@@ -169,9 +169,9 @@ checkpassword(void)
     memset(buf, 0, sizeof buf);
     blankscreen(0);
 }
-/*e: function checkpassword */
+/*e: function [[checkpassword]] */
 
-/*s: function blanker */
+/*s: function [[blanker]] */
 static void
 blanker(void *)
 {
@@ -188,9 +188,9 @@ blanker(void *)
         sleep(1000);
     }
 }
-/*e: function blanker */
+/*e: function [[blanker]] */
 
-/*s: function grabmouse */
+/*s: function [[grabmouse]] */
 static void
 grabmouse(void*)
 {
@@ -218,9 +218,9 @@ grabmouse(void*)
         }
     }
 }
-/*e: function grabmouse */
+/*e: function [[grabmouse]] */
 
-/*s: function screenstring */
+/*s: function [[screenstring]] */
 /* lay down text at `p' */
 static void
 screenstring(Point p, char *s)
@@ -228,9 +228,9 @@ screenstring(Point p, char *s)
     string(view, p, view->display->white, ZP, font, s);
     flushimage(display, 1);
 }
-/*e: function screenstring */
+/*e: function [[screenstring]] */
 
-/*s: function lockscreen */
+/*s: function [[lockscreen]] */
 static void
 lockscreen(void)
 {
@@ -296,7 +296,7 @@ lockscreen(void)
         /* leave it open */
     }
 }
-/*e: function lockscreen */
+/*e: function [[lockscreen]] */
 
 /*s: function threadmain (windows/apps/screenlock.c) */
 void

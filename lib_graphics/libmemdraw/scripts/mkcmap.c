@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <memdraw.h>
 
-/*s: function mkcmap */
+/*s: function [[mkcmap]] */
 /*
 struct Memcmap
 {
@@ -36,9 +36,9 @@ mkcmap(void)
         def.rgb2cmap[r*16*16+g*16+b] = rgb2cmap(r*0x11, g*0x11, b*0x11);
     return &def;
 }
-/*e: function mkcmap */
+/*e: function [[mkcmap]] */
 
-/*s: function main (lib_graphics/libmemdraw/scripts/mkcmap.c) */
+/*s: function [[main]]([[(lib_graphics/libmemdraw/scripts/mkcmap.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -76,5 +76,5 @@ main(int argc, char **argv)
     print("void _memmkcmap(void){}\n");
     exits(0);
 }
-/*e: function main (lib_graphics/libmemdraw/scripts/mkcmap.c) */
+/*e: function [[main]]([[(lib_graphics/libmemdraw/scripts/mkcmap.c)]]) */
 /*e: lib_graphics/libmemdraw/scripts/mkcmap.c */

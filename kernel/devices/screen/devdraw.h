@@ -13,12 +13,12 @@ typedef struct Refx Refx;
 /*s: constant NHASH bis */
 #define NHASH       (1<<5)
 /*e: constant NHASH bis */
-/*s: constant HASHMASK */
+/*s: constant [[HASHMASK]] */
 #define HASHMASK    (NHASH-1)
-/*e: constant HASHMASK */
+/*e: constant [[HASHMASK]] */
 
 
-/*s: struct KDraw */
+/*s: struct [[KDraw]] */
 struct KDraw
 {
     // growing_array<option<Client>> (size = KDraw.nclient)
@@ -44,9 +44,9 @@ struct KDraw
     ulong   blanktime;  /* time of last operation */
     /*e: [[KDraw]] other fields */
 };
-/*e: struct KDraw */
+/*e: struct [[KDraw]] */
 
-/*s: struct Client */
+/*s: struct [[Client]] */
 struct Client
 {
     int     clientid; // /dev/draw/x/
@@ -83,10 +83,10 @@ struct Client
     /*e: [[Client]] concurrency fields */
     Ref     r;
 };
-/*e: struct Client */
+/*e: struct [[Client]] */
 
 
-/*s: struct DName */
+/*s: struct [[DName]] */
 struct DName
 {
     // key
@@ -99,10 +99,10 @@ struct DName
     int     vers;
     /*e: [[DName]] other fields */
 };
-/*e: struct DName */
+/*e: struct [[DName]] */
 
 
-/*s: struct DImage */
+/*s: struct [[DImage]] */
 /*
  * Reference counts in DImages:
  *  one per open by original client
@@ -139,9 +139,9 @@ struct DImage
     /*e: [[DImage]] extra fields */
     int     ref;
 };
-/*e: struct DImage */
+/*e: struct [[DImage]] */
 
-/*s: struct FChar */
+/*s: struct [[FChar]] */
 struct FChar
 {
     // Rectangle in Font.cacheimage
@@ -153,11 +153,11 @@ struct FChar
     schar   left;   /* offset of baseline */
     uchar   width;  /* width of baseline */
 };
-/*e: struct FChar */
+/*e: struct [[FChar]] */
 
 
 
-/*s: struct CScreen */
+/*s: struct [[CScreen]] */
 struct CScreen
 {
     // ref_shared<DScreen>
@@ -165,9 +165,9 @@ struct CScreen
 
     CScreen*    next;
 };
-/*e: struct CScreen */
+/*e: struct [[CScreen]] */
 
-/*s: struct DScreen */
+/*s: struct [[DScreen]] */
 struct DScreen
 {
     int     id;
@@ -191,25 +191,25 @@ struct DScreen
     DScreen*    next;
     /*e: [[DScreen]] extra fields */
 };
-/*e: struct DScreen */
+/*e: struct [[DScreen]] */
 
 
-/*s: struct Refresh */
+/*s: struct [[Refresh]] */
 struct Refresh
 {
     DImage*     dimage;
     Rectangle   r;
     Refresh*    next;
 };
-/*e: struct Refresh */
+/*e: struct [[Refresh]] */
 
-/*s: struct Refx */
+/*s: struct [[Refx]] */
 struct Refx
 {
     Client*     client;
     DImage*     dimage;
 };
-/*e: struct Refx */
+/*e: struct [[Refx]] */
 
 // drawerror.c
 extern char Enodrawimage[];

@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <draw.h>
 
-/*s: function Pt */
+/*s: function [[Pt]] */
 Point
 Pt(int x, int y)
 {
@@ -13,9 +13,9 @@ Pt(int x, int y)
     p.y = y;
     return p;
 }
-/*e: function Pt */
+/*e: function [[Pt]] */
 
-/*s: function Rect */
+/*s: function [[Rect]] */
 Rectangle
 Rect(int ax, int ay, int bx, int by)
 {
@@ -27,9 +27,9 @@ Rect(int ax, int ay, int bx, int by)
     r.max.y = by;
     return r;
 }
-/*e: function Rect */
+/*e: function [[Rect]] */
 
-/*s: function Rpt */
+/*s: function [[Rpt]] */
 Rectangle
 Rpt(Point min, Point max)
 {
@@ -39,9 +39,9 @@ Rpt(Point min, Point max)
     r.max = max;
     return r;
 }
-/*e: function Rpt */
+/*e: function [[Rpt]] */
 
-/*s: function addpt */
+/*s: function [[addpt]] */
 Point
 addpt(Point a, Point b)
 {
@@ -49,9 +49,9 @@ addpt(Point a, Point b)
     a.y += b.y;
     return a;
 }
-/*e: function addpt */
+/*e: function [[addpt]] */
 
-/*s: function subpt */
+/*s: function [[subpt]] */
 Point
 subpt(Point a, Point b)
 {
@@ -59,9 +59,9 @@ subpt(Point a, Point b)
     a.y -= b.y;
     return a;
 }
-/*e: function subpt */
+/*e: function [[subpt]] */
 
-/*s: function insetrect */
+/*s: function [[insetrect]] */
 Rectangle
 insetrect(Rectangle r, int n)
 {
@@ -71,9 +71,9 @@ insetrect(Rectangle r, int n)
     r.max.y -= n;
     return r;
 }
-/*e: function insetrect */
+/*e: function [[insetrect]] */
 
-/*s: function divpt */
+/*s: function [[divpt]] */
 Point
 divpt(Point a, int b)
 {
@@ -81,9 +81,9 @@ divpt(Point a, int b)
     a.y /= b;
     return a;
 }
-/*e: function divpt */
+/*e: function [[divpt]] */
 
-/*s: function mulpt */
+/*s: function [[mulpt]] */
 Point
 mulpt(Point a, int b)
 {
@@ -91,9 +91,9 @@ mulpt(Point a, int b)
     a.y *= b;
     return a;
 }
-/*e: function mulpt */
+/*e: function [[mulpt]] */
 
-/*s: function rectsubpt */
+/*s: function [[rectsubpt]] */
 Rectangle
 rectsubpt(Rectangle r, Point p)
 {
@@ -103,9 +103,9 @@ rectsubpt(Rectangle r, Point p)
     r.max.y -= p.y;
     return r;
 }
-/*e: function rectsubpt */
+/*e: function [[rectsubpt]] */
 
-/*s: function rectaddpt */
+/*s: function [[rectaddpt]] */
 Rectangle
 rectaddpt(Rectangle r, Point p)
 {
@@ -115,53 +115,53 @@ rectaddpt(Rectangle r, Point p)
     r.max.y += p.y;
     return r;
 }
-/*e: function rectaddpt */
+/*e: function [[rectaddpt]] */
 
-/*s: function eqpt */
+/*s: function [[eqpt]] */
 bool
 eqpt(Point p, Point q)
 {
     return p.x==q.x && p.y==q.y;
 }
-/*e: function eqpt */
+/*e: function [[eqpt]] */
 
-/*s: function eqrect */
+/*s: function [[eqrect]] */
 bool
 eqrect(Rectangle r, Rectangle s)
 {
     return r.min.x==s.min.x && r.max.x==s.max.x &&
            r.min.y==s.min.y && r.max.y==s.max.y;
 }
-/*e: function eqrect */
+/*e: function [[eqrect]] */
 
-/*s: function rectXrect */
+/*s: function [[rectXrect]] */
 bool
 rectXrect(Rectangle r, Rectangle s)
 {
     return r.min.x < s.max.x && s.min.x < r.max.x &&
            r.min.y < s.max.y && s.min.y < r.max.y;
 }
-/*e: function rectXrect */
+/*e: function [[rectXrect]] */
 
-/*s: function rectinrect */
+/*s: function [[rectinrect]] */
 bool
 rectinrect(Rectangle r, Rectangle s)
 {
     return s.min.x <= r.min.x && r.max.x <= s.max.x && 
            s.min.y <= r.min.y && r.max.y <= s.max.y;
 }
-/*e: function rectinrect */
+/*e: function [[rectinrect]] */
 
-/*s: function ptinrect */
+/*s: function [[ptinrect]] */
 bool
 ptinrect(Point p, Rectangle r)
 {
     return p.x >= r.min.x && p.x < r.max.x &&
            p.y >= r.min.y && p.y < r.max.y;
 }
-/*e: function ptinrect */
+/*e: function [[ptinrect]] */
 
-/*s: function canonrect */
+/*s: function [[canonrect]] */
 Rectangle
 canonrect(Rectangle r)
 {
@@ -178,9 +178,9 @@ canonrect(Rectangle r)
     }
     return r;
 }
-/*e: function canonrect */
+/*e: function [[canonrect]] */
 
-/*s: function combinerect */
+/*s: function [[combinerect]] */
 void
 combinerect(Rectangle *r1, Rectangle r2)
 {
@@ -193,13 +193,13 @@ combinerect(Rectangle *r1, Rectangle r2)
     if(r1->max.y < r2.max.y)
         r1->max.y = r2.max.y;
 }
-/*e: function combinerect */
+/*e: function [[combinerect]] */
 
 
-/*s: global ZP */
+/*s: global [[ZP]] */
 Point	ZP;
-/*e: global ZP */
-/*s: global ZR */
+/*e: global [[ZP]] */
+/*s: global [[ZR]] */
 Rectangle ZR;
-/*e: global ZR */
+/*e: global [[ZR]] */
 /*e: lib_graphics/libdraw/arith.c */

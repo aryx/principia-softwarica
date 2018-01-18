@@ -4,15 +4,15 @@
 #include <draw.h>
 #include <draw_private.h>
 
-/*s: function line */
+/*s: function [[line]] */
 void
 line(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src, Point sp)
 {
     lineop(dst, p0, p1, end0, end1, radius, src, sp, SoverD);
 }
-/*e: function line */
+/*e: function [[line]] */
 
-/*s: function lineop */
+/*s: function [[lineop]] */
 void
 lineop(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
 {
@@ -41,5 +41,5 @@ lineop(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *sr
     BPLONG(a+37, sp.x);
     BPLONG(a+41, sp.y);
 }
-/*e: function lineop */
+/*e: function [[lineop]] */
 /*e: lib_graphics/libdraw/line.c */

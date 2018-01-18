@@ -5,12 +5,12 @@
 #include <window.h>
 #include <draw_private.h>
 
-/*s: global screenid */
+/*s: global [[screenid]] */
 static int	screenid;
-/*e: global screenid */
+/*e: global [[screenid]] */
 
 
-/*s: function allocscreen */
+/*s: function [[allocscreen]] */
 Screen*
 allocscreen(Image *image, Image *fill, bool public)
 {
@@ -62,9 +62,9 @@ allocscreen(Image *image, Image *fill, bool public)
     /*e: [[allocscreen()]] sanity check screen image */
     return s;
 }
-/*e: function allocscreen */
+/*e: function [[allocscreen]] */
 
-/*s: function publicscreen */
+/*s: function [[publicscreen]] */
 Screen*
 publicscreen(Display *d, int id, ulong chan)
 {
@@ -102,9 +102,9 @@ publicscreen(Display *d, int id, ulong chan)
 
     return s;
 }
-/*e: function publicscreen */
+/*e: function [[publicscreen]] */
 
-/*s: function freescreen */
+/*s: function [[freescreen]] */
 errorneg1
 freescreen(Screen *s)
 {
@@ -135,6 +135,6 @@ freescreen(Screen *s)
     free(s);
     return OK_1;
 }
-/*e: function freescreen */
+/*e: function [[freescreen]] */
 
 /*e: lib_graphics/libdraw/desktop.c */

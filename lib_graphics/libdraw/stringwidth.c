@@ -5,11 +5,11 @@
 #include <draw_private.h>
 #include <font.h>
 
-/*s: enum _anon_ (lib_graphics/libdraw/stringwidth.c) */
+/*s: enum [[_anon_]]([[(lib_graphics/libdraw/stringwidth.c)]]) */
 enum { Max = 64 };
-/*e: enum _anon_ (lib_graphics/libdraw/stringwidth.c) */
+/*e: enum [[_anon_]]([[(lib_graphics/libdraw/stringwidth.c)]]) */
 
-/*s: function _stringnwidth */
+/*s: function [[_stringnwidth]] */
 int
 _stringnwidth(Font *f, char *s, Rune *r, int len)
 {
@@ -83,53 +83,53 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
     }
     return twid;
 }
-/*e: function _stringnwidth */
+/*e: function [[_stringnwidth]] */
 
-/*s: function stringnwidth */
+/*s: function [[stringnwidth]] */
 int
 stringnwidth(Font *f, char *s, int len)
 {
     return _stringnwidth(f, s, nil, len);
 }
-/*e: function stringnwidth */
+/*e: function [[stringnwidth]] */
 
-/*s: function stringwidth */
+/*s: function [[stringwidth]] */
 int
 stringwidth(Font *f, char *s)
 {
     return _stringnwidth(f, s, nil, 1<<24);
 }
-/*e: function stringwidth */
+/*e: function [[stringwidth]] */
 
-/*s: function stringsize */
+/*s: function [[stringsize]] */
 Point
 stringsize(Font *f, char *s)
 {
     return Pt(_stringnwidth(f, s, nil, 1<<24), f->height);
 }
-/*e: function stringsize */
+/*e: function [[stringsize]] */
 
-/*s: function runestringnwidth */
+/*s: function [[runestringnwidth]] */
 int
 runestringnwidth(Font *f, Rune *r, int len)
 {
     return _stringnwidth(f, nil, r, len);
 }
-/*e: function runestringnwidth */
+/*e: function [[runestringnwidth]] */
 
-/*s: function runestringwidth */
+/*s: function [[runestringwidth]] */
 int
 runestringwidth(Font *f, Rune *r)
 {
     return _stringnwidth(f, nil, r, 1<<24);
 }
-/*e: function runestringwidth */
+/*e: function [[runestringwidth]] */
 
-/*s: function runestringsize */
+/*s: function [[runestringsize]] */
 Point
 runestringsize(Font *f, Rune *r)
 {
     return Pt(_stringnwidth(f, nil, r, 1<<24), f->height);
 }
-/*e: function runestringsize */
+/*e: function [[runestringsize]] */
 /*e: lib_graphics/libdraw/stringwidth.c */

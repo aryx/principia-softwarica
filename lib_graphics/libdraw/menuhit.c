@@ -7,7 +7,7 @@
 #include <thread.h>
 #include <mouse.h>
 
-/*s: enum _anon_ (lib_graphics/libdraw/menuhit.c) */
+/*s: enum [[_anon_]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 enum
 {
     Margin = 4,		/* outside to text */
@@ -21,28 +21,28 @@ enum
     Gap = 4,			/* between text and scroll bar */
     /*e: [[menuhit.c]] constants */
 };
-/*e: enum _anon_ (lib_graphics/libdraw/menuhit.c) */
+/*e: enum [[_anon_]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 
-/*s: global menutxt (lib_graphics/libdraw/menuhit.c) */
+/*s: global [[menutxt]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 static	Image	*menutxt;
-/*e: global menutxt (lib_graphics/libdraw/menuhit.c) */
-/*s: global back (lib_graphics/libdraw/menuhit.c) */
+/*e: global [[menutxt]]([[(lib_graphics/libdraw/menuhit.c)]]) */
+/*s: global [[back]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 static	Image	*back;
-/*e: global back (lib_graphics/libdraw/menuhit.c) */
-/*s: global high (lib_graphics/libdraw/menuhit.c) */
+/*e: global [[back]]([[(lib_graphics/libdraw/menuhit.c)]]) */
+/*s: global [[high]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 static	Image	*high;
-/*e: global high (lib_graphics/libdraw/menuhit.c) */
-/*s: global bord (lib_graphics/libdraw/menuhit.c) */
+/*e: global [[high]]([[(lib_graphics/libdraw/menuhit.c)]]) */
+/*s: global [[bord]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 static	Image	*bord;
-/*e: global bord (lib_graphics/libdraw/menuhit.c) */
-/*s: global text (lib_graphics/libdraw/menuhit.c) */
+/*e: global [[bord]]([[(lib_graphics/libdraw/menuhit.c)]]) */
+/*s: global [[text]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 static	Image	*text;
-/*e: global text (lib_graphics/libdraw/menuhit.c) */
-/*s: global htext (lib_graphics/libdraw/menuhit.c) */
+/*e: global [[text]]([[(lib_graphics/libdraw/menuhit.c)]]) */
+/*s: global [[htext]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 static	Image	*htext;
-/*e: global htext (lib_graphics/libdraw/menuhit.c) */
+/*e: global [[htext]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 
-/*s: function menucolors (lib_graphics/libdraw/menuhit.c) */
+/*s: function [[menucolors]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 static
 void
 menucolors(void)
@@ -71,9 +71,9 @@ text = display->black;
 htext = display->white;
 /*e: [[menucolors()]] Error label */
 }
-/*e: function menucolors (lib_graphics/libdraw/menuhit.c) */
+/*e: function [[menucolors]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 
-/*s: function menurect (lib_graphics/libdraw/menuhit.c) */
+/*s: function [[menurect]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 /*
  * r is a rectangle holding the text elements.
  * return the rectangle, including its black edge, holding element i.
@@ -89,9 +89,9 @@ menurect(Rectangle r, int i)
     r.max.y = r.min.y + font->height+Vspacing;
     return insetrect(r, Border-Margin);
 }
-/*e: function menurect (lib_graphics/libdraw/menuhit.c) */
+/*e: function [[menurect]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 
-/*s: function menusel (lib_graphics/libdraw/menuhit.c) */
+/*s: function [[menusel]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 /*
  * r is a rectangle holding the text elements.
  * return the element number containing p.
@@ -104,9 +104,9 @@ menusel(Rectangle r, Point p)
         return -1;
     return (p.y - r.min.y)/(font->height+Vspacing);
 }
-/*e: function menusel (lib_graphics/libdraw/menuhit.c) */
+/*e: function [[menusel]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 
-/*s: function paintitem (lib_graphics/libdraw/menuhit.c) */
+/*s: function [[paintitem]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 static
 void
 paintitem(Image *m, Menu *menu, Rectangle textr, int off, int i, bool highlight, Image *save, Image *restore)
@@ -136,9 +136,9 @@ paintitem(Image *m, Menu *menu, Rectangle textr, int off, int i, bool highlight,
     draw(m, r, highlight? high : back, nil, pt);
     string(m, pt, highlight? htext : text, pt, font, item);
 }
-/*e: function paintitem (lib_graphics/libdraw/menuhit.c) */
+/*e: function [[paintitem]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 
-/*s: function menuscan (lib_graphics/libdraw/menuhit.c) */
+/*s: function [[menuscan]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 /*
  * menur is a rectangle holding all the highlightable text elements.
  * track mouse while inside the box, return what's selected when button
@@ -164,9 +164,9 @@ menuscan(Image *m, Menu *menu, int button, Mousectl *mc, Rectangle textr, int of
     }
     return lasti;
 }
-/*e: function menuscan (lib_graphics/libdraw/menuhit.c) */
+/*e: function [[menuscan]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 
-/*s: function menupaint (lib_graphics/libdraw/menuhit.c) */
+/*s: function [[menupaint]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 static void
 menupaint(Image *m, Menu *menu, Rectangle textr, int off, int nitemdrawn)
 {
@@ -176,9 +176,9 @@ menupaint(Image *m, Menu *menu, Rectangle textr, int off, int nitemdrawn)
     for(i = 0; i<nitemdrawn; i++)
         paintitem(m, menu, textr, off, i, false, nil, nil);
 }
-/*e: function menupaint (lib_graphics/libdraw/menuhit.c) */
+/*e: function [[menupaint]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 
-/*s: function menuscrollpaint (lib_graphics/libdraw/menuhit.c) */
+/*s: function [[menuscrollpaint]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 static void
 menuscrollpaint(Image *m, Rectangle scrollr, int off, int nitem, int nitemdrawn)
 {
@@ -197,9 +197,9 @@ menuscrollpaint(Image *m, Rectangle scrollr, int off, int nitem, int nitemdrawn)
     if(menutxt)
         draw(m, insetrect(r, 1), menutxt, nil, ZP);
 }
-/*e: function menuscrollpaint (lib_graphics/libdraw/menuhit.c) */
+/*e: function [[menuscrollpaint]]([[(lib_graphics/libdraw/menuhit.c)]]) */
 
-/*s: function menuhit */
+/*s: function [[menuhit]] */
 int
 menuhit(int button, Mousectl *mc, Menu *menu, Screen *scr)
 {
@@ -387,5 +387,5 @@ menuhit(int button, Mousectl *mc, Menu *menu, Screen *scr)
     }
     return -1;
 }
-/*e: function menuhit */
+/*e: function [[menuhit]] */
 /*e: lib_graphics/libdraw/menuhit.c */

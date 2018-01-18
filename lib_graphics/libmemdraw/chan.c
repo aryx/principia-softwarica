@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <memdraw.h>
 
-/*s: function memsetchan */
+/*s: function [[memsetchan]] */
 errorneg1
 memsetchan(Memimage *i, ulong chan)
 {
@@ -54,6 +54,6 @@ memsetchan(Memimage *i, ulong chan)
         i->flags |= Fbytes;
     return OK_0;
 }
-/*e: function memsetchan */
+/*e: function [[memsetchan]] */
 
 /*e: lib_graphics/libmemdraw/chan.c */

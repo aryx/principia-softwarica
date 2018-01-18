@@ -5,9 +5,9 @@
 #include <draw.h>
 #include <memdraw.h>
 
-/*s: function RGB2K (lib_graphics/libmemdraw/tests/memdrawtest.c) */
+/*s: function [[RGB2K]]([[(lib_graphics/libmemdraw/tests/memdrawtest.c)]]) */
 #define RGB2K(r,g,b)	((299*((ulong)(r))+587*((ulong)(g))+114*((ulong)(b)))/1000)
-/*e: function RGB2K (lib_graphics/libmemdraw/tests/memdrawtest.c) */
+/*e: function [[RGB2K]]([[(lib_graphics/libmemdraw/tests/memdrawtest.c)]]) */
 
 /*
  * This program tests the 'memimagedraw' primitive stochastically.
@@ -27,72 +27,72 @@ ulong rgbatopix(uchar, uchar, uchar, uchar);
 
 static char *dchan, *schan, *mchan;
 
-/*s: global drawdebug (lib_graphics/libmemdraw/tests/memdrawtest.c) */
+/*s: global [[drawdebug]]([[(lib_graphics/libmemdraw/tests/memdrawtest.c)]]) */
 //old: used to have static in front, but at some point I got
 //some errors (I probably introduced some regressions in 8c of kencc)
 int drawdebug=0;
-/*e: global drawdebug (lib_graphics/libmemdraw/tests/memdrawtest.c) */
-/*s: global seed */
+/*e: global [[drawdebug]]([[(lib_graphics/libmemdraw/tests/memdrawtest.c)]]) */
+/*s: global [[seed]] */
 static int	seed;
-/*e: global seed */
-/*s: global niters */
+/*e: global [[seed]] */
+/*s: global [[niters]] */
 static int	niters = 100;
-/*e: global niters */
-/*s: global dbpp */
+/*e: global [[niters]] */
+/*s: global [[dbpp]] */
 static int	dbpp;	/* bits per pixel in destination */
-/*e: global dbpp */
-/*s: global sbpp */
+/*e: global [[dbpp]] */
+/*s: global [[sbpp]] */
 static int	sbpp;	/* bits per pixel in src */
-/*e: global sbpp */
-/*s: global mbpp */
+/*e: global [[sbpp]] */
+/*s: global [[mbpp]] */
 static int	mbpp;	/* bits per pixel in mask */
-/*e: global mbpp */
-/*s: global dpm */
+/*e: global [[mbpp]] */
+/*s: global [[dpm]] */
 static int	dpm;	/* pixel mask at high part of byte, in destination */
-/*e: global dpm */
-/*s: global nbytes */
+/*e: global [[dpm]] */
+/*s: global [[nbytes]] */
 static int	nbytes;	/* in destination */
-/*e: global nbytes */
+/*e: global [[nbytes]] */
 
-/*s: global Xrange */
+/*s: global [[Xrange]] */
 static int	Xrange	= 64;
-/*e: global Xrange */
-/*s: global Yrange */
+/*e: global [[Xrange]] */
+/*s: global [[Yrange]] */
 static int	Yrange	= 8;
-/*e: global Yrange */
+/*e: global [[Yrange]] */
 
-/*s: global dst */
+/*s: global [[dst]] */
 static Memimage	*dst;
-/*e: global dst */
-/*s: global src */
+/*e: global [[dst]] */
+/*s: global [[src]] */
 static Memimage	*src;
-/*e: global src */
-/*s: global mask */
+/*e: global [[src]] */
+/*s: global [[mask]] */
 static Memimage	*mask;
-/*e: global mask */
-/*s: global stmp */
+/*e: global [[mask]] */
+/*s: global [[stmp]] */
 static Memimage	*stmp;
-/*e: global stmp */
-/*s: global mtmp */
+/*e: global [[stmp]] */
+/*s: global [[mtmp]] */
 static Memimage	*mtmp;
-/*e: global mtmp */
-/*s: global ones (lib_graphics/libmemdraw/tests/memdrawtest.c) */
+/*e: global [[mtmp]] */
+/*s: global [[ones]]([[(lib_graphics/libmemdraw/tests/memdrawtest.c)]]) */
 static Memimage	*ones;
-/*e: global ones (lib_graphics/libmemdraw/tests/memdrawtest.c) */
-/*s: global dstbits */
+/*e: global [[ones]]([[(lib_graphics/libmemdraw/tests/memdrawtest.c)]]) */
+/*s: global [[dstbits]] */
 static uchar	*dstbits;
-/*e: global dstbits */
-/*s: global srcbits */
+/*e: global [[dstbits]] */
+/*s: global [[srcbits]] */
 static uchar	*srcbits;
-/*e: global srcbits */
-/*s: global maskbits */
+/*e: global [[srcbits]] */
+/*s: global [[maskbits]] */
 static uchar	*maskbits;
-/*e: global maskbits */
-/*s: global savedstbits */
+/*e: global [[maskbits]] */
+/*s: global [[savedstbits]] */
 static ulong	*savedstbits;
-/*e: global savedstbits */
+/*e: global [[savedstbits]] */
 
-/*s: function main (lib_graphics/libmemdraw/tests/memdrawtest.c) */
+/*s: function [[main]]([[(lib_graphics/libmemdraw/tests/memdrawtest.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -179,9 +179,9 @@ main(int argc, char *argv[])
 
     exits(0);
 }
-/*e: function main (lib_graphics/libmemdraw/tests/memdrawtest.c) */
+/*e: function [[main]]([[(lib_graphics/libmemdraw/tests/memdrawtest.c)]]) */
 
-/*s: function Bprintr5g6b5 */
+/*s: function [[Bprintr5g6b5]] */
 /*
  * Dump out an ASCII representation of an image.  The label specifies
  * a list of characters to put at various points in the picture.
@@ -195,9 +195,9 @@ Bprintr5g6b5(Biobuf *bio, char*, ulong v)
     b = v&31;
     Bprint(bio, "%.2x%.2x%.2x", r,g,b);
 }
-/*e: function Bprintr5g6b5 */
+/*e: function [[Bprintr5g6b5]] */
 
-/*s: function Bprintr5g5b5a1 */
+/*s: function [[Bprintr5g5b5a1]] */
 static void
 Bprintr5g5b5a1(Biobuf *bio, char*, ulong v)
 {
@@ -208,9 +208,9 @@ Bprintr5g5b5a1(Biobuf *bio, char*, ulong v)
     a = v&1;
     Bprint(bio, "%.2x%.2x%.2x%.2x", r,g,b,a);
 }
-/*e: function Bprintr5g5b5a1 */
+/*e: function [[Bprintr5g5b5a1]] */
 
-/*s: function dumpimage */
+/*s: function [[dumpimage]] */
 void
 dumpimage(char *name, Memimage *img, void *vdata, Point labelpt)
 {
@@ -300,9 +300,9 @@ dumpimage(char *name, Memimage *img, void *vdata, Point labelpt)
     }
     Bterm(&b);
 }
-/*e: function dumpimage */
+/*e: function [[dumpimage]] */
 
-/*s: function checkone */
+/*s: function [[checkone]] */
 /*
  * Verify that the destination pixel has the specified value.
  * The value is in the high bits of v, suitably masked, but must
@@ -331,15 +331,15 @@ checkone(Point p, Point sp, Point mp)
         abort();
     }
 }
-/*e: function checkone */
+/*e: function [[checkone]] */
 
-/*s: function RECTPTS */
+/*s: function [[RECTPTS]] */
 /*
  * Verify that the destination line has the same value as the saved line.
  */
 #define RECTPTS(r) (r).min.x, (r).min.y, (r).max.x, (r).max.y
-/*e: function RECTPTS */
-/*s: function checkline */
+/*e: function [[RECTPTS]] */
+/*s: function [[checkline]] */
 void
 checkline(Rectangle r, Point sp, Point mp, int y, Memimage *stmp, Memimage *mtmp)
 {
@@ -366,9 +366,9 @@ checkline(Rectangle r, Point sp, Point mp, int y, Memimage *stmp, Memimage *mtmp
         abort();
     }
 }
-/*e: function checkline */
+/*e: function [[checkline]] */
 
-/*s: function fill */
+/*s: function [[fill]] */
 /*
  * Fill the bits of an image with random data.
  * The Memimage parameter is used only to make sure
@@ -404,9 +404,9 @@ fill(Memimage *img, uchar *ucbits)
     }
         
 }
-/*e: function fill */
+/*e: function [[fill]] */
 
-/*s: function verifyonemask */
+/*s: function [[verifyonemask]] */
 /*
  * Mask is preset; do the rest
  */
@@ -440,9 +440,9 @@ verifyonemask(void)
 
     checkone(dp, sp, mp);
 }
-/*e: function verifyonemask */
+/*e: function [[verifyonemask]] */
 
-/*s: function verifyone */
+/*s: function [[verifyone]] */
 void
 verifyone(void)
 {
@@ -464,9 +464,9 @@ verifyone(void)
         verifyonemask();
     }
 }
-/*e: function verifyone */
+/*e: function [[verifyone]] */
 
-/*s: function verifylinemask */
+/*s: function [[verifylinemask]] */
 /*
  * Mask is preset; do the rest
  */
@@ -505,9 +505,9 @@ verifylinemask(void)
     memimagedraw(dst, dr, src, sp, mask, mp, SoverD);
     checkline(dr, drawrepl(src->r, sp), drawrepl(mask->r, mp), dr.min.y, nil, nil);
 }
-/*e: function verifylinemask */
+/*e: function [[verifylinemask]] */
 
-/*s: function verifyline */
+/*s: function [[verifyline]] */
 void
 verifyline(void)
 {
@@ -529,9 +529,9 @@ verifyline(void)
         verifylinemask();
     }
 }
-/*e: function verifyline */
+/*e: function [[verifyline]] */
 
-/*s: function verifyrectmask */
+/*s: function [[verifyrectmask]] */
 /*
  * Mask is preset; do the rest
  */
@@ -575,9 +575,9 @@ verifyrectmask(void)
     for(y=0; y<Yrange; y++)
         checkline(dr, drawrepl(src->r, sp), drawrepl(mask->r, mp), y, nil, nil);
 }
-/*e: function verifyrectmask */
+/*e: function [[verifyrectmask]] */
 
-/*s: function verifyrect */
+/*s: function [[verifyrect]] */
 void
 verifyrect(void)
 {
@@ -599,9 +599,9 @@ verifyrect(void)
         verifyrectmask();
     }
 }
-/*e: function verifyrect */
+/*e: function [[verifyrect]] */
 
-/*s: function randrect */
+/*s: function [[randrect]] */
 Rectangle
 randrect(void)
 {
@@ -613,9 +613,9 @@ randrect(void)
     r.max.y = r.min.y + 1 + nrand(Yrange-1-r.min.y);
     return r;
 }
-/*e: function randrect */
+/*e: function [[randrect]] */
 
-/*s: function tilexy */
+/*s: function [[tilexy]] */
 /*
  * Return coordinate corresponding to x withing range [minx, maxx)
  */
@@ -629,9 +629,9 @@ tilexy(int minx, int maxx, int x)
         sx += maxx-minx;
     return sx+minx;
 }
-/*e: function tilexy */
+/*e: function [[tilexy]] */
 
-/*s: function replicate */
+/*s: function [[replicate]] */
 void
 replicate(Memimage *i, Memimage *tmp)
 {
@@ -695,9 +695,9 @@ replicate(Memimage *i, Memimage *tmp)
 //		i->clipr.min.x, i->clipr.min.y, i->clipr.max.x, i->clipr.max.y);
     tmp->clipr = i->clipr;
 }
-/*e: function replicate */
+/*e: function [[replicate]] */
 
-/*s: function verifyrectmaskrepl */
+/*s: function [[verifyrectmaskrepl]] */
 /*
  * Mask is preset; do the rest
  */
@@ -762,9 +762,9 @@ verifyrectmaskrepl(int srcrepl, int maskrepl)
     for(y=0; y<Yrange; y++)
         checkline(dr, drawrepl(src->r, sp), drawrepl(mask->r, mp), y, srcrepl?stmp:nil, maskrepl?mtmp:nil);
 }
-/*e: function verifyrectmaskrepl */
+/*e: function [[verifyrectmaskrepl]] */
 
-/*s: function verifyrectrepl */
+/*s: function [[verifyrectrepl]] */
 void
 verifyrectrepl(int srcrepl, int maskrepl)
 {
@@ -786,14 +786,14 @@ verifyrectrepl(int srcrepl, int maskrepl)
         verifyrectmaskrepl(srcrepl, maskrepl);
     }
 }
-/*e: function verifyrectrepl */
+/*e: function [[verifyrectrepl]] */
 
 /*
  * Trivial draw implementation.
  * Color values are passed around as ulongs containing ααRRGGBB
  */
 
-/*s: function replbits */
+/*s: function [[replbits]] */
 /*
  * Convert v, which is nhave bits wide, into its nwant bits wide equivalent.
  * Replicates to widen the value, truncates to narrow it.
@@ -807,9 +807,9 @@ replbits(ulong v, int nhave, int nwant)
     v >>= (nhave-nwant);
     return v & ((1<<nwant)-1);
 }
-/*e: function replbits */
+/*e: function [[replbits]] */
 
-/*s: function pixtorgba */
+/*s: function [[pixtorgba]] */
 /*
  * Decode a pixel into the uchar* values.
  */
@@ -821,9 +821,9 @@ pixtorgba(ulong v, uchar *r, uchar *g, uchar *b, uchar *a)
     *g = v>>8;
     *b = v;
 }
-/*e: function pixtorgba */
+/*e: function [[pixtorgba]] */
 
-/*s: function rgbatopix */
+/*s: function [[rgbatopix]] */
 /*
  * Convert uchar channels into ulong pixel.
  */
@@ -832,9 +832,9 @@ rgbatopix(uchar r, uchar g, uchar b, uchar a)
 {
     return (a<<24)|(r<<16)|(g<<8)|b;
 }
-/*e: function rgbatopix */
+/*e: function [[rgbatopix]] */
 
-/*s: function getpixel */
+/*s: function [[getpixel]] */
 /*
  * Retrieve the pixel value at pt in the image.
  */
@@ -911,9 +911,9 @@ getpixel(Memimage *img, Point pt)
     }
     return rgbatopix(r, g, b, a);
 }
-/*e: function getpixel */
+/*e: function [[getpixel]] */
 
-/*s: function getgrey */
+/*s: function [[getgrey]] */
 /*
  * Return the greyscale equivalent of a pixel.
  */
@@ -924,9 +924,9 @@ getgrey(Memimage *img, Point pt)
     pixtorgba(getpixel(img, pt), &r, &g, &b, &a);
     return RGB2K(r, g, b);
 }
-/*e: function getgrey */
+/*e: function [[getgrey]] */
 
-/*s: function getmask */
+/*s: function [[getmask]] */
 /*
  * Return the value at pt in image, if image is interpreted
  * as a mask.  This means the alpha channel if present, else
@@ -940,9 +940,9 @@ getmask(Memimage *img, Point pt)
     else
         return getgrey(img, pt);
 }
-/*e: function getmask */
+/*e: function [[getmask]] */
 
-/*s: function putpixel */
+/*s: function [[putpixel]] */
 /*
  * Write a pixel to img at point pt.
  * 
@@ -1035,9 +1035,9 @@ putpixel(Memimage *img, Point pt, ulong nv)
     p[2] = v>>16;
     p[3] = v>>24;	
 }
-/*e: function putpixel */
+/*e: function [[putpixel]] */
 
-/*s: function drawonepixel */
+/*s: function [[drawonepixel]] */
 void
 drawonepixel(Memimage *dst, Point dp, Memimage *src, Point sp, Memimage *mask, Point mp)
 {
@@ -1074,5 +1074,5 @@ drawonepixel(Memimage *dst, Point dp, Memimage *src, Point sp, Memimage *mask, P
     //DBG print("%x %x %x %x\n", dr,dg,db,da);
     putpixel(dst, dp, rgbatopix(dr, dg, db, da));
 }
-/*e: function drawonepixel */
+/*e: function [[drawonepixel]] */
 /*e: lib_graphics/libmemdraw/tests/memdrawtest.c */

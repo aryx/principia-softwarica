@@ -3,7 +3,7 @@
 #include	<libc.h>
 #include	<draw.h>
 
-/*s: global sinus (lib_graphics/libdraw/icossin2.c) */
+/*s: global [[sinus]]([[(lib_graphics/libdraw/icossin2.c)]]) */
 /*
  * Sine and Cosine of arctangents, calculated by 
  *   (sin(atan(index/100.0))*1024.+0.5)
@@ -117,9 +117,9 @@ short sinus[] = {
     724,	/* 1.00 */
     728,	/* 1.01 */
 };
-/*e: global sinus (lib_graphics/libdraw/icossin2.c) */
+/*e: global [[sinus]]([[(lib_graphics/libdraw/icossin2.c)]]) */
 
-/*s: global cosinus */
+/*s: global [[cosinus]] */
 static
 short cosinus[] = {
     1024,	/* 0.00 */
@@ -225,9 +225,9 @@ short cosinus[] = {
     724,	/* 1.00 */
     720,	/* 1.01 */
 };
-/*e: global cosinus */
+/*e: global [[cosinus]] */
 
-/*s: function icossin2 */
+/*s: function [[icossin2]] */
 void
 icossin2(int x, int y, int *cosp, int *sinp)
 {
@@ -265,5 +265,5 @@ icossin2(int x, int y, int *cosp, int *sinp)
     *sinp = sinsign*(stp[0]+(stp[1]-stp[0])*rem/10);
     *cosp = cossign*(ctp[0]+(ctp[1]-ctp[0])*rem/10);
 }
-/*e: function icossin2 */
+/*e: function [[icossin2]] */
 /*e: lib_graphics/libdraw/icossin2.c */

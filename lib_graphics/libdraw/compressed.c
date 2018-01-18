@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <draw_private.h>
 
-/*s: function _twiddlecompressed */
+/*s: function [[_twiddlecompressed]] */
 /*
  * compressed data are seuences of byte codes.  
  * if the first byte b has the 0x80 bit set, the next (b^0x80)+1 bytes
@@ -27,9 +27,9 @@ _twiddlecompressed(uchar *buf, int n)
             buf++;
     }
 }
-/*e: function _twiddlecompressed */
+/*e: function [[_twiddlecompressed]] */
 
-/*s: function _compblocksize */
+/*s: function [[_compblocksize]] */
 int
 _compblocksize(Rectangle r, int depth)
 {
@@ -41,9 +41,9 @@ _compblocksize(Rectangle r, int depth)
         return NCBLOCK;
     return bpl;
 }
-/*e: function _compblocksize */
+/*e: function [[_compblocksize]] */
 
-/*s: function cloadimage */
+/*s: function [[cloadimage]] */
 int
 cloadimage(Image *i, Rectangle r, uchar *data, int ndata)
 {
@@ -89,9 +89,9 @@ cloadimage(Image *i, Rectangle r, uchar *data, int ndata)
     }
     return m;
 }
-/*e: function cloadimage */
+/*e: function [[cloadimage]] */
 
-/*s: function creadimage */
+/*s: function [[creadimage]] */
 Image *
 creadimage(Display *d, int fd, int dolock)
 {
@@ -212,30 +212,30 @@ creadimage(Display *d, int fd, int dolock)
     free(buf);
     return i;
 }
-/*e: function creadimage */
+/*e: function [[creadimage]] */
 
-/*s: constant HSHIFT */
+/*s: constant [[HSHIFT]] */
 #define	HSHIFT	3	/* HSHIFT==5 runs slightly faster, but hash table is 64x bigger */
-/*e: constant HSHIFT */
-/*s: constant NHASH */
+/*e: constant [[HSHIFT]] */
+/*s: constant [[NHASH]] */
 #define	NHASH	(1<<(HSHIFT*NMATCH))
-/*e: constant NHASH */
-/*s: constant HMASK */
+/*e: constant [[NHASH]] */
+/*s: constant [[HMASK]] */
 #define	HMASK	(NHASH-1)
-/*e: constant HMASK */
-/*s: function hupdate */
+/*e: constant [[HMASK]] */
+/*s: function [[hupdate]] */
 #define	hupdate(h, c)	((((h)<<HSHIFT)^(c))&HMASK)
-/*e: function hupdate */
+/*e: function [[hupdate]] */
 
 typedef struct Hlist Hlist;
-/*s: struct Hlist */
+/*s: struct [[Hlist]] */
 struct Hlist{
     uchar *s;
     Hlist *next, *prev;
 };
-/*e: struct Hlist */
+/*e: struct [[Hlist]] */
 
-/*s: function writeimage */
+/*s: function [[writeimage]] */
 int
 writeimage(fdt fd, Image *i, bool dolock)
 {
@@ -414,6 +414,6 @@ writeimage(fdt fd, Image *i, bool dolock)
     free(chain);
     return 0;
 }
-/*e: function writeimage */
+/*e: function [[writeimage]] */
 
 /*e: lib_graphics/libdraw/compressed.c */

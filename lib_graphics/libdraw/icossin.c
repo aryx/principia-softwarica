@@ -3,7 +3,7 @@
 #include	<libc.h>
 #include	<draw.h>
 
-/*s: global sinus */
+/*s: global [[sinus]] */
 /*
  * Integer sine and cosine for integral degree argument.
  * Tables computed by (sin,cos)(PI*d/180).
@@ -101,9 +101,9 @@ static short sinus[91] = {
     1024,	/* 89 */
     1024,	/* 90 */
 };
-/*e: global sinus */
+/*e: global [[sinus]] */
 
-/*s: function icossin */
+/*s: function [[icossin]] */
 void
 icossin(int deg, int *cosp, int *sinp)
 {
@@ -142,5 +142,5 @@ icossin(int deg, int *cosp, int *sinp)
     *sinp = sinsign*stp[0];
     *cosp = cossign*ctp[0];
 }
-/*e: function icossin */
+/*e: function [[icossin]] */
 /*e: lib_graphics/libdraw/icossin.c */

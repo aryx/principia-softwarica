@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <memdraw.h>
 
-/*s: function loadmemimage */
+/*s: function [[loadmemimage]] */
 errorneg1
 loadmemimage(Memimage *i, Rectangle r, byte *data, int ndata)
 {
@@ -90,9 +90,9 @@ loadmemimage(Memimage *i, Rectangle r, byte *data, int ndata)
     return ndata;
     /*e: [[loadmemimage()]] when small depth images */
 }
-/*e: function loadmemimage */
+/*e: function [[loadmemimage]] */
 
-/*s: function unloadmemimage */
+/*s: function [[unloadmemimage]] */
 errorneg1
 unloadmemimage(Memimage *i, Rectangle r, byte *data, int ndata)
 {
@@ -117,5 +117,5 @@ unloadmemimage(Memimage *i, Rectangle r, byte *data, int ndata)
     }
     return ndata;
 }
-/*e: function unloadmemimage */
+/*e: function [[unloadmemimage]] */
 /*e: lib_graphics/libmemdraw/transfer.c */

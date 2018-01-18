@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: function main (lib_graphics/libmemdraw/tests/arctest.c) */
+/*s: function [[main]]([[(lib_graphics/libmemdraw/tests/arctest.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -41,5 +41,5 @@ main(int argc, char **argv)
     t1 = nsec();
     print("%lld %lld\n", t1-t0-del, del);
 }
-/*e: function main (lib_graphics/libmemdraw/tests/arctest.c) */
+/*e: function [[main]]([[(lib_graphics/libmemdraw/tests/arctest.c)]]) */
 /*e: lib_graphics/libmemdraw/tests/arctest.c */

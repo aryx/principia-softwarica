@@ -16,7 +16,7 @@
 
 #include    "devdraw.h"
 
-/*s: function drawclientop */
+/*s: function [[drawclientop]] */
 static int
 drawclientop(Client *cl)
 {
@@ -26,9 +26,9 @@ drawclientop(Client *cl)
     cl->op = SoverD;
     return op;
 }
-/*e: function drawclientop */
+/*e: function [[drawclientop]] */
 
-/*s: function drawimage */
+/*s: function [[drawimage]] */
 Memimage*
 drawimage(Client *client, byte *a)
 {
@@ -41,9 +41,9 @@ drawimage(Client *client, byte *a)
     /*e: [[drawimage()]] sanity check d */
     return d->image;
 }
-/*e: function drawimage */
+/*e: function [[drawimage]] */
 
-/*s: function drawrectangle */
+/*s: function [[drawrectangle]] */
 void
 drawrectangle(Rectangle *r, uchar *a)
 {
@@ -52,18 +52,18 @@ drawrectangle(Rectangle *r, uchar *a)
     r->max.x = BGLONG(a+2*4);
     r->max.y = BGLONG(a+3*4);
 }
-/*e: function drawrectangle */
+/*e: function [[drawrectangle]] */
 
-/*s: function drawpoint */
+/*s: function [[drawpoint]] */
 void
 drawpoint(Point *p, uchar *a)
 {
     p->x = BGLONG(a+0*4);
     p->y = BGLONG(a+1*4);
 }
-/*e: function drawpoint */
+/*e: function [[drawpoint]] */
 
-/*s: function drawcoord */
+/*s: function [[drawcoord]] */
 uchar*
 drawcoord(uchar *p, uchar *maxp, int oldx, int *newx)
 {
@@ -88,11 +88,11 @@ drawcoord(uchar *p, uchar *maxp, int oldx, int *newx)
     *newx = x;
     return p;
 }
-/*e: function drawcoord */
+/*e: function [[drawcoord]] */
 
 
 
-/*s: function drawchar */
+/*s: function [[drawchar]] */
 Point
 drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImage *font, int index, int op)
 {
@@ -145,10 +145,10 @@ drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImag
     sp->x += fc->width;
     return p;
 }
-/*e: function drawchar */
+/*e: function [[drawchar]] */
 
 
-/*s: function printmesg */
+/*s: function [[printmesg]] */
 static void
 printmesg(char *fmt, uchar *a, bool plsprnt)
 {
@@ -202,9 +202,9 @@ printmesg(char *fmt, uchar *a, bool plsprnt)
     *q = '\0';
     iprint("%.*s", (int)(q-buf), buf);
 }
-/*e: function printmesg */
+/*e: function [[printmesg]] */
 
-/*s: function drawmesg */
+/*s: function [[drawmesg]] */
 void
 drawmesg(Client *client, void *av, int n)
 {
@@ -1139,5 +1139,5 @@ drawmesg(Client *client, void *av, int n)
     }
     poperror();
 }
-/*e: function drawmesg */
+/*e: function [[drawmesg]] */
 /*e: kernel/devices/screen/drawmesg.c */

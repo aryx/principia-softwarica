@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: function mempoly */
+/*s: function [[mempoly]] */
 void
 mempoly(Memimage *dst, Point *vert, int nvert, int end0, int end1, int radius, Memimage *src, Point sp, int op)
 {
@@ -30,5 +30,5 @@ mempoly(Memimage *dst, Point *vert, int nvert, int end0, int end1, int radius, M
         memline(dst, vert[i-1], vert[i], e0, e1, radius, src, addpt(d, vert[i-1]), op);
     }
 }
-/*e: function mempoly */
+/*e: function [[mempoly]] */
 /*e: lib_graphics/libmemdraw/poly.c */

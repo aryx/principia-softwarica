@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: function memunload */
+/*s: function [[memunload]] */
 errorneg1
 memunload(Memimage *src, Rectangle r, byte *data, int n)
 {
@@ -59,5 +59,5 @@ memunload(Memimage *src, Rectangle r, byte *data, int n)
     return n;
     /*e: [[memunload()]] if src has layer */
 }
-/*e: function memunload */
+/*e: function [[memunload]] */
 /*e: lib_graphics/libmemlayer/unload.c */

@@ -5,7 +5,7 @@
 #include <draw_private.h>
 #include <memdraw.h>
 
-/*s: function readmemimage */
+/*s: function [[readmemimage]] */
 Memimage*
 readmemimage(fdt fd)
 {
@@ -113,9 +113,9 @@ readmemimage(fdt fd)
     free(tmp);
     return i;
 }
-/*e: function readmemimage */
+/*e: function [[readmemimage]] */
 
-/*s: function creadmemimage */
+/*s: function [[creadmemimage]] */
 Memimage*
 creadmemimage(int fd)
 {
@@ -207,35 +207,35 @@ creadmemimage(int fd)
     free(buf);
     return i;
 }
-/*e: function creadmemimage */
+/*e: function [[creadmemimage]] */
 
 
 
-/*s: constant CHUNK */
+/*s: constant [[CHUNK]] */
 #define	CHUNK	8000
-/*e: constant CHUNK */
+/*e: constant [[CHUNK]] */
 
-/*s: constant HSHIFT (lib_graphics/libmemdraw/write.c) */
+/*s: constant [[HSHIFT]]([[(lib_graphics/libmemdraw/write.c)]]) */
 #define	HSHIFT	3	/* HSHIFT==5 runs slightly faster, but hash table is 64x bigger */
-/*e: constant HSHIFT (lib_graphics/libmemdraw/write.c) */
-/*s: constant NHASH (lib_graphics/libmemdraw/write.c) */
+/*e: constant [[HSHIFT]]([[(lib_graphics/libmemdraw/write.c)]]) */
+/*s: constant [[NHASH]]([[(lib_graphics/libmemdraw/write.c)]]) */
 #define	NHASH	(1<<(HSHIFT*NMATCH))
-/*e: constant NHASH (lib_graphics/libmemdraw/write.c) */
-/*s: constant HMASK (lib_graphics/libmemdraw/write.c) */
+/*e: constant [[NHASH]]([[(lib_graphics/libmemdraw/write.c)]]) */
+/*s: constant [[HMASK]]([[(lib_graphics/libmemdraw/write.c)]]) */
 #define	HMASK	(NHASH-1)
-/*e: constant HMASK (lib_graphics/libmemdraw/write.c) */
-/*s: function hupdate (lib_graphics/libmemdraw/write.c) */
+/*e: constant [[HMASK]]([[(lib_graphics/libmemdraw/write.c)]]) */
+/*s: function [[hupdate]]([[(lib_graphics/libmemdraw/write.c)]]) */
 #define	hupdate(h, c)	((((h)<<HSHIFT)^(c))&HMASK)
-/*e: function hupdate (lib_graphics/libmemdraw/write.c) */
+/*e: function [[hupdate]]([[(lib_graphics/libmemdraw/write.c)]]) */
 typedef struct Hlist Hlist;
-/*s: struct Hlist (lib_graphics/libmemdraw/write.c) */
+/*s: struct [[Hlist]]([[(lib_graphics/libmemdraw/write.c)]]) */
 struct Hlist{
     uchar *s;
     Hlist *next, *prev;
 };
-/*e: struct Hlist (lib_graphics/libmemdraw/write.c) */
+/*e: struct [[Hlist]]([[(lib_graphics/libmemdraw/write.c)]]) */
 
-/*s: function writememimage */
+/*s: function [[writememimage]] */
 int
 writememimage(int fd, Memimage *i)
 {
@@ -402,6 +402,6 @@ writememimage(int fd, Memimage *i)
     free(chain);
     return 0;
 }
-/*e: function writememimage */
+/*e: function [[writememimage]] */
 
 /*e: lib_graphics/libmemdraw/io.c */

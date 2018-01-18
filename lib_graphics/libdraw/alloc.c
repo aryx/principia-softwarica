@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <draw_private.h>
 
-/*s: function allocimage */
+/*s: function [[allocimage]] */
 Image*
 allocimage(Display *d, Rectangle r, ulong chan, bool repl, rgba val)
 {
@@ -17,9 +17,9 @@ allocimage(Display *d, Rectangle r, ulong chan, bool repl, rgba val)
     /*e: [[allocimage()]] set malloc tag for debug */
     return i;
 }
-/*e: function allocimage */
+/*e: function [[allocimage]] */
 
-/*s: function _allocimage */
+/*s: function [[_allocimage]] */
 Image*
 _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, rgba val, int screenid, int refresh)
 {
@@ -124,9 +124,9 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, rgba val,
 
     return i;
 }
-/*e: function _allocimage */
+/*e: function [[_allocimage]] */
 
-/*s: function _freeimage1 */
+/*s: function [[_freeimage1]] */
 errorneg1
 _freeimage1(Image *i)
 {
@@ -174,9 +174,9 @@ _freeimage1(Image *i)
 
     return OK_0;
 }
-/*e: function _freeimage1 */
+/*e: function [[_freeimage1]] */
 
-/*s: function freeimage */
+/*s: function [[freeimage]] */
 errorneg1
 freeimage(Image *i)
 {
@@ -186,9 +186,9 @@ freeimage(Image *i)
     free(i);
     return ret;
 }
-/*e: function freeimage */
+/*e: function [[freeimage]] */
 
-/*s: function allocimagemix */
+/*s: function [[allocimagemix]] */
 Image*
 allocimagemix(Display *d, ulong color1, ulong color3)
 {
@@ -233,5 +233,5 @@ allocimagemix(Display *d, ulong color1, ulong color3)
         return b;
     }
 }
-/*e: function allocimagemix */
+/*e: function [[allocimagemix]] */
 /*e: lib_graphics/libdraw/alloc.c */

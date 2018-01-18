@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <draw_private.h>
 
-/*s: function addcoord */
+/*s: function [[addcoord]] */
 static
 uchar*
 addcoord(byte *p, int oldx, int newx)
@@ -22,9 +22,9 @@ addcoord(byte *p, int oldx, int newx)
     }
     return p;
 }
-/*e: function addcoord */
+/*e: function [[addcoord]] */
 
-/*s: function dopoly */
+/*s: function [[dopoly]] */
 static
 void
 dopoly(int cmd, Image *dst, Point *pp, int np, int end0, int end1, int radius, Image *src, Point *sp, Drawop op)
@@ -73,37 +73,37 @@ dopoly(int cmd, Image *dst, Point *pp, int np, int end0, int end1, int radius, I
     memmove(a+31, t, u-t);
     free(t);
 }
-/*e: function dopoly */
+/*e: function [[dopoly]] */
 
-/*s: function poly */
+/*s: function [[poly]] */
 void
 poly(Image *dst, Point *p, int np, int end0, int end1, int radius, Image *src, Point sp)
 {
     dopoly('p', dst, p, np, end0, end1, radius, src, &sp, SoverD);
 }
-/*e: function poly */
+/*e: function [[poly]] */
 
-/*s: function polyop */
+/*s: function [[polyop]] */
 void
 polyop(Image *dst, Point *p, int np, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
 {
     dopoly('p', dst, p, np, end0, end1, radius, src, &sp, op);
 }
-/*e: function polyop */
+/*e: function [[polyop]] */
 
-/*s: function fillpoly */
+/*s: function [[fillpoly]] */
 void
 fillpoly(Image *dst, Point *p, int np, int wind, Image *src, Point sp)
 {
     dopoly('P', dst, p, np, wind, 0, 0, src, &sp, SoverD);
 }
-/*e: function fillpoly */
+/*e: function [[fillpoly]] */
 
-/*s: function fillpolyop */
+/*s: function [[fillpolyop]] */
 void
 fillpolyop(Image *dst, Point *p, int np, int wind, Image *src, Point sp, Drawop op)
 {
     dopoly('P', dst, p, np, wind, 0, 0, src, &sp, op);
 }
-/*e: function fillpolyop */
+/*e: function [[fillpolyop]] */
 /*e: lib_graphics/libdraw/poly.c */

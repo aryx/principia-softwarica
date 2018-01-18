@@ -7,11 +7,11 @@
 
 static int	fontresize(Font*, int, int, int);
 
-/*s: constant PJW */
+/*s: constant [[PJW]] */
 #define	PJW	0	/* use NUL==pjw for invisible characters */
-/*e: constant PJW */
+/*e: constant [[PJW]] */
 
-/*s: function cachechars */
+/*s: function [[cachechars]] */
 int
 cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **subfontname)
 {
@@ -147,9 +147,9 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
 
     return i;
 }
-/*e: function cachechars */
+/*e: function [[cachechars]] */
 
-/*s: function agefont */
+/*s: function [[agefont]] */
 void
 agefont(Font *f)
 {
@@ -197,9 +197,9 @@ agefont(Font *f)
     }
     /*e: [[agefont()]] if age overflow */
 }
-/*e: function agefont */
+/*e: function [[agefont]] */
 
-/*s: function cf2subfont */
+/*s: function [[cf2subfont]] */
 static Subfont*
 cf2subfont(Cachefont *cf, Font *f)
 {
@@ -223,9 +223,9 @@ cf2subfont(Cachefont *cf, Font *f)
     }
     return lookupsubfont(f->display, name);
 }
-/*e: function cf2subfont */
+/*e: function [[cf2subfont]] */
 
-/*s: function loadchar */
+/*s: function [[loadchar]] */
 /* return 1 if load succeeded, 0 if failed, -1 if must retry */
 error0
 loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
@@ -419,9 +419,9 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
     return OK_1;
     /*e: [[loadchar()]] marshall Cacheinfo c */
 }
-/*e: function loadchar */
+/*e: function [[loadchar]] */
 
-/*s: function fontresize */
+/*s: function [[fontresize]] */
 /* return whether resize succeeded && f->cache is unchanged */
 static bool
 fontresize(Font *f, int wid, int ncache, int depth)
@@ -495,5 +495,5 @@ fontresize(Font *f, int wid, int ncache, int depth)
     memset(f->cache, 0, f->ncache*sizeof f->cache[0]);
     return ret;
 }
-/*e: function fontresize */
+/*e: function [[fontresize]] */
 /*e: lib_graphics/libdraw/fontcache.c */

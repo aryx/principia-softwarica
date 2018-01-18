@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: enum _anon_ (lib_graphics/libmemdraw/arc.c) */
+/*s: enum [[_anon_]]([[(lib_graphics/libmemdraw/arc.c)]]) */
 /*
  * elarc(dst,c,a,b,t,src,sp,alpha,phi)
  *   draws the part of an ellipse between rays at angles alpha and alpha+phi
@@ -16,9 +16,9 @@ enum
 {
     R, T, L, B	/* right, top, left, bottom */
 };
-/*e: enum _anon_ (lib_graphics/libmemdraw/arc.c) */
+/*e: enum [[_anon_]]([[(lib_graphics/libmemdraw/arc.c)]]) */
 
-/*s: global corners */
+/*s: global [[corners]] */
 static
 Point corners[] = {
     {1,1},
@@ -26,14 +26,14 @@ Point corners[] = {
     {-1,-1},
     {1,-1}
 };
-/*e: global corners */
+/*e: global [[corners]] */
 
-/*s: global p00 */
+/*s: global [[p00]] */
 static
 Point p00;
-/*e: global p00 */
+/*e: global [[p00]] */
 
-/*s: function memarc */
+/*s: function [[memarc]] */
 /*
  * make a "wedge" mask covering the desired angle and contained in
  * a surrounding square; draw a full ellipse; intersect that with the
@@ -122,5 +122,5 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
     freememimage(figure);
     freememimage(mask);
 }
-/*e: function memarc */
+/*e: function [[memarc]] */
 /*e: lib_graphics/libmemdraw/arc.c */

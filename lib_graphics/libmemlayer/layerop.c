@@ -5,11 +5,11 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: function RECUR */
+/*s: function [[RECUR]] */
 #define	RECUR(a,b,c,d)	_layerop(fn, i, Rect(a, b, c, d), clipr, etc, front->layer->rear);
-/*e: function RECUR */
+/*e: function [[RECUR]] */
 
-/*s: function _layerop */
+/*s: function [[_layerop]] */
 static void
 _layerop(
     void (*fn)(Memimage*, Rectangle, Rectangle, void*, int),
@@ -60,9 +60,9 @@ _layerop(
     /* r is covered by front, so put in save area */
     (*fn)(i->layer->save, r, clipr, etc, true);
 }
-/*e: function _layerop */
+/*e: function [[_layerop]] */
 
-/*s: function _memlayerop */
+/*s: function [[_memlayerop]] */
 /*
  * Assumes incoming rectangle has already been clipped to i's logical r and clipr
  */
@@ -128,5 +128,5 @@ _memlayerop(
         fn(l->save, Rect(scr.max.x, r.min.y, r.max.x, r.max.y), clipr, etc, true);
     }
 }
-/*e: function _memlayerop */
+/*e: function [[_memlayerop]] */
 /*e: lib_graphics/libmemlayer/layerop.c */

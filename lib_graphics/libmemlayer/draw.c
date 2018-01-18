@@ -5,14 +5,14 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: macro DBG1 */
+/*s: macro [[DBG1]] */
 #define DBG1 if(0) print
-/*e: macro DBG1 */
-/*s: macro DBG */
+/*e: macro [[DBG1]] */
+/*s: macro [[DBG]] */
 #define DBG if(0) print
-/*e: macro DBG */
+/*e: macro [[DBG]] */
 
-/*s: struct Draw */
+/*s: struct [[Draw]] */
 struct Draw
 {
     Memlayer    *dstlayer;
@@ -26,9 +26,9 @@ struct Draw
     // enum<Drawop>
     int	op;
 };
-/*e: struct Draw */
+/*e: struct [[Draw]] */
 
-/*s: function ldrawop */
+/*s: function [[ldrawop]] */
 static
 void
 ldrawop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool insave)
@@ -74,9 +74,9 @@ ldrawop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool insav
     /*e: [[ldrawop()]] if r not in clipr */
     memdraw(dst, r, d->src, p0, d->mask, p1, d->op); // will call memimagedraw
 }
-/*e: function ldrawop */
+/*e: function [[ldrawop]] */
 
-/*s: function memdraw */
+/*s: function [[memdraw]] */
 void
 memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
 {
@@ -264,5 +264,5 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     /*e: [[memdraw()]] general case where dst is an obscured window */
     /*e: [[memdraw()]] when have layers */
 }
-/*e: function memdraw */
+/*e: function [[memdraw]] */
 /*e: lib_graphics/libmemlayer/draw.c */

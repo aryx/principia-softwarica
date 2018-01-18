@@ -5,18 +5,18 @@
 #include <cursor.h>
 #include <event.h>
 
-/*s: constant W */
+/*s: constant [[W]] */
 #define	W	Borderwidth
-/*e: constant W */
+/*e: constant [[W]] */
 
-/*s: global tmp */
+/*s: global [[tmp]] */
 static Image *tmp[4];
-/*e: global tmp */
-/*s: global red */
+/*e: global [[tmp]] */
+/*s: global [[red]] */
 static Image *red;
-/*e: global red */
+/*e: global [[red]] */
 
-/*s: global sweep */
+/*s: global [[sweep]] */
 static Cursor sweep={
     {-7, -7},
     {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0x07,
@@ -28,9 +28,9 @@ static Cursor sweep={
      0x41, 0xC2, 0x41, 0xE2, 0x41, 0x72, 0x40, 0x38,
      0x40, 0x1C, 0x40, 0x0E, 0x7F, 0xE6, 0x00, 0x00,}
 };
-/*e: global sweep */
+/*e: global [[sweep]] */
 
-/*s: function brects */
+/*s: function [[brects]] */
 static
 void
 brects(Rectangle r, Rectangle rp[4])
@@ -44,9 +44,9 @@ brects(Rectangle r, Rectangle rp[4])
     rp[2] = Rect(r.min.x, r.min.y+W, r.min.x+W, r.max.y-W);
     rp[3] = Rect(r.max.x-W, r.min.y+W, r.max.x, r.max.y-W);
 }
-/*e: function brects */
+/*e: function [[brects]] */
 
-/*s: function egetrect */
+/*s: function [[egetrect]] */
 Rectangle
 egetrect(int but, Mouse *m)
 {
@@ -81,9 +81,9 @@ egetrect(int but, Mouse *m)
     }
     return rc;
 }
-/*e: function egetrect */
+/*e: function [[egetrect]] */
 
-/*s: function freetmp */
+/*s: function [[freetmp]] */
 static
 void
 freetmp(void)
@@ -95,9 +95,9 @@ freetmp(void)
     freeimage(red);
     tmp[0] = tmp[1] = tmp[2] = tmp[3] = red = nil;
 }
-/*e: function freetmp */
+/*e: function [[freetmp]] */
 
-/*s: function edrawgetrect */
+/*s: function [[edrawgetrect]] */
 void
 edrawgetrect(Rectangle rc, int up)
 {
@@ -130,5 +130,5 @@ edrawgetrect(Rectangle rc, int up)
         draw(view, rects[i], red, nil, ZP);
     }
 }
-/*e: function edrawgetrect */
+/*e: function [[edrawgetrect]] */
 /*e: lib_graphics/libdraw/egetrect.c */

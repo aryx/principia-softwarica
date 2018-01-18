@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <bio.h>
 
-/*s: function getval */
+/*s: function [[getval]] */
 static ulong
 getval(char **p)
 {
@@ -17,9 +17,9 @@ getval(char **p)
     *p = q;
     return v;
 }
-/*e: function getval */
+/*e: function [[getval]] */
 
-/*s: function readcolmap */
+/*s: function [[readcolmap]] */
 void
 readcolmap(Display *d, RGB *colmap)
 {
@@ -49,9 +49,9 @@ readcolmap(Display *d, RGB *colmap)
     }
     Bterm(b);
 }
-/*e: function readcolmap */
+/*e: function [[readcolmap]] */
 
-/*s: function writecolmap */
+/*s: function [[writecolmap]] */
 /*
  * This code (and the devdraw interface) will have to change
  * if we ever get bitmaps with ldepth > 3, because the
@@ -84,9 +84,9 @@ writecolmap(Display *d, RGB *m)
     if(i != n)
         drawerror(d, "writecolmap: bad write");
 }
-/*e: function writecolmap */
+/*e: function [[writecolmap]] */
 
-/*s: function rgb2cmap */
+/*s: function [[rgb2cmap]] */
 int
 rgb2cmap(int cr, int cg, int cb)
 {
@@ -110,9 +110,9 @@ rgb2cmap(int cr, int cg, int cb)
     }
     return best;
 }
-/*e: function rgb2cmap */
+/*e: function [[rgb2cmap]] */
 
-/*s: function cmap2rgb */
+/*s: function [[cmap2rgb]] */
 int
 cmap2rgb(int c)
 {
@@ -138,14 +138,14 @@ cmap2rgb(int c)
     }
     return rgb;
 }
-/*e: function cmap2rgb */
+/*e: function [[cmap2rgb]] */
 
-/*s: function cmap2rgba */
+/*s: function [[cmap2rgba]] */
 int
 cmap2rgba(int c)
 {
     return (cmap2rgb(c)<<8)|0xFF;
 }
-/*e: function cmap2rgba */
+/*e: function [[cmap2rgba]] */
 
 /*e: lib_graphics/libdraw/colormap.c */

@@ -9,7 +9,7 @@
 // of dependencies that will force the kernel to link in lockdisplay().
 // This in turn will generate a signature conflict because of the differences
 // between QLock (used in Display) in libc.h and in the kernel (in lib.h).
-/*s: function getdefont */
+/*s: function [[getdefont]] */
 Subfont*
 getdefont(Display *d)
 {
@@ -80,10 +80,10 @@ getdefont(Display *d)
     /*e: [[getdefont()]] sanity check f */
     return f;
 }
-/*e: function getdefont */
+/*e: function [[getdefont]] */
 
 
-/*s: function allocsubfont */
+/*s: function [[allocsubfont]] */
 Subfont*
 allocsubfont(char *name, int n, int height, int ascent, Fontchar *info, Image *i)
 {
@@ -115,9 +115,9 @@ allocsubfont(char *name, int n, int height, int ascent, Fontchar *info, Image *i
         f->name = nil;
     return f;
 }
-/*e: function allocsubfont */
+/*e: function [[allocsubfont]] */
 
-/*s: function freesubfont */
+/*s: function [[freesubfont]] */
 void
 freesubfont(Subfont *f)
 {
@@ -135,9 +135,9 @@ freesubfont(Subfont *f)
     freeimage(f->bits);
     free(f);
 }
-/*e: function freesubfont */
+/*e: function [[freesubfont]] */
 
-/*s: function _getsubfont */
+/*s: function [[_getsubfont]] */
 /*
  * Default version: treat as file name
  */
@@ -181,9 +181,9 @@ _getsubfont(Display *d, char *name)
 
     return f;
 }
-/*e: function _getsubfont */
+/*e: function [[_getsubfont]] */
 
-/*s: function readsubfont */
+/*s: function [[readsubfont]] */
 Subfont*
 readsubfont(Display *d, char *name, fdt fd, bool dolock)
 {
@@ -246,9 +246,9 @@ readsubfont(Display *d, char *name, fdt fd, bool dolock)
     free(p);
     return f;
 }
-/*e: function readsubfont */
+/*e: function [[readsubfont]] */
 
-/*s: function packinfo */
+/*s: function [[packinfo]] */
 static
 void
 packinfo(Fontchar *fc, uchar *p, int n)
@@ -266,9 +266,9 @@ packinfo(Fontchar *fc, uchar *p, int n)
         p += 6;
     }
 }
-/*e: function packinfo */
+/*e: function [[packinfo]] */
 
-/*s: function writesubfont */
+/*s: function [[writesubfont]] */
 errorneg1
 writesubfont(fdt fd, Subfont *f)
 {
@@ -294,10 +294,10 @@ writesubfont(fdt fd, Subfont *f)
     free(data);
     return OK_0;
 }
-/*e: function writesubfont */
+/*e: function [[writesubfont]] */
 
 
-/*s: function subfontname */
+/*s: function [[subfontname]] */
 /*
  * Default version: convert to file name
  */
@@ -345,20 +345,20 @@ subfontname(char *cfname, char *fname, int maxdepth)
     free(t);
     return nil;
 }
-/*e: function subfontname */
+/*e: function [[subfontname]] */
 
 /*
  * Easy versions of the cache routines; may be substituted by fancier ones for other purposes
  */
 
-/*s: global lastname */
+/*s: global [[lastname]] */
 static char	*lastname;
-/*e: global lastname */
-/*s: global lastsubfont */
+/*e: global [[lastname]] */
+/*s: global [[lastsubfont]] */
 Subfont	*lastsubfont;
-/*e: global lastsubfont */
+/*e: global [[lastsubfont]] */
 
-/*s: function lookupsubfont */
+/*s: function [[lookupsubfont]] */
 Subfont*
 lookupsubfont(Display *d, char *name)
 {
@@ -371,9 +371,9 @@ lookupsubfont(Display *d, char *name)
     }
     return nil;
 }
-/*e: function lookupsubfont */
+/*e: function [[lookupsubfont]] */
 
-/*s: function installsubfont */
+/*s: function [[installsubfont]] */
 void
 installsubfont(char *name, Subfont *subfont)
 {
@@ -381,9 +381,9 @@ installsubfont(char *name, Subfont *subfont)
     lastname = strdup(name);
     lastsubfont = subfont;	/* notice we don't free the old one; that's your business */
 }
-/*e: function installsubfont */
+/*e: function [[installsubfont]] */
 
-/*s: function uninstallsubfont */
+/*s: function [[uninstallsubfont]] */
 void
 uninstallsubfont(Subfont *subfont)
 {
@@ -392,6 +392,6 @@ uninstallsubfont(Subfont *subfont)
         lastsubfont = nil;
     }
 }
-/*e: function uninstallsubfont */
+/*e: function [[uninstallsubfont]] */
 
 /*e: lib_graphics/libdraw/subfont.c */

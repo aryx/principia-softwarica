@@ -9,7 +9,7 @@
 typedef struct	Slave Slave;
 typedef struct	Ebuf Ebuf;
 
-/*s: struct Slave */
+/*s: struct [[Slave]] */
 struct Slave
 {
     int	pid;
@@ -19,9 +19,9 @@ struct Slave
 
     int	(*fn)(int, Event*, uchar*, int);
 };
-/*e: struct Slave */
+/*e: struct [[Slave]] */
 
-/*s: struct Ebuf */
+/*s: struct [[Ebuf]] */
 struct Ebuf
 {
     int	n;		/* number of bytes in buf */
@@ -30,47 +30,47 @@ struct Ebuf
     // Extra
     Ebuf	*next;
 };
-/*e: struct Ebuf */
+/*e: struct [[Ebuf]] */
 
-/*s: global eslave */
+/*s: global [[eslave]] */
 static	Slave	eslave[MAXSLAVE];
-/*e: global eslave */
-/*s: global Skeyboard */
+/*e: global [[eslave]] */
+/*s: global [[Skeyboard]] */
 static	int	Skeyboard = -1;
-/*e: global Skeyboard */
-/*s: global Smouse */
+/*e: global [[Skeyboard]] */
+/*s: global [[Smouse]] */
 static	int	Smouse = -1;
-/*e: global Smouse */
-/*s: global Stimer */
+/*e: global [[Smouse]] */
+/*s: global [[Stimer]] */
 static	int	Stimer = -1;
-/*e: global Stimer */
-/*s: global logfid */
+/*e: global [[Stimer]] */
+/*s: global [[logfid]] */
 static	fdt	logfid;
-/*e: global logfid */
+/*e: global [[logfid]] */
 
-/*s: global nslave */
+/*s: global [[nslave]] */
 static	int	nslave;
-/*e: global nslave */
-/*s: global parentpid */
+/*e: global [[nslave]] */
+/*s: global [[parentpid]] */
 static	int	parentpid;
-/*e: global parentpid */
-/*s: global epipe */
+/*e: global [[parentpid]] */
+/*s: global [[epipe]] */
 static	fdt	epipe[2];
-/*e: global epipe */
+/*e: global [[epipe]] */
 
 static	int	eforkslave(ulong);
 static	void	extract(void);
 static	void	ekill(void);
 static	int	enote(void *, char *);
 
-/*s: global mousefd */
+/*s: global [[mousefd]] */
 static	fdt	mousefd;
-/*e: global mousefd */
-/*s: global cursorfd */
+/*e: global [[mousefd]] */
+/*s: global [[cursorfd]] */
 static	fdt	cursorfd;
-/*e: global cursorfd */
+/*e: global [[cursorfd]] */
 
-/*s: function ebread */
+/*s: function [[ebread]] */
 static
 Ebuf*
 ebread(Slave *s)
@@ -98,17 +98,17 @@ ebread(Slave *s)
 
     return eb;
 }
-/*e: function ebread */
+/*e: function [[ebread]] */
 
-/*s: function event */
+/*s: function [[event]] */
 keys
 event(Event *e)
 {
     return eread(~0UL, e);
 }
-/*e: function event */
+/*e: function [[event]] */
 
-/*s: function eread */
+/*s: function [[eread]] */
 keys
 eread(keys keys, Event *e)
 {
@@ -145,9 +145,9 @@ eread(keys keys, Event *e)
     }
     return 0; // unreachable
 }
-/*e: function eread */
+/*e: function [[eread]] */
 
-/*s: function ecanmouse */
+/*s: function [[ecanmouse]] */
 int
 ecanmouse(void)
 {
@@ -155,9 +155,9 @@ ecanmouse(void)
         drawerror(display, "events: mouse not initialized");
     return ecanread(Emouse);
 }
-/*e: function ecanmouse */
+/*e: function [[ecanmouse]] */
 
-/*s: function ecankbd */
+/*s: function [[ecankbd]] */
 int
 ecankbd(void)
 {
@@ -165,9 +165,9 @@ ecankbd(void)
         drawerror(display, "events: keyboard not initialzed");
     return ecanread(Ekeyboard);
 }
-/*e: function ecankbd */
+/*e: function [[ecankbd]] */
 
-/*s: function ecanread */
+/*s: function [[ecanread]] */
 int
 ecanread(ulong keys)
 {
@@ -190,9 +190,9 @@ ecanread(ulong keys)
     }
     return 0; // unreachable
 }
-/*e: function ecanread */
+/*e: function [[ecanread]] */
 
-/*s: function estartfn */
+/*s: function [[estartfn]] */
 ulong
 estartfn(ulong key, fdt fd, int n, int (*fn)(int, Event*, uchar*, int))
 {
@@ -221,17 +221,17 @@ estartfn(ulong key, fdt fd, int n, int (*fn)(int, Event*, uchar*, int))
     _exits(nil);
     return 0;
 }
-/*e: function estartfn */
+/*e: function [[estartfn]] */
 
-/*s: function estart */
+/*s: function [[estart]] */
 ulong
 estart(ulong key, fdt fd, int n)
 {
     return estartfn(key, fd, n, nil);
 }
-/*e: function estart */
+/*e: function [[estart]] */
 
-/*s: function etimer */
+/*s: function [[etimer]] */
 ulong
 etimer(ulong key, int n)
 {
@@ -258,9 +258,9 @@ etimer(ulong key, int n)
     _exits(nil);
     return 0;
 }
-/*e: function etimer */
+/*e: function [[etimer]] */
 
-/*s: function ekeyslave */
+/*s: function [[ekeyslave]] */
 static void
 ekeyslave(fdt fd)
 {
@@ -297,9 +297,9 @@ breakout:;
     write(epipe[1], t, 1);
     _exits(0);
 }
-/*e: function ekeyslave */
+/*e: function [[ekeyslave]] */
 
-/*s: function einit */
+/*s: function [[einit]] */
 void
 einit(keys keys)
 {
@@ -345,9 +345,9 @@ einit(keys keys)
             ;
     }
 }
-/*e: function einit */
+/*e: function [[einit]] */
 
-/*s: function extract */
+/*s: function [[extract]] */
 static void
 extract(void)
 {
@@ -415,9 +415,9 @@ loop:
     else
         s->head = s->tail = eb;
 }
-/*e: function extract */
+/*e: function [[extract]] */
 
-/*s: function eforkslave */
+/*s: function [[eforkslave]] */
 static int
 eforkslave(ulong key)
 {
@@ -447,9 +447,9 @@ eforkslave(ulong key)
     drawerror(display, "events: bad slave assignment");
     return 0;
 }
-/*e: function eforkslave */
+/*e: function [[eforkslave]] */
 
-/*s: function enote */
+/*s: function [[enote]] */
 static int
 enote(void *v, char *s)
 {
@@ -479,17 +479,17 @@ enote(void *v, char *s)
     }
     return 0;
 }
-/*e: function enote */
+/*e: function [[enote]] */
 
-/*s: function ekill */
+/*s: function [[ekill]] */
 static void
 ekill(void)
 {
     enote(0, 0);
 }
-/*e: function ekill */
+/*e: function [[ekill]] */
 
-/*s: function emouse */
+/*s: function [[emouse]] */
 Mouse
 emouse(void)
 {
@@ -511,9 +511,9 @@ emouse(void)
     free(eb);
     return m;
 }
-/*e: function emouse */
+/*e: function [[emouse]] */
 
-/*s: function ekbd */
+/*s: function [[ekbd]] */
 int
 ekbd(void)
 {
@@ -527,9 +527,9 @@ ekbd(void)
     free(eb);
     return c;
 }
-/*e: function ekbd */
+/*e: function [[ekbd]] */
 
-/*s: function emoveto */
+/*s: function [[emoveto]] */
 void
 emoveto(Point pt)
 {
@@ -539,9 +539,9 @@ emoveto(Point pt)
     n = sprint(buf, "m%d %d", pt.x, pt.y);
     write(mousefd, buf, n);
 }
-/*e: function emoveto */
+/*e: function [[emoveto]] */
 
-/*s: function esetcursor */
+/*s: function [[esetcursor]] */
 void
 esetcursor(Cursor *c)
 {
@@ -556,9 +556,9 @@ esetcursor(Cursor *c)
         write(cursorfd, curs, sizeof curs);
     }
 }
-/*e: function esetcursor */
+/*e: function [[esetcursor]] */
 
-/*s: function ereadmouse */
+/*s: function [[ereadmouse]] */
 int
 ereadmouse(Mouse *m)
 {
@@ -573,9 +573,9 @@ ereadmouse(Mouse *m)
     }while(n == 0);
     return n;
 }
-/*e: function ereadmouse */
+/*e: function [[ereadmouse]] */
 
-/*s: function eatomouse */
+/*s: function [[eatomouse]] */
 int
 eatomouse(Mouse *m, char *buf, int n)
 {
@@ -592,5 +592,5 @@ eatomouse(Mouse *m, char *buf, int n)
     m->msec = atoi(buf+1+3*12);
     return n;
 }
-/*e: function eatomouse */
+/*e: function [[eatomouse]] */
 /*e: lib_graphics/libdraw/event.c */

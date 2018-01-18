@@ -12,7 +12,7 @@
 
 #include    "devdraw.h"
 
-/*s: function drawcmp */
+/*s: function [[drawcmp]] */
 static
 int
 drawcmp(char *a, char *b, int n)
@@ -21,9 +21,9 @@ drawcmp(char *a, char *b, int n)
         return 1;
     return memcmp(a, b, n);
 }
-/*e: function drawcmp */
+/*e: function [[drawcmp]] */
 
-/*s: function drawlookupname */
+/*s: function [[drawlookupname]] */
 DName*
 drawlookupname(int n, char *str)
 {
@@ -36,9 +36,9 @@ drawlookupname(int n, char *str)
             return name;
     return nil;
 }
-/*e: function drawlookupname */
+/*e: function [[drawlookupname]] */
 
-/*s: function drawgoodname */
+/*s: function [[drawgoodname]] */
 bool
 drawgoodname(DImage *d)
 {
@@ -59,9 +59,9 @@ drawgoodname(DImage *d)
         return false;
     return true;
 }
-/*e: function drawgoodname */
+/*e: function [[drawgoodname]] */
 
-/*s: function drawdelname */
+/*s: function [[drawdelname]] */
 void
 drawdelname(DName *name)
 {
@@ -71,9 +71,9 @@ drawdelname(DName *name)
     memmove(name, name+1, (sdraw.nname-(i+1))*sizeof(DName));
     sdraw.nname--;
 }
-/*e: function drawdelname */
+/*e: function [[drawdelname]] */
 
-/*s: function drawaddname */
+/*s: function [[drawaddname]] */
 void
 drawaddname(Client *client, DImage *di, int n, char *str)
 {
@@ -103,6 +103,6 @@ drawaddname(Client *client, DImage *di, int n, char *str)
 
     new->vers = ++sdraw.vers;
 }
-/*e: function drawaddname */
+/*e: function [[drawaddname]] */
 
 /*e: kernel/devices/screen/drawname.c */

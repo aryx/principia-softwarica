@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <draw.h>
 
-/*s: function unitsperline */
+/*s: function [[unitsperline]] */
 static
 int
 unitsperline(Rectangle r, int d, int bitsperunit)
@@ -24,21 +24,21 @@ unitsperline(Rectangle r, int d, int bitsperunit)
     }
     return l;
 }
-/*e: function unitsperline */
+/*e: function [[unitsperline]] */
 
-/*s: function wordsperline */
+/*s: function [[wordsperline]] */
 int
 wordsperline(Rectangle r, int d)
 {
     return unitsperline(r, d, 8*sizeof(ulong));
 }
-/*e: function wordsperline */
+/*e: function [[wordsperline]] */
 
-/*s: function bytesperline */
+/*s: function [[bytesperline]] */
 int
 bytesperline(Rectangle r, int d)
 {
     return unitsperline(r, d, 8);
 }
-/*e: function bytesperline */
+/*e: function [[bytesperline]] */
 /*e: lib_graphics/libdraw/resolution.c */

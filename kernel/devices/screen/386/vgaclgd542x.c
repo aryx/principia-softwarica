@@ -15,7 +15,7 @@
 #include "../port/portscreen.h"
 #include "screen.h"
 
-/*s: function clgd542xpageset(x86) */
+/*s: function [[clgd542xpageset]](x86) */
 static int
 clgd542xpageset(VGAscr*, int page)
 {
@@ -36,9 +36,9 @@ clgd542xpageset(VGAscr*, int page)
 
     return opage;
 }
-/*e: function clgd542xpageset(x86) */
+/*e: function [[clgd542xpageset]](x86) */
 
-/*s: function clgd542xpage(x86) */
+/*s: function [[clgd542xpage]](x86) */
 static void
 clgd542xpage(VGAscr* scr, int page)
 {
@@ -46,17 +46,17 @@ clgd542xpage(VGAscr* scr, int page)
     clgd542xpageset(scr, page);
     unlock(&scr->devlock);
 }
-/*e: function clgd542xpage(x86) */
+/*e: function [[clgd542xpage]](x86) */
 
-/*s: function clgd542xlinear(x86) */
+/*s: function [[clgd542xlinear]](x86) */
 static void
 clgd542xlinear(VGAscr* scr, int, int)
 {
     vgalinearpciid(scr, 0x1013, 0);
 }
-/*e: function clgd542xlinear(x86) */
+/*e: function [[clgd542xlinear]](x86) */
 
-/*s: function clgd542xdisable(x86) */
+/*s: function [[clgd542xdisable]](x86) */
 static void
 clgd542xdisable(VGAscr*)
 {
@@ -65,9 +65,9 @@ clgd542xdisable(VGAscr*)
     sr12 = vgaxi(Seqx, 0x12);
     vgaxo(Seqx, 0x12, sr12 & ~0x01);
 }
-/*e: function clgd542xdisable(x86) */
+/*e: function [[clgd542xdisable]](x86) */
 
-/*s: function clgd542xenable(x86) */
+/*s: function [[clgd542xenable]](x86) */
 static void
 clgd542xenable(VGAscr* scr)
 {
@@ -155,9 +155,9 @@ clgd542xenable(VGAscr* scr)
     vgaxo(Seqx, 0x13, 0);
     vgaxo(Seqx, 0x12, sr12|0x05);
 }
-/*e: function clgd542xenable(x86) */
+/*e: function [[clgd542xenable]](x86) */
 
-/*s: function clgd542xinitcursor(x86) */
+/*s: function [[clgd542xinitcursor]](x86) */
 static void
 clgd542xinitcursor(VGAscr* scr, int xo, int yo, int index)
 {
@@ -219,9 +219,9 @@ clgd542xinitcursor(VGAscr* scr, int xo, int yo, int index)
         unlock(&scr->devlock);
     }
 }
-/*e: function clgd542xinitcursor(x86) */
+/*e: function [[clgd542xinitcursor]](x86) */
 
-/*s: function clgd542xload(x86) */
+/*s: function [[clgd542xload]](x86) */
 static void
 clgd542xload(VGAscr* scr, Cursor* curs)
 {
@@ -242,9 +242,9 @@ clgd542xload(VGAscr* scr, Cursor* curs)
     vgaxo(Seqx, 0x13, 0);
     vgaxo(Seqx, 0x12, sr12|0x05);
 }
-/*e: function clgd542xload(x86) */
+/*e: function [[clgd542xload]](x86) */
 
-/*s: function clgd542xmove(x86) */
+/*s: function [[clgd542xmove]](x86) */
 static int
 clgd542xmove(VGAscr* scr, Point p)
 {
@@ -275,9 +275,9 @@ clgd542xmove(VGAscr* scr, Point p)
 
     return 0;
 }
-/*e: function clgd542xmove(x86) */
+/*e: function [[clgd542xmove]](x86) */
 
-/*s: global vgaclgd542xdev(x86) */
+/*s: global [[vgaclgd542xdev]](x86) */
 VGAdev vgaclgd542xdev = {
     .name = "clgd542x",
 
@@ -286,9 +286,9 @@ VGAdev vgaclgd542xdev = {
     .page = clgd542xpage,
     .linear = clgd542xlinear,
 };
-/*e: global vgaclgd542xdev(x86) */
+/*e: global [[vgaclgd542xdev]](x86) */
 
-/*s: global vgaclgd542xcur(x86) */
+/*s: global [[vgaclgd542xcur]](x86) */
 VGAcur vgaclgd542xcur = {
     .name = "clgd542xhwgc",
 
@@ -297,5 +297,5 @@ VGAcur vgaclgd542xcur = {
     .load = clgd542xload,
     .move = clgd542xmove,
 };
-/*e: global vgaclgd542xcur(x86) */
+/*e: global [[vgaclgd542xcur]](x86) */
 /*e: kernel/devices/screen/386/vgaclgd542x.c */

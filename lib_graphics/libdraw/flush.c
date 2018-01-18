@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <draw_private.h>
 
-/*s: function doflush */
+/*s: function [[doflush]] */
 static
 errorneg1
 doflush(Display *d)
@@ -18,10 +18,10 @@ doflush(Display *d)
     nn=write(d->fd, d->buf, n);
     /*s: [[doflush()]] sanity check nn */
     if(nn != n){
-        /*s: [[doflush()]] if _drawdebug */
+        /*s: [[doflush()]] if [[_drawdebug]] */
         if(_drawdebug)
             fprint(2, "flushimage fail: d=%p: n=%d nn=%d %r\n", d, n, nn); /**/
-        /*e: [[doflush()]] if _drawdebug */
+        /*e: [[doflush()]] if [[_drawdebug]] */
         d->bufp = d->buf;	/* might as well; chance of continuing */
         return ERROR_NEG1;
     }
@@ -29,9 +29,9 @@ doflush(Display *d)
     d->bufp = d->buf;
     return OK_1;
 }
-/*e: function doflush */
+/*e: function [[doflush]] */
 
-/*s: function flushimage */
+/*s: function [[flushimage]] */
 errorneg1
 flushimage(Display *d, bool visible)
 {
@@ -47,9 +47,9 @@ flushimage(Display *d, bool visible)
     /*e: [[flushimage()]] if visible */
     return doflush(d);
 }
-/*e: function flushimage */
+/*e: function [[flushimage]] */
 
-/*s: function bufimage */
+/*s: function [[bufimage]] */
 byte*
 bufimage(Display *d, int n)
 {
@@ -70,6 +70,6 @@ bufimage(Display *d, int n)
     d->bufp += n;
     return p;
 }
-/*e: function bufimage */
+/*e: function [[bufimage]] */
 
 /*e: lib_graphics/libdraw/flush.c */

@@ -5,7 +5,7 @@
 typedef struct 	Keyboardctl Keyboardctl;
 typedef struct	Channel	Channel;
 
-/*s: struct Keyboardctl */
+/*s: struct [[Keyboardctl]] */
 struct	Keyboardctl
 {
     // /dev/cons
@@ -20,13 +20,13 @@ struct	Keyboardctl
 
     int		pid;		/* of slave proc */
 };
-/*e: struct Keyboardctl */
+/*e: struct [[Keyboardctl]] */
 
 extern	Keyboardctl*	initkeyboard(char*);
 extern	int				ctlkeyboard(Keyboardctl*, char*);
 extern	void			closekeyboard(Keyboardctl*);
 
-/*s: enum Kxxx */
+/*s: enum [[Kxxx]] */
 enum {
     KF=	0xF000,	/* Rune: beginning of private Unicode space */
     Spec=	0xF800,
@@ -55,5 +55,5 @@ enum {
     Keof=	0x04, // C-d
     Kbs=	0x08, // C-h (backspace)
 };
-/*e: enum Kxxx */
+/*e: enum [[Kxxx]] */
 /*e: include/keyboard.h */

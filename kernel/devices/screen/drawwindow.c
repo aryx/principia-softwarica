@@ -12,12 +12,12 @@
 
 #include    "devdraw.h"
 
-/*s: global dscreen */
+/*s: global [[dscreen]] */
 // list<ref<DScreen>> (next = DScreen.next)
 static  DScreen*    dscreen;
-/*e: global dscreen */
+/*e: global [[dscreen]] */
 
-/*s: function drawlookupdscreen */
+/*s: function [[drawlookupdscreen]] */
 DScreen*
 drawlookupdscreen(int id)
 {
@@ -31,9 +31,9 @@ drawlookupdscreen(int id)
     }
     return nil;
 }
-/*e: function drawlookupdscreen */
+/*e: function [[drawlookupdscreen]] */
 
-/*s: function drawlookupscreen */
+/*s: function [[drawlookupscreen]] */
 DScreen*
 drawlookupscreen(Client *client, int id, CScreen **cs)
 {
@@ -50,9 +50,9 @@ drawlookupscreen(Client *client, int id, CScreen **cs)
     error(Enodrawscreen);
     return nil;
 }
-/*e: function drawlookupscreen */
+/*e: function [[drawlookupscreen]] */
 
-/*s: function drawinstallscreen */
+/*s: function [[drawinstallscreen]] */
 Memscreen*
 drawinstallscreen(Client *client, DScreen *d, int id, DImage *dimage, DImage *dfill, bool public)
 {
@@ -121,9 +121,9 @@ drawinstallscreen(Client *client, DScreen *d, int id, DImage *dimage, DImage *df
 
     return d->screen;
 }
-/*e: function drawinstallscreen */
+/*e: function [[drawinstallscreen]] */
 
-/*s: function drawfreedscreen */
+/*s: function [[drawfreedscreen]] */
 void
 drawfreedscreen(DScreen *this)
 {
@@ -161,9 +161,9 @@ drawfreedscreen(DScreen *this)
     free(this->screen);
     free(this);
 }
-/*e: function drawfreedscreen */
+/*e: function [[drawfreedscreen]] */
 
-/*s: function drawuninstallscreen */
+/*s: function [[drawuninstallscreen]] */
 void
 drawuninstallscreen(Client *client, CScreen *this)
 {
@@ -189,7 +189,7 @@ drawuninstallscreen(Client *client, CScreen *this)
         cs = next;
     }
 }
-/*e: function drawuninstallscreen */
+/*e: function [[drawuninstallscreen]] */
 
 
 /*e: kernel/devices/screen/drawwindow.c */

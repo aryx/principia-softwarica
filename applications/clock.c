@@ -9,7 +9,7 @@
 static Image *hrhand, *minhand;
 static Image *dots, *back;
 
-/*s: function circlept */
+/*s: function [[circlept]] */
 static Point
 circlept(Point c, int r, int degrees)
 {
@@ -20,9 +20,9 @@ circlept(Point c, int r, int degrees)
     c.y -= sin(rad)*r;
     return c;
 }
-/*e: function circlept */
+/*e: function [[circlept]] */
 
-/*s: function redraw */
+/*s: function [[redraw]] */
 static void
 redraw(Image *view)
 {
@@ -60,9 +60,9 @@ redraw(Image *view)
 
     flushimage(display, true);
 }
-/*e: function redraw */
+/*e: function [[redraw]] */
 
-/*s: function eresized */
+/*s: function [[eresized]] */
 void
 eresized(bool new)
 {
@@ -70,7 +70,7 @@ eresized(bool new)
         fprint(2,"can't reattach to window");
     redraw(view);
 }
-/*e: function eresized */
+/*e: function [[eresized]] */
 
 /*s: function main (windows/apps/clock.c) */
 void

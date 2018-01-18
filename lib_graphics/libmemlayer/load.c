@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: function memload */
+/*s: function [[memload]] */
 errorneg1
 memload(Memimage *dst, Rectangle r, byte *data, int n, bool iscompressed)
 {
@@ -71,5 +71,5 @@ memload(Memimage *dst, Rectangle r, byte *data, int n, bool iscompressed)
     return n;
     /*e: [[memload()]] if dst has a layer */
 }
-/*e: function memload */
+/*e: function [[memload]] */
 /*e: lib_graphics/libmemlayer/load.c */

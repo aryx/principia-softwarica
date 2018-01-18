@@ -17,7 +17,7 @@
 #include "../port/portscreen.h"
 #include "screen.h"
 
-/*s: enum _anon_ (kernel/devices/screen/386/devvga.c) */
+/*s: enum [[_anon_ (kernel/devices/screen/386/devvga.c)]] */
 enum {
     Qdir,
 
@@ -27,9 +27,9 @@ enum {
     Qvgaovl,
     Qvgaovlctl,
 };
-/*e: enum _anon_ (kernel/devices/screen/386/devvga.c) */
+/*e: enum [[_anon_ (kernel/devices/screen/386/devvga.c)]] */
 
-/*s: global vgadir(x86) */
+/*s: global [[vgadir]](x86) */
 static Dirtab vgadir[] = {
     ".",    { Qdir, 0, QTDIR },     0,  0550,
     "vgabios",  { Qvgabios, 0 },    0x100000, 0440,
@@ -37,9 +37,9 @@ static Dirtab vgadir[] = {
     "vgaovl",       { Qvgaovl, 0 },     0,  0660,
     "vgaovlctl",    { Qvgaovlctl, 0 },  0,  0660,
 };
-/*e: global vgadir(x86) */
+/*e: global [[vgadir]](x86) */
 
-/*s: enum _anon_ (kernel/devices/screen/386/devvga.c)2 */
+/*s: enum [[_anon_ (kernel/devices/screen/386/devvga.c)2]] */
 enum {
     CMactualsize,
     CMblank,
@@ -56,9 +56,9 @@ enum {
     CMtype,
     CMunblank,
 };
-/*e: enum _anon_ (kernel/devices/screen/386/devvga.c)2 */
+/*e: enum [[_anon_ (kernel/devices/screen/386/devvga.c)2]] */
 
-/*s: global vgactlmsg(x86) */
+/*s: global [[vgactlmsg]](x86) */
 static Cmdtab vgactlmsg[] = {
     CMactualsize,   "actualsize",   2,
     CMblank,    "blank",    1,
@@ -75,9 +75,9 @@ static Cmdtab vgactlmsg[] = {
     CMtype,     "type",     2,
     CMunblank,  "unblank",  1,
 };
-/*e: global vgactlmsg(x86) */
+/*e: global [[vgactlmsg]](x86) */
 
-/*s: function vgareset(x86) */
+/*s: function [[vgareset]](x86) */
 static void
 vgareset(void)
 {
@@ -87,9 +87,9 @@ vgareset(void)
     if(ioalloc(0x3c0, 0x3da-0x3c0+1, 0, "vga") < 0)
         panic("vga ports already allocated"); 
 }
-/*e: function vgareset(x86) */
+/*e: function [[vgareset]](x86) */
 
-/*s: function vgaattach(x86) */
+/*s: function [[vgaattach]](x86) */
 static Chan*
 vgaattach(char* spec)
 {
@@ -97,25 +97,25 @@ vgaattach(char* spec)
         error(Eio);
     return devattach('v', spec);
 }
-/*e: function vgaattach(x86) */
+/*e: function [[vgaattach]](x86) */
 
-/*s: function vgawalk(x86) */
+/*s: function [[vgawalk]](x86) */
 Walkqid*
 vgawalk(Chan* c, Chan *nc, char** name, int nname)
 {
     return devwalk(c, nc, name, nname, vgadir, nelem(vgadir), devgen);
 }
-/*e: function vgawalk(x86) */
+/*e: function [[vgawalk]](x86) */
 
-/*s: function vgastat(x86) */
+/*s: function [[vgastat]](x86) */
 static int
 vgastat(Chan* c, uchar* dp, int n)
 {
     return devstat(c, dp, n, vgadir, nelem(vgadir), devgen);
 }
-/*e: function vgastat(x86) */
+/*e: function [[vgastat]](x86) */
 
-/*s: function vgaopen(x86) */
+/*s: function [[vgaopen]](x86) */
 static Chan*
 vgaopen(Chan* c, int omode)
 {
@@ -131,9 +131,9 @@ vgaopen(Chan* c, int omode)
     }
     return devopen(c, omode, vgadir, nelem(vgadir), devgen);
 }
-/*e: function vgaopen(x86) */
+/*e: function [[vgaopen]](x86) */
 
-/*s: function vgaclose(x86) */
+/*s: function [[vgaclose]](x86) */
 static void
 vgaclose(Chan* c)
 {
@@ -151,9 +151,9 @@ vgaclose(Chan* c)
             poperror();
         }
 }
-/*e: function vgaclose(x86) */
+/*e: function [[vgaclose]](x86) */
 
-/*s: function vgaread(x86) */
+/*s: function [[vgaread]](x86) */
 static long
 vgaread(Chan* c, void* a, long n, vlong off)
 {
@@ -232,9 +232,9 @@ vgaread(Chan* c, void* a, long n, vlong off)
 
     return 0;
 }
-/*e: function vgaread(x86) */
+/*e: function [[vgaread]](x86) */
 
-/*s: function vgactl(x86) */
+/*s: function [[vgactl]](x86) */
 static void
 vgactl(Cmdbuf *cb)
 {
@@ -432,13 +432,13 @@ vgactl(Cmdbuf *cb)
 
     cmderror(cb, "bad VGA control message");
 }
-/*e: function vgactl(x86) */
+/*e: function [[vgactl]](x86) */
 
-/*s: global Enooverlay(x86) */
+/*s: global [[Enooverlay]](x86) */
 char Enooverlay[] = "No overlay support";
-/*e: global Enooverlay(x86) */
+/*e: global [[Enooverlay]](x86) */
 
-/*s: function vgawrite(x86) */
+/*s: function [[vgawrite]](x86) */
 static long
 vgawrite(Chan* c, void* a, long n, vlong off)
 {
@@ -488,9 +488,9 @@ vgawrite(Chan* c, void* a, long n, vlong off)
 
     return 0;
 }
-/*e: function vgawrite(x86) */
+/*e: function [[vgawrite]](x86) */
 
-/*s: global vgadevtab(x86) */
+/*s: global [[vgadevtab]](x86) */
 Dev vgadevtab = {
     .dc       =    'v',
     .name     =    "vga",
@@ -515,5 +515,5 @@ Dev vgadevtab = {
     .init     =    devinit,
     .shutdown =    devshutdown,
 };
-/*e: global vgadevtab(x86) */
+/*e: global [[vgadevtab]](x86) */
 /*e: kernel/devices/screen/386/devvga.c */

@@ -16,7 +16,7 @@
 
 #include    "../port/portscreen.h"
 
-/*s: global swcursor_arrow */
+/*s: global [[swcursor_arrow]] */
 Cursor  swcursor_arrow = {
     .offset = { -1, -1 },
     .clr = { 
@@ -32,55 +32,55 @@ Cursor  swcursor_arrow = {
       0x61, 0xF0, 0x60, 0xE0, 0x40, 0x40, 0x00, 0x00, 
     },
 };
-/*e: global swcursor_arrow */
+/*e: global [[swcursor_arrow]] */
 
-/*s: global swback */
+/*s: global [[swback]] */
 Memimage*   swback; /* screen under cursor */
-/*e: global swback */
-/*s: global swimg1 */
+/*e: global [[swback]] */
+/*s: global [[swimg1]] */
 Memimage*   swimg1;
-/*e: global swimg1 */
-/*s: global swmask1 */
+/*e: global [[swimg1]] */
+/*s: global [[swmask1]] */
 Memimage*   swmask1;
-/*e: global swmask1 */
+/*e: global [[swmask1]] */
 
-/*s: global swpt */
+/*s: global [[swpt]] */
 Point   swpt;   /* desired cursor location */
-/*e: global swpt */
-/*s: global swvispt */
+/*e: global [[swpt]] */
+/*s: global [[swvispt]] */
 Point   swvispt;    /* actual cursor location */
-/*e: global swvispt */
-/*s: global swvers */
+/*e: global [[swvispt]] */
+/*s: global [[swvers]] */
 int swvers; /* incremented each time cursor image changes */
-/*e: global swvers */
-/*s: global swvisvers */
+/*e: global [[swvers]] */
+/*s: global [[swvisvers]] */
 int swvisvers;  /* the version on the screen */
-/*e: global swvisvers */
+/*e: global [[swvisvers]] */
 
-/*s: global swenabled */
+/*s: global [[swenabled]] */
 bool swenabled;  /* is the cursor supposed to be on the screen? */
-/*e: global swenabled */
-/*s: global swvisible */
+/*e: global [[swenabled]] */
+/*s: global [[swvisible]] */
 bool swvisible;  /* is the cursor visible? */
-/*e: global swvisible */
+/*e: global [[swvisible]] */
 
-/*s: global swimg */
+/*s: global [[swimg]] */
 Memimage*   swimg;  /* cursor image */
-/*e: global swimg */
-/*s: global swmask */
+/*e: global [[swimg]] */
+/*s: global [[swmask]] */
 Memimage*   swmask; /* cursor mask */
-/*e: global swmask */
+/*e: global [[swmask]] */
 
-/*s: global swrect */
+/*s: global [[swrect]] */
 Rectangle   swrect; /* screen rectangle in swback */
-/*e: global swrect */
+/*e: global [[swrect]] */
 
-/*s: global swoffset */
+/*s: global [[swoffset]] */
 Point   swoffset;
-/*e: global swoffset */
+/*e: global [[swoffset]] */
 
 
-/*s: function swcursorclock */
+/*s: function [[swcursorclock]] */
 void
 swcursor_clock(void)
 {
@@ -105,9 +105,9 @@ swcursor_clock(void)
     }
     arch_splx(x);
 }
-/*e: function swcursorclock */
+/*e: function [[swcursorclock]] */
 
-/*s: function swcursorinit */
+/*s: function [[swcursorinit]] */
 void
 swcursor_init(void)
 {
@@ -147,9 +147,9 @@ swcursor_init(void)
     memfillcolor(swimg,   DBlack);
     memfillcolor(swimg1,  DBlack);
 }
-/*e: function swcursorinit */
+/*e: function [[swcursorinit]] */
 
-/*s: function swcursordraw */
+/*s: function [[swcursordraw]] */
 void
 swcursor_draw(void)
 {
@@ -179,9 +179,9 @@ swcursor_draw(void)
         qunlock(&drawlock);
 
 }
-/*e: function swcursordraw */
+/*e: function [[swcursordraw]] */
 
-/*s: function swcursorhide */
+/*s: function [[swcursorhide]] */
 /*
  * called with drawlock locked for us, most of the time.
  * kernel prints at inopportune times might mean we don't
@@ -201,18 +201,18 @@ swcursor_hide(void)
     memimagedraw(gscreen, swrect, swback, ZP, memopaque, ZP, S);
     arch_flushmemscreen(swrect);
 }
-/*e: function swcursorhide */
+/*e: function [[swcursorhide]] */
 
-/*s: function swcursoravoid */
+/*s: function [[swcursoravoid]] */
 void
 swcursor_avoid(Rectangle r)
 {
     if(swvisible && rectXrect(r, swrect))
         swcursor_hide();
 }
-/*e: function swcursoravoid */
+/*e: function [[swcursoravoid]] */
 
-/*s: function swload */
+/*s: function [[swload]] */
 void
 swcursor_load(Cursor *curs)
 {
@@ -246,14 +246,14 @@ swcursor_load(Cursor *curs)
     memimagedraw(swimg1,  swimg1->r,  swimg,  ZP, memopaque, ZP, S);
     memimagedraw(swmask1, swmask1->r, swmask, ZP, memopaque, ZP, S);
 }
-/*e: function swload */
+/*e: function [[swload]] */
 
-/*s: function swmove */
+/*s: function [[swmove]] */
 int
 swcursor_move(Point p)
 {
     swpt = addpt(p, swoffset);
     return 0;
 }
-/*e: function swmove */
+/*e: function [[swmove]] */
 /*e: kernel/devices/screen/swcursor.c */

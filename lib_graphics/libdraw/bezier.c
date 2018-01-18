@@ -3,20 +3,20 @@
 #include <libc.h>
 #include <draw.h>
 
-/*s: constant PINC */
+/*s: constant [[PINC]] */
 #define	PINC	32		/* realloc granularity */
-/*e: constant PINC */
+/*e: constant [[PINC]] */
 
 typedef struct Plist Plist;
-/*s: struct Plist */
+/*s: struct [[Plist]] */
 struct Plist
 {
     Point *p;
     int np;			/* -1 if malloc/realloc failed */
 };
-/*e: struct Plist */
+/*e: struct [[Plist]] */
 
-/*s: function appendpt */
+/*s: function [[appendpt]] */
 static void
 appendpt(Plist *l, Point p)
 {
@@ -34,17 +34,17 @@ appendpt(Plist *l, Point p)
     }
     l->p[l->np++] = p;
 }
-/*e: function appendpt */
+/*e: function [[appendpt]] */
 
-/*s: function normsq */
+/*s: function [[normsq]] */
 static int
 normsq(Point p)
 {
     return p.x*p.x+p.y*p.y;
 }
-/*e: function normsq */
+/*e: function [[normsq]] */
 
-/*s: function psdist */
+/*s: function [[psdist]] */
 static int
 psdist(Point p, Point a, Point b)
 {
@@ -60,9 +60,9 @@ psdist(Point p, Point a, Point b)
         return normsq(subpt(b, p));
     return normsq(subpt(divpt(mulpt(b, num), den), p));
 }
-/*e: function psdist */
+/*e: function [[psdist]] */
 
-/*s: function bpts1 */
+/*s: function [[bpts1]] */
 /*
  * Convert cubic Bezier curve control points to polyline
  * vertices.  Leaves the last vertex off, so you can continue
@@ -104,26 +104,26 @@ bpts1(Plist *l, Point p0, Point p1, Point p2, Point p3, int scale)
         bpts1(l, p0123, mulpt(p123, 2), mulpt(p23, 4), mulpt(p3, 8), scale*8);
     }
 }
-/*e: function bpts1 */
+/*e: function [[bpts1]] */
 
-/*s: function bpts */
+/*s: function [[bpts]] */
 static void
 bpts(Plist *l, Point p0, Point p1, Point p2, Point p3)
 {
     bpts1(l, p0, p1, p2, p3, 1);
 }
-/*e: function bpts */
+/*e: function [[bpts]] */
 
-/*s: function bezierpts */
+/*s: function [[bezierpts]] */
 static void
 bezierpts(Plist *l, Point p0, Point p1, Point p2, Point p3)
 {
     bpts(l, p0, p1, p2, p3);
     appendpt(l, p3);
 }
-/*e: function bezierpts */
+/*e: function [[bezierpts]] */
 
-/*s: function _bezsplinepts */
+/*s: function [[_bezsplinepts]] */
 static void
 _bezsplinepts(Plist *l, Point *pt, int npt)
 {
@@ -163,9 +163,9 @@ _bezsplinepts(Plist *l, Point *pt, int npt)
     }
     appendpt(l, d);
 }
-/*e: function _bezsplinepts */
+/*e: function [[_bezsplinepts]] */
 
-/*s: function bezsplinepts */
+/*s: function [[bezsplinepts]] */
 int
 bezsplinepts(Point *pt, int npt, Point **pp)
 {
@@ -176,17 +176,17 @@ bezsplinepts(Point *pt, int npt, Point **pp)
     *pp  = l.p;
     return l.np;
 }
-/*e: function bezsplinepts */
+/*e: function [[bezsplinepts]] */
 
-/*s: function bezier */
+/*s: function [[bezier]] */
 error0
 bezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1, int radius, Image *src, Point sp)
 {
     return bezierop(dst, p0, p1, p2, p3, end0, end1, radius, src, sp, SoverD);
 }
-/*e: function bezier */
+/*e: function [[bezier]] */
 
-/*s: function bezierop */
+/*s: function [[bezierop]] */
 error0
 bezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
 {
@@ -202,17 +202,17 @@ bezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1,
     }
     return OK_1;
 }
-/*e: function bezierop */
+/*e: function [[bezierop]] */
 
-/*s: function bezspline */
+/*s: function [[bezspline]] */
 error0
 bezspline(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Image *src, Point sp)
 {
     return bezsplineop(dst, pt, npt, end0, end1, radius, src, sp, SoverD);
 }
-/*e: function bezspline */
+/*e: function [[bezspline]] */
 
-/*s: function bezsplineop */
+/*s: function [[bezsplineop]] */
 error0
 bezsplineop(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
 {
@@ -228,17 +228,17 @@ bezsplineop(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Imag
     }
     return OK_1;
 }
-/*e: function bezsplineop */
+/*e: function [[bezsplineop]] */
 
-/*s: function fillbezier */
+/*s: function [[fillbezier]] */
 error0
 fillbezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *src, Point sp)
 {
     return fillbezierop(dst, p0, p1, p2, p3, w, src, sp, SoverD);
 }
-/*e: function fillbezier */
+/*e: function [[fillbezier]] */
 
-/*s: function fillbezierop */
+/*s: function [[fillbezierop]] */
 error0
 fillbezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *src, Point sp, Drawop op)
 {
@@ -254,17 +254,17 @@ fillbezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *s
     }
     return OK_1;
 }
-/*e: function fillbezierop */
+/*e: function [[fillbezierop]] */
 
-/*s: function fillbezspline */
+/*s: function [[fillbezspline]] */
 error0
 fillbezspline(Image *dst, Point *pt, int npt, int w, Image *src, Point sp)
 {
     return fillbezsplineop(dst, pt, npt, w, src, sp, SoverD);
 }
-/*e: function fillbezspline */
+/*e: function [[fillbezspline]] */
 
-/*s: function fillbezsplineop */
+/*s: function [[fillbezsplineop]] */
 error0
 fillbezsplineop(Image *dst, Point *pt, int npt, int w, Image *src, Point sp, Drawop op)
 {
@@ -280,5 +280,5 @@ fillbezsplineop(Image *dst, Point *pt, int npt, int w, Image *src, Point sp, Dra
     }
     return OK_1;
 }
-/*e: function fillbezsplineop */
+/*e: function [[fillbezsplineop]] */
 /*e: lib_graphics/libdraw/bezier.c */

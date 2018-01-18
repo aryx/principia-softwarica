@@ -7,16 +7,16 @@
 #include <cursor.h>
 #include <mouse.h>
 
-/*s: function moveto */
+/*s: function [[moveto]] */
 void
 moveto(Mousectl *m, Point pt)
 {
     fprint(m->mfd, "m%d %d", pt.x, pt.y);
     m->xy = pt;
 }
-/*e: function moveto */
+/*e: function [[moveto]] */
 
-/*s: function readmouse */
+/*s: function [[readmouse]] */
 errorneg1
 readmouse(Mousectl *mc)
 {
@@ -30,9 +30,9 @@ readmouse(Mousectl *mc)
     }
     return OK_0;
 }
-/*e: function readmouse */
+/*e: function [[readmouse]] */
 
-/*s: function _ioproc (lib_graphics/libdraw/mouse.c) */
+/*s: function [[_ioproc]]([[(lib_graphics/libdraw/mouse.c)]]) */
 static
 void
 _ioproc(void *arg)
@@ -90,9 +90,9 @@ _ioproc(void *arg)
         }
     }
 }
-/*e: function _ioproc (lib_graphics/libdraw/mouse.c) */
+/*e: function [[_ioproc]]([[(lib_graphics/libdraw/mouse.c)]]) */
 
-/*s: function initmouse */
+/*s: function [[initmouse]] */
 Mousectl*
 initmouse(char *file, Image *i)
 {
@@ -154,9 +154,9 @@ initmouse(char *file, Image *i)
 
     return mc;
 }
-/*e: function initmouse */
+/*e: function [[initmouse]] */
 
-/*s: function setcursor */
+/*s: function [[setcursor]] */
 void
 setcursor(Mousectl *mc, Cursor *c)
 {
@@ -171,9 +171,9 @@ setcursor(Mousectl *mc, Cursor *c)
         write(mc->cfd, curs, sizeof curs);
     }
 }
-/*e: function setcursor */
+/*e: function [[setcursor]] */
 
-/*s: function closemouse */
+/*s: function [[closemouse]] */
 void
 closemouse(Mousectl *mc)
 {
@@ -193,10 +193,10 @@ closemouse(Mousectl *mc)
     free(mc->resizec);
     free(mc);
 }
-/*e: function closemouse */
+/*e: function [[closemouse]] */
 
 
-/*s: function mousescrollsize */
+/*s: function [[mousescrollsize]] */
 int
 mousescrollsize(int maxlines)
 {
@@ -222,6 +222,6 @@ mousescrollsize(int maxlines)
         return lines;
     return pcnt * maxlines/100.0;	
 }
-/*e: function mousescrollsize */
+/*e: function [[mousescrollsize]] */
 
 /*e: lib_graphics/libdraw/mouse.c */

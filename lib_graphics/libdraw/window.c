@@ -6,11 +6,11 @@
 #include <draw_private.h>
 
 // see getwindow()
-/*s: global screen */
+/*s: global [[screen]] */
 Screen	*screen;
-/*e: global screen */
+/*e: global [[screen]] */
 
-/*s: function _allocwindow */
+/*s: function [[_allocwindow]] */
 Image*
 _allocwindow(Image *i, Screen *s, Rectangle r, int ref, rgba val)
 {
@@ -30,19 +30,19 @@ _allocwindow(Image *i, Screen *s, Rectangle r, int ref, rgba val)
 
     return i;
 }
-/*e: function _allocwindow */
+/*e: function [[_allocwindow]] */
 
-/*s: function allocwindow */
+/*s: function [[allocwindow]] */
 Image*
 allocwindow(Screen *s, Rectangle r, int ref, rgba val)
 {
     return _allocwindow(nil, s, r, ref, val);
 }
-/*e: function allocwindow */
+/*e: function [[allocwindow]] */
 
 
 
-/*s: function gengetwindow */
+/*s: function [[gengetwindow]] */
 /*
  * Attach, or possibly reattach, to window.
  * If reattaching, maintain value of screen pointer.
@@ -135,9 +135,9 @@ gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
     assert((*winp)->chan != 0);
     return OK_1;
 }
-/*e: function gengetwindow */
+/*e: function [[gengetwindow]] */
 
-/*s: function getwindow */
+/*s: function [[getwindow]] */
 errorneg1
 getwindow(Display *d, int ref)
 {
@@ -146,12 +146,12 @@ getwindow(Display *d, int ref)
     snprint(winname, sizeof winname, "%s/winname", d->windir);
     return gengetwindow(d, winname, &view, &screen, ref);
 }
-/*e: function getwindow */
+/*e: function [[getwindow]] */
 
 
 
 
-/*s: function topbottom */
+/*s: function [[topbottom]] */
 static
 void
 topbottom(Image **w, int n, bool top)
@@ -194,9 +194,9 @@ topbottom(Image **w, int n, bool top)
     for(i=0; i<n; i++)
         BPLONG(b+4+4*i, w[i]->id);
 }
-/*e: function topbottom */
+/*e: function [[topbottom]] */
 
-/*s: function bottomwindow */
+/*s: function [[bottomwindow]] */
 void
 bottomwindow(Image *w)
 {
@@ -206,9 +206,9 @@ bottomwindow(Image *w)
     /*e: [[xxxmwindow()]] sanity check window w */
     topbottom(&w, 1, false);
 }
-/*e: function bottomwindow */
+/*e: function [[bottomwindow]] */
 
-/*s: function topwindow */
+/*s: function [[topwindow]] */
 void
 topwindow(Image *w)
 {
@@ -218,25 +218,25 @@ topwindow(Image *w)
     /*e: [[xxxmwindow()]] sanity check window w */
     topbottom(&w, 1, true);
 }
-/*e: function topwindow */
+/*e: function [[topwindow]] */
 
-/*s: function bottomnwindows */
+/*s: function [[bottomnwindows]] */
 void
 bottomnwindows(Image **w, int n)
 {
     topbottom(w, n, false);
 }
-/*e: function bottomnwindows */
+/*e: function [[bottomnwindows]] */
 
-/*s: function topnwindows */
+/*s: function [[topnwindows]] */
 void
 topnwindows(Image **w, int n)
 {
     topbottom(w, n, true);
 }
-/*e: function topnwindows */
+/*e: function [[topnwindows]] */
 
-/*s: function originwindow */
+/*s: function [[originwindow]] */
 errorneg1
 originwindow(Image *w, Point log, Point scr)
 {
@@ -268,10 +268,10 @@ originwindow(Image *w, Point log, Point scr)
     w->clipr = rectaddpt(w->clipr, delta);
     return OK_1;
 }
-/*e: function originwindow */
+/*e: function [[originwindow]] */
 
 
-/*s: function newwindow */
+/*s: function [[newwindow]] */
 /* Connect us to new window, if possible */
 errorneg1
 newwindow(char *str)
@@ -300,5 +300,5 @@ newwindow(char *str)
 
     return mount(fd, -1, "/dev", MBEFORE, buf);
 }
-/*e: function newwindow */
+/*e: function [[newwindow]] */
 /*e: lib_graphics/libdraw/window.c */

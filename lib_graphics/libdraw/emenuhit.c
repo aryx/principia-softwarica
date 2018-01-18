@@ -5,7 +5,7 @@
 #include <draw_private.h>
 #include <event.h>
 
-/*s: enum _anon_ (lib_graphics/libdraw/emenuhit.c) */
+/*s: enum [[_anon_]]([[(lib_graphics/libdraw/emenuhit.c)]]) */
 enum
 {
     Margin = 4,		/* outside to text */
@@ -17,28 +17,28 @@ enum
     Scrollwid = 14,		/* width of scroll bar */
     Gap = 4,			/* between text and scroll bar */
 };
-/*e: enum _anon_ (lib_graphics/libdraw/emenuhit.c) */
+/*e: enum [[_anon_]]([[(lib_graphics/libdraw/emenuhit.c)]]) */
 
-/*s: global menutxt */
+/*s: global [[menutxt]] */
 static	Image	*menutxt;
-/*e: global menutxt */
-/*s: global back */
+/*e: global [[menutxt]] */
+/*s: global [[back]] */
 static	Image	*back;
-/*e: global back */
-/*s: global high */
+/*e: global [[back]] */
+/*s: global [[high]] */
 static	Image	*high;
-/*e: global high */
-/*s: global bord */
+/*e: global [[high]] */
+/*s: global [[bord]] */
 static	Image	*bord;
-/*e: global bord */
-/*s: global text */
+/*e: global [[bord]] */
+/*s: global [[text]] */
 static	Image	*text;
-/*e: global text */
-/*s: global htext */
+/*e: global [[text]] */
+/*s: global [[htext]] */
 static	Image	*htext;
-/*e: global htext */
+/*e: global [[htext]] */
 
-/*s: function menucolors */
+/*s: function [[menucolors]] */
 static
 void
 menucolors(void)
@@ -63,9 +63,9 @@ menucolors(void)
     text = display->black;
     htext = display->white;
 }
-/*e: function menucolors */
+/*e: function [[menucolors]] */
 
-/*s: function menurect */
+/*s: function [[menurect]] */
 /*
  * r is a rectangle holding the text elements.
  * return the rectangle, including its black edge, holding element i.
@@ -79,9 +79,9 @@ menurect(Rectangle r, int i)
     r.max.y = r.min.y+font->height+Vspacing;
     return insetrect(r, Border-Margin);
 }
-/*e: function menurect */
+/*e: function [[menurect]] */
 
-/*s: function menusel */
+/*s: function [[menusel]] */
 /*
  * r is a rectangle holding the text elements.
  * return the element number containing p.
@@ -94,9 +94,9 @@ menusel(Rectangle r, Point p)
         return -1;
     return (p.y-r.min.y)/(font->height+Vspacing);
 }
-/*e: function menusel */
+/*e: function [[menusel]] */
 
-/*s: function paintitem */
+/*s: function [[paintitem]] */
 static
 void
 paintitem(Menu *menu, Rectangle textr, int off, int i, int highlight, Image *save, Image *restore)
@@ -120,9 +120,9 @@ paintitem(Menu *menu, Rectangle textr, int off, int i, int highlight, Image *sav
     draw(view, r, highlight? high : back, nil, pt);
     string(view, pt, highlight? htext : text, pt, font, item);
 }
-/*e: function paintitem */
+/*e: function [[paintitem]] */
 
-/*s: function menuscan */
+/*s: function [[menuscan]] */
 /*
  * menur is a rectangle holding all the highlightable text elements.
  * track mouse while inside the box, return what's selected when button
@@ -151,9 +151,9 @@ menuscan(Menu *menu, int but, Mouse *m, Rectangle textr, int off, int lasti, Ima
     }
     return lasti;
 }
-/*e: function menuscan */
+/*e: function [[menuscan]] */
 
-/*s: function menupaint */
+/*s: function [[menupaint]] */
 static void
 menupaint(Menu *menu, Rectangle textr, int off, int nitemdrawn)
 {
@@ -163,9 +163,9 @@ menupaint(Menu *menu, Rectangle textr, int off, int nitemdrawn)
     for(i = 0; i<nitemdrawn; i++)
         paintitem(menu, textr, off, i, 0, nil, nil);
 }
-/*e: function menupaint */
+/*e: function [[menupaint]] */
 
-/*s: function menuscrollpaint */
+/*s: function [[menuscrollpaint]] */
 static void
 menuscrollpaint(Rectangle scrollr, int off, int nitem, int nitemdrawn)
 {
@@ -184,9 +184,9 @@ menuscrollpaint(Rectangle scrollr, int off, int nitem, int nitemdrawn)
     if(menutxt)
         draw(view, insetrect(r, 1), menutxt, nil, ZP);
 }
-/*e: function menuscrollpaint */
+/*e: function [[menuscrollpaint]] */
 
-/*s: function emenuhit */
+/*s: function [[emenuhit]] */
 int
 emenuhit(int but, Mouse *m, Menu *menu)
 {
@@ -299,5 +299,5 @@ emenuhit(int but, Mouse *m, Menu *menu)
     }
     return -1;
 }
-/*e: function emenuhit */
+/*e: function [[emenuhit]] */
 /*e: lib_graphics/libdraw/emenuhit.c */

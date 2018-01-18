@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <pool.h>
 
-/*s: function memimagemove */
+/*s: function [[memimagemove]] */
 void
 memimagemove(void *from, void *to)
 {
@@ -23,9 +23,9 @@ memimagemove(void *from, void *to)
     /* if allocmemimage changes this must change too */
     md->bdata = (byte*)md->base + sizeof(Memdata*) + sizeof(ulong);
 }
-/*e: function memimagemove */
+/*e: function [[memimagemove]] */
 
-/*s: function allocmemimaged */
+/*s: function [[allocmemimaged]] */
 Memimage*
 allocmemimaged(Rectangle r, ulong chan, Memdata *md)
 {
@@ -77,10 +77,10 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
     }
     return i;
 }
-/*e: function allocmemimaged */
+/*e: function [[allocmemimaged]] */
 
 
-/*s: function allocmemimage */
+/*s: function [[allocmemimage]] */
 Memimage*
 allocmemimage(Rectangle r, ulong chan)
 {
@@ -137,9 +137,9 @@ allocmemimage(Rectangle r, ulong chan)
 
     return i;
 }
-/*e: function allocmemimage */
+/*e: function [[allocmemimage]] */
 
-/*s: function freememimage */
+/*s: function [[freememimage]] */
 void
 freememimage(Memimage *i)
 {
@@ -155,6 +155,6 @@ freememimage(Memimage *i)
     }
     free(i);
 }
-/*e: function freememimage */
+/*e: function [[freememimage]] */
 
 /*e: lib_graphics/libmemdraw/alloc.c */

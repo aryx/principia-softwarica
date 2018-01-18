@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <draw_private.h>
 
-/*s: function loadimage */
+/*s: function [[loadimage]] */
 errorneg1
 loadimage(Image *i, Rectangle r, byte *data, int ndata)
 {
@@ -73,9 +73,9 @@ loadimage(Image *i, Rectangle r, byte *data, int ndata)
     /*e: [[loadimage()]] flush and sanity check no error */
     return ndata;
 }
-/*e: function loadimage */
+/*e: function [[loadimage]] */
 
-/*s: function unloadimage */
+/*s: function [[unloadimage]] */
 errorneg1
 unloadimage(Image *i, Rectangle r, byte *data, int ndata)
 {
@@ -143,5 +143,5 @@ unloadimage(Image *i, Rectangle r, byte *data, int ndata)
     }
     return ntot;
 }
-/*e: function unloadimage */
+/*e: function [[unloadimage]] */
 /*e: lib_graphics/libdraw/transfer.c */

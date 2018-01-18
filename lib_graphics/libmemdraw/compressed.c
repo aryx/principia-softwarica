@@ -9,7 +9,7 @@
 // to libdraw which ends up linking in lockdisplay in the kernel.
 // To avoid this issue creadmemimage() is defined instead in io.c.
 
-/*s: function cloadmemimage */
+/*s: function [[cloadmemimage]] */
 int
 cloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
 {
@@ -73,6 +73,6 @@ cloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
     }
     return u-data;
 }
-/*e: function cloadmemimage */
+/*e: function [[cloadmemimage]] */
 
 /*e: lib_graphics/libmemdraw/compressed.c */

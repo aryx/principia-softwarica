@@ -7,24 +7,24 @@
 
 extern Pool* imagmem;
 
-/*s: global memones */
+/*s: global [[memones]] */
 static Memimage*	memones;
-/*e: global memones */
-/*s: global memzeros */
+/*e: global [[memones]] */
+/*s: global [[memzeros]] */
 static Memimage*	memzeros;
-/*e: global memzeros */
-/*s: global memwhite */
+/*e: global [[memzeros]] */
+/*s: global [[memwhite]] */
 Memimage *memwhite;
-/*e: global memwhite */
-/*s: global memblack */
+/*e: global [[memwhite]] */
+/*s: global [[memblack]] */
 Memimage *memblack;
-/*e: global memblack */
-/*s: global memtransparent */
+/*e: global [[memblack]] */
+/*s: global [[memtransparent]] */
 Memimage *memtransparent;
-/*e: global memtransparent */
-/*s: global memopaque */
+/*e: global [[memtransparent]] */
+/*s: global [[memopaque]] */
 Memimage *memopaque;
-/*e: global memopaque */
+/*e: global [[memopaque]] */
 
 int	_ifmt(Fmt*);
 
@@ -32,7 +32,7 @@ extern int replmul[];
 
 extern uchar replbit[1+8][256];
 
-/*s: function mktables */
+/*s: function [[mktables]] */
 static void
 mktables(void)
 {
@@ -53,10 +53,10 @@ mktables(void)
     }
 
 }
-/*e: function mktables */
+/*e: function [[mktables]] */
 
 
-/*s: function memimageinit */
+/*s: function [[memimageinit]] */
 void
 memimageinit(void)
 {
@@ -105,6 +105,6 @@ memimageinit(void)
     memopaque = memones;
     memtransparent = memzeros;
 }
-/*e: function memimageinit */
+/*e: function [[memimageinit]] */
 
 /*e: lib_graphics/libmemdraw/init.c */

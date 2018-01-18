@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <draw_private.h>
 
-/*s: function replclipr */
+/*s: function [[replclipr]] */
 void
 replclipr(Image *i, bool repl, Rectangle clipr)
 {
@@ -25,10 +25,10 @@ replclipr(Image *i, bool repl, Rectangle clipr)
     i->clipr = clipr;
     /*e: [[replclipr()]] body */
 }
-/*e: function replclipr */
+/*e: function [[replclipr]] */
 
 
-/*s: function rectclip */
+/*s: function [[rectclip]] */
 bool
 rectclip(Rectangle *rp, Rectangle b) /* first by reference, second by value */
 {
@@ -51,9 +51,9 @@ rectclip(Rectangle *rp, Rectangle b) /* first by reference, second by value */
         rp->max.y = bp->max.y;
     return true;
 }
-/*e: function rectclip */
+/*e: function [[rectclip]] */
 
-/*s: function drawreplxy */
+/*s: function [[drawreplxy]] */
 int
 drawreplxy(int min, int max, int x)
 {
@@ -64,9 +64,9 @@ drawreplxy(int min, int max, int x)
         sx += max - min;
     return sx + min;
 }
-/*e: function drawreplxy */
+/*e: function [[drawreplxy]] */
 
-/*s: function drawrepl */
+/*s: function [[drawrepl]] */
 Point
 drawrepl(Rectangle r, Point p)
 {
@@ -74,6 +74,6 @@ drawrepl(Rectangle r, Point p)
     p.y = drawreplxy(r.min.y, r.max.y, p.y);
     return p;
 }
-/*e: function drawrepl */
+/*e: function [[drawrepl]] */
 
 /*e: lib_graphics/libdraw/replclipr.c */

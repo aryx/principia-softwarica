@@ -7,15 +7,15 @@
 #include <event.h>
 
 static int nbit, npix;
-/*s: global pixel */
+/*s: global [[pixel]] */
 static Image *pixel;
-/*e: global pixel */
-/*s: global crect */
+/*e: global [[pixel]] */
+/*s: global [[crect]] */
 static Rectangle crect[256];
-/*e: global crect */
-/*s: global color */
+/*e: global [[crect]] */
+/*s: global [[color]] */
 static Image *color[256];
-/*e: global color */
+/*e: global [[color]] */
 
 /*s: function eresized (windows/apps/colors.c) */
 void
@@ -56,15 +56,15 @@ eresized(bool new)
 }
 /*e: function eresized (windows/apps/colors.c) */
 
-/*s: global buttons */
+/*s: global [[buttons]] */
 static char *buttons[] =
 {
     "exit",
     0
 };
-/*e: global buttons */
+/*e: global [[buttons]] */
 
-/*s: function grey */
+/*s: function [[grey]] */
 static ulong
 grey(int i)
 {
@@ -74,16 +74,16 @@ grey(int i)
         return grey(255);
     return (i<<16)+(i<<8)+i;
 }
-/*e: function grey */
+/*e: function [[grey]] */
 
-/*s: global menu */
+/*s: global [[menu]] */
 static Menu menu =
 {
     buttons
 };
-/*e: global menu */
+/*e: global [[menu]] */
 
-/*s: global dither */
+/*s: global [[dither]] */
 static int
 dither[16] =  {
     0, 8, 2, 10,
@@ -91,7 +91,7 @@ dither[16] =  {
     3, 11, 1, 9,
     15, 7, 13, 5
 };
-/*e: global dither */
+/*e: global [[dither]] */
 
 /*s: function main (windows/apps/colors.c) */
 void

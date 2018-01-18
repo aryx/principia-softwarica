@@ -1,6 +1,6 @@
 /*s: kernel/devices/screen/386/screen.h */
 
-/*s: enum vgaports(x86) */
+/*s: enum [[vgaports]](x86) */
 /*
  * Generic VGA registers.
  */
@@ -22,9 +22,9 @@ enum {
   Pixmask   = 0x03C6, /* Pixel Mask Register */
   PaddrR    = 0x03C7, /* Palette Address Register, read */
   Pstatus   = 0x03C7, /* DAC Status (RO) */
-/*e: enum vgaports(x86) */
+/*e: enum [[vgaports]](x86) */
 
-/*s: enum vgamisc(x86) */
+/*s: enum [[vgamisc]](x86) */
   Pcolours  = 256,    /* Palette */
 
   Pred    = 0,
@@ -34,15 +34,15 @@ enum {
   Pblack    = 0x00,
   Pwhite    = 0xFF,
 };
-/*e: enum vgamisc(x86) */
+/*e: enum [[vgamisc]](x86) */
 
-/*s: function VGAMEM(x86) */
+/*s: function [[VGAMEM]](x86) */
 #define VGAMEM()  0xA0000
-/*e: function VGAMEM(x86) */
+/*e: function [[VGAMEM]](x86) */
 
-/*s: function vgao(x86) */
+/*s: function [[vgao]](x86) */
 #define vgao(port, data)  outb(port, data)
-/*e: function vgao(x86) */
+/*e: function [[vgao]](x86) */
 //#define vgai(port)    inb(port)
 extern int vgaxi(long, uchar);
 extern int vgaxo(long, uchar, uchar);
@@ -52,7 +52,7 @@ typedef struct VGAdev VGAdev;
 typedef struct VGAcur VGAcur;
 typedef struct VGAscr VGAscr;
 
-/*s: struct VGAdev(x86) */
+/*s: struct [[VGAdev]](x86) */
 struct VGAdev {
   char* name;
 
@@ -71,9 +71,9 @@ struct VGAdev {
 
   void  (*flush)(VGAscr*, Rectangle);
 };
-/*e: struct VGAdev(x86) */
+/*e: struct [[VGAdev]](x86) */
 
-/*s: struct VGAcur(x86) */
+/*s: struct [[VGAcur]](x86) */
 struct VGAcur {
   char* name;
 
@@ -87,9 +87,9 @@ struct VGAcur {
   // optional
   int doespanning;
 };
-/*e: struct VGAcur(x86) */
+/*e: struct [[VGAcur]](x86) */
 
-/*s: struct VGAscr(x86) */
+/*s: struct [[VGAscr]](x86) */
 struct VGAscr {
 
   ulong paddr;    /* frame buffer */
@@ -137,16 +137,16 @@ struct VGAscr {
   // Extra
   Lock  devlock;
 };
-/*e: struct VGAscr(x86) */
+/*e: struct [[VGAscr]](x86) */
 
 //!!!
 extern VGAscr vgascreen;
 
-/*s: enum _anon_ (kernel/devices/screen/386/screen.h)2 */
+/*s: enum [[_anon_ (kernel/devices/screen/386/screen.h)2]] */
 enum {
   Backgnd   = 0,  /* black */
 };
-/*e: enum _anon_ (kernel/devices/screen/386/screen.h)2 */
+/*e: enum [[_anon_ (kernel/devices/screen/386/screen.h)2]] */
 
 
 /* screen.c */

@@ -3,11 +3,11 @@
 #include <libc.h>
 #include <draw.h>
 
-/*s: global debuglockdisplay */
+/*s: global [[debuglockdisplay]] */
 bool		debuglockdisplay = false;
-/*e: global debuglockdisplay */
+/*e: global [[debuglockdisplay]] */
 
-/*s: function lockdisplay */
+/*s: function [[lockdisplay]] */
 void
 lockdisplay(Display *disp)
 {
@@ -23,14 +23,14 @@ lockdisplay(Display *disp)
     else
         qlock(&disp->qlock);
 }
-/*e: function lockdisplay */
+/*e: function [[lockdisplay]] */
 
-/*s: function unlockdisplay */
+/*s: function [[unlockdisplay]] */
 void
 unlockdisplay(Display *disp)
 {
     qunlock(&disp->qlock);
 }
-/*e: function unlockdisplay */
+/*e: function [[unlockdisplay]] */
 
 /*e: lib_graphics/libdraw/concurrency.c */

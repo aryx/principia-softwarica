@@ -5,83 +5,83 @@
 #include <draw_private.h>
 #include <font.h>
 
-/*s: enum _anon_ (lib_graphics/libdraw/string.c) */
+/*s: enum [[_anon_]]([[(lib_graphics/libdraw/string.c)]]) */
 enum
 {
-/*s: constant Max */
+/*s: constant [[Max]] */
 Max = 100
-/*e: constant Max */
+/*e: constant [[Max]] */
 };
-/*e: enum _anon_ (lib_graphics/libdraw/string.c) */
+/*e: enum [[_anon_]]([[(lib_graphics/libdraw/string.c)]]) */
 
 Point
 _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, int len, Rectangle clipr, Image *bg, Point bgp, Drawop op);
 
-/*s: function string */
+/*s: function [[string]] */
 Point
 string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s)
 {
     return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, nil, ZP, SoverD);
 }
-/*e: function string */
+/*e: function [[string]] */
 
-/*s: function stringop */
+/*s: function [[stringop]] */
 Point
 stringop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Drawop op)
 {
     return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, nil, ZP, op);
 }
-/*e: function stringop */
+/*e: function [[stringop]] */
 
-/*s: function stringn */
+/*s: function [[stringn]] */
 Point
 stringn(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len)
 {
     return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, nil, ZP, SoverD);
 }
-/*e: function stringn */
+/*e: function [[stringn]] */
 
-/*s: function stringnop */
+/*s: function [[stringnop]] */
 Point
 stringnop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len, Drawop op)
 {
     return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, nil, ZP, op);
 }
-/*e: function stringnop */
+/*e: function [[stringnop]] */
 
-/*s: function runestring */
+/*s: function [[runestring]] */
 Point
 runestring(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r)
 {
     return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, nil, ZP, SoverD);
 }
-/*e: function runestring */
+/*e: function [[runestring]] */
 
-/*s: function runestringop */
+/*s: function [[runestringop]] */
 Point
 runestringop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, Drawop op)
 {
     return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, nil, ZP, op);
 }
-/*e: function runestringop */
+/*e: function [[runestringop]] */
 
-/*s: function runestringn */
+/*s: function [[runestringn]] */
 Point
 runestringn(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len)
 {
     return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, nil, ZP, SoverD);
 }
-/*e: function runestringn */
+/*e: function [[runestringn]] */
 
-/*s: function runestringnop */
+/*s: function [[runestringnop]] */
 Point
 runestringnop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len, Drawop op)
 {
     return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, nil, ZP, op);
 }
-/*e: function runestringnop */
+/*e: function [[runestringnop]] */
 
-/*s: function _string */
+/*s: function [[_string]] */
 Point
 _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, int len, Rectangle clipr, Image *bg, Point bgp, Drawop op)
 {
@@ -205,69 +205,69 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
     }
     return pt;
 }
-/*e: function _string */
+/*e: function [[_string]] */
 
-/*s: function stringbg */
+/*s: function [[stringbg]] */
 Point
 stringbg(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Image *bg, Point bgp)
 {
     return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, bg, bgp, SoverD);
 }
-/*e: function stringbg */
+/*e: function [[stringbg]] */
 
-/*s: function stringbgop */
+/*s: function [[stringbgop]] */
 Point
 stringbgop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Image *bg, Point bgp, int op)
 {
     return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, bg, bgp, op);
 }
-/*e: function stringbgop */
+/*e: function [[stringbgop]] */
 
-/*s: function stringnbg */
+/*s: function [[stringnbg]] */
 Point
 stringnbg(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len, Image *bg, Point bgp)
 {
     return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, bg, bgp, SoverD);
 }
-/*e: function stringnbg */
+/*e: function [[stringnbg]] */
 
-/*s: function stringnbgop */
+/*s: function [[stringnbgop]] */
 Point
 stringnbgop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len, Image *bg, Point bgp, int op)
 {
     return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, bg, bgp, op);
 }
-/*e: function stringnbgop */
+/*e: function [[stringnbgop]] */
 
-/*s: function runestringbg */
+/*s: function [[runestringbg]] */
 Point
 runestringbg(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, Image *bg, Point bgp)
 {
     return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, bg, bgp, SoverD);
 }
-/*e: function runestringbg */
+/*e: function [[runestringbg]] */
 
-/*s: function runestringbgop */
+/*s: function [[runestringbgop]] */
 Point
 runestringbgop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, Image *bg, Point bgp, int op)
 {
     return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, bg, bgp, op);
 }
-/*e: function runestringbgop */
+/*e: function [[runestringbgop]] */
 
-/*s: function runestringnbg */
+/*s: function [[runestringnbg]] */
 Point
 runestringnbg(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len, Image *bg, Point bgp)
 {
     return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, bg, bgp, SoverD);
 }
-/*e: function runestringnbg */
+/*e: function [[runestringnbg]] */
 
-/*s: function runestringnbgop */
+/*s: function [[runestringnbgop]] */
 Point
 runestringnbgop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len, Image *bg, Point bgp, int op)
 {
     return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, bg, bgp, op);
 }
-/*e: function runestringnbgop */
+/*e: function [[runestringnbgop]] */
 /*e: lib_graphics/libdraw/string.c */

@@ -4,38 +4,38 @@
 #include <draw.h>
 #include <memdraw.h>
 
-/*s: macro DBG1 */
+/*s: macro [[DBG1]] */
 #define DBG1 if(0) print
-/*e: macro DBG1 */
+/*e: macro [[DBG1]] */
 
-/*s: function MUL */
+/*s: function [[MUL]] */
 #define MUL(x, y, t)	(t = (x)*(y)+128, (t+(t>>8))>>8)
-/*e: function MUL */
-/*s: constant MASK13 */
+/*e: function [[MUL]] */
+/*s: constant [[MASK13]] */
 #define MASK13	0xFF00FF00
-/*e: constant MASK13 */
-/*s: constant MASK02 */
+/*e: constant [[MASK13]] */
+/*s: constant [[MASK02]] */
 #define MASK02	0x00FF00FF
-/*e: constant MASK02 */
-/*s: function MUL13 */
+/*e: constant [[MASK02]] */
+/*s: function [[MUL13]] */
 #define MUL13(a, x, t)		(t = (a)*(((x)&MASK13)>>8)+128, ((t+((t>>8)&MASK02))>>8)&MASK02)
-/*e: function MUL13 */
-/*s: function MUL02 */
+/*e: function [[MUL13]] */
+/*s: function [[MUL02]] */
 #define MUL02(a, x, t)		(t = (a)*(((x)&MASK02)>>0)+128, ((t+((t>>8)&MASK02))>>8)&MASK02)
-/*e: function MUL02 */
-/*s: function MUL0123 */
+/*e: function [[MUL02]] */
+/*s: function [[MUL0123]] */
 #define MUL0123(a, x, s, t)	((MUL13(a, x, s)<<8)|MUL02(a, x, t))
-/*e: function MUL0123 */
+/*e: function [[MUL0123]] */
 
-/*s: global ones */
+/*s: global [[ones]] */
 static uchar ones = 0xff;
-/*e: global ones */
+/*e: global [[ones]] */
 
 /*
  * General alpha drawing case.  Can handle anything.
  */
 typedef struct	Buffer	Buffer;
-/*s: struct Buffer */
+/*s: struct [[Buffer]] */
 struct Buffer {
     /* used by most routines */
     byte	*red;
@@ -58,20 +58,20 @@ struct Buffer {
     int		emskip;	/* no. of right bits to skip in *em */
     /*e: [[Buffer]] boolcalc fields */
 };
-/*e: struct Buffer */
+/*e: struct [[Buffer]] */
 
 typedef struct	ParamDraw	Param;
 typedef Buffer	Readfn(Param*, uchar*, int);
 typedef void	Writefn(Param*, uchar*, Buffer);
 typedef Buffer	Calcfn(Buffer, Buffer, Buffer, int, int, int);
 
-/*s: enum _anon_ (lib_graphics/libmemdraw/draw.c) */
+/*s: enum [[_anon_]]([[(lib_graphics/libmemdraw/draw.c)]]) */
 enum {
     MAXBCACHE = 16
 };
-/*e: enum _anon_ (lib_graphics/libmemdraw/draw.c) */
+/*e: enum [[_anon_]]([[(lib_graphics/libmemdraw/draw.c)]]) */
 
-/*s: struct ParamDraw */
+/*s: struct [[ParamDraw]] */
 /* giant rathole to customize functions with */
 struct ParamDraw {
 
@@ -117,13 +117,13 @@ struct ParamDraw {
     ulong	bfilled;
     /*e: [[ParamDraw]] replication fields */
 };
-/*e: struct ParamDraw */
+/*e: struct [[ParamDraw]] */
 
 static Readfn	greymaskread, replread, readptr;
 
-/*s: global nullwrite */
+/*s: global [[nullwrite]] */
 static Writefn	nullwrite;
-/*e: global nullwrite */
+/*e: global [[nullwrite]] */
 
 static Calcfn	alphacalc0, alphacalc14, alphacalc2810, alphacalc3679, alphacalc5, alphacalc11, alphacalcS;
 static Calcfn	boolcalc14, boolcalc236789, boolcalc1011;
@@ -136,7 +136,7 @@ static Calcfn*	boolcopyfn(Memimage*, Memimage*);
 static Readfn*	convfn(Memimage*, Param*, Memimage*, Param*, int*);
 static Readfn*	ptrfn(Memimage*);
 
-/*s: global alphacalc */
+/*s: global [[alphacalc]] */
 static Calcfn *alphacalc[Ncomp] = 
 {
     alphacalc0,         /* Clear */
@@ -152,9 +152,9 @@ static Calcfn *alphacalc[Ncomp] =
     alphacalc2810,      /* S */
     alphacalc11,        /* SoverD */ // the classic
 };
-/*e: global alphacalc */
+/*e: global [[alphacalc]] */
 
-/*s: global boolcalc */
+/*s: global [[boolcalc]] */
 static Calcfn *boolcalc[Ncomp] =
 {
     alphacalc0,		/* Clear */
@@ -170,13 +170,13 @@ static Calcfn *boolcalc[Ncomp] =
     boolcalc1011,		/* S */
     boolcalc1011,		/* SoverD */
 };
-/*e: global boolcalc */
+/*e: global [[boolcalc]] */
 
 /*
  * Avoid standard Lock, QLock so that can be used in kernel.
  */
 typedef struct Dbuf Dbuf;
-/*s: struct Dbuf */
+/*s: struct [[Dbuf]] */
 struct Dbuf
 {
     Param spar, mpar, dpar;
@@ -187,12 +187,12 @@ struct Dbuf
     bool inuse;
     /*e: [[Dbuf]] other fields */
 };
-/*e: struct Dbuf */
-/*s: global dbuf */
+/*e: struct [[Dbuf]] */
+/*s: global [[dbuf]] */
 static Dbuf dbuf[10];
-/*e: global dbuf */
+/*e: global [[dbuf]] */
 
-/*s: function allocdbuf */
+/*s: function [[allocdbuf]] */
 static Dbuf*
 allocdbuf(void)
 {
@@ -206,9 +206,9 @@ allocdbuf(void)
     }
     return nil;
 }
-/*e: function allocdbuf */
+/*e: function [[allocdbuf]] */
 
-/*s: function getparam */
+/*s: function [[getparam]] */
 static void
 getparam(Param *p, Memimage *img, Rectangle r, bool convgrey, bool needbuf, int *ndrawbuf)
 {
@@ -246,9 +246,9 @@ getparam(Param *p, Memimage *img, Rectangle r, bool convgrey, bool needbuf, int 
     p->bufoff = *ndrawbuf;
     *ndrawbuf += p->bufdelta * nbuf;
 }
-/*e: function getparam */
+/*e: function [[getparam]] */
 
-/*s: function clipy */
+/*s: function [[clipy]] */
 static void
 clipy(Memimage *img, int *y)
 {
@@ -263,9 +263,9 @@ clipy(Memimage *img, int *y)
         *y = dy-1;
     assert(0 <= *y && *y < dy);
 }
-/*e: function clipy */
+/*e: function [[clipy]] */
 
-/*s: function alphadraw */
+/*s: function [[alphadraw]] */
 /*
  * For each scan line, we expand the pixels from source, mask, and destination
  * into byte-aligned red, green, blue, alpha, and grey channels.  If buffering
@@ -506,9 +506,9 @@ alphadraw(Memdrawparam *par)
     /*e: [[alphadraw()]] free z */
     return 1;
 }
-/*e: function alphadraw */
+/*e: function [[alphadraw]] */
 
-/*s: function alphacalc0 */
+/*s: function [[alphacalc0]] */
 static Buffer
 alphacalc0(Buffer bdst, Buffer b1, Buffer b2, int dx, int grey, int op)
 {
@@ -520,9 +520,9 @@ alphacalc0(Buffer bdst, Buffer b1, Buffer b2, int dx, int grey, int op)
     memset(bdst.rgba, 0, dx * bdst.delta);
     return bdst;
 }
-/*e: function alphacalc0 */
+/*e: function [[alphacalc0]] */
 
-/*s: function alphacalc14 */
+/*s: function [[alphacalc14]] */
 static Buffer
 alphacalc14(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
 {
@@ -574,9 +574,9 @@ alphacalc14(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
     }
     return obdst;
 }
-/*e: function alphacalc14 */
+/*e: function [[alphacalc14]] */
 
-/*s: function alphacalc2810 */
+/*s: function [[alphacalc2810]] */
 static Buffer
 alphacalc2810(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
 {
@@ -630,9 +630,9 @@ alphacalc2810(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
     }
     return obdst;
 }
-/*e: function alphacalc2810 */
+/*e: function [[alphacalc2810]] */
 
-/*s: function alphacalc3679 */
+/*s: function [[alphacalc3679]] */
 static Buffer
 alphacalc3679(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, bool grey, int op)
 {
@@ -694,9 +694,9 @@ alphacalc3679(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, bool grey, int op)
     }
     return obdst;
 }
-/*e: function alphacalc3679 */
+/*e: function [[alphacalc3679]] */
 
-/*s: function alphacalc5 */
+/*s: function [[alphacalc5]] */
 static Buffer
 alphacalc5(Buffer bdst, Buffer b1, Buffer b2, int dx, int grey, int op)
 {
@@ -708,9 +708,9 @@ alphacalc5(Buffer bdst, Buffer b1, Buffer b2, int dx, int grey, int op)
 
     return bdst;
 }
-/*e: function alphacalc5 */
+/*e: function [[alphacalc5]] */
 
-/*s: function alphacalc11 */
+/*s: function [[alphacalc11]] */
 static Buffer
 alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, bool grey, int op)
 {
@@ -781,9 +781,9 @@ alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, bool grey, int op)
     }
     return obdst;
 }
-/*e: function alphacalc11 */
+/*e: function [[alphacalc11]] */
 
-/*s: function alphacalcS */
+/*s: function [[alphacalcS]] */
 /* source alpha 1 */
 static Buffer
 alphacalcS(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
@@ -823,9 +823,9 @@ alphacalcS(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
     }
     return obdst;
 }
-/*e: function alphacalcS */
+/*e: function [[alphacalcS]] */
 
-/*s: function boolcalc14 */
+/*s: function [[boolcalc14]] */
 static Buffer
 boolcalc14(Buffer bdst, Buffer b1, Buffer bmask, int dx, int grey, int op)
 {
@@ -860,9 +860,9 @@ boolcalc14(Buffer bdst, Buffer b1, Buffer bmask, int dx, int grey, int op)
     }
     return obdst;
 }
-/*e: function boolcalc14 */
+/*e: function [[boolcalc14]] */
 
-/*s: function boolcalc236789 */
+/*s: function [[boolcalc236789]] */
 static Buffer
 boolcalc236789(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
 {
@@ -917,9 +917,9 @@ boolcalc236789(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
     }
     return obdst;
 }
-/*e: function boolcalc236789 */
+/*e: function [[boolcalc236789]] */
 
-/*s: function boolcalc1011 */
+/*s: function [[boolcalc1011]] */
 static Buffer
 boolcalc1011(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
 {
@@ -965,8 +965,8 @@ boolcalc1011(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
     }
     return obdst;
 }
-/*e: function boolcalc1011 */
-/*s: function replread */
+/*e: function [[boolcalc1011]] */
+/*s: function [[replread]] */
 /*
  * Replicated cached scan line read.  Call the function listed in the Param,
  * but cache the result so that for replicated images we only do the work once.
@@ -984,9 +984,9 @@ replread(Param *p, uchar *s, int y)
     }
     return *b;
 }
-/*e: function replread */
+/*e: function [[replread]] */
 
-/*s: function greymaskread */
+/*s: function [[greymaskread]] */
 /*
  * Alpha reading function that simply relabels the grey pointer.
  */
@@ -999,17 +999,17 @@ greymaskread(Param *p, uchar *buf, int y)
     b.alpha = b.grey;
     return b;
 }
-/*e: function greymaskread */
+/*e: function [[greymaskread]] */
 
-/*s: global replbit */
+/*s: global [[replbit]] */
 /*
  * Conversion tables.
  */
 uchar replbit[1+8][256];		/* replbit[x][y] is the replication of the x-bit quantity y to 8-bit depth */
-/*e: global replbit */
+/*e: global [[replbit]] */
 
 
-/*s: function readnbit */
+/*s: function [[readnbit]] */
 static Buffer
 readnbit(Param *p, uchar *buf, int y)
 {
@@ -1101,9 +1101,9 @@ readnbit(Param *p, uchar *buf, int y)
 
     return b;
 }
-/*e: function readnbit */
+/*e: function [[readnbit]] */
 
-/*s: function writenbit */
+/*s: function [[writenbit]] */
 static void
 writenbit(Param *p, uchar *w, Buffer src)
 {
@@ -1144,9 +1144,9 @@ writenbit(Param *p, uchar *w, Buffer src)
     DBG1("\n");
     return;
 }
-/*e: function writenbit */
+/*e: function [[writenbit]] */
 
-/*s: function readcmap */
+/*s: function [[readcmap]] */
 static Buffer
 readcmap(Param *p, uchar *buf, int y)
 {
@@ -1213,9 +1213,9 @@ readcmap(Param *p, uchar *buf, int y)
     }
     return b;
 }
-/*e: function readcmap */
+/*e: function [[readcmap]] */
 
-/*s: function writecmap */
+/*s: function [[writecmap]] */
 static void
 writecmap(Param *p, uchar *w, Buffer src)
 {
@@ -1233,9 +1233,9 @@ writecmap(Param *p, uchar *w, Buffer src)
     for(i=0; i<dx; i++, red+=delta, grn+=delta, blu+=delta)
         *w++ = cmap[(*red>>4)*256+(*grn>>4)*16+(*blu>>4)];
 }
-/*e: function writecmap */
+/*e: function [[writecmap]] */
 
-/*s: function readbyte */
+/*s: function [[readbyte]] */
 static Buffer
 readbyte(Param *p, byte *buf, int y)
 {
@@ -1356,9 +1356,9 @@ readbyte(Param *p, byte *buf, int y)
     return b;
     /*e: [[readbyte()]] more complex cases, possible repl, grey, and small depth */
 }
-/*e: function readbyte */
+/*e: function [[readbyte]] */
 
-/*s: function writebyte */
+/*s: function [[writebyte]] */
 static void
 writebyte(Param *p, byte *w, Buffer src)
 {
@@ -1430,9 +1430,9 @@ writebyte(Param *p, byte *w, Buffer src)
         w += nb;
     }
 }
-/*e: function writebyte */
+/*e: function [[writebyte]] */
 
-/*s: function readfn */
+/*s: function [[readfn]] */
 static Readfn*
 readfn(Memimage *img)
 {
@@ -1446,18 +1446,18 @@ readfn(Memimage *img)
     /*e: [[readfn()]] if cmap */
     return readbyte;
 }
-/*e: function readfn */
+/*e: function [[readfn]] */
 
-/*s: function readalphafn */
+/*s: function [[readalphafn]] */
 static Readfn*
 readalphafn(Memimage *m)
 {
     USED(m);
     return readbyte;
 }
-/*e: function readalphafn */
+/*e: function [[readalphafn]] */
 
-/*s: function writefn */
+/*s: function [[writefn]] */
 static Writefn*
 writefn(Memimage *img)
 {
@@ -1471,9 +1471,9 @@ writefn(Memimage *img)
     /*e: [[writefn()]] if cmap */
     return writebyte;
 }
-/*e: function writefn */
+/*e: function [[writefn]] */
 
-/*s: function nullwrite */
+/*s: function [[nullwrite]] */
 static void
 nullwrite(Param *p, uchar *s, Buffer b)
 {
@@ -1481,9 +1481,9 @@ nullwrite(Param *p, uchar *s, Buffer b)
     USED(s);
     USED(b);
 }
-/*e: function nullwrite */
+/*e: function [[nullwrite]] */
 
-/*s: function readptr */
+/*s: function [[readptr]] */
 static Buffer
 readptr(Param *p, uchar *s, int y)
 {
@@ -1498,9 +1498,9 @@ readptr(Param *p, uchar *s, int y)
     b.delta = p->img->depth/8;
     return b;
 }
-/*e: function readptr */
+/*e: function [[readptr]] */
 
-/*s: function boolmemmove */
+/*s: function [[boolmemmove]] */
 static Buffer
 boolmemmove(Buffer bdst, Buffer bsrc, Buffer b1, int dx, int i, int o)
 {
@@ -1511,9 +1511,9 @@ boolmemmove(Buffer bdst, Buffer bsrc, Buffer b1, int dx, int i, int o)
     memmove(bdst.red, bsrc.red, dx*bdst.delta);
     return bdst;
 }
-/*e: function boolmemmove */
+/*e: function [[boolmemmove]] */
 
-/*s: function boolcopy8 */
+/*s: function [[boolcopy8]] */
 static Buffer
 boolcopy8(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
 {
@@ -1530,9 +1530,9 @@ boolcopy8(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
             *w = *r;
     return bdst;	/* not used */
 }
-/*e: function boolcopy8 */
+/*e: function [[boolcopy8]] */
 
-/*s: function boolcopy16 */
+/*s: function [[boolcopy16]] */
 static Buffer
 boolcopy16(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
 {
@@ -1550,9 +1550,9 @@ boolcopy16(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
             *w = *r;
     return bdst;	/* not used */
 }
-/*e: function boolcopy16 */
+/*e: function [[boolcopy16]] */
 
-/*s: function boolcopy24 */
+/*s: function [[boolcopy24]] */
 static Buffer
 boolcopy24(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
 {
@@ -1577,9 +1577,9 @@ boolcopy24(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
     }
     return bdst;	/* not used */
 }
-/*e: function boolcopy24 */
+/*e: function [[boolcopy24]] */
 
-/*s: function boolcopy32 */
+/*s: function [[boolcopy32]] */
 static Buffer
 boolcopy32(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
 {
@@ -1597,9 +1597,9 @@ boolcopy32(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
             *w = *r;
     return bdst;	/* not used */
 }
-/*e: function boolcopy32 */
+/*e: function [[boolcopy32]] */
 
-/*s: function genconv */
+/*s: function [[genconv]] */
 static Buffer
 genconv(Param *p, uchar *buf, int y)
 {
@@ -1629,9 +1629,9 @@ genconv(Param *p, uchar *buf, int y)
     
     return b;
 }
-/*e: function genconv */
+/*e: function [[genconv]] */
 
-/*s: function convfn */
+/*s: function [[convfn]] */
 static Readfn*
 convfn(Memimage *dst, Param *dpar, Memimage *src, Param *spar, int *ndrawbuf)
 {
@@ -1662,12 +1662,12 @@ convfn(Memimage *dst, Param *dpar, Memimage *src, Param *spar, int *ndrawbuf)
     DBG1("genconv...");
     return genconv;
 }
-/*e: function convfn */
+/*e: function [[convfn]] */
 
 // in resolution.c now
 extern ulong pixelbits(Memimage *i, Point pt);
 
-/*s: function boolcopyfn */
+/*s: function [[boolcopyfn]] */
 static Calcfn*
 boolcopyfn(Memimage *img, Memimage *mask)
 {
@@ -1688,7 +1688,7 @@ boolcopyfn(Memimage *img, Memimage *mask)
     }
     return nil;
 }
-/*e: function boolcopyfn */
+/*e: function [[boolcopyfn]] */
 
 
 /*e: lib_graphics/libmemdraw/alphadraw.c */

@@ -15,7 +15,7 @@
 
 #include    "devdraw.h"
 
-/*s: function allocdimage */
+/*s: function [[allocdimage]] */
 /// makescreenimage | drawinstall -> <>
 DImage*
 allocdimage(Memimage *i)
@@ -38,9 +38,9 @@ allocdimage(Memimage *i)
 
     return d;
 }
-/*e: function allocdimage */
+/*e: function [[allocdimage]] */
 
-/*s: function drawinstall */
+/*s: function [[drawinstall]] */
 Memimage*
 drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
 {
@@ -62,9 +62,9 @@ drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
 
     return i;
 }
-/*e: function drawinstall */
+/*e: function [[drawinstall]] */
 
-/*s: function drawfreedimage */
+/*s: function [[drawfreedimage]] */
 void
 drawfreedimage(DImage *dimage)
 {
@@ -122,9 +122,9 @@ drawfreedimage(DImage *dimage)
     free(dimage->fchar);
     free(dimage);
 }
-/*e: function drawfreedimage */
+/*e: function [[drawfreedimage]] */
 
-/*s: function drawuninstall */
+/*s: function [[drawuninstall]] */
 void
 drawuninstall(Client *client, int id)
 {
@@ -155,6 +155,6 @@ drawuninstall(Client *client, int id)
 
     error(Enodrawimage);
 }
-/*e: function drawuninstall */
+/*e: function [[drawuninstall]] */
 
 /*e: kernel/devices/screen/drawalloc.c */

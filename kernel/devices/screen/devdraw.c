@@ -15,7 +15,7 @@
 #include    "portscreen.h"
 #include    "devdraw.h"
 
-/*s: enum QxxxDraw */
+/*s: enum [[QxxxDraw]] */
 enum
 {
     // Directories
@@ -36,42 +36,42 @@ enum
     Qcolormap, 
     Qrefresh,
 };
-/*e: enum QxxxDraw */
+/*e: enum [[QxxxDraw]] */
 
-/*s: constant QSHIFT */
+/*s: constant [[QSHIFT]] */
 /*
  * Qid path is:
  *   4 bits of file type (qids above)
  *  24 bits of mux slot number +1; 0 means not attached to client
  */
 #define QSHIFT  4   /* location in qid of client # */
-/*e: constant QSHIFT */
+/*e: constant [[QSHIFT]] */
 
 /*s: function QID bis */
 #define QID(q)      ((((ulong)(q).path)&0x0000000F)>>0)
 /*e: function QID bis */
-/*s: function CLIENTPATH */
+/*s: function [[CLIENTPATH]] */
 #define CLIENTPATH(q)   ((((ulong)q)&0x7FFFFFF0)>>QSHIFT)
-/*e: function CLIENTPATH */
+/*e: function [[CLIENTPATH]] */
 
-/*s: constant IOUNIT */
+/*s: constant [[IOUNIT]] */
 #define IOUNIT      (64*1024)
-/*e: constant IOUNIT */
+/*e: constant [[IOUNIT]] */
 
-/*s: global sdraw */
+/*s: global [[sdraw]] */
 KDraw        sdraw;
-/*e: global sdraw */
-/*s: global drawlock */
+/*e: global [[sdraw]] */
+/*s: global [[drawlock]] */
 QLock   drawlock;
-/*e: global drawlock */
+/*e: global [[drawlock]] */
 
 
-/*s: global flushrect */
+/*s: global [[flushrect]] */
 static  Rectangle   flushrect;
-/*e: global flushrect */
-/*s: global waste */
+/*e: global [[flushrect]] */
+/*s: global [[waste]] */
 static  int     waste;
-/*e: global waste */
+/*e: global [[waste]] */
 
 // forward decls
 void        drawmesg(Client*, void*, int);
@@ -82,32 +82,32 @@ DImage* 	allocdimage(Memimage*);
 
 
 
-/*s: function dlock */
+/*s: function [[dlock]] */
 void
 dlock(void)
 {
     qlock(&drawlock);
 }
-/*e: function dlock */
+/*e: function [[dlock]] */
 
-/*s: function candlock */
+/*s: function [[candlock]] */
 int
 candlock(void)
 {
     return canqlock(&drawlock);
 }
-/*e: function candlock */
+/*e: function [[candlock]] */
 
-/*s: function dunlock */
+/*s: function [[dunlock]] */
 void
 dunlock(void)
 {
     qunlock(&drawlock);
 }
-/*e: function dunlock */
+/*e: function [[dunlock]] */
 
 
-/*s: function drawgen */
+/*s: function [[drawgen]] */
 static int
 drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 {
@@ -230,12 +230,12 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
     return 1;
     /*e: [[drawgen()]] third level directory listing */
 }
-/*e: function drawgen */
+/*e: function [[drawgen]] */
 
 
 
 
-/*s: function addflush */
+/*s: function [[addflush]] */
 void
 addflush(Rectangle r)
 {
@@ -282,9 +282,9 @@ addflush(Rectangle r)
 
     waste = 0;
 }
-/*e: function addflush */
+/*e: function [[addflush]] */
 
-/*s: function dstflush */
+/*s: function [[dstflush]] */
 void
 dstflush(int dstid, Memimage *dst, Rectangle r)
 {
@@ -321,9 +321,9 @@ dstflush(int dstid, Memimage *dst, Rectangle r)
 
     /*e: [[dstflush()]] if layer */
 }
-/*e: function dstflush */
+/*e: function [[dstflush]] */
 
-/*s: function drawflush */
+/*s: function [[drawflush]] */
 void
 drawflush(void)
 {
@@ -331,12 +331,12 @@ drawflush(void)
         arch_flushmemscreen(flushrect);
     flushrect = Rect(10000, 10000, -10000, -10000);
 }
-/*e: function drawflush */
+/*e: function [[drawflush]] */
 
 
 
 
-/*s: function drawlookup */
+/*s: function [[drawlookup]] */
 DImage*
 drawlookup(Client *client, int id, bool checkname)
 {
@@ -355,10 +355,10 @@ drawlookup(Client *client, int id, bool checkname)
     }
     return nil;
 }
-/*e: function drawlookup */
+/*e: function [[drawlookup]] */
 
 
-/*s: function drawnewclient */
+/*s: function [[drawnewclient]] */
 Client*
 drawnewclient(void)
 {
@@ -400,10 +400,10 @@ drawnewclient(void)
     sdraw.client[i] = cl;
     return cl;
 }
-/*e: function drawnewclient */
+/*e: function [[drawnewclient]] */
 
 
-/*s: function drawclientofpath */
+/*s: function [[drawclientofpath]] */
 Client*
 drawclientofpath(ulong path)
 {
@@ -418,9 +418,9 @@ drawclientofpath(ulong path)
         return nil;
     return cl;
 }
-/*e: function drawclientofpath */
+/*e: function [[drawclientofpath]] */
 
-/*s: function drawclient */
+/*s: function [[drawclient]] */
 Client*
 drawclient(Chan *c)
 {
@@ -431,7 +431,7 @@ drawclient(Chan *c)
         error(Enoclient);
     return client;
 }
-/*e: function drawclient */
+/*e: function [[drawclient]] */
 
 
 
@@ -443,7 +443,7 @@ drawclient(Chan *c)
 
 
 
-/*s: function drawattach */
+/*s: function [[drawattach]] */
 static Chan*
 drawattach(char *spec)
 {
@@ -456,9 +456,9 @@ drawattach(char *spec)
 
     return devattach('i', spec);
 }
-/*e: function drawattach */
+/*e: function [[drawattach]] */
 
-/*s: function drawwalk */
+/*s: function [[drawwalk]] */
 static Walkqid*
 drawwalk(Chan *c, Chan *nc, char **name, int nname)
 {
@@ -468,17 +468,17 @@ drawwalk(Chan *c, Chan *nc, char **name, int nname)
     /*e: [[drawwalk()]] sanity check */
     return devwalk(c, nc, name, nname, 0, 0, drawgen);
 }
-/*e: function drawwalk */
+/*e: function [[drawwalk]] */
 
-/*s: function drawstat */
+/*s: function [[drawstat]] */
 static int
 drawstat(Chan *c, uchar *db, int n)
 {
     return devstat(c, db, n, 0, 0, drawgen);
 }
-/*e: function drawstat */
+/*e: function [[drawstat]] */
 
-/*s: function drawopen */
+/*s: function [[drawopen]] */
 static Chan*
 drawopen(Chan *c, int omode)
 {
@@ -571,9 +571,9 @@ drawopen(Chan *c, int omode)
 
     return c;
 }
-/*e: function drawopen */
+/*e: function [[drawopen]] */
 
-/*s: function drawclose */
+/*s: function [[drawclose]] */
 static void
 drawclose(Chan *c)
 {
@@ -643,9 +643,9 @@ drawclose(Chan *c)
     poperror();
     /*e: [[drawxxx()]] unlock */
 }
-/*e: function drawclose */
+/*e: function [[drawclose]] */
 
-/*s: function drawread */
+/*s: function [[drawread]] */
 long
 drawread(Chan *c, void *a, long n, vlong off)
 {
@@ -791,9 +791,9 @@ drawread(Chan *c, void *a, long n, vlong off)
 
     return n;
 }
-/*e: function drawread */
+/*e: function [[drawread]] */
 
-/*s: function drawwakeall */
+/*s: function [[drawwakeall]] */
 void
 drawwakeall(void)
 {
@@ -806,9 +806,9 @@ drawwakeall(void)
             wakeup(&cl->refrend);
     }
 }
-/*e: function drawwakeall */
+/*e: function [[drawwakeall]] */
 
-/*s: function drawwrite */
+/*s: function [[drawwrite]] */
 static long
 drawwrite(Chan *c, void *a, long n, vlong)
 {
@@ -895,10 +895,10 @@ drawwrite(Chan *c, void *a, long n, vlong)
 
     return n;
 }
-/*e: function drawwrite */
+/*e: function [[drawwrite]] */
 
 
-/*s: global drawdevtab */
+/*s: global [[drawdevtab]] */
 Dev drawdevtab = {
     .dc       =    'i',
     .name     =    "draw",
@@ -922,6 +922,6 @@ Dev drawdevtab = {
     .init     =    devinit,
     .shutdown =    devshutdown,
 };
-/*e: global drawdevtab */
+/*e: global [[drawdevtab]] */
 
 /*e: kernel/devices/screen/devdraw.c */

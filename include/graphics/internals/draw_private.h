@@ -17,24 +17,24 @@ extern	void	_setdrawop(Display*, Drawop);
 void _twiddlecompressed(uchar *buf, int n);
 int _compblocksize(Rectangle r, int depth);
 
-/*s: constant NMATCH */
+/*s: constant [[NMATCH]] */
 /*
  * Compressed image file parameters and helper routines
  */
 #define	NMATCH	3		/* shortest match possible */
-/*e: constant NMATCH */
-/*s: constant NRUN */
+/*e: constant [[NMATCH]] */
+/*s: constant [[NRUN]] */
 #define	NRUN	(NMATCH+31)	/* longest match possible */
-/*e: constant NRUN */
-/*s: constant NMEM */
+/*e: constant [[NRUN]] */
+/*s: constant [[NMEM]] */
 #define	NMEM	1024		/* window size */
-/*e: constant NMEM */
-/*s: constant NDUMP */
+/*e: constant [[NMEM]] */
+/*s: constant [[NDUMP]] */
 #define	NDUMP	128		/* maximum length of dump */
-/*e: constant NDUMP */
-/*s: constant NCBLOCK */
+/*e: constant [[NDUMP]] */
+/*s: constant [[NCBLOCK]] */
 #define	NCBLOCK	6000		/* size of compressed blocks */
-/*e: constant NCBLOCK */
+/*e: constant [[NCBLOCK]] */
 
 /* XXX backwards helps; should go */
 extern	ulong	drawld2chan[];

@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <draw.h>
 
-/*s: global drawld2chan */
+/*s: global [[drawld2chan]] */
 ulong drawld2chan[] = {
     GREY1,
     GREY2,
@@ -11,6 +11,6 @@ ulong drawld2chan[] = {
 
     CMAP8,
 };
-/*e: global drawld2chan */
+/*e: global [[drawld2chan]] */
 
 /*e: lib_graphics/libdraw/misc.c */

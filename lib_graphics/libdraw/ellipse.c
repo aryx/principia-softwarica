@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <draw_private.h>
 
-/*s: function doellipse */
+/*s: function [[doellipse]] */
 static
 void
 doellipse(int cmd, Image *dst, Point *c, int xr, int yr, int thick, Image *src, Point *sp, int alpha, int phi, Drawop op)
@@ -34,73 +34,73 @@ doellipse(int cmd, Image *dst, Point *c, int xr, int yr, int thick, Image *src, 
     BPLONG(a+37, alpha);
     BPLONG(a+41, phi);
 }
-/*e: function doellipse */
+/*e: function [[doellipse]] */
 
-/*s: function ellipse */
+/*s: function [[ellipse]] */
 void
 ellipse(Image *dst, Point c, int a, int b, int thick, Image *src, Point sp)
 {
     doellipse('e', dst, &c, a, b, thick, src, &sp, 0, 0, SoverD);
 }
-/*e: function ellipse */
+/*e: function [[ellipse]] */
 
-/*s: function ellipseop */
+/*s: function [[ellipseop]] */
 void
 ellipseop(Image *dst, Point c, int a, int b, int thick, Image *src, Point sp, Drawop op)
 {
     doellipse('e', dst, &c, a, b, thick, src, &sp, 0, 0, op);
 }
-/*e: function ellipseop */
+/*e: function [[ellipseop]] */
 
-/*s: function fillellipse */
+/*s: function [[fillellipse]] */
 void
 fillellipse(Image *dst, Point c, int a, int b, Image *src, Point sp)
 {
     doellipse('E', dst, &c, a, b, 0, src, &sp, 0, 0, SoverD);
 }
-/*e: function fillellipse */
+/*e: function [[fillellipse]] */
 
-/*s: function fillellipseop */
+/*s: function [[fillellipseop]] */
 void
 fillellipseop(Image *dst, Point c, int a, int b, Image *src, Point sp, Drawop op)
 {
     doellipse('E', dst, &c, a, b, 0, src, &sp, 0, 0, op);
 }
-/*e: function fillellipseop */
+/*e: function [[fillellipseop]] */
 
-/*s: function arc */
+/*s: function [[arc]] */
 void
 arc(Image *dst, Point c, int a, int b, int thick, Image *src, Point sp, int alpha, int phi)
 {
     alpha |= 1<<31;
     doellipse('e', dst, &c, a, b, thick, src, &sp, alpha, phi, SoverD);
 }
-/*e: function arc */
+/*e: function [[arc]] */
 
-/*s: function arcop */
+/*s: function [[arcop]] */
 void
 arcop(Image *dst, Point c, int a, int b, int thick, Image *src, Point sp, int alpha, int phi, Drawop op)
 {
     alpha |= 1<<31;
     doellipse('e', dst, &c, a, b, thick, src, &sp, alpha, phi, op);
 }
-/*e: function arcop */
+/*e: function [[arcop]] */
 
-/*s: function fillarc */
+/*s: function [[fillarc]] */
 void
 fillarc(Image *dst, Point c, int a, int b, Image *src, Point sp, int alpha, int phi)
 {
     alpha |= 1<<31;
     doellipse('E', dst, &c, a, b, 0, src, &sp, alpha, phi, SoverD);
 }
-/*e: function fillarc */
+/*e: function [[fillarc]] */
 
-/*s: function fillarcop */
+/*s: function [[fillarcop]] */
 void
 fillarcop(Image *dst, Point c, int a, int b, Image *src, Point sp, int alpha, int phi, Drawop op)
 {
     alpha |= 1<<31;
     doellipse('E', dst, &c, a, b, 0, src, &sp, alpha, phi, op);
 }
-/*e: function fillarcop */
+/*e: function [[fillarcop]] */
 /*e: lib_graphics/libdraw/ellipse.c */

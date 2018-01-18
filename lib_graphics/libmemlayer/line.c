@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: struct Lline */
+/*s: struct [[Lline]] */
 struct Lline
 {
     Point			p0;
@@ -20,11 +20,11 @@ struct Lline
     Memimage	*src;
     int			op;
 };
-/*e: struct Lline */
+/*e: struct [[Lline]] */
 
 static void llineop(Memimage*, Rectangle, Rectangle, void*, int);
 
-/*s: function _memline */
+/*s: function [[_memline]] */
 static
 void
 _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memimage *src, Point sp, Rectangle clipr, int op)
@@ -101,7 +101,7 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
         return;
     /*e: [[_memline()]] set r bounding box and clip it */
 
-    /*s: [[_memline()]] general case, call _memlayerop */
+    /*s: [[_memline()]] general case, call [[_memlayerop]] */
     ll.p0 = p0;
     ll.p1 = p1;
     ll.end0 = end0;
@@ -114,12 +114,12 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
     ll.op = op;
 
     _memlayerop(llineop, dst, r, r, &ll);
-    /*e: [[_memline()]] general case, call _memlayerop */
+    /*e: [[_memline()]] general case, call [[_memlayerop]] */
     /*e: [[_memline()]] when have layers */
 }
-/*e: function _memline */
+/*e: function [[_memline]] */
 
-/*s: function llineop */
+/*s: function [[llineop]] */
 static
 void
 llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool insave)
@@ -145,13 +145,13 @@ llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool insav
 
     _memline(dst, p0, p1, ll->end0, ll->end1, ll->radius, ll->src, ll->sp, clipr, ll->op);
 }
-/*e: function llineop */
+/*e: function [[llineop]] */
 
-/*s: function memline */
+/*s: function [[memline]] */
 void
 memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memimage *src, Point sp, int op)
 {
     _memline(dst, p0, p1, end0, end1, radius, src, sp, dst->clipr, op);
 }
-/*e: function memline */
+/*e: function [[memline]] */
 /*e: lib_graphics/libmemlayer/line.c */

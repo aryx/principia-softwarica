@@ -3,10 +3,10 @@
 #include <libc.h>
 #include <draw.h>
 
-/*s: global channames */
+/*s: global [[channames]] */
 static char channames[] = "rgbkamx";
-/*e: global channames */
-/*s: function chantostr */
+/*e: global [[channames]] */
+/*s: function [[chantostr]] */
 char*
 chantostr(char *buf, ulong cc)
 {
@@ -32,18 +32,18 @@ chantostr(char *buf, ulong cc)
 
     return buf;
 }
-/*e: function chantostr */
+/*e: function [[chantostr]] */
 
-/*s: function isspace */
+/*s: function [[isspace]] */
 /* avoid pulling in ctype when using with drawterm etc. */
 static int
 isspace(char c)
 {
     return c==' ' || c== '\t' || c=='\r' || c=='\n';
 }
-/*e: function isspace */
+/*e: function [[isspace]] */
 
-/*s: function strtochan */
+/*s: function [[strtochan]] */
 ulong
 strtochan(char *s)
 {
@@ -78,9 +78,9 @@ strtochan(char *s)
     /*e: [[strtochan()]] sanity check depth */
     return chan;
 }
-/*e: function strtochan */
+/*e: function [[strtochan]] */
 
-/*s: function chantodepth */
+/*s: function [[chantodepth]] */
 int
 chantodepth(ulong c)
 {
@@ -99,5 +99,5 @@ chantodepth(ulong c)
     /*e: [[chantodepth()]] sanity check n */
     return n;
 }
-/*e: function chantodepth */
+/*e: function [[chantodepth]] */
 /*e: lib_graphics/libdraw/chan.c */

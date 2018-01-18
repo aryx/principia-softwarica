@@ -14,11 +14,11 @@
 #include    "portscreen.h"
 #include    "devdraw.h"
 
-/*s: global blanktime */
+/*s: global [[blanktime]] */
 ulong blanktime = 30;   /* in minutes; a half hour */
-/*e: global blanktime */
+/*e: global [[blanktime]] */
 
-/*s: function drawrefactive */
+/*s: function [[drawrefactive]] */
 int
 drawrefactive(void *a)
 {
@@ -27,9 +27,9 @@ drawrefactive(void *a)
     c = a;
     return c->refreshme || c->refresh != nil;
 }
-/*e: function drawrefactive */
+/*e: function [[drawrefactive]] */
 
-/*s: function drawrefreshscreen */
+/*s: function [[drawrefreshscreen]] */
 void
 drawrefreshscreen(DImage *l, Client *client)
 {
@@ -38,9 +38,9 @@ drawrefreshscreen(DImage *l, Client *client)
     if(l != nil && l->dscreen->owner != client)
         l->dscreen->owner->refreshme = 1;
 }
-/*e: function drawrefreshscreen */
+/*e: function [[drawrefreshscreen]] */
 
-/*s: function drawrefresh */
+/*s: function [[drawrefresh]] */
 void
 drawrefresh(Memimage*, Rectangle r, void *v)
 {
@@ -67,11 +67,11 @@ drawrefresh(Memimage*, Rectangle r, void *v)
         c->refresh = ref;
     }
 }
-/*e: function drawrefresh */
+/*e: function [[drawrefresh]] */
 
 
 
-/*s: function drawcmap */
+/*s: function [[drawcmap]] */
 /*
  * On 8 bit displays, load the default color map
  */
@@ -106,9 +106,9 @@ drawcmap(void)
             }
     }
 }
-/*e: function drawcmap */
+/*e: function [[drawcmap]] */
 
-/*s: function drawblankscreen */
+/*s: function [[drawblankscreen]] */
 void
 drawblankscreen(bool blank)
 {
@@ -145,9 +145,9 @@ drawblankscreen(bool blank)
     sdraw.blanked = blank;
     dunlock();
 }
-/*e: function drawblankscreen */
+/*e: function [[drawblankscreen]] */
 
-/*s: function drawactive */
+/*s: function [[drawactive]] */
 /*
  * record activity on screen, changing blanking as appropriate
  */
@@ -163,14 +163,14 @@ drawactive(bool active)
             drawblankscreen(true);
     }
 }
-/*e: function drawactive */
+/*e: function [[drawactive]] */
 
-/*s: function drawidletime */
+/*s: function [[drawidletime]] */
 int
 drawidletime(void)
 {
     return TK2SEC(CPUS(0)->ticks - sdraw.blanktime)/60;
 }
-/*e: function drawidletime */
+/*e: function [[drawidletime]] */
 
 /*e: kernel/devices/screen/drawmisc.c */

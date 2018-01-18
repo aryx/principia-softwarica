@@ -34,24 +34,24 @@ typedef struct	Mouse Mouse;
 // Data structures and constants
 //----------------------------------------------------------------------------
 
-/*s: struct Point */
+/*s: struct [[Point]] */
 struct	Point
 {
     int	x;
     int	y;
 };
-/*e: struct Point */
+/*e: struct [[Point]] */
 
-/*s: struct Rectangle */
+/*s: struct [[Rectangle]] */
 struct Rectangle
 {
     Point	min;
     Point	max;
 };
-/*e: struct Rectangle */
+/*e: struct [[Rectangle]] */
 
 
-/*s: enum Colors */
+/*s: enum [[Colors]] */
 enum
 {
     DOpaque			= 0xFFFFFFFF,
@@ -89,22 +89,22 @@ enum
     DNofill	= DNotacolor,
     
 };
-/*e: enum Colors */
-/*s: type rgba */
+/*e: enum [[Colors]] */
+/*s: type [[rgba]] */
 typedef ulong rgba;
-/*e: type rgba */
+/*e: type [[rgba]] */
 
-/*s: struct RGB */
+/*s: struct [[RGB]] */
 struct RGB
 {
     ulong	red;
     ulong	green;
     ulong	blue;
 };
-/*e: struct RGB */
+/*e: struct [[RGB]] */
 
 
-/*s: enum ImageChan */
+/*s: enum [[ImageChan]] */
 /*
  * image channel descriptors 
  */
@@ -124,29 +124,29 @@ enum ImageChan {
 
     NChan,
 };
-/*e: enum ImageChan */
-/*s: function __DC */
+/*e: enum [[ImageChan]] */
+/*s: function [[__DC]] */
 #define __DC(type, nbits)	((((type)&15)<<4)|((nbits)&15))
-/*e: function __DC */
-/*s: function CHAN1 */
+/*e: function [[__DC]] */
+/*s: function [[CHAN1]] */
 #define CHAN1(a,b)	__DC(a,b)
-/*e: function CHAN1 */
-/*s: function CHAN2 */
+/*e: function [[CHAN1]] */
+/*s: function [[CHAN2]] */
 #define CHAN2(a,b,c,d)	(CHAN1((a),(b))<<8|__DC((c),(d)))
-/*e: function CHAN2 */
-/*s: function CHAN3 */
+/*e: function [[CHAN2]] */
+/*s: function [[CHAN3]] */
 #define CHAN3(a,b,c,d,e,f)	(CHAN2((a),(b),(c),(d))<<8|__DC((e),(f)))
-/*e: function CHAN3 */
-/*s: function CHAN4 */
+/*e: function [[CHAN3]] */
+/*s: function [[CHAN4]] */
 #define CHAN4(a,b,c,d,e,f,g,h)	(CHAN3((a),(b),(c),(d),(e),(f))<<8|__DC((g),(h)))
-/*e: function CHAN4 */
-/*s: function NBITS */
+/*e: function [[CHAN4]] */
+/*s: function [[NBITS]] */
 #define NBITS(c) ((c)&15)
-/*e: function NBITS */
-/*s: function TYPE */
+/*e: function [[NBITS]] */
+/*s: function [[TYPE]] */
 #define TYPE(c) (((c)>>4)&15)
-/*e: function TYPE */
-/*s: enum ImageType */
+/*e: function [[TYPE]] */
+/*s: enum [[ImageType]] */
 enum ImageType {
     GREY1	= CHAN1(CGrey, 1), // used for masks, fonts (black and white)
     CMAP8	= CHAN1(CMap, 8), // PC graphics mode by default, 1 byte per pixel
@@ -168,17 +168,17 @@ enum ImageType {
     XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
     /*e: [[ImageType]] cases */
 };
-/*e: enum ImageType */
-/*s: type channels */
+/*e: enum [[ImageType]] */
+/*s: type [[channels]] */
 typedef ulong channels;
-/*e: type channels */
+/*e: type [[channels]] */
 
 
-/*s: type Errorfn */
+/*s: type [[Errorfn]] */
 typedef void (*Errorfn)(Display*, char*);
-/*e: type Errorfn */
+/*e: type [[Errorfn]] */
 
-/*s: struct Display */
+/*s: struct [[Display]] */
 struct Display
 {
     // ref_own<Image>, the full screen
@@ -240,9 +240,9 @@ struct Display
     bool		locking;	/*program is using lockdisplay */
     /*e: [[Display]] concurrency fields */
 };
-/*e: struct Display */
+/*e: struct [[Display]] */
 
-/*s: struct Image */
+/*s: struct [[Image]] */
 struct Image
 {
     int			id;		/* id of system-held Image */
@@ -267,9 +267,9 @@ struct Image
     Image		*next;	/* next in list of windows */
     /*e: [[Image]] extra fields */
 };
-/*e: struct Image */
+/*e: struct [[Image]] */
 
-/*s: struct Font */
+/*s: struct [[Font]] */
 struct Font
 {
     // ref_own<filename>, // e.g., /lib/font/bit/lucm/latin1.9.font
@@ -305,24 +305,24 @@ struct Font
     int		maxdepth;	/* maximum depth of all loaded subfonts */
     /*e: [[Font]] other fields */
 };
-/*e: struct Font */
+/*e: struct [[Font]] */
 
 
 
-/*s: enum constants1 */
+/*s: enum [[constants1]] */
 enum
 {
-    /*s: constant ICOSSCALE */
+    /*s: constant [[ICOSSCALE]] */
     ICOSSCALE	= 1024,
-    /*e: constant ICOSSCALE */
-    /*s: constant Borderwidth */
+    /*e: constant [[ICOSSCALE]] */
+    /*s: constant [[Borderwidth]] */
     //coupling: must be equal to Selborder in rio
     Borderwidth =	4,
-    /*e: constant Borderwidth */
+    /*e: constant [[Borderwidth]] */
 };
-/*e: enum constants1 */
+/*e: enum [[constants1]] */
 
-/*s: enum drawop */
+/*s: enum [[drawop]] */
 enum Drawop
 {
     /* Porter-Duff compositing operators */
@@ -345,10 +345,10 @@ enum Drawop
 
     Ncomp = 12,
 };
-/*e: enum drawop */
+/*e: enum [[drawop]] */
 typedef enum drawop Drawop;
 
-/*s: enum Refresh */
+/*s: enum [[Refresh]] */
 enum RefreshMethod
 {
     /* refresh methods */
@@ -357,9 +357,9 @@ enum RefreshMethod
 
     Refmesg		= 2 // incomplete apparently
 };
-/*e: enum Refresh */
+/*e: enum [[Refresh]] */
 
-/*s: enum Endline */
+/*s: enum [[Endline]] */
 enum EndLine
 {
     /* line ends */
@@ -369,11 +369,11 @@ enum EndLine
 
     Endmask		= 0x1F
 };
-/*e: enum Endline */
+/*e: enum [[Endline]] */
 
-/*s: function ARROW */
+/*s: function [[ARROW]] */
 #define	ARROW(a, b, c)	(Endarrow|((a)<<5)|((b)<<14)|((c)<<23))
-/*e: function ARROW */
+/*e: function [[ARROW]] */
 
 //----------------------------------------------------------------------------
 // Globals
@@ -462,12 +462,12 @@ extern Rectangle	Rect(int, int, int, int);
 extern Rectangle	Rpt(Point, Point);
 extern int			eqrect(Rectangle, Rectangle);
 
-/*s: function Dx */
+/*s: function [[Dx]] */
 #define	Dx(r)	((r).max.x - (r).min.x)
-/*e: function Dx */
-/*s: function Dy */
+/*e: function [[Dx]] */
+/*s: function [[Dy]] */
 #define	Dy(r)	((r).max.y - (r).min.y)
-/*e: function Dy */
+/*e: function [[Dy]] */
 
 extern Rectangle	rectaddpt(Rectangle, Point);
 extern Rectangle	rectsubpt(Rectangle, Point);

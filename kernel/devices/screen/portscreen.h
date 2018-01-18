@@ -20,12 +20,12 @@ extern bool  arch_ishwimage(Memimage*);
 
 // Cursor
 
-/*s: struct Cursorinfo */
+/*s: struct [[Cursorinfo]] */
 struct Cursorinfo {
   Cursor;
   Lock;
 };
-/*e: struct Cursorinfo */
+/*e: struct [[Cursorinfo]] */
 typedef struct Cursorinfo Cursorinfo;
 
 /*s: global signature cursor */

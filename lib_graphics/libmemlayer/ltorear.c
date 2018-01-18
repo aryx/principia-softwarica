@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: function _memltorear */
+/*s: function [[_memltorear]] */
 void
 _memltorear(Memimage *i, Memimage *rear)
 {
@@ -52,18 +52,18 @@ _memltorear(Memimage *i, Memimage *rear)
             memlexpose(r, x);
     }
 }
-/*e: function _memltorear */
+/*e: function [[_memltorear]] */
 
-/*s: function memltorear */
+/*s: function [[memltorear]] */
 void
 memltorear(Memimage *i)
 {
     _memltorear(i, nil);
     _memlsetclear(i->layer->screen);
 }
-/*e: function memltorear */
+/*e: function [[memltorear]] */
 
-/*s: function memltorearn */
+/*s: function [[memltorearn]] */
 void
 memltorearn(Memimage **ip, int n)
 {
@@ -81,5 +81,5 @@ memltorearn(Memimage **ip, int n)
     }
     _memlsetclear(rear->layer->screen);
 }
-/*e: function memltorearn */
+/*e: function [[memltorearn]] */
 /*e: lib_graphics/libmemlayer/ltorear.c */

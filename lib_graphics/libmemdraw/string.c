@@ -6,7 +6,7 @@
 #include <memlayer.h>
 #include <font.h>
 
-/*s: function memimagestring */
+/*s: function [[memimagestring]] */
 Point
 memimagestring(Memimage *b, Point p, Memimage *color, Point cp, Memsubfont *f, char *cs)
 {
@@ -37,9 +37,9 @@ memimagestring(Memimage *b, Point p, Memimage *color, Point cp, Memsubfont *f, c
     }
     return p;
 }
-/*e: function memimagestring */
+/*e: function [[memimagestring]] */
 
-/*s: function memsubfontwidth */
+/*s: function [[memsubfontwidth]] */
 Point
 memsubfontwidth(Memsubfont *f, char *cs)
 {
@@ -70,5 +70,5 @@ memsubfontwidth(Memsubfont *f, char *cs)
     }
     return p;
 }
-/*e: function memsubfontwidth */
+/*e: function [[memsubfontwidth]] */
 /*e: lib_graphics/libmemdraw/string.c */

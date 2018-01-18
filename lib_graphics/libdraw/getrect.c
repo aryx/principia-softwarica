@@ -6,18 +6,18 @@
 #include <cursor.h>
 #include <mouse.h>
 
-/*s: constant W (lib_graphics/libdraw/getrect.c) */
+/*s: constant [[W]]([[(lib_graphics/libdraw/getrect.c)]]) */
 #define	W	Borderwidth
-/*e: constant W (lib_graphics/libdraw/getrect.c) */
+/*e: constant [[W]]([[(lib_graphics/libdraw/getrect.c)]]) */
 
-/*s: global tmp (lib_graphics/libdraw/getrect.c) */
+/*s: global [[tmp]]([[(lib_graphics/libdraw/getrect.c)]]) */
 static Image *tmp[4];
-/*e: global tmp (lib_graphics/libdraw/getrect.c) */
-/*s: global red (lib_graphics/libdraw/getrect.c) */
+/*e: global [[tmp]]([[(lib_graphics/libdraw/getrect.c)]]) */
+/*s: global [[red]]([[(lib_graphics/libdraw/getrect.c)]]) */
 static Image *red;
-/*e: global red (lib_graphics/libdraw/getrect.c) */
+/*e: global [[red]]([[(lib_graphics/libdraw/getrect.c)]]) */
 
-/*s: global sweep (lib_graphics/libdraw/getrect.c) */
+/*s: global [[sweep]]([[(lib_graphics/libdraw/getrect.c)]]) */
 static Cursor sweep={
     {-7, -7},
     {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0x07,
@@ -29,9 +29,9 @@ static Cursor sweep={
      0x41, 0xC2, 0x41, 0xE2, 0x41, 0x72, 0x40, 0x38,
      0x40, 0x1C, 0x40, 0x0E, 0x7F, 0xE6, 0x00, 0x00,}
 };
-/*e: global sweep (lib_graphics/libdraw/getrect.c) */
+/*e: global [[sweep]]([[(lib_graphics/libdraw/getrect.c)]]) */
 
-/*s: function brects (lib_graphics/libdraw/getrect.c) */
+/*s: function [[brects]]([[(lib_graphics/libdraw/getrect.c)]]) */
 static
 void
 brects(Rectangle r, Rectangle rp[4])
@@ -45,9 +45,9 @@ brects(Rectangle r, Rectangle rp[4])
     rp[2] = Rect(r.min.x, r.min.y+W, r.min.x+W, r.max.y-W);
     rp[3] = Rect(r.max.x-W, r.min.y+W, r.max.x, r.max.y-W);
 }
-/*e: function brects (lib_graphics/libdraw/getrect.c) */
+/*e: function [[brects]]([[(lib_graphics/libdraw/getrect.c)]]) */
 
-/*s: function getrect */
+/*s: function [[getrect]] */
 Rectangle
 getrect(int but, Mousectl *mc)
 {
@@ -82,9 +82,9 @@ getrect(int but, Mousectl *mc)
     }
     return rc;
 }
-/*e: function getrect */
+/*e: function [[getrect]] */
 
-/*s: function freetmp (lib_graphics/libdraw/getrect.c) */
+/*s: function [[freetmp]]([[(lib_graphics/libdraw/getrect.c)]]) */
 static
 void
 freetmp(void)
@@ -96,9 +96,9 @@ freetmp(void)
     freeimage(red);
     tmp[0] = tmp[1] = tmp[2] = tmp[3] = red = nil;
 }
-/*e: function freetmp (lib_graphics/libdraw/getrect.c) */
+/*e: function [[freetmp]]([[(lib_graphics/libdraw/getrect.c)]]) */
 
-/*s: function max */
+/*s: function [[max]] */
 static
 int
 max(int a, int b)
@@ -107,9 +107,9 @@ max(int a, int b)
         return a;
     return b;
 }
-/*e: function max */
+/*e: function [[max]] */
 
-/*s: function drawgetrect */
+/*s: function [[drawgetrect]] */
 void
 drawgetrect(Rectangle rc, int up)
 {
@@ -149,5 +149,5 @@ drawgetrect(Rectangle rc, int up)
         draw(view, rects[i], red, nil, ZP);
     }
 }
-/*e: function drawgetrect */
+/*e: function [[drawgetrect]] */
 /*e: lib_graphics/libdraw/getrect.c */

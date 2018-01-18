@@ -5,7 +5,7 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-/*s: function _memltofront */
+/*s: function [[_memltofront]] */
 /*
  * Pull i towards top of screen, just behind front
 */
@@ -60,27 +60,27 @@ _memltofront(Memimage *i, Memimage *front, bool fill)
             memlexpose(i, x);
     }
 }
-/*e: function _memltofront */
+/*e: function [[_memltofront]] */
 
-/*s: function _memltofrontfill */
+/*s: function [[_memltofrontfill]] */
 void
 _memltofrontfill(Memimage *i, bool fill)
 {
     _memltofront(i, nil, fill);
     _memlsetclear(i->layer->screen);
 }
-/*e: function _memltofrontfill */
+/*e: function [[_memltofrontfill]] */
 
-/*s: function memltofront */
+/*s: function [[memltofront]] */
 void
 memltofront(Memimage *i)
 {
     _memltofront(i, nil, true);
     _memlsetclear(i->layer->screen);
 }
-/*e: function memltofront */
+/*e: function [[memltofront]] */
 
-/*s: function memltofrontn */
+/*s: function [[memltofrontn]] */
 void
 memltofrontn(Memimage **ip, int n)
 {
@@ -98,5 +98,5 @@ memltofrontn(Memimage **ip, int n)
     }
     _memlsetclear(front->layer->screen);
 }
-/*e: function memltofrontn */
+/*e: function [[memltofrontn]] */
 /*e: lib_graphics/libmemlayer/ltofront.c */

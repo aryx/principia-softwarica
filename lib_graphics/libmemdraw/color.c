@@ -4,11 +4,11 @@
 #include <draw.h>
 #include <memdraw.h>
 
-/*s: macro DBG1 */
+/*s: macro [[DBG1]] */
 #define DBG1 if(0) print
-/*e: macro DBG1 */
+/*e: macro [[DBG1]] */
 
-/*s: function imgtorgba */
+/*s: function [[imgtorgba]] */
 rgba
 imgtorgba(Memimage *img, ulong val)
 {
@@ -66,9 +66,9 @@ imgtorgba(Memimage *img, ulong val)
     }
     return (r<<24)|(g<<16)|(b<<8)|a;	
 }
-/*e: function imgtorgba */
+/*e: function [[imgtorgba]] */
 
-/*s: function rgbatoimg */
+/*s: function [[rgbatoimg]] */
 ulong
 rgbatoimg(Memimage *img, rgba rgba)
 {
@@ -120,13 +120,13 @@ rgbatoimg(Memimage *img, rgba rgba)
     DBG1("rgba2img %.8lux = %.*lux\n", rgba, 2*d/8, v);
     return v;
 }
-/*e: function rgbatoimg */
+/*e: function [[rgbatoimg]] */
 
 // could put memfillcolor in draw.c so no need those extern decls.
 extern void memsetl(void *vp, ulong val, int n);
 extern void memset24(void *vp, ulong val, int n);
 
-/*s: function memfillcolor */
+/*s: function [[memfillcolor]] */
 void
 memfillcolor(Memimage *i, rgba val)
 {
@@ -159,5 +159,5 @@ memfillcolor(Memimage *i, rgba val)
         break;
     }
 }
-/*e: function memfillcolor */
+/*e: function [[memfillcolor]] */
 /*e: lib_graphics/libmemdraw/color.c */

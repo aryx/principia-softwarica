@@ -3,7 +3,7 @@
 #pragma lib "libdraw.a"
 // This file assumes you have included draw.h before.
 
-/*s: struct Screen */
+/*s: struct [[Screen]] */
 struct Screen
 {
     Display	*display;	/* display holding data */
@@ -12,7 +12,7 @@ struct Screen
     Image	*image;		/* unused; for reference only */
     Image	*fill;		/* color to paint behind windows */
 };
-/*e: struct Screen */
+/*e: struct [[Screen]] */
 
 // set by initdraw() automatically.
 extern	Screen	*screen; // was called _screen before
