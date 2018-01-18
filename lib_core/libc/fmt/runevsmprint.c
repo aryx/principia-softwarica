@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "fmtdef.h"
 
-/*s: function runeFmtStrFlush */
+/*s: function [[runeFmtStrFlush]] */
 static int
 runeFmtStrFlush(Fmt *f)
 {
@@ -28,9 +28,9 @@ runeFmtStrFlush(Fmt *f)
     f->stop = (Rune*)f->start + n - 1;
     return 1;
 }
-/*e: function runeFmtStrFlush */
+/*e: function [[runeFmtStrFlush]] */
 
-/*s: function runefmtstrinit */
+/*s: function [[runefmtstrinit]] */
 int
 runefmtstrinit(Fmt *f)
 {
@@ -50,9 +50,9 @@ runefmtstrinit(Fmt *f)
     f->nfmt = 0;
     return 0;
 }
-/*e: function runefmtstrinit */
+/*e: function [[runefmtstrinit]] */
 
-/*s: function runevsmprint */
+/*s: function [[runevsmprint]] */
 /*
  * print into an allocated string buffer
  */
@@ -76,5 +76,5 @@ runevsmprint(char *fmt, va_list args)
     *(Rune*)f.to = '\0';
     return f.start;
 }
-/*e: function runevsmprint */
+/*e: function [[runevsmprint]] */
 /*e: fmt/runevsmprint.c */

@@ -4,14 +4,14 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: global _threadrgrp */
+/*s: global [[_threadrgrp]] */
 Rgrp _threadrgrp;
-/*e: global _threadrgrp */
-/*s: global isdirty */
+/*e: global [[_threadrgrp]] */
+/*s: global [[isdirty]] */
 static int isdirty;
-/*e: global isdirty */
+/*e: global [[isdirty]] */
 
-/*s: function finish */
+/*s: function [[finish]] */
 static void*
 finish(Thread *t, void *val)
 {
@@ -29,9 +29,9 @@ finish(Thread *t, void *val)
     unlock(&t->proc->lock);
     return ret;
 }
-/*e: function finish */
+/*e: function [[finish]] */
 
-/*s: function _threadrendezvous */
+/*s: function [[_threadrendezvous]] */
 void*
 _threadrendezvous(void *tag, void *val)
 {
@@ -66,9 +66,9 @@ _threadrendezvous(void *tag, void *val)
     _threaddebug(DBGREND, "Woke after rendezvous; val is %p", t->rendval);
     return t->rendval;
 }
-/*e: function _threadrendezvous */
+/*e: function [[_threadrendezvous]] */
 
-/*s: function _threadflagrendez */
+/*s: function [[_threadflagrendez]] */
 /*
  * This is called while holding _threadpq.lock and p->lock,
  * so we can't lock _threadrgrp.lock.  Instead our caller has 
@@ -80,9 +80,9 @@ _threadflagrendez(Thread *t)
     t->rendbreak = 1;
     isdirty = 1;
 }
-/*e: function _threadflagrendez */
+/*e: function [[_threadflagrendez]] */
 
-/*s: function _threadbreakrendez */
+/*s: function [[_threadbreakrendez]] */
 void
 _threadbreakrendez(void)
 {
@@ -109,5 +109,5 @@ _threadbreakrendez(void)
     }
     unlock(&_threadrgrp.lock);
 }
-/*e: function _threadbreakrendez */
+/*e: function [[_threadbreakrendez]] */
 /*e: lib_core/libthread/rendez.c */

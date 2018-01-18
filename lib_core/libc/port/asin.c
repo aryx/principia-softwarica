@@ -9,7 +9,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function asin */
+/*s: function [[asin]] */
 double
 asin(double arg)
 {
@@ -32,9 +32,9 @@ asin(double arg)
         temp = -temp;
     return temp;
 }
-/*e: function asin */
+/*e: function [[asin]] */
 
-/*s: function acos */
+/*s: function [[acos]] */
 double
 acos(double arg)
 {
@@ -42,5 +42,5 @@ acos(double arg)
         return NaN();
     return PIO2 - asin(arg);
 }
-/*e: function acos */
+/*e: function [[acos]] */
 /*e: port/asin.c */

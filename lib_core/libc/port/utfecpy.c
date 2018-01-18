@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function utfecpy */
+/*s: function [[utfecpy]] */
 char*
 utfecpy(char *to, char *e, char *from)
 {
@@ -21,5 +21,5 @@ utfecpy(char *to, char *e, char *from)
     }
     return end;
 }
-/*e: function utfecpy */
+/*e: function [[utfecpy]] */
 /*e: port/utfecpy.c */

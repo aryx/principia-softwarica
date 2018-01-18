@@ -3,7 +3,7 @@
 #include <libc.h>
 
 
-/*s: function oldtime */
+/*s: function [[oldtime]] */
 /*
  *  After a fork with fd's copied, both fd's are pointing to
  *  the same Chan structure.  Since the offset is kept in the Chan
@@ -38,9 +38,9 @@ oldtime(long *tp)
         *tp = t;
     return t;
 }
-/*e: function oldtime */
+/*e: function [[oldtime]] */
 
-/*s: function time */
+/*s: function [[time]] */
 long
 time(long *tp)
 {
@@ -53,5 +53,5 @@ time(long *tp)
         *tp = t;
     return t;
 }
-/*e: function time */
+/*e: function [[time]] */
 /*e: 9sys/time.c */

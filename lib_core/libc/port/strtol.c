@@ -2,14 +2,14 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: constant LONG_MAX */
+/*s: constant [[LONG_MAX]] */
 #define LONG_MAX    2147483647L
-/*e: constant LONG_MAX */
-/*s: constant LONG_MIN */
+/*e: constant [[LONG_MAX]] */
+/*s: constant [[LONG_MIN]] */
 #define LONG_MIN    -2147483648L
-/*e: constant LONG_MIN */
+/*e: constant [[LONG_MIN]] */
 
-/*s: function strtol */
+/*s: function [[strtol]] */
 long
 strtol(char *nptr, char **endptr, int base)
 {
@@ -105,5 +105,5 @@ Return:
         return -n;
     return n;
 }
-/*e: function strtol */
+/*e: function [[strtol]] */
 /*e: port/strtol.c */

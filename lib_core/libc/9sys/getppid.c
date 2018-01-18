@@ -2,7 +2,7 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: function getppid */
+/*s: function [[getppid]] */
 int
 getppid(void)
 {
@@ -17,5 +17,5 @@ getppid(void)
     }
     return atol(b);
 }
-/*e: function getppid */
+/*e: function [[getppid]] */
 /*e: 9sys/getppid.c */

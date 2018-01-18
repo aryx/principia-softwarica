@@ -4,7 +4,7 @@
 
 // could be merged in libc.h
 
-/*s: type Ctype_flag */
+/*s: type [[Ctype_flag]] */
 #define	_U	01 // upper
 #define	_L	02 // lower
 #define	_N	04 // number
@@ -13,7 +13,7 @@
 #define	_C	040 // ctlr
 #define	_B	0100 // ??
 #define	_X	0200 // ??
-/*e: type Ctype_flag */
+/*e: type [[Ctype_flag]] */
 
 extern unsigned char	_ctype[];
 
@@ -31,13 +31,13 @@ extern unsigned char	_ctype[];
 #define	iscntrl(c)	(_ctype[(unsigned char)(c)]&_C)
 #define	isascii(c)	((unsigned char)(c)<=0177)
 /*e: macros isxxx */
-/*s: macro _toupper */
+/*s: macro [[_toupper]] */
 #define	_toupper(c)	((c)-'a'+'A')
-/*e: macro _toupper */
-/*s: macro _tolower */
+/*e: macro [[_toupper]] */
+/*s: macro [[_tolower]] */
 #define	_tolower(c)	((c)-'A'+'a')
-/*e: macro _tolower */
-/*s: macro toascii */
+/*e: macro [[_tolower]] */
+/*s: macro [[toascii]] */
 #define	toascii(c)	((c)&0177)
-/*e: macro toascii */
+/*e: macro [[toascii]] */
 /*e: include/ctype.h */

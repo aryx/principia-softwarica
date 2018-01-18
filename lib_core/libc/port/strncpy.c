@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function strncpy */
+/*s: function [[strncpy]] */
 char*
 strncpy(char *s1, char *s2, long n)
 {
@@ -18,5 +18,5 @@ strncpy(char *s1, char *s2, long n)
         }
     return os1;
 }
-/*e: function strncpy */
+/*e: function [[strncpy]] */
 /*e: port/strncpy.c */

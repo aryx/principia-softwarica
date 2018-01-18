@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <fcall.h>
 
-/*s: function dirpackage */
+/*s: function [[dirpackage]] */
 static
 long
 dirpackage(uchar *buf, long ts, Dir **d)
@@ -53,9 +53,9 @@ dirpackage(uchar *buf, long ts, Dir **d)
 
     return nn;
 }
-/*e: function dirpackage */
+/*e: function [[dirpackage]] */
 
-/*s: function dirread */
+/*s: function [[dirread]] */
 long
 dirread(int fd, Dir **d)
 {
@@ -71,9 +71,9 @@ dirread(int fd, Dir **d)
     free(buf);
     return ts;
 }
-/*e: function dirread */
+/*e: function [[dirread]] */
 
-/*s: function dirreadall */
+/*s: function [[dirreadall]] */
 long
 dirreadall(int fd, Dir **d)
 {
@@ -101,5 +101,5 @@ dirreadall(int fd, Dir **d)
         return -1;
     return ts;
 }
-/*e: function dirreadall */
+/*e: function [[dirreadall]] */
 /*e: 9sys/dirread.c */

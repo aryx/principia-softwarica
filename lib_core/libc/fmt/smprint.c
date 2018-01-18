@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function smprint */
+/*s: function [[smprint]] */
 char*
 smprint(char *fmt, ...)
 {
@@ -15,5 +15,5 @@ smprint(char *fmt, ...)
     setmalloctag(p, getcallerpc(&fmt));
     return p;
 }
-/*e: function smprint */
+/*e: function [[smprint]] */
 /*e: fmt/smprint.c */

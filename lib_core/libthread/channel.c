@@ -4,33 +4,33 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: enum _anon_ (lib_core/libthread/channel.c) */
+/*s: enum [[_anon_ (lib_core/libthread/channel.c)]] */
 /* Value to indicate the channel is closed */
 enum {
     CHANCLOSD = 0xc105ed,
 };
-/*e: enum _anon_ (lib_core/libthread/channel.c) */
+/*e: enum [[_anon_ (lib_core/libthread/channel.c)]] */
 
-/*s: global errcl */
+/*s: global [[errcl]] */
 static char errcl[] = "channel was closed";
-/*e: global errcl */
-/*s: global chanlock */
+/*e: global [[errcl]] */
+/*s: global [[chanlock]] */
 static Lock chanlock;		/* central channel access lock */
-/*e: global chanlock */
+/*e: global [[chanlock]] */
 
 static void enqueue(Alt*, Channel**);
 static void dequeue(Alt*);
 static int canexec(Alt*);
 static int altexec(Alt*, int);
 
-/*s: constant Closed */
+/*s: constant [[Closed]] */
 #define Closed	((void*)CHANCLOSD)
-/*e: constant Closed */
-/*s: constant Intred */
+/*e: constant [[Closed]] */
+/*s: constant [[Intred]] */
 #define Intred	((void*)~0)		/* interrupted */
-/*e: constant Intred */
+/*e: constant [[Intred]] */
 
-/*s: function _chanfree */
+/*s: function [[_chanfree]] */
 static void
 _chanfree(Channel *c)
 {
@@ -52,9 +52,9 @@ _chanfree(Channel *c)
         free(c);
     }
 }
-/*e: function _chanfree */
+/*e: function [[_chanfree]] */
 
-/*s: function chanfree */
+/*s: function [[chanfree]] */
 void
 chanfree(Channel *c)
 {
@@ -62,9 +62,9 @@ chanfree(Channel *c)
     _chanfree(c);
     unlock(&chanlock);
 }
-/*e: function chanfree */
+/*e: function [[chanfree]] */
 
-/*s: function chaninit */
+/*s: function [[chaninit]] */
 int
 chaninit(Channel *c, int elemsize, int elemcnt)
 {
@@ -79,9 +79,9 @@ chaninit(Channel *c, int elemsize, int elemcnt)
     _threaddebug(DBGCHAN, "chaninit %p", c);
     return 1;
 }
-/*e: function chaninit */
+/*e: function [[chaninit]] */
 
-/*s: function chancreate */
+/*s: function [[chancreate]] */
 Channel*
 chancreate(int elemsize, int elemcnt)
 {
@@ -95,17 +95,17 @@ chancreate(int elemsize, int elemcnt)
     _threaddebug(DBGCHAN, "chancreate %p", c);
     return c;
 }
-/*e: function chancreate */
+/*e: function [[chancreate]] */
 
-/*s: function isopenfor */
+/*s: function [[isopenfor]] */
 static bool
 isopenfor(Channel *c, int op)
 {
     return c->closed == 0 || (op == CHANRCV && c->n > 0);
 }
-/*e: function isopenfor */
+/*e: function [[isopenfor]] */
 
-/*s: function alt */
+/*s: function [[alt]] */
 int
 alt(Alt *alts)
 {
@@ -242,9 +242,9 @@ alt(Alt *alts)
     t->chan = Channone;
     return a - alts;
 }
-/*e: function alt */
+/*e: function [[alt]] */
 
-/*s: function chanclose */
+/*s: function [[chanclose]] */
 int
 chanclose(Channel *c)
 {
@@ -291,9 +291,9 @@ chanclose(Channel *c)
     _procsplx(s);
     return 0;
 }
-/*e: function chanclose */
+/*e: function [[chanclose]] */
 
-/*s: function chanclosing */
+/*s: function [[chanclosing]] */
 int
 chanclosing(Channel *c)
 {
@@ -309,9 +309,9 @@ chanclosing(Channel *c)
     _procsplx(s);
     return n;
 }
-/*e: function chanclosing */
+/*e: function [[chanclosing]] */
 
-/*s: function runop */
+/*s: function [[runop]] */
 static int
 runop(int op, Channel *c, void *v, bool nb)
 {
@@ -350,41 +350,41 @@ runop(int op, Channel *c, void *v, bool nb)
         return -1;
     }
 }
-/*e: function runop */
+/*e: function [[runop]] */
 
-/*s: function recv */
+/*s: function [[recv]] */
 int
 recv(Channel *c, void *v)
 {
     return runop(CHANRCV, c, v, 0);
 }
-/*e: function recv */
+/*e: function [[recv]] */
 
-/*s: function nbrecv */
+/*s: function [[nbrecv]] */
 int
 nbrecv(Channel *c, void *v)
 {
     return runop(CHANRCV, c, v, 1);
 }
-/*e: function nbrecv */
+/*e: function [[nbrecv]] */
 
-/*s: function send */
+/*s: function [[send]] */
 int
 send(Channel *c, void *v)
 {
     return runop(CHANSND, c, v, 0);
 }
-/*e: function send */
+/*e: function [[send]] */
 
-/*s: function nbsend */
+/*s: function [[nbsend]] */
 int
 nbsend(Channel *c, void *v)
 {
     return runop(CHANSND, c, v, 1);
 }
-/*e: function nbsend */
+/*e: function [[nbsend]] */
 
-/*s: function channelsize */
+/*s: function [[channelsize]] */
 static void
 channelsize(Channel *c, int sz)
 {
@@ -394,18 +394,18 @@ channelsize(Channel *c, int sz)
         abort();
     }
 }
-/*e: function channelsize */
+/*e: function [[channelsize]] */
 
-/*s: function sendul */
+/*s: function [[sendul]] */
 int
 sendul(Channel *c, ulong v)
 {
     channelsize(c, sizeof(ulong));
     return send(c, &v);
 }
-/*e: function sendul */
+/*e: function [[sendul]] */
 
-/*s: function recvul */
+/*s: function [[recvul]] */
 ulong
 recvul(Channel *c)
 {
@@ -416,18 +416,18 @@ recvul(Channel *c)
         return ~0;
     return v;
 }
-/*e: function recvul */
+/*e: function [[recvul]] */
 
-/*s: function sendp */
+/*s: function [[sendp]] */
 int
 sendp(Channel *c, void *v)
 {
     channelsize(c, sizeof(void*));
     return send(c, &v);
 }
-/*e: function sendp */
+/*e: function [[sendp]] */
 
-/*s: function recvp */
+/*s: function [[recvp]] */
 void*
 recvp(Channel *c)
 {
@@ -438,18 +438,18 @@ recvp(Channel *c)
         return nil;
     return v;
 }
-/*e: function recvp */
+/*e: function [[recvp]] */
 
-/*s: function nbsendul */
+/*s: function [[nbsendul]] */
 int
 nbsendul(Channel *c, ulong v)
 {
     channelsize(c, sizeof(ulong));
     return nbsend(c, &v);
 }
-/*e: function nbsendul */
+/*e: function [[nbsendul]] */
 
-/*s: function nbrecvul */
+/*s: function [[nbrecvul]] */
 ulong
 nbrecvul(Channel *c)
 {
@@ -460,18 +460,18 @@ nbrecvul(Channel *c)
         return 0;
     return v;
 }
-/*e: function nbrecvul */
+/*e: function [[nbrecvul]] */
 
-/*s: function nbsendp */
+/*s: function [[nbsendp]] */
 int
 nbsendp(Channel *c, void *v)
 {
     channelsize(c, sizeof(void*));
     return nbsend(c, &v);
 }
-/*e: function nbsendp */
+/*e: function [[nbsendp]] */
 
-/*s: function nbrecvp */
+/*s: function [[nbrecvp]] */
 void*
 nbrecvp(Channel *c)
 {
@@ -482,9 +482,9 @@ nbrecvp(Channel *c)
         return nil;
     return v;
 }
-/*e: function nbrecvp */
+/*e: function [[nbrecvp]] */
 
-/*s: function emptyentry */
+/*s: function [[emptyentry]] */
 static int
 emptyentry(Channel *c)
 {
@@ -504,9 +504,9 @@ emptyentry(Channel *c)
     memset(&c->qentry[i], 0, extra*sizeof(c->qentry[0]));
     return i;
 }
-/*e: function emptyentry */
+/*e: function [[emptyentry]] */
 
-/*s: function enqueue */
+/*s: function [[enqueue]] */
 static void
 enqueue(Alt *a, Channel **c)
 {
@@ -517,9 +517,9 @@ enqueue(Alt *a, Channel **c)
     i = emptyentry(a->c);
     a->c->qentry[i] = a;
 }
-/*e: function enqueue */
+/*e: function [[enqueue]] */
 
-/*s: function dequeue */
+/*s: function [[dequeue]] */
 static void
 dequeue(Alt *a)
 {
@@ -537,9 +537,9 @@ dequeue(Alt *a)
             return;
         }
 }
-/*e: function dequeue */
+/*e: function [[dequeue]] */
 
-/*s: function canexec */
+/*s: function [[canexec]] */
 static int
 canexec(Alt *a)
 {
@@ -564,9 +564,9 @@ canexec(Alt *a)
 
     return 0;
 }
-/*e: function canexec */
+/*e: function [[canexec]] */
 
-/*s: function altexecbuffered */
+/*s: function [[altexecbuffered]] */
 static void*
 altexecbuffered(Alt *a, int willreplace)
 {
@@ -593,9 +593,9 @@ altexecbuffered(Alt *a, int willreplace)
     abort();
     return nil;
 }
-/*e: function altexecbuffered */
+/*e: function [[altexecbuffered]] */
 
-/*s: function altcopy */
+/*s: function [[altcopy]] */
 static void
 altcopy(void *dst, void *src, int sz)
 {
@@ -606,9 +606,9 @@ altcopy(void *dst, void *src, int sz)
             memset(dst, 0, sz);
     }
 }
-/*e: function altcopy */
+/*e: function [[altcopy]] */
 
-/*s: function altexec */
+/*s: function [[altexec]] */
 static int
 altexec(Alt *a, int spl)
 {
@@ -672,5 +672,5 @@ altexec(Alt *a, int spl)
     _procsplx(spl);
     return 1;
 }
-/*e: function altexec */
+/*e: function [[altexec]] */
 /*e: lib_core/libthread/channel.c */

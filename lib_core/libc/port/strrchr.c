@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function strrchr */
+/*s: function [[strrchr]] */
 char*
 strrchr(char *s, int c)
 {
@@ -16,5 +16,5 @@ strrchr(char *s, int c)
         r = s++;
     return r;
 }
-/*e: function strrchr */
+/*e: function [[strrchr]] */
 /*e: port/strrchr.c */

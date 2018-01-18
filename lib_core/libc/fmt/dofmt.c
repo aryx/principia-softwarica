@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "fmtdef.h"
 
-/*s: function dofmt */
+/*s: function [[dofmt]] */
 /* format the output into f->to and return the number of characters fmted  */
 int
 dofmt(Fmt *f, char *fmt)
@@ -66,9 +66,9 @@ dofmt(Fmt *f, char *fmt)
             return -1;
     }
 }
-/*e: function dofmt */
+/*e: function [[dofmt]] */
 
-/*s: function _fmtflush */
+/*s: function [[_fmtflush]] */
 void *
 _fmtflush(Fmt *f, void *t, int len)
 {
@@ -83,9 +83,9 @@ _fmtflush(Fmt *f, void *t, int len)
     }
     return f->to;
 }
-/*e: function _fmtflush */
+/*e: function [[_fmtflush]] */
 
-/*s: function _fmtpad */
+/*s: function [[_fmtpad]] */
 /*
  * put a formatted block of memory sz bytes long of n runes into the output buffer,
  * left/right justified in a field of at least f->width charactes
@@ -104,9 +104,9 @@ _fmtpad(Fmt *f, int n)
     f->to = t;
     return 0;
 }
-/*e: function _fmtpad */
+/*e: function [[_fmtpad]] */
 
-/*s: function _rfmtpad */
+/*s: function [[_rfmtpad]] */
 int
 _rfmtpad(Fmt *f, int n)
 {
@@ -121,9 +121,9 @@ _rfmtpad(Fmt *f, int n)
     f->to = t;
     return 0;
 }
-/*e: function _rfmtpad */
+/*e: function [[_rfmtpad]] */
 
-/*s: function _fmtcpy */
+/*s: function [[_fmtcpy]] */
 int
 _fmtcpy(Fmt *f, void *vm, int n, int sz)
 {
@@ -179,9 +179,9 @@ _fmtcpy(Fmt *f, void *vm, int n, int sz)
     }
     return 0;
 }
-/*e: function _fmtcpy */
+/*e: function [[_fmtcpy]] */
 
-/*s: function _fmtrcpy */
+/*s: function [[_fmtrcpy]] */
 int
 _fmtrcpy(Fmt *f, void *vm, int n)
 {
@@ -222,9 +222,9 @@ _fmtrcpy(Fmt *f, void *vm, int n)
     }
     return 0;
 }
-/*e: function _fmtrcpy */
+/*e: function [[_fmtrcpy]] */
 
-/*s: function _charfmt */
+/*s: function [[_charfmt]] */
 /* fmt out one character */
 int
 _charfmt(Fmt *f)
@@ -235,9 +235,9 @@ _charfmt(Fmt *f)
     f->prec = 1;
     return _fmtcpy(f, x, 1, 1);
 }
-/*e: function _charfmt */
+/*e: function [[_charfmt]] */
 
-/*s: function _runefmt */
+/*s: function [[_runefmt]] */
 /* fmt out one rune */
 int
 _runefmt(Fmt *f)
@@ -247,9 +247,9 @@ _runefmt(Fmt *f)
     x[0] = va_arg(f->args, int);
     return _fmtrcpy(f, x, 1);
 }
-/*e: function _runefmt */
+/*e: function [[_runefmt]] */
 
-/*s: function fmtstrcpy */
+/*s: function [[fmtstrcpy]] */
 /* public helper routine: fmt out a null terminated string already in hand */
 int
 fmtstrcpy(Fmt *f, char *s)
@@ -268,9 +268,9 @@ fmtstrcpy(Fmt *f, char *s)
     }
     return _fmtcpy(f, s, utflen(s), strlen(s));
 }
-/*e: function fmtstrcpy */
+/*e: function [[fmtstrcpy]] */
 
-/*s: function _strfmt */
+/*s: function [[_strfmt]] */
 /* fmt out a null terminated utf string */
 int
 _strfmt(Fmt *f)
@@ -280,9 +280,9 @@ _strfmt(Fmt *f)
     s = va_arg(f->args, char *);
     return fmtstrcpy(f, s);
 }
-/*e: function _strfmt */
+/*e: function [[_strfmt]] */
 
-/*s: function fmtrunestrcpy */
+/*s: function [[fmtrunestrcpy]] */
 /* public helper routine: fmt out a null terminated rune string already in hand */
 int
 fmtrunestrcpy(Fmt *f, Rune *s)
@@ -305,9 +305,9 @@ fmtrunestrcpy(Fmt *f, Rune *s)
     }
     return _fmtrcpy(f, s, n);
 }
-/*e: function fmtrunestrcpy */
+/*e: function [[fmtrunestrcpy]] */
 
-/*s: function _runesfmt */
+/*s: function [[_runesfmt]] */
 /* fmt out a null terminated rune string */
 int
 _runesfmt(Fmt *f)
@@ -317,9 +317,9 @@ _runesfmt(Fmt *f)
     s = va_arg(f->args, Rune *);
     return fmtrunestrcpy(f, s);
 }
-/*e: function _runesfmt */
+/*e: function [[_runesfmt]] */
 
-/*s: function _percentfmt */
+/*s: function [[_percentfmt]] */
 /* fmt a % */
 int
 _percentfmt(Fmt *f)
@@ -330,16 +330,16 @@ _percentfmt(Fmt *f)
     f->prec = 1;
     return _fmtrcpy(f, x, 1);
 }
-/*e: function _percentfmt */
+/*e: function [[_percentfmt]] */
 
-/*s: enum _anon_ (fmt/dofmt.c) */
+/*s: enum [[_anon_ (fmt/dofmt.c)]] */
 enum {
     /* %,#llb could emit a sign, "0b" and 64 digits with 21 commas */
     Maxintwidth = 1 + 2 + 64 + 64/3,
 };
-/*e: enum _anon_ (fmt/dofmt.c) */
+/*e: enum [[_anon_ (fmt/dofmt.c)]] */
 
-/*s: function _ifmt */
+/*s: function [[_ifmt]] */
 /* fmt an integer */
 int
 _ifmt(Fmt *f)
@@ -484,9 +484,9 @@ _ifmt(Fmt *f)
     f->flags &= ~FmtPrec;
     return _fmtcpy(f, p + 1, n, n);
 }
-/*e: function _ifmt */
+/*e: function [[_ifmt]] */
 
-/*s: function _countfmt */
+/*s: function [[_countfmt]] */
 int
 _countfmt(Fmt *f)
 {
@@ -508,9 +508,9 @@ _countfmt(Fmt *f)
     }
     return 0;
 }
-/*e: function _countfmt */
+/*e: function [[_countfmt]] */
 
-/*s: function _flagfmt */
+/*s: function [[_flagfmt]] */
 int
 _flagfmt(Fmt *f)
 {
@@ -546,9 +546,9 @@ _flagfmt(Fmt *f)
     }
     return 1;
 }
-/*e: function _flagfmt */
+/*e: function [[_flagfmt]] */
 
-/*s: function _badfmt */
+/*s: function [[_badfmt]] */
 /* default error format */
 int
 _badfmt(Fmt *f)
@@ -562,5 +562,5 @@ _badfmt(Fmt *f)
     _fmtrcpy(f, x, 3);
     return 0;
 }
-/*e: function _badfmt */
+/*e: function [[_badfmt]] */
 /*e: fmt/dofmt.c */

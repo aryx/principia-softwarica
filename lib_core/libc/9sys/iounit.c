@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function iounit */
+/*s: function [[iounit]] */
 /*
  * Format:
   3 r  M    4 (0000000000457def 11 00)   8192      512 /rc/lib/rcmain
@@ -27,5 +27,5 @@ iounit(int fd)
         return 0;
     return atoi(args[7]);
 }
-/*e: function iounit */
+/*e: function [[iounit]] */
 /*e: 9sys/iounit.c */

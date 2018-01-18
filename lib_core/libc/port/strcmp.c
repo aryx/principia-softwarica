@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function strcmp */
+/*s: function [[strcmp]] */
 int
 strcmp(char *s1, char *s2)
 {
@@ -20,5 +20,5 @@ strcmp(char *s1, char *s2)
             return 0;
     }
 }
-/*e: function strcmp */
+/*e: function [[strcmp]] */
 /*e: port/strcmp.c */

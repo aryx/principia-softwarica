@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function needsrcquote */
+/*s: function [[needsrcquote]] */
 int
 needsrcquote(int c)
 {
@@ -12,5 +12,5 @@ needsrcquote(int c)
         return 1;
     return 0;
 }
-/*e: function needsrcquote */
+/*e: function [[needsrcquote]] */
 /*e: port/needsrcquote.c */

@@ -2,7 +2,7 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: function libc_print */
+/*s: function [[libc_print]] */
 int
 libc_print(char *fmt, ...)
 {
@@ -14,9 +14,9 @@ libc_print(char *fmt, ...)
     va_end(args);
     return n;
 }
-/*e: function libc_print */
+/*e: function [[libc_print]] */
 
-/*s: global print */
+/*s: global [[print]] */
 int (*print)(char *fmt, ...) = &libc_print;
-/*e: global print */
+/*e: global [[print]] */
 /*e: fmt/print.c */

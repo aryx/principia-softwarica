@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: global p0 */
+/*s: global [[p0]] */
 /*
  * sinh(arg) returns the hyperbolic sine of its floating-
  * point argument.
@@ -18,27 +18,27 @@
  */
 
 static  double  p0  = -0.6307673640497716991184787251e+6;
-/*e: global p0 */
-/*s: global p1 */
+/*e: global [[p0]] */
+/*s: global [[p1]] */
 static  double  p1  = -0.8991272022039509355398013511e+5;
-/*e: global p1 */
-/*s: global p2 */
+/*e: global [[p1]] */
+/*s: global [[p2]] */
 static  double  p2  = -0.2894211355989563807284660366e+4;
-/*e: global p2 */
-/*s: global p3 */
+/*e: global [[p2]] */
+/*s: global [[p3]] */
 static  double  p3  = -0.2630563213397497062819489e+2;
-/*e: global p3 */
-/*s: global q0 */
+/*e: global [[p3]] */
+/*s: global [[q0]] */
 static  double  q0  = -0.6307673640497716991212077277e+6;
-/*e: global q0 */
-/*s: global q1 */
+/*e: global [[q0]] */
+/*s: global [[q1]] */
 static  double  q1   = 0.1521517378790019070696485176e+5;
-/*e: global q1 */
-/*s: global q2 */
+/*e: global [[q1]] */
+/*s: global [[q2]] */
 static  double  q2  = -0.173678953558233699533450911e+3;
-/*e: global q2 */
+/*e: global [[q2]] */
 
-/*s: function sinh */
+/*s: function [[sinh]] */
 double
 sinh(double arg)
 {
@@ -66,9 +66,9 @@ out:
         temp = -temp;
     return temp;
 }
-/*e: function sinh */
+/*e: function [[sinh]] */
 
-/*s: function cosh */
+/*s: function [[cosh]] */
 double
 cosh(double arg)
 {
@@ -78,5 +78,5 @@ cosh(double arg)
         return exp(arg)/2;
     return (exp(arg) + exp(-arg))/2;
 }
-/*e: function cosh */
+/*e: function [[cosh]] */
 /*e: port/sinh.c */

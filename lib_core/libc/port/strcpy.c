@@ -1,11 +1,11 @@
 /*s: port/strcpy.c */
 #include <u.h>
 #include <libc.h>
-/*s: constant N */
+/*s: constant [[N]] */
 #define N   10000
-/*e: constant N */
+/*e: constant [[N]] */
 
-/*s: function strcpy */
+/*s: function [[strcpy]] */
 char*
 strcpy(char *s1, char *s2)
 {
@@ -18,5 +18,5 @@ strcpy(char *s1, char *s2)
     }
     return os1;
 }
-/*e: function strcpy */
+/*e: function [[strcpy]] */
 /*e: port/strcpy.c */

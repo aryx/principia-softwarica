@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "fmtdef.h"
 
-/*s: function fmtfdflush */
+/*s: function [[fmtfdflush]] */
 /*
  * public routine for final flush of a formatting buffer
  * to a file descriptor; returns total char count.
@@ -15,9 +15,9 @@ fmtfdflush(Fmt *f)
         return -1;
     return f->nfmt;
 }
-/*e: function fmtfdflush */
+/*e: function [[fmtfdflush]] */
 
-/*s: function fmtfdinit */
+/*s: function [[fmtfdinit]] */
 /*
  * initialize an output buffer for buffered printing
  */
@@ -33,5 +33,5 @@ fmtfdinit(Fmt *f, int fd, char *buf, int size)
     f->nfmt = 0;
     return 0;
 }
-/*e: function fmtfdinit */
+/*e: function [[fmtfdinit]] */
 /*e: fmt/fmtfd.c */

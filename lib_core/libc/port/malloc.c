@@ -12,19 +12,19 @@ static void     pprint(Pool*, char*, ...);
 static void     ppanic(Pool*, char*, ...);
 
 typedef struct Private Private;
-/*s: struct Private */
+/*s: struct [[Private]] */
 struct Private {
     Lock    lk;
     int     pid;
     int     printfd;    /* gets debugging output if set */
 };
-/*e: struct Private */
+/*e: struct [[Private]] */
 
-/*s: global sbrkmempriv */
+/*s: global [[sbrkmempriv]] */
 Private sbrkmempriv;
-/*e: global sbrkmempriv */
+/*e: global [[sbrkmempriv]] */
 
-/*s: global sbrkmem */
+/*s: global [[sbrkmem]] */
 static Pool sbrkmem = {
     .name=      "sbrkmem",
     .maxsize=   (3840UL-1)*1024*1024,   /* up to ~0xf0000000 */
@@ -40,15 +40,15 @@ static Pool sbrkmem = {
     .panic=     ppanic,
     .private=       &sbrkmempriv,
 };
-/*e: global sbrkmem */
-/*s: global mainmem */
+/*e: global [[sbrkmem]] */
+/*s: global [[mainmem]] */
 Pool *mainmem = &sbrkmem;
-/*e: global mainmem */
-/*s: global imagmem */
+/*e: global [[mainmem]] */
+/*s: global [[imagmem]] */
 Pool *imagmem = &sbrkmem;
-/*e: global imagmem */
+/*e: global [[imagmem]] */
 
-/*s: function sbrkalloc */
+/*s: function [[sbrkalloc]] */
 /*
  * we do minimal bookkeeping so we can tell pool
  * whether two blocks are adjacent and thus mergeable.
@@ -66,9 +66,9 @@ sbrkalloc(ulong n)
     x[1] = 0xDeadBeef;
     return x+2;
 }
-/*e: function sbrkalloc */
+/*e: function [[sbrkalloc]] */
 
-/*s: function sbrkmerge */
+/*s: function [[sbrkmerge]] */
 static int
 sbrkmerge(void *x, void *y)
 {
@@ -85,9 +85,9 @@ sbrkmerge(void *x, void *y)
     }
     return 0;
 }
-/*e: function sbrkmerge */
+/*e: function [[sbrkmerge]] */
 
-/*s: function plock */
+/*s: function [[plock]] */
 static void
 plock(Pool *p)
 {
@@ -98,9 +98,9 @@ plock(Pool *p)
         abort();
     pv->pid = _tos->pid;
 }
-/*e: function plock */
+/*e: function [[plock]] */
 
-/*s: function punlock */
+/*s: function [[punlock]] */
 static void
 punlock(Pool *p)
 {
@@ -111,9 +111,9 @@ punlock(Pool *p)
     pv->pid = 0;
     unlock(&pv->lk);
 }
-/*e: function punlock */
+/*e: function [[punlock]] */
 
-/*s: function checkenv */
+/*s: function [[checkenv]] */
 static int
 checkenv(void)
 {
@@ -134,9 +134,9 @@ checkenv(void)
         n = -1;
     return n;
 }
-/*e: function checkenv */
+/*e: function [[checkenv]] */
 
-/*s: function pprint */
+/*s: function [[pprint]] */
 static void
 pprint(Pool *p, char *fmt, ...)
 {
@@ -154,12 +154,12 @@ pprint(Pool *p, char *fmt, ...)
     vfprint(pv->printfd, fmt, v);
     va_end(v);
 }
-/*e: function pprint */
+/*e: function [[pprint]] */
 
-/*s: global panicbuf */
+/*s: global [[panicbuf]] */
 static char panicbuf[256];
-/*e: global panicbuf */
-/*s: function ppanic */
+/*e: global [[panicbuf]] */
+/*s: function [[ppanic]] */
 static void
 ppanic(Pool *p, char *fmt, ...) 
 {
@@ -191,7 +191,7 @@ ppanic(Pool *p, char *fmt, ...)
 //  unlock(&pv->lk);
     abort();
 }
-/*e: function ppanic */
+/*e: function [[ppanic]] */
 
 /* - everything from here down should be the same in libc, libdebugmalloc, and the kernel - */
 /* - except the code for malloc(), which alternately doesn't clear or does. - */
@@ -219,16 +219,16 @@ enum {
  *
  */
 
-/*s: enum _anon_ */
+/*s: enum [[_anon_]] */
 /* tracing */
 enum {
     Npadlong    = 2,
     MallocOffset = 0,
     ReallocOffset = 1
 };
-/*e: enum _anon_ */
+/*e: enum [[_anon_]] */
 
-/*s: function malloc */
+/*s: function [[malloc]] */
 void*
 malloc(ulong size)
 {
@@ -242,9 +242,9 @@ malloc(ulong size)
     }
     return v;
 }
-/*e: function malloc */
+/*e: function [[malloc]] */
 
-/*s: function mallocz */
+/*s: function [[mallocz]] */
 void*
 mallocz(ulong size, int clr)
 {
@@ -260,9 +260,9 @@ mallocz(ulong size, int clr)
         memset(v, 0, size);
     return v;
 }
-/*e: function mallocz */
+/*e: function [[mallocz]] */
 
-/*s: function mallocalign */
+/*s: function [[mallocalign]] */
 void*
 mallocalign(ulong size, ulong align, long offset, ulong span)
 {
@@ -276,18 +276,18 @@ mallocalign(ulong size, ulong align, long offset, ulong span)
     }
     return v;
 }
-/*e: function mallocalign */
+/*e: function [[mallocalign]] */
 
-/*s: function free */
+/*s: function [[free]] */
 void
 free(void *v)
 {
     if(v != nil)
         poolfree(mainmem, (ulong*)v-Npadlong);
 }
-/*e: function free */
+/*e: function [[free]] */
 
-/*s: function realloc */
+/*s: function [[realloc]] */
 void*
 realloc(void *v, ulong size)
 {
@@ -310,17 +310,17 @@ realloc(void *v, ulong size)
     }       
     return nv;
 }
-/*e: function realloc */
+/*e: function [[realloc]] */
 
-/*s: function msize */
+/*s: function [[msize]] */
 ulong
 msize(void *v)
 {
     return poolmsize(mainmem, (ulong*)v-Npadlong)-Npadlong*sizeof(ulong);
 }
-/*e: function msize */
+/*e: function [[msize]] */
 
-/*s: function calloc */
+/*s: function [[calloc]] */
 void*
 calloc(ulong n, ulong szelem)
 {
@@ -329,9 +329,9 @@ calloc(ulong n, ulong szelem)
         setmalloctag(v, getcallerpc(&n));
     return v;
 }
-/*e: function calloc */
+/*e: function [[calloc]] */
 
-/*s: function setmalloctag */
+/*s: function [[setmalloctag]] */
 void
 setmalloctag(void *v, ulong pc)
 {
@@ -342,9 +342,9 @@ setmalloctag(void *v, ulong pc)
     u = v;
     u[-Npadlong+MallocOffset] = pc;
 }
-/*e: function setmalloctag */
+/*e: function [[setmalloctag]] */
 
-/*s: function setrealloctag */
+/*s: function [[setrealloctag]] */
 void
 setrealloctag(void *v, ulong pc)
 {
@@ -355,9 +355,9 @@ setrealloctag(void *v, ulong pc)
     u = v;
     u[-Npadlong+ReallocOffset] = pc;
 }
-/*e: function setrealloctag */
+/*e: function [[setrealloctag]] */
 
-/*s: function getmalloctag */
+/*s: function [[getmalloctag]] */
 ulong
 getmalloctag(void *v)
 {
@@ -366,9 +366,9 @@ getmalloctag(void *v)
         return ~0;
     return ((ulong*)v)[-Npadlong+MallocOffset];
 }
-/*e: function getmalloctag */
+/*e: function [[getmalloctag]] */
 
-/*s: function getrealloctag */
+/*s: function [[getrealloctag]] */
 ulong
 getrealloctag(void *v)
 {
@@ -377,9 +377,9 @@ getrealloctag(void *v)
         return ((ulong*)v)[-Npadlong+ReallocOffset];
     return ~0;
 }
-/*e: function getrealloctag */
+/*e: function [[getrealloctag]] */
 
-/*s: function malloctopoolblock */
+/*s: function [[malloctopoolblock]] */
 void*
 malloctopoolblock(void *v)
 {
@@ -388,5 +388,5 @@ malloctopoolblock(void *v)
 
     return &((ulong*)v)[-Npadlong];
 }
-/*e: function malloctopoolblock */
+/*e: function [[malloctopoolblock]] */
 /*e: port/malloc.c */

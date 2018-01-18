@@ -6,42 +6,42 @@
 
 typedef struct Note Note;
 
-/*s: global _threadnopasser */
+/*s: global [[_threadnopasser]] */
 int	_threadnopasser;
-/*e: global _threadnopasser */
+/*e: global [[_threadnopasser]] */
 
 /*s: constant NFN (libthread/note.c) */
 #define	NFN		33
 /*e: constant NFN (libthread/note.c) */
-/*s: constant ERRLEN */
+/*s: constant [[ERRLEN]] */
 #define	ERRLEN	48
-/*e: constant ERRLEN */
-/*s: struct Note */
+/*e: constant [[ERRLEN]] */
+/*s: struct [[Note]] */
 struct Note
 {
     Lock		inuse;
     Proc		*proc;		/* recipient */
     char		s[ERRMAX];	/* arg2 */
 };
-/*e: struct Note */
+/*e: struct [[Note]] */
 
-/*s: global notes */
+/*s: global [[notes]] */
 static Note	notes[128];
-/*e: global notes */
-/*s: global enotes */
+/*e: global [[notes]] */
+/*s: global [[enotes]] */
 static Note	*enotes = notes+nelem(notes);
-/*e: global enotes */
-/*s: global onnote */
+/*e: global [[enotes]] */
+/*s: global [[onnote]] */
 static int		(*onnote[NFN])(void*, char*);
-/*e: global onnote */
-/*s: global onnotepid */
+/*e: global [[onnote]] */
+/*s: global [[onnotepid]] */
 static int		onnotepid[NFN];
-/*e: global onnotepid */
-/*s: global onnotelock */
+/*e: global [[onnotepid]] */
+/*s: global [[onnotelock]] */
 static Lock	onnotelock;
-/*e: global onnotelock */
+/*e: global [[onnotelock]] */
 
-/*s: function threadnotify */
+/*s: function [[threadnotify]] */
 int
 threadnotify(int (*f)(void*, char*), int in)
 {
@@ -67,9 +67,9 @@ threadnotify(int (*f)(void*, char*), int in)
     unlock(&onnotelock);
     return i<NFN;
 }
-/*e: function threadnotify */
+/*e: function [[threadnotify]] */
 
-/*s: function delayednotes */
+/*s: function [[delayednotes]] */
 static void
 delayednotes(Proc *p, void *v)
 {
@@ -102,9 +102,9 @@ delayednotes(Proc *p, void *v)
         }
     }
 }
-/*e: function delayednotes */
+/*e: function [[delayednotes]] */
 
-/*s: function _threadnote */
+/*s: function [[_threadnote]] */
 void
 _threadnote(void *v, char *s)
 {
@@ -139,9 +139,9 @@ _threadnote(void *v, char *s)
         delayednotes(p, v);
     noted(NCONT);
 }
-/*e: function _threadnote */
+/*e: function [[_threadnote]] */
 
-/*s: function _procsplhi */
+/*s: function [[_procsplhi]] */
 int
 _procsplhi(void)
 {
@@ -153,9 +153,9 @@ _procsplhi(void)
     p->splhi = 1;
     return s;
 }
-/*e: function _procsplhi */
+/*e: function [[_procsplhi]] */
 
-/*s: function _procsplx */
+/*s: function [[_procsplx]] */
 void
 _procsplx(int s)
 {
@@ -168,6 +168,6 @@ _procsplx(int s)
     if(p->pending)
         delayednotes(p, nil);
 }
-/*e: function _procsplx */
+/*e: function [[_procsplx]] */
 
 /*e: lib_core/libthread/note.c */

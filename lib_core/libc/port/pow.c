@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function pow */
+/*s: function [[pow]] */
 double
 pow(double x, double y) /* return x ^ y (exponentiation) */
 {
@@ -69,5 +69,5 @@ pow(double x, double y) /* return x ^ y (exponentiation) */
     }
     return ldexp(xy, ey);
 }
-/*e: function pow */
+/*e: function [[pow]] */
 /*e: port/pow.c */

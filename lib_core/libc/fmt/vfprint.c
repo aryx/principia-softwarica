@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "fmtdef.h"
 
-/*s: function _fmtFdFlush */
+/*s: function [[_fmtFdFlush]] */
 /*
  * generic routine for flushing a formatting buffer
  * to a file descriptor
@@ -19,9 +19,9 @@ _fmtFdFlush(Fmt *f)
     f->to = f->start;
     return 1;
 }
-/*e: function _fmtFdFlush */
+/*e: function [[_fmtFdFlush]] */
 
-/*s: function vfprint */
+/*s: function [[vfprint]] */
 int
 vfprint(int fd, char *fmt, va_list args)
 {
@@ -36,5 +36,5 @@ vfprint(int fd, char *fmt, va_list args)
         return -1;
     return n;
 }
-/*e: function vfprint */
+/*e: function [[vfprint]] */
 /*e: fmt/vfprint.c */

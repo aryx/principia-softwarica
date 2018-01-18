@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <auth.h>
 
-/*s: function netcrypt */
+/*s: function [[netcrypt]] */
 int
 netcrypt(void *key, void *chal)
 {
@@ -18,5 +18,5 @@ netcrypt(void *key, void *chal)
     sprint(chal, "%.2ux%.2ux%.2ux%.2ux", buf[0], buf[1], buf[2], buf[3]);
     return 1;
 }
-/*e: function netcrypt */
+/*e: function [[netcrypt]] */
 /*e: port/netcrypt.c */

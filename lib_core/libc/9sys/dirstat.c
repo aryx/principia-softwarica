@@ -3,14 +3,14 @@
 #include <libc.h>
 #include <fcall.h>
 
-/*s: enum _anon_ (9sys/dirstat.c) */
+/*s: enum [[_anon_ (9sys/dirstat.c)]] */
 enum
 {
     DIRSIZE = STATFIXLEN + 16 * 4       /* enough for encoded stat buf + some reasonable strings */
 };
-/*e: enum _anon_ (9sys/dirstat.c) */
+/*e: enum [[_anon_ (9sys/dirstat.c)]] */
 
-/*s: function dirstat */
+/*s: function [[dirstat]] */
 Dir*
 dirstat(char *name)
 {
@@ -39,5 +39,5 @@ dirstat(char *name)
     }
     return nil;
 }
-/*e: function dirstat */
+/*e: function [[dirstat]] */
 /*e: 9sys/dirstat.c */

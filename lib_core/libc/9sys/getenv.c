@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function getenv */
+/*s: function [[getenv]] */
 char*
 getenv(char *name)
 {
@@ -37,5 +37,5 @@ getenv(char *name)
     close(f);
     return ans;
 }
-/*e: function getenv */
+/*e: function [[getenv]] */
 /*e: 9sys/getenv.c */

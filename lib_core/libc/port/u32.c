@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function dec32 */
+/*s: function [[dec32]] */
 int
 dec32(uchar *dest, int ndest, char *src, int nsrc)
 {
@@ -48,9 +48,9 @@ dec32(uchar *dest, int ndest, char *src, int nsrc)
 out:
     return dest-start;
 }
-/*e: function dec32 */
+/*e: function [[dec32]] */
 
-/*s: function enc32 */
+/*s: function [[enc32]] */
 int
 enc32(char *dest, int ndest, uchar *src, int nsrc)
 {
@@ -112,5 +112,5 @@ out:
     *dest = 0;
     return dest-start;
 }
-/*e: function enc32 */
+/*e: function [[enc32]] */
 /*e: port/u32.c */

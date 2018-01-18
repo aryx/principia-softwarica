@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function lock */
+/*s: function [[lock]] */
 void
 lock(Lock *l)
 {
@@ -14,9 +14,9 @@ lock(Lock *l)
         /* interrupted; try again */
     }
 }
-/*e: function lock */
+/*e: function [[lock]] */
 
-/*s: function unlock */
+/*s: function [[unlock]] */
 void
 unlock(Lock *l)
 {
@@ -24,9 +24,9 @@ unlock(Lock *l)
         return; /* changed from 1 -> 0: no contention */
     semrelease(&l->sem, 1);
 }
-/*e: function unlock */
+/*e: function [[unlock]] */
 
-/*s: function canlock */
+/*s: function [[canlock]] */
 bool
 canlock(Lock *l)
 {
@@ -39,5 +39,5 @@ canlock(Lock *l)
     semrelease(&l->sem, 1);
     return false;
 }
-/*e: function canlock */
+/*e: function [[canlock]] */
 /*e: port/lock.c */

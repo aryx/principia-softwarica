@@ -4,13 +4,13 @@
 
 #define VERSION9P   "9P2000"
 
-/*s: constant MAXWELEM */
+/*s: constant [[MAXWELEM]] */
 #define MAXWELEM    16
-/*e: constant MAXWELEM */
+/*e: constant [[MAXWELEM]] */
 
 typedef struct  Fcall Fcall;
 
-/*s: type Fcall */
+/*s: type [[Fcall]] */
 struct  Fcall
 {
     // enum<FcallType>
@@ -67,7 +67,7 @@ struct  Fcall
         };
     };
 };
-/*e: type Fcall */
+/*e: type [[Fcall]] */
 
 /*s: macros GBITxxx */
 #define GBIT8(p)    ((p)[0])
@@ -92,25 +92,25 @@ struct  Fcall
 #define BIT64SZ     8
 /*e: macros BITxxx */
 
-/*s: constant QIDSZ */
+/*s: constant [[QIDSZ]] */
 #define QIDSZ   (BIT8SZ+BIT32SZ+BIT64SZ)
-/*e: constant QIDSZ */
+/*e: constant [[QIDSZ]] */
 
-/*s: constant STATFIXLEN */
+/*s: constant [[STATFIXLEN]] */
 /* STATFIXLEN includes leading 16-bit count */
 /* The count, however, excludes itself; total size is BIT16SZ+count */
 #define STATFIXLEN  (BIT16SZ+QIDSZ+5*BIT16SZ+4*BIT32SZ+1*BIT64SZ)   /* amount of fixed length data in a stat buffer */
-/*e: constant STATFIXLEN */
+/*e: constant [[STATFIXLEN]] */
 
 
 #define NOTAG       (ushort)~0U /* Dummy tag */
 #define NOFID       (u32int)~0U /* Dummy fid */
 
-/*s: constant IOHDRSZ */
+/*s: constant [[IOHDRSZ]] */
 #define IOHDRSZ     24  /* ample room for Twrite/Rread header (iounit) */
-/*e: constant IOHDRSZ */
+/*e: constant [[IOHDRSZ]] */
 
-/*s: type FcallType */
+/*s: type [[FcallType]] */
 enum FcallType
 {
     Tversion =  100,
@@ -144,7 +144,7 @@ enum FcallType
 
     Tmax,
 };
-/*e: type FcallType */
+/*e: type [[FcallType]] */
 
 
 error0    convM2S(uchar*, uint, Fcall*);

@@ -6,7 +6,7 @@
 #define MASK    0x7fffffffL
 /*e: constant MASK (port/lnrand.c) */
 
-/*s: function lnrand */
+/*s: function [[lnrand]] */
 long
 lnrand(long n)
 {
@@ -20,5 +20,5 @@ lnrand(long n)
     while(v <= slop);
     return v % n;
 }
-/*e: function lnrand */
+/*e: function [[lnrand]] */
 /*e: port/lnrand.c */

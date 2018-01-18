@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "fmtdef.h"
 
-/*s: function dorfmt */
+/*s: function [[dorfmt]] */
 /* format the output into f->to and return the number of characters fmted  */
 
 int
@@ -45,5 +45,5 @@ dorfmt(Fmt *f, Rune *fmt)
             return -1;
     }
 }
-/*e: function dorfmt */
+/*e: function [[dorfmt]] */
 /*e: fmt/dorfmt.c */

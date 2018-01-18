@@ -1,7 +1,7 @@
 /*s: port/toupper.c */
 #include    <ctype.h>
 
-/*s: function toupper */
+/*s: function [[toupper]] */
 int
 toupper(int c)
 {
@@ -10,9 +10,9 @@ toupper(int c)
         return c;
     return _toupper(c);
 }
-/*e: function toupper */
+/*e: function [[toupper]] */
 
-/*s: function tolower */
+/*s: function [[tolower]] */
 int
 tolower(int c)
 {
@@ -21,5 +21,5 @@ tolower(int c)
         return c;
     return _tolower(c);
 }
-/*e: function tolower */
+/*e: function [[tolower]] */
 /*e: port/toupper.c */

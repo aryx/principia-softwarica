@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function atol */
+/*s: function [[atol]] */
 long
 atol(char *s)
 {
@@ -46,14 +46,14 @@ atol(char *s)
         n = -n;
     return n;
 }
-/*e: function atol */
+/*e: function [[atol]] */
 
-/*s: function atoi */
+/*s: function [[atoi]] */
 int
 atoi(char *s)
 {
 
     return atol(s);
 }
-/*e: function atoi */
+/*e: function [[atoi]] */
 /*e: port/atol.c */

@@ -2,26 +2,26 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: constant NEXIT */
+/*s: constant [[NEXIT]] */
 #define NEXIT   33
-/*e: constant NEXIT */
+/*e: constant [[NEXIT]] */
 
 typedef struct Onex Onex;
-/*s: struct Onex */
+/*s: struct [[Onex]] */
 struct Onex{
     void    (*f)(void);
     int pid;
 };
-/*e: struct Onex */
+/*e: struct [[Onex]] */
 
-/*s: global onexlock */
+/*s: global [[onexlock]] */
 static Lock onexlock;
-/*e: global onexlock */
-/*s: global onex */
+/*e: global [[onexlock]] */
+/*s: global [[onex]] */
 Onex onex[NEXIT];
-/*e: global onex */
+/*e: global [[onex]] */
 
-/*s: function atexit */
+/*s: function [[atexit]] */
 int
 atexit(void (*f)(void))
 {
@@ -38,10 +38,10 @@ atexit(void (*f)(void))
     unlock(&onexlock);
     return 0;
 }
-/*e: function atexit */
+/*e: function [[atexit]] */
 
 #pragma profile off
-/*s: function exits */
+/*s: function [[exits]] */
 void
 exits(char *s)
 {
@@ -56,6 +56,6 @@ exits(char *s)
         }
     _exits(s);
 }
-/*e: function exits */
+/*e: function [[exits]] */
 #pragma profile on
 /*e: port/atexit.c */

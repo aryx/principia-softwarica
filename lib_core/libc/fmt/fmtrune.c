@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "fmtdef.h"
 
-/*s: function fmtrune */
+/*s: function [[fmtrune]] */
 int
 fmtrune(Fmt *f, int r)
 {
@@ -25,5 +25,5 @@ fmtrune(Fmt *f, int r)
     f->nfmt += n;
     return 0;
 }
-/*e: function fmtrune */
+/*e: function [[fmtrune]] */
 /*e: fmt/fmtrune.c */

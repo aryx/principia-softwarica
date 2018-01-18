@@ -2,11 +2,11 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: constant HZ */
+/*s: constant [[HZ]] */
 #define HZ  1000
-/*e: constant HZ */
+/*e: constant [[HZ]] */
 
-/*s: function cputime */
+/*s: function [[cputime]] */
 double
 cputime(void)
 {
@@ -18,5 +18,5 @@ cputime(void)
         t[0] += t[i];
     return t[0] / (double)HZ;
 }
-/*e: function cputime */
+/*e: function [[cputime]] */
 /*e: 9sys/cputime.c */

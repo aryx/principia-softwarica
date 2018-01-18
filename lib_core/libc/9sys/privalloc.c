@@ -5,17 +5,17 @@
 /*s: global privlock (9sys/privalloc.c) */
 static Lock privlock;
 /*e: global privlock (9sys/privalloc.c) */
-/*s: global privinit */
+/*s: global [[privinit]] */
 static int  privinit;
-/*e: global privinit */
-/*s: global privs */
+/*e: global [[privinit]] */
+/*s: global [[privs]] */
 static void **privs;
-/*e: global privs */
+/*e: global [[privs]] */
 
 extern void **_privates;
 extern int  _nprivates;
 
-/*s: function privalloc */
+/*s: function [[privalloc]] */
 void **
 privalloc(void)
 {
@@ -40,9 +40,9 @@ privalloc(void)
     unlock(&privlock);
     return p;
 }
-/*e: function privalloc */
+/*e: function [[privalloc]] */
 
-/*s: function privfree */
+/*s: function [[privfree]] */
 void
 privfree(void **p)
 {
@@ -53,5 +53,5 @@ privfree(void **p)
     }
     unlock(&privlock);
 }
-/*e: function privfree */
+/*e: function [[privfree]] */
 /*e: 9sys/privalloc.c */

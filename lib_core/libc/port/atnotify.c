@@ -5,14 +5,14 @@
 /*s: constant NFN (port/atnotify.c) */
 #define NFN 33
 /*e: constant NFN (port/atnotify.c) */
-/*s: global onnot */
+/*s: global [[onnot]] */
 static  int (*onnot[NFN])(void*, char*);
-/*e: global onnot */
-/*s: global onnotlock */
+/*e: global [[onnot]] */
+/*s: global [[onnotlock]] */
 static  Lock    onnotlock;
-/*e: global onnotlock */
+/*e: global [[onnotlock]] */
 
-/*s: function notifier */
+/*s: function [[notifier]] */
 static
 void
 notifier(void *v, char *s)
@@ -26,9 +26,9 @@ notifier(void *v, char *s)
         }
     noted(NDFLT);
 }
-/*e: function notifier */
+/*e: function [[notifier]] */
 
-/*s: function atnotify */
+/*s: function [[atnotify]] */
 int
 atnotify(int (*f)(void*, char*), int in)
 {
@@ -66,5 +66,5 @@ atnotify(int (*f)(void*, char*), int in)
     unlock(&onnotlock);
     return ret;
 }
-/*e: function atnotify */
+/*e: function [[atnotify]] */
 /*e: port/atnotify.c */

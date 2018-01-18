@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <fcall.h>
 
-/*s: function wait */
+/*s: function [[wait]] */
 Waitmsg*
 wait(void)
 {
@@ -32,6 +32,6 @@ wait(void)
     memmove(w->msg, fld[4], l);
     return w;
 }
-/*e: function wait */
+/*e: function [[wait]] */
 
 /*e: 9sys/wait.c */

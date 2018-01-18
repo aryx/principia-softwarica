@@ -37,7 +37,7 @@
 #define q3      .1326534908786136358911494e3
 /*e: constant q3 (port/sin.c) */
 
-/*s: function sinus */
+/*s: function [[sinus]] */
 static
 double
 sinus(double arg, int quad)
@@ -72,9 +72,9 @@ sinus(double arg, int quad)
     temp2 = ((((ysq+q3)*ysq+q2)*ysq+q1)*ysq+q0);
     return temp1/temp2;
 }
-/*e: function sinus */
+/*e: function [[sinus]] */
 
-/*s: function cos */
+/*s: function [[cos]] */
 double
 cos(double arg)
 {
@@ -82,13 +82,13 @@ cos(double arg)
         arg = -arg;
     return sinus(arg, 1);
 }
-/*e: function cos */
+/*e: function [[cos]] */
 
-/*s: function sin */
+/*s: function [[sin]] */
 double
 sin(double arg)
 {
     return sinus(arg, 0);
 }
-/*e: function sin */
+/*e: function [[sin]] */
 /*e: port/sin.c */

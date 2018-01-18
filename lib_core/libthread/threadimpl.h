@@ -29,7 +29,7 @@ typedef struct Proc Proc;
 
 
 /* must match list in sched.c */
-/*s: enum state */
+/*s: enum [[state]] */
 enum state
 {
     Dead,
@@ -37,10 +37,10 @@ enum state
     Ready,
     Rendezvous,
 };
-/*e: enum state */
+/*e: enum [[state]] */
 typedef enum state State;
     
-/*s: enum chanstate */
+/*s: enum [[chanstate]] */
 enum chanstate
 {
     Channone,
@@ -50,33 +50,33 @@ enum chanstate
 
     Chanalt,
 };
-/*e: enum chanstate */
+/*e: enum [[chanstate]] */
 typedef enum chanstate Chanstate;
 
-/*s: enum _anon_ (lib_core/libthread/threadimpl.h) */
+/*s: enum [[_anon_ (lib_core/libthread/threadimpl.h)]] */
 enum
 {
-/*s: constant RENDHASH */
+/*s: constant [[RENDHASH]] */
 RENDHASH = 13,
-/*e: constant RENDHASH */
-/*s: constant Printsize */
+/*e: constant [[RENDHASH]] */
+/*s: constant [[Printsize]] */
 Printsize = 2048,
-/*e: constant Printsize */
-/*s: constant NPRIV */
+/*e: constant [[Printsize]] */
+/*s: constant [[NPRIV]] */
 NPRIV = 8,
-/*e: constant NPRIV */
+/*e: constant [[NPRIV]] */
 };
-/*e: enum _anon_ (lib_core/libthread/threadimpl.h) */
+/*e: enum [[_anon_ (lib_core/libthread/threadimpl.h)]] */
 
-/*s: struct Rgrp */
+/*s: struct [[Rgrp]] */
 struct Rgrp
 {
     Lock	lock;
     Thread	*hash[RENDHASH];
 };
-/*e: struct Rgrp */
+/*e: struct [[Rgrp]] */
 
-/*s: struct Tqueue */
+/*s: struct [[Tqueue]] */
 struct Tqueue		/* Thread queue */
 {
     Thread	*head;
@@ -84,9 +84,9 @@ struct Tqueue		/* Thread queue */
 
     int		asleep;
 };
-/*e: struct Tqueue */
+/*e: struct [[Tqueue]] */
 
-/*s: struct Thread */
+/*s: struct [[Thread]] */
 struct Thread
 {
     int		id;		/* thread id */
@@ -131,18 +131,18 @@ struct Thread
 
 
 };
-/*e: struct Thread */
+/*e: struct [[Thread]] */
 
-/*s: struct Execargs */
+/*s: struct [[Execargs]] */
 struct Execargs
 {
     char	*prog;
     char	**args;
     int		fd[2];
 };
-/*e: struct Execargs */
+/*e: struct [[Execargs]] */
 
-/*s: struct Proc */
+/*s: struct [[Proc]] */
 struct Proc
 {
     int		pid;			/* process id */
@@ -188,9 +188,9 @@ struct Proc
 
     Lock	lock;
 };
-/*e: struct Proc */
+/*e: struct [[Proc]] */
 
-/*s: struct Pqueue */
+/*s: struct [[Pqueue]] */
 struct Pqueue {		/* Proc queue */
     Proc		*head;
     Proc		**tail;
@@ -198,9 +198,9 @@ struct Pqueue {		/* Proc queue */
     // Extra
     Lock		lock;
 };
-/*e: struct Pqueue */
+/*e: struct [[Pqueue]] */
 
-/*s: struct Ioproc */
+/*s: struct [[Ioproc]] */
 struct Ioproc
 {
     int tid;
@@ -218,7 +218,7 @@ struct Ioproc
 
     Ioproc *next;
 };
-/*e: struct Ioproc */
+/*e: struct [[Ioproc]] */
 
 void    _freeproc(Proc*);
 void    _freethread(Thread*);
@@ -256,26 +256,26 @@ extern Pqueue       _threadpq;
 extern Channel*     _threadwaitchan;
 extern Rgrp     _threadrgrp;
 
-/*s: constant DBGAPPL */
+/*s: constant [[DBGAPPL]] */
 #define DBGAPPL	(1 << 0)
-/*e: constant DBGAPPL */
-/*s: constant DBGSCHED */
+/*e: constant [[DBGAPPL]] */
+/*s: constant [[DBGSCHED]] */
 #define DBGSCHED	(1 << 16)
-/*e: constant DBGSCHED */
-/*s: constant DBGCHAN */
+/*e: constant [[DBGSCHED]] */
+/*s: constant [[DBGCHAN]] */
 #define DBGCHAN	(1 << 17)
-/*e: constant DBGCHAN */
-/*s: constant DBGREND */
+/*e: constant [[DBGCHAN]] */
+/*s: constant [[DBGREND]] */
 #define DBGREND	(1 << 18)
-/*e: constant DBGREND */
-/*s: constant DBGNOTE */
+/*e: constant [[DBGREND]] */
+/*s: constant [[DBGNOTE]] */
 #define DBGNOTE	(1 << 20)
-/*e: constant DBGNOTE */
-/*s: constant DBGEXEC */
+/*e: constant [[DBGNOTE]] */
+/*s: constant [[DBGEXEC]] */
 #define DBGEXEC	(1 << 21)
-/*e: constant DBGEXEC */
+/*e: constant [[DBGEXEC]] */
 
-/*s: function ioproc_arg */
+/*s: function [[ioproc_arg]] */
 #define ioproc_arg(io, type)	(va_arg((io)->arg, type))
-/*e: function ioproc_arg */
+/*e: function [[ioproc_arg]] */
 /*e: lib_core/libthread/threadimpl.h */

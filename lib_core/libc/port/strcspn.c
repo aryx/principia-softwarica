@@ -6,7 +6,7 @@
 #define N   256
 /*e: constant N (port/strcspn.c) */
 
-/*s: function strcspn */
+/*s: function [[strcspn]] */
 long
 strcspn(char *s, char *b)
 {
@@ -23,5 +23,5 @@ strcspn(char *s, char *b)
         ;
     return s - os - 1;
 }
-/*e: function strcspn */
+/*e: function [[strcspn]] */
 /*e: port/strcspn.c */

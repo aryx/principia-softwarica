@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function runestrncpy */
+/*s: function [[runestrncpy]] */
 Rune*
 runestrncpy(Rune *s1, Rune *s2, long n)
 {
@@ -18,5 +18,5 @@ runestrncpy(Rune *s1, Rune *s2, long n)
         }
     return os1;
 }
-/*e: function runestrncpy */
+/*e: function [[runestrncpy]] */
 /*e: port/runestrncpy.c */

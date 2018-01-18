@@ -34,12 +34,12 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: global dmsize */
+/*s: global [[dmsize]] */
 static  char    dmsize[12] =
 {
     31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 };
-/*e: global dmsize */
+/*e: global [[dmsize]] */
 
 /*
  * The following table is used for 1974 and 1975 and
@@ -50,13 +50,13 @@ static  char    dmsize[12] =
 static  int dysize(int);
 static  void    ct_numb(char*, int);
 
-/*s: constant TZSIZE */
+/*s: constant [[TZSIZE]] */
 #define TZSIZE  150
-/*e: constant TZSIZE */
+/*e: constant [[TZSIZE]] */
 static  void    readtimezone(void);
 static  int rd_name(char**, char*);
 static  int rd_long(char**, long*);
-/*s: global timezone */
+/*s: global [[timezone]] */
 static
 struct
 {
@@ -66,17 +66,17 @@ struct
     long    dldiff;
     long    dlpairs[TZSIZE];
 } timezone;
-/*e: global timezone */
+/*e: global [[timezone]] */
 
-/*s: function ctime */
+/*s: function [[ctime]] */
 char*
 ctime(long t)
 {
     return asctime(localtime(t));
 }
-/*e: function ctime */
+/*e: function [[ctime]] */
 
-/*s: function localtime */
+/*s: function [[localtime]] */
 Tm*
 localtime(long tim)
 {
@@ -105,9 +105,9 @@ localtime(long tim)
     }
     return ct;
 }
-/*e: function localtime */
+/*e: function [[localtime]] */
 
-/*s: function gmtime */
+/*s: function [[gmtime]] */
 Tm*
 gmtime(long tim)
 {
@@ -168,9 +168,9 @@ gmtime(long tim)
     strcpy(xtime.zone, "GMT");
     return &xtime;
 }
-/*e: function gmtime */
+/*e: function [[gmtime]] */
 
-/*s: function asctime */
+/*s: function [[asctime]] */
 char*
 asctime(Tm *t)
 {
@@ -201,9 +201,9 @@ asctime(Tm *t)
     ct_numb(cbuf+26, t->year+100);
     return cbuf;
 }
-/*e: function asctime */
+/*e: function [[asctime]] */
 
-/*s: function dysize */
+/*s: function [[dysize]] */
 static int
 dysize(int y)
 {
@@ -212,9 +212,9 @@ dysize(int y)
         return 366;
     return 365;
 }
-/*e: function dysize */
+/*e: function [[dysize]] */
 
-/*s: function ct_numb */
+/*s: function [[ct_numb]] */
 static
 void
 ct_numb(char *cp, int n)
@@ -225,9 +225,9 @@ ct_numb(char *cp, int n)
         cp[0] = (n/10)%10 + '0';
     cp[1] = n%10 + '0';
 }
-/*e: function ct_numb */
+/*e: function [[ct_numb]] */
 
-/*s: function readtimezone */
+/*s: function [[readtimezone]] */
 static
 void
 readtimezone(void)
@@ -265,9 +265,9 @@ error:
     strcpy(timezone.stname, "GMT");
     timezone.dlpairs[0] = 0;
 }
-/*e: function readtimezone */
+/*e: function [[readtimezone]] */
 
-/*s: function rd_name */
+/*s: function [[rd_name]] */
 static int
 rd_name(char **f, char *p)
 {
@@ -289,9 +289,9 @@ rd_name(char **f, char *p)
     *p = 0;
     return 0;
 }
-/*e: function rd_name */
+/*e: function [[rd_name]] */
 
-/*s: function rd_long */
+/*s: function [[rd_long]] */
 static int
 rd_long(char **f, long *p)
 {
@@ -326,5 +326,5 @@ rd_long(char **f, long *p)
     *p = l;
     return 0;
 }
-/*e: function rd_long */
+/*e: function [[rd_long]] */
 /*e: 9sys/ctime.c */

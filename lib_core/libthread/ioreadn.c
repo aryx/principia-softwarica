@@ -4,7 +4,7 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: function _ioreadn */
+/*s: function [[_ioreadn]] */
 static long
 _ioreadn(va_list *arg)
 {
@@ -17,13 +17,13 @@ _ioreadn(va_list *arg)
     n = va_arg(*arg, long);
     return readn(fd, a, n);
 }
-/*e: function _ioreadn */
+/*e: function [[_ioreadn]] */
 
-/*s: function ioreadn */
+/*s: function [[ioreadn]] */
 long
 ioreadn(Ioproc *io, int fd, void *a, long n)
 {
     return iocall(io, _ioreadn, fd, a, n);
 }
-/*e: function ioreadn */
+/*e: function [[ioreadn]] */
 /*e: lib_core/libthread/ioreadn.c */

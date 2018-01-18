@@ -4,7 +4,7 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: function nextID */
+/*s: function [[nextID]] */
 static int
 nextID(void)
 {
@@ -17,9 +17,9 @@ nextID(void)
     unlock(&l);
     return i;
 }
-/*e: function nextID */
+/*e: function [[nextID]] */
     
-/*s: function newthread */
+/*s: function [[newthread]] */
 /*
  * Create and initialize a new Thread structure attached to a given proc.
  */
@@ -62,9 +62,9 @@ newthread(Proc *p, void (*f)(void *arg), void *arg, uint stacksize, char *name, 
 
     return id;
 }
-/*e: function newthread */
+/*e: function [[newthread]] */
 
-/*s: function threadcreate */
+/*s: function [[threadcreate]] */
 /* 
  * Create a new thread and schedule it to run.
  * The thread grp is inherited from the currently running thread.
@@ -74,9 +74,9 @@ threadcreate(void (*f)(void *arg), void *arg, uint stacksize)
 {
     return newthread(_threadgetproc(), f, arg, stacksize, nil, threadgetgrp());
 }
-/*e: function threadcreate */
+/*e: function [[threadcreate]] */
 
-/*s: function _newproc */
+/*s: function [[_newproc]] */
 /*
  * Create and initialize a new Proc structure with a single Thread
  * running inside it.  Add the Proc to the global process list.
@@ -101,9 +101,9 @@ _newproc(void (*f)(void *arg), void *arg, uint stacksize, char *name, int grp, i
 
     return p;
 }
-/*e: function _newproc */
+/*e: function [[_newproc]] */
 
-/*s: function procrfork */
+/*s: function [[procrfork]] */
 int
 procrfork(void (*f)(void *), void *arg, uint stacksize, int rforkflag)
 {
@@ -117,17 +117,17 @@ procrfork(void (*f)(void *), void *arg, uint stacksize, int rforkflag)
     _sched();
     return id;
 }
-/*e: function procrfork */
+/*e: function [[procrfork]] */
 
-/*s: function proccreate */
+/*s: function [[proccreate]] */
 int
 proccreate(void (*f)(void*), void *arg, uint stacksize)
 {
     return procrfork(f, arg, stacksize, 0);
 }
-/*e: function proccreate */
+/*e: function [[proccreate]] */
 
-/*s: function _freeproc */
+/*s: function [[_freeproc]] */
 void
 _freeproc(Proc *p)
 {
@@ -143,9 +143,9 @@ _freeproc(Proc *p)
     }
     free(p);
 }
-/*e: function _freeproc */
+/*e: function [[_freeproc]] */
 
-/*s: function _freethread */
+/*s: function [[_freethread]] */
 void
 _freethread(Thread *t)
 {
@@ -169,6 +169,6 @@ _freethread(Thread *t)
     free(t->stk);
     free(t);
 }
-/*e: function _freethread */
+/*e: function [[_freethread]] */
 
 /*e: lib_core/libthread/create.c */

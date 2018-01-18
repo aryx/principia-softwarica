@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function runestrncat */
+/*s: function [[runestrncat]] */
 Rune*
 runestrncat(Rune *s1, Rune *s2, long n)
 {
@@ -17,5 +17,5 @@ runestrncat(Rune *s1, Rune *s2, long n)
         }
     return os1;
 }
-/*e: function runestrncat */
+/*e: function [[runestrncat]] */
 /*e: port/runestrncat.c */

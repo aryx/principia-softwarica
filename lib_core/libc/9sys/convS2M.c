@@ -3,7 +3,7 @@
 #include    <libc.h>
 #include    <fcall.h>
 
-/*s: function pstring */
+/*s: function [[pstring]] */
 static
 uchar*
 pstring(uchar *p, char *s)
@@ -26,9 +26,9 @@ pstring(uchar *p, char *s)
     p += n + BIT16SZ;
     return p;
 }
-/*e: function pstring */
+/*e: function [[pstring]] */
 
-/*s: function pqid */
+/*s: function [[pqid]] */
 static
 uchar*
 pqid(uchar *p, Qid *q)
@@ -41,9 +41,9 @@ pqid(uchar *p, Qid *q)
     p += BIT64SZ;
     return p;
 }
-/*e: function pqid */
+/*e: function [[pqid]] */
 
-/*s: function stringsz */
+/*s: function [[stringsz]] */
 static
 uint
 stringsz(char *s)
@@ -53,9 +53,9 @@ stringsz(char *s)
 
     return BIT16SZ+strlen(s);
 }
-/*e: function stringsz */
+/*e: function [[stringsz]] */
 
-/*s: function sizeS2M */
+/*s: function [[sizeS2M]] */
 uint
 sizeS2M(Fcall *f)
 {
@@ -200,9 +200,9 @@ sizeS2M(Fcall *f)
     }
     return n;
 }
-/*e: function sizeS2M */
+/*e: function [[sizeS2M]] */
 
-/*s: function convS2M */
+/*s: function [[convS2M]] */
 error0
 convS2M(Fcall *f, uchar *ap, uint nap)
 {
@@ -398,5 +398,5 @@ convS2M(Fcall *f, uchar *ap, uint nap)
         return ERROR_0;
     return size;
 }
-/*e: function convS2M */
+/*e: function [[convS2M]] */
 /*e: 9sys/convS2M.c */

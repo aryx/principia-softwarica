@@ -13,7 +13,7 @@
 #include <auth.h>
 #include <libsec.h>
 
-/*s: function encrypt */
+/*s: function [[encrypt]] */
 /*
  * destructively encrypt the buffer, which
  * must be at least 8 characters long.
@@ -40,9 +40,9 @@ encrypt(void *key, void *vbuf, int n)
         block_cipher(ekey, buf - 7 + r, 0);
     return 1;
 }
-/*e: function encrypt */
+/*e: function [[encrypt]] */
 
-/*s: function decrypt */
+/*s: function [[decrypt]] */
 /*
  * destructively decrypt the buffer, which
  * must be at least 8 characters long.
@@ -70,5 +70,5 @@ decrypt(void *key, void *vbuf, int n)
     }
     return 1;
 }
-/*e: function decrypt */
+/*e: function [[decrypt]] */
 /*e: port/crypt.c */

@@ -3,7 +3,7 @@
 #include    <libc.h>
 #include    <fcall.h>
 
-/*s: function sizeD2M */
+/*s: function [[sizeD2M]] */
 uint
 sizeD2M(Dir *d)
 {
@@ -22,9 +22,9 @@ sizeD2M(Dir *d)
 
     return STATFIXLEN + ns;
 }
-/*e: function sizeD2M */
+/*e: function [[sizeD2M]] */
 
-/*s: function convD2M */
+/*s: function [[convD2M]] */
 uint
 convD2M(Dir *d, uchar *buf, uint nbuf)
 {
@@ -100,5 +100,5 @@ convD2M(Dir *d, uchar *buf, uint nbuf)
 
     return p - buf;
 }
-/*e: function convD2M */
+/*e: function [[convD2M]] */
 /*e: 9sys/convD2M.c */

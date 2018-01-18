@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function snprint */
+/*s: function [[snprint]] */
 int
 snprint(char *buf, int len, char *fmt, ...)
 {
@@ -14,6 +14,6 @@ snprint(char *buf, int len, char *fmt, ...)
     va_end(args);
     return n;
 }
-/*e: function snprint */
+/*e: function [[snprint]] */
 
 /*e: fmt/snprint.c */

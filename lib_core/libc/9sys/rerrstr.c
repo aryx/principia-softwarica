@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function rerrstr */
+/*s: function [[rerrstr]] */
 void
 rerrstr(char *buf, uint nbuf)
 {
@@ -14,5 +14,5 @@ rerrstr(char *buf, uint nbuf)
     utfecpy(buf, buf+nbuf, tmp);
     errstr(tmp, sizeof tmp);
 }
-/*e: function rerrstr */
+/*e: function [[rerrstr]] */
 /*e: 9sys/rerrstr.c */

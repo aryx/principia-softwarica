@@ -2,7 +2,7 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: function memchr */
+/*s: function [[memchr]] */
 void*
 memchr(void *ap, int c, ulong n)
 {
@@ -17,5 +17,5 @@ memchr(void *ap, int c, ulong n)
     }
     return nil;
 }
-/*e: function memchr */
+/*e: function [[memchr]] */
 /*e: port/memchr.c */

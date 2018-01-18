@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "fmtdef.h"
 
-/*s: function fmtStrFlush */
+/*s: function [[fmtStrFlush]] */
 static int
 fmtStrFlush(Fmt *f)
 {
@@ -28,9 +28,9 @@ fmtStrFlush(Fmt *f)
     f->stop = (char*)f->start + n - 1;
     return 1;
 }
-/*e: function fmtStrFlush */
+/*e: function [[fmtStrFlush]] */
 
-/*s: function fmtstrinit */
+/*s: function [[fmtstrinit]] */
 int
 fmtstrinit(Fmt *f)
 {
@@ -50,9 +50,9 @@ fmtstrinit(Fmt *f)
     f->nfmt = 0;
     return 0;
 }
-/*e: function fmtstrinit */
+/*e: function [[fmtstrinit]] */
 
-/*s: function vsmprint */
+/*s: function [[vsmprint]] */
 /*
  * print into an allocated string buffer
  */
@@ -76,5 +76,5 @@ vsmprint(char *fmt, va_list args)
     *(char*)f.to = '\0';
     return f.start;
 }
-/*e: function vsmprint */
+/*e: function [[vsmprint]] */
 /*e: fmt/vsmprint.c */

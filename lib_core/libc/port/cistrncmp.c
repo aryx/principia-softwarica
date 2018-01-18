@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function cistrncmp */
+/*s: function [[cistrncmp]] */
 int
 cistrncmp(char *s1, char *s2, int n)
 {
@@ -28,5 +28,5 @@ cistrncmp(char *s1, char *s2, int n)
         return 0;
     return -*s2;
 }
-/*e: function cistrncmp */
+/*e: function [[cistrncmp]] */
 /*e: port/cistrncmp.c */

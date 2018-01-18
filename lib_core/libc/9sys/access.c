@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function access */
+/*s: function [[access]] */
 int
 access(char *name, int mode)
 {
@@ -33,5 +33,5 @@ access(char *name, int mode)
     }
     return -1;
 }
-/*e: function access */
+/*e: function [[access]] */
 /*e: 9sys/access.c */

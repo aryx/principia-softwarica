@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function fmtstrflush */
+/*s: function [[fmtstrflush]] */
 char*
 fmtstrflush(Fmt *f)
 {
@@ -11,5 +11,5 @@ fmtstrflush(Fmt *f)
     *(char*)f->to = '\0';
     return f->start;
 }
-/*e: function fmtstrflush */
+/*e: function [[fmtstrflush]] */
 /*e: fmt/fmtstr.c */

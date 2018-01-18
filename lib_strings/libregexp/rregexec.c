@@ -4,7 +4,7 @@
 #include "regexp.h"
 #include "regcomp.h"
 
-/*s: function rregexec1 */
+/*s: function [[rregexec1]] */
 /*
  *  return	0 if no match
  *		>0 if a match
@@ -148,9 +148,9 @@ rregexec1(Reprog *progp,	/* program to run */
     }while(r);
     return match;
 }
-/*e: function rregexec1 */
+/*e: function [[rregexec1]] */
 
-/*s: function rregexec2 */
+/*s: function [[rregexec2]] */
 static int
 rregexec2(Reprog *progp,	/* program to run */
     Rune *bol,	/* string to run machine on */
@@ -169,9 +169,9 @@ rregexec2(Reprog *progp,	/* program to run */
 
     return rregexec1(progp, bol, mp, ms, j);
 }
-/*e: function rregexec2 */
+/*e: function [[rregexec2]] */
 
-/*s: function rregexec */
+/*s: function [[rregexec]] */
 extern int
 rregexec(Reprog *progp,	/* program to run */
     Rune *bol,	/* string to run machine on */
@@ -216,5 +216,5 @@ rregexec(Reprog *progp,	/* program to run */
         return rv;
     return -1;
 }
-/*e: function rregexec */
+/*e: function [[rregexec]] */
 /*e: libregexp/rregexec.c */

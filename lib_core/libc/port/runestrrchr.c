@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function runestrrchr */
+/*s: function [[runestrrchr]] */
 Rune*
 runestrrchr(Rune *s, Rune c)
 {
@@ -15,5 +15,5 @@ runestrrchr(Rune *s, Rune c)
         r = s++;
     return r;
 }
-/*e: function runestrrchr */
+/*e: function [[runestrrchr]] */
 /*e: port/runestrrchr.c */

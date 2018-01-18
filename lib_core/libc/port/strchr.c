@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function strchr */
+/*s: function [[strchr]] */
 char*
 strchr(char *s, int c)
 {
@@ -20,5 +20,5 @@ strchr(char *s, int c)
             return s-1;
     return nil;
 }
-/*e: function strchr */
+/*e: function [[strchr]] */
 /*e: port/strchr.c */

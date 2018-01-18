@@ -5,16 +5,16 @@
 
 #include "threadimpl.h"
 
-/*s: function launcher386 */
+/*s: function [[launcher386]] */
 static void
 launcher386(void (*f)(void *arg), void *arg)
 {
     (*f)(arg);
     threadexits(nil);
 }
-/*e: function launcher386 */
+/*e: function [[launcher386]] */
 
-/*s: function _threadinitstack */
+/*s: function [[_threadinitstack]] */
 void
 _threadinitstack(Thread *t, void (*f)(void*), void *arg)
 {
@@ -26,6 +26,6 @@ _threadinitstack(Thread *t, void (*f)(void*), void *arg)
     t->sched[JMPBUFPC] = (ulong)launcher386+JMPBUFDPC;
     t->sched[JMPBUFSP] = (ulong)tos - 8;		/* old PC and new PC */
 }
-/*e: function _threadinitstack */
+/*e: function [[_threadinitstack]] */
 
 /*e: lib_core/libthread/386.c */

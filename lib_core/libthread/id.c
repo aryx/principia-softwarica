@@ -5,15 +5,15 @@
 #include "threadimpl.h"
 #include <tos.h>
 
-/*s: function threadid */
+/*s: function [[threadid]] */
 int
 threadid(void)
 {
     return _threadgetproc()->thread->id;
 }
-/*e: function threadid */
+/*e: function [[threadid]] */
 
-/*s: function threadpid */
+/*s: function [[threadpid]] */
 int
 threadpid(int id)
 {
@@ -40,9 +40,9 @@ threadpid(int id)
     unlock(&_threadpq.lock);
     return -1;
 }
-/*e: function threadpid */
+/*e: function [[threadpid]] */
 
-/*s: function threadsetgrp */
+/*s: function [[threadsetgrp]] */
 int
 threadsetgrp(int ng)
 {
@@ -54,17 +54,17 @@ threadsetgrp(int ng)
     t->grp = ng;
     return og;
 }
-/*e: function threadsetgrp */
+/*e: function [[threadsetgrp]] */
 
-/*s: function threadgetgrp */
+/*s: function [[threadgetgrp]] */
 int
 threadgetgrp(void)
 {
     return _threadgetproc()->thread->grp;
 }
-/*e: function threadgetgrp */
+/*e: function [[threadgetgrp]] */
 
-/*s: function threadsetname */
+/*s: function [[threadsetname]] */
 void
 threadsetname(char *fmt, ...)
 {
@@ -89,9 +89,9 @@ threadsetname(char *fmt, ...)
         }
     }
 }
-/*e: function threadsetname */
+/*e: function [[threadsetname]] */
 
-/*s: function threadgetname */
+/*s: function [[threadgetname]] */
 char*
 threadgetname(void)
 {
@@ -101,41 +101,41 @@ threadgetname(void)
         return p->thread->cmdname;
     return nil;
 }
-/*e: function threadgetname */
+/*e: function [[threadgetname]] */
 
-/*s: function threaddata */
+/*s: function [[threaddata]] */
 void**
 threaddata(void)
 {
     return &_threadgetproc()->thread->udata[0];
 }
-/*e: function threaddata */
+/*e: function [[threaddata]] */
 
-/*s: function _workerdata */
+/*s: function [[_workerdata]] */
 void**
 _workerdata(void)
 {
     return &_threadgetproc()->wdata;
 }
-/*e: function _workerdata */
+/*e: function [[_workerdata]] */
 
-/*s: function procdata */
+/*s: function [[procdata]] */
 void**
 procdata(void)
 {
     return &_threadgetproc()->udata;
 }
-/*e: function procdata */
+/*e: function [[procdata]] */
 
 /*s: global privlock (libthread/id.c) */
 static Lock privlock;
 /*e: global privlock (libthread/id.c) */
-/*s: global privmask */
+/*s: global [[privmask]] */
 //array<bool> NPRIV at least
 static int privmask = 1;
-/*e: global privmask */
+/*e: global [[privmask]] */
 
-/*s: function tprivalloc */
+/*s: function [[tprivalloc]] */
 int
 tprivalloc(void)
 {
@@ -151,9 +151,9 @@ tprivalloc(void)
     unlock(&privlock);
     return -1;
 }
-/*e: function tprivalloc */
+/*e: function [[tprivalloc]] */
 
-/*s: function tprivfree */
+/*s: function [[tprivfree]] */
 void
 tprivfree(int i)
 {
@@ -162,13 +162,13 @@ tprivfree(int i)
     lock(&privlock);
     privmask &= ~(1<<i);
 }
-/*e: function tprivfree */
+/*e: function [[tprivfree]] */
 
-/*s: function tprivaddr */
+/*s: function [[tprivaddr]] */
 void**
 tprivaddr(int i)
 {
     return &_threadgetproc()->thread->udata[i];
 }
-/*e: function tprivaddr */
+/*e: function [[tprivaddr]] */
 /*e: lib_core/libthread/id.c */

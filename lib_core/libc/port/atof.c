@@ -2,11 +2,11 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function atof */
+/*s: function [[atof]] */
 double
 atof(char *cp)
 {
     return strtod(cp, nil);
 }
-/*e: function atof */
+/*e: function [[atof]] */
 /*e: port/atof.c */

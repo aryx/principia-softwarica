@@ -4,11 +4,11 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: constant PIPEMNT */
+/*s: constant [[PIPEMNT]] */
 #define PIPEMNT	"/mnt/temp"
-/*e: constant PIPEMNT */
+/*e: constant [[PIPEMNT]] */
 
-/*s: function procexec */
+/*s: function [[procexec]] */
 void
 procexec(Channel *pidc, char *prog, char *args[])
 {
@@ -75,14 +75,14 @@ procexec(Channel *pidc, char *prog, char *args[])
     /* wait for exec'ed program, then exit */
     _schedexecwait();
 }
-/*e: function procexec */
+/*e: function [[procexec]] */
 
-/*s: function procexecl */
+/*s: function [[procexecl]] */
 void
 procexecl(Channel *pidc, char *f, ...)
 {
     procexec(pidc, f, &f+1);
 }
-/*e: function procexecl */
+/*e: function [[procexecl]] */
 
 /*e: lib_core/libthread/exec.c */

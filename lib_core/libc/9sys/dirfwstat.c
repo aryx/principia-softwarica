@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <fcall.h>
 
-/*s: function dirfwstat */
+/*s: function [[dirfwstat]] */
 int
 dirfwstat(int fd, Dir *d)
 {
@@ -19,5 +19,5 @@ dirfwstat(int fd, Dir *d)
     free(buf);
     return r;
 }
-/*e: function dirfwstat */
+/*e: function [[dirfwstat]] */
 /*e: 9sys/dirfwstat.c */

@@ -4,7 +4,7 @@
 #include "fmtdef.h"
 
 
-/*s: function fmtvprint */
+/*s: function [[fmtvprint]] */
 /*
  * format a string into the output buffer
  * designed for formats which themselves call fmt
@@ -23,6 +23,6 @@ fmtvprint(Fmt *f, char *fmt, va_list args)
         return 0;
     return n;
 }
-/*e: function fmtvprint */
+/*e: function [[fmtvprint]] */
 
 /*e: fmt/fmtvprint.c */

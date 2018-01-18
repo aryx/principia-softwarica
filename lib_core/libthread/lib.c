@@ -4,11 +4,11 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: global totalmalloc */
+/*s: global [[totalmalloc]] */
 static long totalmalloc;
-/*e: global totalmalloc */
+/*e: global [[totalmalloc]] */
 
-/*s: function _threadmalloc */
+/*s: function [[_threadmalloc]] */
 void*
 _threadmalloc(long size, int z)
 {
@@ -27,9 +27,9 @@ _threadmalloc(long size, int z)
         memset(m, 0, size);
     return m;
 }
-/*e: function _threadmalloc */
+/*e: function [[_threadmalloc]] */
 
-/*s: function _threadsysfatal */
+/*s: function [[_threadsysfatal]] */
 void
 _threadsysfatal(char *fmt, va_list arg)
 {
@@ -42,5 +42,5 @@ _threadsysfatal(char *fmt, va_list arg)
         fprint(2, "%s\n", buf);
     threadexitsall(buf);
 }
-/*e: function _threadsysfatal */
+/*e: function [[_threadsysfatal]] */
 /*e: lib_core/libthread/lib.c */

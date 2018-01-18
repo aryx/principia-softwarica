@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function seprint */
+/*s: function [[seprint]] */
 char*
 seprint(char *buf, char *e, char *fmt, ...)
 {
@@ -14,5 +14,5 @@ seprint(char *buf, char *e, char *fmt, ...)
     va_end(args);
     return p;
 }
-/*e: function seprint */
+/*e: function [[seprint]] */
 /*e: fmt/seprint.c */

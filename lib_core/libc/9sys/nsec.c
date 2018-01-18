@@ -3,11 +3,11 @@
 #include <libc.h>
 #include <tos.h>
 
-/*s: global order */
+/*s: global [[order]] */
 static uvlong order = 0x0001020304050607ULL;
-/*e: global order */
+/*e: global [[order]] */
 
-/*s: function be2vlong */
+/*s: function [[be2vlong]] */
 static void
 be2vlong(vlong *to, uchar *f)
 {
@@ -19,19 +19,19 @@ be2vlong(vlong *to, uchar *f)
     for(i = 0; i < sizeof order; i++)
         t[o[i]] = f[i];
 }
-/*e: function be2vlong */
+/*e: function [[be2vlong]] */
 
-/*s: global fd */
+/*s: global [[fd]] */
 static int fd = -1;
-/*e: global fd */
-/*s: global fds */
+/*e: global [[fd]] */
+/*s: global [[fds]] */
 static struct {
     int pid;
     int fd;
 } fds[64];
-/*e: global fds */
+/*e: global [[fds]] */
 
-/*s: function nsec */
+/*s: function [[nsec]] */
 vlong
 nsec(void)
 {
@@ -84,5 +84,5 @@ nsec(void)
     USED(tries);
     return 0;
 }
-/*e: function nsec */
+/*e: function [[nsec]] */
 /*e: 9sys/nsec.c */

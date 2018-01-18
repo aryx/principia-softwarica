@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function cistrcmp */
+/*s: function [[cistrcmp]] */
 int
 cistrcmp(char *s1, char *s2)
 {
@@ -26,5 +26,5 @@ cistrcmp(char *s1, char *s2)
     }
     return -*s2;
 }
-/*e: function cistrcmp */
+/*e: function [[cistrcmp]] */
 /*e: port/cistrcmp.c */

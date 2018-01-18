@@ -3,7 +3,7 @@
 #include    <libc.h>
 #include    <fcall.h>
 
-/*s: function gstring */
+/*s: function [[gstring]] */
 static
 uchar*
 gstring(uchar *p, uchar *ep, char **s)
@@ -23,9 +23,9 @@ gstring(uchar *p, uchar *ep, char **s)
     p += n+1;
     return p;
 }
-/*e: function gstring */
+/*e: function [[gstring]] */
 
-/*s: function gqid */
+/*s: function [[gqid]] */
 static
 uchar*
 gqid(uchar *p, uchar *ep, Qid *q)
@@ -40,9 +40,9 @@ gqid(uchar *p, uchar *ep, Qid *q)
     p += BIT64SZ;
     return p;
 }
-/*e: function gqid */
+/*e: function [[gqid]] */
 
-/*s: function convM2S */
+/*s: function [[convM2S]] */
 /*
  * no syntactic checks.
  * three causes for error:
@@ -319,5 +319,5 @@ convM2S(uchar *ap, uint nap, Fcall *f)
         return size;
     return ERROR_0;
 }
-/*e: function convM2S */
+/*e: function [[convM2S]] */
 /*e: 9sys/convM2S.c */

@@ -2,11 +2,11 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: function write */
+/*s: function [[write]] */
 long
 write(fdt fd, void *buf, long n)
 {
     return pwrite(fd, buf, n, -1LL);
 }
-/*e: function write */
+/*e: function [[write]] */
 /*e: 9sys/write.c */

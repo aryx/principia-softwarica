@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function perror */
+/*s: function [[perror]] */
 void
 perror(char *s)
 {
@@ -15,5 +15,5 @@ perror(char *s)
     else
         fprint(2, "%s\n", buf);
 }
-/*e: function perror */
+/*e: function [[perror]] */
 /*e: port/perror.c */

@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function strncat */
+/*s: function [[strncat]] */
 char*
 strncat(char *s1, char *s2, long n)
 {
@@ -19,5 +19,5 @@ strncat(char *s1, char *s2, long n)
         }
     return os1;
 }
-/*e: function strncat */
+/*e: function [[strncat]] */
 /*e: port/strncat.c */

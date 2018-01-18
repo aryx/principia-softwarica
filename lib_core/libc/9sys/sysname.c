@@ -2,7 +2,7 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: function sysname */
+/*s: function [[sysname]] */
 char*
 sysname(void)
 {
@@ -21,5 +21,5 @@ sysname(void)
     }
     return b;
 }
-/*e: function sysname */
+/*e: function [[sysname]] */
 /*e: 9sys/sysname.c */

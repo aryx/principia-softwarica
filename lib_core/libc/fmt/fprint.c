@@ -2,7 +2,7 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: function fprint */
+/*s: function [[fprint]] */
 int
 fprint(int fd, char *fmt, ...)
 {
@@ -14,5 +14,5 @@ fprint(int fd, char *fmt, ...)
     va_end(args);
     return n;
 }
-/*e: function fprint */
+/*e: function [[fprint]] */
 /*e: fmt/fprint.c */

@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function runesnprint */
+/*s: function [[runesnprint]] */
 int
 runesnprint(Rune *buf, int len, char *fmt, ...)
 {
@@ -14,6 +14,6 @@ runesnprint(Rune *buf, int len, char *fmt, ...)
     va_end(args);
     return n;
 }
-/*e: function runesnprint */
+/*e: function [[runesnprint]] */
 
 /*e: fmt/runesnprint.c */

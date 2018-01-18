@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <fcall.h>
 
-/*s: function waitpid */
+/*s: function [[waitpid]] */
 int
 waitpid(void)
 {
@@ -21,6 +21,6 @@ waitpid(void)
     }
     return atoi(fld[0]);
 }
-/*e: function waitpid */
+/*e: function [[waitpid]] */
 
 /*e: 9sys/waitpid.c */

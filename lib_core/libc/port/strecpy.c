@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function strecpy */
+/*s: function [[strecpy]] */
 char*
 strecpy(char *to, char *e, char *from)
 {
@@ -17,5 +17,5 @@ strecpy(char *to, char *e, char *from)
     }
     return to;
 }
-/*e: function strecpy */
+/*e: function [[strecpy]] */
 /*e: port/strecpy.c */

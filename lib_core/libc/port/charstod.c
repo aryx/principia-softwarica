@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: constant ADVANCE */
+/*s: constant [[ADVANCE]] */
 /*
  * Reads a floating-point number by interpreting successive characters
  * returned by (*f)(vp).  The last call it makes to f terminates the
@@ -11,9 +11,9 @@
  */
 
 #define ADVANCE do{*s++ = c; if(s>=e) return NaN(); c = (*f)(vp);}while(0)
-/*e: constant ADVANCE */
+/*e: constant [[ADVANCE]] */
 
-/*s: function charstod */
+/*s: function [[charstod]] */
 double
 charstod(int(*f)(void*), void *vp)
 {
@@ -83,5 +83,5 @@ charstod(int(*f)(void*), void *vp)
     *s = 0;
     return strtod(str, &s);
 }
-/*e: function charstod */
+/*e: function [[charstod]] */
 /*e: port/charstod.c */

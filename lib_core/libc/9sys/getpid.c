@@ -2,7 +2,7 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: function getpid */
+/*s: function [[getpid]] */
 int
 getpid(void)
 {
@@ -17,5 +17,5 @@ getpid(void)
     }
     return atol(b);
 }
-/*e: function getpid */
+/*e: function [[getpid]] */
 /*e: 9sys/getpid.c */

@@ -4,7 +4,7 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: function _iodial */
+/*s: function [[_iodial]] */
 static long
 _iodial(va_list *arg)
 {
@@ -18,13 +18,13 @@ _iodial(va_list *arg)
 
     return dial(addr, local, dir, cdfp);
 }
-/*e: function _iodial */
+/*e: function [[_iodial]] */
 
-/*s: function iodial */
+/*s: function [[iodial]] */
 int
 iodial(Ioproc *io, char *addr, char *local, char *dir, int *cdfp)
 {
     return iocall(io, _iodial, addr, local, dir, cdfp);
 }
-/*e: function iodial */
+/*e: function [[iodial]] */
 /*e: lib_core/libthread/iodial.c */

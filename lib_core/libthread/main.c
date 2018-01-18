@@ -6,27 +6,27 @@
 
 typedef struct Mainarg Mainarg;
 
-/*s: struct Mainarg */
+/*s: struct [[Mainarg]] */
 struct Mainarg
 {
     int		argc;
     char	**argv;
 };
-/*e: struct Mainarg */
+/*e: struct [[Mainarg]] */
 
-/*s: global mainstacksize */
+/*s: global [[mainstacksize]] */
 int	mainstacksize;
-/*e: global mainstacksize */
-/*s: global _threadnotefd */
+/*e: global [[mainstacksize]] */
+/*s: global [[_threadnotefd]] */
 int	_threadnotefd;
-/*e: global _threadnotefd */
-/*s: global _threadpasserpid */
+/*e: global [[_threadnotefd]] */
+/*s: global [[_threadpasserpid]] */
 int	_threadpasserpid;
-/*e: global _threadpasserpid */
+/*e: global [[_threadpasserpid]] */
 
-/*s: global _mainjmp */
+/*s: global [[_mainjmp]] */
 static jmp_buf _mainjmp;
-/*e: global _mainjmp */
+/*e: global [[_mainjmp]] */
 
 static void mainlauncher(void*);
 extern void (*_sysfatal)(char*, va_list);
@@ -35,12 +35,12 @@ extern int (*_dial)(char*, char*, char*, int*);
 
 extern int _threaddial(char*, char*, char*, int*);
 
-/*s: global mainp */
+/*s: global [[mainp]] */
 // ref<ref<Proc>
 static Proc **mainp;
-/*e: global mainp */
+/*e: global [[mainp]] */
 
-/*s: function main */
+/*s: function [[main]] */
 void
 main(int argc, char **argv)
 {
@@ -75,9 +75,9 @@ main(int argc, char **argv)
 
     abort();	/* not reached */
 }
-/*e: function main */
+/*e: function [[main]] */
 
-/*s: function mainlauncher */
+/*s: function [[mainlauncher]] */
 static void
 mainlauncher(void *arg)
 {
@@ -90,7 +90,7 @@ mainlauncher(void *arg)
 
     threadexits("threadmain");
 }
-/*e: function mainlauncher */
+/*e: function [[mainlauncher]] */
 
 /*s: function skip (libthread/main.c) */
 static char*
@@ -104,7 +104,7 @@ skip(char *p)
 }
 /*e: function skip (libthread/main.c) */
 
-/*s: function _times */
+/*s: function [[_times]] */
 static long
 _times(long *t)
 {
@@ -136,9 +136,9 @@ _times(long *t)
     }
     return r;
 }
-/*e: function _times */
+/*e: function [[_times]] */
 
-/*s: function efork */
+/*s: function [[efork]] */
 static void
 efork(Execargs *e)
 {
@@ -155,9 +155,9 @@ efork(Execargs *e)
     close(e->fd[1]);
     _exits(buf);
 }
-/*e: function efork */
+/*e: function [[efork]] */
 
-/*s: function _schedexec */
+/*s: function [[_schedexec]] */
 int
 _schedexec(Execargs *e)
 {
@@ -170,9 +170,9 @@ _schedexec(Execargs *e)
         return pid;
     }
 }
-/*e: function _schedexec */
+/*e: function [[_schedexec]] */
 
-/*s: function _schedfork */
+/*s: function [[_schedfork]] */
 int
 _schedfork(Proc *p)
 {
@@ -186,9 +186,9 @@ _schedfork(Proc *p)
         return pid;
     }
 }
-/*e: function _schedfork */
+/*e: function [[_schedfork]] */
 
-/*s: function _schedexit */
+/*s: function [[_schedexit]] */
 void
 _schedexit(Proc *p)
 {
@@ -210,9 +210,9 @@ _schedexit(Proc *p)
     free(p);
     _exits(ex);
 }
-/*e: function _schedexit */
+/*e: function [[_schedexit]] */
 
-/*s: function _schedexecwait */
+/*s: function [[_schedexecwait]] */
 void
 _schedexecwait(void)
 {
@@ -244,6 +244,6 @@ _schedexecwait(void)
     }
     threadexits("procexec");
 }
-/*e: function _schedexecwait */
+/*e: function [[_schedexecwait]] */
 
 /*e: lib_core/libthread/main.c */

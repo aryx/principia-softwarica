@@ -1,11 +1,11 @@
 /*s: port/u16.c */
 #include <u.h>
 #include <libc.h>
-/*s: global t16e */
+/*s: global [[t16e]] */
 static char t16e[] = "0123456789ABCDEF";
-/*e: global t16e */
+/*e: global [[t16e]] */
 
-/*s: function dec16 */
+/*s: function [[dec16]] */
 int
 dec16(uchar *out, int lim, char *in, int n)
 {
@@ -36,9 +36,9 @@ dec16(uchar *out, int lim, char *in, int n)
 exhausted:
     return out - start;
 }
-/*e: function dec16 */
+/*e: function [[dec16]] */
 
-/*s: function enc16 */
+/*s: function [[enc16]] */
 int
 enc16(char *out, int lim, uchar *in, int n)
 {
@@ -57,5 +57,5 @@ exhausted:
     *out = 0;
     return out - start;
 }
-/*e: function enc16 */
+/*e: function [[enc16]] */
 /*e: port/u16.c */

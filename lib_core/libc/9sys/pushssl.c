@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function pushssl */
+/*s: function [[pushssl]] */
 /*
  * Since the SSL device uses decimal file descriptors to name channels,
  * it is impossible for a user-level file server to stand in for the kernel device.
@@ -44,5 +44,5 @@ error:
     close(ctl);
     return -1;
 }
-/*e: function pushssl */
+/*e: function [[pushssl]] */
 /*e: 9sys/pushssl.c */

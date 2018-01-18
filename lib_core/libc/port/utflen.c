@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function utflen */
+/*s: function [[utflen]] */
 int
 utflen(char *s)
 {
@@ -22,5 +22,5 @@ utflen(char *s)
         n++;
     }
 }
-/*e: function utflen */
+/*e: function [[utflen]] */
 /*e: port/utflen.c */

@@ -2,7 +2,7 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: function memset */
+/*s: function [[memset]] */
 void*
 memset(void *ap, int c, ulong n)
 {
@@ -15,5 +15,5 @@ memset(void *ap, int c, ulong n)
     }
     return ap;
 }
-/*e: function memset */
+/*e: function [[memset]] */
 /*e: port/memset.c */

@@ -2,14 +2,14 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: constant VLONG_MAX */
+/*s: constant [[VLONG_MAX]] */
 #define VLONG_MAX   ~(1LL<<63)
-/*e: constant VLONG_MAX */
-/*s: constant VLONG_MIN */
+/*e: constant [[VLONG_MAX]] */
+/*s: constant [[VLONG_MIN]] */
 #define VLONG_MIN   (1LL<<63)
-/*e: constant VLONG_MIN */
+/*e: constant [[VLONG_MIN]] */
 
-/*s: function strtoll */
+/*s: function [[strtoll]] */
 vlong
 strtoll(char *nptr, char **endptr, int base)
 {
@@ -105,5 +105,5 @@ Return:
         return -n;
     return n;
 }
-/*e: function strtoll */
+/*e: function [[strtoll]] */
 /*e: port/strtoll.c */

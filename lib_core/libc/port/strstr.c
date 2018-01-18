@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function strstr */
+/*s: function [[strstr]] */
 /*
  * Return pointer to first occurrence of s2 in s1,
  * 0 if none
@@ -29,5 +29,5 @@ strstr(char *s1, char *s2)
     }
     return 0;
 }
-/*e: function strstr */
+/*e: function [[strstr]] */
 /*e: port/strstr.c */

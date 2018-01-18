@@ -2,11 +2,11 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: function read */
+/*s: function [[read]] */
 long
 read(fdt fd, void *buf, long n)
 {
     return pread(fd, buf, n, -1LL);
 }
-/*e: function read */
+/*e: function [[read]] */
 /*e: 9sys/read.c */

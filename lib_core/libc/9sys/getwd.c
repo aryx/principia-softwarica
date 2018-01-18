@@ -4,7 +4,7 @@
 
 static char *nsgetwd(char*, int);
 
-/*s: function getwd */
+/*s: function [[getwd]] */
 char*
 getwd(char *buf, int nbuf)
 {
@@ -20,5 +20,5 @@ getwd(char *buf, int nbuf)
         return nil;
     return buf;
 }
-/*e: function getwd */
+/*e: function [[getwd]] */
 /*e: 9sys/getwd.c */

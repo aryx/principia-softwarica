@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function setnetmtpt */
+/*s: function [[setnetmtpt]] */
 void
 setnetmtpt(char *net, int n, char *x)
 {
@@ -16,5 +16,5 @@ setnetmtpt(char *net, int n, char *x)
         snprint(net, n, "/net%s", x);
     }
 }
-/*e: function setnetmtpt */
+/*e: function [[setnetmtpt]] */
 /*e: 9sys/setnetmtpt.c */

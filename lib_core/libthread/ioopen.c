@@ -4,7 +4,7 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: function _ioopen */
+/*s: function [[_ioopen]] */
 static long
 _ioopen(va_list *arg)
 {
@@ -15,13 +15,13 @@ _ioopen(va_list *arg)
     mode = va_arg(*arg, int);
     return open(path, mode);
 }
-/*e: function _ioopen */
+/*e: function [[_ioopen]] */
 
-/*s: function ioopen */
+/*s: function [[ioopen]] */
 int
 ioopen(Ioproc *io, char *path, int mode)
 {
     return iocall(io, _ioopen, path, mode);
 }
-/*e: function ioopen */
+/*e: function [[ioopen]] */
 /*e: lib_core/libthread/ioopen.c */

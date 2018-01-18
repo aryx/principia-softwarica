@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function putenv */
+/*s: function [[putenv]] */
 int
 putenv(char *name, char *val)
 {
@@ -26,5 +26,5 @@ putenv(char *name, char *val)
     close(f);
     return 0;
 }
-/*e: function putenv */
+/*e: function [[putenv]] */
 /*e: 9sys/putenv.c */

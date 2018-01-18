@@ -2,13 +2,13 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: enum _anon_ (port/u64.c) */
+/*s: enum [[_anon_ (port/u64.c)]] */
 enum {
     INVAL=  255
 };
-/*e: enum _anon_ (port/u64.c) */
+/*e: enum [[_anon_ (port/u64.c)]] */
 
-/*s: global t64d */
+/*s: global [[t64d]] */
 static uchar t64d[256] = {
    INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,
    INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,
@@ -27,12 +27,12 @@ static uchar t64d[256] = {
    INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,
    INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL
 };
-/*e: global t64d */
-/*s: global t64e */
+/*e: global [[t64d]] */
+/*s: global [[t64e]] */
 static char t64e[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-/*e: global t64e */
+/*e: global [[t64e]] */
 
-/*s: function dec64 */
+/*s: function [[dec64]] */
 int
 dec64(uchar *out, int lim, char *in, int n)
 {
@@ -87,9 +87,9 @@ dec64(uchar *out, int lim, char *in, int n)
 exhausted:
     return out - start;
 }
-/*e: function dec64 */
+/*e: function [[dec64]] */
 
-/*s: function enc64 */
+/*s: function [[enc64]] */
 int
 enc64(char *out, int lim, uchar *in, int n)
 {
@@ -135,5 +135,5 @@ exhausted:
     *out = 0;
     return out - start;
 }
-/*e: function enc64 */
+/*e: function [[enc64]] */
 /*e: port/u64.c */

@@ -10,7 +10,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function hypot */
+/*s: function [[hypot]] */
 double
 hypot(double p, double q)
 {
@@ -41,5 +41,5 @@ hypot(double p, double q)
         r = q/p;
     }
 }
-/*e: function hypot */
+/*e: function [[hypot]] */
 /*e: port/hypot.c */

@@ -6,7 +6,7 @@
 #define MASK    0x7fffffffL
 /*e: constant MASK (port/nrand.c) */
 
-/*s: function nrand */
+/*s: function [[nrand]] */
 int
 nrand(int n)
 {
@@ -23,5 +23,5 @@ nrand(int n)
     while(v <= slop);
     return v % n;
 }
-/*e: function nrand */
+/*e: function [[nrand]] */
 /*e: port/nrand.c */

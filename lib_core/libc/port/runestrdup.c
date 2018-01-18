@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function runestrdup */
+/*s: function [[runestrdup]] */
 Rune*
 runestrdup(Rune *s) 
 {  
@@ -15,5 +15,5 @@ runestrdup(Rune *s)
 
     return runestrcpy(ns, s);
 }
-/*e: function runestrdup */
+/*e: function [[runestrdup]] */
 /*e: port/runestrdup.c */

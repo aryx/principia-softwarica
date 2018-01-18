@@ -2,10 +2,10 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: macro SEP */
+/*s: macro [[SEP]] */
 #define SEP(x)  ((x)=='/' || (x) == '\0')
-/*e: macro SEP */
-/*s: function cleanname */
+/*e: macro [[SEP]] */
+/*s: function [[cleanname]] */
 /*
  * In place, rewrite name to compress multiple /, eliminate ., and process ..
  */
@@ -100,5 +100,5 @@ cleanname(char *name)
         strcpy(name, ".");
     return name;
 }
-/*e: function cleanname */
+/*e: function [[cleanname]] */
 /*e: port/cleanname.c */

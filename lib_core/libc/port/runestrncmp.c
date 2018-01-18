@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function runestrncmp */
+/*s: function [[runestrncmp]] */
 int
 runestrncmp(Rune *s1, Rune *s2, long n)
 {
@@ -22,5 +22,5 @@ runestrncmp(Rune *s1, Rune *s2, long n)
     }
     return 0;
 }
-/*e: function runestrncmp */
+/*e: function [[runestrncmp]] */
 /*e: port/runestrncmp.c */

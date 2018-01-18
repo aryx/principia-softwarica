@@ -5,14 +5,14 @@
 #include "threadimpl.h"
 #include <tos.h>
 
-/*s: global _threadexitsallstatus */
+/*s: global [[_threadexitsallstatus]] */
 char *_threadexitsallstatus;
-/*e: global _threadexitsallstatus */
-/*s: global _threadwaitchan */
+/*e: global [[_threadexitsallstatus]] */
+/*s: global [[_threadwaitchan]] */
 Channel *_threadwaitchan;
-/*e: global _threadwaitchan */
+/*e: global [[_threadwaitchan]] */
 
-/*s: function threadexits */
+/*s: function [[threadexits]] */
 void
 threadexits(char *exitstr)
 {
@@ -27,9 +27,9 @@ threadexits(char *exitstr)
     utfecpy(p->exitstr, p->exitstr+ERRMAX, exitstr);
     _sched();
 }
-/*e: function threadexits */
+/*e: function [[threadexits]] */
 
-/*s: function threadexitsall */
+/*s: function [[threadexitsall]] */
 void
 threadexitsall(char *exitstr)
 {
@@ -70,9 +70,9 @@ threadexitsall(char *exitstr)
     /* leave */
     exits(exitstr);
 }
-/*e: function threadexitsall */
+/*e: function [[threadexitsall]] */
 
-/*s: function threadwaitchan */
+/*s: function [[threadwaitchan]] */
 Channel*
 threadwaitchan(void)
 {
@@ -80,5 +80,5 @@ threadwaitchan(void)
         _threadwaitchan = chancreate(sizeof(Waitmsg*), 16);
     return _threadwaitchan;
 }
-/*e: function threadwaitchan */
+/*e: function [[threadwaitchan]] */
 /*e: lib_core/libthread/exit.c */

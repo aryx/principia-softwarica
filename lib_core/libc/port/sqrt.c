@@ -9,7 +9,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function sqrt */
+/*s: function [[sqrt]] */
 double
 sqrt(double arg)
 {
@@ -54,5 +54,5 @@ sqrt(double arg)
         temp = 0.5*(temp + arg/temp);
     return temp;
 }
-/*e: function sqrt */
+/*e: function [[sqrt]] */
 /*e: port/sqrt.c */

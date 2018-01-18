@@ -3,32 +3,32 @@
 #include <libc.h>
 #include "fmtdef.h"
 
-/*s: enum _anon_ (fmt/fmt.c) */
+/*s: enum [[_anon_ (fmt/fmt.c)]] */
 enum
 {
     Maxfmt = 64
 };
-/*e: enum _anon_ (fmt/fmt.c) */
+/*e: enum [[_anon_ (fmt/fmt.c)]] */
 
 typedef struct Convfmt Convfmt;
-/*s: struct Convfmt */
+/*s: struct [[Convfmt]] */
 struct Convfmt
 {
     int c;
     volatile    Fmts    fmt;    /* for spin lock in fmtfmt; avoids race due to write order */
 };
-/*e: struct Convfmt */
+/*e: struct [[Convfmt]] */
 
-/*s: global fmtalloc */
+/*s: global [[fmtalloc]] */
 struct
 {
     /* lock by calling _fmtlock, _fmtunlock */
     int nfmt;
     Convfmt fmt[Maxfmt];
 } fmtalloc;
-/*e: global fmtalloc */
+/*e: global [[fmtalloc]] */
 
-/*s: global knownfmt */
+/*s: global [[knownfmt]] */
 static Convfmt knownfmt[] = {
     ' ',    _flagfmt,
     '#',    _flagfmt,
@@ -58,13 +58,13 @@ static Convfmt knownfmt[] = {
     'x',    _ifmt,
     0,  nil,
 };
-/*e: global knownfmt */
+/*e: global [[knownfmt]] */
 
 /*s: global doquote (fmt/fmt.c) */
 int (*doquote)(int);
 /*e: global doquote (fmt/fmt.c) */
 
-/*s: function _fmtinstall */
+/*s: function [[_fmtinstall]] */
 /*
  * _fmtlock() must be set
  */
@@ -94,9 +94,9 @@ _fmtinstall(int c, Fmts f)
 
     return 0;
 }
-/*e: function _fmtinstall */
+/*e: function [[_fmtinstall]] */
 
-/*s: function fmtinstall */
+/*s: function [[fmtinstall]] */
 int
 fmtinstall(int c, Fmts f)
 {
@@ -107,9 +107,9 @@ fmtinstall(int c, Fmts f)
     _fmtunlock();
     return ret;
 }
-/*e: function fmtinstall */
+/*e: function [[fmtinstall]] */
 
-/*s: function fmtfmt */
+/*s: function [[fmtfmt]] */
 static Fmts
 fmtfmt(int c)
 {
@@ -135,9 +135,9 @@ fmtfmt(int c)
 
     return _badfmt;
 }
-/*e: function fmtfmt */
+/*e: function [[fmtfmt]] */
 
-/*s: function _fmtdispatch */
+/*s: function [[_fmtdispatch]] */
 void*
 _fmtdispatch(Fmt *f, void *fmt, int isrunes)
 {
@@ -234,5 +234,5 @@ end:
     f->flags = fl;
     return ret;
 }
-/*e: function _fmtdispatch */
+/*e: function [[_fmtdispatch]] */
 /*e: fmt/fmt.c */

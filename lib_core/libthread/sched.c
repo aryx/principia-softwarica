@@ -7,7 +7,7 @@
 
 static Thread   *runthread(Proc*);
 
-/*s: global _psstate */
+/*s: global [[_psstate]] */
 static char *_psstate[] = {
     "Moribund",
     "Dead",
@@ -17,9 +17,9 @@ static char *_psstate[] = {
     "Ready",
     "Rendezvous",
 };
-/*e: global _psstate */
+/*e: global [[_psstate]] */
 
-/*s: function psstate */
+/*s: function [[psstate]] */
 static char*
 psstate(int s)
 {
@@ -27,9 +27,9 @@ psstate(int s)
         return "unknown";
     return _psstate[s];
 }
-/*e: function psstate */
+/*e: function [[psstate]] */
 
-/*s: function _schedinit */
+/*s: function [[_schedinit]] */
 void
 _schedinit(void *arg)
 {
@@ -89,9 +89,9 @@ _schedinit(void *arg)
     unlock(&p->lock);
     _sched();
 }
-/*e: function _schedinit */
+/*e: function [[_schedinit]] */
 
-/*s: function needstack */
+/*s: function [[needstack]] */
 void
 needstack(int n)
 {
@@ -109,9 +109,9 @@ needstack(int n)
         abort();
     }
 }
-/*e: function needstack */
+/*e: function [[needstack]] */
 
-/*s: function _sched */
+/*s: function [[_sched]] */
 void
 _sched(void)
 {
@@ -144,9 +144,9 @@ Resched:
         longjmp(t->sched, 1);
     }
 }
-/*e: function _sched */
+/*e: function [[_sched]] */
 
-/*s: function runthread */
+/*s: function [[runthread]] */
 static Thread*
 runthread(Proc *p)
 {
@@ -172,9 +172,9 @@ runthread(Proc *p)
     unlock(&p->readylock);
     return t;
 }
-/*e: function runthread */
+/*e: function [[runthread]] */
 
-/*s: function _threadready */
+/*s: function [[_threadready]] */
 void
 _threadready(Thread *t)
 {
@@ -202,14 +202,14 @@ _threadready(Thread *t)
     }else
         unlock(&t->proc->readylock);
 }
-/*e: function _threadready */
+/*e: function [[_threadready]] */
 
-/*s: function yield */
+/*s: function [[yield]] */
 void
 yield(void)
 {
     _sched();
 }
-/*e: function yield */
+/*e: function [[yield]] */
 
 /*e: lib_core/libthread/sched.c */

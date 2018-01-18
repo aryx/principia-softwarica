@@ -5,25 +5,25 @@ typedef unsigned short  ushort;
 typedef unsigned char   uchar;
 typedef signed char schar;
 
-/*s: macro SIGN (arm) */
+/*s: macro [[SIGN]](arm) */
 #define SIGN(n) (1UL<<(n-1))
-/*e: macro SIGN (arm) */
+/*e: macro [[SIGN]](arm) */
 
 typedef struct  Vlong   Vlong;
-/*s: struct Vlong (arm) */
+/*s: struct [[Vlong]](arm) */
 struct  Vlong
 {
     ulong   lo;
     ulong   hi;
 };
-/*e: struct Vlong (arm) */
+/*e: struct [[Vlong]](arm) */
 
 void    abort(void);
 
 /* needed by profiler; can't be profiled */
 #pragma profile off
 
-/*s: function _addv (arm) */
+/*s: function [[_addv]](arm) */
 void
 _addv(Vlong *r, Vlong a, Vlong b)
 {
@@ -36,9 +36,9 @@ _addv(Vlong *r, Vlong a, Vlong b)
     r->lo = lo;
     r->hi = hi;
 }
-/*e: function _addv (arm) */
+/*e: function [[_addv]](arm) */
 
-/*s: function _subv (arm) */
+/*s: function [[_subv]](arm) */
 void
 _subv(Vlong *r, Vlong a, Vlong b)
 {
@@ -51,11 +51,11 @@ _subv(Vlong *r, Vlong a, Vlong b)
     r->lo = lo;
     r->hi = hi;
 }
-/*e: function _subv (arm) */
+/*e: function [[_subv]](arm) */
 
 #pragma profile on
 
-/*s: function _d2v (arm) */
+/*s: function [[_d2v]](arm) */
 void
 _d2v(Vlong *y, double d)
 {
@@ -111,17 +111,17 @@ _d2v(Vlong *y, double d)
     y->hi = yhi;
     y->lo = ylo;
 }
-/*e: function _d2v (arm) */
+/*e: function [[_d2v]](arm) */
 
-/*s: function _f2v (arm) */
+/*s: function [[_f2v]](arm) */
 void
 _f2v(Vlong *y, float f)
 {
     _d2v(y, f);
 }
-/*e: function _f2v (arm) */
+/*e: function [[_f2v]](arm) */
 
-/*s: function _v2d (arm) */
+/*s: function [[_v2d]](arm) */
 double
 _v2d(Vlong x)
 {
@@ -135,20 +135,20 @@ _v2d(Vlong x)
     }
     return (long)x.hi*4294967296. + x.lo;
 }
-/*e: function _v2d (arm) */
+/*e: function [[_v2d]](arm) */
 
-/*s: function _v2f (arm) */
+/*s: function [[_v2f]](arm) */
 float
 _v2f(Vlong x)
 {
     return _v2d(x);
 }
-/*e: function _v2f (arm) */
+/*e: function [[_v2f]](arm) */
 
 /* too many of these are also needed by profiler; leave them out */
 #pragma profile off
 
-/*s: function dodiv (arm) */
+/*s: function [[dodiv]](arm) */
 static void
 dodiv(Vlong num, Vlong den, Vlong *q, Vlong *r)
 {
@@ -209,9 +209,9 @@ dodiv(Vlong num, Vlong den, Vlong *q, Vlong *r)
         r->hi = numhi;
     }
 }
-/*e: function dodiv (arm) */
+/*e: function [[dodiv]](arm) */
 
-/*s: function _divvu (arm) */
+/*s: function [[_divvu]](arm) */
 void
 _divvu(Vlong *q, Vlong n, Vlong d)
 {
@@ -222,9 +222,9 @@ _divvu(Vlong *q, Vlong n, Vlong d)
     }
     dodiv(n, d, q, 0);
 }
-/*e: function _divvu (arm) */
+/*e: function [[_divvu]](arm) */
 
-/*s: function _modvu (arm) */
+/*s: function [[_modvu]](arm) */
 void
 _modvu(Vlong *r, Vlong n, Vlong d)
 {
@@ -236,9 +236,9 @@ _modvu(Vlong *r, Vlong n, Vlong d)
     }
     dodiv(n, d, 0, r);
 }
-/*e: function _modvu (arm) */
+/*e: function [[_modvu]](arm) */
 
-/*s: function vneg (arm) */
+/*s: function [[vneg]](arm) */
 static void
 vneg(Vlong *v)
 {
@@ -250,9 +250,9 @@ vneg(Vlong *v)
     v->lo = -v->lo;
     v->hi = ~v->hi;
 }
-/*e: function vneg (arm) */
+/*e: function [[vneg]](arm) */
 
-/*s: function _divv (arm) */
+/*s: function [[_divv]](arm) */
 void
 _divv(Vlong *q, Vlong n, Vlong d)
 {
@@ -273,9 +273,9 @@ _divv(Vlong *q, Vlong n, Vlong d)
     if(nneg != dneg)
         vneg(q);
 }
-/*e: function _divv (arm) */
+/*e: function [[_divv]](arm) */
 
-/*s: function _modv (arm) */
+/*s: function [[_modv]](arm) */
 void
 _modv(Vlong *r, Vlong n, Vlong d)
 {
@@ -296,9 +296,9 @@ _modv(Vlong *r, Vlong n, Vlong d)
     if(nneg)
         vneg(r);
 }
-/*e: function _modv (arm) */
+/*e: function [[_modv]](arm) */
 
-/*s: function _rshav (arm) */
+/*s: function [[_rshav]](arm) */
 void
 _rshav(Vlong *r, Vlong a, int b)
 {
@@ -323,9 +323,9 @@ _rshav(Vlong *r, Vlong a, int b)
     r->hi = t >> b;
     r->lo = (t << (32-b)) | (a.lo >> b);
 }
-/*e: function _rshav (arm) */
+/*e: function [[_rshav]](arm) */
 
-/*s: function _rshlv (arm) */
+/*s: function [[_rshlv]](arm) */
 void
 _rshlv(Vlong *r, Vlong a, int b)
 {
@@ -350,9 +350,9 @@ _rshlv(Vlong *r, Vlong a, int b)
     r->hi = t >> b;
     r->lo = (t << (32-b)) | (a.lo >> b);
 }
-/*e: function _rshlv (arm) */
+/*e: function [[_rshlv]](arm) */
 
-/*s: function _lshv (arm) */
+/*s: function [[_lshv]](arm) */
 void
 _lshv(Vlong *r, Vlong a, int b)
 {
@@ -377,36 +377,36 @@ _lshv(Vlong *r, Vlong a, int b)
     r->lo = t << b;
     r->hi = (t >> (32-b)) | (a.hi << b);
 }
-/*e: function _lshv (arm) */
+/*e: function [[_lshv]](arm) */
 
-/*s: function _andv (arm) */
+/*s: function [[_andv]](arm) */
 void
 _andv(Vlong *r, Vlong a, Vlong b)
 {
     r->hi = a.hi & b.hi;
     r->lo = a.lo & b.lo;
 }
-/*e: function _andv (arm) */
+/*e: function [[_andv]](arm) */
 
-/*s: function _orv (arm) */
+/*s: function [[_orv]](arm) */
 void
 _orv(Vlong *r, Vlong a, Vlong b)
 {
     r->hi = a.hi | b.hi;
     r->lo = a.lo | b.lo;
 }
-/*e: function _orv (arm) */
+/*e: function [[_orv]](arm) */
 
-/*s: function _xorv (arm) */
+/*s: function [[_xorv]](arm) */
 void
 _xorv(Vlong *r, Vlong a, Vlong b)
 {
     r->hi = a.hi ^ b.hi;
     r->lo = a.lo ^ b.lo;
 }
-/*e: function _xorv (arm) */
+/*e: function [[_xorv]](arm) */
 
-/*s: function _vpp (arm) */
+/*s: function [[_vpp]](arm) */
 void
 _vpp(Vlong *l, Vlong *r)
 {
@@ -417,9 +417,9 @@ _vpp(Vlong *l, Vlong *r)
     if(r->lo == 0)
         r->hi++;
 }
-/*e: function _vpp (arm) */
+/*e: function [[_vpp]](arm) */
 
-/*s: function _vmm (arm) */
+/*s: function [[_vmm]](arm) */
 void
 _vmm(Vlong *l, Vlong *r)
 {
@@ -430,9 +430,9 @@ _vmm(Vlong *l, Vlong *r)
         r->hi--;
     r->lo--;
 }
-/*e: function _vmm (arm) */
+/*e: function [[_vmm]](arm) */
 
-/*s: function _ppv (arm) */
+/*s: function [[_ppv]](arm) */
 void
 _ppv(Vlong *l, Vlong *r)
 {
@@ -443,9 +443,9 @@ _ppv(Vlong *l, Vlong *r)
     l->hi = r->hi;
     l->lo = r->lo;
 }
-/*e: function _ppv (arm) */
+/*e: function [[_ppv]](arm) */
 
-/*s: function _mmv (arm) */
+/*s: function [[_mmv]](arm) */
 void
 _mmv(Vlong *l, Vlong *r)
 {
@@ -456,9 +456,9 @@ _mmv(Vlong *l, Vlong *r)
     l->hi = r->hi;
     l->lo = r->lo;
 }
-/*e: function _mmv (arm) */
+/*e: function [[_mmv]](arm) */
 
-/*s: function _vasop (arm) */
+/*s: function [[_vasop]](arm) */
 void
 _vasop(Vlong *ret, void *lv, void fn(Vlong*, Vlong, Vlong), int type, Vlong rv)
 {
@@ -534,9 +534,9 @@ _vasop(Vlong *ret, void *lv, void fn(Vlong*, Vlong, Vlong), int type, Vlong rv)
     }
     *ret = u;
 }
-/*e: function _vasop (arm) */
+/*e: function [[_vasop]](arm) */
 
-/*s: function _p2v (arm) */
+/*s: function [[_p2v]](arm) */
 void
 _p2v(Vlong *ret, void *p)
 {
@@ -546,9 +546,9 @@ _p2v(Vlong *ret, void *p)
     ret->lo = t;
     ret->hi = 0;
 }
-/*e: function _p2v (arm) */
+/*e: function [[_p2v]](arm) */
 
-/*s: function _sl2v (arm) */
+/*s: function [[_sl2v]](arm) */
 void
 _sl2v(Vlong *ret, long sl)
 {
@@ -558,10 +558,10 @@ _sl2v(Vlong *ret, long sl)
     ret->lo = t;
     ret->hi = t >> 31;
 }
-/*e: function _sl2v (arm) */
+/*e: function [[_sl2v]](arm) */
 
 
-/*s: function _ul2v (arm) */
+/*s: function [[_ul2v]](arm) */
 void
 _ul2v(Vlong *ret, ulong ul)
 {
@@ -571,9 +571,9 @@ _ul2v(Vlong *ret, ulong ul)
     ret->lo = t;
     ret->hi = 0;
 }
-/*e: function _ul2v (arm) */
+/*e: function [[_ul2v]](arm) */
 
-/*s: function _si2v (arm) */
+/*s: function [[_si2v]](arm) */
 void
 _si2v(Vlong *ret, int si)
 {
@@ -583,9 +583,9 @@ _si2v(Vlong *ret, int si)
     ret->lo = t;
     ret->hi = t >> 31;
 }
-/*e: function _si2v (arm) */
+/*e: function [[_si2v]](arm) */
 
-/*s: function _ui2v (arm) */
+/*s: function [[_ui2v]](arm) */
 void
 _ui2v(Vlong *ret, uint ui)
 {
@@ -595,9 +595,9 @@ _ui2v(Vlong *ret, uint ui)
     ret->lo = t;
     ret->hi = 0;
 }
-/*e: function _ui2v (arm) */
+/*e: function [[_ui2v]](arm) */
 
-/*s: function _sh2v (arm) */
+/*s: function [[_sh2v]](arm) */
 void
 _sh2v(Vlong *ret, long sh)
 {
@@ -607,9 +607,9 @@ _sh2v(Vlong *ret, long sh)
     ret->lo = t;
     ret->hi = t >> 31;
 }
-/*e: function _sh2v (arm) */
+/*e: function [[_sh2v]](arm) */
 
-/*s: function _uh2v (arm) */
+/*s: function [[_uh2v]](arm) */
 void
 _uh2v(Vlong *ret, ulong ul)
 {
@@ -619,9 +619,9 @@ _uh2v(Vlong *ret, ulong ul)
     ret->lo = t;
     ret->hi = 0;
 }
-/*e: function _uh2v (arm) */
+/*e: function [[_uh2v]](arm) */
 
-/*s: function _sc2v (arm) */
+/*s: function [[_sc2v]](arm) */
 void
 _sc2v(Vlong *ret, long uc)
 {
@@ -631,9 +631,9 @@ _sc2v(Vlong *ret, long uc)
     ret->lo = t;
     ret->hi = t >> 31;
 }
-/*e: function _sc2v (arm) */
+/*e: function [[_sc2v]](arm) */
 
-/*s: function _uc2v (arm) */
+/*s: function [[_uc2v]](arm) */
 void
 _uc2v(Vlong *ret, ulong ul)
 {
@@ -643,9 +643,9 @@ _uc2v(Vlong *ret, ulong ul)
     ret->lo = t;
     ret->hi = 0;
 }
-/*e: function _uc2v (arm) */
+/*e: function [[_uc2v]](arm) */
 
-/*s: function _v2sc (arm) */
+/*s: function [[_v2sc]](arm) */
 long
 _v2sc(Vlong rv)
 {
@@ -654,18 +654,18 @@ _v2sc(Vlong rv)
     t = rv.lo & 0xff;
     return (t << 24) >> 24;
 }
-/*e: function _v2sc (arm) */
+/*e: function [[_v2sc]](arm) */
 
-/*s: function _v2uc (arm) */
+/*s: function [[_v2uc]](arm) */
 long
 _v2uc(Vlong rv)
 {
 
     return rv.lo & 0xff;
 }
-/*e: function _v2uc (arm) */
+/*e: function [[_v2uc]](arm) */
 
-/*s: function _v2sh (arm) */
+/*s: function [[_v2sh]](arm) */
 long
 _v2sh(Vlong rv)
 {
@@ -674,146 +674,146 @@ _v2sh(Vlong rv)
     t = rv.lo & 0xffff;
     return (t << 16) >> 16;
 }
-/*e: function _v2sh (arm) */
+/*e: function [[_v2sh]](arm) */
 
-/*s: function _v2uh (arm) */
+/*s: function [[_v2uh]](arm) */
 long
 _v2uh(Vlong rv)
 {
 
     return rv.lo & 0xffff;
 }
-/*e: function _v2uh (arm) */
+/*e: function [[_v2uh]](arm) */
 
-/*s: function _v2sl (arm) */
+/*s: function [[_v2sl]](arm) */
 long
 _v2sl(Vlong rv)
 {
 
     return rv.lo;
 }
-/*e: function _v2sl (arm) */
+/*e: function [[_v2sl]](arm) */
 
-/*s: function _v2ul (arm) */
+/*s: function [[_v2ul]](arm) */
 long
 _v2ul(Vlong rv)
 {
 
     return rv.lo;
 }
-/*e: function _v2ul (arm) */
+/*e: function [[_v2ul]](arm) */
 
-/*s: function _v2si (arm) */
+/*s: function [[_v2si]](arm) */
 long
 _v2si(Vlong rv)
 {
 
     return rv.lo;
 }
-/*e: function _v2si (arm) */
+/*e: function [[_v2si]](arm) */
 
-/*s: function _v2ui (arm) */
+/*s: function [[_v2ui]](arm) */
 long
 _v2ui(Vlong rv)
 {
 
     return rv.lo;
 }
-/*e: function _v2ui (arm) */
+/*e: function [[_v2ui]](arm) */
 
-/*s: function _testv (arm) */
+/*s: function [[_testv]](arm) */
 int
 _testv(Vlong rv)
 {
     return rv.lo || rv.hi;
 }
-/*e: function _testv (arm) */
+/*e: function [[_testv]](arm) */
 
-/*s: function _eqv (arm) */
+/*s: function [[_eqv]](arm) */
 int
 _eqv(Vlong lv, Vlong rv)
 {
     return lv.lo == rv.lo && lv.hi == rv.hi;
 }
-/*e: function _eqv (arm) */
+/*e: function [[_eqv]](arm) */
 
-/*s: function _nev (arm) */
+/*s: function [[_nev]](arm) */
 int
 _nev(Vlong lv, Vlong rv)
 {
     return lv.lo != rv.lo || lv.hi != rv.hi;
 }
-/*e: function _nev (arm) */
+/*e: function [[_nev]](arm) */
 
-/*s: function _ltv (arm) */
+/*s: function [[_ltv]](arm) */
 int
 _ltv(Vlong lv, Vlong rv)
 {
     return (long)lv.hi < (long)rv.hi || 
         (lv.hi == rv.hi && lv.lo < rv.lo);
 }
-/*e: function _ltv (arm) */
+/*e: function [[_ltv]](arm) */
 
-/*s: function _lev (arm) */
+/*s: function [[_lev]](arm) */
 int
 _lev(Vlong lv, Vlong rv)
 {
     return (long)lv.hi < (long)rv.hi || 
         (lv.hi == rv.hi && lv.lo <= rv.lo);
 }
-/*e: function _lev (arm) */
+/*e: function [[_lev]](arm) */
 
-/*s: function _gtv (arm) */
+/*s: function [[_gtv]](arm) */
 int
 _gtv(Vlong lv, Vlong rv)
 {
     return (long)lv.hi > (long)rv.hi || 
         (lv.hi == rv.hi && lv.lo > rv.lo);
 }
-/*e: function _gtv (arm) */
+/*e: function [[_gtv]](arm) */
 
-/*s: function _gev (arm) */
+/*s: function [[_gev]](arm) */
 int
 _gev(Vlong lv, Vlong rv)
 {
     return (long)lv.hi > (long)rv.hi || 
         (lv.hi == rv.hi && lv.lo >= rv.lo);
 }
-/*e: function _gev (arm) */
+/*e: function [[_gev]](arm) */
 
-/*s: function _lov (arm) */
+/*s: function [[_lov]](arm) */
 int
 _lov(Vlong lv, Vlong rv)
 {
     return lv.hi < rv.hi || 
         (lv.hi == rv.hi && lv.lo < rv.lo);
 }
-/*e: function _lov (arm) */
+/*e: function [[_lov]](arm) */
 
-/*s: function _lsv (arm) */
+/*s: function [[_lsv]](arm) */
 int
 _lsv(Vlong lv, Vlong rv)
 {
     return lv.hi < rv.hi || 
         (lv.hi == rv.hi && lv.lo <= rv.lo);
 }
-/*e: function _lsv (arm) */
+/*e: function [[_lsv]](arm) */
 
-/*s: function _hiv (arm) */
+/*s: function [[_hiv]](arm) */
 int
 _hiv(Vlong lv, Vlong rv)
 {
     return lv.hi > rv.hi || 
         (lv.hi == rv.hi && lv.lo > rv.lo);
 }
-/*e: function _hiv (arm) */
+/*e: function [[_hiv]](arm) */
 
-/*s: function _hsv (arm) */
+/*s: function [[_hsv]](arm) */
 int
 _hsv(Vlong lv, Vlong rv)
 {
     return lv.hi > rv.hi || 
         (lv.hi == rv.hi && lv.lo >= rv.lo);
 }
-/*e: function _hsv (arm) */
+/*e: function [[_hsv]](arm) */
 /*e: arm/vlrt.c */

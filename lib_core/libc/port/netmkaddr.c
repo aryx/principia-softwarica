@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <ctype.h>
 
-/*s: function netmkaddr */
+/*s: function [[netmkaddr]] */
 /*
  *  make an address, add the defaults
  */
@@ -52,5 +52,5 @@ netmkaddr(char *linear, char *defnet, char *defsrv)
 
     return addr;
 }
-/*e: function netmkaddr */
+/*e: function [[netmkaddr]] */
 /*e: port/netmkaddr.c */

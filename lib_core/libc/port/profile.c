@@ -6,18 +6,18 @@
 extern  long    _callpc(void**);
 extern  long    _savearg(void);
 
-/*s: global khz */
+/*s: global [[khz]] */
 static  ulong   khz;
-/*e: global khz */
-/*s: global perr */
+/*e: global [[khz]] */
+/*s: global [[perr]] */
 static  ulong   perr;
-/*e: global perr */
-/*s: global havecycles */
+/*e: global [[perr]] */
+/*s: global [[havecycles]] */
 static  int havecycles;
-/*e: global havecycles */
+/*e: global [[havecycles]] */
 
 typedef struct  Plink   Plink;
-/*s: struct Plink */
+/*s: struct [[Plink]] */
 struct  Plink
 {
     Plink   *old;
@@ -27,11 +27,11 @@ struct  Plink
     long    count;
     vlong time;
 };
-/*e: struct Plink */
+/*e: struct [[Plink]] */
 
 #pragma profile off
 
-/*s: function _profin */
+/*s: function [[_profin]] */
 // Called at every procedure entry when use 5l -p, see Linker.nw
 ulong
 _profin(void)
@@ -88,9 +88,9 @@ out:
     }
     return arg;     /* disgusting linkage */
 }
-/*e: function _profin */
+/*e: function [[_profin]] */
 
-/*s: function _profout */
+/*s: function [[_profout]] */
 // Called at every procedure return when use 5l -p, see Linker.nw
 ulong
 _profout(void)
@@ -122,9 +122,9 @@ _profout(void)
     _tos->prof.pp = p->old;
     return arg;
 }
-/*e: function _profout */
+/*e: function [[_profout]] */
 
-/*s: function _profdump */
+/*s: function [[_profdump]] */
 // called by??
 void
 _profdump(void)
@@ -228,9 +228,9 @@ _profdump(void)
     write(f, (char*)_tos->prof.first, vp - (char*)_tos->prof.first);
     close(f);
 }
-/*e: function _profdump */
+/*e: function [[_profdump]] */
 
-/*s: function _profinit */
+/*s: function [[_profinit]] */
 void
 _profinit(int entries, int what)
 {
@@ -244,9 +244,9 @@ _profinit(int entries, int what)
     _tos->prof.what = what;
     _tos->clock = 1;
 }
-/*e: function _profinit */
+/*e: function [[_profinit]] */
 
-/*s: function _profmain */
+/*s: function [[_profmain]] */
 // called by _mainp in _main9p.s when 5l -p, see Linker
 void
 _profmain(void)
@@ -289,9 +289,9 @@ _profmain(void)
     atexit(_profdump);
     _tos->clock = 1;
 }
-/*e: function _profmain */
+/*e: function [[_profmain]] */
 
-/*s: function prof */
+/*s: function [[prof]] */
 void
 prof(void (*fn)(void*), void *arg, int entries, int what)
 {
@@ -300,7 +300,7 @@ prof(void (*fn)(void*), void *arg, int entries, int what)
     fn(arg);
     _profdump();
 }
-/*e: function prof */
+/*e: function [[prof]] */
 
 #pragma profile on
 

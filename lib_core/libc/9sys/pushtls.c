@@ -4,14 +4,14 @@
 #include <mp.h>
 #include <libsec.h>
 
-/*s: enum _anon_ (9sys/pushtls.c) */
+/*s: enum [[_anon_ (9sys/pushtls.c)]] */
 enum {
     TLSFinishedLen = 12,
     HFinished = 20,
 };
-/*e: enum _anon_ (9sys/pushtls.c) */
+/*e: enum [[_anon_ (9sys/pushtls.c)]] */
 
-/*s: function finished */
+/*s: function [[finished]] */
 static int
 finished(int hand, int isclient)
 {
@@ -39,10 +39,10 @@ finished(int hand, int isclient)
     }
     return 1;
 }
-/*e: function finished */
+/*e: function [[finished]] */
 
 
-/*s: function pushtls */
+/*s: function [[pushtls]] */
 // given a plain fd and secrets established beforehand, return encrypted connection
 int
 pushtls(int fd, char *hashalg, char *encalg, int isclient, char *secret, char *dir)
@@ -102,5 +102,5 @@ error:
         close(hand);
     return -1;
 }
-/*e: function pushtls */
+/*e: function [[pushtls]] */
 /*e: 9sys/pushtls.c */

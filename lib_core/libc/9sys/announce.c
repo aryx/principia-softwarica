@@ -5,14 +5,14 @@
 
 static int  nettrans(char*, char*, int na, char*, int);
 
-/*s: enum _anon_ (9sys/announce.c) */
+/*s: enum [[_anon_ (9sys/announce.c)]] */
 enum
 {
     Maxpath=    256,
 };
-/*e: enum _anon_ (9sys/announce.c) */
+/*e: enum [[_anon_ (9sys/announce.c)]] */
 
-/*s: function announce */
+/*s: function [[announce]] */
 /*
  *  announce a network service.
  */
@@ -79,9 +79,9 @@ announce(char *addr, char *dir)
     }
     return ctl;
 }
-/*e: function announce */
+/*e: function [[announce]] */
 
-/*s: function listen */
+/*s: function [[listen]] */
 /*
  *  listen for an incoming call
  */
@@ -133,9 +133,9 @@ listen(char *dir, char *newdir)
     return ctl;
 
 }
-/*e: function listen */
+/*e: function [[listen]] */
 
-/*s: function accept */
+/*s: function [[accept]] */
 /*
  *  accept a call, return an fd to the open data file
  */
@@ -158,9 +158,9 @@ accept(int ctl, char *dir)
     snprint(buf, sizeof(buf), "%s/data", dir);
     return open(buf, ORDWR);
 }
-/*e: function accept */
+/*e: function [[accept]] */
 
-/*s: function reject */
+/*s: function [[reject]] */
 /*
  *  reject a call, tell device the reason for the rejection
  */
@@ -182,9 +182,9 @@ reject(int ctl, char *dir, char *cause)
         return -1;
     return 0;
 }
-/*e: function reject */
+/*e: function [[reject]] */
 
-/*s: function identtrans */
+/*s: function [[identtrans]] */
 /*
  *  perform the identity translation (in case we can't reach cs)
  */
@@ -209,9 +209,9 @@ identtrans(char *netdir, char *addr, char *naddr, int na, char *file, int nf)
 
     return 1;
 }
-/*e: function identtrans */
+/*e: function [[identtrans]] */
 
-/*s: function nettrans */
+/*s: function [[nettrans]] */
 /*
  *  call up the connection server and get a translation
  */
@@ -286,5 +286,5 @@ nettrans(char *addr, char *naddr, int na, char *file, int nf)
     snprint(file, nf, "%s/%s", netdir, p);
     return 0;
 }
-/*e: function nettrans */
+/*e: function [[nettrans]] */
 /*e: 9sys/announce.c */

@@ -4,12 +4,12 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: global _threaddebuglevel */
+/*s: global [[_threaddebuglevel]] */
 // biset<enum<dbgxxx>>
 int _threaddebuglevel;
-/*e: global _threaddebuglevel */
+/*e: global [[_threaddebuglevel]] */
 
-/*s: function _threaddebug */
+/*s: function [[_threaddebug]] */
 void
 _threaddebug(ulong flag, char *fmt, ...)
 {
@@ -37,9 +37,9 @@ _threaddebug(ulong flag, char *fmt, ...)
     fmtprint(&f, "\n");
     fmtfdflush(&f);
 }
-/*e: function _threaddebug */
+/*e: function [[_threaddebug]] */
 
-/*s: function _threadassert */
+/*s: function [[_threadassert]] */
 void
 _threadassert(char *s)
 {
@@ -56,5 +56,5 @@ _threadassert(char *s)
     write(2, buf, strlen(buf));
     abort();
 }
-/*e: function _threadassert */
+/*e: function [[_threadassert]] */
 /*e: lib_core/libthread/debug.c */

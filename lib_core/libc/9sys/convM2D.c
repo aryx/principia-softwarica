@@ -3,7 +3,7 @@
 #include    <libc.h>
 #include    <fcall.h>
 
-/*s: function statcheck */
+/*s: function [[statcheck]] */
 int
 statcheck(uchar *buf, uint nbuf)
 {
@@ -28,13 +28,13 @@ statcheck(uchar *buf, uint nbuf)
 
     return 0;
 }
-/*e: function statcheck */
+/*e: function [[statcheck]] */
 
-/*s: global nullstring */
+/*s: global [[nullstring]] */
 static char nullstring[] = "";
-/*e: global nullstring */
+/*e: global [[nullstring]] */
 
-/*s: function convM2D */
+/*s: function [[convM2D]] */
 uint
 convM2D(uchar *buf, uint nbuf, Dir *d, char *strs)
 {
@@ -98,5 +98,5 @@ convM2D(uchar *buf, uint nbuf, Dir *d, char *strs)
     
     return p - buf;
 }
-/*e: function convM2D */
+/*e: function [[convM2D]] */
 /*e: 9sys/convM2D.c */

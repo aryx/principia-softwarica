@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function _runebsearch */
+/*s: function [[_runebsearch]] */
 Rune*
 _runebsearch(Rune c, Rune *t, int n, int ne)
 {
@@ -22,5 +22,5 @@ _runebsearch(Rune c, Rune *t, int n, int ne)
         return t;
     return 0;
 }
-/*e: function _runebsearch */
+/*e: function [[_runebsearch]] */
 /*e: port/runebsearch.c */

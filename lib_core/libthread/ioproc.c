@@ -4,16 +4,16 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: enum _anon_ (lib_core/libthread/ioproc.c) */
+/*s: enum [[_anon_ (lib_core/libthread/ioproc.c)]] */
 enum
 {
-    /*s: constant STACK */
+    /*s: constant [[STACK]] */
     STACK = 8192,
-    /*e: constant STACK */
+    /*e: constant [[STACK]] */
 };
-/*e: enum _anon_ (lib_core/libthread/ioproc.c) */
+/*e: enum [[_anon_ (lib_core/libthread/ioproc.c)]] */
 
-/*s: function iointerrupt */
+/*s: function [[iointerrupt]] */
 void
 iointerrupt(Ioproc *io)
 {
@@ -21,9 +21,9 @@ iointerrupt(Ioproc *io)
         return;
     threadint(io->tid);
 }
-/*e: function iointerrupt */
+/*e: function [[iointerrupt]] */
 
-/*s: function xioproc */
+/*s: function [[xioproc]] */
 static void
 xioproc(void *a)
 {
@@ -56,9 +56,9 @@ xioproc(void *a)
             ;
     }
 }
-/*e: function xioproc */
+/*e: function [[xioproc]] */
 
-/*s: function ioproc */
+/*s: function [[ioproc]] */
 Ioproc*
 ioproc(void)
 {
@@ -72,9 +72,9 @@ ioproc(void)
     io->tid = proccreate(xioproc, io, STACK);
     return io;
 }
-/*e: function ioproc */
+/*e: function [[ioproc]] */
 
-/*s: function closeioproc */
+/*s: function [[closeioproc]] */
 void
 closeioproc(Ioproc *io)
 {
@@ -87,5 +87,5 @@ closeioproc(Ioproc *io)
     chanfree(io->creply);
     free(io);
 }
-/*e: function closeioproc */
+/*e: function [[closeioproc]] */
 /*e: lib_core/libthread/ioproc.c */

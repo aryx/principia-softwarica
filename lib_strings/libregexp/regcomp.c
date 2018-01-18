@@ -4,14 +4,14 @@
 #include "regexp.h"
 #include "regcomp.h"
 
-/*s: constant TRUE */
+/*s: constant [[TRUE]] */
 #define	TRUE	1
-/*e: constant TRUE */
-/*s: constant FALSE */
+/*e: constant [[TRUE]] */
+/*s: constant [[FALSE]] */
 #define	FALSE	0
-/*e: constant FALSE */
+/*e: constant [[FALSE]] */
 
-/*s: struct Node */
+/*s: struct [[Node]] */
 /*
  * Parser Information
  */
@@ -21,72 +21,72 @@ struct Node
     Reinst*	first;
     Reinst*	last;
 }Node;
-/*e: struct Node */
+/*e: struct [[Node]] */
 
-/*s: global reprog */
+/*s: global [[reprog]] */
 /* max character classes per program is nelem(reprog->class) */
 static Reprog	*reprog;
-/*e: global reprog */
+/*e: global [[reprog]] */
 
-/*s: constant NCCRUNE */
+/*s: constant [[NCCRUNE]] */
 /* max rune ranges per character class is nelem(classp->spans)/2 */
 #define NCCRUNE	nelem(classp->spans)
-/*e: constant NCCRUNE */
+/*e: constant [[NCCRUNE]] */
 
-/*s: constant NSTACK */
+/*s: constant [[NSTACK]] */
 #define	NSTACK	20
-/*e: constant NSTACK */
-/*s: global andstack */
+/*e: constant [[NSTACK]] */
+/*s: global [[andstack]] */
 static	Node	andstack[NSTACK];
-/*e: global andstack */
-/*s: global andp */
+/*e: global [[andstack]] */
+/*s: global [[andp]] */
 static	Node	*andp;
-/*e: global andp */
-/*s: global atorstack */
+/*e: global [[andp]] */
+/*s: global [[atorstack]] */
 static	int	atorstack[NSTACK];
-/*e: global atorstack */
-/*s: global atorp */
+/*e: global [[atorstack]] */
+/*s: global [[atorp]] */
 static	int*	atorp;
-/*e: global atorp */
-/*s: global cursubid */
+/*e: global [[atorp]] */
+/*s: global [[cursubid]] */
 static	int	cursubid;		/* id of current subexpression */
-/*e: global cursubid */
-/*s: global subidstack */
+/*e: global [[cursubid]] */
+/*s: global [[subidstack]] */
 static	int	subidstack[NSTACK];	/* parallel to atorstack */
-/*e: global subidstack */
-/*s: global subidp */
+/*e: global [[subidstack]] */
+/*s: global [[subidp]] */
 static	int*	subidp;
-/*e: global subidp */
-/*s: global lastwasand */
+/*e: global [[subidp]] */
+/*s: global [[lastwasand]] */
 static	int	lastwasand;	/* Last token was operand */
-/*e: global lastwasand */
-/*s: global nbra */
+/*e: global [[lastwasand]] */
+/*s: global [[nbra]] */
 static	int	nbra;
-/*e: global nbra */
-/*s: global exprp */
+/*e: global [[nbra]] */
+/*s: global [[exprp]] */
 static	char*	exprp;		/* pointer to next character in source expression */
-/*e: global exprp */
-/*s: global lexdone */
+/*e: global [[exprp]] */
+/*s: global [[lexdone]] */
 static	int	lexdone;
-/*e: global lexdone */
-/*s: global nclass */
+/*e: global [[lexdone]] */
+/*s: global [[nclass]] */
 static	int	nclass;
-/*e: global nclass */
-/*s: global classp */
+/*e: global [[nclass]] */
+/*s: global [[classp]] */
 static	Reclass*classp;
-/*e: global classp */
-/*s: global freep */
+/*e: global [[classp]] */
+/*s: global [[freep]] */
 static	Reinst*	freep;
-/*e: global freep */
-/*s: global errors */
+/*e: global [[freep]] */
+/*s: global [[errors]] */
 static	int	errors;
-/*e: global errors */
-/*s: global yyrune */
+/*e: global [[errors]] */
+/*s: global [[yyrune]] */
 static	Rune	yyrune;		/* last lex'd rune */
-/*e: global yyrune */
-/*s: global yyclassp */
+/*e: global [[yyrune]] */
+/*s: global [[yyclassp]] */
 static	Reclass*yyclassp;	/* last lex'd class */
-/*e: global yyclassp */
+/*e: global [[yyclassp]] */
 
 /* predeclared crap */
 static	void	operator(int);
@@ -95,11 +95,11 @@ static	void	pushator(int);
 static	void	evaluntil(int);
 static	int	bldcclass(void);
 
-/*s: global regkaboom */
+/*s: global [[regkaboom]] */
 static jmp_buf regkaboom;
-/*e: global regkaboom */
+/*e: global [[regkaboom]] */
 
-/*s: function rcerror */
+/*s: function [[rcerror]] */
 static	void
 rcerror(char *s)
 {
@@ -107,9 +107,9 @@ rcerror(char *s)
     regerror(s);
     longjmp(regkaboom, 1);
 }
-/*e: function rcerror */
+/*e: function [[rcerror]] */
 
-/*s: function newinst */
+/*s: function [[newinst]] */
 static	Reinst*
 newinst(int t)
 {
@@ -118,9 +118,9 @@ newinst(int t)
     freep->right = 0;
     return freep++;
 }
-/*e: function newinst */
+/*e: function [[newinst]] */
 
-/*s: function operand */
+/*s: function [[operand]] */
 static	void
 operand(int t)
 {
@@ -138,9 +138,9 @@ operand(int t)
     pushand(i, i);
     lastwasand = TRUE;
 }
-/*e: function operand */
+/*e: function [[operand]] */
 
-/*s: function operator */
+/*s: function [[operator]] */
 static	void
 operator(int t)
 {
@@ -160,9 +160,9 @@ operator(int t)
     if(t==STAR || t==QUEST || t==PLUS || t==RBRA)
         lastwasand = TRUE;	/* these look like operands */
 }
-/*e: function operator */
+/*e: function [[operator]] */
 
-/*s: function regerr2 */
+/*s: function [[regerr2]] */
 static	void
 regerr2(char *s, int c)
 {
@@ -174,9 +174,9 @@ regerr2(char *s, int c)
     *cp = '\0'; 
     rcerror(buf);
 }
-/*e: function regerr2 */
+/*e: function [[regerr2]] */
 
-/*s: function cant */
+/*s: function [[cant]] */
 static	void
 cant(char *s)
 {
@@ -185,9 +185,9 @@ cant(char *s)
     strcat(buf, s);
     rcerror(buf);
 }
-/*e: function cant */
+/*e: function [[cant]] */
 
-/*s: function pushand */
+/*s: function [[pushand]] */
 static	void
 pushand(Reinst *f, Reinst *l)
 {
@@ -197,9 +197,9 @@ pushand(Reinst *f, Reinst *l)
     andp->last = l;
     andp++;
 }
-/*e: function pushand */
+/*e: function [[pushand]] */
 
-/*s: function pushator */
+/*s: function [[pushator]] */
 static	void
 pushator(int t)
 {
@@ -208,9 +208,9 @@ pushator(int t)
     *atorp++ = t;
     *subidp++ = cursubid;
 }
-/*e: function pushator */
+/*e: function [[pushator]] */
 
-/*s: function popand */
+/*s: function [[popand]] */
 static	Node*
 popand(int op)
 {
@@ -223,9 +223,9 @@ popand(int op)
     }
     return --andp;
 }
-/*e: function popand */
+/*e: function [[popand]] */
 
-/*s: function popator */
+/*s: function [[popator]] */
 static	int
 popator(void)
 {
@@ -234,9 +234,9 @@ popator(void)
     --subidp;
     return *--atorp;
 }
-/*e: function popator */
+/*e: function [[popator]] */
 
-/*s: function evaluntil */
+/*s: function [[evaluntil]] */
 static	void
 evaluntil(int pri)
 {
@@ -301,9 +301,9 @@ evaluntil(int pri)
         }
     }
 }
-/*e: function evaluntil */
+/*e: function [[evaluntil]] */
 
-/*s: function optimize */
+/*s: function [[optimize]] */
 static	Reprog*
 optimize(Reprog *pp)
 {
@@ -354,10 +354,10 @@ optimize(Reprog *pp)
     *(char **)&npp->startinst += diff;
     return npp;
 }
-/*e: function optimize */
+/*e: function [[optimize]] */
 
 #ifdef	DEBUG
-/*s: function dumpstack */
+/*s: function [[dumpstack]] */
 static	void
 dumpstack(void){
     Node *stk;
@@ -370,9 +370,9 @@ dumpstack(void){
     for(stk=andstack; stk<andp; stk++)
         print("0%o\t0%o\n", stk->first->type, stk->last->type);
 }
-/*e: function dumpstack */
+/*e: function [[dumpstack]] */
 
-/*s: function dump */
+/*s: function [[dump]] */
 static	void
 dump(Reprog *pp)
 {
@@ -399,10 +399,10 @@ dump(Reprog *pp)
             print("\n");
     }while(l++->type);
 }
-/*e: function dump */
+/*e: function [[dump]] */
 #endif
 
-/*s: function newclass */
+/*s: function [[newclass]] */
 static	Reclass*
 newclass(void)
 {
@@ -410,9 +410,9 @@ newclass(void)
         rcerror("too many character classes; increase Reprog.class size");
     return &(classp[nclass++]);
 }
-/*e: function newclass */
+/*e: function [[newclass]] */
 
-/*s: function nextc */
+/*s: function [[nextc]] */
 static	int
 nextc(Rune *rp)
 {
@@ -429,9 +429,9 @@ nextc(Rune *rp)
         lexdone = 1;
     return 0;
 }
-/*e: function nextc */
+/*e: function [[nextc]] */
 
-/*s: function lex */
+/*s: function [[lex]] */
 static	int
 lex(int literal, int dot_type)
 {
@@ -470,9 +470,9 @@ lex(int literal, int dot_type)
     }
     return RUNE;
 }
-/*e: function lex */
+/*e: function [[lex]] */
 
-/*s: function bldcclass */
+/*s: function [[bldcclass]] */
 static int
 bldcclass(void)
 {
@@ -563,9 +563,9 @@ bldcclass(void)
 
     return type;
 }
-/*e: function bldcclass */
+/*e: function [[bldcclass]] */
 
-/*s: function regcomp1 */
+/*s: function [[regcomp1]] */
 static	Reprog*
 regcomp1(char *s, int literal, int dot_type)
 {
@@ -633,29 +633,29 @@ out:
     }
     return pp;
 }
-/*e: function regcomp1 */
+/*e: function [[regcomp1]] */
 
-/*s: function regcomp */
+/*s: function [[regcomp]] */
 extern	Reprog*
 regcomp(char *s)
 {
     return regcomp1(s, 0, ANY);
 }
-/*e: function regcomp */
+/*e: function [[regcomp]] */
 
-/*s: function regcomplit */
+/*s: function [[regcomplit]] */
 extern	Reprog*
 regcomplit(char *s)
 {
     return regcomp1(s, 1, ANY);
 }
-/*e: function regcomplit */
+/*e: function [[regcomplit]] */
 
-/*s: function regcompnl */
+/*s: function [[regcompnl]] */
 extern	Reprog*
 regcompnl(char *s)
 {
     return regcomp1(s, 0, ANYNL);
 }
-/*e: function regcompnl */
+/*e: function [[regcompnl]] */
 /*e: libregexp/regcomp.c */

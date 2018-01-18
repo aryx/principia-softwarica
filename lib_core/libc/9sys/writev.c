@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function iowritev */
+/*s: function [[iowritev]] */
 static
 long
 iowritev(int fd, IOchunk *io, int nio, vlong offset)
@@ -30,21 +30,21 @@ iowritev(int fd, IOchunk *io, int nio, vlong offset)
     free(buf);
     return tot;
 }
-/*e: function iowritev */
+/*e: function [[iowritev]] */
 
-/*s: function writev */
+/*s: function [[writev]] */
 long
 writev(int fd, IOchunk *io, int nio)
 {
     return iowritev(fd, io, nio, -1LL);
 }
-/*e: function writev */
+/*e: function [[writev]] */
 
-/*s: function pwritev */
+/*s: function [[pwritev]] */
 long
 pwritev(int fd, IOchunk *io, int nio, vlong off)
 {
     return iowritev(fd, io, nio, off);
 }
-/*e: function pwritev */
+/*e: function [[pwritev]] */
 /*e: 9sys/writev.c */

@@ -5,7 +5,7 @@
 #include "regcomp.h"
 
 
-/*s: function _renewmatch */
+/*s: function [[_renewmatch]] */
 /*
  *  save a new match in mp
  */
@@ -24,9 +24,9 @@ _renewmatch(Resub *mp, int ms, Resublist *sp)
             mp[i].sp = mp[i].ep = 0;
     }
 }
-/*e: function _renewmatch */
+/*e: function [[_renewmatch]] */
 
-/*s: function _renewthread */
+/*s: function [[_renewthread]] */
 /*
  * Note optimization in _renewthread:
  * 	*lp must be pending when _renewthread called; if *l has been looked
@@ -59,9 +59,9 @@ _renewthread(Relist *lp,	/* _relist to add to */
     (++p)->inst = 0;
     return p;
 }
-/*e: function _renewthread */
+/*e: function [[_renewthread]] */
 
-/*s: function _renewemptythread */
+/*s: function [[_renewemptythread]] */
 /*
  * same as renewthread, but called with
  * initial empty start pointer.
@@ -91,9 +91,9 @@ _renewemptythread(Relist *lp,	/* _relist to add to */
     (++p)->inst = 0;
     return p;
 }
-/*e: function _renewemptythread */
+/*e: function [[_renewemptythread]] */
 
-/*s: function _rrenewemptythread */
+/*s: function [[_rrenewemptythread]] */
 extern Relist*
 _rrenewemptythread(Relist *lp,	/* _relist to add to */
     Reinst *ip,		/* instruction to add */
@@ -119,5 +119,5 @@ _rrenewemptythread(Relist *lp,	/* _relist to add to */
     (++p)->inst = 0;
     return p;
 }
-/*e: function _rrenewemptythread */
+/*e: function [[_rrenewemptythread]] */
 /*e: libregexp/regaux.c */

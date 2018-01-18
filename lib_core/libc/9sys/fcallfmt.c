@@ -7,11 +7,11 @@ static uint dumpsome(char*, char*, char*, long);
 static void fdirconv(char*, char*, Dir*);
 static char *qidtype(char*, uchar);
 
-/*s: constant QIDFMT */
+/*s: constant [[QIDFMT]] */
 #define QIDFMT  "(%.16llux %lud %s)"
-/*e: constant QIDFMT */
+/*e: constant [[QIDFMT]] */
 
-/*s: function fcallfmt */
+/*s: function [[fcallfmt]] */
 int
 fcallfmt(Fmt *fmt)
 {
@@ -151,9 +151,9 @@ fcallfmt(Fmt *fmt)
     }
     return fmtstrcpy(fmt, buf);
 }
-/*e: function fcallfmt */
+/*e: function [[fcallfmt]] */
 
-/*s: function qidtype */
+/*s: function [[qidtype]] */
 static char*
 qidtype(char *s, uchar t)
 {
@@ -173,9 +173,9 @@ qidtype(char *s, uchar t)
     *p = '\0';
     return s;
 }
-/*e: function qidtype */
+/*e: function [[qidtype]] */
 
-/*s: function dirfmt */
+/*s: function [[dirfmt]] */
 int
 dirfmt(Fmt *fmt)
 {
@@ -184,9 +184,9 @@ dirfmt(Fmt *fmt)
     fdirconv(buf, buf+sizeof buf, va_arg(fmt->args, Dir*));
     return fmtstrcpy(fmt, buf);
 }
-/*e: function dirfmt */
+/*e: function [[dirfmt]] */
 
-/*s: function fdirconv */
+/*s: function [[fdirconv]] */
 static void
 fdirconv(char *buf, char *e, Dir *d)
 {
@@ -201,18 +201,18 @@ fdirconv(char *buf, char *e, Dir *d)
             d->atime, d->mtime, d->length,
             d->type, d->dev);
 }
-/*e: function fdirconv */
+/*e: function [[fdirconv]] */
 
-/*s: constant DUMPL */
+/*s: constant [[DUMPL]] */
 /*
  * dump out count (or DUMPL, if count is bigger) bytes from
  * buf to ans, as a string if they are all printable,
  * else as a series of hex bytes
  */
 #define DUMPL 64
-/*e: constant DUMPL */
+/*e: constant [[DUMPL]] */
 
-/*s: function dumpsome */
+/*s: function [[dumpsome]] */
 static uint
 dumpsome(char *ans, char *e, char *buf, long count)
 {
@@ -250,5 +250,5 @@ dumpsome(char *ans, char *e, char *buf, long count)
     *p = 0;
     return p - ans;
 }
-/*e: function dumpsome */
+/*e: function [[dumpsome]] */
 /*e: 9sys/fcallfmt.c */

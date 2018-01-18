@@ -4,7 +4,7 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: function iocall */
+/*s: function [[iocall]] */
 long
 iocall(Ioproc *io, long (*op)(va_list*), ...)
 {
@@ -52,5 +52,5 @@ iocall(Ioproc *io, long (*op)(va_list*), ...)
         ;
     return ret;
 }
-/*e: function iocall */
+/*e: function [[iocall]] */
 /*e: lib_core/libthread/iocall.c */

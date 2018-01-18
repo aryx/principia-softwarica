@@ -10,17 +10,17 @@
  */
 #define MASK    0x7ffL
 /*e: constant MASK (port/frexp.c) */
-/*s: constant SHIFT */
+/*s: constant [[SHIFT]] */
 #define SHIFT   20
-/*e: constant SHIFT */
-/*s: constant BIAS */
+/*e: constant [[SHIFT]] */
+/*s: constant [[BIAS]] */
 #define BIAS    1022L
-/*e: constant BIAS */
-/*s: constant SIG */
+/*e: constant [[BIAS]] */
+/*s: constant [[SIG]] */
 #define SIG 52
-/*e: constant SIG */
+/*e: constant [[SIG]] */
 
-/*s: function frexp */
+/*s: function [[frexp]] */
 double
 frexp(double d, int *ep)
 {
@@ -41,9 +41,9 @@ frexp(double d, int *ep)
     x.hi |= BIAS << SHIFT;
     return x.x;
 }
-/*e: function frexp */
+/*e: function [[frexp]] */
 
-/*s: function ldexp */
+/*s: function [[ldexp]] */
 double
 ldexp(double d, int deltae)
 {
@@ -94,9 +94,9 @@ ldexp(double d, int deltae)
     x.hi |= (long)e << SHIFT;
     return x.x;
 }
-/*e: function ldexp */
+/*e: function [[ldexp]] */
 
-/*s: function modf */
+/*s: function [[modf]] */
 double
 modf(double d, double *ip)
 {
@@ -132,5 +132,5 @@ modf(double d, double *ip)
     *ip = x.x;
     return d - x.x;
 }
-/*e: function modf */
+/*e: function [[modf]] */
 /*e: port/frexp.c */

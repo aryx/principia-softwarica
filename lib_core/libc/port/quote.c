@@ -2,14 +2,14 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: global doquote */
+/*s: global [[doquote]] */
 int (*doquote)(int);
-/*e: global doquote */
+/*e: global [[doquote]] */
 
 extern int _needsquotes(char*, int*);
 extern int _runeneedsquotes(Rune*, int*);
 
-/*s: function unquotestrdup */
+/*s: function [[unquotestrdup]] */
 char*
 unquotestrdup(char *s)
 {
@@ -47,9 +47,9 @@ unquotestrdup(char *s)
         memmove(s, t, strlen(t)+1);
     return ret;
 }
-/*e: function unquotestrdup */
+/*e: function [[unquotestrdup]] */
 
-/*s: function unquoterunestrdup */
+/*s: function [[unquoterunestrdup]] */
 Rune*
 unquoterunestrdup(Rune *s)
 {
@@ -87,9 +87,9 @@ unquoterunestrdup(Rune *s)
         memmove(s, t, (runestrlen(t)+1)*sizeof(Rune));
     return ret;
 }
-/*e: function unquoterunestrdup */
+/*e: function [[unquoterunestrdup]] */
 
-/*s: function quotestrdup */
+/*s: function [[quotestrdup]] */
 char*
 quotestrdup(char *s)
 {
@@ -115,9 +115,9 @@ quotestrdup(char *s)
     *u = '\0';
     return ret;
 }
-/*e: function quotestrdup */
+/*e: function [[quotestrdup]] */
 
-/*s: function quoterunestrdup */
+/*s: function [[quoterunestrdup]] */
 Rune*
 quoterunestrdup(Rune *s)
 {
@@ -143,5 +143,5 @@ quoterunestrdup(Rune *s)
     *u = '\0';
     return ret;
 }
-/*e: function quoterunestrdup */
+/*e: function [[quoterunestrdup]] */
 /*e: port/quote.c */

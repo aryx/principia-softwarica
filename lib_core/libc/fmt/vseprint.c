@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function vseprint */
+/*s: function [[vseprint]] */
 char*
 vseprint(char *buf, char *e, char *fmt, va_list args)
 {
@@ -22,6 +22,6 @@ vseprint(char *buf, char *e, char *fmt, va_list args)
     *(char*)f.to = '\0';
     return f.to;
 }
-/*e: function vseprint */
+/*e: function [[vseprint]] */
 
 /*e: fmt/vseprint.c */

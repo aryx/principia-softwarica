@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function runefmtstrflush */
+/*s: function [[runefmtstrflush]] */
 Rune*
 runefmtstrflush(Fmt *f)
 {
@@ -11,5 +11,5 @@ runefmtstrflush(Fmt *f)
     *(Rune*)f->to = '\0';
     return f->start;
 }
-/*e: function runefmtstrflush */
+/*e: function [[runefmtstrflush]] */
 /*e: fmt/runefmtstr.c */

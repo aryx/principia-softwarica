@@ -4,19 +4,19 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: function incref */
+/*s: function [[incref]] */
 void
 incref(Ref *r)
 {
     ainc(&r->ref);
 }
-/*e: function incref */
+/*e: function [[incref]] */
 
-/*s: function decref */
+/*s: function [[decref]] */
 long
 decref(Ref *r)
 {
     return adec(&r->ref);
 }
-/*e: function decref */
+/*e: function [[decref]] */
 /*e: lib_core/libthread/ref.c */

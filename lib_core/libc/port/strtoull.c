@@ -2,11 +2,11 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: constant UVLONG_MAX */
+/*s: constant [[UVLONG_MAX]] */
 #define UVLONG_MAX  (1LL<<63)
-/*e: constant UVLONG_MAX */
+/*e: constant [[UVLONG_MAX]] */
 
-/*s: function strtoull */
+/*s: function [[strtoull]] */
 uvlong
 strtoull(char *nptr, char **endptr, int base)
 {
@@ -99,5 +99,5 @@ Return:
         return -n;
     return n;
 }
-/*e: function strtoull */
+/*e: function [[strtoull]] */
 /*e: port/strtoull.c */

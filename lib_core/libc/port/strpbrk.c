@@ -5,7 +5,7 @@
 #define N   256
 /*e: constant N (port/strpbrk.c) */
 
-/*s: function strpbrk */
+/*s: function [[strpbrk]] */
 char*
 strpbrk(char *cs, char *cb)
 {
@@ -24,5 +24,5 @@ strpbrk(char *cs, char *cb)
         return (char*)s;
     return 0;
 }
-/*e: function strpbrk */
+/*e: function [[strpbrk]] */
 /*e: port/strpbrk.c */

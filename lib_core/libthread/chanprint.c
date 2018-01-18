@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <thread.h>
 
-/*s: function chanprint */
+/*s: function [[chanprint]] */
 int
 chanprint(Channel *c, char *fmt, ...)
 {
@@ -20,5 +20,5 @@ chanprint(Channel *c, char *fmt, ...)
     yield();	/* let recipient handle message immediately */
     return n;
 }
-/*e: function chanprint */
+/*e: function [[chanprint]] */
 /*e: lib_core/libthread/chanprint.c */

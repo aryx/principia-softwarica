@@ -16,7 +16,7 @@ skip(char *p)
 }
 /*e: function skip (9sys/times.c) */
 
-/*s: function times */
+/*s: function [[times]] */
 /*
  *  after a fork with fd's copied, both fd's are pointing to
  *  the same Chan structure.  Since the offset is kept in the Chan
@@ -62,5 +62,5 @@ times(long *t)
     }
     return r;
 }
-/*e: function times */
+/*e: function [[times]] */
 /*e: 9sys/times.c */

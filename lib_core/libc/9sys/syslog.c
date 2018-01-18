@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: global sl */
+/*s: global [[sl]] */
 static struct
 {
     int fd;
@@ -15,9 +15,9 @@ static struct
 {
     -1, -1,
 };
-/*e: global sl */
+/*e: global [[sl]] */
 
-/*s: function _syslogopen */
+/*s: function [[_syslogopen]] */
 static void
 _syslogopen(void)
 {
@@ -28,9 +28,9 @@ _syslogopen(void)
     snprint(buf, sizeof(buf), "/sys/log/%s", sl.name);
     sl.fd = open(buf, OWRITE|OCEXEC);
 }
-/*e: function _syslogopen */
+/*e: function [[_syslogopen]] */
 
-/*s: function eqdirdev */
+/*s: function [[eqdirdev]] */
 static int
 eqdirdev(Dir *a, Dir *b)
 {
@@ -38,9 +38,9 @@ eqdirdev(Dir *a, Dir *b)
         a->dev == b->dev && a->type == b->type &&
         a->qid.path == b->qid.path;
 }
-/*e: function eqdirdev */
+/*e: function [[eqdirdev]] */
 
-/*s: function syslog */
+/*s: function [[syslog]] */
 /*
  * Print
  *  sysname: time: mesg
@@ -122,5 +122,5 @@ syslog(int cons, char *logname, char *fmt, ...)
 
     unlock(&sl);
 }
-/*e: function syslog */
+/*e: function [[syslog]] */
 /*e: 9sys/syslog.c */

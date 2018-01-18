@@ -11,15 +11,15 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: constant log2 */
+/*s: constant [[log2]] */
 #define log2    0.693147180559945309e0
-/*e: constant log2 */
-/*s: constant ln10o1 */
+/*e: constant [[log2]] */
+/*s: constant [[ln10o1]] */
 #define ln10o1  .4342944819032518276511
-/*e: constant ln10o1 */
-/*s: constant sqrto2 */
+/*e: constant [[ln10o1]] */
+/*s: constant [[sqrto2]] */
 #define sqrto2  0.707106781186547524e0
-/*e: constant sqrto2 */
+/*e: constant [[sqrto2]] */
 /*s: constant p0 (port/log.c) */
 #define p0      -.240139179559210510e2
 /*e: constant p0 (port/log.c) */
@@ -42,7 +42,7 @@
 #define q2      -.891110902798312337e1
 /*e: constant q2 (port/log.c) */
 
-/*s: function log */
+/*s: function [[log]] */
 double
 log(double arg)
 {
@@ -69,9 +69,9 @@ log(double arg)
     temp = temp*z + exp*log2;
     return temp;
 }
-/*e: function log */
+/*e: function [[log]] */
 
-/*s: function log10 */
+/*s: function [[log10]] */
 double
 log10(double arg)
 {
@@ -80,5 +80,5 @@ log10(double arg)
         return NaN();
     return log(arg) * ln10o1;
 }
-/*e: function log10 */
+/*e: function [[log10]] */
 /*e: port/log.c */

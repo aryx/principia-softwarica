@@ -4,37 +4,37 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: global _threadpq */
+/*s: global [[_threadpq]] */
 // used to be in create.c
 Pqueue _threadpq;
-/*e: global _threadpq */
+/*e: global [[_threadpq]] */
 
-/*s: global procp */
+/*s: global [[procp]] */
 // used to be in main.c
 static Proc **procp;
-/*e: global procp */
+/*e: global [[procp]] */
 
-/*s: function _systhreadinit */
+/*s: function [[_systhreadinit]] */
 void
 _systhreadinit(void)
 {
     procp = privalloc();
 }
-/*e: function _systhreadinit */
+/*e: function [[_systhreadinit]] */
 
-/*s: function _threadgetproc */
+/*s: function [[_threadgetproc]] */
 Proc*
 _threadgetproc(void)
 {
     return *procp;
 }
-/*e: function _threadgetproc */
+/*e: function [[_threadgetproc]] */
 
-/*s: function _threadsetproc */
+/*s: function [[_threadsetproc]] */
 void
 _threadsetproc(Proc *p)
 {
     *procp = p;
 }
-/*e: function _threadsetproc */
+/*e: function [[_threadsetproc]] */
 /*e: lib_core/libthread/globals.c */

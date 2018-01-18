@@ -2,7 +2,7 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: function memmove */
+/*s: function [[memmove]] */
 void*
 memmove(void *a1, void *a2, ulong n)
 {
@@ -29,13 +29,13 @@ back:
     }
     return a1;
 }
-/*e: function memmove */
+/*e: function [[memmove]] */
 
-/*s: function memcpy */
+/*s: function [[memcpy]] */
 void*
 memcpy(void *a1, void *a2, ulong n)
 {
     return memmove(a1, a2, n);
 }
-/*e: function memcpy */
+/*e: function [[memcpy]] */
 /*e: port/memmove.c */

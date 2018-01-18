@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function ioreadv */
+/*s: function [[ioreadv]] */
 static
 long
 ioreadv(int fd, IOchunk *io, int nio, vlong offset)
@@ -37,21 +37,21 @@ ioreadv(int fd, IOchunk *io, int nio, vlong offset)
     free(buf);
     return tot;
 }
-/*e: function ioreadv */
+/*e: function [[ioreadv]] */
 
-/*s: function readv */
+/*s: function [[readv]] */
 long
 readv(int fd, IOchunk *io, int nio)
 {
     return ioreadv(fd, io, nio, -1LL);
 }
-/*e: function readv */
+/*e: function [[readv]] */
 
-/*s: function preadv */
+/*s: function [[preadv]] */
 long
 preadv(int fd, IOchunk *io, int nio, vlong off)
 {
     return ioreadv(fd, io, nio, off);
 }
-/*e: function preadv */
+/*e: function [[preadv]] */
 /*e: 9sys/readv.c */

@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function truerand */
+/*s: function [[truerand]] */
 ulong
 truerand(void)
 {
@@ -18,5 +18,5 @@ truerand(void)
 
     return x;
 }
-/*e: function truerand */
+/*e: function [[truerand]] */
 /*e: 9sys/truerand.c */

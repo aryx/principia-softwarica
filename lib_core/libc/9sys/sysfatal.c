@@ -3,7 +3,7 @@
 #include <libc.h>
 
 
-/*s: function _sysfatalimpl */
+/*s: function [[_sysfatalimpl]] */
 static void
 _sysfatalimpl(char *fmt, va_list arg)
 {
@@ -16,13 +16,13 @@ _sysfatalimpl(char *fmt, va_list arg)
         fprint(2, "%s\n", buf);
     exits(buf);
 }
-/*e: function _sysfatalimpl */
+/*e: function [[_sysfatalimpl]] */
 
-/*s: global _sysfatal */
+/*s: global [[_sysfatal]] */
 void (*_sysfatal)(char *fmt, va_list arg) = _sysfatalimpl;
-/*e: global _sysfatal */
+/*e: global [[_sysfatal]] */
 
-/*s: function sysfatal */
+/*s: function [[sysfatal]] */
 void
 sysfatal(char *fmt, ...)
 {
@@ -32,5 +32,5 @@ sysfatal(char *fmt, ...)
     (*_sysfatal)(fmt, arg);
     va_end(arg);
 }
-/*e: function sysfatal */
+/*e: function [[sysfatal]] */
 /*e: 9sys/sysfatal.c */

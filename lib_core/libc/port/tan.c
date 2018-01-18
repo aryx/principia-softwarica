@@ -21,9 +21,9 @@ static double p2     = -0.1550685653483266376941705728e+2;
 /*s: global p3 (port/tan.c) */
 static double p3      = 0.3422554387241003435328470489e-1;
 /*e: global p3 (port/tan.c) */
-/*s: global p4 */
+/*s: global [[p4]] */
 static double p4      = 0.3386638642677172096076369e-4;
-/*e: global p4 */
+/*e: global [[p4]] */
 /*s: global q0 (port/tan.c) */
 static double q0     = -0.1663895238947119001851464661e+5;
 /*e: global q0 (port/tan.c) */
@@ -34,7 +34,7 @@ static double q1      = 0.4765751362916483698926655581e+4;
 static double q2     = -0.1555033164031709966900124574e+3;
 /*e: global q2 (port/tan.c) */
 
-/*s: function tan */
+/*s: function [[tan]] */
 double
 tan(double arg)
 {
@@ -83,5 +83,5 @@ tan(double arg)
         temp = -temp;
     return temp;
 }
-/*e: function tan */
+/*e: function [[tan]] */
 /*e: port/tan.c */

@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function postnote */
+/*s: function [[postnote]] */
 int
 postnote(int group, int pid, char *note)
 {
@@ -33,5 +33,5 @@ postnote(int group, int pid, char *note)
     close(f);
     return 0;
 }
-/*e: function postnote */
+/*e: function [[postnote]] */
 /*e: 9sys/postnote.c */

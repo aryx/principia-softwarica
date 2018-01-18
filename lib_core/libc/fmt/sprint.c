@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function sprint */
+/*s: function [[sprint]] */
 int
 sprint(char *buf, char *fmt, ...)
 {
@@ -14,5 +14,5 @@ sprint(char *buf, char *fmt, ...)
     va_end(args);
     return n;
 }
-/*e: function sprint */
+/*e: function [[sprint]] */
 /*e: fmt/sprint.c */

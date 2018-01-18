@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <fcall.h>
 
-/*s: function read9pmsg */
+/*s: function [[read9pmsg]] */
 error0
 read9pmsg(fdt fd, void *abuf, uint n)
 {
@@ -31,5 +31,5 @@ read9pmsg(fdt fd, void *abuf, uint n)
         return ERROR_0;
     return BIT32SZ+m;
 }
-/*e: function read9pmsg */
+/*e: function [[read9pmsg]] */
 /*e: 9sys/read9pmsg.c */

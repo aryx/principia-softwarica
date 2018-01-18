@@ -4,7 +4,7 @@
 #include <ctype.h>
 #include "fmtdef.h"
 
-/*s: enum _anon_ (fmt/fltfmt.c) */
+/*s: enum [[_anon_ (fmt/fltfmt.c)]] */
 enum
 {
     FDIGIT  = 30,
@@ -12,9 +12,9 @@ enum
     NSIGNIF = 17,
     NEXP10  = 308,
 };
-/*e: enum _anon_ (fmt/fltfmt.c) */
+/*e: enum [[_anon_ (fmt/fltfmt.c)]] */
 
-/*s: function xadd */
+/*s: function [[xadd]] */
 static int
 xadd(char *a, int n, int v)
 {
@@ -35,9 +35,9 @@ xadd(char *a, int n, int v)
     *a = '1';   // overflow adding
     return 1;
 }
-/*e: function xadd */
+/*e: function [[xadd]] */
 
-/*s: function xsub */
+/*s: function [[xsub]] */
 static int
 xsub(char *a, int n, int v)
 {
@@ -56,9 +56,9 @@ xsub(char *a, int n, int v)
     *a = '9';   // underflow subtracting
     return 1;
 }
-/*e: function xsub */
+/*e: function [[xsub]] */
 
-/*s: function xdtoa */
+/*s: function [[xdtoa]] */
 static void
 xdtoa(Fmt *fmt, char *s2, double f)
 {
@@ -299,9 +299,9 @@ found:
     }
     s2[d] = 0;
 }
-/*e: function xdtoa */
+/*e: function [[xdtoa]] */
 
-/*s: function _floatfmt */
+/*s: function [[_floatfmt]] */
 int
 _floatfmt(Fmt *fmt, double f)
 {
@@ -317,9 +317,9 @@ _floatfmt(Fmt *fmt, double f)
     _fmtcpy(fmt, s, strlen(s), strlen(s));
     return 0;
 }
-/*e: function _floatfmt */
+/*e: function [[_floatfmt]] */
 
-/*s: function _efgfmt */
+/*s: function [[_efgfmt]] */
 int
 _efgfmt(Fmt *f)
 {
@@ -328,5 +328,5 @@ _efgfmt(Fmt *f)
     d = va_arg(f->args, double);
     return _floatfmt(f, d);
 }
-/*e: function _efgfmt */
+/*e: function [[_efgfmt]] */
 /*e: fmt/fltfmt.c */

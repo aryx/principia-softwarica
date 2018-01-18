@@ -4,11 +4,11 @@
 
 #pragma profile off
 
-/*s: function cycles (arm) */
+/*s: function [[cycles]](arm) */
 void
 cycles(uvlong* u)
 {
     *u = 0LL;
 }
-/*e: function cycles (arm) */
+/*e: function [[cycles]](arm) */
 /*e: arm/cycles.c */

@@ -2,11 +2,11 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: constant ULONG_MAX */
+/*s: constant [[ULONG_MAX]] */
 #define ULONG_MAX   4294967295UL
-/*e: constant ULONG_MAX */
+/*e: constant [[ULONG_MAX]] */
 
-/*s: function strtoul */
+/*s: function [[strtoul]] */
 ulong
 strtoul(char *nptr, char **endptr, int base)
 {
@@ -99,5 +99,5 @@ strtoul(char *nptr, char **endptr, int base)
         return -n;
     return n;
 }
-/*e: function strtoul */
+/*e: function [[strtoul]] */
 /*e: port/strtoul.c */

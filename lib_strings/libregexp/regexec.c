@@ -5,7 +5,7 @@
 #include "regcomp.h"
 
 
-/*s: function regexec1 */
+/*s: function [[regexec1]] */
 /*
  *  return	0 if no match
  *		>0 if a match
@@ -156,9 +156,9 @@ regexec1(Reprog *progp,	/* program to run */
     }while(r);
     return match;
 }
-/*e: function regexec1 */
+/*e: function [[regexec1]] */
 
-/*s: function regexec2 */
+/*s: function [[regexec2]] */
 static int
 regexec2(Reprog *progp,	/* program to run */
     char *bol,	/* string to run machine on */
@@ -189,9 +189,9 @@ regexec2(Reprog *progp,	/* program to run */
     free(relist1);
     return rv;
 }
-/*e: function regexec2 */
+/*e: function [[regexec2]] */
 
-/*s: function regexec */
+/*s: function [[regexec]] */
 extern int
 regexec(Reprog *progp,	/* program to run */
     char *bol,	/* string to run machine on */
@@ -236,5 +236,5 @@ regexec(Reprog *progp,	/* program to run */
         return rv;
     return -1;
 }
-/*e: function regexec */
+/*e: function [[regexec]] */
 /*e: libregexp/regexec.c */

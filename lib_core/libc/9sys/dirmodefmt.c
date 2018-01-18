@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <fcall.h>
 
-/*s: global modes */
+/*s: global [[modes]] */
 static char *modes[] =
 {
     "---",
@@ -15,17 +15,17 @@ static char *modes[] =
     "rw-",
     "rwx",
 };
-/*e: global modes */
+/*e: global [[modes]] */
 
-/*s: function rwx */
+/*s: function [[rwx]] */
 static void
 rwx(long m, char *s)
 {
     strncpy(s, modes[m], 3);
 }
-/*e: function rwx */
+/*e: function [[rwx]] */
 
-/*s: function dirmodefmt */
+/*s: function [[dirmodefmt]] */
 int
 dirmodefmt(Fmt *f)
 {
@@ -52,5 +52,5 @@ dirmodefmt(Fmt *f)
     buf[11] = 0;
     return fmtstrcpy(f, buf);
 }
-/*e: function dirmodefmt */
+/*e: function [[dirmodefmt]] */
 /*e: 9sys/dirmodefmt.c */

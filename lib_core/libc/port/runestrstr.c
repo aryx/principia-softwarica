@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function runestrstr */
+/*s: function [[runestrstr]] */
 /*
  * Return pointer to first occurrence of s2 in s1,
  * 0 if none
@@ -29,5 +29,5 @@ runestrstr(Rune *s1, Rune *s2)
     }
     return nil;
 }
-/*e: function runestrstr */
+/*e: function [[runestrstr]] */
 /*e: port/runestrstr.c */

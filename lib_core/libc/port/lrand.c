@@ -7,45 +7,45 @@
  *  D. P. Mitchell & J. A. Reeds
  */
 
-/*s: constant LEN */
+/*s: constant [[LEN]] */
 #define LEN 607
-/*e: constant LEN */
-/*s: constant TAP */
+/*e: constant [[LEN]] */
+/*s: constant [[TAP]] */
 #define TAP 273
-/*e: constant TAP */
+/*e: constant [[TAP]] */
 /*s: constant MASK (port/lrand.c) */
 #define MASK    0x7fffffffL
 /*e: constant MASK (port/lrand.c) */
-/*s: constant A */
+/*s: constant [[A]] */
 #define A   48271
-/*e: constant A */
-/*s: constant M */
+/*e: constant [[A]] */
+/*s: constant [[M]] */
 #define M   2147483647
-/*e: constant M */
-/*s: constant Q */
+/*e: constant [[M]] */
+/*s: constant [[Q]] */
 #define Q   44488
-/*e: constant Q */
-/*s: constant R */
+/*e: constant [[Q]] */
+/*s: constant [[R]] */
 #define R   3399
-/*e: constant R */
+/*e: constant [[R]] */
 /*s: constant NORM (port/lrand.c) */
 #define NORM    (1.0/(1.0+MASK))
 /*e: constant NORM (port/lrand.c) */
 
-/*s: global rng_vec */
+/*s: global [[rng_vec]] */
 static  ulong   rng_vec[LEN];
-/*e: global rng_vec */
-/*s: global rng_tap */
+/*e: global [[rng_vec]] */
+/*s: global [[rng_tap]] */
 static  ulong*  rng_tap = rng_vec;
-/*e: global rng_tap */
-/*s: global rng_feed */
+/*e: global [[rng_tap]] */
+/*s: global [[rng_feed]] */
 static  ulong*  rng_feed = 0;
-/*e: global rng_feed */
-/*s: global lk */
+/*e: global [[rng_feed]] */
+/*s: global [[lk]] */
 static  Lock    lk;
-/*e: global lk */
+/*e: global [[lk]] */
 
-/*s: function isrand */
+/*s: function [[isrand]] */
 static void
 isrand(long seed)
 {
@@ -73,9 +73,9 @@ isrand(long seed)
             rng_vec[i] = x;
     }
 }
-/*e: function isrand */
+/*e: function [[isrand]] */
 
-/*s: function srand */
+/*s: function [[srand]] */
 void
 srand(long seed)
 {
@@ -83,9 +83,9 @@ srand(long seed)
     isrand(seed);
     unlock(&lk);
 }
-/*e: function srand */
+/*e: function [[srand]] */
 
-/*s: function lrand */
+/*s: function [[lrand]] */
 long
 lrand(void)
 {
@@ -111,5 +111,5 @@ lrand(void)
 
     return x;
 }
-/*e: function lrand */
+/*e: function [[lrand]] */
 /*e: port/lrand.c */

@@ -3,7 +3,7 @@
 #include <libc.h>
 
 
-/*s: function utfutf */
+/*s: function [[utfutf]] */
 /*
  * Return pointer to first occurrence of s2 in s1,
  * 0 if none
@@ -26,5 +26,5 @@ utfutf(char *s1, char *s2)
             return p;
     return 0;
 }
-/*e: function utfutf */
+/*e: function [[utfutf]] */
 /*e: port/utfutf.c */

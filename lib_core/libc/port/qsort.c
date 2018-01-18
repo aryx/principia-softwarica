@@ -5,7 +5,7 @@
 
 #include <u.h>
 
-/*s: type Sort */
+/*s: type [[Sort]] */
 typedef
 struct
 {
@@ -13,9 +13,9 @@ struct
     void    (*swap)(char*, char*, long);
     long    es;
 } Sort;
-/*e: type Sort */
+/*e: type [[Sort]] */
 
-/*s: function swapb */
+/*s: function [[swapb]] */
 static  void
 swapb(char *i, char *j, long es)
 {
@@ -29,9 +29,9 @@ swapb(char *i, char *j, long es)
     } while(es != 0);
 
 }
-/*e: function swapb */
+/*e: function [[swapb]] */
 
-/*s: function swapi */
+/*s: function [[swapi]] */
 static  void
 swapi(char *ii, char *ij, long es)
 {
@@ -46,9 +46,9 @@ swapi(char *ii, char *ij, long es)
         es -= sizeof(long);
     } while(es != 0);
 }
-/*e: function swapi */
+/*e: function [[swapi]] */
 
-/*s: function pivot */
+/*s: function [[pivot]] */
 static  char*
 pivot(char *a, long n, Sort *p)
 {
@@ -75,9 +75,9 @@ pivot(char *a, long n, Sort *p)
     }
     return pj;
 }
-/*e: function pivot */
+/*e: function [[pivot]] */
 
-/*s: function qsorts */
+/*s: function [[qsorts]] */
 static  void
 qsorts(char *a, long n, Sort *p)
 {
@@ -119,9 +119,9 @@ qsorts(char *a, long n, Sort *p)
         }
     }
 }
-/*e: function qsorts */
+/*e: function [[qsorts]] */
 
-/*s: function qsort */
+/*s: function [[qsort]] */
 void
 qsort(void *va, long n, long es, int (*cmp)(void*, void*))
 {
@@ -134,5 +134,5 @@ qsort(void *va, long n, long es, int (*cmp)(void*, void*))
         s.swap = swapb;
     qsorts((char*)va, n, &s);
 }
-/*e: function qsort */
+/*e: function [[qsort]] */
 /*e: port/qsort.c */

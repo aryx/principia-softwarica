@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "regexp.h"
 
-/*s: function regsub */
+/*s: function [[regsub]] */
 /* substitute into one string using the matches from the last regexec() */
 extern	void
 regsub(char *sp,	/* source string */
@@ -63,5 +63,5 @@ regsub(char *sp,	/* source string */
     }
     *dp = '\0';
 }
-/*e: function regsub */
+/*e: function [[regsub]] */
 /*e: libregexp/regsub.c */

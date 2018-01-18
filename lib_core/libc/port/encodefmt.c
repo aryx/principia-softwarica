@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <ctype.h>
 
-/*s: function encodefmt */
+/*s: function [[encodefmt]] */
 int
 encodefmt(Fmt *f)
 {
@@ -77,5 +77,5 @@ encodefmt(Fmt *f)
 error:
     return fmtstrcpy(f, "<encodefmt>");
 }
-/*e: function encodefmt */
+/*e: function [[encodefmt]] */
 /*e: port/encodefmt.c */

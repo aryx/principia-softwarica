@@ -6,7 +6,7 @@
 #define N   256
 /*e: constant N (port/strtok.c) */
 
-/*s: function strtok */
+/*s: function [[strtok]] */
 char*
 strtok(char *s, char *b)
 {
@@ -32,5 +32,5 @@ strtok(char *s, char *b)
     under_rock = s;
     return os;
 }
-/*e: function strtok */
+/*e: function [[strtok]] */
 /*e: port/strtok.c */

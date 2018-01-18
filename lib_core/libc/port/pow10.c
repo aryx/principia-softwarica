@@ -2,7 +2,7 @@
 #include    <u.h>
 #include    <libc.h>
 
-/*s: global tab */
+/*s: global [[tab]] */
 /*
  * this table might overflow 127-bit exponent representations.
  * in that case, truncate it after 1.0e38.
@@ -31,9 +31,9 @@ double  tab[] =
     1.0e140,1.0e141,1.0e142,1.0e143,1.0e144,1.0e145,1.0e146,1.0e147,1.0e148,1.0e149,
     1.0e150,1.0e151,1.0e152,1.0e153,1.0e154,1.0e155,1.0e156,1.0e157,1.0e158,1.0e159,
 };
-/*e: global tab */
+/*e: global [[tab]] */
 
-/*s: function pow10 */
+/*s: function [[pow10]] */
 double
 pow10(int n)
 {
@@ -51,5 +51,5 @@ pow10(int n)
     m = n/2;
     return pow10(m) * pow10(n-m);
 }
-/*e: function pow10 */
+/*e: function [[pow10]] */
 /*e: port/pow10.c */

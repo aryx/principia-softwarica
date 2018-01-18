@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function utfnlen */
+/*s: function [[utfnlen]] */
 int
 utfnlen(char *s, long m)
 {
@@ -26,5 +26,5 @@ utfnlen(char *s, long m)
     }
     return n;
 }
-/*e: function utfnlen */
+/*e: function [[utfnlen]] */
 /*e: port/utfnlen.c */

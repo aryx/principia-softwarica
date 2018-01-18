@@ -5,7 +5,7 @@
 // Data structures and constants
 //----------------------------------------------------------------------------
 
-/*s: type Namespace_flag */
+/*s: type [[Namespace_flag]] */
 // enum Namespace_flag, mount/bind parameter
 #define	MREPL	0x0000	/* mount replaces object */
 #define	MBEFORE	0x0001	/* mount goes before others in union directory */
@@ -17,9 +17,9 @@
 #define	MORDER	0x0003	/* mask for bits defining order of mounting */
 
 #define	MMASK	0x0017	/* all bits on */
-/*e: type Namespace_flag */
+/*e: type [[Namespace_flag]] */
 
-/*s: type Open_flag */
+/*s: type [[Open_flag]] */
 // enum Open_flag, open parameter
 #define	OREAD	0	/* open for read */
 #define	OWRITE	1	/* write */
@@ -30,30 +30,30 @@
 #define	OCEXEC	32	/* or'ed in, close on exec */
 #define	ORCLOSE	64	/* or'ed in, remove on close */
 #define	OEXCL	0x1000	/* or'ed in, exclusive use (create only) */
-/*e: type Open_flag */
+/*e: type [[Open_flag]] */
 
-/*s: type Access_flag */
+/*s: type [[Access_flag]] */
 // enum Access_flag
 #define	AEXIST	0	/* accessible: exists */
 #define	AEXEC	1	/* execute access */
 #define	AWRITE	2	/* write access */
 #define	AREAD	4	/* read access */
-/*e: type Access_flag */
+/*e: type [[Access_flag]] */
 
-/*s: type Segattach_flag */
+/*s: type [[Segattach_flag]] */
 /* Segattch */
 #define	SG_RONLY	0040	/* read only */
 #define	SG_CEXEC	0100	/* detach on exec */
-/*e: type Segattach_flag */
+/*e: type [[Segattach_flag]] */
 
-/*s: type Note_flag */
+/*s: type [[Note_flag]] */
 #define	NCONT	0	/* continue after note */
 #define	NDFLT	1	/* terminate after note */
 #define	NSAVE	2	/* clear note but hold state */
 #define	NRSTR	3	/* restore saved state */
-/*e: type Note_flag */
+/*e: type [[Note_flag]] */
 
-/*s: type Qid_type */
+/*s: type [[Qid_type]] */
 /* bits in Qid.type */
 #define QTFILE		0x00		/* plain file */
 #define QTDIR		0x80		/* type bit for directories */
@@ -63,9 +63,9 @@
 #define QTMOUNT		0x10		/* type bit for mounted channel */
 #define QTAUTH		0x08		/* type bit for authentication file */
 #define QTTMP		0x04		/* type bit for not-backed-up file */
-/*e: type Qid_type */
+/*e: type [[Qid_type]] */
 
-/*s: type Dir_mode */
+/*s: type [[Dir_mode]] */
 /* bits in Dir.mode */
 #define DMDIR		0x80000000	/* mode bit for directories */
 #define DMREAD		0x4		/* mode bit for read permission */
@@ -77,9 +77,9 @@
 #define DMMOUNT		0x10000000	/* mode bit for mounted channel */
 #define DMAUTH		0x08000000	/* mode bit for authentication file */
 #define DMTMP		0x04000000	/* mode bit for non-backed-up files */
-/*e: type Dir_mode */
+/*e: type [[Dir_mode]] */
 
-/*s: type Rfork_flag */
+/*s: type [[Rfork_flag]] */
 /* rfork */
 enum Rfork_flags
 {
@@ -96,30 +96,30 @@ enum Rfork_flags
     RFREND   = (1<<13),
     RFNOMNT  = (1<<14)
 };
-/*e: type Rfork_flag */
+/*e: type [[Rfork_flag]] */
 
-/*s: constant STATMAX */
+/*s: constant [[STATMAX]] */
 #define	STATMAX	65535U	/* max length of machine-independent stat structure */
-/*e: constant STATMAX */
+/*e: constant [[STATMAX]] */
 
-/*s: constant DIRMAX */
+/*s: constant [[DIRMAX]] */
 #define	DIRMAX	(sizeof(Dir)+STATMAX)	/* max length of Dir structure */
-/*e: constant DIRMAX */
+/*e: constant [[DIRMAX]] */
 
-/*s: constant ERRMAX */
+/*s: constant [[ERRMAX]] */
 #define	ERRMAX	128	/* max length of error string */
-/*e: constant ERRMAX */
+/*e: constant [[ERRMAX]] */
 
-/*s: type Seek_cursor */
+/*s: type [[Seek_cursor]] */
 // pad's stuff (but it is actually also in stdio.h)
 enum Seek_cursor {
     SEEK__START = 0,
     SEEK__CUR = 1,
     SEEK__END = 2,
 };
-/*e: type Seek_cursor */
+/*e: type [[Seek_cursor]] */
 
-/*s: type Qid */
+/*s: type [[Qid]] */
 // Qid as in uniQue id
 struct Qid {
  uvlong	path;
@@ -127,9 +127,9 @@ struct Qid {
     // bitset<Qidtype>
  uchar	type;
 };
-/*e: type Qid */
+/*e: type [[Qid]] */
 
-/*s: type DirEntry */
+/*s: type [[DirEntry]] */
 // a similar structure is defined in the kernel!
 struct Dir {
  /* system-modified data */
@@ -149,9 +149,9 @@ struct Dir {
  char	*gid;	/* group name */
  char	*muid;	/* last modifier name */
 };
-/*e: type DirEntry */
+/*e: type [[DirEntry]] */
 
-/*s: type Waitmsg */
+/*s: type [[Waitmsg]] */
 /* keep /sys/src/ape/lib/ap/plan9/sys9.h in sync with this -rsc */
 struct Waitmsg {
  int	pid;		/* of loved one */
@@ -159,14 +159,14 @@ struct Waitmsg {
  // ref_own?<string>?
  char	*msg;
 };
-/*e: type Waitmsg */
+/*e: type [[Waitmsg]] */
 
-/*s: type IOchunk */
+/*s: type [[IOchunk]] */
 struct IOchunk {
  void	*addr;
  ulong	len;
 };
-/*e: type IOchunk */
+/*e: type [[IOchunk]] */
 
 //----------------------------------------------------------------------------
 // Functions

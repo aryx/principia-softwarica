@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function readn */
+/*s: function [[readn]] */
 long
 readn(fdt f, void *av, long n)
 {
@@ -22,5 +22,5 @@ readn(fdt f, void *av, long n)
     }
     return t;
 }
-/*e: function readn */
+/*e: function [[readn]] */
 /*e: port/readn.c */

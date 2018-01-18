@@ -4,7 +4,7 @@
 
 Rune*_runebsearch(Rune c, Rune *t, int n, int ne);
 
-/*s: global _base2 */
+/*s: global [[_base2]] */
 static Rune _base2[] =
 {
     0x00c0, 0x0041, /* À A */
@@ -1941,9 +1941,9 @@ static Rune _base2[] =
     0x2fa1b,    0x9f16, /* 鼖 鼖 */
     0x2fa1c,    0x9f3b, /* 鼻 鼻 */
 };
-/*e: global _base2 */
+/*e: global [[_base2]] */
 
-/*s: function tobaserune */
+/*s: function [[tobaserune]] */
 Rune
 tobaserune(Rune c)
 {
@@ -1954,13 +1954,13 @@ tobaserune(Rune c)
         c = p[1];
     return c;
 }
-/*e: function tobaserune */
+/*e: function [[tobaserune]] */
 
-/*s: function isbaserune */
+/*s: function [[isbaserune]] */
 int
 isbaserune(Rune c)
 {
     return tobaserune(c) == c;
 }
-/*e: function isbaserune */
+/*e: function [[isbaserune]] */
 /*e: port/runebase.c */

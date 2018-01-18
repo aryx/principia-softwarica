@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function mktemp */
+/*s: function [[mktemp]] */
 char*
 mktemp(char *as)
 {
@@ -31,5 +31,5 @@ mktemp(char *as)
     errstr(err, sizeof err);    /* clear the error */
     return as;
 }
-/*e: function mktemp */
+/*e: function [[mktemp]] */
 /*e: port/mktemp.c */

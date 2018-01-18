@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function utfrrune */
+/*s: function [[utfrrune]] */
 char*
 utfrrune(char *s, long c)
 {
@@ -30,5 +30,5 @@ utfrrune(char *s, long c)
         s += c1;
     }
 }
-/*e: function utfrrune */
+/*e: function [[utfrrune]] */
 /*e: port/utfrrune.c */

@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function runevsnprint */
+/*s: function [[runevsnprint]] */
 int
 runevsnprint(Rune *buf, int len, char *fmt, va_list args)
 {
@@ -22,5 +22,5 @@ runevsnprint(Rune *buf, int len, char *fmt, va_list args)
     *(Rune*)f.to = '\0';
     return (Rune*)f.to - buf;
 }
-/*e: function runevsnprint */
+/*e: function [[runevsnprint]] */
 /*e: fmt/runevsnprint.c */

@@ -6,7 +6,7 @@
 
 static void tinterrupt(Proc*, Thread*);
 
-/*s: function threadxxxgrp */
+/*s: function [[threadxxxgrp]] */
 static void
 threadxxxgrp(int grp, int dokill)
 {
@@ -27,9 +27,9 @@ threadxxxgrp(int grp, int dokill)
     unlock(&_threadpq.lock);
     _threadbreakrendez();
 }
-/*e: function threadxxxgrp */
+/*e: function [[threadxxxgrp]] */
 
-/*s: function threadxxx */
+/*s: function [[threadxxx]] */
 static void
 threadxxx(int id, int dokill)
 {
@@ -55,41 +55,41 @@ threadxxx(int id, int dokill)
     _threaddebug(DBGNOTE, "Can't find thread to kill");
     return;
 }
-/*e: function threadxxx */
+/*e: function [[threadxxx]] */
 
-/*s: function threadkillgrp */
+/*s: function [[threadkillgrp]] */
 void
 threadkillgrp(int grp)
 {
     threadxxxgrp(grp, 1);
 }
-/*e: function threadkillgrp */
+/*e: function [[threadkillgrp]] */
 
-/*s: function threadkill */
+/*s: function [[threadkill]] */
 void
 threadkill(int id)
 {
     threadxxx(id, 1);
 }
-/*e: function threadkill */
+/*e: function [[threadkill]] */
 
-/*s: function threadintgrp */
+/*s: function [[threadintgrp]] */
 void
 threadintgrp(int grp)
 {
     threadxxxgrp(grp, 0);
 }
-/*e: function threadintgrp */
+/*e: function [[threadintgrp]] */
 
-/*s: function threadint */
+/*s: function [[threadint]] */
 void
 threadint(int id)
 {
     threadxxx(id, 0);
 }
-/*e: function threadint */
+/*e: function [[threadint]] */
 
-/*s: function tinterrupt */
+/*s: function [[tinterrupt]] */
 static void
 tinterrupt(Proc *p, Thread *t)
 {
@@ -102,5 +102,5 @@ tinterrupt(Proc *p, Thread *t)
         break;
     }
 }
-/*e: function tinterrupt */
+/*e: function [[tinterrupt]] */
 /*e: lib_core/libthread/kill.c */

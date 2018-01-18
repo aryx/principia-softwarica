@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function runevseprint */
+/*s: function [[runevseprint]] */
 Rune*
 runevseprint(Rune *buf, Rune *e, char *fmt, va_list args)
 {
@@ -22,6 +22,6 @@ runevseprint(Rune *buf, Rune *e, char *fmt, va_list args)
     *(Rune*)f.to = '\0';
     return f.to;
 }
-/*e: function runevseprint */
+/*e: function [[runevseprint]] */
 
 /*e: fmt/runevseprint.c */

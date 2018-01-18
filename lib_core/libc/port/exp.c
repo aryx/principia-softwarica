@@ -27,17 +27,17 @@
 /*s: constant q2 (port/exp.c) */
 #define q2  .1749287689093076403844945335e4
 /*e: constant q2 (port/exp.c) */
-/*s: constant log2e */
+/*s: constant [[log2e]] */
 #define log2e  1.4426950408889634073599247
-/*e: constant log2e */
-/*s: constant sqrt2 */
+/*e: constant [[log2e]] */
+/*s: constant [[sqrt2]] */
 #define sqrt2  1.4142135623730950488016887
-/*e: constant sqrt2 */
-/*s: constant maxf */
+/*e: constant [[sqrt2]] */
+/*s: constant [[maxf]] */
 #define maxf  10000
-/*e: constant maxf */
+/*e: constant [[maxf]] */
 
-/*s: function exp */
+/*s: function [[exp]] */
 double
 exp(double arg)
 {
@@ -59,5 +59,5 @@ exp(double arg)
     temp2 = ((xsq+q2)*xsq+q1)*xsq + q0;
     return ldexp(sqrt2*(temp2+temp1)/(temp2-temp1), ent);
 }
-/*e: function exp */
+/*e: function [[exp]] */
 /*e: port/exp.c */

@@ -2,11 +2,11 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: global unknown */
+/*s: global [[unknown]] */
 static char *unknown = "???";
-/*e: global unknown */
+/*e: global [[unknown]] */
 
-/*s: function getendpoint */
+/*s: function [[getendpoint]] */
 static void
 getendpoint(char *dir, char *file, char **sysp, char **servp)
 {
@@ -38,9 +38,9 @@ getendpoint(char *dir, char *file, char **sysp, char **servp)
     *servp = serv;
     *sysp = sys;
 }
-/*e: function getendpoint */
+/*e: function [[getendpoint]] */
 
-/*s: function getnetconninfo */
+/*s: function [[getnetconninfo]] */
 NetConnInfo*
 getnetconninfo(char *dir, int fd)
 {
@@ -112,9 +112,9 @@ err:
     freenetconninfo(nci);
     return nil;
 }
-/*e: function getnetconninfo */
+/*e: function [[getnetconninfo]] */
 
-/*s: function xfree */
+/*s: function [[xfree]] */
 static void
 xfree(char *x)
 {
@@ -122,9 +122,9 @@ xfree(char *x)
         return;
     free(x);
 }
-/*e: function xfree */
+/*e: function [[xfree]] */
 
-/*s: function freenetconninfo */
+/*s: function [[freenetconninfo]] */
 void
 freenetconninfo(NetConnInfo *nci)
 {
@@ -141,5 +141,5 @@ freenetconninfo(NetConnInfo *nci)
     xfree(nci->raddr);
     free(nci);
 }
-/*e: function freenetconninfo */
+/*e: function [[freenetconninfo]] */
 /*e: 9sys/getnetconninfo.c */

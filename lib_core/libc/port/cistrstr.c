@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function cistrstr */
+/*s: function [[cistrstr]] */
 char*
 cistrstr(char *s, char *sub)
 {
@@ -23,5 +23,5 @@ cistrstr(char *s, char *sub)
     }
     return nil;
 }
-/*e: function cistrstr */
+/*e: function [[cistrstr]] */
 /*e: port/cistrstr.c */

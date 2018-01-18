@@ -2,16 +2,16 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: global ql */
+/*s: global [[ql]] */
 static struct {
     QLp *p;
     QLp x[1024];
 } ql = {
     ql.x
 };
-/*e: global ql */
+/*e: global [[ql]] */
 
-/*s: enum _anon_ (9sys/qlock.c) */
+/*s: enum [[_anon_ (9sys/qlock.c)]] */
 enum
 {
     Queuing,
@@ -19,22 +19,22 @@ enum
     QueuingW,
     Sleeping,
 };
-/*e: enum _anon_ (9sys/qlock.c) */
+/*e: enum [[_anon_ (9sys/qlock.c)]] */
 
-/*s: global _rendezvousp */
+/*s: global [[_rendezvousp]] */
 static void*    (*_rendezvousp)(void*, void*) = rendezvous;
-/*e: global _rendezvousp */
+/*e: global [[_rendezvousp]] */
 
-/*s: function _qlockinit */
+/*s: function [[_qlockinit]] */
 /* this gets called by the thread library ONLY to get us to use its rendezvous */
 void
 _qlockinit(void* (*r)(void*, void*))
 {
     _rendezvousp = r;
 }
-/*e: function _qlockinit */
+/*e: function [[_qlockinit]] */
 
-/*s: function getqlp */
+/*s: function [[getqlp]] */
 /* find a free shared memory location to queue ourselves in */
 static QLp*
 getqlp(void)
@@ -55,9 +55,9 @@ getqlp(void)
     }
     return p;
 }
-/*e: function getqlp */
+/*e: function [[getqlp]] */
 
-/*s: function qlock */
+/*s: function [[qlock]] */
 void
 qlock(QLock *q)
 {
@@ -87,9 +87,9 @@ qlock(QLock *q)
         ;
     mp->inuse = 0;
 }
-/*e: function qlock */
+/*e: function [[qlock]] */
 
-/*s: function qunlock */
+/*s: function [[qunlock]] */
 void
 qunlock(QLock *q)
 {
@@ -113,9 +113,9 @@ qunlock(QLock *q)
     q->locked = 0;
     unlock(&q->lock);
 }
-/*e: function qunlock */
+/*e: function [[qunlock]] */
 
-/*s: function canqlock */
+/*s: function [[canqlock]] */
 int
 canqlock(QLock *q)
 {
@@ -129,9 +129,9 @@ canqlock(QLock *q)
     unlock(&q->lock);
     return 0;
 }
-/*e: function canqlock */
+/*e: function [[canqlock]] */
 
-/*s: function rlock */
+/*s: function [[rlock]] */
 void
 rlock(RWLock *q)
 {
@@ -161,9 +161,9 @@ rlock(RWLock *q)
         ;
     mp->inuse = 0;
 }
-/*e: function rlock */
+/*e: function [[rlock]] */
 
-/*s: function canrlock */
+/*s: function [[canrlock]] */
 int
 canrlock(RWLock *q)
 {
@@ -177,9 +177,9 @@ canrlock(RWLock *q)
     unlock(&q->lock);
     return 0;
 }
-/*e: function canrlock */
+/*e: function [[canrlock]] */
 
-/*s: function runlock */
+/*s: function [[runlock]] */
 void
 runlock(RWLock *q)
 {
@@ -207,9 +207,9 @@ runlock(RWLock *q)
     while((*_rendezvousp)(p, 0) == (void*)~0)
         ;
 }
-/*e: function runlock */
+/*e: function [[runlock]] */
 
-/*s: function wlock */
+/*s: function [[wlock]] */
 void
 wlock(RWLock *q)
 {
@@ -240,9 +240,9 @@ wlock(RWLock *q)
         ;
     mp->inuse = 0;
 }
-/*e: function wlock */
+/*e: function [[wlock]] */
 
-/*s: function canwlock */
+/*s: function [[canwlock]] */
 int
 canwlock(RWLock *q)
 {
@@ -256,9 +256,9 @@ canwlock(RWLock *q)
     unlock(&q->lock);
     return 0;
 }
-/*e: function canwlock */
+/*e: function [[canwlock]] */
 
-/*s: function wunlock */
+/*s: function [[wunlock]] */
 void
 wunlock(RWLock *q)
 {
@@ -300,9 +300,9 @@ wunlock(RWLock *q)
     q->writer = 0;
     unlock(&q->lock);
 }
-/*e: function wunlock */
+/*e: function [[wunlock]] */
 
-/*s: function rsleep */
+/*s: function [[rsleep]] */
 void
 rsleep(Rendez *r)
 {
@@ -344,9 +344,9 @@ rsleep(Rendez *r)
         ;
     me->inuse = 0;
 }
-/*e: function rsleep */
+/*e: function [[rsleep]] */
 
-/*s: function rwakeup */
+/*s: function [[rwakeup]] */
 int
 rwakeup(Rendez *r)
 {
@@ -382,9 +382,9 @@ rwakeup(Rendez *r)
     unlock(&r->l->lock);
     return 1;
 }
-/*e: function rwakeup */
+/*e: function [[rwakeup]] */
 
-/*s: function rwakeupall */
+/*s: function [[rwakeupall]] */
 int
 rwakeupall(Rendez *r)
 {
@@ -394,6 +394,6 @@ rwakeupall(Rendez *r)
         ;
     return i;
 }
-/*e: function rwakeupall */
+/*e: function [[rwakeupall]] */
 
 /*e: 9sys/qlock.c */

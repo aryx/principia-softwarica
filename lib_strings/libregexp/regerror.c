@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "regexp.h"
 
-/*s: function regerror */
+/*s: function [[regerror]] */
 void
 regerror(char *s)
 {
@@ -15,5 +15,5 @@ regerror(char *s)
     write(2, buf, strlen(buf));
     exits("regerr");
 }
-/*e: function regerror */
+/*e: function [[regerror]] */
 /*e: libregexp/regerror.c */

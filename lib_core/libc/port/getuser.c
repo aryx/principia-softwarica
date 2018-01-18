@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function getuser */
+/*s: function [[getuser]] */
 char*
 getuser(void)
 {
@@ -21,5 +21,5 @@ getuser(void)
         user[n] = '\0';
     return user;
 }
-/*e: function getuser */
+/*e: function [[getuser]] */
 /*e: port/getuser.c */

@@ -9,7 +9,7 @@ typedef struct Conn Conn;
 typedef struct Dest Dest;
 typedef struct DS DS;
 
-/*s: enum _anon_ (9sys/dial.c) */
+/*s: enum [[_anon_ (9sys/dial.c)]] */
 enum
 {
     Maxstring   = 128,
@@ -22,9 +22,9 @@ enum
      */
     Maxconnms   = 2*60*1000,    /* 2 minutes */
 };
-/*e: enum _anon_ (9sys/dial.c) */
+/*e: enum [[_anon_ (9sys/dial.c)]] */
 
-/*s: struct DS (9sys/dial.c) */
+/*s: struct [[DS]](9sys/dial.c) */
 struct DS {
     /* dist string */
     char    buf[Maxstring];
@@ -37,9 +37,9 @@ struct DS {
     char    *dir;
     int *cfdp;
 };
-/*e: struct DS (9sys/dial.c) */
+/*e: struct [[DS]](9sys/dial.c) */
 
-/*s: struct Conn */
+/*s: struct [[Conn]] */
 /*
  * malloc these; they need to be writable by this proc & all children.
  * the stack is private to each proc, and static allocation in the data
@@ -54,8 +54,8 @@ struct Conn {
     char    dir[NETPATHLEN+1];
     char    err[ERRMAX];
 };
-/*e: struct Conn */
-/*s: struct Dest */
+/*e: struct [[Conn]] */
+/*s: struct [[Dest]] */
 struct Dest {
     Conn    *conn;          /* allocated array */
     Conn    *connend;
@@ -70,14 +70,14 @@ struct Dest {
     char    *nextaddr;
     char    addrlist[Maxcsreply];
 };
-/*e: struct Dest */
+/*e: struct [[Dest]] */
 
 static int  call(char*, char*, DS*, Dest*, Conn*);
 static int  csdial(DS*);
 static void _dial_string_parse(char*, DS*);
 
 
-/*s: function dialimpl */
+/*s: function [[dialimpl]] */
 /*
  *  the dialstring is of the form '[/net/]proto!dest'
  */
@@ -119,25 +119,25 @@ dialimpl(char *dest, char *local, char *dir, int *cfdp)
         werrstr("%s", alterr);
     return rv;
 }
-/*e: function dialimpl */
+/*e: function [[dialimpl]] */
 
-/*s: global _dial */
+/*s: global [[_dial]] */
 /*
  * the thread library can't cope with rfork(RFMEM|RFPROC),
  * so it must override this with a private version of dial.
  */
 int (*_dial)(char *, char *, char *, int *) = dialimpl;
-/*e: global _dial */
+/*e: global [[_dial]] */
 
-/*s: function dial */
+/*s: function [[dial]] */
 int
 dial(char *dest, char *local, char *dir, int *cfdp)
 {
     return (*_dial)(dest, local, dir, cfdp);
 }
-/*e: function dial */
+/*e: function [[dial]] */
 
-/*s: function connsalloc */
+/*s: function [[connsalloc]] */
 static int
 connsalloc(Dest *dp, int addrs)
 {
@@ -155,9 +155,9 @@ connsalloc(Dest *dp, int addrs)
         conn->cfd = conn->dfd = -1;
     return 0;
 }
-/*e: function connsalloc */
+/*e: function [[connsalloc]] */
 
-/*s: function freedest */
+/*s: function [[freedest]] */
 static void
 freedest(Dest *dp)
 {
@@ -171,9 +171,9 @@ freedest(Dest *dp)
     if (oalarm >= 0)
         alarm(oalarm);
 }
-/*e: function freedest */
+/*e: function [[freedest]] */
 
-/*s: function closeopenfd */
+/*s: function [[closeopenfd]] */
 static void
 closeopenfd(int *fdp)
 {
@@ -182,9 +182,9 @@ closeopenfd(int *fdp)
         *fdp = -1;
     }
 }
-/*e: function closeopenfd */
+/*e: function [[closeopenfd]] */
 
-/*s: function notedeath */
+/*s: function [[notedeath]] */
 static void
 notedeath(Dest *dp, char *exitsts)
 {
@@ -213,9 +213,9 @@ notedeath(Dest *dp, char *exitsts)
         }
     /* not a proc that we forked */
 }
-/*e: function notedeath */
+/*e: function [[notedeath]] */
 
-/*s: function outstandingprocs */
+/*s: function [[outstandingprocs]] */
 static int
 outstandingprocs(Dest *dp)
 {
@@ -226,9 +226,9 @@ outstandingprocs(Dest *dp)
             return 1;
     return 0;
 }
-/*e: function outstandingprocs */
+/*e: function [[outstandingprocs]] */
 
-/*s: function reap */
+/*s: function [[reap]] */
 static int
 reap(Dest *dp)
 {
@@ -240,9 +240,9 @@ reap(Dest *dp)
     }
     return -1;
 }
-/*e: function reap */
+/*e: function [[reap]] */
 
-/*s: function fillinds */
+/*s: function [[fillinds]] */
 static int
 fillinds(DS *ds, Dest *dp)
 {
@@ -259,9 +259,9 @@ fillinds(DS *ds, Dest *dp)
     }
     return conn->dfd;
 }
-/*e: function fillinds */
+/*e: function [[fillinds]] */
 
-/*s: function connectwait */
+/*s: function [[connectwait]] */
 static int
 connectwait(Dest *dp, char *besterr)
 {
@@ -288,9 +288,9 @@ connectwait(Dest *dp, char *besterr)
         }
     return dp->winner;
 }
-/*e: function connectwait */
+/*e: function [[connectwait]] */
 
-/*s: function parsecs */
+/*s: function [[parsecs]] */
 static int
 parsecs(Dest *dp, char **clonep, char **destp)
 {
@@ -316,9 +316,9 @@ parsecs(Dest *dp, char **clonep, char **destp)
     dp->nextaddr = p;       /* advance to next line */
     return 0;
 }
-/*e: function parsecs */
+/*e: function [[parsecs]] */
 
-/*s: function pickuperr */
+/*s: function [[pickuperr]] */
 static void
 pickuperr(char *besterr, char *err)
 {
@@ -327,17 +327,17 @@ pickuperr(char *besterr, char *err)
     if(strstr(err, "does not exist") == 0)
         strcpy(besterr, err);
 }
-/*e: function pickuperr */
+/*e: function [[pickuperr]] */
 
-/*s: function catcher */
+/*s: function [[catcher]] */
 static int
 catcher(void *, char *s)
 {
     return strstr(s, "alarm") != nil;
 }
-/*e: function catcher */
+/*e: function [[catcher]] */
 
-/*s: function dialmulti */
+/*s: function [[dialmulti]] */
 /*
  * try all addresses in parallel and take the first one that answers;
  * this helps when systems have ip v4 and v6 addresses but are
@@ -377,9 +377,9 @@ dialmulti(DS *ds, Dest *dp)
         werrstr("%s", (*besterr? besterr: "unknown error"));
     return rv;
 }
-/*e: function dialmulti */
+/*e: function [[dialmulti]] */
 
-/*s: function csdial (9sys/dial.c) */
+/*s: function [[csdial]](9sys/dial.c) */
 static int
 csdial(DS *ds)
 {
@@ -476,9 +476,9 @@ csdial(DS *ds)
     freedest(dp);
     return rv;
 }
-/*e: function csdial (9sys/dial.c) */
+/*e: function [[csdial]](9sys/dial.c) */
 
-/*s: function call (9sys/dial.c) */
+/*s: function [[call]](9sys/dial.c) */
 static int
 call(char *clone, char *dest, DS *ds, Dest *dp, Conn *conn)
 {
@@ -558,9 +558,9 @@ call(char *clone, char *dest, DS *ds, Dest *dp, Conn *conn)
     alarm(calleralarm? dp->oalarm: 0);
     return fd;
 }
-/*e: function call (9sys/dial.c) */
+/*e: function [[call]](9sys/dial.c) */
 
-/*s: function _dial_string_parse (9sys/dial.c) */
+/*s: function [[_dial_string_parse]](9sys/dial.c) */
 /*
  *  parse a dial string
  */
@@ -593,5 +593,5 @@ _dial_string_parse(char *str, DS *ds)
         ds->rem = p + 1;
     }
 }
-/*e: function _dial_string_parse (9sys/dial.c) */
+/*e: function [[_dial_string_parse]](9sys/dial.c) */
 /*e: 9sys/dial.c */

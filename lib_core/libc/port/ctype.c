@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <ctype.h>
 
-/*s: global _ctype */
+/*s: global [[_ctype]] */
 uchar   _ctype[256] =
 {
 /*   0   1   2   3   4   5   6   7  */
@@ -25,5 +25,5 @@ uchar   _ctype[256] =
 /*160*/ _L, _L, _L, _L, _L, _L, _L, _L,
 /*170*/ _L, _L, _L, _P, _P, _P, _P, _C,
 };
-/*e: global _ctype */
+/*e: global [[_ctype]] */
 /*e: port/ctype.c */

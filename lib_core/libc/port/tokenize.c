@@ -2,11 +2,11 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: global qsep */
+/*s: global [[qsep]] */
 static char qsep[] = " \t\r\n";
-/*e: global qsep */
+/*e: global [[qsep]] */
 
-/*s: function qtoken */
+/*s: function [[qtoken]] */
 static char*
 qtoken(char *s, char *sep)
 {
@@ -44,9 +44,9 @@ qtoken(char *s, char *sep)
     }
     return t;
 }
-/*e: function qtoken */
+/*e: function [[qtoken]] */
 
-/*s: function etoken */
+/*s: function [[etoken]] */
 static char*
 etoken(char *t, char *sep)
 {
@@ -77,9 +77,9 @@ etoken(char *t, char *sep)
     }
     return t;
 }
-/*e: function etoken */
+/*e: function [[etoken]] */
 
-/*s: function gettokens */
+/*s: function [[gettokens]] */
 int
 gettokens(char *s, char **args, int maxargs, char *sep)
 {
@@ -96,9 +96,9 @@ gettokens(char *s, char **args, int maxargs, char *sep)
 
     return nargs;
 }
-/*e: function gettokens */
+/*e: function [[gettokens]] */
 
-/*s: function tokenize */
+/*s: function [[tokenize]] */
 int
 tokenize(char *s, char **args, int maxargs)
 {
@@ -115,5 +115,5 @@ tokenize(char *s, char **args, int maxargs)
 
     return nargs;
 }
-/*e: function tokenize */
+/*e: function [[tokenize]] */
 /*e: port/tokenize.c */

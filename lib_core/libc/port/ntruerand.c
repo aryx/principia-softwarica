@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function ntruerand */
+/*s: function [[ntruerand]] */
 ulong
 ntruerand(ulong n)
 {
@@ -23,5 +23,5 @@ ntruerand(ulong n)
 
     return r%n;
 }
-/*e: function ntruerand */
+/*e: function [[ntruerand]] */
 /*e: port/ntruerand.c */

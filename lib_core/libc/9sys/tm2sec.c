@@ -2,13 +2,13 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: constant TZSIZE (9sys/tm2sec.c) */
+/*s: constant [[TZSIZE]](9sys/tm2sec.c) */
 #define TZSIZE  150
-/*e: constant TZSIZE (9sys/tm2sec.c) */
+/*e: constant [[TZSIZE]](9sys/tm2sec.c) */
 static  void    readtimezone(void);
 static  int rd_name(char**, char*);
 static  int rd_long(char**, long*);
-/*s: global timezone (9sys/tm2sec.c) */
+/*s: global [[timezone]](9sys/tm2sec.c) */
 static
 struct
 {
@@ -18,19 +18,19 @@ struct
     long    dldiff;
     long    dlpairs[TZSIZE];
 } timezone;
-/*e: global timezone (9sys/tm2sec.c) */
+/*e: global [[timezone]](9sys/tm2sec.c) */
 
-/*s: constant SEC2MIN */
+/*s: constant [[SEC2MIN]] */
 #define SEC2MIN 60L
-/*e: constant SEC2MIN */
-/*s: constant SEC2HOUR */
+/*e: constant [[SEC2MIN]] */
+/*s: constant [[SEC2HOUR]] */
 #define SEC2HOUR (60L*SEC2MIN)
-/*e: constant SEC2HOUR */
-/*s: constant SEC2DAY */
+/*e: constant [[SEC2HOUR]] */
+/*s: constant [[SEC2DAY]] */
 #define SEC2DAY (24L*SEC2HOUR)
-/*e: constant SEC2DAY */
+/*e: constant [[SEC2DAY]] */
 
-/*s: global dmsize (9sys/tm2sec.c) */
+/*s: global [[dmsize]](9sys/tm2sec.c) */
 /*
  *  days per month plus days/year
  */
@@ -38,15 +38,15 @@ static  int dmsize[] =
 {
     365, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 };
-/*e: global dmsize (9sys/tm2sec.c) */
-/*s: global ldmsize */
+/*e: global [[dmsize]](9sys/tm2sec.c) */
+/*s: global [[ldmsize]] */
 static  int ldmsize[] =
 {
     366, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 };
-/*e: global ldmsize */
+/*e: global [[ldmsize]] */
 
-/*s: function yrsize */
+/*s: function [[yrsize]] */
 /*
  *  return the days/month for the given year
  */
@@ -58,9 +58,9 @@ yrsize(int y)
     else
         return dmsize;
 }
-/*e: function yrsize */
+/*e: function [[yrsize]] */
 
-/*s: function tm2sec */
+/*s: function [[tm2sec]] */
 /*
  * compute seconds since Jan 1 1970 GMT
  * and convert to our timezone.
@@ -117,9 +117,9 @@ tm2sec(Tm *tm)
         secs = 0;
     return secs;
 }
-/*e: function tm2sec */
+/*e: function [[tm2sec]] */
 
-/*s: function readtimezone (9sys/tm2sec.c) */
+/*s: function [[readtimezone]](9sys/tm2sec.c) */
 static
 void
 readtimezone(void)
@@ -155,9 +155,9 @@ error:
     strcpy(timezone.stname, "GMT");
     timezone.dlpairs[0] = 0;
 }
-/*e: function readtimezone (9sys/tm2sec.c) */
+/*e: function [[readtimezone]](9sys/tm2sec.c) */
 
-/*s: function rd_name (9sys/tm2sec.c) */
+/*s: function [[rd_name]](9sys/tm2sec.c) */
 static int
 rd_name(char **f, char *p)
 {
@@ -179,9 +179,9 @@ rd_name(char **f, char *p)
     *p = 0;
     return 0;
 }
-/*e: function rd_name (9sys/tm2sec.c) */
+/*e: function [[rd_name]](9sys/tm2sec.c) */
 
-/*s: function rd_long (9sys/tm2sec.c) */
+/*s: function [[rd_long]](9sys/tm2sec.c) */
 static int
 rd_long(char **f, long *p)
 {
@@ -216,5 +216,5 @@ rd_long(char **f, long *p)
     *p = l;
     return 0;
 }
-/*e: function rd_long (9sys/tm2sec.c) */
+/*e: function [[rd_long]](9sys/tm2sec.c) */
 /*e: 9sys/tm2sec.c */
