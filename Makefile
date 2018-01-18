@@ -2,7 +2,7 @@ TOP=.
 #############################################################################
 # Configuration section
 #############################################################################
-# on a MAC
+# on my MAC
 DISK="/Volumes/DISK Image"
 
 CONFIG=qemu
@@ -20,7 +20,7 @@ setup_host:
 	sudo ln -s `pwd`/root/arm /arm
 	sudo ln -s `pwd`/root/lib /lib
 	sudo ln -s `pwd`/sys /sys
-# this last one will be problematic on linux
+# this last one will be problematic on Linux
 
 # This assumes you have done source env.sh, or have a good 'mk' wrapper
 compile:
@@ -98,13 +98,15 @@ graph_windows:
 graph_windows2:
 	~/pfff/codegraph -derived_data -lang c -build include/ lib_graphics/ windows/
 
+# you need also to adjust skip list sometimes!
+ASSEMBLERSRC=include assemblers/aa/ assemblers/5a
 
 ##############################################################################
 # Literate Programming rules
 ##############################################################################
 
 NWDIRS=kernel windows shells \
-       assemblers compilers linkers\
+       assemblers compilers linkers \
        builders debuggers profilers generators
 #TODO: lib (libc, fmt, libthread, malloc, libregexp, libbio, libstring, ...)
 #LATER: network/ security/
