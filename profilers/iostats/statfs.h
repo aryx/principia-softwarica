@@ -1,33 +1,33 @@
-/*s: profilers/iostats/statfs.h */
-/*s: constant DEBUGFILE */
+/*s: iostats/statfs.h */
+/*s: constant [[DEBUGFILE]] */
 /*
  * statfs.h - definitions for statistic gathering file server
  */
 
 #define DEBUGFILE	"iostats.out"
-/*e: constant DEBUGFILE */
-/*s: constant DONESTR */
+/*e: constant [[DEBUGFILE]] */
+/*s: constant [[DONESTR]] */
 #define DONESTR		"done"
-/*e: constant DONESTR */
-/*s: constant DEBUG */
+/*e: constant [[DONESTR]] */
+/*s: constant [[DEBUG]] */
 #define DEBUG		if(dbg)fprint
-/*e: constant DEBUG */
-/*s: constant MAXPROC */
+/*e: constant [[DEBUG]] */
+/*s: constant [[MAXPROC]] */
 #define MAXPROC		16
-/*e: constant MAXPROC */
-/*s: constant FHASHSIZE */
+/*e: constant [[MAXPROC]] */
+/*s: constant [[FHASHSIZE]] */
 #define FHASHSIZE	64
-/*e: constant FHASHSIZE */
-/*s: function fidhash */
+/*e: constant [[FHASHSIZE]] */
+/*s: function [[fidhash]] */
 #define fidhash(s)	fhash[s%FHASHSIZE]
-/*e: function fidhash */
+/*e: function [[fidhash]] */
 
-/*s: enum _anon_ (profilers/iostats/statfs.h) */
+/*s: enum [[_anon_ (iostats/statfs.h)]] */
 enum{
     Maxfdata	= 8192,	/* max size of data in 9P message */
     Maxrpc		= 20000,/* number of RPCs we'll log */
 };
-/*e: enum _anon_ (profilers/iostats/statfs.h) */
+/*e: enum [[_anon_ (iostats/statfs.h)]] */
 
 typedef struct Fsrpc Fsrpc;
 typedef struct Fid Fid;
@@ -37,7 +37,7 @@ typedef struct Stats Stats;
 typedef struct Rpc Rpc;
 typedef struct Frec Frec;
 
-/*s: struct Frec */
+/*s: struct [[Frec]] */
 struct Frec
 {
     Frec	*next;
@@ -48,9 +48,9 @@ struct Frec
     ulong	bwrite;
     ulong	opens;
 };
-/*e: struct Frec */
+/*e: struct [[Frec]] */
 
-/*s: struct Rpc */
+/*s: struct [[Rpc]] */
 struct Rpc
 {
     char	*name;
@@ -61,9 +61,9 @@ struct Rpc
     ulong	bin;
     ulong	bout;
 };
-/*e: struct Rpc */
+/*e: struct [[Rpc]] */
 
-/*s: struct Stats */
+/*s: struct [[Stats]] */
 struct Stats
 {
     ulong	totread;
@@ -72,9 +72,9 @@ struct Stats
     ulong	nproto;
     Rpc	rpc[Maxrpc];
 };
-/*e: struct Stats */
+/*e: struct [[Stats]] */
 
-/*s: struct Fsrpc */
+/*s: struct [[Fsrpc]] */
 struct Fsrpc
 {
     int	busy;			/* Work buffer has pending rpc to service */
@@ -84,9 +84,9 @@ struct Fsrpc
     Fcall	work;			/* Plan 9 incoming Fcall */
     uchar	buf[IOHDRSZ+Maxfdata];	/* Data buffer */
 };
-/*e: struct Fsrpc */
+/*e: struct [[Fsrpc]] */
 
-/*s: struct Fid */
+/*s: struct [[Fid]] */
 struct Fid
 {
     int	fid;			/* system fd for i/o */
@@ -100,9 +100,9 @@ struct Fid
     ulong	bwrite;
     vlong	offset;			/* for directories */
 };
-/*e: struct Fid */
+/*e: struct [[Fid]] */
 
-/*s: struct File */
+/*s: struct [[File]] */
 struct File
 {
     char	*name;
@@ -112,25 +112,25 @@ struct File
     File	*child;
     File	*childlist;
 };
-/*e: struct File */
+/*e: struct [[File]] */
 
-/*s: struct Proc */
+/*s: struct [[Proc]] */
 struct Proc
 {
     uintptr	pid;
     int	busy;
     Proc	*next;
 };
-/*e: struct Proc */
+/*e: struct [[Proc]] */
 
-/*s: enum _anon_ (profilers/iostats/statfs.h)2 */
+/*s: enum [[_anon_ (iostats/statfs.h)2]] */
 enum
 {
     Nr_workbufs 	= 40,
     Dsegpad		= 8192,
     Fidchunk	= 1000,
 };
-/*e: enum _anon_ (profilers/iostats/statfs.h)2 */
+/*e: enum [[_anon_ (iostats/statfs.h)2]] */
 
 extern Fsrpc	*Workq;
 extern int  	dbg;
@@ -171,4 +171,4 @@ void	flushaction(void*, char*);
 void	catcher(void*, char*);
 ulong	msec(void);
 void	fidreport(Fid*);
-/*e: profilers/iostats/statfs.h */
+/*e: iostats/statfs.h */

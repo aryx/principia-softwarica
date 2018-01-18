@@ -1,22 +1,22 @@
-/*s: profilers/kprof.c */
+/*s: misc/kprof.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
 
-/*s: constant PCRES */
+/*s: constant [[PCRES]] */
 #define	PCRES	8
-/*e: constant PCRES */
+/*e: constant [[PCRES]] */
 
-/*s: struct COUNTER */
+/*s: struct [[COUNTER]] */
 struct COUNTER
 {
     char 	*name;		/* function name */
     long	time;		/* ticks spent there */
 };
-/*e: struct COUNTER */
+/*e: struct [[COUNTER]] */
 
-/*s: function error (profilers/kprof.c) */
+/*s: function error (misc/kprof.c) */
 static void
 error(int perr, char *s)
 {
@@ -28,9 +28,9 @@ error(int perr, char *s)
         fprint(2, "\n");
     exits(s);
 }
-/*e: function error (profilers/kprof.c) */
+/*e: function error (misc/kprof.c) */
 
-/*s: function compar */
+/*s: function [[compar]] */
 static int
 compar(void *va, void *vb)
 {
@@ -44,8 +44,8 @@ compar(void *va, void *vb)
         return 0;
     return 1;
 }
-/*e: function compar */
-/*s: function main (profilers/kprof.c) */
+/*e: function [[compar]] */
+/*s: function main (misc/kprof.c) */
 void
 main(int argc, char *argv[])
 {
@@ -150,5 +150,5 @@ main(int argc, char *argv[])
                 cp[k].name);
     exits(0);
 }
-/*e: function main (profilers/kprof.c) */
-/*e: profilers/kprof.c */
+/*e: function main (misc/kprof.c) */
+/*e: misc/kprof.c */

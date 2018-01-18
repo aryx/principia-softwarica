@@ -1,4 +1,4 @@
-/*s: profilers/iostats/iostats.c */
+/*s: iostats/iostats.c */
 /*
  * iostats - Gather file system information
  */
@@ -11,7 +11,7 @@
 
 void	runprog(char**);
 
-/*s: global fcalls */
+/*s: global [[fcalls]] */
 void (*fcalls[])(Fsrpc*) =
 {
     [Tversion]	Xversion,
@@ -28,22 +28,22 @@ void (*fcalls[])(Fsrpc*) =
     [Tstat]		Xstat,
     [Twstat]	Xwstat,
 };
-/*e: global fcalls */
+/*e: global [[fcalls]] */
 
-/*s: global p */
+/*s: global [[p]] */
 int p[2];
-/*e: global p */
+/*e: global [[p]] */
 
-/*s: function usage (profilers/iostats/iostats.c) */
+/*s: function usage (iostats/iostats.c) */
 static void
 usage(void)
 {
     fprint(2, "usage: iostats [-d] [-f debugfile] cmds [args ...]\n");
     exits("usage");
 }
-/*e: function usage (profilers/iostats/iostats.c) */
+/*e: function usage (iostats/iostats.c) */
 
-/*s: function main (profilers/iostats/iostats.c) */
+/*s: function main (iostats/iostats.c) */
 void
 main(int argc, char **argv)
 {
@@ -265,9 +265,9 @@ main(int argc, char **argv)
 
     exits(0);
 }
-/*e: function main (profilers/iostats/iostats.c) */
+/*e: function main (iostats/iostats.c) */
 
-/*s: function reply */
+/*s: function [[reply]] */
 void
 reply(Fcall *r, Fcall *t, char *err)
 {
@@ -291,9 +291,9 @@ reply(Fcall *r, Fcall *t, char *err)
     stats->nproto += n;
     stats->rpc[t->type-1].bout += n;
 }
-/*e: function reply */
+/*e: function [[reply]] */
 
-/*s: function getfid */
+/*s: function [[getfid]] */
 Fid *
 getfid(int nr)
 {
@@ -305,9 +305,9 @@ getfid(int nr)
 
     return 0;
 }
-/*e: function getfid */
+/*e: function [[getfid]] */
 
-/*s: function freefid */
+/*s: function [[freefid]] */
 int
 freefid(int nr)
 {
@@ -326,9 +326,9 @@ freefid(int nr)
 
     return 0;	
 }
-/*e: function freefid */
+/*e: function [[freefid]] */
 
-/*s: function newfid */
+/*s: function [[newfid]] */
 Fid *
 newfid(int nr)
 {
@@ -366,9 +366,9 @@ newfid(int nr)
 
     return new;	
 }
-/*e: function newfid */
+/*e: function [[newfid]] */
 
-/*s: function getsbuf */
+/*s: function [[getsbuf]] */
 Fsrpc *
 getsbuf(void)
 {
@@ -394,9 +394,9 @@ getsbuf(void)
 
     return wb;
 }
-/*e: function getsbuf */
+/*e: function [[getsbuf]] */
 
-/*s: function strcatalloc */
+/*s: function [[strcatalloc]] */
 char *
 strcatalloc(char *p, char *n)
 {
@@ -408,9 +408,9 @@ strcatalloc(char *p, char *n)
     strcat(v, n);
     return v;
 }
-/*e: function strcatalloc */
+/*e: function [[strcatalloc]] */
 
-/*s: function file */
+/*s: function [[file]] */
 File *
 file(File *parent, char *name)
 {
@@ -455,9 +455,9 @@ file(File *parent, char *name)
     free(dir);
     return new;
 }
-/*e: function file */
+/*e: function [[file]] */
 
-/*s: function initroot */
+/*s: function [[initroot]] */
 void
 initroot(void)
 {
@@ -480,9 +480,9 @@ initroot(void)
     root->qid.path = ++qid;
     free(dir);
 }
-/*e: function initroot */
+/*e: function [[initroot]] */
 
-/*s: function makepath */
+/*s: function [[makepath]] */
 void
 makepath(char *as, File *p, char *name)
 {
@@ -509,9 +509,9 @@ makepath(char *as, File *p, char *name)
     if(as == s)	/* empty string is root */
         strcpy(as, "/");
 }
-/*e: function makepath */
+/*e: function [[makepath]] */
 
-/*s: function fatal */
+/*s: function [[fatal]] */
 void
 fatal(char *s)
 {
@@ -525,9 +525,9 @@ fatal(char *s)
 
     exits("fatal");
 }
-/*e: function fatal */
+/*e: function [[fatal]] */
 
-/*s: function rdenv */
+/*s: function [[rdenv]] */
 char*
 rdenv(char *v, char **end)
 {
@@ -553,12 +553,12 @@ rdenv(char *v, char **end)
     free(d);
     return buf;
 }
-/*e: function rdenv */
+/*e: function [[rdenv]] */
 
-/*s: global Defaultpath */
+/*s: global [[Defaultpath]] */
 char Defaultpath[] = ".\0/bin";
-/*e: global Defaultpath */
-/*s: function runprog */
+/*e: global [[Defaultpath]] */
+/*s: function [[runprog]] */
 void
 runprog(char *argv[])
 {
@@ -576,9 +576,9 @@ runprog(char *argv[])
     }
     fatal("exec");
 }
-/*e: function runprog */
+/*e: function [[runprog]] */
 
-/*s: function catcher */
+/*s: function [[catcher]] */
 void
 catcher(void *a, char *msg)
 {
@@ -592,9 +592,9 @@ catcher(void *a, char *msg)
 
     noted(NDFLT);
 }
-/*e: function catcher */
+/*e: function [[catcher]] */
 
-/*s: function fidreport */
+/*s: function [[fidreport]] */
 void
 fidreport(Fid *f)
 {
@@ -634,5 +634,5 @@ fidreport(Fid *f)
     }
     fr->next = 0;
 }
-/*e: function fidreport */
-/*e: profilers/iostats/iostats.c */
+/*e: function [[fidreport]] */
+/*e: iostats/iostats.c */

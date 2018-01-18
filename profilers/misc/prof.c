@@ -1,4 +1,4 @@
-/*s: profilers/prof.c */
+/*s: misc/prof.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -8,7 +8,7 @@ typedef struct Data	Data;
 typedef struct Pc	Pc;
 typedef struct Acc	Acc;
 
-/*s: struct Data */
+/*s: struct [[Data]] */
 struct Data
 {
     ushort	down;
@@ -17,17 +17,17 @@ struct Data
     ulong	count;
     ulong	time;
 };
-/*e: struct Data */
+/*e: struct [[Data]] */
 
-/*s: struct Pc */
+/*s: struct [[Pc]] */
 struct Pc
 {
     Pc	*next;
     ulong	pc;
 };
-/*e: struct Pc */
+/*e: struct [[Pc]] */
 
-/*s: struct Acc */
+/*s: struct [[Acc]] */
 struct Acc
 {
     char	*name;
@@ -35,38 +35,38 @@ struct Acc
     ulong	ms;
     ulong	calls;
 };
-/*e: struct Acc */
+/*e: struct [[Acc]] */
 
-/*s: global data */
+/*s: global [[data]] */
 Data*	data;
-/*e: global data */
-/*s: global acc */
+/*e: global [[data]] */
+/*s: global [[acc]] */
 Acc*	acc;
-/*e: global acc */
-/*s: global ms */
+/*e: global [[acc]] */
+/*s: global [[ms]] */
 ulong	ms;
-/*e: global ms */
-/*s: global nsym */
+/*e: global [[ms]] */
+/*s: global [[nsym]] */
 long	nsym;
-/*e: global nsym */
-/*s: global ndata */
+/*e: global [[nsym]] */
+/*s: global [[ndata]] */
 long	ndata;
-/*e: global ndata */
-/*s: global dflag */
+/*e: global [[ndata]] */
+/*s: global [[dflag]] */
 int	dflag;
-/*e: global dflag */
-/*s: global rflag */
+/*e: global [[dflag]] */
+/*s: global [[rflag]] */
 int	rflag;
-/*e: global rflag */
-/*s: global bout */
+/*e: global [[rflag]] */
+/*s: global [[bout]] */
 Biobuf	bout;
-/*e: global bout */
-/*s: global tabstop */
+/*e: global [[bout]] */
+/*s: global [[tabstop]] */
 int	tabstop = 4;
-/*e: global tabstop */
-/*s: global verbose */
+/*e: global [[tabstop]] */
+/*s: global [[verbose]] */
 int	verbose;
-/*e: global verbose */
+/*e: global [[verbose]] */
 
 void	syms(char*);
 void	datas(char*);
@@ -76,7 +76,7 @@ char*	name(ulong);
 void	indent(int);
 char*	defaout(void);
 
-/*s: function main (profilers/prof.c) */
+/*s: function main (misc/prof.c) */
 void
 main(int argc, char *argv[])
 {
@@ -116,9 +116,9 @@ main(int argc, char *argv[])
     }
     exits(0);
 }
-/*e: function main (profilers/prof.c) */
+/*e: function main (misc/prof.c) */
 
-/*s: function swapdata */
+/*s: function [[swapdata]] */
 void
 swapdata(Data *dp)
 {
@@ -128,9 +128,9 @@ swapdata(Data *dp)
     dp->count = beswal(dp->count);
     dp->time = beswal(dp->time);
 }
-/*e: function swapdata */
+/*e: function [[swapdata]] */
 
-/*s: function acmp */
+/*s: function [[acmp]] */
 int
 acmp(void *va, void *vb)
 {
@@ -148,9 +148,9 @@ acmp(void *va, void *vb)
         return -1;
     return 0;
 }
-/*e: function acmp */
+/*e: function [[acmp]] */
 
-/*s: function syms */
+/*s: function [[syms]] */
 void
 syms(char *cout)
 {
@@ -175,9 +175,9 @@ syms(char *cout)
     }
     close(fd);
 }
-/*e: function syms */
+/*e: function [[syms]] */
 
-/*s: function datas */
+/*s: function [[datas]] */
 void
 datas(char *dout)
 {
@@ -209,9 +209,9 @@ datas(char *dout)
     for (i = 0; i < ndata; i++)
         swapdata(data+i);
 }
-/*e: function datas */
+/*e: function [[datas]] */
 
-/*s: function name */
+/*s: function [[name]] */
 char*
 name(ulong pc)
 {
@@ -223,9 +223,9 @@ name(ulong pc)
     snprint(buf, sizeof(buf), "#%lux", pc);
     return buf;
 }
-/*e: function name */
+/*e: function [[name]] */
 
-/*s: function graph */
+/*s: function [[graph]] */
 void
 graph(int ind, ulong i, Pc *pc)
 {
@@ -264,8 +264,8 @@ graph(int ind, ulong i, Pc *pc)
     }
     graph(ind+1, data[i].down, &lpc);
 }
-/*e: function graph */
-/*s: function symind */
+/*e: function [[graph]] */
+/*s: function [[symind]] */
 /*
  *	assume acc is ordered by increasing text address.
  */
@@ -287,9 +287,9 @@ symind(ulong pc)
     }
     return -1;
 }
-/*e: function symind */
+/*e: function [[symind]] */
 
-/*s: function sum */
+/*s: function [[sum]] */
 ulong
 sum(ulong i)
 {
@@ -330,9 +330,9 @@ sum(ulong i)
         return time;
     return time + sum(data[i].right);
 }
-/*e: function sum */
+/*e: function [[sum]] */
 
-/*s: function plot */
+/*s: function [[plot]] */
 void
 plot(void)
 {
@@ -362,9 +362,9 @@ plot(void)
                 acc[nsym].name);
     }
 }
-/*e: function plot */
+/*e: function [[plot]] */
 
-/*s: function indent */
+/*s: function [[indent]] */
 void
 indent(int ind)
 {
@@ -378,9 +378,9 @@ indent(int ind)
     if(j)
         Bwrite(&bout, ".                            ", j);
 }
-/*e: function indent */
+/*e: function [[indent]] */
 
-/*s: global trans */
+/*s: global [[trans]] */
 char*	trans[] =
 {
     "386",		"8.out",
@@ -394,9 +394,9 @@ char*	trans[] =
     "spim",		"0.out",
     0,0
 };
-/*e: global trans */
+/*e: global [[trans]] */
 
-/*s: function defaout */
+/*s: function [[defaout]] */
 char*
 defaout(void)
 {
@@ -410,5 +410,5 @@ defaout(void)
             return trans[i+1];
     return trans[1];
 }
-/*e: function defaout */
-/*e: profilers/prof.c */
+/*e: function [[defaout]] */
+/*e: misc/prof.c */

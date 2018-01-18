@@ -1,14 +1,14 @@
-/*s: profilers/time.c */
+/*s: misc/time.c */
 #include <u.h>
 #include <libc.h>
 
-/*s: global output */
+/*s: global [[output]] */
 char	output[4096];
-/*e: global output */
+/*e: global [[output]] */
 void	add(char*, ...);
 void	notifyf(void*, char*);
 
-/*s: function error */
+/*s: function [[error]] */
 static void
 error(char *s)
 {
@@ -16,9 +16,9 @@ error(char *s)
     fprint(2, "time: %s: %r\n", s);
     exits(s);
 }
-/*e: function error */
+/*e: function [[error]] */
 
-/*s: function main */
+/*s: function [[main]] */
 void
 main(int argc, char *argv[])
 {
@@ -81,9 +81,9 @@ main(int argc, char *argv[])
     fprint(2, "%s\n", output);
     exits(w->msg);
 }
-/*e: function main */
+/*e: function [[main]] */
 
-/*s: function add */
+/*s: function [[add]] */
 void
 add(char *a, ...)
 {
@@ -97,10 +97,10 @@ add(char *a, ...)
     va_end(arg);
     beenhere++;
 }
-/*e: function add */
+/*e: function [[add]] */
 
 
-/*s: function notifyf */
+/*s: function [[notifyf]] */
 void
 notifyf(void *a, char *s)
 {
@@ -109,5 +109,5 @@ notifyf(void *a, char *s)
         noted(NCONT);
     noted(NDFLT);
 }
-/*e: function notifyf */
-/*e: profilers/time.c */
+/*e: function [[notifyf]] */
+/*e: misc/time.c */

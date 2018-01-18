@@ -1,4 +1,4 @@
-/*s: profilers/trace.c */
+/*s: misc/trace.c */
 #include <u.h>
 #include <tos.h>
 #include <libc.h>
@@ -19,43 +19,43 @@
 #pragma	varargck	type	"t"		vlong
 #pragma	varargck	type	"U"		uvlong
 
-/*s: function NS */
+/*s: function [[NS]] */
 #define NS(x)	((vlong)x)
-/*e: function NS */
-/*s: function US */
+/*e: function [[NS]] */
+/*s: function [[US]] */
 #define US(x)	(NS(x) * 1000ULL)
-/*e: function US */
-/*s: function MS */
+/*e: function [[US]] */
+/*s: function [[MS]] */
 #define MS(x)	(US(x) * 1000ULL)
-/*e: function MS */
-/*s: function S */
+/*e: function [[MS]] */
+/*s: function [[S]] */
 #define S(x)	(MS(x) * 1000ULL)
-/*e: function S */
+/*e: function [[S]] */
 
-/*s: function numblocks */
+/*s: function [[numblocks]] */
 #define numblocks(a, b)	(((a) + (b) - 1) / (b))
-/*e: function numblocks */
-/*s: function roundup */
+/*e: function [[numblocks]] */
+/*s: function [[roundup]] */
 #define roundup(a, b)	(numblocks((a), (b)) * (b))
-/*e: function roundup */
+/*e: function [[roundup]] */
 
-/*s: enum _anon_ */
+/*s: enum [[_anon_]] */
 enum {
     OneRound = MS(1)/2LL,
     MilliRound = US(1)/2LL,
 };
-/*e: enum _anon_ */
+/*e: enum [[_anon_]] */
 
 typedef struct TEvent TEvent;
 typedef struct Task Task;
-/*s: struct TEvent */
+/*s: struct [[TEvent]] */
 struct TEvent {
     Traceevent;
     vlong	etime;	/* length of block to draw */
 };
-/*e: struct TEvent */
+/*e: struct [[TEvent]] */
 
-/*s: struct Task */
+/*s: struct [[Task]] */
 struct Task {
     int	pid;
     char	*name;
@@ -69,54 +69,54 @@ struct Task {
     long	runs;
     ulong	tevents[Nevent];
 };
-/*e: struct Task */
+/*e: struct [[Task]] */
 
-/*s: enum _anon_ (profilers/trace.c) */
+/*s: enum [[_anon_ (misc/trace.c)]] */
 enum {
     Nevents = 1024,
     Ncolor = 6,
     K = 1024,
 };
-/*e: enum _anon_ (profilers/trace.c) */
+/*e: enum [[_anon_ (misc/trace.c)]] */
 
 vlong	now, prevts;
 
-/*s: global newwin */
+/*s: global [[newwin]] */
 int	newwin;
-/*e: global newwin */
-/*s: global Width */
+/*e: global [[newwin]] */
+/*s: global [[Width]] */
 int	Width = 1000;		
-/*e: global Width */
-/*s: global Height */
+/*e: global [[Width]] */
+/*s: global [[Height]] */
 int	Height = 100;		// Per task
-/*e: global Height */
-/*s: global topmargin */
+/*e: global [[Height]] */
+/*s: global [[topmargin]] */
 int	topmargin = 8;
-/*e: global topmargin */
-/*s: global bottommargin */
+/*e: global [[topmargin]] */
+/*s: global [[bottommargin]] */
 int	bottommargin = 4;
-/*e: global bottommargin */
-/*s: global lineht */
+/*e: global [[bottommargin]] */
+/*s: global [[lineht]] */
 int	lineht = 12;
-/*e: global lineht */
-/*s: global wctlfd */
+/*e: global [[lineht]] */
+/*s: global [[wctlfd]] */
 int	wctlfd;
-/*e: global wctlfd */
-/*s: global nevents */
+/*e: global [[wctlfd]] */
+/*s: global [[nevents]] */
 int	nevents;
-/*e: global nevents */
-/*s: global eventbuf */
+/*e: global [[nevents]] */
+/*s: global [[eventbuf]] */
 Traceevent *eventbuf;
-/*e: global eventbuf */
-/*s: global event */
+/*e: global [[eventbuf]] */
+/*s: global [[event]] */
 TEvent	*event;
-/*e: global event */
+/*e: global [[event]] */
 
 void drawtrace(void);
 int schedparse(char*, char*, char*);
 int timeconv(Fmt*);
 
-/*s: global schedstatename */
+/*s: global [[schedstatename]] */
 char *schedstatename[] = {
     [SReady] =	"Ready",
     [SRun] =	"Run",
@@ -133,18 +133,18 @@ char *schedstatename[] = {
     [SInts] =	"Ints",
     [SInte] =	"Inte",
 };
-/*e: global schedstatename */
+/*e: global [[schedstatename]] */
 
-/*s: struct scale */
+/*s: struct [[scale]] */
 struct scale {
     vlong	scale;
     vlong	bigtics;
     vlong	littletics;
     int	sleep;
 };
-/*e: struct scale */
+/*e: struct [[scale]] */
 
-/*s: global scales */
+/*s: global [[scales]] */
 struct scale scales[] = {
     {	US(500),	US(100),	US(50),		  0},
     {	US(1000),	US(500),	US(100),	  0},
@@ -167,34 +167,34 @@ struct scale scales[] = {
     {	S(500),		S(100),		S(50),		100},
     {	S(1000),	S(500),		S(100),		100},
 };
-/*e: global scales */
+/*e: global [[scales]] */
 
 int ntasks, triggerproc, paused;
-/*s: global verbose (profilers/trace.c) */
+/*s: global verbose (misc/trace.c) */
 static int verbose;
-/*e: global verbose (profilers/trace.c) */
-/*s: global tasks */
+/*e: global verbose (misc/trace.c) */
+/*s: global [[tasks]] */
 Task *tasks;
-/*e: global tasks */
-/*s: global cols */
+/*e: global [[tasks]] */
+/*s: global [[cols]] */
 static Image *cols[Ncolor][4];
-/*e: global cols */
+/*e: global [[cols]] */
 static Font *mediumfont, *tinyfont;
 Image *grey, *red, *green, *blue, *bg, *fg;
-/*s: global profdev */
+/*s: global [[profdev]] */
 char*profdev = "/proc/trace";
-/*e: global profdev */
+/*e: global [[profdev]] */
 
-/*s: function usage */
+/*s: function [[usage]] */
 static void
 usage(void)
 {
     fprint(2, "Usage: %s [-d profdev] [-w] [-v] [-t triggerproc] [processes]\n", argv0);
     exits(nil);
 }
-/*e: function usage */
+/*e: function [[usage]] */
 
-/*s: function threadmain */
+/*s: function [[threadmain]] */
 void
 threadmain(int argc, char **argv)
 {
@@ -238,9 +238,9 @@ threadmain(int argc, char **argv)
 
     drawtrace();
 }
-/*e: function threadmain */
+/*e: function [[threadmain]] */
 
-/*s: function mkcol */
+/*s: function [[mkcol]] */
 static void
 mkcol(int i, int c0, int c1, int c2)
 {
@@ -249,9 +249,9 @@ mkcol(int i, int c0, int c1, int c2)
     cols[i][2] = allocimage(display, Rect(0,0,1,1), view->chan, 1, c2);
     cols[i][3] = allocimage(display, Rect(0,0,1,1), view->chan, 1, c0);
 }
-/*e: function mkcol */
+/*e: function [[mkcol]] */
 
-/*s: function colinit */
+/*s: function [[colinit]] */
 static void
 colinit(void)
 {
@@ -286,13 +286,13 @@ colinit(void)
     bg = display->white;
     fg = display->black;
 }
-/*e: function colinit */
+/*e: function [[colinit]] */
 
-/*s: function time2x */
+/*s: function [[time2x]] */
 #define time2x(t)	((int)(((t) - oldestts) / ppp))
-/*e: function time2x */
+/*e: function [[time2x]] */
 
-/*s: function redraw */
+/*s: function [[redraw]] */
 static void
 redraw(int scaleno)
 {
@@ -529,9 +529,9 @@ redraw(int scaleno)
     flushimage(display, 1);
     prevts = newestts;
 }
-/*e: function redraw */
+/*e: function [[redraw]] */
 
-/*s: function newtask */
+/*s: function [[newtask]] */
 Task*
 newtask(ulong pid)
 {
@@ -570,9 +570,9 @@ newtask(ulong pid)
         Height = ntasks ? Dy(view->r)/ntasks : Dy(view->r);
     return t;
 }
-/*e: function newtask */
+/*e: function [[newtask]] */
 
-/*s: function doevent */
+/*s: function [[doevent]] */
 void
 doevent(Task *t, Traceevent *ep)
 {
@@ -627,9 +627,9 @@ print("task died %ld %t %s\n", event->pid, event->time, schedstatename[event->et
         prevts = 0;
     }
 }
-/*e: function doevent */
+/*e: function [[doevent]] */
 
-/*s: function drawtrace */
+/*s: function [[drawtrace]] */
 void
 drawtrace(void)
 {
@@ -800,9 +800,9 @@ drawtrace(void)
         sleep(scales[scaleno].sleep);
     }
 }
-/*e: function drawtrace */
+/*e: function [[drawtrace]] */
 
-/*s: function timeconv */
+/*s: function [[timeconv]] */
 int
 timeconv(Fmt *f)
 {
@@ -837,5 +837,5 @@ timeconv(Fmt *f)
         sprint(buf, "%s%dns", sign, (int)t);
     return fmtstrcpy(f, buf);
 }
-/*e: function timeconv */
-/*e: profilers/trace.c */
+/*e: function [[timeconv]] */
+/*e: misc/trace.c */

@@ -1,4 +1,4 @@
-/*s: profilers/stats.c */
+/*s: misc/stats.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -8,16 +8,16 @@
 #include <window.h>
 #include <event.h>
 
-/*s: constant MAXNUM */
+/*s: constant [[MAXNUM]] */
 // a GUI system monitoring tool
 
 #define	MAXNUM	10	/* maximum number of numbers on data line */
-/*e: constant MAXNUM */
+/*e: constant [[MAXNUM]] */
 
 typedef struct Graph	Graph;
 typedef struct Machine	Machine;
 
-/*s: struct Graph */
+/*s: struct [[Graph]] */
 struct Graph
 {
     int		colindex;
@@ -31,9 +31,9 @@ struct Graph
     int		overflow;
     Image		*overtmp;
 };
-/*e: struct Graph */
+/*e: struct [[Graph]] */
 
-/*s: enum _anon_ (profilers/stats.c) */
+/*s: enum [[_anon_ (misc/stats.c)]] */
 enum
 {
     /* old /dev/swap */
@@ -59,9 +59,9 @@ enum
     Out,
     Err0,
 };
-/*e: enum _anon_ (profilers/stats.c) */
+/*e: enum [[_anon_ (misc/stats.c)]] */
 
-/*s: struct Machine */
+/*s: struct [[Machine]] */
 struct Machine
 {
     char		*name;
@@ -92,18 +92,18 @@ struct Machine
     char		*bufp;
     char		*ebufp;
 };
-/*e: struct Machine */
+/*e: struct [[Machine]] */
 
-/*s: enum _anon_ (profilers/stats.c)2 */
+/*s: enum [[_anon_ (misc/stats.c)2]] */
 enum
 {
     Mainproc,
     Mouseproc,
     NPROC,
 };
-/*e: enum _anon_ (profilers/stats.c)2 */
+/*e: enum [[_anon_ (misc/stats.c)2]] */
 
-/*s: enum _anon_ (profilers/stats.c)3 */
+/*s: enum [[_anon_ (misc/stats.c)3]] */
 enum
 {
     Ncolor		= 6,
@@ -115,9 +115,9 @@ enum
     Lablen		= 16,	/* max length of label */
     Lx		= 4,	/* label tick length */
 };
-/*e: enum _anon_ (profilers/stats.c)3 */
+/*e: enum [[_anon_ (misc/stats.c)3]] */
 
-/*s: enum Menu2 */
+/*s: enum [[Menu2]] */
 enum Menu2
 {
     Mbattery,
@@ -140,9 +140,9 @@ enum Menu2
     Mtemp,
     Nmenu2,
 };
-/*e: enum Menu2 */
+/*e: enum [[Menu2]] */
 
-/*s: global menu2str */
+/*s: global [[menu2str]] */
 char	*menu2str[Nmenu2+1] = {
     "add  battery ",
     "add  context ",
@@ -164,7 +164,7 @@ char	*menu2str[Nmenu2+1] = {
     "add  temp    ",
     nil,
 };
-/*e: global menu2str */
+/*e: global [[menu2str]] */
 
 
 void	contextval(Machine*, uvlong*, uvlong*, int),
@@ -186,13 +186,13 @@ void	contextval(Machine*, uvlong*, uvlong*, int),
     signalval(Machine*, uvlong*, uvlong*, int),
     tempval(Machine*, uvlong*, uvlong*, int);
 
-/*s: global menu2 */
+/*s: global [[menu2]] */
 Menu	menu2 = {menu2str, nil};
-/*e: global menu2 */
-/*s: global present */
+/*e: global [[menu2]] */
+/*s: global [[present]] */
 int	present[Nmenu2];
-/*e: global present */
-/*s: global newvaluefn */
+/*e: global [[present]] */
+/*s: global [[newvaluefn]] */
 void	(*newvaluefn[Nmenu2])(Machine*, uvlong*, uvlong*, int init) = {
     batteryval,
     contextval,
@@ -213,59 +213,59 @@ void	(*newvaluefn[Nmenu2])(Machine*, uvlong*, uvlong*, int init) = {
     signalval,
     tempval,
 };
-/*e: global newvaluefn */
+/*e: global [[newvaluefn]] */
 
-/*s: global cols (profilers/stats.c) */
+/*s: global cols (misc/stats.c) */
 Image	*cols[Ncolor][3];
-/*e: global cols (profilers/stats.c) */
-/*s: global graph */
+/*e: global cols (misc/stats.c) */
+/*s: global [[graph]] */
 Graph	*graph;
-/*e: global graph */
-/*s: global mach */
+/*e: global [[graph]] */
+/*s: global [[mach]] */
 Machine	*mach;
-/*e: global mach */
-/*s: global mediumfont */
+/*e: global [[mach]] */
+/*s: global [[mediumfont]] */
 Font	*mediumfont;
-/*e: global mediumfont */
-/*s: global mysysname */
+/*e: global [[mediumfont]] */
+/*s: global [[mysysname]] */
 char	*mysysname;
-/*e: global mysysname */
-/*s: global argchars */
+/*e: global [[mysysname]] */
+/*s: global [[argchars]] */
 char	argchars[] = "8bceEfiImlnpstwz";
-/*e: global argchars */
-/*s: global pids */
+/*e: global [[argchars]] */
+/*s: global [[pids]] */
 int	pids[NPROC];
-/*e: global pids */
-/*s: global parity */
+/*e: global [[pids]] */
+/*s: global [[parity]] */
 int 	parity;	/* toggled to avoid patterns in textured background */
-/*e: global parity */
-/*s: global nmach */
+/*e: global [[parity]] */
+/*s: global [[nmach]] */
 int	nmach;
-/*e: global nmach */
-/*s: global ngraph */
+/*e: global [[nmach]] */
+/*s: global [[ngraph]] */
 int	ngraph;	/* totaly number is ngraph*nmach */
-/*e: global ngraph */
-/*s: global scale */
+/*e: global [[ngraph]] */
+/*s: global [[scale]] */
 double	scale = 1.0;
-/*e: global scale */
-/*s: global logscale */
+/*e: global [[scale]] */
+/*s: global [[logscale]] */
 int	logscale = 0;
-/*e: global logscale */
-/*s: global ylabels */
+/*e: global [[logscale]] */
+/*s: global [[ylabels]] */
 int	ylabels = 0;
-/*e: global ylabels */
-/*s: global oldsystem */
+/*e: global [[ylabels]] */
+/*s: global [[oldsystem]] */
 int	oldsystem = 0;
-/*e: global oldsystem */
-/*s: global sleeptime */
+/*e: global [[oldsystem]] */
+/*s: global [[sleeptime]] */
 int 	sleeptime = 1000;
-/*e: global sleeptime */
+/*e: global [[sleeptime]] */
 
-/*s: global procnames */
+/*s: global [[procnames]] */
 char	*procnames[NPROC] = {"main", "mouse"};
-/*e: global procnames */
+/*e: global [[procnames]] */
 
-/*s: function killall */
+/*s: function [[killall]] */
 void
 killall(char *s)
 {
@@ -277,9 +277,9 @@ killall(char *s)
             postnote(PNPROC, pids[i], "kill");
     exits(s);
 }
-/*e: function killall */
+/*e: function [[killall]] */
 
-/*s: function emalloc */
+/*s: function [[emalloc]] */
 void*
 emalloc(ulong sz)
 {
@@ -292,9 +292,9 @@ emalloc(ulong sz)
     memset(v, 0, sz);
     return v;
 }
-/*e: function emalloc */
+/*e: function [[emalloc]] */
 
-/*s: function erealloc */
+/*s: function [[erealloc]] */
 void*
 erealloc(void *v, ulong sz)
 {
@@ -305,9 +305,9 @@ erealloc(void *v, ulong sz)
     }
     return v;
 }
-/*e: function erealloc */
+/*e: function [[erealloc]] */
 
-/*s: function estrdup */
+/*s: function [[estrdup]] */
 char*
 estrdup(char *s)
 {
@@ -318,9 +318,9 @@ estrdup(char *s)
     }
     return t;
 }
-/*e: function estrdup */
+/*e: function [[estrdup]] */
 
-/*s: function mkcol (profilers/stats.c) */
+/*s: function mkcol (misc/stats.c) */
 void
 mkcol(int i, int c0, int c1, int c2)
 {
@@ -328,9 +328,9 @@ mkcol(int i, int c0, int c1, int c2)
     cols[i][1] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, c1);
     cols[i][2] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, c2);
 }
-/*e: function mkcol (profilers/stats.c) */
+/*e: function mkcol (misc/stats.c) */
 
-/*s: function colinit (profilers/stats.c) */
+/*s: function colinit (misc/stats.c) */
 void
 colinit(void)
 {
@@ -353,9 +353,9 @@ colinit(void)
     cols[5][1] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xCCCCCCFF);
     cols[5][2] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x888888FF);
 }
-/*e: function colinit (profilers/stats.c) */
+/*e: function colinit (misc/stats.c) */
 
-/*s: function loadbuf */
+/*s: function [[loadbuf]] */
 int
 loadbuf(Machine *m, int *fd)
 {
@@ -376,9 +376,9 @@ loadbuf(Machine *m, int *fd)
     m->buf[n] = 0;
     return 1;
 }
-/*e: function loadbuf */
+/*e: function [[loadbuf]] */
 
-/*s: function label */
+/*s: function [[label]] */
 void
 label(Point p, int dy, char *text)
 {
@@ -402,17 +402,17 @@ label(Point p, int dy, char *text)
         p.y += mediumfont->height-Ysqueeze;
     }
 }
-/*e: function label */
+/*e: function [[label]] */
 
-/*s: function paritypt */
+/*s: function [[paritypt]] */
 Point
 paritypt(int x)
 {
     return Pt(x+parity, 0);
 }
-/*e: function paritypt */
+/*e: function [[paritypt]] */
 
-/*s: function datapoint */
+/*s: function [[datapoint]] */
 Point
 datapoint(Graph *g, int x, uvlong v, uvlong vmax)
 {
@@ -445,9 +445,9 @@ datapoint(Graph *g, int x, uvlong v, uvlong vmax)
         p.y = g->r.max.y-Dot;
     return p;
 }
-/*e: function datapoint */
+/*e: function [[datapoint]] */
 
-/*s: function drawdatum */
+/*s: function [[drawdatum]] */
 void
 drawdatum(Graph *g, int x, uvlong prev, uvlong v, uvlong vmax)
 {
@@ -468,9 +468,9 @@ drawdatum(Graph *g, int x, uvlong prev, uvlong v, uvlong vmax)
     }
 
 }
-/*e: function drawdatum */
+/*e: function [[drawdatum]] */
 
-/*s: function redraw (profilers/stats.c) */
+/*s: function redraw (misc/stats.c) */
 void
 redraw(Graph *g, uvlong vmax)
 {
@@ -483,9 +483,9 @@ redraw(Graph *g, uvlong vmax)
     drawdatum(g, g->r.min.x, g->data[i], g->data[i], vmax);
     g->overflow = 0;
 }
-/*e: function redraw (profilers/stats.c) */
+/*e: function redraw (misc/stats.c) */
 
-/*s: function update1 */
+/*s: function [[update1]] */
 void
 update1(Graph *g, uvlong v, uvlong vmax)
 {
@@ -510,9 +510,9 @@ update1(Graph *g, uvlong v, uvlong vmax)
         string(view, g->overtmp->r.min, display->black, ZP, mediumfont, buf);
     }
 }
-/*e: function update1 */
+/*e: function [[update1]] */
 
-/*s: function readnums */
+/*s: function [[readnums]] */
 /* read one line of text from buffer and process integers */
 int
 readnums(Machine *m, int n, uvlong *a, int spanlines)
@@ -540,9 +540,9 @@ readnums(Machine *m, int n, uvlong *a, int spanlines)
     m->bufp = ep;
     return i == n;
 }
-/*e: function readnums */
+/*e: function [[readnums]] */
 
-/*s: function filter */
+/*s: function [[filter]] */
 /* Network on fd1, mount driver on fd0 */
 static int
 filter(int fd)
@@ -572,9 +572,9 @@ filter(int fd)
     }
     return p[1];
 }
-/*e: function filter */
+/*e: function [[filter]] */
 
-/*s: function connect9fs */
+/*s: function [[connect9fs]] */
 /*
  * 9fs
  */
@@ -596,9 +596,9 @@ connect9fs(char *addr)
 //		fd = filter(fd);
     return fd;
 }
-/*e: function connect9fs */
+/*e: function [[connect9fs]] */
 
-/*s: function old9p */
+/*s: function [[old9p]] */
 int
 old9p(int fd)
 {
@@ -636,10 +636,10 @@ old9p(int fd)
     }
     return p[1];
 }
-/*e: function old9p */
+/*e: function [[old9p]] */
 
 
-/*s: function connectexportfs */
+/*s: function [[connectexportfs]] */
 /*
  * exportfs
  */
@@ -683,9 +683,9 @@ connectexportfs(char *addr)
 
     return fd;
 }
-/*e: function connectexportfs */
+/*e: function [[connectexportfs]] */
 
-/*s: function readswap */
+/*s: function [[readswap]] */
 int
 readswap(Machine *m, uvlong *a)
 {
@@ -701,9 +701,9 @@ readswap(Machine *m, uvlong *a)
     }
     return readnums(m, nelem(m->devswap), a, 0);
 }
-/*e: function readswap */
+/*e: function [[readswap]] */
 
-/*s: function shortname */
+/*s: function [[shortname]] */
 char*
 shortname(char *s)
 {
@@ -715,9 +715,9 @@ shortname(char *s)
         *e = 0;
     return p;
 }
-/*e: function shortname */
+/*e: function [[shortname]] */
 
-/*s: function ilog10 */
+/*s: function [[ilog10]] */
 int
 ilog10(uvlong j)
 {
@@ -727,9 +727,9 @@ ilog10(uvlong j)
         j /= 10;
     return i;
 }
-/*e: function ilog10 */
+/*e: function [[ilog10]] */
 
-/*s: function initmach */
+/*s: function [[initmach]] */
 int
 initmach(Machine *m, char *name)
 {
@@ -816,13 +816,13 @@ initmach(Machine *m, char *name)
              m->temp[n] = a[0];
     return 1;
 }
-/*e: function initmach */
+/*e: function [[initmach]] */
 
-/*s: global catchalarm */
+/*s: global [[catchalarm]] */
 jmp_buf catchalarm;
-/*e: global catchalarm */
+/*e: global [[catchalarm]] */
 
-/*s: function alarmed */
+/*s: function [[alarmed]] */
 void
 alarmed(void *a, char *s)
 {
@@ -830,60 +830,60 @@ alarmed(void *a, char *s)
         notejmp(a, catchalarm, 1);
     noted(NDFLT);
 }
-/*e: function alarmed */
+/*e: function [[alarmed]] */
 
-/*s: function needswap */
+/*s: function [[needswap]] */
 int
 needswap(int init)
 {
     return init | present[Mmem] | present[Mswap];
 }
-/*e: function needswap */
+/*e: function [[needswap]] */
 
 
-/*s: function needstat */
+/*s: function [[needstat]] */
 int
 needstat(int init)
 {
     return init | present[Mcontext]  | present[Mfault] | present[Mintr] | present[Mload] | present[Midle] |
         present[Minintr] | present[Msyscall] | present[Mtlbmiss] | present[Mtlbpurge];
 }
-/*e: function needstat */
+/*e: function [[needstat]] */
 
 
-/*s: function needether */
+/*s: function [[needether]] */
 int
 needether(int init)
 {
     return init | present[Mether] | present[Metherin] | present[Metherout] | present[Methererr];
 }
-/*e: function needether */
+/*e: function [[needether]] */
 
-/*s: function needbattery */
+/*s: function [[needbattery]] */
 int
 needbattery(int init)
 {
     return init | present[Mbattery];
 }
-/*e: function needbattery */
+/*e: function [[needbattery]] */
 
-/*s: function needsignal */
+/*s: function [[needsignal]] */
 int
 needsignal(int init)
 {
     return init | present[Msignal];
 }
-/*e: function needsignal */
+/*e: function [[needsignal]] */
 
-/*s: function needtemp */
+/*s: function [[needtemp]] */
 int
 needtemp(int init)
 {
     return init | present[Mtemp];
 }
-/*e: function needtemp */
+/*e: function [[needtemp]] */
 
-/*s: function readmach */
+/*s: function [[readmach]] */
 void
 readmach(Machine *m, int init)
 {
@@ -939,27 +939,27 @@ readmach(Machine *m, int init)
         notify(nil);
     }
 }
-/*e: function readmach */
+/*e: function [[readmach]] */
 
-/*s: function memval */
+/*s: function [[memval]] */
 void
 memval(Machine *m, uvlong *v, uvlong *vmax, int)
 {
     *v = m->devswap[Mem];
     *vmax = m->devswap[Maxmem];
 }
-/*e: function memval */
+/*e: function [[memval]] */
 
-/*s: function swapval */
+/*s: function [[swapval]] */
 void
 swapval(Machine *m, uvlong *v, uvlong *vmax, int)
 {
     *v = m->devswap[Swap];
     *vmax = m->devswap[Maxswap];
 }
-/*e: function swapval */
+/*e: function [[swapval]] */
 
-/*s: function contextval */
+/*s: function [[contextval]] */
 void
 contextval(Machine *m, uvlong *v, uvlong *vmax, int init)
 {
@@ -968,9 +968,9 @@ contextval(Machine *m, uvlong *v, uvlong *vmax, int init)
     if(init)
         *vmax = sleeptime;
 }
-/*e: function contextval */
+/*e: function [[contextval]] */
 
-/*s: function intrval */
+/*s: function [[intrval]] */
 /*
  * bug: need to factor in HZ
  */
@@ -982,9 +982,9 @@ intrval(Machine *m, uvlong *v, uvlong *vmax, int init)
     if(init)
         *vmax = sleeptime*10;
 }
-/*e: function intrval */
+/*e: function [[intrval]] */
 
-/*s: function syscallval */
+/*s: function [[syscallval]] */
 void
 syscallval(Machine *m, uvlong *v, uvlong *vmax, int init)
 {
@@ -993,9 +993,9 @@ syscallval(Machine *m, uvlong *v, uvlong *vmax, int init)
     if(init)
         *vmax = sleeptime;
 }
-/*e: function syscallval */
+/*e: function [[syscallval]] */
 
-/*s: function faultval */
+/*s: function [[faultval]] */
 void
 faultval(Machine *m, uvlong *v, uvlong *vmax, int init)
 {
@@ -1004,9 +1004,9 @@ faultval(Machine *m, uvlong *v, uvlong *vmax, int init)
     if(init)
         *vmax = sleeptime;
 }
-/*e: function faultval */
+/*e: function [[faultval]] */
 
-/*s: function tlbmissval */
+/*s: function [[tlbmissval]] */
 void
 tlbmissval(Machine *m, uvlong *v, uvlong *vmax, int init)
 {
@@ -1015,9 +1015,9 @@ tlbmissval(Machine *m, uvlong *v, uvlong *vmax, int init)
     if(init)
         *vmax = (sleeptime/1000)*10;
 }
-/*e: function tlbmissval */
+/*e: function [[tlbmissval]] */
 
-/*s: function tlbpurgeval */
+/*s: function [[tlbpurgeval]] */
 void
 tlbpurgeval(Machine *m, uvlong *v, uvlong *vmax, int init)
 {
@@ -1026,9 +1026,9 @@ tlbpurgeval(Machine *m, uvlong *v, uvlong *vmax, int init)
     if(init)
         *vmax = (sleeptime/1000)*10;
 }
-/*e: function tlbpurgeval */
+/*e: function [[tlbpurgeval]] */
 
-/*s: function loadval */
+/*s: function [[loadval]] */
 void
 loadval(Machine *m, uvlong *v, uvlong *vmax, int init)
 {
@@ -1037,27 +1037,27 @@ loadval(Machine *m, uvlong *v, uvlong *vmax, int init)
     if(init)
         *vmax = 1000;
 }
-/*e: function loadval */
+/*e: function [[loadval]] */
 
-/*s: function idleval */
+/*s: function [[idleval]] */
 void
 idleval(Machine *m, uvlong *v, uvlong *vmax, int)
 {
     *v = m->devsysstat[Idle]/m->nproc;
     *vmax = 100;
 }
-/*e: function idleval */
+/*e: function [[idleval]] */
 
-/*s: function inintrval */
+/*s: function [[inintrval]] */
 void
 inintrval(Machine *m, uvlong *v, uvlong *vmax, int)
 {
     *v = m->devsysstat[InIntr]/m->nproc;
     *vmax = 100;
 }
-/*e: function inintrval */
+/*e: function [[inintrval]] */
 
-/*s: function etherval */
+/*s: function [[etherval]] */
 void
 etherval(Machine *m, uvlong *v, uvlong *vmax, int init)
 {
@@ -1066,9 +1066,9 @@ etherval(Machine *m, uvlong *v, uvlong *vmax, int init)
     if(init)
         *vmax = sleeptime;
 }
-/*e: function etherval */
+/*e: function [[etherval]] */
 
-/*s: function etherinval */
+/*s: function [[etherinval]] */
 void
 etherinval(Machine *m, uvlong *v, uvlong *vmax, int init)
 {
@@ -1077,9 +1077,9 @@ etherinval(Machine *m, uvlong *v, uvlong *vmax, int init)
     if(init)
         *vmax = sleeptime;
 }
-/*e: function etherinval */
+/*e: function [[etherinval]] */
 
-/*s: function etheroutval */
+/*s: function [[etheroutval]] */
 void
 etheroutval(Machine *m, uvlong *v, uvlong *vmax, int init)
 {
@@ -1088,9 +1088,9 @@ etheroutval(Machine *m, uvlong *v, uvlong *vmax, int init)
     if(init)
         *vmax = sleeptime;
 }
-/*e: function etheroutval */
+/*e: function [[etheroutval]] */
 
-/*s: function ethererrval */
+/*s: function [[ethererrval]] */
 void
 ethererrval(Machine *m, uvlong *v, uvlong *vmax, int init)
 {
@@ -1103,9 +1103,9 @@ ethererrval(Machine *m, uvlong *v, uvlong *vmax, int init)
     if(init)
         *vmax = (sleeptime/1000)*10;
 }
-/*e: function ethererrval */
+/*e: function [[ethererrval]] */
 
-/*s: function batteryval */
+/*s: function [[batteryval]] */
 void
 batteryval(Machine *m, uvlong *v, uvlong *vmax, int)
 {
@@ -1115,9 +1115,9 @@ batteryval(Machine *m, uvlong *v, uvlong *vmax, int)
     else
         *vmax = 100;
 }
-/*e: function batteryval */
+/*e: function [[batteryval]] */
 
-/*s: function signalval */
+/*s: function [[signalval]] */
 void
 signalval(Machine *m, uvlong *v, uvlong *vmax, int)
 {
@@ -1134,9 +1134,9 @@ signalval(Machine *m, uvlong *v, uvlong *vmax, int)
     }
     *v = 20*(l+95);
 }
-/*e: function signalval */
+/*e: function [[signalval]] */
 
-/*s: function tempval */
+/*s: function [[tempval]] */
 void
 tempval(Machine *m, uvlong *v, uvlong *vmax, int)
 {
@@ -1149,18 +1149,18 @@ tempval(Machine *m, uvlong *v, uvlong *vmax, int)
     else
         *v = (l-20)*27;
 }
-/*e: function tempval */
+/*e: function [[tempval]] */
 
-/*s: function usage (profilers/stats.c) */
+/*s: function usage (misc/stats.c) */
 void
 usage(void)
 {
     fprint(2, "usage: stats [-O] [-S scale] [-LY] [-%s] [machine...]\n", argchars);
     exits("usage");
 }
-/*e: function usage (profilers/stats.c) */
+/*e: function usage (misc/stats.c) */
 
-/*s: function addgraph */
+/*s: function [[addgraph]] */
 void
 addgraph(int n)
 {
@@ -1192,9 +1192,9 @@ addgraph(int n)
     present[n] = 1;
     nadd++;
 }
-/*e: function addgraph */
+/*e: function [[addgraph]] */
 
-/*s: function dropgraph */
+/*s: function [[dropgraph]] */
 void
 dropgraph(int which)
 {
@@ -1228,9 +1228,9 @@ dropgraph(int which)
     ngraph--;
     present[which] = 0;
 }
-/*e: function dropgraph */
+/*e: function [[dropgraph]] */
 
-/*s: function addmachine */
+/*s: function [[addmachine]] */
 int
 addmachine(char *name)
 {
@@ -1248,9 +1248,9 @@ addmachine(char *name)
     } else
         return 0;
 }
-/*e: function addmachine */
+/*e: function [[addmachine]] */
 
-/*s: function labelstrs */
+/*s: function [[labelstrs]] */
 void
 labelstrs(Graph *g, char strs[Nlab][Lablen], int *np)
 {
@@ -1268,9 +1268,9 @@ labelstrs(Graph *g, char strs[Nlab][Lablen], int *np)
         *np = 3;
     }
 }
-/*e: function labelstrs */
+/*e: function [[labelstrs]] */
 
-/*s: function labelwidth */
+/*s: function [[labelwidth]] */
 int
 labelwidth(void)
 {
@@ -1289,9 +1289,9 @@ labelwidth(void)
     }
     return maxw;
 }
-/*e: function labelwidth */
+/*e: function [[labelwidth]] */
 
-/*s: function resize */
+/*s: function [[resize]] */
 void
 resize(void)
 {
@@ -1397,9 +1397,9 @@ resize(void)
 
     flushimage(display, 1);
 }
-/*e: function resize */
+/*e: function [[resize]] */
 
-/*s: function eresized */
+/*s: function [[eresized]] */
 void
 eresized(int new)
 {
@@ -1411,9 +1411,9 @@ eresized(int new)
     resize();
     unlockdisplay(display);
 }
-/*e: function eresized */
+/*e: function [[eresized]] */
 
-/*s: function mouseproc */
+/*s: function [[mouseproc]] */
 void
 mouseproc(void)
 {
@@ -1441,9 +1441,9 @@ mouseproc(void)
         }
     }
 }
-/*e: function mouseproc */
+/*e: function [[mouseproc]] */
 
-/*s: function startproc */
+/*s: function [[startproc]] */
 void
 startproc(void (*f)(void), int index)
 {
@@ -1463,9 +1463,9 @@ startproc(void (*f)(void), int index)
     if(index >= 0)
         pids[index] = pid;
 }
-/*e: function startproc */
+/*e: function [[startproc]] */
 
-/*s: function main (profilers/stats.c) */
+/*s: function main (misc/stats.c) */
 void
 main(int argc, char *argv[])
 {
@@ -1618,5 +1618,5 @@ main(int argc, char *argv[])
         sleep(sleeptime);
     }
 }
-/*e: function main (profilers/stats.c) */
-/*e: profilers/stats.c */
+/*e: function main (misc/stats.c) */
+/*e: misc/stats.c */

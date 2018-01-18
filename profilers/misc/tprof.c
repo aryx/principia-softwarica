@@ -1,22 +1,22 @@
-/*s: profilers/tprof.c */
+/*s: misc/tprof.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
 
-/*s: constant PCRES (profilers/tprof.c) */
+/*s: constant PCRES (misc/tprof.c) */
 #define	PCRES	8
-/*e: constant PCRES (profilers/tprof.c) */
+/*e: constant PCRES (misc/tprof.c) */
 
-/*s: struct COUNTER (profilers/tprof.c) */
+/*s: struct COUNTER (misc/tprof.c) */
 struct COUNTER
 {
     char 	*name;		/* function name */
     long	time;		/* ticks spent there */
 };
-/*e: struct COUNTER (profilers/tprof.c) */
+/*e: struct COUNTER (misc/tprof.c) */
 
-/*s: function error (profilers/tprof.c) */
+/*s: function error (misc/tprof.c) */
 static void
 error(int perr, char *s)
 {
@@ -28,9 +28,9 @@ error(int perr, char *s)
         fprint(2, "\n");
     exits(s);
 }
-/*e: function error (profilers/tprof.c) */
+/*e: function error (misc/tprof.c) */
 
-/*s: function compar (profilers/tprof.c) */
+/*s: function compar (misc/tprof.c) */
 int
 compar(void *va, void *vb)
 {
@@ -44,8 +44,8 @@ compar(void *va, void *vb)
         return 0;
     return 1;
 }
-/*e: function compar (profilers/tprof.c) */
-/*s: function main (profilers/tprof.c) */
+/*e: function compar (misc/tprof.c) */
+/*s: function main (misc/tprof.c) */
 void
 main(int argc, char *argv[])
 {
@@ -155,5 +155,5 @@ main(int argc, char *argv[])
                 cp[k].name);
     exits(0);
 }
-/*e: function main (profilers/tprof.c) */
-/*e: profilers/tprof.c */
+/*e: function main (misc/tprof.c) */
+/*e: misc/tprof.c */

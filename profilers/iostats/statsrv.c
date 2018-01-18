@@ -1,4 +1,4 @@
-/*s: profilers/iostats/statsrv.c */
+/*s: iostats/statsrv.c */
 #include <u.h>
 #include <libc.h>
 #include <auth.h>
@@ -6,29 +6,29 @@
 
 #include "statfs.h"
 
-/*s: global Ebadfid */
+/*s: global [[Ebadfid]] */
 char Ebadfid[]	= "Bad fid";
-/*e: global Ebadfid */
-/*s: global Enotdir */
+/*e: global [[Ebadfid]] */
+/*s: global [[Enotdir]] */
 char Enotdir[]	="Not a directory";
-/*e: global Enotdir */
-/*s: global Edupfid */
+/*e: global [[Enotdir]] */
+/*s: global [[Edupfid]] */
 char Edupfid[]	= "Fid already in use";
-/*e: global Edupfid */
-/*s: global Eopen */
+/*e: global [[Edupfid]] */
+/*s: global [[Eopen]] */
 char Eopen[]	= "Fid already opened";
-/*e: global Eopen */
-/*s: global Exmnt */
+/*e: global [[Eopen]] */
+/*s: global [[Exmnt]] */
 char Exmnt[]	= "Cannot .. past mount point";
-/*e: global Exmnt */
-/*s: global Enoauth */
+/*e: global [[Exmnt]] */
+/*s: global [[Enoauth]] */
 char Enoauth[]	= "iostats: Authentication failed";
-/*e: global Enoauth */
-/*s: global Ebadver */
+/*e: global [[Enoauth]] */
+/*s: global [[Ebadver]] */
 char Ebadver[]	= "Unrecognized 9P version";
-/*e: global Ebadver */
+/*e: global [[Ebadver]] */
 
-/*s: function okfile */
+/*s: function [[okfile]] */
 int
 okfile(char *s, int mode)
 {
@@ -46,9 +46,9 @@ okfile(char *s, int mode)
         return 0;
     return 1;
 }
-/*e: function okfile */
+/*e: function [[okfile]] */
 
-/*s: function update */
+/*s: function [[update]] */
 void
 update(Rpc *rpc, vlong t)
 {
@@ -65,9 +65,9 @@ update(Rpc *rpc, vlong t)
     if(t > rpc->hi)
         rpc->hi = t;
 }
-/*e: function update */
+/*e: function [[update]] */
 
-/*s: function Xversion */
+/*s: function [[Xversion]] */
 void
 Xversion(Fsrpc *r)
 {
@@ -93,9 +93,9 @@ Xversion(Fsrpc *r)
 
     update(&stats->rpc[Tversion], t);
 }
-/*e: function Xversion */
+/*e: function [[Xversion]] */
 
-/*s: function Xauth */
+/*s: function [[Xauth]] */
 void
 Xauth(Fsrpc *r)
 {
@@ -109,9 +109,9 @@ Xauth(Fsrpc *r)
 
     update(&stats->rpc[Tauth], t);
 }
-/*e: function Xauth */
+/*e: function [[Xauth]] */
 
-/*s: function Xflush */
+/*s: function [[Xflush]] */
 void
 Xflush(Fsrpc *r)
 {
@@ -138,9 +138,9 @@ Xflush(Fsrpc *r)
     DEBUG(2, "\tflush reply\n");
     r->busy = 0;
 }
-/*e: function Xflush */
+/*e: function [[Xflush]] */
 
-/*s: function Xattach */
+/*s: function [[Xattach]] */
 void
 Xattach(Fsrpc *r)
 {
@@ -164,9 +164,9 @@ Xattach(Fsrpc *r)
 
     update(&stats->rpc[Tattach], t);
 }
-/*e: function Xattach */
+/*e: function [[Xattach]] */
 
-/*s: function Xwalk */
+/*s: function [[Xwalk]] */
 void
 Xwalk(Fsrpc *r)
 {
@@ -239,9 +239,9 @@ Xwalk(Fsrpc *r)
 
     update(&stats->rpc[Twalk], t);
 }
-/*e: function Xwalk */
+/*e: function [[Xwalk]] */
 
-/*s: function Xclunk */
+/*s: function [[Xclunk]] */
 void
 Xclunk(Fsrpc *r)
 {
@@ -273,9 +273,9 @@ Xclunk(Fsrpc *r)
 
     freefid(fid);
 }
-/*e: function Xclunk */
+/*e: function [[Xclunk]] */
 
-/*s: function Xstat */
+/*s: function [[Xstat]] */
 void
 Xstat(Fsrpc *r)
 {
@@ -320,9 +320,9 @@ Xstat(Fsrpc *r)
 
     update(&stats->rpc[Tstat], t);
 }
-/*e: function Xstat */
+/*e: function [[Xstat]] */
 
-/*s: function Xcreate */
+/*s: function [[Xcreate]] */
 void
 Xcreate(Fsrpc *r)
 {
@@ -368,10 +368,10 @@ Xcreate(Fsrpc *r)
 
     update(&stats->rpc[Tcreate], t);
 }
-/*e: function Xcreate */
+/*e: function [[Xcreate]] */
 
 
-/*s: function Xremove */
+/*s: function [[Xremove]] */
 void
 Xremove(Fsrpc *r)
 {
@@ -409,9 +409,9 @@ Xremove(Fsrpc *r)
 
     update(&stats->rpc[Tremove], t);
 }
-/*e: function Xremove */
+/*e: function [[Xremove]] */
 
-/*s: function Xwstat */
+/*s: function [[Xwstat]] */
 void
 Xwstat(Fsrpc *r)
 {
@@ -445,9 +445,9 @@ Xwstat(Fsrpc *r)
     r->busy = 0;
     update(&stats->rpc[Twstat], t);
 }
-/*e: function Xwstat */
+/*e: function [[Xwstat]] */
 
-/*s: function slave */
+/*s: function [[slave]] */
 void
 slave(Fsrpc *f)
 {
@@ -490,9 +490,9 @@ slave(Fsrpc *f)
         rendezvous((void*)p->pid, p);
     }
 }
-/*e: function slave */
+/*e: function [[slave]] */
 
-/*s: function blockingslave */
+/*s: function [[blockingslave]] */
 void
 blockingslave(void)
 {
@@ -538,9 +538,9 @@ blockingslave(void)
         m->busy = 0;
     }
 }
-/*e: function blockingslave */
+/*e: function [[blockingslave]] */
 
-/*s: function slaveopen */
+/*s: function [[slaveopen]] */
 void
 slaveopen(Fsrpc *p)
 {
@@ -593,9 +593,9 @@ slaveopen(Fsrpc *p)
 
     update(&stats->rpc[Topen], t);
 }
-/*e: function slaveopen */
+/*e: function [[slaveopen]] */
 
-/*s: function slaveread */
+/*s: function [[slaveread]] */
 void
 slaveread(Fsrpc *p)
 {
@@ -657,9 +657,9 @@ slaveread(Fsrpc *p)
 
     update(&stats->rpc[Tread], t);
 }
-/*e: function slaveread */
+/*e: function [[slaveread]] */
 
-/*s: function slavewrite */
+/*s: function [[slavewrite]] */
 void
 slavewrite(Fsrpc *p)
 {
@@ -701,18 +701,18 @@ slavewrite(Fsrpc *p)
 
     update(&stats->rpc[Twrite], t);
 }
-/*e: function slavewrite */
+/*e: function [[slavewrite]] */
 
-/*s: function reopen */
+/*s: function [[reopen]] */
 void
 reopen(Fid *f)
 {
     USED(f);
     fatal("reopen");
 }
-/*e: function reopen */
+/*e: function [[reopen]] */
 
-/*s: function flushaction */
+/*s: function [[flushaction]] */
 void
 flushaction(void *a, char *cause)
 {
@@ -722,5 +722,5 @@ flushaction(void *a, char *cause)
 
     noted(NCONT);
 }
-/*e: function flushaction */
-/*e: profilers/iostats/statsrv.c */
+/*e: function [[flushaction]] */
+/*e: iostats/statsrv.c */
