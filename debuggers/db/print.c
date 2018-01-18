@@ -13,15 +13,15 @@ extern	int	maxpos;
 
 /* general printing routines ($) */
 
-/*s: global Ipath */
+/*s: global [[Ipath]] */
 char	*Ipath = INCDIR;
-/*e: global Ipath */
-/*s: global tracetype */
+/*e: global [[Ipath]] */
+/*s: global [[tracetype]] */
 static	int	tracetype;
-/*e: global tracetype */
+/*e: global [[tracetype]] */
 static void	printfp(Map*, int);
 
-/*s: function ptrace */
+/*s: function [[ptrace]] */
 /*
  *	callback on stack trace
  */
@@ -44,9 +44,9 @@ ptrace(Map *map, uvlong pc, uvlong sp, Symbol *sym)
     if(tracetype == 'C')
         printlocals(sym, sp);
 }
-/*e: function ptrace */
+/*e: function [[ptrace]] */
 
-/*s: function printtrace */
+/*s: function [[printtrace]] */
 void
 printtrace(int modif)
 {
@@ -196,9 +196,9 @@ printtrace(int modif)
     }
 
 }
-/*e: function printtrace */
+/*e: function [[printtrace]] */
 
-/*s: function getfname */
+/*s: function [[getfname]] */
 char *
 getfname(void)
 {
@@ -219,9 +219,9 @@ getfname(void)
     reread();
     return (fname);
 }
-/*e: function getfname */
+/*e: function [[getfname]] */
 
-/*s: function printfp */
+/*s: function [[printfp]] */
 static void
 printfp(Map *map, int modif)
 {
@@ -247,9 +247,9 @@ printfp(Map *map, int modif)
         i++;
     }
 }
-/*e: function printfp */
+/*e: function [[printfp]] */
 
-/*s: function redirin */
+/*s: function [[redirin]] */
 void
 redirin(int stack, char *file)
 {
@@ -270,9 +270,9 @@ redirin(int stack, char *file)
         }
     }
 }
-/*e: function redirin */
+/*e: function [[redirin]] */
 
-/*s: function printmap */
+/*s: function [[printmap]] */
 void
 printmap(char *s, Map *map)
 {
@@ -296,9 +296,9 @@ printmap(char *s, Map *map)
                 map->seg[i].f);
     }
 }
-/*e: function printmap */
+/*e: function [[printmap]] */
 
-/*s: function printsym */
+/*s: function [[printsym]] */
 /*
  *	dump the raw symbol table
  */
@@ -332,13 +332,13 @@ printsym(void)
         }
     }
 }
-/*e: function printsym */
+/*e: function [[printsym]] */
 
-/*s: constant STRINGSZ */
+/*s: constant [[STRINGSZ]] */
 #define	STRINGSZ	128
-/*e: constant STRINGSZ */
+/*e: constant [[STRINGSZ]] */
 
-/*s: function printsource */
+/*s: function [[printsource]] */
 /*
  *	print the value of dot as file:line
  */
@@ -350,9 +350,9 @@ printsource(ADDR dot)
     if (fileline(str, STRINGSZ, dot))
         dprint("%s", str);
 }
-/*e: function printsource */
+/*e: function [[printsource]] */
 
-/*s: function printpc */
+/*s: function [[printpc]] */
 void
 printpc(void)
 {
@@ -369,9 +369,9 @@ printpc(void)
         dprint("%16t%s\n", buf);
     }
 }
-/*e: function printpc */
+/*e: function [[printpc]] */
 
-/*s: function printlocals */
+/*s: function [[printlocals]] */
 void
 printlocals(Symbol *fn, ADDR fp)
 {
@@ -389,9 +389,9 @@ printlocals(Symbol *fn, ADDR fp)
             dprint("%8t%s.%s/%10t?\n", fn->name, s.name);
     }
 }
-/*e: function printlocals */
+/*e: function [[printlocals]] */
 
-/*s: function printparams */
+/*s: function [[printparams]] */
 void
 printparams(Symbol *fn, ADDR fp)
 {
@@ -411,5 +411,5 @@ printparams(Symbol *fn, ADDR fp)
             dprint("%s=%#lux", s.name, w);
     }
 }
-/*e: function printparams */
+/*e: function [[printparams]] */
 /*e: db/print.c */

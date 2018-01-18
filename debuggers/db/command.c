@@ -8,28 +8,28 @@
 #include "defs.h"
 #include "fns.h"
 
-/*s: global BADEQ */
+/*s: global [[BADEQ]] */
 char	BADEQ[] = "unexpected `='";
-/*e: global BADEQ */
+/*e: global [[BADEQ]] */
 
-/*s: global executing */
+/*s: global [[executing]] */
 bool	executing;
-/*e: global executing */
+/*e: global [[executing]] */
 extern	Rune	*lp;
 
-/*s: global eqformat */
+/*s: global [[eqformat]] */
 char	eqformat[ARB] = "z";
-/*e: global eqformat */
-/*s: global stformat */
+/*e: global [[eqformat]] */
+/*s: global [[stformat]] */
 char	stformat[ARB] = "zMi";
-/*e: global stformat */
+/*e: global [[stformat]] */
 
 
-/*s: global loopcnt */
+/*s: global [[loopcnt]] */
 WORD loopcnt;
-/*e: global loopcnt */
+/*e: global [[loopcnt]] */
 
-/*s: function command */
+/*s: function [[command]] */
 /* command decoding */
 int
 command(char *buf, int defcom)
@@ -153,9 +153,9 @@ command(char *buf, int defcom)
     return 1;
     /*e: [[command()]] return (db) */
 }
-/*e: function command */
+/*e: function [[command]] */
 
-/*s: function acommand */
+/*s: function [[acommand]] */
 /*
  * [/?][wml]
  */
@@ -213,9 +213,9 @@ acommand(int pc)
         scanform(cntval, !eqcom, fmt, map, eqcom);
     }
 }
-/*e: function acommand */
+/*e: function [[acommand]] */
 
-/*s: function cmdsrc */
+/*s: function [[cmdsrc]] */
 void
 cmdsrc(int c, Map *map)
 {
@@ -250,13 +250,13 @@ cmdsrc(int c, Map *map)
     symoff(buf, 512, dot, CANY);
     dprint(buf);
 }
-/*e: function cmdsrc */
+/*e: function [[cmdsrc]] */
 
-/*s: global badwrite */
+/*s: global [[badwrite]] */
 static char badwrite[] = "can't write process memory or text image";
-/*e: global badwrite */
+/*e: global [[badwrite]] */
 
-/*s: function cmdwrite */
+/*s: function [[cmdwrite]] */
 void
 cmdwrite(int wcom, Map *map)
 {
@@ -289,9 +289,9 @@ cmdwrite(int wcom, Map *map)
     } while (expr(0));
     dot=savdot;
 }
-/*e: function cmdwrite */
+/*e: function [[cmdwrite]] */
 
-/*s: function regname */
+/*s: function [[regname]] */
 /*
  * collect a register name; return register offset
  * this is not what i'd call a good division of labour
@@ -315,9 +315,9 @@ regname(int regnam)
     reread();
     return (buf);
 }
-/*e: function regname */
+/*e: function [[regname]] */
 
-/*s: function shell */
+/*s: function [[shell]] */
 /*
  * shell escape
  */
@@ -349,5 +349,5 @@ shell(void)
         reread();
     }
 }
-/*e: function shell */
+/*e: function [[shell]] */
 /*e: db/command.c */

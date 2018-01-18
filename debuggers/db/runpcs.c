@@ -8,11 +8,11 @@
 #include "defs.h"
 #include "fns.h"
 
-/*s: global bpin */
+/*s: global [[bpin]] */
 bool bpin;
-/*e: global bpin */
+/*e: global [[bpin]] */
 
-/*s: function runpcs */
+/*s: function [[runpcs]] */
 /* service routines for sub process control */
 int
 runpcs(int runmode, bool keepnote)
@@ -92,9 +92,9 @@ runpcs(int runmode, bool keepnote)
     }
     return rc;
 }
-/*e: function runpcs */
+/*e: function [[runpcs]] */
 
-/*s: function endpcs */
+/*s: function [[endpcs]] */
 /*
  * finish the process off;
  * kill if still running
@@ -123,9 +123,9 @@ endpcs(void)
     bpin = FALSE;
     ending = false;
 }
-/*e: function endpcs */
+/*e: function [[endpcs]] */
 
-/*s: function setup */
+/*s: function [[setup]] */
 /*
  * start up the program to be debugged in a child
  */
@@ -138,9 +138,9 @@ setup(void)
     pcsactive = true;
     bpin = FALSE;
 }
-/*e: function setup */
+/*e: function [[setup]] */
 
-/*s: function execbkpt */
+/*s: function [[execbkpt]] */
 /*
  * skip over a breakpoint:
  * remove breakpoints, then single step
@@ -152,9 +152,9 @@ execbkpt(BKPT *bk, int keepnote)
     runstep(bk->loc, keepnote);
     bk->flag = BKPTSET;
 }
-/*e: function execbkpt */
+/*e: function [[execbkpt]] */
 
-/*s: function scanbkpt */
+/*s: function [[scanbkpt]] */
 /*
  * find the breakpoint at adr, if any
  */
@@ -168,9 +168,9 @@ scanbkpt(ADDR adr)
             break;
     return bk;
 }
-/*e: function scanbkpt */
+/*e: function [[scanbkpt]] */
 
-/*s: function delbp */
+/*s: function [[delbp]] */
 /*
  * remove all breakpoints from the process' address space
  */
@@ -187,9 +187,9 @@ delbp(void)
             bkput(bk, false);
     bpin = FALSE;
 }
-/*e: function delbp */
+/*e: function [[delbp]] */
 
-/*s: function setbp */
+/*s: function [[setbp]] */
 /*
  * install all the breakpoints
  */
@@ -206,5 +206,5 @@ setbp(void)
             bkput(bk, true);
     bpin = TRUE;
 }
-/*e: function setbp */
+/*e: function [[setbp]] */
 /*e: db/runpcs.c */

@@ -1,4 +1,4 @@
-/*s: linkers/libmach/map.c */
+/*s: libmach/map.c */
 /*
  * file map routines
  */
@@ -7,7 +7,7 @@
 #include <bio.h>
 #include <mach.h>
 
-/*s: function newmap */
+/*s: function [[newmap]] */
 Map *
 newmap(Map *map, int n)
 {
@@ -26,9 +26,9 @@ newmap(Map *map, int n)
     map->nsegs = n;
     return map;
 }
-/*e: function newmap */
+/*e: function [[newmap]] */
 
-/*s: function setmap */
+/*s: function [[setmap]] */
 int
 setmap(Map *map, int fd, uvlong b, uvlong e, vlong f, char *name)
 {
@@ -49,9 +49,9 @@ setmap(Map *map, int fd, uvlong b, uvlong e, vlong f, char *name)
     map->seg[i].fd = fd;
     return 1;
 }
-/*e: function setmap */
+/*e: function [[setmap]] */
 
-/*s: function stacktop */
+/*s: function [[stacktop]] */
 static uvlong
 stacktop(int pid)
 {
@@ -82,9 +82,9 @@ stacktop(int pid)
         return 0;
     return strtoull(cp, 0, 16);
 }
-/*e: function stacktop */
+/*e: function [[stacktop]] */
 
-/*s: function attachproc */
+/*s: function [[attachproc]] */
 Map*
 attachproc(int pid, int kflag, int corefd, Fhdr *fp)
 {
@@ -136,9 +136,9 @@ attachproc(int pid, int kflag, int corefd, Fhdr *fp)
     setmap(map, corefd, fp->dataddr, n, fp->dataddr, "data");
     return map;
 }
-/*e: function attachproc */
+/*e: function [[attachproc]] */
     
-/*s: function findseg */
+/*s: function [[findseg]] */
 int
 findseg(Map *map, char *name)
 {
@@ -151,18 +151,18 @@ findseg(Map *map, char *name)
             return i;
     return -1;
 }
-/*e: function findseg */
+/*e: function [[findseg]] */
 
-/*s: function unusemap */
+/*s: function [[unusemap]] */
 void
 unusemap(Map *map, int i)
 {
     if (map != 0 && 0 <= i && i < map->nsegs)
         map->seg[i].inuse = 0;
 }
-/*e: function unusemap */
+/*e: function [[unusemap]] */
 
-/*s: function loadmap */
+/*s: function [[loadmap]] */
 Map*
 loadmap(Map *map, int fd, Fhdr *fp)
 {
@@ -184,5 +184,5 @@ loadmap(Map *map, int fd, Fhdr *fp)
     map->seg[1].name = "data";
     return map;
 }
-/*e: function loadmap */
-/*e: linkers/libmach/map.c */
+/*e: function [[loadmap]] */
+/*e: libmach/map.c */

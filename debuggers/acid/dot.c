@@ -6,7 +6,7 @@
 #include <mach.h>
 #include "acid.h"
 
-/*s: function srch */
+/*s: function [[srch]] */
 Type*
 srch(Type *t, char *s)
 {
@@ -22,9 +22,9 @@ srch(Type *t, char *s)
     }
     return f;
 }
-/*e: function srch */
+/*e: function [[srch]] */
 
-/*s: function odot */
+/*s: function [[odot]] */
 void
 odot(Node *n, Node *r)
 {
@@ -63,16 +63,16 @@ odot(Node *n, Node *r)
         indir(cormap, addr, t->fmt, r);
 
 }
-/*e: function odot */
+/*e: function [[odot]] */
 
 /*s: global tail (acid/dot.c) */
 static Type **tail;
 /*e: global tail (acid/dot.c) */
-/*s: global base */
+/*s: global [[base]] */
 static Lsym *base;
-/*e: global base */
+/*e: global [[base]] */
 
-/*s: function buildtype */
+/*s: function [[buildtype]] */
 void
 buildtype(Node *m, int d)
 {
@@ -112,9 +112,9 @@ buildtype(Node *m, int d)
         tail = &t->next;
     }			
 }
-/*e: function buildtype */
+/*e: function [[buildtype]] */
 
-/*s: function defcomplex */
+/*s: function [[defcomplex]] */
 void
 defcomplex(Node *tn, Node *m)
 {
@@ -122,9 +122,9 @@ defcomplex(Node *tn, Node *m)
     base = tn->sym;
     buildtype(m, 0);
 }
-/*e: function defcomplex */
+/*e: function [[defcomplex]] */
 
-/*s: function decl */
+/*s: function [[decl]] */
 void
 decl(Node *n)
 {
@@ -164,5 +164,5 @@ decl(Node *n)
     f->next = l->sym->local;
     l->sym->local = f;
 }
-/*e: function decl */
+/*e: function [[decl]] */
 /*e: acid/dot.c */

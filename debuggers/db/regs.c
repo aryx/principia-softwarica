@@ -6,7 +6,7 @@
 #include "defs.h"
 #include "fns.h"
 
-/*s: function rname */
+/*s: function [[rname]] */
 /*
  * translate a name to a magic register offset
  */
@@ -20,9 +20,9 @@ rname(char *name)
             return rp;
     return 0;
 }
-/*e: function rname */
+/*e: function [[rname]] */
 
-/*s: function getreg */
+/*s: function [[getreg]] */
 static uvlong
 getreg(Map *map, Reglist *rp)
 {
@@ -59,9 +59,9 @@ getreg(Map *map, Reglist *rp)
     }
     return v;
 }
-/*e: function getreg */
+/*e: function [[getreg]] */
 
-/*s: function rget */
+/*s: function [[rget]] */
 uvlong
 rget(Map *map, char *name)
 {
@@ -72,9 +72,9 @@ rget(Map *map, char *name)
         error("invalid register name");
     return getreg(map, rp);
 }
-/*e: function rget */
+/*e: function [[rget]] */
 
-/*s: function rput */
+/*s: function [[rput]] */
 void
 rput(Map *map, char *name, vlong v)
 {
@@ -105,8 +105,8 @@ rput(Map *map, char *name, vlong v)
     if (ret < 0)
         error("can't write register");
 }
-/*e: function rput */
-/*s: function printregs */
+/*e: function [[rput]] */
+/*s: function [[printregs]] */
 /*
  * print the registers
  */
@@ -139,5 +139,5 @@ printregs(int c)
     dprint ("%s\n", machdata->excep(cormap, rget));
     printpc();
 }
-/*e: function printregs */
+/*e: function [[printregs]] */
 /*e: db/regs.c */

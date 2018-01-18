@@ -8,11 +8,11 @@
 #include "defs.h"
 #include "fns.h"
 
-/*s: global NOPCS */
+/*s: global [[NOPCS]] */
 char	NOPCS[] = "no process";
-/*e: global NOPCS */
+/*e: global [[NOPCS]] */
 
-/*s: function subpcs */
+/*s: function [[subpcs]] */
 /* sub process control */
 
 void
@@ -195,5 +195,5 @@ Return:
     printpc();
     notes();
 }
-/*e: function subpcs */
+/*e: function [[subpcs]] */
 /*e: db/pcs.c */

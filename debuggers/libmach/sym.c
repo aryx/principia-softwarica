@@ -1,37 +1,37 @@
-/*s: linkers/libmach/sym.c */
+/*s: libmach/sym.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
 
-/*s: constant HUGEINT */
+/*s: constant [[HUGEINT]] */
 #define	HUGEINT	0x7fffffff
-/*e: constant HUGEINT */
-/*s: constant NNAME */
+/*e: constant [[HUGEINT]] */
+/*s: constant [[NNAME]] */
 #define	NNAME	20		/* a relic of the past */
-/*e: constant NNAME */
+/*e: constant [[NNAME]] */
 
 typedef	struct txtsym Txtsym;
 typedef	struct file File;
 typedef	struct hist Hist;
 
-/*s: struct txtsym */
+/*s: struct [[txtsym]] */
 struct txtsym {				/* Text Symbol table */
     int 	n;			/* number of local vars */
     Sym	**locals;		/* array of ptrs to autos */
     Sym	*sym;			/* function symbol entry */
 };
-/*e: struct txtsym */
+/*e: struct [[txtsym]] */
 
-/*s: struct hist */
+/*s: struct [[hist]] */
 struct hist {				/* Stack of include files & #line directives */
     char	*name;			/* Assumes names Null terminated in file */
     long	line;			/* line # where it was included */
     long	offset;			/* line # of #line directive */
 };
-/*e: struct hist */
+/*e: struct [[hist]] */
 
-/*s: struct file */
+/*s: struct [[file]] */
 struct file {				/* Per input file header to history stack */
     uvlong	addr;			/* address of first text sym */
     union {
@@ -41,75 +41,75 @@ struct file {				/* Per input file header to history stack */
     int	n;			/* size of history stack */
     Hist	*hist;			/* history stack */
 };
-/*e: struct file */
+/*e: struct [[file]] */
 
-/*s: global debug (linkers/libmach/sym.c) */
+/*s: global debug (libmach/sym.c) */
 static	int	debug = 0;
-/*e: global debug (linkers/libmach/sym.c) */
+/*e: global debug (libmach/sym.c) */
 
-/*s: global autos */
+/*s: global [[autos]] */
 static	Sym	**autos;		/* Base of auto variables */
-/*e: global autos */
-/*s: global files */
+/*e: global [[autos]] */
+/*s: global [[files]] */
 static	File	*files;			/* Base of file arena */
-/*e: global files */
-/*s: global fmax */
+/*e: global [[files]] */
+/*s: global [[fmax]] */
 static	int	fmax;			/* largest file path index */
-/*e: global fmax */
-/*s: global fnames (linkers/libmach/sym.c) */
+/*e: global [[fmax]] */
+/*s: global fnames (libmach/sym.c) */
 static	Sym	**fnames;		/* file names path component table */
-/*e: global fnames (linkers/libmach/sym.c) */
-/*s: global globals */
+/*e: global fnames (libmach/sym.c) */
+/*s: global [[globals]] */
 static	Sym	**globals;		/* globals by addr table */
-/*e: global globals */
-/*s: global hist */
+/*e: global [[globals]] */
+/*s: global [[hist]] */
 static	Hist	*hist;			/* base of history stack */
-/*e: global hist */
-/*s: global isbuilt */
+/*e: global [[hist]] */
+/*s: global [[isbuilt]] */
 static	int	isbuilt;		/* internal table init flag */
-/*e: global isbuilt */
-/*s: global nauto */
+/*e: global [[isbuilt]] */
+/*s: global [[nauto]] */
 static	long	nauto;			/* number of automatics */
-/*e: global nauto */
-/*s: global nfiles */
+/*e: global [[nauto]] */
+/*s: global [[nfiles]] */
 static	long	nfiles;			/* number of files */
-/*e: global nfiles */
-/*s: global nglob */
+/*e: global [[nfiles]] */
+/*s: global [[nglob]] */
 static	long	nglob;			/* number of globals */
-/*e: global nglob */
-/*s: global nhist */
+/*e: global [[nglob]] */
+/*s: global [[nhist]] */
 static	long	nhist;			/* number of history stack entries */
-/*e: global nhist */
-/*s: global nsym (linkers/libmach/sym.c) */
+/*e: global [[nhist]] */
+/*s: global nsym (libmach/sym.c) */
 static	long	nsym;			/* number of symbols */
-/*e: global nsym (linkers/libmach/sym.c) */
-/*s: global ntxt */
+/*e: global nsym (libmach/sym.c) */
+/*s: global [[ntxt]] */
 static	int	ntxt;			/* number of text symbols */
-/*e: global ntxt */
-/*s: global pcline */
+/*e: global [[ntxt]] */
+/*s: global [[pcline]] */
 static	uchar	*pcline;		/* start of pc-line state table */
-/*e: global pcline */
-/*s: global pclineend */
+/*e: global [[pcline]] */
+/*s: global [[pclineend]] */
 static	uchar 	*pclineend;		/* end of pc-line table */
-/*e: global pclineend */
-/*s: global spoff */
+/*e: global [[pclineend]] */
+/*s: global [[spoff]] */
 static	uchar	*spoff;			/* start of pc-sp state table */
-/*e: global spoff */
-/*s: global spoffend */
+/*e: global [[spoff]] */
+/*s: global [[spoffend]] */
 static	uchar	*spoffend;		/* end of pc-sp offset table */
-/*e: global spoffend */
-/*s: global symbols */
+/*e: global [[spoffend]] */
+/*s: global [[symbols]] */
 static	Sym	*symbols;		/* symbol table */
-/*e: global symbols */
-/*s: global txt */
+/*e: global [[symbols]] */
+/*s: global [[txt]] */
 static	Txtsym	*txt;			/* Base of text symbol table */
-/*e: global txt */
-/*s: global txtstart */
+/*e: global [[txt]] */
+/*s: global [[txtstart]] */
 static	uvlong	txtstart;		/* start of text segment */
-/*e: global txtstart */
-/*s: global txtend */
+/*e: global [[txtstart]] */
+/*s: global [[txtend]] */
 static	uvlong	txtend;			/* end of text segment */
-/*e: global txtend */
+/*e: global [[txtend]] */
 
 static void	cleansyms(void);
 static long	decodename(Biobuf*, Sym*);
@@ -128,7 +128,7 @@ static int	symerrmsg(int, char*);
 static int	txtcomp(void*, void*);
 static int	filecomp(void*, void*);
 
-/*s: function syminit */
+/*s: function [[syminit]] */
 /*
  *	initialize the symbol tables
  */
@@ -249,18 +249,18 @@ syminit(int fd, Fhdr *fp)
     }
     return nsym;
 }
-/*e: function syminit */
+/*e: function [[syminit]] */
 
-/*s: function symerrmsg */
+/*s: function [[symerrmsg]] */
 static int
 symerrmsg(int n, char *table)
 {
     werrstr("can't read %d bytes of %s table", n, table);
     return -1;
 }
-/*e: function symerrmsg */
+/*e: function [[symerrmsg]] */
 
-/*s: function decodename */
+/*s: function [[decodename]] */
 static long
 decodename(Biobuf *bp, Sym *p)
 {
@@ -325,9 +325,9 @@ decodename(Biobuf *bp, Sym *p)
     }
     return n;
 }
-/*e: function decodename */
+/*e: function [[decodename]] */
 
-/*s: function cleansyms */
+/*s: function [[cleansyms]] */
 /*
  *	free any previously loaded symbol tables
  */
@@ -371,9 +371,9 @@ cleansyms(void)
         free(pcline);
     pcline = 0;
 }
-/*e: function cleansyms */
+/*e: function [[cleansyms]] */
 
-/*s: function textseg */
+/*s: function [[textseg]] */
 /*
  *	delimit the text segment
  */
@@ -383,9 +383,9 @@ textseg(uvlong base, Fhdr *fp)
     txtstart = base;
     txtend = base+fp->txtsz;
 }
-/*e: function textseg */
+/*e: function [[textseg]] */
 
-/*s: function symbase */
+/*s: function [[symbase]] */
 /*
  *	symbase: return base and size of raw symbol table
  *		(special hack for high access rate operations)
@@ -396,9 +396,9 @@ symbase(long *n)
     *n = nsym;
     return symbols;
 }
-/*e: function symbase */
+/*e: function [[symbase]] */
 
-/*s: function getsym */
+/*s: function [[getsym]] */
 /*
  *	Get the ith symbol table entry
  */
@@ -409,9 +409,9 @@ getsym(int index)
         return &symbols[index];
     return 0;
 }
-/*e: function getsym */
+/*e: function [[getsym]] */
 
-/*s: function buildtbls */
+/*s: function [[buildtbls]] */
 /*
  *	initialize internal symbol tables
  */
@@ -567,9 +567,9 @@ buildtbls(void)
     }
     return 1;
 }
-/*e: function buildtbls */
+/*e: function [[buildtbls]] */
 
-/*s: function lookup (linkers/libmach/sym.c) */
+/*s: function lookup (libmach/sym.c) */
 /*
  * find symbol function.var by name.
  *	fn != 0 && var != 0	=> look for fn in text, var in data
@@ -600,9 +600,9 @@ lookup(char *fn, char *var, Symbol *s)
     return findglobal(var, s);		/* case 3: var not found */
 
 }
-/*e: function lookup (linkers/libmach/sym.c) */
+/*e: function lookup (libmach/sym.c) */
 
-/*s: function findtext */
+/*s: function [[findtext]] */
 /*
  * find a function by name
  */
@@ -621,8 +621,8 @@ findtext(char *name, Symbol *s)
     }
     return 0;
 }
-/*e: function findtext */
-/*s: function findglobal */
+/*e: function [[findtext]] */
+/*s: function [[findglobal]] */
 /*
  * find global variable by name
  */
@@ -640,9 +640,9 @@ findglobal(char *name, Symbol *s)
     }
     return 0;
 }
-/*e: function findglobal */
+/*e: function [[findglobal]] */
 
-/*s: function findlocal */
+/*s: function [[findlocal]] */
 /*
  *	find the local variable by name within a given function
  */
@@ -655,9 +655,9 @@ findlocal(Symbol *s1, char *name, Symbol *s2)
         return 0;
     return findlocvar(s1, name, s2);
 }
-/*e: function findlocal */
+/*e: function [[findlocal]] */
 
-/*s: function findlocvar */
+/*s: function [[findlocvar]] */
 /*
  *	find the local variable by name within a given function
  *		(internal function - does no parameter validation)
@@ -680,9 +680,9 @@ findlocvar(Symbol *s1, char *name, Symbol *s2)
     }
     return 0;
 }
-/*e: function findlocvar */
+/*e: function [[findlocvar]] */
 
-/*s: function textsym */
+/*s: function [[textsym]] */
 /*
  *	Get ith text symbol
  */
@@ -699,9 +699,9 @@ textsym(Symbol *s, int index)
     s->index = index;
     return 1;
 }
-/*e: function textsym */
+/*e: function [[textsym]] */
 
-/*s: function filesym */
+/*s: function [[filesym]] */
 /*	
  *	Get ith file name
  */
@@ -719,9 +719,9 @@ filesym(int index, char *buf, int n)
         return 0;
     return fileelem(fnames, (uchar*)hp->name, buf, n);
 }
-/*e: function filesym */
+/*e: function [[filesym]] */
 
-/*s: function getauto */
+/*s: function [[getauto]] */
 /*
  *	Lookup name of local variable located at an offset into the frame.
  *	The type selects either a parameter or automatic.
@@ -757,9 +757,9 @@ getauto(Symbol *s1, int off, int type, Symbol *s2)
     }
     return 0;
 }
-/*e: function getauto */
+/*e: function [[getauto]] */
 
-/*s: function srchtext */
+/*s: function [[srchtext]] */
 /*
  * Find text symbol containing addr; binary search assumes text array is sorted by addr
  */
@@ -786,9 +786,9 @@ srchtext(uvlong addr)
     }
     return -1;
 }
-/*e: function srchtext */
+/*e: function [[srchtext]] */
 
-/*s: function srchdata */
+/*s: function [[srchdata]] */
 /*
  * Find data symbol containing addr; binary search assumes data array is sorted by addr
  */
@@ -815,9 +815,9 @@ srchdata(uvlong addr)
     }
     return -1;
 }
-/*e: function srchdata */
+/*e: function [[srchdata]] */
 
-/*s: function findsym */
+/*s: function [[findsym]] */
 /*
  * Find symbol containing val in specified search space
  * There is a special case when a value falls beyond the end
@@ -854,9 +854,9 @@ findsym(uvlong val, int type, Symbol *s)
     }
     return 0;
 }
-/*e: function findsym */
+/*e: function [[findsym]] */
 
-/*s: function fnbound */
+/*s: function [[fnbound]] */
 /*
  *	Find the start and end address of the function containing addr
  */
@@ -876,9 +876,9 @@ fnbound(uvlong addr, uvlong *bounds)
     }
     return 0;
 }
-/*e: function fnbound */
+/*e: function [[fnbound]] */
 
-/*s: function localsym */
+/*s: function [[localsym]] */
 /*
  * get the ith local symbol for a function
  * the input symbol table is reverse ordered, so we reverse
@@ -903,9 +903,9 @@ localsym(Symbol *s, int index)
     }
     return 0;
 }
-/*e: function localsym */
+/*e: function [[localsym]] */
 
-/*s: function globalsym */
+/*s: function [[globalsym]] */
 /*
  * get the ith global symbol
  */
@@ -924,9 +924,9 @@ globalsym(Symbol *s, int index)
     }
     return 0;
 }
-/*e: function globalsym */
+/*e: function [[globalsym]] */
 
-/*s: function file2pc */
+/*s: function [[file2pc]] */
 /*
  *	find the pc given a file name and line offset into it.
  */
@@ -972,9 +972,9 @@ file2pc(char *file, long line)
     }
     return pc;
 }
-/*e: function file2pc */
+/*e: function [[file2pc]] */
 
-/*s: function pathcomp */
+/*s: function [[pathcomp]] */
 /*
  *	search for a path component index
  */
@@ -988,9 +988,9 @@ pathcomp(char *s, int n)
             return i;
     return -1;
 }
-/*e: function pathcomp */
+/*e: function [[pathcomp]] */
 
-/*s: function encfname */
+/*s: function [[encfname]] */
 /*
  *	Encode a char file name as a sequence of short indices
  *	into the file name dictionary.
@@ -1028,9 +1028,9 @@ encfname(char *file)
     dest[i] = 0;
     return dest;
 }
-/*e: function encfname */
+/*e: function [[encfname]] */
 
-/*s: function hline */
+/*s: function [[hline]] */
 /*
  *	Search a history stack for a matching file name accumulating
  *	the size of intervening files in the stack.
@@ -1080,9 +1080,9 @@ hline(File *fp, short *name, long *line)
     *line = ln+offset;
     return 1;
 }
-/*e: function hline */
+/*e: function [[hline]] */
 
-/*s: function hcomp */
+/*s: function [[hcomp]] */
 /*
  *	compare two encoded file names
  */
@@ -1107,9 +1107,9 @@ hcomp(Hist *hp, short *sp)
     }
     return *s == 0;
 }
-/*e: function hcomp */
+/*e: function [[hcomp]] */
 
-/*s: function fileline */
+/*s: function [[fileline]] */
 /*
  *	Convert a pc to a "file:line {file:line}" string.
  */
@@ -1140,9 +1140,9 @@ fileline(char *str, int n, uvlong dot)
     }
     return 0;
 }
-/*e: function fileline */
+/*e: function [[fileline]] */
 
-/*s: function fline */
+/*s: function [[fline]] */
 /*
  *	Convert a line number within a composite file to relative line
  *	number in a source file.  A composite file is the source
@@ -1212,9 +1212,9 @@ fline(char *str, int n, long line, Hist *base, Hist **ret)
  ********************/
     return 0;
 }
-/*e: function fline */
+/*e: function [[fline]] */
 
-/*s: function fileelem */
+/*s: function [[fileelem]] */
 /*
  *	convert an encoded file name to a string.
  */
@@ -1245,9 +1245,9 @@ fileelem(Sym **fp, uchar *cp, char *buf, int n)
     }
     return i;
 }
-/*e: function fileelem */
+/*e: function [[fileelem]] */
 
-/*s: function symcomp */
+/*s: function [[symcomp]] */
 /*
  *	compare the values of two symbol table entries.
  */
@@ -1261,9 +1261,9 @@ symcomp(void *a, void *b)
         return i;
     return strcmp((*(Sym**)a)->name, (*(Sym**)b)->name);
 }
-/*e: function symcomp */
+/*e: function [[symcomp]] */
 
-/*s: function txtcomp */
+/*s: function [[txtcomp]] */
 /*
  *	compare the values of the symbols referenced by two text table entries
  */
@@ -1272,9 +1272,9 @@ txtcomp(void *a, void *b)
 {
     return ((Txtsym*)a)->sym->value - ((Txtsym*)b)->sym->value;
 }
-/*e: function txtcomp */
+/*e: function [[txtcomp]] */
 
-/*s: function filecomp */
+/*s: function [[filecomp]] */
 /*
  *	compare the values of the symbols referenced by two file table entries
  */
@@ -1283,9 +1283,9 @@ filecomp(void *a, void *b)
 {
     return ((File*)a)->addr - ((File*)b)->addr;
 }
-/*e: function filecomp */
+/*e: function [[filecomp]] */
 
-/*s: function fillsym */
+/*s: function [[fillsym]] */
 /*
  *	fill an interface Symbol structure from a symbol table entry
  */
@@ -1324,9 +1324,9 @@ fillsym(Sym *sp, Symbol *s)
     }
     s->handle = 0;
 }
-/*e: function fillsym */
+/*e: function [[fillsym]] */
 
-/*s: function pc2sp */
+/*s: function [[pc2sp]] */
 /*
  *	find the stack frame, given the pc
  */
@@ -1361,9 +1361,9 @@ pc2sp(uvlong pc)
     }
     return ~0;
 }
-/*e: function pc2sp */
+/*e: function [[pc2sp]] */
 
-/*s: function pc2line */
+/*s: function [[pc2line]] */
 /*
  *	find the source file line number for a given value of the pc
  */
@@ -1399,9 +1399,9 @@ pc2line(uvlong pc)
     }
     return ~0;
 }
-/*e: function pc2line */
+/*e: function [[pc2line]] */
 
-/*s: function line2addr */
+/*s: function [[line2addr]] */
 /*
  *	find the pc associated with a line number
  *	basepc and endpc are text addresses bounding the search.
@@ -1458,9 +1458,9 @@ line2addr(long line, uvlong basepc, uvlong endpc)
         return pc;
     return ~0;
 }
-/*e: function line2addr */
+/*e: function [[line2addr]] */
 
-/*s: function printhist */
+/*s: function [[printhist]] */
 /*
  *	Print a history stack (debug). if count is 0, prints the whole stack
  */
@@ -1487,10 +1487,10 @@ printhist(char *msg, Hist *hp, int count)
         hp++;
     }
 }
-/*e: function printhist */
+/*e: function [[printhist]] */
 
 #ifdef DEBUG
-/*s: function dumphist */
+/*s: function [[dumphist]] */
 /*
  *	print the history stack for a file. (debug only)
  *	if (name == 0) => print all history stacks.
@@ -1513,6 +1513,6 @@ dumphist(char *name)
     if(fname)
         free(fname);
 }
-/*e: function dumphist */
+/*e: function [[dumphist]] */
 #endif
-/*e: linkers/libmach/sym.c */
+/*e: libmach/sym.c */

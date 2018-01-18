@@ -7,7 +7,7 @@
 #include "acid.h"
 #include "y.tab.h"
 
-/*s: global keywds */
+/*s: global [[keywds]] */
 struct keywd
 {
     char	*name;
@@ -37,9 +37,9 @@ keywds[] =
     "builtin",	Tbuiltin,
     0,		0
 };
-/*e: global keywds */
+/*e: global [[keywds]] */
 
-/*s: global cmap */
+/*s: global [[cmap]] */
 char cmap[256] =
 {
     ['0']	'\0'+1,
@@ -53,9 +53,9 @@ char cmap[256] =
     ['\\']	'\\'+1,
     ['"']	'"'+1,
 };
-/*e: global cmap */
+/*e: global [[cmap]] */
 
-/*s: function kinit */
+/*s: function [[kinit]] */
 void
 kinit(void)
 {
@@ -64,10 +64,10 @@ kinit(void)
     for(i = 0; keywds[i].name; i++) 
         enter(keywds[i].name, keywds[i].terminal);
 }
-/*e: function kinit */
+/*e: function [[kinit]] */
 
 typedef struct IOstack IOstack;
-/*s: struct IOstack */
+/*s: struct [[IOstack]] */
 struct IOstack
 {
     char	*name;
@@ -77,12 +77,12 @@ struct IOstack
     Biobuf	*fin;
     IOstack	*prev;
 };
-/*e: struct IOstack */
-/*s: global lexio */
+/*e: struct [[IOstack]] */
+/*s: global [[lexio]] */
 IOstack *lexio;
-/*e: global lexio */
+/*e: global [[lexio]] */
 
-/*s: function pushfile */
+/*s: function [[pushfile]] */
 void
 pushfile(char *file)
 {
@@ -112,9 +112,9 @@ pushfile(char *file)
     io->prev = lexio;
     lexio = io;
 }
-/*e: function pushfile */
+/*e: function [[pushfile]] */
 
-/*s: function pushstr */
+/*s: function [[pushstr]] */
 void
 pushstr(Node *s)
 {
@@ -138,18 +138,18 @@ pushstr(Node *s)
     io->prev = lexio;
     lexio = io;
 }
-/*e: function pushstr */
+/*e: function [[pushstr]] */
 
-/*s: function restartio */
+/*s: function [[restartio]] */
 void
 restartio(void)
 {
     Bflush(lexio->fin);
     Binit(lexio->fin, 0, OREAD);
 }
-/*e: function restartio */
+/*e: function [[restartio]] */
 
-/*s: function popio */
+/*s: function [[popio]] */
 int
 popio(void)
 {
@@ -175,9 +175,9 @@ popio(void)
     free(s);
     return 1;
 }
-/*e: function popio */
+/*e: function [[popio]] */
 
-/*s: function Lfmt */
+/*s: function [[Lfmt]] */
 int
 Lfmt(Fmt *f)
 {
@@ -199,9 +199,9 @@ Lfmt(Fmt *f)
     fmtstrcpy(f, buf);
     return 0;
 }
-/*e: function Lfmt */
+/*e: function [[Lfmt]] */
 
-/*s: function unlexc */
+/*s: function [[unlexc]] */
 void
 unlexc(int s)
 {
@@ -213,9 +213,9 @@ unlexc(int s)
     else
         lexio->ip--;
 }
-/*e: function unlexc */
+/*e: function [[unlexc]] */
 
-/*s: function lexc */
+/*s: function [[lexc]] */
 int
 lexc(void)
 {
@@ -233,9 +233,9 @@ lexc(void)
         return -1;
     return c;
 }
-/*e: function lexc */
+/*e: function [[lexc]] */
 
-/*s: function escchar */
+/*s: function [[escchar]] */
 int
 escchar(char c)
 {
@@ -266,9 +266,9 @@ escchar(char c)
         return c;
     return n-1;
 }
-/*e: function escchar */
+/*e: function [[escchar]] */
 
-/*s: function eatstring */
+/*s: function [[eatstring]] */
 void
 eatstring(void)
 {
@@ -313,9 +313,9 @@ done:
     buf[cnt] = '\0';
     yylval.string = strnode(buf);
 }
-/*e: function eatstring */
+/*e: function [[eatstring]] */
 
-/*s: function eatnl */
+/*s: function [[eatnl]] */
 void
 eatnl(void)
 {
@@ -330,9 +330,9 @@ eatnl(void)
             return;
     }
 }
-/*e: function eatnl */
+/*e: function [[eatnl]] */
 
-/*s: function yylex */
+/*s: function [[yylex]] */
 int
 yylex(void)
 {
@@ -498,9 +498,9 @@ loop:
         return numsym(c);
     }
 }
-/*e: function yylex */
+/*e: function [[yylex]] */
 
-/*s: function numsym */
+/*s: function [[numsym]] */
 int
 numsym(char first)
 {
@@ -580,9 +580,9 @@ numsym(char first)
     yylval.sym = s;
     return s->lexval;
 }
-/*e: function numsym */
+/*e: function [[numsym]] */
 
-/*s: function enter */
+/*s: function [[enter]] */
 Lsym*
 enter(char *name, int t)
 {
@@ -613,9 +613,9 @@ enter(char *name, int t)
 
     return s;
 }
-/*e: function enter */
+/*e: function [[enter]] */
 
-/*s: function look */
+/*s: function [[look]] */
 Lsym*
 look(char *name)
 {
@@ -633,9 +633,9 @@ look(char *name)
             return s;
     return 0;
 }
-/*e: function look */
+/*e: function [[look]] */
 
-/*s: function mkvar */
+/*s: function [[mkvar]] */
 Lsym*
 mkvar(char *s)
 {
@@ -646,5 +646,5 @@ mkvar(char *s)
         l = enter(s, Tid);
     return l;
 }
-/*e: function mkvar */
+/*e: function [[mkvar]] */
 /*e: acid/lex.c */

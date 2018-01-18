@@ -2,7 +2,7 @@
 #include "defs.h"
 #include "fns.h"
 
-/*s: function error */
+/*s: function [[error]] */
 /*
  * An error occurred; save the message for later printing,
  * close open files, and reset to main command loop.
@@ -19,9 +19,9 @@ error(char *n)
 
     longjmp(env, 1);
 }
-/*e: function error */
+/*e: function [[error]] */
 
-/*s: function errors */
+/*s: function [[errors]] */
 void
 errors(char *m, char *n)
 {
@@ -30,5 +30,5 @@ errors(char *m, char *n)
     sprint(buf, "%s: %s", m, n);
     error(buf);
 }
-/*e: function errors */
+/*e: function [[errors]] */
 /*e: db/utils.c */

@@ -11,12 +11,12 @@
 
 #include <mach.h>
 
-/*s: type ADDR */
+/*s: type [[ADDR]] */
 typedef uvlong ADDR;
-/*e: type ADDR */
-/*s: type WORD */
+/*e: type [[ADDR]] */
+/*s: type [[WORD]] */
 typedef ulong WORD;
-/*e: type WORD */
+/*e: type [[WORD]] */
 
 typedef struct bkpt	BKPT;
 
@@ -24,85 +24,85 @@ typedef struct bkpt	BKPT;
 #define	HUGEINT	0x7fffffff	/* enormous WORD */
 /*e: constant HUGEINT (db) */
 
-/*s: constant MAXOFF */
+/*s: constant [[MAXOFF]] */
 #define	MAXOFF	0x1000000
-/*e: constant MAXOFF */
-/*s: constant INCDIR */
+/*e: constant [[MAXOFF]] */
+/*s: constant [[INCDIR]] */
 #define	INCDIR	"/usr/lib/adb"
-/*e: constant INCDIR */
-/*s: constant DBNAME */
+/*e: constant [[INCDIR]] */
+/*s: constant [[DBNAME]] */
 #define	DBNAME	"db\n"
-/*e: constant DBNAME */
-/*s: constant CMD_VERBS */
+/*e: constant [[DBNAME]] */
+/*s: constant [[CMD_VERBS]] */
 #define CMD_VERBS	"?/=>!$: \t"
-/*e: constant CMD_VERBS */
+/*e: constant [[CMD_VERBS]] */
 
-/*s: constant MAXPOS */
+/*s: constant [[MAXPOS]] */
 #define MAXPOS	80
-/*e: constant MAXPOS */
-/*s: constant MAXLIN */
+/*e: constant [[MAXPOS]] */
+/*s: constant [[MAXLIN]] */
 #define MAXLIN	128
-/*e: constant MAXLIN */
-/*s: constant ARB */
+/*e: constant [[MAXLIN]] */
+/*s: constant [[ARB]] */
 #define	ARB	512
-/*e: constant ARB */
-/*s: constant MAXCOM */
+/*e: constant [[ARB]] */
+/*s: constant [[MAXCOM]] */
 #define MAXCOM	64
-/*e: constant MAXCOM */
-/*s: constant MAXARG */
+/*e: constant [[MAXCOM]] */
+/*s: constant [[MAXARG]] */
 #define MAXARG	32
-/*e: constant MAXARG */
-/*s: constant LINSIZ */
+/*e: constant [[MAXARG]] */
+/*s: constant [[LINSIZ]] */
 #define LINSIZ	4096
-/*e: constant LINSIZ */
-/*s: constant MAXSYM */
+/*e: constant [[LINSIZ]] */
+/*s: constant [[MAXSYM]] */
 #define	MAXSYM	255
-/*e: constant MAXSYM */
+/*e: constant [[MAXSYM]] */
 
-/*s: constant EOR */
+/*s: constant [[EOR]] */
 #define EOR	'\n'
-/*e: constant EOR */
-/*s: constant SPC */
+/*e: constant [[EOR]] */
+/*s: constant [[SPC]] */
 #define SPC	' '
-/*e: constant SPC */
-/*s: constant TB */
+/*e: constant [[SPC]] */
+/*s: constant [[TB]] */
 #define TB	'\t'
-/*e: constant TB */
+/*e: constant [[TB]] */
 
-/*s: constant TRUE */
+/*s: constant [[TRUE]] */
 #define	TRUE	(-1)
-/*e: constant TRUE */
-/*s: constant FALSE */
+/*e: constant [[TRUE]] */
+/*s: constant [[FALSE]] */
 #define	FALSE	0
-/*e: constant FALSE */
+/*e: constant [[FALSE]] */
 
 /*
  * run modes
  */
-/*s: constant SINGLE */
+/*s: constant [[SINGLE]] */
 #define	SINGLE	1
-/*e: constant SINGLE */
-/*s: constant CONTIN */
+/*e: constant [[SINGLE]] */
+/*s: constant [[CONTIN]] */
 #define	CONTIN	2
-/*e: constant CONTIN */
+/*e: constant [[CONTIN]] */
 
 /*
  * breakpoints
  */
-/*s: constant BKPTCLR */
+/*s: constant [[BKPTCLR]] */
 #define	BKPTCLR	0	/* not a real breakpoint */
-/*e: constant BKPTCLR */
-/*s: constant BKPTSET */
+/*e: constant [[BKPTCLR]] */
+/*s: constant [[BKPTSET]] */
 #define BKPTSET	1	/* real, ready to trap */
-/*e: constant BKPTSET */
-/*s: constant BKPTSKIP */
+/*e: constant [[BKPTSET]] */
+/*s: constant [[BKPTSKIP]] */
 #define BKPTSKIP 2	/* real, skip over it next time */
-/*e: constant BKPTSKIP */
-/*s: constant BKPTTMP */
+/*e: constant [[BKPTSKIP]] */
+/*s: constant [[BKPTTMP]] */
 #define	BKPTTMP	3	/* temporary; clear when it happens */
-/*e: constant BKPTTMP */
+/*e: constant [[BKPTTMP]] */
 
-/*s: struct bkpt */
+/*s: struct [[bkpt]] */
 struct bkpt {
     // address to break on
     ADDR	loc;
@@ -125,7 +125,7 @@ struct bkpt {
     BKPT	*nxtbkpt;
     /*e: [[Bkpt]] extra fields */
 };
-/*e: struct bkpt */
+/*e: struct [[bkpt]] */
 
 /*
  * common globals
@@ -158,9 +158,9 @@ extern	BKPT	*bkpthead;
 
 extern	int	lastc, peekc;
 
-/*s: constant NNOTE */
+/*s: constant [[NNOTE]] */
 #define	NNOTE 10
-/*e: constant NNOTE */
+/*e: constant [[NNOTE]] */
 extern	int	nnote;
 extern	char	note[NNOTE][ERRMAX];
 

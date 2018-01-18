@@ -10,33 +10,33 @@
 
 extern	int	infile;
 
-/*s: global line */
+/*s: global [[line]] */
 Rune	line[LINSIZ];
-/*e: global line */
-/*s: global lp */
+/*e: global [[line]] */
+/*s: global [[lp]] */
 Rune	*lp;
-/*e: global lp */
-/*s: global peekc */
+/*e: global [[lp]] */
+/*s: global [[peekc]] */
 int	peekc;
-/*e: global peekc */
-/*s: global lastc */
+/*e: global [[peekc]] */
+/*s: global [[lastc]] */
 int lastc = EOR;
-/*e: global lastc */
-/*s: global eof */
+/*e: global [[lastc]] */
+/*s: global [[eof]] */
 bool	eof;
-/*e: global eof */
+/*e: global [[eof]] */
 
 /* input routines */
 
-/*s: function eol */
+/*s: function [[eol]] */
 bool
 eol(int c)
 {
     return(c==EOR || c==';');
 }
-/*e: function eol */
+/*e: function [[eol]] */
 
-/*s: function rdc */
+/*s: function [[rdc]] */
 int
 rdc(void)
 {
@@ -45,17 +45,17 @@ rdc(void)
     } while (lastc==SPC || lastc==TB);
     return lastc;
 }
-/*e: function rdc */
+/*e: function [[rdc]] */
 
-/*s: function reread */
+/*s: function [[reread]] */
 void
 reread(void)
 {
     peekc = lastc;
 }
-/*e: function reread */
+/*e: function [[reread]] */
 
-/*s: function clrinp */
+/*s: function [[clrinp]] */
 void
 clrinp(void)
 {
@@ -63,9 +63,9 @@ clrinp(void)
     lp = nil;
     peekc = 0;
 }
-/*e: function clrinp */
+/*e: function [[clrinp]] */
 
-/*s: function readrune */
+/*s: function [[readrune]] */
 int
 readrune(int fd, Rune *r)
 {
@@ -79,9 +79,9 @@ readrune(int fd, Rune *r)
     chartorune(r, buf);
     return 1;
 }
-/*e: function readrune */
+/*e: function [[readrune]] */
 
-/*s: function readchar */
+/*s: function [[readchar]] */
 int
 readchar(void)
 {
@@ -125,9 +125,9 @@ readchar(void)
     }
     return lastc;
 }
-/*e: function readchar */
+/*e: function [[readchar]] */
 
-/*s: function nextchar */
+/*s: function [[nextchar]] */
 int
 nextchar(void)
 {
@@ -137,9 +137,9 @@ nextchar(void)
     }
     return lastc;
 }
-/*e: function nextchar */
+/*e: function [[nextchar]] */
 
-/*s: function quotchar */
+/*s: function [[quotchar]] */
 int
 quotchar(void)
 {
@@ -150,9 +150,9 @@ quotchar(void)
     else
         return lastc;
 }
-/*e: function quotchar */
+/*e: function [[quotchar]] */
 
-/*s: function getformat */
+/*s: function [[getformat]] */
 void
 getformat(char *deformat)
 {
@@ -172,9 +172,9 @@ getformat(char *deformat)
     if (fptr!=deformat)
         *fptr = '\0';
 }
-/*e: function getformat */
+/*e: function [[getformat]] */
 
-/*s: function isfileref */
+/*s: function [[isfileref]] */
 /*
  *	check if the input line if of the form:
  *		<filename>:<digits><verb> ...
@@ -204,5 +204,5 @@ isfileref(void)
     }
     return 0;
 }
-/*e: function isfileref */
+/*e: function [[isfileref]] */
 /*e: db/input.c */

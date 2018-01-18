@@ -9,44 +9,44 @@
 // was called ratrace, maybe in hommage to Ed Wood "Rat Race" movie
 // but most people knows better 'strace'
 
-/*s: enum _anon_ (strace) */
+/*s: enum [[_anon_ (strace)]] */
 enum {
     Stacksize	= 8*1024,
     Bufsize		= 8*1024,
 };
-/*e: enum _anon_ (strace) */
+/*e: enum [[_anon_ (strace)]] */
 
-/*s: global out */
+/*s: global [[out]] */
 Channel *out;
-/*e: global out */
-/*s: global quit */
+/*e: global [[out]] */
+/*s: global [[quit]] */
 Channel *quit;
-/*e: global quit */
-/*s: global forkc */
+/*e: global [[quit]] */
+/*s: global [[forkc]] */
 Channel *forkc;
-/*e: global forkc */
-/*s: global nread */
+/*e: global [[forkc]] */
+/*s: global [[nread]] */
 int nread = 0;
-/*e: global nread */
+/*e: global [[nread]] */
 
 typedef struct Str Str;
-/*s: struct Str */
+/*s: struct [[Str]] */
 struct Str {
     char	*buf;
     int	len;
 };
-/*e: struct Str */
+/*e: struct [[Str]] */
 
-/*s: function die */
+/*s: function [[die]] */
 void
 die(char *s)
 {
     fprint(2, "%s\n", s);
     exits(s);
 }
-/*e: function die */
+/*e: function [[die]] */
 
-/*s: function cwrite */
+/*s: function [[cwrite]] */
 void
 cwrite(int fd, char *path, char *cmd, int len)
 {
@@ -58,9 +58,9 @@ cwrite(int fd, char *path, char *cmd, int len)
         threadexits(nil);
     }
 }
-/*e: function cwrite */
+/*e: function [[cwrite]] */
 
-/*s: function newstr */
+/*s: function [[newstr]] */
 Str *
 newstr(void)
 {
@@ -72,9 +72,9 @@ newstr(void)
     s->buf = (char *)&s[1];
     return s;
 }
-/*e: function newstr */
+/*e: function [[newstr]] */
 
-/*s: function reader */
+/*s: function [[reader]] */
 void
 reader(void *v)
 {
@@ -143,9 +143,9 @@ reader(void *v)
     sendp(quit, nil);
     threadexitsall(nil);
 }
-/*e: function reader */
+/*e: function [[reader]] */
 
-/*s: function writer */
+/*s: function [[writer]] */
 void
 writer(void *)
 {
@@ -189,7 +189,7 @@ writer(void *)
 done:
     exits(nil);
 }
-/*e: function writer */
+/*e: function [[writer]] */
 
 /*s: function usage (tracers/strace.c) */
 void
@@ -200,7 +200,7 @@ usage(void)
 }
 /*e: function usage (tracers/strace.c) */
 
-/*s: function hang */
+/*s: function [[hang]] */
 void
 hang(void)
 {
@@ -216,9 +216,9 @@ hang(void)
     close(me);
     free(myctl);
 }
-/*e: function hang */
+/*e: function [[hang]] */
 
-/*s: function threadmain */
+/*s: function [[threadmain]] */
 void
 threadmain(int argc, char **argv)
 {
@@ -274,5 +274,5 @@ threadmain(int argc, char **argv)
     procrfork(writer, nil, Stacksize, 0);
     reader((void*)pid);
 }
-/*e: function threadmain */
+/*e: function [[threadmain]] */
 /*e: tracers/strace.c */

@@ -8,76 +8,76 @@
 #include "defs.h"
 #include "fns.h"
 
-/*s: global printcol */
+/*s: global [[printcol]] */
 int	printcol = 0;
-/*e: global printcol */
-/*s: global infile */
+/*e: global [[printcol]] */
+/*s: global [[infile]] */
 int	infile = STDIN;
-/*e: global infile */
-/*s: global maxpos */
+/*e: global [[infile]] */
+/*s: global [[maxpos]] */
 int	maxpos = MAXPOS;
-/*e: global maxpos */
+/*e: global [[maxpos]] */
 
-/*s: global stdout */
+/*s: global [[stdout]] */
 Biobuf	stdout;
-/*e: global stdout */
+/*e: global [[stdout]] */
 
-/*s: function printc */
+/*s: function [[printc]] */
 void
 printc(int c)
 {
     dprint("%c", c);
 }
-/*e: function printc */
+/*e: function [[printc]] */
 
-/*s: function tconv */
+/*s: function [[tconv]] */
 /* was move to next f1-sized tab stop; now just print a tab */
 int
 tconv(Fmt *f)
 {
     return fmtstrcpy(f, "\t");
 }
-/*e: function tconv */
+/*e: function [[tconv]] */
 
-/*s: function flushbuf */
+/*s: function [[flushbuf]] */
 void
 flushbuf(void)
 {
   if (printcol != 0)
         printc(EOR);
 }
-/*e: function flushbuf */
+/*e: function [[flushbuf]] */
 
-/*s: function prints */
+/*s: function [[prints]] */
 void
 prints(char *s)
 {
     dprint("%s",s);
 }
-/*e: function prints */
+/*e: function [[prints]] */
 
-/*s: function newline */
+/*s: function [[newline]] */
 void
 newline(void)
 {
     printc(EOR);
 }
-/*e: function newline */
+/*e: function [[newline]] */
 
-/*s: constant MAXIFD */
+/*s: constant [[MAXIFD]] */
 #define	MAXIFD	5
-/*e: constant MAXIFD */
-/*s: global istack */
+/*e: constant [[MAXIFD]] */
+/*s: global [[istack]] */
 struct {
     int	fd;
     int	r9;
 } istack[MAXIFD];
-/*e: global istack */
-/*s: global ifiledepth */
+/*e: global [[istack]] */
+/*s: global [[ifiledepth]] */
 int	ifiledepth;
-/*e: global ifiledepth */
+/*e: global [[ifiledepth]] */
 
-/*s: function iclose */
+/*s: function [[iclose]] */
 void
 iclose(int stack, int err)
 {
@@ -111,9 +111,9 @@ iclose(int stack, int err)
         }
     }
 }
-/*e: function iclose */
+/*e: function [[iclose]] */
 
-/*s: function oclose */
+/*s: function [[oclose]] */
 void
 oclose(void)
 {
@@ -121,9 +121,9 @@ oclose(void)
     Bterm(&stdout);
     Binit(&stdout, 1, OWRITE);
 }
-/*e: function oclose */
+/*e: function [[oclose]] */
 
-/*s: function redirout */
+/*s: function [[redirout]] */
 void
 redirout(char *file)
 {
@@ -141,9 +141,9 @@ redirout(char *file)
     Bterm(&stdout);
     Binit(&stdout, fd, OWRITE);
 }
-/*e: function redirout */
+/*e: function [[redirout]] */
 
-/*s: function endline */
+/*s: function [[endline]] */
 void
 endline(void)
 {
@@ -151,17 +151,17 @@ endline(void)
     if (printcol >= maxpos)
         newline();
 }
-/*e: function endline */
+/*e: function [[endline]] */
 
-/*s: function flush */
+/*s: function [[flush]] */
 void
 flush(void)
 {
     Bflush(&stdout);
 }
-/*e: function flush */
+/*e: function [[flush]] */
 
-/*s: function dprint */
+/*s: function [[dprint]] */
 int
 dprint(char *fmt, ...)
 {
@@ -197,14 +197,14 @@ dprint(char *fmt, ...)
     /*e: [[dprint()]] maintain printcol */
     return n;
 }
-/*e: function dprint */
+/*e: function [[dprint]] */
 
-/*s: function outputinit */
+/*s: function [[outputinit]] */
 void
 outputinit(void)
 {
     Binit(&stdout, 1, OWRITE);
     fmtinstall('t', tconv);
 }
-/*e: function outputinit */
+/*e: function [[outputinit]] */
 /*e: db/output.c */

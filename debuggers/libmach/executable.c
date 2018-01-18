@@ -1,4 +1,4 @@
-/*s: linkers/libmach/executable.c */
+/*s: libmach/executable.c */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
@@ -36,7 +36,7 @@ static	void	settext(Fhdr*, uvlong, uvlong, long, vlong);
 static	void	hswal(void*, int, ulong(*)(ulong));
 static	uvlong	_round(uvlong, ulong);
 
-/*s: struct Exectable */
+/*s: struct [[Exectable]] */
 /*
  *	definition of per-executable file type structures
  */
@@ -51,13 +51,13 @@ typedef struct Exectable{
     ulong	(*swal)(ulong);		/* beswal or leswal */
     int	(*hparse)(int, Fhdr*, ExecHdr*);
 } ExecTable;
-/*e: struct Exectable */
+/*e: struct [[Exectable]] */
 
 //PAD: removed many archi
 extern	Mach	mi386;
 extern	Mach	marm;
 
-/*s: global exectab */
+/*s: global [[exectab]] */
 ExecTable exectab[] =
 {
     { I_MAGIC,			/* I386 8.out & boot image */
@@ -90,13 +90,13 @@ ExecTable exectab[] =
 
     { 0 },
 };
-/*e: global exectab */
+/*e: global [[exectab]] */
 
-/*s: global mach */
+/*s: global [[mach]] */
 Mach	*mach = &mi386;			/* Global current machine table */
-/*e: global mach */
+/*e: global [[mach]] */
 
-/*s: function crackhdr */
+/*s: function [[crackhdr]] */
 int
 crackhdr(int fd, Fhdr *fp)
 {
@@ -159,9 +159,9 @@ crackhdr(int fd, Fhdr *fp)
         werrstr("unknown header type");
     return ret;
 }
-/*e: function crackhdr */
+/*e: function [[crackhdr]] */
 
-/*s: function hswal */
+/*s: function [[hswal]] */
 /*
  * Convert header to canonical form
  */
@@ -173,9 +173,9 @@ hswal(void *v, int n, ulong (*swap)(ulong))
     for(ulp = v; n--; ulp++)
         *ulp = (*swap)(*ulp);
 }
-/*e: function hswal */
+/*e: function [[hswal]] */
 
-/*s: function adotout */
+/*s: function [[adotout]] */
 /*
  *	Crack a normal a.out-type header
  */
@@ -193,9 +193,9 @@ adotout(int fd, Fhdr *fp, ExecHdr *hp)
     setsym(fp, hp->e.syms, hp->e._unused, hp->e.pcsz, fp->datoff+fp->datsz);
     return 1;
 }
-/*e: function adotout */
+/*e: function [[adotout]] */
 
-/*s: function commonboot */
+/*s: function [[commonboot]] */
 static void
 commonboot(Fhdr *fp)
 {
@@ -220,9 +220,9 @@ commonboot(Fhdr *fp)
     }
     fp->hdrsz = 0;			/* header stripped */
 }
-/*e: function commonboot */
+/*e: function [[commonboot]] */
 
-/*s: function common */
+/*s: function [[common]] */
 /*
  *	_MAGIC() style headers and
  *	alpha plan9-style bootable images for axp "headerless" boot
@@ -240,9 +240,9 @@ common(int fd, Fhdr *fp, ExecHdr *hp)
     commonboot(fp);
     return 1;
 }
-/*e: function common */
+/*e: function [[common]] */
 
-/*s: function elf32dotout */
+/*s: function [[elf32dotout]] */
 /*
  * ELF32 binaries.
  */
@@ -365,9 +365,9 @@ elf32dotout(int fd, Fhdr *fp, ExecHdr *hp)
     free(ph);
     return 1;
 }
-/*e: function elf32dotout */
+/*e: function [[elf32dotout]] */
 
-/*s: function elfdotout */
+/*s: function [[elfdotout]] */
 /*
  * Elf binaries.
  */
@@ -383,9 +383,9 @@ elfdotout(int fd, Fhdr *fp, ExecHdr *hp)
     werrstr("bad ELF class - not 32 bit");
     return 0;
 }
-/*e: function elfdotout */
+/*e: function [[elfdotout]] */
 
-/*s: function armdotout */
+/*s: function [[armdotout]] */
 /*
  * (Free|Net)BSD ARM header.
  */
@@ -408,9 +408,9 @@ armdotout(int fd, Fhdr *fp, ExecHdr *hp)
     }
     return 1;
 }
-/*e: function armdotout */
+/*e: function [[armdotout]] */
 
-/*s: function settext */
+/*s: function [[settext]] */
 static void
 settext(Fhdr *fp, uvlong e, uvlong a, long s, vlong off)
 {
@@ -419,9 +419,9 @@ settext(Fhdr *fp, uvlong e, uvlong a, long s, vlong off)
     fp->txtsz = s;
     fp->txtoff = off;
 }
-/*e: function settext */
+/*e: function [[settext]] */
 
-/*s: function setdata */
+/*s: function [[setdata]] */
 static void
 setdata(Fhdr *fp, uvlong a, long s, vlong off, long bss)
 {
@@ -430,9 +430,9 @@ setdata(Fhdr *fp, uvlong a, long s, vlong off, long bss)
     fp->datoff = off;
     fp->bsssz = bss;
 }
-/*e: function setdata */
+/*e: function [[setdata]] */
 
-/*s: function setsym */
+/*s: function [[setsym]] */
 static void
 setsym(Fhdr *fp, long symsz, long sppcsz, long lnpcsz, vlong symoff)
 {
@@ -443,10 +443,10 @@ setsym(Fhdr *fp, long symsz, long sppcsz, long lnpcsz, vlong symoff)
     fp->lnpcsz = lnpcsz;
     fp->lnpcoff = fp->sppcoff+fp->sppcsz;
 }
-/*e: function setsym */
+/*e: function [[setsym]] */
 
 
-/*s: function _round */
+/*s: function [[_round]] */
 static uvlong
 _round(uvlong a, ulong b)
 {
@@ -457,5 +457,5 @@ _round(uvlong a, ulong b)
         w += b;
     return(w);
 }
-/*e: function _round */
-/*e: linkers/libmach/executable.c */
+/*e: function [[_round]] */
+/*e: libmach/executable.c */

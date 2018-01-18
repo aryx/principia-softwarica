@@ -44,7 +44,7 @@ void	fmtof(Node*, Node*) ;
 void	dofmtsize(Node*, Node*) ;
 
 typedef struct Btab Btab;
-/*s: global tab */
+/*s: global [[tab]] */
 struct Btab
 {
     char	*name;
@@ -87,13 +87,13 @@ struct Btab
     "fmtsize",	dofmtsize,
     0
 };
-/*e: global tab */
+/*e: global [[tab]] */
 
-/*s: global vfmt */
+/*s: global [[vfmt]] */
 char vfmt[] = "aBbcCdDfFgGiIoOqQrRsSuUVWxXYZ38";
-/*e: global vfmt */
+/*e: global [[vfmt]] */
 
-/*s: function mkprint */
+/*s: function [[mkprint]] */
 void
 mkprint(Lsym *s)
 {
@@ -104,9 +104,9 @@ mkprint(Lsym *s)
     memset(prnt->left, 0, sizeof(Node));
     prnt->left->sym = s;
 }
-/*e: function mkprint */
+/*e: function [[mkprint]] */
 
-/*s: function installbuiltin */
+/*s: function [[installbuiltin]] */
 void
 installbuiltin(void)
 {
@@ -125,9 +125,9 @@ installbuiltin(void)
         b++;
     }
 }
-/*e: function installbuiltin */
+/*e: function [[installbuiltin]] */
 
-/*s: function dosysr1 */
+/*s: function [[dosysr1]] */
 void
 dosysr1(Node *r, Node*)
 {
@@ -140,9 +140,9 @@ dosysr1(Node *r, Node*)
 //pad: now it's sysnop
     r->ival = nop();
 }
-/*e: function dosysr1 */
+/*e: function [[dosysr1]] */
 
-/*s: function match */
+/*s: function [[match]] */
 void
 match(Node *r, Node *args)
 {
@@ -195,9 +195,9 @@ match(Node *r, Node *args)
         i++;
     }
 }
-/*e: function match */
+/*e: function [[match]] */
 
-/*s: function newproc */
+/*s: function [[newproc]] */
 void
 newproc(Node *r, Node *args)
 {
@@ -237,9 +237,9 @@ newproc(Node *r, Node *args)
     r->fmt = 'D';
     r->ival = nproc(argv);
 }
-/*e: function newproc */
+/*e: function [[newproc]] */
 
-/*s: function startstop */
+/*s: function [[startstop]] */
 void
 startstop(Node *r, Node *args)
 {
@@ -256,9 +256,9 @@ startstop(Node *r, Node *args)
     notes(res.ival);
     dostop(res.ival);
 }
-/*e: function startstop */
+/*e: function [[startstop]] */
 
-/*s: function waitstop */
+/*s: function [[waitstop]] */
 void
 waitstop(Node *r, Node *args)
 {
@@ -276,9 +276,9 @@ waitstop(Node *r, Node *args)
     notes(res.ival);
     dostop(res.ival);
 }
-/*e: function waitstop */
+/*e: function [[waitstop]] */
 
-/*s: function start */
+/*s: function [[start]] */
 void
 start(Node *r, Node *args)
 {
@@ -293,9 +293,9 @@ start(Node *r, Node *args)
 
     msg(res.ival, "start");
 }
-/*e: function start */
+/*e: function [[start]] */
 
-/*s: function stop */
+/*s: function [[stop]] */
 void
 stop(Node *r, Node *args)
 {
@@ -313,9 +313,9 @@ stop(Node *r, Node *args)
     notes(res.ival);
     dostop(res.ival);
 }
-/*e: function stop */
+/*e: function [[stop]] */
 
-/*s: function kill */
+/*s: function [[kill]] */
 void
 kill(Node *r, Node *args)
 {
@@ -331,9 +331,9 @@ kill(Node *r, Node *args)
     msg(res.ival, "kill");
     deinstall(res.ival);
 }
-/*e: function kill */
+/*e: function [[kill]] */
 
-/*s: function status */
+/*s: function [[status]] */
 void
 status(Node *r, Node *args)
 {
@@ -353,9 +353,9 @@ status(Node *r, Node *args)
     r->fmt = 's';
     r->type = TSTRING;
 }
-/*e: function status */
+/*e: function [[status]] */
 
-/*s: function reason */
+/*s: function [[reason]] */
 void
 reason(Node *r, Node *args)
 {
@@ -372,9 +372,9 @@ reason(Node *r, Node *args)
     r->fmt = 's';
     r->string = strnode((*machdata->excep)(cormap, rget));
 }
-/*e: function reason */
+/*e: function [[reason]] */
 
-/*s: function follow */
+/*s: function [[follow]] */
 void
 follow(Node *r, Node *args)
 {
@@ -401,9 +401,9 @@ follow(Node *r, Node *args)
         tail = &l->next;
     }
 }
-/*e: function follow */
+/*e: function [[follow]] */
 
-/*s: function funcbound */
+/*s: function [[funcbound]] */
 void
 funcbound(Node *r, Node *args)
 {
@@ -430,9 +430,9 @@ funcbound(Node *r, Node *args)
         l->fmt = 'X';
     }
 }
-/*e: function funcbound */
+/*e: function [[funcbound]] */
 
-/*s: function setproc */
+/*s: function [[setproc]] */
 void
 setproc(Node *r, Node *args)
 {
@@ -447,9 +447,9 @@ setproc(Node *r, Node *args)
 
     sproc(res.ival);
 }
-/*e: function setproc */
+/*e: function [[setproc]] */
 
-/*s: function filepc */
+/*s: function [[filepc]] */
 void
 filepc(Node *r, Node *args)
 {
@@ -477,9 +477,9 @@ filepc(Node *r, Node *args)
     r->type = TINT;
     r->fmt = 'V';
 }
-/*e: function filepc */
+/*e: function [[filepc]] */
 
-/*s: function interpret */
+/*s: function [[interpret]] */
 void
 interpret(Node *r, Node *args)
 {
@@ -503,9 +503,9 @@ interpret(Node *r, Node *args)
     r->type = TINT;
     r->fmt = 'D';
 }
-/*e: function interpret */
+/*e: function [[interpret]] */
 
-/*s: function include */
+/*s: function [[include]] */
 void
 include(Node *r, Node *args)
 {
@@ -529,9 +529,9 @@ include(Node *r, Node *args)
     r->type = TINT;
     r->fmt = 'D';
 }
-/*e: function include */
+/*e: function [[include]] */
 
-/*s: function rc */
+/*s: function [[rc]] */
 void
 rc(Node *r, Node *args)
 {
@@ -574,9 +574,9 @@ rc(Node *r, Node *args)
     free(w);
     r->fmt = 's';
 }
-/*e: function rc */
+/*e: function [[rc]] */
 
-/*s: function doerror */
+/*s: function [[doerror]] */
 void
 doerror(Node *r, Node *args)
 {
@@ -591,9 +591,9 @@ doerror(Node *r, Node *args)
 
     error(res.string->string);
 }
-/*e: function doerror */
+/*e: function [[doerror]] */
 
-/*s: function doaccess */
+/*s: function [[doaccess]] */
 void
 doaccess(Node *r, Node *args)
 {
@@ -611,9 +611,9 @@ doaccess(Node *r, Node *args)
     if(access(res.string->string, 4) == 0)
         r->ival = 1;
 }
-/*e: function doaccess */
+/*e: function [[doaccess]] */
 
-/*s: function readfile */
+/*s: function [[readfile]] */
 void
 readfile(Node *r, Node *args)
 {
@@ -651,7 +651,7 @@ readfile(Node *r, Node *args)
     free(buf);
     close(fd);
 }
-/*e: function readfile */
+/*e: function [[readfile]] */
 
 /*s: function getfile (acid/builtin.c) */
 void
@@ -702,7 +702,7 @@ getfile(Node *r, Node *args)
 }
 /*e: function getfile (acid/builtin.c) */
 
-/*s: function cvtatof */
+/*s: function [[cvtatof]] */
 void
 cvtatof(Node *r, Node *args)
 {
@@ -719,9 +719,9 @@ cvtatof(Node *r, Node *args)
     r->fval = atof(res.string->string);
     r->fmt = 'f';
 }
-/*e: function cvtatof */
+/*e: function [[cvtatof]] */
 
-/*s: function cvtatoi */
+/*s: function [[cvtatoi]] */
 void
 cvtatoi(Node *r, Node *args)
 {
@@ -738,16 +738,16 @@ cvtatoi(Node *r, Node *args)
     r->ival = strtoull(res.string->string, 0, 0);
     r->fmt = 'V';
 }
-/*e: function cvtatoi */
+/*e: function [[cvtatoi]] */
 
-/*s: global fmtflags */
+/*s: global [[fmtflags]] */
 static char *fmtflags = "-0123456789. #,u";
-/*e: global fmtflags */
-/*s: global fmtverbs */
+/*e: global [[fmtflags]] */
+/*s: global [[fmtverbs]] */
 static char *fmtverbs = "bdox";
-/*e: global fmtverbs */
+/*e: global [[fmtverbs]] */
 
-/*s: function acidfmt */
+/*s: function [[acidfmt]] */
 static int
 acidfmt(char *fmt, char *buf, int blen)
 {
@@ -790,9 +790,9 @@ acidfmt(char *fmt, char *buf, int blen)
 
     return 0;
 }
-/*e: function acidfmt */
+/*e: function [[acidfmt]] */
 
-/*s: function cvtitoa */
+/*s: function [[cvtitoa]] */
 void
 cvtitoa(Node *r, Node *args)
 {
@@ -827,9 +827,9 @@ err:
     r->string = strnode(buf);
     r->fmt = 's';
 }
-/*e: function cvtitoa */
+/*e: function [[cvtitoa]] */
 
-/*s: function mapent */
+/*s: function [[mapent]] */
 List*
 mapent(Map *m)
 {
@@ -863,9 +863,9 @@ mapent(Map *m)
     }
     return h;
 }
-/*e: function mapent */
+/*e: function [[mapent]] */
 
-/*s: function map */
+/*s: function [[map]] */
 void
 map(Node *r, Node *args)
 {
@@ -927,9 +927,9 @@ map(Node *r, Node *args)
         }
     }
 }
-/*e: function map */
+/*e: function [[map]] */
 
-/*s: function flatten */
+/*s: function [[flatten]] */
 void 
 flatten(Node **av, Node *n)
 {
@@ -948,9 +948,9 @@ flatten(Node **av, Node *n)
         break;
     }
 }
-/*e: function flatten */
+/*e: function [[flatten]] */
 
-/*s: function strace */
+/*s: function [[strace]] */
 void
 strace(Node *r, Node *args)
 {
@@ -985,17 +985,17 @@ strace(Node *r, Node *args)
     r->type = TLIST;
     r->l = tracelist;
 }
-/*e: function strace */
+/*e: function [[strace]] */
 
-/*s: function regerror */
+/*s: function [[regerror]] */
 void
 regerror(char *msg)
 {
     error(msg);
 }
-/*e: function regerror */
+/*e: function [[regerror]] */
 
-/*s: function regexp */
+/*s: function [[regexp]] */
 void
 regexp(Node *r, Node *args)
 {
@@ -1023,9 +1023,9 @@ regexp(Node *r, Node *args)
     r->ival = regexec(rp, res.string->string, 0, 0);
     free(rp);
 }
-/*e: function regexp */
+/*e: function [[regexp]] */
 
-/*s: function fmt */
+/*s: function [[fmt]] */
 void
 fmt(Node *r, Node *args)
 {
@@ -1042,9 +1042,9 @@ fmt(Node *r, Node *args)
     expr(av[0], r);
     r->fmt = res.ival;
 }
-/*e: function fmt */
+/*e: function [[fmt]] */
 
-/*s: function patom */
+/*s: function [[patom]] */
 void
 patom(char type, Store *res)
 {
@@ -1161,9 +1161,9 @@ patom(char type, Store *res)
         break;
     }
 }
-/*e: function patom */
+/*e: function [[patom]] */
 
-/*s: function blprint */
+/*s: function [[blprint]] */
 void
 blprint(List *l)
 {
@@ -1191,9 +1191,9 @@ blprint(List *l)
     }
     Bprint(bout, "}");
 }
-/*e: function blprint */
+/*e: function [[blprint]] */
 
-/*s: function comx */
+/*s: function [[comx]] */
 int
 comx(Node res)
 {
@@ -1220,9 +1220,9 @@ comx(Node res)
     print("(%s)", sl->name);
     return 0;
 }
-/*e: function comx */
+/*e: function [[comx]] */
 
-/*s: function bprint */
+/*s: function [[bprint]] */
 void
 bprint(Node *r, Node *args)
 {
@@ -1252,9 +1252,9 @@ bprint(Node *r, Node *args)
     if(ret == 0)
         Bputc(bout, '\n');
 }
-/*e: function bprint */
+/*e: function [[bprint]] */
 
-/*s: function printto */
+/*s: function [[printto]] */
 void
 printto(Node *r, Node *args)
 {
@@ -1306,9 +1306,9 @@ printto(Node *r, Node *args)
     free(b);
     bout = io[--iop];
 }
-/*e: function printto */
+/*e: function [[printto]] */
 
-/*s: function pcfile */
+/*s: function [[pcfile]] */
 void
 pcfile(Node *r, Node *args)
 {
@@ -1333,9 +1333,9 @@ pcfile(Node *r, Node *args)
     *p = '\0';
     r->string = strnode(buf);	
 }
-/*e: function pcfile */
+/*e: function [[pcfile]] */
 
-/*s: function pcline */
+/*s: function [[pcline]] */
 void
 pcline(Node *r, Node *args)
 {
@@ -1360,9 +1360,9 @@ pcline(Node *r, Node *args)
         error("pcline(addr): funny file %s", buf);
     r->ival = strtol(p+1, 0, 0);	
 }
-/*e: function pcline */
+/*e: function [[pcline]] */
 
-/*s: function fmtof */
+/*s: function [[fmtof]] */
 void fmtof(Node *r, Node *args)
 {
     Node *av[Maxarg];
@@ -1381,9 +1381,9 @@ void fmtof(Node *r, Node *args)
     r->ival = res.fmt ;
     r->fmt = 'c';
 }
-/*e: function fmtof */
+/*e: function [[fmtof]] */
 
-/*s: function dofmtsize */
+/*s: function [[dofmtsize]] */
 void dofmtsize(Node *r, Node *args)
 {
     Node *av[Maxarg];
@@ -1408,5 +1408,5 @@ void dofmtsize(Node *r, Node *args)
     r->ival = fmtsize(&v) ;
     r->fmt = 'D';
 }
-/*e: function dofmtsize */
+/*e: function [[dofmtsize]] */
 /*e: acid/builtin.c */

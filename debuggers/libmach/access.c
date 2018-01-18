@@ -1,4 +1,4 @@
-/*s: linkers/libmach/access.c */
+/*s: libmach/access.c */
 /*
  * functions to read and write an executable or file image
  */
@@ -12,7 +12,7 @@ static	int	mget(Map*, uvlong, void*, int);
 static	int	mput(Map*, uvlong, void*, int);
 static	struct	segment*	reloc(Map*, uvlong, vlong*);
 
-/*s: function geta */
+/*s: function [[geta]] */
 /*
  * routines to get/put various types
  */
@@ -35,9 +35,9 @@ geta(Map *map, uvlong addr, uvlong *x)
 
     return 1;
 }
-/*e: function geta */
+/*e: function [[geta]] */
 
-/*s: function get8 */
+/*s: function [[get8]] */
 int
 get8(Map *map, uvlong addr, uvlong *x)
 {
@@ -55,9 +55,9 @@ get8(Map *map, uvlong addr, uvlong *x)
     *x = machdata->swav(*x);
     return 1;
 }
-/*e: function get8 */
+/*e: function [[get8]] */
 
-/*s: function get4 */
+/*s: function [[get4]] */
 int
 get4(Map *map, uvlong addr, ulong *x)
 {
@@ -75,9 +75,9 @@ get4(Map *map, uvlong addr, ulong *x)
     *x = machdata->swal(*x);
     return 1;
 }
-/*e: function get4 */
+/*e: function [[get4]] */
 
-/*s: function get2 */
+/*s: function [[get2]] */
 int
 get2(Map *map, uvlong addr, ushort *x)
 {
@@ -95,9 +95,9 @@ get2(Map *map, uvlong addr, ushort *x)
     *x = machdata->swab(*x);
     return 1;
 }
-/*e: function get2 */
+/*e: function [[get2]] */
 
-/*s: function get1 */
+/*s: function [[get1]] */
 int
 get1(Map *map, uvlong addr, uchar *x, int size)
 {
@@ -118,9 +118,9 @@ get1(Map *map, uvlong addr, uchar *x, int size)
         return mget(map, addr, x, size);
     return 1;
 }
-/*e: function get1 */
+/*e: function [[get1]] */
 
-/*s: function puta */
+/*s: function [[puta]] */
 int
 puta(Map *map, uvlong addr, uvlong v)
 {
@@ -129,9 +129,9 @@ puta(Map *map, uvlong addr, uvlong v)
 
     return put4(map, addr, v);
 }
-/*e: function puta */
+/*e: function [[puta]] */
 
-/*s: function put8 */
+/*s: function [[put8]] */
 int
 put8(Map *map, uvlong addr, uvlong v)
 {
@@ -142,9 +142,9 @@ put8(Map *map, uvlong addr, uvlong v)
     v = machdata->swav(v);
     return mput(map, addr, &v, 8);
 }
-/*e: function put8 */
+/*e: function [[put8]] */
 
-/*s: function put4 (linkers/libmach/access.c) */
+/*s: function put4 (libmach/access.c) */
 int
 put4(Map *map, uvlong addr, ulong v)
 {
@@ -155,9 +155,9 @@ put4(Map *map, uvlong addr, ulong v)
     v = machdata->swal(v);
     return mput(map, addr, &v, 4);
 }
-/*e: function put4 (linkers/libmach/access.c) */
+/*e: function put4 (libmach/access.c) */
 
-/*s: function put2 */
+/*s: function [[put2]] */
 int
 put2(Map *map, uvlong addr, ushort v)
 {
@@ -168,9 +168,9 @@ put2(Map *map, uvlong addr, ushort v)
     v = machdata->swab(v);
     return mput(map, addr, &v, 2);
 }
-/*e: function put2 */
+/*e: function [[put2]] */
 
-/*s: function put1 */
+/*s: function [[put1]] */
 int
 put1(Map *map, uvlong addr, uchar *v, int size)
 {
@@ -180,9 +180,9 @@ put1(Map *map, uvlong addr, uchar *v, int size)
     }
     return mput(map, addr, v, size);
 }
-/*e: function put1 */
+/*e: function [[put1]] */
 
-/*s: function spread */
+/*s: function [[spread]] */
 static int
 spread(struct segment *s, void *buf, int n, uvlong off)
 {
@@ -215,9 +215,9 @@ spread(struct segment *s, void *buf, int n, uvlong off)
 
     return pread(s->fd, buf, n, off);
 }
-/*e: function spread */
+/*e: function [[spread]] */
 
-/*s: function mget */
+/*s: function [[mget]] */
 static int
 mget(Map *map, uvlong addr, void *buf, int size)
 {
@@ -245,9 +245,9 @@ mget(Map *map, uvlong addr, void *buf, int size)
     werrstr("partial read at address %llux (size %d j %d)", addr, size, j);
     return -1;
 }
-/*e: function mget */
+/*e: function [[mget]] */
 
-/*s: function mput */
+/*s: function [[mput]] */
 static int
 mput(Map *map, uvlong addr, void *buf, int size)
 {
@@ -277,9 +277,9 @@ mput(Map *map, uvlong addr, void *buf, int size)
     werrstr("partial write at address %llux", addr);
     return -1;
 }
-/*e: function mput */
+/*e: function [[mput]] */
 
-/*s: function reloc */
+/*s: function [[reloc]] */
 /*
  *	convert address to file offset; returns nonzero if ok
  */
@@ -298,5 +298,5 @@ reloc(Map *map, uvlong addr, vlong *offp)
     werrstr("can't translate address %llux", addr);
     return 0;
 }
-/*e: function reloc */
-/*e: linkers/libmach/access.c */
+/*e: function [[reloc]] */
+/*e: libmach/access.c */

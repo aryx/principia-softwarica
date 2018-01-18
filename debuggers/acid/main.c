@@ -8,21 +8,21 @@
 
 extern int _ifmt(Fmt*);
 
-/*s: global bioout */
+/*s: global [[bioout]] */
 static Biobuf	bioout;
-/*e: global bioout */
-/*s: global prog */
+/*e: global [[bioout]] */
+/*s: global [[prog]] */
 static char	prog[128];
-/*e: global prog */
-/*s: global lm */
+/*e: global [[prog]] */
+/*s: global [[lm]] */
 static char*	lm[16];
-/*e: global lm */
-/*s: global nlm */
+/*e: global [[lm]] */
+/*s: global [[nlm]] */
 static int	nlm;
-/*e: global nlm */
-/*s: global mtype */
+/*e: global [[nlm]] */
+/*s: global [[mtype]] */
 static char*	mtype;
-/*e: global mtype */
+/*e: global [[mtype]] */
 
 static	int attachfiles(char*, int);
 int	xfmt(Fmt*);
@@ -172,7 +172,7 @@ main(int argc, char *argv[])
 }
 /*e: function main (acid/main.c) */
 
-/*s: function attachfiles */
+/*s: function [[attachfiles]] */
 static int
 attachfiles(char *aout, int pid)
 {
@@ -194,7 +194,7 @@ attachfiles(char *aout, int pid)
         sproc(pid);
     return 0;
 }
-/*e: function attachfiles */
+/*e: function [[attachfiles]] */
 
 /*s: function die (acid/main.c) */
 void
@@ -214,7 +214,7 @@ die(void)
 }
 /*e: function die (acid/main.c) */
 
-/*s: function loadmoduleobjtype */
+/*s: function [[loadmoduleobjtype]] */
 void
 loadmoduleobjtype(void)
 {
@@ -224,9 +224,9 @@ loadmoduleobjtype(void)
     loadmodule(buf);
     free(buf);
 }
-/*e: function loadmoduleobjtype */
+/*e: function [[loadmoduleobjtype]] */
 
-/*s: function userinit */
+/*s: function [[userinit]] */
 void
 userinit(void)
 {
@@ -255,9 +255,9 @@ userinit(void)
         execute(n);
     }
 }
-/*e: function userinit */
+/*e: function [[userinit]] */
 
-/*s: function loadmodule */
+/*s: function [[loadmodule]] */
 void
 loadmodule(char *s)
 {
@@ -272,9 +272,9 @@ loadmodule(char *s)
     popio();
     return;
 }
-/*e: function loadmodule */
+/*e: function [[loadmodule]] */
 
-/*s: function readtext */
+/*s: function [[readtext]] */
 void
 readtext(char *s)
 {
@@ -342,9 +342,9 @@ readtext(char *s)
     machbytype(fhdr.type);
     varreg();
 }
-/*e: function readtext */
+/*e: function [[readtext]] */
 
-/*s: function an */
+/*s: function [[an]] */
 Node*
 an(int op, Node *l, Node *r)
 {
@@ -359,9 +359,9 @@ an(int op, Node *l, Node *r)
     n->right = r;
     return n;
 }
-/*e: function an */
+/*e: function [[an]] */
 
-/*s: function al */
+/*s: function [[al]] */
 List*
 al(int t)
 {
@@ -374,9 +374,9 @@ al(int t)
     gcl = l;
     return l;
 }
-/*e: function al */
+/*e: function [[al]] */
 
-/*s: function con */
+/*s: function [[con]] */
 Node*
 con(vlong v)
 {
@@ -388,7 +388,7 @@ con(vlong v)
     n->type = TINT;
     return n;
 }
-/*e: function con */
+/*e: function [[con]] */
 
 /*s: function fatal (acid/main.c) */
 void
@@ -405,7 +405,7 @@ fatal(char *fmt, ...)
 }
 /*e: function fatal (acid/main.c) */
 
-/*s: function yyerror */
+/*s: function [[yyerror]] */
 void
 yyerror(char *fmt, ...)
 {
@@ -421,9 +421,9 @@ yyerror(char *fmt, ...)
     va_end(arg);
     print("%L: %s\n", buf);
 }
-/*e: function yyerror */
+/*e: function [[yyerror]] */
 
-/*s: function marktree */
+/*s: function [[marktree]] */
 void
 marktree(Node *n)
 {
@@ -450,9 +450,9 @@ marktree(Node *n)
         break;
     }
 }
-/*e: function marktree */
+/*e: function [[marktree]] */
 
-/*s: function marklist */
+/*s: function [[marklist]] */
 void
 marklist(List *l)
 {
@@ -472,9 +472,9 @@ marklist(List *l)
         l = l->next;
     }
 }
-/*e: function marklist */
+/*e: function [[marklist]] */
 
-/*s: function gc */
+/*s: function [[gc]] */
 void
 gc(void)
 {
@@ -525,9 +525,9 @@ gc(void)
             p = &m->gclink;
     }
 }
-/*e: function gc */
+/*e: function [[gc]] */
 
-/*s: function gmalloc */
+/*s: function [[gmalloc]] */
 void*
 gmalloc(long l)
 {
@@ -539,9 +539,9 @@ gmalloc(long l)
         fatal("out of memory");
     return p;
 }
-/*e: function gmalloc */
+/*e: function [[gmalloc]] */
 
-/*s: function checkqid */
+/*s: function [[checkqid]] */
 void
 checkqid(int f1, int pid)
 {
@@ -578,9 +578,9 @@ checkqid(int f1, int pid)
     free(d1);
     free(d2);
 }
-/*e: function checkqid */
+/*e: function [[checkqid]] */
 
-/*s: function catcher */
+/*s: function [[catcher]] */
 void
 catcher(void *junk, char *s)
 {
@@ -592,9 +592,9 @@ catcher(void *junk, char *s)
     }
     noted(NDFLT);
 }
-/*e: function catcher */
+/*e: function [[catcher]] */
 
-/*s: function system */
+/*s: function [[system]] */
 char*
 system(void)
 {
@@ -624,9 +624,9 @@ system(void)
 
     return kernel;
 }
-/*e: function system */
+/*e: function [[system]] */
 
-/*s: function isnumeric */
+/*s: function [[isnumeric]] */
 int
 isnumeric(char *s)
 {
@@ -637,14 +637,14 @@ isnumeric(char *s)
     }
     return 1;
 }
-/*e: function isnumeric */
+/*e: function [[isnumeric]] */
 
-/*s: function xfmt */
+/*s: function [[xfmt]] */
 int
 xfmt(Fmt *f)
 {
     f->flags ^= FmtSharp;
     return _ifmt(f);
 }
-/*e: function xfmt */
+/*e: function [[xfmt]] */
 /*e: acid/main.c */

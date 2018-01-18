@@ -1,7 +1,7 @@
-/*s: linkers/libmach/swap.c */
+/*s: libmach/swap.c */
 #include <u.h>
 
-/*s: function beswab */
+/*s: function [[beswab]] */
 /*
  * big-endian short
  */
@@ -13,9 +13,9 @@ beswab(ushort s)
     p = (uchar*)&s;
     return (p[0]<<8) | p[1];
 }
-/*e: function beswab */
+/*e: function [[beswab]] */
 
-/*s: function beswal */
+/*s: function [[beswal]] */
 /*
  * big-endian long
  */
@@ -27,9 +27,9 @@ beswal(ulong l)
     p = (uchar*)&l;
     return (p[0]<<24) | (p[1]<<16) | (p[2]<<8) | p[3];
 }
-/*e: function beswal */
+/*e: function [[beswal]] */
 
-/*s: function beswav */
+/*s: function [[beswav]] */
 /*
  * big-endian vlong
  */
@@ -44,9 +44,9 @@ beswav(uvlong v)
                   | ((uvlong)p[5]<<16) | ((uvlong)p[6]<<8)
                   | (uvlong)p[7];
 }
-/*e: function beswav */
+/*e: function [[beswav]] */
 
-/*s: function leswab */
+/*s: function [[leswab]] */
 /*
  * little-endian short
  */
@@ -58,9 +58,9 @@ leswab(ushort s)
     p = (uchar*)&s;
     return (p[1]<<8) | p[0];
 }
-/*e: function leswab */
+/*e: function [[leswab]] */
 
-/*s: function leswal */
+/*s: function [[leswal]] */
 /*
  * little-endian long
  */
@@ -72,9 +72,9 @@ leswal(ulong l)
     p = (uchar*)&l;
     return (p[3]<<24) | (p[2]<<16) | (p[1]<<8) | p[0];
 }
-/*e: function leswal */
+/*e: function [[leswal]] */
 
-/*s: function leswav */
+/*s: function [[leswav]] */
 /*
  * little-endian vlong
  */
@@ -89,5 +89,5 @@ leswav(uvlong v)
                   | ((uvlong)p[2]<<16) | ((uvlong)p[1]<<8)
                   | (uvlong)p[0];
 }
-/*e: function leswav */
-/*e: linkers/libmach/swap.c */
+/*e: function [[leswav]] */
+/*e: libmach/swap.c */

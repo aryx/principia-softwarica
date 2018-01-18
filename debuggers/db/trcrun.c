@@ -7,21 +7,21 @@
 #include "fns.h"
 
 
-/*s: global child */
+/*s: global [[child]] */
 int child;
-/*e: global child */
-/*s: global msgfd */
+/*e: global [[child]] */
+/*s: global [[msgfd]] */
 fdt msgfd = -1;
-/*e: global msgfd */
-/*s: global notefd */
+/*e: global [[msgfd]] */
+/*s: global [[notefd]] */
 fdt notefd = -1;
-/*e: global notefd */
-/*s: global pcspid */
+/*e: global [[notefd]] */
+/*s: global [[pcspid]] */
 int pcspid = -1;
-/*e: global pcspid */
+/*e: global [[pcspid]] */
 
 
-/*s: function setpcs */
+/*s: function [[setpcs]] */
 void
 setpcs(void)
 {
@@ -56,9 +56,9 @@ setpcs(void)
         pcspid = pid;
     }
 }
-/*e: function setpcs */
+/*e: function [[setpcs]] */
 
-/*s: function msgpcs */
+/*s: function [[msgpcs]] */
 void
 msgpcs(char *msg)
 {
@@ -79,9 +79,9 @@ msgpcs(char *msg)
     }
     /*e: [[msgpcs()]] error managment */
 }
-/*e: function msgpcs */
+/*e: function [[msgpcs]] */
 
-/*s: function unloadnote */
+/*s: function [[unloadnote]] */
 /*
  * empty the note buffer and toss pending breakpoint notes
  */
@@ -107,9 +107,9 @@ unloadnote(void)
             --nnote;
     }
 }
-/*e: function unloadnote */
+/*e: function [[unloadnote]] */
 
-/*s: function loadnote */
+/*s: function [[loadnote]] */
 /*
  * reload the note buffer
  */
@@ -130,9 +130,9 @@ loadnote(void)
     }
     nnote = 0;
 }
-/*e: function loadnote */
+/*e: function [[loadnote]] */
 
-/*s: function notes */
+/*s: function [[notes]] */
 void
 notes(void)
 {
@@ -144,17 +144,17 @@ notes(void)
     for(n=0; n<nnote; n++)
         dprint("%d:\t%s\n", n, note[n]);
 }
-/*e: function notes */
+/*e: function [[notes]] */
 
-/*s: function killpcs */
+/*s: function [[killpcs]] */
 void
 killpcs(void)
 {
     msgpcs("kill");
 }
-/*e: function killpcs */
+/*e: function [[killpcs]] */
 
-/*s: function grab */
+/*s: function [[grab]] */
 void
 grab(void)
 {
@@ -162,17 +162,17 @@ grab(void)
     msgpcs("stop");
     bpwait();
 }
-/*e: function grab */
+/*e: function [[grab]] */
 
-/*s: function ungrab */
+/*s: function [[ungrab]] */
 void
 ungrab(void)
 {
     msgpcs("start");
 }
-/*e: function ungrab */
+/*e: function [[ungrab]] */
 
-/*s: function doexec */
+/*s: function [[doexec]] */
 void
 doexec(void)
 {
@@ -224,13 +224,13 @@ doexec(void)
     exec(symfil, argl);
     perror(symfil);
 }
-/*e: function doexec */
+/*e: function [[doexec]] */
 
-/*s: global procname */
+/*s: global [[procname]] */
 static char	procname[100];
-/*e: global procname */
+/*e: global [[procname]] */
 
-/*s: function startpcs */
+/*s: function [[startpcs]] */
 void
 startpcs(void)
 {
@@ -260,9 +260,9 @@ startpcs(void)
         ;
     reread();
 }
-/*e: function startpcs */
+/*e: function [[startpcs]] */
 
-/*s: function runstep */
+/*s: function [[runstep]] */
 void
 runstep(uvlong loc, bool keepnote)
 {
@@ -292,18 +292,18 @@ runstep(uvlong loc, bool keepnote)
     for(i=0; i<nfoll; i++)
         bkput(&bkpt[i], false);
 }
-/*e: function runstep */
+/*e: function [[runstep]] */
 
-/*s: function bpwait */
+/*s: function [[bpwait]] */
 void
 bpwait(void)
 {
     setcor();
     unloadnote();
 }
-/*e: function bpwait */
+/*e: function [[bpwait]] */
 
-/*s: function runrun */
+/*s: function [[runrun]] */
 void
 runrun(bool keepnote)
 {
@@ -325,9 +325,9 @@ runrun(bool keepnote)
     msgpcs("startstop");
     bpwait();
 }
-/*e: function runrun */
+/*e: function [[runrun]] */
 
-/*s: function bkput */
+/*s: function [[bkput]] */
 void
 bkput(BKPT *bp, bool install)
 {
@@ -354,5 +354,5 @@ bkput(BKPT *bp, bool install)
         read(0, buf, 100);
     }
 }
-/*e: function bkput */
+/*e: function [[bkput]] */
 /*e: db/trcrun.c */

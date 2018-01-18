@@ -14,7 +14,7 @@
  *		arm
  */
 
-/*s: enum executable_type */
+/*s: enum [[executable_type]] */
 /* types of executables */
 enum executable_type 
 {
@@ -25,16 +25,16 @@ enum executable_type
     FARM,			/* 5.out */
     FARMB,			/* ARM bootable */
 };
-/*e: enum executable_type */
-/*s: enum machine_type */
+/*e: enum [[executable_type]] */
+/*s: enum [[machine_type]] */
 /* machine types */
 enum machine_type 
 {
     MI386,
     MARM,
 };
-/*e: enum machine_type */
-/*s: enum dissembler_type */
+/*e: enum [[machine_type]] */
+/*s: enum [[dissembler_type]] */
 /* dissembler types */
 enum dissembler_type
 {
@@ -44,8 +44,8 @@ enum dissembler_type
     AI8086,			/* oh god */
     AARM,
 };
-/*e: enum dissembler_type */
-/*s: enum object_file_type */
+/*e: enum [[dissembler_type]] */
+/*s: enum [[object_file_type]] */
 /* object file types */
 enum object_file_type
 {
@@ -54,8 +54,8 @@ enum object_file_type
 
     Maxobjtype,
 };
-/*e: enum object_file_type */
-/*s: enum symbol_type */
+/*e: enum [[object_file_type]] */
+/*s: enum [[symbol_type]] */
 /* symbol table classes */
 enum symbol_type
 {
@@ -69,7 +69,7 @@ enum symbol_type
 
     CANY,			/* to look for any class */
 };
-/*e: enum symbol_type */
+/*e: enum [[symbol_type]] */
 
 typedef	struct	Map	Map;
 typedef struct	Symbol	Symbol;
@@ -78,7 +78,7 @@ typedef	struct	Mach	Mach;
 typedef	struct	Machdata Machdata;
 typedef struct  Fhdr Fhdr;
 
-/*s: struct Map */
+/*s: struct [[Map]] */
 /*
  * 	Structure to map a segment to a position in a file
  */
@@ -97,9 +97,9 @@ struct Map {
 
     } seg[1];			/* actually n of these */
 };
-/*e: struct Map */
+/*e: struct [[Map]] */
 
-/*s: struct Symbol */
+/*s: struct [[Symbol]] */
 /*
  *	Internal structure describing a symbol table entry
  */
@@ -113,9 +113,9 @@ struct Symbol {
         int	index;		/* in findlocal, globalsym, textsym */
     };
 };
-/*e: struct Symbol */
+/*e: struct [[Symbol]] */
 
-/*s: struct Reglist */
+/*s: struct [[Reglist]] */
 /*
  *	machine register description
  */
@@ -128,18 +128,18 @@ struct Reglist {
     char	rflags;		/* INTEGER/FLOAT, WRITABLE */
     char	rformat;	/* print format: 'x', 'X', 'f', '8', '3', 'Y', 'W' */
 };
-/*e: struct Reglist */
+/*e: struct [[Reglist]] */
 
-/*s: enum register_flag */
+/*s: enum [[register_flag]] */
 enum {					/* bits in rflags field */
     RINT	= (0<<0),
     RFLT	= (1<<0),
 
     RRDONLY	= (1<<1),
 };
-/*e: enum register_flag */
+/*e: enum [[register_flag]] */
 
-/*s: struct Mach */
+/*s: struct [[Mach]] */
 /*
  *	Machine-dependent data is stored in two structures:
  *		Mach  - miscellaneous general parameters
@@ -177,14 +177,14 @@ struct Mach{
     int	szfloat;		/* sizeof(float) */
     int	szdouble;		/* sizeof(double) */
 };
-/*e: struct Mach */
+/*e: struct [[Mach]] */
 
 extern	Mach	*mach;			/* Current machine */
 
 typedef uvlong	(*Rgetter)(Map*, char*);
 typedef	void	(*Tracer)(Map*, uvlong, uvlong, Symbol*);
 
-/*s: struct Machdata */
+/*s: struct [[Machdata]] */
 struct	Machdata {		/* Machine-dependent debugger support */
     uchar	bpinst[4];			/* break point instr. */
     short	bpsize;				/* size of break point instr. */
@@ -207,9 +207,9 @@ struct	Machdata {		/* Machine-dependent debugger support */
     int	(*hexinst)(Map*, uvlong, char*, int); 	/* hex disassembly */
     int	(*instsize)(Map*, uvlong);	/* instruction size */
 };
-/*e: struct Machdata */
+/*e: struct [[Machdata]] */
 
-/*s: struct Fhdr */
+/*s: struct [[Fhdr]] */
 /*
  *	Common a.out header describing all architectures
  */
@@ -246,7 +246,7 @@ struct Fhdr
     long	lnpcsz;		/* size of line number-pc table */
 
 };
-/*e: struct Fhdr */
+/*e: struct [[Fhdr]] */
 
 extern	int	asstype;	/* dissembler type - machdata.c */
 extern	Machdata *machdata;	/* jump vector - machdata.c */

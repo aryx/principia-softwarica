@@ -1,5 +1,5 @@
 /*s: acid/acid.h */
-/*s: enum _anon_ (acid/acid.h) */
+/*s: enum [[_anon_ (acid/acid.h)]] */
 /* acid.h */
 enum
 {
@@ -12,7 +12,7 @@ enum
     Maxval		= 10,
     Mempergc	= 1024*1024,
 };
-/*e: enum _anon_ (acid/acid.h) */
+/*e: enum [[_anon_ (acid/acid.h)]] */
 
 #pragma varargck type "L"	void
 
@@ -58,12 +58,12 @@ extern int	initialising;
 extern int	quiet;
 
 extern void	(*expop[])(Node*, Node*);
-/*s: macro expr */
+/*s: macro [[expr]] */
 #define expr(n, r) do{(r)->comt=0; (*expop[(n)->op])(n, r);}while(0)
-/*e: macro expr */
+/*e: macro [[expr]] */
 extern int	fmtsize(Value *v) ;
 
-/*s: enum _anon_ (acid/acid.h)2 */
+/*s: enum [[_anon_ (acid/acid.h)]]2 */
 enum
 {
     TINT,
@@ -72,9 +72,9 @@ enum
     TLIST,
     TCODE,
 };
-/*e: enum _anon_ (acid/acid.h)2 */
+/*e: enum [[_anon_ (acid/acid.h)]]2 */
 
-/*s: struct Type */
+/*s: struct [[Type]] */
 struct Type
 {
     Type*	next;
@@ -85,28 +85,28 @@ struct Type
     Lsym*	tag;
     Lsym*	base;
 };
-/*e: struct Type */
+/*e: struct [[Type]] */
 
-/*s: struct Frtype */
+/*s: struct [[Frtype]] */
 struct Frtype
 {
     Lsym*	var;
     Type*	type;
     Frtype*	next;
 };
-/*e: struct Frtype */
+/*e: struct [[Frtype]] */
 
-/*s: struct Ptab */
+/*s: struct [[Ptab]] */
 struct Ptab
 {
     int	pid;
     int	ctl;
 };
-/*e: struct Ptab */
+/*e: struct [[Ptab]] */
 
 extern Ptab	ptab[Maxproc];
 
-/*s: struct Rplace */
+/*s: struct [[Rplace]] */
 struct Rplace
 {
     jmp_buf	rlab;
@@ -115,17 +115,17 @@ struct Rplace
     Lsym*	local;
     Lsym**	tail;
 };
-/*e: struct Rplace */
+/*e: struct [[Rplace]] */
 
-/*s: struct Gc */
+/*s: struct [[Gc]] */
 struct Gc
 {
     char	gcmark;
     Gc*	gclink;
 };
-/*e: struct Gc */
+/*e: struct [[Gc]] */
 
-/*s: struct Store */
+/*s: struct [[Store]] */
 struct Store
 {
     char	fmt;
@@ -138,9 +138,9 @@ struct Store
         Node*	cc;
     };
 };
-/*e: struct Store */
+/*e: struct [[Store]] */
 
-/*s: struct List */
+/*s: struct [[List]] */
 struct List
 {
     Gc;
@@ -148,9 +148,9 @@ struct List
     char	type;
     Store;
 };
-/*e: struct List */
+/*e: struct [[List]] */
 
-/*s: struct Value */
+/*s: struct [[Value]] */
 struct Value
 {
     char	set;
@@ -160,9 +160,9 @@ struct Value
     Lsym*	scope;
     Rplace*	ret;
 };
-/*e: struct Value */
+/*e: struct [[Value]] */
 
-/*s: struct Lsym */
+/*s: struct [[Lsym]] */
 struct Lsym
 {
     char*	name;
@@ -174,9 +174,9 @@ struct Lsym
     Frtype*	local;
     void	(*builtin)(Node*, Node*);
 };
-/*e: struct Lsym */
+/*e: struct [[Lsym]] */
 
-/*s: struct Node */
+/*s: struct [[Node]] */
 struct Node
 {
     Gc;
@@ -188,19 +188,19 @@ struct Node
     int	builtin;
     Store;
 };
-/*e: struct Node */
-/*s: constant ZN */
+/*e: struct [[Node]] */
+/*s: constant [[ZN]] */
 #define ZN	(Node*)0
-/*e: constant ZN */
+/*e: constant [[ZN]] */
 
-/*s: struct StringAcid */
+/*s: struct [[StringAcid]] */
 struct StringAcid
 {
     Gc;
     char	*string;
     int	len;
 };
-/*e: struct StringAcid */
+/*e: struct [[StringAcid]] */
 
 List*	addlist(List*, List*);
 List*	al(int);
@@ -276,7 +276,7 @@ void	yyerror(char*, ...);
 int	yylex(void);
 int	yyparse(void);
 
-/*s: enum _anon_ (acid/acid.h)3 */
+/*s: enum [[_anon_ (acid/acid.h)]]3 */
 enum
 {
     ONAME,
@@ -329,5 +329,5 @@ enum
     OEVAL,
     OWHAT,
 };
-/*e: enum _anon_ (acid/acid.h)3 */
+/*e: enum [[_anon_ (acid/acid.h)]]3 */
 /*e: acid/acid.h */

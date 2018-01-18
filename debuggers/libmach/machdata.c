@@ -1,4 +1,4 @@
-/*s: linkers/libmach/machdata.c */
+/*s: libmach/machdata.c */
 /*
  * Debugger utilities shared by at least two architectures
  */
@@ -8,26 +8,26 @@
 #include <bio.h>
 #include <mach.h>
 
-/*s: constant STARTSYM */
+/*s: constant [[STARTSYM]] */
 #define STARTSYM	"_main"
-/*e: constant STARTSYM */
-/*s: constant PROFSYM */
+/*e: constant [[STARTSYM]] */
+/*s: constant [[PROFSYM]] */
 #define PROFSYM		"_mainp"
-/*e: constant PROFSYM */
-/*s: constant FRAMENAME */
+/*e: constant [[PROFSYM]] */
+/*s: constant [[FRAMENAME]] */
 #define	FRAMENAME	".frame"
-/*e: constant FRAMENAME */
+/*e: constant [[FRAMENAME]] */
 
 extern	Machdata	mipsmach;
 
-/*s: global asstype */
+/*s: global [[asstype]] */
 int	asstype = AARM;		/* disassembler type */
-/*e: global asstype */
-/*s: global machdata */
+/*e: global [[asstype]] */
+/*s: global [[machdata]] */
 Machdata *machdata;		/* machine-dependent functions */
-/*e: global machdata */
+/*e: global [[machdata]] */
 
-/*s: function localaddr */
+/*s: function [[localaddr]] */
 int
 localaddr(Map *map, char *fn, char *var, uvlong *r, Rgetter rget)
 {
@@ -73,9 +73,9 @@ localaddr(Map *map, char *fn, char *var, uvlong *r, Rgetter rget)
     }
     return 1;
 }
-/*e: function localaddr */
+/*e: function [[localaddr]] */
 
-/*s: function symoff */
+/*s: function [[symoff]] */
 /*
  * Print value v as s.name[+offset] if possible, or just v.
  */
@@ -103,9 +103,9 @@ symoff(char *buf, int n, uvlong v, int space)
     else
         return snprint(buf, n, "%s", s.name);
 }
-/*e: function symoff */
+/*e: function [[symoff]] */
 
-/*s: function fpformat */
+/*s: function [[fpformat]] */
 /*
  *	Format floating point registers
  *
@@ -166,9 +166,9 @@ fpformat(Map *map, Reglist *rp, char *buf, int n, int modif)
     }
     return 1;
 }
-/*e: function fpformat */
+/*e: function [[fpformat]] */
 
-/*s: function _hexify */
+/*s: function [[_hexify]] */
 char *
 _hexify(char *buf, ulong p, int zeros)
 {
@@ -183,9 +183,9 @@ _hexify(char *buf, ulong p, int zeros)
     *buf++ = "0123456789abcdef"[p&0x0f];
     return buf;
 }
-/*e: function _hexify */
+/*e: function [[_hexify]] */
 
-/*s: function ieeedftos */
+/*s: function [[ieeedftos]] */
 /*
  * These routines assume that if the number is representable
  * in IEEE floating point, it will be representable in the native
@@ -228,9 +228,9 @@ ieeedftos(char *buf, int n, ulong h, ulong l)
     fr = ldexp(fr, exp);
     return snprint(buf, n, "%.18g", fr);
 }
-/*e: function ieeedftos */
+/*e: function [[ieeedftos]] */
 
-/*s: function ieeesftos */
+/*s: function [[ieeesftos]] */
 int
 ieeesftos(char *buf, int n, ulong h)
 {
@@ -263,41 +263,41 @@ ieeesftos(char *buf, int n, ulong h)
     fr = ldexp(fr, exp);
     return snprint(buf, n, "%.9g", fr);
 }
-/*e: function ieeesftos */
+/*e: function [[ieeesftos]] */
 
-/*s: function beieeesftos */
+/*s: function [[beieeesftos]] */
 int
 beieeesftos(char *buf, int n, void *s)
 {
     return ieeesftos(buf, n, beswal(*(ulong*)s));
 }
-/*e: function beieeesftos */
+/*e: function [[beieeesftos]] */
 
-/*s: function beieeedftos */
+/*s: function [[beieeedftos]] */
 int
 beieeedftos(char *buf, int n, void *s)
 {
     return ieeedftos(buf, n, beswal(*(ulong*)s), beswal(((ulong*)(s))[1]));
 }
-/*e: function beieeedftos */
+/*e: function [[beieeedftos]] */
 
-/*s: function leieeesftos */
+/*s: function [[leieeesftos]] */
 int
 leieeesftos(char *buf, int n, void *s)
 {
     return ieeesftos(buf, n, leswal(*(ulong*)s));
 }
-/*e: function leieeesftos */
+/*e: function [[leieeesftos]] */
 
-/*s: function leieeedftos */
+/*s: function [[leieeedftos]] */
 int
 leieeedftos(char *buf, int n, void *s)
 {
     return ieeedftos(buf, n, leswal(((ulong*)(s))[1]), leswal(*(ulong*)s));
 }
-/*e: function leieeedftos */
+/*e: function [[leieeedftos]] */
 
-/*s: function beieee80ftos */
+/*s: function [[beieee80ftos]] */
 /* packed in 12 bytes, with s[2]==s[3]==0; mantissa starts at s[4]*/
 int
 beieee80ftos(char *buf, int n, void *s)
@@ -348,9 +348,9 @@ beieee80ftos(char *buf, int n, void *s)
     done:
     return beieeedftos(buf, n, (void*)ieee);
 }
-/*e: function beieee80ftos */
+/*e: function [[beieee80ftos]] */
 
-/*s: function leieee80ftos */
+/*s: function [[leieee80ftos]] */
 int
 leieee80ftos(char *buf, int n, void *s)
 {
@@ -363,9 +363,9 @@ leieee80ftos(char *buf, int n, void *s)
         b[11-i] = *cp++;
     return beieee80ftos(buf, n, b);
 }
-/*e: function leieee80ftos */
+/*e: function [[leieee80ftos]] */
 
-/*s: function cisctrace */
+/*s: function [[cisctrace]] */
 int
 cisctrace(Map *map, uvlong pc, uvlong sp, uvlong link, Tracer trace)
 {
@@ -397,9 +397,9 @@ cisctrace(Map *map, uvlong pc, uvlong sp, uvlong link, Tracer trace)
     }
     return i;
 }
-/*e: function cisctrace */
+/*e: function [[cisctrace]] */
 
-/*s: function risctrace */
+/*s: function [[risctrace]] */
 int
 risctrace(Map *map, uvlong pc, uvlong sp, uvlong link, Tracer trace)
 {
@@ -435,9 +435,9 @@ risctrace(Map *map, uvlong pc, uvlong sp, uvlong link, Tracer trace)
     }
     return i;
 }
-/*e: function risctrace */
+/*e: function [[risctrace]] */
 
-/*s: function ciscframe */
+/*s: function [[ciscframe]] */
 uvlong
 ciscframe(Map *map, uvlong addr, uvlong pc, uvlong sp, uvlong link)
 {
@@ -459,9 +459,9 @@ ciscframe(Map *map, uvlong addr, uvlong pc, uvlong sp, uvlong link)
     }
     return 0;
 }
-/*e: function ciscframe */
+/*e: function [[ciscframe]] */
 
-/*s: function riscframe */
+/*s: function [[riscframe]] */
 uvlong
 riscframe(Map *map, uvlong addr, uvlong pc, uvlong sp, uvlong link)
 {
@@ -489,5 +489,5 @@ riscframe(Map *map, uvlong addr, uvlong pc, uvlong sp, uvlong link)
     }
     return 0;
 }
-/*e: function riscframe */
-/*e: linkers/libmach/machdata.c */
+/*e: function [[riscframe]] */
+/*e: libmach/machdata.c */

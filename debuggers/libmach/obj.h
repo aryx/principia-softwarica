@@ -1,4 +1,4 @@
-/*s: linkers/libmach/obj.h */
+/*s: libmach/obj.h */
 /*
  * obj.h -- defs for dealing with object files
  */
@@ -13,7 +13,7 @@ typedef enum Kind		/* variable defs and references in obj */
 
 typedef struct	Prog	Prog;
 
-/*s: struct Prog (linkers/libmach/obj.h) */
+/*s: struct Prog (libmach/obj.h) */
 struct Prog		/* info from .$O files */
 {
     Kind	kind;		/* what kind of symbol */
@@ -22,11 +22,11 @@ struct Prog		/* info from .$O files */
     char	*id;		/* name for the symbol, if it introduces one */
     uint	sig;		/* type signature for symbol */
 };
-/*e: struct Prog (linkers/libmach/obj.h) */
+/*e: struct Prog (libmach/obj.h) */
 
-/*s: constant UNKNOWN */
+/*s: constant [[UNKNOWN]] */
 #define UNKNOWN	'?'
-/*e: constant UNKNOWN */
+/*e: constant [[UNKNOWN]] */
 
 void		_offset(int, vlong);
-/*e: linkers/libmach/obj.h */
+/*e: libmach/obj.h */

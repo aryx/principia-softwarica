@@ -40,7 +40,7 @@ error(char *fmt, ...)
 }
 /*e: function error (acid/exec.c) */
 
-/*s: function unwind */
+/*s: function [[unwind]] */
 void
 unwind(void)
 {
@@ -58,9 +58,9 @@ unwind(void)
         }
     }
 }
-/*e: function unwind */
+/*e: function [[unwind]] */
 
-/*s: function execute */
+/*s: function [[execute]] */
 void
 execute(Node *n)
 {
@@ -160,9 +160,9 @@ execute(Node *n)
         break;
     }
 }
-/*e: function execute */
+/*e: function [[execute]] */
 
-/*s: function fbool */
+/*s: function [[fbool]] */
 int
 fbool(Node *n)
 {
@@ -191,9 +191,9 @@ fbool(Node *n)
     }
     return true;
 }
-/*e: function fbool */
+/*e: function [[fbool]] */
 
-/*s: function convflt */
+/*s: function [[convflt]] */
 void
 convflt(Node *r, char *flt)
 {
@@ -210,9 +210,9 @@ convflt(Node *r, char *flt)
         r->fval = atof(flt);
     }
 }
-/*e: function convflt */
+/*e: function [[convflt]] */
 
-/*s: function indir */
+/*s: function [[indir]] */
 void
 indir(Map *m, uvlong addr, char fmt, Node *r)
 {
@@ -365,9 +365,9 @@ indir(Map *m, uvlong addr, char fmt, Node *r)
         break;
     }
 }
-/*e: function indir */
+/*e: function [[indir]] */
 
-/*s: function windir */
+/*s: function [[windir]] */
 void
 windir(Map *m, Node *addr, Node *rval, Node *r)
 {
@@ -437,9 +437,9 @@ windir(Map *m, Node *addr, Node *rval, Node *r)
     if (ret < 0)
         error("windir: %r");
 }
-/*e: function windir */
+/*e: function [[windir]] */
 
-/*s: function call */
+/*s: function [[call]] */
 void
 call(char *fn, Node *parameters, Node *local, Node *body, Node *retexp)
 {
@@ -511,5 +511,5 @@ call(char *fn, Node *parameters, Node *local, Node *body, Node *retexp)
         free(f);
     }
 }
-/*e: function call */
+/*e: function [[call]] */
 /*e: acid/exec.c */

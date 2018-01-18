@@ -1,31 +1,31 @@
-/*s: linkers/libmach/5db.c */
+/*s: libmach/5db.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
 
-/*s: global debug (linkers/libmach/5db.c)(arm) */
+/*s: global debug (libmach/5db.c)(arm) */
 static int debug = 0;
-/*e: global debug (linkers/libmach/5db.c)(arm) */
+/*e: global debug (libmach/5db.c)(arm) */
 
-/*s: function BITS(arm) */
+/*s: function [[BITS]](arm) */
 #define	BITS(a, b)	((1<<(b+1))-(1<<a))
-/*e: function BITS(arm) */
+/*e: function [[BITS]](arm) */
 
-/*s: function LSR(arm) */
+/*s: function [[LSR]](arm) */
 #define LSR(v, s)	((ulong)(v) >> (s))
-/*e: function LSR(arm) */
-/*s: function ASR(arm) */
+/*e: function [[LSR]](arm) */
+/*s: function [[ASR]](arm) */
 #define ASR(v, s)	((long)(v) >> (s))
-/*e: function ASR(arm) */
-/*s: function ROR(arm) */
+/*e: function [[ASR]](arm) */
+/*s: function [[ROR]](arm) */
 #define ROR(v, s)	(LSR((v), (s)) | (((v) & ((1 << (s))-1)) << (32 - (s))))
-/*e: function ROR(arm) */
+/*e: function [[ROR]](arm) */
 
 
 
 typedef struct	Instr	Instr;
-/*s: struct Instr(arm) */
+/*s: struct [[Instr]](arm) */
 struct	Instr
 {
     Map	*map;
@@ -45,10 +45,10 @@ struct	Instr
     char*	end;			/* end of buffer */
     char*	err;			/* error message */
 };
-/*e: struct Instr(arm) */
+/*e: struct [[Instr]](arm) */
 
 typedef struct Opcode Opcode;
-/*s: struct Opcode(arm) */
+/*s: struct [[Opcode]](arm) */
 struct Opcode
 {
     char*	o;
@@ -56,12 +56,12 @@ struct Opcode
     uvlong	(*foll)(Map*, Rgetter, Instr*, uvlong);
     char*	a;
 };
-/*e: struct Opcode(arm) */
+/*e: struct [[Opcode]](arm) */
 
 static	void	format(char*, Instr*, char*);
-/*s: global FRAMENAME(arm) */
+/*s: global [[FRAMENAME]](arm) */
 static	char	FRAMENAME[] = ".frame";
-/*e: global FRAMENAME(arm) */
+/*e: global [[FRAMENAME]](arm) */
 
 /*
  * Arm-specific debugger interface
@@ -73,7 +73,7 @@ static	int	arminst(Map*, uvlong, char, char*, int);
 static	int	armdas(Map*, uvlong, char*, int);
 static	int	arminstlen(Map*, uvlong);
 
-/*s: global armmach(arm) */
+/*s: global [[armmach]](arm) */
 /*
  *	Debugger interface
  */
@@ -96,9 +96,9 @@ Machdata armmach =
     armdas,			/* dissembler */
     arminstlen,		/* instruction size */
 };
-/*e: global armmach(arm) */
+/*e: global [[armmach]](arm) */
 
-/*s: function armexcep(arm) */
+/*s: function [[armexcep]](arm) */
 static char*
 armexcep(Map *map, Rgetter rget)
 {
@@ -124,9 +124,9 @@ armexcep(Map *map, Rgetter rget)
         return "Undefined trap";
     }
 }
-/*e: function armexcep(arm) */
+/*e: function [[armexcep]](arm) */
 
-/*s: global cond(arm) */
+/*s: global [[cond]](arm) */
 static
 char*	cond[16] =
 {
@@ -135,33 +135,33 @@ char*	cond[16] =
     "HI",	"LS",	"GE",	"LT",
     "GT",	"LE",	0,	"NV"
 };
-/*e: global cond(arm) */
+/*e: global [[cond]](arm) */
 
-/*s: global shtype(arm) */
+/*s: global [[shtype]](arm) */
 static
 char*	shtype[4] =
 {
     "<<",	">>",	"->",	"@>"
 };
-/*e: global shtype(arm) */
+/*e: global [[shtype]](arm) */
 
-/*s: global hb(arm) */
+/*s: global [[hb]](arm) */
 static
 char *hb[4] =
 {
     "???",	"HU", "B", "H"
 };
-/*e: global hb(arm) */
+/*e: global [[hb]](arm) */
 
-/*s: global addsub(arm) */
+/*s: global [[addsub]](arm) */
 static
 char*	addsub[2] =
 {
     "-",	"+",
 };
-/*e: global addsub(arm) */
+/*e: global [[addsub]](arm) */
 
-/*s: function armclass(arm) */
+/*s: function [[armclass]](arm) */
 int
 armclass(long w)
 {
@@ -322,9 +322,9 @@ armclass(long w)
     }
     return op;
 }
-/*e: function armclass(arm) */
+/*e: function [[armclass]](arm) */
 
-/*s: function decode(arm) */
+/*s: function [[decode]](arm) */
 static int
 decode(Map *map, uvlong pc, Instr *i)
 {
@@ -341,11 +341,11 @@ decode(Map *map, uvlong pc, Instr *i)
     i->map = map;
     return 1;
 }
-/*e: function decode(arm) */
+/*e: function [[decode]](arm) */
 
 #pragma	varargck	argpos	bprint		2
 
-/*s: function bprint(arm) */
+/*s: function [[bprint]](arm) */
 static void
 bprint(Instr *i, char *fmt, ...)
 {
@@ -355,9 +355,9 @@ bprint(Instr *i, char *fmt, ...)
     i->curr = vseprint(i->curr, i->end, fmt, arg);
     va_end(arg);
 }
-/*e: function bprint(arm) */
+/*e: function [[bprint]](arm) */
 
-/*s: function plocal(arm) */
+/*s: function [[plocal]](arm) */
 static int
 plocal(Instr *i)
 {
@@ -393,9 +393,9 @@ plocal(Instr *i)
     bprint(i, "%s%c%lld%s", s.name, class == CPARAM ? '+' : '-', s.value, reg);
     return 1;
 }
-/*e: function plocal(arm) */
+/*e: function [[plocal]](arm) */
 
-/*s: function gsymoff(arm) */
+/*s: function [[gsymoff]](arm) */
 /*
  * Print value v as name[+offset]
  */
@@ -425,9 +425,9 @@ gsymoff(char *buf, int n, ulong v, int space)
     else
         return snprint(buf, n, "#%lux", v);
 }
-/*e: function gsymoff(arm) */
+/*e: function [[gsymoff]](arm) */
 
-/*s: function armdps(arm) */
+/*s: function [[armdps]](arm) */
 static void
 armdps(Opcode *o, Instr *i)
 {
@@ -467,9 +467,9 @@ armdps(Opcode *o, Instr *i)
     }
     format(o->o, i, o->a);
 }
-/*e: function armdps(arm) */
+/*e: function [[armdps]](arm) */
 
-/*s: function armdpi(arm) */
+/*s: function [[armdpi]](arm) */
 static void
 armdpi(Opcode *o, Instr *i)
 {
@@ -499,9 +499,9 @@ armdpi(Opcode *o, Instr *i)
     }
     format(o->o, i, o->a);
 }
-/*e: function armdpi(arm) */
+/*e: function [[armdpi]](arm) */
 
-/*s: function armsdti(arm) */
+/*s: function [[armsdti]](arm) */
 static void
 armsdti(Opcode *o, Instr *i)
 {
@@ -522,9 +522,9 @@ armsdti(Opcode *o, Instr *i)
     }
     format(o->o, i, o->a);
 }
-/*e: function armsdti(arm) */
+/*e: function [[armsdti]](arm) */
 
-/*s: function armvstdi(arm) */
+/*s: function [[armvstdi]](arm) */
 static void
 armvstdi(Opcode *o, Instr *i)
 {
@@ -538,9 +538,9 @@ armvstdi(Opcode *o, Instr *i)
     i->rd = (i->w >> 12) & 0xf;
     format(o->o, i, o->a);
 }
-/*e: function armvstdi(arm) */
+/*e: function [[armvstdi]](arm) */
 
-/*s: function armhwby(arm) */
+/*s: function [[armhwby]](arm) */
 /* arm V4 ld/st halfword, signed byte */
 static void
 armhwby(Opcode *o, Instr *i)
@@ -554,9 +554,9 @@ armhwby(Opcode *o, Instr *i)
     i->rs = (i->w >> 0) & 0xf;
     format(o->o, i, o->a);
 }
-/*e: function armhwby(arm) */
+/*e: function [[armhwby]](arm) */
 
-/*s: function armsdts(arm) */
+/*s: function [[armsdts]](arm) */
 static void
 armsdts(Opcode *o, Instr *i)
 {
@@ -566,9 +566,9 @@ armsdts(Opcode *o, Instr *i)
     i->rd = (i->w >> 12) & 0xf;
     format(o->o, i, o->a);
 }
-/*e: function armsdts(arm) */
+/*e: function [[armsdts]](arm) */
 
-/*s: function armbdt(arm) */
+/*s: function [[armbdt]](arm) */
 static void
 armbdt(Opcode *o, Instr *i)
 {
@@ -580,33 +580,33 @@ armbdt(Opcode *o, Instr *i)
     else
         format(o->o, i, o->a);
 }
-/*e: function armbdt(arm) */
+/*e: function [[armbdt]](arm) */
 
-/*s: function armund(arm) */
+/*s: function [[armund]](arm) */
 static void
 armund(Opcode *o, Instr *i)
 {
     format(o->o, i, o->a);
 }
-/*e: function armund(arm) */
+/*e: function [[armund]](arm) */
 
-/*s: function armcdt(arm) */
+/*s: function [[armcdt]](arm) */
 static void
 armcdt(Opcode *o, Instr *i)
 {
     format(o->o, i, o->a);
 }
-/*e: function armcdt(arm) */
+/*e: function [[armcdt]](arm) */
 
-/*s: function armunk(arm) */
+/*s: function [[armunk]](arm) */
 static void
 armunk(Opcode *o, Instr *i)
 {
     format(o->o, i, o->a);
 }
-/*e: function armunk(arm) */
+/*e: function [[armunk]](arm) */
 
-/*s: function armb(arm) */
+/*s: function [[armb]](arm) */
 static void
 armb(Opcode *o, Instr *i)
 {
@@ -618,18 +618,18 @@ armb(Opcode *o, Instr *i)
     i->imm = (v<<2) + i->addr + 8;
     format(o->o, i, o->a);
 }
-/*e: function armb(arm) */
+/*e: function [[armb]](arm) */
 
-/*s: function armbpt(arm) */
+/*s: function [[armbpt]](arm) */
 static void
 armbpt(Opcode *o, Instr *i)
 {
     i->imm = ((i->w >> 4) & 0xfff0) | (i->w &0xf);
     format(o->o, i, o->a);
 }
-/*e: function armbpt(arm) */
+/*e: function [[armbpt]](arm) */
 
-/*s: function armco(arm) */
+/*s: function [[armco]](arm) */
 static void
 armco(Opcode *o, Instr *i)		/* coprocessor instructions */
 {
@@ -651,9 +651,9 @@ armco(Opcode *o, Instr *i)		/* coprocessor instructions */
     }
     format(o->o, i, buf);
 }
-/*e: function armco(arm) */
+/*e: function [[armco]](arm) */
 
-/*s: function armcondpass(arm) */
+/*s: function [[armcondpass]](arm) */
 static int
 armcondpass(Map *map, Rgetter rget, uchar cond)
 {
@@ -689,9 +689,9 @@ armcondpass(Map *map, Rgetter rget, uchar cond)
     case 15:	return 0;
     }
 }
-/*e: function armcondpass(arm) */
+/*e: function [[armcondpass]](arm) */
 
-/*s: function armshiftval(arm) */
+/*s: function [[armshiftval]](arm) */
 static ulong
 armshiftval(Map *map, Rgetter rget, Instr *i)
 {
@@ -755,9 +755,9 @@ armshiftval(Map *map, Rgetter rget, Instr *i)
         }
     }
 }
-/*e: function armshiftval(arm) */
+/*e: function [[armshiftval]](arm) */
 
-/*s: function nbits(arm) */
+/*s: function [[nbits]](arm) */
 static int
 nbits(ulong v)
 {
@@ -771,9 +771,9 @@ nbits(ulong v)
 
     return n;
 }
-/*e: function nbits(arm) */
+/*e: function [[nbits]](arm) */
 
-/*s: function armmaddr(arm) */
+/*s: function [[armmaddr]](arm) */
 static ulong
 armmaddr(Map *map, Rgetter rget, Instr *i)
 {
@@ -796,9 +796,9 @@ armmaddr(Map *map, Rgetter rget, Instr *i)
     case 3: return v + 4;
     }
 }
-/*e: function armmaddr(arm) */
+/*e: function [[armmaddr]](arm) */
 
-/*s: function armaddr(arm) */
+/*s: function [[armaddr]](arm) */
 static uvlong
 armaddr(Map *map, Rgetter rget, Instr *i)
 {
@@ -841,9 +841,9 @@ armaddr(Map *map, Rgetter rget, Instr *i)
         return rn - index;
     }
 }
-/*e: function armaddr(arm) */
+/*e: function [[armaddr]](arm) */
 
-/*s: function armfadd(arm) */
+/*s: function [[armfadd]](arm) */
 static uvlong
 armfadd(Map *map, Rgetter rget, Instr *i, uvlong pc)
 {
@@ -859,9 +859,9 @@ armfadd(Map *map, Rgetter rget, Instr *i, uvlong pc)
 
     return rget(map, buf) + armshiftval(map, rget, i);
 }
-/*e: function armfadd(arm) */
+/*e: function [[armfadd]](arm) */
 
-/*s: function armfbx(arm) */
+/*s: function [[armfbx]](arm) */
 static uvlong
 armfbx(Map *map, Rgetter rget, Instr *i, uvlong pc)
 {
@@ -874,9 +874,9 @@ armfbx(Map *map, Rgetter rget, Instr *i, uvlong pc)
     sprint(buf, "R%d", r);
     return rget(map, buf);
 }
-/*e: function armfbx(arm) */
+/*e: function [[armfbx]](arm) */
 
-/*s: function armfmovm(arm) */
+/*s: function [[armfmovm]](arm) */
 static uvlong
 armfmovm(Map *map, Rgetter rget, Instr *i, uvlong pc)
 {
@@ -894,9 +894,9 @@ armfmovm(Map *map, Rgetter rget, Instr *i, uvlong pc)
     }
     return v;
 }
-/*e: function armfmovm(arm) */
+/*e: function [[armfmovm]](arm) */
 
-/*s: function armfbranch(arm) */
+/*s: function [[armfbranch]](arm) */
 static uvlong
 armfbranch(Map *map, Rgetter rget, Instr *i, uvlong pc)
 {
@@ -905,9 +905,9 @@ armfbranch(Map *map, Rgetter rget, Instr *i, uvlong pc)
 
     return pc + (((signed long)i->w << 8) >> 6) + 8;
 }
-/*e: function armfbranch(arm) */
+/*e: function [[armfbranch]](arm) */
 
-/*s: function armfmov(arm) */
+/*s: function [[armfmov]](arm) */
 static uvlong
 armfmov(Map *map, Rgetter rget, Instr *i, uvlong pc)
 {
@@ -932,9 +932,9 @@ armfmov(Map *map, Rgetter rget, Instr *i, uvlong pc)
 
     return v;
 }
-/*e: function armfmov(arm) */
+/*e: function [[armfmov]](arm) */
 
-/*s: global opcodes(arm) */
+/*s: global [[opcodes]](arm) */
 static Opcode opcodes[] =
 {
     "AND%C%S",	armdps, 0,	"R%s,R%n,R%d",
@@ -1105,28 +1105,28 @@ static Opcode opcodes[] =
     "BXJ%C",	armdps,	armfbx,	"(R%s)",
     "BLX%C",	armdps,	armfbx,	"(R%s)",
 };
-/*e: global opcodes(arm) */
+/*e: global [[opcodes]](arm) */
 
-/*s: function gaddr(arm) */
+/*s: function [[gaddr]](arm) */
 static void
 gaddr(Instr *i)
 {
     *i->curr++ = '$';
     i->curr += gsymoff(i->curr, i->end-i->curr, i->imm, CANY);
 }
-/*e: function gaddr(arm) */
+/*e: function [[gaddr]](arm) */
 
-/*s: global mode(arm) */
+/*s: global [[mode]](arm) */
 static	char *mode[] = { 0, "IA", "DB", "IB" };
-/*e: global mode(arm) */
-/*s: global pw(arm) */
+/*e: global [[mode]](arm) */
+/*s: global [[pw]](arm) */
 static	char *pw[] = { "P", "PW", 0, "W" };
-/*e: global pw(arm) */
-/*s: global sw(arm) */
+/*e: global [[pw]](arm) */
+/*s: global [[sw]](arm) */
 static	char *sw[] = { 0, "W", "S", "SW" };
-/*e: global sw(arm) */
+/*e: global [[sw]](arm) */
 
-/*s: function format(arm) */
+/*s: function [[format]](arm) */
 static void
 format(char *mnemonic, Instr *i, char *f)
 {
@@ -1360,9 +1360,9 @@ format(char *mnemonic, Instr *i, char *f)
     }
     *i->curr = 0;
 }
-/*e: function format(arm) */
+/*e: function [[format]](arm) */
 
-/*s: function printins(arm) */
+/*s: function [[printins]](arm) */
 static int
 printins(Map *map, uvlong pc, char *buf, int n)
 {
@@ -1376,18 +1376,18 @@ printins(Map *map, uvlong pc, char *buf, int n)
     (*opcodes[i.op].fmt)(&opcodes[i.op], &i);
     return 4;
 }
-/*e: function printins(arm) */
+/*e: function [[printins]](arm) */
 
-/*s: function arminst(arm) */
+/*s: function [[arminst]](arm) */
 static int
 arminst(Map *map, uvlong pc, char modifier, char *buf, int n)
 {
     USED(modifier);
     return printins(map, pc, buf, n);
 }
-/*e: function arminst(arm) */
+/*e: function [[arminst]](arm) */
 
-/*s: function armdas(arm) */
+/*s: function [[armdas]](arm) */
 static int
 armdas(Map *map, uvlong pc, char *buf, int n)
 {
@@ -1402,9 +1402,9 @@ armdas(Map *map, uvlong pc, char *buf, int n)
     *i.curr = 0;
     return 4;
 }
-/*e: function armdas(arm) */
+/*e: function [[armdas]](arm) */
 
-/*s: function arminstlen(arm) */
+/*s: function [[arminstlen]](arm) */
 static int
 arminstlen(Map *map, uvlong pc)
 {
@@ -1414,9 +1414,9 @@ arminstlen(Map *map, uvlong pc)
         return -1;
     return 4;
 }
-/*e: function arminstlen(arm) */
+/*e: function [[arminstlen]](arm) */
 
-/*s: function armfoll(arm) */
+/*s: function [[armfoll]](arm) */
 static int
 armfoll(Map *map, uvlong pc, Rgetter rget, uvlong *foll)
 {
@@ -1436,5 +1436,5 @@ armfoll(Map *map, uvlong pc, Rgetter rget, uvlong *foll)
     foll[0] = d;
     return 1;
 }
-/*e: function armfoll(arm) */
-/*e: linkers/libmach/5db.c */
+/*e: function [[armfoll]](arm) */
+/*e: libmach/5db.c */

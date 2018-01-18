@@ -9,7 +9,7 @@
 
 static void install(int);
 
-/*s: function nocore */
+/*s: function [[nocore]] */
 void
 nocore(void)
 {
@@ -24,9 +24,9 @@ nocore(void)
     free(cormap);
     cormap = 0;
 }
-/*e: function nocore */
+/*e: function [[nocore]] */
 
-/*s: function sproc */
+/*s: function [[sproc]] */
 void
 sproc(int pid)
 {
@@ -59,9 +59,9 @@ sproc(int pid)
         cormap->seg[i].name = "*data";
     install(pid);
 }
-/*e: function sproc */
+/*e: function [[sproc]] */
 
-/*s: function nproc */
+/*s: function [[nproc]] */
 int
 nproc(char **argv)
 {
@@ -104,7 +104,7 @@ nproc(char **argv)
 
     return pid;
 }
-/*e: function nproc */
+/*e: function [[nproc]] */
 
 /*s: function notes (acid/proc.c) */
 void
@@ -145,7 +145,7 @@ notes(int pid)
 }
 /*e: function notes (acid/proc.c) */
 
-/*s: function dostop */
+/*s: function [[dostop]] */
 void
 dostop(int pid)
 {
@@ -164,9 +164,9 @@ dostop(int pid)
         execute(np);
     }
 }
-/*e: function dostop */
+/*e: function [[dostop]] */
 
-/*s: function install */
+/*s: function [[install]] */
 static void
 install(int pid)
 {
@@ -201,9 +201,9 @@ install(int pid)
     s->v->l = l;
     s->v->set = 1;
 }
-/*e: function install */
+/*e: function [[install]] */
 
-/*s: function deinstall */
+/*s: function [[deinstall]] */
 void
 deinstall(int pid)
 {
@@ -230,9 +230,9 @@ deinstall(int pid)
         }
     }
 }
-/*e: function deinstall */
+/*e: function [[deinstall]] */
 
-/*s: function msg */
+/*s: function [[msg]] */
 void
 msg(int pid, char *msg)
 {
@@ -254,9 +254,9 @@ msg(int pid, char *msg)
     }
     error("msg: pid=%d: not found for %s", pid, msg);
 }
-/*e: function msg */
+/*e: function [[msg]] */
 
-/*s: function getstatus */
+/*s: function [[getstatus]] */
 char *
 getstatus(int pid)
 {
@@ -280,9 +280,9 @@ getstatus(int pid)
 
     return argv[2];
 }
-/*e: function getstatus */
+/*e: function [[getstatus]] */
 
-/*s: function waitfor */
+/*s: function [[waitfor]] */
 Waitmsg*
 waitfor(int pid)
 {
@@ -296,5 +296,5 @@ waitfor(int pid)
         free(w);
     }
 }
-/*e: function waitfor */
+/*e: function [[waitfor]] */
 /*e: acid/proc.c */

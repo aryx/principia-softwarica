@@ -1,4 +1,4 @@
-/*s: linkers/libmach/obj.c */
+/*s: libmach/obj.c */
 /*
  * obj.c
  * routines universal to all object files
@@ -11,11 +11,11 @@
 
 #include "obj.h"
 
-/*s: function islocal */
+/*s: function [[islocal]] */
 #define islocal(t)	((t)=='a' || (t)=='p')
-/*e: function islocal */
+/*e: function [[islocal]] */
 
-/*s: enum _anon_ (linkers/libmach/obj.c) */
+/*s: enum [[_anon_ (libmach/obj.c)]] */
 enum
 {
     NNAMES	= 50,
@@ -24,7 +24,7 @@ enum
     NHASH	= 1024,		/* must be power of two */
     HASHMUL	= 79L,
 };
-/*e: enum _anon_ (linkers/libmach/obj.c) */
+/*e: enum [[_anon_ (libmach/obj.c)]] */
 
 int			/* in [$OS].c */ //$
   _is5(char*),
@@ -36,45 +36,45 @@ int			/* in [$OS].c */ //$
 typedef struct Obj	Obj;
 typedef struct Symtab	Symtab;
 
-/*s: struct Obj */
+/*s: struct [[Obj]] */
 struct	Obj		/* functions to handle each intermediate (.$O) file */
 {
     char	*name;				/* name of each $O file */
     int	(*is)(char*);			/* test for each type of $O file */
     int	(*read)(Biobuf*, Prog*);	/* read for each type of $O file*/
 };
-/*e: struct Obj */
+/*e: struct [[Obj]] */
 
-/*s: global obj */
+/*s: global [[obj]] */
 static Obj	obj[] =
 {			/* functions to identify and parse each type of obj */
     [ObjArm]	"arm .5",	_is5, _read5,
     [Obj386]	"386 .8",	_is8, _read8,
     [Maxobjtype]	0, 0
 };
-/*e: global obj */
+/*e: global [[obj]] */
 
-/*s: struct Symtab */
+/*s: struct [[Symtab]] */
 struct	Symtab
 {
     struct	Sym 	s;
     struct	Symtab	*next;
 };
-/*e: struct Symtab */
+/*e: struct [[Symtab]] */
 
-/*s: global hash (linkers/libmach/obj.c) */
+/*s: global hash (libmach/obj.c) */
 static	Symtab *hash[NHASH];
-/*e: global hash (linkers/libmach/obj.c) */
-/*s: global names */
+/*e: global hash (libmach/obj.c) */
+/*s: global [[names]] */
 static	Sym	*names[NNAMES];	/* working set of active names */
-/*e: global names */
+/*e: global [[names]] */
 
 static	int	processprog(Prog*,int);	/* decode each symbol reference */
 static	void	objreset(void);
 static	void	objlookup(int, char *, int, uint);
 static	void 	objupdate(int, int);
 
-/*s: function objtype */
+/*s: function [[objtype]] */
 int
 objtype(Biobuf *bp, char **name)
 {
@@ -93,9 +93,9 @@ objtype(Biobuf *bp, char **name)
     }
     return -1;
 }
-/*e: function objtype */
+/*e: function [[objtype]] */
 
-/*s: function isar */
+/*s: function [[isar]] */
 int
 isar(Biobuf *bp)
 {
@@ -107,9 +107,9 @@ isar(Biobuf *bp)
         return 1;
     return 0;
 }
-/*e: function isar */
+/*e: function [[isar]] */
 
-/*s: function readobj */
+/*s: function [[readobj]] */
 /*
  * determine what kind of object file this is and process it.
  * return whether or not this was a recognized intermediate file.
@@ -127,9 +127,9 @@ readobj(Biobuf *bp, int objtype)
             return 0;
     return 1;
 }
-/*e: function readobj */
+/*e: function [[readobj]] */
 
-/*s: function readar */
+/*s: function [[readar]] */
 int
 readar(Biobuf *bp, int objtype, vlong end, int doautos)
 {
@@ -143,9 +143,9 @@ readar(Biobuf *bp, int objtype, vlong end, int doautos)
             return 0;
     return 1;
 }
-/*e: function readar */
+/*e: function [[readar]] */
 
-/*s: function processprog */
+/*s: function [[processprog]] */
 /*
  *	decode a symbol reference or definition
  */
@@ -175,9 +175,9 @@ processprog(Prog *p, int doautos)
     }
     return 1;
 }
-/*e: function processprog */
+/*e: function [[processprog]] */
 
-/*s: function objlookup */
+/*s: function [[objlookup]] */
 /*
  * find the entry for s in the symbol array.
  * make a new entry if it is not already there.
@@ -245,8 +245,8 @@ objlookup(int id, char *name, int type, uint sig)
     hash[h] = sp;
     return;
 }
-/*e: function objlookup */
-/*s: function objtraverse */
+/*e: function [[objlookup]] */
+/*s: function [[objtraverse]] */
 /*
  *	traverse the symbol lists
  */
@@ -260,9 +260,9 @@ objtraverse(void (*fn)(Sym*, void*), void *pointer)
         for(s = hash[i]; s; s = s->next)
             (*fn)(&s->s, pointer);
 }
-/*e: function objtraverse */
+/*e: function [[objtraverse]] */
 
-/*s: function _offset */
+/*s: function [[_offset]] */
 /*
  * update the offset information for a 'a' or 'p' symbol in an intermediate file
  */
@@ -275,9 +275,9 @@ _offset(int id, vlong off)
     if (s && s->name[0] && islocal(s->type) && s->value > off)
         s->value = off;
 }
-/*e: function _offset */
+/*e: function [[_offset]] */
 
-/*s: function objupdate */
+/*s: function [[objupdate]] */
 /*
  * update the type of a global text or data symbol
  */
@@ -293,9 +293,9 @@ objupdate(int id, int type)
         else if (s->type == 'b')
             s->type = tolower(type);
 }
-/*e: function objupdate */
+/*e: function [[objupdate]] */
 
-/*s: function nextar */
+/*s: function [[nextar]] */
 /*
  * look for the next file in an archive
  */
@@ -322,9 +322,9 @@ nextar(Biobuf *bp, int offset, char *buf)
         arsize++;
     return arsize + SAR_HDR;
 }
-/*e: function nextar */
+/*e: function [[nextar]] */
 
-/*s: function objreset */
+/*s: function [[objreset]] */
 static void
 objreset(void)
 {
@@ -341,5 +341,5 @@ objreset(void)
     }
     memset(names, 0, sizeof names);
 }
-/*e: function objreset */
-/*e: linkers/libmach/obj.c */
+/*e: function [[objreset]] */
+/*e: libmach/obj.c */

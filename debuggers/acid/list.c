@@ -6,11 +6,11 @@
 #include <mach.h>
 #include "acid.h"
 
-/*s: global tail */
+/*s: global [[tail]] */
 static List **tail;
-/*e: global tail */
+/*e: global [[tail]] */
 
-/*s: function construct */
+/*s: function [[construct]] */
 List*
 construct(Node *l)
 {
@@ -24,9 +24,9 @@ construct(Node *l)
 
     return lh;
 }
-/*e: function construct */
+/*e: function [[construct]] */
 
-/*s: function listlen */
+/*s: function [[listlen]] */
 int
 listlen(List *l)
 {
@@ -39,9 +39,9 @@ listlen(List *l)
     }
     return len;
 }
-/*e: function listlen */
+/*e: function [[listlen]] */
 
-/*s: function build */
+/*s: function [[build]] */
 void
 build(Node *n)
 {
@@ -64,9 +64,9 @@ build(Node *n)
         tail = &l->next;	
     }
 }
-/*e: function build */
+/*e: function [[build]] */
 
-/*s: function addlist */
+/*s: function [[addlist]] */
 List*
 addlist(List *l, List *r)
 {
@@ -81,9 +81,9 @@ addlist(List *l, List *r)
 
     return l;
 }
-/*e: function addlist */
+/*e: function [[addlist]] */
 
-/*s: function append */
+/*s: function [[append]] */
 void
 append(Node *r, Node *list, Node *val)
 {
@@ -106,9 +106,9 @@ append(Node *r, Node *list, Node *val)
     f->next = l;
     r->l = list->l;
 }
-/*e: function append */
+/*e: function [[append]] */
 
-/*s: function listcmp */
+/*s: function [[listcmp]] */
 int
 listcmp(List *l, List *r)
 {
@@ -145,9 +145,9 @@ listcmp(List *l, List *r)
         return 0;
     return 1;
 }
-/*e: function listcmp */
+/*e: function [[listcmp]] */
 
-/*s: function nthelem */
+/*s: function [[nthelem]] */
 void
 nthelem(List *l, int n, Node *res)
 {
@@ -166,9 +166,9 @@ nthelem(List *l, int n, Node *res)
     res->type = l->type;
     res->Store = l->Store;
 }
-/*e: function nthelem */
+/*e: function [[nthelem]] */
 
-/*s: function delete */
+/*s: function [[delete]] */
 void
 delete(List *l, int n, Node *res)
 {
@@ -188,9 +188,9 @@ delete(List *l, int n, Node *res)
         error("element beyond end of list");
     *tl = l->next;
 }
-/*e: function delete */
+/*e: function [[delete]] */
 
-/*s: function listvar */
+/*s: function [[listvar]] */
 List*
 listvar(char *s, vlong v)
 {
@@ -209,9 +209,9 @@ listvar(char *s, vlong v)
 
     return tl;
 }
-/*e: function listvar */
+/*e: function [[listvar]] */
 
-/*s: function listlocals */
+/*s: function [[listlocals]] */
 static List*
 listlocals(Map *map, Symbol *fn, uvlong fp)
 {
@@ -237,9 +237,9 @@ listlocals(Map *map, Symbol *fn, uvlong fp)
     }
     return l2;
 }
-/*e: function listlocals */
+/*e: function [[listlocals]] */
 
-/*s: function listparams */
+/*s: function [[listparams]] */
 static List*
 listparams(Map *map, Symbol *fn, uvlong fp)
 {
@@ -263,9 +263,9 @@ listparams(Map *map, Symbol *fn, uvlong fp)
     }
     return l2;
 }
-/*e: function listparams */
+/*e: function [[listparams]] */
 
-/*s: function trlist */
+/*s: function [[trlist]] */
 void
 trlist(Map *map, uvlong pc, uvlong sp, Symbol *sym)
 {
@@ -300,5 +300,5 @@ trlist(Map *map, uvlong pc, uvlong sp, Symbol *sym)
     l = l->next;
     l->l = listlocals(map, sym, sp);
 }
-/*e: function trlist */
+/*e: function [[trlist]] */
 /*e: acid/list.c */

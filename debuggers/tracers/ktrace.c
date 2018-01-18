@@ -16,27 +16,27 @@ static	void	inithdr(int);
 static	void	fatal(char*, ...);
 static	void	readstack(void);
 
-/*s: global fhdr */
+/*s: global [[fhdr]] */
 static	Fhdr	fhdr;
-/*e: global fhdr */
-/*s: global interactive */
+/*e: global [[fhdr]] */
+/*s: global [[interactive]] */
 static	int	interactive = 0;
-/*e: global interactive */
+/*e: global [[interactive]] */
 
 /*s: constant FRAMENAME (ktrace) */
 #define	FRAMENAME	".frame"
 /*e: constant FRAMENAME (ktrace) */
 
-/*s: function usage */
+/*s: function [[usage]] */
 static void
 usage(void)
 {
     fprint(2, "usage: ktrace [-i] kernel pc sp [link]\n");
     exits("usage");
 }
-/*e: function usage */
+/*e: function [[usage]] */
 
-/*s: function printaddr */
+/*s: function [[printaddr]] */
 static void
 printaddr(char *addr, uvlong pc)
 {
@@ -66,13 +66,13 @@ printaddr(char *addr, uvlong pc)
     }else
         print("src(%#.8llux); // %s\n", pc, addr);
 }
-/*e: function printaddr */
+/*e: function [[printaddr]] */
 
-/*s: global fmt */
+/*s: global [[fmt]] */
 static void (*fmt)(char*, uvlong) = printaddr;
-/*e: global fmt */
+/*e: global [[fmt]] */
 
-/*s: function main */
+/*s: function [[main]] */
 void
 main(int argc, char *argv[])
 {
@@ -124,9 +124,9 @@ main(int argc, char *argv[])
     (*t)(pc, sp, link);
     exits(0);
 }
-/*e: function main */
+/*e: function [[main]] */
 
-/*s: function inithdr */
+/*s: function [[inithdr]] */
 static void
 inithdr(int fd)
 {
@@ -137,9 +137,9 @@ inithdr(int fd)
     if(syminit(fd, &fhdr) < 0)
         fatal("%r\n");
 }
-/*e: function inithdr */
+/*e: function [[inithdr]] */
 
-/*s: function rtrace */
+/*s: function [[rtrace]] */
 // for MIPS and ARM
 static int
 rtrace(uvlong pc, uvlong sp, uvlong link)
@@ -180,7 +180,7 @@ rtrace(uvlong pc, uvlong sp, uvlong link)
     }
     return i;
 }
-/*e: function rtrace */
+/*e: function [[rtrace]] */
 
 /*s: function i386trace (ktrace) */
 static int
@@ -232,17 +232,17 @@ i386trace(uvlong pc, uvlong sp, uvlong link)
 }
 /*e: function i386trace (ktrace) */
 
-/*s: global naddr */
+/*s: global [[naddr]] */
 int naddr;
-/*e: global naddr */
-/*s: global addr */
+/*e: global [[naddr]] */
+/*s: global [[addr]] */
 uvlong addr[1024];
-/*e: global addr */
-/*s: global val */
+/*e: global [[addr]] */
+/*s: global [[val]] */
 uvlong val[1024];
-/*e: global val */
+/*e: global [[val]] */
 
-/*s: function putval */
+/*s: function [[putval]] */
 static void
 putval(uvlong a, uvlong v)
 {
@@ -252,9 +252,9 @@ putval(uvlong a, uvlong v)
         naddr++;
     }
 }
-/*e: function putval */
+/*e: function [[putval]] */
 
-/*s: function readstack */
+/*s: function [[readstack]] */
 static void
 readstack(void)
 {
@@ -275,9 +275,9 @@ readstack(void)
         }
     }
 }
-/*e: function readstack */
+/*e: function [[readstack]] */
 
-/*s: function getval */
+/*s: function [[getval]] */
 static uvlong
 getval(uvlong a)
 {
@@ -301,9 +301,9 @@ getval(uvlong a)
 
     return r;
 }
-/*e: function getval */
+/*e: function [[getval]] */
 
-/*s: function fatal */
+/*s: function [[fatal]] */
 static void
 fatal(char *fmt, ...)
 {
@@ -316,5 +316,5 @@ fatal(char *fmt, ...)
     fprint(2, "ktrace: %s\n", buf);
     exits(buf);
 }
-/*e: function fatal */
+/*e: function [[fatal]] */
 /*e: tracers/ktrace.c */

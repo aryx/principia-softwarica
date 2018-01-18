@@ -8,7 +8,7 @@
 #include "defs.h"
 #include "fns.h"
 
-/*s: function scanform */
+/*s: function [[scanform]] */
 void
 scanform(long icount, int prt, char *ifp, Map *map, int literal)
 {
@@ -45,9 +45,9 @@ scanform(long icount, int prt, char *ifp, Map *map, int literal)
             dot=inkdot(dotinc);
     }
 }
-/*e: function scanform */
+/*e: function [[scanform]] */
 
-/*s: function exform */
+/*s: function [[exform]] */
 char *
 exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
 {
@@ -369,9 +369,9 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
 
     return fp;
 }
-/*e: function exform */
+/*e: function [[exform]] */
 
-/*s: function printesc */
+/*s: function [[printesc]] */
 void
 printesc(int c)
 {
@@ -382,9 +382,9 @@ printesc(int c)
     else
         printc(c);
 }
-/*e: function printesc */
+/*e: function [[printesc]] */
 
-/*s: function inkdot */
+/*s: function [[inkdot]] */
 ADDR
 inkdot(int incr)
 {
@@ -398,5 +398,5 @@ inkdot(int incr)
     /*e: [[inkdot()]] error managment */
     return newdot;
 }
-/*e: function inkdot */
+/*e: function [[inkdot]] */
 /*e: db/format.c */

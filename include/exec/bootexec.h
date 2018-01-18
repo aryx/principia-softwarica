@@ -1,5 +1,5 @@
 /*s: include/bootexec.h */
-/*s: struct coffsect */
+/*s: struct [[coffsect]] */
 struct coffsect
 {
     char	name[8];
@@ -12,9 +12,9 @@ struct coffsect
     ulong	nrelocnlineno;
     ulong	flags;
 };
-/*e: struct coffsect */
+/*e: struct [[coffsect]] */
 
-/*s: struct i386exec */
+/*s: struct [[i386exec]] */
 struct i386exec
 {
     struct	i386coff{
@@ -38,5 +38,5 @@ struct i386exec
     struct coffsect ibsss;
     struct coffsect icomments;
 };
-/*e: struct i386exec */
+/*e: struct [[i386exec]] */
 /*e: include/bootexec.h */

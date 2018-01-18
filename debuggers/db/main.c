@@ -195,7 +195,7 @@ main(int argc, char **argv)
 }
 /*e: function main (db/main.c) */
 
-/*s: function alldigs */
+/*s: function [[alldigs]] */
 bool
 alldigs(char *s)
 {
@@ -206,9 +206,9 @@ alldigs(char *s)
     }
     return true;
 }
-/*e: function alldigs */
+/*e: function [[alldigs]] */
 
-/*s: function done */
+/*s: function [[done]] */
 void
 done(void)
 {
@@ -216,10 +216,10 @@ done(void)
         endpcs();
     exits(nil);
 }
-/*e: function done */
+/*e: function [[done]] */
 
 
-/*s: function fault */
+/*s: function [[fault]] */
 /*
  * An interrupt occurred;
  * seek to the end of the current file
@@ -236,5 +236,5 @@ fault(void *a, char *s)
     }
     noted(NDFLT);
 }
-/*e: function fault */
+/*e: function [[fault]] */
 /*e: db/main.c */

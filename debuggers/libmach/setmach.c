@@ -1,4 +1,4 @@
-/*s: linkers/libmach/setmach.c */
+/*s: libmach/setmach.c */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
@@ -7,7 +7,7 @@
 
 typedef	struct machtab Machtab;
 
-/*s: struct machtab */
+/*s: struct [[machtab]] */
 struct machtab
 {
     char	*name;			/* machine name */
@@ -17,12 +17,12 @@ struct machtab
     Mach	*mach;			/* machine description */
     Machdata	*machdata;		/* machine functions */
 };
-/*e: struct machtab */
+/*e: struct [[machtab]] */
 
 extern	Mach		mi386, marm;
 extern	Machdata	i386mach, armmach;
 
-/*s: global machines */
+/*s: global [[machines]] */
 /*
  *	machine selection table.  machines with native disassemblers should
  *	follow the plan 9 variant in the table; native modes are selectable
@@ -44,9 +44,9 @@ Machtab	machines[] =
         &armmach,	},
     {	0		},		/*the terminator*/
 };
-/*e: global machines */
+/*e: global [[machines]] */
 
-/*s: function machbytype */
+/*s: function [[machbytype]] */
 /*
  *	select a machine by executable file type
  */
@@ -63,8 +63,8 @@ machbytype(int type)
         }
     }
 }
-/*e: function machbytype */
-/*s: function machbyname */
+/*e: function [[machbytype]] */
+/*s: function [[machbyname]] */
 /*
  *	select a machine by name
  */
@@ -89,5 +89,5 @@ machbyname(char *name)
     }
     return 0;
 }
-/*e: function machbyname */
-/*e: linkers/libmach/setmach.c */
+/*e: function [[machbyname]] */
+/*e: libmach/setmach.c */

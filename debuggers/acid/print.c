@@ -6,7 +6,7 @@
 #include <mach.h>
 #include "acid.h"
 
-/*s: global binop */
+/*s: global [[binop]] */
 static char *binop[] =
 {
     [OMUL]	"*",
@@ -29,12 +29,12 @@ static char *binop[] =
     [OCOR]	"||",
     [OASGN]	" = ",
 };
-/*e: global binop */
+/*e: global [[binop]] */
 
-/*s: global tabs */
+/*s: global [[tabs]] */
 static char *tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
-/*e: global tabs */
-/*s: global typenames */
+/*e: global [[tabs]] */
+/*s: global [[typenames]] */
 char *typenames[] =
 {
     [TINT]		"integer",
@@ -43,9 +43,9 @@ char *typenames[] =
     [TLIST]		"list",
     [TCODE]		"code",
 };
-/*e: global typenames */
+/*e: global [[typenames]] */
 
-/*s: function cmp */
+/*s: function [[cmp]] */
 int
 cmp(void *va, void *vb)
 {
@@ -54,9 +54,9 @@ cmp(void *va, void *vb)
 
     return strcmp(*a, *b);
 }
-/*e: function cmp */
+/*e: function [[cmp]] */
 
-/*s: function fundefs */
+/*s: function [[fundefs]] */
 void
 fundefs(void)
 {
@@ -98,9 +98,9 @@ fundefs(void)
         Bprint(bout, "\n");
     }
 }
-/*e: function fundefs */
+/*e: function [[fundefs]] */
 
-/*s: function whatis */
+/*s: function [[whatis]] */
 void
 whatis(Lsym *l)
 {
@@ -161,9 +161,9 @@ whatis(Lsym *l)
     if(def == 0)
         Bprint(bout, "%s is undefined\n", l->name);
 }
-/*e: function whatis */
+/*e: function [[whatis]] */
 
-/*s: function slist */
+/*s: function [[slist]] */
 void
 slist(Node *n, int d)
 {
@@ -175,9 +175,9 @@ slist(Node *n, int d)
     if(n->op == OLIST)
         Bprint(bout, "%.*s}\n", d-1, tabs);
 }
-/*e: function slist */
+/*e: function [[slist]] */
 
-/*s: function pcode */
+/*s: function [[pcode]] */
 void
 pcode(Node *n, int d)
 {
@@ -247,9 +247,9 @@ pcode(Node *n, int d)
         slist(r, d+1);
     }
 }
-/*e: function pcode */
+/*e: function [[pcode]] */
 
-/*s: function pexpr */
+/*s: function [[pexpr]] */
 void
 pexpr(Node *n)
 {
@@ -411,9 +411,9 @@ pexpr(Node *n)
         break;
     }
 }
-/*e: function pexpr */
+/*e: function [[pexpr]] */
 
-/*s: function pstr */
+/*s: function [[pstr]] */
 void
 pstr(String *s)
 {
@@ -462,5 +462,5 @@ pstr(String *s)
     }
     Bputc(bout, '"');
 }
-/*e: function pstr */
+/*e: function [[pstr]] */
 /*e: acid/print.c */

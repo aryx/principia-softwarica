@@ -7,11 +7,11 @@
 #include "acid.h"
 #include "y.tab.h"
 
-/*s: global syren */
+/*s: global [[syren]] */
 static int syren;
-/*e: global syren */
+/*e: global [[syren]] */
 
-/*s: function unique */
+/*s: function [[unique]] */
 Lsym*
 unique(char *buf, Sym *s)
 {
@@ -44,9 +44,9 @@ unique(char *buf, Sym *s)
         l = enter(buf, Tid);
     return l;	
 }
-/*e: function unique */
+/*e: function [[unique]] */
 
-/*s: function varsym */
+/*s: function [[varsym]] */
 void
 varsym(void)
 {
@@ -112,9 +112,9 @@ varsym(void)
     if(l2 == 0)
         print("no symbol information\n");
 }
-/*e: function varsym */
+/*e: function [[varsym]] */
 
-/*s: function varreg */
+/*s: function [[varreg]] */
 void
 varreg(void)
 {
@@ -158,9 +158,9 @@ varreg(void)
     v->string->string = gmalloc(machdata->bpsize);
     memmove(v->string->string, machdata->bpinst, machdata->bpsize);
 }
-/*e: function varreg */
+/*e: function [[varreg]] */
 
-/*s: function loadvars */
+/*s: function [[loadvars]] */
 void
 loadvars(void)
 {
@@ -186,7 +186,7 @@ loadvars(void)
     l = mkvar("proclist");		/* Attached processes */
     l->v->type = TLIST;
 }
-/*e: function loadvars */
+/*e: function [[loadvars]] */
 
 /*s: function rget (acid/util.c) */
 uvlong
@@ -219,7 +219,7 @@ rget(Map *map, char *reg)
 }
 /*e: function rget (acid/util.c) */
 
-/*s: function strnodlen */
+/*s: function [[strnodlen]] */
 String*
 strnodlen(char *name, int len)
 {
@@ -237,17 +237,17 @@ strnodlen(char *name, int len)
 
     return s;
 }
-/*e: function strnodlen */
+/*e: function [[strnodlen]] */
 
-/*s: function strnode */
+/*s: function [[strnode]] */
 String*
 strnode(char *name)
 {
     return strnodlen(name, strlen(name));
 }
-/*e: function strnode */
+/*e: function [[strnode]] */
 
-/*s: function runenode */
+/*s: function [[runenode]] */
 String*
 runenode(Rune *name)
 {
@@ -271,9 +271,9 @@ runenode(Rune *name)
 
     return s;
 }
-/*e: function runenode */
+/*e: function [[runenode]] */
 
-/*s: function stradd */
+/*s: function [[stradd]] */
 String*
 stradd(String *l, String *r)
 {
@@ -291,9 +291,9 @@ stradd(String *l, String *r)
     s->string[s->len] = 0;
     return s;
 }
-/*e: function stradd */
+/*e: function [[stradd]] */
 
-/*s: function straddrune */
+/*s: function [[straddrune]] */
 String*
 straddrune(String *l, Rune r)
 {
@@ -311,9 +311,9 @@ straddrune(String *l, Rune r)
     s->string[s->len] = 0;
     return s;
 }
-/*e: function straddrune */
+/*e: function [[straddrune]] */
 
-/*s: function scmp */
+/*s: function [[scmp]] */
 int
 scmp(String *sr, String *sl)
 {
@@ -325,5 +325,5 @@ scmp(String *sr, String *sl)
 
     return 1;
 }
-/*e: function scmp */
+/*e: function [[scmp]] */
 /*e: acid/util.c */

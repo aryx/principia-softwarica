@@ -6,7 +6,7 @@
 #include <mach.h>
 #include "acid.h"
 
-/*s: global fsize */
+/*s: global [[fsize]] */
 static int fsize[] =
 {
     ['A'] 4,
@@ -40,9 +40,9 @@ static int fsize[] =
     ['3'] 10,
     ['8'] 10,
 };
-/*e: global fsize */
+/*e: global [[fsize]] */
 
-/*s: function fmtsize */
+/*s: function [[fmtsize]] */
 int
 fmtsize(Value *v)
 {
@@ -64,27 +64,27 @@ fmtsize(Value *v)
         return ret;
     }
 }
-/*e: function fmtsize */
+/*e: function [[fmtsize]] */
 
-/*s: function chklval */
+/*s: function [[chklval]] */
 void
 chklval(Node *lp)
 {
     if(lp->op != ONAME)
         error("need l-value");
 }
-/*e: function chklval */
+/*e: function [[chklval]] */
 
-/*s: function olist */
+/*s: function [[olist]] */
 void
 olist(Node *n, Node *res)
 {
     expr(n->left, res);
     expr(n->right, res);
 }
-/*e: function olist */
+/*e: function [[olist]] */
 
-/*s: function oeval */
+/*s: function [[oeval]] */
 void
 oeval(Node *n, Node *res)
 {
@@ -93,9 +93,9 @@ oeval(Node *n, Node *res)
         error("bad type for eval");
     expr(res->cc, res);
 }
-/*e: function oeval */
+/*e: function [[oeval]] */
 
-/*s: function ocast */
+/*s: function [[ocast]] */
 void
 ocast(Node *n, Node *res)
 {
@@ -106,9 +106,9 @@ ocast(Node *n, Node *res)
     res->comt = n->sym->lt;
     res->fmt = 'a';
 }
-/*e: function ocast */
+/*e: function [[ocast]] */
 
-/*s: function oindm */
+/*s: function [[oindm]] */
 void
 oindm(Node *n, Node *res)
 {
@@ -126,9 +126,9 @@ oindm(Node *n, Node *res)
     indir(m, l.ival, l.fmt, res);
     res->comt = l.comt;
 }
-/*e: function oindm */
+/*e: function [[oindm]] */
 
-/*s: function oindc */
+/*s: function [[oindc]] */
 void
 oindc(Node *n, Node *res)
 {
@@ -146,9 +146,9 @@ oindc(Node *n, Node *res)
     indir(m, l.ival, l.fmt, res);
     res->comt = l.comt;
 }
-/*e: function oindc */
+/*e: function [[oindc]] */
 
-/*s: function oframe */
+/*s: function [[oframe]] */
 void
 oframe(Node *n, Node *res)
 {
@@ -178,9 +178,9 @@ oframe(Node *n, Node *res)
         }
     }
 }
-/*e: function oframe */
+/*e: function [[oframe]] */
 
-/*s: function oindex */
+/*s: function [[oindex]] */
 void
 oindex(Node *n, Node *res)
 {
@@ -216,9 +216,9 @@ oindex(Node *n, Node *res)
         break;
     }
 }
-/*e: function oindex */
+/*e: function [[oindex]] */
 
-/*s: function oappend */
+/*s: function [[oappend]] */
 void
 oappend(Node *n, Node *res)
 {
@@ -239,9 +239,9 @@ oappend(Node *n, Node *res)
         v->comt = res->comt;
     }
 }
-/*e: function oappend */
+/*e: function [[oappend]] */
 
-/*s: function odelete */
+/*s: function [[odelete]] */
 void
 odelete(Node *n, Node *res)
 {
@@ -256,9 +256,9 @@ odelete(Node *n, Node *res)
 
     delete(l.l, r.ival, res);
 }
-/*e: function odelete */
+/*e: function [[odelete]] */
 
-/*s: function ohead */
+/*s: function [[ohead]] */
 void
 ohead(Node *n, Node *res)
 {
@@ -277,9 +277,9 @@ ohead(Node *n, Node *res)
         res->l = 0;
     }
 }
-/*e: function ohead */
+/*e: function [[ohead]] */
 
-/*s: function otail */
+/*s: function [[otail]] */
 void
 otail(Node *n, Node *res)
 {
@@ -295,9 +295,9 @@ otail(Node *n, Node *res)
     else
         res->l = 0;
 }
-/*e: function otail */
+/*e: function [[otail]] */
 
-/*s: function oconst */
+/*s: function [[oconst]] */
 void
 oconst(Node *n, Node *res)
 {
@@ -306,9 +306,9 @@ oconst(Node *n, Node *res)
     res->Store = n->Store;
     res->comt = n->comt;
 }
-/*e: function oconst */
+/*e: function [[oconst]] */
 
-/*s: function oname */
+/*s: function [[oname]] */
 void
 oname(Node *n, Node *res)
 {
@@ -322,9 +322,9 @@ oname(Node *n, Node *res)
     res->Store = v->Store;
     res->comt = v->comt;
 }
-/*e: function oname */
+/*e: function [[oname]] */
 
-/*s: function octruct */
+/*s: function [[octruct]] */
 void
 octruct(Node *n, Node *res)
 {
@@ -332,9 +332,9 @@ octruct(Node *n, Node *res)
     res->type = TLIST;
     res->l = construct(n->left);
 }
-/*e: function octruct */
+/*e: function [[octruct]] */
 
-/*s: function oasgn */
+/*s: function [[oasgn]] */
 void
 oasgn(Node *n, Node *res)
 {
@@ -362,9 +362,9 @@ oasgn(Node *n, Node *res)
         res->comt = v->comt;
     }
 }
-/*e: function oasgn */
+/*e: function [[oasgn]] */
 
-/*s: function oadd */
+/*s: function [[oadd]] */
 void
 oadd(Node *n, Node *res)
 {
@@ -435,9 +435,9 @@ oadd(Node *n, Node *res)
         }
     }
 }
-/*e: function oadd */
+/*e: function [[oadd]] */
 
-/*s: function osub */
+/*s: function [[osub]] */
 void
 osub(Node *n, Node *res)
 {
@@ -478,9 +478,9 @@ osub(Node *n, Node *res)
         break;
     }
 }
-/*e: function osub */
+/*e: function [[osub]] */
 
-/*s: function omul */
+/*s: function [[omul]] */
 void
 omul(Node *n, Node *res)
 {
@@ -521,9 +521,9 @@ omul(Node *n, Node *res)
         break;
     }
 }
-/*e: function omul */
+/*e: function [[omul]] */
 
-/*s: function odiv */
+/*s: function [[odiv]] */
 void
 odiv(Node *n, Node *res)
 {
@@ -568,9 +568,9 @@ odiv(Node *n, Node *res)
         break;
     }
 }
-/*e: function odiv */
+/*e: function [[odiv]] */
 
-/*s: function omod */
+/*s: function [[omod]] */
 void
 omod(Node *n, Node *res)
 {
@@ -585,9 +585,9 @@ omod(Node *n, Node *res)
         error("bad expr type %");
     res->ival = l.ival%r.ival;
 }
-/*e: function omod */
+/*e: function [[omod]] */
 
-/*s: function olsh */
+/*s: function [[olsh]] */
 void
 olsh(Node *n, Node *res)
 {
@@ -602,9 +602,9 @@ olsh(Node *n, Node *res)
         error("bad expr type <<");
     res->ival = l.ival<<r.ival;
 }
-/*e: function olsh */
+/*e: function [[olsh]] */
 
-/*s: function orsh */
+/*s: function [[orsh]] */
 void
 orsh(Node *n, Node *res)
 {
@@ -619,9 +619,9 @@ orsh(Node *n, Node *res)
         error("bad expr type >>");
     res->ival = (uvlong)l.ival>>r.ival;
 }
-/*e: function orsh */
+/*e: function [[orsh]] */
 
-/*s: function olt */
+/*s: function [[olt]] */
 void
 olt(Node *n, Node *res)
 {
@@ -662,9 +662,9 @@ olt(Node *n, Node *res)
         break;
     }
 }
-/*e: function olt */
+/*e: function [[olt]] */
 
-/*s: function ogt */
+/*s: function [[ogt]] */
 void
 ogt(Node *n, Node *res)
 {
@@ -704,9 +704,9 @@ ogt(Node *n, Node *res)
         break;
     }
 }
-/*e: function ogt */
+/*e: function [[ogt]] */
 
-/*s: function oleq */
+/*s: function [[oleq]] */
 void
 oleq(Node *n, Node *res)
 {
@@ -746,9 +746,9 @@ oleq(Node *n, Node *res)
         break;
     }
 }
-/*e: function oleq */
+/*e: function [[oleq]] */
 
-/*s: function ogeq */
+/*s: function [[ogeq]] */
 void
 ogeq(Node *n, Node *res)
 {
@@ -788,9 +788,9 @@ ogeq(Node *n, Node *res)
         break;
     }
 }
-/*e: function ogeq */
+/*e: function [[ogeq]] */
 
-/*s: function oeq */
+/*s: function [[oeq]] */
 void
 oeq(Node *n, Node *res)
 {
@@ -845,10 +845,10 @@ oeq(Node *n, Node *res)
     if(n->op == ONEQ)
         res->ival = !res->ival;
 }
-/*e: function oeq */
+/*e: function [[oeq]] */
 
 
-/*s: function oland */
+/*s: function [[oland]] */
 void
 oland(Node *n, Node *res)
 {
@@ -863,9 +863,9 @@ oland(Node *n, Node *res)
         error("bad expr type &");
     res->ival = l.ival&r.ival;
 }
-/*e: function oland */
+/*e: function [[oland]] */
 
-/*s: function oxor */
+/*s: function [[oxor]] */
 void
 oxor(Node *n, Node *res)
 {
@@ -880,9 +880,9 @@ oxor(Node *n, Node *res)
         error("bad expr type ^");
     res->ival = l.ival^r.ival;
 }
-/*e: function oxor */
+/*e: function [[oxor]] */
 
-/*s: function olor */
+/*s: function [[olor]] */
 void
 olor(Node *n, Node *res)
 {
@@ -897,9 +897,9 @@ olor(Node *n, Node *res)
         error("bad expr type |");
     res->ival = l.ival|r.ival;
 }
-/*e: function olor */
+/*e: function [[olor]] */
 
-/*s: function ocand */
+/*s: function [[ocand]] */
 void
 ocand(Node *n, Node *res)
 {
@@ -917,9 +917,9 @@ ocand(Node *n, Node *res)
         return;
     res->ival = 1;
 }
-/*e: function ocand */
+/*e: function [[ocand]] */
 
-/*s: function onot */
+/*s: function [[onot]] */
 void
 onot(Node *n, Node *res)
 {
@@ -933,9 +933,9 @@ onot(Node *n, Node *res)
     if(fbool(&l) == 0)
         res->ival = 1;
 }
-/*e: function onot */
+/*e: function [[onot]] */
 
-/*s: function ocor */
+/*s: function [[ocor]] */
 void
 ocor(Node *n, Node *res)
 {
@@ -956,9 +956,9 @@ ocor(Node *n, Node *res)
         return;
     }
 }
-/*e: function ocor */
+/*e: function [[ocor]] */
 
-/*s: function oeinc */
+/*s: function [[oeinc]] */
 void
 oeinc(Node *n, Node *res)
 {
@@ -986,9 +986,9 @@ oeinc(Node *n, Node *res)
     }
     res->Store = v->Store;
 }
-/*e: function oeinc */
+/*e: function [[oeinc]] */
 
-/*s: function opinc */
+/*s: function [[opinc]] */
 void
 opinc(Node *n, Node *res)
 {
@@ -1016,9 +1016,9 @@ opinc(Node *n, Node *res)
         error("bad type for post --/++");
     }
 }
-/*e: function opinc */
+/*e: function [[opinc]] */
 
-/*s: function ocall */
+/*s: function [[ocall]] */
 void
 ocall(Node *n, Node *res)
 {
@@ -1047,18 +1047,18 @@ ocall(Node *n, Node *res)
     call(s->name, n->right, s->proc->left, s->proc->right, res);
     ret = rsav;
 }
-/*e: function ocall */
+/*e: function [[ocall]] */
 
-/*s: function ofmt */
+/*s: function [[ofmt]] */
 void
 ofmt(Node *n, Node *res)
 {
     expr(n->left, res);
     res->fmt = n->right->ival;
 }
-/*e: function ofmt */
+/*e: function [[ofmt]] */
 
-/*s: function owhat */
+/*s: function [[owhat]] */
 void
 owhat(Node *n, Node *res)
 {
@@ -1067,9 +1067,9 @@ owhat(Node *n, Node *res)
     res->l = 0;
     whatis(n->sym);
 }
-/*e: function owhat */
+/*e: function [[owhat]] */
 
-/*s: global expop */
+/*s: global [[expop]] */
 void (*expop[])(Node*, Node*) =
 {
     [ONAME]		oname,
@@ -1122,5 +1122,5 @@ void (*expop[])(Node*, Node*) =
     [OEVAL]		oeval,
     [OWHAT]		owhat,
 };
-/*e: global expop */
+/*e: global [[expop]] */
 /*e: acid/expr.c */

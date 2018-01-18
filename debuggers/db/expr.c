@@ -12,7 +12,7 @@ static long	round(long, long);
 
 extern	ADDR	ditto;
 
-/*s: function ascval */
+/*s: function [[ascval]] */
 static WORD
 ascval(void)
 {
@@ -25,16 +25,16 @@ ascval(void)
         ;
     return((WORD) r);
 }
-/*e: function ascval */
+/*e: function [[ascval]] */
 
-/*s: struct fpin_union */
+/*s: struct [[fpin_union]] */
 union fpin_union {
         WORD w;
         float f;
 };
-/*e: struct fpin_union */
+/*e: struct [[fpin_union]] */
 
-/*s: function fpin */
+/*s: function [[fpin]] */
 /*
  * read a floating point number
  * the result must fit in a WORD
@@ -48,9 +48,9 @@ fpin(char *buf)
     x.f = atof(buf);
     return (x.w);
 }
-/*e: function fpin */
+/*e: function [[fpin]] */
 
-/*s: function defval */
+/*s: function [[defval]] */
 WORD
 defval(WORD w)
 {
@@ -59,9 +59,9 @@ defval(WORD w)
     else
         return (w);
 }
-/*e: function defval */
+/*e: function [[defval]] */
 
-/*s: function expr */
+/*s: function [[expr]] */
 bool
 expr(int a)
 {	/* term | term dyadic expr |  */
@@ -129,9 +129,9 @@ expr(int a)
     }
     return rc;
 }
-/*e: function expr */
+/*e: function [[expr]] */
 
-/*s: function term */
+/*s: function [[term]] */
 bool
 term(int a)
 {	/* item | monadic item | (expr) | */
@@ -174,9 +174,9 @@ term(int a)
         return item(a);
     }
 }
-/*e: function term */
+/*e: function [[term]] */
 
-/*s: function item */
+/*s: function [[item]] */
 bool
 item(int a)
 {	/* name [ . local ] | number | . | ^  | <register | 'x | | */
@@ -266,13 +266,13 @@ item(int a)
     }
     return true;
 }
-/*e: function item */
+/*e: function [[item]] */
 
-/*s: constant MAXBASE */
+/*s: constant [[MAXBASE]] */
 #define	MAXBASE	16
-/*e: constant MAXBASE */
+/*e: constant [[MAXBASE]] */
 
-/*s: function getnum */
+/*s: function [[getnum]] */
 /* service routines for expression reading */
 int
 getnum(int (*rdf)(void))
@@ -335,9 +335,9 @@ getnum(int (*rdf)(void))
         expv = fpin(num);
     return (1);
 }
-/*e: function getnum */
+/*e: function [[getnum]] */
 
-/*s: function readsym */
+/*s: function [[readsym]] */
 void
 readsym(char *isymbol)
 {
@@ -354,9 +354,9 @@ readsym(char *isymbol)
     } while (symchar(1));
     *p = 0;
 }
-/*e: function readsym */
+/*e: function [[readsym]] */
 
-/*s: function readfname */
+/*s: function [[readfname]] */
 void
 readfname(char *filename)
 {
@@ -373,9 +373,9 @@ readfname(char *filename)
     *p = 0;
     reread();
 }
-/*e: function readfname */
+/*e: function [[readfname]] */
 
-/*s: function convdig */
+/*s: function [[convdig]] */
 int
 convdig(int c)
 {
@@ -388,9 +388,9 @@ convdig(int c)
     else
         return(c-'a'+10);
 }
-/*e: function convdig */
+/*e: function [[convdig]] */
 
-/*s: function symchar */
+/*s: function [[symchar]] */
 int
 symchar(int dig)
 {
@@ -400,9 +400,9 @@ symchar(int dig)
     }
     return(isalpha(lastc) || lastc>0x80 || lastc=='_' || dig && isdigit(lastc));
 }
-/*e: function symchar */
+/*e: function [[symchar]] */
 
-/*s: function round */
+/*s: function [[round]] */
 static long
 round(long a, long b)
 {
@@ -413,5 +413,5 @@ round(long a, long b)
         w += b;
     return(w);
 }
-/*e: function round */
+/*e: function [[round]] */
 /*e: db/expr.c */

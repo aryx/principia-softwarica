@@ -6,23 +6,23 @@
 #include "defs.h"
 #include "fns.h"
 
-/*s: global symfil */
+/*s: global [[symfil]] */
 char	*symfil = nil;
-/*e: global symfil */
-/*s: global corfil */
+/*e: global [[symfil]] */
+/*s: global [[corfil]] */
 char	*corfil = nil;
-/*e: global corfil */
+/*e: global [[corfil]] */
 
-/*s: global dotmap */
+/*s: global [[dotmap]] */
 Map	*dotmap;
-/*e: global dotmap */
+/*e: global [[dotmap]] */
 
-/*s: global fsym */
+/*s: global [[fsym]] */
 fdt fsym;
-/*e: global fsym */
-/*s: global fcor */
+/*e: global [[fsym]] */
+/*s: global [[fcor]] */
 fdt fcor;
-/*e: global fcor */
+/*e: global [[fcor]] */
 /*s: global fhdr (db/setup.c) */
 static Fhdr fhdr;
 /*e: global fhdr (db/setup.c) */
@@ -71,7 +71,7 @@ setsym(void)
 }
 /*e: function setsym (db) */
 
-/*s: function setcor */
+/*s: function [[setcor]] */
 void
 setcor(void)
 {
@@ -111,12 +111,12 @@ setcor(void)
     kmsys();
     return;
 }
-/*e: function setcor */
+/*e: function [[setcor]] */
 
 extern Mach mi386;
 extern Machdata i386mach;
 
-/*s: function dumbmap */
+/*s: function [[dumbmap]] */
 Map *
 dumbmap(fdt fd)
 {
@@ -131,9 +131,9 @@ dumbmap(fdt fd)
         machdata = &i386mach;
     return dumb;
 }
-/*e: function dumbmap */
+/*e: function [[dumbmap]] */
 
-/*s: function cmdmap */
+/*s: function [[cmdmap]] */
 /*
  * set up maps for a direct process image (/proc)
  */
@@ -181,9 +181,9 @@ cmdmap(Map *map)
     } else
         reread();
 }
-/*e: function cmdmap */
+/*e: function [[cmdmap]] */
 
-/*s: function getfile */
+/*s: function [[getfile]] */
 static fdt
 getfile(char *filnam, int cnt, int omode)
 {
@@ -213,9 +213,9 @@ getfile(char *filnam, int cnt, int omode)
     /*e: [[getfile()]] error managment */
     return f;
 }
-/*e: function getfile */
+/*e: function [[getfile]] */
 
-/*s: function kmsys */
+/*s: function [[kmsys]] */
 void
 kmsys(void)
 {
@@ -233,9 +233,9 @@ kmsys(void)
         symmap->seg[i].e |= mach->kbase;
     }
 }
-/*e: function kmsys */
+/*e: function [[kmsys]] */
 
-/*s: function attachprocess */
+/*s: function [[attachprocess]] */
 void
 attachprocess(void)
 {
@@ -264,5 +264,5 @@ attachprocess(void)
     if (fd >= 0)
         close(fd);
 }
-/*e: function attachprocess */
+/*e: function [[attachprocess]] */
 /*e: db/setup.c */

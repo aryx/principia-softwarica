@@ -1,4 +1,4 @@
-/*s: linkers/libmach/5.c */
+/*s: libmach/5.c */
 /*
  * arm definition
  */
@@ -8,20 +8,20 @@
 #include "/arm/include/ureg.h"
 #include <mach.h>
 
-/*s: function REGOFF(arm) */
+/*s: function [[REGOFF]](arm) */
 #define	REGOFF(x)	(ulong) (&((struct Ureg *) 0)->x)
-/*e: function REGOFF(arm) */
+/*e: function [[REGOFF]](arm) */
 
-/*s: constant SP(arm) */
+/*s: constant [[SP]](arm) */
 #define SP		REGOFF(r13)
-/*e: constant SP(arm) */
-/*s: constant PC(arm) */
+/*e: constant [[SP]](arm) */
+/*s: constant [[PC]](arm) */
 #define PC		REGOFF(pc)
-/*e: constant PC(arm) */
-/*s: constant REGSIZE(arm) */
+/*e: constant [[PC]](arm) */
+/*s: constant [[REGSIZE]](arm) */
 #define	REGSIZE		sizeof(struct Ureg)
-/*e: constant REGSIZE(arm) */
-/*s: global armreglist(arm) */
+/*e: constant [[REGSIZE]](arm) */
+/*s: global [[armreglist]](arm) */
 Reglist armreglist[] =
 {
     {"TYPE",	REGOFF(type),		RINT|RRDONLY, 'X'},
@@ -46,8 +46,8 @@ Reglist armreglist[] =
     {"R0",		REGOFF(r0),		RINT, 'X'},
     {  0 }
 };
-/*e: global armreglist(arm) */
-/*s: global marm(arm) */
+/*e: global [[armreglist]](arm) */
+/*s: global [[marm]](arm) */
 Mach marm =
 {
     "arm",
@@ -70,5 +70,5 @@ Mach marm =
     4,		/* szfloat */
     8,		/* szdouble */
 };
-/*e: global marm(arm) */
-/*e: linkers/libmach/5.c */
+/*e: global [[marm]](arm) */
+/*e: libmach/5.c */

@@ -1,4 +1,4 @@
-/*s: linkers/libmach/5obj.c */
+/*s: libmach/5obj.c */
 /*
  * 5obj.c - identify and parse an arm object file
  */
@@ -11,19 +11,19 @@
 #include "obj.h"
 
 typedef struct Addr	Addr;
-/*s: struct Addr(arm) */
+/*s: struct [[Addr]](arm) */
 struct Addr
 {
     char	type;
     char	sym;
     char	name;
 };
-/*e: struct Addr(arm) */
+/*e: struct [[Addr]](arm) */
 static Addr addr(Biobuf*);
 static char type2char(int);
 static void skip(Biobuf*, int);
 
-/*s: function _is5(arm) */
+/*s: function [[_is5]](arm) */
 int
 _is5(char *s)
 {
@@ -32,9 +32,9 @@ _is5(char *s)
         && s[2] == 1				/* sym */
         && s[3] == '<';				/* name of file */
 }
-/*e: function _is5(arm) */
+/*e: function [[_is5]](arm) */
 
-/*s: function _read5(arm) */
+/*s: function [[_read5]](arm) */
 int
 _read5(Biobuf *bp, Prog *p)
 {
@@ -83,9 +83,9 @@ _read5(Biobuf *bp, Prog *p)
     p->sym = a.sym;
     return 1;
 }
-/*e: function _read5(arm) */
+/*e: function [[_read5]](arm) */
 
-/*s: function addr(arm) */
+/*s: function [[addr]](arm) */
 static Addr
 addr(Biobuf *bp)
 {
@@ -126,9 +126,9 @@ addr(Biobuf *bp)
     }
     return a;
 }
-/*e: function addr(arm) */
+/*e: function [[addr]](arm) */
 
-/*s: function type2char(arm) */
+/*s: function [[type2char]](arm) */
 static char
 type2char(int t)
 {
@@ -140,14 +140,14 @@ type2char(int t)
     default:		return UNKNOWN;
     }
 }
-/*e: function type2char(arm) */
+/*e: function [[type2char]](arm) */
 
-/*s: function skip(arm) */
+/*s: function [[skip]](arm) */
 static void
 skip(Biobuf *bp, int n)
 {
     while (n-- > 0)
         Bgetc(bp);
 }
-/*e: function skip(arm) */
-/*e: linkers/libmach/5obj.c */
+/*e: function [[skip]](arm) */
+/*e: libmach/5obj.c */
