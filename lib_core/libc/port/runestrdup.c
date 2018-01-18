@@ -1,4 +1,4 @@
-/*s: port/runestrdup.c */
+/*s: libc/port/runestrdup.c */
 #include <u.h>
 #include <libc.h>
 
@@ -16,4 +16,4 @@ runestrdup(Rune *s)
     return runestrcpy(ns, s);
 }
 /*e: function [[runestrdup]] */
-/*e: port/runestrdup.c */
+/*e: libc/port/runestrdup.c */

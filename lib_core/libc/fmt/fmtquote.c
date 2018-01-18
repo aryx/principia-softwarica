@@ -1,4 +1,4 @@
-/*s: fmt/fmtquote.c */
+/*s: libc/fmt/fmtquote.c */
 #include <u.h>
 #include <libc.h>
 #include "fmtdef.h"
@@ -264,4 +264,4 @@ _runeneedsquotes(Rune *r, int *quotelenp)
     return q.quoted;
 }
 /*e: function [[_runeneedsquotes]] */
-/*e: fmt/fmtquote.c */
+/*e: libc/fmt/fmtquote.c */

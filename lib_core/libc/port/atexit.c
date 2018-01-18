@@ -1,4 +1,4 @@
-/*s: port/atexit.c */
+/*s: libc/port/atexit.c */
 #include <u.h>
 #include <libc.h>
 
@@ -58,4 +58,4 @@ exits(char *s)
 }
 /*e: function [[exits]] */
 #pragma profile on
-/*e: port/atexit.c */
+/*e: libc/port/atexit.c */

@@ -1,4 +1,4 @@
-/*s: fmt/dofmt.c */
+/*s: libc/fmt/dofmt.c */
 #include <u.h>
 #include <libc.h>
 #include "fmtdef.h"
@@ -563,4 +563,4 @@ _badfmt(Fmt *f)
     return 0;
 }
 /*e: function [[_badfmt]] */
-/*e: fmt/dofmt.c */
+/*e: libc/fmt/dofmt.c */

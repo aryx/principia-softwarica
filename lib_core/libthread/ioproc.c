@@ -1,17 +1,17 @@
-/*s: lib_core/libthread/ioproc.c */
+/*s: libthread/ioproc.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: enum [[_anon_ (lib_core/libthread/ioproc.c)]] */
+/*s: enum [[_anon_ (libthread/ioproc.c)]] */
 enum
 {
     /*s: constant [[STACK]] */
     STACK = 8192,
     /*e: constant [[STACK]] */
 };
-/*e: enum [[_anon_ (lib_core/libthread/ioproc.c)]] */
+/*e: enum [[_anon_ (libthread/ioproc.c)]] */
 
 /*s: function [[iointerrupt]] */
 void
@@ -88,4 +88,4 @@ closeioproc(Ioproc *io)
     free(io);
 }
 /*e: function [[closeioproc]] */
-/*e: lib_core/libthread/ioproc.c */
+/*e: libthread/ioproc.c */

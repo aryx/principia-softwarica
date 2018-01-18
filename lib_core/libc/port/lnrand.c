@@ -1,4 +1,4 @@
-/*s: port/lnrand.c */
+/*s: libc/port/lnrand.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -21,4 +21,4 @@ lnrand(long n)
     return v % n;
 }
 /*e: function [[lnrand]] */
-/*e: port/lnrand.c */
+/*e: libc/port/lnrand.c */

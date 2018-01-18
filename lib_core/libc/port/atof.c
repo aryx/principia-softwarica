@@ -1,4 +1,4 @@
-/*s: port/atof.c */
+/*s: libc/port/atof.c */
 #include <u.h>
 #include <libc.h>
 
@@ -9,4 +9,4 @@ atof(char *cp)
     return strtod(cp, nil);
 }
 /*e: function [[atof]] */
-/*e: port/atof.c */
+/*e: libc/port/atof.c */

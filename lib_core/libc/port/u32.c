@@ -1,4 +1,4 @@
-/*s: port/u32.c */
+/*s: libc/port/u32.c */
 #include <u.h>
 #include <libc.h>
 
@@ -113,4 +113,4 @@ out:
     return dest-start;
 }
 /*e: function [[enc32]] */
-/*e: port/u32.c */
+/*e: libc/port/u32.c */

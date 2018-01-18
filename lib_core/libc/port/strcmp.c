@@ -1,4 +1,4 @@
-/*s: port/strcmp.c */
+/*s: libc/port/strcmp.c */
 #include <u.h>
 #include <libc.h>
 
@@ -21,4 +21,4 @@ strcmp(char *s1, char *s2)
     }
 }
 /*e: function [[strcmp]] */
-/*e: port/strcmp.c */
+/*e: libc/port/strcmp.c */

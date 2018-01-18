@@ -1,4 +1,4 @@
-/*s: port/rand.c */
+/*s: libc/port/rand.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -9,4 +9,4 @@ rand(void)
     return lrand() & 0x7fff;
 }
 /*e: function [[rand]] */
-/*e: port/rand.c */
+/*e: libc/port/rand.c */

@@ -1,4 +1,4 @@
-/*s: port/muldiv.c */
+/*s: libc/port/muldiv.c */
 #include <u.h>
 #include <libc.h>
 
@@ -41,4 +41,4 @@ muldiv(long a, long b, long c)
     return v;
 }
 /*e: function [[muldiv]] */
-/*e: port/muldiv.c */
+/*e: libc/port/muldiv.c */

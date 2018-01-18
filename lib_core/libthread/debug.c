@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/debug.c */
+/*s: libthread/debug.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -57,4 +57,4 @@ _threadassert(char *s)
     abort();
 }
 /*e: function [[_threadassert]] */
-/*e: lib_core/libthread/debug.c */
+/*e: libthread/debug.c */

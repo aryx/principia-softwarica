@@ -1,4 +1,4 @@
-/*s: port/pool.c */
+/*s: libc/port/pool.c */
 /*
  * This allocator takes blocks from a coarser allocator (p->alloc) and
  * uses them as arenas.
@@ -1615,4 +1615,4 @@ memmark(void *v, int sig, ulong size)
         *p++ = sig;
 }
 /*e: function [[memmark]] */
-/*e: port/pool.c */
+/*e: libc/port/pool.c */

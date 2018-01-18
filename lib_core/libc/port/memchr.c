@@ -1,4 +1,4 @@
-/*s: port/memchr.c */
+/*s: libc/port/memchr.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -18,4 +18,4 @@ memchr(void *ap, int c, ulong n)
     return nil;
 }
 /*e: function [[memchr]] */
-/*e: port/memchr.c */
+/*e: libc/port/memchr.c */

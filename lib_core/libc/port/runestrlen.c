@@ -1,4 +1,4 @@
-/*s: port/runestrlen.c */
+/*s: libc/port/runestrlen.c */
 #include <u.h>
 #include <libc.h>
 
@@ -10,4 +10,4 @@ runestrlen(Rune *s)
     return runestrchr(s, 0) - s;
 }
 /*e: function [[runestrlen]] */
-/*e: port/runestrlen.c */
+/*e: libc/port/runestrlen.c */

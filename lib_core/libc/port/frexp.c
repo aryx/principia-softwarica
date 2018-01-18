@@ -1,4 +1,4 @@
-/*s: port/frexp.c */
+/*s: libc/port/frexp.c */
 #include <u.h>
 #include <libc.h>
 
@@ -133,4 +133,4 @@ modf(double d, double *ip)
     return d - x.x;
 }
 /*e: function [[modf]] */
-/*e: port/frexp.c */
+/*e: libc/port/frexp.c */

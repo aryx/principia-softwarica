@@ -1,4 +1,4 @@
-/*s: port/ctype.c */
+/*s: libc/port/ctype.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -26,4 +26,4 @@ uchar   _ctype[256] =
 /*170*/ _L, _L, _L, _P, _P, _P, _P, _C,
 };
 /*e: global [[_ctype]] */
-/*e: port/ctype.c */
+/*e: libc/port/ctype.c */

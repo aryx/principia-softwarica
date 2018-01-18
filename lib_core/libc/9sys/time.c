@@ -1,4 +1,4 @@
-/*s: 9sys/time.c */
+/*s: libc/9sys/time.c */
 #include <u.h>
 #include <libc.h>
 
@@ -54,4 +54,4 @@ time(long *tp)
     return t;
 }
 /*e: function [[time]] */
-/*e: 9sys/time.c */
+/*e: libc/9sys/time.c */

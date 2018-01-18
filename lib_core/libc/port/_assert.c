@@ -1,4 +1,4 @@
-/*s: port/_assert.c */
+/*s: libc/port/_assert.c */
 #include <u.h>
 #include <libc.h>
 
@@ -21,4 +21,4 @@ default_assert(char *s)
 /*s: global [[_assert]] */
 void (*_assert)(char*) = default_assert;
 /*e: global [[_assert]] */
-/*e: port/_assert.c */
+/*e: libc/port/_assert.c */

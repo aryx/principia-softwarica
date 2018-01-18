@@ -1,4 +1,4 @@
-/*s: port/readn.c */
+/*s: libc/port/readn.c */
 #include <u.h>
 #include <libc.h>
 
@@ -23,4 +23,4 @@ readn(fdt f, void *av, long n)
     return t;
 }
 /*e: function [[readn]] */
-/*e: port/readn.c */
+/*e: libc/port/readn.c */

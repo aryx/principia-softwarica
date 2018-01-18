@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/xincport.h */
+/*s: libthread/xincport.h */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -30,4 +30,4 @@ _xdec(long *p)
     return r;
 }
 /*e: function [[_xdec]] */
-/*e: lib_core/libthread/xincport.h */
+/*e: libthread/xincport.h */

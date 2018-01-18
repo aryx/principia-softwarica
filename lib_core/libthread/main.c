@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/main.c */
+/*s: libthread/main.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -246,4 +246,4 @@ _schedexecwait(void)
 }
 /*e: function [[_schedexecwait]] */
 
-/*e: lib_core/libthread/main.c */
+/*e: libthread/main.c */

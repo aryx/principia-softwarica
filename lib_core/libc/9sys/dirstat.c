@@ -1,4 +1,4 @@
-/*s: 9sys/dirstat.c */
+/*s: libc/9sys/dirstat.c */
 #include <u.h>
 #include <libc.h>
 #include <fcall.h>
@@ -40,4 +40,4 @@ dirstat(char *name)
     return nil;
 }
 /*e: function [[dirstat]] */
-/*e: 9sys/dirstat.c */
+/*e: libc/9sys/dirstat.c */

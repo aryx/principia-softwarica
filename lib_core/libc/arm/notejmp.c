@@ -1,4 +1,4 @@
-/*s: arm/notejmp.c */
+/*s: libc/arm/notejmp.c */
 #include <u.h>
 #include <libc.h>
 #include <ureg.h>
@@ -17,4 +17,4 @@ notejmp(void *vr, jmp_buf j, int ret)
     noted(NCONT);
 }
 /*e: function [[notejmp]](arm) */
-/*e: arm/notejmp.c */
+/*e: libc/arm/notejmp.c */

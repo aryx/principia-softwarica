@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/sched.c */
+/*s: libthread/sched.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -212,4 +212,4 @@ yield(void)
 }
 /*e: function [[yield]] */
 
-/*e: lib_core/libthread/sched.c */
+/*e: libthread/sched.c */

@@ -1,4 +1,4 @@
-/*s: 9sys/fork.c */
+/*s: libc/9sys/fork.c */
 #include <u.h>
 #include <libc.h>
 
@@ -9,4 +9,4 @@ fork(void)
     return rfork(RFPROC|RFFDG|RFREND);
 }
 /*e: function [[fork]] */
-/*e: 9sys/fork.c */
+/*e: libc/9sys/fork.c */

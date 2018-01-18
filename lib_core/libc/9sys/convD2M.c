@@ -1,4 +1,4 @@
-/*s: 9sys/convD2M.c */
+/*s: libc/9sys/convD2M.c */
 #include    <u.h>
 #include    <libc.h>
 #include    <fcall.h>
@@ -101,4 +101,4 @@ convD2M(Dir *d, uchar *buf, uint nbuf)
     return p - buf;
 }
 /*e: function [[convD2M]] */
-/*e: 9sys/convD2M.c */
+/*e: libc/9sys/convD2M.c */

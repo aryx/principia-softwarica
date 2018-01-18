@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/iosleep.c */
+/*s: libthread/iosleep.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -22,4 +22,4 @@ iosleep(Ioproc *io, long n)
     return iocall(io, _iosleep, n);
 }
 /*e: function [[iosleep]] */
-/*e: lib_core/libthread/iosleep.c */
+/*e: libthread/iosleep.c */

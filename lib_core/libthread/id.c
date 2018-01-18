@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/id.c */
+/*s: libthread/id.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -171,4 +171,4 @@ tprivaddr(int i)
     return &_threadgetproc()->thread->udata[i];
 }
 /*e: function [[tprivaddr]] */
-/*e: lib_core/libthread/id.c */
+/*e: libthread/id.c */

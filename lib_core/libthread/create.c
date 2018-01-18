@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/create.c */
+/*s: libthread/create.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -171,4 +171,4 @@ _freethread(Thread *t)
 }
 /*e: function [[_freethread]] */
 
-/*e: lib_core/libthread/create.c */
+/*e: libthread/create.c */

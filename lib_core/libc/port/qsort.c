@@ -1,4 +1,4 @@
-/*s: port/qsort.c */
+/*s: libc/port/qsort.c */
 /*
  * qsort -- simple quicksort
  */
@@ -135,4 +135,4 @@ qsort(void *va, long n, long es, int (*cmp)(void*, void*))
     qsorts((char*)va, n, &s);
 }
 /*e: function [[qsort]] */
-/*e: port/qsort.c */
+/*e: libc/port/qsort.c */

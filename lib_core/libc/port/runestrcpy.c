@@ -1,4 +1,4 @@
-/*s: port/runestrcpy.c */
+/*s: libc/port/runestrcpy.c */
 #include <u.h>
 #include <libc.h>
 
@@ -14,4 +14,4 @@ runestrcpy(Rune *s1, Rune *s2)
     return os1;
 }
 /*e: function [[runestrcpy]] */
-/*e: port/runestrcpy.c */
+/*e: libc/port/runestrcpy.c */

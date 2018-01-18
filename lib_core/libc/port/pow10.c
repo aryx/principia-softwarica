@@ -1,4 +1,4 @@
-/*s: port/pow10.c */
+/*s: libc/port/pow10.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -52,4 +52,4 @@ pow10(int n)
     return pow10(m) * pow10(n-m);
 }
 /*e: function [[pow10]] */
-/*e: port/pow10.c */
+/*e: libc/port/pow10.c */

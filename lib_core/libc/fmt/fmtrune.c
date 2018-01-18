@@ -1,4 +1,4 @@
-/*s: fmt/fmtrune.c */
+/*s: libc/fmt/fmtrune.c */
 #include <u.h>
 #include <libc.h>
 #include "fmtdef.h"
@@ -26,4 +26,4 @@ fmtrune(Fmt *f, int r)
     return 0;
 }
 /*e: function [[fmtrune]] */
-/*e: fmt/fmtrune.c */
+/*e: libc/fmt/fmtrune.c */

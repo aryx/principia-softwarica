@@ -1,4 +1,4 @@
-/*s: port/strtod.c */
+/*s: libc/port/strtod.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -545,4 +545,4 @@ xcmp(char *a, char *b)
     return 0;
 }
 /*e: function [[xcmp]] */
-/*e: port/strtod.c */
+/*e: libc/port/strtod.c */

@@ -1,4 +1,4 @@
-/*s: fmt/runevsnprint.c */
+/*s: libc/fmt/runevsnprint.c */
 #include <u.h>
 #include <libc.h>
 
@@ -23,4 +23,4 @@ runevsnprint(Rune *buf, int len, char *fmt, va_list args)
     return (Rune*)f.to - buf;
 }
 /*e: function [[runevsnprint]] */
-/*e: fmt/runevsnprint.c */
+/*e: libc/fmt/runevsnprint.c */

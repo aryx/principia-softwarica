@@ -1,4 +1,4 @@
-/*s: port/utfrune.c */
+/*s: libc/port/utfrune.c */
 #include <u.h>
 #include <libc.h>
 
@@ -30,4 +30,4 @@ utfrune(char *s, long c)
     }
 }
 /*e: function [[utfrune]] */
-/*e: port/utfrune.c */
+/*e: libc/port/utfrune.c */

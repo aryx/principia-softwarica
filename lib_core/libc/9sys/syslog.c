@@ -1,4 +1,4 @@
-/*s: 9sys/syslog.c */
+/*s: libc/9sys/syslog.c */
 #include <u.h>
 #include <libc.h>
 
@@ -123,4 +123,4 @@ syslog(int cons, char *logname, char *fmt, ...)
     unlock(&sl);
 }
 /*e: function [[syslog]] */
-/*e: 9sys/syslog.c */
+/*e: libc/9sys/syslog.c */

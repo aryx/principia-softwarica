@@ -1,4 +1,4 @@
-/*s: port/floor.c */
+/*s: libc/port/floor.c */
 #include <u.h>
 #include <libc.h>
 /*s: function [[floor]] */
@@ -29,4 +29,4 @@ ceil(double d)
     return -floor(-d);
 }
 /*e: function [[ceil]] */
-/*e: port/floor.c */
+/*e: libc/port/floor.c */

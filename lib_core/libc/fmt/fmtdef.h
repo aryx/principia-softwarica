@@ -1,4 +1,4 @@
-/*s: lib_core/libc/fmt/fmtdef.h */
+/*s: libc/fmt/fmtdef.h */
 /*
  * dofmt -- format to a buffer
  * the number of characters formatted is returned,
@@ -84,4 +84,4 @@ void    _fmtunlock(void);
         t += runetochar(t, &_rune);\
     }\
     }while(0)
-/*e: lib_core/libc/fmt/fmtdef.h */
+/*e: libc/fmt/fmtdef.h */

@@ -1,4 +1,4 @@
-/*s: port/quote.c */
+/*s: libc/port/quote.c */
 #include <u.h>
 #include <libc.h>
 
@@ -144,4 +144,4 @@ quoterunestrdup(Rune *s)
     return ret;
 }
 /*e: function [[quoterunestrdup]] */
-/*e: port/quote.c */
+/*e: libc/port/quote.c */

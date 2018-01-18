@@ -1,4 +1,4 @@
-/*s: port/runestrcat.c */
+/*s: libc/port/runestrcat.c */
 #include <u.h>
 #include <libc.h>
 
@@ -11,4 +11,4 @@ runestrcat(Rune *s1, Rune *s2)
     return s1;
 }
 /*e: function [[runestrcat]] */
-/*e: port/runestrcat.c */
+/*e: libc/port/runestrcat.c */

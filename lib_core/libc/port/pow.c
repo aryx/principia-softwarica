@@ -1,4 +1,4 @@
-/*s: port/pow.c */
+/*s: libc/port/pow.c */
 #include <u.h>
 #include <libc.h>
 
@@ -70,4 +70,4 @@ pow(double x, double y) /* return x ^ y (exponentiation) */
     return ldexp(xy, ey);
 }
 /*e: function [[pow]] */
-/*e: port/pow.c */
+/*e: libc/port/pow.c */

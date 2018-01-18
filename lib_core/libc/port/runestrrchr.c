@@ -1,4 +1,4 @@
-/*s: port/runestrrchr.c */
+/*s: libc/port/runestrrchr.c */
 #include <u.h>
 #include <libc.h>
 
@@ -16,4 +16,4 @@ runestrrchr(Rune *s, Rune c)
     return r;
 }
 /*e: function [[runestrrchr]] */
-/*e: port/runestrrchr.c */
+/*e: libc/port/runestrrchr.c */

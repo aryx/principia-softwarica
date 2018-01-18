@@ -1,4 +1,4 @@
-/*s: port/toupper.c */
+/*s: libc/port/toupper.c */
 #include    <ctype.h>
 
 /*s: function [[toupper]] */
@@ -22,4 +22,4 @@ tolower(int c)
     return _tolower(c);
 }
 /*e: function [[tolower]] */
-/*e: port/toupper.c */
+/*e: libc/port/toupper.c */

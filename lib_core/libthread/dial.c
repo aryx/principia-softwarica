@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/dial.c */
+/*s: libthread/dial.c */
 /*
  * old single-process version of dial that libthread can cope with
  */
@@ -11,13 +11,13 @@ static int  call(char*, char*, DS*);
 static int  csdial(DS*);
 static void _dial_string_parse(char*, DS*);
 
-/*s: enum [[_anon_ (lib_core/libthread/dial.c)]] */
+/*s: enum [[_anon_ (libthread/dial.c)]] */
 enum
 {
     Maxstring	= 128,
     Maxpath		= 256,
 };
-/*e: enum [[_anon_ (lib_core/libthread/dial.c)]] */
+/*e: enum [[_anon_ (libthread/dial.c)]] */
 
 /*s: struct [[DS]](libthread/dial.c) */
 struct DS {
@@ -232,4 +232,4 @@ _dial_string_parse(char *str, DS *ds)
     }
 }
 /*e: function [[_dial_string_parse]](libthread/dial.c) */
-/*e: lib_core/libthread/dial.c */
+/*e: libthread/dial.c */

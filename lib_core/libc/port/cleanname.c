@@ -1,4 +1,4 @@
-/*s: port/cleanname.c */
+/*s: libc/port/cleanname.c */
 #include <u.h>
 #include <libc.h>
 
@@ -101,4 +101,4 @@ cleanname(char *name)
     return name;
 }
 /*e: function [[cleanname]] */
-/*e: port/cleanname.c */
+/*e: libc/port/cleanname.c */

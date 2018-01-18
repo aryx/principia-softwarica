@@ -1,4 +1,4 @@
-/*s: port/strtoul.c */
+/*s: libc/port/strtoul.c */
 #include <u.h>
 #include <libc.h>
 
@@ -100,4 +100,4 @@ strtoul(char *nptr, char **endptr, int base)
     return n;
 }
 /*e: function [[strtoul]] */
-/*e: port/strtoul.c */
+/*e: libc/port/strtoul.c */

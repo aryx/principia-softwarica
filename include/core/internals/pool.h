@@ -1,4 +1,4 @@
-/*s: include/pool.h */
+/*s: include/core/internals/pool.h */
 typedef struct Pool Pool;
 
 /*s: type [[Pool]] */
@@ -61,4 +61,4 @@ enum Pool_flag {	/* flags */
  POOL_NOREUSE	= 1<<6,
 };
 /*e: type [[Pool_flag]] */
-/*e: include/pool.h */
+/*e: include/core/internals/pool.h */

@@ -1,4 +1,4 @@
-/*s: 9sys/dial.c */
+/*s: libc/9sys/dial.c */
 /*
  * dial - connect to a service (parallel version)
  */
@@ -594,4 +594,4 @@ _dial_string_parse(char *str, DS *ds)
     }
 }
 /*e: function [[_dial_string_parse]](9sys/dial.c) */
-/*e: 9sys/dial.c */
+/*e: libc/9sys/dial.c */

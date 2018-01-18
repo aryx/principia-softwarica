@@ -1,4 +1,4 @@
-/*s: 9sys/abort.c */
+/*s: libc/9sys/abort.c */
 #include <u.h>
 #include <libc.h>
 
@@ -10,4 +10,4 @@ abort(void)
         ;
 }
 /*e: function [[abort]] */
-/*e: 9sys/abort.c */
+/*e: libc/9sys/abort.c */

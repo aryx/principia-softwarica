@@ -1,4 +1,4 @@
-/*s: port/needsrcquote.c */
+/*s: libc/port/needsrcquote.c */
 #include <u.h>
 #include <libc.h>
 
@@ -13,4 +13,4 @@ needsrcquote(int c)
     return 0;
 }
 /*e: function [[needsrcquote]] */
-/*e: port/needsrcquote.c */
+/*e: libc/port/needsrcquote.c */

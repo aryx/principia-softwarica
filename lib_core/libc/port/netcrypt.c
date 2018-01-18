@@ -1,4 +1,4 @@
-/*s: port/netcrypt.c */
+/*s: libc/port/netcrypt.c */
 #include <u.h>
 #include <libc.h>
 #include <auth.h>
@@ -19,4 +19,4 @@ netcrypt(void *key, void *chal)
     return 1;
 }
 /*e: function [[netcrypt]] */
-/*e: port/netcrypt.c */
+/*e: libc/port/netcrypt.c */

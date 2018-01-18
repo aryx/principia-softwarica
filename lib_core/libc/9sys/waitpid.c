@@ -1,4 +1,4 @@
-/*s: 9sys/waitpid.c */
+/*s: libc/9sys/waitpid.c */
 #include <u.h>
 #include <libc.h>
 #include <fcall.h>
@@ -23,4 +23,4 @@ waitpid(void)
 }
 /*e: function [[waitpid]] */
 
-/*e: 9sys/waitpid.c */
+/*e: libc/9sys/waitpid.c */

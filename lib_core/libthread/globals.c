@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/globals.c */
+/*s: libthread/globals.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -37,4 +37,4 @@ _threadsetproc(Proc *p)
     *procp = p;
 }
 /*e: function [[_threadsetproc]] */
-/*e: lib_core/libthread/globals.c */
+/*e: libthread/globals.c */

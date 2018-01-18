@@ -1,4 +1,4 @@
-/*s: fmt/fmt.c */
+/*s: libc/fmt/fmt.c */
 #include <u.h>
 #include <libc.h>
 #include "fmtdef.h"
@@ -235,4 +235,4 @@ end:
     return ret;
 }
 /*e: function [[_fmtdispatch]] */
-/*e: fmt/fmt.c */
+/*e: libc/fmt/fmt.c */

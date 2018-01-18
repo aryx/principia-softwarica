@@ -1,4 +1,4 @@
-/*s: port/runestrstr.c */
+/*s: libc/port/runestrstr.c */
 #include <u.h>
 #include <libc.h>
 
@@ -30,4 +30,4 @@ runestrstr(Rune *s1, Rune *s2)
     return nil;
 }
 /*e: function [[runestrstr]] */
-/*e: port/runestrstr.c */
+/*e: libc/port/runestrstr.c */

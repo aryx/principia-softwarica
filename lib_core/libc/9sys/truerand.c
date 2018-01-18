@@ -1,4 +1,4 @@
-/*s: 9sys/truerand.c */
+/*s: libc/9sys/truerand.c */
 #include <u.h>
 #include <libc.h>
 
@@ -19,4 +19,4 @@ truerand(void)
     return x;
 }
 /*e: function [[truerand]] */
-/*e: 9sys/truerand.c */
+/*e: libc/9sys/truerand.c */

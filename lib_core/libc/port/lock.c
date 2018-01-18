@@ -1,4 +1,4 @@
-/*s: port/lock.c */
+/*s: libc/port/lock.c */
 #include <u.h>
 #include <libc.h>
 
@@ -40,4 +40,4 @@ canlock(Lock *l)
     return false;
 }
 /*e: function [[canlock]] */
-/*e: port/lock.c */
+/*e: libc/port/lock.c */

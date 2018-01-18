@@ -1,4 +1,4 @@
-/*s: port/u16.c */
+/*s: libc/port/u16.c */
 #include <u.h>
 #include <libc.h>
 /*s: global [[t16e]] */
@@ -58,4 +58,4 @@ exhausted:
     return out - start;
 }
 /*e: function [[enc16]] */
-/*e: port/u16.c */
+/*e: libc/port/u16.c */

@@ -1,4 +1,4 @@
-/*s: 9sys/postnote.c */
+/*s: libc/9sys/postnote.c */
 #include <u.h>
 #include <libc.h>
 
@@ -34,4 +34,4 @@ postnote(int group, int pid, char *note)
     return 0;
 }
 /*e: function [[postnote]] */
-/*e: 9sys/postnote.c */
+/*e: libc/9sys/postnote.c */

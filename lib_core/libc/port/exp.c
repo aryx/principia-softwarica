@@ -1,4 +1,4 @@
-/*s: port/exp.c */
+/*s: libc/port/exp.c */
 /*
     exp returns the exponential function of its
     floating-point argument.
@@ -60,4 +60,4 @@ exp(double arg)
     return ldexp(sqrt2*(temp2+temp1)/(temp2-temp1), ent);
 }
 /*e: function [[exp]] */
-/*e: port/exp.c */
+/*e: libc/port/exp.c */

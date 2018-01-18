@@ -1,4 +1,4 @@
-/*s: 9sys/pushssl.c */
+/*s: libc/9sys/pushssl.c */
 #include <u.h>
 #include <libc.h>
 
@@ -45,4 +45,4 @@ error:
     return -1;
 }
 /*e: function [[pushssl]] */
-/*e: 9sys/pushssl.c */
+/*e: libc/9sys/pushssl.c */

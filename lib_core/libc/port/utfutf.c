@@ -1,4 +1,4 @@
-/*s: port/utfutf.c */
+/*s: libc/port/utfutf.c */
 #include <u.h>
 #include <libc.h>
 
@@ -27,4 +27,4 @@ utfutf(char *s1, char *s2)
     return 0;
 }
 /*e: function [[utfutf]] */
-/*e: port/utfutf.c */
+/*e: libc/port/utfutf.c */

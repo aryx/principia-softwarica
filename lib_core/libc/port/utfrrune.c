@@ -1,4 +1,4 @@
-/*s: port/utfrrune.c */
+/*s: libc/port/utfrrune.c */
 #include <u.h>
 #include <libc.h>
 
@@ -31,4 +31,4 @@ utfrrune(char *s, long c)
     }
 }
 /*e: function [[utfrrune]] */
-/*e: port/utfrrune.c */
+/*e: libc/port/utfrrune.c */

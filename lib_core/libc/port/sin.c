@@ -1,4 +1,4 @@
-/*s: port/sin.c */
+/*s: libc/port/sin.c */
 /*
     C program for floating point sin/cos.
     Calls modf.
@@ -91,4 +91,4 @@ sin(double arg)
     return sinus(arg, 0);
 }
 /*e: function [[sin]] */
-/*e: port/sin.c */
+/*e: libc/port/sin.c */

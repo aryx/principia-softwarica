@@ -1,15 +1,15 @@
-/*s: lib_core/libthread/channel.c */
+/*s: libthread/channel.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
 #include "threadimpl.h"
 
-/*s: enum [[_anon_ (lib_core/libthread/channel.c)]] */
+/*s: enum [[_anon_ (libthread/channel.c)]] */
 /* Value to indicate the channel is closed */
 enum {
     CHANCLOSD = 0xc105ed,
 };
-/*e: enum [[_anon_ (lib_core/libthread/channel.c)]] */
+/*e: enum [[_anon_ (libthread/channel.c)]] */
 
 /*s: global [[errcl]] */
 static char errcl[] = "channel was closed";
@@ -673,4 +673,4 @@ altexec(Alt *a, int spl)
     return 1;
 }
 /*e: function [[altexec]] */
-/*e: lib_core/libthread/channel.c */
+/*e: libthread/channel.c */

@@ -1,4 +1,4 @@
-/*s: 9sys/write.c */
+/*s: libc/9sys/write.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -9,4 +9,4 @@ write(fdt fd, void *buf, long n)
     return pwrite(fd, buf, n, -1LL);
 }
 /*e: function [[write]] */
-/*e: 9sys/write.c */
+/*e: libc/9sys/write.c */

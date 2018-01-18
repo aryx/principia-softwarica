@@ -1,4 +1,4 @@
-/*s: 9sys/read9pmsg.c */
+/*s: libc/9sys/read9pmsg.c */
 #include <u.h>
 #include <libc.h>
 #include <fcall.h>
@@ -32,4 +32,4 @@ read9pmsg(fdt fd, void *abuf, uint n)
     return BIT32SZ+m;
 }
 /*e: function [[read9pmsg]] */
-/*e: 9sys/read9pmsg.c */
+/*e: libc/9sys/read9pmsg.c */

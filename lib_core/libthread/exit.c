@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/exit.c */
+/*s: libthread/exit.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -81,4 +81,4 @@ threadwaitchan(void)
     return _threadwaitchan;
 }
 /*e: function [[threadwaitchan]] */
-/*e: lib_core/libthread/exit.c */
+/*e: libthread/exit.c */

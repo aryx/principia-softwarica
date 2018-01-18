@@ -1,4 +1,4 @@
-/*s: port/utfnlen.c */
+/*s: libc/port/utfnlen.c */
 #include <u.h>
 #include <libc.h>
 
@@ -27,4 +27,4 @@ utfnlen(char *s, long m)
     return n;
 }
 /*e: function [[utfnlen]] */
-/*e: port/utfnlen.c */
+/*e: libc/port/utfnlen.c */

@@ -1,4 +1,4 @@
-/*s: port/sinh.c */
+/*s: libc/port/sinh.c */
 #include <u.h>
 #include <libc.h>
 
@@ -79,4 +79,4 @@ cosh(double arg)
     return (exp(arg) + exp(-arg))/2;
 }
 /*e: function [[cosh]] */
-/*e: port/sinh.c */
+/*e: libc/port/sinh.c */

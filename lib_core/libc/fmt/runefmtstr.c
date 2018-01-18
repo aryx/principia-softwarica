@@ -1,4 +1,4 @@
-/*s: fmt/runefmtstr.c */
+/*s: libc/fmt/runefmtstr.c */
 #include <u.h>
 #include <libc.h>
 
@@ -12,4 +12,4 @@ runefmtstrflush(Fmt *f)
     return f->start;
 }
 /*e: function [[runefmtstrflush]] */
-/*e: fmt/runefmtstr.c */
+/*e: libc/fmt/runefmtstr.c */

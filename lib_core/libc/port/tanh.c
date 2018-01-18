@@ -1,4 +1,4 @@
-/*s: port/tanh.c */
+/*s: libc/port/tanh.c */
 #include <u.h>
 #include <libc.h>
 
@@ -26,4 +26,4 @@ tanh(double arg)
     return sinh(arg)/cosh(arg);
 }
 /*e: function [[tanh]] */
-/*e: port/tanh.c */
+/*e: libc/port/tanh.c */

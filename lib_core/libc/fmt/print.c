@@ -1,4 +1,4 @@
-/*s: fmt/print.c */
+/*s: libc/fmt/print.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -19,4 +19,4 @@ libc_print(char *fmt, ...)
 /*s: global [[print]] */
 int (*print)(char *fmt, ...) = &libc_print;
 /*e: global [[print]] */
-/*e: fmt/print.c */
+/*e: libc/fmt/print.c */

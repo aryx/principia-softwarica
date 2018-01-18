@@ -1,4 +1,4 @@
-/*s: port/atol.c */
+/*s: libc/port/atol.c */
 #include <u.h>
 #include <libc.h>
 
@@ -56,4 +56,4 @@ atoi(char *s)
     return atol(s);
 }
 /*e: function [[atoi]] */
-/*e: port/atol.c */
+/*e: libc/port/atol.c */

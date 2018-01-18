@@ -1,4 +1,4 @@
-/*s: fmt/sprint.c */
+/*s: libc/fmt/sprint.c */
 #include <u.h>
 #include <libc.h>
 
@@ -15,4 +15,4 @@ sprint(char *buf, char *fmt, ...)
     return n;
 }
 /*e: function [[sprint]] */
-/*e: fmt/sprint.c */
+/*e: libc/fmt/sprint.c */

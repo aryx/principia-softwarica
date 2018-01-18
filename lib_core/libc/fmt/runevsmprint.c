@@ -1,4 +1,4 @@
-/*s: fmt/runevsmprint.c */
+/*s: libc/fmt/runevsmprint.c */
 #include <u.h>
 #include <libc.h>
 #include "fmtdef.h"
@@ -77,4 +77,4 @@ runevsmprint(char *fmt, va_list args)
     return f.start;
 }
 /*e: function [[runevsmprint]] */
-/*e: fmt/runevsmprint.c */
+/*e: libc/fmt/runevsmprint.c */

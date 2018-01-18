@@ -1,4 +1,4 @@
-/*s: 9sys/qlock.c */
+/*s: libc/9sys/qlock.c */
 #include <u.h>
 #include <libc.h>
 
@@ -396,4 +396,4 @@ rwakeupall(Rendez *r)
 }
 /*e: function [[rwakeupall]] */
 
-/*e: 9sys/qlock.c */
+/*e: libc/9sys/qlock.c */

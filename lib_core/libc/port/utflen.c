@@ -1,4 +1,4 @@
-/*s: port/utflen.c */
+/*s: libc/port/utflen.c */
 #include <u.h>
 #include <libc.h>
 
@@ -23,4 +23,4 @@ utflen(char *s)
     }
 }
 /*e: function [[utflen]] */
-/*e: port/utflen.c */
+/*e: libc/port/utflen.c */

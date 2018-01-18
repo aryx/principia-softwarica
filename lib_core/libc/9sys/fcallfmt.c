@@ -1,4 +1,4 @@
-/*s: 9sys/fcallfmt.c */
+/*s: libc/9sys/fcallfmt.c */
 #include <u.h>
 #include <libc.h>
 #include <fcall.h>
@@ -251,4 +251,4 @@ dumpsome(char *ans, char *e, char *buf, long count)
     return p - ans;
 }
 /*e: function [[dumpsome]] */
-/*e: 9sys/fcallfmt.c */
+/*e: libc/9sys/fcallfmt.c */

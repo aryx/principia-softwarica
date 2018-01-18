@@ -1,4 +1,4 @@
-/*s: 9sys/readv.c */
+/*s: libc/9sys/readv.c */
 #include <u.h>
 #include <libc.h>
 
@@ -54,4 +54,4 @@ preadv(int fd, IOchunk *io, int nio, vlong off)
     return ioreadv(fd, io, nio, off);
 }
 /*e: function [[preadv]] */
-/*e: 9sys/readv.c */
+/*e: libc/9sys/readv.c */

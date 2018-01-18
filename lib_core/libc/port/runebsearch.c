@@ -1,4 +1,4 @@
-/*s: port/runebsearch.c */
+/*s: libc/port/runebsearch.c */
 #include <u.h>
 #include <libc.h>
 
@@ -23,4 +23,4 @@ _runebsearch(Rune c, Rune *t, int n, int ne)
     return 0;
 }
 /*e: function [[_runebsearch]] */
-/*e: port/runebsearch.c */
+/*e: libc/port/runebsearch.c */

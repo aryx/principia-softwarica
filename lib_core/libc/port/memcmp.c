@@ -1,4 +1,4 @@
-/*s: port/memcmp.c */
+/*s: libc/port/memcmp.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -24,4 +24,4 @@ memcmp(void *a1, void *a2, ulong n)
     return 0;
 }
 /*e: function [[memcmp]] */
-/*e: port/memcmp.c */
+/*e: libc/port/memcmp.c */

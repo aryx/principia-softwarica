@@ -1,4 +1,4 @@
-/*s: fmt/snprint.c */
+/*s: libc/fmt/snprint.c */
 #include <u.h>
 #include <libc.h>
 
@@ -16,4 +16,4 @@ snprint(char *buf, int len, char *fmt, ...)
 }
 /*e: function [[snprint]] */
 
-/*e: fmt/snprint.c */
+/*e: libc/fmt/snprint.c */

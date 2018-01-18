@@ -1,4 +1,4 @@
-/*s: 9sys/getnetconninfo.c */
+/*s: libc/9sys/getnetconninfo.c */
 #include <u.h>
 #include <libc.h>
 
@@ -142,4 +142,4 @@ freenetconninfo(NetConnInfo *nci)
     free(nci);
 }
 /*e: function [[freenetconninfo]] */
-/*e: 9sys/getnetconninfo.c */
+/*e: libc/9sys/getnetconninfo.c */

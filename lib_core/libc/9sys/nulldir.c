@@ -1,4 +1,4 @@
-/*s: 9sys/nulldir.c */
+/*s: libc/9sys/nulldir.c */
 #include <u.h>
 #include <libc.h>
 
@@ -10,4 +10,4 @@ nulldir(Dir *d)
     d->name = d->uid = d->gid = d->muid = "";
 }
 /*e: function [[nulldir]] */
-/*e: 9sys/nulldir.c */
+/*e: libc/9sys/nulldir.c */

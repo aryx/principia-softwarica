@@ -1,4 +1,4 @@
-/*s: port/fmod.c */
+/*s: libc/port/fmod.c */
 #include <u.h>
 #include <libc.h>
 
@@ -32,4 +32,4 @@ fmod (double x, double y)
     return r;
 }
 /*e: function [[fmod]] */
-/*e: port/fmod.c */
+/*e: libc/port/fmod.c */

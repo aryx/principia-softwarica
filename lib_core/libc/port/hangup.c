@@ -1,4 +1,4 @@
-/*s: port/hangup.c */
+/*s: libc/port/hangup.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -13,4 +13,4 @@ hangup(int ctl)
     return write(ctl, "hangup", sizeof("hangup")-1) != sizeof("hangup")-1;
 }
 /*e: function [[hangup]] */
-/*e: port/hangup.c */
+/*e: libc/port/hangup.c */

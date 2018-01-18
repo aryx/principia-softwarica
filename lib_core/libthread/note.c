@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/note.c */
+/*s: libthread/note.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -170,4 +170,4 @@ _procsplx(int s)
 }
 /*e: function [[_procsplx]] */
 
-/*e: lib_core/libthread/note.c */
+/*e: libthread/note.c */

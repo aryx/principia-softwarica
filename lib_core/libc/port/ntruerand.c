@@ -1,4 +1,4 @@
-/*s: port/ntruerand.c */
+/*s: libc/port/ntruerand.c */
 #include <u.h>
 #include <libc.h>
 
@@ -24,4 +24,4 @@ ntruerand(ulong n)
     return r%n;
 }
 /*e: function [[ntruerand]] */
-/*e: port/ntruerand.c */
+/*e: libc/port/ntruerand.c */

@@ -1,4 +1,4 @@
-/*s: fmt/fltfmt.c */
+/*s: libc/fmt/fltfmt.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -329,4 +329,4 @@ _efgfmt(Fmt *f)
     return _floatfmt(f, d);
 }
 /*e: function [[_efgfmt]] */
-/*e: fmt/fltfmt.c */
+/*e: libc/fmt/fltfmt.c */

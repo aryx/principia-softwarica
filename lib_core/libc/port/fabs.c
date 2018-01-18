@@ -1,4 +1,4 @@
-/*s: port/fabs.c */
+/*s: libc/port/fabs.c */
 #include <u.h>
 #include <libc.h>
 
@@ -12,4 +12,4 @@ fabs(double arg)
     return arg;
 }
 /*e: function [[fabs]] */
-/*e: port/fabs.c */
+/*e: libc/port/fabs.c */

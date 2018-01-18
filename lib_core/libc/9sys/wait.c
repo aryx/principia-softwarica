@@ -1,4 +1,4 @@
-/*s: 9sys/wait.c */
+/*s: libc/9sys/wait.c */
 #include <u.h>
 #include <libc.h>
 #include <fcall.h>
@@ -34,4 +34,4 @@ wait(void)
 }
 /*e: function [[wait]] */
 
-/*e: 9sys/wait.c */
+/*e: libc/9sys/wait.c */

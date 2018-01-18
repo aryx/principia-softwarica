@@ -1,4 +1,4 @@
-/*s: port/memccpy.c */
+/*s: libc/port/memccpy.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -19,4 +19,4 @@ memccpy(void *a1, void *a2, int c, ulong n)
     return nil;
 }
 /*e: function [[memccpy]] */
-/*e: port/memccpy.c */
+/*e: libc/port/memccpy.c */

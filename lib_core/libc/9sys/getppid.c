@@ -1,4 +1,4 @@
-/*s: 9sys/getppid.c */
+/*s: libc/9sys/getppid.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -18,4 +18,4 @@ getppid(void)
     return atol(b);
 }
 /*e: function [[getppid]] */
-/*e: 9sys/getppid.c */
+/*e: libc/9sys/getppid.c */

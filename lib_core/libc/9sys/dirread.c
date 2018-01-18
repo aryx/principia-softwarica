@@ -1,4 +1,4 @@
-/*s: 9sys/dirread.c */
+/*s: libc/9sys/dirread.c */
 #include <u.h>
 #include <libc.h>
 #include <fcall.h>
@@ -102,4 +102,4 @@ dirreadall(int fd, Dir **d)
     return ts;
 }
 /*e: function [[dirreadall]] */
-/*e: 9sys/dirread.c */
+/*e: libc/9sys/dirread.c */

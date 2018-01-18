@@ -1,4 +1,4 @@
-/*s: port/strdup.c */
+/*s: libc/port/strdup.c */
 #include <u.h>
 #include <libc.h>
 
@@ -16,4 +16,4 @@ strdup(char *s)
     return strcpy(ns, s);
 }
 /*e: function [[strdup]] */
-/*e: port/strdup.c */
+/*e: libc/port/strdup.c */

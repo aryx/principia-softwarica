@@ -1,4 +1,4 @@
-/*s: fmt/seprint.c */
+/*s: libc/fmt/seprint.c */
 #include <u.h>
 #include <libc.h>
 
@@ -15,4 +15,4 @@ seprint(char *buf, char *e, char *fmt, ...)
     return p;
 }
 /*e: function [[seprint]] */
-/*e: fmt/seprint.c */
+/*e: libc/fmt/seprint.c */

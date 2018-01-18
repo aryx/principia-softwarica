@@ -1,4 +1,4 @@
-/*s: 9sys/tm2sec.c */
+/*s: libc/9sys/tm2sec.c */
 #include <u.h>
 #include <libc.h>
 
@@ -217,4 +217,4 @@ rd_long(char **f, long *p)
     return 0;
 }
 /*e: function [[rd_long]](9sys/tm2sec.c) */
-/*e: 9sys/tm2sec.c */
+/*e: libc/9sys/tm2sec.c */

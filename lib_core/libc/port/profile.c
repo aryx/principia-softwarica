@@ -1,4 +1,4 @@
-/*s: port/profile.c */
+/*s: libc/port/profile.c */
 #include    <u.h>
 #include    <libc.h>
 #include    <tos.h>
@@ -304,4 +304,4 @@ prof(void (*fn)(void*), void *arg, int entries, int what)
 
 #pragma profile on
 
-/*e: port/profile.c */
+/*e: libc/port/profile.c */

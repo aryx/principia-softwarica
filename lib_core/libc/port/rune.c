@@ -1,4 +1,4 @@
-/*s: port/rune.c */
+/*s: libc/port/rune.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -183,4 +183,4 @@ fullrune(char *str, int n)
     return n >= UTFmax;
 }
 /*e: function [[fullrune]] */
-/*e: port/rune.c */
+/*e: libc/port/rune.c */

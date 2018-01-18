@@ -1,4 +1,4 @@
-/*s: 9sys/nsec.c */
+/*s: libc/9sys/nsec.c */
 #include <u.h>
 #include <libc.h>
 #include <tos.h>
@@ -85,4 +85,4 @@ nsec(void)
     return 0;
 }
 /*e: function [[nsec]] */
-/*e: 9sys/nsec.c */
+/*e: libc/9sys/nsec.c */

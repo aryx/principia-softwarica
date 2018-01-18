@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/ioreadn.c */
+/*s: libthread/ioreadn.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -26,4 +26,4 @@ ioreadn(Ioproc *io, int fd, void *a, long n)
     return iocall(io, _ioreadn, fd, a, n);
 }
 /*e: function [[ioreadn]] */
-/*e: lib_core/libthread/ioreadn.c */
+/*e: libthread/ioreadn.c */

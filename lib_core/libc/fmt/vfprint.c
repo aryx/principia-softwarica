@@ -1,4 +1,4 @@
-/*s: fmt/vfprint.c */
+/*s: libc/fmt/vfprint.c */
 #include <u.h>
 #include <libc.h>
 #include "fmtdef.h"
@@ -37,4 +37,4 @@ vfprint(int fd, char *fmt, va_list args)
     return n;
 }
 /*e: function [[vfprint]] */
-/*e: fmt/vfprint.c */
+/*e: libc/fmt/vfprint.c */

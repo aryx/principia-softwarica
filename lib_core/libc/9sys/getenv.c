@@ -1,4 +1,4 @@
-/*s: 9sys/getenv.c */
+/*s: libc/9sys/getenv.c */
 #include <u.h>
 #include <libc.h>
 
@@ -38,4 +38,4 @@ getenv(char *name)
     return ans;
 }
 /*e: function [[getenv]] */
-/*e: 9sys/getenv.c */
+/*e: libc/9sys/getenv.c */

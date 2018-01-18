@@ -1,4 +1,4 @@
-/*s: port/strpbrk.c */
+/*s: libc/port/strpbrk.c */
 #include <u.h>
 #include <libc.h>
 /*s: constant N (port/strpbrk.c) */
@@ -25,4 +25,4 @@ strpbrk(char *cs, char *cb)
     return 0;
 }
 /*e: function [[strpbrk]] */
-/*e: port/strpbrk.c */
+/*e: libc/port/strpbrk.c */

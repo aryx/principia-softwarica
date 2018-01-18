@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/ioopen.c */
+/*s: libthread/ioopen.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -24,4 +24,4 @@ ioopen(Ioproc *io, char *path, int mode)
     return iocall(io, _ioopen, path, mode);
 }
 /*e: function [[ioopen]] */
-/*e: lib_core/libthread/ioopen.c */
+/*e: libthread/ioopen.c */

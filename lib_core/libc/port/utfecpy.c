@@ -1,4 +1,4 @@
-/*s: port/utfecpy.c */
+/*s: libc/port/utfecpy.c */
 #include <u.h>
 #include <libc.h>
 
@@ -22,4 +22,4 @@ utfecpy(char *to, char *e, char *from)
     return end;
 }
 /*e: function [[utfecpy]] */
-/*e: port/utfecpy.c */
+/*e: libc/port/utfecpy.c */

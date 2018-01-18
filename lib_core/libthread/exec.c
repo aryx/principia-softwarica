@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/exec.c */
+/*s: libthread/exec.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -85,4 +85,4 @@ procexecl(Channel *pidc, char *f, ...)
 }
 /*e: function [[procexecl]] */
 
-/*e: lib_core/libthread/exec.c */
+/*e: libthread/exec.c */

@@ -1,4 +1,4 @@
-/*s: 9sys/pushtls.c */
+/*s: libc/9sys/pushtls.c */
 #include <u.h>
 #include <libc.h>
 #include <mp.h>
@@ -103,4 +103,4 @@ error:
     return -1;
 }
 /*e: function [[pushtls]] */
-/*e: 9sys/pushtls.c */
+/*e: libc/9sys/pushtls.c */

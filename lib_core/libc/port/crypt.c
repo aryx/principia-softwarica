@@ -1,4 +1,4 @@
-/*s: port/crypt.c */
+/*s: libc/port/crypt.c */
 /*
  *  Data Encryption Standard
  *  D.P.Mitchell  83/06/08.
@@ -71,4 +71,4 @@ decrypt(void *key, void *vbuf, int n)
     return 1;
 }
 /*e: function [[decrypt]] */
-/*e: port/crypt.c */
+/*e: libc/port/crypt.c */

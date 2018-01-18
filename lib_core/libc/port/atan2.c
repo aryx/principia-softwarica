@@ -1,4 +1,4 @@
-/*s: port/atan2.c */
+/*s: libc/port/atan2.c */
 #include <u.h>
 #include <libc.h>
 
@@ -26,4 +26,4 @@ atan2(double arg1, double arg2)
     return arg1;
 }
 /*e: function [[atan2]] */
-/*e: port/atan2.c */
+/*e: libc/port/atan2.c */

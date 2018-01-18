@@ -1,4 +1,4 @@
-/*s: fmt/errfmt.c */
+/*s: libc/fmt/errfmt.c */
 #include <u.h>
 #include <libc.h>
 #include "fmtdef.h"
@@ -13,4 +13,4 @@ errfmt(Fmt *f)
     return _fmtcpy(f, buf, utflen(buf), strlen(buf));
 }
 /*e: function [[errfmt]] */
-/*e: fmt/errfmt.c */
+/*e: libc/fmt/errfmt.c */

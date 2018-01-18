@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/iowrite.c */
+/*s: libthread/iowrite.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -26,4 +26,4 @@ iowrite(Ioproc *io, int fd, void *a, long n)
     return iocall(io, _iowrite, fd, a, n);
 }
 /*e: function [[iowrite]] */
-/*e: lib_core/libthread/iowrite.c */
+/*e: libthread/iowrite.c */

@@ -1,4 +1,4 @@
-/*s: 9sys/rerrstr.c */
+/*s: libc/9sys/rerrstr.c */
 #include <u.h>
 #include <libc.h>
 
@@ -15,4 +15,4 @@ rerrstr(char *buf, uint nbuf)
     errstr(tmp, sizeof tmp);
 }
 /*e: function [[rerrstr]] */
-/*e: 9sys/rerrstr.c */
+/*e: libc/9sys/rerrstr.c */

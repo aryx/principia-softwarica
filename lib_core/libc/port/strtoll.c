@@ -1,4 +1,4 @@
-/*s: port/strtoll.c */
+/*s: libc/port/strtoll.c */
 #include <u.h>
 #include <libc.h>
 
@@ -106,4 +106,4 @@ Return:
     return n;
 }
 /*e: function [[strtoll]] */
-/*e: port/strtoll.c */
+/*e: libc/port/strtoll.c */

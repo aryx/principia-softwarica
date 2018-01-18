@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/chanprint.c */
+/*s: libthread/chanprint.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -21,4 +21,4 @@ chanprint(Channel *c, char *fmt, ...)
     return n;
 }
 /*e: function [[chanprint]] */
-/*e: lib_core/libthread/chanprint.c */
+/*e: libthread/chanprint.c */

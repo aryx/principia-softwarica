@@ -1,4 +1,4 @@
-/*s: port/atnotify.c */
+/*s: libc/port/atnotify.c */
 #include <u.h>
 #include <libc.h>
 
@@ -67,4 +67,4 @@ atnotify(int (*f)(void*, char*), int in)
     return ret;
 }
 /*e: function [[atnotify]] */
-/*e: port/atnotify.c */
+/*e: libc/port/atnotify.c */

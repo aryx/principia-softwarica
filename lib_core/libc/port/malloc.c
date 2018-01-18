@@ -1,4 +1,4 @@
-/*s: port/malloc.c */
+/*s: libc/port/malloc.c */
 #include <u.h>
 #include <libc.h>
 #include <pool.h>
@@ -389,4 +389,4 @@ malloctopoolblock(void *v)
     return &((ulong*)v)[-Npadlong];
 }
 /*e: function [[malloctopoolblock]] */
-/*e: port/malloc.c */
+/*e: libc/port/malloc.c */

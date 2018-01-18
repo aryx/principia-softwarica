@@ -1,4 +1,4 @@
-/*s: port/charstod.c */
+/*s: libc/port/charstod.c */
 #include <u.h>
 #include <libc.h>
 
@@ -84,4 +84,4 @@ charstod(int(*f)(void*), void *vp)
     return strtod(str, &s);
 }
 /*e: function [[charstod]] */
-/*e: port/charstod.c */
+/*e: libc/port/charstod.c */

@@ -1,4 +1,4 @@
-/*s: fmt/fmtlock.c */
+/*s: libc/fmt/fmtlock.c */
 #include <u.h>
 #include <libc.h>
 
@@ -21,4 +21,4 @@ _fmtunlock(void)
     unlock(&fmtl);
 }
 /*e: function [[_fmtunlock]] */
-/*e: fmt/fmtlock.c */
+/*e: libc/fmt/fmtlock.c */

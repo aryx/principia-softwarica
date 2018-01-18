@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/kill.c */
+/*s: libthread/kill.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -103,4 +103,4 @@ tinterrupt(Proc *p, Thread *t)
     }
 }
 /*e: function [[tinterrupt]] */
-/*e: lib_core/libthread/kill.c */
+/*e: libthread/kill.c */

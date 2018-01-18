@@ -1,4 +1,4 @@
-/*s: port/memmove.c */
+/*s: libc/port/memmove.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -38,4 +38,4 @@ memcpy(void *a1, void *a2, ulong n)
     return memmove(a1, a2, n);
 }
 /*e: function [[memcpy]] */
-/*e: port/memmove.c */
+/*e: libc/port/memmove.c */

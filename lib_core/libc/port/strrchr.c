@@ -1,4 +1,4 @@
-/*s: port/strrchr.c */
+/*s: libc/port/strrchr.c */
 #include <u.h>
 #include <libc.h>
 
@@ -17,4 +17,4 @@ strrchr(char *s, int c)
     return r;
 }
 /*e: function [[strrchr]] */
-/*e: port/strrchr.c */
+/*e: libc/port/strrchr.c */

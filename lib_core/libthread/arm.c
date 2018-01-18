@@ -1,3 +1,4 @@
+/*s: libthread/arm.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -25,4 +26,4 @@ _threadinitstack(Thread *t, void (*f)(void*), void *arg)
 	t->sched[JMPBUFPC] = (ulong)launcherarm+JMPBUFDPC;
 	t->sched[JMPBUFSP] = (ulong)tos;
 }
-
+/*e: libthread/arm.c */

@@ -1,4 +1,4 @@
-/*s: 9sys/times.c */
+/*s: libc/9sys/times.c */
 #include <u.h>
 #include <libc.h>
 
@@ -63,4 +63,4 @@ times(long *t)
     return r;
 }
 /*e: function [[times]] */
-/*e: 9sys/times.c */
+/*e: libc/9sys/times.c */

@@ -1,4 +1,4 @@
-/*s: port/nan.c */
+/*s: libc/port/nan.c */
 #include <u.h>
 #include <libc.h>
 
@@ -67,4 +67,4 @@ isInf(double d, int sign)
     return false;
 }
 /*e: function [[isInf]] */
-/*e: port/nan.c */
+/*e: libc/port/nan.c */

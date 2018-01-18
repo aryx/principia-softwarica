@@ -1,4 +1,4 @@
-/*s: port/perror.c */
+/*s: libc/port/perror.c */
 #include <u.h>
 #include <libc.h>
 
@@ -16,4 +16,4 @@ perror(char *s)
         fprint(2, "%s\n", buf);
 }
 /*e: function [[perror]] */
-/*e: port/perror.c */
+/*e: libc/port/perror.c */

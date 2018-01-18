@@ -1,4 +1,4 @@
-/*s: port/sqrt.c */
+/*s: libc/port/sqrt.c */
 /*
     sqrt returns the square root of its floating
     point argument. Newton's method.
@@ -55,4 +55,4 @@ sqrt(double arg)
     return temp;
 }
 /*e: function [[sqrt]] */
-/*e: port/sqrt.c */
+/*e: libc/port/sqrt.c */

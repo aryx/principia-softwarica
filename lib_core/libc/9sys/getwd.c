@@ -1,4 +1,4 @@
-/*s: 9sys/getwd.c */
+/*s: libc/9sys/getwd.c */
 #include <u.h>
 #include <libc.h>
 
@@ -21,4 +21,4 @@ getwd(char *buf, int nbuf)
     return buf;
 }
 /*e: function [[getwd]] */
-/*e: 9sys/getwd.c */
+/*e: libc/9sys/getwd.c */

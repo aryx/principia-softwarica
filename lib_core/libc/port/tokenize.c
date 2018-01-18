@@ -1,4 +1,4 @@
-/*s: port/tokenize.c */
+/*s: libc/port/tokenize.c */
 #include <u.h>
 #include <libc.h>
 
@@ -116,4 +116,4 @@ tokenize(char *s, char **args, int maxargs)
     return nargs;
 }
 /*e: function [[tokenize]] */
-/*e: port/tokenize.c */
+/*e: libc/port/tokenize.c */

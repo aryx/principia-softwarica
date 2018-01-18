@@ -1,4 +1,4 @@
-/*s: 9sys/access.c */
+/*s: libc/9sys/access.c */
 #include <u.h>
 #include <libc.h>
 
@@ -34,4 +34,4 @@ access(char *name, int mode)
     return -1;
 }
 /*e: function [[access]] */
-/*e: 9sys/access.c */
+/*e: libc/9sys/access.c */

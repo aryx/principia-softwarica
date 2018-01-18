@@ -1,4 +1,4 @@
-/*s: fmt/fprint.c */
+/*s: libc/fmt/fprint.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -15,4 +15,4 @@ fprint(int fd, char *fmt, ...)
     return n;
 }
 /*e: function [[fprint]] */
-/*e: fmt/fprint.c */
+/*e: libc/fmt/fprint.c */

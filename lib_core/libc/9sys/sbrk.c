@@ -1,4 +1,4 @@
-/*s: 9sys/sbrk.c */
+/*s: libc/9sys/sbrk.c */
 #include <u.h>
 #include <libc.h>
 
@@ -32,4 +32,4 @@ sbrk(ulong n)
     return (void*)bl;
 }
 /*e: function [[sbrk]] */
-/*e: 9sys/sbrk.c */
+/*e: libc/9sys/sbrk.c */

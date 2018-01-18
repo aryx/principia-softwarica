@@ -1,4 +1,4 @@
-/*s: port/getcallerpc.c */
+/*s: libc/port/getcallerpc.c */
 #include <u.h>
 #include <libc.h>
 
@@ -9,4 +9,4 @@ getcallerpc(void*)
     return 0;
 }
 /*e: function [[getcallerpc]] */
-/*e: port/getcallerpc.c */
+/*e: libc/port/getcallerpc.c */

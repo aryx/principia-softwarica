@@ -1,4 +1,4 @@
-/*s: port/frand.c */
+/*s: libc/port/frand.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -22,4 +22,4 @@ frand(void)
     return x;
 }
 /*e: function [[frand]] */
-/*e: port/frand.c */
+/*e: libc/port/frand.c */

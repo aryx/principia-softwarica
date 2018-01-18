@@ -1,4 +1,4 @@
-/*s: port/strncat.c */
+/*s: libc/port/strncat.c */
 #include <u.h>
 #include <libc.h>
 
@@ -20,4 +20,4 @@ strncat(char *s1, char *s2, long n)
     return os1;
 }
 /*e: function [[strncat]] */
-/*e: port/strncat.c */
+/*e: libc/port/strncat.c */

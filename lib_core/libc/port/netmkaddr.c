@@ -1,4 +1,4 @@
-/*s: port/netmkaddr.c */
+/*s: libc/port/netmkaddr.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -53,4 +53,4 @@ netmkaddr(char *linear, char *defnet, char *defsrv)
     return addr;
 }
 /*e: function [[netmkaddr]] */
-/*e: port/netmkaddr.c */
+/*e: libc/port/netmkaddr.c */

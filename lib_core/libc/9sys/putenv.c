@@ -1,4 +1,4 @@
-/*s: 9sys/putenv.c */
+/*s: libc/9sys/putenv.c */
 #include <u.h>
 #include <libc.h>
 
@@ -27,4 +27,4 @@ putenv(char *name, char *val)
     return 0;
 }
 /*e: function [[putenv]] */
-/*e: 9sys/putenv.c */
+/*e: libc/9sys/putenv.c */

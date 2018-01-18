@@ -1,4 +1,4 @@
-/*s: port/log.c */
+/*s: libc/port/log.c */
 /*
     log returns the natural logarithm of its floating
     point argument.
@@ -81,4 +81,4 @@ log10(double arg)
     return log(arg) * ln10o1;
 }
 /*e: function [[log10]] */
-/*e: port/log.c */
+/*e: libc/port/log.c */

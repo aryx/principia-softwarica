@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/ioread.c */
+/*s: libthread/ioread.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -26,4 +26,4 @@ ioread(Ioproc *io, int fd, void *a, long n)
     return iocall(io, _ioread, fd, a, n);
 }
 /*e: function [[ioread]] */
-/*e: lib_core/libthread/ioread.c */
+/*e: libthread/ioread.c */

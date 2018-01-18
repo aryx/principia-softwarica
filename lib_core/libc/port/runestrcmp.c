@@ -1,4 +1,4 @@
-/*s: port/runestrcmp.c */
+/*s: libc/port/runestrcmp.c */
 #include <u.h>
 #include <libc.h>
 
@@ -21,4 +21,4 @@ runestrcmp(Rune *s1, Rune *s2)
     }
 }
 /*e: function [[runestrcmp]] */
-/*e: port/runestrcmp.c */
+/*e: libc/port/runestrcmp.c */

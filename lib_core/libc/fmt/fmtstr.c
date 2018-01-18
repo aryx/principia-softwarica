@@ -1,4 +1,4 @@
-/*s: fmt/fmtstr.c */
+/*s: libc/fmt/fmtstr.c */
 #include <u.h>
 #include <libc.h>
 
@@ -12,4 +12,4 @@ fmtstrflush(Fmt *f)
     return f->start;
 }
 /*e: function [[fmtstrflush]] */
-/*e: fmt/fmtstr.c */
+/*e: libc/fmt/fmtstr.c */

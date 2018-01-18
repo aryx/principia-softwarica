@@ -1,4 +1,4 @@
-/*s: 9sys/ctime.c */
+/*s: libc/9sys/ctime.c */
 /*
  * This routine converts time as follows.
  * The epoch is 0000 Jan 1 1970 GMT.
@@ -327,4 +327,4 @@ rd_long(char **f, long *p)
     return 0;
 }
 /*e: function [[rd_long]] */
-/*e: 9sys/ctime.c */
+/*e: libc/9sys/ctime.c */

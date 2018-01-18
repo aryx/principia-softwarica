@@ -1,4 +1,4 @@
-/*s: port/runestrncmp.c */
+/*s: libc/port/runestrncmp.c */
 #include <u.h>
 #include <libc.h>
 
@@ -23,4 +23,4 @@ runestrncmp(Rune *s1, Rune *s2, long n)
     return 0;
 }
 /*e: function [[runestrncmp]] */
-/*e: port/runestrncmp.c */
+/*e: libc/port/runestrncmp.c */

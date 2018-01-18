@@ -1,4 +1,4 @@
-/*s: fmt/fmtfd.c */
+/*s: libc/fmt/fmtfd.c */
 #include <u.h>
 #include <libc.h>
 #include "fmtdef.h"
@@ -34,4 +34,4 @@ fmtfdinit(Fmt *f, int fd, char *buf, int size)
     return 0;
 }
 /*e: function [[fmtfdinit]] */
-/*e: fmt/fmtfd.c */
+/*e: libc/fmt/fmtfd.c */

@@ -1,4 +1,4 @@
-/*s: port/abs.c */
+/*s: libc/port/abs.c */
 #include <u.h>
 #include <libc.h>
 
@@ -12,4 +12,4 @@ abs(int a)
 }
 /*e: function [[abs]] */
 
-/*e: port/abs.c */
+/*e: libc/port/abs.c */

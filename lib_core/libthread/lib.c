@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/lib.c */
+/*s: libthread/lib.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -43,4 +43,4 @@ _threadsysfatal(char *fmt, va_list arg)
     threadexitsall(buf);
 }
 /*e: function [[_threadsysfatal]] */
-/*e: lib_core/libthread/lib.c */
+/*e: libthread/lib.c */

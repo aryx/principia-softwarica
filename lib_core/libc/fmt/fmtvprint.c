@@ -1,4 +1,4 @@
-/*s: fmt/fmtvprint.c */
+/*s: libc/fmt/fmtvprint.c */
 #include <u.h>
 #include <libc.h>
 #include "fmtdef.h"
@@ -25,4 +25,4 @@ fmtvprint(Fmt *f, char *fmt, va_list args)
 }
 /*e: function [[fmtvprint]] */
 
-/*e: fmt/fmtvprint.c */
+/*e: libc/fmt/fmtvprint.c */

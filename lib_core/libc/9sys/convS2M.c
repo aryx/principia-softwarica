@@ -1,4 +1,4 @@
-/*s: 9sys/convS2M.c */
+/*s: libc/9sys/convS2M.c */
 #include    <u.h>
 #include    <libc.h>
 #include    <fcall.h>
@@ -399,4 +399,4 @@ convS2M(Fcall *f, uchar *ap, uint nap)
     return size;
 }
 /*e: function [[convS2M]] */
-/*e: 9sys/convS2M.c */
+/*e: libc/9sys/convS2M.c */

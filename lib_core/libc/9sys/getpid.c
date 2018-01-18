@@ -1,4 +1,4 @@
-/*s: 9sys/getpid.c */
+/*s: libc/9sys/getpid.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -18,4 +18,4 @@ getpid(void)
     return atol(b);
 }
 /*e: function [[getpid]] */
-/*e: 9sys/getpid.c */
+/*e: libc/9sys/getpid.c */

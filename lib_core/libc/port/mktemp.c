@@ -1,4 +1,4 @@
-/*s: port/mktemp.c */
+/*s: libc/port/mktemp.c */
 #include <u.h>
 #include <libc.h>
 
@@ -32,4 +32,4 @@ mktemp(char *as)
     return as;
 }
 /*e: function [[mktemp]] */
-/*e: port/mktemp.c */
+/*e: libc/port/mktemp.c */

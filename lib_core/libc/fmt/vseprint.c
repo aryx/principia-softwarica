@@ -1,4 +1,4 @@
-/*s: fmt/vseprint.c */
+/*s: libc/fmt/vseprint.c */
 #include <u.h>
 #include <libc.h>
 
@@ -24,4 +24,4 @@ vseprint(char *buf, char *e, char *fmt, va_list args)
 }
 /*e: function [[vseprint]] */
 
-/*e: fmt/vseprint.c */
+/*e: libc/fmt/vseprint.c */

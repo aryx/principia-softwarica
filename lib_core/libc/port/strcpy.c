@@ -1,4 +1,4 @@
-/*s: port/strcpy.c */
+/*s: libc/port/strcpy.c */
 #include <u.h>
 #include <libc.h>
 /*s: constant [[N]] */
@@ -19,4 +19,4 @@ strcpy(char *s1, char *s2)
     return os1;
 }
 /*e: function [[strcpy]] */
-/*e: port/strcpy.c */
+/*e: libc/port/strcpy.c */

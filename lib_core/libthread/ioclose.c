@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/ioclose.c */
+/*s: libthread/ioclose.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -22,4 +22,4 @@ ioclose(Ioproc *io, int fd)
     return iocall(io, _ioclose, fd);
 }
 /*e: function [[ioclose]] */
-/*e: lib_core/libthread/ioclose.c */
+/*e: libthread/ioclose.c */

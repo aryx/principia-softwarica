@@ -1,4 +1,4 @@
-/*s: port/strtoull.c */
+/*s: libc/port/strtoull.c */
 #include <u.h>
 #include <libc.h>
 
@@ -100,4 +100,4 @@ Return:
     return n;
 }
 /*e: function [[strtoull]] */
-/*e: port/strtoull.c */
+/*e: libc/port/strtoull.c */

@@ -1,4 +1,4 @@
-/*s: port/strcat.c */
+/*s: libc/port/strcat.c */
 #include <u.h>
 #include <libc.h>
 
@@ -11,4 +11,4 @@ strcat(char *s1, char *s2)
     return s1;
 }
 /*e: function [[strcat]] */
-/*e: port/strcat.c */
+/*e: libc/port/strcat.c */

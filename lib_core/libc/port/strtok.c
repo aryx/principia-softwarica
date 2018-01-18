@@ -1,4 +1,4 @@
-/*s: port/strtok.c */
+/*s: libc/port/strtok.c */
 #include <u.h>
 #include <libc.h>
 
@@ -33,4 +33,4 @@ strtok(char *s, char *b)
     return os;
 }
 /*e: function [[strtok]] */
-/*e: port/strtok.c */
+/*e: libc/port/strtok.c */

@@ -1,4 +1,4 @@
-/*s: port/cistrcmp.c */
+/*s: libc/port/cistrcmp.c */
 #include <u.h>
 #include <libc.h>
 
@@ -27,4 +27,4 @@ cistrcmp(char *s1, char *s2)
     return -*s2;
 }
 /*e: function [[cistrcmp]] */
-/*e: port/cistrcmp.c */
+/*e: libc/port/cistrcmp.c */

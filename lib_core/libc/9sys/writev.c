@@ -1,4 +1,4 @@
-/*s: 9sys/writev.c */
+/*s: libc/9sys/writev.c */
 #include <u.h>
 #include <libc.h>
 
@@ -47,4 +47,4 @@ pwritev(int fd, IOchunk *io, int nio, vlong off)
     return iowritev(fd, io, nio, off);
 }
 /*e: function [[pwritev]] */
-/*e: 9sys/writev.c */
+/*e: libc/9sys/writev.c */

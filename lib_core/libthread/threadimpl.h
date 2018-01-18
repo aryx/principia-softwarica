@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/threadimpl.h */
+/*s: libthread/threadimpl.h */
 /* 
  * Some notes on locking:
  *
@@ -53,7 +53,7 @@ enum chanstate
 /*e: enum [[chanstate]] */
 typedef enum chanstate Chanstate;
 
-/*s: enum [[_anon_ (lib_core/libthread/threadimpl.h)]] */
+/*s: enum [[_anon_ (libthread/threadimpl.h)]] */
 enum
 {
 /*s: constant [[RENDHASH]] */
@@ -66,7 +66,7 @@ Printsize = 2048,
 NPRIV = 8,
 /*e: constant [[NPRIV]] */
 };
-/*e: enum [[_anon_ (lib_core/libthread/threadimpl.h)]] */
+/*e: enum [[_anon_ (libthread/threadimpl.h)]] */
 
 /*s: struct [[Rgrp]] */
 struct Rgrp
@@ -278,4 +278,4 @@ extern Rgrp     _threadrgrp;
 /*s: function [[ioproc_arg]] */
 #define ioproc_arg(io, type)	(va_arg((io)->arg, type))
 /*e: function [[ioproc_arg]] */
-/*e: lib_core/libthread/threadimpl.h */
+/*e: libthread/threadimpl.h */

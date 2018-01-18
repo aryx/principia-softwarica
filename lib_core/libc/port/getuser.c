@@ -1,4 +1,4 @@
-/*s: port/getuser.c */
+/*s: libc/port/getuser.c */
 #include <u.h>
 #include <libc.h>
 
@@ -22,4 +22,4 @@ getuser(void)
     return user;
 }
 /*e: function [[getuser]] */
-/*e: port/getuser.c */
+/*e: libc/port/getuser.c */

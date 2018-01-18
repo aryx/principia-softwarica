@@ -1,4 +1,4 @@
-/*s: 9sys/dirfwstat.c */
+/*s: libc/9sys/dirfwstat.c */
 #include <u.h>
 #include <libc.h>
 #include <fcall.h>
@@ -20,4 +20,4 @@ dirfwstat(int fd, Dir *d)
     return r;
 }
 /*e: function [[dirfwstat]] */
-/*e: 9sys/dirfwstat.c */
+/*e: libc/9sys/dirfwstat.c */

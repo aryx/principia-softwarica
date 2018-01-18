@@ -1,4 +1,4 @@
-/*s: 9sys/setnetmtpt.c */
+/*s: libc/9sys/setnetmtpt.c */
 #include <u.h>
 #include <libc.h>
 
@@ -17,4 +17,4 @@ setnetmtpt(char *net, int n, char *x)
     }
 }
 /*e: function [[setnetmtpt]] */
-/*e: 9sys/setnetmtpt.c */
+/*e: libc/9sys/setnetmtpt.c */

@@ -1,4 +1,4 @@
-/*s: 9sys/privalloc.c */
+/*s: libc/9sys/privalloc.c */
 #include <u.h>
 #include <libc.h>
 
@@ -54,4 +54,4 @@ privfree(void **p)
     unlock(&privlock);
 }
 /*e: function [[privfree]] */
-/*e: 9sys/privalloc.c */
+/*e: libc/9sys/privalloc.c */

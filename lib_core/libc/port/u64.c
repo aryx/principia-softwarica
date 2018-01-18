@@ -1,4 +1,4 @@
-/*s: port/u64.c */
+/*s: libc/port/u64.c */
 #include <u.h>
 #include <libc.h>
 
@@ -136,4 +136,4 @@ exhausted:
     return out - start;
 }
 /*e: function [[enc64]] */
-/*e: port/u64.c */
+/*e: libc/port/u64.c */

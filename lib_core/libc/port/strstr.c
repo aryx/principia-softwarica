@@ -1,4 +1,4 @@
-/*s: port/strstr.c */
+/*s: libc/port/strstr.c */
 #include <u.h>
 #include <libc.h>
 
@@ -30,4 +30,4 @@ strstr(char *s1, char *s2)
     return 0;
 }
 /*e: function [[strstr]] */
-/*e: port/strstr.c */
+/*e: libc/port/strstr.c */

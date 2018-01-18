@@ -1,4 +1,4 @@
-/*s: port/atan.c */
+/*s: libc/port/atan.c */
 /*
     floating-point arctangent
 
@@ -107,4 +107,4 @@ atan(double arg)
     return -satan(-arg);
 }
 /*e: function [[atan]] */
-/*e: port/atan.c */
+/*e: libc/port/atan.c */

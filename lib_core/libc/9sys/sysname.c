@@ -1,4 +1,4 @@
-/*s: 9sys/sysname.c */
+/*s: libc/9sys/sysname.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -22,4 +22,4 @@ sysname(void)
     return b;
 }
 /*e: function [[sysname]] */
-/*e: 9sys/sysname.c */
+/*e: libc/9sys/sysname.c */

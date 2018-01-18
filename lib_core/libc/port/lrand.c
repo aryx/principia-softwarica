@@ -1,4 +1,4 @@
-/*s: port/lrand.c */
+/*s: libc/port/lrand.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -112,4 +112,4 @@ lrand(void)
     return x;
 }
 /*e: function [[lrand]] */
-/*e: port/lrand.c */
+/*e: libc/port/lrand.c */

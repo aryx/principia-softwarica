@@ -1,4 +1,4 @@
-/*s: 9sys/announce.c */
+/*s: libc/9sys/announce.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -287,4 +287,4 @@ nettrans(char *addr, char *naddr, int na, char *file, int nf)
     return 0;
 }
 /*e: function [[nettrans]] */
-/*e: 9sys/announce.c */
+/*e: libc/9sys/announce.c */

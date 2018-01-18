@@ -1,4 +1,4 @@
-/*s: port/strecpy.c */
+/*s: libc/port/strecpy.c */
 #include <u.h>
 #include <libc.h>
 
@@ -18,4 +18,4 @@ strecpy(char *to, char *e, char *from)
     return to;
 }
 /*e: function [[strecpy]] */
-/*e: port/strecpy.c */
+/*e: libc/port/strecpy.c */

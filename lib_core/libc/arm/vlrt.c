@@ -1,4 +1,4 @@
-/*s: arm/vlrt.c */
+/*s: libc/arm/vlrt.c */
 typedef unsigned long   ulong;
 typedef unsigned int    uint;
 typedef unsigned short  ushort;
@@ -816,4 +816,4 @@ _hsv(Vlong lv, Vlong rv)
         (lv.hi == rv.hi && lv.lo >= rv.lo);
 }
 /*e: function [[_hsv]](arm) */
-/*e: arm/vlrt.c */
+/*e: libc/arm/vlrt.c */

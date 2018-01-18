@@ -1,4 +1,4 @@
-/*s: port/getfields.c */
+/*s: libc/port/getfields.c */
 #include <u.h>
 #include <libc.h>
 
@@ -38,4 +38,4 @@ getfields(char *str, char **args, int max, int mflag, char *set)
     return narg;
 }
 /*e: function [[getfields]] */
-/*e: port/getfields.c */
+/*e: libc/port/getfields.c */

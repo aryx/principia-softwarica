@@ -1,4 +1,4 @@
-/*s: 9sys/convM2S.c */
+/*s: libc/9sys/convM2S.c */
 #include    <u.h>
 #include    <libc.h>
 #include    <fcall.h>
@@ -320,4 +320,4 @@ convM2S(uchar *ap, uint nap, Fcall *f)
     return ERROR_0;
 }
 /*e: function [[convM2S]] */
-/*e: 9sys/convM2S.c */
+/*e: libc/9sys/convM2S.c */

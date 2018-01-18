@@ -1,4 +1,4 @@
-/*s: fmt/runesprint.c */
+/*s: libc/fmt/runesprint.c */
 #include <u.h>
 #include <libc.h>
 
@@ -15,4 +15,4 @@ runesprint(Rune *buf, char *fmt, ...)
     return n;
 }
 /*e: function [[runesprint]] */
-/*e: fmt/runesprint.c */
+/*e: libc/fmt/runesprint.c */

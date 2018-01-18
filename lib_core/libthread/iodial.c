@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/iodial.c */
+/*s: libthread/iodial.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -27,4 +27,4 @@ iodial(Ioproc *io, char *addr, char *local, char *dir, int *cdfp)
     return iocall(io, _iodial, addr, local, dir, cdfp);
 }
 /*e: function [[iodial]] */
-/*e: lib_core/libthread/iodial.c */
+/*e: libthread/iodial.c */

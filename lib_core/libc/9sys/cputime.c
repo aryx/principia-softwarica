@@ -1,4 +1,4 @@
-/*s: 9sys/cputime.c */
+/*s: libc/9sys/cputime.c */
 #include <u.h>
 #include <libc.h>
 
@@ -19,4 +19,4 @@ cputime(void)
     return t[0] / (double)HZ;
 }
 /*e: function [[cputime]] */
-/*e: 9sys/cputime.c */
+/*e: libc/9sys/cputime.c */

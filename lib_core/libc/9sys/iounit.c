@@ -1,4 +1,4 @@
-/*s: 9sys/iounit.c */
+/*s: libc/9sys/iounit.c */
 #include <u.h>
 #include <libc.h>
 
@@ -28,4 +28,4 @@ iounit(int fd)
     return atoi(args[7]);
 }
 /*e: function [[iounit]] */
-/*e: 9sys/iounit.c */
+/*e: libc/9sys/iounit.c */

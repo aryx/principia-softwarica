@@ -1,4 +1,4 @@
-/*s: port/nrand.c */
+/*s: libc/port/nrand.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -24,4 +24,4 @@ nrand(int n)
     return v % n;
 }
 /*e: function [[nrand]] */
-/*e: port/nrand.c */
+/*e: libc/port/nrand.c */

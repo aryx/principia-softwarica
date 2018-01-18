@@ -1,4 +1,4 @@
-/*s: fmt/vsmprint.c */
+/*s: libc/fmt/vsmprint.c */
 #include <u.h>
 #include <libc.h>
 #include "fmtdef.h"
@@ -77,4 +77,4 @@ vsmprint(char *fmt, va_list args)
     return f.start;
 }
 /*e: function [[vsmprint]] */
-/*e: fmt/vsmprint.c */
+/*e: libc/fmt/vsmprint.c */

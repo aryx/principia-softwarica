@@ -1,4 +1,4 @@
-/*s: port/encodefmt.c */
+/*s: libc/port/encodefmt.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -78,4 +78,4 @@ error:
     return fmtstrcpy(f, "<encodefmt>");
 }
 /*e: function [[encodefmt]] */
-/*e: port/encodefmt.c */
+/*e: libc/port/encodefmt.c */

@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/rendez.c */
+/*s: libthread/rendez.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -110,4 +110,4 @@ _threadbreakrendez(void)
     unlock(&_threadrgrp.lock);
 }
 /*e: function [[_threadbreakrendez]] */
-/*e: lib_core/libthread/rendez.c */
+/*e: libthread/rendez.c */

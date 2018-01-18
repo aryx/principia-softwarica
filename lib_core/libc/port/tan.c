@@ -1,4 +1,4 @@
-/*s: port/tan.c */
+/*s: libc/port/tan.c */
 /*
     floating point tangent
 
@@ -84,4 +84,4 @@ tan(double arg)
     return temp;
 }
 /*e: function [[tan]] */
-/*e: port/tan.c */
+/*e: libc/port/tan.c */

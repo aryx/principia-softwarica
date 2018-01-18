@@ -1,4 +1,4 @@
-/*s: port/hypot.c */
+/*s: libc/port/hypot.c */
 /*
  * hypot -- sqrt(p*p+q*q), but overflows only if the result does.
  * See Cleve Moler and Donald Morrison,
@@ -42,4 +42,4 @@ hypot(double p, double q)
     }
 }
 /*e: function [[hypot]] */
-/*e: port/hypot.c */
+/*e: libc/port/hypot.c */

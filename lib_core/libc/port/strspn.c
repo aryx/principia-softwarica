@@ -1,4 +1,4 @@
-/*s: port/strspn.c */
+/*s: libc/port/strspn.c */
 #include <u.h>
 #include <libc.h>
 
@@ -21,4 +21,4 @@ strspn(char *s, char *b)
     return s - os - 1;
 }
 /*e: function [[strspn]] */
-/*e: port/strspn.c */
+/*e: libc/port/strspn.c */

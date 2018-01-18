@@ -1,4 +1,4 @@
-/*s: port/asin.c */
+/*s: libc/port/asin.c */
 /*
  * asin(arg) and acos(arg) return the arcsin, arccos,
  * respectively of their arguments.
@@ -43,4 +43,4 @@ acos(double arg)
     return PIO2 - asin(arg);
 }
 /*e: function [[acos]] */
-/*e: port/asin.c */
+/*e: libc/port/asin.c */

@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/ref.c */
+/*s: libthread/ref.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -19,4 +19,4 @@ decref(Ref *r)
     return adec(&r->ref);
 }
 /*e: function [[decref]] */
-/*e: lib_core/libthread/ref.c */
+/*e: libthread/ref.c */

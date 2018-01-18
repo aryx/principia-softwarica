@@ -1,4 +1,4 @@
-/*s: port/runestrncpy.c */
+/*s: libc/port/runestrncpy.c */
 #include <u.h>
 #include <libc.h>
 
@@ -19,4 +19,4 @@ runestrncpy(Rune *s1, Rune *s2, long n)
     return os1;
 }
 /*e: function [[runestrncpy]] */
-/*e: port/runestrncpy.c */
+/*e: libc/port/runestrncpy.c */

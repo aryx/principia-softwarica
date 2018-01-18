@@ -1,4 +1,4 @@
-/*s: 9sys/dirmodefmt.c */
+/*s: libc/9sys/dirmodefmt.c */
 #include <u.h>
 #include <libc.h>
 #include <fcall.h>
@@ -53,4 +53,4 @@ dirmodefmt(Fmt *f)
     return fmtstrcpy(f, buf);
 }
 /*e: function [[dirmodefmt]] */
-/*e: 9sys/dirmodefmt.c */
+/*e: libc/9sys/dirmodefmt.c */

@@ -1,4 +1,4 @@
-/*s: fmt/dorfmt.c */
+/*s: libc/fmt/dorfmt.c */
 #include <u.h>
 #include <libc.h>
 #include "fmtdef.h"
@@ -46,4 +46,4 @@ dorfmt(Fmt *f, Rune *fmt)
     }
 }
 /*e: function [[dorfmt]] */
-/*e: fmt/dorfmt.c */
+/*e: libc/fmt/dorfmt.c */

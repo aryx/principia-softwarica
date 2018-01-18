@@ -1,4 +1,4 @@
-/*s: 9sys/werrstr.c */
+/*s: libc/9sys/werrstr.c */
 #include <u.h>
 #include <libc.h>
 
@@ -15,4 +15,4 @@ werrstr(char *fmt, ...)
     errstr(buf, sizeof buf);
 }
 /*e: function [[werrstr]] */
-/*e: 9sys/werrstr.c */
+/*e: libc/9sys/werrstr.c */

@@ -1,4 +1,4 @@
-/*s: lib_core/libthread/iocall.c */
+/*s: libthread/iocall.c */
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
@@ -53,4 +53,4 @@ iocall(Ioproc *io, long (*op)(va_list*), ...)
     return ret;
 }
 /*e: function [[iocall]] */
-/*e: lib_core/libthread/iocall.c */
+/*e: libthread/iocall.c */

@@ -1,4 +1,4 @@
-/*s: port/memset.c */
+/*s: libc/port/memset.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -16,4 +16,4 @@ memset(void *ap, int c, ulong n)
     return ap;
 }
 /*e: function [[memset]] */
-/*e: port/memset.c */
+/*e: libc/port/memset.c */

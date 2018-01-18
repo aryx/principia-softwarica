@@ -1,4 +1,4 @@
-/*s: fmt/vsnprint.c */
+/*s: libc/fmt/vsnprint.c */
 #include <u.h>
 #include <libc.h>
 
@@ -23,4 +23,4 @@ vsnprint(char *buf, int len, char *fmt, va_list args)
     return (char*)f.to - buf;
 }
 /*e: function [[vsnprint]] */
-/*e: fmt/vsnprint.c */
+/*e: libc/fmt/vsnprint.c */

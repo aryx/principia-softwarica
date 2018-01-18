@@ -1,4 +1,4 @@
-/*s: port/cistrstr.c */
+/*s: libc/port/cistrstr.c */
 #include <u.h>
 #include <libc.h>
 
@@ -24,4 +24,4 @@ cistrstr(char *s, char *sub)
     return nil;
 }
 /*e: function [[cistrstr]] */
-/*e: port/cistrstr.c */
+/*e: libc/port/cistrstr.c */

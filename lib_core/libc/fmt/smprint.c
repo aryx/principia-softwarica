@@ -1,4 +1,4 @@
-/*s: fmt/smprint.c */
+/*s: libc/fmt/smprint.c */
 #include <u.h>
 #include <libc.h>
 
@@ -16,4 +16,4 @@ smprint(char *fmt, ...)
     return p;
 }
 /*e: function [[smprint]] */
-/*e: fmt/smprint.c */
+/*e: libc/fmt/smprint.c */

@@ -1,4 +1,4 @@
-/*s: 9sys/sysfatal.c */
+/*s: libc/9sys/sysfatal.c */
 #include <u.h>
 #include <libc.h>
 
@@ -33,4 +33,4 @@ sysfatal(char *fmt, ...)
     va_end(arg);
 }
 /*e: function [[sysfatal]] */
-/*e: 9sys/sysfatal.c */
+/*e: libc/9sys/sysfatal.c */
