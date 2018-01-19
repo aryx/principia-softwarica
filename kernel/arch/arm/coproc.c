@@ -18,7 +18,7 @@
 #include "io.h"
 #include "arm.h"
 
-/*s: enum _anon_(arm) */
+/*s: enum [[_anon_]](arm) */
 enum {
     /* alternates:  
      *  0xe12fff1e  BX (R14); last e is R14
@@ -29,14 +29,14 @@ enum {
     Opmask  = MASK(3),
     Regmask = MASK(4),
 };
-/*e: enum _anon_(arm) */
+/*e: enum [[_anon_]](arm) */
 
 // pointer to ulong function void
 typedef ulong (*Pufv)(void);
 // pointer to void function ulong
 typedef void  (*Pvfu)(ulong);
 
-/*s: function setupcpop(arm) */
+/*s: function [[setupcpop]](arm) */
 // setup coprocessor operation
 static void
 setupcpop(ulong instr[2], ulong opcode, int cp, int op1, int crn, int crm,
@@ -55,9 +55,9 @@ setupcpop(ulong instr[2], ulong opcode, int cp, int op1, int crn, int crm,
     cachedwbse(instr, sizeof instrsz);
     cacheiinv();
 }
-/*e: function setupcpop(arm) */
+/*e: function [[setupcpop]](arm) */
 
-/*s: function cprd(arm) */
+/*s: function [[cprd]](arm) */
 ulong
 cprd(int cp, int op1, int crn, int crm, int op2)
 {
@@ -77,9 +77,9 @@ cprd(int cp, int op1, int crn, int crm, int op2)
     arch_splx(s);
     return r;
 }
-/*e: function cprd(arm) */
+/*e: function [[cprd]](arm) */
 
-/*s: function cpwr(arm) */
+/*s: function [[cpwr]](arm) */
 void
 cpwr(int cp, int op1, int crn, int crm, int op2, ulong val)
 {
@@ -95,27 +95,27 @@ cpwr(int cp, int op1, int crn, int crm, int op2, ulong val)
     arch_coherence();
     arch_splx(s);
 }
-/*e: function cpwr(arm) */
+/*e: function [[cpwr]](arm) */
 
-/*s: function cprdsc(arm) */
+/*s: function [[cprdsc]](arm) */
 ulong
 cprdsc(int op1, int crn, int crm, int op2)
 {
     return cprd(CpSC, op1, crn, crm, op2);
 }
-/*e: function cprdsc(arm) */
+/*e: function [[cprdsc]](arm) */
 
-/*s: function cpwrsc(arm) */
+/*s: function [[cpwrsc]](arm) */
 void
 cpwrsc(int op1, int crn, int crm, int op2, ulong val)
 {
     cpwr(CpSC, op1, crn, crm, op2, val);
 }
-/*e: function cpwrsc(arm) */
+/*e: function [[cpwrsc]](arm) */
 
 /* floating point */
 
-/*s: function setupfpctlop(arm) */
+/*s: function [[setupfpctlop]](arm) */
 /* fp coproc control */
 static void
 setupfpctlop(ulong instr[2], int opcode, int fpctlreg)
@@ -133,9 +133,9 @@ setupfpctlop(ulong instr[2], int opcode, int fpctlreg)
     cacheiinv();
     /*e: [[setupfpctlop()]] invalidate instruction cache(arm) */
 }
-/*e: function setupfpctlop(arm) */
+/*e: function [[setupfpctlop]](arm) */
 
-/*s: function fprd(arm) */
+/*s: function [[fprd]](arm) */
 ulong
 fprd(int fpreg)
 {
@@ -158,9 +158,9 @@ fprd(int fpreg)
     arch_splx(s);
     return r;
 }
-/*e: function fprd(arm) */
+/*e: function [[fprd]](arm) */
 
-/*s: function fpwr(arm) */
+/*s: function [[fpwr]](arm) */
 void
 fpwr(int fpreg, ulong val)
 {
@@ -176,9 +176,9 @@ fpwr(int fpreg, ulong val)
     arch_coherence();
     arch_splx(s);
 }
-/*e: function fpwr(arm) */
+/*e: function [[fpwr]](arm) */
 
-/*s: function setupfpop(arm) */
+/*s: function [[setupfpop]](arm) */
 /* fp register access; don't bother with single precision */
 static void
 setupfpop(ulong instr[2], int opcode, int fpreg)
@@ -197,9 +197,9 @@ setupfpop(ulong instr[2], int opcode, int fpreg)
     cacheiinv();
     /*e: [[setupfpop()]] invalidate instruction cache(arm) */
 }
-/*e: function setupfpop(arm) */
+/*e: function [[setupfpop]](arm) */
 
-/*s: function fpsavereg(arm) */
+/*s: function [[fpsavereg]](arm) */
 ulong
 fpsavereg(int fpreg, uvlong *fpp)
 {
@@ -221,9 +221,9 @@ fpsavereg(int fpreg, uvlong *fpp)
     arch_coherence();
     return r;           /* not too meaningful */
 }
-/*e: function fpsavereg(arm) */
+/*e: function [[fpsavereg]](arm) */
 
-/*s: function fprestreg(arm) */
+/*s: function [[fprestreg]](arm) */
 void
 fprestreg(int fpreg, uvlong val)
 {
@@ -240,5 +240,5 @@ fprestreg(int fpreg, uvlong val)
     arch_coherence();
     arch_splx(s);
 }
-/*e: function fprestreg(arm) */
+/*e: function [[fprestreg]](arm) */
 /*e: arch/arm/coproc.c */

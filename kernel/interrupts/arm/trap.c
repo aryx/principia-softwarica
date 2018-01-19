@@ -14,41 +14,41 @@
 #include "ureg.h"
 #include "arm.h"
 
-/*s: constant INTREGS(arm) */
+/*s: constant [[INTREGS]](arm) */
 #define INTREGS     (VIRTIO+0xB200)
-/*e: constant INTREGS(arm) */
-/*s: constant LOCALREGS(arm) */
+/*e: constant [[INTREGS]](arm) */
+/*s: constant [[LOCALREGS]](arm) */
 #define LOCALREGS   (VIRTIO+IOSIZE)
-/*e: constant LOCALREGS(arm) */
+/*e: constant [[LOCALREGS]](arm) */
 
 typedef struct Intregs Intregs;
 typedef struct Vctl Vctl;
 typedef struct Vpage0 Vpage0;
 
-/*s: enum _anon_ (interrupts/arm/trap.c)(arm) */
+/*s: enum [[_anon_]]([[(interrupts/arm/trap.c)(arm)]]) */
 enum {
     Debug = 0,
 
-    /*s: constant Nvec(arm) */
+    /*s: constant [[Nvec]](arm) */
     Nvec = 8,       /* # of vectors at start of lexception.s */
-    /*e: constant Nvec(arm) */
-    /*s: constant Fiqenable(arm) */
+    /*e: constant [[Nvec]](arm) */
+    /*s: constant [[Fiqenable]](arm) */
     Fiqenable = 1<<7,
-    /*e: constant Fiqenable(arm) */
+    /*e: constant [[Fiqenable]](arm) */
 
-    /*s: constant Localtimerint(arm) */
+    /*s: constant [[Localtimerint]](arm) */
     Localtimerint   = 0x40,
-    /*e: constant Localtimerint(arm) */
-    /*s: constant Localmboxint(arm) */
+    /*e: constant [[Localtimerint]](arm) */
+    /*s: constant [[Localmboxint]](arm) */
     Localmboxint    = 0x50,
-    /*e: constant Localmboxint(arm) */
-    /*s: constant Localintpending(arm) */
+    /*e: constant [[Localmboxint]](arm) */
+    /*s: constant [[Localintpending]](arm) */
     Localintpending = 0x60,
-    /*e: constant Localintpending(arm) */
+    /*e: constant [[Localintpending]](arm) */
 };
-/*e: enum _anon_ (interrupts/arm/trap.c)(arm) */
+/*e: enum [[_anon_]]([[(interrupts/arm/trap.c)(arm)]]) */
 
-/*s: struct Vpage0(arm) */
+/*s: struct [[Vpage0]](arm) */
 /*
  *   Layout at virtual address KZERO (double mapped at HVECTORS).
  */
@@ -56,9 +56,9 @@ struct Vpage0 {
     void    (*vectors[Nvec])(void);
     u32int  vtable[Nvec];
 };
-/*e: struct Vpage0(arm) */
+/*e: struct [[Vpage0]](arm) */
 
-/*s: struct Intregs(arm) */
+/*s: struct [[Intregs]](arm) */
 /*
  * interrupt control registers
  */
@@ -75,9 +75,9 @@ struct Intregs {
     u32int  GPUdisable[2];
     u32int  ARMdisable;
 };
-/*e: struct Intregs(arm) */
+/*e: struct [[Intregs]](arm) */
 
-/*s: struct Vctl(arm) */
+/*s: struct [[Vctl]](arm) */
 struct Vctl {
     // enum<IRQ>
     int irq;
@@ -97,22 +97,22 @@ struct Vctl {
     Vctl    *next;
     /*e: [[Vctl]] extra fields(arm) */
 };
-/*e: struct Vctl(arm) */
+/*e: struct [[Vctl]](arm) */
 
-/*s: global vctllock(arm) */
+/*s: global [[vctllock]](arm) */
 static Lock vctllock;
-/*e: global vctllock(arm) */
+/*e: global [[vctllock]](arm) */
 
-/*s: global vctl(arm) */
+/*s: global [[vctl]](arm) */
 // list<ref_own<Vctl>>> (next = Vctl.next)
 static Vctl *vctl;
-/*e: global vctl(arm) */
+/*e: global [[vctl]](arm) */
 
-/*s: global vfiq(arm) */
+/*s: global [[vfiq]](arm) */
 static Vctl *vfiq;
-/*e: global vfiq(arm) */
+/*e: global [[vfiq]](arm) */
 
-/*s: global trapnames(arm) */
+/*s: global [[trapnames]](arm) */
 static char *trapnames[PsrMask+1] = {
     [ PsrMusr ] "user mode",
     [ PsrMsvc ] "svc/swi exception",
@@ -124,9 +124,9 @@ static char *trapnames[PsrMask+1] = {
     [ PsrMfiq ] "fiq interrupt",
     /*e: [[trapnames()]] other entries(arm) */
 };
-/*e: global trapnames(arm) */
+/*e: global [[trapnames]](arm) */
 
-/*s: function arch__trapinit(arm) */
+/*s: function [[arch__trapinit]](arm) */
 /*
  *  set up for exceptions
  */
@@ -160,9 +160,9 @@ arch__trapinit(void)
     arch_coherence();
     /*e: [[arch__trapinit()]] coherence(arm) */
 }
-/*e: function arch__trapinit(arm) */
+/*e: function [[arch__trapinit]](arm) */
 
-/*s: function intrcpushutdown(arm) */
+/*s: function [[intrcpushutdown]](arm) */
 void
 intrcpushutdown(void)
 {
@@ -177,9 +177,9 @@ intrcpushutdown(void)
         *enable = 1;
     }
 }
-/*e: function intrcpushutdown(arm) */
+/*e: function [[intrcpushutdown]](arm) */
 
-/*s: function intrsoff(arm) */
+/*s: function [[intrsoff]](arm) */
 void
 intrsoff(void)
 {
@@ -193,9 +193,9 @@ intrsoff(void)
     ip->ARMdisable = disable;
     ip->FIQctl = 0;
 }
-/*e: function intrsoff(arm) */
+/*e: function [[intrsoff]](arm) */
 
-/*s: function intrshutdown(arm) */
+/*s: function [[intrshutdown]](arm) */
 /* called from cpu0 after other cpus are shutdown */
 void
 intrshutdown(void)
@@ -203,9 +203,9 @@ intrshutdown(void)
     intrsoff();
     intrcpushutdown();
 }
-/*e: function intrshutdown(arm) */
+/*e: function [[intrshutdown]](arm) */
 
-/*s: function intrtime(arm) */
+/*s: function [[intrtime]](arm) */
 static void
 intrtime(void)
 {
@@ -220,10 +220,10 @@ intrtime(void)
     if(up == nil && cpu->perf.inidle > diff)
         cpu->perf.inidle -= diff;
 }
-/*e: function intrtime(arm) */
+/*e: function [[intrtime]](arm) */
 
 
-/*s: function irq(arm) */
+/*s: function [[irq]](arm) */
 /*
  *  called by trap to handle irq interrupts.
  *  returns true iff a clock interrupt, thus maybe reschedule.
@@ -257,9 +257,9 @@ irq(Ureg* ureg)
     intrtime();
     return clockintr;
 }
-/*e: function irq(arm) */
+/*e: function [[irq]](arm) */
 
-/*s: function fiq(arm) */
+/*s: function [[fiq]](arm) */
 /*
  * called direct from lexception.s to handle fiq interrupt.
  */
@@ -282,9 +282,9 @@ fiq(Ureg *ureg)
     arch_coherence();
     intrtime();
 }
-/*e: function fiq(arm) */
+/*e: function [[fiq]](arm) */
 
-/*s: function irqenable(arm) */
+/*s: function [[irqenable]](arm) */
 void
 irqenable(int irq, void (*f)(Ureg*, void*), void* a)
 {
@@ -345,9 +345,9 @@ irqenable(int irq, void (*f)(Ureg*, void*), void* a)
     }
     unlock(&vctllock);
 }
-/*e: function irqenable(arm) */
+/*e: function [[irqenable]](arm) */
 
-/*s: function trapname(arm) */
+/*s: function [[trapname]](arm) */
 static char *
 trapname(int psr)
 {
@@ -358,9 +358,9 @@ trapname(int psr)
         s = "unknown trap number in psr";
     return s;
 }
-/*e: function trapname(arm) */
+/*e: function [[trapname]](arm) */
 
-/*s: function ckfaultstuck(arm) */
+/*s: function [[ckfaultstuck]](arm) */
 /* this is quite helpful during mmu and cache debugging */
 static void
 ckfaultstuck(uintptr va)
@@ -380,9 +380,9 @@ ckfaultstuck(uintptr va)
         lastpid = up->pid;
     }
 }
-/*e: function ckfaultstuck(arm) */
+/*e: function [[ckfaultstuck]](arm) */
 
-/*s: function faultarm(arm) */
+/*s: function [[faultarm]](arm) */
 /*
  *  called by trap to handle access faults
  */
@@ -417,9 +417,9 @@ faultarm(Ureg *ureg, virt_addr va, bool user, bool read)
     }
     up->insyscall = insyscall;
 }
-/*e: function faultarm(arm) */
+/*e: function [[faultarm]](arm) */
 
-/*s: function writetomem(arm) */
+/*s: function [[writetomem]](arm) */
 /*
  *  returns true if the instruction writes memory, false otherwise
  */
@@ -436,9 +436,9 @@ writetomem(ulong inst)
 
     return true;
 }
-/*e: function writetomem(arm) */
+/*e: function [[writetomem]](arm) */
 
-/*s: function arch__trap(arm) */
+/*s: function [[arch__trap]](arm) */
 /*
  *  here on all exceptions other than syscall (SWI) and fiq
  */
@@ -664,17 +664,17 @@ arch__trap(Ureg *ureg)
         arch__kexit(ureg);
     }
 }
-/*e: function arch__trap(arm) */
+/*e: function [[arch__trap]](arm) */
 
-/*s: function isvalidaddr(arm) */
+/*s: function [[isvalidaddr]](arm) */
 int
 isvalidaddr(void *v)
 {
     return (uintptr)v >= KZERO;
 }
-/*e: function isvalidaddr(arm) */
+/*e: function [[isvalidaddr]](arm) */
 
-/*s: function dumplongs(arm) */
+/*s: function [[dumplongs]](arm) */
 static void
 dumplongs(char *msg, ulong *v, int n)
 {
@@ -697,9 +697,9 @@ dumplongs(char *msg, ulong *v, int n)
     }
     iprint("\n");
 }
-/*e: function dumplongs(arm) */
+/*e: function [[dumplongs]](arm) */
 
-/*s: function dumpstackwithureg(arm) */
+/*s: function [[dumpstackwithureg]](arm) */
 static void
 dumpstackwithureg(Ureg *ureg)
 {
@@ -745,9 +745,9 @@ dumpstackwithureg(Ureg *ureg)
     if(i)
         iprint("\n");
 }
-/*e: function dumpstackwithureg(arm) */
+/*e: function [[dumpstackwithureg]](arm) */
 
-/*s: function getpcsp(arm) */
+/*s: function [[getpcsp]](arm) */
 /*
  * Fill in enough of Ureg to get a stack trace, and call a function.
  * Used by debugging interface rdb.
@@ -758,9 +758,9 @@ getpcsp(ulong *pc, ulong *sp)
     *pc = getcallerpc(&pc);
     *sp = (ulong)&pc-4;
 }
-/*e: function getpcsp(arm) */
+/*e: function [[getpcsp]](arm) */
 
-/*s: function arch_callwithureg(arm) */
+/*s: function [[arch_callwithureg]](arm) */
 void
 arch_callwithureg(void (*fn)(Ureg*))
 {
@@ -770,17 +770,17 @@ arch_callwithureg(void (*fn)(Ureg*))
     ureg.r14 = getcallerpc(&fn);
     fn(&ureg);
 }
-/*e: function arch_callwithureg(arm) */
+/*e: function [[arch_callwithureg]](arm) */
 
-/*s: function trap_arch_dumpstack(arm) */
+/*s: function [[trap_arch_dumpstack]](arm) */
 void
 trap_arch_dumpstack(void)
 {
     arch_callwithureg(dumpstackwithureg);
 }
-/*e: function trap_arch_dumpstack(arm) */
+/*e: function [[trap_arch_dumpstack]](arm) */
 
-/*s: function dumpregs(arm) */
+/*s: function [[dumpregs]](arm) */
 void
 dumpregs(Ureg* ureg)
 {
@@ -816,5 +816,5 @@ dumpregs(Ureg* ureg)
     arch_dumpstack();
     arch_splx(s);
 }
-/*e: function dumpregs(arm) */
+/*e: function [[dumpregs]](arm) */
 /*e: interrupts/arm/trap.c */

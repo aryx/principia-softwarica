@@ -730,9 +730,9 @@ uartclock(void)
 /*
  * polling console input, output
  */
-/*s: global consuart */
+/*s: global [[consuart]] */
 Uart* consuart;
-/*e: global consuart */
+/*e: global [[consuart]] */
 
 void (*lprint)(char *, int);
 

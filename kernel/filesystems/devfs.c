@@ -1271,7 +1271,7 @@ Done:
     return res;
 }
 
-/*s: global fsdevtab */
+/*s: global [[fsdevtab]] */
 Dev fsdevtab = {
     .dc       =    'k',
     .name     =    "fs",
@@ -1295,5 +1295,5 @@ Dev fsdevtab = {
 //    .power    =    devpower,
 //    .config   =    devconfig,
 };
-/*e: global fsdevtab */
+/*e: global [[fsdevtab]] */
 /*e: devfs.c */

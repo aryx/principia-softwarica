@@ -8,7 +8,7 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: function incref */
+/*s: function [[incref]] */
 long
 incref(Ref *r)
 {
@@ -19,9 +19,9 @@ incref(Ref *r)
     unlock(r);
     return x;
 }
-/*e: function incref */
+/*e: function [[incref]] */
 
-/*s: function decref */
+/*s: function [[decref]] */
 long
 decref(Ref *r)
 {
@@ -34,5 +34,5 @@ decref(Ref *r)
         panic("decref pc=%#p", getcallerpc(&r));
     return x;
 }
-/*e: function decref */
+/*e: function [[decref]] */
 /*e: ref.c */

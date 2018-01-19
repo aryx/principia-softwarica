@@ -2,7 +2,7 @@
 typedef struct Plink Plink;
 #pragma incomplete Plink
 
-/*s: struct Tos */
+/*s: struct [[Tos]] */
 struct Tos {
     /*s: [[Tos]] prof field */
     struct			/* Per process profiling */
@@ -28,7 +28,7 @@ struct Tos {
     /*e: [[Tos]] other fields */
     /* top of stack is here */
 };
-/*e: struct Tos */
+/*e: struct [[Tos]] */
 typedef struct Tos Tos;
 
 extern Tos *_tos;

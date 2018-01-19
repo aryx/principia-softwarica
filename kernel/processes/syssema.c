@@ -92,7 +92,7 @@
  * read and after each write.       - rsc
  */
 
-/*s: function semqueue */
+/*s: function [[semqueue]] */
 /* Add semaphore p with addr a to list in seg. */
 static void
 semqueue(Segment *s, long *a, Sema *p)
@@ -106,9 +106,9 @@ semqueue(Segment *s, long *a, Sema *p)
     p->prev->next = p;
     unlock(&s->sema);
 }
-/*e: function semqueue */
+/*e: function [[semqueue]] */
 
-/*s: function semdequeue */
+/*s: function [[semdequeue]] */
 /* Remove semaphore p from list in seg. */
 static void
 semdequeue(Segment *s, Sema *p)
@@ -118,9 +118,9 @@ semdequeue(Segment *s, Sema *p)
     p->prev->next = p->next;
     unlock(&s->sema);
 }
-/*e: function semdequeue */
+/*e: function [[semdequeue]] */
 
-/*s: function semwakeup */
+/*s: function [[semwakeup]] */
 /* Wake up n waiters with addr a on list in seg. */
 static void
 semwakeup(Segment *s, long *a, long n)
@@ -138,9 +138,9 @@ semwakeup(Segment *s, long *a, long n)
     }
     unlock(&s->sema);
 }
-/*e: function semwakeup */
+/*e: function [[semwakeup]] */
 
-/*s: function semrelease */
+/*s: function [[semrelease]] */
 /* Add delta to semaphore and wake up waiters as appropriate. */
 static long
 semrelease(Segment *s, long *addr, long delta)
@@ -153,9 +153,9 @@ semrelease(Segment *s, long *addr, long delta)
     semwakeup(s, addr, delta);
     return value+delta;
 }
-/*e: function semrelease */
+/*e: function [[semrelease]] */
 
-/*s: function canacquire */
+/*s: function [[canacquire]] */
 /* Try to acquire semaphore using compare-and-swap */
 static bool
 canacquire(long *addr)
@@ -167,9 +167,9 @@ canacquire(long *addr)
             return true;
     return false;
 }       
-/*e: function canacquire */
+/*e: function [[canacquire]] */
 
-/*s: function semawoke */
+/*s: function [[semawoke]] */
 /* Should we wake up? */
 static bool
 semawoke(void *p)
@@ -177,9 +177,9 @@ semawoke(void *p)
     arch_coherence();
     return !((Sema*)p)->waiting;
 }
-/*e: function semawoke */
+/*e: function [[semawoke]] */
 
-/*s: function semacquire */
+/*s: function [[semacquire]] */
 /* Acquire semaphore (subtract 1). */
 static bool
 semacquire(Segment *s, long *addr, bool block)
@@ -214,9 +214,9 @@ semacquire(Segment *s, long *addr, bool block)
         nexterror();
     return false;
 }
-/*e: function semacquire */
+/*e: function [[semacquire]] */
 
-/*s: function tsemacquire */
+/*s: function [[tsemacquire]] */
 /* Acquire semaphore or time-out */
 static bool
 tsemacquire(Segment *s, long *addr, ulong ms)
@@ -260,7 +260,7 @@ tsemacquire(Segment *s, long *addr, ulong ms)
         nexterror();
     return false;
 }
-/*e: function tsemacquire */
+/*e: function [[tsemacquire]] */
 
 /*s: syscall semacquire */
 // int semacquire(long *addr, int block);

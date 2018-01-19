@@ -8,7 +8,7 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: struct Rb */
+/*s: struct [[Rb]] */
 struct Rb
 {
     QLock;
@@ -24,13 +24,13 @@ struct Rb
     ushort  bits;
     ulong   randn;
 };
-/*e: struct Rb */
+/*e: struct [[Rb]] */
 
-/*s: global rb */
+/*s: global [[rb]] */
 struct Rb rb;
-/*e: global rb */
+/*e: global [[rb]] */
 
-/*s: struct rbnotfull */
+/*s: struct [[rbnotfull]] */
 static int
 rbnotfull(void*)
 {
@@ -39,17 +39,17 @@ rbnotfull(void*)
     i = rb.rp - rb.wp;
     return i != 1 && i != (1 - sizeof(rb.buf));
 }
-/*e: struct rbnotfull */
+/*e: struct [[rbnotfull]] */
 
-/*s: struct rbnotempty */
+/*s: struct [[rbnotempty]] */
 static int
 rbnotempty(void*)
 {
     return rb.wp != rb.rp;
 }
-/*e: struct rbnotempty */
+/*e: struct [[rbnotempty]] */
 
-/*s: function genrandom */
+/*s: function [[genrandom]] */
 static void
 genrandom(void*)
 {
@@ -66,7 +66,7 @@ genrandom(void*)
             sleep(&rb.producer, rbnotfull, 0);
     }
 }
-/*e: function genrandom */
+/*e: function [[genrandom]] */
 
 /*s: clock callback randomclock */
 /*
@@ -97,7 +97,7 @@ randomclock(void)
 }
 /*e: clock callback randomclock */
 
-/*s: function randominit */
+/*s: function [[randominit]] */
 void
 randominit(void)
 {
@@ -107,9 +107,9 @@ randominit(void)
     rb.rp = rb.wp = rb.buf;
     kproc("kgenrandom", genrandom, 0);
 }
-/*e: function randominit */
+/*e: function [[randominit]] */
 
-/*s: function randomread */
+/*s: function [[randomread]] */
 /*
  *  consume random bytes from a circular buffer
  */
@@ -156,5 +156,5 @@ randomread(void *xp, ulong n)
 
     return n;
 }
-/*e: function randomread */
+/*e: function [[randomread]] */
 /*e: random.c */

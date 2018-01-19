@@ -13,15 +13,15 @@
 // Global
 //*****************************************************************************
 
-/*s: global imagealloc */
+/*s: global [[imagealloc]] */
 static struct Imagealloc imagealloc;
-/*e: global imagealloc */
+/*e: global [[imagealloc]] */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
-/*s: global physseg */
+/*s: global [[physseg]] */
 /*
  * Attachable segment types
  */
@@ -38,14 +38,14 @@ static Physseg physseg[10] = {
     },
     { 0, 0, 0, 0},
 };
-/*e: global physseg */
-/*s: global physseglock */
+/*e: global [[physseg]] */
+/*s: global [[physseglock]] */
 static Lock physseglock;
-/*e: global physseglock */
+/*e: global [[physseglock]] */
 
-/*s: hook _globalsegattach */
+/*s: hook [[_globalsegattach]] */
 Segment* (*_globalsegattach)(Proc*, char*);
-/*e: hook _globalsegattach */
+/*e: hook [[_globalsegattach]] */
 
 /*s: segment.c forward decl */
 static void imagereclaim(void);
@@ -57,7 +57,7 @@ Segment* data2txt(Segment *s);
 // Initialization
 //*****************************************************************************
 
-/*s: function imageinit */
+/*s: function [[imageinit]] */
 void
 imageinit(void)
 {
@@ -75,13 +75,13 @@ imageinit(void)
     imagealloc.freechan = malloc(NFREECHAN * sizeof(Chan*));
     imagealloc.szfreechan = NFREECHAN;
 }
-/*e: function imageinit */
+/*e: function [[imageinit]] */
 
 //*****************************************************************************
 // Functions
 //*****************************************************************************
 
-/*s: constructor newseg */
+/*s: constructor [[newseg]] */
 Segment *
 newseg(int type, user_addr base, ulong size)
 {
@@ -123,9 +123,9 @@ newseg(int type, user_addr base, ulong size)
     }
     return s;
 }
-/*e: constructor newseg */
+/*e: constructor [[newseg]] */
 
-/*s: destructor putseg */
+/*s: destructor [[putseg]] */
 void
 putseg(Segment *s)
 {
@@ -184,9 +184,9 @@ putseg(Segment *s)
     /*e: [[putseg()]] free profile */
     free(s);
 }
-/*e: destructor putseg */
+/*e: destructor [[putseg]] */
 
-/*s: function relocateseg */
+/*s: function [[relocateseg]] */
 void
 relocateseg(Segment *s, ulong offset)
 {
@@ -204,9 +204,9 @@ relocateseg(Segment *s, ulong offset)
         }
     }
 }
-/*e: function relocateseg */
+/*e: function [[relocateseg]] */
 
-/*s: function dupseg */
+/*s: function [[dupseg]] */
 Segment*
 dupseg(Segment **seg, int segno, bool share)
 {
@@ -237,23 +237,23 @@ dupseg(Segment **seg, int segno, bool share)
         break;
     /*x: [[dupseg()]] switch segment type cases */
     case SG_DATA:       /* Copy on write plus demand load info */
-        /*s: [[dupseg()]] when SG_DATA, if Text segment */
+        /*s: [[dupseg()]] when [[SG_DATA]], if Text segment */
         if(segno == TSEG){ // why not SG_TEXT then?
             poperror();
             qunlock(&s->lk);
             return data2txt(s);// ????
         }
-        /*e: [[dupseg()]] when SG_DATA, if Text segment */
+        /*e: [[dupseg()]] when [[SG_DATA]], if Text segment */
         if(share)
             goto sameseg; // threads! clone()
         // else
         n = newseg(s->type, s->base, s->size);
-        /*s: [[dupseg()]] SG_DATA case, attach image to new segment n */
+        /*s: [[dupseg()]] [[SG_DATA]] case, attach image to new segment n */
         incref(s->image); // how sure non nil? data always attached to an img
         n->image = s->image;
         n->fstart = s->fstart;
         n->flen = s->flen;
-        /*e: [[dupseg()]] SG_DATA case, attach image to new segment n */
+        /*e: [[dupseg()]] [[SG_DATA]] case, attach image to new segment n */
         break;
     /*x: [[dupseg()]] switch segment type cases */
     case SG_BSS:        /* Just copy on write */
@@ -298,9 +298,9 @@ sameseg:
     qunlock(&s->lk);
     return s;
 }
-/*e: function dupseg */
+/*e: function [[dupseg]] */
 
-/*s: function segpage */
+/*s: function [[segpage]] */
 void
 segpage(Segment *s, Page *p)
 {
@@ -326,9 +326,9 @@ segpage(Segment *s, Page *p)
     if(pg > (*pt)->last)
         (*pt)->last = pg;
 }
-/*e: function segpage */
+/*e: function [[segpage]] */
 
-/*s: constructor attachimage */
+/*s: constructor [[attachimage]] */
 KImage*
 attachimage(int type, Chan *c, virt_addr base, ulong len)
 {
@@ -401,21 +401,21 @@ found:
 
     return img;
 }
-/*e: constructor attachimage */
+/*e: constructor [[attachimage]] */
 
-/*s: struct Irstats */
+/*s: struct [[Irstats]] */
 struct Irstats {
     int calls;          /* times imagereclaim was called */
     int loops;          /* times the main loop was run */
     uvlong  ticks;          /* total time in the main loop */
     uvlong  maxt;           /* longest time in main loop */
 };
-/*e: struct Irstats */
+/*e: struct [[Irstats]] */
 /*s: segment.c global irstats */
 static struct Irstats  irstats;
 /*e: segment.c global irstats */
 
-/*s: function imagereclaim */
+/*s: function [[imagereclaim]] */
 static void
 imagereclaim(void)
 {
@@ -454,9 +454,9 @@ imagereclaim(void)
     //print("T%llud+", ticks);
     qunlock(&imagealloc.ireclaim);
 }
-/*e: function imagereclaim */
+/*e: function [[imagereclaim]] */
 
-/*s: function imagechanreclaim */
+/*s: function [[imagechanreclaim]] */
 /*
  *  since close can block, this has to be called outside of
  *  spin locks.
@@ -486,9 +486,9 @@ imagechanreclaim(void)
 
     qunlock(&imagealloc.fcreclaim);
 }
-/*e: function imagechanreclaim */
+/*e: function [[imagechanreclaim]] */
 
-/*s: destructor putimage */
+/*s: destructor [[putimage]] */
 void
 putimage(KImage *img)
 {
@@ -539,9 +539,9 @@ putimage(KImage *img)
     }
     unlock(img);
 }
-/*e: destructor putimage */
+/*e: destructor [[putimage]] */
 
-/*s: function ibrk */
+/*s: function [[ibrk]] */
 long
 ibrk(user_addr addr, int seg)
 {
@@ -640,9 +640,9 @@ ibrk(user_addr addr, int seg)
     /*e: [[ibrk()]] if newtop more than oldtop, extend the segment */
 
 }
-/*e: function ibrk */
+/*e: function [[ibrk]] */
 
-/*s: function mfreeseg */
+/*s: function [[mfreeseg]] */
 /*
  *  called with s->lk locked
  */
@@ -709,9 +709,9 @@ out:
         putpage(pg);
     }
 }
-/*e: function mfreeseg */
+/*e: function [[mfreeseg]] */
 
-/*s: function isoverlap */
+/*s: function [[isoverlap]] */
 Segment*
 isoverlap(Proc *p, ulong va, int len)
 {
@@ -730,9 +730,9 @@ isoverlap(Proc *p, ulong va, int len)
     }
     return nil;
 }
-/*e: function isoverlap */
+/*e: function [[isoverlap]] */
 
-/*s: function addphysseg */
+/*s: function [[addphysseg]] */
 int
 addphysseg(Physseg* new)
 {
@@ -759,9 +759,9 @@ addphysseg(Physseg* new)
 
     return 0;
 }
-/*e: function addphysseg */
+/*e: function [[addphysseg]] */
 
-/*s: function segattach */
+/*s: function [[segattach]] */
 ulong
 segattach(Proc *p, ulong attr, char *name, ulong va, ulong len)
 {
@@ -842,7 +842,7 @@ found:
 
     return va;
 }
-/*e: function segattach */
+/*e: function [[segattach]] */
 
 /*s: clock callback segclock */
 // called via profclock
@@ -864,7 +864,7 @@ segclock(ulong pc)
 /*e: clock callback segclock */
 
 // was in another file before
-/*s: function data2txt */
+/*s: function [[data2txt]] */
 Segment*
 data2txt(Segment *s)
 {
@@ -881,5 +881,5 @@ data2txt(Segment *s)
 
     return ps;
 }
-/*e: function data2txt */
+/*e: function [[data2txt]] */
 /*e: segment.c */

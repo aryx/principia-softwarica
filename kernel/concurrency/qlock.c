@@ -8,7 +8,7 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: struct QlockStats */
+/*s: struct [[QlockStats]] */
 struct QlockStats {
     ulong rlock;
     ulong rlockq;
@@ -17,12 +17,12 @@ struct QlockStats {
     ulong qlock;
     ulong qlockq;
 };
-/*e: struct QlockStats */
-/*s: global rwstats */
+/*e: struct [[QlockStats]] */
+/*s: global [[rwstats]] */
 struct QlockStats rwstats;
-/*e: global rwstats */
+/*e: global [[rwstats]] */
 
-/*s: function qlock */
+/*s: function [[qlock]] */
 void
 qlock(QLock *q)
 {
@@ -78,9 +78,9 @@ qlock(QLock *q)
     // will resume here when another process unlock() the lock and ready() us
     q->qpc = getcallerpc(&q);
 }
-/*e: function qlock */
+/*e: function [[qlock]] */
 
-/*s: function canqlock */
+/*s: function [[canqlock]] */
 bool
 canqlock(QLock *q)
 {
@@ -97,9 +97,9 @@ canqlock(QLock *q)
     unlock(&q->use);
     return true;
 }
-/*e: function canqlock */
+/*e: function [[canqlock]] */
 
-/*s: function qunlock */
+/*s: function [[qunlock]] */
 void
 qunlock(QLock *q)
 {
@@ -127,9 +127,9 @@ qunlock(QLock *q)
         unlock(&q->use);
     }
 }
-/*e: function qunlock */
+/*e: function [[qunlock]] */
 
-/*s: function rlock */
+/*s: function [[rlock]] */
 void
 rlock(RWlock *q)
 {
@@ -165,9 +165,9 @@ rlock(RWlock *q)
     sched();
     // will resume here when another process unlock() the lock and ready() us
 }
-/*e: function rlock */
+/*e: function [[rlock]] */
 
-/*s: function runlock */
+/*s: function [[runlock]] */
 void
 runlock(RWlock *q)
 {
@@ -194,9 +194,9 @@ runlock(RWlock *q)
     unlock(&q->use);
     ready(p);
 }
-/*e: function runlock */
+/*e: function [[runlock]] */
 
-/*s: function wlock */
+/*s: function [[wlock]] */
 void
 wlock(RWlock *q)
 {
@@ -234,9 +234,9 @@ wlock(RWlock *q)
     unlock(&q->use);
     sched();
 }
-/*e: function wlock */
+/*e: function [[wlock]] */
 
-/*s: function wunlock */
+/*s: function [[wunlock]] */
 void
 wunlock(RWlock *q)
 {
@@ -277,9 +277,9 @@ wunlock(RWlock *q)
     q->writer = false;
     unlock(&q->use);
 }
-/*e: function wunlock */
+/*e: function [[wunlock]] */
 
-/*s: function canrlock */
+/*s: function [[canrlock]] */
 /* same as rlock but punts if there are any writers waiting */
 bool
 canrlock(RWlock *q)
@@ -295,5 +295,5 @@ canrlock(RWlock *q)
     unlock(&q->use);
     return false;
 }
-/*e: function canrlock */
+/*e: function [[canrlock]] */
 /*e: qlock.c */

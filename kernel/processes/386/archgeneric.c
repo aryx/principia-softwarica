@@ -17,15 +17,15 @@
  *  architecture specific stuff
  */
 
-/*s: function unimplemented(x86) */
+/*s: function [[unimplemented]](x86) */
 static int
 unimplemented(int)
 {
     return 0;
 }
-/*e: function unimplemented(x86) */
+/*e: function [[unimplemented]](x86) */
 
-/*s: function archreset(x86) */
+/*s: function [[archreset]](x86) */
 static void
 archreset(void)
 {
@@ -49,9 +49,9 @@ archreset(void)
     for(;;)
         idle();
 }
-/*e: function archreset(x86) */
+/*e: function [[archreset]](x86) */
 
-/*s: global archgeneric(x86) */
+/*s: global [[archgeneric]](x86) */
 PCArch archgeneric = {
     .id=        "generic",
     .ident=     nil,
@@ -78,14 +78,14 @@ PCArch archgeneric = {
         .modempower=    unimplemented,
     /*e: [[archgeneric]] power methods(x86) */
 };
-/*e: global archgeneric(x86) */
+/*e: global [[archgeneric]](x86) */
 
-/*s: function archrevert(x86) */
+/*s: function [[archrevert]](x86) */
 void
 archrevert(void)
 {
     arch = &archgeneric;
 }
-/*e: function archrevert(x86) */
+/*e: function [[archrevert]](x86) */
 
 /*e: archgeneric.c */

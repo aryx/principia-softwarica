@@ -127,7 +127,7 @@ dupwrite(Chan*, void*, long, vlong)
     return 0;       /* not reached */
 }
 
-/*s: global dupdevtab */
+/*s: global [[dupdevtab]] */
 Dev dupdevtab = {
     .dc       =    'd',
     .name     =    "dup",
@@ -148,5 +148,5 @@ Dev dupdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
-/*e: global dupdevtab */
+/*e: global [[dupdevtab]] */
 /*e: devdup.c */

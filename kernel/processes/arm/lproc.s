@@ -2,7 +2,7 @@
 #include "mem.h"
 #include "arm.h"
 
-/*s: function arch_touser(arm) */
+/*s: function [[arch_touser]](arm) */
 /*
  *  This is the first jump from kernel to user mode.
  *  Fake a return from interrupt.
@@ -35,9 +35,9 @@ TEXT arch_touser(SB), 1, $-4
      * not from memory but from SPSR due to `.S'.
      */
     RFE
-/*e: function arch_touser(arm) */
+/*e: function [[arch_touser]](arm) */
 
-/*s: function arch__forkret(arm) */
+/*s: function [[arch__forkret]](arm) */
 /*
  *  here to jump to a newly forked process
  */
@@ -49,5 +49,5 @@ TEXT arch__forkret(SB), 1, $-4
     MOVM.DB.S (R13), [R0-R14]   /* restore registers */
     ADD $8, R13         /* pop past ureg->{type+psr} */
     RFE             /* MOVM.IA.S.W (R13), [R15] */
-/*e: function arch__forkret(arm) */
+/*e: function [[arch__forkret]](arm) */
 /*e: processes/arm/lproc.s */

@@ -33,7 +33,7 @@ enum{
 };
 /*e: devsys.c enum Qxxx */
 
-/*s: global sysdir */
+/*s: global [[sysdir]] */
 static Dirtab sysdir[]={
     ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
 
@@ -54,7 +54,7 @@ static Dirtab sysdir[]={
     "sysstat",  {Qsysstat}, 0,      0666,
     /*e: [[sysdir]] fields */
 };
-/*e: global sysdir */
+/*e: global [[sysdir]] */
 
 /*s: devsys.c decls and globals */
 extern byte configfile[]; // in $CONF.c
@@ -73,9 +73,9 @@ Cmdtab rebootmsg[] =
     CMpanic,    "panic",    0,
 };
 /*e: devsys.c decls and globals */
-/*s: global sysname */
+/*s: global [[sysname]] */
 char    *sysname;
-/*e: global sysname */
+/*e: global [[sysname]] */
 
 /*s: method sysinit */
 static void
@@ -324,7 +324,7 @@ syswrite(Chan *c, void *va, long n, vlong off)
 }
 /*e: method syswrite */
 
-/*s: global sysdevtab */
+/*s: global [[sysdevtab]] */
 Dev sysdevtab = {
     .dc       =    'k',
     .name     =    "sys",
@@ -345,6 +345,6 @@ Dev sysdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
-/*e: global sysdevtab */
+/*e: global [[sysdevtab]] */
 
 /*e: devsys.c */

@@ -25,9 +25,9 @@ void  arch_touser(void*);
 int   (*arch_cmpswap)(long*, long, long);
 void  (*arch_coherence)(void);
 void  (*arch_cycles)(uvlong*);
-/*s: function mmuflushtlb(x86) */
+/*s: function [[mmuflushtlb]](x86) */
 #define mmuflushtlb(mmupd) putcr3(mmupd)
-/*e: function mmuflushtlb(x86) */
+/*e: function [[mmuflushtlb]](x86) */
 
 // fns_memory.h
 
@@ -272,12 +272,12 @@ int pcmspecial(char*, ISAConf*);
 
 
 /*s: fns.h macros(x86) */
-/*s: function KADDR(x86) */
+/*s: function [[KADDR]](x86) */
 #define KADDR(pa)  arch_kaddr(pa)
-/*e: function KADDR(x86) */
-/*s: function PADDR(x86) */
+/*e: function [[KADDR]](x86) */
+/*s: function [[PADDR]](x86) */
 #define PADDR(ka)  arch_paddr((kern_addr3)(ka))
-/*e: function PADDR(x86) */
+/*e: function [[PADDR]](x86) */
 
 #define BIOSSEG(a)  KADDR(((uint)(a))<<4)
 

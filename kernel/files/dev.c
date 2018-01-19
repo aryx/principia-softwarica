@@ -9,12 +9,12 @@
 /*e: kernel basic includes */
 
 // was in $CONF.c
-/*s: global devtab */
+/*s: global [[devtab]] */
 // array<ref_own<Dev>>
 Dev** devtab = nil;
-/*e: global devtab */
+/*e: global [[devtab]] */
 
-/*s: function mkqid */
+/*s: function [[mkqid]] */
 void
 mkqid(Qid *q, vlong path, ulong vers, int type)
 {
@@ -22,9 +22,9 @@ mkqid(Qid *q, vlong path, ulong vers, int type)
     q->vers = vers;
     q->path = path;
 }
-/*e: function mkqid */
+/*e: function [[mkqid]] */
 
-/*s: function devno */
+/*s: function [[devno]] */
 int
 devno(Rune c, bool user)
 {
@@ -39,9 +39,9 @@ devno(Rune c, bool user)
 
     return -1;
 }
-/*e: function devno */
+/*e: function [[devno]] */
 
-/*s: function devdir */
+/*s: function [[devdir]] */
 void
 devdir(Chan *c, Qid qid, char *n, vlong length, char *user, long perm, DirEntry *db)
 {
@@ -60,9 +60,9 @@ devdir(Chan *c, Qid qid, char *n, vlong length, char *user, long perm, DirEntry 
     db->gid = eve;
     db->muid = user;
 }
-/*e: function devdir */
+/*e: function [[devdir]] */
 
-/*s: function devgen */
+/*s: function [[devgen]] */
 /*
  * (here, Devgen is the prototype; devgen is the function in dev.c.)
  * 
@@ -120,7 +120,7 @@ devgen(Chan *c, char *name, Dirtab *tab, int ntab, int i, DirEntry *dp)
     devdir(c, tab->qid, tab->name, tab->length, eve, tab->perm, dp);
     return 1;
 }
-/*e: function devgen */
+/*e: function [[devgen]] */
 
 void
 devreset(void)
@@ -137,7 +137,7 @@ devshutdown(void)
 {
 }
 
-/*s: function devattach */
+/*s: function [[devattach]] */
 Chan*
 devattach(Rune tc, char *spec)
 {
@@ -159,9 +159,9 @@ devattach(Rune tc, char *spec)
 
     return c;
 }
-/*e: function devattach */
+/*e: function [[devattach]] */
 
-/*s: function devclone */
+/*s: function [[devclone]] */
 Chan*
 devclone(Chan *c)
 {
@@ -183,9 +183,9 @@ devclone(Chan *c)
     nc->mcp = c->mcp;
     return nc;
 }
-/*e: function devclone */
+/*e: function [[devclone]] */
 
-/*s: function devwalk */
+/*s: function [[devwalk]] */
 Walkqid*
 devwalk(Chan *c, Chan *nc, char **name, int nname, Dirtab *tab, int ntab, Devgen *gen)
 {
@@ -280,9 +280,9 @@ Done:
     }
     return wq;
 }
-/*e: function devwalk */
+/*e: function [[devwalk]] */
 
-/*s: function devstat */
+/*s: function [[devstat]] */
 int
 devstat(Chan *c, byte *db, int n, Dirtab *tab, int ntab, Devgen *gen)
 {
@@ -326,9 +326,9 @@ devstat(Chan *c, byte *db, int n, Dirtab *tab, int ntab, Devgen *gen)
     }
     return -1; // unreachable
 }
-/*e: function devstat */
+/*e: function [[devstat]] */
 
-/*s: function devdirread */
+/*s: function [[devdirread]] */
 long
 devdirread(Chan *c, char *d, long n, Dirtab *tab, int ntab, Devgen *gen)
 {
@@ -358,9 +358,9 @@ devdirread(Chan *c, char *d, long n, Dirtab *tab, int ntab, Devgen *gen)
 
     return m;
 }
-/*e: function devdirread */
+/*e: function [[devdirread]] */
 
-/*s: function devpermcheck */
+/*s: function [[devpermcheck]] */
 /*
  * error(Eperm) if open permission not granted for up->user.
  */
@@ -382,9 +382,9 @@ devpermcheck(char *fileuid, ulong perm, int omode)
     if((t&perm) != t)
         error(Eperm);
 }
-/*e: function devpermcheck */
+/*e: function [[devpermcheck]] */
 
-/*s: function devopen */
+/*s: function [[devopen]] */
 Chan*
 devopen(Chan *c, int omode, Dirtab *tab, int ntab, Devgen *gen)
 {
@@ -413,7 +413,7 @@ Return:
     c->flag |= COPEN;
     return c;
 }
-/*e: function devopen */
+/*e: function [[devopen]] */
 
 void
 devcreate(Chan*, char*, int, ulong)
@@ -421,7 +421,7 @@ devcreate(Chan*, char*, int, ulong)
     error(Eperm);
 }
 
-/*s: function devbread */
+/*s: function [[devbread]] */
 Block*
 devbread(Chan *c, long n, ulong offset)
 {
@@ -438,9 +438,9 @@ devbread(Chan *c, long n, ulong offset)
     poperror();
     return bp;
 }
-/*e: function devbread */
+/*e: function [[devbread]] */
 
-/*s: function devbrwrite */
+/*s: function [[devbrwrite]] */
 long
 devbwrite(Chan *c, Block *bp, ulong offset)
 {
@@ -456,7 +456,7 @@ devbwrite(Chan *c, Block *bp, ulong offset)
 
     return n;
 }
-/*e: function devbrwrite */
+/*e: function [[devbrwrite]] */
 
 void
 devremove(Chan*)

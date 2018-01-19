@@ -93,7 +93,7 @@ uchar *sp;      /* user stack of init proc */
 //@Scheck: Assembly
 extern phys_addr *multiboot;
 
-/*s: function options(x86) */
+/*s: function [[options]](x86) */
 static void
 options(void)
 {
@@ -148,9 +148,9 @@ options(void)
                 nconf++;
         }
 }
-/*e: function options(x86) */
+/*e: function [[options]](x86) */
 
-/*s: function writeconf(x86) */
+/*s: function [[writeconf]](x86) */
 static void
 writeconf(void)
 {
@@ -179,13 +179,13 @@ writeconf(void)
         poperror();
         free(p);
 }
-/*e: function writeconf(x86) */
+/*e: function [[writeconf]](x86) */
 
 //*****************************************************************************
 // Cpu init
 //*****************************************************************************
 
-/*s: function cpuinit(x86) */
+/*s: function [[cpuinit]](x86) */
 void
 cpuinit(void)
 {
@@ -210,9 +210,9 @@ cpuinit(void)
      */
     cpu->loopconst = 100000;
 }
-/*e: function cpuinit(x86) */
+/*e: function [[cpuinit]](x86) */
 
-/*s: function cpu0init(x86) */
+/*s: function [[cpu0init]](x86) */
 void
 cpu0init(void)
 {
@@ -228,13 +228,13 @@ cpu0init(void)
     active.cpus = 1;
     active.exiting = false;
 }
-/*e: function cpu0init(x86) */
+/*e: function [[cpu0init]](x86) */
 
 //*****************************************************************************
 // Conf init
 //*****************************************************************************
 
-/*s: function confinit(x86) */
+/*s: function [[confinit]](x86) */
 // precondition: meminit() have initialized Conf.mem
 void
 confinit(void)
@@ -330,13 +330,13 @@ confinit(void)
         imagmem->maxsize = kmem;
     }
 }
-/*e: function confinit(x86) */
+/*e: function [[confinit]](x86) */
 
 //*****************************************************************************
 // First process init
 //*****************************************************************************
 
-/*s: function init0(x86) */
+/*s: function [[init0]](x86) */
 // set by userinit to sched.pc
 void
 init0(void)
@@ -378,9 +378,9 @@ init0(void)
     cgapost(0x9);
     arch_touser(sp);
 }
-/*e: function init0(x86) */
+/*e: function [[init0]](x86) */
 
-/*s: function pusharg(x86) */
+/*s: function [[pusharg]](x86) */
 uchar *
 pusharg(char *p)
 {
@@ -391,10 +391,10 @@ pusharg(char *p)
         memmove(sp, p, n);
         return sp;
 }
-/*e: function pusharg(x86) */
+/*e: function [[pusharg]](x86) */
 
 //TODO: get rid of as have simplified boot process, no plan9.ini
-/*s: function bootargs(x86) */
+/*s: function [[bootargs]](x86) */
 void
 bootargs(void *base)
 {
@@ -433,9 +433,9 @@ bootargs(void *base)
         *lsp = 0;
         sp += (USTKTOP - BY2PG) - (ulong)base - sizeof(ulong);
 }
-/*e: function bootargs(x86) */
+/*e: function [[bootargs]](x86) */
 
-/*s: function userinit(x86) */
+/*s: function [[userinit]](x86) */
 void
 userinit(void)
 {
@@ -504,13 +504,13 @@ userinit(void)
 
     ready(p);
 }
-/*e: function userinit(x86) */
+/*e: function [[userinit]](x86) */
 
 //*****************************************************************************
 // Math coprocessor
 //*****************************************************************************
 
-/*s: global mathmsg(x86) */
+/*s: global [[mathmsg]](x86) */
 static char* mathmsg[] =
 {
         nil,    /* handled below */
@@ -520,9 +520,9 @@ static char* mathmsg[] =
         "numeric underflow",
         "precision loss",
 };
-/*e: global mathmsg(x86) */
+/*e: global [[mathmsg]](x86) */
 
-/*s: function mathstate(x86) */
+/*s: function [[mathstate]](x86) */
 static void
 mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
 {
@@ -545,9 +545,9 @@ mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
         if(ctlp)
                 *ctlp = ctl;
 }
-/*e: function mathstate(x86) */
+/*e: function [[mathstate]](x86) */
 
-/*s: function mathnote(x86) */
+/*s: function [[mathnote]](x86) */
 static void
 mathnote(void)
 {
@@ -581,9 +581,9 @@ mathnote(void)
                 msg, pc, status);
         postnote(up, 1, note, NDebug);
 }
-/*e: function mathnote(x86) */
+/*e: function [[mathnote]](x86) */
 
-/*s: function matherror(x86) */
+/*s: function [[matherror]](x86) */
 /*
  *  math coprocessor error
  */
@@ -612,9 +612,9 @@ matherror(Ureg *ur, void*)
                 panic("fp: status %#lux fppc=%#lux pc=%#lux", status, pc, ur->pc);
         }
 }
-/*e: function matherror(x86) */
+/*e: function [[matherror]](x86) */
 
-/*s: function mathemu(x86) */
+/*s: function [[mathemu]](x86) */
 /*
  *  math coprocessor emulation fault
  */
@@ -655,9 +655,9 @@ mathemu(Ureg *ureg, void*)
                 break;
         }
 }
-/*e: function mathemu(x86) */
+/*e: function [[mathemu]](x86) */
 
-/*s: function mathover(x86) */
+/*s: function [[mathover]](x86) */
 /*
  *  math coprocessor segment overrun
  */
@@ -666,9 +666,9 @@ mathover(Ureg*, void*)
 {
         pexit("math overrun", false);
 }
-/*e: function mathover(x86) */
+/*e: function [[mathover]](x86) */
 
-/*s: function mathinit(x86) */
+/*s: function [[mathinit]](x86) */
 void
 mathinit(void)
 {
@@ -678,13 +678,13 @@ mathinit(void)
         trapenable(VectorCNA, mathemu, 0, "mathemu");
         trapenable(VectorCSO, mathover, 0, "mathover");
 }
-/*e: function mathinit(x86) */
+/*e: function [[mathinit]](x86) */
 
 //*****************************************************************************
 // Shutdown/reboot
 //*****************************************************************************
 
-/*s: function shutdown(x86) */
+/*s: function [[shutdown]](x86) */
 static void
 shutdown(bool ispanic)
 {
@@ -729,18 +729,18 @@ shutdown(bool ispanic)
     }else
         arch_delay(1000);
 }
-/*e: function shutdown(x86) */
+/*e: function [[shutdown]](x86) */
 
-/*s: function exit(x86) */
+/*s: function [[exit]](x86) */
 void
 main_exit(bool ispanic)
 {
         shutdown(ispanic);
         arch->reset();
 }
-/*e: function exit(x86) */
+/*e: function [[exit]](x86) */
 
-/*s: function reboot(x86) */
+/*s: function [[reboot]](x86) */
 void
 arch_reboot(kern_addr3 entry, kern_addr3 code, ulong size)
 {
@@ -814,13 +814,13 @@ arch_reboot(kern_addr3 entry, kern_addr3 code, ulong size)
     arch_coherence();
     (*f)(PADDR(entry), PADDR(code), size);
 }
-/*e: function reboot(x86) */
+/*e: function [[reboot]](x86) */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
-/*s: function isaconfig(x86) */
+/*s: function [[isaconfig]](x86) */
 int
 main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 {
@@ -853,13 +853,13 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
         }
         return 1;
 }
-/*e: function isaconfig(x86) */
+/*e: function [[isaconfig]](x86) */
 
 //*****************************************************************************
 // Main entry point!
 //*****************************************************************************
 
-/*s: function main(x86) */
+/*s: function [[main]](x86) */
 //@Scheck: not dead, entry point :) jumped from assembly at _startpg() end
 void main(void)
 {
@@ -973,5 +973,5 @@ void main(void)
     schedinit();
     panic("should never reach this point");
 }
-/*e: function main(x86) */
+/*e: function [[main]](x86) */
 /*e: init/386/main.c */

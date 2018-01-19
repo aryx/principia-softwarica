@@ -59,17 +59,17 @@ void (*arch_microdelay)(int) = nil;
 
 /*e: portfns.c backward deps breaker */
 
-/*s: function returnfalse */
+/*s: function [[returnfalse]] */
 // usually used as default callback for sleep/tsleep
 bool
 returnfalse(void*)
 {
     return false;
 }
-/*e: function returnfalse */
+/*e: function [[returnfalse]] */
 
 // was in devcons.c, could be in lib/misc.c
-/*s: function readnum */
+/*s: function [[readnum]] */
 int
 readnum(ulong off, char *buf, ulong n, ulong val, int size)
 {
@@ -84,9 +84,9 @@ readnum(ulong off, char *buf, ulong n, ulong val, int size)
     memmove(buf, tmp+off, n);
     return n;
 }
-/*e: function readnum */
+/*e: function [[readnum]] */
 
-/*s: function readstr */
+/*s: function [[readstr]] */
 int
 readstr(ulong off, char *buf, ulong n, char *str)
 {
@@ -100,5 +100,5 @@ readstr(ulong off, char *buf, ulong n, char *str)
     memmove(buf, str+off, n);
     return n;
 }
-/*e: function readstr */
+/*e: function [[readstr]] */
 /*e: portfns.c */

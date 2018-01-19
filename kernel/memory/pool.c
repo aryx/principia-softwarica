@@ -30,7 +30,7 @@ struct Private {
 // Pool methods
 //*****************************************************************************
 
-/*s: function poolprint */
+/*s: function [[poolprint]] */
 /*
  * because we can't print while we're holding the locks, 
  * we have the save the message and print it once we let go.
@@ -46,9 +46,9 @@ poolprint(Pool *p, char *fmt, ...)
     vseprint(pv->msg+strlen(pv->msg), pv->msg+sizeof pv->msg, fmt, v);
     va_end(v);
 }
-/*e: function poolprint */
+/*e: function [[poolprint]] */
 
-/*s: function ppanic */
+/*s: function [[ppanic]] */
 static void
 ppanic(Pool *p, char *fmt, ...)
 {
@@ -64,9 +64,9 @@ ppanic(Pool *p, char *fmt, ...)
     iunlock(&pv->lk);
     panic("%s", msg);
 }
-/*e: function ppanic */
+/*e: function [[ppanic]] */
 
-/*s: function plock */
+/*s: function [[plock]] */
 static void
 plock(Pool *p)
 {
@@ -77,9 +77,9 @@ plock(Pool *p)
     pv->lk.pc = getcallerpc(&p);
     pv->msg[0] = 0;
 }
-/*e: function plock */
+/*e: function [[plock]] */
 
-/*s: function punlock */
+/*s: function [[punlock]] */
 static void
 punlock(Pool *p)
 {
@@ -96,22 +96,22 @@ punlock(Pool *p)
     iunlock(&pv->lk);
     iprint("%.*s", sizeof pv->msg, msg);
 }
-/*e: function punlock */
+/*e: function [[punlock]] */
 
-/*s: function poolsummary */
+/*s: function [[poolsummary]] */
 void
 poolsummary(Pool *p)
 {
     print("%s max %lud cur %lud free %lud alloc %lud\n", p->name,
         p->maxsize, p->cursize, p->curfree, p->curalloc);
 }
-/*e: function poolsummary */
+/*e: function [[poolsummary]] */
 
 //*****************************************************************************
 // The globals
 //*****************************************************************************
 
-/*s: global pmainmem */
+/*s: global [[pmainmem]] */
 static Private pmainpriv;
 static Pool pmainmem = {
     .name=  "Main",
@@ -132,9 +132,9 @@ static Pool pmainmem = {
 
     .private=   &pmainpriv,
 };
-/*e: global pmainmem */
+/*e: global [[pmainmem]] */
 
-/*s: global pimagmem */
+/*s: global [[pimagmem]] */
 static Private pimagpriv;
 static Pool pimagmem = {
     .name=  "Image",
@@ -155,7 +155,7 @@ static Pool pimagmem = {
 
     .private=   &pimagpriv,
 };
-/*e: global pimagmem */
+/*e: global [[pimagmem]] */
 
 /*s: global mainmem and imagmem */
 // exported in include/pool.h, defined here!
@@ -163,13 +163,13 @@ Pool*   mainmem = &pmainmem;
 Pool*   imagmem = &pimagmem;
 /*e: global mainmem and imagmem */
 
-/*s: function mallosummary */
+/*s: function [[mallosummary]] */
 void
 mallocsummary(void)
 {
     poolsummary(mainmem);
     poolsummary(imagmem);
 }
-/*e: function mallosummary */
+/*e: function [[mallosummary]] */
 
 /*e: pool.c */

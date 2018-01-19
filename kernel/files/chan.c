@@ -21,15 +21,15 @@ bool chandebug=false;        /* toggle it in sysnop if you want */
 
 enum
 {
-/*s: constant PATHSLOP */
+/*s: constant [[PATHSLOP]] */
 PATHSLOP    = 20,
-/*e: constant PATHSLOP */
-/*s: constant PATHMSLOP */
+/*e: constant [[PATHSLOP]] */
+/*s: constant [[PATHMSLOP]] */
 PATHMSLOP   = 20,
-/*e: constant PATHMSLOP */
+/*e: constant [[PATHMSLOP]] */
 };
 
-/*s: struct Chanalloc */
+/*s: struct [[Chanalloc]] */
 // Channel allocator
 struct Chanalloc
 {
@@ -43,12 +43,12 @@ struct Chanalloc
     // extra
     Lock;
 };
-/*e: struct Chanalloc */
-/*s: global chanalloc */
+/*e: struct [[Chanalloc]] */
+/*s: global [[chanalloc]] */
 struct Chanalloc chanalloc;
-/*e: global chanalloc */
+/*e: global [[chanalloc]] */
 
-/*s: struct Elemlist */
+/*s: struct [[Elemlist]] */
 struct Elemlist
 {
     char    *aname; /* original name */
@@ -66,9 +66,9 @@ struct Elemlist
     int nerror;
     int prefix;
 };
-/*e: struct Elemlist */
+/*e: struct [[Elemlist]] */
 
-/*s: function chanpath */
+/*s: function [[chanpath]] */
 char*
 chanpath(Chan *c)
 {
@@ -80,17 +80,17 @@ chanpath(Chan *c)
         return "<nil path.s>";
     return c->path->s;
 }
-/*e: function chanpath */
+/*e: function [[chanpath]] */
 
-/*s: function isdotdot */
+/*s: function [[isdotdot]] */
 int
 isdotdot(char *p)
 {
     return p[0]=='.' && p[1]=='.' && p[2]=='\0';
 }
-/*e: function isdotdot */
+/*e: function [[isdotdot]] */
 
-/*s: function emptystr */
+/*s: function [[emptystr]] */
 bool
 emptystr(char *s)
 {
@@ -100,9 +100,9 @@ emptystr(char *s)
         return true;
     return false;
 }
-/*e: function emptystr */
+/*e: function [[emptystr]] */
 
-/*s: function chandevreset */
+/*s: function [[chandevreset]] */
 void
 chandevreset(void)
 {
@@ -115,9 +115,9 @@ chandevreset(void)
         devtab[i]->reset();
     }
 }
-/*e: function chandevreset */
+/*e: function [[chandevreset]] */
 
-/*s: function chandevinit */
+/*s: function [[chandevinit]] */
 void
 chandevinit(void)
 {
@@ -126,9 +126,9 @@ chandevinit(void)
         devtab[i]->init();
     }
 }
-/*e: function chandevinit */
+/*e: function [[chandevinit]] */
 
-/*s: function chandevshutdown */
+/*s: function [[chandevshutdown]] */
 void
 chandevshutdown(void)
 {
@@ -140,9 +140,9 @@ chandevshutdown(void)
     for(i--; i >= 0; i--)
         devtab[i]->shutdown();
 }
-/*e: function chandevshutdown */
+/*e: function [[chandevshutdown]] */
 
-/*s: constructor newchan */
+/*s: constructor [[newchan]] */
 Chan*
 newchan(void)
 {
@@ -193,13 +193,13 @@ newchan(void)
     
     return c;
 }
-/*e: constructor newchan */
+/*e: constructor [[newchan]] */
 
-/*s: global npath */
+/*s: global [[npath]] */
 Ref npath;
-/*e: global npath */
+/*e: global [[npath]] */
 
-/*s: constructor newpath */
+/*s: constructor [[newpath]] */
 Path*
 newpath(char *s)
 {
@@ -230,9 +230,9 @@ newpath(char *s)
     /*e: [[newpath()]] mtpt handling */
     return p;
 }
-/*e: constructor newpath */
+/*e: constructor [[newpath]] */
 
-/*s: function copypath */
+/*s: function [[copypath]] */
 static Path*
 copypath(Path *p)
 {
@@ -261,9 +261,9 @@ copypath(Path *p)
     /*e: [[copypath()]] mtpt handling */
     return pp;
 }
-/*e: function copypath */
+/*e: function [[copypath]] */
 
-/*s: destructor pathclose */
+/*s: destructor [[pathclose]] */
 void
 pathclose(Path *p)
 {
@@ -291,9 +291,9 @@ pathclose(Path *p)
     /*e: [[pathclose()]] mtpt handling */
     free(p);
 }
-/*e: destructor pathclose */
+/*e: destructor [[pathclose]] */
 
-/*s: function fixdotdotname */
+/*s: function [[fixdotdotname]] */
 /*
  * In place, rewrite name to compress multiple /, eliminate ., and process ..
  * (Really only called to remove a trailing .. that has been added.
@@ -320,9 +320,9 @@ fixdotdotname(Path *p)
         cleanname(p->s);
     p->len = strlen(p->s);
 }
-/*e: function fixdotdotname */
+/*e: function [[fixdotdotname]] */
 
-/*s: function uniquepath */
+/*s: function [[uniquepath]] */
 static Path*
 uniquepath(Path *p)
 {
@@ -336,9 +336,9 @@ uniquepath(Path *p)
     }
     return p;
 }
-/*e: function uniquepath */
+/*e: function [[uniquepath]] */
 
-/*s: function addelem */
+/*s: function [[addelem]] */
 static Path*
 addelem(Path *p, char *s, Chan *from)
 {
@@ -395,9 +395,9 @@ addelem(Path *p, char *s, Chan *from)
 
     return p;
 }
-/*e: function addelem */
+/*e: function [[addelem]] */
 
-/*s: destructor chanfree */
+/*s: destructor [[chanfree]] */
 void
 chanfree(Chan *c)
 {
@@ -439,9 +439,9 @@ chanfree(Chan *c)
     chanalloc.free = c;
     unlock(&chanalloc);
 }
-/*e: destructor chanfree */
+/*e: destructor [[chanfree]] */
 
-/*s: function cclose */
+/*s: function [[cclose]] */
 void
 chan_cclose(Chan *c)
 {
@@ -458,9 +458,9 @@ chan_cclose(Chan *c)
     }
     chanfree(c);
 }
-/*e: function cclose */
+/*e: function [[cclose]] */
 
-/*s: struct Clunkq */
+/*s: struct [[Clunkq]] */
 /*
  * Queue a chan to be closed by one of the clunk procs.
  */
@@ -473,12 +473,12 @@ struct Clunkq {
     QLock q;
     Rendez r;
 };
-/*e: struct Clunkq */
-/*s: global clunkq */
+/*e: struct [[Clunkq]] */
+/*s: global [[clunkq]] */
 struct Clunkq clunkq;
-/*e: global clunkq */
+/*e: global [[clunkq]] */
 
-/*s: function ccloseq */
+/*s: function [[ccloseq]] */
 void
 ccloseq(Chan *c)
 {
@@ -503,17 +503,17 @@ ccloseq(Chan *c)
     if(!wakeup(&clunkq.r))
         kproc("kcloseproc", closeproc, nil); 
 }
-/*e: function ccloseq */
+/*e: function [[ccloseq]] */
 
-/*s: function clunkwork */
+/*s: function [[clunkwork]] */
 static int
 clunkwork(void*)
 {
     return clunkq.head != nil;
 }
-/*e: function clunkwork */
+/*e: function [[clunkwork]] */
 
-/*s: function closeproc */
+/*s: function [[closeproc]] */
 void
 closeproc(void*)
 {
@@ -544,9 +544,9 @@ closeproc(void*)
         chanfree(c);
     }
 }
-/*e: function closeproc */
+/*e: function [[closeproc]] */
 
-/*s: function uniquechan */
+/*s: function [[uniquechan]] */
 /*
  * Make sure we have the only copy of c.  (Copy on write.)
  */
@@ -563,17 +563,17 @@ uniquechan(Chan *c)
       return c;
     }
 }
-/*e: function uniquechan */
+/*e: function [[uniquechan]] */
 
-/*s: function eqqid */
+/*s: function [[eqqid]] */
 bool
 eqqid(Qid a, Qid b)
 {
     return a.path==b.path && a.vers==b.vers;
 }
-/*e: function eqqid */
+/*e: function [[eqqid]] */
 
-/*s: function eqchan */
+/*s: function [[eqchan]] */
 bool
 eqchan(Chan *a, Chan *b, bool skipvers)
 {
@@ -588,9 +588,9 @@ eqchan(Chan *a, Chan *b, bool skipvers)
         return false;
     return true;
 }
-/*e: function eqchan */
+/*e: function [[eqchan]] */
 
-/*s: function eqchantdqid */
+/*s: function [[eqchantdqid]] */
 bool
 eqchantdqid(Chan *a, int type, int dev, Qid qid, bool skipvers)
 {
@@ -604,9 +604,9 @@ eqchantdqid(Chan *a, int type, int dev, Qid qid, bool skipvers)
         return false;
     return true;
 }
-/*e: function eqchantdqid */
+/*e: function [[eqchantdqid]] */
 
-/*s: constructor newmhead */
+/*s: constructor [[newmhead]] */
 Mhead*
 newmhead(Chan *from)
 {
@@ -618,9 +618,9 @@ newmhead(Chan *from)
     incref(from);
     return mh;
 }
-/*e: constructor newmhead */
+/*e: constructor [[newmhead]] */
 
-/*s: function cmount */
+/*s: function [[cmount]] */
 int
 cmount(Chan *new, Chan *old, int flag, char *spec)
 {
@@ -748,9 +748,9 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
     poperror();
     return m->mountid;
 }
-/*e: function cmount */
+/*e: function [[cmount]] */
 
-/*s: function cunmount */
+/*s: function [[cunmount]] */
 void
 cunmount(Chan *mnt, Chan *mounted)
 {
@@ -825,9 +825,9 @@ cunmount(Chan *mnt, Chan *mounted)
     wunlock(&pg->ns);
     error(Eunion);
 }
-/*e: function cunmount */
+/*e: function [[cunmount]] */
 
-/*s: function cclone */
+/*s: function [[cclone]] */
 Chan*
 cclone(Chan *c)
 {
@@ -845,9 +845,9 @@ cclone(Chan *c)
         incref(c->path);
     return nc;
 }
-/*e: function cclone */
+/*e: function [[cclone]] */
 
-/*s: function findmount */
+/*s: function [[findmount]] */
 /* also used by sysfile.c:/^mountfix */
 bool
 findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
@@ -887,9 +887,9 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
     runlock(&pg->ns);
     return false;
 }
-/*e: function findmount */
+/*e: function [[findmount]] */
 
-/*s: function domount */
+/*s: function [[domount]] */
 /*
  * Calls findmount but also updates path.
  */
@@ -919,9 +919,9 @@ domount(Chan **cp, Mhead **mp, Path **path)
     }
     return;
 }
-/*e: function domount */
+/*e: function [[domount]] */
 
-/*s: function undomount */
+/*s: function [[undomount]] */
 /*
  * If c is the right-hand-side of a mount point, returns the left hand side.
  * Changes name to reflect the fact that we've uncrossed the mountpoint,
@@ -945,9 +945,9 @@ undomount(Chan *c, Path *path)
     }
     return c;
 }
-/*e: function undomount */
+/*e: function [[undomount]] */
 
-/*s: function ewalk */
+/*s: function [[ewalk]] */
 /*
  * Call dev walk but catch errors.
  */
@@ -962,13 +962,13 @@ ewalk(Chan *c, char **names, int nnames)
     poperror();
     return wq;
 }
-/*e: function ewalk */
+/*e: function [[ewalk]] */
 
-/*s: global Edoesnotexist */
+/*s: global [[Edoesnotexist]] */
 static char Edoesnotexist[] = "does not exist";
-/*e: global Edoesnotexist */
+/*e: global [[Edoesnotexist]] */
 
-/*s: function walk */
+/*s: function [[walk]] */
 /*
  * Either walks all the way or not at all.  No partial results in *cp.
  * *nerror is the number of names to display in an error message.
@@ -1179,9 +1179,9 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
         *nerror = nhave;
     return 0;
 }
-/*e: function walk */
+/*e: function [[walk]] */
 
-/*s: function createdir */
+/*s: function [[createdir]] */
 /*
  * c is a mounted non-creatable directory.  find a creatable one.
  */
@@ -1209,9 +1209,9 @@ createdir(Chan *c, Mhead *m)
     panic("createdir: should not reach this point");
     return nil; // unreachable
 }
-/*e: function createdir */
+/*e: function [[createdir]] */
 
-/*s: function growparse */
+/*s: function [[growparse]] */
 static void
 growparse(Elemlist *e)
 {
@@ -1230,9 +1230,9 @@ growparse(Elemlist *e)
         e->off = inew;
     }
 }
-/*e: function growparse */
+/*e: function [[growparse]] */
 
-/*s: function parsename */
+/*s: function [[parsename]] */
 /*
  * The name is known to be valid.
  * Copy the name so slashes can be overwritten.
@@ -1273,9 +1273,9 @@ parsename(char *aname, Elemlist *e)
         name = slash;
     }
 }
-/*e: function parsename */
+/*e: function [[parsename]] */
 
-/*s: function memrchr */
+/*s: function [[memrchr]] */
 void*
 memrchr(void *va, int c, long n)
 {
@@ -1287,9 +1287,9 @@ memrchr(void *va, int c, long n)
             return e;
     return nil;
 }
-/*e: function memrchr */
+/*e: function [[memrchr]] */
 
-/*s: function namelenerror */
+/*s: function [[namelenerror]] */
 void
 namelenerror(char *aname, int len, char *err)
 {
@@ -1334,17 +1334,17 @@ namelenerror(char *aname, int len, char *err)
     snprint(up->errstr, ERRMAX, "%#q %s", up->genbuf, err);
     nexterror();
 }
-/*e: function namelenerror */
+/*e: function [[namelenerror]] */
 
-/*s: function nameerror */
+/*s: function [[nameerror]] */
 void
 nameerror(char *name, char *err)
 {
     namelenerror(name, strlen(name), err);
 }
-/*e: function nameerror */
+/*e: function [[nameerror]] */
 
-/*s: function namec */
+/*s: function [[namec]] */
 /*
  * Turn a name into a channel.
  * &name[0] is known to be a valid address.  It may be a kernel address.
@@ -1758,9 +1758,9 @@ namec(char *aname, int amode, int omode, ulong perm)
 
     return c;
 }
-/*e: function namec */
+/*e: function [[namec]] */
 
-/*s: function skipslash */
+/*s: function [[skipslash]] */
 /*
  * name is valid. skip leading / and ./ as much as possible
  */
@@ -1771,9 +1771,9 @@ skipslash(char *name)
         name++;
     return name;
 }
-/*e: function skipslash */
+/*e: function [[skipslash]] */
 
-/*s: global isfrog */
+/*s: global [[isfrog]] */
 char isfrog[256]={
     /*NUL*/ 1, 1, 1, 1, 1, 1, 1, 1,
     /*BKS*/ 1, 1, 1, 1, 1, 1, 1, 1,
@@ -1782,9 +1782,9 @@ char isfrog[256]={
     ['/']   1,
     [0x7f]  1,
 };
-/*e: global isfrog */
+/*e: global [[isfrog]] */
 
-/*s: function validname0 */
+/*s: function [[validname0]] */
 /*
  * Check that the name
  *  a) is in valid memory.
@@ -1849,25 +1849,25 @@ validname0(char *aname, bool slashok, bool dup, kern_addr pc)
     }
     return s;
 }
-/*e: function validname0 */
+/*e: function [[validname0]] */
 
-/*s: function validname */
+/*s: function [[validname]] */
 void
 validname(char *aname, bool slashok)
 {
     validname0(aname, slashok, false, getcallerpc(&aname));
 }
-/*e: function validname */
+/*e: function [[validname]] */
 
-/*s: function validnamedup */
+/*s: function [[validnamedup]] */
 char*
 validnamedup(char *aname, bool slashok)
 {
     return validname0(aname, slashok, true, getcallerpc(&aname));
 }
-/*e: function validnamedup */
+/*e: function [[validnamedup]] */
 
-/*s: function error_if_not_dir */
+/*s: function [[error_if_not_dir]] */
 void
 error_if_not_dir(Chan *c)
 {
@@ -1875,9 +1875,9 @@ error_if_not_dir(Chan *c)
         return;
     error(Enotdir);
 }
-/*e: function error_if_not_dir */
+/*e: function [[error_if_not_dir]] */
 
-/*s: destructor putmhead */
+/*s: destructor [[putmhead]] */
 /*
  * This is necessary because there are many
  * pointers to the top of a given mount list:
@@ -1905,6 +1905,6 @@ putmhead(Mhead *m)
         free(m);
     }
 }
-/*e: destructor putmhead */
+/*e: destructor [[putmhead]] */
 
 /*e: chan.c */

@@ -40,23 +40,23 @@ enum
     Ckbdint=    (1<<0),     /* kbd interrupt enable */
 };
 
-/*s: global i8042lock(x86) */
+/*s: global [[i8042lock]](x86) */
 static Lock i8042lock;
-/*e: global i8042lock(x86) */
-/*s: global nokbd(x86) */
+/*e: global [[i8042lock]](x86) */
+/*s: global [[nokbd]](x86) */
 static bool nokbd = true;           /* flag: no PS/2 keyboard */
-/*e: global nokbd(x86) */
+/*e: global [[nokbd]](x86) */
 
-/*s: global ccc(x86) */
+/*s: global [[ccc]](x86) */
 static byte ccc;
-/*e: global ccc(x86) */
+/*e: global [[ccc]](x86) */
 /*s: hook auxputc(x86) */
 static void (*auxputc)(int, int);
 /*e: hook auxputc(x86) */
 
 static char *initfailed = "i8042: kbdinit failed\n";
 
-/*s: function outready(x86) */
+/*s: function [[outready]](x86) */
 /*
  *  wait for output no longer busy
  */
@@ -72,9 +72,9 @@ outready(void)
     }
     return 0;
 }
-/*e: function outready(x86) */
+/*e: function [[outready]](x86) */
 
-/*s: function inready(x86) */
+/*s: function [[inready]](x86) */
 /*
  *  wait for input
  */
@@ -90,9 +90,9 @@ inready(void)
     }
     return 0;
 }
-/*e: function inready(x86) */
+/*e: function [[inready]](x86) */
 
-/*s: function i8042reset(x86) */
+/*s: function [[i8042reset]](x86) */
 /*
  *  ask 8042 to reset the machine
  */
@@ -126,9 +126,9 @@ i8042reset(void)
         arch_delay(100);
     }
 }
-/*e: function i8042reset(x86) */
+/*e: function [[i8042reset]](x86) */
 
-/*s: function i8042auxcmd(x86) */
+/*s: function [[i8042auxcmd]](x86) */
 int
 i8042auxcmd(int cmd)
 {
@@ -166,9 +166,9 @@ i8042auxcmd(int cmd)
     }
     return 0;
 }
-/*e: function i8042auxcmd(x86) */
+/*e: function [[i8042auxcmd]](x86) */
 
-/*s: function setleds(x86) */
+/*s: function [[setleds]](x86) */
 /*
  * set keyboard's leds for lock states (scroll, numeric, caps).
  *
@@ -206,7 +206,7 @@ arch_setleds(Kbscan *kbscan)
     outready();
     iunlock(&i8042lock);
 }
-/*e: function setleds(x86) */
+/*e: function [[setleds]](x86) */
 
 /*s: interrupt callback i8042intr(x86) */
 /*
@@ -248,7 +248,7 @@ i8042intr(Ureg*, void*)
 }
 /*e: interrupt callback i8042intr(x86) */
 
-/*s: function i8042auxenable(x86) */
+/*s: function [[i8042auxenable]](x86) */
 void
 i8042auxenable(void (*putc)(int, int))
 {
@@ -276,9 +276,9 @@ i8042auxenable(void (*putc)(int, int))
     arch_intrenable(IrqAUX, i8042intr, 0, BUSUNKNOWN, "kbdaux");
     iunlock(&i8042lock);
 }
-/*e: function i8042auxenable(x86) */
+/*e: function [[i8042auxenable]](x86) */
 
-/*s: function outbyte(x86) */
+/*s: function [[outbyte]](x86) */
 static int
 outbyte(int port, int c)
 {
@@ -289,9 +289,9 @@ outbyte(int port, int c)
     }
     return 0;
 }
-/*e: function outbyte(x86) */
+/*e: function [[outbyte]](x86) */
 
-/*s: function kbdinit(x86) */
+/*s: function [[kbdinit]](x86) */
 void
 kbdinit(void)
 {
@@ -337,9 +337,9 @@ kbdinit(void)
         if(outbyte(Data, 0xf3) < 0 || outbyte(Data, 0) < 0)
             print("i8042: kbdinit set typematic rate failed\n");
 }
-/*e: function kbdinit(x86) */
+/*e: function [[kbdinit]](x86) */
 
-/*s: function kbdenable(x86) */
+/*s: function [[kbdenable]](x86) */
 void
 kbdenable(void)
 {
@@ -351,6 +351,6 @@ kbdenable(void)
     kbscans[KbInt].num = false;
     arch_setleds(&kbscans[KbInt]);
 }
-/*e: function kbdenable(x86) */
+/*e: function [[kbdenable]](x86) */
 
 /*e: devices/keyboard/386/kbd.c */

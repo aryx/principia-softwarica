@@ -48,16 +48,16 @@ typedef struct Fmt  Fmt;
 /*
  * functions (mostly) linked in from libc.
  */
-/*s: function nelem */
+/*s: function [[nelem]] */
 #define nelem(x)  (sizeof(x)/sizeof((x)[0]))
-/*e: function nelem */
-/*s: function offsetof */
+/*e: function [[nelem]] */
+/*s: function [[offsetof]] */
 //@Scheck: not dead, actually exanded in macros.h
 #define offsetof(s, m)  (ulong)(&(((s*)0)->m))
-/*e: function offsetof */
-/*s: function assert */
+/*e: function [[offsetof]] */
+/*s: function [[assert]] */
 #define assert(x) do { if(x) {}else _assert("x");}while(0)
-/*e: function assert */
+/*e: function [[assert]] */
 
 /*
  * mem routines
@@ -91,13 +91,13 @@ extern  int fullrune(char*, int);
 extern  int cistrcmp(char*, char*);
 extern  int cistrncmp(char*, char*, int);
 
-/*s: enum utf */
+/*s: enum [[utf]] */
 enum
 {
   UTFmax    = 4,    /* maximum bytes per rune */
   Runeself  = 0x80,   /* rune and UTF sequences are the same (<) */
 };
-/*e: enum utf */
+/*e: enum [[utf]] */
 
 /*
  * rune routines
@@ -115,7 +115,7 @@ extern  int abs(int);
  * print routines
  */
 typedef int (*Fmts)(Fmt*);
-/*s: struct Fmt */
+/*s: struct [[Fmt]] */
 struct Fmt{
   byte runes;      /* output buffer is runes or chars? */
   void  *start;     /* of buffer */
@@ -130,7 +130,7 @@ struct Fmt{
   int prec;
   ulong flags;
 };
-/*e: struct Fmt */
+/*e: struct [[Fmt]] */
 
 /*s: lib.h print decl */
 // This used to be regular function, but to avoid backward deps in the kernel
@@ -214,7 +214,7 @@ extern  char  end[];
 /*
  * Syscall data structures
  */
-/*s: enum mount */
+/*s: enum [[mount]] */
 enum MountFlags {
     MREPL = 0x0000,  /* mount replaces object */
   
@@ -229,9 +229,9 @@ enum MountFlags {
     MORDERMASK =  0x0003,  /* mask for bits defining order of mounting */
     MMASK = 0x0017,  /* all bits on */
 };
-/*e: enum mount */
+/*e: enum [[mount]] */
 
-/*s: enum open */
+/*s: enum [[open]] */
 enum OpenFlags {
     OREAD = 0, /* open for read */
     OWRITE = 1, /* write */
@@ -248,31 +248,31 @@ enum OpenFlags {
     OEXCL = 0x1000,  /* or'ed in, exclusive create */
     /*e: [[OpenFlags]] cases */
 };
-/*e: enum open */
+/*e: enum [[open]] */
 
-/*s: enum note */
+/*s: enum [[note]] */
 enum NoteHook {
   NCONT = 0, /* continue after note */
   NDFLT = 1, /* terminate after note */
   NSAVE = 2, /* clear note but hold state */
   NRSTR = 3, /* restore saved state */
 };
-/*e: enum note */
+/*e: enum [[note]] */
 
-/*s: enum miscsize */
+/*s: enum [[miscsize]] */
 enum Miscsize {  
-    /*s: constant ERRMAX */
+    /*s: constant [[ERRMAX]] */
     ERRMAX = 128, /* max length of error string */
-    /*e: constant ERRMAX */
-    /*s: constant KNAMELEN */
+    /*e: constant [[ERRMAX]] */
+    /*s: constant [[KNAMELEN]] */
     KNAMELEN = 28,  /* max length of name held in kernel */
-    /*e: constant KNAMELEN */
+    /*e: constant [[KNAMELEN]] */
 };
-/*e: enum miscsize */
+/*e: enum [[miscsize]] */
 
 
 
-/*s: enum qidtype */
+/*s: enum [[qidtype]] */
 /* bits in Qid.type */
 enum Qidtype {
   QTFILE = 0x00,    /* plain file */
@@ -285,9 +285,9 @@ enum Qidtype {
   QTEXCL = 0x20,    /* type bit for exclusive use files */
   /*e: [[Qidtype]] cases */
 };
-/*e: enum qidtype */
+/*e: enum [[qidtype]] */
 
-/*s: enum dirmode */
+/*s: enum [[dirmode]] */
 /* bits in DirEntry.mode */
 enum Dirmode {
     DMDIR = 0x80000000,  /* mode bit for directories */
@@ -301,9 +301,9 @@ enum Dirmode {
     DMEXCL = 0x20000000,  /* mode bit for exclusive use files */
     /*e: [[Dirmode]] cases */
 };
-/*e: enum dirmode */
+/*e: enum [[dirmode]] */
 
-/*s: struct Qid */
+/*s: struct [[Qid]] */
 struct Qid
 {
   // note that this is not a string, but an int! it's kind of an inode
@@ -313,9 +313,9 @@ struct Qid
   // enum<Qidtype>
   byte type;
 };
-/*e: struct Qid */
+/*e: struct [[Qid]] */
 
-/*s: struct DirEntry */
+/*s: struct [[DirEntry]] */
 struct DirEntry {
   /* system-modified data */
   ushort  type; /* server type */
@@ -336,10 +336,10 @@ struct DirEntry {
   char  *gid; /* group name */
   char  *muid;  /* last modifier name */
 };
-/*e: struct DirEntry */
+/*e: struct [[DirEntry]] */
 
 
-/*s: struct Waitmsg */
+/*s: struct [[Waitmsg]] */
 struct Waitmsg
 {
   int pid;    /* of loved one */ // pid of the child
@@ -348,6 +348,6 @@ struct Waitmsg
   /*e: [[Waitmsg]] time field */
   char  msg[ERRMAX];  /* actually variable-size in user mode */
 };
-/*e: struct Waitmsg */
+/*e: struct [[Waitmsg]] */
 
 /*e: lib.h */

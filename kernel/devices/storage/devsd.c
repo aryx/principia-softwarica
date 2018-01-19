@@ -1299,7 +1299,7 @@ sdconfig(int on, char* spec, DevConf* cf)
     return unconfigure(spec);
 }
 
-/*s: global sddevtab */
+/*s: global [[sddevtab]] */
 Dev sddevtab = {
     .dc       =    'S',
     .name     =    "sd",
@@ -1323,7 +1323,7 @@ Dev sddevtab = {
 //    .power    = devpower,
 //    .config   = sdconfig,   /* probe; only called for pcmcia-like devices */
 };
-/*e: global sddevtab */
+/*e: global [[sddevtab]] */
 
 /*
  * This is wrong for so many reasons.  This code must go.

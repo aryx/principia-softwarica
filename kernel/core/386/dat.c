@@ -8,8 +8,8 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: global cpu(x86) */
+/*s: global [[cpu]](x86) */
 // ref<Cpu>, assigned to CPUADDR in _clearbss
 Cpu *cpu;
-/*e: global cpu(x86) */
+/*e: global [[cpu]](x86) */
 /*e: core/386/dat.c */

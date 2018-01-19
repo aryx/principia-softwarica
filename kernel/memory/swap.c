@@ -17,21 +17,21 @@ static void pagepte(int, Page**);
 static void pager(void*);
 /*e: swap.c forward decl */
 
-/*s: global iolist */
+/*s: global [[iolist]] */
 // array<option<ref<Page>>>, xalloc'ed in swapinit(), size = Conf.nswppo
 static  Page    **iolist;
-/*e: global iolist */
-/*s: global ioptr */
+/*e: global [[iolist]] */
+/*s: global [[ioptr]] */
 // index in iolist
 static  int ioptr;
-/*e: global ioptr */
+/*e: global [[ioptr]] */
 
-/*s: global genxxx */
+/*s: global [[genxxx]] */
 static  ulong   genage, genclock, gencount;
 static  uvlong  gensum;
-/*e: global genxxx */
+/*e: global [[genxxx]] */
 
-/*s: function gentick */
+/*s: function [[gentick]] */
 static void
 gentick(void)
 {
@@ -42,9 +42,9 @@ gentick(void)
         genage = 0;
     gensum = gencount = 0;
 }
-/*e: function gentick */
+/*e: function [[gentick]] */
 
-/*s: function swapinit */
+/*s: function [[swapinit]] */
 void
 swapinit(void)
 {
@@ -63,9 +63,9 @@ swapinit(void)
     /*e: [[swapinit()]] sanity check xalloc return values */
     swapimage.notext = true;
 }
-/*e: function swapinit */
+/*e: function [[swapinit]] */
 
-/*s: function newswap */
+/*s: function [[newswap]] */
 ulong
 newswap(void)
 {
@@ -88,9 +88,9 @@ newswap(void)
     unlock(&swapalloc);
     return (look-swapalloc.swmap) * BY2PG; // offset in swapfile
 }
-/*e: function newswap */
+/*e: function [[newswap]] */
 
-/*s: function putswap */
+/*s: function [[putswap]] */
 void
 putswap(Page *p)
 {
@@ -107,9 +107,9 @@ putswap(Page *p)
         panic("putswap %#p == %ud", p, *idx);
     unlock(&swapalloc);
 }
-/*e: function putswap */
+/*e: function [[putswap]] */
 
-/*s: function dupswap */
+/*s: function [[dupswap]] */
 void
 dupswap(Page *p)
 {
@@ -118,17 +118,17 @@ dupswap(Page *p)
         panic("dupswap");
     unlock(&swapalloc);
 }
-/*e: function dupswap */
+/*e: function [[dupswap]] */
 
-/*s: function swapcount */
+/*s: function [[swapcount]] */
 int
 swapcount(ulong daddr)
 {
     return swapalloc.swmap[daddr/BY2PG];
 }
-/*e: function swapcount */
+/*e: function [[swapcount]] */
 
-/*s: function kickpager */
+/*s: function [[kickpager]] */
 void
 kickpager(void)
 {
@@ -141,9 +141,9 @@ kickpager(void)
         started = true;
     }
 }
-/*e: function kickpager */
+/*e: function [[kickpager]] */
 
-/*s: function pager */
+/*s: function [[pager]] */
 static void
 pager(void *junk)
 {
@@ -216,9 +216,9 @@ loop:
     }
     goto loop;
 }
-/*e: function pager */
+/*e: function [[pager]] */
 
-/*s: function pageout */
+/*s: function [[pageout]] */
 static void
 pageout(Proc *p, Segment *s)
 {
@@ -286,9 +286,9 @@ out:
     qunlock(&s->lk);
     putseg(s);
 }
-/*e: function pageout */
+/*e: function [[pageout]] */
 
-/*s: function canflush */
+/*s: function [[canflush]] */
 static bool
 canflush(Proc *p, Segment *s)
 {
@@ -320,9 +320,9 @@ canflush(Proc *p, Segment *s)
     }
     return true;
 }
-/*e: function canflush */
+/*e: function [[canflush]] */
 
-/*s: function pagepte */
+/*s: function [[pagepte]] */
 static void
 pagepte(int type, Page **pte)
 {
@@ -375,9 +375,9 @@ pagepte(int type, Page **pte)
         break;
     }
 }
-/*e: function pagepte */
+/*e: function [[pagepte]] */
 
-/*s: function pagersummary */
+/*s: function [[pagersummary]] */
 void
 pagersummary(void)
 {
@@ -386,9 +386,9 @@ pagersummary(void)
         palloc.user, conf.nswap-swapalloc.free, conf.nswap,
         ioptr);
 }
-/*e: function pagersummary */
+/*e: function [[pagersummary]] */
 
-/*s: function pageiocomp */
+/*s: function [[pageiocomp]] */
 static int
 pageiocomp(void *a, void *b)
 {
@@ -401,9 +401,9 @@ pageiocomp(void *a, void *b)
     else
         return -1;
 }
-/*e: function pageiocomp */
+/*e: function [[pageiocomp]] */
 
-/*s: function executeio */
+/*s: function [[executeio]] */
 static void
 executeio(void)
 {
@@ -440,17 +440,17 @@ executeio(void)
     }
     ioptr = 0;
 }
-/*e: function executeio */
+/*e: function [[executeio]] */
 
-/*s: function needpages */
+/*s: function [[needpages]] */
 static bool
 needpages(void*)
 {
     return palloc.freecount < swapalloc.headroom;
 }
-/*e: function needpages */
+/*e: function [[needpages]] */
 
-/*s: function setswapchan */
+/*s: function [[setswapchan]] */
 void
 setswapchan(Chan *c)
 {
@@ -486,6 +486,6 @@ setswapchan(Chan *c)
 
     swapimage.c = c;
 }
-/*e: function setswapchan */
+/*e: function [[setswapchan]] */
 
 /*e: swap.c */

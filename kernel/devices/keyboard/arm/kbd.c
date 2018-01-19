@@ -12,8 +12,8 @@
 // with help from /dev/kbin (which then calls functions from portkbd
 // which calls arch_setleds below).
 
-/*s: function arch_setleds(arm) */
+/*s: function [[arch_setleds]](arm) */
 // empty callback for portkbd.c
 void arch_setleds(Kbscan *kbscan) { USED(kbscan); }
-/*e: function arch_setleds(arm) */
+/*e: function [[arch_setleds]](arm) */
 /*e: devices/keyboard/arm/kbd.c */

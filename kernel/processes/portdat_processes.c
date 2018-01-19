@@ -15,7 +15,7 @@ void (*proctrace)(Proc*, /*enum<tevent>*/int, vlong) = 0; // was in devproc.c
 void (*kproftimer)(ulong);
 /*e: hook kproftimer */
 
-/*s: global active */
+/*s: global [[active]] */
 struct Active active;
-/*e: global active */
+/*e: global [[active]] */
 /*e: portdat_processes.c */

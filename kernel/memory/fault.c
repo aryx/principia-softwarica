@@ -12,7 +12,7 @@
 void        pio(Segment *, ulong, ulong, Page **);
 /*e: fault.c forward decl */
 
-/*s: function fault */
+/*s: function [[fault]] */
 int
 fault(virt_addr addr, bool read)
 {
@@ -50,9 +50,9 @@ fault(virt_addr addr, bool read)
     up->psstate = sps;
     return 0;
 }
-/*e: function fault */
+/*e: function [[fault]] */
 
-/*s: function faulterror */
+/*s: function [[faulterror]] */
 static void
 faulterror(char *s, Chan *c, bool freemem)
 {
@@ -68,13 +68,13 @@ faulterror(char *s, Chan *c, bool freemem)
     }
     pexit(s, freemem);
 }
-/*e: function faulterror */
+/*e: function [[faulterror]] */
 
 // for debugging SG_PHYSICAL
 void    (*checkaddr)(ulong, Segment *, Page *);
 ulong   addr2check;
 
-/*s: function fixfault */
+/*s: function [[fixfault]] */
 errorneg1
 fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 {
@@ -103,10 +103,10 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 
     switch(type) {
     case SG_TEXT:           /* Demand load */
-        /*s: [[fixfault()]] page in for SG_TEXT pte if pagedout */
+        /*s: [[fixfault()]] page in for [[SG_TEXT]] pte if pagedout */
         if(pagedout(*pte))
             pio(s, addr, soff, pte);
-        /*e: [[fixfault()]] page in for SG_TEXT pte if pagedout */
+        /*e: [[fixfault()]] page in for [[SG_TEXT]] pte if pagedout */
 
         mmupte = PPN((*pte)->pa) | PTERONLY|PTEVALID;
         (*pte)->modref = PG_REF;
@@ -125,10 +125,10 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 
     case SG_DATA:
     common:         /* Demand load/pagein/copy on write */
-        /*s: [[fixfault()]] page in for SG_DATA or swapin (SG_BSS, etc) pte if pagedout */
+        /*s: [[fixfault()]] page in for [[SG_DATA]] or swapin ([[SG_BSS]], etc) pte if pagedout */
         if(pagedout(*pte))
             pio(s, addr, soff, pte);
-        /*e: [[fixfault()]] page in for SG_DATA or swapin (SG_BSS, etc) pte if pagedout */
+        /*e: [[fixfault()]] page in for [[SG_DATA]] or swapin ([[SG_BSS]], etc) pte if pagedout */
 
         /*s: [[fixfault()]] if read and copy on write, adjust mmupte and break */
         /*
@@ -175,7 +175,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         (*pte)->modref = PG_MOD|PG_REF;
         break;
 
-    /*s: [[fixfault()]] SG_PHYSICAL case */
+    /*s: [[fixfault()]] [[SG_PHYSICAL]] case */
     case SG_PHYSICAL:
         if(*pte == nil) {
             new = smalloc(sizeof(Page));
@@ -190,7 +190,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         mmupte = PPN((*pte)->pa) |PTEWRITE|PTEUNCACHED|PTEVALID;
         (*pte)->modref = PG_MOD|PG_REF;
         break;
-    /*e: [[fixfault()]] SG_PHYSICAL case */
+    /*e: [[fixfault()]] [[SG_PHYSICAL]] case */
 
     default:
         panic("fault");
@@ -203,9 +203,9 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 
     return OK_0;
 }
-/*e: function fixfault */
+/*e: function [[fixfault]] */
 
-/*s: function pio */
+/*s: function [[pio]] */
 void
 pio(Segment *s, virt_addr addr, ulong soff, PageOrSwap **p)
 {
@@ -310,9 +310,9 @@ if(s->flushme)
     memset((*p)->cachectl, PG_TXTFLUSH, sizeof((*p)->cachectl));
 /*e: [[pio()]] set cachectl if flushme segment */
 }
-/*e: function pio */
+/*e: function [[pio]] */
 
-/*s: function okaddr */
+/*s: function [[okaddr]] */
 /*
  * Called only in a system call
  */
@@ -338,9 +338,9 @@ okaddr(user_addr addr, ulong len, bool write)
     pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, arch_userpc());
     return false;
 }
-/*e: function okaddr */
+/*e: function [[okaddr]] */
 
-/*s: function validaddr */
+/*s: function [[validaddr]] */
 void
 validaddr(user_addr addr, ulong len, bool write)
 {
@@ -349,9 +349,9 @@ validaddr(user_addr addr, ulong len, bool write)
         error(Ebadarg);
     }
 }
-/*e: function validaddr */
+/*e: function [[validaddr]] */
 
-/*s: function vmemchr */
+/*s: function [[vmemchr]] */
 /*
  * &s[0] is known to be a valid address.
  */
@@ -378,9 +378,9 @@ vmemchr(user_vp s, int c, int n)
     /* fits in one page */
     return memchr((void*)a, c, n);
 }
-/*e: function vmemchr */
+/*e: function [[vmemchr]] */
 
-/*s: function seg */
+/*s: function [[seg]] */
 Segment*
 seg(Proc *p, user_addr addr, bool dolock)
 {
@@ -405,9 +405,9 @@ seg(Proc *p, user_addr addr, bool dolock)
     }
     return nil;
 }
-/*e: function seg */
+/*e: function [[seg]] */
 
-/*s: function checkpages */
+/*s: function [[checkpages]] */
 void
 checkpages(void)
 {
@@ -442,5 +442,5 @@ checkpages(void)
     }
     print("%ld %s: checked %d page table entries\n", up->pid, up->text, checked);
 }
-/*e: function checkpages */
+/*e: function [[checkpages]] */
 /*e: fault.c */

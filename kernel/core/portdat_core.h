@@ -8,7 +8,7 @@
 // Conf
 //*****************************************************************************
 
-/*s: struct Confmem */
+/*s: struct [[Confmem]] */
 // memory "bank"
 struct Confmem
 {
@@ -20,9 +20,9 @@ struct Confmem
     kern_addr klimit; // KADDR(base+ x*BY2PG) where x <= Confmem.npage
     /*e: [[Confmem]] other fields */
 };
-/*e: struct Confmem */
+/*e: struct [[Confmem]] */
 
-/*s: struct Conf */
+/*s: struct [[Conf]] */
 struct Conf
 {
     ulong ncpu;    /* processors */
@@ -47,13 +47,13 @@ struct Conf
     ulong pipeqsize;  /* size in bytes of pipe queues */
     /*e: [[Conf]] other fields */
 };
-/*e: struct Conf */
+/*e: struct [[Conf]] */
 
 extern Conf conf;
 
-/*s: constant MAXCONF */
+/*s: constant [[MAXCONF]] */
 #define MAXCONF         64
-/*e: constant MAXCONF */
+/*e: constant [[MAXCONF]] */
 // hash<string, string>
 extern char *confname[];
 extern char *confval[];
@@ -68,7 +68,7 @@ char* getconf(char *name);
 // Cpu
 //*****************************************************************************
 
-/*s: struct Label */
+/*s: struct [[Label]] */
 // =~ a jumpbuf in C, for coroutines
 struct Label
 {
@@ -76,9 +76,9 @@ struct Label
     kern_addr sp; 
     kern_addr pc; 
 };
-/*e: struct Label */
+/*e: struct [[Label]] */
 
-/*s: struct Perf */
+/*s: struct [[Perf]] */
 /*
  *  performance timers, all units in perfticks
  */
@@ -96,9 +96,9 @@ struct Perf
     ulong last;   /* value of arch_perfticks() at last clock tick */
     ulong period;   /* arch_perfticks() per clock tick */
 };
-/*e: struct Perf */
+/*e: struct [[Perf]] */
 
-/*s: struct Cpu */
+/*s: struct [[Cpu]] */
 //coupling: do not change the order of the first 4 fields! 
 // Some assembly code assumes this order.
 struct Cpu
@@ -152,14 +152,14 @@ struct Cpu
     // must be at the end of the structure!
     int stack[1];
 };
-/*e: struct Cpu */
+/*e: struct [[Cpu]] */
 
 
 // array<ref<Cpu>>, MAXCPUS is defined in <arch>/mem.h
 extern Cpu* cpus[MAXCPUS];
-/*s: macro CPUS */
+/*s: macro [[CPUS]] */
 #define CPUS(n)  (cpus[n])
-/*e: macro CPUS */
+/*e: macro [[CPUS]] */
 
 // 'up' and 'cpu' can have different implement in different arch
 // so they are not defined here.

@@ -21,7 +21,7 @@
 #define MEMDEBUG    0
 /*e: memory.c debugging macro(x86) */
 
-/*s: enum memkind(x86) */
+/*s: enum [[memkind]](x86) */
 enum Memkind {
     MemUPA,        /* unbacked physical address */
     MemRAM,        /* physical memory */
@@ -29,7 +29,7 @@ enum Memkind {
 
     NMemType, // must be last
 };
-/*e: enum memkind(x86) */
+/*e: enum [[memkind]](x86) */
 
 enum {
     MemMin      = 4*MB,
@@ -42,14 +42,14 @@ enum {
 typedef struct Map Map;
 typedef struct RMap RMap;
 /*e: memory.c forward decl(x86) */
-/*s: struct Map(x86) */
+/*s: struct [[Map]](x86) */
 struct Map {
     phys_addr addr;
     ulong size; // in bytes
 };
-/*e: struct Map(x86) */
+/*e: struct [[Map]](x86) */
 
-/*s: struct RMap(x86) */
+/*s: struct [[RMap]](x86) */
 struct RMap {
     char*   name;
     //ref<Map> in mapram
@@ -58,7 +58,7 @@ struct RMap {
     Map*    mapend;
     Lock;
 };
-/*e: struct RMap(x86) */
+/*e: struct [[RMap]](x86) */
 
 /* 
  * Memory allocation tracking.
@@ -70,14 +70,14 @@ static RMap rmapupa = {
     &mapupa[nelem(mapupa)-1],
 };
 
-/*s: global mapram(x86) */
+/*s: global [[mapram]](x86) */
 static Map mapram[16];
 static RMap rmapram = {
     "physical memory",
     mapram,
     &mapram[nelem(mapram)-1],
 };
-/*e: global mapram(x86) */
+/*e: global [[mapram]](x86) */
 
 static Map mapumb[64];
 static RMap rmapumb = {
@@ -93,7 +93,7 @@ static RMap rmapumbrw = {
     &mapumbrw[nelem(mapumbrw)-1],
 };
 
-/*s: function mapprint(x86) */
+/*s: function [[mapprint]](x86) */
 void
 mapprint(RMap *rmap)
 {
@@ -103,9 +103,9 @@ mapprint(RMap *rmap)
     for(mp = rmap->map; mp->size; mp++)
         print("\t%8.8luX %8.8luX (%lud)\n", mp->addr, mp->addr+mp->size, mp->size);
 }
-/*e: function mapprint(x86) */
+/*e: function [[mapprint]](x86) */
 
-/*s: function memdebug(x86) */
+/*s: function [[memdebug]](x86) */
 void
 memdebug(void)
 {
@@ -122,9 +122,9 @@ memdebug(void)
     mapprint(&rmapumbrw);
     mapprint(&rmapupa);
 }
-/*e: function memdebug(x86) */
+/*e: function [[memdebug]](x86) */
 
-/*s: function mapfree(x86) */
+/*s: function [[mapfree]](x86) */
 void
 mapfree(RMap* rmap, phys_addr addr, ulong size)
 {
@@ -170,9 +170,9 @@ mapfree(RMap* rmap, phys_addr addr, ulong size)
     }
     unlock(rmap);
 }
-/*e: function mapfree(x86) */
+/*e: function [[mapfree]](x86) */
 
-/*s: function mapalloc(x86) */
+/*s: function [[mapalloc]](x86) */
 ulong
 mapalloc(RMap* rmap, ulong addr, int size, int align)
 {
@@ -228,9 +228,9 @@ mapalloc(RMap* rmap, ulong addr, int size, int align)
     unlock(rmap);
     return nilptr;
 }
-/*e: function mapalloc(x86) */
+/*e: function [[mapalloc]](x86) */
 
-/*s: function rampage(x86) */
+/*s: function [[rampage]](x86) */
 /*
  * Allocate from the ram map directly to make page tables.
  * Called by mmuwalk during e820scan.
@@ -245,9 +245,9 @@ rampage(void)
         return nil;
     return KADDR(m);
 }
-/*e: function rampage(x86) */
+/*e: function [[rampage]](x86) */
 
-/*s: function umbscan(x86) */
+/*s: function [[umbscan]](x86) */
 static void
 umbscan(void)
 {
@@ -306,9 +306,9 @@ umbscan(void)
             mapfree(&rmapumb, PADDR(p), 64*KB);
     }
 }
-/*e: function umbscan(x86) */
+/*e: function [[umbscan]](x86) */
 
-/*s: function sigscan(x86) */
+/*s: function [[sigscan]](x86) */
 static void*
 sigscan(uchar* addr, int len, char* signature)
 {
@@ -322,9 +322,9 @@ sigscan(uchar* addr, int len, char* signature)
             return p;
     return nil;
 }
-/*e: function sigscan(x86) */
+/*e: function [[sigscan]](x86) */
 
-/*s: function sigsearch(x86) */
+/*s: function [[sigsearch]](x86) */
 void*
 sigsearch(char* signature)
 {
@@ -358,9 +358,9 @@ sigsearch(char* signature)
 
     return sigscan(BIOSSEG(0xe000), 0x20000, signature);
 }
-/*e: function sigsearch(x86) */
+/*e: function [[sigsearch]](x86) */
 
-/*s: function lowraminit(x86) */
+/*s: function [[lowraminit]](x86) */
 static void
 lowraminit(void)
 {
@@ -386,9 +386,9 @@ lowraminit(void)
     mapfree(&rmapram, x, pa-x);
     memset(KADDR(x), 0, pa-x);      /* keep us honest */
 }
-/*e: function lowraminit(x86) */
+/*e: function [[lowraminit]](x86) */
 
-/*s: function ramscan(x86) */
+/*s: function [[ramscan]](x86) */
 static void
 ramscan(phys_addr maxmem)
 {
@@ -556,9 +556,9 @@ ramscan(phys_addr maxmem)
     mapfree(&rmapupa, pa, (u32int)(-pa));
     *k0 = kzero;
 }
-/*e: function ramscan(x86) */
+/*e: function [[ramscan]](x86) */
 
-/*s: function meminit(x86) */
+/*s: function [[meminit]](x86) */
 void
 meminit(void)
 {
@@ -614,9 +614,9 @@ meminit(void)
     if(MEMDEBUG)
         memdebug();
 }
-/*e: function meminit(x86) */
+/*e: function [[meminit]](x86) */
 
-/*s: function upaalloc(x86) */
+/*s: function [[upaalloc]](x86) */
 /*
  * Give out otherwise-unused physical address space
  * for use in configuring devices.  Note that unlike upamalloc
@@ -635,9 +635,9 @@ upaalloc(int size, int align)
     }
     return a;
 }
-/*e: function upaalloc(x86) */
+/*e: function [[upaalloc]](x86) */
 
-/*s: function upareserve(x86) */
+/*s: function [[upareserve]](x86) */
 void
 upareserve(ulong pa, int size)
 {
@@ -655,9 +655,9 @@ upareserve(ulong pa, int size)
             mapfree(&rmapupa, a, size);
     }
 }
-/*e: function upareserve(x86) */
+/*e: function [[upareserve]](x86) */
 
-/*s: function memorysummary(x86) */
+/*s: function [[memorysummary]](x86) */
 void
 arch_memorysummary(void)
 {
@@ -694,6 +694,6 @@ arch_memorysummary(void)
   print("\n");
   memdebug();
 }
-/*e: function memorysummary(x86) */
+/*e: function [[memorysummary]](x86) */
 
 /*e: memory/386/memory.c */

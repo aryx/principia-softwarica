@@ -7,7 +7,7 @@
 #include "arm.h"
 #include "arminstr.ha"
 
-/*s: function armstart(raspberry pi1)(arm) */
+/*s: function [[armstart]](raspberry pi1)(arm) */
 TEXT armstart(SB), 1, $-4
 
     /*
@@ -74,9 +74,9 @@ _ramZ:
     MOVW    $(CPUADDR+CPUSIZE-4), R13
 
     MOVW    $_startpg(SB), R15
-/*e: function armstart(raspberry pi1)(arm) */
+/*e: function [[armstart]](raspberry pi1)(arm) */
 
-/*s: function _startpg(raspberry pi1)(arm) */
+/*s: function [[_startpg]](raspberry pi1)(arm) */
 TEXT _startpg(SB), 1, $-4
 
     /*s: [[_startpg()]] enable cycle counter(raspberry pi1)(arm) */
@@ -94,11 +94,11 @@ TEXT _startpg(SB), 1, $-4
     // Unreached            
     B   0(PC)
     BL  _div(SB)        /* hack to load _div, etc. */
-/*e: function _startpg(raspberry pi1)(arm) */
+/*e: function [[_startpg]](raspberry pi1)(arm) */
 
 
         
-/*s: function arch_idlehands(raspberry pi1)(arm) */
+/*s: function [[arch_idlehands]](raspberry pi1)(arm) */
 TEXT arch_idlehands(SB), $-4
     MOVW    CPSR, R3
     ORR $(PsrDirq|PsrDfiq), R3, R1      /* splfhi */
@@ -112,5 +112,5 @@ TEXT arch_idlehands(SB), $-4
 
     MOVW    R3, CPSR            /* splx */
     RET
-/*e: function arch_idlehands(raspberry pi1)(arm) */
+/*e: function [[arch_idlehands]](raspberry pi1)(arm) */
 /*e: init/arm/startv6.s */

@@ -18,27 +18,27 @@
 // Globals
 //*****************************************************************************
 
-/*s: global trapinited(x86) */
+/*s: global [[trapinited]](x86) */
 static bool trapinited;
-/*e: global trapinited(x86) */
+/*e: global [[trapinited]](x86) */
 
-/*s: global vctllock(x86) */
+/*s: global [[vctllock]](x86) */
 static Lock vctllock;
-/*e: global vctllock(x86) */
-/*s: global vctl(x86) */
+/*e: global [[vctllock]](x86) */
+/*s: global [[vctl]](x86) */
 // array<list<ref_own<Vctl>>> (next = Vctl.next)
 static Vctl *vctl[256];
-/*e: global vctl(x86) */
+/*e: global [[vctl]](x86) */
 
 enum
 {
-   /*s: constant Ntimevec(x86) */
+   /*s: constant [[Ntimevec]](x86) */
    Ntimevec = 20       /* number of time buckets for each intr */
-   /*e: constant Ntimevec(x86) */
+   /*e: constant [[Ntimevec]](x86) */
 };
-/*s: global intrtimes(x86) */
+/*s: global [[intrtimes]](x86) */
 ulong intrtimes[256][Ntimevec];
-/*e: global intrtimes(x86) */
+/*e: global [[intrtimes]](x86) */
 
 //*****************************************************************************
 // Forward decl
@@ -61,7 +61,7 @@ extern void checkpages(void);
 // Interrupts enable/disable
 //*****************************************************************************
 
-/*s: function intrenable(x86) */
+/*s: function [[intrenable]](x86) */
 void
 arch_intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
 {
@@ -103,9 +103,9 @@ arch_intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
     vctl[vno] = v;
     iunlock(&vctllock);
 }
-/*e: function intrenable(x86) */
+/*e: function [[intrenable]](x86) */
 
-/*s: function intrdisable(x86) */
+/*s: function [[intrdisable]](x86) */
 int
 intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
 {
@@ -137,13 +137,13 @@ intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
     xfree(v);
     return 0;
 }
-/*e: function intrdisable(x86) */
+/*e: function [[intrdisable]](x86) */
 
 //*****************************************************************************
 // Init
 //*****************************************************************************
 
-/*s: function irqallocread(x86) */
+/*s: function [[irqallocread]](x86) */
 static long
 irqallocread(Chan*, void *vbuf, long n, vlong offset)
 {
@@ -182,9 +182,9 @@ irqallocread(Chan*, void *vbuf, long n, vlong offset)
     }
     return oldn - n;
 }
-/*e: function irqallocread(x86) */
+/*e: function [[irqallocread]](x86) */
 
-/*s: function trapenable(x86) */
+/*s: function [[trapenable]](x86) */
 void
 trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
 {
@@ -207,9 +207,9 @@ trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
     vctl[vno] = v;
     iunlock(&vctllock);
 }
-/*e: function trapenable(x86) */
+/*e: function [[trapenable]](x86) */
 
-/*s: function nmienable(x86) */
+/*s: function [[nmienable]](x86) */
 static void
 nmienable(void)
 {
@@ -225,9 +225,9 @@ nmienable(void)
     outb(0x61, 0x08|x);
     outb(0x61, x);
 }
-/*e: function nmienable(x86) */
+/*e: function [[nmienable]](x86) */
 
-/*s: function trapinit0(x86) */
+/*s: function [[trapinit0]](x86) */
 /*
  * Minimal trap setup.  Just enough so that we can panic
  * on traps (bugs) during kernel initialization.
@@ -260,9 +260,9 @@ trapinit0(void)
         vaddr += 6;
     }
 }
-/*e: function trapinit0(x86) */
+/*e: function [[trapinit0]](x86) */
 
-/*s: function trapinit(x86) */
+/*s: function [[trapinit]](x86) */
 void
 arch__trapinit(void)
 {
@@ -280,13 +280,13 @@ arch__trapinit(void)
     addarchfile("irqalloc", 0444, irqallocread, nil);
     trapinited = true;
 }
-/*e: function trapinit(x86) */
+/*e: function [[trapinit]](x86) */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
-/*s: global excname(x86) */
+/*s: global [[excname]](x86) */
 static char* excname[32] = {
     "divide error",
     "debug exception",
@@ -321,9 +321,9 @@ static char* excname[32] = {
     "30 (reserved)",
     "31 (reserved)",
 };
-/*e: global excname(x86) */
+/*e: global [[excname]](x86) */
 
-/*s: function intrtime(x86) */
+/*s: function [[intrtime]](x86) */
 /*
  *  keep histogram of interrupt service times
  */
@@ -346,9 +346,9 @@ intrtime(Cpu*, int vno)
         diff = Ntimevec-1;
     intrtimes[vno][diff]++;
 }
-/*e: function intrtime(x86) */
+/*e: function [[intrtime]](x86) */
 
-/*s: function kexit(x86) */
+/*s: function [[kexit]](x86) */
 /* go to user space */
 void
 kexit(Ureg*)
@@ -365,9 +365,9 @@ kexit(Ureg*)
     tos->pid = up->pid;
     /*e: [[arch__kexit()]] tos adjustments */
 }
-/*e: function kexit(x86) */
+/*e: function [[kexit]](x86) */
 
-/*s: function trap(x86) */
+/*s: function [[trap]](x86) */
 /*
  *  All traps come here.  It is slower to have all traps call trap()
  *  rather than directly vectoring the handler. However, this avoids a
@@ -522,9 +522,9 @@ void trap(Ureg* ureg)
         kexit(ureg);
     }
 }
-/*e: function trap(x86) */
+/*e: function [[trap]](x86) */
 
-/*s: function dumpregs2(x86) */
+/*s: function [[dumpregs2]](x86) */
 /*
  *  dump registers
  */
@@ -547,9 +547,9 @@ dumpregs2(Ureg* ureg)
         ureg->cs & 0xFFFF, ureg->ds & 0xFFFF, ureg->es & 0xFFFF,
         ureg->fs & 0xFFFF, ureg->gs & 0xFFFF);
 }
-/*e: function dumpregs2(x86) */
+/*e: function [[dumpregs2]](x86) */
 
-/*s: function dumpregs(x86) */
+/*s: function [[dumpregs]](x86) */
 void
 dumpregs(Ureg* ureg)
 {
@@ -576,9 +576,9 @@ dumpregs(Ureg* ureg)
     }
     iprint("\n  ur %#p up %#p\n", ureg, up);
 }
-/*e: function dumpregs(x86) */
+/*e: function [[dumpregs]](x86) */
 
-/*s: function callwithureg(x86) */
+/*s: function [[callwithureg]](x86) */
 /*
  * Fill in enough of Ureg to get a stack trace, and call a function.
  * Used by debugging interface rdb.
@@ -591,20 +591,20 @@ arch_callwithureg(void (*fn)(Ureg*))
     ureg.sp = (ulong)&fn;
     fn(&ureg);
 }
-/*e: function callwithureg(x86) */
+/*e: function [[callwithureg]](x86) */
 
 // was in fns.h before as a macro
 // #define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
-/*s: function userureg(x86) */
+/*s: function [[userureg]](x86) */
 //#define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
 int
 arch_userureg(Ureg* ur)
 {
   return (((ur)->cs & 0xFFFF) == UESEL);
 }
-/*e: function userureg(x86) */
+/*e: function [[userureg]](x86) */
 
-/*s: function _dumpstack(x86) */
+/*s: function [[_dumpstack]](x86) */
 static void
 _dumpstack(Ureg *ureg)
 {
@@ -668,17 +668,17 @@ _dumpstack(Ureg *ureg)
     if(i)
         iprint("\n");
 }
-/*e: function _dumpstack(x86) */
+/*e: function [[_dumpstack]](x86) */
 
-/*s: function dumpstack(x86) */
+/*s: function [[dumpstack]](x86) */
 void
 trap_dumpstack(void)
 {
     arch_callwithureg(_dumpstack);
 }
-/*e: function dumpstack(x86) */
+/*e: function [[dumpstack]](x86) */
 
-/*s: function debugbpt(x86) */
+/*s: function [[debugbpt]](x86) */
 static void
 debugbpt(Ureg* ureg, void*)
 {
@@ -691,25 +691,25 @@ debugbpt(Ureg* ureg, void*)
     snprint(buf, sizeof buf, "sys: breakpoint");
     postnote(up, 1, buf, NDebug);
 }
-/*e: function debugbpt(x86) */
+/*e: function [[debugbpt]](x86) */
 
-/*s: function doublefault(x86) */
+/*s: function [[doublefault]](x86) */
 static void
 doublefault(Ureg*, void*)
 {
     panic("double fault");
 }
-/*e: function doublefault(x86) */
+/*e: function [[doublefault]](x86) */
 
-/*s: function unexpected(x86) */
+/*s: function [[unexpected]](x86) */
 static void
 unexpected(Ureg* ureg, void*)
 {
     print("unexpected trap %lud; ignoring\n", ureg->trap);
 }
-/*e: function unexpected(x86) */
+/*e: function [[unexpected]](x86) */
 
-/*s: function fault386 */
+/*s: function [[fault386]] */
 static void
 fault386(Ureg* ureg, void*)
 {
@@ -751,7 +751,7 @@ fault386(Ureg* ureg, void*)
     }
     up->insyscall = insyscall;
 }
-/*e: function fault386 */
+/*e: function [[fault386]] */
 
 //*****************************************************************************
 // Syscall
@@ -762,7 +762,7 @@ fault386(Ureg* ureg, void*)
  */
 #include "../port/systab.h"
 
-/*s: function syscall(x86) */
+/*s: function [[syscall]](x86) */
 /*
  *  Syscall is called directly from assembler without going through trap().
  */
@@ -908,9 +908,9 @@ void syscall(Ureg* ureg)
     /*e: [[syscall()]] if delaysched(x86) */
     kexit(ureg);
 }
-/*e: function syscall(x86) */
+/*e: function [[syscall]](x86) */
 
-/*s: function notify(x86) */
+/*s: function [[notify]](x86) */
 /*
  *  Call user, if necessary, with note.
  *  Pass user the Ureg struct and the note on his stack.
@@ -995,9 +995,9 @@ notify(Ureg* ureg)
     arch_splx(s);
     return 1;
 }
-/*e: function notify(x86) */
+/*e: function [[notify]](x86) */
 
-/*s: function noted(x86) */
+/*s: function [[noted]](x86) */
 /*
  *   Return user to state before notify()
  */
@@ -1090,7 +1090,7 @@ arch__noted(Ureg* ureg, ulong arg0)
         pexit(up->lastnote.msg, up->lastnote.flag!=NDebug);
     }
 }
-/*e: function noted(x86) */
+/*e: function [[noted]](x86) */
 //old: #define evenaddr(x)       /* x86 doesn't care */
 void
 arch_validalign(uintptr addr, unsigned align)
@@ -1119,7 +1119,7 @@ arch_validalign(uintptr addr, unsigned align)
 }
 
 
-/*s: function execregs(x86) */
+/*s: function [[execregs]](x86) */
 long
 arch_execregs(ulong entry, ulong ssize, ulong nargs)
 {
@@ -1144,9 +1144,9 @@ arch_execregs(ulong entry, ulong ssize, ulong nargs)
      /*e: [[execregs()]] return adjustments(x86) */
      ;     /* address of kernel/user shared data */
 }
-/*e: function execregs(x86) */
+/*e: function [[execregs]](x86) */
 
-/*s: function userpc(x86) */
+/*s: function [[userpc]](x86) */
 /*
  *  return the userpc the last exception happened at
  */
@@ -1158,9 +1158,9 @@ arch_userpc(void)
     ureg = (Ureg*)up->dbgreg;
     return ureg->pc;
 }
-/*e: function userpc(x86) */
+/*e: function [[userpc]](x86) */
 
-/*s: function setregisters(x86) */
+/*s: function [[setregisters]](x86) */
 /* This routine must save the values of registers the user is not permitted
  * to write from devproc and then restore the saved values before returning.
  */
@@ -1185,9 +1185,9 @@ arch_setregisters(Ureg* ureg, char* pureg, char* uva, int n)
     ureg->flags = (ureg->flags & 0x00FF) | (flags & 0xFF00);
     ureg->ss = ss;
 }
-/*e: function setregisters(x86) */
+/*e: function [[setregisters]](x86) */
 
-/*s: function linkproc(x86) */
+/*s: function [[linkproc]](x86) */
 static void
 linkproc(void)
 {
@@ -1197,9 +1197,9 @@ linkproc(void)
     // to run forever??
     pexit("kproc dying", /*freemem*/false); 
 }
-/*e: function linkproc(x86) */
+/*e: function [[linkproc]](x86) */
 
-/*s: function kprocchild(x86) */
+/*s: function [[kprocchild]](x86) */
 void
 arch_kprocchild(Proc* p, void (*func)(void*), void* arg)
 {
@@ -1214,9 +1214,9 @@ arch_kprocchild(Proc* p, void (*func)(void*), void* arg)
     p->sched.pc = (ulong)linkproc;
     p->sched.sp = (ulong)p->kstack+KSTACK-BY2WD;
 }
-/*e: function kprocchild(x86) */
+/*e: function [[kprocchild]](x86) */
 
-/*s: function forkchild(x86) */
+/*s: function [[forkchild]](x86) */
 void
 arch_forkchild(Proc *p, Ureg *ureg)
 {
@@ -1239,9 +1239,9 @@ arch_forkchild(Proc *p, Ureg *ureg)
     p->psstate = nil;
     p->insyscall = false;
 }
-/*e: function forkchild(x86) */
+/*e: function [[forkchild]](x86) */
 
-/*s: function setkernur(x86) */
+/*s: function [[setkernur]](x86) */
 /* Give enough context in the ureg to produce a kernel stack for
  * a sleeping process
  */
@@ -1251,9 +1251,9 @@ arch_setkernur(Ureg* ureg, Proc* p)
     ureg->pc = p->sched.pc;
     ureg->sp = p->sched.sp+4;
 }
-/*e: function setkernur(x86) */
+/*e: function [[setkernur]](x86) */
 
-/*s: function dbgpc(x86) */
+/*s: function [[dbgpc]](x86) */
 ulong
 arch_dbgpc(Proc *p)
 {
@@ -1265,5 +1265,5 @@ arch_dbgpc(Proc *p)
 
     return ureg->pc;
 }
-/*e: function dbgpc(x86) */
+/*e: function [[dbgpc]](x86) */
 /*e: interrupts/386/trap.c */

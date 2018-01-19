@@ -8,18 +8,18 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: constant POWERREGS(arm) */
+/*s: constant [[POWERREGS]](arm) */
 #define POWERREGS   (VIRTIO+0x100000)
-/*e: constant POWERREGS(arm) */
+/*e: constant [[POWERREGS]](arm) */
 
-/*s: enum _anon_ (init/arm/watchdog.c)(arm) */
+/*s: enum [[_anon_]]([[(init/arm/watchdog.c)(arm)]]) */
 enum {
     Wdogfreq    = 65536,
     Wdogtime    = 5,    /* seconds, ≤ 15 */
 };
-/*e: enum _anon_ (init/arm/watchdog.c)(arm) */
+/*e: enum [[_anon_]]([[(init/arm/watchdog.c)(arm)]]) */
 
-/*s: enum _anon_ (init/arm/watchdog.c)2(arm) */
+/*s: enum [[_anon_]]([[(init/arm/watchdog.c)2(arm)]]) */
 /*
  * Power management / watchdog registers
  */
@@ -31,17 +31,17 @@ enum {
     Rsts        = 0x20>>2,
     Wdog        = 0x24>>2,
 };
-/*e: enum _anon_ (init/arm/watchdog.c)2(arm) */
+/*e: enum [[_anon_]]([[(init/arm/watchdog.c)2(arm)]]) */
 
-/*s: function archreset(arm) */
+/*s: function [[archreset]](arm) */
 void
 archreset(void)
 {
     fpon();
 }
-/*e: function archreset(arm) */
+/*e: function [[archreset]](arm) */
 
-/*s: function archreboot(arm) */
+/*s: function [[archreboot]](arm) */
 void
 archreboot(void)
 {
@@ -54,9 +54,9 @@ archreboot(void)
     for(;;)
         ;
 }
-/*e: function archreboot(arm) */
+/*e: function [[archreboot]](arm) */
 
-/*s: function wdogfeed(arm) */
+/*s: function [[wdogfeed]](arm) */
 static void
 wdogfeed(void)
 {
@@ -66,9 +66,9 @@ wdogfeed(void)
     r[Wdog] = Password | (Wdogtime * Wdogfreq);
     r[Rstc] = Password | (r[Rstc] & ~CfgMask) | CfgReset;
 }
-/*e: function wdogfeed(arm) */
+/*e: function [[wdogfeed]](arm) */
 
-/*s: function wdogoff(arm) */
+/*s: function [[wdogoff]](arm) */
 void
 wdogoff(void)
 {
@@ -77,13 +77,13 @@ wdogoff(void)
     r = (u32int*)POWERREGS;
     r[Rstc] = Password | (r[Rstc] & ~CfgMask);
 }
-/*e: function wdogoff(arm) */
+/*e: function [[wdogoff]](arm) */
 
-/*s: function watchdoglink(arm) */
+/*s: function [[watchdoglink]](arm) */
 void
 watchdoglink(void)
 {
     addclock0link(wdogfeed, Arch_HZ);
 }
-/*e: function watchdoglink(arm) */
+/*e: function [[watchdoglink]](arm) */
 /*e: init/arm/watchdog.c */

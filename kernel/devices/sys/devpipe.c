@@ -15,7 +15,7 @@
 typedef struct Pipe Pipe;
 /*e: devpipe.c forward decl */
 
-/*s: struct Pipe */
+/*s: struct [[Pipe]] */
 struct Pipe
 {
     int ref;
@@ -28,9 +28,9 @@ struct Pipe
     QLock;
     Pipe    *next;
 };
-/*e: struct Pipe */
+/*e: struct [[Pipe]] */
 
-/*s: struct Pipealloc */
+/*s: struct [[Pipealloc]] */
 struct Pipealloc
 {
     ulong   path;
@@ -38,11 +38,11 @@ struct Pipealloc
     // extra
     Lock;
 };
-/*e: struct Pipealloc */
+/*e: struct [[Pipealloc]] */
 
-/*s: global pipealloc */
+/*s: global [[pipealloc]] */
 struct Pipealloc pipealloc;
-/*e: global pipealloc */
+/*e: global [[pipealloc]] */
 
 /*s: devpipe.c enum Qxxx */
 enum
@@ -53,14 +53,14 @@ enum
 };
 /*e: devpipe.c enum Qxxx */
 
-/*s: global pipedir */
+/*s: global [[pipedir]] */
 Dirtab pipedir[] =
 {
     ".",        {Qdir,0,QTDIR}, 0,      DMDIR|0500,
     "data",     {Qdata0},   0,      0600,
     "data1",    {Qdata1},   0,      0600,
 };
-/*e: global pipedir */
+/*e: global [[pipedir]] */
 
 #define NPIPEDIR 3
 
@@ -117,7 +117,7 @@ pipeattach(char *spec)
 }
 /*e: method pipeattach */
 
-/*s: function pipegen */
+/*s: function [[pipegen]] */
 static int
 pipegen(Chan *c, char*, Dirtab *tab, int ntab, int i, DirEntry *dp)
 {
@@ -150,7 +150,7 @@ pipegen(Chan *c, char*, Dirtab *tab, int ntab, int i, DirEntry *dp)
     devdir(c, q, tab->name, len, eve, p->perm, dp);
     return 1;
 }
-/*e: function pipegen */
+/*e: function [[pipegen]] */
 
 /*s: method pipewalk */
 static Walkqid*
@@ -449,7 +449,7 @@ pipebwrite(Chan *c, Block *bp, ulong)
 }
 /*e: method pipebwrite */
 
-/*s: global pipedevtab */
+/*s: global [[pipedevtab]] */
 Dev pipedevtab = {
     .dc       =    '|',
     .name     =    "pipe",
@@ -470,5 +470,5 @@ Dev pipedevtab = {
     .remove   =    devremove,
     .wstat    =    pipewstat,
 };
-/*e: global pipedevtab */
+/*e: global [[pipedevtab]] */
 /*e: devpipe.c */

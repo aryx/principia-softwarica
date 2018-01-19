@@ -1,7 +1,7 @@
 /*s: l_trap.s */
 #include "mem.h"
 
-/*s: function _strayintr(x86) */
+/*s: function [[_strayintr]](x86) */
 /*
  * Interrupt/exception handling.
  * Each entry in the vector table calls either _strayintr or _strayintrx depending
@@ -15,9 +15,9 @@ TEXT _strayintr(SB), $0
         PUSHL   AX                      /* save AX */
         MOVL    4(SP), AX               /* return PC from vectortable(SB) */
         JMP     intrcommon
-/*e: function _strayintr(x86) */
+/*e: function [[_strayintr]](x86) */
 
-/*s: function _strayintrx(x86) */
+/*s: function [[_strayintrx]](x86) */
 TEXT _strayintrx(SB), $0
         XCHGL   AX, (SP)                /* swap AX with vectortable CALL PC */
 intrcommon:
@@ -37,9 +37,9 @@ intrcommon:
 
         PUSHL   SP                      /* Ureg* argument to trap */
         CALL    trap(SB)
-/*e: function _strayintrx(x86) */
+/*e: function [[_strayintrx]](x86) */
 
-/*s: function forkret(x86) */
+/*s: function [[forkret]](x86) */
 TEXT arch__forkret(SB), $0
         POPL    AX
         POPAL
@@ -49,9 +49,9 @@ TEXT arch__forkret(SB), $0
         POPL    DS
         ADDL    $8, SP                  /* pop error code and trap type */
         IRETL
-/*e: function forkret(x86) */
+/*e: function [[forkret]](x86) */
 
-/*s: global vectortable(x86) */
+/*s: global [[vectortable]](x86) */
 TEXT vectortable(SB), $0
         CALL _strayintr(SB); BYTE $0x00         /* divide error */
         CALL _strayintr(SB); BYTE $0x01         /* debug exception */
@@ -309,5 +309,5 @@ TEXT vectortable(SB), $0
         CALL _strayintr(SB); BYTE $0xFD
         CALL _strayintr(SB); BYTE $0xFE
         CALL _strayintr(SB); BYTE $0xFF
-/*e: global vectortable(x86) */
+/*e: global [[vectortable]](x86) */
 /*e: l_trap.s */

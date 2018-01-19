@@ -12,14 +12,14 @@
 #include    <tos.h>
 #include    <ureg.h>
 
-/*s: struct Mntwalk */
+/*s: struct [[Mntwalk]] */
 struct Mntwalk              /* state for /proc/#/ns */
 {
     bool cddone;
     Mhead*  mh;
     Mount*  cm;
 };
-/*e: struct Mntwalk */
+/*e: struct [[Mntwalk]] */
 
 /*s: devproc.c enum Qxxx */
 enum
@@ -85,16 +85,16 @@ enum
 /*e: devproc enum CMxxx */
 
 enum{
-/*s: constant Nevents */
+/*s: constant [[Nevents]] */
 Nevents = 0x4000,
-/*e: constant Nevents */
-/*s: constant Emask */
+/*e: constant [[Nevents]] */
+/*s: constant [[Emask]] */
 Emask = Nevents - 1,
-/*e: constant Emask */
+/*e: constant [[Emask]] */
 };
 
 #define STATSIZE    (2*KNAMELEN+12+9*12)
-/*s: global procdir */
+/*s: global [[procdir]] */
 /*
  * Status, fd, and ns are left fully readable (0444) because of their use in debugging,
  * particularly on shared servers.
@@ -121,9 +121,9 @@ Dirtab procdir[] =
     "profile",  {Qprofile}, 0,          0400,
     "syscall",  {Qsyscall}, 0,          0400,   
 };
-/*e: global procdir */
+/*e: global [[procdir]] */
 
-/*s: global proccmd */
+/*s: global [[proccmd]] */
 static
 Cmdtab proccmd[] = {
     CMclose,        "close",        2,
@@ -153,10 +153,10 @@ Cmdtab proccmd[] = {
     CMexpel,        "expel",        1,
     CMevent,        "event",        1,
 };
-/*e: global proccmd */
+/*e: global [[proccmd]] */
 
 /* Segment type from portdat.h */
-/*s: global sname */
+/*s: global [[sname]] */
 // hash<enum<Segtype, string>>
 static char *sname[]={ 
     [SG_TEXT]     = "Text", 
@@ -167,7 +167,7 @@ static char *sname[]={
     [SG_SHARED]   = "Shared", 
     [SG_PHYSICAL] = "Phys"
 };
-/*e: global sname */
+/*e: global [[sname]] */
 
 /*s: devproc QXXX macros */
 /*
@@ -222,7 +222,7 @@ profclock(Ureg *ur, Timer *)
 }
 /*e: clock callback profclock */
 
-/*s: function procgen */
+/*s: function [[procgen]] */
 static int
 procgen(Chan *c, char *name, Dirtab *tab, int, int s, DirEntry *dp)
 {
@@ -315,9 +315,9 @@ procgen(Chan *c, char *name, Dirtab *tab, int, int s, DirEntry *dp)
     devdir(c, qid, tab->name, len, p->user, perm, dp);
     return 1;
 }
-/*e: function procgen */
+/*e: function [[procgen]] */
 
-/*s: function _proctrace */
+/*s: function [[_proctrace]] */
 static void
 _proctrace(Proc* p, Tevent etype, vlong ts)
 {
@@ -336,7 +336,7 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
         te->time = ts;
     tproduced++;
 }
-/*e: function _proctrace */
+/*e: function [[_proctrace]] */
 
 /*s: method procinit */
 static void
@@ -369,7 +369,7 @@ procstat(Chan *c, uchar *db, int n)
     return devstat(c, db, n, 0, 0, procgen);
 }
 
-/*s: function nonone */
+/*s: function [[nonone]] */
 /*
  *  none can't read or write state on other
  *  processes.  This is to contain access of
@@ -387,7 +387,7 @@ nonone(Proc *p)
         return;
     error(Eperm);
 }
-/*e: function nonone */
+/*e: function [[nonone]] */
 
 /*s: method procopen */
 static Chan*
@@ -576,7 +576,7 @@ procwstat(Chan *c, byte *db, int n)
 }
 /*e: method procwstat */
 
-/*s: function procoffset */
+/*s: function [[procoffset]] */
 static long
 procoffset(long offset, char *va, int *np)
 {
@@ -591,9 +591,9 @@ procoffset(long offset, char *va, int *np)
     }
     return offset;
 }
-/*e: function procoffset */
+/*e: function [[procoffset]] */
 
-/*s: function procqidwidth */
+/*s: function [[procqidwidth]] */
 static int
 procqidwidth(Chan *c)
 {
@@ -601,9 +601,9 @@ procqidwidth(Chan *c)
 
     return snprint(buf, sizeof buf, "%lud", c->qid.vers);
 }
-/*e: function procqidwidth */
+/*e: function [[procqidwidth]] */
 
-/*s: function procfdprint */
+/*s: function [[procfdprint]] */
 int
 procfdprint(Chan *c, int fd, int w, char *s, int ns)
 {
@@ -619,9 +619,9 @@ procfdprint(Chan *c, int fd, int w, char *s, int ns)
         c->iounit, c->offset, c->path->s);
     return n;
 }
-/*e: function procfdprint */
+/*e: function [[procfdprint]] */
 
-/*s: function procfds */
+/*s: function [[procfds]] */
 static int
 procfds(Proc *p, char *va, int count, long offset)
 {
@@ -678,7 +678,7 @@ procfds(Proc *p, char *va, int count, long offset)
 
     return n;
 }
-/*e: function procfds */
+/*e: function [[procfds]] */
 
 /*s: method procclose */
 static void
@@ -701,7 +701,7 @@ procclose(Chan* c)
 }
 /*e: method procclose */
 
-/*s: function int2flag */
+/*s: function [[int2flag]] */
 static void
 int2flag(int flag, char *s)
 {
@@ -720,9 +720,9 @@ int2flag(int flag, char *s)
         *s++ = 'C';
     *s = '\0';
 }
-/*e: function int2flag */
+/*e: function [[int2flag]] */
 
-/*s: function procargs */
+/*s: function [[procargs]] */
 static int
 procargs(Proc *p, char *buf, int nbuf)
 {
@@ -748,15 +748,15 @@ procargs(Proc *p, char *buf, int nbuf)
     }
     return j;
 }
-/*e: function procargs */
+/*e: function [[procargs]] */
 
-/*s: function eventsavailable */
+/*s: function [[eventsavailable]] */
 static int
 eventsavailable(void *)
 {
     return tproduced > tconsumed;
 }
-/*e: function eventsavailable */
+/*e: function [[eventsavailable]] */
 
 /*s: method procread */
 static long
@@ -1113,7 +1113,7 @@ procread(Chan *c, void *va, long n, vlong off)
 }
 /*e: method procread */
 
-/*s: function mntscan */
+/*s: function [[mntscan]] */
 void
 mntscan(Mntwalk *mw, Proc *p)
 {
@@ -1152,7 +1152,7 @@ mntscan(Mntwalk *mw, Proc *p)
 
     runlock(&pg->ns);
 }
-/*e: function mntscan */
+/*e: function [[mntscan]] */
 
 /*s: method procwrite */
 static long
@@ -1280,7 +1280,7 @@ procwrite(Chan *c, void *va, long n, vlong off)
 }
 /*e: method procwrite */
 
-/*s: global procdevtab */
+/*s: global [[procdevtab]] */
 Dev procdevtab = {
     .dc       =    'p',
     .name     =    "proc",
@@ -1301,11 +1301,11 @@ Dev procdevtab = {
     .remove   =    devremove,
     .wstat    =    procwstat,
 };
-/*e: global procdevtab */
+/*e: global [[procdevtab]] */
 
 
 
-/*s: function proctext */
+/*s: function [[proctext]] */
 Chan*
 proctext(Chan *c, Proc *p)
 {
@@ -1352,9 +1352,9 @@ proctext(Chan *c, Proc *p)
 
     return tc;
 }
-/*e: function proctext */
+/*e: function [[proctext]] */
 
-/*s: function procstopwait */
+/*s: function [[procstopwait]] */
 // assumes p->debug is held
 void
 procstopwait(Proc *p, int ctl)
@@ -1387,9 +1387,9 @@ procstopwait(Proc *p, int ctl)
     if(p->pid != pid) // p was reallocated to a new process
         error(Eprocdied);
 }
-/*e: function procstopwait */
+/*e: function [[procstopwait]] */
 
-/*s: function procctlcloseone */
+/*s: function [[procctlcloseone]] */
 static void
 procctlcloseone(Proc *p, Fgrp *f, int fd)
 {
@@ -1405,9 +1405,9 @@ procctlcloseone(Proc *p, Fgrp *f, int fd)
     qlock(&p->debug);
     lock(f);
 }
-/*e: function procctlcloseone */
+/*e: function [[procctlcloseone]] */
 
-/*s: function procctlclosefiles */
+/*s: function [[procctlclosefiles]] */
 void
 procctlclosefiles(Proc *p, bool all, int fd)
 {
@@ -1428,9 +1428,9 @@ procctlclosefiles(Proc *p, bool all, int fd)
     unlock(f);
     closefgrp(f);
 }
-/*e: function procctlclosefiles */
+/*e: function [[procctlclosefiles]] */
 
-/*s: function parsetime */
+/*s: function [[parsetime]] */
 static char *
 parsetime(vlong *rt, char *s)
 {
@@ -1463,9 +1463,9 @@ parsetime(vlong *rt, char *s)
     *rt = ticks;
     return nil;
 }
-/*e: function parsetime */
+/*e: function [[parsetime]] */
 
-/*s: function procctlreq */
+/*s: function [[procctlreq]] */
 // assumes p->debug is held
 void
 procctlreq(Proc *p, char *va, int n)
@@ -1697,18 +1697,18 @@ procctlreq(Proc *p, char *va, int n)
     poperror();
     free(cb);
 }
-/*e: function procctlreq */
+/*e: function [[procctlreq]] */
 
-/*s: function procstopped */
+/*s: function [[procstopped]] */
 bool
 procstopped(void *a)
 {
     Proc *p = a;
     return p->state == Stopped;
 }
-/*e: function procstopped */
+/*e: function [[procstopped]] */
 
-/*s: function procctlmemio */
+/*s: function [[procctlmemio]] */
 int
 procctlmemio(Proc *p, ulong offset, int n, virt_vp va, bool read)
 {
@@ -1781,9 +1781,9 @@ procctlmemio(Proc *p, ulong offset, int n, virt_vp va, bool read)
 
     return n;
 }
-/*e: function procctlmemio */
+/*e: function [[procctlmemio]] */
 
-/*s: function text2data */
+/*s: function [[text2data]] */
 Segment*
 text2data(Proc *p, Segment *s)
 {
@@ -1814,5 +1814,5 @@ text2data(Proc *p, Segment *s)
 
     return ps;
 }
-/*e: function text2data */
+/*e: function [[text2data]] */
 /*e: devproc.c */

@@ -3,7 +3,7 @@
 #include "arm.h"
 #include "arminstr.ha"
 
-/*s: function mmuinvalidate(arm) */
+/*s: function [[mmuinvalidate]](arm) */
 /*
  * invalidate tlb
  */
@@ -12,9 +12,9 @@ TEXT mmuinvalidate(SB), 1, $-4
     MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinv
     BARRIERS
     RET
-/*e: function mmuinvalidate(arm) */
+/*e: function [[mmuinvalidate]](arm) */
 
-/*s: function mmuinvalidateaddr(arm) */
+/*s: function [[mmuinvalidateaddr]](arm) */
 /*
  * mmuinvalidateaddr(va)
  *   invalidate tlb entry for virtual page address va, ASID 0
@@ -23,5 +23,5 @@ TEXT mmuinvalidateaddr(SB), 1, $-4
     MCR CpSC, 0, R0, C(CpTLB), C(CpTLBinvu), CpTLBinvse
     BARRIERS
     RET
-/*e: function mmuinvalidateaddr(arm) */
+/*e: function [[mmuinvalidateaddr]](arm) */
 /*e: memory/arm/mmuinvalidate.s */

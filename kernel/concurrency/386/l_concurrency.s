@@ -1,7 +1,7 @@
 /*s: l_concurrency.s */
 #include "mem.h"
 
-/*s: function splhi(x86) */
+/*s: function [[splhi]](x86) */
 // bool   arch_splhi(void);
 TEXT arch_splhi(SB), $0
 shi:
@@ -15,9 +15,9 @@ shi:
 alreadyhi:
         CLI
         RET
-/*e: function splhi(x86) */
+/*e: function [[splhi]](x86) */
 
-/*s: function spllo(x86) */
+/*s: function [[spllo]](x86) */
 // bool   arch_spllo(void);
 TEXT arch_spllo(SB), $0
 slo:
@@ -30,46 +30,46 @@ slo:
 alreadylo:
         STI
         RET
-/*e: function spllo(x86) */
+/*e: function [[spllo]](x86) */
 
-/*s: function splx(x86) */
+/*s: function [[splx]](x86) */
 // void    arch_splx(bool);
 TEXT arch_splx(SB), $0
         MOVL    s+0(FP), AX
         TESTL   $0x200, AX
         JNZ     slo
         JMP     shi
-/*e: function splx(x86) */
+/*e: function [[splx]](x86) */
 
-/*s: function islo(x86) */
+/*s: function [[islo]](x86) */
 // bool arch_islo(void);
 TEXT arch_islo(SB), $0
         PUSHFL
         POPL    AX
         ANDL    $0x200, AX                      /* interrupt enable flag */
         RET
-/*e: function islo(x86) */
+/*e: function [[islo]](x86) */
 
 /*
  * Test-And-Set.
  */
-/*s: function tas(x86) */
+/*s: function [[tas]](x86) */
 TEXT arch_tas(SB), $0
         MOVL    $0xDEADDEAD, AX
         MOVL    l+0(FP), BX
         XCHGL   AX, (BX)                        /* lock->key */
         RET
-/*e: function tas(x86) */
+/*e: function [[tas]](x86) */
 
-/*s: function _xinc(x86) */
+/*s: function [[_xinc]](x86) */
 /* void arch_xinc(long*); */
 TEXT arch_xinc(SB), $0
         MOVL    l+0(FP), AX
         LOCK;   INCL 0(AX)
         RET
-/*e: function _xinc(x86) */
+/*e: function [[_xinc]](x86) */
 
-/*s: function _xdec(x86) */
+/*s: function [[_xdec]](x86) */
 /* long arch_xdec(long*); */
 TEXT arch_xdec(SB), $0
         MOVL    l+0(FP), BX
@@ -84,7 +84,7 @@ _xdecgt:
 _xdeclt:
         DECL    AX
         RET
-/*e: function _xdec(x86) */
+/*e: function [[_xdec]](x86) */
 
 // cmpswap
 
@@ -107,28 +107,28 @@ didnt:
 
 #define CPUID           BYTE $0x0F; BYTE $0xA2  /* CPUID, argument in AX */
 
-/*s: function mb386(x86) */
+/*s: function [[mb386]](x86) */
 TEXT mb386(SB), $0
         POPL    AX                              /* return PC */
         PUSHFL
         PUSHL   CS
         PUSHL   AX
         IRETL
-/*e: function mb386(x86) */
+/*e: function [[mb386]](x86) */
 
-/*s: function mb586(x86) */
+/*s: function [[mb586]](x86) */
 TEXT mb586(SB), $0
         XORL    AX, AX
         CPUID
         RET
-/*e: function mb586(x86) */
+/*e: function [[mb586]](x86) */
 
-/*s: function mfence(x86) */
+/*s: function [[mfence]](x86) */
 TEXT mfence(SB), $0
         BYTE $0x0f
         BYTE $0xae
         BYTE $0xf0
         RET
-/*e: function mfence(x86) */
+/*e: function [[mfence]](x86) */
 
 /*e: l_concurrency.s */

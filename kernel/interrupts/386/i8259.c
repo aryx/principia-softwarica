@@ -29,13 +29,13 @@ enum
     Elcr2=      0x4D1,
 };
 
-/*s: global i8259lock(x86) */
+/*s: global [[i8259lock]](x86) */
 static Lock i8259lock;
-/*e: global i8259lock(x86) */
+/*e: global [[i8259lock]](x86) */
 static int i8259mask = 0xFFFF;      /* disabled interrupts */
 int i8259elcr;              /* mask of level-triggered interrupts */
 
-/*s: function i8259init(x86) */
+/*s: function [[i8259init]](x86) */
 void
 i8259init(void)
 {
@@ -107,9 +107,9 @@ i8259init(void)
     }
     iunlock(&i8259lock);
 }
-/*e: function i8259init(x86) */
+/*e: function [[i8259init]](x86) */
 
-/*s: function i8259isr(x86) */
+/*s: function [[i8259isr]](x86) */
 int
 i8259isr(int vno)
 {
@@ -135,9 +135,9 @@ i8259isr(int vno)
 
     return isr & (1<<irq);
 }
-/*e: function i8259isr(x86) */
+/*e: function [[i8259isr]](x86) */
 
-/*s: function i8259enable(x86) */
+/*s: function [[i8259enable]](x86) */
 int
 i8259enable(Vctl* v)
 {
@@ -175,17 +175,17 @@ i8259enable(Vctl* v)
 
     return VectorPIC+irq;
 }
-/*e: function i8259enable(x86) */
+/*e: function [[i8259enable]](x86) */
 
-/*s: function i8259vecno(x86) */
+/*s: function [[i8259vecno]](x86) */
 int
 i8259vecno(int irq)
 {
     return VectorPIC+irq;
 }
-/*e: function i8259vecno(x86) */
+/*e: function [[i8259vecno]](x86) */
 
-/*s: function i8259disable(x86) */
+/*s: function [[i8259disable]](x86) */
 int
 i8259disable(int irq)
 {
@@ -212,24 +212,24 @@ i8259disable(int irq)
     iunlock(&i8259lock);
     return 0;
 }
-/*e: function i8259disable(x86) */
+/*e: function [[i8259disable]](x86) */
 
-/*s: function i8259on(x86) */
+/*s: function [[i8259on]](x86) */
 void
 i8259on(void)
 {
     outb(Int0aux, i8259mask&0xFF);
     outb(Int1aux, (i8259mask>>8)&0xFF);
 }
-/*e: function i8259on(x86) */
+/*e: function [[i8259on]](x86) */
 
-/*s: function i8259off(x86) */
+/*s: function [[i8259off]](x86) */
 void
 i8259off(void)
 {
     outb(Int0aux, 0xFF);
     outb(Int1aux, 0xFF);
 }
-/*e: function i8259off(x86) */
+/*e: function [[i8259off]](x86) */
 
 /*e: i8259.c */

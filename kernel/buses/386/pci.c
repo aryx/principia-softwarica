@@ -653,7 +653,7 @@ struct Bridge
     void    (*set)(Pcidev *, uchar, uchar);
 };
 
-/*s: global southbridges(x86) */
+/*s: global [[southbridges]](x86) */
 static Bridge southbridges[] = {
     { 0x8086, 0x122e, pIIxget, pIIxset },   /* Intel 82371FB */
     { 0x8086, 0x1234, pIIxget, pIIxset },   /* Intel 82371MX */
@@ -703,7 +703,7 @@ static Bridge southbridges[] = {
     { 0x1002, 0x4377, nil, nil },       /* ATI Radeon Xpress 200M */
     { 0x1002, 0x4372, nil, nil },       /* ATI SB400 */
 };
-/*e: global southbridges(x86) */
+/*e: global [[southbridges]](x86) */
 
 struct Slot {
     uchar   bus;        /* Pci bus number */

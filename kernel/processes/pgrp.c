@@ -11,19 +11,19 @@
 /*e: kernel basic includes */
 
 enum {
-   /*s: constant Whinesecs */
+   /*s: constant [[Whinesecs]] */
    Whinesecs = 10,     /* frequency of out-of-resources printing */
-   /*e: constant Whinesecs */
+   /*e: constant [[Whinesecs]] */
 };
 
-/*s: global pgrpid */
+/*s: global [[pgrpid]] */
 static Counter pgrpid;
-/*e: global pgrpid */
-/*s: global mountid */
+/*e: global [[pgrpid]] */
+/*s: global [[mountid]] */
 static Counter mountid;
-/*e: global mountid */
+/*e: global [[mountid]] */
 
-/*s: function pgrpnote */
+/*s: function [[pgrpnote]] */
 void
 pgrpnote(ulong noteid, char *a, long n, int flag)
 {
@@ -54,9 +54,9 @@ pgrpnote(ulong noteid, char *a, long n, int flag)
         }
     }
 }
-/*e: function pgrpnote */
+/*e: function [[pgrpnote]] */
 
-/*s: constructor newpgrp */
+/*s: constructor [[newpgrp]] */
 Pgrp*
 newpgrp(void)
 {
@@ -67,9 +67,9 @@ newpgrp(void)
     p->pgrpid = incref(&pgrpid);
     return p;
 }
-/*e: constructor newpgrp */
+/*e: constructor [[newpgrp]] */
 
-/*s: constructor newrgrp */
+/*s: constructor [[newrgrp]] */
 Rgrp*
 newrgrp(void)
 {
@@ -79,18 +79,18 @@ newrgrp(void)
     r->ref = 1;
     return r;
 }
-/*e: constructor newrgrp */
+/*e: constructor [[newrgrp]] */
 
-/*s: destructor closergrp */
+/*s: destructor [[closergrp]] */
 void
 closergrp(Rgrp *r)
 {
     if(decref(r) == 0)
         free(r);
 }
-/*e: destructor closergrp */
+/*e: destructor [[closergrp]] */
 
-/*s: destructor closepgrp */
+/*s: destructor [[closepgrp]] */
 void
 closepgrp(Pgrp *p)
 {
@@ -119,9 +119,9 @@ closepgrp(Pgrp *p)
     qunlock(&p->debug);
     free(p);
 }
-/*e: destructor closepgrp */
+/*e: destructor [[closepgrp]] */
 
-/*s: function pgrpinsert */
+/*s: function [[pgrpinsert]] */
 void
 pgrpinsert(Mount **order, Mount *m)
 {
@@ -142,9 +142,9 @@ pgrpinsert(Mount **order, Mount *m)
     }
     *order = m;
 }
-/*e: function pgrpinsert */
+/*e: function [[pgrpinsert]] */
 
-/*s: function pgrpcpy */
+/*s: function [[pgrpcpy]] */
 /*
  * pgrpcpy MUST preserve the mountid allocation order of the parent group
  */
@@ -187,9 +187,9 @@ pgrpcpy(Pgrp *to, Pgrp *from)
     unlock(&mountid);
     wunlock(&from->ns);
 }
-/*e: function pgrpcpy */
+/*e: function [[pgrpcpy]] */
 
-/*s: function dupfgrp */
+/*s: function [[dupfgrp]] */
 Fgrp*
 dupfgrp(Fgrp *f)
 {
@@ -230,9 +230,9 @@ dupfgrp(Fgrp *f)
 
     return new;
 }
-/*e: function dupfgrp */
+/*e: function [[dupfgrp]] */
 
-/*s: function closefgrp */
+/*s: function [[closefgrp]] */
 void
 closefgrp(Fgrp *f)
 {
@@ -260,9 +260,9 @@ closefgrp(Fgrp *f)
     free(f->fd);
     free(f);
 }
-/*e: function closefgrp */
+/*e: function [[closefgrp]] */
 
-/*s: function forceclosefgrp */
+/*s: function [[forceclosefgrp]] */
 /*
  * Called from sleep because up is in the middle
  * of closefgrp and just got a kill ctl message.
@@ -292,9 +292,9 @@ forceclosefgrp(void)
             ccloseq(c);
         }
 }
-/*e: function forceclosefgrp */
+/*e: function [[forceclosefgrp]] */
 
-/*s: constructor newmount */
+/*s: constructor [[newmount]] */
 Mount*
 newmount(Chan *to, int flag, char *spec)
 {
@@ -310,9 +310,9 @@ newmount(Chan *to, int flag, char *spec)
 
     return m;
 }
-/*e: constructor newmount */
+/*e: constructor [[newmount]] */
 
-/*s: destructor mountfree */
+/*s: destructor [[mountfree]] */
 void
 mountfree(Mount *m)
 {
@@ -327,9 +327,9 @@ mountfree(Mount *m)
         m = f;
     }
 }
-/*e: destructor mountfree */
+/*e: destructor [[mountfree]] */
 
-/*s: function resrcwait */
+/*s: function [[resrcwait]] */
 void
 resrcwait(char *reason)
 {
@@ -353,5 +353,5 @@ resrcwait(char *reason)
     tsleep(&up->sleepr, returnfalse, 0, 300);
     up->psstate = p;
 }
-/*e: function resrcwait */
+/*e: function [[resrcwait]] */
 /*e: pgrp.c */

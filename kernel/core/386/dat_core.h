@@ -4,7 +4,7 @@
 // Cpu extension
 //*****************************************************************************
 
-/*s: struct Tss(x86) */
+/*s: struct [[Tss]](x86) */
 struct Tss {
     ulong link;     /* link (old TSS selector) */
     ulong esp0;     /* privilege level 0 stack pointer */
@@ -33,17 +33,17 @@ struct Tss {
     ulong ldt;      /* selector for task's LDT */
     ulong iomap;      /* I/O map base address + T-bit */
 };
-/*e: struct Tss(x86) */
+/*e: struct [[Tss]](x86) */
 
-/*s: struct Segdesc(x86) */
+/*s: struct [[Segdesc]](x86) */
 struct Segdesc
 {
     ulong d0; // ??
     ulong d1; // ??
 };
-/*e: struct Segdesc(x86) */
+/*e: struct [[Segdesc]](x86) */
 
-/*s: struct ArchCpu(x86) */
+/*s: struct [[ArchCpu]](x86) */
 struct Arch_Cpu {
     /*s: [[Cpu]] [[Arch]] cpuid fields(x86) */
     char  cpuidid[16];
@@ -84,7 +84,7 @@ struct Arch_Cpu {
     uvlong tscticks;
     /*e: [[Cpu]] [[Arch]] other fields(x86) */
 };
-/*e: struct ArchCpu(x86) */
+/*e: struct [[ArchCpu]](x86) */
 
 //*****************************************************************************
 // Conf extension?

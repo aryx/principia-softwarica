@@ -96,7 +96,7 @@ mntauth(Chan *c, char *spec)
 
 }
 
-/*s: function mntattach */
+/*s: function [[mntattach]] */
 static Chan*
 mntattach(char *muxattach)
 {
@@ -158,7 +158,7 @@ mntattach(char *muxattach)
         c->flag |= CCACHE;
     return c;
 }
-/*e: function mntattach */
+/*e: function [[mntattach]] */
 
 Chan*
 mntchan(void)
@@ -175,7 +175,7 @@ mntchan(void)
     return c;
 }
 
-/*s: function mntwalk */
+/*s: function [[mntwalk]] */
 static Walkqid*
 mntwalk(Chan *c, Chan *nc, char **name, int nname)
 {
@@ -257,7 +257,7 @@ mntwalk(Chan *c, Chan *nc, char **name, int nname)
     poperror();
     return wq;
 }
-/*e: function mntwalk */
+/*e: function [[mntwalk]] */
 
 static int
 mntstat(Chan *c, uchar *dp, int n)
@@ -497,7 +497,7 @@ mntrdwr(int type, Chan *c, void *buf, long n, vlong off)
     return cnt;
 }
 
-/*s: function mountrpc */
+/*s: function [[mountrpc]] */
 void
 mountrpc(Mnt *m, Mntrpc *r)
 {
@@ -531,9 +531,9 @@ mountrpc(Mnt *m, Mntrpc *r)
         error(Emountrpc);
     }
 }
-/*e: function mountrpc */
+/*e: function [[mountrpc]] */
 
-/*s: function mountio */
+/*s: function [[mountio]] */
 void
 mountio(Mnt *m, Mntrpc *r)
 {
@@ -590,7 +590,7 @@ mountio(Mnt *m, Mntrpc *r)
     poperror();
     mntflushfree(m, r);
 }
-/*e: function mountio */
+/*e: function [[mountio]] */
 
 
 static int
@@ -920,7 +920,7 @@ rpcattn(void *v)
     return r->done || r->m->rip == 0;
 }
 
-/*s: global mntdevtab */
+/*s: global [[mntdevtab]] */
 Dev mntdevtab = {
     .dc       =    'M',
     .name     =    "mnt",
@@ -941,5 +941,5 @@ Dev mntdevtab = {
     .remove   =    mntremove,
     .wstat    =    mntwstat,
 };
-/*e: global mntdevtab */
+/*e: global [[mntdevtab]] */
 /*e: devmnt.c */

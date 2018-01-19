@@ -1,5 +1,5 @@
 /*s: trace.h */
-/*s: enum Tevent */
+/*s: enum [[Tevent]] */
 enum Tevent {
     SReady = 0,		/* runnable but not running  */
     SRun,		/* running best effort */
@@ -21,16 +21,16 @@ enum Tevent {
 
     Nevent, // must be last
 };
-/*e: enum Tevent */
+/*e: enum [[Tevent]] */
 
-/*s: struct Traceevent */
+/*s: struct [[Traceevent]] */
 struct Traceevent {
     ulong	pid;	
     // enum<tevent>
     ulong	etype;	/* Event type */
     vlong	time;	/* time stamp  */ // dimension?
 };
-/*e: struct Traceevent */
+/*e: struct [[Traceevent]] */
 
 typedef enum Tevent Tevent;
 typedef struct Traceevent	Traceevent;

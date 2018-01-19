@@ -9,17 +9,17 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: struct TaslockStats */
+/*s: struct [[TaslockStats]] */
 struct TaslockStats
 {
     ulong   locks;
     ulong   glare;
     ulong   inglare;
 };
-/*e: struct TaslockStats */
-/*s: global lockstats */
+/*e: struct [[TaslockStats]] */
+/*s: global [[lockstats]] */
 struct TaslockStats lockstats;
-/*e: global lockstats */
+/*e: global [[lockstats]] */
 /*s: globals lockcycles */
 #ifdef LOCKCYCLES
 long maxlockcycles;
@@ -34,7 +34,7 @@ static int n;
 #endif
 /*e: globals lockcycles */
 
-/*s: function inccnt */
+/*s: function [[inccnt]] */
 // See also ref.c incref() and decref(), but we can't use them here as they
 // themselves rely on lock() and unlock(). 
 static void
@@ -42,9 +42,9 @@ inccnt(Ref *r)
 {
     arch_xinc(&r->ref);
 }
-/*e: function inccnt */
+/*e: function [[inccnt]] */
 
-/*s: function deccnt */
+/*s: function [[deccnt]] */
 static int
 deccnt(Ref *r)
 {
@@ -55,9 +55,9 @@ deccnt(Ref *r)
         panic("deccnt pc=%#p", getcallerpc(&r));
     return x;
 }
-/*e: function deccnt */
+/*e: function [[deccnt]] */
 
-/*s: function lockloop */
+/*s: function [[lockloop]] */
 void
 lockloop(Lock *l, ulong pc)
 {
@@ -70,9 +70,9 @@ lockloop(Lock *l, ulong pc)
     if(p != nil)
         dumpaproc(p);
 }
-/*e: function lockloop */
+/*e: function [[lockloop]] */
 
-/*s: function lock */
+/*s: function [[lock]] */
 int
 lock(Lock *l)
 {
@@ -169,9 +169,9 @@ lock(Lock *l)
     }
     return -1; // unreachable
 }
-/*e: function lock */
+/*e: function [[lock]] */
 
-/*s: function ilock */
+/*s: function [[ilock]] */
 // To provide mutual exclusion with interrupt code and avoiding deadlock.
 // By using arch_splhi() we disable interrupts while running the critical region
 // code.
@@ -224,9 +224,9 @@ acquire:
     #endif
     /*e: lock ifdef LOCKCYCLES */
 }
-/*e: function ilock */
+/*e: function [[ilock]] */
 
-/*s: function canlock */
+/*s: function [[canlock]] */
 bool
 canlock(Lock *l)
 {
@@ -257,9 +257,9 @@ canlock(Lock *l)
     /*e: lock ifdef LOCKCYCLES */
     return true;
 }
-/*e: function canlock */
+/*e: function [[canlock]] */
 
-/*s: function unlock */
+/*s: function [[unlock]] */
 void
 unlock(Lock *l)
 {
@@ -303,9 +303,9 @@ unlock(Lock *l)
     }
     /*e: [[unlock()]] if delaysched */
 }
-/*e: function unlock */
+/*e: function [[unlock]] */
 
-/*s: function iunlock */
+/*s: function [[iunlock]] */
 void
 iunlock(Lock *l)
 {
@@ -344,6 +344,6 @@ iunlock(Lock *l)
         up->lastilock = nil;
     arch_splx(sr);
 }
-/*e: function iunlock */
+/*e: function [[iunlock]] */
 
 /*e: taslock.c */

@@ -305,7 +305,7 @@ envwrite(Chan *c, void *a, long n, vlong off)
     return n;
 }
 
-/*s: global envdevtab */
+/*s: global [[envdevtab]] */
 Dev envdevtab = {
     .dc       =    'e',
     .name     =    "env",
@@ -326,11 +326,11 @@ Dev envdevtab = {
     .remove   =    envremove,
     .wstat    =    devwstat,
 };
-/*e: global envdevtab */
+/*e: global [[envdevtab]] */
 
 
 
-/*s: function envcpy */
+/*s: function [[envcpy]] */
 void
 envcpy(Egrp *to, Egrp *from)
 {
@@ -356,9 +356,9 @@ envcpy(Egrp *to, Egrp *from)
     to->nent = from->nent;
     runlock(from);
 }
-/*e: function envcpy */
+/*e: function [[envcpy]] */
 
-/*s: function envgrp */
+/*s: function [[envgrp]] */
 static Egrp*
 envgrp(Chan *c)
 {
@@ -366,17 +366,17 @@ envgrp(Chan *c)
         return up->egrp;
     return c->aux;
 }
-/*e: function envgrp */
+/*e: function [[envgrp]] */
 
-/*s: function envwriteable */
+/*s: function [[envwriteable]] */
 static bool
 envwriteable(Chan *c)
 {
     return iseve() || c->aux == nil;
 }
-/*e: function envwriteable */
+/*e: function [[envwriteable]] */
 
-/*s: function ksetenv */
+/*s: function [[ksetenv]] */
 /*
  *  to let the kernel set environment variables
  */
@@ -391,9 +391,9 @@ ksetenv(char *ename, char *eval, bool conf)
     devtab[c->type]->write(c, eval, strlen(eval), 0);
     cclose(c);
 }
-/*e: function ksetenv */
+/*e: function [[ksetenv]] */
 
-/*s: function getconfenv */
+/*s: function [[getconfenv]] */
 /*
  * Return a copy of configuration environment as a sequence of strings.
  * The strings alternate between name and value.  A zero length name string
@@ -438,5 +438,5 @@ getconfenv(void)
     runlock(eg);
     return p;
 }
-/*e: function getconfenv */
+/*e: function [[getconfenv]] */
 /*e: devenv.c */

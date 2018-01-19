@@ -8,7 +8,7 @@
 
 // This used to be in <arch>/, but its fields are used from port/, so the 
 // code must be portable!
-/*s: struct Lock */
+/*s: struct [[Lock]] */
 // a.k.a Spinlock
 struct Lock
 {
@@ -34,13 +34,13 @@ struct Lock
     Cpu  *cpu; // not that used, only in iprintcanlock apparently
     /*e: [[Lock]] other fields */
 };
-/*e: struct Lock */
+/*e: struct [[Lock]] */
 
-/*s: struct ILock */
+/*s: struct [[ILock]] */
 typedef Lock ILock;
-/*e: struct ILock */
+/*e: struct [[ILock]] */
 
-/*s: struct QLock */
+/*s: struct [[QLock]] */
 // Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h QLock)
 // a.k.a Mutex
 struct KQLock
@@ -58,9 +58,9 @@ struct KQLock
   
     Lock  use;    /* to access Qlock structure */
 };
-/*e: struct QLock */
+/*e: struct [[QLock]] */
 
-/*s: struct RWlock */
+/*s: struct [[RWlock]] */
 struct RWlock
 {
     int readers;  /* number of readers */
@@ -79,13 +79,13 @@ struct RWlock
     // Extra  
     Lock  use;
 };
-/*e: struct RWlock */
+/*e: struct [[RWlock]] */
 
 //*****************************************************************************
 // Atomicity
 //*****************************************************************************
 
-/*s: struct Ref */
+/*s: struct [[Ref]] */
 // For reference counting shared things (e.g. a Page)
 struct Ref
 {
@@ -93,18 +93,18 @@ struct Ref
 
     Lock;
 };
-/*e: struct Ref */
+/*e: struct [[Ref]] */
 
-/*s: struct Counter */
+/*s: struct [[Counter]] */
 typedef struct Ref Counter;
-/*e: struct Counter */
+/*e: struct [[Counter]] */
 
 //*****************************************************************************
 // Synchronization
 //*****************************************************************************
 
 // defined in this directory but no functions are operating on it in this dir
-/*s: struct Rendez */
+/*s: struct [[Rendez]] */
 struct Rendez
 {
     // option<ref<Proc>>
@@ -112,9 +112,9 @@ struct Rendez
 
     Lock; // LOCK ORDERING: always do lock(r); lock(p->rlock);
 };
-/*e: struct Rendez */
+/*e: struct [[Rendez]] */
 
-/*s: struct Sema */
+/*s: struct [[Sema]] */
 // user level semaphores, used to implement user-level lock, 
 // see libc/port/lock.c
 struct Sema
@@ -128,7 +128,7 @@ struct Sema
 
     Rendez;
 };
-/*e: struct Sema */
+/*e: struct [[Sema]] */
 
 // see also Waitq in portdat_processes.h?
 /*e: portdat_concurrency.h */

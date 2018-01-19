@@ -13,7 +13,7 @@
 #include "arm.h"
 
 typedef struct NFrame NFrame;
-/*s: struct NFrame(arm) */
+/*s: struct [[NFrame]](arm) */
 struct NFrame {
     uintptr ip;
     Ureg*   arg0;
@@ -22,9 +22,9 @@ struct NFrame {
     Ureg*   old;
     Ureg    ureg;
 };
-/*e: struct NFrame(arm) */
+/*e: struct [[NFrame]](arm) */
 
-/*s: function arch__noted(arm) */
+/*s: function [[arch__noted]](arm) */
 /*
  *   Return user to state before notify()
  */
@@ -99,9 +99,9 @@ arch__noted(Ureg* cur, uintptr arg0)
         pexit(up->lastnote.msg, up->lastnote.flag != NDebug);
     }
 }
-/*e: function arch__noted(arm) */
+/*e: function [[arch__noted]](arm) */
 
-/*s: function arch__notify(arm) */
+/*s: function [[arch__notify]](arm) */
 /*
  *  Call user, if necessary, with note.
  *  Pass user the Ureg struct and the note on his stack.
@@ -186,9 +186,9 @@ arch__notify(Ureg* ureg)
 
     return 1;
 }
-/*e: function arch__notify(arm) */
+/*e: function [[arch__notify]](arm) */
 
-/*s: function arch__syscall(arm) */
+/*s: function [[arch__syscall]](arm) */
 void
 arch__syscall(Ureg* ureg)
 {
@@ -230,7 +230,7 @@ arch__syscall(Ureg* ureg)
     arch_spllo();
     sp = ureg->sp;
 
-    /*s: [[syscall()]] Proc_tracesyscall if, syscall entry(arm) */
+    /*s: [[syscall()]] [[Proc_tracesyscall]] if, syscall entry(arm) */
     if(up->procctl == Proc_tracesyscall){
         /*
          * Redundant validaddr.  Do we care?
@@ -252,7 +252,7 @@ arch__syscall(Ureg* ureg)
             free(up->syscalltrace);
         up->syscalltrace = nil;
     }
-    /*e: [[syscall()]] Proc_tracesyscall if, syscall entry(arm) */
+    /*e: [[syscall()]] [[Proc_tracesyscall]] if, syscall entry(arm) */
 
     up->nerrlab = 0;
     ret = -1;
@@ -306,7 +306,7 @@ arch__syscall(Ureg* ureg)
      */
     ureg->r0 = ret;
 
-    /*s: [[syscall()]] Proc_tracesyscall if, syscall exit(arm) */
+    /*s: [[syscall()]] [[Proc_tracesyscall]] if, syscall exit(arm) */
     if(up->procctl == Proc_tracesyscall){
         stopns = todget(nil);
         up->procctl = Proc_stopme;
@@ -318,7 +318,7 @@ arch__syscall(Ureg* ureg)
             free(up->syscalltrace);
         up->syscalltrace = nil;
     }
-    /*e: [[syscall()]] Proc_tracesyscall if, syscall exit(arm) */
+    /*e: [[syscall()]] [[Proc_tracesyscall]] if, syscall exit(arm) */
 
     up->insyscall = false;
     up->psstate = nil;
@@ -342,9 +342,9 @@ arch__syscall(Ureg* ureg)
     /*e: [[syscall()]] if delaysched(arm) */
     arch__kexit(ureg);
 }
-/*e: function arch__syscall(arm) */
+/*e: function [[arch__syscall]](arm) */
 
-/*s: function arch_execregs(arm) */
+/*s: function [[arch_execregs]](arm) */
 long
 arch_execregs(user_addr entry, ulong ssize, ulong nargs)
 {
@@ -364,9 +364,9 @@ arch_execregs(user_addr entry, ulong ssize, ulong nargs)
      */
     return USTKTOP-sizeof(Tos);
 }
-/*e: function arch_execregs(arm) */
+/*e: function [[arch_execregs]](arm) */
 
-/*s: function arch_forkchild(arm) */
+/*s: function [[arch_forkchild]](arm) */
 /* 
  *  Craft a return frame which will cause the child to pop out of
  *  the scheduler in user mode with the return register zero.  Set
@@ -393,5 +393,5 @@ arch_forkchild(Proc *p, Ureg *ureg)
     fpusysrforkchild(p, cureg, up);
     /*e: [[arch_forkchild()]] floating point(arm) */
 }
-/*e: function arch_forkchild(arm) */
+/*e: function [[arch_forkchild]](arm) */
 /*e: syscalls/arm/syscall.c */

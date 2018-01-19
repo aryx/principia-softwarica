@@ -11,7 +11,7 @@
 // All the ref<Kimage> here are references to KImage in the ?? of 
 // Imagealloc.free?
 
-/*s: enum modref */
+/*s: enum [[modref]] */
 enum Modref 
 {
     PG_NOTHING = 0x00, // nothing
@@ -19,18 +19,18 @@ enum Modref
     PG_MOD    = 0x01,   /* software modified bit */
     PG_REF    = 0x02,   /* software referenced bit */
 };
-/*e: enum modref */
+/*e: enum [[modref]] */
 
-/*s: enum Cachectl */
+/*s: enum [[Cachectl]] */
 enum Cachectl {
     PG_NOFLUSH	= 0,
     PG_TXTFLUSH	= 1,		/* flush dcache and invalidate icache */
 
     PG_NEWCOL	= 3,		/* page has been recolored */
 };
-/*e: enum Cachectl */
+/*e: enum [[Cachectl]] */
 
-/*s: struct Page */
+/*s: struct [[Page]] */
 // Page metadata. We will allocate as many Page as to cover all physical memory
 // available for the user. xalloc'ed in Palloc.pages
 struct Page
@@ -71,13 +71,13 @@ struct Page
     Page  *hash; /* Image hash chains */ 
     /*e: [[Page]] extra fields */
 };
-/*e: struct Page */
+/*e: struct [[Page]] */
 
-/*s: type PageOrSwap */
+/*s: type [[PageOrSwap]] */
 typedef Page PageOrSwap;
-/*e: type PageOrSwap */
+/*e: type [[PageOrSwap]] */
 
-/*s: struct Pagetable */
+/*s: struct [[Pagetable]] */
 // ptalloc'ed (malloc'ed)
 struct Pagetable
 {
@@ -90,10 +90,10 @@ struct Pagetable
     // ref<ref<Page>> in Pagetable.pages
     Page  **last;     /* Last used entry */
 };
-/*e: struct Pagetable */
+/*e: struct [[Pagetable]] */
 
 // used to be arch-specific, but many constants were used in port/ code
-/*s: type PTExxx */
+/*s: type [[PTExxx]] */
 #define PTEVALID    (1<<0)
 #define PTERONLY    0
 #define PTEWRITE    (1<<1)
@@ -106,9 +106,9 @@ struct Pagetable
 #define PTESIZE   (1<<7) // Big pages (x86 extension)
 #define PTEGLOBAL (1<<8) // do not clear from TLB kernel pages (x86 extension)
 /*e: [[PTExxx]] other cases */
-/*e: type PTExxx */
+/*e: type [[PTExxx]] */
 
-/*s: struct KImage */
+/*s: struct [[KImage]] */
 // a KImage is essentially a channel to an executable or swapfile
 struct KImage
 {
@@ -133,9 +133,9 @@ struct KImage
     Segment *s;     /* TEXT segment for image if running */
     /*e: [[Kimage]] extra fields */
 };
-/*e: struct KImage */
+/*e: struct [[KImage]] */
 
-/*s: enum segtype */
+/*s: enum [[segtype]] */
 /* Segment types */
 enum Segtype
 {
@@ -156,25 +156,25 @@ enum Segtype
     SG_CEXEC  = 0100,   /* Detach at exec */
     /*e: [[Segtype]] other flags */
 };
-/*e: enum segtype */
+/*e: enum [[segtype]] */
 
-/*s: constant PG_ONSWAP */
+/*s: constant [[PG_ONSWAP]] */
 #define PG_ONSWAP 1
-/*e: constant PG_ONSWAP */
+/*e: constant [[PG_ONSWAP]] */
 
-/*s: function onswap */
+/*s: function [[onswap]] */
 #define onswap(s) (((kern_addr)s)&PG_ONSWAP)
-/*e: function onswap */
-/*s: function pagedout */
+/*e: function [[onswap]] */
+/*s: function [[pagedout]] */
 #define pagedout(s) (((ulong)s)==0 || onswap(s))
-/*e: function pagedout */
-/*s: function swapaddr */
+/*e: function [[pagedout]] */
+/*s: function [[swapaddr]] */
 #define swapaddr(s) (((ulong)s)&~PG_ONSWAP)
-/*e: function swapaddr */
+/*e: function [[swapaddr]] */
 
 #define SEGMAXSIZE  (PAGEDIRSIZE*PAGETABMAPMEM)
 
-/*s: struct Physseg */
+/*s: struct [[Physseg]] */
 struct Physseg
 {
     ulong attr;     /* Segment attributes */
@@ -182,16 +182,16 @@ struct Physseg
     phys_addr pa;     /* Physical address */
     ulong size;     /* Maximum segment size in pages */
 };
-/*e: struct Physseg */
+/*e: struct [[Physseg]] */
 
 enum
 {
-    /*s: constant LRESPROF */
+    /*s: constant [[LRESPROF]] */
     LRESPROF  = 3,
-    /*e: constant LRESPROF */
+    /*e: constant [[LRESPROF]] */
 };
 
-/*s: struct Segment */
+/*s: struct [[Segment]] */
 // smalloc'ed by newseg()
 struct Segment
 {
@@ -232,7 +232,7 @@ struct Segment
     Ref; // LOCK ORDERING: always do lock(img); lock(s) ??
     QLock lk; // FOR WHAT???
 };
-/*e: struct Segment */
+/*e: struct [[Segment]] */
 
 //*****************************************************************************
 // Internal to memory/
@@ -249,7 +249,7 @@ enum
 };
 /*e: constants holes */
 
-/*s: struct Hole */
+/*s: struct [[Hole]] */
 struct Hole
 {
     // between addr and top the memory is free, this is the "hole"
@@ -262,9 +262,9 @@ struct Hole
     Hole* next; // list<ref<Hole>> of Xalloc.sorted_holes or Xalloc.unused_slots
     /*e: [[Hole]] extra fields */
 };
-/*e: struct Hole */
+/*e: struct [[Hole]] */
 
-/*s: struct Xhdr */
+/*s: struct [[Xhdr]] */
 // What is the connection with Hole? A Hole that get used will gets
 // its top and size decremented, and this newly allocated part will describe
 // a portion of used memory, and at this memory there will be a header
@@ -277,9 +277,9 @@ struct Xhdr
   
     char  data[]; // memory pointer returned by xalloc
 };
-/*e: struct Xhdr */
+/*e: struct [[Xhdr]] */
 
-/*s: struct Xalloc */
+/*s: struct [[Xalloc]] */
 // Long lived data structure allocator (singleton)
 struct Xalloc
 {
@@ -295,7 +295,7 @@ struct Xalloc
     // extra
     Lock;
 };
-/*e: struct Xalloc */
+/*e: struct [[Xalloc]] */
 //IMPORTANT: static Xalloc xlists; // private to xalloc.c
 
 
@@ -338,25 +338,25 @@ struct Xalloc
 // memory pools for ??
 //IMPORTANT: extern Pool*  imagmem;
 
-/*s: struct Pallocmem */
+/*s: struct [[Pallocmem]] */
 // memory banks for user memory, similar to Confmem (and RMap)
 struct Pallocmem
 {
     phys_addr base;
     ulong npage;
 };
-/*e: struct Pallocmem */
+/*e: struct [[Pallocmem]] */
 
-/*s: function pghash */
+/*s: function [[pghash]] */
 enum
 {
     PGHLOG  = 9, // 2^9 = 512
     PGHSIZE = 1<<PGHLOG,  /* Page hash for image lookup */
 };
 #define pghash(daddr) palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
-/*e: function pghash */
+/*e: function [[pghash]] */
 
-/*s: struct Palloc */
+/*s: struct [[Palloc]] */
 // Page Allocator (singleton)
 struct Palloc
 {
@@ -388,20 +388,20 @@ struct Palloc
     QLock pwait; /* Queue of procs waiting for memory */
     /*e: [[Palloc]] extra fields */
 };
-/*e: struct Palloc */
+/*e: struct [[Palloc]] */
 extern  Palloc  palloc;
 
-/*s: constant NFREECHAN */
+/*s: constant [[NFREECHAN]] */
 #define NFREECHAN 64
-/*e: constant NFREECHAN */
+/*e: constant [[NFREECHAN]] */
 
-/*s: function ihash */
+/*s: function [[ihash]] */
 #define IHASHSIZE 64
 // actually internal to page.c, but important so here
 #define ihash(qidpath)  imagealloc.hash[qidpath%IHASHSIZE]
-/*e: function ihash */
+/*e: function [[ihash]] */
 
-/*s: struct Imagealloc */
+/*s: struct [[Imagealloc]] */
 // Image allocator (internal to segment.c, but important so here, singleton)
 struct Imagealloc
 {
@@ -422,13 +422,13 @@ struct Imagealloc
     // extra
     Lock;
 };
-/*e: struct Imagealloc */
+/*e: struct [[Imagealloc]] */
 
 //IMPORTANT: static struct Imagealloc imagealloc; (segment.c)
 // so have conf.nimage + 1 Kimages
 extern  KImage  swapimage;
 
-/*s: struct Swapalloc */
+/*s: struct [[Swapalloc]] */
 // Swap allocator (singleton)
 struct Swapalloc
 {
@@ -453,6 +453,6 @@ struct Swapalloc
     Lock;       /* Free map lock */
     Rendez r;      /* Pager kproc idle sleep */ // needpages()
 };
-/*e: struct Swapalloc */
+/*e: struct [[Swapalloc]] */
 extern struct Swapalloc swapalloc;
 /*e: portdat_memory.h */

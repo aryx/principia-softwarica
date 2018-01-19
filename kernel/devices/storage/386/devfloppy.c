@@ -1141,7 +1141,7 @@ floppyintr(Ureg *)
     wakeup(&fl.r);
 }
 
-/*s: global floppydevtab(x86) */
+/*s: global [[floppydevtab]](x86) */
 Dev floppydevtab = {
     .dc       =    'f',
     .name     =    "floppy",
@@ -1162,5 +1162,5 @@ Dev floppydevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
-/*e: global floppydevtab(x86) */
+/*e: global [[floppydevtab]](x86) */
 /*e: devfloppy.c */

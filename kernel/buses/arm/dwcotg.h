@@ -10,13 +10,13 @@ typedef unsigned int Reg;
 typedef struct Dwcregs Dwcregs;
 typedef struct Hostchan Hostchan;
 
-/*s: enum _anon_ (buses/arm/dwcotg.h)(arm) */
+/*s: enum [[_anon_]]([[(buses/arm/dwcotg.h)(arm)]]) */
 enum {
     Maxchans    = 16,   /* actual number of channels in ghwcfg2 */
 };
-/*e: enum _anon_ (buses/arm/dwcotg.h)(arm) */
+/*e: enum [[_anon_]]([[(buses/arm/dwcotg.h)(arm)]]) */
 
-/*s: struct Dwcregs(arm) */
+/*s: struct [[Dwcregs]](arm) */
 struct Dwcregs {
     /* Core global registers 0x000-0x140 */
     Reg gotgctl;    /* OTG Control and Status */
@@ -80,7 +80,7 @@ struct Dwcregs {
     /* Power & clock gating control register 0xE00 */
     Reg pcgcctl;
 };
-/*e: struct Dwcregs(arm) */
+/*e: struct [[Dwcregs]](arm) */
 
 enum {
     /* gotgctl */

@@ -7,7 +7,7 @@
 /*
  * Program Status Registers
  */
-/*s: type PsrMode(arm) */
+/*s: type [[PsrMode]](arm) */
 // Last 4 bits of PSR
 #define PsrMusr     0x00000010  /* user mode */
 #define PsrMsvc     0x00000013  /* `protected mode for OS' */
@@ -20,25 +20,25 @@
 /*e: [[PsrMode]] other cases(arm) */
 
 #define PsrMask     0x0000001F
-/*e: type PsrMode(arm) */
+/*e: type [[PsrMode]](arm) */
 
-/*s: type PsrDisable(arm) */
+/*s: type [[PsrDisable]](arm) */
 #define PsrDirq     0x00000080      /* disable IRQ interrupts */
 /*s: [[PsrDisable]] other cases(arm) */
 #define PsrDfiq     0x00000040      /* disable FIQ interrupts */
 /*e: [[PsrDisable]] other cases(arm) */
-/*e: type PsrDisable(arm) */
+/*e: type [[PsrDisable]](arm) */
 
 /*
  * Coprocessors
  */
-/*s: type Coprocessors(arm) */
+/*s: type [[Coprocessors]](arm) */
 #define CpSC        15          /* System Control */
 /*s: [[Coprocessors]] other cases(arm) */
 #define CpFP        10          /* float FP, VFP cfg. */
 #define CpDFP       11          /* double FP */
 /*e: [[Coprocessors]] other cases(arm) */
-/*e: type Coprocessors(arm) */
+/*e: type [[Coprocessors]](arm) */
 
 /*
  * Primary (CRn) CpSC registers.
@@ -127,20 +127,20 @@
 #define CpACsmp         (1<<6)  /* SMP l1 caches coherence; needed for ldrex/strex */
 /*e: type CpCONTROL CpAuxctl(arm) */
 
-/*s: type CpTTB(arm) */
+/*s: type [[CpTTB]](arm) */
 /*
  * CpTTB op1==0, Crm==0 opcode2 values.
  */
 #define CpTTB1      1           /* cortex */
-/*e: type CpTTB(arm) */
+/*e: type [[CpTTB]](arm) */
 
-/*s: type CpFSR(arm) */
+/*s: type [[CpFSR]](arm) */
 /*
  * CpFSR opcode2 values.
  */
 #define CpFSRdata   0           /* armv6, armv7 */
 #define CpFSRinst   1           /* armv6, armv7 */
-/*e: type CpFSR(arm) */
+/*e: type [[CpFSR]](arm) */
 
 /*s: type CpCACHE secondary registers(arm) */
 /*
@@ -184,7 +184,7 @@
 #define CpCLDenacyc 1
 /*e: type CpCLD opcode2(arm) */
 
-/*s: type CpTIMER(arm) */
+/*s: type [[CpTIMER]](arm) */
 /*
  * CpTIMER op1==0 Crm and opcode2 registers (cortex-a7)
  */
@@ -192,7 +192,7 @@
 
 #define CpTIMERphysval  0
 #define CpTIMERphysctl  1
-/*e: type CpTIMER(arm) */
+/*e: type [[CpTIMER]](arm) */
 
 /*s: type CpSPM secondary registers(arm) */
 /*
@@ -228,70 +228,70 @@
 /*
  * MMU page table entries.
  */
-/*s: constant Mbz(arm) */
+/*s: constant [[Mbz]](arm) */
 /* Mbz (0x10) bit is implementation-defined and must be 0 on the cortex. */
 #define Mbz     (0<<4)
-/*e: constant Mbz(arm) */
+/*e: constant [[Mbz]](arm) */
 
-/*s: constant Fault(arm) */
+/*s: constant [[Fault]](arm) */
 #define Fault       0x00000000      /* L[12] pte: unmapped */
-/*e: constant Fault(arm) */
+/*e: constant [[Fault]](arm) */
 
-/*s: type PageDirGranularity(arm) */
+/*s: type [[PageDirGranularity]](arm) */
 #define Coarse      (Mbz|1)         /* L1 */
 #define Section     (Mbz|2)         /* L1 1MB */
-/*e: type PageDirGranularity(arm) */
-/*s: type PageTableGranularity(arm) */
+/*e: type [[PageDirGranularity]](arm) */
+/*s: type [[PageTableGranularity]](arm) */
 #define Large       0x00000001      /* L2 64KB */
 #define Small       0x00000002      /* L2 4KB */
-/*e: type PageTableGranularity(arm) */
+/*e: type [[PageTableGranularity]](arm) */
 
-/*s: type PageTableEntryAttribute1(arm) */
+/*s: type [[PageTableEntryAttribute1]](arm) */
 #define Buffered    0x00000004      /* L[12]: write-back not -thru */
 #define Cached      0x00000008      /* L[12] */
-/*e: type PageTableEntryAttribute1(arm) */
+/*e: type [[PageTableEntryAttribute1]](arm) */
 
-/*s: constant Dom0(arm) */
+/*s: constant [[Dom0]](arm) */
 #define Dom0        0
-/*e: constant Dom0(arm) */
+/*e: constant [[Dom0]](arm) */
 
-/*s: type PageTableEntryAttribute2(arm) */
+/*s: type [[PageTableEntryAttribute2]](arm) */
 #define L1wralloc   (1<<12)         /* L1 TEX */
 #define L1sharable  (1<<16)
 #define L2wralloc   (1<<6)          /* L2 TEX (small pages) */
 #define L2sharable  (1<<10)
-/*e: type PageTableEntryAttribute2(arm) */
+/*e: type [[PageTableEntryAttribute2]](arm) */
 
-/*s: type PageTableEntryAttribute3(arm) */
+/*s: type [[PageTableEntryAttribute3]](arm) */
 #define Noaccess    0       /* AP, DAC */
 #define Krw     1           /* AP */
 /* armv7 deprecates AP[2] == 1 & AP[1:0] == 2 (Uro), prefers 3 (new in v7) */
 #define Uro     2           /* AP */
 #define Urw     3           /* AP */
-/*e: type PageTableEntryAttribute3(arm) */
+/*e: type [[PageTableEntryAttribute3]](arm) */
 
-/*s: type DAC(arm) */
+/*s: type [[DAC]](arm) */
 #define Client      1           /* DAC */
 #define Manager     3           /* DAC */
-/*e: type DAC(arm) */
+/*e: type [[DAC]](arm) */
 
-/*s: macro F(arm) */
+/*s: macro [[F]](arm) */
 #define F(v, o, w)  (((v) & ((1<<(w))-1))<<(o))
-/*e: macro F(arm) */
+/*e: macro [[F]](arm) */
 
-/*s: macro AP(arm) */
+/*s: macro [[AP]](arm) */
 #define AP(n, v)    F((v), ((n)*2)+4, 2)
-/*e: macro AP(arm) */
-/*s: macro L1AP(arm) */
+/*e: macro [[AP]](arm) */
+/*s: macro [[L1AP]](arm) */
 #define L1AP(ap)    (AP(3, (ap)))
-/*e: macro L1AP(arm) */
+/*e: macro [[L1AP]](arm) */
 /* L2AP differs between armv6 and armv7 -- see l2ap in arch*.c */
-/*s: macro DAC(arm) */
+/*s: macro [[DAC]](arm) */
 #define DAC(n, v)   F((v), (n)*2, 2)
-/*e: macro DAC(arm) */
+/*e: macro [[DAC]](arm) */
 
-/*s: constant HVECTORS(arm) */
+/*s: constant [[HVECTORS]](arm) */
 #define HVECTORS    0xffff0000
-/*e: constant HVECTORS(arm) */
+/*e: constant [[HVECTORS]](arm) */
 
 /*e: arch/arm/arm.h */

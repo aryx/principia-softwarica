@@ -52,7 +52,7 @@
 
 typedef struct Hcitype Hcitype;
 
-/*s: enum _anon_ (buses/arm/devusb.c)(arm) */
+/*s: enum [[_anon_]]([[(buses/arm/devusb.c)(arm)]]) */
 enum
 {
     /* Qid numbers */
@@ -99,29 +99,29 @@ enum
     Rportreset  = 4,
 
 };
-/*e: enum _anon_ (buses/arm/devusb.c)(arm) */
+/*e: enum [[_anon_]]([[(buses/arm/devusb.c)(arm)]]) */
 
-/*s: struct Hcitype(arm) */
+/*s: struct [[Hcitype]](arm) */
 struct Hcitype
 {
     char*   type;
     int (*reset)(Hci*);
 };
-/*e: struct Hcitype(arm) */
+/*e: struct [[Hcitype]](arm) */
 
-/*s: macro QID(arm) */
+/*s: macro [[QID]](arm) */
 #define QID(q)  ((int)(q).path)
-/*e: macro QID(arm) */
+/*e: macro [[QID]](arm) */
 
-/*s: global usbctls(arm) */
+/*s: global [[usbctls]](arm) */
 static Cmdtab usbctls[] =
 {
     {CMdebug,   "debug",    2},
     {CMdump,    "dump",     1},
 };
-/*e: global usbctls(arm) */
+/*e: global [[usbctls]](arm) */
 
-/*s: global epctls(arm) */
+/*s: global [[epctls]](arm) */
 static Cmdtab epctls[] =
 {
     {CMnew,     "new",      4},
@@ -142,25 +142,25 @@ static Cmdtab epctls[] =
     {CMtmout,   "timeout",  2},
     {CMpreset,  "reset",    1},
 };
-/*e: global epctls(arm) */
+/*e: global [[epctls]](arm) */
 
-/*s: global usbdir(arm) */
+/*s: global [[usbdir]](arm) */
 static Dirtab usbdir[] =
 {
     "ctl",      {Qctl},     0,  0666,
 };
-/*e: global usbdir(arm) */
+/*e: global [[usbdir]](arm) */
 
-/*s: global usbmodename(arm) */
+/*s: global [[usbmodename]](arm) */
 char *usbmodename[] =
 {
     [OREAD] "r",
     [OWRITE]    "w",
     [ORDWR] "rw",
 };
-/*e: global usbmodename(arm) */
+/*e: global [[usbmodename]](arm) */
 
-/*s: global ttname(arm) */
+/*s: global [[ttname]](arm) */
 static char *ttname[] =
 {
     [Tnone] "none",
@@ -169,9 +169,9 @@ static char *ttname[] =
     [Tintr] "interrupt",
     [Tbulk] "bulk",
 };
-/*e: global ttname(arm) */
+/*e: global [[ttname]](arm) */
 
-/*s: global spname(arm) */
+/*s: global [[spname]](arm) */
 static char *spname[] =
 {
     [Fullspeed] "full",
@@ -179,31 +179,31 @@ static char *spname[] =
     [Highspeed] "high",
     [Nospeed]   "no",
 };
-/*e: global spname(arm) */
+/*e: global [[spname]](arm) */
 
-/*s: global debug(arm) */
+/*s: global [[debug]](arm) */
 static int  debug;
-/*e: global debug(arm) */
-/*s: global hcitypes(arm) */
+/*e: global [[debug]](arm) */
+/*s: global [[hcitypes]](arm) */
 static Hcitype  hcitypes[Nhcis];
-/*e: global hcitypes(arm) */
-/*s: global hcis(arm) */
+/*e: global [[hcitypes]](arm) */
+/*s: global [[hcis]](arm) */
 static Hci* hcis[Nhcis];
-/*e: global hcis(arm) */
-/*s: global epslck(arm) */
+/*e: global [[hcis]](arm) */
+/*s: global [[epslck]](arm) */
 static QLock    epslck;     /* add, del, lookup endpoints */
-/*e: global epslck(arm) */
-/*s: global eps(arm) */
+/*e: global [[epslck]](arm) */
+/*s: global [[eps]](arm) */
 static Ep*  eps[Neps];  /* all endpoints known */
-/*e: global eps(arm) */
-/*s: global epmax(arm) */
+/*e: global [[eps]](arm) */
+/*s: global [[epmax]](arm) */
 static int  epmax;      /* 1 + last endpoint index used  */
-/*e: global epmax(arm) */
-/*s: global usbidgen(arm) */
+/*e: global [[epmax]](arm) */
+/*s: global [[usbidgen]](arm) */
 static int  usbidgen;   /* device address generator */
-/*e: global usbidgen(arm) */
+/*e: global [[usbidgen]](arm) */
 
-/*s: function seprintdata(arm) */
+/*s: function [[seprintdata]](arm) */
 /*
  * Is there something like this in a library? should it be?
  */
@@ -222,9 +222,9 @@ seprintdata(char *s, char *se, uchar *d, int n)
         s = seprint(s, se, "...");
     return s;
 }
-/*e: function seprintdata(arm) */
+/*e: function [[seprintdata]](arm) */
 
-/*s: function name2speed(arm) */
+/*s: function [[name2speed]](arm) */
 static int
 name2speed(char *name)
 {
@@ -235,9 +235,9 @@ name2speed(char *name)
             return i;
     return Nospeed;
 }
-/*e: function name2speed(arm) */
+/*e: function [[name2speed]](arm) */
 
-/*s: function name2ttype(arm) */
+/*s: function [[name2ttype]](arm) */
 static int
 name2ttype(char *name)
 {
@@ -258,9 +258,9 @@ name2ttype(char *name)
         return Tnone;
     }
 }
-/*e: function name2ttype(arm) */
+/*e: function [[name2ttype]](arm) */
 
-/*s: function name2mode(arm) */
+/*s: function [[name2mode]](arm) */
 static int
 name2mode(char *mode)
 {
@@ -271,9 +271,9 @@ name2mode(char *mode)
             return i;
     return -1;
 }
-/*e: function name2mode(arm) */
+/*e: function [[name2mode]](arm) */
 
-/*s: function qid2epidx(arm) */
+/*s: function [[qid2epidx]](arm) */
 static int
 qid2epidx(int q)
 {
@@ -282,9 +282,9 @@ qid2epidx(int q)
         return -1;
     return q;
 }
-/*e: function qid2epidx(arm) */
+/*e: function [[qid2epidx]](arm) */
 
-/*s: function isqtype(arm) */
+/*s: function [[isqtype]](arm) */
 static int
 isqtype(int q, int type)
 {
@@ -293,9 +293,9 @@ isqtype(int q, int type)
     q -= Qep0dir;
     return (q & 3) == type;
 }
-/*e: function isqtype(arm) */
+/*e: function [[isqtype]](arm) */
 
-/*s: function addhcitype(arm) */
+/*s: function [[addhcitype]](arm) */
 void
 addhcitype(char* t, int (*r)(Hci*))
 {
@@ -307,9 +307,9 @@ addhcitype(char* t, int (*r)(Hci*))
     hcitypes[ntype].reset = r;
     ntype++;
 }
-/*e: function addhcitype(arm) */
+/*e: function [[addhcitype]](arm) */
 
-/*s: function seprintep(arm) */
+/*s: function [[seprintep]](arm) */
 static char*
 seprintep(char *s, char *se, Ep *ep, int all)
 {
@@ -367,9 +367,9 @@ seprintep(char *s, char *se, Ep *ep, int all)
     poperror();
     return s;
 }
-/*e: function seprintep(arm) */
+/*e: function [[seprintep]](arm) */
 
-/*s: function epalloc(arm) */
+/*s: function [[epalloc]](arm) */
 static Ep*
 epalloc(Hci *hp)
 {
@@ -399,9 +399,9 @@ epalloc(Hci *hp)
     qunlock(&epslck);
     return ep;
 }
-/*e: function epalloc(arm) */
+/*e: function [[epalloc]](arm) */
 
-/*s: function getep(arm) */
+/*s: function [[getep]](arm) */
 static Ep*
 getep(int i)
 {
@@ -416,9 +416,9 @@ getep(int i)
     qunlock(&epslck);
     return ep;
 }
-/*e: function getep(arm) */
+/*e: function [[getep]](arm) */
 
-/*s: function putep(arm) */
+/*s: function [[putep]](arm) */
 static void
 putep(Ep *ep)
 {
@@ -448,9 +448,9 @@ putep(Ep *ep)
         free(ep);
     }
 }
-/*e: function putep(arm) */
+/*e: function [[putep]](arm) */
 
-/*s: function dumpeps(arm) */
+/*s: function [[dumpeps]](arm) */
 static void
 dumpeps(void)
 {
@@ -484,9 +484,9 @@ dumpeps(void)
         if(hcis[i] != nil)
             hcis[i]->dump(hcis[i]);
 }
-/*e: function dumpeps(arm) */
+/*e: function [[dumpeps]](arm) */
 
-/*s: function newusbid(arm) */
+/*s: function [[newusbid]](arm) */
 static int
 newusbid(Hci *)
 {
@@ -499,9 +499,9 @@ newusbid(Hci *)
     qunlock(&epslck);
     return id;
 }
-/*e: function newusbid(arm) */
+/*e: function [[newusbid]](arm) */
 
-/*s: function newdev(arm) */
+/*s: function [[newdev]](arm) */
 /*
  * Create endpoint 0 for a new device
  */
@@ -532,9 +532,9 @@ newdev(Hci *hp, int ishub, int isroot)
     dprint("newdev %#p ep%d.%d %#p\n", d, d->nb, ep->nb, ep);
     return ep;
 }
-/*e: function newdev(arm) */
+/*e: function [[newdev]](arm) */
 
-/*s: function newdevep(arm) */
+/*s: function [[newdevep]](arm) */
 /*
  * Create a new endpoint for the device
  * accessed via the given endpoint 0.
@@ -576,9 +576,9 @@ newdevep(Ep *ep, int i, int tt, int mode)
     deprint("newdevep ep%d.%d %#p\n", d->nb, nep->nb, nep);
     return ep;
 }
-/*e: function newdevep(arm) */
+/*e: function [[newdevep]](arm) */
 
-/*s: function epdataperm(arm) */
+/*s: function [[epdataperm]](arm) */
 static int
 epdataperm(int mode)
 {
@@ -594,9 +594,9 @@ epdataperm(int mode)
         return 0660|DMEXCL;
     }
 }
-/*e: function epdataperm(arm) */
+/*e: function [[epdataperm]](arm) */
 
-/*s: function usbgen(arm) */
+/*s: function [[usbgen]](arm) */
 static int
 usbgen(Chan *c, char *, Dirtab*, int, int s, Dir *dp)
 {
@@ -720,9 +720,9 @@ Fail:
     if(0)ddprint("fail\n");
     return -1;
 }
-/*e: function usbgen(arm) */
+/*e: function [[usbgen]](arm) */
 
-/*s: function hciprobe(arm) */
+/*s: function [[hciprobe]](arm) */
 static Hci*
 hciprobe(int cardno, int ctlrno)
 {
@@ -765,9 +765,9 @@ hciprobe(int cardno, int ctlrno)
 
     return hp;
 }
-/*e: function hciprobe(arm) */
+/*e: function [[hciprobe]](arm) */
 
-/*s: function usbreset(arm) */
+/*s: function [[usbreset]](arm) */
 static void
 usbreset(void)
 {
@@ -792,9 +792,9 @@ usbreset(void)
     if(hcis[Nhcis-1] != nil)
         print("usbreset: bug: Nhcis too small\n");
 }
-/*e: function usbreset(arm) */
+/*e: function [[usbreset]](arm) */
 
-/*s: function usbinit(arm) */
+/*s: function [[usbinit]](arm) */
 static void
 usbinit(void)
 {
@@ -817,33 +817,33 @@ usbinit(void)
         }
     }
 }
-/*e: function usbinit(arm) */
+/*e: function [[usbinit]](arm) */
 
-/*s: function usbattach(arm) */
+/*s: function [[usbattach]](arm) */
 static Chan*
 usbattach(char *spec)
 {
     return devattach(L'u', spec);
 }
-/*e: function usbattach(arm) */
+/*e: function [[usbattach]](arm) */
 
-/*s: function usbwalk(arm) */
+/*s: function [[usbwalk]](arm) */
 static Walkqid*
 usbwalk(Chan *c, Chan *nc, char **name, int nname)
 {
     return devwalk(c, nc, name, nname, nil, 0, usbgen);
 }
-/*e: function usbwalk(arm) */
+/*e: function [[usbwalk]](arm) */
 
-/*s: function usbstat(arm) */
+/*s: function [[usbstat]](arm) */
 static int
 usbstat(Chan *c, uchar *db, int n)
 {
     return devstat(c, db, n, nil, 0, usbgen);
 }
-/*e: function usbstat(arm) */
+/*e: function [[usbstat]](arm) */
 
-/*s: function usbload(arm) */
+/*s: function [[usbload]](arm) */
 /*
  * µs for the given transfer, for bandwidth allocation.
  * This is a very rough worst case for what 5.11.3
@@ -877,9 +877,9 @@ usbload(int speed, int maxpkt)
     }
     return l / 1000UL;  /* in µs */
 }
-/*e: function usbload(arm) */
+/*e: function [[usbload]](arm) */
 
-/*s: function usbopen(arm) */
+/*s: function [[usbopen]](arm) */
 static Chan*
 usbopen(Chan *c, int omode)
 {
@@ -935,9 +935,9 @@ usbopen(Chan *c, int omode)
     c->aux = nil;   /* paranoia */
     return c;
 }
-/*e: function usbopen(arm) */
+/*e: function [[usbopen]](arm) */
 
-/*s: function epclose(arm) */
+/*s: function [[epclose]](arm) */
 static void
 epclose(Ep *ep)
 {
@@ -953,9 +953,9 @@ epclose(Ep *ep)
     qunlock(ep);
     poperror();
 }
-/*e: function epclose(arm) */
+/*e: function [[epclose]](arm) */
 
-/*s: function usbclose(arm) */
+/*s: function [[usbclose]](arm) */
 static void
 usbclose(Chan *c)
 {
@@ -984,9 +984,9 @@ usbclose(Chan *c)
     poperror();
     putep(ep);
 }
-/*e: function usbclose(arm) */
+/*e: function [[usbclose]](arm) */
 
-/*s: function ctlread(arm) */
+/*s: function [[ctlread]](arm) */
 static long
 ctlread(Chan *c, void *a, long n, vlong offset)
 {
@@ -1043,9 +1043,9 @@ ctlread(Chan *c, void *a, long n, vlong offset)
     free(us);
     return n;
 }
-/*e: function ctlread(arm) */
+/*e: function [[ctlread]](arm) */
 
-/*s: function rhubread(arm) */
+/*s: function [[rhubread]](arm) */
 /*
  * Fake root hub emulation.
  */
@@ -1065,9 +1065,9 @@ rhubread(Ep *ep, void *a, long n)
     ep->rhrepl = -1;
     return n;
 }
-/*e: function rhubread(arm) */
+/*e: function [[rhubread]](arm) */
 
-/*s: function rhubwrite(arm) */
+/*s: function [[rhubwrite]](arm) */
 static long
 rhubwrite(Ep *ep, void *a, long n)
 {
@@ -1106,9 +1106,9 @@ rhubwrite(Ep *ep, void *a, long n)
     }
     return n;
 }
-/*e: function rhubwrite(arm) */
+/*e: function [[rhubwrite]](arm) */
 
-/*s: function usbread(arm) */
+/*s: function [[usbread]](arm) */
 static long
 usbread(Chan *c, void *a, long n, vlong offset)
 {
@@ -1154,17 +1154,17 @@ usbread(Chan *c, void *a, long n, vlong offset)
     putep(ep);
     return n;
 }
-/*e: function usbread(arm) */
+/*e: function [[usbread]](arm) */
 
-/*s: function pow2(arm) */
+/*s: function [[pow2]](arm) */
 static long
 pow2(int n)
 {
     return 1 << n;
 }
-/*e: function pow2(arm) */
+/*e: function [[pow2]](arm) */
 
-/*s: function setmaxpkt(arm) */
+/*s: function [[setmaxpkt]](arm) */
 static void
 setmaxpkt(Ep *ep, char* s)
 {
@@ -1184,9 +1184,9 @@ setmaxpkt(Ep *ep, char* s)
         ep->maxpkt = 1024;
     }
 }
-/*e: function setmaxpkt(arm) */
+/*e: function [[setmaxpkt]](arm) */
 
-/*s: function epctl(arm) */
+/*s: function [[epctl]](arm) */
 /*
  * Many endpoint ctls. simply update the portable representation
  * of the endpoint. The actual controller driver will look
@@ -1404,9 +1404,9 @@ epctl(Ep *ep, Chan *c, void *a, long n)
     poperror();
     return n;
 }
-/*e: function epctl(arm) */
+/*e: function [[epctl]](arm) */
 
-/*s: function usbctl(arm) */
+/*s: function [[usbctl]](arm) */
 static long
 usbctl(void *a, long n)
 {
@@ -1445,9 +1445,9 @@ usbctl(void *a, long n)
     poperror();
     return n;
 }
-/*e: function usbctl(arm) */
+/*e: function [[usbctl]](arm) */
 
-/*s: function ctlwrite(arm) */
+/*s: function [[ctlwrite]](arm) */
 static long
 ctlwrite(Chan *c, void *a, long n)
 {
@@ -1478,9 +1478,9 @@ ctlwrite(Chan *c, void *a, long n)
     poperror();
     return n;
 }
-/*e: function ctlwrite(arm) */
+/*e: function [[ctlwrite]](arm) */
 
-/*s: function usbwrite(arm) */
+/*s: function [[usbwrite]](arm) */
 static long
 usbwrite(Chan *c, void *a, long n, vlong off)
 {
@@ -1525,9 +1525,9 @@ usbwrite(Chan *c, void *a, long n, vlong off)
     poperror();
     return n;
 }
-/*e: function usbwrite(arm) */
+/*e: function [[usbwrite]](arm) */
 
-/*s: function usbbread(arm) */
+/*s: function [[usbbread]](arm) */
 Block*
 usbbread(Chan *c, long n, ulong offset)
 {
@@ -1544,9 +1544,9 @@ usbbread(Chan *c, long n, ulong offset)
     poperror();
     return bp;
 }
-/*e: function usbbread(arm) */
+/*e: function [[usbbread]](arm) */
 
-/*s: function usbbwrite(arm) */
+/*s: function [[usbbwrite]](arm) */
 long
 usbbwrite(Chan *c, Block *bp, ulong offset)
 {
@@ -1562,9 +1562,9 @@ usbbwrite(Chan *c, Block *bp, ulong offset)
 
     return n;
 }
-/*e: function usbbwrite(arm) */
+/*e: function [[usbbwrite]](arm) */
 
-/*s: function usbshutdown(arm) */
+/*s: function [[usbshutdown]](arm) */
 void
 usbshutdown(void)
 {
@@ -1581,9 +1581,9 @@ usbshutdown(void)
             hp->shutdown(hp);
     }
 }
-/*e: function usbshutdown(arm) */
+/*e: function [[usbshutdown]](arm) */
 
-/*s: global usbdevtab(arm) */
+/*s: global [[usbdevtab]](arm) */
 Dev usbdevtab = {
     .dc = L'u',
     .name = "usb",
@@ -1604,5 +1604,5 @@ Dev usbdevtab = {
     .remove = devremove,
     .wstat = devwstat,
 };
-/*e: global usbdevtab(arm) */
+/*e: global [[usbdevtab]](arm) */
 /*e: buses/arm/devusb.c */

@@ -61,9 +61,9 @@ enum
 };
 
 enum {
-    /*s: constant Freq(x86) */
+    /*s: constant [[Freq]](x86) */
     Freq=   1193182,    /* Real clock frequency */
-    /*e: constant Freq(x86) */
+    /*e: constant [[Freq]](x86) */
     Tickshift=8,        /* extra accuracy */
     MaxPeriod=Freq/Arch_HZ,
     MinPeriod=Freq/(100*Arch_HZ),
@@ -71,11 +71,11 @@ enum {
     Wdogms  = 200,      /* ms between strokes */
 };
 
-/*s: global i8253(x86) */
+/*s: global [[i8253]](x86) */
 I8253 i8253;
-/*e: global i8253(x86) */
+/*e: global [[i8253]](x86) */
 
-/*s: struct Watchdog(x86) */
+/*s: struct [[Watchdog]](x86) */
 struct Watchdog
 {
     void    (*enable)(void);    /* watchdog enable */
@@ -83,19 +83,19 @@ struct Watchdog
     void    (*restart)(void);   /* watchdog restart */
     void    (*stat)(char*, char*);  /* watchdog statistics */
 };
-/*e: struct Watchdog(x86) */
+/*e: struct [[Watchdog]](x86) */
 
-/*s: global watchdog(x86) */
+/*s: global [[watchdog]](x86) */
 Watchdog* watchdog;
 int watchdogon;
-/*e: global watchdog(x86) */
+/*e: global [[watchdog]](x86) */
 
 
 //*****************************************************************************
 // Init
 //*****************************************************************************
 
-/*s: function i8253init(x86) */
+/*s: function [[i8253init]](x86) */
 void
 i8253init(void)
 {
@@ -138,13 +138,13 @@ i8253init(void)
         x |= inb(T0cntr)<<8;
     }
 }
-/*e: function i8253init(x86) */
+/*e: function [[i8253init]](x86) */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
-/*s: function wdogpause(x86) */
+/*s: function [[wdogpause]](x86) */
 /*
  * if the watchdog is running and we're on cpu 0 and ignoring (clock)
  * interrupts, disable the watchdog temporarily so that the (presumed)
@@ -163,9 +163,9 @@ wdogpause(void)
     }
     return turndogoff;
 }
-/*e: function wdogpause(x86) */
+/*e: function [[wdogpause]](x86) */
 
-/*s: function wdogresume(x86) */
+/*s: function [[wdogresume]](x86) */
 static void
 wdogresume(int resume)
 {
@@ -174,9 +174,9 @@ wdogresume(int resume)
         watchdogon = 1;
     }
 }
-/*e: function wdogresume(x86) */
+/*e: function [[wdogresume]](x86) */
 
-/*s: function guesscpuhz(x86) */
+/*s: function [[guesscpuhz]](x86) */
 void
 guesscpuhz(int aalcycles)
 {
@@ -255,9 +255,9 @@ guesscpuhz(int aalcycles)
         panic("guesscpuhz: zero cpu->cpumhz");
     i8253.hz = Freq<<Tickshift;
 }
-/*e: function guesscpuhz(x86) */
+/*e: function [[guesscpuhz]](x86) */
 
-/*s: function i8253timerset(x86) */
+/*s: function [[i8253timerset]](x86) */
 void
 i8253timerset(uvlong next)
 {
@@ -291,7 +291,7 @@ i8253timerset(uvlong next)
         iunlock(&i8253);
     }
 }
-/*e: function i8253timerset(x86) */
+/*e: function [[i8253timerset]](x86) */
 
 /*s: interrupt callback i8253clock(x86) */
 static void
@@ -301,7 +301,7 @@ i8253clock(Ureg* ureg, void*)
 }
 /*e: interrupt callback i8253clock(x86) */
 
-/*s: function i8253enable(x86) */
+/*s: function [[i8253enable]](x86) */
 void
 i8253enable(void)
 {
@@ -309,9 +309,9 @@ i8253enable(void)
     i8253.period = Freq/Arch_HZ;
     arch_intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
 }
-/*e: function i8253enable(x86) */
+/*e: function [[i8253enable]](x86) */
 
-/*s: function i8253read(x86) */
+/*s: function [[i8253read]](x86) */
 /*
  *  return the total ticks of counter 2.  We shift by
  *  8 to give timesync more wriggle room for interpretation
@@ -350,9 +350,9 @@ i8253read(uvlong *hz)
 
     return ticks<<Tickshift;
 }
-/*e: function i8253read(x86) */
+/*e: function [[i8253read]](x86) */
 
-/*s: function delay(x86) */
+/*s: function [[delay]](x86) */
 void
 i8253_delay(int millisecs)
 {
@@ -369,9 +369,9 @@ i8253_delay(int millisecs)
         millisecs = 1;
     aamloop(millisecs);
 }
-/*e: function delay(x86) */
+/*e: function [[delay]](x86) */
 
-/*s: function microdelay(x86) */
+/*s: function [[microdelay]](x86) */
 void
 i8253_microdelay(int microsecs)
 {
@@ -386,9 +386,9 @@ i8253_microdelay(int microsecs)
         microsecs = 1;
     aamloop(microsecs);
 }
-/*e: function microdelay(x86) */
+/*e: function [[microdelay]](x86) */
 
-/*s: function perfticks(x86) */
+/*s: function [[perfticks]](x86) */
 /*  
  *  performance measurement ticks.  must be low overhead.
  *  doesn't have to count over a second.
@@ -404,5 +404,5 @@ arch_perfticks(void)
         x = 0;
     return x;
 }
-/*e: function perfticks(x86) */
+/*e: function [[perfticks]](x86) */
 /*e: i8253.c */

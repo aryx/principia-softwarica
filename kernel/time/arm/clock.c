@@ -25,43 +25,43 @@
 #include "ureg.h"
 #include "arm.h"
 
-/*s: constant SYSTIMERS(arm) */
+/*s: constant [[SYSTIMERS]](arm) */
 #define SYSTIMERS (VIRTIO+0x3000)
-/*e: constant SYSTIMERS(arm) */
-/*s: constant ARMTIMER(arm) */
+/*e: constant [[SYSTIMERS]](arm) */
+/*s: constant [[ARMTIMER]](arm) */
 #define ARMTIMER (VIRTIO+0xB400)
-/*e: constant ARMTIMER(arm) */
+/*e: constant [[ARMTIMER]](arm) */
 //TODO factorize in mem.h
-/*s: constant ARMLOCAL(arm) */
+/*s: constant [[ARMLOCAL]](arm) */
 #define ARMLOCAL    (VIRTIO+IOSIZE)
-/*e: constant ARMLOCAL(arm) */
+/*e: constant [[ARMLOCAL]](arm) */
 
-/*s: enum _anon_ (time/arm/clock.c)(arm) */
+/*s: enum [[_anon_]]([[(time/arm/clock.c)(arm)]]) */
 enum {
-    /*s: constant Localctl(arm) */
+    /*s: constant [[Localctl]](arm) */
     Localctl    = 0x00,
-    /*e: constant Localctl(arm) */
-    /*s: constant Prescaler(arm) */
+    /*e: constant [[Localctl]](arm) */
+    /*s: constant [[Prescaler]](arm) */
     Prescaler   = 0x08,
-    /*e: constant Prescaler(arm) */
+    /*e: constant [[Prescaler]](arm) */
 
-    /*s: constant SystimerFreq(arm) */
+    /*s: constant [[SystimerFreq]](arm) */
     SystimerFreq    = 1*Mhz,
-    /*e: constant SystimerFreq(arm) */
+    /*e: constant [[SystimerFreq]](arm) */
 
-    /*s: constant MaxPeriod(arm) */
+    /*s: constant [[MaxPeriod]](arm) */
     MaxPeriod   = SystimerFreq / Arch_HZ,
-    /*e: constant MaxPeriod(arm) */
-    /*s: constant MinPeriod(arm) */
+    /*e: constant [[MaxPeriod]](arm) */
+    /*s: constant [[MinPeriod]](arm) */
     MinPeriod   = SystimerFreq / (100*Arch_HZ),
-    /*e: constant MinPeriod(arm) */
+    /*e: constant [[MinPeriod]](arm) */
 };
-/*e: enum _anon_ (time/arm/clock.c)(arm) */
+/*e: enum [[_anon_]]([[(time/arm/clock.c)(arm)]]) */
 
 typedef struct Systimers Systimers;
 typedef struct Armtimer Armtimer;
 
-/*s: struct Systimers(arm) */
+/*s: struct [[Systimers]](arm) */
 // The order matters! the fields match the memory-mapped external registers.
 struct Systimers {
     u32int  cs;
@@ -74,9 +74,9 @@ struct Systimers {
     u32int  c2;
     u32int  c3;
 };
-/*e: struct Systimers(arm) */
+/*e: struct [[Systimers]](arm) */
 
-/*s: struct Armtimer(arm) */
+/*s: struct [[Armtimer]](arm) */
 struct Armtimer {
     u32int  load;
     u32int  val;
@@ -88,9 +88,9 @@ struct Armtimer {
     u32int  predivider;
     u32int  count;
 };
-/*e: struct Armtimer(arm) */
+/*e: struct [[Armtimer]](arm) */
 
-/*s: enum _anon_ (time/arm/clock.c)2(arm) */
+/*s: enum [[_anon_]]([[(time/arm/clock.c)2(arm)]]) */
 enum {
     CntPrescaleShift= 16,   /* freq is sys_clk/(prescale+1) */
     CntPrescaleMask = 0xFF,
@@ -109,9 +109,9 @@ enum {
     Imask   = 1<<1,
     Istatus = 1<<2,
 };
-/*e: enum _anon_ (time/arm/clock.c)2(arm) */
+/*e: enum [[_anon_]]([[(time/arm/clock.c)2(arm)]]) */
 
-/*s: function clockintr(arm) */
+/*s: function [[clockintr]](arm) */
 static void
 clockintr(Ureg *ureg, void*)
 {
@@ -123,9 +123,9 @@ clockintr(Ureg *ureg, void*)
     // portable code
     timerintr(ureg, 0);
 }
-/*e: function clockintr(arm) */
+/*e: function [[clockintr]](arm) */
 
-/*s: function localclockintr(arm) */
+/*s: function [[localclockintr]](arm) */
 static void
 localclockintr(Ureg *ureg, void *)
 {
@@ -134,9 +134,9 @@ localclockintr(Ureg *ureg, void *)
     cpwrsc(0, CpTIMER, CpTIMERphys, CpTIMERphysctl, Imask|Enable);
     timerintr(ureg, 0);
 }
-/*e: function localclockintr(arm) */
+/*e: function [[localclockintr]](arm) */
 
-/*s: function clockshutdown(arm) */
+/*s: function [[clockshutdown]](arm) */
 void
 clockshutdown(void)
 {
@@ -146,9 +146,9 @@ clockshutdown(void)
     tm->ctl = 0;
     //wdogoff();
 }
-/*e: function clockshutdown(arm) */
+/*e: function [[clockshutdown]](arm) */
 
-/*s: function clockinit(arm) */
+/*s: function [[clockinit]](arm) */
 void
 clockinit(void)
 {
@@ -197,9 +197,9 @@ clockinit(void)
         arch_intrenable(IRQcntpns, localclockintr, nil, 0, "clock");
     /*e: [[clockinit()]] if not cpu0 */
 }
-/*e: function clockinit(arm) */
+/*e: function [[clockinit]](arm) */
 
-/*s: function arch_timerset(arm) */
+/*s: function [[arch_timerset]](arm) */
 void
 arch_timerset(Tfast next)
 {
@@ -226,9 +226,9 @@ arch_timerset(Tfast next)
         tn->c3 = (ulong)(now + period);
     }
 }
-/*e: function arch_timerset(arm) */
+/*e: function [[arch_timerset]](arm) */
 
-/*s: function clock_arch_fastticks(arm) */
+/*s: function [[clock_arch_fastticks]](arm) */
 Tufast
 clock_arch_fastticks(uvlong *hz)
 {
@@ -254,9 +254,9 @@ clock_arch_fastticks(uvlong *hz)
     arch_splx(s);
     return now;
 }
-/*e: function clock_arch_fastticks(arm) */
+/*e: function [[clock_arch_fastticks]](arm) */
 
-/*s: function arch_perfticks(arm) */
+/*s: function [[arch_perfticks]](arm) */
 ulong
 arch_perfticks(void)
 {
@@ -265,9 +265,9 @@ arch_perfticks(void)
     tm = (Armtimer*)ARMTIMER;
     return tm->count;
 }
-/*e: function arch_perfticks(arm) */
+/*e: function [[arch_perfticks]](arm) */
 
-/*s: function armtimerset(arm) */
+/*s: function [[armtimerset]](arm) */
 void
 armtimerset(int n)
 {
@@ -283,9 +283,9 @@ armtimerset(int n)
         tm->irq = 1;
     }
 }
-/*e: function armtimerset(arm) */
+/*e: function [[armtimerset]](arm) */
 
-/*s: function arch_us(arm) */
+/*s: function [[arch_us]](arm) */
 ulong // Tmicro
 arch_us(void)
 {
@@ -295,9 +295,9 @@ arch_us(void)
     /*e: [[arch_us()]] if non-standard systimer frequency */
     return arch_fastticks(nil);
 }
-/*e: function arch_us(arm) */
+/*e: function [[arch_us]](arm) */
 
-/*s: function clock_arch_microdelay(arm) */
+/*s: function [[clock_arch_microdelay]](arm) */
 void
 clock_arch_microdelay(int n) // Tmicro
 {
@@ -310,14 +310,14 @@ clock_arch_microdelay(int n) // Tmicro
     while(tn->clo - now < diff)
         ;
 }
-/*e: function clock_arch_microdelay(arm) */
+/*e: function [[clock_arch_microdelay]](arm) */
 
-/*s: function clock_arch_delay(arm) */
+/*s: function [[clock_arch_delay]](arm) */
 void
 clock_arch_delay(Tms n)
 {
     while(--n >= 0)
         arch_microdelay(1000);
 }
-/*e: function clock_arch_delay(arm) */
+/*e: function [[clock_arch_delay]](arm) */
 /*e: time/arm/clock.c */

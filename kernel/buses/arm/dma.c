@@ -20,13 +20,13 @@
 /*e: kernel basic includes */
 #include "io.h"
 
-/*s: constant DMAREGS(arm) */
+/*s: constant [[DMAREGS]](arm) */
 #define DMAREGS (VIRTIO+0x7000)
-/*e: constant DMAREGS(arm) */
+/*e: constant [[DMAREGS]](arm) */
 
 #define DBG if(Dbg)
 
-/*s: enum _anon_ (buses/arm/dma.c)(arm) */
+/*s: enum [[_anon_]]([[(buses/arm/dma.c)(arm)]]) */
 enum {
     Nchan       = 7,        /* number of dma channels */
     Regsize     = 0x100,    /* size of regs for each chan */
@@ -78,21 +78,21 @@ enum {
     Lite        = 1<<28,
     Clrerrors   = 7<<0,
 };
-/*e: enum _anon_ (buses/arm/dma.c)(arm) */
+/*e: enum [[_anon_]]([[(buses/arm/dma.c)(arm)]]) */
 
 typedef struct Ctlr Ctlr;
 typedef struct Cb Cb;
 
-/*s: struct Ctlr(arm) */
+/*s: struct [[Ctlr]](arm) */
 struct Ctlr {
     u32int  *regs;
     Cb  *cb;
     Rendez  r;
     int dmadone;
 };
-/*e: struct Ctlr(arm) */
+/*e: struct [[Ctlr]](arm) */
 
-/*s: struct Cb(arm) */
+/*s: struct [[Cb]](arm) */
 struct Cb {
     u32int  ti;
     u32int  sourcead;
@@ -102,32 +102,32 @@ struct Cb {
     u32int  nextconbk;
     u32int  reserved[2];
 };
-/*e: struct Cb(arm) */
+/*e: struct [[Cb]](arm) */
 
-/*s: global dma(arm) */
+/*s: global [[dma]](arm) */
 static Ctlr dma[Nchan];
-/*e: global dma(arm) */
-/*s: global dmaregs(arm) */
+/*e: global [[dma]](arm) */
+/*s: global [[dmaregs]](arm) */
 static u32int *dmaregs = (u32int*)DMAREGS;
-/*e: global dmaregs(arm) */
+/*e: global [[dmaregs]](arm) */
 
-/*s: function dmaaddr(arm) */
+/*s: function [[dmaaddr]](arm) */
 uintptr
 dmaaddr(void *va)
 {
     return soc.busdram | (PTR2UINT(va) & ~KSEGM); // PADDR?
 }
-/*e: function dmaaddr(arm) */
+/*e: function [[dmaaddr]](arm) */
 
-/*s: function dmaioaddr(arm) */
+/*s: function [[dmaioaddr]](arm) */
 static uintptr
 dmaioaddr(void *va)
 {
     return soc.busio | (PTR2UINT(va) & ~VIRTIO);
 }
-/*e: function dmaioaddr(arm) */
+/*e: function [[dmaioaddr]](arm) */
 
-/*s: function dump(arm) */
+/*s: function [[dump]](arm) */
 static void
 dump(char *msg, uchar *p, int n)
 {
@@ -136,9 +136,9 @@ dump(char *msg, uchar *p, int n)
         print(" %2.2x", *p++);
     print("\n");
 }
-/*e: function dump(arm) */
+/*e: function [[dump]](arm) */
 
-/*s: function dumpdregs(arm) */
+/*s: function [[dumpdregs]](arm) */
 static void
 dumpdregs(char *msg, u32int *r)
 {
@@ -149,17 +149,17 @@ dumpdregs(char *msg, u32int *r)
         print(" %8.8uX", r[i]);
     print("\n");
 }
-/*e: function dumpdregs(arm) */
+/*e: function [[dumpdregs]](arm) */
 
-/*s: function dmadone(arm) */
+/*s: function [[dmadone]](arm) */
 static int
 dmadone(void *a)
 {
     return ((Ctlr*)a)->dmadone;
 }
-/*e: function dmadone(arm) */
+/*e: function [[dmadone]](arm) */
 
-/*s: function dmainterrupt(arm) */
+/*s: function [[dmainterrupt]](arm) */
 static void
 dmainterrupt(Ureg*, void *a)
 {
@@ -170,9 +170,9 @@ dmainterrupt(Ureg*, void *a)
     ctlr->dmadone = 1;
     wakeup(&ctlr->r);
 }
-/*e: function dmainterrupt(arm) */
+/*e: function [[dmainterrupt]](arm) */
 
-/*s: function dmastart(arm) */
+/*s: function [[dmastart]](arm) */
 void
 dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
 {
@@ -234,9 +234,9 @@ dmastart(int chan, int dev, int dir, void *src, void *dst, int len)
     ctlr->regs[Cs] = Active;
     DBG dumpdregs("after Active", ctlr->regs);
 }
-/*e: function dmastart(arm) */
+/*e: function [[dmastart]](arm) */
 
-/*s: function dmawait(arm) */
+/*s: function [[dmawait]](arm) */
 int
 dmawait(int chan)
 {
@@ -260,6 +260,6 @@ dmawait(int chan)
     r[Cs] = Int|End;
     return 0;
 }
-/*e: function dmawait(arm) */
+/*e: function [[dmawait]](arm) */
 
 /*e: buses/arm/dma.c */

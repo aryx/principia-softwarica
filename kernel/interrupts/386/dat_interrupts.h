@@ -4,7 +4,7 @@
 // Used to be in io.h but more important than just a set of enums for IO
 // so put here.
 
-/*s: enum vector(x86) */
+/*s: enum [[vector]](x86) */
 enum {
     /*s: enum vector cases(x86) */
         VectorNMI = 2,    /* non-maskable interrupt */
@@ -27,9 +27,9 @@ enum {
         MaxVectorAPIC = 255,
     /*e: enum vector cases(x86) */
 };
-/*e: enum vector(x86) */
+/*e: enum [[vector]](x86) */
 
-/*s: enum irq(x86) */
+/*s: enum [[irq]](x86) */
 enum {
     IrqCLOCK  = 0, // !!! clock interrupt
     IrqKBD    = 1,
@@ -55,9 +55,9 @@ enum {
 
     MaxIrqLAPIC = 31,
 };
-/*e: enum irq(x86) */
+/*e: enum [[irq]](x86) */
   
-/*s: struct Vctl(x86) */
+/*s: struct [[Vctl]](x86) */
 struct Vctl {
 
     bool isintr;     /* interrupt or fault/trap */
@@ -80,7 +80,7 @@ struct Vctl {
     Vctl* next;     /* handlers on this vector */
     /*e: [[Vctl]] extra fields(x86) */
 };
-/*e: struct Vctl(x86) */
+/*e: struct [[Vctl]](x86) */
 
 // array<list<Vctl>>, xalloc'ed
 //IMPORTANT: static Vctl *vctl[256]; (in trap.c)

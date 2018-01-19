@@ -55,7 +55,7 @@ extern Syscall systsemacquire;
 
 //coupling: debuggers/acid/conf/syscall
 //coupling: debuggers/acid/conf/truss
-/*s: global systab */
+/*s: global [[systab]] */
 Syscall *systab[] = {
     [NOP]     sysnop,
     /*s: [[systab]] process syscalls */
@@ -123,12 +123,12 @@ Syscall *systab[] = {
     /*e: [[systab]] security syscalls */
     [ERRSTR]    syserrstr,
 };
-/*e: global systab */
-/*s: global nsyscall */
+/*e: global [[systab]] */
+/*s: global [[nsyscall]] */
 int nsyscall = nelem(systab);
-/*e: global nsyscall */
+/*e: global [[nsyscall]] */
 
-/*s: global sysstab */
+/*s: global [[sysstab]] */
 char *sysctab[] = {
     [NOP]     "Nop",
     [BIND]      "Bind",
@@ -171,5 +171,5 @@ char *sysctab[] = {
     [PWRITE]    "Pwrite",
     [TSEMACQUIRE]   "Tsemacquire",
 };
-/*e: global sysstab */
+/*e: global [[sysstab]] */
 /*e: systab.c */

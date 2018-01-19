@@ -1,6 +1,6 @@
 /*s: portdat_files.h */
 
-/*s: enum blockflag */
+/*s: enum [[blockflag]] */
 /* flag values */
 enum BlockFlags
 {
@@ -11,9 +11,9 @@ enum BlockFlags
   Btcpck  = (1<<4),   /* tcp checksum */
   Bpktck  = (1<<5),   /* packet checksum */
 };
-/*e: enum blockflag */
+/*e: enum [[blockflag]] */
 
-/*s: struct Block */
+/*s: struct [[Block]] */
 struct Block
 {
   long  ref;
@@ -27,17 +27,17 @@ struct Block
   ushort  flag;
   ushort  checksum;   /* IP checksum of complete packet (minus media header) */
 };
-/*e: struct Block */
+/*e: struct [[Block]] */
 
-/*s: function BLEN */
+/*s: function [[BLEN]] */
 #define BLEN(s) ((s)->wp - (s)->rp)
-/*e: function BLEN */
-/*s: function BALLOC */
+/*e: function [[BLEN]] */
+/*s: function [[BALLOC]] */
 #define BALLOC(s) ((s)->lim - (s)->base)
-/*e: function BALLOC */
+/*e: function [[BALLOC]] */
 
 
-/*s: enum queuestate */
+/*s: enum [[queuestate]] */
 /* queue state bits,  Qmsg, Qcoalesce, and Qkick can be set in qopen */
 enum QueueState
 {
@@ -49,7 +49,7 @@ enum QueueState
   Qcoalesce = (1<<4), /* coalesce packets on read */
   Qkick   = (1<<5), /* always call the kick routine after qwrite */
 };
-/*e: enum queuestate */
+/*e: enum [[queuestate]] */
 
 // defined in qio.c
 extern  uint  qiomaxatomic;
@@ -58,7 +58,7 @@ extern  uint  qiomaxatomic;
  *  IO queues
  */
 // was in qio.c
-/*s: struct Queue */
+/*s: struct [[Queue]] */
 struct Queue
 {
   Lock;
@@ -85,11 +85,11 @@ struct Queue
 
   char  err[ERRMAX];
 };
-/*e: struct Queue */
+/*e: struct [[Queue]] */
 
 
 // was in cache.c
-/*s: struct Extent */
+/*s: struct [[Extent]] */
 struct Extent
 {
   int bid;
@@ -98,10 +98,10 @@ struct Extent
   Page  *cache;
   Extent  *next;
 };
-/*e: struct Extent */
+/*e: struct [[Extent]] */
 
 // was in cache.c
-/*s: struct Mntcache */
+/*s: struct [[Mntcache]] */
 struct Mntcache
 {
   Qid qid;
@@ -113,10 +113,10 @@ struct Mntcache
   Mntcache *prev;
   Mntcache *next;
 };
-/*e: struct Mntcache */
+/*e: struct [[Mntcache]] */
 
 
-/*s: struct Mount */
+/*s: struct [[Mount]] */
 struct Mount
 {
     // ref<Chan>
@@ -140,9 +140,9 @@ struct Mount
     Mount*  copy;
     /*e: [[Mount]] extra fields */
 };
-/*e: struct Mount */
+/*e: struct [[Mount]] */
 
-/*s: struct Mhead */
+/*s: struct [[Mhead]] */
 struct Mhead
 {
     // ref<Chan>
@@ -157,14 +157,14 @@ struct Mhead
     Mhead*  hash;     /* Hash chain */
     /*e: [[Mhead]] extra fields */
 };
-/*e: struct Mhead */
+/*e: struct [[Mhead]] */
 
 
 
 #include <fcall.h>
 
 // was in devmnt.c
-/*s: struct Mntrpc */
+/*s: struct [[Mntrpc]] */
 struct Mntrpc
 {
   Chan* c;    /* Channel for whom we are working */
@@ -182,9 +182,9 @@ struct Mntrpc
   ulong replen;   /* reply length for mnt statistics */
   Mntrpc* flushed;  /* message this one flushes */
 };
-/*e: struct Mntrpc */
+/*e: struct [[Mntrpc]] */
 
-/*s: struct Mnt */
+/*s: struct [[Mnt]] */
 struct Mnt
 {
   Lock;
@@ -199,11 +199,11 @@ struct Mnt
   char  *version; /* 9P version */
   Queue *q;   /* input queue */
 };
-/*e: struct Mnt */
+/*e: struct [[Mnt]] */
 
 
 
-/*s: struct Path */
+/*s: struct [[Path]] */
 struct Path
 {
     char  *s;
@@ -220,9 +220,9 @@ struct Path
     // extra
     Ref;
 };
-/*e: struct Path */
+/*e: struct [[Path]] */
 
-/*s: enum accessnamec */
+/*s: enum [[accessnamec]] */
 /*
  * Access types in namec
  */
@@ -238,9 +238,9 @@ enum AccessFlags
   Amount,       /* to be mounted or mounted upon */
   /*e: [[AccessFlags]] cases */
 };
-/*e: enum accessnamec */
+/*e: enum [[accessnamec]] */
 
-/*s: enum channelflag */
+/*s: enum [[channelflag]] */
 /*
  * channel flags
  */
@@ -258,9 +258,9 @@ enum ChannelFlag
   CCACHE  = 0x0080,   /* client cache */
   /*e: [[ChannelFlag]] cases */
 };
-/*e: enum channelflag */
+/*e: enum [[channelflag]] */
 
-/*s: struct Chan */
+/*s: struct [[Chan]] */
 struct Chan
 {
     ushort type; // idx in devtab
@@ -326,10 +326,10 @@ struct Chan
     Chan* link;
     /*e: [[Chan]] extra fields */
 };
-/*e: struct Chan */
+/*e: struct [[Chan]] */
 
 
-/*s: struct Evalue */
+/*s: struct [[Evalue]] */
 struct Evalue
 {
     // string
@@ -341,9 +341,9 @@ struct Evalue
     
     Qid qid;
 };
-/*e: struct Evalue */
+/*e: struct [[Evalue]] */
 
-/*s: struct Egrp */
+/*s: struct [[Egrp]] */
 struct Egrp
 {
     // array<ref_counted<Evalue>>
@@ -360,12 +360,12 @@ struct Egrp
     Ref;
     RWlock;
 };
-/*e: struct Egrp */
+/*e: struct [[Egrp]] */
 
 
 // internals
 
-/*s: struct Walkqid */
+/*s: struct [[Walkqid]] */
 struct Walkqid
 {
   Chan  *clone;
@@ -373,9 +373,9 @@ struct Walkqid
   // variable array length, size = nqid
   Qid qid[1];
 };
-/*e: struct Walkqid */
+/*e: struct [[Walkqid]] */
 
-/*s: struct Dev */
+/*s: struct [[Dev]] */
 struct Dev
 {
     Rune dc; // dev character code, e.g. '/' (devroot), 'e' (devenv), ...
@@ -412,7 +412,7 @@ struct Dev
     void  (*shutdown)(void);
     /*e: [[Dev]] methods */
 };
-/*e: struct Dev */
+/*e: struct [[Dev]] */
 
 
 // array<Dev>, it looks like an allocated array<ref<dev>> but
@@ -421,7 +421,7 @@ struct Dev
 // structures (e.g. mousedevtab, vgadevtab, etc).
 extern Dev** devtab;
 
-/*s: struct Dirtab */
+/*s: struct [[Dirtab]] */
 struct Dirtab
 {
   char  name[KNAMELEN];
@@ -429,7 +429,7 @@ struct Dirtab
   vlong length;
   long  perm;
 };
-/*e: struct Dirtab */
+/*e: struct [[Dirtab]] */
 
 // used by with devmnt.c and sysfile.c
 struct Bogus {
@@ -454,7 +454,7 @@ enum
 /*e: constants tags */
 
 // actually internal to devmnt.c and mnt.c
-/*s: struct Mntalloc */
+/*s: struct [[Mntalloc]] */
 /*
  * References are managed as follows:
  * The channel to the server - a network connection or pipe - has one
@@ -479,6 +479,6 @@ struct Mntalloc
     Lock;
 
 };
-/*e: struct Mntalloc */
+/*e: struct [[Mntalloc]] */
 extern struct Mntalloc mntalloc;
 /*e: portdat_files.h */

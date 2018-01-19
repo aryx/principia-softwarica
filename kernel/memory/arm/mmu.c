@@ -9,35 +9,35 @@
 /*e: kernel basic includes */
 #include "arm.h"
 
-/*s: macro L1X(arm) */
+/*s: macro [[L1X]](arm) */
 #define L1X(va)     FEXT((va), 20, 12)
-/*e: macro L1X(arm) */
-/*s: macro L2X(arm) */
+/*e: macro [[L1X]](arm) */
+/*s: macro [[L2X]](arm) */
 #define L2X(va)     FEXT((va), 12, 8)
-/*e: macro L2X(arm) */
-/*s: macro L2AP(arm) */
+/*e: macro [[L2X]](arm) */
+/*s: macro [[L2AP]](arm) */
 #define L2AP(ap)    l2ap(ap)
-/*e: macro L2AP(arm) */
+/*e: macro [[L2AP]](arm) */
 
-/*s: constant L1ptedramattrs(arm) */
+/*s: constant [[L1ptedramattrs]](arm) */
 #define L1ptedramattrs  soc.l1ptedramattrs
-/*e: constant L1ptedramattrs(arm) */
-/*s: constant L2ptedramattrs(arm) */
+/*e: constant [[L1ptedramattrs]](arm) */
+/*s: constant [[L2ptedramattrs]](arm) */
 #define L2ptedramattrs  soc.l2ptedramattrs
-/*e: constant L2ptedramattrs(arm) */
+/*e: constant [[L2ptedramattrs]](arm) */
 
-/*s: enum _anon_ (memory/arm/mmu.c)(arm) */
+/*s: enum [[_anon_]]([[(memory/arm/mmu.c)(arm)]]) */
 enum {
-/*s: constant L1lo(arm) */
+/*s: constant [[L1lo]](arm) */
 L1lo        = UZERO/MiB,        /* L1X(UZERO)? */
-/*e: constant L1lo(arm) */
-/*s: constant L1hi(arm) */
+/*e: constant [[L1lo]](arm) */
+/*s: constant [[L1hi]](arm) */
 L1hi        = (USTKTOP+MiB-1)/MiB,  /* L1X(USTKTOP+MiB-1)? */
-/*e: constant L1hi(arm) */
+/*e: constant [[L1hi]](arm) */
 };
-/*e: enum _anon_ (memory/arm/mmu.c)(arm) */
+/*e: enum [[_anon_]]([[(memory/arm/mmu.c)(arm)]]) */
 
-/*s: function mmuinit(arm) */
+/*s: function [[mmuinit]](arm) */
 /*
  * Set up initial PTEs for this cpu (called with mmu off)
  */
@@ -89,9 +89,9 @@ mmuinit(void *a)
     l1[L1X(va)] = (uintptr)l2|Dom0|Coarse;
     l2[L2X(va)] = L2AP(Krw)|Small|L2ptedramattrs;
 }
-/*e: function mmuinit(arm) */
+/*e: function [[mmuinit]](arm) */
 
-/*s: function mmuinit1(arm) */
+/*s: function [[mmuinit1]](arm) */
 void
 mmuinit1(void *a)
 {
@@ -109,9 +109,9 @@ mmuinit1(void *a)
     /*e: [[mmuinit1()]] write back cache after adjusting page tables(arm) */
     mmuinvalidateaddr(0);
 }
-/*e: function mmuinit1(arm) */
+/*e: function [[mmuinit1]](arm) */
 
-/*s: function mmul2empty(arm) */
+/*s: function [[mmul2empty]](arm) */
 static void
 mmul2empty(Proc* proc, bool clear)
 {
@@ -132,17 +132,17 @@ mmul2empty(Proc* proc, bool clear)
     proc->mmul2 = nil;
     /*e: [[mmul2empty()]] remember free pages(arm) */
 }
-/*e: function mmul2empty(arm) */
+/*e: function [[mmul2empty]](arm) */
 
-/*s: function mmul1empty(arm) */
+/*s: function [[mmul1empty]](arm) */
 static void
 mmul1empty(void)
 {
     memset(&cpu->mmul1[L1lo], 0, (L1hi - L1lo)*sizeof(PTE));
 }
-/*e: function mmul1empty(arm) */
+/*e: function [[mmul1empty]](arm) */
 
-/*s: function arch_mmuswitch(arm) */
+/*s: function [[arch_mmuswitch]](arm) */
 void
 arch_mmuswitch(Proc* proc)
 {
@@ -190,9 +190,9 @@ arch_mmuswitch(Proc* proc)
     /* lose any possible stale tlb entries */
     mmuinvalidate();
 }
-/*e: function arch_mmuswitch(arm) */
+/*e: function [[arch_mmuswitch]](arm) */
 
-/*s: function arch_flushmmu(arm) */
+/*s: function [[arch_flushmmu]](arm) */
 void
 arch_flushmmu(void)
 {
@@ -203,9 +203,9 @@ arch_flushmmu(void)
     arch_mmuswitch(up);
     arch_splx(s);
 }
-/*e: function arch_flushmmu(arm) */
+/*e: function [[arch_flushmmu]](arm) */
 
-/*s: function arch_mmurelease(arm) */
+/*s: function [[arch_mmurelease]](arm) */
 void
 arch_mmurelease(Proc* proc)
 {
@@ -236,9 +236,9 @@ arch_mmurelease(Proc* proc)
     /* lose any possible stale tlb entries */
     mmuinvalidate();
 }
-/*e: function arch_mmurelease(arm) */
+/*e: function [[arch_mmurelease]](arm) */
 
-/*s: function arch_putmmu(arm) */
+/*s: function [[arch_putmmu]](arm) */
 void
 arch_putmmu(virt_addr va, phys_addr pa, Page* page)
 {
@@ -321,18 +321,18 @@ arch_putmmu(virt_addr va, phys_addr pa, Page* page)
      *  on this mmu because the virtual cache is set associative
      *  rather than direct mapped.
      */
-    /*s: [[arch_putmmu()]] if PG_TXTFLUSH, invalidate cache(arm) */
+    /*s: [[arch_putmmu()]] if [[PG_TXTFLUSH]], invalidate cache(arm) */
     if(page->cachectl[cpu->cpuno] == PG_TXTFLUSH){
         /* pio() sets PG_TXTFLUSH whenever a text pg has been written */
         cacheiinv();
         page->cachectl[cpu->cpuno] = PG_NOFLUSH;
     }
-    /*e: [[arch_putmmu()]] if PG_TXTFLUSH, invalidate cache(arm) */
+    /*e: [[arch_putmmu()]] if [[PG_TXTFLUSH]], invalidate cache(arm) */
     arch_checkmmu(va, PPN(pa));
 }
-/*e: function arch_putmmu(arm) */
+/*e: function [[arch_putmmu]](arm) */
 
-/*s: function arch_cankaddr(arm) */
+/*s: function [[arch_cankaddr]](arm) */
 /*
  * Return the number of bytes that can be accessed via KADDR(pa).
  * If pa is not a valid argument to KADDR, return 0.
@@ -344,9 +344,9 @@ arch_cankaddr(phys_addr pa)
         return memsize - pa;
     return 0;
 }
-/*e: function arch_cankaddr(arm) */
+/*e: function [[arch_cankaddr]](arm) */
 
-/*s: function mmukmap(arm) */
+/*s: function [[mmukmap]](arm) */
 uintptr
 mmukmap(uintptr va, uintptr pa, usize size)
 {
@@ -372,26 +372,26 @@ mmukmap(uintptr va, uintptr pa, usize size)
     /*e: [[mmukmap()]] write back cache after changing page tables(arm) */
     return va + o;
 }
-/*e: function mmukmap(arm) */
+/*e: function [[mmukmap]](arm) */
 
 
-/*s: function arch_checkmmu(arm) */
+/*s: function [[arch_checkmmu]](arm) */
 void
 arch_checkmmu(virt_addr va, phys_addr pa)
 {
     USED(va);
     USED(pa);
 }
-/*e: function arch_checkmmu(arm) */
+/*e: function [[arch_checkmmu]](arm) */
 
-/*s: function arch_kmap(arm) */
+/*s: function [[arch_kmap]](arm) */
 Arch_KMap*
 arch_kmap(Page *p) {
   return (Arch_KMap*)((p)->pa|KZERO);
 }
-/*e: function arch_kmap(arm) */
+/*e: function [[arch_kmap]](arm) */
 
-/*s: function arch_kunmap(arm) */
+/*s: function [[arch_kunmap]](arm) */
 void
 arch_kunmap(Arch_KMap *k)
 {
@@ -399,5 +399,5 @@ arch_kunmap(Arch_KMap *k)
     cachedwbinvse(k, BY2PG);
     /*e: [[arch_kunmap()]] write back cache for page(arm) */
 }
-/*e: function arch_kunmap(arm) */
+/*e: function [[arch_kunmap]](arm) */
 /*e: memory/arm/mmu.c */

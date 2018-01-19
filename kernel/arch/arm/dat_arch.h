@@ -1,6 +1,6 @@
 /*s: arch/arm/dat_arch.h */
 
-/*s: struct Soc(arm) */
+/*s: struct [[Soc]](arm) */
 struct Soc {            /* SoC dependent configuration */
     ulong   dramsize;
     phys_addr physio;
@@ -17,7 +17,7 @@ struct Soc {            /* SoC dependent configuration */
     uintptr armlocal;
     /*e: [[Soc]] other fields */
 };
-/*e: struct Soc(arm) */
+/*e: struct [[Soc]](arm) */
 
 extern Soc soc;
 /*e: arch/arm/dat_arch.h */

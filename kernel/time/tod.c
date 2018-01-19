@@ -44,7 +44,7 @@ static void todfix(void);
 #define TODFREQ     1000000000ULL
 #define MicroFREQ   1000000ULL
 
-/*s: struct TOD */
+/*s: struct [[TOD]] */
 struct TOD {
     bool init;       /* true if initialized */
 
@@ -68,12 +68,12 @@ struct TOD {
     // Extra
     Lock;
 };
-/*e: struct TOD */
-/*s: global tod */
+/*e: struct [[TOD]] */
+/*s: global [[tod]] */
 struct TOD tod;
-/*e: global tod */
+/*e: global [[tod]] */
 
-/*s: function todinit */
+/*s: function [[todinit]] */
 void
 todinit(void)
 {
@@ -86,9 +86,9 @@ todinit(void)
     todsetfreq(tod.hz);
     addclock0link(todfix, 100);
 }
-/*e: function todinit */
+/*e: function [[todinit]] */
 
-/*s: function todsetfreq */
+/*s: function [[todsetfreq]] */
 /*
  *  calculate multiplier
  */
@@ -107,9 +107,9 @@ todsetfreq(vlong f)
     tod.udivider    = mk64fract(f, MicroFREQ) + 1;
     iunlock(&tod);
 }
-/*e: function todsetfreq */
+/*e: function [[todsetfreq]] */
 
-/*s: function todset */
+/*s: function [[todset]] */
 /*
  *  Set the time of day struct
  */
@@ -145,9 +145,9 @@ todset(vlong t, vlong delta, int n)
     }
     iunlock(&tod);
 }
-/*e: function todset */
+/*e: function [[todset]] */
 
-/*s: function todget */
+/*s: function [[todget]] */
 /*
  *  get time of day
  */
@@ -199,9 +199,9 @@ todget(vlong *ticksp)
 
     return x;
 }
-/*e: function todget */
+/*e: function [[todget]] */
 
-/*s: function todfix */
+/*s: function [[todfix]] */
 /*
  *  called regularly to avoid calculation overflows
  */
@@ -229,17 +229,17 @@ if(x > 30000000000ULL) iprint("todfix %llud\n", x);
         iunlock(&tod);
     }
 }
-/*e: function todfix */
+/*e: function [[todfix]] */
 
-/*s: function seconds */
+/*s: function [[seconds]] */
 long
 seconds(void)
 {
     return (vlong)todget(nil) / TODFREQ;
 }
-/*e: function seconds */
+/*e: function [[seconds]] */
 
-/*s: function fastticks2us */
+/*s: function [[fastticks2us]] */
 uvlong
 fastticks2us(uvlong ticks)
 {
@@ -250,9 +250,9 @@ fastticks2us(uvlong ticks)
     arch_mul64fract(&res, ticks, tod.umultiplier);
     return res;
 }
-/*e: function fastticks2us */
+/*e: function [[fastticks2us]] */
 
-/*s: function ns2fastticks */
+/*s: function [[ns2fastticks]] */
 /*
  *  convert nanoseconds to fast ticks
  */
@@ -266,9 +266,9 @@ ns2fastticks(uvlong ns)
     arch_mul64fract(&res, ns, tod.divider);
     return res;
 }
-/*e: function ns2fastticks */
+/*e: function [[ns2fastticks]] */
 
-/*s: function mk64fract */
+/*s: function [[mk64fract]] */
 /*
  * Make a 64 bit fixed point number that has a decimal point
  * to the left of the low order 32 bits.  This is used with
@@ -281,5 +281,5 @@ mk64fract(uvlong to, uvlong from)
 {
     return (to<<32) / from;
 }
-/*e: function mk64fract */
+/*e: function [[mk64fract]] */
 /*e: tod.c */

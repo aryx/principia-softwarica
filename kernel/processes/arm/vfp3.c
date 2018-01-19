@@ -13,15 +13,15 @@
 #include "ureg.h"
 #include "arm.h"
 
-/*s: enum _anon_ (processes/arm/vfp3.c)(arm) */
+/*s: enum [[_anon_]]([[(processes/arm/vfp3.c)(arm)]]) */
 /* subarchitecture code in cpu->havefp */
 enum VFPKind {
     VFPv2   = 2,
     VFPv3   = 3,
 };
-/*e: enum _anon_ (processes/arm/vfp3.c)(arm) */
+/*e: enum [[_anon_]]([[(processes/arm/vfp3.c)(arm)]]) */
 
-/*s: enum _anon_ (processes/arm/vfp3.c)2(arm) */
+/*s: enum [[_anon_]]([[(processes/arm/vfp3.c)2(arm)]]) */
 /* fp control regs.  most are read-only */
 enum {
     Fpsid = 0,
@@ -32,8 +32,8 @@ enum {
     Fpinst= 9,          /* optional, for exceptions */
     Fpinst2=10,
 };
-/*e: enum _anon_ (processes/arm/vfp3.c)2(arm) */
-/*s: enum _anon_ (processes/arm/vfp3.c)3(arm) */
+/*e: enum [[_anon_]]([[(processes/arm/vfp3.c)2(arm)]]) */
+/*s: enum [[_anon_]]([[(processes/arm/vfp3.c)3(arm)]]) */
 enum {
     /* Fpexc bits */
     Fpex =      1u << 31,
@@ -56,16 +56,16 @@ enum {
     /* condition codes */
     Allcc =     MASK(4) << 28,
 };
-/*e: enum _anon_ (processes/arm/vfp3.c)3(arm) */
-/*s: enum _anon_ (processes/arm/vfp3.c)4(arm) */
+/*e: enum [[_anon_]]([[(processes/arm/vfp3.c)3(arm)]]) */
+/*s: enum [[_anon_]]([[(processes/arm/vfp3.c)4(arm)]]) */
 enum {
     /* CpCPaccess bits */
     Cpaccnosimd =   1u << 31,
     Cpaccd16 =  1 << 30,
 };
-/*e: enum _anon_ (processes/arm/vfp3.c)4(arm) */
+/*e: enum [[_anon_]]([[(processes/arm/vfp3.c)4(arm)]]) */
 
-/*s: function subarch(arm) */
+/*s: function [[subarch]](arm) */
 static char *
 subarch(int impl, uint sa)
 {
@@ -82,9 +82,9 @@ subarch(int impl, uint sa)
     else
         return armarchs[sa];
 }
-/*e: function subarch(arm) */
+/*e: function [[subarch]](arm) */
 
-/*s: function implement(arm) */
+/*s: function [[implement]](arm) */
 static char *
 implement(uchar impl)
 {
@@ -93,9 +93,9 @@ implement(uchar impl)
     else
         return "unknown";
 }
-/*e: function implement(arm) */
+/*e: function [[implement]](arm) */
 
-/*s: function havefp(arm) */
+/*s: function [[havefp]](arm) */
 static int
 havefp(void)
 {
@@ -144,9 +144,9 @@ havefp(void)
     cpu->havefpvalid = true;
     return 1;
 }
-/*e: function havefp(arm) */
+/*e: function [[havefp]](arm) */
 
-/*s: function fpoff(arm) */
+/*s: function [[fpoff]](arm) */
 /*
  * these can be called to turn the fpu on or off for user procs,
  * not just at system start up or shutdown.
@@ -159,9 +159,9 @@ fpoff(void)
         cpu->fpon = false;
     }
 }
-/*e: function fpoff(arm) */
+/*e: function [[fpoff]](arm) */
 
-/*s: function fpononly(arm) */
+/*s: function [[fpononly]](arm) */
 void
 fpononly(void)
 {
@@ -171,9 +171,9 @@ fpononly(void)
         cpu->fpon = true;
     }
 }
-/*e: function fpononly(arm) */
+/*e: function [[fpononly]](arm) */
 
-/*s: function fpcfg(arm) */
+/*s: function [[fpcfg]](arm) */
 static void
 fpcfg(void)
 {
@@ -194,9 +194,9 @@ fpcfg(void)
         subarch(impl, (sid >> 16) & MASK(7)), sid & MASK(4));
     printed = 1;
 }
-/*e: function fpcfg(arm) */
+/*e: function [[fpcfg]](arm) */
 
-/*s: function fpinit(arm) */
+/*s: function [[fpinit]](arm) */
 void
 fpinit(void)
 {
@@ -205,9 +205,9 @@ fpinit(void)
         fpcfg();
     }
 }
-/*e: function fpinit(arm) */
+/*e: function [[fpinit]](arm) */
 
-/*s: function fpon(arm) */
+/*s: function [[fpon]](arm) */
 void
 fpon(void)
 {
@@ -219,9 +219,9 @@ fpon(void)
             fpcfg();    /* 1st time on this fpu; configure it */
     }
 }
-/*e: function fpon(arm) */
+/*e: function [[fpon]](arm) */
 
-/*s: function fpclear(arm) */
+/*s: function [[fpclear]](arm) */
 void
 fpclear(void)
 {
@@ -234,10 +234,10 @@ fpclear(void)
 
     fpwr(Fpexc, fprd(Fpexc) & ~Fpmbc);
 }
-/*e: function fpclear(arm) */
+/*e: function [[fpclear]](arm) */
 
 
-/*s: function fpunotify(arm) */
+/*s: function [[fpunotify]](arm) */
 /*
  * Called when a note is about to be delivered to a
  * user process, usually at the end of a system call.
@@ -254,9 +254,9 @@ fpunotify(Ureg*)
     }
     up->fpstate |= FPillegal;
 }
-/*e: function fpunotify(arm) */
+/*e: function [[fpunotify]](arm) */
 
-/*s: function fpunoted(arm) */
+/*s: function [[fpunoted]](arm) */
 /*
  * Called from sysnoted() via the machine-dependent
  * noted() routine.
@@ -267,9 +267,9 @@ fpunoted(void)
 {
     up->fpstate &= ~FPillegal;
 }
-/*e: function fpunoted(arm) */
+/*e: function [[fpunoted]](arm) */
 
-/*s: function fpusysrfork(arm) */
+/*s: function [[fpusysrfork]](arm) */
 /*
  * Called early in the non-interruptible path of
  * sysrfork() via the machine-dependent syscall() routine.
@@ -284,9 +284,9 @@ fpusysrfork(Ureg*)
         up->fpstate = FPinactive;
     }
 }
-/*e: function fpusysrfork(arm) */
+/*e: function [[fpusysrfork]](arm) */
 
-/*s: function fpusysrforkchild(arm) */
+/*s: function [[fpusysrforkchild]](arm) */
 /*
  * Called later in sysrfork() via the machine-dependent
  * sysrforkchild() routine.
@@ -298,9 +298,9 @@ fpusysrforkchild(Proc *p, Ureg *, Proc *up)
     /* don't penalize the child, it hasn't done FP in a note handler. */
     p->fpstate = up->fpstate & ~FPillegal;
 }
-/*e: function fpusysrforkchild(arm) */
+/*e: function [[fpusysrforkchild]](arm) */
 
-/*s: function fpsave(arm) */
+/*s: function [[fpsave]](arm) */
 /* should only be called if p->fpstate == FPactive */
 void
 fpsave(Arch_FPsave *fps)
@@ -314,9 +314,9 @@ fpsave(Arch_FPsave *fps)
         fpsavereg(n, (uvlong *)fps->regs[n]);
     fpoff();
 }
-/*e: function fpsave(arm) */
+/*e: function [[fpsave]](arm) */
 
-/*s: function fprestore(arm) */
+/*s: function [[fprestore]](arm) */
 static void
 fprestore(Proc *p)
 {
@@ -329,9 +329,9 @@ fprestore(Proc *p)
     for (n = 0; n < cpu->fpnregs; n++)
         fprestreg(n, *(uvlong *)p->fpsave.regs[n]);
 }
-/*e: function fprestore(arm) */
+/*e: function [[fprestore]](arm) */
 
-/*s: function fpuprocsave(arm) */
+/*s: function [[fpuprocsave]](arm) */
 /*
  * Called from sched() and sleep() via the machine-dependent
  * procsave() routine.
@@ -359,9 +359,9 @@ fpuprocsave(Proc *p)
         p->fpstate = FPinactive;
     }
 }
-/*e: function fpuprocsave(arm) */
+/*e: function [[fpuprocsave]](arm) */
 
-/*s: function fpuprocrestore(arm) */
+/*s: function [[fpuprocrestore]](arm) */
 /*
  * The process has been rescheduled and is about to run.
  * Nothing to do here right now. If the process tries to use
@@ -372,9 +372,9 @@ void
 fpuprocrestore(Proc *)
 {
 }
-/*e: function fpuprocrestore(arm) */
+/*e: function [[fpuprocrestore]](arm) */
 
-/*s: function fpusysprocsetup(arm) */
+/*s: function [[fpusysprocsetup]](arm) */
 /*
  * Disable the FPU.
  * Called from sysexec() via sysprocsetup() to
@@ -386,10 +386,10 @@ fpusysprocsetup(Proc *p)
     p->fpstate = FPinit;
     fpoff();
 }
-/*e: function fpusysprocsetup(arm) */
+/*e: function [[fpusysprocsetup]](arm) */
 
 
-/*s: function arch_procsetup(arm) */
+/*s: function [[arch_procsetup]](arm) */
 /*
  *  set mach dependent process state for a new process
  */
@@ -400,9 +400,9 @@ arch_procsetup(Proc* p)
     fpusysprocsetup(p);
     /*e: [[arch_procsetup()]] floating point(arm) */
 }
-/*e: function arch_procsetup(arm) */
+/*e: function [[arch_procsetup]](arm) */
 
-/*s: function arch_procsave(arm) */
+/*s: function [[arch_procsave]](arm) */
 /*
  *  Save the mach dependent part of the process state.
  */
@@ -420,9 +420,9 @@ arch_procsave(Proc* p)
     fpuprocsave(p);
     /*e: [[arch_procsave()]] floating point(arm) */
 }
-/*e: function arch_procsave(arm) */
+/*e: function [[arch_procsave]](arm) */
 
-/*s: function arch_procrestore(arm) */
+/*s: function [[arch_procrestore]](arm) */
 void
 arch_procrestore(Proc* p)
 {
@@ -438,9 +438,9 @@ arch_procrestore(Proc* p)
     fpuprocrestore(p);
     /*e: [[arch_procrestore()]] floating point(arm) */
 }
-/*e: function arch_procrestore(arm) */
+/*e: function [[arch_procrestore]](arm) */
 
-/*s: function mathnote(arm) */
+/*s: function [[mathnote]](arm) */
 static void
 mathnote(void)
 {
@@ -469,9 +469,9 @@ mathnote(void)
         msg, up->fpsave.pc, status);
     postnote(up, 1, note, NDebug);
 }
-/*e: function mathnote(arm) */
+/*e: function [[mathnote]](arm) */
 
-/*s: function mathemu(arm) */
+/*s: function [[mathemu]](arm) */
 static void
 mathemu(Ureg *)
 {
@@ -501,9 +501,9 @@ mathemu(Ureg *)
     }
     fpclear();
 }
-/*e: function mathemu(arm) */
+/*e: function [[mathemu]](arm) */
 
-/*s: function fpstuck(arm) */
+/*s: function [[fpstuck]](arm) */
 void
 fpstuck(uintptr pc)
 {
@@ -519,9 +519,9 @@ fpstuck(uintptr pc)
         cpu->fpcnt = 0;
     }
 }
-/*e: function fpstuck(arm) */
+/*e: function [[fpstuck]](arm) */
 
-/*s: enum _anon_ (processes/arm/vfp3.c)5(arm) */
+/*s: enum [[_anon_]]([[(processes/arm/vfp3.c)5(arm)]]) */
 enum {
     N = 1<<31,
     Z = 1<<30,
@@ -529,9 +529,9 @@ enum {
     V = 1<<28,
     REGPC = 15,
 };
-/*e: enum _anon_ (processes/arm/vfp3.c)5(arm) */
+/*e: enum [[_anon_]]([[(processes/arm/vfp3.c)5(arm)]]) */
 
-/*s: function condok(arm) */
+/*s: function [[condok]](arm) */
 static int
 condok(int cc, int c)
 {
@@ -571,17 +571,17 @@ condok(int cc, int c)
     }
     return 0;   /* not reached */
 }
-/*e: function condok(arm) */
+/*e: function [[condok]](arm) */
 
 /* instruction decoding */ // was in arm.h
-/*s: macro ISCPOP(arm) */
+/*s: macro [[ISCPOP]](arm) */
 #define ISCPOP(op)  ((op) == 0xE || ((op) & ~1) == 0xC)
-/*e: macro ISCPOP(arm) */
-/*s: macro ISVFPOP(arm) */
+/*e: macro [[ISCPOP]](arm) */
+/*s: macro [[ISVFPOP]](arm) */
 #define ISVFPOP(cp, op) (((cp) == CpDFP || (cp) == CpFP) && ISCPOP(op))
-/*e: macro ISVFPOP(arm) */
+/*e: macro [[ISVFPOP]](arm) */
 
-/*s: function fpuemu(arm) */
+/*s: function [[fpuemu]](arm) */
 /* only called to deal with user-mode instruction faults */
 int
 fpuemu(Ureg* ureg)
@@ -614,5 +614,5 @@ fpuemu(Ureg* ureg)
     poperror();
     return nfp;
 }
-/*e: function fpuemu(arm) */
+/*e: function [[fpuemu]](arm) */
 /*e: processes/arm/vfp3.c */

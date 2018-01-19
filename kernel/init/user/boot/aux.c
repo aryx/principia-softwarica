@@ -28,7 +28,7 @@ fatal(char *s)
     exits(msg);         /* this will trigger a panic */
 }
 
-/*s: function runv */
+/*s: function [[runv]] */
 void
 runv(char **argv)
 {
@@ -47,15 +47,15 @@ runv(char **argv)
       fatal(smprint("wait failed running %s", argv[0]));
   }
 }
-/*e: function runv */
+/*e: function [[runv]] */
 
-/*s: function run */
+/*s: function [[run]] */
 void
 run(char *file, ...)
 {
   runv(&file);
 }
-/*e: function run */
+/*e: function [[run]] */
 
 
 void bind_safe(char* old, char* new, int flag) {

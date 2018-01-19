@@ -3,7 +3,7 @@
 // Used only in 386/, so could be put in arch/ but used by the .c here.
 // Actually used only in i8253.c but important so put here.
 
-/*s: struct I8253(x86) */
+/*s: struct [[I8253]](x86) */
 struct I8253
 {
     ulong   period;     /* current clock period */
@@ -19,7 +19,7 @@ struct I8253
     // extra
     Lock;
 };
-/*e: struct I8253(x86) */
+/*e: struct [[I8253]](x86) */
 
 //IMPORTANT: I8253 i8253; (in i8253.c)
 //IMPORTANT: also is interrupt i8253clock() calling clock.c:timerintr()

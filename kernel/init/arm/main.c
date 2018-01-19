@@ -21,13 +21,13 @@
 // in portscreen.h
 extern void swcursor_init(void);
 
-/*s: constant Minfirmrev(arm) */
+/*s: constant [[Minfirmrev]](arm) */
 /* Firmware compatibility */
 #define Minfirmrev  326770
-/*e: constant Minfirmrev(arm) */
-/*s: constant Minfirmdate(arm) */
+/*e: constant [[Minfirmrev]](arm) */
+/*s: constant [[Minfirmdate]](arm) */
 #define Minfirmdate "19 Aug 2013"
-/*e: constant Minfirmdate(arm) */
+/*e: constant [[Minfirmdate]](arm) */
 
 
 // part of a trick to remove some backward dependencies
@@ -66,7 +66,7 @@ int  main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa);
 extern  Dev*  conf_devtab[];
 extern  char*   conffile;
 
-/*s: function getconf(arm) */
+/*s: function [[getconf]](arm) */
 char*
 getconf(char *name)
 {
@@ -78,7 +78,7 @@ getconf(char *name)
     //  return confval[i];
     return nil;
 }
-/*e: function getconf(arm) */
+/*e: function [[getconf]](arm) */
 
 //*****************************************************************************
 // Boot parameters, see bootconf.c (not used by pad)
@@ -87,7 +87,7 @@ getconf(char *name)
 //*****************************************************************************
 // Cpu init
 //*****************************************************************************
-/*s: function arch__cpuinit(arm) */
+/*s: function [[arch__cpuinit]](arm) */
 void
 arch__cpuinit(void)
 {
@@ -104,9 +104,9 @@ arch__cpuinit(void)
     }
     /*e: [[arch__cpuinit()]] it not cpu0 */
 }
-/*e: function arch__cpuinit(arm) */
+/*e: function [[arch__cpuinit]](arm) */
 
-/*s: function arch__cpu0init(arm) */
+/*s: function [[arch__cpu0init]](arm) */
 void
 arch__cpu0init(void)
 {
@@ -120,9 +120,9 @@ arch__cpu0init(void)
 
     up = nil;
 }
-/*e: function arch__cpu0init(arm) */
+/*e: function [[arch__cpu0init]](arm) */
 
-/*s: function machon(arm) */
+/*s: function [[machon]](arm) */
 /* enable scheduling of this cpu */
 void
 machon(uint xcpu)
@@ -137,18 +137,18 @@ machon(uint xcpu)
     }
     unlock(&active);
 }
-/*e: function machon(arm) */
+/*e: function [[machon]](arm) */
 
 //*****************************************************************************
 // Conf init
 //*****************************************************************************
 
-/*s: global memsize(arm) */
+/*s: global [[memsize]](arm) */
 // used also in mmu.c
 ulong   memsize = 128*1024*1024;
-/*e: global memsize(arm) */
+/*e: global [[memsize]](arm) */
 
-/*s: function arch__confinit(arm) */
+/*s: function [[arch__confinit]](arm) */
 void
 arch__confinit(void)
 {
@@ -236,18 +236,18 @@ arch__confinit(void)
          */
         imagmem->maxsize = kmem;
 }
-/*e: function arch__confinit(arm) */
+/*e: function [[arch__confinit]](arm) */
 
 //*****************************************************************************
 // First process init
 //*****************************************************************************
 
-/*s: global sp(arm) */
+/*s: global [[sp]](arm) */
 static user_addr sp;      /* XXX - must go - user stack of init proc */
-/*e: global sp(arm) */
+/*e: global [[sp]](arm) */
 
 // kernel space instructions executed by first process
-/*s: function init0(arm) */
+/*s: function [[init0]](arm) */
 /*
  *  starting place for first process
  */
@@ -300,13 +300,13 @@ init0(void)
 
     assert(0);          /* shouldn't have returned */
 }
-/*e: function init0(arm) */
+/*e: function [[init0]](arm) */
 
 // user space instructions executed by first process
 // see initcode in init.h (comes from ../port/initcode.c and init9.s
 
 extern uintptr bootargs(uintptr base);
-/*s: function arch__userinit(arm) */
+/*s: function [[arch__userinit]](arm) */
 /*
  *  create the first process
  */
@@ -380,14 +380,14 @@ arch__userinit(void)
     // ready to go!
     ready(p);
 }
-/*e: function arch__userinit(arm) */
+/*e: function [[arch__userinit]](arm) */
 
 
 //*****************************************************************************
 // Shutdown/reboot
 //*****************************************************************************
 
-/*s: function shutdown (init/arm/main.c)(arm) */
+/*s: function [[shutdown]]([[(init/arm/main.c)(arm)]]) */
 static void
 shutdown(int ispanic)
 {
@@ -413,9 +413,9 @@ shutdown(int ispanic)
     }
     arch_delay(100*cpu->cpuno);
 }
-/*e: function shutdown (init/arm/main.c)(arm) */
+/*e: function [[shutdown]]([[(init/arm/main.c)(arm)]]) */
 
-/*s: function main_arch_exit(arm) */
+/*s: function [[main_arch_exit]](arm) */
 /*
  *  exit kernel either on a panic or user request
  */
@@ -437,9 +437,9 @@ main_arch_exit(int code)
         for(;;){}
     }
 }
-/*e: function main_arch_exit(arm) */
+/*e: function [[main_arch_exit]](arm) */
 
-/*s: function arch_reboot(arm) */
+/*s: function [[arch_reboot]](arm) */
 /*
  * the new kernel is already loaded at address `code'
  * of size `size' and entry point `entry'.
@@ -505,13 +505,13 @@ arch_reboot(void *entry, void *code, ulong size)
     arch_delay(1000);
     archreboot();
 }
-/*e: function arch_reboot(arm) */
+/*e: function [[arch_reboot]](arm) */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
-/*s: function main_arch_isaconfig(arm) */
+/*s: function [[main_arch_isaconfig]](arm) */
 /*
  * stub for ../omap/devether.c
  */
@@ -536,20 +536,20 @@ main_arch_isaconfig(char *class, int ctlrno, ISAConf *isa)
     }
     return 1;
 }
-/*e: function main_arch_isaconfig(arm) */
+/*e: function [[main_arch_isaconfig]](arm) */
 
-/*s: function arch_memorysummary(arm) */
+/*s: function [[arch_memorysummary]](arm) */
 // called from devcons.c
 void
 arch_memorysummary(void) {
 }
-/*e: function arch_memorysummary(arm) */
+/*e: function [[arch_memorysummary]](arm) */
 
 //*****************************************************************************
 // Main entry point!
 //*****************************************************************************
 
-/*s: function launchinit(arm) */
+/*s: function [[launchinit]](arm) */
 void
 launchinit(int ncpus)
 {
@@ -580,9 +580,9 @@ launchinit(int ncpus)
     if(xcpu < ncpus)
             panic("only %d cpu%s started", xcpu, xcpu == 1? "" : "s");
 }
-/*e: function launchinit(arm) */
+/*e: function [[launchinit]](arm) */
 
-/*s: function main(arm) */
+/*s: function [[main]](arm) */
 void
 main(void)
 {
@@ -698,5 +698,5 @@ main(void)
 
     assert(0);          /* shouldn't have returned */
 }
-/*e: function main(arm) */
+/*e: function [[main]](arm) */
 /*e: init/arm/main.c */

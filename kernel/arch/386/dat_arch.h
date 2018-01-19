@@ -1,6 +1,6 @@
 /*s: arch/386/dat_arch.h */
 
-/*s: enum arch_constants(x86) */
+/*s: enum [[arch_constants]](x86) */
 enum arch_constants
 {
     /* cpuid instruction result register bits */
@@ -17,7 +17,7 @@ enum arch_constants
     Fxsr  = 1<<24,  /* have SSE FXSAVE/FXRSTOR */
     Sse2  = 1<<26,  /* thus mfence & lfence instr.s */
 };
-/*e: enum arch_constants(x86) */
+/*e: enum [[arch_constants]](x86) */
 
 //*****************************************************************************
 // IO Map
@@ -26,7 +26,7 @@ enum arch_constants
 // All the ref<IOMap> here are references to IOMap in the array<IOMap> of 
 // Iomapalloc.maps (pool allocator)
 
-/*s: struct IOMap(x86) */
+/*s: struct [[IOMap]](x86) */
 struct IOMap
 {
     char    tag[13];
@@ -39,9 +39,9 @@ struct IOMap
 
     bool    reserved;
 };
-/*e: struct IOMap(x86) */
+/*e: struct [[IOMap]](x86) */
 
-/*s: struct Iomapalloc(x86) */
+/*s: struct [[Iomapalloc]](x86) */
 struct Iomapalloc
 {
     // ??
@@ -56,7 +56,7 @@ struct Iomapalloc
     Lock;
     QLock   ql;     /* lock for reading map */
 };
-/*e: struct Iomapalloc(x86) */
+/*e: struct [[Iomapalloc]](x86) */
 
 // array<IMap> alloced statically in maps
 extern struct Iomapalloc iomap;
@@ -68,7 +68,7 @@ extern struct Iomapalloc iomap;
 /*
  *  routines for things outside the PC model, like power management
  */
-/*s: struct PCArch(x86) */
+/*s: struct [[PCArch]](x86) */
 struct PCArch
 {
   char* id;
@@ -98,7 +98,7 @@ struct PCArch
   int (*modempower)(int); /* 1 == on, 0 == off */
   /*e: [[PCArch]] power methods fields(x86) */
 };
-/*e: struct PCArch(x86) */
+/*e: struct [[PCArch]](x86) */
 extern PCArch *arch;      /* PC architecture */
 extern PCArch archgeneric;
 
@@ -106,7 +106,7 @@ extern PCArch archgeneric;
 // Co processor
 //*****************************************************************************
 
-/*s: struct FPstate(x86) */
+/*s: struct [[FPstate]](x86) */
 struct  FPstate     /* x87 fpu state */
 {
   ushort  control;
@@ -124,9 +124,9 @@ struct  FPstate     /* x87 fpu state */
   ushort  r5;
   uchar regs[80]; /* floating point registers */
 };
-/*e: struct FPstate(x86) */
+/*e: struct [[FPstate]](x86) */
 
-/*s: struct FPssestate(x86) */
+/*s: struct [[FPssestate]](x86) */
 struct  FPssestate    /* SSE fp state */
 {
   ushort  fcw;    /* control */
@@ -143,7 +143,7 @@ struct  FPssestate    /* SSE fp state */
   ulong mxcsr_mask; /* MXCSR mask register */
   uchar xregs[480]; /* extended registers */
 };
-/*e: struct FPssestate(x86) */
+/*e: struct [[FPssestate]](x86) */
 
 /*s: struct  SFPssestate(x86) */
 struct  SFPssestate   /* SSE fp state with alignment slop */
@@ -180,14 +180,14 @@ enum {
 };
 extern Lock nvrtlock;
 
-/*s: struct X86type(x86) */
+/*s: struct [[X86type]](x86) */
 struct X86type {
     int family;
     int model;
     int aalcycles;
     char*   name;
 };
-/*e: struct X86type(x86) */
+/*e: struct [[X86type]](x86) */
 
 extern X86type *cputype;
 /*e: arch/386/dat_arch.h */

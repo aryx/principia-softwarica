@@ -22,10 +22,10 @@ typedef void* user_vp;
 
 #include "dat_forward.h"
 #include "../port/portdat_forward.h"
-/*s: constant STAGESIZE(arm) */
+/*s: constant [[STAGESIZE]](arm) */
 // was a default in portdat.h
 #define STAGESIZE 64 // for struct Uart
-/*e: constant STAGESIZE(arm) */
+/*e: constant [[STAGESIZE]](arm) */
 
 /*s: dat.h includes(arm) */
 #include "dat_core.h"                    // Arch_Cpu
@@ -50,19 +50,19 @@ typedef void* user_vp;
 // and R9 for the second one. See Compiler.nw.
 // Then mem.h relies on this to define the UP and CPU macros used
 // inside assembly code.
-/*s: global cpu(arm) */
+/*s: global [[cpu]](arm) */
 extern register Cpu* cpu;           /* R10 */
-/*e: global cpu(arm) */
-/*s: global up(arm) */
+/*e: global [[cpu]](arm) */
+/*s: global [[up]](arm) */
 extern register Proc* up;           /* R9 */
-/*e: global up(arm) */
+/*e: global [[up]](arm) */
 
 // in main.c (used in mmu.c)
 extern ulong memsize;
 
-/*s: constant KMESGSIZE(arm) */
+/*s: constant [[KMESGSIZE]](arm) */
 #define KMESGSIZE (16*1024) // for /dev/kmesg
-/*e: constant KMESGSIZE(arm) */
+/*e: constant [[KMESGSIZE]](arm) */
 
 // TODO: put that in portdat.h or in netif.h?
 #pragma varargck  type  "I" uchar*

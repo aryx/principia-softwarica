@@ -19,7 +19,7 @@
  * later sorting into the appropriate buckets.
  */
 
-/*s: function arch_userpc(arm) */
+/*s: function [[arch_userpc]](arm) */
 /*
  *  return the userpc the last exception happened at
  */
@@ -29,9 +29,9 @@ arch_userpc(void)
     Ureg *ureg = up->dbgreg;
     return ureg->pc;
 }
-/*e: function arch_userpc(arm) */
+/*e: function [[arch_userpc]](arm) */
 
-/*s: function arch_dbgpc(arm) */
+/*s: function [[arch_dbgpc]](arm) */
 /*
  *  pc output by dumpaproc
  */
@@ -46,18 +46,18 @@ arch_dbgpc(Proc* p)
 
     return ureg->pc;
 }
-/*e: function arch_dbgpc(arm) */
+/*e: function [[arch_dbgpc]](arm) */
 
-/*s: function arch_userureg(arm) */
+/*s: function [[arch_userureg]](arm) */
 bool
 arch_userureg(Ureg* ureg)
 {
     return (ureg->psr & PsrMask) == PsrMusr;
 }
-/*e: function arch_userureg(arm) */
+/*e: function [[arch_userureg]](arm) */
 
 
-/*s: function arch_setregisters(arm) */
+/*s: function [[arch_setregisters]](arm) */
 /* This routine must save the values of registers the user is not permitted
  * to write from devproc and then restore the saved values before returning.
  */
@@ -66,9 +66,9 @@ arch_setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 {
     USED(ureg, pureg, uva, n);
 }
-/*e: function arch_setregisters(arm) */
+/*e: function [[arch_setregisters]](arm) */
 
-/*s: function arch_setkernur(arm) */
+/*s: function [[arch_setkernur]](arm) */
 /* Give enough context in the ureg to produce a kernel stack for
  * a sleeping process
  */
@@ -79,9 +79,9 @@ arch_setkernur(Ureg* ureg, Proc* p)
     ureg->sp = p->sched.sp+4;
     ureg->r14 = PTR2UINT(sched);
 }
-/*e: function arch_setkernur(arm) */
+/*e: function [[arch_setkernur]](arm) */
 
-/*s: function arch_validalign(arm) */
+/*s: function [[arch_validalign]](arm) */
 /*
  * called in syscallfmt.c, sysfile.c, sysproc.c
  */
@@ -110,9 +110,9 @@ arch_validalign(uintptr addr, unsigned align)
     error(Ebadarg);
     /*NOTREACHED*/
 }
-/*e: function arch_validalign(arm) */
+/*e: function [[arch_validalign]](arm) */
 
-/*s: function arch__kexit(arm) */
+/*s: function [[arch__kexit]](arm) */
 /* go to user space */
 void
 arch__kexit(Ureg*)
@@ -134,10 +134,10 @@ arch__kexit(Ureg*)
     cachedwbinvse(tos, sizeof *tos);
     /*e: [[arch__kexit()]] write back cache(arm) */
 }
-/*e: function arch__kexit(arm) */
+/*e: function [[arch__kexit]](arm) */
 
 
-/*s: function linkproc(arm) */
+/*s: function [[linkproc]](arm) */
 /*
  *  this is the body for all kproc's
  */
@@ -150,9 +150,9 @@ linkproc(void)
     // to run forever??
     pexit("kproc exiting", false);
 }
-/*e: function linkproc(arm) */
+/*e: function [[linkproc]](arm) */
 
-/*s: function arch_kprocchild(arm) */
+/*s: function [[arch_kprocchild]](arm) */
 /*
  *  setup stack and initial PC for a new kernel proc.  This is architecture
  *  dependent because of the starting stack location
@@ -166,5 +166,5 @@ arch_kprocchild(Proc *p, void (*func)(void*), void *arg)
     p->kpfun = func;
     p->kparg = arg;
 }
-/*e: function arch_kprocchild(arm) */
+/*e: function [[arch_kprocchild]](arm) */
 /*e: processes/arm/arch.c */

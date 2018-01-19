@@ -13,7 +13,7 @@
 //--------------------------------------------------------------------
 
 // TODO: state transition diagram
-/*s: enum procstate */
+/*s: enum [[procstate]] */
 /* Process states, Proc.state */
 enum Procstate
 {
@@ -43,7 +43,7 @@ enum Procstate
     Waitrelease, // for real-time scheduling
     /*e: [[Procstate]] cases */
 };
-/*e: enum procstate */
+/*e: enum [[procstate]] */
 
 // hash<enum<procstate>, string>, to debug
 extern  char* statename[];
@@ -51,7 +51,7 @@ extern  char* statename[];
 //--------------------------------------------------------------------
 // Memory
 //--------------------------------------------------------------------
-/*s: enum procseg */
+/*s: enum [[procseg]] */
 /*
  *  process memory segments - NSEG always last !
  */
@@ -65,7 +65,7 @@ enum Procseg
 
     NSEG // to count, see Proc.seg array
 };
-/*e: enum procseg */
+/*e: enum [[procseg]] */
 
 //--------------------------------------------------------------------
 // Files
@@ -73,12 +73,12 @@ enum Procseg
 
 enum
 {
-   /*s: constant DELTAFD */
+   /*s: constant [[DELTAFD]] */
    DELTAFD = 20    /* incremental increase in Fgrp.fd's */
-   /*e: constant DELTAFD */
+   /*e: constant [[DELTAFD]] */
 };
 
-/*s: struct Fgrp */
+/*s: struct [[Fgrp]] */
 struct Fgrp
 {
     // array<option<ref_counted<Chan>>>
@@ -93,19 +93,19 @@ struct Fgrp
     // extra
     Ref;
 };
-/*e: struct Fgrp */
+/*e: struct [[Fgrp]] */
 
 
-/*s: function MOUNTH */
+/*s: function [[MOUNTH]] */
 enum
 {
     MNTLOG  = 5,
     MNTHASH = 1<<MNTLOG,  /* Hash to walk mount table */
 };
 #define MOUNTH(p,qid) ((p)->mnthash[(qid).path&((1<<MNTLOG)-1)])
-/*e: function MOUNTH */
+/*e: function [[MOUNTH]] */
 
-/*s: struct Pgrp */
+/*s: struct [[Pgrp]] */
 // Mount table, aka Namespace, aka process group
 struct Pgrp
 {
@@ -125,44 +125,44 @@ struct Pgrp
     QLock debug;      /* single access via devproc.c */
     RWlock  ns;     /* Namespace n read/one write lock */
 };
-/*e: struct Pgrp */
+/*e: struct [[Pgrp]] */
 
 //--------------------------------------------------------------------
 // System call
 //--------------------------------------------------------------------
 
-/*s: constant MAXSYSARG */
+/*s: constant [[MAXSYSARG]] */
 #define MAXSYSARG  5 /* for mount(fd, afd, mpt, flag, arg) */
-/*e: constant MAXSYSARG */
+/*e: constant [[MAXSYSARG]] */
 
-/*s: struct Sargs */
+/*s: struct [[Sargs]] */
 // syscall arguments copied from user stack
 struct Sargs
 {
     ulong args[MAXSYSARG];
 };
-/*e: struct Sargs */
+/*e: struct [[Sargs]] */
 
 //--------------------------------------------------------------------
 // Notes
 //--------------------------------------------------------------------
 
 enum {
-    /*s: constant NNOTE */
+    /*s: constant [[NNOTE]] */
     NNOTE = 5,
-    /*e: constant NNOTE */
+    /*e: constant [[NNOTE]] */
 };
 
-/*s: enum notekind */
+/*s: enum [[notekind]] */
 enum NoteKind
 {
     NUser,        /* note provided externally */
     NExit,        /* deliver note quietly */
     NDebug,       /* print debug message */
 };
-/*e: enum notekind */
+/*e: enum [[notekind]] */
 
-/*s: struct Note */
+/*s: struct [[Note]] */
 // a kind of Unix signal
 struct Note
 {
@@ -170,14 +170,14 @@ struct Note
     // enum<NoteKind>
     int flag;     /* whether system posted it */
 };
-/*e: struct Note */
+/*e: struct [[Note]] */
 extern Counter  noteidalloc;
 
 //--------------------------------------------------------------------
 // Process children waiting
 //--------------------------------------------------------------------
 
-/*s: struct Waitq */
+/*s: struct [[Waitq]] */
 // essentially a stack<ref_own<Waitmsg>>
 struct Waitq
 {
@@ -187,22 +187,22 @@ struct Waitq
     // list<ref_own<Waitq>> Proc.waitq
     Waitq *next;
 };
-/*e: struct Waitq */
+/*e: struct [[Waitq]] */
 
 //--------------------------------------------------------------------
 // Synchronization (Rendez vous)
 //--------------------------------------------------------------------
 
-/*s: function REND */
+/*s: function [[REND]] */
 enum
 {
     RENDLOG = 5,
     RENDHASH =  1<<RENDLOG, /* Hash to lookup rendezvous tags */
 };
 #define REND(p,s) ((p)->rendhash[(s)&((1<<RENDLOG)-1)])
-/*e: function REND */
+/*e: function [[REND]] */
 
-/*s: struct Rgrp */
+/*s: struct [[Rgrp]] */
 struct Rgrp
 {
     // hash<??, list<ref<Proc>>>
@@ -211,7 +211,7 @@ struct Rgrp
     // extra
     Ref;        /* the Ref's lock is also the Rgrp's lock */
 };
-/*e: struct Rgrp */
+/*e: struct [[Rgrp]] */
 
 //--------------------------------------------------------------------
 // Alarms, timers
@@ -223,15 +223,15 @@ struct Rgrp
 //--------------------------------------------------------------------
 
 enum {
-    /*s: constant Npriq */
+    /*s: constant [[Npriq]] */
     Npriq   = 20,   /* number of scheduler priority levels */
-    /*e: constant Npriq */
-    /*s: constant Nrq */
+    /*e: constant [[Npriq]] */
+    /*s: constant [[Nrq]] */
     Nrq   = Npriq+2,  /* number of priority levels including real time */
-    /*e: constant Nrq */
+    /*e: constant [[Nrq]] */
 };
 
-/*s: enum priority */
+/*s: enum [[priority]] */
 enum Priority 
 {
     PriNormal = 10,   /* base priority for normal processes */
@@ -245,9 +245,9 @@ enum Priority
     PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
     /*e: [[Priority]] cases for real-time priority */
 };
-/*e: enum priority */
+/*e: enum [[priority]] */
 
-/*s: enum edfflags */
+/*s: enum [[edfflags]] */
 enum EdfFlags 
 {
     /* Edf.flags field */
@@ -259,9 +259,9 @@ enum EdfFlags
     Yield     = 0x20,
     Extratime   = 0x40,
 };
-/*e: enum edfflags */
+/*e: enum [[edfflags]] */
 
-/*s: struct Edf */
+/*s: struct [[Edf]] */
 struct Edf {
     /* All times in µs */
     /* time intervals */
@@ -295,21 +295,21 @@ struct Edf {
     ulong   periods;
     ulong   missed;
 };
-/*e: struct Edf */
+/*e: struct [[Edf]] */
 
 //--------------------------------------------------------------------
 // Error management
 //--------------------------------------------------------------------
 enum {
-    /*s: constant NERR */
+    /*s: constant [[NERR]] */
     NERR = 64,
-    /*e: constant NERR */
+    /*e: constant [[NERR]] */
 };
 
 //--------------------------------------------------------------------
 // Stats, profiling
 //--------------------------------------------------------------------
-/*s: enum proctimer */
+/*s: enum [[proctimer]] */
 enum Proctime 
 {
     TUser = 0,    /* Proc.time */
@@ -320,13 +320,13 @@ enum Proctime
     TCUser,
     TCSys,
 };
-/*e: enum proctimer */
+/*e: enum [[proctimer]] */
 
 //--------------------------------------------------------------------
 // Debugger
 //--------------------------------------------------------------------
 
-/*s: enum procctl */
+/*s: enum [[procctl]] */
 enum Procctl
 {
     Proc_nothing = 0,
@@ -341,13 +341,13 @@ enum Procctl
     Proc_exitbig,
     /*e: [[Procctl]] cases */
 };
-/*e: enum procctl */
+/*e: enum [[procctl]] */
 
 //--------------------------------------------------------------------
 // Misc
 //--------------------------------------------------------------------
 
-/*s: enum fpsavestatus */
+/*s: enum [[fpsavestatus]] */
 /*
  * FPsave.status
  */
@@ -362,13 +362,13 @@ enum FPSaveStatus
     /* the following is a bit that can be or'd into the state */
     FPillegal=  0x100,
 };
-/*e: enum fpsavestatus */
+/*e: enum [[fpsavestatus]] */
 
 //*****************************************************************************
 // Proc, the big one
 //*****************************************************************************
 
-/*s: struct Proc */
+/*s: struct [[Proc]] */
 struct Proc
 {
 //--------------------------------------------------------------------
@@ -641,7 +641,7 @@ struct Proc
     Proc  *palarm;  /* Next alarm time */
     /*e: [[Proc]] extra fields */
 };
-/*e: struct Proc */
+/*e: struct [[Proc]] */
 
 /*s: macro waserror poperror */
 // poor's man exceptions in C
@@ -663,7 +663,7 @@ struct Proc
 //*****************************************************************************
 
 // Proc allocator (singleton), was actually in proc.c, but important so here
-/*s: struct Procalloc */
+/*s: struct [[Procalloc]] */
 // Process allocator
 struct Procalloc
 {
@@ -680,10 +680,10 @@ struct Procalloc
     // extra
     Lock;
 };
-/*e: struct Procalloc */
+/*e: struct [[Procalloc]] */
 //IMPORTANT: static struct Procalloc procalloc; (in proc.c)
 
-/*s: struct Schedq */
+/*s: struct [[Schedq]] */
 // essentially a queue<ref<Proc>>
 struct Schedq
 {
@@ -697,12 +697,12 @@ struct Schedq
     // extra
     Lock; // protects also the globals nrdy and runvec
 };
-/*e: struct Schedq */
+/*e: struct [[Schedq]] */
 // hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
 //IMPORTANT: Schedq  runq[Nrq];  (in proc.c)
 
 // was in alarm.c, but important so here
-/*s: struct Alarms */
+/*s: struct [[Alarms]] */
 struct Alarms
 {
     // sorted_list<ref<Proc> (next = Proc.palarm, sort_key = Proc.alarm)
@@ -711,11 +711,11 @@ struct Alarms
     // Extra
     QLock;
 };
-/*e: struct Alarms */
+/*e: struct [[Alarms]] */
 //IMPORTANT: static Alarms alarms; (in alarm.c)
 //IMPORTANT: static Rendez alarmr; (in alarm.c)
 
-/*s: struct Active */
+/*s: struct [[Active]] */
 struct Active
 {
     // array<bool> (coupling: sizeof(int) must be >= MAXCPUS)
@@ -731,7 +731,7 @@ struct Active
     // extra
     Lock;
 };
-/*e: struct Active */
+/*e: struct [[Active]] */
 extern struct Active active;
 
 /*e: portdat_processes.h */

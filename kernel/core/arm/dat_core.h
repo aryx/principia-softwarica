@@ -1,10 +1,10 @@
 /*s: core/arm/dat_core.h */
 
-/*s: type PTE(arm) */
+/*s: type [[PTE]](arm) */
 typedef u32int      PTE;
-/*e: type PTE(arm) */
+/*e: type [[PTE]](arm) */
 
-/*s: struct Arch_Cpu(arm) */
+/*s: struct [[Arch_Cpu]](arm) */
 //coupling: do not change the first field! Some assembly code assumes this order
 struct Arch_Cpu {
     /*s: [[Cpu]] [[Arch]] mmu fields(arm) */
@@ -40,5 +40,5 @@ struct Arch_Cpu {
     u32int  sabt[5];
     /*e: [[Cpu]] [[Arch]] save of first five registers fields(arm) */
 };
-/*e: struct Arch_Cpu(arm) */
+/*e: struct [[Arch_Cpu]](arm) */
 /*e: core/arm/dat_core.h */

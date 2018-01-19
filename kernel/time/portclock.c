@@ -13,24 +13,24 @@
 #include <ureg.h>
 
 enum {
-   /*s: constant Maxtimerloops */
+   /*s: constant [[Maxtimerloops]] */
    Maxtimerloops = 20*1000,
-   /*e: constant Maxtimerloops */
+   /*e: constant [[Maxtimerloops]] */
 };
 
-/*s: global timers */
+/*s: global [[timers]] */
 static Timers timers[MAXCPUS];
-/*e: global timers */
-/*s: global timersinited */
+/*e: global [[timers]] */
+/*s: global [[timersinited]] */
 static bool timersinited;
-/*e: global timersinited */
+/*e: global [[timersinited]] */
 
 /*s: clock.c statistics */
 ulong intrcount[MAXCPUS];
 ulong fcallcount[MAXCPUS];
 /*e: clock.c statistics */
 
-/*s: function tadd */
+/*s: function [[tadd]] */
 static Tfast
 tadd(Timers *tt, Timer *nt)
 {
@@ -83,9 +83,9 @@ tadd(Timers *tt, Timer *nt)
         return nt->twhen;
     return 0;
 }
-/*e: function tadd */
+/*e: function [[tadd]] */
 
-/*s: function tdel */
+/*s: function [[tdel]] */
 static Tfast
 tdel(Timer *dt)
 {
@@ -110,9 +110,9 @@ tdel(Timer *dt)
         return tt->head->twhen;
     return 0;
 }
-/*e: function tdel */
+/*e: function [[tdel]] */
 
-/*s: function timeradd */
+/*s: function [[timeradd]] */
 /* add or modify a timer */
 void
 timeradd(Timer *nt)
@@ -138,9 +138,9 @@ timeradd(Timer *nt)
     iunlock(tt);
     iunlock(nt);
 }
-/*e: function timeradd */
+/*e: function [[timeradd]] */
 
-/*s: function timerdel */
+/*s: function [[timerdel]] */
 void
 timerdel(Timer *dt)
 {
@@ -157,7 +157,7 @@ timerdel(Timer *dt)
     }
     iunlock(dt);
 }
-/*e: function timerdel */
+/*e: function [[timerdel]] */
 
 /*s: clock callback hzclock */
 void
@@ -276,7 +276,7 @@ timerintr(Ureg *u, Tval)
 }
 /*e: interrupt callback timerintr */
 
-/*s: function timersinit */
+/*s: function [[timersinit]] */
 void
 timersinit(void)
 {
@@ -297,9 +297,9 @@ timersinit(void)
     t->tf = nil;
     timeradd(t);
 }
-/*e: function timersinit */
+/*e: function [[timersinit]] */
 
-/*s: function addclock0link */
+/*s: function [[addclock0link]] */
 Timer*
 addclock0link(void (*f)(void), Tms ms)
 {
@@ -335,9 +335,9 @@ addclock0link(void (*f)(void), Tms ms)
     iunlock(&timers[0]);
     return nt;
 }
-/*e: function addclock0link */
+/*e: function [[addclock0link]] */
 
-/*s: function tk2ms */
+/*s: function [[tk2ms]] */
 /*
  *  This tk2ms avoids overflows that the macro version is prone to.
  *  It is a LOT slower so shouldn't be used if you're just converting
@@ -355,9 +355,9 @@ tk2ms(ulong ticks)
     ticks = t;
     return ticks;
 }
-/*e: function tk2ms */
+/*e: function [[tk2ms]] */
 
-/*s: function ms2tk */
+/*s: function [[ms2tk]] */
 ulong
 ms2tk(ulong ms)
 {
@@ -368,5 +368,5 @@ ms2tk(ulong ms)
     /*e: [[ms2tk()]] overflow approximation */
     return (ms * Arch_HZ + 500) / 1000;
 }
-/*e: function ms2tk */
+/*e: function [[ms2tk]] */
 /*e: portclock.c */

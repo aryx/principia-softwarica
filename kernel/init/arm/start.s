@@ -7,7 +7,7 @@
 #include "arm.h"
 #include "arminstr.ha"
 
-/*s: function _start(arm) */
+/*s: function [[_start]](arm) */
 /*
  * on bcm2836, only cpu0 starts here
  * other cpus enter at cpureset in armv7.s
@@ -40,5 +40,5 @@ TEXT _start(SB), 1, $-4
     // Unreached
     B   0(PC)
     RET
-/*e: function _start(arm) */
+/*e: function [[_start]](arm) */
 /*e: init/arm/start.s */

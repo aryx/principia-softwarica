@@ -8,7 +8,7 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: function procsetup(x86) */
+/*s: function [[procsetup]](x86) */
 void
 arch_procsetup(Proc* p)
 {
@@ -20,9 +20,9 @@ arch_procsetup(Proc* p)
       fpoff();
   /*e: [[procsetup()]] fp setup(x86) */
 }
-/*e: function procsetup(x86) */
+/*e: function [[procsetup]](x86) */
 
-/*s: function procsave(x86) */
+/*s: function [[procsave]](x86) */
 /*
  *  Save the cpu dependent part of the process state.
  */
@@ -66,9 +66,9 @@ arch_procsave(Proc *p)
      */
     mmuflushtlb(PADDR(cpu->pdproto));
 }
-/*e: function procsave(x86) */
+/*e: function [[procsave]](x86) */
 
-/*s: function procrestore(x86) */
+/*s: function [[procrestore]](x86) */
 void
 arch_procrestore(Proc *p)
 {
@@ -81,9 +81,9 @@ arch_procrestore(Proc *p)
     p->pcycles -= t;
     /*e: [[arch_procrestore]] cycles adjustments */
 }
-/*e: function procrestore(x86) */
+/*e: function [[procrestore]](x86) */
 
-/*s: function fpsavealloc(x86) */
+/*s: function [[fpsavealloc]](x86) */
 void
 fpsavealloc(void)
 {
@@ -91,9 +91,9 @@ fpsavealloc(void)
     if (cpu->fpsavalign == nil)
         panic("cpu%d: can't allocate fpsavalign", cpu->cpuno);
 }
-/*e: function fpsavealloc(x86) */
+/*e: function [[fpsavealloc]](x86) */
 
-/*s: function fpssesave(x86) */
+/*s: function [[fpssesave]](x86) */
 /*
  * sse fp save and restore buffers have to be 16-byte (FPalign) aligned,
  * so we shuffle the data down as needed or make copies.
@@ -112,9 +112,9 @@ fpssesave(Arch_FPsave *fps)
     if (fps->magic != 0x1234)
         print("fpssesave: magic corrupted\n");
 }
-/*e: function fpssesave(x86) */
+/*e: function [[fpssesave]](x86) */
 
-/*s: function fpsserestore(x86) */
+/*s: function [[fpsserestore]](x86) */
 void
 fpsserestore(Arch_FPsave *fps)
 {
@@ -130,9 +130,9 @@ fpsserestore(Arch_FPsave *fps)
     if (fps->magic != 0x4321)
         print("fpsserestore: magic corrupted\n");
 }
-/*e: function fpsserestore(x86) */
+/*e: function [[fpsserestore]](x86) */
 
-/*s: function idlehands(x86) */
+/*s: function [[idlehands]](x86) */
 // current configuration
 static bool idle_spin = false;
 static int idle_if_nproc = 0;
@@ -159,5 +159,5 @@ arch_idlehands(void)
         (idle_if_nproc && conf.ncpu >= idle_if_nproc))
         halt();
 }
-/*e: function idlehands(x86) */
+/*e: function [[idlehands]](x86) */
 /*e: processes/386/main_processes.c */

@@ -20,11 +20,11 @@
 typedef struct Mbox Mbox;
 typedef struct Mboxes Mboxes;
 
-/*s: constant ARMLOCAL(arm) */
+/*s: constant [[ARMLOCAL]](arm) */
 #define ARMLOCAL    (VIRTIO+IOSIZE)
-/*e: constant ARMLOCAL(arm) */
+/*e: constant [[ARMLOCAL]](arm) */
 
-/*s: global soc(raspberry pi2)(arm) */
+/*s: global [[soc]](raspberry pi2)(arm) */
 Soc soc = {
     .dramsize   = 1024*MiB,
     .physio     = 0x3F000000,
@@ -39,10 +39,10 @@ Soc soc = {
      .busio      = 0x7E000000,
      /*e: [[soc(raspberry pi2)]] other fields(arm) */
 };
-/*e: global soc(raspberry pi2)(arm) */
+/*e: global [[soc]](raspberry pi2)(arm) */
 
 
-/*s: struct Mbox(arm) */
+/*s: struct [[Mbox]](arm) */
 /*
  * Arm local regs for SMP
  */
@@ -52,13 +52,13 @@ struct Mbox {
     u32int  mbox2;
     u32int  startcpu;
 };
-/*e: struct Mbox(arm) */
-/*s: struct Mboxes(arm) */
+/*e: struct [[Mbox]](arm) */
+/*s: struct [[Mboxes]](arm) */
 struct Mboxes {
     Mbox    set[4];
     Mbox    clr[4];
 };
-/*e: struct Mboxes(arm) */
+/*e: struct [[Mboxes]](arm) */
 
 enum {
     Mboxregs    = 0x80
@@ -69,7 +69,7 @@ static Lock startlock[MAXCPUS + 1];
 // in startv7.s
 extern u32int cpidget(void);
 
-/*s: function cputype2name(raspberry pi2)(arm) */
+/*s: function [[cputype2name]](raspberry pi2)(arm) */
 char*
 cputype2name(char *buf, int size)
 {
@@ -81,9 +81,9 @@ cputype2name(char *buf, int size)
         (r >> 20) & MASK(4), r & MASK(4));
     return buf;
 }
-/*e: function cputype2name(raspberry pi2)(arm) */
+/*e: function [[cputype2name]](raspberry pi2)(arm) */
 
-/*s: function arch_cpuidprint(raspberry pi2)(arm) */
+/*s: function [[arch_cpuidprint]](raspberry pi2)(arm) */
 void
 arch_cpuidprint(void)
 {
@@ -93,9 +93,9 @@ arch_cpuidprint(void)
     arch_delay(50);             /* let uart catch up */
     print("cpu%d: %dMHz ARM %s\n", cpu->cpuno, cpu->cpumhz, name);
 }
-/*e: function arch_cpuidprint(raspberry pi2)(arm) */
+/*e: function [[arch_cpuidprint]](raspberry pi2)(arm) */
 
-/*s: function getncpus(raspberry pi2)(arm) */
+/*s: function [[getncpus]](raspberry pi2)(arm) */
 int
 getncpus(void)
 {
@@ -112,9 +112,9 @@ getncpus(void)
     /*e: [[getncpus()]] adjust n if ncpu config parameter(arm) */
     return n;
 }
-/*e: function getncpus(raspberry pi2)(arm) */
+/*e: function [[getncpus]](raspberry pi2)(arm) */
 
-/*s: function startcpu(raspberry pi2)(arm) */
+/*s: function [[startcpu]](raspberry pi2)(arm) */
 static int
 startcpu(uint xcpu)
 {
@@ -133,9 +133,9 @@ startcpu(uint xcpu)
     mb->set[xcpu].doorbell = 1;
     return 0;
 }
-/*e: function startcpu(raspberry pi2)(arm) */
+/*e: function [[startcpu]](raspberry pi2)(arm) */
 
-/*s: function startcpus(raspberry pi2)(arm) */
+/*s: function [[startcpus]](raspberry pi2)(arm) */
 int
 startcpus(uint ncpu)
 {
@@ -152,7 +152,7 @@ startcpus(uint ncpu)
     }
     return ncpu;
 }
-/*e: function startcpus(raspberry pi2)(arm) */
+/*e: function [[startcpus]](raspberry pi2)(arm) */
 
 
 int
@@ -165,20 +165,20 @@ archether(unsigned ctlrno, Ether *ether)
     return 1;
 }
 
-/*s: function l2ap(raspberry pi2)(arm) */
+/*s: function [[l2ap]](raspberry pi2)(arm) */
 int
 l2ap(int ap)
 {
     return (AP(0, (ap)));
 }
-/*e: function l2ap(raspberry pi2)(arm) */
+/*e: function [[l2ap]](raspberry pi2)(arm) */
 
 
 // in main.c
 extern void arch__cpuinit(void);
 extern void machon(uint);
 
-/*s: function cpustart(raspberry pi2)(arm) */
+/*s: function [[cpustart]](raspberry pi2)(arm) */
 void
 cpustart(int xcpu)
 {
@@ -207,6 +207,6 @@ cpustart(int xcpu)
 
     panic("schedinit returned");
 }
-/*e: function cpustart(raspberry pi2)(arm) */
+/*e: function [[cpustart]](raspberry pi2)(arm) */
 
 /*e: init/arm/raspi2.c */

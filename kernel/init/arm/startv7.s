@@ -7,11 +7,11 @@
 #include "arm.h"
 #include "arminstr.ha"
 
-/*s: instruction WFI_EQ(arm) */
+/*s: instruction [[WFI_EQ]](arm) */
 #define WFI_EQ  WORD    $0x0320f003 /* wait for interrupt if eq */
-/*e: instruction WFI_EQ(arm) */
+/*e: instruction [[WFI_EQ]](arm) */
 
-/*s: function armstart(raspberry pi2)(arm) */
+/*s: function [[armstart]](raspberry pi2)(arm) */
 TEXT armstart(SB), 1, $-4
 
     /*
@@ -88,9 +88,9 @@ _ramZ:
     MOVW    $setR12(SB), R12
     MOVW    $(CPUADDR+CPUSIZE-4), R13
     MOVW    $_startpg(SB), R15
-/*e: function armstart(raspberry pi2)(arm) */
+/*e: function [[armstart]](raspberry pi2)(arm) */
 
-/*s: function _startpg(raspberry pi2)(arm) */
+/*s: function [[_startpg]](raspberry pi2)(arm) */
 TEXT _startpg(SB), 1, $-4
 
     /*s: [[_startpg()]] enable cycle counter(raspberry pi2)(arm) */
@@ -109,9 +109,9 @@ TEXT _startpg(SB), 1, $-4
     B   0(PC)
 
     BL  _div(SB)        /* hack to load _div, etc. */
-/*e: function _startpg(raspberry pi2)(arm) */
+/*e: function [[_startpg]](raspberry pi2)(arm) */
 
-/*s: function cpureset(raspberry pi2)(arm) */
+/*s: function [[cpureset]](raspberry pi2)(arm) */
 /*
  * startup entry for cpu(s) other than 0
  */
@@ -208,9 +208,9 @@ reset:
     MOVW    $setR12(SB), R12
     ADD $KZERO, R13
     MOVW    $_startpg2(SB), R15
-/*e: function cpureset(raspberry pi2)(arm) */
+/*e: function [[cpureset]](raspberry pi2)(arm) */
 
-/*s: function _startpg2(raspberry pi2)(arm) */
+/*s: function [[_startpg2]](raspberry pi2)(arm) */
 TEXT _startpg2(SB), 1, $-4
 
     /*s: [[_startpg2()]] enable cycle counter(raspberry pi2)(arm) */
@@ -229,16 +229,16 @@ TEXT _startpg2(SB), 1, $-4
     AND $(MAXCPUS-1), R0            /* mask out non-cpu-id bits */
     BL  ,cpustart(SB)
     B   ,0(PC)
-/*e: function _startpg2(raspberry pi2)(arm) */
+/*e: function [[_startpg2]](raspberry pi2)(arm) */
 
-/*s: function cpidget(raspberry pi2)(arm) */
+/*s: function [[cpidget]](raspberry pi2)(arm) */
 TEXT cpidget(SB), 1, $-4            /* main ID */
     MRC CpSC, 0, R0, C(CpID), C(0), CpIDid
     RET
-/*e: function cpidget(raspberry pi2)(arm) */
+/*e: function [[cpidget]](raspberry pi2)(arm) */
 
         
-/*s: function arch_idlehands(raspberry pi2)(arm) */
+/*s: function [[arch_idlehands]](raspberry pi2)(arm) */
 TEXT arch_idlehands(SB), $-4
     MOVW    CPSR, R3
     ORR $(PsrDirq|PsrDfiq), R3, R1      /* splfhi */
@@ -254,6 +254,6 @@ TEXT arch_idlehands(SB), $-4
 
     MOVW    R3, CPSR            /* splx */
     RET
-/*e: function arch_idlehands(raspberry pi2)(arm) */
+/*e: function [[arch_idlehands]](raspberry pi2)(arm) */
 
 /*e: init/arm/startv7.s */

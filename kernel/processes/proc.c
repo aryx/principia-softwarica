@@ -13,27 +13,27 @@
 // Globals
 //*****************************************************************************
 
-/*s: global runq */
+/*s: global [[runq]] */
 // The run queue!!
 // hash<enum<priority>, queue<ref<Proc>>>
 Schedq  runq[Nrq];
-/*e: global runq */
-/*s: global runveq */
+/*e: global [[runq]] */
+/*s: global [[runveq]] */
 // array<bool>, each bit i represents whether the runq at pri i has processes
 ulong   runvec; // coupling: sizeof(ulong) must be >= Nrq
-/*e: global runveq */
+/*e: global [[runveq]] */
 
-/*s: global procalloc */
+/*s: global [[procalloc]] */
 static struct Procalloc procalloc;
-/*e: global procalloc */
+/*e: global [[procalloc]] */
 
-/*s: global nrdy */
+/*s: global [[nrdy]] */
 int nrdy;
-/*e: global nrdy */
-/*s: global noteidalloc */
+/*e: global [[nrdy]] */
+/*s: global [[noteidalloc]] */
 // also used by sysrfork()
 Counter noteidalloc;
-/*e: global noteidalloc */
+/*e: global [[noteidalloc]] */
 
 /*s: proc.c statistics */
 long preempts;
@@ -41,21 +41,21 @@ ulong delayedscheds;    /* statistics */
 long skipscheds;
 /*e: proc.c statistics */
 
-/*s: global pidalloc */
+/*s: global [[pidalloc]] */
 static Counter  pidalloc;
-/*e: global pidalloc */
+/*e: global [[pidalloc]] */
 
 enum
 {
-    /*s: constant Schedagain */
+    /*s: constant [[Schedagain]] */
     schedgain = 30, /* units in seconds */
-    /*e: constant Schedagain */
-    /*s: constant Scaling */
+    /*e: constant [[Schedagain]] */
+    /*s: constant [[Scaling]] */
     Scaling=2,
-    /*e: constant Scaling */
+    /*e: constant [[Scaling]] */
 };
 
-/*s: global statename */
+/*s: global [[statename]] */
 // hash<enum<Procstate>, string>, coupling: with enum Procstate
 char *statename[] =
 {
@@ -73,7 +73,7 @@ char *statename[] =
     [Rendezvous]  = "Rendezvous",
     [Waitrelease] = "Waitrelease",
 };
-/*e: global statename */
+/*e: global [[statename]] */
 
 /*s: proc.c forward decl */
 Proc* runproc(void);
@@ -91,7 +91,7 @@ static void rebalance(void);
 
 // see also waserror() and poperror() macro in portdat_processes.h
 
-/*s: function error */
+/*s: function [[error]] */
 void
 proc_error(char *err)
 {
@@ -102,18 +102,18 @@ proc_error(char *err)
     arch_setlabel(&up->errlab[NERR-1]);
     nexterror();
 }
-/*e: function error */
+/*e: function [[error]] */
 
-/*s: function nexterror */
+/*s: function [[nexterror]] */
 // raise an exception
 void
 proc_nexterror(void)
 {
     arch_gotolabel(&up->errlab[--up->nerrlab]);
 }
-/*e: function nexterror */
+/*e: function [[nexterror]] */
 
-/*s: function exhausted */
+/*s: function [[exhausted]] */
 void
 exhausted(char *resource)
 {
@@ -123,13 +123,13 @@ exhausted(char *resource)
     iprint("%s\n", buf);
     error(buf);
 }
-/*e: function exhausted */
+/*e: function [[exhausted]] */
 
 //*****************************************************************************
 // Functions
 //*****************************************************************************
 
-/*s: function schedinit */
+/*s: function [[schedinit]] */
 /*
  * Always arch_splhi()'ed.
  */
@@ -191,9 +191,9 @@ schedinit(void)     /* never returns */
     // ok at this point up is nil
     sched();
 }
-/*e: function schedinit */
+/*e: function [[schedinit]] */
 
-/*s: function sched */
+/*s: function [[sched]] */
 /*
  *  If changing this routine, look also at sleep().  It
  *  contains a copy of the guts of sched().
@@ -302,25 +302,25 @@ proc_sched(void)
     arch_gotolabel(&up->sched);
     /*e: [[sched()]] if no up */
 }
-/*e: function sched */
+/*e: function [[sched]] */
 
-/*s: function anyready */
+/*s: function [[anyready]] */
 bool
 anyready(void)
 {
     return runvec;
 }
-/*e: function anyready */
+/*e: function [[anyready]] */
 
-/*s: function anyhigher */
+/*s: function [[anyhigher]] */
 int
 anyhigher(void)
 {
     return runvec & ~((1<<(up->priority+1))-1);
 }
-/*e: function anyhigher */
+/*e: function [[anyhigher]] */
 
-/*s: function hzsched */
+/*s: function [[hzsched]] */
 /*
  *  here once per clock tick to see if we should resched
  */
@@ -340,9 +340,9 @@ hzsched(void)
         up->delaysched++;
     }
 }
-/*e: function hzsched */
+/*e: function [[hzsched]] */
 
-/*s: function preempt */
+/*s: function [[preempt]] */
 /*
  *  here at the end of non-clock interrupts to see if we should preempt the
  *  current process.
@@ -362,9 +362,9 @@ preempt(void)
           }
     return;
 }
-/*e: function preempt */
+/*e: function [[preempt]] */
 
-/*s: function updatecpu */
+/*s: function [[updatecpu]] */
 /*
  * Update the cpu time average for this particular process,
  * which is about to change from up -> not up or vice versa.
@@ -435,9 +435,9 @@ updatecpu(Proc *p)
     }
 
 }
-/*e: function updatecpu */
+/*e: function [[updatecpu]] */
 
-/*s: function reprioritize */
+/*s: function [[reprioritize]] */
 /*
  * On average, p has used p->cpuavg of a cpu recently.
  * Its fair share is conf.ncpu/cpu->load of a cpu.  If it has been getting
@@ -473,9 +473,9 @@ reprioritize(Proc *p)
 //iprint("pid %d cpu %d load %d fair %d pri %d\n", p->pid, p->cpuavg, load, fairshare, ratio);
     return ratio;
 }
-/*e: function reprioritize */
+/*e: function [[reprioritize]] */
 
-/*s: function queueproc */
+/*s: function [[queueproc]] */
 /*
  * add a process to a scheduling queue
  */
@@ -501,9 +501,9 @@ queueproc(Schedq *rq, Proc *p)
     runvec |= 1<<pri;
     unlock(runq);
 }
-/*e: function queueproc */
+/*e: function [[queueproc]] */
 
-/*s: function dequeueproc */
+/*s: function [[dequeueproc]] */
 /*
  *  try to remove a process from a scheduling queue (called arch_splhi)
  */
@@ -554,9 +554,9 @@ dequeueproc(Schedq *rq, Proc *tp)
     unlock(runq);
     return p;
 }
-/*e: function dequeueproc */
+/*e: function [[dequeueproc]] */
 
-/*s: function ready */
+/*s: function [[ready]] */
 /*
  *  ready(p) picks a new priority for a process and sticks it in the
  *  runq for that priority.
@@ -599,9 +599,9 @@ proc_ready(Proc *p)
     /*e: [[ready()]] hook proctrace */
     arch_splx(s);
 }
-/*e: function ready */
+/*e: function [[ready]] */
 
-/*s: function yield */
+/*s: function [[yield]] */
 /*
  *  yield the processor and drop our priority
  */
@@ -616,18 +616,18 @@ yield(void)
         sched();
     }
 }
-/*e: function yield */
+/*e: function [[yield]] */
 
-/*s: global balancetime */
+/*s: global [[balancetime]] */
 /*
  *  recalculate priorities once a second.  We need to do this
  *  since priorities will otherwise only be recalculated when
  *  the running process blocks.
  */
 ulong balancetime;
-/*e: global balancetime */
+/*e: global [[balancetime]] */
 
-/*s: function rebalance */
+/*s: function [[rebalance]] */
 static void
 rebalance(void)
 {
@@ -663,9 +663,9 @@ another:
         }
     }
 }
-/*e: function rebalance */
+/*e: function [[rebalance]] */
     
-/*s: function runproc */
+/*s: function [[runproc]] */
 /*
  *  pick a process to run
  */
@@ -726,12 +726,12 @@ loop:
         // nothing found
         /* waste time or halt the CPU */
         arch_idlehands();
-        /*s: [[runproc()]] after arch_idlehands, before restarting loop */
+        /*s: [[runproc()]] after [[arch_idlehands]], before restarting loop */
         /* remember how much time we're here */
         now = arch_perfticks();
         cpu->perf.inidle += now-start;
         start = now;
-        /*e: [[runproc()]] after arch_idlehands, before restarting loop */
+        /*e: [[runproc()]] after [[arch_idlehands]], before restarting loop */
     }
 
 found:
@@ -756,9 +756,9 @@ found:
     /*e: [[runproc()]] hook proctrace */
     return p;
 }
-/*e: function runproc */
+/*e: function [[runproc]] */
 
-/*s: function canpage */
+/*s: function [[canpage]] */
 int
 canpage(Proc *p)
 {
@@ -776,9 +776,9 @@ canpage(Proc *p)
 
     return ok;
 }
-/*e: function canpage */
+/*e: function [[canpage]] */
 
-/*s: function noprocpanic */
+/*s: function [[noprocpanic]] */
 void
 noprocpanic(char *msg)
 {
@@ -796,9 +796,9 @@ noprocpanic(char *msg)
     arch_delay(1000);
     panic(msg);
 }
-/*e: function noprocpanic */
+/*e: function [[noprocpanic]] */
 
-/*s: constructor newproc */
+/*s: constructor [[newproc]] */
 Proc*
 newproc(void)
 {
@@ -916,9 +916,9 @@ newproc(void)
 
     return p;
 }
-/*e: constructor newproc */
+/*e: constructor [[newproc]] */
 
-/*s: function procwired */
+/*s: function [[procwired]] */
 /*
  * wire this proc to a processor
  */
@@ -952,9 +952,9 @@ procwired(Proc *p, int bm)
     p->wired = CPUS(bm);
     p->lastcpu = p->wired;
 }
-/*e: function procwired */
+/*e: function [[procwired]] */
 
-/*s: function procpriority */
+/*s: function [[procpriority]] */
 void
 procpriority(Proc *p, int pri, bool fixed)
 {
@@ -969,9 +969,9 @@ procpriority(Proc *p, int pri, bool fixed)
     p->basepri = pri;
     p->fixedpri = fixed;
 }
-/*e: function procpriority */
+/*e: function [[procpriority]] */
 
-/*s: function procinit */
+/*s: function [[procinit]] */
 void
 procinit(void)
 {
@@ -993,9 +993,9 @@ procinit(void)
         p->qnext = p+1;
     p->qnext = nil;
 }
-/*e: function procinit */
+/*e: function [[procinit]] */
 
-/*s: function sleep */
+/*s: function [[sleep]] */
 /*
  *  sleep if a condition is not true.  Another process will
  *  awaken us after it sets the condition.  When we awaken
@@ -1092,17 +1092,17 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
     /*e: [[sleep()]] if notepending */
     arch_splx(s);
 }
-/*e: function sleep */
+/*e: function [[sleep]] */
 
-/*s: function tfn */
+/*s: function [[tfn]] */
 static int
 tfn(void *arg)
 {
     return up->trend == nil || up->tfn(arg);
 }
-/*e: function tfn */
+/*e: function [[tfn]] */
 
-/*s: function twakeup */
+/*s: function [[twakeup]] */
 void
 twakeup(Ureg*, Timer *t)
 {
@@ -1115,9 +1115,9 @@ twakeup(Ureg*, Timer *t)
     if(trend)
         wakeup(trend);
 }
-/*e: function twakeup */
+/*e: function [[twakeup]] */
 
-/*s: function tsleep */
+/*s: function [[tsleep]] */
 void
 proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
 {
@@ -1151,9 +1151,9 @@ proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
     /*e: [[tsleep()]] reset timer after sleep */
     poperror();
 }
-/*e: function tsleep */
+/*e: function [[tsleep]] */
 
-/*s: function wakeup */
+/*s: function [[wakeup]] */
 /*
  *  Expects that only one process can call wakeup for any given Rendez.
  *  We hold both locks to ensure that r->p and p->r remain consistent.
@@ -1187,9 +1187,9 @@ proc_wakeup(Rendez *r)
     arch_splx(s);
     return p;
 }
-/*e: function wakeup */
+/*e: function [[wakeup]] */
 
-/*s: function postnote */
+/*s: function [[postnote]] */
 /*
  *  if waking a sleeping process, this routine must hold both
  *  p->rlock and r->lock.  However, it can't know them in
@@ -1269,9 +1269,9 @@ proc_postnote(Proc *p, int dolock, char *n, int flag)
     unlock(p->rgrp);
     return ret;
 }
-/*e: function postnote */
+/*e: function [[postnote]] */
 
-/*s: struct Broken */
+/*s: struct [[Broken]] */
 /*
  * weird thing: keep at most NBROKEN around
  */
@@ -1286,12 +1286,12 @@ struct Broken
     // extra
     QLock;
 };
-/*e: struct Broken */
-/*s: global broken */
+/*e: struct [[Broken]] */
+/*s: global [[broken]] */
 struct Broken broken;
-/*e: global broken */
+/*e: global [[broken]] */
 
-/*s: function addbroken */
+/*s: function [[addbroken]] */
 void
 addbroken(Proc *p)
 {
@@ -1309,9 +1309,9 @@ addbroken(Proc *p)
     p->psstate = nil;
     sched();
 }
-/*e: function addbroken */
+/*e: function [[addbroken]] */
 
-/*s: function unbreak */
+/*s: function [[unbreak]] */
 void
 unbreak(Proc *p)
 {
@@ -1328,9 +1328,9 @@ unbreak(Proc *p)
         }
     qunlock(&broken);
 }
-/*e: function unbreak */
+/*e: function [[unbreak]] */
 
-/*s: function freebroken */
+/*s: function [[freebroken]] */
 int
 freebroken(void)
 {
@@ -1346,9 +1346,9 @@ freebroken(void)
     qunlock(&broken);
     return n;
 }
-/*e: function freebroken */
+/*e: function [[freebroken]] */
 
-/*s: function pexit */
+/*s: function [[pexit]] */
 void
 proc_pexit(char *exitstr, bool freemem)
 {
@@ -1548,9 +1548,9 @@ proc_pexit(char *exitstr, bool freemem)
     sched(); 
     panic("pexit: should never reach this point"); 
 }
-/*e: function pexit */
+/*e: function [[pexit]] */
 
-/*s: function haswaitq */
+/*s: function [[haswaitq]] */
 int
 haswaitq(void *x)
 {
@@ -1558,9 +1558,9 @@ haswaitq(void *x)
     p = (Proc *)x;
     return p->waitq != nil;
 }
-/*e: function haswaitq */
+/*e: function [[haswaitq]] */
 
-/*s: function pwait */
+/*s: function [[pwait]] */
 ulong
 pwait(Waitmsg *w)
 {
@@ -1609,17 +1609,17 @@ pwait(Waitmsg *w)
     free(wq);
     return cpid;
 }
-/*e: function pwait */
+/*e: function [[pwait]] */
 
-/*s: function proctab */
+/*s: function [[proctab]] */
 Proc*
 proc_proctab(int i)
 {
     return &procalloc.arena[i];
 }
-/*e: function proctab */
+/*e: function [[proctab]] */
 
-/*s: function dumpaproc */
+/*s: function [[dumpaproc]] */
 void
 proc_dumpaproc(Proc *p)
 {
@@ -1640,9 +1640,9 @@ proc_dumpaproc(Proc *p)
         p->pid, p->text, p->pc, arch_dbgpc(p),  s, statename[p->state],
         p->time[TUser], p->time[TSys], bss, p->qpc, p->nlocks.ref, p->delaysched, p->lastlock ? p->lastlock->pc : 0, p->priority);
 }
-/*e: function dumpaproc */
+/*e: function [[dumpaproc]] */
 
-/*s: function procdump */
+/*s: function [[procdump]] */
 void
 procdump(void)
 {
@@ -1661,9 +1661,9 @@ procdump(void)
         dumpaproc(p);
     }
 }
-/*e: function procdump */
+/*e: function [[procdump]] */
 
-/*s: function procflushseg */
+/*s: function [[procflushseg]] */
 /*
  *  wait till all processes have flushed their mmu
  *  state about segment s
@@ -1708,9 +1708,9 @@ procflushseg(Segment *s)
             while(CPUS(nm)->flushmmu)
                 sched();
 }
-/*e: function procflushseg */
+/*e: function [[procflushseg]] */
 
-/*s: function scheddump */
+/*s: function [[scheddump]] */
 void
 scheddump(void)
 {
@@ -1728,9 +1728,9 @@ scheddump(void)
     }
     print("nrdy %d\n", nrdy);
 }
-/*e: function scheddump */
+/*e: function [[scheddump]] */
 
-/*s: function kproc */
+/*s: function [[kproc]] */
 // kernel process (aka kernel_thread in Linux?)
 void
 kproc(char *name, void (*func)(void *), void *arg)
@@ -1777,9 +1777,9 @@ kproc(char *name, void (*func)(void *), void *arg)
     /*e: [[kproc()]] setting time field */
     ready(p);
 }
-/*e: function kproc */
+/*e: function [[kproc]] */
 
-/*s: function procctl */
+/*s: function [[procctl]] */
 /*
  *  called arch_splhi() by notify().  See comment in notify for the
  *  reasoning.
@@ -1791,12 +1791,12 @@ procctl(Proc *p)
     ulong s;
 
     switch(p->procctl) {
-    /*s: [[procctl()]] Proc_traceme case (and fallthrough [[Proc_stopme]]) */
+    /*s: [[procctl()]] [[Proc_traceme]] case (and fallthrough [[Proc_stopme]]) */
     case Proc_traceme:
         if(p->nnote == 0)
             return;
         /* No break */
-    /*e: [[procctl()]] Proc_traceme case (and fallthrough [[Proc_stopme]]) */
+    /*e: [[procctl()]] [[Proc_traceme]] case (and fallthrough [[Proc_stopme]]) */
     case Proc_stopme:
         p->procctl = Proc_nothing;
         oldstate = p->psstate;
@@ -1818,22 +1818,22 @@ procctl(Proc *p)
         p->psstate = oldstate;
         arch_splx(s);
         return;
-    /*s: [[procctl()]] Proc_exitbig case */
+    /*s: [[procctl()]] [[Proc_exitbig]] case */
     case Proc_exitbig:
         arch_spllo();
         pexit("Killed: Insufficient physical memory", true);
         // Fallthrough
-    /*e: [[procctl()]] Proc_exitbig case */
-    /*s: [[procctl()]] Proc_exitme case */
+    /*e: [[procctl()]] [[Proc_exitbig]] case */
+    /*s: [[procctl()]] [[Proc_exitme]] case */
     case Proc_exitme:
         arch_spllo();        /* pexit has locks in it */
         pexit("Killed", true);
-    /*e: [[procctl()]] Proc_exitme case */
+    /*e: [[procctl()]] [[Proc_exitme]] case */
     }
 }
-/*e: function procctl */
+/*e: function [[procctl]] */
 
-/*s: function killbig */
+/*s: function [[killbig]] */
 void
 killbig(char *why)
 {
@@ -1876,9 +1876,9 @@ killbig(char *why)
         }
     }
 }
-/*e: function killbig */
+/*e: function [[killbig]] */
 
-/*s: function renameuser */
+/*s: function [[renameuser]] */
 /*
  *  change ownership to 'new' of all processes owned by 'old'.  Used when
  *  eve changes.
@@ -1893,9 +1893,9 @@ renameuser(char *old, char *new)
         if(p->user!=nil && strcmp(old, p->user)==0)
             kstrdup(&p->user, new);
 }
-/*e: function renameuser */
+/*e: function [[renameuser]] */
 
-/*s: function accounttime */
+/*s: function [[accounttime]] */
 /*
  *  time accounting called by clock() splhi'd
  */
@@ -1948,9 +1948,9 @@ accounttime(void)
     n = (nrdy+n)*1000;
     cpu->load = (cpu->load*(Arch_HZ-1)+n)/Arch_HZ;
 }
-/*e: function accounttime */
+/*e: function [[accounttime]] */
 
-/*s: function pidhash */
+/*s: function [[pidhash]] */
 static void
 pidhash(Proc *p)
 {
@@ -1963,9 +1963,9 @@ pidhash(Proc *p)
     procalloc.ht[h] = p;
     unlock(&procalloc);
 }
-/*e: function pidhash */
+/*e: function [[pidhash]] */
 
-/*s: function pidunhash */
+/*s: function [[pidunhash]] */
 static void
 pidunhash(Proc *p)
 {
@@ -1982,9 +1982,9 @@ pidunhash(Proc *p)
         }
     unlock(&procalloc);
 }
-/*e: function pidunhash */
+/*e: function [[pidunhash]] */
 
-/*s: function procindex */
+/*s: function [[procindex]] */
 int
 procindex(ulong pid)
 {
@@ -2004,5 +2004,5 @@ procindex(ulong pid)
     unlock(&procalloc);
     return s;
 }
-/*e: function procindex */
+/*e: function [[procindex]] */
 /*e: proc.c */

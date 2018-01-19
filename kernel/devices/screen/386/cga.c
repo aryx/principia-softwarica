@@ -42,36 +42,36 @@ enum {
 };
 /*e: cga.c enum misc(x86) */
 
-/*s: constant CGASCREENBASE(x86) */
+/*s: constant [[CGASCREENBASE]](x86) */
 #define CGASCREENBASE   ((byte*)KADDR(0xB8000))
-/*e: constant CGASCREENBASE(x86) */
+/*e: constant [[CGASCREENBASE]](x86) */
 
-/*s: global cgapos(x86) */
+/*s: global [[cgapos]](x86) */
 static int cgapos;
-/*e: global cgapos(x86) */
-/*s: global cgascreenlock(x86) */
+/*e: global [[cgapos]](x86) */
+/*s: global [[cgascreenlock]](x86) */
 static Lock cgascreenlock;
-/*e: global cgascreenlock(x86) */
+/*e: global [[cgascreenlock]](x86) */
 
-/*s: function cgaregr(x86) */
+/*s: function [[cgaregr]](x86) */
 static byte
 cgaregr(int index)
 {
     outb(0x3D4, index);
     return inb(0x3D4+1) & 0xFF;
 }
-/*e: function cgaregr(x86) */
+/*e: function [[cgaregr]](x86) */
 
-/*s: function cgaregw(x86) */
+/*s: function [[cgaregw]](x86) */
 static void
 cgaregw(int index, int data)
 {
     outb(0x3D4, index);
     outb(0x3D4+1, data);
 }
-/*e: function cgaregw(x86) */
+/*e: function [[cgaregw]](x86) */
 
-/*s: function movecursor(x86) */
+/*s: function [[movecursor]](x86) */
 static void
 movecursor(void)
 {
@@ -79,9 +79,9 @@ movecursor(void)
     cgaregw(0x0F, cgapos/2 & 0xFF);
     CGASCREENBASE[cgapos+1] = Attr;
 }
-/*e: function movecursor(x86) */
+/*e: function [[movecursor]](x86) */
 
-/*s: function cgascreenputc(x86) */
+/*s: function [[cgascreenputc]](x86) */
 static void
 cgascreenputc(char c)
 {
@@ -118,9 +118,9 @@ cgascreenputc(char c)
     }
     movecursor();
 }
-/*e: function cgascreenputc(x86) */
+/*e: function [[cgascreenputc]](x86) */
 
-/*s: function cgascreenputs(x86) */
+/*s: function [[cgascreenputs]](x86) */
 static void
 cgascreenputs(char* s, int n)
 {
@@ -140,9 +140,9 @@ cgascreenputs(char* s, int n)
 
     unlock(&cgascreenlock);
 }
-/*e: function cgascreenputs(x86) */
+/*e: function [[cgascreenputs]](x86) */
 
-/*s: function cgapost(x86) */
+/*s: function [[cgapost]](x86) */
 char hex[] = "0123456789ABCDEF";
 
 void
@@ -156,9 +156,9 @@ cgapost(int code)
     cga[Width*Height-Postcodelen*2+2] = hex[code & 0x0F];
     cga[Width*Height-Postcodelen*2+3] = Attr;
 }
-/*e: function cgapost(x86) */
+/*e: function [[cgapost]](x86) */
 
-/*s: function screeninit(x86) */
+/*s: function [[screeninit]](x86) */
 void
 arch__screeninit(void)
 {
@@ -169,5 +169,5 @@ arch__screeninit(void)
 
     screenputs = cgascreenputs;
 }
-/*e: function screeninit(x86) */
+/*e: function [[screeninit]](x86) */
 /*e: cga.c */

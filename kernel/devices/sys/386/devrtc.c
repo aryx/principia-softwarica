@@ -32,7 +32,7 @@ static ulong rtc2sec(Rtc*);
 static void sec2rtc(ulong, Rtc*);
 /*e: devrtc.c forward decl(x86) */
 
-/*s: struct Rtc(x86) */
+/*s: struct [[Rtc]](x86) */
 struct Rtc
 {
     int sec;
@@ -42,7 +42,7 @@ struct Rtc
     int mon;
     int year;
 };
-/*e: struct Rtc(x86) */
+/*e: struct [[Rtc]](x86) */
 
 
 enum{
@@ -306,7 +306,7 @@ rtcwrite(Chan* c, void* buf, long n, vlong off)
     return 0;
 }
 
-/*s: global rtcdevtab(x86) */
+/*s: global [[rtcdevtab]](x86) */
 Dev rtcdevtab = {
     .dc       =    'r',
     .name     =    "rtc",
@@ -327,7 +327,7 @@ Dev rtcdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
-/*e: global rtcdevtab(x86) */
+/*e: global [[rtcdevtab]](x86) */
 
 /*s: constants SEC2XXX(x86) */
 #define SEC2MIN 60L
@@ -349,7 +349,7 @@ static  int ldmsize[] =
 };
 /*e: globals dmsize ldmsize(x86) */
 
-/*s: function yrsize(x86) */
+/*s: function [[yrsize]](x86) */
 /*
  *  return the days/month for the given year
  */
@@ -361,9 +361,9 @@ yrsize(int y)
     else
         return dmsize;
 }
-/*e: function yrsize(x86) */
+/*e: function [[yrsize]](x86) */
 
-/*s: function rtc2sec(x86) */
+/*s: function [[rtc2sec]](x86) */
 /*
  *  compute seconds since Jan 1 1970
  */
@@ -398,9 +398,9 @@ rtc2sec(Rtc *rtc)
 
     return secs;
 }
-/*e: function rtc2sec(x86) */
+/*e: function [[rtc2sec]](x86) */
 
-/*s: function sec2rtc(x86) */
+/*s: function [[sec2rtc]](x86) */
 /*
  *  compute rtc from seconds since Jan 1 1970
  */
@@ -452,6 +452,6 @@ sec2rtc(ulong secs, Rtc *rtc)
 
     return;
 }
-/*e: function sec2rtc(x86) */
+/*e: function [[sec2rtc]](x86) */
 
 /*e: devices/sys/386/devrtc.c */

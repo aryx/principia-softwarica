@@ -8,9 +8,9 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: global arch(x86) */
+/*s: global [[arch]](x86) */
 PCArch* arch;
-/*e: global arch(x86) */
+/*e: global [[arch]](x86) */
 
 /*s: hook fprestore and fpsave(x86) */
 void    (*fprestore)(Arch_FPsave*);
@@ -28,7 +28,7 @@ pcmspecial(char *idstr, ISAConf *isa)
     return (_pcmspecial != nil)? _pcmspecial(idstr, isa): -1;
 }
 
-/*s: function cpuidprint(x86) */
+/*s: function [[cpuidprint]](x86) */
 void
 arch_cpuidprint(void)
 {
@@ -44,6 +44,6 @@ arch_cpuidprint(void)
         cpu->cpuidtype, cpu->cpuidax, cpu->cpuiddx);
     print(buf);
 }
-/*e: function cpuidprint(x86) */
+/*e: function [[cpuidprint]](x86) */
 
 /*e: arch/386/arch.c */

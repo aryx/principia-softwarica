@@ -9,9 +9,9 @@
 /*e: kernel basic includes */
 
 // was in init/main.c
-/*s: global conf */
+/*s: global [[conf]] */
 Conf conf;
-/*e: global conf */
+/*e: global [[conf]] */
 // bool cpuserver; // defined in $CONF.c
 
 /*s: globals confname and confvar */
@@ -20,12 +20,12 @@ Conf conf;
 char *confname[MAXCONF];
 char *confval[MAXCONF];
 /*e: globals confname and confvar */
-/*s: global nconf */
+/*s: global [[nconf]] */
 // Hashtbl.length(confname)
 int nconf;
-/*e: global nconf */
+/*e: global [[nconf]] */
 
-/*s: function getconf */
+/*s: function [[getconf]] */
 char* getconf(char *name)
 {
         int i;
@@ -34,10 +34,10 @@ char* getconf(char *name)
                         return confval[i];
         return nil;
 }
-/*e: function getconf */
+/*e: function [[getconf]] */
 
 // was in dat.h
-/*s: global cpus */
+/*s: global [[cpus]] */
 /*
  * Each processor sees its own Cpu structure at address CPUADDR.
  * However, the Cpu structures must also be available via the per-processor
@@ -46,21 +46,21 @@ char* getconf(char *name)
  */
 // array<ref<Cpu>>
 Cpu* cpus[MAXCPUS];
-/*e: global cpus */
+/*e: global [[cpus]] */
 // cpu is in init/main.c because it can differ in different archi
 
 // was in security/auth.c
-/*s: global eve */
+/*s: global [[eve]] */
 char    *eve;
-/*e: global eve */
+/*e: global [[eve]] */
 // should be in portfns.c, but then backward deps
 /*
  *  return true if current user is eve
  */
-/*s: function iseve */
+/*s: function [[iseve]] */
 bool iseve(void) { 
   return strcmp(eve, up->user) == 0; 
 }
-/*e: function iseve */
+/*e: function [[iseve]] */
 
 /*e: portdat.c */

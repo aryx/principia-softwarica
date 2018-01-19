@@ -16,15 +16,15 @@ void        xhole(ulong, ulong);
 // The global
 //*****************************************************************************
 
-/*s: global xlists */
+/*s: global [[xlists]] */
 static Xalloc   xlists;
-/*e: global xlists */
+/*e: global [[xlists]] */
 
 //*****************************************************************************
 // Initialization
 //*****************************************************************************
 
-/*s: function xinit */
+/*s: function [[xinit]] */
 void
 xinit(void)
 {
@@ -77,13 +77,13 @@ xinit(void)
         }
     }
 }
-/*e: function xinit */
+/*e: function [[xinit]] */
 
 //*****************************************************************************
 // Functions
 //*****************************************************************************
 
-/*s: function xspanalloc */
+/*s: function [[xspanalloc]] */
 kern_vp
 xspanalloc(ulong size, int align, ulong span)
 {
@@ -111,9 +111,9 @@ xspanalloc(ulong size, int align, ulong span)
 
     return (kern_vp)v;
 }
-/*e: function xspanalloc */
+/*e: function [[xspanalloc]] */
 
-/*s: function xallocz */
+/*s: function [[xallocz]] */
 kern_vp
 xallocz(ulong size, bool zero)
 {
@@ -154,17 +154,17 @@ xallocz(ulong size, bool zero)
     iunlock(&xlists);
     return nil; // panic? 
 }
-/*e: function xallocz */
+/*e: function [[xallocz]] */
 
-/*s: function xalloc */
+/*s: function [[xalloc]] */
 kern_vp
 xalloc(ulong size)
 {
     return xallocz(size, true);
 }
-/*e: function xalloc */
+/*e: function [[xalloc]] */
 
-/*s: function xfree */
+/*s: function [[xfree]] */
 void
 xfree(kern_vp p)
 {
@@ -179,9 +179,9 @@ xfree(kern_vp p)
     /*e: [[xfree()]] sanity check magix mark */
     xhole(PADDR((kern_addr)x), x->size);
 }
-/*e: function xfree */
+/*e: function [[xfree]] */
 
-/*s: function xmerge */
+/*s: function [[xmerge]] */
 bool
 xmerge(kern_vp vp, kern_vp vq)
 {
@@ -218,9 +218,9 @@ xmerge(kern_vp vp, kern_vp vq)
     }
     return false;
 }
-/*e: function xmerge */
+/*e: function [[xmerge]] */
 
-/*s: function xhole */
+/*s: function [[xhole]] */
 void
 xhole(phys_addr addr, ulong size)
 {
@@ -274,13 +274,13 @@ xhole(phys_addr addr, ulong size)
     *l = h;
     iunlock(&xlists);
 }
-/*e: function xhole */
+/*e: function [[xhole]] */
 
 //*****************************************************************************
 // Debugging
 //*****************************************************************************
 
-/*s: function xsummary */
+/*s: function [[xsummary]] */
 void
 xsummary(void)
 {
@@ -315,5 +315,5 @@ xsummary(void)
     }
     print(" %d bytes free\n", i);
 }
-/*e: function xsummary */
+/*e: function [[xsummary]] */
 /*e: xalloc.c */

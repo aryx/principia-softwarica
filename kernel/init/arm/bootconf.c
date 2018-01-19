@@ -10,41 +10,41 @@
 
 #include "tos.h"
 
-/*s: enum _anon_ (init/arm/bootconf.c)(arm) */
+/*s: enum [[_anon_]]([[(init/arm/bootconf.c)(arm)]]) */
 enum {
     /* space for syscall args, return PC, top-of-stack struct */
     Ustkheadroom    = sizeof(Sargs) + sizeof(uintptr) + sizeof(Tos),
 };
-/*e: enum _anon_ (init/arm/bootconf.c)(arm) */
+/*e: enum [[_anon_]]([[(init/arm/bootconf.c)(arm)]]) */
 
-/*s: constant BOOTARGS(arm) */
+/*s: constant [[BOOTARGS]](arm) */
 /*
  * Where configuration info is left for the loaded programme.
  */
 #define BOOTARGS    ((char*)CONFADDR)
-/*e: constant BOOTARGS(arm) */
-/*s: constant BOOTARGSLEN(arm) */
+/*e: constant [[BOOTARGS]](arm) */
+/*s: constant [[BOOTARGSLEN]](arm) */
 #define BOOTARGSLEN (CPUADDR-CONFADDR)
-/*e: constant BOOTARGSLEN(arm) */
+/*e: constant [[BOOTARGSLEN]](arm) */
 //#define MAXCONF       64
 //#define MAXCONFLINE   160
 
-/*s: global oargc(arm) */
+/*s: global [[oargc]](arm) */
 /*
  * Option arguments from the command line.
  * oargv[0] is the boot file.
  */
 static int oargc;
-/*e: global oargc(arm) */
-/*s: global oargv(arm) */
+/*e: global [[oargc]](arm) */
+/*s: global [[oargv]](arm) */
 static char* oargv[20];
-/*e: global oargv(arm) */
-/*s: global oargb(arm) */
+/*e: global [[oargv]](arm) */
+/*s: global [[oargb]](arm) */
 static char oargb[128];
-/*e: global oargb(arm) */
-/*s: global oargblen(arm) */
+/*e: global [[oargb]](arm) */
+/*s: global [[oargblen]](arm) */
 static int oargblen;
-/*e: global oargblen(arm) */
+/*e: global [[oargblen]](arm) */
 
 /* store plan9.ini contents here at least until we stash them in #ec */
 //static char confname[MAXCONF][KNAMELEN];
@@ -52,7 +52,7 @@ static int oargblen;
 //static int nconf;
 
 typedef struct Atag Atag;
-/*s: struct Atag(arm) */
+/*s: struct [[Atag]](arm) */
 struct Atag {
     u32int  size;   /* size of atag in words, including this header */
     u32int  tag;    /* atag type */
@@ -67,18 +67,18 @@ struct Atag {
         char    cmdline[1]; /* actually [4*(size-2)] */
     };
 };
-/*e: struct Atag(arm) */
+/*e: struct [[Atag]](arm) */
 
-/*s: enum _anon_ (init/arm/bootconf.c)2(arm) */
+/*s: enum [[_anon_]]([[(init/arm/bootconf.c)2(arm)]]) */
 enum {
     AtagNone    = 0x00000000,
     AtagCore    = 0x54410001,
     AtagMem     = 0x54410002,
     AtagCmdline = 0x54410009,
 };
-/*e: enum _anon_ (init/arm/bootconf.c)2(arm) */
+/*e: enum [[_anon_]]([[(init/arm/bootconf.c)2(arm)]]) */
 
-/*s: function findconf(arm) */
+/*s: function [[findconf]](arm) */
 static int
 findconf(char *name)
 {
@@ -89,10 +89,10 @@ findconf(char *name)
             return i;
     return -1;
 }
-/*e: function findconf(arm) */
+/*e: function [[findconf]](arm) */
 
 
-/*s: function addconf(arm) */
+/*s: function [[addconf]](arm) */
 void
 addconf(char *name, char *val)
 {
@@ -107,9 +107,9 @@ addconf(char *name, char *val)
     }
     strecpy(confval[i], confval[i]+sizeof(confval[i]), val);
 }
-/*e: function addconf(arm) */
+/*e: function [[addconf]](arm) */
 
-/*s: function writeconf(arm) */
+/*s: function [[writeconf]](arm) */
 static void
 writeconf(void)
 {
@@ -138,9 +138,9 @@ writeconf(void)
     poperror();
     free(p);
 }
-/*e: function writeconf(arm) */
+/*e: function [[writeconf]](arm) */
 
-/*s: function plan9iniinit(arm) */
+/*s: function [[plan9iniinit]](arm) */
 static void
 plan9iniinit(char *s, int cmdline)
 {
@@ -164,9 +164,9 @@ plan9iniinit(char *s, int cmdline)
         addconf(toks[i], v);
     }
 }
-/*e: function plan9iniinit(arm) */
+/*e: function [[plan9iniinit]](arm) */
 
-/*s: function ataginit(arm) */
+/*s: function [[ataginit]](arm) */
 static void
 ataginit(Atag *a)
 {
@@ -198,9 +198,9 @@ ataginit(Atag *a)
         a = (Atag*)((u32int*)a + a->size);
     }
 }
-/*e: function ataginit(arm) */
+/*e: function [[ataginit]](arm) */
 
-/*s: function optionsinit(arm) */
+/*s: function [[optionsinit]](arm) */
 static void
 optionsinit(char* s)
 {
@@ -210,9 +210,9 @@ optionsinit(char* s)
     oargc = tokenize(oargb, oargv, nelem(oargv)-1);
     oargv[oargc] = nil;
 }
-/*e: function optionsinit(arm) */
+/*e: function [[optionsinit]](arm) */
 
-/*s: function bootargs(arm) */
+/*s: function [[bootargs]](arm) */
 uintptr
 bootargs(uintptr base)
 {
@@ -246,5 +246,5 @@ bootargs(uintptr base)
     //sp = USTKTOP - ssize;
     return USTKTOP - ssize;
 }
-/*e: function bootargs(arm) */
+/*e: function [[bootargs]](arm) */
 /*e: init/arm/bootconf.c */

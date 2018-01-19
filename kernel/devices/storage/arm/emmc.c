@@ -15,11 +15,11 @@
 #include "io.h"
 #include "../port/sd.h"
 
-/*s: constant EMMCREGS(arm) */
+/*s: constant [[EMMCREGS]](arm) */
 #define EMMCREGS    (VIRTIO+0x300000)
-/*e: constant EMMCREGS(arm) */
+/*e: constant [[EMMCREGS]](arm) */
 
-/*s: enum _anon_ (devices/storage/arm/emmc.c)(arm) */
+/*s: enum [[_anon_]]([[(devices/storage/arm/emmc.c)(arm)]]) */
 enum {
     Extfreq     = 100*Mhz,  /* guess external clock frequency if */
                     /* not available from vcore */
@@ -30,9 +30,9 @@ enum {
     MMCSelect   = 7,        /* mmc/sd card select command */
     Setbuswidth = 6,        /* mmc/sd set bus width command */
 };
-/*e: enum _anon_ (devices/storage/arm/emmc.c)(arm) */
+/*e: enum [[_anon_]]([[(devices/storage/arm/emmc.c)(arm)]]) */
 
-/*s: enum _anon_ (devices/storage/arm/emmc.c)2(arm) */
+/*s: enum [[_anon_]]([[(devices/storage/arm/emmc.c)2(arm)]]) */
 enum {
     /* Controller registers */
     Arg2            = 0x00>>2,
@@ -128,9 +128,9 @@ enum {
     Datinhibit  = 1<<1,
     Cmdinhibit  = 1<<0,
 };
-/*e: enum _anon_ (devices/storage/arm/emmc.c)2(arm) */
+/*e: enum [[_anon_]]([[(devices/storage/arm/emmc.c)2(arm)]]) */
 
-/*s: global cmdinfo(arm) */
+/*s: global [[cmdinfo]](arm) */
 int cmdinfo[64] = {
 [0]  Ixchken,
 [2]  Resp136,
@@ -149,23 +149,23 @@ int cmdinfo[64] = {
 [41] Resp48,
 [55] Resp48 | Ixchken | Crcchken,
 };
-/*e: global cmdinfo(arm) */
+/*e: global [[cmdinfo]](arm) */
 
 typedef struct Ctlr Ctlr;
-/*s: struct Ctlr (devices/storage/arm/emmc.c)(arm) */
+/*s: struct [[Ctlr]]([[(devices/storage/arm/emmc.c)(arm)]]) */
 struct Ctlr {
     Rendez  r;
     int datadone;
     int fastclock;
     ulong   extclk;
 };
-/*e: struct Ctlr (devices/storage/arm/emmc.c)(arm) */
+/*e: struct [[Ctlr]]([[(devices/storage/arm/emmc.c)(arm)]]) */
 
-/*s: global emmc(arm) */
+/*s: global [[emmc]](arm) */
 static Ctlr emmc;
-/*e: global emmc(arm) */
+/*e: global [[emmc]](arm) */
 
-/*s: function WR(arm) */
+/*s: function [[WR]](arm) */
 static void
 WR(int reg, u32int val)
 {
@@ -175,9 +175,9 @@ WR(int reg, u32int val)
     arch_microdelay(emmc.fastclock? 2 : 20);
     r[reg] = val;
 }
-/*e: function WR(arm) */
+/*e: function [[WR]](arm) */
 
-/*s: function clkdiv(arm) */
+/*s: function [[clkdiv]](arm) */
 static uint
 clkdiv(uint d)
 {
@@ -188,9 +188,9 @@ clkdiv(uint d)
     v |= ((d >> 8) << Clkfreqms2shift) & Clkfreqms2mask;
     return v;
 }
-/*e: function clkdiv(arm) */
+/*e: function [[clkdiv]](arm) */
 
-/*s: function datadone(arm) */
+/*s: function [[datadone]](arm) */
 static int
 datadone(void*)
 {
@@ -200,9 +200,9 @@ datadone(void*)
     i = r[Interrupt];
     return i & (Datadone|Err);
 }
-/*e: function datadone(arm) */
+/*e: function [[datadone]](arm) */
 
-/*s: function emmcinit(arm) */
+/*s: function [[emmcinit]](arm) */
 static int
 emmcinit(void)
 {
@@ -226,9 +226,9 @@ emmcinit(void)
         ;
     return 0;
 }
-/*e: function emmcinit(arm) */
+/*e: function [[emmcinit]](arm) */
 
-/*s: function emmcinquiry(arm) */
+/*s: function [[emmcinquiry]](arm) */
 static int
 emmcinquiry(char *inquiry, int inqlen)
 {
@@ -241,9 +241,9 @@ emmcinquiry(char *inquiry, int inqlen)
         "Arasan eMMC SD Host Controller %2.2x Version %2.2x",
         ver&0xFF, ver>>8);
 }
-/*e: function emmcinquiry(arm) */
+/*e: function [[emmcinquiry]](arm) */
 
-/*s: function mmcinterrupt(arm) */
+/*s: function [[mmcinterrupt]](arm) */
 static void
 mmcinterrupt(Ureg*, void*)
 {   
@@ -254,9 +254,9 @@ mmcinterrupt(Ureg*, void*)
         wakeup(&emmc.r);
     }
 }
-/*e: function mmcinterrupt(arm) */
+/*e: function [[mmcinterrupt]](arm) */
 
-/*s: function emmcenable(arm) */
+/*s: function [[emmcenable]](arm) */
 static void
 emmcenable(void)
 {
@@ -276,9 +276,9 @@ emmcenable(void)
     WR(Irptmask, ~(Dtoerr|Cardintr));
     arch_intrenable(IRQmmc, mmcinterrupt, nil, 0, "mmc");
 }
-/*e: function emmcenable(arm) */
+/*e: function [[emmcenable]](arm) */
 
-/*s: function emmccmd(arm) */
+/*s: function [[emmccmd]](arm) */
 static int
 emmccmd(u32int cmd, u32int arg, u32int *resp)
 {
@@ -390,9 +390,9 @@ emmccmd(u32int cmd, u32int arg, u32int *resp)
     }
     return 0;
 }
-/*e: function emmccmd(arm) */
+/*e: function [[emmccmd]](arm) */
 
-/*s: function emmciosetup(arm) */
+/*s: function [[emmciosetup]](arm) */
 void
 emmciosetup(int write, void *buf, int bsize, int bcount)
 {
@@ -400,9 +400,9 @@ emmciosetup(int write, void *buf, int bsize, int bcount)
     USED(buf);
     WR(Blksizecnt, bcount<<16 | bsize);
 }
-/*e: function emmciosetup(arm) */
+/*e: function [[emmciosetup]](arm) */
 
-/*s: function emmcio(arm) */
+/*s: function [[emmcio]](arm) */
 static void
 emmcio(int write, uchar *buf, int len)
 {
@@ -448,10 +448,10 @@ emmcio(int write, uchar *buf, int len)
     poperror();
     okay(0);
 }
-/*e: function emmcio(arm) */
+/*e: function [[emmcio]](arm) */
 
 
-/*s: global sdio(arm) */
+/*s: global [[sdio]](arm) */
 SDio sdio = {
     "emmc",
     emmcinit,
@@ -461,5 +461,5 @@ SDio sdio = {
     emmciosetup,
     emmcio,
 };
-/*e: global sdio(arm) */
+/*e: global [[sdio]](arm) */
 /*e: devices/storage/arm/emmc.c */

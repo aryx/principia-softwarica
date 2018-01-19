@@ -9,27 +9,27 @@ enum misc_constants_portable {
 
     NUMSIZE = 12,   /* size of formatted number */
 
-    /*s: constant PRINTSIZE */
+    /*s: constant [[PRINTSIZE]] */
     PRINTSIZE = 256,
-    /*e: constant PRINTSIZE */
+    /*e: constant [[PRINTSIZE]] */
 };
 
 
-/*s: struct Cmdbuf */
+/*s: struct [[Cmdbuf]] */
 struct Cmdbuf
 {
   char  *buf;
   char  **f;
   int nf;
 };
-/*e: struct Cmdbuf */
+/*e: struct [[Cmdbuf]] */
 
-/*s: struct Cmdtab */
+/*s: struct [[Cmdtab]] */
 struct Cmdtab
 {
   int index;  /* used by client to switch on result */
   char  *cmd; /* command name */
   int narg; /* expected #args; 0 ==> variadic */
 };
-/*e: struct Cmdtab */
+/*e: struct [[Cmdtab]] */
 /*e: portdat_misc.h */

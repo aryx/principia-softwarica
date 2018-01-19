@@ -20,35 +20,35 @@
 #define WD2PG   (BY2PG/BY2WD)   /* words per page */
 #define PGSHIFT   12      /* log(BY2PG) */
 
-/*s: constant BLOCKALIGN(x86) */
+/*s: constant [[BLOCKALIGN]](x86) */
 #define BLOCKALIGN  8
-/*e: constant BLOCKALIGN(x86) */
+/*e: constant [[BLOCKALIGN]](x86) */
 
 // Intel specific
 //#define BY2XPG    (4096*1024)   /* bytes per big page */
 
-/*s: constant FPalign(x86) */
+/*s: constant [[FPalign]](x86) */
 #define FPalign   16      /* required for FXSAVE */
-/*e: constant FPalign(x86) */
+/*e: constant [[FPalign]](x86) */
 
-/*s: constant MAXCPUS(x86) */
+/*s: constant [[MAXCPUS]](x86) */
 /*
  * In 32-bit mode, the MAXCPUS limit is 32 without
  * changing the way active.cpus is defined and used
  * (unfortunately, it is also used in the port code).
  */
 #define MAXCPUS   32      /* max # cpus system can run */
-/*e: constant MAXCPUS(x86) */
-/*s: constant KSTACK(x86) */
+/*e: constant [[MAXCPUS]](x86) */
+/*s: constant [[KSTACK]](x86) */
 #define KSTACK    4096      /* Size of kernel stack */
-/*e: constant KSTACK(x86) */
+/*e: constant [[KSTACK]](x86) */
 
 /*
  * Time
  */
-/*s: constant HZ(x86) */
+/*s: constant [[HZ]](x86) */
 #define Arch_HZ    (100)     /* clock frequency */ //TODO: mv in dat_time.h
-/*e: constant HZ(x86) */
+/*e: constant [[HZ]](x86) */
 
 /*
  *  Address spaces
@@ -62,64 +62,64 @@
 // 0x1000000 = 256Mo
 // note: graphic card memory is at 0xb8000 so safer to go to 1Mo for kernel
 
-/*s: constant KZERO(x86) */
+/*s: constant [[KZERO]](x86) */
 //coupling: with mkfile KZERO_AND_HEADER
 #define KZERO   0xE0000000    /* base of kernel address space */
-/*e: constant KZERO(x86) */
-/*s: constant KTZERO(x86) */
+/*e: constant [[KZERO]](x86) */
+/*s: constant [[KTZERO]](x86) */
 #define KTZERO    (KZERO+0x100000)  /* first address in kernel text */
-/*e: constant KTZERO(x86) */
+/*e: constant [[KTZERO]](x86) */
 
-/*s: constant UZERO(x86) */
+/*s: constant [[UZERO]](x86) */
 #define UZERO   0     /* base of user address space */
-/*e: constant UZERO(x86) */
-/*s: constant UTZERO(x86) */
+/*e: constant [[UZERO]](x86) */
+/*s: constant [[UTZERO]](x86) */
 #define UTZERO    (UZERO+BY2PG)   /* first address in user text */
-/*e: constant UTZERO(x86) */
+/*e: constant [[UTZERO]](x86) */
 
-/*s: function UTROUND(x86) */
+/*s: function [[UTROUND]](x86) */
 #define UTROUND(t)  ROUNDUP((t), BY2PG)
-/*e: function UTROUND(x86) */
+/*e: function [[UTROUND]](x86) */
 #define USTKTOP   (VMAP-BY2PG)    /* byte just beyond user stack */
 #define USTKSIZE  (16*1024*1024)    /* size of user stack */
-/*s: constant TSTKTOP(x86) */
+/*s: constant [[TSTKTOP]](x86) */
 #define TSTKTOP   (USTKTOP-USTKSIZE)  /* end of new stack in sysexec */ // just below
-/*e: constant TSTKTOP(x86) */
-/*s: constant TSTKSIZ(x86) */
+/*e: constant [[TSTKTOP]](x86) */
+/*s: constant [[TSTKSIZ]](x86) */
 #define TSTKSIZ   100     /* pages in new stack; limits exec args */
-/*e: constant TSTKSIZ(x86) */
+/*e: constant [[TSTKSIZ]](x86) */
 
-/*s: constant MAXKPA(x86) */
+/*s: constant [[MAXKPA]](x86) */
 // -KZERO = 0xFFFFFFFF-KZERO in two's complement arithmetic
 #define MAXKPA (phys_addr)(-KZERO)
-/*e: constant MAXKPA(x86) */
+/*e: constant [[MAXKPA]](x86) */
 
-/*s: constant VPTSIZE(x86) */
+/*s: constant [[VPTSIZE]](x86) */
 #define VPTSIZE 0
-/*e: constant VPTSIZE(x86) */
-/*s: constant VPT(x86) */
-/*e: constant VPT(x86) */
+/*e: constant [[VPTSIZE]](x86) */
+/*s: constant [[VPT]](x86) */
+/*e: constant [[VPT]](x86) */
 
-/*s: constant KMAPSIZE(x86) */
+/*s: constant [[KMAPSIZE]](x86) */
 #define KMAPSIZE 0
-/*e: constant KMAPSIZE(x86) */
-/*s: constant KMAP(x86) */
+/*e: constant [[KMAPSIZE]](x86) */
+/*s: constant [[KMAP]](x86) */
 #define KMAP KZERO
-/*e: constant KMAP(x86) */
+/*e: constant [[KMAP]](x86) */
 
-/*s: constant VMAPSIZE(x86) */
+/*s: constant [[VMAPSIZE]](x86) */
 #define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
-/*e: constant VMAPSIZE(x86) */
-/*s: constant VMAP(x86) */
+/*e: constant [[VMAPSIZE]](x86) */
+/*s: constant [[VMAP]](x86) */
 #define VMAP    (KMAP-VMAPSIZE)
-/*e: constant VMAP(x86) */
+/*e: constant [[VMAP]](x86) */
 /*
  * Fundamental addresses - bottom 64kB saved for return to real mode
  */
 #define CONFADDR  (KZERO+0x1200)    /* info passed from boot loader */
 
-/*s: constant TMPADDR(x86) */
-/*e: constant TMPADDR(x86) */
+/*s: constant [[TMPADDR]](x86) */
+/*e: constant [[TMPADDR]](x86) */
 
 #define APBOOTSTRAP (KZERO+0x3000)    /* AP bootstrap code */
 
@@ -127,9 +127,9 @@
 #define RMCODE    (KZERO+0x8000)    /* copy of first page of KTEXT */
 #define RMBUF   (KZERO+0x9000)    /* buffer for user space - known to vga */
 
-/*s: constant IDTADDR(x86) */
+/*s: constant [[IDTADDR]](x86) */
 #define IDTADDR   (KZERO+0x10800)   /* idt */
-/*e: constant IDTADDR(x86) */
+/*e: constant [[IDTADDR]](x86) */
 #define REBOOTADDR  (0x11000)   /* reboot code - physical address */
 
 #define CPU0PD   (KZERO+0x12000)   /* bootstrap processor PD */
@@ -173,14 +173,14 @@
 #define NGDT    10  /* number of GDT entries required */
 /*e: constant x86 segments */
 
-/*s: constant SELGDT(x86) */
+/*s: constant [[SELGDT]](x86) */
 #define SELGDT  (0<<2)  /* selector is in gdt */
-/*e: constant SELGDT(x86) */
+/*e: constant [[SELGDT]](x86) */
 //#define SELLDT  (1<<2)  /* selector is in ldt */
 
-/*s: macro SELECTOR(x86) */
+/*s: macro [[SELECTOR]](x86) */
 #define SELECTOR(idx, type, prio) (((idx)<<3) | (type) | (prio))
-/*e: macro SELECTOR(x86) */
+/*e: macro [[SELECTOR]](x86) */
 
 /*s: constant x86 segment selectors */
 //#define NULLSEL SELECTOR(NULLSEG, SELGDT, 0)
@@ -227,18 +227,18 @@
 /*
  *  virtual MMU
  */
-/*s: constant PAGETABMAPMEM(x86) */
+/*s: constant [[PAGETABMAPMEM]](x86) */
 #define PAGETABMAPMEM (1024*1024) // 1MB
-/*e: constant PAGETABMAPMEM(x86) */
-/*s: constant PAGETABSIZE(x86) */
+/*e: constant [[PAGETABMAPMEM]](x86) */
+/*s: constant [[PAGETABSIZE]](x86) */
 #define PAGETABSIZE 256 // (PAGETABMAPMEM/BY2PG)
-/*e: constant PAGETABSIZE(x86) */
-/*s: constant PAGEDIRSIZE(x86) */
+/*e: constant [[PAGETABSIZE]](x86) */
+/*s: constant [[PAGEDIRSIZE]](x86) */
 #define PAGEDIRSIZE  1984
-/*e: constant PAGEDIRSIZE(x86) */
-/*s: constant SMALLPAGEDIRSIZE(x86) */
+/*e: constant [[PAGEDIRSIZE]](x86) */
+/*s: constant [[SMALLPAGEDIRSIZE]](x86) */
 #define SMALLPAGEDIRSIZE 16
-/*e: constant SMALLPAGEDIRSIZE(x86) */
+/*e: constant [[SMALLPAGEDIRSIZE]](x86) */
 
 #define PPN(x)    ((x)&~(BY2PG-1))
 
@@ -252,8 +252,8 @@
 
 #define getpgcolor(a) 0
 
-/*s: constant VectorSYSCALL(x86) */
+/*s: constant [[VectorSYSCALL]](x86) */
 //!!! int 64 (0x40), way to jump in plan9 OS !!!
 #define VectorSYSCALL 64
-/*e: constant VectorSYSCALL(x86) */
+/*e: constant [[VectorSYSCALL]](x86) */
 /*e: memory/386/mem.h */

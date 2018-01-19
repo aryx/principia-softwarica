@@ -27,10 +27,10 @@
 
 #include "dwcotg.h"
 
-/*s: constant USBREGS(arm) */
+/*s: constant [[USBREGS]](arm) */
 #define  USBREGS (VIRTIO+0x980000)
-/*e: constant USBREGS(arm) */
-/*s: enum _anon_ (buses/arm/usbdwc.c)(arm) */
+/*e: constant [[USBREGS]](arm) */
+/*s: enum [[_anon_]]([[(buses/arm/usbdwc.c)(arm)]]) */
 enum
 {
     Enabledelay = 50,
@@ -40,12 +40,12 @@ enum
     Read        = 0,
     Write       = 1,
 };
-/*e: enum _anon_ (buses/arm/usbdwc.c)(arm) */
+/*e: enum [[_anon_]]([[(buses/arm/usbdwc.c)(arm)]]) */
 
 typedef struct Ctlr Ctlr;
 typedef struct Epio Epio;
 
-/*s: struct Ctlr (buses/arm/usbdwc.c)(arm) */
+/*s: struct [[Ctlr]]([[(buses/arm/usbdwc.c)(arm)]]) */
 struct Ctlr {
     Lock;
     Dwcregs *regs;      /* controller registers */
@@ -59,31 +59,31 @@ struct Ctlr {
     int debugchan;  /* bitmap of channels for interrupt debug */
     Rendez  *chanintr;  /* sleep till interrupt on channel N */
 };
-/*e: struct Ctlr (buses/arm/usbdwc.c)(arm) */
+/*e: struct [[Ctlr]]([[(buses/arm/usbdwc.c)(arm)]]) */
 
-/*s: struct Epio(arm) */
+/*s: struct [[Epio]](arm) */
 struct Epio {
     QLock;
     Block   *cb;
     ulong   lastpoll;
 };
-/*e: struct Epio(arm) */
+/*e: struct [[Epio]](arm) */
 
-/*s: global dwc(arm) */
+/*s: global [[dwc]](arm) */
 static Ctlr dwc;
-/*e: global dwc(arm) */
-/*s: global debug (buses/arm/usbdwc.c)(arm) */
+/*e: global [[dwc]](arm) */
+/*s: global [[debug]]([[(buses/arm/usbdwc.c)(arm)]]) */
 static int debug;
-/*e: global debug (buses/arm/usbdwc.c)(arm) */
+/*e: global [[debug]]([[(buses/arm/usbdwc.c)(arm)]]) */
 
-/*s: global Ebadlen(arm) */
+/*s: global [[Ebadlen]](arm) */
 static char Ebadlen[] = "bad usb request length";
-/*e: global Ebadlen(arm) */
+/*e: global [[Ebadlen]](arm) */
 
 static void clog(Ep *ep, Hostchan *hc);
 static void logdump(Ep *ep);
 
-/*s: function filock(arm) */
+/*s: function [[filock]](arm) */
 static void
 filock(Lock *l)
 {
@@ -93,17 +93,17 @@ filock(Lock *l)
     ilock(l);
     l->sr = x;
 }
-/*e: function filock(arm) */
+/*e: function [[filock]](arm) */
 
-/*s: function fiunlock(arm) */
+/*s: function [[fiunlock]](arm) */
 static void
 fiunlock(Lock *l)
 {
     iunlock(l);
 }
-/*e: function fiunlock(arm) */
+/*e: function [[fiunlock]](arm) */
 
-/*s: function chanalloc(arm) */
+/*s: function [[chanalloc]](arm) */
 static Hostchan*
 chanalloc(Ep *ep)
 {
@@ -123,9 +123,9 @@ chanalloc(Ep *ep)
     panic("miller is a lazy git");
     return nil;
 }
-/*e: function chanalloc(arm) */
+/*e: function [[chanalloc]](arm) */
 
-/*s: function chanrelease(arm) */
+/*s: function [[chanrelease]](arm) */
 static void
 chanrelease(Ep *ep, Hostchan *chan)
 {
@@ -138,9 +138,9 @@ chanrelease(Ep *ep, Hostchan *chan)
     ctlr->chanbusy &= ~(1<<i);
     qunlock(&ctlr->chanlock);
 }
-/*e: function chanrelease(arm) */
+/*e: function [[chanrelease]](arm) */
 
-/*s: function chansetup(arm) */
+/*s: function [[chansetup]](arm) */
 static void
 chansetup(Hostchan *hc, Ep *ep)
 {
@@ -193,9 +193,9 @@ chansetup(Hostchan *hc, Ep *ep)
     hc->hcchar = hcc;
     hc->hcint = ~0;
 }
-/*e: function chansetup(arm) */
+/*e: function [[chansetup]](arm) */
 
-/*s: function sofdone(arm) */
+/*s: function [[sofdone]](arm) */
 static int
 sofdone(void *a)
 {
@@ -204,9 +204,9 @@ sofdone(void *a)
     r = a;
     return (r->gintmsk & Sofintr) == 0;
 }
-/*e: function sofdone(arm) */
+/*e: function [[sofdone]](arm) */
 
-/*s: function sofwait(arm) */
+/*s: function [[sofwait]](arm) */
 static void
 sofwait(Ctlr *ctlr, int n)
 {
@@ -222,9 +222,9 @@ sofwait(Ctlr *ctlr, int n)
         sleep(&ctlr->chanintr[n], sofdone, r);
     }while((r->hfnum & 7) == 6);
 }
-/*e: function sofwait(arm) */
+/*e: function [[sofwait]](arm) */
 
-/*s: function chandone(arm) */
+/*s: function [[chandone]](arm) */
 static int
 chandone(void *a)
 {
@@ -235,9 +235,9 @@ chandone(void *a)
         return 0;
     return (hc->hcint & hc->hcintmsk) != 0;
 }
-/*e: function chandone(arm) */
+/*e: function [[chandone]](arm) */
 
-/*s: function chanwait(arm) */
+/*s: function [[chanwait]](arm) */
 static int
 chanwait(Ep *ep, Ctlr *ctlr, Hostchan *hc, int mask)
 {
@@ -295,9 +295,9 @@ restart:
         logdump(ep);
     }
 }
-/*e: function chanwait(arm) */
+/*e: function [[chanwait]](arm) */
 
-/*s: function chanintr(arm) */
+/*s: function [[chanintr]](arm) */
 static int
 chanintr(Ctlr *ctlr, int n)
 {
@@ -333,25 +333,25 @@ chanintr(Ctlr *ctlr, int n)
     hc->hcchar = (hc->hcchar &~ Chdis) | Chen;
     return 1;
 }
-/*e: function chanintr(arm) */
+/*e: function [[chanintr]](arm) */
 
-/*s: global chanlog(arm) */
+/*s: global [[chanlog]](arm) */
 static Reg chanlog[32][5];
-/*e: global chanlog(arm) */
-/*s: global nchanlog(arm) */
+/*e: global [[chanlog]](arm) */
+/*s: global [[nchanlog]](arm) */
 static int nchanlog;
-/*e: global nchanlog(arm) */
+/*e: global [[nchanlog]](arm) */
 
-/*s: function logstart(arm) */
+/*s: function [[logstart]](arm) */
 static void
 logstart(Ep *ep)
 {
     if(ep->debug)
         nchanlog = 0;
 }
-/*e: function logstart(arm) */
+/*e: function [[logstart]](arm) */
 
-/*s: function clog(arm) */
+/*s: function [[clog]](arm) */
 static void
 clog(Ep *ep, Hostchan *hc)
 {
@@ -369,9 +369,9 @@ clog(Ep *ep, Hostchan *hc)
     p[4] = hc->hcdma;
     nchanlog++;
 }
-/*e: function clog(arm) */
+/*e: function [[clog]](arm) */
 
-/*s: function logdump(arm) */
+/*s: function [[logdump]](arm) */
 static void
 logdump(Ep *ep)
 {
@@ -388,9 +388,9 @@ logdump(Ep *ep)
     }
     nchanlog = 0;
 }
-/*e: function logdump(arm) */
+/*e: function [[logdump]](arm) */
 
-/*s: function chanio(arm) */
+/*s: function [[chanio]](arm) */
 static int
 chanio(Ep *ep, Hostchan *hc, int dir, int pid, void *a, int len)
 {
@@ -514,9 +514,9 @@ chanio(Ep *ep, Hostchan *hc, int dir, int pid, void *a, int len)
     logdump(ep);
     return len - nleft;
 }
-/*e: function chanio(arm) */
+/*e: function [[chanio]](arm) */
 
-/*s: function multitrans(arm) */
+/*s: function [[multitrans]](arm) */
 static long
 multitrans(Ep *ep, Hostchan *hc, int rw, void *a, long n)
 {
@@ -534,9 +534,9 @@ multitrans(Ep *ep, Hostchan *hc, int rw, void *a, long n)
     }while(sofar < n && m == ep->maxpkt);
     return sofar;
 }
-/*e: function multitrans(arm) */
+/*e: function [[multitrans]](arm) */
 
-/*s: function eptrans(arm) */
+/*s: function [[eptrans]](arm) */
 static long
 eptrans(Ep *ep, int rw, void *a, long n)
 {
@@ -569,9 +569,9 @@ eptrans(Ep *ep, int rw, void *a, long n)
     poperror();
     return n;
 }
-/*e: function eptrans(arm) */
+/*e: function [[eptrans]](arm) */
 
-/*s: function ctltrans(arm) */
+/*s: function [[ctltrans]](arm) */
 static long
 ctltrans(Ep *ep, uchar *req, long n)
 {
@@ -630,9 +630,9 @@ ctltrans(Ep *ep, uchar *req, long n)
     poperror();
     return n;
 }
-/*e: function ctltrans(arm) */
+/*e: function [[ctltrans]](arm) */
 
-/*s: function ctldata(arm) */
+/*s: function [[ctldata]](arm) */
 static long
 ctldata(Ep *ep, void *a, long n)
 {
@@ -653,9 +653,9 @@ ctldata(Ep *ep, void *a, long n)
     }
     return n;
 }
-/*e: function ctldata(arm) */
+/*e: function [[ctldata]](arm) */
 
-/*s: function greset(arm) */
+/*s: function [[greset]](arm) */
 static void
 greset(Dwcregs *r, int bits)
 {
@@ -664,9 +664,9 @@ greset(Dwcregs *r, int bits)
         ;
     arch_microdelay(10);
 }
-/*e: function greset(arm) */
+/*e: function [[greset]](arm) */
 
-/*s: function init(arm) */
+/*s: function [[init]](arm) */
 static void
 init(Hci *hp)
 {
@@ -710,16 +710,16 @@ init(Hci *hp)
     r->gintmsk = Hcintr;
     r->gahbcfg |= Glblintrmsk;
 }
-/*e: function init(arm) */
+/*e: function [[init]](arm) */
 
-/*s: function dump (buses/arm/usbdwc.c)(arm) */
+/*s: function [[dump]]([[(buses/arm/usbdwc.c)(arm)]]) */
 static void
 dump(Hci*)
 {
 }
-/*e: function dump (buses/arm/usbdwc.c)(arm) */
+/*e: function [[dump]]([[(buses/arm/usbdwc.c)(arm)]]) */
 
-/*s: function fiqintr(arm) */
+/*s: function [[fiqintr]](arm) */
 static void
 fiqintr(Ureg*, void *a)
 {
@@ -761,9 +761,9 @@ fiqintr(Ureg*, void *a)
     }
     fiunlock(ctlr);
 }
-/*e: function fiqintr(arm) */
+/*e: function [[fiqintr]](arm) */
 
-/*s: function irqintr(arm) */
+/*s: function [[irqintr]](arm) */
 static void
 irqintr(Ureg*, void *a)
 {
@@ -783,9 +783,9 @@ irqintr(Ureg*, void *a)
         wakechan >>= 1;
     }
 }
-/*e: function irqintr(arm) */
+/*e: function [[irqintr]](arm) */
 
-/*s: function epopen(arm) */
+/*s: function [[epopen]](arm) */
 static void
 epopen(Ep *ep)
 {
@@ -808,9 +808,9 @@ epopen(Ep *ep)
     if(ep->aux == nil)
         error(Enomem);
 }
-/*e: function epopen(arm) */
+/*e: function [[epopen]](arm) */
 
-/*s: function epclose (buses/arm/usbdwc.c)(arm) */
+/*s: function [[epclose]]([[(buses/arm/usbdwc.c)(arm)]]) */
 static void
 epclose(Ep *ep)
 {
@@ -825,9 +825,9 @@ epclose(Ep *ep)
         break;
     }
 }
-/*e: function epclose (buses/arm/usbdwc.c)(arm) */
+/*e: function [[epclose]]([[(buses/arm/usbdwc.c)(arm)]]) */
 
-/*s: function epread(arm) */
+/*s: function [[epread]](arm) */
 static long
 epread(Ep *ep, void *a, long n)
 {
@@ -876,9 +876,9 @@ epread(Ep *ep, void *a, long n)
         return nr;
     }
 }
-/*e: function epread(arm) */
+/*e: function [[epread]](arm) */
 
-/*s: function epwrite(arm) */
+/*s: function [[epwrite]](arm) */
 static long
 epwrite(Ep *ep, void *a, long n)
 {
@@ -925,17 +925,17 @@ epwrite(Ep *ep, void *a, long n)
         return n;
     }
 }
-/*e: function epwrite(arm) */
+/*e: function [[epwrite]](arm) */
 
-/*s: function seprintep (buses/arm/usbdwc.c)(arm) */
+/*s: function [[seprintep]]([[(buses/arm/usbdwc.c)(arm)]]) */
 static char*
 seprintep(char *s, char*, Ep*)
 {
     return s;
 }
-/*e: function seprintep (buses/arm/usbdwc.c)(arm) */
+/*e: function [[seprintep]]([[(buses/arm/usbdwc.c)(arm)]]) */
     
-/*s: function portenable(arm) */
+/*s: function [[portenable]](arm) */
 static int
 portenable(Hci *hp, int port, int on)
 {
@@ -952,9 +952,9 @@ portenable(Hci *hp, int port, int on)
     dprint("usbotg enable=%d; sts %#x\n", on, r->hport0);
     return 0;
 }
-/*e: function portenable(arm) */
+/*e: function [[portenable]](arm) */
 
-/*s: function portreset(arm) */
+/*s: function [[portreset]](arm) */
 static int
 portreset(Hci *hp, int port, int on)
 {
@@ -981,9 +981,9 @@ portreset(Hci *hp, int port, int on)
         print("usbotg: host port not enabled after reset");
     return 0;
 }
-/*e: function portreset(arm) */
+/*e: function [[portreset]](arm) */
 
-/*s: function portstatus(arm) */
+/*s: function [[portstatus]](arm) */
 static int
 portstatus(Hci *hp, int port)
 {
@@ -1025,24 +1025,24 @@ portstatus(Hci *hp, int port)
     }
     return b;
 }
-/*e: function portstatus(arm) */
+/*e: function [[portstatus]](arm) */
 
-/*s: function shutdown(arm) */
+/*s: function [[shutdown]](arm) */
 static void
 shutdown(Hci*)
 {
 }
-/*e: function shutdown(arm) */
+/*e: function [[shutdown]](arm) */
 
-/*s: function setdebug(arm) */
+/*s: function [[setdebug]](arm) */
 static void
 setdebug(Hci*, int d)
 {
     debug = d;
 }
-/*e: function setdebug(arm) */
+/*e: function [[setdebug]](arm) */
 
-/*s: function reset(arm) */
+/*s: function [[reset]](arm) */
 static int
 reset(Hci *hp)
 {
@@ -1083,13 +1083,13 @@ reset(Hci *hp)
     hp->type = "dwcotg";
     return 0;
 }
-/*e: function reset(arm) */
+/*e: function [[reset]](arm) */
 
-/*s: function usbdwclink(arm) */
+/*s: function [[usbdwclink]](arm) */
 void
 usbdwclink(void)
 {
     addhcitype("dwcotg", reset);
 }
-/*e: function usbdwclink(arm) */
+/*e: function [[usbdwclink]](arm) */
 /*e: buses/arm/usbdwc.c */

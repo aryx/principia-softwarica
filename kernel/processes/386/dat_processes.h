@@ -1,12 +1,12 @@
 /*s: processes/386/dat_processes.h */
 
-/*s: constant AOUT_MAGIC(x86) */
+/*s: constant [[AOUT_MAGIC]](x86) */
 /*
  *  parameters for sysproc.c
  */
 // I_MAGIC is defined in include/a.out.h, I for INTEL?
 #define AOUT_MAGIC  (I_MAGIC)
-/*e: constant AOUT_MAGIC(x86) */
+/*e: constant [[AOUT_MAGIC]](x86) */
 
 //*****************************************************************************
 // Proc extensions

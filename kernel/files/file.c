@@ -8,7 +8,7 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: function fdtochan */
+/*s: function [[fdtochan]] */
 Chan*
 fdtochan(int fd, int mode, bool chkmnt, bool iref)
 {
@@ -58,9 +58,9 @@ fdtochan(int fd, int mode, bool chkmnt, bool iref)
 
     return c;
 }
-/*e: function fdtochan */
+/*e: function [[fdtochan]] */
 
-/*s: function openmode */
+/*s: function [[openmode]] */
 int
 openmode(ulong o)
 {
@@ -71,9 +71,9 @@ openmode(ulong o)
         return OREAD;
     return o;
 }
-/*e: function openmode */
+/*e: function [[openmode]] */
 
-/*s: function fdclose */
+/*s: function [[fdclose]] */
 void
 fdclose(int fd, int flag)
 {
@@ -103,9 +103,9 @@ fdclose(int fd, int flag)
     unlock(f);
     cclose(c);
 }
-/*e: function fdclose */
+/*e: function [[fdclose]] */
 
-/*s: function validstat */
+/*s: function [[validstat]] */
 void
 validstat(byte *s, int n)
 {
@@ -132,6 +132,6 @@ validstat(byte *s, int n)
     if(strcmp(buf, "/") != 0)
         validname(buf, false);
 }
-/*e: function validstat */
+/*e: function [[validstat]] */
 
 /*e: file.c */

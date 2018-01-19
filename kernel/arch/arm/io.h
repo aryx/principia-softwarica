@@ -1,6 +1,6 @@
 /*s: arch/arm/io.h */
 // could be in dat_interrupts.h?
-/*s: enum IRQ(arm) */
+/*s: enum [[IRQ]](arm) */
 enum IRQ {
     IRQtimer0   = 0, // reserved by GPU?
     IRQtimer1   = 1, // reserved by GPU?
@@ -30,12 +30,12 @@ enum IRQ {
     IRQfiq      = IRQusb,   /* only one source can be FIQ */
     /*e: [[IRQ]] other cases(arm) */
 };
-/*e: enum IRQ(arm) */
-/*s: macro IRQDMA(arm) */
+/*e: enum [[IRQ]](arm) */
+/*s: macro [[IRQDMA]](arm) */
 #define IRQDMA(chan)    (IRQdma0+(chan))
-/*e: macro IRQDMA(arm) */
+/*e: macro [[IRQDMA]](arm) */
 
-/*s: enum Dma(arm) */
+/*s: enum [[Dma]](arm) */
 enum DmaFlags {
     DmaD2M      = 0,        /* device to memory */
     DmaM2D      = 1,        /* memory to device */
@@ -49,9 +49,9 @@ enum DmaFlags {
     DmaDevSpiRx = 7,
     DmaDevEmmc  = 11,
 };
-/*e: enum Dma(arm) */
+/*e: enum [[Dma]](arm) */
 
-/*s: enum Power(arm) */
+/*s: enum [[Power]](arm) */
 enum {
     PowerSd     = 0,
     PowerUart0,
@@ -63,10 +63,10 @@ enum {
     PowerSpi,
     PowerCcp2tx,
 };
-/*e: enum Power(arm) */
+/*e: enum [[Power]](arm) */
 
 // could be in dat_time.h?
-/*s: enum Clock(arm) */
+/*s: enum [[Clock]](arm) */
 enum {
     ClkEmmc     = 1,
     ClkUart,
@@ -79,5 +79,5 @@ enum {
     ClkPixel,
     ClkPwm,
 };
-/*e: enum Clock(arm) */
+/*e: enum [[Clock]](arm) */
 /*e: arch/arm/io.h */

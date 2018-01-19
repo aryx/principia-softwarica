@@ -1,6 +1,6 @@
 /*s: portdat_time.h */
 
-/*s: enum timermode */
+/*s: enum [[timermode]] */
 /*
  * fasttick timer interrupts
  */
@@ -9,21 +9,21 @@ enum Timermode
     Trelative,  /* timer programmed in ns from now */
     Tperiodic,  /* periodic timer, period in ns */
 };
-/*e: enum timermode */
+/*e: enum [[timermode]] */
 
-/*s: type Txxx */
+/*s: type [[Txxx]] */
 typedef vlong   Tsec; // seconds
 typedef int     Tms; // milliseconds
 typedef vlong   Tmicro; // microseconds
 typedef vlong   Tnano; // nanoseconds
-/*x: type Txxx */
+/*x: type [[Txxx]] */
 typedef vlong   Tval; // ticks
-/*x: type Txxx */
+/*x: type [[Txxx]] */
 typedef vlong   Tfast; // fastticks
 typedef uvlong   Tufast; // fastticks
-/*e: type Txxx */
+/*e: type [[Txxx]] */
 
-/*s: struct Timer */
+/*s: struct [[Timer]] */
 struct Timer
 {
     /* Public interface */
@@ -46,10 +46,10 @@ struct Timer
     Timers  *tt;    /* Timers queue this timer runs on */
     /*e: [[Timer]] extra fields */
     };
-/*e: struct Timer */
+/*e: struct [[Timer]] */
 
 // was in clock.c
-/*s: struct Timers */
+/*s: struct [[Timers]] */
 struct Timers
 {
     // list<Timer> (next = Timer.tnext)
@@ -57,7 +57,7 @@ struct Timers
     // extra
     ILock;
 };
-/*e: struct Timers */
+/*e: struct [[Timers]] */
 
 // used only in arm/ for now
 enum {

@@ -13,23 +13,23 @@
 
 #include "io.h"
 
-/*s: constant GPIOREGS(arm) */
+/*s: constant [[GPIOREGS]](arm) */
 #define GPIOREGS    (VIRTIO+0x200000)
-/*e: constant GPIOREGS(arm) */
-/*s: constant AUXREGS(arm) */
+/*e: constant [[GPIOREGS]](arm) */
+/*s: constant [[AUXREGS]](arm) */
 #define AUXREGS     (VIRTIO+0x215000)
-/*e: constant AUXREGS(arm) */
-/*s: constant OkLed(arm) */
+/*e: constant [[AUXREGS]](arm) */
+/*s: constant [[OkLed]](arm) */
 #define OkLed       16
-/*e: constant OkLed(arm) */
-/*s: constant TxPin(arm) */
+/*e: constant [[OkLed]](arm) */
+/*s: constant [[TxPin]](arm) */
 #define TxPin       14
-/*e: constant TxPin(arm) */
-/*s: constant RxPin(arm) */
+/*e: constant [[TxPin]](arm) */
+/*s: constant [[RxPin]](arm) */
 #define RxPin       15
-/*e: constant RxPin(arm) */
+/*e: constant [[RxPin]](arm) */
 
-/*s: enum _anon_ (buses/arm/uartmini.c)(arm) */
+/*s: enum [[_anon_]]([[(buses/arm/uartmini.c)(arm)]]) */
 /* GPIO regs */
 enum {
     Fsel0   = 0x00>>2,
@@ -52,9 +52,9 @@ enum {
     PUDclk0 = 0x98>>2,
     PUDclk1 = 0x9c>>2,
 };
-/*e: enum _anon_ (buses/arm/uartmini.c)(arm) */
+/*e: enum [[_anon_]]([[(buses/arm/uartmini.c)(arm)]]) */
 
-/*s: enum _anon_ (buses/arm/uartmini.c)2(arm) */
+/*s: enum [[_anon_]]([[(buses/arm/uartmini.c)2(arm)]]) */
 /* AUX regs */
 enum {
     Irq = 0x00>>2,
@@ -82,20 +82,20 @@ enum {
         RxEn    = 1<<0,
     MuBaud  = 0x68>>2,
 };
-/*e: enum _anon_ (buses/arm/uartmini.c)2(arm) */
+/*e: enum [[_anon_]]([[(buses/arm/uartmini.c)2(arm)]]) */
 
 extern PhysUart miniphysuart;
 
-/*s: global miniuart(arm) */
+/*s: global [[miniuart]](arm) */
 static Uart miniuart = {
     .regs   = (u32int*)AUXREGS,
     .name   = "uart0",
     .freq   = 250000000,
     .phys   = &miniphysuart,
 };
-/*e: global miniuart(arm) */
+/*e: global [[miniuart]](arm) */
 
-/*s: function gpiosel(arm) */
+/*s: function [[gpiosel]](arm) */
 void
 gpiosel(uint pin, int func)
 {   
@@ -107,9 +107,9 @@ gpiosel(uint pin, int func)
     off = (pin % 10) * 3;
     *fsel = (*fsel & ~(FuncMask<<off)) | func<<off;
 }
-/*e: function gpiosel(arm) */
+/*e: function [[gpiosel]](arm) */
 
-/*s: function gpiopull(arm) */
+/*s: function [[gpiopull]](arm) */
 static void
 gpiopull(uint pin, int func)
 {
@@ -125,33 +125,33 @@ gpiopull(uint pin, int func)
     arch_microdelay(1);
     *reg = 0;
 }
-/*e: function gpiopull(arm) */
+/*e: function [[gpiopull]](arm) */
 
-/*s: function gpiopulloff(arm) */
+/*s: function [[gpiopulloff]](arm) */
 void
 gpiopulloff(uint pin)
 {
     gpiopull(pin, Off);
 }
-/*e: function gpiopulloff(arm) */
+/*e: function [[gpiopulloff]](arm) */
 
-/*s: function gpiopullup(arm) */
+/*s: function [[gpiopullup]](arm) */
 void
 gpiopullup(uint pin)
 {
     gpiopull(pin, Pullup);
 }
-/*e: function gpiopullup(arm) */
+/*e: function [[gpiopullup]](arm) */
 
-/*s: function gpiopulldown(arm) */
+/*s: function [[gpiopulldown]](arm) */
 void
 gpiopulldown(uint pin)
 {
     gpiopull(pin, Pulldown);
 }
-/*e: function gpiopulldown(arm) */
+/*e: function [[gpiopulldown]](arm) */
 
-/*s: function gpioout(arm) */
+/*s: function [[gpioout]](arm) */
 void
 gpioout(uint pin, int set)
 {
@@ -162,9 +162,9 @@ gpioout(uint pin, int set)
     v = set? Set0 : Clr0;
     gp[v + pin/32] = 1 << (pin % 32);
 }
-/*e: function gpioout(arm) */
+/*e: function [[gpioout]](arm) */
 
-/*s: function gpioin(arm) */
+/*s: function [[gpioin]](arm) */
 int
 gpioin(uint pin)
 {
@@ -173,9 +173,9 @@ gpioin(uint pin)
     gp = (u32int*)GPIOREGS;
     return (gp[Lev0 + pin/32] & (1 << (pin % 32))) != 0;
 }
-/*e: function gpioin(arm) */
+/*e: function [[gpioin]](arm) */
 
-/*s: function interrupt(arm) */
+/*s: function [[interrupt]](arm) */
 static void
 interrupt(Ureg*, void *arg)
 {
@@ -203,9 +203,9 @@ interrupt(Ureg*, void *arg)
     }
     arch_coherence();
 }
-/*e: function interrupt(arm) */
+/*e: function [[interrupt]](arm) */
 
-/*s: function pnp(arm) */
+/*s: function [[pnp]](arm) */
 static Uart*
 pnp(void)
 {
@@ -216,9 +216,9 @@ pnp(void)
         kbdq = qopen(8*1024, 0, nil, nil);
     return uart;
 }
-/*e: function pnp(arm) */
+/*e: function [[pnp]](arm) */
 
-/*s: function enable(arm) */
+/*s: function [[enable]](arm) */
 static void
 enable(Uart *uart, int ie)
 {
@@ -241,9 +241,9 @@ enable(Uart *uart, int ie)
     }else
         ap[MuIer] = 0;
 }
-/*e: function enable(arm) */
+/*e: function [[enable]](arm) */
 
-/*s: function disable(arm) */
+/*s: function [[disable]](arm) */
 static void
 disable(Uart *uart)
 {
@@ -253,9 +253,9 @@ disable(Uart *uart)
     ap[MuCntl] = 0;
     ap[MuIer] = 0;
 }
-/*e: function disable(arm) */
+/*e: function [[disable]](arm) */
 
-/*s: function kick(arm) */
+/*s: function [[kick]](arm) */
 static void
 kick(Uart *uart)
 {
@@ -276,18 +276,18 @@ kick(Uart *uart)
         ap[MuIer] |= TxIen;
     arch_coherence();
 }
-/*e: function kick(arm) */
+/*e: function [[kick]](arm) */
 
-/*s: function dobreak(arm) */
+/*s: function [[dobreak]](arm) */
 /* TODO */
 static void
 dobreak(Uart *uart, int ms)
 {
     USED(uart, ms);
 }
-/*e: function dobreak(arm) */
+/*e: function [[dobreak]](arm) */
 
-/*s: function baud(arm) */
+/*s: function [[baud]](arm) */
 static int
 baud(Uart *uart, int n)
 {
@@ -300,9 +300,9 @@ baud(Uart *uart, int n)
     uart->baud = n;
     return 0;
 }
-/*e: function baud(arm) */
+/*e: function [[baud]](arm) */
 
-/*s: function bits(arm) */
+/*s: function [[bits]](arm) */
 static int
 bits(Uart *uart, int n)
 {
@@ -324,9 +324,9 @@ bits(Uart *uart, int n)
     uart->bits = n;
     return 0;
 }
-/*e: function bits(arm) */
+/*e: function [[bits]](arm) */
 
-/*s: function stop(arm) */
+/*s: function [[stop]](arm) */
 static int
 stop(Uart *uart, int n)
 {
@@ -335,9 +335,9 @@ stop(Uart *uart, int n)
     uart->stop = n;
     return 0;
 }
-/*e: function stop(arm) */
+/*e: function [[stop]](arm) */
 
-/*s: function parity(arm) */
+/*s: function [[parity]](arm) */
 static int
 parity(Uart *uart, int n)
 {
@@ -346,9 +346,9 @@ parity(Uart *uart, int n)
     uart->parity = n;
     return 0;
 }
-/*e: function parity(arm) */
+/*e: function [[parity]](arm) */
 
-/*s: function modemctl(arm) */
+/*s: function [[modemctl]](arm) */
 /*
  * cts/rts flow control
  *   need to bring signals to gpio pins before enabling this
@@ -366,9 +366,9 @@ modemctl(Uart *uart, int on)
         ap[MuCntl] &= ~CtsFlow;
     uart->modem = on;
 }
-/*e: function modemctl(arm) */
+/*e: function [[modemctl]](arm) */
 
-/*s: function rts(arm) */
+/*s: function [[rts]](arm) */
 static void
 rts(Uart *uart, int on)
 {
@@ -380,9 +380,9 @@ rts(Uart *uart, int on)
     else
         ap[MuMcr] |= RtsN;
 }
-/*e: function rts(arm) */
+/*e: function [[rts]](arm) */
 
-/*s: function status(arm) */
+/*s: function [[status]](arm) */
 static long
 status(Uart *uart, void *buf, long n, long offset)
 {
@@ -409,16 +409,16 @@ status(Uart *uart, void *buf, long n, long offset)
 
     return n;
 }
-/*e: function status(arm) */
+/*e: function [[status]](arm) */
 
-/*s: function donothing(arm) */
+/*s: function [[donothing]](arm) */
 static void
 donothing(Uart*, int)
 {
 }
-/*e: function donothing(arm) */
+/*e: function [[donothing]](arm) */
 
-/*s: function putc(arm) */
+/*s: function [[putc]](arm) */
 void
 putc(Uart*, int c)
 {
@@ -431,9 +431,9 @@ putc(Uart*, int c)
     while((ap[MuLsr] & TxRdy) == 0)
         ;
 }
-/*e: function putc(arm) */
+/*e: function [[putc]](arm) */
 
-/*s: function getc(arm) */
+/*s: function [[getc]](arm) */
 int
 getc(Uart*)
 {
@@ -444,9 +444,9 @@ getc(Uart*)
         ;
     return ap[MuIo] & 0xFF;
 }
-/*e: function getc(arm) */
+/*e: function [[getc]](arm) */
 
-/*s: function uartconsinit(arm) */
+/*s: function [[uartconsinit]](arm) */
 void
 uartconsinit(void)
 {
@@ -476,9 +476,9 @@ uartconsinit(void)
     consuart = uart;
     uart->console = 1;
 }
-/*e: function uartconsinit(arm) */
+/*e: function [[uartconsinit]](arm) */
 
-/*s: global miniphysuart(arm) */
+/*s: global [[miniphysuart]](arm) */
 PhysUart miniphysuart = {
     .name       = "miniuart",
     .pnp        = pnp,
@@ -498,9 +498,9 @@ PhysUart miniphysuart = {
     .getc       = getc,
     .putc       = putc,
 };
-/*e: global miniphysuart(arm) */
+/*e: global [[miniphysuart]](arm) */
 
-/*s: function okay(arm) */
+/*s: function [[okay]](arm) */
 void
 okay(int on)
 {
@@ -524,5 +524,5 @@ okay(int on)
     }
     gpioout(okled, on^polarity);
 }
-/*e: function okay(arm) */
+/*e: function [[okay]](arm) */
 /*e: buses/arm/uartmini.c */

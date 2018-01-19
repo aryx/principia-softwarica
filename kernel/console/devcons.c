@@ -11,9 +11,9 @@
 #include    <pool.h>
 
 // used also by edf.c
-/*s: global panicking */
+/*s: global [[panicking]] */
 bool panicking;
-/*e: global panicking */
+/*e: global [[panicking]] */
 
 /*s: hook screenputs */
 void    (*screenputs)(char*, int) = nil;
@@ -22,28 +22,28 @@ void    (*screenputs)(char*, int) = nil;
 void    (*consdebug)(void) = nil; // for rdb
 /*e: hook consdebug */
 
-/*s: global kbdq */
+/*s: global [[kbdq]] */
 Queue*  kbdq;           /* unprocessed console input */
-/*e: global kbdq */
-/*s: global lineq */
+/*e: global [[kbdq]] */
+/*s: global [[lineq]] */
 Queue*  lineq;          /* processed console input */
-/*e: global lineq */
-/*s: global serialoq */
+/*e: global [[lineq]] */
+/*s: global [[serialoq]] */
 // option<Queue>
 Queue*  serialoq;       /* serial console output */
-/*e: global serialoq */
-/*s: global kprintoq */
+/*e: global [[serialoq]] */
+/*s: global [[kprintoq]] */
 Queue*  kprintoq;       /* console output, for /dev/kprint */
-/*e: global kprintoq */
+/*e: global [[kprintoq]] */
 
-/*s: global kprintinuse */
+/*s: global [[kprintinuse]] */
 ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
-/*e: global kprintinuse */
-/*s: global iprintscreenputs */
+/*e: global [[kprintinuse]] */
+/*s: global [[iprintscreenputs]] */
 bool iprintscreenputs = true;
-/*e: global iprintscreenputs */
+/*e: global [[iprintscreenputs]] */
 
-/*s: struct ConsKbd */
+/*s: struct [[ConsKbd]] */
 struct ConsKbd
 {
     /* a place to save up characters at interrupt time before dumping them in the queue */
@@ -66,20 +66,20 @@ struct ConsKbd
     // extra
     QLock;
 };
-/*e: struct ConsKbd */
+/*e: struct [[ConsKbd]] */
 
-/*s: global kbd */
+/*s: global [[kbd]] */
 static struct ConsKbd kbd = 
 {
     .iw = kbd.istage,
     .ir = kbd.istage,
     .ie = kbd.istage + sizeof(kbd.istage),
 };
-/*e: global kbd */
+/*e: global [[kbd]] */
 
-/*s: global fasthz */
+/*s: global [[fasthz]] */
 vlong   fasthz;
-/*e: global fasthz */
+/*e: global [[fasthz]] */
 
 /*s: devcons.c forward decl */
 static void seedrand(void);
@@ -89,7 +89,7 @@ static int  writetime(char*, int);
 static int  writebintime(char*, int);
 /*e: devcons.c forward decl */
 
-/*s: function kbdqinit */
+/*s: function [[kbdqinit]] */
 void
 kbdqinit(void)
 {
@@ -98,9 +98,9 @@ kbdqinit(void)
         panic("kbdinit");
     qnoblock(kbdq, true);
 }
-/*e: function kbdqinit */
+/*e: function [[kbdqinit]] */
 
-/*s: function lineqinit */
+/*s: function [[lineqinit]] */
 void
 lineqinit(void)
 {
@@ -110,9 +110,9 @@ lineqinit(void)
         panic("lineqinit");
     qnoblock(lineq, true);
 }
-/*e: function lineqinit */
+/*e: function [[lineqinit]] */
 
-/*s: function consactive */
+/*s: function [[consactive]] */
 int
 consactive(void)
 {
@@ -120,9 +120,9 @@ consactive(void)
         return qlen(serialoq) > 0;
     return 0;
 }
-/*e: function consactive */
+/*e: function [[consactive]] */
 
-/*s: function prflush */
+/*s: function [[prflush]] */
 void
 prflush(void)
 {
@@ -133,9 +133,9 @@ prflush(void)
         if(cpu->ticks - now >= Arch_HZ)
             break;
 }
-/*e: function prflush */
+/*e: function [[prflush]] */
 
-/*s: struct KMesg */
+/*s: struct [[KMesg]] */
 /*
  * Log console output so it can be retrieved via /dev/kmesg.
  * This is good for catching boot-time messages after the fact.
@@ -145,13 +145,13 @@ struct KMesg {
     char buf[KMESGSIZE];
     uint n;
 };
-/*e: struct KMesg */
+/*e: struct [[KMesg]] */
 
-/*s: global kmesg */
+/*s: global [[kmesg]] */
 struct KMesg kmesg;
-/*e: global kmesg */
+/*e: global [[kmesg]] */
 
-/*s: function kmesgputs */
+/*s: function [[kmesgputs]] */
 static void
 kmesgputs(char *str, int n)
 {
@@ -180,9 +180,9 @@ kmesgputs(char *str, int n)
     kmesg.n = nn;
     iunlock(&kmesg.lk);
 }
-/*e: function kmesgputs */
+/*e: function [[kmesgputs]] */
 
-/*s: function putstrn0 */
+/*s: function [[putstrn0]] */
 /*
  *   Print a string on the console.
  */
@@ -259,17 +259,17 @@ putstrn0(char *str, int n, bool usewrite)
     }
     /*e: [[putstrn0()]] serialoq handling */
 }
-/*e: function putstrn0 */
+/*e: function [[putstrn0]] */
 
-/*s: function putstrn */
+/*s: function [[putstrn]] */
 void
 putstrn(char *str, int n)
 {
     putstrn0(str, n, false);
 }
-/*e: function putstrn */
+/*e: function [[putstrn]] */
 
-/*s: function print */
+/*s: function [[print]] */
 bool noprint; // to debug?
 
 int
@@ -289,9 +289,9 @@ devcons_print(char *fmt, ...)
 
     return n;
 }
-/*e: function print */
+/*e: function [[print]] */
 
-/*s: global iprintlock */
+/*s: global [[iprintlock]] */
 /*
  * Want to interlock iprints to avoid interlaced output on 
  * multiprocessor, but don't want to deadlock if one processor
@@ -299,9 +299,9 @@ devcons_print(char *fmt, ...)
  * Make a good faith effort.
  */
 static Lock iprintlock;
-/*e: global iprintlock */
+/*e: global [[iprintlock]] */
 
-/*s: function iprintcanlock */
+/*s: function [[iprintcanlock]] */
 static bool
 iprintcanlock(Lock *l)
 {
@@ -316,9 +316,9 @@ iprintcanlock(Lock *l)
     }
     return false;
 }
-/*e: function iprintcanlock */
+/*e: function [[iprintcanlock]] */
 
-/*s: function iprint */
+/*s: function [[iprint]] */
 int
 devcons_iprint(char *fmt, ...)
 {
@@ -346,9 +346,9 @@ devcons_iprint(char *fmt, ...)
 
     return n;
 }
-/*e: function iprint */
+/*e: function [[iprint]] */
 
-/*s: function panic */
+/*s: function [[panic]] */
 void
 devcons_panic(char *fmt, ...)
 {
@@ -383,9 +383,9 @@ devcons_panic(char *fmt, ...)
     //arch_dumpstack();
     //exit(1);
 }
-/*e: function panic */
+/*e: function [[panic]] */
 
-/*s: function sysfatal */
+/*s: function [[sysfatal]] */
 /* libmp at least contains a few calls to sysfatal; simulate with panic */
 // note that this is not a system call, even though it's prefixed with sys
 //@Scheck: no dead, override also sysfatal from libc/9sys/sysfatal.c
@@ -399,17 +399,17 @@ void sysfatal(char *fmt, ...)
     va_end(arg);
     panic("sysfatal: %s", err);
 }
-/*e: function sysfatal */
+/*e: function [[sysfatal]] */
 
-/*s: function _assert */
+/*s: function [[_assert]] */
 void
 devcons__assert(char *fmt)
 {
     panic("assert failed at %#p: %s", getcallerpc(&fmt), fmt);
 }
-/*e: function _assert */
+/*e: function [[_assert]] */
 
-/*s: function pprint */
+/*s: function [[pprint]] */
 int
 devcons_pprint(char *fmt, ...)
 {
@@ -441,9 +441,9 @@ devcons_pprint(char *fmt, ...)
 
     return n;
 }
-/*e: function pprint */
+/*e: function [[pprint]] */
 
-/*s: function echoscreen */
+/*s: function [[echoscreen]] */
 static void
 echoscreen(char *buf, int n)
 {
@@ -469,9 +469,9 @@ echoscreen(char *buf, int n)
     if(p != ebuf)
         screenputs(ebuf, p - ebuf);
 }
-/*e: function echoscreen */
+/*e: function [[echoscreen]] */
 
-/*s: function echoserialoq */
+/*s: function [[echoserialoq]] */
 static void
 echoserialoq(char *buf, int n)
 {
@@ -500,9 +500,9 @@ echoserialoq(char *buf, int n)
     if(p != ebuf)
         qiwrite(serialoq, ebuf, p - ebuf);
 }
-/*e: function echoserialoq */
+/*e: function [[echoserialoq]] */
 
-/*s: function echo */
+/*s: function [[echo]] */
 static void
 echo(char *buf, int n)
 {
@@ -617,9 +617,9 @@ echo(char *buf, int n)
         echoserialoq(buf, n);
     /*e: [[echo()]] hooks */
 }
-/*e: function echo */
+/*e: function [[echo]] */
 
-/*s: function kbdcr2nl */
+/*s: function [[kbdcr2nl]] */
 /*
  *  Called by a uart interrupt for console input.
  *
@@ -643,9 +643,9 @@ kbdcr2nl(Queue*, int ch)
     iunlock(&kbd.lockputc);
     return 0;
 }
-/*e: function kbdcr2nl */
+/*e: function [[kbdcr2nl]] */
 
-/*s: function kbdputc */
+/*s: function [[kbdputc]] */
 /*
  *  Put character, possibly a rune, into kbd at interrupt time.
  *  Called at interrupt time to process a character.
@@ -684,7 +684,7 @@ kbdputc(Rune ch)
     iunlock(&kbd.lockputc);
     return;
 }
-/*e: function kbdputc */
+/*e: function [[kbdputc]] */
 
 /*s: clock callback kbdputcclock */
 /*
@@ -740,12 +740,12 @@ enum{
 
 enum
 {
-    /*s: constant VLNUMSIZE */
+    /*s: constant [[VLNUMSIZE]] */
     VLNUMSIZE=  22,
-    /*e: constant VLNUMSIZE */
+    /*e: constant [[VLNUMSIZE]] */
 };
 
-/*s: global consdir */
+/*s: global [[consdir]] */
 static Dirtab consdir[]={
     ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
 
@@ -770,7 +770,7 @@ static Dirtab consdir[]={
     "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
     /*e: [[consdir]] fields */
 };
-/*e: global consdir */
+/*e: global [[consdir]] */
 
 /*s: method consinit */
 static void
@@ -1143,7 +1143,7 @@ conswrite(Chan *c, void *va, long n, vlong off)
 }
 /*e: method conswrite */
 
-/*s: global consdevtab */
+/*s: global [[consdevtab]] */
 Dev consdevtab = {
     .dc       =    'c',
     .name     =    "cons",
@@ -1164,13 +1164,13 @@ Dev consdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
-/*e: global consdevtab */
+/*e: global [[consdevtab]] */
 
-/*s: global randn */
+/*s: global [[randn]] */
 static  ulong   randn;
-/*e: global randn */
+/*e: global [[randn]] */
 
-/*s: function seedrand */
+/*s: function [[seedrand]] */
 static void
 seedrand(void)
 {
@@ -1179,9 +1179,9 @@ seedrand(void)
         poperror();
     }
 }
-/*e: function seedrand */
+/*e: function [[seedrand]] */
 
-/*s: function nrand */
+/*s: function [[nrand]] */
 int
 nrand(int n)
 {
@@ -1190,13 +1190,13 @@ nrand(int n)
     randn = randn*1103515245 + 12345 + CPUS(0)->ticks;
     return (randn>>16) % n;
 }
-/*e: function nrand */
+/*e: function [[nrand]] */
 
-/*s: global uvorder */
+/*s: global [[uvorder]] */
 static uvlong uvorder = 0x0001020304050607ULL;
-/*e: global uvorder */
+/*e: global [[uvorder]] */
 
-/*s: function le2vlong */
+/*s: function [[le2vlong]] */
 static byte*
 le2vlong(vlong *to, byte *f)
 {
@@ -1209,9 +1209,9 @@ le2vlong(vlong *to, byte *f)
         t[o[i]] = f[i];
     return f+sizeof(vlong);
 }
-/*e: function le2vlong */
+/*e: function [[le2vlong]] */
 
-/*s: function vlong2le */
+/*s: function [[vlong2le]] */
 static byte*
 vlong2le(byte *t, vlong from)
 {
@@ -1224,13 +1224,13 @@ vlong2le(byte *t, vlong from)
         t[i] = f[o[i]];
     return t+sizeof(vlong);
 }
-/*e: function vlong2le */
+/*e: function [[vlong2le]] */
 
-/*s: global order */
+/*s: global [[order]] */
 static long order = 0x00010203;
-/*e: global order */
+/*e: global [[order]] */
 
-/*s: function le2long */
+/*s: function [[le2long]] */
 static byte*
 le2long(long *to, byte *f)
 {
@@ -1243,13 +1243,13 @@ le2long(long *to, byte *f)
         t[o[i]] = f[i];
     return f+sizeof(long);
 }
-/*e: function le2long */
+/*e: function [[le2long]] */
 
 /*s: devcons.c Exxx errors */
 char *Ebadtimectl = "bad time control";
 /*e: devcons.c Exxx errors */
 
-/*s: function readtime */
+/*s: function [[readtime]] */
 /*
  *  like the old #c/time but with added info.  Return
  *
@@ -1273,9 +1273,9 @@ readtime(ulong off, char *buf, int n)
         VLNUMSIZE-1, fasthz);
     return readstr(off, buf, n, str);
 }
-/*e: function readtime */
+/*e: function [[readtime]] */
 
-/*s: function writetime */
+/*s: function [[writetime]] */
 /*
  *  set the time in seconds
  */
@@ -1297,9 +1297,9 @@ writetime(char *buf, int n)
     todset(now, 0, 0);
     return n;
 }
-/*e: function writetime */
+/*e: function [[writetime]] */
 
-/*s: function readbintime */
+/*s: function [[readbintime]] */
 /*
  *  read binary time info.  all numbers are little endian.
  *  ticks and nsec are syncronized.
@@ -1329,9 +1329,9 @@ readbintime(char *buf, int n)
     }
     return i;
 }
-/*e: function readbintime */
+/*e: function [[readbintime]] */
 
-/*s: function writebintime */
+/*s: function [[writebintime]] */
 /*
  *  set any of the following
  *  - time in nsec
@@ -1372,5 +1372,5 @@ writebintime(char *buf, int n)
     }
     return n;
 }
-/*e: function writebintime */
+/*e: function [[writebintime]] */
 /*e: devcons.c */

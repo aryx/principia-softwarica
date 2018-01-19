@@ -11,21 +11,21 @@
 // this used to be in devmnt.c, but to avoid backward deps I've splitted
 // this file in 2 (which forced to put more stuff in portdat_files.h though).
 
-/*s: global mntalloc */
+/*s: global [[mntalloc]] */
 struct Mntalloc mntalloc;
-/*e: global mntalloc */
+/*e: global [[mntalloc]] */
 
 #define MAXRPC (IOHDRSZ+8192)
 
-/*s: function freetag */
+/*s: function [[freetag]] */
 void
 freetag(int t)
 {
     mntalloc.tagmask[t>>TAGSHIFT] &= ~(1<<(t&TAGMASK));
 }
-/*e: function freetag */
+/*e: function [[freetag]] */
 
-/*s: function mntfree */
+/*s: function [[mntfree]] */
 void
 mntfree(Mntrpc *r)
 {
@@ -45,9 +45,9 @@ mntfree(Mntrpc *r)
     mntalloc.nrpcused--;
     unlock(&mntalloc);
 }
-/*e: function mntfree */
+/*e: function [[mntfree]] */
 
-/*s: function mntpntfree */
+/*s: function [[mntpntfree]] */
 void
 mntpntfree(Mnt *m)
 {
@@ -70,9 +70,9 @@ mntpntfree(Mnt *m)
 
     qfree(q);
 }
-/*e: function mntpntfree */
+/*e: function [[mntpntfree]] */
 
-/*s: function muxclose */
+/*s: function [[muxclose]] */
 void
 muxclose(Mnt *m)
 {
@@ -87,9 +87,9 @@ muxclose(Mnt *m)
     m->version = nil;
     mntpntfree(m);
 }
-/*e: function muxclose */
+/*e: function [[muxclose]] */
 
-/*s: function mntversion */
+/*s: function [[mntversion]] */
 /*
  * Version is not multiplexed: message sent only once per connection.
  */
@@ -243,6 +243,6 @@ mntversion(Chan *c, char *version, int msize, int returnlen)
 
     return k;
 }
-/*e: function mntversion */
+/*e: function [[mntversion]] */
 
 /*e: mnt.c */

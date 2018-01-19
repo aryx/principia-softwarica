@@ -6,9 +6,9 @@
 #include "arm.h"
 #include "arminstr.ha"
 
-/*s: constant PTEDRAM(arm) */
+/*s: constant [[PTEDRAM]](arm) */
 #define PTEDRAM     (Dom0|L1AP(Krw)|Section)
-/*e: constant PTEDRAM(arm) */
+/*e: constant [[PTEDRAM]](arm) */
 
 /*s: instruction WFI(arm) */
 #define WFI WORD    $0xe320f003 /* wait for interrupt */

@@ -85,7 +85,7 @@ identify(void)
     return 0;
 }
 
-/*s: global archmp(x86) */
+/*s: global [[archmp]](x86) */
 PCArch archmp = {
     .id=        "_MP_", 
     .ident=     identify,
@@ -98,12 +98,12 @@ PCArch archmp = {
     .timerset=  lapictimerset,
     .resetothers=   mpresetothers,
 };
-/*e: global archmp(x86) */
+/*e: global [[archmp]](x86) */
 
 
 //Lock mpsynclock;
 
-/*s: function syncclock(x86) */
+/*s: function [[syncclock]](x86) */
 // actually not a clock callback even though finish in clock
 void
 syncclock(void)
@@ -124,5 +124,5 @@ syncclock(void)
         arch_cycles(&cpu->tscticks);
     }
 }
-/*e: function syncclock(x86) */
+/*e: function [[syncclock]](x86) */
 /*e: archmp.c */

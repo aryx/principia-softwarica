@@ -11,7 +11,7 @@
 #define MAXSC 100000
 
 TEXT    _tas(SB), $-4           /* _tas(ulong *) */
-/*s: function arch_tas(raspberry pi2)(arm) */
+/*s: function [[arch_tas]](raspberry pi2)(arm) */
 TEXT    arch_tas(SB), $-4
     /* returns old (R0) after modifying (R0) */
     MOVW    R0,R5
@@ -37,5 +37,5 @@ lockbusy:
 tas0:
     MOVW    R7, R0      /* return old value */
     RET
-/*e: function arch_tas(raspberry pi2)(arm) */
+/*e: function [[arch_tas]](raspberry pi2)(arm) */
 /*e: concurrency/arm/tas_raspi2.s */

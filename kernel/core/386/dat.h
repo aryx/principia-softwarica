@@ -1,18 +1,18 @@
 /*s: core/386/dat.h */
 
-/*s: enum misc_constants(x86) */
+/*s: enum [[misc_constants]](x86) */
 enum misc_constants
 {
-    /*s: constant KMESGSIZE(x86) */
+    /*s: constant [[KMESGSIZE]](x86) */
     // used in devcons.c
     KMESGSIZE = (16*1024),  /* put 256*1024 if want acpi debugging */
-    /*e: constant KMESGSIZE(x86) */
-    /*s: constant STAGESIZE(x86) */
+    /*e: constant [[KMESGSIZE]](x86) */
+    /*s: constant [[STAGESIZE]](x86) */
     // used by devuart.c
     STAGESIZE = 2048, // default is 64
-    /*e: constant STAGESIZE(x86) */
+    /*e: constant [[STAGESIZE]](x86) */
 };
-/*e: enum misc_constants(x86) */
+/*e: enum [[misc_constants]](x86) */
 /*s: pad memory pointer types(x86) */
 // physical address
 typedef uintptr phys_addr;
@@ -85,10 +85,10 @@ typedef void* user_vp;
 // ref<Cpu>, the actual Cpu is where??
 extern Cpu *cpu;
 
-/*s: macro up(x86) */
+/*s: macro [[up]](x86) */
 // up = user process
 #define up (cpu->proc)
-/*e: macro up(x86) */
+/*e: macro [[up]](x86) */
 
 /*s: portdat.h pragmas(x86) */
 #pragma varargck  type  "I" uchar*

@@ -17,11 +17,11 @@
 // The functions kbdputmap/kbdgetmap are also portable functions called
 // from devkbmap.c
 
-/*s: global kdebug */
+/*s: global [[kdebug]] */
 bool kdebug;
-/*e: global kdebug */
+/*e: global [[kdebug]] */
 
-/*s: enum specialkey */
+/*s: enum [[specialkey]] */
 enum {
     KF=         0xF000,     /* function key (begin Unicode private space) */
     Spec=       0xF800,     /* Unicode private space */
@@ -60,9 +60,9 @@ enum {
 
     Nscan=  128,
 };
-/*e: enum specialkey */
+/*e: enum [[specialkey]] */
 
-/*s: global kbtab */
+/*s: global [[kbtab]] */
 Rune kbtab[Nscan] = 
 {
 [0x00]  No, 0x1b,   '1',    '2',    '3',    '4',    '5',    '6',
@@ -82,9 +82,9 @@ Rune kbtab[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, No, No, No, No, No, No, No,
 };
-/*e: global kbtab */
+/*e: global [[kbtab]] */
 
-/*s: global kbtabshift */
+/*s: global [[kbtabshift]] */
 Rune kbtabshift[Nscan] =
 {
 [0x00]  No, 0x1b,   '!',    '@',    '#',    '$',    '%',    '^',
@@ -104,9 +104,9 @@ Rune kbtabshift[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, No, No, No, No, No, No, No,
 };
-/*e: global kbtabshift */
+/*e: global [[kbtabshift]] */
 
-/*s: global kbtabesc1 */
+/*s: global [[kbtabesc1]] */
 Rune kbtabesc1[Nscan] =
 {
 [0x00]  No, No, No, No, No, No, No, No,
@@ -126,9 +126,9 @@ Rune kbtabesc1[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, No, No, No, No, No, No, No,
 };
-/*e: global kbtabesc1 */
+/*e: global [[kbtabesc1]] */
 
-/*s: global kbtabaltgr */
+/*s: global [[kbtabaltgr]] */
 Rune kbtabaltgr[Nscan] =
 {
 [0x00]  No, No, No, No, No, No, No, No,
@@ -148,7 +148,7 @@ Rune kbtabaltgr[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, No, No, No, No, No, No, No,
 };
-/*e: global kbtabaltgr */
+/*e: global [[kbtabaltgr]] */
 
 // see kbtab.c for the ctrl one, put in another file because
 // of issues with TeX with the special characters it contain
@@ -157,14 +157,14 @@ Rune kbtabaltgr[Nscan] =
 extern Rune kbtabctrl[];
 /*e: global kbtabctrl decl */
 
-/*s: global kbscans */
+/*s: global [[kbscans]] */
 // hash<enum<KbscanKind>, Kbscan>
 Kbscan kbscans[KbNscans]; /* kernel and external scan code state */
-/*e: global kbscans */
+/*e: global [[kbscans]] */
 
 
 // called when write in /dev/kbin (see devkbin.c)
-/*s: function kbdputsc */
+/*s: function [[kbdputsc]] */
 /*
  * Scan code processing
  */
@@ -382,10 +382,10 @@ kbdputsc(byte k, int external)
         }
     }
 }
-/*e: function kbdputsc */
+/*e: function [[kbdputsc]] */
 
 // called when interact with /dev/kbmap (see devkbmap.c)
-/*s: function kbdputmap */
+/*s: function [[kbdputmap]] */
 void
 kbdputmap(ushort m, ushort scanc, Rune r)
 {
@@ -411,9 +411,9 @@ kbdputmap(ushort m, ushort scanc, Rune r)
         break;
     }
 }
-/*e: function kbdputmap */
+/*e: function [[kbdputmap]] */
 
-/*s: function kbdgetmap */
+/*s: function [[kbdgetmap]] */
 int
 kbdgetmap(uint offset, int *t, int *sc, Rune *r)
 {
@@ -441,5 +441,5 @@ kbdgetmap(uint offset, int *t, int *sc, Rune *r)
         return 1;
     }
 }
-/*e: function kbdgetmap */
+/*e: function [[kbdgetmap]] */
 /*e: portkbd.c */

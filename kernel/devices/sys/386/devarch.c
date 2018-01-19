@@ -270,7 +270,7 @@ archwrite(Chan *c, void *a, long n, vlong offset)
     return 0;
 }
 
-/*s: global archdevtab(x86) */
+/*s: global [[archdevtab]](x86) */
 Dev archdevtab = {
     .dc       =    'P',
     .name     =    "arch",
@@ -291,7 +291,7 @@ Dev archdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
-/*e: global archdevtab(x86) */
+/*e: global [[archdevtab]](x86) */
 
 void
 nop(void)
@@ -439,7 +439,7 @@ archctlwrite(Chan*, void *a, long n, vlong)
     return n;
 }
 
-/*s: function archinit(x86) */
+/*s: function [[archinit]](x86) */
 void
 archinit(void)
 {
@@ -489,5 +489,5 @@ archinit(void)
     addarchfile("cputype", 0444, cputyperead, nil);
     addarchfile("archctl", 0664, archctlread, archctlwrite);
 }
-/*e: function archinit(x86) */
+/*e: function [[archinit]](x86) */
 /*e: devices/sys/386/devarch.c */

@@ -12,7 +12,7 @@
 typedef struct Srv Srv;
 /*e: devsrv.c forward decl */
 
-/*s: struct Srv */
+/*s: struct [[Srv]] */
 struct Srv
 {
     char    *name;
@@ -22,17 +22,17 @@ struct Srv
     Srv *link;
     ulong   path;
 };
-/*e: struct Srv */
+/*e: struct [[Srv]] */
 
-/*s: global srvlk */
+/*s: global [[srvlk]] */
 static QLock    srvlk;
-/*e: global srvlk */
-/*s: global srv */
+/*e: global [[srvlk]] */
+/*s: global [[srv]] */
 static Srv  *srv;
-/*e: global srv */
-/*s: global qidpath */
+/*e: global [[srv]] */
+/*s: global [[qidpath]] */
 static int  qidpath;
-/*e: global qidpath */
+/*e: global [[qidpath]] */
 
 /*s: method srvgen */
 static int
@@ -84,7 +84,7 @@ srvwalk(Chan *c, Chan *nc, char **name, int nname)
     return devwalk(c, nc, name, nname, 0, 0, srvgen);
 }
 
-/*s: function srvlookup */
+/*s: function [[srvlookup]] */
 static Srv*
 srvlookup(char *name, ulong qidpath)
 {
@@ -94,7 +94,7 @@ srvlookup(char *name, ulong qidpath)
             return sp;
     return nil;
 }
-/*e: function srvlookup */
+/*e: function [[srvlookup]] */
 
 static int
 srvstat(Chan *c, uchar *db, int n)
@@ -102,7 +102,7 @@ srvstat(Chan *c, uchar *db, int n)
     return devstat(c, db, n, 0, 0, srvgen);
 }
 
-/*s: function srvname */
+/*s: function [[srvname]] */
 char*
 srvname(Chan *c)
 {
@@ -119,7 +119,7 @@ srvname(Chan *c)
         }
     return nil;
 }
-/*e: function srvname */
+/*e: function [[srvname]] */
 
 /*s: method srvopen */
 static Chan*
@@ -372,7 +372,7 @@ srvwrite(Chan *c, void *va, long n, vlong)
 }
 /*e: method srvwrite */
 
-/*s: global srvdevtab */
+/*s: global [[srvdevtab]] */
 Dev srvdevtab = {
     .dc       =    's',
     .name     =    "srv",
@@ -393,5 +393,5 @@ Dev srvdevtab = {
     .remove   =    srvremove,
     .wstat    =    srvwstat,
 };
-/*e: global srvdevtab */
+/*e: global [[srvdevtab]] */
 /*e: devsrv.c */

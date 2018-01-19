@@ -8,12 +8,12 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: global alarms */
+/*s: global [[alarms]] */
 static Alarms   alarms;
-/*e: global alarms */
-/*s: global alarmr */
+/*e: global [[alarms]] */
+/*s: global [[alarmr]] */
 static Rendez alarmr;
-/*e: global alarmr */
+/*e: global [[alarmr]] */
 
 /*s: kernel process alarmkproc */
 // Kernel Process for alarm management
@@ -52,7 +52,7 @@ alarmkproc(void*)
 }
 /*e: kernel process alarmkproc */
 
-/*s: function checkalarms */
+/*s: function [[checkalarms]] */
 /*
  *  called every clock tick
  */
@@ -68,9 +68,9 @@ checkalarms(void)
     if(p && (long)(now - p->alarm) >= 0)
         wakeup(&alarmr);
 }
-/*e: function checkalarms */
+/*e: function [[checkalarms]] */
 
-/*s: function procalarm */
+/*s: function [[procalarm]] */
 ulong
 procalarm(ulong time) // Tms
 {
@@ -129,5 +129,5 @@ done:
 
     return old;
 }
-/*e: function procalarm */
+/*e: function [[procalarm]] */
 /*e: alarm.c */

@@ -26,7 +26,7 @@ enum
 /*s: devroot.c forward decl */
 typedef struct Dirlist Dirlist;
 /*e: devroot.c forward decl */
-/*s: struct Dirlist */
+/*s: struct [[Dirlist]] */
 struct Dirlist
 {
     uint base; // for unique qids
@@ -35,7 +35,7 @@ struct Dirlist
     int ndir; // number of dir used
     int mdir; // max dir entries
 };
-/*e: struct Dirlist */
+/*e: struct [[Dirlist]] */
 
 //*****************************************************************************
 // Root
@@ -98,7 +98,7 @@ static Dirlist bootlist =
 // Functions
 //*****************************************************************************
 
-/*s: function addlist */
+/*s: function [[addlist]] */
 /*
  *  add a file to the list
  */
@@ -120,9 +120,9 @@ addlist(Dirlist *l, char *name, byte *contents, ulong len, int perm)
     if(perm & DMDIR)
         d->qid.type |= QTDIR;
 }
-/*e: function addlist */
+/*e: function [[addlist]] */
 
-/*s: function addbootfile */
+/*s: function [[addbootfile]] */
 /*
  *  add a boot file
  */
@@ -131,9 +131,9 @@ addbootfile(char *name, byte *contents, ulong len)
 {
     addlist(&bootlist, name, contents, len, 0555);
 }
-/*e: function addbootfile */
+/*e: function [[addbootfile]] */
 
-/*s: function addrootdir */
+/*s: function [[addrootdir]] */
 /*
  *  add a root directory
  */
@@ -142,7 +142,7 @@ addrootdir(char *name)
 {
     addlist(&rootlist, name, nil, 0, DMDIR|0555);
 }
-/*e: function addrootdir */
+/*e: function [[addrootdir]] */
 
 /*s: method rootreset */
 static void
@@ -168,7 +168,7 @@ rootattach(char *spec)
     return devattach('/', spec);
 }
 
-/*s: function rootgen */
+/*s: function [[rootgen]] */
 static int
 rootgen(Chan *c, char *name, Dirtab*, int, int s, DirEntry *dp)
 {
@@ -213,7 +213,7 @@ rootgen(Chan *c, char *name, Dirtab*, int, int s, DirEntry *dp)
         return 1;
     }
 }
-/*e: function rootgen */
+/*e: function [[rootgen]] */
 
 static Walkqid*
 rootwalk(Chan *c, Chan *nc, char **name, int nname)
@@ -289,7 +289,7 @@ rootwrite(Chan*, void*, long, vlong)
     return 0;
 }
 
-/*s: global rootdevtab */
+/*s: global [[rootdevtab]] */
 Dev rootdevtab = {
     .dc       = '/',
     .name     = "root",
@@ -310,6 +310,6 @@ Dev rootdevtab = {
     .remove   = devremove,
     .wstat    = devwstat,
 };
-/*e: global rootdevtab */
+/*e: global [[rootdevtab]] */
 
 /*e: devroot.c */

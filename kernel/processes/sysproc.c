@@ -11,7 +11,7 @@
 #include    <tos.h>
 #include    <a.out.h>
 
-/*s: enum rfork */
+/*s: enum [[rfork]] */
 //coupling: with libc.h
 enum Rfork
 {
@@ -32,7 +32,7 @@ enum Rfork
 
     RFNOMNT     = (1<<14), // # paths forbidden, sandboxing
 };
-/*e: enum rfork */
+/*e: enum [[rfork]] */
 
 /*s: sysproc.c forward decl */
 int shargs(char*, int, char**);
@@ -310,7 +310,7 @@ sysrfork(ulong* arg)
 }
 /*e: syscall rfork */
 
-/*s: function l2be */
+/*s: function [[l2be]] */
 ulong
 l2be(long l)
 {
@@ -319,7 +319,7 @@ l2be(long l)
     cp = (byte*)&l;
     return (cp[0]<<24) | (cp[1]<<16) | (cp[2]<<8) | cp[3];
 }
-/*e: function l2be */
+/*e: function [[l2be]] */
 
 /*s: syscall exec */
 // void* exec(char *name, char* argv[]);
@@ -699,7 +699,7 @@ sysexec(ulong* arg)
 }
 /*e: syscall exec */
 
-/*s: function shargs */
+/*s: function [[shargs]] */
 int
 shargs(char *s, int n, char **ap)
 {
@@ -730,7 +730,7 @@ shargs(char *s, int n, char **ap)
     }
     return i;
 }
-/*e: function shargs */
+/*e: function [[shargs]] */
 
 /*s: syscall sleep */
 // int sleep(long millisecs);
@@ -830,7 +830,7 @@ sysawait(ulong* arg)
 }
 /*e: syscall await */
 
-/*s: function werrstr */
+/*s: function [[werrstr]] */
 //@Scheck: this is also defined in libc, so it's supposed to override it? TODO
 void werrstr(char *fmt, ...)
 {
@@ -843,9 +843,9 @@ void werrstr(char *fmt, ...)
     vseprint(up->syserrstr, up->syserrstr+ERRMAX, fmt, va);
     va_end(va);
 }
-/*e: function werrstr */
+/*e: function [[werrstr]] */
 
-/*s: function generrstr */
+/*s: function [[generrstr]] */
 static long
 generrstr(char *buf, uint nbuf)
 {
@@ -865,7 +865,7 @@ generrstr(char *buf, uint nbuf)
     memmove(up->syserrstr, tmp, nbuf);
     return 0;
 }
-/*e: function generrstr */
+/*e: function [[generrstr]] */
 
 /*s: syscall errstr */
 // int errstr(char *err, uint nerr);
