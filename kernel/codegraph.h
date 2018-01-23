@@ -1,9 +1,9 @@
 
-// this is only for codegraph
+// this is only for codegraph or syncweb's indexer
 
 // see also include/*.h and lib_core/libc/9syscall/sys.h
 
-// tos.h, pragma incomplete
+// tos.h, pragma incomplete defined in lib_core/libc/port/profile.c
 struct Plink {
 };
 
@@ -11,7 +11,7 @@ struct Plink {
 #define KERNDATE "today"
 
 // never defined on x86
-struct KMap {
+struct Arch_KMap {
 };
 
 // defined in user/preboot/ which is skipped because depends on other stack
@@ -20,6 +20,6 @@ uchar initcode[]={
 };
 
 // when add lib_graphics/
-#define fprint(x) x
-#define strdup(x) x
-#define abort(x) x
+//#define fprint(x) x
+//#define strdup(x) x
+//#define abort(x) x

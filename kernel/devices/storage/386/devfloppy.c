@@ -1,4 +1,4 @@
-/*s: devfloppy.c */
+/*s: devices/storage/386/devfloppy.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -1163,4 +1163,4 @@ Dev floppydevtab = {
     .wstat    =    devwstat,
 };
 /*e: global [[floppydevtab]](x86) */
-/*e: devfloppy.c */
+/*e: devices/storage/386/devfloppy.c */

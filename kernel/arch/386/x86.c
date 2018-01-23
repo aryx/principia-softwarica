@@ -1,4 +1,4 @@
-/*s: x86.c */
+/*s: arch/386/x86.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -281,4 +281,4 @@ cpuidentify(void)
 }
 /*e: function [[cpuidentify]](x86) */
 
-/*e: x86.c */
+/*e: arch/386/x86.c */

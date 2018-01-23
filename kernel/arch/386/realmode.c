@@ -1,4 +1,4 @@
-/*s: realmode.c */
+/*s: arch/386/realmode.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -147,4 +147,4 @@ realmodelink(void)
 }
 /*e: function [[realmodelink]](x86) */
 
-/*e: realmode.c */
+/*e: arch/386/realmode.c */

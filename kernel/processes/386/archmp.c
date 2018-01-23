@@ -1,4 +1,4 @@
-/*s: archmp.c */
+/*s: processes/386/archmp.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -125,4 +125,4 @@ syncclock(void)
     }
 }
 /*e: function [[syncclock]](x86) */
-/*e: archmp.c */
+/*e: processes/386/archmp.c */

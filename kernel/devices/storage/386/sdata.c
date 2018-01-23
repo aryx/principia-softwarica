@@ -1,4 +1,4 @@
-/*s: sdata.c */
+/*s: devices/storage/386/sdata.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -2370,4 +2370,4 @@ SDifc sdataifc = {
     atastat,            /* rtopctl */
     nil,                /* wtopctl */
 };
-/*e: sdata.c */
+/*e: devices/storage/386/sdata.c */

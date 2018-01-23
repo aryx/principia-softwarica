@@ -1,4 +1,4 @@
-/*s: floppy.h */
+/*s: devices/storage/386/floppy.h */
 /*s: floppy.h forward decl(x86) */
 typedef struct FController FController;
 typedef struct FDrive FDrive;
@@ -123,4 +123,4 @@ enum
   Overrun=  0x10,
 };
 
-/*e: floppy.h */
+/*e: devices/storage/386/floppy.h */

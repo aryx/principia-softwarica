@@ -1,4 +1,4 @@
-/*s: concurrency.c */
+/*s: concurrency/386/concurrency.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -38,4 +38,4 @@ int (*arch_cmpswap)(long*, long, long) = cmpswap386;
  * Aux/vmware does this via the #P/archctl file.
  */
 //now in globals.c: void (*coherence)(void) = nop;
-/*e: concurrency.c */
+/*e: concurrency/386/concurrency.c */

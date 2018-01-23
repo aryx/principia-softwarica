@@ -1,4 +1,4 @@
-/*s: i8259.c */
+/*s: interrupts/386/i8259.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -232,4 +232,4 @@ i8259off(void)
 }
 /*e: function [[i8259off]](x86) */
 
-/*e: i8259.c */
+/*e: interrupts/386/i8259.c */

@@ -1,4 +1,4 @@
-/*s: uartisa.c */
+/*s: buses/386/uartisa.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -99,4 +99,4 @@ PhysUart isaphysuart = {
     .status     = nil,
     .fifo       = nil,
 };
-/*e: uartisa.c */
+/*e: buses/386/uartisa.c */

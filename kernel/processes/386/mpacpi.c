@@ -1,4 +1,4 @@
-/*s: mpacpi.c */
+/*s: processes/386/mpacpi.c */
 /*
  * minimal acpi support for multiprocessors.
  *
@@ -259,4 +259,4 @@ mpacpi(void)
 }
 
 void    (*mpacpifunc)(void) = mpacpi;
-/*e: mpacpi.c */
+/*e: processes/386/mpacpi.c */

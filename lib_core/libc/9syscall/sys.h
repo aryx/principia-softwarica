@@ -1,4 +1,4 @@
-/*s: sys.h */
+/*s: lib_core/libc/9syscall/sys.h */
 #define	NOP		0
 /*s: [[sys.h]] process syscalls */
 #define	RFORK		1
@@ -61,4 +61,4 @@
 #define	FAUTH		38
 /*e: [[sys.h]] security syscalls */
 #define	ERRSTR		39
-/*e: sys.h */
+/*e: lib_core/libc/9syscall/sys.h */

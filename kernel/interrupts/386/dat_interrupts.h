@@ -1,4 +1,4 @@
-/*s: dat_interrupts.h */
+/*s: interrupts/386/dat_interrupts.h */
 
 // Used only in 386/, so could be put in arch/, but used by the .c here.
 // Used to be in io.h but more important than just a set of enums for IO
@@ -85,4 +85,4 @@ struct Vctl {
 // array<list<Vctl>>, xalloc'ed
 //IMPORTANT: static Vctl *vctl[256]; (in trap.c)
 
-/*e: dat_interrupts.h */
+/*e: interrupts/386/dat_interrupts.h */

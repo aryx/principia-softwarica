@@ -1,4 +1,4 @@
-/*s: mp.h */
+/*s: arch/386/mp.h */
 /*
  * MultiProcessor Specification Version 1.[14].
  */
@@ -204,4 +204,4 @@ extern int mpintrenable(Vctl*);
 extern void mpshutdown(void);
 
 extern _MP_ *_mp_;
-/*e: mp.h */
+/*e: arch/386/mp.h */

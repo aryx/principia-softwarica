@@ -1,4 +1,4 @@
-/*s: bios32.c */
+/*s: arch/386/bios32.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -151,4 +151,4 @@ bios32open(char* id)
 
     return si;
 }
-/*e: bios32.c */
+/*e: arch/386/bios32.c */

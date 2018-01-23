@@ -1,4 +1,4 @@
-/*s: pci.c */
+/*s: buses/386/pci.c */
 /*
  * PCI support code.
  * Needs a massive rewrite.
@@ -1390,4 +1390,4 @@ pciclrbme(Pcidev* p)
     pcicfgw16(p, PciPCR, p->pcr);
 }
 
-/*e: pci.c */
+/*e: buses/386/pci.c */

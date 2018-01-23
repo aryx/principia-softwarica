@@ -1,4 +1,4 @@
-/*s: apic.c */
+/*s: processes/386/apic.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -429,4 +429,4 @@ lapicintroff(void)
     lapicw(LapicTPR, 0xFF);
 }
 
-/*e: apic.c */
+/*e: processes/386/apic.c */

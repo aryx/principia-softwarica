@@ -1,4 +1,4 @@
-/*s: nvram.c */
+/*s: arch/386/nvram.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -32,4 +32,4 @@ nvramwrite(int addr, uchar data)
     outb(PdataPort, data);
     iunlock(&nvrtlock);
 }
-/*e: nvram.c */
+/*e: arch/386/nvram.c */

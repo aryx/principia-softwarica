@@ -1,4 +1,4 @@
-/*s: iomap.c */
+/*s: arch/386/iomap.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -164,4 +164,4 @@ iofree(int port)
 }
 /*e: function [[iofree]](x86) */
 
-/*e: iomap.c */
+/*e: arch/386/iomap.c */

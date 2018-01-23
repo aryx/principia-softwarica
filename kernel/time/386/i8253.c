@@ -1,4 +1,4 @@
-/*s: i8253.c */
+/*s: time/386/i8253.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -405,4 +405,4 @@ arch_perfticks(void)
     return x;
 }
 /*e: function [[perfticks]](x86) */
-/*e: i8253.c */
+/*e: time/386/i8253.c */

@@ -1,4 +1,4 @@
-/*s: archgeneric.c */
+/*s: processes/386/archgeneric.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -88,4 +88,4 @@ archrevert(void)
 }
 /*e: function [[archrevert]](x86) */
 
-/*e: archgeneric.c */
+/*e: processes/386/archgeneric.c */

@@ -1,4 +1,4 @@
-/*s: mp.c */
+/*s: processes/386/mp.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -956,4 +956,4 @@ mpshutdown(void)
     for(;;)
         idle();
 }
-/*e: mp.c */
+/*e: processes/386/mp.c */

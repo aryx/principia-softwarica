@@ -1,4 +1,4 @@
-/*s: uarti8250.c */
+/*s: buses/386/uarti8250.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -730,4 +730,4 @@ i8250console(void)
 }
 
 
-/*e: uarti8250.c */
+/*e: buses/386/uarti8250.c */
