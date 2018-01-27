@@ -1,21 +1,16 @@
 /*s: rc/globals.c */
+/*s: includes */
 #include "rc.h"
+#include "getflags.h"
 #include "exec.h"
+#include "io.h"
+#include "fns.h"
+/*e: includes */
 
 // was in rc.h
-/*s: global [[tok]] */
-char tok[NTOK + UTFmax];
-/*e: global [[tok]] */
-/*s: global [[lastc]] */
-int lastc;
-/*e: global [[lastc]] */
 /*s: global [[mypid]] */
 int mypid;
 /*e: global [[mypid]] */
-/*s: global [[gvar]] */
-// map<string, ref_own<Var>> (next = Var.next in bucket list)
-var *gvar[NVAR];		/* hash for globals */
-/*e: global [[gvar]] */
 /*s: global [[ndot]] */
 /*
  * How many dot commands have we executed?
@@ -26,12 +21,6 @@ int ndot;
 /*s: global [[promptstr]] */
 char *promptstr;
 /*e: global [[promptstr]] */
-/*s: global [[nerror]] */
-int nerror;		/* number of errors encountered during compilation */
-/*e: global [[nerror]] */
-/*s: global [[err]] */
-io *err;
-/*e: global [[err]] */
 
 // was in exec.h
 /*s: global [[runq]] */

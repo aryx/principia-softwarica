@@ -1,13 +1,30 @@
 /*s: rc/lex.c */
+/*s: includes */
 #include "rc.h"
+#include "getflags.h"
 #include "exec.h"
 #include "io.h"
-#include "getflags.h"
 #include "fns.h"
+/*e: includes */
 #include "x.tab.h"
 
 int getnext(void);
 
+// was used by subr.c
+/*s: global [[lastdol]] */
+bool lastdol;	/* was the last token read '$' or '$#' or '"'? */
+/*e: global [[lastdol]] */
+/*s: global [[lastword]] */
+// used also by syn.y
+bool lastword;	/* was the last token read a word or compound word terminator? */
+/*e: global [[lastword]] */
+// was in rc.h
+/*s: global [[tok]] */
+char tok[NTOK + UTFmax];
+/*e: global [[tok]] */
+/*s: global [[lastc]] */
+int lastc;
+/*e: global [[lastc]] */
 
 /*s: function [[wordchr]] */
 int
@@ -135,6 +152,34 @@ getnext(void)
 }
 /*e: function [[getnext]] */
 
+/*s: function [[yyerror]] */
+void
+yyerror(char *m)
+{
+    pfmt(err, "rc: ");
+    if(runq->cmdfile && !runq->iflag)
+        pfmt(err, "%s:%d: ", runq->cmdfile, runq->lineno);
+    else if(runq->cmdfile)
+        pfmt(err, "%s: ", runq->cmdfile);
+    else if(!runq->iflag)
+        pfmt(err, "line %d: ", runq->lineno);
+
+    if(tok[0] && tok[0]!='\n')
+        pfmt(err, "token %q: ", tok);
+    pfmt(err, "%s\n", m);
+    flush(err);
+    lastword = false;
+    lastdol = false;
+
+    while(lastc!='\n' && lastc!=EOF) 
+        advance();
+
+    nerror++;
+    setvar("status", newword(m, (word *)nil));
+}
+/*e: function [[yyerror]] */
+
+
 /*s: function [[pprompt]] */
 void
 pprompt(void)
@@ -252,13 +297,6 @@ addutf(char *p, int c)
     return p;
 }
 /*e: function [[addutf]] */
-
-/*s: global [[lastdol]] */
-bool lastdol;	/* was the last token read '$' or '$#' or '"'? */
-/*e: global [[lastdol]] */
-/*s: global lastword (rc/lex.c) */
-bool lastword;	/* was the last token read a word or compound word terminator? */
-/*e: global lastword (rc/lex.c) */
 
 /*s: function [[yylex]] */
 //@Scheck: called from yyparse()

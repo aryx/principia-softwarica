@@ -15,29 +15,7 @@ extern void Xdelhere(void), Xpopredir(void), Xsub(void), Xeflag(void), Xsettrue(
 extern void Xerror(char*);
 extern void Xerror1(char*);
 
-/*s: struct [[Word]] */
-/*
- * word lists are in correct order,
- * i.e. word0->word1->word2->word3->nil
- */
-struct Word {
-    char *word;
-
-    // Extra
-    word *next;
-};
-/*e: struct [[Word]] */
-/*s: struct [[List]] */
-struct List {
-    // list<ref_own<Word>> (next = Word.next)
-    word *words;
-
-    // Extra
-    list *next;
-};
-/*e: struct [[List]] */
-word *newword(char *, word *);
-word *copywords(word *, word *);
+extern word nullpath;
 
 /*s: struct [[Redir]] */
 struct Redir {

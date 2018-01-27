@@ -16,17 +16,23 @@ struct Io {
 
 extern io *err;
 
+// io.c
 io *openfd(fdt);
 io *openstr(void);
 io *opencore(char *, int);
-void pchr(io*, int);
-int rchr(io*);
-int rutf(io*, char*, Rune*);
 void closeio(io*);
 void flush(io*);
+
+int rchr(io*);
+int rutf(io*, char*, Rune*);
+
+// fmt.c
+void pchr(io*, int);
 void pstr(io*, char*);
 void pfmt(io*, char*, ...);
 
+// pcmd.c
 void pcmd(io*, tree*);
+// pfnc.c
 void pfnc(io*, thread*);
 /*e: rc/io.h */

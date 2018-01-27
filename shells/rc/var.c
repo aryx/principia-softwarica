@@ -1,8 +1,18 @@
 /*s: rc/var.c */
+/*s: includes */
 #include "rc.h"
+#include "getflags.h"
 #include "exec.h"
+#include "io.h"
 #include "fns.h"
+/*e: includes */
 #include "x.tab.h"
+
+// was in rc.h
+/*s: global [[gvar]] */
+// map<string, ref_own<Var>> (next = Var.next in bucket list)
+var *gvar[NVAR];		/* hash for globals */
+/*e: global [[gvar]] */
 
 /*s: function [[hash]] */
 unsigned
@@ -18,6 +28,7 @@ hash(char *as, int n)
     return h % n;
 }
 /*e: function [[hash]] */
+
 
 /*s: constant [[NKW]] */
 #define	NKW	30
@@ -81,6 +92,8 @@ klook(char *name)
 }
 /*e: function [[klook]] */
 
+
+
 /*s: function [[gvlook]] */
 var*
 gvlook(char *name)
@@ -120,4 +133,22 @@ setvar(char *name, word *val)
     v->changed = true;
 }
 /*e: function [[setvar]] */
+
+/*s: function [[newvar]] */
+var*
+newvar(char *name, var *next)
+{
+    var *v = new(var);
+    v->name = name;
+    v->val = nil;
+
+    v->fn = nil;
+    v->changed = false;
+    v->fnchanged = false;
+
+    v->next = next;
+    return v;
+}
+/*e: function [[newvar]] */
+
 /*e: rc/var.c */

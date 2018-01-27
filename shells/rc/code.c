@@ -1,9 +1,11 @@
 /*s: rc/code.c */
+/*s: includes */
 #include "rc.h"
-#include "io.h"
-#include "exec.h"
-#include "fns.h"
 #include "getflags.h"
+#include "exec.h"
+#include "io.h"
+#include "fns.h"
+/*e: includes */
 #include "x.tab.h"
 
 /*s: constant c0 (rc/code.c) */

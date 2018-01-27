@@ -16,9 +16,13 @@
 %  - removed deadcode (Thread.treenodes, Tree.iskw, freetree, ...)
 
 %thx to codemap/codegraph/scheck:
-% - TODO use cg to reduce backward deps (only ??: ??% down from 4.61%), introduce ???
+% - use cg to reduce backward deps (only 32: 2.43% down from 4.61%), introduce
+%   error.c, main.c, utils.c, path.c, status.c, words.c, builtins.c, globals.c
 %   (harder to understand non layered code)
-%  - removed deadcode (many dead functions)
+% - use scheck to remove deadcode, dead prototypes, useless export
+%   or mv as forward decl
+%   (harder to understand big interface files)
+
 
 %thx to rc in ocaml, I learned a lot:
 %  - Xerror and walk up the stack
@@ -48,7 +52,7 @@
 % - put all content of files in the Extra section, via 'pfff -lpize'
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
-%    * TODO ctor/dtor, builtin, opcode
+%    * TODO ctor/dtor, builtin, bytecode
 % - read Extra section, identify concepts, first TOC
 % - distribute parts of the file before
 % - SEMI nullify, boolify, typeify,    scheckify
@@ -203,6 +207,8 @@ The shell or the command ran from the shell?
 
 \section{The \plan shell: [[rc]]}
 
+%http://plan9.bell-labs.com/magic/man2html/1/rc
+
 % gonna present rc, for run command.
 % 6300 LOC.
 
@@ -212,9 +218,10 @@ The shell or the command ran from the shell?
 
 % actually seems used as a fork basis for other advanced shells
 % (es, other?)
+\l used also outside plan9 by a few open source software. Portable.
 
 % missing stuff: lots of interactive stuff apparently introduced in 
-% Bill Joy's csh). See Conclusion.
+% Bill Joy's csh. See Conclusion.
 
 % Still used in Go :)
 
@@ -438,7 +445,7 @@ who wrote in some sense most of this book.
 % -xxx, /a/b, are treated as regular words! only ;&${[^ are specials
 
 
-\subsection{A universal read-eval-print-loop (REPL)}
+\subsection{A universal read-eval-print loop (REPL)}
 
 % shell is also idea of universal repl! not like Lisp machine, Squeak, etc.
 % see Kernel.nw note on this.
@@ -478,8 +485,9 @@ who wrote in some sense most of this book.
 
 %\subsection{Globbing}
 
-\subsection{A full programming language}
-% Scripting
+\subsection{A scripting language}
+% Scripting! definition of such a language? hybrid lang? easy to "script" :) 
+% scriptometer of pixel
 
 % Not just function calls and combination combinator. Want full PL.
 
@@ -533,7 +541,7 @@ who wrote in some sense most of this book.
 % -e stops at first error (called like that from mk)
 % -m => change init script? not rcmain but something else?
 
-% -r => debug opcodes output (convenient)
+% -r => debug bytecodes output (convenient)
 
 
 \section{Input shell language}
@@ -568,6 +576,75 @@ who wrote in some sense most of this book.
 
 \section{Code organization}
 
+%dup: (and adapted) from Assembler.nw
+Table~\ref{tab:code-orga} presents short descriptions
+of the source files of [[rc]], together with
+the main entities (e.g., structures, functions, globals) the file defines,
+and the corresponding chapters in this document in which the code
+contained in the file is primarily discussed.
+\n sorted by chapters, make more sense than sorted by dir
+
+\begin{table*}[tbh!]
+\begin{center}
+\begin{tabular}{lcllr}
+\toprule
+{\bf Function}                             & {\bf Ch.}                 & {\bf File}     & {\bf Entities}                                                             & {\bf LOC} \\
+\otoprule
+main data structures                       & \ref{chap:core-ds}            & [[rc.h]]       & [<Tree>] [<Code>] [<Word>] [<List>] [<Var>]                                & \\ % Here
+execution data structures                  & \ref{chap:core-ds}            & [[exec.h]]     & [<Thread>]                                                                 & \\ %Redir Builtin
+AST helpers                                & \ref{chap:core-ds}            & [[tree.c]]     & [<newtree()>] [<tree1()>] [<tree2()>]          & \\ %treenodes mung[123] epimung simplemung   token [<tree3()>] [<freenodes()>]
+globals                                    & \ref{chap:core-ds}            & [[globals.c]]  & [<codebuf>] [<runq>]                                               & \\ %
+list of strings (words)                    & \ref{chap:core-ds}            & [[words.c]]    & [<newword()>] [<count()>] [<freewords()>]                   & \\ % copywords freelist? [<copynwords()>]
+shell variables                            & \ref{chap:core-ds}            & [[var.c]]      & [<setvar()>] [<vlook()>] [<gvar>] [<gvlook()>]                         & \\ % kenter kinit [<newvar()>] 
+function prototypes                        & \ref{chap:core-ds}            & [[fns.h]]      & \\ %
+\midrule
+
+entry point                                & \ref{chap:main}               & [[main.c]]     & [<main()>]                                                                 & \\
+
+\midrule
+character input and prompt                 & \ref{chap:input}              &                & \\ %
+lexer                                      & \ref{chap:lexing}             & [[lex.c]]      & [<yylex()>]                                                                & \\ % wordchr idchr skipwhite skipnl  [<yyerror()>]
+parser                                     & \ref{chap:parsing}            & [[syn.y]]      & [<yyparse()>]                                                              & \\ 
+
+\midrule
+bytecode generation                        & \ref{chap:compile-interpret}  & [[code.c]]     & [<emitf()>] [<compile()>] [<outcode()>]                                    & \\ % 
+process status                   & \ref{chap:compile-interpret} & [[status.c]] & [<setstatus()>] [<getstatus>] & \\ % truestatus convstatuts
+simple command bytecode          & \ref{chap:compile-interpret}  & [[simple.c]]   & [<Xsimple()>] [<execexec()>] [<doredir()>]                                 & \\ % execcmds execfunc (fn)
+[[$path]] management                       & \ref{chap:compile-interpret}  & [[path.c]]     & [<searchpath()>]                                                           & \\ %$
+process-related bytecodes                  & \ref{chap:compile-interpret}  & [[havefork.c]] & [<execforkexec()>] [<Xpipe()>] [<Xasync()>]                                 & \\ % Xbackq Xpipefd Xsubshell 
+other bytecodes                            & \ref{chap:compile-interpret}  & [[exec.c]]     & [<Xtrue()>] [<Xreturn()>] [<Xjump()>] [<Xfn()>] & \\ % [<Xwrite()>] [<Xassign()>]
+builtins, environment, and         & \ref{chap:compile-interpret}  & [[plan9.c]]     & [<builtins>] [<addenv()>] [<Vinit()>]             & \\ % Updenv signals  [<Readdir()>] [<Opendir()>]
+process methods for \plan &                               &                & [<Execute()>] [<Waitfor()>] [<addwaitpid()>]                    & \\ % [<Exit()>]
+% environment chapter? plan9.c
+
+\midrule
+shell builtins                             & \ref{chap:builtins}           & [[builtins.c]] & [<execcd()>] [<execexit()>] [<execdot()>]  & \\ % execshift execeval execflag [<execwait()>]  [<execwhatis()>]
+
+\midrule
+[['*']] management (globbing)              & \ref{chap:globbing}           & [[glob.c]]     & [<glob()>] [<match()>]                                                     & \\ % globlist Xglob
+signal management                          & \ref{chap:signals}            & [[trap.c]]     & [<dotrap()>]                                                               & \\ %
+% initialization chapter?
+[['<<']] management (here doc)            & \ref{chap:advanced-topics}    & [[here.c]]     & [<readhere()>] [<heredoc()>]                                               & \\ %
+
+\midrule
+AST dumper                                 & \ref{chap:debugging-appendix} & [[pcmd.c]]     & [<pcmd()>]                                                                 & \\ %
+bytecode dumper                            & \ref{chap:debugging-appendix} & [[pfnc.c]]     & [<pfnc()>]                                                                 & \\ %
+error management                           & \ref{chap:error}              & [[error.c]]    & [<panic()>]                                                  & \\ %
+memory management                          & \ref{chap:utilities}          & [[utils.c]]    & [<emalloc()>] [<efree()>]                                                  & \\ % Dup Creat Unlink Malloc
+command-line flags                         & \ref{chap:utilities}               & [[getflags.c]] & [<getflags()>] [<usage()>]                                        & \\ % flagset [<flag>] 
+buffered IO                                & \ref{chap:utilities}          & [[io.c]]       & [<openfd()>] [<rchr()>]                                                    & \\ % io.h openstr opencore
+pretty printer                             & \ref{chap:utilities}          & [[fmt.c]]      & [<pfmt()>]                                                                 & \\ %
+misc utilities                             & \ref{chap:utilities}          & [[subr.c]]     & [<inttoascii()>]                                                           & \\ % iacvt
+
+\otoprule
+Total                                      &                               &                &                                                                            & 6800 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\caption{Chapters and associated [[rc]] source files.}
+\label{tab:code-orga}
+\end{table*}
+
 %rc.h:
 
 %globals.c: a few globals
@@ -576,11 +653,11 @@ who wrote in some sense most of this book.
 %tree.c: AST builder helpers
 %lex.c: lexer, yylex()
 %syn.y: parser, yyparse() in generated y.tab.c
-%code.c: opcode generation from tree, compile() and outcode()
+%code.c: bytecode generation from tree, compile() and outcode()
 
-%exec.c: main(), opcode interpreter loop, many Xxxx() opcode interpretation
-%simple.c: Xsimple opcode interpreter, and builtins
-%havefork.c: opcodes related to process (Xpipe, Xasync, etc)
+%exec.c: main(), bytecode interpreter loop, many Xxxx() bytecode interpretation
+%simple.c: Xsimple bytecode interpreter, and builtins
+%havefork.c: bytecode related to process (Xpipe, Xasync, etc)
 
 
 %here.c: here document feature
@@ -592,12 +669,20 @@ who wrote in some sense most of this book.
 %getflags.c: getopt + specific flag setting
 %io.c: fmt + buffered IO + specific debug
 %pcmd.c: debugging (tree) (should rename file and function name)
-%pfnc.c: debugging (runq and opcode) (should rename file too)
+%pfnc.c: debugging (runq and bytecode) (should rename file too)
 
 %plan9.c: for portability
 
 %old: havenfork.c removed, no need to handle such OS
 %old: unix.c, win32.c: no need handle such OS (plan9.c is enough)
+
+<<includes>>=
+#include "rc.h"
+#include "getflags.h"
+#include "exec.h"
+#include "io.h"
+#include "fns.h"
+@
 
 \section{Software architecture}
 
@@ -609,7 +694,7 @@ who wrote in some sense most of this book.
 %
 % but how the parsing chain is called?
 % main() -> 
-%   - build boostrap[] which essentially contain a Xrdcmds opcode
+%   - build boostrap[] which essentially contain a Xrdcmds bytecode
 %      (actually it has a Xsimple "." rcmain and so
 %      will run execdot which will run Xrdcmds)
 %   - calls start() to setup runq from boostrap[]
@@ -621,16 +706,16 @@ who wrote in some sense most of this book.
 %                    -> Xreturn and loop
 
 
-%Xxxx = opcodes
+%Xxxx = bytecodes
 %execxxx = builtins (Xsimple of specially interpreted command)
 
 % chapter with a simple traduction of a simple command? like 'ls /' ?
 
-\subsection{Trace of a simple command}
+%\subsection{Trace of a simple command}
 
 % show rc -r ? great to understand (see Appendix X)
 
-\subsection{Trace of a pipe}
+%\subsection{Trace of a pipe}
 
 % when do   % ls | wc -l, what happens?
 % first REPL bootstrapped thread t1, 
@@ -638,8 +723,8 @@ who wrote in some sense most of this book.
 % return, we return to the REPL).
 % FIGURE? 
 
-% execute opcodes, see Pipe opcode. Then fork, in child1 execute
-% opcodes for ls (still in interpreter!). This child1 eventually will
+% execute bytecodes, see Pipe byecode. Then fork, in child1 execute
+% bytecodes for ls (still in interpreter!). This child1 eventually will
 % arrive on a simple command and so forkexec a child2 that will execute
 % ls. In the mean time child1 will Waitfor child2. child1 is still interpreter
 % and once it has wait, it exits with return status.
@@ -661,7 +746,7 @@ who wrote in some sense most of this book.
 
 % so see that even if cmd1 | cmd2 there is actually 3 forks!
 
-\subsection{Trace of a redirection}
+%\subsection{Trace of a redirection}
 
 % ls > foo
 % can also be  {ls; echo bar} > foo
@@ -679,6 +764,7 @@ who wrote in some sense most of this book.
 %###############################################################################
 
 \chapter{Core Data Structures}
+\label{chap:core-ds}
 
 \section{[[Token]]}
 
@@ -880,10 +966,11 @@ if(type==';'){
 
 
 
-\section{Op[[Code]] and [[codebuf]]}
+\section{Byte[[Code]] and [[codebuf]]}
+%old: was called Opcode in original code, but I prefer bytecode
 
-% shell = interpreter. Actually source -> AST -> opcode
-% and then opcode interpreter, a bit like an actual processor
+% shell = interpreter. Actually source -> AST -> bytecode
+% and then bytecode interpreter, a bit like an actual processor
 % (or Java). A little stack based interpreter.
 
 <<global [[codebuf]]>>=
@@ -891,7 +978,7 @@ if(type==';'){
 code *codebuf;				/* compiler output */
 @
 %ocaml: maybe could just interpret from AST itself.
-% not sure needs this intermediate opcode data structure
+% not sure needs this intermediate bytecode data structure
 %ocaml: ugly to use a global again. Better compile returns codebuf
 
 <<struct [[Code]]>>=
@@ -901,14 +988,14 @@ code *codebuf;				/* compiler output */
  * Always call codefree(.) when deleting a reference.
  */
 union Code {
-    void	(*f)(void); // Xxxx() opcode
+    void	(*f)(void); // Xxxx() bytecode
     int	i;
     char	*s;
 };
 @
 %ocaml: use variant. Still need the integer for the jumps
 % (but no need for reference counting), and also for file descriptor arguments
-% for certain opcodes like Pipe, Dup, etc.
+% for certain bytecodes like Pipe, Dup, etc.
 
 % show bootstrap code?
 % or show trace of rc -r ? with my simple bootstrap code!
@@ -980,9 +1067,9 @@ union Code {
 % * Xdelhere
 
 % * Xerror // print error message and then Xreturn while not interactive thread
-%   but it not a generated opcode! should rename just error
+%   but it not a generated bytecode! should rename just error
 
-% list of opcodes with comments were in exec.c but sorted alphabetically
+% list of bytecodes with comments were in exec.c but sorted alphabetically
 % better to group them for explanation
 
 % dol = dollar
@@ -1009,7 +1096,7 @@ codecopy(code *cp)
 @
 %ocaml: just use Gc
 
-% when opcodes are shared? just for bootstrap? need this reference count?
+% when bytecodes are shared? just for bootstrap? need this reference count?
 % when define functions.
 
 % Xreturn | Xfn | Xdelfn -> <>
@@ -1050,8 +1137,8 @@ codefree(code *cp)
 \section{[[Thread]] and [[runq]]eue}
 
 % why called threads?
-% because they contains opcodes to execute.
-% They are not the process. When interpreting the opcodes
+% because they contains bytecodes to execute.
+% They are not the process. When interpreting the bytecodes
 % they may generate new process but they are not themselves
 % processes.
 % Still thread is maybe confusing.
@@ -1080,7 +1167,7 @@ thread *runq;
 % (and ultimately linked to the bootstrap thread)
 
 % when put stuff on stack? when run commands, do x;y, then
-% has opcodes of repl in stack, and add more process on top of it.
+% has bytecodes of repl in stack, and add more process on top of it.
 
 <<[[Thread]] extra fields>>=
 thread *ret;		/* who continues when this finishes */
@@ -1185,6 +1272,23 @@ copynwords(word *a, word *tail, int n)
 }
 @
 
+<<function [[copywords]]>>=
+/*
+ * copy arglist a, adding the copy to the front of tail
+ */
+word*
+copywords(word *a, word *tail)
+{
+    word *v = nil;
+    word **end;
+
+    for(end=&v;a;a = a->next,end=&(*end)->next)
+        *end = newword(a->word, nil);
+    *end = tail;
+    return v;
+}
+@
+%ocaml: use gc so copy for free, and just use @ to concat
 
 
 <<function [[freewords]]>>=
@@ -1201,6 +1305,7 @@ freewords(word *w)
 }
 @
 %ocaml: use gc
+
 
 % diff with freewords???
 <<function [[freelist]]>>=
@@ -1375,8 +1480,7 @@ newvar(char *name, var *next)
 
 
 \chapter{[[main()]]}
-
-
+\label{chap:main}
 
 
 \section{Overview}
@@ -1414,7 +1518,8 @@ void main(int argc, char *argv[])
 }
 @
 
-\section{Command-line arguments processing: [[getflags()]]}
+\section{Command-line arguments processing}
+% [[getflags()]]
 
 
 <<global [[flag]]>>=
@@ -1446,6 +1551,9 @@ if(argc==-1)
 %-d and -p are actually dead
 %ocaml: Arg is cleaner than this getflags where everything needs to be
 % an array of string, even a boolean flag.
+
+% usage is generic, part of getflags.c (use global to remember
+%  format passed to getflags?)
 
 % so c:1 so -c except one argument.
 % same for -m.
@@ -1518,7 +1626,7 @@ Vinit();    // read environment variables and add them in gvar
 %ocaml: kinit -> use ocamlllex
 
 
-\section{Bootstrapping opcodes (simplified)}
+\section{Bootstrapping bytecodes (simplified)}
 
 \ifallcode
 <<[[main()]] locals>>=
@@ -1543,7 +1651,7 @@ bootstrap[i].i = 0;
 @
 %bootstrap[i++].f = XMark; ? necessary?
 %bootstrap[i++].f = Xexit; ? Xexit never reached I think.
-% 1 to reference count? why? they put 0 in compile() for new opcodes
+% 1 to reference count? why? they put 0 in compile() for new bytecodes
 %ocaml: no need end of list, no need reference count
 
 \section{Setting [[runq]]}
@@ -1630,9 +1738,9 @@ for(i = argc-1; i!=0; --i)
 % see pushlist() below
 
 % this list is actually manipulatd by Xmark, etc
-% so runq->argv is the argument to the opcodes, not just
+% so runq->argv is the argument to the bytecodes, not just
 % to the simple command (but actually simple commands become
-% Xsimple so this opcode look at runq->argv)
+% Xsimple so this bytecode look at runq->argv)
 
 % main | Xmark ->  <>
 <<function [[pushlist]]>>=
@@ -1665,7 +1773,7 @@ pushword(char *wd)
 %ocaml: no need for panic, argv always at least empty list
 
 
-\section{Opcode interpreter loop}
+\section{Bytecode interpreter loop}
 
 <<[[main()]] interpreter loop>>=
 for(;;){
@@ -1681,7 +1789,7 @@ for(;;){
 
 
 \section{The REPL: [[Xrdcmds()]]}
-% X(opcode) read commands
+% X(bytecode) read commands
 
 % Xrdcmds =~ REPL, 
 %  read (yylex+yyparse),
@@ -1796,6 +1904,7 @@ if(error){
 
 
 \chapter{Input}
+\label{chap:input}
 % so Lexing chapter cleaner
 
 \section{Overview}
@@ -1905,7 +2014,7 @@ if(peekc!=EOF){
 
 
 
-\subsection{Prompt}
+\subsection{Displaying the prompt}
 
 % so $prompt is actually a 2 words list, first word = original
 % and second word when it's a multiline command?
@@ -2065,6 +2174,7 @@ nextis(int c)
 
 
 \chapter{Lexing}
+\label{chap:lexing}
 
 % why not using lex? they like yacc but not lex apparently
 % (because lex != flex? or because of multiline editing tricks
@@ -2156,7 +2266,7 @@ char tok[NTOK + UTFmax];
 @
 
 
-\section{Spaces and comments}
+\section{Spaces and comments ([['#']])}
 
 <<global [[incomm]]>>=
 bool incomm;
@@ -2235,7 +2345,7 @@ skipnl(void)
 % note that in a loop, so will accept multiple empty lines
 % until non whitespace character
 
-\section{Operators}
+\section{Operators (e.g., [['&']])}
 
 
 <<[[yylex()]] switch c cases>>=
@@ -2423,7 +2533,7 @@ if(!wordchr(c)){
 
 % so newline is handled by this code above.
 
-\section{Quoted strings}
+\section{Quoted strings ([['...']])}
 
 
 <<global [[inquote]]>>=
@@ -2437,7 +2547,8 @@ inquote = false;
 @
 
 
-<<global lastword (rc/lex.c)>>=
+<<global [[lastword]]>>=
+// used also by syn.y
 bool lastword;	/* was the last token read a word or compound word terminator? */
 @
 % rename last_tok_was_a_word
@@ -2468,6 +2579,7 @@ case '\'':
     return t->type;
 @
 % classic double '' to represent a quote
+%meta, also in C need escape
 
 % addutf in advanced topics, but essentially add character
 % and if character start of unicode char, then consume more chars
@@ -2499,7 +2611,7 @@ token(char *str, int type)
 
 
 
-\section{Keywords and identifiers}
+\section{Keywords and identifiers (e.g., [[if]])}
 
 
 <<[[yylex()]] if c is a word character>>=
@@ -2613,7 +2725,7 @@ kenter(int type, char *name)
 
 
 
-\section{Array subscript}
+\section{Array subscript ([[<arr>(<n>)]])}
 % and automatic carret
 
 % ( vs SUB. Call? vs array subscript.
@@ -2665,6 +2777,7 @@ if(lastword){
 
 
 \chapter{Parsing}
+\label{chap:parsing}
 
 \section{Overview}
 
@@ -2689,6 +2802,11 @@ if(lastword){
 
 %%
 <<grammar>>
+@
+
+% for syncweb -to_tex
+<<function [[yyparse]]>>=
+... generated code from syn.y by yacc ...
 @
 
  
@@ -2775,7 +2893,7 @@ rc:
 \fi
 
 
-\section{Simple commands}
+\section{Simple commands ([[<cmd> <arg1>...<argn>]]) }
 
 % a line can have a single command (stmt)
 <<line rule>>=
@@ -2913,7 +3031,7 @@ for(u = t->child[0]; u->type==ARGLIST; u = u->child[0]){
 % simple rule and so have different priotities.
 % redirection is lower, then pipe and logic operators, then sequence
 
-\subsection{Sequence}
+\subsection{Sequence (e.g., [[';']])}
 
 <<line rule other cases>>=
 |   cmdsa line      {$$=tree2(';', $1, $2);}
@@ -2933,7 +3051,7 @@ cmdsa:
 
 % newline is also a form of sequence when in the body { } of something
 
-\subsection{Logical operators}
+\subsection{Logical operators  (e.g., [['&&']])}
 % Other operators?
 % && ||  |  &  !?
 % >> << > <
@@ -2978,7 +3096,7 @@ tree* mung3(tree *t, tree *c0, tree *c1, tree *c2)
 @
 %ocaml: build directly
 
-\subsection{String operator}
+\subsection{String matching  (\texttt{'\textasciitilde'})}
 
 % Fundamental type is list of string. No int, no float, just strings.
 % So fundamental operator is string matching ~.
@@ -3001,7 +3119,7 @@ tree* mung2(tree *t, tree *c0, tree *c1)
 @
 %ocaml: build directly
 
-\subsection{Pipe}
+\subsection{Pipe  ([['|']])}
 
 <<cmd rule other cases>>=
 |   cmd PIPE cmd        {$$=mung2($2, $1, $3);}
@@ -3010,7 +3128,7 @@ tree* mung2(tree *t, tree *c0, tree *c1)
 
 % what if second cmd derives the EmptyCommand?
 
-\subsection{Redirections}
+\subsection{Redirections  (e.g., [['>']])}
 
 % at level of simple, below cmd, so higher prio than ||, &&, ;, etc
 <<simple rule other cases>>=
@@ -3073,7 +3191,7 @@ tree* epimung(tree *comp, tree *epi)
 % really need to support that?
 %ocaml: do not support that
 
-\section{Control flow statements}
+\section{Control flow statements (e.g., [[if]])} 
 
 <<cmd rule other cases>>=
 |   IF paren {skipnl();} cmd  {$$=mung2($1, $2, $4);}
@@ -3147,7 +3265,7 @@ cmdsan:
 
 
 
-\section{Functions}
+\section{Functions ([[fn]])}
 
 <<cmd rule other cases>>=
 |   FN words brace  {$$=tree2(FN, $2, $3);}
@@ -3160,7 +3278,7 @@ cmdsan:
 % second line is for delfn. if type
 % fn foo   without anything, then means delete the function.
 
-\section{Variables}
+\section{Variables ([[<x> = ...]])}
 
 % definitions
 
@@ -3234,7 +3352,7 @@ assign: first '=' word      {$$=tree2('=', $1, $3);}
 % SUB = '(' when after a word, subscript
 % but what that mean? subscript, array access
 
-\section{Lists}
+\section{Lists ([[(...)]])}
 
 <<comword rule other cases>>=
 |   '(' words ')'   {$$=tree1(PAREN, $2);}
@@ -3255,9 +3373,11 @@ assign: first '=' word      {$$=tree2('=', $1, $3);}
 % I could do?
 
 
-\chapter{Opcode Generation and Interpretation}
+\chapter{Bytecode Generation and Interpretation}
+\label{chap:compile-interpret}
+
 % or Code generation? or Bytecode generation?
-\n i merged Opcode Generation and Intepretation in one chapter
+\n i merged Bytecode Generation and Intepretation in one chapter
 \n  because it helps to see the code generated from a tree.
 \n We could also group with the related parsing, but maybe it would
 \n  be too much, and parsing can be understood in isolation.
@@ -3337,7 +3457,7 @@ error0 compile(tree *t)
 
 % note that compile is called for each line entered interactively,
 % and also inline of a script.
-% So for each line in a script there are set of opcodes for this line
+% So for each line in a script there are set of bytecodes for this line
 % followed by a Xreturn to go back to the REPL to read the next line!
 
 <<[[compile()]] check nerror>>=
@@ -3422,7 +3542,7 @@ Xmark(void)
     pushlist();
 }
 @
-% why need multiple argv list? Because some opcodes requires
+% why need multiple argv list? Because some bytecodes requires
 % multiple things in the stack, but clearly separated.
 % Many things can expand to list of strings, so when you need to operate
 % over 2 list of strings, you need a special mark.
@@ -3578,7 +3698,7 @@ havewaitpid(int pid)
 % or builtins or functions
 
 
-\subsection{Opcode generation}
+\subsection{Bytecode generation}
 
 % SIMPLE node built in simplemung()
 
@@ -3685,7 +3805,7 @@ if(a==nil){
 
 % globlist is for globbing. See advanced topics.
 
-% actually not an opcode. Never generated by compile()
+% actually not an bytecode. Never generated by compile()
 <<function [[Xerror]]>>=
 void
 Xerror(char *s)
@@ -4236,7 +4356,7 @@ case ROPEN:
 
 
 
-\subsubsection{Opcode generation}
+\subsubsection{Bytecode generation}
 
 <<[[outcode()]] cases>>=
 case REDIR:
@@ -4726,7 +4846,7 @@ Xexit(void)
 
 \section{Control flow statements}
 
-\subsection{If}
+\subsection{[[if]]}
 
 % remember than in rc there is   'if ( )' and 'if not' for else.
 
@@ -4816,7 +4936,7 @@ if(t->type!=NOT && t->type!=';')
 @
 
 
-\subsection{While}
+\subsection{[[while]]}
 
 <<[[outcode()]] cases>>=
 case WHILE:
@@ -4849,7 +4969,7 @@ Xjump(void)
 }
 @
 
-\subsection{For}
+\subsection{[[for]]}
 
 % why Xmark?
 
@@ -4900,7 +5020,7 @@ Xfor(void)
 @
 
 
-\subsection{Switch}
+\subsection{[[switch]]}
 % mv in advanced topic?
 
 <<[[outcode()]] cases>>=
@@ -5053,7 +5173,7 @@ Xcase(void)
 @
 
 
-\subsection{Blocks}
+\subsection{Blocks: \texttt{'\{...\}'}}
 
 <<[[outcode()]] cases>>=
 case PAREN:
@@ -5082,7 +5202,7 @@ bool	fnchanged;
 
 
 
-\subsection{Definitions}
+\subsection{Definitions ([[fn <foo> { ... }]])}
 % defs
 
 % * Xfn(name){... Xreturn}			define function
@@ -5168,7 +5288,7 @@ Xdelfn(void)
 @
 % can delete a list of functions. meh.
 
-\subsection{Uses}
+\subsection{Uses ([[<foo>(...)]])}
 
 <<[[Xsimple()]] other locals>>=
 var *v;
@@ -5199,7 +5319,7 @@ execfunc(var *func)
 
 \section{Variables}
 
-\subsection{Definitions}
+\subsection{Definitions ([[<x>=...]])}
 
 <<[[outcode()]] locals>>=
 tree *tt;
@@ -5309,7 +5429,7 @@ Xunlocal(void)
 @
 
 
-\subsection{Uses}
+\subsection{Uses ([[$<x>]])} %$
 
 <<[[outcode()]] cases>>=
 case '$': //$
@@ -5356,23 +5476,6 @@ Xdol(void)
 %ocaml: be more strict when array index out of bound
 
 
-<<function [[copywords]]>>=
-/*
- * copy arglist a, adding the copy to the front of tail
- */
-word*
-copywords(word *a, word *tail)
-{
-    word *v = nil;
-    word **end;
-
-    for(end=&v;a;a = a->next,end=&(*end)->next)
-        *end = newword(a->word, nil);
-    *end = tail;
-    return v;
-}
-@
-%ocaml: use gc so copy for free, and just use @ to concat
 
 
 
@@ -5560,6 +5663,7 @@ conclist(word *lp, word *rp, word *tail)
 % ifs?
 
 \chapter{Builtins}
+\label{chap:builtins}
 
 
 
@@ -5883,13 +5987,14 @@ if(first){
 %                break;
 %        }
 
-<<function [[Dup1]]>>=
-int
-Dup1(int)
-{
-    return -1;
-}
-@
+%dead: because of code removed above
+% <<function [[Dup1]]>>=
+% int
+% Dup1(int)
+% {
+%     return -1;
+% }
+% @
 
 \section{[[$ eval]]}
 %$
@@ -5974,6 +6079,7 @@ execwait(void)
 
 
 \chapter{Environment}
+\label{chap:environment}
 
 \section{[[Updenv()]]}
 
@@ -6122,6 +6228,7 @@ int envdir;
 
 
 \chapter{Globbing}
+\label{chap:globbing}
 % could be in advanced topics, but important feature in a shell
 
 
@@ -6622,6 +6729,7 @@ Closedir(int f)
 
 
 \chapter{Signals}
+\label{chap:signals}
 
 % code of nohup utility?
 
@@ -6804,8 +6912,9 @@ ntrap = 0;	/* avoid double-interrupts during blocked writes */
 
 
 \chapter{Initialization}
+\label{chap:initialization-real}
 
-\section{Actual bootstrapping and [[rc -m /path/to/rcmain]]}
+\section{Actual bootstrapping code and [[rc -m /path/to/rcmain]]}
 
 % see main() comment:
 % * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
@@ -6864,7 +6973,7 @@ bootstrap[i].i = 0;
 \t  I think because rcmain contains call to finit?
 
 % show rc foo bar -r
-% great resource to see the opcodes, argv.
+% great resource to see the bytecodes, argv.
 
 
 \section{Actual environment}
@@ -6895,14 +7004,15 @@ setvar("rcname", newword(argv[0], (word *)nil));
 
 
 \chapter{Advanced Topics TODO}
+\label{chap:advanced-topics}
 
-\section{[[rc -c]]}
+\section{Reading commands from a string: [[rc -c]]}
 
 <<[[main()]] initialisation>>=
 setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
 @
 
-\section{[[rc -e]]}
+\section{Failing fast: [[rc -e]]}
 
 
 <<[[outcode()]] emit Xeflag after Xsimple>>=
@@ -6971,7 +7081,7 @@ addutf(char *p, int c)
 
 
 
-\subsection{Subshell: [[@ command]]}
+\subsection{Subshell: [[@ <cmd>]]}
 
 % why need that? () not enough? { } not enough?
 % no because side effect done in { } will be propagated, e.g., cd!
@@ -7038,7 +7148,7 @@ Xsubshell(void)
 
 
 
-\subsection{Here documents: [[<< HERE]]}
+\subsection{Here documents: [[<< <HERE>]]}
 % >>
 
 % again spirit of interactive REPL. enter data from command line.
@@ -7057,7 +7167,7 @@ if(nextis(c)){
     *w++=c;
 }
 @
-
+\t mv c to '<' ?
 
 <<struct [[Here]]>>=
 struct Here {
@@ -7278,7 +7388,7 @@ pstrs(io *f, word *a)
 }
 @
 
-\subsection{Read-write redirections: [[<> file]]}
+\subsection{Read-write redirections: [[<> <file>]]}
 
 <<constant [[RDWR]]>>=
 #define RDWR	7
@@ -7328,7 +7438,7 @@ Xrdwr(void)
 @
 
 
-\subsection{General redirections: [[>[2] file]]}
+\subsection{General redirections: [[>[2] <file>]]}
 
 % fancy lexing redirect, see rc manual
 
@@ -7388,7 +7498,7 @@ if(nextis('[')){
 @
 
 
-\subsection{Advanced dup: [[>[fd0=fd1]] ], [[<>[fd0=fd1] ]], [[<[fd0=fd1] ]]}
+\subsection{Advanced dup: [[>[<fd0>=<fd1>]] ], [[<>[<fd0>=<fd1>] ]], [[<[<fd0>=<fd1>] ]]}
 
 % so can print on stderr with echo in kmem.rc:
 %	echo 'usage: kmem [kernel]' >[1=2]
@@ -7467,13 +7577,13 @@ case RCLOSE:
 
 
 
-\subsection{Advanced pipes: [[|[fd] ]], [[|[fd0=fd1] ]]}
+\subsection{Advanced pipes: [[|[<fd>] ]], [[|[<fd0>=<fd1>] ]]}
 
 % see man/1/rc:
 
 
 
-\subsection{Command output as file: [[<{command}]], [[>{command}]]}
+\subsection{Command output as a file: \texttt{'<\{<cmd>\}'}}
 
 <<comword rule other cases>>=
 |   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
@@ -7557,7 +7667,7 @@ Xpipefd(void)
 
 
 
-\subsection{Command substitution: [[`{command}]]}
+\subsection{Command substitution: \texttt{`\{<cmd>\}}}
 % Command output as arguments
 
 % by using `{} instead of ``
@@ -7658,7 +7768,7 @@ Xbackq(void)
 
 
 
-\subsection{Stringification of variables: [[$"foo]]} %$
+\subsection{Stringification of variables: [[$"<foo>]]} %$
 
 <<comword rule other cases>>=
 |   '"' word        {$$=tree1('"', $2);}
@@ -8045,6 +8155,7 @@ Xrdfn(void)
 
 
 \chapter{Conclusion}
+\label{chap:conclusion}
 
 % Lex and Yacc to understand some parts. 
 % Kernel for other parts.
@@ -8069,6 +8180,7 @@ Xrdfn(void)
 \appendix
 
 \chapter{Debugging}
+\label{chap:debugging-appendix}
 
 \section{AST dumper}
 
@@ -8229,7 +8341,7 @@ pdeglob(io *f, char *s)
 
 
 
-\section{Printing opcodes: [[rc -r]]}
+\section{Bytecode dumper: [[rc -r]]}
 
 % nice output:
 
@@ -8363,6 +8475,7 @@ else
 % so get also the content of the rcmain
 
 \chapter{Error Management}
+\label{chap:error}
 
 <<constant [[ERRMAX]]>>=
 #define ERRMAX 128
@@ -8458,6 +8571,7 @@ Exit(char *stat)
 
 
 \chapter{Utilities}
+\label{chap:utilities}
 
 <<function [[_efgfmt]]>>=
 /* avoid loading any floating-point library code */
@@ -8480,10 +8594,10 @@ emalloc(long n)
 
     if(p==nil)
         panic("Can't malloc %d bytes", n);
-/*	if(err){ pfmt(err, "malloc %d->%p\n", n, p); flush(err); } /**/
     return p;
 }
 @
+%old: /*	if(err){ pfmt(err, "malloc %d->%p\n", n, p); flush(err); } /**/
 %ocaml: use Gc.
 
 % plan9
@@ -8506,9 +8620,9 @@ efree(void *p)
 }
 @
 %old: /*	pfmt(err, "free %p\n", p); flush(err); /**/
-% nice trick the /**/ at the end :)
+% nice trick the /**/ at the end :) but can also simply use //
 
-\section{Command-line arguments processing: [[getflags()]]}
+\section{Command-line arguments: [[getflags()]]}
 % getopt
 
 %ocaml: use Arg.ml
@@ -8980,13 +9094,6 @@ opencore(char *s, int len)
 }
 @
 
-<<function [[Memcpy]]>>=
-void
-Memcpy(void *a, void *b, long n)
-{
-    memmove(a, b, n);
-}
-@
 
 
 
@@ -9062,7 +9169,7 @@ pfmt(io *f, char *fmt, ...)
         flush(f);
 }
 @
-% could add 'x' pcmd for the opcode
+% could add 'x' pcmd for the bytecode
 
 
 
@@ -9242,6 +9349,13 @@ Dup(int a, int b)
 }
 @
 
+<<function [[Memcpy]]>>=
+void
+Memcpy(void *a, void *b, long n)
+{
+    memmove(a, b, n);
+}
+@
 
 
 \chapter{Examples of [[rc]] scripts TODO}

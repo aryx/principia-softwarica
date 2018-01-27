@@ -1,8 +1,12 @@
 /*s: rc/trap.c */
+/*s: includes */
 #include "rc.h"
+#include "getflags.h"
 #include "exec.h"
-#include "fns.h"
 #include "io.h"
+#include "fns.h"
+/*e: includes */
+
 extern char *signame[];
 
 /*s: function [[dotrap]] */

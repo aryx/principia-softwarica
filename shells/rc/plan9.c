@@ -4,11 +4,13 @@
  *	By convention, exported routines herein have names beginning with an
  *	upper case letter.
  */
+/*s: includes */
 #include "rc.h"
+#include "getflags.h"
 #include "exec.h"
 #include "io.h"
 #include "fns.h"
-#include "getflags.h"
+/*e: includes */
 
 char**	mkargv(word*);
 void	delwaitpid(int);
@@ -576,38 +578,6 @@ Trapinit(void)
 }
 /*e: function [[Trapinit]] */
 
-/*s: function [[Unlink]] */
-void
-Unlink(char *name)
-{
-    remove(name);
-}
-/*e: function [[Unlink]] */
-
-/*s: function [[Write]] */
-long
-Write(int fd, void *buf, long cnt)
-{
-    return write(fd, buf, cnt);
-}
-/*e: function [[Write]] */
-
-/*s: function [[Read]] */
-long
-Read(int fd, void *buf, long cnt)
-{
-    return read(fd, buf, cnt);
-}
-/*e: function [[Read]] */
-
-/*s: function [[Seek]] */
-long
-Seek(int fd, long cnt, long whence)
-{
-    return seek(fd, cnt, whence);
-}
-/*e: function [[Seek]] */
-
 /*s: function [[Executable]] */
 bool
 Executable(char *file)
@@ -623,30 +593,6 @@ Executable(char *file)
     return ret;
 }
 /*e: function [[Executable]] */
-
-/*s: function [[Creat]] */
-int
-Creat(char *file)
-{
-    return create(file, 1, 0666L);
-}
-/*e: function [[Creat]] */
-
-/*s: function [[Dup]] */
-int
-Dup(int a, int b)
-{
-    return dup(a, b);
-}
-/*e: function [[Dup]] */
-
-/*s: function [[Dup1]] */
-int
-Dup1(int)
-{
-    return -1;
-}
-/*e: function [[Dup1]] */
 
 /*s: function [[Exit]] */
 void
@@ -701,22 +647,6 @@ Abort(void)
     Exit("aborting");
 }
 /*e: function [[Abort]] */
-
-/*s: function [[Memcpy]] */
-void
-Memcpy(void *a, void *b, long n)
-{
-    memmove(a, b, n);
-}
-/*e: function [[Memcpy]] */
-
-/*s: function [[Malloc]] */
-void*
-Malloc(ulong n)
-{
-    return mallocz(n, 1);
-}
-/*e: function [[Malloc]] */
 
 /*s: global [[waitpids]] */
 // growing_array<pid> (but really a list)

@@ -1,8 +1,13 @@
 /*s: rc/pcmd.c */
+/*s: includes */
 #include "rc.h"
+#include "getflags.h"
+#include "exec.h"
 #include "io.h"
 #include "fns.h"
+/*e: includes */
 #include "x.tab.h"
+
 /*s: global [[nl]] */
 char nl='\n';		/* change to semicolon for bourne-proofing */
 /*e: global [[nl]] */

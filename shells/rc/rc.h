@@ -45,6 +45,7 @@
 #endif
 //#endif
 
+// forward decls
 typedef struct Tree tree;
 typedef struct Word word;
 typedef struct Io io;
@@ -93,8 +94,6 @@ struct Tree {
 /*e: struct [[Tree]] */
 
 tree *newtree(void);
-tree *token(char*, int);
-tree *klook(char*);
 //@Scheck: useful, for syn.y, and not just for tree.c
 tree *tree1(int, tree*);
 tree *tree2(int, tree*, tree*);
@@ -107,7 +106,6 @@ tree *epimung(tree*, tree*);
 tree *simplemung(tree*);
 tree *heredoc(tree*);
 
-
 /*s: struct [[Code]] */
 /*
  * The first word of any code vector is a reference count.
@@ -115,7 +113,7 @@ tree *heredoc(tree*);
  * Always call codefree(.) when deleting a reference.
  */
 union Code {
-    void	(*f)(void); // Xxxx() opcode
+    void	(*f)(void); // Xxxx() bytecode
     int	i;
     char	*s;
 };
@@ -127,8 +125,6 @@ extern bool doprompt;
 /*s: constant [[NTOK]] */
 #define	NTOK	8192		/* maximum bytes in a word (token) */
 /*e: constant [[NTOK]] */
-
-extern char tok[NTOK + UTFmax];
 
 /*s: constant [[APPEND]] */
 #define	APPEND	1
@@ -151,6 +147,30 @@ extern char tok[NTOK + UTFmax];
 /*s: constant [[RDWR]] */
 #define RDWR	7
 /*e: constant [[RDWR]] */
+
+/*s: struct [[Word]] */
+/*
+ * word lists are in correct order,
+ * i.e. word0->word1->word2->word3->nil
+ */
+struct Word {
+    char *word;
+
+    // Extra
+    word *next;
+};
+/*e: struct [[Word]] */
+/*s: struct [[List]] */
+struct List {
+    // list<ref_own<Word>> (next = Word.next)
+    word *words;
+
+    // Extra
+    list *next;
+};
+/*e: struct [[List]] */
+word *newword(char *, word *);
+word *copywords(word *, word *);
 
 /*s: struct [[Var]] */
 struct Var {
@@ -183,9 +203,7 @@ var *newvar(char*, var*);
 extern var *gvar[NVAR];		/* hash for globals */
 
 #define	new(type)	((type *)emalloc(sizeof(type)))
-
 void *emalloc(long);
-void *Malloc(ulong);
 void efree(void *);
 
 /*s: struct [[Here]] */
@@ -225,10 +243,13 @@ extern int nerror;	/* number of errors encountered during compilation */
 
 extern char *Rcmain;
 extern char *Fdprefix;
+
 extern int ndot;
+
 char *getstatus(void);
 
-extern int lastc;
-extern bool lastword;
+tree *token(char*, int);
+tree *klook(char*);
 
+extern bool lastword;
 /*e: rc/rc.h */

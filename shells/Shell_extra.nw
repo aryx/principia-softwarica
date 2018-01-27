@@ -1317,47 +1317,37 @@ Node	*alloc(int (*op)(Node *));
 %-------------------------------------------------------------
 
 <<rc/fns.h>>=
+
+//
 void	Abort(void);
 void	Closedir(int);
-int	Creat(char*);
-int	Dup(int, int);
-int	Dup1(int);
 int	Eintr(void);
 int	Executable(char*);
 void	Execute(word*,  word*);
 void	Exit(char*);
 int	Globsize(char*);
 int	Isatty(int);
-void	Memcpy(void*, void*, long);
 void	Noerror(void);
 int	Opendir(char*);
-long	Read(int, void*, long);
 int	Readdir(int, void*, int);
-long	Seek(int, long, long);
 void	Trapinit(void);
-void	Unlink(char*);
 void	Updenv(void);
 void	Vinit(void);
 int	Waitfor(int, int);
-long	Write(int, void*, long);
 
 void	addwaitpid(int);
-int	advance(void);
 void	cleanhere(char*);
 void	codefree(code*);
 error0	compile(tree*);
-int	count(word*);
 void	deglob(void*);
 void	dotrap(void);
 void	freenodes(void);
-void	freewords(word*);
 void	globlist(void);
 int	idchr(int);
 void	inttoascii(char*, long);
 void	kinit(void);
 int	match(void*, void*, int);
 void	clearwaitpids(void);
-void	panic(char*, int);
 void	poplist(void);
 void	popword(void);
 void	pprompt(void);
@@ -1365,17 +1355,48 @@ void	pushlist(void);
 void	pushredir(int, int, int);
 void	pushword(char*);
 void	readhere(void);
-void	setstatus(char*);
-void	setvar(char*, word*);
 //@Scheck: used in syn.y
 void	skipnl(void);
 void	start(code*, int, var*);
-int	truestatus(void);
 void	usage(char*);
+
+// utils.c
+void	Memcpy(void*, void*, long);
+long	Read(int, void*, long);
+long	Write(int, void*, long);
+long	Seek(int, long, long);
+void	Unlink(char*);
+int	Creat(char*);
+int	Dup(int, int);
+
+// words.c
+word* copynwords(word *a, word *tail, int n);
+void freelist(word *w);
+void	freewords(word*);
+int	count(word*);
+
+// var.c
+void	setvar(char*, word*);
+
+// status.c
+void	setstatus(char*);
+char* concstatus(char *s, char *t);
+int	truestatus(void);
+
+// error.c
+void	panic(char*, int);
 void	yyerror(char*);
+
+// path.c
+word*	searchpath(char*);
+
+// lex.c
 int	yylex(void);
+
+// syn.y
 //@Scheck: defined in syn.y and y.tab.c
 int	yyparse(void);
+
 @
 
 
@@ -1405,18 +1426,24 @@ int getflags(int, char*[], char*, int);
 
 extern io *err;
 
+// io.c
 io *openfd(fdt);
 io *openstr(void);
 io *opencore(char *, int);
-void pchr(io*, int);
-int rchr(io*);
-int rutf(io*, char*, Rune*);
 void closeio(io*);
 void flush(io*);
+
+int rchr(io*);
+int rutf(io*, char*, Rune*);
+
+// fmt.c
+void pchr(io*, int);
 void pstr(io*, char*);
 void pfmt(io*, char*, ...);
 
+// pcmd.c
 void pcmd(io*, tree*);
+// pfnc.c
 void pfnc(io*, thread*);
 @
 
@@ -1462,6 +1489,7 @@ void pfnc(io*, thread*);
 #endif
 //#endif
 
+// forward decls
 typedef struct Tree tree;
 typedef struct Word word;
 typedef struct Io io;
@@ -1480,8 +1508,6 @@ typedef struct Builtin builtin;
 <<struct [[Tree]]>>
 
 tree *newtree(void);
-tree *token(char*, int);
-tree *klook(char*);
 //@Scheck: useful, for syn.y, and not just for tree.c
 tree *tree1(int, tree*);
 tree *tree2(int, tree*, tree*);
@@ -1494,15 +1520,12 @@ tree *epimung(tree*, tree*);
 tree *simplemung(tree*);
 tree *heredoc(tree*);
 
-
 <<struct [[Code]]>>
 
 extern char *promptstr;
 extern bool doprompt;
 
 <<constant [[NTOK]]>>
-
-extern char tok[NTOK + UTFmax];
 
 <<constant [[APPEND]]>>
 <<constant [[WRITE]]>>
@@ -1511,6 +1534,11 @@ extern char tok[NTOK + UTFmax];
 <<constant [[DUPFD]]>>
 <<constant [[CLOSE]]>>
 <<constant [[RDWR]]>>
+
+<<struct [[Word]]>>
+<<struct [[List]]>>
+word *newword(char *, word *);
+word *copywords(word *, word *);
 
 <<struct [[Var]]>>
 
@@ -1522,9 +1550,7 @@ var *newvar(char*, var*);
 extern var *gvar[NVAR];		/* hash for globals */
 
 #define	new(type)	((type *)emalloc(sizeof(type)))
-
 void *emalloc(long);
-void *Malloc(ulong);
 void efree(void *);
 
 <<struct [[Here]]>>
@@ -1538,12 +1564,15 @@ extern int nerror;	/* number of errors encountered during compilation */
 
 extern char *Rcmain;
 extern char *Fdprefix;
+
 extern int ndot;
+
 char *getstatus(void);
 
-extern int lastc;
-extern bool lastword;
+tree *token(char*, int);
+tree *klook(char*);
 
+extern bool lastword;
 @
 
 
@@ -1569,10 +1598,7 @@ extern void Xdelhere(void), Xpopredir(void), Xsub(void), Xeflag(void), Xsettrue(
 extern void Xerror(char*);
 extern void Xerror1(char*);
 
-<<struct [[Word]]>>
-<<struct [[List]]>>
-word *newword(char *, word *);
-word *copywords(word *, word *);
+extern word nullpath;
 
 <<struct [[Redir]]>>
 
@@ -1611,18 +1637,12 @@ void execcmds(io *);
 %pad: I created this file, was in rc.h before (without not even the EXTERN trick)
 
 <<rc/globals.c>>=
-#include "rc.h"
-#include "exec.h"
+<<includes>>
 
 // was in rc.h
-<<global [[tok]]>>
-<<global [[lastc]]>>
 <<global [[mypid]]>>
-<<global [[gvar]]>>
 <<global [[ndot]]>>
 <<global [[promptstr]]>>
-<<global [[nerror]]>>
-<<global [[err]]>>
 
 // was in exec.h
 <<global [[runq]]>>
@@ -1639,9 +1659,10 @@ void execcmds(io *);
 %-------------------------------------------------------------
 
 <<rc/getflags.c>>=
-#include "rc.h"
 #include "getflags.h"
-#include "fns.h"
+
+extern void	Exit(char*);
+extern long	Write(int, void*, long);
 
 static void reverse(char**, char**);
 static int scanflag(int, char*);
@@ -1687,45 +1708,16 @@ static void errc(int);
 %-------------------------------------------------------------
 
 <<rc/io.c>>=
-#include "rc.h"
-#include "exec.h"
-#include "io.h"
-#include "fns.h"
+<<includes>>
 
 <<enum [[MiscConstants]]>>
 
-<<global [[pfmtnest]]>>
-
 int emptybuf(io*);
 int fullbuf(io*, int);
-void pdec(io*, int);
-void poct(io*, unsigned int);
-void pptr(io*, void*);
-void pval(io*, word*);
-void pquo(io*, char*);
-void pwrd(io*, char*);
-
-<<function [[pfmt]]>>
-
-<<function [[pchr]]>>
 
 <<function [[rchr]]>>
 
 <<function [[rutf]]>>
-
-<<function [[pquo]]>>
-
-<<function [[pwrd]]>>
-
-<<function [[pptr]]>>
-
-<<function [[pstr]]>>
-
-<<function [[pdec]]>>
-
-<<function [[poct]]>>
-
-<<function [[pval]]>>
 
 <<function [[fullbuf]]>>
 
@@ -1734,6 +1726,7 @@ void pwrd(io*, char*);
 <<function [[openfd]]>>
 
 <<function [[openstr]]>>
+
 <<function [[opencore]]>>
 
 <<function [[closeio]]>>
@@ -1748,12 +1741,14 @@ void pwrd(io*, char*);
 %-------------------------------------------------------------
 
 <<rc/var.c>>=
-#include "rc.h"
-#include "exec.h"
-#include "fns.h"
+<<includes>>
 #include "x.tab.h"
 
+// was in rc.h
+<<global [[gvar]]>>
+
 <<function [[hash]]>>
+
 
 <<constant [[NKW]]>>
 <<struct [[Kw]]>>
@@ -1765,11 +1760,16 @@ void pwrd(io*, char*);
 
 <<function [[klook]]>>
 
+
+
 <<function [[gvlook]]>>
 
 <<function [[vlook]]>>
 
 <<function [[setvar]]>>
+
+<<function [[newvar]]>>
+
 @
 
 
@@ -1779,25 +1779,14 @@ void pwrd(io*, char*);
 %-------------------------------------------------------------
 
 <<rc/subr.c>>=
-#include "rc.h"
-#include "exec.h"
-#include "io.h"
-#include "fns.h"
+<<includes>>
 
-<<function [[emalloc]]>>
-
-<<function [[efree]]>>
-extern bool lastword;
-extern bool lastdol;
-
-<<function [[yyerror]]>>
 <<global [[bp]]>>
 
 <<function [[iacvt]]>>
 
 <<function [[inttoascii]]>>
 
-<<function [[panic]]>>
 @
 
 
@@ -1811,11 +1800,7 @@ extern bool lastdol;
  *	By convention, exported routines herein have names beginning with an
  *	upper case letter.
  */
-#include "rc.h"
-#include "exec.h"
-#include "io.h"
-#include "fns.h"
-#include "getflags.h"
+<<includes>>
 
 char**	mkargv(word*);
 void	delwaitpid(int);
@@ -1875,21 +1860,7 @@ void execnewpgrp(void);
 
 <<function [[Trapinit]]>>
 
-<<function [[Unlink]]>>
-
-<<function [[Write]]>>
-
-<<function [[Read]]>>
-
-<<function [[Seek]]>>
-
 <<function [[Executable]]>>
-
-<<function [[Creat]]>>
-
-<<function [[Dup]]>>
-
-<<function [[Dup1]]>>
 
 <<function [[Exit]]>>
 
@@ -1900,10 +1871,6 @@ void execnewpgrp(void);
 <<function [[Isatty]]>>
 
 <<function [[Abort]]>>
-
-<<function [[Memcpy]]>>
-
-<<function [[Malloc]]>>
 
 <<global [[waitpids]]>>
 <<global [[nwaitpids]]>>
@@ -1926,9 +1893,7 @@ void execnewpgrp(void);
 %-------------------------------------------------------------
 
 <<rc/glob.c>>=
-#include "rc.h"
-#include "exec.h"
-#include "fns.h"
+<<includes>>
 
 int	matchfn(void*, void*);
 
@@ -1963,11 +1928,7 @@ int	matchfn(void*, void*);
 %-------------------------------------------------------------
 
 <<rc/exec.c>>=
-#include "rc.h"
-#include "getflags.h"
-#include "exec.h"
-#include "io.h"
-#include "fns.h"
+<<includes>>
 
 char*	list2str(word*);
 
@@ -1975,33 +1936,15 @@ char*	list2str(word*);
 
 <<function [[start]]>>
 
-<<function [[newword]]>>
-
 <<function [[pushword]]>>
 
 <<function [[popword]]>>
-
-<<function [[freelist]]>>
 
 <<function [[pushlist]]>>
 
 <<function [[poplist]]>>
 
-<<function [[count]]>>
-
 <<function [[pushredir]]>>
-
-<<function [[newvar]]>>
-
-/*
- * get command line flags.
- * initialize keywords & traps.
- * get values from environment.
- * set $pid, $cflag, $*
- * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
- * start interpreting code
- */
-<<function main (rc/exec.c)>>
 
 /*
  * Opcode routines
@@ -2115,13 +2058,10 @@ char*	list2str(word*);
 <<function [[Xconc]]>>
 
 <<function [[Xassign]]>>
-<<function [[copywords]]>>
 
 <<function [[Xdol]]>>
 
 <<function [[Xqdol]]>>
-
-<<function [[copynwords]]>>
 
 <<function [[subwords]]>>
 
@@ -2133,13 +2073,9 @@ char*	list2str(word*);
 
 <<function [[Xunlocal]]>>
 
-<<function [[freewords]]>>
-
 <<function [[Xfn]]>>
 
 <<function [[Xdelfn]]>>
-
-<<function [[concstatus]]>>
 
 <<function [[Xpipewait]]>>
 
@@ -2148,12 +2084,6 @@ char*	list2str(word*);
 <<function [[Xerror]]>>
 
 <<function [[Xerror1]]>>
-
-<<function [[setstatus]]>>
-
-<<function [[getstatus]]>>
-
-<<function [[truestatus]]>>
 
 <<function [[Xdelhere]]>>
 
@@ -2169,11 +2099,7 @@ char*	list2str(word*);
 %-------------------------------------------------------------
 
 <<rc/havefork.c>>=
-#include "rc.h"
-#include "getflags.h"
-#include "exec.h"
-#include "io.h"
-#include "fns.h"
+<<includes>>
 #include <string.h>
 
 <<function [[Xasync]]>>
@@ -2196,13 +2122,8 @@ char*	list2str(word*);
 %-------------------------------------------------------------
 
 <<rc/tree.c>>=
-#include "rc.h"
-#include "exec.h"
-#include "io.h"
-#include "fns.h"
+<<includes>>
 #include "x.tab.h"
-
-void freetree(tree*);
 
 <<global [[treenodes]]>>
 <<function [[newtree]]>>
@@ -2235,15 +2156,17 @@ void freetree(tree*);
 %-------------------------------------------------------------
 
 <<rc/lex.c>>=
-#include "rc.h"
-#include "exec.h"
-#include "io.h"
-#include "getflags.h"
-#include "fns.h"
+<<includes>>
 #include "x.tab.h"
 
 int getnext(void);
 
+// was used by subr.c
+<<global [[lastdol]]>>
+<<global [[lastword]]>>
+// was in rc.h
+<<global [[tok]]>>
+<<global [[lastc]]>>
 
 <<function [[wordchr]]>>
 
@@ -2258,6 +2181,9 @@ int getnext(void);
 <<function [[advance]]>>
 <<function [[getnext]]>>
 
+<<function [[yyerror]]>>
+
+
 <<function [[pprompt]]>>
 
 <<function [[skipwhite]]>>
@@ -2270,9 +2196,6 @@ int getnext(void);
 
 <<function [[addutf]]>>
 
-<<global [[lastdol]]>>
-<<global lastword (rc/lex.c)>>
-
 <<function [[yylex]]>>
 @
 
@@ -2283,10 +2206,8 @@ int getnext(void);
 %-------------------------------------------------------------
 
 <<rc/trap.c>>=
-#include "rc.h"
-#include "exec.h"
-#include "fns.h"
-#include "io.h"
+<<includes>>
+
 extern char *signame[];
 
 <<function [[dotrap]]>>
@@ -2302,54 +2223,24 @@ extern char *signame[];
 /*
  * Maybe `simple' is a misnomer.
  */
-#include "rc.h"
-#include "getflags.h"
-#include "exec.h"
-#include "io.h"
-#include "fns.h"
+<<includes>>
 
-word*	searchpath(char*);
 void execfunc(var*);
-int	mapfd(int);
 
 <<function [[exitnext]]>>
 
 <<function [[Xsimple]]>>
-<<global [[nullpath]]>>
 
 <<function [[doredir]]>>
-
-<<function [[searchpath]]>>
 
 <<function [[execexec]]>>
 
 <<function [[execfunc]]>>
 
-<<function [[dochdir]]>>
-
-<<function [[appfile]]>>
-
-<<function [[execcd]]>>
-
-<<function [[execexit]]>>
-
-<<function [[execshift]]>>
-
-<<function [[mapfd]]>>
 <<global [[rdcmds]]>>
 
 <<function [[execcmds]]>>
 
-<<function [[execeval]]>>
-<<global [[dotcmds]]>>
-
-<<function [[execdot]]>>
-
-<<function [[execflag]]>>
-
-<<function [[execwhatis]]>>
-
-<<function [[execwait]]>>
 @
 
 
@@ -2359,10 +2250,9 @@ int	mapfd(int);
 %-------------------------------------------------------------
 
 <<rc/pcmd.c>>=
-#include "rc.h"
-#include "io.h"
-#include "fns.h"
+<<includes>>
 #include "x.tab.h"
+
 <<global [[nl]]>>
 <<constant [[c0]]>>
 <<constant [[c1]]>>
@@ -2379,10 +2269,7 @@ int	mapfd(int);
 %-------------------------------------------------------------
 
 <<rc/here.c>>=
-#include "rc.h"
-#include "exec.h"
-#include "io.h"
-#include "fns.h"
+<<includes>>
 #include "x.tab.h"
 
 <<global [[here]]>>
@@ -2414,11 +2301,7 @@ void pstrs(io*, word*);
 
 
 <<rc/code.c>>=
-#include "rc.h"
-#include "io.h"
-#include "exec.h"
-#include "fns.h"
-#include "getflags.h"
+<<includes>>
 #include "x.tab.h"
 
 <<constant c0 (rc/code.c)>>
@@ -2463,12 +2346,203 @@ void codefree(code*);
 %-------------------------------------------------------------
 
 <<rc/pfnc.c>>=
-#include "rc.h"
-#include "exec.h"
-#include "io.h"
-#include "fns.h"
+<<includes>>
 
 <<global [[fname]]>>
 
 <<function [[pfnc]]>>
+@
+
+\subsection*{[[rc/utils.c]]}
+%pad: I created this file, its content was mostly in subr.c and plan9.c
+
+%-------------------------------------------------------------
+
+<<rc/utils.c>>=
+<<includes>>
+
+<<function [[Unlink]]>>
+
+<<function [[Write]]>>
+
+<<function [[Read]]>>
+
+<<function [[Seek]]>>
+
+<<function [[Creat]]>>
+
+<<function [[Dup]]>>
+
+
+<<function [[Memcpy]]>>
+
+<<function [[Malloc]]>>
+
+
+
+<<function [[emalloc]]>>
+
+<<function [[efree]]>>
+
+@
+
+\subsection*{[[rc/status.c]]}
+%pad: I created this file, its content was in exec.c
+
+%-------------------------------------------------------------
+
+<<rc/status.c>>=
+<<includes>>
+
+<<function [[setstatus]]>>
+
+<<function [[getstatus]]>>
+
+<<function [[truestatus]]>>
+
+<<function [[concstatus]]>>
+
+@
+
+\subsection*{[[rc/builtins.c]]}
+%pad: I created this file, its content was in simple.c
+
+%-------------------------------------------------------------
+
+<<rc/builtins.c>>=
+<<includes>>
+
+<<function [[dochdir]]>>
+
+<<function [[appfile]]>>
+
+<<function [[mapfd]]>>
+
+
+<<function [[execcd]]>>
+
+<<function [[execexit]]>>
+
+<<function [[execeval]]>>
+
+<<function [[execflag]]>>
+
+<<function [[execwhatis]]>>
+
+<<function [[execshift]]>>
+
+<<global [[dotcmds]]>>
+
+<<function [[execdot]]>>
+
+<<function [[execwait]]>>
+@
+
+\subsection*{[[rc/path.c]]}
+%pad: I created this file, its content was in simple.c
+
+%-------------------------------------------------------------
+
+<<rc/path.c>>=
+<<includes>>
+
+<<global [[nullpath]]>>
+
+<<function [[searchpath]]>>
+
+@
+
+\subsection*{[[rc/fmt.c]]}
+%pad: I created this file, its content was mostly in io.c
+
+%-------------------------------------------------------------
+
+<<rc/fmt.c>>=
+<<includes>>
+
+<<global [[pfmtnest]]>>
+
+void pdec(io*, int);
+void poct(io*, unsigned int);
+void pptr(io*, void*);
+void pval(io*, word*);
+void pquo(io*, char*);
+void pwrd(io*, char*);
+
+int fullbuf(io*, int);
+
+<<function [[pfmt]]>>
+
+<<function [[pchr]]>>
+
+<<function [[pquo]]>>
+
+<<function [[pwrd]]>>
+
+<<function [[pptr]]>>
+
+<<function [[pstr]]>>
+
+<<function [[pdec]]>>
+
+<<function [[poct]]>>
+
+<<function [[pval]]>>
+
+@
+
+\subsection*{[[rc/words.c]]}
+%pad: I created this file, its content was mostly in exec.c
+
+%-------------------------------------------------------------
+<<rc/words.c>>=
+<<includes>>
+
+<<function [[newword]]>>
+
+<<function [[freewords]]>>
+
+<<function [[count]]>>
+
+<<function [[copynwords]]>>
+
+<<function [[copywords]]>>
+
+<<function [[freelist]]>>
+
+@
+
+\subsection*{[[rc/error.c]]}
+%pad: I created this file, its content was mostly in subr.c
+
+%-------------------------------------------------------------
+
+<<rc/error.c>>=
+<<includes>>
+
+// was in rc.h
+<<global [[nerror]]>>
+<<global [[err]]>>
+
+<<function [[panic]]>>
+@
+
+\subsection*{[[rc/main.c]]}
+%pad: I created this file, its content was mostly in exec.c
+
+%-------------------------------------------------------------
+
+<<rc/main.c>>=
+<<includes>>
+
+/*
+ * get command line flags.
+ * initialize keywords & traps.
+ * get values from environment.
+ * set $pid, $cflag, $*
+ * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
+ * start interpreting code
+ */
+<<function main (rc/exec.c)>>
+
 @

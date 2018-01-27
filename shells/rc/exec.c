@@ -1,9 +1,11 @@
 /*s: rc/exec.c */
+/*s: includes */
 #include "rc.h"
 #include "getflags.h"
 #include "exec.h"
 #include "io.h"
 #include "fns.h"
+/*e: includes */
 
 char*	list2str(word*);
 
@@ -42,17 +44,6 @@ start(code *c, int pc, var *local)
 }
 /*e: function [[start]] */
 
-/*s: function [[newword]] */
-word*
-newword(char *wd, word *next)
-{
-    word *p = new(struct Word);
-    p->word = strdup(wd);
-    p->next = next;
-    return p;
-}
-/*e: function [[newword]] */
-
 /*s: function [[pushword]] */
 void
 pushword(char *wd)
@@ -83,20 +74,6 @@ popword(void)
 }
 /*e: function [[popword]] */
 
-/*s: function [[freelist]] */
-void
-freelist(word *w)
-{
-    word *nw;
-    while(w){
-        nw = w->next;
-        efree(w->word);
-        efree((char *)w);
-        w = nw;
-    }
-}
-/*e: function [[freelist]] */
-
 /*s: function [[pushlist]] */
 void
 pushlist(void)
@@ -123,17 +100,6 @@ poplist(void)
 }
 /*e: function [[poplist]] */
 
-/*s: function [[count]] */
-int
-count(word *w)
-{
-    int n;
-    for(n = 0;w;n++) 
-        w = w->next;
-    return n;
-}
-/*e: function [[count]] */
-
 /*s: function [[pushredir]] */
 void
 pushredir(int type, int from, int to)
@@ -148,137 +114,6 @@ pushredir(int type, int from, int to)
     runq->redir = rp;
 }
 /*e: function [[pushredir]] */
-
-/*s: function [[newvar]] */
-var*
-newvar(char *name, var *next)
-{
-    var *v = new(var);
-    v->name = name;
-    v->val = nil;
-
-    v->fn = nil;
-    v->changed = false;
-    v->fnchanged = false;
-
-    v->next = next;
-    return v;
-}
-/*e: function [[newvar]] */
-
-/*
- * get command line flags.
- * initialize keywords & traps.
- * get values from environment.
- * set $pid, $cflag, $*
- * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
- * start interpreting code
- */
-/*s: function main (rc/exec.c) */
-void main(int argc, char *argv[])
-{
-    /*s: [[main()]] locals */
-    code bootstrap[17];
-    /*x: [[main()]] locals */
-    int i;
-    /*x: [[main()]] locals */
-    char *rcmain;
-    /*x: [[main()]] locals */
-    char num[12];
-    /*e: [[main()]] locals */
-
-    /*s: [[main()]] argc argv processing, modify flags */
-    argc = getflags(argc, argv, "SsrdiIlxepvVc:1m:1[command]", 1);
-    if(argc==-1)
-        usage("[file [arg ...]]");
-    /*x: [[main()]] argc argv processing, modify flags */
-    if(argv[0][0]=='-')
-        flag['l'] = flagset;
-    /*x: [[main()]] argc argv processing, modify flags */
-    if(flag['I'])
-        flag['i'] = nil;
-    else 
-        if(flag['i']==nil && argc==1 && Isatty(STDIN)) 
-           flag['i'] = flagset;
-    /*e: [[main()]] argc argv processing, modify flags */
-
-    /*s: [[main()]] initialisation */
-    err = openfd(STDERR);
-    /*x: [[main()]] initialisation */
-    kinit();    // initialize keywords
-    Trapinit(); // notify() function setup
-    Vinit();    // read environment variables and add them in gvar
-    /*x: [[main()]] initialisation */
-    rcmain = flag['m'] ? flag['m'][0] : Rcmain; 
-    /*x: [[main()]] initialisation */
-    mypid = getpid();
-    inttoascii(num, mypid);
-    setvar("pid", newword(num, (word *)nil));
-    /*x: [[main()]] initialisation */
-    setvar("rcname", newword(argv[0], (word *)nil));
-    /*x: [[main()]] initialisation */
-    setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
-    /*e: [[main()]] initialisation */
-    /*s: [[main()]] initialize [[boostrap]] */
-    memset(bootstrap, 0, sizeof bootstrap);
-
-    i = 0;
-    bootstrap[i++].i=1;
-    // runq->argv is populated with the arguments to rc
-    // we just need to add '*=(argv)'
-    bootstrap[i++].f = Xmark;
-      bootstrap[i++].f = Xword;
-      bootstrap[i++].s="*";
-    bootstrap[i++].f = Xassign; // will pop_list() x2
-
-    bootstrap[i++].f = Xmark;
-      bootstrap[i++].f = Xmark;
-        bootstrap[i++].f = Xword;
-        bootstrap[i++].s="*";
-      bootstrap[i++].f = Xdol; // will pop_list()
-      bootstrap[i++].f = Xword;
-      bootstrap[i++].s = rcmain;
-      bootstrap[i++].f = Xword;
-      bootstrap[i++].s=".";
-    bootstrap[i++].f = Xsimple; // will pop_list()
-
-    bootstrap[i++].f = Xexit;
-
-    bootstrap[i].i = 0;
-    /*e: [[main()]] initialize [[boostrap]] */
-    /*s: [[main()]] initialize runq with bootstrap code */
-    start(bootstrap, 1, (var *)nil);
-    /*x: [[main()]] initialize runq with bootstrap code */
-    runq->cmdfd = openfd(STDIN); // reading from stdin
-    runq->cmdfile = "<stdin>";
-    runq->iflag = flag['i']? true : false;// interactive mode; will print a prompt
-    /*e: [[main()]] initialize runq with bootstrap code */
-    /*s: [[main()]] initialize runq->argv */
-    /* prime bootstrap argv */
-    pushlist();
-    argv0 = strdup(argv[0]);
-    for(i = argc-1; i!=0; --i) 
-        pushword(argv[i]);
-    /*e: [[main()]] initialize runq->argv */
-
-    /*s: [[main()]] interpreter loop */
-    for(;;){
-        /*s: [[main()]] debug runq in interpreter loop */
-        if(flag['r'])
-            pfnc(err, runq);
-        /*e: [[main()]] debug runq in interpreter loop */
-
-        runq->pc++;
-        (*runq->code[runq->pc-1].f)();
-
-        /*s: [[main()]] handing trap if necessary in interpreter loop */
-        if(ntrap)
-            dotrap();
-        /*e: [[main()]] handing trap if necessary in interpreter loop */
-    }
-    /*e: [[main()]] interpreter loop */
-}
-/*e: function main (rc/exec.c) */
 
 /*
  * Opcode routines
@@ -786,22 +621,6 @@ Xassign(void)
     poplist();
 }
 /*e: function [[Xassign]] */
-/*s: function [[copywords]] */
-/*
- * copy arglist a, adding the copy to the front of tail
- */
-word*
-copywords(word *a, word *tail)
-{
-    word *v = nil;
-    word **end;
-
-    for(end=&v;a;a = a->next,end=&(*end)->next)
-        *end = newword(a->word, nil);
-    *end = tail;
-    return v;
-}
-/*e: function [[copywords]] */
 
 /*s: function [[Xdol]] */
 void
@@ -873,23 +692,6 @@ Xqdol(void)
     efree(s);
 }
 /*e: function [[Xqdol]] */
-
-/*s: function [[copynwords]] */
-word*
-copynwords(word *a, word *tail, int n)
-{
-    word *v = nil;
-    word **end = &v;
-    
-    while(n-- > 0){
-        *end = newword(a->word, 0);
-        end = &(*end)->next;
-        a = a->next;
-    }
-    *end = tail;
-    return v;
-}
-/*e: function [[copynwords]] */
 
 /*s: function [[subwords]] */
 word*
@@ -1015,20 +817,6 @@ Xunlocal(void)
 }
 /*e: function [[Xunlocal]] */
 
-/*s: function [[freewords]] */
-void
-freewords(word *w)
-{
-    word *nw;
-    while(w){
-        efree(w->word);
-        nw = w->next;
-        efree((char *)w);
-        w = nw;
-    }
-}
-/*e: function [[freewords]] */
-
 /*s: function [[Xfn]] */
 void
 Xfn(void)
@@ -1069,22 +857,6 @@ Xdelfn(void)
     poplist();
 }
 /*e: function [[Xdelfn]] */
-
-/*s: function [[concstatus]] */
-char*
-concstatus(char *s, char *t)
-{
-    static char v[NSTATUS+1];
-    int n = strlen(s);
-    strncpy(v, s, NSTATUS);
-    if(n<NSTATUS){
-        v[n]='|';
-        strncpy(v+n+1, t, NSTATUS-n-1);
-    }
-    v[NSTATUS]='\0';
-    return v;
-}
-/*e: function [[concstatus]] */
 
 /*s: function [[Xpipewait]] */
 void
@@ -1197,35 +969,6 @@ Xerror1(char *s)
         Xreturn();
 }
 /*e: function [[Xerror1]] */
-
-/*s: function [[setstatus]] */
-void
-setstatus(char *s)
-{
-    setvar("status", newword(s, (word *)nil));
-}
-/*e: function [[setstatus]] */
-
-/*s: function [[getstatus]] */
-char*
-getstatus(void)
-{
-    var *status = vlook("status");
-    return status->val ? status->val->word : "";
-}
-/*e: function [[getstatus]] */
-
-/*s: function [[truestatus]] */
-bool
-truestatus(void)
-{
-    char *s;
-    for(s = getstatus();*s;s++)
-        if(*s!='|' && *s!='0')
-            return false;
-    return true;
-}
-/*e: function [[truestatus]] */
 
 /*s: function [[Xdelhere]] */
 void

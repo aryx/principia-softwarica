@@ -1,7 +1,11 @@
 /*s: rc/glob.c */
+/*s: includes */
 #include "rc.h"
+#include "getflags.h"
 #include "exec.h"
+#include "io.h"
 #include "fns.h"
+/*e: includes */
 
 int	matchfn(void*, void*);
 

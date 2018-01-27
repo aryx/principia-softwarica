@@ -1,7 +1,8 @@
 /*s: rc/getflags.c */
-#include "rc.h"
 #include "getflags.h"
-#include "fns.h"
+
+extern void	Exit(char*);
+extern long	Write(int, void*, long);
 
 static void reverse(char**, char**);
 static int scanflag(int, char*);
