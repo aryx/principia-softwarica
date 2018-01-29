@@ -7,6 +7,25 @@
 #include "fns.h"
 /*e: includes */
 
+// was in rc.h (under an ifdef for plan9)
+/*s: constant [[NSIG]] */
+#define	NSIG	32
+/*e: constant [[NSIG]] */
+/*s: constant [[SIGINT]] */
+#define	SIGINT	2
+/*e: constant [[SIGINT]] */
+/*s: constant [[SIGQUIT]] */
+#define	SIGQUIT	3
+/*e: constant [[SIGQUIT]] */
+
+// was in exec.h
+/*s: global [[ntrap]] */
+int ntrap;				/* number of outstanding traps */
+/*e: global [[ntrap]] */
+/*s: global [[trap]] */
+int trap[NSIG];				/* number of outstanding traps per type */
+/*e: global [[trap]] */
+
 extern char *signame[];
 
 /*s: function [[dotrap]] */

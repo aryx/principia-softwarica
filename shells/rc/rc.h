@@ -1,31 +1,6 @@
 /*s: rc/rc.h */
-/*
- * Assume plan 9 by default; if Unix is defined, assume unix.
- * Please don't litter the code with ifdefs.  The five below should be enough.
- */
-
-//#ifndef Unix
-/* plan 9 */
 #include <u.h>
 #include <libc.h>
-
-/*s: constant [[NSIG]] */
-#define	NSIG	32
-/*e: constant [[NSIG]] */
-/*s: constant [[SIGINT]] */
-#define	SIGINT	2
-/*e: constant [[SIGINT]] */
-/*s: constant [[SIGQUIT]] */
-#define	SIGQUIT	3
-/*e: constant [[SIGQUIT]] */
-
-//#define fcntl(fd, op, arg) /* unix compatibility */
-//#define F_SETFD  
-//#define FD_CLOEXEC 
-
-//#else
-//#include "unix.h"
-//#endif
 
 #ifndef ERRMAX
 /*s: constant [[ERRMAX]] */
@@ -37,13 +12,6 @@
 //@Scheck: used in y.tab.c
 #define	YYMAXDEPTH	500
 /*e: constant [[YYMAXDEPTH]] */
-
-//#ifndef YYPREFIX
-#ifndef PAREN
-//#include "x.tab.h"
-//pad: better like that, otherwise get some "redefined FOR macro" error
-#endif
-//#endif
 
 // forward decls
 typedef struct Tree tree;
@@ -57,8 +25,8 @@ typedef struct Thread thread;
 typedef struct Builtin builtin;
 
 //#ifndef Unix
-#pragma incomplete word
-#pragma incomplete io
+//#pragma incomplete word
+//#pragma incomplete io
 //#endif
 
 /*s: struct [[Tree]] */
@@ -121,10 +89,6 @@ union Code {
 
 extern char *promptstr;
 extern bool doprompt;
-
-/*s: constant [[NTOK]] */
-#define	NTOK	8192		/* maximum bytes in a word (token) */
-/*e: constant [[NTOK]] */
 
 /*s: constant [[APPEND]] */
 #define	APPEND	1

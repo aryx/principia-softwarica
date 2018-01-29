@@ -31,12 +31,6 @@ thread *runq;
 // growing_array<ref_own<Code>>
 code *codebuf;				/* compiler output */
 /*e: global [[codebuf]] */
-/*s: global [[ntrap]] */
-int ntrap;				/* number of outstanding traps */
-/*e: global [[ntrap]] */
-/*s: global [[trap]] */
-int trap[NSIG];				/* number of outstanding traps per type */
-/*e: global [[trap]] */
 /*s: global [[eflagok]] */
 bool eflagok;	/* kludge flag so that -e doesn't exit in startup */
 /*e: global [[eflagok]] */

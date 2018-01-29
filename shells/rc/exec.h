@@ -92,8 +92,10 @@ code *codecopy(code*);
 
 extern thread *runq;
 extern code *codebuf;		/* compiler output */
+
 extern int ntrap;		/* number of outstanding traps */
-extern int trap[NSIG];		/* number of outstanding traps per type */
+extern int trap[];		/* number of outstanding traps per type */
+
 extern bool eflagok;		/* kludge flag so that -e doesn't exit in startup */
 
 /*s: struct [[Builtin]] */
@@ -104,6 +106,7 @@ struct Builtin {
 /*e: struct [[Builtin]] */
 extern struct Builtin builtins[];
 
+// for plan9.c to fill builtins[]
 void execcd(void);
 void execwhatis(void);
 void execeval(void);

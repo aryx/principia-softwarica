@@ -10,6 +10,10 @@
 
 int getnext(void);
 
+/*s: constant [[NTOK]] */
+#define	NTOK	8192		/* maximum bytes in a word (token) */
+/*e: constant [[NTOK]] */
+
 // was used by subr.c
 /*s: global [[lastdol]] */
 bool lastdol;	/* was the last token read '$' or '$#' or '"'? */
