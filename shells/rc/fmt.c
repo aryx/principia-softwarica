@@ -11,6 +11,7 @@
 int pfmtnest = 0;
 /*e: global [[pfmtnest]] */
 
+// forward decls
 void pdec(io*, int);
 void poct(io*, unsigned int);
 void pptr(io*, void*);
@@ -18,6 +19,7 @@ void pval(io*, word*);
 void pquo(io*, char*);
 void pwrd(io*, char*);
 
+// in io.c
 int fullbuf(io*, int);
 
 /*s: function [[pfmt]] */

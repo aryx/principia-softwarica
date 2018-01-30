@@ -70,6 +70,9 @@ void	globlist(void);
 int	match(void*, void*, int);
 
 // utils.c
+#define	new(type)	((type *)emalloc(sizeof(type)))
+void *emalloc(long);
+void efree(void *);
 void	Memcpy(void*, void*, long);
 long	Read(int, void*, long);
 long	Write(int, void*, long);

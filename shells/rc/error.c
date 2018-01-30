@@ -15,6 +15,7 @@ int nerror;		/* number of errors encountered during compilation */
 io *err;
 /*e: global [[err]] */
 
+// forward decls
 void Abort(void);
 
 /*s: function [[panic]] */

@@ -8,11 +8,6 @@
 /*e: includes */
 #include "x.tab.h"
 
-// now in input.c
-extern bool inquote;
-extern bool incomm;
-extern int lastc;
-
 /*s: constant [[NTOK]] */
 #define	NTOK	8192		/* maximum bytes in a word (token) */
 /*e: constant [[NTOK]] */

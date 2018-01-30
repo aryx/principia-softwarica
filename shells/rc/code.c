@@ -33,13 +33,12 @@ int ncode;
 /*s: function [[emits]] */
 #define	emits(x) ((codep!=ncode || morecode()), codebuf[codep].s = (x), codep++)
 /*e: function [[emits]] */
-void stuffdot(int);
-char *fnstr(tree*);
+
+
+// forward decls
 void outcode(tree*, int);
 void codeswitch(tree*, int);
 int iscase(tree*);
-code *codecopy(code*);
-void codefree(code*);
 
 /*s: function [[morecode]] */
 //@Scheck: used by the macros above (why marked as dead then??? TODO)

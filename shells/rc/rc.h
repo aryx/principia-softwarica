@@ -90,11 +90,6 @@ union Code {
 };
 /*e: struct [[Code]] */
 
-// globals.c
-extern char *promptstr;
-// input.c
-extern bool doprompt;
-
 /*s: constant [[APPEND]] */
 #define	APPEND	1
 /*e: constant [[APPEND]] */
@@ -129,15 +124,6 @@ struct Word {
     word *next;
 };
 /*e: struct [[Word]] */
-/*s: struct [[List]] */
-struct List {
-    // list<ref_own<Word>> (next = Word.next)
-    word *words;
-
-    // Extra
-    list *next;
-};
-/*e: struct [[List]] */
 
 // words.c
 word *newword(char *, word *);
@@ -179,11 +165,6 @@ void	setvar(char*, word*);
 /*e: constant [[NVAR]] */
 extern var *gvar[NVAR];		/* hash for globals */
 
-#define	new(type)	((type *)emalloc(sizeof(type)))
-// utils.c
-void *emalloc(long);
-void efree(void *);
-
 /*s: struct [[Here]] */
 struct Here {
     tree	*tag;
@@ -191,12 +172,6 @@ struct Here {
     struct Here *next;
 };
 /*e: struct [[Here]] */
-
-// lex.c
-extern bool lastword;
-
-// globals.c
-extern int mypid;
 
 /*s: constant [[GLOB]] */
 /*
@@ -210,8 +185,6 @@ extern int mypid;
 #define	GLOB	'\001'
 /*e: constant [[GLOB]] */
 
-// error.c
-extern int nerror;	/* number of errors encountered during compilation */
 /*s: constant [[PRD]] */
 /*
  * Which fds are the reading/writing end of a pipe?
@@ -226,6 +199,17 @@ extern int nerror;	/* number of errors encountered during compilation */
 /*e: constant [[PWR]] */
 
 // globals.c
+extern int mypid;
+extern char *promptstr;
 extern int ndot;
+// input.c
+extern bool doprompt;
+extern bool inquote;
+extern bool incomm;
+extern int lastc;
+// lex.c
+extern bool lastword;
+// error.c
+extern int nerror;	/* number of errors encountered during compilation */
 
 /*e: rc/rc.h */

@@ -7,8 +7,6 @@
 #include "io.h"
 /*e: includes */
 
-char*	list2str(word*);
-
 /*s: global [[argv0]] */
 /*
  * Start executing the given code at the given pc with the given redirection

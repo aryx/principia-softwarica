@@ -15,9 +15,6 @@ extern void Xdelhere(void), Xpopredir(void), Xsub(void), Xeflag(void), Xsettrue(
 extern void Xerror(char*);
 extern void Xerror1(char*);
 
-// path.c
-extern word nullpath;
-
 /*s: struct [[Redir]] */
 struct Redir {
     // enum<redirection_kind_bis>
@@ -49,6 +46,16 @@ struct Redir {
 /*s: constant [[RCLOSE]] */
 #define	RCLOSE	3			/* close(from); */
 /*e: constant [[RCLOSE]] */
+
+/*s: struct [[List]] */
+struct List {
+    // list<ref_own<Word>> (next = Word.next)
+    word *words;
+
+    // Extra
+    list *next;
+};
+/*e: struct [[List]] */
 
 /*s: struct [[Thread]] */
 struct Thread {
@@ -90,20 +97,22 @@ struct Thread {
 };
 /*e: struct [[Thread]] */
 
-// globals.c
-extern thread *runq;
-extern code *codebuf;		/* compiler output */
-extern bool eflagok;		/* kludge flag so that -e doesn't exit in startup */
-
-// trap.c
-extern int ntrap;		/* number of outstanding traps */
-
 /*s: struct [[Builtin]] */
 struct Builtin {
     char *name;
     void (*fnc)(void);
 };
 /*e: struct [[Builtin]] */
+
+// globals.c
+extern thread *runq;
+extern code *codebuf;		/* compiler output */
+extern bool eflagok;		/* kludge flag so that -e doesn't exit in startup */
+// path.c
+extern word nullpath;
+// trap.c
+extern int ntrap;		/* number of outstanding traps */
+// builtins.c
 extern struct Builtin builtins[];
 
 // simple.c

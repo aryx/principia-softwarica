@@ -10,6 +10,7 @@
 #include "io.h"
 /*e: includes */
 
+// forward decls
 void execfunc(var*);
 
 /*s: function [[exitnext]] */

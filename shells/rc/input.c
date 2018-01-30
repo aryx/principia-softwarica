@@ -28,6 +28,7 @@ bool incomm;
 int lastc;
 /*e: global [[lastc]] */
 
+// forward decl
 int getnext(void);
 
 /*s: function [[nextc]] */

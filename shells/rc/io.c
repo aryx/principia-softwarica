@@ -11,6 +11,7 @@
 enum { Stralloc = 100, };
 /*e: enum [[MiscConstants]] */
 
+// forward decls
 int emptybuf(io*);
 int fullbuf(io*, int);
 

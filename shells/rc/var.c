@@ -29,7 +29,6 @@ hash(char *as, int n)
 /*e: function [[hash]] */
 
 
-
 /*s: function [[gvlook]] */
 var*
 gvlook(char *name)
