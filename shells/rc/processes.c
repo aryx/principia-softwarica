@@ -1,12 +1,179 @@
-/*s: rc/havefork.c */
+/*s: rc/processes.c */
 /*s: includes */
 #include "rc.h"
-#include "getflags.h"
 #include "exec.h"
-#include "io.h"
 #include "fns.h"
+#include "getflags.h"
+#include "io.h"
 /*e: includes */
 #include <string.h>
+
+// was in plan9.c
+
+/*s: global [[Fdprefix]] */
+char *Fdprefix = "/fd/";
+/*e: global [[Fdprefix]] */
+
+
+/*s: global [[waitpids]] */
+// growing_array<pid> (but really a list)
+int *waitpids;
+/*e: global [[waitpids]] */
+/*s: global [[nwaitpids]] */
+int nwaitpids;
+/*e: global [[nwaitpids]] */
+
+/*s: function [[addwaitpid]] */
+void
+addwaitpid(int pid)
+{
+    waitpids = realloc(waitpids, (nwaitpids+1)*sizeof waitpids[0]);
+    if(waitpids == nil)
+        panic("Can't realloc %d waitpids", nwaitpids+1);
+    waitpids[nwaitpids++] = pid;
+}
+/*e: function [[addwaitpid]] */
+
+/*s: function [[delwaitpid]] */
+void
+delwaitpid(int pid)
+{
+    int r, w;
+    
+    for(r=w=0; r<nwaitpids; r++)
+        if(waitpids[r] != pid)
+            waitpids[w++] = waitpids[r];
+    nwaitpids = w;
+}
+/*e: function [[delwaitpid]] */
+
+/*s: function [[clearwaitpids]] */
+void
+clearwaitpids(void)
+{
+    nwaitpids = 0;
+}
+/*e: function [[clearwaitpids]] */
+
+/*s: function [[havewaitpid]] */
+bool
+havewaitpid(int pid)
+{
+    int i;
+
+    for(i=0; i<nwaitpids; i++)
+        if(waitpids[i] == pid)
+            return true;
+    return false;
+}
+/*e: function [[havewaitpid]] */
+
+
+/*s: function [[mkargv]] */
+char **
+mkargv(word *a)
+{
+    char **argv = (char **)emalloc((count(a)+2) * sizeof(char *));
+    char **argp = argv+1;	/* leave one at front for runcoms */
+
+    for(;a;a = a->next) 
+        *argp++=a->word;
+    *argp = nil;
+    return argv;
+}
+/*e: function [[mkargv]] */
+
+/*s: function [[Execute]] */
+void
+Execute(word *args, word *path)
+{
+    char **argv = mkargv(args);
+    char file[1024];
+    char errstr[1024];
+    int nc;
+
+    Updenv();
+    errstr[0] = '\0';
+
+    for(;path;path = path->next){
+        nc = strlen(path->word);
+        if(nc < sizeof file - 1){	/* 1 for / */
+            strcpy(file, path->word);
+            if(file[0]){
+                strcat(file, "/");
+                nc++;
+            }
+            if(nc + strlen(argv[1]) < sizeof file){
+                strcat(file, argv[1]);
+
+                // The actual exec() system call!
+                exec(file, argv+1);
+
+                // reached if the file does not exist
+
+                rerrstr(errstr, sizeof errstr);
+                /*
+                 * if file exists and is executable, exec should
+                 * have worked, unless it's a directory or an
+                 * executable for another architecture.  in
+                 * particular, if it failed due to lack of
+                 * swap/vm (e.g., arg. list too long) or other
+                 * allocation failure, stop searching and print
+                 * the reason for failure.
+                 */
+                if (strstr(errstr, " allocat") != nil ||
+                    strstr(errstr, " full") != nil)
+                    break;
+            }
+            else werrstr("command name too long");
+        }
+    }
+    // should not be reached if found an actual binary to exec
+    pfmt(err, "%s: %s\n", argv[1], errstr);
+    efree((char *)argv);
+}
+/*e: function [[Execute]] */
+
+
+/*s: function [[Waitfor]] */
+int
+Waitfor(int pid, int)
+{
+    thread *p;
+    Waitmsg *w;
+    char errbuf[ERRMAX];
+
+    if(pid >= 0 && !havewaitpid(pid))
+        return 0;
+
+    // wait()!! until we found it
+    while((w = wait()) != nil){
+        delwaitpid(w->pid);
+
+        if(w->pid==pid){
+            setstatus(w->msg);
+            free(w);
+            return 0;
+        }
+        /*s: [[Waitfor()]] in while loop, if wait returns another pid */
+        // else
+        for(p = runq->ret;p;p = p->ret)
+            if(p->pid==w->pid){
+                p->pid=-1;
+                strcpy(p->status, w->msg);
+            }
+        free(w);
+        /*e: [[Waitfor()]] in while loop, if wait returns another pid */
+    }
+
+    errstr(errbuf, sizeof errbuf);
+    if(strcmp(errbuf, "interrupted")==0) 
+        return -1;
+    return 0;
+}
+/*e: function [[Waitfor]] */
+
+// was in havefork.c
 
 /*s: function [[Xasync]] */
 void
@@ -251,4 +418,4 @@ execforkexec(void)
     return pid;
 }
 /*e: function [[execforkexec]] */
-/*e: rc/havefork.c */
+/*e: rc/processes.c */

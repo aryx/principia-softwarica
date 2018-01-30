@@ -1,13 +1,38 @@
 /*s: rc/glob.c */
 /*s: includes */
 #include "rc.h"
-#include "getflags.h"
 #include "exec.h"
-#include "io.h"
 #include "fns.h"
+#include "getflags.h"
+#include "io.h"
 /*e: includes */
 
 int	matchfn(void*, void*);
+
+// was in plan9.c
+/*s: constant [[NDIR]] */
+#define	NDIR	256		/* shoud be a better way */
+/*e: constant [[NDIR]] */
+/*s: function [[Globsize]] */
+int
+Globsize(char *p)
+{
+    int isglob = 0, globlen = NDIR+1;
+    for(;*p;p++){
+        if(*p==GLOB){
+            p++;
+            if(*p!=GLOB)
+                isglob++;
+            globlen+=*p=='*'?NDIR:1;
+        }
+        else
+            globlen++;
+    }
+    return isglob?globlen:0;
+}
+/*e: function [[Globsize]] */
+
+
 
 /*s: global [[globname]] */
 char *globname;

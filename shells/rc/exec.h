@@ -15,6 +15,7 @@ extern void Xdelhere(void), Xpopredir(void), Xsub(void), Xeflag(void), Xsettrue(
 extern void Xerror(char*);
 extern void Xerror1(char*);
 
+// path.c
 extern word nullpath;
 
 /*s: struct [[Redir]] */
@@ -48,6 +49,7 @@ struct Redir {
 /*s: constant [[RCLOSE]] */
 #define	RCLOSE	3			/* close(from); */
 /*e: constant [[RCLOSE]] */
+
 /*s: struct [[Thread]] */
 struct Thread {
     union Code *code;		/* code for this thread */
@@ -88,15 +90,13 @@ struct Thread {
 };
 /*e: struct [[Thread]] */
 
-code *codecopy(code*);
-
+// globals.c
 extern thread *runq;
 extern code *codebuf;		/* compiler output */
-
-extern int ntrap;		/* number of outstanding traps */
-extern int trap[];		/* number of outstanding traps per type */
-
 extern bool eflagok;		/* kludge flag so that -e doesn't exit in startup */
+
+// trap.c
+extern int ntrap;		/* number of outstanding traps */
 
 /*s: struct [[Builtin]] */
 struct Builtin {
@@ -106,16 +106,10 @@ struct Builtin {
 /*e: struct [[Builtin]] */
 extern struct Builtin builtins[];
 
-// for plan9.c to fill builtins[]
-void execcd(void);
-void execwhatis(void);
-void execeval(void);
+// simple.c
 void execexec(void);
-int  execforkexec(void);
-void execexit(void);
-void execshift(void);
-void execwait(void);
-void execdot(void);
-void execflag(void);
 void execcmds(io *);
+// processes.c
+int  execforkexec(void);
+
 /*e: rc/exec.h */

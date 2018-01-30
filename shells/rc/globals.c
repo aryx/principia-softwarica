@@ -1,16 +1,19 @@
 /*s: rc/globals.c */
 /*s: includes */
 #include "rc.h"
-#include "getflags.h"
 #include "exec.h"
-#include "io.h"
 #include "fns.h"
+#include "getflags.h"
+#include "io.h"
 /*e: includes */
 
 // was in rc.h
 /*s: global [[mypid]] */
 int mypid;
 /*e: global [[mypid]] */
+/*s: global [[promptstr]] */
+char *promptstr;
+/*e: global [[promptstr]] */
 /*s: global [[ndot]] */
 /*
  * How many dot commands have we executed?
@@ -18,9 +21,6 @@ int mypid;
  */
 int ndot;
 /*e: global [[ndot]] */
-/*s: global [[promptstr]] */
-char *promptstr;
-/*e: global [[promptstr]] */
 
 // was in exec.h
 /*s: global [[runq]] */

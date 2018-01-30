@@ -1,10 +1,10 @@
 /*s: rc/builtins.c */
 /*s: includes */
 #include "rc.h"
-#include "getflags.h"
 #include "exec.h"
-#include "io.h"
 #include "fns.h"
+#include "getflags.h"
+#include "io.h"
 /*e: includes */
 
 /*s: function [[dochdir]] */
@@ -19,7 +19,7 @@ dochdir(char *word)
         return ERROR_NEG1;
 
     if(flag['i']!=nil){
-        if(wdirfd==-2)	/* try only once */
+        if(wdirfd==-2)  /* try only once */
             wdirfd = open("/dev/wdir", OWRITE|OCEXEC);
         if(wdirfd>=0) {
             //fcntl(wdirfd, F_SETFD, FD_CLOEXEC);
@@ -136,7 +136,7 @@ execexit(void)
     case 2:
         setstatus(runq->argv->words->next->word);
         // FALLTHROUGH
-    case 1:	
+    case 1: 
         Xexit();
     }
 }
@@ -203,9 +203,27 @@ execflag(void)
 }
 /*e: function [[execflag]] */
 
+// was in plan9.c
+
+/*s: function [[Executable]] */
+bool
+Executable(char *file)
+{
+    Dir *statbuf;
+    bool ret;
+
+    statbuf = dirstat(file);
+    if(statbuf == nil)
+        return false;
+    ret = ((statbuf->mode&0111)!=0 && (statbuf->mode&DMDIR)==0);
+    free(statbuf);
+    return ret;
+}
+/*e: function [[Executable]] */
+
 /*s: function [[execwhatis]] */
 void
-execwhatis(void){	/* mildly wrong -- should fork before writing */
+execwhatis(void){   /* mildly wrong -- should fork before writing */
     word *a, *b, *path;
     var *v;
     struct Builtin *bp;
@@ -276,6 +294,7 @@ execwhatis(void){	/* mildly wrong -- should fork before writing */
 }
 /*e: function [[execwhatis]] */
 
+
 /*s: function [[execshift]] */
 void
 execshift(void)
@@ -308,6 +327,7 @@ execshift(void)
     poplist();
 }
 /*e: function [[execshift]] */
+
 
 /*s: global [[dotcmds]] */
 union Code dotcmds[14];
@@ -415,6 +435,7 @@ execdot(void)
 }
 /*e: function [[execdot]] */
 
+
 /*s: function [[execwait]] */
 void
 execwait(void)
@@ -433,4 +454,107 @@ execwait(void)
     poplist();
 }
 /*e: function [[execwait]] */
+
+
+/*s: function [[execnewpgrp]] */
+void
+execnewpgrp(void)
+{
+    int arg;
+    char *s;
+    switch(count(runq->argv->words)){
+    case 1:
+        arg = RFENVG|RFNAMEG|RFNOTEG;
+        break;
+    case 2:
+        arg = 0;
+        for(s = runq->argv->words->next->word;*s;s++) switch(*s){
+        default:
+            goto Usage;
+        case 'n':
+            arg|=RFNAMEG;  break;
+        case 'N':
+            arg|=RFCNAMEG;
+            break;
+        case 'm':
+            arg|=RFNOMNT;  break;
+        case 'e':
+            arg|=RFENVG;   break;
+        case 'E':
+            arg|=RFCENVG;  break;
+        case 's':
+            arg|=RFNOTEG;  break;
+        case 'f':
+            arg|=RFFDG;    break;
+        case 'F':
+            arg|=RFCFDG;   break;
+        }
+        break;
+    default:
+    Usage:
+        pfmt(err, "Usage: %s [fnesFNEm]\n", runq->argv->words->word);
+        setstatus("rfork usage");
+        poplist();
+        return;
+    }
+    if(rfork(arg)==-1){
+        pfmt(err, "rc: %s failed\n", runq->argv->words->word);
+        setstatus("rfork failed");
+    }
+    else
+        setstatus("");
+    poplist();
+}
+/*e: function [[execnewpgrp]] */
+
+
+/*s: global [[rdfns]] */
+union Code rdfns[4];
+/*e: global [[rdfns]] */
+
+extern fdt envdir;
+
+/*s: function [[execfinit]] */
+void
+execfinit(void)
+{
+    static bool first = true;
+    if(first){
+        rdfns[0].i = 1;
+        rdfns[1].f = Xrdfn;
+        rdfns[2].f = Xjump;
+        rdfns[3].i = 1;
+        first = false;
+    }
+    Xpopm(); // pop_list()
+    envdir = open("/env", 0);
+    if(envdir<0){
+        pfmt(err, "rc: can't open /env: %r\n");
+        return;
+    }
+    start(rdfns, 1, runq->local);
+}
+/*e: function [[execfinit]] */
+
+
+/*s: global [[builtins]] */
+builtin builtins[] = {
+    "cd"     ,      execcd,
+    "exit"   ,      execexit,
+    "."      ,      execdot,
+    "eval"   ,      execeval,
+
+    "whatis" ,      execwhatis,
+
+    "exec"   ,      execexec,   /* but with popword first */
+    "rfork"  ,      execnewpgrp,
+    "wait"   ,      execwait,
+
+    "shift"  ,      execshift,
+    "finit"  ,      execfinit,
+    "flag"   ,      execflag,
+    0
+};
+/*e: global [[builtins]] */
+
 /*e: rc/builtins.c */

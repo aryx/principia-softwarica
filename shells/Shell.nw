@@ -16,8 +16,10 @@
 %  - removed deadcode (Thread.treenodes, Tree.iskw, freetree, ...)
 
 %thx to codemap/codegraph/scheck:
-% - use cg to reduce backward deps (only 32: 2.43% down from 4.61%), introduce
-%   error.c, main.c, utils.c, path.c, status.c, words.c, builtins.c, globals.c
+% - use cg to reduce backward deps (only 20: 1.5% down from 4.61%), introduced
+%   error.c, main.c, utils.c, words.c, globals.c, fmt.c,
+%   path.c, status.c, builtins.c, env.c, executils.c, input.c, processes.c
+%   and spread around plan9.c, 
 %   (harder to understand non layered code)
 % - use scheck to remove deadcode, dead prototypes, useless export
 %   or mv as forward decl
@@ -592,17 +594,18 @@ contained in the file is primarily discussed.
 \otoprule
 main data structures           & \ref{chap:core-ds}            & [[rc.h]]       & [<Tree>] [<Code>] [<Word>] [<List>] [<Var>]     & \\ % Here
 execution data structures      & \ref{chap:core-ds}            & [[exec.h]]     & [<Thread>]                                      & \\ % Redir Builtin
-AST helpers                    & \ref{chap:core-ds}            & [[tree.c]]     & [<newtree()>] [<tree1()>] [<tree2()>]           & \\ % treenodes mung[123] epimung simplemung   token [<tree3()>] [<freenodes()>]
+AST helpers                    & \ref{chap:core-ds}            & [[tree.c]]     & [<newtree()>] [<tree1()>] [<tree2()>]           & \\ % treenodes mung[123] epimung simplemung  [tree3()>] [freenodes()>]
 globals                        & \ref{chap:core-ds}            & [[globals.c]]  & [<codebuf>] [<runq>]                            & \\ %
-list of strings (words)        & \ref{chap:core-ds}            & [[words.c]]    & [<newword()>] [<count()>] [<freewords()>]       & \\ % copywords freelist? [<copynwords()>]
-shell variables                & \ref{chap:core-ds}            & [[var.c]]      & [<setvar()>] [<vlook()>] [<gvar>] [<gvlook()>]  & \\ % kenter kinit [<newvar()>] 
+list of strings (words)        & \ref{chap:core-ds}            & [[words.c]]    & [<newword()>] [<count()>] [<freewords()>]       & \\ % copywords freelist? [copynwords()>]
+shell variables                & \ref{chap:core-ds}            & [[var.c]]      & [<setvar()>] [<vlook()>] [<gvar>] [<gvlook()>]  & \\ % kenter kinit [newvar()>] 
 function prototypes            & \ref{chap:core-ds}            & [[fns.h]]      & \\ %
 \midrule
 
-entry point                    & \ref{chap:main}               & [[main.c]]     & [<main()>]                                      & \\
+entry point                    & \ref{chap:main}               & [[main.c]]     & [<main()>]                                      & \\ % isatty Rcmain
+execution utilities            & \ref{chap:main}               & [[executils.c]]& [<start()>] [<pushlist()>] [<pushword()>]   & \\ %  [Xerror()>] [Xreturn()>] Xpopredir poplist popword argv0
 
 \midrule
-character input and prompt     & \ref{chap:input}              &                & \\ %
+character input and prompt     & \ref{chap:input}              & [[input.c]]    & [<getnext()>] [<pprompt()>] [<nextc()>] \\ % [token()>] [klook()>]
 lexer                          & \ref{chap:lexing}             & [[lex.c]]      & [<yylex()>]                                     & \\ % wordchr idchr skipwhite skipnl  [<yyerror()>]
 parser                         & \ref{chap:parsing}            & [[syn.y]]      & [<yyparse()>]                                   & \\ 
 
@@ -611,18 +614,16 @@ bytecode generation            & \ref{chap:compile-interpret}  & [[code.c]]     
 process status                 & \ref{chap:compile-interpret}  & [[status.c]]   & [<setstatus()>] [<getstatus()>]                 & \\ % truestatus convstatuts
 simple command bytecode        & \ref{chap:compile-interpret}  & [[simple.c]]   & [<Xsimple()>] [<execexec()>] [<doredir()>]      & \\ % execcmds execfunc (fn)
 [[$path]] management           & \ref{chap:compile-interpret}  & [[path.c]]     & [<searchpath()>]                                & \\ %$
-process-related bytecodes      & \ref{chap:compile-interpret}  & [[havefork.c]] & [<execforkexec()>] [<Xpipe()>] [<Xasync()>]     & \\ % Xbackq Xpipefd Xsubshell 
-other bytecodes                & \ref{chap:compile-interpret}  & [[exec.c]]     & [<Xtrue()>] [<Xreturn()>] [<Xjump()>] [<Xfn()>] & \\ % [<Xwrite()>] [<Xassign()>]
-builtins, environment, and     & \ref{chap:compile-interpret}  & [[plan9.c]]    & [<builtins>] [<addenv()>] [<Vinit()>]           & \\ % Updenv signals  [<Readdir()>] [<Opendir()>]
-process methods for \plan      &                               &                & [<Execute()>] [<Waitfor()>] [<addwaitpid()>]    & \\ % [<Exit()>]
-% environment chapter? plan9.c
+process-related bytecodes      & \ref{chap:compile-interpret}  & [[processes.c]] & [<execforkexec()>] [<Xpipe()>] [<Xasync()>]     & \\ % Xbackq Xpipefd Xsubshell 
+other bytecodes                & \ref{chap:compile-interpret}  & [[exec.c]]     & [<Xtrue()>] [<Xjump()>] [<Xfn()>] & \\ % [Xwrite()>] [Xassign()>]
 
 \midrule
-shell builtins                 & \ref{chap:builtins}           & [[builtins.c]] & [<execcd()>] [<execexit()>] [<execdot()>]       & \\ % execshift execeval execflag [<execwait()>]  [<execwhatis()>]
-
-\midrule
+shell builtins                 & \ref{chap:builtins}           & [[builtins.c]] & [<execcd()>] [<execexit()>] [<execdot()>]       & \\ % execshift execeval execflag [execwait()>]  [execwhatis()>]
+shell environment              & \ref{chap:environment}        & [[env.c]]      & [<addenv()>] [<Vinit()>]                        & \\ % Updenv
 [['*']] management (globbing)  & \ref{chap:globbing}           & [[glob.c]]     & [<glob()>] [<match()>]                          & \\ % globlist Xglob
 signal management              & \ref{chap:signals}            & [[trap.c]]     & [<dotrap()>]                                    & \\ %
+
+\midrule
 % initialization chapter?
 [['<<']] management (here doc) & \ref{chap:advanced-topics}    & [[here.c]]     & [<readhere()>] [<heredoc()>]                    & \\ %
 
@@ -630,11 +631,11 @@ signal management              & \ref{chap:signals}            & [[trap.c]]     
 AST dumper                     & \ref{chap:debugging-appendix} & [[pcmd.c]]     & [<pcmd()>]                                      & \\ %
 bytecode dumper                & \ref{chap:debugging-appendix} & [[pfnc.c]]     & [<pfnc()>]                                      & \\ %
 error management               & \ref{chap:error}              & [[error.c]]    & [<panic()>]                                     & \\ %
-memory management              & \ref{chap:utilities}          & [[utils.c]]    & [<emalloc()>] [<efree()>]                       & \\ % Dup Creat Unlink Malloc
-command-line flags             & \ref{chap:utilities}          & [[getflags.c]] & [<getflags()>] [<usage()>]                      & \\ % flagset [<flag>] 
+memory management              & \ref{chap:utilities}          & [[utils.c]]    & [<emalloc()>] [<efree()>]                       & \\ % Dup Creat Unlink Malloc [inttoascii()>] ...
+command-line flags             & \ref{chap:utilities}          & [[getflags.c]] & [<getflags()>] [<usage()>]                      & \\ % getflags.h flagset [flag>] 
 buffered IO                    & \ref{chap:utilities}          & [[io.c]]       & [<openfd()>] [<rchr()>]                         & \\ % io.h openstr opencore
 pretty printer                 & \ref{chap:utilities}          & [[fmt.c]]      & [<pfmt()>]                                      & \\ %
-misc utilities                 & \ref{chap:utilities}          & [[subr.c]]     & [<inttoascii()>]                                & \\ % iacvt
+%misc utilities                 & \ref{chap:utilities}          & [[subr.c]]     &                                 & \\ % iacvt
 
 \otoprule
 Total                          &                               &                &                                                 & 6800 \\
@@ -656,11 +657,13 @@ Total                          &                               &                
 
 <<includes>>=
 #include "rc.h"
-#include "getflags.h"
 #include "exec.h"
-#include "io.h"
 #include "fns.h"
+#include "getflags.h"
+#include "io.h"
 @
+%pad: I factorized most include and changed the order. Not worth
+% having different #include in each file
 
 \section{Software architecture}
 
@@ -5660,20 +5663,20 @@ struct Builtin {
 % rename Builtin -> builtins
 <<global [[builtins]]>>=
 builtin builtins[] = {
-    "cd",		execcd,
-    "exit",		execexit,
-    ".",		execdot,
-    "eval",		execeval,
+    "cd"     ,      execcd,
+    "exit"   ,      execexit,
+    "."      ,      execdot,
+    "eval"   ,      execeval,
 
-    "whatis",		execwhatis,
+    "whatis" ,      execwhatis,
 
-    "exec",		execexec,	/* but with popword first */
-    "rfork",		execnewpgrp,
-    "wait",		execwait,
+    "exec"   ,      execexec,   /* but with popword first */
+    "rfork"  ,      execnewpgrp,
+    "wait"   ,      execwait,
 
-    "shift",		execshift,
-    "finit",		execfinit,
-    "flag",		execflag,
+    "shift"  ,      execshift,
+    "finit"  ,      execfinit,
+    "flag"   ,      execflag,
     0
 };
 @
@@ -5803,7 +5806,7 @@ dochdir(char *word)
         return ERROR_NEG1;
 
     if(flag['i']!=nil){
-        if(wdirfd==-2)	/* try only once */
+        if(wdirfd==-2)  /* try only once */
             wdirfd = open("/dev/wdir", OWRITE|OCEXEC);
         if(wdirfd>=0) {
             //fcntl(wdirfd, F_SETFD, FD_CLOEXEC);
@@ -5828,7 +5831,7 @@ execexit(void)
     case 2:
         setstatus(runq->argv->words->next->word);
         // FALLTHROUGH
-    case 1:	
+    case 1: 
         Xexit();
     }
 }
@@ -6198,7 +6201,7 @@ Vinit(void)
 @
 
 <<global [[envdir]]>>=
-int envdir;
+fdt envdir;
 @
 
 %\section{Functions in the environment}
@@ -7822,7 +7825,7 @@ Xqdol(void)
 
 <<function [[execwhatis]]>>=
 void
-execwhatis(void){	/* mildly wrong -- should fork before writing */
+execwhatis(void){   /* mildly wrong -- should fork before writing */
     word *a, *b, *path;
     var *v;
     struct Builtin *bp;

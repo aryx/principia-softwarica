@@ -1318,47 +1318,74 @@ Node	*alloc(int (*op)(Node *));
 
 <<rc/fns.h>>=
 
-//
-void	Abort(void);
-void	Closedir(int);
-int	Eintr(void);
-int	Executable(char*);
-void	Execute(word*,  word*);
-void	Exit(char*);
-int	Globsize(char*);
-int	Isatty(int);
-void	Noerror(void);
-int	Opendir(char*);
-int	Readdir(int, void*, int);
-void	Trapinit(void);
-void	Updenv(void);
-void	Vinit(void);
-int	Waitfor(int, int);
+// for var.c, words.c, tree.c: see rc.h
+// see also io.h and getflags.h
 
-void	addwaitpid(int);
-void	cleanhere(char*);
-void	codefree(code*);
-error0	compile(tree*);
-void	deglob(void*);
-void	dotrap(void);
-void	freenodes(void);
-void	globlist(void);
-int	idchr(int);
-void	inttoascii(char*, long);
-void	kinit(void);
-int	match(void*, void*, int);
-void	clearwaitpids(void);
-void	poplist(void);
-void	popword(void);
+// input.c
+int getnext(void);
+int advance(void);
+int nextc(void);
+bool nextis(int c);
 void	pprompt(void);
-void	pushlist(void);
-void	pushredir(int, int, int);
-void	pushword(char*);
-void	readhere(void);
+void	kinit(void);
+tree *token(char*, int);
+tree *klook(char*);
+
+// lex.c
+int	yylex(void);
 //@Scheck: used in syn.y
 void	skipnl(void);
+int	idchr(int);
+
+// syn.y
+//@Scheck: defined in syn.y and y.tab.c
+int	yyparse(void);
+
+// executils.c
 void	start(code*, int, var*);
-void	usage(char*);
+void	pushlist(void);
+void	poplist(void);
+void	pushword(char*);
+void	popword(void);
+void	pushredir(int, int, int);
+
+// status.c
+char *getstatus(void);
+void	setstatus(char*);
+char* concstatus(char *s, char *t);
+int	truestatus(void);
+
+// path.c
+word*	searchpath(char*);
+
+// env.c
+void	Updenv(void);
+void	Vinit(void);
+
+// processes.c
+int	Waitfor(int, int);
+void	Execute(word*,  word*);
+
+// code.c
+error0	compile(tree*);
+code *codecopy(code*);
+void	codefree(code*);
+void	cleanhere(char*);
+
+// trap.c
+void	dotrap(void);
+void	Trapinit(void);
+int	Eintr(void);
+void	Noerror(void);
+
+// here.c
+void	readhere(void);
+tree *heredoc(tree*);
+
+// glob.c
+void	deglob(void*);
+void	globlist(void);
+int	match(void*, void*, int);
 
 // utils.c
 void	Memcpy(void*, void*, long);
@@ -1368,34 +1395,15 @@ long	Seek(int, long, long);
 void	Unlink(char*);
 int	Creat(char*);
 int	Dup(int, int);
-
-// words.c
-word* copynwords(word *a, word *tail, int n);
-void freelist(word *w);
-void	freewords(word*);
-int	count(word*);
-
-// var.c
-void	setvar(char*, word*);
-
-// status.c
-void	setstatus(char*);
-char* concstatus(char *s, char *t);
-int	truestatus(void);
+int	Opendir(char*);
+int	Readdir(int, void*, int);
+void	Closedir(int);
+void	inttoascii(char*, long);
 
 // error.c
 void	panic(char*, int);
 void	yyerror(char*);
-
-// path.c
-word*	searchpath(char*);
-
-// lex.c
-int	yylex(void);
-
-// syn.y
-//@Scheck: defined in syn.y and y.tab.c
-int	yyparse(void);
+void	Exit(char*);
 
 @
 
@@ -1411,6 +1419,7 @@ extern char **flag[NFLAG];
 extern char *flagset[];
 
 int getflags(int, char*[], char*, int);
+void	usage(char*);
 @
 
 
@@ -1478,12 +1487,21 @@ void pfnc(io*, thread*);
 % //pad: better like that, otherwise get some "redefined FOR macro" error
 % #endif
 % //#endif
+%
+%//#ifndef Unix
+%//#pragma incomplete word
+%//#pragma incomplete io
+%//#endif
+
 
 %-------------------------------------------------------------
 
 <<rc/rc.h>>=
 #include <u.h>
 #include <libc.h>
+
+// was in plan9.c
+<<enum [[MiscPlan9]]>>
 
 #ifndef ERRMAX
 <<constant [[ERRMAX]]>>
@@ -1502,13 +1520,9 @@ typedef struct Redir redir;
 typedef struct Thread thread;
 typedef struct Builtin builtin;
 
-//#ifndef Unix
-//#pragma incomplete word
-//#pragma incomplete io
-//#endif
-
 <<struct [[Tree]]>>
 
+// tree.c
 tree *newtree(void);
 //@Scheck: useful, for syn.y, and not just for tree.c
 tree *tree1(int, tree*);
@@ -1520,11 +1534,13 @@ tree *mung2(tree*, tree*, tree*);
 tree *mung3(tree*, tree*, tree*, tree*);
 tree *epimung(tree*, tree*);
 tree *simplemung(tree*);
-tree *heredoc(tree*);
+void	freenodes(void);
 
 <<struct [[Code]]>>
 
+// globals.c
 extern char *promptstr;
+// input.c
 extern bool doprompt;
 
 <<constant [[APPEND]]>>
@@ -1537,42 +1553,49 @@ extern bool doprompt;
 
 <<struct [[Word]]>>
 <<struct [[List]]>>
+
+// words.c
 word *newword(char *, word *);
 word *copywords(word *, word *);
+word* copynwords(word *a, word *tail, int n);
+void freelist(word *w);
+void	freewords(word*);
+int	count(word*);
 
 <<struct [[Var]]>>
 
+// var.c
 var *vlook(char*);
 var *gvlook(char*);
 var *newvar(char*, var*);
+void	setvar(char*, word*);
 
 <<constant [[NVAR]]>>
 extern var *gvar[NVAR];		/* hash for globals */
 
 #define	new(type)	((type *)emalloc(sizeof(type)))
+// utils.c
 void *emalloc(long);
 void efree(void *);
 
 <<struct [[Here]]>>
+
+// lex.c
+extern bool lastword;
+
+// globals.c
 extern int mypid;
 
 <<constant [[GLOB]]>>
 
+// error.c
 extern int nerror;	/* number of errors encountered during compilation */
 <<constant [[PRD]]>>
 <<constant [[PWR]]>>
 
-extern char *Rcmain;
-extern char *Fdprefix;
-
+// globals.c
 extern int ndot;
 
-char *getstatus(void);
-
-tree *token(char*, int);
-tree *klook(char*);
-
-extern bool lastword;
 @
 
 
@@ -1598,6 +1621,7 @@ extern void Xdelhere(void), Xpopredir(void), Xsub(void), Xeflag(void), Xsettrue(
 extern void Xerror(char*);
 extern void Xerror1(char*);
 
+// path.c
 extern word nullpath;
 
 <<struct [[Redir]]>>
@@ -1606,33 +1630,26 @@ extern word nullpath;
 <<constant [[ROPEN]]>>
 <<constant [[RDUP]]>>
 <<constant [[RCLOSE]]>>
+
 <<struct [[Thread]]>>
 
-code *codecopy(code*);
-
+// globals.c
 extern thread *runq;
 extern code *codebuf;		/* compiler output */
-
-extern int ntrap;		/* number of outstanding traps */
-extern int trap[NSIG];		/* number of outstanding traps per type */
-
 extern bool eflagok;		/* kludge flag so that -e doesn't exit in startup */
+
+// trap.c
+extern int ntrap;		/* number of outstanding traps */
 
 <<struct [[Builtin]]>>
 extern struct Builtin builtins[];
 
-// for plan9.c to fill builtins[]
-void execcd(void);
-void execwhatis(void);
-void execeval(void);
+// simple.c
 void execexec(void);
-int  execforkexec(void);
-void execexit(void);
-void execshift(void);
-void execwait(void);
-void execdot(void);
-void execflag(void);
 void execcmds(io *);
+// processes.c
+int  execforkexec(void);
+
 @
 
 
@@ -1644,8 +1661,8 @@ void execcmds(io *);
 
 // was in rc.h
 <<global [[mypid]]>>
-<<global [[ndot]]>>
 <<global [[promptstr]]>>
+<<global [[ndot]]>>
 
 // was in exec.h
 <<global [[runq]]>>
@@ -1736,6 +1753,58 @@ int fullbuf(io*, int);
 @
 
 
+\subsection*{[[rc/input.c]]}
+%pad: I created this file, its content was in var.c, tree.c, and lex.c
+
+%-------------------------------------------------------------
+
+<<rc/input.c>>=
+<<includes>>
+#include "x.tab.h"
+
+// was in lex.c
+
+<<global [[future]]>>
+<<global [[doprompt]]>>
+<<global [[inquote]]>>
+<<global [[incomm]]>>
+
+// was in rc.h
+<<global [[lastc]]>>
+
+int getnext(void);
+
+<<function [[nextc]]>>
+<<function [[advance]]>>
+<<function [[getnext]]>>
+
+<<function [[pprompt]]>>
+
+
+<<function [[nextis]]>>
+
+
+extern unsigned hash(char *as, int n);
+
+// was in tree.c
+
+<<function [[token]]>>
+
+// was in var.c
+
+<<constant [[NKW]]>>
+<<struct [[Kw]]>>
+<<global [[kw]]>>
+
+<<function [[kenter]]>>
+
+<<function [[kinit]]>>
+
+<<function [[klook]]>>
+
+
+@
+
 \subsection*{[[rc/var.c]]}
 
 
@@ -1751,17 +1820,6 @@ int fullbuf(io*, int);
 <<function [[hash]]>>
 
 
-<<constant [[NKW]]>>
-<<struct [[Kw]]>>
-<<global [[kw]]>>
-
-<<function [[kenter]]>>
-
-<<function [[kinit]]>>
-
-<<function [[klook]]>>
-
-
 
 <<function [[gvlook]]>>
 
@@ -1774,64 +1832,30 @@ int fullbuf(io*, int);
 @
 
 
-\subsection*{[[rc/subr.c]]}
+%\subsection*{[[rc/subr.c]]}
+%pad: merged with utils.c (that I created)
 
+% <<rc/subr.c>>=
+% <<includes>>
+% 
+% <<global [[bp]]>>
+% 
+% <<function [[iacvt]]>>
+% 
+% <<function [[inttoascii]]>>
+% 
+% @
+
+
+\subsection*{[[rc/env.c]]}
+%pad: I created this file, its content was in plan9.c before
 
 %-------------------------------------------------------------
 
-<<rc/subr.c>>=
+<<rc/env.c>>=
 <<includes>>
-
-<<global [[bp]]>>
-
-<<function [[iacvt]]>>
-
-<<function [[inttoascii]]>>
-
-@
-
-
-\subsection*{[[rc/plan9.c]]}
-
-%-------------------------------------------------------------
-
-<<rc/plan9.c>>=
-/*
- * Plan 9 versions of system-specific functions
- *	By convention, exported routines herein have names beginning with an
- *	upper case letter.
- */
-<<includes>>
-
-char**	mkargv(word*);
-void	delwaitpid(int);
-int	havewaitpid(int);
-
-<<enum [[MiscPlan9]]>>
-
-<<global [[signame]]>>
-<<global [[syssigname]]>>
-<<global [[Rcmain]]>>
-<<global [[Fdprefix]]>>
-
-void execfinit(void);
-void execnewpgrp(void);
-
-<<global [[builtins]]>>
-
-<<function [[execnewpgrp]]>>
 
 <<function [[Vinit]]>>
-<<global [[envdir]]>>
-
-<<function [[Xrdfn]]>>
-<<global [[rdfns]]>>
-
-<<function [[execfinit]]>>
-
-<<function [[Waitfor]]>>
-
-<<function [[mkargv]]>>
 
 <<function [[addenv]]>>
 
@@ -1839,53 +1863,23 @@ void execnewpgrp(void);
 
 <<function [[Updenv]]>>
 
-
-<<function [[Execute]]>>
-<<constant [[NDIR]]>>
-
-<<function [[Globsize]]>>
-<<constant [[NFD]]>>
-
-<<struct [[DirEntryWrapper]]>>
-<<global [[dir]]>>
-
-<<function [[Opendir]]>>
-
-<<function [[trimdirs]]>>
-
-<<function [[Readdir]]>>
-
-<<function [[Closedir]]>>
-<<global [[interrupted]]>>
-<<function [[notifyf]]>>
-
-<<function [[Trapinit]]>>
-
-<<function [[Executable]]>>
-
-<<function [[Exit]]>>
-
-<<function [[Eintr]]>>
-
-<<function [[Noerror]]>>
-
-<<function [[Isatty]]>>
-
-<<function [[Abort]]>>
-
-<<global [[waitpids]]>>
-<<global [[nwaitpids]]>>
-
-<<function [[addwaitpid]]>>
-
-<<function [[delwaitpid]]>>
-
-<<function [[clearwaitpids]]>>
-
-<<function [[havewaitpid]]>>
-
-<<function [[_efgfmt]]>>
 @
+
+%\subsection*{[[rc/plan9.c]]}
+
+%old: void execnewpgrp(void);
+
+%-------------------------------------------------------------
+
+%<<rc/plan9.c>>=
+%/*
+% * Plan 9 versions of system-specific functions
+% *	By convention, exported routines herein have names beginning with an
+% *	upper case letter.
+% */
+%<<includes>>
+%
+%@
 
 
 \subsection*{[[rc/glob.c]]}
@@ -1897,6 +1891,12 @@ void execnewpgrp(void);
 <<includes>>
 
 int	matchfn(void*, void*);
+
+// was in plan9.c
+<<constant [[NDIR]]>>
+<<function [[Globsize]]>>
+
+
 
 <<global [[globname]]>>
 <<global [[globv]]>>
@@ -1924,11 +1924,12 @@ int	matchfn(void*, void*);
 @
 
 
-\subsection*{[[rc/exec.c]]}
+\subsection*{[[rc/executils.c]]}
+%pad: I created this file, its content was in exec.c
 
 %-------------------------------------------------------------
 
-<<rc/exec.c>>=
+<<rc/executils.c>>=
 <<includes>>
 
 char*	list2str(word*);
@@ -1936,6 +1937,7 @@ char*	list2str(word*);
 <<global [[argv0]]>>
 
 <<function [[start]]>>
+
 
 <<function [[pushword]]>>
 
@@ -1945,7 +1947,29 @@ char*	list2str(word*);
 
 <<function [[poplist]]>>
 
+
 <<function [[pushredir]]>>
+
+
+<<function [[Xerror]]>>
+
+<<function [[Xerror1]]>>
+
+
+<<function [[turfredir]]>>
+
+<<function [[Xpopredir]]>>
+
+<<function [[Xreturn]]>>
+
+@
+
+\subsection*{[[rc/exec.c]]}
+
+%-------------------------------------------------------------
+
+<<rc/exec.c>>=
+<<includes>>
 
 /*
  * Opcode routines
@@ -2032,12 +2056,6 @@ char*	list2str(word*);
 
 <<function [[Xrdwr]]>>
 
-<<function [[turfredir]]>>
-
-<<function [[Xpopredir]]>>
-
-<<function [[Xreturn]]>>
-
 <<function [[Xtrue]]>>
 
 <<function [[Xif]]>>
@@ -2082,35 +2100,53 @@ char*	list2str(word*);
 
 <<function [[Xrdcmds]]>>
 
-<<function [[Xerror]]>>
-
-<<function [[Xerror1]]>>
-
 <<function [[Xdelhere]]>>
 
 <<function [[Xfor]]>>
 
 <<function [[Xglob]]>>
+
+<<global [[envdir]]>>
+
+<<function [[Xrdfn]]>>
+
 @
 
 
-\subsection*{[[rc/env.c]]}
-%pad: I created this file, its content was in plan9.c
-
-
-%-------------------------------------------------------------
-
-<<rc/env.c>>=
-@
-
-\subsection*{[[rc/havefork.c]]}
-
+\subsection*{[[rc/processes.c]]}
+%pad: this was called havefork.c before
 
 %-------------------------------------------------------------
 
-<<rc/havefork.c>>=
+<<rc/processes.c>>=
 <<includes>>
 #include <string.h>
+
+// was in plan9.c
+
+<<global [[Fdprefix]]>>
+
+
+<<global [[waitpids]]>>
+<<global [[nwaitpids]]>>
+
+<<function [[addwaitpid]]>>
+
+<<function [[delwaitpid]]>>
+
+<<function [[clearwaitpids]]>>
+
+<<function [[havewaitpid]]>>
+
+
+<<function [[mkargv]]>>
+
+<<function [[Execute]]>>
+
+
+<<function [[Waitfor]]>>
+
+// was in havefork.c
 
 <<function [[Xasync]]>>
 
@@ -2155,8 +2191,6 @@ char*	list2str(word*);
 <<function [[epimung]]>>
 <<function [[simplemung]]>>
 
-<<function [[token]]>>
-
 @
 %dead: <<function freetree>>
 
@@ -2169,7 +2203,10 @@ char*	list2str(word*);
 <<includes>>
 #include "x.tab.h"
 
-int getnext(void);
+// now in input.c
+extern bool inquote;
+extern bool incomm;
+extern int lastc;
 
 <<constant [[NTOK]]>>
 
@@ -2178,31 +2215,18 @@ int getnext(void);
 <<global [[lastword]]>>
 // was in rc.h
 <<global [[tok]]>>
-<<global [[lastc]]>>
 
 <<function [[wordchr]]>>
 
 <<function [[idchr]]>>
 
-<<global [[future]]>>
-<<global [[doprompt]]>>
-<<global [[inquote]]>>
-<<global [[incomm]]>>
-
-<<function [[nextc]]>>
-<<function [[advance]]>>
-<<function [[getnext]]>>
 
 <<function [[yyerror]]>>
 
 
-<<function [[pprompt]]>>
-
 <<function [[skipwhite]]>>
 
 <<function [[skipnl]]>>
-
-<<function [[nextis]]>>
 
 <<function [[addtok]]>>
 
@@ -2213,6 +2237,8 @@ int getnext(void);
 
 
 \subsection*{[[rc/trap.c]]}
+
+%old: extern char *signame[];
 
 %-------------------------------------------------------------
 
@@ -2228,8 +2254,21 @@ int getnext(void);
 <<global [[ntrap]]>>
 <<global [[trap]]>>
 
-extern char *signame[];
+// was in plan9.c
+<<global [[signame]]>>
+<<global [[syssigname]]>>
 
+<<global [[interrupted]]>>
+
+<<function [[notifyf]]>>
+
+<<function [[Trapinit]]>>
+
+<<function [[Eintr]]>>
+
+<<function [[Noerror]]>>
+
+// generic part independent of plan9
 <<function [[dotrap]]>>
 @
 
@@ -2394,15 +2433,36 @@ void codefree(code*);
 <<function [[Dup]]>>
 
 
+<<constant [[NFD]]>>
+
+<<struct [[DirEntryWrapper]]>>
+<<global [[dir]]>>
+
+<<function [[Opendir]]>>
+
+<<function [[trimdirs]]>>
+
+<<function [[Readdir]]>>
+
+<<function [[Closedir]]>>
+
+
+
 <<function [[Memcpy]]>>
 
 <<function [[Malloc]]>>
 
 
-
 <<function [[emalloc]]>>
 
 <<function [[efree]]>>
+
+
+<<global [[bp]]>>
+
+<<function [[iacvt]]>>
+
+<<function [[inttoascii]]>>
 
 @
 
@@ -2425,7 +2485,7 @@ void codefree(code*);
 @
 
 \subsection*{[[rc/builtins.c]]}
-%pad: I created this file, its content was in simple.c
+%pad: I created this file, its content was mostly in simple.c and plan9.c
 
 %-------------------------------------------------------------
 
@@ -2447,15 +2507,36 @@ void codefree(code*);
 
 <<function [[execflag]]>>
 
+// was in plan9.c
+
+<<function [[Executable]]>>
+
 <<function [[execwhatis]]>>
 
+
 <<function [[execshift]]>>
+
 
 <<global [[dotcmds]]>>
 
 <<function [[execdot]]>>
 
+
 <<function [[execwait]]>>
+
+
+<<function [[execnewpgrp]]>>
+
+
+<<global [[rdfns]]>>
+
+extern fdt envdir;
+
+<<function [[execfinit]]>>
+
+
+<<global [[builtins]]>>
+
 @
 
 \subsection*{[[rc/path.c]]}
@@ -2509,6 +2590,9 @@ int fullbuf(io*, int);
 
 <<function [[pval]]>>
 
+// was in plan9.c
+<<function [[_efgfmt]]>>
+
 @
 
 \subsection*{[[rc/words.c]]}
@@ -2544,7 +2628,15 @@ int fullbuf(io*, int);
 <<global [[nerror]]>>
 <<global [[err]]>>
 
+void Abort(void);
+
 <<function [[panic]]>>
+
+// was in plan9.c
+<<function [[Exit]]>>
+
+<<function [[Abort]]>>
+
 @
 
 \subsection*{[[rc/main.c]]}
@@ -2554,6 +2646,12 @@ int fullbuf(io*, int);
 
 <<rc/main.c>>=
 <<includes>>
+
+// was in plan9.c
+<<global [[Rcmain]]>>
+// was in plan9.c
+<<function [[Isatty]]>>
+
 
 /*
  * get command line flags.

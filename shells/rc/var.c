@@ -1,12 +1,11 @@
 /*s: rc/var.c */
 /*s: includes */
 #include "rc.h"
-#include "getflags.h"
 #include "exec.h"
-#include "io.h"
 #include "fns.h"
+#include "getflags.h"
+#include "io.h"
 /*e: includes */
-#include "x.tab.h"
 
 // was in rc.h
 /*s: global [[gvar]] */
@@ -28,69 +27,6 @@ hash(char *as, int n)
     return h % n;
 }
 /*e: function [[hash]] */
-
-
-/*s: constant [[NKW]] */
-#define	NKW	30
-/*e: constant [[NKW]] */
-/*s: struct [[Kw]] */
-struct Kw {
-    char *name;
-    int type;
-
-    struct Kw *next;
-};
-/*e: struct [[Kw]] */
-/*s: global [[kw]] */
-struct Kw *kw[NKW];
-/*e: global [[kw]] */
-
-/*s: function [[kenter]] */
-void
-kenter(int type, char *name)
-{
-    int h = hash(name, NKW);
-    struct Kw *p = new(struct Kw);
-    p->type = type;
-    p->name = name;
-    p->next = kw[h];
-    kw[h] = p;
-}
-/*e: function [[kenter]] */
-
-/*s: function [[kinit]] */
-void
-kinit(void)
-{
-    kenter(FOR, "for");
-    kenter(IN, "in");
-    kenter(WHILE, "while");
-    kenter(IF, "if");
-    kenter(NOT, "not");
-    kenter(SWITCH, "switch");
-    kenter(FN, "fn");
-
-    kenter(TWIDDLE, "~");
-    kenter(BANG, "!");
-    kenter(SUBSHELL, "@");
-}
-/*e: function [[kinit]] */
-
-/*s: function [[klook]] */
-tree*
-klook(char *name)
-{
-    struct Kw *p;
-    tree *t = token(name, WORD);
-
-    for(p = kw[hash(name, NKW)];p;p = p->next)
-        if(strcmp(p->name, name)==0){
-            t->type = p->type;
-            break;
-        }
-    return t;
-}
-/*e: function [[klook]] */
 
 
 

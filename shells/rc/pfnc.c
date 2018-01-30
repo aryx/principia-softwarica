@@ -1,10 +1,10 @@
 /*s: rc/pfnc.c */
 /*s: includes */
 #include "rc.h"
-#include "getflags.h"
 #include "exec.h"
-#include "io.h"
 #include "fns.h"
+#include "getflags.h"
+#include "io.h"
 /*e: includes */
 
 /*s: global [[fname]] */

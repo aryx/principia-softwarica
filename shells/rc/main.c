@@ -1,11 +1,35 @@
 /*s: rc/main.c */
 /*s: includes */
 #include "rc.h"
-#include "getflags.h"
 #include "exec.h"
-#include "io.h"
 #include "fns.h"
+#include "getflags.h"
+#include "io.h"
 /*e: includes */
+
+// was in plan9.c
+/*s: global [[Rcmain]] */
+char *Rcmain = "/rc/lib/rcmain";
+/*e: global [[Rcmain]] */
+// was in plan9.c
+/*s: function [[Isatty]] */
+bool
+Isatty(fdt fd)
+{
+    char buf[64];
+
+    if(fd2path(fd, buf, sizeof buf) != 0)
+        return false;
+
+    /* might be #c/cons during boot - fixed 22 april 2005, remove this later */
+    if(strcmp(buf, "#c/cons") == 0)
+        return true;
+
+    /* might be /mnt/term/dev/cons */
+    return strlen(buf) >= 9 && strcmp(buf+strlen(buf)-9, "/dev/cons") == 0;
+}
+/*e: function [[Isatty]] */
+
 
 /*
  * get command line flags.

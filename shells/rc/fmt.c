@@ -1,10 +1,10 @@
 /*s: rc/fmt.c */
 /*s: includes */
 #include "rc.h"
-#include "getflags.h"
 #include "exec.h"
-#include "io.h"
 #include "fns.h"
+#include "getflags.h"
+#include "io.h"
 /*e: includes */
 
 /*s: global [[pfmtnest]] */
@@ -190,5 +190,15 @@ pval(io *f, word *a)
     }
 }
 /*e: function [[pval]] */
+
+// was in plan9.c
+/*s: function [[_efgfmt]] */
+/* avoid loading any floating-point library code */
+//@Scheck: weird, probably linker trick
+int _efgfmt(Fmt *)
+{
+    return -1;
+}
+/*e: function [[_efgfmt]] */
 
 /*e: rc/fmt.c */

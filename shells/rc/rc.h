@@ -2,6 +2,13 @@
 #include <u.h>
 #include <libc.h>
 
+// was in plan9.c
+/*s: enum [[MiscPlan9]] */
+enum {
+    Maxenvname = 256,	/* undocumented limit */
+};
+/*e: enum [[MiscPlan9]] */
+
 #ifndef ERRMAX
 /*s: constant [[ERRMAX]] */
 #define ERRMAX 128
@@ -23,11 +30,6 @@ typedef struct List list;
 typedef struct Redir redir;
 typedef struct Thread thread;
 typedef struct Builtin builtin;
-
-//#ifndef Unix
-//#pragma incomplete word
-//#pragma incomplete io
-//#endif
 
 /*s: struct [[Tree]] */
 struct Tree {
@@ -61,6 +63,7 @@ struct Tree {
 };
 /*e: struct [[Tree]] */
 
+// tree.c
 tree *newtree(void);
 //@Scheck: useful, for syn.y, and not just for tree.c
 tree *tree1(int, tree*);
@@ -72,7 +75,7 @@ tree *mung2(tree*, tree*, tree*);
 tree *mung3(tree*, tree*, tree*, tree*);
 tree *epimung(tree*, tree*);
 tree *simplemung(tree*);
-tree *heredoc(tree*);
+void	freenodes(void);
 
 /*s: struct [[Code]] */
 /*
@@ -87,7 +90,9 @@ union Code {
 };
 /*e: struct [[Code]] */
 
+// globals.c
 extern char *promptstr;
+// input.c
 extern bool doprompt;
 
 /*s: constant [[APPEND]] */
@@ -133,8 +138,14 @@ struct List {
     list *next;
 };
 /*e: struct [[List]] */
+
+// words.c
 word *newword(char *, word *);
 word *copywords(word *, word *);
+word* copynwords(word *a, word *tail, int n);
+void freelist(word *w);
+void	freewords(word*);
+int	count(word*);
 
 /*s: struct [[Var]] */
 struct Var {
@@ -157,9 +168,11 @@ struct Var {
 };
 /*e: struct [[Var]] */
 
+// var.c
 var *vlook(char*);
 var *gvlook(char*);
 var *newvar(char*, var*);
+void	setvar(char*, word*);
 
 /*s: constant [[NVAR]] */
 #define	NVAR	521
@@ -167,6 +180,7 @@ var *newvar(char*, var*);
 extern var *gvar[NVAR];		/* hash for globals */
 
 #define	new(type)	((type *)emalloc(sizeof(type)))
+// utils.c
 void *emalloc(long);
 void efree(void *);
 
@@ -177,6 +191,11 @@ struct Here {
     struct Here *next;
 };
 /*e: struct [[Here]] */
+
+// lex.c
+extern bool lastword;
+
+// globals.c
 extern int mypid;
 
 /*s: constant [[GLOB]] */
@@ -191,6 +210,7 @@ extern int mypid;
 #define	GLOB	'\001'
 /*e: constant [[GLOB]] */
 
+// error.c
 extern int nerror;	/* number of errors encountered during compilation */
 /*s: constant [[PRD]] */
 /*
@@ -205,15 +225,7 @@ extern int nerror;	/* number of errors encountered during compilation */
 #define	PWR	1
 /*e: constant [[PWR]] */
 
-extern char *Rcmain;
-extern char *Fdprefix;
-
+// globals.c
 extern int ndot;
 
-char *getstatus(void);
-
-tree *token(char*, int);
-tree *klook(char*);
-
-extern bool lastword;
 /*e: rc/rc.h */

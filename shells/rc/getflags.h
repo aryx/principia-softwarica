@@ -7,4 +7,5 @@ extern char **flag[NFLAG];
 extern char *flagset[];
 
 int getflags(int, char*[], char*, int);
+void	usage(char*);
 /*e: rc/getflags.h */

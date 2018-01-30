@@ -1,46 +1,73 @@
 /*s: rc/fns.h */
 
-//
-void	Abort(void);
-void	Closedir(int);
-int	Eintr(void);
-int	Executable(char*);
-void	Execute(word*,  word*);
-void	Exit(char*);
-int	Globsize(char*);
-int	Isatty(int);
-void	Noerror(void);
-int	Opendir(char*);
-int	Readdir(int, void*, int);
-void	Trapinit(void);
-void	Updenv(void);
-void	Vinit(void);
-int	Waitfor(int, int);
+// for var.c, words.c, tree.c: see rc.h
+// see also io.h and getflags.h
 
-void	addwaitpid(int);
-void	cleanhere(char*);
-void	codefree(code*);
-error0	compile(tree*);
-void	deglob(void*);
-void	dotrap(void);
-void	freenodes(void);
-void	globlist(void);
-int	idchr(int);
-void	inttoascii(char*, long);
-void	kinit(void);
-int	match(void*, void*, int);
-void	clearwaitpids(void);
-void	poplist(void);
-void	popword(void);
+// input.c
+int getnext(void);
+int advance(void);
+int nextc(void);
+bool nextis(int c);
 void	pprompt(void);
-void	pushlist(void);
-void	pushredir(int, int, int);
-void	pushword(char*);
-void	readhere(void);
+void	kinit(void);
+tree *token(char*, int);
+tree *klook(char*);
+
+// lex.c
+int	yylex(void);
 //@Scheck: used in syn.y
 void	skipnl(void);
+int	idchr(int);
+
+// syn.y
+//@Scheck: defined in syn.y and y.tab.c
+int	yyparse(void);
+
+// executils.c
 void	start(code*, int, var*);
-void	usage(char*);
+void	pushlist(void);
+void	poplist(void);
+void	pushword(char*);
+void	popword(void);
+void	pushredir(int, int, int);
+
+// status.c
+char *getstatus(void);
+void	setstatus(char*);
+char* concstatus(char *s, char *t);
+int	truestatus(void);
+
+// path.c
+word*	searchpath(char*);
+
+// env.c
+void	Updenv(void);
+void	Vinit(void);
+
+// processes.c
+int	Waitfor(int, int);
+void	Execute(word*,  word*);
+
+// code.c
+error0	compile(tree*);
+code *codecopy(code*);
+void	codefree(code*);
+void	cleanhere(char*);
+
+// trap.c
+void	dotrap(void);
+void	Trapinit(void);
+int	Eintr(void);
+void	Noerror(void);
+
+// here.c
+void	readhere(void);
+tree *heredoc(tree*);
+
+// glob.c
+void	deglob(void*);
+void	globlist(void);
+int	match(void*, void*, int);
 
 // utils.c
 void	Memcpy(void*, void*, long);
@@ -50,33 +77,14 @@ long	Seek(int, long, long);
 void	Unlink(char*);
 int	Creat(char*);
 int	Dup(int, int);
-
-// words.c
-word* copynwords(word *a, word *tail, int n);
-void freelist(word *w);
-void	freewords(word*);
-int	count(word*);
-
-// var.c
-void	setvar(char*, word*);
-
-// status.c
-void	setstatus(char*);
-char* concstatus(char *s, char *t);
-int	truestatus(void);
+int	Opendir(char*);
+int	Readdir(int, void*, int);
+void	Closedir(int);
+void	inttoascii(char*, long);
 
 // error.c
 void	panic(char*, int);
 void	yyerror(char*);
-
-// path.c
-word*	searchpath(char*);
-
-// lex.c
-int	yylex(void);
-
-// syn.y
-//@Scheck: defined in syn.y and y.tab.c
-int	yyparse(void);
+void	Exit(char*);
 
 /*e: rc/fns.h */

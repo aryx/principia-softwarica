@@ -1,10 +1,10 @@
 /*s: rc/tree.c */
 /*s: includes */
 #include "rc.h"
-#include "getflags.h"
 #include "exec.h"
-#include "io.h"
 #include "fns.h"
+#include "getflags.h"
+#include "io.h"
 /*e: includes */
 #include "x.tab.h"
 
@@ -159,17 +159,5 @@ tree* simplemung(tree *t)
     return t;
 }
 /*e: function [[simplemung]] */
-
-/*s: function [[token]] */
-tree*
-token(char *str, int type)
-{
-    tree *t = newtree();
-
-    t->type = type;
-    t->str = strdup(str);
-    return t;
-}
-/*e: function [[token]] */
 
 /*e: rc/tree.c */
