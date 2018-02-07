@@ -382,6 +382,7 @@ ipush(void)
     struct Input *in, *me;
 
     me = (struct Input *)Malloc(sizeof(*me));
+    // saving globals
     me->file = infile;
     me->line = mkinline;
     me->next = nil;
@@ -414,6 +415,7 @@ ipop(void)
         me = in->next;
         in->next = nil;
     }
+    // restoring globals
     infile = me->file;
     mkinline = me->line;
     free((char *)me);

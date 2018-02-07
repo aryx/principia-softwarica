@@ -76,6 +76,132 @@ run(Job *j)
 }
 /*e: function [[run]] */
 
+// was in plan9.c
+/*s: global [[shell]] */
+char 	*shell =	"/bin/rc";
+/*e: global [[shell]] */
+/*s: global [[shellname]] */
+char 	*shellname =	"rc";
+/*e: global [[shellname]] */
+
+// was in plan9.c
+/*s: function [[execsh]] */
+int
+execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
+{
+    int pid1, pid2;
+    fdt in[2]; // pipe descriptors
+    int err;
+    /*s: [[execsh()]] other locals */
+    char *endshinput;
+    /*x: [[execsh()]] other locals */
+    fdt out[2];
+    /*x: [[execsh()]] other locals */
+    int tot, n;
+    /*e: [[execsh()]] other locals */
+
+    /*s: [[execsh()]] if buf then create pipe to save output */
+    if(buf && pipe(out) < 0){
+        perror("pipe");
+        Exit();
+    }
+    /*e: [[execsh()]] if buf then create pipe to save output */
+
+    pid1 = rfork(RFPROC|RFFDG|RFENVG);
+    /*s: [[execsh()]] sanity check pid rfork */
+    if(pid1 < 0){
+        perror("mk rfork");
+        Exit();
+    }
+    /*e: [[execsh()]] sanity check pid rfork */
+    // child
+    if(pid1 == 0){
+        /*s: [[execsh()]] in child, if buf, close one side of pipe */
+        if(buf)
+            close(out[0]);
+        /*e: [[execsh()]] in child, if buf, close one side of pipe */
+        err = pipe(in);
+        /*s: [[execsh()]] sanity check err pipe */
+        if(err < 0){
+            perror("pipe");
+            Exit();
+        }
+        /*e: [[execsh()]] sanity check err pipe */
+        pid2 = fork();
+        /*s: [[execsh()]] sanity check pid fork */
+        if(pid2 < 0){
+            perror("mk fork");
+            Exit();
+        }
+        /*e: [[execsh()]] sanity check pid fork */
+        // parent of grandchild, the shell interpreter
+        if(pid2 != 0){
+            // input must come from the pipe
+            dup(in[0], STDIN);
+            /*s: [[execsh()]] in child, if buf, dup and close */
+            if(buf){
+                // output now goes in the pipe
+                dup(out[1], STDOUT);
+                close(out[1]);
+            }
+            /*e: [[execsh()]] in child, if buf, dup and close */
+            close(in[0]);
+            close(in[1]);
+            /*s: [[execsh()]] in child, export environment before exec */
+            if (e)
+                exportenv(e);
+            /*e: [[execsh()]] in child, export environment before exec */
+            if(shflags)
+                execl(shell, shellname, shflags, shargs, nil);
+            else
+                execl(shell, shellname, shargs, nil);
+            // should not be reached
+            perror(shell);
+            _exits("exec");
+        }
+        // else, grandchild, feeding the shell with recipe, through a pipe
+        /*s: [[execsh()]] in grandchild, if buf, close other side of pipe */
+        if(buf)
+            close(out[1]);
+        /*e: [[execsh()]] in grandchild, if buf, close other side of pipe */
+        close(in[0]);
+        // feed the shell
+        /*s: [[execsh()]] in grandchild, write cmd in pipe */
+        endshinput = shinput + strlen(shinput);
+        while(shinput < endshinput){
+            n = write(in[1], shinput, endshinput - shinput);
+            if(n < 0)
+                break;
+            shinput += n;
+        }
+        /*e: [[execsh()]] in grandchild, write cmd in pipe */
+        close(in[1]); // will flush
+        _exits(nil);
+    }
+    // parent
+    /*s: [[execsh()]] in parent, if buf, close other side of pipe and read output */
+    if(buf){
+        close(out[1]);
+        tot = 0;
+        for(;;){
+            if (buf->current >= buf->end)
+                growbuf(buf);
+            n = read(out[0], buf->current, buf->end-buf->current);
+            if(n <= 0)
+                break;
+            buf->current += n;
+            tot += n;
+        }
+        if (tot && buf->current[-1] == '\n')
+            buf->current--;
+        close(out[0]);
+    }
+    /*e: [[execsh()]] in parent, if buf, close other side of pipe and read output */
+    return pid1;
+}
+/*e: function [[execsh]] */
+
+
 /*s: function [[sched]] */
 static void
 sched(void)
@@ -157,6 +283,26 @@ sched(void)
     }
 }
 /*e: function [[sched]] */
+
+// was in plan9.c
+/*s: function [[waitfor]] */
+int
+waitfor(char *msg)
+{
+    Waitmsg *w;
+    int pid;
+
+    // blocking call, wait for any children
+    w = wait();
+    // no more children
+    if(w == nil)
+        return -1;
+    strecpy(msg, msg+ERRMAX, w->msg);
+    pid = w->pid;
+    free(w);
+    return pid;
+}
+/*e: function [[waitfor]] */
 
 /*s: function [[waitup]] */
 int
@@ -398,6 +544,57 @@ pdelete(Process *p)
 }
 /*e: function [[pdelete]] */
 
+// was in plan9.c
+/*s: function [[Exit]] */
+void
+Exit(void)
+{
+    while(waitpid() >= 0)
+        ;
+    exits("error");
+}
+/*e: function [[Exit]] */
+
+// was in plan9.c
+/*s: function [[notifyf]] */
+int
+notifyf(void *a, char *msg)
+{
+    /*s: [[notifyf()]] sanity check not too many notes */
+    static int nnote;
+
+    USED(a);
+    if(++nnote > 100){	/* until andrew fixes his program */
+        fprint(STDERR, "mk: too many notes\n");
+        notify(0);
+        abort();
+    }
+    /*e: [[notifyf()]] sanity check not too many notes */
+    if(strcmp(msg, "interrupt")!=0 && strcmp(msg, "hangup")!=0)
+        return 0;
+    killchildren(msg);
+    return -1;
+}
+/*e: function [[notifyf]] */
+
+// was in plan9.c
+/*s: function [[catchnotes]] */
+void
+catchnotes()
+{
+    atnotify(notifyf, 1);
+}
+/*e: function [[catchnotes]] */
+
+// was in plan9.c
+/*s: function [[expunge]] */
+void
+expunge(int pid, char *msg)
+{
+    postnote(PNPROC, pid, msg);
+}
+/*e: function [[expunge]] */
+
 /*s: function [[killchildren]] */
 void
 killchildren(char *msg)
@@ -453,4 +650,47 @@ prusage(void)
         fprint(STDOUT, "%d: %lud\n", i, tslot[i]);
 }
 /*e: function [[prusage]] */
+
+// was in plan9.c
+/*s: function [[pipecmd]] */
+int
+pipecmd(char *cmd, ShellEnvVar *e, int *fd)
+{
+    int pid;
+    fdt pfd[2];
+
+    if(DEBUG(D_EXEC))
+        fprint(STDOUT, "pipecmd='%s'\n", cmd);/**/
+
+    if(fd && pipe(pfd) < 0){
+        perror("pipe");
+        Exit();
+    }
+    pid = rfork(RFPROC|RFFDG|RFENVG);
+    if(pid < 0){
+        perror("mk fork");
+        Exit();
+    }
+    if(pid == 0){
+        if(fd){
+            close(pfd[0]);
+            dup(pfd[1], 1);
+            close(pfd[1]);
+        }
+        if(e)
+            exportenv(e);
+        if(shflags)
+            execl(shell, shellname, shflags, "-c", cmd, nil);
+        else
+            execl(shell, shellname, "-c", cmd, nil);
+        perror(shell);
+        _exits("exec");
+    }
+    if(fd){
+        close(pfd[1]);
+        *fd = pfd[0];
+    }
+    return pid;
+}
+/*e: function [[pipecmd]] */
 /*e: mk/run.c */

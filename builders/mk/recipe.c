@@ -18,8 +18,11 @@ newjob(Rule *r, Node *nlist, char *stem, char **match,
     j->stem = stem;
     j->match = match;
 
-    j->np = newprereqs;
+    /*s: [[newjob()]] setting other fields */
     j->at = alltargets;
+    /*x: [[newjob()]] setting other fields */
+    j->np = newprereqs;
+    /*e: [[newjob()]] setting other fields */
 
     j->next = nil;
     return j;

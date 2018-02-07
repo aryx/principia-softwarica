@@ -30,16 +30,17 @@ addrule(char *target, Word *prereqs, char *recipe,
     bool reuse;
     /*e: [[addrule()]] other locals */
 
-    /*s: [[addrule()]] find if rule already exists, set reuse */
+    /*s: [[addrule()]] find if rule already exists, set [[reuse]], update [[r]] */
     reuse = false;
-    if(sym = symlook(target, S_TARGET, nil)){
+    sym = symlook(target, S_TARGET, nil);
+    if(sym){
         for(r = sym->u.ptr; r; r = r->chain)
             if(rcmp(r, target, prereqs) == 0){
                 reuse = true;
                 break;
             }
     }
-    /*e: [[addrule()]] find if rule already exists, set reuse */
+    /*e: [[addrule()]] find if rule already exists, set [[reuse]], update [[r]] */
 
     if(r == nil)
         r = (Rule *)Malloc(sizeof(Rule));

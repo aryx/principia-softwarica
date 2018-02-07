@@ -276,12 +276,11 @@ main(int argc, char **argv)
         /*e: [[main()]] if sequential mode and target arguments given */
         else {
            /*s: [[main()]] parallel mode and target arguments given */
-           Word *head, *tail;
-           Word *t;
+           Word *head;
+           Word *tail = nil;
+           Word *t = nil;
 
            /* fake a new rule with all the args as prereqs */
-           tail = nil;
-           t = nil;
            for(; *argv; argv++)
                if(**argv){
                    // add_list(newword(*argv), t)

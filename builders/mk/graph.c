@@ -309,6 +309,29 @@ newnode(char *name)
 }
 /*e: constructor [[newnode]] */
 
+// was in plan9.c
+/*s: function [[rcopy]] */
+void
+rcopy(char **to, Resub *match, int n)
+{
+    int c;
+    char *p;
+
+    *to = match->sp;		/* stem0 matches complete target */
+    for(to++, match++; --n > 0; to++, match++){
+        if(match->sp && match->ep){
+            p = match->ep;
+            c = *p;
+            *p = 0;
+            *to = strdup(match->sp);
+            *p = c;
+        }
+        else
+            *to = 0;
+    }
+}
+/*e: function [[rcopy]] */
+
 /*s: constructor [[newarc]] */
 Arc*
 newarc(Node *n, Rule *r, char *stem, Resub *match)
