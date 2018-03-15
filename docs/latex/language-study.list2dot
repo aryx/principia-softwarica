@@ -1,0 +1,194 @@
+#!/usr/bin/perl
+#src: http://rigaux.org/language-study/diagram.html
+
+#pad: related work:
+# - gnuclad 
+#   https://launchpad.net/gnuclad (cladogram tree)
+# - gldt (gnu/linux distro timeline)
+#   http://futurist.se/gldt/ , uses gnuclad
+
+sub min { (sort { $a <=> $b } @_)[0] }
+sub max { (sort { $b <=> $a } @_)[0] }
+sub uniq { my %l; @l{@_} = (); keys %l }
+sub difference2 { my %l; @l{@{$_[1]}} = (); grep { !exists $l{$_} } @{$_[0]} }
+sub round_down { my ($i, $r) = @_; $i = int $i; $i -= $i % $r; }
+sub round_up { my ($i, $r) = @_; $i = int $i; $i += $r - ($i + $r - 1) % $r - 1; }
+sub round { 
+    my ($i, $r) = @_;
+    my $x1 = round_down($i, $r);
+    my $x2 = round_up($i, $r);
+    my $diff1 = $i - $x1;
+    my $diff2 = $x2 - $i;
+    if ($diff1 <= $diff2) {
+        return $x1;
+    } else {
+        return $x2;
+    }
+}
+
+sub allocation2color {
+    ${{ GC => 'cyan', Static => 'gray', Stack => 'aquamarine2', Heap => 'lightblue' }}{$_[0]};
+}
+sub ds2color {
+    ${{ 
+	'arrays' => 'gray',
+	'records' => 'orange', 
+	'arrays,records' => 'yellow',
+	'objects' => 'red',
+	'lists' => 'cyan', 
+	'datatypes,lists' => 'lightblue',
+	'strings' => 'green',
+	'lists,strings', => 'aquamarine2',
+    }}{$_[0]};
+}
+sub sy2color {
+    ${{
+	0 => 'white',
+    1 => 'red', # selected
+    2 => 'orange', #considered
+    3 => 'yellow',
+	4 => 'aquamarine2',
+    5 => 'green',
+    6 => 'grey', #closed source (originally at least)
+   
+    }}{$_[0]};
+}
+sub color {
+#    return;
+#    my $e = allocation2color($allocation{$_[0]});
+#    my $e = ds2color($ds{$_[0]});
+    my $e = sy2color($sy{$_[0]} || '0');
+    print STDERR "$_[0] $sy{$_[0]} $e\n" unless $e;
+    $e ? "[color=$e; style=filled]" : '';
+}
+sub inheritate {
+    my ($to, $from) = @_;
+
+    $allocation{$to} = $allocation{$from};
+    $ds{$to} = $ds{$from};
+    #$sy{$to} = $sy{$from};
+}
+
+my $sons;
+my $was_empty = 1;
+while (<>) {
+    /^\s*#/ and next;
+    s/\s+$//;
+    if (/^\S/) {
+	# new language
+	$importance{$_} = s/^\*//;
+	$is_evolution{$_} = !$was_empty;
+	$links{$_} = $was_empty ? [] : [ $lang ];
+	$son{$_} = $was_empty ? $sons++ : $son{$lang};
+	inheritate($_, $lang);
+	$lang = $_;
+    } elsif (/^  (\d{4})\??$/) {
+	$date{$lang} = $1;
+    } elsif (/^  DS:(.*)/) {
+	$ds{$lang} = join(',', sort split(',', $1));
+    } elsif (/^  SY:(\d+)/) {
+	$sy{$lang} = $1;
+    } elsif (/^  (http:.*)/) {
+	$url{$lang} = $1;
+    } elsif (/^  (.* typing.*)/) {
+	$typing{$lang} = $1;
+    } elsif (/^  (Static|Stack|Heap) allocation$/ || /^  (GC)$/) {
+	$allocation{$lang} = $1;
+    } elsif (/^  (.*)/) {
+	my @l = split ',', $1;
+	difference2($links{$lang}, \@l) and warn "overriding @{$links{$lang}} with @l for $lang\n";
+	$links{$_} or die "$ARGV $.: unknown lang $_\n" foreach @l;
+	$links{$lang} = \@l;
+	inheritate($lang, $l[0]);
+    }
+    $was_empty = /^$/;
+}
+
+print '
+digraph dd {
+  {
+    node [ shape=plaintext,fontsize=45 ];
+
+';
+#pad: orig - 25
+
+my $bloated = $ENV{BLOATED};
+my $step = $bloated ? 1 : 5;
+my $min = round_down(min(values %date), $step);
+my $max = round_up(max(values %date), $step);
+my ($prev);
+for ($date = $min; $date <= $max; $date += $step) {
+    print " -> " if $prev;
+    print "$date";
+    $prev = $date;
+}
+print '
+  }
+
+node [ fontsize=30, style=filled ];
+';
+
+if (!$bloated) {
+    my %all_links = %links;
+    %links = ();
+
+    foreach my $lang (grep { $importance{$_} } keys %importance) {
+	my %l = map { $_ => 1 } @{$all_links{$lang}};
+	my %r;
+
+	while (%l) {
+	    my ($e) = keys %l; my $depth = delete $l{$e};
+	    if ($importance{$e}) {
+		$r{$e} = $depth;
+	    } else {
+		my @sub = @{$all_links{$e}};
+		my $i;
+		foreach (@sub) {
+		    my $depth2 = $depth + ($i == 0 && $is_evolution{$e} ? 0 : 1);
+		    $l{$_} = min($depth2, $l{$_} || 99);
+		    $i++;
+		}
+	    }
+	}
+	%r or next;
+	for (my $depth = 1; ; $depth++) {
+	    my @l = grep { $r{$_} <= $depth } keys %r or next;
+	    @{$links{$lang}} = @l;
+	    last;
+	}
+    }
+
+    delete $date{$_} foreach grep { !$importance{$_} } keys %importance;
+}
+
+my %d;
+push @{$d{$date{$_}}}, $_ foreach keys %date;
+while (my ($date, $langs) = each %d) {
+    print "{ rank = same ; ", round($date, $step);
+    foreach (@$langs) {
+	print " ; ";
+	print qq("$_");
+	print " [ fontsize=40 ]" if $importance{$_};
+    my $c = color($_); 
+    #print STDERR "ERR: $_=$c\n";
+    print $c;
+    }
+    print " }\n";
+}
+
+print "\n";
+
+while (my ($lang, $links) = each %links) {
+    foreach (uniq(@$links)) {
+	print qq("$_" -> "$lang");
+	print " [weight=3]" if $is_evolution{$lang} && $_ eq $links->[0];
+	print "\n";
+    }
+}
+
+
+print '
+}
+';
+
+1;
