@@ -1,19 +1,21 @@
 # try to use absolute paths below if you use a wrapper script like my 'mk'
 
 export objtype=386
-export cputype=386
 #alt: export objtype=arm
+
+#export cputype=386
 
 export ROOT=/home/pad/plan9/ROOT
 
-
-# for 8c, 8a, 8l, iar, etc 
+# for 8c, 8a, 8l, iar, iyacc, etc 
 export KENCC=/home/pad/kencc
-# for rc, mk (configured with rc), etc
-export PLAN9=/home/pad/packages/stow/plan9port
-# for 'ar' that will call kencc 'iar'
-export CROSS=/home/pad/plan9/CROSS
+# for ar, yacc that will call kencc iar, iyacc
+export CROSS=/home/pad/plan9/MISC/CROSS
 
+
+# for rc, mk (configured with rc), etc
+#export MKSHELL=rc
+#export PLAN9=/home/pad/packages/stow/plan9port
 # Note that kencc has an 'mk' but it is configured with 'sh',
 # so I override it by the 'mk' in plan9port via the PATH
 # ordering below. The reason to configure 'mk' with rc is
@@ -25,4 +27,3 @@ export PATH=$CROSS/bin:$PLAN9/bin:$KENCC/bin:$PATH
 
 #for 8._cp to be found and called
 PATH=$PATH:.
-
