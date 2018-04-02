@@ -6,7 +6,7 @@
 #include "getflags.h"
 #include "io.h"
 /*e: includes */
-#include "x.tab.h"
+#include "y.tab.h"
 
 // was in lex.c
 

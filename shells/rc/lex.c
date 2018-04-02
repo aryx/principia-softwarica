@@ -6,7 +6,7 @@
 #include "getflags.h"
 #include "io.h"
 /*e: includes */
-#include "x.tab.h"
+#include "y.tab.h"
 
 /*s: constant [[NTOK]] */
 #define	NTOK	8192		/* maximum bytes in a word (token) */

@@ -6,7 +6,7 @@
 #include "getflags.h"
 #include "io.h"
 /*e: includes */
-#include "x.tab.h"
+#include "y.tab.h"
 
 /*s: global [[treenodes]] */
 // list<ref_own<Tree>> (next = Tree.next)

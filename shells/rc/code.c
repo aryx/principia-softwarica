@@ -6,7 +6,7 @@
 #include "getflags.h"
 #include "io.h"
 /*e: includes */
-#include "x.tab.h"
+#include "y.tab.h"
 
 /*s: constant c0 (rc/code.c) */
 #define	c0	t->child[0]
