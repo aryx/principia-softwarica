@@ -20,7 +20,7 @@ char 	errbuf[ERRMAX];
 ulong	nofunc;
 /*e: global [[nofunc]] */
 
-#include "/sys/src/libc/9syscall/sys.h"
+#include "../../lib_core/libc/9syscall/sys.h"
 
 /*s: global [[sysctab]] */
 char*	sysctab[] =
