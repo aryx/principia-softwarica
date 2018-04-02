@@ -5,8 +5,6 @@ export objtype=386
 
 #export cputype=386
 
-export ROOT=/home/pad/plan9/ROOT
-
 # for 8c, 8a, 8l, iar, iyacc, etc 
 export KENCC=/home/pad/kencc
 # for ar, yacc that will call kencc iar, iyacc

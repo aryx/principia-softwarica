@@ -1,7 +1,8 @@
 
-Open source is good, but clean and well documented source is even better!
+Open source programs are good, but clean and well documented programs
+are even better!
 Principia softwarica is a serie of books explaining essential ``meta'' programs
-which are programs dealing with other programs (a.k.a system software):
+(programs dealing with other programs. a.k.a system software):
 
  - kernel/shell/windows = programs that manage and launch other programs
  - network = programs to help other programs communicate with each other
