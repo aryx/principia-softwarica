@@ -8,15 +8,12 @@ LIBS=\
  lib_math\
  lib_networking\
  lib_graphics\
+ # used by plumb, iostats, snapfs, screenlock, etc\
+ lib_security\
  lib_misc\
  \
  generators/lex/liblex\
  debuggers/libmach\
- # used by plumb, iostats, snapfs, etc\
- security/libauth\
- # used by screenlock, ???\
- security/libsec\
- security/libauthsrv\
  # used by networking/ip, aux/vga/db, etc.\
  database/libndb\
  # used by compilers/cpp (which is used by pcc), languages/s9\
