@@ -1,7 +1,7 @@
 # try to use absolute paths below if you use a wrapper script like my 'mk'
 
 export objtype=386
-#alt: arm
+#alt: arm 386
 #export cputype=386
 
 # for 8c, 8a, 8l, ar, yacc, etc 
