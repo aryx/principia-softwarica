@@ -5,7 +5,7 @@
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
-#include "/386/include/ureg.h"
+#include "../../include/arch/386/ureg.h"
 #include <mach.h>
 
 /*s: function REGOFF(x86) */

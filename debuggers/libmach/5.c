@@ -5,7 +5,7 @@
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
-#include "/arm/include/ureg.h"
+#include "../../include/arch/arm/ureg.h"
 #include <mach.h>
 
 /*s: function [[REGOFF]](arm) */
