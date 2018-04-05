@@ -4701,8 +4701,11 @@ parse(char *f, fdt fd, bool varoverride)
 @
 \l leak strdup for infile? when free?
 
-The code of [<parse()>] operates in four steps (as shown by
-the sectioning comments in the code above): intialization, lexing, parsing,
+The code of [<parse()>] operates in four steps 
+(as shown by the sectioning comments in the code above): 
+intialization, 
+lexing, 
+parsing,
 and actions.
 %
 Here are a few comments about each step:
@@ -4714,7 +4717,7 @@ globals [<infile>] and [<mkinline>]
 mentioned above, as well as two local buffers:
 \begin{enumerate}
 \item [[in]]: an input buffer 
-(using the [[libbio]] library see the \book{Libcore})
+(using the [[libbio]] library; see the \book{Libcore})
 connected to the file descriptor of the opened [[mkfile]]
 \n use Biobuf because will sometimes unget a character (said later)
 \item [[buf]]: a string buffer (see Appendix~\ref{sec:bufblock}) that will
@@ -4722,8 +4725,8 @@ be used to store one line of the [[mkfile]].
 \end{enumerate}
 
 %compiler:
-\item {\em Lexing}: [<parse()>] reads and assembles a line from the [[mkfile]] in [[buf]]
-(via the function [<assline()>]).
+\item {\em Lexing}: [<parse()>] reads and assembles a line from the [[mkfile]]
+in [[buf]] (via the function [<assline()>]).
 This is similar to the lexing phase in a compiler (see the \book{Compiler}).
 
 \item {\em Parsing}: [<parse()>]> processes a line to extract its elements:
@@ -5098,6 +5101,7 @@ a comment anymore.
 
 You can configure [[mk]] to use either the \plan shell [[rc]]
 (see the \book{Shell}) or a Bourne-alike shell.
+\t actually not anymore?
 %
 However, each shell has its own escaping rules: sometimes a single quote,
 sometimes double quotes, or sometimes the antislash character,
@@ -5358,6 +5362,7 @@ whether the target contains a special pattern character.
 [<rhead()>] called [[charin()]] to get
 the position of the [[':']], [['=']], or [['<']] character
 in a line.
+%
 In both cases, [[charin()]] does not just look for a character
 in a string; it must also handle quoted characters.
 
@@ -5623,6 +5628,10 @@ out:
 %old: tail -> lastw, b -> buf
 %pad: use empty()
 
+%ocaml-found:
+% note that it also looks for newlines, that it treats like a space!
+% Indeed stow() can be called on a string coming from a `cmd` which
+% may have newlines in it.
 
 The presence of the [[restart]] label above, as well as the local
 variables [[empty]] and [[lastw]] will become clear later.
@@ -8007,6 +8016,8 @@ for(a = node->arcs; a; a = a->next)
 \t when this matter? example?
 
 
+\t but that means cant display warning when mention inexistent files
+\t  that should exist, like typo in HFILES where mispelled header dependency
 
 
 
@@ -8144,7 +8155,7 @@ mk(char *target)
 % when did nothing, because prog was _already_ up to date.
 % in mk-ocaml I changed the message.
 
-[<mk()>] operates in siz steps:
+[<mk()>] operates in six steps:
 
 \begin{enumerate}
 
@@ -9723,7 +9734,7 @@ to the shell interpreter
 the values of [[mk]]'s special variables (e.g., [[$target]], [[$stem]]) or
 user variables (e.g., [[$CFLAGS]]) %$
 used in the recipes.
-
+%dup: which simplifies many things compared to Make (said later)
 
 %\section{Interacting with the shell}
 
@@ -9959,7 +9970,6 @@ for(p = specialvars; *p; p++)
 \l maybe should issue a warning? anyway it is only for user variables
 %  because for readenv(), those variables are skipped.
 
-
 %ocaml-found:
 % when use mk recursively, you will get a $stem in the environment! and
 % you need to filter it otherwise in exportenv you would need to take care
@@ -9980,6 +9990,7 @@ Indeed [<main()>]
 calls [<inithash()>] to initialize the symbol table, and
 [<inithash()>] calls [[readenv()]] below to populate the symbol table
 with variables from the environment (e.g., [[$HOME]], [[$objtype]], [[$CC]]). %$
+
 
 Under \plan, the environment variables of a process are accessible
 through the filesystem under [[/env/]] (see the \book{Kernel}).
@@ -10328,7 +10339,6 @@ if(f < 0) {
 
 \chapter{Debugging and Profiling Support TODO}
 \label{chap:debugging-support}
-
 
 % seen file/line fields in Rule, so can report error accurately.
 
@@ -10763,6 +10773,8 @@ prusage(void)
 
 
 
+
+
 \chapter{Advanced Features TODO}
 \label{chap:advanced}
 
@@ -11054,8 +11066,15 @@ pipecmd(char *cmd, ShellEnvVar *e, int *fd)
 
 % actually two styles, `{...} or `...`
 
-% useful for `data`.
-% also useful for globbing! SRC=`echo *.c`
+% Useful for `stuff that generates data`. 
+% Useful for globbing! SRC=`ls *.c`.
+% Note that in this last case ls will output one line per C file
+% (there is a difference between running ls from a terminal in inteactive mode
+% and when run outside a terminal. See 'ls *.c /tmp/output; cat /tmp/output')
+
+\subsection{Parsing backquotes: [[bquote()]]}
+
+\l recall context, how assline() works and bp and buf.
 
 <<[[assline()]] switch character cases>>=
 case '`':
@@ -11064,7 +11083,17 @@ case '`':
     break;
 @
 
-\subsection{[[bquote()]]}
+% bquote will use buf to store output of shell command
+% (which must be a line? after all that's the job of assline, to get a line).
+% It also use it to store the command string itself, but this
+% command is overriden by the output at some point.
+
+% This output is then parsed by rhead (which can expand variables).
+
+%ocaml-found:
+% Note that backquotes are expanded in assline! so before rhead! so in theory
+% the command output could output '<xxx' or even a rule, behaving a bit
+% like a dynamic mkfile (like <|)
 
 <<function [[bquote]]>>=
 /*
@@ -11073,16 +11102,15 @@ case '`':
 static error0
 bquote(Biobuf *bp, Bufblock *buf)
 {
-    int c, line, term;
+    int line;
+    int c, term;
     int start;
 
     line = mkinline;
-    while((c = Bgetrune(bp)) == ' ' || c == '\t')
-            ;
+    <<[[bquote()]] skip spaces>>
     if(c == '{'){
         term = '}';		/* rc style */
-        while((c = Bgetrune(bp)) == ' ' || c == '\t')
-            ;
+        <<[[bquote()]] skip spaces>>
     } else
         term = '`';		/* sh style */
 
@@ -11091,22 +11119,15 @@ bquote(Biobuf *bp, Bufblock *buf)
         if(c == term){
             insert(buf, '\n');
             insert(buf, '\0');
+            // prepare to overwrite the command string with its output
             buf->current = buf->start + start;
 
-            initenv();
-            // running the command, passing a buf argument
-            execsh(nil, buf->current, buf, shellenv);
-
+            <<[[bquote()]] execute shell command in [[buf]]>>
             return OK_1;
         }
         if(c == '\n')
-            break;
-        if(c == '\'' || c == '"' || c == '\\'){
-            insert(buf, c);
-            if(!escapetoken(bp, buf, 1, c))
-                return ERROR_0;
-            continue;
-        }
+            break; // go to error
+        <<[[bquote()]] handle quotes and escape characters>>
         rinsert(buf, c);
     }
     SYNERR(line);
@@ -11116,13 +11137,47 @@ bquote(Biobuf *bp, Bufblock *buf)
 @
 \l should waitup here? to consume the Wait records
 
+%FIGURE with buffer, how it will be overwritten
+
 % pass false to nextrune, so do not elide
+
+%ocaml-found:
+% note that in the case of quotes we want to keep the quote character
+% hence the insert below and the true parameter to preserve it.
+
+<<[[bquote()]] handle quotes and escape characters>>=
+if(c == '\'' || c == '"' || c == '\\'){
+    insert(buf, c);
+    if(!escapetoken(bp, buf, true, c))
+        return ERROR_0;
+    continue;
+}
+@
+
+<<[[bquote()]] skip spaces>>=
+while((c = Bgetrune(bp)) == ' ' || c == '\t')
+        ;
+@
+%ocaml: I remove that
+
 
 \subsection{Adjusting [[execsh()]]}
 
-% but so different that maybe should write another function
-% instead of trying to factorize too much.
 
+<<[[bquote()]] execute shell command in [[buf]]>>=
+initenv();
+// running the command, passing a buf argument
+execsh(nil, buf->current, buf, shellenv);
+@
+\l a bit dangerous because pass shinput through buf->current
+\l  but then execsh is also supposed to overwite buf ... but 
+\l  no pb because the use of buf->current is done in the forked grandchild
+\l  so no collision (subtle)
+
+\l execsh for backquote is so different that maybe should write another function
+% instead of trying to factorize too much?
+\l you really need to have the code of execsh next to you to understand
+\l the code below
 
 <<[[execsh()]] other locals>>=
 fdt out[2];
@@ -11177,6 +11232,7 @@ if(buf){
     close(out[0]);
 }
 @
+% remove trailing newline
 
 % note that child process, but not a job, but still will
 % be returned in waitup. No choice. But to avoid interference,
@@ -12025,6 +12081,14 @@ if(symlook(s->name, S_NOEXPORT, nil))
 \subsection{[[$target]] versus [[$alltargets]]}
 % should be oldtargets vs targets, would be more consistent
 % with prereqs vs newprereqs
+
+\t actually subtle, but when have a rule like
+%all install clean nuke:V:
+%	for (i in $LIBS $CMDS) @{
+%		cd $i
+%		mk $target
+%	}
+% then $target should be just 'clean' if do mk clean, not the whole thing
 
 
 <<[[dorecipe()]] other locals>>=
@@ -13358,8 +13422,12 @@ struct Bufblock
     char 		*current;
 
     // Extra
-    struct Bufblock *next;
+    <<[[Bufblock]] extra fields>>
 };
+@
+
+<<[[Bufblock]] extra fields>>=
+struct Bufblock *next;
 @
 
 % classic idiom
@@ -13405,7 +13473,7 @@ freebuf(Bufblock *p)
     freelist = p;
 }
 @
-
+% so buffer can be reused; no need rmalloc (really optimize things?)
 
 
 
