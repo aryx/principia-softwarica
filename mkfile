@@ -99,14 +99,14 @@ all:QV:
 		mk $MKFLAGS $target
 	}
 
-install clean nuke:QV:
+install uninstall clean nuke:QV:
 	for (i in $DIRS) @{
 		cd $i
 		mk $MKFLAGS $target
 	}
 
 help:VQ:
-	echo mk all, install, clean, nuke, release, cmds, kernels, or libs
+	echo mk all, install, uninstall, clean, nuke, release, cmds, kernels, or libs
 
 installall:V:
 	echo "installall not supported"
