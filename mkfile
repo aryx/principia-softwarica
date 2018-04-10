@@ -66,16 +66,22 @@ CMDSTODO=\
  \
  # requires (slow) pcc, too slow so skipped for now\
  typesetting\
- browsers\
 
-# interpreters/s9
-# networking/http
-# graphics/jpg
-# security: auth/
 # kernel/devices/storage/user
 # kernel/init/user
 # kernel/memory/user
 # kernel/syscalls/user
+
+
+#missing:
+# browsers
+# interpreters/s9
+# security/auth/
+
+#missing in subdirs:
+# networking/http
+# graphics/libimg
+# ...
 
 TESTS=\
  lib_graphics/libdraw/tests\

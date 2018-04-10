@@ -17,7 +17,7 @@ educational platform to learn about programming and computer science.
 The code of Plan9 is so elegant and small that you
 can realistically understand the whole operating system.
 In fact, I explained the whole code in my Principia Softwarica
-book series.
+book series (see https://principia-softwarica.org).
 
 This fork, because it is used to support my Principia Softwarica
 book series, contains only the essential programs used by a programmer
@@ -27,5 +27,5 @@ I've selected only what I consider to be the essence of an operating system.
 Moreover, this fork supports only the ARM and x86 architectures. Even though
 the original Plan9 supported more architectures, I think ARM and x86 are
 enough for the educational purpose of Principia Softwarica.
-Finally, this fork can be cross-compiled from Linux or MacOS, which
-makes it easy to experiment.
+Finally, as opposed to the original Plan9, this fork can also be
+cross-compiled from Linux or MacOS, which makes it easy to experiment with.
