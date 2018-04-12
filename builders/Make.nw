@@ -11139,13 +11139,15 @@ if(buf){
 \section{Dynamic [[mkfile]]: [[<|]]{\em prog}}
 \label{sec:dynamic-mkfile}
 
-% How to do the ifdef I use in pfff's makefiles?
-
+% How to do the ifdef I use in pfff's makefiles? dynamic mkfile!
 % Useful to provide an alternative to ifdef in Make.
 % instead you put the configurable part in an external
 % shell program that just does some echo FOO=X.
 
 % used by plan9 kernel to accept DSL for kernel configuration.
+
+% mkfile content through pipe
+% <|cmd  instead of <file
 
 <<[[rhead()]] adjust sep if dynamic mkfile [[<|]]>>=
 if(sep == '<' && *p == '|'){
@@ -11154,49 +11156,62 @@ if(sep == '<' && *p == '|'){
 }
 @
 
-% mkfile content through pipe
-% <|cmd  instead of <file
-
-<<[[parse()]] other locals>>=
-int pid;
-@
-% abused to store pid and later return status
 
 <<[[WaitupParam]] other cases>>=
-EMPTY_CHILDREN_IS_ERROR2 = -2,
 EMPTY_CHILDREN_IS_ERROR3 = -3,
 @
 %old:   
 %  could use __LINE__ instead of those ERROR and ERROR2
 
 
+<<[[parse()]] other locals>>=
+int pid;
+@
+% abused to store pid and later return status
 <<[[parse()]] switch rhead cases>>=
 case '|':
     p = wtos(tail, ' ');
-    if(*p == '\0'){
-        SYNERR(-1);
-        fprint(STDERR, "missing include program name\n");
-        Exit();
-    }
+    <<[[parse()]] sanity check [[p]] for include program name>>
 
     initenv();
     pid = pipecmd(p, shellenv, &newfd);
-    if(newfd < 0){
-        fprint(STDERR, "warning: skipping missing program file: ");
-        perror(p);
-    } else
+    <<[[parse()]] sanity check [[newfd]]>>
+    else
+        // recursive call
         parse(p, newfd, 0);
 
     while(waitup(EMPTY_CHILDREN_IS_ERROR3, &pid) >= 0)
         ;
-    if(pid != 0){
-        fprint(STDERR, "bad include program status\n");
-        Exit();
-    }
+    <<[[parse()]] sanity check [[pid]] after waitup>>
     break;
 @
 % why use waitup? it's a parsing time, so there should be no jobs
 % yet so stupid to introduce Process machinery for that.
+%ocaml: use waitpid
+
+<<[[parse()]] sanity check [[p]] for include program name>>=
+if(*p == '\0'){
+    SYNERR(-1);
+    fprint(STDERR, "missing include program name\n");
+    Exit();
+}
+@
+
+
+<<[[parse()]] sanity check [[newfd]]>>=
+if(newfd < 0){
+    fprint(STDERR, "warning: skipping missing program file: ");
+    perror(p);
+} 
+@
+%ocaml: exn before if there is a pb
+
+<<[[parse()]] sanity check [[pid]] after waitup>>=
+if(pid != 0){
+    fprint(STDERR, "bad include program status\n");
+    Exit();
+}
+@
 
 % execinit cos command string can contain variables?
 
@@ -13005,6 +13020,10 @@ if(res > 0){
 }
 @
 \t res == WEmptyChild ?
+
+<<[[WaitupParam]] other cases>>=
+EMPTY_CHILDREN_IS_ERROR2 = -2,
+@
 
 % subtle
 <<[[mk()]] before returning, more [[waitup()]] if there was an error>>=
