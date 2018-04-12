@@ -142,4 +142,5 @@ kernels:QV:
 		mk $MKFLAGS install
 	}
 
-<mkfile-$HOST
+<mkfile-host-$HOST
+<mkfile-target-$TARGET
