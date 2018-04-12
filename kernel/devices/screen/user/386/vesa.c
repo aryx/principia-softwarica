@@ -1,7 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
-#include </386/include/ureg.h>
+#include <../../../../../include/arch/386/ureg.h>
 typedef struct Ureg Ureg;
 
 #include "pci.h"

@@ -77,20 +77,23 @@ TESTS=\
 # those programs (e.g., bind, mount) are used as an initial /bin/
 # and mentioned in boot.rc
 BOOTCMDS=\
+ # those programs are part of the root image (thx to data2s)\
  kernel/files/user\
  kernel/devices/storage/user/386/libdisk\
  kernel/devices/storage/user/386/prep\
- kernel/filesystems/user/dossrv
-
-CMDSTODO=\
- kernel/filesystems/user/ramfs\
+ kernel/filesystems/user/dossrv\
+ # those programs are not part of the root image because they are called\
+ # after the call to dossrv\
  kernel/devices/mouse/user\
  kernel/devices/screen/user/386\
+ kernel/filesystems/user/ramfs\
+ # mntgen and ns\
  kernel/devices/sys/user\
- \
- # requires (slow) pcc, too slow so skipped for now\
- typesetting\
 
+#TODO:
+# requires (slow) pcc, too slow so skipped for now
+# typesetting
+#
 # kernel/devices/storage/user
 # kernel/init/user
 # kernel/memory/user
