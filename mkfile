@@ -62,6 +62,7 @@ PROGRAMS=\
 # graphics/libimg
 # ...
 
+#TODO: not used for now
 TESTS=\
  lib_graphics/libdraw/tests\
  lib_graphics/libmemdraw/tests\
