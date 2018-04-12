@@ -4,10 +4,10 @@ export objtype=386
 #alt: arm 386
 #export cputype=386
 
-# for 8c, 8a, 8l, ar, yacc, etc 
-export KENCC=/home/pad/kencc
 # for mk (configured with rc)
 export MKPATH=/home/pad
+# for 8c, 8a, 8l, ar, yacc, data2s, etc 
+export KENCC=/home/pad/kencc
 # for rc, sed, xd, ...
 export PLAN9=/home/pad/packages/stow/plan9port
 
