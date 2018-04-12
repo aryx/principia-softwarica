@@ -105,6 +105,8 @@ CMDS=$PROGRAMS $BOOTCMDS
 
 DIRS=$LIBS $CMDS #$KERNELS
 
+# I assume you have done source env.sh, or have a good 'mk' wrapper
+
 all:QV:
 	for (i in $DIRS) @{
 		cd $i
