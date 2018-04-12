@@ -2,7 +2,7 @@ TOP=../../../..
 objtype=386
 <$TOP/mkfiles/$objtype/mkfile
 
-# CONF is the configuration file, processed by many mkxxx scripts
+# $CONF is the configuration file, which is processed by many mkxxx scripts
 CONF=qemu
 CONFLIST=qemu
 p=9
@@ -12,7 +12,7 @@ KTZERO_AND_HEADER=0xE0100020
 # must match mem.h
 APBOOTSTRAP=0xE0003000
 
-DEVS=`{rc ../port/mkdevlist $CONF}
+DEVS=`rc ../port/mkdevlist $CONF`
 
 PORT=\
      portfns.$O\
@@ -92,6 +92,7 @@ OBJ=\
 	$PORT\
 
 # the order matters!
+#pad: we could switch libdraw.a to a smaller libgeometry.a
 LIB=\
 	$ROOT/$objtype/lib/libmemlayer.a\
 	$ROOT/$objtype/lib/libmemdraw.a\
@@ -99,7 +100,6 @@ LIB=\
 	$ROOT/$objtype/lib/libip.a\
 	$ROOT/$objtype/lib/libc.a\
 
-#pad: we could switch libdraw.a to a smaller libgeometry.a
 
 ETHER=`{echo devether.c ether*.c | sed 's/\.c/.'$O'/g'}
 VGA=`{echo devvga.c vga*.c | sed 's/\.c/.'$O'/g'}
@@ -116,30 +116,27 @@ $p$CONF:	$CONF.c $OBJ $LIB
 
 
 install:V:	$p$CONF
-	cp $p$CONF /$objtype/
+	cp $p$CONF $ROOT/$objtype/
 
-#TODO: simplify all of that
-# will specify the boot/*.c that will be part of bootpcf.out
-<../boot/bootmkfile
-# will specify the port/*.c, ip/*.c
+# specify the port/*.c, ip/*.c rules
 <../port/portmkfile
-# will inspect the 'bootdir' section of pcf and generate the target for pcf.root.c
+# inspect the 'bootdir' section of $CONF to generate $CONF.root.c target
 <|rc ../port/mkbootrules $CONF
 
-#TODO: should be done via 'mk depend'
+# should really be done via a 'mk depend'
+main.$O:			init.h reboot.h
 $ETHER: 			../port/etherif.h ../port/netif.h
-$VGA mouse.$O:			screen.h ../port/portscreen.h /sys/include/memdraw.h
+$VGA mouse.$O:			screen.h ../port/portscreen.h $TOP/include/ALL/memdraw.h
 $SDEV:				../port/sd.h
 devfloppy.$O: 			floppy.h
 archmp.$O mp.$O:		apbootstrap.h
 apic.$O archmp.$O mp.$O:	mp.h
-main.$O:			init.h reboot.h
-trap.$O:			/sys/include/tos.h
+trap.$O:			$TOP/include/ALL/tos.h
 
 init.h:D:		../port/initcode.c init9.c
 	$CC $CFLAGS ../port/initcode.c
 	$CC init9.c
-	$LD -l -R1 -s -o init.out init9.$O initcode.$O /$objtype/lib/libc.a
+	$LD -l -R1 -s -o init.out init9.$O initcode.$O $ROOT/$objtype/lib/libc.a
 	{echo 'uchar initcode[]={'
 	 xd -1x <init.out |
 		sed -e 's/^[0-9a-f]+ //' -e 's/ ([0-9a-f][0-9a-f])/0x\1,/g'
@@ -164,12 +161,10 @@ apbootstrap.h:	apbootstrap.s mem.h
 	 echo '};'} > $target
 
 
+%.clean:V: extraclean
 
-%.clean:V:
-	rm -f $stem.c [9bz]$stem [9bz]$stem.gz reboot.h apbootstrap.h init.h
-	rm -f ../boot/libboot.a$O
-#rm -f boot$stem.* 
-
+extraclean:V:
+	rm -f apbootstrap.h
 
 acid:V:
 	8c -a -w -I. i8253.c > acid
