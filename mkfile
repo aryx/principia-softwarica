@@ -29,6 +29,7 @@ LIBS=\
 # Programs
 ###############################################################################
 
+#todo: ugly but windows/ must be before editors/ because of the lib it contains
 PROGRAMS=\
  assemblers\
  linkers\
@@ -37,13 +38,13 @@ PROGRAMS=\
  machine\
  MISC/APE/pcc\
  \
+ shells\
+ windows\
+ \
  builders\
  debuggers\
  profilers\
  editors\
- \
- shells\
- windows\
  \
  networking\
  \
