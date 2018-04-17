@@ -647,6 +647,8 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     }
     /*e: [[new()]] if hideit */
 
+    if(DEBUG) fprint(STDERR, "new: creating winctl thread for win=%d\n", w->id);
+
     // create a new thread! for this new window!
     threadcreate(winctl, w, 8192);
 
@@ -668,9 +670,12 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
             arg[3] = argv;
         arg[4] = dir;
 
+        if(DEBUG) fprint(STDERR, "new: creating new winshell\n");
         proccreate(winshell, arg, 8192);
 
         pid = recvul(cpid);
+        if(DEBUG) fprint(STDERR, "new: created winshell=%d\n", pid);
+
         free(arg);
     }
     /*e: [[new()]] if pid == 0, create winshell process and set pid */

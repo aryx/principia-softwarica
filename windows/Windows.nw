@@ -6579,6 +6579,7 @@ winctl(void *arg)
     Window *w = arg;
     // map<enum<Wxxx>, Alt>
     Alt alts[NWALT+1];
+    int event;
     <<[[winctl()]] other locals>>
     
     snprint(buf, sizeof buf, "winctl-id%d", w->id);
@@ -6592,8 +6593,23 @@ winctl(void *arg)
     for(;;){
         <<[[winctl()]] alts adjustments>>
 
+        // to isolate messaging bug
+        //alts[WKey].op = CHANNOP;
+        //alts[WMouse].op = CHANNOP;
+        ////alts[WCtl].op = CHANNOP;
+        //alts[WMouseread].op = CHANNOP;
+        //alts[WCread].op = CHANNOP;
+        //alts[WCwrite].op = CHANNOP;
+        //alts[WWread].op = CHANNOP;
+
         // event loop
-        switch(alt(alts)){
+        event = alt(alts);
+        if(DEBUG) fprint(STDERR, "winctl: win=%d, event=%d\n", w->id, event);
+        if(event == -1) {
+          fprint(STDERR, "winctl: interrupted %r");
+          exits("interrupted");
+        }
+        switch(event){
         <<[[winctl()]] event loop cases>>
         }
 
@@ -7727,6 +7743,7 @@ wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
     wcm.r = r;
     wcm.image = image;
 
+    if(DEBUG) fprint(STDERR, "wsendctlmesg: win=%d, type=%d\n", w->id, type);
     send(w->cctl, &wcm);
 }
 @
@@ -7739,6 +7756,8 @@ int
 wctlmesg(Window *w, int m, Rectangle r, Image *i)
 {
     char buf[64];
+
+    if(DEBUG) fprint(STDERR, "wctlmesg: win=%d, type=%d\n", w->id, m);
 
     switch(m){
     <<[[wctlmesg()]] cases>>
@@ -7818,6 +7837,8 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     windows = erealloc(windows, ++nwindow * sizeof(Window*));
     windows[nwindow-1] = w;
     <<[[new()]] if hideit>>
+
+    if(DEBUG) fprint(STDERR, "new: creating winctl thread for win=%d\n", w->id);
 
     // create a new thread! for this new window!
     threadcreate(winctl, w, 8192);
@@ -7933,6 +7954,8 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 @
 %old: I changed the order of some initialisations, to group textual window
 % stuff together
+%bugpad: I rename in channels settings but forgot to put back channels creation
+% so I was getting some segfault in rio and some regressions (bad LP!)
 
 
 
@@ -8056,9 +8079,12 @@ if(pid == 0){
         arg[3] = argv;
     arg[4] = dir;
 
+    if(DEBUG) fprint(STDERR, "new: creating new winshell\n");
     proccreate(winshell, arg, 8192);
 
     pid = recvul(cpid);
+    if(DEBUG) fprint(STDERR, "new: created winshell=%d\n", pid);
+
     free(arg);
 }
 @
@@ -8117,6 +8143,8 @@ winshell(void *args)
     cmd  = arg[2];
     argv = arg[3];
     dir  = arg[4];
+    
+    if(DEBUG) fprint(STDERR, "winshell: cmd = %s\n", cmd);
 
     // copy namespace/file-descriptors/environment-variables (do not share)
     rfork(RFNAMEG|RFFDG|RFENVG);
@@ -8125,6 +8153,8 @@ winshell(void *args)
     <<[[winshell()]] reassign STDIN/STDOUT after namespace adjustment>>
 
     if(wclose(w) == false){	/* remove extra ref hanging from creation */
+
+        if(DEBUG) fprint(STDERR, "winshell: before procexec %s\n", cmd);
         notify(nil);
         dup(STDOUT, STDERR); // STDERR = STDOUT
         if(dir)
@@ -8168,6 +8198,7 @@ wsetpid(Window *w, int pid, bool dolabel)
     fdt fd;
 
     w->pid = pid;
+    if(DEBUG) fprint(STDERR, "wsetpid: win=%d pid =%d\n", w->id, w->pid);
 
     if(dolabel){
         sprint(buf, "rc %d", pid);
@@ -8205,12 +8236,16 @@ filsysmount(Filsys *fs, int id)
     char buf[32];
     errorneg1 err;
 
+    if(DEBUG) fprint(STDERR, "filsysmount1\n");
+
     close(fs->sfd);	/* close server end so mount won't hang if exiting */
     sprint(buf, "%d", id);
     err = mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf);
     <<[[filsysmount()]] sanity check err mount>>
     err = bind("/mnt/wsys", "/dev", MBEFORE);
     <<[[filsysmount()]] sanity check err bind>>
+
+    if(DEBUG) fprint(STDERR, "filsysmount2\n");
     return OK_0;
 }
 @
@@ -18838,6 +18873,13 @@ wrefresh(Window *w, Rectangle)
 
 \chapter{Debugging}
 \label{chap:debugging-appendix}
+
+% hard to see the error message because they are written on
+% /dev/cons which is disabled when you run in graphic mode, so easier
+% to redirect error to a file:
+%   rio >[2] /tmp/errors
+% also easier to debug rio from rio, so important to save somewhere
+% a rio that works! (e.g., /save/rio_old)
 
 %\section{9P messages}
 

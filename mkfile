@@ -149,7 +149,7 @@ kernels:QV:
 		mk $MKFLAGS install
 	}
 
-doall:Q:
+doall:V:
 	mk all
 	mk install
 	mk disk

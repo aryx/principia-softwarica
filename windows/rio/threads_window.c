@@ -53,6 +53,8 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
 {
     char buf[64];
 
+    if(DEBUG) fprint(STDERR, "wctlmesg: win=%d, type=%d\n", w->id, m);
+
     switch(m){
     /*s: [[wctlmesg()]] cases */
     case Deleted:
@@ -162,6 +164,7 @@ winctl(void *arg)
     Window *w = arg;
     // map<enum<Wxxx>, Alt>
     Alt alts[NWALT+1];
+    int event;
     /*s: [[winctl()]] other locals */
     Rune *kbdr;
     /*x: [[winctl()]] other locals */
@@ -287,8 +290,23 @@ winctl(void *arg)
             alts[WWread].op = CHANSND;
         /*e: [[winctl()]] alts adjustments */
 
+        // to isolate messaging bug
+        //alts[WKey].op = CHANNOP;
+        //alts[WMouse].op = CHANNOP;
+        ////alts[WCtl].op = CHANNOP;
+        //alts[WMouseread].op = CHANNOP;
+        //alts[WCread].op = CHANNOP;
+        //alts[WCwrite].op = CHANNOP;
+        //alts[WWread].op = CHANNOP;
+
         // event loop
-        switch(alt(alts)){
+        event = alt(alts);
+        if(DEBUG) fprint(STDERR, "winctl: win=%d, event=%d\n", w->id, event);
+        if(event == -1) {
+          fprint(STDERR, "winctl: interrupted %r");
+          exits("interrupted");
+        }
+        switch(event){
         /*s: [[winctl()]] event loop cases */
         case WKey:
             for(i=0; kbdr[i] != L'\0'; i++)

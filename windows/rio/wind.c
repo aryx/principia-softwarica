@@ -58,6 +58,7 @@ wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
     wcm.r = r;
     wcm.image = image;
 
+    if(DEBUG) fprint(STDERR, "wsendctlmesg: win=%d, type=%d\n", w->id, type);
     send(w->cctl, &wcm);
 }
 /*e: function [[wsendctlmesg]] */
@@ -157,6 +158,15 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     w->ck = ck;
     w->cctl = cctl;
     /*e: [[wmk()]] channels settings */
+    /*s: [[wmk()]] channels creation */
+    w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
+    /*x: [[wmk()]] channels creation */
+    w->consread =  chancreate(sizeof(Consreadmesg), 0);
+    /*x: [[wmk()]] channels creation */
+    w->conswrite = chancreate(sizeof(Conswritemesg), 0);
+    /*x: [[wmk()]] channels creation */
+    w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
+    /*e: [[wmk()]] channels creation */
     /*s: [[wmk()]] textual window settings */
     /*s: [[wmk()]] textual window settings, set scrollbar */
     r = insetrect(w->i->r, Selborder+1);
@@ -559,6 +569,7 @@ wsetpid(Window *w, int pid, bool dolabel)
     fdt fd;
 
     w->pid = pid;
+    if(DEBUG) fprint(STDERR, "wsetpid: win=%d pid =%d\n", w->id, w->pid);
 
     if(dolabel){
         sprint(buf, "rc %d", pid);

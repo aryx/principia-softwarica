@@ -32,6 +32,8 @@ winshell(void *args)
     cmd  = arg[2];
     argv = arg[3];
     dir  = arg[4];
+    
+    if(DEBUG) fprint(STDERR, "winshell: cmd = %s\n", cmd);
 
     // copy namespace/file-descriptors/environment-variables (do not share)
     rfork(RFNAMEG|RFFDG|RFENVG);
@@ -69,6 +71,8 @@ winshell(void *args)
     /*e: [[winshell()]] reassign STDIN/STDOUT after namespace adjustment */
 
     if(wclose(w) == false){	/* remove extra ref hanging from creation */
+
+        if(DEBUG) fprint(STDERR, "winshell: before procexec %s\n", cmd);
         notify(nil);
         dup(STDOUT, STDERR); // STDERR = STDOUT
         if(dir)

@@ -227,6 +227,8 @@ filsysmount(Filsys *fs, int id)
     char buf[32];
     errorneg1 err;
 
+    if(DEBUG) fprint(STDERR, "filsysmount1\n");
+
     close(fs->sfd);	/* close server end so mount won't hang if exiting */
     sprint(buf, "%d", id);
     err = mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf);
@@ -243,6 +245,8 @@ filsysmount(Filsys *fs, int id)
         return ERROR_NEG1;
     }
     /*e: [[filsysmount()]] sanity check err bind */
+
+    if(DEBUG) fprint(STDERR, "filsysmount2\n");
     return OK_0;
 }
 /*e: function [[filsysmount]] */
