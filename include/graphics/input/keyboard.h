@@ -1,4 +1,4 @@
-/*s: include/keyboard.h */
+/*s: include/graphics/input/keyboard.h */
 #pragma src "/sys/src/libdraw"
 #pragma lib "libdraw.a"
 
@@ -56,4 +56,4 @@ enum {
     Kbs=	0x08, // C-h (backspace)
 };
 /*e: enum [[Kxxx]] */
-/*e: include/keyboard.h */
+/*e: include/graphics/input/keyboard.h */

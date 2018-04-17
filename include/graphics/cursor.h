@@ -1,4 +1,4 @@
-/*s: include/cursor.h */
+/*s: include/graphics/cursor.h */
 #pragma src "/sys/src/libdraw"
 
 typedef struct	Cursor Cursor;
@@ -12,4 +12,4 @@ struct	Cursor
     byte	set[2*16];
 };
 /*e: struct [[Cursor]] */
-/*e: include/cursor.h */
+/*e: include/graphics/cursor.h */

@@ -1,4 +1,4 @@
-/*s: include/window.h */
+/*s: include/graphics/window.h */
 #pragma src "/sys/src/libdraw"
 #pragma lib "libdraw.a"
 // This file assumes you have included draw.h before.
@@ -40,4 +40,4 @@ extern void	topwindow(Image*);
 
 extern int	newwindow(char*);
 
-/*e: include/window.h */
+/*e: include/graphics/window.h */

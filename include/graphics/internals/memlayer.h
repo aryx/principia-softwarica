@@ -1,4 +1,4 @@
-/*s: include/memlayer.h */
+/*s: include/graphics/internals/memlayer.h */
 #pragma src "/sys/src/libmemlayer"
 #pragma lib "libmemlayer.a"
 // This file assumes you have included draw.h before.
@@ -79,4 +79,4 @@ void			_memlayerop(void (*fn)(Memimage*, Rectangle, Rectangle, void*, int), Memi
 
 void			_memltofrontfill(Memimage*, int);
 void			_memlsetclear(Memscreen*);
-/*e: include/memlayer.h */
+/*e: include/graphics/internals/memlayer.h */

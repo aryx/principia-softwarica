@@ -1,4 +1,4 @@
-/*s: include/draw.h */
+/*s: include/graphics/draw.h */
 #pragma src "/sys/src/libdraw"
 #pragma lib "libdraw.a"
 
@@ -582,4 +582,4 @@ extern void		unlockdisplay(Display*);
 extern	int	Rfmt(Fmt*);
 extern	int	Pfmt(Fmt*);
 
-/*e: include/draw.h */
+/*e: include/graphics/draw.h */

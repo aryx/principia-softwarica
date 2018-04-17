@@ -1,4 +1,4 @@
-/*s: include/event.h */
+/*s: include/graphics/input/event.h */
 #pragma src "/sys/src/libdraw"
 #pragma lib "libdraw.a"
 
@@ -87,4 +87,4 @@ extern int		eatomouse(Mouse*, char*, int);
 
 extern Rectangle	getrect(int, Mouse*);
 extern Rectangle	egetrect(int, Mouse*);
-/*e: include/event.h */
+/*e: include/graphics/input/event.h */

@@ -1,4 +1,4 @@
-/*s: include/memdraw.h */
+/*s: include/graphics/internals/memdraw.h */
 #pragma	src	"/sys/src/libmemdraw"
 #pragma	lib	"libmemdraw.a"
 // This file assumes you have included draw.h before.
@@ -276,4 +276,4 @@ extern int		drawdebug;
 #pragma varargck type "b" int
 #pragma varargck type "b" uint
 
-/*e: include/memdraw.h */
+/*e: include/graphics/internals/memdraw.h */

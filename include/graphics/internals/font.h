@@ -1,4 +1,4 @@
-/*s: include/font.h */
+/*s: include/graphics/internals/font.h */
 #pragma src "/sys/src/libdraw"
 #pragma lib "libdraw.a"
 // This file assumes you have included draw.h before.
@@ -160,4 +160,4 @@ extern	byte	defontdata[];
 extern	int		sizeofdefont;
 
 
-/*e: include/font.h */
+/*e: include/graphics/internals/font.h */

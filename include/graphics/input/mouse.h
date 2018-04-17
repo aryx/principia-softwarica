@@ -1,4 +1,4 @@
-/*s: include/mouse.h */
+/*s: include/graphics/input/mouse.h */
 #pragma src "/sys/src/libdraw"
 
 typedef struct	Channel Channel;
@@ -83,4 +83,4 @@ extern void			drawgetrect(Rectangle, int);
 extern Rectangle	getrect(int, Mousectl*);
 
 extern int	 		menuhit(int, Mousectl*, Menu*, Screen*);
-/*e: include/mouse.h */
+/*e: include/graphics/input/mouse.h */

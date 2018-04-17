@@ -1,4 +1,4 @@
-/*s: include/marshal.h */
+/*s: include/graphics/internals/marshal.h */
 /*s: function [[BGSHORT]] */
 #define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))
 /*e: function [[BGSHORT]] */
@@ -14,4 +14,4 @@
 
 extern byte*	bufimage(Display*, int);
 
-/*e: include/marshal.h */
+/*e: include/graphics/internals/marshal.h */

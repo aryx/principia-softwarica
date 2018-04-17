@@ -1,4 +1,4 @@
-/*s: include/draw_private.h */
+/*s: include/graphics/internals/draw_private.h */
 
 extern int		drawlsetrefresh(ulong, int, void*, void*);
 
@@ -42,4 +42,4 @@ extern	void	drawsetdebug(bool);
 
 #include <marshal.h>
 
-/*e: include/draw_private.h */
+/*e: include/graphics/internals/draw_private.h */
