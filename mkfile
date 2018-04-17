@@ -149,5 +149,11 @@ kernels:QV:
 		mk $MKFLAGS install
 	}
 
+doall:Q:
+	mk all
+	mk install
+	mk disk
+    mk run
+
 <mkfile-host-$HOST
 <mkfile-target-$TARGET
