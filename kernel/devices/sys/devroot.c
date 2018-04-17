@@ -157,8 +157,7 @@ rootreset(void)
     addrootdir("proc");
     addrootdir("root");
     addrootdir("srv");
-    // can't use sys, would conflict with ROOT/sys
-    addrootdir("ksys");
+    addrootdir("sys");
 }
 /*e: method rootreset */
 
