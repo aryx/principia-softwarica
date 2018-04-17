@@ -24,11 +24,13 @@ struct Slave
 /*s: struct [[Ebuf]] */
 struct Ebuf
 {
-    int	n;		/* number of bytes in buf */
-    byte	buf[EMAXMSG];
-
     // Extra
     Ebuf	*next;
+
+    int	n;		/* number of bytes in buf */
+    // this must be the last field
+    byte	buf[EMAXMSG];
+
 };
 /*e: struct [[Ebuf]] */
 
