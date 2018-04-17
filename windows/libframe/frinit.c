@@ -10,9 +10,9 @@
 void
 frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
 {
-    frsetrects(f, r, b);
     f->font = ft;
     f->display = b->display;
+    frsetrects(f, r, b);
 
     f->nchars = 0;
     f->nlines = 0;
