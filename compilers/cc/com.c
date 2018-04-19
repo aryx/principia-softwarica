@@ -71,14 +71,14 @@ complex(Node *n)
 }
 /*e: function [[complex]] */
 
-/*s: enum _anon_ (cc/com.c) */
+/*s: enum [[_anon_ (cc/com.c)]] */
 enum
 {
     ADDROF	= 1<<0,
     CASTOF	= 1<<1,
     ADDROP	= 1<<2,
 };
-/*e: enum _anon_ (cc/com.c) */
+/*e: enum [[_anon_ (cc/com.c)]] */
 
 /*s: function [[tcom]] */
 /*

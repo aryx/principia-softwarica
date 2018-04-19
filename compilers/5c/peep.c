@@ -1318,14 +1318,14 @@ enum {
 };
 /*e: enum [[_anon_]](arm) */
     
-/*s: enum _anon_ (5c/peep.c)(arm) */
+/*s: enum [[_anon_ (5c/peep.c)]](arm) */
 enum {
     Falsecond,
     Truecond,
     Delbranch,
     Keepbranch
 };
-/*e: enum _anon_ (5c/peep.c)(arm) */
+/*e: enum [[_anon_ (5c/peep.c)]](arm) */
 
 /*s: function [[isbranch]](arm) */
 int 

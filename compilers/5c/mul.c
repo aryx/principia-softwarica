@@ -34,7 +34,7 @@ static int	docode(char *hp, char *cp, int r0, int r1);
 static int	gen1(int len);
 static int	gen2(int len, long r1);
 static int	gen3(int len, long r0, long r1, int flag);
-/*s: enum _anon_ (5c/mul.c)(arm) */
+/*s: enum [[_anon_ (5c/mul.c)]](arm) */
 enum
 {
     SR1	= 1<<0,		/* r1 has been shifted */
@@ -42,7 +42,7 @@ enum
     UR1	= 1<<2,		/* r1 has not been used */
     UR0	= 1<<3,		/* r0 has not been used */
 };
-/*e: enum _anon_ (5c/mul.c)(arm) */
+/*e: enum [[_anon_ (5c/mul.c)]](arm) */
 
 /*s: function [[mulcon0]](arm) */
 Multab*
