@@ -236,6 +236,9 @@ zarglist:
 |   arglist     { $$ = invert($1); }
 /*x: parameter declarator rules */
 /*s: arglist rule */
+arglist:
+    name
+/*x: arglist rule */
 |   tlist xdecor
     {
         $$ = new(OPROTO, $2, Z);
@@ -250,9 +253,6 @@ zarglist:
 |   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
 /*x: arglist rule */
 |   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
-/*x: arglist rule */
-arglist:
-    name
 /*e: arglist rule */
 /*x: parameter declarator rules */
 /*

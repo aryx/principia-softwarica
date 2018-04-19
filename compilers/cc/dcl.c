@@ -1021,6 +1021,10 @@ fnproto1(Node *n)
 
     switch(n->op) {
     /*s: [[fnproto1()]] switch node kind cases */
+    case ONAME:
+        diag(n, "incomplete argument prototype");
+        return typ(TINT, T);
+    /*x: [[fnproto1()]] switch node kind cases */
     case OPROTO:
         lastdcltype = T; // dead?
         dodecl(NODECL, CXXX, n->type, n->left);
@@ -1039,10 +1043,6 @@ fnproto1(Node *n)
     /*x: [[fnproto1()]] switch node kind cases */
     case ODOTDOT:
         return typ(TDOT, T);
-    /*x: [[fnproto1()]] switch node kind cases */
-    case ONAME:
-        diag(n, "incomplete argument prototype");
-        return typ(TINT, T);
     /*e: [[fnproto1()]] switch node kind cases */
     }
     diag(n, "unknown op in fnproto");
