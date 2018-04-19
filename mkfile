@@ -152,7 +152,7 @@ kernels:QV:
 doall:V:
 	mk all
 	mk install
-	mk disk
+	mk disksrc
     mk run
 
 <mkfile-host-$HOST
