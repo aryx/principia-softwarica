@@ -1,15 +1,16 @@
 /*s: assemblers/8a/a.h */
 #include "../aa/aa.h"
-#include <8.out.h>
+#include <386/8.out.h>
+//XxX: #include <8.out.h>
 
 typedef	struct	Gen  Gen;
 typedef	struct	Gen2 Gen2;
 
-/*s: constant FPCHIP(x86) */
+/*s: constant [[FPCHIP]](x86) */
 #define	FPCHIP		true
-/*e: constant FPCHIP(x86) */
+/*e: constant [[FPCHIP]](x86) */
 
-/*s: struct Gen(x86) */
+/*s: struct [[Gen]](x86) */
 struct	Gen
 {
     // enum<operand_kind>
@@ -24,22 +25,22 @@ struct	Gen
 
     short	scale;
 
+    //??
     Sym*	sym;
 
     long	offset2;
 };
-/*e: struct Gen(x86) */
-/*s: struct Gen2(x86) */
+/*e: struct [[Gen]](x86) */
+/*s: struct [[Gen2]](x86) */
 struct	Gen2
 {
     Gen	from;
     Gen	to;
 };
-/*e: struct Gen2(x86) */
+/*e: struct [[Gen2]](x86) */
 
 extern	char*	Dlist[30];
 extern	int	nDlist;
-
 extern	Gen	nullgen;
 extern	int	pass;
 extern	char*	pathname;

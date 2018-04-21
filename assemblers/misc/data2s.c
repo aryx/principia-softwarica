@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <bio.h>
 
-/*s: function main */
+/*s: function [[main]] */
 void
 main(int argc, char *argv[])
 {
@@ -40,5 +40,5 @@ main(int argc, char *argv[])
     Bprint(&bout, "DATA %slen+0(SB)/4, $%ld\n", argv[1], slen);
     exits(0);
 }
-/*e: function main */
+/*e: function [[main]] */
 /*e: assemblers/misc/data2s.c */

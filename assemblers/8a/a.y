@@ -39,23 +39,23 @@
 %token  <sval>  LSCONST
 %token  <sym>   LNAME LLAB LVAR
 /*e: token declarations(x86) */
-/*s: type declarations(x86) */
+/*s: type [[declarations]](x86) */
 %type   <gen>   reg imm mem   omem nmem nam
-/*x: type declarations(x86) */
+/*x: type [[declarations]](x86) */
 %type   <lval>  pointer
-/*x: type declarations(x86) */
+/*x: type [[declarations]](x86) */
 %type   <gen>  rel
-/*x: type declarations(x86) */
+/*x: type [[declarations]](x86) */
 %type   <lval>  offset
-/*x: type declarations(x86) */
+/*x: type [[declarations]](x86) */
 %type   <gen>  rem rim rom 
-/*x: type declarations(x86) */
+/*x: type [[declarations]](x86) */
 %type   <gen2>  spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
-/*x: type declarations(x86) */
+/*x: type [[declarations]](x86) */
 %type   <lval>  con expr
-/*x: type declarations(x86) */
+/*x: type [[declarations]](x86) */
 %type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
-/*e: type declarations(x86) */
+/*e: type [[declarations]](x86) */
 %%
 /*s: grammar(x86) */
 prog:
@@ -437,14 +437,18 @@ rom:
 | '*' omem { $$ = $2; }
 /*e: operand rules(x86) */
 /*s: constant expression rules */
+/*s: con rule */
 con:
   LCONST
-| LVAR         { $$ = $1->value; }
 | '-' con      { $$ = -$2; }
 | '+' con      { $$ = $2; }
 | '~' con      { $$ = ~$2; }
+/*x: con rule */
 | '(' expr ')' { $$ = $2; }
-
+/*x: con rule */
+| LVAR         { $$ = $1->value; }
+/*e: con rule */
+/*s: expr rule */
 expr:
   con
 | expr '+' expr     { $$ = $1 + $3; }
@@ -452,12 +456,15 @@ expr:
 | expr '*' expr     { $$ = $1 * $3; }
 | expr '/' expr     { $$ = $1 / $3; }
 | expr '%' expr     { $$ = $1 % $3; }
+
 | expr '<' '<' expr { $$ = $1 << $4; }
 | expr '>' '>' expr { $$ = $1 >> $4; }
+
 | expr '&' expr     { $$ = $1 & $3; }
 | expr '^' expr     { $$ = $1 ^ $3; }
 | expr '|' expr     { $$ = $1 | $3; }
 
+/*e: expr rule */
 /*e: constant expression rules */
 /*e: grammar(x86) */
 /*e: 8a/a.y */
