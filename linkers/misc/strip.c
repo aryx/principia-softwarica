@@ -2,6 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
+
 #include <mach.h>
 
 /*s: function error (linkers/misc/strip.c) */
@@ -30,7 +31,7 @@ usage(void)
 }
 /*e: function usage (linkers/misc/strip.c) */
 
-/*s: function strip */
+/*s: function [[strip]] */
 static int
 strip(char* file, char* out)
 {
@@ -130,7 +131,7 @@ strip(char* file, char* out)
 
     return 0;
 }
-/*e: function strip */
+/*e: function [[strip]] */
 
 /*s: function main (linkers/misc/strip.c) */
 void

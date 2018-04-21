@@ -4,59 +4,60 @@
  */
 #include <u.h>
 #include <libc.h>
-#include <ar.h>
 #include <bio.h>
-#include <mach.h>
 
-/*s: enum _anon_ (linkers/misc/nm.c) */
+#include <mach.h>
+#include <ar.h>
+
+/*s: enum NmConstants */
 enum{
     CHUNK	=	256	/* must be power of 2 */
 };
-/*e: enum _anon_ (linkers/misc/nm.c) */
+/*e: enum NmConstants */
 
-/*s: global errs */
+/*s: global [[errs]] */
 static char	*errs;			/* exit status */
-/*e: global errs */
-/*s: global filename */
+/*e: global [[errs]] */
+/*s: global [[filename]] */
 static char	*filename;		/* current file */
-/*e: global filename */
-/*s: global symname */
+/*e: global [[filename]] */
+/*s: global [[symname]] */
 static char	symname[]="__.SYMDEF";	/* table of contents file name */
-/*e: global symname */
-/*s: global multifile */
+/*e: global [[symname]] */
+/*s: global [[multifile]] */
 static bool	multifile;		/* processing multiple files */
-/*e: global multifile */
+/*e: global [[multifile]] */
 /*s: global aflag (linkers/misc/nm.c) */
 static int	aflag;
 /*e: global aflag (linkers/misc/nm.c) */
-/*s: global gflag */
+/*s: global [[gflag]] */
 static int	gflag;
-/*e: global gflag */
-/*s: global hflag */
+/*e: global [[gflag]] */
+/*s: global [[hflag]] */
 static int	hflag;
-/*e: global hflag */
-/*s: global nflag */
+/*e: global [[hflag]] */
+/*s: global [[nflag]] */
 static int	nflag;
-/*e: global nflag */
-/*s: global sflag */
+/*e: global [[nflag]] */
+/*s: global [[sflag]] */
 static int	sflag;
-/*e: global sflag */
+/*e: global [[sflag]] */
 /*s: global uflag (linkers/misc/nm.c) */
 static int	uflag;
 /*e: global uflag (linkers/misc/nm.c) */
-/*s: global Tflag */
+/*s: global [[Tflag]] */
 static int	Tflag;
-/*e: global Tflag */
+/*e: global [[Tflag]] */
 
-/*s: global fnames */
+/*s: global [[fnames]] */
 static Sym	**fnames;		/* file path translation table */
-/*e: global fnames */
-/*s: global symptr */
+/*e: global [[fnames]] */
+/*s: global [[symptr]] */
 static Sym	**symptr;
-/*e: global symptr */
-/*s: global nsym */
+/*e: global [[symptr]] */
+/*s: global [[nsym]] */
 static int	nsym;
-/*e: global nsym */
+/*e: global [[nsym]] */
 /*s: global bout (linkers/misc/nm.c) */
 static Biobuf	bout;
 /*e: global bout (linkers/misc/nm.c) */
@@ -121,7 +122,7 @@ main(int argc, char *argv[])
 }
 /*e: function main (linkers/misc/nm.c) */
 
-/*s: function doar */
+/*s: function [[doar]] */
 /*
  * read an archive file,
  * processing the symbols for each intermediate file in it.
@@ -160,9 +161,9 @@ doar(Biobuf *bp)
         printsyms(symptr, nsym);
     }
 }
-/*e: function doar */
+/*e: function [[doar]] */
 
-/*s: function dofile */
+/*s: function [[dofile]] */
 /*
  * process symbols in a file
  */
@@ -181,15 +182,15 @@ dofile(Biobuf *bp)
         printsyms(symptr, nsym);
     }
 }
-/*e: function dofile */
+/*e: function [[dofile]] */
 
-/*s: function cmp */
+/*s: function [[cmp_symbol]] */
 /*
  * comparison routine for sorting the symbol table
  *	this screws up on 'z' records when aflag == 1
  */
 int
-cmp(void *vs, void *vt)
+cmp_symbol(void *vs, void *vt)
 {
     Sym **s, **t;
 
@@ -202,8 +203,8 @@ cmp(void *vs, void *vt)
             return (*s)->value > (*t)->value;
     return strcmp((*s)->name, (*t)->name);
 }
-/*e: function cmp */
-/*s: function zenter */
+/*e: function [[cmp_symbol]] */
+/*s: function [[zenter]] */
 /*
  * enter a symbol in the table of filename elements
  */
@@ -222,9 +223,9 @@ zenter(Sym *s)
     }
     fnames[s->value] = s;
 }
-/*e: function zenter */
+/*e: function [[zenter]] */
 
-/*s: function execsyms */
+/*s: function [[execsyms]] */
 /*
  * get the symbol table from an executable file, if it has one
  */
@@ -249,9 +250,9 @@ execsyms(int fd)
 
     printsyms(symptr, nsym);
 }
-/*e: function execsyms */
+/*e: function [[execsyms]] */
 
-/*s: function psym */
+/*s: function [[psym]] */
 void
 psym(Sym *s, void* p)
 {
@@ -305,9 +306,9 @@ psym(Sym *s, void* p)
     }
     symptr[nsym++] = s;
 }
-/*e: function psym */
+/*e: function [[psym]] */
 
-/*s: function printsyms */
+/*s: function [[printsyms]] */
 void
 printsyms(Sym **symptr, long nsym)
 {
@@ -317,7 +318,7 @@ printsyms(Sym **symptr, long nsym)
     char path[512];
 
     if(!sflag)
-        qsort(symptr, nsym, sizeof(*symptr), cmp);
+        qsort(symptr, nsym, sizeof(*symptr), cmp_symbol);
     
     wid = 0;
     for (i=0; i<nsym; i++) {
@@ -346,9 +347,9 @@ printsyms(Sym **symptr, long nsym)
         Bprint(&bout, "%c %s\n", s->type, cp);
     }
 }
-/*e: function printsyms */
+/*e: function [[printsyms]] */
 
-/*s: function error */
+/*s: function [[error]] */
 static void
 error(char *fmt, ...)
 {
@@ -365,5 +366,5 @@ error(char *fmt, ...)
     fmtfdflush(&f);
     errs = "errors";
 }
-/*e: function error */
+/*e: function [[error]] */
 /*e: linkers/misc/nm.c */

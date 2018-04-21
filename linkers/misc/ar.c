@@ -5,6 +5,7 @@
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
+
 #include <mach.h>
 #include <ar.h>
 
@@ -18,7 +19,7 @@
  * 	temp files, in order, back into the archive.
  */
 
-/*s: struct Arsymref */
+/*s: struct [[Arsymref]] */
 typedef struct	Arsymref
 {
     char	*name;
@@ -27,9 +28,9 @@ typedef struct	Arsymref
     vlong	offset;
     struct	Arsymref *next;
 } Arsymref;
-/*e: struct Arsymref */
+/*e: struct [[Arsymref]] */
 
-/*s: struct Armember */
+/*s: struct [[Armember]] */
 typedef struct	Armember	/* Temp file entry - one per archive member */
 {
     struct Armember	*next;
@@ -38,9 +39,9 @@ typedef struct	Armember	/* Temp file entry - one per archive member */
     long		date;
     void		*member;
 } Armember;
-/*e: struct Armember */
+/*e: struct [[Armember]] */
 
-/*s: struct Arfile */
+/*s: struct [[Arfile]] */
 typedef	struct Arfile		/* Temp file control block - one per tempfile */
 {
     int	paged;		/* set when some data paged to disk */
@@ -51,21 +52,21 @@ typedef	struct Arfile		/* Temp file control block - one per tempfile */
     Armember *tail;		/* tail of member chain */
     Arsymref *sym;		/* head of defined symbol chain */
 } Arfile;
-/*e: struct Arfile */
+/*e: struct [[Arfile]] */
 
-/*s: struct Hashchain */
+/*s: struct [[Hashchain]] */
 typedef struct Hashchain
 {
     char	*name;
     struct Hashchain *next;
 } Hashchain;
-/*e: struct Hashchain */
+/*e: struct [[Hashchain]] */
 
-/*s: constant NHASH */
+/*s: constant [[NHASH]] */
 #define	NHASH	1024
-/*e: constant NHASH */
+/*e: constant [[NHASH]] */
 
-/*s: function HEADER_IO */
+/*s: function [[HEADER_IO]] */
 /*
  *	macro to portably read/write archive header.
  *	'cmd' is read/write/Bread/Bwrite, etc.
@@ -77,77 +78,78 @@ typedef struct Hashchain
                 || cmd(f, h.mode, sizeof(h.mode)) != sizeof(h.mode)\
                 || cmd(f, h.size, sizeof(h.size)) != sizeof(h.size)\
                 || cmd(f, h.fmag, sizeof(h.fmag)) != sizeof(h.fmag)
-/*e: function HEADER_IO */
+/*e: function [[HEADER_IO]] */
 
         /* constants and flags */
-/*s: global man */
+/*s: global [[man]] */
 char	*man =		"mrxtdpq";
-/*e: global man */
-/*s: global opt */
+/*e: global [[man]] */
+/*s: global [[opt]] */
 char	*opt =		"uvnbailo";
-/*e: global opt */
-/*s: global artemp */
+/*e: global [[opt]] */
+/*s: global [[artemp]] */
 char	artemp[] =	"/tmp/vXXXXX";
-/*e: global artemp */
-/*s: global movtemp */
+/*e: global [[artemp]] */
+/*s: global [[movtemp]] */
 char	movtemp[] =	"/tmp/v1XXXXX";
-/*e: global movtemp */
-/*s: global tailtemp */
+/*e: global [[movtemp]] */
+/*s: global [[tailtemp]] */
 char	tailtemp[] =	"/tmp/v2XXXXX";
-/*e: global tailtemp */
-/*s: global symdef */
+/*e: global [[tailtemp]] */
+/*s: global [[symdef]] */
 char	symdef[] =	"__.SYMDEF";
-/*e: global symdef */
+/*e: global [[symdef]] */
 
-/*s: global aflag */
+/*s: global [[aflag]] */
 int	aflag;				/* command line flags */
-/*e: global aflag */
-/*s: global bflag */
+/*e: global [[aflag]] */
+/*s: global [[bflag]] */
 static int	bflag;
-/*e: global bflag */
-/*s: global cflag */
+/*e: global [[bflag]] */
+/*s: global [[cflag]] */
 int	cflag;
-/*e: global cflag */
-/*s: global oflag */
+/*e: global [[cflag]] */
+/*s: global [[oflag]] */
 int	oflag;
-/*e: global oflag */
-/*s: global uflag */
+/*e: global [[oflag]] */
+/*s: global [[uflag]] */
 int	uflag;
-/*e: global uflag */
-/*s: global vflag */
+/*e: global [[uflag]] */
+/*s: global [[vflag]] */
 int	vflag;
-/*e: global vflag */
+/*e: global [[vflag]] */
 
 Arfile *astart, *amiddle, *aend;	/* Temp file control block pointers */
-/*s: global allobj */
-int	allobj = 1;			/* set when all members are object files of the same type */
-/*e: global allobj */
-/*s: global symdefsize */
-int	symdefsize;			/* size of symdef file */
-/*e: global symdefsize */
-/*s: global dupfound */
-int	dupfound;			/* flag for duplicate symbol */
-/*e: global dupfound */
-/*s: global hash */
-Hashchain	*hash[NHASH];		/* hash table of text symbols */
-/*e: global hash */
-    
-/*s: constant ARNAMESIZE */
-#define	ARNAMESIZE	sizeof(astart->tail->hdr.name)
-/*e: constant ARNAMESIZE */
 
-/*s: global poname */
+/*s: global [[allobj]] */
+int	allobj = 1;			/* set when all members are object files of the same type */
+/*e: global [[allobj]] */
+/*s: global [[symdefsize]] */
+int	symdefsize;			/* size of symdef file */
+/*e: global [[symdefsize]] */
+/*s: global [[dupfound]] */
+int	dupfound;			/* flag for duplicate symbol */
+/*e: global [[dupfound]] */
+/*s: global [[hash]] */
+Hashchain	*hash[NHASH];		/* hash table of text symbols */
+/*e: global [[hash]] */
+    
+/*s: constant [[ARNAMESIZE]] */
+#define	ARNAMESIZE	sizeof(astart->tail->hdr.name)
+/*e: constant [[ARNAMESIZE]] */
+
+/*s: global [[poname]] */
 char	poname[ARNAMESIZE+1];		/* name of pivot member */
-/*e: global poname */
-/*s: global file */
+/*e: global [[poname]] */
+/*s: global [[file]] */
 char	*file;				/* current file or member being worked on */
-/*e: global file */
-/*s: global bout */
+/*e: global [[file]] */
+/*s: global [[bout]] */
 Biobuf	bout;
-/*e: global bout */
-/*s: global bar */
+/*e: global [[bout]] */
+/*s: global [[bar]] */
 Biobuf bar;
-/*e: global bar */
+/*e: global [[bar]] */
 
 void	arcopy(Biobuf*, Arfile*, Armember*);
 int	arcreate(char*);
@@ -190,11 +192,12 @@ void	tcmd(char*, int, char**);
 void	pcmd(char*, int, char**);
 void	mcmd(char*, int, char**);
 void	qcmd(char*, int, char**);
-/*s: global comfun */
-void	(*comfun)(char*, int, char**);
-/*e: global comfun */
 
-/*s: function main */
+/*s: global [[comfun]] */
+void	(*comfun)(char*, int, char**);
+/*e: global [[comfun]] */
+
+/*s: function [[main]] */
 void
 main(int argc, char *argv[])
 {
@@ -261,8 +264,8 @@ main(int argc, char *argv[])
     }
     exits(cp);
 }
-/*e: function main */
-/*s: function setcom */
+/*e: function [[main]] */
+/*s: function [[setcom]] */
 /*
  *	select a command
  */
@@ -276,8 +279,8 @@ setcom(void (*fun)(char *, int, char**))
     }
     comfun = fun;
 }
-/*e: function setcom */
-/*s: function rcmd */
+/*e: function [[setcom]] */
+/*s: function [[rcmd]] */
 /*
  *	perform the 'r' and 'u' commands
  */
@@ -371,9 +374,9 @@ rcmd(char *arname, int count, char **files)
     else
         install(arname, astart, 0, aend, 0);
 }
-/*e: function rcmd */
+/*e: function [[rcmd]] */
 
-/*s: function dcmd */
+/*s: function [[dcmd]] */
 void
 dcmd(char *arname, int count, char **files)
 {
@@ -402,9 +405,9 @@ dcmd(char *arname, int count, char **files)
     close(fd);
     install(arname, astart, 0, 0, 0);
 }
-/*e: function dcmd */
+/*e: function [[dcmd]] */
 
-/*s: function xcmd */
+/*s: function [[xcmd]] */
 void
 xcmd(char *arname, int count, char **files)
 {
@@ -448,8 +451,8 @@ xcmd(char *arname, int count, char **files)
     }
     close(fd);
 }
-/*e: function xcmd */
-/*s: function pcmd */
+/*e: function [[xcmd]] */
+/*s: function [[pcmd]] */
 void
 pcmd(char *arname, int count, char **files)
 {
@@ -472,8 +475,8 @@ pcmd(char *arname, int count, char **files)
     }
     close(fd);
 }
-/*e: function pcmd */
-/*s: function mcmd */
+/*e: function [[pcmd]] */
+/*s: function [[mcmd]] */
 void
 mcmd(char *arname, int count, char **files)
 {
@@ -517,8 +520,8 @@ mcmd(char *arname, int count, char **files)
         fprint(2, "ar: %s not found - files moved to end.\n", poname);
     install(arname, astart, amiddle, aend, 0);
 }
-/*e: function mcmd */
-/*s: function tcmd */
+/*e: function [[mcmd]] */
+/*s: function [[tcmd]] */
 void
 tcmd(char *arname, int count, char **files)
 {
@@ -541,8 +544,8 @@ tcmd(char *arname, int count, char **files)
     }
     close(fd);
 }
-/*e: function tcmd */
-/*s: function qcmd */
+/*e: function [[tcmd]] */
+/*s: function [[qcmd]] */
 void
 qcmd(char *arname, int count, char **files)
 {
@@ -585,9 +588,9 @@ qcmd(char *arname, int count, char **files)
     free(bp);
     close(fd);
 }
-/*e: function qcmd */
+/*e: function [[qcmd]] */
 
-/*s: function scanobj */
+/*s: function [[scanobj]] */
 /*
  *	extract the symbol references from an object file
  */
@@ -628,9 +631,9 @@ scanobj(Biobuf *b, Arfile *ap, long size)
     Bseek(b, offset, 0);
     objtraverse(objsym, ap);
 }
-/*e: function scanobj */
+/*e: function [[scanobj]] */
 
-/*s: function objsym */
+/*s: function [[objsym]] */
 /*
  *	add text and data symbols to the symbol list
  */
@@ -662,9 +665,9 @@ objsym(Sym *s, void *p)
     as->next = ap->sym;
     ap->sym = as;
 }
-/*e: function objsym */
+/*e: function [[objsym]] */
 
-/*s: function duplicate */
+/*s: function [[duplicate]] */
 /*
  *	Check the symbol table for duplicate text symbols
  */
@@ -691,9 +694,9 @@ duplicate(char *name)
     hash[h] = p;
     return 0;
 }
-/*e: function duplicate */
+/*e: function [[duplicate]] */
 
-/*s: function openar */
+/*s: function [[openar]] */
 /*
  *	open an archive and validate its header
  */
@@ -715,9 +718,9 @@ openar(char *arname, int mode, int errok)
     }
     return fd;
 }
-/*e: function openar */
+/*e: function [[openar]] */
 
-/*s: function arcreate */
+/*s: function [[arcreate]] */
 /*
  *	create an archive and set its header
  */
@@ -735,9 +738,9 @@ arcreate(char *arname)
         wrerr();
     return fd;
 }
-/*e: function arcreate */
+/*e: function [[arcreate]] */
 
-/*s: function wrerr */
+/*s: function [[wrerr]] */
 /*
  *		error handling
  */
@@ -747,36 +750,36 @@ wrerr(void)
     perror("ar: write error");
     exits("error");
 }
-/*e: function wrerr */
+/*e: function [[wrerr]] */
 
-/*s: function rderr */
+/*s: function [[rderr]] */
 void
 rderr(void)
 {
     perror("ar: read error");
     exits("error");
 }
-/*e: function rderr */
+/*e: function [[rderr]] */
 
-/*s: function phaseerr */
+/*s: function [[phaseerr]] */
 void
 phaseerr(int offset)
 {
     fprint(2, "ar: phase error at offset %d\n", offset);
     exits("error");
 }
-/*e: function phaseerr */
+/*e: function [[phaseerr]] */
 
-/*s: function usage */
+/*s: function [[usage]] */
 static void
 usage(void)
 {
     fprint(2, "usage: ar [%s][%s] archive files ...\n", opt, man);
     exits("error");
 }
-/*e: function usage */
+/*e: function [[usage]] */
 
-/*s: function getdir */
+/*s: function [[getdir]] */
 /*
  *	read the header for the next archive member
  */
@@ -806,9 +809,9 @@ getdir(Biobuf *b)
     bp->size = strtol(bp->hdr.size, 0, 0);
     return bp;
 }
-/*e: function getdir */
+/*e: function [[getdir]] */
 
-/*s: function armove */
+/*s: function [[armove]] */
 /*
  *	Copy the file referenced by fd to the temp file
  */
@@ -843,9 +846,9 @@ armove(Biobuf *b, Arfile *ap, Armember *bp)
     }
     free(d);
 }
-/*e: function armove */
+/*e: function [[armove]] */
 
-/*s: function arcopy */
+/*s: function [[arcopy]] */
 /*
  *	Copy the archive member at the current offset into the temp file.
  */
@@ -863,9 +866,9 @@ arcopy(Biobuf *b, Arfile *ap, Armember *bp)
         ap->size += n+SAR_HDR;
     }
 }
-/*e: function arcopy */
+/*e: function [[arcopy]] */
 
-/*s: function skip */
+/*s: function [[skip]] */
 /*
  *	Skip an archive member
  */
@@ -876,9 +879,9 @@ skip(Biobuf *bp, vlong len)
         len++;
     Bseek(bp, len, 1);
 }
-/*e: function skip */
+/*e: function [[skip]] */
 
-/*s: function install */
+/*s: function [[install]] */
 /*
  *	Stream the three temp files to an archive
  */
@@ -915,9 +918,9 @@ install(char *arname, Arfile *astart, Arfile *amiddle, Arfile *aend, int createf
     }
     close(fd);
 }
-/*e: function install */
+/*e: function [[install]] */
 
-/*s: function rl */
+/*s: function [[rl]] */
 void
 rl(int fd)
 {
@@ -962,9 +965,9 @@ rl(int fd)
         Bputc(&b, 0);
     Bterm(&b);
 }
-/*e: function rl */
+/*e: function [[rl]] */
 
-/*s: function wrsym */
+/*s: function [[wrsym]] */
 /*
  *	Write the defined symbols to the symdef file
  */
@@ -985,9 +988,9 @@ wrsym(Biobuf *bp, long offset, Arsymref *as)
         as = as->next;
     }
 }
-/*e: function wrsym */
+/*e: function [[wrsym]] */
 
-/*s: function match */
+/*s: function [[match]] */
 /*
  *	Check if the archive member matches an entry on the command line.
  */
@@ -1009,9 +1012,9 @@ match(int count, char **files)
     }
     return 0;
 }
-/*e: function match */
+/*e: function [[match]] */
 
-/*s: function bamatch */
+/*s: function [[bamatch]] */
 /*
  *	compare the current member to the name of the pivot member
  */
@@ -1041,9 +1044,9 @@ bamatch(char *file, char *pivot)
     }
     return 0;
 }
-/*e: function bamatch */
+/*e: function [[bamatch]] */
 
-/*s: function mesg */
+/*s: function [[mesg]] */
 /*
  *	output a message, if 'v' option was specified
  */
@@ -1054,9 +1057,9 @@ mesg(int c, char *file)
     if(vflag)
         Bprint(&bout, "%c - %s\n", c, file);
 }
-/*e: function mesg */
+/*e: function [[mesg]] */
 
-/*s: function trim */
+/*s: function [[trim]] */
 /*
  *	isolate file name by stripping leading directories and trailing slashes
  */
@@ -1078,49 +1081,49 @@ trim(char *s, char *buf, int n)
         *p = 0;			/* strip trailing slash */
     }
 }
-/*e: function trim */
+/*e: function [[trim]] */
 
-/*s: constant SUID */
+/*s: constant [[SUID]] */
 /*
  *	utilities for printing long form of 't' command
  */
 #define	SUID	04000
-/*e: constant SUID */
-/*s: constant SGID */
+/*e: constant [[SUID]] */
+/*s: constant [[SGID]] */
 #define	SGID	02000
-/*e: constant SGID */
-/*s: constant ROWN */
+/*e: constant [[SGID]] */
+/*s: constant [[ROWN]] */
 #define	ROWN	0400
-/*e: constant ROWN */
-/*s: constant WOWN */
+/*e: constant [[ROWN]] */
+/*s: constant [[WOWN]] */
 #define	WOWN	0200
-/*e: constant WOWN */
-/*s: constant XOWN */
+/*e: constant [[WOWN]] */
+/*s: constant [[XOWN]] */
 #define	XOWN	0100
-/*e: constant XOWN */
-/*s: constant RGRP */
+/*e: constant [[XOWN]] */
+/*s: constant [[RGRP]] */
 #define	RGRP	040
-/*e: constant RGRP */
-/*s: constant WGRP */
+/*e: constant [[RGRP]] */
+/*s: constant [[WGRP]] */
 #define	WGRP	020
-/*e: constant WGRP */
-/*s: constant XGRP */
+/*e: constant [[WGRP]] */
+/*s: constant [[XGRP]] */
 #define	XGRP	010
-/*e: constant XGRP */
-/*s: constant ROTH */
+/*e: constant [[XGRP]] */
+/*s: constant [[ROTH]] */
 #define	ROTH	04
-/*e: constant ROTH */
-/*s: constant WOTH */
+/*e: constant [[ROTH]] */
+/*s: constant [[WOTH]] */
 #define	WOTH	02
-/*e: constant WOTH */
-/*s: constant XOTH */
+/*e: constant [[WOTH]] */
+/*s: constant [[XOTH]] */
 #define	XOTH	01
-/*e: constant XOTH */
-/*s: constant STXT */
+/*e: constant [[XOTH]] */
+/*s: constant [[STXT]] */
 #define	STXT	01000
-/*e: constant STXT */
+/*e: constant [[STXT]] */
 
-/*s: function longt */
+/*s: function [[longt]] */
 void
 longt(Armember *bp)
 {
@@ -1132,41 +1135,41 @@ longt(Armember *bp)
     cp = ctime(bp->date);
     Bprint(&bout, " %-12.12s %-4.4s ", cp+4, cp+24);
 }
-/*e: function longt */
+/*e: function [[longt]] */
 
-/*s: global m1 */
+/*s: global [[m1]] */
 int	m1[] = { 1, ROWN, 'r', '-' };
-/*e: global m1 */
-/*s: global m2 */
+/*e: global [[m1]] */
+/*s: global [[m2]] */
 int	m2[] = { 1, WOWN, 'w', '-' };
-/*e: global m2 */
-/*s: global m3 */
+/*e: global [[m2]] */
+/*s: global [[m3]] */
 int	m3[] = { 2, SUID, 's', XOWN, 'x', '-' };
-/*e: global m3 */
-/*s: global m4 */
+/*e: global [[m3]] */
+/*s: global [[m4]] */
 int	m4[] = { 1, RGRP, 'r', '-' };
-/*e: global m4 */
-/*s: global m5 */
+/*e: global [[m4]] */
+/*s: global [[m5]] */
 int	m5[] = { 1, WGRP, 'w', '-' };
-/*e: global m5 */
-/*s: global m6 */
+/*e: global [[m5]] */
+/*s: global [[m6]] */
 int	m6[] = { 2, SGID, 's', XGRP, 'x', '-' };
-/*e: global m6 */
-/*s: global m7 */
+/*e: global [[m6]] */
+/*s: global [[m7]] */
 int	m7[] = { 1, ROTH, 'r', '-' };
-/*e: global m7 */
-/*s: global m8 */
+/*e: global [[m7]] */
+/*s: global [[m8]] */
 int	m8[] = { 1, WOTH, 'w', '-' };
-/*e: global m8 */
-/*s: global m9 */
+/*e: global [[m8]] */
+/*s: global [[m9]] */
 int	m9[] = { 2, STXT, 't', XOTH, 'x', '-' };
-/*e: global m9 */
+/*e: global [[m9]] */
 
-/*s: global m */
+/*s: global [[m]] */
 int	*m[] = { m1, m2, m3, m4, m5, m6, m7, m8, m9};
-/*e: global m */
+/*e: global [[m]] */
 
-/*s: function pmode */
+/*s: function [[pmode]] */
 void
 pmode(long mode)
 {
@@ -1175,9 +1178,9 @@ pmode(long mode)
     for(mp = &m[0]; mp < &m[9];)
         select(*mp++, mode);
 }
-/*e: function pmode */
+/*e: function [[pmode]] */
 
-/*s: function select */
+/*s: function [[select]] */
 void
 select(int *ap, long mode)
 {
@@ -1188,9 +1191,9 @@ select(int *ap, long mode)
         ap++;
     Bputc(&bout, *ap);
 }
-/*e: function select */
+/*e: function [[select]] */
 
-/*s: function newtempfile */
+/*s: function [[newtempfile]] */
 /*
  *	Temp file I/O subsystem.  We attempt to cache all three temp files in
  *	core.  When we run out of memory we spill to disk.
@@ -1210,17 +1213,17 @@ newtempfile(char *name)		/* allocate a file control block */
     ap->fname = name;
     return ap;
 }
-/*e: function newtempfile */
+/*e: function [[newtempfile]] */
 
-/*s: function newmember */
+/*s: function [[newmember]] */
 Armember *
 newmember(void)			/* allocate a member buffer */
 {
     return (Armember *)armalloc(sizeof(Armember));
 }
-/*e: function newmember */
+/*e: function [[newmember]] */
 
-/*s: function arread */
+/*s: function [[arread]] */
 void
 arread(Biobuf *b, Armember *bp, int n)	/* read an image into a member buffer */
 {
@@ -1234,9 +1237,9 @@ arread(Biobuf *b, Armember *bp, int n)	/* read an image into a member buffer */
         rderr();
     }
 }
-/*e: function arread */
+/*e: function [[arread]] */
 
-/*s: function arinsert */
+/*s: function [[arinsert]] */
 /*
  * insert a member buffer into the member chain
  */
@@ -1250,9 +1253,9 @@ arinsert(Arfile *ap, Armember *bp)
         ap->tail->next = bp;
     ap->tail = bp;
 }
-/*e: function arinsert */
+/*e: function [[arinsert]] */
 
-/*s: function arstream */
+/*s: function [[arstream]] */
 /*
  *	stream the members in a temp file to the file referenced by 'fd'.
  */
@@ -1283,9 +1286,9 @@ arstream(int fd, Arfile *ap)
             wrerr();
     }
 }
-/*e: function arstream */
+/*e: function [[arstream]] */
 
-/*s: function arwrite */
+/*s: function [[arwrite]] */
 /*
  *	write a member to 'fd'.
  */
@@ -1303,9 +1306,9 @@ arwrite(int fd, Armember *bp)
         return 0;
     return 1;
 }
-/*e: function arwrite */
+/*e: function [[arwrite]] */
 
-/*s: function page */
+/*s: function [[page]] */
 /*
  *	Spill a member to a disk copy of a temp file
  */
@@ -1333,9 +1336,9 @@ page(Arfile *ap)
     free(bp);
     return 1;
 }
-/*e: function page */
+/*e: function [[page]] */
 
-/*s: function getspace */
+/*s: function [[getspace]] */
 /*
  *	try to reclaim space by paging.  we try to spill the start, middle,
  *	and end files, in that order.  there is no particular reason for the
@@ -1352,9 +1355,9 @@ getspace(void)
             return 1;
     return 0;
 }
-/*e: function getspace */
+/*e: function [[getspace]] */
 
-/*s: function arfree */
+/*s: function [[arfree]] */
 void
 arfree(Arfile *ap)		/* free a member buffer */
 {
@@ -1368,9 +1371,9 @@ arfree(Arfile *ap)		/* free a member buffer */
     }
     free(ap);
 }
-/*e: function arfree */
+/*e: function [[arfree]] */
 
-/*s: function armalloc */
+/*s: function [[armalloc]] */
 /*
  *	allocate space for a control block or member buffer.  if the malloc
  *	fails we try to reclaim space by spilling previously allocated
@@ -1392,5 +1395,5 @@ armalloc(int n)
     exits("malloc");
     return 0;
 }
-/*e: function armalloc */
+/*e: function [[armalloc]] */
 /*e: linkers/misc/ar.c */

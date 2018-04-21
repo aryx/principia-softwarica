@@ -2,9 +2,10 @@
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
+
 #include	<mach.h>
 
-/*s: function size */
+/*s: function [[size]] */
 int
 size(char *file)
 {
@@ -26,7 +27,7 @@ size(char *file)
     close(fd);
     return 1;
 }
-/*e: function size */
+/*e: function [[size]] */
 
 /*s: function main (linkers/misc/size.c) */
 void
