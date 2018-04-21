@@ -108,7 +108,7 @@ KERNELS=kernel/COMPILE/9/pc
 ###############################################################################
 CMDS=$PROGRAMS $BOOTCMDS
 
-DIRS=$LIBS $CMDS #$KERNELS
+DIRS=$LIBS $CMDS $KERNELS
 
 # I assume you have done source env.sh, or have a good 'mk' wrapper
 
