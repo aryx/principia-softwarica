@@ -1,19 +1,19 @@
 /*s: include/ar.h */
-/*s: constant ARMAG */
+/*s: constant [[ARMAG]] */
 #define	ARMAG	"!<arch>\n"
-/*e: constant ARMAG */
-/*s: constant SARMAG */
+/*e: constant [[ARMAG]] */
+/*s: constant [[SARMAG]] */
 #define	SARMAG	8
-/*e: constant SARMAG */
+/*e: constant [[SARMAG]] */
 
-/*s: constant ARFMAG */
+/*s: constant [[ARFMAG]] */
 #define	ARFMAG	"`\n"
-/*e: constant ARFMAG */
-/*s: constant SARNAME */
+/*e: constant [[ARFMAG]] */
+/*s: constant [[SARNAME]] */
 #define SARNAME	16
-/*e: constant SARNAME */
+/*e: constant [[SARNAME]] */
 
-/*s: struct ar_hdr */
+/*s: struct [[ar_hdr]] */
 struct	ar_hdr
 {
     char	name[SARNAME];
@@ -26,8 +26,8 @@ struct	ar_hdr
     char	size[10]; // use atolwhex() to get the value
     char	fmag[2]; // ARFMAG
 };
-/*e: struct ar_hdr */
-/*s: constant SAR_HDR */
+/*e: struct [[ar_hdr]] */
+/*s: constant [[SAR_HDR]] */
 #define	SAR_HDR	(SARNAME+44)
-/*e: constant SAR_HDR */
+/*e: constant [[SAR_HDR]] */
 /*e: include/ar.h */

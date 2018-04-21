@@ -1,19 +1,20 @@
 /*s: include/386/8.out.h */
 
-/*s: constant NSNAME(x86) */
-#define	NSNAME	8
-/*e: constant NSNAME(x86) */
-/*s: constant NOPROF(x86) */
-#define NOPROF	(1<<0)
-/*e: constant NOPROF(x86) */
-/*s: constant DUPOK(x86) */
-#define DUPOK	(1<<1)
-/*e: constant DUPOK(x86) */
-/*s: constant NOSPLIT(x86) */
-#define NOSPLIT	(1<<2)
-/*e: constant NOSPLIT(x86) */
+/*s: constant [[NSNAME]] */
+#define NSNAME      8
+/*e: constant [[NSNAME]] */
 
-/*s: enum as(x86) */
+/*s: constant [[NOPROF]](x86) */
+#define NOPROF	(1<<0)
+/*e: constant [[NOPROF]](x86) */
+/*s: constant [[DUPOK]](x86) */
+#define DUPOK	(1<<1)
+/*e: constant [[DUPOK]](x86) */
+/*s: constant [[NOSPLIT]](x86) */
+#define NOSPLIT	(1<<2)
+/*e: constant [[NOSPLIT]](x86) */
+
+/*s: enum [[as]](x86) */
 // coupling: with 8c/enam.c (and 8l/obj.c#optab?)
 enum opcode_kind
 {
@@ -471,9 +472,9 @@ enum opcode_kind
     /* add new operations here. nowhere else. here. */
     ALAST
 };
-/*e: enum as(x86) */
+/*e: enum [[as]](x86) */
 
-/*s: enum reg(x86) */
+/*s: enum [[reg]](x86) */
 enum operand_kind
 {
 /*s: [[operand_kind]] register cases(x86) */
@@ -543,9 +544,9 @@ enum operand_kind
     D_SIZE,	/* 8l internal */
 /*e: [[operand_kind]] non register cases(x86) */
 };
-/*e: enum reg(x86) */
+/*e: enum [[reg]](x86) */
 
-/*s: enum misc2(x86) */
+/*s: enum [[misc2]](x86) */
 enum misc2 {
     T_TYPE		= 1<<0,
     T_INDEX		= 1<<1,
@@ -555,8 +556,8 @@ enum misc2 {
     T_SCONST	= 1<<5,
     T_OFFSET2	= 1<<6,
 };
-/*e: enum misc2(x86) */
-/*s: enum misc3(x86) */
+/*e: enum [[misc2]](x86) */
+/*s: enum [[misc3]](x86) */
 enum misc3 {
     REGARG		= -1,
     REGRET		= D_AX,
@@ -564,12 +565,12 @@ enum misc3 {
     REGSP		= D_SP,
     REGTMP		= D_DI,
 };
-/*e: enum misc3(x86) */
+/*e: enum [[misc3]](x86) */
 
-/*s: constant SYMDEF(x86) */
+/*s: constant [[SYMDEF]](x86) */
 /*
  * this is the ranlib header
  */
 #define	SYMDEF	"__.SYMDEF"
-/*e: constant SYMDEF(x86) */
+/*e: constant [[SYMDEF]](x86) */
 /*e: include/386/8.out.h */

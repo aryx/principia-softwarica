@@ -1,6 +1,6 @@
 /*s: include/exec/elf.h */
 
-/*s: enum _anon_ (elf.h) */
+/*s: enum ElfConstants */
 /* was in /sys/src/libmach/elf.h */
 enum {
     /* Ehdr codes */
@@ -71,13 +71,13 @@ enum {
     Salloc = 2,
     Sexec = 4,
 };
-/*e: enum _anon_ (elf.h) */
+/*e: enum ElfConstants */
 
 typedef struct Ehdr Ehdr;
 typedef struct Phdr Phdr;
 typedef struct Shdr Shdr;
 
-/*s: struct Ehdr */
+/*s: struct [[Ehdr]] */
 /*
  *	Definitions needed for accessing ELF headers
  */
@@ -97,9 +97,9 @@ struct Ehdr {
     ushort	shnum;		/* number shdrs */
     ushort	shstrndx;	/* shdr string index */
 };
-/*e: struct Ehdr */
+/*e: struct [[Ehdr]] */
 
-/*s: struct Phdr */
+/*s: struct [[Phdr]] */
 struct Phdr {
     int	type;		/* entry type */
     ulong	offset;		/* file offset */
@@ -110,9 +110,9 @@ struct Phdr {
     int	flags;		/* entry flags */
     int	align;		/* memory/file alignment */
 };
-/*e: struct Phdr */
+/*e: struct [[Phdr]] */
 
-/*s: struct Shdr */
+/*s: struct [[Shdr]] */
 struct Shdr {
     ulong	name;		/* section name */
     ulong	type;		/* SHT_... */
@@ -125,9 +125,9 @@ struct Shdr {
     ulong	addralign;	/* memory alignment */
     ulong	entsize;	/* entry size if table */
 };
-/*e: struct Shdr */
+/*e: struct [[Shdr]] */
 
-/*s: constant ELF_MAG */
+/*s: constant [[ELF_MAG]] */
 #define	ELF_MAG		((0x7f<<24) | ('E'<<16) | ('L'<<8) | 'F')
-/*e: constant ELF_MAG */
+/*e: constant [[ELF_MAG]] */
 /*e: include/exec/elf.h */
