@@ -157,3 +157,21 @@ doall:V:
 
 <mkfile-host-$HOST
 <mkfile-target-$TARGET
+
+###############################################################################
+# Literate programming
+###############################################################################
+LPDIRS=\
+ assemblers linkers compilers machine \
+ kernel shells lib_core\
+ builders debuggers profilers version_control \
+ lib_graphics windows\
+ networking
+
+#TODO generators
+
+lpclean:QV:
+	for (i in $LPDIRS) @{
+		cd $i
+		mk $MKFLAGS $target
+	}
