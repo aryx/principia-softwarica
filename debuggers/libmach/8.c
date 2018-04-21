@@ -1,41 +1,42 @@
-/*s: linkers/libmach/8.c */
+/*s: libmach/8.c */
 /*
  * 386 definition
  */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
-#include "../../include/arch/386/ureg.h"
+#include "/386/include/ureg.h"
+//XxX #include "../../include/arch/386/ureg.h"
 #include <mach.h>
 
-/*s: function REGOFF(x86) */
+/*s: function [[REGOFF]](x86) */
 #define	REGOFF(x)	(ulong)(&((struct Ureg *) 0)->x)
-/*e: function REGOFF(x86) */
+/*e: function [[REGOFF]](x86) */
 
-/*s: constant PC(x86) */
+/*s: constant [[PC]](x86) */
 #define PC		REGOFF(pc)
-/*e: constant PC(x86) */
-/*s: constant SP(x86) */
+/*e: constant [[PC]](x86) */
+/*s: constant [[SP]](x86) */
 #define SP		REGOFF(sp)
-/*e: constant SP(x86) */
-/*s: constant AX(x86) */
+/*e: constant [[SP]](x86) */
+/*s: constant [[AX]](x86) */
 #define	AX		REGOFF(ax)
-/*e: constant AX(x86) */
+/*e: constant [[AX]](x86) */
 
-/*s: constant REGSIZE(x86) */
+/*s: constant [[REGSIZE]](x86) */
 #define	REGSIZE		sizeof(struct Ureg)
-/*e: constant REGSIZE(x86) */
-/*s: function FP_CTL(x86) */
+/*e: constant [[REGSIZE]](x86) */
+/*s: function [[FP_CTL]](x86) */
 #define FP_CTL(x)	(REGSIZE+4*(x))
-/*e: function FP_CTL(x86) */
-/*s: function FP_REG(x86) */
+/*e: function [[FP_CTL]](x86) */
+/*s: function [[FP_REG]](x86) */
 #define FP_REG(x)	(FP_CTL(7)+10*(x))
-/*e: function FP_REG(x86) */
-/*s: constant FPREGSIZE(x86) */
+/*e: function [[FP_REG]](x86) */
+/*s: constant [[FPREGSIZE]](x86) */
 #define	FPREGSIZE	(7*4+8*10)
-/*e: constant FPREGSIZE(x86) */
+/*e: constant [[FPREGSIZE]](x86) */
 
-/*s: global i386reglist */
+/*s: global [[i386reglist]] */
 Reglist i386reglist[] = {
     {"DI",		REGOFF(di),	RINT, 'X'},
     {"SI",		REGOFF(si),	RINT, 'X'},
@@ -73,9 +74,9 @@ Reglist i386reglist[] = {
     {"F7",		FP_REG(7),	RFLT, '3'},
     {  0 }
 };
-/*e: global i386reglist */
+/*e: global [[i386reglist]] */
 
-/*s: global mi386 */
+/*s: global [[mi386]] */
 Mach mi386 =
 {
     "386",
@@ -98,5 +99,5 @@ Mach mi386 =
     4,		/* szfloat */
     8,		/* szdouble */
 };
-/*e: global mi386 */
-/*e: linkers/libmach/8.c */
+/*e: global [[mi386]] */
+/*e: libmach/8.c */

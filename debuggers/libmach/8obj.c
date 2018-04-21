@@ -1,4 +1,4 @@
-/*s: linkers/libmach/8obj.c */
+/*s: libmach/8obj.c */
 /*
  * 8obj.c - identify and parse a 386 object file
  */
@@ -7,22 +7,23 @@
 #include <bio.h>
 #include <mach.h>
 
-#include <8.out.h>
+#include <386/8.out.h>
+//XxX: #include <8.out.h>
 #include "obj.h"
 
 typedef struct Addr	Addr;
-/*s: struct Addr(x86) */
+/*s: struct [[Addr]](x86) */
 struct Addr
 {
     char	sym;
     char	flags;
 };
-/*e: struct Addr(x86) */
+/*e: struct [[Addr]](x86) */
 static	Addr	addr(Biobuf*);
 static	char	type2char(int);
 static	void	skip(Biobuf*, int);
 
-/*s: function _is8(x86) */
+/*s: function [[_is8]](x86) */
 int
 _is8(char *t)
 {
@@ -34,9 +35,9 @@ _is8(char *t)
         && s[3] == 1				/* sym */
         && s[4] == '<';				/* name of file */
 }
-/*e: function _is8(x86) */
+/*e: function [[_is8]](x86) */
 
-/*s: function _read8(x86) */
+/*s: function [[_read8]](x86) */
 int
 _read8(Biobuf *bp, Prog* p)
 {
@@ -89,9 +90,9 @@ _read8(Biobuf *bp, Prog* p)
     p->sym = a.sym;
     return 1;
 }
-/*e: function _read8(x86) */
+/*e: function [[_read8]](x86) */
 
-/*s: function addr(x86) */
+/*s: function [[addr]](x86) */
 static Addr
 addr(Biobuf *bp)
 {
@@ -126,9 +127,9 @@ addr(Biobuf *bp)
     }
     return a;
 }
-/*e: function addr(x86) */
+/*e: function [[addr]](x86) */
 
-/*s: function type2char(x86) */
+/*s: function [[type2char]](x86) */
 static char
 type2char(int t)
 {
@@ -140,14 +141,14 @@ type2char(int t)
     default:		return UNKNOWN;
     }
 }
-/*e: function type2char(x86) */
+/*e: function [[type2char]](x86) */
 
-/*s: function skip (linkers/libmach/8obj.c)(x86) */
+/*s: function skip (libmach/8obj.c)(x86) */
 static void
 skip(Biobuf *bp, int n)
 {
     while (n-- > 0)
         Bgetc(bp);
 }
-/*e: function skip (linkers/libmach/8obj.c)(x86) */
-/*e: linkers/libmach/8obj.c */
+/*e: function skip (libmach/8obj.c)(x86) */
+/*e: libmach/8obj.c */
