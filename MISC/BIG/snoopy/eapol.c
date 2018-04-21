@@ -6,16 +6,16 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
-/*s: struct Hdr (networking/ip/snoopy/eapol.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/eapol.c)]]) */
 struct Hdr
 {
     uchar	vi;		/* version */
     uchar	type;
     uchar	len[2];	/* length of data following this header */
 };
-/*e: struct Hdr (networking/ip/snoopy/eapol.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/eapol.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/eapol.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/eapol.c)]] */
 enum
 {
     EAPOLHDR=	4,		/* sizeof(Hdr) */
@@ -27,16 +27,16 @@ enum
     Key,
     AsfAlert,
 };
-/*e: enum _anon_ (networking/ip/snoopy/eapol.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/eapol.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/eapol.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/eapol.c)2]] */
 enum
 {
     Ot,	/* type */
 };
-/*e: enum _anon_ (networking/ip/snoopy/eapol.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/eapol.c)2]] */
 
-/*s: global p_mux (networking/ip/snoopy/eapol.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/eapol.c)]]) */
 static Mux p_mux[] =
 {
     { "eap", Eap, },
@@ -46,9 +46,9 @@ static Mux p_mux[] =
     { "asf_alert", AsfAlert, },
     { 0 }
 };
-/*e: global p_mux (networking/ip/snoopy/eapol.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/eapol.c)]]) */
 
-/*s: function p_compile (networking/ip/snoopy/eapol.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/eapol.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -63,9 +63,9 @@ p_compile(Filter *f)
         }
     sysfatal("unknown eapol field or type: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/eapol.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/eapol.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/eapol.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/eapol.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -85,9 +85,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/eapol.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/eapol.c)]]) */
 
-/*s: function op (networking/ip/snoopy/eapol.c) */
+/*s: function [[op]]([[(networking/ip/snoopy/eapol.c)]]) */
 static char*
 op(int i)
 {
@@ -109,9 +109,9 @@ op(int i)
         return x;
     }
 }
-/*e: function op (networking/ip/snoopy/eapol.c) */
+/*e: function [[op]]([[(networking/ip/snoopy/eapol.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/eapol.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/eapol.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -140,9 +140,9 @@ p_seprint(Msg *m)
             op(h->type), h->vi, len);
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/eapol.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/eapol.c)]]) */
 
-/*s: global eapol */
+/*s: global [[eapol]] */
 Proto eapol =
 {
     "eapol",
@@ -154,5 +154,5 @@ Proto eapol =
     nil,
     defaultframer,
 };
-/*e: global eapol */
+/*e: global [[eapol]] */
 /*e: networking/ip/snoopy/eapol.c */

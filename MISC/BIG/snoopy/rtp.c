@@ -6,7 +6,7 @@
 #include "protos.h"
 
 typedef struct Hdr Hdr;
-/*s: struct Hdr (networking/ip/snoopy/rtp.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/rtp.c)]]) */
 struct Hdr {
     uchar	hdr;		/* RTP header */
     uchar	marker;		/* Payload and marker */
@@ -14,15 +14,15 @@ struct Hdr {
     uchar	ts[4];		/* Time stamp */
     uchar	ssrc[4];	/* Synchronization source identifier */
 };
-/*e: struct Hdr (networking/ip/snoopy/rtp.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/rtp.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/rtp.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/rtp.c)]] */
 enum{
     RTPLEN = 12,		/* Minimum size of an RTP header */
 };
-/*e: enum _anon_ (networking/ip/snoopy/rtp.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/rtp.c)]] */
 
-/*s: function p_seprint (networking/ip/snoopy/rtp.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/rtp.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -54,9 +54,9 @@ p_seprint(Msg *m)
     m->pr = nil;
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/rtp.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/rtp.c)]]) */
 
-/*s: global rtp */
+/*s: global [[rtp]] */
 Proto rtp = {
     "rtp",
     nil,
@@ -67,5 +67,5 @@ Proto rtp = {
     nil,
     defaultframer,
 };
-/*e: global rtp */
+/*e: global [[rtp]] */
 /*e: networking/ip/snoopy/rtp.c */

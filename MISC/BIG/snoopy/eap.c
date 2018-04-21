@@ -6,7 +6,7 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
-/*s: struct Hdr (networking/ip/snoopy/eap.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/eap.c)]]) */
 struct Hdr
 {
     uchar	code;
@@ -15,9 +15,9 @@ struct Hdr
 
     uchar	tp;	/* optional, only for Request/Response */
 };
-/*e: struct Hdr (networking/ip/snoopy/eap.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/eap.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/eap.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/eap.c)]] */
 enum
 {
     EAPHDR=	4,	/* sizeof(code)+sizeof(id)+sizeof(len) */
@@ -40,16 +40,16 @@ enum
     Xpnd = 254,	/* expanded types */
     Xprm,		/* experimental use */
 };
-/*e: enum _anon_ (networking/ip/snoopy/eap.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/eap.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/eap.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/eap.c)2]] */
 enum
 {
     Ot,
 };
-/*e: enum _anon_ (networking/ip/snoopy/eap.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/eap.c)2]] */
 
-/*s: global p_mux (networking/ip/snoopy/eap.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/eap.c)]]) */
 static Mux p_mux[] =
 {
     { "eap_identity", Identity, },
@@ -63,9 +63,9 @@ static Mux p_mux[] =
     { "eap_xprm", Xprm, }, 
     { 0 }
 };
-/*e: global p_mux (networking/ip/snoopy/eap.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/eap.c)]]) */
 
-/*s: global eapsubtype */
+/*s: global [[eapsubtype]] */
 static char *eapsubtype[256] =
 {
 [Identity]	"Identity",
@@ -78,10 +78,10 @@ static char *eapsubtype[256] =
 [Xpnd]	"Xpnd",
 [Xprm]	"Xprm",
 };
-/*e: global eapsubtype */
+/*e: global [[eapsubtype]] */
 
 
-/*s: function p_compile (networking/ip/snoopy/eap.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/eap.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -96,9 +96,9 @@ p_compile(Filter *f)
         }
     sysfatal("unknown eap field or type: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/eap.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/eap.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/eap.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/eap.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -131,9 +131,9 @@ p_filter(Filter *f, Msg *m)
 
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/eap.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/eap.c)]]) */
 
-/*s: function op (networking/ip/snoopy/eap.c) */
+/*s: function [[op]]([[(networking/ip/snoopy/eap.c)]]) */
 static char*
 op(int i)
 {
@@ -153,9 +153,9 @@ op(int i)
         return x;
     }
 }
-/*e: function op (networking/ip/snoopy/eap.c) */
+/*e: function [[op]]([[(networking/ip/snoopy/eap.c)]]) */
 
-/*s: function subop */
+/*s: function [[subop]] */
 static char*
 subop(uchar val)
 {
@@ -169,9 +169,9 @@ subop(uchar val)
         return x;
     }
 }
-/*e: function subop */
+/*e: function [[subop]] */
 
-/*s: function p_seprint (networking/ip/snoopy/eap.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/eap.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -211,9 +211,9 @@ p_seprint(Msg *m)
     m->p = seprint(p, e, " len=%1d", len);
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/eap.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/eap.c)]]) */
 
-/*s: function p_seprintidentity */
+/*s: function [[p_seprintidentity]] */
 static int
 p_seprintidentity(Msg *m)
 {
@@ -243,9 +243,9 @@ p_seprintidentity(Msg *m)
     }
     return 0;
 }
-/*e: function p_seprintidentity */
+/*e: function [[p_seprintidentity]] */
 
-/*s: global eap */
+/*s: global [[eap]] */
 Proto eap =
 {
     "eap",
@@ -257,9 +257,9 @@ Proto eap =
     nil,
     defaultframer,
 };
-/*e: global eap */
+/*e: global [[eap]] */
 
-/*s: global eap_identity */
+/*s: global [[eap_identity]] */
 Proto eap_identity =
 {
     "eap_identity",
@@ -271,5 +271,5 @@ Proto eap_identity =
     nil,
     defaultframer,
 };
-/*e: global eap_identity */
+/*e: global [[eap_identity]] */
 /*e: networking/ip/snoopy/eap.c */

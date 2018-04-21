@@ -14,21 +14,21 @@ typedef struct{
     uchar	tag[4];
 }Hdr;
 
-/*s: enum _anon_ (networking/ip/snoopy/aoe.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/aoe.c)]] */
 enum{
     Hsize	= 10,
 };
-/*e: enum _anon_ (networking/ip/snoopy/aoe.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/aoe.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/aoe.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/aoe.c)2]] */
 enum{
     Omajor,
     Ominor,
     Ocmd,
 };
-/*e: enum _anon_ (networking/ip/snoopy/aoe.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/aoe.c)2]] */
 
-/*s: global p_mux (networking/ip/snoopy/aoe.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/aoe.c)]]) */
 static Mux p_mux[] = {
     {"aoeata",	0},
     {"aoecmd",	1},
@@ -36,9 +36,9 @@ static Mux p_mux[] = {
     {"aoerr",	3},
     {0},
 };
-/*e: global p_mux (networking/ip/snoopy/aoe.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/aoe.c)]]) */
 
-/*s: global p_fields (networking/ip/snoopy/aoe.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/aoe.c)]]) */
 static Field p_fields[] =
 {
     {"shelf",	Fnum,	Ominor,		"shelf", },
@@ -46,9 +46,9 @@ static Field p_fields[] =
     {"cmd",		Fnum,	Ocmd,		"cmd",	},
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/aoe.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/aoe.c)]]) */
 
-/*s: function p_compile (networking/ip/snoopy/aoe.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/aoe.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -67,9 +67,9 @@ p_compile(Filter *f)
         }
     sysfatal("unknown aoe field: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/aoe.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/aoe.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/aoe.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/aoe.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -91,9 +91,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/aoe.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/aoe.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/aoe.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/aoe.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -112,9 +112,9 @@ p_seprint(Msg *m)
         h->minor, h->cmd, NetL(h->tag));
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/aoe.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/aoe.c)]]) */
 
-/*s: global aoe */
+/*s: global [[aoe]] */
 Proto aoe =
 {
     "aoe",
@@ -126,5 +126,5 @@ Proto aoe =
     p_fields,
     defaultframer,
 };
-/*e: global aoe */
+/*e: global [[aoe]] */
 /*e: networking/ip/snoopy/aoe.c */

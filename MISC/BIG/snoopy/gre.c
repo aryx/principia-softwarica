@@ -12,7 +12,7 @@
 */
 
 
-/*s: enum _anon_ (networking/ip/snoopy/gre.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/gre.c)]] */
 /* GRE flag bits */
 enum {
     GRE_chksum	= (1<<15),
@@ -24,11 +24,11 @@ enum {
     GRE_ack		= (1<<7),
     GRE_version	= 0x7,
 };
-/*e: enum _anon_ (networking/ip/snoopy/gre.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/gre.c)]] */
 
 
 typedef struct Hdr	Hdr;
-/*s: struct Hdr (networking/ip/snoopy/gre.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/gre.c)]]) */
 struct Hdr
 {
     ushort flags;
@@ -41,24 +41,24 @@ struct Hdr
     ulong route;
     ulong ack;
 };
-/*e: struct Hdr (networking/ip/snoopy/gre.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/gre.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/gre.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/gre.c)2]] */
 enum
 {
     Oproto,
 };
-/*e: enum _anon_ (networking/ip/snoopy/gre.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/gre.c)2]] */
 
-/*s: global p_fields (networking/ip/snoopy/gre.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/gre.c)]]) */
 static Field p_fields[] = 
 {
     {"proto",		Fnum,	Oproto,	"encapsulated protocol",	} ,
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/gre.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/gre.c)]]) */
 
-/*s: global p_mux (networking/ip/snoopy/gre.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/gre.c)]]) */
 static Mux p_mux[] =
 {
     {"pup",	0x0200, },
@@ -76,9 +76,9 @@ static Mux p_mux[] =
     {"eapol",	0x888e, },
     {0},
 };
-/*e: global p_mux (networking/ip/snoopy/gre.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/gre.c)]]) */
 
-/*s: function parthdrlen */
+/*s: function [[parthdrlen]] */
 int
 parthdrlen(ushort flags)
 {
@@ -88,9 +88,9 @@ parthdrlen(ushort flags)
         flags&GRE_seq ? 4 : 0 +
         flags&GRE_ack ? 4 : 0;
 }
-/*e: function parthdrlen */
+/*e: function [[parthdrlen]] */
 
-/*s: function parsehdr */
+/*s: function [[parsehdr]] */
 int
 parsehdr(Hdr *h, uchar *s, uchar *e)
 {
@@ -141,9 +141,9 @@ parsehdr(Hdr *h, uchar *s, uchar *e)
 
     return p - s;
 }
-/*e: function parsehdr */
+/*e: function [[parsehdr]] */
 
-/*s: function p_compile (networking/ip/snoopy/gre.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/gre.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -162,9 +162,9 @@ p_compile(Filter *f)
         }
     sysfatal("unknown gre field or protocol: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/gre.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/gre.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/gre.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/gre.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -182,9 +182,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/gre.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/gre.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/gre.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/gre.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -214,9 +214,9 @@ p_seprint(Msg *m)
     
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/gre.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/gre.c)]]) */
 
-/*s: global gre */
+/*s: global [[gre]] */
 Proto gre =
 {
     "gre",
@@ -228,5 +228,5 @@ Proto gre =
     p_fields,
     defaultframer,
 };
-/*e: global gre */
+/*e: global [[gre]] */
 /*e: networking/ip/snoopy/gre.c */

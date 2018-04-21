@@ -13,27 +13,27 @@ typedef struct{
     uchar	len[2];
 }Hdr;
 
-/*s: enum _anon_ (networking/ip/snoopy/aoecmd.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/aoecmd.c)]] */
 enum{
     Hsize	= 8,
 };
-/*e: enum _anon_ (networking/ip/snoopy/aoecmd.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/aoecmd.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/aoecmd.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/aoecmd.c)2]] */
 enum{
     Ocmd,
 };
-/*e: enum _anon_ (networking/ip/snoopy/aoecmd.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/aoecmd.c)2]] */
 
-/*s: global p_fields (networking/ip/snoopy/aoecmd.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/aoecmd.c)]]) */
 static Field p_fields[] =
 {
     {"cmd",		Fnum,	Ocmd,		"cmd",	},
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/aoecmd.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/aoecmd.c)]]) */
 
-/*s: function p_compile (networking/ip/snoopy/aoecmd.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/aoecmd.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -43,9 +43,9 @@ p_compile(Filter *f)
     }
     sysfatal("unknown aoecmd field: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/aoecmd.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/aoecmd.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/aoecmd.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/aoecmd.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -63,9 +63,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/aoecmd.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/aoecmd.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/aoecmd.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/aoecmd.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -86,9 +86,9 @@ p_seprint(Msg *m)
     m->p = seprint(m->p, m->e, "%.*s", NetS(h->len), (char*)m->ps);
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/aoecmd.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/aoecmd.c)]]) */
 
-/*s: global aoecmd */
+/*s: global [[aoecmd]] */
 Proto aoecmd =
 {
     "aoecmd",
@@ -100,5 +100,5 @@ Proto aoecmd =
     p_fields,
     defaultframer,
 };
-/*e: global aoecmd */
+/*e: global [[aoecmd]] */
 /*e: networking/ip/snoopy/aoecmd.c */

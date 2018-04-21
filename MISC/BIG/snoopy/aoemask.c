@@ -12,7 +12,7 @@ typedef struct {
     uchar	cnt;
 } Hdr;
 
-/*s: enum _anon_ (networking/ip/snoopy/aoemask.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/aoemask.c)]] */
 enum {
     Ocmd,
     Oerr,
@@ -20,9 +20,9 @@ enum {
 
     Hsize	= 4,
 };
-/*e: enum _anon_ (networking/ip/snoopy/aoemask.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/aoemask.c)]] */
 
-/*s: global p_fields (networking/ip/snoopy/aoemask.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/aoemask.c)]]) */
 static Field p_fields[] =
 {
     { "cmd",	Fnum,	Ocmd,	"command", },
@@ -30,17 +30,17 @@ static Field p_fields[] =
     { "cnt",	Fnum,	Ocnt,	"count", },
     nil
 };
-/*e: global p_fields (networking/ip/snoopy/aoemask.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/aoemask.c)]]) */
 
-/*s: global p_mux (networking/ip/snoopy/aoemask.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/aoemask.c)]]) */
 static Mux p_mux[] = {
     { "aoemd",	0 },
     { "aoemd",	1 },
     nil
 };
-/*e: global p_mux (networking/ip/snoopy/aoemask.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/aoemask.c)]]) */
 
-/*s: function p_compile (networking/ip/snoopy/aoemask.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/aoemask.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -59,9 +59,9 @@ p_compile(Filter *f)
         }
     sysfatal("unknown aoemask field: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/aoemask.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/aoemask.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/aoemask.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/aoemask.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -83,24 +83,24 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/aoemask.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/aoemask.c)]]) */
 
-/*s: global ctab */
+/*s: global [[ctab]] */
 static char *ctab[] = {
     "read",
     "edit",
 };
-/*e: global ctab */
+/*e: global [[ctab]] */
 
-/*s: global etab */
+/*s: global [[etab]] */
 static char *etab[] = {
     "",
     "bad",
     "full",
 };
-/*e: global etab */
+/*e: global [[etab]] */
 
-/*s: function p_seprint (networking/ip/snoopy/aoemask.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/aoemask.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -125,9 +125,9 @@ p_seprint(Msg *m)
         h->cmd, s, h->err, t, h->cnt);
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/aoemask.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/aoemask.c)]]) */
 
-/*s: global aoemask */
+/*s: global [[aoemask]] */
 Proto aoemask = {
     "aoemask",
     p_compile,
@@ -138,5 +138,5 @@ Proto aoemask = {
     p_fields,
     defaultframer,
 };
-/*e: global aoemask */
+/*e: global [[aoemask]] */
 /*e: networking/ip/snoopy/aoemask.c */

@@ -12,7 +12,7 @@ typedef struct Ospfhello	Ospfhello;
 /*
  *  OSPF packets
  */
-/*s: struct Ospfpkt */
+/*s: struct [[Ospfpkt]] */
 struct Ospfpkt
 {
     uchar	version;
@@ -25,12 +25,12 @@ struct Ospfpkt
     uchar	auth[8];
     uchar	data[1];
 };
-/*e: struct Ospfpkt */
-/*s: constant OSPF_HDRSIZE */
+/*e: struct [[Ospfpkt]] */
+/*s: constant [[OSPF_HDRSIZE]] */
 #define OSPF_HDRSIZE	24	
-/*e: constant OSPF_HDRSIZE */
+/*e: constant [[OSPF_HDRSIZE]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/ospf.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/ospf.c)]] */
 enum
 {
     OSPFhello=	1,
@@ -39,10 +39,10 @@ enum
     OSPFlsupdate=	4,
     OSPFlsack=	5,
 };
-/*e: enum _anon_ (networking/ip/snoopy/ospf.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/ospf.c)]] */
 
 
-/*s: global ospftype */
+/*s: global [[ospftype]] */
 char *ospftype[] = {
     [OSPFhello]	"hello",
     [OSPFdd]	"data definition",
@@ -50,9 +50,9 @@ char *ospftype[] = {
     [OSPFlsupdate]	"link state update",
     [OSPFlsack]	"link state ack",
 };
-/*e: global ospftype */
+/*e: global [[ospftype]] */
 
-/*s: function ospfpkttype */
+/*s: function [[ospfpkttype]] */
 char*
 ospfpkttype(int x)
 {
@@ -63,9 +63,9 @@ ospfpkttype(int x)
     sprint(type, "type %d", x);
     return type;
 }
-/*e: function ospfpkttype */
+/*e: function [[ospfpkttype]] */
 
-/*s: function ospfauth */
+/*s: function [[ospfauth]] */
 char*
 ospfauth(Ospfpkt *ospf)
 {
@@ -88,9 +88,9 @@ ospfauth(Ospfpkt *ospf)
     }
     return auth;
 }
-/*e: function ospfauth */
+/*e: function [[ospfauth]] */
 
-/*s: struct Ospfhello */
+/*s: struct [[Ospfhello]] */
 struct Ospfhello
 {
     uchar	mask[4];
@@ -102,9 +102,9 @@ struct Ospfhello
     uchar	bdesignated[4];
     uchar	neighbor[1];
 };
-/*e: struct Ospfhello */
+/*e: struct [[Ospfhello]] */
 
-/*s: function seprintospfhello */
+/*s: function [[seprintospfhello]] */
 char*
 seprintospfhello(char *p, char *e, void *a)
 {
@@ -115,9 +115,9 @@ seprintospfhello(char *p, char *e, void *a)
         h->mask, NetS(h->interval), h->options, h->pri,
         NetL(h->deadint), h->designated, h->bdesignated);
 }
-/*e: function seprintospfhello */
+/*e: function [[seprintospfhello]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/ospf.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/ospf.c)2]] */
 enum
 {
     LSARouter=	1,
@@ -126,10 +126,10 @@ enum
     LSASummR=	4,
     LSAASext=	5
 };
-/*e: enum _anon_ (networking/ip/snoopy/ospf.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/ospf.c)2]] */
 
 
-/*s: global lsatype */
+/*s: global [[lsatype]] */
 char *lsatype[] = {
     [LSARouter]	"Router LSA",
     [LSANetwork]	"Network LSA",
@@ -137,9 +137,9 @@ char *lsatype[] = {
     [LSASummR]	"Summary LSA (Router)",
     [LSAASext]	"LSA AS external",
 };
-/*e: global lsatype */
+/*e: global [[lsatype]] */
 
-/*s: function lsapkttype */
+/*s: function [[lsapkttype]] */
 char*
 lsapkttype(int x)
 {
@@ -150,11 +150,11 @@ lsapkttype(int x)
     sprint(type, "type %d", x);
     return type;
 }
-/*e: function lsapkttype */
+/*e: function [[lsapkttype]] */
 
 /* OSPF Link State Advertisement Header */
 /* rfc2178 section 12.1 */
-/*s: struct OspfLSAhdr */
+/*s: struct [[OspfLSAhdr]] */
 /* data of Ospfpkt point to a 4-uchar value that is the # of LSAs */
 struct OspfLSAhdr {
     uchar	lsage[2];
@@ -173,9 +173,9 @@ struct OspfLSAhdr {
     uchar	lscksum[2];
     uchar	lsalen[2];	/* includes the 20 byte lsa header */
 };
-/*e: struct OspfLSAhdr */
+/*e: struct [[OspfLSAhdr]] */
 
-/*s: struct Ospfrt */
+/*s: struct [[Ospfrt]] */
 struct Ospfrt {
     uchar	linkid[4];
     uchar	linkdata[4];
@@ -184,40 +184,40 @@ struct Ospfrt {
     uchar	metric[2];
     
 };
-/*e: struct Ospfrt */
+/*e: struct [[Ospfrt]] */
 
-/*s: struct OspfrtLSA */
+/*s: struct [[OspfrtLSA]] */
 struct OspfrtLSA {
     struct OspfLSAhdr	hdr;
     uchar			netmask[4];
 };
-/*e: struct OspfrtLSA */
+/*e: struct [[OspfrtLSA]] */
 
-/*s: struct OspfntLSA */
+/*s: struct [[OspfntLSA]] */
 struct OspfntLSA {
     struct OspfLSAhdr	hdr;
     uchar			netmask[4];
     uchar			attrt[4];
 };
-/*e: struct OspfntLSA */
+/*e: struct [[OspfntLSA]] */
 
-/*s: struct Ospfsumm */
+/*s: struct [[Ospfsumm]] */
 /* Summary Link State Advertisement info */
 struct Ospfsumm {
     uchar	flag;	/* always zero */
     uchar	metric[3];
 };
-/*e: struct Ospfsumm */
+/*e: struct [[Ospfsumm]] */
 
-/*s: struct OspfsummLSA */
+/*s: struct [[OspfsummLSA]] */
 struct OspfsummLSA {
     struct OspfLSAhdr	hdr;
     uchar			netmask[4];
     struct Ospfsumm		lsa;
 };
-/*e: struct OspfsummLSA */
+/*e: struct [[OspfsummLSA]] */
 
-/*s: struct OspfASext */
+/*s: struct [[OspfASext]] */
 /* AS external Link State Advertisement info */
 struct OspfASext {
     uchar	flag;	/* external */
@@ -225,17 +225,17 @@ struct OspfASext {
     uchar	fwdaddr[4];
     uchar	exrttag[4];
 };
-/*e: struct OspfASext */
+/*e: struct [[OspfASext]] */
 
-/*s: struct OspfASextLSA */
+/*s: struct [[OspfASextLSA]] */
 struct OspfASextLSA {
     struct OspfLSAhdr	hdr;
     uchar			netmask[4];
     struct OspfASext	lsa;
 };
-/*e: struct OspfASextLSA */
+/*e: struct [[OspfASextLSA]] */
 
-/*s: struct OspfLSupdpkt */
+/*s: struct [[OspfLSupdpkt]] */
 /* OSPF Link State Update Packet */
 struct OspfLSupdpkt {
     uchar	lsacnt[4];
@@ -247,9 +247,9 @@ struct OspfLSupdpkt {
         struct OspfASextLSA	as[1];
     };
 };
-/*e: struct OspfLSupdpkt */
+/*e: struct [[OspfLSupdpkt]] */
 
-/*s: function seprintospflsaheader */
+/*s: function [[seprintospflsaheader]] */
 char*
 seprintospflsaheader(char *p, char *e, struct OspfLSAhdr *h)
 {
@@ -258,9 +258,9 @@ seprintospflsaheader(char *p, char *e, struct OspfLSAhdr *h)
         h->lsid, h->advtrt, NetL(h->lsseqno), NetS(h->lscksum),
         NetS(h->lsalen));
 }
-/*e: function seprintospflsaheader */
+/*e: function [[seprintospflsaheader]] */
 
-/*s: struct OspfDDpkt */
+/*s: struct [[OspfDDpkt]] */
 /* OSPF Database Description Packet */
 struct OspfDDpkt {
     uchar	intMTU[2];
@@ -269,9 +269,9 @@ struct OspfDDpkt {
     uchar	DDseqno[4];
     struct OspfLSAhdr	hdr[1];		/* LSA headers... */
 };
-/*e: struct OspfDDpkt */
+/*e: struct [[OspfDDpkt]] */
 
-/*s: function seprintospfdatadesc */
+/*s: function [[seprintospfdatadesc]] */
 char*
 seprintospfdatadesc(char *p, char *e, void *a, int len)
 {
@@ -287,9 +287,9 @@ seprintospfdatadesc(char *p, char *e, void *a, int len)
     }
     return seprint(p, e, ")");
 }
-/*e: function seprintospfdatadesc */
+/*e: function [[seprintospfdatadesc]] */
 
-/*s: function seprintospflsupdate */
+/*s: function [[seprintospflsupdate]] */
 char*
 seprintospflsupdate(char *p, char *e, void *a, int len)
 {
@@ -357,9 +357,9 @@ seprintospflsupdate(char *p, char *e, void *a, int len)
     }
     return seprint(p, e, ")");
 }
-/*e: function seprintospflsupdate */
+/*e: function [[seprintospflsupdate]] */
 
-/*s: function seprintospflsack */
+/*s: function [[seprintospflsack]] */
 char*
 seprintospflsack(char *p, char *e, void *a, int len)
 {
@@ -376,9 +376,9 @@ seprintospflsack(char *p, char *e, void *a, int len)
     }
     return seprint(p, e, ")");
 }
-/*e: function seprintospflsack */
+/*e: function [[seprintospflsack]] */
 
-/*s: function p_seprint (networking/ip/snoopy/ospf.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/ospf.c)]]) */
 int
 p_seprint(Msg *m)
 {
@@ -428,9 +428,9 @@ Default:
     m->pr = nil;
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/ospf.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/ospf.c)]]) */
 
-/*s: global ospf */
+/*s: global [[ospf]] */
 Proto ospf =
 {
     "ospf",
@@ -442,5 +442,5 @@ Proto ospf =
     nil,
     defaultframer,
 };
-/*e: global ospf */
+/*e: global [[ospf]] */
 /*e: networking/ip/snoopy/ospf.c */

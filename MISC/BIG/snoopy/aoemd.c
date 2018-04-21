@@ -11,24 +11,24 @@ typedef struct {
     uchar	ea[6];
 } Hdr;
 
-/*s: enum _anon_ (networking/ip/snoopy/aoemd.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/aoemd.c)]] */
 enum {
     Ocmd,
     Oea,
 
     Hsize	= 8,
 };
-/*e: enum _anon_ (networking/ip/snoopy/aoemd.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/aoemd.c)]] */
 
-/*s: global p_fields (networking/ip/snoopy/aoemd.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/aoemd.c)]]) */
 static Field p_fields[] = {
     {"cmd",	Fnum,	Ocmd,	"command",	},
     {"ea",	Fnum,	Oea,	"ethernet addr", },
     nil
 };
-/*e: global p_fields (networking/ip/snoopy/aoemd.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/aoemd.c)]]) */
 
-/*s: function p_compile (networking/ip/snoopy/aoemd.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/aoemd.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -38,9 +38,9 @@ p_compile(Filter *f)
     }
     sysfatal("unknown aoemd field: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/aoemd.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/aoemd.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/aoemd.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/aoemd.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -64,17 +64,17 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/aoemd.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/aoemd.c)]]) */
 
-/*s: global ctab (networking/ip/snoopy/aoemd.c) */
+/*s: global [[ctab]]([[(networking/ip/snoopy/aoemd.c)]]) */
 static char *ctab[] = {
     "  ",
     " +",
     " -",
 };
-/*e: global ctab (networking/ip/snoopy/aoemd.c) */
+/*e: global [[ctab]]([[(networking/ip/snoopy/aoemd.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/aoemd.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/aoemd.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -96,9 +96,9 @@ p_seprint(Msg *m)
     m->p = seprint(m->p, m->e, "cmd=%d%s ea=%E\n", h->cmd, s, h->ea);
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/aoemd.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/aoemd.c)]]) */
 
-/*s: global aoemd */
+/*s: global [[aoemd]] */
 Proto aoemd = {
     "aoemd",
     p_compile,
@@ -109,5 +109,5 @@ Proto aoemd = {
     p_fields,
     defaultframer,
 };
-/*e: global aoemd */
+/*e: global [[aoemd]] */
 /*e: networking/ip/snoopy/aoemd.c */

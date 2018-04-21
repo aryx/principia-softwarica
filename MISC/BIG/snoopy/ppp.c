@@ -6,16 +6,16 @@
 #include "dat.h"
 #include "protos.h"
 
-/*s: enum _anon_ (networking/ip/snoopy/ppp.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/ppp.c)]] */
 /* PPP stuff */
 enum {
     PPP_addr=	0xff,
     PPP_ctl=	0x3,
     PPP_period=	3*1000,	/* period of retransmit process (in ms) */
 };
-/*e: enum _anon_ (networking/ip/snoopy/ppp.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/ppp.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/ppp.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/ppp.c)2]] */
 /* PPP protocols */
 enum {
     PPP_ip=		0x21,		/* internet */
@@ -30,13 +30,13 @@ enum {
     PPP_lqm=	0xc025,		/* link quality monitoring */
     PPP_chap=	0xc223,		/* challenge/response */
 };
-/*e: enum _anon_ (networking/ip/snoopy/ppp.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/ppp.c)2]] */
 
 /* LCP protocol (and IPCP) */
 
 
 typedef struct Lcppkt	Lcppkt;
-/*s: struct Lcppkt */
+/*s: struct [[Lcppkt]] */
 struct Lcppkt
 {
     uchar	code;
@@ -44,19 +44,19 @@ struct Lcppkt
     uchar	len[2];
     uchar	data[1];
 };
-/*e: struct Lcppkt */
+/*e: struct [[Lcppkt]] */
 
 typedef struct Lcpopt	Lcpopt;
-/*s: struct Lcpopt */
+/*s: struct [[Lcpopt]] */
 struct Lcpopt
 {
     uchar	type;
     uchar	len;
     uchar	data[1];
 };
-/*e: struct Lcpopt */
+/*e: struct [[Lcpopt]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/ppp.c)3 */
+/*s: enum [[_anon_ (networking/ip/snoopy/ppp.c)3]] */
 enum
 {
     /* LCP codes */
@@ -102,9 +102,9 @@ enum
     Oipdns2=	131,
     Oipwins2=	132,
 };
-/*e: enum _anon_ (networking/ip/snoopy/ppp.c)3 */
+/*e: enum [[_anon_ (networking/ip/snoopy/ppp.c)3]] */
 
-/*s: global lcpcode */
+/*s: global [[lcpcode]] */
 char *
 lcpcode[] = {
     0,
@@ -124,9 +124,9 @@ lcpcode[] = {
     "resetreq",
     "resetack",
 };
-/*e: global lcpcode */
+/*e: global [[lcpcode]] */
 
-/*s: global p_mux (networking/ip/snoopy/ppp.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/ppp.c)]]) */
 static Mux p_mux[] =
 {
     {"ip",		PPP_ip, },
@@ -142,16 +142,16 @@ static Mux p_mux[] =
     {"ppp_chap",	PPP_chap, },
     {0},
 };
-/*e: global p_mux (networking/ip/snoopy/ppp.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/ppp.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/ppp.c)4 */
+/*s: enum [[_anon_ (networking/ip/snoopy/ppp.c)4]] */
 enum
 {
     OOproto,
 };
-/*e: enum _anon_ (networking/ip/snoopy/ppp.c)4 */
+/*e: enum [[_anon_ (networking/ip/snoopy/ppp.c)4]] */
 
-/*s: function p_compile (networking/ip/snoopy/ppp.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/ppp.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -167,9 +167,9 @@ p_compile(Filter *f)
 
     sysfatal("unknown ppp field or protocol: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/ppp.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/ppp.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/ppp.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/ppp.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -195,9 +195,9 @@ p_filter(Filter *f, Msg *m)
 
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/ppp.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/ppp.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/ppp.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/ppp.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -220,9 +220,9 @@ p_seprint(Msg *m)
 
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/ppp.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/ppp.c)]]) */
 
-/*s: function p_seprintchap */
+/*s: function [[p_seprintchap]] */
 static int
 p_seprintchap(Msg *m)
 {
@@ -272,9 +272,9 @@ p_seprintchap(Msg *m)
     m->p = seprint(p, e, " len=%d", len);
     return 0;
 }
-/*e: function p_seprintchap */
+/*e: function [[p_seprintchap]] */
 
-/*s: function seprintlcpopt */
+/*s: function [[seprintlcpopt]] */
 static char*
 seprintlcpopt(char *p, char *e, void *a, int len)
 {
@@ -341,10 +341,10 @@ seprintlcpopt(char *p, char *e, void *a, int len)
     }
     return p;
 }
-/*e: function seprintlcpopt */
+/*e: function [[seprintlcpopt]] */
 
 
-/*s: function p_seprintlcp */
+/*s: function [[p_seprintlcp]] */
 static int
 p_seprintlcp(Msg *m)
 {
@@ -391,9 +391,9 @@ p_seprintlcp(Msg *m)
     m->p = seprint(p, e, " len=%d", len);
     return 0;
 }
-/*e: function p_seprintlcp */
+/*e: function [[p_seprintlcp]] */
 
-/*s: function seprintipcpopt */
+/*s: function [[seprintipcpopt]] */
 static char*
 seprintipcpopt(char *p, char *e, void *a, int len)
 {
@@ -439,9 +439,9 @@ seprintipcpopt(char *p, char *e, void *a, int len)
     }
     return p;
 }
-/*e: function seprintipcpopt */
+/*e: function [[seprintipcpopt]] */
 
-/*s: function p_seprintipcp */
+/*s: function [[p_seprintipcp]] */
 static int
 p_seprintipcp(Msg *m)
 {
@@ -483,9 +483,9 @@ p_seprintipcp(Msg *m)
     m->p = seprint(p, e, " len=%d", len);
     return 0;
 }
-/*e: function p_seprintipcp */
+/*e: function [[p_seprintipcp]] */
 
-/*s: function seprintccpopt */
+/*s: function [[seprintccpopt]] */
 static char*
 seprintccpopt(char *p, char *e, void *a, int len)
 {
@@ -520,9 +520,9 @@ seprintccpopt(char *p, char *e, void *a, int len)
     }
     return p;
 }
-/*e: function seprintccpopt */
+/*e: function [[seprintccpopt]] */
 
-/*s: function p_seprintccp */
+/*s: function [[p_seprintccp]] */
 static int
 p_seprintccp(Msg *m)
 {
@@ -567,9 +567,9 @@ p_seprintccp(Msg *m)
     
     return 0;
 }
-/*e: function p_seprintccp */
+/*e: function [[p_seprintccp]] */
 
-/*s: function p_seprintcomp */
+/*s: function [[p_seprintcomp]] */
 static int
 p_seprintcomp(Msg *m)
 {
@@ -599,9 +599,9 @@ p_seprintcomp(Msg *m)
     m->pr = nil;
     return 0;
 }
-/*e: function p_seprintcomp */
+/*e: function [[p_seprintcomp]] */
 
-/*s: global ppp */
+/*s: global [[ppp]] */
 Proto ppp =
 {
     "ppp",
@@ -613,9 +613,9 @@ Proto ppp =
     nil,
     defaultframer,
 };
-/*e: global ppp */
+/*e: global [[ppp]] */
 
-/*s: global ppp_ipcp */
+/*s: global [[ppp_ipcp]] */
 Proto ppp_ipcp =
 {
     "ppp_ipcp",
@@ -627,9 +627,9 @@ Proto ppp_ipcp =
     nil,
     defaultframer,
 };
-/*e: global ppp_ipcp */
+/*e: global [[ppp_ipcp]] */
 
-/*s: global ppp_lcp */
+/*s: global [[ppp_lcp]] */
 Proto ppp_lcp =
 {
     "ppp_lcp",
@@ -641,9 +641,9 @@ Proto ppp_lcp =
     nil,
     defaultframer,
 };
-/*e: global ppp_lcp */
+/*e: global [[ppp_lcp]] */
 
-/*s: global ppp_ccp */
+/*s: global [[ppp_ccp]] */
 Proto ppp_ccp =
 {
     "ppp_ccp",
@@ -655,9 +655,9 @@ Proto ppp_ccp =
     nil,
     defaultframer,
 };
-/*e: global ppp_ccp */
+/*e: global [[ppp_ccp]] */
 
-/*s: global ppp_chap */
+/*s: global [[ppp_chap]] */
 Proto ppp_chap =
 {
     "ppp_chap",
@@ -669,9 +669,9 @@ Proto ppp_chap =
     nil,
     defaultframer,
 };
-/*e: global ppp_chap */
+/*e: global [[ppp_chap]] */
 
-/*s: global ppp_comp */
+/*s: global [[ppp_comp]] */
 Proto ppp_comp =
 {
     "ppp_comp",
@@ -683,5 +683,5 @@ Proto ppp_comp =
     nil,
     defaultframer,
 };
-/*e: global ppp_comp */
+/*e: global [[ppp_comp]] */
 /*e: networking/ip/snoopy/ppp.c */

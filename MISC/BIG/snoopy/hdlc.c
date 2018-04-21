@@ -5,7 +5,7 @@
 #include "dat.h"
 #include "protos.h"
 
-/*s: enum _anon_ (networking/ip/snoopy/hdlc.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/hdlc.c)]] */
 enum {
     HDLC_frame=	0x7e,
     HDLC_esc=	0x7d,
@@ -16,9 +16,9 @@ enum {
     PPP_initfcs=	0xffff,
     PPP_goodfcs=	0xf0b8,
 };
-/*e: enum _anon_ (networking/ip/snoopy/hdlc.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/hdlc.c)]] */
 
-/*s: global fcstab */
+/*s: global [[fcstab]] */
 /*
  * Calculate FCS - rfc 1331
  */
@@ -57,31 +57,31 @@ ushort fcstab[256] =
       0xf78f, 0xe606, 0xd49d, 0xc514, 0xb1ab, 0xa022, 0x92b9, 0x8330,
       0x7bc7, 0x6a4e, 0x58d5, 0x495c, 0x3de3, 0x2c6a, 0x1ef1, 0x0f78
 };
-/*e: global fcstab */
+/*e: global [[fcstab]] */
 
-/*s: global inbuf */
+/*s: global [[inbuf]] */
 static uchar inbuf[16*1024];
-/*e: global inbuf */
-/*s: global inlen */
+/*e: global [[inbuf]] */
+/*s: global [[inlen]] */
 static int inlen;
-/*e: global inlen */
+/*e: global [[inlen]] */
 
-/*s: global p_mux (networking/ip/snoopy/hdlc.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/hdlc.c)]]) */
 static Mux p_mux[] =
 {
     {"ppp",		(PPP_addr<<8)|PPP_ctl,	} ,
     {0}
 };
-/*e: global p_mux (networking/ip/snoopy/hdlc.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/hdlc.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/hdlc.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/hdlc.c)2]] */
 enum
 {
     Ot = 1
 };
-/*e: enum _anon_ (networking/ip/snoopy/hdlc.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/hdlc.c)2]] */
 
-/*s: function p_compile (networking/ip/snoopy/hdlc.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/hdlc.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -96,9 +96,9 @@ p_compile(Filter *f)
         }
     sysfatal("unknown ethernet field or protocol: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/hdlc.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/hdlc.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/hdlc.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/hdlc.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -116,9 +116,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 1;
 }
-/*e: function p_filter (networking/ip/snoopy/hdlc.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/hdlc.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/hdlc.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/hdlc.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -133,9 +133,9 @@ p_seprint(Msg *m)
 
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/hdlc.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/hdlc.c)]]) */
 
-/*s: function p_framer */
+/*s: function [[p_framer]] */
 static int
 p_framer(int fd, uchar *pkt, int pktlen)
 {
@@ -181,9 +181,9 @@ p_framer(int fd, uchar *pkt, int pktlen)
     }
     return -1;
 }
-/*e: function p_framer */
+/*e: function [[p_framer]] */
 
-/*s: global hdlc */
+/*s: global [[hdlc]] */
 Proto hdlc =
 {
     "hdlc",
@@ -195,5 +195,5 @@ Proto hdlc =
     nil,
     p_framer,
 };
-/*e: global hdlc */
+/*e: global [[hdlc]] */
 /*e: networking/ip/snoopy/hdlc.c */

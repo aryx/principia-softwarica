@@ -13,13 +13,13 @@ typedef struct{
     uchar	lba[6];
 }Hdr;
 
-/*s: enum _anon_ (networking/ip/snoopy/aoeata.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/aoeata.c)]] */
 enum{
     Hsize	= 10,
 };
-/*e: enum _anon_ (networking/ip/snoopy/aoeata.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/aoeata.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/aoeata.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/aoeata.c)2]] */
 enum{
     Oaflag,
     Ocmd,
@@ -30,9 +30,9 @@ enum{
     Ostat,
     Oerr,
 };
-/*e: enum _anon_ (networking/ip/snoopy/aoeata.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/aoeata.c)2]] */
 
-/*s: global p_fields (networking/ip/snoopy/aoeata.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/aoeata.c)]]) */
 static Field p_fields[] =
 {
     {"aflag",	Fnum,	Oaflag,		"aflag",		},
@@ -44,9 +44,9 @@ static Field p_fields[] =
     {"err",		Fnum,	Oerr,		"error",		},
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/aoeata.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/aoeata.c)]]) */
 
-/*s: function p_compile (networking/ip/snoopy/aoeata.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/aoeata.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -56,9 +56,9 @@ p_compile(Filter *f)
     }
     sysfatal("unknown aoeata field: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/aoeata.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/aoeata.c)]]) */
 
-/*s: function llba */
+/*s: function [[llba]] */
 uvlong
 llba(uchar *c)
 {
@@ -72,9 +72,9 @@ llba(uchar *c)
     l |= (uvlong)c[5]<<40;
     return l;
 }
-/*e: function llba */
+/*e: function [[llba]] */
 
-/*s: function p_filter (networking/ip/snoopy/aoeata.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/aoeata.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -106,9 +106,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/aoeata.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/aoeata.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/aoeata.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/aoeata.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -127,9 +127,9 @@ p_seprint(Msg *m)
         h->aflag, h->feat, h->sectors, h->cmd, llba(h->lba));
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/aoeata.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/aoeata.c)]]) */
 
-/*s: global aoeata */
+/*s: global [[aoeata]] */
 Proto aoeata =
 {
     "aoeata",
@@ -141,5 +141,5 @@ Proto aoeata =
     p_fields,
     defaultframer,
 };
-/*e: global aoeata */
+/*e: global [[aoeata]] */
 /*e: networking/ip/snoopy/aoeata.c */

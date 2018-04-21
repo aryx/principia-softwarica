@@ -5,14 +5,14 @@
 #include "dat.h"
 #include "protos.h"
 
-/*s: struct Hdr (networking/ip/snoopy/eapol_key.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 typedef struct Hdr
 {
     uchar	desc;
 } Hdr;
-/*e: struct Hdr (networking/ip/snoopy/eapol_key.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 
-/*s: struct Rc4KeyDesc */
+/*s: struct [[Rc4KeyDesc]] */
 typedef struct Rc4KeyDesc
 {
     uchar	ln[2];
@@ -21,9 +21,9 @@ typedef struct Rc4KeyDesc
     uchar	idx;
     uchar	md[16];
 } Rc4KeyDesc;
-/*e: struct Rc4KeyDesc */
+/*e: struct [[Rc4KeyDesc]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/eapol_key.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/eapol_key.c)]] */
 enum
 {
     HDR=	1,		/* sizeof(Hdr) */
@@ -31,32 +31,32 @@ enum
 
     DescTpRC4= 1,
 };
-/*e: enum _anon_ (networking/ip/snoopy/eapol_key.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/eapol_key.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/eapol_key.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/eapol_key.c)2]] */
 enum
 {
     Odesc,
 };
-/*e: enum _anon_ (networking/ip/snoopy/eapol_key.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/eapol_key.c)2]] */
 
-/*s: global p_mux (networking/ip/snoopy/eapol_key.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 static Mux p_mux[] =
 {
     { "rc4keydesc", DescTpRC4, },
     { 0 }
 };
-/*e: global p_mux (networking/ip/snoopy/eapol_key.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 
-/*s: global p_muxrc4 */
+/*s: global [[p_muxrc4]] */
 static Mux p_muxrc4[] =
 {
     { "dump", 0, },
     { 0 }
 };
-/*e: global p_muxrc4 */
+/*e: global [[p_muxrc4]] */
 
-/*s: function p_compile (networking/ip/snoopy/eapol_key.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -71,9 +71,9 @@ p_compile(Filter *f)
         }
     sysfatal("unknown eap_key field or type: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/eapol_key.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/eapol_key.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -91,9 +91,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/eapol_key.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 
-/*s: function op (networking/ip/snoopy/eapol_key.c) */
+/*s: function [[op]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 static char*
 op(int i)
 {
@@ -107,9 +107,9 @@ op(int i)
         return x;
     }
 }
-/*e: function op (networking/ip/snoopy/eapol_key.c) */
+/*e: function [[op]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/eapol_key.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -127,9 +127,9 @@ p_seprint(Msg *m)
     m->p = seprint(m->p, m->e, "desc=%s", op(h->desc));
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/eapol_key.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/eapol_key.c)]]) */
 
-/*s: function p_seprintrc4 */
+/*s: function [[p_seprintrc4]] */
 static int
 p_seprintrc4(Msg *m)
 {
@@ -151,9 +151,9 @@ p_seprintrc4(Msg *m)
         m->p = seprint(m->p, m->e, " data=%.*H", len, m->ps);
     return 0;
 }
-/*e: function p_seprintrc4 */
+/*e: function [[p_seprintrc4]] */
 
-/*s: global eapol_key */
+/*s: global [[eapol_key]] */
 Proto eapol_key =
 {
     "eapol_key",
@@ -165,9 +165,9 @@ Proto eapol_key =
     nil,
     defaultframer,
 };
-/*e: global eapol_key */
+/*e: global [[eapol_key]] */
 
-/*s: global rc4keydesc */
+/*s: global [[rc4keydesc]] */
 Proto rc4keydesc =
 {
     "rc4keydesc",
@@ -179,5 +179,5 @@ Proto rc4keydesc =
     nil,
     defaultframer,
 };
-/*e: global rc4keydesc */
+/*e: global [[rc4keydesc]] */
 /*e: networking/ip/snoopy/eapol_key.c */

@@ -6,7 +6,7 @@
 #include "protos.h"
 
 typedef struct Hdr Hdr;
-/*s: struct Hdr (networking/ip/snoopy/rtcp.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/rtcp.c)]]) */
 struct Hdr {
     uchar	hdr;		/* RTCP header */
     uchar	pt;		/* Packet type */
@@ -17,10 +17,10 @@ struct Hdr {
     uchar	pktc[4];	/* Sender's packet count */
     uchar	octc[4];	/* Sender's octet count */
 };
-/*e: struct Hdr (networking/ip/snoopy/rtcp.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/rtcp.c)]]) */
 
 typedef struct Report Report;
-/*s: struct Report */
+/*s: struct [[Report]] */
 struct Report {
     uchar	ssrc[4];	/* SSRC identifier */
     uchar	lost[4];	/* Fraction + cumu lost */
@@ -29,16 +29,16 @@ struct Report {
     uchar	lsr[4];		/* Last SR */
     uchar	dlsr[4];	/* Delay since last SR */
 };
-/*e: struct Report */
+/*e: struct [[Report]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/rtcp.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/rtcp.c)]] */
 enum{
     RTCPLEN = 28,		/* Minimum size of an RTCP header */
     REPORTLEN = 24,
 };
-/*e: enum _anon_ (networking/ip/snoopy/rtcp.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/rtcp.c)]] */
 
-/*s: function p_seprint (networking/ip/snoopy/rtcp.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/rtcp.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -78,9 +78,9 @@ p_seprint(Msg *m)
     m->pr = nil;
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/rtcp.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/rtcp.c)]]) */
 
-/*s: global rtcp */
+/*s: global [[rtcp]] */
 Proto rtcp = {
     "rtcp",
     nil,
@@ -91,5 +91,5 @@ Proto rtcp = {
     nil,
     defaultframer,
 };
-/*e: global rtcp */
+/*e: global [[rtcp]] */
 /*e: networking/ip/snoopy/rtcp.c */

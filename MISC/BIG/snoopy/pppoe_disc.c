@@ -6,30 +6,30 @@
 #include "protos.h"
 
 typedef struct Hdr Hdr;
-/*s: struct Hdr (networking/ip/snoopy/pppoe_disc.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/pppoe_disc.c)]]) */
 struct Hdr {
     uchar verstype;
     uchar code;
     uchar sessid[2];
     uchar length[2];	/* of payload */
 };
-/*e: struct Hdr (networking/ip/snoopy/pppoe_disc.c) */
-/*s: enum _anon_ (networking/ip/snoopy/pppoe_disc.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/pppoe_disc.c)]]) */
+/*s: enum [[_anon_ (networking/ip/snoopy/pppoe_disc.c)]] */
 enum
 {
     HDRSIZE = 1+1+2+2
 };
-/*e: enum _anon_ (networking/ip/snoopy/pppoe_disc.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/pppoe_disc.c)]] */
 
-/*s: global p_mux (networking/ip/snoopy/pppoe_disc.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/pppoe_disc.c)]]) */
 static Mux p_mux[] =
 {
     {"ppp",		0,	} ,
     {0}
 };
-/*e: global p_mux (networking/ip/snoopy/pppoe_disc.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/pppoe_disc.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/pppoe_disc.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/pppoe_disc.c)2]] */
 enum
 {
     Overs,
@@ -37,9 +37,9 @@ enum
     Ocode,
     Osess,
 };
-/*e: enum _anon_ (networking/ip/snoopy/pppoe_disc.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/pppoe_disc.c)2]] */
 
-/*s: global p_fields (networking/ip/snoopy/pppoe_disc.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/pppoe_disc.c)]]) */
 static Field p_fields[] = 
 {
     {"v",	Fnum,	Overs,	"version",	} ,
@@ -48,9 +48,9 @@ static Field p_fields[] =
     {"s",	Fnum,	Osess,	"sessid" } ,
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/pppoe_disc.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/pppoe_disc.c)]]) */
 
-/*s: function p_compilesess */
+/*s: function [[p_compilesess]] */
 static void
 p_compilesess(Filter *f)
 {
@@ -71,8 +71,8 @@ p_compilesess(Filter *f)
 */
     sysfatal("unknown pppoe field or protocol: %s", f->s);
 }
-/*e: function p_compilesess */
-/*s: function p_compiledisc */
+/*e: function [[p_compilesess]] */
+/*s: function [[p_compiledisc]] */
 static void
 p_compiledisc(Filter *f)
 {
@@ -93,9 +93,9 @@ p_compiledisc(Filter *f)
 */
     sysfatal("unknown pppoe field or protocol: %s", f->s);
 }
-/*e: function p_compiledisc */
+/*e: function [[p_compiledisc]] */
 
-/*s: function p_filter (networking/ip/snoopy/pppoe_disc.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/pppoe_disc.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -119,9 +119,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/pppoe_disc.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/pppoe_disc.c)]]) */
 
-/*s: function p_seprintdisc */
+/*s: function [[p_seprintdisc]] */
 /* BUG: print all the discovery types */
 static int
 p_seprintdisc(Msg *m)
@@ -143,9 +143,9 @@ p_seprintdisc(Msg *m)
 
     return 0;
 }
-/*e: function p_seprintdisc */
+/*e: function [[p_seprintdisc]] */
 
-/*s: function p_seprintsess */
+/*s: function [[p_seprintsess]] */
 static int
 p_seprintsess(Msg *m)
 {
@@ -167,9 +167,9 @@ p_seprintsess(Msg *m)
 
     return 0;
 }
-/*e: function p_seprintsess */
+/*e: function [[p_seprintsess]] */
 
-/*s: global pppoe_disc */
+/*s: global [[pppoe_disc]] */
 Proto pppoe_disc =
 {
     "pppoe_disc",
@@ -181,9 +181,9 @@ Proto pppoe_disc =
     p_fields,
     defaultframer
 };
-/*e: global pppoe_disc */
+/*e: global [[pppoe_disc]] */
 
-/*s: global pppoe_sess */
+/*s: global [[pppoe_sess]] */
 Proto pppoe_sess =
 {
     "pppoe_sess",
@@ -195,6 +195,6 @@ Proto pppoe_sess =
     p_fields,
     defaultframer
 };
-/*e: global pppoe_sess */
+/*e: global [[pppoe_sess]] */
 
 /*e: networking/ip/snoopy/pppoe_disc.c */

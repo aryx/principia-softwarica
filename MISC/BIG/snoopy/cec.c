@@ -12,22 +12,22 @@ typedef struct{
     uchar	len;
 }Hdr;
 
-/*s: enum _anon_ (networking/ip/snoopy/cec.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/cec.c)]] */
 enum{
     Hsize	= 4,
 };
-/*e: enum _anon_ (networking/ip/snoopy/cec.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/cec.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/cec.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/cec.c)2]] */
 enum{
     Otype,
     Oconn,
     Oseq,
     Olen,
 };
-/*e: enum _anon_ (networking/ip/snoopy/cec.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/cec.c)2]] */
 
-/*s: global p_fields (networking/ip/snoopy/cec.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/cec.c)]]) */
 static Field p_fields[] =
 {
     {"type",	Fnum,	Otype,		"type",	},
@@ -36,9 +36,9 @@ static Field p_fields[] =
     {"len",		Fnum,	Olen,		"len",	},
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/cec.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/cec.c)]]) */
 
-/*s: function p_compile (networking/ip/snoopy/cec.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/cec.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -48,9 +48,9 @@ p_compile(Filter *f)
     }
     sysfatal("unknown aoe field: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/cec.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/cec.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/cec.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/cec.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -74,9 +74,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/cec.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/cec.c)]]) */
 
-/*s: global ttab */
+/*s: global [[ttab]] */
 static char* ttab[] = {
     "Tinita",
     "Tinitb",
@@ -87,9 +87,9 @@ static char* ttab[] = {
     "Toffer",
     "Treset",
 };
-/*e: global ttab */
+/*e: global [[ttab]] */
 
-/*s: function p_seprint (networking/ip/snoopy/cec.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/cec.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -117,9 +117,9 @@ p_seprint(Msg *m)
         (int)utfnlen(p, h->len), p);
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/cec.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/cec.c)]]) */
 
-/*s: global cec */
+/*s: global [[cec]] */
 Proto cec =
 {
     "cec",
@@ -131,5 +131,5 @@ Proto cec =
     p_fields,
     defaultframer,
 };
-/*e: global cec */
+/*e: global [[cec]] */
 /*e: networking/ip/snoopy/cec.c */
