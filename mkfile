@@ -169,6 +169,9 @@ LPDIRS=\
  networking
 
 #TODO generators
+# editors
+# browser
+# languages
 
 lpclean:QV:
 	for (i in $LPDIRS) @{
