@@ -49,51 +49,63 @@ gethunk(void)
     nhunk = nh;
     thunk += nh;
 }
-/*e: function gethunk */
+/*e: function [[gethunk]] */
 
-/*s: function lookup */
+/*s: function [[lookup]] */
 Sym*
 lookup(char *symb, int v)
 {
-    Sym *s;
-    char *p;
+    Sym *sym;
     long h;
-    int l, c;
+    int len;
+    /*s: [[lookup()]] other locals */
+    char *p;
+    int c;
+    /*e: [[lookup()]] other locals */
 
-    // h = hash(symb, v)
+    /*s: [[lookup()]] compute hash value [[h]] of [[(symb, v)]] and [[len]] */
+    // h = hashcode(symb, v); 
+    // len = strlen(symb);
     h = v;
     for(p=symb; *p; p++) {
         c = *p;
         h = h+h+h + c;
     }
-    l = (p - symb) + 1;
+    len = (p - symb) + 1;
     h &= 0xffffff;
     h %= NHASH;
+    /*e: [[lookup()]] compute hash value [[h]] of [[(symb, v)]] and [[len]] */
     
-    // s = lookup(h, hash)
-    for(s = hash[h]; s != S; s = s->link)
-        if(s->version == v)
-            if(memcmp(s->name, symb, l) == 0)
-                return s;
+    // sym = hash_lookup((symb, v), h, hash)
+    for(sym = hash[h]; sym != S; sym = sym->link)
+        if(sym->version == v)
+            if(memcmp(sym->name, symb, len) == 0)
+                return sym;
 
+    // else
+    /*s: [[lookup()]] if symbol name not found */
+    sym = malloc(sizeof(Sym));
+    sym->name = malloc(len + 1); // +1 again?
+    memmove(sym->name, symb, len);
+    sym->version = v;
 
-    s = malloc(sizeof(Sym));
-    s->name = malloc(l + 1); // +1 again?
-    memmove(s->name, symb, l);
-    s->type = SNONE;
-    s->version = v;
-    s->value = 0;
-    s->sig = 0;
+    sym->value = 0;
+    sym->type = SNONE;
+    sym->sig = 0;
 
-    s->link = hash[h];
-    hash[h] = s;
+    // add_hash(sym, hash)
+    sym->link = hash[h];
+    hash[h] = sym;
 
+    /*s: [[lookup()]] profiling */
     nsymbol++;
-    return s;
+    /*e: [[lookup()]] profiling */
+    return sym;
+    /*e: [[lookup()]] if symbol name not found */
 }
-/*e: function lookup */
+/*e: function [[lookup]] */
 
-/*s: constructor prg */
+/*s: constructor [[prg]] */
 Prog*
 prg(void)
 {
