@@ -1,10 +1,10 @@
-/*s: include/arm/5.out.h */
+/*s: include/obj/5.out.h */
 
 // Many of the types below are serialized in the .5 object files,
 // so take care when changing those types to not alter the order
 // (or to recompile carefully everything).
 
-/*s: enum [[regxxx]](arm) */
+/*s: enum [[Register]](arm) */
 enum Register {
     /*s: [[Register]] compiler conventions cases */
     // reserved by compiler, calling conventions
@@ -33,12 +33,12 @@ enum Register {
 
     NREG = 16,
 };
-/*e: enum [[regxxx]](arm) */
+/*e: enum [[Register]](arm) */
 /*s: constant [[R_NONE]](arm) */
 #define R_NONE 16
 /*e: constant [[R_NONE]](arm) */
 
-/*s: enum [[fregister]](arm) */
+/*s: enum [[Fregister]](arm) */
 enum Fregister {
     FREGRET = 0,
     /* compiler allocates register variables F0 up */
@@ -48,9 +48,9 @@ enum Fregister {
 
     NFREG = 8,
 };
-/*e: enum [[fregister]](arm) */
+/*e: enum [[Fregister]](arm) */
 
-/*s: enum [[opcode]](arm) */
+/*s: enum [[Opcode]](arm) */
 // coupling: with 5c/enam.c
 enum Opcode
 {
@@ -216,9 +216,9 @@ enum Opcode
 
     ALAST,
 };
-/*e: enum [[opcode]](arm) */
+/*e: enum [[Opcode]](arm) */
 
-/*s: enum [[operand_kind]](arm) */
+/*s: enum [[Operand_kind]](arm) */
 enum Operand_kind {
     D_NONE,
 
@@ -244,9 +244,9 @@ enum Operand_kind {
     D_PSR,
     /*e: [[Operand_kind]] cases */
 };
-/*e: enum [[operand_kind]](arm) */
+/*e: enum [[Operand_kind]](arm) */
 
-/*s: enum [[sym_kind]](arm) */
+/*s: enum [[Sym_kind]](arm) */
 enum Sym_kind {
     N_NONE,
 
@@ -261,7 +261,7 @@ enum Sym_kind {
     N_LINE, // used by linker only
     /*e: [[Sym_kind]] cases */
 };
-/*e: enum [[sym_kind]](arm) */
+/*e: enum [[Sym_kind]](arm) */
 
 /*s: constant [[NSNAME]] */
 #define NSNAME      8
@@ -303,4 +303,4 @@ enum Sym_kind {
  */
 #define SYMDEF  "__.SYMDEF"
 /*e: constant [[SYMDEF]](arm) */
-/*e: include/arm/5.out.h */
+/*e: include/obj/5.out.h */

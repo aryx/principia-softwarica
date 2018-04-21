@@ -18,17 +18,17 @@ zname(char *n, int symkind, int symidx)
 }
 /*e: function [[zname]](arm) */
 
-/*s: function [[zaddr]](arm) */
+/*s: function [[outopd]](arm) */
 /// main -> assemble -> yyparse -> outcode -> <>
 void
 outopd(Gen *a, int symidx)
 {
-    /*s: [[zaddr()]] locals(arm) */
+    /*s: [[outopd()]] locals(arm) */
     long l;
     char *n;
     Ieee e;
     int i;
-    /*e: [[zaddr()]] locals(arm) */
+    /*e: [[outopd()]] locals(arm) */
 
     Bputc(&obuf, a->type);
     Bputc(&obuf, a->reg);
@@ -38,7 +38,7 @@ outopd(Gen *a, int symidx)
     Bputc(&obuf, a->symkind);
 
     switch(a->type) {
-    /*s: [[zaddr()]] cases(arm) */
+    /*s: [[outopd()]] cases(arm) */
     case D_NONE:
         break;
 
@@ -64,11 +64,11 @@ outopd(Gen *a, int symidx)
             n++;
         }
         break;
-    /*x: [[zaddr()]] cases(arm) */
+    /*x: [[outopd()]] cases(arm) */
     case D_FREG:
     case D_FPCR:
         break;
-    /*x: [[zaddr()]] cases(arm) */
+    /*x: [[outopd()]] cases(arm) */
     case D_FCONST:
         ieeedtod(&e, a->dval);
         Bputc(&obuf, e.l);
@@ -80,21 +80,21 @@ outopd(Gen *a, int symidx)
         Bputc(&obuf, e.h>>16);
         Bputc(&obuf, e.h>>24);
         break;
-    /*x: [[zaddr()]] cases(arm) */
+    /*x: [[outopd()]] cases(arm) */
     case D_REGREG:
         Bputc(&obuf, a->offset);
         break;
-    /*x: [[zaddr()]] cases(arm) */
+    /*x: [[outopd()]] cases(arm) */
     case D_PSR:
         break;
-    /*e: [[zaddr()]] cases(arm) */
+    /*e: [[outopd()]] cases(arm) */
     default:
         print("unknown type %d\n", a->type);
         exits("arg");
 
     }
 }
-/*e: function [[zaddr]](arm) */
+/*e: function [[outopd]](arm) */
 
 /*s: global [[bcode]](arm) */
 static int bcode[] =

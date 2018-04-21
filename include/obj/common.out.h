@@ -1,4 +1,4 @@
-/*s: include/common.out.h */
+/*s: include/obj/common.out.h */
 
 // The entities below were originally in some xxx/y.out.h, but were always
 // the same in all architecture, hence the factorization below.
@@ -20,4 +20,4 @@ struct	ieee
 };
 /*e: struct [[ieee]] */
 typedef	struct ieee Ieee;
-/*e: include/common.out.h */
+/*e: include/obj/common.out.h */

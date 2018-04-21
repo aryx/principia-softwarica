@@ -111,20 +111,20 @@ void main(int argc, char *argv[])
 
     bootstrap[i].i = 0;
     /*e: [[main()]] initialize [[boostrap]] */
-    /*s: [[main()]] initialize runq with bootstrap code */
+    /*s: [[main()]] initialize [[runq]] with bootstrap code */
     start(bootstrap, 1, (var *)nil);
-    /*x: [[main()]] initialize runq with bootstrap code */
+    /*x: [[main()]] initialize [[runq]] with bootstrap code */
     runq->cmdfd = openfd(STDIN); // reading from stdin
     runq->cmdfile = "<stdin>";
     runq->iflag = flag['i']? true : false;// interactive mode; will print a prompt
-    /*e: [[main()]] initialize runq with bootstrap code */
-    /*s: [[main()]] initialize runq->argv */
+    /*e: [[main()]] initialize [[runq]] with bootstrap code */
+    /*s: [[main()]] initialize [[runq->argv]] */
     /* prime bootstrap argv */
     pushlist();
     argv0 = strdup(argv[0]);
     for(i = argc-1; i!=0; --i) 
         pushword(argv[i]);
-    /*e: [[main()]] initialize runq->argv */
+    /*e: [[main()]] initialize [[runq->argv]] */
 
     /*s: [[main()]] interpreter loop */
     for(;;){

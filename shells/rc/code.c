@@ -566,26 +566,34 @@ void
 codefree(code *cp)
 {
     code *p;
+    // check ref count
     if(--cp[0].i != 0)
         return;
 
     for(p = cp+1; p->f; p++){
-        if(p->f==Xappend || p->f==Xclose || p->f==Xread || p->f==Xwrite
-        || p->f==Xrdwr
-        || p->f==Xasync || p->f==Xbackq || p->f==Xcase || p->f==Xfalse
+        /*s: [[codefree()]] in loop over code [[cp]], switch bytecode cases */
+        if(p->f==Xfalse || p->f==Xtrue
+        || p->f==Xread || p->f==Xwrite || p->f==Xrdwr
+        || p->f==Xappend || p->f==Xclose 
+        || p->f==Xasync || p->f==Xbackq || p->f==Xcase 
         || p->f==Xfor || p->f==Xjump
-        || p->f==Xsubshell || p->f==Xtrue)
+        || p->f==Xsubshell)
             p++;
-        else if(p->f==Xdup || p->f==Xpipefd) 
-                 p+=2;
-        else if(p->f==Xpipe) 
-                 p+=4;
+        /*x: [[codefree()]] in loop over code [[cp]], switch bytecode cases */
         else if(p->f==Xword || p->f==Xdelhere) 
                  efree((++p)->s);
+        /*x: [[codefree()]] in loop over code [[cp]], switch bytecode cases */
+        else if(p->f==Xpipe) 
+                 p+=4;
+        /*x: [[codefree()]] in loop over code [[cp]], switch bytecode cases */
         else if(p->f==Xfn){
                  efree(p[2].s);
                  p+=2;
               }
+        /*x: [[codefree()]] in loop over code [[cp]], switch bytecode cases */
+        else if(p->f==Xdup || p->f==Xpipefd) 
+                 p+=2;
+        /*e: [[codefree()]] in loop over code [[cp]], switch bytecode cases */
     }
     efree((char *)cp);
 }

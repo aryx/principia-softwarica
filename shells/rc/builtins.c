@@ -11,13 +11,16 @@
 errorneg1
 dochdir(char *word)
 {
+    /*s: [[dochdir()]] locals */
     /* report to /dev/wdir if it exists and we're interactive */
     static fdt wdirfd = -2;
+    /*e: [[dochdir()]] locals */
 
     // the actual syscall
     if(chdir(word)<0) 
         return ERROR_NEG1;
 
+    /*s: [[dochdir()]] adjust [[/dev/wdir]] if run under [[rio]] */
     if(flag['i']!=nil){
         if(wdirfd==-2)  /* try only once */
             wdirfd = open("/dev/wdir", OWRITE|OCEXEC);
@@ -26,6 +29,7 @@ dochdir(char *word)
             write(wdirfd, word, strlen(word));
         }
     }
+    /*e: [[dochdir()]] adjust [[/dev/wdir]] if run under [[rio]] */
     return OK_1;
 }
 /*e: function [[dochdir]] */
@@ -361,7 +365,7 @@ execdot(void)
           dotcmds[7].s="*";
         dotcmds[8].f = Xlocal; // will pop_list twice
 
-        dotcmds[9].f = Xrdcmds; // the REPL
+        dotcmds[9].f = Xrdcmds; // =~ a REPL
 
         dotcmds[10].f = Xunlocal;
         dotcmds[11].f = Xunlocal;

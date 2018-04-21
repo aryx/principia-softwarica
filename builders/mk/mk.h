@@ -25,7 +25,9 @@ struct Bufblock
     char 		*current;
 
     // Extra
+    /*s: [[Bufblock]] extra fields */
     struct Bufblock *next;
+    /*e: [[Bufblock]] extra fields */
 };
 /*e: struct [[Bufblock]] */
 
@@ -312,8 +314,9 @@ enum WaitupParam {
   EMPTY_CHILDREN_IS_OK = 1, 
   EMPTY_CHILDREN_IS_ERROR = -1, 
   /*s: [[WaitupParam]] other cases */
-  EMPTY_CHILDREN_IS_ERROR2 = -2,
   EMPTY_CHILDREN_IS_ERROR3 = -3,
+  /*x: [[WaitupParam]] other cases */
+  EMPTY_CHILDREN_IS_ERROR2 = -2,
   /*e: [[WaitupParam]] other cases */
 };
 /*e: type [[WaitupParam]] */

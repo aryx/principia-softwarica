@@ -121,26 +121,34 @@ parse(char *f, fdt fd, bool varoverride)
         /*x: [[parse()]] switch rhead cases */
         case '|':
             p = wtos(tail, ' ');
+            /*s: [[parse()]] sanity check [[p]] for include program name */
             if(*p == '\0'){
                 SYNERR(-1);
                 fprint(STDERR, "missing include program name\n");
                 Exit();
             }
+            /*e: [[parse()]] sanity check [[p]] for include program name */
 
             initenv();
             pid = pipecmd(p, shellenv, &newfd);
+            /*s: [[parse()]] sanity check [[newfd]] */
             if(newfd < 0){
                 fprint(STDERR, "warning: skipping missing program file: ");
                 perror(p);
-            } else
+            } 
+            /*e: [[parse()]] sanity check [[newfd]] */
+            else
+                // recursive call
                 parse(p, newfd, 0);
 
             while(waitup(EMPTY_CHILDREN_IS_ERROR3, &pid) >= 0)
                 ;
+            /*s: [[parse()]] sanity check [[pid]] after waitup */
             if(pid != 0){
                 fprint(STDERR, "bad include program status\n");
                 Exit();
             }
+            /*e: [[parse()]] sanity check [[pid]] after waitup */
             break;
         /*e: [[parse()]] switch rhead cases */
         }
