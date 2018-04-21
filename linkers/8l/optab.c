@@ -1,21 +1,21 @@
 /*s: linkers/8l/optab.c */
 #include	"l.h"
 
-/*s: global ynone(x86) */
+/*s: global [[ynone]](x86) */
 byte	ynone[] =
 {
     Ynone,	Ynone,	Zlit,	1,
     0
 };
-/*e: global ynone(x86) */
-/*s: global ytext(x86) */
+/*e: global [[ynone]](x86) */
+/*s: global [[ytext]](x86) */
 byte	ytext[] =
 {
     Ymb,	Yi32,	Zpseudo,1,
     0
 };
-/*e: global ytext(x86) */
-/*s: global ynop(x86) */
+/*e: global [[ytext]](x86) */
+/*s: global [[ynop]](x86) */
 byte	ynop[] =
 {
     Ynone,	Ynone,	Zpseudo,1,
@@ -25,8 +25,8 @@ byte	ynop[] =
     Yrf,	Ynone,	Zpseudo,1,
     0
 };
-/*e: global ynop(x86) */
-/*s: global yxorb(x86) */
+/*e: global [[ynop]](x86) */
+/*s: global [[yxorb]](x86) */
 byte	yxorb[] =
 {
     Yi32,	Yal,	Zib_,	1,
@@ -35,8 +35,8 @@ byte	yxorb[] =
     Ymb,	Yrb,	Zm_r,	1,
     0
 };
-/*e: global yxorb(x86) */
-/*s: global yxorl(x86) */
+/*e: global [[yxorb]](x86) */
+/*s: global [[yxorl]](x86) */
 byte	yxorl[] =
 {
     Yi8,	Yml,	Zibo_m,	2,
@@ -46,8 +46,8 @@ byte	yxorl[] =
     Yml,	Yrl,	Zm_r,	1,
     0
 };
-/*e: global yxorl(x86) */
-/*s: global yaddl(x86) */
+/*e: global [[yxorl]](x86) */
+/*s: global [[yaddl]](x86) */
 byte	yaddl[] =
 {
     Yi8,	Yml,	Zibo_m,	2,
@@ -57,23 +57,23 @@ byte	yaddl[] =
     Yml,	Yrl,	Zm_r,	1,
     0
 };
-/*e: global yaddl(x86) */
-/*s: global yincb(x86) */
+/*e: global [[yaddl]](x86) */
+/*s: global [[yincb]](x86) */
 byte	yincb[] =
 {
     Ynone,	Ymb,	Zo_m,	2,
     0
 };
-/*e: global yincb(x86) */
-/*s: global yincl(x86) */
+/*e: global [[yincb]](x86) */
+/*s: global [[yincl]](x86) */
 byte	yincl[] =
 {
     Ynone,	Yrl,	Z_rp,	1,
     Ynone,	Yml,	Zo_m,	2,
     0
 };
-/*e: global yincl(x86) */
-/*s: global ycmpb(x86) */
+/*e: global [[yincl]](x86) */
+/*s: global [[ycmpb]](x86) */
 byte	ycmpb[] =
 {
     Yal,	Yi32,	Z_ib,	1,
@@ -82,8 +82,8 @@ byte	ycmpb[] =
     Yrb,	Ymb,	Zr_m,	1,
     0
 };
-/*e: global ycmpb(x86) */
-/*s: global ycmpl(x86) */
+/*e: global [[ycmpb]](x86) */
+/*s: global [[ycmpl]](x86) */
 byte	ycmpl[] =
 {
     Yml,	Yi8,	Zm_ibo,	2,
@@ -93,8 +93,8 @@ byte	ycmpl[] =
     Yrl,	Yml,	Zr_m,	1,
     0
 };
-/*e: global ycmpl(x86) */
-/*s: global yshb(x86) */
+/*e: global [[ycmpl]](x86) */
+/*s: global [[yshb]](x86) */
 byte	yshb[] =
 {
     Yi1,	Ymb,	Zo_m,	2,
@@ -102,8 +102,8 @@ byte	yshb[] =
     Ycx,	Ymb,	Zo_m,	2,
     0
 };
-/*e: global yshb(x86) */
-/*s: global yshl(x86) */
+/*e: global [[yshb]](x86) */
+/*s: global [[yshl]](x86) */
 byte	yshl[] =
 {
     Yi1,	Yml,	Zo_m,	2,
@@ -112,8 +112,8 @@ byte	yshl[] =
     Ycx,	Yml,	Zo_m,	2,
     0
 };
-/*e: global yshl(x86) */
-/*s: global ytestb(x86) */
+/*e: global [[yshl]](x86) */
+/*s: global [[ytestb]](x86) */
 byte	ytestb[] =
 {
     Yi32,	Yal,	Zib_,	1,
@@ -122,8 +122,8 @@ byte	ytestb[] =
     Ymb,	Yrb,	Zm_r,	1,
     0
 };
-/*e: global ytestb(x86) */
-/*s: global ytestl(x86) */
+/*e: global [[ytestb]](x86) */
+/*s: global [[ytestl]](x86) */
 byte	ytestl[] =
 {
     Yi32,	Yax,	Zil_,	1,
@@ -132,8 +132,8 @@ byte	ytestl[] =
     Yml,	Yrl,	Zm_r,	1,
     0
 };
-/*e: global ytestl(x86) */
-/*s: global ymovb(x86) */
+/*e: global [[ytestl]](x86) */
+/*s: global [[ymovb]](x86) */
 byte	ymovb[] =
 {
     Yrb,	Ymb,	Zr_m,	1,
@@ -142,8 +142,8 @@ byte	ymovb[] =
     Yi32,	Ymb,	Zibo_m,	2,
     0
 };
-/*e: global ymovb(x86) */
-/*s: global ymovl(x86) */
+/*e: global [[ymovb]](x86) */
+/*s: global [[ymovl]](x86) */
 byte	ymovl[] =
 {
     Yrl,	Yml,	Zr_m,	1,
@@ -155,73 +155,73 @@ byte	ymovl[] =
     Yiauto,	Yrl,	Zaut_r,	2,
     0
 };
-/*e: global ymovl(x86) */
-/*s: global ym_rl(x86) */
+/*e: global [[ymovl]](x86) */
+/*s: global [[ym_rl]](x86) */
 byte	ym_rl[] =
 {
     Ym,	Yrl,	Zm_r,	1,
     0
 };
-/*e: global ym_rl(x86) */
-/*s: global yrl_m(x86) */
+/*e: global [[ym_rl]](x86) */
+/*s: global [[yrl_m]](x86) */
 byte	yrl_m[] =
 {
     Yrl,	Ym,	Zr_m,	1,
     0
 };
-/*e: global yrl_m(x86) */
-/*s: global ymb_rl(x86) */
+/*e: global [[yrl_m]](x86) */
+/*s: global [[ymb_rl]](x86) */
 byte	ymb_rl[] =
 {
     Ymb,	Yrl,	Zm_r,	1,
     0
 };
-/*e: global ymb_rl(x86) */
-/*s: global yml_rl(x86) */
+/*e: global [[ymb_rl]](x86) */
+/*s: global [[yml_rl]](x86) */
 byte	yml_rl[] =
 {
     Yml,	Yrl,	Zm_r,	1,
     0
 };
-/*e: global yml_rl(x86) */
-/*s: global yrl_ml(x86) */
+/*e: global [[yml_rl]](x86) */
+/*s: global [[yrl_ml]](x86) */
 byte	yrl_ml[] =
 {
     Yrl,	Yml,	Zr_m,	1,
     0
 };
-/*e: global yrl_ml(x86) */
-/*s: global yml_mb(x86) */
+/*e: global [[yrl_ml]](x86) */
+/*s: global [[yml_mb]](x86) */
 byte	yml_mb[] =
 {
     Yrb,	Ymb,	Zr_m,	1,
     Ymb,	Yrb,	Zm_r,	1,
     0
 };
-/*e: global yml_mb(x86) */
-/*s: global yml_ml(x86) */
+/*e: global [[yml_mb]](x86) */
+/*s: global [[yml_ml]](x86) */
 byte	yml_ml[] =
 {
     Yrl,	Yml,	Zr_m,	1,
     Yml,	Yrl,	Zm_r,	1,
     0
 };
-/*e: global yml_ml(x86) */
-/*s: global ydivl(x86) */
+/*e: global [[yml_ml]](x86) */
+/*s: global [[ydivl]](x86) */
 byte	ydivl[] =
 {
     Yml,	Ynone,	Zm_o,	2,
     0
 };
-/*e: global ydivl(x86) */
-/*s: global ydivb(x86) */
+/*e: global [[ydivl]](x86) */
+/*s: global [[ydivb]](x86) */
 byte	ydivb[] =
 {
     Ymb,	Ynone,	Zm_o,	2,
     0
 };
-/*e: global ydivb(x86) */
-/*s: global yimul(x86) */
+/*e: global [[ydivb]](x86) */
+/*s: global [[yimul]](x86) */
 byte	yimul[] =
 {
     Yml,	Ynone,	Zm_o,	2,
@@ -229,30 +229,30 @@ byte	yimul[] =
     Yi32,	Yrl,	Zil_rr,	1,
     0
 };
-/*e: global yimul(x86) */
-/*s: global ybyte(x86) */
+/*e: global [[yimul]](x86) */
+/*s: global [[ybyte]](x86) */
 byte	ybyte[] =
 {
     Yi32,	Ynone,	Zbyte,	1,
     0
 };
-/*e: global ybyte(x86) */
-/*s: global yin(x86) */
+/*e: global [[ybyte]](x86) */
+/*s: global [[yin]](x86) */
 byte	yin[] =
 {
     Yi32,	Ynone,	Zib_,	1,
     Ynone,	Ynone,	Zlit,	1,
     0
 };
-/*e: global yin(x86) */
-/*s: global yint(x86) */
+/*e: global [[yin]](x86) */
+/*s: global [[yint]](x86) */
 byte	yint[] =
 {
     Yi32,	Ynone,	Zib_,	1,
     0
 };
-/*e: global yint(x86) */
-/*s: global ypushl(x86) */
+/*e: global [[yint]](x86) */
+/*s: global [[ypushl]](x86) */
 byte	ypushl[] =
 {
     Yrl,	Ynone,	Zrp_,	1,
@@ -261,54 +261,54 @@ byte	ypushl[] =
     Yi32,	Ynone,	Zil_,	1,
     0
 };
-/*e: global ypushl(x86) */
-/*s: global ypopl(x86) */
+/*e: global [[ypushl]](x86) */
+/*s: global [[ypopl]](x86) */
 byte	ypopl[] =
 {
     Ynone,	Yrl,	Z_rp,	1,
     Ynone,	Ym,	Zo_m,	2,
     0
 };
-/*e: global ypopl(x86) */
-/*s: global yscond(x86) */
+/*e: global [[ypopl]](x86) */
+/*s: global [[yscond]](x86) */
 byte	yscond[] =
 {
     Ynone,	Ymb,	Zo_m,	2,
     0
 };
-/*e: global yscond(x86) */
-/*s: global yjcond(x86) */
+/*e: global [[yscond]](x86) */
+/*s: global [[yjcond]](x86) */
 byte	yjcond[] =
 {
     Ynone,	Ybr,	Zbr,	1,
     0
 };
-/*e: global yjcond(x86) */
-/*s: global yloop(x86) */
+/*e: global [[yjcond]](x86) */
+/*s: global [[yloop]](x86) */
 byte	yloop[] =
 {
     Ynone,	Ybr,	Zloop,	1,
     0
 };
-/*e: global yloop(x86) */
-/*s: global ycall(x86) */
+/*e: global [[yloop]](x86) */
+/*s: global [[ycall]](x86) */
 byte	ycall[] =
 {
     Ynone,	Yml,	Zo_m,	2,
     Ynone,	Ybr,	Zcall,	1,
     0
 };
-/*e: global ycall(x86) */
-/*s: global yjmp(x86) */
+/*e: global [[ycall]](x86) */
+/*s: global [[yjmp]](x86) */
 byte	yjmp[] =
 {
     Ynone,	Yml,	Zo_m,	2,
     Ynone,	Ybr,	Zjmp,	1,
     0
 };
-/*e: global yjmp(x86) */
+/*e: global [[yjmp]](x86) */
 
-/*s: global yfmvd(x86) */
+/*s: global [[yfmvd]](x86) */
 byte	yfmvd[] =
 {
     Ym,	Yf0,	Zm_o,	2,
@@ -317,38 +317,38 @@ byte	yfmvd[] =
     Yf0,	Yrf,	Zo_m,	2,
     0
 };
-/*e: global yfmvd(x86) */
-/*s: global yfmvdp(x86) */
+/*e: global [[yfmvd]](x86) */
+/*s: global [[yfmvdp]](x86) */
 byte	yfmvdp[] =
 {
     Yf0,	Ym,	Zo_m,	2,
     Yf0,	Yrf,	Zo_m,	2,
     0
 };
-/*e: global yfmvdp(x86) */
-/*s: global yfmvf(x86) */
+/*e: global [[yfmvdp]](x86) */
+/*s: global [[yfmvf]](x86) */
 byte	yfmvf[] =
 {
     Ym,	Yf0,	Zm_o,	2,
     Yf0,	Ym,	Zo_m,	2,
     0
 };
-/*e: global yfmvf(x86) */
-/*s: global yfmvx(x86) */
+/*e: global [[yfmvf]](x86) */
+/*s: global [[yfmvx]](x86) */
 byte	yfmvx[] =
 {
     Ym,	Yf0,	Zm_o,	2,
     0
 };
-/*e: global yfmvx(x86) */
-/*s: global yfmvp(x86) */
+/*e: global [[yfmvx]](x86) */
+/*s: global [[yfmvp]](x86) */
 byte	yfmvp[] =
 {
     Yf0,	Ym,	Zo_m,	2,
     0
 };
-/*e: global yfmvp(x86) */
-/*s: global yfadd(x86) */
+/*e: global [[yfmvp]](x86) */
+/*s: global [[yfadd]](x86) */
 byte	yfadd[] =
 {
     Ym,	Yf0,	Zm_o,	2,
@@ -356,55 +356,55 @@ byte	yfadd[] =
     Yf0,	Yrf,	Zo_m,	2,
     0
 };
-/*e: global yfadd(x86) */
-/*s: global yfaddp(x86) */
+/*e: global [[yfadd]](x86) */
+/*s: global [[yfaddp]](x86) */
 byte	yfaddp[] =
 {
     Yf0,	Yrf,	Zo_m,	2,
     0
 };
-/*e: global yfaddp(x86) */
-/*s: global yfxch(x86) */
+/*e: global [[yfaddp]](x86) */
+/*s: global [[yfxch]](x86) */
 byte	yfxch[] =
 {
     Yf0,	Yrf,	Zo_m,	2,
     Yrf,	Yf0,	Zm_o,	2,
     0
 };
-/*e: global yfxch(x86) */
-/*s: global ycompp(x86) */
+/*e: global [[yfxch]](x86) */
+/*s: global [[ycompp]](x86) */
 byte	ycompp[] =
 {
     Yf0,	Yrf,	Zo_m,	2,	/* botch is really f0,f1 */
     0
 };
-/*e: global ycompp(x86) */
-/*s: global ystsw(x86) */
+/*e: global [[ycompp]](x86) */
+/*s: global [[ystsw]](x86) */
 byte	ystsw[] =
 {
     Ynone,	Ym,	Zo_m,	2,
     Ynone,	Yax,	Zlit,	1,
     0
 };
-/*e: global ystsw(x86) */
-/*s: global ystcw(x86) */
+/*e: global [[ystsw]](x86) */
+/*s: global [[ystcw]](x86) */
 byte	ystcw[] =
 {
     Ynone,	Ym,	Zo_m,	2,
     Ym,	Ynone,	Zm_o,	2,
     0
 };
-/*e: global ystcw(x86) */
-/*s: global ysvrs(x86) */
+/*e: global [[ystcw]](x86) */
+/*s: global [[ysvrs]](x86) */
 byte	ysvrs[] =
 {
     Ynone,	Ym,	Zo_m,	2,
     Ym,	Ynone,	Zm_o,	2,
     0
 };
-/*e: global ysvrs(x86) */
+/*e: global [[ysvrs]](x86) */
 
-/*s: global optab(x86) */
+/*s: global [[optab]](x86) */
 Optab optab[] =
 /*	as, ytab, andproto, opcode */
 {
@@ -750,5 +750,5 @@ Optab optab[] =
     { AEND },
     0
 };
-/*e: global optab(x86) */
+/*e: global [[optab]](x86) */
 /*e: linkers/8l/optab.c */

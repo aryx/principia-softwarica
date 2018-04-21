@@ -2,60 +2,55 @@
 #include	"l.h"
 #include	<ar.h>
 
-#ifndef	DEFAULT
-/*s: constant DEFAULT */
-#define	DEFAULT	H_PLAN9
-/*e: constant DEFAULT */
-#endif
-
-/*s: global curauto */
+/*s: global [[curauto]] */
+// list<ref<Auto>> (next = Auto.link)
 Auto*	curauto;
-/*e: global curauto */
+/*e: global [[curauto]] */
 
-/*s: global curhist */
+/*s: global [[curhist]] */
 Auto*	curhist;
-/*e: global curhist */
-/*s: global etextp */
-// ref<Prog>, end of textp list
+/*e: global [[curhist]] */
+/*s: global [[etextp]] */
+// ref<Prog> (end from = textp)
 Prog*	etextp = P;
-/*e: global etextp */
+/*e: global [[etextp]] */
 
-/*s: global histfrog */
+/*s: global [[histfrog]] */
 Sym*	histfrog[MAXHIST];
-/*e: global histfrog */
-/*s: global histfrogp */
+/*e: global [[histfrog]] */
+/*s: global [[histfrogp]] */
 int	histfrogp;
-/*e: global histfrogp */
-/*s: global histgen */
+/*e: global [[histfrogp]] */
+/*s: global [[histgen]] */
 int	histgen = 0;
-/*e: global histgen */
+/*e: global [[histgen]] */
 
-/*s: global library */
+/*s: global [[library]] */
 // array<option<filename>>
 char*	library[50];
-/*e: global library */
-/*s: global libraryobj */
+/*e: global [[library]] */
+/*s: global [[libraryobj]] */
 char*	libraryobj[50];
-/*e: global libraryobj */
-/*s: global libraryp */
+/*e: global [[libraryobj]] */
+/*s: global [[libraryp]] */
 // index of first free entry in library array
 int	libraryp;
-/*e: global libraryp */
+/*e: global [[libraryp]] */
 
-/*s: global xrefresolv */
+/*s: global [[xrefresolv]] */
 bool	xrefresolv;
-/*e: global xrefresolv */
+/*e: global [[xrefresolv]] */
 
-/*s: global version */
+/*s: global [[version]] */
 int	version = 0;
-/*e: global version */
-/*s: global literal(x86) */
+/*e: global [[version]] */
+/*s: global [[literal]](x86) */
 char	literal[32];
-/*e: global literal(x86) */
-/*s: global doexp */
+/*e: global [[literal]](x86) */
+/*s: global [[doexp]] */
 // do export table, -x
 bool	doexp;
-/*e: global doexp */
+/*e: global [[doexp]] */
 
 void	addlibpath(char*);
 char*	findlib(char*);
@@ -90,37 +85,37 @@ char	*noname		= "<none>";
 /*s: global symname linker */
 char	symname[]	= SYMDEF;
 /*e: global symname linker */
-/*s: global thechar */
+/*s: global [[thechar]] */
 char	thechar;
-/*e: global thechar */
-/*s: global thestring */
+/*e: global [[thechar]] */
+/*s: global [[thestring]] */
 char*	thestring;
-/*e: global thestring */
+/*e: global [[thestring]] */
 
-/*s: global libdir */
+/*s: global [[libdir]] */
 // growing_array<dirname>
 char**	libdir;
-/*e: global libdir */
-/*s: global nlibdir */
+/*e: global [[libdir]] */
+/*s: global [[nlibdir]] */
 // index of next free entry in libdir
 int	nlibdir	= 0;
-/*e: global nlibdir */
-/*s: global maxlibdir */
+/*e: global [[nlibdir]] */
+/*s: global [[maxlibdir]] */
 // index of last free entry in libdir
 static	int	maxlibdir = 0;
-/*e: global maxlibdir */
+/*e: global [[maxlibdir]] */
 
 /*s: function usage, linker */
 void
 usage(void)
 {
-    diag("usage: %s [-options] objects", argv0);
+    print("usage: %s [-options] objects\n", argv0);
     errorexit();
 }
 /*e: function usage, linker */
 
-/*s: function isobjfile */
-static int
+/*s: function [[isobjfile]] */
+int
 isobjfile(char *f)
 {
     int n, v;
@@ -141,7 +136,7 @@ isobjfile(char *f)
     Bterm(b);
     return v;
 }
-/*e: function isobjfile */
+/*e: function [[isobjfile]] */
 
 /*s: function main (linkers/8l/obj.c) */
 void
@@ -505,6 +500,7 @@ main(int argc, char *argv[])
         Bprint(&bso, "%5.2f cpu time\n", cputime());
         Bprint(&bso, "%ld symbols\n", nsymbol);
         Bprint(&bso, "%ld memory used\n", thunk);
+
         Bprint(&bso, "%d sizeof adr\n", sizeof(Adr));
         Bprint(&bso, "%d sizeof prog\n", sizeof(Prog));
         Bflush(&bso);
@@ -514,7 +510,7 @@ main(int argc, char *argv[])
 }
 /*e: function main (linkers/8l/obj.c) */
 
-/*s: function addlibpath */
+/*s: function [[addlibpath]] */
 void
 addlibpath(char *arg)
 {
@@ -540,9 +536,9 @@ addlibpath(char *arg)
 
     libdir[nlibdir++] = strdup(arg);
 }
-/*e: function addlibpath */
+/*e: function [[addlibpath]] */
 
-/*s: function findlib */
+/*s: function [[findlib]] */
 char*
 findlib(char *file)
 {
@@ -556,9 +552,9 @@ findlib(char *file)
     }
     return nil;
 }
-/*e: function findlib */
+/*e: function [[findlib]] */
 
-/*s: function loadlib */
+/*s: function [[loadlib]] */
 void
 loadlib(void)
 {
@@ -583,15 +579,16 @@ loop:
                  }
     /*e: [[loadlib()]] if xrefresolv */
 }
-/*e: function loadlib */
+/*e: function [[loadlib]] */
 
-/*s: function objfile */
+/*s: function [[objfile]] */
+/// main | loadlib  -> <>
 void
 objfile(char *file)
 {
     fdt f;
-    long l;
-    char magbuf[SARMAG];
+    long len;
+    char magbuf[SARMAG]; // magic buffer
     /*s: [[objfile()]] other locals */
     struct ar_hdr arhdr;
     long off, esym, cnt;
@@ -727,9 +724,9 @@ objfile(char *file)
         close(f);
     /*e: [[objfile()]] when file is a library */
 }
-/*e: function objfile */
+/*e: function [[objfile]] */
 
-/*s: function zaddr(x86) */
+/*s: function [[zaddr]](x86) */
 int
 zaddr(byte *p, Adr *a, Sym *h[])
 {
@@ -783,7 +780,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
         return c;
 
     t = a->type;
-    if(t != D_AUTO && t != D_PARAM)
+    if(t != D_LOCAL && t != D_PARAM)
         return c;
     l = a->offset;
     for(u=curauto; u; u=u->link) {
@@ -809,9 +806,10 @@ zaddr(byte *p, Adr *a, Sym *h[])
     u->type = t;
     return c;
 }
-/*e: function zaddr(x86) */
+/*e: function [[zaddr]](x86) */
 
-/*s: function addlib */
+/*s: function [[addlib]] */
+/// ldobj(case AHISTORY and local_line == -1 special mark) -> <>
 void
 addlib(char *obj)
 {
@@ -1052,8 +1050,8 @@ ldobj(fdt f, long c, char *pn)
     filen[files++] = strdup(pn);
 
     /*s: [[ldobj()]] bloc and bsize init */
-    bsize = buf.ibuf;
     bloc = buf.ibuf;
+    bsize = buf.ibuf;
     /*e: [[ldobj()]] bloc and bsize init */
 
     di = S;
@@ -1416,9 +1414,9 @@ loop:
 eof:
     diag("truncated object file: %s", pn);
 }
-/*e: function ldobj(x86) */
+/*e: function [[ldobj]](x86) */
 
-/*s: function appendp(x86) */
+/*s: function [[appendp]](x86) */
 Prog*
 appendp(Prog *q)
 {
@@ -1430,9 +1428,9 @@ appendp(Prog *q)
     p->line = q->line;
     return p;
 }
-/*e: function appendp(x86) */
+/*e: function [[appendp]](x86) */
 
-/*s: function doprof1(x86) */
+/*s: function [[doprof1]](x86) */
 void
 doprof1(void)
 {
@@ -1500,9 +1498,9 @@ doprof1(void)
     // 4 bytes counter for each functions
     s->value = n*4;
 }
-/*e: function doprof1(x86) */
+/*e: function [[doprof1]](x86) */
 
-/*s: function doprof2(x86) */
+/*s: function [[doprof2]](x86) */
 void
 doprof2(void)
 {
@@ -1639,9 +1637,9 @@ doprof2(void)
         }
     }
 }
-/*e: function doprof2(x86) */
+/*e: function [[doprof2]](x86) */
 
-/*s: function nuxiinit(x86) */
+/*s: function [[nuxiinit]](x86) */
 void
 nuxiinit(void)
 {
@@ -1678,9 +1676,9 @@ nuxiinit(void)
     }
     Bflush(&bso);
 }
-/*e: function nuxiinit(x86) */
+/*e: function [[nuxiinit]](x86) */
 
-/*s: function find1 */
+/*s: function [[find1]] */
 int
 find1(long l, int c)
 {
@@ -1693,9 +1691,10 @@ find1(long l, int c)
             return i;
     return 0;
 }
-/*e: function find1 */
+/*e: function [[find1]] */
 
-/*s: function ieeedtof */
+/*s: function [[ieeedtof]] */
+/// main -> objfile -> ldobj -> <>
 long
 ieeedtof(Ieee *e)
 {
@@ -1721,9 +1720,10 @@ ieeedtof(Ieee *e)
     v |= e->h & 0x80000000L;
     return v;
 }
-/*e: function ieeedtof */
+/*e: function [[ieeedtof]] */
 
-/*s: function ieeedtod */
+/*s: function [[ieeedtod]] */
+/// Dconv -> <>
 double
 ieeedtod(Ieee *ieeep)
 {
@@ -1748,9 +1748,9 @@ ieeedtod(Ieee *ieeep)
     exp -= (1L<<10) - 2L;
     return ldexp(fr, exp);
 }
-/*e: function ieeedtod */
+/*e: function [[ieeedtod]] */
 
-/*s: function undefsym */
+/*s: function [[undefsym]] */
 void
 undefsym(Sym *s)
 {
@@ -1765,9 +1765,9 @@ undefsym(Sym *s)
     s->type = SUNDEF;
     imports++;
 }
-/*e: function undefsym */
+/*e: function [[undefsym]] */
 
-/*s: function zerosig */
+/*s: function [[zerosig]] */
 void
 zerosig(char *sp)
 {
@@ -1776,9 +1776,9 @@ zerosig(char *sp)
     s = lookup(sp, 0);
     s->sig = 0;
 }
-/*e: function zerosig */
+/*e: function [[zerosig]] */
 
-/*s: function readundefs */
+/*s: function [[readundefs]] */
 void
 readundefs(char *f, int t)
 {
@@ -1819,5 +1819,5 @@ readundefs(char *f, int t)
     }
     Bterm(b);
 }
-/*e: function readundefs */
+/*e: function [[readundefs]] */
 /*e: linkers/8l/obj.c */

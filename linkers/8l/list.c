@@ -7,7 +7,7 @@ int	Pconv(Fmt*);
 int	Rconv(Fmt*);
 int	Sconv(Fmt*);
 
-/*s: function listinit(x86) */
+/*s: function [[listinit]](x86) */
 void
 listinit(void)
 {
@@ -18,13 +18,13 @@ listinit(void)
     fmtinstall('P', Pconv);
     fmtinstall('S', Sconv);
 }
-/*e: function listinit(x86) */
+/*e: function [[listinit]](x86) */
 
-/*s: global bigP(x86) */
+/*s: global [[bigP]](x86) */
 static	Prog	*bigP;
-/*e: global bigP(x86) */
+/*e: global [[bigP]](x86) */
 
-/*s: function Pconv(x86) */
+/*s: function [[Pconv]](x86) */
 // Prog -> string
 int
 Pconv(Fmt *fp)
@@ -59,9 +59,9 @@ Pconv(Fmt *fp)
     bigP = P;
     return fmtstrcpy(fp, str);
 }
-/*e: function Pconv(x86) */
+/*e: function [[Pconv]](x86) */
 
-/*s: function Aconv(x86) */
+/*s: function [[Aconv]](x86) */
 // enum<opcode> -> string
 int
 Aconv(Fmt *fp)
@@ -71,9 +71,9 @@ Aconv(Fmt *fp)
     i = va_arg(fp->args, int);
     return fmtstrcpy(fp, anames[i]);
 }
-/*e: function Aconv(x86) */
+/*e: function [[Aconv]](x86) */
 
-/*s: function Dconv(x86) */
+/*s: function [[Dconv]](x86) */
 // Adr -> string
 int
 Dconv(Fmt *fp)
@@ -120,7 +120,7 @@ Dconv(Fmt *fp)
         snprint(str, sizeof(str), "%s<%d>+%ld(SB)", a->sym->name,
             a->sym->version, a->offset);
         break;
-    case D_AUTO:
+    case D_LOCAL:
         snprint(str, sizeof(str), "%s+%ld(SP)", a->sym->name, a->offset);
         break;
     case D_PARAM:
@@ -161,9 +161,9 @@ brk:
 conv:
     return fmtstrcpy(fp, str);
 }
-/*e: function Dconv(x86) */
+/*e: function [[Dconv]](x86) */
 
-/*s: global regstr(x86) */
+/*s: global [[regstr]](x86) */
 // coupling with enum regs in 8.out.h
 char*	regstr[] =
 {
@@ -236,9 +236,9 @@ char*	regstr[] =
 
     "NONE",		/* [D_NONE] */
 };
-/*e: global regstr(x86) */
+/*e: global [[regstr]](x86) */
 
-/*s: function Rconv(x86) */
+/*s: function [[Rconv]](x86) */
 // enum<operand_kind(register-only)> -> string
 int
 Rconv(Fmt *fp)
@@ -254,9 +254,9 @@ Rconv(Fmt *fp)
 
     return fmtstrcpy(fp, str);
 }
-/*e: function Rconv(x86) */
+/*e: function [[Rconv]](x86) */
 
-/*s: function Sconv(x86) */
+/*s: function [[Sconv]](x86) */
 // ?? -> string
 int
 Sconv(Fmt *fp)
@@ -303,9 +303,9 @@ Sconv(Fmt *fp)
     *p = 0;
     return fmtstrcpy(fp, str);
 }
-/*e: function Sconv(x86) */
+/*e: function [[Sconv]](x86) */
 
-/*s: function diag */
+/*s: function [[diag]] */
 void
 diag(char *fmt, ...)
 {
@@ -327,5 +327,5 @@ diag(char *fmt, ...)
         errorexit();
     }
 }
-/*e: function diag */
+/*e: function [[diag]] */
 /*e: linkers/8l/list.c */

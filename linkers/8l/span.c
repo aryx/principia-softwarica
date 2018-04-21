@@ -1,7 +1,7 @@
 /*s: linkers/8l/span.c */
 #include	"l.h"
 
-/*s: function span(x86) */
+/*s: function [[span]](x86) */
 void
 span(void)
 {
@@ -102,9 +102,9 @@ loop:
         p->from.sym->value = p->pc;
     textsize = c - INITTEXT;
 }
-/*e: function span(x86) */
+/*e: function [[span]](x86) */
 
-/*s: function xdefine(x86) */
+/*s: function [[xdefine]](x86) */
 void
 xdefine(char *p, int t, long v)
 {
@@ -118,41 +118,48 @@ xdefine(char *p, int t, long v)
     if(s->type == STEXT && s->value == 0)
         s->value = v;
 }
-/*e: function xdefine(x86) */
+/*e: function [[xdefine]](x86) */
 
-/*s: function putsymb */
+/*s: function [[putsymb]] */
 void
 putsymb(char *s, int t, long v, int ver)
 {
     int i, f;
 
+    /*s: [[putsymb()]] adjust string [[s]] if file symbol */
     if(t == 'f')
         s++;
+    /*e: [[putsymb()]] adjust string [[s]] if file symbol */
 
+    // value
     lput(v);
+    // type
     if(ver)
-        t += 'a' - 'A';
+        t += 'a' - 'A'; // lowercase(t)
     cput(t+0x80);			/* 0x80 is variable length */
 
     /*s: [[putsymb()]] if z or Z */
     if(t == 'z' || t == 'Z') {
         cput(s[0]);
-        for(i=1; s[i] != 0 || s[i+1] != 0; i += 2) {
+        for(i=1; s[i] != '\0' || s[i+1] != '\0'; i += 2) {
             cput(s[i]);
             cput(s[i+1]);
         }
-        cput(0);
-        cput(0);
+        cput('\0');
+        cput('\0');
         i++;
     }
     /*e: [[putsymb()]] if z or Z */
     else {
+        // name
         for(i=0; s[i]; i++)
             cput(s[i]);
+        // end marker
         cput('\0');
     }
     symsize += 4 + 1 + i + 1;
 
+    /*s: [[putsymb()]] debug */
     if(debug['n']) {
         /*s: [[putsymb()]] if z or Z in debug output */
         if(t == 'z' || t == 'Z') {
@@ -170,10 +177,11 @@ putsymb(char *s, int t, long v, int ver)
         else
             Bprint(&bso, "%c %.8lux %s\n", t, v, s);
     }
+    /*e: [[putsymb()]] debug */
 }
-/*e: function putsymb */
+/*e: function [[putsymb]] */
 
-/*s: function asmsym(x86) */
+/*s: function [[asmsym]](x86) */
 void
 asmsym(void)
 {
@@ -225,7 +233,7 @@ asmsym(void)
         putsymb(".frame", 'm', p->to.offset+4, 0);
 
         for(a=p->to.autom; a; a=a->link)
-            if(a->type == D_AUTO)
+            if(a->type == D_LOCAL)
                 putsymb(a->asym->name, 'a', -a->aoffset, 0);
             else
             if(a->type == D_PARAM)
@@ -235,15 +243,16 @@ asmsym(void)
     if(debug['v'] || debug['n'])
         DBG("symsize = %lud\n", symsize);
 }
-/*e: function asmsym(x86) */
+/*e: function [[asmsym]](x86) */
 
-/*s: function asmlc */
+/*s: function [[asmlc]] */
 void
 asmlc(void)
 {
     long oldpc, oldlc;
     Prog *p;
-    long v, s;
+    long v;
+    long s;
 
     oldpc = INITTEXT;
     oldlc = 0;
@@ -253,33 +262,39 @@ asmlc(void)
             if(p->as == ATEXT)
                 curtext = p;
             /*e: adjust curtext when iterate over instructions p */
+            /*s: [[asmlc()]] dump instruction p, debug */
             if(debug['V'])
-                Bprint(&bso, "%6lux %P\n",
-                    p->pc, p);
+                Bprint(&bso, "%6lux %P\n", p->pc, p);
+            /*e: [[asmlc()]] dump instruction p, debug */
             continue;
         }
+        // else
+        /*s: [[asmlc()]] dump lcsize, debug */
         if(debug['V'])
             Bprint(&bso, "\t\t%6ld", lcsize);
+        /*e: [[asmlc()]] dump lcsize, debug */
         v = (p->pc - oldpc) / MINLC;
         while(v) {
-            s = 127;
-            if(v < 127)
-                s = v;
+            s = (v < 127)? v : 127; // min(), but impossible more than 6 (o6)
             cput(s+128);	/* 129-255 +pc */
+            /*s: [[asmlc()]] dump s, debug */
             if(debug['V'])
                 Bprint(&bso, " pc+%ld*%d(%ld)", s, MINLC, s+128);
+            /*e: [[asmlc()]] dump s, debug */
             v -= s;
             lcsize++;
         }
         s = p->line - oldlc;
         oldlc = p->line;
         oldpc = p->pc + MINLC;
+
         if(s > 64 || s < -64) {
             cput(0);	/* 0 vv +lc */
             cput(s>>24);
             cput(s>>16);
             cput(s>>8);
             cput(s);
+            /*s: [[asmlc()]] dump big line change, debug */
             if(debug['V']) {
                 if(s > 0)
                     Bprint(&bso, " lc+%ld(%d,%ld)\n",
@@ -319,9 +334,9 @@ asmlc(void)
         Bprint(&bso, "lcsize = %ld\n", lcsize);
     Bflush(&bso);
 }
-/*e: function asmlc */
+/*e: function [[asmlc]] */
 
-/*s: function prefixof(x86) */
+/*s: function [[prefixof]](x86) */
 int
 prefixof(Adr *a)
 {
@@ -339,9 +354,9 @@ prefixof(Adr *a)
     }
     return 0;
 }
-/*e: function prefixof(x86) */
+/*e: function [[prefixof]](x86) */
 
-/*s: function oclass(x86) */
+/*s: function [[oclass]](x86) */
 int
 oclass(Adr *a)
 {
@@ -354,7 +369,7 @@ oclass(Adr *a)
                 case D_EXTERN:
                 case D_STATIC:
                     return Yi32;
-                case D_AUTO:
+                case D_LOCAL:
                 case D_PARAM:
                     return Yiauto;
                 }
@@ -453,7 +468,7 @@ oclass(Adr *a)
 
     case D_EXTERN:
     case D_STATIC:
-    case D_AUTO:
+    case D_LOCAL:
     case D_PARAM:
         return Ym;
 
@@ -475,9 +490,9 @@ oclass(Adr *a)
     }
     return Yxxx;
 }
-/*e: function oclass(x86) */
+/*e: function [[oclass]](x86) */
 
-/*s: function asmidx(x86) */
+/*s: function [[asmidx]](x86) */
 void
 asmidx(Adr *a, int base)
 {
@@ -541,9 +556,9 @@ bad:
     *andptr++ = 0;
     return;
 }
-/*e: function asmidx(x86) */
+/*e: function [[asmidx]](x86) */
 
-/*s: function put4(x86) */
+/*s: function [[put4]](x86) */
 static void
 put4(long v)
 {
@@ -557,9 +572,9 @@ put4(long v)
     andptr[3] = v>>24;
     andptr += 4;
 }
-/*e: function put4(x86) */
+/*e: function [[put4]](x86) */
 
-/*s: function vaddr(x86) */
+/*s: function [[vaddr]](x86) */
 long
 vaddr(Adr *a)
 {
@@ -592,9 +607,9 @@ vaddr(Adr *a)
     }
     return v;
 }
-/*e: function vaddr(x86) */
+/*e: function [[vaddr]](x86) */
 
-/*s: function asmand(x86) */
+/*s: function [[asmand]](x86) */
 void
 asmand(Adr *a, int r)
 {
@@ -636,7 +651,7 @@ asmand(Adr *a, int r)
         case D_EXTERN:
             aa.type = D_NONE+D_INDIR;
             break;
-        case D_AUTO:
+        case D_LOCAL:
         case D_PARAM:
             aa.type = D_SP+D_INDIR;
             break;
@@ -701,7 +716,7 @@ asmand(Adr *a, int r)
     case D_EXTERN:
         aa.type = D_NONE+D_INDIR;
         break;
-    case D_AUTO:
+    case D_LOCAL:
     case D_PARAM:
         aa.type = D_SP+D_INDIR;
         break;
@@ -715,12 +730,12 @@ bad:
     diag("asmand: bad address %D", a);
     return;
 }
-/*e: function asmand(x86) */
+/*e: function [[asmand]](x86) */
 
-/*s: constant E(x86) */
+/*s: constant [[E]](x86) */
 #define	E	0xff
-/*e: constant E(x86) */
-/*s: global ymovtab(x86) */
+/*e: constant [[E]](x86) */
+/*s: global [[ymovtab]](x86) */
 uchar	ymovtab[] =
 {
 /* push */
@@ -824,9 +839,9 @@ uchar	ymovtab[] =
     AIMULL,	Yml,	Yrl,	7,	Pm,0xaf,0,0,
     0
 };
-/*e: global ymovtab(x86) */
+/*e: global [[ymovtab]](x86) */
 
-/*s: function isax(x86) */
+/*s: function [[isax]](x86) */
 int
 isax(Adr *a)
 {
@@ -842,9 +857,9 @@ isax(Adr *a)
         return 1;
     return 0;
 }
-/*e: function isax(x86) */
+/*e: function [[isax]](x86) */
 
-/*s: function subreg(x86) */
+/*s: function [[subreg]](x86) */
 void
 subreg(Prog *p, int from, int to)
 {
@@ -871,9 +886,9 @@ subreg(Prog *p, int from, int to)
     if(debug['Q'])
         print("%P\n", p);
 }
-/*e: function subreg(x86) */
+/*e: function [[subreg]](x86) */
 
-/*s: function doasm(x86) */
+/*s: function [[doasm]](x86) */
 void
 doasm(Prog *p)
 {
@@ -1291,9 +1306,9 @@ mfound:
         break;
     }
 }
-/*e: function doasm(x86) */
+/*e: function [[doasm]](x86) */
 
-/*s: function asmins(x86) */
+/*s: function [[asmins]](x86) */
 void
 asmins(Prog *p)
 {
@@ -1301,7 +1316,7 @@ asmins(Prog *p)
     andptr = and;
     doasm(p);
 }
-/*e: function asmins(x86) */
+/*e: function [[asmins]](x86) */
 
 /*s: enum _anon_ (linkers/8l/span.c) */
 enum{
@@ -1312,13 +1327,13 @@ enum{
 };
 /*e: enum _anon_ (linkers/8l/span.c) */
 
-/*s: global modemap */
+/*s: global [[modemap]] */
 int modemap[4] = { 0, 1, -1, 2, };
-/*e: global modemap */
+/*e: global [[modemap]] */
 
 typedef struct Reloc Reloc;
 
-/*s: struct Reloc */
+/*s: struct [[Reloc]] */
 struct Reloc
 {
     int n;
@@ -1326,13 +1341,13 @@ struct Reloc
     byte *m;
     ulong *a;
 };
-/*e: struct Reloc */
+/*e: struct [[Reloc]] */
 
-/*s: global rels */
+/*s: global [[rels]] */
 Reloc rels;
-/*e: global rels */
+/*e: global [[rels]] */
 
-/*s: function grow */
+/*s: function [[grow]] */
 static void
 grow(Reloc *r)
 {
@@ -1351,9 +1366,9 @@ grow(Reloc *r)
     free(m);
     free(a);
 }
-/*e: function grow */
+/*e: function [[grow]] */
 
-/*s: function dynreloc(x86) */
+/*s: function [[dynreloc]](x86) */
 void
 dynreloc(Sym *s, ulong v, int abs)
 {
@@ -1386,9 +1401,9 @@ dynreloc(Sym *s, ulong v, int abs)
     a[i] = v;
     r->n++;
 }
-/*e: function dynreloc(x86) */
+/*e: function [[dynreloc]](x86) */
 
-/*s: function sput */
+/*s: function [[sput]] */
 static int
 sput(char *s)
 {
@@ -1400,9 +1415,9 @@ sput(char *s)
     cput(0);
     return  s-p+1;
 }
-/*e: function sput */
+/*e: function [[sput]] */
 
-/*s: function asmdyn */
+/*s: function [[asmdyn]] */
 void
 asmdyn()
 {
@@ -1468,5 +1483,5 @@ asmdyn()
     DBG("import table entries = %d\n", imports);
     DBG("export table entries = %d\n", exports);
 }
-/*e: function asmdyn */
+/*e: function [[asmdyn]] */
 /*e: linkers/8l/span.c */

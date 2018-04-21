@@ -1,17 +1,17 @@
 /*s: linkers/8l/asm.c */
 #include	"l.h"
 
-/*s: constant Dbufslop */
+/*s: constant [[Dbufslop]] */
 #define	Dbufslop	100
-/*e: constant Dbufslop */
+/*e: constant [[Dbufslop]] */
 
-/*s: global spsize(x86) */
+/*s: global [[spsize]](x86) */
 long	spsize = 0;
-/*e: global spsize(x86) */
+/*e: global [[spsize]](x86) */
 
 void	datblk(long, long);
 
-/*s: function entryvalue(x86) */
+/*s: function [[entryvalue]](x86) */
 long
 entryvalue(void)
 {
@@ -40,12 +40,12 @@ entryvalue(void)
     /*e: [[entryvalue()]] if dynamic module case */
     default:
         diag("entry not text: %s", s->name);
-        return -1;
+        //XxX: return -1;
     }
 }
-/*e: function entryvalue(x86) */
+/*e: function [[entryvalue]](x86) */
 
-/*s: function wputl(x86) */
+/*s: function [[wputl]](x86) */
 /* these need to take long arguments to be compatible with elf.c */
 void
 wputl(long w)
@@ -53,18 +53,18 @@ wputl(long w)
     cput(w);
     cput(w>>8);
 }
-/*e: function wputl(x86) */
+/*e: function [[wputl]](x86) */
 
-/*s: function wput(x86) */
+/*s: function [[wput]](x86) */
 void
 wput(long w)
 {
     cput(w>>8);
     cput(w);
 }
-/*e: function wput(x86) */
+/*e: function [[wput]](x86) */
 
-/*s: function lput(x86) */
+/*s: function [[lput]](x86) */
 void
 lput(long l)
 {
@@ -73,9 +73,9 @@ lput(long l)
     cput(l>>8);
     cput(l);
 }
-/*e: function lput(x86) */
+/*e: function [[lput]](x86) */
 
-/*s: function lputl(x86) */
+/*s: function [[lputl]](x86) */
 void
 lputl(long l)
 {
@@ -84,27 +84,9 @@ lputl(long l)
     cput(l>>16);
     cput(l>>24);
 }
-/*e: function lputl(x86) */
+/*e: function [[lputl]](x86) */
 
-/*s: function llput */
-void
-llput(vlong v)
-{
-    lput(v>>32);
-    lput(v);
-}
-/*e: function llput */
-
-/*s: function llputl */
-void
-llputl(vlong v)
-{
-    lputl(v);
-    lputl(v>>32);
-}
-/*e: function llputl */
-
-/*s: function strnput(x86) */
+/*s: function [[strnput]](x86) */
 void
 strnput(char *s, int n)
 {
@@ -117,9 +99,9 @@ strnput(char *s, int n)
         n--;
     }
 }
-/*e: function strnput(x86) */
+/*e: function [[strnput]](x86) */
 
-/*s: function asmb(x86) */
+/*s: function [[asmb]](x86) */
 void
 asmb(void)
 {
@@ -425,9 +407,9 @@ asmb(void)
 
     cflush();
 }
-/*e: function asmb(x86) */
+/*e: function [[asmb]](x86) */
 
-/*s: function cflush */
+/*s: function [[cflush]] */
 void
 cflush(void)
 {
@@ -440,9 +422,9 @@ cflush(void)
     cbp = buf.obuf;
     cbc = sizeof(buf.obuf);
 }
-/*e: function cflush */
+/*e: function [[cflush]] */
 
-/*s: function datblk(x86) */
+/*s: function [[datblk]](x86) */
 void
 datblk(long s, long n)
 {
@@ -586,22 +568,26 @@ datblk(long s, long n)
     }
     write(cout, buf.dbuf, n);
 }
-/*e: function datblk(x86) */
+/*e: function [[datblk]](x86) */
 
-/*s: function rnd */
+/*s: function [[rnd]] */
 long
 rnd(long v, long r)
 {
     long c;
 
+    /*s: [[rnd()]] if r is null or negative */
     if(r <= 0)
         return v;
+    /*e: [[rnd()]] if r is null or negative */
     v += r - 1;
     c = v % r;
+    /*s: [[rnd()]] if v was negative */
     if(c < 0)
         c += r;
+    /*e: [[rnd()]] if v was negative */
     v -= c;
     return v;
 }
-/*e: function rnd */
+/*e: function [[rnd]] */
 /*e: linkers/8l/asm.c */

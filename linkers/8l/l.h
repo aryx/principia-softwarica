@@ -4,34 +4,35 @@
 #include	<bio.h>
 
 #include	<common.out.h>
-#include	<8.out.h>
+#include	<386/8.out.h>
+//XxX: #include	<8.out.h>
 #include	"elf.h"
 
-/*s: macro DBG */
+/*s: macro [[DBG]] */
 #define DBG if(debug['v']) mylog
-/*e: macro DBG */
+/*e: macro [[DBG]] */
 
-/*s: constant P */
-#define	P		((Prog*)nil)
-/*e: constant P */
-/*s: constant S */
-#define	S		((Sym*)nil)
-/*e: constant S */
+/*s: constant [[P]] */
+#define P       ((Prog*)nil)
+/*e: constant [[P]] */
+/*s: constant [[S]] */
+#define S       ((Sym*)nil)
+/*e: constant [[S]] */
 
-/*s: constant TNAME(x86) */
+/*s: constant [[TNAME]](x86) */
 #define	TNAME		(curtext ? curtext->from.sym->name : noname)
-/*e: constant TNAME(x86) */
+/*e: constant [[TNAME]](x86) */
 
-/*s: function cput(x86) */
+/*s: function [[cput]](x86) */
 #define	cput(c)\
     { *cbp++ = c;\
     if(--cbc <= 0)\
         cflush(); }
-/*e: function cput(x86) */
+/*e: function [[cput]](x86) */
 
-/*s: constant LIBNAMELEN */
-#define	LIBNAMELEN	300
-/*e: constant LIBNAMELEN */
+/*s: constant [[LIBNAMELEN]] */
+#define LIBNAMELEN  300
+/*e: constant [[LIBNAMELEN]] */
 
 typedef	struct	Adr	Adr;
 typedef	struct	Prog	Prog;
@@ -39,7 +40,7 @@ typedef	struct	Sym	Sym;
 typedef	struct	Auto	Auto;
 typedef	struct	Optab	Optab;
 
-/*s: struct Adr(x86) */
+/*s: struct [[Adr]](x86) */
 struct	Adr
 {
     //enum<operand_kind> (D_NONE by default)
@@ -65,29 +66,29 @@ struct	Adr
     // TODO: abused for NOPROF function attributes
     char	scale; // offset * scale give size of entity?
 };
-/*e: struct Adr(x86) */
+/*e: struct [[Adr]](x86) */
 
-/*s: constant offset */
+/*s: constant [[offset]] */
 #define	offset	u0.u0offset
-/*e: constant offset */
-/*s: constant scon(x86) */
+/*e: constant [[offset]] */
+/*s: constant [[scon]](x86) */
 #define	scon	u0.u0scon
-/*e: constant scon(x86) */
-/*s: constant cond(x86) */
+/*e: constant [[scon]](x86) */
+/*s: constant [[cond]](x86) */
 #define	cond	u0.u0cond
-/*e: constant cond(x86) */
-/*s: constant ieee */
+/*e: constant [[cond]](x86) */
+/*s: constant [[ieee]] */
 #define	ieee	u0.u0ieee
-/*e: constant ieee */
+/*e: constant [[ieee]] */
 
-/*s: constant autom */
+/*s: constant [[autom]] */
 #define	autom	u1.u1autom
-/*e: constant autom */
-/*s: constant sym */
+/*e: constant [[autom]] */
+/*s: constant [[sym]] */
 #define	sym	u1.u1sym
-/*e: constant sym */
+/*e: constant [[sym]] */
 
-/*s: struct Prog(x86) */
+/*s: struct [[Prog]](x86) */
 struct	Prog
 {
     //enum<opcode>
@@ -118,8 +119,8 @@ struct	Prog
     Prog*	pcond;	/* work on this */
 
 };
-/*e: struct Prog(x86) */
-/*s: struct Auto(x86) */
+/*e: struct [[Prog]](x86) */
+/*s: struct [[Auto]](x86) */
 struct	Auto
 {
     Sym*	asym;
@@ -176,9 +177,9 @@ struct	Optab
     // the actual x86 machine code for instruction optab.as
     byte	op[10];
 };
-/*e: struct Optab(x86) */
+/*e: struct [[Optab]](x86) */
 
-/*s: enum sxxx(x86) */
+/*s: enum [[sxxx]](x86) */
 enum section
 {
     SNONE		= 0,
@@ -195,8 +196,8 @@ enum section
     SIMPORT,
     SEXPORT,
 };
-/*e: enum sxxx(x86) */
-/*s: enum yxxx(x86) */
+/*e: enum [[sxxx]](x86) */
+/*s: enum [[yxxx]](x86) */
 enum yxxx {
     Yxxx		= 0,
     Ynone,
@@ -230,8 +231,8 @@ enum yxxx {
 
     Ymax,
 };
-/*e: enum yxxx(x86) */
-/*s: enum zxxx(x86) */
+/*e: enum [[yxxx]](x86) */
+/*s: enum [[zxxx]](x86) */
 enum zxxx {
     Zxxx		= 0,
 
@@ -265,8 +266,8 @@ enum zxxx {
     Zmov,
     Zmax,
 };
-/*e: enum zxxx(x86) */
-/*s: enum pxxx(x86) */
+/*e: enum [[zxxx]](x86) */
+/*s: enum [[pxxx]](x86) */
 enum pxxx {
     Px		= 0,
     Pe		= 0x66,	/* operand escape */
@@ -322,19 +323,20 @@ enum headtype {
     H_EXE = 4,
     H_ELF = 5,
 };
-/*e: enum headtype(x86) */
+/*e: enum [[headtype]](x86) */
 
-/*s: struct Buf */
+/*s: struct [[Buf]] */
 union Buf
 {
     struct
     {
-        char	obuf[MAXIO];			/* output buffer */
-        byte	ibuf[MAXIO];			/* input buffer */
+        char    obuf[MAXIO];            /* output buffer */
+        byte    ibuf[MAXIO];            /* input buffer */
     };
-    char	dbuf[1]; // variable size
+    char    dbuf[1]; // variable size
+    //XxX: this cause bugs in kencc under Linux
 };
-/*e: struct Buf */
+/*e: struct [[Buf]] */
 extern union Buf buf;
 
 #pragma	varargck	type	"A"	int
@@ -403,9 +405,9 @@ bool allexport;
 extern	char*	EXPTAB;
 extern	Prog	undefp;
 
-/*s: constant UP */
-#define	UP	(&undefp)
-/*e: constant UP */
+/*s: constant [[UP]] */
+#define UP  (&undefp)
+/*e: constant [[UP]] */
 
 extern	Optab	optab[];
 //@Scheck: defined in ../8c/enam.c
@@ -448,8 +450,6 @@ void	listinit(void);
 Sym*	lookup(char*, int);
 void	lput(long);
 void	lputl(long);
-void	llput(vlong v);
-void	llputl(vlong v);
 void	main(int, char*[]);
 
 void	patch(void);

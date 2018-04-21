@@ -6,7 +6,7 @@ int	relinv(int);
 void	mkfwd(void);
 Prog*	brloop(Prog*);
 
-/*s: function dodata(x86) */
+/*s: function [[dodata]](x86) */
 void
 dodata(void)
 {
@@ -102,9 +102,9 @@ dodata(void)
     xdefine("end", SBSS, bsssize + datsize);
     /* etext is defined in span.c */
 }
-/*e: function dodata(x86) */
+/*e: function [[dodata]](x86) */
 
-/*s: function brchain(x86) */
+/*s: function [[brchain]](x86) */
 Prog*
 brchain(Prog *p)
 {
@@ -117,9 +117,9 @@ brchain(Prog *p)
     }
     return P;
 }
-/*e: function brchain(x86) */
+/*e: function [[brchain]](x86) */
 
-/*s: function follow */
+/*s: function [[follow]] */
 void
 follow(void)
 {
@@ -134,9 +134,9 @@ follow(void)
     lastp->link = P;
     firstp = firstp->link;
 }
-/*e: function follow */
+/*e: function [[follow]] */
 
-/*s: function xfol(x86) */
+/*s: function [[xfol]](x86) */
 void
 xfol(Prog *p)
 {
@@ -248,9 +248,9 @@ loop:
     p = p->link;
     goto loop;
 }
-/*e: function xfol(x86) */
+/*e: function [[xfol]](x86) */
 
-/*s: function relinv(x86) */
+/*s: function [[relinv]](x86) */
 int
 relinv(int a)
 {
@@ -276,9 +276,9 @@ relinv(int a)
     diag("unknown relation: %s in %s", anames[a], TNAME);
     return a;
 }
-/*e: function relinv(x86) */
+/*e: function [[relinv]](x86) */
 
-/*s: function doinit(x86) */
+/*s: function [[doinit]](x86) */
 void
 doinit(void)
 {
@@ -300,9 +300,9 @@ doinit(void)
             p->to.offset += INITDAT;
     }
 }
-/*e: function doinit(x86) */
+/*e: function [[doinit]](x86) */
 
-/*s: function patch(x86) */
+/*s: function [[patch]](x86) */
 void
 patch(void)
 {
@@ -439,9 +439,9 @@ brloop(Prog *p)
     }
     return q;
 }
-/*e: function brloop(x86) */
+/*e: function [[brloop]](x86) */
 
-/*s: function dostkoff(x86) */
+/*s: function [[dostkoff]](x86) */
 void
 dostkoff(void)
 {
@@ -540,12 +540,12 @@ dostkoff(void)
             deltasp = autoffset;
         }
         a = p->from.type;
-        if(a == D_AUTO)
+        if(a == D_LOCAL)
             p->from.offset += deltasp;
         if(a == D_PARAM)
             p->from.offset += deltasp + 4;
         a = p->to.type;
-        if(a == D_AUTO)
+        if(a == D_LOCAL)
             p->to.offset += deltasp;
         if(a == D_PARAM)
             p->to.offset += deltasp + 4;
@@ -604,9 +604,9 @@ dostkoff(void)
         continue;
     }
 }
-/*e: function dostkoff(x86) */
+/*e: function [[dostkoff]](x86) */
 
-/*s: function atolwhex */
+/*s: function [[atolwhex]] */
 long
 atolwhex(char *s)
 {
@@ -646,9 +646,10 @@ atolwhex(char *s)
         n = -n;
     return n;
 }
-/*e: function atolwhex */
+/*e: function [[atolwhex]] */
 
-/*s: function undef */
+/*s: function [[undef]] */
+/// main -> <>
 void
 undef(void)
 {
@@ -660,9 +661,9 @@ undef(void)
             if(s->type == SXREF)
                 diag("%s: not defined", s->name);
 }
-/*e: function undef */
+/*e: function [[undef]] */
 
-/*s: function import(x86) */
+/*s: function [[import]](x86) */
 void
 import(void)
 {
@@ -681,18 +682,18 @@ import(void)
                     s->sig = 0;
             }
 }
-/*e: function import(x86) */
+/*e: function [[import]](x86) */
 
-/*s: function ckoff */
+/*s: function [[ckoff]] */
 void
 ckoff(Sym *s, long v)
 {
     if(v < 0 || v >= 1<<Roffset)
         diag("relocation offset %ld for %s out of range", v, s->name);
 }
-/*e: function ckoff */
+/*e: function [[ckoff]] */
 
-/*s: function newdata(x86) */
+/*s: function [[newdata]](x86) */
 static Prog*
 newdata(Sym *s, int o, int w, int t)
 {
@@ -713,9 +714,9 @@ newdata(Sym *s, int o, int w, int t)
     p->to.type = D_CONST;
     return p;
 }
-/*e: function newdata(x86) */
+/*e: function [[newdata]](x86) */
 
-/*s: function export(x86) */
+/*s: function [[export]](x86) */
 void
 export(void)
 {
@@ -814,5 +815,5 @@ export(void)
     exports = ne;
     free(esyms);
 }
-/*e: function export(x86) */
+/*e: function [[export]](x86) */
 /*e: linkers/8l/pass.c */

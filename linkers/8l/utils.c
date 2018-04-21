@@ -1,7 +1,7 @@
 /*s: linkers/8l/utils.c */
 #include "l.h"
 
-/*s: function log */
+/*s: function [[log]] */
 void mylog(char *fmt, ...) {
 
     va_list arg;
@@ -11,9 +11,9 @@ void mylog(char *fmt, ...) {
     va_end(arg);
     Bflush(&bso);
 }
-/*e: function log */
+/*e: function [[log]] */
 
-/*s: function errorexit */
+/*s: function [[errorexit]] */
 void
 errorexit(void)
 {
@@ -25,10 +25,10 @@ errorexit(void)
     }
     exits(0);
 }
-/*e: function errorexit */
+/*e: function [[errorexit]] */
 
-/*s: function gethunk */
-void
+/*s: function [[gethunk]] */
+static void
 gethunk(void)
 {
     char *h;
@@ -103,9 +103,9 @@ prg(void)
     *p = zprg;
     return p;
 }
-/*e: constructor prg */
+/*e: constructor [[prg]] */
 
-/*s: function copyp */
+/*s: function [[copyp]] */
 Prog*
 copyp(Prog *q)
 {
@@ -115,6 +115,6 @@ copyp(Prog *q)
     *p = *q;
     return p;
 }
-/*e: function copyp */
+/*e: function [[copyp]] */
 
 /*e: linkers/8l/utils.c */
