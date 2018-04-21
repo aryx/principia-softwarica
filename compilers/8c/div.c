@@ -1,7 +1,7 @@
 /*s: 8c/div.c */
 #include "gc.h"
 
-/*s: function TN(x86) */
+/*s: function [[TN]](x86) */
 /*
  * Based on: Granlund, T.; Montgomery, P.L.
  * "Division by Invariant Integers using Multiplication".
@@ -9,15 +9,15 @@
  */
 
 #define	TN(n)	((uvlong)1 << (n))
-/*e: function TN(x86) */
-/*s: constant T31(x86) */
+/*e: function [[TN]](x86) */
+/*s: constant [[T31]](x86) */
 #define	T31	TN(31)
-/*e: constant T31(x86) */
-/*s: constant T32(x86) */
+/*e: constant [[T31]](x86) */
+/*s: constant [[T32]](x86) */
 #define	T32	TN(32)
-/*e: constant T32(x86) */
+/*e: constant [[T32]](x86) */
 
-/*s: function multiplier(x86) */
+/*s: function [[multiplier]](x86) */
 int
 multiplier(ulong d, int p, uvlong *mp)
 {
@@ -43,9 +43,9 @@ multiplier(ulong d, int p, uvlong *mp)
     *mp = mhi;
     return l;
 }
-/*e: function multiplier(x86) */
+/*e: function [[multiplier]](x86) */
 
-/*s: function sdiv(x86) */
+/*s: function [[sdiv]](x86) */
 int
 sdiv(ulong d, ulong *mp, int *sp)
 {
@@ -60,9 +60,9 @@ sdiv(ulong d, ulong *mp, int *sp)
     else
         return 0;
 }
-/*e: function sdiv(x86) */
+/*e: function [[sdiv]](x86) */
 
-/*s: function udiv(x86) */
+/*s: function [[udiv]](x86) */
 int
 udiv(ulong d, ulong *mp, int *sp, int *pp)
 {
@@ -90,9 +90,9 @@ udiv(ulong d, ulong *mp, int *sp, int *pp)
         return 0;
     }
 }
-/*e: function udiv(x86) */
+/*e: function [[udiv]](x86) */
 
-/*s: function sdivgen(x86) */
+/*s: function [[sdivgen]](x86) */
 void
 sdivgen(Node *l, Node *r, Node *ax, Node *dx)
 {
@@ -116,9 +116,9 @@ sdivgen(Node *l, Node *r, Node *ax, Node *dx)
     if(r->vconst < 0)
         gins(ANEGL, Z, dx);
 }
-/*e: function sdivgen(x86) */
+/*e: function [[sdivgen]](x86) */
 
-/*s: function udivgen(x86) */
+/*s: function [[udivgen]](x86) */
 void
 udivgen(Node *l, Node *r, Node *ax, Node *dx)
 {
@@ -154,9 +154,9 @@ udivgen(Node *l, Node *r, Node *ax, Node *dx)
     if(s != 0)
         gins(ASHRL, nodconst(s), dx);
 }
-/*e: function udivgen(x86) */
+/*e: function [[udivgen]](x86) */
 
-/*s: function sext(x86) */
+/*s: function [[sext]](x86) */
 void
 sext(Node *d, Node *s, Node *l)
 {
@@ -170,9 +170,9 @@ sext(Node *d, Node *s, Node *l)
         gins(ASARL, nodconst(31), d);
     }
 }
-/*e: function sext(x86) */
+/*e: function [[sext]](x86) */
 
-/*s: function sdiv2(x86) */
+/*s: function [[sdiv2]](x86) */
 void
 sdiv2(long c, int v, Node *l, Node *n)
 {
@@ -194,9 +194,9 @@ sdiv2(long c, int v, Node *l, Node *n)
     if(c < 0)
         gins(ANEGL, Z, n);
 }
-/*e: function sdiv2(x86) */
+/*e: function [[sdiv2]](x86) */
 
-/*s: function smod2(x86) */
+/*s: function [[smod2]](x86) */
 void
 smod2(long c, int v, Node *l, Node *n)
 {
@@ -226,5 +226,5 @@ smod2(long c, int v, Node *l, Node *n)
     }
     regfree(&nod);
 }
-/*e: function smod2(x86) */
+/*e: function [[smod2]](x86) */
 /*e: 8c/div.c */

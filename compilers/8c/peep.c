@@ -12,7 +12,7 @@ int	copyau(Adr*, Adr*);
 int	copysub(Adr*, Adr*, Adr*, int);
 //int	copysub1(Prog*, Adr*, Adr*, int);
 
-/*s: function needc(x86) */
+/*s: function [[needc]](x86) */
 static bool
 needc(Prog *p)
 {
@@ -36,9 +36,9 @@ needc(Prog *p)
     }
     return false;
 }
-/*e: function needc(x86) */
+/*e: function [[needc]](x86) */
 
-/*s: function peep(x86) */
+/*s: function [[peep]](x86) */
 void
 peep(void)
 {
@@ -157,9 +157,9 @@ loop1:
     if(t)
         goto loop1;
 }
-/*e: function peep(x86) */
+/*e: function [[peep]](x86) */
 
-/*s: function excise(x86) */
+/*s: function [[excise]](x86) */
 void
 excise(Reg *r)
 {
@@ -170,9 +170,9 @@ excise(Reg *r)
     p->from = zprog.from;
     p->to = zprog.to;
 }
-/*e: function excise(x86) */
+/*e: function [[excise]](x86) */
 
-/*s: function uniqp */
+/*s: function [[uniqp]] */
 Reg*
 uniqp(Reg *r)
 {
@@ -188,9 +188,9 @@ uniqp(Reg *r)
             return R;
     return r1;
 }
-/*e: function uniqp */
+/*e: function [[uniqp]] */
 
-/*s: function uniqs */
+/*s: function [[uniqs]] */
 Reg*
 uniqs(Reg *r)
 {
@@ -206,9 +206,9 @@ uniqs(Reg *r)
             return R;
     return r1;
 }
-/*e: function uniqs */
+/*e: function [[uniqs]] */
 
-/*s: function regtyp(x86) */
+/*s: function [[regtyp]](x86) */
 int
 regtyp(Adr *a)
 {
@@ -219,9 +219,9 @@ regtyp(Adr *a)
         return 1;
     return 0;
 }
-/*e: function regtyp(x86) */
+/*e: function [[regtyp]](x86) */
 
-/*s: function subprop(x86) */
+/*s: function [[subprop]](x86) */
 /*
  * the idea is to substitute
  * one register for another
@@ -343,9 +343,9 @@ gotit:
         print("%P last\n", r->prog);
     return 1;
 }
-/*e: function subprop(x86) */
+/*e: function [[subprop]](x86) */
 
-/*s: function copyprop */
+/*s: function [[copyprop]] */
 /*
  * The idea is to remove redundant copies.
  *	v1->v2	F=0
@@ -374,9 +374,9 @@ copyprop(Reg *r0)
         r->active = 0;
     return copy1(v1, v2, r0->s1, 0);
 }
-/*e: function copyprop */
+/*e: function [[copyprop]] */
 
-/*s: function copy1 */
+/*s: function [[copy1]] */
 int
 copy1(Adr *v1, Adr *v2, Reg *r, int f)
 {
@@ -453,9 +453,9 @@ copy1(Adr *v1, Adr *v2, Reg *r, int f)
     }
     return 1;
 }
-/*e: function copy1 */
+/*e: function [[copy1]] */
 
-/*s: function copyu(x86) */
+/*s: function [[copyu]](x86) */
 /*
  * return
  * 1 if v only used (and substitute),
@@ -728,9 +728,9 @@ copyu(Prog *p, Adr *v, Adr *s)
     }
     return 0;
 }
-/*e: function copyu(x86) */
+/*e: function [[copyu]](x86) */
 
-/*s: function copyas(x86) */
+/*s: function [[copyas]](x86) */
 /*
  * direct reference,
  * could be set/use depending on
@@ -748,9 +748,9 @@ copyas(Adr *a, Adr *v)
             return 1;
     return 0;
 }
-/*e: function copyas(x86) */
+/*e: function [[copyas]](x86) */
 
-/*s: function copyau(x86) */
+/*s: function [[copyau]](x86) */
 /*
  * either direct or indirect
  */
@@ -768,9 +768,9 @@ copyau(Adr *a, Adr *v)
     }
     return 0;
 }
-/*e: function copyau(x86) */
+/*e: function [[copyau]](x86) */
 
-/*s: function copysub(x86) */
+/*s: function [[copysub]](x86) */
 /*
  * substitute s for v in a
  * return failure to substitute
@@ -806,5 +806,5 @@ copysub(Adr *a, Adr *v, Adr *s, int f)
     }
     return 0;
 }
-/*e: function copysub(x86) */
+/*e: function [[copysub]](x86) */
 /*e: 8c/peep.c */

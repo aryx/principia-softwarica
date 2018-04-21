@@ -18,7 +18,7 @@ long	RtoB(int);
 int	BtoR(long);
 //int	BtoF(long);
 
-/*s: function rega */
+/*s: function [[rega]] */
 Reg*
 rega(void)
 {
@@ -33,9 +33,9 @@ rega(void)
     *r = zreg;
     return r;
 }
-/*e: function rega */
+/*e: function [[rega]] */
 
-/*s: function rcmp */
+/*s: function [[rcmp]] */
 int
 rcmp(const void *a1, const void *a2)
 {
@@ -50,17 +50,17 @@ rcmp(const void *a1, const void *a2)
         return c1;
     return p2->varno - p1->varno;
 }
-/*e: function rcmp */
+/*e: function [[rcmp]] */
 
-/*s: struct Regopt_helper(x86) */
+/*s: struct [[Regopt_helper]](x86) */
 struct Regopt_helper {
         long	m;
         long	c;
         Reg*	p;
 };
-/*e: struct Regopt_helper(x86) */
+/*e: struct [[Regopt_helper]](x86) */
 
-/*s: function regopt(x86) */
+/*s: function [[regopt]](x86) */
 void
 regopt(Prog *p)
 {
@@ -597,9 +597,9 @@ brk:
         freer = firstr;
     }
 }
-/*e: function regopt(x86) */
+/*e: function [[regopt]](x86) */
 
-/*s: function addmove(x86) */
+/*s: function [[addmove]](x86) */
 /*
  * add mov b,rn
  * just after r
@@ -646,9 +646,9 @@ addmove(Reg *r, int bn, int rn, int f)
     if(debug['R'])
         print("%P\t.a%P\n", p, p1);
 }
-/*e: function addmove(x86) */
+/*e: function [[addmove]](x86) */
 
-/*s: function doregbits(x86) */
+/*s: function [[doregbits]](x86) */
 ulong
 doregbits(int r)
 {
@@ -667,9 +667,9 @@ doregbits(int r)
         b |= RtoB(r-D_AH+D_AX);
     return b;
 }
-/*e: function doregbits(x86) */
+/*e: function [[doregbits]](x86) */
 
-/*s: function mkvar(x86) */
+/*s: function [[mkvar]](x86) */
 Bits
 mkvar(Reg *r, Adr *a, int isro)
 {
@@ -756,9 +756,9 @@ out:
 none:
     return zbits;
 }
-/*e: function mkvar(x86) */
+/*e: function [[mkvar]](x86) */
 
-/*s: function prop(x86) */
+/*s: function [[prop]](x86) */
 void
 prop(Reg *r, Bits ref, Bits cal)
 {
@@ -814,9 +814,9 @@ prop(Reg *r, Bits ref, Bits cal)
         for(r2 = r->p2; r2 != R; r2 = r2->p2link)
             prop(r2, r->refbehind, r->calbehind);
 }
-/*e: function prop(x86) */
+/*e: function [[prop]](x86) */
 
-/*s: function postorder */
+/*s: function [[postorder]] */
 /*
  * find looping structure
  *
@@ -848,9 +848,9 @@ postorder(Reg *r, Reg **rpo2r, long n)
     n++;
     return n;
 }
-/*e: function postorder */
+/*e: function [[postorder]] */
 
-/*s: function rpolca */
+/*s: function [[rpolca]] */
 long
 rpolca(long *idom, long rpo1, long rpo2)
 {
@@ -873,9 +873,9 @@ rpolca(long *idom, long rpo1, long rpo2)
     }
     return rpo1;
 }
-/*e: function rpolca */
+/*e: function [[rpolca]] */
 
-/*s: function doms */
+/*s: function [[doms]] */
 int
 doms(long *idom, long r, long s)
 {
@@ -883,9 +883,9 @@ doms(long *idom, long r, long s)
         s = idom[s];
     return s == r;
 }
-/*e: function doms */
+/*e: function [[doms]] */
 
-/*s: function loophead */
+/*s: function [[loophead]] */
 int
 loophead(long *idom, Reg *r)
 {
@@ -899,9 +899,9 @@ loophead(long *idom, Reg *r)
             return 1;
     return 0;
 }
-/*e: function loophead */
+/*e: function [[loophead]] */
 
-/*s: function loopmark */
+/*s: function [[loopmark]] */
 void
 loopmark(Reg **rpo2r, long head, Reg *r)
 {
@@ -914,9 +914,9 @@ loopmark(Reg **rpo2r, long head, Reg *r)
     for(r = r->p2; r != R; r = r->p2link)
         loopmark(rpo2r, head, r);
 }
-/*e: function loopmark */
+/*e: function [[loopmark]] */
 
-/*s: function loopit */
+/*s: function [[loopit]] */
 void
 loopit(Reg *r, long nr)
 {
@@ -961,9 +961,9 @@ loopit(Reg *r, long nr)
             loopmark(rpo2r, i, r1);
     }
 }
-/*e: function loopit */
+/*e: function [[loopit]] */
 
-/*s: function synch */
+/*s: function [[synch]] */
 void
 synch(Reg *r, Bits dif)
 {
@@ -989,9 +989,9 @@ synch(Reg *r, Bits dif)
             synch(r1->s2, dif);
     }
 }
-/*e: function synch */
+/*e: function [[synch]] */
 
-/*s: function allreg(x86) */
+/*s: function [[allreg]](x86) */
 ulong
 allreg(ulong b, Rgn *r)
 {
@@ -1029,9 +1029,9 @@ allreg(ulong b, Rgn *r)
     }
     return 0;
 }
-/*e: function allreg(x86) */
+/*e: function [[allreg]](x86) */
 
-/*s: function paint1(x86) */
+/*s: function [[paint1]](x86) */
 void
 paint1(Reg *r, int bn)
 {
@@ -1117,9 +1117,9 @@ paint1(Reg *r, int bn)
             break;
     }
 }
-/*e: function paint1(x86) */
+/*e: function [[paint1]](x86) */
 
-/*s: function regset(x86) */
+/*s: function [[regset]](x86) */
 ulong
 regset(Reg *r, ulong bb)
 {
@@ -1138,9 +1138,9 @@ regset(Reg *r, ulong bb)
     }
     return set;
 }
-/*e: function regset(x86) */
+/*e: function [[regset]](x86) */
 
-/*s: function reguse(x86) */
+/*s: function [[reguse]](x86) */
 ulong
 reguse(Reg *r, ulong bb)
 {
@@ -1159,9 +1159,9 @@ reguse(Reg *r, ulong bb)
     }
     return set;
 }
-/*e: function reguse(x86) */
+/*e: function [[reguse]](x86) */
 
-/*s: function paint2(x86) */
+/*s: function [[paint2]](x86) */
 ulong
 paint2(Reg *r, int bn)
 {
@@ -1221,9 +1221,9 @@ paint2(Reg *r, int bn)
     }
     return vreg;
 }
-/*e: function paint2(x86) */
+/*e: function [[paint2]](x86) */
 
-/*s: function paint3 */
+/*s: function [[paint3]] */
 void
 paint3(Reg *r, int bn, long rb, int rn)
 {
@@ -1294,9 +1294,9 @@ paint3(Reg *r, int bn, long rb, int rn)
             break;
     }
 }
-/*e: function paint3 */
+/*e: function [[paint3]] */
 
-/*s: function addreg(x86) */
+/*s: function [[addreg]](x86) */
 void
 addreg(Adr *a, int rn)
 {
@@ -1305,9 +1305,9 @@ addreg(Adr *a, int rn)
     a->offset = 0;
     a->type = rn;
 }
-/*e: function addreg(x86) */
+/*e: function [[addreg]](x86) */
 
-/*s: function RtoB(x86) */
+/*s: function [[RtoB]](x86) */
 long
 RtoB(int r)
 {
@@ -1316,9 +1316,9 @@ RtoB(int r)
         return 0;
     return 1L << (r-D_AX);
 }
-/*e: function RtoB(x86) */
+/*e: function [[RtoB]](x86) */
 
-/*s: function BtoR(x86) */
+/*s: function [[BtoR]](x86) */
 int
 BtoR(long b)
 {
@@ -1328,5 +1328,5 @@ BtoR(long b)
         return 0;
     return bitno(b) + D_AX;
 }
-/*e: function BtoR(x86) */
+/*e: function [[BtoR]](x86) */
 /*e: 8c/reg.c */

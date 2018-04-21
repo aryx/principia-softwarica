@@ -3,7 +3,7 @@
 
 void	bcgen(Node*, int);
 
-/*s: function cgen(x86) */
+/*s: function [[cgen]](x86) */
 void
 cgen(Node *n, Node *nn)
 {
@@ -1127,9 +1127,9 @@ cgen(Node *n, Node *nn)
 done:
     cursafe = curs;
 }
-/*e: function cgen(x86) */
+/*e: function [[cgen]](x86) */
 
-/*s: function reglcgen(x86) */
+/*s: function [[reglcgen]](x86) */
 void
 reglcgen(Node *t, Node *n, Node *nn)
 {
@@ -1154,9 +1154,9 @@ reglcgen(Node *t, Node *n, Node *nn)
     lcgen(n, t);
     regind(t, n);
 }
-/*e: function reglcgen(x86) */
+/*e: function [[reglcgen]](x86) */
 
-/*s: function lcgen(x86) */
+/*s: function [[lcgen]](x86) */
 void
 lcgen(Node *n, Node *nn)
 {
@@ -1204,9 +1204,9 @@ lcgen(Node *n, Node *nn)
 
     }
 }
-/*e: function lcgen(x86) */
+/*e: function [[lcgen]](x86) */
 
-/*s: function bcgen */
+/*s: function [[bcgen]] */
 void
 bcgen(Node *n, bool btrue)
 {
@@ -1216,9 +1216,9 @@ bcgen(Node *n, bool btrue)
     else
         boolgen(n, btrue, Z);
 }
-/*e: function bcgen */
+/*e: function [[bcgen]] */
 
-/*s: function boolgen(x86) */
+/*s: function [[boolgen]](x86) */
 void
 boolgen(Node *n, int true, Node *nn)
 {
@@ -1436,9 +1436,9 @@ boolgen(Node *n, int true, Node *nn)
     }
     cursafe = curs;
 }
-/*e: function boolgen(x86) */
+/*e: function [[boolgen]](x86) */
 
-/*s: function sugen(x86) */
+/*s: function [[sugen]](x86) */
 void
 sugen(Node *n, Node *nn, long w)
 {
@@ -1866,5 +1866,5 @@ copy:
         reg[nod1.reg]--;
     }
 }
-/*e: function sugen(x86) */
+/*e: function [[sugen]](x86) */
 /*e: 8c/cgen.c */

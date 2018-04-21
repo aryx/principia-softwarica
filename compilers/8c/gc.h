@@ -2,37 +2,38 @@
 #include	"../cc/cc.h"
 
 #include	<common.out.h>
-#include	<8.out.h>
+#include	<386/8.out.h>
+//XxX: #include	<8.out.h>
 
 /*
  * 8c/386
  * Intel 386
  */
 
-/*s: constant SZ_CHAR(x86) */
+/*s: constant [[SZ_CHAR]](x86) */
 #define	SZ_CHAR		1
-/*e: constant SZ_CHAR(x86) */
-/*s: constant SZ_SHORT(x86) */
+/*e: constant [[SZ_CHAR]](x86) */
+/*s: constant [[SZ_SHORT]](x86) */
 #define	SZ_SHORT	2
-/*e: constant SZ_SHORT(x86) */
-/*s: constant SZ_INT(x86) */
+/*e: constant [[SZ_SHORT]](x86) */
+/*s: constant [[SZ_INT]](x86) */
 #define	SZ_INT		4
-/*e: constant SZ_INT(x86) */
-/*s: constant SZ_LONG(x86) */
+/*e: constant [[SZ_INT]](x86) */
+/*s: constant [[SZ_LONG]](x86) */
 #define	SZ_LONG		4
-/*e: constant SZ_LONG(x86) */
-/*s: constant SZ_IND(x86) */
+/*e: constant [[SZ_LONG]](x86) */
+/*s: constant [[SZ_IND]](x86) */
 #define	SZ_IND		4
-/*e: constant SZ_IND(x86) */
-/*s: constant SZ_FLOAT(x86) */
+/*e: constant [[SZ_IND]](x86) */
+/*s: constant [[SZ_FLOAT]](x86) */
 #define	SZ_FLOAT	4
-/*e: constant SZ_FLOAT(x86) */
-/*s: constant SZ_VLONG(x86) */
+/*e: constant [[SZ_FLOAT]](x86) */
+/*s: constant [[SZ_VLONG]](x86) */
 #define	SZ_VLONG	8
-/*e: constant SZ_VLONG(x86) */
-/*s: constant SZ_DOUBLE(x86) */
+/*e: constant [[SZ_VLONG]](x86) */
+/*s: constant [[SZ_DOUBLE]](x86) */
 #define	SZ_DOUBLE	8
-/*e: constant SZ_DOUBLE(x86) */
+/*e: constant [[SZ_DOUBLE]](x86) */
 /*s: constant FNX (8c/gc.h) */
 #define	FNX		100
 /*e: constant FNX (8c/gc.h) */
@@ -45,7 +46,7 @@ typedef	struct	Var	Var;
 typedef	struct	Reg	Reg;
 typedef	struct	Rgn	Rgn;
 
-/*s: struct Idx(x86) */
+/*s: struct [[Idx]](x86) */
 struct Idx
 {
     Node*	regtree;
@@ -54,10 +55,10 @@ struct Idx
     short	reg;
     short	ptr;
 };
-/*e: struct Idx(x86) */
+/*e: struct [[Idx]](x86) */
 extern struct Idx idx;
 
-/*s: struct Adr(x86) */
+/*s: struct [[Adr]](x86) */
 struct	Adr
 {
     long	offset;
@@ -70,15 +71,15 @@ struct	Adr
     uchar	etype;
     uchar	scale;	/* doubles as width in DATA op */
 };
-/*e: struct Adr(x86) */
-/*s: constant A */
+/*e: struct [[Adr]](x86) */
+/*s: constant [[A]] */
 #define	A	((Adr*)nil)
-/*e: constant A */
+/*e: constant [[A]] */
 
-/*s: constant INDEXED(x86) */
+/*s: constant [[INDEXED]](x86) */
 #define	INDEXED	9
-/*e: constant INDEXED(x86) */
-/*s: struct Prog(x86) */
+/*e: constant [[INDEXED]](x86) */
+/*s: struct [[Prog]](x86) */
 struct	Prog
 {
     // enum<opcode>, from 8.out.h
@@ -94,12 +95,12 @@ struct	Prog
     Prog*	link;
     /*e: [[Prog]] extra fields(x86) */
 };
-/*e: struct Prog(x86) */
-/*s: constant P */
+/*e: struct [[Prog]](x86) */
+/*s: constant [[P]] */
 #define	P	((Prog*)nil)
-/*e: constant P */
+/*e: constant [[P]] */
 
-/*s: struct Case */
+/*s: struct [[Case]] */
 struct	Case
 {
     vlong	val;
@@ -109,20 +110,20 @@ struct	Case
 
     Case*	link;
 };
-/*e: struct Case */
-/*s: constant C */
+/*e: struct [[Case]] */
+/*s: constant [[C]] */
 #define	C	((Case*)nil)
-/*e: constant C */
+/*e: constant [[C]] */
 
-/*s: struct C1 */
+/*s: struct [[C1]] */
 struct	C1
 {
     vlong	val;
     long	label;
 };
-/*e: struct C1 */
+/*e: struct [[C1]] */
 
-/*s: struct Var */
+/*s: struct [[Var]] */
 struct	Var
 {
     Sym*	sym;
@@ -132,9 +133,9 @@ struct	Var
     char	etype;
     long	offset;
 };
-/*e: struct Var */
+/*e: struct [[Var]] */
 
-/*s: struct Reg */
+/*s: struct [[Reg]] */
 struct	Reg
 {
     long	pc;
@@ -167,15 +168,15 @@ struct	Reg
 
     Prog*	prog;
 };
-/*e: struct Reg */
-/*s: constant R */
+/*e: struct [[Reg]] */
+/*s: constant [[R]] */
 #define	R	((Reg*)nil)
-/*e: constant R */
+/*e: constant [[R]] */
 
-/*s: constant NRGN(x86) */
+/*s: constant [[NRGN]](x86) */
 #define	NRGN	600
-/*e: constant NRGN(x86) */
-/*s: struct Rgn */
+/*e: constant [[NRGN]](x86) */
+/*s: struct [[Rgn]] */
 struct	Rgn
 {
     Reg*	enter;
@@ -183,7 +184,7 @@ struct	Rgn
     short	varno;
     short	regno;
 };
-/*e: struct Rgn */
+/*e: struct [[Rgn]] */
 
 extern	long	breakpc;
 extern	long	nbreak;
@@ -215,30 +216,30 @@ extern	int	reg[D_NONE];
 extern	long	exregoffset;
 extern	long	exfregoffset;
 
-/*s: function LOAD(x86) */
+/*s: function [[LOAD]](x86) */
 #define	LOAD(r)		(~r->refbehind.b[z] & r->refahead.b[z])
-/*e: function LOAD(x86) */
-/*s: function STORE(x86) */
+/*e: function [[LOAD]](x86) */
+/*s: function [[STORE]](x86) */
 #define	STORE(r)	(~r->calbehind.b[z] & r->calahead.b[z])
-/*e: function STORE(x86) */
+/*e: function [[STORE]](x86) */
 
-/*s: macro bset(x86) */
+/*s: macro [[bset]](x86) */
 //@Scheck: maybe dead, dupe with bits.c function
 #define	bset(a,n)	((a).b[(n)/32]&(1L<<(n)%32))
-/*e: macro bset(x86) */
+/*e: macro [[bset]](x86) */
 
-/*s: constant CLOAD(x86) */
+/*s: constant [[CLOAD]](x86) */
 #define	CLOAD	5
-/*e: constant CLOAD(x86) */
-/*s: constant CREF(x86) */
+/*e: constant [[CLOAD]](x86) */
+/*s: constant [[CREF]](x86) */
 #define	CREF	5
-/*e: constant CREF(x86) */
-/*s: constant CINF(x86) */
+/*e: constant [[CREF]](x86) */
+/*s: constant [[CINF]](x86) */
 #define	CINF	1000
-/*e: constant CINF(x86) */
-/*s: constant LOOP(x86) */
+/*e: constant [[CINF]](x86) */
+/*s: constant [[LOOP]](x86) */
 #define	LOOP	3
-/*e: constant LOOP(x86) */
+/*e: constant [[LOOP]](x86) */
 
 extern	Rgn	region[NRGN];
 extern	Rgn*	rgp;
@@ -356,12 +357,12 @@ int	copyu(Prog*, Adr*, Adr*);
 
 
 
-/*s: constant D_HI(x86) */
+/*s: constant [[D_HI]](x86) */
 //#define	D_HI	D_NONE
-/*e: constant D_HI(x86) */
-/*s: constant D_LO(x86) */
+/*e: constant [[D_HI]](x86) */
+/*s: constant [[D_LO]](x86) */
 //#define	D_LO	D_NONE
-/*e: constant D_LO(x86) */
+/*e: constant [[D_LO]](x86) */
 
 /*
  * com64
