@@ -175,3 +175,9 @@ lpclean:QV:
 		cd $i
 		mk $MKFLAGS $target
 	}
+
+sync:QVI:
+	for (i in $LPDIRS) @{
+		cd $i
+		mk $MKFLAGS $target
+	}
