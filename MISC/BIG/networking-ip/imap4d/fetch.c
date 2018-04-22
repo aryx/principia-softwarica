@@ -5,7 +5,7 @@
 #include <auth.h>
 #include "imap4d.h"
 
-/*s: global fetchPartNames */
+/*s: global [[fetchPartNames]] */
 char *fetchPartNames[FPMax] =
 {
     "",
@@ -15,9 +15,9 @@ char *fetchPartNames[FPMax] =
     "MIME",
     "TEXT",
 };
-/*e: global fetchPartNames */
+/*e: global [[fetchPartNames]] */
 
-/*s: function fetchSeen */
+/*s: function [[fetchSeen]] */
 /*
  * implicitly set the \seen flag.  done in a separate pass
  * so the .imp file doesn't need to be open while the
@@ -45,9 +45,9 @@ breakout:
 
     return 1;
 }
-/*e: function fetchSeen */
+/*e: function [[fetchSeen]] */
 
-/*s: function fetchMsg */
+/*s: function [[fetchMsg]] */
 /*
  * fetch messages
  *
@@ -175,9 +175,9 @@ fetchMsg(Box *, Msg *m, int uids, void *vf)
 
     return 1;
 }
-/*e: function fetchMsg */
+/*e: function [[fetchMsg]] */
 
-/*s: function fetchSect */
+/*s: function [[fetchSect]] */
 /*
  * print out section, part, headers;
  * find and return message section
@@ -200,9 +200,9 @@ fetchSect(Msg *m, Fetch *f)
     Bprint(&bout, "]");
     return findMsgSect(m, f->sect);
 }
-/*e: function fetchSect */
+/*e: function [[fetchSect]] */
 
-/*s: function fetchBody */
+/*s: function [[fetchBody]] */
 /*
  * actually return the body pieces
  */
@@ -326,9 +326,9 @@ fetchBody(Msg *m, Fetch *f)
     }
     close(fd);
 }
-/*e: function fetchBody */
+/*e: function [[fetchBody]] */
 
-/*s: function fetchBodyPart */
+/*s: function [[fetchBodyPart]] */
 /*
  * resolve the actual bounds of any partial fetch,
  * and print out the bounds & size of string returned
@@ -355,9 +355,9 @@ fetchBodyPart(Fetch *f, ulong size)
     p.stop = stop;
     return p;
 }
-/*e: function fetchBodyPart */
+/*e: function [[fetchBodyPart]] */
 
-/*s: function fetchBodyFill */
+/*s: function [[fetchBodyFill]] */
 /*
  * something went wrong fetching data
  * produce fill bytes for what we've committed to produce
@@ -369,9 +369,9 @@ fetchBodyFill(ulong n)
         if(Bputc(&bout, ' ') < 0)
             writeErr();
 }
-/*e: function fetchBodyFill */
+/*e: function [[fetchBodyFill]] */
 
-/*s: function fetchBodyStr */
+/*s: function [[fetchBodyStr]] */
 /*
  * return a simple string
  */
@@ -383,9 +383,9 @@ fetchBodyStr(Fetch *f, char *buf, ulong size)
     p = fetchBodyPart(f, size);
     Bwrite(&bout, &buf[p.start], p.stop-p.start);
 }
-/*e: function fetchBodyStr */
+/*e: function [[fetchBodyStr]] */
 
-/*s: function printnlist */
+/*s: function [[printnlist]] */
 char*
 printnlist(NList *sect)
 {
@@ -400,9 +400,9 @@ printnlist(NList *sect)
     *p = '\0';
     return buf;
 }
-/*e: function printnlist */
+/*e: function [[printnlist]] */
 
-/*s: function findMsgSect */
+/*s: function [[findMsgSect]] */
 /*
  * find the numbered sub-part of the message
  */
@@ -432,9 +432,9 @@ findMsgSect(Msg *m, NList *sect)
     }
     return m;
 }
-/*e: function findMsgSect */
+/*e: function [[findMsgSect]] */
 
-/*s: function fetchEnvelope */
+/*s: function [[fetchEnvelope]] */
 void
 fetchEnvelope(Msg *m)
 {
@@ -462,9 +462,9 @@ fetchEnvelope(Msg *m)
     Bimapstr(&bout, m->info[IMessageId]);
     Bputc(&bout, ')');
 }
-/*e: function fetchEnvelope */
+/*e: function [[fetchEnvelope]] */
 
-/*s: function fetchBodyStruct */
+/*s: function [[fetchBodyStruct]] */
 void
 fetchBodyStruct(Msg *m, Header *h, int extensions)
 {
@@ -560,9 +560,9 @@ fetchBodyStruct(Msg *m, Header *h, int extensions)
     }
     Bputc(&bout, ')');
 }
-/*e: function fetchBodyStruct */
+/*e: function [[fetchBodyStruct]] */
 
-/*s: function fetchStructExt */
+/*s: function [[fetchStructExt]] */
 /*
  * common part of bodystructure extensions
  */
@@ -587,9 +587,9 @@ fetchStructExt(Header *h)
     }else
         Bprint(&bout, "NIL");
 }
-/*e: function fetchStructExt */
+/*e: function [[fetchStructExt]] */
 
-/*s: function BimapMimeParams */
+/*s: function [[BimapMimeParams]] */
 int
 BimapMimeParams(Biobuf *b, MimeHdr *mh)
 {
@@ -613,9 +613,9 @@ BimapMimeParams(Biobuf *b, MimeHdr *mh)
     n += Bputc(b, ')');
     return n;
 }
-/*e: function BimapMimeParams */
+/*e: function [[BimapMimeParams]] */
 
-/*s: function Bimapaddr */
+/*s: function [[Bimapaddr]] */
 /*
  * print a list of addresses;
  * each address is printed as '(' personalName AtDomainList mboxName hostName ')'
@@ -653,5 +653,5 @@ Bimapaddr(Biobuf *b, MAddr *a)
     n += Bputc(b, ')');
     return n;
 }
-/*e: function Bimapaddr */
+/*e: function [[Bimapaddr]] */
 /*e: networking/ip/imap4d/fetch.c */

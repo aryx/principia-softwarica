@@ -3,24 +3,24 @@
 #include <libc.h>
 #include <auth.h>
 
-/*s: global eof */
+/*s: global [[eof]] */
 int	eof;		/* send an eof if true */
-/*e: global eof */
-/*s: global crtonl */
+/*e: global [[eof]] */
+/*s: global [[crtonl]] */
 int	crtonl;		/* convert all received \r to \n */
-/*e: global crtonl */
-/*s: global returns */
+/*e: global [[crtonl]] */
+/*s: global [[returns]] */
 int	returns;	/* strip \r on reception */
-/*e: global returns */
-/*s: global note */
+/*e: global [[returns]] */
+/*s: global [[note]] */
 char	*note = "die: yankee dog";
-/*e: global note */
-/*s: global ruser */
+/*e: global [[note]] */
+/*s: global [[ruser]] */
 char	*ruser;		/* for BSD authentication */
-/*e: global ruser */
-/*s: global key */
+/*e: global [[ruser]] */
+/*s: global [[key]] */
 char *key;
-/*e: global key */
+/*e: global [[key]] */
 
 void	rex(int, char*, char*);
 void	tcpexec(int, char*, char*);
@@ -30,16 +30,16 @@ int	send(int);
 void	error(char*, char*);
 void	sshexec(char*, char*);
 
-/*s: function usage (networking/misc/rx.c) */
+/*s: function [[usage]]([[(networking/misc/rx.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-e] [-T] [-r] [-k keypattern] [-l user] net!host command...\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/misc/rx.c) */
+/*e: function [[usage]]([[(networking/misc/rx.c)]]) */
 
-/*s: function main (networking/misc/rx.c) */
+/*s: function [[main]]([[(networking/misc/rx.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -101,18 +101,18 @@ main(int argc, char *argv[])
     error("can't dial", host);
     exits(0);
 }
-/*e: function main (networking/misc/rx.c) */
+/*e: function [[main]]([[(networking/misc/rx.c)]]) */
 
-/*s: function call (networking/misc/rx.c) */
+/*s: function [[call]]([[(networking/misc/rx.c)]]) */
 int
 call(char *net, char *host, char *service, char **na)
 {
     *na = netmkaddr(host, net, service);
     return dial(*na, 0, 0, 0);
 }
-/*e: function call (networking/misc/rx.c) */
+/*e: function [[call]]([[(networking/misc/rx.c)]]) */
 
-/*s: function rex */
+/*s: function [[rex]] */
 void
 rex(int fd, char *cmd, char *proto)
 {
@@ -136,9 +136,9 @@ rex(int fd, char *cmd, char *proto)
     postnote(PNPROC, kid, note);/**/
     exits(0);
 }
-/*e: function rex */
+/*e: function [[rex]] */
 
-/*s: function tcpexec */
+/*s: function [[tcpexec]] */
 void
 tcpexec(int fd, char *addr, char *cmd)
 {
@@ -200,9 +200,9 @@ tcpexec(int fd, char *addr, char *cmd)
     postnote(PNPROC, kid, note);/**/
     exits(0);
 }
-/*e: function tcpexec */
+/*e: function [[tcpexec]] */
 
-/*s: function sshexec */
+/*s: function [[sshexec]] */
 void
 sshexec(char *host, char *cmd)
 {
@@ -223,9 +223,9 @@ sshexec(char *host, char *cmd)
     argv[n] = 0;
     exec("/bin/ssh", argv);
 }
-/*e: function sshexec */
+/*e: function [[sshexec]] */
 
-/*s: function send */
+/*s: function [[send]] */
 int
 send(int fd)
 {
@@ -249,9 +249,9 @@ send(int fd)
     exits(0);
     return 0;			/* to keep compiler happy */
 }
-/*e: function send */
+/*e: function [[send]] */
 
-/*s: function error (networking/misc/rx.c) */
+/*s: function [[error]]([[(networking/misc/rx.c)]]) */
 void
 error(char *s, char *z)
 {
@@ -261,9 +261,9 @@ error(char *s, char *z)
         fprint(2, "%s: %s %s: %r\n", argv0, s, z);
     exits(s);
 }
-/*e: function error (networking/misc/rx.c) */
+/*e: function [[error]]([[(networking/misc/rx.c)]]) */
 
-/*s: function buildargs */
+/*s: function [[buildargs]] */
 char *
 buildargs(char *argv[])
 {
@@ -285,5 +285,5 @@ buildargs(char *argv[])
     }
     return args;
 }
-/*e: function buildargs */
+/*e: function [[buildargs]] */
 /*e: networking/misc/rx.c */

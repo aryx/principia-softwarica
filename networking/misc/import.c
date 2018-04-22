@@ -4,50 +4,50 @@
 #include <auth.h>
 #include <libsec.h>
 
-/*s: enum _anon_ (networking/misc/import.c) */
+/*s: enum [[_anon_ (networking/misc/import.c)]] */
 enum {
     Encnone,
     Encssl,
     Enctls,
 };
-/*e: enum _anon_ (networking/misc/import.c) */
+/*e: enum [[_anon_ (networking/misc/import.c)]] */
 
-/*s: global encprotos */
+/*s: global [[encprotos]] */
 static char *encprotos[] = {
     [Encnone] =	"clear",
     [Encssl] =	"ssl",
     [Enctls] = 	"tls",
             nil,
 };
-/*e: global encprotos */
+/*e: global [[encprotos]] */
 
-/*s: global keyspec (networking/misc/import.c) */
+/*s: global [[keyspec]]([[(networking/misc/import.c)]]) */
 char		*keyspec = "";
-/*e: global keyspec (networking/misc/import.c) */
-/*s: global filterp */
+/*e: global [[keyspec]]([[(networking/misc/import.c)]]) */
+/*s: global [[filterp]] */
 char		*filterp;
-/*e: global filterp */
-/*s: global ealgs (networking/misc/import.c) */
+/*e: global [[filterp]] */
+/*s: global [[ealgs]]([[(networking/misc/import.c)]]) */
 char		*ealgs = "rc4_256 sha1";
-/*e: global ealgs (networking/misc/import.c) */
-/*s: global encproto */
+/*e: global [[ealgs]]([[(networking/misc/import.c)]]) */
+/*s: global [[encproto]] */
 int		encproto = Encnone;
-/*e: global encproto */
-/*s: global aan */
+/*e: global [[encproto]] */
+/*s: global [[aan]] */
 char		*aan = "/bin/aan";
-/*e: global aan */
-/*s: global ai */
+/*e: global [[aan]] */
+/*s: global [[ai]] */
 AuthInfo 	*ai;
-/*e: global ai */
-/*s: global debug (networking/misc/import.c) */
+/*e: global [[ai]] */
+/*s: global [[debug]]([[(networking/misc/import.c)]]) */
 int		debug;
-/*e: global debug (networking/misc/import.c) */
-/*s: global doauth */
+/*e: global [[debug]]([[(networking/misc/import.c)]]) */
+/*s: global [[doauth]] */
 int		doauth = 1;
-/*e: global doauth */
-/*s: global timedout */
+/*e: global [[doauth]] */
+/*s: global [[timedout]] */
 int		timedout;
-/*e: global timedout */
+/*e: global [[timedout]] */
 
 int	connect(char*, char*, int);
 int	passive(void);
@@ -59,7 +59,7 @@ int	filter(int, char *, char *);
 
 static void	mksecret(char *, uchar *);
 
-/*s: function procsetname (networking/misc/import.c) */
+/*s: function [[procsetname]]([[(networking/misc/import.c)]]) */
 /*
  * based on libthread's threadsetname, but drags in less library code.
  * actually just sets the arguments displayed.
@@ -84,9 +84,9 @@ procsetname(char *fmt, ...)
     }
     free(cmdname);
 }
-/*e: function procsetname (networking/misc/import.c) */
+/*e: function [[procsetname]]([[(networking/misc/import.c)]]) */
 
-/*s: function post (networking/misc/import.c) */
+/*s: function [[post]]([[(networking/misc/import.c)]]) */
 void
 post(char *name, char *envname, int srvfd)
 {
@@ -102,9 +102,9 @@ post(char *name, char *envname, int srvfd)
     close(fd);
     putenv(envname, name);
 }
-/*e: function post (networking/misc/import.c) */
+/*e: function [[post]]([[(networking/misc/import.c)]]) */
 
-/*s: function lookup */
+/*s: function [[lookup]] */
 static int
 lookup(char *s, char *l[])
 {
@@ -115,9 +115,9 @@ lookup(char *s, char *l[])
             return i;
     return -1;
 }
-/*e: function lookup */
+/*e: function [[lookup]] */
 
-/*s: function main (networking/misc/import.c) */
+/*s: function [[main]]([[(networking/misc/import.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -275,9 +275,9 @@ main(int argc, char **argv)
     }
     exits(0);
 }
-/*e: function main (networking/misc/import.c) */
+/*e: function [[main]]([[(networking/misc/import.c)]]) */
 
-/*s: function catcher (networking/misc/import.c) */
+/*s: function [[catcher]]([[(networking/misc/import.c)]]) */
 void
 catcher(void*, char *msg)
 {
@@ -286,9 +286,9 @@ catcher(void*, char *msg)
         noted(NCONT);
     noted(NDFLT);
 }
-/*e: function catcher (networking/misc/import.c) */
+/*e: function [[catcher]]([[(networking/misc/import.c)]]) */
 
-/*s: function old9p (networking/misc/import.c) */
+/*s: function [[old9p]]([[(networking/misc/import.c)]]) */
 int
 old9p(int fd)
 {
@@ -327,9 +327,9 @@ old9p(int fd)
     }
     return p[1];
 }
-/*e: function old9p (networking/misc/import.c) */
+/*e: function [[old9p]]([[(networking/misc/import.c)]]) */
 
-/*s: function connect */
+/*s: function [[connect]] */
 int
 connect(char *system, char *tree, int oldserver)
 {
@@ -378,9 +378,9 @@ connect(char *system, char *tree, int oldserver)
         return old9p(fd);
     return fd;
 }
-/*e: function connect */
+/*e: function [[connect]] */
 
-/*s: function passive */
+/*s: function [[passive]] */
 int
 passive(void)
 {
@@ -406,9 +406,9 @@ passive(void)
 
     return fd;
 }
-/*e: function passive */
+/*e: function [[passive]] */
 
-/*s: function usage (networking/misc/import.c) */
+/*s: function [[usage]]([[(networking/misc/import.c)]]) */
 void
 usage(void)
 {
@@ -416,9 +416,9 @@ usage(void)
 "[-e 'crypt auth'|clear] [-k keypattern] [-p] host remotefs [mountpoint]\n");
     exits("usage");
 }
-/*e: function usage (networking/misc/import.c) */
+/*e: function [[usage]]([[(networking/misc/import.c)]]) */
 
-/*s: function filter */
+/*s: function [[filter]] */
 /* Network on fd1, mount driver on fd0 */
 int
 filter(int fd, char *cmd, char *host)
@@ -470,14 +470,14 @@ filter(int fd, char *cmd, char *host)
     }
     return p[1];
 }
-/*e: function filter */
+/*e: function [[filter]] */
 
-/*s: function mksecret (networking/misc/import.c) */
+/*s: function [[mksecret]]([[(networking/misc/import.c)]]) */
 static void
 mksecret(char *t, uchar *f)
 {
     sprint(t, "%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux",
         f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[9]);
 }
-/*e: function mksecret (networking/misc/import.c) */
+/*e: function [[mksecret]]([[(networking/misc/import.c)]]) */
 /*e: networking/misc/import.c */

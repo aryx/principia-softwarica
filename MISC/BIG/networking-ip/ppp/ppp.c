@@ -11,59 +11,59 @@
 #include <ndb.h>
 #include "ppp.h"
 
-/*s: constant PATH */
+/*s: constant [[PATH]] */
 #define PATH 128
-/*e: constant PATH */
+/*e: constant [[PATH]] */
 
-/*s: global baud (networking/ip/ppp/ppp.c) */
+/*s: global [[baud]]([[(networking/ip/ppp/ppp.c)]]) */
 static	int	baud;
-/*e: global baud (networking/ip/ppp/ppp.c) */
-/*s: global nocompress */
+/*e: global [[baud]]([[(networking/ip/ppp/ppp.c)]]) */
+/*s: global [[nocompress]] */
 static	int	nocompress;
-/*e: global nocompress */
-/*s: global pppframing */
+/*e: global [[nocompress]] */
+/*s: global [[pppframing]] */
 static 	int	pppframing = 1;
-/*e: global pppframing */
-/*s: global noipcompress */
+/*e: global [[pppframing]] */
+/*s: global [[noipcompress]] */
 static	int	noipcompress;
-/*e: global noipcompress */
-/*s: global server (networking/ip/ppp/ppp.c) */
+/*e: global [[noipcompress]] */
+/*s: global [[server]]([[(networking/ip/ppp/ppp.c)]]) */
 static	int	server;
-/*e: global server (networking/ip/ppp/ppp.c) */
-/*s: global noauth */
+/*e: global [[server]]([[(networking/ip/ppp/ppp.c)]]) */
+/*s: global [[noauth]] */
 static	int noauth;
-/*e: global noauth */
-/*s: global nip (networking/ip/ppp/ppp.c) */
+/*e: global [[noauth]] */
+/*s: global [[nip]]([[(networking/ip/ppp/ppp.c)]]) */
 static	int	nip;		/* number of ip interfaces */
-/*e: global nip (networking/ip/ppp/ppp.c) */
-/*s: global dying (networking/ip/ppp/ppp.c) */
+/*e: global [[nip]]([[(networking/ip/ppp/ppp.c)]]) */
+/*s: global [[dying]]([[(networking/ip/ppp/ppp.c)]]) */
 static	int	dying;		/* flag to signal to all threads its time to go */
-/*e: global dying (networking/ip/ppp/ppp.c) */
-/*s: global primary */
+/*e: global [[dying]]([[(networking/ip/ppp/ppp.c)]]) */
+/*s: global [[primary]] */
 static	int	primary;	/* this is the primary IP interface */
-/*e: global primary */
-/*s: global chatfile */
+/*e: global [[primary]] */
+/*s: global [[chatfile]] */
 static	char	*chatfile;
-/*e: global chatfile */
+/*e: global [[chatfile]] */
 
-/*s: global debug (networking/ip/ppp/ppp.c) */
+/*s: global [[debug]]([[(networking/ip/ppp/ppp.c)]]) */
 int	debug;
-/*e: global debug (networking/ip/ppp/ppp.c) */
-/*s: global LOG */
+/*e: global [[debug]]([[(networking/ip/ppp/ppp.c)]]) */
+/*s: global [[LOG]] */
 char*	LOG = "ppp";
-/*e: global LOG */
-/*s: global keyspec (networking/ip/ppp/ppp.c) */
+/*e: global [[LOG]] */
+/*s: global [[keyspec]]([[(networking/ip/ppp/ppp.c)]]) */
 char*	keyspec = "";
-/*e: global keyspec (networking/ip/ppp/ppp.c) */
+/*e: global [[keyspec]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: enum _anon_ (networking/ip/ppp/ppp.c) */
+/*s: enum [[_anon_ (networking/ip/ppp/ppp.c)]] */
 enum
 {
     Rmagic=	0x12345
 };
-/*e: enum _anon_ (networking/ip/ppp/ppp.c) */
+/*e: enum [[_anon_ (networking/ip/ppp/ppp.c)]] */
 
-/*s: global fcstab (networking/ip/ppp/ppp.c) */
+/*s: global [[fcstab]]([[(networking/ip/ppp/ppp.c)]]) */
 /*
  * Calculate FCS - rfc 1331
  */
@@ -102,9 +102,9 @@ ushort fcstab[256] =
       0xf78f, 0xe606, 0xd49d, 0xc514, 0xb1ab, 0xa022, 0x92b9, 0x8330,
       0x7bc7, 0x6a4e, 0x58d5, 0x495c, 0x3de3, 0x2c6a, 0x1ef1, 0x0f78
 };
-/*e: global fcstab (networking/ip/ppp/ppp.c) */
+/*e: global [[fcstab]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: global snames */
+/*s: global [[snames]] */
 static char *snames[] =
 {
     "Sclosed",
@@ -114,7 +114,7 @@ static char *snames[] =
     "Sacksent",
     "Sopened",
 };
-/*e: global snames */
+/*e: global [[snames]] */
 
 static	void		authtimer(PPP*);
 static	void		chapinit(PPP*);
@@ -151,7 +151,7 @@ static	int		validv4(Ipaddr);
 static  void		dmppkt(char *s, uchar *a, int na);
 static	void		getauth(PPP*);
 
-/*s: function pppopen */
+/*s: function [[pppopen]] */
 void
 pppopen(PPP *ppp, int mediain, int mediaout, char *net,
     Ipaddr ipaddr, Ipaddr remip,
@@ -193,9 +193,9 @@ pppopen(PPP *ppp, int mediain, int mediaout, char *net,
         _exits(0);
     }
 }
-/*e: function pppopen */
+/*e: function [[pppopen]] */
 
-/*s: function init (networking/ip/ppp/ppp.c) */
+/*s: function [[init]]([[(networking/ip/ppp/ppp.c)]]) */
 static void
 init(PPP* ppp)
 {
@@ -247,9 +247,9 @@ init(PPP* ppp)
     pinit(ppp, ppp->lcp);
     setphase(ppp, Plink);
 }
-/*e: function init (networking/ip/ppp/ppp.c) */
+/*e: function [[init]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: function setphase */
+/*s: function [[setphase]] */
 static void
 setphase(PPP *ppp, int phase)
 {
@@ -299,9 +299,9 @@ setphase(PPP *ppp, int phase)
         break;
     }
 }
-/*e: function setphase */
+/*e: function [[setphase]] */
 
-/*s: function pinit */
+/*s: function [[pinit]] */
 static void
 pinit(PPP *ppp, Pstate *p)
 {
@@ -355,9 +355,9 @@ pinit(PPP *ppp, Pstate *p)
     config(ppp, p, 1);
     newstate(ppp, p, Sreqsent);
 }
-/*e: function pinit */
+/*e: function [[pinit]] */
 
-/*s: function newstate */
+/*s: function [[newstate]] */
 /*
  *  change protocol to a new state.
  */
@@ -410,9 +410,9 @@ newstate(PPP *ppp, Pstate *p, int state)
 
     p->state = state;
 }
-/*e: function newstate */
+/*e: function [[newstate]] */
 
-/*s: function getframe */
+/*s: function [[getframe]] */
 /* returns (protocol, information) */
 static Block*
 getframe(PPP *ppp, int *protop)
@@ -527,9 +527,9 @@ getframe(PPP *ppp, int *protop)
         freeb(b);
     }
 }
-/*e: function getframe */
+/*e: function [[getframe]] */
 
-/*s: function putframe */
+/*s: function [[putframe]] */
 /* send a PPP frame */
 static int
 putframe(PPP *ppp, int proto, Block *b)
@@ -633,9 +633,9 @@ putframe(PPP *ppp, int proto, Block *b)
     qunlock(&ppp->outlock);
     return 0;
 }
-/*e: function putframe */
+/*e: function [[putframe]] */
 
-/*s: function alloclcp */
+/*s: function [[alloclcp]] */
 Block*
 alloclcp(int code, int id, int len, Lcpmsg **mp)
 {
@@ -655,10 +655,10 @@ alloclcp(int code, int id, int len, Lcpmsg **mp)
     *mp = m;
     return b;
 }
-/*e: function alloclcp */
+/*e: function [[alloclcp]] */
 
 
-/*s: function putlo */
+/*s: function [[putlo]] */
 static void
 putlo(Block *b, int type, ulong val)
 {
@@ -667,9 +667,9 @@ putlo(Block *b, int type, ulong val)
     hnputl(b->wptr, val);
     b->wptr += 4;
 }
-/*e: function putlo */
+/*e: function [[putlo]] */
 
-/*s: function putv4o */
+/*s: function [[putv4o]] */
 static void
 putv4o(Block *b, int type, Ipaddr val)
 {
@@ -678,9 +678,9 @@ putv4o(Block *b, int type, Ipaddr val)
     v6tov4(b->wptr, val);
     b->wptr += 4;
 }
-/*e: function putv4o */
+/*e: function [[putv4o]] */
 
-/*s: function putso */
+/*s: function [[putso]] */
 static void
 putso(Block *b, int type, ulong val)
 {
@@ -689,18 +689,18 @@ putso(Block *b, int type, ulong val)
     hnputs(b->wptr, val);
     b->wptr += 2;
 }
-/*e: function putso */
+/*e: function [[putso]] */
 
-/*s: function puto */
+/*s: function [[puto]] */
 static void
 puto(Block *b, int type)
 {
     *b->wptr++ = type;
     *b->wptr++ = 2;
 }
-/*e: function puto */
+/*e: function [[puto]] */
 
-/*s: function config */
+/*s: function [[config]] */
 /*
  *  send configuration request
  */
@@ -784,9 +784,9 @@ config(PPP *ppp, Pstate *p, int newid)
     putframe(ppp, p->proto, b);
     freeb(b);
 }
-/*e: function config */
+/*e: function [[config]] */
 
-/*s: function getipinfo */
+/*s: function [[getipinfo]] */
 static void
 getipinfo(PPP *ppp)
 {
@@ -815,9 +815,9 @@ getipinfo(PPP *ppp)
     if(t != nil)
         ndbfree(t);
 }
-/*e: function getipinfo */
+/*e: function [[getipinfo]] */
 
-/*s: function getopts */
+/*s: function [[getopts]] */
 /*
  *  parse configuration request, sends an ack or reject packet
  *
@@ -1072,8 +1072,8 @@ getopts(PPP *ppp, Pstate *p, Block *b)
 
     return rejecting || nacking;
 }
-/*e: function getopts */
-/*s: function dmppkt */
+/*e: function [[getopts]] */
+/*s: function [[dmppkt]] */
 static void
 dmppkt(char *s, uchar *a, int na)
 {
@@ -1087,9 +1087,9 @@ dmppkt(char *s, uchar *a, int na)
         fprint(2, " %.2ux", a[i]);
     fprint(2, "\n");
 }
-/*e: function dmppkt */
+/*e: function [[dmppkt]] */
 
-/*s: function dropoption */
+/*s: function [[dropoption]] */
 static void
 dropoption(Pstate *p, Lcpopt *o)
 {
@@ -1116,9 +1116,9 @@ dropoption(Pstate *p, Lcpopt *o)
         break;
     }
 }
-/*e: function dropoption */
+/*e: function [[dropoption]] */
 
-/*s: function rejopts */
+/*s: function [[rejopts]] */
 /*
  *  parse configuration rejection, just stop sending anything that they
  *  don't like (except for ipcp address nak).
@@ -1263,10 +1263,10 @@ syslog(0, "ppp", "rejected addr %I with %V", ppp->local, o->data);
         }
     }
 }
-/*e: function rejopts */
+/*e: function [[rejopts]] */
 
 
-/*s: function rcv */
+/*s: function [[rcv]] */
 /*
  *  put a messages through the lcp or ipcp state machine.  They are
  *  very similar.
@@ -1465,9 +1465,9 @@ rcv(PPP *ppp, Pstate *p, Block *b)
     qunlock(ppp);
     freeb(b);
 }
-/*e: function rcv */
+/*e: function [[rcv]] */
 
-/*s: function ptimer */
+/*s: function [[ptimer]] */
 /*
  *  timer for protocol state machine
  */
@@ -1500,9 +1500,9 @@ ptimer(PPP *ppp, Pstate *p)
         break;
     }
 }
-/*e: function ptimer */
+/*e: function [[ptimer]] */
 
-/*s: function authtimer */
+/*s: function [[authtimer]] */
 /* paptimer -- pap timer event handler
  *
  * If PAP authorization hasn't come through, resend an authreqst.  If
@@ -1523,10 +1523,10 @@ authtimer(PPP* ppp)
         netlog("ppp: pap timed out--not authorized\n");
     }
 }
-/*e: function authtimer */
+/*e: function [[authtimer]] */
 
 
-/*s: function ppptimer */
+/*s: function [[ppptimer]] */
 /*
  *  timer for ppp
  */
@@ -1560,9 +1560,9 @@ ppptimer(PPP *ppp)
         qunlock(ppp);
     }
 }
-/*e: function ppptimer */
+/*e: function [[ppptimer]] */
 
-/*s: function setdefroute */
+/*s: function [[setdefroute]] */
 static void
 setdefroute(char *net, Ipaddr gate)
 {
@@ -1576,15 +1576,15 @@ setdefroute(char *net, Ipaddr gate)
     fprint(fd, "add 0 0 %I", gate);
     close(fd);
 }
-/*e: function setdefroute */
+/*e: function [[setdefroute]] */
 
-/*s: enum _anon_ (networking/ip/ppp/ppp.c)2 */
+/*s: enum [[_anon_ (networking/ip/ppp/ppp.c)2]] */
 enum
 {
     Mofd=	32,
 };
-/*e: enum _anon_ (networking/ip/ppp/ppp.c)2 */
-/*s: global old */
+/*e: enum [[_anon_ (networking/ip/ppp/ppp.c)2]] */
+/*s: global [[old]] */
 struct
 {
     Lock;
@@ -1593,9 +1593,9 @@ struct
     int	cfd[Mofd];
     int	n;
 } old;
-/*e: global old */
+/*e: global [[old]] */
 
-/*s: function ipopen (networking/ip/ppp/ppp.c) */
+/*s: function [[ipopen]]([[(networking/ip/ppp/ppp.c)]]) */
 static char*
 ipopen(PPP *ppp)
 {
@@ -1673,9 +1673,9 @@ ipopen(PPP *ppp)
 
     return nil;
 }
-/*e: function ipopen (networking/ip/ppp/ppp.c) */
+/*e: function [[ipopen]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: function pppread */
+/*s: function [[pppread]] */
 /* return next input IP packet */
 Block*
 pppread(PPP *ppp)
@@ -1772,9 +1772,9 @@ Again:
     }
     return nil;
 }
-/*e: function pppread */
+/*e: function [[pppread]] */
 
-/*s: function pppwrite */
+/*s: function [[pppwrite]] */
 /* transmit an IP packet */
 int
 pppwrite(PPP *ppp, Block *b)
@@ -1826,9 +1826,9 @@ pppwrite(PPP *ppp, Block *b)
     freeb(b);
     return len;
 }
-/*e: function pppwrite */
+/*e: function [[pppwrite]] */
 
-/*s: function terminate */
+/*s: function [[terminate]] */
 static void
 terminate(PPP *ppp, int kill)
 {
@@ -1845,10 +1845,10 @@ terminate(PPP *ppp, int kill)
     if(kill)
         postnote(PNGROUP, getpid(), "die");
 }
-/*e: function terminate */
+/*e: function [[terminate]] */
 
 typedef struct Iphdr Iphdr;
-/*s: struct Iphdr (networking/ip/ppp/ppp.c) */
+/*s: struct [[Iphdr]]([[(networking/ip/ppp/ppp.c)]]) */
 struct Iphdr
 {
     uchar	vihl;		/* Version and header length */
@@ -1862,9 +1862,9 @@ struct Iphdr
     uchar	src[4];		/* Ip source (uchar ordering unimportant) */
     uchar	dst[4];		/* Ip destination (uchar ordering unimportant) */
 };
-/*e: struct Iphdr (networking/ip/ppp/ppp.c) */
+/*e: struct [[Iphdr]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: function ipinproc */
+/*s: function [[ipinproc]] */
 static void
 ipinproc(PPP *ppp)
 {
@@ -1890,9 +1890,9 @@ ipinproc(PPP *ppp)
             break;
     }
 }
-/*e: function ipinproc */
+/*e: function [[ipinproc]] */
 
-/*s: function catchdie */
+/*s: function [[catchdie]] */
 static void
 catchdie(void*, char *msg)
 {
@@ -1901,9 +1901,9 @@ catchdie(void*, char *msg)
     else
         noted(NDFLT);
 }
-/*e: function catchdie */
+/*e: function [[catchdie]] */
 
-/*s: function hexdump */
+/*s: function [[hexdump]] */
 static void
 hexdump(uchar *a, int na)
 {
@@ -1927,9 +1927,9 @@ hexdump(uchar *a, int na)
         write(2, buf, strlen(buf));
     }
 }
-/*e: function hexdump */
+/*e: function [[hexdump]] */
 
-/*s: function mediainproc */
+/*s: function [[mediainproc]] */
 static void
 mediainproc(PPP *ppp)
 {
@@ -1987,9 +1987,9 @@ mediainproc(PPP *ppp)
     syslog(0, LOG, "\t\tvjin=%lud vjout=%lud vjfail=%lud", 
         ppp->stat.vjin, ppp->stat.vjout, ppp->stat.vjfail);
 }
-/*e: function mediainproc */
+/*e: function [[mediainproc]] */
 
-/*s: function getlqm */
+/*s: function [[getlqm]] */
 /*
  *  link quality management
  */
@@ -2019,9 +2019,9 @@ getlqm(PPP *ppp, Block *b)
         putlqm(ppp);
 
 }
-/*e: function getlqm */
+/*e: function [[getlqm]] */
 
-/*s: function putlqm */
+/*s: function [[putlqm]] */
 static void
 putlqm(PPP *ppp)
 {
@@ -2054,9 +2054,9 @@ putlqm(PPP *ppp)
     freeb(b);
     ppp->out.reports++;
 }
-/*e: function putlqm */
+/*e: function [[putlqm]] */
 
-/*s: function chapinit */
+/*s: function [[chapinit]] */
 /*
  * init challenge response dialog
  */
@@ -2101,9 +2101,9 @@ chapinit(PPP *ppp)
 
     c->state = Cchalsent;
 }
-/*e: function chapinit */
+/*e: function [[chapinit]] */
 
-/*s: enum _anon_ (networking/ip/ppp/ppp.c)3 */
+/*s: enum [[_anon_ (networking/ip/ppp/ppp.c)3]] */
 /*
  * BUG factotum should do this
  */
@@ -2112,9 +2112,9 @@ enum {
     MSresplen = 24,
     MSchallen = 8,
 };
-/*e: enum _anon_ (networking/ip/ppp/ppp.c)3 */
+/*e: enum [[_anon_ (networking/ip/ppp/ppp.c)3]] */
 
-/*s: function desencrypt */
+/*s: function [[desencrypt]] */
 void
 desencrypt(uchar data[8], uchar key[7])
 {
@@ -2123,9 +2123,9 @@ desencrypt(uchar data[8], uchar key[7])
     key_setup(key, ekey);
     block_cipher(ekey, data, 0);
 }
-/*e: function desencrypt */
+/*e: function [[desencrypt]] */
 
-/*s: function nthash */
+/*s: function [[nthash]] */
 void
 nthash(uchar hash[MShashlen], char *passwd)
 {
@@ -2139,9 +2139,9 @@ nthash(uchar hash[MShashlen], char *passwd)
     memset(hash, 0, 16);
     md4(buf, i, hash, 0);
 }
-/*e: function nthash */
+/*e: function [[nthash]] */
 
-/*s: function mschalresp */
+/*s: function [[mschalresp]] */
 void
 mschalresp(uchar resp[MSresplen], uchar hash[MShashlen], uchar chal[MSchallen])
 {
@@ -2156,14 +2156,14 @@ mschalresp(uchar resp[MSresplen], uchar hash[MShashlen], uchar chal[MSchallen])
         desencrypt(resp+i*MSchallen, buf+i*7);
     }
 }
-/*e: function mschalresp */
+/*e: function [[mschalresp]] */
 
 /*
  *  challenge response dialog
  */
 extern	int	_asrdresp(int, uchar*, int);
 
-/*s: function getchap */
+/*s: function [[getchap]] */
 static void
 getchap(PPP *ppp, Block *b)
 {
@@ -2342,9 +2342,9 @@ getchap(PPP *ppp, Block *b)
     qunlock(ppp);
     freeb(b);
 }
-/*e: function getchap */
+/*e: function [[getchap]] */
 
-/*s: function putpaprequest */
+/*s: function [[putpaprequest]] */
 static void
 putpaprequest(PPP *ppp)
 {
@@ -2375,18 +2375,18 @@ putpaprequest(PPP *ppp)
     putframe(ppp, Ppasswd, b);
     freeb(b);
 }
-/*e: function putpaprequest */
+/*e: function [[putpaprequest]] */
 
-/*s: function papinit */
+/*s: function [[papinit]] */
 static void
 papinit(PPP *ppp)
 {
     ppp->chap->id = 0;
     putpaprequest(ppp);
 }
-/*e: function papinit */
+/*e: function [[papinit]] */
 
-/*s: function getpap */
+/*s: function [[getpap]] */
 static void
 getpap(PPP *ppp, Block *b)
 {
@@ -2431,9 +2431,9 @@ getpap(PPP *ppp, Block *b)
     qunlock(ppp);
     freeb(b);
 }
-/*e: function getpap */
+/*e: function [[getpap]] */
 
-/*s: function printopts */
+/*s: function [[printopts]] */
 static void
 printopts(Pstate *p, Block *b, int send)
 {
@@ -2579,9 +2579,9 @@ printopts(Pstate *p, Block *b, int send)
         }
     }
 }
-/*e: function printopts */
+/*e: function [[printopts]] */
 
-/*s: function sendtermreq */
+/*s: function [[sendtermreq]] */
 static void
 sendtermreq(PPP *ppp, Pstate *p)
 {
@@ -2595,9 +2595,9 @@ sendtermreq(PPP *ppp, Pstate *p)
     freeb(b);
     newstate(ppp, p, Sclosing);
 }
-/*e: function sendtermreq */
+/*e: function [[sendtermreq]] */
 
-/*s: function sendechoreq */
+/*s: function [[sendechoreq]] */
 static void
 sendechoreq(PPP *ppp, Pstate *p)
 {
@@ -2610,9 +2610,9 @@ sendechoreq(PPP *ppp, Pstate *p)
     putframe(ppp, p->proto, b);
     freeb(b);
 }
-/*e: function sendechoreq */
+/*e: function [[sendechoreq]] */
 
-/*s: enum _anon_ (networking/ip/ppp/ppp.c)4 */
+/*s: enum [[_anon_ (networking/ip/ppp/ppp.c)4]] */
 enum
 {
     CtrlD	= 0x4,
@@ -2621,13 +2621,13 @@ enum
     Cr	= 13,
     View	= 0x80,
 };
-/*e: enum _anon_ (networking/ip/ppp/ppp.c)4 */
+/*e: enum [[_anon_ (networking/ip/ppp/ppp.c)4]] */
 
-/*s: global conndone */
+/*s: global [[conndone]] */
 int conndone;
-/*e: global conndone */
+/*e: global [[conndone]] */
 
-/*s: function xfer */
+/*s: function [[xfer]] */
 static void
 xfer(int fd)
 {
@@ -2647,9 +2647,9 @@ xfer(int fd)
     }
     close(fd);
 }
-/*e: function xfer */
+/*e: function [[xfer]] */
 
-/*s: function readcr */
+/*s: function [[readcr]] */
 static int
 readcr(int fd, char *buf, int nbuf)
 {
@@ -2668,9 +2668,9 @@ readcr(int fd, char *buf, int nbuf)
     }
     return n;
 }
-/*e: function readcr */
+/*e: function [[readcr]] */
 
-/*s: function connect (networking/ip/ppp/ppp.c) */
+/*s: function [[connect]]([[(networking/ip/ppp/ppp.c)]]) */
 static void
 connect(int fd, int cfd)
 {
@@ -2793,13 +2793,13 @@ connect(int fd, int cfd)
         }
     }
 }
-/*e: function connect (networking/ip/ppp/ppp.c) */
+/*e: function [[connect]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: global interactive */
+/*s: global [[interactive]] */
 int interactive;
-/*e: global interactive */
+/*e: global [[interactive]] */
 
-/*s: function usage (networking/ip/ppp/ppp.c) */
+/*s: function [[usage]]([[(networking/ip/ppp/ppp.c)]]) */
 void
 usage(void)
 {
@@ -2808,9 +2808,9 @@ usage(void)
         "[local-addr [remote-addr]]\n");
     exits("usage");
 }
-/*e: function usage (networking/ip/ppp/ppp.c) */
+/*e: function [[usage]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: function main (networking/ip/ppp/ppp.c) */
+/*s: function [[main]]([[(networking/ip/ppp/ppp.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -2978,9 +2978,9 @@ main(int argc, char **argv)
 
     exits(0);
 }
-/*e: function main (networking/ip/ppp/ppp.c) */
+/*e: function [[main]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: function netlog (networking/ip/ppp/ppp.c) */
+/*s: function [[netlog]]([[(networking/ip/ppp/ppp.c)]]) */
 void
 netlog(char *fmt, ...)
 {
@@ -3002,9 +3002,9 @@ netlog(char *fmt, ...)
     free(m);
     va_end(arg);
 }
-/*e: function netlog (networking/ip/ppp/ppp.c) */
+/*e: function [[netlog]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: function validv4 */
+/*s: function [[validv4]] */
 /*
  *  return non-zero if this is a valid v4 address
  */
@@ -3013,17 +3013,17 @@ validv4(Ipaddr addr)
 {
     return memcmp(addr, v4prefix, IPv4off) == 0 && memcmp(addr, v4prefix, IPaddrlen) != 0;
 }
-/*e: function validv4 */
+/*e: function [[validv4]] */
 
-/*s: function invalidate (networking/ip/ppp/ppp.c) */
+/*s: function [[invalidate]]([[(networking/ip/ppp/ppp.c)]]) */
 static void
 invalidate(Ipaddr addr)
 {
     ipmove(addr, IPnoaddr);
 }
-/*e: function invalidate (networking/ip/ppp/ppp.c) */
+/*e: function [[invalidate]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: function nipifcs (networking/ip/ppp/ppp.c) */
+/*s: function [[nipifcs]]([[(networking/ip/ppp/ppp.c)]]) */
 /*
  *  return number of networks
  */
@@ -3042,9 +3042,9 @@ nipifcs(char *net)
             n++;
     return n;
 }
-/*e: function nipifcs (networking/ip/ppp/ppp.c) */
+/*e: function [[nipifcs]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: function putndb (networking/ip/ppp/ppp.c) */
+/*s: function [[putndb]]([[(networking/ip/ppp/ppp.c)]]) */
 /*
  *   make an ndb entry and put it into /net/ndb for the servers to see
  */
@@ -3083,9 +3083,9 @@ putndb(PPP *ppp, char *net)
     write(fd, "refresh", 7);
     close(fd);
 }
-/*e: function putndb (networking/ip/ppp/ppp.c) */
+/*e: function [[putndb]]([[(networking/ip/ppp/ppp.c)]]) */
 
-/*s: function getauth */
+/*s: function [[getauth]] */
 static void
 getauth(PPP *ppp)
 {
@@ -3100,5 +3100,5 @@ getauth(PPP *ppp)
         strcpy(ppp->secret, up->passwd);
     }		
 }
-/*e: function getauth */
+/*e: function [[getauth]] */
 /*e: networking/ip/ppp/ppp.c */

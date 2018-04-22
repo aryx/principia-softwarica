@@ -6,7 +6,7 @@
 #include "ppp.h"
 #include "thwack.h"
 
-/*s: enum _anon_ (networking/ip/ppp/unthwack.c) */
+/*s: enum [[_anon_ (networking/ip/ppp/unthwack.c)]] */
 enum
 {
     DMaxFastLen	= 7,
@@ -14,9 +14,9 @@ enum
     DBigLenBits	= 6,
     DBigLenBase	= 1		/* starting items to encode for big lens */
 };
-/*e: enum _anon_ (networking/ip/ppp/unthwack.c) */
+/*e: enum [[_anon_ (networking/ip/ppp/unthwack.c)]] */
 
-/*s: global lenval */
+/*s: global [[lenval]] */
 static uchar lenval[1 << (DBigLenBits - 1)] =
 {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -27,24 +27,24 @@ static uchar lenval[1 << (DBigLenBits - 1)] =
     255,
     255
 };
-/*e: global lenval */
+/*e: global [[lenval]] */
 
-/*s: global lenbits */
+/*s: global [[lenbits]] */
 static uchar lenbits[] =
 {
     0, 0, 0,
     2, 3, 5, 5,
 };
-/*e: global lenbits */
+/*e: global [[lenbits]] */
 
-/*s: global offbits */
+/*s: global [[offbits]] */
 static uchar offbits[16] =
 {
     5, 5, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 12, 13
 };
-/*e: global offbits */
+/*e: global [[offbits]] */
 
-/*s: global offbase */
+/*s: global [[offbase]] */
 static ushort offbase[16] =
 {
     0, 0x20,
@@ -57,9 +57,9 @@ static ushort offbase[16] =
     0x1000,
     0x2000
 };
-/*e: global offbase */
+/*e: global [[offbase]] */
 
-/*s: function unthwackinit */
+/*s: function [[unthwackinit]] */
 void
 unthwackinit(Unthwack *ut)
 {
@@ -69,9 +69,9 @@ unthwackinit(Unthwack *ut)
     for(i = 0; i < DWinBlocks; i++)
         ut->blocks[i].data = ut->data[i];
 }
-/*e: function unthwackinit */
+/*e: function [[unthwackinit]] */
 
-/*s: function unthwackstate */
+/*s: function [[unthwackstate]] */
 ulong
 unthwackstate(Unthwack *ut, uchar *mask)
 {
@@ -100,9 +100,9 @@ unthwackstate(Unthwack *ut, uchar *mask)
     *mask = m;
     return seq;
 }
-/*e: function unthwackstate */
+/*e: function [[unthwackstate]] */
 
-/*s: function unthwackinsert */
+/*s: function [[unthwackinsert]] */
 /*
  * insert this block in it's correct sequence number order.
  * replace the oldest block, which is always pointed to by ut->slot.
@@ -139,9 +139,9 @@ unthwackinsert(Unthwack *ut, int len, ulong seq)
 
     return tslot;
 }
-/*e: function unthwackinsert */
+/*e: function [[unthwackinsert]] */
 
-/*s: function unthwackadd */
+/*s: function [[unthwackadd]] */
 int
 unthwackadd(Unthwack *ut, uchar *src, int nsrc, ulong seq)
 {
@@ -158,9 +158,9 @@ unthwackadd(Unthwack *ut, uchar *src, int nsrc, ulong seq)
 
     return nsrc;
 }
-/*e: function unthwackadd */
+/*e: function [[unthwackadd]] */
 
-/*s: function unthwack */
+/*s: function [[unthwack]] */
 int
 unthwack(Unthwack *ut, uchar *dst, int ndst, uchar *src, int nsrc, ulong seq)
 {
@@ -343,5 +343,5 @@ unthwack(Unthwack *ut, uchar *dst, int ndst, uchar *src, int nsrc, ulong seq)
 
     return len;
 }
-/*e: function unthwack */
+/*e: function [[unthwack]] */
 /*e: networking/ip/ppp/unthwack.c */

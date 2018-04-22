@@ -2,7 +2,7 @@
 typedef struct Conf Conf;
 typedef struct Ctl Ctl;
 
-/*s: struct Conf */
+/*s: struct [[Conf]] */
 struct Conf
 {
     /* locally generated */
@@ -74,15 +74,15 @@ struct Conf
     ulong	validlt;	/* valid lifetime (seconds) */
     ulong	preflt;		/* preferred lifetime (seconds) */
 };
-/*e: struct Conf */
+/*e: struct [[Conf]] */
 
-/*s: struct Ctl */
+/*s: struct [[Ctl]] */
 struct Ctl
 {
     Ctl	*next;
     char	*ctl;
 };
-/*e: struct Ctl */
+/*e: struct [[Ctl]] */
 
 extern Ctl *firstctl, **ctll;
 
@@ -162,7 +162,7 @@ typedef struct Prefixopt Prefixopt;
 typedef struct Routeradv Routeradv;
 typedef struct Routersol Routersol;
 
-/*s: enum _anon_ (networking/ip/ipconfig/ipconfig.h) */
+/*s: enum [[_anon_ (networking/ip/ipconfig/ipconfig.h)]] */
 enum {
     IsRouter 	= 1,
     IsHostRecv	= 2,
@@ -190,33 +190,33 @@ enum {
 
     IP_IN_IP	= 41,
 };
-/*e: enum _anon_ (networking/ip/ipconfig/ipconfig.h) */
+/*e: enum [[_anon_ (networking/ip/ipconfig/ipconfig.h)]] */
 
-/*s: enum _anon_ (networking/ip/ipconfig/ipconfig.h)2 */
+/*s: enum [[_anon_ (networking/ip/ipconfig/ipconfig.h)2]] */
 enum {
     MFMASK = 1 << 7,
     OCMASK = 1 << 6,
     OLMASK = 1 << 7,
     AFMASK = 1 << 6,
 };
-/*e: enum _anon_ (networking/ip/ipconfig/ipconfig.h)2 */
+/*e: enum [[_anon_ (networking/ip/ipconfig/ipconfig.h)2]] */
 
-/*s: enum _anon_ (networking/ip/ipconfig/ipconfig.h)3 */
+/*s: enum [[_anon_ (networking/ip/ipconfig/ipconfig.h)3]] */
 enum {
     MAXTTL		= 255,
     D64HLEN		= IPV6HDR_LEN - IPV4HDR_LEN,
     IP_MAX		= 32*1024,
 };
-/*e: enum _anon_ (networking/ip/ipconfig/ipconfig.h)3 */
+/*e: enum [[_anon_ (networking/ip/ipconfig/ipconfig.h)3]] */
 
-/*s: struct Headers */
+/*s: struct [[Headers]] */
 struct Headers {
     uchar	dst[IPaddrlen];
     uchar	src[IPaddrlen];
 };
-/*e: struct Headers */
+/*e: struct [[Headers]] */
 
-/*s: struct Routersol */
+/*s: struct [[Routersol]] */
 struct Routersol {
     uchar	vcf[4];		/* version:4, traffic class:8, flow label:20 */
     uchar	ploadlen[2];	/* payload length: packet length - 40 */
@@ -229,9 +229,9 @@ struct Routersol {
     uchar	cksum[2];
     uchar	res[4];
 };
-/*e: struct Routersol */
+/*e: struct [[Routersol]] */
 
-/*s: struct Routeradv */
+/*s: struct [[Routeradv]] */
 struct Routeradv {
     uchar	vcf[4];		/* version:4, traffic class:8, flow label:20 */
     uchar	ploadlen[2];	/* payload length: packet length - 40 */
@@ -248,17 +248,17 @@ struct Routeradv {
     uchar	rchbltime[4];
     uchar	rxmtimer[4];
 };
-/*e: struct Routeradv */
+/*e: struct [[Routeradv]] */
 
-/*s: struct Lladdropt */
+/*s: struct [[Lladdropt]] */
 struct Lladdropt {
     uchar	type;
     uchar	len;
     uchar	lladdr[MAClen];
 };
-/*e: struct Lladdropt */
+/*e: struct [[Lladdropt]] */
 
-/*s: struct Prefixopt */
+/*s: struct [[Prefixopt]] */
 struct Prefixopt {
     uchar	type;
     uchar	len;
@@ -269,16 +269,16 @@ struct Prefixopt {
     uchar	reserv[4];
     uchar	pref[IPaddrlen];
 };
-/*e: struct Prefixopt */
+/*e: struct [[Prefixopt]] */
 
-/*s: struct Mtuopt */
+/*s: struct [[Mtuopt]] */
 struct Mtuopt {
     uchar	type;
     uchar	len;
     uchar	reserv[2];
     uchar	mtu[4];
 };
-/*e: struct Mtuopt */
+/*e: struct [[Mtuopt]] */
 
 void	ea2lla(uchar *lla, uchar *ea);
 void	ipv62smcast(uchar *smcast, uchar *a);

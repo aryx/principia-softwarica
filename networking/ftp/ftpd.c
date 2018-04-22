@@ -9,7 +9,7 @@
 
 #include "glob.h"
 
-/*s: enum _anon_ (networking/ip/ftpd.c) */
+/*s: enum [[_anon_ (networking/ip/ftpd.c)]] */
 enum
 {
     /* telnet control character */
@@ -38,7 +38,7 @@ enum
     Maxerr=		128,
     Maxpath=	512,
 };
-/*e: enum _anon_ (networking/ip/ftpd.c) */
+/*e: enum [[_anon_ (networking/ip/ftpd.c)]] */
 
 int	abortcmd(char*);
 int	appendcmd(char*);
@@ -78,16 +78,16 @@ int	sodoff(void);
 int	accessok(char*);
 
 typedef struct Cmd	Cmd;
-/*s: struct Cmd */
+/*s: struct [[Cmd]] */
 struct Cmd
 {
     char	*name;
     int	(*f)(char*);
     int	needlogin;
 };
-/*e: struct Cmd */
+/*e: struct [[Cmd]] */
 
-/*s: global cmdtab */
+/*s: global [[cmdtab]] */
 Cmd cmdtab[] =
 {
     { "abor",	abortcmd,	0, },
@@ -122,77 +122,77 @@ Cmd cmdtab[] =
     { "user",	usercmd,	0, },
     { 0, 0, 0 },
 };
-/*e: global cmdtab */
+/*e: global [[cmdtab]] */
 
-/*s: constant NONENS */
+/*s: constant [[NONENS]] */
 #define NONENS "/lib/namespace.ftp"	/* default ns for none */
-/*e: constant NONENS */
+/*e: constant [[NONENS]] */
 
-/*s: global user (networking/ip/ftpd.c) */
+/*s: global [[user]]([[(networking/ip/ftpd.c)]]) */
 char	user[Maxpath];		/* logged in user */
-/*e: global user (networking/ip/ftpd.c) */
-/*s: global curdir */
+/*e: global [[user]]([[(networking/ip/ftpd.c)]]) */
+/*s: global [[curdir]] */
 char	curdir[Maxpath];	/* current directory path */
-/*e: global curdir */
-/*s: global ch */
+/*e: global [[curdir]] */
+/*s: global [[ch]] */
 Chalstate	*ch;
-/*e: global ch */
-/*s: global loggedin */
+/*e: global [[ch]] */
+/*s: global [[loggedin]] */
 int	loggedin;
-/*e: global loggedin */
-/*s: global type */
+/*e: global [[loggedin]] */
+/*s: global [[type]] */
 int	type;			/* transmission type */
-/*e: global type */
-/*s: global mode */
+/*e: global [[type]] */
+/*s: global [[mode]] */
 int	mode;			/* transmission mode */
-/*e: global mode */
-/*s: global structure */
+/*e: global [[mode]] */
+/*s: global [[structure]] */
 int	structure;		/* file structure */
-/*e: global structure */
-/*s: global data */
+/*e: global [[structure]] */
+/*s: global [[data]] */
 char	data[64];		/* data address */
-/*e: global data */
-/*s: global pid */
+/*e: global [[data]] */
+/*s: global [[pid]] */
 int	pid;			/* transfer process */
-/*e: global pid */
-/*s: global encryption */
+/*e: global [[pid]] */
+/*s: global [[encryption]] */
 int	encryption;		/* encryption state */
-/*e: global encryption */
+/*e: global [[encryption]] */
 int	isnone, anon_ok, anon_only, anon_everybody;
-/*s: global cputype */
+/*s: global [[cputype]] */
 char	cputype[Maxpath];	/* the environment variable of the same name */
-/*e: global cputype */
-/*s: global bindir */
+/*e: global [[cputype]] */
+/*s: global [[bindir]] */
 char	bindir[Maxpath];	/* bin directory for this architecture */
-/*e: global bindir */
-/*s: global mailaddr */
+/*e: global [[bindir]] */
+/*s: global [[mailaddr]] */
 char	mailaddr[Maxpath];
-/*e: global mailaddr */
-/*s: global namespace */
+/*e: global [[mailaddr]] */
+/*s: global [[namespace]] */
 char	*namespace = NONENS;
-/*e: global namespace */
-/*s: global debug (networking/ip/ftpd.c) */
+/*e: global [[namespace]] */
+/*s: global [[debug]]([[(networking/ip/ftpd.c)]]) */
 int	debug;
-/*e: global debug (networking/ip/ftpd.c) */
-/*s: global nci */
+/*e: global [[debug]]([[(networking/ip/ftpd.c)]]) */
+/*s: global [[nci]] */
 NetConnInfo	*nci;
-/*e: global nci */
-/*s: global createperm */
+/*e: global [[nci]] */
+/*s: global [[createperm]] */
 int	createperm = 0660;
-/*e: global createperm */
-/*s: global isnoworld */
+/*e: global [[createperm]] */
+/*s: global [[isnoworld]] */
 int	isnoworld;
-/*e: global isnoworld */
-/*s: global offset */
+/*e: global [[isnoworld]] */
+/*s: global [[offset]] */
 vlong	offset;			/* from restart command */
-/*e: global offset */
+/*e: global [[offset]] */
 
-/*s: global id */
+/*s: global [[id]] */
 ulong id;
-/*e: global id */
+/*e: global [[id]] */
 
 typedef struct Passive Passive;
-/*s: global passive */
+/*s: global [[passive]] */
 struct Passive
 {
     int	inuse;
@@ -201,13 +201,13 @@ struct Passive
     int	port;
     uchar	ipaddr[IPaddrlen];
 } passive;
-/*e: global passive */
+/*e: global [[passive]] */
 
-/*s: constant FTPLOG */
+/*s: constant [[FTPLOG]] */
 #define FTPLOG "ftp"
-/*e: constant FTPLOG */
+/*e: constant [[FTPLOG]] */
 
-/*s: function logit (networking/ip/ftpd.c) */
+/*s: function [[logit]]([[(networking/ip/ftpd.c)]]) */
 void
 logit(char *fmt, ...)
 {
@@ -222,9 +222,9 @@ logit(char *fmt, ...)
     syslog(0, FTPLOG, "%s.%s %s", nci->rsys, nci->rserv, buf);
     werrstr(errstr, sizeof errstr);
 }
-/*e: function logit (networking/ip/ftpd.c) */
+/*e: function [[logit]]([[(networking/ip/ftpd.c)]]) */
 
-/*s: function usage (networking/ip/ftpd.c) */
+/*s: function [[usage]]([[(networking/ip/ftpd.c)]]) */
 static void
 usage(void)
 {
@@ -232,9 +232,9 @@ usage(void)
     fprint(2, "usage: %s [-aAde] [-n nsfile]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ip/ftpd.c) */
+/*e: function [[usage]]([[(networking/ip/ftpd.c)]]) */
 
-/*s: function main (networking/ip/ftpd.c) */
+/*s: function [[main]]([[(networking/ip/ftpd.c)]]) */
 /*
  *  read commands from the control stream and dispatch
  */
@@ -381,9 +381,9 @@ main(int argc, char **argv)
     if(pid)
         postnote(PNPROC, pid, "kill");
 }
-/*e: function main (networking/ip/ftpd.c) */
+/*e: function [[main]]([[(networking/ip/ftpd.c)]]) */
 
-/*s: function reply (networking/ip/ftpd.c) */
+/*s: function [[reply]]([[(networking/ip/ftpd.c)]]) */
 /*
  *  reply to a command
  */
@@ -405,17 +405,17 @@ reply(char *fmt, ...)
     write(1, buf, s - buf);
     return 0;
 }
-/*e: function reply (networking/ip/ftpd.c) */
+/*e: function [[reply]]([[(networking/ip/ftpd.c)]]) */
 
-/*s: function sodoff */
+/*s: function [[sodoff]] */
 int
 sodoff(void)
 {
     return reply("530 Sod off, service requires login");
 }
-/*e: function sodoff */
+/*e: function [[sodoff]] */
 
-/*s: function asproc */
+/*s: function [[asproc]] */
 /*
  *  run a command in a separate process
  */
@@ -444,9 +444,9 @@ asproc(void (*f)(char*, int), char *arg, int arg2)
     }
     return 0;
 }
-/*e: function asproc */
+/*e: function [[asproc]] */
 
-/*s: function transfer */
+/*s: function [[transfer]] */
 /*
  * run a command to filter a tail
  */
@@ -543,10 +543,10 @@ transfer(char *cmd, char *a1, char *a2, char *a3, int image)
     reply("226 Transfer complete");
     return bytes;
 }
-/*e: function transfer */
+/*e: function [[transfer]] */
 
 
-/*s: function nopcmd */
+/*s: function [[nopcmd]] */
 /*
  *  just reply OK
  */
@@ -557,9 +557,9 @@ nopcmd(char *arg)
     reply("510 Plan 9 FTP daemon still alive");
     return 0;
 }
-/*e: function nopcmd */
+/*e: function [[nopcmd]] */
 
-/*s: function loginuser */
+/*s: function [[loginuser]] */
 /*
  *  login as user
  */
@@ -582,9 +582,9 @@ loginuser(char *user, char *nsfile, int gotoslash)
         reply("230- If you have problems, send mail to 'postmaster'.");
     return reply("230 Logged in");
 }
-/*e: function loginuser */
+/*e: function [[loginuser]] */
 
-/*s: function slowdown */
+/*s: function [[slowdown]] */
 static void
 slowdown(void)
 {
@@ -597,9 +597,9 @@ slowdown(void)
     } else
         pause = 1000;
 }
-/*e: function slowdown */
+/*e: function [[slowdown]] */
 
-/*s: function usercmd */
+/*s: function [[usercmd]] */
 /*
  *  get a user id, reply with a challenge.  The users 'anonymous'
  *  and 'ftp' are equivalent to 'none'.  The user 'none' requires
@@ -655,9 +655,9 @@ usercmd(char *name)
         return reply("421 %r");
     return reply("331 encrypt challenge, %s, as a password", ch->chal);
 }
-/*e: function usercmd */
+/*e: function [[usercmd]] */
 
-/*s: function passcmd */
+/*s: function [[passcmd]] */
 /*
  *  get a password, set up user if it works.
  */
@@ -708,9 +708,9 @@ passcmd(char *response)
             return loginuser(user, "/lib/namespace", 0);
     }
 }
-/*e: function passcmd */
+/*e: function [[passcmd]] */
 
-/*s: function pwdcmd */
+/*s: function [[pwdcmd]] */
 /*
  *  print working directory
  */
@@ -721,9 +721,9 @@ pwdcmd(char *arg)
         return reply("550 Pwd takes no argument");
     return reply("257 \"%s\" is the current directory", curdir);
 }
-/*e: function pwdcmd */
+/*e: function [[pwdcmd]] */
 
-/*s: function cwdcmd */
+/*s: function [[cwdcmd]] */
 /*
  *  chdir
  */
@@ -754,9 +754,9 @@ cwdcmd(char *dir)
     strcpy(curdir, rp);
     return reply("250 directory changed to %s", curdir);
 }
-/*e: function cwdcmd */
+/*e: function [[cwdcmd]] */
 
-/*s: function cdupcmd */
+/*s: function [[cdupcmd]] */
 /*
  *  chdir ..
  */
@@ -766,9 +766,9 @@ cdupcmd(char *dp)
     USED(dp);
     return cwdcmd("..");
 }
-/*e: function cdupcmd */
+/*e: function [[cdupcmd]] */
 
-/*s: function quitcmd */
+/*s: function [[quitcmd]] */
 int
 quitcmd(char *arg)
 {
@@ -778,9 +778,9 @@ quitcmd(char *arg)
         postnote(PNPROC, pid, "kill");
     return -1;
 }
-/*e: function quitcmd */
+/*e: function [[quitcmd]] */
 
-/*s: function typecmd */
+/*s: function [[typecmd]] */
 int
 typecmd(char *arg)
 {
@@ -812,9 +812,9 @@ typecmd(char *arg)
     }
     return reply("200 Type %s", type==Tascii ? "Ascii" : "Image");
 }
-/*e: function typecmd */
+/*e: function [[typecmd]] */
 
-/*s: function modecmd */
+/*s: function [[modecmd]] */
 int
 modecmd(char *arg)
 {
@@ -832,9 +832,9 @@ modecmd(char *arg)
     }
     return reply("200 Stream mode");
 }
-/*e: function modecmd */
+/*e: function [[modecmd]] */
 
-/*s: function structcmd */
+/*s: function [[structcmd]] */
 int
 structcmd(char *arg)
 {
@@ -851,9 +851,9 @@ structcmd(char *arg)
     }
     return reply("200 File structure");
 }
-/*e: function structcmd */
+/*e: function [[structcmd]] */
 
-/*s: function portcmd */
+/*s: function [[portcmd]] */
 int
 portcmd(char *arg)
 {
@@ -869,9 +869,9 @@ portcmd(char *arg)
         field[3], atoi(field[4])*256 + atoi(field[5]));
     return reply("200 Data port is %s", data);
 }
-/*e: function portcmd */
+/*e: function [[portcmd]] */
 
-/*s: function mountnet */
+/*s: function [[mountnet]] */
 int
 mountnet(void)
 {
@@ -892,18 +892,18 @@ mountnet(void)
 
     return rv;
 }
-/*e: function mountnet */
+/*e: function [[mountnet]] */
 
-/*s: function unmountnet */
+/*s: function [[unmountnet]] */
 void
 unmountnet(void)
 {
     unmount(0, "/net");
     unmount("#/", "/");
 }
-/*e: function unmountnet */
+/*e: function [[unmountnet]] */
 
-/*s: function pasvcmd */
+/*s: function [[pasvcmd]] */
 int
 pasvcmd(char *arg)
 {
@@ -944,23 +944,23 @@ pasvcmd(char *arg)
         p->ipaddr[IPv4off+0], p->ipaddr[IPv4off+1], p->ipaddr[IPv4off+2], p->ipaddr[IPv4off+3],
         p->port>>8, p->port&0xff);
 }
-/*e: function pasvcmd */
+/*e: function [[pasvcmd]] */
 
-/*s: enum _anon_ (networking/ip/ftpd.c)2 */
+/*s: enum [[_anon_ (networking/ip/ftpd.c)2]] */
 enum
 {
     Narg=32,
 };
-/*e: enum _anon_ (networking/ip/ftpd.c)2 */
+/*e: enum [[_anon_ (networking/ip/ftpd.c)2]] */
 int Cflag, rflag, tflag, Rflag;
-/*s: global maxnamelen */
+/*s: global [[maxnamelen]] */
 int maxnamelen;
-/*e: global maxnamelen */
-/*s: global col */
+/*e: global [[maxnamelen]] */
+/*s: global [[col]] */
 int col;
-/*e: global col */
+/*e: global [[col]] */
 
-/*s: function mode2asc */
+/*s: function [[mode2asc]] */
 char*
 mode2asc(int m)
 {
@@ -985,8 +985,8 @@ mode2asc(int m)
     }
     return asc;
 }
-/*e: function mode2asc */
-/*s: function listfile */
+/*e: function [[mode2asc]] */
+/*s: function [[listfile]] */
 void
 listfile(Biobufhdr *b, char *name, int lflag, char *dname)
 {
@@ -1045,8 +1045,8 @@ listfile(Biobufhdr *b, char *name, int lflag, char *dname)
     }
     free(d);
 }
-/*e: function listfile */
-/*s: function dircomp */
+/*e: function [[listfile]] */
+/*s: function [[dircomp]] */
 int
 dircomp(void *va, void *vb)
 {
@@ -1062,8 +1062,8 @@ dircomp(void *va, void *vb)
         rv = strcmp(a->name, b->name);
     return (rflag?-1:1)*rv;
 }
-/*e: function dircomp */
-/*s: function listdir */
+/*e: function [[dircomp]] */
+/*s: function [[listdir]] */
 void
 listdir(char *name, Biobufhdr *b, int lflag, int *printname, Globlist *gl)
 {
@@ -1118,8 +1118,8 @@ listdir(char *name, Biobufhdr *b, int lflag, int *printname, Globlist *gl)
     }
     free(p);
 }
-/*e: function listdir */
-/*s: function list */
+/*e: function [[listdir]] */
+/*s: function [[list]] */
 void
 list(char *arg, int lflag)
 {
@@ -1226,23 +1226,23 @@ list(char *arg, int lflag)
 
     reply("226 Transfer complete (list %s)", arg);
 }
-/*e: function list */
-/*s: function namelistcmd */
+/*e: function [[list]] */
+/*s: function [[namelistcmd]] */
 int
 namelistcmd(char *arg)
 {
     return asproc(list, arg, 0);
 }
-/*e: function namelistcmd */
-/*s: function listcmd */
+/*e: function [[namelistcmd]] */
+/*s: function [[listcmd]] */
 int
 listcmd(char *arg)
 {
     return asproc(list, arg, 1);
 }
-/*e: function listcmd */
+/*e: function [[listcmd]] */
 
-/*s: function oksiteuser */
+/*s: function [[oksiteuser]] */
 /*
  * fuse compatability
  */
@@ -1264,9 +1264,9 @@ oksiteuser(void)
     close(fd);
     return n > 0;
 }
-/*e: function oksiteuser */
+/*e: function [[oksiteuser]] */
 
-/*s: function sitecmd */
+/*s: function [[sitecmd]] */
 int
 sitecmd(char *arg)
 {
@@ -1292,9 +1292,9 @@ sitecmd(char *arg)
         return reply("550 Permission denied %r");
     return reply("200 very well, then");
  }
-/*e: function sitecmd */
+/*e: function [[sitecmd]] */
 
-/*s: function sizecmd */
+/*s: function [[sizecmd]] */
 /*
  *  return the size of the file
  */
@@ -1314,9 +1314,9 @@ sizecmd(char *arg)
     free(d);
     return rv;
 }
-/*e: function sizecmd */
+/*e: function [[sizecmd]] */
 
-/*s: function mdtmcmd */
+/*s: function [[mdtmcmd]] */
 /*
  *  return the modify time of the file
  */
@@ -1341,9 +1341,9 @@ mdtmcmd(char *arg)
     free(d);
     return rv;
 }
-/*e: function mdtmcmd */
+/*e: function [[mdtmcmd]] */
 
-/*s: function restartcmd */
+/*s: function [[restartcmd]] */
 /*
  *  set an offset to start reading a file from
  *  only lasts for one command
@@ -1361,9 +1361,9 @@ restartcmd(char *arg)
 
     return reply("350 Restarting at %lld. Send STORE or RETRIEVE", offset);
 }
-/*e: function restartcmd */
+/*e: function [[restartcmd]] */
 
-/*s: function crlfwrite */
+/*s: function [[crlfwrite]] */
 /*
  *  send a file to the user
  */
@@ -1383,8 +1383,8 @@ crlfwrite(int fd, char *p, int n)
     else
         return -1;
 }
-/*e: function crlfwrite */
-/*s: function retrievedir */
+/*e: function [[crlfwrite]] */
+/*s: function [[retrievedir]] */
 void
 retrievedir(char *arg)
 {
@@ -1414,8 +1414,8 @@ retrievedir(char *arg)
         logit("get %s OK %d", arg, n);
     s_free(file);
 }
-/*e: function retrievedir */
-/*s: function retrieve */
+/*e: function [[retrievedir]] */
+/*s: function [[retrieve]] */
 void
 retrieve(char *arg, int arg2)
 {
@@ -1520,8 +1520,8 @@ retrieve(char *arg, int arg2)
     reply("226 Transfer complete");
     logit("get %s OK %d", arg, bytes);
 }
-/*e: function retrieve */
-/*s: function retrievecmd */
+/*e: function [[retrieve]] */
+/*s: function [[retrievecmd]] */
 int
 retrievecmd(char *arg)
 {
@@ -1533,9 +1533,9 @@ retrievecmd(char *arg)
 
     return asproc(retrieve, arg, 0);
 }
-/*e: function retrievecmd */
+/*e: function [[retrievecmd]] */
 
-/*s: function lfwrite */
+/*s: function [[lfwrite]] */
 /*
  *  get a file from the user
  */
@@ -1554,8 +1554,8 @@ lfwrite(int fd, char *p, int n)
     else
         return -1;
 }
-/*e: function lfwrite */
-/*s: function store */
+/*e: function [[lfwrite]] */
+/*s: function [[store]] */
 void
 store(char *arg, int fd)
 {
@@ -1591,8 +1591,8 @@ store(char *arg, int fd)
     logit("put %s OK", arg);
     reply("226 Transfer complete");
 }
-/*e: function store */
-/*s: function storecmd */
+/*e: function [[store]] */
+/*s: function [[storecmd]] */
 int
 storecmd(char *arg)
 {
@@ -1622,8 +1622,8 @@ storecmd(char *arg)
     close(fd);
     return rv;
 }
-/*e: function storecmd */
-/*s: function appendcmd */
+/*e: function [[storecmd]] */
+/*s: function [[appendcmd]] */
 int
 appendcmd(char *arg)
 {
@@ -1648,8 +1648,8 @@ appendcmd(char *arg)
     close(fd);
     return rv;
 }
-/*e: function appendcmd */
-/*s: function storeucmd */
+/*e: function [[appendcmd]] */
+/*s: function [[storeucmd]] */
 int
 storeucmd(char *arg)
 {
@@ -1669,9 +1669,9 @@ storeucmd(char *arg)
     close(fd);
     return rv;
 }
-/*e: function storeucmd */
+/*e: function [[storeucmd]] */
 
-/*s: function mkdircmd */
+/*s: function [[mkdircmd]] */
 int
 mkdircmd(char *name)
 {
@@ -1690,9 +1690,9 @@ mkdircmd(char *name)
     close(fd);
     return reply("226 %s created", name);
 }
-/*e: function mkdircmd */
+/*e: function [[mkdircmd]] */
 
-/*s: function delcmd */
+/*s: function [[delcmd]] */
 int
 delcmd(char *name)
 {
@@ -1708,9 +1708,9 @@ delcmd(char *name)
     else
         return reply("226 %s removed", name);
 }
-/*e: function delcmd */
+/*e: function [[delcmd]] */
 
-/*s: function abortcmd */
+/*s: function [[abortcmd]] */
 /*
  *  kill off the last transfer (if the process still exists)
  */
@@ -1728,18 +1728,18 @@ abortcmd(char *arg)
     }
     return reply("226 Abort processed");
 }
-/*e: function abortcmd */
+/*e: function [[abortcmd]] */
 
-/*s: function systemcmd */
+/*s: function [[systemcmd]] */
 int
 systemcmd(char *arg)
 {
     USED(arg);
     return reply("215 UNIX Type: L8 Version: Plan 9");
 }
-/*e: function systemcmd */
+/*e: function [[systemcmd]] */
 
-/*s: function helpcmd */
+/*s: function [[helpcmd]] */
 int
 helpcmd(char *arg)
 {
@@ -1763,16 +1763,16 @@ helpcmd(char *arg)
     reply("214 ");
     return 0;
 }
-/*e: function helpcmd */
+/*e: function [[helpcmd]] */
 
-/*s: global filepath */
+/*s: global [[filepath]] */
 /*
  *  renaming a file takes two commands
  */
 static String *filepath;
-/*e: global filepath */
+/*e: global [[filepath]] */
 
-/*s: function rnfrcmd */
+/*s: function [[rnfrcmd]] */
 int
 rnfrcmd(char *from)
 {
@@ -1791,8 +1791,8 @@ rnfrcmd(char *from)
     }
     return reply("350 Rename %s to ...", s_to_c(filepath));
 }
-/*e: function rnfrcmd */
-/*s: function rntocmd */
+/*e: function [[rnfrcmd]] */
+/*s: function [[rntocmd]] */
 int
 rntocmd(char *to)
 {
@@ -1828,9 +1828,9 @@ rntocmd(char *to)
 
     return r;
 }
-/*e: function rntocmd */
+/*e: function [[rntocmd]] */
 
-/*s: function dialdata */
+/*s: function [[dialdata]] */
 /*
  *  to dial out we need the network file system in our
  *  name space.
@@ -1866,9 +1866,9 @@ dialdata(void)
     werrstr(err, sizeof err);
     return fd;
 }
-/*e: function dialdata */
+/*e: function [[dialdata]] */
 
-/*s: function postnote */
+/*s: function [[postnote]] */
 int
 postnote(int group, int pid, char *note)
 {
@@ -1901,18 +1901,18 @@ postnote(int group, int pid, char *note)
     close(f);
     return 0;
 }
-/*e: function postnote */
+/*e: function [[postnote]] */
 
-/*s: global special */
+/*s: global [[special]] */
 /*
  *  to circumscribe the accessible files we have to eliminate ..'s
  *  and resolve all names from the root.  We also remove any /bin/rc
  *  special characters to avoid later problems with executed commands.
  */
 char *special = "`;| ";
-/*e: global special */
+/*e: global [[special]] */
 
-/*s: function abspath */
+/*s: function [[abspath]] */
 char*
 abspath(char *origpath)
 {
@@ -1949,31 +1949,31 @@ abspath(char *origpath)
 
     return s_to_c(rpath);
 }
-/*e: function abspath */
+/*e: function [[abspath]] */
 
 typedef struct Path Path;
-/*s: struct Path */
+/*s: struct [[Path]] */
 struct Path {
     Path	*next;
     String	*path;
     int	inuse;
     int	ok;
 };
-/*e: struct Path */
+/*e: struct [[Path]] */
 
-/*s: enum _anon_ (networking/ip/ftpd.c)3 */
+/*s: enum [[_anon_ (networking/ip/ftpd.c)3]] */
 enum
 {
     Maxlevel = 16,
     Maxperlevel= 8,
 };
-/*e: enum _anon_ (networking/ip/ftpd.c)3 */
+/*e: enum [[_anon_ (networking/ip/ftpd.c)3]] */
 
-/*s: global pathlevel */
+/*s: global [[pathlevel]] */
 Path *pathlevel[Maxlevel];
-/*e: global pathlevel */
+/*e: global [[pathlevel]] */
 
-/*s: function unlinkpath */
+/*s: function [[unlinkpath]] */
 Path*
 unlinkpath(char *path, int level)
 {
@@ -2006,9 +2006,9 @@ unlinkpath(char *path, int level)
     p->path = s_copy(path);
     return p;
 }
-/*e: function unlinkpath */
+/*e: function [[unlinkpath]] */
 
-/*s: function linkpath */
+/*s: function [[linkpath]] */
 void
 linkpath(Path *p, int level)
 {
@@ -2016,9 +2016,9 @@ linkpath(Path *p, int level)
     pathlevel[level] = p;
     p->inuse = 1;
 }
-/*e: function linkpath */
+/*e: function [[linkpath]] */
 
-/*s: function addpath */
+/*s: function [[addpath]] */
 void
 addpath(Path *p, int level, int ok)
 {
@@ -2026,9 +2026,9 @@ addpath(Path *p, int level, int ok)
     p->next = pathlevel[level];
     pathlevel[level] = p;
 }
-/*e: function addpath */
+/*e: function [[addpath]] */
 
-/*s: function _accessok */
+/*s: function [[_accessok]] */
 int
 _accessok(String *s, int level)
 {
@@ -2070,9 +2070,9 @@ _accessok(String *s, int level)
 
     return p->ok;
 }
-/*e: function _accessok */
+/*e: function [[_accessok]] */
 
-/*s: function accessok */
+/*s: function [[accessok]] */
 /*
  * check for a subdirectory containing .httplogin
  * at each level of the path.
@@ -2098,5 +2098,5 @@ accessok(char *path)
 
     return r;
 }
-/*e: function accessok */
+/*e: function [[accessok]] */
 /*e: networking/ip/ftpd.c */

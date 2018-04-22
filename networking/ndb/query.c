@@ -8,11 +8,11 @@
 #include <ndb.h>
 
 static int all, multiple;
-/*s: global bout */
+/*s: global [[bout]] */
 static Biobuf bout;
-/*e: global bout */
+/*e: global [[bout]] */
 
-/*s: function usage (networking/ndb/query.c) */
+/*s: function [[usage]]([[(networking/ndb/query.c)]]) */
 void
 usage(void)
 {
@@ -20,9 +20,9 @@ usage(void)
         "[returned-attr [reps]]\n");
     exits("usage");
 }
-/*e: function usage (networking/ndb/query.c) */
+/*e: function [[usage]]([[(networking/ndb/query.c)]]) */
 
-/*s: function prmatch */
+/*s: function [[prmatch]] */
 /* print values of nt's attributes matching rattr */
 static void
 prmatch(Ndbtuple *nt, char *rattr)
@@ -31,9 +31,9 @@ prmatch(Ndbtuple *nt, char *rattr)
         if (strcmp(nt->attr, rattr) == 0)
             Bprint(&bout, "%s\n", nt->val);
 }
-/*e: function prmatch */
+/*e: function [[prmatch]] */
 
-/*s: function search (networking/ndb/query.c) */
+/*s: function [[search]]([[(networking/ndb/query.c)]]) */
 void
 search(Ndb *db, char *attr, char *val, char *rattr)
 {
@@ -71,9 +71,9 @@ search(Ndb *db, char *attr, char *val, char *rattr)
         ndbfree(t);
     }
 }
-/*e: function search (networking/ndb/query.c) */
+/*e: function [[search]]([[(networking/ndb/query.c)]]) */
 
-/*s: function main (networking/ndb/query.c) */
+/*s: function [[main]]([[(networking/ndb/query.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -122,5 +122,5 @@ main(int argc, char **argv)
 
     exits(0);
 }
-/*e: function main (networking/ndb/query.c) */
+/*e: function [[main]]([[(networking/ndb/query.c)]]) */
 /*e: networking/ndb/query.c */

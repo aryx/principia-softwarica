@@ -9,32 +9,32 @@ void	pip(char*, Dir*);
 void	nstat(char*, void (*)(char*, Dir*));
 void	pipifc(void);
 
-/*s: global out */
+/*s: global [[out]] */
 Biobuf	out;
-/*e: global out */
-/*s: global netroot */
+/*e: global [[out]] */
+/*s: global [[netroot]] */
 char	*netroot;
-/*e: global netroot */
-/*s: global proto (networking/misc/netstat.c) */
+/*e: global [[netroot]] */
+/*s: global [[proto]]([[(networking/misc/netstat.c)]]) */
 char *proto[20];
-/*e: global proto (networking/misc/netstat.c) */
-/*s: global nproto */
+/*e: global [[proto]]([[(networking/misc/netstat.c)]]) */
+/*s: global [[nproto]] */
 int nproto;
-/*e: global nproto */
-/*s: global notrans */
+/*e: global [[nproto]] */
+/*s: global [[notrans]] */
 int	notrans;
-/*e: global notrans */
+/*e: global [[notrans]] */
 
-/*s: function usage (networking/misc/netstat.c) */
+/*s: function [[usage]]([[(networking/misc/netstat.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-in] [-p proto] [network-dir]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/misc/netstat.c) */
+/*e: function [[usage]]([[(networking/misc/netstat.c)]]) */
 
-/*s: function main (networking/misc/netstat.c) */
+/*s: function [[main]]([[(networking/misc/netstat.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -96,9 +96,9 @@ main(int argc, char *argv[])
     }
     exits(0);
 }
-/*e: function main (networking/misc/netstat.c) */
+/*e: function [[main]]([[(networking/misc/netstat.c)]]) */
 
-/*s: function nstat */
+/*s: function [[nstat]] */
 void
 nstat(char *net, void (*f)(char*, Dir*))
 {
@@ -119,9 +119,9 @@ nstat(char *net, void (*f)(char*, Dir*))
     free(dir);
     close(fdir);
 }
-/*e: function nstat */
+/*e: function [[nstat]] */
 
-/*s: function getport */
+/*s: function [[getport]] */
 char*
 getport(char *net, char *p)
 {
@@ -136,9 +136,9 @@ getport(char *net, char *p)
     free(p);
     return port;
 }
-/*e: function getport */
+/*e: function [[getport]] */
 
-/*s: function pip */
+/*s: function [[pip]] */
 void
 pip(char *net, Dir *db)
 {
@@ -220,9 +220,9 @@ pip(char *net, Dir *db)
     Bflush(&out);
     free(dname);
 }
-/*e: function pip */
+/*e: function [[pip]] */
 
-/*s: function pipifc */
+/*s: function [[pipifc]] */
 void
 pipifc(void)
 {
@@ -258,5 +258,5 @@ pipifc(void)
     }
     Bflush(&out);
 }
-/*e: function pipifc */
+/*e: function [[pipifc]] */
 /*e: networking/misc/netstat.c */

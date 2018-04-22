@@ -5,29 +5,29 @@
 #include <ndb.h>
 #include <ip.h>
 
-/*s: struct x */
+/*s: struct [[x]] */
 typedef struct x
 {
     Ndbtuple *t;
     Ndbtuple *it;
     Ndbtuple *nt;
 } X;
-/*e: struct x */
+/*e: struct [[x]] */
 
-/*s: global x */
+/*s: global [[x]] */
 X x[4096];
-/*e: global x */
-/*s: global nx */
+/*e: global [[x]] */
+/*s: global [[nx]] */
 int nx;
-/*e: global nx */
-/*s: global domname */
+/*e: global [[nx]] */
+/*s: global [[domname]] */
 char *domname = "research.att.com";
-/*e: global domname */
-/*s: global domnamlen */
+/*e: global [[domname]] */
+/*s: global [[domnamlen]] */
 int domnamlen;
-/*e: global domnamlen */
+/*e: global [[domnamlen]] */
 
-/*s: function upper */
+/*s: function [[upper]] */
 char*
 upper(char *x)
 {
@@ -38,9 +38,9 @@ upper(char *x)
         *p = toupper(c);
     return x;
 }
-/*e: function upper */
+/*e: function [[upper]] */
 
-/*s: function printArecord */
+/*s: function [[printArecord]] */
 void
 printArecord(int fd, X *p)
 {
@@ -74,9 +74,9 @@ printArecord(int fd, X *p)
         }
     }
 }
-/*e: function printArecord */
+/*e: function [[printArecord]] */
 
-/*s: function printentry */
+/*s: function [[printentry]] */
 void
 printentry(int fd, X *p)
 {
@@ -93,9 +93,9 @@ printentry(int fd, X *p)
             fprint(fd, " %s", nt->val);
     fprint(fd, "\n");
 }
-/*e: function printentry */
+/*e: function [[printentry]] */
 
-/*s: function printsys */
+/*s: function [[printsys]] */
 void
 printsys(int fd, X *p)
 {
@@ -105,9 +105,9 @@ printsys(int fd, X *p)
         if(strcmp(nt->attr, "dom") == 0)
             fprint(fd, "%s\n", nt->val);
 }
-/*e: function printsys */
+/*e: function [[printsys]] */
 
-/*s: function printtxt */
+/*s: function [[printtxt]] */
 void
 printtxt(int fd, X *p)
 {
@@ -136,9 +136,9 @@ printtxt(int fd, X *p)
         }
     fprint(fd, "\n");
 }
-/*e: function printtxt */
+/*e: function [[printtxt]] */
 
-/*s: function parse */
+/*s: function [[parse]] */
 void
 parse(char *file)
 {
@@ -191,9 +191,9 @@ parse(char *file)
         }
     }
 }
-/*e: function parse */
+/*e: function [[parse]] */
 
-/*s: function main (networking/ndb/mkhosts.c) */
+/*s: function [[main]]([[(networking/ndb/mkhosts.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -255,5 +255,5 @@ main(int argc, char *argv[])
 
     exits(0);
 }
-/*e: function main (networking/ndb/mkhosts.c) */
+/*e: function [[main]]([[(networking/ndb/mkhosts.c)]]) */
 /*e: networking/ndb/mkhosts.c */

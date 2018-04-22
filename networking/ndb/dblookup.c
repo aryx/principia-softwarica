@@ -6,7 +6,7 @@
 #include <ip.h>
 #include "dns.h"
 
-/*s: enum _anon_ (networking/ndb/dblookup.c) */
+/*s: enum [[_anon_ (networking/ndb/dblookup.c)]] */
 enum {
     Nibwidth = 4,
     Nibmask = (1<<Nibwidth) - 1,
@@ -20,14 +20,14 @@ enum {
      */
     Ptrttl = 120,
 };
-/*e: enum _anon_ (networking/ndb/dblookup.c) */
+/*e: enum [[_anon_ (networking/ndb/dblookup.c)]] */
 
-/*s: global db (networking/ndb/dblookup.c) */
+/*s: global [[db]]([[(networking/ndb/dblookup.c)]]) */
 static Ndb *db;
-/*e: global db (networking/ndb/dblookup.c) */
-/*s: global dblock (networking/ndb/dblookup.c) */
+/*e: global [[db]]([[(networking/ndb/dblookup.c)]]) */
+/*s: global [[dblock]]([[(networking/ndb/dblookup.c)]]) */
 static Lock	dblock;
-/*e: global dblock (networking/ndb/dblookup.c) */
+/*e: global [[dblock]]([[(networking/ndb/dblookup.c)]]) */
 
 static RR*	addrrr(Ndbtuple*, Ndbtuple*);
 static RR*	cnamerr(Ndbtuple*, Ndbtuple*);
@@ -43,7 +43,7 @@ static RR*	soarr(Ndbtuple*, Ndbtuple*);
 static RR*	srvrr(Ndbtuple*, Ndbtuple*);
 static RR*	txtrr(Ndbtuple*, Ndbtuple*);
 
-/*s: global implemented */
+/*s: global [[implemented]] */
 static int	implemented[Tall] =
 {
     [Ta]		1,
@@ -57,21 +57,21 @@ static int	implemented[Tall] =
     [Tsrv]		1,
     [Ttxt]		1,
 };
-/*e: global implemented */
+/*e: global [[implemented]] */
 
 /* straddle server configuration */
 static Ndbtuple *indoms, *innmsrvs, *outnmsrvs;
 
-/*s: function nstrcpy (networking/ndb/dblookup.c) */
+/*s: function [[nstrcpy]]([[(networking/ndb/dblookup.c)]]) */
 static void
 nstrcpy(char *to, char *from, int len)
 {
     strncpy(to, from, len);
     to[len-1] = 0;
 }
-/*e: function nstrcpy (networking/ndb/dblookup.c) */
+/*e: function [[nstrcpy]]([[(networking/ndb/dblookup.c)]]) */
 
-/*s: function opendatabase */
+/*s: function [[opendatabase]] */
 int
 opendatabase(void)
 {
@@ -91,9 +91,9 @@ opendatabase(void)
     db = ndbcat(netdb, xdb);	/* both */
     return db? 0: -1;
 }
-/*e: function opendatabase */
+/*e: function [[opendatabase]] */
 
-/*s: function dblookup */
+/*s: function [[dblookup]] */
 /*
  *  lookup an RR in the network database, look for matches
  *  against both the domain name and the wildcarded domain name.
@@ -190,9 +190,9 @@ out:
     unlock(&dblock);
     return rp;
 }
-/*e: function dblookup */
+/*e: function [[dblookup]] */
 
-/*s: function intval */
+/*s: function [[intval]] */
 static ulong
 intval(Ndbtuple *entry, Ndbtuple *pair, char *attr, ulong def)
 {
@@ -200,9 +200,9 @@ intval(Ndbtuple *entry, Ndbtuple *pair, char *attr, ulong def)
 
     return (t? strtoul(t->val, 0, 10): def);
 }
-/*e: function intval */
+/*e: function [[intval]] */
 
-/*s: function dblookup1 */
+/*s: function [[dblookup1]] */
 /*
  *  lookup an RR in the network database
  */
@@ -347,9 +347,9 @@ dblookup1(char *name, int type, int auth, int ttl)
 //	dnslog("dnlookup1(%s) -> %#p", name, list);
     return list;
 }
-/*e: function dblookup1 */
+/*e: function [[dblookup1]] */
 
-/*s: function addrrr */
+/*s: function [[addrrr]] */
 /*
  *  make various types of resource records from a database entry
  */
@@ -368,8 +368,8 @@ addrrr(Ndbtuple *entry, Ndbtuple *pair)
     rp->ip = dnlookup(pair->val, Cin, 1);
     return rp;
 }
-/*e: function addrrr */
-/*s: function nullrr */
+/*e: function [[addrrr]] */
+/*s: function [[nullrr]] */
 static RR*
 nullrr(Ndbtuple *entry, Ndbtuple *pair)
 {
@@ -381,8 +381,8 @@ nullrr(Ndbtuple *entry, Ndbtuple *pair)
     rp->null->dlen = strlen((char*)rp->null->data);
     return rp;
 }
-/*e: function nullrr */
-/*s: function txtrr */
+/*e: function [[nullrr]] */
+/*s: function [[txtrr]] */
 /*
  *  txt rr strings are at most 255 bytes long.  one
  *  can represent longer strings by multiple concatenated
@@ -419,8 +419,8 @@ txtrr(Ndbtuple *entry, Ndbtuple *pair)
     }
     return rp;
 }
-/*e: function txtrr */
-/*s: function cnamerr */
+/*e: function [[txtrr]] */
+/*s: function [[cnamerr]] */
 static RR*
 cnamerr(Ndbtuple *entry, Ndbtuple *pair)
 {
@@ -431,8 +431,8 @@ cnamerr(Ndbtuple *entry, Ndbtuple *pair)
     rp->host = dnlookup(pair->val, Cin, 1);
     return rp;
 }
-/*e: function cnamerr */
-/*s: function mxrr */
+/*e: function [[cnamerr]] */
+/*s: function [[mxrr]] */
 static RR*
 mxrr(Ndbtuple *entry, Ndbtuple *pair)
 {
@@ -443,8 +443,8 @@ mxrr(Ndbtuple *entry, Ndbtuple *pair)
     rp->pref = intval(entry, pair, "pref", 1);
     return rp;
 }
-/*e: function mxrr */
-/*s: function nsrr */
+/*e: function [[mxrr]] */
+/*s: function [[nsrr]] */
 static RR*
 nsrr(Ndbtuple *entry, Ndbtuple *pair)
 {
@@ -458,8 +458,8 @@ nsrr(Ndbtuple *entry, Ndbtuple *pair)
         rp->local = 1;
     return rp;
 }
-/*e: function nsrr */
-/*s: function ptrrr */
+/*e: function [[nsrr]] */
+/*s: function [[ptrrr]] */
 static RR*
 ptrrr(Ndbtuple *entry, Ndbtuple *pair)
 {
@@ -470,8 +470,8 @@ ptrrr(Ndbtuple *entry, Ndbtuple *pair)
     rp->ptr = dnlookup(pair->val, Cin, 1);
     return rp;
 }
-/*e: function ptrrr */
-/*s: function soarr */
+/*e: function [[ptrrr]] */
+/*s: function [[soarr]] */
 static RR*
 soarr(Ndbtuple *entry, Ndbtuple *pair)
 {
@@ -532,9 +532,9 @@ soarr(Ndbtuple *entry, Ndbtuple *pair)
 
     return rp;
 }
-/*e: function soarr */
+/*e: function [[soarr]] */
 
-/*s: function srvrr */
+/*s: function [[srvrr]] */
 static RR*
 srvrr(Ndbtuple *entry, Ndbtuple *pair)
 {
@@ -548,9 +548,9 @@ srvrr(Ndbtuple *entry, Ndbtuple *pair)
     rp->port = intval(entry, pair, "port", 0);
     return rp;
 }
-/*e: function srvrr */
+/*e: function [[srvrr]] */
 
-/*s: function look */
+/*s: function [[look]] */
 /*
  *  Look for a pair with the given attribute.  look first on the same line,
  *  then in the whole entry.
@@ -574,9 +574,9 @@ look(Ndbtuple *entry, Ndbtuple *line, char *attr)
             return nt;
     return 0;
 }
-/*e: function look */
+/*e: function [[look]] */
 
-/*s: function linkrr */
+/*s: function [[linkrr]] */
 static RR**
 linkrr(RR *rp, DN *dp, RR **l)
 {
@@ -586,9 +586,9 @@ linkrr(RR *rp, DN *dp, RR **l)
     *l = rp;
     return &rp->next;
 }
-/*e: function linkrr */
+/*e: function [[linkrr]] */
 
-/*s: function doaxfr */
+/*s: function [[doaxfr]] */
 /* these are answered specially by the tcp version */
 static RR*
 doaxfr(Ndb *db, char *name)
@@ -596,10 +596,10 @@ doaxfr(Ndb *db, char *name)
     USED(db, name);
     return 0;
 }
-/*e: function doaxfr */
+/*e: function [[doaxfr]] */
 
 
-/*s: function dbfile2area */
+/*s: function [[dbfile2area]] */
 /*
  *  read the all the soa's from the database to determine area's.
  *  this is only used when we're not caching the database.
@@ -615,9 +615,9 @@ dbfile2area(Ndb *db)
     while(t = ndbparse(db))
         ndbfree(t);
 }
-/*e: function dbfile2area */
+/*e: function [[dbfile2area]] */
 
-/*s: function dbpair2cache */
+/*s: function [[dbpair2cache]] */
 /*
  *  read the database into the cache
  */
@@ -656,8 +656,8 @@ dbpair2cache(DN *dp, Ndbtuple *entry, Ndbtuple *pair)
     rp->ttl = intval(entry, pair, "ttl", rp->ttl);
     rrattach(rp, Notauthoritative);
 }
-/*e: function dbpair2cache */
-/*s: function dbtuple2cache */
+/*e: function [[dbpair2cache]] */
+/*s: function [[dbtuple2cache]] */
 static void
 dbtuple2cache(Ndbtuple *t)
 {
@@ -682,8 +682,8 @@ dbtuple2cache(Ndbtuple *t)
             }
         }
 }
-/*e: function dbtuple2cache */
-/*s: function dbfile2cache */
+/*e: function [[dbtuple2cache]] */
+/*s: function [[dbfile2cache]] */
 static void
 dbfile2cache(Ndb *db)
 {
@@ -697,9 +697,9 @@ dbfile2cache(Ndb *db)
         ndbfree(t);
     }
 }
-/*e: function dbfile2cache */
+/*e: function [[dbfile2cache]] */
 
-/*s: function loaddomsrvs */
+/*s: function [[loaddomsrvs]] */
 /* called with dblock held */
 static void
 loaddomsrvs(void)
@@ -722,9 +722,9 @@ loaddomsrvs(void)
     dnslog("[%d] ndb changed: reloaded inside-dom, inside-ns, outside-ns",
         getpid());
 }
-/*e: function loaddomsrvs */
+/*e: function [[loaddomsrvs]] */
 
-/*s: function db2cache */
+/*s: function [[db2cache]] */
 void
 db2cache(int doit)
 {
@@ -803,9 +803,9 @@ db2cache(int doit)
 
     unlock(&dblock);
 }
-/*e: function db2cache */
+/*e: function [[db2cache]] */
 
-/*s: function dnforceage */
+/*s: function [[dnforceage]] */
 void
 dnforceage(void)
 {
@@ -813,11 +813,11 @@ dnforceage(void)
     dnageall(1);
     unlock(&dblock);
 }
-/*e: function dnforceage */
+/*e: function [[dnforceage]] */
 
-extern uchar	myip[IPaddrlen];	/* my ip address */
+extern uchar	ipaddr[IPaddrlen];	/* my ip address */
 
-/*s: function lookupinfo */
+/*s: function [[lookupinfo]] */
 /*
  *  get all my xxx
  *  caller ndbfrees the result
@@ -829,7 +829,7 @@ lookupinfo(char *attr)
     char *a[2];
     Ndbtuple *t;
 
-    snprint(buf, sizeof buf, "%I", myip);
+    snprint(buf, sizeof buf, "%I", ipaddr);
     a[0] = attr;
 
     lock(&dblock);
@@ -841,16 +841,16 @@ lookupinfo(char *attr)
     unlock(&dblock);
     return t;
 }
-/*e: function lookupinfo */
+/*e: function [[lookupinfo]] */
 
-/*s: global localservers */
+/*s: global [[localservers]] */
 char *localservers =	  "local#dns#servers";
-/*e: global localservers */
-/*s: global localserverprefix */
+/*e: global [[localservers]] */
+/*s: global [[localserverprefix]] */
 char *localserverprefix = "local#dns#server";
-/*e: global localserverprefix */
+/*e: global [[localserverprefix]] */
 
-/*s: function baddelegation */
+/*s: function [[baddelegation]] */
 /*
  *  return non-zero if this is a bad delegation
  */
@@ -896,9 +896,9 @@ baddelegation(RR *rp, RR *nsrp, uchar *addr)
 
     return 0;
 }
-/*e: function baddelegation */
+/*e: function [[baddelegation]] */
 
-/*s: function myaddr */
+/*s: function [[myaddr]] */
 int
 myaddr(char *addr)
 {
@@ -906,7 +906,7 @@ myaddr(char *addr)
     char buf[64];
     Biobuf *bp;
 
-    snprint(buf, sizeof buf, "%I", myip);
+    snprint(buf, sizeof buf, "%I", ipaddr);
     if (strcmp(addr, buf) == 0) {
         dnslog("rejecting my ip %s as local dns server", addr);
         return 1;
@@ -932,18 +932,18 @@ myaddr(char *addr)
     }
     return 0;
 }
-/*e: function myaddr */
+/*e: function [[myaddr]] */
 
-/*s: global locdns */
+/*s: global [[locdns]] */
 static char *locdns[20];
-/*e: global locdns */
-/*s: global locdnslck */
+/*e: global [[locdns]] */
+/*s: global [[locdnslck]] */
 static QLock locdnslck;
-/*e: global locdnslck */
+/*e: global [[locdnslck]] */
 
-/*s: function addlocaldnsserver */
+/*s: function [[addlocaldnsserver]] */
 static void
-addlocaldnsserver(DN *dp, int class, char *myip, int i)
+addlocaldnsserver(DN *dp, int class, char *ipaddr, int i)
 {
     int n;
     DN *nsdp;
@@ -952,20 +952,20 @@ addlocaldnsserver(DN *dp, int class, char *myip, int i)
     uchar ip[IPaddrlen];
 
     /* reject our own ip addresses so we don't query ourselves via udp */
-    if (myaddr(myip))
+    if (myaddr(ipaddr))
         return;
 
     qlock(&locdnslck);
     for (n = 0; n < i && n < nelem(locdns) && locdns[n]; n++)
-        if (strcmp(locdns[n], myip) == 0) {
+        if (strcmp(locdns[n], ipaddr) == 0) {
             dnslog("rejecting duplicate local dns server ip %s",
-                myip);
+                ipaddr);
             qunlock(&locdnslck);
             return;
         }
     if (n < nelem(locdns))
         if (locdns[n] == nil || ++n < nelem(locdns))
-            locdns[n] = strdup(myip); /* remember 1st few local ns */
+            locdns[n] = strdup(ipaddr); /* remember 1st few local ns */
     qunlock(&locdnslck);
 
     /* ns record for name server, make up an impossible name */
@@ -981,11 +981,11 @@ addlocaldnsserver(DN *dp, int class, char *myip, int i)
     rrattach(rp, Authoritative);	/* will not attach rrs in my area */
 
     /* A or AAAA record */
-    if (parseip(ip, myip) >= 0 && isv4(ip))
+    if (parseip(ip, ipaddr) >= 0 && isv4(ip))
         rp = rralloc(Ta);
     else
         rp = rralloc(Taaaa);
-    rp->ip = dnlookup(myip, class, 1);
+    rp->ip = dnlookup(ipaddr, class, 1);
     rp->owner = nsdp;
     rp->local = 1;
     rp->db = 1;
@@ -993,11 +993,11 @@ addlocaldnsserver(DN *dp, int class, char *myip, int i)
     rp->ttl = (1UL<<31)-1;
     rrattach(rp, Authoritative);	/* will not attach rrs in my area */
 
-    dnslog("added local dns server %s at %s", buf, myip);
+    dnslog("added local dns server %s at %s", buf, ipaddr);
 }
-/*e: function addlocaldnsserver */
+/*e: function [[addlocaldnsserver]] */
 
-/*s: function dnsservers */
+/*s: function [[dnsservers]] */
 /*
  *  return list of dns server addresses to use when
  *  acting just as a resolver.
@@ -1037,9 +1037,9 @@ dnsservers(int class)
 
     return rrlookup(dp, Tns, NOneg);
 }
-/*e: function dnsservers */
+/*e: function [[dnsservers]] */
 
-/*s: function addlocaldnsdomain */
+/*s: function [[addlocaldnsdomain]] */
 static void
 addlocaldnsdomain(DN *dp, int class, char *domain)
 {
@@ -1053,9 +1053,9 @@ addlocaldnsdomain(DN *dp, int class, char *domain)
     rp->ttl = 10*Min;
     rrattach(rp, Authoritative);
 }
-/*e: function addlocaldnsdomain */
+/*e: function [[addlocaldnsdomain]] */
 
-/*s: function domainlist */
+/*s: function [[domainlist]] */
 /*
  *  return list of domains to use when resolving names without '.'s
  */
@@ -1080,23 +1080,23 @@ domainlist(int class)
 
     return rrlookup(dp, Tptr, NOneg);
 }
-/*e: function domainlist */
+/*e: function [[domainlist]] */
 
-/*s: global v4ptrdom */
+/*s: global [[v4ptrdom]] */
 char *v4ptrdom = ".in-addr.arpa";
-/*e: global v4ptrdom */
-/*s: global v6ptrdom */
+/*e: global [[v4ptrdom]] */
+/*s: global [[v6ptrdom]] */
 char *v6ptrdom = ".ip6.arpa";		/* ip6.int deprecated, rfc 3152 */
-/*e: global v6ptrdom */
+/*e: global [[v6ptrdom]] */
 
-/*s: global attribs */
+/*s: global [[attribs]] */
 char *attribs[] = {
     "ipmask",
     0
 };
-/*e: global attribs */
+/*e: global [[attribs]] */
 
-/*s: function createv4ptrs */
+/*s: function [[createv4ptrs]] */
 /*
  *  create ptrs that are in our v4 areas
  */
@@ -1175,9 +1175,9 @@ createv4ptrs(void)
         dnptr(net, mask, dom, Ta, 4+2-n, Ptrttl);
     }
 }
-/*e: function createv4ptrs */
+/*e: function [[createv4ptrs]] */
 
-/*s: function bytes2nibbles */
+/*s: function [[bytes2nibbles]] */
 /* convert bytes to nibbles, big-endian */
 void
 bytes2nibbles(uchar *nibbles, uchar *bytes, int nbytes)
@@ -1187,9 +1187,9 @@ bytes2nibbles(uchar *nibbles, uchar *bytes, int nbytes)
         *nibbles++ = *bytes++ & Nibmask;
     }
 }
-/*e: function bytes2nibbles */
+/*e: function [[bytes2nibbles]] */
 
-/*s: function nibbles2bytes */
+/*s: function [[nibbles2bytes]] */
 void
 nibbles2bytes(uchar *bytes, uchar *nibbles, int nnibs)
 {
@@ -1200,9 +1200,9 @@ nibbles2bytes(uchar *bytes, uchar *nibbles, int nnibs)
     if (nnibs > 0)
         *bytes = nibbles[0] << Nibwidth;
 }
-/*e: function nibbles2bytes */
+/*e: function [[nibbles2bytes]] */
 
-/*s: function createv6ptrs */
+/*s: function [[createv6ptrs]] */
 /*
  *  create ptrs that are in our v6 areas.  see rfc3596
  */
@@ -1255,9 +1255,9 @@ createv6ptrs(void)
         dnptr(net, mask, dom, Taaaa, V6maxrevdomdepth - pfxnibs, Ptrttl);
     }
 }
-/*e: function createv6ptrs */
+/*e: function [[createv6ptrs]] */
 
-/*s: function createptrs */
+/*s: function [[createptrs]] */
 /*
  *  create ptrs that are in our areas
  */
@@ -1267,9 +1267,9 @@ createptrs(void)
     createv4ptrs();
     createv6ptrs();
 }
-/*e: function createptrs */
+/*e: function [[createptrs]] */
 
-/*s: function insideaddr */
+/*s: function [[insideaddr]] */
 /*
  * is this domain (or DOMAIN or Domain or dOMAIN)
  * internal to our organisation (behind our firewall)?
@@ -1312,9 +1312,9 @@ insideaddr(char *dom)
     unlock(&dblock);
     return rv;
 }
-/*e: function insideaddr */
+/*e: function [[insideaddr]] */
 
-/*s: function insidens */
+/*s: function [[insidens]] */
 int
 insidens(uchar *ip)
 {
@@ -1329,9 +1329,9 @@ insidens(uchar *ip)
         }
     return 0;
 }
-/*e: function insidens */
+/*e: function [[insidens]] */
 
-/*s: function outsidens */
+/*s: function [[outsidens]] */
 uchar *
 outsidens(int n)
 {
@@ -1347,5 +1347,5 @@ outsidens(int n)
         }
     return nil;
 }
-/*e: function outsidens */
+/*e: function [[outsidens]] */
 /*e: networking/ndb/dblookup.c */

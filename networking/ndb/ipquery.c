@@ -5,7 +5,7 @@
 #include <ndb.h>
 #include <ip.h>
 
-/*s: function usage (networking/ndb/ipquery.c) */
+/*s: function [[usage]]([[(networking/ndb/ipquery.c)]]) */
 /*
  *  search the database for matches
  */
@@ -16,9 +16,9 @@ usage(void)
     fprint(2, "usage: ipquery attr value rattribute\n");
     exits("usage");
 }
-/*e: function usage (networking/ndb/ipquery.c) */
+/*e: function [[usage]]([[(networking/ndb/ipquery.c)]]) */
 
-/*s: function search */
+/*s: function [[search]] */
 void
 search(Ndb *db, char *attr, char *val, char **rattr, int nrattr)
 {
@@ -30,9 +30,9 @@ search(Ndb *db, char *attr, char *val, char **rattr, int nrattr)
     print("\n");
     ndbfree(tt);
 }
-/*e: function search */
+/*e: function [[search]] */
 
-/*s: function main (networking/ndb/ipquery.c) */
+/*s: function [[main]]([[(networking/ndb/ipquery.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -58,5 +58,5 @@ main(int argc, char **argv)
 
     exits(0);
 }
-/*e: function main (networking/ndb/ipquery.c) */
+/*e: function [[main]]([[(networking/ndb/ipquery.c)]]) */
 /*e: networking/ndb/ipquery.c */

@@ -9,7 +9,7 @@
 #include <ip.h>
 #include <string.h>
 
-/*s: enum _anon_ (networking/ndb/cs.c) */
+/*s: enum [[_anon_ (networking/ndb/cs.c)]] */
 enum
 {
     Nreply=			20,
@@ -23,7 +23,7 @@ enum
     Qdir=			0,
     Qcs=			1,
 };
-/*e: enum _anon_ (networking/ndb/cs.c) */
+/*e: enum [[_anon_ (networking/ndb/cs.c)]] */
 
 typedef struct Mfile	Mfile;
 typedef struct Mlist	Mlist;
@@ -31,11 +31,11 @@ typedef struct Network	Network;
 typedef struct Flushreq	Flushreq;
 typedef struct Job	Job;
 
-/*s: global vers */
+/*s: global [[vers]] */
 int vers;		/* incremented each clone/attach */
-/*e: global vers */
+/*e: global [[vers]] */
 
-/*s: struct Mfile */
+/*s: struct [[Mfile]] */
 struct Mfile
 {
     int		busy;
@@ -60,18 +60,18 @@ struct Mfile
     char		*reply[Nreply];
     int		replylen[Nreply];
 };
-/*e: struct Mfile */
+/*e: struct [[Mfile]] */
 
-/*s: struct Mlist */
+/*s: struct [[Mlist]] */
 struct Mlist
 {
     Mlist	*next;
     Mfile	mf;
 };
-/*e: struct Mlist */
+/*e: struct [[Mlist]] */
 
 
-/*s: struct Job */
+/*s: struct [[Job]] */
 /*
  *  active requests
  */
@@ -82,36 +82,36 @@ struct Job
     Fcall	request;
     Fcall	reply;
 };
-/*e: struct Job */
-/*s: global joblock */
+/*e: struct [[Job]] */
+/*s: global [[joblock]] */
 Lock	joblock;
-/*e: global joblock */
-/*s: global joblist */
+/*e: global [[joblock]] */
+/*s: global [[joblist]] */
 Job	*joblist;
-/*e: global joblist */
+/*e: global [[joblist]] */
 
-/*s: global mlist */
+/*s: global [[mlist]] */
 Mlist	*mlist;
-/*e: global mlist */
-/*s: global mfd */
+/*e: global [[mlist]] */
+/*s: global [[mfd]] */
 int	mfd[2];
-/*e: global mfd */
-/*s: global debug (networking/ndb/cs.c) */
+/*e: global [[mfd]] */
+/*s: global [[debug]]([[(networking/ndb/cs.c)]]) */
 int	debug;
-/*e: global debug (networking/ndb/cs.c) */
+/*e: global [[debug]]([[(networking/ndb/cs.c)]]) */
 int	paranoia;
-/*s: global ipv6lookups */
+/*s: global [[ipv6lookups]] */
 int	ipv6lookups = 1;
-/*e: global ipv6lookups */
-/*s: global masterjmp */
+/*e: global [[ipv6lookups]] */
+/*s: global [[masterjmp]] */
 jmp_buf	masterjmp;	/* return through here after a slave process has been created */
-/*e: global masterjmp */
-/*s: global isslave */
+/*e: global [[masterjmp]] */
+/*s: global [[isslave]] */
 int	*isslave;	/* *isslave non-zero means this is a slave process */
-/*e: global isslave */
-/*s: global dbfile */
+/*e: global [[isslave]] */
+/*s: global [[dbfile]] */
 char	*dbfile;
-/*e: global dbfile */
+/*e: global [[dbfile]] */
 Ndb	*db, *netdb;
 
 void	rversion(Job*);
@@ -150,26 +150,26 @@ void	cleanmf(Mfile*);
 
 extern void	paralloc(void);
 
-/*s: global dblock */
+/*s: global [[dblock]] */
 Lock	dblock;		/* mutex on database operations */
-/*e: global dblock */
-/*s: global netlock (networking/ndb/cs.c) */
+/*e: global [[dblock]] */
+/*s: global [[netlock]]([[(networking/ndb/cs.c)]]) */
 Lock	netlock;	/* mutex for netinit() */
-/*e: global netlock (networking/ndb/cs.c) */
+/*e: global [[netlock]]([[(networking/ndb/cs.c)]]) */
 
-/*s: global logfile (networking/ndb/cs.c) */
+/*s: global [[logfile]]([[(networking/ndb/cs.c)]]) */
 char	*logfile = "cs";
-/*e: global logfile (networking/ndb/cs.c) */
-/*s: global paranoiafile */
+/*e: global [[logfile]]([[(networking/ndb/cs.c)]]) */
+/*s: global [[paranoiafile]] */
 char	*paranoiafile = "cs.paranoia";
-/*e: global paranoiafile */
+/*e: global [[paranoiafile]] */
 
-/*s: global mntpt */
+/*s: global [[mntpt]] */
 char	mntpt[Maxpath];
-/*e: global mntpt */
-/*s: global netndb */
+/*e: global [[mntpt]] */
+/*s: global [[netndb]] */
 char	netndb[Maxpath];
-/*e: global netndb */
+/*e: global [[netndb]] */
 
 /*
  *  Network specific translators
@@ -180,7 +180,7 @@ Ndbtuple*	telcolookup(Network*, char*, char*, int);
 char*		telcotrans(Ndbtuple*, Network*, char*, char*, int);
 Ndbtuple*	dnsiplookup(char*, Ndbs*);
 
-/*s: struct Network */
+/*s: struct [[Network]] */
 struct Network
 {
     char		*net;
@@ -190,16 +190,16 @@ struct Network
     int		fasttimeouthack;	/* flag. was for IL */
     Network		*next;
 };
-/*e: struct Network */
+/*e: struct [[Network]] */
 
-/*s: enum _anon_ (networking/ndb/cs.c)2 */
+/*s: enum [[_anon_ (networking/ndb/cs.c)2]] */
 enum
 {
     Ntcp = 0,
 };
-/*e: enum _anon_ (networking/ndb/cs.c)2 */
+/*e: enum [[_anon_ (networking/ndb/cs.c)2]] */
 
-/*s: global network (networking/ndb/cs.c) */
+/*s: global [[network]]([[(networking/ndb/cs.c)]]) */
 /*
  *  net doesn't apply to (r)udp, icmp(v6), or telco (for speed).
  */
@@ -213,54 +213,54 @@ Network network[] = {
     { "telco",	telcolookup,	telcotrans,	1 },
     { 0 },
 };
-/*e: global network (networking/ndb/cs.c) */
+/*e: global [[network]]([[(networking/ndb/cs.c)]]) */
 
-/*s: global ipifclock */
+/*s: global [[ipifclock]] */
 Lock ipifclock;
-/*e: global ipifclock */
-/*s: global ipifcs */
+/*e: global [[ipifclock]] */
+/*s: global [[ipifcs]] */
 Ipifc *ipifcs;
-/*e: global ipifcs */
+/*e: global [[ipifcs]] */
 
-/*s: global eaddr */
+/*s: global [[eaddr]] */
 char	eaddr[16];		/* ascii ethernet address */
-/*e: global eaddr */
-/*s: global ipaddr */
-char	ipaddr_ascii[64];		/* ascii internet address */
-/*e: global ipaddr */
-/*s: global ipa */
+/*e: global [[eaddr]] */
+/*s: global [[ipaddr]] */
+char	ipaddr[64];		/* ascii internet address */
+/*e: global [[ipaddr]] */
+/*s: global [[ipa]] */
 uchar	ipa[IPaddrlen];		/* binary internet address */
-/*e: global ipa */
-/*s: global mysysname */
+/*e: global [[ipa]] */
+/*s: global [[mysysname]] */
 char	*mysysname;
-/*e: global mysysname */
+/*e: global [[mysysname]] */
 
-/*s: global netlist */
+/*s: global [[netlist]] */
 Network *netlist;		/* networks ordered by preference */
-/*e: global netlist */
-/*s: global last (networking/ndb/cs.c) */
+/*e: global [[netlist]] */
+/*s: global [[last]]([[(networking/ndb/cs.c)]]) */
 Network *last;
-/*e: global last (networking/ndb/cs.c) */
+/*e: global [[last]]([[(networking/ndb/cs.c)]]) */
 
-/*s: function nstrcpy */
+/*s: function [[nstrcpy]] */
 static void
 nstrcpy(char *to, char *from, int len)
 {
     strncpy(to, from, len);
     to[len-1] = 0;
 }
-/*e: function nstrcpy */
+/*e: function [[nstrcpy]] */
 
-/*s: function usage (networking/ndb/cs.c) */
+/*s: function [[usage]]([[(networking/ndb/cs.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-dn] [-f ndb-file] [-x netmtpt]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ndb/cs.c) */
+/*e: function [[usage]]([[(networking/ndb/cs.c)]]) */
 
-/*s: function procsetname (networking/ndb/cs.c) */
+/*s: function [[procsetname]]([[(networking/ndb/cs.c)]]) */
 /*
  * based on libthread's threadsetname, but drags in less library code.
  * actually just sets the arguments displayed.
@@ -285,9 +285,9 @@ procsetname(char *fmt, ...)
     }
     free(cmdname);
 }
-/*e: function procsetname (networking/ndb/cs.c) */
+/*e: function [[procsetname]]([[(networking/ndb/cs.c)]]) */
 
-/*s: function main (networking/ndb/cs.c) */
+/*s: function [[main]]([[(networking/ndb/cs.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -339,9 +339,9 @@ main(int argc, char *argv[])
     }
     exits(0);
 }
-/*e: function main (networking/ndb/cs.c) */
+/*e: function [[main]]([[(networking/ndb/cs.c)]]) */
 
-/*s: function setext */
+/*s: function [[setext]] */
 /*
  *  if a mount point is specified, set the cs extention to be the mount point
  *  with '_'s replacing '/'s
@@ -362,9 +362,9 @@ setext(char *ext, int n, char *p)
     }
     ext[i] = 0;
 }
-/*e: function setext */
+/*e: function [[setext]] */
 
-/*s: function mountinit */
+/*s: function [[mountinit]] */
 void
 mountinit(char *service, char *mntpt)
 {
@@ -403,9 +403,9 @@ mountinit(char *service, char *mntpt)
     }
     mfd[0] = mfd[1] = p[0];
 }
-/*e: function mountinit */
+/*e: function [[mountinit]] */
 
-/*s: function ndbinit */
+/*s: function [[ndbinit]] */
 void
 ndbinit(void)
 {
@@ -419,9 +419,9 @@ ndbinit(void)
         db = ndbcat(netdb, db);
     }
 }
-/*e: function ndbinit */
+/*e: function [[ndbinit]] */
 
-/*s: function newfid (networking/ndb/cs.c) */
+/*s: function [[newfid]]([[(networking/ndb/cs.c)]]) */
 Mfile*
 newfid(int fid)
 {
@@ -444,9 +444,9 @@ newfid(int fid)
     mf->fid = fid;
     return mf;
 }
-/*e: function newfid (networking/ndb/cs.c) */
+/*e: function [[newfid]]([[(networking/ndb/cs.c)]]) */
 
-/*s: function newjob */
+/*s: function [[newjob]] */
 Job*
 newjob(void)
 {
@@ -460,9 +460,9 @@ newjob(void)
     unlock(&joblock);
     return job;
 }
-/*e: function newjob */
+/*e: function [[newjob]] */
 
-/*s: function freejob */
+/*s: function [[freejob]] */
 void
 freejob(Job *job)
 {
@@ -478,9 +478,9 @@ freejob(Job *job)
     }
     unlock(&joblock);
 }
-/*e: function freejob */
+/*e: function [[freejob]] */
 
-/*s: function flushjob */
+/*s: function [[flushjob]] */
 void
 flushjob(int tag)
 {
@@ -495,9 +495,9 @@ flushjob(int tag)
     }
     unlock(&joblock);
 }
-/*e: function flushjob */
+/*e: function [[flushjob]] */
 
-/*s: function io */
+/*s: function [[io]] */
 void
 io(void)
 {
@@ -595,9 +595,9 @@ io(void)
         }
     }
 }
-/*e: function io */
+/*e: function [[io]] */
 
-/*s: function rversion */
+/*s: function [[rversion]] */
 void
 rversion(Job *job)
 {
@@ -612,17 +612,17 @@ rversion(Job *job)
         sendmsg(job, 0);
     }
 }
-/*e: function rversion */
+/*e: function [[rversion]] */
 
-/*s: function rauth */
+/*s: function [[rauth]] */
 void
 rauth(Job *job)
 {
     sendmsg(job, "cs: authentication not required");
 }
-/*e: function rauth */
+/*e: function [[rauth]] */
 
-/*s: function rflush */
+/*s: function [[rflush]] */
 /*
  *  don't flush till all the slaves are done
  */
@@ -632,9 +632,9 @@ rflush(Job *job)
     flushjob(job->request.oldtag);
     sendmsg(job, 0);
 }
-/*e: function rflush */
+/*e: function [[rflush]] */
 
-/*s: function rattach */
+/*s: function [[rattach]] */
 void
 rattach(Job *job, Mfile *mf)
 {
@@ -648,10 +648,10 @@ rattach(Job *job, Mfile *mf)
     job->reply.qid = mf->qid;
     sendmsg(job, 0);
 }
-/*e: function rattach */
+/*e: function [[rattach]] */
 
 
-/*s: function rwalk */
+/*s: function [[rwalk]] */
 char*
 rwalk(Job *job, Mfile *mf)
 {
@@ -723,9 +723,9 @@ rwalk(Job *job, Mfile *mf)
     sendmsg(job, err);
     return err;
 }
-/*e: function rwalk */
+/*e: function [[rwalk]] */
 
-/*s: function ropen */
+/*s: function [[ropen]] */
 void
 ropen(Job *job, Mfile *mf)
 {
@@ -742,18 +742,18 @@ ropen(Job *job, Mfile *mf)
     job->reply.iounit = 0;
     sendmsg(job, err);
 }
-/*e: function ropen */
+/*e: function [[ropen]] */
 
-/*s: function rcreate */
+/*s: function [[rcreate]] */
 void
 rcreate(Job *job, Mfile *mf)
 {
     USED(mf);
     sendmsg(job, "creation permission denied");
 }
-/*e: function rcreate */
+/*e: function [[rcreate]] */
 
-/*s: function rread */
+/*s: function [[rread]] */
 void
 rread(Job *job, Mfile *mf)
 {
@@ -817,8 +817,8 @@ send:
     job->reply.count = n;
     sendmsg(job, err);
 }
-/*e: function rread */
-/*s: function cleanmf */
+/*e: function [[rread]] */
+/*s: function [[cleanmf]] */
 void
 cleanmf(Mfile *mf)
 {
@@ -848,7 +848,7 @@ cleanmf(Mfile *mf)
     mf->nreply = 0;
     mf->nextnet = netlist;
 }
-/*e: function cleanmf */
+/*e: function [[cleanmf]] */
 
 void
 rwrite(Job *job, Mfile *mf)
@@ -965,7 +965,7 @@ send:
     sendmsg(job, err);
 }
 
-/*s: function rclunk */
+/*s: function [[rclunk]] */
 void
 rclunk(Job *job, Mfile *mf)
 {
@@ -976,18 +976,18 @@ rclunk(Job *job, Mfile *mf)
     mf->fid = 0;
     sendmsg(job, 0);
 }
-/*e: function rclunk */
+/*e: function [[rclunk]] */
 
-/*s: function rremove */
+/*s: function [[rremove]] */
 void
 rremove(Job *job, Mfile *mf)
 {
     USED(mf);
     sendmsg(job, "remove permission denied");
 }
-/*e: function rremove */
+/*e: function [[rremove]] */
 
-/*s: function rstat */
+/*s: function [[rstat]] */
 void
 rstat(Job *job, Mfile *mf)
 {
@@ -1012,18 +1012,18 @@ rstat(Job *job, Mfile *mf)
     job->reply.stat = buf;
     sendmsg(job, 0);
 }
-/*e: function rstat */
+/*e: function [[rstat]] */
 
-/*s: function rwstat */
+/*s: function [[rwstat]] */
 void
 rwstat(Job *job, Mfile *mf)
 {
     USED(mf);
     sendmsg(job, "wstat permission denied");
 }
-/*e: function rwstat */
+/*e: function [[rwstat]] */
 
-/*s: function sendmsg */
+/*s: function [[sendmsg]] */
 void
 sendmsg(Job *job, char *err)
 {
@@ -1052,55 +1052,55 @@ sendmsg(Job *job, char *err)
     if(debug)
         syslog(0, logfile, "%F %d", &job->reply, n);
 }
-/*e: function sendmsg */
+/*e: function [[sendmsg]] */
 
-/*s: function error (networking/ndb/cs.c) */
+/*s: function [[error]]([[(networking/ndb/cs.c)]]) */
 void
 error(char *s)
 {
     syslog(1, "cs", "%s: %r", s);
     _exits(0);
 }
-/*e: function error (networking/ndb/cs.c) */
+/*e: function [[error]]([[(networking/ndb/cs.c)]]) */
 
-/*s: function isvalidip */
+/*s: function [[isvalidip]] */
 static int
 isvalidip(uchar *ip)
 {
     return ipcmp(ip, IPnoaddr) != 0 && ipcmp(ip, v4prefix) != 0;
 }
-/*e: function isvalidip */
+/*e: function [[isvalidip]] */
 
-/*s: global loopbacknet (networking/ndb/cs.c) */
+/*s: global [[loopbacknet]]([[(networking/ndb/cs.c)]]) */
 static uchar loopbacknet[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
     127, 0, 0, 0
 };
-/*e: global loopbacknet (networking/ndb/cs.c) */
-/*s: global loopbackmask (networking/ndb/cs.c) */
+/*e: global [[loopbacknet]]([[(networking/ndb/cs.c)]]) */
+/*s: global [[loopbackmask]]([[(networking/ndb/cs.c)]]) */
 static uchar loopbackmask[IPaddrlen] = {
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
     0xff, 0, 0, 0
 };
-/*e: global loopbackmask (networking/ndb/cs.c) */
+/*e: global [[loopbackmask]]([[(networking/ndb/cs.c)]]) */
 
-/*s: function readipinterfaces */
+/*s: function [[readipinterfaces]] */
 void
 readipinterfaces(void)
 {
     if(myipaddr(ipa, mntpt) != 0)
         ipmove(ipa, IPnoaddr);
-    sprint(ipaddr_ascii, "%I", ipa);
+    sprint(ipaddr, "%I", ipa);
     if (debug)
-        syslog(0, "dns", "ipaddr is %s\n", ipaddr_ascii);
+        syslog(0, "dns", "ipaddr is %s\n", ipaddr);
 }
-/*e: function readipinterfaces */
+/*e: function [[readipinterfaces]] */
 
-/*s: function ipid */
+/*s: function [[ipid]] */
 /*
  *  get the system name
  */
@@ -1150,7 +1150,7 @@ ipid(void)
         if(mysysname == 0){
             t = nil;
             if(isvalidip(ipa))
-                free(ndbgetvalue(db, &s, "ip", ipaddr_ascii, "sys", &t));
+                free(ndbgetvalue(db, &s, "ip", ipaddr, "sys", &t));
             if(t == nil){
                 for(f = 0; f < 3; f++){
                     snprint(buf, sizeof buf, "%s/ether%d", mntpt, f);
@@ -1173,7 +1173,7 @@ ipid(void)
 
         /* nothing else worked, use the ip address */
         if(mysysname == 0 && isvalidip(ipa))
-            mysysname = strdup(ipaddr_ascii);
+            mysysname = strdup(ipaddr);
 
 
         /* set /dev/sysname if we now know it */
@@ -1186,9 +1186,9 @@ ipid(void)
         }
     }
 }
-/*e: function ipid */
+/*e: function [[ipid]] */
 
-/*s: function netinit */
+/*s: function [[netinit]] */
 /*
  *  Set up a list of default networks by looking for
  *  /net/^*^/clone.
@@ -1234,16 +1234,16 @@ netinit(int background)
 
     if(debug)
         syslog(0, logfile, "mysysname %s eaddr %s ipaddr %s ipa %I\n",
-            mysysname?mysysname:"???", eaddr, ipaddr_ascii, ipa);
+            mysysname?mysysname:"???", eaddr, ipaddr, ipa);
 
     if(background){
         unlock(&netlock);
         _exits(0);
     }
 }
-/*e: function netinit */
+/*e: function [[netinit]] */
 
-/*s: function netadd */
+/*s: function [[netadd]] */
 /*
  *  add networks to the standard list
  */
@@ -1271,9 +1271,9 @@ netadd(char *p)
         }
     }
 }
-/*e: function netadd */
+/*e: function [[netadd]] */
 
-/*s: function lookforproto */
+/*s: function [[lookforproto]] */
 int
 lookforproto(Ndbtuple *t, char *proto)
 {
@@ -1282,9 +1282,9 @@ lookforproto(Ndbtuple *t, char *proto)
             return 1;
     return 0;
 }
-/*e: function lookforproto */
+/*e: function [[lookforproto]] */
 
-/*s: function lookup (networking/ndb/cs.c) */
+/*s: function [[lookup]]([[(networking/ndb/cs.c)]]) */
 /*
  *  lookup a request.  the network "net" means we should pick the
  *  best network to get there.
@@ -1388,9 +1388,9 @@ lookup(Mfile *mf)
         return 1;
     }
 }
-/*e: function lookup (networking/ndb/cs.c) */
+/*e: function [[lookup]]([[(networking/ndb/cs.c)]]) */
 
-/*s: function ipserv */
+/*s: function [[ipserv]] */
 /*
  *  translate an ip service name into a port number.  If it's a numeric port
  *  number, look for restricted access.
@@ -1450,9 +1450,9 @@ ipserv(Network *np, char *name, char *buf, int blen)
 
     return buf;
 }
-/*e: function ipserv */
+/*e: function [[ipserv]] */
 
-/*s: function ipattrlookup */
+/*s: function [[ipattrlookup]] */
 /*
  *  lookup an ip attribute
  */
@@ -1479,9 +1479,9 @@ ipattrlookup(Ndb *db, char *ipa, char *attr, char *val, int vlen)
     ndbfree(t);
     return 0;
 }
-/*e: function ipattrlookup */
+/*e: function [[ipattrlookup]] */
 
-/*s: function iplookup */
+/*s: function [[iplookup]] */
 /*
  *  lookup (and translate) an ip destination
  */
@@ -1526,7 +1526,7 @@ iplookup(Network *np, char *host, char *serv, int nolookup)
      *  need to search for
      */
     if(*host == '$'){
-        if(ipattrlookup(db, ipaddr_ascii, host+1, dollar, sizeof dollar))
+        if(ipattrlookup(db, ipaddr, host+1, dollar, sizeof dollar))
             host = dollar;
     }
 
@@ -1597,9 +1597,9 @@ iplookup(Network *np, char *host, char *serv, int nolookup)
 
     return t;
 }
-/*e: function iplookup */
+/*e: function [[iplookup]] */
 
-/*s: function iptrans */
+/*s: function [[iptrans]] */
 /*
  *  translate an ip address
  */
@@ -1631,9 +1631,9 @@ iptrans(Ndbtuple *t, Network *np, char *serv, char *rem, int hack)
 
     return strdup(reply);
 }
-/*e: function iptrans */
+/*e: function [[iptrans]] */
 
-/*s: function telcolookup */
+/*s: function [[telcolookup]] */
 /*
  *  lookup a telephone number
  */
@@ -1652,9 +1652,9 @@ telcolookup(Network *np, char *host, char *serv, int nolookup)
 
     return reorder(t, s.t);
 }
-/*e: function telcolookup */
+/*e: function [[telcolookup]] */
 
-/*s: function telcotrans */
+/*s: function [[telcotrans]] */
 /*
  *  translate a telephone address
  */
@@ -1679,9 +1679,9 @@ telcotrans(Ndbtuple *t, Network *np, char *serv, char *rem, int)
             t->val, x);
     return strdup(reply);
 }
-/*e: function telcotrans */
+/*e: function [[telcotrans]] */
 
-/*s: function reorder */
+/*s: function [[reorder]] */
 /*
  *  reorder the tuple to put x's line first in the entry
  */
@@ -1709,9 +1709,9 @@ reorder(Ndbtuple *t, Ndbtuple *x)
     nt->entry = t;
     return line;
 }
-/*e: function reorder */
+/*e: function [[reorder]] */
 
-/*s: function slave (networking/ndb/cs.c) */
+/*s: function [[slave]]([[(networking/ndb/cs.c)]]) */
 /*
  *  create a slave process to handle a request to avoid one request blocking
  *  another.  parent returns to job loop.
@@ -1736,9 +1736,9 @@ slave(char *host)
     }
 
 }
-/*e: function slave (networking/ndb/cs.c) */
+/*e: function [[slave]]([[(networking/ndb/cs.c)]]) */
 
-/*s: function dnsip6lookup */
+/*s: function [[dnsip6lookup]] */
 static Ndbtuple*
 dnsip6lookup(char *mntpt, char *buf, Ndbtuple *t)
 {
@@ -1762,9 +1762,9 @@ dnsip6lookup(char *mntpt, char *buf, Ndbtuple *t)
     tt->entry = t6;
     return t;
 }
-/*e: function dnsip6lookup */
+/*e: function [[dnsip6lookup]] */
 
-/*s: function dnsiplookup */
+/*s: function [[dnsiplookup]] */
 /*
  *  call the dns process and have it try to translate a name
  */
@@ -1802,9 +1802,9 @@ dnsiplookup(char *host, Ndbs *s)
     lock(&dblock);
     return t;
 }
-/*e: function dnsiplookup */
+/*e: function [[dnsiplookup]] */
 
-/*s: function qmatch */
+/*s: function [[qmatch]] */
 int
 qmatch(Ndbtuple *t, char **attr, char **val, int n)
 {
@@ -1825,9 +1825,9 @@ qmatch(Ndbtuple *t, char **attr, char **val, int n)
     }
     return i == n;
 }
-/*e: function qmatch */
+/*e: function [[qmatch]] */
 
-/*s: function qreply */
+/*s: function [[qreply]] */
 void
 qreply(Mfile *mf, Ndbtuple *t)
 {
@@ -1849,16 +1849,16 @@ qreply(Mfile *mf, Ndbtuple *t)
     }
     s_free(s);
 }
-/*e: function qreply */
+/*e: function [[qreply]] */
 
-/*s: enum _anon_ (networking/ndb/cs.c)3 */
+/*s: enum [[_anon_ (networking/ndb/cs.c)3]] */
 enum
 {
     Maxattr=	32,
 };
-/*e: enum _anon_ (networking/ndb/cs.c)3 */
+/*e: enum [[_anon_ (networking/ndb/cs.c)3]] */
 
-/*s: function genquery */
+/*s: function [[genquery]] */
 /*
  *  generic query lookup.  The query is of one of the following
  *  forms:
@@ -1928,9 +1928,9 @@ genquery(Mfile *mf, char *query)
 
     return "no match";
 }
-/*e: function genquery */
+/*e: function [[genquery]] */
 
-/*s: function ipresolve */
+/*s: function [[ipresolve]] */
 /*
  *  resolve an ip address
  */
@@ -1953,9 +1953,9 @@ ipresolve(char *attr, char *host)
     }
     return t;
 }
-/*e: function ipresolve */
+/*e: function [[ipresolve]] */
 
-/*s: function ipinfoquery */
+/*s: function [[ipinfoquery]] */
 char*
 ipinfoquery(Mfile *mf, char **list, int n)
 {
@@ -1978,7 +1978,7 @@ ipinfoquery(Mfile *mf, char **list, int n)
         n--;
     }else{
         attr = "ip";
-        val = ipaddr_ascii;
+        val = ipaddr;
     }
 
     if(n < 1)
@@ -2043,9 +2043,9 @@ ipinfoquery(Mfile *mf, char **list, int n)
 
     return nil;
 }
-/*e: function ipinfoquery */
+/*e: function [[ipinfoquery]] */
 
-/*s: function emalloc (networking/ndb/cs.c) */
+/*s: function [[emalloc]]([[(networking/ndb/cs.c)]]) */
 void*
 emalloc(int size)
 {
@@ -2057,9 +2057,9 @@ emalloc(int size)
     memset(x, 0, size);
     return x;
 }
-/*e: function emalloc (networking/ndb/cs.c) */
+/*e: function [[emalloc]]([[(networking/ndb/cs.c)]]) */
 
-/*s: function estrdup (networking/ndb/cs.c) */
+/*s: function [[estrdup]]([[(networking/ndb/cs.c)]]) */
 char*
 estrdup(char *s)
 {
@@ -2073,5 +2073,5 @@ estrdup(char *s)
     memmove(p, s, size);
     return p;
 }
-/*e: function estrdup (networking/ndb/cs.c) */
+/*e: function [[estrdup]]([[(networking/ndb/cs.c)]]) */
 /*e: networking/ndb/cs.c */

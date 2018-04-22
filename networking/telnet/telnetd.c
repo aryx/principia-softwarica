@@ -5,55 +5,55 @@
 #include <auth.h>
 #include <libsec.h>
 
-#include "telnet.h"
+#include "../ip/telnet.h"
 
 /*  console state (for consctl) */
 typedef struct Consstate	Consstate;
-/*s: struct Consstate */
+/*s: struct [[Consstate]] */
 struct Consstate{
     int raw;
     int hold;
 };
-/*e: struct Consstate */
-/*s: global cons */
+/*e: struct [[Consstate]] */
+/*s: global [[cons]] */
 Consstate *cons;
-/*e: global cons */
+/*e: global [[cons]] */
 
-/*s: global notefd */
+/*s: global [[notefd]] */
 int notefd;		/* for sending notes to the child */
-/*e: global notefd */
-/*s: global noproto */
+/*e: global [[notefd]] */
+/*s: global [[noproto]] */
 int noproto;		/* true if we shouldn't be using the telnet protocol */
-/*e: global noproto */
-/*s: global trusted */
+/*e: global [[noproto]] */
+/*s: global [[trusted]] */
 int trusted;		/* true if we need not authenticate - current user is ok */
-/*e: global trusted */
-/*s: global nonone */
+/*e: global [[trusted]] */
+/*s: global [[nonone]] */
 int nonone = 1;		/* don't allow none logins */
-/*e: global nonone */
-/*s: global noworldonly */
+/*e: global [[nonone]] */
+/*s: global [[noworldonly]] */
 int noworldonly;	/* only noworld accounts */
-/*e: global noworldonly */
+/*e: global [[noworldonly]] */
 
-/*s: enum _anon_ (networking/ip/telnetd.c) */
+/*s: enum [[_anon_ (networking/ip/telnetd.c)]] */
 enum
 {
     Maxpath=	256,
     Maxuser=	64,
     Maxvar=		32,
 };
-/*e: enum _anon_ (networking/ip/telnetd.c) */
+/*e: enum [[_anon_ (networking/ip/telnetd.c)]] */
 
-/*s: global netib */
+/*s: global [[netib]] */
 /* input and output buffers for network connection */
 Biobuf	netib;
-/*e: global netib */
-/*s: global childib */
+/*e: global [[netib]] */
+/*s: global [[childib]] */
 Biobuf	childib;
-/*e: global childib */
-/*s: global remotesys */
+/*e: global [[childib]] */
+/*s: global [[remotesys]] */
 char	remotesys[Maxpath];	/* name of remote system */
-/*e: global remotesys */
+/*e: global [[remotesys]] */
 
 int	alnum(int);
 int	conssim(void);
@@ -68,11 +68,11 @@ int	noworldlogin(char*);
 void*	share(ulong);
 int	doauth(char*);
 
-/*s: constant TELNETLOG */
+/*s: constant [[TELNETLOG]] */
 #define TELNETLOG "telnet"
-/*e: constant TELNETLOG */
+/*e: constant [[TELNETLOG]] */
 
-/*s: function logit */
+/*s: function [[logit]] */
 void
 logit(char *fmt, ...)
 {
@@ -84,9 +84,9 @@ logit(char *fmt, ...)
     va_end(arg);
     syslog(0, TELNETLOG, "(%s) %s", remotesys, buf);
 }
-/*e: function logit */
+/*e: function [[logit]] */
 
-/*s: function getremote */
+/*s: function [[getremote]] */
 void
 getremote(char *dir)
 {
@@ -104,9 +104,9 @@ getremote(char *dir)
         strcpy(remotesys, remfile);
     close(fd);
 }
-/*e: function getremote */
+/*e: function [[getremote]] */
 
-/*s: function main (networking/ip/telnetd.c) */
+/*s: function [[main]]([[(networking/ip/telnetd.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -238,9 +238,9 @@ main(int argc, char *argv[])
     write(fd, "die", 3);
     exits(0);
 }
-/*e: function main (networking/ip/telnetd.c) */
+/*e: function [[main]]([[(networking/ip/telnetd.c)]]) */
 
-/*s: function prompt */
+/*s: function [[prompt]] */
 void
 prompt(char *p, char *b, int n, int raw)
 {
@@ -265,9 +265,9 @@ prompt(char *p, char *b, int n, int raw)
     if(raw)
         opt[Echo].local = echo;
 }
-/*e: function prompt */
+/*e: function [[prompt]] */
 
-/*s: function challuser */
+/*s: function [[challuser]] */
 /*
  *  challenge user
  */
@@ -302,8 +302,8 @@ challuser(char *user)
         return -1;
     return 0;
 }
-/*e: function challuser */
-/*s: function noworldlogin */
+/*e: function [[challuser]] */
+/*s: function [[noworldlogin]] */
 /*
  *  use the in the clear apop password to change user id
  */
@@ -318,9 +318,9 @@ noworldlogin(char *user)
     rfork(RFNOMNT);	/* sandbox */
     return 0;
 }
-/*e: function noworldlogin */
+/*e: function [[noworldlogin]] */
 
-/*s: function doauth */
+/*s: function [[doauth]] */
 int
 doauth(char *user)
 {
@@ -333,9 +333,9 @@ doauth(char *user)
     return challuser(user);
         
 }
-/*e: function doauth */
+/*e: function [[doauth]] */
 
-/*s: function fromchild */
+/*s: function [[fromchild]] */
 /*
  *  Process some input from the child, add protocol if needed.  If
  *  the input buffer goes empty, return.
@@ -362,9 +362,9 @@ fromchild(char *bp, int len)
     }
     return bp-start;
 }
-/*e: function fromchild */
+/*e: function [[fromchild]] */
 
-/*s: macro ECHO */
+/*s: macro [[ECHO]] */
 /*
  *  Read from the network up to a '\n' or some other break.
  *
@@ -379,8 +379,8 @@ fromchild(char *bp, int len)
  *	Intr causes an "interrupt" note to be sent to the children.
  */
 #define ECHO(c) { *ebp++ = (c); }
-/*e: macro ECHO */
-/*s: function fromnet (networking/ip/telnetd.c) */
+/*e: macro [[ECHO]] */
+/*s: function [[fromnet]]([[(networking/ip/telnetd.c)]]) */
 int
 fromnet(char *bp, int len)
 {
@@ -514,9 +514,9 @@ out:
         write(1, echobuf, ebp-echobuf);
     return bp - start;
 }
-/*e: function fromnet (networking/ip/telnetd.c) */
+/*e: function [[fromnet]]([[(networking/ip/telnetd.c)]]) */
 
-/*s: function termchange */
+/*s: function [[termchange]] */
 int
 termchange(Biobuf *bp, int cmd)
 {
@@ -535,9 +535,9 @@ termchange(Biobuf *bp, int cmd)
     *p++ = Se;
     return iwrite(Bfildes(bp), buf, p-buf);
 }
-/*e: function termchange */
+/*e: function [[termchange]] */
 
-/*s: function termsub (networking/ip/telnetd.c) */
+/*s: function [[termsub]]([[(networking/ip/telnetd.c)]]) */
 int
 termsub(Biobuf *bp, uchar *sub, int n)
 {
@@ -552,9 +552,9 @@ termsub(Biobuf *bp, uchar *sub, int n)
     putenv("TERM", term);
     return 0;
 }
-/*e: function termsub (networking/ip/telnetd.c) */
+/*e: function [[termsub]]([[(networking/ip/telnetd.c)]]) */
 
-/*s: function xlocchange */
+/*s: function [[xlocchange]] */
 int
 xlocchange(Biobuf *bp, int cmd)
 {
@@ -573,9 +573,9 @@ xlocchange(Biobuf *bp, int cmd)
     *p++ = Se;
     return iwrite(Bfildes(bp), buf, p-buf);
 }
-/*e: function xlocchange */
+/*e: function [[xlocchange]] */
 
-/*s: function xlocsub (networking/ip/telnetd.c) */
+/*s: function [[xlocsub]]([[(networking/ip/telnetd.c)]]) */
 int
 xlocsub(Biobuf *bp, uchar *sub, int n)
 {
@@ -590,9 +590,9 @@ xlocsub(Biobuf *bp, uchar *sub, int n)
     putenv("DISPLAY", xloc);
     return 0;
 }
-/*e: function xlocsub (networking/ip/telnetd.c) */
+/*e: function [[xlocsub]]([[(networking/ip/telnetd.c)]]) */
 
-/*s: function share (networking/ip/telnetd.c) */
+/*s: function [[share]]([[(networking/ip/telnetd.c)]]) */
 /*
  *  create a shared segment.  Make is start 2 meg higher than the current
  *  end of process memory.
@@ -612,9 +612,9 @@ share(ulong len)
 
     return vastart;
 }
-/*e: function share (networking/ip/telnetd.c) */
+/*e: function [[share]]([[(networking/ip/telnetd.c)]]) */
 
-/*s: function conssim */
+/*s: function [[conssim]] */
 /*
  *  bind a pipe onto consctl and keep reading it to
  *  get changes to console state.
@@ -683,9 +683,9 @@ conssim(void)
     exits(0);
     return -1;
 }
-/*e: function conssim */
+/*e: function [[conssim]] */
 
-/*s: function alnum */
+/*s: function [[alnum]] */
 int
 alnum(int c)
 {
@@ -702,5 +702,5 @@ alnum(int c)
         return 0;
     return 1;
 }
-/*e: function alnum */
+/*e: function [[alnum]] */
 /*e: networking/ip/telnetd.c */

@@ -5,7 +5,7 @@
 #include <auth.h>
 #include "imap4d.h"
 
-/*s: global mt64d */
+/*s: global [[mt64d]] */
 /*
  * modified utf-7, as per imap4 spec
  * like utf-7, but substitues , for / in base 64,
@@ -21,12 +21,12 @@
  */
 
 static uchar mt64d[256];
-/*e: global mt64d */
-/*s: global mt64e */
+/*e: global [[mt64d]] */
+/*s: global [[mt64e]] */
 static char mt64e[64];
-/*e: global mt64e */
+/*e: global [[mt64e]] */
 
-/*s: function initm64 */
+/*s: function [[initm64]] */
 static void
 initm64(void)
 {
@@ -52,9 +52,9 @@ initm64(void)
     mt64e[i] = ',';
     mt64d[','] = i;
 }
-/*e: function initm64 */
+/*e: function [[initm64]] */
 
-/*s: function encmutf7 */
+/*s: function [[encmutf7]] */
 int
 encmutf7(char *out, int lim, char *in)
 {
@@ -120,9 +120,9 @@ encmutf7(char *out, int lim, char *in)
     *out = '\0';
     return out - start;
 }
-/*e: function encmutf7 */
+/*e: function [[encmutf7]] */
 
-/*s: function decmutf7 */
+/*s: function [[decmutf7]] */
 int
 decmutf7(char *out, int lim, char *in)
 {
@@ -182,5 +182,5 @@ decmutf7(char *out, int lim, char *in)
     *out = '\0';
     return out - start;
 }
-/*e: function decmutf7 */
+/*e: function [[decmutf7]] */
 /*e: networking/ip/imap4d/mutf7.c */

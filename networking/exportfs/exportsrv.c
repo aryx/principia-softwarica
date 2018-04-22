@@ -8,45 +8,45 @@
 
 extern char *netdir, *local, *remote;
 
-/*s: global Ebadfid (networking/exportfs/exportsrv.c) */
+/*s: global [[Ebadfid]]([[(networking/exportfs/exportsrv.c)]]) */
 char Ebadfid[] = "Bad fid";
-/*e: global Ebadfid (networking/exportfs/exportsrv.c) */
-/*s: global Enotdir (networking/exportfs/exportsrv.c) */
+/*e: global [[Ebadfid]]([[(networking/exportfs/exportsrv.c)]]) */
+/*s: global [[Enotdir]]([[(networking/exportfs/exportsrv.c)]]) */
 char Enotdir[] = "Not a directory";
-/*e: global Enotdir (networking/exportfs/exportsrv.c) */
-/*s: global Edupfid (networking/exportfs/exportsrv.c) */
+/*e: global [[Enotdir]]([[(networking/exportfs/exportsrv.c)]]) */
+/*s: global [[Edupfid]]([[(networking/exportfs/exportsrv.c)]]) */
 char Edupfid[] = "Fid already in use";
-/*e: global Edupfid (networking/exportfs/exportsrv.c) */
-/*s: global Eopen (networking/exportfs/exportsrv.c) */
+/*e: global [[Edupfid]]([[(networking/exportfs/exportsrv.c)]]) */
+/*s: global [[Eopen]]([[(networking/exportfs/exportsrv.c)]]) */
 char Eopen[] = "Fid already opened";
-/*e: global Eopen (networking/exportfs/exportsrv.c) */
-/*s: global Exmnt (networking/exportfs/exportsrv.c) */
+/*e: global [[Eopen]]([[(networking/exportfs/exportsrv.c)]]) */
+/*s: global [[Exmnt]]([[(networking/exportfs/exportsrv.c)]]) */
 char Exmnt[] = "Cannot .. past mount point";
-/*e: global Exmnt (networking/exportfs/exportsrv.c) */
-/*s: global Emip (networking/exportfs/exportsrv.c) */
+/*e: global [[Exmnt]]([[(networking/exportfs/exportsrv.c)]]) */
+/*s: global [[Emip]]([[(networking/exportfs/exportsrv.c)]]) */
 char Emip[] = "Mount in progress";
-/*e: global Emip (networking/exportfs/exportsrv.c) */
-/*s: global Enopsmt (networking/exportfs/exportsrv.c) */
+/*e: global [[Emip]]([[(networking/exportfs/exportsrv.c)]]) */
+/*s: global [[Enopsmt]]([[(networking/exportfs/exportsrv.c)]]) */
 char Enopsmt[] = "Out of pseudo mount points";
-/*e: global Enopsmt (networking/exportfs/exportsrv.c) */
-/*s: global Enomem (networking/exportfs/exportsrv.c) */
+/*e: global [[Enopsmt]]([[(networking/exportfs/exportsrv.c)]]) */
+/*s: global [[Enomem]]([[(networking/exportfs/exportsrv.c)]]) */
 char Enomem[] = "No memory";
-/*e: global Enomem (networking/exportfs/exportsrv.c) */
-/*s: global Eversion */
+/*e: global [[Enomem]]([[(networking/exportfs/exportsrv.c)]]) */
+/*s: global [[Eversion]] */
 char Eversion[] = "Bad 9P2000 version";
-/*e: global Eversion */
-/*s: global Ereadonly */
+/*e: global [[Eversion]] */
+/*s: global [[Ereadonly]] */
 char Ereadonly[] = "File system read only";
-/*e: global Ereadonly */
+/*e: global [[Ereadonly]] */
 
-/*s: global messagesize */
+/*s: global [[messagesize]] */
 ulong messagesize;
-/*e: global messagesize */
-/*s: global readonly (networking/exportfs/exportsrv.c) */
+/*e: global [[messagesize]] */
+/*s: global [[readonly]]([[(networking/exportfs/exportsrv.c)]]) */
 int readonly;
-/*e: global readonly (networking/exportfs/exportsrv.c) */
+/*e: global [[readonly]]([[(networking/exportfs/exportsrv.c)]]) */
 
-/*s: function Xversion */
+/*s: function [[Xversion]] */
 void
 Xversion(Fsrpc *t)
 {
@@ -64,9 +64,9 @@ Xversion(Fsrpc *t)
     reply(&t->work, &rhdr, 0);
     t->busy = 0;
 }
-/*e: function Xversion */
+/*e: function [[Xversion]] */
 
-/*s: function Xauth */
+/*s: function [[Xauth]] */
 void
 Xauth(Fsrpc *t)
 {
@@ -75,9 +75,9 @@ Xauth(Fsrpc *t)
     reply(&t->work, &rhdr, "exportfs: authentication not required");
     t->busy = 0;
 }
-/*e: function Xauth */
+/*e: function [[Xauth]] */
 
-/*s: function Xflush */
+/*s: function [[Xflush]] */
 void
 Xflush(Fsrpc *t)
 {
@@ -104,9 +104,9 @@ Xflush(Fsrpc *t)
     DEBUG(DFD, "\tflush reply\n");
     t->busy = 0;
 }
-/*e: function Xflush */
+/*e: function [[Xflush]] */
 
-/*s: function Xattach */
+/*s: function [[Xattach]] */
 void
 Xattach(Fsrpc *t)
 {
@@ -160,9 +160,9 @@ Xattach(Fsrpc *t)
     reply(&t->work, &rhdr, 0);
     t->busy = 0;
 }
-/*e: function Xattach */
+/*e: function [[Xattach]] */
 
-/*s: function clonefid */
+/*s: function [[clonefid]] */
 Fid*
 clonefid(Fid *f, int new)
 {
@@ -184,9 +184,9 @@ clonefid(Fid *f, int new)
     n->f->ref++;
     return n;
 }
-/*e: function clonefid */
+/*e: function [[clonefid]] */
 
-/*s: function Xwalk */
+/*s: function [[Xwalk]] */
 void
 Xwalk(Fsrpc *t)
 {
@@ -247,9 +247,9 @@ Xwalk(Fsrpc *t)
     reply(&t->work, &rhdr, e);
     t->busy = 0;
 }
-/*e: function Xwalk */
+/*e: function [[Xwalk]] */
 
-/*s: function Xclunk */
+/*s: function [[Xclunk]] */
 void
 Xclunk(Fsrpc *t)
 {
@@ -270,9 +270,9 @@ Xclunk(Fsrpc *t)
     reply(&t->work, &rhdr, 0);
     t->busy = 0;
 }
-/*e: function Xclunk */
+/*e: function [[Xclunk]] */
 
-/*s: function Xstat */
+/*s: function [[Xstat]] */
 void
 Xstat(Fsrpc *t)
 {
@@ -315,9 +315,9 @@ Xstat(Fsrpc *t)
     free(statbuf);
     t->busy = 0;
 }
-/*e: function Xstat */
+/*e: function [[Xstat]] */
 
-/*s: function getiounit */
+/*s: function [[getiounit]] */
 static int
 getiounit(int fd)
 {
@@ -328,9 +328,9 @@ getiounit(int fd)
         n = messagesize-IOHDRSZ;
     return n;
 }
-/*e: function getiounit */
+/*e: function [[getiounit]] */
 
-/*s: function Xcreate */
+/*s: function [[Xcreate]] */
 void
 Xcreate(Fsrpc *t)
 {
@@ -378,9 +378,9 @@ Xcreate(Fsrpc *t)
     reply(&t->work, &rhdr, 0);
     t->busy = 0;
 }
-/*e: function Xcreate */
+/*e: function [[Xcreate]] */
 
-/*s: function Xremove */
+/*s: function [[Xremove]] */
 void
 Xremove(Fsrpc *t)
 {
@@ -419,9 +419,9 @@ Xremove(Fsrpc *t)
     reply(&t->work, &rhdr, 0);
     t->busy = 0;
 }
-/*e: function Xremove */
+/*e: function [[Xremove]] */
 
-/*s: function Xwstat */
+/*s: function [[Xwstat]] */
 void
 Xwstat(Fsrpc *t)
 {
@@ -474,9 +474,9 @@ Xwstat(Fsrpc *t)
     free(strings);
     t->busy = 0;
 }
-/*e: function Xwstat */
+/*e: function [[Xwstat]] */
 
-/*s: function procsetname (networking/exportfs/exportsrv.c) */
+/*s: function [[procsetname]]([[(networking/exportfs/exportsrv.c)]]) */
 /*
  * based on libthread's threadsetname, but drags in less library code.
  * actually just sets the arguments displayed.
@@ -501,9 +501,9 @@ procsetname(char *fmt, ...)
     }
     free(cmdname);
 }
-/*e: function procsetname (networking/exportfs/exportsrv.c) */
+/*e: function [[procsetname]]([[(networking/exportfs/exportsrv.c)]]) */
 
-/*s: function slave */
+/*s: function [[slave]] */
 void
 slave(Fsrpc *f)
 {
@@ -570,9 +570,9 @@ slave(Fsrpc *f)
         }
     }
 }
-/*e: function slave */
+/*e: function [[slave]] */
 
-/*s: function blockingslave */
+/*s: function [[blockingslave]] */
 void
 blockingslave(void)
 {
@@ -622,9 +622,9 @@ flushme:
         m->busy = 0;
     }
 }
-/*e: function blockingslave */
+/*e: function [[blockingslave]] */
 
-/*s: function openmount */
+/*s: function [[openmount]] */
 int
 openmount(int sfd)
 {
@@ -664,9 +664,9 @@ openmount(int sfd)
     _exits("whoops: exec failed");	
     return -1;
 }
-/*e: function openmount */
+/*e: function [[openmount]] */
 
-/*s: function slaveopen */
+/*s: function [[slaveopen]] */
 void
 slaveopen(Fsrpc *p)
 {
@@ -720,9 +720,9 @@ slaveopen(Fsrpc *p)
     rhdr.qid = f->f->qid;
     reply(work, &rhdr, 0);
 }
-/*e: function slaveopen */
+/*e: function [[slaveopen]] */
 
-/*s: function slaveread */
+/*s: function [[slaveread]] */
 void
 slaveread(Fsrpc *p)
 {
@@ -767,9 +767,9 @@ slaveread(Fsrpc *p)
     reply(work, &rhdr, 0);
     free(data);
 }
-/*e: function slaveread */
+/*e: function [[slaveread]] */
 
-/*s: function slavewrite */
+/*s: function [[slavewrite]] */
 void
 slavewrite(Fsrpc *p)
 {
@@ -803,18 +803,18 @@ slavewrite(Fsrpc *p)
     rhdr.count = n;
     reply(work, &rhdr, 0);
 }
-/*e: function slavewrite */
+/*e: function [[slavewrite]] */
 
-/*s: function reopen */
+/*s: function [[reopen]] */
 void
 reopen(Fid *f)
 {
     USED(f);
     fatal("reopen");
 }
-/*e: function reopen */
+/*e: function [[reopen]] */
 
-/*s: function flushaction */
+/*s: function [[flushaction]] */
 void
 flushaction(void *a, char *cause)
 {
@@ -828,5 +828,5 @@ flushaction(void *a, char *cause)
 
     noted(NCONT);
 }
-/*e: function flushaction */
+/*e: function [[flushaction]] */
 /*e: networking/exportfs/exportsrv.c */

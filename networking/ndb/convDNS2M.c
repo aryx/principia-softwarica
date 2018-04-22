@@ -4,7 +4,7 @@
 #include <ip.h>
 #include "dns.h"
 
-/*s: enum _anon_ (networking/ndb/convDNS2M.c) */
+/*s: enum [[_anon_ (networking/ndb/convDNS2M.c)]] */
 /*
  *  a dictionary of domain names for packing messages
  */
@@ -12,9 +12,9 @@ enum
 {
     Ndict=	64,
 };
-/*e: enum _anon_ (networking/ndb/convDNS2M.c) */
+/*e: enum [[_anon_ (networking/ndb/convDNS2M.c)]] */
 typedef struct Dict	Dict;
-/*s: struct Dict */
+/*s: struct [[Dict]] */
 struct Dict
 {
     struct {
@@ -26,37 +26,37 @@ struct Dict
     char	buf[16*1024];	/* buffer for unpacked names (was 4k) */
     char	*ep;		/* first free char in buf */
 };
-/*e: struct Dict */
+/*e: struct [[Dict]] */
 
-/*s: macro NAME */
+/*s: macro [[NAME]] */
 #define NAME(x)		p = pname(p, ep, x, dp)
-/*e: macro NAME */
-/*s: macro SYMBOL */
+/*e: macro [[NAME]] */
+/*s: macro [[SYMBOL]] */
 #define SYMBOL(x)	p = psym(p, ep, x)
-/*e: macro SYMBOL */
-/*s: macro STRING */
+/*e: macro [[SYMBOL]] */
+/*s: macro [[STRING]] */
 #define STRING(x)	p = pstr(p, ep, x)
-/*e: macro STRING */
-/*s: macro BYTES */
+/*e: macro [[STRING]] */
+/*s: macro [[BYTES]] */
 #define BYTES(x, n)	p = pbytes(p, ep, x, n)
-/*e: macro BYTES */
-/*s: macro USHORT */
+/*e: macro [[BYTES]] */
+/*s: macro [[USHORT]] */
 #define USHORT(x)	p = pushort(p, ep, x)
-/*e: macro USHORT */
-/*s: macro UCHAR */
+/*e: macro [[USHORT]] */
+/*s: macro [[UCHAR]] */
 #define UCHAR(x)	p = puchar(p, ep, x)
-/*e: macro UCHAR */
-/*s: macro ULONG */
+/*e: macro [[UCHAR]] */
+/*s: macro [[ULONG]] */
 #define ULONG(x)	p = pulong(p, ep, x)
-/*e: macro ULONG */
-/*s: macro V4ADDR */
+/*e: macro [[ULONG]] */
+/*s: macro [[V4ADDR]] */
 #define V4ADDR(x)	p = pv4addr(p, ep, x)
-/*e: macro V4ADDR */
-/*s: macro V6ADDR */
+/*e: macro [[V4ADDR]] */
+/*s: macro [[V6ADDR]] */
 #define V6ADDR(x)	p = pv6addr(p, ep, x)
-/*e: macro V6ADDR */
+/*e: macro [[V6ADDR]] */
 
-/*s: function psym */
+/*s: function [[psym]] */
 static uchar*
 psym(uchar *p, uchar *ep, char *np)
 {
@@ -71,17 +71,17 @@ psym(uchar *p, uchar *ep, char *np)
     memmove(p, np, n);
     return p + n;
 }
-/*e: function psym */
+/*e: function [[psym]] */
 
-/*s: function pstr */
+/*s: function [[pstr]] */
 static uchar*
 pstr(uchar *p, uchar *ep, char *np)
 {
     return psym(p, ep, np);
 }
-/*e: function pstr */
+/*e: function [[pstr]] */
 
-/*s: function pbytes */
+/*s: function [[pbytes]] */
 static uchar*
 pbytes(uchar *p, uchar *ep, uchar *np, int n)
 {
@@ -90,9 +90,9 @@ pbytes(uchar *p, uchar *ep, uchar *np, int n)
     memmove(p, np, n);
     return p + n;
 }
-/*e: function pbytes */
+/*e: function [[pbytes]] */
 
-/*s: function puchar */
+/*s: function [[puchar]] */
 static uchar*
 puchar(uchar *p, uchar *ep, int val)
 {
@@ -101,9 +101,9 @@ puchar(uchar *p, uchar *ep, int val)
     *p++ = val;
     return p;
 }
-/*e: function puchar */
+/*e: function [[puchar]] */
 
-/*s: function pushort */
+/*s: function [[pushort]] */
 static uchar*
 pushort(uchar *p, uchar *ep, int val)
 {
@@ -113,9 +113,9 @@ pushort(uchar *p, uchar *ep, int val)
     *p++ = val;
     return p;
 }
-/*e: function pushort */
+/*e: function [[pushort]] */
 
-/*s: function pulong */
+/*s: function [[pulong]] */
 static uchar*
 pulong(uchar *p, uchar *ep, int val)
 {
@@ -127,9 +127,9 @@ pulong(uchar *p, uchar *ep, int val)
     *p++ = val;
     return p;
 }
-/*e: function pulong */
+/*e: function [[pulong]] */
 
-/*s: function pv4addr */
+/*s: function [[pv4addr]] */
 static uchar*
 pv4addr(uchar *p, uchar *ep, char *name)
 {
@@ -141,9 +141,9 @@ pv4addr(uchar *p, uchar *ep, char *name)
     v6tov4(p, ip);
     return p + 4;
 }
-/*e: function pv4addr */
+/*e: function [[pv4addr]] */
 
-/*s: function pv6addr */
+/*s: function [[pv6addr]] */
 static uchar*
 pv6addr(uchar *p, uchar *ep, char *name)
 {
@@ -152,9 +152,9 @@ pv6addr(uchar *p, uchar *ep, char *name)
     parseip(p, name);
     return p + IPaddrlen;
 }
-/*e: function pv6addr */
+/*e: function [[pv6addr]] */
 
-/*s: function pname */
+/*s: function [[pname]] */
 static uchar*
 pname(uchar *p, uchar *ep, char *np, Dict *dp)
 {
@@ -226,9 +226,9 @@ pname(uchar *p, uchar *ep, char *np, Dict *dp)
 
     return p;
 }
-/*e: function pname */
+/*e: function [[pname]] */
 
-/*s: function convRR2M */
+/*s: function [[convRR2M]] */
 static uchar*
 convRR2M(RR *rp, uchar *p, uchar *ep, Dict *dp)
 {
@@ -347,9 +347,9 @@ convRR2M(RR *rp, uchar *p, uchar *ep, Dict *dp)
 
     return p;
 }
-/*e: function convRR2M */
+/*e: function [[convRR2M]] */
 
-/*s: function convQ2M */
+/*s: function [[convQ2M]] */
 static uchar*
 convQ2M(RR *rp, uchar *p, uchar *ep, Dict *dp)
 {
@@ -358,9 +358,9 @@ convQ2M(RR *rp, uchar *p, uchar *ep, Dict *dp)
     USHORT(rp->owner->class);
     return p;
 }
-/*e: function convQ2M */
+/*e: function [[convQ2M]] */
 
-/*s: function rrloop */
+/*s: function [[rrloop]] */
 static uchar*
 rrloop(RR *rp, int *countp, uchar *p, uchar *ep, Dict *dp, int quest)
 {
@@ -379,9 +379,9 @@ rrloop(RR *rp, int *countp, uchar *p, uchar *ep, Dict *dp, int quest)
     }
     return p;
 }
-/*e: function rrloop */
+/*e: function [[rrloop]] */
 
-/*s: function convDNS2M */
+/*s: function [[convDNS2M]] */
 /*
  *  convert into a message
  */
@@ -424,5 +424,5 @@ convDNS2M(DNSmsg *m, uchar *buf, int len)
     USED(p);
     return np - buf;
 }
-/*e: function convDNS2M */
+/*e: function [[convDNS2M]] */
 /*e: networking/ndb/convDNS2M.c */

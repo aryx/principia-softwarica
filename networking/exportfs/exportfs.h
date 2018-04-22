@@ -1,17 +1,17 @@
 /*s: networking/exportfs/exportfs.h */
-/*s: constant DEBUG (networking/exportfs/exportfs.h) */
+/*s: constant [[DEBUG]]([[(networking/exportfs/exportfs.h)]]) */
 /*
  * exportfs.h - definitions for exporting file server
  */
 
 #define DEBUG		if(dbg)fprint
-/*e: constant DEBUG (networking/exportfs/exportfs.h) */
-/*s: constant DFD */
+/*e: constant [[DEBUG]]([[(networking/exportfs/exportfs.h)]]) */
+/*s: constant [[DFD]] */
 #define DFD		9
-/*e: constant DFD */
-/*s: macro fidhash */
+/*e: constant [[DFD]] */
+/*s: macro [[fidhash]] */
 #define fidhash(s)	fhash[s%FHASHSIZE]
-/*e: macro fidhash */
+/*e: macro [[fidhash]] */
 
 typedef struct Fsrpc Fsrpc;
 typedef struct Fid Fid;
@@ -19,7 +19,7 @@ typedef struct File File;
 typedef struct Proc Proc;
 typedef struct Qidtab Qidtab;
 
-/*s: struct Fsrpc */
+/*s: struct [[Fsrpc]] */
 struct Fsrpc
 {
     int	busy;		/* Work buffer has pending rpc to service */
@@ -29,9 +29,9 @@ struct Fsrpc
     Fcall	work;		/* Plan 9 incoming Fcall */
     uchar	*buf;		/* Data buffer */
 };
-/*e: struct Fsrpc */
+/*e: struct [[Fsrpc]] */
 
-/*s: struct Fid (networking/exportfs/exportfs.h) */
+/*s: struct [[Fid]]([[(networking/exportfs/exportfs.h)]]) */
 struct Fid
 {
     int	fid;		/* system fd for i/o */
@@ -48,9 +48,9 @@ struct Fid
     int	gdir;		/* glue index */
     vlong	offset;		/* offset in virtual directory */
 };
-/*e: struct Fid (networking/exportfs/exportfs.h) */
+/*e: struct [[Fid]]([[(networking/exportfs/exportfs.h)]]) */
 
-/*s: struct File */
+/*s: struct [[File]] */
 struct File
 {
     char	*name;
@@ -62,18 +62,18 @@ struct File
     File	*child;
     File	*childlist;
 };
-/*e: struct File */
+/*e: struct [[File]] */
 
-/*s: struct Proc */
+/*s: struct [[Proc]] */
 struct Proc
 {
     uintptr	pid;
     int	busy;
     Proc	*next;
 };
-/*e: struct Proc */
+/*e: struct [[Proc]] */
 
-/*s: struct Qidtab */
+/*s: struct [[Qidtab]] */
 struct Qidtab
 {
     int	ref;
@@ -83,9 +83,9 @@ struct Qidtab
     vlong	uniqpath;
     Qidtab	*next;
 };
-/*e: struct Qidtab */
+/*e: struct [[Qidtab]] */
 
-/*s: enum _anon_ (networking/exportfs/exportfs.h) */
+/*s: enum [[_anon_ (networking/exportfs/exportfs.h)]] */
 enum
 {
     MAXPROC		= 50,
@@ -96,32 +96,32 @@ enum
     Nqidbits		= 5,
     Nqidtab		= (1<<Nqidbits),
 };
-/*e: enum _anon_ (networking/exportfs/exportfs.h) */
+/*e: enum [[_anon_ (networking/exportfs/exportfs.h)]] */
 
-/*s: global Ebadfid */
+/*s: global [[Ebadfid]] */
 char Ebadfid[];
-/*e: global Ebadfid */
-/*s: global Enotdir (networking/exportfs/exportfs.h) */
+/*e: global [[Ebadfid]] */
+/*s: global [[Enotdir]]([[(networking/exportfs/exportfs.h)]]) */
 char Enotdir[];
-/*e: global Enotdir (networking/exportfs/exportfs.h) */
-/*s: global Edupfid */
+/*e: global [[Enotdir]]([[(networking/exportfs/exportfs.h)]]) */
+/*s: global [[Edupfid]] */
 char Edupfid[];
-/*e: global Edupfid */
-/*s: global Eopen */
+/*e: global [[Edupfid]] */
+/*s: global [[Eopen]] */
 char Eopen[];
-/*e: global Eopen */
-/*s: global Exmnt */
+/*e: global [[Eopen]] */
+/*s: global [[Exmnt]] */
 char Exmnt[];
-/*e: global Exmnt */
-/*s: global Enomem */
+/*e: global [[Exmnt]] */
+/*s: global [[Enomem]] */
 char Enomem[];
-/*e: global Enomem */
-/*s: global Emip */
+/*e: global [[Enomem]] */
+/*s: global [[Emip]] */
 char Emip[];
-/*e: global Emip */
-/*s: global Enopsmt */
+/*e: global [[Emip]] */
+/*s: global [[Enopsmt]] */
 char Enopsmt[];
-/*e: global Enopsmt */
+/*e: global [[Enopsmt]] */
 
 extern Fsrpc	*Workq;
 extern int  	dbg;

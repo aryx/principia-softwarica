@@ -6,7 +6,7 @@
 #include "httpsrv.h"
 
 typedef struct Suffix	Suffix;
-/*s: struct Suffix */
+/*s: struct [[Suffix]] */
 struct Suffix 
 {
     Suffix	*next;
@@ -15,18 +15,18 @@ struct Suffix
     char	*specific;
     char	*encoding;
 };
-/*e: struct Suffix */
+/*e: struct [[Suffix]] */
 
-/*s: global suffixes */
+/*s: global [[suffixes]] */
 Suffix	*suffixes = nil;
-/*e: global suffixes */
+/*e: global [[suffixes]] */
 
 static	Suffix*			parsesuffix(char*, Suffix*);
 static	char*			skipwhite(char*);
 static	HContents		suffixclass(char*);
 static	char*			towhite(char*);
 
-/*s: function updateQid */
+/*s: function [[updateQid]] */
 int
 updateQid(int fd, Qid *q)
 {
@@ -43,9 +43,9 @@ updateQid(int fd, Qid *q)
     *q = dq;
     return 1;
 }
-/*e: function updateQid */
+/*e: function [[updateQid]] */
 
-/*s: function contentinit */
+/*s: function [[contentinit]] */
 void
 contentinit(void)
 {
@@ -78,9 +78,9 @@ contentinit(void)
         suffixes = parsesuffix(s, suffixes);
     }
 }
-/*e: function contentinit */
+/*e: function [[contentinit]] */
 
-/*s: function parsesuffix */
+/*s: function [[parsesuffix]] */
 static Suffix*
 parsesuffix(char *line, Suffix *suffix)
 {
@@ -114,9 +114,9 @@ parsesuffix(char *line, Suffix *suffix)
         s->encoding = estrdup(fields[3]);
     return s;
 }
-/*e: function parsesuffix */
+/*e: function [[parsesuffix]] */
 
-/*s: function uriclass */
+/*s: function [[uriclass]] */
 /*
  * classify by file name extensions
  */
@@ -148,9 +148,9 @@ uriclass(HConnect *hc, char *name)
     conts.encoding = enc;
     return conts;
 }
-/*e: function uriclass */
+/*e: function [[uriclass]] */
 
-/*s: function dataclass */
+/*s: function [[dataclass]] */
 /*
  * classify by initial contents of file
  */
@@ -184,5 +184,5 @@ dataclass(HConnect *hc, char *buf, int n)
     conts.encoding = nil;
     return conts;
 }
-/*e: function dataclass */
+/*e: function [[dataclass]] */
 /*e: networking/ip/httpd/content.c */

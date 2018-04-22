@@ -6,7 +6,7 @@
 #include "dat.h"
 #include "protos.h"
 
-/*s: function p_seprint (networking/ip/snoopy/ninep.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/ninep.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -30,9 +30,9 @@ p_seprint(Msg *m)
     m->pr = nil;
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/ninep.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/ninep.c)]]) */
 
-/*s: global ninep */
+/*s: global [[ninep]] */
 Proto ninep =
 {
     "ninep",
@@ -44,5 +44,5 @@ Proto ninep =
     nil,
     defaultframer,
 };
-/*e: global ninep */
+/*e: global [[ninep]] */
 /*e: networking/ip/snoopy/ninep.c */

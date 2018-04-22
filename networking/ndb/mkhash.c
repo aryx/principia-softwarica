@@ -4,24 +4,24 @@
 #include <bio.h>
 #include <ndb.h>
 
-/*s: global ht (networking/ndb/mkhash.c) */
+/*s: global [[ht]]([[(networking/ndb/mkhash.c)]]) */
 /*
  *  make the hash table completely in memory and then write as a file
  */
 
 uchar *ht;
-/*e: global ht (networking/ndb/mkhash.c) */
-/*s: global hlen */
+/*e: global [[ht]]([[(networking/ndb/mkhash.c)]]) */
+/*s: global [[hlen]] */
 ulong hlen;
-/*e: global hlen */
-/*s: global db (networking/ndb/mkhash.c) */
+/*e: global [[hlen]] */
+/*s: global [[db]]([[(networking/ndb/mkhash.c)]]) */
 Ndb *db;
-/*e: global db (networking/ndb/mkhash.c) */
-/*s: global nextchain */
+/*e: global [[db]]([[(networking/ndb/mkhash.c)]]) */
+/*s: global [[nextchain]] */
 ulong nextchain;
-/*e: global nextchain */
+/*e: global [[nextchain]] */
 
-/*s: function syserr (networking/ndb/mkhash.c) */
+/*s: function [[syserr]]([[(networking/ndb/mkhash.c)]]) */
 char*
 syserr(void)
 {
@@ -30,9 +30,9 @@ syserr(void)
     errstr(buf, sizeof buf);
     return buf;
 }
-/*e: function syserr (networking/ndb/mkhash.c) */
+/*e: function [[syserr]]([[(networking/ndb/mkhash.c)]]) */
 
-/*s: function enter */
+/*s: function [[enter]] */
 void
 enter(char *val, ulong dboff)
 {
@@ -72,13 +72,13 @@ enter(char *val, ulong dboff)
     NDBPUTP(dboff, &ht[nextchain + NDBPLEN]);
     nextchain += 2*NDBPLEN;
 }
-/*e: function enter */
+/*e: function [[enter]] */
 
-/*s: global nbuf */
+/*s: global [[nbuf]] */
 uchar nbuf[16*1024];
-/*e: global nbuf */
+/*e: global [[nbuf]] */
 
-/*s: function main (networking/ndb/mkhash.c) */
+/*s: function [[main]]([[(networking/ndb/mkhash.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -169,5 +169,5 @@ main(int argc, char **argv)
 
     exits(0);
 }
-/*e: function main (networking/ndb/mkhash.c) */
+/*e: function [[main]]([[(networking/ndb/mkhash.c)]]) */
 /*e: networking/ndb/mkhash.c */

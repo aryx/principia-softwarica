@@ -8,28 +8,28 @@
 #include <libc.h>
 #include <ip.h>
 
-/*s: enum _anon_ (networking/ip/linklocal.c) */
+/*s: enum [[_anon_ (networking/ip/linklocal.c)]] */
 enum {
     Mac0mcast	= 1<<0,		/* multicast address */
     Mac0localadm	= 1<<1,		/* locally-administered address, */
     V60globaladm	= 1<<1,		/* but ipv6 reverses the meaning */
 };
-/*e: enum _anon_ (networking/ip/linklocal.c) */
+/*e: enum [[_anon_ (networking/ip/linklocal.c)]] */
 
-/*s: global v4_6to4 */
+/*s: global [[v4_6to4]] */
 static char *v4_6to4;
-/*e: global v4_6to4 */
+/*e: global [[v4_6to4]] */
 
-/*s: function usage (networking/ip/linklocal.c) */
+/*s: function [[usage]]([[(networking/ip/linklocal.c)]]) */
 static void
 usage(void)
 {
     fprint(2, "usage: %s [-t ipv4] ether...\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ip/linklocal.c) */
+/*e: function [[usage]]([[(networking/ip/linklocal.c)]]) */
 
-/*s: function ea2eui64 */
+/*s: function [[ea2eui64]] */
 void
 ea2eui64(uchar *lla, uchar *ea)
 {
@@ -42,9 +42,9 @@ ea2eui64(uchar *lla, uchar *ea)
     *lla++ = *ea++;			/* " */
     *lla = *ea;			/* " */
 }
-/*e: function ea2eui64 */
+/*e: function [[ea2eui64]] */
 
-/*s: function eaip26to4 */
+/*s: function [[eaip26to4]] */
 void
 eaip26to4(uchar *lla, uchar *ea, uchar *ipv4)
 {
@@ -55,9 +55,9 @@ eaip26to4(uchar *lla, uchar *ea, uchar *ipv4)
     memset(lla, 0, 2);
     ea2eui64(lla + 2, ea);
 }
-/*e: function eaip26to4 */
+/*e: function [[eaip26to4]] */
 
-/*s: function ea2lla */
+/*s: function [[ea2lla]] */
 void
 ea2lla(uchar *lla, uchar *ea)
 {
@@ -66,9 +66,9 @@ ea2lla(uchar *lla, uchar *ea)
     memset(lla, 0, 6);
     ea2eui64(lla + 6, ea);
 }
-/*e: function ea2lla */
+/*e: function [[ea2lla]] */
 
-/*s: function process */
+/*s: function [[process]] */
 static void
 process(char *ether)
 {
@@ -83,9 +83,9 @@ process(char *ether)
         ea2lla(ipaddr, ethaddr);
     print("%I\n", ipaddr);
 }
-/*e: function process */
+/*e: function [[process]] */
 
-/*s: function main (networking/ip/linklocal.c) */
+/*s: function [[main]]([[(networking/ip/linklocal.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -108,5 +108,5 @@ main(int argc, char *argv[])
         process(argv[i]);
     exits(0);
 }
-/*e: function main (networking/ip/linklocal.c) */
+/*e: function [[main]]([[(networking/ip/linklocal.c)]]) */
 /*e: networking/ip/linklocal.c */

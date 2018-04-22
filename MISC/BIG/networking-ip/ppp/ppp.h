@@ -15,7 +15,7 @@ typedef uchar Ipaddr[IPaddrlen];
 
 #pragma incomplete Tcpc
 
-/*s: struct Block (networking/ip/ppp/ppp.h) */
+/*s: struct [[Block]]([[(networking/ip/ppp/ppp.h)]]) */
 /*
  *  data blocks
  */
@@ -33,12 +33,12 @@ struct Block
     ulong	pc;
     ulong	bsz;
 };
-/*e: struct Block (networking/ip/ppp/ppp.h) */
-/*s: macro BLEN */
+/*e: struct [[Block]]([[(networking/ip/ppp/ppp.h)]]) */
+/*s: macro [[BLEN]] */
 #define BLEN(b)	((b)->wptr-(b)->rptr)
-/*e: macro BLEN */
+/*e: macro [[BLEN]] */
 
-/*s: enum _anon_ (networking/ip/ppp/ppp.h) */
+/*s: enum [[_anon_ (networking/ip/ppp/ppp.h)]] */
 enum
 {
     /* block flags */
@@ -50,7 +50,7 @@ enum
     QHUNGUP		= (1<<0),
     QFLOW		= (1<<1),	/* queue is flow controlled */
 };
-/*e: enum _anon_ (networking/ip/ppp/ppp.h) */
+/*e: enum [[_anon_ (networking/ip/ppp/ppp.h)]] */
 
 Block*	allocb(int);
 void	freeb(Block*);
@@ -62,7 +62,7 @@ Block*	btrim(Block*, int, int);
 Block*	copyb(Block*, int);
 int	pullb(Block**, int);
 
-/*s: enum _anon_ (networking/ip/ppp/ppp.h)2 */
+/*s: enum [[_anon_ (networking/ip/ppp/ppp.h)2]] */
 enum {
     HDLC_frame=	0x7e,
     HDLC_esc=	0x7d,
@@ -204,10 +204,10 @@ enum {
     Minmtu=		128,		/* minimum that we will accept */
     Maxmtu=		2000,		/* maximum that we will accept */
 };
-/*e: enum _anon_ (networking/ip/ppp/ppp.h)2 */
+/*e: enum [[_anon_ (networking/ip/ppp/ppp.h)2]] */
 
 
-/*s: struct Pstate */
+/*s: struct [[Pstate]] */
 struct Pstate
 {
     int	proto;		/* protocol type */
@@ -223,9 +223,9 @@ struct Pstate
     int	echoack;	/* recieved echo ack */
     int	echotimeout;	/* echo timeout */
 };
-/*e: struct Pstate */
+/*e: struct [[Pstate]] */
 
-/*s: struct Chap */
+/*s: struct [[Chap]] */
 /* server chap state */
 struct Chap
 {
@@ -235,9 +235,9 @@ struct Chap
     int	timeout;	/* for current state */
     Chalstate *cs;
 };
-/*e: struct Chap */
+/*e: struct [[Chap]] */
 
-/*s: struct Qualstats */
+/*s: struct [[Qualstats]] */
 struct Qualstats
 {
     ulong	reports;
@@ -246,9 +246,9 @@ struct Qualstats
     ulong	discards;
     ulong	errors;
 };
-/*e: struct Qualstats */
+/*e: struct [[Qualstats]] */
 
-/*s: struct Comptype */
+/*s: struct [[Comptype]] */
 struct Comptype
 {
     void*		(*init)(PPP*);
@@ -256,9 +256,9 @@ struct Comptype
     Block*		(*resetreq)(void*, Block*);
     void		(*fini)(void*);
 };
-/*e: struct Comptype */
+/*e: struct [[Comptype]] */
 
-/*s: struct Uncomptype */
+/*s: struct [[Uncomptype]] */
 struct Uncomptype
 {
     void*		(*init)(PPP*);
@@ -266,9 +266,9 @@ struct Uncomptype
     void		(*resetack)(void*, Block*);
     void		(*fini)(void*);
 };
-/*e: struct Uncomptype */
+/*e: struct [[Uncomptype]] */
 
-/*s: struct PPP */
+/*s: struct [[PPP]] */
 struct PPP
 {
     QLock;
@@ -346,13 +346,13 @@ struct PPP
         ulong	vjfail;
     } stat;
 };
-/*e: struct PPP */
+/*e: struct [[PPP]] */
 
 extern Block*	pppread(PPP*);
 extern int	pppwrite(PPP*, Block*);
 extern void	pppopen(PPP*, int, int, char*, Ipaddr, Ipaddr, int, int);
 
-/*s: struct Lcpmsg */
+/*s: struct [[Lcpmsg]] */
 struct Lcpmsg
 {
     uchar	code;
@@ -360,18 +360,18 @@ struct Lcpmsg
     uchar	len[2];
     uchar	data[1];
 };
-/*e: struct Lcpmsg */
+/*e: struct [[Lcpmsg]] */
 
-/*s: struct Lcpopt (networking/ip/ppp/ppp.h) */
+/*s: struct [[Lcpopt]]([[(networking/ip/ppp/ppp.h)]]) */
 struct Lcpopt
 {
     uchar	type;
     uchar	len;
     uchar	data[1];
 };
-/*e: struct Lcpopt (networking/ip/ppp/ppp.h) */
+/*e: struct [[Lcpopt]]([[(networking/ip/ppp/ppp.h)]]) */
 
-/*s: struct Qualpkt */
+/*s: struct [[Qualpkt]] */
 struct Qualpkt
 {
     uchar	magic[4];
@@ -388,7 +388,7 @@ struct Qualpkt
     uchar	peeroutpackets[4];
     uchar	peeroutuchars[4];
 };
-/*e: struct Qualpkt */
+/*e: struct [[Qualpkt]] */
 
 extern Block*	compress(Tcpc*, Block*, int*);
 extern void	compress_error(Tcpc*);

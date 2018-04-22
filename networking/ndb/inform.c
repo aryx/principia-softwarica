@@ -7,13 +7,13 @@
 #include <ip.h>
 #include "dns.h"
 
-/*s: enum _anon_ (networking/ndb/inform.c) */
+/*s: enum [[_anon_ (networking/ndb/inform.c)]] */
 enum {
     FQDNMAX	= 255,
 };
-/*e: enum _anon_ (networking/ndb/inform.c) */
+/*e: enum [[_anon_ (networking/ndb/inform.c)]] */
 
-/*s: global errmsgs */
+/*s: global [[errmsgs]] */
 char *errmsgs[] = {
     [0]  "ok",
     [1]  "request format error",
@@ -27,18 +27,18 @@ char *errmsgs[] = {
     [9]  "server not authoritative",
     [10] "domain name not in zone",
 };
-/*e: global errmsgs */
+/*e: global [[errmsgs]] */
 
-/*s: function usage (networking/ndb/inform.c) */
+/*s: function [[usage]]([[(networking/ndb/inform.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-x netmtpt]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ndb/inform.c) */
+/*e: function [[usage]]([[(networking/ndb/inform.c)]]) */
 
-/*s: function ding (networking/ndb/inform.c) */
+/*s: function [[ding]]([[(networking/ndb/inform.c)]]) */
 void
 ding(void *, char *msg)
 {
@@ -46,9 +46,9 @@ ding(void *, char *msg)
         noted(NCONT);
     noted(NDFLT);
 }
-/*e: function ding (networking/ndb/inform.c) */
+/*e: function [[ding]]([[(networking/ndb/inform.c)]]) */
 
-/*s: function g16 */
+/*s: function [[g16]] */
 int
 g16(uchar **p)
 {
@@ -58,18 +58,18 @@ g16(uchar **p)
     n |= *(*p)++;
     return n;
 }
-/*e: function g16 */
+/*e: function [[g16]] */
 
-/*s: function p16 */
+/*s: function [[p16]] */
 void
 p16(uchar **p, int n)
 {
     *(*p)++ = n >> 8;
     *(*p)++ = n;
 }
-/*e: function p16 */
+/*e: function [[p16]] */
 
-/*s: function p32 */
+/*s: function [[p32]] */
 void
 p32(uchar **p, int n)
 {
@@ -78,18 +78,18 @@ p32(uchar **p, int n)
     *(*p)++ = n >> 8;
     *(*p)++ = n;
 }
-/*e: function p32 */
+/*e: function [[p32]] */
 
-/*s: function pmem */
+/*s: function [[pmem]] */
 void
 pmem(uchar **p, void *v, int len)
 {
     memmove(*p, v, len);
     *p += len;
 }
-/*e: function pmem */
+/*e: function [[pmem]] */
 
-/*s: function pname (networking/ndb/inform.c) */
+/*s: function [[pname]]([[(networking/ndb/inform.c)]]) */
 void
 pname(uchar **p, char *s)
 {
@@ -105,9 +105,9 @@ pname(uchar **p, char *s)
     }
     *(*p)++ = 0;
 }
-/*e: function pname (networking/ndb/inform.c) */
+/*e: function [[pname]]([[(networking/ndb/inform.c)]]) */
 
-/*s: function main (networking/ndb/inform.c) */
+/*s: function [[main]]([[(networking/ndb/inform.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -237,5 +237,5 @@ main(int argc, char *argv[])
             sysfatal("unknown dns server error %d", err);
     exits(0);
 }
-/*e: function main (networking/ndb/inform.c) */
+/*e: function [[main]]([[(networking/ndb/inform.c)]]) */
 /*e: networking/ndb/inform.c */

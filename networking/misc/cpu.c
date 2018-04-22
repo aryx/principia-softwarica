@@ -13,12 +13,12 @@
 #include <fcall.h>
 #include <libsec.h>
 
-/*s: constant Maxfdata */
+/*s: constant [[Maxfdata]] */
 #define	Maxfdata 8192
-/*e: constant Maxfdata */
-/*s: constant MaxStr */
+/*e: constant [[Maxfdata]] */
+/*s: constant [[MaxStr]] */
 #define MaxStr 128
-/*e: constant MaxStr */
+/*e: constant [[MaxStr]] */
 
 void	remoteside(int);
 void	fatal(int, char*, ...);
@@ -30,49 +30,49 @@ void	writestr(int, char*, char*, int);
 int	readstr(int, char*, int);
 char	*rexcall(int*, char*, char*);
 int	setamalg(char*);
-/*s: global keyspec */
+/*s: global [[keyspec]] */
 char *keyspec = "";
-/*e: global keyspec */
+/*e: global [[keyspec]] */
 
-/*s: global notechan */
+/*s: global [[notechan]] */
 int 	notechan;
-/*e: global notechan */
-/*s: global exportpid */
+/*e: global [[notechan]] */
+/*s: global [[exportpid]] */
 int	exportpid;
-/*e: global exportpid */
-/*s: global system */
+/*e: global [[exportpid]] */
+/*s: global [[system]] */
 char	*system;
-/*e: global system */
-/*s: global cflag */
+/*e: global [[system]] */
+/*s: global [[cflag]] */
 int	cflag;
-/*e: global cflag */
-/*s: global dbg */
+/*e: global [[cflag]] */
+/*s: global [[dbg]] */
 int	dbg;
-/*e: global dbg */
-/*s: global user */
+/*e: global [[dbg]] */
+/*s: global [[user]] */
 char	*user;
-/*e: global user */
-/*s: global patternfile */
+/*e: global [[user]] */
+/*s: global [[patternfile]] */
 char	*patternfile;
-/*e: global patternfile */
-/*s: global origargs */
+/*e: global [[patternfile]] */
+/*s: global [[origargs]] */
 char	*origargs;
-/*e: global origargs */
+/*e: global [[origargs]] */
 
-/*s: global srvname */
+/*s: global [[srvname]] */
 char	*srvname = "ncpu";
-/*e: global srvname */
-/*s: global exportfs */
+/*e: global [[srvname]] */
+/*s: global [[exportfs]] */
 char	*exportfs = "/bin/exportfs";
-/*e: global exportfs */
-/*s: global ealgs */
+/*e: global [[exportfs]] */
+/*s: global [[ealgs]] */
 char	*ealgs = "rc4_256 sha1";
-/*e: global ealgs */
+/*e: global [[ealgs]] */
 
-/*s: global msgsize */
+/*s: global [[msgsize]] */
 /* message size for exportfs; may be larger so we can do big graphics in CPU window */
 int	msgsize = Maxfdata+IOHDRSZ;
-/*e: global msgsize */
+/*e: global [[msgsize]] */
 
 /* authentication mechanisms */
 static int	netkeyauth(int);
@@ -83,7 +83,7 @@ static int	noauth(int);
 static int	srvnoauth(int, char*);
 
 typedef struct AuthMethod AuthMethod;
-/*s: global authmethod */
+/*s: global [[authmethod]] */
 struct AuthMethod {
     char	*name;			/* name of method */
     int	(*cf)(int);		/* client side authentication */
@@ -95,18 +95,18 @@ struct AuthMethod {
 //	{ "none",	noauth,		srvnoauth,},
     { nil,	nil}
 };
-/*e: global authmethod */
-/*s: global am */
+/*e: global [[authmethod]] */
+/*s: global [[am]] */
 AuthMethod *am = authmethod;	/* default is p9 */
-/*e: global am */
+/*e: global [[am]] */
 
-/*s: global p9authproto */
+/*s: global [[p9authproto]] */
 char *p9authproto = "p9any";
-/*e: global p9authproto */
+/*e: global [[p9authproto]] */
 
 int setam(char*);
 
-/*s: function usage (networking/misc/cpu.c) */
+/*s: function [[usage]]([[(networking/misc/cpu.c)]]) */
 void
 usage(void)
 {
@@ -115,9 +115,9 @@ usage(void)
         "[-c cmd arg ...]\n");
     exits("usage");
 }
-/*e: function usage (networking/misc/cpu.c) */
+/*e: function [[usage]]([[(networking/misc/cpu.c)]]) */
 
-/*s: function procgetname */
+/*s: function [[procgetname]] */
 /*
  * reading /proc/pid/args yields either "name args" or "name [display args]",
  * so return only args or display args.
@@ -147,9 +147,9 @@ procgetname(void)
     *rp = '\0';
     return strdup(lp+1);
 }
-/*e: function procgetname */
+/*e: function [[procgetname]] */
 
-/*s: function procsetname (networking/misc/cpu.c) */
+/*s: function [[procsetname]]([[(networking/misc/cpu.c)]]) */
 /*
  * based on libthread's threadsetname, but drags in less library code.
  * actually just sets the arguments displayed.
@@ -174,9 +174,9 @@ procsetname(char *fmt, ...)
     }
     free(cmdname);
 }
-/*e: function procsetname (networking/misc/cpu.c) */
+/*e: function [[procsetname]]([[(networking/misc/cpu.c)]]) */
 
-/*s: function main (networking/misc/cpu.c) */
+/*s: function [[main]]([[(networking/misc/cpu.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -305,9 +305,9 @@ main(int argc, char **argv)
     exec(exportfs, av);
     fatal(1, "starting exportfs");
 }
-/*e: function main (networking/misc/cpu.c) */
+/*e: function [[main]]([[(networking/misc/cpu.c)]]) */
 
-/*s: function fatal (networking/misc/cpu.c) */
+/*s: function [[fatal]]([[(networking/misc/cpu.c)]]) */
 void
 fatal(int syserr, char *fmt, ...)
 {
@@ -328,17 +328,17 @@ fatal(int syserr, char *fmt, ...)
     syslog(0, "cpu", str);
     exits(str);
 }
-/*e: function fatal (networking/misc/cpu.c) */
+/*e: function [[fatal]]([[(networking/misc/cpu.c)]]) */
 
-/*s: global negstr */
+/*s: global [[negstr]] */
 char *negstr = "negotiating authentication method";
-/*e: global negstr */
+/*e: global [[negstr]] */
 
-/*s: global bug */
+/*s: global [[bug]] */
 char bug[256];
-/*e: global bug */
+/*e: global [[bug]] */
 
-/*s: function old9p */
+/*s: function [[old9p]] */
 int
 old9p(int fd)
 {
@@ -376,9 +376,9 @@ old9p(int fd)
     }
     return p[1];	
 }
-/*e: function old9p */
+/*e: function [[old9p]] */
 
-/*s: function remoteside */
+/*s: function [[remoteside]] */
 /* Invoked with stdin, stdout and stderr connected to the network connection */
 void
 remoteside(int old)
@@ -471,9 +471,9 @@ remoteside(int old)
         execl("/bin/rc", "rc", "-li", nil);
     fatal(1, "exec shell");
 }
-/*e: function remoteside */
+/*e: function [[remoteside]] */
 
-/*s: function rexcall */
+/*s: function [[rexcall]] */
 char*
 rexcall(int *fd, char *host, char *service)
 {
@@ -511,9 +511,9 @@ rexcall(int *fd, char *host, char *service)
         return "can't authenticate";
     return 0;
 }
-/*e: function rexcall */
+/*e: function [[rexcall]] */
 
-/*s: function writestr */
+/*s: function [[writestr]] */
 void
 writestr(int fd, char *str, char *thing, int ignore)
 {
@@ -524,9 +524,9 @@ writestr(int fd, char *str, char *thing, int ignore)
     if(!ignore && n < 0)
         fatal(1, "writing network: %s", thing);
 }
-/*e: function writestr */
+/*e: function [[writestr]] */
 
-/*s: function readstr */
+/*s: function [[readstr]] */
 int
 readstr(int fd, char *str, int len)
 {
@@ -543,9 +543,9 @@ readstr(int fd, char *str, int len)
     }
     return -1;
 }
-/*e: function readstr */
+/*e: function [[readstr]] */
 
-/*s: function readln */
+/*s: function [[readln]] */
 static int
 readln(char *buf, int n)
 {
@@ -564,9 +564,9 @@ readln(char *buf, int n)
     *p = '\0';
     return p-buf;
 }
-/*e: function readln */
+/*e: function [[readln]] */
 
-/*s: function netkeyauth */
+/*s: function [[netkeyauth]] */
 /*
  *  user level challenge/response
  */
@@ -596,9 +596,9 @@ netkeyauth(int fd)
     }
     return -1;
 }
-/*e: function netkeyauth */
+/*e: function [[netkeyauth]] */
 
-/*s: function netkeysrvauth */
+/*s: function [[netkeysrvauth]] */
 static int
 netkeysrvauth(int fd, char *user)
 {
@@ -632,18 +632,18 @@ netkeysrvauth(int fd, char *user)
     auth_freeAI(ai);
     return fd;
 }
-/*e: function netkeysrvauth */
+/*e: function [[netkeysrvauth]] */
 
-/*s: function mksecret */
+/*s: function [[mksecret]] */
 static void
 mksecret(char *t, uchar *f)
 {
     sprint(t, "%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux",
         f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[9]);
 }
-/*e: function mksecret */
+/*e: function [[mksecret]] */
 
-/*s: function p9auth */
+/*s: function [[p9auth]] */
 /*
  *  plan9 authentication followed by rc4 encryption
  */
@@ -689,18 +689,18 @@ p9auth(int fd)
         werrstr("can't establish ssl connection: %r");
     return i;
 }
-/*e: function p9auth */
+/*e: function [[p9auth]] */
 
-/*s: function noauth */
+/*s: function [[noauth]] */
 static int
 noauth(int fd)
 {
     ealgs = nil;
     return fd;
 }
-/*e: function noauth */
+/*e: function [[noauth]] */
 
-/*s: function srvnoauth */
+/*s: function [[srvnoauth]] */
 static int
 srvnoauth(int fd, char *user)
 {
@@ -709,9 +709,9 @@ srvnoauth(int fd, char *user)
     newns(user, nil);
     return fd;
 }
-/*e: function srvnoauth */
+/*e: function [[srvnoauth]] */
 
-/*s: function loghex */
+/*s: function [[loghex]] */
 void
 loghex(uchar *p, int n)
 {
@@ -722,9 +722,9 @@ loghex(uchar *p, int n)
         sprint(buf+2*i, "%2.2ux", p[i]);
     syslog(0, "cpu", buf);
 }
-/*e: function loghex */
+/*e: function [[loghex]] */
 
-/*s: function srvp9auth */
+/*s: function [[srvp9auth]] */
 static int
 srvp9auth(int fd, char *user)
 {
@@ -766,9 +766,9 @@ srvp9auth(int fd, char *user)
         werrstr("can't establish ssl connection: %r");
     return i;
 }
-/*e: function srvp9auth */
+/*e: function [[srvp9auth]] */
 
-/*s: function setam */
+/*s: function [[setam]] */
 /*
  *  set authentication mechanism
  */
@@ -781,9 +781,9 @@ setam(char *name)
     am = authmethod;
     return -1;
 }
-/*e: function setam */
+/*e: function [[setam]] */
 
-/*s: function setamalg */
+/*s: function [[setamalg]] */
 /*
  *  set authentication mechanism and encryption/hash algs
  */
@@ -795,13 +795,13 @@ setamalg(char *s)
         *ealgs++ = 0;
     return setam(s);
 }
-/*e: function setamalg */
+/*e: function [[setamalg]] */
 
-/*s: global rmtnotefile */
+/*s: global [[rmtnotefile]] */
 char *rmtnotefile = "/mnt/term/dev/cpunote";
-/*e: global rmtnotefile */
+/*e: global [[rmtnotefile]] */
 
-/*s: function rmtnoteproc */
+/*s: function [[rmtnoteproc]] */
 /*
  *  loop reading /mnt/term/dev/note looking for notes.
  *  The child returns to start the shell.
@@ -854,9 +854,9 @@ rmtnoteproc(void)
     postnote(PNPROC, notepid, "kill");
     _exits(0);
 }
-/*e: function rmtnoteproc */
+/*e: function [[rmtnoteproc]] */
 
-/*s: enum _anon_ (networking/misc/cpu.c) */
+/*s: enum [[_anon_ (networking/misc/cpu.c)]] */
 enum
 {
     Qdir,
@@ -864,9 +864,9 @@ enum
 
     Nfid = 32,
 };
-/*e: enum _anon_ (networking/misc/cpu.c) */
+/*e: enum [[_anon_ (networking/misc/cpu.c)]] */
 
-/*s: global fstab */
+/*s: global [[fstab]] */
 struct {
     char	*name;
     Qid	qid;
@@ -876,48 +876,48 @@ struct {
     [Qdir]		{ ".",		{Qdir, 0, QTDIR},	DMDIR|0555	},
     [Qcpunote]	{ "cpunote",	{Qcpunote, 0},		0444		},
 };
-/*e: global fstab */
+/*e: global [[fstab]] */
 
 typedef struct Note Note;
-/*s: struct Note */
+/*s: struct [[Note]] */
 struct Note
 {
     Note *next;
     char msg[ERRMAX];
 };
-/*e: struct Note */
+/*e: struct [[Note]] */
 
 typedef struct Request Request;
-/*s: struct Request */
+/*s: struct [[Request]] */
 struct Request
 {
     Request *next;
     Fcall f;
 };
-/*e: struct Request */
+/*e: struct [[Request]] */
 
 typedef struct Fid Fid;
-/*s: struct Fid */
+/*s: struct [[Fid]] */
 struct Fid
 {
     int	fid;
     int	file;
     int	omode;
 };
-/*e: struct Fid */
-/*s: global fids */
+/*e: struct [[Fid]] */
+/*s: global [[fids]] */
 Fid fids[Nfid];
-/*e: global fids */
+/*e: global [[fids]] */
 
-/*s: global nfs */
+/*s: global [[nfs]] */
 struct {
     Lock;
     Note *nfirst, *nlast;
     Request *rfirst, *rlast;
 } nfs;
-/*e: global nfs */
+/*e: global [[nfs]] */
 
-/*s: function fsreply */
+/*s: function [[fsreply]] */
 int
 fsreply(int fd, Fcall *f)
 {
@@ -935,9 +935,9 @@ fsreply(int fd, Fcall *f)
     }
     return 0;
 }
-/*e: function fsreply */
+/*e: function [[fsreply]] */
 
-/*s: function kick */
+/*s: function [[kick]] */
 /* match a note read request with a note, reply to the request */
 int
 kick(int fd)
@@ -969,9 +969,9 @@ kick(int fd)
     }
     return 0;
 }
-/*e: function kick */
+/*e: function [[kick]] */
 
-/*s: function flushreq */
+/*s: function [[flushreq]] */
 void
 flushreq(int tag)
 {
@@ -989,9 +989,9 @@ flushreq(int tag)
     }
     unlock(&nfs);
 }
-/*e: function flushreq */
+/*e: function [[flushreq]] */
 
-/*s: function getfid */
+/*s: function [[getfid]] */
 Fid*
 getfid(int fid)
 {
@@ -1010,9 +1010,9 @@ getfid(int fid)
     }
     return nil;
 }
-/*e: function getfid */
+/*e: function [[getfid]] */
 
-/*s: function fsstat */
+/*s: function [[fsstat]] */
 int
 fsstat(int fd, Fid *fid, Fcall *f)
 {
@@ -1031,9 +1031,9 @@ fsstat(int fd, Fid *fid, Fcall *f)
     f->nstat = convD2M(&d, statbuf, sizeof statbuf);
     return fsreply(fd, f);
 }
-/*e: function fsstat */
+/*e: function [[fsstat]] */
 
-/*s: function fsread */
+/*s: function [[fsread]] */
 int
 fsread(int fd, Fid *fid, Fcall *f)
 {
@@ -1074,19 +1074,19 @@ fsread(int fd, Fid *fid, Fcall *f)
         return kick(fd);;
     }
 }
-/*e: function fsread */
+/*e: function [[fsread]] */
 
-/*s: global Eperm */
+/*s: global [[Eperm]] */
 char Eperm[] = "permission denied";
-/*e: global Eperm */
-/*s: global Enofile */
+/*e: global [[Eperm]] */
+/*s: global [[Enofile]] */
 char Enofile[] = "out of files";
-/*e: global Enofile */
-/*s: global Enotdir */
+/*e: global [[Enofile]] */
+/*s: global [[Enotdir]] */
 char Enotdir[] = "not a directory";
-/*e: global Enotdir */
+/*e: global [[Enotdir]] */
 
-/*s: function notefs */
+/*s: function [[notefs]] */
 void
 notefs(int fd)
 {
@@ -1235,13 +1235,13 @@ err:
         fprint(2, "postnote PNGROUP %d: %r\n", exportpid);
     close(fd);
 }
-/*e: function notefs */
+/*e: function [[notefs]] */
 
-/*s: global notebuf */
+/*s: global [[notebuf]] */
 char 	notebuf[ERRMAX];
-/*e: global notebuf */
+/*e: global [[notebuf]] */
 
-/*s: function catcher */
+/*s: function [[catcher]] */
 void
 catcher(void*, char *text)
 {
@@ -1254,9 +1254,9 @@ catcher(void*, char *text)
     notebuf[n] = '\0';
     noted(NCONT);
 }
-/*e: function catcher */
+/*e: function [[catcher]] */
 
-/*s: function lclnoteproc */
+/*s: function [[lclnoteproc]] */
 /*
  *  mount in /dev a note file for the remote side to read.
  */
@@ -1334,5 +1334,5 @@ lclnoteproc(int netfd)
     exits(0);
 /*	exits(w->msg); */
 }
-/*e: function lclnoteproc */
+/*e: function [[lclnoteproc]] */
 /*e: networking/misc/cpu.c */

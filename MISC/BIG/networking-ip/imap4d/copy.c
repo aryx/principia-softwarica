@@ -10,7 +10,7 @@ static int	saveMsg(char *dst, char *digest, int flags, char *head, int nhead, Bi
 static int	saveb(int fd, DigestState *dstate, char *buf, int nr, int nw);
 static long	appSpool(Biobuf *bout, Biobuf *bin, long n);
 
-/*s: function copyCheck */
+/*s: function [[copyCheck]] */
 /*
  * check if the message exists
  */
@@ -33,9 +33,9 @@ copyCheck(Box *box, Msg *m, int uids, void *v)
     close(fd);
     return 1;
 }
-/*e: function copyCheck */
+/*e: function [[copyCheck]] */
 
-/*s: function copySave */
+/*s: function [[copySave]] */
 int
 copySave(Box *box, Msg *m, int uids, void *vs)
 {
@@ -91,9 +91,9 @@ copySave(Box *box, Msg *m, int uids, void *vs)
     close(bfd);
     return ok;
 }
-/*e: function copySave */
+/*e: function [[copySave]] */
 
-/*s: function appendSave */
+/*s: function [[appendSave]] */
 /*
  * first spool the input into a temorary file,
  * and massage the input in the process.
@@ -126,9 +126,9 @@ appendSave(char *mbox, int flags, char *head, Biobuf *b, long n)
     close(fd);
     return ok;
 }
-/*e: function appendSave */
+/*e: function [[appendSave]] */
 
-/*s: function appSpool */
+/*s: function [[appSpool]] */
 /*
  * copy from bin to bout,
  * mapping "\r\n" to "\n" and "\nFrom " to "\n From "
@@ -177,9 +177,9 @@ appSpool(Biobuf *bout, Biobuf *bin, long n)
         return -1;
     return Boffset(bout);
 }
-/*e: function appSpool */
+/*e: function [[appSpool]] */
 
-/*s: function saveMsg */
+/*s: function [[saveMsg]] */
 static int
 saveMsg(char *dst, char *digest, int flags, char *head, int nhead, Biobuf *b, long n)
 {
@@ -257,9 +257,9 @@ saveMsg(char *dst, char *digest, int flags, char *head, int nhead, Biobuf *b, lo
     mbUnlock(ml);
     return 1;
 }
-/*e: function saveMsg */
+/*e: function [[saveMsg]] */
 
-/*s: function saveb */
+/*s: function [[saveb]] */
 static int
 saveb(int fd, DigestState *dstate, char *buf, int nr, int nw)
 {
@@ -269,5 +269,5 @@ saveb(int fd, DigestState *dstate, char *buf, int nr, int nw)
         return 0;
     return 1;
 }
-/*e: function saveb */
+/*e: function [[saveb]] */
 /*e: networking/ip/imap4d/copy.c */

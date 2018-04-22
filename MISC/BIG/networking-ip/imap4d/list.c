@@ -5,9 +5,9 @@
 #include <auth.h>
 #include "imap4d.h"
 
-/*s: constant SUBSCRIBED */
+/*s: constant [[SUBSCRIBED]] */
 #define SUBSCRIBED	"imap.subscribed"
-/*e: constant SUBSCRIBED */
+/*e: constant [[SUBSCRIBED]] */
 
 static int	matches(char *ref, char *pat, char *name);
 static int	mayMatch(char *pat, char *name, int star);
@@ -16,7 +16,7 @@ static int	listAll(char *cmd, char *ref, char *pat, char *mbox, long mtime);
 static int	listMatch(char *cmd, char *ref, char *pat, char *mbox, char *mm);
 static int	mkSubscribed(void);
 
-/*s: function listMtime */
+/*s: function [[listMtime]] */
 static long
 listMtime(char *file)
 {
@@ -30,9 +30,9 @@ listMtime(char *file)
     free(d);
     return mtime;
 }
-/*e: function listMtime */
+/*e: function [[listMtime]] */
 
-/*s: function lsubBoxes */
+/*s: function [[lsubBoxes]] */
 /*
  * check for subscribed mailboxes
  * each line is either a comment starting with #
@@ -88,9 +88,9 @@ lsubBoxes(char *cmd, char *ref, char *pat)
     mbUnlock(mb);
     return ok;
 }
-/*e: function lsubBoxes */
+/*e: function [[lsubBoxes]] */
 
-/*s: function mkSubscribed */
+/*s: function [[mkSubscribed]] */
 static int
 mkSubscribed(void)
 {
@@ -103,9 +103,9 @@ mkSubscribed(void)
     seek(fd, 0, 0);
     return fd;
 }
-/*e: function mkSubscribed */
+/*e: function [[mkSubscribed]] */
 
-/*s: function subscribe */
+/*s: function [[subscribe]] */
 /*
  * either subscribe or unsubscribe to a mailbox
  */
@@ -156,9 +156,9 @@ subscribe(char *mbox, int how)
     mbUnlock(mb);
     return ok;
 }
-/*e: function subscribe */
+/*e: function [[subscribe]] */
 
-/*s: function listBoxes */
+/*s: function [[listBoxes]] */
 /*
  * stupidly complicated so that % doesn't read entire directory structure
  * yet * works
@@ -173,9 +173,9 @@ listBoxes(char *cmd, char *ref, char *pat)
     ok = checkMatch(cmd, ref, pat, "INBOX", listMtime("mbox"), 0);
     return ok | listMatch(cmd, ref, pat, ref, pat);
 }
-/*e: function listBoxes */
+/*e: function [[listBoxes]] */
 
-/*s: function listMatch */
+/*s: function [[listMatch]] */
 /*
  * look for all messages which may match the pattern
  * punt when a * is reached
@@ -278,9 +278,9 @@ listMatch(char *cmd, char *ref, char *pat, char *mbox, char *mm)
     free(dir);
     return ok;
 }
-/*e: function listMatch */
+/*e: function [[listMatch]] */
 
-/*s: function listAll */
+/*s: function [[listAll]] */
 /*
  * too hard: recursively list all files rooted at mbox,
  * and list checkMatch figure it out
@@ -314,9 +314,9 @@ listAll(char *cmd, char *ref, char *pat, char *mbox, long mtime)
     free(mb);
     return ok;
 }
-/*e: function listAll */
+/*e: function [[listAll]] */
 
-/*s: function mayMatch */
+/*s: function [[mayMatch]] */
 static int
 mayMatch(char *pat, char *name, int star)
 {
@@ -350,9 +350,9 @@ mayMatch(char *pat, char *name, int star)
         return 1;
     return 0;
 }
-/*e: function mayMatch */
+/*e: function [[mayMatch]] */
 
-/*s: function checkMatch */
+/*s: function [[checkMatch]] */
 /*
  * mbox is a mailbox name which might match pat.
  * verify the match
@@ -383,9 +383,9 @@ checkMatch(char *cmd, char *ref, char *pat, char *mbox, long mtime, int isdir)
         Bprint(&bout, "* %s %s \"/\" \"%s\"\r\n", cmd, flags, s);
     return 1;
 }
-/*e: function checkMatch */
+/*e: function [[checkMatch]] */
 
-/*s: function matches */
+/*s: function [[matches]] */
 static int
 matches(char *ref, char *pat, char *name)
 {
@@ -432,5 +432,5 @@ matches(char *ref, char *pat, char *name)
         return 1;
     return 0;
 }
-/*e: function matches */
+/*e: function [[matches]] */
 /*e: networking/ip/imap4d/list.c */

@@ -4,45 +4,45 @@
 #include <bio.h>
 #include "telnet.h"
 
-/*s: global ctl */
+/*s: global [[ctl]] */
 int ctl = -1;		/* control fd (for break's) */
-/*e: global ctl */
-/*s: global consctl */
+/*e: global [[ctl]] */
+/*s: global [[consctl]] */
 int consctl = -1;	/* consctl fd */
-/*e: global consctl */
+/*e: global [[consctl]] */
 
-/*s: global ttypid */
+/*s: global [[ttypid]] */
 int ttypid;		/* pid's if the 2 processes (used to kill them) */
-/*e: global ttypid */
-/*s: global netpid */
+/*e: global [[ttypid]] */
+/*s: global [[netpid]] */
 int netpid;
-/*e: global netpid */
-/*s: global interrupted */
+/*e: global [[netpid]] */
+/*s: global [[interrupted]] */
 int interrupted;
-/*e: global interrupted */
-/*s: global localecho */
+/*e: global [[interrupted]] */
+/*s: global [[localecho]] */
 int localecho;
-/*e: global localecho */
-/*s: global notkbd */
+/*e: global [[localecho]] */
+/*s: global [[notkbd]] */
 int notkbd;
-/*e: global notkbd */
+/*e: global [[notkbd]] */
 
-/*s: global srv */
+/*s: global [[srv]] */
 static char *srv;
-/*e: global srv */
+/*e: global [[srv]] */
 
 // forward decl
 typedef struct Comm Comm;
 
-/*s: struct Comm */
+/*s: struct [[Comm]] */
 struct Comm {
     int returns;
     int stopped;
 };
-/*e: struct Comm */
-/*s: global comm */
+/*e: struct [[Comm]] */
+/*s: global [[comm]] */
 Comm *comm;
-/*e: global comm */
+/*e: global [[comm]] */
 
 int	dodial(char*);
 void	fromkbd(int);
@@ -60,15 +60,15 @@ void*	share(ulong);
 
 static int islikeatty(int);
 
-/*s: function usage (networking/ip/telnet.c) */
+/*s: function [[usage]]([[(networking/ip/telnet.c)]]) */
 void
 usage(void)
 {
     fatal("usage: telnet [-Cdnr] [-s srv] net!host[!service]", 0, 0);
 }
-/*e: function usage (networking/ip/telnet.c) */
+/*e: function [[usage]]([[(networking/ip/telnet.c)]]) */
 
-/*s: function main (networking/ip/telnet.c) */
+/*s: function [[main]]([[(networking/ip/telnet.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -108,9 +108,9 @@ main(int argc, char *argv[])
 
     telnet(dodial(argv[0]));
 }
-/*e: function main (networking/ip/telnet.c) */
+/*e: function [[main]]([[(networking/ip/telnet.c)]]) */
 
-/*s: function dodial */
+/*s: function [[dodial]] */
 /*
  *  dial and return a data connection
  */
@@ -128,9 +128,9 @@ dodial(char *dest)
     fprint(2, "connected to %s on %s\n", name, devdir);
     return data;
 }
-/*e: function dodial */
+/*e: function [[dodial]] */
 
-/*s: function post */
+/*s: function [[post]] */
 void
 post(char *srv, int fd)
 {
@@ -145,9 +145,9 @@ post(char *srv, int fd)
         sysfatal("write %s: %r", srv);
     close(f);
 }
-/*e: function post */
+/*e: function [[post]] */
 
-/*s: function telnet */
+/*s: function [[telnet]] */
 /*
  *  two processes pass bytes back and forth between the
  *  terminal and the network.
@@ -200,9 +200,9 @@ telnet(int net)
         exits(0);
     }
 }
-/*e: function telnet */
+/*e: function [[telnet]] */
 
-/*s: function fromkbd */
+/*s: function [[fromkbd]] */
 /*
  *  Read the keyboard and write it to the network.  '^\' gets us into
  *  the menu.
@@ -275,9 +275,9 @@ fromkbd(int net)
                 return;
     }
 }
-/*e: function fromkbd */
+/*e: function [[fromkbd]] */
 
-/*s: function fromnet */
+/*s: function [[fromnet]] */
 /*
  *  Read from the network and write to the screen.  If 'stopped' is set
  *  spin and don't read.  Filter out spurious carriage returns.
@@ -352,9 +352,9 @@ fromnet(int net)
             return;
     }
 }
-/*e: function fromnet */
+/*e: function [[fromnet]] */
 
-/*s: function rawon */
+/*s: function [[rawon]] */
 /*
  *  turn keyboard raw mode on
  */
@@ -371,9 +371,9 @@ rawon(void)
     }
     write(consctl, "rawon", 5);
 }
-/*e: function rawon */
+/*e: function [[rawon]] */
 
-/*s: function rawoff */
+/*s: function [[rawoff]] */
 /*
  *  turn keyboard raw mode off
  */
@@ -390,16 +390,16 @@ rawoff(void)
     }
     write(consctl, "rawoff", 6);
 }
-/*e: function rawoff */
+/*e: function [[rawoff]] */
 
-/*s: constant STDHELP */
+/*s: constant [[STDHELP]] */
 /*
  *  control menu
  */
 #define STDHELP	"\t(b)reak, (i)nterrupt, (q)uit, (r)eturns, (!cmd), (.)continue\n"
-/*e: constant STDHELP */
+/*e: constant [[STDHELP]] */
 
-/*s: function menu */
+/*s: function [[menu]] */
 int
 menu(Biobuf *bp, int net)
 {
@@ -460,9 +460,9 @@ menu(Biobuf *bp, int net)
     comm->stopped = 0;
     return 0;
 }
-/*e: function menu */
+/*e: function [[menu]] */
 
-/*s: function notifyf */
+/*s: function [[notifyf]] */
 /*
  *  ignore interrupts
  */
@@ -478,9 +478,9 @@ notifyf(void *a, char *msg)
         noted(NCONT);
     noted(NDFLT);
 }
-/*e: function notifyf */
+/*e: function [[notifyf]] */
 
-/*s: function system */
+/*s: function [[system]] */
 /*
  *  run a command with the network connection as standard IO
  */
@@ -512,9 +512,9 @@ system(int fd, char *cmd)
     }
     return "lost child";
 }
-/*e: function system */
+/*e: function [[system]] */
 
-/*s: function echochange */
+/*s: function [[echochange]] */
 /*
  *  suppress local echo if the remote side is doing it
  */
@@ -533,9 +533,9 @@ echochange(Biobuf *bp, int cmd)
     }
     return 0;
 }
-/*e: function echochange */
+/*e: function [[echochange]] */
 
-/*s: function termsub */
+/*s: function [[termsub]] */
 /*
  *  send terminal type to the other side
  */
@@ -565,9 +565,9 @@ termsub(Biobuf *bp, uchar *sub, int n)
     }
     return 0;
 }
-/*e: function termsub */
+/*e: function [[termsub]] */
 
-/*s: function xlocsub */
+/*s: function [[xlocsub]] */
 /*
  *  send an x display location to the other side
  */
@@ -596,9 +596,9 @@ xlocsub(Biobuf *bp, uchar *sub, int n)
     }
     return 0;
 }
-/*e: function xlocsub */
+/*e: function [[xlocsub]] */
 
-/*s: function islikeatty */
+/*s: function [[islikeatty]] */
 static int
 islikeatty(int fd)
 {
@@ -610,9 +610,9 @@ islikeatty(int fd)
     /* might be /mnt/term/dev/cons */
     return strlen(buf) >= 9 && strcmp(buf+strlen(buf)-9, "/dev/cons") == 0;
 }
-/*e: function islikeatty */
+/*e: function [[islikeatty]] */
 
-/*s: function share */
+/*s: function [[share]] */
 /*
  *  create a shared segment.  Make is start 2 meg higher than the current
  *  end of process memory.
@@ -632,5 +632,5 @@ share(ulong len)
 
     return vastart;
 }
-/*e: function share */
+/*e: function [[share]] */
 /*e: networking/ip/telnet.c */

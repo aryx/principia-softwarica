@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <ctype.h>
 
-/*s: enum _anon_ (networking/con/xms.c) */
+/*s: enum [[_anon_ (networking/con/xms.c)]] */
 enum {
     Soh=	0x1,
     Stx=	0x2,
@@ -12,14 +12,14 @@ enum {
     Nak=	0x15,
     Cancel=	0x18,
 };
-/*e: enum _anon_ (networking/con/xms.c) */
+/*e: enum [[_anon_ (networking/con/xms.c)]] */
 
 int send(uchar*, int);
 int notifyf(void*, char*);
 
 int debug, progress, onek;
 
-/*s: function errorout */
+/*s: function [[errorout]] */
 void
 errorout(int ctl, int bytes)
 {
@@ -31,9 +31,9 @@ errorout(int ctl, int bytes)
     write(ctl, "rawoff", 6);
     exits("cancel");
 }
-/*e: function errorout */
+/*e: function [[errorout]] */
 
-/*s: function updcrc */
+/*s: function [[updcrc]] */
 ushort
 updcrc(int c, ushort crc)
 {
@@ -52,9 +52,9 @@ updcrc(int c, ushort crc)
     }
     return crc;	
 }
-/*e: function updcrc */
+/*e: function [[updcrc]] */
 
-/*s: function main (networking/con/xms.c) */
+/*s: function [[main]]([[(networking/con/xms.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -164,9 +164,9 @@ main(int argc, char **argv)
     write(ctl, "rawoff", 6);
     exits(0);
 }
-/*e: function main (networking/con/xms.c) */
+/*e: function [[main]]([[(networking/con/xms.c)]]) */
 
-/*s: function send (networking/con/xms.c) */
+/*s: function [[send]]([[(networking/con/xms.c)]]) */
 /*
  *  send a message till it's acked or we give up
  */
@@ -214,9 +214,9 @@ send(uchar *buf, int len)
     }
     return 0;
 }
-/*e: function send (networking/con/xms.c) */
+/*e: function [[send]]([[(networking/con/xms.c)]]) */
 
-/*s: function notifyf (networking/con/xms.c) */
+/*s: function [[notifyf]]([[(networking/con/xms.c)]]) */
 int
 notifyf(void *a, char *msg)
 {
@@ -225,5 +225,5 @@ notifyf(void *a, char *msg)
         return 1;
     return 0;
 }
-/*e: function notifyf (networking/con/xms.c) */
+/*e: function [[notifyf]]([[(networking/con/xms.c)]]) */
 /*e: networking/con/xms.c */

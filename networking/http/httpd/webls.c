@@ -8,28 +8,28 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
-/*s: global hout (networking/ip/httpd/webls.c) */
+/*s: global [[hout]]([[(networking/ip/httpd/webls.c)]]) */
 static	Hio		*hout;
-/*e: global hout (networking/ip/httpd/webls.c) */
-/*s: global houtb (networking/ip/httpd/webls.c) */
+/*e: global [[hout]]([[(networking/ip/httpd/webls.c)]]) */
+/*s: global [[houtb]]([[(networking/ip/httpd/webls.c)]]) */
 static	Hio		houtb;
-/*e: global houtb (networking/ip/httpd/webls.c) */
-/*s: global connect (networking/ip/httpd/webls.c) */
+/*e: global [[houtb]]([[(networking/ip/httpd/webls.c)]]) */
+/*s: global [[connect]]([[(networking/ip/httpd/webls.c)]]) */
 static	HConnect	*connect;
-/*e: global connect (networking/ip/httpd/webls.c) */
+/*e: global [[connect]]([[(networking/ip/httpd/webls.c)]]) */
 static	int		vermaj, gidwidth, uidwidth, lenwidth, devwidth;
 static	Biobuf		*aio, *dio;
 
-/*s: function doctype */
+/*s: function [[doctype]] */
 static void
 doctype(void)
 {
     hprint(hout, "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n");
     hprint(hout, "    \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
 }
-/*e: function doctype */
+/*e: function [[doctype]] */
 
-/*s: function error (networking/ip/httpd/webls.c) */
+/*s: function [[error]]([[(networking/ip/httpd/webls.c)]]) */
 void
 error(char *title, char *fmt, ...)
 {
@@ -58,9 +58,9 @@ error(char *title, char *fmt, ...)
     writelog(connect, "Reply: 404\nReason: %s\n", title);
     exits(nil);
 }
-/*e: function error (networking/ip/httpd/webls.c) */
+/*e: function [[error]]([[(networking/ip/httpd/webls.c)]]) */
 
-/*s: function getre */
+/*s: function [[getre]] */
 /*
  * Are we actually allowed to look in here?
  *
@@ -112,9 +112,9 @@ getre(Biobuf *buf)
         return(re);
     }
 }
-/*e: function getre */
+/*e: function [[getre]] */
 
-/*s: function allowed */
+/*s: function [[allowed]] */
 static int
 allowed(char *dir)
 {
@@ -152,9 +152,9 @@ allowed(char *dir)
     }
     return(okay);
 }
-/*e: function allowed */
+/*e: function [[allowed]] */
 
-/*s: function compar */
+/*s: function [[compar]] */
 /*
  * Comparison routine for sorting the directory.
  */
@@ -163,9 +163,9 @@ compar(Dir *a, Dir *b)
 {
     return(strcmp(a->name, b->name));
 }
-/*e: function compar */
+/*e: function [[compar]] */
 
-/*s: function maxwidths */
+/*s: function [[maxwidths]] */
 /*
  * These is for formating; how wide are variable-length
  * fields?
@@ -187,9 +187,9 @@ maxwidths(Dir *dp, long n)
             lenwidth = strlen(scratch);
     }
 }
-/*e: function maxwidths */
+/*e: function [[maxwidths]] */
 
-/*s: function asciitime */
+/*s: function [[asciitime]] */
 /*
  * Do an actual directory listing.
  * asciitime is lifted directly out of ls.
@@ -212,9 +212,9 @@ asciitime(long l)
     buf[12] = 0;
     return buf;
 }
-/*e: function asciitime */
+/*e: function [[asciitime]] */
 
-/*s: function dols */
+/*s: function [[dols]] */
 static void
 dols(char *dir)
 {
@@ -288,9 +288,9 @@ dols(char *dir)
     hflush(hout);
     free(d);
 }
-/*e: function dols */
+/*e: function [[dols]] */
 
-/*s: function dosearch (networking/ip/httpd/webls.c) */
+/*s: function [[dosearch]]([[(networking/ip/httpd/webls.c)]]) */
 /*
  * Handle unpacking the request in the URI and
  * invoking the actual handler.
@@ -313,9 +313,9 @@ dosearch(char *search)
         "<p>Illegal formatted directory listing request:</p>\n"
         "<p>%H</p>", search);
 }
-/*e: function dosearch (networking/ip/httpd/webls.c) */
+/*e: function [[dosearch]]([[(networking/ip/httpd/webls.c)]]) */
 
-/*s: function main (networking/ip/httpd/webls.c) */
+/*s: function [[main]]([[(networking/ip/httpd/webls.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -359,5 +359,5 @@ main(int argc, char **argv)
     writelog(connect, "200 webls %ld %ld\n", hout->seek, hout->seek);
     exits(nil);
 }
-/*e: function main (networking/ip/httpd/webls.c) */
+/*e: function [[main]]([[(networking/ip/httpd/webls.c)]]) */
 /*e: networking/ip/httpd/webls.c */

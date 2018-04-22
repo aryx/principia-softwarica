@@ -4,9 +4,9 @@
 #include <ip.h>
 #include "dat.h"
 #include "protos.h"
-#include "../ndb/dns.h"
+#include "../../ndb/dns.h"
 
-/*s: global rrtname */
+/*s: global [[rrtname]] */
 /* names of RR types - /sys/src/cmd/ndb/dn.c:/rrtname */
 char *rrtname[] =
 {
@@ -72,8 +72,8 @@ char *rrtname[] =
 [Tall]		"all",
         0,
 };
-/*e: global rrtname */
-/*s: function rrtypestr */
+/*e: global [[rrtname]] */
+/*s: function [[rrtypestr]] */
 static char*
 rrtypestr(int t)
 {
@@ -84,9 +84,9 @@ rrtypestr(int t)
     snprint(buf, sizeof buf, "type%d", t);
     return buf;
 }
-/*e: function rrtypestr */
+/*e: function [[rrtypestr]] */
 
-/*s: function fmtrr */
+/*s: function [[fmtrr]] */
 static void
 fmtrr(Msg *m, RR **rrp, int quest)
 {
@@ -176,17 +176,17 @@ fmtrr(Msg *m, RR **rrp, int quest)
     }
     rrfree(rr);
 }
-/*e: function fmtrr */
+/*e: function [[fmtrr]] */
 
 void freealldn(void);
 static Proto dnsqd, dnsan, dnsns, dnsar;
 
 static void donext(Msg*);
-/*s: global dm */
+/*s: global [[dm]] */
 static DNSmsg dm;
-/*e: global dm */
+/*e: global [[dm]] */
 
-/*s: function p_seprint (networking/ip/snoopy/dns.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/dns.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -200,9 +200,9 @@ p_seprint(Msg *m)
     donext(m);
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/dns.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/dns.c)]]) */
 
-/*s: function donext */
+/*s: function [[donext]] */
 static void
 donext(Msg *m)
 {
@@ -220,9 +220,9 @@ donext(Msg *m)
         m->pr = nil;
     }
 }
-/*e: function donext */
+/*e: function [[donext]] */
 
-/*s: function p_seprintqd */
+/*s: function [[p_seprintqd]] */
 static int
 p_seprintqd(Msg *m)
 {
@@ -230,9 +230,9 @@ p_seprintqd(Msg *m)
     donext(m);
     return 0;
 }
-/*e: function p_seprintqd */
+/*e: function [[p_seprintqd]] */
 
-/*s: function p_seprintan */
+/*s: function [[p_seprintan]] */
 static int
 p_seprintan(Msg *m)
 {
@@ -240,9 +240,9 @@ p_seprintan(Msg *m)
     donext(m);
     return 0;
 }
-/*e: function p_seprintan */
+/*e: function [[p_seprintan]] */
 
-/*s: function p_seprintns */
+/*s: function [[p_seprintns]] */
 static int
 p_seprintns(Msg *m)
 {
@@ -250,9 +250,9 @@ p_seprintns(Msg *m)
     donext(m);
     return 0;
 }
-/*e: function p_seprintns */
+/*e: function [[p_seprintns]] */
 
-/*s: function p_seprintar */
+/*s: function [[p_seprintar]] */
 static int
 p_seprintar(Msg *m)
 {
@@ -260,9 +260,9 @@ p_seprintar(Msg *m)
     donext(m);
     return 0;
 }
-/*e: function p_seprintar */
+/*e: function [[p_seprintar]] */
 
-/*s: global dns */
+/*s: global [[dns]] */
 Proto dns =
 {
     "dns",
@@ -274,9 +274,9 @@ Proto dns =
     nil,
     defaultframer,
 };
-/*e: global dns */
+/*e: global [[dns]] */
 
-/*s: global dnsqd */
+/*s: global [[dnsqd]] */
 static Proto dnsqd =
 {
     "dns.qd",
@@ -288,9 +288,9 @@ static Proto dnsqd =
     nil,
     defaultframer,
 };
-/*e: global dnsqd */
+/*e: global [[dnsqd]] */
 
-/*s: global dnsan */
+/*s: global [[dnsan]] */
 static Proto dnsan =
 {
     "dns.an",
@@ -302,9 +302,9 @@ static Proto dnsan =
     nil,
     defaultframer,
 };
-/*e: global dnsan */
+/*e: global [[dnsan]] */
 
-/*s: global dnsns */
+/*s: global [[dnsns]] */
 static Proto dnsns =
 {
     "dns.ns",
@@ -316,9 +316,9 @@ static Proto dnsns =
     nil,
     defaultframer,
 };
-/*e: global dnsns */
+/*e: global [[dnsns]] */
 
-/*s: global dnsar */
+/*s: global [[dnsar]] */
 static Proto dnsar =
 {
     "dns.ar",
@@ -330,10 +330,10 @@ static Proto dnsar =
     nil,
     defaultframer,
 };
-/*e: global dnsar */
+/*e: global [[dnsar]] */
 
 
-/*s: function emalloc (networking/ip/snoopy/dns.c) */
+/*s: function [[emalloc]]([[(networking/ip/snoopy/dns.c)]]) */
 void*
 emalloc(int n)
 {
@@ -344,9 +344,9 @@ emalloc(int n)
         sysfatal("out of memory");
     return v;
 }
-/*e: function emalloc (networking/ip/snoopy/dns.c) */
+/*e: function [[emalloc]]([[(networking/ip/snoopy/dns.c)]]) */
 
-/*s: function estrdup (networking/ip/snoopy/dns.c) */
+/*s: function [[estrdup]]([[(networking/ip/snoopy/dns.c)]]) */
 char*
 estrdup(char *s)
 {
@@ -355,13 +355,13 @@ estrdup(char *s)
         sysfatal("out of memory");
     return s;
 }
-/*e: function estrdup (networking/ip/snoopy/dns.c) */
+/*e: function [[estrdup]]([[(networking/ip/snoopy/dns.c)]]) */
 
-/*s: global alldn */
+/*s: global [[alldn]] */
 DN *alldn;
-/*e: global alldn */
+/*e: global [[alldn]] */
 
-/*s: function dnlookup */
+/*s: function [[dnlookup]] */
 DN*
 dnlookup(char *name, int class, int)
 {
@@ -375,9 +375,9 @@ dnlookup(char *name, int class, int)
     alldn = dn;
     return dn;
 }
-/*e: function dnlookup */
+/*e: function [[dnlookup]] */
 
-/*s: function freealldn */
+/*s: function [[freealldn]] */
 void
 freealldn(void)
 {
@@ -389,29 +389,29 @@ freealldn(void)
         free(dn);
     }
 }
-/*e: function freealldn */
+/*e: function [[freealldn]] */
 
-/*s: global debug (networking/ip/snoopy/dns.c) */
+/*s: global [[debug]]([[(networking/ip/snoopy/dns.c)]]) */
 int debug;				/* for ndb/dns.h */
-/*e: global debug (networking/ip/snoopy/dns.c) */
-/*s: global now (networking/ip/snoopy/dns.c) */
+/*e: global [[debug]]([[(networking/ip/snoopy/dns.c)]]) */
+/*s: global [[now]]([[(networking/ip/snoopy/dns.c)]]) */
 ulong now = 0;
-/*e: global now (networking/ip/snoopy/dns.c) */
+/*e: global [[now]]([[(networking/ip/snoopy/dns.c)]]) */
 
-/*s: function dnslog */
+/*s: function [[dnslog]] */
 void
 dnslog(char *fmt, ...)			/* don't log */
 {
     USED(fmt);
 }
-/*e: function dnslog */
+/*e: function [[dnslog]] */
 
 /*************************************************
  * Everything below here is copied from /sys/src/cmd/ndb/dn.c
  * without modification and can be recopied to update.
  */
 
-/*s: function rrname */
+/*s: function [[rrname]] */
 /*
  *  convert an integer RR type to it's ascii name
  */
@@ -429,9 +429,9 @@ rrname(int type, char *buf, int len)
     }
     return t;
 }
-/*e: function rrname */
+/*e: function [[rrname]] */
 
-/*s: function rrfreelist */
+/*s: function [[rrfreelist]] */
 /*
  *  free a list of resource records and any related structs
  */
@@ -445,9 +445,9 @@ rrfreelist(RR *rp)
         rrfree(rp);
     }
 }
-/*e: function rrfreelist */
+/*e: function [[rrfreelist]] */
 
-/*s: function freeserverlist */
+/*s: function [[freeserverlist]] */
 void
 freeserverlist(Server *s)
 {
@@ -458,9 +458,9 @@ freeserverlist(Server *s)
         free(s);
     }
 }
-/*e: function freeserverlist */
+/*e: function [[freeserverlist]] */
 
-/*s: function rralloc */
+/*s: function [[rralloc]] */
 /*
  *  allocate a resource record of a given type
  */
@@ -506,9 +506,9 @@ rralloc(int type)
     rp->next = 0;
     return rp;
 }
-/*e: function rralloc */
+/*e: function [[rralloc]] */
 
-/*s: function rrfree */
+/*s: function [[rrfree]] */
 /*
  *  free a resource record and any related structs
  */
@@ -574,5 +574,5 @@ rrfree(RR *rp)
     memset(rp, 0, sizeof *rp);		/* cause trouble */
     free(rp);
 }
-/*e: function rrfree */
+/*e: function [[rrfree]] */
 /*e: networking/ip/snoopy/dns.c */

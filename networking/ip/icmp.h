@@ -1,5 +1,5 @@
 /*s: networking/ip/icmp.h */
-/*s: enum _anon_ (networking/ip/icmp.h) */
+/*s: enum [[_anon_ (networking/ip/icmp.h)]] */
 /* ICMP for IP v4 and v6 */
 enum
 {
@@ -42,12 +42,12 @@ enum
 
     ICMP_HDRSIZE	= 8,
 };
-/*e: enum _anon_ (networking/ip/icmp.h) */
+/*e: enum [[_anon_ (networking/ip/icmp.h)]] */
 
 typedef struct Ip4hdr Ip4hdr;
 typedef struct Icmphdr Icmphdr;
 
-/*s: struct Ip4hdr (networking/ip/icmp.h) */
+/*s: struct [[Ip4hdr]]([[(networking/ip/icmp.h)]]) */
 struct Ip4hdr
 {
     uchar	vihl;		/* Version and header length */
@@ -63,10 +63,10 @@ struct Ip4hdr
 
     uchar	data[];
 };
-/*e: struct Ip4hdr (networking/ip/icmp.h) */
+/*e: struct [[Ip4hdr]]([[(networking/ip/icmp.h)]]) */
 
 /* the icmp payload has the same format in v4 and v6 */
-/*s: struct Icmphdr */
+/*s: struct [[Icmphdr]] */
 struct Icmphdr {
     uchar	type;
     uchar	code;
@@ -75,7 +75,7 @@ struct Icmphdr {
     uchar	seq[2];
     uchar	data[];
 };
-/*e: struct Icmphdr */
+/*e: struct [[Icmphdr]] */
 
 // #define IP4HDRSZ offsetof(Ip4hdr, data[0])
 // #define ICMPHDRSZ offsetof(Icmphdr, data[0])

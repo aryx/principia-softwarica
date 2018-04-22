@@ -5,7 +5,7 @@
 #include <auth.h>
 #include "imap4d.h"
 
-/*s: global flagMap */
+/*s: global [[flagMap]] */
 static NamedInt	flagMap[] =
 {
     {"\\Seen",	MSeen},
@@ -16,9 +16,9 @@ static NamedInt	flagMap[] =
     {"\\Recent",	MRecent},
     {nil,		0}
 };
-/*e: global flagMap */
+/*e: global [[flagMap]] */
 
-/*s: function storeMsg */
+/*s: function [[storeMsg]] */
 int
 storeMsg(Box *box, Msg *m, int uids, void *vst)
 {
@@ -54,9 +54,9 @@ storeMsg(Box *box, Msg *m, int uids, void *vst)
 
     return 1;
 }
-/*e: function storeMsg */
+/*e: function [[storeMsg]] */
 
-/*s: function setFlags */
+/*s: function [[setFlags]] */
 /*
  * update flags & global flag counts in box
  */
@@ -75,9 +75,9 @@ setFlags(Box *box, Msg *m, int f)
     }
     m->flags = f;
 }
-/*e: function setFlags */
+/*e: function [[setFlags]] */
 
-/*s: function sendFlags */
+/*s: function [[sendFlags]] */
 void
 sendFlags(Box *box, int uids)
 {
@@ -99,9 +99,9 @@ sendFlags(Box *box, int uids)
         }
     }
 }
-/*e: function sendFlags */
+/*e: function [[sendFlags]] */
 
-/*s: function writeFlags */
+/*s: function [[writeFlags]] */
 void
 writeFlags(Biobuf *b, Msg *m, int recentOk)
 {
@@ -117,9 +117,9 @@ writeFlags(Biobuf *b, Msg *m, int recentOk)
         }
     }
 }
-/*e: function writeFlags */
+/*e: function [[writeFlags]] */
 
-/*s: function msgSeen */
+/*s: function [[msgSeen]] */
 int
 msgSeen(Box *box, Msg *m)
 {
@@ -131,13 +131,13 @@ msgSeen(Box *box, Msg *m)
     box->dirtyImp = 1;
     return 1;
 }
-/*e: function msgSeen */
+/*e: function [[msgSeen]] */
 
-/*s: function mapFlag */
+/*s: function [[mapFlag]] */
 ulong
 mapFlag(char *name)
 {
     return mapInt(flagMap, name);
 }
-/*e: function mapFlag */
+/*e: function [[mapFlag]] */
 /*e: networking/ip/imap4d/store.c */

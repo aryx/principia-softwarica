@@ -24,7 +24,7 @@ ulong	thread(void(*f)(void*), void *a);
 void	timerthread(void*);
 void	usage(void);
 
-/*s: global dhcp (networking/ip/dhcpclient.c) */
+/*s: global [[dhcp]]([[(networking/ip/dhcpclient.c)]]) */
 struct {
     QLock	lk;
     int	state;
@@ -40,17 +40,17 @@ struct {
     ulong	resend;		/* number of resends for current state */
     ulong	timeout;	/* time to timeout - seconds */
 } dhcp;
-/*e: global dhcp (networking/ip/dhcpclient.c) */
+/*e: global [[dhcp]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: global net (networking/ip/dhcpclient.c) */
+/*s: global [[net]]([[(networking/ip/dhcpclient.c)]]) */
 char	net[64];
-/*e: global net (networking/ip/dhcpclient.c) */
+/*e: global [[net]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: global optmagic (networking/ip/dhcpclient.c) */
+/*s: global [[optmagic]]([[(networking/ip/dhcpclient.c)]]) */
 char optmagic[4] = { 0x63, 0x82, 0x53, 0x63 };
-/*e: global optmagic (networking/ip/dhcpclient.c) */
+/*e: global [[optmagic]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function main (networking/ip/dhcpclient.c) */
+/*s: function [[main]]([[(networking/ip/dhcpclient.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -120,18 +120,18 @@ main(int argc, char *argv[])
         dhcp.fd = -1;
     }
 }
-/*e: function main (networking/ip/dhcpclient.c) */
+/*e: function [[main]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function usage (networking/ip/dhcpclient.c) */
+/*s: function [[usage]]([[(networking/ip/dhcpclient.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-x netextension]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ip/dhcpclient.c) */
+/*e: function [[usage]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function timerthread */
+/*s: function [[timerthread]] */
 void
 timerthread(void*)
 {
@@ -184,9 +184,9 @@ timerthread(void*)
         qunlock(&dhcp.lk);
     }
 }
-/*e: function timerthread */
+/*e: function [[timerthread]] */
 
-/*s: function stdinthread */
+/*s: function [[stdinthread]] */
 void
 stdinthread(void*)
 {
@@ -210,9 +210,9 @@ stdinthread(void*)
     postnote(PNGROUP, getpid(), "die");
     exits(0);
 }
-/*e: function stdinthread */
+/*e: function [[stdinthread]] */
 
-/*s: function dhcpinit */
+/*s: function [[dhcpinit]] */
 void
 dhcpinit(void)
 {
@@ -231,9 +231,9 @@ dhcpinit(void)
 
     sprint(dhcp.cid, "%s.%d", getenv("sysname"), getpid());
 }
-/*e: function dhcpinit */
+/*e: function [[dhcpinit]] */
 
-/*s: function dhcpsend (networking/ip/dhcpclient.c) */
+/*s: function [[dhcpsend]]([[(networking/ip/dhcpclient.c)]]) */
 void
 dhcpsend(int type)
 {
@@ -287,9 +287,9 @@ dhcpsend(int type)
     if(write(dhcp.fd, &bp, n) != n)
         myfatal("dhcpsend: write failed: %r");
 }
-/*e: function dhcpsend (networking/ip/dhcpclient.c) */
+/*e: function [[dhcpsend]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function dhcprecv (networking/ip/dhcpclient.c) */
+/*s: function [[dhcprecv]]([[(networking/ip/dhcpclient.c)]]) */
 void
 dhcprecv(void)
 {
@@ -365,9 +365,9 @@ bootpdump(buf, n);
     }
 
 }
-/*e: function dhcprecv (networking/ip/dhcpclient.c) */
+/*e: function [[dhcprecv]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function openlisten (networking/ip/dhcpclient.c) */
+/*s: function [[openlisten]]([[(networking/ip/dhcpclient.c)]]) */
 int
 openlisten(char *net)
 {
@@ -397,9 +397,9 @@ openlisten(char *net)
     close(cfd);
     return fd;
 }
-/*e: function openlisten (networking/ip/dhcpclient.c) */
+/*e: function [[openlisten]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function optadd (networking/ip/dhcpclient.c) */
+/*s: function [[optadd]]([[(networking/ip/dhcpclient.c)]]) */
 uchar*
 optadd(uchar *p, int op, void *d, int n)
 {
@@ -408,9 +408,9 @@ optadd(uchar *p, int op, void *d, int n)
     memmove(p+2, d, n);
     return p+n+2;
 }
-/*e: function optadd (networking/ip/dhcpclient.c) */
+/*e: function [[optadd]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function optaddbyte (networking/ip/dhcpclient.c) */
+/*s: function [[optaddbyte]]([[(networking/ip/dhcpclient.c)]]) */
 uchar*
 optaddbyte(uchar *p, int op, int b)
 {
@@ -419,9 +419,9 @@ optaddbyte(uchar *p, int op, int b)
     p[2] = b;
     return p+3;
 }
-/*e: function optaddbyte (networking/ip/dhcpclient.c) */
+/*e: function [[optaddbyte]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function optaddulong (networking/ip/dhcpclient.c) */
+/*s: function [[optaddulong]]([[(networking/ip/dhcpclient.c)]]) */
 uchar*
 optaddulong(uchar *p, int op, ulong x)
 {
@@ -430,9 +430,9 @@ optaddulong(uchar *p, int op, ulong x)
     hnputl(p+2, x);
     return p+6;
 }
-/*e: function optaddulong (networking/ip/dhcpclient.c) */
+/*e: function [[optaddulong]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function optaddaddr (networking/ip/dhcpclient.c) */
+/*s: function [[optaddaddr]]([[(networking/ip/dhcpclient.c)]]) */
 uchar *
 optaddaddr(uchar *p, int op, uchar *ip)
 {
@@ -441,9 +441,9 @@ optaddaddr(uchar *p, int op, uchar *ip)
     v6tov4(p+2, ip);
     return p+6;
 }
-/*e: function optaddaddr (networking/ip/dhcpclient.c) */
+/*e: function [[optaddaddr]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function optget (networking/ip/dhcpclient.c) */
+/*s: function [[optget]]([[(networking/ip/dhcpclient.c)]]) */
 uchar*
 optget(Bootp *bp, int op, int n)
 {
@@ -467,10 +467,10 @@ optget(Bootp *bp, int op, int n)
         return p;
     }
 }
-/*e: function optget (networking/ip/dhcpclient.c) */
+/*e: function [[optget]]([[(networking/ip/dhcpclient.c)]]) */
 
 
-/*s: function optgetbyte (networking/ip/dhcpclient.c) */
+/*s: function [[optgetbyte]]([[(networking/ip/dhcpclient.c)]]) */
 int
 optgetbyte(Bootp *bp, int op)
 {
@@ -481,9 +481,9 @@ optgetbyte(Bootp *bp, int op)
         return 0;
     return *p;
 }
-/*e: function optgetbyte (networking/ip/dhcpclient.c) */
+/*e: function [[optgetbyte]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function optgetulong (networking/ip/dhcpclient.c) */
+/*s: function [[optgetulong]]([[(networking/ip/dhcpclient.c)]]) */
 ulong
 optgetulong(Bootp *bp, int op)
 {
@@ -494,9 +494,9 @@ optgetulong(Bootp *bp, int op)
         return 0;
     return nhgetl(p);
 }
-/*e: function optgetulong (networking/ip/dhcpclient.c) */
+/*e: function [[optgetulong]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function optgetaddr (networking/ip/dhcpclient.c) */
+/*s: function [[optgetaddr]]([[(networking/ip/dhcpclient.c)]]) */
 int
 optgetaddr(Bootp *bp, int op, uchar *ip)
 {
@@ -508,9 +508,9 @@ optgetaddr(Bootp *bp, int op, uchar *ip)
     v4tov6(ip, p);
     return 1;
 }
-/*e: function optgetaddr (networking/ip/dhcpclient.c) */
+/*e: function [[optgetaddr]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function parse (networking/ip/dhcpclient.c) */
+/*s: function [[parse]]([[(networking/ip/dhcpclient.c)]]) */
 /* make sure packet looks ok */
 Bootp *
 parse(uchar *p, int n)
@@ -576,9 +576,9 @@ parse(uchar *p, int n)
 
     return bp;
 }
-/*e: function parse (networking/ip/dhcpclient.c) */
+/*e: function [[parse]]([[(networking/ip/dhcpclient.c)]]) */
 
-/*s: function bootpdump */
+/*s: function [[bootpdump]] */
 void
 bootpdump(uchar *p, int n)
 {
@@ -668,9 +668,9 @@ bootpdump(uchar *p, int n)
         n -= len;
     }
 }
-/*e: function bootpdump */
+/*e: function [[bootpdump]] */
 
-/*s: function thread */
+/*s: function [[thread]] */
 ulong
 thread(void(*f)(void*), void *a)
 {
@@ -684,9 +684,9 @@ thread(void(*f)(void*), void *a)
     (*f)(a);
     return 0;	/* never reaches here */
 }
-/*e: function thread */
+/*e: function [[thread]] */
 
-/*s: function myfatal */
+/*s: function [[myfatal]] */
 void
 myfatal(char *fmt, ...)
 {
@@ -700,5 +700,5 @@ myfatal(char *fmt, ...)
     postnote(PNGROUP, getpid(), "die");
     exits(buf);
 }
-/*e: function myfatal */
+/*e: function [[myfatal]] */
 /*e: networking/ip/dhcpclient.c */

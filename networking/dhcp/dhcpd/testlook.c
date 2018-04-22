@@ -5,11 +5,11 @@
 #include <bio.h>
 #include <ndb.h>
 
-/*s: global noether */
+/*s: global [[noether]] */
 static uchar noether[6];
-/*e: global noether */
+/*e: global [[noether]] */
 
-/*s: function lookval */
+/*s: function [[lookval]] */
 /*
  *  Look for a pair with the given attribute.  look first on the same line,
  *  then in the whole entry.
@@ -37,9 +37,9 @@ lookval(Ndbtuple *entry, Ndbtuple *line, char *attr, char *to)
         }
     return 0;
 }
-/*e: function lookval */
+/*e: function [[lookval]] */
 
-/*s: function lookupip (networking/ip/dhcpd/testlook.c) */
+/*s: function [[lookupip]]([[(networking/ip/dhcpd/testlook.c)]]) */
 /*
  *  lookup an ip address
  */
@@ -77,9 +77,9 @@ lookupip(Ndb *db, char *name, uchar *to, Ipinfo *iip)
     }
     return 0;
 }
-/*e: function lookupip (networking/ip/dhcpd/testlook.c) */
+/*e: function [[lookupip]]([[(networking/ip/dhcpd/testlook.c)]]) */
 
-/*s: function recursesubnet */
+/*s: function [[recursesubnet]] */
 /*
  *  lookup a subnet and fill in anything we can
  */
@@ -118,9 +118,9 @@ print("%s->", ip);
         ndbfree(t);
     }
 }
-/*e: function recursesubnet */
+/*e: function [[recursesubnet]] */
 #ifdef foo
-/*s: function ipinfo */
+/*s: function [[ipinfo]] */
 /*
  *  find out everything we can about a system from what has been
  *  specified.
@@ -207,9 +207,9 @@ ipinfo(Ndb *db, char *etherin, char *ipin, char *name, Ipinfo *iip)
         lookupip(db, auname, iip->auip, iip);
     return 0;
 }
-/*e: function ipinfo */
+/*e: function [[ipinfo]] */
 #endif
-/*s: function main (networking/ip/dhcpd/testlook.c) */
+/*s: function [[main]]([[(networking/ip/dhcpd/testlook.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -232,5 +232,5 @@ main(int argc, char **argv)
     fprint(2, "a %I m %I n %I f %s e %E\n", ii.ipaddr,
         ii.ipmask, ii.ipnet, ii.bootf, ii.etheraddr);
 }
-/*e: function main (networking/ip/dhcpd/testlook.c) */
+/*e: function [[main]]([[(networking/ip/dhcpd/testlook.c)]]) */
 /*e: networking/ip/dhcpd/testlook.c */

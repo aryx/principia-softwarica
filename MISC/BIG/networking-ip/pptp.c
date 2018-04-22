@@ -10,87 +10,87 @@
 #include <ip.h>
 #include <thread.h>
 
-/*s: global ack */
+/*s: global [[ack]] */
 int	ack;
-/*e: global ack */
-/*s: global alarmed (networking/ip/pptp.c) */
+/*e: global [[ack]] */
+/*s: global [[alarmed]]([[(networking/ip/pptp.c)]]) */
 int	alarmed;
-/*e: global alarmed (networking/ip/pptp.c) */
-/*s: global ctlechotime */
+/*e: global [[alarmed]]([[(networking/ip/pptp.c)]]) */
+/*s: global [[ctlechotime]] */
 int	ctlechotime;
-/*e: global ctlechotime */
-/*s: global ctlfd (networking/ip/pptp.c) */
+/*e: global [[ctlechotime]] */
+/*s: global [[ctlfd]]([[(networking/ip/pptp.c)]]) */
 int	ctlfd;
-/*e: global ctlfd (networking/ip/pptp.c) */
-/*s: global ctlrcvtime */
+/*e: global [[ctlfd]]([[(networking/ip/pptp.c)]]) */
+/*s: global [[ctlrcvtime]] */
 int	ctlrcvtime;
-/*e: global ctlrcvtime */
-/*s: global debug (networking/ip/pptp.c) */
+/*e: global [[ctlrcvtime]] */
+/*s: global [[debug]]([[(networking/ip/pptp.c)]]) */
 int	debug;
-/*e: global debug (networking/ip/pptp.c) */
-/*s: global grefd */
+/*e: global [[debug]]([[(networking/ip/pptp.c)]]) */
+/*s: global [[grefd]] */
 int	grefd;
-/*e: global grefd */
-/*s: global localip */
+/*e: global [[grefd]] */
+/*s: global [[localip]] */
 uchar localip[IPaddrlen];
-/*e: global localip */
-/*s: global localwin */
+/*e: global [[localip]] */
+/*s: global [[localwin]] */
 int	localwin;
-/*e: global localwin */
-/*s: global keyspec (networking/ip/pptp.c) */
+/*e: global [[localwin]] */
+/*s: global [[keyspec]]([[(networking/ip/pptp.c)]]) */
 char	*keyspec;
-/*e: global keyspec (networking/ip/pptp.c) */
-/*s: global now (networking/ip/pptp.c) */
+/*e: global [[keyspec]]([[(networking/ip/pptp.c)]]) */
+/*s: global [[now]]([[(networking/ip/pptp.c)]]) */
 int	now;
-/*e: global now (networking/ip/pptp.c) */
-/*s: global pppnetmntpt */
+/*e: global [[now]]([[(networking/ip/pptp.c)]]) */
+/*s: global [[pppnetmntpt]] */
 char	*pppnetmntpt;
-/*e: global pppnetmntpt */
-/*s: global pid (networking/ip/pptp.c) */
+/*e: global [[pppnetmntpt]] */
+/*s: global [[pid]]([[(networking/ip/pptp.c)]]) */
 int	pid;
-/*e: global pid (networking/ip/pptp.c) */
-/*s: global pidchan */
+/*e: global [[pid]]([[(networking/ip/pptp.c)]]) */
+/*s: global [[pidchan]] */
 Channel *pidchan;
-/*e: global pidchan */
-/*s: global pppfd */
+/*e: global [[pidchan]] */
+/*s: global [[pppfd]] */
 int	pppfd;
-/*e: global pppfd */
-/*s: global primary (networking/ip/pptp.c) */
+/*e: global [[pppfd]] */
+/*s: global [[primary]]([[(networking/ip/pptp.c)]]) */
 int	primary;
-/*e: global primary (networking/ip/pptp.c) */
-/*s: global rack */
+/*e: global [[primary]]([[(networking/ip/pptp.c)]]) */
+/*s: global [[rack]] */
 int	rack;
-/*e: global rack */
-/*s: global rdchan */
+/*e: global [[rack]] */
+/*s: global [[rdchan]] */
 Channel	*rdchan;
-/*e: global rdchan */
-/*s: global rdexpect */
+/*e: global [[rdchan]] */
+/*s: global [[rdexpect]] */
 int	rdexpect;
-/*e: global rdexpect */
-/*s: global remid */
+/*e: global [[rdexpect]] */
+/*s: global [[remid]] */
 int	remid;
-/*e: global remid */
-/*s: global remoteip */
+/*e: global [[remid]] */
+/*s: global [[remoteip]] */
 uchar remoteip[IPaddrlen];
-/*e: global remoteip */
-/*s: global remwin */
+/*e: global [[remoteip]] */
+/*s: global [[remwin]] */
 int	remwin;
-/*e: global remwin */
-/*s: global rseq */
+/*e: global [[remwin]] */
+/*s: global [[rseq]] */
 int	rseq;
-/*e: global rseq */
-/*s: global seq */
+/*e: global [[rseq]] */
+/*s: global [[seq]] */
 int	seq;
-/*e: global seq */
-/*s: global tcpdir */
+/*e: global [[seq]] */
+/*s: global [[tcpdir]] */
 char	tcpdir[40];
-/*e: global tcpdir */
-/*s: global tickchan */
+/*e: global [[tcpdir]] */
+/*s: global [[tickchan]] */
 Channel *tickchan;
-/*e: global tickchan */
-/*s: global topppfd */
+/*e: global [[tickchan]] */
+/*s: global [[topppfd]] */
 int	topppfd;
-/*e: global topppfd */
+/*e: global [[topppfd]] */
 
 int	aread(int, int, void*, int);
 int	catchalarm(void*, char*);
@@ -106,16 +106,16 @@ void	recordack(int);
 int	schedack(int, uchar*, int);
 void	waitacks(void);
 
-/*s: function usage (networking/ip/pptp.c) */
+/*s: function [[usage]]([[(networking/ip/pptp.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: ip/pptp [-Pd] [-k keyspec] [-x pppnetmntpt] [-w window] server\n");
     exits("usage");
 }
-/*e: function usage (networking/ip/pptp.c) */
+/*e: function [[usage]]([[(networking/ip/pptp.c)]]) */
 
-/*s: function threadmain (networking/ip/pptp.c) */
+/*s: function [[threadmain]]([[(networking/ip/pptp.c)]]) */
 void
 threadmain(int argc, char **argv)
 {
@@ -153,9 +153,9 @@ threadmain(int argc, char **argv)
     pushppp(fd);
     exits(nil);
 }
-/*e: function threadmain (networking/ip/pptp.c) */
+/*e: function [[threadmain]]([[(networking/ip/pptp.c)]]) */
 
-/*s: function catchalarm (networking/ip/pptp.c) */
+/*s: function [[catchalarm]]([[(networking/ip/pptp.c)]]) */
 int
 catchalarm(void *a, char *msg)
 {
@@ -169,9 +169,9 @@ catchalarm(void *a, char *msg)
         fprint(2, "note rcved: %s\n", msg);
     return 0;
 }
-/*e: function catchalarm (networking/ip/pptp.c) */
+/*e: function [[catchalarm]]([[(networking/ip/pptp.c)]]) */
 
-/*s: enum _anon_ (networking/ip/pptp.c) */
+/*s: enum [[_anon_ (networking/ip/pptp.c)]] */
 enum {
     Stack	= 8192,
 
@@ -187,9 +187,9 @@ enum {
     Servertimeout = 5*60*1000/Tick,
     Echointerval = 60*1000/Tick,
 };
-/*e: enum _anon_ (networking/ip/pptp.c) */
+/*e: enum [[_anon_ (networking/ip/pptp.c)]] */
 
-/*s: enum _anon_ (networking/ip/pptp.c)2 */
+/*s: enum [[_anon_ (networking/ip/pptp.c)2]] */
 enum {
     Syncframe	= 0x1,
     Asyncframe	= 0x2,
@@ -197,9 +197,9 @@ enum {
     Digital		= 0x2,
     Version		= 0x100,
 };
-/*e: enum _anon_ (networking/ip/pptp.c)2 */
+/*e: enum [[_anon_ (networking/ip/pptp.c)2]] */
 
-/*s: enum _anon_ (networking/ip/pptp.c)3 */
+/*s: enum [[_anon_ (networking/ip/pptp.c)3]] */
 enum {
     Tstart		= 1,
     Rstart		= 2,
@@ -217,9 +217,9 @@ enum {
     Awaninfo	= 14,
     Alinkinfo	= 15,
 };
-/*e: enum _anon_ (networking/ip/pptp.c)3 */
+/*e: enum [[_anon_ (networking/ip/pptp.c)3]] */
 
-/*s: function recho */
+/*s: function [[recho]] */
 void
 recho(uchar *in)
 {
@@ -238,9 +238,9 @@ recho(uchar *in)
 
     ewrite(ctlfd, out, sizeof out);
 }
-/*e: function recho */
+/*e: function [[recho]] */
 
-/*s: function sendecho */
+/*s: function [[sendecho]] */
 void
 sendecho(void)
 {
@@ -255,9 +255,9 @@ sendecho(void)
 
     ewrite(ctlfd, out, sizeof out);
 }
-/*e: function sendecho */
+/*e: function [[sendecho]] */
 
-/*s: function pptpctlproc */
+/*s: function [[pptpctlproc]] */
 void
 pptpctlproc(void*)
 {
@@ -310,18 +310,18 @@ pptpctlproc(void*)
         }
     }
 }
-/*e: function pptpctlproc */
+/*e: function [[pptpctlproc]] */
 
-/*s: enum _anon_ (networking/ip/pptp.c)4 */
+/*s: enum [[_anon_ (networking/ip/pptp.c)4]] */
 enum {
     Seqnum = 0x1000,
     Acknum = 0x0080,
 
     GrePPP = 0x880B,
 };
-/*e: enum _anon_ (networking/ip/pptp.c)4 */
+/*e: enum [[_anon_ (networking/ip/pptp.c)4]] */
 
-/*s: function grereadproc */
+/*s: function [[grereadproc]] */
 void
 grereadproc(void*)
 {
@@ -378,9 +378,9 @@ grereadproc(void*)
     }
     threadexits(nil);
 }
-/*e: function grereadproc */
+/*e: function [[grereadproc]] */
 
-/*s: function pppreadproc */
+/*s: function [[pppreadproc]] */
 void
 pppreadproc(void*)
 {
@@ -416,9 +416,9 @@ pppreadproc(void*)
     }
     threadexits(nil);
 }
-/*e: function pppreadproc */
+/*e: function [[pppreadproc]] */
 
-/*s: function sendack (networking/ip/pptp.c) */
+/*s: function [[sendack]]([[(networking/ip/pptp.c)]]) */
 void
 sendack(void)
 {
@@ -438,9 +438,9 @@ sendack(void)
     if(write(grefd, pkt, sizeof pkt) != sizeof pkt)
         myfatal("gre write: %r");
 }
-/*e: function sendack (networking/ip/pptp.c) */
+/*e: function [[sendack]]([[(networking/ip/pptp.c)]]) */
 
-/*s: function schedack */
+/*s: function [[schedack]] */
 int
 schedack(int n, uchar *dat, int len)
 {
@@ -477,9 +477,9 @@ schedack(int n, uchar *dat, int len)
 
     return 1;
 }
-/*e: function schedack */
+/*e: function [[schedack]] */
 
-/*s: function gretimeoutproc */
+/*s: function [[gretimeoutproc]] */
 void
 gretimeoutproc(void*)
 {
@@ -493,17 +493,17 @@ gretimeoutproc(void*)
             sendecho();
     }
 }
-/*e: function gretimeoutproc */
+/*e: function [[gretimeoutproc]] */
 
-/*s: function recordack */
+/*s: function [[recordack]] */
 void
 recordack(int n)
 {
     ack = n;
 }
-/*e: function recordack */
+/*e: function [[recordack]] */
 
-/*s: function waitacks */
+/*s: function [[waitacks]] */
 void
 waitacks(void)
 {
@@ -518,9 +518,9 @@ waitacks(void)
     }
 */
 }
-/*e: function waitacks */
+/*e: function [[waitacks]] */
 
-/*s: function tstart */
+/*s: function [[tstart]] */
 void
 tstart(void)
 {
@@ -558,9 +558,9 @@ tstart(void)
         myfatal("Rstart error %d", rpkt[15]);
     free(rpkt);
 }
-/*e: function tstart */
+/*e: function [[tstart]] */
 
-/*s: function tcallout */
+/*s: function [[tcallout]] */
 void
 tcallout(void)
 {
@@ -599,9 +599,9 @@ tcallout(void)
     remwin = nhgets(pkt+24);
     free(rpkt);
 }
-/*e: function tcallout */
+/*e: function [[tcallout]] */
 
-/*s: function pptp */
+/*s: function [[pptp]] */
 /*
 void
 tcallreq(void)
@@ -704,9 +704,9 @@ pptp(char *addr)
     close(topppfd);
     return pppfd;
 }
-/*e: function pptp */
+/*e: function [[pptp]] */
     
-/*s: function pushppp */
+/*s: function [[pushppp]] */
 void
 pushppp(int fd)
 {
@@ -743,9 +743,9 @@ pushppp(int fd)
         myfatal("exec: %r");
     }
 }
-/*e: function pushppp */
+/*e: function [[pushppp]] */
 
-/*s: function aread (networking/ip/pptp.c) */
+/*s: function [[aread]]([[(networking/ip/pptp.c)]]) */
 int
 aread(int timeout, int fd, void *buf, int nbuf)
 {
@@ -763,9 +763,9 @@ aread(int timeout, int fd, void *buf, int nbuf)
         myfatal("short read");
     return n;
 }
-/*e: function aread (networking/ip/pptp.c) */
+/*e: function [[aread]]([[(networking/ip/pptp.c)]]) */
 
-/*s: function ewrite (networking/ip/pptp.c) */
+/*s: function [[ewrite]]([[(networking/ip/pptp.c)]]) */
 void
 ewrite(int fd, void *buf, int nbuf)
 {
@@ -778,9 +778,9 @@ ewrite(int fd, void *buf, int nbuf)
         myfatal("write %d to %s: %s", nbuf, path, e);
     }
 }
-/*e: function ewrite (networking/ip/pptp.c) */
+/*e: function [[ewrite]]([[(networking/ip/pptp.c)]]) */
 
-/*s: function emalloc (networking/ip/pptp.c) */
+/*s: function [[emalloc]]([[(networking/ip/pptp.c)]]) */
 void*
 emalloc(long n)
 {
@@ -791,9 +791,9 @@ emalloc(long n)
         myfatal("out of memory");
     return v;
 }
-/*e: function emalloc (networking/ip/pptp.c) */
+/*e: function [[emalloc]]([[(networking/ip/pptp.c)]]) */
 
-/*s: function thread (networking/ip/pptp.c) */
+/*s: function [[thread]]([[(networking/ip/pptp.c)]]) */
 int
 thread(void(*f)(void*), void *a)
 {
@@ -807,9 +807,9 @@ thread(void(*f)(void*), void *a)
     _exits(nil);
     return 0; // never reaches here
 }
-/*e: function thread (networking/ip/pptp.c) */
+/*e: function [[thread]]([[(networking/ip/pptp.c)]]) */
 
-/*s: function dumpctlpkt */
+/*s: function [[dumpctlpkt]] */
 void
 dumpctlpkt(uchar *pkt)
 {
@@ -930,9 +930,9 @@ dumpctlpkt(uchar *pkt)
         break;
     }
 }
-/*e: function dumpctlpkt */
+/*e: function [[dumpctlpkt]] */
 
-/*s: function getaddrs */
+/*s: function [[getaddrs]] */
 void
 getaddrs(void)
 {
@@ -957,9 +957,9 @@ getaddrs(void)
     parseip(remoteip, buf);
     close(fd);
 }
-/*e: function getaddrs */
+/*e: function [[getaddrs]] */
 
-/*s: function myfatal (networking/ip/pptp.c) */
+/*s: function [[myfatal]]([[(networking/ip/pptp.c)]]) */
 void
 myfatal(char *fmt, ...)
 {
@@ -982,5 +982,5 @@ myfatal(char *fmt, ...)
     fprint(2, "fatal: %s\n", sbuf);
     threadexitsall(nil);
 }
-/*e: function myfatal (networking/ip/pptp.c) */
+/*e: function [[myfatal]]([[(networking/ip/pptp.c)]]) */
 /*e: networking/ip/pptp.c */

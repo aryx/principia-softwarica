@@ -11,94 +11,94 @@
 #include <mp.h>
 #include <libsec.h>
 
-/*s: enum _anon_ (networking/ip/httpfile.c) */
+/*s: enum [[_anon_ (networking/ip/httpfile.c)]] */
 enum
 {
     Blocksize = 64*1024,
     Stacksize = 8192,
 };
-/*e: enum _anon_ (networking/ip/httpfile.c) */
+/*e: enum [[_anon_ (networking/ip/httpfile.c)]] */
 
-/*s: global host */
+/*s: global [[host]] */
 char *host;
-/*e: global host */
-/*s: global file */
+/*e: global [[host]] */
+/*s: global [[file]] */
 char *file;
-/*e: global file */
-/*s: global port */
+/*e: global [[file]] */
+/*s: global [[port]] */
 char *port;
-/*e: global port */
-/*s: global url */
+/*e: global [[port]] */
+/*s: global [[url]] */
 char *url;
-/*e: global url */
-/*s: global get */
+/*e: global [[url]] */
+/*s: global [[get]] */
 char *get;
-/*e: global get */
-/*s: global user (networking/ip/httpfile.c) */
+/*e: global [[get]] */
+/*s: global [[user]]([[(networking/ip/httpfile.c)]]) */
 char *user;
-/*e: global user (networking/ip/httpfile.c) */
-/*s: global net (networking/ip/httpfile.c) */
+/*e: global [[user]]([[(networking/ip/httpfile.c)]]) */
+/*s: global [[net]]([[(networking/ip/httpfile.c)]]) */
 char *net = "net";
-/*e: global net (networking/ip/httpfile.c) */
+/*e: global [[net]]([[(networking/ip/httpfile.c)]]) */
 
-/*s: global size */
+/*s: global [[size]] */
 vlong size;
-/*e: global size */
-/*s: global usetls (networking/ip/httpfile.c) */
+/*e: global [[size]] */
+/*s: global [[usetls]]([[(networking/ip/httpfile.c)]]) */
 int usetls;
-/*e: global usetls (networking/ip/httpfile.c) */
-/*s: global debug (networking/ip/httpfile.c) */
+/*e: global [[usetls]]([[(networking/ip/httpfile.c)]]) */
+/*s: global [[debug]]([[(networking/ip/httpfile.c)]]) */
 int debug;
-/*e: global debug (networking/ip/httpfile.c) */
-/*s: global ncache */
+/*e: global [[debug]]([[(networking/ip/httpfile.c)]]) */
+/*s: global [[ncache]] */
 int ncache;
-/*e: global ncache */
-/*s: global mcache */
+/*e: global [[ncache]] */
+/*s: global [[mcache]] */
 int mcache;
-/*e: global mcache */
+/*e: global [[mcache]] */
 
-/*s: function usage (networking/ip/httpfile.c) */
+/*s: function [[usage]]([[(networking/ip/httpfile.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: httpfile [-Dd] [-c count] [-f file] [-m mtpt] [-s srvname] [-x net] url\n");
     exits("usage");
 }
-/*e: function usage (networking/ip/httpfile.c) */
+/*e: function [[usage]]([[(networking/ip/httpfile.c)]]) */
 
-/*s: enum _anon_ (networking/ip/httpfile.c)2 */
+/*s: enum [[_anon_ (networking/ip/httpfile.c)2]] */
 enum
 {
     Qroot,
     Qfile,
 };
-/*e: enum _anon_ (networking/ip/httpfile.c)2 */
+/*e: enum [[_anon_ (networking/ip/httpfile.c)2]] */
 
-/*s: macro PATH */
+/*s: macro [[PATH]] */
 #define PATH(type, n)		((type)|((n)<<8))
-/*e: macro PATH */
-/*s: macro TYPE (networking/ip/httpfile.c) */
+/*e: macro [[PATH]] */
+/*s: macro [[TYPE]]([[(networking/ip/httpfile.c)]]) */
 #define TYPE(path)			((int)(path) & 0xFF)
-/*e: macro TYPE (networking/ip/httpfile.c) */
-/*s: macro NUM */
+/*e: macro [[TYPE]]([[(networking/ip/httpfile.c)]]) */
+/*s: macro [[NUM]] */
 #define NUM(path)			((uint)(path)>>8)
-/*e: macro NUM */
+/*e: macro [[NUM]] */
 
-/*s: global reqchan */
+/*s: global [[reqchan]] */
 Channel *reqchan;
-/*e: global reqchan */
-/*s: global httpchan */
+/*e: global [[reqchan]] */
+/*s: global [[httpchan]] */
 Channel *httpchan;
-/*e: global httpchan */
-/*s: global finishchan */
+/*e: global [[httpchan]] */
+/*s: global [[finishchan]] */
 Channel *finishchan;
-/*e: global finishchan */
-/*s: global time0 */
+/*e: global [[finishchan]] */
+/*s: global [[time0]] */
 ulong time0;
-/*e: global time0 */
+/*e: global [[time0]] */
 
 typedef struct Block Block;
-/*s: struct Block (networking/ip/httpfile.c) */
+/*s: struct [[Block]]([[(networking/ip/httpfile.c)]]) */
 struct Block
 {
     uchar *p;
@@ -109,25 +109,25 @@ struct Block
     Req *rq;
     Req **erq;
 };
-/*e: struct Block (networking/ip/httpfile.c) */
+/*e: struct [[Block]]([[(networking/ip/httpfile.c)]]) */
 
 typedef struct Blocklist Blocklist;
-/*s: struct Blocklist */
+/*s: struct [[Blocklist]] */
 struct Blocklist
 {
     Block *first;
     Block **end;
 };
-/*e: struct Blocklist */
+/*e: struct [[Blocklist]] */
 
-/*s: global cache */
+/*s: global [[cache]] */
 Blocklist cache;
-/*e: global cache */
-/*s: global inprogress */
+/*e: global [[cache]] */
+/*s: global [[inprogress]] */
 Blocklist inprogress;
-/*e: global inprogress */
+/*e: global [[inprogress]] */
 
-/*s: function queuereq */
+/*s: function [[queuereq]] */
 void
 queuereq(Block *b, Req *r)
 {
@@ -137,9 +137,9 @@ queuereq(Block *b, Req *r)
     r->aux = nil;
     b->erq = (Req**)&r->aux;
 }
-/*e: function queuereq */
+/*e: function [[queuereq]] */
 
-/*s: function addblock */
+/*s: function [[addblock]] */
 void
 addblock(Blocklist *l, Block *b)
 {
@@ -153,9 +153,9 @@ addblock(Blocklist *l, Block *b)
     l->end = &b->link;
     b->lastuse = time(0);
 }
-/*e: function addblock */
+/*e: function [[addblock]] */
 
-/*s: function delreq */
+/*s: function [[delreq]] */
 void
 delreq(Block *b, Req *r)
 {
@@ -171,9 +171,9 @@ delreq(Block *b, Req *r)
         }
     }
 }
-/*e: function delreq */
+/*e: function [[delreq]] */
 
-/*s: function evictblock */
+/*s: function [[evictblock]] */
 void
 evictblock(Blocklist *cache)
 {
@@ -195,9 +195,9 @@ evictblock(Blocklist *cache)
     free(b);
     ncache--;
 }
-/*e: function evictblock */
+/*e: function [[evictblock]] */
 
-/*s: function findblock */
+/*s: function [[findblock]] */
 Block *
 findblock(Blocklist *s, vlong off)
 {
@@ -214,9 +214,9 @@ findblock(Blocklist *s, vlong off)
 
     return nil;
 }
-/*e: function findblock */
+/*e: function [[findblock]] */
 
-/*s: function readfrom */
+/*s: function [[readfrom]] */
 void
 readfrom(Req *r, Block *b)
 {
@@ -235,9 +235,9 @@ readfrom(Req *r, Block *b)
 
     respond(r, nil);
 }
-/*e: function readfrom */
+/*e: function [[readfrom]] */
 
-/*s: function hangupclient */
+/*s: function [[hangupclient]] */
 void
 hangupclient(Srv*)
 {
@@ -246,9 +246,9 @@ hangupclient(Srv*)
 
     threadexitsall("done");
 }
-/*e: function hangupclient */
+/*e: function [[hangupclient]] */
 
-/*s: function dotls */
+/*s: function [[dotls]] */
 int
 dotls(int fd)
 {
@@ -262,9 +262,9 @@ dotls(int fd)
 
     return fd;
 }
-/*e: function dotls */
+/*e: function [[dotls]] */
 
-/*s: function nocr */
+/*s: function [[nocr]] */
 char*
 nocr(char *s)
 {
@@ -276,9 +276,9 @@ nocr(char *s)
     *w = 0;
     return s;
 }
-/*e: function nocr */
+/*e: function [[nocr]] */
 
-/*s: function readhttphdr */
+/*s: function [[readhttphdr]] */
 char*
 readhttphdr(Biobuf *netbio, vlong *size)
 {
@@ -298,9 +298,9 @@ readhttphdr(Biobuf *netbio, vlong *size)
 
     return stat;
 }
-/*e: function readhttphdr */
+/*e: function [[readhttphdr]] */
 
-/*s: function dialhttp */
+/*s: function [[dialhttp]] */
 int
 dialhttp(Biobuf *netbio)
 {
@@ -315,9 +315,9 @@ dialhttp(Biobuf *netbio)
 
     return netfd;
 }
-/*e: function dialhttp */
+/*e: function [[dialhttp]] */
 
-/*s: function getrange */
+/*s: function [[getrange]] */
 uchar*
 getrange(Block *b)
 {
@@ -374,9 +374,9 @@ getrange(Block *b)
     close(netfd);
     return data;
 }
-/*e: function getrange */
+/*e: function [[getrange]] */
 
-/*s: function httpfilereadproc */
+/*s: function [[httpfilereadproc]] */
 void
 httpfilereadproc(void*)
 {
@@ -393,26 +393,26 @@ httpfilereadproc(void*)
         sendp(finishchan, b);
     }
 }
-/*e: function httpfilereadproc */
+/*e: function [[httpfilereadproc]] */
 
 typedef struct Tab Tab;
-/*s: struct Tab */
+/*s: struct [[Tab]] */
 struct Tab
 {
     char *name;
     ulong mode;
 };
-/*e: struct Tab */
+/*e: struct [[Tab]] */
 
-/*s: global tab */
+/*s: global [[tab]] */
 Tab tab[] =
 {
     "/",		DMDIR|0555,
     nil,		0444,
 };
-/*e: global tab */
+/*e: global [[tab]] */
 
-/*s: function fillstat */
+/*s: function [[fillstat]] */
 static void
 fillstat(Dir *d, uvlong path)
 {
@@ -429,9 +429,9 @@ fillstat(Dir *d, uvlong path)
     d->qid.type = t->mode>>24;
     d->mode = t->mode;
 }
-/*e: function fillstat */
+/*e: function [[fillstat]] */
 
-/*s: function fsattach */
+/*s: function [[fsattach]] */
 static void
 fsattach(Req *r)
 {
@@ -445,18 +445,18 @@ fsattach(Req *r)
     r->ofcall.qid = r->fid->qid;
     respond(r, nil);
 }
-/*e: function fsattach */
+/*e: function [[fsattach]] */
 
-/*s: function fsstat (networking/ip/httpfile.c) */
+/*s: function [[fsstat]]([[(networking/ip/httpfile.c)]]) */
 static void
 fsstat(Req *r)
 {
     fillstat(&r->d, r->fid->qid.path);
     respond(r, nil);
 }
-/*e: function fsstat (networking/ip/httpfile.c) */
+/*e: function [[fsstat]]([[(networking/ip/httpfile.c)]]) */
 
-/*s: function rootgen */
+/*s: function [[rootgen]] */
 static int
 rootgen(int i, Dir *d, void*)
 {
@@ -467,9 +467,9 @@ rootgen(int i, Dir *d, void*)
     }
     return -1;
 }
-/*e: function rootgen */
+/*e: function [[rootgen]] */
 
-/*s: function fswalk1 */
+/*s: function [[fswalk1]] */
 static char*
 fswalk1(Fid *fid, char *name, Qid *qid)
 {
@@ -502,9 +502,9 @@ fswalk1(Fid *fid, char *name, Qid *qid)
     }
     return "directory entry not found";
 }
-/*e: function fswalk1 */
+/*e: function [[fswalk1]] */
 
-/*s: function getfilesize */
+/*s: function [[getfilesize]] */
 vlong
 getfilesize(void)
 {
@@ -532,9 +532,9 @@ getfilesize(void)
     close(netfd);
     return size;
 }
-/*e: function getfilesize */
+/*e: function [[getfilesize]] */
 
-/*s: function fileread (networking/ip/httpfile.c) */
+/*s: function [[fileread]]([[(networking/ip/httpfile.c)]]) */
 void
 fileread(Req *r)
 {
@@ -558,9 +558,9 @@ fileread(Req *r)
     }
     queuereq(b, r);
 }
-/*e: function fileread (networking/ip/httpfile.c) */
+/*e: function [[fileread]]([[(networking/ip/httpfile.c)]]) */
 
-/*s: function fsopen */
+/*s: function [[fsopen]] */
 static void
 fsopen(Req *r)
 {
@@ -570,9 +570,9 @@ fsopen(Req *r)
     }
     respond(r, nil);
 }
-/*e: function fsopen */
+/*e: function [[fsopen]] */
 
-/*s: function finishthread */
+/*s: function [[finishthread]] */
 void
 finishthread(void*)
 {
@@ -598,9 +598,9 @@ finishthread(void*)
             sendp(httpchan, inprogress.first);
     }
 }
-/*e: function finishthread */
+/*e: function [[finishthread]] */
 
-/*s: function fsnetproc */
+/*s: function [[fsnetproc]] */
 void
 fsnetproc(void*)
 {
@@ -629,17 +629,17 @@ fsnetproc(void*)
         }
     }
 }
-/*e: function fsnetproc */
+/*e: function [[fsnetproc]] */
 
-/*s: function fsflush */
+/*s: function [[fsflush]] */
 static void
 fsflush(Req *r)
 {
     sendp(reqchan, r);
 }
-/*e: function fsflush */
+/*e: function [[fsflush]] */
 
-/*s: function fsread (networking/ip/httpfile.c) */
+/*s: function [[fsread]]([[(networking/ip/httpfile.c)]]) */
 static void
 fsread(Req *r)
 {
@@ -661,9 +661,9 @@ fsread(Req *r)
         break;
     }
 }
-/*e: function fsread (networking/ip/httpfile.c) */
+/*e: function [[fsread]]([[(networking/ip/httpfile.c)]]) */
 
-/*s: global fs */
+/*s: global [[fs]] */
 Srv fs = 
 {
 .attach=		fsattach,
@@ -674,9 +674,9 @@ Srv fs =
 .flush=		fsflush,
 .end=		hangupclient,
 };
-/*e: global fs */
+/*e: global [[fs]] */
 
-/*s: function threadmain */
+/*s: function [[threadmain]] */
 void
 threadmain(int argc, char **argv)
 {
@@ -766,5 +766,5 @@ threadmain(int argc, char **argv)
     threadpostmountsrv(&fs, srvname, mtpt, MBEFORE);
     threadexits(0);
 }
-/*e: function threadmain */
+/*e: function [[threadmain]] */
 /*e: networking/ip/httpfile.c */

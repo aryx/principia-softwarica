@@ -8,7 +8,7 @@
 #include <libc.h>
 #include <ip.h>
 
-/*s: enum _anon_ (networking/ip/6in4.c) */
+/*s: enum [[_anon_ (networking/ip/6in4.c)]] */
 /*
  * IPv6 and related IP protocols & their numbers:
  *
@@ -29,10 +29,10 @@ enum {
     IP_ICMPV6PROTO	= 58,
     V6to4pfx	= 0x2002,
 };
-/*e: enum _anon_ (networking/ip/6in4.c) */
+/*e: enum [[_anon_ (networking/ip/6in4.c)]] */
 
 typedef struct Iphdr Iphdr;
-/*s: struct Iphdr */
+/*s: struct [[Iphdr]] */
 struct Iphdr
 {
     uchar	vihl;		/* Version and header length */
@@ -47,56 +47,56 @@ struct Iphdr
     uchar	dst[4];		/* Ip destination (uchar ordering unimportant) */
     uchar	payload[];
 };
-/*e: struct Iphdr */
+/*e: struct [[Iphdr]] */
 
-/*s: constant STFHDR */
+/*s: constant [[STFHDR]] */
 #define STFHDR offsetof(Iphdr, payload[0])
-/*e: constant STFHDR */
+/*e: constant [[STFHDR]] */
 
-/*s: global anysender */
+/*s: global [[anysender]] */
 int anysender;
-/*e: global anysender */
-/*s: global gateway */
+/*e: global [[anysender]] */
+/*s: global [[gateway]] */
 int gateway;
-/*e: global gateway */
-/*s: global debug (networking/ip/6in4.c) */
+/*e: global [[gateway]] */
+/*s: global [[debug]]([[(networking/ip/6in4.c)]]) */
 int debug;
-/*e: global debug (networking/ip/6in4.c) */
+/*e: global [[debug]]([[(networking/ip/6in4.c)]]) */
 
-/*s: global local6 */
+/*s: global [[local6]] */
 uchar local6[IPaddrlen];
-/*e: global local6 */
-/*s: global remote6 */
+/*e: global [[local6]] */
+/*s: global [[remote6]] */
 uchar remote6[IPaddrlen];
-/*e: global remote6 */
-/*s: global remote4 */
+/*e: global [[remote6]] */
+/*s: global [[remote4]] */
 uchar remote4[IPaddrlen];
-/*e: global remote4 */
-/*s: global localmask */
+/*e: global [[remote4]] */
+/*s: global [[localmask]] */
 uchar localmask[IPaddrlen];
-/*e: global localmask */
-/*s: global localnet */
+/*e: global [[localmask]] */
+/*s: global [[localnet]] */
 uchar localnet[IPaddrlen];
-/*e: global localnet */
-/*s: global myip */
+/*e: global [[localnet]] */
+/*s: global [[myip]] */
 uchar myip[IPaddrlen];
-/*e: global myip */
+/*e: global [[myip]] */
 
-/*s: global anycast6to4 */
+/*s: global [[anycast6to4]] */
 /* magic anycast address from rfc3068 */
 uchar anycast6to4[IPv4addrlen] = { 192, 88, 99, 1 };
-/*e: global anycast6to4 */
+/*e: global [[anycast6to4]] */
 
-/*s: global net */
+/*s: global [[net]] */
 static char *net = "/net";
-/*e: global net */
+/*e: global [[net]] */
 
 static int	badipv4(uchar*);
 static int	badipv6(uchar*);
 static void	ip2tunnel(int, int);
 static void	tunnel2ip(int, int);
 
-/*s: function usage (networking/ip/6in4.c) */
+/*s: function [[usage]]([[(networking/ip/6in4.c)]]) */
 static void
 usage(void)
 {
@@ -104,9 +104,9 @@ usage(void)
         argv0);
     exits("Usage");
 }
-/*e: function usage (networking/ip/6in4.c) */
+/*e: function [[usage]]([[(networking/ip/6in4.c)]]) */
 
-/*s: function defv6addr */
+/*s: function [[defv6addr]] */
 static char *
 defv6addr(void)
 {
@@ -115,9 +115,9 @@ defv6addr(void)
     return smprint("%ux:%2.2x%2.2x:%2.2x%2.2x::1/48", V6to4pfx,
         ipv4[0], ipv4[1], ipv4[2], ipv4[3]);
 }
-/*e: function defv6addr */
+/*e: function [[defv6addr]] */
 
-/*s: function procargs */
+/*s: function [[procargs]] */
 /* process non-option arguments */
 static void
 procargs(int argc, char **argv)
@@ -185,9 +185,9 @@ procargs(int argc, char **argv)
     if (debug)
         fprint(2, "localnet %I remote6 %I\n", localnet, remote6);
 }
-/*e: function procargs */
+/*e: function [[procargs]] */
 
-/*s: function setup */
+/*s: function [[setup]] */
 static void
 setup(int *v6net, int *tunp)
 {
@@ -244,9 +244,9 @@ setup(int *v6net, int *tunp)
             sysfatal("can't set default global route: %r");
     }
 }
-/*e: function setup */
+/*e: function [[setup]] */
 
-/*s: function runtunnel */
+/*s: function [[runtunnel]] */
 static void
 runtunnel(int v6net, int tunnel)
 {
@@ -272,9 +272,9 @@ runtunnel(int v6net, int tunnel)
     }
     exits("tunnel gone");
 }
-/*e: function runtunnel */
+/*e: function [[runtunnel]] */
 
-/*s: function main (networking/ip/6in4.c) */
+/*s: function [[main]]([[(networking/ip/6in4.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -311,9 +311,9 @@ main(int argc, char **argv)
     runtunnel(v6net, tunnel);
     exits(0);
 }
-/*e: function main (networking/ip/6in4.c) */
+/*e: function [[main]]([[(networking/ip/6in4.c)]]) */
 
-/*s: function procsetname */
+/*s: function [[procsetname]] */
 /*
  * based on libthread's threadsetname, but drags in less library code.
  * actually just sets the arguments displayed.
@@ -338,9 +338,9 @@ procsetname(char *fmt, ...)
     }
     free(cmdname);
 }
-/*e: function procsetname */
+/*e: function [[procsetname]] */
 
-/*s: function ip2tunnel */
+/*s: function [[ip2tunnel]] */
 /*
  * encapsulate v6 packets from the packet interface in v4 ones
  * and send them into the tunnel.
@@ -408,9 +408,9 @@ ip2tunnel(int in, int out)
         }
     }
 }
-/*e: function ip2tunnel */
+/*e: function [[ip2tunnel]] */
 
-/*s: function tunnel2ip */
+/*s: function [[tunnel2ip]] */
 /*
  * decapsulate v6 packets from v4 ones from the tunnel
  * and forward them to the packet interface
@@ -478,9 +478,9 @@ tunnel2ip(int in, int out)
         }
     }
 }
-/*e: function tunnel2ip */
+/*e: function [[tunnel2ip]] */
 
-/*s: function badipv4 */
+/*s: function [[badipv4]] */
 static int
 badipv4(uchar *a)
 {
@@ -499,9 +499,9 @@ badipv4(uchar *a)
     /* 224.0.0.0/4 multicast, 240.0.0.0/4 reserved, broadcast */
     return a[0] >= 240;
 }
-/*e: function badipv4 */
+/*e: function [[badipv4]] */
 
-/*s: function badipv6 */
+/*s: function [[badipv6]] */
 /*
  * 0x0000/16 prefix = v4 compatible, v4 mapped, loopback, unspecified...
  * site-local is now deprecated, rfc3879
@@ -514,5 +514,5 @@ badipv6(uchar *a)
     return h == 0 || ISIPV6MCAST(a) || ISIPV6LINKLOCAL(a) ||
         h == V6to4pfx && badipv4(a+2);
 }
-/*e: function badipv6 */
+/*e: function [[badipv6]] */
 /*e: networking/ip/6in4.c */

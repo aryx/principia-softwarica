@@ -5,31 +5,31 @@
 #include <auth.h>
 #include "ppp.h"
 
-/*s: enum _anon_ (networking/ip/ppp/block.c) */
+/*s: enum [[_anon_ (networking/ip/ppp/block.c)]] */
 enum
 {
     PAD	= 128,
     NLIST	= (1<<5),
     BPOW	= 10,
 };
-/*e: enum _anon_ (networking/ip/ppp/block.c) */
+/*e: enum [[_anon_ (networking/ip/ppp/block.c)]] */
 
 typedef struct Barena Barena;
-/*s: struct Barena */
+/*s: struct [[Barena]] */
 struct Barena
 {
     QLock;
     Block*	list[NLIST];
 };
-/*e: struct Barena */
-/*s: global area */
+/*e: struct [[Barena]] */
+/*s: global [[area]] */
 static Barena area;
-/*e: global area */
+/*e: global [[area]] */
 
 #define ADEBUG if(0)
 
 
-/*s: enum _anon_ (networking/ip/ppp/block.c)2 */
+/*s: enum [[_anon_ (networking/ip/ppp/block.c)2]] */
 /*
  *  allocation tracing
  */
@@ -37,26 +37,26 @@ enum
 {
     Npc=	64,
 };
-/*e: enum _anon_ (networking/ip/ppp/block.c)2 */
+/*e: enum [[_anon_ (networking/ip/ppp/block.c)2]] */
 typedef struct Arefent Arefent;
-/*s: struct Arefent */
+/*s: struct [[Arefent]] */
 struct Arefent
 {
     uint	pc;
     uint	n;
 };
-/*e: struct Arefent */
+/*e: struct [[Arefent]] */
 typedef struct Aref Aref;
-/*s: struct Aref */
+/*s: struct [[Aref]] */
 struct  Aref
 {
     Arefent	tab[Npc];
     QLock;
 };
-/*e: struct Aref */
-/*s: global arefblock */
+/*e: struct [[Aref]] */
+/*s: global [[arefblock]] */
 Aref arefblock;
-/*e: global arefblock */
+/*e: global [[arefblock]] */
 
 static ulong	callerpc(void*);
 static void	aref(Aref*, ulong);
@@ -141,7 +141,7 @@ freeb(Block *bp)
     qunlock(&area);
 }
 
-/*s: function concat */
+/*s: function [[concat]] */
 /*
  *  concatenate a list of blocks into a single one and make sure
  *  the result is at least min uchars
@@ -161,9 +161,9 @@ concat(Block *bp)
     freeb(bp);
     return nb;
 }
-/*e: function concat */
+/*e: function [[concat]] */
 
-/*s: function blen */
+/*s: function [[blen]] */
 int
 blen(Block *bp)
 {
@@ -176,9 +176,9 @@ blen(Block *bp)
     }
     return len;
 }
-/*e: function blen */
+/*e: function [[blen]] */
 
-/*s: function pullup */
+/*s: function [[pullup]] */
 Block *
 pullup(Block *bp, int n)
 {
@@ -226,9 +226,9 @@ pullup(Block *bp, int n)
     freeb(bp);
     return nil;
 }
-/*e: function pullup */
+/*e: function [[pullup]] */
 
-/*s: function padb */
+/*s: function [[padb]] */
 /*
  *  Pad a block to the front with n uchars.  This is used to add protocol
  *  headers to the front of blocks.
@@ -251,9 +251,9 @@ padb(Block *bp, int n)
         return nbp;
     }
 } 
-/*e: function padb */
+/*e: function [[padb]] */
 
-/*s: function btrim */
+/*s: function [[btrim]] */
 Block *
 btrim(Block *bp, int offset, int len)
 {
@@ -291,9 +291,9 @@ btrim(Block *bp, int offset, int len)
 
     return startb;
 }
-/*e: function btrim */
+/*e: function [[btrim]] */
 
-/*s: function copyb */
+/*s: function [[copyb]] */
 Block*
 copyb(Block *bp, int count)
 {
@@ -327,9 +327,9 @@ copyb(Block *bp, int count)
 
     return head;
 }
-/*e: function copyb */
+/*e: function [[copyb]] */
 
-/*s: function pullb */
+/*s: function [[pullb]] */
 int
 pullb(Block **bph, int count)
 {
@@ -356,9 +356,9 @@ pullb(Block **bph, int count)
     }
     return uchars;
 }
-/*e: function pullb */
+/*e: function [[pullb]] */
 
-/*s: function callerpc */
+/*s: function [[callerpc]] */
 /*
  *  handy routines for keeping track of allocations
  */
@@ -367,8 +367,8 @@ callerpc(void *a)
 {
     return ((ulong*)a)[-1];
 }
-/*e: function callerpc */
-/*s: function aref */
+/*e: function [[callerpc]] */
+/*s: function [[aref]] */
 static void
 aref(Aref *ap, ulong pc)
 {
@@ -383,8 +383,8 @@ aref(Aref *ap, ulong pc)
     a->n++;
     qunlock(ap);
 }
-/*e: function aref */
-/*s: function aunref */
+/*e: function [[aref]] */
+/*s: function [[aunref]] */
 static void
 aunref(Aref *ap, ulong pc)
 {
@@ -398,5 +398,5 @@ aunref(Aref *ap, ulong pc)
     a->n--;
     qunlock(ap);
 }
-/*e: function aunref */
+/*e: function [[aunref]] */
 /*e: networking/ip/ppp/block.c */

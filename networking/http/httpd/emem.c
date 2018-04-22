@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "httpd.h"
 
-/*s: function ezalloc */
+/*s: function [[ezalloc]] */
 void*
 ezalloc(ulong n)
 {
@@ -15,9 +15,9 @@ ezalloc(ulong n)
     memset(p, 0, n);
     return p;
 }
-/*e: function ezalloc */
+/*e: function [[ezalloc]] */
 
-/*s: function estrdup (networking/ip/httpd/emem.c) */
+/*s: function [[estrdup]]([[(networking/ip/httpd/emem.c)]]) */
 char*
 estrdup(char *s)
 {
@@ -26,6 +26,6 @@ estrdup(char *s)
         sysfatal("out of memory");
     return s;
 }
-/*e: function estrdup (networking/ip/httpd/emem.c) */
+/*e: function [[estrdup]]([[(networking/ip/httpd/emem.c)]]) */
 
 /*e: networking/ip/httpd/emem.c */

@@ -4,7 +4,7 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
-/*s: function anonymous */
+/*s: function [[anonymous]] */
 void
 anonymous(HConnect *c)
 {
@@ -14,5 +14,5 @@ anonymous(HConnect *c)
     }
     chdir("/");
 }
-/*e: function anonymous */
+/*e: function [[anonymous]] */
 /*e: networking/ip/httpd/anonymous.c */

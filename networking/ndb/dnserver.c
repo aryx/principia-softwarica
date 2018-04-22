@@ -7,12 +7,12 @@
 static RR*	doextquery(DNSmsg*, Request*, int);
 static void	hint(RR**, RR*);
 
-/*s: global norecursion */
+/*s: global [[norecursion]] */
 /* set in dns.c */
 int	norecursion;		/* don't allow recursive requests */
-/*e: global norecursion */
+/*e: global [[norecursion]] */
 
-/*s: function dnserver */
+/*s: function [[dnserver]] */
 /*
  *  answer a dns request
  */
@@ -174,9 +174,9 @@ dnserver(DNSmsg *reqp, DNSmsg *repp, Request *req, uchar *srcip, int rcode)
 
     dncheck(nil, 1);
 }
-/*e: function dnserver */
+/*e: function [[dnserver]] */
 
-/*s: function doextquery */
+/*s: function [[doextquery]] */
 /*
  *  satisfy a recursive request.  dnlookup will handle cnames.
  */
@@ -204,9 +204,9 @@ doextquery(DNSmsg *mp, Request *req, int recurse)
     unlock(&dnlock);
     return neg;
 }
-/*e: function doextquery */
+/*e: function [[doextquery]] */
 
-/*s: function hint */
+/*s: function [[hint]] */
 static void
 hint(RR **last, RR *rp)
 {
@@ -235,5 +235,5 @@ hint(RR **last, RR *rp)
         break;
     }
 }
-/*e: function hint */
+/*e: function [[hint]] */
 /*e: networking/ndb/dnserver.c */

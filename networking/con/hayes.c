@@ -8,17 +8,17 @@ void godial(int, int, char*);
 int readmsg(int, int);
 void punt(char*, ...);
 
-/*s: global pulsed */
+/*s: global [[pulsed]] */
 int pulsed;
-/*e: global pulsed */
-/*s: global verbose (networking/con/hayes.c) */
+/*e: global [[pulsed]] */
+/*s: global [[verbose]]([[(networking/con/hayes.c)]]) */
 int verbose;
-/*e: global verbose (networking/con/hayes.c) */
-/*s: global msgbuf */
+/*e: global [[verbose]]([[(networking/con/hayes.c)]]) */
+/*s: global [[msgbuf]] */
 char msgbuf[128];		/* last message read */
-/*e: global msgbuf */
+/*e: global [[msgbuf]] */
 
-/*s: enum _anon_ (networking/con/hayes.c) */
+/*s: enum [[_anon_ (networking/con/hayes.c)]] */
 enum
 {
     Ok,
@@ -26,19 +26,19 @@ enum
     Failure,
     Noise,
 };
-/*e: enum _anon_ (networking/con/hayes.c) */
+/*e: enum [[_anon_ (networking/con/hayes.c)]] */
 
 typedef struct Msg	Msg;
-/*s: struct Msg */
+/*s: struct [[Msg]] */
 struct Msg
 {
     char	*text;
     int	type;
 };
-/*e: struct Msg */
+/*e: struct [[Msg]] */
 
 
-/*s: global msgs */
+/*s: global [[msgs]] */
 Msg msgs[] =
 {
     { "OK",			Ok, },
@@ -50,17 +50,17 @@ Msg msgs[] =
     { "CONNECT",		Success, },
     { 0,			0 },
 };
-/*e: global msgs */
+/*e: global [[msgs]] */
 
-/*s: function usage (networking/con/hayes.c) */
+/*s: function [[usage]]([[(networking/con/hayes.c)]]) */
 void
 usage(void)
 {
     punt("usage: hayes [-p] telno [device]");
 }
-/*e: function usage (networking/con/hayes.c) */
+/*e: function [[usage]]([[(networking/con/hayes.c)]]) */
 
-/*s: function main (networking/con/hayes.c) */
+/*s: function [[main]]([[(networking/con/hayes.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -100,17 +100,17 @@ main(int argc, char **argv)
     godial(data, ctl, argv[0]);
     exits(0);
 }
-/*e: function main (networking/con/hayes.c) */
+/*e: function [[main]]([[(networking/con/hayes.c)]]) */
 
-/*s: function send (networking/con/hayes.c) */
+/*s: function [[send]]([[(networking/con/hayes.c)]]) */
 int
 send(int fd, char *x)
 {
     return write(fd, x, strlen(x));
 }
-/*e: function send (networking/con/hayes.c) */
+/*e: function [[send]]([[(networking/con/hayes.c)]]) */
 
-/*s: function godial */
+/*s: function [[godial]] */
 void
 godial(int data, int ctl, char *number)
 {
@@ -163,9 +163,9 @@ godial(int data, int ctl, char *number)
     setspeed(ctl, baud);
     fprint(2, "hayes: connected at %d baud\n", baud);
 }
-/*e: function godial */
+/*e: function [[godial]] */
 
-/*s: function readmsg */
+/*s: function [[readmsg]] */
 /*
  *  read until we see a message or we time out
  */
@@ -209,9 +209,9 @@ readmsg(int f, int secs)
     strcpy(msgbuf, "No response from modem");
     return Noise;
 }
-/*e: function readmsg */
+/*e: function [[readmsg]] */
 
-/*s: function getspeed */
+/*s: function [[getspeed]] */
 /*
  *  get baud rate from a connect message
  */
@@ -230,9 +230,9 @@ getspeed(char *msg, int speed)
     else
         return s;
 }
-/*e: function getspeed */
+/*e: function [[getspeed]] */
 
-/*s: function setspeed */
+/*s: function [[setspeed]] */
 /*
  *  set speed and RTS/CTS modem flow control
  */
@@ -247,10 +247,10 @@ setspeed(int ctl, int baud)
     write(ctl, buf, strlen(buf));
     write(ctl, "m1", 2);
 }
-/*e: function setspeed */
+/*e: function [[setspeed]] */
 
 
-/*s: function punt (networking/con/hayes.c) */
+/*s: function [[punt]]([[(networking/con/hayes.c)]]) */
 void
 punt(char *fmt, ...)
 {
@@ -266,5 +266,5 @@ punt(char *fmt, ...)
     write(2, buf, n+1);
     exits("hayes");
 }
-/*e: function punt (networking/con/hayes.c) */
+/*e: function [[punt]]([[(networking/con/hayes.c)]]) */
 /*e: networking/con/hayes.c */

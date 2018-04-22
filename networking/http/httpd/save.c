@@ -15,15 +15,15 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
-/*s: enum _anon_ (networking/ip/httpd/save.c) */
+/*s: enum [[_anon_ (networking/ip/httpd/save.c)]] */
 enum
 {
     MaxLog		= 24*1024,		/* limit on length of any one log request */
     LockSecs	= MaxLog/500,		/* seconds to wait before giving up on opening the data file */
 };
-/*e: enum _anon_ (networking/ip/httpd/save.c) */
+/*e: enum [[_anon_ (networking/ip/httpd/save.c)]] */
 
-/*s: function dangerous */
+/*s: function [[dangerous]] */
 static int
 dangerous(char *s)
 {
@@ -42,9 +42,9 @@ dangerous(char *s)
     }
     return 0;
 }
-/*e: function dangerous */
+/*e: function [[dangerous]] */
 
-/*s: function openLocked */
+/*s: function [[openLocked]] */
 /*
  * open a file which might be locked.
  * if it is, spin until available
@@ -66,9 +66,9 @@ openLocked(char *file, int mode)
     }
     return -1;
 }
-/*e: function openLocked */
+/*e: function [[openLocked]] */
 
-/*s: function main (networking/ip/httpd/save.c) */
+/*s: function [[main]]([[(networking/ip/httpd/save.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -160,5 +160,5 @@ main(int argc, char **argv)
 
     exits(nil);
 }
-/*e: function main (networking/ip/httpd/save.c) */
+/*e: function [[main]]([[(networking/ip/httpd/save.c)]]) */
 /*e: networking/ip/httpd/save.c */

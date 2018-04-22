@@ -6,7 +6,7 @@
 #include <bio.h>
 #include "imap4d.h"
 
-/*s: function enableForwarding */
+/*s: function [[enableForwarding]] */
 /*
  * hack to allow smtp forwarding.
  * hide the peer IP address under a rock in the ratifier FS.
@@ -55,9 +55,9 @@ enableForwarding(void)
     if(fd >= 0)
         close(fd);
 }
-/*e: function enableForwarding */
+/*e: function [[enableForwarding]] */
 
-/*s: function setupuser */
+/*s: function [[setupuser]] */
 void
 setupuser(AuthInfo *ai)
 {
@@ -101,9 +101,9 @@ _exits("rob1");
         bye("can't initialize mail system");
     free(w);
 }
-/*e: function setupuser */
+/*e: function [[setupuser]] */
 
-/*s: function authresp */
+/*s: function [[authresp]] */
 static char*
 authresp(void)
 {
@@ -126,9 +126,9 @@ authresp(void)
     s[n] = '\0';
     return s;
 }
-/*e: function authresp */
+/*e: function [[authresp]] */
 
-/*s: function cramauth */
+/*s: function [[cramauth]] */
 /*
  * rfc 2195 cram-md5 authentication
  */
@@ -172,9 +172,9 @@ cramauth(void)
     setupuser(ai);
     return nil;
 }
-/*e: function cramauth */
+/*e: function [[cramauth]] */
 
-/*s: function passLogin */
+/*s: function [[passLogin]] */
 AuthInfo*
 passLogin(char *user, char *secret)
 {
@@ -200,5 +200,5 @@ passLogin(char *user, char *secret)
     auth_freechal(cs);
     return ai;
 }
-/*e: function passLogin */
+/*e: function [[passLogin]] */
 /*e: networking/ip/imap4d/auth.c */

@@ -31,20 +31,20 @@ char	*csquery(char *attr, char *val, char *rattr);
 
 typedef struct	ParseCmd	ParseCmd;
 
-/*s: enum _anon_ (networking/ip/imap4d/imap4d.c) */
+/*s: enum [[_anon_ (networking/ip/imap4d/imap4d.c)]] */
 enum
 {
     UlongMax	= 4294967295,
 };
-/*e: enum _anon_ (networking/ip/imap4d/imap4d.c) */
+/*e: enum [[_anon_ (networking/ip/imap4d/imap4d.c)]] */
 
-/*s: struct ParseCmd */
+/*s: struct [[ParseCmd]] */
 struct ParseCmd
 {
     char	*name;
     void	(*f)(char *tg, char *cmd);
 };
-/*e: struct ParseCmd */
+/*e: struct [[ParseCmd]] */
 
 static	void	appendCmd(char *tg, char *cmd);
 static	void	authenticateCmd(char *tg, char *cmd);
@@ -110,7 +110,7 @@ static	char	*tag(void);
 static	ulong	uidNo(void);
 static	void	ungetc(void);
 
-/*s: global SNonAuthed */
+/*s: global [[SNonAuthed]] */
 static	ParseCmd	SNonAuthed[] =
 {
     {"capability",		capabilityCmd},
@@ -123,9 +123,9 @@ static	ParseCmd	SNonAuthed[] =
 
     nil
 };
-/*e: global SNonAuthed */
+/*e: global [[SNonAuthed]] */
 
-/*s: global SAuthed */
+/*s: global [[SAuthed]] */
 static	ParseCmd	SAuthed[] =
 {
     {"capability",		capabilityCmd},
@@ -149,9 +149,9 @@ static	ParseCmd	SAuthed[] =
 
     nil
 };
-/*e: global SAuthed */
+/*e: global [[SAuthed]] */
 
-/*s: global SSelected */
+/*s: global [[SSelected]] */
 static	ParseCmd	SSelected[] =
 {
     {"capability",		capabilityCmd},
@@ -184,74 +184,74 @@ static	ParseCmd	SSelected[] =
 
     nil
 };
-/*e: global SSelected */
+/*e: global [[SSelected]] */
 
-/*s: global atomStop */
+/*s: global [[atomStop]] */
 static	char		*atomStop = "(){%*\"\\";
-/*e: global atomStop */
-/*s: global chal */
+/*e: global [[atomStop]] */
+/*s: global [[chal]] */
 static	Chalstate	*chal;
-/*e: global chal */
-/*s: global chaled */
+/*e: global [[chal]] */
+/*s: global [[chaled]] */
 static	int		chaled;
-/*e: global chaled */
-/*s: global imapState */
+/*e: global [[chaled]] */
+/*s: global [[imapState]] */
 static	ParseCmd	*imapState;
-/*e: global imapState */
-/*s: global parseJmp */
+/*e: global [[imapState]] */
+/*s: global [[parseJmp]] */
 static	jmp_buf		parseJmp;
-/*e: global parseJmp */
-/*s: global parseMsg */
+/*e: global [[parseJmp]] */
+/*s: global [[parseMsg]] */
 static	char		*parseMsg;
-/*e: global parseMsg */
-/*s: global allowPass */
+/*e: global [[parseMsg]] */
+/*s: global [[allowPass]] */
 static	int		allowPass;
-/*e: global allowPass */
-/*s: global allowCR */
+/*e: global [[allowPass]] */
+/*s: global [[allowCR]] */
 static	int		allowCR;
-/*e: global allowCR */
-/*s: global exiting */
+/*e: global [[allowCR]] */
+/*s: global [[exiting]] */
 static	int		exiting;
-/*e: global exiting */
-/*s: global imaplock */
+/*e: global [[exiting]] */
+/*s: global [[imaplock]] */
 static	QLock		imaplock;
-/*e: global imaplock */
-/*s: global idlepid */
+/*e: global [[imaplock]] */
+/*s: global [[idlepid]] */
 static	int		idlepid = -1;
-/*e: global idlepid */
+/*e: global [[idlepid]] */
 
-/*s: global bout (networking/ip/imap4d/imap4d.c) */
+/*s: global [[bout]]([[(networking/ip/imap4d/imap4d.c)]]) */
 Biobuf	bout;
-/*e: global bout (networking/ip/imap4d/imap4d.c) */
-/*s: global bin */
+/*e: global [[bout]]([[(networking/ip/imap4d/imap4d.c)]]) */
+/*s: global [[bin]] */
 Biobuf	bin;
-/*e: global bin */
-/*s: global username */
+/*e: global [[bin]] */
+/*s: global [[username]] */
 char	username[UserNameLen];
-/*e: global username */
-/*s: global mboxDir */
+/*e: global [[username]] */
+/*s: global [[mboxDir]] */
 char	mboxDir[MboxNameLen];
-/*e: global mboxDir */
-/*s: global servername (networking/ip/imap4d/imap4d.c) */
+/*e: global [[mboxDir]] */
+/*s: global [[servername]]([[(networking/ip/imap4d/imap4d.c)]]) */
 char	*servername;
-/*e: global servername (networking/ip/imap4d/imap4d.c) */
-/*s: global site */
+/*e: global [[servername]]([[(networking/ip/imap4d/imap4d.c)]]) */
+/*s: global [[site]] */
 char	*site;
-/*e: global site */
-/*s: global remote */
+/*e: global [[site]] */
+/*s: global [[remote]] */
 char	*remote;
-/*e: global remote */
-/*s: global selected */
+/*e: global [[remote]] */
+/*s: global [[selected]] */
 Box	*selected;
-/*e: global selected */
-/*s: global parseBin */
+/*e: global [[selected]] */
+/*s: global [[parseBin]] */
 Bin	*parseBin;
-/*e: global parseBin */
-/*s: global debug (networking/ip/imap4d/imap4d.c) */
+/*e: global [[parseBin]] */
+/*s: global [[debug]]([[(networking/ip/imap4d/imap4d.c)]]) */
 int	debug;
-/*e: global debug (networking/ip/imap4d/imap4d.c) */
+/*e: global [[debug]]([[(networking/ip/imap4d/imap4d.c)]]) */
 
-/*s: function main (networking/ip/imap4d/imap4d.c) */
+/*s: function [[main]]([[(networking/ip/imap4d/imap4d.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -334,9 +334,9 @@ main(int argc, char *argv[])
     atexit(cleaner);
     imap4(preauth);
 }
-/*e: function main (networking/ip/imap4d/imap4d.c) */
+/*e: function [[main]]([[(networking/ip/imap4d/imap4d.c)]]) */
 
-/*s: function imap4 */
+/*s: function [[imap4]] */
 static void
 imap4(int preauth)
 {
@@ -399,9 +399,9 @@ imap4(int preauth)
         binfree(&parseBin);
     }
 }
-/*e: function imap4 */
+/*e: function [[imap4]] */
 
-/*s: function bye */
+/*s: function [[bye]] */
 void
 bye(char *fmt, ...)
 {
@@ -415,18 +415,18 @@ bye(char *fmt, ...)
 exits("rob2");
     exits(0);
 }
-/*e: function bye */
+/*e: function [[bye]] */
 
-/*s: function parseErr */
+/*s: function [[parseErr]] */
 void
 parseErr(char *msg)
 {
     parseMsg = msg;
     longjmp(parseJmp, 1);
 }
-/*e: function parseErr */
+/*e: function [[parseErr]] */
 
-/*s: function writeErr */
+/*s: function [[writeErr]] */
 /*
  * an error occured while writing to the client
  */
@@ -436,9 +436,9 @@ writeErr(void)
     cleaner();
     _exits("connection closed");
 }
-/*e: function writeErr */
+/*e: function [[writeErr]] */
 
-/*s: function catcher (networking/ip/imap4d/imap4d.c) */
+/*s: function [[catcher]]([[(networking/ip/imap4d/imap4d.c)]]) */
 static int
 catcher(void *v, char *msg)
 {
@@ -447,9 +447,9 @@ catcher(void *v, char *msg)
         return 1;
     return 0;
 }
-/*e: function catcher (networking/ip/imap4d/imap4d.c) */
+/*e: function [[catcher]]([[(networking/ip/imap4d/imap4d.c)]]) */
 
-/*s: function cleaner */
+/*s: function [[cleaner]] */
 /*
  * wipes out the idleCmd backgroung process if it is around.
  * this can only be called if the current proc has qlocked imaplock.
@@ -476,9 +476,9 @@ cleaner(void)
     for(i = 0; i < 4; i++)
         postnote(PNGROUP, getpid(), "die");
 }
-/*e: function cleaner */
+/*e: function [[cleaner]] */
 
-/*s: function status */
+/*s: function [[status]] */
 /*
  * send any pending status updates to the client
  * careful: shouldn't exit, because called by idle polling proc
@@ -535,9 +535,9 @@ status(int expungeable, int uids)
     if(tell)
         closeImp(selected, checkBox(selected, 1));
 }
-/*e: function status */
+/*e: function [[status]] */
 
-/*s: function check */
+/*s: function [[check]] */
 /*
  * careful: can't exit, because called by idle polling proc
  */
@@ -549,9 +549,9 @@ check(void)
     checkBox(selected, 0);
     status(1, 0);
 }
-/*e: function check */
+/*e: function [[check]] */
 
-/*s: function appendCmd */
+/*s: function [[appendCmd]] */
 static void
 appendCmd(char *tg, char *cmd)
 {
@@ -600,9 +600,9 @@ appendCmd(char *tg, char *cmd)
     else
         Bprint(&bout, "%s NO %s message save failed\r\n", tg, cmd);
 }
-/*e: function appendCmd */
+/*e: function [[appendCmd]] */
 
-/*s: function authenticateCmd */
+/*s: function [[authenticateCmd]] */
 static void
 authenticateCmd(char *tg, char *cmd)
 {
@@ -623,9 +623,9 @@ authenticateCmd(char *tg, char *cmd)
     }else
         Bprint(&bout, "%s NO %s unsupported authentication protocol\r\n", tg, cmd);
 }
-/*e: function authenticateCmd */
+/*e: function [[authenticateCmd]] */
 
-/*s: function capabilityCmd */
+/*s: function [[capabilityCmd]] */
 static void
 capabilityCmd(char *tg, char *cmd)
 {
@@ -636,9 +636,9 @@ capabilityCmd(char *tg, char *cmd)
     Bprint(&bout, "* CAPABILITY IMAP4REV1 IDLE NAMESPACE AUTH=CRAM-MD5\r\n");
     Bprint(&bout, "%s OK %s\r\n", tg, cmd);
 }
-/*e: function capabilityCmd */
+/*e: function [[capabilityCmd]] */
 
-/*s: function closeCmd */
+/*s: function [[closeCmd]] */
 static void
 closeCmd(char *tg, char *cmd)
 {
@@ -648,9 +648,9 @@ closeCmd(char *tg, char *cmd)
     selected = nil;
     Bprint(&bout, "%s OK %s mailbox closed, now in authenticated state\r\n", tg, cmd);
 }
-/*e: function closeCmd */
+/*e: function [[closeCmd]] */
 
-/*s: function copyCmd */
+/*s: function [[copyCmd]] */
 /*
  * note: message id's are before any pending expunges
  */
@@ -659,9 +659,9 @@ copyCmd(char *tg, char *cmd)
 {
     copyUCmd(tg, cmd, 0);
 }
-/*e: function copyCmd */
+/*e: function [[copyCmd]] */
 
-/*s: function copyUCmd */
+/*s: function [[copyUCmd]] */
 static void
 copyUCmd(char *tg, char *cmd, int uids)
 {
@@ -706,9 +706,9 @@ copyUCmd(char *tg, char *cmd, int uids)
     else
         Bprint(&bout, "%s NO %s%s failed\r\n", tg, uid, cmd);
 }
-/*e: function copyUCmd */
+/*e: function [[copyUCmd]] */
 
-/*s: function createCmd */
+/*s: function [[createCmd]] */
 static void
 createCmd(char *tg, char *cmd)
 {
@@ -743,9 +743,9 @@ createCmd(char *tg, char *cmd)
     else
         Bprint(&bout, "%s OK %s %s completed\r\n", tg, mbox, cmd);
 }
-/*e: function createCmd */
+/*e: function [[createCmd]] */
 
-/*s: function deleteCmd */
+/*s: function [[deleteCmd]] */
 static void
 deleteCmd(char *tg, char *cmd)
 {
@@ -770,9 +770,9 @@ deleteCmd(char *tg, char *cmd)
     else
         Bprint(&bout, "%s OK %s %s completed\r\n", tg, mbox, cmd);
 }
-/*e: function deleteCmd */
+/*e: function [[deleteCmd]] */
 
-/*s: function expungeCmd */
+/*s: function [[expungeCmd]] */
 static void
 expungeCmd(char *tg, char *cmd)
 {
@@ -786,17 +786,17 @@ expungeCmd(char *tg, char *cmd)
     else
         Bprint(&bout, "%s NO %s some messages not expunged\r\n", tg, cmd);
 }
-/*e: function expungeCmd */
+/*e: function [[expungeCmd]] */
 
-/*s: function fetchCmd */
+/*s: function [[fetchCmd]] */
 static void
 fetchCmd(char *tg, char *cmd)
 {
     fetchUCmd(tg, cmd, 0);
 }
-/*e: function fetchCmd */
+/*e: function [[fetchCmd]] */
 
-/*s: function fetchUCmd */
+/*s: function [[fetchUCmd]] */
 static void
 fetchUCmd(char *tg, char *cmd, int uids)
 {
@@ -827,9 +827,9 @@ fetchUCmd(char *tg, char *cmd, int uids)
     else
         Bprint(&bout, "%s NO %s%s failed\r\n", tg, uid, cmd);
 }
-/*e: function fetchUCmd */
+/*e: function [[fetchUCmd]] */
 
-/*s: function idleCmd */
+/*s: function [[idleCmd]] */
 static void
 idleCmd(char *tg, char *cmd)
 {
@@ -901,9 +901,9 @@ _exits("rob4");
     check();
     Bprint(&bout, "%s OK %s terminated\r\n", tg, cmd);
 }
-/*e: function idleCmd */
+/*e: function [[idleCmd]] */
 
-/*s: function listCmd */
+/*s: function [[listCmd]] */
 static void
 listCmd(char *tg, char *cmd)
 {
@@ -1000,9 +1000,9 @@ listCmd(char *tg, char *cmd)
         listBoxes(cmd, s, ss);
     Bprint(&bout, "%s OK %s completed\r\n", tg, cmd);
 }
-/*e: function listCmd */
+/*e: function [[listCmd]] */
 
-/*s: function passCR */
+/*s: function [[passCR]] */
 static char*
 passCR(char*u, char*p)
 {
@@ -1032,9 +1032,9 @@ again:
     }
         
 }
-/*e: function passCR */
+/*e: function [[passCR]] */
 
-/*s: function loginCmd */
+/*s: function [[loginCmd]] */
 static void
 loginCmd(char *tg, char *cmd)
 {
@@ -1067,9 +1067,9 @@ loginCmd(char *tg, char *cmd)
     }
     Bprint(&bout, "%s NO %s plaintext passwords disallowed\r\n", tg, cmd);
 }
-/*e: function loginCmd */
+/*e: function [[loginCmd]] */
 
-/*s: function logoutCmd */
+/*s: function [[logoutCmd]] */
 /*
  * logout or x-exit, which doesn't expunge the mailbox
  */
@@ -1087,9 +1087,9 @@ logoutCmd(char *tg, char *cmd)
 exits("rob6");
     exits(0);
 }
-/*e: function logoutCmd */
+/*e: function [[logoutCmd]] */
 
-/*s: function namespaceCmd */
+/*s: function [[namespaceCmd]] */
 static void
 namespaceCmd(char *tg, char *cmd)
 {
@@ -1103,9 +1103,9 @@ namespaceCmd(char *tg, char *cmd)
     Bprint(&bout, "* NAMESPACE ((\"\" \"/\")) nil nil\r\n");
     Bprint(&bout, "%s OK %s completed\r\n", tg, cmd);
 }
-/*e: function namespaceCmd */
+/*e: function [[namespaceCmd]] */
 
-/*s: function noopCmd */
+/*s: function [[noopCmd]] */
 static void
 noopCmd(char *tg, char *cmd)
 {
@@ -1114,9 +1114,9 @@ noopCmd(char *tg, char *cmd)
     Bprint(&bout, "%s OK %s completed\r\n", tg, cmd);
     enableForwarding();
 }
-/*e: function noopCmd */
+/*e: function [[noopCmd]] */
 
-/*s: function renameCmd */
+/*s: function [[renameCmd]] */
 /*
  * this is only a partial implementation
  * should copy files to other directories,
@@ -1159,17 +1159,17 @@ renameCmd(char *tg, char *cmd)
     else
         Bprint(&bout, "%s NO %s failed\r\n", tg, cmd);
 }
-/*e: function renameCmd */
+/*e: function [[renameCmd]] */
 
-/*s: function searchCmd */
+/*s: function [[searchCmd]] */
 static void
 searchCmd(char *tg, char *cmd)
 {
     searchUCmd(tg, cmd, 0);
 }
-/*e: function searchCmd */
+/*e: function [[searchCmd]] */
 
-/*s: function searchUCmd */
+/*s: function [[searchUCmd]] */
 static void
 searchUCmd(char *tg, char *cmd, int uids)
 {
@@ -1212,9 +1212,9 @@ searchUCmd(char *tg, char *cmd, int uids)
     status(uids, uids);
     Bprint(&bout, "%s OK %s%s completed\r\n", tg, uid, cmd);
 }
-/*e: function searchUCmd */
+/*e: function [[searchUCmd]] */
 
-/*s: function selectCmd */
+/*s: function [[selectCmd]] */
 static void
 selectCmd(char *tg, char *cmd)
 {
@@ -1264,9 +1264,9 @@ selectCmd(char *tg, char *cmd)
         s = "READ-WRITE";
     Bprint(&bout, "%s OK [%s] %s %s completed\r\n", tg, s, cmd, mbox);
 }
-/*e: function selectCmd */
+/*e: function [[selectCmd]] */
 
-/*s: global statusItems */
+/*s: global [[statusItems]] */
 static NamedInt	statusItems[] =
 {
     {"MESSAGES",	SMessages},
@@ -1276,9 +1276,9 @@ static NamedInt	statusItems[] =
     {"UNSEEN",	SUnseen},
     {nil,		0}
 };
-/*e: global statusItems */
+/*e: global [[statusItems]] */
 
-/*s: function statusCmd */
+/*s: function [[statusCmd]] */
 static void
 statusCmd(char *tg, char *cmd)
 {
@@ -1359,17 +1359,17 @@ statusCmd(char *tg, char *cmd)
     check();
     Bprint(&bout, "%s OK %s completed\r\n", tg, cmd);
 }
-/*e: function statusCmd */
+/*e: function [[statusCmd]] */
 
-/*s: function storeCmd */
+/*s: function [[storeCmd]] */
 static void
 storeCmd(char *tg, char *cmd)
 {
     storeUCmd(tg, cmd, 0);
 }
-/*e: function storeCmd */
+/*e: function [[storeCmd]] */
 
-/*s: function storeUCmd */
+/*s: function [[storeUCmd]] */
 static void
 storeUCmd(char *tg, char *cmd, int uids)
 {
@@ -1398,9 +1398,9 @@ storeUCmd(char *tg, char *cmd, int uids)
     else
         Bprint(&bout, "%s NO %s%s failed\r\n", tg, uid, cmd);
 }
-/*e: function storeUCmd */
+/*e: function [[storeUCmd]] */
 
-/*s: function subscribeCmd */
+/*s: function [[subscribeCmd]] */
 /*
  * minimal implementation of subscribe
  * all folders are automatically subscribed,
@@ -1431,9 +1431,9 @@ subscribeCmd(char *tg, char *cmd)
     else
         Bprint(&bout, "%s OK %s completed\r\n", tg, cmd);
 }
-/*e: function subscribeCmd */
+/*e: function [[subscribeCmd]] */
 
-/*s: function uidCmd */
+/*s: function [[uidCmd]] */
 static void
 uidCmd(char *tg, char *cmd)
 {
@@ -1454,9 +1454,9 @@ uidCmd(char *tg, char *cmd)
         Bprint(&bout, "%s BAD %s illegal uid command %s\r\n", tg, cmd, sub);
     }
 }
-/*e: function uidCmd */
+/*e: function [[uidCmd]] */
 
-/*s: function unsubscribeCmd */
+/*s: function [[unsubscribeCmd]] */
 static void
 unsubscribeCmd(char *tg, char *cmd)
 {
@@ -1472,17 +1472,17 @@ unsubscribeCmd(char *tg, char *cmd)
     else
         Bprint(&bout, "%s OK %s completed\r\n", tg, cmd);
 }
-/*e: function unsubscribeCmd */
+/*e: function [[unsubscribeCmd]] */
 
-/*s: function badsyn */
+/*s: function [[badsyn]] */
 static void
 badsyn(void)
 {
     parseErr("bad syntax");
 }
-/*e: function badsyn */
+/*e: function [[badsyn]] */
 
-/*s: function clearcmd */
+/*s: function [[clearcmd]] */
 static void
 clearcmd(void)
 {
@@ -1496,9 +1496,9 @@ clearcmd(void)
             return;
     }
 }
-/*e: function clearcmd */
+/*e: function [[clearcmd]] */
 
-/*s: function crnl */
+/*s: function [[crnl]] */
 static void
 crnl(void)
 {
@@ -1510,9 +1510,9 @@ crnl(void)
     if(c != '\r' || getc() != '\n')
         badsyn();
 }
-/*e: function crnl */
+/*e: function [[crnl]] */
 
-/*s: function mustBe */
+/*s: function [[mustBe]] */
 static void
 mustBe(int c)
 {
@@ -1521,9 +1521,9 @@ mustBe(int c)
         badsyn();
     }
 }
-/*e: function mustBe */
+/*e: function [[mustBe]] */
 
-/*s: function flagList */
+/*s: function [[flagList]] */
 /*
  * flaglist	: '(' ')' | '(' flags ')'
  */
@@ -1540,9 +1540,9 @@ flagList(void)
     mustBe(')');
     return f;
 }
-/*e: function flagList */
+/*e: function [[flagList]] */
 
-/*s: function flags (networking/ip/imap4d/imap4d.c) */
+/*s: function [[flags]]([[(networking/ip/imap4d/imap4d.c)]]) */
 /*
  * flags	: flag | flags ' ' flag
  * flag		: '\' atom | atom
@@ -1576,9 +1576,9 @@ flags(void)
         parseErr("no flags given");
     return flags;
 }
-/*e: function flags (networking/ip/imap4d/imap4d.c) */
+/*e: function [[flags]]([[(networking/ip/imap4d/imap4d.c)]]) */
 
-/*s: function storeWhat */
+/*s: function [[storeWhat]] */
 /*
  * storeWhat	: osign 'FLAGS' ' ' storeflags
  *		| osign 'FLAGS.SILENT' ' ' storeflags
@@ -1613,16 +1613,16 @@ storeWhat(void)
         f = flags();
     return mkStore(c, w, f);
 }
-/*e: function storeWhat */
+/*e: function [[storeWhat]] */
 
-/*s: global fetchAtom */
+/*s: global [[fetchAtom]] */
 /*
  * fetchWhat	: "ALL" | "FULL" | "FAST" | fetchAtt | '(' fetchAtts ')'
  * fetchAtts	: fetchAtt | fetchAtts ' ' fetchAtt
  */
 static char *fetchAtom	= "(){}%*\"\\[]";
-/*e: global fetchAtom */
-/*s: function fetchWhat */
+/*e: global [[fetchAtom]] */
+/*s: function [[fetchWhat]] */
 static Fetch*
 fetchWhat(void)
 {
@@ -1654,9 +1654,9 @@ fetchWhat(void)
         f = fetchAtt(s, nil);
     return f;
 }
-/*e: function fetchWhat */
+/*e: function [[fetchWhat]] */
 
-/*s: function fetchAtt */
+/*s: function [[fetchAtt]] */
 /*
  * fetchAtt	: "ENVELOPE" | "FLAGS" | "INTERNALDATE"
  *		| "RFC822" | "RFC822.HEADER" | "RFC822.SIZE" | "RFC822.TEXT"
@@ -1738,9 +1738,9 @@ fetchAtt(char *s, Fetch *f)
     mustBe('>');
     return f;
 }
-/*e: function fetchAtt */
+/*e: function [[fetchAtt]] */
 
-/*s: function sectText */
+/*s: function [[sectText]] */
 /*
  * sectText	: sectMsgText | "MIME"
  * sectMsgText	: "HEADER"
@@ -1788,9 +1788,9 @@ sectText(Fetch *f, int mimeOk)
     mustBe(')');
     f->hdrs = revSList(h);
 }
-/*e: function sectText */
+/*e: function [[sectText]] */
 
-/*s: global searchMap */
+/*s: global [[searchMap]] */
 /*
  * searchWhat	: "CHARSET" ' ' astring searchkeys | searchkeys
  * searchkeys	: searchkey | searchkeys ' ' searchkey
@@ -1826,9 +1826,9 @@ static NamedInt searchMap[] =
     {"UNSEEN",	SKUnseen},
     {nil,		0}
 };
-/*e: global searchMap */
+/*e: global [[searchMap]] */
 
-/*s: global searchMapStr */
+/*s: global [[searchMapStr]] */
 static NamedInt searchMapStr[] =
 {
     {"CHARSET",	SKCharset},
@@ -1841,9 +1841,9 @@ static NamedInt searchMapStr[] =
     {"TO",		SKTo},
     {nil,		0}
 };
-/*e: global searchMapStr */
+/*e: global [[searchMapStr]] */
 
-/*s: global searchMapDate */
+/*s: global [[searchMapDate]] */
 static NamedInt searchMapDate[] =
 {
     {"BEFORE",	SKBefore},
@@ -1854,27 +1854,27 @@ static NamedInt searchMapDate[] =
     {"SENTSINCE",	SKSentSince},
     {nil,		0}
 };
-/*e: global searchMapDate */
+/*e: global [[searchMapDate]] */
 
-/*s: global searchMapFlag */
+/*s: global [[searchMapFlag]] */
 static NamedInt searchMapFlag[] =
 {
     {"KEYWORD",	SKKeyword},
     {"UNKEYWORD",	SKUnkeyword},
     {nil,		0}
 };
-/*e: global searchMapFlag */
+/*e: global [[searchMapFlag]] */
 
-/*s: global searchMapNum */
+/*s: global [[searchMapNum]] */
 static NamedInt searchMapNum[] =
 {
     {"SMALLER",	SKSmaller},
     {"LARGER",	SKLarger},
     {nil,		0}
 };
-/*e: global searchMapNum */
+/*e: global [[searchMapNum]] */
 
-/*s: function searchKeys */
+/*s: function [[searchKeys]] */
 static Search*
 searchKeys(int first, Search *tail)
 {
@@ -1897,9 +1897,9 @@ searchKeys(int first, Search *tail)
     }
     return tail;
 }
-/*e: function searchKeys */
+/*e: function [[searchKeys]] */
 
-/*s: function searchKey */
+/*s: function [[searchKey]] */
 static Search*
 searchKey(int first)
 {
@@ -1989,9 +1989,9 @@ searchKey(int first)
         parseErr("illegal search key");
     return sr;
 }
-/*e: function searchKey */
+/*e: function [[searchKey]] */
 
-/*s: function msgSet */
+/*s: function [[msgSet]] */
 /*
  * set	: seqno
  *	| seqno ':' seqno
@@ -2029,9 +2029,9 @@ msgSet(int uids)
     }
     return head.next;
 }
-/*e: function msgSet */
+/*e: function [[msgSet]] */
 
-/*s: function seqNo */
+/*s: function [[seqNo]] */
 static ulong
 seqNo(void)
 {
@@ -2041,9 +2041,9 @@ seqNo(void)
     }
     return number(1);
 }
-/*e: function seqNo */
+/*e: function [[seqNo]] */
 
-/*s: function uidNo */
+/*s: function [[uidNo]] */
 static ulong
 uidNo(void)
 {
@@ -2053,9 +2053,9 @@ uidNo(void)
     }
     return number(0);
 }
-/*e: function uidNo */
+/*e: function [[uidNo]] */
 
-/*s: function atom */
+/*s: function [[atom]] */
 /*
  * 7 bit, non-ctl chars, no (){%*"\
  * NIL is special case for nstring or parenlist
@@ -2065,9 +2065,9 @@ atom(void)
 {
     return atomString(atomStop, "");
 }
-/*e: function atom */
+/*e: function [[atom]] */
 
-/*s: function tag */
+/*s: function [[tag]] */
 /*
  * like an atom, but no +
  */
@@ -2076,9 +2076,9 @@ tag(void)
 {
     return atomString("+(){%*\"\\", "");
 }
-/*e: function tag */
+/*e: function [[tag]] */
 
-/*s: function listmbox */
+/*s: function [[listmbox]] */
 /*
  * string or atom allowing %*
  */
@@ -2094,9 +2094,9 @@ listmbox(void)
         return quoted();
     return atomString("(){\"\\", "");
 }
-/*e: function listmbox */
+/*e: function [[listmbox]] */
 
-/*s: function astring */
+/*s: function [[astring]] */
 /*
  * string or atom
  */
@@ -2112,9 +2112,9 @@ astring(void)
         return quoted();
     return atom();
 }
-/*e: function astring */
+/*e: function [[astring]] */
 
-/*s: function atomString */
+/*s: function [[atomString]] */
 /*
  * 7 bit, non-ctl chars, none from exception list
  */
@@ -2149,9 +2149,9 @@ atomString(char *disallowed, char *initial)
     s[ns] = '\0';
     return s;
 }
-/*e: function atomString */
+/*e: function [[atomString]] */
 
-/*s: function quoted */
+/*s: function [[quoted]] */
 /*
  * quoted: '"' chars* '"'
  * chars:	1-128 except \r and \n
@@ -2190,9 +2190,9 @@ quoted(void)
     s[ns] = '\0';
     return s;
 }
-/*e: function quoted */
+/*e: function [[quoted]] */
 
-/*s: function litlen */
+/*s: function [[litlen]] */
 /*
  * litlen: {number}\r\n
  */
@@ -2207,9 +2207,9 @@ litlen(void)
     crnl();
     return v;
 }
-/*e: function litlen */
+/*e: function [[litlen]] */
 
-/*s: function literal */
+/*s: function [[literal]] */
 /*
  * literal: litlen data<0:litlen>
  */
@@ -2231,9 +2231,9 @@ literal(void)
     s[v] = '\0';
     return s;
 }
-/*e: function literal */
+/*e: function [[literal]] */
 
-/*s: function number */
+/*s: function [[number]] */
 /*
  * digits; number is 32 bits
  */
@@ -2263,25 +2263,25 @@ number(int nonzero)
     }
     return v;
 }
-/*e: function number */
+/*e: function [[number]] */
 
-/*s: function getc */
+/*s: function [[getc]] */
 static int
 getc(void)
 {
     return Bgetc(&bin);
 }
-/*e: function getc */
+/*e: function [[getc]] */
 
-/*s: function ungetc */
+/*s: function [[ungetc]] */
 static void
 ungetc(void)
 {
     Bungetc(&bin);
 }
-/*e: function ungetc */
+/*e: function [[ungetc]] */
 
-/*s: function peekc */
+/*s: function [[peekc]] */
 static int
 peekc(void)
 {
@@ -2291,6 +2291,6 @@ peekc(void)
     Bungetc(&bin);
     return c;
 }
-/*e: function peekc */
+/*e: function [[peekc]] */
 
 /*e: networking/ip/imap4d/imap4d.c */

@@ -7,65 +7,65 @@
 #include <ndb.h>
 #include "dns.h"
 
-/*s: enum _anon_ (networking/ndb/dnsdebug.c) */
+/*s: enum [[_anon_ (networking/ndb/dnsdebug.c)]] */
 enum {
     Maxrequest=		128,
 };
-/*e: enum _anon_ (networking/ndb/dnsdebug.c) */
+/*e: enum [[_anon_ (networking/ndb/dnsdebug.c)]] */
 
-/*s: global cfg (networking/ndb/dnsdebug.c) */
+/*s: global [[cfg]]([[(networking/ndb/dnsdebug.c)]]) */
 Cfg cfg;
-/*e: global cfg (networking/ndb/dnsdebug.c) */
+/*e: global [[cfg]]([[(networking/ndb/dnsdebug.c)]]) */
 
-/*s: global servername */
+/*s: global [[servername]] */
 static char *servername;
-/*e: global servername */
-/*s: global serverrr */
+/*e: global [[servername]] */
+/*s: global [[serverrr]] */
 static RR *serverrr;
-/*e: global serverrr */
-/*s: global serveraddrs */
+/*e: global [[serverrr]] */
+/*s: global [[serveraddrs]] */
 static RR *serveraddrs;
-/*e: global serveraddrs */
+/*e: global [[serveraddrs]] */
 
-/*s: global dbfile (networking/ndb/dnsdebug.c) */
+/*s: global [[dbfile]]([[(networking/ndb/dnsdebug.c)]]) */
 char	*dbfile;
-/*e: global dbfile (networking/ndb/dnsdebug.c) */
-/*s: global debug (networking/ndb/dnsdebug.c) */
+/*e: global [[dbfile]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[debug]]([[(networking/ndb/dnsdebug.c)]]) */
 int	debug;
-/*e: global debug (networking/ndb/dnsdebug.c) */
-/*s: global ipaddr (networking/ndb/dnsdebug.c) */
-uchar	myip[IPaddrlen];	/* my ip address */
-/*e: global ipaddr (networking/ndb/dnsdebug.c) */
-/*s: global logfile (networking/ndb/dnsdebug.c) */
+/*e: global [[debug]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[ipaddr]]([[(networking/ndb/dnsdebug.c)]]) */
+uchar	ipaddr[IPaddrlen];	/* my ip address */
+/*e: global [[ipaddr]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[logfile]]([[(networking/ndb/dnsdebug.c)]]) */
 char	*logfile = "dnsdebug";
-/*e: global logfile (networking/ndb/dnsdebug.c) */
-/*s: global maxage (networking/ndb/dnsdebug.c) */
+/*e: global [[logfile]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[maxage]]([[(networking/ndb/dnsdebug.c)]]) */
 int	maxage  = 60*60;
-/*e: global maxage (networking/ndb/dnsdebug.c) */
-/*s: global mntpt (networking/ndb/dnsdebug.c) */
+/*e: global [[maxage]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[mntpt]]([[(networking/ndb/dnsdebug.c)]]) */
 char	mntpt[Maxpath];
-/*e: global mntpt (networking/ndb/dnsdebug.c) */
-/*s: global needrefresh (networking/ndb/dnsdebug.c) */
+/*e: global [[mntpt]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[needrefresh]]([[(networking/ndb/dnsdebug.c)]]) */
 int	needrefresh;
-/*e: global needrefresh (networking/ndb/dnsdebug.c) */
-/*s: global now (networking/ndb/dnsdebug.c) */
+/*e: global [[needrefresh]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[now]]([[(networking/ndb/dnsdebug.c)]]) */
 ulong	now;
-/*e: global now (networking/ndb/dnsdebug.c) */
-/*s: global nowns (networking/ndb/dnsdebug.c) */
+/*e: global [[now]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[nowns]]([[(networking/ndb/dnsdebug.c)]]) */
 vlong	nowns;
-/*e: global nowns (networking/ndb/dnsdebug.c) */
-/*s: global testing (networking/ndb/dnsdebug.c) */
+/*e: global [[nowns]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[testing]]([[(networking/ndb/dnsdebug.c)]]) */
 int	testing;
-/*e: global testing (networking/ndb/dnsdebug.c) */
-/*s: global trace (networking/ndb/dnsdebug.c) */
+/*e: global [[testing]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[trace]]([[(networking/ndb/dnsdebug.c)]]) */
 char	*trace;
-/*e: global trace (networking/ndb/dnsdebug.c) */
-/*s: global traceactivity (networking/ndb/dnsdebug.c) */
+/*e: global [[trace]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[traceactivity]]([[(networking/ndb/dnsdebug.c)]]) */
 int	traceactivity;
-/*e: global traceactivity (networking/ndb/dnsdebug.c) */
-/*s: global zonerefreshprogram (networking/ndb/dnsdebug.c) */
+/*e: global [[traceactivity]]([[(networking/ndb/dnsdebug.c)]]) */
+/*s: global [[zonerefreshprogram]]([[(networking/ndb/dnsdebug.c)]]) */
 char	*zonerefreshprogram;
-/*e: global zonerefreshprogram (networking/ndb/dnsdebug.c) */
+/*e: global [[zonerefreshprogram]]([[(networking/ndb/dnsdebug.c)]]) */
 
 void	docmd(int, char**);
 void	doquery(char*, char*);
@@ -74,16 +74,16 @@ int	prettyrrfmt(Fmt*);
 int	setserver(char*);
 void	squirrelserveraddrs(void);
 
-/*s: function usage (networking/ndb/dnsdebug.c) */
+/*s: function [[usage]]([[(networking/ndb/dnsdebug.c)]]) */
 void
 usage(void)
 {
     fprint(2, "%s: [-rx] [-f db-file] [[@server] domain [type]]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ndb/dnsdebug.c) */
+/*e: function [[usage]]([[(networking/ndb/dnsdebug.c)]]) */
 
-/*s: function main (networking/ndb/dnsdebug.c) */
+/*s: function [[main]]([[(networking/ndb/dnsdebug.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -114,7 +114,7 @@ main(int argc, char *argv[])
     nowns = nsec();
     dninit();
     fmtinstall('R', prettyrrfmt);
-    if(myipaddr(myip, mntpt) < 0)
+    if(myipaddr(ipaddr, mntpt) < 0)
         sysfatal("can't read my ip address");
     opendatabase();
 
@@ -139,9 +139,9 @@ main(int argc, char *argv[])
     }
     exits(0);
 }
-/*e: function main (networking/ndb/dnsdebug.c) */
+/*e: function [[main]]([[(networking/ndb/dnsdebug.c)]]) */
 
-/*s: function longtime */
+/*s: function [[longtime]] */
 static char*
 longtime(long t)
 {
@@ -165,9 +165,9 @@ longtime(long t)
         sprint(x+n, "%ld sec", t);
     return x;
 }
-/*e: function longtime */
+/*e: function [[longtime]] */
 
-/*s: function prettyrrfmt */
+/*s: function [[prettyrrfmt]] */
 int
 prettyrrfmt(Fmt *f)
 {
@@ -262,9 +262,9 @@ prettyrrfmt(Fmt *f)
 out:
     return fmtstrcpy(f, buf);
 }
-/*e: function prettyrrfmt */
+/*e: function [[prettyrrfmt]] */
 
-/*s: function logsection */
+/*s: function [[logsection]] */
 void
 logsection(char *flag, RR *rp)
 {
@@ -274,9 +274,9 @@ logsection(char *flag, RR *rp)
     for(rp = rp->next; rp != nil; rp = rp->next)
         print("\t      %R\n", rp);
 }
-/*e: function logsection */
+/*e: function [[logsection]] */
 
-/*s: function logreply (networking/ndb/dnsdebug.c) */
+/*s: function [[logreply]]([[(networking/ndb/dnsdebug.c)]]) */
 void
 logreply(int id, uchar *addr, DNSmsg *mp)
 {
@@ -320,9 +320,9 @@ logreply(int id, uchar *addr, DNSmsg *mp)
     logsection("Auth: ", mp->ns);
     logsection("Hint: ", mp->ar);
 }
-/*e: function logreply (networking/ndb/dnsdebug.c) */
+/*e: function [[logreply]]([[(networking/ndb/dnsdebug.c)]]) */
 
-/*s: function logsend (networking/ndb/dnsdebug.c) */
+/*s: function [[logsend]]([[(networking/ndb/dnsdebug.c)]]) */
 void
 logsend(int id, int subid, uchar *addr, char *sname, char *rname, int type)
 {
@@ -331,9 +331,9 @@ logsend(int id, int subid, uchar *addr, char *sname, char *rname, int type)
     print("%d.%d: sending to %I/%s %s %s\n", id, subid,
         addr, sname, rname, rrname(type, buf, sizeof buf));
 }
-/*e: function logsend (networking/ndb/dnsdebug.c) */
+/*e: function [[logsend]]([[(networking/ndb/dnsdebug.c)]]) */
 
-/*s: function getdnsservers (networking/ndb/dnsdebug.c) */
+/*s: function [[getdnsservers]]([[(networking/ndb/dnsdebug.c)]]) */
 RR*
 getdnsservers(int class)
 {
@@ -348,9 +348,9 @@ getdnsservers(int class)
 
     return rr;
 }
-/*e: function getdnsservers (networking/ndb/dnsdebug.c) */
+/*e: function [[getdnsservers]]([[(networking/ndb/dnsdebug.c)]]) */
 
-/*s: function squirrelserveraddrs */
+/*s: function [[squirrelserveraddrs]] */
 void
 squirrelserveraddrs(void)
 {
@@ -390,9 +390,9 @@ squirrelserveraddrs(void)
     cfg.resolver = 1;
     debug = 1;
 }
-/*e: function squirrelserveraddrs */
+/*e: function [[squirrelserveraddrs]] */
 
-/*s: function preloadserveraddrs */
+/*s: function [[preloadserveraddrs]] */
 void
 preloadserveraddrs(void)
 {
@@ -406,9 +406,9 @@ preloadserveraddrs(void)
         rrattach(first, Authoritative);
     }
 }
-/*e: function preloadserveraddrs */
+/*e: function [[preloadserveraddrs]] */
 
-/*s: function setserver */
+/*s: function [[setserver]] */
 int
 setserver(char *server)
 {
@@ -428,9 +428,9 @@ setserver(char *server)
         cfg.resolver = 1;
     return cfg.resolver? 0: -1;
 }
-/*e: function setserver */
+/*e: function [[setserver]] */
 
-/*s: function doquery */
+/*s: function [[doquery]] */
 void
 doquery(char *name, char *tstr)
 {
@@ -503,9 +503,9 @@ doquery(char *name, char *tstr)
 
     putactivity(0);
 }
-/*e: function doquery */
+/*e: function [[doquery]] */
 
-/*s: function docmd */
+/*s: function [[docmd]] */
 void
 docmd(int n, char **f)
 {
@@ -546,5 +546,5 @@ docmd(int n, char **f)
     if(tmpsrv)
         setserver("");
 }
-/*e: function docmd */
+/*e: function [[docmd]] */
 /*e: networking/ndb/dnsdebug.c */

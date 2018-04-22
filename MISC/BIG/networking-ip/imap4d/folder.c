@@ -6,26 +6,26 @@
 #include "imap4d.h"
 
 static	int	copyData(int ffd, int tfd, MbLock *ml);
-/*s: global mLock */
+/*s: global [[mLock]] */
 static	MbLock	mLock =
 {
     .fd = -1
 };
-/*e: global mLock */
+/*e: global [[mLock]] */
 
-/*s: global curDir */
+/*s: global [[curDir]] */
 static char curDir[MboxNameLen];
-/*e: global curDir */
+/*e: global [[curDir]] */
 
-/*s: function resetCurDir */
+/*s: function [[resetCurDir]] */
 void
 resetCurDir(void)
 {
     curDir[0] = '\0';
 }
-/*e: function resetCurDir */
+/*e: function [[resetCurDir]] */
 
-/*s: function myChdir */
+/*s: function [[myChdir]] */
 int
 myChdir(char *dir)
 {
@@ -40,9 +40,9 @@ myChdir(char *dir)
     }
     return 0;
 }
-/*e: function myChdir */
+/*e: function [[myChdir]] */
 
-/*s: function cdCreate */
+/*s: function [[cdCreate]] */
 int
 cdCreate(char *dir, char *file, int mode, ulong perm)
 {
@@ -50,9 +50,9 @@ cdCreate(char *dir, char *file, int mode, ulong perm)
         return -1;
     return create(file, mode, perm);
 }
-/*e: function cdCreate */
+/*e: function [[cdCreate]] */
 
-/*s: function cdDirstat */
+/*s: function [[cdDirstat]] */
 Dir*
 cdDirstat(char *dir, char *file)
 {
@@ -60,9 +60,9 @@ cdDirstat(char *dir, char *file)
         return nil;
     return dirstat(file);
 }
-/*e: function cdDirstat */
+/*e: function [[cdDirstat]] */
 
-/*s: function cdExists */
+/*s: function [[cdExists]] */
 int
 cdExists(char *dir, char *file)
 {
@@ -74,9 +74,9 @@ cdExists(char *dir, char *file)
     free(d);
     return 1;
 }
-/*e: function cdExists */
+/*e: function [[cdExists]] */
 
-/*s: function cdDirwstat */
+/*s: function [[cdDirwstat]] */
 int
 cdDirwstat(char *dir, char *file, Dir *d)
 {
@@ -84,9 +84,9 @@ cdDirwstat(char *dir, char *file, Dir *d)
         return -1;
     return dirwstat(file, d);
 }
-/*e: function cdDirwstat */
+/*e: function [[cdDirwstat]] */
 
-/*s: function cdOpen */
+/*s: function [[cdOpen]] */
 int
 cdOpen(char *dir, char *file, int mode)
 {
@@ -94,9 +94,9 @@ cdOpen(char *dir, char *file, int mode)
         return -1;
     return open(file, mode);
 }
-/*e: function cdOpen */
+/*e: function [[cdOpen]] */
 
-/*s: function cdRemove */
+/*s: function [[cdRemove]] */
 int
 cdRemove(char *dir, char *file)
 {
@@ -104,9 +104,9 @@ cdRemove(char *dir, char *file)
         return -1;
     return remove(file);
 }
-/*e: function cdRemove */
+/*e: function [[cdRemove]] */
 
-/*s: function mbLock */
+/*s: function [[mbLock]] */
 /*
  * open the one true mail lock file
  */
@@ -125,9 +125,9 @@ mbLock(void)
     }
     return nil;
 }
-/*e: function mbLock */
+/*e: function [[mbLock]] */
 
-/*s: function mbUnlock */
+/*s: function [[mbUnlock]] */
 void
 mbUnlock(MbLock *ml)
 {
@@ -138,9 +138,9 @@ mbUnlock(MbLock *ml)
     close(ml->fd);
     ml->fd = -1;
 }
-/*e: function mbUnlock */
+/*e: function [[mbUnlock]] */
 
-/*s: function mbLockRefresh */
+/*s: function [[mbLockRefresh]] */
 void
 mbLockRefresh(MbLock *ml)
 {
@@ -149,17 +149,17 @@ mbLockRefresh(MbLock *ml)
     seek(ml->fd, 0, 0);
     read(ml->fd, buf, 1);
 }
-/*e: function mbLockRefresh */
+/*e: function [[mbLockRefresh]] */
 
-/*s: function mbLocked */
+/*s: function [[mbLocked]] */
 int
 mbLocked(void)
 {
     return mLock.fd >= 0;
 }
-/*e: function mbLocked */
+/*e: function [[mbLocked]] */
 
-/*s: function impName */
+/*s: function [[impName]] */
 char*
 impName(char *name)
 {
@@ -178,9 +178,9 @@ impName(char *name)
     snprint(s, n, "%s.imp", name);
     return s;
 }
-/*e: function impName */
+/*e: function [[impName]] */
 
-/*s: function mboxName */
+/*s: function [[mboxName]] */
 /*
  * massage the mailbox name into something valid
  * eliminates all .', and ..',s, redundatant and trailing /'s.
@@ -196,9 +196,9 @@ mboxName(char *s)
     cleanname(ss);
     return ss;
 }
-/*e: function mboxName */
+/*e: function [[mboxName]] */
 
-/*s: function strmutf7 */
+/*s: function [[strmutf7]] */
 char *
 strmutf7(char *s)
 {
@@ -213,9 +213,9 @@ strmutf7(char *s)
         return nil;
     return m;
 }
-/*e: function strmutf7 */
+/*e: function [[strmutf7]] */
 
-/*s: function mutf7str */
+/*s: function [[mutf7str]] */
 char *
 mutf7str(char *s)
 {
@@ -235,9 +235,9 @@ mutf7str(char *s)
         return nil;
     return m;
 }
-/*e: function mutf7str */
+/*e: function [[mutf7str]] */
 
-/*s: function splitr */
+/*s: function [[splitr]] */
 void
 splitr(char *s, int c, char **left, char **right)
 {
@@ -259,9 +259,9 @@ splitr(char *s, int c, char **left, char **right)
         *left = d + n;
     }
 }
-/*e: function splitr */
+/*e: function [[splitr]] */
 
-/*s: function createBox */
+/*s: function [[createBox]] */
 /*
  * create the mailbox and all intermediate components
  * a trailing / implies the new mailbox is a directory;
@@ -295,9 +295,9 @@ createBox(char *mbox, int dir)
         fd = cdCreate(mboxDir, mbox, OWRITE, 0664);
     return fd;
 }
-/*e: function createBox */
+/*e: function [[createBox]] */
 
-/*s: function moveBox */
+/*s: function [[moveBox]] */
 /*
  * move one mail folder to another
  * destination mailbox doesn't exist.
@@ -341,9 +341,9 @@ moveBox(char *from, char *to)
 
     return copyBox(from, to, 1);
 }
-/*e: function moveBox */
+/*e: function [[moveBox]] */
 
-/*s: function copyBox */
+/*s: function [[copyBox]] */
 /*
  * copy the contents of one mailbox to another
  * either truncates or removes the source box if it succeeds.
@@ -405,9 +405,9 @@ copyBox(char *from, char *to, int doremove)
     mbUnlock(ml);
     return 1;
 }
-/*e: function copyBox */
+/*e: function [[copyBox]] */
 
-/*s: function copyData */
+/*s: function [[copyData]] */
 /*
  * copies while holding the mail lock,
  * then tries to copy permissions and group ownership
@@ -442,5 +442,5 @@ copyData(int ffd, int tfd, MbLock *ml)
     }
     return 1;
 }
-/*e: function copyData */
+/*e: function [[copyData]] */
 /*e: networking/ip/imap4d/folder.c */

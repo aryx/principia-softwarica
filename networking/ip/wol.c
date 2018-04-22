@@ -4,35 +4,35 @@
 #include <libc.h>
 #include <ip.h>
 
-/*s: enum _anon_ (networking/ip/wol.c) */
+/*s: enum [[_anon_ (networking/ip/wol.c)]] */
 enum {
     Eaddrlen = 6,	/* 48 bits */
 };
-/*e: enum _anon_ (networking/ip/wol.c) */
+/*e: enum [[_anon_ (networking/ip/wol.c)]] */
 
 typedef struct Wolpack Wolpack;
-/*s: struct Wolpack */
+/*s: struct [[Wolpack]] */
 struct Wolpack{
     uchar	magic[6];
     uchar	macs[16][Eaddrlen];
     char	pass[6+1];
 };
-/*e: struct Wolpack */
+/*e: struct [[Wolpack]] */
 
-/*s: global verbose */
+/*s: global [[verbose]] */
 int verbose;
-/*e: global verbose */
+/*e: global [[verbose]] */
 
-/*s: function usage (networking/ip/wol.c) */
+/*s: function [[usage]]([[(networking/ip/wol.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: wol [-v] [-a dialstr] [-c password] macaddr\n");
     exits("usage");
 }
-/*e: function usage (networking/ip/wol.c) */
+/*e: function [[usage]]([[(networking/ip/wol.c)]]) */
 
-/*s: function fillmac */
+/*s: function [[fillmac]] */
 void
 fillmac(Wolpack *w, uchar *mac)
 {
@@ -41,9 +41,9 @@ fillmac(Wolpack *w, uchar *mac)
     for(i = 0; i < nelem(w->macs); i++)
         memmove(w->macs[i], mac, Eaddrlen);
 }
-/*e: function fillmac */
+/*e: function [[fillmac]] */
 
-/*s: function dumppack */
+/*s: function [[dumppack]] */
 void
 dumppack(Wolpack *w)
 {
@@ -56,9 +56,9 @@ dumppack(Wolpack *w)
     print("\t%6s\n", w->pass);
     print("]\n");
 }
-/*e: function dumppack */
+/*e: function [[dumppack]] */
 
-/*s: function main (networking/ip/wol.c) */
+/*s: function [[main]]([[(networking/ip/wol.c)]]) */
 void
 main(int argc, char* argv[])
 {
@@ -113,5 +113,5 @@ main(int argc, char* argv[])
         sysfatal("error sending: %r");
     exits(0);
 }
-/*e: function main (networking/ip/wol.c) */
+/*e: function [[main]]([[(networking/ip/wol.c)]]) */
 /*e: networking/ip/wol.c */

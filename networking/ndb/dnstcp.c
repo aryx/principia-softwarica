@@ -7,49 +7,49 @@
 #include <ip.h>
 #include "dns.h"
 
-/*s: global cfg (networking/ndb/dnstcp.c) */
+/*s: global [[cfg]]([[(networking/ndb/dnstcp.c)]]) */
 Cfg cfg;
-/*e: global cfg (networking/ndb/dnstcp.c) */
+/*e: global [[cfg]]([[(networking/ndb/dnstcp.c)]]) */
 
-/*s: global caller */
+/*s: global [[caller]] */
 char	*caller = "";
-/*e: global caller */
-/*s: global dbfile (networking/ndb/dnstcp.c) */
+/*e: global [[caller]] */
+/*s: global [[dbfile]]([[(networking/ndb/dnstcp.c)]]) */
 char	*dbfile;
-/*e: global dbfile (networking/ndb/dnstcp.c) */
-/*s: global debug (networking/ndb/dnstcp.c) */
+/*e: global [[dbfile]]([[(networking/ndb/dnstcp.c)]]) */
+/*s: global [[debug]]([[(networking/ndb/dnstcp.c)]]) */
 int	debug;
-/*e: global debug (networking/ndb/dnstcp.c) */
-/*s: global ipaddr (networking/ndb/dnstcp.c) */
-uchar	myip[IPaddrlen];	/* my ip address */
-/*e: global ipaddr (networking/ndb/dnstcp.c) */
-/*s: global logfile (networking/ndb/dnstcp.c) */
+/*e: global [[debug]]([[(networking/ndb/dnstcp.c)]]) */
+/*s: global [[ipaddr]]([[(networking/ndb/dnstcp.c)]]) */
+uchar	ipaddr[IPaddrlen];	/* my ip address */
+/*e: global [[ipaddr]]([[(networking/ndb/dnstcp.c)]]) */
+/*s: global [[logfile]]([[(networking/ndb/dnstcp.c)]]) */
 char	*logfile = "dns";
-/*e: global logfile (networking/ndb/dnstcp.c) */
-/*s: global maxage (networking/ndb/dnstcp.c) */
+/*e: global [[logfile]]([[(networking/ndb/dnstcp.c)]]) */
+/*s: global [[maxage]]([[(networking/ndb/dnstcp.c)]]) */
 int	maxage = 60*60;
-/*e: global maxage (networking/ndb/dnstcp.c) */
-/*s: global mntpt (networking/ndb/dnstcp.c) */
+/*e: global [[maxage]]([[(networking/ndb/dnstcp.c)]]) */
+/*s: global [[mntpt]]([[(networking/ndb/dnstcp.c)]]) */
 char	mntpt[Maxpath];
-/*e: global mntpt (networking/ndb/dnstcp.c) */
-/*s: global needrefresh (networking/ndb/dnstcp.c) */
+/*e: global [[mntpt]]([[(networking/ndb/dnstcp.c)]]) */
+/*s: global [[needrefresh]]([[(networking/ndb/dnstcp.c)]]) */
 int	needrefresh;
-/*e: global needrefresh (networking/ndb/dnstcp.c) */
-/*s: global now (networking/ndb/dnstcp.c) */
+/*e: global [[needrefresh]]([[(networking/ndb/dnstcp.c)]]) */
+/*s: global [[now]]([[(networking/ndb/dnstcp.c)]]) */
 ulong	now;
-/*e: global now (networking/ndb/dnstcp.c) */
-/*s: global nowns (networking/ndb/dnstcp.c) */
+/*e: global [[now]]([[(networking/ndb/dnstcp.c)]]) */
+/*s: global [[nowns]]([[(networking/ndb/dnstcp.c)]]) */
 vlong	nowns;
-/*e: global nowns (networking/ndb/dnstcp.c) */
-/*s: global testing (networking/ndb/dnstcp.c) */
+/*e: global [[nowns]]([[(networking/ndb/dnstcp.c)]]) */
+/*s: global [[testing]]([[(networking/ndb/dnstcp.c)]]) */
 int	testing;
-/*e: global testing (networking/ndb/dnstcp.c) */
-/*s: global traceactivity (networking/ndb/dnstcp.c) */
+/*e: global [[testing]]([[(networking/ndb/dnstcp.c)]]) */
+/*s: global [[traceactivity]]([[(networking/ndb/dnstcp.c)]]) */
 int	traceactivity;
-/*e: global traceactivity (networking/ndb/dnstcp.c) */
-/*s: global zonerefreshprogram (networking/ndb/dnstcp.c) */
+/*e: global [[traceactivity]]([[(networking/ndb/dnstcp.c)]]) */
+/*s: global [[zonerefreshprogram]]([[(networking/ndb/dnstcp.c)]]) */
 char	*zonerefreshprogram;
-/*e: global zonerefreshprogram (networking/ndb/dnstcp.c) */
+/*e: global [[zonerefreshprogram]]([[(networking/ndb/dnstcp.c)]]) */
 
 static int	readmsg(int, uchar*, int);
 static void	reply(int, DNSmsg*, Request*);
@@ -57,16 +57,16 @@ static void	dnzone(DNSmsg*, DNSmsg*, Request*);
 static void	getcaller(char*);
 static void	refreshmain(char*);
 
-/*s: function usage (networking/ndb/dnstcp.c) */
+/*s: function [[usage]]([[(networking/ndb/dnstcp.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-rR] [-f ndb-file] [-x netmtpt] [conndir]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ndb/dnstcp.c) */
+/*e: function [[usage]]([[(networking/ndb/dnstcp.c)]]) */
 
-/*s: function main (networking/ndb/dnstcp.c) */
+/*s: function [[main]]([[(networking/ndb/dnstcp.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -110,9 +110,9 @@ main(int argc, char *argv[])
     dninit();
 
     snprint(mntpt, sizeof mntpt, "/net%s", ext);
-    if(myipaddr(myip, mntpt) < 0)
+    if(myipaddr(ipaddr, mntpt) < 0)
         sysfatal("can't read my ip address");
-    dnslog("dnstcp call from %s to %I", caller, myip);
+    dnslog("dnstcp call from %s to %I", caller, ipaddr);
     memset(callip, 0, sizeof callip);
     parseip(callip, caller);
 
@@ -184,9 +184,9 @@ main(int argc, char *argv[])
     }
     refreshmain(mntpt);
 }
-/*e: function main (networking/ndb/dnstcp.c) */
+/*e: function [[main]]([[(networking/ndb/dnstcp.c)]]) */
 
-/*s: function readmsg (networking/ndb/dnstcp.c) */
+/*s: function [[readmsg]]([[(networking/ndb/dnstcp.c)]]) */
 static int
 readmsg(int fd, uchar *buf, int max)
 {
@@ -202,9 +202,9 @@ readmsg(int fd, uchar *buf, int max)
         return -1;
     return n;
 }
-/*e: function readmsg (networking/ndb/dnstcp.c) */
+/*e: function [[readmsg]]([[(networking/ndb/dnstcp.c)]]) */
 
-/*s: function reply (networking/ndb/dnstcp.c) */
+/*s: function [[reply]]([[(networking/ndb/dnstcp.c)]]) */
 static void
 reply(int fd, DNSmsg *rep, Request *req)
 {
@@ -238,7 +238,7 @@ reply(int fd, DNSmsg *rep, Request *req)
         exits(0);
     }
 }
-/*e: function reply (networking/ndb/dnstcp.c) */
+/*e: function [[reply]]([[(networking/ndb/dnstcp.c)]]) */
 
 /*
  *  Hash table for domain names.  The hash is based only on the
@@ -246,7 +246,7 @@ reply(int fd, DNSmsg *rep, Request *req)
  */
 extern DN	*ht[HTLEN];
 
-/*s: function numelem */
+/*s: function [[numelem]] */
 static int
 numelem(char *name)
 {
@@ -258,9 +258,9 @@ numelem(char *name)
             i++;
     return i;
 }
-/*e: function numelem */
+/*e: function [[numelem]] */
 
-/*s: function inzone */
+/*s: function [[inzone]] */
 int
 inzone(DN *dp, char *name, int namelen, int depth)
 {
@@ -279,9 +279,9 @@ inzone(DN *dp, char *name, int namelen, int depth)
         return 0;
     return 1;
 }
-/*e: function inzone */
+/*e: function [[inzone]] */
 
-/*s: function dnzone */
+/*s: function [[dnzone]] */
 static void
 dnzone(DNSmsg *reqp, DNSmsg *repp, Request *req)
 {
@@ -345,9 +345,9 @@ out:
     rrfree(repp->qd);
     repp->qd = nil;
 }
-/*e: function dnzone */
+/*e: function [[dnzone]] */
 
-/*s: function getcaller */
+/*s: function [[getcaller]] */
 static void
 getcaller(char *dir)
 {
@@ -367,9 +367,9 @@ getcaller(char *dir)
     remote[n] = 0;
     caller = remote;
 }
-/*e: function getcaller */
+/*e: function [[getcaller]] */
 
-/*s: function refreshmain */
+/*s: function [[refreshmain]] */
 static void
 refreshmain(char *net)
 {
@@ -387,9 +387,9 @@ refreshmain(char *net)
         close(fd);
     }
 }
-/*e: function refreshmain */
+/*e: function [[refreshmain]] */
 
-/*s: function logreply (networking/ndb/dnstcp.c) */
+/*s: function [[logreply]]([[(networking/ndb/dnstcp.c)]]) */
 /*
  *  the following varies between dnsdebug and dns
  */
@@ -413,9 +413,9 @@ logreply(int id, uchar *addr, DNSmsg *mp)
     for(rp = mp->ar; rp != nil; rp = rp->next)
         dnslog("%d: rcvd %I ar %R", id, addr, rp);
 }
-/*e: function logreply (networking/ndb/dnstcp.c) */
+/*e: function [[logreply]]([[(networking/ndb/dnstcp.c)]]) */
 
-/*s: function logsend (networking/ndb/dnstcp.c) */
+/*s: function [[logsend]]([[(networking/ndb/dnstcp.c)]]) */
 void
 logsend(int id, int subid, uchar *addr, char *sname, char *rname, int type)
 {
@@ -424,13 +424,13 @@ logsend(int id, int subid, uchar *addr, char *sname, char *rname, int type)
     dnslog("%d.%d: sending to %I/%s %s %s",
         id, subid, addr, sname, rname, rrname(type, buf, sizeof buf));
 }
-/*e: function logsend (networking/ndb/dnstcp.c) */
+/*e: function [[logsend]]([[(networking/ndb/dnstcp.c)]]) */
 
-/*s: function getdnsservers (networking/ndb/dnstcp.c) */
+/*s: function [[getdnsservers]]([[(networking/ndb/dnstcp.c)]]) */
 RR*
 getdnsservers(int class)
 {
     return dnsservers(class);
 }
-/*e: function getdnsservers (networking/ndb/dnstcp.c) */
+/*e: function [[getdnsservers]]([[(networking/ndb/dnstcp.c)]]) */
 /*e: networking/ndb/dnstcp.c */

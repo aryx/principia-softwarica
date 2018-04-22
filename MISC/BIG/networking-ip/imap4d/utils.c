@@ -5,7 +5,7 @@
 #include <auth.h>
 #include "imap4d.h"
 
-/*s: function strrev */
+/*s: function [[strrev]] */
 /*
  * reverse string [s:e) in place
  */
@@ -20,17 +20,17 @@ strrev(char *s, char *e)
         *e = c;
     }
 }
-/*e: function strrev */
+/*e: function [[strrev]] */
 
-/*s: function isdotdot */
+/*s: function [[isdotdot]] */
 int
 isdotdot(char *s)
 {
     return s[0] == '.' && s[1] == '.' && (s[2] == '/' || s[2] == '\0');
 }
-/*e: function isdotdot */
+/*e: function [[isdotdot]] */
 
-/*s: function issuffix */
+/*s: function [[issuffix]] */
 int
 issuffix(char *suf, char *s)
 {
@@ -41,25 +41,25 @@ issuffix(char *suf, char *s)
         return 0;
     return strcmp(s + n, suf) == 0;
 }
-/*e: function issuffix */
+/*e: function [[issuffix]] */
 
-/*s: function isprefix */
+/*s: function [[isprefix]] */
 int
 isprefix(char *pre, char *s)
 {
     return strncmp(pre, s, strlen(pre)) == 0;
 }
-/*e: function isprefix */
+/*e: function [[isprefix]] */
 
-/*s: function ciisprefix */
+/*s: function [[ciisprefix]] */
 int
 ciisprefix(char *pre, char *s)
 {
     return cistrncmp(pre, s, strlen(pre)) == 0;
 }
-/*e: function ciisprefix */
+/*e: function [[ciisprefix]] */
 
-/*s: function readFile */
+/*s: function [[readFile]] */
 char*
 readFile(int fd)
 {
@@ -78,9 +78,9 @@ readFile(int fd)
     s[length] = '\0';
     return s;
 }
-/*e: function readFile */
+/*e: function [[readFile]] */
 
-/*s: function imapTmp */
+/*s: function [[imapTmp]] */
 /*
  * create the imap tmp file.
  * it just happens that we don't need multiple temporary files.
@@ -103,9 +103,9 @@ imapTmp(void)
     }
     return -1;
 }
-/*e: function imapTmp */
+/*e: function [[imapTmp]] */
 
-/*s: function openLocked (networking/ip/imap4d/utils.c) */
+/*s: function [[openLocked]]([[(networking/ip/imap4d/utils.c)]]) */
 /*
  * open a file which might be locked.
  * if it is, spin until available
@@ -127,9 +127,9 @@ openLocked(char *dir, char *file, int mode)
     }
     return -1;
 }
-/*e: function openLocked (networking/ip/imap4d/utils.c) */
+/*e: function [[openLocked]]([[(networking/ip/imap4d/utils.c)]]) */
 
-/*s: function fqid */
+/*s: function [[fqid]] */
 int
 fqid(int fd, Qid *qid)
 {
@@ -142,9 +142,9 @@ fqid(int fd, Qid *qid)
     free(d);
     return 0;
 }
-/*e: function fqid */
+/*e: function [[fqid]] */
 
-/*s: function mapInt */
+/*s: function [[mapInt]] */
 ulong
 mapInt(NamedInt *map, char *name)
 {
@@ -155,9 +155,9 @@ mapInt(NamedInt *map, char *name)
             break;
     return map[i].v;
 }
-/*e: function mapInt */
+/*e: function [[mapInt]] */
 
-/*s: function estrdup (networking/ip/imap4d/utils.c) */
+/*s: function [[estrdup]]([[(networking/ip/imap4d/utils.c)]]) */
 char*
 estrdup(char *s)
 {
@@ -167,9 +167,9 @@ estrdup(char *s)
     strcpy(t, s);
     return t;
 }
-/*e: function estrdup (networking/ip/imap4d/utils.c) */
+/*e: function [[estrdup]]([[(networking/ip/imap4d/utils.c)]]) */
 
-/*s: function emalloc (networking/ip/imap4d/utils.c) */
+/*s: function [[emalloc]]([[(networking/ip/imap4d/utils.c)]]) */
 void*
 emalloc(ulong n)
 {
@@ -181,9 +181,9 @@ emalloc(ulong n)
     setmalloctag(p, getcallerpc(&n));
     return p;
 }
-/*e: function emalloc (networking/ip/imap4d/utils.c) */
+/*e: function [[emalloc]]([[(networking/ip/imap4d/utils.c)]]) */
 
-/*s: function ezmalloc */
+/*s: function [[ezmalloc]] */
 void*
 ezmalloc(ulong n)
 {
@@ -196,9 +196,9 @@ ezmalloc(ulong n)
     memset(p, 0, n);
     return p;
 }
-/*e: function ezmalloc */
+/*e: function [[ezmalloc]] */
 
-/*s: function erealloc (networking/ip/imap4d/utils.c) */
+/*s: function [[erealloc]]([[(networking/ip/imap4d/utils.c)]]) */
 void*
 erealloc(void *p, ulong n)
 {
@@ -208,5 +208,5 @@ erealloc(void *p, ulong n)
     setrealloctag(p, getcallerpc(&p));
     return p;
 }
-/*e: function erealloc (networking/ip/imap4d/utils.c) */
+/*e: function [[erealloc]]([[(networking/ip/imap4d/utils.c)]]) */
 /*e: networking/ip/imap4d/utils.c */

@@ -15,59 +15,59 @@ int malformed(uchar*, int, int);
 int pppoe(char*);
 void execppp(int);
 
-/*s: global alarmed */
+/*s: global [[alarmed]] */
 int alarmed;
-/*e: global alarmed */
-/*s: global debug (networking/ip/pppoe.c) */
+/*e: global [[alarmed]] */
+/*s: global [[debug]]([[(networking/ip/pppoe.c)]]) */
 int debug;
-/*e: global debug (networking/ip/pppoe.c) */
-/*s: global sessid */
+/*e: global [[debug]]([[(networking/ip/pppoe.c)]]) */
+/*s: global [[sessid]] */
 int sessid;
-/*e: global sessid */
-/*s: global keyspec (networking/ip/pppoe.c) */
+/*e: global [[sessid]] */
+/*s: global [[keyspec]]([[(networking/ip/pppoe.c)]]) */
 char *keyspec;
-/*e: global keyspec (networking/ip/pppoe.c) */
-/*s: global primary (networking/ip/pppoe.c) */
+/*e: global [[keyspec]]([[(networking/ip/pppoe.c)]]) */
+/*s: global [[primary]]([[(networking/ip/pppoe.c)]]) */
 int primary;
-/*e: global primary (networking/ip/pppoe.c) */
-/*s: global pppnetmtpt */
+/*e: global [[primary]]([[(networking/ip/pppoe.c)]]) */
+/*s: global [[pppnetmtpt]] */
 char *pppnetmtpt;
-/*e: global pppnetmtpt */
-/*s: global acname */
+/*e: global [[pppnetmtpt]] */
+/*s: global [[acname]] */
 char *acname;
-/*e: global acname */
-/*s: global pppname */
+/*e: global [[acname]] */
+/*s: global [[pppname]] */
 char *pppname = "/bin/ip/ppp";
-/*e: global pppname */
-/*s: global srvname (networking/ip/pppoe.c) */
+/*e: global [[pppname]] */
+/*s: global [[srvname]]([[(networking/ip/pppoe.c)]]) */
 char *srvname = "";
-/*e: global srvname (networking/ip/pppoe.c) */
-/*s: global wantac */
+/*e: global [[srvname]]([[(networking/ip/pppoe.c)]]) */
+/*s: global [[wantac]] */
 char *wantac;
-/*e: global wantac */
-/*s: global cookie */
+/*e: global [[wantac]] */
+/*s: global [[cookie]] */
 uchar *cookie;
-/*e: global cookie */
-/*s: global cookielen */
+/*e: global [[cookie]] */
+/*s: global [[cookielen]] */
 int cookielen;
-/*e: global cookielen */
-/*s: global etherdst */
+/*e: global [[cookielen]] */
+/*s: global [[etherdst]] */
 uchar etherdst[6];
-/*e: global etherdst */
-/*s: global mtu (networking/ip/pppoe.c) */
+/*e: global [[etherdst]] */
+/*s: global [[mtu]]([[(networking/ip/pppoe.c)]]) */
 int mtu = 1492;
-/*e: global mtu (networking/ip/pppoe.c) */
+/*e: global [[mtu]]([[(networking/ip/pppoe.c)]]) */
 
-/*s: function usage (networking/ip/pppoe.c) */
+/*s: function [[usage]]([[(networking/ip/pppoe.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: pppoe [-Pd] [-A acname] [-S srvname] [-k keyspec] [-m mtu] [-x pppnet] [ether0]\n");
     exits("usage");
 }
-/*e: function usage (networking/ip/pppoe.c) */
+/*e: function [[usage]]([[(networking/ip/pppoe.c)]]) */
 
-/*s: function catchalarm */
+/*s: function [[catchalarm]] */
 int
 catchalarm(void *a, char *msg)
 {
@@ -81,9 +81,9 @@ catchalarm(void *a, char *msg)
         fprint(2, "note rcved: %s\n", msg);
     return 0;
 }
-/*e: function catchalarm */
+/*e: function [[catchalarm]] */
 
-/*s: function main (networking/ip/pppoe.c) */
+/*s: function [[main]]([[(networking/ip/pppoe.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -133,18 +133,18 @@ main(int argc, char **argv)
     fd = pppoe(dev);
     execppp(fd);
 }
-/*e: function main (networking/ip/pppoe.c) */
+/*e: function [[main]]([[(networking/ip/pppoe.c)]]) */
 
 typedef struct Etherhdr Etherhdr;
-/*s: struct Etherhdr (networking/ip/pppoe.c) */
+/*s: struct [[Etherhdr]]([[(networking/ip/pppoe.c)]]) */
 struct Etherhdr {
     uchar dst[6];
     uchar src[6];
     uchar type[2];
 };
-/*e: struct Etherhdr (networking/ip/pppoe.c) */
+/*e: struct [[Etherhdr]]([[(networking/ip/pppoe.c)]]) */
 
-/*s: enum _anon_ (networking/ip/pppoe.c) */
+/*s: enum [[_anon_ (networking/ip/pppoe.c)]] */
 enum {
     EtherHdrSz = 6+6+2,
     EtherMintu = 60,
@@ -152,13 +152,13 @@ enum {
     EtherPppoeDiscovery = 0x8863,
     EtherPppoeSession = 0x8864,
 };
-/*e: enum _anon_ (networking/ip/pppoe.c) */
+/*e: enum [[_anon_ (networking/ip/pppoe.c)]] */
 
-/*s: global etherbcast */
+/*s: global [[etherbcast]] */
 uchar etherbcast[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-/*e: global etherbcast */
+/*e: global [[etherbcast]] */
 
-/*s: function etherhdr */
+/*s: function [[etherhdr]] */
 int
 etherhdr(uchar *pkt, uchar *dst, int type)
 {
@@ -169,26 +169,26 @@ etherhdr(uchar *pkt, uchar *dst, int type)
     hnputs(eh->type, type);
     return EtherHdrSz;
 }
-/*e: function etherhdr */
+/*e: function [[etherhdr]] */
 
 typedef struct Pppoehdr Pppoehdr;
-/*s: struct Pppoehdr */
+/*s: struct [[Pppoehdr]] */
 struct Pppoehdr {
     uchar verstype;
     uchar code;
     uchar sessid[2];
     uchar length[2];	/* of payload */
 };
-/*e: struct Pppoehdr */
+/*e: struct [[Pppoehdr]] */
 
-/*s: enum _anon_ (networking/ip/pppoe.c)2 */
+/*s: enum [[_anon_ (networking/ip/pppoe.c)2]] */
 enum {
     PppoeHdrSz = 1+1+2+2,
     Hdr = EtherHdrSz+PppoeHdrSz,
 };
-/*e: enum _anon_ (networking/ip/pppoe.c)2 */
+/*e: enum [[_anon_ (networking/ip/pppoe.c)2]] */
 
-/*s: enum _anon_ (networking/ip/pppoe.c)3 */
+/*s: enum [[_anon_ (networking/ip/pppoe.c)3]] */
 enum {
     VersType = 0x11,
 
@@ -201,9 +201,9 @@ enum {
     /* Session codes */
     CodeSession = 0x00,
 };
-/*e: enum _anon_ (networking/ip/pppoe.c)3 */
+/*e: enum [[_anon_ (networking/ip/pppoe.c)3]] */
 
-/*s: function pppoehdr */
+/*s: function [[pppoehdr]] */
 int
 pppoehdr(uchar *pkt, int code, int sessid)
 {
@@ -215,17 +215,17 @@ pppoehdr(uchar *pkt, int code, int sessid)
     hnputs(ph->sessid, sessid);
     return PppoeHdrSz;
 }
-/*e: function pppoehdr */
+/*e: function [[pppoehdr]] */
 
 typedef struct Taghdr Taghdr;
-/*s: struct Taghdr */
+/*s: struct [[Taghdr]] */
 struct Taghdr {
     uchar type[2];
     uchar length[2];	/* of value */
 };
-/*e: struct Taghdr */
+/*e: struct [[Taghdr]] */
 
-/*s: enum _anon_ (networking/ip/pppoe.c)4 */
+/*s: enum [[_anon_ (networking/ip/pppoe.c)4]] */
 enum {
     TagEnd = 0x0000,		/* end of tag list */
     TagSrvName = 0x0101,	/* service name */
@@ -237,9 +237,9 @@ enum {
     TagSrvNameErr = 0x0201,	/* service name error (ascii) */
     TagAcSysErr = 0x0202,	/* a.c. system error */
 };
-/*e: enum _anon_ (networking/ip/pppoe.c)4 */
+/*e: enum [[_anon_ (networking/ip/pppoe.c)4]] */
 
-/*s: function tag (networking/ip/pppoe.c) */
+/*s: function [[tag]]([[(networking/ip/pppoe.c)]]) */
 int
 tag(uchar *pkt, int type, void *value, int nvalue)
 {
@@ -251,9 +251,9 @@ tag(uchar *pkt, int type, void *value, int nvalue)
     memmove(pkt+4, value, nvalue);
     return 4+nvalue;
 }
-/*e: function tag (networking/ip/pppoe.c) */
+/*e: function [[tag]]([[(networking/ip/pppoe.c)]]) */
 
-/*s: function padi */
+/*s: function [[padi]] */
 /* PPPoE Active Discovery Initiation */
 int
 padi(uchar *pkt)
@@ -270,9 +270,9 @@ padi(uchar *pkt)
     hnputs(length, sz-tagoff);
     return sz;
 }
-/*e: function padi */
+/*e: function [[padi]] */
 
-/*s: function padr */
+/*s: function [[padr]] */
 /* PPPoE Active Discovery Request */
 int
 padr(uchar *pkt)
@@ -292,9 +292,9 @@ padr(uchar *pkt)
     hnputs(length, sz-tagoff);
     return sz;
 }
-/*e: function padr */
+/*e: function [[padr]] */
 
-/*s: function ewrite */
+/*s: function [[ewrite]] */
 void
 ewrite(int fd, void *buf, int nbuf)
 {
@@ -307,9 +307,9 @@ ewrite(int fd, void *buf, int nbuf)
         sysfatal("write %d to %s: %s", nbuf, path, e);
     }
 }
-/*e: function ewrite */
+/*e: function [[ewrite]] */
 
-/*s: function emalloc (networking/ip/pppoe.c) */
+/*s: function [[emalloc]]([[(networking/ip/pppoe.c)]]) */
 void*
 emalloc(long n)
 {
@@ -320,9 +320,9 @@ emalloc(long n)
         sysfatal("out of memory");
     return v;
 }
-/*e: function emalloc (networking/ip/pppoe.c) */
+/*e: function [[emalloc]]([[(networking/ip/pppoe.c)]]) */
 
-/*s: function aread */
+/*s: function [[aread]] */
 int
 aread(int timeout, int fd, void *buf, int nbuf)
 {
@@ -340,9 +340,9 @@ aread(int timeout, int fd, void *buf, int nbuf)
         sysfatal("short read");
     return n;
 }
-/*e: function aread */
+/*e: function [[aread]] */
 
-/*s: function pktread */
+/*s: function [[pktread]] */
 int
 pktread(int timeout, int fd, void *buf, int nbuf, int (*want)(uchar*))
 {
@@ -369,18 +369,18 @@ pktread(int timeout, int fd, void *buf, int nbuf, int (*want)(uchar*))
     }
     return n;
 }
-/*e: function pktread */
+/*e: function [[pktread]] */
 
-/*s: function bad */
+/*s: function [[bad]] */
 int
 bad(char *reason)
 {
     werrstr(reason);
     return 0;
 }
-/*e: function bad */
+/*e: function [[bad]] */
 
-/*s: function copy */
+/*s: function [[copy]] */
 void*
 copy(uchar *s, int len)
 {
@@ -391,9 +391,9 @@ copy(uchar *s, int len)
     v[len] = '\0';
     return v;
 }
-/*e: function copy */
+/*e: function [[copy]] */
 
-/*s: function clearstate */
+/*s: function [[clearstate]] */
 void
 clearstate(void)
 {
@@ -403,9 +403,9 @@ clearstate(void)
     free(cookie);
     cookie = nil;
 }
-/*e: function clearstate */
+/*e: function [[clearstate]] */
 
-/*s: function wantoffer */
+/*s: function [[wantoffer]] */
 int
 wantoffer(uchar *pkt)
 {
@@ -444,9 +444,9 @@ wantoffer(uchar *pkt)
     memmove(etherdst, eh->src, sizeof etherdst);
     return 1;
 }
-/*e: function wantoffer */
+/*e: function [[wantoffer]] */
 
-/*s: function wantsession */
+/*s: function [[wantsession]] */
 int
 wantsession(uchar *pkt)
 {
@@ -481,9 +481,9 @@ wantsession(uchar *pkt)
     sessid = nhgets(ph->sessid);
     return 1;
 }
-/*e: function wantsession */
+/*e: function [[wantsession]] */
 
-/*s: function pppoe */
+/*s: function [[pppoe]] */
 int
 pppoe(char *ether)
 {
@@ -588,9 +588,9 @@ pppoe(char *ether)
     close(p[0]);
     return p[1];
 }
-/*e: function pppoe */
+/*e: function [[pppoe]] */
 
-/*s: function execppp */
+/*s: function [[execppp]] */
 void
 execppp(int fd)
 {
@@ -622,9 +622,9 @@ execppp(int fd)
     exec(pppname, argv);
     sysfatal("exec: %r");
 }
-/*e: function execppp */
+/*e: function [[execppp]] */
 
-/*s: function findtag */
+/*s: function [[findtag]] */
 uchar*
 findtag(uchar *pkt, int tagtype, int *plen, int skip)
 {
@@ -657,9 +657,9 @@ findtag(uchar *pkt, int tagtype, int *plen, int skip)
     }
     return nil;	
 }
-/*e: function findtag */
+/*e: function [[findtag]] */
 
-/*s: function dumptags */
+/*s: function [[dumptags]] */
 void
 dumptags(uchar *tagdat, int ntagdat)
 {
@@ -713,9 +713,9 @@ dumptags(uchar *tagdat, int ntagdat)
     if(sz != ntagdat)
         fprint(2, "warning: only dumped %d of %d bytes\n", sz, ntagdat);
 }
-/*e: function dumptags */
+/*e: function [[dumptags]] */
 
-/*s: function dumppkt */
+/*s: function [[dumppkt]] */
 void
 dumppkt(uchar *pkt)
 {
@@ -739,9 +739,9 @@ dumppkt(uchar *pkt)
             dumptags(pkt+Hdr, nhgets(ph->length));
     }
 }
-/*e: function dumppkt */
+/*e: function [[dumppkt]] */
 
-/*s: function malformed */
+/*s: function [[malformed]] */
 int
 malformed(uchar *pkt, int n, int wantet)
 {
@@ -765,9 +765,9 @@ malformed(uchar *pkt, int n, int wantet)
 
     return 0;
 }
-/*e: function malformed */
+/*e: function [[malformed]] */
 
-/*s: function hexdump (networking/ip/pppoe.c) */
+/*s: function [[hexdump]]([[(networking/ip/pppoe.c)]]) */
 void
 hexdump(uchar *a, int na)
 {
@@ -790,5 +790,5 @@ hexdump(uchar *a, int na)
         write(2, buf, strlen(buf));
     }
 }
-/*e: function hexdump (networking/ip/pppoe.c) */
+/*e: function [[hexdump]]([[(networking/ip/pppoe.c)]]) */
 /*e: networking/ip/pppoe.c */

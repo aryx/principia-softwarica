@@ -8,7 +8,7 @@
 
 typedef struct Huff	Huff;
 
-/*s: enum _anon_ (networking/ip/ppp/thwack.c) */
+/*s: enum [[_anon_ (networking/ip/ppp/thwack.c)]] */
 enum
 {
     MaxFastLen	= 9,
@@ -16,9 +16,9 @@ enum
     BigLenBits	= 9,
     BigLenBase	= 4		/* starting items to encode for big lens */
 };
-/*e: enum _anon_ (networking/ip/ppp/thwack.c) */
+/*e: enum [[_anon_ (networking/ip/ppp/thwack.c)]] */
 
-/*s: enum _anon_ (networking/ip/ppp/thwack.c)2 */
+/*s: enum [[_anon_ (networking/ip/ppp/thwack.c)2]] */
 enum
 {
     StatBytes,
@@ -33,17 +33,17 @@ enum
 
     MaxStat
 };
-/*e: enum _anon_ (networking/ip/ppp/thwack.c)2 */
+/*e: enum [[_anon_ (networking/ip/ppp/thwack.c)2]] */
 
-/*s: struct Huff */
+/*s: struct [[Huff]] */
 struct Huff
 {
     short	bits;				/* length of the code */
     ulong	encode;				/* the code */
 };
-/*e: struct Huff */
+/*e: struct [[Huff]] */
 
-/*s: global lentab */
+/*s: global [[lentab]] */
 static	Huff	lentab[MaxFastLen] =
 {
     {2,	0x2},		/* 10 */
@@ -56,9 +56,9 @@ static	Huff	lentab[MaxFastLen] =
     {8,	0xf8},		/* 11111000 */
     {8,	0xf9},		/* 11111001 */
 };
-/*e: global lentab */
+/*e: global [[lentab]] */
 
-/*s: function thwackinit */
+/*s: function [[thwackinit]] */
 void
 thwackinit(Thwack *tw)
 {
@@ -77,9 +77,9 @@ thwackinit(Thwack *tw)
     }
     qunlock(&tw->acklock);
 }
-/*e: function thwackinit */
+/*e: function [[thwackinit]] */
 
-/*s: function thwackcleanup */
+/*s: function [[thwackcleanup]] */
 void
 thwackcleanup(Thwack *tw)
 {
@@ -94,9 +94,9 @@ thwackcleanup(Thwack *tw)
     }
     qunlock(&tw->acklock);
 }
-/*e: function thwackcleanup */
+/*e: function [[thwackcleanup]] */
 
-/*s: function thwackack */
+/*s: function [[thwackack]] */
 /*
  * acknowledgement for block seq & nearby preds
  */
@@ -128,9 +128,9 @@ thwackack(Thwack *tw, ulong seq, ulong mask)
     }
     qunlock(&tw->acklock);
 }
-/*e: function thwackack */
+/*e: function [[thwackack]] */
 
-/*s: function thwmatch */
+/*s: function [[thwmatch]] */
 /*
  * find a string in the dictionary
  */
@@ -177,7 +177,7 @@ thwmatch(ThwBlock *b, ThwBlock *eblocks, uchar **ss, uchar *esrc, ulong h)
     }
     return 0;
 }
-/*e: function thwmatch */
+/*e: function [[thwmatch]] */
 
 /*
  * knuth vol. 3 multiplicative hashing
@@ -188,14 +188,14 @@ thwmatch(ThwBlock *b, ThwBlock *eblocks, uchar **ss, uchar *esrc, ulong h)
  * the 3 byte value appears to be as almost good as the 4 byte value,
  * and might be faster on some machines
  */
-/*s: macro hashit */
+/*s: macro [[hashit]] */
 /*
 #define hashit(c)	(((ulong)(c) * 0x6b43a9) >> (24 - HashLog))
 */
 #define hashit(c)	((((ulong)(c) & 0xffffff) * 0x6b43a9b5) >> (32 - HashLog))
-/*e: macro hashit */
+/*e: macro [[hashit]] */
 
-/*s: function thwack */
+/*s: function [[thwack]] */
 /*
  * lz77 compression with single lookup in a hash table for each block
  */
@@ -438,5 +438,5 @@ thwack(Thwack *tw, int mustadd, uchar *dst, int ndst, Block *bsrc, ulong seq, ul
 
     return twdst - dst;
 }
-/*e: function thwack */
+/*e: function [[thwack]] */
 /*e: networking/ip/ppp/thwack.c */

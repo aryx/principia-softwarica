@@ -4,15 +4,15 @@
 #include <string.h>
 #include "ftpfs.h"
 
-/*s: enum _anon_ (networking/ip/ftpfs/file.c) */
+/*s: enum [[_anon_ (networking/ip/ftpfs/file.c)]] */
 enum
 {
     Chunk=		1024,		/* chunk size for buffered data */
     Nfile=		128,		/* maximum number of cached files */
 };
-/*e: enum _anon_ (networking/ip/ftpfs/file.c) */
+/*e: enum [[_anon_ (networking/ip/ftpfs/file.c)]] */
 
-/*s: struct File (networking/ip/ftpfs/file.c) */
+/*s: struct [[File]]([[(networking/ip/ftpfs/file.c)]]) */
 /* a file (with cached data) */
 struct File
 {
@@ -26,19 +26,19 @@ struct File
     Node	*node;
     char 	*template;
 };
-/*e: struct File (networking/ip/ftpfs/file.c) */
+/*e: struct [[File]]([[(networking/ip/ftpfs/file.c)]]) */
 
-/*s: global files */
+/*s: global [[files]] */
 static File	files[Nfile];
-/*e: global files */
-/*s: global now (networking/ip/ftpfs/file.c) */
+/*e: global [[files]] */
+/*s: global [[now]]([[(networking/ip/ftpfs/file.c)]]) */
 static ulong	now;
-/*e: global now (networking/ip/ftpfs/file.c) */
-/*s: global ntmp */
+/*e: global [[now]]([[(networking/ip/ftpfs/file.c)]]) */
+/*s: global [[ntmp]] */
 static int	ntmp;
-/*e: global ntmp */
+/*e: global [[ntmp]] */
 
-/*s: function fileget */
+/*s: function [[fileget]] */
 /*
  *  lookup a file, create one if not found.  if there are no
  *  free files, free the last oldest clean one.
@@ -76,9 +76,9 @@ fileget(Node *node)
     }
     return fp;
 }
-/*e: function fileget */
+/*e: function [[fileget]] */
 
-/*s: function filefree */
+/*s: function [[filefree]] */
 /*
  *  free a cached file
  */
@@ -109,9 +109,9 @@ filefree(Node *node)
 
     node->fp = 0;
 }
-/*e: function filefree */
+/*e: function [[filefree]] */
 
-/*s: function fileread */
+/*s: function [[fileread]] */
 /*
  *  satisfy read first from in memory chunk and then from temporary
  *  file.  It's up to the caller to make sure that the file is valid.
@@ -156,9 +156,9 @@ fileread(Node *node, char *a, long off, int n)
     }
     return sofar;
 }
-/*e: function fileread */
+/*e: function [[fileread]] */
 
-/*s: function uncachedir */
+/*s: function [[uncachedir]] */
 void
 uncachedir(Node *parent, Node *child)
 {
@@ -176,9 +176,9 @@ uncachedir(Node *parent, Node *child)
             UNCACHED(sp);
         }
 }
-/*e: function uncachedir */
+/*e: function [[uncachedir]] */
 
-/*s: function createtmp */
+/*s: function [[createtmp]] */
 static int
 createtmp(File *fp)
 {
@@ -199,9 +199,9 @@ createtmp(File *fp)
     ntmp++;
     return fp->fd;
 }
-/*e: function createtmp */
+/*e: function [[createtmp]] */
 
-/*s: function filewrite */
+/*s: function [[filewrite]] */
 /*
  *  write cached data (first Chunk bytes stay in memory)
  */
@@ -249,9 +249,9 @@ filewrite(Node *node, char *a, long off, int n)
         node->d->length = off;
     return sofar;
 }
-/*e: function filewrite */
+/*e: function [[filewrite]] */
 
-/*s: function filedirty */
+/*s: function [[filedirty]] */
 /*
  *  mark a file as dirty
  */
@@ -263,9 +263,9 @@ filedirty(Node *node)
     fp = fileget(node);
     fp->dirty = 1;
 }
-/*e: function filedirty */
+/*e: function [[filedirty]] */
 
-/*s: function fileclean */
+/*s: function [[fileclean]] */
 /*
  *  mark a file as clean
  */
@@ -275,13 +275,13 @@ fileclean(Node *node)
     if(node->fp)
         node->fp->dirty = 0;
 }
-/*e: function fileclean */
+/*e: function [[fileclean]] */
 
-/*s: function fileisdirty */
+/*s: function [[fileisdirty]] */
 int
 fileisdirty(Node *node)
 {
     return node->fp && node->fp->dirty;
 }
-/*e: function fileisdirty */
+/*e: function [[fileisdirty]] */
 /*e: networking/ip/ftpfs/file.c */

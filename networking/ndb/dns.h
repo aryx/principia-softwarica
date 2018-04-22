@@ -1,20 +1,20 @@
 /*s: networking/ndb/dns.h */
 #include <thread.h>		/* for Ref */
 
-/*s: macro NS2MS */
+/*s: macro [[NS2MS]] */
 #define NS2MS(ns) ((ns) / 1000000L)
-/*e: macro NS2MS */
-/*s: macro S2MS */
+/*e: macro [[NS2MS]] */
+/*s: macro [[S2MS]] */
 #define S2MS(s)   ((s)  * 1000LL)
-/*e: macro S2MS */
+/*e: macro [[S2MS]] */
 
-/*s: macro timems */
+/*s: macro [[timems]] */
 #define timems()	NS2MS(nsec())
-/*e: macro timems */
+/*e: macro [[timems]] */
 
 typedef struct Ndbtuple Ndbtuple;
 
-/*s: enum _anon_ (networking/ndb/dns.h) */
+/*s: enum [[_anon_ (networking/ndb/dns.h)]] */
 enum
 {
     /* RR types; see: http://www.iana.org/assignments/dns-parameters */
@@ -166,7 +166,7 @@ enum
     Notauthoritative = 0,
     Authoritative,
 };
-/*e: enum _anon_ (networking/ndb/dns.h) */
+/*e: enum [[_anon_ (networking/ndb/dns.h)]] */
 
 typedef struct Area	Area;
 typedef struct Block	Block;
@@ -183,7 +183,7 @@ typedef struct Sig	Sig;
 typedef struct Srv	Srv;
 typedef struct Txt	Txt;
 
-/*s: struct Request (networking/ndb/dns.h) */
+/*s: struct [[Request]]([[(networking/ndb/dns.h)]]) */
 /*
  *  a structure to track a request and any slave process handling it
  */
@@ -195,19 +195,19 @@ struct Request
     int	id;
     char	*from;		/* who asked us? */
 };
-/*e: struct Request (networking/ndb/dns.h) */
+/*e: struct [[Request]]([[(networking/ndb/dns.h)]]) */
 
 typedef struct Querylck Querylck;
-/*s: struct Querylck */
+/*s: struct [[Querylck]] */
 struct Querylck
 {
     QLock;
 //	Rendez;
     Ref;
 };
-/*e: struct Querylck */
+/*e: struct [[Querylck]] */
 
-/*s: struct DN */
+/*s: struct [[DN]] */
 /*
  *  a domain name
  */
@@ -229,9 +229,9 @@ struct DN
     /* permit only 1 query per (domain name, type) at a time */
     Querylck querylck[Maxlcks];
 };
-/*e: struct DN */
+/*e: struct [[DN]] */
 
-/*s: struct Block */
+/*s: struct [[Block]] */
 /*
  *  security info
  */
@@ -240,8 +240,8 @@ struct Block
     int	dlen;
     uchar	*data;
 };
-/*e: struct Block */
-/*s: struct Key */
+/*e: struct [[Block]] */
+/*s: struct [[Key]] */
 struct Key
 {
     int	flags;
@@ -249,8 +249,8 @@ struct Key
     int	alg;
     Block;
 };
-/*e: struct Key */
-/*s: struct Cert */
+/*e: struct [[Key]] */
+/*s: struct [[Cert]] */
 struct Cert
 {
     int	type;
@@ -258,8 +258,8 @@ struct Cert
     int	alg;
     Block;
 };
-/*e: struct Cert */
-/*s: struct Sig */
+/*e: struct [[Cert]] */
+/*s: struct [[Sig]] */
 struct Sig
 {
     Cert;
@@ -269,15 +269,15 @@ struct Sig
     ulong	incep;
     DN	*signer;
 };
-/*e: struct Sig */
-/*s: struct Null */
+/*e: struct [[Sig]] */
+/*s: struct [[Null]] */
 struct Null
 {
     Block;
 };
-/*e: struct Null */
+/*e: struct [[Null]] */
 
-/*s: struct Txt */
+/*s: struct [[Txt]] */
 /*
  *  text strings
  */
@@ -286,9 +286,9 @@ struct Txt
     Txt	*next;
     char	*p;
 };
-/*e: struct Txt */
+/*e: struct [[Txt]] */
 
-/*s: struct RR */
+/*s: struct [[RR]] */
 /*
  *  an unpacked resource record
  */
@@ -337,9 +337,9 @@ struct RR
         Srv	*srv;
     };
 };
-/*e: struct RR */
+/*e: struct [[RR]] */
 
-/*s: struct Server */
+/*s: struct [[Server]] */
 /*
  *  list of servers
  */
@@ -348,9 +348,9 @@ struct Server
     Server	*next;
     char	*name;
 };
-/*e: struct Server */
+/*e: struct [[Server]] */
 
-/*s: struct SOA */
+/*s: struct [[SOA]] */
 /*
  *  timers for a start-of-authority record.  all ulongs are in seconds.
  */
@@ -364,9 +364,9 @@ struct SOA
 
     Server	*slaves;	/* slave servers */
 };
-/*e: struct SOA */
+/*e: struct [[SOA]] */
 
-/*s: struct Srv */
+/*s: struct [[Srv]] */
 /*
  * srv (service location) record (rfc2782):
  * _service._proto.name ttl class(IN) 'SRV' priority weight port target
@@ -376,18 +376,18 @@ struct Srv
     ushort	pri;
     ushort	weight;
 };
-/*e: struct Srv */
+/*e: struct [[Srv]] */
 
 typedef struct Rrlist Rrlist;
-/*s: struct Rrlist */
+/*s: struct [[Rrlist]] */
 struct Rrlist
 {
     int	count;
     RR	*rrs;
 };
-/*e: struct Rrlist */
+/*e: struct [[Rrlist]] */
 
-/*s: struct DNSmsg */
+/*s: struct [[DNSmsg]] */
 /*
  *  domain messages
  */
@@ -404,9 +404,9 @@ struct DNSmsg
     int	arcount;	/* hints */
     RR	*ar;
 };
-/*e: struct DNSmsg */
+/*e: struct [[DNSmsg]] */
 
-/*s: struct Area */
+/*s: struct [[Area]] */
 /*
  *  definition of local area for dblookup
  */
@@ -419,10 +419,10 @@ struct Area
     int	neednotify;
     int	needrefresh;
 };
-/*e: struct Area */
+/*e: struct [[Area]] */
 
 typedef struct Cfg Cfg;
-/*s: struct Cfg */
+/*s: struct [[Cfg]] */
 struct Cfg {
     int	cachedb;
     int	resolver;
@@ -431,7 +431,7 @@ struct Cfg {
     int	inside;
     int	straddle;
 };
-/*e: struct Cfg */
+/*e: struct [[Cfg]] */
 
 /* (udp) query stats */
 typedef struct {
@@ -457,11 +457,11 @@ typedef struct {
     ulong	negcached;	/* neg ans cached */
 } Stats;
 
-/*s: global stats */
+/*s: global [[stats]] */
 Stats stats;
-/*e: global stats */
+/*e: global [[stats]] */
 
-/*s: enum _anon_ (networking/ndb/dns.h)2 */
+/*s: enum [[_anon_ (networking/ndb/dns.h)2]] */
 enum
 {
     Recurse,
@@ -469,7 +469,7 @@ enum
     NOneg,
     OKneg,
 };
-/*e: enum _anon_ (networking/ndb/dns.h)2 */
+/*e: enum [[_anon_ (networking/ndb/dns.h)2]] */
 
 extern Cfg	cfg;
 extern char	*dbfile;

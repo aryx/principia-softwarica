@@ -5,17 +5,17 @@ typedef struct Msg Msg;
 typedef struct Mux Mux;
 typedef struct Proto Proto;
 
-/*s: macro NetS (networking/ip/snoopy/dat.h) */
+/*s: macro [[NetS]]([[(networking/ip/snoopy/dat.h)]]) */
 #define NetS(x) ((((uchar*)x)[0]<<8) | ((uchar*)x)[1])
-/*e: macro NetS (networking/ip/snoopy/dat.h) */
-/*s: macro Net3 */
+/*e: macro [[NetS]]([[(networking/ip/snoopy/dat.h)]]) */
+/*s: macro [[Net3]] */
 #define Net3(x) ((((uchar*)x)[0]<<16) | (((uchar*)x)[1]<<8) | ((uchar*)x)[2])
-/*e: macro Net3 */
-/*s: macro NetL (networking/ip/snoopy/dat.h) */
+/*e: macro [[Net3]] */
+/*s: macro [[NetL]]([[(networking/ip/snoopy/dat.h)]]) */
 #define NetL(x) ((((uchar*)x)[0]<<24) | (((uchar*)x)[1]<<16) | (((uchar*)x)[2]<<8) | ((uchar*)x)[3])
-/*e: macro NetL (networking/ip/snoopy/dat.h) */
+/*e: macro [[NetL]]([[(networking/ip/snoopy/dat.h)]]) */
 
-/*s: struct Proto (networking/ip/snoopy/dat.h) */
+/*s: struct [[Proto]]([[(networking/ip/snoopy/dat.h)]]) */
 /*
  *  one per protocol module
  */
@@ -30,10 +30,10 @@ struct Proto
     Field*	field;
     int	(*framer)(int, uchar*, int);
 };
-/*e: struct Proto (networking/ip/snoopy/dat.h) */
+/*e: struct [[Proto]]([[(networking/ip/snoopy/dat.h)]]) */
 extern Proto *protos[];
 
-/*s: struct Mux */
+/*s: struct [[Mux]] */
 /*
  *  one per protocol module, pointed to by Proto.mux
  */
@@ -43,9 +43,9 @@ struct Mux
     ulong	val;
     Proto*	pr;
 };
-/*e: struct Mux */
+/*e: struct [[Mux]] */
 
-/*s: struct Field */
+/*s: struct [[Field]] */
 /*
  *  a field defining a comparison filter
  */
@@ -56,9 +56,9 @@ struct Field
     int	subop;
     char*	help;
 };
-/*e: struct Field */
+/*e: struct [[Field]] */
 
-/*s: struct Msg (networking/ip/snoopy/dat.h) */
+/*s: struct [[Msg]]([[(networking/ip/snoopy/dat.h)]]) */
 /*
  *  the status of the current message walk
  */
@@ -73,9 +73,9 @@ struct Msg
     int	needroot;	/* pr is root, need to see in expression */
     Proto	*pr;	/* current/next protocol */	
 };
-/*e: struct Msg (networking/ip/snoopy/dat.h) */
+/*e: struct [[Msg]]([[(networking/ip/snoopy/dat.h)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/dat.h) */
+/*s: enum [[_anon_ (networking/ip/snoopy/dat.h)]] */
 enum
 {
     Fnum,		/* just a number */
@@ -84,9 +84,9 @@ enum
     Fv6ip,		/* v6 ip address */
     Fba,		/* byte array */
 };
-/*e: enum _anon_ (networking/ip/snoopy/dat.h) */
+/*e: enum [[_anon_ (networking/ip/snoopy/dat.h)]] */
 
-/*s: struct Filter */
+/*s: struct [[Filter]] */
 /*
  *  a node in the filter tree
  */
@@ -107,7 +107,7 @@ struct Filter {
         uchar	a[32];
     };
 };
-/*e: struct Filter */
+/*e: struct [[Filter]] */
 
 extern void	yyinit(char*);
 extern int	yyparse(void);
@@ -123,8 +123,8 @@ extern int dflag;
 extern int Cflag;
 
 typedef Filter *Filterptr;
-/*s: constant YYSTYPE */
+/*s: constant [[YYSTYPE]] */
 #define YYSTYPE Filterptr
-/*e: constant YYSTYPE */
+/*e: constant [[YYSTYPE]] */
 extern Filter *filter;
 /*e: networking/ip/snoopy/dat.h */

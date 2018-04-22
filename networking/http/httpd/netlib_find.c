@@ -12,14 +12,14 @@ void index_fmt(char*,char*);
 void no_fmt(char*,char*);
 int send(HConnect*);
 
-/*s: global hout (networking/ip/httpd/netlib_find.c) */
+/*s: global [[hout]]([[(networking/ip/httpd/netlib_find.c)]]) */
 Hio *hout;
-/*e: global hout (networking/ip/httpd/netlib_find.c) */
+/*e: global [[hout]]([[(networking/ip/httpd/netlib_find.c)]]) */
 
 /********** table of databases ************/
 
 typedef struct DB	DB;
-/*s: struct DB */
+/*s: struct [[DB]] */
 struct DB 
 {
     int	SELECT;	/* value from search.html */
@@ -29,9 +29,9 @@ struct DB
     void	(*fmt)(char*,char*); /* convert one record to HTML */
     char	*postlude;	/* trailer text */
 };
-/*e: struct DB */
+/*e: struct [[DB]] */
 
-/*s: global db (networking/ip/httpd/netlib_find.c) */
+/*s: global [[db]]([[(networking/ip/httpd/netlib_find.c)]]) */
 DB db[] =
 {
  {0, "netlib",	250, "/srv/netlib_DEFAULT", index_fmt,
@@ -44,11 +44,11 @@ DB db[] =
  {4, "siam",	 50, "/srv/netlib_siam-Secret", no_fmt, "</BODY>\r\n"},
  {-1,"",0,"",no_fmt,""}
 };
-/*e: global db (networking/ip/httpd/netlib_find.c) */
+/*e: global [[db]]([[(networking/ip/httpd/netlib_find.c)]]) */
 
 
 
-/*s: function no_fmt */
+/*s: function [[no_fmt]] */
 /********** reformat database record as HTML ************/
 
 void /* tr '\015' '\012' ("uncombline") */
@@ -63,9 +63,9 @@ no_fmt(char*s,char*e)
             s = p+1;
         }
 }
-/*e: function no_fmt */
+/*e: function [[no_fmt]] */
 
-/*s: function suffix */
+/*s: function [[suffix]] */
 int /* should the filename have .gz appended? */
 suffix(char*filename)
 {
@@ -90,9 +90,9 @@ suffix(char*filename)
     free(z);
     return(0);
 }
-/*e: function suffix */
+/*e: function [[suffix]] */
 
-/*s: function index_fmt */
+/*s: function [[index_fmt]] */
 void /* add HREF to "file:" lines */
 index_fmt(char*s,char*e)
 {
@@ -129,9 +129,9 @@ index_fmt(char*s,char*e)
         no_fmt(s,e);
     }
 }
-/*e: function index_fmt */
+/*e: function [[index_fmt]] */
 
-/*s: function bib_fmt */
+/*s: function [[bib_fmt]] */
 void /* add HREF to "URL" lines */
 bib_fmt(char*s,char*e)
 {
@@ -152,10 +152,10 @@ bib_fmt(char*s,char*e)
             }
         }
 }
-/*e: function bib_fmt */
+/*e: function [[bib_fmt]] */
 
 
-/*s: function main (networking/ip/httpd/netlib_find.c) */
+/*s: function [[main]]([[(networking/ip/httpd/netlib_find.c)]]) */
 /********** main() calls httpheadget() calls send() ************/
 
 void
@@ -169,13 +169,13 @@ main(int argc, char **argv)
         send(c);
     exits(nil);
 }
-/*e: function main (networking/ip/httpd/netlib_find.c) */
+/*e: function [[main]]([[(networking/ip/httpd/netlib_find.c)]]) */
 
-/*s: global Blist */
+/*s: global [[Blist]] */
 Biobuf Blist;
-/*e: global Blist */
+/*e: global [[Blist]] */
 
-/*s: function init800fs */
+/*s: function [[init800fs]] */
 Biobuf*
 init800fs(char*name,char*pat)
 {
@@ -197,10 +197,10 @@ init800fs(char*name,char*pat)
     Binit(&Blist, fd800fs,OREAD);
     return(&Blist);
 }
-/*e: function init800fs */
+/*e: function [[init800fs]] */
 
 
-/*s: function hq */
+/*s: function [[hq]] */
 static char *
 hq(char *text)
 {
@@ -227,9 +227,9 @@ hq(char *text)
     }
     return escaped;
 }
-/*e: function hq */
+/*e: function [[hq]] */
 
-/*s: function send (networking/ip/httpd/netlib_find.c) */
+/*s: function [[send]]([[(networking/ip/httpd/netlib_find.c)]]) */
 int
 send(HConnect *c)
 {
@@ -300,5 +300,5 @@ send(HConnect *c)
     writelog(c, "Reply: 200 netlib_find %ld %ld\n", hout->seek, hout->seek);
     return 1;
 }
-/*e: function send (networking/ip/httpd/netlib_find.c) */
+/*e: function [[send]]([[(networking/ip/httpd/netlib_find.c)]]) */
 /*e: networking/ip/httpd/netlib_find.c */

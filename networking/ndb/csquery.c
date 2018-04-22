@@ -3,26 +3,26 @@
 #include <libc.h>
 #include <bio.h>
 
-/*s: global server */
+/*s: global [[server]] */
 char *server;
-/*e: global server */
-/*s: global status */
+/*e: global [[server]] */
+/*s: global [[status]] */
 char *status;
-/*e: global status */
-/*s: global statusonly */
+/*e: global [[status]] */
+/*s: global [[statusonly]] */
 int statusonly;
-/*e: global statusonly */
+/*e: global [[statusonly]] */
 
-/*s: function usage (networking/ndb/csquery.c) */
+/*s: function [[usage]]([[(networking/ndb/csquery.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: ndb/csquery [/net/cs [addr...]]\n");
     exits("usage");
 }
-/*e: function usage (networking/ndb/csquery.c) */
+/*e: function [[usage]]([[(networking/ndb/csquery.c)]]) */
 
-/*s: function query */
+/*s: function [[query]] */
 void
 query(char *addr)
 {
@@ -48,9 +48,9 @@ query(char *addr)
     }
     close(fd);
 }
-/*e: function query */
+/*e: function [[query]] */
 
-/*s: function main (networking/ndb/csquery.c) */
+/*s: function [[main]]([[(networking/ndb/csquery.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -88,5 +88,5 @@ main(int argc, char **argv)
     }
     exits(nil);
 }
-/*e: function main (networking/ndb/csquery.c) */
+/*e: function [[main]]([[(networking/ndb/csquery.c)]]) */
 /*e: networking/ndb/csquery.c */

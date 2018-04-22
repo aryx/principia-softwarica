@@ -6,7 +6,7 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
-/*s: struct Hdr (networking/ip/snoopy/arp.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/arp.c)]]) */
 struct Hdr
 {
     uchar	hrd[2];
@@ -19,16 +19,16 @@ struct Hdr
     uchar	tha[6];
     uchar	tpa[4];
 };
-/*e: struct Hdr (networking/ip/snoopy/arp.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/arp.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/arp.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/arp.c)]] */
 enum
 {
     ARPLEN=	28,
 };
-/*e: enum _anon_ (networking/ip/snoopy/arp.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/arp.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/arp.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/arp.c)2]] */
 enum
 {
     Ospa,
@@ -39,9 +39,9 @@ enum
     Ostha,
     Opa,
 };
-/*e: enum _anon_ (networking/ip/snoopy/arp.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/arp.c)2]] */
 
-/*s: global p_fields (networking/ip/snoopy/arp.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/arp.c)]]) */
 static Field p_fields[] = 
 {
     {"spa",		Fv4ip,	Ospa,	"protocol source",	} ,
@@ -52,9 +52,9 @@ static Field p_fields[] =
     {"ah",	 	Fba,	Ostha,	"hardware source/target",	} ,
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/arp.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/arp.c)]]) */
 
-/*s: function p_compile (networking/ip/snoopy/arp.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/arp.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -64,9 +64,9 @@ p_compile(Filter *f)
     }
     sysfatal("unknown arp field: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/arp.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/arp.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/arp.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/arp.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -96,9 +96,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/arp.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/arp.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/arp.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/arp.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -118,9 +118,9 @@ p_seprint(Msg *m)
             h->spa, h->sha, h->tpa, h->tha);
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/arp.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/arp.c)]]) */
 
-/*s: global arp */
+/*s: global [[arp]] */
 Proto arp =
 {
     "arp",
@@ -132,9 +132,9 @@ Proto arp =
     p_fields,
     defaultframer,
 };
-/*e: global arp */
+/*e: global [[arp]] */
 
-/*s: global rarp */
+/*s: global [[rarp]] */
 Proto rarp =
 {
     "rarp",
@@ -146,5 +146,5 @@ Proto rarp =
     p_fields,
     defaultframer,
 };
-/*e: global rarp */
+/*e: global [[rarp]] */
 /*e: networking/ip/snoopy/arp.c */

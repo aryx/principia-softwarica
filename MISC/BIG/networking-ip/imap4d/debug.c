@@ -5,7 +5,7 @@
 #include <bio.h>
 #include "imap4d.h"
 
-/*s: function debuglog */
+/*s: function [[debuglog]] */
 void
 debuglog(char *fmt, ...)
 {
@@ -23,9 +23,9 @@ debuglog(char *fmt, ...)
         va_end(arg);
     }
 }
-/*e: function debuglog */
+/*e: function [[debuglog]] */
 
-/*s: function boxVerify */
+/*s: function [[boxVerify]] */
 void
 boxVerify(Box *box)
 {
@@ -60,9 +60,9 @@ boxVerify(Box *box)
     if(recent != box->recent)
         fprint(2, "recent=%lud, should be %lud\n", box->recent, recent);
 }
-/*e: function boxVerify */
+/*e: function [[boxVerify]] */
 
-/*s: function openfiles */
+/*s: function [[openfiles]] */
 void
 openfiles(void)
 {
@@ -77,9 +77,9 @@ openfiles(void)
         }
     }
 }
-/*e: function openfiles */
+/*e: function [[openfiles]] */
 
-/*s: function ls */
+/*s: function [[ls]] */
 void
 ls(char *file)
 {
@@ -114,5 +114,5 @@ ls(char *file)
     }
     close(fd);
 }
-/*e: function ls */
+/*e: function [[ls]] */
 /*e: networking/ip/imap4d/debug.c */

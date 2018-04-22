@@ -6,7 +6,7 @@
 #include <ctype.h>
 #include "dns.h"
 
-/*s: enum _anon_ (networking/ndb/dn.c) */
+/*s: enum [[_anon_ (networking/ndb/dn.c)]] */
 /*
  *  this comment used to say `our target is 4000 names cached, this should
  *  be larger on large servers'.  dns at Bell Labs starts off with
@@ -27,17 +27,17 @@ enum {
     Restartmins	= 0,
 //	Restartmins	= 600,
 };
-/*e: enum _anon_ (networking/ndb/dn.c) */
+/*e: enum [[_anon_ (networking/ndb/dn.c)]] */
 
-/*s: global ht */
+/*s: global [[ht]] */
 /*
  *  Hash table for domain names.  The hash is based only on the
  *  first element of the domain name.
  */
 DN *ht[HTLEN];
-/*e: global ht */
+/*e: global [[ht]] */
 
-/*s: global dnvars */
+/*s: global [[dnvars]] */
 static struct {
     Lock;
     ulong	names;		/* names allocated */
@@ -46,9 +46,9 @@ static struct {
     int	mutex;
     ushort	id;		/* same size as in packet */
 } dnvars;
-/*e: global dnvars */
+/*e: global [[dnvars]] */
 
-/*s: global rrtname (networking/ndb/dn.c) */
+/*s: global [[rrtname]]([[(networking/ndb/dn.c)]]) */
 /* names of RR types */
 char *rrtname[] =
 {
@@ -114,9 +114,9 @@ char *rrtname[] =
 [Tall]		"all",
         0,
 };
-/*e: global rrtname (networking/ndb/dn.c) */
+/*e: global [[rrtname]]([[(networking/ndb/dn.c)]]) */
 
-/*s: global rname */
+/*s: global [[rname]] */
 /* names of response codes */
 char *rname[Rmask+1] =
 {
@@ -139,12 +139,12 @@ char *rname[Rmask+1] =
 [Rbadname]		"duplicate key name",
 [Rbadalg]		"bad algorithm",
 };
-/*e: global rname */
-/*s: global nrname */
+/*e: global [[rname]] */
+/*s: global [[nrname]] */
 unsigned nrname = nelem(rname);
-/*e: global nrname */
+/*e: global [[nrname]] */
 
-/*s: global opname */
+/*s: global [[opname]] */
 /* names of op codes */
 char *opname[] =
 {
@@ -153,26 +153,26 @@ char *opname[] =
 [Ostatus]	"status",
 [Oupdate]	"update",
 };
-/*e: global opname */
+/*e: global [[opname]] */
 
-/*s: global target */
+/*s: global [[target]] */
 ulong target = Deftarget;
-/*e: global target */
-/*s: global start */
+/*e: global [[target]] */
+/*s: global [[start]] */
 ulong start;
-/*e: global start */
-/*s: global dnlock */
+/*e: global [[start]] */
+/*s: global [[dnlock]] */
 Lock	dnlock;
-/*e: global dnlock */
+/*e: global [[dnlock]] */
 
-/*s: global agefreq */
+/*s: global [[agefreq]] */
 static ulong agefreq = Defagefreq;
-/*e: global agefreq */
+/*e: global [[agefreq]] */
 
 static int rrequiv(RR *r1, RR *r2);
 static int sencodefmt(Fmt*);
 
-/*s: function ding (networking/ndb/dn.c) */
+/*s: function [[ding]]([[(networking/ndb/dn.c)]]) */
 static void
 ding(void*, char *msg)
 {
@@ -182,9 +182,9 @@ ding(void*, char *msg)
     } else
         noted(NDFLT);		/* die */
 }
-/*e: function ding (networking/ndb/dn.c) */
+/*e: function [[ding]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function dninit */
+/*s: function [[dninit]] */
 void
 dninit(void)
 {
@@ -201,9 +201,9 @@ dninit(void)
 
     notify(ding);
 }
-/*e: function dninit */
+/*e: function [[dninit]] */
 
-/*s: function dnhash */
+/*s: function [[dnhash]] */
 /*
  *  hash for a domain name
  */
@@ -217,9 +217,9 @@ dnhash(char *name)
         hash = hash*13 + tolower(*val)-'a';
     return hash % HTLEN;
 }
-/*e: function dnhash */
+/*e: function [[dnhash]] */
 
-/*s: function dnlookup (networking/ndb/dn.c) */
+/*s: function [[dnlookup]]([[(networking/ndb/dn.c)]]) */
 /*
  *  lookup a symbol.  if enter is not zero and the name is
  *  not found, create it.
@@ -261,18 +261,18 @@ dnlookup(char *name, int class, int enter)
 
     return dp;
 }
-/*e: function dnlookup (networking/ndb/dn.c) */
+/*e: function [[dnlookup]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function rrsame */
+/*s: function [[rrsame]] */
 static int
 rrsame(RR *rr1, RR *rr2)
 {
     return rr1 == rr2 || rr2 && rrequiv(rr1, rr2) &&
         rr1->db == rr2->db && rr1->auth == rr2->auth;
 }
-/*e: function rrsame */
+/*e: function [[rrsame]] */
 
-/*s: function rronlist */
+/*s: function [[rronlist]] */
 static int
 rronlist(RR *rp, RR *lp)
 {
@@ -281,9 +281,9 @@ rronlist(RR *rp, RR *lp)
             return 1;
     return 0;
 }
-/*e: function rronlist */
+/*e: function [[rronlist]] */
 
-/*s: function dnstats */
+/*s: function [[dnstats]] */
 /*
  * dump the stats
  */
@@ -325,9 +325,9 @@ dnstats(char *file)
     unlock(&dnlock);
     close(fd);
 }
-/*e: function dnstats */
+/*e: function [[dnstats]] */
 
-/*s: function dndump */
+/*s: function [[dndump]] */
 /*
  *  dump the cache
  */
@@ -357,9 +357,9 @@ dndump(char *file)
     unlock(&dnlock);
     close(fd);
 }
-/*e: function dndump */
+/*e: function [[dndump]] */
 
-/*s: function dnpurge */
+/*s: function [[dnpurge]] */
 /*
  *  purge all records
  */
@@ -383,9 +383,9 @@ dnpurge(void)
 
     unlock(&dnlock);
 }
-/*e: function dnpurge */
+/*e: function [[dnpurge]] */
 
-/*s: function rrdelhead */
+/*s: function [[rrdelhead]] */
 /*
  *  delete head of *l and free the old head.
  *  call with dnlock held.
@@ -404,9 +404,9 @@ rrdelhead(RR **l)
     rp->cached = 0;		/* avoid blowing an assertion in rrfree */
     rrfree(rp);
 }
-/*e: function rrdelhead */
+/*e: function [[rrdelhead]] */
 
-/*s: function dnage */
+/*s: function [[dnage]] */
 /*
  *  check the age of resource records, free any that have timed out.
  *  call with dnlock held.
@@ -434,13 +434,13 @@ dnage(DN *dp)
             l = &rp->next;
     }
 }
-/*e: function dnage */
+/*e: function [[dnage]] */
 
-/*s: macro MARK */
+/*s: macro [[MARK]] */
 #define MARK(dp)	{ if (dp) (dp)->keep = 1; }
-/*e: macro MARK */
+/*e: macro [[MARK]] */
 
-/*s: function dnagenever */
+/*s: function [[dnagenever]] */
 /* mark a domain name and those in its RRs as never to be aged */
 void
 dnagenever(DN *dp, int dolock)
@@ -503,9 +503,9 @@ dnagenever(DN *dp, int dolock)
     if (dolock)
         unlock(&dnlock);
 }
-/*e: function dnagenever */
+/*e: function [[dnagenever]] */
 
-/*s: function dnageallnever */
+/*s: function [[dnageallnever]] */
 /* mark all current domain names as never to be aged */
 void
 dnageallnever(void)
@@ -527,13 +527,13 @@ dnageallnever(void)
         dnslog("more initial domain names (%ld) than target (%ld)",
             dnvars.names, target);
 }
-/*e: function dnageallnever */
+/*e: function [[dnageallnever]] */
 
-/*s: macro REF */
+/*s: macro [[REF]] */
 #define REF(dp)	{ if (dp) (dp)->refs++; }
-/*e: macro REF */
+/*e: macro [[REF]] */
 
-/*s: function dnageall */
+/*s: function [[dnageall]] */
 /*
  *  periodicly sweep for old records and remove unreferenced domain names
  *
@@ -647,9 +647,9 @@ dnageall(int doit)
 
     unlock(&dnlock);
 }
-/*e: function dnageall */
+/*e: function [[dnageall]] */
 
-/*s: function dnagedb */
+/*s: function [[dnagedb]] */
 /*
  *  timeout all database records (used when rereading db)
  */
@@ -673,9 +673,9 @@ dnagedb(void)
 
     unlock(&dnlock);
 }
-/*e: function dnagedb */
+/*e: function [[dnagedb]] */
 
-/*s: function dnauthdb */
+/*s: function [[dnauthdb]] */
 /*
  *  mark all local db records about my area as authoritative,
  *  time out any others
@@ -712,9 +712,9 @@ dnauthdb(void)
 
     unlock(&dnlock);
 }
-/*e: function dnauthdb */
+/*e: function [[dnauthdb]] */
 
-/*s: function getactivity */
+/*s: function [[getactivity]] */
 /*
  *  keep track of other processes to know if we can
  *  garbage collect.  block while garbage collecting.
@@ -745,8 +745,8 @@ getactivity(Request *req, int recursive)
 
     return rv;
 }
-/*e: function getactivity */
-/*s: function putactivity */
+/*e: function [[getactivity]] */
+/*s: function [[putactivity]] */
 void
 putactivity(int recursive)
 {
@@ -798,9 +798,9 @@ putactivity(int recursive)
     needrefresh = 0;
     dnvars.mutex = 0;
 }
-/*e: function putactivity */
+/*e: function [[putactivity]] */
 
-/*s: function rrlistlen */
+/*s: function [[rrlistlen]] */
 int
 rrlistlen(RR *rp)
 {
@@ -811,9 +811,9 @@ rrlistlen(RR *rp)
         ++n;
     return n;
 }
-/*e: function rrlistlen */
+/*e: function [[rrlistlen]] */
 
-/*s: function rrattach1 */
+/*s: function [[rrattach1]] */
 /*
  *  Attach a single resource record to a domain name (new->owner).
  *	- Avoid duplicates with already present RR's
@@ -916,9 +916,9 @@ rrattach1(RR *new, int auth)
     new->next = rp;
     *l = new;
 }
-/*e: function rrattach1 */
+/*e: function [[rrattach1]] */
 
-/*s: function rrattach */
+/*s: function [[rrattach]] */
 /*
  *  Attach a list of resource records to a domain name.
  *  May rrfree any stale duplicate RRs; dismembers the list.
@@ -959,9 +959,9 @@ rrattach(RR *rp, int auth)
     }
     unlock(&dnlock);
 }
-/*e: function rrattach */
+/*e: function [[rrattach]] */
 
-/*s: function rrcopy */
+/*s: function [[rrcopy]] */
 /* should be called with dnlock held */
 RR**
 rrcopy(RR *rp, RR **last)
@@ -1044,9 +1044,9 @@ rrcopy(RR *rp, RR **last)
     *last = nrp;
     return &nrp->next;
 }
-/*e: function rrcopy */
+/*e: function [[rrcopy]] */
 
-/*s: function rrlookup */
+/*s: function [[rrlookup]] */
 /*
  *  lookup a resource record of a particular type and
  *  class attached to a domain name.  Return copies.
@@ -1136,9 +1136,9 @@ out:
 //		setmalloctag(first, getcallerpc(&dp));
     return first;
 }
-/*e: function rrlookup */
+/*e: function [[rrlookup]] */
 
-/*s: function rrtype */
+/*s: function [[rrtype]] */
 /*
  *  convert an ascii RR type name to its integer representation
  */
@@ -1159,9 +1159,9 @@ rrtype(char *atype)
     else
         return -1;
 }
-/*e: function rrtype */
+/*e: function [[rrtype]] */
 
-/*s: function rrsupported */
+/*s: function [[rrsupported]] */
 /*
  *  return 0 if not a supported rr type
  */
@@ -1172,9 +1172,9 @@ rrsupported(int type)
         return 0;
     return rrtname[type] != nil;
 }
-/*e: function rrsupported */
+/*e: function [[rrsupported]] */
 
-/*s: function tsame */
+/*s: function [[tsame]] */
 /*
  *  compare 2 types
  */
@@ -1183,9 +1183,9 @@ tsame(int t1, int t2)
 {
     return t1 == t2 || t1 == Tall;
 }
-/*e: function tsame */
+/*e: function [[tsame]] */
 
-/*s: function rrcat */
+/*s: function [[rrcat]] */
 /*
  *  Add resource records to a list, duplicate them if they are cached
  *  RR's since these are shared.  should be called with dnlock held
@@ -1213,9 +1213,9 @@ rrcat(RR **start, RR *rp)
     *last = rp;
     return *start;
 }
-/*e: function rrcat */
+/*e: function [[rrcat]] */
 
-/*s: function rrremneg */
+/*s: function [[rrremneg]] */
 /*
  *  remove negative cache rr's from an rr list
  */
@@ -1242,9 +1242,9 @@ rrremneg(RR **l)
 
     return first;
 }
-/*e: function rrremneg */
+/*e: function [[rrremneg]] */
 
-/*s: function rrremtype */
+/*s: function [[rrremtype]] */
 /*
  *  remove rr's of a particular type from an rr list
  */
@@ -1269,17 +1269,17 @@ rrremtype(RR **l, int type)
 
     return first;
 }
-/*e: function rrremtype */
+/*e: function [[rrremtype]] */
 
-/*s: function dnname */
+/*s: function [[dnname]] */
 static char *
 dnname(DN *dn)
 {
     return dn? dn->name: "<null>";
 }
-/*e: function dnname */
+/*e: function [[dnname]] */
 
-/*s: function rrfmt */
+/*s: function [[rrfmt]] */
 /*
  *  print conversion for rr records
  */
@@ -1405,9 +1405,9 @@ out:
     free(strp);
     return rv;
 }
-/*e: function rrfmt */
+/*e: function [[rrfmt]] */
 
-/*s: function rravfmt */
+/*s: function [[rravfmt]] */
 /*
  *  print conversion for rr records in attribute value form
  */
@@ -1543,9 +1543,9 @@ out:
     free(strp);
     return rv;
 }
-/*e: function rravfmt */
+/*e: function [[rravfmt]] */
 
-/*s: function warning (networking/ndb/dn.c) */
+/*s: function [[warning]]([[(networking/ndb/dn.c)]]) */
 void
 warning(char *fmt, ...)
 {
@@ -1557,9 +1557,9 @@ warning(char *fmt, ...)
     va_end(arg);
     syslog(1, logfile, dnserr);		/* on console too */
 }
-/*e: function warning (networking/ndb/dn.c) */
+/*e: function [[warning]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function dnslog (networking/ndb/dn.c) */
+/*s: function [[dnslog]]([[(networking/ndb/dn.c)]]) */
 void
 dnslog(char *fmt, ...)
 {
@@ -1571,9 +1571,9 @@ dnslog(char *fmt, ...)
     va_end(arg);
     syslog(0, logfile, dnserr);
 }
-/*e: function dnslog (networking/ndb/dn.c) */
+/*e: function [[dnslog]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function procsetname (networking/ndb/dn.c) */
+/*s: function [[procsetname]]([[(networking/ndb/dn.c)]]) */
 /*
  * based on libthread's threadsetname, but drags in less library code.
  * actually just sets the arguments displayed.
@@ -1598,9 +1598,9 @@ procsetname(char *fmt, ...)
     }
     free(cmdname);
 }
-/*e: function procsetname (networking/ndb/dn.c) */
+/*e: function [[procsetname]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function slave (networking/ndb/dn.c) */
+/*s: function [[slave]]([[(networking/ndb/dn.c)]]) */
 /*
  *  create a slave process to handle a request to avoid one request blocking
  *  another
@@ -1657,9 +1657,9 @@ slave(Request *req)
         longjmp(req->mret, 1);
     }
 }
-/*e: function slave (networking/ndb/dn.c) */
+/*e: function [[slave]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function dncheck */
+/*s: function [[dncheck]] */
 /*
  *  chasing down double free's
  */
@@ -1700,9 +1700,9 @@ dncheck(void *p, int dolock)
     if(dolock)
         unlock(&dnlock);
 }
-/*e: function dncheck */
+/*e: function [[dncheck]] */
 
-/*s: function rrequiv */
+/*s: function [[rrequiv]] */
 static int
 rrequiv(RR *r1, RR *r2)
 {
@@ -1711,9 +1711,9 @@ rrequiv(RR *r1, RR *r2)
         && r1->arg0 == r2->arg0
         && r1->arg1 == r2->arg1;
 }
-/*e: function rrequiv */
+/*e: function [[rrequiv]] */
 
-/*s: function unique */
+/*s: function [[unique]] */
 /* called with dnlock held */
 void
 unique(RR *rp)
@@ -1730,9 +1730,9 @@ unique(RR *rp)
                 l = &nrp->next;
     }
 }
-/*e: function unique */
+/*e: function [[unique]] */
 
-/*s: function subsume */
+/*s: function [[subsume]] */
 /*
  *  true if second domain is subsumed by the first
  */
@@ -1748,9 +1748,9 @@ subsume(char *higher, char *lower)
         return 0;
     return 1;
 }
-/*e: function subsume */
+/*e: function [[subsume]] */
 
-/*s: function randomize */
+/*s: function [[randomize]] */
 /*
  *  randomize the order we return items to provide some
  *  load balancing for servers.
@@ -1809,9 +1809,9 @@ randomize(RR *rp)
 
     return first;
 }
-/*e: function randomize */
+/*e: function [[randomize]] */
 
-/*s: function sencodefmt */
+/*s: function [[sencodefmt]] */
 static int
 sencodefmt(Fmt *f)
 {
@@ -1892,9 +1892,9 @@ sencodefmt(Fmt *f)
 error:
     return fmtstrcpy(f, "<encodefmt>");
 }
-/*e: function sencodefmt */
+/*e: function [[sencodefmt]] */
 
-/*s: function emalloc (networking/ndb/dn.c) */
+/*s: function [[emalloc]]([[(networking/ndb/dn.c)]]) */
 void*
 emalloc(int size)
 {
@@ -1906,9 +1906,9 @@ emalloc(int size)
     setmalloctag(x, getcallerpc(&size));
     return x;
 }
-/*e: function emalloc (networking/ndb/dn.c) */
+/*e: function [[emalloc]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function estrdup (networking/ndb/dn.c) */
+/*s: function [[estrdup]]([[(networking/ndb/dn.c)]]) */
 char*
 estrdup(char *s)
 {
@@ -1923,9 +1923,9 @@ estrdup(char *s)
     setmalloctag(p, getcallerpc(&s));
     return p;
 }
-/*e: function estrdup (networking/ndb/dn.c) */
+/*e: function [[estrdup]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function mkptr */
+/*s: function [[mkptr]] */
 /*
  *  create a pointer record
  */
@@ -1945,11 +1945,11 @@ mkptr(DN *dp, char *ptr, ulong ttl)
         rp->ttl = ttl;
     return rp;
 }
-/*e: function mkptr */
+/*e: function [[mkptr]] */
 
 void	bytes2nibbles(uchar *nibbles, uchar *bytes, int nbytes);
 
-/*s: function dnptr */
+/*s: function [[dnptr]] */
 /*
  *  look for all ip addresses in this network and make
  *  pointer records for them.
@@ -2004,9 +2004,9 @@ dnptr(uchar *net, uchar *mask, char *dom, int forwtype, int subdoms, int ttl)
         rrattach(rp, Authoritative);
     }
 }
-/*e: function dnptr */
+/*e: function [[dnptr]] */
 
-/*s: function addserver */
+/*s: function [[addserver]] */
 void
 addserver(Server **l, char *name)
 {
@@ -2022,9 +2022,9 @@ addserver(Server **l, char *name)
     s->next = nil;
     *l = s;
 }
-/*e: function addserver */
+/*e: function [[addserver]] */
 
-/*s: function copyserverlist */
+/*s: function [[copyserverlist]] */
 Server*
 copyserverlist(Server *s)
 {
@@ -2034,12 +2034,12 @@ copyserverlist(Server *s)
         addserver(&ns, s->name);
     return ns;
 }
-/*e: function copyserverlist */
+/*e: function [[copyserverlist]] */
 
 
 /* from here down is copied to ip/snoopy/dns.c periodically to update it */
 
-/*s: function rrname (networking/ndb/dn.c) */
+/*s: function [[rrname]]([[(networking/ndb/dn.c)]]) */
 /*
  *  convert an integer RR type to it's ascii name
  */
@@ -2057,9 +2057,9 @@ rrname(int type, char *buf, int len)
     }
     return t;
 }
-/*e: function rrname (networking/ndb/dn.c) */
+/*e: function [[rrname]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function rrfreelist (networking/ndb/dn.c) */
+/*s: function [[rrfreelist]]([[(networking/ndb/dn.c)]]) */
 /*
  *  free a list of resource records and any related structs
  */
@@ -2073,9 +2073,9 @@ rrfreelist(RR *rp)
         rrfree(rp);
     }
 }
-/*e: function rrfreelist (networking/ndb/dn.c) */
+/*e: function [[rrfreelist]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function freeserverlist (networking/ndb/dn.c) */
+/*s: function [[freeserverlist]]([[(networking/ndb/dn.c)]]) */
 void
 freeserverlist(Server *s)
 {
@@ -2086,9 +2086,9 @@ freeserverlist(Server *s)
         free(s);
     }
 }
-/*e: function freeserverlist (networking/ndb/dn.c) */
+/*e: function [[freeserverlist]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function rralloc (networking/ndb/dn.c) */
+/*s: function [[rralloc]]([[(networking/ndb/dn.c)]]) */
 /*
  *  allocate a resource record of a given type
  */
@@ -2136,9 +2136,9 @@ rralloc(int type)
     rp->next = 0;
     return rp;
 }
-/*e: function rralloc (networking/ndb/dn.c) */
+/*e: function [[rralloc]]([[(networking/ndb/dn.c)]]) */
 
-/*s: function rrfree (networking/ndb/dn.c) */
+/*s: function [[rrfree]]([[(networking/ndb/dn.c)]]) */
 /*
  *  free a resource record and any related structs
  */
@@ -2209,5 +2209,5 @@ rrfree(RR *rp)
     memset(rp, 0, sizeof *rp);		/* cause trouble */
     free(rp);
 }
-/*e: function rrfree (networking/ndb/dn.c) */
+/*e: function [[rrfree]]([[(networking/ndb/dn.c)]]) */
 /*e: networking/ndb/dn.c */

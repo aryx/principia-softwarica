@@ -7,23 +7,23 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
-/*s: enum _anon_ (networking/ip/httpd/httpd.c) */
+/*s: enum [[_anon_ (networking/ip/httpd/httpd.c)]] */
 enum {
     Nbuckets	= 256,
 };
-/*e: enum _anon_ (networking/ip/httpd/httpd.c) */
+/*e: enum [[_anon_ (networking/ip/httpd/httpd.c)]] */
 
 typedef struct Strings		Strings;
 typedef struct System		System;
 
-/*s: struct Strings */
+/*s: struct [[Strings]] */
 struct Strings
 {
     char	*s1;
     char	*s2;
 };
-/*e: struct Strings */
-/*s: struct System */
+/*e: struct [[Strings]] */
+/*s: struct [[System]] */
 struct System {
     char	*rsys;
     ulong	reqs;
@@ -31,24 +31,24 @@ struct System {
     ulong	last;
     System	*next;			/* next in chain */
 };
-/*e: struct System */
+/*e: struct [[System]] */
 
-/*s: global netdir (networking/ip/httpd/httpd.c) */
+/*s: global [[netdir]]([[(networking/ip/httpd/httpd.c)]]) */
 char	*netdir;
-/*e: global netdir (networking/ip/httpd/httpd.c) */
-/*s: global HTTPLOG */
+/*e: global [[netdir]]([[(networking/ip/httpd/httpd.c)]]) */
+/*s: global [[HTTPLOG]] */
 char	*HTTPLOG = "httpd/log";
-/*e: global HTTPLOG */
+/*e: global [[HTTPLOG]] */
 
-/*s: global netdirb */
+/*s: global [[netdirb]] */
 static	char		netdirb[256];
-/*e: global netdirb */
-/*s: global namespace (networking/ip/httpd/httpd.c) */
+/*e: global [[netdirb]] */
+/*s: global [[namespace]]([[(networking/ip/httpd/httpd.c)]]) */
 static	char		*namespace;
-/*e: global namespace (networking/ip/httpd/httpd.c) */
-/*s: global syss */
+/*e: global [[namespace]]([[(networking/ip/httpd/httpd.c)]]) */
+/*s: global [[syss]] */
 static	System		syss[Nbuckets];
-/*e: global syss */
+/*e: global [[syss]] */
 
 static	void		becomenone(char*);
 static	char		*csquery(char*, char*, char*);
@@ -60,17 +60,17 @@ static	char*		stripprefix(char*, char*);
 static	char*		sysdom(void);
 static	int		notfound(HConnect *c, char *url);
 
-/*s: global certificate */
+/*s: global [[certificate]] */
 uchar *certificate;
-/*e: global certificate */
-/*s: global certlen */
+/*e: global [[certificate]] */
+/*s: global [[certlen]] */
 int certlen;
-/*e: global certlen */
-/*s: global certchain */
+/*e: global [[certlen]] */
+/*s: global [[certchain]] */
 PEMChain *certchain;	
-/*e: global certchain */
+/*e: global [[certchain]] */
 
-/*s: function usage (networking/ip/httpd/httpd.c) */
+/*s: function [[usage]]([[(networking/ip/httpd/httpd.c)]]) */
 void
 usage(void)
 {
@@ -78,9 +78,9 @@ usage(void)
         "[-d domain] [-n namespace] [-w webroot]\n");
     exits("usage");
 }
-/*e: function usage (networking/ip/httpd/httpd.c) */
+/*e: function [[usage]]([[(networking/ip/httpd/httpd.c)]]) */
 
-/*s: function main (networking/ip/httpd/httpd.c) */
+/*s: function [[main]]([[(networking/ip/httpd/httpd.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -164,9 +164,9 @@ main(int argc, char **argv)
     dolisten(netmkaddr(address, "tcp", certificate == nil ? "http" : "https"));
     exits(nil);
 }
-/*e: function main (networking/ip/httpd/httpd.c) */
+/*e: function [[main]]([[(networking/ip/httpd/httpd.c)]]) */
 
-/*s: function becomenone */
+/*s: function [[becomenone]] */
 static void
 becomenone(char *namespace)
 {
@@ -181,9 +181,9 @@ becomenone(char *namespace)
     if(addns("none", namespace) < 0)
         sysfatal("can't build httpd namespace");
 }
-/*e: function becomenone */
+/*e: function [[becomenone]] */
 
-/*s: function mkconnect */
+/*s: function [[mkconnect]] */
 static HConnect*
 mkconnect(char *scheme, char *port)
 {
@@ -197,9 +197,9 @@ mkconnect(char *scheme, char *port)
     c->port = port;
     return c;
 }
-/*e: function mkconnect */
+/*e: function [[mkconnect]] */
 
-/*s: function mkhspriv */
+/*s: function [[mkhspriv]] */
 static HSPriv*
 mkhspriv(void)
 {
@@ -208,9 +208,9 @@ mkhspriv(void)
     p = ezalloc(sizeof(HSPriv));
     return p;
 }
-/*e: function mkhspriv */
+/*e: function [[mkhspriv]] */
 
-/*s: function hashstr (networking/ip/httpd/httpd.c) */
+/*s: function [[hashstr]]([[(networking/ip/httpd/httpd.c)]]) */
 static uint 
 hashstr(char* key)
 {
@@ -222,9 +222,9 @@ hashstr(char* key)
         h = 65599*h + *k++;
         return h;
 }
-/*e: function hashstr (networking/ip/httpd/httpd.c) */
+/*e: function [[hashstr]]([[(networking/ip/httpd/httpd.c)]]) */
 
-/*s: function hashsys */
+/*s: function [[hashsys]] */
 static System *
 hashsys(char *rsys)
 {
@@ -250,9 +250,9 @@ hashsys(char *rsys)
     }
     return sys;
 }
-/*e: function hashsys */
+/*e: function [[hashsys]] */
 
-/*s: function isswamped */
+/*s: function [[isswamped]] */
 /*
  * be sure to call this at least once per listen in the parent,
  * to update the hash chains.
@@ -273,9 +273,9 @@ isswamped(char *rsys)
     period = sys->first - sys->last;
     return ++sys->reqs > 30 && period > 30 && sys->reqs / period >= 2;
 }
-/*e: function isswamped */
+/*e: function [[isswamped]] */
 
-/*s: function throttle */
+/*s: function [[throttle]] */
 /* must only be called in child */
 static void
 throttle(int nctl, NetConnInfo *nci, int swamped)
@@ -287,9 +287,9 @@ throttle(int nctl, NetConnInfo *nci, int swamped)
         exits(nil);
     }
 }
-/*e: function throttle */
+/*e: function [[throttle]] */
 
-/*s: function dolisten */
+/*s: function [[dolisten]] */
 static void
 dolisten(char *address)
 {
@@ -412,9 +412,9 @@ dolisten(char *address)
         }
     }
 }
-/*e: function dolisten */
+/*e: function [[dolisten]] */
 
-/*s: function doreq */
+/*s: function [[doreq]] */
 static int
 doreq(HConnect *c)
 {
@@ -528,9 +528,9 @@ magic:
         c->head.closeit = 1;
     return send(c);
 }
-/*e: function doreq */
+/*e: function [[doreq]] */
 
-/*s: function send (networking/ip/httpd/httpd.c) */
+/*s: function [[send]]([[(networking/ip/httpd/httpd.c)]]) */
 static int
 send(HConnect *c)
 {
@@ -639,9 +639,9 @@ send(HConnect *c)
 
     return sendfd(c, fd, dir, nil, nil);
 }
-/*e: function send (networking/ip/httpd/httpd.c) */
+/*e: function [[send]]([[(networking/ip/httpd/httpd.c)]]) */
 
-/*s: function stripmagic */
+/*s: function [[stripmagic]] */
 static Strings
 stripmagic(HConnect *hc, char *uri)
 {
@@ -669,9 +669,9 @@ stripmagic(HConnect *hc, char *uri)
     ss.s2 = prog;
     return ss;
 }
-/*e: function stripmagic */
+/*e: function [[stripmagic]] */
 
-/*s: function stripprefix */
+/*s: function [[stripprefix]] */
 static char*
 stripprefix(char *pre, char *str)
 {
@@ -680,9 +680,9 @@ stripprefix(char *pre, char *str)
             return nil;
     return str;
 }
-/*e: function stripprefix */
+/*e: function [[stripprefix]] */
 
-/*s: function notfound */
+/*s: function [[notfound]] */
 /*
  * couldn't open a file
  * figure out why and return and error message
@@ -698,9 +698,9 @@ notfound(HConnect *c, char *url)
         return hfail(c, HUnauth, url);
     return hfail(c, HNotFound, url);
 }
-/*e: function notfound */
+/*e: function [[notfound]] */
 
-/*s: function sysdom */
+/*s: function [[sysdom]] */
 static char*
 sysdom(void)
 {
@@ -711,9 +711,9 @@ sysdom(void)
         dn = "who cares";
     return dn;
 }
-/*e: function sysdom */
+/*e: function [[sysdom]] */
 
-/*s: function csquery (networking/ip/httpd/httpd.c) */
+/*s: function [[csquery]]([[(networking/ip/httpd/httpd.c)]]) */
 /*
  *  query the connection server
  */
@@ -753,5 +753,5 @@ csquery(char *attr, char *val, char *rattr)
     close(fd);
     return nil;
 }
-/*e: function csquery (networking/ip/httpd/httpd.c) */
+/*e: function [[csquery]]([[(networking/ip/httpd/httpd.c)]]) */
 /*e: networking/ip/httpd/httpd.c */

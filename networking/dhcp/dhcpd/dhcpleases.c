@@ -8,17 +8,17 @@
 
 extern	char *binddir;
 
-/*s: global now (networking/ip/dhcpd/dhcpleases.c) */
+/*s: global [[now]]([[(networking/ip/dhcpd/dhcpleases.c)]]) */
 long now;
-/*e: global now (networking/ip/dhcpd/dhcpleases.c) */
-/*s: global blog (networking/ip/dhcpd/dhcpleases.c) */
+/*e: global [[now]]([[(networking/ip/dhcpd/dhcpleases.c)]]) */
+/*s: global [[blog]]([[(networking/ip/dhcpd/dhcpleases.c)]]) */
 char *blog = "ipboot";
-/*e: global blog (networking/ip/dhcpd/dhcpleases.c) */
-/*s: global minlease (networking/ip/dhcpd/dhcpleases.c) */
+/*e: global [[blog]]([[(networking/ip/dhcpd/dhcpleases.c)]]) */
+/*s: global [[minlease]]([[(networking/ip/dhcpd/dhcpleases.c)]]) */
 int minlease = MinLease;
-/*e: global minlease (networking/ip/dhcpd/dhcpleases.c) */
+/*e: global [[minlease]]([[(networking/ip/dhcpd/dhcpleases.c)]]) */
 
-/*s: function main (networking/ip/dhcpd/dhcpleases.c) */
+/*s: function [[main]]([[(networking/ip/dhcpd/dhcpleases.c)]]) */
 void
 main(void)
 {
@@ -51,5 +51,5 @@ main(void)
     }
     exits(0);
 }
-/*e: function main (networking/ip/dhcpd/dhcpleases.c) */
+/*e: function [[main]]([[(networking/ip/dhcpd/dhcpleases.c)]]) */
 /*e: networking/ip/dhcpd/dhcpleases.c */

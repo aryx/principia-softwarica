@@ -4,7 +4,7 @@ typedef struct Unthwack		Unthwack;
 typedef struct ThwBlock		ThwBlock;
 typedef struct UnthwBlock	UnthwBlock;
 
-/*s: enum _anon_ (networking/ip/ppp/thwack.h) */
+/*s: enum [[_anon_ (networking/ip/ppp/thwack.h)]] */
 enum
 {
     ThwStats	= 8,
@@ -29,9 +29,9 @@ enum
     MaxSeqMask	= 8,		/* number of bits in coding block mask */
     MaxSeqStart	= 256		/* max offset of initial coding block */
 };
-/*e: enum _anon_ (networking/ip/ppp/thwack.h) */
+/*e: enum [[_anon_ (networking/ip/ppp/thwack.h)]] */
 
-/*s: struct ThwBlock */
+/*s: struct [[ThwBlock]] */
 struct ThwBlock
 {
     ulong	seq;			/* sequence number for this data */
@@ -42,9 +42,9 @@ struct ThwBlock
     ushort	*hash;
     uchar	*data;
 };
-/*e: struct ThwBlock */
+/*e: struct [[ThwBlock]] */
 
-/*s: struct Thwack */
+/*s: struct [[Thwack]] */
 struct Thwack
 {
     QLock		acklock;	/* locks slot, blocks[].(acked|seq) */
@@ -53,18 +53,18 @@ struct Thwack
     ushort		hash[EWinBlocks][HashSize];
     Block		*data[EWinBlocks];
 };
-/*e: struct Thwack */
+/*e: struct [[Thwack]] */
 
-/*s: struct UnthwBlock */
+/*s: struct [[UnthwBlock]] */
 struct UnthwBlock
 {
     ulong	seq;			/* sequence number for this data */
     ushort	maxoff;			/* valid data in each block */
     uchar	*data;
 };
-/*e: struct UnthwBlock */
+/*e: struct [[UnthwBlock]] */
 
-/*s: struct Unthwack */
+/*s: struct [[Unthwack]] */
 struct Unthwack
 {
     int		slot;		/* next block to use */
@@ -72,7 +72,7 @@ struct Unthwack
     UnthwBlock	blocks[DWinBlocks];
     uchar		data[DWinBlocks][ThwMaxBlock];
 };
-/*e: struct Unthwack */
+/*e: struct [[Unthwack]] */
 
 void	thwackinit(Thwack*);
 void	thwackcleanup(Thwack *tw);

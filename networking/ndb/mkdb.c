@@ -4,14 +4,14 @@
 #include <bio.h>
 #include <ctype.h>
 
-/*s: global in */
+/*s: global [[in]] */
 Biobuf in;
-/*e: global in */
-/*s: global out (networking/ndb/mkdb.c) */
+/*e: global [[in]] */
+/*s: global [[out]]([[(networking/ndb/mkdb.c)]]) */
 Biobuf out;
-/*e: global out (networking/ndb/mkdb.c) */
+/*e: global [[out]]([[(networking/ndb/mkdb.c)]]) */
 
-/*s: enum _anon_ (networking/ndb/mkdb.c) */
+/*s: enum [[_anon_ (networking/ndb/mkdb.c)]] */
 enum
 {
     Empty,
@@ -20,17 +20,17 @@ enum
     Ip,
     Domain,
 };
-/*e: enum _anon_ (networking/ndb/mkdb.c) */
+/*e: enum [[_anon_ (networking/ndb/mkdb.c)]] */
 
-/*s: function iscomment */
+/*s: function [[iscomment]] */
 int
 iscomment(char *name)
 {
     return *name == '#';
 }
-/*e: function iscomment */
+/*e: function [[iscomment]] */
 
-/*s: function isdk */
+/*s: function [[isdk]] */
 /*
  *  is this a fully specified datakit name?
  */
@@ -51,9 +51,9 @@ isdk(char *name)
     }
     return slash;
 }
-/*e: function isdk */
+/*e: function [[isdk]] */
 
-/*s: function isdomain */
+/*s: function [[isdomain]] */
 /*
  *  Is this an internet domain name?
  */
@@ -78,9 +78,9 @@ isdomain(char *name)
     }
     return dot && alpha;
 }
-/*e: function isdomain */
+/*e: function [[isdomain]] */
 
-/*s: function isip */
+/*s: function [[isip]] */
 /*
  *  is this an ip address?
  */
@@ -100,19 +100,19 @@ isip(char *name)
     }
     return dot;
 }
-/*e: function isip */
+/*e: function [[isip]] */
 
-/*s: global tup */
+/*s: global [[tup]] */
 char tup[64][64];
-/*e: global tup */
-/*s: global ttype */
+/*e: global [[tup]] */
+/*s: global [[ttype]] */
 int ttype[64];
-/*e: global ttype */
-/*s: global ntup */
+/*e: global [[ttype]] */
+/*s: global [[ntup]] */
 int ntup;
-/*e: global ntup */
+/*e: global [[ntup]] */
 
-/*s: function tprint */
+/*s: function [[tprint]] */
 void
 tprint(void)
 {
@@ -158,13 +158,13 @@ tprint(void)
         }
     }
 }
-/*e: function tprint */
+/*e: function [[tprint]] */
 
-/*s: constant NFIELDS */
+/*s: constant [[NFIELDS]] */
 #define NFIELDS 64
-/*e: constant NFIELDS */
+/*e: constant [[NFIELDS]] */
 
-/*s: function main (networking/ndb/mkdb.c) */
+/*s: function [[main]]([[(networking/ndb/mkdb.c)]]) */
 /*
  *  make a database file from a merged uucp/inet database
  */
@@ -227,5 +227,5 @@ main(void)
         tprint();
     exits(0);
 }
-/*e: function main (networking/ndb/mkdb.c) */
+/*e: function [[main]]([[(networking/ndb/mkdb.c)]]) */
 /*e: networking/ndb/mkdb.c */

@@ -13,7 +13,7 @@ typedef struct Msg	Msg;
 typedef struct NamedInt	NamedInt;
 typedef struct Pair	Pair;
 
-/*s: enum _anon_ (networking/ip/imap4d/imap4d.h) */
+/*s: enum [[_anon_ (networking/ip/imap4d/imap4d.h)]] */
 enum
 {
     StrAlloc	= 32,		/* characters allocated at a time */
@@ -46,9 +46,9 @@ enum
     BogusBody	= 2,	/* the body had bad characters */
     BogusTried	= 4,	/* attempted to open the fake message */
 };
-/*e: enum _anon_ (networking/ip/imap4d/imap4d.h) */
+/*e: enum [[_anon_ (networking/ip/imap4d/imap4d.h)]] */
 
-/*s: struct Box */
+/*s: struct [[Box]] */
 struct Box
 {
     char	*name;		/* path name of mailbox */
@@ -69,9 +69,9 @@ struct Box
     ulong	uidvalidity;	/* uid of mailbox */
     Msg	*msgs;
 };
-/*e: struct Box */
+/*e: struct [[Box]] */
 
-/*s: enum _anon_ (networking/ip/imap4d/imap4d.h)2 */
+/*s: enum [[_anon_ (networking/ip/imap4d/imap4d.h)2]] */
 /*
  * fields of Msg->info
  */
@@ -99,9 +99,9 @@ enum
 
     IMax
 };
-/*e: enum _anon_ (networking/ip/imap4d/imap4d.h)2 */
+/*e: enum [[_anon_ (networking/ip/imap4d/imap4d.h)2]] */
 
-/*s: struct Header */
+/*s: struct [[Header]] */
 struct Header
 {
     char	*buf;		/* header, including terminating \r\n */
@@ -119,9 +119,9 @@ struct Header
     MimeHdr	*disposition;	/* content-disposition */
     MimeHdr	*language;	/* content-language */
 };
-/*e: struct Header */
+/*e: struct [[Header]] */
 
-/*s: struct Msg (networking/ip/imap4d/imap4d.h) */
+/*s: struct [[Msg]]([[(networking/ip/imap4d/imap4d.h)]]) */
 struct Msg
 {
     Msg	*next;
@@ -158,9 +158,9 @@ struct Msg
     MAddr	*cc;
     MAddr	*bcc;
 };
-/*e: struct Msg (networking/ip/imap4d/imap4d.h) */
+/*e: struct [[Msg]]([[(networking/ip/imap4d/imap4d.h)]]) */
 
-/*s: struct MAddr */
+/*s: struct [[MAddr]] */
 /*
  * pre-parsed header lines
  */
@@ -171,18 +171,18 @@ struct MAddr
     char	*host;
     MAddr	*next;
 };
-/*e: struct MAddr */
+/*e: struct [[MAddr]] */
 
-/*s: struct MimeHdr */
+/*s: struct [[MimeHdr]] */
 struct MimeHdr
 {
     char	*s;
     char	*t;
     MimeHdr	*next;
 };
-/*e: struct MimeHdr */
+/*e: struct [[MimeHdr]] */
 
-/*s: struct NamedInt */
+/*s: struct [[NamedInt]] */
 /*
  * mapping of integer & names
  */
@@ -191,9 +191,9 @@ struct NamedInt
     char	*name;
     int	v;
 };
-/*e: struct NamedInt */
+/*e: struct [[NamedInt]] */
 
-/*s: struct MbLock */
+/*s: struct [[MbLock]] */
 /*
  * lock for all mail file operations
  */
@@ -201,7 +201,7 @@ struct MbLock
 {
     int	fd;
 };
-/*e: struct MbLock */
+/*e: struct [[MbLock]] */
 
 /*
  * parse nodes for imap4rev1 protocol
@@ -219,7 +219,7 @@ typedef struct MsgSet	MsgSet;
 typedef struct Store	Store;
 typedef struct Search	Search;
 
-/*s: enum _anon_ (networking/ip/imap4d/imap4d.h)3 */
+/*s: enum [[_anon_ (networking/ip/imap4d/imap4d.h)3]] */
 /*
  * parse tree for fetch command
  */
@@ -240,9 +240,9 @@ enum
 
     FMax
 };
-/*e: enum _anon_ (networking/ip/imap4d/imap4d.h)3 */
+/*e: enum [[_anon_ (networking/ip/imap4d/imap4d.h)3]] */
 
-/*s: enum _anon_ (networking/ip/imap4d/imap4d.h)4 */
+/*s: enum [[_anon_ (networking/ip/imap4d/imap4d.h)4]] */
 enum
 {
     FPAll,
@@ -254,9 +254,9 @@ enum
 
     FPMax
 };
-/*e: enum _anon_ (networking/ip/imap4d/imap4d.h)4 */
+/*e: enum [[_anon_ (networking/ip/imap4d/imap4d.h)4]] */
 
-/*s: struct Fetch */
+/*s: struct [[Fetch]] */
 struct Fetch
 {
     uchar	op;		/* F.* operator */
@@ -268,9 +268,9 @@ struct Fetch
     SList	*hdrs;
     Fetch	*next;
 };
-/*e: struct Fetch */
+/*e: struct [[Fetch]] */
 
-/*s: enum _anon_ (networking/ip/imap4d/imap4d.h)5 */
+/*s: enum [[_anon_ (networking/ip/imap4d/imap4d.h)5]] */
 /*
  * status items
  */
@@ -281,9 +281,9 @@ enum{
     SUidValidity	= 1 << 3,
     SUnseen		= 1 << 4,
 };
-/*e: enum _anon_ (networking/ip/imap4d/imap4d.h)5 */
+/*e: enum [[_anon_ (networking/ip/imap4d/imap4d.h)5]] */
 
-/*s: enum _anon_ (networking/ip/imap4d/imap4d.h)6 */
+/*s: enum [[_anon_ (networking/ip/imap4d/imap4d.h)6]] */
 /*
  * parse tree for store command
  */
@@ -294,18 +294,18 @@ enum
 
     STMax
 };
-/*e: enum _anon_ (networking/ip/imap4d/imap4d.h)6 */
+/*e: enum [[_anon_ (networking/ip/imap4d/imap4d.h)6]] */
 
-/*s: struct Store */
+/*s: struct [[Store]] */
 struct Store
 {
     uchar	sign;
     uchar	op;
     int	flags;
 };
-/*e: struct Store */
+/*e: struct [[Store]] */
 
-/*s: enum _anon_ (networking/ip/imap4d/imap4d.h)7 */
+/*s: enum [[_anon_ (networking/ip/imap4d/imap4d.h)7]] */
 /*
  * parse tree for search command
  */
@@ -354,9 +354,9 @@ enum
 
     SKMax
 };
-/*e: enum _anon_ (networking/ip/imap4d/imap4d.h)7 */
+/*e: enum [[_anon_ (networking/ip/imap4d/imap4d.h)7]] */
 
-/*s: struct Search */
+/*s: struct [[Search]] */
 struct Search
 {
     int	key;
@@ -371,40 +371,40 @@ struct Search
     Search	*right;
     Search	*next;
 };
-/*e: struct Search */
+/*e: struct [[Search]] */
 
-/*s: struct NList */
+/*s: struct [[NList]] */
 struct NList
 {
     ulong	n;
     NList	*next;
 };
-/*e: struct NList */
+/*e: struct [[NList]] */
 
-/*s: struct SList */
+/*s: struct [[SList]] */
 struct SList
 {
     char	*s;
     SList	*next;
 };
-/*e: struct SList */
+/*e: struct [[SList]] */
 
-/*s: struct MsgSet */
+/*s: struct [[MsgSet]] */
 struct MsgSet
 {
     ulong	from;
     ulong	to;
     MsgSet	*next;
 };
-/*e: struct MsgSet */
+/*e: struct [[MsgSet]] */
 
-/*s: struct Pair */
+/*s: struct [[Pair]] */
 struct Pair
 {
     ulong	start;
     ulong	stop;
 };
-/*e: struct Pair */
+/*e: struct [[Pair]] */
 
 #include "bin.h"
 

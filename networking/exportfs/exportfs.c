@@ -10,22 +10,22 @@
 
 #include "exportfs.h"
 
-/*s: constant QIDPATH */
+/*s: constant [[QIDPATH]] */
 #define QIDPATH	((1LL<<48)-1)
-/*e: constant QIDPATH */
-/*s: global newqid */
+/*e: constant [[QIDPATH]] */
+/*s: global [[newqid]] */
 vlong newqid = 0;
-/*e: global newqid */
+/*e: global [[newqid]] */
 
-/*s: enum _anon_ (networking/exportfs/exportfs.c) */
+/*s: enum [[_anon_ (networking/exportfs/exportfs.c)]] */
 enum {
     Encnone,
     Encssl,
     Enctls,
 };
-/*e: enum _anon_ (networking/exportfs/exportfs.c) */
+/*e: enum [[_anon_ (networking/exportfs/exportfs.c)]] */
 
-/*s: global fcalls */
+/*s: global [[fcalls]] */
 void (*fcalls[])(Fsrpc*) =
 {
     [Tversion]	Xversion,
@@ -42,61 +42,61 @@ void (*fcalls[])(Fsrpc*) =
     [Tstat]		Xstat,
     [Twstat]	Xwstat,
 };
-/*e: global fcalls */
+/*e: global [[fcalls]] */
 
-/*s: global filecnt */
+/*s: global [[filecnt]] */
 /* accounting and debugging counters */
 int	filecnt;
-/*e: global filecnt */
-/*s: global freecnt */
+/*e: global [[filecnt]] */
+/*s: global [[freecnt]] */
 int	freecnt;
-/*e: global freecnt */
-/*s: global qidcnt */
+/*e: global [[freecnt]] */
+/*s: global [[qidcnt]] */
 int	qidcnt;
-/*e: global qidcnt */
-/*s: global qfreecnt */
+/*e: global [[qidcnt]] */
+/*s: global [[qfreecnt]] */
 int	qfreecnt;
-/*e: global qfreecnt */
-/*s: global ncollision */
+/*e: global [[qfreecnt]] */
+/*s: global [[ncollision]] */
 int	ncollision;
-/*e: global ncollision */
+/*e: global [[ncollision]] */
 
-/*s: global netfd */
+/*s: global [[netfd]] */
 int	netfd;				/* initially stdin */
-/*e: global netfd */
-/*s: global srvfd */
+/*e: global [[netfd]] */
+/*s: global [[srvfd]] */
 int	srvfd = -1;
-/*e: global srvfd */
-/*s: global nonone (networking/exportfs/exportfs.c) */
+/*e: global [[srvfd]] */
+/*s: global [[nonone]]([[(networking/exportfs/exportfs.c)]]) */
 int	nonone = 1;
-/*e: global nonone (networking/exportfs/exportfs.c) */
-/*s: global filterp (networking/exportfs/exportfs.c) */
+/*e: global [[nonone]]([[(networking/exportfs/exportfs.c)]]) */
+/*s: global [[filterp]]([[(networking/exportfs/exportfs.c)]]) */
 char	*filterp;
-/*e: global filterp (networking/exportfs/exportfs.c) */
-/*s: global ealgs (networking/exportfs/exportfs.c) */
+/*e: global [[filterp]]([[(networking/exportfs/exportfs.c)]]) */
+/*s: global [[ealgs]]([[(networking/exportfs/exportfs.c)]]) */
 char	*ealgs = "rc4_256 sha1";
-/*e: global ealgs (networking/exportfs/exportfs.c) */
-/*s: global aanfilter */
+/*e: global [[ealgs]]([[(networking/exportfs/exportfs.c)]]) */
+/*s: global [[aanfilter]] */
 char	*aanfilter = "/bin/aan";
-/*e: global aanfilter */
-/*s: global encproto (networking/exportfs/exportfs.c) */
+/*e: global [[aanfilter]] */
+/*s: global [[encproto]]([[(networking/exportfs/exportfs.c)]]) */
 int	encproto = Encnone;
-/*e: global encproto (networking/exportfs/exportfs.c) */
-/*s: global readonly (networking/exportfs/exportfs.c) */
+/*e: global [[encproto]]([[(networking/exportfs/exportfs.c)]]) */
+/*s: global [[readonly]]([[(networking/exportfs/exportfs.c)]]) */
 int	readonly;
-/*e: global readonly (networking/exportfs/exportfs.c) */
+/*e: global [[readonly]]([[(networking/exportfs/exportfs.c)]]) */
 
 static void	mksecret(char *, uchar *);
 static int localread9pmsg(int, void *, uint, ulong *);
-/*s: global anstring */
+/*s: global [[anstring]] */
 static char *anstring  = "tcp!*!0";
-/*e: global anstring */
+/*e: global [[anstring]] */
 
 char *netdir = "", *local = "", *remote = "";
 
 int	filter(int, char *);
 
-/*s: function usage (networking/exportfs/exportfs.c) */
+/*s: function [[usage]]([[(networking/exportfs/exportfs.c)]]) */
 void
 usage(void)
 {
@@ -105,9 +105,9 @@ usage(void)
         "[-A announce-string] [-B address]\n", argv0);
     fatal("usage");
 }
-/*e: function usage (networking/exportfs/exportfs.c) */
+/*e: function [[usage]]([[(networking/exportfs/exportfs.c)]]) */
 
-/*s: function noteconn */
+/*s: function [[noteconn]] */
 static void
 noteconn(int fd)
 {
@@ -121,9 +121,9 @@ noteconn(int fd)
     remote = strdup(nci->rsys);
     freenetconninfo(nci);
 }
-/*e: function noteconn */
+/*e: function [[noteconn]] */
 
-/*s: function main (networking/exportfs/exportfs.c) */
+/*s: function [[main]]([[(networking/exportfs/exportfs.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -442,9 +442,9 @@ main(int argc, char **argv)
         (fcalls[r->work.type])(r);
     }
 }
-/*e: function main (networking/exportfs/exportfs.c) */
+/*e: function [[main]]([[(networking/exportfs/exportfs.c)]]) */
 
-/*s: function localread9pmsg */
+/*s: function [[localread9pmsg]] */
 /*
  * WARNING: Replace this with the original version as soon as all 
  * _old_ imports have been replaced with negotiating imports.  Also
@@ -484,8 +484,8 @@ localread9pmsg(int fd, void *abuf, uint n, ulong *initial)
         return 0;
     return BIT32SZ+m;
 }
-/*e: function localread9pmsg */
-/*s: function reply (networking/exportfs/exportfs.c) */
+/*e: function [[localread9pmsg]] */
+/*s: function [[reply]]([[(networking/exportfs/exportfs.c)]]) */
 void
 reply(Fcall *r, Fcall *t, char *err)
 {
@@ -513,9 +513,9 @@ reply(Fcall *r, Fcall *t, char *err)
 }
     free(data);
 }
-/*e: function reply (networking/exportfs/exportfs.c) */
+/*e: function [[reply]]([[(networking/exportfs/exportfs.c)]]) */
 
-/*s: function getfid (networking/exportfs/exportfs.c) */
+/*s: function [[getfid]]([[(networking/exportfs/exportfs.c)]]) */
 Fid *
 getfid(int nr)
 {
@@ -527,9 +527,9 @@ getfid(int nr)
 
     return 0;
 }
-/*e: function getfid (networking/exportfs/exportfs.c) */
+/*e: function [[getfid]]([[(networking/exportfs/exportfs.c)]]) */
 
-/*s: function freefid */
+/*s: function [[freefid]] */
 int
 freefid(int nr)
 {
@@ -562,9 +562,9 @@ freefid(int nr)
 
     return 0;	
 }
-/*e: function freefid */
+/*e: function [[freefid]] */
 
-/*s: function newfid */
+/*s: function [[newfid]] */
 Fid *
 newfid(int nr)
 {
@@ -597,9 +597,9 @@ newfid(int nr)
 
     return new;	
 }
-/*e: function newfid */
+/*e: function [[newfid]] */
 
-/*s: function getsbuf */
+/*s: function [[getsbuf]] */
 Fsrpc *
 getsbuf(void)
 {
@@ -636,9 +636,9 @@ getsbuf(void)
     fatal("No more work buffers");
     return nil;
 }
-/*e: function getsbuf */
+/*e: function [[getsbuf]] */
 
-/*s: function freefile */
+/*s: function [[freefile]] */
 void
 freefile(File *f)
 {
@@ -669,9 +669,9 @@ Loop:
     if(f != nil)
         goto Loop;
 }
-/*e: function freefile */
+/*e: function [[freefile]] */
 
-/*s: function file */
+/*s: function [[file]] */
 File *
 file(File *parent, char *name)
 {
@@ -718,9 +718,9 @@ file(File *parent, char *name)
 
     return f;
 }
-/*e: function file */
+/*e: function [[file]] */
 
-/*s: function initroot */
+/*s: function [[initroot]] */
 void
 initroot(void)
 {
@@ -758,9 +758,9 @@ initroot(void)
         return;
     psmpt = file(psmpt, "exportfs");
 }
-/*e: function initroot */
+/*e: function [[initroot]] */
 
-/*s: function makepath */
+/*s: function [[makepath]] */
 char*
 makepath(File *p, char *name)
 {
@@ -789,9 +789,9 @@ makepath(File *p, char *name)
 
     return path;
 }
-/*e: function makepath */
+/*e: function [[makepath]] */
 
-/*s: function qidhash */
+/*s: function [[qidhash]] */
 int
 qidhash(vlong path)
 {
@@ -804,9 +804,9 @@ qidhash(vlong path)
     }
     return h & (Nqidtab-1);
 }
-/*e: function qidhash */
+/*e: function [[qidhash]] */
 
-/*s: function freeqid */
+/*s: function [[freeqid]] */
 void
 freeqid(Qidtab *q)
 {
@@ -828,9 +828,9 @@ freeqid(Qidtab *q)
     }
     free(q);
 }
-/*e: function freeqid */
+/*e: function [[freeqid]] */
 
-/*s: function qidlookup */
+/*s: function [[qidlookup]] */
 Qidtab*
 qidlookup(Dir *d)
 {
@@ -843,9 +843,9 @@ qidlookup(Dir *d)
             return q;
     return nil;
 }
-/*e: function qidlookup */
+/*e: function [[qidlookup]] */
 
-/*s: function qidexists */
+/*s: function [[qidexists]] */
 int
 qidexists(vlong path)
 {
@@ -858,9 +858,9 @@ qidexists(vlong path)
                 return 1;
     return 0;
 }
-/*e: function qidexists */
+/*e: function [[qidexists]] */
 
-/*s: function uniqueqid */
+/*s: function [[uniqueqid]] */
 Qidtab*
 uniqueqid(Dir *d)
 {
@@ -901,9 +901,9 @@ uniqueqid(Dir *d)
     qidtab[h] = q;
     return q;
 }
-/*e: function uniqueqid */
+/*e: function [[uniqueqid]] */
 
-/*s: function fatal (networking/exportfs/exportfs.c) */
+/*s: function [[fatal]]([[(networking/exportfs/exportfs.c)]]) */
 void
 fatal(char *s, ...)
 {
@@ -927,9 +927,9 @@ fatal(char *s, ...)
     else
         exits(nil);
 }
-/*e: function fatal (networking/exportfs/exportfs.c) */
+/*e: function [[fatal]]([[(networking/exportfs/exportfs.c)]]) */
 
-/*s: function emallocz */
+/*s: function [[emallocz]] */
 void*
 emallocz(uint n)
 {
@@ -940,9 +940,9 @@ emallocz(uint n)
         fatal(Enomem);
     return p;
 }
-/*e: function emallocz */
+/*e: function [[emallocz]] */
 
-/*s: function estrdup (networking/exportfs/exportfs.c) */
+/*s: function [[estrdup]]([[(networking/exportfs/exportfs.c)]]) */
 char*
 estrdup(char *s)
 {
@@ -953,9 +953,9 @@ estrdup(char *s)
         fatal(Enomem);
     return t;
 }
-/*e: function estrdup (networking/exportfs/exportfs.c) */
+/*e: function [[estrdup]]([[(networking/exportfs/exportfs.c)]]) */
 
-/*s: function filter (networking/exportfs/exportfs.c) */
+/*s: function [[filter]]([[(networking/exportfs/exportfs.c)]]) */
 /* Network on fd1, mount driver on fd0 */
 int
 filter(int fd, char *cmd)
@@ -1013,14 +1013,14 @@ filter(int fd, char *cmd)
     }
     return p[1];	
 }
-/*e: function filter (networking/exportfs/exportfs.c) */
+/*e: function [[filter]]([[(networking/exportfs/exportfs.c)]]) */
 
-/*s: function mksecret (networking/exportfs/exportfs.c) */
+/*s: function [[mksecret]]([[(networking/exportfs/exportfs.c)]]) */
 static void
 mksecret(char *t, uchar *f)
 {
     sprint(t, "%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux%2.2ux",
         f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[9]);
 }
-/*e: function mksecret (networking/exportfs/exportfs.c) */
+/*e: function [[mksecret]]([[(networking/exportfs/exportfs.c)]]) */
 /*e: networking/exportfs/exportfs.c */

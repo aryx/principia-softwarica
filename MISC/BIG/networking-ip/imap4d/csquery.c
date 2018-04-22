@@ -5,7 +5,7 @@
 #include <auth.h>
 #include "imap4d.h"
 
-/*s: function csquery (networking/ip/imap4d/csquery.c) */
+/*s: function [[csquery]]([[(networking/ip/imap4d/csquery.c)]]) */
 /*
  *  query the connection server
  */
@@ -44,5 +44,5 @@ csquery(char *attr, char *val, char *rattr)
     close(fd);
     return nil;
 }
-/*e: function csquery (networking/ip/imap4d/csquery.c) */
+/*e: function [[csquery]]([[(networking/ip/imap4d/csquery.c)]]) */
 /*e: networking/ip/imap4d/csquery.c */

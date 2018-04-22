@@ -5,7 +5,7 @@
 #include <auth.h>
 #include "imap4d.h"
 
-/*s: function forMsgs */
+/*s: function [[forMsgs]] */
 /*
  * iterated over all of the items in the message set.
  * errors are accumulated, but processing continues.
@@ -47,9 +47,9 @@ forMsgs(Box *box, MsgSet *ms, ulong max, int uids, int (*f)(Box*, Msg*, int, voi
     }
     return ok;
 }
-/*e: function forMsgs */
+/*e: function [[forMsgs]] */
 
-/*s: function mkStore */
+/*s: function [[mkStore]] */
 Store *
 mkStore(int sign, int op, int flags)
 {
@@ -63,9 +63,9 @@ mkStore(int sign, int op, int flags)
     st->flags = flags;
     return st;
 }
-/*e: function mkStore */
+/*e: function [[mkStore]] */
 
-/*s: function mkFetch */
+/*s: function [[mkFetch]] */
 Fetch *
 mkFetch(int op, Fetch *next)
 {
@@ -78,9 +78,9 @@ mkFetch(int op, Fetch *next)
     f->next = next;
     return f;
 }
-/*e: function mkFetch */
+/*e: function [[mkFetch]] */
 
-/*s: function revFetch */
+/*s: function [[revFetch]] */
 Fetch*
 revFetch(Fetch *f)
 {
@@ -94,9 +94,9 @@ revFetch(Fetch *f)
     }
     return last;
 }
-/*e: function revFetch */
+/*e: function [[revFetch]] */
 
-/*s: function mkNList */
+/*s: function [[mkNList]] */
 NList*
 mkNList(ulong n, NList *next)
 {
@@ -109,9 +109,9 @@ mkNList(ulong n, NList *next)
     nl->next = next;
     return nl;
 }
-/*e: function mkNList */
+/*e: function [[mkNList]] */
 
-/*s: function revNList */
+/*s: function [[revNList]] */
 NList*
 revNList(NList *nl)
 {
@@ -125,9 +125,9 @@ revNList(NList *nl)
     }
     return last;
 }
-/*e: function revNList */
+/*e: function [[revNList]] */
 
-/*s: function mkSList */
+/*s: function [[mkSList]] */
 SList*
 mkSList(char *s, SList *next)
 {
@@ -140,9 +140,9 @@ mkSList(char *s, SList *next)
     sl->next = next;
     return sl;
 }
-/*e: function mkSList */
+/*e: function [[mkSList]] */
 
-/*s: function revSList */
+/*s: function [[revSList]] */
 SList*
 revSList(SList *sl)
 {
@@ -156,9 +156,9 @@ revSList(SList *sl)
     }
     return last;
 }
-/*e: function revSList */
+/*e: function [[revSList]] */
 
-/*s: function BNList */
+/*s: function [[BNList]] */
 int
 BNList(Biobuf *b, NList *nl, char *sep)
 {
@@ -173,9 +173,9 @@ BNList(Biobuf *b, NList *nl, char *sep)
     }
     return n;
 }
-/*e: function BNList */
+/*e: function [[BNList]] */
 
-/*s: function BSList */
+/*s: function [[BSList]] */
 int
 BSList(Biobuf *b, SList *sl, char *sep)
 {
@@ -191,9 +191,9 @@ BSList(Biobuf *b, SList *sl, char *sep)
     }
     return n;
 }
-/*e: function BSList */
+/*e: function [[BSList]] */
 
-/*s: function Bimapdate */
+/*s: function [[Bimapdate]] */
 int
 Bimapdate(Biobuf *b, Tm *tm)
 {
@@ -204,9 +204,9 @@ Bimapdate(Biobuf *b, Tm *tm)
     imap4date(buf, sizeof(buf), tm);
     return Bimapstr(b, buf);
 }
-/*e: function Bimapdate */
+/*e: function [[Bimapdate]] */
 
-/*s: function Brfc822date */
+/*s: function [[Brfc822date]] */
 int
 Brfc822date(Biobuf *b, Tm *tm)
 {
@@ -217,9 +217,9 @@ Brfc822date(Biobuf *b, Tm *tm)
     rfc822date(buf, sizeof(buf), tm);
     return Bimapstr(b, buf);
 }
-/*e: function Brfc822date */
+/*e: function [[Brfc822date]] */
 
-/*s: function Bimapstr */
+/*s: function [[Bimapstr]] */
 int
 Bimapstr(Biobuf *b, char *s)
 {
@@ -237,5 +237,5 @@ Bimapstr(Biobuf *b, char *s)
     }
     return Bprint(b, "{%lud}\r\n%s", strlen(s), s);
 }
-/*e: function Bimapstr */
+/*e: function [[Bimapstr]] */
 /*e: networking/ip/imap4d/nodes.c */

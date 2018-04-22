@@ -3,32 +3,32 @@
 #include <libc.h>
 #include <ctype.h>
 
-/*s: global debug (networking/ip/ppp/testppp.c) */
+/*s: global [[debug]]([[(networking/ip/ppp/testppp.c)]]) */
 int	debug;
-/*e: global debug (networking/ip/ppp/testppp.c) */
-/*s: global errrate */
+/*e: global [[debug]]([[(networking/ip/ppp/testppp.c)]]) */
+/*s: global [[errrate]] */
 long	errrate;
-/*e: global errrate */
-/*s: global droprate */
+/*e: global [[errrate]] */
+/*s: global [[droprate]] */
 long	droprate;
-/*e: global droprate */
-/*s: global framing */
+/*e: global [[droprate]] */
+/*s: global [[framing]] */
 int	framing;
-/*e: global framing */
-/*s: global nocompress (networking/ip/ppp/testppp.c) */
+/*e: global [[framing]] */
+/*s: global [[nocompress]]([[(networking/ip/ppp/testppp.c)]]) */
 int	nocompress;
-/*e: global nocompress (networking/ip/ppp/testppp.c) */
-/*s: global noipcompress (networking/ip/ppp/testppp.c) */
+/*e: global [[nocompress]]([[(networking/ip/ppp/testppp.c)]]) */
+/*s: global [[noipcompress]]([[(networking/ip/ppp/testppp.c)]]) */
 int	noipcompress;
-/*e: global noipcompress (networking/ip/ppp/testppp.c) */
-/*s: global ppp (networking/ip/ppp/testppp.c) */
+/*e: global [[noipcompress]]([[(networking/ip/ppp/testppp.c)]]) */
+/*s: global [[ppp]]([[(networking/ip/ppp/testppp.c)]]) */
 char	*ppp = "8.out";
-/*e: global ppp (networking/ip/ppp/testppp.c) */
-/*s: global mtu */
+/*e: global [[ppp]]([[(networking/ip/ppp/testppp.c)]]) */
+/*s: global [[mtu]] */
 char	*mtu;
-/*e: global mtu */
+/*e: global [[mtu]] */
 
-/*s: function pppopen (networking/ip/ppp/testppp.c) */
+/*s: function [[pppopen]]([[(networking/ip/ppp/testppp.c)]]) */
 void
 pppopen(int fd, char *net, char *local, char *remote)
 {
@@ -72,9 +72,9 @@ pppopen(int fd, char *net, char *local, char *remote)
     argv[argc] = 0;
     exec(ppp, argv);
 }
-/*e: function pppopen (networking/ip/ppp/testppp.c) */
+/*e: function [[pppopen]]([[(networking/ip/ppp/testppp.c)]]) */
 
-/*s: function printbuf */
+/*s: function [[printbuf]] */
 void
 printbuf(uchar *p, int n)
 {
@@ -94,9 +94,9 @@ printbuf(uchar *p, int n)
     }
     fprint(2, "%s\n", buf);
 }
-/*e: function printbuf */
+/*e: function [[printbuf]] */
 
-/*s: function xfer (networking/ip/ppp/testppp.c) */
+/*s: function [[xfer]]([[(networking/ip/ppp/testppp.c)]]) */
 void
 xfer(int from, int to)
 {
@@ -147,18 +147,18 @@ xfer(int from, int to)
         }
     }
 }
-/*e: function xfer (networking/ip/ppp/testppp.c) */
+/*e: function [[xfer]]([[(networking/ip/ppp/testppp.c)]]) */
 
-/*s: function usage (networking/ip/ppp/testppp.c) */
+/*s: function [[usage]]([[(networking/ip/ppp/testppp.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: testppp [-cCDf] [-e errrate] [-d droprate] [-m mtu] [-p ppp]\n");
     exits("usage");
 }
-/*e: function usage (networking/ip/ppp/testppp.c) */
+/*e: function [[usage]]([[(networking/ip/ppp/testppp.c)]]) */
 
-/*s: function main (networking/ip/ppp/testppp.c) */
+/*s: function [[main]]([[(networking/ip/ppp/testppp.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -221,6 +221,6 @@ main(int argc, char **argv)
     xfer(pfd2[1], pfd1[1]);
     exits(0);
 }
-/*e: function main (networking/ip/ppp/testppp.c) */
+/*e: function [[main]]([[(networking/ip/ppp/testppp.c)]]) */
 
 /*e: networking/ip/ppp/testppp.c */

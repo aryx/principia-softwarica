@@ -11,7 +11,7 @@
 #include <string.h>
 #include "ftpfs.h"
 
-/*s: enum _anon_ (networking/ip/ftpfs/proto.c) */
+/*s: enum [[_anon_ (networking/ip/ftpfs/proto.c)]] */
 enum
 {
     /* return codes */
@@ -22,55 +22,55 @@ enum
     PermFail=	5,
     Impossible=	6,
 };
-/*e: enum _anon_ (networking/ip/ftpfs/proto.c) */
+/*e: enum [[_anon_ (networking/ip/ftpfs/proto.c)]] */
 
-/*s: global remdir */
+/*s: global [[remdir]] */
 Node	*remdir;		/* current directory on remote machine */
-/*e: global remdir */
-/*s: global remroot */
+/*e: global [[remdir]] */
+/*s: global [[remroot]] */
 Node	*remroot;		/* root directory on remote machine */
-/*e: global remroot */
+/*e: global [[remroot]] */
 
-/*s: global ctlfd */
+/*s: global [[ctlfd]] */
 int	ctlfd;			/* fd for control connection */
-/*e: global ctlfd */
-/*s: global ctlin */
+/*e: global [[ctlfd]] */
+/*s: global [[ctlin]] */
 Biobuf	ctlin;			/* input buffer for control connection */
-/*e: global ctlin */
-/*s: global stdin */
+/*e: global [[ctlin]] */
+/*s: global [[stdin]] */
 Biobuf	stdin;			/* input buffer for standard input */
-/*e: global stdin */
-/*s: global dbuf */
+/*e: global [[stdin]] */
+/*s: global [[dbuf]] */
 Biobuf	dbuf;			/* buffer for data connection */
-/*e: global dbuf */
-/*s: global msg */
+/*e: global [[dbuf]] */
+/*s: global [[msg]] */
 char	msg[512];		/* buffer for replies */
-/*e: global msg */
-/*s: global net (networking/ip/ftpfs/proto.c) */
+/*e: global [[msg]] */
+/*s: global [[net]]([[(networking/ip/ftpfs/proto.c)]]) */
 char	net[Maxpath];		/* network for connections */
-/*e: global net (networking/ip/ftpfs/proto.c) */
-/*s: global listenfd */
+/*e: global [[net]]([[(networking/ip/ftpfs/proto.c)]]) */
+/*s: global [[listenfd]] */
 int	listenfd;		/* fd to listen on for connections */
-/*e: global listenfd */
-/*s: global netdir (networking/ip/ftpfs/proto.c) */
+/*e: global [[listenfd]] */
+/*s: global [[netdir]]([[(networking/ip/ftpfs/proto.c)]]) */
 char	netdir[Maxpath];
-/*e: global netdir (networking/ip/ftpfs/proto.c) */
+/*e: global [[netdir]]([[(networking/ip/ftpfs/proto.c)]]) */
 int	os, defos;
-/*s: global topsdir */
+/*s: global [[topsdir]] */
 char	topsdir[64];		/* name of listed directory for TOPS */
-/*e: global topsdir */
-/*s: global remrootpath */
+/*e: global [[topsdir]] */
+/*s: global [[remrootpath]] */
 String	*remrootpath;	/* path on remote side to remote root */
-/*e: global remrootpath */
-/*s: global user (networking/ip/ftpfs/proto.c) */
+/*e: global [[remrootpath]] */
+/*s: global [[user]]([[(networking/ip/ftpfs/proto.c)]]) */
 char	*user;
-/*e: global user (networking/ip/ftpfs/proto.c) */
-/*s: global nopassive */
+/*e: global [[user]]([[(networking/ip/ftpfs/proto.c)]]) */
+/*s: global [[nopassive]] */
 int	nopassive;
-/*e: global nopassive */
-/*s: global lastsend */
+/*e: global [[nopassive]] */
+/*s: global [[lastsend]] */
 long	lastsend;
-/*e: global lastsend */
+/*e: global [[lastsend]] */
 extern int usetls;
 
 static void	sendrequest(char*, char*);
@@ -88,7 +88,7 @@ static Node*	vmsdir(char*);
 static int	getpassword(char*, char*);
 static int	nw_mode(char dirlet, char *s);
 
-/*s: function hello */
+/*s: function [[hello]] */
 /*
  *  connect to remote server, default network is "tcp/ip"
  */
@@ -142,9 +142,9 @@ hello(char *dest)
             fatal("bad prot p");
     }
 }
-/*e: function hello */
+/*e: function [[hello]] */
 
-/*s: function rlogin (networking/ip/ftpfs/proto.c) */
+/*s: function [[rlogin]]([[(networking/ip/ftpfs/proto.c)]]) */
 /*
  *  login to remote system
  */
@@ -202,9 +202,9 @@ out:
         free(up);
     }
 }
-/*e: function rlogin (networking/ip/ftpfs/proto.c) */
+/*e: function [[rlogin]]([[(networking/ip/ftpfs/proto.c)]]) */
 
-/*s: function clogin */
+/*s: function [[clogin]] */
 /*
  *  login to remote system with given user name and password.
  */
@@ -235,9 +235,9 @@ clogin(char *cuser, char *cpassword)
         defos = MVS;
     return;
 }
-/*e: function clogin */
+/*e: function [[clogin]] */
 
-/*s: function preamble */
+/*s: function [[preamble]] */
 /*
  *  find out about the other side.  go to it's root if requested.  set
  *  image mode if a Plan9 system.
@@ -383,9 +383,9 @@ preamble(char *mountroot)
     if(os == Plan9)
         image();
 }
-/*e: function preamble */
+/*e: function [[preamble]] */
 
-/*s: function ascii */
+/*s: function [[ascii]] */
 static void
 ascii(void)
 {
@@ -397,9 +397,9 @@ ascii(void)
         fatal("can't set type to ascii");
     }
 }
-/*e: function ascii */
+/*e: function [[ascii]] */
 
-/*s: function image */
+/*s: function [[image]] */
 static void
 image(void)
 {
@@ -411,19 +411,19 @@ image(void)
         fatal("can't set type to image/binary");
     }
 }
-/*e: function image */
+/*e: function [[image]] */
 
-/*s: global monthchars */
+/*s: global [[monthchars]] */
 /*
  *  decode the time fields, return seconds since epoch began
  */
 char *monthchars = "janfebmaraprmayjunjulaugsepoctnovdec";
-/*e: global monthchars */
-/*s: global now (networking/ip/ftpfs/proto.c) */
+/*e: global [[monthchars]] */
+/*s: global [[now]]([[(networking/ip/ftpfs/proto.c)]]) */
 static Tm now;
-/*e: global now (networking/ip/ftpfs/proto.c) */
+/*e: global [[now]]([[(networking/ip/ftpfs/proto.c)]]) */
 
-/*s: function cracktime */
+/*s: function [[cracktime]] */
 static ulong
 cracktime(char *month, char *day, char *yr, char *hms)
 {
@@ -478,9 +478,9 @@ cracktime(char *month, char *day, char *yr, char *hms)
     /* convert to epoch seconds */
     return tm2sec(&tm);
 }
-/*e: function cracktime */
+/*e: function [[cracktime]] */
 
-/*s: function crackmode */
+/*s: function [[crackmode]] */
 /*
  *  decode a Unix or Plan 9 file mode
  */
@@ -534,9 +534,9 @@ crackmode(char *p)
     }
     return mode | flags;
 }
-/*e: function crackmode */
+/*e: function [[crackmode]] */
 
-/*s: function strpunct */
+/*s: function [[strpunct]] */
 /*
  *  find first punctuation
  */
@@ -551,9 +551,9 @@ strpunct(char *p)
     }
     return 0;
 }
-/*e: function strpunct */
+/*e: function [[strpunct]] */
 
-/*s: function crackdir */
+/*s: function [[crackdir]] */
 /*
  *  decode a Unix or Plan 9 directory listing
  */
@@ -789,12 +789,12 @@ crackdir(char *p, String **remname)
 
     return dp;
 }
-/*e: function crackdir */
+/*e: function [[crackdir]] */
 
 /*
  *  probe files in a directory to see if they are directories
  */
-/*s: function readdir */
+/*s: function [[readdir]] */
 /*
  *  read a remote directory
  */
@@ -881,9 +881,9 @@ readdir(Node *node)
     }
     return seterr(nosuchfile);
 }
-/*e: function readdir */
+/*e: function [[readdir]] */
 
-/*s: function createdir */
+/*s: function [[createdir]] */
 /*
  *  create a remote directory
  */
@@ -898,9 +898,9 @@ createdir(Node *node)
         return -1;
     return 0;
 }
-/*e: function createdir */
+/*e: function [[createdir]] */
 
-/*s: function changedir */
+/*s: function [[changedir]] */
 /*
  *  change to a remote directory.
  */
@@ -974,9 +974,9 @@ changedir(Node *node)
         return seterr(nosuchfile);
     }
 }
-/*e: function changedir */
+/*e: function [[changedir]] */
 
-/*s: function readfile1 */
+/*s: function [[readfile1]] */
 /*
  *  read a remote file
  */
@@ -1028,9 +1028,9 @@ readfile1(Node *node)
     }
     return seterr(nosuchfile);
 }
-/*e: function readfile1 */
+/*e: function [[readfile1]] */
 
-/*s: function readfile */
+/*s: function [[readfile]] */
 int
 readfile(Node *node)
 {
@@ -1055,9 +1055,9 @@ readfile(Node *node)
         ascii();
     return rv;
 }
-/*e: function readfile */
+/*e: function [[readfile]] */
 
-/*s: function createfile1 */
+/*s: function [[createfile1]] */
 /*
  *  write back a file
  */
@@ -1085,9 +1085,9 @@ createfile1(Node *node)
         return -1;
     return off;
 }
-/*e: function createfile1 */
+/*e: function [[createfile1]] */
 
-/*s: function createfile */
+/*s: function [[createfile]] */
 int
 createfile(Node *node)
 {
@@ -1112,9 +1112,9 @@ createfile(Node *node)
     }
     return rv;
 }
-/*e: function createfile */
+/*e: function [[createfile]] */
 
-/*s: function removefile */
+/*s: function [[removefile]] */
 /*
  *  remove a remote file
  */
@@ -1129,9 +1129,9 @@ removefile(Node *node)
         return -1;
     return 0;
 }
-/*e: function removefile */
+/*e: function [[removefile]] */
 
-/*s: function removedir */
+/*s: function [[removedir]] */
 /*
  *  remove a remote directory
  */
@@ -1146,9 +1146,9 @@ removedir(Node *node)
         return -1;
     return 0;
 }
-/*e: function removedir */
+/*e: function [[removedir]] */
 
-/*s: function quit */
+/*s: function [[quit]] */
 /*
  *  tell remote that we're exiting and then do it
  */
@@ -1159,9 +1159,9 @@ quit(void)
     getreply(&ctlin, msg, sizeof(msg), 0);
     exits(0);
 }
-/*e: function quit */
+/*e: function [[quit]] */
 
-/*s: function sendrequest */
+/*s: function [[sendrequest]] */
 /*
  *  send a request
  */
@@ -1189,9 +1189,9 @@ sendrequest(char *a, char *b)
         write(2, buf, n);
     lastsend = time(0);
 }
-/*e: function sendrequest */
+/*e: function [[sendrequest]] */
 
-/*s: function getreply */
+/*s: function [[getreply]] */
 /*
  *  replies codes are in the range [100, 999] and may contain multiple lines of
  *  continuation.
@@ -1239,9 +1239,9 @@ getreply(Biobuf *bp, char *msg, int len, int printreply)
     fatal("remote side closed connection");
     return 0;
 }
-/*e: function getreply */
+/*e: function [[getreply]] */
 
-/*s: function port */
+/*s: function [[port]] */
 /*
  *  Announce on a local port and tell its address to the the remote side
  */
@@ -1293,9 +1293,9 @@ port(void)
         return seterr(msg);
     return 0;
 }
-/*e: function port */
+/*e: function [[port]] */
 
-/*s: function active */
+/*s: function [[active]] */
 /*
  *  have server call back for a data connection
  */
@@ -1343,9 +1343,9 @@ active(int mode, Biobuf **bpp, char *cmda, char *cmdb)
     *bpp = &dbuf;
     return Extra;
 }
-/*e: function active */
+/*e: function [[active]] */
 
-/*s: function passive (networking/ip/ftpfs/proto.c) */
+/*s: function [[passive]]([[(networking/ip/ftpfs/proto.c)]]) */
 /*
  *  call out for a data connection
  */
@@ -1419,9 +1419,9 @@ passive(int mode, Biobuf **bpp, char *cmda, char *cmdb)
     *bpp = &dbuf;
     return Extra;
 }
-/*e: function passive (networking/ip/ftpfs/proto.c) */
+/*e: function [[passive]]([[(networking/ip/ftpfs/proto.c)]]) */
 
-/*s: function data */
+/*s: function [[data]] */
 static int
 data(int mode, Biobuf **bpp, char* cmda, char *cmdb)
 {
@@ -1432,9 +1432,9 @@ data(int mode, Biobuf **bpp, char* cmda, char *cmdb)
         return x;
     return active(mode, bpp, cmda, cmdb);
 }
-/*e: function data */
+/*e: function [[data]] */
 
-/*s: function nop */
+/*s: function [[nop]] */
 /*
  *  used for keep alives
  */
@@ -1446,9 +1446,9 @@ nop(void)
     sendrequest("PWD", nil);
     getreply(&ctlin, msg, sizeof(msg), 0);
 }
-/*e: function nop */
+/*e: function [[nop]] */
 
-/*s: function vmsextendpath */
+/*s: function [[vmsextendpath]] */
 /*
  *  turn a vms spec into a path
  */
@@ -1469,8 +1469,8 @@ vmsextendpath(Node *np, char *name)
     }
     return np;
 }
-/*e: function vmsextendpath */
-/*s: function vmsdir */
+/*e: function [[vmsextendpath]] */
+/*s: function [[vmsdir]] */
 static Node*
 vmsdir(char *name)
 {
@@ -1508,9 +1508,9 @@ vmsdir(char *name)
     free(oname);
     return np;
 }
-/*e: function vmsdir */
+/*e: function [[vmsdir]] */
 
-/*s: function vmspath */
+/*s: function [[vmspath]] */
 /*
  *  walk up the tree building a VMS style path
  */
@@ -1538,9 +1538,9 @@ vmspath(Node *node, String *path)
     s_append(path, ".");
     s_append(path, s_to_c(node->remname));
 }
-/*e: function vmspath */
+/*e: function [[vmspath]] */
 
-/*s: function unixpath */
+/*s: function [[unixpath]] */
 /*
  *  walk up the tree building a Unix style path
  */
@@ -1556,9 +1556,9 @@ unixpath(Node *node, String *path)
         s_append(path, "/");
     s_append(path, s_to_c(node->remname));
 }
-/*e: function unixpath */
+/*e: function [[unixpath]] */
 
-/*s: function mvspath */
+/*s: function [[mvspath]] */
 /*
  *  walk up the tree building a MVS style path
  */
@@ -1574,9 +1574,9 @@ mvspath(Node *node, String *path)
         s_append(path, ".");
     s_append(path, s_to_c(node->remname));
 }
-/*e: function mvspath */
+/*e: function [[mvspath]] */
 
-/*s: function getpassword */
+/*s: function [[getpassword]] */
 static int
 getpassword(char *buf, char *e)
 {
@@ -1607,9 +1607,9 @@ out:
         close(consctl);
     return rv;
 }
-/*e: function getpassword */
+/*e: function [[getpassword]] */
 
-/*s: function fromlatin1 */
+/*s: function [[fromlatin1]] */
 /*
  *  convert from latin1 to utf
  */
@@ -1639,9 +1639,9 @@ fromlatin1(char *from)
     *p = 0;
     return to;
 }
-/*e: function fromlatin1 */
+/*e: function [[fromlatin1]] */
 
-/*s: function reallocdir */
+/*s: function [[reallocdir]] */
 Dir*
 reallocdir(Dir *d, int dofree)
 {
@@ -1694,9 +1694,9 @@ reallocdir(Dir *d, int dofree)
         free(utf);
     return dp;
 }
-/*e: function reallocdir */
+/*e: function [[reallocdir]] */
 
-/*s: function dir_change_name */
+/*s: function [[dir_change_name]] */
 Dir*
 dir_change_name(Dir *d, char *name)
 {
@@ -1707,9 +1707,9 @@ dir_change_name(Dir *d, char *name)
     d->name = name;
     return reallocdir(d, 1);
 }
-/*e: function dir_change_name */
+/*e: function [[dir_change_name]] */
 
-/*s: function dir_change_uid */
+/*s: function [[dir_change_uid]] */
 Dir*
 dir_change_uid(Dir *d, char *name)
 {
@@ -1720,9 +1720,9 @@ dir_change_uid(Dir *d, char *name)
     d->uid = name;
     return reallocdir(d, 1);
 }
-/*e: function dir_change_uid */
+/*e: function [[dir_change_uid]] */
 
-/*s: function dir_change_gid */
+/*s: function [[dir_change_gid]] */
 Dir*
 dir_change_gid(Dir *d, char *name)
 {
@@ -1733,9 +1733,9 @@ dir_change_gid(Dir *d, char *name)
     d->gid = name;
     return reallocdir(d, 1);
 }
-/*e: function dir_change_gid */
+/*e: function [[dir_change_gid]] */
 
-/*s: function dir_change_muid */
+/*s: function [[dir_change_muid]] */
 Dir*
 dir_change_muid(Dir *d, char *name)
 {
@@ -1746,9 +1746,9 @@ dir_change_muid(Dir *d, char *name)
     d->muid = name;
     return reallocdir(d, 1);
 }
-/*e: function dir_change_muid */
+/*e: function [[dir_change_muid]] */
 
-/*s: function nw_mode */
+/*s: function [[nw_mode]] */
 static int
 nw_mode(char dirlet, char *s)		/* NetWare file mode mapping */
 {
@@ -1771,5 +1771,5 @@ nw_mode(char dirlet, char *s)		/* NetWare file mode mapping */
 
     return(mode);
 }
-/*e: function nw_mode */
+/*e: function [[nw_mode]] */
 /*e: networking/ip/ftpfs/proto.c */

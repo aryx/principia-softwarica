@@ -7,17 +7,17 @@
 #include "thwack.h"
 
 typedef struct Cstate Cstate;
-/*s: struct Cstate (networking/ip/ppp/thw.c) */
+/*s: struct [[Cstate]]([[(networking/ip/ppp/thw.c)]]) */
 struct Cstate
 {
     ulong		seq;
     Thwack		th;
     ulong		stats[ThwStats];
 };
-/*e: struct Cstate (networking/ip/ppp/thw.c) */
+/*e: struct [[Cstate]]([[(networking/ip/ppp/thw.c)]]) */
 
 typedef struct Uncstate Uncstate;
-/*s: struct Uncstate (networking/ip/ppp/thw.c) */
+/*s: struct [[Uncstate]]([[(networking/ip/ppp/thw.c)]]) */
 struct Uncstate
 {
     QLock		ackl;			/* lock for acks sent back to compressor */
@@ -30,9 +30,9 @@ struct Uncstate
     int		resetid;		/* id of most recent reset */
     Unthwack	ut;
 };
-/*e: struct Uncstate (networking/ip/ppp/thw.c) */
+/*e: struct [[Uncstate]]([[(networking/ip/ppp/thw.c)]]) */
 
-/*s: enum _anon_ (networking/ip/ppp/thw.c) */
+/*s: enum [[_anon_ (networking/ip/ppp/thw.c)]] */
 enum
 {
     ThwAcked	= 1UL << 23,
@@ -43,7 +43,7 @@ enum
     ThwSeqMask	= 0x0fffff,
     ThwSmallPack	= 96,
 };
-/*e: enum _anon_ (networking/ip/ppp/thw.c) */
+/*e: enum [[_anon_ (networking/ip/ppp/thw.c)]] */
 
 static	void		*compinit(PPP*);
 static	Block*		comp(PPP*, ushort, Block*, int*);
@@ -56,25 +56,25 @@ static	Block*		uncomp(PPP*, Block*, int *protop, Block**);
 static	void		uncfini(void*);
 static	void		uncresetack(void*, Block*);
 
-/*s: global cthwack */
+/*s: global [[cthwack]] */
 Comptype cthwack = {
     compinit,
     comp,
     compresetreq,
     compfini
 };
-/*e: global cthwack */
+/*e: global [[cthwack]] */
 
-/*s: global uncthwack */
+/*s: global [[uncthwack]] */
 Uncomptype uncthwack = {
     uncinit,
     uncomp,
     uncresetack,
     uncfini
 };
-/*e: global uncthwack */
+/*e: global [[uncthwack]] */
 
-/*s: function compinit (networking/ip/ppp/thw.c) */
+/*s: function [[compinit]]([[(networking/ip/ppp/thw.c)]]) */
 static void *
 compinit(PPP *)
 {
@@ -84,9 +84,9 @@ compinit(PPP *)
     thwackinit(&cs->th);
     return cs;
 }
-/*e: function compinit (networking/ip/ppp/thw.c) */
+/*e: function [[compinit]]([[(networking/ip/ppp/thw.c)]]) */
 
-/*s: function compfini (networking/ip/ppp/thw.c) */
+/*s: function [[compfini]]([[(networking/ip/ppp/thw.c)]]) */
 static void
 compfini(void *as)
 {
@@ -96,10 +96,10 @@ compfini(void *as)
     thwackcleanup(&cs->th);
     free(cs);
 }
-/*e: function compfini (networking/ip/ppp/thw.c) */
+/*e: function [[compfini]]([[(networking/ip/ppp/thw.c)]]) */
 
 
-/*s: function compresetreq (networking/ip/ppp/thw.c) */
+/*s: function [[compresetreq]]([[(networking/ip/ppp/thw.c)]]) */
 static Block *
 compresetreq(void *as, Block *b)
 {
@@ -122,9 +122,9 @@ compresetreq(void *as, Block *b)
 
     return b;
 }
-/*e: function compresetreq (networking/ip/ppp/thw.c) */
+/*e: function [[compresetreq]]([[(networking/ip/ppp/thw.c)]]) */
 
-/*s: function comp (networking/ip/ppp/thw.c) */
+/*s: function [[comp]]([[(networking/ip/ppp/thw.c)]]) */
 static Block*
 comp(PPP *ppp, ushort proto, Block *b, int *protop)
 {
@@ -212,9 +212,9 @@ comp(PPP *ppp, ushort proto, Block *b, int *protop)
     *protop = Pcdata;
     return bb;
 }
-/*e: function comp (networking/ip/ppp/thw.c) */
+/*e: function [[comp]]([[(networking/ip/ppp/thw.c)]]) */
 
-/*s: function uncinit (networking/ip/ppp/thw.c) */
+/*s: function [[uncinit]]([[(networking/ip/ppp/thw.c)]]) */
 static	void *
 uncinit(PPP *)
 {
@@ -228,17 +228,17 @@ uncinit(PPP *)
 
     return s;
 }
-/*e: function uncinit (networking/ip/ppp/thw.c) */
+/*e: function [[uncinit]]([[(networking/ip/ppp/thw.c)]]) */
 
-/*s: function uncfini (networking/ip/ppp/thw.c) */
+/*s: function [[uncfini]]([[(networking/ip/ppp/thw.c)]]) */
 static	void
 uncfini(void *as)
 {
     free(as);
 }
-/*e: function uncfini (networking/ip/ppp/thw.c) */
+/*e: function [[uncfini]]([[(networking/ip/ppp/thw.c)]]) */
 
-/*s: function uncresetack (networking/ip/ppp/thw.c) */
+/*s: function [[uncresetack]]([[(networking/ip/ppp/thw.c)]]) */
 static	void
 uncresetack(void *as, Block *b)
 {
@@ -259,9 +259,9 @@ uncresetack(void *as, Block *b)
         unthwackinit(&s->ut);
     }
 }
-/*e: function uncresetack (networking/ip/ppp/thw.c) */
+/*e: function [[uncresetack]]([[(networking/ip/ppp/thw.c)]]) */
 
-/*s: function uncomp (networking/ip/ppp/thw.c) */
+/*s: function [[uncomp]]([[(networking/ip/ppp/thw.c)]]) */
 static	Block*
 uncomp(PPP *ppp, Block *bb, int *protop, Block **reply)
 {
@@ -354,5 +354,5 @@ uncomp(PPP *ppp, Block *bb, int *protop, Block **reply)
     }
     return b;
 }
-/*e: function uncomp (networking/ip/ppp/thw.c) */
+/*e: function [[uncomp]]([[(networking/ip/ppp/thw.c)]]) */
 /*e: networking/ip/ppp/thw.c */

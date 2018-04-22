@@ -8,7 +8,7 @@
 
 /* an active fid */
 typedef struct Fid	Fid;
-/*s: struct Fid (networking/ip/ftpfs/ftpfs.c) */
+/*s: struct [[Fid]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 struct Fid
 {
     int	fid;
@@ -17,56 +17,56 @@ struct Fid
     Fid	*next;
     int	open;
 };
-/*e: struct Fid (networking/ip/ftpfs/ftpfs.c) */
+/*e: struct [[Fid]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: global fids (networking/ip/ftpfs/ftpfs.c) */
+/*s: global [[fids]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 Fid	*fids;			/* linked list of fids */
-/*e: global fids (networking/ip/ftpfs/ftpfs.c) */
-/*s: global errstring */
+/*e: global [[fids]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
+/*s: global [[errstring]] */
 char	errstring[128];		/* error to return */
-/*e: global errstring */
-/*s: global mfd (networking/ip/ftpfs/ftpfs.c) */
+/*e: global [[errstring]] */
+/*s: global [[mfd]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 int	mfd;			/* fd for 9fs */
-/*e: global mfd (networking/ip/ftpfs/ftpfs.c) */
-/*s: global messagesize (networking/ip/ftpfs/ftpfs.c) */
+/*e: global [[mfd]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
+/*s: global [[messagesize]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 int	messagesize = 4*1024*IOHDRSZ;
-/*e: global messagesize (networking/ip/ftpfs/ftpfs.c) */
-/*s: global mdata */
+/*e: global [[messagesize]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
+/*s: global [[mdata]] */
 uchar	mdata[8*1024*IOHDRSZ];
-/*e: global mdata */
-/*s: global mbuf */
+/*e: global [[mdata]] */
+/*s: global [[mbuf]] */
 uchar	mbuf[8*1024*IOHDRSZ];
-/*e: global mbuf */
-/*s: global rhdr */
+/*e: global [[mbuf]] */
+/*s: global [[rhdr]] */
 Fcall	rhdr;
-/*e: global rhdr */
-/*s: global thdr */
+/*e: global [[rhdr]] */
+/*s: global [[thdr]] */
 Fcall	thdr;
-/*e: global thdr */
-/*s: global debug (networking/ip/ftpfs/ftpfs.c) */
+/*e: global [[thdr]] */
+/*s: global [[debug]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 int	debug;
-/*e: global debug (networking/ip/ftpfs/ftpfs.c) */
-/*s: global usenlst */
+/*e: global [[debug]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
+/*s: global [[usenlst]] */
 int	usenlst;
-/*e: global usenlst */
-/*s: global usetls */
+/*e: global [[usenlst]] */
+/*s: global [[usetls]] */
 int	usetls;
-/*e: global usetls */
-/*s: global ext */
+/*e: global [[usetls]] */
+/*s: global [[ext]] */
 char	*ext;
-/*e: global ext */
-/*s: global quiet (networking/ip/ftpfs/ftpfs.c) */
+/*e: global [[ext]] */
+/*s: global [[quiet]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 int	quiet;
-/*e: global quiet (networking/ip/ftpfs/ftpfs.c) */
-/*s: global kapid */
+/*e: global [[quiet]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
+/*s: global [[kapid]] */
 int	kapid = -1;
-/*e: global kapid */
-/*s: global dying */
+/*e: global [[kapid]] */
+/*s: global [[dying]] */
 int	dying;		/* set when any process decides to die */
-/*e: global dying */
-/*s: global dokeepalive */
+/*e: global [[dying]] */
+/*s: global [[dokeepalive]] */
 int	dokeepalive;
-/*e: global dokeepalive */
+/*e: global [[dokeepalive]] */
 
 char	*rflush(Fid*), *rnop(Fid*), *rversion(Fid*),
     *rattach(Fid*), *rclone(Fid*), *rwalk(Fid*),
@@ -78,7 +78,7 @@ void	mountinit(char*);
 void	io(void);
 int	readpdir(Node*);
 
-/*s: global fcalls (networking/ip/ftpfs/ftpfs.c) */
+/*s: global [[fcalls]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char 	*(*fcalls[])(Fid*) = {
     [Tflush]	rflush,
     [Tversion]	rversion,
@@ -94,9 +94,9 @@ char 	*(*fcalls[])(Fid*) = {
     [Tstat]		rstat,
     [Twstat]	rwstat,
 };
-/*e: global fcalls (networking/ip/ftpfs/ftpfs.c) */
+/*e: global [[fcalls]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: global oslist */
+/*s: global [[oslist]] */
 /* these names are matched as prefixes, so VMS must precede VM */
 OS oslist[] = {
     { Plan9,	"Plan 9", },
@@ -116,33 +116,33 @@ OS oslist[] = {
     { NT,		"WINDOWS_NT", },	/* Unix like interface */
     { Unknown,	0 },
 };
-/*e: global oslist */
+/*e: global [[oslist]] */
 
-/*s: global nouid */
+/*s: global [[nouid]] */
 char *nouid = "?uid?";
-/*e: global nouid */
+/*e: global [[nouid]] */
 
-/*s: macro S2P */
+/*s: macro [[S2P]] */
 #define S2P(x) (((ulong)(x)) & 0xffffff)
-/*e: macro S2P */
+/*e: macro [[S2P]] */
 
-/*s: global nosuchfile */
+/*s: global [[nosuchfile]] */
 char *nosuchfile = "file does not exist";
-/*e: global nosuchfile */
-/*s: global keyspec (networking/ip/ftpfs/ftpfs.c) */
+/*e: global [[nosuchfile]] */
+/*s: global [[keyspec]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char *keyspec = "";
-/*e: global keyspec (networking/ip/ftpfs/ftpfs.c) */
+/*e: global [[keyspec]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function usage (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[usage]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 void
 usage(void)
 {
     fprint(2, "ftpfs [-/dqnt] [-a passwd] [-m mountpoint] [-e ext] [-k keyspec] [-o os] [-r root] [net!]address\n");
     exits("usage");
 }
-/*e: function usage (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[usage]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function main (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[main]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -241,9 +241,9 @@ main(int argc, char *argv[])
     }
     exits(0);
 }
-/*e: function main (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[main]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function newfid (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[newfid]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 /*
  *  lookup an fid. if not found, create a new one.
  */
@@ -273,9 +273,9 @@ newfid(int fid)
     ff->fid = fid;
     return ff;
 }
-/*e: function newfid (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[newfid]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function kaproc */
+/*s: function [[kaproc]] */
 /*
  *  a process that sends keep alive messages to
  *  keep the server from shutting down the connection
@@ -305,9 +305,9 @@ kaproc(void)
     _exits(0);
     return -1;
 }
-/*e: function kaproc */
+/*e: function [[kaproc]] */
 
-/*s: function io (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[io]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 void
 io(void)
 {
@@ -349,18 +349,18 @@ io(void)
             fatal("mount write");
     }
 }
-/*e: function io (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[io]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rnop */
+/*s: function [[rnop]] */
 char*
 rnop(Fid *f)
 {
     USED(f);
     return 0;
 }
-/*e: function rnop */
+/*e: function [[rnop]] */
 
-/*s: function rversion (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rversion]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char*
 rversion(Fid*)
 {
@@ -375,25 +375,25 @@ rversion(Fid*)
     rhdr.version = "9P2000";
     return nil;
 }
-/*e: function rversion (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rversion]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rflush (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rflush]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char*
 rflush(Fid*)
 {
     return 0;
 }
-/*e: function rflush (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rflush]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rauth (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rauth]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char*
 rauth(Fid*)
 {
     return "auth unimplemented";
 }
-/*e: function rauth (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rauth]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rattach (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rattach]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char*
 rattach(Fid *f)
 {
@@ -402,9 +402,9 @@ rattach(Fid *f)
     rhdr.qid = f->node->d->qid;
     return 0;
 }
-/*e: function rattach (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rattach]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rwalk (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rwalk]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char*
 rwalk(Fid *f)
 {
@@ -505,9 +505,9 @@ rwalk(Fid *f)
 
     return err;
 }
-/*e: function rwalk (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rwalk]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function ropen (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[ropen]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char *
 ropen(Fid *f)
 {
@@ -543,9 +543,9 @@ ropen(Fid *f)
     f->node->opens++;
     return 0;
 }
-/*e: function ropen (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[ropen]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rcreate (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rcreate]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char*
 rcreate(Fid *f)
 {
@@ -570,9 +570,9 @@ rcreate(Fid *f)
     f->node->opens++;
     return 0;
 }
-/*e: function rcreate (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rcreate]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rread (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rread]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char*
 rread(Fid *f)
 {
@@ -621,9 +621,9 @@ rread(Fid *f)
     rhdr.count = rv;
     return 0;
 }
-/*e: function rread (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rread]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rwrite (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rwrite]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char*
 rwrite(Fid *f)
 {
@@ -643,9 +643,9 @@ rwrite(Fid *f)
     rhdr.count = cnt;
     return 0;
 }
-/*e: function rwrite (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rwrite]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rclunk (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rclunk]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char *
 rclunk(Fid *f)
 {
@@ -662,9 +662,9 @@ rclunk(Fid *f)
     f->busy = 0;
     return 0;
 }
-/*e: function rclunk (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rclunk]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rremove (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rremove]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 /*
  *  remove is an implicit clunk
  */
@@ -687,9 +687,9 @@ rremove(Fid *f)
     f->busy = 0;
     return e;
 }
-/*e: function rremove (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rremove]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rstat (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rstat]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char *
 rstat(Fid *f)
 {
@@ -709,18 +709,18 @@ rstat(Fid *f)
     rhdr.stat = mbuf;
     return 0;
 }
-/*e: function rstat (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rstat]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function rwstat (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[rwstat]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 char *
 rwstat(Fid *f)
 {
     USED(f);
     return "wstat not implemented";
 }
-/*e: function rwstat (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[rwstat]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function fatal (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[fatal]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 /*
  *  print message and die
  */
@@ -741,9 +741,9 @@ fatal(char *fmt, ...)
         postnote(PNGROUP, kapid, "die");
     exits(buf);
 }
-/*e: function fatal (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[fatal]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function safecpy */
+/*s: function [[safecpy]] */
 /*
  *  like strncpy but make sure there's a terminating null
  */
@@ -756,9 +756,9 @@ safecpy(void *to, void *from, int n)
     *a = 0;
     return to;
 }
-/*e: function safecpy */
+/*e: function [[safecpy]] */
 
-/*s: function seterr (networking/ip/ftpfs/ftpfs.c) */
+/*s: function [[seterr]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 /*
  *  set the error string
  */
@@ -772,9 +772,9 @@ seterr(char *fmt, ...)
     va_end(arg);
     return -1;
 }
-/*e: function seterr (networking/ip/ftpfs/ftpfs.c) */
+/*e: function [[seterr]]([[(networking/ip/ftpfs/ftpfs.c)]]) */
 
-/*s: function newnode */
+/*s: function [[newnode]] */
 /*
  *  create a new node
  */
@@ -819,9 +819,9 @@ newnode(Node *parent, String *name)
 
     return np;
 }
-/*e: function newnode */
+/*e: function [[newnode]] */
 
-/*s: function extendpath */
+/*s: function [[extendpath]] */
 /*
  *  walk one down the local mirror of the remote directory tree
  */
@@ -838,9 +838,9 @@ extendpath(Node *parent, String *elem)
 
     return newnode(parent, elem);
 }
-/*e: function extendpath */
+/*e: function [[extendpath]] */
 
-/*s: function uncache */
+/*s: function [[uncache]] */
 /*
  *  flush the cached file, write it back if it's dirty
  */
@@ -852,9 +852,9 @@ uncache(Node *np)
     filefree(np);
     UNCACHED(np);
 }
-/*e: function uncache */
+/*e: function [[uncache]] */
 
-/*s: function invalidate */
+/*s: function [[invalidate]] */
 /*
  *  invalidate all children of a node
  */
@@ -877,9 +877,9 @@ invalidate(Node *node)
         np->d->dev = 0;
     }
 }
-/*e: function invalidate */
+/*e: function [[invalidate]] */
 
-/*s: function newtopsdir */
+/*s: function [[newtopsdir]] */
 /*
  *  make a top level tops-20 directory.  They are automaticly valid.
  */
@@ -905,9 +905,9 @@ newtopsdir(char *name)
     }
     return np;
 }
-/*e: function newtopsdir */
+/*e: function [[newtopsdir]] */
 
-/*s: function fixsymbolic */
+/*s: function [[fixsymbolic]] */
 /*
  *  figure out if a symbolic link is to a directory or a file
  */
@@ -921,5 +921,5 @@ fixsymbolic(Node *node)
         node->d->qid.type = QTFILE;
     node->d->mode &= ~DMSYML; 
 }
-/*e: function fixsymbolic */
+/*e: function [[fixsymbolic]] */
 /*e: networking/ip/ftpfs/ftpfs.c */

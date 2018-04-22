@@ -4,17 +4,17 @@
 #include <ip.h>
 #include "dns.h"
 
-/*s: enum _anon_ (networking/ndb/dnudpserver.c) */
+/*s: enum [[_anon_ (networking/ndb/dnudpserver.c)]] */
 enum {
     Logqueries = 0,
 };
-/*e: enum _anon_ (networking/ndb/dnudpserver.c) */
+/*e: enum [[_anon_ (networking/ndb/dnudpserver.c)]] */
 
 static int	udpannounce(char*);
 static void	reply(int, uchar*, DNSmsg*, Request*);
 
 typedef struct Inprogress Inprogress;
-/*s: struct Inprogress */
+/*s: struct [[Inprogress]] */
 struct Inprogress
 {
     int	inuse;
@@ -23,32 +23,32 @@ struct Inprogress
     ushort	type;
     int	id;
 };
-/*e: struct Inprogress */
-/*s: global inprog */
+/*e: struct [[Inprogress]] */
+/*s: global [[inprog]] */
 Inprogress inprog[Maxactive+2];
-/*e: global inprog */
+/*e: global [[inprog]] */
 
 typedef struct Forwtarg Forwtarg;
-/*s: struct Forwtarg */
+/*s: struct [[Forwtarg]] */
 struct Forwtarg {
     char	*host;
     uchar	addr[IPaddrlen];
     int	fd;
     ulong	lastdial;
 };
-/*e: struct Forwtarg */
-/*s: global forwtarg */
+/*e: struct [[Forwtarg]] */
+/*s: global [[forwtarg]] */
 Forwtarg forwtarg[10];
-/*e: global forwtarg */
-/*s: global currtarg */
+/*e: global [[forwtarg]] */
+/*s: global [[currtarg]] */
 int currtarg;
-/*e: global currtarg */
+/*e: global [[currtarg]] */
 
-/*s: global hmsg (networking/ndb/dnudpserver.c) */
+/*s: global [[hmsg]]([[(networking/ndb/dnudpserver.c)]]) */
 static char *hmsg = "headers";
-/*e: global hmsg (networking/ndb/dnudpserver.c) */
+/*e: global [[hmsg]]([[(networking/ndb/dnudpserver.c)]]) */
 
-/*s: function clientrxmit */
+/*s: function [[clientrxmit]] */
 /*
  *  record client id and ignore retransmissions.
  *  we're still single thread at this point.
@@ -87,9 +87,9 @@ clientrxmit(DNSmsg *req, uchar *buf)
     empty->inuse = 1;
     return empty;
 }
-/*e: function clientrxmit */
+/*e: function [[clientrxmit]] */
 
-/*s: function addforwtarg */
+/*s: function [[addforwtarg]] */
 int
 addforwtarg(char *host)
 {
@@ -114,9 +114,9 @@ addforwtarg(char *host)
     currtarg++;
     return 0;
 }
-/*e: function addforwtarg */
+/*e: function [[addforwtarg]] */
 
-/*s: function redistrib */
+/*s: function [[redistrib]] */
 /*
  * fast forwarding of incoming queries to other dns servers.
  * intended primarily for debugging.
@@ -144,9 +144,9 @@ redistrib(uchar *buf, int len)
             tp->fd = udpport(mntpt);
         }
 }
-/*e: function redistrib */
+/*e: function [[redistrib]] */
 
-/*s: function dnudpserver */
+/*s: function [[dnudpserver]] */
 /*
  *  a process to act as a dns server for outside reqeusts
  */
@@ -291,9 +291,9 @@ freereq:
         }
     }
 }
-/*e: function dnudpserver */
+/*e: function [[dnudpserver]] */
 
-/*s: function udpannounce (networking/ndb/dnudpserver.c) */
+/*s: function [[udpannounce]]([[(networking/ndb/dnudpserver.c)]]) */
 /*
  *  announce on well-known dns udp port and set message style interface
  */
@@ -330,9 +330,9 @@ udpannounce(char *mntpt)
     close(ctl);
     return data;
 }
-/*e: function udpannounce (networking/ndb/dnudpserver.c) */
+/*e: function [[udpannounce]]([[(networking/ndb/dnudpserver.c)]]) */
 
-/*s: function reply (networking/ndb/dnudpserver.c) */
+/*s: function [[reply]]([[(networking/ndb/dnudpserver.c)]]) */
 static void
 reply(int fd, uchar *buf, DNSmsg *rep, Request *reqp)
 {
@@ -351,5 +351,5 @@ reply(int fd, uchar *buf, DNSmsg *rep, Request *reqp)
     if(write(fd, buf, len) != len)
         dnslog("error sending reply: %r");
 }
-/*e: function reply (networking/ndb/dnudpserver.c) */
+/*e: function [[reply]]([[(networking/ndb/dnudpserver.c)]]) */
 /*e: networking/ndb/dnudpserver.c */

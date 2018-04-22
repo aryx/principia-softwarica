@@ -6,7 +6,7 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
-/*s: struct Hdr (networking/ip/snoopy/tcp.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/tcp.c)]]) */
 struct Hdr
 {
     uchar	sport[2];
@@ -19,9 +19,9 @@ struct Hdr
     uchar	urg[2];
     uchar	opt[1];
 };
-/*e: struct Hdr (networking/ip/snoopy/tcp.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/tcp.c)]]) */
 
-/*s: struct PseudoHdr */
+/*s: struct [[PseudoHdr]] */
 typedef struct PseudoHdr{
     uchar	src[4];
     uchar	dst[4];
@@ -30,25 +30,25 @@ typedef struct PseudoHdr{
     uchar	length[2];
     uchar	hdrdata[1580];
 } PseudoHdr;
-/*e: struct PseudoHdr */
+/*e: struct [[PseudoHdr]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/tcp.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/tcp.c)]] */
 enum
 {
     TCPLEN= 20,
 };
-/*e: enum _anon_ (networking/ip/snoopy/tcp.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/tcp.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/tcp.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/tcp.c)2]] */
 enum
 {
     Os,
     Od,
     Osd,
 };
-/*e: enum _anon_ (networking/ip/snoopy/tcp.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/tcp.c)2]] */
 
-/*s: global p_fields (networking/ip/snoopy/tcp.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/tcp.c)]]) */
 static Field p_fields[] =
 {
     {"s",		Fnum,	Os,	"source port",	} ,
@@ -57,9 +57,9 @@ static Field p_fields[] =
     {"sd",		Fnum,	Osd,	"source/dest port",	} ,
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/tcp.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/tcp.c)]]) */
 
-/*s: global p_mux (networking/ip/snoopy/tcp.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/tcp.c)]]) */
 static Mux p_mux[] =
 {
     {"dns",		53, },
@@ -70,9 +70,9 @@ static Mux p_mux[] =
     {"ninep",	17013, },	/* cpu */
     {0},
 };
-/*e: global p_mux (networking/ip/snoopy/tcp.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/tcp.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/tcp.c)3 */
+/*s: enum [[_anon_ (networking/ip/snoopy/tcp.c)3]] */
 enum
 {
     EOLOPT		= 0,
@@ -82,9 +82,9 @@ enum
     WSOPT		= 3,
     WS_LENGTH	= 3,		/* Bits to scale window size by */
 };
-/*e: enum _anon_ (networking/ip/snoopy/tcp.c)3 */
+/*e: enum [[_anon_ (networking/ip/snoopy/tcp.c)3]] */
 
-/*s: function p_compile (networking/ip/snoopy/tcp.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/tcp.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -103,9 +103,9 @@ p_compile(Filter *f)
         }
     sysfatal("unknown tcp field or protocol: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/tcp.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/tcp.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/tcp.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/tcp.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -127,9 +127,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/tcp.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/tcp.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/tcp.c)4 */
+/*s: enum [[_anon_ (networking/ip/snoopy/tcp.c)4]] */
 enum
 {
     URG		= 0x20,		/* Data marked urgent */
@@ -139,9 +139,9 @@ enum
     SYN		= 0x02,		/* Pkt. is synchronise */
     FIN		= 0x01,		/* Start close down */
 };
-/*e: enum _anon_ (networking/ip/snoopy/tcp.c)4 */
+/*e: enum [[_anon_ (networking/ip/snoopy/tcp.c)4]] */
 
-/*s: function flags */
+/*s: function [[flags]] */
 static char*
 flags(int f)
 {
@@ -164,10 +164,10 @@ flags(int f)
     *p = 0;
     return fl;
 }
-/*e: function flags */
+/*e: function [[flags]] */
 
 
-/*s: function p_seprint (networking/ip/snoopy/tcp.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/tcp.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -231,9 +231,9 @@ p_seprint(Msg *m)
     }
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/tcp.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/tcp.c)]]) */
 
-/*s: global tcp */
+/*s: global [[tcp]] */
 Proto tcp =
 {
     "tcp",
@@ -245,5 +245,5 @@ Proto tcp =
     p_fields,
     defaultframer,
 };
-/*e: global tcp */
+/*e: global [[tcp]] */
 /*e: networking/ip/snoopy/tcp.c */

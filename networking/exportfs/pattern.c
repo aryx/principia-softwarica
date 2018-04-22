@@ -8,11 +8,11 @@
 #include "exportfs.h"
 
 Reprog	**exclude, **include;
-/*s: global patternfile (networking/exportfs/pattern.c) */
+/*s: global [[patternfile]]([[(networking/exportfs/pattern.c)]]) */
 char	*patternfile;
-/*e: global patternfile (networking/exportfs/pattern.c) */
+/*e: global [[patternfile]]([[(networking/exportfs/pattern.c)]]) */
 
-/*s: function exclusions */
+/*s: function [[exclusions]] */
 void
 exclusions(void)
 {
@@ -72,9 +72,9 @@ exclusions(void)
     }
     Bterm(f);
 }
-/*e: function exclusions */
+/*e: function [[exclusions]] */
 
-/*s: function excludefile */
+/*s: function [[excludefile]] */
 int
 excludefile(char *path)
 {
@@ -101,9 +101,9 @@ excludefile(char *path)
     }
     return 0;
 }
-/*e: function excludefile */
+/*e: function [[excludefile]] */
 
-/*s: function preaddir */
+/*s: function [[preaddir]] */
 int
 preaddir(Fid *f, uchar *data, int n, vlong offset)
 {
@@ -160,5 +160,5 @@ skipentry:	if(f->cdir >= f->ndir){
     }
     return r;
 }
-/*e: function preaddir */
+/*e: function [[preaddir]] */
 /*e: networking/exportfs/pattern.c */

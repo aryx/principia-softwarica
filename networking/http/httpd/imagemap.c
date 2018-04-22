@@ -9,33 +9,33 @@ typedef struct Point	Point;
 typedef struct OkPoint	OkPoint;
 typedef struct Strings	Strings;
 
-/*s: struct Point */
+/*s: struct [[Point]] */
 struct Point 
 {
     int	x;
     int	y;
 };
-/*e: struct Point */
+/*e: struct [[Point]] */
 
-/*s: struct OkPoint */
+/*s: struct [[OkPoint]] */
 struct OkPoint 
 {
     Point	p;
     int	ok;
 };
-/*e: struct OkPoint */
+/*e: struct [[OkPoint]] */
 
-/*s: struct Strings (networking/ip/httpd/imagemap.c) */
+/*s: struct [[Strings]]([[(networking/ip/httpd/imagemap.c)]]) */
 struct Strings
 {
     char	*s1;
     char	*s2;
 };
-/*e: struct Strings (networking/ip/httpd/imagemap.c) */
+/*e: struct [[Strings]]([[(networking/ip/httpd/imagemap.c)]]) */
 
-/*s: global me */
+/*s: global [[me]] */
 static	char *me;
-/*e: global me */
+/*e: global [[me]] */
 
 int		polytest(int, Point, Point, Point);
 Strings		getfield(char*);
@@ -44,7 +44,7 @@ char*		translate(HConnect*, char*, char*);
 Point		sub(Point, Point);
 float		dist(Point, Point);
 
-/*s: function main (networking/ip/httpd/imagemap.c) */
+/*s: function [[main]]([[(networking/ip/httpd/imagemap.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -88,9 +88,9 @@ main(int argc, char **argv)
         hredirected(c, "302 Found", dest);
     exits(nil);
 }
-/*e: function main (networking/ip/httpd/imagemap.c) */
+/*e: function [[main]]([[(networking/ip/httpd/imagemap.c)]]) */
 
-/*s: function translate */
+/*s: function [[translate]] */
 char*
 translate(HConnect *c, char *uri, char *search)
 {
@@ -241,9 +241,9 @@ translate(HConnect *c, char *uri, char *search)
         to = def;
     return to;
 }
-/*e: function translate */
+/*e: function [[translate]] */
 
-/*s: function polytest */
+/*s: function [[polytest]] */
 int
 polytest(int inside, Point p, Point b, Point a)
 {
@@ -260,9 +260,9 @@ polytest(int inside, Point p, Point b, Point a)
         inside = !inside;
     return inside;
 }
-/*e: function polytest */
+/*e: function [[polytest]] */
 
-/*s: function sub (networking/ip/httpd/imagemap.c) */
+/*s: function [[sub]]([[(networking/ip/httpd/imagemap.c)]]) */
 Point
 sub(Point p, Point q)
 {
@@ -270,9 +270,9 @@ sub(Point p, Point q)
     p.y -= q.y;
     return p;
 }
-/*e: function sub (networking/ip/httpd/imagemap.c) */
+/*e: function [[sub]]([[(networking/ip/httpd/imagemap.c)]]) */
 
-/*s: function dist */
+/*s: function [[dist]] */
 float
 dist(Point p, Point q)
 {
@@ -280,9 +280,9 @@ dist(Point p, Point q)
     p.y -= q.y;
     return (float)p.x * p.x + (float)p.y * p.y;
 }
-/*e: function dist */
+/*e: function [[dist]] */
 
-/*s: function pt */
+/*s: function [[pt]] */
 OkPoint
 pt(char *s)
 {
@@ -320,9 +320,9 @@ pt(char *s)
     okp.ok = 1;
     return okp;
 }
-/*e: function pt */
+/*e: function [[pt]] */
 
-/*s: function getfield */
+/*s: function [[getfield]] */
 Strings
 getfield(char *s)
 {
@@ -340,5 +340,5 @@ getfield(char *s)
     ss.s2 = s;
     return ss;
 }
-/*e: function getfield */
+/*e: function [[getfield]] */
 /*e: networking/ip/httpd/imagemap.c */

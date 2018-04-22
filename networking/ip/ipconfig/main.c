@@ -7,14 +7,14 @@
 #include <ip.h>
 #include <bio.h>
 #include <ndb.h>
-#include "../../dhcp/dhcp.h"
+#include "../dhcp.h"
 #include "ipconfig.h"
 
-/*s: constant DEBUG */
+/*s: constant [[DEBUG]] */
 #define DEBUG if(debug)warning
-/*e: constant DEBUG */
+/*e: constant [[DEBUG]] */
 
-/*s: enum _anon_ (networking/ip/ipconfig/main.c) */
+/*s: enum [[_anon_ (networking/ip/ipconfig/main.c)]] */
 /* possible verbs */
 enum
 {
@@ -33,9 +33,9 @@ enum
     Vtree,
     Vpkt,
 };
-/*e: enum _anon_ (networking/ip/ipconfig/main.c) */
+/*e: enum [[_anon_ (networking/ip/ipconfig/main.c)]] */
 
-/*s: enum _anon_ (networking/ip/ipconfig/main.c)2 */
+/*s: enum [[_anon_ (networking/ip/ipconfig/main.c)2]] */
 enum
 {
     Taddr,
@@ -45,18 +45,18 @@ enum
     Tulong,
     Tvec,
 };
-/*e: enum _anon_ (networking/ip/ipconfig/main.c)2 */
+/*e: enum [[_anon_ (networking/ip/ipconfig/main.c)2]] */
 
 typedef struct Option Option;
-/*s: struct Option */
+/*s: struct [[Option]] */
 struct Option
 {
     char	*name;
     int	type;
 };
-/*e: struct Option */
+/*e: struct [[Option]] */
 
-/*s: global option */
+/*s: global [[option]] */
 /*
  * I was too lazy to look up the types for each of these
  * options.  If someone feels like it, please mail me a
@@ -139,82 +139,82 @@ Option option[256] =
 [ODtftpserver]		{ "tftp",		Taddr },
 [ODbootfile]		{ "bootfile",		Tstr },
 };
-/*e: global option */
+/*e: global [[option]] */
 
-/*s: global defrequested */
+/*s: global [[defrequested]] */
 uchar defrequested[] = {
     OBmask, OBrouter, OBdnserver, OBhostname, OBdomainname, OBntpserver,
 };
-/*e: global defrequested */
+/*e: global [[defrequested]] */
 
-/*s: global requested */
+/*s: global [[requested]] */
 uchar	requested[256];
-/*e: global requested */
-/*s: global nrequested */
+/*e: global [[requested]] */
+/*s: global [[nrequested]] */
 int	nrequested;
-/*e: global nrequested */
+/*e: global [[nrequested]] */
 
-/*s: global Oflag */
+/*s: global [[Oflag]] */
 int	Oflag;
-/*e: global Oflag */
-/*s: global beprimary */
+/*e: global [[Oflag]] */
+/*s: global [[beprimary]] */
 int	beprimary = -1;
-/*e: global beprimary */
-/*s: global conf */
+/*e: global [[beprimary]] */
+/*s: global [[conf]] */
 Conf	conf;
-/*e: global conf */
-/*s: global debug (networking/ip/ipconfig/main.c) */
+/*e: global [[conf]] */
+/*s: global [[debug]]([[(networking/ip/ipconfig/main.c)]]) */
 int	debug;
-/*e: global debug (networking/ip/ipconfig/main.c) */
-/*s: global dodhcp */
+/*e: global [[debug]]([[(networking/ip/ipconfig/main.c)]]) */
+/*s: global [[dodhcp]] */
 int	dodhcp;
-/*e: global dodhcp */
-/*s: global dolog */
+/*e: global [[dodhcp]] */
+/*s: global [[dolog]] */
 int	dolog;
-/*e: global dolog */
-/*s: global dondbconfig */
+/*e: global [[dolog]] */
+/*s: global [[dondbconfig]] */
 int	dondbconfig = 0;
-/*e: global dondbconfig */
-/*s: global dupl_disc */
+/*e: global [[dondbconfig]] */
+/*s: global [[dupl_disc]] */
 int	dupl_disc = 1;		/* flag: V6 duplicate neighbor discovery */
-/*e: global dupl_disc */
+/*e: global [[dupl_disc]] */
 Ctl	*firstctl, **ctll;
-/*s: global ifc */
+/*s: global [[ifc]] */
 Ipifc	*ifc;
-/*e: global ifc */
-/*s: global ipv6auto */
+/*e: global [[ifc]] */
+/*s: global [[ipv6auto]] */
 int	ipv6auto = 0;
-/*e: global ipv6auto */
-/*s: global myifc */
+/*e: global [[ipv6auto]] */
+/*s: global [[myifc]] */
 int	myifc = -1;
-/*e: global myifc */
-/*s: global ndboptions */
+/*e: global [[myifc]] */
+/*s: global [[ndboptions]] */
 char	*ndboptions;
-/*e: global ndboptions */
-/*s: global nip */
+/*e: global [[ndboptions]] */
+/*s: global [[nip]] */
 int	nip;
-/*e: global nip */
-/*s: global noconfig */
+/*e: global [[nip]] */
+/*s: global [[noconfig]] */
 int	noconfig;
-/*e: global noconfig */
-/*s: global nodhcpwatch */
+/*e: global [[noconfig]] */
+/*s: global [[nodhcpwatch]] */
 int	nodhcpwatch;
-/*e: global nodhcpwatch */
-/*s: global optmagic */
+/*e: global [[nodhcpwatch]] */
+/*s: global [[optmagic]] */
 char 	optmagic[4] = { 0x63, 0x82, 0x53, 0x63 };
-/*e: global optmagic */
-/*s: global plan9 */
+/*e: global [[optmagic]] */
+/*s: global [[plan9]] */
 int	plan9 = 1;
-/*e: global plan9 */
-/*s: global sendhostname */
+/*e: global [[plan9]] */
+/*s: global [[sendhostname]] */
 int	sendhostname;
-/*e: global sendhostname */
+/*e: global [[sendhostname]] */
 
-/*s: global logfile */
+/*s: global [[logfile]] */
 static char logfile[] = "ipconfig";
-/*e: global logfile */
+/*e: global [[logfile]] */
 
-/*s: global verbs */
+/*s: global [[verbs]] */
 char *verbs[] = {
 [Vadd]		"add",
 [Vremove]	"remove",
@@ -229,7 +229,7 @@ char *verbs[] = {
 [Vtree]		"tree",
 [Vpkt]		"pkt",
 };
-/*e: global verbs */
+/*e: global [[verbs]] */
 
 void	adddefroute(char*, uchar*);
 int	addoption(char*);
@@ -278,7 +278,7 @@ void	usage(void);
 int	validip(uchar*);
 void	writendb(char*, int, int);
 
-/*s: function usage (networking/ip/ipconfig/main.c) */
+/*s: function [[usage]]([[(networking/ip/ipconfig/main.c)]]) */
 void
 usage(void)
 {
@@ -288,9 +288,9 @@ usage(void)
         "[raddr [fs [auth]]]]]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ip/ipconfig/main.c) */
+/*e: function [[usage]]([[(networking/ip/ipconfig/main.c)]]) */
 
-/*s: function warning */
+/*s: function [[warning]] */
 void
 warning(char *fmt, ...)
 {
@@ -305,9 +305,9 @@ warning(char *fmt, ...)
     else
         fprint(2, "%s: %s\n", argv0, buf);
 }
-/*e: function warning */
+/*e: function [[warning]] */
 
-/*s: function parsenorm */
+/*s: function [[parsenorm]] */
 static void
 parsenorm(int argc, char **argv)
 {
@@ -342,9 +342,9 @@ parsenorm(int argc, char **argv)
         usage();
     }
 }
-/*e: function parsenorm */
+/*e: function [[parsenorm]] */
 
-/*s: function parse6pref */
+/*s: function [[parse6pref]] */
 static void
 parse6pref(int argc, char **argv)
 {
@@ -371,9 +371,9 @@ parse6pref(int argc, char **argv)
     }
     DEBUG("parse6pref: pref %I len %d", conf.v6pref, conf.prefixlen);
 }
-/*e: function parse6pref */
+/*e: function [[parse6pref]] */
 
-/*s: function parse6ra */
+/*s: function [[parse6ra]] */
 /* parse router advertisement (keyword, value) pairs */
 static void
 parse6ra(int argc, char **argv)
@@ -422,9 +422,9 @@ parse6ra(int argc, char **argv)
         sysfatal("maxraint %d < minraint %d",
             conf.maxraint, conf.minraint);
 }
-/*e: function parse6ra */
+/*e: function [[parse6ra]] */
 
-/*s: function init */
+/*s: function [[init]] */
 static void
 init(void)
 {
@@ -447,9 +447,9 @@ init(void)
     nrequested = sizeof defrequested;
     memcpy(requested, defrequested, nrequested);
 }
-/*e: function init */
+/*e: function [[init]] */
 
-/*s: function parseargs */
+/*s: function [[parseargs]] */
 static int
 parseargs(int argc, char **argv)
 {
@@ -532,9 +532,9 @@ parseargs(int argc, char **argv)
     }
     return action;
 }
-/*e: function parseargs */
+/*e: function [[parseargs]] */
 
-/*s: function main (networking/ip/ipconfig/main.c) */
+/*s: function [[main]]([[(networking/ip/ipconfig/main.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -634,9 +634,9 @@ main(int argc, char **argv)
     }
     exits(0);
 }
-/*e: function main (networking/ip/ipconfig/main.c) */
+/*e: function [[main]]([[(networking/ip/ipconfig/main.c)]]) */
 
-/*s: function havendb */
+/*s: function [[havendb]] */
 int
 havendb(char *net)
 {
@@ -653,9 +653,9 @@ havendb(char *net)
     free(d);
     return 1;
 }
-/*e: function havendb */
+/*e: function [[havendb]] */
 
-/*s: function doadd */
+/*s: function [[doadd]] */
 void
 doadd(int retry)
 {
@@ -724,9 +724,9 @@ doadd(int retry)
         tweakservers();
     }
 }
-/*e: function doadd */
+/*e: function [[doadd]] */
 
-/*s: function doremove */
+/*s: function [[doremove]] */
 void
 doremove(void)
 {
@@ -764,9 +764,9 @@ doremove(void)
         }
     }
 }
-/*e: function doremove */
+/*e: function [[doremove]] */
 
-/*s: function dounbind */
+/*s: function [[dounbind]] */
 void
 dounbind(void)
 {
@@ -790,9 +790,9 @@ dounbind(void)
         }
     }
 }
-/*e: function dounbind */
+/*e: function [[dounbind]] */
 
-/*s: function adddefroute */
+/*s: function [[adddefroute]] */
 /* set the default route */
 void
 adddefroute(char *mpoint, uchar *gaddr)
@@ -811,9 +811,9 @@ adddefroute(char *mpoint, uchar *gaddr)
         fprint(cfd, "add :: /0 %I", gaddr);
     close(cfd);
 }
-/*e: function adddefroute */
+/*e: function [[adddefroute]] */
 
-/*s: function mkclientid */
+/*s: function [[mkclientid]] */
 /* create a client id */
 void
 mkclientid(void)
@@ -832,9 +832,9 @@ mkclientid(void)
             conf.cidlen = strlen((char*)conf.cid);
         }
 }
-/*e: function mkclientid */
+/*e: function [[mkclientid]] */
 
-/*s: function lookforip */
+/*s: function [[lookforip]] */
 /* bind ip into the namespace */
 void
 lookforip(char *net)
@@ -846,9 +846,9 @@ lookforip(char *net)
         return;
     sysfatal("no ip stack bound onto %s", net);
 }
-/*e: function lookforip */
+/*e: function [[lookforip]] */
 
-/*s: function controldevice */
+/*s: function [[controldevice]] */
 /* send some ctls to a device */
 void
 controldevice(void)
@@ -873,9 +873,9 @@ controldevice(void)
     }
 //	close(fd);		/* or does it need to be left hanging? */
 }
-/*e: function controldevice */
+/*e: function [[controldevice]] */
 
-/*s: function binddevice */
+/*s: function [[binddevice]] */
 /* bind an ip stack to a device, leave the control channel open */
 void
 binddevice(void)
@@ -903,9 +903,9 @@ binddevice(void)
     }
 
 }
-/*e: function binddevice */
+/*e: function [[binddevice]] */
 
-/*s: function ip4cfg */
+/*s: function [[ip4cfg]] */
 /* add a logical interface to the ip stack */
 int
 ip4cfg(void)
@@ -939,9 +939,9 @@ ip4cfg(void)
 
     return 0;
 }
-/*e: function ip4cfg */
+/*e: function [[ip4cfg]] */
 
-/*s: function ipunconfig */
+/*s: function [[ipunconfig]] */
 /* remove a logical interface to the ip stack */
 void
 ipunconfig(void)
@@ -969,9 +969,9 @@ ipunconfig(void)
     if(beprimary==1)
         writendb("", 0, 0);
 }
-/*e: function ipunconfig */
+/*e: function [[ipunconfig]] */
 
-/*s: function ding */
+/*s: function [[ding]] */
 void
 ding(void*, char *msg)
 {
@@ -979,9 +979,9 @@ ding(void*, char *msg)
         noted(NCONT);
     noted(NDFLT);
 }
-/*e: function ding */
+/*e: function [[ding]] */
 
-/*s: function dhcpquery */
+/*s: function [[dhcpquery]] */
 void
 dhcpquery(int needconfig, int startstate)
 {
@@ -1026,9 +1026,9 @@ dhcpquery(int needconfig, int startstate)
         fprint(conf.cfd, "remove %I %I", IPnoaddr, IPnoaddr);
 
 }
-/*e: function dhcpquery */
+/*e: function [[dhcpquery]] */
 
-/*s: enum _anon_ (networking/ip/ipconfig/main.c)3 */
+/*s: enum [[_anon_ (networking/ip/ipconfig/main.c)3]] */
 enum {
     /*
      * was an hour, needs to be less for the ARM/GS1 until the timer
@@ -1036,9 +1036,9 @@ enum {
      */
     Maxsleep = 450,
 };
-/*e: enum _anon_ (networking/ip/ipconfig/main.c)3 */
+/*e: enum [[_anon_ (networking/ip/ipconfig/main.c)3]] */
 
-/*s: function dhcpwatch */
+/*s: function [[dhcpwatch]] */
 void
 dhcpwatch(int needconfig)
 {
@@ -1107,9 +1107,9 @@ dhcpwatch(int needconfig)
         }
     }
 }
-/*e: function dhcpwatch */
+/*e: function [[dhcpwatch]] */
 
-/*s: function dhcptimer */
+/*s: function [[dhcptimer]] */
 int
 dhcptimer(void)
 {
@@ -1146,9 +1146,9 @@ dhcptimer(void)
     }
     return 0;
 }
-/*e: function dhcptimer */
+/*e: function [[dhcptimer]] */
 
-/*s: function dhcpsend */
+/*s: function [[dhcpsend]] */
 void
 dhcpsend(int type)
 {
@@ -1239,9 +1239,9 @@ dhcpsend(int type)
     if(write(conf.fd, &bp, sizeof bp) != sizeof bp)
         warning("dhcpsend: write failed: %r");
 }
-/*e: function dhcpsend */
+/*e: function [[dhcpsend]] */
 
-/*s: function dhcprecv */
+/*s: function [[dhcprecv]] */
 void
 dhcprecv(void)
 {
@@ -1421,9 +1421,9 @@ dhcprecv(void)
         break;
     }
 }
-/*e: function dhcprecv */
+/*e: function [[dhcprecv]] */
 
-/*s: function randint */
+/*s: function [[randint]] */
 /* return pseudo-random integer in range low...(hi-1) */
 ulong
 randint(ulong low, ulong hi)
@@ -1432,17 +1432,17 @@ randint(ulong low, ulong hi)
         return low;
     return low + nrand(hi - low);
 }
-/*e: function randint */
+/*e: function [[randint]] */
 
-/*s: function jitter */
+/*s: function [[jitter]] */
 long
 jitter(void)		/* compute small pseudo-random delay in ms */
 {
     return randint(0, 10*1000);
 }
-/*e: function jitter */
+/*e: function [[jitter]] */
 
-/*s: function openlisten */
+/*s: function [[openlisten]] */
 int
 openlisten(void)
 {
@@ -1475,9 +1475,9 @@ openlisten(void)
     close(cfd);
     return fd;
 }
-/*e: function openlisten */
+/*e: function [[openlisten]] */
 
-/*s: function optadd */
+/*s: function [[optadd]] */
 uchar*
 optadd(uchar *p, int op, void *d, int n)
 {
@@ -1486,9 +1486,9 @@ optadd(uchar *p, int op, void *d, int n)
     memmove(p+2, d, n);
     return p+n+2;
 }
-/*e: function optadd */
+/*e: function [[optadd]] */
 
-/*s: function optaddbyte */
+/*s: function [[optaddbyte]] */
 uchar*
 optaddbyte(uchar *p, int op, int b)
 {
@@ -1497,9 +1497,9 @@ optaddbyte(uchar *p, int op, int b)
     p[2] = b;
     return p+3;
 }
-/*e: function optaddbyte */
+/*e: function [[optaddbyte]] */
 
-/*s: function optaddulong */
+/*s: function [[optaddulong]] */
 uchar*
 optaddulong(uchar *p, int op, ulong x)
 {
@@ -1508,9 +1508,9 @@ optaddulong(uchar *p, int op, ulong x)
     hnputl(p+2, x);
     return p+6;
 }
-/*e: function optaddulong */
+/*e: function [[optaddulong]] */
 
-/*s: function optaddaddr */
+/*s: function [[optaddaddr]] */
 uchar *
 optaddaddr(uchar *p, int op, uchar *ip)
 {
@@ -1519,9 +1519,9 @@ optaddaddr(uchar *p, int op, uchar *ip)
     v6tov4(p+2, ip);
     return p+6;
 }
-/*e: function optaddaddr */
+/*e: function [[optaddaddr]] */
 
-/*s: function optaddvec */
+/*s: function [[optaddvec]] */
 /* add dhcp option op with value v of length n to dhcp option array p */
 uchar *
 optaddvec(uchar *p, int op, uchar *v, int n)
@@ -1531,9 +1531,9 @@ optaddvec(uchar *p, int op, uchar *v, int n)
     memmove(p+2, v, n);
     return p+2+n;
 }
-/*e: function optaddvec */
+/*e: function [[optaddvec]] */
 
-/*s: function optaddstr */
+/*s: function [[optaddstr]] */
 uchar *
 optaddstr(uchar *p, int op, char *v)
 {
@@ -1545,9 +1545,9 @@ optaddstr(uchar *p, int op, char *v)
     memmove(p+2, v, n);
     return p+2+n;
 }
-/*e: function optaddstr */
+/*e: function [[optaddstr]] */
 
-/*s: function optget */
+/*s: function [[optget]] */
 /*
  * parse p, looking for option `op'.  if non-nil, np points to minimum length.
  * return nil if option is too small, else ptr to opt, and
@@ -1576,9 +1576,9 @@ optget(uchar *p, int op, int *np)
     }
     return 0;
 }
-/*e: function optget */
+/*e: function [[optget]] */
 
-/*s: function optgetbyte */
+/*s: function [[optgetbyte]] */
 int
 optgetbyte(uchar *p, int op)
 {
@@ -1590,9 +1590,9 @@ optgetbyte(uchar *p, int op)
         return 0;
     return *p;
 }
-/*e: function optgetbyte */
+/*e: function [[optgetbyte]] */
 
-/*s: function optgetulong */
+/*s: function [[optgetulong]] */
 ulong
 optgetulong(uchar *p, int op)
 {
@@ -1604,9 +1604,9 @@ optgetulong(uchar *p, int op)
         return 0;
     return nhgetl(p);
 }
-/*e: function optgetulong */
+/*e: function [[optgetulong]] */
 
-/*s: function optgetaddr */
+/*s: function [[optgetaddr]] */
 int
 optgetaddr(uchar *p, int op, uchar *ip)
 {
@@ -1619,9 +1619,9 @@ optgetaddr(uchar *p, int op, uchar *ip)
     v4tov6(ip, p);
     return 1;
 }
-/*e: function optgetaddr */
+/*e: function [[optgetaddr]] */
 
-/*s: function optgetaddrs */
+/*s: function [[optgetaddrs]] */
 /* expect at most n addresses; ip[] only has room for that many */
 int
 optgetaddrs(uchar *p, int op, uchar *ip, int n)
@@ -1639,9 +1639,9 @@ optgetaddrs(uchar *p, int op, uchar *ip, int n)
         v4tov6(&ip[i*IPaddrlen], &p[i*IPv4addrlen]);
     return i;
 }
-/*e: function optgetaddrs */
+/*e: function [[optgetaddrs]] */
 
-/*s: function optgetp9addrs */
+/*s: function [[optgetp9addrs]] */
 /* expect at most n addresses; ip[] only has room for that many */
 int
 optgetp9addrs(uchar *ap, int op, uchar *ip, int n)
@@ -1665,9 +1665,9 @@ optgetp9addrs(uchar *ap, int op, uchar *ip, int n)
     }
     return addrs;
 }
-/*e: function optgetp9addrs */
+/*e: function [[optgetp9addrs]] */
 
-/*s: function optgetvec */
+/*s: function [[optgetvec]] */
 int
 optgetvec(uchar *p, int op, uchar *v, int n)
 {
@@ -1682,9 +1682,9 @@ optgetvec(uchar *p, int op, uchar *v, int n)
     memmove(v, p, len);
     return len;
 }
-/*e: function optgetvec */
+/*e: function [[optgetvec]] */
 
-/*s: function optgetstr */
+/*s: function [[optgetstr]] */
 int
 optgetstr(uchar *p, int op, char *s, int n)
 {
@@ -1700,9 +1700,9 @@ optgetstr(uchar *p, int op, char *s, int n)
     s[len] = 0;
     return len;
 }
-/*e: function optgetstr */
+/*e: function [[optgetstr]] */
 
-/*s: function parseoptions */
+/*s: function [[parseoptions]] */
 /*
  * sanity check options area
  * 	- options don't overflow packet
@@ -1743,9 +1743,9 @@ parseoptions(uchar *p, int n)
     *p = OBend;
     return 0;
 }
-/*e: function parseoptions */
+/*e: function [[parseoptions]] */
 
-/*s: function parsebootp */
+/*s: function [[parsebootp]] */
 /*
  * sanity check received packet:
  * 	- magic is dhcp magic
@@ -1790,9 +1790,9 @@ parsebootp(uchar *p, int n)
         return nil;
     return bp;
 }
-/*e: function parsebootp */
+/*e: function [[parsebootp]] */
 
-/*s: function writendb */
+/*s: function [[writendb]] */
 /* write out an ndb entry */
 void
 writendb(char *s, int n, int append)
@@ -1809,9 +1809,9 @@ writendb(char *s, int n, int append)
     write(fd, s, n);
     close(fd);
 }
-/*e: function writendb */
+/*e: function [[writendb]] */
 
-/*s: function putaddrs */
+/*s: function [[putaddrs]] */
 /* put server addresses into the ndb entry */
 char*
 putaddrs(char *p, char *e, char *attr, uchar *a, int len)
@@ -1822,9 +1822,9 @@ putaddrs(char *p, char *e, char *attr, uchar *a, int len)
         p = seprint(p, e, "%s=%I\n", attr, a);
     return p;
 }
-/*e: function putaddrs */
+/*e: function [[putaddrs]] */
 
-/*s: function putndb */
+/*s: function [[putndb]] */
 /* make an ndb entry and put it into /net/ndb for the servers to see */
 void
 putndb(void)
@@ -1865,9 +1865,9 @@ putndb(void)
     if(p > buf)
         writendb(buf, p-buf, append);
 }
-/*e: function putndb */
+/*e: function [[putndb]] */
 
-/*s: function getndb */
+/*s: function [[getndb]] */
 /* get an ndb entry someone else wrote */
 int
 getndb(void)
@@ -1890,9 +1890,9 @@ getndb(void)
         fprint(2, "%s: bad address %s\n", argv0, p+3);
     return 0;
 }
-/*e: function getndb */
+/*e: function [[getndb]] */
 
-/*s: function tweakserver */
+/*s: function [[tweakserver]] */
 /* tell a server to refresh */
 void
 tweakserver(char *server)
@@ -1907,9 +1907,9 @@ tweakserver(char *server)
     fprint(fd, "refresh");
     close(fd);
 }
-/*e: function tweakserver */
+/*e: function [[tweakserver]] */
 
-/*s: function tweakservers */
+/*s: function [[tweakservers]] */
 /* tell all servers to refresh their information */
 void
 tweakservers(void)
@@ -1917,9 +1917,9 @@ tweakservers(void)
     tweakserver("dns");
     tweakserver("cs");
 }
-/*e: function tweakservers */
+/*e: function [[tweakservers]] */
 
-/*s: function nipifcs */
+/*s: function [[nipifcs]] */
 /* return number of networks */
 int
 nipifcs(char *net)
@@ -1946,18 +1946,18 @@ nipifcs(char *net)
     }
     return n;
 }
-/*e: function nipifcs */
+/*e: function [[nipifcs]] */
 
-/*s: function validip */
+/*s: function [[validip]] */
 /* return true if this is a valid v4 address */
 int
 validip(uchar *addr)
 {
     return ipcmp(addr, IPnoaddr) != 0 && ipcmp(addr, v4prefix) != 0;
 }
-/*e: function validip */
+/*e: function [[validip]] */
 
-/*s: function parseverb */
+/*s: function [[parseverb]] */
 /* look for an action */
 int
 parseverb(char *name)
@@ -1969,9 +1969,9 @@ parseverb(char *name)
             return i;
     return -1;
 }
-/*e: function parseverb */
+/*e: function [[parseverb]] */
 
-/*s: function ndbconfig */
+/*s: function [[ndbconfig]] */
 /* get everything out of ndb */
 void
 ndbconfig(void)
@@ -2024,9 +2024,9 @@ ndbconfig(void)
     if(!validip(conf.laddr))
         sysfatal("address not found in ndb");
 }
-/*e: function ndbconfig */
+/*e: function [[ndbconfig]] */
 
-/*s: function addoption */
+/*s: function [[addoption]] */
 int
 addoption(char *opt)
 {
@@ -2045,9 +2045,9 @@ addoption(char *opt)
         }
     return -1;
 }
-/*e: function addoption */
+/*e: function [[addoption]] */
 
-/*s: function optgetx */
+/*s: function [[optgetx]] */
 char*
 optgetx(uchar *p, uchar opt)
 {
@@ -2101,9 +2101,9 @@ optgetx(uchar *p, uchar opt)
     }
     return s;
 }
-/*e: function optgetx */
+/*e: function [[optgetx]] */
 
-/*s: function getoptions */
+/*s: function [[getoptions]] */
 void
 getoptions(uchar *p)
 {
@@ -2124,5 +2124,5 @@ getoptions(uchar *p)
         free(s);
     }
 }
-/*e: function getoptions */
+/*e: function [[getoptions]] */
 /*e: networking/ip/ipconfig/main.c */

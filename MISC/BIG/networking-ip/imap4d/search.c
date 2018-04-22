@@ -10,7 +10,7 @@ static int	addrSearch(MAddr *a, char *s);
 static int	fileSearch(Msg *m, char *file, char *pat);
 static int	headerSearch(Msg *m, char *hdr, char *pat);
 
-/*s: function searchMsg */
+/*s: function [[searchMsg]] */
 /*
  * free to exit, parseErr, since called before starting any client reply
  *
@@ -153,9 +153,9 @@ searchMsg(Msg *m, Search *s)
     }
     return ok;
 }
-/*e: function searchMsg */
+/*e: function [[searchMsg]] */
 
-/*s: function fileSearch */
+/*s: function [[fileSearch]] */
 static int
 fileSearch(Msg *m, char *file, char *pat)
 {
@@ -189,9 +189,9 @@ fileSearch(Msg *m, char *file, char *pat)
     close(fd);
     return ok;
 }
-/*e: function fileSearch */
+/*e: function [[fileSearch]] */
 
-/*s: function headerSearch */
+/*s: function [[headerSearch]] */
 static int
 headerSearch(Msg *m, char *hdr, char *pat)
 {
@@ -212,9 +212,9 @@ headerSearch(Msg *m, char *hdr, char *pat)
     free(s);
     return ok;
 }
-/*e: function headerSearch */
+/*e: function [[headerSearch]] */
 
-/*s: function addrSearch */
+/*s: function [[addrSearch]] */
 static int
 addrSearch(MAddr *a, char *s)
 {
@@ -229,9 +229,9 @@ addrSearch(MAddr *a, char *s)
     }
     return 0;
 }
-/*e: function addrSearch */
+/*e: function [[addrSearch]] */
 
-/*s: function dateCmp */
+/*s: function [[dateCmp]] */
 static int
 dateCmp(char *date, Search *s)
 {
@@ -252,5 +252,5 @@ dateCmp(char *date, Search *s)
         return 1;
     return 0;
 }
-/*e: function dateCmp */
+/*e: function [[dateCmp]] */
 /*e: networking/ip/imap4d/search.c */

@@ -6,7 +6,7 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
-/*s: struct Hdr (networking/ip/snoopy/il.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/il.c)]]) */
 struct Hdr
 {
     uchar	sum[2];		/* Checksum including header */
@@ -18,25 +18,25 @@ struct Hdr
     uchar	id[4];		/* Sequence id */
     uchar	ack[4];		/* Acked sequence */
 };
-/*e: struct Hdr (networking/ip/snoopy/il.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/il.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/il.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/il.c)]] */
 enum
 {
     ILLEN= 18,
 };
-/*e: enum _anon_ (networking/ip/snoopy/il.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/il.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/il.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/il.c)2]] */
 enum
 {
     Os,
     Od,
     Osd,
 };
-/*e: enum _anon_ (networking/ip/snoopy/il.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/il.c)2]] */
 
-/*s: global p_fields (networking/ip/snoopy/il.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/il.c)]]) */
 static Field p_fields[] = 
 {
     {"s",		Fnum,	Os,	"source port",	} ,
@@ -45,9 +45,9 @@ static Field p_fields[] =
     {"sd",		Fnum,	Osd,	"source/dest port",	} ,
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/il.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/il.c)]]) */
 
-/*s: global p_mux (networking/ip/snoopy/il.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/il.c)]]) */
 static Mux p_mux[] =
 {
     {"ninep",	17007, },	/* exportfs */
@@ -57,9 +57,9 @@ static Mux p_mux[] =
     {"ninep",	17013, },	/* cpu */
     {0},
 };
-/*e: global p_mux (networking/ip/snoopy/il.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/il.c)]]) */
 
-/*s: function p_compile (networking/ip/snoopy/il.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/il.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -78,9 +78,9 @@ p_compile(Filter *f)
         }
     sysfatal("unknown il field or protocol: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/il.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/il.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/il.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/il.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -101,9 +101,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/il.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/il.c)]]) */
 
-/*s: global pktnames */
+/*s: global [[pktnames]] */
 char *pktnames[] = 
 {
     "Sync",	
@@ -114,9 +114,9 @@ char *pktnames[] =
     "State",
     "Close"
 };
-/*e: global pktnames */
+/*e: global [[pktnames]] */
 
-/*s: function pkttype */
+/*s: function [[pkttype]] */
 static char*
 pkttype(int t)
 {
@@ -128,9 +128,9 @@ pkttype(int t)
     }
     return pktnames[t];
 }
-/*e: function pkttype */
+/*e: function [[pkttype]] */
 
-/*s: function p_seprint (networking/ip/snoopy/il.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/il.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -153,9 +153,9 @@ p_seprint(Msg *m)
             NetS(h->sum), NetS(h->len));
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/il.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/il.c)]]) */
 
-/*s: global il */
+/*s: global [[il]] */
 Proto il =
 {
     "il",
@@ -167,5 +167,5 @@ Proto il =
     p_fields,
     defaultframer,
 };
-/*e: global il */
+/*e: global [[il]] */
 /*e: networking/ip/snoopy/il.c */

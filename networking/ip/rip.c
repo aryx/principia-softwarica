@@ -4,7 +4,7 @@
 #include <bio.h>
 #include <ip.h>
 
-/*s: enum _anon_ (networking/ip/rip.c) */
+/*s: enum [[_anon_ (networking/ip/rip.c)]] */
 enum
 {
     Version=	1,
@@ -27,7 +27,7 @@ enum
     Infinity=	16,	/* infinite hop count */
     Maxpacket=	488,	/* largest packet body */
 };
-/*e: enum _anon_ (networking/ip/rip.c) */
+/*e: enum [[_anon_ (networking/ip/rip.c)]] */
 
 // forward decl
 typedef struct Rip	Rip;
@@ -39,7 +39,7 @@ typedef struct Bnet Bnet;
 /*
  *  network info
  */
-/*s: struct Rip */
+/*s: struct [[Rip]] */
 struct Rip
 {
     uchar	family[2];
@@ -48,8 +48,8 @@ struct Rip
     uchar	pad[8];
     uchar	metric[4];
 };
-/*e: struct Rip */
-/*s: struct Ripmsg */
+/*e: struct [[Rip]] */
+/*s: struct [[Ripmsg]] */
 struct Ripmsg
 {
     uchar	type;
@@ -57,16 +57,16 @@ struct Ripmsg
     uchar	pad[2];
     Rip	rip[1];		/* the rest of the packet consists of routes */
 };
-/*e: struct Ripmsg */
+/*e: struct [[Ripmsg]] */
 
-/*s: enum _anon_ (networking/ip/rip.c)2 */
+/*s: enum [[_anon_ (networking/ip/rip.c)2]] */
 enum
 {
     Maxroutes=	(Maxpacket-4)/sizeof(Ripmsg),
 };
-/*e: enum _anon_ (networking/ip/rip.c)2 */
+/*e: enum [[_anon_ (networking/ip/rip.c)2]] */
 
-/*s: enum _anon_ (networking/ip/rip.c)3 */
+/*s: enum [[_anon_ (networking/ip/rip.c)3]] */
 /*
  *  internal route info
  */
@@ -76,9 +76,9 @@ enum
     Nhash=	256,		/* routing hash buckets */
     Nifc=	16,
 };
-/*e: enum _anon_ (networking/ip/rip.c)3 */
+/*e: enum [[_anon_ (networking/ip/rip.c)3]] */
 
-/*s: struct Route (networking/ip/rip.c) */
+/*s: struct [[Route]]([[(networking/ip/rip.c)]]) */
 struct Route
 {
     Route	*next;
@@ -90,17 +90,17 @@ struct Route
     int	inuse;
     long	time;
 };
-/*e: struct Route (networking/ip/rip.c) */
-/*s: global ralloc */
+/*e: struct [[Route]]([[(networking/ip/rip.c)]]) */
+/*s: global [[ralloc]] */
 struct {
     Route	route[Nroute];
     Route	*hash[Nhash];
     int	nroute;
     Route	def;	/* default route (immutable by us) */
 } ralloc;
-/*e: global ralloc */
+/*e: global [[ralloc]] */
 
-/*s: struct Ifc */
+/*s: struct [[Ifc]] */
 struct Ifc
 {
     int	bcast;
@@ -110,46 +110,46 @@ struct Ifc
     uchar	*cmask;		/* class mask */
     uchar	cnet[Pasize];	/* class net */
 };
-/*e: struct Ifc */
-/*s: global ialloc */
+/*e: struct [[Ifc]] */
+/*s: global [[ialloc]] */
 struct {
     Ifc	ifc[Nifc];
     int	nifc;
 } ialloc;
-/*e: global ialloc */
+/*e: global [[ialloc]] */
 
 /*
  *  specific networks to broadcast on
  */
-/*s: struct Bnet */
+/*s: struct [[Bnet]] */
 struct Bnet
 {
     Bnet	*next;
     uchar	addr[Pasize];
 };
-/*e: struct Bnet */
-/*s: global bnets */
+/*e: struct [[Bnet]] */
+/*s: global [[bnets]] */
 Bnet	*bnets;
-/*e: global bnets */
+/*e: global [[bnets]] */
 
-/*s: global ripfd */
+/*s: global [[ripfd]] */
 int	ripfd;
-/*e: global ripfd */
-/*s: global now */
+/*e: global [[ripfd]] */
+/*s: global [[now]] */
 long	now;
-/*e: global now */
-/*s: global debug (networking/ip/rip.c) */
+/*e: global [[now]] */
+/*s: global [[debug]]([[(networking/ip/rip.c)]]) */
 int	debug;
-/*e: global debug (networking/ip/rip.c) */
-/*s: global readonly */
+/*e: global [[debug]]([[(networking/ip/rip.c)]]) */
+/*s: global [[readonly]] */
 int	readonly;
-/*e: global readonly */
-/*s: global routefile */
+/*e: global [[readonly]] */
+/*s: global [[routefile]] */
 char	routefile[256];
-/*e: global routefile */
-/*s: global netdir */
+/*e: global [[routefile]] */
+/*s: global [[netdir]] */
 char	netdir[256];
-/*e: global netdir */
+/*e: global [[netdir]] */
 
 int	openport(void);
 void	readroutes(void);
@@ -161,7 +161,7 @@ uchar	*getmask(uchar*);
 void	broadcast(void);
 void	timeoutroutes(void);
 
-/*s: function fatal */
+/*s: function [[fatal]] */
 void
 fatal(int syserr, char *fmt, ...)
 {
@@ -179,9 +179,9 @@ fatal(int syserr, char *fmt, ...)
         fprint(2, "routed: %s\n", buf);
     exits(buf);
 }
-/*e: function fatal */
+/*e: function [[fatal]] */
 
-/*s: function v4parseipmask */
+/*s: function [[v4parseipmask]] */
 ulong
 v4parseipmask(uchar *ip, char *p)
 {
@@ -192,9 +192,9 @@ v4parseipmask(uchar *ip, char *p)
     memmove(ip, v6ip+IPv4off, 4);
     return x;
 }
-/*e: function v4parseipmask */
+/*e: function [[v4parseipmask]] */
 
-/*s: function v4defmask */
+/*s: function [[v4defmask]] */
 uchar*
 v4defmask(uchar *ip)
 {
@@ -204,9 +204,9 @@ v4defmask(uchar *ip)
     ip = defmask(v6ip);
     return ip+IPv4off;
 }
-/*e: function v4defmask */
+/*e: function [[v4defmask]] */
 
-/*s: function v4maskip */
+/*s: function [[v4maskip]] */
 void
 v4maskip(uchar *from, uchar *mask, uchar *to)
 {
@@ -215,21 +215,21 @@ v4maskip(uchar *from, uchar *mask, uchar *to)
     for(i = 0; i < Pasize; i++)
         *to++ = *from++ & *mask++;
 }
-/*e: function v4maskip */
+/*e: function [[v4maskip]] */
 
-/*s: function v6tov4mask */
+/*s: function [[v6tov4mask]] */
 void
 v6tov4mask(uchar *v4, uchar *v6)
 {
     memmove(v4, v6+IPv4off, 4);
 }
-/*e: function v6tov4mask */
+/*e: function [[v6tov4mask]] */
 
-/*s: macro equivip */
+/*s: macro [[equivip]] */
 #define equivip(a, b) (memcmp((a), (b), Pasize) == 0)
-/*e: macro equivip */
+/*e: macro [[equivip]] */
 
-/*s: function ding (networking/ip/rip.c) */
+/*s: function [[ding]]([[(networking/ip/rip.c)]]) */
 void
 ding(void *u, char *msg)
 {
@@ -239,18 +239,18 @@ ding(void *u, char *msg)
         noted(NCONT);
     noted(NDFLT);
 }
-/*e: function ding (networking/ip/rip.c) */
+/*e: function [[ding]]([[(networking/ip/rip.c)]]) */
 
-/*s: function usage (networking/ip/rip.c) */
+/*s: function [[usage]]([[(networking/ip/rip.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-bnd] [-x netmtpt]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ip/rip.c) */
+/*e: function [[usage]]([[(networking/ip/rip.c)]]) */
 
-/*s: function main (networking/ip/rip.c) */
+/*s: function [[main]]([[(networking/ip/rip.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -371,9 +371,9 @@ main(int argc, char *argv[])
     }
     /* not reached */
 }
-/*e: function main (networking/ip/rip.c) */
+/*e: function [[main]]([[(networking/ip/rip.c)]]) */
 
-/*s: function openport */
+/*s: function [[openport]] */
 int
 openport(void)
 {
@@ -393,13 +393,13 @@ openport(void)
         fatal(1, "open udp data");
     return rip;
 }
-/*e: function openport */
+/*e: function [[openport]] */
 
-/*s: global ifcs */
+/*s: global [[ifcs]] */
 Ipifc *ifcs;
-/*e: global ifcs */
+/*e: global [[ifcs]] */
 
-/*s: function readifcs */
+/*s: function [[readifcs]] */
 void
 readifcs(void)
 {
@@ -444,9 +444,9 @@ readifcs(void)
     }
     ialloc.nifc = i;
 }
-/*e: function readifcs */
+/*e: function [[readifcs]] */
 
-/*s: function readroutes */
+/*s: function [[readroutes]] */
 void
 readroutes(void)
 {
@@ -476,9 +476,9 @@ readroutes(void)
     }
     Bterm(b);
 }
-/*e: function readroutes */
+/*e: function [[readroutes]] */
 
-/*s: function rhash */
+/*s: function [[rhash]] */
 /*
  *  route's hashed by net, not subnet
  */
@@ -492,9 +492,9 @@ rhash(uchar *d)
     h = net[0] + net[1] + net[2];
     return h % Nhash;
 }
-/*e: function rhash */
+/*e: function [[rhash]] */
 
-/*s: function considerroute */
+/*s: function [[considerroute]] */
 /*
  *  consider installing a route.  Do so only if it is better than what
  *  we have.
@@ -550,9 +550,9 @@ considerroute(Route *r)
     ralloc.hash[h] = hp;
     installroute(hp);
 }
-/*e: function considerroute */
+/*e: function [[considerroute]] */
 
-/*s: function removeroute */
+/*s: function [[removeroute]] */
 void
 removeroute(Route *r)
 {
@@ -569,9 +569,9 @@ removeroute(Route *r)
         fprint(2, "removeroute %V\n", r->dest);
     close(fd);
 }
-/*e: function removeroute */
+/*e: function [[removeroute]] */
 
-/*s: function installroute */
+/*s: function [[installroute]] */
 /*
  *  pass a route to the kernel or /ip.  Don't bother if it is just the default
  *  gateway.
@@ -628,9 +628,9 @@ installroute(Route *r)
         fprint(2, "add %V & %V -> %V\n", r->dest, r->mask, r->gate);
     close(fd);
 }
-/*e: function installroute */
+/*e: function [[installroute]] */
 
-/*s: function onnet */
+/*s: function [[onnet]] */
 /*
  *  return true of dest is on net
  */
@@ -642,9 +642,9 @@ onnet(uchar *dest, uchar *net, uchar *netmask)
     v4maskip(dest, netmask, dnet);
     return equivip(dnet, net);
 }
-/*e: function onnet */
+/*e: function [[onnet]] */
 
-/*s: function getmask */
+/*s: function [[getmask]] */
 /*
  *  figure out what mask to use, if we have a direct connected network
  *  with the same class net use its subnet mask.
@@ -674,9 +674,9 @@ getmask(uchar *dest)
         m = v4defmask(dest);
     return m;
 }
-/*e: function getmask */
+/*e: function [[getmask]] */
 
-/*s: function sendto */
+/*s: function [[sendto]] */
 /*
  *  broadcast routes onto all networks
  */
@@ -745,8 +745,8 @@ sendto(Ifc *ip)
     if(n && !readonly)
         write(ripfd, mbuf, Udphdrsize+4+n*20);
 }
-/*e: function sendto */
-/*s: function broadcast */
+/*e: function [[sendto]] */
+/*s: function [[broadcast]] */
 void
 broadcast(void)
 {
@@ -758,9 +758,9 @@ broadcast(void)
             sendto(&ialloc.ifc[i]);
     }
 }
-/*e: function broadcast */
+/*e: function [[broadcast]] */
 
-/*s: function timeoutroutes */
+/*s: function [[timeoutroutes]] */
 /*
  *  timeout any routes that haven't been refreshed and aren't wired
  */
@@ -786,5 +786,5 @@ timeoutroutes(void)
         }
     }
 }
-/*e: function timeoutroutes */
+/*e: function [[timeoutroutes]] */
 /*e: networking/ip/rip.c */

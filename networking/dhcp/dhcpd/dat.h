@@ -1,15 +1,15 @@
 /*s: networking/ip/dhcpd/dat.h */
 #include "../dhcp.h"
 
-/*s: enum _anon_ (networking/ip/dhcpd/dat.h) */
+/*s: enum [[_anon_ (networking/ip/dhcpd/dat.h)]] */
 enum
 {
     Maxstr=	256,
 };
-/*e: enum _anon_ (networking/ip/dhcpd/dat.h) */
+/*e: enum [[_anon_ (networking/ip/dhcpd/dat.h)]] */
 
 typedef struct Binding Binding;
-/*s: struct Binding */
+/*s: struct [[Binding]] */
 struct Binding
 {
     Binding *next;
@@ -27,10 +27,10 @@ struct Binding
 
     Qid	q;		/* qid at the last syncbinding */
 };
-/*e: struct Binding */
+/*e: struct [[Binding]] */
 
 typedef struct Info	Info;
-/*s: struct Info */
+/*s: struct [[Info]] */
 struct Info
 {
     int	indb;			/* true if found in database */
@@ -50,7 +50,7 @@ struct Info
     char	dhcpgroup[Maxstr];
     char	vendor[Maxstr];	/* vendor info */
 };
-/*e: struct Info */
+/*e: struct [[Info]] */
 
 
 /* from dhcp.c */

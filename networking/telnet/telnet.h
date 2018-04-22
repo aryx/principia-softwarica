@@ -1,14 +1,14 @@
 /*s: networking/ip/telnet.h */
 typedef struct Opt	Opt;
 
-/*s: global debug (networking/ip/telnet.h) */
+/*s: global [[debug]]([[(networking/ip/telnet.h)]]) */
 int debug;
-/*e: global debug (networking/ip/telnet.h) */
-/*s: constant DPRINT (networking/ip/telnet.h) */
+/*e: global [[debug]]([[(networking/ip/telnet.h)]]) */
+/*s: constant [[DPRINT]]([[(networking/ip/telnet.h)]]) */
 #define DPRINT if(debug)fprint
-/*e: constant DPRINT (networking/ip/telnet.h) */
+/*e: constant [[DPRINT]]([[(networking/ip/telnet.h)]]) */
 
-/*s: enum _anon_ (networking/ip/telnet.h) */
+/*s: enum [[_anon_ (networking/ip/telnet.h)]] */
 enum
 {
     /* control characters */
@@ -50,9 +50,9 @@ enum
     Xloc,
     Extend,
 };
-/*e: enum _anon_ (networking/ip/telnet.h) */
+/*e: enum [[_anon_ (networking/ip/telnet.h)]] */
 
-/*s: struct Opt */
+/*s: struct [[Opt]] */
 struct Opt
 {
     char	*name;
@@ -63,9 +63,9 @@ struct Opt
     char	remote;				/* remote value */
     char	local;				/* local value */
 };
-/*e: struct Opt */
+/*e: struct [[Opt]] */
 
-/*s: global opt */
+/*s: global [[opt]] */
 Opt opt[] =
 {
 [Binary]	{ "binary",		0,  0, },
@@ -88,7 +88,7 @@ Opt opt[] =
 [Xloc]		{ "X display loc",	35, 0, },
 [Extend]	{ "Extended",		255, 1, },
 };
-/*e: global opt */
+/*e: global [[opt]] */
 
 int	control(Biobuf*, int);
 Opt*	findopt(int);
@@ -109,7 +109,7 @@ void	binit(Biobuf*, int);
 void	berase(Biobuf*);
 void	bkill(Biobuf*);
 
-/*s: function control */
+/*s: function [[control]] */
 /*
  *  parse telnet control messages
  */
@@ -140,9 +140,9 @@ control(Biobuf *bp, int c)
     }
     return 0;
 }
-/*e: function control */
+/*e: function [[control]] */
 
-/*s: function findopt */
+/*s: function [[findopt]] */
 Opt*
 findopt(int c)
 {
@@ -153,9 +153,9 @@ findopt(int c)
             return o;
     return 0;
 }
-/*e: function findopt */
+/*e: function [[findopt]] */
 
-/*s: function will */
+/*s: function [[will]] */
 int
 will(Biobuf *bp)
 {
@@ -183,9 +183,9 @@ will(Biobuf *bp)
     o->remote = 1;
     return rv;
 }
-/*e: function will */
+/*e: function [[will]] */
 
-/*s: function wont */
+/*s: function [[wont]] */
 int
 wont(Biobuf *bp)
 {
@@ -208,9 +208,9 @@ wont(Biobuf *bp)
     o->remote = 0;
     return rv;
 }
-/*e: function wont */
+/*e: function [[wont]] */
 
-/*s: function doit */
+/*s: function [[doit]] */
 int
 doit(Biobuf *bp)
 {
@@ -237,9 +237,9 @@ doit(Biobuf *bp)
     o->local = 1;
     return rv;
 }
-/*e: function doit */
+/*e: function [[doit]] */
 
-/*s: function dont */
+/*s: function [[dont]] */
 int
 dont(Biobuf *bp)
 {
@@ -265,9 +265,9 @@ dont(Biobuf *bp)
     o->local = 0;
     return rv;
 }
-/*e: function dont */
+/*e: function [[dont]] */
 
-/*s: function sub */
+/*s: function [[sub]] */
 /* read in a subnegotiation message and pass it to a routine for that option */
 int
 sub(Biobuf *bp)
@@ -300,9 +300,9 @@ sub(Biobuf *bp)
         return 0;
     return (*o->sub)(bp, subneg+1, p - subneg - 1);
 }
-/*e: function sub */
+/*e: function [[sub]] */
 
-/*s: function sendd */
+/*s: function [[sendd]] */
 void
 sendd(int c0, int c1)
 {
@@ -325,9 +325,9 @@ sendd(int c0, int c1)
     if(t)
         DPRINT(2, "r %s %d\n", t, c1);
 }
-/*e: function sendd */
+/*e: function [[sendd]] */
 
-/*s: function send2 */
+/*s: function [[send2]] */
 int
 send2(int f, int c0, int c1)
 {
@@ -337,9 +337,9 @@ send2(int f, int c0, int c1)
     buf[1] = c1;
     return iwrite(f, buf, 2) == 2 ? 0 : -1;
 }
-/*e: function send2 */
+/*e: function [[send2]] */
 
-/*s: function send3 */
+/*s: function [[send3]] */
 int
 send3(int f, int c0, int c1, int c2)
 {
@@ -351,9 +351,9 @@ send3(int f, int c0, int c1, int c2)
     sendd(c1, c2);
     return iwrite(f, buf, 3) == 3 ? 0 : -1;
 }
-/*e: function send3 */
+/*e: function [[send3]] */
 
-/*s: function sendnote */
+/*s: function [[sendnote]] */
 int
 sendnote(int pid, char *msg)
 {
@@ -368,9 +368,9 @@ sendnote(int pid, char *msg)
         return -1;
     return close(fd);
 }
-/*e: function sendnote */
+/*e: function [[sendnote]] */
 
-/*s: function fatal (networking/ip/telnet.h) */
+/*s: function [[fatal]]([[(networking/ip/telnet.h)]]) */
 void
 fatal(char *fmt, void *a0, void *a1)
 {
@@ -380,9 +380,9 @@ fatal(char *fmt, void *a0, void *a1)
     fprint(2, "%s: %s\n", argv0, buf);
     exits(buf);
 }
-/*e: function fatal (networking/ip/telnet.h) */
+/*e: function [[fatal]]([[(networking/ip/telnet.h)]]) */
 
-/*s: function syserr */
+/*s: function [[syserr]] */
 char*
 syserr(void)
 {
@@ -391,17 +391,17 @@ syserr(void)
     errstr(err, sizeof err);
     return err;
 }
-/*e: function syserr */
+/*e: function [[syserr]] */
 
-/*s: function wasintr */
+/*s: function [[wasintr]] */
 int
 wasintr(void)
 {
     return strcmp(syserr(), "interrupted") == 0;
 }
-/*e: function wasintr */
+/*e: function [[wasintr]] */
 
-/*s: function iread */
+/*s: function [[iread]] */
 long
 iread(int f, void *a, int n)
 {
@@ -414,9 +414,9 @@ iread(int f, void *a, int n)
     }
     return m;
 }
-/*e: function iread */
+/*e: function [[iread]] */
 
-/*s: function iwrite */
+/*s: function [[iwrite]] */
 long
 iwrite(int f, void *a, int n)
 {
@@ -427,5 +427,5 @@ iwrite(int f, void *a, int n)
         return n;
     return m;
 }
-/*e: function iwrite */
+/*e: function [[iwrite]] */
 /*e: networking/ip/telnet.h */

@@ -6,7 +6,7 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
-/*s: struct Hdr (networking/ip/snoopy/udp.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/udp.c)]]) */
 struct Hdr
 {
     uchar	sport[2];	/* Source port */
@@ -14,16 +14,16 @@ struct Hdr
     uchar	len[2];		/* data length */
     uchar	cksum[2];	/* Checksum */
 };
-/*e: struct Hdr (networking/ip/snoopy/udp.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/udp.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/udp.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/udp.c)]] */
 enum
 {
     UDPLEN=	8,
 };
-/*e: enum _anon_ (networking/ip/snoopy/udp.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/udp.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/udp.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/udp.c)2]] */
 enum
 {
     Os,
@@ -31,9 +31,9 @@ enum
     Osd,
     Osetport,
 };
-/*e: enum _anon_ (networking/ip/snoopy/udp.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/udp.c)2]] */
 
-/*s: global p_fields (networking/ip/snoopy/udp.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/udp.c)]]) */
 static Field p_fields[] = 
 {
     {"s",		Fnum,	Os,	"source port",	} ,
@@ -42,13 +42,13 @@ static Field p_fields[] =
     {"sd",		Fnum,	Osd,	"source/dest port",	} ,
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/udp.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/udp.c)]]) */
 
-/*s: constant ANYPORT */
+/*s: constant [[ANYPORT]] */
 #define ANYPORT ~0UL
-/*e: constant ANYPORT */
+/*e: constant [[ANYPORT]] */
 
-/*s: global p_mux (networking/ip/snoopy/udp.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/udp.c)]]) */
 static Mux p_mux[] =
 {
     {"dns",	53, },
@@ -58,14 +58,14 @@ static Mux p_mux[] =
     {"rtcp",	ANYPORT, },
     {0},
 };
-/*e: global p_mux (networking/ip/snoopy/udp.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/udp.c)]]) */
 
-/*s: global defproto */
+/*s: global [[defproto]] */
 /* default next protocol, can be changed by p_filter, reset by p_compile */
 static Proto	*defproto = &dump;
-/*e: global defproto */
+/*e: global [[defproto]] */
 
-/*s: function p_compile (networking/ip/snoopy/udp.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/udp.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -85,9 +85,9 @@ p_compile(Filter *f)
 
     sysfatal("unknown udp field or protocol: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/udp.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/udp.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/udp.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/udp.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -113,9 +113,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/udp.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/udp.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/udp.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/udp.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -139,9 +139,9 @@ p_seprint(Msg *m)
             NetS(h->cksum), NetS(h->len));
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/udp.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/udp.c)]]) */
 
-/*s: global udp */
+/*s: global [[udp]] */
 Proto udp =
 {
     "udp",
@@ -153,5 +153,5 @@ Proto udp =
     p_fields,
     defaultframer,
 };
-/*e: global udp */
+/*e: global [[udp]] */
 /*e: networking/ip/snoopy/udp.c */

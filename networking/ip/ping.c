@@ -8,7 +8,7 @@
 #include <ndb.h>
 #include "icmp.h"
 
-/*s: enum _anon_ (networking/ip/ping.c) */
+/*s: enum [[_anon_ (networking/ip/ping.c)]] */
 enum {
     MAXMSG		= 32,
     SLEEPMS		= 1000,
@@ -16,10 +16,10 @@ enum {
     SECOND		= 1000000000LL,
     MINUTE		= 60*SECOND,
 };
-/*e: enum _anon_ (networking/ip/ping.c) */
+/*e: enum [[_anon_ (networking/ip/ping.c)]] */
 
 typedef struct Req Req;
-/*s: struct Req */
+/*s: struct [[Req]] */
 struct Req
 {
     ushort	seq;	/* sequence number */
@@ -29,7 +29,7 @@ struct Req
     int	replied;
     Req	 *next;
 };
-/*e: struct Req */
+/*e: struct [[Req]] */
 
 typedef struct {
     int	version;
@@ -43,63 +43,63 @@ typedef struct {
 } Proto;
 
 
-/*s: global first */
+/*s: global [[first]] */
 Req	*first;		/* request list */
-/*e: global first */
-/*s: global last */
+/*e: global [[first]] */
+/*s: global [[last]] */
 Req	*last;		/* ... */
-/*e: global last */
-/*s: global listlock */
+/*e: global [[last]] */
+/*s: global [[listlock]] */
 Lock	listlock;
-/*e: global listlock */
+/*e: global [[listlock]] */
 
-/*s: global argv0 */
+/*s: global [[argv0]] */
 char *argv0;
-/*e: global argv0 */
+/*e: global [[argv0]] */
 
-/*s: global addresses */
+/*s: global [[addresses]] */
 int addresses;
-/*e: global addresses */
-/*s: global debug */
+/*e: global [[addresses]] */
+/*s: global [[debug]] */
 int debug;
-/*e: global debug */
-/*s: global done */
+/*e: global [[debug]] */
+/*s: global [[done]] */
 int done;
-/*e: global done */
-/*s: global flood */
+/*e: global [[done]] */
+/*s: global [[flood]] */
 int flood;
-/*e: global flood */
-/*s: global lostmsgs */
+/*e: global [[flood]] */
+/*s: global [[lostmsgs]] */
 int lostmsgs;
-/*e: global lostmsgs */
-/*s: global lostonly */
+/*e: global [[lostmsgs]] */
+/*s: global [[lostonly]] */
 int lostonly;
-/*e: global lostonly */
-/*s: global quiet */
+/*e: global [[lostonly]] */
+/*s: global [[quiet]] */
 int quiet;
-/*e: global quiet */
-/*s: global rcvdmsgs */
+/*e: global [[quiet]] */
+/*s: global [[rcvdmsgs]] */
 int rcvdmsgs;
-/*e: global rcvdmsgs */
-/*s: global rint */
+/*e: global [[rcvdmsgs]] */
+/*s: global [[rint]] */
 int rint;
-/*e: global rint */
-/*s: global firstseq */
+/*e: global [[rint]] */
+/*s: global [[firstseq]] */
 ushort firstseq;
-/*e: global firstseq */
-/*s: global sum */
+/*e: global [[firstseq]] */
+/*s: global [[sum]] */
 vlong sum;
-/*e: global sum */
-/*s: global waittime */
+/*e: global [[sum]] */
+/*s: global [[waittime]] */
 int waittime = 5000;
-/*e: global waittime */
+/*e: global [[waittime]] */
 
 static char *network, *target;
 
 void lost(Req*, void*);
 void reply(Req*, void*);
 
-/*s: function usage */
+/*s: function [[usage]] */
 static void
 usage(void)
 {
@@ -108,9 +108,9 @@ usage(void)
         argv0);
     exits("usage");
 }
-/*e: function usage */
+/*e: function [[usage]] */
 
-/*s: function catch */
+/*s: function [[catch]] */
 static void
 catch(void *a, char *msg)
 {
@@ -122,9 +122,9 @@ catch(void *a, char *msg)
     else
         noted(NDFLT);
 }
-/*e: function catch */
+/*e: function [[catch]] */
 
-/*s: function prlost4 */
+/*s: function [[prlost4]] */
 static void
 prlost4(ushort seq, void *v)
 {
@@ -132,9 +132,9 @@ prlost4(ushort seq, void *v)
 
     print("lost %ud: %V -> %V\n", seq, ip4->src, ip4->dst);
 }
-/*e: function prlost4 */
+/*e: function [[prlost4]] */
 
-/*s: function prlost6 */
+/*s: function [[prlost6]] */
 static void
 prlost6(ushort seq, void *v)
 {
@@ -142,9 +142,9 @@ prlost6(ushort seq, void *v)
 
     print("lost %ud: %I -> %I\n", seq, ip6->src, ip6->dst);
 }
-/*e: function prlost6 */
+/*e: function [[prlost6]] */
 
-/*s: function prreply4 */
+/*s: function [[prreply4]] */
 static void
 prreply4(Req *r, void *v)
 {
@@ -154,9 +154,9 @@ prreply4(Req *r, void *v)
         r->seq - firstseq, ip4->src, ip4->dst, r->rtt, sum/rcvdmsgs,
         r->ttl);
 }
-/*e: function prreply4 */
+/*e: function [[prreply4]] */
 
-/*s: function prreply6 */
+/*s: function [[prreply6]] */
 static void
 prreply6(Req *r, void *v)
 {
@@ -166,31 +166,31 @@ prreply6(Req *r, void *v)
         r->seq - firstseq, ip6->src, ip6->dst, r->rtt, sum/rcvdmsgs,
         r->ttl);
 }
-/*e: function prreply6 */
+/*e: function [[prreply6]] */
 
-/*s: global v4pr */
+/*s: global [[v4pr]] */
 static Proto v4pr = {
     4,		"icmp",
     EchoRequest,	EchoReply,
     IPV4HDR_LEN,
     prreply4,	prlost4,
 };
-/*e: global v4pr */
-/*s: global v6pr */
+/*e: global [[v4pr]] */
+/*s: global [[v6pr]] */
 static Proto v6pr = {
     6,		"icmpv6",
     EchoRequestV6,	EchoReplyV6,
     IPV6HDR_LEN,
     prreply6,	prlost6,
 };
-/*e: global v6pr */
+/*e: global [[v6pr]] */
 
-/*s: global proto */
+/*s: global [[proto]] */
 static Proto *proto = &v4pr;
-/*e: global proto */
+/*e: global [[proto]] */
 
 
-/*s: function geticmp */
+/*s: function [[geticmp]] */
 Icmphdr *
 geticmp(void *v)
 {
@@ -198,9 +198,9 @@ geticmp(void *v)
 
     return (Icmphdr *)(p + proto->iphdrsz);
 }
-/*e: function geticmp */
+/*e: function [[geticmp]] */
 
-/*s: function clean */
+/*s: function [[clean]] */
 void
 clean(ushort seq, vlong now, void *v)
 {
@@ -240,26 +240,26 @@ clean(ushort seq, vlong now, void *v)
     }
     unlock(&listlock);
 }
-/*e: function clean */
+/*e: function [[clean]] */
 
-/*s: global loopbacknet (networking/ip/ping.c) */
+/*s: global [[loopbacknet]]([[(networking/ip/ping.c)]]) */
 static uchar loopbacknet[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
     127, 0, 0, 0
 };
-/*e: global loopbacknet (networking/ip/ping.c) */
-/*s: global loopbackmask (networking/ip/ping.c) */
+/*e: global [[loopbacknet]]([[(networking/ip/ping.c)]]) */
+/*s: global [[loopbackmask]]([[(networking/ip/ping.c)]]) */
 static uchar loopbackmask[IPaddrlen] = {
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
     0xff, 0, 0, 0
 };
-/*e: global loopbackmask (networking/ip/ping.c) */
+/*e: global [[loopbackmask]]([[(networking/ip/ping.c)]]) */
 
-/*s: function myipvnaddr */
+/*s: function [[myipvnaddr]] */
 /*
  * find first ip addr suitable for proto and
  * that isn't the friggin loopback address.
@@ -296,9 +296,9 @@ myipvnaddr(uchar *ip, Proto *proto, char *net)
     ipmove(ip, linklocal);
     return ipcmp(ip, IPnoaddr) == 0? -1: 0;
 }
-/*e: function myipvnaddr */
+/*e: function [[myipvnaddr]] */
 
-/*s: function sender */
+/*s: function [[sender]] */
 void
 sender(int fd, int msglen, int interval, int n)
 {
@@ -362,9 +362,9 @@ sender(int fd, int msglen, int interval, int n)
     }
     done = 1;
 }
-/*e: function sender */
+/*e: function [[sender]] */
 
-/*s: function rcvr */
+/*s: function [[rcvr]] */
 void
 rcvr(int fd, int msglen, int interval, int nmsg)
 {
@@ -416,9 +416,9 @@ rcvr(int fd, int msglen, int interval, int nmsg)
         print("%d out of %d messages lost\n", lostmsgs,
             lostmsgs+rcvdmsgs);
 }
-/*e: function rcvr */
+/*e: function [[rcvr]] */
 
-/*s: function isdottedquad */
+/*s: function [[isdottedquad]] */
 static int
 isdottedquad(char *name)
 {
@@ -433,9 +433,9 @@ isdottedquad(char *name)
             return 0;
     return dot && digit;
 }
-/*e: function isdottedquad */
+/*e: function [[isdottedquad]] */
 
-/*s: function isv6lit */
+/*s: function [[isv6lit]] */
 static int
 isv6lit(char *name)
 {
@@ -450,9 +450,9 @@ isv6lit(char *name)
             return 0;
     return colon;
 }
-/*e: function isv6lit */
+/*e: function [[isv6lit]] */
 
-/*s: enum _anon_ (networking/ip/ping.c)2 */
+/*s: enum [[_anon_ (networking/ip/ping.c)2]] */
 /* from /sys/src/libc/9sys/dial.c */
 
 enum
@@ -460,10 +460,10 @@ enum
     Maxstring	= 128,
     Maxpath		= 256,
 };
-/*e: enum _anon_ (networking/ip/ping.c)2 */
+/*e: enum [[_anon_ (networking/ip/ping.c)2]] */
 
 typedef struct DS DS;
-/*s: struct DS */
+/*s: struct [[DS]] */
 struct DS {
     /* dist string */
     char	buf[Maxstring];
@@ -476,9 +476,9 @@ struct DS {
     char	*dir;
     int	*cfdp;
 };
-/*e: struct DS */
+/*e: struct [[DS]] */
 
-/*s: function _dial_string_parse */
+/*s: function [[_dial_string_parse]] */
 /*
  *  parse a dial string
  */
@@ -510,11 +510,11 @@ _dial_string_parse(char *str, DS *ds)
         ds->rem = p + 1;
     }
 }
-/*e: function _dial_string_parse */
+/*e: function [[_dial_string_parse]] */
 
 /* end excerpt from /sys/src/libc/9sys/dial.c */
 
-/*s: function isv4name */
+/*s: function [[isv4name]] */
 /* side effect: sets network & target */
 static int
 isv4name(char *name)
@@ -563,9 +563,9 @@ isv4name(char *name)
     free(ip);
     return r;
 }
-/*e: function isv4name */
+/*e: function [[isv4name]] */
 
-/*s: function main (networking/ip/ping.c) */
+/*s: function [[main]]([[(networking/ip/ping.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -664,9 +664,9 @@ main(int argc, char **argv)
         exits(lostmsgs ? "lost messages" : "");
     }
 }
-/*e: function main (networking/ip/ping.c) */
+/*e: function [[main]]([[(networking/ip/ping.c)]]) */
 
-/*s: function reply */
+/*s: function [[reply]] */
 void
 reply(Req *r, void *v)
 {
@@ -682,9 +682,9 @@ reply(Req *r, void *v)
                 r->seq - firstseq, r->rtt, sum/rcvdmsgs, r->ttl);
     r->replied = 1;
 }
-/*e: function reply */
+/*e: function [[reply]] */
 
-/*s: function lost */
+/*s: function [[lost]] */
 void
 lost(Req *r, void *v)
 {
@@ -695,5 +695,5 @@ lost(Req *r, void *v)
             print("lost %ud\n", r->seq - firstseq);
     lostmsgs++;
 }
-/*e: function lost */
+/*e: function [[lost]] */
 /*e: networking/ip/ping.c */

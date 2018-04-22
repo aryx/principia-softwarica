@@ -2,68 +2,68 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: global debug (networking/con/con.c) */
+/*s: global [[debug]]([[(networking/con/con.c)]]) */
 int debug;		/* true if debugging */
-/*e: global debug (networking/con/con.c) */
-/*s: global ctl (networking/con/con.c) */
+/*e: global [[debug]]([[(networking/con/con.c)]]) */
+/*s: global [[ctl]]([[(networking/con/con.c)]]) */
 int ctl = -1;		/* control fd (for break's) */
-/*e: global ctl (networking/con/con.c) */
-/*s: global raw */
+/*e: global [[ctl]]([[(networking/con/con.c)]]) */
+/*s: global [[raw]] */
 int raw;		/* true if raw is on */
-/*e: global raw */
-/*s: global consctl (networking/con/con.c) */
+/*e: global [[raw]] */
+/*s: global [[consctl]]([[(networking/con/con.c)]]) */
 int consctl = -1;	/* control fd for cons */
-/*e: global consctl (networking/con/con.c) */
-/*s: global ttypid (networking/con/con.c) */
+/*e: global [[consctl]]([[(networking/con/con.c)]]) */
+/*s: global [[ttypid]]([[(networking/con/con.c)]]) */
 int ttypid;		/* pid's if the 2 processes (used to kill them) */
-/*e: global ttypid (networking/con/con.c) */
-/*s: global outfd */
+/*e: global [[ttypid]]([[(networking/con/con.c)]]) */
+/*s: global [[outfd]] */
 int outfd = 1;		/* local output file descriptor */
-/*e: global outfd */
-/*s: global cooked */
+/*e: global [[outfd]] */
+/*s: global [[cooked]] */
 int cooked;		/* non-zero forces cooked mode */
-/*e: global cooked */
-/*s: global returns (networking/con/con.c) */
+/*e: global [[cooked]] */
+/*s: global [[returns]]([[(networking/con/con.c)]]) */
 int returns;		/* non-zero forces carriage returns not to be filtered out */
-/*e: global returns (networking/con/con.c) */
-/*s: global crtonl (networking/con/con.c) */
+/*e: global [[returns]]([[(networking/con/con.c)]]) */
+/*s: global [[crtonl]]([[(networking/con/con.c)]]) */
 int crtonl;			/* non-zero forces carriage returns to be converted to nls coming from net */
-/*e: global crtonl (networking/con/con.c) */
-/*s: global strip */
+/*e: global [[crtonl]]([[(networking/con/con.c)]]) */
+/*s: global [[strip]] */
 int	strip;		/* strip off parity bits */
-/*e: global strip */
-/*s: global firsterr */
+/*e: global [[strip]] */
+/*s: global [[firsterr]] */
 char firsterr[2*ERRMAX];
-/*e: global firsterr */
-/*s: global transerr */
+/*e: global [[firsterr]] */
+/*s: global [[transerr]] */
 char transerr[2*ERRMAX];
-/*e: global transerr */
-/*s: global limited */
+/*e: global [[transerr]] */
+/*s: global [[limited]] */
 int limited;
-/*e: global limited */
-/*s: global remuser */
+/*e: global [[limited]] */
+/*s: global [[remuser]] */
 char *remuser;		/* for BSD rlogin authentication */
-/*e: global remuser */
-/*s: global verbose (networking/con/con.c) */
+/*e: global [[remuser]] */
+/*s: global [[verbose]]([[(networking/con/con.c)]]) */
 int verbose;
-/*e: global verbose (networking/con/con.c) */
-/*s: global baud */
+/*e: global [[verbose]]([[(networking/con/con.c)]]) */
+/*s: global [[baud]] */
 int baud;
-/*e: global baud */
-/*s: global notkbd (networking/con/con.c) */
+/*e: global [[baud]] */
+/*s: global [[notkbd]]([[(networking/con/con.c)]]) */
 int notkbd;
-/*e: global notkbd (networking/con/con.c) */
-/*s: global nltocr */
+/*e: global [[notkbd]]([[(networking/con/con.c)]]) */
+/*s: global [[nltocr]] */
 int nltocr;		/* translate kbd nl to cr  and vice versa */
-/*e: global nltocr */
+/*e: global [[nltocr]] */
 
-/*s: global srv (networking/con/con.c) */
+/*s: global [[srv]]([[(networking/con/con.c)]]) */
 static char *srv;
-/*e: global srv (networking/con/con.c) */
+/*e: global [[srv]]([[(networking/con/con.c)]]) */
 
-/*s: constant MAXMSG */
+/*s: constant [[MAXMSG]] */
 #define MAXMSG (2*8192)
-/*e: constant MAXMSG */
+/*e: constant [[MAXMSG]] */
 
 int	dodial(char*, char*, char*);
 void	fromkbd(int);
@@ -88,16 +88,16 @@ void	device(char*, char*);
 void	rlogin(char*, char*);
 void	simple(char*, char*);
 
-/*s: function usage (networking/con/con.c) */
+/*s: function [[usage]]([[(networking/con/con.c)]]) */
 void
 usage(void)
 {
     punt("usage: con [-CdnrRsTv] [-b baud] [-l [user]] [-c cmd] [-S svc] "
         "net!host[!service]");
 }
-/*e: function usage (networking/con/con.c) */
+/*e: function [[usage]]([[(networking/con/con.c)]]) */
 
-/*s: function main (networking/con/con.c) */
+/*s: function [[main]]([[(networking/con/con.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -166,9 +166,9 @@ main(int argc, char *argv[])
     }
     punt(firsterr);
 }
-/*e: function main (networking/con/con.c) */
+/*e: function [[main]]([[(networking/con/con.c)]]) */
 
-/*s: function simple */
+/*s: function [[simple]] */
 /*
  *  just dial and use as a byte stream with remote echo
  */
@@ -189,9 +189,9 @@ simple(char *dest, char *cmd)
     stdcon(net);
     exits(0);
 }
-/*e: function simple */
+/*e: function [[simple]] */
 
-/*s: function rlogin */
+/*s: function [[rlogin]] */
 /*
  *  dial, do UCB authentication, use as a byte stream with local echo
  *
@@ -255,9 +255,9 @@ rlogin(char *dest, char *cmd)
     stdcon(net);
     exits(0);
 }
-/*e: function rlogin */
+/*e: function [[rlogin]] */
 
-/*s: function device */
+/*s: function [[device]] */
 /*
  *  just open a device and use it as a connection
  */
@@ -291,9 +291,9 @@ device(char *dest, char *cmd)
     stdcon(net);
     exits(0);
 }
-/*e: function device */
+/*e: function [[device]] */
 
-/*s: function notifyf (networking/con/con.c) */
+/*s: function [[notifyf]]([[(networking/con/con.c)]]) */
 /*
  *  ignore interrupts
  */
@@ -310,9 +310,9 @@ notifyf(void *a, char *msg)
         noted(NCONT);
     noted(NDFLT);
 }
-/*e: function notifyf (networking/con/con.c) */
+/*e: function [[notifyf]]([[(networking/con/con.c)]]) */
 
-/*s: function rawon (networking/con/con.c) */
+/*s: function [[rawon]]([[(networking/con/con.c)]]) */
 /*
  *  turn keyboard raw mode on
  */
@@ -332,9 +332,9 @@ rawon(void)
     write(consctl, "rawon", 5);
     raw = 1;
 }
-/*e: function rawon (networking/con/con.c) */
+/*e: function [[rawon]]([[(networking/con/con.c)]]) */
 
-/*s: function rawoff (networking/con/con.c) */
+/*s: function [[rawoff]]([[(networking/con/con.c)]]) */
 /*
  *  turn keyboard raw mode off
  */
@@ -354,16 +354,16 @@ rawoff(void)
     write(consctl, "rawoff", 6);
     raw = 0;
 }
-/*e: function rawoff (networking/con/con.c) */
+/*e: function [[rawoff]]([[(networking/con/con.c)]]) */
 
-/*s: constant STDHELP (networking/con/con.c) */
+/*s: constant [[STDHELP]]([[(networking/con/con.c)]]) */
 /*
  *  control menu
  */
 #define STDHELP	"\t(b)reak, (q)uit, (i)nterrupt, toggle printing (r)eturns, (.)continue, (!cmd)\n"
-/*e: constant STDHELP (networking/con/con.c) */
+/*e: constant [[STDHELP]]([[(networking/con/con.c)]]) */
 
-/*s: function menu (networking/con/con.c) */
+/*s: function [[menu]]([[(networking/con/con.c)]]) */
 int
 menu(int net)
 {
@@ -421,9 +421,9 @@ menu(int net)
         rawoff();
     return 0;
 }
-/*e: function menu (networking/con/con.c) */
+/*e: function [[menu]]([[(networking/con/con.c)]]) */
 
-/*s: function post (networking/con/con.c) */
+/*s: function [[post]]([[(networking/con/con.c)]]) */
 void
 post(char *srv, int fd)
 {
@@ -438,9 +438,9 @@ post(char *srv, int fd)
         sysfatal("write %s: %r", srv);
     close(f);
 }
-/*e: function post (networking/con/con.c) */
+/*e: function [[post]]([[(networking/con/con.c)]]) */
 
-/*s: function stdcon */
+/*s: function [[stdcon]] */
 /*
  *  the real work.  two processes pass bytes back and forth between the
  *  terminal and the network.
@@ -490,9 +490,9 @@ stdcon(int net)
         exits(0);
     }
 }
-/*e: function stdcon */
+/*e: function [[stdcon]] */
 
-/*s: function fromkbd (networking/con/con.c) */
+/*s: function [[fromkbd]]([[(networking/con/con.c)]]) */
 /*
  *  Read the keyboard and write it to the network.  '^\' gets us into
  *  the menu.
@@ -548,9 +548,9 @@ fromkbd(int net)
         }
     }
 }
-/*e: function fromkbd (networking/con/con.c) */
+/*e: function [[fromkbd]]([[(networking/con/con.c)]]) */
 
-/*s: function fromnet (networking/con/con.c) */
+/*s: function [[fromnet]]([[(networking/con/con.c)]]) */
 /*
  *  Read from the network and write to the screen.
  *  Filter out spurious carriage returns.
@@ -599,9 +599,9 @@ fromnet(int net)
         }
     }
 }
-/*e: function fromnet (networking/con/con.c) */
+/*e: function [[fromnet]]([[(networking/con/con.c)]]) */
 
-/*s: function dodial (networking/con/con.c) */
+/*s: function [[dodial]]([[(networking/con/con.c)]]) */
 /*
  *  dial and return a data connection
  */
@@ -622,9 +622,9 @@ dodial(char *dest, char *net, char *service)
     fprint(2, "connected to %s on %s\n", name, devdir);
     return data;
 }
-/*e: function dodial (networking/con/con.c) */
+/*e: function [[dodial]]([[(networking/con/con.c)]]) */
 
-/*s: function dosystem */
+/*s: function [[dosystem]] */
 void
 dosystem(int fd, char *cmd)
 {
@@ -636,9 +636,9 @@ dosystem(int fd, char *cmd)
         exits(p);
     }
 }
-/*e: function dosystem */
+/*e: function [[dosystem]] */
 
-/*s: function system (networking/con/con.c) */
+/*s: function [[system]]([[(networking/con/con.c)]]) */
 /*
  *  run a command with the network connection as standard IO
  */
@@ -692,17 +692,17 @@ system(int fd, char *cmd)
     }
     return msg.msg;
 }
-/*e: function system (networking/con/con.c) */
+/*e: function [[system]]([[(networking/con/con.c)]]) */
 
-/*s: function wasintr (networking/con/con.c) */
+/*s: function [[wasintr]]([[(networking/con/con.c)]]) */
 int
 wasintr(void)
 {
     return strcmp(syserr(), "interrupted") == 0;
 }
-/*e: function wasintr (networking/con/con.c) */
+/*e: function [[wasintr]]([[(networking/con/con.c)]]) */
 
-/*s: function punt */
+/*s: function [[punt]] */
 void
 punt(char *msg)
 {
@@ -711,9 +711,9 @@ punt(char *msg)
     fprint(2, "con: %s\n", msg);
     exits(msg);
 }
-/*e: function punt */
+/*e: function [[punt]] */
 
-/*s: function syserr (networking/con/con.c) */
+/*s: function [[syserr]]([[(networking/con/con.c)]]) */
 char*
 syserr(void)
 {
@@ -721,9 +721,9 @@ syserr(void)
     errstr(err, sizeof err);
     return err;
 }
-/*e: function syserr (networking/con/con.c) */
+/*e: function [[syserr]]([[(networking/con/con.c)]]) */
 
-/*s: function seterr */
+/*s: function [[seterr]] */
 void
 seterr(char *addr)
 {
@@ -738,10 +738,10 @@ seterr(char *addr)
         return;
     strcpy(firsterr, se);
 }
-/*e: function seterr */
+/*e: function [[seterr]] */
 
 
-/*s: function iread (networking/con/con.c) */
+/*s: function [[iread]]([[(networking/con/con.c)]]) */
 long
 iread(int f, void *a, int n)
 {
@@ -754,9 +754,9 @@ iread(int f, void *a, int n)
     }
     return m;
 }
-/*e: function iread (networking/con/con.c) */
+/*e: function [[iread]]([[(networking/con/con.c)]]) */
 
-/*s: function iwrite (networking/con/con.c) */
+/*s: function [[iwrite]]([[(networking/con/con.c)]]) */
 long
 iwrite(int f, void *a, int n)
 {
@@ -767,5 +767,5 @@ iwrite(int f, void *a, int n)
         return n;
     return m;
 }
-/*e: function iwrite (networking/con/con.c) */
+/*e: function [[iwrite]]([[(networking/con/con.c)]]) */
 /*e: networking/con/con.c */

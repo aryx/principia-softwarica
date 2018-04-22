@@ -5,43 +5,43 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
-/*s: enum _anon_ (networking/ip/httpd/hints.c) */
+/*s: enum [[_anon_ (networking/ip/httpd/hints.c)]] */
 enum{ URLmax = 65536, HINTmax = 20 };
-/*e: enum _anon_ (networking/ip/httpd/hints.c) */
-/*s: constant RECIPLOG2 */
+/*e: enum [[_anon_ (networking/ip/httpd/hints.c)]] */
+/*s: constant [[RECIPLOG2]] */
 #define RECIPLOG2 1.44269504089
-/*e: constant RECIPLOG2 */
+/*e: constant [[RECIPLOG2]] */
 
-/*s: global urlname */
+/*s: global [[urlname]] */
 char **urlname;				/* array of url strings    1,...,nurl */
-/*e: global urlname */
-/*s: global nurl */
+/*e: global [[urlname]] */
+/*s: global [[nurl]] */
 static int nurl;
-/*e: global nurl */
-/*s: global urltab */
+/*e: global [[nurl]] */
+/*s: global [[urltab]] */
 static uint urltab[URLmax];		/* hashstr(url)  1,...,nurl */
-/*e: global urltab */
-/*s: global urlnext */
+/*e: global [[urltab]] */
+/*s: global [[urlnext]] */
 static int urlnext[URLmax];		/* index urltab of next url in chain */
-/*e: global urlnext */
-/*s: global urlhash */
+/*e: global [[urlnext]] */
+/*s: global [[urlhash]] */
 static int urlhash[URLmax];		/* initially 0, meaning empty buckets */
-/*e: global urlhash */
+/*e: global [[urlhash]] */
 
-/*s: struct Hint */
+/*s: struct [[Hint]] */
 typedef struct Hint {
     ushort url;
     uchar prob;
 } Hint;
-/*e: struct Hint */
-/*s: global hints */
+/*e: struct [[Hint]] */
+/*s: global [[hints]] */
 Hint *hints[URLmax];
-/*e: global hints */
-/*s: global nhint */
+/*e: global [[hints]] */
+/*s: global [[nhint]] */
 uchar nhint[URLmax];
-/*e: global nhint */
+/*e: global [[nhint]] */
 
-/*s: function Bfilelen */
+/*s: function [[Bfilelen]] */
 vlong
 Bfilelen(void *vb)
 {
@@ -53,9 +53,9 @@ Bfilelen(void *vb)
     Bseek(b, 0L, 0);
     return n;
 }
-/*e: function Bfilelen */
+/*e: function [[Bfilelen]] */
 
-/*s: function hashstr */
+/*s: function [[hashstr]] */
 static uint 
 hashstr(char* key)
 {
@@ -66,9 +66,9 @@ hashstr(char* key)
         h = 65599*h + *k++;
         return h;
 }
-/*e: function hashstr */
+/*e: function [[hashstr]] */
 
-/*s: function urllookup */
+/*s: function [[urllookup]] */
 static int
 urllookup(uint url)
 {
@@ -85,9 +85,9 @@ urllookup(uint url)
         j = urlnext[j];
     }
 }
-/*e: function urllookup */
+/*e: function [[urllookup]] */
 
-/*s: function Bage */
+/*s: function [[Bage]] */
 int
 Bage(Biobuf *b)
 {
@@ -102,9 +102,9 @@ Bage(Biobuf *b)
     free(dir);
     return time(nil) - mtime;
 }
-/*e: function Bage */
+/*e: function [[Bage]] */
 
-/*s: function urlinit */
+/*s: function [[urlinit]] */
 void
 urlinit(void)
 {
@@ -180,9 +180,9 @@ urlinit(void)
     syslog(0, HTTPLOG, "prefetch-hints url=%d (%.1fMB)", nurl, 1.e-6*(URLmax*sizeof(*urlname)+filelen));
     /* b is held open, because namespace will be chopped */
 }
-/*e: function urlinit */
+/*e: function [[urlinit]] */
 
-/*s: function statsinit */
+/*s: function [[statsinit]] */
 void
 statsinit(void)
 {
@@ -238,9 +238,9 @@ statsinit(void)
     }
     syslog(0, HTTPLOG, "prefetch-hints stats=%d (%.1fMB)", nstats, 1.e-6*((filelen/3)*sizeof(Hint)));
 }
-/*e: function statsinit */
+/*e: function [[statsinit]] */
 
-/*s: function urlcanon */
+/*s: function [[urlcanon]] */
 void
 urlcanon(char *url)
 {
@@ -273,9 +273,9 @@ urlcanon(char *url)
             memmove(url,url+11,strlen(url+11)+1);
     }
 }
-/*e: function urlcanon */
+/*e: function [[urlcanon]] */
 
-/*s: function hintprint */
+/*s: function [[hintprint]] */
 void
 hintprint(HConnect *hc, Hio *hout, char *uri, int thresh, int havej)
 {
@@ -330,6 +330,6 @@ continuei: ;
     if(newhint)
         hprint(hout, "Fresh: have/%d\r\n", j);
 }
-/*e: function hintprint */
+/*e: function [[hintprint]] */
 
 /*e: networking/ip/httpd/hints.c */

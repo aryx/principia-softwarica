@@ -5,7 +5,7 @@
 #include "dns.h"
 
 typedef struct Scan	Scan;
-/*s: struct Scan */
+/*s: struct [[Scan]] */
 struct Scan
 {
     uchar	*base;		/* input buffer */
@@ -18,9 +18,9 @@ struct Scan
     int	stop;		/* flag: stop processing */
     int	trunc;		/* flag: input truncated */
 };
-/*e: struct Scan */
+/*e: struct [[Scan]] */
 
-/*s: function errneg */
+/*s: function [[errneg]] */
 static int
 errneg(RR *rp, Scan *sp, int actual)
 {
@@ -29,9 +29,9 @@ errneg(RR *rp, Scan *sp, int actual)
     sp->err = sp->errbuf;
     return 0;
 }
-/*e: function errneg */
+/*e: function [[errneg]] */
 
-/*s: function errtoolong */
+/*s: function [[errtoolong]] */
 static int
 errtoolong(RR *rp, Scan *sp, int remain, int need, char *where)
 {
@@ -62,9 +62,9 @@ errtoolong(RR *rp, Scan *sp, int remain, int need, char *where)
     sp->err = sp->errbuf;
     return 0;
 }
-/*e: function errtoolong */
+/*e: function [[errtoolong]] */
 
-/*s: function gchar */
+/*s: function [[gchar]] */
 /*
  *  get a ushort/ulong
  */
@@ -81,8 +81,8 @@ gchar(RR *rp, Scan *sp)
     sp->p += 1;
     return x;
 }
-/*e: function gchar */
-/*s: function gshort */
+/*e: function [[gchar]] */
+/*s: function [[gshort]] */
 static ushort
 gshort(RR *rp, Scan *sp)
 {
@@ -96,8 +96,8 @@ gshort(RR *rp, Scan *sp)
     sp->p += 2;
     return x;
 }
-/*e: function gshort */
-/*s: function glong */
+/*e: function [[gshort]] */
+/*s: function [[glong]] */
 static ulong
 glong(RR *rp, Scan *sp)
 {
@@ -111,9 +111,9 @@ glong(RR *rp, Scan *sp)
     sp->p += 4;
     return x;
 }
-/*e: function glong */
+/*e: function [[glong]] */
 
-/*s: function gv4addr */
+/*s: function [[gv4addr]] */
 /*
  *  get an ip address
  */
@@ -131,8 +131,8 @@ gv4addr(RR *rp, Scan *sp)
 
     return dnlookup(addr, Cin, 1);
 }
-/*e: function gv4addr */
-/*s: function gv6addr */
+/*e: function [[gv4addr]] */
+/*s: function [[gv6addr]] */
 static DN*
 gv6addr(RR *rp, Scan *sp)
 {
@@ -148,9 +148,9 @@ gv6addr(RR *rp, Scan *sp)
 
     return dnlookup(addr, Cin, 1);
 }
-/*e: function gv6addr */
+/*e: function [[gv6addr]] */
 
-/*s: function gsym */
+/*s: function [[gsym]] */
 /*
  *  get a string.  make it an internal symbol.
  */
@@ -180,9 +180,9 @@ gsym(RR *rp, Scan *sp)
 
     return dnlookup(sym, Csym, 1);
 }
-/*e: function gsym */
+/*e: function [[gsym]] */
 
-/*s: function gstr */
+/*s: function [[gstr]] */
 /*
  *  get a string.  don't make it an internal symbol.
  */
@@ -216,9 +216,9 @@ gstr(RR *rp, Scan *sp)
     t->p = estrdup(sym);
     return t;
 }
-/*e: function gstr */
+/*e: function [[gstr]] */
 
-/*s: function gbytes */
+/*s: function [[gbytes]] */
 /*
  *  get a sequence of bytes
  */
@@ -238,9 +238,9 @@ gbytes(RR *rp, Scan *sp, uchar **p, int n)
 
     return n;
 }
-/*e: function gbytes */
+/*e: function [[gbytes]] */
 
-/*s: function gname */
+/*s: function [[gname]] */
 /*
  *  get a domain name.  'to' must point to a buffer at least Domlen+1 long.
  */
@@ -322,9 +322,9 @@ err:
     *tostart = 0;
     return tostart;
 }
-/*e: function gname */
+/*e: function [[gname]] */
 
-/*s: function mstypehack */
+/*s: function [[mstypehack]] */
 /*
  * ms windows 2000 seems to get the bytes backward in the type field
  * of ptr records, so return a format error as feedback.
@@ -342,37 +342,37 @@ mstypehack(Scan *sp, ushort type, char *where)
     }
     return type;
 }
-/*e: function mstypehack */
+/*e: function [[mstypehack]] */
 
-/*s: macro NAME (networking/ndb/convM2DNS.c) */
+/*s: macro [[NAME]]([[(networking/ndb/convM2DNS.c)]]) */
 #define NAME(x)		gname(x, rp, sp)
-/*e: macro NAME (networking/ndb/convM2DNS.c) */
-/*s: macro SYMBOL (networking/ndb/convM2DNS.c) */
+/*e: macro [[NAME]]([[(networking/ndb/convM2DNS.c)]]) */
+/*s: macro [[SYMBOL]]([[(networking/ndb/convM2DNS.c)]]) */
 #define SYMBOL(x)	((x) = gsym(rp, sp))
-/*e: macro SYMBOL (networking/ndb/convM2DNS.c) */
-/*s: macro STRING (networking/ndb/convM2DNS.c) */
+/*e: macro [[SYMBOL]]([[(networking/ndb/convM2DNS.c)]]) */
+/*s: macro [[STRING]]([[(networking/ndb/convM2DNS.c)]]) */
 #define STRING(x)	((x) = gstr(rp, sp))
-/*e: macro STRING (networking/ndb/convM2DNS.c) */
-/*s: macro USHORT (networking/ndb/convM2DNS.c) */
+/*e: macro [[STRING]]([[(networking/ndb/convM2DNS.c)]]) */
+/*s: macro [[USHORT]]([[(networking/ndb/convM2DNS.c)]]) */
 #define USHORT(x)	((x) = gshort(rp, sp))
-/*e: macro USHORT (networking/ndb/convM2DNS.c) */
-/*s: macro ULONG (networking/ndb/convM2DNS.c) */
+/*e: macro [[USHORT]]([[(networking/ndb/convM2DNS.c)]]) */
+/*s: macro [[ULONG]]([[(networking/ndb/convM2DNS.c)]]) */
 #define ULONG(x)	((x) = glong(rp, sp))
-/*e: macro ULONG (networking/ndb/convM2DNS.c) */
-/*s: macro UCHAR (networking/ndb/convM2DNS.c) */
+/*e: macro [[ULONG]]([[(networking/ndb/convM2DNS.c)]]) */
+/*s: macro [[UCHAR]]([[(networking/ndb/convM2DNS.c)]]) */
 #define UCHAR(x)	((x) = gchar(rp, sp))
-/*e: macro UCHAR (networking/ndb/convM2DNS.c) */
-/*s: macro V4ADDR (networking/ndb/convM2DNS.c) */
+/*e: macro [[UCHAR]]([[(networking/ndb/convM2DNS.c)]]) */
+/*s: macro [[V4ADDR]]([[(networking/ndb/convM2DNS.c)]]) */
 #define V4ADDR(x)	((x) = gv4addr(rp, sp))
-/*e: macro V4ADDR (networking/ndb/convM2DNS.c) */
-/*s: macro V6ADDR (networking/ndb/convM2DNS.c) */
+/*e: macro [[V4ADDR]]([[(networking/ndb/convM2DNS.c)]]) */
+/*s: macro [[V6ADDR]]([[(networking/ndb/convM2DNS.c)]]) */
 #define V6ADDR(x)	((x) = gv6addr(rp, sp))
-/*e: macro V6ADDR (networking/ndb/convM2DNS.c) */
-/*s: macro BYTES (networking/ndb/convM2DNS.c) */
+/*e: macro [[V6ADDR]]([[(networking/ndb/convM2DNS.c)]]) */
+/*s: macro [[BYTES]]([[(networking/ndb/convM2DNS.c)]]) */
 #define BYTES(x, y)	((y) = gbytes(rp, sp, &(x), len - (sp->p - data)))
-/*e: macro BYTES (networking/ndb/convM2DNS.c) */
+/*e: macro [[BYTES]]([[(networking/ndb/convM2DNS.c)]]) */
 
-/*s: function convM2RR */
+/*s: function [[convM2RR]] */
 /*
  *  convert the next RR from a message
  */
@@ -551,9 +551,9 @@ retry:
     // if(rp) dnslog("convM2RR: got %R", rp);
     return rp;
 }
-/*e: function convM2RR */
+/*e: function [[convM2RR]] */
 
-/*s: function convM2Q */
+/*s: function [[convM2Q]] */
 /*
  *  convert the next question from a message
  */
@@ -577,9 +577,9 @@ convM2Q(Scan *sp)
 
     return rp;
 }
-/*e: function convM2Q */
+/*e: function [[convM2Q]] */
 
-/*s: function rrloop (networking/ndb/convM2DNS.c) */
+/*s: function [[rrloop]]([[(networking/ndb/convM2DNS.c)]]) */
 static RR*
 rrloop(Scan *sp, char *what, int count, int quest)
 {
@@ -611,9 +611,9 @@ rrloop(Scan *sp, char *what, int count, int quest)
 //		setmalloctag(first, getcallerpc(&sp));
     return first;
 }
-/*e: function rrloop (networking/ndb/convM2DNS.c) */
+/*e: function [[rrloop]]([[(networking/ndb/convM2DNS.c)]]) */
 
-/*s: function convM2DNS */
+/*s: function [[convM2DNS]] */
 /*
  *  convert the next DNS from a message stream.
  *  if there are formatting errors or the like during parsing of the message,
@@ -664,5 +664,5 @@ convM2DNS(uchar *buf, int len, DNSmsg *m, int *codep)
         *codep = sp->rcode;
     return err;
 }
-/*e: function convM2DNS */
+/*e: function [[convM2DNS]] */
 /*e: networking/ndb/convM2DNS.c */

@@ -2,9 +2,9 @@
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
-#include "../../ip/icmp.h"
+#include "../icmp.h"
 
-/*s: function catch (networking/ip/dhcpd/ping.c) */
+/*s: function [[catch]]([[(networking/ip/dhcpd/ping.c)]]) */
 static void
 catch(void *a, char *msg)
 {
@@ -14,13 +14,13 @@ catch(void *a, char *msg)
     else
         noted(NDFLT);
 }
-/*e: function catch (networking/ip/dhcpd/ping.c) */
+/*e: function [[catch]]([[(networking/ip/dhcpd/ping.c)]]) */
 
-/*s: constant MSG (networking/ip/dhcpd/ping.c) */
+/*s: constant [[MSG]]([[(networking/ip/dhcpd/ping.c)]]) */
 #define MSG "dhcp probe"
-/*e: constant MSG (networking/ip/dhcpd/ping.c) */
+/*e: constant [[MSG]]([[(networking/ip/dhcpd/ping.c)]]) */
 
-/*s: function icmpecho */
+/*s: function [[icmpecho]] */
 /*
  *  make sure noone is using the address
  *  TODO: ipv6 ping
@@ -76,5 +76,5 @@ icmpecho(uchar *a)
     close(fd);
     return rv;
 }
-/*e: function icmpecho */
+/*e: function [[icmpecho]] */
 /*e: networking/ip/dhcpd/ping.c */

@@ -7,15 +7,15 @@
 #include <ip.h>
 #include "icmp.h"
 
-/*s: enum _anon_ (networking/ip/traceroute.c) */
+/*s: enum [[_anon_ (networking/ip/traceroute.c)]] */
 enum{
     Maxstring=	128,
     Maxpath=	256,
 };
-/*e: enum _anon_ (networking/ip/traceroute.c) */
+/*e: enum [[_anon_ (networking/ip/traceroute.c)]] */
 
 typedef struct DS DS;
-/*s: struct DS (networking/ip/traceroute.c) */
+/*s: struct [[DS]]([[(networking/ip/traceroute.c)]]) */
 struct DS {
     /* dial string */
     char	buf[Maxstring];
@@ -23,18 +23,18 @@ struct DS {
     char	*proto;
     char	*rem;
 };
-/*e: struct DS (networking/ip/traceroute.c) */
+/*e: struct [[DS]]([[(networking/ip/traceroute.c)]]) */
 
-/*s: global argv0 (networking/ip/traceroute.c) */
+/*s: global [[argv0]]([[(networking/ip/traceroute.c)]]) */
 char *argv0;
-/*e: global argv0 (networking/ip/traceroute.c) */
-/*s: global debug (networking/ip/traceroute.c) */
+/*e: global [[argv0]]([[(networking/ip/traceroute.c)]]) */
+/*s: global [[debug]]([[(networking/ip/traceroute.c)]]) */
 int debug;
-/*e: global debug (networking/ip/traceroute.c) */
+/*e: global [[debug]]([[(networking/ip/traceroute.c)]]) */
 
 void	histogram(long *t, int n, int buckets, long lo, long hi);
 
-/*s: function usage (networking/ip/traceroute.c) */
+/*s: function [[usage]]([[(networking/ip/traceroute.c)]]) */
 void
 usage(void)
 {
@@ -43,9 +43,9 @@ usage(void)
         argv0);
     exits("usage");
 }
-/*e: function usage (networking/ip/traceroute.c) */
+/*e: function [[usage]]([[(networking/ip/traceroute.c)]]) */
 
-/*s: function csquery */
+/*s: function [[csquery]] */
 static int
 csquery(DS *ds, char *clone, char *dest)
 {
@@ -101,9 +101,9 @@ csquery(DS *ds, char *clone, char *dest)
     strcpy(dest, p);
     return 0;
 }
-/*e: function csquery */
+/*e: function [[csquery]] */
 
-/*s: function dodnsquery */
+/*s: function [[dodnsquery]] */
 /*
  *  call the dns process and have it try to resolve the mx request
  */
@@ -127,9 +127,9 @@ dodnsquery(DS *ds, char *ip, char *dom)
     ndbfree(t);
     return -1;
 }
-/*e: function dodnsquery */
+/*e: function [[dodnsquery]] */
 
-/*s: function tcpilprobe */
+/*s: function [[tcpilprobe]] */
 /*  for connection oriented protocols (il, tcp) we just need
  *  to try dialing.  resending is up to it.
  */
@@ -147,9 +147,9 @@ tcpilprobe(int cfd, int dfd, char *dest, int interval)
     alarm(0);
     return n;
 }
-/*e: function tcpilprobe */
+/*e: function [[tcpilprobe]] */
 
-/*s: function udpprobe */
+/*s: function [[udpprobe]] */
 /*
  *  for udp, we keep sending to an improbable port
  *  till we timeout or someone complains
@@ -194,16 +194,16 @@ udpprobe(int cfd, int dfd, char *dest, int interval)
     alarm(0);
     return rv;
 }
-/*e: function udpprobe */
+/*e: function [[udpprobe]] */
 
-/*s: constant MSG */
+/*s: constant [[MSG]] */
 #define MSG "traceroute probe"
-/*e: constant MSG */
-/*s: constant MAGIC */
+/*e: constant [[MSG]] */
+/*s: constant [[MAGIC]] */
 #define MAGIC 0xdead
-/*e: constant MAGIC */
+/*e: constant [[MAGIC]] */
 
-/*s: function icmpprobe */
+/*s: function [[icmpprobe]] */
 /* ICMPv4 only */
 static int
 icmpprobe(int cfd, int dfd, char *dest, int interval)
@@ -254,9 +254,9 @@ icmpprobe(int cfd, int dfd, char *dest, int interval)
     alarm(0);
     return rv;
 }
-/*e: function icmpprobe */
+/*e: function [[icmpprobe]] */
 
-/*s: function catch (networking/ip/traceroute.c) */
+/*s: function [[catch]]([[(networking/ip/traceroute.c)]]) */
 static void
 catch(void *a, char *msg)
 {
@@ -266,9 +266,9 @@ catch(void *a, char *msg)
     else
         noted(NDFLT);
 }
-/*e: function catch (networking/ip/traceroute.c) */
+/*e: function [[catch]]([[(networking/ip/traceroute.c)]]) */
 
-/*s: function call */
+/*s: function [[call]] */
 static int
 call(DS *ds, char *clone, char *dest, int ttl, long *interval)
 {
@@ -321,9 +321,9 @@ out:
     close(dfd);
     return rv;
 }
-/*e: function call */
+/*e: function [[call]] */
 
-/*s: function dial_string_parse */
+/*s: function [[dial_string_parse]] */
 /*
  *  parse a dial string.  default netdir is /net.
  *  default proto is tcp.
@@ -358,9 +358,9 @@ dial_string_parse(char *str, DS *ds)
     if(strchr(ds->rem, '!') == 0)
         strcat(ds->rem, "!32767");
 }
-/*e: function dial_string_parse */
+/*e: function [[dial_string_parse]] */
 
-/*s: function main (networking/ip/traceroute.c) */
+/*s: function [[main]]([[(networking/ip/traceroute.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -476,13 +476,13 @@ main(int argc, char **argv)
     }
     exits(0);
 }
-/*e: function main (networking/ip/traceroute.c) */
+/*e: function [[main]]([[(networking/ip/traceroute.c)]]) */
 
-/*s: global order */
+/*s: global [[order]] */
 char *order = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-/*e: global order */
+/*e: global [[order]] */
 
-/*s: function histogram */
+/*s: function [[histogram]] */
 void
 histogram(long *t, int n, int buckets, long lo, long hi)
 {
@@ -516,5 +516,5 @@ histogram(long *t, int n, int buckets, long lo, long hi)
     }
     print("+++++++++++++++++++++++\n");
 }
-/*e: function histogram */
+/*e: function [[histogram]] */
 /*e: networking/ip/traceroute.c */

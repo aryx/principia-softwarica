@@ -3,7 +3,6 @@
 #include <libc.h>
 #include <regexp.h>
 #include <string.h>
-
 #include "glob.h"
 
 /*
@@ -12,7 +11,7 @@
  *  better, certainly faster. - presotto
  */
 
-/*s: function globnew */
+/*s: function [[globnew]] */
 static Glob*
 globnew(void)
 {
@@ -23,18 +22,18 @@ globnew(void)
         sysfatal("globnew: %r");
     return g;
 }
-/*e: function globnew */
+/*e: function [[globnew]] */
 
-/*s: function globfree1 */
+/*s: function [[globfree1]] */
 static void
 globfree1(Glob *g)
 {
     s_free(g->glob);
     free(g);
 }
-/*e: function globfree1 */
+/*e: function [[globfree1]] */
 
-/*s: function globfree */
+/*s: function [[globfree]] */
 static void
 globfree(Glob *g)
 {
@@ -45,9 +44,9 @@ globfree(Glob *g)
         globfree1(g);
     }
 }
-/*e: function globfree */
+/*e: function [[globfree]] */
 
-/*s: function globlistnew */
+/*s: function [[globlistnew]] */
 static Globlist*
 globlistnew(char *x)
 {
@@ -61,9 +60,9 @@ globlistnew(char *x)
     gl->l = &gl->first->next;
     return gl;
 }
-/*e: function globlistnew */
+/*e: function [[globlistnew]] */
 
-/*s: function globlistfree */
+/*s: function [[globlistfree]] */
 void
 globlistfree(Globlist *gl)
 {
@@ -72,9 +71,9 @@ globlistfree(Globlist *gl)
     globfree(gl->first);
     free(gl);
 }
-/*e: function globlistfree */
+/*e: function [[globlistfree]] */
 
-/*s: function globadd */
+/*s: function [[globadd]] */
 void
 globadd(Globlist *gl, char *dir, char *file)
 {
@@ -88,9 +87,9 @@ globadd(Globlist *gl, char *dir, char *file)
     *(gl->l) = g;
     gl->l = &(g->next); 
 }
-/*e: function globadd */
+/*e: function [[globadd]] */
 
-/*s: function globdir */
+/*s: function [[globdir]] */
 static void
 globdir(Globlist *gl, char *dir, Reprog *re)
 {
@@ -112,9 +111,9 @@ globdir(Globlist *gl, char *dir, Reprog *re)
             globadd(gl, dir, d[i].name);
     free(d);
 }
-/*e: function globdir */
+/*e: function [[globdir]] */
 
-/*s: function globdot */
+/*s: function [[globdot]] */
 static void
 globdot(Globlist *gl, char *dir)
 {
@@ -131,9 +130,9 @@ globdot(Globlist *gl, char *dir)
         globadd(gl, dir, ".");
     free(d);
 }
-/*e: function globdot */
+/*e: function [[globdot]] */
 
-/*s: function globnext */
+/*s: function [[globnext]] */
 static void
 globnext(Globlist *gl, char *pattern)
 {
@@ -201,9 +200,9 @@ globnext(Globlist *gl, char *pattern)
     if(gl->first != nil)
         globnext(gl, pattern);
 }
-/*e: function globnext */
+/*e: function [[globnext]] */
 
-/*s: function globiter */
+/*s: function [[globiter]] */
 char *
 globiter(Globlist *gl)
 {
@@ -222,9 +221,9 @@ globiter(Globlist *gl)
     globfree1(g);
     return s;
 }
-/*e: function globiter */
+/*e: function [[globiter]] */
 
-/*s: function glob */
+/*s: function [[glob]] */
 Globlist*
 glob(char *pattern)
 {
@@ -240,5 +239,5 @@ glob(char *pattern)
     globnext(gl, pattern);
     return gl;
 }
-/*e: function glob */
+/*e: function [[glob]] */
 /*e: networking/ip/glob.c */

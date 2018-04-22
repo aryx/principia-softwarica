@@ -5,14 +5,14 @@
 #include <bio.h>
 #include <ndb.h>
 
-/*s: global noether (networking/ip/dhcpd/testlookup.c) */
+/*s: global [[noether]]([[(networking/ip/dhcpd/testlookup.c)]]) */
 static uchar noether[6];
-/*e: global noether (networking/ip/dhcpd/testlookup.c) */
-/*s: global db (networking/ip/dhcpd/testlookup.c) */
+/*e: global [[noether]]([[(networking/ip/dhcpd/testlookup.c)]]) */
+/*s: global [[db]]([[(networking/ip/dhcpd/testlookup.c)]]) */
     Ndb *db;
-/*e: global db (networking/ip/dhcpd/testlookup.c) */
+/*e: global [[db]]([[(networking/ip/dhcpd/testlookup.c)]]) */
 
-/*s: function recursesubnet (networking/ip/dhcpd/testlookup.c) */
+/*s: function [[recursesubnet]]([[(networking/ip/dhcpd/testlookup.c)]]) */
 static void
 recursesubnet(Ndb *db, uchar *addr, uchar *mask, char *attr, char *name, char *name1)
 {
@@ -55,9 +55,9 @@ recursesubnet(Ndb *db, uchar *addr, uchar *mask, char *attr, char *name, char *n
 
     ndbfree(t);
 }
-/*e: function recursesubnet (networking/ip/dhcpd/testlookup.c) */
+/*e: function [[recursesubnet]]([[(networking/ip/dhcpd/testlookup.c)]]) */
 
-/*s: function getipaddr */
+/*s: function [[getipaddr]] */
 /*
  *  lookup an ip address
  */
@@ -95,9 +95,9 @@ getipaddr(Ndb *db, char *name, uchar *to, Ipinfo *iip)
     }
     return 0;
 }
-/*e: function getipaddr */
+/*e: function [[getipaddr]] */
 
-/*s: function lookupserver (networking/ip/dhcpd/testlookup.c) */
+/*s: function [[lookupserver]]([[(networking/ip/dhcpd/testlookup.c)]]) */
 /*
  *  return the ip addresses for a type of server for system ip
  */
@@ -143,9 +143,9 @@ lookupserver(char *attr, uchar ipaddrs[2][IPaddrlen], Ipinfo *iip)
         i++;
     return i;
 }
-/*e: function lookupserver (networking/ip/dhcpd/testlookup.c) */
+/*e: function [[lookupserver]]([[(networking/ip/dhcpd/testlookup.c)]]) */
 
-/*s: function main (networking/ip/dhcpd/testlookup.c) */
+/*s: function [[main]]([[(networking/ip/dhcpd/testlookup.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -178,5 +178,5 @@ main(int argc, char **argv)
     for(j = 0; j < i; j++)
         print("%I\n", addrs[j]);
 }
-/*e: function main (networking/ip/dhcpd/testlookup.c) */
+/*e: function [[main]]([[(networking/ip/dhcpd/testlookup.c)]]) */
 /*e: networking/ip/dhcpd/testlookup.c */

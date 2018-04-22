@@ -1,7 +1,7 @@
 /*s: networking/ip/httpd/httpsrv.h */
 typedef struct HSPriv	HSPriv;
 
-/*s: enum _anon_ (networking/ip/httpd/httpsrv.h) */
+/*s: enum [[_anon_ (networking/ip/httpd/httpsrv.h)]] */
 enum
 {
     HSTIMEOUT	= 15 * 60 * 1000,
@@ -17,24 +17,24 @@ enum
     Redirsubord	= 1<<2,
     Redironly	= 1<<3,
 };
-/*e: enum _anon_ (networking/ip/httpd/httpsrv.h) */
+/*e: enum [[_anon_ (networking/ip/httpd/httpsrv.h)]] */
 
-/*s: struct HSPriv */
+/*s: struct [[HSPriv]] */
 struct HSPriv
 {
     char		*remotesys;
     char		*remoteserv;
 };
-/*e: struct HSPriv */
+/*e: struct [[HSPriv]] */
 
 extern	int		logall[3];
 extern	char*		HTTPLOG;
 extern	char*		webroot;
 extern	char*		netdir;
 
-/*s: macro STRLEN */
+/*s: macro [[STRLEN]] */
 #define 		STRLEN(s)	(sizeof(s)-1)
-/*e: macro STRLEN */
+/*e: macro [[STRLEN]] */
 
 /* emem.c */
 char			*estrdup(char*);
@@ -83,7 +83,7 @@ void			writelog(HConnect*, char*, ...);
 /* authorize.c */
 int authorize(HConnect*, char*);
 
-/*s: global webroot */
+/*s: global [[webroot]] */
 char *webroot;
-/*e: global webroot */
+/*e: global [[webroot]] */
 /*e: networking/ip/httpd/httpsrv.h */

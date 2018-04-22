@@ -6,7 +6,7 @@
 #include <auth.h>
 #include "ppp.h"
 
-/*s: enum _anon_ (networking/ip/ppp/mppc.c) */
+/*s: enum [[_anon_ (networking/ip/ppp/mppc.c)]] */
 enum {
     HistorySize=	8*1024,
     Cminmatch	= 3,		/* sintest match possible */
@@ -14,19 +14,19 @@ enum {
     Cnhash		= 1<<(Chshift*Cminmatch),
     HMASK		= Cnhash-1,
 };
-/*e: enum _anon_ (networking/ip/ppp/mppc.c) */
+/*e: enum [[_anon_ (networking/ip/ppp/mppc.c)]] */
 
 typedef struct Carena Carena;
-/*s: struct Carena */
+/*s: struct [[Carena]] */
 struct Carena
 {
     uchar	*pos;			/* current place, also amount of history filled */
     uchar	buf[HistorySize];
 };
-/*e: struct Carena */
+/*e: struct [[Carena]] */
 
 typedef struct Cstate Cstate;
-/*s: struct Cstate */
+/*s: struct [[Cstate]] */
 struct Cstate
 {
     QLock;
@@ -53,10 +53,10 @@ struct Cstate
     uchar	key[16];
     RC4state rc4key;
 };
-/*e: struct Cstate */
+/*e: struct [[Cstate]] */
 
 typedef struct Uncstate Uncstate;
-/*s: struct Uncstate */
+/*s: struct [[Uncstate]] */
 struct Uncstate
 {
     int	count;	 	/* packet count - detects missing packets */
@@ -68,9 +68,9 @@ struct Uncstate
     uchar	key[16];
     RC4state rc4key;
 };
-/*e: struct Uncstate */
+/*e: struct [[Uncstate]] */
 
-/*s: enum _anon_ (networking/ip/ppp/mppc.c)2 */
+/*s: enum [[_anon_ (networking/ip/ppp/mppc.c)2]] */
 /* packet flags */
 enum {
     Preset=		(1<<15),	/* reset history */
@@ -78,9 +78,9 @@ enum {
     Pcompress=	(1<<13),	/* packet is compressed */
     Pencrypt=	(1<<12),	/* packet is encrypted */
 };
-/*e: enum _anon_ (networking/ip/ppp/mppc.c)2 */
+/*e: enum [[_anon_ (networking/ip/ppp/mppc.c)2]] */
 
-/*s: enum _anon_ (networking/ip/ppp/mppc.c)3 */
+/*s: enum [[_anon_ (networking/ip/ppp/mppc.c)3]] */
 enum {
     Lit7,		/* seven bit literal */
     Lit8,		/* eight bit literal */
@@ -88,9 +88,9 @@ enum {
     Off8,		/* eight bit offset */
     Off13,		/* thirteen bit offset */
 };
-/*e: enum _anon_ (networking/ip/ppp/mppc.c)3 */
+/*e: enum [[_anon_ (networking/ip/ppp/mppc.c)3]] */
 
-/*s: global decode */
+/*s: global [[decode]] */
 /* decode first four bits */
 int decode[16] = {
     Lit7,	
@@ -110,7 +110,7 @@ int decode[16] = {
     Off8,
     Off6,
 };
-/*e: global decode */
+/*e: global [[decode]] */
     
 
 static	void		*compinit(PPP*);
@@ -137,25 +137,25 @@ static  void		hischeck(Uncstate*);
 
 static	void		setkey(uchar *key, uchar *startkey);
 
-/*s: global cmppc */
+/*s: global [[cmppc]] */
 Comptype cmppc = {
     compinit,
     comp,
     compresetreq,
     compfini
 };
-/*e: global cmppc */
+/*e: global [[cmppc]] */
 
-/*s: global uncmppc */
+/*s: global [[uncmppc]] */
 Uncomptype uncmppc = {
     uncinit,
     uncomp,
     uncresetack,
     uncfini
 };
-/*e: global uncmppc */
+/*e: global [[uncmppc]] */
 
-/*s: function compinit */
+/*s: function [[compinit]] */
 static void *
 compinit(PPP *ppp)
 {
@@ -183,9 +183,9 @@ compinit(PPP *ppp)
 
     return cs;
 }
-/*e: function compinit */
+/*e: function [[compinit]] */
 
-/*s: function compfini */
+/*s: function [[compfini]] */
 static void
 compfini(void *as)
 {
@@ -194,10 +194,10 @@ compfini(void *as)
     cs = as;
     free(cs);
 }
-/*e: function compfini */
+/*e: function [[compfini]] */
 
 
-/*s: function comp */
+/*s: function [[comp]] */
 static Block*
 comp(PPP *ppp, ushort proto, Block *b, int *protop)
 {
@@ -287,9 +287,9 @@ comp(PPP *ppp, ushort proto, Block *b, int *protop)
     *protop = Pcdata;
     return b;
 }
-/*e: function comp */
+/*e: function [[comp]] */
 
-/*s: function compresetreq */
+/*s: function [[compresetreq]] */
 static Block *
 compresetreq(void *as, Block *b)
 {
@@ -305,9 +305,9 @@ netlog("mppc: comp: reset request\n");
 
     return nil;
 }
-/*e: function compresetreq */
+/*e: function [[compresetreq]] */
 
-/*s: function comp2 */
+/*s: function [[comp2]] */
 static void
 comp2(Cstate *cs, uchar *p, int n)
 {
@@ -390,9 +390,9 @@ comp2(Cstate *cs, uchar *p, int n)
     cs->h = h;
     cs->me = me;
 }
-/*e: function comp2 */
+/*e: function [[comp2]] */
 
-/*s: function compfront */
+/*s: function [[compfront]] */
 static void
 compfront(Cstate *cs)
 {
@@ -408,9 +408,9 @@ compfront(Cstate *cs)
     cs->me = cs->split + HistorySize;
     cs->split = cs->me;
 }
-/*e: function compfront */
+/*e: function [[compfront]] */
 
-/*s: function compreset */
+/*s: function [[compreset]] */
 static void
 compreset(Cstate *cs)
 {
@@ -428,9 +428,9 @@ compreset(Cstate *cs)
     cs->hist->pos = cs->hist->buf;
     cs->ohist->pos = cs->ohist->buf;
 }
-/*e: function compreset */
+/*e: function [[compreset]] */
 
-/*s: function complit */
+/*s: function [[complit]] */
 static void
 complit(Cstate *s, int c)
 {
@@ -439,9 +439,9 @@ complit(Cstate *s, int c)
     else
         compout(s, c, 8);
 }
-/*e: function complit */
+/*e: function [[complit]] */
 
-/*s: function compcopy */
+/*s: function [[compcopy]] */
 static void
 compcopy(Cstate *s, int off, int len)
 {
@@ -465,9 +465,9 @@ compcopy(Cstate *s, int off, int len)
         compout(s, (((1<<(i-2))-1)<<i) | len&mask, (i-1)<<1);
     }
 }
-/*e: function compcopy */
+/*e: function [[compcopy]] */
 
-/*s: function compout */
+/*s: function [[compout]] */
 static void
 compout(Cstate *s, ulong data, int bits)
 {
@@ -484,9 +484,9 @@ compout(Cstate *s, ulong data, int bits)
     s->sreg = sreg;
     s->bits = bits;
 }
-/*e: function compout */
+/*e: function [[compout]] */
 
-/*s: function printkey */
+/*s: function [[printkey]] */
 void
 printkey(uchar *key)
 {
@@ -498,9 +498,9 @@ printkey(uchar *key)
         p += sprint(p, "%.2ux ", key[i]);
 //netlog("key = %s\n", buf);
 }
-/*e: function printkey */
+/*e: function [[printkey]] */
 
-/*s: function uncinit */
+/*s: function [[uncinit]] */
 static	void *
 uncinit(PPP *ppp)
 {
@@ -516,9 +516,9 @@ uncinit(PPP *ppp)
 
     return s;
 }
-/*e: function uncinit */
+/*e: function [[uncinit]] */
 
-/*s: function uncomp */
+/*s: function [[uncomp]] */
 static	Block*
 uncomp(PPP *ppp, Block *b, int *protop, Block **r)
 {
@@ -567,14 +567,14 @@ uncomp(PPP *ppp, Block *b, int *protop, Block **r)
     *protop = proto;
     return b;
 }
-/*e: function uncomp */
+/*e: function [[uncomp]] */
 
 #define NEXTBYTE	sreg = (sreg<<8) | *p++; n--; bits += 8
-/*s: global maxoff */
+/*s: global [[maxoff]] */
 int	maxoff;
-/*e: global maxoff */
+/*e: global [[maxoff]] */
     
-/*s: function uncomp2 */
+/*s: function [[uncomp2]] */
 static	Block*
 uncomp2(Uncstate *s, Block *b, ushort count)
 {
@@ -762,16 +762,16 @@ netlog("*****bad history\n");
     freeb(b);
     return nil;
 }
-/*e: function uncomp2 */
+/*e: function [[uncomp2]] */
 
-/*s: function uncresetack */
+/*s: function [[uncresetack]] */
 static	void
 uncresetack(void*, Block*)
 {
 }
-/*e: function uncresetack */
+/*e: function [[uncresetack]] */
 
-/*s: function uncfini */
+/*s: function [[uncfini]] */
 static	void
 uncfini(void *as)
 {
@@ -780,9 +780,9 @@ uncfini(void *as)
     s = as;	
     free(s);
 }
-/*e: function uncfini */
+/*e: function [[uncfini]] */
 
-/*s: function setkey */
+/*s: function [[setkey]] */
 static void
 setkey(uchar *key, uchar *startkey)
 {
@@ -798,13 +798,13 @@ setkey(uchar *key, uchar *startkey)
     sha1(pad, 40, digest, s);
     memmove(key, digest, 16);
 }
-/*e: function setkey */
+/*e: function [[setkey]] */
 
 
 /* code to check if IP packet looks good */
 
 typedef struct Iphdr Iphdr;
-/*s: struct Iphdr (networking/ip/ppp/mppc.c) */
+/*s: struct [[Iphdr]]([[(networking/ip/ppp/mppc.c)]]) */
 struct Iphdr
 {
     uchar	vihl;		/* Version and header length */
@@ -818,9 +818,9 @@ struct Iphdr
     uchar	src[4];		/* Ip source */
     uchar	dst[4];		/* Ip destination */
 };
-/*e: struct Iphdr (networking/ip/ppp/mppc.c) */
+/*e: struct [[Iphdr]]([[(networking/ip/ppp/mppc.c)]]) */
 
-/*s: enum _anon_ (networking/ip/ppp/mppc.c)4 */
+/*s: enum [[_anon_ (networking/ip/ppp/mppc.c)4]] */
 enum
 {
     QMAX		= 64*1024-1,
@@ -830,9 +830,9 @@ enum
     TCP_HDRSIZE	= 20,
     TCP_PKT		= TCP_IPLEN+TCP_PHDRSIZE,
 };
-/*e: enum _anon_ (networking/ip/ppp/mppc.c)4 */
+/*e: enum [[_anon_ (networking/ip/ppp/mppc.c)4]] */
 
-/*s: enum _anon_ (networking/ip/ppp/mppc.c)5 */
+/*s: enum [[_anon_ (networking/ip/ppp/mppc.c)5]] */
 enum
 {
     UDP_PHDRSIZE	= 12,
@@ -846,10 +846,10 @@ enum
     Udptickms	= 100,
     Udpmaxxmit	= 10,
 };
-/*e: enum _anon_ (networking/ip/ppp/mppc.c)5 */
+/*e: enum [[_anon_ (networking/ip/ppp/mppc.c)5]] */
 
 typedef struct UDPhdr UDPhdr;
-/*s: struct UDPhdr */
+/*s: struct [[UDPhdr]] */
 struct UDPhdr
 {
     /* ip header */
@@ -870,10 +870,10 @@ struct UDPhdr
     uchar	udplen[2];	/* data length */
     uchar	udpcksum[2];	/* Checksum */
 };
-/*e: struct UDPhdr */
+/*e: struct [[UDPhdr]] */
 
 typedef struct TCPhdr TCPhdr;
-/*s: struct TCPhdr */
+/*s: struct [[TCPhdr]] */
 struct TCPhdr
 {
     uchar	vihl;		/* Version and header length */
@@ -898,9 +898,9 @@ struct TCPhdr
     uchar	tcpopt[2];
     uchar	tcpmss[2];
 };
-/*e: struct TCPhdr */
+/*e: struct [[TCPhdr]] */
 
-/*s: function hischeck */
+/*s: function [[hischeck]] */
 static void
 hischeck(Uncstate *s)
 {
@@ -924,10 +924,10 @@ netlog("off = %ld ", p-s->his);
         p += len;
     }
 }
-/*e: function hischeck */
+/*e: function [[hischeck]] */
 
 
-/*s: function ipcheck */
+/*s: function [[ipcheck]] */
 static int
 ipcheck(uchar *p, int len)
 {
@@ -996,5 +996,5 @@ ipcheck(uchar *p, int len)
     freeb(bp);
     return good;
 }
-/*e: function ipcheck */
+/*e: function [[ipcheck]] */
 /*e: networking/ip/ppp/mppc.c */

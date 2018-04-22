@@ -14,26 +14,26 @@
 
 #pragma varargck argpos ralog 1
 
-/*s: constant RALOG */
+/*s: constant [[RALOG]] */
 #define RALOG "v6routeradv"
-/*e: constant RALOG */
+/*e: constant [[RALOG]] */
 
-/*s: macro NetS (networking/ip/ipconfig/ipv6.c) */
+/*s: macro [[NetS]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 #define NetS(x) (((uchar*)x)[0]<< 8 | ((uchar*)x)[1])
-/*e: macro NetS (networking/ip/ipconfig/ipv6.c) */
-/*s: macro NetL (networking/ip/ipconfig/ipv6.c) */
+/*e: macro [[NetS]]([[(networking/ip/ipconfig/ipv6.c)]]) */
+/*s: macro [[NetL]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 #define NetL(x) (((uchar*)x)[0]<<24 | ((uchar*)x)[1]<<16 | \
          ((uchar*)x)[2]<< 8 | ((uchar*)x)[3])
-/*e: macro NetL (networking/ip/ipconfig/ipv6.c) */
+/*e: macro [[NetL]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: enum _anon_ (networking/ip/ipconfig/ipv6.c) */
+/*s: enum [[_anon_ (networking/ip/ipconfig/ipv6.c)]] */
 enum {
     ICMP6LEN=	4,
 };
-/*e: enum _anon_ (networking/ip/ipconfig/ipv6.c) */
+/*e: enum [[_anon_ (networking/ip/ipconfig/ipv6.c)]] */
 
 typedef struct Hdr Hdr;
-/*s: struct Hdr (networking/ip/ipconfig/ipv6.c) */
+/*s: struct [[Hdr]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 struct Hdr			/* ICMP v4 & v6 header */
 {
     uchar	type;
@@ -41,9 +41,9 @@ struct Hdr			/* ICMP v4 & v6 header */
     uchar	cksum[2];	/* Checksum */
     uchar	data[];
 };
-/*e: struct Hdr (networking/ip/ipconfig/ipv6.c) */
+/*e: struct [[Hdr]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: global icmpmsg6 (networking/ip/ipconfig/ipv6.c) */
+/*s: global [[icmpmsg6]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 char *icmpmsg6[Maxtype6+1] =
 {
 [EchoReply]		"EchoReply",
@@ -68,9 +68,9 @@ char *icmpmsg6[Maxtype6+1] =
 [NbrAdvert]		"NbrAdvert",
 [RedirectV6]		"RedirectV6",
 };
-/*e: global icmpmsg6 (networking/ip/ipconfig/ipv6.c) */
+/*e: global [[icmpmsg6]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: global icmp6opts (networking/ip/ipconfig/ipv6.c) */
+/*s: global [[icmp6opts]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 static char *icmp6opts[] =
 {
 [0]			"unknown option",
@@ -86,63 +86,63 @@ static char *icmp6opts[] =
 [V6nd_9fs]		"9fs",
 [V6nd_9auth]		"9auth",
 };
-/*e: global icmp6opts (networking/ip/ipconfig/ipv6.c) */
+/*e: global [[icmp6opts]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: global v6allroutersL */
+/*s: global [[v6allroutersL]] */
 uchar v6allroutersL[IPaddrlen] = {
     0xff, 0x02, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0x02
 };
-/*e: global v6allroutersL */
+/*e: global [[v6allroutersL]] */
 
-/*s: global v6allnodesL (networking/ip/ipconfig/ipv6.c) */
+/*s: global [[v6allnodesL]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 uchar v6allnodesL[IPaddrlen] = {
     0xff, 0x02, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0x01
 };
-/*e: global v6allnodesL (networking/ip/ipconfig/ipv6.c) */
+/*e: global [[v6allnodesL]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: global v6Unspecified (networking/ip/ipconfig/ipv6.c) */
+/*s: global [[v6Unspecified]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 uchar v6Unspecified[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0
 };
-/*e: global v6Unspecified (networking/ip/ipconfig/ipv6.c) */
+/*e: global [[v6Unspecified]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: global v6loopback (networking/ip/ipconfig/ipv6.c) */
+/*s: global [[v6loopback]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 uchar v6loopback[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 1
 };
-/*e: global v6loopback (networking/ip/ipconfig/ipv6.c) */
+/*e: global [[v6loopback]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: global v6glunicast */
+/*s: global [[v6glunicast]] */
 uchar v6glunicast[IPaddrlen] = {
     0x08, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0
 };
-/*e: global v6glunicast */
+/*e: global [[v6glunicast]] */
 
-/*s: global v6linklocal (networking/ip/ipconfig/ipv6.c) */
+/*s: global [[v6linklocal]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 uchar v6linklocal[IPaddrlen] = {
     0xfe, 0x80, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0
 };
-/*e: global v6linklocal (networking/ip/ipconfig/ipv6.c) */
+/*e: global [[v6linklocal]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: global v6solpfx */
+/*s: global [[v6solpfx]] */
 uchar v6solpfx[IPaddrlen] = {
     0xff, 0x02, 0, 0,
     0, 0, 0, 0,
@@ -150,18 +150,18 @@ uchar v6solpfx[IPaddrlen] = {
     /* last 3 bytes filled with low-order bytes of addr being solicited */
     0xff, 0, 0, 0,
 };
-/*e: global v6solpfx */
+/*e: global [[v6solpfx]] */
 
-/*s: global v6defmask */
+/*s: global [[v6defmask]] */
 uchar v6defmask[IPaddrlen] = {
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
     0, 0, 0, 0,
     0, 0, 0, 0
 };
-/*e: global v6defmask */
+/*e: global [[v6defmask]] */
 
-/*s: enum _anon_ (networking/ip/ipconfig/ipv6.c)2 */
+/*s: enum [[_anon_ (networking/ip/ipconfig/ipv6.c)2]] */
 enum
 {
     Vadd,
@@ -170,9 +170,9 @@ enum
     Vaddpref6,
     Vra6,
 };
-/*e: enum _anon_ (networking/ip/ipconfig/ipv6.c)2 */
+/*e: enum [[_anon_ (networking/ip/ipconfig/ipv6.c)2]] */
 
-/*s: function ralog */
+/*s: function [[ralog]] */
 static void
 ralog(char *fmt, ...)
 {
@@ -184,9 +184,9 @@ ralog(char *fmt, ...)
     va_end(arg);
     syslog(debug, RALOG, msg);
 }
-/*e: function ralog */
+/*e: function [[ralog]] */
 
-/*s: function ea2lla (networking/ip/ipconfig/ipv6.c) */
+/*s: function [[ea2lla]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 extern void
 ea2lla(uchar *lla, uchar *ea)
 {
@@ -203,9 +203,9 @@ ea2lla(uchar *lla, uchar *ea)
     lla[14] = ea[4];
     lla[15] = ea[5];
 }
-/*e: function ea2lla (networking/ip/ipconfig/ipv6.c) */
+/*e: function [[ea2lla]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: function ipv62smcast (networking/ip/ipconfig/ipv6.c) */
+/*s: function [[ipv62smcast]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 extern void
 ipv62smcast(uchar *smcast, uchar *a)
 {
@@ -219,9 +219,9 @@ ipv62smcast(uchar *smcast, uchar *a)
     smcast[14] = a[14];
     smcast[15] = a[15];
 }
-/*e: function ipv62smcast (networking/ip/ipconfig/ipv6.c) */
+/*e: function [[ipv62smcast]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: function v6paraminit */
+/*s: function [[v6paraminit]] */
 void
 v6paraminit(Conf *cf)
 {
@@ -242,9 +242,9 @@ v6paraminit(Conf *cf)
     cf->autoflag = 0;
     cf->validlt = cf->preflt = ~0L;
 }
-/*e: function v6paraminit */
+/*e: function [[v6paraminit]] */
 
-/*s: function optname */
+/*s: function [[optname]] */
 static char *
 optname(unsigned opt)
 {
@@ -256,9 +256,9 @@ optname(unsigned opt)
     } else
         return icmp6opts[opt];
 }
-/*e: function optname */
+/*e: function [[optname]] */
 
-/*s: function opt_seprint (networking/ip/ipconfig/ipv6.c) */
+/*s: function [[opt_seprint]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 static char*
 opt_seprint(uchar *ps, uchar *pe, char *sps, char *spe)
 {
@@ -301,9 +301,9 @@ opt_seprint(uchar *ps, uchar *pe, char *sps, char *spe)
     }
     return p;
 }
-/*e: function opt_seprint (networking/ip/ipconfig/ipv6.c) */
+/*e: function [[opt_seprint]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: function pkt2str */
+/*s: function [[pkt2str]] */
 static void
 pkt2str(uchar *ps, uchar *pe, char *sps, char *spe)
 {
@@ -353,9 +353,9 @@ pkt2str(uchar *ps, uchar *pe, char *sps, char *spe)
         break;
     }
 }
-/*e: function pkt2str */
+/*e: function [[pkt2str]] */
 
-/*s: function catch (networking/ip/ipconfig/ipv6.c) */
+/*s: function [[catch]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 static void
 catch(void *a, char *msg)
 {
@@ -365,9 +365,9 @@ catch(void *a, char *msg)
     else
         noted(NDFLT);
 }
-/*e: function catch (networking/ip/ipconfig/ipv6.c) */
+/*e: function [[catch]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: function procsetname (networking/ip/ipconfig/ipv6.c) */
+/*s: function [[procsetname]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 /*
  * based on libthread's threadsetname, but drags in less library code.
  * actually just sets the arguments displayed.
@@ -392,9 +392,9 @@ procsetname(char *fmt, ...)
     }
     free(cmdname);
 }
-/*e: function procsetname (networking/ip/ipconfig/ipv6.c) */
+/*e: function [[procsetname]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: function dialicmp */
+/*s: function [[dialicmp]] */
 int
 dialicmp(uchar *dst, int dport, int *ctlfd)
 {
@@ -432,9 +432,9 @@ dialicmp(uchar *dst, int dport, int *ctlfd)
     *ctlfd = cfd;
     return fd;
 }
-/*e: function dialicmp */
+/*e: function [[dialicmp]] */
 
-/*s: function ip6cfg */
+/*s: function [[ip6cfg]] */
 /* add ipv6 addr to an interface */
 int
 ip6cfg(int autoconf)
@@ -509,9 +509,9 @@ ip6cfg(int autoconf)
     }
     return 0;
 }
-/*e: function ip6cfg */
+/*e: function [[ip6cfg]] */
 
-/*s: function recvra6on */
+/*s: function [[recvra6on]] */
 static int
 recvra6on(char *net, int conn)
 {
@@ -527,9 +527,9 @@ recvra6on(char *net, int conn)
     else
         return IsHostNoRecv;
 }
-/*e: function recvra6on */
+/*e: function [[recvra6on]] */
 
-/*s: function sendrs */
+/*s: function [[sendrs]] */
 /* send icmpv6 router solicitation to multicast address for all routers */
 static void
 sendrs(int fd)
@@ -549,9 +549,9 @@ sendrs(int fd)
         ralog("sendrs: sent solicitation to %I from %I on %s",
             rs->dst, rs->src, conf.dev);
 }
-/*e: function sendrs */
+/*e: function [[sendrs]] */
 
-/*s: function recvrarouter */
+/*s: function [[recvrarouter]] */
 /*
  * a router receiving a router adv from another
  * router calls this; it is basically supposed to
@@ -566,9 +566,9 @@ recvrarouter(uchar buf[], int pktlen)
     USED(buf, pktlen);
     ralog("i am a router and got a router advert");
 }
-/*e: function recvrarouter */
+/*e: function [[recvrarouter]] */
 
-/*s: function ewrite (networking/ip/ipconfig/ipv6.c) */
+/*s: function [[ewrite]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 /* host receiving a router advertisement calls this */
 
 static void
@@ -580,9 +580,9 @@ ewrite(int fd, char *str)
     if (write(fd, str, n) != n)
         ralog("write(%s) failed: %r", str);
 }
-/*e: function ewrite (networking/ip/ipconfig/ipv6.c) */
+/*e: function [[ewrite]]([[(networking/ip/ipconfig/ipv6.c)]]) */
 
-/*s: function issuebasera6 */
+/*s: function [[issuebasera6]] */
 static void
 issuebasera6(Conf *cf)
 {
@@ -595,9 +595,9 @@ issuebasera6(Conf *cf)
     ewrite(cf->cfd, cfg);
     free(cfg);
 }
-/*e: function issuebasera6 */
+/*e: function [[issuebasera6]] */
 
-/*s: function issuerara6 */
+/*s: function [[issuerara6]] */
 static void
 issuerara6(Conf *cf)
 {
@@ -610,9 +610,9 @@ issuerara6(Conf *cf)
     ewrite(cf->cfd, cfg);
     free(cfg);
 }
-/*e: function issuerara6 */
+/*e: function [[issuerara6]] */
 
-/*s: function issueadd6 */
+/*s: function [[issueadd6]] */
 static void
 issueadd6(Conf *cf)
 {
@@ -623,9 +623,9 @@ issueadd6(Conf *cf)
     ewrite(cf->cfd, cfg);
     free(cfg);
 }
-/*e: function issueadd6 */
+/*e: function [[issueadd6]] */
 
-/*s: function recvrahost */
+/*s: function [[recvrahost]] */
 static void
 recvrahost(uchar buf[], int pktlen)
 {
@@ -729,9 +729,9 @@ recvrahost(uchar buf[], int pktlen)
         }
     }
 }
-/*e: function recvrahost */
+/*e: function [[recvrahost]] */
 
-/*s: function recvra6 */
+/*s: function [[recvra6]] */
 /*
  * daemon to receive router advertisements from routers
  */
@@ -808,9 +808,9 @@ recvra6(void)
         }
     }
 }
-/*e: function recvra6 */
+/*e: function [[recvra6]] */
 
-/*s: function recvrs */
+/*s: function [[recvrs]] */
 /*
  * return -1 -- error, reading/writing some file,
  *         0 -- no arp table updates
@@ -860,9 +860,9 @@ recvrs(uchar *buf, int pktlen, uchar *sol)
     close(arpfd);
     return 1;
 }
-/*e: function recvrs */
+/*e: function [[recvrs]] */
 
-/*s: function sendra */
+/*s: function [[sendra]] */
 void
 sendra(int fd, uchar *dst, int rlt)
 {
@@ -941,9 +941,9 @@ sendra(int fd, uchar *dst, int rlt)
     else if (debug)
         ralog("sendra succ %s", abuf);
 }
-/*e: function sendra */
+/*e: function [[sendra]] */
 
-/*s: function sendra6 */
+/*s: function [[sendra6]] */
 /*
  * daemon to send router advertisements to hosts
  */
@@ -1026,9 +1026,9 @@ sendra6(void)
             sendra(fd, v6allnodesL, 1);
     }
 }
-/*e: function sendra6 */
+/*e: function [[sendra6]] */
 
-/*s: function startra6 */
+/*s: function [[startra6]] */
 void
 startra6(void)
 {
@@ -1047,9 +1047,9 @@ startra6(void)
             recvra6();
     }
 }
-/*e: function startra6 */
+/*e: function [[startra6]] */
 
-/*s: function doipv6 */
+/*s: function [[doipv6]] */
 void
 doipv6(int what)
 {
@@ -1074,5 +1074,5 @@ doipv6(int what)
         break;
     }
 }
-/*e: function doipv6 */
+/*e: function [[doipv6]] */
 /*e: networking/ip/ipconfig/ipv6.c */

@@ -5,18 +5,18 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
-/*s: global HO */
+/*s: global [[HO]] */
 Hio *HO;
-/*e: global HO */
-/*s: global diffb */
+/*e: global [[HO]] */
+/*s: global [[diffb]] */
 int diffb;
-/*e: global diffb */
+/*e: global [[diffb]] */
 
-/*s: enum _anon_ (networking/ip/httpd/netlib_history.c) */
+/*s: enum [[_anon_ (networking/ip/httpd/netlib_history.c)]] */
 enum{ DAY = 24*60*60 };
-/*e: enum _anon_ (networking/ip/httpd/netlib_history.c) */
+/*e: enum [[_anon_ (networking/ip/httpd/netlib_history.c)]] */
 
-/*s: function lastbefore */
+/*s: function [[lastbefore]] */
 void
 lastbefore(ulong t, char *f, char *b)
 {
@@ -41,10 +41,10 @@ lastbefore(ulong t, char *f, char *b)
     }
     strcpy(b, "filenotfound");
 }
-/*e: function lastbefore */
+/*e: function [[lastbefore]] */
 
 // create explicit file for diff, which otherwise would create a
-/*s: function gunzip */
+/*s: function [[gunzip]] */
 // mode 0600 file that it couldn't read (because running as none)
 void
 gunzip(char *f, char *tmp)
@@ -70,9 +70,9 @@ gunzip(char *f, char *tmp)
     }
     close(fd);
 }
-/*e: function gunzip */
+/*e: function [[gunzip]] */
 
-/*s: function netlibhistory */
+/*s: function [[netlibhistory]] */
 void
 netlibhistory(char *file)
 {
@@ -158,9 +158,9 @@ done:
         remove(tmpf[1]);
     }
 }
-/*e: function netlibhistory */
+/*e: function [[netlibhistory]] */
 
-/*s: function send (networking/ip/httpd/netlib_history.c) */
+/*s: function [[send]]([[(networking/ip/httpd/netlib_history.c)]]) */
 int
 send(HConnect *c)
 {
@@ -218,9 +218,9 @@ send(HConnect *c)
     writelog(c, "Reply: 200 netlib_history %ld %ld\n", HO->seek, HO->seek);
     return 1;
 }
-/*e: function send (networking/ip/httpd/netlib_history.c) */
+/*e: function [[send]]([[(networking/ip/httpd/netlib_history.c)]]) */
 
-/*s: function main (networking/ip/httpd/netlib_history.c) */
+/*s: function [[main]]([[(networking/ip/httpd/netlib_history.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -232,5 +232,5 @@ main(int argc, char **argv)
         send(c);
     exits(nil);
 }
-/*e: function main (networking/ip/httpd/netlib_history.c) */
+/*e: function [[main]]([[(networking/ip/httpd/netlib_history.c)]]) */
 /*e: networking/ip/httpd/netlib_history.c */

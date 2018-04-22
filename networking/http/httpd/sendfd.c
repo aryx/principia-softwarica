@@ -7,27 +7,27 @@
 
 static	void		printtype(Hio *hout, HContent *type, HContent *enc);
 
-/*s: constant UNAUTHED (networking/ip/httpd/sendfd.c) */
+/*s: constant [[UNAUTHED]]([[(networking/ip/httpd/sendfd.c)]]) */
 /*
  * these should be done better; see the reponse codes in /lib/rfc/rfc2616 for
  * more info on what should be included.
  */
 #define UNAUTHED	"You are not authorized to see this area.\n"
-/*e: constant UNAUTHED (networking/ip/httpd/sendfd.c) */
-/*s: constant NOCONTENT */
+/*e: constant [[UNAUTHED]]([[(networking/ip/httpd/sendfd.c)]]) */
+/*s: constant [[NOCONTENT]] */
 #define NOCONTENT	"No acceptable type of data is available.\n"
-/*e: constant NOCONTENT */
-/*s: constant NOENCODE */
+/*e: constant [[NOCONTENT]] */
+/*s: constant [[NOENCODE]] */
 #define NOENCODE	"No acceptable encoding of the contents is available.\n"
-/*e: constant NOENCODE */
-/*s: constant UNMATCHED */
+/*e: constant [[NOENCODE]] */
+/*s: constant [[UNMATCHED]] */
 #define UNMATCHED	"The entity requested does not match the existing entity.\n"
-/*e: constant UNMATCHED */
-/*s: constant BADRANGE */
+/*e: constant [[UNMATCHED]] */
+/*s: constant [[BADRANGE]] */
 #define BADRANGE	"No bytes are avaible for the range you requested.\n"
-/*e: constant BADRANGE */
+/*e: constant [[BADRANGE]] */
 
-/*s: function sendfd */
+/*s: function [[sendfd]] */
 /*
  * fd references a file which has been authorized & checked for relocations.
  * send back the headers & its contents.
@@ -247,9 +247,9 @@ breakout:;
     close(fd);
     return ok;
 }
-/*e: function sendfd */
+/*e: function [[sendfd]] */
 
-/*s: function printtype */
+/*s: function [[printtype]] */
 static void
 printtype(Hio *hout, HContent *type, HContent *enc)
 {
@@ -262,9 +262,9 @@ printtype(Hio *hout, HContent *type, HContent *enc)
     if(enc != nil)
         hprint(hout, "Content-Encoding: %s\r\n", enc->generic);
 }
-/*e: function printtype */
+/*e: function [[printtype]] */
 
-/*s: function etagmatch */
+/*s: function [[etagmatch]] */
 int
 etagmatch(int strong, HETag *tags, char *e)
 {
@@ -290,9 +290,9 @@ etagmatch(int strong, HETag *tags, char *e)
     }
     return 0;
 }
-/*e: function etagmatch */
+/*e: function [[etagmatch]] */
 
-/*s: function acceptcont */
+/*s: function [[acceptcont]] */
 static char *
 acceptcont(char *s, char *e, HContent *ok, char *which)
 {
@@ -311,9 +311,9 @@ acceptcont(char *s, char *e, HContent *ok, char *which)
     }
     return seprint(s, e, ".<br>\n");
 }
-/*e: function acceptcont */
+/*e: function [[acceptcont]] */
 
-/*s: function notaccept */
+/*s: function [[notaccept]] */
 /*
  * send back a nice error message if the content is unacceptable
  * to get this message in ie, go to tools, internet options, advanced,
@@ -355,9 +355,9 @@ notaccept(HConnect *c, HContent *type, HContent *enc, char *which)
     writelog(c, "Reply: 406 Not Acceptable\nReason: %s\n", which);
     return hflush(hout);
 }
-/*e: function notaccept */
+/*e: function [[notaccept]] */
 
-/*s: function checkreq */
+/*s: function [[checkreq]] */
 /*
  * check time and entity tag conditions.
  */
@@ -418,9 +418,9 @@ checkreq(HConnect *c, HContent *type, HContent *enc, long mtime, char *etag)
     }
     return 1;
 }
-/*e: function checkreq */
+/*e: function [[checkreq]] */
 
-/*s: function fixrange */
+/*s: function [[fixrange]] */
 /*
  * length is the actual length of the entity requested.
  * discard any range requests which are invalid,
@@ -484,5 +484,5 @@ fixrange(HRange *h, long length)
     }
     return h;
 }
-/*e: function fixrange */
+/*e: function [[fixrange]] */
 /*e: networking/ip/httpd/sendfd.c */

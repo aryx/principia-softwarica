@@ -4,7 +4,7 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
-/*s: function usage (networking/ip/httpd/init.c) */
+/*s: function [[usage]]([[(networking/ip/httpd/init.c)]]) */
 void
 usage(void)
 {
@@ -14,26 +14,26 @@ usage(void)
         " method version uri [search]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ip/httpd/init.c) */
+/*e: function [[usage]]([[(networking/ip/httpd/init.c)]]) */
 
-/*s: global netdir (networking/ip/httpd/init.c) */
+/*s: global [[netdir]]([[(networking/ip/httpd/init.c)]]) */
 char	*netdir;
-/*e: global netdir (networking/ip/httpd/init.c) */
-/*s: global webroot (networking/ip/httpd/init.c) */
+/*e: global [[netdir]]([[(networking/ip/httpd/init.c)]]) */
+/*s: global [[webroot]]([[(networking/ip/httpd/init.c)]]) */
 char	*webroot;
-/*e: global webroot (networking/ip/httpd/init.c) */
-/*s: global HTTPLOG (networking/ip/httpd/init.c) */
+/*e: global [[webroot]]([[(networking/ip/httpd/init.c)]]) */
+/*s: global [[HTTPLOG]]([[(networking/ip/httpd/init.c)]]) */
 char	*HTTPLOG = "httpd/log";
-/*e: global HTTPLOG (networking/ip/httpd/init.c) */
+/*e: global [[HTTPLOG]]([[(networking/ip/httpd/init.c)]]) */
 
-/*s: global connect */
+/*s: global [[connect]] */
 static	HConnect	connect;
-/*e: global connect */
-/*s: global priv */
+/*e: global [[connect]] */
+/*s: global [[priv]] */
 static	HSPriv		priv;
-/*e: global priv */
+/*e: global [[priv]] */
 
-/*s: function init (networking/ip/httpd/init.c) */
+/*s: function [[init]]([[(networking/ip/httpd/init.c)]]) */
 HConnect*
 init(int argc, char **argv)
 {
@@ -125,5 +125,5 @@ init(int argc, char **argv)
     connect.reqtime = time(nil);	/* not quite right, but close enough */
     return &connect;
 }
-/*e: function init (networking/ip/httpd/init.c) */
+/*e: function [[init]]([[(networking/ip/httpd/init.c)]]) */
 /*e: networking/ip/httpd/init.c */

@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function hogport */
+/*s: function [[hogport]] */
 void
 hogport(char *proto, int port)
 {
@@ -13,9 +13,9 @@ hogport(char *proto, int port)
     if(announce(buf, dir) < 0)
         fprint(2, "%s: can't hog %s\n", argv0, buf);
 }
-/*e: function hogport */
+/*e: function [[hogport]] */
 
-/*s: function hogrange */
+/*s: function [[hogrange]] */
 void
 hogrange(char *str)
 {
@@ -41,9 +41,9 @@ hogrange(char *str)
     for(; start <= end; start++)
         hogport(str, start);
 }
-/*e: function hogrange */
+/*e: function [[hogrange]] */
 
-/*s: function main (networking/ip/hogports.c) */
+/*s: function [[main]]([[(networking/ip/hogports.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -75,5 +75,5 @@ main(int argc, char **argv)
     for(;;)
         sleep(10000);
 }
-/*e: function main (networking/ip/hogports.c) */
+/*e: function [[main]]([[(networking/ip/hogports.c)]]) */
 /*e: networking/ip/hogports.c */

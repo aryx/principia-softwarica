@@ -4,7 +4,7 @@
 
 void	getstr(int, char*, int);
 
-/*s: function main (networking/ip/rlogind.c) */
+/*s: function [[main]]([[(networking/ip/rlogind.c)]]) */
 void
 main(void)
 {
@@ -24,9 +24,9 @@ main(void)
     fprint(2, "can't exec con service: %r\n");
     exits("can't exec");
 }
-/*e: function main (networking/ip/rlogind.c) */
+/*e: function [[main]]([[(networking/ip/rlogind.c)]]) */
 
-/*s: function getstr */
+/*s: function [[getstr]] */
 void
 getstr(int fd, char *str, int len)
 {
@@ -45,5 +45,5 @@ getstr(int fd, char *str, int len)
     }
     *str = '\0';
 }
-/*e: function getstr */
+/*e: function [[getstr]] */
 /*e: networking/ip/rlogind.c */

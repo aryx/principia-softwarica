@@ -7,15 +7,15 @@
 
 typedef struct Country Country;
 
-/*s: struct Country */
+/*s: struct [[Country]] */
 struct Country
 {
     char *code;
     char *name;
 };
-/*e: struct Country */
+/*e: struct [[Country]] */
 
-/*s: global badc */
+/*s: global [[badc]] */
 Country badc[] =
 {
     {"af", "afghanistan"},
@@ -28,9 +28,9 @@ Country badc[] =
     {"sy", "syria"},
     { 0, 0 }
 };
-/*e: global badc */
+/*e: global [[badc]] */
 
-/*s: global goodc */
+/*s: global [[goodc]] */
 Country goodc[] =
 {
     // the original, us and canada
@@ -69,9 +69,9 @@ Country goodc[] =
     {"nz", "new zealand"},
     { 0, 0 }
 };
-/*e: global goodc */
+/*e: global [[goodc]] */
 
-/*s: global gov */
+/*s: global [[gov]] */
 char *gov[] =
 {
     "gov",
@@ -80,9 +80,9 @@ char *gov[] =
     "government",
     0,
 };
-/*e: global gov */
+/*e: global [[gov]] */
 
-/*s: global allc */
+/*s: global [[allc]] */
 Country allc[] =
 {
     { "ad",	"andorra" },
@@ -345,13 +345,13 @@ Country allc[] =
 
     { 0, 0 }
 };
-/*e: global allc */
+/*e: global [[allc]] */
 
-/*s: global classdebug */
+/*s: global [[classdebug]] */
 int classdebug;
-/*e: global classdebug */
+/*e: global [[classdebug]] */
 
-/*s: function incountries */
+/*s: function [[incountries]] */
 static int
 incountries(char *s, Country *cp)
 {
@@ -361,9 +361,9 @@ incountries(char *s, Country *cp)
             return 1;
     return 0;
 }
-/*e: function incountries */
+/*e: function [[incountries]] */
 
-/*s: function indomains */
+/*s: function [[indomains]] */
 static int
 indomains(char *s, char **dp)
 {
@@ -373,9 +373,9 @@ indomains(char *s, char **dp)
 
     return 0;
 }
-/*e: function indomains */
+/*e: function [[indomains]] */
 
-/*s: function classify */
+/*s: function [[classify]] */
 int
 classify(char *ip, Ndbtuple *t)
 {
@@ -443,5 +443,5 @@ classify(char *ip, Ndbtuple *t)
         return Cbadgov;
     return Cok;
 }
-/*e: function classify */
+/*e: function [[classify]] */
 /*e: networking/ip/httpd/classify.c */

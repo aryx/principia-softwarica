@@ -6,39 +6,39 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
-/*s: struct Hdr (networking/ip/snoopy/icmp.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/icmp.c)]]) */
 struct Hdr
 {	uchar	type;
     uchar	code;
     uchar	cksum[2];	/* Checksum */
     uchar	data[1];
 };
-/*e: struct Hdr (networking/ip/snoopy/icmp.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/icmp.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/icmp.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/icmp.c)]] */
 enum
 {
     ICMPLEN=	4,
 };
-/*e: enum _anon_ (networking/ip/snoopy/icmp.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/icmp.c)]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/icmp.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/icmp.c)2]] */
 enum
 {
     Ot,	/* type */
     Op,	/* next protocol */
 };
-/*e: enum _anon_ (networking/ip/snoopy/icmp.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/icmp.c)2]] */
 
-/*s: global p_fields (networking/ip/snoopy/icmp.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/icmp.c)]]) */
 static Field p_fields[] = 
 {
     {"t",		Fnum,	Ot,	"type",	} ,
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/icmp.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/icmp.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/icmp.c)3 */
+/*s: enum [[_anon_ (networking/ip/snoopy/icmp.c)3]] */
 enum
 {
     EchoRep=	0,
@@ -53,9 +53,9 @@ enum
     InfoReq=	15,
     InfoRep=	16,
 };
-/*e: enum _anon_ (networking/ip/snoopy/icmp.c)3 */
+/*e: enum [[_anon_ (networking/ip/snoopy/icmp.c)3]] */
 
-/*s: global p_mux (networking/ip/snoopy/icmp.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/icmp.c)]]) */
 static Mux p_mux[] =
 {
     {"ip",	Unreachable, },
@@ -65,9 +65,9 @@ static Mux p_mux[] =
     {"ip",	ParamProb, },
     {0},
 };
-/*e: global p_mux (networking/ip/snoopy/icmp.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/icmp.c)]]) */
 
-/*s: global icmpmsg */
+/*s: global [[icmpmsg]] */
 char *icmpmsg[256] =
 {
 [EchoRep]	"EchoRep",
@@ -82,9 +82,9 @@ char *icmpmsg[256] =
 [InfoReq]	"InfoReq",
 [InfoRep]	"InfoRep",
 };
-/*e: global icmpmsg */
+/*e: global [[icmpmsg]] */
 
-/*s: function p_compile (networking/ip/snoopy/icmp.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/icmp.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -99,9 +99,9 @@ p_compile(Filter *f)
     }
     sysfatal("unknown icmp field or protocol: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/icmp.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/icmp.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/icmp.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/icmp.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -131,9 +131,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/icmp.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/icmp.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/icmp.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/icmp.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -203,9 +203,9 @@ p_seprint(Msg *m)
     m->p = p;
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/icmp.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/icmp.c)]]) */
 
-/*s: global icmp */
+/*s: global [[icmp]] */
 Proto icmp =
 {
     "icmp",
@@ -217,5 +217,5 @@ Proto icmp =
     p_fields,
     defaultframer,
 };
-/*e: global icmp */
+/*e: global [[icmp]] */
 /*e: networking/ip/snoopy/icmp.c */

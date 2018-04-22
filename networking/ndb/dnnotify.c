@@ -6,7 +6,7 @@
 #include <ndb.h>
 #include "dns.h"
 
-/*s: function dnnotify */
+/*s: function [[dnnotify]] */
 /* get a notification from another system of a changed zone */
 void
 dnnotify(DNSmsg *reqp, DNSmsg *repp, Request *)
@@ -45,9 +45,9 @@ dnnotify(DNSmsg *reqp, DNSmsg *repp, Request *)
     if(a->soarr->soa->serial != repp->qd->soa->serial)
         a->needrefresh = 1;
 }
-/*e: function dnnotify */
+/*e: function [[dnnotify]] */
 
-/*s: function send_notify */
+/*s: function [[send_notify]] */
 /* notify a slave that an area has changed. */
 static void
 send_notify(char *slave, RR *soa, Request *req)
@@ -106,9 +106,9 @@ send_notify(char *slave, RR *soa, Request *req)
         freeanswers(&repmsg);
     close(fd);
 }
-/*e: function send_notify */
+/*e: function [[send_notify]] */
 
-/*s: function notify_areas */
+/*s: function [[notify_areas]] */
 /* send notifies for any updated areas */
 static void
 notify_areas(Area *a, Request *req)
@@ -125,9 +125,9 @@ notify_areas(Area *a, Request *req)
         a->neednotify = 0;
     }
 }
-/*e: function notify_areas */
+/*e: function [[notify_areas]] */
 
-/*s: function notifyproc */
+/*s: function [[notifyproc]] */
 /*
  *  process to notify other servers of changes
  *  (also reads in new databases)
@@ -157,5 +157,5 @@ notifyproc(void)
         sleep(60*1000);
     }
 }
-/*e: function notifyproc */
+/*e: function [[notifyproc]] */
 /*e: networking/ndb/dnnotify.c */

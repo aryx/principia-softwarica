@@ -13,7 +13,7 @@ typedef struct Dest Dest;
 typedef struct Ipaddr Ipaddr;
 typedef struct Query Query;
 
-/*s: enum _anon_ (networking/ndb/dnresolve.c) */
+/*s: enum [[_anon_ (networking/ndb/dnresolve.c)]] */
 enum
 {
     Udp, Tcp,
@@ -43,22 +43,22 @@ enum
     Destmagic=	0xcafebabe,
     Querymagic=	0xdeadbeef,
 };
-/*e: enum _anon_ (networking/ndb/dnresolve.c) */
-/*s: enum _anon_ (networking/ndb/dnresolve.c)2 */
+/*e: enum [[_anon_ (networking/ndb/dnresolve.c)]] */
+/*s: enum [[_anon_ (networking/ndb/dnresolve.c)2]] */
 enum { Hurry, Patient, };
-/*e: enum _anon_ (networking/ndb/dnresolve.c)2 */
-/*s: enum _anon_ (networking/ndb/dnresolve.c)3 */
+/*e: enum [[_anon_ (networking/ndb/dnresolve.c)2]] */
+/*s: enum [[_anon_ (networking/ndb/dnresolve.c)3]] */
 enum { Outns, Inns, };
-/*e: enum _anon_ (networking/ndb/dnresolve.c)3 */
+/*e: enum [[_anon_ (networking/ndb/dnresolve.c)3]] */
 
-/*s: struct Ipaddr */
+/*s: struct [[Ipaddr]] */
 struct Ipaddr {
     Ipaddr *next;
     uchar	ip[IPaddrlen];
 };
-/*e: struct Ipaddr */
+/*e: struct [[Ipaddr]] */
 
-/*s: struct Dest */
+/*s: struct [[Dest]] */
 struct Dest
 {
     uchar	a[IPaddrlen];	/* ip address */
@@ -68,9 +68,9 @@ struct Dest
 
     ulong	magic;
 };
-/*e: struct Dest */
+/*e: struct [[Dest]] */
 
-/*s: struct Query */
+/*s: struct [[Query]] */
 /*
  * Query has a QLock in it, thus it can't be an automatic
  * variable, since each process would see a separate copy
@@ -97,9 +97,9 @@ struct Query {
 
     ulong	magic;
 };
-/*e: struct Query */
+/*e: struct [[Query]] */
 
-/*s: global likely */
+/*s: global [[likely]] */
 /* estimated % probability of such a record existing at all */
 int likely[] = {
     [Ta]		95,
@@ -114,12 +114,12 @@ int likely[] = {
     [Ttxt]		15,
     [Tall]		95,
 };
-/*e: global likely */
+/*e: global [[likely]] */
 
 static RR*	dnresolve1(char*, int, int, Request*, int, int);
 static int	netquery(Query *, int);
 
-/*s: function procgetname (networking/ndb/dnresolve.c) */
+/*s: function [[procgetname]]([[(networking/ndb/dnresolve.c)]]) */
 /*
  * reading /proc/pid/args yields either "name args" or "name [display args]",
  * so return only display args, if any.
@@ -145,9 +145,9 @@ procgetname(void)
     *rp = '\0';
     return strdup(lp+1);
 }
-/*e: function procgetname (networking/ndb/dnresolve.c) */
+/*e: function [[procgetname]]([[(networking/ndb/dnresolve.c)]]) */
 
-/*s: function rrfreelistptr */
+/*s: function [[rrfreelistptr]] */
 void
 rrfreelistptr(RR **rpp)
 {
@@ -159,9 +159,9 @@ rrfreelistptr(RR **rpp)
     *rpp = nil;	/* update pointer in memory before freeing list */
     rrfreelist(rp);
 }
-/*e: function rrfreelistptr */
+/*e: function [[rrfreelistptr]] */
 
-/*s: function dnresolve */
+/*s: function [[dnresolve]] */
 /*
  *  lookup 'type' info for domain name 'name'.  If it doesn't exist, try
  *  looking it up as a canonical name.
@@ -257,9 +257,9 @@ dnresolve(char *name, int class, int type, Request *req, RR **cn, int depth,
     free(procname);
     return randomize(rp);
 }
-/*e: function dnresolve */
+/*e: function [[dnresolve]] */
 
-/*s: function queryinit */
+/*s: function [[queryinit]] */
 static void
 queryinit(Query *qp, DN *dp, int type, Request *req)
 {
@@ -274,18 +274,18 @@ queryinit(Query *qp, DN *dp, int type, Request *req)
     qp->dest = qp->curdest = nil;
     qp->magic = Querymagic;
 }
-/*e: function queryinit */
+/*e: function [[queryinit]] */
 
-/*s: function queryck */
+/*s: function [[queryck]] */
 static void
 queryck(Query *qp)
 {
     assert(qp);
     assert(qp->magic == Querymagic);
 }
-/*e: function queryck */
+/*e: function [[queryck]] */
 
-/*s: function querydestroy */
+/*s: function [[querydestroy]] */
 static void
 querydestroy(Query *qp)
 {
@@ -301,27 +301,27 @@ querydestroy(Query *qp)
     memset(qp, 0, sizeof *qp);	/* prevent accidents */
     qp->udpfd = qp->tcpfd = qp->tcpctlfd = -1;
 }
-/*e: function querydestroy */
+/*e: function [[querydestroy]] */
 
-/*s: function destinit */
+/*s: function [[destinit]] */
 static void
 destinit(Dest *p)
 {
     memset(p, 0, sizeof *p);
     p->magic = Destmagic;
 }
-/*e: function destinit */
+/*e: function [[destinit]] */
 
-/*s: function destck */
+/*s: function [[destck]] */
 static void
 destck(Dest *p)
 {
     assert(p);
     assert(p->magic == Destmagic);
 }
-/*e: function destck */
+/*e: function [[destck]] */
 
-/*s: function notestats */
+/*s: function [[notestats]] */
 /*
  * if the response to a query hasn't arrived within 100 ms.,
  * it's unlikely to arrive at all.  after 1 s., it's really unlikely.
@@ -351,9 +351,9 @@ notestats(vlong start, int tmout, int type)
     }
     qunlock(&stats);
 }
-/*e: function notestats */
+/*e: function [[notestats]] */
 
-/*s: function noteinmem */
+/*s: function [[noteinmem]] */
 static void
 noteinmem(void)
 {
@@ -361,9 +361,9 @@ noteinmem(void)
     stats.answinmem++;
     qunlock(&stats);
 }
-/*e: function noteinmem */
+/*e: function [[noteinmem]] */
 
-/*s: function netqueryns */
+/*s: function [[netqueryns]] */
 /* netquery with given name servers, free ns rrs when done */
 static int
 netqueryns(Query *qp, int depth, RR *nsrp)
@@ -377,9 +377,9 @@ netqueryns(Query *qp, int depth, RR *nsrp)
     unlock(&dnlock);
     return rv;
 }
-/*e: function netqueryns */
+/*e: function [[netqueryns]] */
 
-/*s: function issuequery */
+/*s: function [[issuequery]] */
 static RR*
 issuequery(Query *qp, char *name, int class, int depth, int recurse)
 {
@@ -457,9 +457,9 @@ issuequery(Query *qp, char *name, int class, int depth, int recurse)
     }
     return nil;
 }
-/*e: function issuequery */
+/*e: function [[issuequery]] */
 
-/*s: function dnresolve1 */
+/*s: function [[dnresolve1]] */
 static RR*
 dnresolve1(char *name, int class, int type, Request *req, int depth,
     int recurse)
@@ -574,9 +574,9 @@ dnresolve1(char *name, int class, int type, Request *req, int depth,
     }
     return rp;
 }
-/*e: function dnresolve1 */
+/*e: function [[dnresolve1]] */
 
-/*s: function walkup */
+/*s: function [[walkup]] */
 /*
  *  walk a domain name one element to the right.
  *  return a pointer to that element.
@@ -595,17 +595,17 @@ walkup(char *name)
     else
         return 0;
 }
-/*e: function walkup */
+/*e: function [[walkup]] */
 
-/*s: global hmsg */
+/*s: global [[hmsg]] */
 /*
  *  Get a udp port for sending requests and reading replies.  Put the port
  *  into "headers" mode.
  */
 static char *hmsg = "headers";
-/*e: global hmsg */
+/*e: global [[hmsg]] */
 
-/*s: function udpport */
+/*s: function [[udpport]] */
 int
 udpport(char *mtpt)
 {
@@ -635,9 +635,9 @@ udpport(char *mtpt)
         warning("can't open udp port %s: %r", ds);
     return fd;
 }
-/*e: function udpport */
+/*e: function [[udpport]] */
 
-/*s: function initdnsmsg */
+/*s: function [[initdnsmsg]] */
 void
 initdnsmsg(DNSmsg *mp, RR *rp, int flags, ushort reqno)
 {
@@ -647,9 +647,9 @@ initdnsmsg(DNSmsg *mp, RR *rp, int flags, ushort reqno)
     if(rp != nil)
         mp->qdcount = 1;
 }
-/*e: function initdnsmsg */
+/*e: function [[initdnsmsg]] */
 
-/*s: function newdnsmsg */
+/*s: function [[newdnsmsg]] */
 DNSmsg *
 newdnsmsg(RR *rp, int flags, ushort reqno)
 {
@@ -659,9 +659,9 @@ newdnsmsg(RR *rp, int flags, ushort reqno)
     initdnsmsg(mp, rp, flags, reqno);
     return mp;
 }
-/*e: function newdnsmsg */
+/*e: function [[newdnsmsg]] */
 
-/*s: function mkreq */
+/*s: function [[mkreq]] */
 /* generate a DNS UDP query packet */
 int
 mkreq(DN *dp, int type, uchar *buf, int flags, ushort reqno)
@@ -685,9 +685,9 @@ mkreq(DN *dp, int type, uchar *buf, int flags, ushort reqno)
     memset(&m, 0, sizeof m);		/* cause trouble */
     return len;
 }
-/*e: function mkreq */
+/*e: function [[mkreq]] */
 
-/*s: function freeanswers */
+/*s: function [[freeanswers]] */
 void
 freeanswers(DNSmsg *mp)
 {
@@ -699,9 +699,9 @@ freeanswers(DNSmsg *mp)
     unlock(&dnlock);
     mp->qdcount = mp->ancount = mp->nscount = mp->arcount = 0;
 }
-/*e: function freeanswers */
+/*e: function [[freeanswers]] */
 
-/*s: function readnet */
+/*s: function [[readnet]] */
 /* timed read of reply.  sets srcip.  ibuf must be 64K to handle tcp answers. */
 static int
 readnet(Query *qp, int medium, uchar *ibuf, uvlong endms, uchar **replyp,
@@ -763,9 +763,9 @@ readnet(Query *qp, int medium, uchar *ibuf, uvlong endms, uchar **replyp,
     *replyp = reply;
     return len;
 }
-/*e: function readnet */
+/*e: function [[readnet]] */
 
-/*s: function readreply */
+/*s: function [[readreply]] */
 /*
  *  read replies to a request and remember the rrs in the answer(s).
  *  ignore any of the wrong type.
@@ -842,9 +842,9 @@ readreply(Query *qp, int medium, ushort req, uchar *ibuf, DNSmsg *mp,
     }
     return -1;
 }
-/*e: function readreply */
+/*e: function [[readreply]] */
 
-/*s: function contains */
+/*s: function [[contains]] */
 /*
  *	return non-0 if first list includes second list
  */
@@ -864,10 +864,10 @@ contains(RR *rp1, RR *rp2)
     }
     return 1;
 }
-/*e: function contains */
+/*e: function [[contains]] */
 
 
-/*s: function ipisbm */
+/*s: function [[ipisbm]] */
 /*
  *  return multicast version if any
  */
@@ -883,9 +883,9 @@ ipisbm(uchar *ip)
             return 6;
     return 0;
 }
-/*e: function ipisbm */
+/*e: function [[ipisbm]] */
 
-/*s: function serveraddrs */
+/*s: function [[serveraddrs]] */
 /*
  *  Get next server address(es) into qp->dest[nd] and beyond
  */
@@ -977,9 +977,9 @@ serveraddrs(Query *qp, int nd, int depth)
         return Maxdest - 1;
     return nd;
 }
-/*e: function serveraddrs */
+/*e: function [[serveraddrs]] */
 
-/*s: function cacheneg */
+/*s: function [[cacheneg]] */
 /*
  *  cache negative responses
  */
@@ -1019,9 +1019,9 @@ cacheneg(DN *dp, int type, int rcode, RR *soarr)
     rp->ttl = ttl;
     rrattach(rp, Authoritative);
 }
-/*e: function cacheneg */
+/*e: function [[cacheneg]] */
 
-/*s: function setdestoutns */
+/*s: function [[setdestoutns]] */
 static int
 setdestoutns(Dest *p, int n)
 {
@@ -1038,9 +1038,9 @@ setdestoutns(Dest *p, int n)
     p->s = dnlookup("outside-ns-ips", Cin, 1);
     return 0;
 }
-/*e: function setdestoutns */
+/*e: function [[setdestoutns]] */
 
-/*s: function mydnsquery */
+/*s: function [[mydnsquery]] */
 /*
  * issue query via UDP or TCP as appropriate.
  * for TCP, returns with qp->tcpip set from udppkt header.
@@ -1120,9 +1120,9 @@ mydnsquery(Query *qp, int medium, uchar *udppkt, int len)
     }
     return rv;
 }
-/*e: function mydnsquery */
+/*e: function [[mydnsquery]] */
 
-/*s: function xmitquery */
+/*s: function [[xmitquery]] */
 /*
  * send query to all UDP destinations or one TCP destination,
  * taken from obuf (udp packet) header
@@ -1221,9 +1221,9 @@ xmitquery(Query *qp, int medium, int depth, uchar *obuf, int inns, int len)
     }
     return 0;
 }
-/*e: function xmitquery */
+/*e: function [[xmitquery]] */
 
-/*s: global lckindex */
+/*s: global [[lckindex]] */
 static int lckindex[Maxlcks] = {
     0,			/* all others map here */
     Ta,
@@ -1235,9 +1235,9 @@ static int lckindex[Maxlcks] = {
     Ttxt,
     Taaaa,
 };
-/*e: global lckindex */
+/*e: global [[lckindex]] */
 
-/*s: function qtype2lck */
+/*s: function [[qtype2lck]] */
 static int
 qtype2lck(int qtype)		/* map query type to querylck index */
 {
@@ -1248,9 +1248,9 @@ qtype2lck(int qtype)		/* map query type to querylck index */
             return i;
     return 0;
 }
-/*e: function qtype2lck */
+/*e: function [[qtype2lck]] */
 
-/*s: function isnegrname */
+/*s: function [[isnegrname]] */
 /* is mp a cachable negative response (with Rname set)? */
 static int
 isnegrname(DNSmsg *mp)
@@ -1258,9 +1258,9 @@ isnegrname(DNSmsg *mp)
     /* TODO: could add || cfg.justforw to RHS of && */
     return mp->an == nil && (mp->flags & Rmask) == Rname;
 }
-/*e: function isnegrname */
+/*e: function [[isnegrname]] */
 
-/*s: function procansw */
+/*s: function [[procansw]] */
 /* returns Answerr (-1) on errors, else number of answers, which can be zero. */
 static int
 procansw(Query *qp, DNSmsg *mp, uchar *srcip, int depth, Dest *p)
@@ -1409,9 +1409,9 @@ procansw(Query *qp, DNSmsg *mp, uchar *srcip, int depth, Dest *p)
     free(nqp);
     return rv;
 }
-/*e: function procansw */
+/*e: function [[procansw]] */
 
-/*s: function tcpquery */
+/*s: function [[tcpquery]] */
 /*
  * send a query via tcp to a single address (from ibuf's udp header)
  * and read the answer(s) into mp->an.
@@ -1446,9 +1446,9 @@ tcpquery(Query *qp, DNSmsg *mp, int depth, uchar *ibuf, uchar *obuf, int len,
     qunlock(&qp->tcplock);
     return rv;
 }
-/*e: function tcpquery */
+/*e: function [[tcpquery]] */
 
-/*s: function queryns */
+/*s: function [[queryns]] */
 /*
  *  query name servers.  fill in obuf with on-the-wire representation of a
  *  DNSmsg derived from qp.  if the name server returns a pointer to another
@@ -1555,9 +1555,9 @@ queryns(Query *qp, int depth, uchar *ibuf, uchar *obuf, ulong waitms, int inns)
     qp->dest = qp->curdest = nil;		/* prevent accidents */
     return Answnone;
 }
-/*e: function queryns */
+/*e: function [[queryns]] */
 
-/*s: function system (networking/ndb/dnresolve.c) */
+/*s: function [[system]]([[(networking/ndb/dnresolve.c)]]) */
 /*
  *  run a command with a supplied fd as standard input
  */
@@ -1582,9 +1582,9 @@ system(int fd, char *cmd)
             return msg.msg;
     return "lost child";
 }
-/*e: function system (networking/ndb/dnresolve.c) */
+/*e: function [[system]]([[(networking/ndb/dnresolve.c)]]) */
 
-/*s: function weight */
+/*s: function [[weight]] */
 /* compute wait, weighted by probability of success, with bounds */
 static ulong
 weight(ulong ms, unsigned pcntprob)
@@ -1598,9 +1598,9 @@ weight(ulong ms, unsigned pcntprob)
         wait = Maxwaitms;
     return wait;
 }
-/*e: function weight */
+/*e: function [[weight]] */
 
-/*s: function udpquery */
+/*s: function [[udpquery]] */
 /*
  * in principle we could use a single descriptor for a udp port
  * to send all queries and receive all the answers to them,
@@ -1675,9 +1675,9 @@ udpquery(Query *qp, char *mntpt, int depth, int patient, int inns)
     free(ibuf);
     return rv;
 }
-/*e: function udpquery */
+/*e: function [[udpquery]] */
 
-/*s: function netquery */
+/*s: function [[netquery]] */
 /*
  * look up (qp->dp->name, qp->type) rr in dns,
  * using nameservers in qp->nsrp.
@@ -1782,9 +1782,9 @@ netquery(Query *qp, int depth)
     }
     return rv;
 }
-/*e: function netquery */
+/*e: function [[netquery]] */
 
-/*s: function seerootns */
+/*s: function [[seerootns]] */
 int
 seerootns(void)
 {
@@ -1812,5 +1812,5 @@ seerootns(void)
     free(qp);
     return rv;
 }
-/*e: function seerootns */
+/*e: function [[seerootns]] */
 /*e: networking/ndb/dnresolve.c */

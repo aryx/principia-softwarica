@@ -8,7 +8,7 @@
 
 Area *owned, *delegated;
 
-/*s: function inmyarea */
+/*s: function [[inmyarea]] */
 /*
  *  true if a name is in our area
  */
@@ -40,9 +40,9 @@ inmyarea(char *name)
 
     return s;	/* name is in area `s' and not in a delegated subarea */
 }
-/*e: function inmyarea */
+/*e: function [[inmyarea]] */
 
-/*s: function addarea */
+/*s: function [[addarea]] */
 /*
  *  our area is the part of the domain tree that
  *  we serve
@@ -87,9 +87,9 @@ addarea(DN *dp, RR *rp, Ndbtuple *t)
     *l = s;
     unlock(&dnlock);
 }
-/*e: function addarea */
+/*e: function [[addarea]] */
 
-/*s: function freearea */
+/*s: function [[freearea]] */
 void
 freearea(Area **l)
 {
@@ -104,9 +104,9 @@ freearea(Area **l)
         free(s);
     }
 }
-/*e: function freearea */
+/*e: function [[freearea]] */
 
-/*s: function refresh_areas */
+/*s: function [[refresh_areas]] */
 /*
  * refresh all areas that need it
  *  this entails running a command 'zonerefreshprogram'.  This could
@@ -145,5 +145,5 @@ refresh_areas(Area *s)
         free(w);
     }
 }
-/*e: function refresh_areas */
+/*e: function [[refresh_areas]] */
 /*e: networking/ndb/dnarea.c */

@@ -6,7 +6,7 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
-/*s: struct Hdr (networking/ip/snoopy/ip.c) */
+/*s: struct [[Hdr]]([[(networking/ip/snoopy/ip.c)]]) */
 struct Hdr
 {
     uchar	vihl;		/* Version and header length */
@@ -20,9 +20,9 @@ struct Hdr
     uchar	src[4];		/* IP source */
     uchar	dst[4];		/* IP destination */
 };
-/*e: struct Hdr (networking/ip/snoopy/ip.c) */
+/*e: struct [[Hdr]]([[(networking/ip/snoopy/ip.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/ip.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/ip.c)]] */
 enum
 {
     IPHDR		= 20,		/* sizeof(Iphdr) */
@@ -30,9 +30,9 @@ enum
     IP_DF		= 0x4000,	/* Don't fragment */
     IP_MF		= 0x2000,	/* More fragments */
 };
-/*e: enum _anon_ (networking/ip/snoopy/ip.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/ip.c)]] */
 
-/*s: global p_mux (networking/ip/snoopy/ip.c) */
+/*s: global [[p_mux]]([[(networking/ip/snoopy/ip.c)]]) */
 static Mux p_mux[] =
 {
     { "icmp", 1, },
@@ -132,9 +132,9 @@ static Mux p_mux[] =
     { "rudp", 254, },
     { 0 }
 };
-/*e: global p_mux (networking/ip/snoopy/ip.c) */
+/*e: global [[p_mux]]([[(networking/ip/snoopy/ip.c)]]) */
 
-/*s: enum _anon_ (networking/ip/snoopy/ip.c)2 */
+/*s: enum [[_anon_ (networking/ip/snoopy/ip.c)2]] */
 enum
 {
     Os,	/* source */
@@ -142,9 +142,9 @@ enum
     Osd,	/* source or destination */
     Ot,	/* type */
 };
-/*e: enum _anon_ (networking/ip/snoopy/ip.c)2 */
+/*e: enum [[_anon_ (networking/ip/snoopy/ip.c)2]] */
 
-/*s: global p_fields (networking/ip/snoopy/ip.c) */
+/*s: global [[p_fields]]([[(networking/ip/snoopy/ip.c)]]) */
 static Field p_fields[] =
 {
     {"s",	Fv4ip,	Os,	"source address",	} ,
@@ -154,9 +154,9 @@ static Field p_fields[] =
     {"t",	Fnum,	Ot,	"sub protocol number",	} ,
     {0}
 };
-/*e: global p_fields (networking/ip/snoopy/ip.c) */
+/*e: global [[p_fields]]([[(networking/ip/snoopy/ip.c)]]) */
 
-/*s: function p_compile (networking/ip/snoopy/ip.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/ip.c)]]) */
 static void
 p_compile(Filter *f)
 {
@@ -175,9 +175,9 @@ p_compile(Filter *f)
         }
     sysfatal("unknown ip field or protocol: %s", f->s);
 }
-/*e: function p_compile (networking/ip/snoopy/ip.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/ip.c)]]) */
 
-/*s: function p_filter (networking/ip/snoopy/ip.c) */
+/*s: function [[p_filter]]([[(networking/ip/snoopy/ip.c)]]) */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -201,9 +201,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter (networking/ip/snoopy/ip.c) */
+/*e: function [[p_filter]]([[(networking/ip/snoopy/ip.c)]]) */
 
-/*s: function p_seprint (networking/ip/snoopy/ip.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/ip.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -245,9 +245,9 @@ p_seprint(Msg *m)
 
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/ip.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/ip.c)]]) */
 
-/*s: global ip */
+/*s: global [[ip]] */
 Proto ip =
 {
     "ip",
@@ -259,5 +259,5 @@ Proto ip =
     p_fields,
     defaultframer,
 };
-/*e: global ip */
+/*e: global [[ip]] */
 /*e: networking/ip/snoopy/ip.c */

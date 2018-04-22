@@ -10,19 +10,19 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
-/*s: constant LOG */
+/*s: constant [[LOG]] */
 #define LOG "wiki"
-/*e: constant LOG */
+/*e: constant [[LOG]] */
 
-/*s: global hc */
+/*s: global [[hc]] */
 HConnect *hc;
-/*e: global hc */
-/*s: global hp */
+/*e: global [[hc]] */
+/*s: global [[hp]] */
 HSPriv *hp;
-/*e: global hp */
+/*e: global [[hp]] */
 
 
-/*s: function _urlunesc */
+/*s: function [[_urlunesc]] */
 /* go from possibly-latin1 url with escapes to utf */
 char *
 _urlunesc(char *s)
@@ -76,16 +76,16 @@ _urlunesc(char *s)
 
     return v;
 }
-/*e: function _urlunesc */
+/*e: function [[_urlunesc]] */
 
-/*s: enum _anon_ (networking/ip/httpd/wikipost.c) */
+/*s: enum [[_anon_ (networking/ip/httpd/wikipost.c)]] */
 enum
 {
     MaxLog		= 100*1024,		/* limit on length of any one log request */
 };
-/*e: enum _anon_ (networking/ip/httpd/wikipost.c) */
+/*e: enum [[_anon_ (networking/ip/httpd/wikipost.c)]] */
 
-/*s: function dangerous (networking/ip/httpd/wikipost.c) */
+/*s: function [[dangerous]]([[(networking/ip/httpd/wikipost.c)]]) */
 static int
 dangerous(char *s)
 {
@@ -104,9 +104,9 @@ dangerous(char *s)
     }
     return 0;
 }
-/*e: function dangerous (networking/ip/httpd/wikipost.c) */
+/*e: function [[dangerous]]([[(networking/ip/httpd/wikipost.c)]]) */
 
-/*s: function unhttp */
+/*s: function [[unhttp]] */
 char*
 unhttp(char *s)
 {
@@ -127,9 +127,9 @@ unhttp(char *s)
     *w = '\0';
     return s;
 }
-/*e: function unhttp */
+/*e: function [[unhttp]] */
 
-/*s: function mountwiki */
+/*s: function [[mountwiki]] */
 void
 mountwiki(HConnect *c, char *service)
 {
@@ -162,9 +162,9 @@ mountwiki(HConnect *c, char *service)
     }
     close(fd);
 }
-/*e: function mountwiki */
+/*e: function [[mountwiki]] */
 
-/*s: function dowiki */
+/*s: function [[dowiki]] */
 char*
 dowiki(HConnect *c, char *title, char *author, char *comment, char *base, ulong version, char *text)
 {
@@ -207,10 +207,10 @@ i=0;
     snprint(p, l, "%s/%s/%s.html", base, tmp, err ? "werror" : "index");
     return p;
 }
-/*e: function dowiki */
+/*e: function [[dowiki]] */
 
 
-/*s: function main (networking/ip/httpd/wikipost.c) */
+/*s: function [[main]]([[(networking/ip/httpd/wikipost.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -323,5 +323,5 @@ main(int argc, char **argv)
     hredirected(hc, "303 See Other", url);
     exits(nil);
 }
-/*e: function main (networking/ip/httpd/wikipost.c) */
+/*e: function [[main]]([[(networking/ip/httpd/wikipost.c)]]) */
 /*e: networking/ip/httpd/wikipost.c */

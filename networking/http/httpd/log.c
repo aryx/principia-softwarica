@@ -4,19 +4,19 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
-/*s: global logall */
+/*s: global [[logall]] */
 int		logall[3];  /* logall[2] is in "Common Log Format" */
-/*e: global logall */
+/*e: global [[logall]] */
 
-/*s: global monname */
+/*s: global [[monname]] */
 static char *
 monname[12] =
 {
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
-/*e: global monname */
+/*e: global [[monname]] */
 
-/*s: function logit (networking/ip/httpd/log.c) */
+/*s: function [[logit]]([[(networking/ip/httpd/log.c)]]) */
 void
 logit(HConnect *c, char *fmt, ...)
 {
@@ -35,9 +35,9 @@ logit(HConnect *c, char *fmt, ...)
     else
         syslog(0, HTTPLOG, "%s", buf);
 }
-/*e: function logit (networking/ip/httpd/log.c) */
+/*e: function [[logit]]([[(networking/ip/httpd/log.c)]]) */
 
-/*s: function writelog */
+/*s: function [[writelog]] */
 void
 writelog(HConnect *c, char *fmt, ...)
 {
@@ -110,5 +110,5 @@ writelog(HConnect *c, char *fmt, ...)
         write(logall[2], buf, bufp-buf);   /* append-only file */
     }
 }
-/*e: function writelog */
+/*e: function [[writelog]] */
 /*e: networking/ip/httpd/log.c */

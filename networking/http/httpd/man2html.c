@@ -5,19 +5,19 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
-/*s: global hout */
+/*s: global [[hout]] */
 static	Hio		*hout;
-/*e: global hout */
-/*s: global houtb */
+/*e: global [[hout]] */
+/*s: global [[houtb]] */
 static	Hio		houtb;
-/*e: global houtb */
-/*s: global connect (networking/ip/httpd/man2html.c) */
+/*e: global [[houtb]] */
+/*s: global [[connect]]([[(networking/ip/httpd/man2html.c)]]) */
 static	HConnect	*connect;
-/*e: global connect (networking/ip/httpd/man2html.c) */
+/*e: global [[connect]]([[(networking/ip/httpd/man2html.c)]]) */
 
 void	doconvert(char*, int);
 
-/*s: function error (networking/ip/httpd/man2html.c) */
+/*s: function [[error]]([[(networking/ip/httpd/man2html.c)]]) */
 void
 error(char *title, char *fmt, ...)
 {
@@ -41,18 +41,18 @@ error(char *title, char *fmt, ...)
     writelog(connect, "Reply: 404\nReason: %s\n", title);
     exits(nil);
 }
-/*e: function error (networking/ip/httpd/man2html.c) */
+/*e: function [[error]]([[(networking/ip/httpd/man2html.c)]]) */
 
 typedef struct Hit	Hit;
-/*s: struct Hit */
+/*s: struct [[Hit]] */
 struct Hit 
 {
     Hit *next;
     char *file;
 };
-/*e: struct Hit */
+/*e: struct [[Hit]] */
 
-/*s: function lookup (networking/ip/httpd/man2html.c) */
+/*s: function [[lookup]]([[(networking/ip/httpd/man2html.c)]]) */
 void
 lookup(char *object, int section, Hit **list)
 {
@@ -98,9 +98,9 @@ lookup(char *object, int section, Hit **list)
         h->file = estrdup(file+8);
     }
 }
-/*e: function lookup (networking/ip/httpd/man2html.c) */
+/*e: function [[lookup]]([[(networking/ip/httpd/man2html.c)]]) */
 
-/*s: function manindex */
+/*s: function [[manindex]] */
 void
 manindex(int sect, int vermaj)
 {
@@ -129,9 +129,9 @@ manindex(int sect, int vermaj)
             i, i);
     hprint(hout, "</body>\n");
 }
-/*e: function manindex */
+/*e: function [[manindex]] */
 
-/*s: function man */
+/*s: function [[man]] */
 void
 man(char *o, int sect, int vermaj)
 {
@@ -176,9 +176,9 @@ man(char *o, int sect, int vermaj)
             list->file, list->file);
     hprint(hout, "</body>\n");
 }
-/*e: function man */
+/*e: function [[man]] */
 
-/*s: function strlwr */
+/*s: function [[strlwr]] */
 void
 strlwr(char *p)
 {
@@ -186,9 +186,9 @@ strlwr(char *p)
         if('A' <= *p && *p <= 'Z')
             *p += 'a'-'A';
 }
-/*e: function strlwr */
+/*e: function [[strlwr]] */
 
-/*s: function redirectto */
+/*s: function [[redirectto]] */
 void
 redirectto(char *uri)
 {
@@ -198,9 +198,9 @@ redirectto(char *uri)
     }else
         hprint(hout, "Your selection moved to <a href=\"%U\"> here</a>.<p></body>\r\n", uri);
 }
-/*e: function redirectto */
+/*e: function [[redirectto]] */
 
-/*s: function searchfor */
+/*s: function [[searchfor]] */
 void
 searchfor(char *search)
 {
@@ -280,9 +280,9 @@ searchfor(char *search)
     free(p);
     close(fd);
 }
-/*e: function searchfor */
+/*e: function [[searchfor]] */
 
-/*s: function dosearch */
+/*s: function [[dosearch]] */
 /*
  *  find man pages mentioning the search string
  */
@@ -324,9 +324,9 @@ dosearch(int vermaj, char *search)
     hprint(hout, "<body><p>%H</p>\n", search);
     hprint(hout, "</body>");
 }
-/*e: function dosearch */
+/*e: function [[dosearch]] */
 
-/*s: function doconvert */
+/*s: function [[doconvert]] */
 /*
  *  convert a man page to html and output
  */
@@ -434,9 +434,9 @@ doconvert(char *uri, int vermaj)
         free(w);
     }
 }
-/*e: function doconvert */
+/*e: function [[doconvert]] */
 
-/*s: function main (networking/ip/httpd/man2html.c) */
+/*s: function [[main]]([[(networking/ip/httpd/man2html.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -475,5 +475,5 @@ main(int argc, char **argv)
     writelog(connect, "200 man2html %ld %ld\n", hout->seek, hout->seek);
     exits(nil);
 }
-/*e: function main (networking/ip/httpd/man2html.c) */
+/*e: function [[main]]([[(networking/ip/httpd/man2html.c)]]) */
 /*e: networking/ip/httpd/man2html.c */

@@ -4,7 +4,7 @@
 #include <bio.h>
 #include <auth.h>
 
-/*s: function main (networking/ip/rexexec.c) */
+/*s: function [[main]]([[(networking/ip/rexexec.c)]]) */
 /*
  * called by listen as rexexec rexexec net dir ...
  */
@@ -40,5 +40,5 @@ main(int argc, char **argv)
     execl("/bin/rc", "rc", "-lc", buf, nil);
     sysfatal("can't exec rc");
 }
-/*e: function main (networking/ip/rexexec.c) */
+/*e: function [[main]]([[(networking/ip/rexexec.c)]]) */
 /*e: networking/ip/rexexec.c */

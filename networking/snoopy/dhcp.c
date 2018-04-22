@@ -5,7 +5,7 @@
 #include "dat.h"
 #include "protos.h"
 
-/*s: enum _anon_ (networking/ip/snoopy/dhcp.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/dhcp.c)]] */
 enum
 {
     Maxoptlen=	312-4,
@@ -104,9 +104,9 @@ enum
     OP9fsv4=		128,	/* plan9 file servers */
     OP9authv4=		129,	/* plan9 auth servers */
 };
-/*e: enum _anon_ (networking/ip/snoopy/dhcp.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/dhcp.c)]] */
 
-/*s: function hex */
+/*s: function [[hex]] */
 /*
  *  convert a byte array to hex
  */
@@ -117,8 +117,8 @@ hex(int x)
         return x + '0';
     return x - 10 + 'a';
 }
-/*e: function hex */
-/*s: function phex */
+/*e: function [[hex]] */
+/*s: function [[phex]] */
 static char*
 phex(char *p, char *e, char *tag, uchar *o, int n)
 {
@@ -131,9 +131,9 @@ phex(char *p, char *e, char *tag, uchar *o, int n)
     }
     return p;
 }
-/*e: function phex */
+/*e: function [[phex]] */
 
-/*s: function pstring */
+/*s: function [[pstring]] */
 static char*
 pstring(char *p, char *e, char *tag, uchar *o, int n)
 {
@@ -145,9 +145,9 @@ pstring(char *p, char *e, char *tag, uchar *o, int n)
     msg[n] = 0;
     return seprint(p, e, "%s=%s", tag, msg);
 }
-/*e: function pstring */
+/*e: function [[pstring]] */
 
-/*s: function pint */
+/*s: function [[pint]] */
 static char*
 pint(char *p, char *e, char *tag, uchar *o, int n)
 {
@@ -158,9 +158,9 @@ pint(char *p, char *e, char *tag, uchar *o, int n)
         x = x<<8 | *o++;
     return seprint(p, e, "%s=%d", tag, x);
 }
-/*e: function pint */
+/*e: function [[pint]] */
 
-/*s: function puint */
+/*s: function [[puint]] */
 static char*
 puint(char *p, char *e, char *tag, uchar *o, int n)
 {
@@ -171,9 +171,9 @@ puint(char *p, char *e, char *tag, uchar *o, int n)
         x = x<<8 | *o++;
     return seprint(p, e, "%s=%ud", tag, x);
 }
-/*e: function puint */
+/*e: function [[puint]] */
 
-/*s: function pserver */
+/*s: function [[pserver]] */
 static char*
 pserver(char *p, char *e, char *tag, uchar *o, int n)
 {
@@ -186,9 +186,9 @@ pserver(char *p, char *e, char *tag, uchar *o, int n)
     p = seprint(p, e, ")");
     return p;
 }
-/*e: function pserver */
+/*e: function [[pserver]] */
 
-/*s: global dhcptype */
+/*s: global [[dhcptype]] */
 static char *dhcptype[256] =
 {
 [Discover]	"Discover",
@@ -200,10 +200,10 @@ static char *dhcptype[256] =
 [Release]	"Release",
 [Inform]	"Inform",
 };
-/*e: global dhcptype */
+/*e: global [[dhcptype]] */
 
 
-/*s: function ptype */
+/*s: function [[ptype]] */
 static char*
 ptype(char *p, char *e, uchar val)
 {
@@ -215,9 +215,9 @@ ptype(char *p, char *e, uchar val)
     else
         return seprint(p, e, "t=%d", val);
 }
-/*e: function ptype */
+/*e: function [[ptype]] */
 
-/*s: function p_seprint (networking/ip/snoopy/dhcp.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/dhcp.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -475,9 +475,9 @@ out:
     m->ps = ps;
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/dhcp.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/dhcp.c)]]) */
 
-/*s: global dhcp */
+/*s: global [[dhcp]] */
 Proto dhcp =
 {
     "dhcp",
@@ -489,5 +489,5 @@ Proto dhcp =
     nil,
     defaultframer,
 };
-/*e: global dhcp */
+/*e: global [[dhcp]] */
 /*e: networking/ip/snoopy/dhcp.c */

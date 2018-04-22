@@ -3,16 +3,16 @@
 #include <libc.h>
 #include <ip.h>
 
-/*s: function usage (networking/ip/udpecho.c) */
+/*s: function [[usage]]([[(networking/ip/udpecho.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-x netmtpt]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ip/udpecho.c) */
+/*e: function [[usage]]([[(networking/ip/udpecho.c)]]) */
 
-/*s: function main (networking/ip/udpecho.c) */
+/*s: function [[main]]([[(networking/ip/udpecho.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -44,5 +44,5 @@ main(int argc, char **argv)
         sysfatal("error reading: %r");
     exits(0);
 }
-/*e: function main (networking/ip/udpecho.c) */
+/*e: function [[main]]([[(networking/ip/udpecho.c)]]) */
 /*e: networking/ip/udpecho.c */

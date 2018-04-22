@@ -5,17 +5,17 @@
 #include <auth.h>
 #include "ppp.h"
 
-/*s: global endian (networking/ip/ppp/ipaux.c) */
+/*s: global [[endian]]([[(networking/ip/ppp/ipaux.c)]]) */
 static	ushort	endian	= 1;
-/*e: global endian (networking/ip/ppp/ipaux.c) */
-/*s: global aendian (networking/ip/ppp/ipaux.c) */
+/*e: global [[endian]]([[(networking/ip/ppp/ipaux.c)]]) */
+/*s: global [[aendian]]([[(networking/ip/ppp/ipaux.c)]]) */
 static	uchar*	aendian	= (uchar*)&endian;
-/*e: global aendian (networking/ip/ppp/ipaux.c) */
-/*s: constant LITTLE (networking/ip/ppp/ipaux.c) */
+/*e: global [[aendian]]([[(networking/ip/ppp/ipaux.c)]]) */
+/*s: constant [[LITTLE]]([[(networking/ip/ppp/ipaux.c)]]) */
 #define	LITTLE	*aendian
-/*e: constant LITTLE (networking/ip/ppp/ipaux.c) */
+/*e: constant [[LITTLE]]([[(networking/ip/ppp/ipaux.c)]]) */
 
-/*s: function ptclbsum (networking/ip/ppp/ipaux.c) */
+/*s: function [[ptclbsum]]([[(networking/ip/ppp/ipaux.c)]]) */
 ushort
 ptclbsum(uchar *addr, int len)
 {
@@ -76,9 +76,9 @@ ptclbsum(uchar *addr, int len)
 
     return losum & 0xffff;
 }
-/*e: function ptclbsum (networking/ip/ppp/ipaux.c) */
+/*e: function [[ptclbsum]]([[(networking/ip/ppp/ipaux.c)]]) */
 
-/*s: function ptclcsum (networking/ip/ppp/ipaux.c) */
+/*s: function [[ptclcsum]]([[(networking/ip/ppp/ipaux.c)]]) */
 ushort
 ptclcsum(Block *bp, int offset, int len)
 {
@@ -135,9 +135,9 @@ ptclcsum(Block *bp, int offset, int len)
 
     return ~losum & 0xffff;
 }
-/*e: function ptclcsum (networking/ip/ppp/ipaux.c) */
+/*e: function [[ptclcsum]]([[(networking/ip/ppp/ipaux.c)]]) */
 
-/*s: function ipcsum (networking/ip/ppp/ipaux.c) */
+/*s: function [[ipcsum]]([[(networking/ip/ppp/ipaux.c)]]) */
 ushort
 ipcsum(uchar *addr)
 {
@@ -158,5 +158,5 @@ ipcsum(uchar *addr)
 
     return (sum^0xffff);
 }
-/*e: function ipcsum (networking/ip/ppp/ipaux.c) */
+/*e: function [[ipcsum]]([[(networking/ip/ppp/ipaux.c)]]) */
 /*e: networking/ip/ppp/ipaux.c */

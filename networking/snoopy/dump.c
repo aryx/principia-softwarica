@@ -6,21 +6,21 @@
 #include "dat.h"
 #include "protos.h"
 
-/*s: function p_compile (networking/ip/snoopy/dump.c) */
+/*s: function [[p_compile]]([[(networking/ip/snoopy/dump.c)]]) */
 static void
 p_compile(Filter *)
 {
 }
-/*e: function p_compile (networking/ip/snoopy/dump.c) */
+/*e: function [[p_compile]]([[(networking/ip/snoopy/dump.c)]]) */
 
-/*s: global tohex */
+/*s: global [[tohex]] */
 static char tohex[16] = {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
     'a', 'b', 'c', 'd', 'e', 'f'
 };
-/*e: global tohex */
+/*e: global [[tohex]] */
 
-/*s: function p_seprint (networking/ip/snoopy/dump.c) */
+/*s: function [[p_seprint]]([[(networking/ip/snoopy/dump.c)]]) */
 static int
 p_seprint(Msg *m)
 {
@@ -76,9 +76,9 @@ p_seprint(Msg *m)
 
     return 0;
 }
-/*e: function p_seprint (networking/ip/snoopy/dump.c) */
+/*e: function [[p_seprint]]([[(networking/ip/snoopy/dump.c)]]) */
 
-/*s: global dump */
+/*s: global [[dump]] */
 Proto dump =
 {
     "dump",
@@ -90,5 +90,5 @@ Proto dump =
     nil,
     defaultframer,
 };
-/*e: global dump */
+/*e: global [[dump]] */
 /*e: networking/ip/snoopy/dump.c */

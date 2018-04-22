@@ -13,53 +13,53 @@
 #include "protos.h"
 #include "y.tab.h"
 
-/*s: global Cflag */
+/*s: global [[Cflag]] */
 int Cflag;
-/*e: global Cflag */
-/*s: global pflag */
+/*e: global [[Cflag]] */
+/*s: global [[pflag]] */
 int pflag;
-/*e: global pflag */
-/*s: global Nflag */
+/*e: global [[pflag]] */
+/*s: global [[Nflag]] */
 int Nflag;
-/*e: global Nflag */
-/*s: global Mflag */
+/*e: global [[Nflag]] */
+/*s: global [[Mflag]] */
 int Mflag;
-/*e: global Mflag */
-/*s: global sflag */
+/*e: global [[Mflag]] */
+/*s: global [[sflag]] */
 int sflag;
-/*e: global sflag */
-/*s: global tiflag */
+/*e: global [[sflag]] */
+/*s: global [[tiflag]] */
 int tiflag;
-/*e: global tiflag */
-/*s: global toflag */
+/*e: global [[tiflag]] */
+/*s: global [[toflag]] */
 int toflag;
-/*e: global toflag */
+/*e: global [[toflag]] */
 
-/*s: global prom */
+/*s: global [[prom]] */
 char *prom = "promiscuous";
-/*e: global prom */
+/*e: global [[prom]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/main.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/main.c)]] */
 enum
 {
     Pktlen=	64*1024,
     Blen=	16*1024,
 };
-/*e: enum _anon_ (networking/ip/snoopy/main.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/main.c)]] */
 
-/*s: global filter */
+/*s: global [[filter]] */
 Filter *filter;
-/*e: global filter */
-/*s: global root (networking/ip/snoopy/main.c) */
+/*e: global [[filter]] */
+/*s: global [[root]]([[(networking/ip/snoopy/main.c)]]) */
 Proto *root;
-/*e: global root (networking/ip/snoopy/main.c) */
-/*s: global out (networking/ip/snoopy/main.c) */
+/*e: global [[root]]([[(networking/ip/snoopy/main.c)]]) */
+/*s: global [[out]]([[(networking/ip/snoopy/main.c)]]) */
 Biobuf out;
-/*e: global out (networking/ip/snoopy/main.c) */
+/*e: global [[out]]([[(networking/ip/snoopy/main.c)]]) */
 vlong starttime, pkttime;
-/*s: global pcap */
+/*s: global [[pcap]] */
 int pcap;
-/*e: global pcap */
+/*e: global [[pcap]] */
 
 int	filterpkt(Filter *f, uchar *ps, uchar *pe, Proto *pr, int);
 void	printpkt(char *p, char *e, uchar *ps, uchar *pe);
@@ -71,25 +71,25 @@ void	printhelp(char*);
 void	tracepkt(uchar*, int);
 void	pcaphdr(void);
 
-/*s: function printusage */
+/*s: function [[printusage]] */
 void
 printusage(void)
 {
     fprint(2, "usage: %s [-CDdpst] [-N n] [-f filter] [-h first-header] path\n", argv0);
     fprint(2, "  for protocol help: %s -? [proto]\n", argv0);
 }
-/*e: function printusage */
+/*e: function [[printusage]] */
 
-/*s: function usage (networking/ip/snoopy/main.c) */
+/*s: function [[usage]]([[(networking/ip/snoopy/main.c)]]) */
 void
 usage(void)
 {
     printusage();
     exits("usage");
 }
-/*e: function usage (networking/ip/snoopy/main.c) */
+/*e: function [[usage]]([[(networking/ip/snoopy/main.c)]]) */
 
-/*s: function main (networking/ip/snoopy/main.c) */
+/*s: function [[main]]([[(networking/ip/snoopy/main.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -235,9 +235,9 @@ main(int argc, char **argv)
         }
     }
 }
-/*e: function main (networking/ip/snoopy/main.c) */
+/*e: function [[main]]([[(networking/ip/snoopy/main.c)]]) */
 
-/*s: function newfilter */
+/*s: function [[newfilter]] */
 /* create a new filter node */
 Filter*
 newfilter(void)
@@ -249,9 +249,9 @@ newfilter(void)
         sysfatal("newfilter: %r");
     return f;
 }
-/*e: function newfilter */
+/*e: function [[newfilter]] */
 
-/*s: function _filterpkt */
+/*s: function [[_filterpkt]] */
 /*
  *  apply filter to packet
  */
@@ -289,8 +289,8 @@ _filterpkt(Filter *f, Msg *m)
     sysfatal("internal error: filterpkt op: %d", f->op);
     return 0;
 }
-/*e: function _filterpkt */
-/*s: function filterpkt */
+/*e: function [[_filterpkt]] */
+/*s: function [[filterpkt]] */
 int
 filterpkt(Filter *f, uchar *ps, uchar *pe, Proto *pr, int needroot)
 {
@@ -305,22 +305,22 @@ filterpkt(Filter *f, uchar *ps, uchar *pe, Proto *pr, int needroot)
     m.pr = pr;
     return _filterpkt(f, &m);
 }
-/*e: function filterpkt */
+/*e: function [[filterpkt]] */
 
-/*s: constant PCAP_VERSION_MAJOR */
+/*s: constant [[PCAP_VERSION_MAJOR]] */
 /*
  *  from the Unix world
  */
 #define PCAP_VERSION_MAJOR 2
-/*e: constant PCAP_VERSION_MAJOR */
-/*s: constant PCAP_VERSION_MINOR */
+/*e: constant [[PCAP_VERSION_MAJOR]] */
+/*s: constant [[PCAP_VERSION_MINOR]] */
 #define PCAP_VERSION_MINOR 4
-/*e: constant PCAP_VERSION_MINOR */
-/*s: constant TCPDUMP_MAGIC */
+/*e: constant [[PCAP_VERSION_MINOR]] */
+/*s: constant [[TCPDUMP_MAGIC]] */
 #define TCPDUMP_MAGIC 0xa1b2c3d4
-/*e: constant TCPDUMP_MAGIC */
+/*e: constant [[TCPDUMP_MAGIC]] */
 
-/*s: struct pcap_file_header */
+/*s: struct [[pcap_file_header]] */
 struct pcap_file_header {
     ulong		magic;
     ushort		version_major;
@@ -330,17 +330,17 @@ struct pcap_file_header {
     ulong		snaplen;    /* max length saved portion of each pkt */
     ulong		linktype;   /* data link type (DLT_*) */
 };
-/*e: struct pcap_file_header */
+/*e: struct [[pcap_file_header]] */
 
-/*s: struct pcap_pkthdr */
+/*s: struct [[pcap_pkthdr]] */
 struct pcap_pkthdr {
         uvlong	ts;	/* time stamp */
         ulong	caplen;	/* length of portion present */
         ulong	len;	/* length this packet (off wire) */
 };
-/*e: struct pcap_pkthdr */
+/*e: struct [[pcap_pkthdr]] */
 
-/*s: function pcaphdr */
+/*s: function [[pcaphdr]] */
 /*
  *  pcap trace header 
  */
@@ -360,9 +360,9 @@ pcaphdr(void)
 
     write(1, &hdr, sizeof(hdr));
 }
-/*e: function pcaphdr */
+/*e: function [[pcaphdr]] */
 
-/*s: function tracepkt */
+/*s: function [[tracepkt]] */
 /*
  *  write out a packet trace
  */
@@ -386,9 +386,9 @@ tracepkt(uchar *ps, int len)
         write(1, ps-10, len+10);
     }
 }
-/*e: function tracepkt */
+/*e: function [[tracepkt]] */
 
-/*s: function printpkt */
+/*s: function [[printpkt]] */
 /*
  *  format and print a packet
  */
@@ -421,16 +421,16 @@ printpkt(char *p, char *e, uchar *ps, uchar *pe)
     if(write(1, p, m.p - p) < 0)
         sysfatal("stdout: %r");
 }
-/*e: function printpkt */
+/*e: function [[printpkt]] */
 
-/*s: global xprotos */
+/*s: global [[xprotos]] */
 Proto **xprotos;
-/*e: global xprotos */
-/*s: global nprotos */
+/*e: global [[xprotos]] */
+/*s: global [[nprotos]] */
 int nprotos;
-/*e: global nprotos */
+/*e: global [[nprotos]] */
 
-/*s: function findproto */
+/*s: function [[findproto]] */
 /* look up a protocol by its name */
 Proto*
 findproto(char *name)
@@ -442,9 +442,9 @@ findproto(char *name)
             return xprotos[i];
     return nil;
 }
-/*e: function findproto */
+/*e: function [[findproto]] */
 
-/*s: function addproto */
+/*s: function [[addproto]] */
 /*
  *  add an undefined protocol to protos[]
  */
@@ -460,9 +460,9 @@ addproto(char *name)
     xprotos[nprotos++] = pr;
     return pr;
 }
-/*e: function addproto */
+/*e: function [[addproto]] */
 
-/*s: function mkprotograph */
+/*s: function [[mkprotograph]] */
 /*
  *  build a graph of protocols, this could easily be circular.  This
  *  links together all the multiplexing in the protocol modules.
@@ -489,9 +489,9 @@ mkprotograph(void)
         }
     }
 }
-/*e: function mkprotograph */
+/*e: function [[mkprotograph]] */
 
-/*s: function addnode (networking/ip/snoopy/main.c) */
+/*s: function [[addnode]]([[(networking/ip/snoopy/main.c)]]) */
 /*
  *  add in a protocol node
  */
@@ -506,9 +506,9 @@ addnode(Filter *f, Proto *pr)
     nf->op = WORD;
     return nf;
 }
-/*e: function addnode (networking/ip/snoopy/main.c) */
+/*e: function [[addnode]]([[(networking/ip/snoopy/main.c)]]) */
 
-/*s: function _fillin */
+/*s: function [[_fillin]] */
 /*
  *  recurse through the protocol graph adding missing nodes
  *  to the filter if we reach the filter's protocol
@@ -533,9 +533,9 @@ _fillin(Filter *f, Proto *last, int depth)
     }
     return nil;
 }
-/*e: function _fillin */
+/*e: function [[_fillin]] */
 
-/*s: function fillin */
+/*s: function [[fillin]] */
 static Filter*
 fillin(Filter *f, Proto *last)
 {
@@ -561,9 +561,9 @@ fillin(Filter *f, Proto *last)
     }
     return nf;
 }
-/*e: function fillin */
+/*e: function [[fillin]] */
 
-/*s: function complete */
+/*s: function [[complete]] */
 /*
  *  massage tree so that all paths from the root to a leaf
  *  contain a filter node for each header.
@@ -609,9 +609,9 @@ complete(Filter *f, Proto *last)
     }
     return f;
 }
-/*e: function complete */
+/*e: function [[complete]] */
 
-/*s: global changed */
+/*s: global [[changed]] */
 /*
  *  merge common nodes under | and & moving the merged node
  *  above the | or &.
@@ -620,9 +620,9 @@ complete(Filter *f, Proto *last)
  *  'true | x' becomes true.
  */
 static int changed;
-/*e: global changed */
+/*e: global [[changed]] */
 
-/*s: function _optimize */
+/*s: function [[_optimize]] */
 static Filter*
 _optimize(Filter *f)
 {
@@ -686,9 +686,9 @@ _optimize(Filter *f)
     f->r = _optimize(f->r);
     return f;
 }
-/*e: function _optimize */
+/*e: function [[_optimize]] */
 
-/*s: function optimize */
+/*s: function [[optimize]] */
 Filter*
 optimize(Filter *f)
 {
@@ -699,9 +699,9 @@ optimize(Filter *f)
 
     return f;
 }
-/*e: function optimize */
+/*e: function [[optimize]] */
 
-/*s: function findbogus */
+/*s: function [[findbogus]] */
 /*
  *  find any top level nodes that aren't the root
  */
@@ -721,9 +721,9 @@ findbogus(Filter *f)
     }
     return 0;
 }
-/*e: function findbogus */
+/*e: function [[findbogus]] */
 
-/*s: function _compile */
+/*s: function [[_compile]] */
 /*
  *  compile the filter
  */
@@ -763,9 +763,9 @@ _compile(Filter *f, Proto *last)
         sysfatal("internal error: compilewalk op: %d", f->op);
     }
 }
-/*e: function _compile */
+/*e: function [[_compile]] */
 
-/*s: function compile */
+/*s: function [[compile]] */
 Filter*
 compile(Filter *f)
 {
@@ -791,9 +791,9 @@ compile(Filter *f)
 
     return f;
 }
-/*e: function compile */
+/*e: function [[compile]] */
 
-/*s: function parseba */
+/*s: function [[parseba]] */
 /*
  *  parse a byte array
  */
@@ -817,9 +817,9 @@ parseba(uchar *to, char *from)
     }
     return i;
 }
-/*e: function parseba */
+/*e: function [[parseba]] */
 
-/*s: function compile_cmp */
+/*s: function [[compile_cmp]] */
 /*
  *  compile WORD = WORD, becomes a single node with a subop
  */
@@ -880,9 +880,9 @@ compile_cmp(char *proto, Filter *f, Field *fld)
     }
     sysfatal("unknown %s field in: %s = %s", proto, f->l->s, f->r->s);
 }
-/*e: function compile_cmp */
+/*e: function [[compile_cmp]] */
 
-/*s: function _pf */
+/*s: function [[_pf]] */
 void
 _pf(Filter *f)
 {
@@ -925,9 +925,9 @@ _pf(Filter *f)
         break;
     }
 }
-/*e: function _pf */
+/*e: function [[_pf]] */
 
-/*s: function printfilter */
+/*s: function [[printfilter]] */
 void
 printfilter(Filter *f, char *tag)
 {
@@ -935,9 +935,9 @@ printfilter(Filter *f, char *tag)
     _pf(f);
     fprint(2, "\n");
 }
-/*e: function printfilter */
+/*e: function [[printfilter]] */
 
-/*s: function cat */
+/*s: function [[cat]] */
 void
 cat(void)
 {
@@ -947,12 +947,12 @@ cat(void)
     while((n = read(0, buf, sizeof buf)) > 0)
         write(1, buf, n);
 }
-/*e: function cat */
+/*e: function [[cat]] */
 
-/*s: global fd1 */
+/*s: global [[fd1]] */
 static int fd1 = -1;
-/*e: global fd1 */
-/*s: function startmc */
+/*e: global [[fd1]] */
+/*s: function [[startmc]] */
 void
 startmc(void)
 {
@@ -982,9 +982,9 @@ startmc(void)
         _exits(0);
     }
 }
-/*e: function startmc */
+/*e: function [[startmc]] */
 
-/*s: function stopmc */
+/*s: function [[stopmc]] */
 void
 stopmc(void)
 {
@@ -992,9 +992,9 @@ stopmc(void)
     dup(fd1, 1);
     waitpid();
 }
-/*e: function stopmc */
+/*e: function [[stopmc]] */
 
-/*s: function printhelp */
+/*s: function [[printhelp]] */
 void
 printhelp(char *name)
 {
@@ -1039,9 +1039,9 @@ printhelp(char *name)
         stopmc();
     }
 }
-/*e: function printhelp */
+/*e: function [[printhelp]] */
 
-/*s: function demux */
+/*s: function [[demux]] */
 /*
  *  demultiplex to next prototol header
  */
@@ -1056,9 +1056,9 @@ demux(Mux *mx, ulong val1, ulong val2, Msg *m, Proto *def)
         }
     }
 }
-/*e: function demux */
+/*e: function [[demux]] */
 
-/*s: function defaultframer */
+/*s: function [[defaultframer]] */
 /*
  *  default framer just assumes the input packet is
  *  a single read
@@ -1068,5 +1068,5 @@ defaultframer(int fd, uchar *pkt, int pktlen)
 {
     return read(fd, pkt, pktlen);
 }
-/*e: function defaultframer */
+/*e: function [[defaultframer]] */
 /*e: networking/ip/snoopy/main.c */

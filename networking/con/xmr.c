@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: enum _anon_ (networking/con/xmr.c) */
+/*s: enum [[_anon_ (networking/con/xmr.c)]] */
 enum {
     Soh=	0x1,
     Eot=	0x4,
@@ -10,7 +10,7 @@ enum {
     Nak=	0x15,
     Cancel=	0x18,
 };
-/*e: enum _anon_ (networking/con/xmr.c) */
+/*e: enum [[_anon_ (networking/con/xmr.c)]] */
 
 int notifyf(void*, char*);
 int readupto(uchar*, int);
@@ -19,7 +19,7 @@ void send(int);
 
 int debug, dfd;
 
-/*s: function main (networking/con/xmr.c) */
+/*s: function [[main]]([[(networking/con/xmr.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -62,9 +62,9 @@ main(int argc, char **argv)
     fprint(2, "xmr: received %ld bytes\n", bytes);
     exits(0);
 }
-/*e: function main (networking/con/xmr.c) */
+/*e: function [[main]]([[(networking/con/xmr.c)]]) */
 
-/*s: function send (networking/con/xmr.c) */
+/*s: function [[send]]([[(networking/con/xmr.c)]]) */
 void
 send(int byte)
 {
@@ -76,9 +76,9 @@ send(int byte)
         exits("hangup");
     }
 }
-/*e: function send (networking/con/xmr.c) */
+/*e: function [[send]]([[(networking/con/xmr.c)]]) */
 
-/*s: function readupto */
+/*s: function [[readupto]] */
 int
 readupto(uchar *a, int len)
 {
@@ -98,9 +98,9 @@ readupto(uchar *a, int len)
     return sofar;
 
 }
-/*e: function readupto */
+/*e: function [[readupto]] */
 
-/*s: function receive */
+/*s: function [[receive]] */
 int
 receive(int fd, uchar seqno)
 {
@@ -181,9 +181,9 @@ receive(int fd, uchar seqno)
         }
     }
 }
-/*e: function receive */
+/*e: function [[receive]] */
 
-/*s: function notifyf (networking/con/xmr.c) */
+/*s: function [[notifyf]]([[(networking/con/xmr.c)]]) */
 int
 notifyf(void *a, char *msg)
 {
@@ -192,5 +192,5 @@ notifyf(void *a, char *msg)
         return 1;
     return 0;
 }
-/*e: function notifyf (networking/con/xmr.c) */
+/*e: function [[notifyf]]([[(networking/con/xmr.c)]]) */
 /*e: networking/con/xmr.c */

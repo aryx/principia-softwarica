@@ -6,26 +6,26 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
-/*s: struct Hdr */
+/*s: struct [[Hdr]] */
 struct Hdr {
     uchar	d[6];
     uchar	s[6];
     uchar	type[2];
     char	data[1500];
 };
-/*e: struct Hdr */
+/*e: struct [[Hdr]] */
 
-/*s: constant ETHERMINTU (networking/ip/snoopy/ether.c) */
+/*s: constant [[ETHERMINTU]]([[(networking/ip/snoopy/ether.c)]]) */
 #define	ETHERMINTU	60	/* minimum transmit size */
-/*e: constant ETHERMINTU (networking/ip/snoopy/ether.c) */
-/*s: constant ETHERMAXTU (networking/ip/snoopy/ether.c) */
+/*e: constant [[ETHERMINTU]]([[(networking/ip/snoopy/ether.c)]]) */
+/*s: constant [[ETHERMAXTU]]([[(networking/ip/snoopy/ether.c)]]) */
 #define	ETHERMAXTU	1514	/* maximum transmit size */
-/*e: constant ETHERMAXTU (networking/ip/snoopy/ether.c) */
-/*s: constant ETHERHDRSIZE (networking/ip/snoopy/ether.c) */
+/*e: constant [[ETHERMAXTU]]([[(networking/ip/snoopy/ether.c)]]) */
+/*s: constant [[ETHERHDRSIZE]]([[(networking/ip/snoopy/ether.c)]]) */
 #define ETHERHDRSIZE	14	/* size of an ethernet header */
-/*e: constant ETHERHDRSIZE (networking/ip/snoopy/ether.c) */
+/*e: constant [[ETHERHDRSIZE]]([[(networking/ip/snoopy/ether.c)]]) */
 
-/*s: global p_mux */
+/*s: global [[p_mux]] */
 static Mux p_mux[] =
 {
     {"ip",		0x0800,	} ,
@@ -40,9 +40,9 @@ static Mux p_mux[] =
     {"cec",		0xbcbc, } ,
     {0}
 };
-/*e: global p_mux */
+/*e: global [[p_mux]] */
 
-/*s: enum _anon_ (networking/ip/snoopy/ether.c) */
+/*s: enum [[_anon_ (networking/ip/snoopy/ether.c)]] */
 enum
 {
     Os,	/* source */
@@ -50,9 +50,9 @@ enum
     Oa,	/* source or destination */
     Ot,	/* type */
 };
-/*e: enum _anon_ (networking/ip/snoopy/ether.c) */
+/*e: enum [[_anon_ (networking/ip/snoopy/ether.c)]] */
 
-/*s: global p_fields */
+/*s: global [[p_fields]] */
 static Field p_fields[] =
 {
     {"s",	Fether,	Os,	"source address",	} ,
@@ -62,9 +62,9 @@ static Field p_fields[] =
     {"t",	Fnum,	Ot,	"type" } ,
     {0}
 };
-/*e: global p_fields */
+/*e: global [[p_fields]] */
 
-/*s: function p_compile */
+/*s: function [[p_compile]] */
 static void
 p_compile(Filter *f)
 {
@@ -83,9 +83,9 @@ p_compile(Filter *f)
         }
     sysfatal("unknown ethernet field or protocol: %s", f->s);
 }
-/*e: function p_compile */
+/*e: function [[p_compile]] */
 
-/*s: function p_filter */
+/*s: function [[p_filter]] */
 static int
 p_filter(Filter *f, Msg *m)
 {
@@ -109,9 +109,9 @@ p_filter(Filter *f, Msg *m)
     }
     return 0;
 }
-/*e: function p_filter */
+/*e: function [[p_filter]] */
 
-/*s: function p_seprint */
+/*s: function [[p_seprint]] */
 static int
 p_seprint(Msg *m)
 {
@@ -133,9 +133,9 @@ p_seprint(Msg *m)
         t, len);
     return 0;
 }
-/*e: function p_seprint */
+/*e: function [[p_seprint]] */
 
-/*s: global ether */
+/*s: global [[ether]] */
 Proto ether =
 {
     "ether",
@@ -147,5 +147,5 @@ Proto ether =
     p_fields,
     defaultframer
 };
-/*e: global ether */
+/*e: global [[ether]] */
 /*e: networking/ip/snoopy/ether.c */

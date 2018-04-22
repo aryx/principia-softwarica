@@ -6,11 +6,11 @@
 #include <ndb.h>
 #include "dat.h"
 
-/*s: global blog (networking/ip/dhcpd/testping.c) */
+/*s: global [[blog]]([[(networking/ip/dhcpd/testping.c)]]) */
 char	*blog = "ipboot";
-/*e: global blog (networking/ip/dhcpd/testping.c) */
+/*e: global [[blog]]([[(networking/ip/dhcpd/testping.c)]]) */
 
-/*s: function main (networking/ip/dhcpd/testping.c) */
+/*s: function [[main]]([[(networking/ip/dhcpd/testping.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -24,5 +24,5 @@ main(int argc, char **argv)
     else
         fprint(2, "%s doesn't answer\n", argv[1]);
 }
-/*e: function main (networking/ip/dhcpd/testping.c) */
+/*e: function [[main]]([[(networking/ip/dhcpd/testping.c)]]) */
 /*e: networking/ip/dhcpd/testping.c */

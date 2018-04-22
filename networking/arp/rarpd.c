@@ -8,7 +8,7 @@
 
 typedef struct Rarp	Rarp;
 
-/*s: struct Rarp */
+/*s: struct [[Rarp]] */
 struct Rarp
 {
     uchar	edst[6];
@@ -24,52 +24,52 @@ struct Rarp
     uchar	tha[6];
     uchar	tpa[4];
 };
-/*e: struct Rarp */
+/*e: struct [[Rarp]] */
 
-/*s: global myip (networking/ip/rarpd.c) */
+/*s: global [[myip]]([[(networking/ip/rarpd.c)]]) */
 uchar	myip[IPaddrlen];
-/*e: global myip (networking/ip/rarpd.c) */
-/*s: global myether */
+/*e: global [[myip]]([[(networking/ip/rarpd.c)]]) */
+/*s: global [[myether]] */
 uchar	myether[6];
-/*e: global myether */
-/*s: global rlog */
+/*e: global [[myether]] */
+/*s: global [[rlog]] */
 char	rlog[] = "ipboot";
-/*e: global rlog */
-/*s: global device */
+/*e: global [[rlog]] */
+/*s: global [[device]] */
 char	*device = "ether0";
-/*e: global device */
-/*s: global debug (networking/ip/rarpd.c) */
+/*e: global [[device]] */
+/*s: global [[debug]]([[(networking/ip/rarpd.c)]]) */
 int	debug;
-/*e: global debug (networking/ip/rarpd.c) */
-/*s: global db */
+/*e: global [[debug]]([[(networking/ip/rarpd.c)]]) */
+/*s: global [[db]] */
 Ndb	*db;
-/*e: global db */
+/*e: global [[db]] */
 
 char*	lookup(char*, char*, char*, char*, int);
 
-/*s: function error (networking/ip/rarpd.c) */
+/*s: function [[error]]([[(networking/ip/rarpd.c)]]) */
 void
 error(char *s)
 {
     syslog(1, rlog, "error %s: %r", s);
     exits(s);
 }
-/*e: function error (networking/ip/rarpd.c) */
+/*e: function [[error]]([[(networking/ip/rarpd.c)]]) */
 
-/*s: global net (networking/ip/rarpd.c) */
+/*s: global [[net]]([[(networking/ip/rarpd.c)]]) */
 char net[32];
-/*e: global net (networking/ip/rarpd.c) */
+/*e: global [[net]]([[(networking/ip/rarpd.c)]]) */
 
-/*s: function usage (networking/ip/rarpd.c) */
+/*s: function [[usage]]([[(networking/ip/rarpd.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-e device] [-x netmtpt] [-f ndb-file] [-d]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ip/rarpd.c) */
+/*e: function [[usage]]([[(networking/ip/rarpd.c)]]) */
 
-/*s: function main (networking/ip/rarpd.c) */
+/*s: function [[main]]([[(networking/ip/rarpd.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -187,9 +187,9 @@ main(int argc, char *argv[])
             fprint(2, "can't write arp entry\n");
     }
 }
-/*e: function main (networking/ip/rarpd.c) */
+/*e: function [[main]]([[(networking/ip/rarpd.c)]]) */
 
-/*s: function lookup (networking/ip/rarpd.c) */
+/*s: function [[lookup]]([[(networking/ip/rarpd.c)]]) */
 char*
 lookup(char *sattr, char *sval, char *tattr, char *tval, int len)
 {
@@ -214,5 +214,5 @@ lookup(char *sattr, char *sval, char *tattr, char *tval, int len)
     ndbfree(t);
     return tval;
 }
-/*e: function lookup (networking/ip/rarpd.c) */
+/*e: function [[lookup]]([[(networking/ip/rarpd.c)]]) */
 /*e: networking/ip/rarpd.c */

@@ -47,7 +47,7 @@ static void	stripQuotes(char *q);
 static MAddr	*unixFrom(char *s);
 
 
-/*s: global bogusBody */
+/*s: global [[bogusBody]] */
 static char bogusBody[] = 
     "This message contains null characters, so it cannot be displayed correctly.\r\n"
     "Most likely you were sent a bogus message or a binary file.\r\n"
@@ -56,42 +56,42 @@ static char bogusBody[] =
     "The first is inlined with all non-printable characters stripped.\r\n"
     "The second contains the message as it was stored in your mailbox.\r\n"
     "The third has the initial header stripped.\r\n";
-/*e: global bogusBody */
+/*e: global [[bogusBody]] */
 
-/*s: global bogusMimeText */
+/*s: global [[bogusMimeText]] */
 static char bogusMimeText[] =
     "Content-Disposition: inline\r\n"
     "Content-Type: text/plain; charset=\"US-ASCII\"\r\n"
     "Content-Transfer-Encoding: 7bit\r\n";
-/*e: global bogusMimeText */
+/*e: global [[bogusMimeText]] */
 
-/*s: global bogusMimeBinary */
+/*s: global [[bogusMimeBinary]] */
 static char bogusMimeBinary[] =
     "Content-Disposition: attachment\r\n"
     "Content-Type: application/octet-stream\r\n"
     "Content-Transfer-Encoding: base64\r\n";
-/*e: global bogusMimeBinary */
+/*e: global [[bogusMimeBinary]] */
 
-/*s: global headFieldStop */
+/*s: global [[headFieldStop]] */
 /*
  * stop list for header fields
  */
 static char	*headFieldStop = ":";
-/*e: global headFieldStop */
-/*s: global mimeTokenStop */
+/*e: global [[headFieldStop]] */
+/*s: global [[mimeTokenStop]] */
 static char	*mimeTokenStop = "()<>@,;:\\\"/[]?=";
-/*e: global mimeTokenStop */
-/*s: global headAtomStop */
+/*e: global [[mimeTokenStop]] */
+/*s: global [[headAtomStop]] */
 static char	*headAtomStop = "()<>@,;:\\\".[]";
-/*e: global headAtomStop */
-/*s: global headStr */
+/*e: global [[headAtomStop]] */
+/*s: global [[headStr]] */
 static uchar	*headStr;
-/*e: global headStr */
-/*s: global lastWhite */
+/*e: global [[headStr]] */
+/*s: global [[lastWhite]] */
 static uchar	*lastWhite;
-/*e: global lastWhite */
+/*e: global [[lastWhite]] */
 
-/*s: function selectFields */
+/*s: function [[selectFields]] */
 long
 selectFields(char *dst, long n, char *hdr, SList *fields, int matches)
 {
@@ -126,9 +126,9 @@ selectFields(char *dst, long n, char *hdr, SList *fields, int matches)
     dst[m] = '\0';
     return m;
 }
-/*e: function selectFields */
+/*e: function [[selectFields]] */
 
-/*s: function freeMsg */
+/*s: function [[freeMsg]] */
 void
 freeMsg(Msg *m)
 {
@@ -156,25 +156,25 @@ freeMsg(Msg *m)
     free(m->fs);
     free(m);
 }
-/*e: function freeMsg */
+/*e: function [[freeMsg]] */
 
-/*s: function msgSize */
+/*s: function [[msgSize]] */
 ulong
 msgSize(Msg *m)
 {
     return m->head.size + m->size;
 }
-/*e: function msgSize */
+/*e: function [[msgSize]] */
 
-/*s: function infoIsNil */
+/*s: function [[infoIsNil]] */
 int
 infoIsNil(char *s)
 {
     return s == nil || s[0] == '\0';
 }
-/*e: function infoIsNil */
+/*e: function [[infoIsNil]] */
 
-/*s: function maddrStr */
+/*s: function [[maddrStr]] */
 char*
 maddrStr(MAddr *a)
 {
@@ -194,9 +194,9 @@ maddrStr(MAddr *a)
         snprint(addr, n, "%s@%s", a->box, host);
     return addr;
 }
-/*e: function maddrStr */
+/*e: function [[maddrStr]] */
 
-/*s: function msgFile */
+/*s: function [[msgFile]] */
 /*
  * return actual name of f in m's fs directory
  * this is special cased when opening m/rawbody, m/mimeheader, or m/rawheader,
@@ -357,25 +357,25 @@ msgFile(Msg *m, char *f)
     seek(fd, 0, 0);
     return fd;
 }
-/*e: function msgFile */
+/*e: function [[msgFile]] */
 
-/*s: function msgIsMulti */
+/*s: function [[msgIsMulti]] */
 int
 msgIsMulti(Header *h)
 {
     return h->type != nil && cistrcmp("multipart", h->type->s) == 0;
 }
-/*e: function msgIsMulti */
+/*e: function [[msgIsMulti]] */
 
-/*s: function msgIsRfc822 */
+/*s: function [[msgIsRfc822]] */
 int
 msgIsRfc822(Header *h)
 {
     return h->type != nil && cistrcmp("message", h->type->s) == 0 && cistrcmp("rfc822", h->type->t) == 0;
 }
-/*e: function msgIsRfc822 */
+/*e: function [[msgIsRfc822]] */
 
-/*s: function msgDead */
+/*s: function [[msgDead]] */
 /*
  * check if a message has been deleted by someone else
  */
@@ -388,9 +388,9 @@ msgDead(Msg *m)
     if(!cdExists(m->fsDir, m->fs))
         m->expunged = 1;
 }
-/*e: function msgDead */
+/*e: function [[msgDead]] */
 
-/*s: function msgInfo */
+/*s: function [[msgInfo]] */
 /*
  * make sure the message has valid associated info
  * used for ISubject, IDigest, IInReplyTo, IMessageId.
@@ -425,9 +425,9 @@ msgInfo(Msg *m)
 
     return 1;
 }
-/*e: function msgInfo */
+/*e: function [[msgInfo]] */
 
-/*s: function msgStruct */
+/*s: function [[msgStruct]] */
 /*
  * make sure the message has valid mime structure
  * and sub-messages
@@ -534,9 +534,9 @@ msgStruct(Msg *m, int top)
     }
     return 1;
 }
-/*e: function msgStruct */
+/*e: function [[msgStruct]] */
 
-/*s: function msgReadFile */
+/*s: function [[msgReadFile]] */
 static long
 msgReadFile(Msg *m, char *file, char **ss)
 {
@@ -587,9 +587,9 @@ msgReadFile(Msg *m, char *file, char **ss)
     *ss = s;
     return nn;
 }
-/*e: function msgReadFile */
+/*e: function [[msgReadFile]] */
 
-/*s: function freeMAddr */
+/*s: function [[freeMAddr]] */
 static void
 freeMAddr(MAddr *a)
 {
@@ -604,9 +604,9 @@ freeMAddr(MAddr *a)
         free(p);
     }
 }
-/*e: function freeMAddr */
+/*e: function [[freeMAddr]] */
 
-/*s: function msgBogus */
+/*s: function [[msgBogus]] */
 /*
  * the message is corrupted or illegal.
  * reset message fields.  msgStruct will reparse the message,
@@ -624,9 +624,9 @@ msgBogus(Msg *m, int flags)
     memset(&m->mime, 0, sizeof(Header));
     return 0;
 }
-/*e: function msgBogus */
+/*e: function [[msgBogus]] */
 
-/*s: function enc64x18 */
+/*s: function [[enc64x18]] */
 /*
  *  stolen from upas/marshal; base64 encodes from one fd to another.
  *
@@ -656,9 +656,9 @@ enc64x18(char *out, int lim, uchar *in, int n)
     }
     return nn;
 }
-/*e: function enc64x18 */
+/*e: function [[enc64x18]] */
 
-/*s: function body64 */
+/*s: function [[body64]] */
 static void
 body64(int in, int out)
 {
@@ -677,9 +677,9 @@ body64(int in, int out)
             return;
     }
 }
-/*e: function body64 */
+/*e: function [[body64]] */
 
-/*s: function bodystrip */
+/*s: function [[bodystrip]] */
 /*
  * strip all non-printable characters from a file
  */
@@ -707,9 +707,9 @@ bodystrip(int in, int out)
             return;
     }
 }
-/*e: function bodystrip */
+/*e: function [[bodystrip]] */
 
-/*s: function msgBodySize */
+/*s: function [[msgBodySize]] */
 /*
  * read in the message body to count \n without a preceding \r
  */
@@ -767,9 +767,9 @@ msgBodySize(Msg *m)
     close(fd);
     return 1;
 }
-/*e: function msgBodySize */
+/*e: function [[msgBodySize]] */
 
-/*s: function msgUnix */
+/*s: function [[msgUnix]] */
 /*
  * retrieve information from the unixheader file
  */
@@ -810,9 +810,9 @@ bogus:
     free(ss);
     return 1;
 }
-/*e: function msgUnix */
+/*e: function [[msgUnix]] */
 
-/*s: function unixFrom */
+/*s: function [[unixFrom]] */
 /*
  * parse the address in the unix header
  * last line of defence, so must return something
@@ -843,9 +843,9 @@ unixFrom(char *s)
     free(t);
     return a;
 }
-/*e: function unixFrom */
+/*e: function [[unixFrom]] */
 
-/*s: function msgHeader */
+/*s: function [[msgHeader]] */
 /*
  * read in the entire header,
  * and parse out any existing mime headers
@@ -978,9 +978,9 @@ msgHeader(Msg *m, Header *h, char *file)
     }
     return 1;
 }
-/*e: function msgHeader */
+/*e: function [[msgHeader]] */
 
-/*s: function msgAddHead */
+/*s: function [[msgAddHead]] */
 /*
  * prepend head: body to the cached header
  */
@@ -999,9 +999,9 @@ msgAddHead(Msg *m, char *head, char *body)
     m->head.size = size;
     m->head.lines++;
 }
-/*e: function msgAddHead */
+/*e: function [[msgAddHead]] */
 
-/*s: function msgAddDate */
+/*s: function [[msgAddDate]] */
 static void
 msgAddDate(Msg *m)
 {
@@ -1016,9 +1016,9 @@ msgAddDate(Msg *m)
     rfc822date(buf, sizeof(buf), &tm);
     msgAddHead(m, "Date", buf);
 }
-/*e: function msgAddDate */
+/*e: function [[msgAddDate]] */
 
-/*s: function mkMimeHdr */
+/*s: function [[mkMimeHdr]] */
 static MimeHdr*
 mkMimeHdr(char *s, char *t, MimeHdr *next)
 {
@@ -1030,9 +1030,9 @@ mkMimeHdr(char *s, char *t, MimeHdr *next)
     mh->next = next;
     return mh;
 }
-/*e: function mkMimeHdr */
+/*e: function [[mkMimeHdr]] */
 
-/*s: function freeMimeHdr */
+/*s: function [[freeMimeHdr]] */
 static void
 freeMimeHdr(MimeHdr *mh)
 {
@@ -1046,9 +1046,9 @@ freeMimeHdr(MimeHdr *mh)
         free(last);
     }
 }
-/*e: function freeMimeHdr */
+/*e: function [[freeMimeHdr]] */
 
-/*s: function cleanupHeader */
+/*s: function [[cleanupHeader]] */
 static void
 cleanupHeader(Header *h)
 {
@@ -1060,13 +1060,13 @@ cleanupHeader(Header *h)
     freeMimeHdr(h->disposition);
     freeMimeHdr(h->language);
 }
-/*e: function cleanupHeader */
+/*e: function [[cleanupHeader]] */
 
 /*
  * parser for rfc822 & mime header fields
  */
 
-/*s: function mimeType */
+/*s: function [[mimeType]] */
 /*
  * type		: 'content-type' ':' token '/' token params
  */
@@ -1089,9 +1089,9 @@ mimeType(Header *h)
     }
     h->type = mkMimeHdr(s, t, mimeParams());
 }
-/*e: function mimeType */
+/*e: function [[mimeType]] */
 
-/*s: function mimeParams */
+/*s: function [[mimeParams]] */
 /*
  * params	:
  *		| params ';' token '=' token
@@ -1127,9 +1127,9 @@ mimeParams(void)
     }
     return head.next;
 }
-/*e: function mimeParams */
+/*e: function [[mimeParams]] */
 
-/*s: function mimeEncoding */
+/*s: function [[mimeEncoding]] */
 /*
  * encoding	: 'content-transfer-encoding' ':' token
  */
@@ -1145,9 +1145,9 @@ mimeEncoding(Header *h)
         return;
     h->encoding = mkMimeHdr(s, nil, nil);
 }
-/*e: function mimeEncoding */
+/*e: function [[mimeEncoding]] */
 
-/*s: function headMAddr */
+/*s: function [[headMAddr]] */
 /*
  * mailaddr	: ':' addresses
  */
@@ -1169,9 +1169,9 @@ headMAddr(MAddr *old)
     freeMAddr(old);
     return a;
 }
-/*e: function headMAddr */
+/*e: function [[headMAddr]] */
 
-/*s: function headAddresses */
+/*s: function [[headAddresses]] */
 /*
  * addresses	: address | addresses ',' address
  */
@@ -1196,9 +1196,9 @@ headAddresses(void)
     }
     return addr;
 }
-/*e: function headAddresses */
+/*e: function [[headAddresses]] */
 
-/*s: function headAddress */
+/*s: function [[headAddress]] */
 /*
  * address	: mailbox | group
  * group	: phrase ':' mboxes ';' | phrase ':' ';'
@@ -1312,9 +1312,9 @@ headAddress(void)
     free(s);
     return addr;
 }
-/*e: function headAddress */
+/*e: function [[headAddress]] */
 
-/*s: function headPhrase */
+/*s: function [[headPhrase]] */
 /*
  * phrase	: word
  *		| phrase word
@@ -1346,9 +1346,9 @@ headPhrase(char *e, char *w)
     }
     return e;
 }
-/*e: function headPhrase */
+/*e: function [[headPhrase]] */
 
-/*s: function headAddrSpec */
+/*s: function [[headAddrSpec]] */
 /*
  * addr-spec	: local-part '@' domain
  *		| local-part			extension to allow ! and local names
@@ -1434,9 +1434,9 @@ headAddrSpec(char *e, char *w)
         return nil;
     return at;
 }
-/*e: function headAddrSpec */
+/*e: function [[headAddrSpec]] */
 
-/*s: function domBang */
+/*s: function [[domBang]] */
 /*
  * find the ! in domain!rest, where domain must have at least
  * one internal '.'
@@ -1460,9 +1460,9 @@ domBang(char *s)
     }
     return nil;
 }
-/*e: function domBang */
+/*e: function [[domBang]] */
 
-/*s: function headDomain */
+/*s: function [[headDomain]] */
 /*
  * domain	: sub-domain
  *		| domain '.' sub-domain
@@ -1489,9 +1489,9 @@ headDomain(char *e)
     }
     return e;
 }
-/*e: function headDomain */
+/*e: function [[headDomain]] */
 
-/*s: function mimeId */
+/*s: function [[mimeId]] */
 /*
  * id		: 'content-id' ':' msg-id
  * msg-id	: '<' addr-spec '>'
@@ -1521,9 +1521,9 @@ mimeId(Header *h)
     free(s);
     h->id = mkMimeHdr(w, nil, nil);
 }
-/*e: function mimeId */
+/*e: function [[mimeId]] */
 
-/*s: function mimeDescription */
+/*s: function [[mimeDescription]] */
 /*
  * description	: 'content-description' ':' *text
  */
@@ -1535,9 +1535,9 @@ mimeDescription(Header *h)
     headSkipWhite(0);
     h->description = mkMimeHdr(headText(), nil, nil);
 }
-/*e: function mimeDescription */
+/*e: function [[mimeDescription]] */
 
-/*s: function mimeDisposition */
+/*s: function [[mimeDisposition]] */
 /*
  * disposition	: 'content-disposition' ':' token params
  */
@@ -1553,9 +1553,9 @@ mimeDisposition(Header *h)
         return;
     h->disposition = mkMimeHdr(s, nil, mimeParams());
 }
-/*e: function mimeDisposition */
+/*e: function [[mimeDisposition]] */
 
-/*s: function mimeMd5 */
+/*s: function [[mimeMd5]] */
 /*
  * md5		: 'content-md5' ':' token
  */
@@ -1571,9 +1571,9 @@ mimeMd5(Header *h)
         return;
     h->md5 = mkMimeHdr(s, nil, nil);
 }
-/*e: function mimeMd5 */
+/*e: function [[mimeMd5]] */
 
-/*s: function mimeLanguage */
+/*s: function [[mimeLanguage]] */
 /*
  * language	: 'content-language' ':' langs
  * langs	: token
@@ -1600,9 +1600,9 @@ mimeLanguage(Header *h)
     }
     h->language = head.next;
 }
-/*e: function mimeLanguage */
+/*e: function [[mimeLanguage]] */
 
-/*s: function headAtom */
+/*s: function [[headAtom]] */
 /*
  * token	: 1*<char 33-255, except "()<>@,;:\\\"/[]?=" aka mimeTokenStop>
  * atom		: 1*<chars 33-255, except "()<>@,;:\\\".[]" aka headAtomStop>
@@ -1638,9 +1638,9 @@ headAtom(char *disallowed)
     s[ns] = '\0';
     return s;
 }
-/*e: function headAtom */
+/*e: function [[headAtom]] */
 
-/*s: function headSubDomain */
+/*s: function [[headSubDomain]] */
 /*
  * sub-domain	: atom | domain-lit
  */
@@ -1651,9 +1651,9 @@ headSubDomain(void)
         return headQuoted('[', ']');
     return headAtom(headAtomStop);
 }
-/*e: function headSubDomain */
+/*e: function [[headSubDomain]] */
 
-/*s: function headWord */
+/*s: function [[headWord]] */
 /*
  * word	: atom | quoted-str
  */
@@ -1664,9 +1664,9 @@ headWord(void)
         return headQuoted('"', '"');
     return headAtom(headAtomStop);
 }
-/*e: function headWord */
+/*e: function [[headWord]] */
 
-/*s: function stripQuotes */
+/*s: function [[stripQuotes]] */
 /*
  * q is a quoted string.  remove enclosing " and and \ escapes
  */
@@ -1689,9 +1689,9 @@ stripQuotes(char *q)
     }
     s[-1] = '\0';
 }
-/*e: function stripQuotes */
+/*e: function [[stripQuotes]] */
 
-/*s: function headQuoted */
+/*s: function [[headQuoted]] */
 /*
  * quoted-str	: '"' *(any char but '"\\\r', or '\' any char, or linear-white-space) '"'
  * domain-lit	: '[' *(any char but '[]\\\r', or '\' any char, or linear-white-space) ']'
@@ -1748,9 +1748,9 @@ headQuoted(int start, int stop)
     s[ns] = '\0';
     return s;
 }
-/*e: function headQuoted */
+/*e: function [[headQuoted]] */
 
-/*s: function headText */
+/*s: function [[headText]] */
 /*
  * headText	: contents of rest of header line
  */
@@ -1767,9 +1767,9 @@ headText(void)
     s[headStr - v] = '\0';
     return s;
 }
-/*e: function headText */
+/*e: function [[headText]] */
 
-/*s: function headSkipWhite */
+/*s: function [[headSkipWhite]] */
 /*
  * white space is ' ' '\t' or nested comments.
  * skip white space.
@@ -1838,9 +1838,9 @@ breakout:;
     free(s);
     return nil;
 }
-/*e: function headSkipWhite */
+/*e: function [[headSkipWhite]] */
 
-/*s: function headChar */
+/*s: function [[headChar]] */
 /*
  * return the next non-white character
  */
@@ -1855,9 +1855,9 @@ headChar(int eat)
         headStr++;
     return c;
 }
-/*e: function headChar */
+/*e: function [[headChar]] */
 
-/*s: function headToEnd */
+/*s: function [[headToEnd]] */
 static void
 headToEnd(void)
 {
@@ -1879,9 +1879,9 @@ headToEnd(void)
         headStr = s;
     }
 }
-/*e: function headToEnd */
+/*e: function [[headToEnd]] */
 
-/*s: function headSkip */
+/*s: function [[headSkip]] */
 static void
 headSkip(void)
 {
@@ -1897,5 +1897,5 @@ headSkip(void)
         }
     }
 }
-/*e: function headSkip */
+/*e: function [[headSkip]] */
 /*e: networking/ip/imap4d/msg.c */

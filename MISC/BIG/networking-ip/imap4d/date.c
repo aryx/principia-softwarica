@@ -5,27 +5,27 @@
 #include <auth.h>
 #include "imap4d.h"
 
-/*s: global wdayname */
+/*s: global [[wdayname]] */
 char *
 wdayname[7] =
 {
     "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 };
-/*e: global wdayname */
+/*e: global [[wdayname]] */
 
-/*s: global monname (networking/ip/imap4d/date.c) */
+/*s: global [[monname]]([[(networking/ip/imap4d/date.c)]]) */
 char *
 monname[12] =
 {
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
-/*e: global monname (networking/ip/imap4d/date.c) */
+/*e: global [[monname]]([[(networking/ip/imap4d/date.c)]]) */
 
 static void	time2tm(Tm *tm, char *s);
 static void	zone2tm(Tm *tm, char *s);
 static int	dateindex(char *d, char **tab, int n);
 
-/*s: function rfc822date */
+/*s: function [[rfc822date]] */
 int
 rfc822date(char *s, int n, Tm *tm)
 {
@@ -45,9 +45,9 @@ rfc822date(char *s, int n, Tm *tm)
         tm->mday, monname[tm->mon], tm->year+1900, tm->hour, tm->min, tm->sec,
         plus, (tm->tzoff/3600)*100 + (tm->tzoff/60)%60);
 }
-/*e: function rfc822date */
+/*e: function [[rfc822date]] */
 
-/*s: function imap4date */
+/*s: function [[imap4date]] */
 int
 imap4date(char *s, int n, Tm *tm)
 {
@@ -59,9 +59,9 @@ imap4date(char *s, int n, Tm *tm)
     return snprint(s, n, "%2d-%s-%.4d %2.2d:%2.2d:%2.2d %s%4.4d",
         tm->mday, monname[tm->mon], tm->year+1900, tm->hour, tm->min, tm->sec, plus, (tm->tzoff/3600)*100 + (tm->tzoff/60)%60);
 }
-/*e: function imap4date */
+/*e: function [[imap4date]] */
 
-/*s: function imap4Date */
+/*s: function [[imap4Date]] */
 int
 imap4Date(Tm *tm, char *date)
 {
@@ -75,9 +75,9 @@ imap4Date(Tm *tm, char *date)
     tm->year = strtol(flds[2], nil, 10) - 1900;
     return 1;
 }
-/*e: function imap4Date */
+/*e: function [[imap4Date]] */
 
-/*s: function imap4DateTime */
+/*s: function [[imap4DateTime]] */
 /*
  * parse imap4 dates
  */
@@ -108,9 +108,9 @@ imap4DateTime(char *date)
     t -= tm.tzoff;
     return t;
 }
-/*e: function imap4DateTime */
+/*e: function [[imap4DateTime]] */
 
-/*s: function date2tm */
+/*s: function [[date2tm]] */
 /*
  * parse dates of formats
  * [Wkd[,]] DD Mon YYYY HH:MM:SS zone
@@ -201,9 +201,9 @@ date2tm(Tm *tm, char *date)
     }
     return tm;
 }
-/*e: function date2tm */
+/*e: function [[date2tm]] */
 
-/*s: global zones */
+/*s: global [[zones]] */
 /*
  * zone	: [A-Za-z][A-Za-z][A-Za-z]	some time zone names
  *	| [A-IK-Z]			military time; rfc1123 says the rfc822 spec is wrong.
@@ -250,9 +250,9 @@ static NamedInt zones[] =
     {"Z",	0},
     {nil,	0}
 };
-/*e: global zones */
+/*e: global [[zones]] */
 
-/*s: function zone2tm */
+/*s: function [[zone2tm]] */
 static void
 zone2tm(Tm *tm, char *s)
 {
@@ -298,9 +298,9 @@ zone2tm(Tm *tm, char *s)
     strncpy(tm->zone, "GMT", 4);
     tm->tzoff = 0;
 }
-/*e: function zone2tm */
+/*e: function [[zone2tm]] */
 
-/*s: function time2tm */
+/*s: function [[time2tm]] */
 /*
  * hh[:mm[:ss]]
  */
@@ -315,9 +315,9 @@ time2tm(Tm *tm, char *s)
         return;
     tm->sec = strtoul(s, &s, 10);
 }
-/*e: function time2tm */
+/*e: function [[time2tm]] */
 
-/*s: function dateindex */
+/*s: function [[dateindex]] */
 static int
 dateindex(char *d, char **tab, int n)
 {
@@ -328,5 +328,5 @@ dateindex(char *d, char **tab, int n)
             return i;
     return -1;
 }
-/*e: function dateindex */
+/*e: function [[dateindex]] */
 /*e: networking/ip/imap4d/date.c */

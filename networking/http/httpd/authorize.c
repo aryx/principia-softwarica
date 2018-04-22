@@ -7,15 +7,15 @@
 
 static char*	readfile(char*);
 
-/*s: constant UNAUTHED */
+/*s: constant [[UNAUTHED]] */
 /*
  * these should be done better; see the response codes in /lib/rfc/rfc2616 for
  * more info on what should be included.
  */
 #define UNAUTHED	"You are not authorized to see this area.\n"
-/*e: constant UNAUTHED */
+/*e: constant [[UNAUTHED]] */
 
-/*s: function authorize */
+/*s: function [[authorize]] */
 /*
  * check for authorization for some parts of the server tree.
  * the user name supplied with the authorization request is ignored;
@@ -83,9 +83,9 @@ authorize(HConnect *c, char *file)
     free(buf);
     return hflush(hout);
 }
-/*e: function authorize */
+/*e: function [[authorize]] */
 
-/*s: function readfile (networking/ip/httpd/authorize.c) */
+/*s: function [[readfile]]([[(networking/ip/httpd/authorize.c)]]) */
 static char*
 readfile(char *file)
 {
@@ -120,5 +120,5 @@ readfile(char *file)
     buf[n] = '\0';
     return buf;
 }
-/*e: function readfile (networking/ip/httpd/authorize.c) */
+/*e: function [[readfile]]([[(networking/ip/httpd/authorize.c)]]) */
 /*e: networking/ip/httpd/authorize.c */

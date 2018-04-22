@@ -5,7 +5,7 @@
 #include <auth.h>
 #include "imap4d.h"
 
-/*s: global flagChars */
+/*s: global [[flagChars]] */
 static NamedInt	flagChars[NFlags] =
 {
     {"s",	MSeen},
@@ -15,11 +15,11 @@ static NamedInt	flagChars[NFlags] =
     {"d",	MDraft},
     {"r",	MRecent},
 };
-/*e: global flagChars */
+/*e: global [[flagChars]] */
 
-/*s: global fsCtl */
+/*s: global [[fsCtl]] */
 static	int	fsCtl = -1;
-/*e: global fsCtl */
+/*e: global [[fsCtl]] */
 
 static	void	boxFlags(Box *box);
 static	int	createImp(Box *box, Qid *qid);
@@ -31,7 +31,7 @@ static	int	readBox(Box *box);
 static	ulong	uidRenumber(Msg *m, ulong uid, int force);
 static	int	impFlags(Box *box, Msg *m, char *flags);
 
-/*s: function openBox */
+/*s: function [[openBox]] */
 /*
  * strategy:
  * every mailbox file has an associated .imp file
@@ -139,9 +139,9 @@ openBox(char *name, char *fsname, int writable)
     closeBox(box, 0);
     return nil;
 }
-/*e: function openBox */
+/*e: function [[openBox]] */
 
-/*s: function checkBox */
+/*s: function [[checkBox]] */
 /*
  * check mailbox
  * returns fd of open .imp file if imped.
@@ -186,9 +186,9 @@ checkBox(Box *box, int imped)
     }
     return ml;
 }
-/*e: function checkBox */
+/*e: function [[checkBox]] */
 
-/*s: function mboxGone */
+/*s: function [[mboxGone]] */
 /*
  * mailbox is unreachable, so mark all messages expunged
  * clean up .imp files as well.
@@ -204,9 +204,9 @@ mboxGone(Box *box)
         m->expunged = 1;
     box->writable = 0;
 }
-/*e: function mboxGone */
+/*e: function [[mboxGone]] */
 
-/*s: function readBox */
+/*s: function [[readBox]] */
 /*
  * read messages in the mailbox
  * mark message that no longer exist as expunged
@@ -304,17 +304,17 @@ readBox(Box *box)
 
     return new;
 }
-/*e: function readBox */
+/*e: function [[readBox]] */
 
-/*s: constant IMPMAGIC */
+/*s: constant [[IMPMAGIC]] */
 /*
  * read in the .imp file, or make one if it doesn't exist.
  * make sure all flags and uids are consistent.
  * return the mailbox lock.
  */
 #define IMPMAGIC	"imap internal mailbox description\n"
-/*e: constant IMPMAGIC */
-/*s: function openImp */
+/*e: constant [[IMPMAGIC]] */
+/*s: function [[openImp]] */
 static MbLock*
 openImp(Box *box, int new)
 {
@@ -373,9 +373,9 @@ ZZZhack:
     close(fd);
     return ml;
 }
-/*e: function openImp */
+/*e: function [[openImp]] */
 
-/*s: function closeImp */
+/*s: function [[closeImp]] */
 /*
  * close the .imp file, after writing out any changes
  */
@@ -418,9 +418,9 @@ closeImp(Box *box, MbLock *ml)
     close(fd);
     mbUnlock(ml);
 }
-/*e: function closeImp */
+/*e: function [[closeImp]] */
 
-/*s: function wrImpFlags */
+/*s: function [[wrImpFlags]] */
 void
 wrImpFlags(char *buf, int flags, int killRecent)
 {
@@ -435,9 +435,9 @@ wrImpFlags(char *buf, int flags, int killRecent)
     }
     buf[i] = '\0';
 }
-/*e: function wrImpFlags */
+/*e: function [[wrImpFlags]] */
 
-/*s: function emptyImp */
+/*s: function [[emptyImp]] */
 int
 emptyImp(char *mbox)
 {
@@ -461,9 +461,9 @@ emptyImp(char *mbox)
     free(d);
     return fd;
 }
-/*e: function emptyImp */
+/*e: function [[emptyImp]] */
 
-/*s: function createImp */
+/*s: function [[createImp]] */
 /*
  * try to match permissions with mbox
  */
@@ -492,9 +492,9 @@ createImp(Box *box, Qid *qid)
 
     return fd;
 }
-/*e: function createImp */
+/*e: function [[createImp]] */
 
-/*s: function parseImp */
+/*s: function [[parseImp]] */
 /*
  * read or re-read a .imp file.
  * this is tricky:
@@ -627,9 +627,9 @@ parseImp(Biobuf *b, Box *box)
     }
     return 1;
 }
-/*e: function parseImp */
+/*e: function [[parseImp]] */
 
-/*s: function impFlags */
+/*s: function [[impFlags]] */
 /*
  * parse .imp flags
  */
@@ -666,9 +666,9 @@ impFlags(Box *box, Msg *m, char *flags)
     m->flags = f;
     return 1;
 }
-/*e: function impFlags */
+/*e: function [[impFlags]] */
 
-/*s: function boxFlags */
+/*s: function [[boxFlags]] */
 /*
  * assign uids to any new messages
  * which aren't already in the .imp file.
@@ -689,9 +689,9 @@ boxFlags(Box *box)
             box->recent++;
     }
 }
-/*e: function boxFlags */
+/*e: function [[boxFlags]] */
 
-/*s: function uidRenumber */
+/*s: function [[uidRenumber]] */
 static ulong
 uidRenumber(Msg *m, ulong uid, int force)
 {
@@ -702,9 +702,9 @@ uidRenumber(Msg *m, ulong uid, int force)
     }
     return uid;
 }
-/*e: function uidRenumber */
+/*e: function [[uidRenumber]] */
 
-/*s: function closeBox */
+/*s: function [[closeBox]] */
 void
 closeBox(Box *box, int opened)
 {
@@ -733,9 +733,9 @@ closeBox(Box *box, int opened)
     free(box->imp);
     free(box);
 }
-/*e: function closeBox */
+/*e: function [[closeBox]] */
 
-/*s: function deleteMsgs */
+/*s: function [[deleteMsgs]] */
 int
 deleteMsgs(Box *box)
 {
@@ -768,9 +768,9 @@ deleteMsgs(Box *box)
 
     return ok;
 }
-/*e: function deleteMsgs */
+/*e: function [[deleteMsgs]] */
 
-/*s: function expungeMsgs */
+/*s: function [[expungeMsgs]] */
 /*
  * second pass: remove the message structure,
  * and renumber message sequence numbers.
@@ -808,9 +808,9 @@ expungeMsgs(Box *box, int send)
     }
     return n;
 }
-/*e: function expungeMsgs */
+/*e: function [[expungeMsgs]] */
 
-/*s: function fsInit */
+/*s: function [[fsInit]] */
 static void
 fsInit(void)
 {
@@ -822,9 +822,9 @@ fsInit(void)
     if(fprint(fsCtl, "close mbox") < 0)
         bye("can't initialize mail file system");
 }
-/*e: function fsInit */
+/*e: function [[fsInit]] */
 
-/*s: global stoplist */
+/*s: global [[stoplist]] */
 static char *stoplist[] =
 {
     "mbox",
@@ -836,23 +836,23 @@ static char *stoplist[] =
     "imap.ok",
     0
 };
-/*e: global stoplist */
+/*e: global [[stoplist]] */
 
-/*s: enum _anon_ (networking/ip/imap4d/mbox.c) */
+/*s: enum [[_anon_ (networking/ip/imap4d/mbox.c)]] */
 enum {
     Maxokbytes	= 4096,
     Maxfolders	= Maxokbytes / 4,
 };
-/*e: enum _anon_ (networking/ip/imap4d/mbox.c) */
+/*e: enum [[_anon_ (networking/ip/imap4d/mbox.c)]] */
 
-/*s: global folders */
+/*s: global [[folders]] */
 static char *folders[Maxfolders];
-/*e: global folders */
-/*s: global folderbuff */
+/*e: global [[folders]] */
+/*s: global [[folderbuff]] */
 static char *folderbuff;
-/*e: global folderbuff */
+/*e: global [[folderbuff]] */
 
-/*s: function readokfolders */
+/*s: function [[readokfolders]] */
 static void
 readokfolders(void)
 {
@@ -876,9 +876,9 @@ readokfolders(void)
     folderbuff[nr] = 0;
     tokenize(folderbuff, folders, nelem(folders));
 }
-/*e: function readokfolders */
+/*e: function [[readokfolders]] */
 
-/*s: function okMbox */
+/*s: function [[okMbox]] */
 /*
  * reject bad mailboxes based on mailbox name
  */
@@ -913,5 +913,5 @@ okMbox(char *path)
         return 0;
     return 1;
 }
-/*e: function okMbox */
+/*e: function [[okMbox]] */
 /*e: networking/ip/imap4d/mbox.c */

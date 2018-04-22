@@ -9,7 +9,7 @@
 #include <pool.h>
 #include "dns.h"
 
-/*s: enum _anon_ (networking/ndb/dns.c) */
+/*s: enum [[_anon_ (networking/ndb/dns.c)]] */
 enum
 {
     Maxrequest=		1024,
@@ -22,7 +22,7 @@ enum
     Qdir=			0,
     Qdns=			1,
 };
-/*e: enum _anon_ (networking/ndb/dns.c) */
+/*e: enum [[_anon_ (networking/ndb/dns.c)]] */
 
 typedef struct Mfile	Mfile;
 typedef struct Job	Job;
@@ -30,15 +30,15 @@ typedef struct Network	Network;
 
 extern	ulong	start;
 
-/*s: global vers (networking/ndb/dns.c) */
+/*s: global [[vers]]([[(networking/ndb/dns.c)]]) */
 int vers;		/* incremented each clone/attach */
-/*e: global vers (networking/ndb/dns.c) */
+/*e: global [[vers]]([[(networking/ndb/dns.c)]]) */
 
-/*s: global stop */
+/*s: global [[stop]] */
 static volatile int stop;
-/*e: global stop */
+/*e: global [[stop]] */
 
-/*s: struct Mfile (networking/ndb/dns.c) */
+/*s: struct [[Mfile]]([[(networking/ndb/dns.c)]]) */
 /* holds data to be returned via read of /net/dns, perhaps multiple reads */
 struct Mfile
 {
@@ -54,9 +54,9 @@ struct Mfile
     ushort		rr[Maxrrr];	/* offset of rr's */
     ushort		nrr;		/* number of rr's */
 };
-/*e: struct Mfile (networking/ndb/dns.c) */
+/*e: struct [[Mfile]]([[(networking/ndb/dns.c)]]) */
 
-/*s: struct Job (networking/ndb/dns.c) */
+/*s: struct [[Job]]([[(networking/ndb/dns.c)]]) */
 /*
  *  active local requests
  */
@@ -67,70 +67,70 @@ struct Job
     Fcall	request;
     Fcall	reply;
 };
-/*e: struct Job (networking/ndb/dns.c) */
-/*s: global joblock (networking/ndb/dns.c) */
+/*e: struct [[Job]]([[(networking/ndb/dns.c)]]) */
+/*s: global [[joblock]]([[(networking/ndb/dns.c)]]) */
 Lock	joblock;
-/*e: global joblock (networking/ndb/dns.c) */
-/*s: global joblist (networking/ndb/dns.c) */
+/*e: global [[joblock]]([[(networking/ndb/dns.c)]]) */
+/*s: global [[joblist]]([[(networking/ndb/dns.c)]]) */
 Job	*joblist;
-/*e: global joblist (networking/ndb/dns.c) */
+/*e: global [[joblist]]([[(networking/ndb/dns.c)]]) */
 
-/*s: global mfalloc */
+/*s: global [[mfalloc]] */
 struct {
     Lock;
     Mfile	*inuse;		/* active mfile's */
 } mfalloc;
-/*e: global mfalloc */
+/*e: global [[mfalloc]] */
 
-/*s: global cfg */
+/*s: global [[cfg]] */
 Cfg	cfg;
-/*e: global cfg */
-/*s: global debug (networking/ndb/dns.c) */
+/*e: global [[cfg]] */
+/*s: global [[debug]]([[(networking/ndb/dns.c)]]) */
 int	debug;
-/*e: global debug (networking/ndb/dns.c) */
-/*s: global ipaddr (networking/ndb/dns.c) */
-uchar	myip[IPaddrlen];	/* my ip address */
-/*e: global ipaddr (networking/ndb/dns.c) */
-/*s: global maxage */
+/*e: global [[debug]]([[(networking/ndb/dns.c)]]) */
+/*s: global [[ipaddr]]([[(networking/ndb/dns.c)]]) */
+uchar	ipaddr[IPaddrlen];	/* my ip address */
+/*e: global [[ipaddr]]([[(networking/ndb/dns.c)]]) */
+/*s: global [[maxage]] */
 int	maxage = Defmaxage;
-/*e: global maxage */
-/*s: global mfd (networking/ndb/dns.c) */
+/*e: global [[maxage]] */
+/*s: global [[mfd]]([[(networking/ndb/dns.c)]]) */
 int	mfd[2];
-/*e: global mfd (networking/ndb/dns.c) */
-/*s: global needrefresh */
+/*e: global [[mfd]]([[(networking/ndb/dns.c)]]) */
+/*s: global [[needrefresh]] */
 int	needrefresh;
-/*e: global needrefresh */
-/*s: global now (networking/ndb/dns.c) */
+/*e: global [[needrefresh]] */
+/*s: global [[now]]([[(networking/ndb/dns.c)]]) */
 ulong	now;
-/*e: global now (networking/ndb/dns.c) */
-/*s: global nowns */
+/*e: global [[now]]([[(networking/ndb/dns.c)]]) */
+/*s: global [[nowns]] */
 vlong	nowns;
-/*e: global nowns */
-/*s: global sendnotifies */
+/*e: global [[nowns]] */
+/*s: global [[sendnotifies]] */
 int	sendnotifies;
-/*e: global sendnotifies */
-/*s: global testing */
+/*e: global [[sendnotifies]] */
+/*s: global [[testing]] */
 int	testing;
-/*e: global testing */
-/*s: global trace */
+/*e: global [[testing]] */
+/*s: global [[trace]] */
 char	*trace;
-/*e: global trace */
-/*s: global traceactivity */
+/*e: global [[trace]] */
+/*s: global [[traceactivity]] */
 int	traceactivity;
-/*e: global traceactivity */
-/*s: global zonerefreshprogram */
+/*e: global [[traceactivity]] */
+/*s: global [[zonerefreshprogram]] */
 char	*zonerefreshprogram;
-/*e: global zonerefreshprogram */
+/*e: global [[zonerefreshprogram]] */
 
-/*s: global logfile (networking/ndb/dns.c) */
+/*s: global [[logfile]]([[(networking/ndb/dns.c)]]) */
 char	*logfile = "dns";	/* or "dns.test" */
-/*e: global logfile (networking/ndb/dns.c) */
-/*s: global dbfile (networking/ndb/dns.c) */
+/*e: global [[logfile]]([[(networking/ndb/dns.c)]]) */
+/*s: global [[dbfile]]([[(networking/ndb/dns.c)]]) */
 char	*dbfile;
-/*e: global dbfile (networking/ndb/dns.c) */
-/*s: global mntpt (networking/ndb/dns.c) */
+/*e: global [[dbfile]]([[(networking/ndb/dns.c)]]) */
+/*s: global [[mntpt]]([[(networking/ndb/dns.c)]]) */
 char	mntpt[Maxpath];
-/*e: global mntpt (networking/ndb/dns.c) */
+/*e: global [[mntpt]]([[(networking/ndb/dns.c)]]) */
 
 int	addforwtarg(char *);
 int	fillreply(Mfile*, int);
@@ -158,7 +158,7 @@ static char *lookupqueryold(Job*, Mfile*, Request*, char*, char*, int, int);
 static char *lookupquerynew(Job*, Mfile*, Request*, char*, char*, int, int);
 static char *respond(Job*, Mfile*, RR*, char*, int, int);
 
-/*s: function usage (networking/ndb/dns.c) */
+/*s: function [[usage]]([[(networking/ndb/dns.c)]]) */
 void
 usage(void)
 {
@@ -166,9 +166,9 @@ usage(void)
         "[-T forwip] [-x netmtpt] [-z refreshprog]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ndb/dns.c) */
+/*e: function [[usage]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function justremount */
+/*s: function [[justremount]] */
 void
 justremount(char *service, char *mntpt)
 {
@@ -182,9 +182,9 @@ justremount(char *service, char *mntpt)
         sleep(5000);
     }
 }
-/*e: function justremount */
+/*e: function [[justremount]] */
 
-/*s: function main (networking/ndb/dns.c) */
+/*s: function [[main]]([[(networking/ndb/dns.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -262,14 +262,14 @@ main(int argc, char *argv[])
     fmtinstall('F', fcallfmt);
     dninit();
     /* this really shouldn't be fatal */
-    if(myipaddr(myip, mntpt) < 0)
+    if(myipaddr(ipaddr, mntpt) < 0)
         sysfatal("can't read my ip address");
     dnslog("starting %s%sdns %s%s%son %I's %s",
         (cfg.straddle? "straddling ": ""),
         (cfg.cachedb? "caching ": ""),
         (cfg.serve?   "udp server ": ""),
         (cfg.justforw? "forwarding-only ": ""),
-        (cfg.resolver? "resolver ": ""), myip, mntpt);
+        (cfg.resolver? "resolver ": ""), ipaddr, mntpt);
 
     opendatabase();
     now = time(nil);		/* open time files before we fork */
@@ -327,9 +327,9 @@ main(int argc, char *argv[])
         dnslog("restarting");
     }
 }
-/*e: function main (networking/ndb/dns.c) */
+/*e: function [[main]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function setext (networking/ndb/dns.c) */
+/*s: function [[setext]]([[(networking/ndb/dns.c)]]) */
 /*
  *  if a mount point is specified, set the cs extension to be the mount point
  *  with '_'s replacing '/'s
@@ -350,9 +350,9 @@ setext(char *ext, int n, char *p)
     }
     ext[i] = 0;
 }
-/*e: function setext (networking/ndb/dns.c) */
+/*e: function [[setext]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function mountinit (networking/ndb/dns.c) */
+/*s: function [[mountinit]]([[(networking/ndb/dns.c)]]) */
 void
 mountinit(char *service, char *mntpt)
 {
@@ -394,9 +394,9 @@ mountinit(char *service, char *mntpt)
         _exits(0);
     }
 }
-/*e: function mountinit (networking/ndb/dns.c) */
+/*e: function [[mountinit]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function newfid (networking/ndb/dns.c) */
+/*s: function [[newfid]]([[(networking/ndb/dns.c)]]) */
 Mfile*
 newfid(int fid, int needunused)
 {
@@ -418,9 +418,9 @@ newfid(int fid, int needunused)
     unlock(&mfalloc);
     return mf;
 }
-/*e: function newfid (networking/ndb/dns.c) */
+/*e: function [[newfid]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function freefid (networking/ndb/dns.c) */
+/*s: function [[freefid]]([[(networking/ndb/dns.c)]]) */
 void
 freefid(Mfile *mf)
 {
@@ -440,9 +440,9 @@ freefid(Mfile *mf)
     unlock(&mfalloc);
     sysfatal("freeing unused fid");
 }
-/*e: function freefid (networking/ndb/dns.c) */
+/*e: function [[freefid]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function copyfid */
+/*s: function [[copyfid]] */
 Mfile*
 copyfid(Mfile *mf, int fid)
 {
@@ -459,9 +459,9 @@ copyfid(Mfile *mf, int fid)
     nmf->qid.vers = vers++;
     return nmf;
 }
-/*e: function copyfid */
+/*e: function [[copyfid]] */
 
-/*s: function newjob (networking/ndb/dns.c) */
+/*s: function [[newjob]]([[(networking/ndb/dns.c)]]) */
 Job*
 newjob(void)
 {
@@ -475,9 +475,9 @@ newjob(void)
     unlock(&joblock);
     return job;
 }
-/*e: function newjob (networking/ndb/dns.c) */
+/*e: function [[newjob]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function freejob (networking/ndb/dns.c) */
+/*s: function [[freejob]]([[(networking/ndb/dns.c)]]) */
 void
 freejob(Job *job)
 {
@@ -493,9 +493,9 @@ freejob(Job *job)
         }
     unlock(&joblock);
 }
-/*e: function freejob (networking/ndb/dns.c) */
+/*e: function [[freejob]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function flushjob (networking/ndb/dns.c) */
+/*s: function [[flushjob]]([[(networking/ndb/dns.c)]]) */
 void
 flushjob(int tag)
 {
@@ -509,9 +509,9 @@ flushjob(int tag)
         }
     unlock(&joblock);
 }
-/*e: function flushjob (networking/ndb/dns.c) */
+/*e: function [[flushjob]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function io (networking/ndb/dns.c) */
+/*s: function [[io]]([[(networking/ndb/dns.c)]]) */
 void
 io(void)
 {
@@ -617,9 +617,9 @@ io(void)
     postnote(PNGROUP, getpid(), "die");
     sleep(1000);
 }
-/*e: function io (networking/ndb/dns.c) */
+/*e: function [[io]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function rversion (networking/ndb/dns.c) */
+/*s: function [[rversion]]([[(networking/ndb/dns.c)]]) */
 void
 rversion(Job *job)
 {
@@ -634,17 +634,17 @@ rversion(Job *job)
         sendmsg(job, 0);
     }
 }
-/*e: function rversion (networking/ndb/dns.c) */
+/*e: function [[rversion]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function rauth (networking/ndb/dns.c) */
+/*s: function [[rauth]]([[(networking/ndb/dns.c)]]) */
 void
 rauth(Job *job)
 {
     sendmsg(job, "dns: authentication not required");
 }
-/*e: function rauth (networking/ndb/dns.c) */
+/*e: function [[rauth]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function rflush (networking/ndb/dns.c) */
+/*s: function [[rflush]]([[(networking/ndb/dns.c)]]) */
 /*
  *  don't flush till all the slaves are done
  */
@@ -654,9 +654,9 @@ rflush(Job *job)
     flushjob(job->request.oldtag);
     sendmsg(job, 0);
 }
-/*e: function rflush (networking/ndb/dns.c) */
+/*e: function [[rflush]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function rattach (networking/ndb/dns.c) */
+/*s: function [[rattach]]([[(networking/ndb/dns.c)]]) */
 void
 rattach(Job *job, Mfile *mf)
 {
@@ -669,9 +669,9 @@ rattach(Job *job, Mfile *mf)
     job->reply.qid = mf->qid;
     sendmsg(job, 0);
 }
-/*e: function rattach (networking/ndb/dns.c) */
+/*e: function [[rattach]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function rwalk (networking/ndb/dns.c) */
+/*s: function [[rwalk]]([[(networking/ndb/dns.c)]]) */
 char*
 rwalk(Job *job, Mfile *mf)
 {
@@ -732,9 +732,9 @@ send:
     sendmsg(job, err);
     return err;
 }
-/*e: function rwalk (networking/ndb/dns.c) */
+/*e: function [[rwalk]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function ropen (networking/ndb/dns.c) */
+/*s: function [[ropen]]([[(networking/ndb/dns.c)]]) */
 void
 ropen(Job *job, Mfile *mf)
 {
@@ -750,18 +750,18 @@ ropen(Job *job, Mfile *mf)
     job->reply.iounit = 0;
     sendmsg(job, err);
 }
-/*e: function ropen (networking/ndb/dns.c) */
+/*e: function [[ropen]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function rcreate (networking/ndb/dns.c) */
+/*s: function [[rcreate]]([[(networking/ndb/dns.c)]]) */
 void
 rcreate(Job *job, Mfile *mf)
 {
     USED(mf);
     sendmsg(job, "creation permission denied");
 }
-/*e: function rcreate (networking/ndb/dns.c) */
+/*e: function [[rcreate]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function rread (networking/ndb/dns.c) */
+/*s: function [[rread]]([[(networking/ndb/dns.c)]]) */
 void
 rread(Job *job, Mfile *mf)
 {
@@ -812,9 +812,9 @@ rread(Job *job, Mfile *mf)
     job->reply.count = n;
     sendmsg(job, err);
 }
-/*e: function rread (networking/ndb/dns.c) */
+/*e: function [[rread]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function rwrite */
+/*s: function [[rwrite]] */
 void
 rwrite(Job *job, Mfile *mf, Request *req)
 {
@@ -931,9 +931,9 @@ send:
     job->reply.count = cnt;
     sendmsg(job, err);
 }
-/*e: function rwrite */
+/*e: function [[rwrite]] */
 
-/*s: function lookupqueryold */
+/*s: function [[lookupqueryold]] */
 /*
  * dnsdebug calls
  *	rr = dnresolve(buf, Cin, type, &req, 0, 0, Recurse, rooted, 0);
@@ -966,9 +966,9 @@ lookupqueryold(Job *job, Mfile *mf, Request *req, char *errbuf, char *p,
 
     return respond(job, mf, rp, errbuf, status, wantsav);
 }
-/*e: function lookupqueryold */
+/*e: function [[lookupqueryold]] */
 
-/*s: function respond */
+/*s: function [[respond]] */
 static char *
 respond(Job *job, Mfile *mf, RR *rp, char *errbuf, int status, int wantsav)
 {
@@ -1007,9 +1007,9 @@ respond(Job *job, Mfile *mf, RR *rp, char *errbuf, int status, int wantsav)
     rrfreelist(rp);
     return nil;
 }
-/*e: function respond */
+/*e: function [[respond]] */
 
-/*s: function lookupquerynew */
+/*s: function [[lookupquerynew]] */
 /* simulate what dnsudpserver does */
 static char *
 lookupquerynew(Job *job, Mfile *mf, Request *req, char *errbuf, char *p,
@@ -1036,27 +1036,27 @@ lookupquerynew(Job *job, Mfile *mf, Request *req, char *errbuf, char *p,
     freeanswers(&repmsg);
     return err;
 }
-/*e: function lookupquerynew */
+/*e: function [[lookupquerynew]] */
 
-/*s: function rclunk (networking/ndb/dns.c) */
+/*s: function [[rclunk]]([[(networking/ndb/dns.c)]]) */
 void
 rclunk(Job *job, Mfile *mf)
 {
     freefid(mf);
     sendmsg(job, 0);
 }
-/*e: function rclunk (networking/ndb/dns.c) */
+/*e: function [[rclunk]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function rremove (networking/ndb/dns.c) */
+/*s: function [[rremove]]([[(networking/ndb/dns.c)]]) */
 void
 rremove(Job *job, Mfile *mf)
 {
     USED(mf);
     sendmsg(job, "remove permission denied");
 }
-/*e: function rremove (networking/ndb/dns.c) */
+/*e: function [[rremove]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function rstat (networking/ndb/dns.c) */
+/*s: function [[rstat]]([[(networking/ndb/dns.c)]]) */
 void
 rstat(Job *job, Mfile *mf)
 {
@@ -1079,18 +1079,18 @@ rstat(Job *job, Mfile *mf)
     job->reply.stat = buf;
     sendmsg(job, 0);
 }
-/*e: function rstat (networking/ndb/dns.c) */
+/*e: function [[rstat]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function rwstat (networking/ndb/dns.c) */
+/*s: function [[rwstat]]([[(networking/ndb/dns.c)]]) */
 void
 rwstat(Job *job, Mfile *mf)
 {
     USED(mf);
     sendmsg(job, "wstat permission denied");
 }
-/*e: function rwstat (networking/ndb/dns.c) */
+/*e: function [[rwstat]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function sendmsg (networking/ndb/dns.c) */
+/*s: function [[sendmsg]]([[(networking/ndb/dns.c)]]) */
 void
 sendmsg(Job *job, char *err)
 {
@@ -1118,9 +1118,9 @@ sendmsg(Job *job, char *err)
     if(debug)
         dnslog("%F %d", &job->reply, n);
 }
-/*e: function sendmsg (networking/ndb/dns.c) */
+/*e: function [[sendmsg]]([[(networking/ndb/dns.c)]]) */
 
-/*s: function logreply */
+/*s: function [[logreply]] */
 /*
  *  the following varies between dnsdebug and dns
  */
@@ -1144,9 +1144,9 @@ logreply(int id, uchar *addr, DNSmsg *mp)
     for(rp = mp->ar; rp != nil; rp = rp->next)
         dnslog("%d: rcvd %I ar %R", id, addr, rp);
 }
-/*e: function logreply */
+/*e: function [[logreply]] */
 
-/*s: function logsend */
+/*s: function [[logsend]] */
 void
 logsend(int id, int subid, uchar *addr, char *sname, char *rname, int type)
 {
@@ -1156,13 +1156,13 @@ logsend(int id, int subid, uchar *addr, char *sname, char *rname, int type)
         getpid(), id, subid, addr, sname, rname,
         rrname(type, buf, sizeof buf));
 }
-/*e: function logsend */
+/*e: function [[logsend]] */
 
-/*s: function getdnsservers */
+/*s: function [[getdnsservers]] */
 RR*
 getdnsservers(int class)
 {
     return dnsservers(class);
 }
-/*e: function getdnsservers */
+/*e: function [[getdnsservers]] */
 /*e: networking/ndb/dns.c */

@@ -6,7 +6,7 @@
 #include "ppp.h"
 
 typedef struct Iphdr Iphdr;
-/*s: struct Iphdr (networking/ip/ppp/compress.c) */
+/*s: struct [[Iphdr]]([[(networking/ip/ppp/compress.c)]]) */
 struct Iphdr
 {
     uchar	vihl;		/* Version and header length */
@@ -20,10 +20,10 @@ struct Iphdr
     ulong	src;		/* Ip source (uchar ordering unimportant) */
     ulong	dst;		/* Ip destination (uchar ordering unimportant) */
 };
-/*e: struct Iphdr (networking/ip/ppp/compress.c) */
+/*e: struct [[Iphdr]]([[(networking/ip/ppp/compress.c)]]) */
 
 typedef struct Tcphdr Tcphdr;
-/*s: struct Tcphdr */
+/*s: struct [[Tcphdr]] */
 struct Tcphdr
 {
     ulong	ports;		/* defined as a ulong to make comparisons easier */
@@ -34,10 +34,10 @@ struct Tcphdr
     uchar	cksum[2];
     uchar	urg[2];
 };
-/*e: struct Tcphdr */
+/*e: struct [[Tcphdr]] */
 
 typedef struct Ilhdr Ilhdr;
-/*s: struct Ilhdr (networking/ip/ppp/compress.c) */
+/*s: struct [[Ilhdr]]([[(networking/ip/ppp/compress.c)]]) */
 struct Ilhdr
 {
     uchar	sum[2];	/* Checksum including header */
@@ -49,9 +49,9 @@ struct Ilhdr
     uchar	id[4];	/* Sequence id */
     uchar	ack[4];	/* Acked sequence */
 };
-/*e: struct Ilhdr (networking/ip/ppp/compress.c) */
+/*e: struct [[Ilhdr]]([[(networking/ip/ppp/compress.c)]]) */
 
-/*s: enum _anon_ (networking/ip/ppp/compress.c) */
+/*s: enum [[_anon_ (networking/ip/ppp/compress.c)]] */
 enum
 {
     URG		= 0x20,		/* Data marked urgent */
@@ -67,10 +67,10 @@ enum
     IP_ILPROTO	= 40,
     IL_IPHDR	= 20,
 };
-/*e: enum _anon_ (networking/ip/ppp/compress.c) */
+/*e: enum [[_anon_ (networking/ip/ppp/compress.c)]] */
 
 typedef struct Hdr Hdr;
-/*s: struct Hdr (networking/ip/ppp/compress.c) */
+/*s: struct [[Hdr]]([[(networking/ip/ppp/compress.c)]]) */
 struct Hdr
 {
     uchar	buf[128];
@@ -78,10 +78,10 @@ struct Hdr
     Tcphdr	*tcp;
     int	len;
 };
-/*e: struct Hdr (networking/ip/ppp/compress.c) */
+/*e: struct [[Hdr]]([[(networking/ip/ppp/compress.c)]]) */
 
 typedef struct Tcpc Tcpc;
-/*s: struct Tcpc */
+/*s: struct [[Tcpc]] */
 struct Tcpc
 {
     uchar	lastrecv;
@@ -92,9 +92,9 @@ struct Tcpc
     Hdr	t[MAX_STATES];
     Hdr	r[MAX_STATES];
 };
-/*e: struct Tcpc */
+/*e: struct [[Tcpc]] */
 
-/*s: enum _anon_ (networking/ip/ppp/compress.c)2 */
+/*s: enum [[_anon_ (networking/ip/ppp/compress.c)2]] */
 enum
 {	/* flag bits for what changed in a packet */
     NEW_U=(1<<0),	/* tcp only */
@@ -107,20 +107,20 @@ enum
     NEW_T=(1<<7),	/* il only */
     TCP_PUSH_BIT	= 0x10,
 };
-/*e: enum _anon_ (networking/ip/ppp/compress.c)2 */
+/*e: enum [[_anon_ (networking/ip/ppp/compress.c)2]] */
 
-/*s: constant SPECIAL_I */
+/*s: constant [[SPECIAL_I]] */
 /* reserved, special-case values of above for tcp */
 #define SPECIAL_I (NEW_S|NEW_W|NEW_U)		/* echoed interactive traffic */
-/*e: constant SPECIAL_I */
-/*s: constant SPECIAL_D */
+/*e: constant [[SPECIAL_I]] */
+/*s: constant [[SPECIAL_D]] */
 #define SPECIAL_D (NEW_S|NEW_A|NEW_W|NEW_U)	/* unidirectional data */
-/*e: constant SPECIAL_D */
-/*s: constant SPECIALS_MASK */
+/*e: constant [[SPECIAL_D]] */
+/*s: constant [[SPECIALS_MASK]] */
 #define SPECIALS_MASK (NEW_S|NEW_A|NEW_W|NEW_U)
-/*e: constant SPECIALS_MASK */
+/*e: constant [[SPECIALS_MASK]] */
 
-/*s: function encode */
+/*s: function [[encode]] */
 int
 encode(void *p, ulong n)
 {
@@ -136,9 +136,9 @@ encode(void *p, ulong n)
     *cp = n;
     return 1;
 }
-/*e: function encode */
+/*e: function [[encode]] */
 
-/*s: macro DECODEL */
+/*s: macro [[DECODEL]] */
 #define DECODEL(f) { \
     if (*cp == 0) {\
         hnputl(f, nhgetl(f) + ((cp[1] << 8) | cp[2])); \
@@ -147,8 +147,8 @@ encode(void *p, ulong n)
         hnputl(f, nhgetl(f) + (ulong)*cp++); \
     } \
 }
-/*e: macro DECODEL */
-/*s: macro DECODES */
+/*e: macro [[DECODEL]] */
+/*s: macro [[DECODES]] */
 #define DECODES(f) { \
     if (*cp == 0) {\
         hnputs(f, nhgets(f) + ((cp[1] << 8) | cp[2])); \
@@ -157,9 +157,9 @@ encode(void *p, ulong n)
         hnputs(f, nhgets(f) + (ulong)*cp++); \
     } \
 }
-/*e: macro DECODES */
+/*e: macro [[DECODES]] */
 
-/*s: function tcpcompress */
+/*s: function [[tcpcompress]] */
 Block*
 tcpcompress(Tcpc *comp, Block *b, int *protop)
 {
@@ -344,7 +344,7 @@ rescue:
     *protop = Pvjutcp;
     return b;
 }
-/*e: function tcpcompress */
+/*e: function [[tcpcompress]] */
 
 Block*
 tcpuncompress(Tcpc *comp, Block *b, int type)
@@ -491,7 +491,7 @@ rescue:
     return nil;
 }
 
-/*s: function compress_init */
+/*s: function [[compress_init]] */
 Tcpc*
 compress_init(Tcpc *c)
 {
@@ -515,9 +515,9 @@ compress_init(Tcpc *c)
 
     return c;
 }
-/*e: function compress_init */
+/*e: function [[compress_init]] */
 
-/*s: function compress */
+/*s: function [[compress]] */
 Block*
 compress(Tcpc *tcp, Block *b, int *protop)
 {
@@ -540,9 +540,9 @@ compress(Tcpc *tcp, Block *b, int *protop)
         return b;
     }
 }
-/*e: function compress */
+/*e: function [[compress]] */
 
-/*s: function compress_negotiate */
+/*s: function [[compress_negotiate]] */
 int
 compress_negotiate(Tcpc *tcp, uchar *data)
 {
@@ -551,14 +551,14 @@ compress_negotiate(Tcpc *tcp, uchar *data)
     tcp->compressid = data[1];
     return 0;
 }
-/*e: function compress_negotiate */
+/*e: function [[compress_negotiate]] */
 
-/*s: function compress_error */
+/*s: function [[compress_error]] */
 /* called by ppp when there was a bad frame received */
 void
 compress_error(Tcpc *tcp)
 {
     tcp->err = 1;
 }
-/*e: function compress_error */
+/*e: function [[compress_error]] */
 /*e: networking/ip/ppp/compress.c */

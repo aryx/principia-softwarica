@@ -1,5 +1,5 @@
 /*s: networking/ip/dhcp.h */
-/*s: enum _anon_ (networking/ip/dhcp.h) */
+/*s: enum [[_anon_ (networking/ip/dhcp.h)]] */
 /* Dynamic Host Configuration Protocol / BOOTP */
 enum
 {
@@ -129,14 +129,14 @@ enum
     OP9ipgw=		134,	/* client's gateway */
 /*	OP9dns=			135,	/* dns servers */
 };
-/*e: enum _anon_ (networking/ip/dhcp.h) */
+/*e: enum [[_anon_ (networking/ip/dhcp.h)]] */
 
-/*s: constant Lforever */
+/*s: constant [[Lforever]] */
 /* a lease that never expires */
 #define Lforever	~0UL
-/*e: constant Lforever */
+/*e: constant [[Lforever]] */
 
-/*s: enum _anon_ (networking/ip/dhcp.h)2 */
+/*s: enum [[_anon_ (networking/ip/dhcp.h)2]] */
 /* dhcp states */
 enum {
     Sinit,
@@ -146,10 +146,10 @@ enum {
     Srenewing,
     Srebinding,
 };
-/*e: enum _anon_ (networking/ip/dhcp.h)2 */
+/*e: enum [[_anon_ (networking/ip/dhcp.h)2]] */
 
 typedef struct Bootp	Bootp;
-/*s: struct Bootp */
+/*s: struct [[Bootp]] */
 struct Bootp
 {
     /* Udphdr (included because of structure alignment on the alpha) */
@@ -172,5 +172,5 @@ struct Bootp
     uchar	optmagic[4];
     uchar	optdata[Maxoptlen];
 };
-/*e: struct Bootp */
+/*e: struct [[Bootp]] */
 /*e: networking/ip/dhcp.h */

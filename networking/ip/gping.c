@@ -9,21 +9,21 @@
 #include <ip.h>
 #include "icmp.h"
 
-/*s: constant MAXNUM */
+/*s: constant [[MAXNUM]] */
 #define	MAXNUM	8	/* maximum number of numbers on data line */
-/*e: constant MAXNUM */
+/*e: constant [[MAXNUM]] */
 
 typedef struct Graph	Graph;
 typedef struct Machine	Machine;
 typedef struct Req	Req;
 
-/*s: enum _anon_ (networking/ip/gping.c) */
+/*s: enum [[_anon_ (networking/ip/gping.c)]] */
 enum {
     Gmsglen	= 16,
 };
-/*e: enum _anon_ (networking/ip/gping.c) */
+/*e: enum [[_anon_ (networking/ip/gping.c)]] */
 
-/*s: struct Graph */
+/*s: struct [[Graph]] */
 struct Graph
 {
     int		colindex;
@@ -41,18 +41,18 @@ struct Graph
     int		cursor;
     int		vmax;
 };
-/*e: struct Graph */
+/*e: struct [[Graph]] */
 
-/*s: enum _anon_ (networking/ip/gping.c)2 */
+/*s: enum [[_anon_ (networking/ip/gping.c)2]] */
 enum
 {
     MSGLEN		= 64,
 
     Rttmax		= 50,
 };
-/*e: enum _anon_ (networking/ip/gping.c)2 */
+/*e: enum [[_anon_ (networking/ip/gping.c)2]] */
 
-/*s: struct Req (networking/ip/gping.c) */
+/*s: struct [[Req]]([[(networking/ip/gping.c)]]) */
 struct Req
 {
     int	seq;	/* sequence number */
@@ -60,9 +60,9 @@ struct Req
 //	int	rtt;
     Req	*next;
 };
-/*e: struct Req (networking/ip/gping.c) */
+/*e: struct [[Req]]([[(networking/ip/gping.c)]]) */
 
-/*s: struct Machine */
+/*s: struct [[Machine]] */
 struct Machine
 {
     Lock;
@@ -88,9 +88,9 @@ struct Machine
     char	*bufp;
     char	*ebufp;
 };
-/*e: struct Machine */
+/*e: struct [[Machine]] */
 
-/*s: enum _anon_ (networking/ip/gping.c)3 */
+/*s: enum [[_anon_ (networking/ip/gping.c)3]] */
 enum
 {
     Ncolor		= 6,
@@ -101,75 +101,75 @@ enum
     NPROC		= 128,
     NMACH		= 32,
 };
-/*e: enum _anon_ (networking/ip/gping.c)3 */
+/*e: enum [[_anon_ (networking/ip/gping.c)3]] */
 
-/*s: enum Menu2 */
+/*s: enum [[Menu2]] */
 enum Menu2
 {
     Mrtt,
     Mlost,
     Nmenu2,
 };
-/*e: enum Menu2 */
+/*e: enum [[Menu2]] */
 
-/*s: global menu2str */
+/*s: global [[menu2str]] */
 char	*menu2str[Nmenu2+1] = {
     "add  sec rtt",
     "add  % lost ",
     nil,
 };
-/*e: global menu2str */
+/*e: global [[menu2str]] */
 
 
 void	rttval(Machine*, long*, long*, long*);
 void	lostval(Machine*, long*, long*, long*);
 
-/*s: global menu2 */
+/*s: global [[menu2]] */
 Menu	menu2 = {menu2str, nil};
-/*e: global menu2 */
-/*s: global present */
+/*e: global [[menu2]] */
+/*s: global [[present]] */
 int		present[Nmenu2];
-/*e: global present */
-/*s: global newvaluefn */
+/*e: global [[present]] */
+/*s: global [[newvaluefn]] */
 void		(*newvaluefn[Nmenu2])(Machine*, long*, long*, long*) = {
     rttval,
     lostval,
 };
-/*e: global newvaluefn */
+/*e: global [[newvaluefn]] */
 
-/*s: global cols */
+/*s: global [[cols]] */
 Image		*cols[Ncolor][3];
-/*e: global cols */
-/*s: global graph */
+/*e: global [[cols]] */
+/*s: global [[graph]] */
 Graph		*graph;
-/*e: global graph */
-/*s: global mach */
+/*e: global [[graph]] */
+/*s: global [[mach]] */
 Machine		mach[NMACH];
-/*e: global mach */
-/*s: global mediumfont */
+/*e: global [[mach]] */
+/*s: global [[mediumfont]] */
 Font		*mediumfont;
-/*e: global mediumfont */
-/*s: global pids */
+/*e: global [[mediumfont]] */
+/*s: global [[pids]] */
 int		pids[NPROC];
-/*e: global pids */
-/*s: global npid */
+/*e: global [[pids]] */
+/*s: global [[npid]] */
 int		npid;
-/*e: global npid */
-/*s: global parity */
+/*e: global [[npid]] */
+/*s: global [[parity]] */
 int 		parity;	/* toggled to avoid patterns in textured background */
-/*e: global parity */
-/*s: global nmach */
+/*e: global [[parity]] */
+/*s: global [[nmach]] */
 int		nmach;
-/*e: global nmach */
-/*s: global ngraph */
+/*e: global [[nmach]] */
+/*s: global [[ngraph]] */
 int		ngraph;	/* totaly number is ngraph*nmach */
-/*e: global ngraph */
-/*s: global starttime */
+/*e: global [[ngraph]] */
+/*s: global [[starttime]] */
 long		starttime;
-/*e: global starttime */
-/*s: global pinginterval */
+/*e: global [[starttime]] */
+/*s: global [[pinginterval]] */
 int		pinginterval;
-/*e: global pinginterval */
+/*e: global [[pinginterval]] */
 
 void	dropgraph(int);
 void	addgraph(int);
@@ -179,7 +179,7 @@ long	rttscale(long);
 int	which2index(int);
 int	index2which(int);
 
-/*s: function killall */
+/*s: function [[killall]] */
 void
 killall(char *s)
 {
@@ -191,9 +191,9 @@ killall(char *s)
             postnote(PNPROC, pids[i], "kill");
     exits(s);
 }
-/*e: function killall */
+/*e: function [[killall]] */
 
-/*s: function emalloc */
+/*s: function [[emalloc]] */
 void*
 emalloc(ulong sz)
 {
@@ -206,9 +206,9 @@ emalloc(ulong sz)
     memset(v, 0, sz);
     return v;
 }
-/*e: function emalloc */
+/*e: function [[emalloc]] */
 
-/*s: function erealloc */
+/*s: function [[erealloc]] */
 void*
 erealloc(void *v, ulong sz)
 {
@@ -219,9 +219,9 @@ erealloc(void *v, ulong sz)
     }
     return v;
 }
-/*e: function erealloc */
+/*e: function [[erealloc]] */
 
-/*s: function estrdup */
+/*s: function [[estrdup]] */
 char*
 estrdup(char *s)
 {
@@ -232,9 +232,9 @@ estrdup(char *s)
     }
     return t;
 }
-/*e: function estrdup */
+/*e: function [[estrdup]] */
 
-/*s: function mkcol */
+/*s: function [[mkcol]] */
 void
 mkcol(int i, int c0, int c1, int c2)
 {
@@ -242,9 +242,9 @@ mkcol(int i, int c0, int c1, int c2)
     cols[i][1] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, c1);
     cols[i][2] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, c2);
 }
-/*e: function mkcol */
+/*e: function [[mkcol]] */
 
-/*s: function colinit */
+/*s: function [[colinit]] */
 void
 colinit(void)
 {
@@ -267,9 +267,9 @@ colinit(void)
     cols[5][1] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xCCCCCCFF);
     cols[5][2] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x888888FF);
 }
-/*e: function colinit */
+/*e: function [[colinit]] */
 
-/*s: function loadbuf */
+/*s: function [[loadbuf]] */
 int
 loadbuf(Machine *m, int *fd)
 {
@@ -289,9 +289,9 @@ loadbuf(Machine *m, int *fd)
     m->ebufp = m->buf+n;
     return 1;
 }
-/*e: function loadbuf */
+/*e: function [[loadbuf]] */
 
-/*s: function label */
+/*s: function [[label]] */
 void
 label(Point p, int dy, char *text)
 {
@@ -315,9 +315,9 @@ label(Point p, int dy, char *text)
         p.y += mediumfont->height-Ysqueeze;
     }
 }
-/*e: function label */
+/*e: function [[label]] */
 
-/*s: function hashmark */
+/*s: function [[hashmark]] */
 void
 hashmark(Point p, int dy, long v, long vmax, char *label)
 {
@@ -331,9 +331,9 @@ hashmark(Point p, int dy, long v, long vmax, char *label)
         string(view, Pt(x, y-mediumfont->height/2),
             display->black, ZP, mediumfont, label);
 }
-/*e: function hashmark */
+/*e: function [[hashmark]] */
 
-/*s: function hashmarks */
+/*s: function [[hashmarks]] */
 void
 hashmarks(Point p, int dy, int which)
 {
@@ -351,17 +351,17 @@ hashmarks(Point p, int dy, int which)
         break;
     }
 }
-/*e: function hashmarks */
+/*e: function [[hashmarks]] */
 
-/*s: function paritypt */
+/*s: function [[paritypt]] */
 Point
 paritypt(int x)
 {
     return Pt(x+parity, 0);
 }
-/*e: function paritypt */
+/*e: function [[paritypt]] */
 
-/*s: function datapoint */
+/*s: function [[datapoint]] */
 Point
 datapoint(Graph *g, int x, long v, long vmax)
 {
@@ -375,9 +375,9 @@ datapoint(Graph *g, int x, long v, long vmax)
         p.y = g->r.max.y-Dot;
     return p;
 }
-/*e: function datapoint */
+/*e: function [[datapoint]] */
 
-/*s: function drawdatum */
+/*s: function [[drawdatum]] */
 void
 drawdatum(Graph *g, int x, long prev, long v, long vmax)
 {
@@ -398,9 +398,9 @@ drawdatum(Graph *g, int x, long prev, long v, long vmax)
     }
     g->vmax = vmax;
 }
-/*e: function drawdatum */
+/*e: function [[drawdatum]] */
 
-/*s: function drawmark */
+/*s: function [[drawmark]] */
 void
 drawmark(Graph *g, int x)
 {
@@ -409,9 +409,9 @@ drawmark(Graph *g, int x)
     c = (g->colindex+1)&Ncolor;
     draw(view, Rect(x, g->r.min.y, x+1, g->r.max.y), cols[c][2], nil, ZP);
 }
-/*e: function drawmark */
+/*e: function [[drawmark]] */
 
-/*s: function redraw */
+/*s: function [[redraw]] */
 void
 redraw(Graph *g, int vmax)
 {
@@ -423,9 +423,9 @@ redraw(Graph *g, int vmax)
         drawdatum(g, g->r.max.x-i, g->data[i-1], g->data[i], vmax);
     drawdatum(g, g->r.min.x, g->data[i], g->data[i], vmax);
 }
-/*e: function redraw */
+/*e: function [[redraw]] */
 
-/*s: function clearmsg */
+/*s: function [[clearmsg]] */
 void
 clearmsg(Graph *g)
 {
@@ -433,9 +433,9 @@ clearmsg(Graph *g)
         draw(view, g->overtmp->r, g->overtmp, nil, g->overtmp->r.min);
     g->overflow = 0;
 }
-/*e: function clearmsg */
+/*e: function [[clearmsg]] */
 
-/*s: function drawmsg */
+/*s: function [[drawmsg]] */
 void
 drawmsg(Graph *g, char *msg)
 {
@@ -450,9 +450,9 @@ drawmsg(Graph *g, char *msg)
         msg[g->overtmplen] = 0;
     string(view, g->overtmp->r.min, display->black, ZP, mediumfont, msg);
 }
-/*e: function drawmsg */
+/*e: function [[drawmsg]] */
 
-/*s: function clearcursor */
+/*s: function [[clearcursor]] */
 void
 clearcursor(Graph *g)
 {
@@ -471,9 +471,9 @@ clearcursor(Graph *g)
         g->cursor = -1;
     }
 }
-/*e: function clearcursor */
+/*e: function [[clearcursor]] */
 
-/*s: function drawcursor */
+/*s: function [[drawcursor]] */
 void
 drawcursor(Graph *g, int x)
 {
@@ -482,9 +482,9 @@ drawcursor(Graph *g, int x)
 
     draw(view, Rect(x, g->r.min.y, x+1, g->r.max.y), cols[g->colindex][2], nil, ZP);
 }
-/*e: function drawcursor */
+/*e: function [[drawcursor]] */
 
-/*s: function update1 */
+/*s: function [[update1]] */
 void
 update1(Graph *g, long v, long vmax, long mark)
 {
@@ -521,17 +521,17 @@ update1(Graph *g, long v, long vmax, long mark)
     }
 
 }
-/*e: function update1 */
+/*e: function [[update1]] */
 
-/*s: function pinglost */
+/*s: function [[pinglost]] */
 void
 pinglost(Machine *m, Req*)
 {
     m->lostmsgs++;
 }
-/*e: function pinglost */
+/*e: function [[pinglost]] */
 
-/*s: function pingreply */
+/*s: function [[pingreply]] */
 void
 pingreply(Machine *m, Req *r)
 {
@@ -542,10 +542,10 @@ pingreply(Machine *m, Req *r)
     m->rcvdmsgs++;
     m->rttmsgs++;
 }
-/*e: function pingreply */
+/*e: function [[pingreply]] */
 
 
-/*s: function pingclean */
+/*s: function [[pingclean]] */
 void
 pingclean(Machine *m, ushort seq, vlong now, int)
 {
@@ -568,9 +568,9 @@ pingclean(Machine *m, ushort seq, vlong now, int)
             l = &(r->next);
     }
 }
-/*e: function pingclean */
+/*e: function [[pingclean]] */
 
-/*s: function pingsend */
+/*s: function [[pingsend]] */
 /* IPv4 only */
 void
 pingsend(Machine *m)
@@ -610,9 +610,9 @@ pingsend(Machine *m)
     }
     m->seq++;
 }
-/*e: function pingsend */
+/*e: function [[pingsend]] */
 
-/*s: function pingrcv */
+/*s: function [[pingrcv]] */
 /* IPv4 only */
 void
 pingrcv(void *arg)
@@ -648,9 +648,9 @@ pingrcv(void *arg)
         unlock(m);
     }
 }
-/*e: function pingrcv */
+/*e: function [[pingrcv]] */
 
-/*s: function initmach */
+/*s: function [[initmach]] */
 void
 initmach(Machine *m, char *name)
 {
@@ -671,9 +671,9 @@ initmach(Machine *m, char *name)
         sysfatal("dialing %s: %r", m->name);
     startproc(pingrcv, m);
 }
-/*e: function initmach */
+/*e: function [[initmach]] */
 
-/*s: function rttscale */
+/*s: function [[rttscale]] */
 long
 rttscale(long x)
 {
@@ -684,9 +684,9 @@ rttscale(long x)
         x = 0;
     return x;
 }
-/*e: function rttscale */
+/*e: function [[rttscale]] */
 
-/*s: function rttunscale */
+/*s: function [[rttunscale]] */
 double
 rttunscale(long x)
 {
@@ -696,9 +696,9 @@ rttunscale(long x)
     dx = x;
     return pow(10.0, dx/10.0);
 }
-/*e: function rttunscale */
+/*e: function [[rttunscale]] */
 
-/*s: function rttval */
+/*s: function [[rttval]] */
 void
 rttval(Machine *m, long *v, long *vmax, long *mark)
 {
@@ -716,9 +716,9 @@ rttval(Machine *m, long *v, long *vmax, long *mark)
     *vmax = Rttmax;
     *mark = 0;
 }
-/*e: function rttval */
+/*e: function [[rttval]] */
 
-/*s: function lostval */
+/*s: function [[lostval]] */
 void
 lostval(Machine *m, long *v, long *vmax, long *mark)
 {
@@ -740,13 +740,13 @@ lostval(Machine *m, long *v, long *vmax, long *mark)
     *v = x;
     *vmax = 100;
 }
-/*e: function lostval */
+/*e: function [[lostval]] */
 
-/*s: global catchalarm */
+/*s: global [[catchalarm]] */
 jmp_buf catchalarm;
-/*e: global catchalarm */
+/*e: global [[catchalarm]] */
 
-/*s: function alarmed */
+/*s: function [[alarmed]] */
 void
 alarmed(void *a, char *s)
 {
@@ -754,18 +754,18 @@ alarmed(void *a, char *s)
         notejmp(a, catchalarm, 1);
     noted(NDFLT);
 }
-/*e: function alarmed */
+/*e: function [[alarmed]] */
 
-/*s: function usage (networking/ip/gping.c) */
+/*s: function [[usage]]([[(networking/ip/gping.c)]]) */
 void
 usage(void)
 {
     fprint(2, "usage: %s machine [machine...]\n", argv0);
     exits("usage");
 }
-/*e: function usage (networking/ip/gping.c) */
+/*e: function [[usage]]([[(networking/ip/gping.c)]]) */
 
-/*s: function addgraph */
+/*s: function [[addgraph]] */
 void
 addgraph(int n)
 {
@@ -797,9 +797,9 @@ addgraph(int n)
     present[n] = 1;
     nadd++;
 }
-/*e: function addgraph */
+/*e: function [[addgraph]] */
 
-/*s: function which2index */
+/*s: function [[which2index]] */
 int
 which2index(int which)
 {
@@ -818,9 +818,9 @@ which2index(int which)
     }
     return n;
 }
-/*e: function which2index */
+/*e: function [[which2index]] */
 
-/*s: function index2which */
+/*s: function [[index2which]] */
 int
 index2which(int index)
 {
@@ -839,9 +839,9 @@ index2which(int index)
     }
     return n;
 }
-/*e: function index2which */
+/*e: function [[index2which]] */
 
-/*s: function dropgraph */
+/*s: function [[dropgraph]] */
 void
 dropgraph(int which)
 {
@@ -866,9 +866,9 @@ dropgraph(int which)
     ngraph--;
     present[which] = 0;
 }
-/*e: function dropgraph */
+/*e: function [[dropgraph]] */
 
-/*s: function addmachine */
+/*s: function [[addmachine]] */
 void
 addmachine(char *name)
 {
@@ -880,10 +880,10 @@ addmachine(char *name)
         sysfatal("too many machines");
     initmach(&mach[nmach++], name);
 }
-/*e: function addmachine */
+/*e: function [[addmachine]] */
 
 
-/*s: function resize */
+/*s: function [[resize]] */
 void
 resize(void)
 {
@@ -987,9 +987,9 @@ resize(void)
 
     flushimage(display, 1);
 }
-/*e: function resize */
+/*e: function [[resize]] */
 
-/*s: function eresized */
+/*s: function [[eresized]] */
 void
 eresized(int new)
 {
@@ -1001,9 +1001,9 @@ eresized(int new)
     resize();
     unlockdisplay(display);
 }
-/*e: function eresized */
+/*e: function [[eresized]] */
 
-/*s: function dobutton2 */
+/*s: function [[dobutton2]] */
 void
 dobutton2(Mouse *m)
 {
@@ -1023,9 +1023,9 @@ dobutton2(Mouse *m)
         resize();
     }
 }
-/*e: function dobutton2 */
+/*e: function [[dobutton2]] */
 
-/*s: function dobutton1 */
+/*s: function [[dobutton1]] */
 void
 dobutton1(Mouse *m)
 {
@@ -1073,9 +1073,9 @@ dobutton1(Mouse *m)
     drawmsg(g, g->msg);
     drawcursor(g, m->xy.x);
 }
-/*e: function dobutton1 */
+/*e: function [[dobutton1]] */
 
-/*s: function mouseproc */
+/*s: function [[mouseproc]] */
 void
 mouseproc(void*)
 {
@@ -1094,9 +1094,9 @@ mouseproc(void*)
         }
     }
 }
-/*e: function mouseproc */
+/*e: function [[mouseproc]] */
 
-/*s: function startproc */
+/*s: function [[startproc]] */
 void
 startproc(void (*f)(void*), void *arg)
 {
@@ -1113,9 +1113,9 @@ startproc(void (*f)(void*), void *arg)
     }
     pids[npid++] = pid;
 }
-/*e: function startproc */
+/*e: function [[startproc]] */
 
-/*s: function main (networking/ip/gping.c) */
+/*s: function [[main]]([[(networking/ip/gping.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -1197,5 +1197,5 @@ main(int argc, char *argv[])
         sleep(pinginterval/nmach);
     }
 }
-/*e: function main (networking/ip/gping.c) */
+/*e: function [[main]]([[(networking/ip/gping.c)]]) */
 /*e: networking/ip/gping.c */

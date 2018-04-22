@@ -6,7 +6,7 @@
 #include <ndb.h>
 #include "dat.h"
 
-/*s: enum _anon_ (networking/ip/dhcpd/dhcpd.c) */
+/*s: enum [[_anon_ (networking/ip/dhcpd/dhcpd.c)]] */
 /*
  *	ala rfc2131
  */
@@ -14,10 +14,10 @@
 enum {
     Maxloglen = 1024,
 };
-/*e: enum _anon_ (networking/ip/dhcpd/dhcpd.c) */
+/*e: enum [[_anon_ (networking/ip/dhcpd/dhcpd.c)]] */
 
 typedef struct Req Req;
-/*s: struct Req (networking/ip/dhcpd/dhcpd.c) */
+/*s: struct [[Req]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 struct Req
 {
     int	fd;			/* for reply */
@@ -51,79 +51,79 @@ struct Req
 
     uchar buf[2*1024];		/* message buffer */
 };
-/*e: struct Req (networking/ip/dhcpd/dhcpd.c) */
+/*e: struct [[Req]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: constant TFTP */
+/*s: constant [[TFTP]] */
 #define TFTP "/lib/tftpd"
-/*e: constant TFTP */
+/*e: constant [[TFTP]] */
 
-/*s: global blog */
+/*s: global [[blog]] */
 char	*blog = "ipboot";
-/*e: global blog */
-/*s: global mysysname (networking/ip/dhcpd/dhcpd.c) */
+/*e: global [[blog]] */
+/*s: global [[mysysname]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 char	mysysname[64];
-/*e: global mysysname (networking/ip/dhcpd/dhcpd.c) */
-/*s: global ipifcs (networking/ip/dhcpd/dhcpd.c) */
+/*e: global [[mysysname]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
+/*s: global [[ipifcs]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 Ipifc	*ipifcs;
-/*e: global ipifcs (networking/ip/dhcpd/dhcpd.c) */
-/*s: global debug (networking/ip/dhcpd/dhcpd.c) */
+/*e: global [[ipifcs]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
+/*s: global [[debug]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 int	debug;
-/*e: global debug (networking/ip/dhcpd/dhcpd.c) */
-/*s: global nobootp */
+/*e: global [[debug]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
+/*s: global [[nobootp]] */
 int	nobootp;
-/*e: global nobootp */
-/*s: global now (networking/ip/dhcpd/dhcpd.c) */
+/*e: global [[nobootp]] */
+/*s: global [[now]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 long	now;
-/*e: global now (networking/ip/dhcpd/dhcpd.c) */
+/*e: global [[now]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 int	slowstat, slowdyn;
-/*s: global net (networking/ip/dhcpd/dhcpd.c) */
+/*s: global [[net]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 char	net[256];
-/*e: global net (networking/ip/dhcpd/dhcpd.c) */
+/*e: global [[net]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: global pptponly */
+/*s: global [[pptponly]] */
 int	pptponly;	/* only answer request that came from the pptp server */
-/*e: global pptponly */
+/*e: global [[pptponly]] */
 int	mute, mutestat;
-/*s: global minlease */
+/*s: global [[minlease]] */
 int	minlease = MinLease;
-/*e: global minlease */
-/*s: global staticlease */
+/*e: global [[minlease]] */
+/*s: global [[staticlease]] */
 int	staticlease = StaticLease;
-/*e: global staticlease */
+/*e: global [[staticlease]] */
 
-/*s: global start (networking/ip/dhcpd/dhcpd.c) */
+/*s: global [[start]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 uvlong	start;
-/*e: global start (networking/ip/dhcpd/dhcpd.c) */
+/*e: global [[start]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: global v6opts */
+/*s: global [[v6opts]] */
 static int v6opts;
-/*e: global v6opts */
+/*e: global [[v6opts]] */
 
-/*s: global plan9opt */
+/*s: global [[plan9opt]] */
 /* option magic */
 char plan9opt[4] = { 'p', '9', ' ', ' ' };
-/*e: global plan9opt */
-/*s: global genericopt */
+/*e: global [[plan9opt]] */
+/*s: global [[genericopt]] */
 char genericopt[4] = { 0x63, 0x82, 0x53, 0x63 };
-/*e: global genericopt */
+/*e: global [[genericopt]] */
 
-/*s: global zeros */
+/*s: global [[zeros]] */
 /* well known addresses */
 uchar zeros[Maxhwlen];
-/*e: global zeros */
+/*e: global [[zeros]] */
 
-/*s: global optbuf */
+/*s: global [[optbuf]] */
 /* option debug buffer */
 char optbuf[1024];
-/*e: global optbuf */
-/*s: global op */
+/*e: global [[optbuf]] */
+/*s: global [[op]] */
 char *op;
-/*e: global op */
-/*s: global oe */
+/*e: global [[op]] */
+/*s: global [[oe]] */
 char *oe = optbuf + sizeof(optbuf);
-/*e: global oe */
+/*e: global [[oe]] */
 
-/*s: global optname */
+/*s: global [[optname]] */
 char *optname[256] =
 {
 [OBend]			"end",
@@ -205,7 +205,7 @@ char *optname[256] =
 [ODtftpserver]		"tftpserver",
 [ODbootfile]		"bf",
 };
-/*e: global optname */
+/*e: global [[optname]] */
 
 void	addropt(Req*, int, uchar*);
 void	addrsopt(Req*, int, uchar**, int);
@@ -241,7 +241,7 @@ int	validip(uchar*);
 void	vectoropt(Req*, int, uchar*, int);
 void	warning(int, char*, ...);
 
-/*s: function timestamp */
+/*s: function [[timestamp]] */
 void
 timestamp(char *tag)
 {
@@ -250,9 +250,9 @@ timestamp(char *tag)
     t = nsec()/1000;
     syslog(0, blog, "%s %lludµs", tag, t - start);
 }
-/*e: function timestamp */
+/*e: function [[timestamp]] */
 
-/*s: function usage (networking/ip/dhcpd/dhcpd.c) */
+/*s: function [[usage]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 void
 usage(void)
 {
@@ -260,9 +260,9 @@ usage(void)
         "[-x netmtpt] [-Z staticlease] addr n [addr n] ...\n");
     exits("usage");
 }
-/*e: function usage (networking/ip/dhcpd/dhcpd.c) */
+/*e: function [[usage]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: function main (networking/ip/dhcpd/dhcpd.c) */
+/*s: function [[main]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -371,9 +371,9 @@ main(int argc, char **argv)
             free(r.id);
     }
 }
-/*e: function main (networking/ip/dhcpd/dhcpd.c) */
+/*e: function [[main]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: function proto */
+/*s: function [[proto]] */
 void
 proto(Req *rp, int n)
 {
@@ -455,18 +455,18 @@ proto(Req *rp, int n)
         bootp(rp);
     timestamp("done");
 }
-/*e: function proto */
+/*e: function [[proto]] */
 
-/*s: function slowdelay */
+/*s: function [[slowdelay]] */
 static void
 slowdelay(Req *rp)
 {
     if(slowstat && rp->staticbinding || slowdyn && !rp->staticbinding)
         sleep(2000);
 }
-/*e: function slowdelay */
+/*e: function [[slowdelay]] */
 
-/*s: function dhcp */
+/*s: function [[dhcp]] */
 void
 dhcp(Req *rp)
 {
@@ -491,9 +491,9 @@ dhcp(Req *rp)
         break;
     }
 }
-/*e: function dhcp */
+/*e: function [[dhcp]] */
 
-/*s: function rcvdiscover */
+/*s: function [[rcvdiscover]] */
 void
 rcvdiscover(Req *rp)
 {
@@ -546,9 +546,9 @@ rcvdiscover(Req *rp)
     mkoffer(b, rp->id, rp->leasetime);
     sendoffer(rp, b->ip, b->offer);
 }
-/*e: function rcvdiscover */
+/*e: function [[rcvdiscover]] */
 
-/*s: function rcvrequest */
+/*s: function [[rcvrequest]] */
 void
 rcvrequest(Req *rp)
 {
@@ -696,9 +696,9 @@ rcvrequest(Req *rp)
         sendack(rp, b->ip, b->offer, 1);
     }
 }
-/*e: function rcvrequest */
+/*e: function [[rcvrequest]] */
 
-/*s: function rcvdecline */
+/*s: function [[rcvdecline]] */
 void
 rcvdecline(Req *rp)
 {
@@ -720,9 +720,9 @@ rcvdecline(Req *rp)
     mkoffer(b, buf, 0x7fffffff);
     commitbinding(b);
 }
-/*e: function rcvdecline */
+/*e: function [[rcvdecline]] */
 
-/*s: function rcvrelease */
+/*s: function [[rcvrelease]] */
 void
 rcvrelease(Req *rp)
 {
@@ -746,9 +746,9 @@ rcvrelease(Req *rp)
     if(releasebinding(b, rp->id) < 0)
         warning(0, "release: couldn't release");
 }
-/*e: function rcvrelease */
+/*e: function [[rcvrelease]] */
 
-/*s: function rcvinform */
+/*s: function [[rcvinform]] */
 void
 rcvinform(Req *rp)
 {
@@ -767,9 +767,9 @@ rcvinform(Req *rp)
     }
     sendack(rp, b->ip, 0, 0);
 }
-/*e: function rcvinform */
+/*e: function [[rcvinform]] */
 
-/*s: function setsiaddr */
+/*s: function [[setsiaddr]] */
 int
 setsiaddr(uchar *siaddr, uchar *saddr, uchar *laddr)
 {
@@ -781,17 +781,17 @@ setsiaddr(uchar *siaddr, uchar *saddr, uchar *laddr)
         return 1;
     }
 }
-/*e: function setsiaddr */
+/*e: function [[setsiaddr]] */
 
-/*s: function ismuted */
+/*s: function [[ismuted]] */
 int
 ismuted(Req *rp)
 {
     return mute || (mutestat && rp->staticbinding);
 }
-/*e: function ismuted */
+/*e: function [[ismuted]] */
 
-/*s: function sendoffer */
+/*s: function [[sendoffer]] */
 void
 sendoffer(Req *rp, uchar *ip, int offer)
 {
@@ -851,9 +851,9 @@ sendoffer(Req *rp, uchar *ip, int offer)
     if(!ismuted(rp) && write(rp->fd, rp->buf, n) != n)
         warning(0, "offer: write failed: %r");
 }
-/*e: function sendoffer */
+/*e: function [[sendoffer]] */
 
-/*s: function sendack */
+/*s: function [[sendack]] */
 void
 sendack(Req *rp, uchar *ip, int offer, int sendlease)
 {
@@ -914,9 +914,9 @@ sendack(Req *rp, uchar *ip, int offer, int sendlease)
     if(!ismuted(rp) && write(rp->fd, rp->buf, n) != n)
         warning(0, "ack: write failed: %r");
 }
-/*e: function sendack */
+/*e: function [[sendack]] */
 
-/*s: function sendnak */
+/*s: function [[sendnak]] */
 void
 sendnak(Req *rp, char *msg)
 {
@@ -969,9 +969,9 @@ sendnak(Req *rp, char *msg)
     if(!ismuted(rp) && write(rp->fd, rp->buf, n) != n)
         warning(0, "nak: write failed: %r");
 }
-/*e: function sendnak */
+/*e: function [[sendnak]] */
 
-/*s: function bootp */
+/*s: function [[bootp]] */
 void
 bootp(Req *rp)
 {
@@ -1112,9 +1112,9 @@ bootp(Req *rp)
             bp->ciaddr, bp->giaddr, bp->yiaddr, bp->siaddr,
             optbuf);
 }
-/*e: function bootp */
+/*e: function [[bootp]] */
 
-/*s: function parseoptions (networking/ip/dhcpd/dhcpd.c) */
+/*s: function [[parseoptions]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 void
 parseoptions(Req *rp)
 {
@@ -1192,9 +1192,9 @@ parseoptions(Req *rp)
         }
     }
 }
-/*e: function parseoptions (networking/ip/dhcpd/dhcpd.c) */
+/*e: function [[parseoptions]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: function remrequested */
+/*s: function [[remrequested]] */
 void
 remrequested(Req *rp, int opt)
 {
@@ -1204,9 +1204,9 @@ remrequested(Req *rp, int opt)
     if(p != nil)
         *p = OBpad;
 }
-/*e: function remrequested */
+/*e: function [[remrequested]] */
 
-/*s: function miscoptions */
+/*s: function [[miscoptions]] */
 void
 miscoptions(Req *rp, uchar *ip)
 {
@@ -1367,9 +1367,9 @@ miscoptions(Req *rp, uchar *ip)
 
     ndbfree(t);
 }
-/*e: function miscoptions */
+/*e: function [[miscoptions]] */
 
-/*s: function openlisten (networking/ip/dhcpd/dhcpd.c) */
+/*s: function [[openlisten]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 int
 openlisten(char *net)
 {
@@ -1389,9 +1389,9 @@ openlisten(char *net)
         fatal(1, "open udp data");
     return fd;
 }
-/*e: function openlisten (networking/ip/dhcpd/dhcpd.c) */
+/*e: function [[openlisten]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: function fatal (networking/ip/dhcpd/dhcpd.c) */
+/*s: function [[fatal]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 void
 fatal(int syserr, char *fmt, ...)
 {
@@ -1407,9 +1407,9 @@ fatal(int syserr, char *fmt, ...)
         syslog(1, blog, "%s", buf);
     exits(buf);
 }
-/*e: function fatal (networking/ip/dhcpd/dhcpd.c) */
+/*e: function [[fatal]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: function warning (networking/ip/dhcpd/dhcpd.c) */
+/*s: function [[warning]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 void
 warning(int syserr, char *fmt, ...)
 {
@@ -1429,9 +1429,9 @@ warning(int syserr, char *fmt, ...)
             fprint(2, "%s\n", buf);
     }
 }
-/*e: function warning (networking/ip/dhcpd/dhcpd.c) */
+/*e: function [[warning]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: function readsysname */
+/*s: function [[readsysname]] */
 char*
 readsysname(void)
 {
@@ -1453,9 +1453,9 @@ readsysname(void)
         return "unknown";
     return p;
 }
-/*e: function readsysname */
+/*e: function [[readsysname]] */
 
-/*s: function validip (networking/ip/dhcpd/dhcpd.c) */
+/*s: function [[validip]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 extern int
 validip(uchar *ip)
 {
@@ -1465,9 +1465,9 @@ validip(uchar *ip)
         return 0;
     return 1;
 }
-/*e: function validip (networking/ip/dhcpd/dhcpd.c) */
+/*e: function [[validip]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: function longopt */
+/*s: function [[longopt]] */
 void
 longopt(Req *rp, int t, long v)
 {
@@ -1480,9 +1480,9 @@ longopt(Req *rp, int t, long v)
 
     op = seprint(op, oe, "%s(%ld)", optname[t], v);
 }
-/*e: function longopt */
+/*e: function [[longopt]] */
 
-/*s: function addropt */
+/*s: function [[addropt]] */
 void
 addropt(Req *rp, int t, uchar *ip)
 {
@@ -1500,9 +1500,9 @@ addropt(Req *rp, int t, uchar *ip)
 
     op = seprint(op, oe, "%s(%I)", optname[t], ip);
 }
-/*e: function addropt */
+/*e: function [[addropt]] */
 
-/*s: function maskopt */
+/*s: function [[maskopt]] */
 void
 maskopt(Req *rp, int t, uchar *ip)
 {
@@ -1515,9 +1515,9 @@ maskopt(Req *rp, int t, uchar *ip)
 
     op = seprint(op, oe, "%s(%M)", optname[t], ip);
 }
-/*e: function maskopt */
+/*e: function [[maskopt]] */
 
-/*s: function addrsopt */
+/*s: function [[addrsopt]] */
 void
 addrsopt(Req *rp, int t, uchar **ip, int i)
 {
@@ -1553,9 +1553,9 @@ addrsopt(Req *rp, int t, uchar **ip, int i)
     }
     op = seprint(op, oe, ")");
 }
-/*e: function addrsopt */
+/*e: function [[addrsopt]] */
 
-/*s: function p9addrsopt */
+/*s: function [[p9addrsopt]] */
 void
 p9addrsopt(Req *rp, int t, uchar **ip, int i)
 {
@@ -1589,9 +1589,9 @@ p9addrsopt(Req *rp, int t, uchar **ip, int i)
     rp->p[1] = pkt - payload;	/* payload length */
     rp->p = (uchar *)pkt;
 }
-/*e: function p9addrsopt */
+/*e: function [[p9addrsopt]] */
 
-/*s: function byteopt */
+/*s: function [[byteopt]] */
 void
 byteopt(Req *rp, int t, uchar v)
 {
@@ -1603,9 +1603,9 @@ byteopt(Req *rp, int t, uchar v)
 
     op = seprint(op, oe, "%s(%d)", optname[t], v);
 }
-/*e: function byteopt */
+/*e: function [[byteopt]] */
 
-/*s: function termopt */
+/*s: function [[termopt]] */
 void
 termopt(Req *rp)
 {
@@ -1613,9 +1613,9 @@ termopt(Req *rp)
         return;
     *rp->p++ = OBend;
 }
-/*e: function termopt */
+/*e: function [[termopt]] */
 
-/*s: function stringopt */
+/*s: function [[stringopt]] */
 void
 stringopt(Req *rp, int t, char *str)
 {
@@ -1633,9 +1633,9 @@ stringopt(Req *rp, int t, char *str)
 
     op = seprint(op, oe, "%s(%s)", optname[t], str);
 }
-/*e: function stringopt */
+/*e: function [[stringopt]] */
 
-/*s: function vectoropt */
+/*s: function [[vectoropt]] */
 void
 vectoropt(Req *rp, int t, uchar *v, int n)
 {
@@ -1659,9 +1659,9 @@ vectoropt(Req *rp, int t, uchar *v, int n)
         op = seprint(op, oe, " %ud", v[i]);
     op = seprint(op, oe, ")");
 }
-/*e: function vectoropt */
+/*e: function [[vectoropt]] */
 
-/*s: function fromhex */
+/*s: function [[fromhex]] */
 int
 fromhex(int x)
 {
@@ -1669,9 +1669,9 @@ fromhex(int x)
         return x - '0';
     return x - 'a';
 }
-/*e: function fromhex */
+/*e: function [[fromhex]] */
 
-/*s: function hexopt */
+/*s: function [[hexopt]] */
 void
 hexopt(Req *rp, int t, char *str)
 {
@@ -1692,9 +1692,9 @@ hexopt(Req *rp, int t, char *str)
 
     op = seprint(op, oe, "%s(%s)", optname[t], str);
 }
-/*e: function hexopt */
+/*e: function [[hexopt]] */
 
-/*s: function arpenter (networking/ip/dhcpd/dhcpd.c) */
+/*s: function [[arpenter]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 void
 arpenter(uchar *ip, uchar *ether)
 {
@@ -1710,9 +1710,9 @@ arpenter(uchar *ip, uchar *ether)
     fprint(f, "add ether %I %E", ip, ether);
     close(f);
 }
-/*e: function arpenter (networking/ip/dhcpd/dhcpd.c) */
+/*e: function [[arpenter]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: global dhcpmsgname */
+/*s: global [[dhcpmsgname]] */
 char *dhcpmsgname[] =
 {
     [Discover]	"Discover",
@@ -1724,9 +1724,9 @@ char *dhcpmsgname[] =
     [Release]	"Release",
     [Inform]	"Inform",
 };
-/*e: global dhcpmsgname */
+/*e: global [[dhcpmsgname]] */
 
-/*s: function logdhcp */
+/*s: function [[logdhcp]] */
 void
 logdhcp(Req *rp)
 {
@@ -1765,9 +1765,9 @@ logdhcp(Req *rp)
     USED(p);
     syslog(0, blog, "%s", buf);
 }
-/*e: function logdhcp */
+/*e: function [[logdhcp]] */
 
-/*s: function logdhcpout */
+/*s: function [[logdhcpout]] */
 void
 logdhcpout(Req *rp, char *type)
 {
@@ -1775,9 +1775,9 @@ logdhcpout(Req *rp, char *type)
         type, rp->up->laddr, rp->up->raddr, rp->id,
         rp->bp->ciaddr, rp->bp->giaddr, rp->bp->yiaddr, rp->bp->siaddr, optbuf);
 }
-/*e: function logdhcpout */
+/*e: function [[logdhcpout]] */
 
-/*s: function ding (networking/ip/dhcpd/dhcpd.c) */
+/*s: function [[ding]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 /*
  *  if we get behind, it's useless to try answering since the sender
  *  will probably have retransmitted with a differnt sequence number.
@@ -1791,9 +1791,9 @@ ding(void*, char *msg)
     else
         noted(NDFLT);
 }
-/*e: function ding (networking/ip/dhcpd/dhcpd.c) */
+/*e: function [[ding]]([[(networking/ip/dhcpd/dhcpd.c)]]) */
 
-/*s: function readlast */
+/*s: function [[readlast]] */
 int
 readlast(int fd, uchar *buf, int len)
 {
@@ -1815,5 +1815,5 @@ readlast(int fd, uchar *buf, int len)
     }
     return read(fd, buf, len);
 }
-/*e: function readlast */
+/*e: function [[readlast]] */
 /*e: networking/ip/dhcpd/dhcpd.c */

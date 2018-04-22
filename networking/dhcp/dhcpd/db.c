@@ -7,7 +7,7 @@
 #include <ctype.h>
 #include "dat.h"
 
-/*s: global bcache */
+/*s: global [[bcache]] */
 /*
  *  format of a binding entry:
  *	char ipaddr[32];
@@ -16,15 +16,15 @@
  *	char otime[10];
  */
 Binding *bcache;
-/*e: global bcache */
-/*s: global bfirst */
+/*e: global [[bcache]] */
+/*s: global [[bfirst]] */
 uchar bfirst[IPaddrlen];
-/*e: global bfirst */
-/*s: global binddir */
+/*e: global [[bfirst]] */
+/*s: global [[binddir]] */
 char *binddir = "/lib/ndb/dhcp";
-/*e: global binddir */
+/*e: global [[binddir]] */
 
-/*s: function hex (networking/ip/dhcpd/db.c) */
+/*s: function [[hex]]([[(networking/ip/dhcpd/db.c)]]) */
 /*
  *  convert a byte array to hex
  */
@@ -35,8 +35,8 @@ hex(int x)
         return x + '0';
     return x - 10 + 'a';
 }
-/*e: function hex (networking/ip/dhcpd/db.c) */
-/*s: function tohex */
+/*e: function [[hex]]([[(networking/ip/dhcpd/db.c)]]) */
+/*s: function [[tohex]] */
 extern char*
 tohex(char *hdr, uchar *p, int len)
 {
@@ -56,9 +56,9 @@ tohex(char *hdr, uchar *p, int len)
     *sp = 0;
     return s;
 }
-/*e: function tohex */
+/*e: function [[tohex]] */
 
-/*s: function toid */
+/*s: function [[toid]] */
 /*
  *  convert a client id to a string.  If it's already
  *  ascii, leave it be.  Otherwise, convert it to hex.
@@ -77,9 +77,9 @@ toid(uchar *p, int n)
     s[n] = 0;
     return s;
 }
-/*e: function toid */
+/*e: function [[toid]] */
 
-/*s: function incip */
+/*s: function [[incip]] */
 /*
  *  increment an ip address
  */
@@ -96,9 +96,9 @@ incip(uchar *ip)
             break;
     }
 }
-/*e: function incip */
+/*e: function [[incip]] */
 
-/*s: function lockopen */
+/*s: function [[lockopen]] */
 /*
  *  find a binding for an id or hardware address
  */
@@ -129,9 +129,9 @@ lockopen(char *file)
     }
     return -1;
 }
-/*e: function lockopen */
+/*e: function [[lockopen]] */
 
-/*s: function setbinding */
+/*s: function [[setbinding]] */
 void
 setbinding(Binding *b, char *id, long t)
 {
@@ -141,9 +141,9 @@ setbinding(Binding *b, char *id, long t)
     b->boundto = strdup(id);
     b->lease = t;
 }
-/*e: function setbinding */
+/*e: function [[setbinding]] */
 
-/*s: function parsebinding */
+/*s: function [[parsebinding]] */
 static void
 parsebinding(Binding *b, char *buf)
 {
@@ -164,9 +164,9 @@ parsebinding(Binding *b, char *buf)
     /* replace any past info */
     setbinding(b, id, t);
 }
-/*e: function parsebinding */
+/*e: function [[parsebinding]] */
 
-/*s: function writebinding */
+/*s: function [[writebinding]] */
 static int
 writebinding(int fd, Binding *b)
 {
@@ -184,9 +184,9 @@ writebinding(int fd, Binding *b)
     free(d);
     return 0;
 }
-/*e: function writebinding */
+/*e: function [[writebinding]] */
 
-/*s: function syncbinding */
+/*s: function [[syncbinding]] */
 /*
  *  synchronize cached binding with file.  the file always wins.
  */
@@ -227,9 +227,9 @@ syncbinding(Binding *b, int returnfd)
     close(fd);
     return 0;
 }
-/*e: function syncbinding */
+/*e: function [[syncbinding]] */
 
-/*s: function samenet */
+/*s: function [[samenet]] */
 extern int
 samenet(uchar *ip, Info *iip)
 {
@@ -238,9 +238,9 @@ samenet(uchar *ip, Info *iip)
     maskip(iip->ipmask, ip, x);
     return ipcmp(x, iip->ipnet) == 0;
 }
-/*e: function samenet */
+/*e: function [[samenet]] */
 
-/*s: function initbinding */
+/*s: function [[initbinding]] */
 /*
  *  create a record for each binding
  */
@@ -252,9 +252,9 @@ initbinding(uchar *first, int n)
         incip(first);
     }
 }
-/*e: function initbinding */
+/*e: function [[initbinding]] */
 
-/*s: function iptobinding */
+/*s: function [[iptobinding]] */
 /*
  *  find a binding for a specific ip address
  */
@@ -280,9 +280,9 @@ iptobinding(uchar *ip, int mk)
     syncbinding(b, 0);
     return b;
 }
-/*e: function iptobinding */
+/*e: function [[iptobinding]] */
 
-/*s: function lognolease */
+/*s: function [[lognolease]] */
 static void
 lognolease(Binding *b)
 {
@@ -297,9 +297,9 @@ lognolease(Binding *b)
         b->ip, b->boundto != nil ? b->boundto : "?", b->lease);
     b->lastcomplained = now;
 }
-/*e: function lognolease */
+/*e: function [[lognolease]] */
 
-/*s: function idtobinding */
+/*s: function [[idtobinding]] */
 /*
  *  find a free binding for a hw addr or id on the same network as iip
  */
@@ -371,9 +371,9 @@ idtobinding(char *id, Info *iip, int ping)
     /* nothing worked, give up */
     return 0;
 }
-/*e: function idtobinding */
+/*e: function [[idtobinding]] */
 
-/*s: function mkoffer */
+/*s: function [[mkoffer]] */
 /*
  *  create an offer
  */
@@ -392,9 +392,9 @@ mkoffer(Binding *b, char *id, long leasetime)
     b->offer = leasetime;
     b->expoffer = now + OfferTimeout;
 }
-/*e: function mkoffer */
+/*e: function [[mkoffer]] */
 
-/*s: function idtooffer */
+/*s: function [[idtooffer]] */
 /*
  *  find an offer for this id
  */
@@ -415,9 +415,9 @@ idtooffer(char *id, Info *iip)
     }
     return 0;
 }
-/*e: function idtooffer */
+/*e: function [[idtooffer]] */
 
-/*s: function commitbinding */
+/*s: function [[commitbinding]] */
 /*
  *  commit a lease, this could fail
  */
@@ -448,9 +448,9 @@ commitbinding(Binding *b)
     close(fd);
     return 0;
 }
-/*e: function commitbinding */
+/*e: function [[commitbinding]] */
 
-/*s: function releasebinding */
+/*s: function [[releasebinding]] */
 /*
  *  commit a lease, this could fail
  */
@@ -479,5 +479,5 @@ releasebinding(Binding *b, char *id)
     close(fd);
     return 0;
 }
-/*e: function releasebinding */
+/*e: function [[releasebinding]] */
 /*e: networking/ip/dhcpd/db.c */

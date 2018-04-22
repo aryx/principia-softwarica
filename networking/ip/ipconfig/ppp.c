@@ -4,10 +4,10 @@
 #include <ip.h>
 #include <bio.h>
 #include <ndb.h>
-#include "../../dhcp/dhcp.h"
+#include "../dhcp.h"
 #include "ipconfig.h"
 
-/*s: function pppbinddev */
+/*s: function [[pppbinddev]] */
 void
 pppbinddev(void)
 {
@@ -59,6 +59,6 @@ pppbinddev(void)
     noconfig = 1;
     getndb();
 }
-/*e: function pppbinddev */
+/*e: function [[pppbinddev]] */
 
 /*e: networking/ip/ipconfig/ppp.c */

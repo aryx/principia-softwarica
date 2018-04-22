@@ -9,14 +9,14 @@
 #include <ndb.h>
 #include "dat.h"
 
-/*s: global db (networking/ip/dhcpd/ndb.c) */
+/*s: global [[db]]([[(networking/ip/dhcpd/ndb.c)]]) */
 static Ndb *db;
-/*e: global db (networking/ip/dhcpd/ndb.c) */
-/*s: global ndbfile */
+/*e: global [[db]]([[(networking/ip/dhcpd/ndb.c)]]) */
+/*s: global [[ndbfile]] */
 char *ndbfile;
-/*e: global ndbfile */
+/*e: global [[ndbfile]] */
 
-/*s: function opendb */
+/*s: function [[opendb]] */
 /*
  * open ndbfile as db if not already open.  also check for stale data
  * and reload as needed.
@@ -38,9 +38,9 @@ opendb(void)
     }
     return db;
 }
-/*e: function opendb */
+/*e: function [[opendb]] */
 
-/*s: function findlifc */
+/*s: function [[findlifc]] */
 Iplifc*
 findlifc(uchar *ip)
 {
@@ -59,9 +59,9 @@ findlifc(uchar *ip)
     }
     return nil;
 }
-/*e: function findlifc */
+/*e: function [[findlifc]] */
 
-/*s: function forme */
+/*s: function [[forme]] */
 int
 forme(uchar *ip)
 {
@@ -75,31 +75,31 @@ forme(uchar *ip)
     }
     return 0;
 }
-/*e: function forme */
+/*e: function [[forme]] */
 
-/*s: global noetheraddr */
+/*s: global [[noetheraddr]] */
 uchar noetheraddr[6];
-/*e: global noetheraddr */
+/*e: global [[noetheraddr]] */
 
-/*s: function setipaddr */
+/*s: function [[setipaddr]] */
 static void
 setipaddr(uchar *addr, char *ip)
 {
     if(ipcmp(addr, IPnoaddr) == 0)
         parseip(addr, ip);
 }
-/*e: function setipaddr */
+/*e: function [[setipaddr]] */
 
-/*s: function setipmask */
+/*s: function [[setipmask]] */
 static void
 setipmask(uchar *mask, char *ip)
 {
     if(ipcmp(mask, IPnoaddr) == 0)
         parseipmask(mask, ip);
 }
-/*e: function setipmask */
+/*e: function [[setipmask]] */
 
-/*s: function lookupip */
+/*s: function [[lookupip]] */
 /*
  *  do an ipinfo with defaults
  */
@@ -207,13 +207,13 @@ lookupip(uchar *ipaddr, Info *iip, int gate)
     maskip(iip->ipaddr, iip->ipmask, iip->ipnet);
     return 0;
 }
-/*e: function lookupip */
+/*e: function [[lookupip]] */
 
-/*s: global zeroes */
+/*s: global [[zeroes]] */
 static uchar zeroes[6];
-/*e: global zeroes */
+/*e: global [[zeroes]] */
 
-/*s: function lookup (networking/ip/dhcpd/ndb.c) */
+/*s: function [[lookup]]([[(networking/ip/dhcpd/ndb.c)]]) */
 /*
  *  lookup info about a client in the database.  Find an address on the
  *  same net as riip.
@@ -295,9 +295,9 @@ lookup(Bootp *bp, Info *iip, Info *riip)
     }
     return -1;
 }
-/*e: function lookup (networking/ip/dhcpd/ndb.c) */
+/*e: function [[lookup]]([[(networking/ip/dhcpd/ndb.c)]]) */
 
-/*s: function lookupinfo (networking/ip/dhcpd/ndb.c) */
+/*s: function [[lookupinfo]]([[(networking/ip/dhcpd/ndb.c)]]) */
 /*
  *  interface to ndbipinfo
  */
@@ -309,9 +309,9 @@ lookupinfo(uchar *ipaddr, char **attr, int n)
     sprint(ip, "%I", ipaddr);
     return ndbipinfo(db, "ip", ip, attr, n);
 }
-/*e: function lookupinfo (networking/ip/dhcpd/ndb.c) */
+/*e: function [[lookupinfo]]([[(networking/ip/dhcpd/ndb.c)]]) */
 
-/*s: function lookupserver */
+/*s: function [[lookupserver]] */
 /*
  *  return the ip addresses for a type of server for system ip
  */
@@ -328,9 +328,9 @@ lookupserver(char *attr, uchar **ipaddrs, Ndbtuple *t)
         }
     return rv;
 }
-/*e: function lookupserver */
+/*e: function [[lookupserver]] */
 
-/*s: function lookupname */
+/*s: function [[lookupname]] */
 /*
  *  just lookup the name
  */
@@ -345,5 +345,5 @@ lookupname(char *val, Ndbtuple *t)
             break;
         }
 }
-/*e: function lookupname */
+/*e: function [[lookupname]] */
 /*e: networking/ip/dhcpd/ndb.c */

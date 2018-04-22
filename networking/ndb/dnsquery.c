@@ -7,12 +7,12 @@
 #include "dns.h"
 #include "ip.h"
 
-/*s: global domount */
+/*s: global [[domount]] */
 static int domount;
-/*e: global domount */
+/*e: global [[domount]] */
 static char *mtpt, *dns, *srv;
 
-/*s: function setup (networking/ndb/dnsquery.c) */
+/*s: function [[setup]]([[(networking/ndb/dnsquery.c)]]) */
 static int
 setup(int argc, char **argv)
 {
@@ -38,9 +38,9 @@ setup(int argc, char **argv)
     }
     return fd;
 }
-/*e: function setup (networking/ndb/dnsquery.c) */
+/*e: function [[setup]]([[(networking/ndb/dnsquery.c)]]) */
 
-/*s: function querydns */
+/*s: function [[querydns]] */
 static void
 querydns(int fd, char *line, int n)
 {
@@ -58,9 +58,9 @@ querydns(int fd, char *line, int n)
         print("%s\n", buf);
     }
 }
-/*e: function querydns */
+/*e: function [[querydns]] */
 
-/*s: function query (networking/ndb/dnsquery.c) */
+/*s: function [[query]]([[(networking/ndb/dnsquery.c)]]) */
 static void
 query(int fd)
 {
@@ -124,9 +124,9 @@ query(int fd)
     }
     Bterm(&in);
 }
-/*e: function query (networking/ndb/dnsquery.c) */
+/*e: function [[query]]([[(networking/ndb/dnsquery.c)]]) */
 
-/*s: function main (networking/ndb/dnsquery.c) */
+/*s: function [[main]]([[(networking/ndb/dnsquery.c)]]) */
 void
 main(int argc, char *argv[])
 {
@@ -148,5 +148,5 @@ main(int argc, char *argv[])
     query(setup(argc, argv));
     exits(0);
 }
-/*e: function main (networking/ndb/dnsquery.c) */
+/*e: function [[main]]([[(networking/ndb/dnsquery.c)]]) */
 /*e: networking/ndb/dnsquery.c */

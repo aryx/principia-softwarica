@@ -9,7 +9,7 @@
 #include <ip.h>
 #include <ndb.h>
 
-/*s: enum _anon_ (networking/ip/tftpd.c) */
+/*s: enum [[_anon_ (networking/ip/tftpd.c)]] */
 enum
 {
     Maxpath=	128,
@@ -58,46 +58,46 @@ enum
     Bandtblksz	= Bandtmtu - 40 - 8,
     Bcavium		= 1432,		/* cavium's u-boot demands this size */
 };
-/*e: enum _anon_ (networking/ip/tftpd.c) */
+/*e: enum [[_anon_ (networking/ip/tftpd.c)]] */
 
 typedef struct Opt Opt;
-/*s: struct Opt (networking/ip/tftpd.c) */
+/*s: struct [[Opt]]([[(networking/ip/tftpd.c)]]) */
 struct Opt {
     char	*name;
     int	*valp;		/* set to client's value if within bounds */
     int	min;
     int	max;
 };
-/*e: struct Opt (networking/ip/tftpd.c) */
+/*e: struct [[Opt]]([[(networking/ip/tftpd.c)]]) */
 
-/*s: global dbg (networking/ip/tftpd.c) */
+/*s: global [[dbg]]([[(networking/ip/tftpd.c)]]) */
 int 	dbg;
-/*e: global dbg (networking/ip/tftpd.c) */
-/*s: global restricted */
+/*e: global [[dbg]]([[(networking/ip/tftpd.c)]]) */
+/*s: global [[restricted]] */
 int	restricted;
-/*e: global restricted */
-/*s: global pid (networking/ip/tftpd.c) */
+/*e: global [[restricted]] */
+/*s: global [[pid]]([[(networking/ip/tftpd.c)]]) */
 int	pid;
-/*e: global pid (networking/ip/tftpd.c) */
+/*e: global [[pid]]([[(networking/ip/tftpd.c)]]) */
 
-/*s: global blksize */
+/*s: global [[blksize]] */
 /* options */
 int	blksize = Defsegsize;		/* excluding 4-byte header */
-/*e: global blksize */
-/*s: global timeout */
+/*e: global [[blksize]] */
+/*s: global [[timeout]] */
 int	timeout = 5;			/* seconds */
-/*e: global timeout */
-/*s: global tsize */
+/*e: global [[timeout]] */
+/*s: global [[tsize]] */
 int	tsize;
-/*e: global tsize */
-/*s: global option (networking/ip/tftpd.c) */
+/*e: global [[tsize]] */
+/*s: global [[option]]([[(networking/ip/tftpd.c)]]) */
 static Opt option[] = {
     "timeout",	&timeout,	1,	255,
     /* see "hack" below */
     "blksize",	&blksize,	8,	Maxsegsize,
     "tsize",	&tsize,		0,	~0UL >> 1,
 };
-/*e: global option (networking/ip/tftpd.c) */
+/*e: global [[option]]([[(networking/ip/tftpd.c)]]) */
 
 void	sendfile(int, char*, char*, int);
 void	recvfile(int, char*, char*);
@@ -109,30 +109,30 @@ char*	sunkernel(char*);
 void	remoteaddr(char*, char*, int);
 void	doserve(int);
 
-/*s: global bigbuf */
+/*s: global [[bigbuf]] */
 char	bigbuf[32768];
-/*e: global bigbuf */
-/*s: global raddr */
+/*e: global [[bigbuf]] */
+/*s: global [[raddr]] */
 char	raddr[64];
-/*e: global raddr */
+/*e: global [[raddr]] */
 
-/*s: global dir */
+/*s: global [[dir]] */
 char	*dir = "/lib/tftpd";
-/*e: global dir */
-/*s: global dirsl */
+/*e: global [[dir]] */
+/*s: global [[dirsl]] */
 char	*dirsl;
-/*e: global dirsl */
-/*s: global dirsllen */
+/*e: global [[dirsl]] */
+/*s: global [[dirsllen]] */
 int	dirsllen;
-/*e: global dirsllen */
-/*s: global flog */
+/*e: global [[dirsllen]] */
+/*s: global [[flog]] */
 char	flog[] = "ipboot";
-/*e: global flog */
-/*s: global net (networking/ip/tftpd.c) */
+/*e: global [[flog]] */
+/*s: global [[net]]([[(networking/ip/tftpd.c)]]) */
 char	net[Maxpath];
-/*e: global net (networking/ip/tftpd.c) */
+/*e: global [[net]]([[(networking/ip/tftpd.c)]]) */
 
-/*s: global opnames */
+/*s: global [[opnames]] */
 static char *opnames[] = {
 [Tftp_READ]	"read",
 [Tftp_WRITE]	"write",
@@ -141,9 +141,9 @@ static char *opnames[] = {
 [Tftp_ERROR]	"error",
 [Tftp_OACK]	"oack",
 };
-/*e: global opnames */
+/*e: global [[opnames]] */
 
-/*s: function usage (networking/ip/tftpd.c) */
+/*s: function [[usage]]([[(networking/ip/tftpd.c)]]) */
 void
 usage(void)
 {
@@ -151,9 +151,9 @@ usage(void)
         argv0);
     exits("usage");
 }
-/*e: function usage (networking/ip/tftpd.c) */
+/*e: function [[usage]]([[(networking/ip/tftpd.c)]]) */
 
-/*s: function main (networking/ip/tftpd.c) */
+/*s: function [[main]]([[(networking/ip/tftpd.c)]]) */
 void
 main(int argc, char **argv)
 {
@@ -239,9 +239,9 @@ main(int argc, char **argv)
         }
     }
 }
-/*e: function main (networking/ip/tftpd.c) */
+/*e: function [[main]]([[(networking/ip/tftpd.c)]]) */
 
-/*s: function handleopt */
+/*s: function [[handleopt]] */
 static Opt *
 handleopt(int fd, char *name, char *val)
 {
@@ -267,9 +267,9 @@ handleopt(int fd, char *name, char *val)
         }
     return nil;
 }
-/*e: function handleopt */
+/*e: function [[handleopt]] */
 
-/*s: function filesize */
+/*s: function [[filesize]] */
 static vlong
 filesize(char *file)
 {
@@ -283,9 +283,9 @@ filesize(char *file)
     free(dp);
     return size;
 }
-/*e: function filesize */
+/*e: function [[filesize]] */
 
-/*s: function emits */
+/*s: function [[emits]] */
 /* copy word into bp iff it fits before ep, returns bytes to advance bp. */
 static int
 emits(char *word, char *bp, char *ep)
@@ -298,9 +298,9 @@ emits(char *word, char *bp, char *ep)
     strcpy(bp, word);
     return len;
 }
-/*e: function emits */
+/*e: function [[emits]] */
 
-/*s: function emitn */
+/*s: function [[emitn]] */
 /* format number into bp iff it fits before ep. */
 static int
 emitn(vlong n, char *bp, char *ep)
@@ -310,9 +310,9 @@ emitn(vlong n, char *bp, char *ep)
     snprint(numb, sizeof numb, "%lld", n);
     return emits(numb, bp, ep);
 }
-/*e: function emitn */
+/*e: function [[emitn]] */
 
-/*s: function options */
+/*s: function [[options]] */
 /*
  * send an OACK packet to respond to options.  bail early with -1 on error.
  * p is the packet containing the options.
@@ -397,9 +397,9 @@ options(int fd, char *buf, int bufsz, char *file, ushort oper, char *p, int dlen
         syslog(dbg, flog, "tftpd oack: options to %s", raddr);
     return nopts;
 }
-/*e: function options */
+/*e: function [[options]] */
 
-/*s: function optlog */
+/*s: function [[optlog]] */
 static void
 optlog(char *bytes, char *p, int dlen)
 {
@@ -413,9 +413,9 @@ optlog(char *bytes, char *p, int dlen)
     *bp = '\0';
     syslog(dbg, flog, "%s", bytes);
 }
-/*e: function optlog */
+/*e: function [[optlog]] */
 
-/*s: function mapname */
+/*s: function [[mapname]] */
 /*
  * replace one occurrence of %[ICE] with ip, cfgpxe name, or ether mac, resp.
  * we can't easily use $ because u-boot has stranger quoting rules than sh.
@@ -474,9 +474,9 @@ mapname(char *file)
     free(remip);
     return newnm;
 }
-/*e: function mapname */
+/*e: function [[mapname]] */
 
-/*s: function doserve */
+/*s: function [[doserve]] */
 void
 doserve(int fd)
 {
@@ -551,9 +551,9 @@ doserve(int fd)
     else
         recvfile(fd, file, mode);
 }
-/*e: function doserve */
+/*e: function [[doserve]] */
 
-/*s: function catcher (networking/ip/tftpd.c) */
+/*s: function [[catcher]]([[(networking/ip/tftpd.c)]]) */
 void
 catcher(void *junk, char *msg)
 {
@@ -563,9 +563,9 @@ catcher(void *junk, char *msg)
         noted(NDFLT);
     noted(NCONT);
 }
-/*e: function catcher (networking/ip/tftpd.c) */
+/*e: function [[catcher]]([[(networking/ip/tftpd.c)]]) */
 
-/*s: function awaitack */
+/*s: function [[awaitack]] */
 static int
 awaitack(int net, int block)
 {
@@ -613,9 +613,9 @@ awaitack(int net, int block)
     }
     return Ackrexmit;
 }
-/*e: function awaitack */
+/*e: function [[awaitack]] */
 
-/*s: function sendfile */
+/*s: function [[sendfile]] */
 void
 sendfile(int net, char *name, char *mode, int opts)
 {
@@ -702,9 +702,9 @@ error:
     close(net);
     close(file);
 }
-/*e: function sendfile */
+/*e: function [[sendfile]] */
 
-/*s: function recvfile */
+/*s: function [[recvfile]] */
 void
 recvfile(int net, char *name, char *mode)
 {
@@ -774,9 +774,9 @@ recvfile(int net, char *name, char *mode)
 error:
     close(file);
 }
-/*e: function recvfile */
+/*e: function [[recvfile]] */
 
-/*s: function ack */
+/*s: function [[ack]] */
 void
 ack(int fd, ushort block)
 {
@@ -792,9 +792,9 @@ ack(int fd, ushort block)
     if(n < 4)
         sysfatal("network write: %r");
 }
-/*e: function ack */
+/*e: function [[ack]] */
 
-/*s: function nak */
+/*s: function [[nak]] */
 void
 nak(int fd, int code, char *msg)
 {
@@ -810,9 +810,9 @@ nak(int fd, int code, char *msg)
     if(write(fd, buf, n) < n)
         sysfatal("write nak: %r");
 }
-/*e: function nak */
+/*e: function [[nak]] */
 
-/*s: function setuser */
+/*s: function [[setuser]] */
 void
 setuser(void)
 {
@@ -825,9 +825,9 @@ setuser(void)
     if(newns("none", nil) < 0)
         sysfatal("can't build namespace: %r");
 }
-/*e: function setuser */
+/*e: function [[setuser]] */
 
-/*s: function lookup (networking/ip/tftpd.c) */
+/*s: function [[lookup]]([[(networking/ip/tftpd.c)]]) */
 char*
 lookup(char *sattr, char *sval, char *tattr, char *tval, int len)
 {
@@ -852,9 +852,9 @@ lookup(char *sattr, char *sval, char *tattr, char *tval, int len)
     ndbfree(t);
     return tval;
 }
-/*e: function lookup (networking/ip/tftpd.c) */
+/*e: function [[lookup]]([[(networking/ip/tftpd.c)]]) */
 
-/*s: function sunkernel */
+/*s: function [[sunkernel]] */
 /*
  *  for sun kernel boots, replace the requested file name with
  *  a one from our database.  If the database doesn't specify a file,
@@ -882,9 +882,9 @@ sunkernel(char *name)
     sprint(ipbuf, "%I", v6);
     return lookup("ip", ipbuf, "bootf", buf, sizeof buf);
 }
-/*e: function sunkernel */
+/*e: function [[sunkernel]] */
 
-/*s: function remoteaddr */
+/*s: function [[remoteaddr]] */
 void
 remoteaddr(char *dir, char *raddr, int len)
 {
@@ -907,5 +907,5 @@ remoteaddr(char *dir, char *raddr, int len)
         n--;
     raddr[n] = 0;
 }
-/*e: function remoteaddr */
+/*e: function [[remoteaddr]] */
 /*e: networking/ip/tftpd.c */
