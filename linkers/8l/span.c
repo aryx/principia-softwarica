@@ -305,26 +305,32 @@ asmlc(void)
                 Bprint(&bso, "%6lux %P\n",
                     p->pc, p);
             }
+            /*e: [[asmlc()]] dump big line change, debug */
             lcsize += 5;
-            continue;
-        }
-        if(s > 0) {
-            cput(0+s);	/* 1-64 +lc */
-            if(debug['V']) {
-                Bprint(&bso, " lc+%ld(%ld)\n", s, 0+s);
-                Bprint(&bso, "%6lux %P\n",
-                    p->pc, p);
-            }
         } else {
-            cput(64-s);	/* 65-128 -lc */
-            if(debug['V']) {
-                Bprint(&bso, " lc%ld(%ld)\n", s, 64-s);
-                Bprint(&bso, "%6lux %P\n",
-                    p->pc, p);
+            if(s > 0) {
+                cput(0+s);	/* 1-64 +lc */
+                /*s: [[asmlc()]] dump small line increment, debug */
+                if(debug['V']) {
+                    Bprint(&bso, " lc+%ld(%ld)\n", s, 0+s);
+                    Bprint(&bso, "%6lux %P\n",
+                        p->pc, p);
+                }
+                /*e: [[asmlc()]] dump small line increment, debug */
+            } else {
+                cput(64-s);	/* 65-128 -lc */
+                /*s: [[asmlc()]] dump negative line increment, debug */
+                if(debug['V']) {
+                    Bprint(&bso, " lc%ld(%ld)\n", s, 64-s);
+                    Bprint(&bso, "%6lux %P\n",
+                        p->pc, p);
+                }
+                /*e: [[asmlc()]] dump negative line increment, debug */
             }
+            lcsize++;
         }
-        lcsize++;
     }
+    // padding
     while(lcsize & 1) {
         s = 129;
         cput(s);
