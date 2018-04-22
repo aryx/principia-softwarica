@@ -18,7 +18,8 @@ main(int argc, char *argv[])
     int i, c;
     /*e: [[main()]] locals */
     /*s: [[main()]] debug initialization */
-    memset(debug, false, sizeof(debug));
+    TODO? lost in ARM factorization?
+    //XxX: memset(debug, false, sizeof(debug));
     /*e: [[main()]] debug initialization */
 
     thechar = '8';
@@ -81,7 +82,7 @@ main(int argc, char *argv[])
                     print("%s:\n", *argv);
                     if(assemble(*argv))
                         errorexit();
-                    exits(0);
+                    exits(nil);
                 }
                 nout++;
                 argc--;
@@ -91,7 +92,7 @@ main(int argc, char *argv[])
             if(i < 0) {
                 if(c)
                     errorexit();
-                exits(0);
+                exits(nil);
             }
             if(status)
                 c++;
@@ -106,28 +107,30 @@ main(int argc, char *argv[])
 }
 /*e: function main (assemblers/8a/lex.c) */
 
-/*s: function assemble */
-int
+/*s: function [[assemble]] */
+errorn
 assemble(char *infile)
 {
-    /*s: [[assemble()]] locals */
-    char *p;
     fdt of; // outfile
-    int i;
-    /*x: [[assemble()]] locals */
+    /*s: [[assemble()]] locals */
     char ofile[100];
     /*x: [[assemble()]] locals */
+    char *p;
+    /*x: [[assemble()]] locals */
     char incfile[20];
+    /*x: [[assemble()]] locals */
+    int i;
     /*e: [[assemble()]] locals */
 
     /*s: [[assemble()]] set p to basename(infile) and adjust include */
     // p = basename(infile)
-    // include[0] = dirname(infile); 
     strcpy(ofile, infile);
     p = utfrrune(ofile, '/');
     if(p) {
-        include[0] = ofile;
         *p++ = '\0';
+        /*s: [[assemble()]] adjust first entry in include with dirname infile */
+        include[0] = ofile;
+        /*e: [[assemble()]] adjust first entry in include with dirname infile */
     } else
         p = ofile;
     /*e: [[assemble()]] set p to basename(infile) and adjust include */
@@ -148,55 +151,56 @@ assemble(char *infile)
             outfile = "/dev/null";
         /*e: [[assemble()]] set outfile to {basename(infile)}.{thechar} */
     }
-    /*s: [[assemble()]] setinclude("/{thestring}/include") or INCLUDE */
+    /*s: [[assemble()]] setinclude("/{thestring}/include") or use INCLUDE */
     p = getenv("INCLUDE");
     if(p) {
         setinclude(p);
     } else {
-        if(systemtype(Plan9)) {
-            sprint(incfile,"/%s/include", thestring);
-            setinclude(strdup(incfile));
-        }
+         sprint(incfile,"/%s/include", thestring);
+         setinclude(strdup(incfile));
     }
-    /*e: [[assemble()]] setinclude("/{thestring}/include") or INCLUDE */
+    /*e: [[assemble()]] setinclude("/{thestring}/include") or use INCLUDE */
 
     of = mycreat(outfile, 0664);
+    /*s: [[assemble()]] sanity check [[of]] */
     if(of < 0) {
         yyerror("%ca: cannot create %s", thechar, outfile);
         errorexit();
     }
+    /*e: [[assemble()]] sanity check [[of]] */
     Binit(&obuf, of, OWRITE);
 
+    // Pass 1
     pass = 1;
-
     pinit(infile);
     /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
     /*e: [[assemble()]] init Dlist after pinit */
-    yyparse(); // calls outcode() but does nothing when pass == 1
-
+    yyparse(); // calls outcode(), which does almost nothing when pass == 1
+    /*s: [[assemble()]] sanity check nerrors */
     if(nerrors) {
         cclean();
         return nerrors;
     }
+    /*e: [[assemble()]] sanity check nerrors */
 
+    // Pass 2
     pass = 2;
-    outhist(); // file history information at the beginning of the object
-
+    outhist(); // output file/line history information in object file
     pinit(infile);
     /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
     /*e: [[assemble()]] init Dlist after pinit */
-    yyparse(); // calls outcode() that now does things
+    yyparse(); // calls outcode() which now does things
 
     cclean();
     return nerrors;
 }
-/*e: function assemble */
+/*e: function [[assemble]] */
 
-/*s: struct Itab(x86) */
+/*s: struct [[Itab]](x86) */
 struct Itab
 {
     char	*name;
@@ -206,8 +210,8 @@ struct Itab
     //enum<opcode_kind> | enum<operand_kind>
     ushort	value;
 };
-/*e: struct Itab(x86) */
-/*s: global itab(x86) */
+/*e: struct [[Itab]](x86) */
+/*s: global [[itab]](x86) */
 struct Itab itab[] =
 {
     "SP",		LSP,	D_AUTO,
@@ -693,9 +697,9 @@ struct Itab itab[] =
 
     0
 };
-/*e: global itab(x86) */
+/*e: global [[itab]](x86) */
 
-/*s: function cinit(x86) */
+/*s: function [[cinit]](x86) */
 void
 cinit(void)
 {
@@ -729,9 +733,9 @@ cinit(void)
             strcpy(pathname, "/???");
     }
 }
-/*e: function cinit(x86) */
+/*e: function [[cinit]](x86) */
 
-/*s: function checkscale(x86) */
+/*s: function [[checkscale]](x86) */
 void
 checkscale(int scale)
 {
@@ -745,19 +749,18 @@ checkscale(int scale)
     }
     yyerror("scale must be 1248: %d", scale);
 }
-/*e: function checkscale(x86) */
+/*e: function [[checkscale]](x86) */
 
-/*s: function syminit */
+/*s: function [[syminit]] */
 void
-syminit(Sym *s)
+syminit(Sym *sym)
 {
-
-    s->type = LNAME;
-    s->value = 0;
+    sym->type = LNAME;
+    sym->value = 0;
 }
-/*e: function syminit */
+/*e: function [[syminit]] */
 
-/*s: function cclean(x86) */
+/*s: function [[cclean]](x86) */
 void
 cclean(void)
 {
@@ -766,9 +769,9 @@ cclean(void)
     outcode(AEND, &g2);
     Bflush(&obuf);
 }
-/*e: function cclean(x86) */
+/*e: function [[cclean]](x86) */
 
-/*s: function zname(x86) */
+/*s: function [[zname]](x86) */
 void
 zname(char *n, int t, int s)
 {
@@ -783,9 +786,9 @@ zname(char *n, int t, int s)
     }
     Bputc(&obuf, '\0');
 }
-/*e: function zname(x86) */
+/*e: function [[zname]](x86) */
 
-/*s: function zaddr(x86) */
+/*s: function [[zaddr]](x86) */
 void
 zaddr(Gen *a, int s)
 {
@@ -871,9 +874,9 @@ zaddr(Gen *a, int s)
     if(t & T_TYPE)
         Bputc(&obuf, a->type);
 }
-/*e: function zaddr(x86) */
+/*e: function [[zaddr]](x86) */
 
-/*s: function outcode(x86) */
+/*s: function [[outcode]](x86) */
 void
 outcode(int a, Gen2 *g2)
 {
@@ -961,9 +964,9 @@ out:
     if(a != AGLOBL && a != ADATA)
         pc++;
 }
-/*e: function outcode(x86) */
+/*e: function [[outcode]](x86) */
 
-/*s: function outhist(x86) */
+/*s: function [[outhist]](x86) */
 void
 outhist(void)
 {
@@ -1020,16 +1023,16 @@ outhist(void)
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, AHISTORY>>8);
 
-        Bputc(&obuf, h->global_line);
-        Bputc(&obuf, h->global_line>>8);
-        Bputc(&obuf, h->global_line>>16);
-        Bputc(&obuf, h->global_line>>24);
+        Bputc(&obuf, h->line);
+        Bputc(&obuf, h->line>>8);
+        Bputc(&obuf, h->line>>16);
+        Bputc(&obuf, h->line>>24);
 
         zaddr(&nullgen, 0);
         zaddr(&g, 0);
     }
 }
-/*e: function outhist(x86) */
+/*e: function [[outhist]](x86) */
 
 // now use aa.a8
 //#include "../cc/lexbody"
@@ -1037,7 +1040,8 @@ outhist(void)
 
 // used to be in ../cc/lexbody and factorized between assemblers by
 // using #include, but ugly, so I copy pasted the function for now
-/*s: function yylex */
+/*s: function [[yylex]] */
+/// main -> assemble -> yyparse -> <>
 long
 yylex(void)
 {
@@ -1045,50 +1049,63 @@ yylex(void)
     /*s: [[yylex()]] locals */
     int c1;
     /*x: [[yylex()]] locals */
+    // ref<char> (target = symb)
     char *cp;
+    // ref<Symbol> (owner = hash)
     Sym *s;
+    /*x: [[yylex()]] locals */
+    int baselog2;
+    /*x: [[yylex()]] locals */
+    int i;
     /*e: [[yylex()]] locals */
 
+    /*s: [[yylex()]] peekc handling, starting part */
     c = peekc;
     if(c != IGN) {
-        peekc = IGN;
-        goto l1;
+        peekc = IGN; // consume the extra character saved in peekc
+        goto l1; // skip the GETC(), we already have a character in c
     }
+    /*e: [[yylex()]] peekc handling, starting part */
 l0:
     c = GETC();
-
 l1:
     if(c == EOF) {
-        peekc = EOF;
-        return -1;
+        return EOF;
     }
 
     if(isspace(c)) {
+        /*s: [[yylex()]] if c is newline */
         if(c == '\n') {
             lineno++;
             return ';'; // newline transformed in fake ';'
         }
+        /*e: [[yylex()]] if c is newline */
+        // ignore spaces
         goto l0;
     }
+    // else
 
+    /*s: [[yylex()]] before switch, if isxxx */
     if(isalpha(c))
         goto talph;
+    /*x: [[yylex()]] before switch, if isxxx */
     if(isdigit(c))
         goto tnum;
-
+    /*e: [[yylex()]] before switch, if isxxx */
     switch(c) {
+//XxX: missing?
+//    case '\n':
+//        lineno++;
+//        return ';';
     /*s: [[yylex()]] switch c cases */
-    case '\n':
-        lineno++;
-        return ';';
-    /*x: [[yylex()]] switch c cases */
     case '/':
         c1 = GETC();
         if(c1 == '/') {
+            // '/''/' read; skip everything until next '\n'
             for(;;) {
                 c = GETC();
                 if(c == '\n')
-                    goto l1;
+                    goto l1; // which will convert the \n in c in a ';'
                 if(c == EOF) {
                     yyerror("eof in comment");
                     errorexit();
@@ -1096,9 +1113,10 @@ l1:
             }
         }
         if(c1 == '*') {
+            // '/''*' read; skip everything until next '*''/'
             for(;;) {
                 c = GETC();
-                while(c == '*') {
+                while(c == '*') { // not an if! to handle /** not finished */
                     c = GETC();
                     if(c == '/')
                         goto l0;
@@ -1116,22 +1134,20 @@ l1:
     case '_':
     case '@':
     // case 'a'..'z' 'A'..'Z': (isalpha())
-    // case '.' too
+    // XxX: case '.' too
     talph:
         cp = symb;
 
     aloop:
         *cp++ = c;
         c = GETC();
-        if(isalpha(c) || isdigit(c) || c == '_' || c == '$') // $
+        if(isalpha(c) || isdigit(c) || c == '_' || c == '$')
             goto aloop;
-
-        // went too far, yyback(1)
+        // went too far
         peekc = c;
 
         *cp = '\0';
-        s = lookup();
-
+        s = lookup(); // uses symb global (referenced by cp)
         /*s: [[yylex()]] if macro symbol */
         if(s->macro) {
             newio();
@@ -1152,15 +1168,17 @@ l1:
             goto l0;
         }
         /*e: [[yylex()]] if macro symbol */
+        //XxX?
+        //if(s->type == 0)
+        //    s->type = LNAME;
 
-        if(s->type == 0)
-            s->type = LNAME;
-
-        if(s->type == LNAME || s->type == LVAR || s->type == LLAB) {
+        /*s: [[yylex()]] in identifier case, set yylval */
+        if(s->type == LNAME || s->type == LLAB || s->type == LVAR) {
             yylval.sym = s;
         } else {
             yylval.lval = s->value;
         }
+        /*e: [[yylex()]] in identifier case, set yylval */
         return s->type;
     /*x: [[yylex()]] switch c cases */
     // case '0'..'9': (isdigit())
@@ -1168,40 +1186,51 @@ l1:
         cp = symb;
         if(c != '0')
             goto dc;
-
+        // else, read a '0', maybe the start of an hexadecimal number
+        /*s: [[yylex()]] in number case, 0xxx handling */
         *cp++ = c;
         c = GETC();
-        c1 = 3;
+        baselog2 = 3; // 2^3, for octal
         if(c == 'x' || c == 'X') {
-            c1 = 4;
+            baselog2 = 4; // 2^4, for hexadecimal
             c = GETC();
-        } else
-        if(c < '0' || c > '7')
+        } 
+        else if(c < '0' || c > '7')
             goto dc;
+
         yylval.lval = 0;
         for(;;) {
             if(c >= '0' && c <= '9') {
-                if(c > '7' && c1 == 3)
+                if(c > '7' && baselog2 == 3)
                     break;
-                yylval.lval <<= c1;
+                yylval.lval <<= baselog2;
                 yylval.lval += c - '0';
                 c = GETC();
                 continue;
             }
-            if(c1 == 3)
+            // else
+            if(baselog2 == 3)
                 break;
+            // else
+            /*s: [[yylex()]] in number case, 0xxx handling, normalize letters */
             if(c >= 'A' && c <= 'F')
+                // c = lowercase(c)
                 c += 'a' - 'A';
+            /*e: [[yylex()]] in number case, 0xxx handling, normalize letters */
             if(c >= 'a' && c <= 'f') {
-                yylval.lval <<= c1;
+                yylval.lval <<= baselog2;
                 yylval.lval += c - 'a' + 10;
                 c = GETC();
                 continue;
             }
             break;
         }
-        goto ncu;
+        //XxX: goto ncu;
+        peekc = c;
+        return LCONST;
+        /*e: [[yylex()]] in number case, 0xxx handling */
 
+    /*s: [[yylex()]] in number case, decimal dc label handling */
     dc:
         for(;;) {
             if(!isdigit(c))
@@ -1209,22 +1238,29 @@ l1:
             *cp++ = c;
             c = GETC();
         }
+        /*s: [[yylex()]] in number case, in decimal case, float handling */
         if(c == '.')
             goto casedot;
         if(c == 'e' || c == 'E')
             goto casee;
-        *cp = 0;
-        if(sizeof(yylval.lval) == sizeof(vlong))
-            yylval.lval = strtoll(symb, nil, 10);
-        else
-            yylval.lval = strtol(symb, nil, 10);
+         //XxX:         *cp = 0;
+         //XxX:         if(sizeof(yylval.lval) == sizeof(vlong))
+         //XxX:             yylval.lval = strtoll(symb, nil, 10);
+         //XxX:         else
+         //XxX:             yylval.lval = strtol(symb, nil, 10);
+         //XxX: 
+         //XxX:     ncu:
+         //XxX:         while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
+         //XxX:             c = GETC();
 
-    ncu:
-        while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
-            c = GETC();
+        /*e: [[yylex()]] in number case, in decimal case, float handling */
+        *cp = '\0';
+        yylval.lval = strtol(symb, nil, 10);
+
         peekc = c;
         return LCONST;
-
+    /*e: [[yylex()]] in number case, decimal dc label handling */
+    /*s: [[yylex()]] in number case, float labels handling */
     casedot:
         for(;;) {
             *cp++ = c;
@@ -1249,53 +1285,59 @@ l1:
         }
 
     caseout:
-        *cp = 0;
+        *cp = '\0';
         peekc = c;
         if(FPCHIP) {
             yylval.dval = atof(symb);
             return LFCONST;
+        } else {
+            yyerror("assembler cannot interpret fp constants");
+            yylval.lval = 1L;
+            return LCONST;
         }
-        yyerror("assembler cannot interpret fp constants");
-        yylval.lval = 1L;
-        return LCONST;
+    /*e: [[yylex()]] in number case, float labels handling */
     /*x: [[yylex()]] switch c cases */
     case '.':
         c = GETC();
-        if(isalpha(c)) {
+        if(isalpha(c)) { // an identifier
             cp = symb;
             *cp++ = '.';
             goto aloop;
         }
-        if(isdigit(c)) {
+        if(isdigit(c)) { // a float
             cp = symb;
             *cp++ = '.';
             goto casedot;
         }
+        // else
         peekc = c;
-        return '.';
+        return '.'; // a single '.'
     /*x: [[yylex()]] switch c cases */
     case '\'':
         c = escchar('\'');
+        /*s: [[yylex()]] in character case, if c is EOF */
         if(c == EOF)
             c = '\'';
+        /*e: [[yylex()]] in character case, if c is EOF */
         if(escchar('\'') != EOF)
             yyerror("missing '");
+
         yylval.lval = c;
         return LCONST;
     /*x: [[yylex()]] switch c cases */
     case '"':
         memcpy(yylval.sval, nullgen.sval, sizeof(yylval.sval));
         cp = yylval.sval;
-        c1 = 0;
+        i = 0;
         for(;;) {
             c = escchar('"');
             if(c == EOF)
                 break;
-            if(c1 < sizeof(yylval.sval))
+            if(i < sizeof(yylval.sval))
                 *cp++ = c;
-            c1++;
+            i++;
         }
-        if(c1 > sizeof(yylval.sval))
+        if(i > sizeof(yylval.sval))
             yyerror("string constant too long");
         return LSCONST;
     /*x: [[yylex()]] switch c cases */
@@ -1306,10 +1348,12 @@ l1:
     default:
         return c;
     }
+    /*s: [[yylex()]] peekc handling, ending part */
     peekc = c1;
+    /*e: [[yylex()]] peekc handling, ending part */
     return c;
 }
-/*e: function yylex */
+/*e: function [[yylex]] */
 
 // #include "../cc/macbody"
 /*e: assemblers/8a/lex.c */

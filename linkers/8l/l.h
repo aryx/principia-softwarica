@@ -131,40 +131,49 @@ struct	Auto
     // Extra
     Auto*	link;
 };
-/*e: struct Auto(x86) */
-/*s: struct Sym */
-struct	Sym
+/*e: struct [[Auto]](x86) */
+/*s: struct [[Sym]] */
+struct  Sym
 {
-    char	*name;
-    short	version; // for static names, each sym has a different version
+    // The key
+    // ref_own<string>
+    char    *name;
+    // 0 for global symbols, object file id for private symbols
+    short   version; 
 
-    //enum<section>
-    short	type;
-    // generic value, e.g. virtual pc for a TEXT procedure, size for GLOBL
-    long	value; 
+    // The generic value, 
+    // e.g., virtual pc for a TEXT procedure, size for GLOBL
+    long    value; 
+
+    /*s: [[Sym]] section field */
+    //enum<Section>
+    short   type;
+    /*e: [[Sym]] section field */
 
     /*s: [[Sym]] other fields */
-    // md5sum of the type of the symbol
-    long	sig;
+    // for instance last 32 bits of md5sum of the type of the symbol
+    ulong   sig;
     /*x: [[Sym]] other fields */
-    // idx in filen
-    ushort	file;
+    // index in filen[]
+    ushort  file;
     /*x: [[Sym]] other fields */
-    // enum<section> too?
-    short	subtype;
+    // enum<Section> too?
+    short   subtype;
     /*x: [[Sym]] other fields */
-    short	become;
+    // x86 only, dead? can remove though?
+    short   become;
     /*x: [[Sym]] other fields */
-    short	frame;
+    // x86 only
+    short   frame;
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */
-    // hash<Sym.name * Sym.version, ref<Sym>> of hash
-    Sym*	link;
+    // list<ref<Sym>> (from = hash)
+    Sym*    link;
     /*e: [[Sym]] extra fields */
 };
-/*e: struct Sym */
-/*s: struct Optab(x86) */
+/*e: struct [[Sym]] */
+/*s: struct [[Optab]](x86) */
 struct	Optab
 {
     // enum<as> from 8.out.h
@@ -277,36 +286,36 @@ enum pxxx {
 };
 
 
-/*e: enum pxxx(x86) */
-/*s: enum rxxx */
+/*e: enum [[pxxx]](x86) */
+/*s: enum [[rxxx]] */
 enum rxxx {
-    Roffset	= 22,		/* no. bits for offset in relocation address */
-    Rindex	= 10,		/* no. bits for index in relocation address */
+    Roffset = 22,       /* no. bits for offset in relocation address */
+    Rindex  = 10,       /* no. bits for index in relocation address */
 };
-/*e: enum rxxx */
+/*e: enum [[rxxx]] */
 
-/*s: enum misc1(x86) */
+/*s: enum [[misc1]](x86) */
 enum misc1 {
     /*s: constant NHASH linker */
-    NHASH		= 10007,
+    NHASH       = 10007,
     /*e: constant NHASH linker */
     /*s: constant NHUNK linker */
-    NHUNK		= 100000,
+    NHUNK       = 100000,
     /*e: constant NHUNK linker */
 
     MINSIZ		= 4,
-    /*s: constant STRINGSZ */
-    STRINGSZ	= 200,
-    /*e: constant STRINGSZ */
+    /*s: constant [[STRINGSZ]] */
+    STRINGSZ    = 200,
+    /*e: constant [[STRINGSZ]] */
     MINLC		= 1,
-    /*s: constant MAXIO */
-    MAXIO		= 8192,
-    /*e: constant MAXIO */
+    /*s: constant [[MAXIO]] */
+    MAXIO       = 8192,
+    /*e: constant [[MAXIO]] */
     MAXHIST		= 20, /* limit of path elements for history symbols */
 };
-/*e: enum misc1(x86) */
+/*e: enum [[misc1]](x86) */
 
-/*s: enum headtype(x86) */
+/*s: enum [[headtype]](x86) */
 /*
  *	-H0 -T0x40004C -D0x10000000	is garbage unix
  *	-H1 -T0xd0 -R4			is unix coff
