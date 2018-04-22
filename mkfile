@@ -175,7 +175,7 @@ LPDIRS=\
  assemblers linkers compilers machine \
  kernel shells lib_core\
  builders debuggers profilers version_control \
- lib_graphics windows\
+ lib_graphics windows lib_gui \
  networking
 
 #TODO generators
