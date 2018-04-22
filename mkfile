@@ -70,6 +70,7 @@ TESTS=\
  lib_graphics/libmemdraw/tests\
  assemblers/5a/tests\
  compilers/8c/tests\
+ compilers/5c/tests\
  linkers/8l/tests\
  # need a arm/lib/libc.a\
  # compilers/5c/tests\
