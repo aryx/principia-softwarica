@@ -324,10 +324,6 @@ main(int argc, char *argv[])
 
     }
     /*s: [[main()]] last INITXXX adjustments */
-    if(INITDAT != 0 && INITRND != 0)
-        print("warning: -D0x%lux is ignored because of -R0x%lux\n",
-            INITDAT, INITRND);
-    /*x: [[main()]] last INITXXX adjustments */
     if (INITTEXTP == -1)
         INITTEXTP = INITTEXT;
     /*e: [[main()]] last INITXXX adjustments */
@@ -432,14 +428,15 @@ main(int argc, char *argv[])
         if(debug['p'])
             INITENTRY = "_mainp";
         /*e: [[main()]] adjust INITENTRY if profiling */
-        if(load_libs)
-            lookup(INITENTRY, 0)->type = SXREF;
-    } else {
-        /*s: [[main()]] if digit INITENTRY */
-        if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
-           lookup(INITENTRY, 0)->type = SXREF;
-        /*e: [[main()]] if digit INITENTRY */
     }
+    /*s: [[main()]] if rare condition do not set SXREF for INITENTRY, else */
+    if(debug['l']) {}
+    else
+    /*x: [[main()]] if rare condition do not set SXREF for INITENTRY, else */
+    if(*INITENTRY >= '0' && *INITENTRY <= '9') {}
+    else
+    /*e: [[main()]] if rare condition do not set SXREF for INITENTRY, else */
+      lookup(INITENTRY, 0)->type = SXREF;
     /*e: [[main()]] set INITENTRY */
 
     while(*argv)
@@ -623,28 +620,28 @@ objfile(char *file)
     }
     /*e: [[objfile()]] sanity check f */
 
-    l = read(f, magbuf, SARMAG);
+    len = read(f, magbuf, SARMAG);
 
-    // is it a regular object (and not a library)
-    if(l != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
+    // is it a regular object? (not a library)
+    if(len != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
         /* load it as a regular file */
-        l = seek(f, 0L, SEEK__END);
+        len = seek(f, 0L, SEEK__END); // len = filesize(f);
         seek(f, 0L, SEEK__START);
 
         // the important call!
-        ldobj(f, l, file);
+        ldobj(f, len, file);
 
         close(f);
         return;
     }
-
+    // else
     /*s: [[objfile()]] when file is a library */
     DBG("%5.2f ldlib: %s\n", cputime(), file);
 
-    l = read(f, &arhdr, SAR_HDR);
+    len = read(f, &arhdr, SAR_HDR);
 
     /*s: [[objfile()]] sanity check library header size and content */
-    if(l != SAR_HDR) {
+    if(len != SAR_HDR) {
         diag("%s: short read on archive file symbol header", file);
         goto out;
     }
@@ -686,24 +683,24 @@ objfile(char *file)
                 sprint(pname, "%s(%s)", file, s->name);
                 DBG("%5.2f library: %s\n", cputime(), pname);
             
-                l = e[1] & 0xff;
-                l |= (e[2] & 0xff) << 8;
-                l |= (e[3] & 0xff) << 16;
-                l |= (e[4] & 0xff) << 24;
+                len = e[1] & 0xff;
+                len |= (e[2] & 0xff) << 8;
+                len |= (e[3] & 0xff) << 16;
+                len |= (e[4] & 0xff) << 24;
                 // >> >> >> >>
             
-                seek(f, l, SEEK__START);
-                l = read(f, &arhdr, SAR_HDR);
+                seek(f, len, SEEK__START);
+                len = read(f, &arhdr, SAR_HDR);
                 /*s: [[objfile()]] sanity check entry header */
-                if(l != SAR_HDR)
+                if(len != SAR_HDR)
                     goto bad;
                 if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
                     goto bad;
                 /*e: [[objfile()]] sanity check entry header */
-                l = atolwhex(arhdr.size);
+                len = atolwhex(arhdr.size);
 
                 // loading the object file containing the symbol
-                ldobj(f, l, pname);
+                ldobj(f, len, pname);
             
                 if(s->type == SXREF) {
                     diag("%s: failed to load: %s", file, s->name);
@@ -895,27 +892,31 @@ addlib(char *obj)
     libraryobj[libraryp] = p;
     libraryp++;
 }
-/*e: function addlib */
+/*e: function [[addlib]] */
 
-/*s: function addhist */
+/*s: function [[addhist]] */
 void
 addhist(long line, int type)
 {
     Auto *u;
     Sym *s;
+    /*s: [[addhist()]] other locals */
     int i, j, k;
+    /*e: [[addhist()]] other locals */
 
     s = malloc(sizeof(Sym));
-    s->name = malloc(2*(histfrogp+1) + 1);
 
     u = malloc(sizeof(Auto));
     u->asym = s;
     u->type = type;
     u->aoffset = line;
 
+    //add_list(u, curhist)
     u->link = curhist;
     curhist = u;
 
+    /*s: [[addhist()]] set symbol name to filename using compact encoding */
+    s->name = malloc(2*(histfrogp+1) + 1);
     j = 1;
     for(i=0; i<histfrogp; i++) {
         k = histfrog[i]->value;
@@ -923,25 +924,29 @@ addhist(long line, int type)
         s->name[j+1] = k;
         j += 2;
     }
+    /*e: [[addhist()]] set symbol name to filename using compact encoding */
 }
-/*e: function addhist */
+/*e: function [[addhist]] */
 
-/*s: function histtoauto */
+/*s: function [[histtoauto]] */
+/// ldobj (case AEND | ATEXT) -> <>
 void
 histtoauto(void)
 {
     Auto *l;
 
+    // append_list(curhist, curauto); curhist = nil;
     while(l = curhist) {
         curhist = l->link;
+
         l->link = curauto;
         curauto = l;
     }
 }
-/*e: function histtoauto */
+/*e: function [[histtoauto]] */
 
-/*s: function collapsefrog */
-void
+/*s: function [[collapsefrog]] */
+static void
 collapsefrog(Sym *s)
 {
     int i;
@@ -978,38 +983,38 @@ collapsefrog(Sym *s)
 out:
     histfrog[histfrogp-1] = s;
 }
-/*e: function collapsefrog */
+/*e: function [[collapsefrog]] */
 
-/*s: function nopout */
-void
+/*s: function [[nopout]] */
+static void
 nopout(Prog *p)
 {
     p->as = ANOP;
     p->from.type = D_NONE;
     p->to.type = D_NONE;
 }
-/*e: function nopout */
+/*e: function [[nopout]] */
 
-/*s: function readsome */
+/*s: function [[readsome]] */
 byte*
-readsome(int f, byte *buf, byte *good, byte *stop, int max)
+readsome(fdt f, byte *buf, byte *good, byte *stop, int max)
 {
     int n;
 
     n = stop - good;
-    memmove(buf, good, stop - good);
+    memmove(buf, good, n);
     stop = buf + n;
     n = MAXIO - n;
     if(n > max)
         n = max;
     n = read(f, stop, n);
     if(n <= 0)
-        return 0;
+        return nil;
     return stop + n;
 }
-/*e: function readsome */
+/*e: function [[readsome]] */
 
-/*s: function ldobj(x86) */
+/*s: function [[ldobj]](x86) */
 void
 ldobj(fdt f, long c, char *pn)
 {
@@ -1070,11 +1075,11 @@ loop:
 
     /*s: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
     r = bsize - bloc;
-    if(r < 100 && r < c) {		/* enough for largest prog */
+    if(r < 100 && r < c) {		/* enough for largest instruction */
         bsize = readsome(f, buf.ibuf, bloc, bsize, c);
-        if(bsize == 0)
+        if(bsize == nil)
             goto eof;
-        bloc = buf.ibuf;
+        bloc = buf.ibuf; // readsome() does some memmove()
         goto loop;
     }
     /*e: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
@@ -1511,10 +1516,6 @@ doprof2(void)
     DBG("%5.2f profile 2\n", cputime());
 
     /*s: [[doprof2()]] if embedded tracing */
-    if(debug['e']){
-        s2 = lookup("_tracein", 0);
-        s4 = lookup("_traceout", 0);
-    }
     /*e: [[doprof2()]] if embedded tracing */
     else{
         s2 = lookup("_profin", 0);
@@ -1522,8 +1523,6 @@ doprof2(void)
     }
     if(s2->type != STEXT || s4->type != STEXT) {
        /*s: [[doprof2()]] if embedded tracing diag() */
-       if(debug['e'])
-           diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
        /*e: [[doprof2()]] if embedded tracing diag() */
         else
             diag("_profin/_profout not defined");
@@ -1599,17 +1598,6 @@ doprof2(void)
 
         }else if(p->as == ARET) {
             /*s: [[doprof2()]] if embedded tracing ARET instrumentation */
-            /*
-             * RET (default)
-             */
-            if(debug['e']){		/* embedded tracing */
-                q = prg();
-                q->line = p->line;
-                q->pc = p->pc;
-                q->link = p->link;
-                p->link = q;
-                p = q;
-            }
             /*e: [[doprof2()]] if embedded tracing ARET instrumentation */
             /*
              * RET
