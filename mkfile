@@ -172,13 +172,13 @@ doall:V:
 # Literate programming
 ###############################################################################
 LPDIRS=\
- assemblers linkers compilers machine \
+ assemblers linkers compilers machine generators \
  kernel shells lib_core\
  builders debuggers profilers version_control \
  lib_graphics windows lib_gui \
  networking
 
-#TODO generators
+#TODO
 # editors
 # browser
 # languages
