@@ -65,8 +65,10 @@ PROGRAMS=\
 
 #TODO: not used for now
 TESTS=\
+ ROOT/tests\
  lib_graphics/libdraw/tests\
  lib_graphics/libmemdraw/tests\
+ assemblers/5a/tests\
  compilers/8c/tests\
  linkers/8l/tests\
  # need a arm/lib/libc.a\
@@ -118,11 +120,18 @@ all:QV:
 		mk $MKFLAGS $target
 	}
 
-install uninstall clean nuke:QV:
+install uninstall:QV:
 	for (i in $DIRS) @{
 		cd $i
 		mk $MKFLAGS $target
 	}
+
+clean nuke:QV:
+	for (i in $DIRS $TESTS) @{
+		cd $i
+		mk $MKFLAGS $target
+	}
+
 
 help:VQ:
 	echo mk all, install, uninstall, clean, nuke, release, cmds, kernels, or libs
