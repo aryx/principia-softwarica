@@ -350,6 +350,10 @@ l1:
         goto tnum;
     /*e: [[yylex()]] before switch, if isxxx */
     switch(c) {
+//XxX: missing?
+//    case '\n':
+//        lineno++;
+//        return ';';
     /*s: [[yylex()]] switch c cases */
     case '/':
         c1 = GETC();
@@ -387,6 +391,7 @@ l1:
     case '_':
     case '@':
     // case 'a'..'z' 'A'..'Z': (isalpha())
+    // XxX: case '.' too
     talph:
         cp = symb;
 
@@ -420,6 +425,10 @@ l1:
             goto l0;
         }
         /*e: [[yylex()]] if macro symbol */
+        //XxX?
+        //if(s->type == 0)
+        //    s->type = LNAME;
+
         /*s: [[yylex()]] in identifier case, set yylval */
         if(s->type == LNAME || s->type == LLAB || s->type == LVAR) {
             yylval.sym = s;
@@ -473,7 +482,7 @@ l1:
             }
             break;
         }
-
+        //XxX: goto ncu;
         peekc = c;
         return LCONST;
         /*e: [[yylex()]] in number case, 0xxx handling */
@@ -491,6 +500,16 @@ l1:
             goto casedot;
         if(c == 'e' || c == 'E')
             goto casee;
+         //XxX:         *cp = 0;
+         //XxX:         if(sizeof(yylval.lval) == sizeof(vlong))
+         //XxX:             yylval.lval = strtoll(symb, nil, 10);
+         //XxX:         else
+         //XxX:             yylval.lval = strtol(symb, nil, 10);
+         //XxX: 
+         //XxX:     ncu:
+         //XxX:         while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
+         //XxX:             c = GETC();
+
         /*e: [[yylex()]] in number case, in decimal case, float handling */
         *cp = '\0';
         yylval.lval = strtol(symb, nil, 10);

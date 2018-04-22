@@ -260,6 +260,7 @@ union Buf
         byte    ibuf[MAXIO];            /* input buffer */
     };
     char    dbuf[1]; // variable size
+    //XxX: this cause bugs in kencc under Linux
 };
 /*e: struct [[Buf]] */
 
