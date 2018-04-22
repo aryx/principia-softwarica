@@ -378,20 +378,23 @@ patch(void)
         }
     }
 }
-/*e: function patch(x86) */
+/*e: function [[patch]](x86) */
 
-/*s: constant LOG */
+/*s: constant [[LOG]] */
 #define	LOG	5
-/*e: constant LOG */
-/*s: function mkfwd */
+/*e: constant [[LOG]] */
+/*s: function [[mkfwd]] */
+/// main -> patch -> <>
 void
 mkfwd(void)
 {
-    long dwn[LOG], cnt[LOG];
-    Prog *lst[LOG];
+    long cnt[LOG]; // (length of arc)/LOG at a certain level (constant)
+    long dwn[LOG]; // remaining elements to skip at a level (goes down)
+    Prog *lst[LOG]; // past instruction saved at a level
     Prog *p;
-    int i;
+    int i; // level
 
+    /*s: [[mkfwd()]] initializes cnt, dwn, lst */
     for(i=0; i<LOG; i++) {
         if(i == 0)
             cnt[i] = 1; 
@@ -400,6 +403,7 @@ mkfwd(void)
         dwn[i] = 1;
         lst[i] = P;
     }
+    /*e: [[mkfwd()]] initializes cnt, dwn, lst */
 
     i = 0;
     for(p = firstp; p != P; p = p->link) {
@@ -407,22 +411,29 @@ mkfwd(void)
         if(p->as == ATEXT)
             curtext = p;
         /*e: adjust curtext when iterate over instructions p */
+        p->forwd = P;
+
+        /*s: [[mkfwd()]] in for loop, add forward links from past p in lst to p */
+        // first loop, the levels
         i--;
         if(i < 0)
             i = LOG-1;
-        p->forwd = P;
+
+        // second loop, the frequency at a certain level
         dwn[i]--;
         if(dwn[i] <= 0) {
             dwn[i] = cnt[i];
+
             if(lst[i] != P)
-                lst[i]->forwd = p;
+                lst[i]->forwd = p; // link from past p to p
             lst[i] = p;
         }
+        /*e: [[mkfwd()]] in for loop, add forward links from past p in lst to p */
     }
 }
-/*e: function mkfwd */
+/*e: function [[mkfwd]] */
 
-/*s: function brloop(x86) */
+/*s: function [[brloop]](x86) */
 Prog*
 brloop(Prog *p)
 {
