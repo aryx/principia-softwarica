@@ -95,7 +95,7 @@ BOOTCMDS=\
  # mntgen and ns\
  kernel/devices/sys/user\
 
-#TODO usb for pi
+#TODO kernel/bus/user/usb for pi
 
 #TODO:
 # requires (slow) pcc, too slow so skipped for now
