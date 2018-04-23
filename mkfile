@@ -113,7 +113,7 @@ KERNELS=kernel/COMPILE/9/pc
 ###############################################################################
 CMDS=$PROGRAMS $BOOTCMDS
 
-DIRS=$LIBS $CMDS $KERNELS
+DIRS=$LIBS $CMDS
 
 # I assume you have done source env.sh, or have a good 'mk' wrapper
 
@@ -156,6 +156,8 @@ cmds:QV:
     }
 
 kernels:QV:
+    # required to get the binaries for mkboot
+	mk $MKFLAGS install
 	for (i in $KERNELS) @{
 		cd $i
 		mk $MKFLAGS install
