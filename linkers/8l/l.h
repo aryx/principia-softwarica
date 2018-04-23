@@ -4,8 +4,7 @@
 #include	<bio.h>
 
 #include	<common.out.h>
-#include	<386/8.out.h>
-//XxX: #include	<8.out.h>
+#include	<8.out.h>
 #include	"elf.h"
 
 /*s: macro [[DBG]] */
