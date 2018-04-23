@@ -1,7 +1,6 @@
 /*s: assemblers/8a/a.h */
 #include "../aa/aa.h"
-#include <386/8.out.h>
-//XxX: #include <8.out.h>
+#include <8.out.h>
 
 typedef	struct	Gen  Gen;
 typedef	struct	Gen2 Gen2;

@@ -18,8 +18,7 @@ main(int argc, char *argv[])
     int i, c;
     /*e: [[main()]] locals */
     /*s: [[main()]] debug initialization */
-    TODO? lost in ARM factorization?
-    //XxX: memset(debug, false, sizeof(debug));
+    memset(debug, false, sizeof(debug));
     /*e: [[main()]] debug initialization */
 
     thechar = '8';
@@ -1023,10 +1022,10 @@ outhist(void)
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, AHISTORY>>8);
 
-        Bputc(&obuf, h->line);
-        Bputc(&obuf, h->line>>8);
-        Bputc(&obuf, h->line>>16);
-        Bputc(&obuf, h->line>>24);
+        Bputc(&obuf, h->global_line);
+        Bputc(&obuf, h->global_line>>8);
+        Bputc(&obuf, h->global_line>>16);
+        Bputc(&obuf, h->global_line>>24);
 
         zaddr(&nullgen, 0);
         zaddr(&g, 0);
