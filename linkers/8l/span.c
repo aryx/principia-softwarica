@@ -233,7 +233,7 @@ asmsym(void)
         putsymb(".frame", 'm', p->to.offset+4, 0);
 
         for(a=p->to.autom; a; a=a->link)
-            if(a->type == D_LOCAL)
+            if(a->type == D_AUTO)
                 putsymb(a->asym->name, 'a', -a->aoffset, 0);
             else
             if(a->type == D_PARAM)
@@ -375,7 +375,7 @@ oclass(Adr *a)
                 case D_EXTERN:
                 case D_STATIC:
                     return Yi32;
-                case D_LOCAL:
+                case D_AUTO:
                 case D_PARAM:
                     return Yiauto;
                 }
@@ -474,7 +474,7 @@ oclass(Adr *a)
 
     case D_EXTERN:
     case D_STATIC:
-    case D_LOCAL:
+    case D_AUTO:
     case D_PARAM:
         return Ym;
 
@@ -657,7 +657,7 @@ asmand(Adr *a, int r)
         case D_EXTERN:
             aa.type = D_NONE+D_INDIR;
             break;
-        case D_LOCAL:
+        case D_AUTO:
         case D_PARAM:
             aa.type = D_SP+D_INDIR;
             break;
@@ -722,7 +722,7 @@ asmand(Adr *a, int r)
     case D_EXTERN:
         aa.type = D_NONE+D_INDIR;
         break;
-    case D_LOCAL:
+    case D_AUTO:
     case D_PARAM:
         aa.type = D_SP+D_INDIR;
         break;

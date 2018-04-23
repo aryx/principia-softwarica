@@ -551,12 +551,12 @@ dostkoff(void)
             deltasp = autoffset;
         }
         a = p->from.type;
-        if(a == D_LOCAL)
+        if(a == D_AUTO)
             p->from.offset += deltasp;
         if(a == D_PARAM)
             p->from.offset += deltasp + 4;
         a = p->to.type;
-        if(a == D_LOCAL)
+        if(a == D_AUTO)
             p->to.offset += deltasp;
         if(a == D_PARAM)
             p->to.offset += deltasp + 4;

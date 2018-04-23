@@ -120,7 +120,7 @@ Dconv(Fmt *fp)
         snprint(str, sizeof(str), "%s<%d>+%ld(SB)", a->sym->name,
             a->sym->version, a->offset);
         break;
-    case D_LOCAL:
+    case D_AUTO:
         snprint(str, sizeof(str), "%s+%ld(SP)", a->sym->name, a->offset);
         break;
     case D_PARAM:

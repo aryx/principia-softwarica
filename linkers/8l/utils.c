@@ -28,7 +28,7 @@ errorexit(void)
 /*e: function [[errorexit]] */
 
 /*s: function [[gethunk]] */
-static void
+void
 gethunk(void)
 {
     char *h;
@@ -51,6 +51,7 @@ gethunk(void)
 }
 /*e: function [[gethunk]] */
 
+#undef sym // ugly hack for x86
 /*s: function [[lookup]] */
 Sym*
 lookup(char *symb, int v)

@@ -255,7 +255,7 @@ main(int argc, char *argv[])
 
     /*s: [[main()]] adjust HEADTYPE if debug flags(x86) */
     if(HEADTYPE == -1) {
-      HEADTYPE = DEFAULT;
+      HEADTYPE = H_PLAN9;
     }
     /*e: [[main()]] adjust HEADTYPE if debug flags(x86) */
     switch(HEADTYPE) {
@@ -777,7 +777,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
         return c;
 
     t = a->type;
-    if(t != D_LOCAL && t != D_PARAM)
+    if(t != D_AUTO && t != D_PARAM)
         return c;
     l = a->offset;
     for(u=curauto; u; u=u->link) {
@@ -1524,8 +1524,7 @@ doprof2(void)
     if(s2->type != STEXT || s4->type != STEXT) {
        /*s: [[doprof2()]] if embedded tracing diag() */
        /*e: [[doprof2()]] if embedded tracing diag() */
-        else
-            diag("_profin/_profout not defined");
+        diag("_profin/_profout not defined");
         return;
     }
 
