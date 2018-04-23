@@ -7,7 +7,7 @@
 #include <ip.h>
 #include <bio.h>
 #include <ndb.h>
-#include "../dhcp.h"
+#include "../../dhcp/dhcp.h"
 #include "ipconfig.h"
 
 /*s: constant [[DEBUG]] */

@@ -21,7 +21,7 @@ char	*dbfile;
 int	debug;
 /*e: global [[debug]]([[(networking/ndb/dnstcp.c)]]) */
 /*s: global [[ipaddr]]([[(networking/ndb/dnstcp.c)]]) */
-uchar	ipaddr[IPaddrlen];	/* my ip address */
+ipaddr	ipaddr_;	/* my ip address */
 /*e: global [[ipaddr]]([[(networking/ndb/dnstcp.c)]]) */
 /*s: global [[logfile]]([[(networking/ndb/dnstcp.c)]]) */
 char	*logfile = "dns";
@@ -110,9 +110,9 @@ main(int argc, char *argv[])
     dninit();
 
     snprint(mntpt, sizeof mntpt, "/net%s", ext);
-    if(myipaddr(ipaddr, mntpt) < 0)
+    if(myipaddr(ipaddr_, mntpt) < 0)
         sysfatal("can't read my ip address");
-    dnslog("dnstcp call from %s to %I", caller, ipaddr);
+    dnslog("dnstcp call from %s to %I", caller, ipaddr_);
     memset(callip, 0, sizeof callip);
     parseip(callip, caller);
 

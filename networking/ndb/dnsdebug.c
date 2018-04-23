@@ -34,7 +34,7 @@ char	*dbfile;
 int	debug;
 /*e: global [[debug]]([[(networking/ndb/dnsdebug.c)]]) */
 /*s: global [[ipaddr]]([[(networking/ndb/dnsdebug.c)]]) */
-uchar	ipaddr[IPaddrlen];	/* my ip address */
+ipaddr	ipaddr_;	/* my ip address */
 /*e: global [[ipaddr]]([[(networking/ndb/dnsdebug.c)]]) */
 /*s: global [[logfile]]([[(networking/ndb/dnsdebug.c)]]) */
 char	*logfile = "dnsdebug";
@@ -114,7 +114,7 @@ main(int argc, char *argv[])
     nowns = nsec();
     dninit();
     fmtinstall('R', prettyrrfmt);
-    if(myipaddr(ipaddr, mntpt) < 0)
+    if(myipaddr(ipaddr_, mntpt) < 0)
         sysfatal("can't read my ip address");
     opendatabase();
 

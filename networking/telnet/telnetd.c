@@ -5,7 +5,7 @@
 #include <auth.h>
 #include <libsec.h>
 
-#include "../ip/telnet.h"
+#include "telnet.h"
 
 /*  console state (for consctl) */
 typedef struct Consstate	Consstate;
