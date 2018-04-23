@@ -8,7 +8,7 @@
 void
 drawscreen(void)
 {
-	draw(screen, screen->r, img, nil, ZP);
+	draw(view, view->r, img, nil, ZP);
 	flushimage(display, 1);
 }
 

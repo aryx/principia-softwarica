@@ -67,7 +67,7 @@ eallocimage(Rectangle r, int repl, uint color)
 {
 	Image *tmp;
 
-	tmp = allocimage(display, r, screen->chan, repl, color);
+	tmp = allocimage(display, r, view->chan, repl, color);
 	if(tmp == nil)
 		sysfatal("cannot allocate buffer image: %r");
 
@@ -142,7 +142,7 @@ mouse2route(Mouse m)
 	Point p, q;
 	Route *r;
 
-	p = subpt(m.xy, screen->r.min);
+	p = subpt(m.xy, view->r.min);
 	p.x /= BoardX;
 	p.y /= BoardY;
 
@@ -203,7 +203,7 @@ eresized(int new)
 	if(new && getwindow(display, Refnone) < 0)
 		sysfatal("can't reattach to window");
 	
-	p = Pt(Dx(screen->r), Dy(screen->r));
+	p = Pt(Dx(view->r), Dy(view->r));
 
 	if(!new || !eqpt(p, boardsize(level.max))) {
 		drawlevel();

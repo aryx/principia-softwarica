@@ -57,7 +57,7 @@ setbox(int i, int j)
 	Point loc;
 
 	loc = Pt(cen.x + j*PX, cen.y + i*PX);
-	draw(screen, Rpt(loc, addpt(loc, Pt(BX, BX))), box, nil, ZP);
+	draw(view, Rpt(loc, addpt(loc, Pt(BX, BX))), box, nil, ZP);
 }
 
 static void
@@ -66,7 +66,7 @@ clrbox(int i, int j)
 	Point loc;
 
 	loc = Pt(cen.x + j*PX, cen.y + i*PX);
-	draw(screen, Rpt(loc, addpt(loc, Pt(BX, BX))), display->white, nil, ZP);
+	draw(view, Rpt(loc, addpt(loc, Pt(BX, BX))), display->white, nil, ZP);
 }
 
 void
@@ -138,7 +138,7 @@ main(int argc, char *argv[])
 	initdraw(g9err, 0, argv0);
 	einit(Emouse|Ekeyboard);	/* implies rawon() */
 
-	cen = divpt(subpt(addpt(screen->r.min, screen->r.max),
+	cen = divpt(subpt(addpt(view->r.min, view->r.max),
 		Pt(NLIFE * PX, NLIFE * PX)), 2);
 	box  = allocimage(display, Rect(0, 0, BX, BX), RGB24, 1, DBlack);
 	assert(box != nil);
@@ -302,7 +302,7 @@ readlife(char *filename)
 		if ((bp = Bopen(name, OREAD)) == nil)
 			sysfatal("can't read %s: %r", name);
 	}
-	draw(screen, screen->r, display->white, nil, ZP);
+	draw(view, view->r, display->white, nil, ZP);
 	for (i = 0; i != NLIFE; i++) {
 		row[i] = col[i] = 0;
 		for (j = 0; j != NLIFE; j++)
@@ -379,7 +379,7 @@ redraw(void)
 	int i, j;
 
 	window();
-	draw(screen, screen->r, display->white, nil, ZP);
+	draw(view, view->r, display->white, nil, ZP);
 	for (i = i0; i <= i1; i++)
 		for (j = j0; j <= j1; j++)
 			if (life[i][j] & 1)
@@ -405,15 +405,15 @@ reshape(void)
 //	int dy12;
 
 //	if (needresize) {
-//		sqwid = Dx(screen->r) / (1 + bdp->cols + 1);
-//		dy12  = Dy(screen->r) / (1 + bdp->rows + 1 + 2);
+//		sqwid = Dx(view->r) / (1 + bdp->cols + 1);
+//		dy12  = Dy(view->r) / (1 + bdp->rows + 1 + 2);
 //		if (sqwid > dy12)
 //			sqwid = dy12;
 //		recompute(bdp, sqwid);
 //	}
 	sleep(1000);
 	needresize = 0;
-	cen = divpt(subpt(addpt(screen->r.min, screen->r.max),
+	cen = divpt(subpt(addpt(view->r.min, view->r.max),
 		Pt(NLIFE * PX, NLIFE * PX)), 2);
 	redraw();
 	flushimage(display, 1);
@@ -431,7 +431,7 @@ eresized(int callgetwin)
 		sysfatal("can't reattach to window: %r");
 
 	/* destroyed window? */
-	if (Dx(screen->r) == 0 || Dy(screen->r) == 0)
+	if (Dx(view->r) == 0 || Dy(view->r) == 0)
 		exits("window gone");
 
 	reshape();
