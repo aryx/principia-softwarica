@@ -63,7 +63,7 @@ PROGRAMS=\
 # graphics/libimg
 # ...
 
-#TODO: not used for now
+# used by mk clean
 TESTS=\
  ROOT/tests\
  lib_graphics/libdraw/tests\
@@ -119,6 +119,7 @@ DIRS=$LIBS $CMDS
 
 all:QV:
 	for (i in $DIRS) @{
+		echo $i
 		cd $i
 		mk $MKFLAGS $target
 	}
@@ -176,25 +177,29 @@ doall:V:
 # Literate programming
 ###############################################################################
 LPDIRS=\
- assemblers linkers compilers machine generators \
- kernel shells lib_core\
- builders debuggers profilers version_control \
+ assemblers linkers compilers machine  \
+ shells lib_core\
+ builders debuggers profilers \
  lib_graphics windows lib_gui \
  networking
+
+#TODO generators (rename chunks) kernel version_control (indexer exit status)
 
 #TODO
 # editors
 # browser
 # languages
 
-lpclean:QV:
+pdf lpclean:QV:
 	for (i in $LPDIRS) @{
+		echo $i
 		cd $i
 		mk $MKFLAGS $target
 	}
 
 sync:QVI:
 	for (i in $LPDIRS) @{
+		echo $i
 		cd $i
 		mk $MKFLAGS $target
 	}
