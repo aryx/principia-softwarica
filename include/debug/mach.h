@@ -1,4 +1,4 @@
-/*s: include/mach.h */
+/*s: include/debug/mach.h */
 /*
  *	Architecture-dependent application data
  */
@@ -317,4 +317,4 @@ int		symoff(char*, int, uvlong, int);
 void		textseg(uvlong, Fhdr*);
 int		textsym(Symbol*, int);
 void		unusemap(Map*, int);
-/*e: include/mach.h */
+/*e: include/debug/mach.h */

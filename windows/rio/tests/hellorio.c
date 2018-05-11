@@ -1,4 +1,4 @@
-/*s: tests/rio/hellorio.c */
+/*s: windows/rio/tests/hellorio.c */
 #include <u.h>
 #include <libc.h>
 
@@ -110,4 +110,4 @@ void redraw(void)
   runestring(view, mouseloc, display->black, ZP, font, str);
   flushimage(display, true);
 }
-/*e: tests/rio/hellorio.c */
+/*e: windows/rio/tests/hellorio.c */

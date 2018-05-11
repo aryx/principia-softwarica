@@ -1,4 +1,4 @@
-/*s: include/thread.h */
+/*s: include/ipc/thread.h */
 #pragma src "/sys/src/libthread"
 #pragma lib "libthread.a"
 
@@ -151,4 +151,4 @@ void    **tprivaddr(int);
 void    yield(void);
 
 extern  int mainstacksize;
-/*e: include/thread.h */
+/*e: include/ipc/thread.h */

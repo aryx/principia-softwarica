@@ -1,4 +1,4 @@
-/*s: include/libc.h */
+/*s: include/core/libc.h */
 #pragma lib "libc.a"
 #pragma src "/sys/src/libc"
 
@@ -774,4 +774,4 @@ extern char *argv0;
 /* this is used by sbrk and brk,  it's a really bad idea to redefine it */
 extern  char    end[];
 
-/*e: include/libc.h */
+/*e: include/core/libc.h */

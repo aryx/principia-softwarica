@@ -1,4 +1,4 @@
-/*s: include/ctype.h */
+/*s: include/core/ctype.h */
 #pragma	src	"/sys/src/libc/port"
 #pragma	lib	"libc.a"
 
@@ -40,4 +40,4 @@ extern unsigned char	_ctype[];
 /*s: macro [[toascii]] */
 #define	toascii(c)	((c)&0177)
 /*e: macro [[toascii]] */
-/*e: include/ctype.h */
+/*e: include/core/ctype.h */

@@ -162,7 +162,7 @@ long	nhunk;
 // thunk defined in globals.c because also used by main.c for profiling report
 
 /*s: function [[gethunk]] */
-static void
+void
 gethunk(void)
 {
     char *h;

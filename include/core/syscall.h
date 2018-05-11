@@ -1,4 +1,4 @@
-/*s: include/syscall.h */
+/*s: include/core/syscall.h */
 // you must include libc.h instead of this file
 
 //----------------------------------------------------------------------------
@@ -280,4 +280,4 @@ extern	void	rerrstr(char*, uint);
 //???
 extern	char*	sysname(void);
 
-/*e: include/syscall.h */
+/*e: include/core/syscall.h */
