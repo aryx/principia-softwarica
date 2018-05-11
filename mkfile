@@ -29,7 +29,7 @@ LIBS=\
 # Programs
 ###############################################################################
 
-#todo: ugly but windows/ must be before editors/ because of the lib it contains
+#todo: ugly but windows/ must be before editors/ because of the libs it contains
 PROGRAMS=\
  assemblers\
  linkers\
@@ -57,6 +57,7 @@ PROGRAMS=\
 # browsers
 # interpreters/s9
 # security/auth/
+# typesetting (requires (slow) pcc, too slow so skipped for now)
 
 #missing in subdirs:
 # networking/http
@@ -79,8 +80,8 @@ TESTS=\
 # Kernel
 ###############################################################################
 
-# those programs (e.g., bind, mount) are used as an initial /bin/
-# and mentioned in boot.rc
+# the programs in the directories below (e.g., bind, mount) are used as 
+# an initial /bin/ and mentioned in boot.rc
 BOOTCMDS=\
  # those programs are part of the root image (thx to data2s)\
  kernel/files/user\
@@ -98,9 +99,6 @@ BOOTCMDS=\
 #TODO kernel/bus/user/usb for pi
 
 #TODO:
-# requires (slow) pcc, too slow so skipped for now
-# typesetting
-#
 # kernel/devices/storage/user
 # kernel/init/user
 # kernel/memory/user
