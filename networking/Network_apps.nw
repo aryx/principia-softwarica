@@ -5266,7 +5266,7 @@ getoptions(uchar *p)
 #include <ip.h>
 #include <bio.h>
 #include <ndb.h>
-#include "../dhcp.h"
+#include "../../dhcp/dhcp.h"
 #include "ipconfig.h"
 
 <<constant [[DEBUG]]>>
@@ -5539,7 +5539,7 @@ pppbinddev(void)
 #include <ip.h>
 #include <bio.h>
 #include <ndb.h>
-#include "../dhcp.h"
+#include "../../dhcp/dhcp.h"
 #include "ipconfig.h"
 
 <<function [[pppbinddev]]>>
@@ -8442,7 +8442,7 @@ alnum(int c)
 #include <auth.h>
 #include <libsec.h>
 
-#include "../ip/telnet.h"
+#include "telnet.h"
 
 /*  console state (for consctl) */
 typedef struct Consstate	Consstate;
@@ -19593,7 +19593,7 @@ rrfree(RR *rp)
 #include <ip.h>
 #include "dat.h"
 #include "protos.h"
-#include "../../ndb/dns.h"
+#include "../ndb/dns.h"
 
 <<global [[rrtname]]>>
 <<function [[rrtypestr]]>>
@@ -28034,7 +28034,7 @@ char	eaddr[16];		/* ascii ethernet address */
 @
 
 <<global [[ipaddr]]>>=
-char	ipaddr[64];		/* ascii internet address */
+char	ipaddr__[64];		/* ascii internet address */
 @
 
 <<global [[ipa]]>>=
@@ -28791,9 +28791,9 @@ readipinterfaces(void)
 {
     if(myipaddr(ipa, mntpt) != 0)
         ipmove(ipa, IPnoaddr);
-    sprint(ipaddr, "%I", ipa);
+    sprint(ipaddr__, "%I", ipa);
     if (debug)
-        syslog(0, "dns", "ipaddr is %s\n", ipaddr);
+        syslog(0, "dns", "ipaddr is %s\n", ipaddr__);
 }
 @
 
@@ -28847,7 +28847,7 @@ ipid(void)
         if(mysysname == 0){
             t = nil;
             if(isvalidip(ipa))
-                free(ndbgetvalue(db, &s, "ip", ipaddr, "sys", &t));
+                free(ndbgetvalue(db, &s, "ip", ipaddr__, "sys", &t));
             if(t == nil){
                 for(f = 0; f < 3; f++){
                     snprint(buf, sizeof buf, "%s/ether%d", mntpt, f);
@@ -28870,7 +28870,7 @@ ipid(void)
 
         /* nothing else worked, use the ip address */
         if(mysysname == 0 && isvalidip(ipa))
-            mysysname = strdup(ipaddr);
+            mysysname = strdup(ipaddr__);
 
 
         /* set /dev/sysname if we now know it */
@@ -28931,7 +28931,7 @@ netinit(int background)
 
     if(debug)
         syslog(0, logfile, "mysysname %s eaddr %s ipaddr %s ipa %I\n",
-            mysysname?mysysname:"???", eaddr, ipaddr, ipa);
+            mysysname?mysysname:"???", eaddr, ipaddr__, ipa);
 
     if(background){
         unlock(&netlock);
@@ -29224,7 +29224,7 @@ iplookup(Network *np, char *host, char *serv, int nolookup)
      *  need to search for
      */
     if(*host == '$'){
-        if(ipattrlookup(db, ipaddr, host+1, dollar, sizeof dollar))
+        if(ipattrlookup(db, ipaddr__, host+1, dollar, sizeof dollar))
             host = dollar;
     }
 
@@ -29676,7 +29676,7 @@ ipinfoquery(Mfile *mf, char **list, int n)
         n--;
     }else{
         attr = "ip";
-        val = ipaddr;
+        val = ipaddr__;
     }
 
     if(n < 1)
@@ -31037,7 +31037,7 @@ lookupinfo(char *attr)
     char *a[2];
     Ndbtuple *t;
 
-    snprint(buf, sizeof buf, "%I", ipaddr);
+    snprint(buf, sizeof buf, "%I", ipaddr_);
     a[0] = attr;
 
     lock(&dblock);
@@ -31115,7 +31115,7 @@ myaddr(char *addr)
     char buf[64];
     Biobuf *bp;
 
-    snprint(buf, sizeof buf, "%I", ipaddr);
+    snprint(buf, sizeof buf, "%I", ipaddr_);
     if (strcmp(addr, buf) == 0) {
         dnslog("rejecting my ip %s as local dns server", addr);
         return 1;
@@ -31153,7 +31153,7 @@ static QLock locdnslck;
 
 <<function [[addlocaldnsserver]]>>=
 static void
-addlocaldnsserver(DN *dp, int class, char *ipaddr, int i)
+addlocaldnsserver(DN *dp, int class, char *ipaddr_, int i)
 {
     int n;
     DN *nsdp;
@@ -31162,20 +31162,20 @@ addlocaldnsserver(DN *dp, int class, char *ipaddr, int i)
     uchar ip[IPaddrlen];
 
     /* reject our own ip addresses so we don't query ourselves via udp */
-    if (myaddr(ipaddr))
+    if (myaddr(ipaddr_))
         return;
 
     qlock(&locdnslck);
     for (n = 0; n < i && n < nelem(locdns) && locdns[n]; n++)
-        if (strcmp(locdns[n], ipaddr) == 0) {
+        if (strcmp(locdns[n], ipaddr_) == 0) {
             dnslog("rejecting duplicate local dns server ip %s",
-                ipaddr);
+                ipaddr_);
             qunlock(&locdnslck);
             return;
         }
     if (n < nelem(locdns))
         if (locdns[n] == nil || ++n < nelem(locdns))
-            locdns[n] = strdup(ipaddr); /* remember 1st few local ns */
+            locdns[n] = strdup(ipaddr_); /* remember 1st few local ns */
     qunlock(&locdnslck);
 
     /* ns record for name server, make up an impossible name */
@@ -31191,11 +31191,11 @@ addlocaldnsserver(DN *dp, int class, char *ipaddr, int i)
     rrattach(rp, Authoritative);	/* will not attach rrs in my area */
 
     /* A or AAAA record */
-    if (parseip(ip, ipaddr) >= 0 && isv4(ip))
+    if (parseip(ip, ipaddr_) >= 0 && isv4(ip))
         rp = rralloc(Ta);
     else
         rp = rralloc(Taaaa);
-    rp->ip = dnlookup(ipaddr, class, 1);
+    rp->ip = dnlookup(ipaddr_, class, 1);
     rp->owner = nsdp;
     rp->local = 1;
     rp->db = 1;
@@ -31203,7 +31203,7 @@ addlocaldnsserver(DN *dp, int class, char *ipaddr, int i)
     rp->ttl = (1UL<<31)-1;
     rrattach(rp, Authoritative);	/* will not attach rrs in my area */
 
-    dnslog("added local dns server %s at %s", buf, ipaddr);
+    dnslog("added local dns server %s at %s", buf, ipaddr_);
 }
 @
 % >> >> >> >> >>
@@ -31636,7 +31636,7 @@ static Ndbtuple *indoms, *innmsrvs, *outnmsrvs;
 
 <<function [[dnforceage]]>>
 
-extern uchar	ipaddr[IPaddrlen];	/* my ip address */
+extern ipaddr	ipaddr_;	/* my ip address */
 
 <<function [[lookupinfo]]>>
 
@@ -36370,7 +36370,7 @@ int	debug;
 @
 
 <<global [[ipaddr]]([[(networking/ndb/dns.c)]])>>=
-uchar	ipaddr[IPaddrlen];	/* my ip address */
+ipaddr	ipaddr_;	/* my ip address */
 @
 
 <<global [[maxage]]>>=
@@ -36529,14 +36529,14 @@ main(int argc, char *argv[])
     fmtinstall('F', fcallfmt);
     dninit();
     /* this really shouldn't be fatal */
-    if(myipaddr(ipaddr, mntpt) < 0)
+    if(myipaddr(ipaddr_, mntpt) < 0)
         sysfatal("can't read my ip address");
     dnslog("starting %s%sdns %s%s%son %I's %s",
         (cfg.straddle? "straddling ": ""),
         (cfg.cachedb? "caching ": ""),
         (cfg.serve?   "udp server ": ""),
         (cfg.justforw? "forwarding-only ": ""),
-        (cfg.resolver? "resolver ": ""), ipaddr, mntpt);
+        (cfg.resolver? "resolver ": ""), ipaddr_, mntpt);
 
     opendatabase();
     now = time(nil);		/* open time files before we fork */
@@ -38264,7 +38264,7 @@ int	debug;
 @
 
 <<global [[ipaddr]]([[(networking/ndb/dnsdebug.c)]])>>=
-uchar	ipaddr[IPaddrlen];	/* my ip address */
+ipaddr	ipaddr_;	/* my ip address */
 @
 
 <<global [[logfile]]([[(networking/ndb/dnsdebug.c)]])>>=
@@ -38347,7 +38347,7 @@ main(int argc, char *argv[])
     nowns = nsec();
     dninit();
     fmtinstall('R', prettyrrfmt);
-    if(myipaddr(ipaddr, mntpt) < 0)
+    if(myipaddr(ipaddr_, mntpt) < 0)
         sysfatal("can't read my ip address");
     opendatabase();
 
@@ -39292,7 +39292,7 @@ int	debug;
 @
 
 <<global [[ipaddr]]([[(networking/ndb/dnstcp.c)]])>>=
-uchar	ipaddr[IPaddrlen];	/* my ip address */
+ipaddr	ipaddr_;	/* my ip address */
 @
 
 <<global [[logfile]]([[(networking/ndb/dnstcp.c)]])>>=
@@ -39384,9 +39384,9 @@ main(int argc, char *argv[])
     dninit();
 
     snprint(mntpt, sizeof mntpt, "/net%s", ext);
-    if(myipaddr(ipaddr, mntpt) < 0)
+    if(myipaddr(ipaddr_, mntpt) < 0)
         sysfatal("can't read my ip address");
-    dnslog("dnstcp call from %s to %I", caller, ipaddr);
+    dnslog("dnstcp call from %s to %I", caller, ipaddr_);
     memset(callip, 0, sizeof callip);
     parseip(callip, caller);
 
@@ -45475,7 +45475,7 @@ icmpecho(uchar *a)
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
-#include "../icmp.h"
+#include "../../ip/icmp.h"
 
 <<function [[catch]]([[(networking/ip/dhcpd/ping.c)]])>>
 
