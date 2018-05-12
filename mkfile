@@ -70,11 +70,11 @@ TESTS=\
  lib_graphics/libdraw/tests\
  lib_graphics/libmemdraw/tests\
  assemblers/5a/tests\
- compilers/8c/tests\
- compilers/5c/tests\
- linkers/8l/tests\
  # need a arm/lib/libc.a\
- # compilers/5c/tests\
+ compilers/5c/tests\
+ compilers/8c/tests\
+ linkers/8l/tests\
+ lib_gui/libpanel/tests\
 
 ###############################################################################
 # Kernel
