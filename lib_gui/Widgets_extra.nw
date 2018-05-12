@@ -1,6 +1,359 @@
-\section{[[windows/libpanel/]]}
+\section{[[include/gui//]]}
 
-\subsection*{[[windows/libpanel/button.c]]}
+\subsection*{[[lib_gui/libpanel/panel.h]]}
+
+<<struct Scroll>>=
+struct Scroll{
+    Point pos, size;
+};
+@
+
+<<struct Rtext>>=
+struct Rtext{
+    int flags;		/* responds to hits? text selection? */
+    void *user;		/* user data */
+    int space;		/* how much space before, if no break */
+    int indent;		/* how much space before, after a break */
+    Image *b;		/* what to display, if nonzero */
+    Panel *p;		/* what to display, if nonzero and b==0 */
+    Font *font;		/* font in which to draw text */
+    char *text;		/* what to display, if b==0 and p==0 */
+    Rtext *next;		/* next piece */
+    /* private below */
+    Rtext *nextline;	/* links line to line */
+    Rtext *last;		/* last, for append */
+    Rectangle r;		/* where to draw, if origin were Pt(0,0) */
+    int topy;		/* y coord of top of line */
+    int wid;		/* not including space */
+};
+@
+
+<<struct Panel>>=
+struct Panel{
+    Point ipad, pad;				/* extra space inside and outside */
+    Point fixedsize;				/* size of Panel, if FIXED */
+    int user;					/* available for user */
+    void *userp;					/* available for user */
+    Rectangle r;					/* where the Panel goes */
+    /* private below */
+    Panel *next;					/* It's a list! */
+    Panel *child, *echild, *parent;			/* No, it's a tree! */
+    Image *b;					/* where we're drawn */
+    int flags;					/* position flags, see below */
+    char *kind;					/* what kind of panel? */
+    int state;					/* for hitting & drawing purposes */
+    Point size;					/* space for this Panel */
+    Point sizereq;					/* size requested by this Panel */
+    Point childreq;					/* total size needed by children */
+    Panel *lastmouse;				/* who got the last mouse event? */
+    Panel *scrollee;				/* pointer to scrolled window */
+    Panel *xscroller, *yscroller;			/* pointers to scroll bars */
+    Scroll scr;					/* scroll data */
+    void *data;					/* kind-specific data */
+    void (*draw)(Panel *);				/* draw panel and children */
+    int (*pri)(Panel *, Point);			/* priority for hitting */
+    int (*hit)(Panel *, Mouse *);			/* process mouse event */
+    void (*type)(Panel *, Rune);			/* process keyboard event */
+    Point (*getsize)(Panel *, Point);		/* return size, given child size */
+    void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
+    void (*scroll)(Panel *, int, int, int, int);	/* scroll bar to scrollee */
+    void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
+    void (*free)(Panel *);				/* free fields of data when done */
+    char* (*snarf)(Panel *);			/* snarf text from panel */
+    void (*paste)(Panel *, char *);			/* paste text into panel */
+};
+@
+
+<<constant PACK>>=
+/*
+ * Panel flags
+ */
+#define	PACK	0x0007		/* which side of the parent is the Panel attached to? */
+@
+
+<<constant PACKN>>=
+#define		PACKN	0x0000
+@
+
+<<constant PACKE>>=
+#define		PACKE	0x0001
+@
+
+<<constant PACKS>>=
+#define		PACKS	0x0002
+@
+
+<<constant PACKW>>=
+#define		PACKW	0x0003
+@
+
+<<constant PACKCEN>>=
+#define		PACKCEN	0x0004	/* only used by pulldown */
+@
+
+<<constant FILLX>>=
+#define	FILLX	0x0008		/* grow horizontally to fill the available space */
+@
+
+<<constant FILLY>>=
+#define	FILLY	0x0010		/* grow vertically to fill the available space */
+@
+
+<<constant PLACE>>=
+#define	PLACE	0x01e0		/* which side of its space should the Panel adhere to? */
+@
+
+<<constant PLACECEN>>=
+#define		PLACECEN 0x0000
+@
+
+<<constant PLACES>>=
+#define		PLACES	0x0020
+@
+
+<<constant PLACEE>>=
+#define		PLACEE	0x0040
+@
+
+<<constant PLACEW>>=
+#define		PLACEW	0x0060
+@
+
+<<constant PLACEN>>=
+#define		PLACEN	0x0080
+@
+
+<<constant PLACENE>>=
+#define		PLACENE	0x00a0
+@
+
+<<constant PLACENW>>=
+#define		PLACENW	0x00c0
+@
+
+<<constant PLACESE>>=
+#define		PLACESE	0x00e0
+@
+
+<<constant PLACESW>>=
+#define		PLACESW	0x0100
+@
+
+<<constant EXPAND>>=
+#define	EXPAND	0x0200		/* use up all extra space in the parent */
+@
+
+<<constant FIXED>>=
+#define	FIXED	0x0c00		/* don't pass children's size requests through to parent */
+@
+
+<<constant FIXEDX>>=
+#define	FIXEDX	0x0400
+@
+
+<<constant FIXEDY>>=
+#define	FIXEDY	0x0800
+@
+
+<<constant MAXX>>=
+#define	MAXX	0x1000		/* make x size as big as biggest sibling's */
+@
+
+<<constant MAXY>>=
+#define	MAXY	0x2000		/* make y size as big as biggest sibling's */
+@
+
+<<constant BITMAP>>=
+#define	BITMAP	0x4000		/* text argument is a bitmap, not a string */
+@
+
+<<constant USERFL>>=
+#define USERFL	0x100000	/* start of user flag */
+@
+
+<<constant OUT>>=
+/*
+ * An extra bit in Mouse.buttons
+ */
+#define	OUT	8			/* Mouse.buttons bit, set when mouse leaves Panel */
+@
+
+<<constant PRI_NORMAL>>=
+/*
+ * Priorities
+ */
+#define	PRI_NORMAL	0		/* ordinary panels */
+@
+
+<<constant PRI_POPUP>>=
+#define	PRI_POPUP	1		/* popup menus */
+@
+
+<<constant PRI_SCROLLBAR>>=
+#define	PRI_SCROLLBAR	2		/* scroll bars */
+@
+
+<<constant PL_HOT>>=
+/* Rtext.flags */
+#define PL_HOT		1
+@
+
+<<constant PL_SEL>>=
+#define PL_SEL		2
+@
+
+<<global plkbfocus>>=
+Panel *plkbfocus;			/* the panel in keyboard focus */
+@
+
+
+%-------------------------------------------------------------
+
+<<include/gui/panel.h>>=
+//#pragma	src	"/sys/src/libpanel"
+//#pragma	lib	"libpanel.a"
+typedef struct Scroll Scroll;
+typedef struct Panel Panel;		/* a Graphical User Interface element */
+typedef struct Rtext Rtext;		/* formattable text */
+typedef void Icon;			/* Always used as Icon * -- Image or char */
+typedef struct Idol Idol;		/* A picture/text combo */
+<<struct Scroll>>
+<<struct Rtext>>
+<<struct Panel>>
+<<constant PACK>>
+<<constant PACKN>>
+<<constant PACKE>>
+<<constant PACKS>>
+<<constant PACKW>>
+<<constant PACKCEN>>
+<<constant FILLX>>
+<<constant FILLY>>
+<<constant PLACE>>
+<<constant PLACECEN>>
+<<constant PLACES>>
+<<constant PLACEE>>
+<<constant PLACEW>>
+<<constant PLACEN>>
+<<constant PLACENE>>
+<<constant PLACENW>>
+<<constant PLACESE>>
+<<constant PLACESW>>
+<<constant EXPAND>>
+<<constant FIXED>>
+<<constant FIXEDX>>
+<<constant FIXEDY>>
+<<constant MAXX>>
+<<constant MAXY>>
+<<constant BITMAP>>
+<<constant USERFL>>
+
+<<constant OUT>>
+<<constant PRI_NORMAL>>
+<<constant PRI_POPUP>>
+<<constant PRI_SCROLLBAR>>
+
+<<constant PL_HOT>>
+<<constant PL_SEL>>
+
+<<global plkbfocus>>
+
+int plinit(int);			/* initialization */
+void plpack(Panel *, Rectangle);	/* figure out where to put the Panel & children */
+void plmove(Panel *, Point);		/* move an already-packed panel to a new location */
+void pldraw(Panel *, Image *);		/* display the panel on the bitmap */
+void plfree(Panel *);			/* give back space */
+void plgrabkb(Panel *);			/* this Panel should receive keyboard events */
+void plkeyboard(Rune);			/* send a keyboard event to the appropriate Panel */
+void plmouse(Panel *, Mouse *);		/* send a Mouse event to a Panel tree */
+void plscroll(Panel *, Panel *, Panel *); /* link up scroll bars */
+char *plentryval(Panel *);		/* entry delivers its value */
+void plsetbutton(Panel *, int);		/* set or clear the mark on a button */
+void plsetslider(Panel *, int, int);	/* set the value of a slider */
+Rune *pleget(Panel *);			/* get the text from an edit window */
+int plelen(Panel *);			/* get the length of the text from an edit window */
+void plegetsel(Panel *, int *, int *);	/* get the selection from an edit window */
+void plepaste(Panel *, Rune *, int);	/* paste in an edit window */
+void plesel(Panel *, int, int);		/* set the selection in an edit window */
+void plescroll(Panel *, int);		/* scroll an edit window */
+Scroll plgetscroll(Panel *);		/* get scrolling information from panel */
+void plsetscroll(Panel *, Scroll);	/* set scrolling information */
+void plplacelabel(Panel *, int);	/* label placement */
+
+/*
+ * Panel creation & reinitialization functions
+ */
+Panel *plbutton(Panel *pl, int, Icon *, void (*)(Panel *pl, int));
+Panel *plcanvas(Panel *pl, int, void (*)(Panel *), void (*)(Panel *pl, Mouse *));
+Panel *plcheckbutton(Panel *pl, int, Icon *, void (*)(Panel *pl, int, int));
+Panel *pledit(Panel *, int, Point, Rune *, int, void (*)(Panel *));
+Panel *plentry(Panel *pl, int, int, char *, void (*)(Panel *pl, char *));
+Panel *plframe(Panel *pl, int);
+Panel *plgroup(Panel *pl, int);
+Panel *plidollist(Panel*, int, Point, Font*, Idol*, void (*)(Panel*, int, void*));
+Panel *pllabel(Panel *pl, int, Icon *);
+Panel *pllist(Panel *pl, int, char *(*)(Panel *, int), int, void(*)(Panel *pl, int, int));
+Panel *plmenu(Panel *pl, int, Icon **, int, void (*)(int, int));
+Panel *plmenubar(Panel *pl, int, int, Icon *, Panel *pl, Icon *, ...);
+Panel *plmessage(Panel *pl, int, int, char *);
+Panel *plpopup(Panel *pl, int, Panel *pl, Panel *pl, Panel *pl);
+Panel *plpulldown(Panel *pl, int, Icon *, Panel *pl, int);
+Panel *plradiobutton(Panel *pl, int, Icon *, void (*)(Panel *pl, int, int));
+Panel *plscrollbar(Panel *plparent, int flags);
+Panel *plslider(Panel *pl, int, Point, void(*)(Panel *pl, int, int, int));
+Panel *pltextview(Panel *, int, Point, Rtext *, void (*)(Panel *, int, Rtext *));
+void plinitbutton(Panel *, int, Icon *, void (*)(Panel *, int));
+void plinitcanvas(Panel *, int, void (*)(Panel *), void (*)(Panel *, Mouse *));
+void plinitcheckbutton(Panel *, int, Icon *, void (*)(Panel *, int, int));
+void plinitedit(Panel *, int, Point, Rune *, int, void (*)(Panel *));
+void plinitentry(Panel *, int, int, char *, void (*)(Panel *, char *));
+void plinitframe(Panel *, int);
+void plinitgroup(Panel *, int);
+void plinitidollist(Panel*, int, Point, Font*, Idol*, void (*)(Panel*, int, void*));
+void plinitlabel(Panel *, int, Icon *);
+void plinitlist(Panel *, int, char *(*)(Panel *, int), int, void(*)(Panel *, int, int));
+void plinitmenu(Panel *, int, Icon **, int, void (*)(int, int));
+void plinitmessage(Panel *, int, int, char *);
+void plinitpopup(Panel *, int, Panel *, Panel *, Panel *);
+void plinitpulldown(Panel *, int, Icon *, Panel *, int);
+void plinitradiobutton(Panel *, int, Icon *, void (*)(Panel *, int, int));
+void plinitscrollbar(Panel *parent, int flags);
+void plinitslider(Panel *, int, Point, void(*)(Panel *, int, int, int));
+void plinittextview(Panel *, int, Point, Rtext *, void (*)(Panel *, int, Rtext *));
+/*
+ * Rtext constructors & destructor
+ */
+Rtext *plrtstr(Rtext **, int, int, Font *, char *, int, void *);
+Rtext *plrtbitmap(Rtext **, int, int, Image *, int, void *);
+Rtext *plrtpanel(Rtext **, int, int, Panel *, void *);
+void plrtfree(Rtext *);
+void plrtseltext(Rtext *, Rtext *, Rtext *);
+char *plrtsnarftext(Rtext *);
+
+int plgetpostextview(Panel *);
+void plsetpostextview(Panel *, int);
+
+/*
+ * Idols
+ */
+Idol *plmkidol(Idol**, Image*, Image*, char*, void*);
+void plfreeidol(Idol*);
+Point plidolsize(Idol*, Font*, int);
+void *plidollistgetsel(Panel*);
+
+/*
+ * Snarf
+ */
+void plputsnarf(char *);
+char *plgetsnarf(void);
+void plsnarf(Panel *);			/* snarf a panel */
+void plpaste(Panel *);			/* paste a panel */
+@
+
+
+\section{[[lib_gui/libpanel/]]}
+
+
+\subsection*{[[lib_gui/libpanel/button.c]]}
 
 <<struct Button>>=
 struct Button{
@@ -250,7 +603,7 @@ void plsetbutton(Panel *p, int val){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/button.c>>=
+<<lib_gui/libpanel/button.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -282,7 +635,7 @@ typedef struct Button Button;
 @
 
 
-\subsection*{[[windows/libpanel/canvas.c]]}
+\subsection*{[[lib_gui/libpanel/canvas.c]]}
 
 <<struct Canvas>>=
 struct Canvas{
@@ -355,7 +708,7 @@ Panel *plcanvas(Panel *parent, int flags, void (*draw)(Panel *), void (*hit)(Pan
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/canvas.c>>=
+<<lib_gui/libpanel/canvas.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -374,7 +727,7 @@ typedef struct Canvas Canvas;
 @
 
 
-\subsection*{[[windows/libpanel/draw.c]]}
+\subsection*{[[lib_gui/libpanel/draw.c]]}
 
 <<constant PWID>>=
 #define	PWID	1	/* width of label border */
@@ -419,10 +772,10 @@ static int plldepth;
 <<function pl_drawinit>>=
 int pl_drawinit(int ldepth){
     plldepth=ldepth;
-    pl_white=allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0xFFFFFFFF);
+    pl_white=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xFFFFFFFF);
     pl_light=allocimagemix(display, DPalebluegreen, DWhite);
-    pl_dark =allocimage(display, Rect(0,0,1,1), screen->chan, 1, DPurpleblue);
-    pl_black=allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0x000000FF);
+    pl_dark =allocimage(display, Rect(0,0,1,1), view->chan, 1, DPurpleblue);
+    pl_black=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x000000FF);
     pl_hilit=allocimage(display, Rect(0,0,1,1), CHAN1(CAlpha,8), 1, 0x80);
     if(pl_white==0 || pl_light==0 || pl_black==0 || pl_dark==0) return 0;
     return 1;
@@ -743,7 +1096,7 @@ void pl_cpy(Image *b, Point dst, Rectangle src){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/draw.c>>=
+<<lib_gui/libpanel/draw.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -787,7 +1140,7 @@ void pl_draw1(Panel *p, Image *b);
 @
 
 
-\subsection*{[[windows/libpanel/edit.c]]}
+\subsection*{[[lib_gui/libpanel/edit.c]]}
 
 <<struct Edit>>=
 struct Edit{
@@ -1120,7 +1473,7 @@ void plemove(Panel *p, Point d){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/edit.c>>=
+<<lib_gui/libpanel/edit.c>>=
 /*
  * Interface includes:
  *	void plescroll(Panel *p, int top);
@@ -1169,7 +1522,7 @@ typedef struct Edit Edit;
 @
 
 
-\subsection*{[[windows/libpanel/entry.c]]}
+\subsection*{[[lib_gui/libpanel/entry.c]]}
 
 <<struct Entry>>=
 struct Entry{
@@ -1394,7 +1747,7 @@ char *plentryval(Panel *p){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/entry.c>>=
+<<lib_gui/libpanel/entry.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -1420,7 +1773,7 @@ typedef struct Entry Entry;
 @
 
 
-\subsection*{[[windows/libpanel/event.c]]}
+\subsection*{[[lib_gui/libpanel/event.c]]}
 
 <<function plgrabkb>>=
 void plgrabkb(Panel *g){
@@ -1480,7 +1833,7 @@ void plmouse(Panel *g, Mouse *m){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/event.c>>=
+<<lib_gui/libpanel/event.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -1496,7 +1849,7 @@ void plmouse(Panel *g, Mouse *m){
 @
 
 
-\subsection*{[[windows/libpanel/frame.c]]}
+\subsection*{[[lib_gui/libpanel/frame.c]]}
 
 <<function pl_drawframe>>=
 void pl_drawframe(Panel *p){
@@ -1555,7 +1908,7 @@ Panel *plframe(Panel *parent, int flags){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/frame.c>>=
+<<lib_gui/libpanel/frame.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -1572,7 +1925,7 @@ Panel *plframe(Panel *parent, int flags){
 @
 
 
-\subsection*{[[windows/libpanel/group.c]]}
+\subsection*{[[lib_gui/libpanel/group.c]]}
 
 <<function pl_drawgroup>>=
 void pl_drawgroup(Panel *p){
@@ -1630,7 +1983,7 @@ Panel *plgroup(Panel *parent, int flags){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/group.c>>=
+<<lib_gui/libpanel/group.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -1647,7 +2000,7 @@ Panel *plgroup(Panel *parent, int flags){
 @
 
 
-\subsection*{[[windows/libpanel/init.c]]}
+\subsection*{[[lib_gui/libpanel/init.c]]}
 
 <<function plinit>>=
 /*
@@ -1662,7 +2015,7 @@ int plinit(int ldepth){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/init.c>>=
+<<lib_gui/libpanel/init.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -1673,7 +2026,7 @@ int plinit(int ldepth){
 @
 
 
-\subsection*{[[windows/libpanel/label.c]]}
+\subsection*{[[lib_gui/libpanel/label.c]]}
 
 <<struct Label>>=
 struct Label{
@@ -1748,7 +2101,7 @@ void plplacelabel(Panel *p, int placement){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/label.c>>=
+<<lib_gui/libpanel/label.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -1768,7 +2121,7 @@ typedef struct Label Label;
 @
 
 
-\subsection*{[[windows/libpanel/list.c]]}
+\subsection*{[[lib_gui/libpanel/list.c]]}
 
 <<struct List>>=
 struct List{
@@ -1992,7 +2345,7 @@ Panel *pllist(Panel *parent, int flags, char *(*gen)(Panel *, int), int nlist, v
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/list.c>>=
+<<lib_gui/libpanel/list.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -2015,7 +2368,7 @@ typedef struct List List;
 @
 
 
-\subsection*{[[windows/libpanel/mem.c]]}
+\subsection*{[[lib_gui/libpanel/mem.c]]}
 
 <<function pl_emalloc>>=
 void *pl_emalloc(int n){
@@ -2176,7 +2529,7 @@ void plfree(Panel *p){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/mem.c>>=
+<<lib_gui/libpanel/mem.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -2199,7 +2552,7 @@ void plfree(Panel *p){
 @
 
 
-\subsection*{[[windows/libpanel/message.c]]}
+\subsection*{[[lib_gui/libpanel/message.c]]}
 
 <<struct Message>>=
 struct Message{
@@ -2331,7 +2684,7 @@ Panel *plmessage(Panel *parent, int flags, int wid, char *msg){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/message.c>>=
+<<lib_gui/libpanel/message.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -2352,7 +2705,7 @@ typedef struct Message Message;
 @
 
 
-\subsection*{[[windows/libpanel/pack.c]]}
+\subsection*{[[lib_gui/libpanel/pack.c]]}
 
 <<function pl_max>>=
 int pl_max(int a, int b){
@@ -2532,7 +2885,7 @@ void plmove(Panel *p, Point d){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/pack.c>>=
+<<lib_gui/libpanel/pack.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -2549,357 +2902,7 @@ void plmove(Panel *p, Point d){
 @
 
 
-\subsection*{[[windows/libpanel/panel.h]]}
-
-<<struct Scroll>>=
-struct Scroll{
-    Point pos, size;
-};
-@
-
-<<struct Rtext>>=
-struct Rtext{
-    int flags;		/* responds to hits? text selection? */
-    void *user;		/* user data */
-    int space;		/* how much space before, if no break */
-    int indent;		/* how much space before, after a break */
-    Image *b;		/* what to display, if nonzero */
-    Panel *p;		/* what to display, if nonzero and b==0 */
-    Font *font;		/* font in which to draw text */
-    char *text;		/* what to display, if b==0 and p==0 */
-    Rtext *next;		/* next piece */
-    /* private below */
-    Rtext *nextline;	/* links line to line */
-    Rtext *last;		/* last, for append */
-    Rectangle r;		/* where to draw, if origin were Pt(0,0) */
-    int topy;		/* y coord of top of line */
-    int wid;		/* not including space */
-};
-@
-
-<<struct Panel>>=
-struct Panel{
-    Point ipad, pad;				/* extra space inside and outside */
-    Point fixedsize;				/* size of Panel, if FIXED */
-    int user;					/* available for user */
-    void *userp;					/* available for user */
-    Rectangle r;					/* where the Panel goes */
-    /* private below */
-    Panel *next;					/* It's a list! */
-    Panel *child, *echild, *parent;			/* No, it's a tree! */
-    Image *b;					/* where we're drawn */
-    int flags;					/* position flags, see below */
-    char *kind;					/* what kind of panel? */
-    int state;					/* for hitting & drawing purposes */
-    Point size;					/* space for this Panel */
-    Point sizereq;					/* size requested by this Panel */
-    Point childreq;					/* total size needed by children */
-    Panel *lastmouse;				/* who got the last mouse event? */
-    Panel *scrollee;				/* pointer to scrolled window */
-    Panel *xscroller, *yscroller;			/* pointers to scroll bars */
-    Scroll scr;					/* scroll data */
-    void *data;					/* kind-specific data */
-    void (*draw)(Panel *);				/* draw panel and children */
-    int (*pri)(Panel *, Point);			/* priority for hitting */
-    int (*hit)(Panel *, Mouse *);			/* process mouse event */
-    void (*type)(Panel *, Rune);			/* process keyboard event */
-    Point (*getsize)(Panel *, Point);		/* return size, given child size */
-    void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
-    void (*scroll)(Panel *, int, int, int, int);	/* scroll bar to scrollee */
-    void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
-    void (*free)(Panel *);				/* free fields of data when done */
-    char* (*snarf)(Panel *);			/* snarf text from panel */
-    void (*paste)(Panel *, char *);			/* paste text into panel */
-};
-@
-
-<<constant PACK>>=
-/*
- * Panel flags
- */
-#define	PACK	0x0007		/* which side of the parent is the Panel attached to? */
-@
-
-<<constant PACKN>>=
-#define		PACKN	0x0000
-@
-
-<<constant PACKE>>=
-#define		PACKE	0x0001
-@
-
-<<constant PACKS>>=
-#define		PACKS	0x0002
-@
-
-<<constant PACKW>>=
-#define		PACKW	0x0003
-@
-
-<<constant PACKCEN>>=
-#define		PACKCEN	0x0004	/* only used by pulldown */
-@
-
-<<constant FILLX>>=
-#define	FILLX	0x0008		/* grow horizontally to fill the available space */
-@
-
-<<constant FILLY>>=
-#define	FILLY	0x0010		/* grow vertically to fill the available space */
-@
-
-<<constant PLACE>>=
-#define	PLACE	0x01e0		/* which side of its space should the Panel adhere to? */
-@
-
-<<constant PLACECEN>>=
-#define		PLACECEN 0x0000
-@
-
-<<constant PLACES>>=
-#define		PLACES	0x0020
-@
-
-<<constant PLACEE>>=
-#define		PLACEE	0x0040
-@
-
-<<constant PLACEW>>=
-#define		PLACEW	0x0060
-@
-
-<<constant PLACEN>>=
-#define		PLACEN	0x0080
-@
-
-<<constant PLACENE>>=
-#define		PLACENE	0x00a0
-@
-
-<<constant PLACENW>>=
-#define		PLACENW	0x00c0
-@
-
-<<constant PLACESE>>=
-#define		PLACESE	0x00e0
-@
-
-<<constant PLACESW>>=
-#define		PLACESW	0x0100
-@
-
-<<constant EXPAND>>=
-#define	EXPAND	0x0200		/* use up all extra space in the parent */
-@
-
-<<constant FIXED>>=
-#define	FIXED	0x0c00		/* don't pass children's size requests through to parent */
-@
-
-<<constant FIXEDX>>=
-#define	FIXEDX	0x0400
-@
-
-<<constant FIXEDY>>=
-#define	FIXEDY	0x0800
-@
-
-<<constant MAXX>>=
-#define	MAXX	0x1000		/* make x size as big as biggest sibling's */
-@
-
-<<constant MAXY>>=
-#define	MAXY	0x2000		/* make y size as big as biggest sibling's */
-@
-
-<<constant BITMAP>>=
-#define	BITMAP	0x4000		/* text argument is a bitmap, not a string */
-@
-
-<<constant USERFL>>=
-#define USERFL	0x100000	/* start of user flag */
-@
-
-<<constant OUT>>=
-/*
- * An extra bit in Mouse.buttons
- */
-#define	OUT	8			/* Mouse.buttons bit, set when mouse leaves Panel */
-@
-
-<<constant PRI_NORMAL>>=
-/*
- * Priorities
- */
-#define	PRI_NORMAL	0		/* ordinary panels */
-@
-
-<<constant PRI_POPUP>>=
-#define	PRI_POPUP	1		/* popup menus */
-@
-
-<<constant PRI_SCROLLBAR>>=
-#define	PRI_SCROLLBAR	2		/* scroll bars */
-@
-
-<<constant PL_HOT>>=
-/* Rtext.flags */
-#define PL_HOT		1
-@
-
-<<constant PL_SEL>>=
-#define PL_SEL		2
-@
-
-<<global plkbfocus>>=
-Panel *plkbfocus;			/* the panel in keyboard focus */
-@
-
-
-%-------------------------------------------------------------
-
-<<windows/libpanel/panel.h>>=
-//#pragma	src	"/sys/src/libpanel"
-//#pragma	lib	"libpanel.a"
-typedef struct Scroll Scroll;
-typedef struct Panel Panel;		/* a Graphical User Interface element */
-typedef struct Rtext Rtext;		/* formattable text */
-typedef void Icon;			/* Always used as Icon * -- Image or char */
-typedef struct Idol Idol;		/* A picture/text combo */
-<<struct Scroll>>
-<<struct Rtext>>
-<<struct Panel>>
-<<constant PACK>>
-<<constant PACKN>>
-<<constant PACKE>>
-<<constant PACKS>>
-<<constant PACKW>>
-<<constant PACKCEN>>
-<<constant FILLX>>
-<<constant FILLY>>
-<<constant PLACE>>
-<<constant PLACECEN>>
-<<constant PLACES>>
-<<constant PLACEE>>
-<<constant PLACEW>>
-<<constant PLACEN>>
-<<constant PLACENE>>
-<<constant PLACENW>>
-<<constant PLACESE>>
-<<constant PLACESW>>
-<<constant EXPAND>>
-<<constant FIXED>>
-<<constant FIXEDX>>
-<<constant FIXEDY>>
-<<constant MAXX>>
-<<constant MAXY>>
-<<constant BITMAP>>
-<<constant USERFL>>
-
-<<constant OUT>>
-<<constant PRI_NORMAL>>
-<<constant PRI_POPUP>>
-<<constant PRI_SCROLLBAR>>
-
-<<constant PL_HOT>>
-<<constant PL_SEL>>
-
-<<global plkbfocus>>
-
-int plinit(int);			/* initialization */
-void plpack(Panel *, Rectangle);	/* figure out where to put the Panel & children */
-void plmove(Panel *, Point);		/* move an already-packed panel to a new location */
-void pldraw(Panel *, Image *);		/* display the panel on the bitmap */
-void plfree(Panel *);			/* give back space */
-void plgrabkb(Panel *);			/* this Panel should receive keyboard events */
-void plkeyboard(Rune);			/* send a keyboard event to the appropriate Panel */
-void plmouse(Panel *, Mouse *);		/* send a Mouse event to a Panel tree */
-void plscroll(Panel *, Panel *, Panel *); /* link up scroll bars */
-char *plentryval(Panel *);		/* entry delivers its value */
-void plsetbutton(Panel *, int);		/* set or clear the mark on a button */
-void plsetslider(Panel *, int, int);	/* set the value of a slider */
-Rune *pleget(Panel *);			/* get the text from an edit window */
-int plelen(Panel *);			/* get the length of the text from an edit window */
-void plegetsel(Panel *, int *, int *);	/* get the selection from an edit window */
-void plepaste(Panel *, Rune *, int);	/* paste in an edit window */
-void plesel(Panel *, int, int);		/* set the selection in an edit window */
-void plescroll(Panel *, int);		/* scroll an edit window */
-Scroll plgetscroll(Panel *);		/* get scrolling information from panel */
-void plsetscroll(Panel *, Scroll);	/* set scrolling information */
-void plplacelabel(Panel *, int);	/* label placement */
-
-/*
- * Panel creation & reinitialization functions
- */
-Panel *plbutton(Panel *pl, int, Icon *, void (*)(Panel *pl, int));
-Panel *plcanvas(Panel *pl, int, void (*)(Panel *), void (*)(Panel *pl, Mouse *));
-Panel *plcheckbutton(Panel *pl, int, Icon *, void (*)(Panel *pl, int, int));
-Panel *pledit(Panel *, int, Point, Rune *, int, void (*)(Panel *));
-Panel *plentry(Panel *pl, int, int, char *, void (*)(Panel *pl, char *));
-Panel *plframe(Panel *pl, int);
-Panel *plgroup(Panel *pl, int);
-Panel *plidollist(Panel*, int, Point, Font*, Idol*, void (*)(Panel*, int, void*));
-Panel *pllabel(Panel *pl, int, Icon *);
-Panel *pllist(Panel *pl, int, char *(*)(Panel *, int), int, void(*)(Panel *pl, int, int));
-Panel *plmenu(Panel *pl, int, Icon **, int, void (*)(int, int));
-Panel *plmenubar(Panel *pl, int, int, Icon *, Panel *pl, Icon *, ...);
-Panel *plmessage(Panel *pl, int, int, char *);
-Panel *plpopup(Panel *pl, int, Panel *pl, Panel *pl, Panel *pl);
-Panel *plpulldown(Panel *pl, int, Icon *, Panel *pl, int);
-Panel *plradiobutton(Panel *pl, int, Icon *, void (*)(Panel *pl, int, int));
-Panel *plscrollbar(Panel *plparent, int flags);
-Panel *plslider(Panel *pl, int, Point, void(*)(Panel *pl, int, int, int));
-Panel *pltextview(Panel *, int, Point, Rtext *, void (*)(Panel *, int, Rtext *));
-void plinitbutton(Panel *, int, Icon *, void (*)(Panel *, int));
-void plinitcanvas(Panel *, int, void (*)(Panel *), void (*)(Panel *, Mouse *));
-void plinitcheckbutton(Panel *, int, Icon *, void (*)(Panel *, int, int));
-void plinitedit(Panel *, int, Point, Rune *, int, void (*)(Panel *));
-void plinitentry(Panel *, int, int, char *, void (*)(Panel *, char *));
-void plinitframe(Panel *, int);
-void plinitgroup(Panel *, int);
-void plinitidollist(Panel*, int, Point, Font*, Idol*, void (*)(Panel*, int, void*));
-void plinitlabel(Panel *, int, Icon *);
-void plinitlist(Panel *, int, char *(*)(Panel *, int), int, void(*)(Panel *, int, int));
-void plinitmenu(Panel *, int, Icon **, int, void (*)(int, int));
-void plinitmessage(Panel *, int, int, char *);
-void plinitpopup(Panel *, int, Panel *, Panel *, Panel *);
-void plinitpulldown(Panel *, int, Icon *, Panel *, int);
-void plinitradiobutton(Panel *, int, Icon *, void (*)(Panel *, int, int));
-void plinitscrollbar(Panel *parent, int flags);
-void plinitslider(Panel *, int, Point, void(*)(Panel *, int, int, int));
-void plinittextview(Panel *, int, Point, Rtext *, void (*)(Panel *, int, Rtext *));
-/*
- * Rtext constructors & destructor
- */
-Rtext *plrtstr(Rtext **, int, int, Font *, char *, int, void *);
-Rtext *plrtbitmap(Rtext **, int, int, Image *, int, void *);
-Rtext *plrtpanel(Rtext **, int, int, Panel *, void *);
-void plrtfree(Rtext *);
-void plrtseltext(Rtext *, Rtext *, Rtext *);
-char *plrtsnarftext(Rtext *);
-
-int plgetpostextview(Panel *);
-void plsetpostextview(Panel *, int);
-
-/*
- * Idols
- */
-Idol *plmkidol(Idol**, Image*, Image*, char*, void*);
-void plfreeidol(Idol*);
-Point plidolsize(Idol*, Font*, int);
-void *plidollistgetsel(Panel*);
-
-/*
- * Snarf
- */
-void plputsnarf(char *);
-char *plgetsnarf(void);
-void plsnarf(Panel *);			/* snarf a panel */
-void plpaste(Panel *);			/* paste a panel */
-@
-
-
-\subsection*{[[windows/libpanel/pldefs.h]]}
+\subsection*{[[lib_gui/libpanel/pldefs.h]]}
 
 <<constant HITME>>=
 #define	HITME	0x08000		/* tells ptinpanel not to look at children */
@@ -2917,7 +2920,7 @@ void plpaste(Panel *);			/* paste a panel */
 #define	REMOUSE	0x40000		/* send next mouse event here, even if not inside */
 @
 
-<<enum _anon_ (windows/libpanel/pldefs.h)>>=
+<<enum _anon_ (lib_gui/libpanel/pldefs.h)>>=
 /*
  * States, also styles
  */
@@ -2932,7 +2935,7 @@ enum{
 };
 @
 
-<<enum _anon_ (windows/libpanel/pldefs.h)2>>=
+<<enum _anon_ (lib_gui/libpanel/pldefs.h)2>>=
 /*
  * Scroll flags
  */
@@ -2946,7 +2949,7 @@ enum{
 };
 @
 
-<<enum _anon_ (windows/libpanel/pldefs.h)3>>=
+<<enum _anon_ (lib_gui/libpanel/pldefs.h)3>>=
 /*
  * Scrollbar, slider orientations
  */
@@ -2974,7 +2977,7 @@ struct Textwin{
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/pldefs.h>>=
+<<lib_gui/libpanel/pldefs.h>>=
 /*
  * Definitions for internal use only
  */
@@ -2990,9 +2993,9 @@ Rtext *pl_rthit(Rtext *, int, Point, Point);
 <<constant LEAF>>
 <<constant INVIS>>
 <<constant REMOUSE>>
-<<enum _anon_ (windows/libpanel/pldefs.h)>>
-<<enum _anon_ (windows/libpanel/pldefs.h)2>>
-<<enum _anon_ (windows/libpanel/pldefs.h)3>>
+<<enum _anon_ (lib_gui/libpanel/pldefs.h)>>
+<<enum _anon_ (lib_gui/libpanel/pldefs.h)2>>
+<<enum _anon_ (lib_gui/libpanel/pldefs.h)3>>
 Panel *pl_newpanel(Panel *, int);	/* make a new Panel, given parent & data size */
 void *pl_emalloc(int);			/* allocate some space, exit on error */
 void *pl_erealloc(void*,int);		/* reallocate some space, exit on error */
@@ -3044,7 +3047,7 @@ void plemove(Panel *, Point);
 @
 
 
-\subsection*{[[windows/libpanel/popup.c]]}
+\subsection*{[[lib_gui/libpanel/popup.c]]}
 
 <<struct Popup>>=
 struct Popup{
@@ -3079,7 +3082,7 @@ int pl_hitpopup(Panel *g, Mouse *m){
             g->state=DOWN;
         }
         else if(g->state!=UP){
-            plpack(p, screen->clipr);
+            plpack(p, view->clipr);
             if(p->lastmouse)
                 d=subpt(m->xy, divpt(addpt(p->lastmouse->r.min,
                              p->lastmouse->r.max), 2));
@@ -3181,7 +3184,7 @@ Panel *plpopup(Panel *parent, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/popup.c>>=
+<<lib_gui/libpanel/popup.c>>=
 /*
  * popup
  *	looks like a group, except diverts hits on certain buttons to
@@ -3206,7 +3209,7 @@ typedef struct Popup Popup;
 @
 
 
-\subsection*{[[windows/libpanel/print.c]]}
+\subsection*{[[lib_gui/libpanel/print.c]]}
 
 <<function pl_iprint>>=
 void pl_iprint(int indent, char *fmt, ...){
@@ -3270,7 +3273,7 @@ void pl_print(Panel *p){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/print.c>>=
+<<lib_gui/libpanel/print.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -3283,7 +3286,7 @@ void pl_print(Panel *p){
 @
 
 
-\subsection*{[[windows/libpanel/pulldown.c]]}
+\subsection*{[[lib_gui/libpanel/pulldown.c]]}
 
 <<struct Pulldown>>=
 struct Pulldown{
@@ -3464,7 +3467,7 @@ Panel *plmenubar(Panel *parent, int flags, int cflags, Icon *l1, Panel *m1, Icon
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/pulldown.c>>=
+<<lib_gui/libpanel/pulldown.c>>=
 /*
  * pulldown
  *	makes a button that pops up a panel when hit
@@ -3488,7 +3491,7 @@ typedef struct Pulldown Pulldown;
 @
 
 
-\subsection*{[[windows/libpanel/rtext.c]]}
+\subsection*{[[lib_gui/libpanel/rtext.c]]}
 
 <<constant LEAD>>=
 #define LEAD	4	/* extra space between lines */
@@ -3846,7 +3849,7 @@ char *plrtsnarftext(Rtext *w){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/rtext.c>>=
+<<lib_gui/libpanel/rtext.c>>=
 /*
  * Rich text with images.
  * Should there be an offset field, to do subscripts & kerning?
@@ -3885,7 +3888,7 @@ int pl_tabmin, pl_tabsize;
 @
 
 
-\subsection*{[[windows/libpanel/rtext.h]]}
+\subsection*{[[lib_gui/libpanel/rtext.h]]}
 
 <<constant PL_NOPBIT>>=
 /*
@@ -3921,7 +3924,7 @@ int pl_tabmin, pl_tabsize;
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/rtext.h>>=
+<<lib_gui/libpanel/rtext.h>>=
 <<constant PL_NOPBIT>>
 <<constant PL_NARGBIT>>
 <<constant PL_ARGMASK>>
@@ -3933,7 +3936,7 @@ void pltabsize(int, int);			/* set min tab and tab size */
 @
 
 
-\subsection*{[[windows/libpanel/scroll.c]]}
+\subsection*{[[lib_gui/libpanel/scroll.c]]}
 
 <<function plscroll>>=
 void plscroll(Panel *scrollee, Panel *xscroller, Panel *yscroller){
@@ -3962,7 +3965,7 @@ void plsetscroll(Panel *p, Scroll s){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/scroll.c>>=
+<<lib_gui/libpanel/scroll.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -3975,7 +3978,7 @@ void plsetscroll(Panel *p, Scroll s){
 @
 
 
-\subsection*{[[windows/libpanel/scrollbar.c]]}
+\subsection*{[[lib_gui/libpanel/scrollbar.c]]}
 
 <<struct Scrollbar>>=
 struct Scrollbar{
@@ -4152,7 +4155,7 @@ Panel *plscrollbar(Panel *parent, int flags){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/scrollbar.c>>=
+<<lib_gui/libpanel/scrollbar.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -4174,7 +4177,7 @@ typedef struct Scrollbar Scrollbar;
 @
 
 
-\subsection*{[[windows/libpanel/slider.c]]}
+\subsection*{[[lib_gui/libpanel/slider.c]]}
 
 <<struct Slider>>=
 struct Slider{
@@ -4296,7 +4299,7 @@ void plsetslider(Panel *p, int value, int range){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/slider.c>>=
+<<lib_gui/libpanel/slider.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -4316,7 +4319,7 @@ typedef struct Slider Slider;
 @
 
 
-\subsection*{[[windows/libpanel/snarf.c]]}
+\subsection*{[[lib_gui/libpanel/snarf.c]]}
 
 <<function plputsnarf>>=
 void plputsnarf(char *s){
@@ -4384,7 +4387,7 @@ void plpaste(Panel *p){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/snarf.c>>=
+<<lib_gui/libpanel/snarf.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -4399,7 +4402,7 @@ void plpaste(Panel *p){
 @
 
 
-\subsection*{[[windows/libpanel/textview.c]]}
+\subsection*{[[lib_gui/libpanel/textview.c]]}
 
 <<struct Textview>>=
 struct Textview{
@@ -4645,7 +4648,7 @@ void plsetpostextview(Panel *p, int yoffs){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/textview.c>>=
+<<lib_gui/libpanel/textview.c>>=
 /*
  * Fonted text viewer, calls out to code in rtext.c
  *
@@ -4681,9 +4684,9 @@ typedef struct Textview Textview;
 @
 
 
-\subsection*{[[windows/libpanel/textwin.c]]}
+\subsection*{[[lib_gui/libpanel/textwin.c]]}
 
-<<constant SLACK (windows/libpanel/textwin.c)>>=
+<<constant SLACK (lib_gui/libpanel/textwin.c)>>=
 #define SLACK 100
 @
 
@@ -5192,7 +5195,7 @@ void twmove(Textwin *t, Point d){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/textwin.c>>=
+<<lib_gui/libpanel/textwin.c>>=
 /*
  * Text windows
  *	void twhilite(Textwin *t, int sel0, int sel1, int on)
@@ -5222,7 +5225,7 @@ void twmove(Textwin *t, Point d){
 #include <panel.h>
 #include "pldefs.h"
 
-<<constant SLACK (windows/libpanel/textwin.c)>>
+<<constant SLACK (lib_gui/libpanel/textwin.c)>>
 
 <<function tw_before>>
 <<function twpt2rune>>
@@ -5247,7 +5250,7 @@ void twmove(Textwin *t, Point d){
 @
 
 
-\subsection*{[[windows/libpanel/utf.c]]}
+\subsection*{[[lib_gui/libpanel/utf.c]]}
 
 <<function pl_idchar>>=
 /*
@@ -5289,7 +5292,7 @@ int pl_runewidth(Font *f, char *s){
 
 %-------------------------------------------------------------
 
-<<windows/libpanel/utf.c>>=
+<<lib_gui/libpanel/utf.c>>=
 #include <u.h>
 #include <libc.h>
 #include <draw.h>

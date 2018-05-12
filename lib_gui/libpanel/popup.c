@@ -1,4 +1,4 @@
-/*s: windows/libpanel/popup.c */
+/*s: lib_gui/libpanel/popup.c */
 /*
  * popup
  *	looks like a group, except diverts hits on certain buttons to
@@ -42,7 +42,7 @@ int pl_hitpopup(Panel *g, Mouse *m){
             g->state=DOWN;
         }
         else if(g->state!=UP){
-            plpack(p, screen->clipr);
+            plpack(p, view->clipr);
             if(p->lastmouse)
                 d=subpt(m->xy, divpt(addpt(p->lastmouse->r.min,
                              p->lastmouse->r.max), 2));
@@ -134,4 +134,4 @@ Panel *plpopup(Panel *parent, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
     return v;
 }
 /*e: function plpopup */
-/*e: windows/libpanel/popup.c */
+/*e: lib_gui/libpanel/popup.c */

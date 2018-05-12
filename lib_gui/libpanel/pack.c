@@ -1,4 +1,4 @@
-/*s: windows/libpanel/pack.c */
+/*s: lib_gui/libpanel/pack.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -173,4 +173,4 @@ void plmove(Panel *p, Point d){
     for(p=p->child;p;p=p->next) plmove(p, d);
 }
 /*e: function plmove */
-/*e: windows/libpanel/pack.c */
+/*e: lib_gui/libpanel/pack.c */

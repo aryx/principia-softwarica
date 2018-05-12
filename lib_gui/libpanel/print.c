@@ -1,4 +1,4 @@
-/*s: windows/libpanel/print.c */
+/*s: lib_gui/libpanel/print.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -61,4 +61,4 @@ void pl_print(Panel *p){
     pl_ipprint(p, 0);
 }
 /*e: function pl_print */
-/*e: windows/libpanel/print.c */
+/*e: lib_gui/libpanel/print.c */

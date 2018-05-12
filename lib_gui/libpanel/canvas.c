@@ -1,4 +1,4 @@
-/*s: windows/libpanel/canvas.c */
+/*s: lib_gui/libpanel/canvas.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -66,4 +66,4 @@ Panel *plcanvas(Panel *parent, int flags, void (*draw)(Panel *), void (*hit)(Pan
     return p;
 }
 /*e: function plcanvas */
-/*e: windows/libpanel/canvas.c */
+/*e: lib_gui/libpanel/canvas.c */

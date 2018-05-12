@@ -1,4 +1,4 @@
-/*s: windows/libpanel/scrollbar.c */
+/*s: lib_gui/libpanel/scrollbar.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -167,4 +167,4 @@ Panel *plscrollbar(Panel *parent, int flags){
     return v;
 }
 /*e: function plscrollbar */
-/*e: windows/libpanel/scrollbar.c */
+/*e: lib_gui/libpanel/scrollbar.c */

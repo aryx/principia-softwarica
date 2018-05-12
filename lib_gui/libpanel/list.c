@@ -1,4 +1,4 @@
-/*s: windows/libpanel/list.c */
+/*s: lib_gui/libpanel/list.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -213,4 +213,4 @@ Panel *pllist(Panel *parent, int flags, char *(*gen)(Panel *, int), int nlist, v
     return v;
 }
 /*e: function pllist */
-/*e: windows/libpanel/list.c */
+/*e: lib_gui/libpanel/list.c */

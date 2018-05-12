@@ -1,4 +1,4 @@
-/*s: windows/libpanel/entry.c */
+/*s: lib_gui/libpanel/entry.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -215,4 +215,4 @@ char *plentryval(Panel *p){
     return ep->entry;
 }
 /*e: function plentryval */
-/*e: windows/libpanel/entry.c */
+/*e: lib_gui/libpanel/entry.c */

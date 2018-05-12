@@ -1,4 +1,4 @@
-/*s: windows/libpanel/slider.c */
+/*s: lib_gui/libpanel/slider.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -114,4 +114,4 @@ void plsetslider(Panel *p, int value, int range){
     else sp->val=value*(p->r.max.y-p->r.min.y)/range;
 }
 /*e: function plsetslider */
-/*e: windows/libpanel/slider.c */
+/*e: lib_gui/libpanel/slider.c */

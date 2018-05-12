@@ -1,4 +1,4 @@
-/*s: windows/libpanel/event.c */
+/*s: lib_gui/libpanel/event.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -58,4 +58,4 @@ void plmouse(Panel *g, Mouse *m){
     flushimage(display, 1);
 }
 /*e: function plmouse */
-/*e: windows/libpanel/event.c */
+/*e: lib_gui/libpanel/event.c */

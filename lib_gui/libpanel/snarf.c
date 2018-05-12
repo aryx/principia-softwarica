@@ -1,4 +1,4 @@
-/*s: windows/libpanel/snarf.c */
+/*s: lib_gui/libpanel/snarf.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -65,4 +65,4 @@ void plpaste(Panel *p){
     }
 }
 /*e: function plpaste */
-/*e: windows/libpanel/snarf.c */
+/*e: lib_gui/libpanel/snarf.c */

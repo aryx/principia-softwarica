@@ -1,4 +1,4 @@
-/*s: windows/libpanel/init.c */
+/*s: lib_gui/libpanel/init.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -14,4 +14,4 @@ int plinit(int ldepth){
     return 1;
 }
 /*e: function plinit */
-/*e: windows/libpanel/init.c */
+/*e: lib_gui/libpanel/init.c */

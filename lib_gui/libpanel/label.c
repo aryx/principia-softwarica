@@ -1,4 +1,4 @@
-/*s: windows/libpanel/label.c */
+/*s: lib_gui/libpanel/label.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -67,4 +67,4 @@ void plplacelabel(Panel *p, int placement){
     ((Label *)(p->data))->placement=placement;
 }
 /*e: function plplacelabel */
-/*e: windows/libpanel/label.c */
+/*e: lib_gui/libpanel/label.c */

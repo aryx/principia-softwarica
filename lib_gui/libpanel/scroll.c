@@ -1,4 +1,4 @@
-/*s: windows/libpanel/scroll.c */
+/*s: lib_gui/libpanel/scroll.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -26,4 +26,4 @@ void plsetscroll(Panel *p, Scroll s){
     }
 }
 /*e: function plsetscroll */
-/*e: windows/libpanel/scroll.c */
+/*e: lib_gui/libpanel/scroll.c */

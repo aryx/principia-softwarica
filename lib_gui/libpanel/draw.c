@@ -1,4 +1,4 @@
-/*s: windows/libpanel/draw.c */
+/*s: lib_gui/libpanel/draw.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -39,10 +39,10 @@ static Image *pl_white, *pl_light, *pl_dark, *pl_black, *pl_hilit;
 /*s: function pl_drawinit */
 int pl_drawinit(int ldepth){
     plldepth=ldepth;
-    pl_white=allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0xFFFFFFFF);
+    pl_white=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xFFFFFFFF);
     pl_light=allocimagemix(display, DPalebluegreen, DWhite);
-    pl_dark =allocimage(display, Rect(0,0,1,1), screen->chan, 1, DPurpleblue);
-    pl_black=allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0x000000FF);
+    pl_dark =allocimage(display, Rect(0,0,1,1), view->chan, 1, DPurpleblue);
+    pl_black=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x000000FF);
     pl_hilit=allocimage(display, Rect(0,0,1,1), CHAN1(CAlpha,8), 1, 0x80);
     if(pl_white==0 || pl_light==0 || pl_black==0 || pl_dark==0) return 0;
     return 1;
@@ -341,4 +341,4 @@ void pl_cpy(Image *b, Point dst, Rectangle src){
     draw(b, Rpt(dst, addpt(dst, subpt(src.max, src.min))), b, 0, src.min);
 }
 /*e: function pl_cpy */
-/*e: windows/libpanel/draw.c */
+/*e: lib_gui/libpanel/draw.c */

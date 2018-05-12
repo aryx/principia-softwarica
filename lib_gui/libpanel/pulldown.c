@@ -1,4 +1,4 @@
-/*s: windows/libpanel/pulldown.c */
+/*s: lib_gui/libpanel/pulldown.c */
 /*
  * pulldown
  *	makes a button that pops up a panel when hit
@@ -177,4 +177,4 @@ Panel *plmenubar(Panel *parent, int flags, int cflags, Icon *l1, Panel *m1, Icon
     return v;
 }
 /*e: function plmenubar */
-/*e: windows/libpanel/pulldown.c */
+/*e: lib_gui/libpanel/pulldown.c */

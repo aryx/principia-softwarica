@@ -2,7 +2,8 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
-#include <../panel.h>
+#include <panel.h>
+
 static Panel *root, *list;
 
 char *genlist(Panel *, int which){
@@ -11,21 +12,25 @@ char *genlist(Panel *, int which){
 	sprint(buf, "item %c", which+'a');
 	return buf;
 }
+
 void hitgen(Panel *p, int buttons, int sel){
 	USED(p, buttons, sel);
 }
+
 void ereshaped(Rectangle r){
-	screen.r=r;
+	view.r=r;
 	r=inset(r, 4);
 	plpack(root, r);
-	bitblt(&screen, screen.r.min, &screen, screen.r, Zero);
-	pldraw(root, &screen);
+	bitblt(&view, view.r.min, &view, view.r, Zero);
+	pldraw(root, &view);
 }
+
 void done(Panel *p, int buttons){
 	USED(p, buttons);
-	bitblt(&screen, screen.r.min, &screen, screen.r, Zero);
+	bitblt(&view, view.r.min, &view, view.r, Zero);
 	exits(0);
 }
+
 Panel *msg;
 void message(char *s, ...){
 	char buf[1024], *out;
@@ -35,24 +40,30 @@ void message(char *s, ...){
 	va_end(arg);
 	*out='\0';
 	plinitlabel(msg, PACKN|FILLX, buf);
-	pldraw(msg, &screen);
+	pldraw(msg, &view);
 }
+
 Scroll s;
+
 void save(Panel *p, int buttons){
 	USED(p, buttons);
 	s=plgetscroll(list);
 	message("save %d %d %d %d", s);
 }
+
 void revert(Panel *p, int buttons){
 	USED(p, buttons);
-	plsetscroll(list, s, &screen);
+	plsetscroll(list, s, &view);
 	message("revert %d %d %d %d", s);
 }
+
 void main(void){
 	Panel *g;
+
 	binit(0,0,0);
 	einit(Emouse);
-	plinit(screen.ldepth);
+	plinit(view.ldepth);
+
 	root=plgroup(0, 0);
 	g=plgroup(root, PACKN|EXPAND);
 	list=pllist(g, PACKE|EXPAND, genlist, 8, hitgen);
@@ -61,6 +72,8 @@ void main(void){
 	plbutton(root, PACKW, "save", save);
 	plbutton(root, PACKW, "revert", revert);
 	plbutton(root, PACKE, "done", done);
-	ereshaped(screen.r);
-	for(;;) plmouse(root, emouse(), &screen);
+
+	ereshaped(view.r);
+	for(;;) 
+      plmouse(root, emouse(), &view);
 }

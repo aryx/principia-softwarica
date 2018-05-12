@@ -1,4 +1,4 @@
-/*s: windows/libpanel/frame.c */
+/*s: lib_gui/libpanel/frame.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -52,4 +52,4 @@ Panel *plframe(Panel *parent, int flags){
     return p;
 }
 /*e: function plframe */
-/*e: windows/libpanel/frame.c */
+/*e: lib_gui/libpanel/frame.c */

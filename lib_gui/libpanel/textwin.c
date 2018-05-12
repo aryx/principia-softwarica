@@ -1,4 +1,4 @@
-/*s: windows/libpanel/textwin.c */
+/*s: lib_gui/libpanel/textwin.c */
 /*
  * Text windows
  *	void twhilite(Textwin *t, int sel0, int sel1, int on)
@@ -28,9 +28,9 @@
 #include <panel.h>
 #include "pldefs.h"
 
-/*s: constant SLACK (windows/libpanel/textwin.c) */
+/*s: constant SLACK (lib_gui/libpanel/textwin.c) */
 #define SLACK 100
-/*e: constant SLACK (windows/libpanel/textwin.c) */
+/*e: constant SLACK (lib_gui/libpanel/textwin.c) */
 
 /*s: function tw_before */
 /*
@@ -514,4 +514,4 @@ void twmove(Textwin *t, Point d){
         *lp = addpt(*lp, d);
 }
 /*e: function twmove */
-/*e: windows/libpanel/textwin.c */
+/*e: lib_gui/libpanel/textwin.c */

@@ -1,4 +1,4 @@
-/*s: windows/libpanel/edit.c */
+/*s: lib_gui/libpanel/edit.c */
 /*
  * Interface includes:
  *	void plescroll(Panel *p, int top);
@@ -334,4 +334,4 @@ void plemove(Panel *p, Point d){
     if(ep->t && !eqpt(d, Pt(0,0))) twmove(ep->t, d);
 }
 /*e: function plemove */
-/*e: windows/libpanel/edit.c */
+/*e: lib_gui/libpanel/edit.c */

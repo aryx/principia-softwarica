@@ -1,4 +1,4 @@
-/*s: windows/libpanel/button.c */
+/*s: lib_gui/libpanel/button.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -230,4 +230,4 @@ void plsetbutton(Panel *p, int val){
     ((Button *)p->data)->check=val;
 }
 /*e: function plsetbutton */
-/*e: windows/libpanel/button.c */
+/*e: lib_gui/libpanel/button.c */

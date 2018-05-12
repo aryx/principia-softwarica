@@ -1,4 +1,4 @@
-/*s: windows/libpanel/rtext.c */
+/*s: lib_gui/libpanel/rtext.c */
 /*
  * Rich text with images.
  * Should there be an offset field, to do subscripts & kerning?
@@ -353,4 +353,4 @@ char *plrtsnarftext(Rtext *w){
     return b;
 }
 /*e: function plrtsnarftext */
-/*e: windows/libpanel/rtext.c */
+/*e: lib_gui/libpanel/rtext.c */

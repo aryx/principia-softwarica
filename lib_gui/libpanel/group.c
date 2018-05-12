@@ -1,4 +1,4 @@
-/*s: windows/libpanel/group.c */
+/*s: lib_gui/libpanel/group.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -51,4 +51,4 @@ Panel *plgroup(Panel *parent, int flags){
     return p;
 }
 /*e: function plgroup */
-/*e: windows/libpanel/group.c */
+/*e: lib_gui/libpanel/group.c */

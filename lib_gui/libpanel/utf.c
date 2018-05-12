@@ -1,4 +1,4 @@
-/*s: windows/libpanel/utf.c */
+/*s: lib_gui/libpanel/utf.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -37,4 +37,4 @@ int pl_runewidth(Font *f, char *s){
     return stringwidth(f, r);
 }
 /*e: function pl_runewidth */
-/*e: windows/libpanel/utf.c */
+/*e: lib_gui/libpanel/utf.c */

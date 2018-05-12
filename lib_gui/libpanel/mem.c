@@ -1,4 +1,4 @@
-/*s: windows/libpanel/mem.c */
+/*s: lib_gui/libpanel/mem.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -148,4 +148,4 @@ void plfree(Panel *p){
     free(p);
 }
 /*e: function plfree */
-/*e: windows/libpanel/mem.c */
+/*e: lib_gui/libpanel/mem.c */

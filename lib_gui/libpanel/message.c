@@ -1,4 +1,4 @@
-/*s: windows/libpanel/message.c */
+/*s: lib_gui/libpanel/message.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -123,4 +123,4 @@ Panel *plmessage(Panel *parent, int flags, int wid, char *msg){
     return v;
 }
 /*e: function plmessage */
-/*e: windows/libpanel/message.c */
+/*e: lib_gui/libpanel/message.c */

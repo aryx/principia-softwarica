@@ -1,4 +1,4 @@
-/*s: windows/libpanel/textview.c */
+/*s: lib_gui/libpanel/textview.c */
 /*
  * Fonted text viewer, calls out to code in rtext.c
  *
@@ -242,4 +242,4 @@ void plsetpostextview(Panel *p, int yoffs){
     pldraw(p, p->b);
 }
 /*e: function plsetpostextview */
-/*e: windows/libpanel/textview.c */
+/*e: lib_gui/libpanel/textview.c */
