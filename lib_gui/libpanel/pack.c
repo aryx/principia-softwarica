@@ -5,12 +5,12 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
-/*s: function pl_max */
+/*s: function [[pl_max]] */
 int pl_max(int a, int b){
     return a>b?a:b;
 }
-/*e: function pl_max */
-/*s: function pl_sizesibs */
+/*e: function [[pl_max]] */
+/*s: function [[pl_sizesibs]] */
 Point pl_sizesibs(Panel *p){
     Point s;
     if(p==0) return Pt(0,0);
@@ -29,8 +29,8 @@ Point pl_sizesibs(Panel *p){
     }
     return s;
 }
-/*e: function pl_sizesibs */
-/*s: function pl_sizereq */
+/*e: function [[pl_sizesibs]] */
+/*s: function [[pl_sizereq]] */
 /*
  * Compute the requested size of p and its descendants.
  */
@@ -52,8 +52,8 @@ void pl_sizereq(Panel *p){
     if(p->flags&FIXEDX) p->sizereq.x=p->fixedsize.x;
     if(p->flags&FIXEDY) p->sizereq.y=p->fixedsize.y;
 }
-/*e: function pl_sizereq */
-/*s: function pl_getshare */
+/*e: function [[pl_sizereq]] */
+/*s: function [[pl_getshare]] */
 Point pl_getshare(Panel *p){
     Point share;
     if(p==0) return Pt(0,0);
@@ -72,8 +72,8 @@ Point pl_getshare(Panel *p){
     }
     return share;
 }
-/*e: function pl_getshare */
-/*s: function pl_setrect */
+/*e: function [[pl_getshare]] */
+/*s: function [[pl_setrect]] */
 /*
  * Set the sizes and rectangles of p and its descendants, given their requested sizes.
  */
@@ -155,14 +155,14 @@ void pl_setrect(Panel *p, Point ul, Point avail){
         space=newspace;
     }
 }
-/*e: function pl_setrect */
-/*s: function plpack */
+/*e: function [[pl_setrect]] */
+/*s: function [[plpack]] */
 void plpack(Panel *p, Rectangle where){
     pl_sizereq(p);
     pl_setrect(p, where.min, subpt(where.max, where.min));
 }
-/*e: function plpack */
-/*s: function plmove */
+/*e: function [[plpack]] */
+/*s: function [[plmove]] */
 /*
  * move an already-packed panel so that p->r=raddp(p->r, d)
  */
@@ -172,5 +172,5 @@ void plmove(Panel *p, Point d){
     p->r=rectaddpt(p->r, d);
     for(p=p->child;p;p=p->next) plmove(p, d);
 }
-/*e: function plmove */
+/*e: function [[plmove]] */
 /*e: lib_gui/libpanel/pack.c */

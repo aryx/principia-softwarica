@@ -8,7 +8,7 @@
 #include <keyboard.h>
 
 typedef struct Entry Entry;
-/*s: struct Entry */
+/*s: struct [[Entry]] */
 struct Entry{
     char *entry;
     char *entp;
@@ -16,11 +16,11 @@ struct Entry{
     void (*hit)(Panel *, char *);
     Point minsize;
 };
-/*e: struct Entry */
-/*s: constant SLACK */
+/*e: struct [[Entry]] */
+/*s: constant [[SLACK]] */
 #define	SLACK	7	/* enough for one extra rune and ◀ and a nul */
-/*e: constant SLACK */
-/*s: function pl_snarfentry */
+/*e: constant [[SLACK]] */
+/*s: function [[pl_snarfentry]] */
 char *pl_snarfentry(Panel *p){
     Entry *ep;
     int n;
@@ -32,8 +32,8 @@ char *pl_snarfentry(Panel *p){
     if(n<=0) return nil;
     return smprint("%.*s", n, ep->entry);
 }
-/*e: function pl_snarfentry */
-/*s: function pl_pasteentry */
+/*e: function [[pl_snarfentry]] */
+/*s: function [[pl_pasteentry]] */
 void pl_pasteentry(Panel *p, char *s){
     Entry *ep;
     char *e;
@@ -51,8 +51,8 @@ void pl_pasteentry(Panel *p, char *s){
     ep->entp=ep->eent=e;
     pldraw(p, p->b);
 }
-/*e: function pl_pasteentry */
-/*s: function pl_drawentry */
+/*e: function [[pl_pasteentry]] */
+/*s: function [[pl_drawentry]] */
 void pl_drawentry(Panel *p){
     Rectangle r;
     Entry *ep;
@@ -74,8 +74,8 @@ void pl_drawentry(Panel *p){
     if(s != ep->entry)
         free(s);
 }
-/*e: function pl_drawentry */
-/*s: function pl_hitentry */
+/*e: function [[pl_drawentry]] */
+/*s: function [[pl_hitentry]] */
 int pl_hitentry(Panel *p, Mouse *m){
     if((m->buttons&7)==1){
         plgrabkb(p);
@@ -107,8 +107,8 @@ int pl_hitentry(Panel *p, Mouse *m){
     }
     return 0;
 }
-/*e: function pl_hitentry */
-/*s: function pl_typeentry */
+/*e: function [[pl_hitentry]] */
+/*s: function [[pl_typeentry]] */
 void pl_typeentry(Panel *p, Rune c){
     int n;
     Entry *ep;
@@ -153,27 +153,27 @@ void pl_typeentry(Panel *p, Rune c){
     }
     pldraw(p, p->b);
 }
-/*e: function pl_typeentry */
-/*s: function pl_getsizeentry */
+/*e: function [[pl_typeentry]] */
+/*s: function [[pl_getsizeentry]] */
 Point pl_getsizeentry(Panel *p, Point children){
     USED(children);
     return pl_boxsize(((Entry *)p->data)->minsize, p->state);
 }
-/*e: function pl_getsizeentry */
-/*s: function pl_childspaceentry */
+/*e: function [[pl_getsizeentry]] */
+/*s: function [[pl_childspaceentry]] */
 void pl_childspaceentry(Panel *p, Point *ul, Point *size){
     USED(p, ul, size);
 }
-/*e: function pl_childspaceentry */
-/*s: function pl_freeentry */
+/*e: function [[pl_childspaceentry]] */
+/*s: function [[pl_freeentry]] */
 void pl_freeentry(Panel *p){
     Entry *ep;
     ep = p->data;
     free(ep->entry);
     ep->entry = ep->eent = ep->entp = 0;
 }
-/*e: function pl_freeentry */
-/*s: function plinitentry */
+/*e: function [[pl_freeentry]] */
+/*s: function [[plinitentry]] */
 void plinitentry(Panel *v, int flags, int wid, char *str, void (*hit)(Panel *, char *)){
     int elen;
     Entry *ep;
@@ -198,21 +198,21 @@ void plinitentry(Panel *v, int flags, int wid, char *str, void (*hit)(Panel *, c
     ep->hit=hit;
     v->kind="entry";
 }
-/*e: function plinitentry */
-/*s: function plentry */
+/*e: function [[plinitentry]] */
+/*s: function [[plentry]] */
 Panel *plentry(Panel *parent, int flags, int wid, char *str, void (*hit)(Panel *, char *)){
     Panel *v;
     v=pl_newpanel(parent, sizeof(Entry));
     plinitentry(v, flags, wid, str, hit);
     return v;
 }
-/*e: function plentry */
-/*s: function plentryval */
+/*e: function [[plentry]] */
+/*s: function [[plentryval]] */
 char *plentryval(Panel *p){
     Entry *ep;
     ep=p->data;
     *ep->entp='\0';
     return ep->entry;
 }
-/*e: function plentryval */
+/*e: function [[plentryval]] */
 /*e: lib_gui/libpanel/entry.c */

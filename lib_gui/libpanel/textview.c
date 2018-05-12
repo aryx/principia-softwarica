@@ -13,7 +13,7 @@
 #include "pldefs.h"
 
 typedef struct Textview Textview;
-/*s: struct Textview */
+/*s: struct [[Textview]] */
 struct Textview{
     void (*hit)(Panel *, int, Rtext *); /* call back to user on hit */
     Rtext *text;			/* text */
@@ -25,9 +25,9 @@ struct Textview{
     Point minsize;			/* smallest acceptible window size */
     int buttons;
 };
-/*e: struct Textview */
+/*e: struct [[Textview]] */
 
-/*s: function pl_setscrpos */
+/*s: function [[pl_setscrpos]] */
 void pl_setscrpos(Panel *p, Textview *tp, Rectangle r){
     Panel *sb;
     int lo, hi;
@@ -36,8 +36,8 @@ void pl_setscrpos(Panel *p, Textview *tp, Rectangle r){
     sb=p->yscroller;
     if(sb && sb->setscrollbar) sb->setscrollbar(sb, lo, hi, tp->thgt);
 }
-/*e: function pl_setscrpos */
-/*s: function pl_drawtextview */
+/*e: function [[pl_setscrpos]] */
+/*s: function [[pl_drawtextview]] */
 void pl_drawtextview(Panel *p){
     int twid;
     Rectangle r;
@@ -54,8 +54,8 @@ void pl_drawtextview(Panel *p){
     pl_rtdraw(p->b, r, tp->text, tp->yoffs);
     pl_setscrpos(p, tp, r);
 }
-/*e: function pl_drawtextview */
-/*s: function pl_passon */
+/*e: function [[pl_drawtextview]] */
+/*s: function [[pl_passon]] */
 /*
  * If t is a panel word, pass the mouse event on to it
  */
@@ -63,8 +63,8 @@ void pl_passon(Rtext *t, Mouse *m){
     if(t && t->b==0 && t->p!=0)
         plmouse(t->p, m);
 }
-/*e: function pl_passon */
-/*s: function pl_hittextview */
+/*e: function [[pl_passon]] */
+/*s: function [[pl_hittextview]] */
 int pl_hittextview(Panel *p, Mouse *m){
     Rtext *oldhitword, *oldhitfirst;
     int hitme, oldstate;
@@ -117,8 +117,8 @@ int pl_hittextview(Panel *p, Mouse *m){
     }
     return 0;
 }
-/*e: function pl_hittextview */
-/*s: function pl_scrolltextview */
+/*e: function [[pl_hittextview]] */
+/*s: function [[pl_scrolltextview]] */
 void pl_scrolltextview(Panel *p, int dir, int buttons, int num, int den){
     int yoffs;
     Point ul, size;
@@ -153,24 +153,24 @@ void pl_scrolltextview(Panel *p, int dir, int buttons, int num, int den){
         pl_setscrpos(p, tp, r);
     }
 }
-/*e: function pl_scrolltextview */
-/*s: function pl_typetextview */
+/*e: function [[pl_scrolltextview]] */
+/*s: function [[pl_typetextview]] */
 void pl_typetextview(Panel *g, Rune c){
     USED(g, c);
 }
-/*e: function pl_typetextview */
-/*s: function pl_getsizetextview */
+/*e: function [[pl_typetextview]] */
+/*s: function [[pl_getsizetextview]] */
 Point pl_getsizetextview(Panel *p, Point children){
     USED(children);
     return pl_boxsize(((Textview *)p->data)->minsize, p->state);
 }
-/*e: function pl_getsizetextview */
-/*s: function pl_childspacetextview */
+/*e: function [[pl_getsizetextview]] */
+/*s: function [[pl_childspacetextview]] */
 void pl_childspacetextview(Panel *g, Point *ul, Point *size){
     USED(g, ul, size);
 }
-/*e: function pl_childspacetextview */
-/*s: function pl_pritextview */
+/*e: function [[pl_childspacetextview]] */
+/*s: function [[pl_pritextview]] */
 /*
  * Priority depends on what thing inside the panel we're pointing at.
  */
@@ -189,15 +189,15 @@ int pl_pritextview(Panel *p, Point xy){
     }
     return PRI_NORMAL;
 }
-/*e: function pl_pritextview */
+/*e: function [[pl_pritextview]] */
 
-/*s: function pl_snarftextview */
+/*s: function [[pl_snarftextview]] */
 char* pl_snarftextview(Panel *p){
     return plrtsnarftext(((Textview *)p->data)->text);
 }
-/*e: function pl_snarftextview */
+/*e: function [[pl_snarftextview]] */
 
-/*s: function plinittextview */
+/*s: function [[plinittextview]] */
 void plinittextview(Panel *v, int flags, Point minsize, Rtext *t, void (*hit)(Panel *, int, Rtext *)){
     Textview *tp;
     tp=v->data;
@@ -222,24 +222,24 @@ void plinittextview(Panel *v, int flags, Point minsize, Rtext *t, void (*hit)(Pa
     v->scr.pos=Pt(0,0);
     v->scr.size=Pt(0,1);
 }
-/*e: function plinittextview */
-/*s: function pltextview */
+/*e: function [[plinittextview]] */
+/*s: function [[pltextview]] */
 Panel *pltextview(Panel *parent, int flags, Point minsize, Rtext *t, void (*hit)(Panel *, int, Rtext *)){
     Panel *v;
     v=pl_newpanel(parent, sizeof(Textview));
     plinittextview(v, flags, minsize, t, hit);
     return v;
 }
-/*e: function pltextview */
-/*s: function plgetpostextview */
+/*e: function [[pltextview]] */
+/*s: function [[plgetpostextview]] */
 int plgetpostextview(Panel *p){
     return ((Textview *)p->data)->yoffs;
 }
-/*e: function plgetpostextview */
-/*s: function plsetpostextview */
+/*e: function [[plgetpostextview]] */
+/*s: function [[plsetpostextview]] */
 void plsetpostextview(Panel *p, int yoffs){
     ((Textview *)p->data)->yoffs=yoffs;
     pldraw(p, p->b);
 }
-/*e: function plsetpostextview */
+/*e: function [[plsetpostextview]] */
 /*e: lib_gui/libpanel/textview.c */

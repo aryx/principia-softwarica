@@ -11,18 +11,18 @@
 #include <panel.h>
 #include "pldefs.h"
 typedef struct Popup Popup;
-/*s: struct Popup */
+/*s: struct [[Popup]] */
 struct Popup{
     Image *save;			/* where to save what the popup covers */
     Panel *pop[3];			/* what to pop up */
 };
-/*e: struct Popup */
-/*s: function pl_drawpopup */
+/*e: struct [[Popup]] */
+/*s: function [[pl_drawpopup]] */
 void pl_drawpopup(Panel *p){
     USED(p);
 }
-/*e: function pl_drawpopup */
-/*s: function pl_hitpopup */
+/*e: function [[pl_drawpopup]] */
+/*s: function [[pl_hitpopup]] */
 int pl_hitpopup(Panel *g, Mouse *m){
     Panel *p;
     Point d;
@@ -85,29 +85,29 @@ int pl_hitpopup(Panel *g, Mouse *m){
         g->state=UP;
     return (m->buttons&7)!=0;
 }
-/*e: function pl_hitpopup */
-/*s: function pl_typepopup */
+/*e: function [[pl_hitpopup]] */
+/*s: function [[pl_typepopup]] */
 void pl_typepopup(Panel *g, Rune c){
     USED(g, c);
 }
-/*e: function pl_typepopup */
-/*s: function pl_getsizepopup */
+/*e: function [[pl_typepopup]] */
+/*s: function [[pl_getsizepopup]] */
 Point pl_getsizepopup(Panel *g, Point children){
     USED(g);
     return children;
 }
-/*e: function pl_getsizepopup */
-/*s: function pl_childspacepopup */
+/*e: function [[pl_getsizepopup]] */
+/*s: function [[pl_childspacepopup]] */
 void pl_childspacepopup(Panel *g, Point *ul, Point *size){
     USED(g, ul, size);
 }
-/*e: function pl_childspacepopup */
-/*s: function pl_pripopup */
+/*e: function [[pl_childspacepopup]] */
+/*s: function [[pl_pripopup]] */
 int pl_pripopup(Panel *, Point){
     return PRI_POPUP;
 }
-/*e: function pl_pripopup */
-/*s: function plinitpopup */
+/*e: function [[pl_pripopup]] */
+/*s: function [[plinitpopup]] */
 void plinitpopup(Panel *v, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
     Popup *pp;
     pp=v->data;
@@ -125,13 +125,13 @@ void plinitpopup(Panel *v, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
     pp->save=0;
     v->kind="popup";
 }
-/*e: function plinitpopup */
-/*s: function plpopup */
+/*e: function [[plinitpopup]] */
+/*s: function [[plpopup]] */
 Panel *plpopup(Panel *parent, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
     Panel *v;
     v=pl_newpanel(parent, sizeof(Popup));
     plinitpopup(v, flags, pop0, pop1, pop2);
     return v;
 }
-/*e: function plpopup */
+/*e: function [[plpopup]] */
 /*e: lib_gui/libpanel/popup.c */

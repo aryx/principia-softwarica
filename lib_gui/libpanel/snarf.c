@@ -6,7 +6,7 @@
 #include <panel.h>
 #include "pldefs.h"
 
-/*s: function plputsnarf */
+/*s: function [[plputsnarf]] */
 void plputsnarf(char *s){
     int fd;
 
@@ -17,8 +17,8 @@ void plputsnarf(char *s){
         close(fd);
     }
 }
-/*e: function plputsnarf */
-/*s: function plgetsnarf */
+/*e: function [[plputsnarf]] */
+/*s: function [[plgetsnarf]] */
 char *plgetsnarf(void){
     int fd, n, r;
     char *s;
@@ -41,8 +41,8 @@ char *plgetsnarf(void){
     s[n] = '\0';
     return s;
 }
-/*e: function plgetsnarf */
-/*s: function plsnarf */
+/*e: function [[plgetsnarf]] */
+/*s: function [[plsnarf]] */
 void plsnarf(Panel *p){
     char *s;
 
@@ -52,8 +52,8 @@ void plsnarf(Panel *p){
     plputsnarf(s);
     free(s);
 }
-/*e: function plsnarf */
-/*s: function plpaste */
+/*e: function [[plsnarf]] */
+/*s: function [[plpaste]] */
 void plpaste(Panel *p){
     char *s;
 
@@ -64,5 +64,5 @@ void plpaste(Panel *p){
         free(s);
     }
 }
-/*e: function plpaste */
+/*e: function [[plpaste]] */
 /*e: lib_gui/libpanel/snarf.c */

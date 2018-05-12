@@ -6,21 +6,21 @@
 #include <panel.h>
 #include "pldefs.h"
 
-/*s: function plgrabkb */
+/*s: function [[plgrabkb]] */
 void plgrabkb(Panel *g){
     plkbfocus=g;
 }
-/*e: function plgrabkb */
-/*s: function plkeyboard */
+/*e: function [[plgrabkb]] */
+/*s: function [[plkeyboard]] */
 void plkeyboard(Rune c){
     if(plkbfocus){
         plkbfocus->type(plkbfocus, c);
         flushimage(display, 1);
     }
 }
-/*e: function plkeyboard */
+/*e: function [[plkeyboard]] */
 
-/*s: function pl_ptinpanel */
+/*s: function [[pl_ptinpanel]] */
 /*
  * Return the most leafward, highest priority panel containing p
  */
@@ -33,8 +33,8 @@ Panel *pl_ptinpanel(Point p, Panel *g){
     }
     return 0;
 }
-/*e: function pl_ptinpanel */
-/*s: function plmouse */
+/*e: function [[pl_ptinpanel]] */
+/*s: function [[plmouse]] */
 void plmouse(Panel *g, Mouse *m){
     Panel *hit, *last;
     if(g->flags&REMOUSE)
@@ -57,5 +57,5 @@ void plmouse(Panel *g, Mouse *m){
     }
     flushimage(display, 1);
 }
-/*e: function plmouse */
+/*e: function [[plmouse]] */
 /*e: lib_gui/libpanel/event.c */

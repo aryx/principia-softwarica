@@ -6,7 +6,7 @@
 #include <panel.h>
 #include "pldefs.h"
 typedef struct List List;
-/*s: struct List */
+/*s: struct [[List]] */
 struct List{
     void (*hit)(Panel *, int, int);	/* call user back on hit */
     char *(*gen)(Panel *, int);	/* return text given index or 0 if out of range */
@@ -17,11 +17,11 @@ struct List{
     Point minsize;
     int buttons;
 };
-/*e: struct List */
-/*s: constant MAXHGT */
+/*e: struct [[List]] */
+/*s: constant [[MAXHGT]] */
 #define	MAXHGT	12
-/*e: constant MAXHGT */
-/*s: function pl_listsel */
+/*e: constant [[MAXHGT]] */
+/*s: function [[pl_listsel]] */
 void pl_listsel(Panel *p, int sel, int on){
     List *lp;
     int hi;
@@ -40,8 +40,8 @@ void pl_listsel(Panel *p, int sel, int on){
         }
     }
 }
-/*e: function pl_listsel */
-/*s: function pl_liststrings */
+/*e: function [[pl_listsel]] */
+/*s: function [[pl_liststrings]] */
 void pl_liststrings(Panel *p, int lo, int hi, Rectangle r){
     Panel *sb;
     List *lp;
@@ -59,8 +59,8 @@ void pl_liststrings(Panel *p, int lo, int hi, Rectangle r){
         sb->setscrollbar(sb, lp->lo,
             lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height, lp->len);
 }
-/*e: function pl_liststrings */
-/*s: function pl_drawlist */
+/*e: function [[pl_liststrings]] */
+/*s: function [[pl_drawlist]] */
 void pl_drawlist(Panel *p){
     List *lp;
     lp=p->data;
@@ -68,8 +68,8 @@ void pl_drawlist(Panel *p){
     pl_liststrings(p, lp->lo, lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height,
         lp->listr);
 }
-/*e: function pl_drawlist */
-/*s: function pl_hitlist */
+/*e: function [[pl_drawlist]] */
+/*s: function [[pl_hitlist]] */
 int pl_hitlist(Panel *p, Mouse *m){
     int oldsel, hitme;
     Point ul, size;
@@ -103,8 +103,8 @@ int pl_hitlist(Panel *p, Mouse *m){
         lp->hit(p, lp->buttons, lp->sel);
     return 0;
 }
-/*e: function pl_hitlist */
-/*s: function pl_scrolllist */
+/*e: function [[pl_hitlist]] */
+/*s: function [[pl_scrolllist]] */
 void pl_scrolllist(Panel *p, int dir, int buttons, int val, int len){
     Point ul, size;
     int nlist, oldlo, hi, nline, y;
@@ -148,24 +148,24 @@ void pl_scrolllist(Panel *p, int dir, int buttons, int val, int len){
         pl_liststrings(p, oldlo+nline, hi, r);
     }
 }
-/*e: function pl_scrolllist */
-/*s: function pl_typelist */
+/*e: function [[pl_scrolllist]] */
+/*s: function [[pl_typelist]] */
 void pl_typelist(Panel *g, Rune c){
     USED(g, c);
 }
-/*e: function pl_typelist */
-/*s: function pl_getsizelist */
+/*e: function [[pl_typelist]] */
+/*s: function [[pl_getsizelist]] */
 Point pl_getsizelist(Panel *p, Point children){
     USED(children);
     return pl_boxsize(((List *)p->data)->minsize, p->state);
 }
-/*e: function pl_getsizelist */
-/*s: function pl_childspacelist */
+/*e: function [[pl_getsizelist]] */
+/*s: function [[pl_childspacelist]] */
 void pl_childspacelist(Panel *g, Point *ul, Point *size){
     USED(g, ul, size);
 }
-/*e: function pl_childspacelist */
-/*s: function plinitlist */
+/*e: function [[pl_childspacelist]] */
+/*s: function [[plinitlist]] */
 void plinitlist(Panel *v, int flags, char *(*gen)(Panel *, int), int nlist, void (*hit)(Panel *, int, int)){
     List *lp;
     int wid, max;
@@ -204,13 +204,13 @@ void plinitlist(Panel *v, int flags, char *(*gen)(Panel *, int), int nlist, void
     v->scr.size=Pt(0,lp->len);
     v->kind="list";
 }
-/*e: function plinitlist */
-/*s: function pllist */
+/*e: function [[plinitlist]] */
+/*s: function [[pllist]] */
 Panel *pllist(Panel *parent, int flags, char *(*gen)(Panel *, int), int nlist, void (*hit)(Panel *, int, int)){
     Panel *v;
     v=pl_newpanel(parent, sizeof(List));
     plinitlist(v, flags, gen, nlist, hit);
     return v;
 }
-/*e: function pllist */
+/*e: function [[pllist]] */
 /*e: lib_gui/libpanel/list.c */

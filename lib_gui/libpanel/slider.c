@@ -6,7 +6,7 @@
 #include <panel.h>
 #include "pldefs.h"
 typedef struct Slider Slider;
-/*s: struct Slider */
+/*s: struct [[Slider]] */
 struct Slider{
     int dir;			/* HORIZ or VERT */
     int val;			/* setting, in screen coordinates */
@@ -14,8 +14,8 @@ struct Slider{
     void (*hit)(Panel *, int, int, int);	/* call back to user when slider changes */
     int buttons;
 };
-/*e: struct Slider */
-/*s: function pl_drawslider */
+/*e: struct [[Slider]] */
+/*s: function [[pl_drawslider]] */
 void pl_drawslider(Panel *p){
     Rectangle r;
     Slider *sp;
@@ -26,8 +26,8 @@ void pl_drawslider(Panel *p){
     case VERT:  pl_sliderupd(p->b, r, sp->dir, r.max.y-sp->val, r.max.y); break;
     }
 }
-/*e: function pl_drawslider */
-/*s: function pl_hitslider */
+/*e: function [[pl_drawslider]] */
+/*s: function [[pl_hitslider]] */
 int pl_hitslider(Panel *p, Mouse *m){
     int oldstate, oldval, len;
     Point ul, size;
@@ -61,24 +61,24 @@ int pl_hitslider(Panel *p, Mouse *m){
     if(oldval!=sp->val && sp->hit) sp->hit(p, sp->buttons, sp->val, len);
     return 0;
 }
-/*e: function pl_hitslider */
-/*s: function pl_typeslider */
+/*e: function [[pl_hitslider]] */
+/*s: function [[pl_typeslider]] */
 void pl_typeslider(Panel *p, Rune c){
     USED(p, c);
 }
-/*e: function pl_typeslider */
-/*s: function pl_getsizeslider */
+/*e: function [[pl_typeslider]] */
+/*s: function [[pl_getsizeslider]] */
 Point pl_getsizeslider(Panel *p, Point children){
     USED(children);
     return pl_boxsize(((Slider *)p->data)->minsize, p->state);
 }
-/*e: function pl_getsizeslider */
-/*s: function pl_childspaceslider */
+/*e: function [[pl_getsizeslider]] */
+/*s: function [[pl_childspaceslider]] */
 void pl_childspaceslider(Panel *g, Point *ul, Point *size){
     USED(g, ul, size);
 }
-/*e: function pl_childspaceslider */
-/*s: function plinitslider */
+/*e: function [[pl_childspaceslider]] */
+/*s: function [[plinitslider]] */
 void plinitslider(Panel *v, int flags, Point size, void (*hit)(Panel *, int, int, int)){
     Slider *sp;
     sp=v->data;
@@ -95,16 +95,16 @@ void plinitslider(Panel *v, int flags, Point size, void (*hit)(Panel *, int, int
     sp->hit=hit;
     v->kind="slider";
 }
-/*e: function plinitslider */
-/*s: function plslider */
+/*e: function [[plinitslider]] */
+/*s: function [[plslider]] */
 Panel *plslider(Panel *parent, int flags, Point size, void (*hit)(Panel *, int, int, int)){
     Panel *p;
     p=pl_newpanel(parent, sizeof(Slider));
     plinitslider(p, flags, size, hit);
     return p;
 }
-/*e: function plslider */
-/*s: function plsetslider */
+/*e: function [[plslider]] */
+/*s: function [[plsetslider]] */
 void plsetslider(Panel *p, int value, int range){
     Slider *sp;
     sp=p->data;
@@ -113,5 +113,5 @@ void plsetslider(Panel *p, int value, int range){
     if(sp->dir==HORIZ) sp->val=value*(p->r.max.x-p->r.min.x)/range;
     else sp->val=value*(p->r.max.y-p->r.min.y)/range;
 }
-/*e: function plsetslider */
+/*e: function [[plsetslider]] */
 /*e: lib_gui/libpanel/slider.c */

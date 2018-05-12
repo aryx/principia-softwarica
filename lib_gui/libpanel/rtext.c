@@ -11,14 +11,14 @@
 #include "pldefs.h"
 #include "rtext.h"
 
-/*s: constant LEAD */
+/*s: constant [[LEAD]] */
 #define LEAD	4	/* extra space between lines */
-/*e: constant LEAD */
-/*s: constant BORD */
+/*e: constant [[LEAD]] */
+/*s: constant [[BORD]] */
 #define BORD	2	/* extra border for images */
-/*e: constant BORD */
+/*e: constant [[BORD]] */
 
-/*s: function pl_rtnew */
+/*s: function [[pl_rtnew]] */
 Rtext *pl_rtnew(Rtext **t, int space, int indent, Image *b, Panel *p, Font *f, char *s, int flags, void *user){
     Rtext *new;
     new=pl_emalloc(sizeof(Rtext));
@@ -40,23 +40,23 @@ Rtext *pl_rtnew(Rtext **t, int space, int indent, Image *b, Panel *p, Font *f, c
     (*t)->last=new;
     return new;
 }
-/*e: function pl_rtnew */
-/*s: function plrtpanel */
+/*e: function [[pl_rtnew]] */
+/*s: function [[plrtpanel]] */
 Rtext *plrtpanel(Rtext **t, int space, int indent, Panel *p, void *user){
     return pl_rtnew(t, space, indent, 0, p, 0, 0, 1, user);
 }
-/*e: function plrtpanel */
-/*s: function plrtstr */
+/*e: function [[plrtpanel]] */
+/*s: function [[plrtstr]] */
 Rtext *plrtstr(Rtext **t, int space, int indent, Font *f, char *s, int flags, void *user){
     return pl_rtnew(t, space, indent, 0, 0, f, s, flags, user);
 }
-/*e: function plrtstr */
-/*s: function plrtbitmap */
+/*e: function [[plrtstr]] */
+/*s: function [[plrtbitmap]] */
 Rtext *plrtbitmap(Rtext **t, int space, int indent, Image *b, int flags, void *user){
     return pl_rtnew(t, space, indent, b, 0, 0, 0, flags, user);
 }
-/*e: function plrtbitmap */
-/*s: function plrtfree */
+/*e: function [[plrtbitmap]] */
+/*s: function [[plrtfree]] */
 void plrtfree(Rtext *t){
     Rtext *next;
     while(t){
@@ -65,15 +65,15 @@ void plrtfree(Rtext *t){
         t=next;
     }
 }
-/*e: function plrtfree */
+/*e: function [[plrtfree]] */
 int pl_tabmin, pl_tabsize;
-/*s: function pltabsize */
+/*s: function [[pltabsize]] */
 void pltabsize(int min, int size){
     pl_tabmin=min;
     pl_tabsize=size;
 }
-/*e: function pltabsize */
-/*s: function pl_space */
+/*e: function [[pltabsize]] */
+/*s: function [[pl_space]] */
 int pl_space(int space, int pos, int indent){
     if(space>=0) return space;
     switch(PL_OP(space)){
@@ -83,8 +83,8 @@ int pl_space(int space, int pos, int indent){
         return ((pos-indent+pl_tabmin)/pl_tabsize+PL_ARG(space))*pl_tabsize+indent-pos;
     }
 }
-/*e: function pl_space */
-/*s: function pl_rtfmt */
+/*e: function [[pl_space]] */
+/*s: function [[pl_rtfmt]] */
 /*
  * initialize rectangles & nextlines of text starting at t,
  * galley width is wid.  Returns the total length of the text
@@ -171,9 +171,9 @@ int pl_rtfmt(Rtext *t, int wid){
     }
     return p.y;
 }
-/*e: function pl_rtfmt */
+/*e: function [[pl_rtfmt]] */
 
-/*s: function pl_stuffbitmap */
+/*s: function [[pl_stuffbitmap]] */
 /*
  * If we draw the text in a backup bitmap and copy it onto the screen,
  * the bitmap pointers in all the subpanels point to the wrong bitmap.
@@ -184,9 +184,9 @@ void pl_stuffbitmap(Panel *p, Image *b){
     for(p=p->child;p;p=p->next)
         pl_stuffbitmap(p, b);
 }
-/*e: function pl_stuffbitmap */
+/*e: function [[pl_stuffbitmap]] */
 
-/*s: function pl_rtdraw */
+/*s: function [[pl_rtdraw]] */
 void pl_rtdraw(Image *b, Rectangle r, Rtext *t, int yoffs){
     static Image *backup;
     Point offs, lp;
@@ -239,8 +239,8 @@ void pl_rtdraw(Image *b, Rectangle r, Rtext *t, int yoffs){
     if(b!=bb)
         draw(bb, r, b, 0, r.min);
 }
-/*e: function pl_rtdraw */
-/*s: function pl_reposition */
+/*e: function [[pl_rtdraw]] */
+/*s: function [[pl_reposition]] */
 /*
  * Reposition text already drawn in the window.
  * We just move the pixels and update the positions of any
@@ -254,8 +254,8 @@ void pl_reposition(Rtext *t, Image *b, Point p, Rectangle r){
         if(!eqrect(t->r, Rect(0,0,0,0)) && !t->b && t->p)
             plmove(t->p, offs);
 }
-/*e: function pl_reposition */
-/*s: function pl_rtredraw */
+/*e: function [[pl_reposition]] */
+/*s: function [[pl_rtredraw]] */
 /*
  * Rectangle r of Image b contains an image of Rtext t, offset by oldoffs.
  * Redraw the text to have offset yoffs.
@@ -278,8 +278,8 @@ void pl_rtredraw(Image *b, Rectangle r, Rtext *t, int yoffs, int oldoffs){
         pl_rtdraw(b, Rect(r.min.x, r.min.y, r.max.x, r.min.y+dy), t, yoffs);
     }
 }
-/*e: function pl_rtredraw */
-/*s: function pl_rthit */
+/*e: function [[pl_rtredraw]] */
+/*s: function [[pl_rthit]] */
 Rtext *pl_rthit(Rtext *t, int yoffs, Point p, Point ul){
     Rectangle r;
     Point lp;
@@ -301,9 +301,9 @@ Rtext *pl_rthit(Rtext *t, int yoffs, Point p, Point ul){
     }
     return 0;
 }
-/*e: function pl_rthit */
+/*e: function [[pl_rthit]] */
 
-/*s: function plrtseltext */
+/*s: function [[plrtseltext]] */
 void plrtseltext(Rtext *t, Rtext *s, Rtext *e){
     while(t){
         t->flags &= ~PL_SEL;
@@ -322,9 +322,9 @@ void plrtseltext(Rtext *t, Rtext *s, Rtext *e){
     }
     t->flags |= PL_SEL;
 }
-/*e: function plrtseltext */
+/*e: function [[plrtseltext]] */
 
-/*s: function plrtsnarftext */
+/*s: function [[plrtsnarftext]] */
 char *plrtsnarftext(Rtext *w){
     char *b, *p, *e, *t;
     int n;
@@ -352,5 +352,5 @@ char *plrtsnarftext(Rtext *w){
     }
     return b;
 }
-/*e: function plrtsnarftext */
+/*e: function [[plrtsnarftext]] */
 /*e: lib_gui/libpanel/rtext.c */

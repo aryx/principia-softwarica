@@ -5,38 +5,38 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
-/*s: constant PWID */
+/*s: constant [[PWID]] */
 #define	PWID	1	/* width of label border */
-/*e: constant PWID */
-/*s: constant BWID */
+/*e: constant [[PWID]] */
+/*s: constant [[BWID]] */
 #define	BWID	1	/* width of button relief */
-/*e: constant BWID */
-/*s: constant FWID */
+/*e: constant [[BWID]] */
+/*s: constant [[FWID]] */
 #define	FWID	2	/* width of frame relief */
-/*e: constant FWID */
-/*s: constant SPACE */
+/*e: constant [[FWID]] */
+/*s: constant [[SPACE]] */
 #define	SPACE	1	/* space inside relief of button or frame */
-/*e: constant SPACE */
-/*s: constant CKSIZE */
+/*e: constant [[SPACE]] */
+/*s: constant [[CKSIZE]] */
 #define	CKSIZE	3	/* size of check mark */
-/*e: constant CKSIZE */
-/*s: constant CKSPACE */
+/*e: constant [[CKSIZE]] */
+/*s: constant [[CKSPACE]] */
 #define	CKSPACE	2	/* space around check mark */
-/*e: constant CKSPACE */
-/*s: constant CKWID */
+/*e: constant [[CKSPACE]] */
+/*s: constant [[CKWID]] */
 #define	CKWID	1	/* width of frame around check mark */
-/*e: constant CKWID */
-/*s: constant CKINSET */
+/*e: constant [[CKWID]] */
+/*s: constant [[CKINSET]] */
 #define	CKINSET	1	/* space around check mark frame */
-/*e: constant CKINSET */
-/*s: constant CKBORDER */
+/*e: constant [[CKINSET]] */
+/*s: constant [[CKBORDER]] */
 #define	CKBORDER 2	/* space around X inside frame */
-/*e: constant CKBORDER */
-/*s: global plldepth */
+/*e: constant [[CKBORDER]] */
+/*s: global [[plldepth]] */
 static int plldepth;
-/*e: global plldepth */
+/*e: global [[plldepth]] */
 static Image *pl_white, *pl_light, *pl_dark, *pl_black, *pl_hilit;
-/*s: function pl_drawinit */
+/*s: function [[pl_drawinit]] */
 int pl_drawinit(int ldepth){
     plldepth=ldepth;
     pl_white=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xFFFFFFFF);
@@ -47,8 +47,8 @@ int pl_drawinit(int ldepth){
     if(pl_white==0 || pl_light==0 || pl_black==0 || pl_dark==0) return 0;
     return 1;
 }
-/*e: function pl_drawinit */
-/*s: function pl_relief */
+/*e: function [[pl_drawinit]] */
+/*s: function [[pl_relief]] */
 void pl_relief(Image *b, Image *ul, Image *lr, Rectangle r, int wid){
     int x, y;
     draw(b, Rect(r.min.x, r.max.y-wid, r.max.x, r.max.y), lr, 0, ZP); /* bottom */
@@ -60,8 +60,8 @@ void pl_relief(Image *b, Image *ul, Image *lr, Rectangle r, int wid){
         draw(b, rectaddpt(Rect(0,0,1,1), Pt(x+r.min.x, y+r.max.y-wid)), lr, 0, ZP);
     }
 }
-/*e: function pl_relief */
-/*s: function pl_boxoutline */
+/*e: function [[pl_relief]] */
+/*s: function [[pl_boxoutline]] */
 Rectangle pl_boxoutline(Image *b, Rectangle r, int style, int fill){
     if(plldepth==0) switch(style){
     case UP:
@@ -125,18 +125,18 @@ Rectangle pl_boxoutline(Image *b, Rectangle r, int style, int fill){
     }
     return insetrect(r, SPACE);
 }
-/*e: function pl_boxoutline */
-/*s: function pl_outline */
+/*e: function [[pl_boxoutline]] */
+/*s: function [[pl_outline]] */
 Rectangle pl_outline(Image *b, Rectangle r, int style){
     return pl_boxoutline(b, r, style, 0);
 }
-/*e: function pl_outline */
-/*s: function pl_box */
+/*e: function [[pl_outline]] */
+/*s: function [[pl_box]] */
 Rectangle pl_box(Image *b, Rectangle r, int style){
     return pl_boxoutline(b, r, style, 1);
 }
-/*e: function pl_box */
-/*s: function pl_boxsize */
+/*e: function [[pl_box]] */
+/*s: function [[pl_boxsize]] */
 Point pl_boxsize(Point interior, int state){
     switch(state){
     case UP:
@@ -152,8 +152,8 @@ Point pl_boxsize(Point interior, int state){
     }
     return Pt(0, 0);
 }
-/*e: function pl_boxsize */
-/*s: function pl_interior */
+/*e: function [[pl_boxsize]] */
+/*s: function [[pl_interior]] */
 void pl_interior(int state, Point *ul, Point *size){
     switch(state){
     case UP:
@@ -173,9 +173,9 @@ void pl_interior(int state, Point *ul, Point *size){
         *size=subpt(*size, Pt(4*FWID+2*SPACE, 4*FWID+2*SPACE));
     }
 }
-/*e: function pl_interior */
+/*e: function [[pl_interior]] */
 
-/*s: function pl_drawicon */
+/*s: function [[pl_drawicon]] */
 void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
     Rectangle save;
     Point ul, offs;
@@ -200,8 +200,8 @@ void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
     else string(b, ul, pl_black, ZP, font, s);
     replclipr(b, b->repl, save);
 }
-/*e: function pl_drawicon */
-/*s: function pl_radio */
+/*e: function [[pl_drawicon]] */
+/*s: function [[pl_radio]] */
 /*
  * Place a check mark at the left end of r.  Return the unused space.
  * Caller must guarantee that r.max.x-r.min.x>=r.max.y-r.min.y!
@@ -224,8 +224,8 @@ Rectangle pl_radio(Image *b, Rectangle r, int val){
     if(val) draw(b, insetrect(r, CKSPACE), pl_black, 0, ZP);
     return remainder;
 }
-/*e: function pl_radio */
-/*s: function pl_check */
+/*e: function [[pl_radio]] */
+/*s: function [[pl_check]] */
 Rectangle pl_check(Image *b, Rectangle r, int val){
     Rectangle remainder;
     remainder=r;
@@ -252,13 +252,13 @@ Rectangle pl_check(Image *b, Rectangle r, int val){
     }
     return remainder;
 }
-/*e: function pl_check */
-/*s: function pl_ckwid */
+/*e: function [[pl_check]] */
+/*s: function [[pl_ckwid]] */
 int pl_ckwid(void){
     return 2*(CKINSET+CKSPACE+CKWID)+CKSIZE;
 }
-/*e: function pl_ckwid */
-/*s: function pl_sliderupd */
+/*e: function [[pl_ckwid]] */
+/*s: function [[pl_sliderupd]] */
 void pl_sliderupd(Image *b, Rectangle r1, int dir, int lo, int hi){
     Rectangle r2, r3;
     r2=r1;
@@ -285,60 +285,60 @@ void pl_sliderupd(Image *b, Rectangle r1, int dir, int lo, int hi){
     draw(b, r2, pl_dark, 0, ZP);
     draw(b, r3, pl_light, 0, ZP);
 }
-/*e: function pl_sliderupd */
+/*e: function [[pl_sliderupd]] */
 void pl_draw1(Panel *p, Image *b);
-/*s: function pl_drawall */
+/*s: function [[pl_drawall]] */
 void pl_drawall(Panel *p, Image *b){
     if(p->flags&INVIS) return;
     p->b=b;
     p->draw(p);
     for(p=p->child;p;p=p->next) pl_draw1(p, b);
 }
-/*e: function pl_drawall */
-/*s: function pl_draw1 */
+/*e: function [[pl_drawall]] */
+/*s: function [[pl_draw1]] */
 void pl_draw1(Panel *p, Image *b){
     if(b!=0)
         pl_drawall(p, b);
 }
-/*e: function pl_draw1 */
-/*s: function pldraw */
+/*e: function [[pl_draw1]] */
+/*s: function [[pldraw]] */
 void pldraw(Panel *p, Image *b){
     pl_draw1(p, b);
     flushimage(display, 1);
 }
-/*e: function pldraw */
-/*s: function pl_invis */
+/*e: function [[pldraw]] */
+/*s: function [[pl_invis]] */
 void pl_invis(Panel *p, int v){
     for(;p;p=p->next){
         if(v) p->flags|=INVIS; else p->flags&=~INVIS;
         pl_invis(p->child, v);
     }
 }
-/*e: function pl_invis */
-/*s: function pl_iconsize */
+/*e: function [[pl_invis]] */
+/*s: function [[pl_iconsize]] */
 Point pl_iconsize(int flags, Icon *p){
     if(flags&BITMAP) return subpt(((Image *)p)->r.max, ((Image *)p)->r.min);
     return stringsize(font, (char *)p);
 }
-/*e: function pl_iconsize */
-/*s: function pl_highlight */
+/*e: function [[pl_iconsize]] */
+/*s: function [[pl_highlight]] */
 void pl_highlight(Image *b, Rectangle r){
     draw(b, r, pl_dark, pl_hilit, ZP);
 }
-/*e: function pl_highlight */
-/*s: function pl_clr */
+/*e: function [[pl_highlight]] */
+/*s: function [[pl_clr]] */
 void pl_clr(Image *b, Rectangle r){
     draw(b, r, display->white, 0, ZP);
 }
-/*e: function pl_clr */
-/*s: function pl_fill */
+/*e: function [[pl_clr]] */
+/*s: function [[pl_fill]] */
 void pl_fill(Image *b, Rectangle r){
     draw(b, r, plldepth==0? pl_white : pl_light, 0, ZP);
 }
-/*e: function pl_fill */
-/*s: function pl_cpy */
+/*e: function [[pl_fill]] */
+/*s: function [[pl_cpy]] */
 void pl_cpy(Image *b, Point dst, Rectangle src){
     draw(b, Rpt(dst, addpt(dst, subpt(src.max, src.min))), b, 0, src.min);
 }
-/*e: function pl_cpy */
+/*e: function [[pl_cpy]] */
 /*e: lib_gui/libpanel/draw.c */

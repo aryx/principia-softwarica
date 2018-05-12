@@ -28,19 +28,19 @@
 #include <panel.h>
 #include "pldefs.h"
 
-/*s: constant SLACK (lib_gui/libpanel/textwin.c) */
+/*s: constant [[SLACK]]([[(lib_gui/libpanel/textwin.c)]]) */
 #define SLACK 100
-/*e: constant SLACK (lib_gui/libpanel/textwin.c) */
+/*e: constant [[SLACK]]([[(lib_gui/libpanel/textwin.c)]]) */
 
-/*s: function tw_before */
+/*s: function [[tw_before]] */
 /*
  * Is text at point a before or after that at point b?
  */
 int tw_before(Textwin *t, Point a, Point b){
     return a.y<b.y || a.y<b.y+t->hgt && a.x<b.x;
 }
-/*e: function tw_before */
-/*s: function twpt2rune */
+/*e: function [[tw_before]] */
+/*s: function [[twpt2rune]] */
 /*
  * Return the character index indicated by point p, or -1
  * if its off-screen.  The screen must be up-to-date.
@@ -57,8 +57,8 @@ int twpt2rune(Textwin *t, Point p){
         }
     return t->bot;
 }
-/*e: function twpt2rune */
-/*s: function tw_rune2pt */
+/*e: function [[twpt2rune]] */
+/*s: function [[tw_rune2pt]] */
 /*
  * Return ul corner of the character with the given index
  */
@@ -67,8 +67,8 @@ Point tw_rune2pt(Textwin *t, int i){
     if(i>t->bot) return t->r.max;
     return t->loc[i-t->top];
 }
-/*e: function tw_rune2pt */
-/*s: function tw_storeloc */
+/*e: function [[tw_rune2pt]] */
+/*s: function [[tw_storeloc]] */
 /*
  * Store p at t->loc[l], extending t->loc if necessary
  */
@@ -81,8 +81,8 @@ void tw_storeloc(Textwin *t, int l, Point p){
     }
     t->loc[l]=p;
 }
-/*e: function tw_storeloc */
-/*s: function tw_setloc */
+/*e: function [[tw_storeloc]] */
+/*s: function [[tw_setloc]] */
 /*
  * Set the locations at which the given runes should appear.
  * Returns the index of the first rune not set, which might not
@@ -132,8 +132,8 @@ int tw_setloc(Textwin *t, int first, int last, Point ul){
     tw_storeloc(t, lp, ul);
     return r-t->text;
 }
-/*e: function tw_setloc */
-/*s: function tw_draw */
+/*e: function [[tw_setloc]] */
+/*s: function [[tw_draw]] */
 /*
  * Draw the given runes at their locations.
  * Bug -- saving up multiple characters would
@@ -176,8 +176,8 @@ void tw_draw(Textwin *t, int first, int last){
     /***/		pl_clr(t->b, Rpt(ur, Pt(t->r.max.x, ur.y+t->hgt)));
     }
 }
-/*e: function tw_draw */
-/*s: function tw_hilitep */
+/*e: function [[tw_draw]] */
+/*s: function [[tw_hilitep]] */
 /*
  * Hilight the characters with tops between ul and ur
  */
@@ -199,8 +199,8 @@ void tw_hilitep(Textwin *t, Point ul, Point ur){
         pl_highlight(t->b, Rpt(ul, Pt(ur.x, y)));
     }
 }
-/*e: function tw_hilitep */
-/*s: function twhilite */
+/*e: function [[tw_hilitep]] */
+/*s: function [[twhilite]] */
 /*
  * Hilite/unhilite the given range of characters
  */
@@ -228,8 +228,8 @@ void twhilite(Textwin *t, int sel0, int sel1, int on){
         ur=t->loc[sel1-t->top];
     tw_hilitep(t, ul, ur);
 }
-/*e: function twhilite */
-/*s: function twselect */
+/*e: function [[twhilite]] */
+/*s: function [[twselect]] */
 /*
  * Set t->sel[01] from mouse input.
  * Also hilites the selection.
@@ -274,8 +274,8 @@ void twselect(Textwin *t, Mouse *m){
         t->sel1=sel0;
     }
 }
-/*e: function twselect */
-/*s: function tw_clrend */
+/*e: function [[twselect]] */
+/*s: function [[tw_clrend]] */
 /*
  * Clear the area following the last displayed character
  */
@@ -289,8 +289,8 @@ void tw_clrend(Textwin *t){
     ul=Pt(t->r.min.x, y);
     pl_clr(t->b, Rpt(ul, t->r.max));
 }
-/*e: function tw_clrend */
-/*s: function tw_moverect */
+/*e: function [[tw_clrend]] */
+/*s: function [[tw_moverect]] */
 /*
  * Move part of a line of text, truncating the source or padding
  * the destination on the right if necessary.
@@ -308,8 +308,8 @@ void tw_moverect(Textwin *t, Point uld, Point urd, Point uls, Point urs){
     }
     pl_cpy(t->b, uld, Rpt(uls, Pt(uls.x+dw, uls.y+t->hgt)));
 }
-/*e: function tw_moverect */
-/*s: function tw_moveup */
+/*e: function [[tw_moverect]] */
+/*s: function [[tw_moveup]] */
 /*
  * Move a block of characters up or to the left:
  *	Identify contiguous runs of characters whose width doesn't change, and
@@ -345,8 +345,8 @@ void tw_moveup(Textwin *t, Point *dp, Point *sp, Point *esp){
     pl_cpy(t->b, Pt(t->r.min.x, y),
         Rect(t->r.min.x, esp->y, esp->x, esp->y+t->hgt));
 }
-/*e: function tw_moveup */
-/*s: function tw_movedn */
+/*e: function [[tw_moveup]] */
+/*s: function [[tw_movedn]] */
 /*
  * Same as above, but moving down and in reverse order, so as not to overwrite stuff
  * not moved yet.
@@ -384,8 +384,8 @@ void tw_movedn(Textwin *t, Point *dp, Point *bsp, Point *esp){
         tw_moverect(t, *dp, urd, *sp, urs);
     }
 }
-/*e: function tw_movedn */
-/*s: function tw_relocate */
+/*e: function [[tw_movedn]] */
+/*s: function [[tw_relocate]] */
 /*
  * Move the given range of characters, already drawn on
  * the given textwin, to the given location.
@@ -404,8 +404,8 @@ void tw_relocate(Textwin *t, int first, int last, Point dst){
     else
         tw_movedn(t, t->loc+first-t->top, srcloc, srcloc+(last-first));
 }
-/*e: function tw_relocate */
-/*s: function twreplace */
+/*e: function [[tw_relocate]] */
+/*s: function [[twreplace]] */
 /*
  * Replace the runes with indices from r0 to r1-1 with the text
  * pointed to by text, and with length ntext.
@@ -451,8 +451,8 @@ void twreplace(Textwin *t, int r0, int r1, Rune *ins, int nins){
      * code for case where there is useful text below is missing (see `1 ||' above)
      */
 }
-/*e: function twreplace */
-/*s: function twscroll */
+/*e: function [[twreplace]] */
+/*s: function [[twscroll]] */
 /*
  * This works but is stupid.
  */
@@ -463,16 +463,16 @@ void twscroll(Textwin *t, int top){
     tw_draw(t, t->top, t->bot);
     tw_clrend(t);
 }
-/*e: function twscroll */
-/*s: function twreshape */
+/*e: function [[twscroll]] */
+/*s: function [[twreshape]] */
 void twreshape(Textwin *t, Rectangle r){
     t->r=r;
     t->bot=tw_setloc(t, t->top, t->etext-t->text, t->r.min);
     tw_draw(t, t->top, t->bot);
     tw_clrend(t);
 }
-/*e: function twreshape */
-/*s: function twnew */
+/*e: function [[twreshape]] */
+/*s: function [[twnew]] */
 Textwin *twnew(Image *b, Font *f, Rune *text, int ntext){
     Textwin *t;
     t=pl_emalloc(sizeof(Textwin));
@@ -493,15 +493,15 @@ Textwin *twnew(Image *b, Font *f, Rune *text, int ntext){
     t->tabstop=8*t->mintab;
     return t;
 }
-/*e: function twnew */
-/*s: function twfree */
+/*e: function [[twnew]] */
+/*s: function [[twfree]] */
 void twfree(Textwin *t){
     free(t->loc);
     free(t->text);
     free(t);
 }
-/*e: function twfree */
-/*s: function twmove */
+/*e: function [[twfree]] */
+/*s: function [[twmove]] */
 /*
  * Correct the character locations in a textwin after the panel is moved.
  * This horrid hack would not be necessary if loc values were relative
@@ -513,5 +513,5 @@ void twmove(Textwin *t, Point d){
     for(lp=t->loc; lp<t->eloc; lp++)
         *lp = addpt(*lp, d);
 }
-/*e: function twmove */
+/*e: function [[twmove]] */
 /*e: lib_gui/libpanel/textwin.c */

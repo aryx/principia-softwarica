@@ -6,7 +6,7 @@
 #include <panel.h>
 #include "pldefs.h"
 typedef struct Button Button;
-/*s: struct Button */
+/*s: struct [[Button]] */
 struct Button{
     int btype;			/* button type */
     Icon *icon;			/* what to write on the button */
@@ -17,20 +17,20 @@ struct Button{
     int index;			/* arg to menuhit */
     int buttons;
 };
-/*e: struct Button */
-/*s: constant BUTTON */
+/*e: struct [[Button]] */
+/*s: constant [[BUTTON]] */
 /*
  * Button types
  */
 #define	BUTTON	1
-/*e: constant BUTTON */
-/*s: constant CHECK */
+/*e: constant [[BUTTON]] */
+/*s: constant [[CHECK]] */
 #define	CHECK	2
-/*e: constant CHECK */
-/*s: constant RADIO */
+/*e: constant [[CHECK]] */
+/*s: constant [[RADIO]] */
 #define	RADIO	3
-/*e: constant RADIO */
-/*s: function pl_drawbutton */
+/*e: constant [[RADIO]] */
+/*s: function [[pl_drawbutton]] */
 void pl_drawbutton(Panel *p){
     Rectangle r;
     Button *bp;
@@ -46,8 +46,8 @@ void pl_drawbutton(Panel *p){
     }
     pl_drawicon(p->b, r, PLACECEN, p->flags, bp->icon);
 }
-/*e: function pl_drawbutton */
-/*s: function pl_hitbutton */
+/*e: function [[pl_drawbutton]] */
+/*s: function [[pl_hitbutton]] */
 int pl_hitbutton(Panel *p, Mouse *m){
     int oldstate, hitme;
     Panel *sib;
@@ -95,13 +95,13 @@ int pl_hitbutton(Panel *p, Mouse *m){
     }
     return 0;
 }
-/*e: function pl_hitbutton */
-/*s: function pl_typebutton */
+/*e: function [[pl_hitbutton]] */
+/*s: function [[pl_typebutton]] */
 void pl_typebutton(Panel *g, Rune c){
     USED(g, c);
 }
-/*e: function pl_typebutton */
-/*s: function pl_getsizebutton */
+/*e: function [[pl_typebutton]] */
+/*s: function [[pl_getsizebutton]] */
 Point pl_getsizebutton(Panel *p, Point children){
     Point s;
     int ckw;
@@ -119,13 +119,13 @@ Point pl_getsizebutton(Panel *p, Point children){
     }
     return pl_boxsize(s, p->state);
 }
-/*e: function pl_getsizebutton */
-/*s: function pl_childspacebutton */
+/*e: function [[pl_getsizebutton]] */
+/*s: function [[pl_childspacebutton]] */
 void pl_childspacebutton(Panel *g, Point *ul, Point *size){
     USED(g, ul, size);
 }
-/*e: function pl_childspacebutton */
-/*s: function pl_initbtype */
+/*e: function [[pl_childspacebutton]] */
+/*s: function [[pl_initbtype]] */
 void pl_initbtype(Panel *v, int flags, Icon *icon, void (*hit)(Panel *, int, int), int btype){
     Button *bp;
     bp=v->data;
@@ -146,61 +146,61 @@ void pl_initbtype(Panel *v, int flags, Icon *icon, void (*hit)(Panel *, int, int
     case RADIO:  v->kind="radiobutton"; break;
     }
 }
-/*e: function pl_initbtype */
-/*s: function pl_buttonhit */
+/*e: function [[pl_initbtype]] */
+/*s: function [[pl_buttonhit]] */
 void pl_buttonhit(Panel *p, int buttons, int check){
     USED(check);
     if(((Button *)p->data)->pl_buttonhit) ((Button *)p->data)->pl_buttonhit(p, buttons);
 }
-/*e: function pl_buttonhit */
-/*s: function plinitbutton */
+/*e: function [[pl_buttonhit]] */
+/*s: function [[plinitbutton]] */
 void plinitbutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, int)){
     ((Button *)p->data)->pl_buttonhit=hit;
     pl_initbtype(p, flags, icon, pl_buttonhit, BUTTON);
 }
-/*e: function plinitbutton */
-/*s: function plinitcheckbutton */
+/*e: function [[plinitbutton]] */
+/*s: function [[plinitcheckbutton]] */
 void plinitcheckbutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, int, int)){
     pl_initbtype(p, flags, icon, hit, CHECK);
 }
-/*e: function plinitcheckbutton */
-/*s: function plinitradiobutton */
+/*e: function [[plinitcheckbutton]] */
+/*s: function [[plinitradiobutton]] */
 void plinitradiobutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, int, int)){
     pl_initbtype(p, flags, icon, hit, RADIO);
 }
-/*e: function plinitradiobutton */
-/*s: function plbutton */
+/*e: function [[plinitradiobutton]] */
+/*s: function [[plbutton]] */
 Panel *plbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int)){
     Panel *p;
     p=pl_newpanel(parent, sizeof(Button));
     plinitbutton(p, flags, icon, hit);
     return p;
 }
-/*e: function plbutton */
-/*s: function plcheckbutton */
+/*e: function [[plbutton]] */
+/*s: function [[plcheckbutton]] */
 Panel *plcheckbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int, int)){
     Panel *p;
     p=pl_newpanel(parent, sizeof(Button));
     plinitcheckbutton(p, flags, icon, hit);
     return p;
 }
-/*e: function plcheckbutton */
-/*s: function plradiobutton */
+/*e: function [[plcheckbutton]] */
+/*s: function [[plradiobutton]] */
 Panel *plradiobutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int, int)){
     Panel *p;
     p=pl_newpanel(parent, sizeof(Button));
     plinitradiobutton(p, flags, icon, hit);
     return p;
 }
-/*e: function plradiobutton */
-/*s: function pl_hitmenu */
+/*e: function [[plradiobutton]] */
+/*s: function [[pl_hitmenu]] */
 void pl_hitmenu(Panel *p, int buttons){
     void (*hit)(int, int);
     hit=((Button *)p->data)->menuhit;
     if(hit) hit(buttons, ((Button *)p->data)->index);
 }
-/*e: function pl_hitmenu */
-/*s: function plinitmenu */
+/*e: function [[pl_hitmenu]] */
+/*s: function [[plinitmenu]] */
 void plinitmenu(Panel *v, int flags, Icon **item, int cflags, void (*hit)(int, int)){
     Panel *b;
     int i;
@@ -216,18 +216,18 @@ void plinitmenu(Panel *v, int flags, Icon **item, int cflags, void (*hit)(int, i
         ((Button *)b->data)->index=i;
     }
 }
-/*e: function plinitmenu */
-/*s: function plmenu */
+/*e: function [[plinitmenu]] */
+/*s: function [[plmenu]] */
 Panel *plmenu(Panel *parent, int flags, Icon **item, int cflags, void (*hit)(int, int)){
     Panel *v;
     v=plgroup(parent, flags);
     plinitmenu(v, flags, item, cflags, hit);
     return v;
 }
-/*e: function plmenu */
-/*s: function plsetbutton */
+/*e: function [[plmenu]] */
+/*s: function [[plsetbutton]] */
 void plsetbutton(Panel *p, int val){
     ((Button *)p->data)->check=val;
 }
-/*e: function plsetbutton */
+/*e: function [[plsetbutton]] */
 /*e: lib_gui/libpanel/button.c */

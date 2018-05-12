@@ -6,7 +6,7 @@
 #include <panel.h>
 #include "pldefs.h"
 typedef struct Scrollbar Scrollbar;
-/*s: struct Scrollbar */
+/*s: struct [[Scrollbar]] */
 struct Scrollbar{
     int dir;		/* HORIZ or VERT */
     int lo, hi;		/* setting, in screen coordinates */
@@ -14,19 +14,19 @@ struct Scrollbar{
     Rectangle interior;
     Point minsize;
 };
-/*e: struct Scrollbar */
-/*s: constant SBWID */
+/*e: struct [[Scrollbar]] */
+/*s: constant [[SBWID]] */
 #define	SBWID	15	/* should come from draw.c? */
-/*e: constant SBWID */
-/*s: function pl_drawscrollbar */
+/*e: constant [[SBWID]] */
+/*s: function [[pl_drawscrollbar]] */
 void pl_drawscrollbar(Panel *p){
     Scrollbar *sp;
     sp=p->data;
     sp->interior=pl_outline(p->b, p->r, p->state);
     pl_sliderupd(p->b, sp->interior, sp->dir, sp->lo, sp->hi);
 }
-/*e: function pl_drawscrollbar */
-/*s: function pl_hitscrollbar */
+/*e: function [[pl_drawscrollbar]] */
+/*s: function [[pl_hitscrollbar]] */
 int pl_hitscrollbar(Panel *g, Mouse *m){
     int oldstate, pos, len, dy;
     Point ul, size;
@@ -82,24 +82,24 @@ out:
     if(oldstate!=g->state) pldraw(g, g->b);
     return g->state==DOWN;
 }
-/*e: function pl_hitscrollbar */
-/*s: function pl_typescrollbar */
+/*e: function [[pl_hitscrollbar]] */
+/*s: function [[pl_typescrollbar]] */
 void pl_typescrollbar(Panel *p, Rune c){
     USED(p, c);
 }
-/*e: function pl_typescrollbar */
-/*s: function pl_getsizescrollbar */
+/*e: function [[pl_typescrollbar]] */
+/*s: function [[pl_getsizescrollbar]] */
 Point pl_getsizescrollbar(Panel *p, Point children){
     USED(children);
     return pl_boxsize(((Scrollbar *)p->data)->minsize, p->state);
 }
-/*e: function pl_getsizescrollbar */
-/*s: function pl_childspacescrollbar */
+/*e: function [[pl_getsizescrollbar]] */
+/*s: function [[pl_childspacescrollbar]] */
 void pl_childspacescrollbar(Panel *p, Point *ul, Point *size){
     USED(p, ul, size);
 }
-/*e: function pl_childspacescrollbar */
-/*s: function pl_setscrollbarscrollbar */
+/*e: function [[pl_childspacescrollbar]] */
+/*s: function [[pl_setscrollbarscrollbar]] */
 /*
  * Arguments lo, hi and len are in the scrollee's natural coordinates
  */
@@ -121,13 +121,13 @@ void pl_setscrollbarscrollbar(Panel *p, int lo, int hi, int len){
     if(sp->hi>mylen) sp->hi=mylen;
     pldraw(p, p->b);
 }
-/*e: function pl_setscrollbarscrollbar */
-/*s: function pl_priscrollbar */
+/*e: function [[pl_setscrollbarscrollbar]] */
+/*s: function [[pl_priscrollbar]] */
 int pl_priscrollbar(Panel *, Point){
     return PRI_SCROLLBAR;
 }
-/*e: function pl_priscrollbar */
-/*s: function plinitscrollbar */
+/*e: function [[pl_priscrollbar]] */
+/*s: function [[plinitscrollbar]] */
 void plinitscrollbar(Panel *v, int flags){
     Scrollbar *sp;
     sp=v->data;
@@ -158,13 +158,13 @@ void plinitscrollbar(Panel *v, int flags){
     sp->hi=0;
     v->kind="scrollbar";
 }
-/*e: function plinitscrollbar */
-/*s: function plscrollbar */
+/*e: function [[plinitscrollbar]] */
+/*s: function [[plscrollbar]] */
 Panel *plscrollbar(Panel *parent, int flags){
     Panel *v;
     v=pl_newpanel(parent, sizeof(Scrollbar));
     plinitscrollbar(v, flags);
     return v;
 }
-/*e: function plscrollbar */
+/*e: function [[plscrollbar]] */
 /*e: lib_gui/libpanel/scrollbar.c */

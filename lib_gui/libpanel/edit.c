@@ -23,7 +23,7 @@
 #include <keyboard.h>
 
 typedef struct Edit Edit;
-/*s: struct Edit */
+/*s: struct [[Edit]] */
 struct Edit{
     Point minsize;
     void (*hit)(Panel *);
@@ -32,8 +32,8 @@ struct Edit{
     Rune *text;
     int ntext;
 };
-/*e: struct Edit */
-/*s: function pl_drawedit */
+/*e: struct [[Edit]] */
+/*s: function [[pl_drawedit]] */
 void pl_drawedit(Panel *p){
     Edit *ep;
     Panel *sb;
@@ -52,9 +52,9 @@ void pl_drawedit(Panel *p){
     if(sb && sb->setscrollbar)
         sb->setscrollbar(sb, ep->t->top, ep->t->bot, ep->t->etext-ep->t->text);
 }
-/*e: function pl_drawedit */
+/*e: function [[pl_drawedit]] */
 
-/*s: function pl_snarfedit */
+/*s: function [[pl_snarfedit]] */
 char *pl_snarfedit(Panel *p){
     int s0, s1;
     Rune *t;
@@ -64,8 +64,8 @@ char *pl_snarfedit(Panel *p){
         return nil;
     return smprint("%.*S", s1-s0, t+s0);
 }
-/*e: function pl_snarfedit */
-/*s: function pl_pasteedit */
+/*e: function [[pl_snarfedit]] */
+/*s: function [[pl_pasteedit]] */
 void pl_pasteedit(Panel *p, char *s){
     Rune *t;
     if(t=runesmprint("%s", s)){
@@ -73,9 +73,9 @@ void pl_pasteedit(Panel *p, char *s){
         free(t);
     }
 }
-/*e: function pl_pasteedit */
+/*e: function [[pl_pasteedit]] */
 
-/*s: function pl_hitedit */
+/*s: function [[pl_hitedit]] */
 /*
  * Should do double-clicks:
  *	If ep->sel0==ep->sel1 on entry and the
@@ -113,8 +113,8 @@ int pl_hitedit(Panel *p, Mouse *m){
     }
     return 0;
 }
-/*e: function pl_hitedit */
-/*s: function pl_scrolledit */
+/*e: function [[pl_hitedit]] */
+/*s: function [[pl_scrolledit]] */
 void pl_scrolledit(Panel *p, int dir, int buttons, int num, int den){
     Edit *ep;
     Textwin *t;
@@ -153,8 +153,8 @@ void pl_scrolledit(Panel *p, int dir, int buttons, int num, int den){
             sb->setscrollbar(sb, t->top, t->bot, t->etext-t->text);
     }
 }
-/*e: function pl_scrolledit */
-/*s: function pl_typeedit */
+/*e: function [[pl_scrolledit]] */
+/*s: function [[pl_typeedit]] */
 void pl_typeedit(Panel *p, Rune c){
     Edit *ep;
     Textwin *t;
@@ -213,27 +213,27 @@ void pl_typeedit(Panel *p, Rune c){
     }
     twhilite(t, ep->sel0, ep->sel1, 1);
 }
-/*e: function pl_typeedit */
-/*s: function pl_getsizeedit */
+/*e: function [[pl_typeedit]] */
+/*s: function [[pl_getsizeedit]] */
 Point pl_getsizeedit(Panel *p, Point children){
     USED(children);
     return pl_boxsize(((Edit *)p->data)->minsize, p->state);
 }
-/*e: function pl_getsizeedit */
-/*s: function pl_childspaceedit */
+/*e: function [[pl_getsizeedit]] */
+/*s: function [[pl_childspaceedit]] */
 void pl_childspaceedit(Panel *g, Point *ul, Point *size){
     USED(g, ul, size);
 }
-/*e: function pl_childspaceedit */
-/*s: function pl_freeedit */
+/*e: function [[pl_childspaceedit]] */
+/*s: function [[pl_freeedit]] */
 void pl_freeedit(Panel *p){
     Edit *ep;
     ep=p->data;
     if(ep->t) twfree(ep->t);
     ep->t=0;
 }
-/*e: function pl_freeedit */
-/*s: function plinitedit */
+/*e: function [[pl_freeedit]] */
+/*s: function [[plinitedit]] */
 void plinitedit(Panel *v, int flags, Point minsize, Rune *text, int ntext, void (*hit)(Panel *)){
     Edit *ep;
     ep=v->data;
@@ -260,8 +260,8 @@ void plinitedit(Panel *v, int flags, Point minsize, Rune *text, int ntext, void 
     v->scr.pos=Pt(0,0);
     v->scr.size=Pt(ntext,0);
 }
-/*e: function plinitedit */
-/*s: function pledit */
+/*e: function [[plinitedit]] */
+/*s: function [[pledit]] */
 Panel *pledit(Panel *parent, int flags, Point minsize, Rune *text, int ntext, void (*hit)(Panel *)){
     Panel *v;
     v=pl_newpanel(parent, sizeof(Edit));
@@ -269,39 +269,39 @@ Panel *pledit(Panel *parent, int flags, Point minsize, Rune *text, int ntext, vo
     plinitedit(v, flags, minsize, text, ntext, hit);
     return v;
 }
-/*e: function pledit */
-/*s: function plescroll */
+/*e: function [[pledit]] */
+/*s: function [[plescroll]] */
 void plescroll(Panel *p, int top){
     Textwin *t;
     t=((Edit*)p->data)->t;
     if(t) twscroll(t, top);
 }
-/*e: function plescroll */
-/*s: function plegetsel */
+/*e: function [[plescroll]] */
+/*s: function [[plegetsel]] */
 void plegetsel(Panel *p, int *sel0, int *sel1){
     Edit *ep;
     ep=p->data;
     *sel0=ep->sel0;
     *sel1=ep->sel1;
 }
-/*e: function plegetsel */
-/*s: function plelen */
+/*e: function [[plegetsel]] */
+/*s: function [[plelen]] */
 int plelen(Panel *p){
     Textwin *t;
     t=((Edit*)p->data)->t;
     if(t==0) return 0;
     return t->etext-t->text;
 }
-/*e: function plelen */
-/*s: function pleget */
+/*e: function [[plelen]] */
+/*s: function [[pleget]] */
 Rune *pleget(Panel *p){
     Textwin *t;
     t=((Edit*)p->data)->t;
     if(t==0) return 0;
     return t->text;
 }
-/*e: function pleget */
-/*s: function plesel */
+/*e: function [[pleget]] */
+/*s: function [[plesel]] */
 void plesel(Panel *p, int sel0, int sel1){
     Edit *ep;
     ep=p->data;
@@ -312,8 +312,8 @@ void plesel(Panel *p, int sel0, int sel1){
     ep->sel1=sel1;
     twhilite(ep->t, ep->sel0, ep->sel1, 1);
 }
-/*e: function plesel */
-/*s: function plepaste */
+/*e: function [[plesel]] */
+/*s: function [[plepaste]] */
 void plepaste(Panel *p, Rune *text, int ntext){
     Edit *ep;
     ep=p->data;
@@ -326,12 +326,12 @@ void plepaste(Panel *p, Rune *text, int ntext){
     p->scr.size.y=ep->t->etext-ep->t->text;
     p->scr.pos.y=ep->t->top;
 }
-/*e: function plepaste */
-/*s: function plemove */
+/*e: function [[plepaste]] */
+/*s: function [[plemove]] */
 void plemove(Panel *p, Point d){
     Edit *ep;
     ep=p->data;
     if(ep->t && !eqpt(d, Pt(0,0))) twmove(ep->t, d);
 }
-/*e: function plemove */
+/*e: function [[plemove]] */
 /*e: lib_gui/libpanel/edit.c */

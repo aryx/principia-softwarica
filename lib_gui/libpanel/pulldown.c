@@ -10,21 +10,21 @@
 #include <panel.h>
 #include "pldefs.h"
 typedef struct Pulldown Pulldown;
-/*s: struct Pulldown */
+/*s: struct [[Pulldown]] */
 struct Pulldown{
     Icon *icon;		/* button label */
     Panel *pull;		/* Panel to pull down */
     int side;		/* which side of the button to put the panel on */
     Image *save;		/* where to save what we draw the panel on */
 };
-/*e: struct Pulldown */
-/*s: function pl_drawpulldown */
+/*e: struct [[Pulldown]] */
+/*s: function [[pl_drawpulldown]] */
 void pl_drawpulldown(Panel *p){
     pl_drawicon(p->b, pl_box(p->b, p->r, p->state), PLACECEN,
         p->flags, ((Pulldown *)p->data)->icon);
 }
-/*e: function pl_drawpulldown */
-/*s: function pl_hitpulldown */
+/*e: function [[pl_drawpulldown]] */
+/*s: function [[pl_hitpulldown]] */
 int pl_hitpulldown(Panel *g, Mouse *m){
     int oldstate, passon;
     Rectangle r;
@@ -105,24 +105,24 @@ int pl_hitpulldown(Panel *g, Mouse *m){
     if(hitme) plmouse(hitme, m);
     return g->state==DOWN;
 }
-/*e: function pl_hitpulldown */
-/*s: function pl_typepulldown */
+/*e: function [[pl_hitpulldown]] */
+/*s: function [[pl_typepulldown]] */
 void pl_typepulldown(Panel *p, Rune c){
     USED(p, c);
 }
-/*e: function pl_typepulldown */
-/*s: function pl_getsizepulldown */
+/*e: function [[pl_typepulldown]] */
+/*s: function [[pl_getsizepulldown]] */
 Point pl_getsizepulldown(Panel *p, Point children){
     USED(p, children);
     return pl_boxsize(pl_iconsize(p->flags, ((Pulldown *)p->data)->icon), p->state);
 }
-/*e: function pl_getsizepulldown */
-/*s: function pl_childspacepulldown */
+/*e: function [[pl_getsizepulldown]] */
+/*s: function [[pl_childspacepulldown]] */
 void pl_childspacepulldown(Panel *p, Point *ul, Point *size){
     USED(p, ul, size);
 }
-/*e: function pl_childspacepulldown */
-/*s: function plinitpulldown */
+/*e: function [[pl_childspacepulldown]] */
+/*s: function [[plinitpulldown]] */
 void plinitpulldown(Panel *v, int flags, Icon *icon, Panel *pullthis, int side){
     Pulldown *pp;
     pp=v->data;
@@ -137,8 +137,8 @@ void plinitpulldown(Panel *v, int flags, Icon *icon, Panel *pullthis, int side){
     pp->icon=icon;
     v->kind="pulldown";
 }
-/*e: function plinitpulldown */
-/*s: function plpulldown */
+/*e: function [[plinitpulldown]] */
+/*s: function [[plpulldown]] */
 Panel *plpulldown(Panel *parent, int flags, Icon *icon, Panel *pullthis, int side){
     Panel *v;
     v=pl_newpanel(parent, sizeof(Pulldown));
@@ -147,8 +147,8 @@ Panel *plpulldown(Panel *parent, int flags, Icon *icon, Panel *pullthis, int sid
     plinitpulldown(v, flags, icon, pullthis, side);
     return v;
 }
-/*e: function plpulldown */
-/*s: function plmenubar */
+/*e: function [[plpulldown]] */
+/*s: function [[plmenubar]] */
 Panel *plmenubar(Panel *parent, int flags, int cflags, Icon *l1, Panel *m1, Icon *l2, ...){
     Panel *v;
     va_list arg;
@@ -176,5 +176,5 @@ Panel *plmenubar(Panel *parent, int flags, int cflags, Icon *l1, Panel *m1, Icon
     v->kind="menubar";
     return v;
 }
-/*e: function plmenubar */
+/*e: function [[plmenubar]] */
 /*e: lib_gui/libpanel/pulldown.c */

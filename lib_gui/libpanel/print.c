@@ -5,7 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
-/*s: function pl_iprint */
+/*s: function [[pl_iprint]] */
 void pl_iprint(int indent, char *fmt, ...){
     char buf[8192];
     va_list arg;
@@ -14,8 +14,8 @@ void pl_iprint(int indent, char *fmt, ...){
     write(1, buf, vsnprint(buf+indent, sizeof(buf)-indent, fmt, arg));
     va_end(arg);
 }
-/*e: function pl_iprint */
-/*s: function pl_ipprint */
+/*e: function [[pl_iprint]] */
+/*s: function [[pl_ipprint]] */
 void pl_ipprint(Panel *p, int n){
     Panel *c;
     char *place, *stick;
@@ -55,10 +55,10 @@ void pl_ipprint(Panel *p, int n){
     for(c=p->child;c;c=c->next)
         pl_ipprint(c, n+1);
 }
-/*e: function pl_ipprint */
-/*s: function pl_print */
+/*e: function [[pl_ipprint]] */
+/*s: function [[pl_print]] */
 void pl_print(Panel *p){
     pl_ipprint(p, 0);
 }
-/*e: function pl_print */
+/*e: function [[pl_print]] */
 /*e: lib_gui/libpanel/print.c */

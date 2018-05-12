@@ -5,7 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
-/*s: function pl_emalloc */
+/*s: function [[pl_emalloc]] */
 void *pl_emalloc(int n){
     void *v;
     v=mallocz(n, 1);
@@ -16,8 +16,8 @@ void *pl_emalloc(int n){
     setmalloctag(v, getcallerpc(&n));
     return v;
 }
-/*e: function pl_emalloc */
-/*s: function pl_erealloc */
+/*e: function [[pl_emalloc]] */
+/*s: function [[pl_erealloc]] */
 void *pl_erealloc(void *v, int n)
 {
     v=realloc(v, n);
@@ -28,61 +28,61 @@ void *pl_erealloc(void *v, int n)
     setrealloctag(v, getcallerpc(&v));
     return v;
 }
-/*e: function pl_erealloc */
-/*s: function pl_unexpected */
+/*e: function [[pl_erealloc]] */
+/*s: function [[pl_unexpected]] */
 void pl_unexpected(Panel *g, char *rou){
     fprint(2, "%s called unexpectedly (%s %lux)\n", rou, g->kind, (ulong)g);
     abort();
 }
-/*e: function pl_unexpected */
-/*s: function pl_drawerror */
+/*e: function [[pl_unexpected]] */
+/*s: function [[pl_drawerror]] */
 void pl_drawerror(Panel *g){
     pl_unexpected(g, "draw");
 }
-/*e: function pl_drawerror */
-/*s: function pl_hiterror */
+/*e: function [[pl_drawerror]] */
+/*s: function [[pl_hiterror]] */
 int pl_hiterror(Panel *g, Mouse *m){
     USED(m);
     pl_unexpected(g, "hit");
     return 0;
 }
-/*e: function pl_hiterror */
-/*s: function pl_typeerror */
+/*e: function [[pl_hiterror]] */
+/*s: function [[pl_typeerror]] */
 void pl_typeerror(Panel *g, Rune c){
     USED(c);
     pl_unexpected(g, "type");
 }
-/*e: function pl_typeerror */
-/*s: function pl_getsizeerror */
+/*e: function [[pl_typeerror]] */
+/*s: function [[pl_getsizeerror]] */
 Point pl_getsizeerror(Panel *g, Point childsize){
     pl_unexpected(g, "getsize");
     return childsize;
 }
-/*e: function pl_getsizeerror */
-/*s: function pl_childspaceerror */
+/*e: function [[pl_getsizeerror]] */
+/*s: function [[pl_childspaceerror]] */
 void pl_childspaceerror(Panel *g, Point *ul, Point *size){
     USED(ul, size);
     pl_unexpected(g, "childspace");
 }
-/*e: function pl_childspaceerror */
-/*s: function pl_scrollerror */
+/*e: function [[pl_childspaceerror]] */
+/*s: function [[pl_scrollerror]] */
 void pl_scrollerror(Panel *g, int dir, int button, int num, int den){
     USED(dir, button, num, den);
     pl_unexpected(g, "scroll");
 }
-/*e: function pl_scrollerror */
-/*s: function pl_setscrollbarerror */
+/*e: function [[pl_scrollerror]] */
+/*s: function [[pl_setscrollbarerror]] */
 void pl_setscrollbarerror(Panel *g, int top, int bot, int den){
     USED(top, bot, den);
     pl_unexpected(g, "setscrollbar");
 }
-/*e: function pl_setscrollbarerror */
-/*s: function pl_prinormal */
+/*e: function [[pl_setscrollbarerror]] */
+/*s: function [[pl_prinormal]] */
 int pl_prinormal(Panel *, Point){
     return PRI_NORMAL;
 }
-/*e: function pl_prinormal */
-/*s: function pl_newpanel */
+/*e: function [[pl_prinormal]] */
+/*s: function [[pl_newpanel]] */
 Panel *pl_newpanel(Panel *parent, int ndata){
     Panel *v;
     if(parent && parent->flags&LEAF){
@@ -131,8 +131,8 @@ Panel *pl_newpanel(Panel *parent, int ndata){
         v->data=0;
     return v;
 }
-/*e: function pl_newpanel */
-/*s: function plfree */
+/*e: function [[pl_newpanel]] */
+/*s: function [[plfree]] */
 void plfree(Panel *p){
     Panel *cp, *ncp;
     if(p==0)
@@ -147,5 +147,5 @@ void plfree(Panel *p){
     if(p->data) free(p->data);
     free(p);
 }
-/*e: function plfree */
+/*e: function [[plfree]] */
 /*e: lib_gui/libpanel/mem.c */
