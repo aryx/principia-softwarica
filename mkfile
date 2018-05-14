@@ -175,6 +175,7 @@ doall:V:
 # Literate programming
 ###############################################################################
 LPDIRS=\
+ docs/principia \
  assemblers linkers compilers machine generators  \
  shells lib_core\
  builders debuggers profilers version_control \
@@ -185,6 +186,8 @@ LPDIRS=\
 # editors
 # kernel 
 # browser
+#LESS
+# s9, tiger, fork-ocaml, games
 
 pdf lpclean:QV:
 	for (i in $LPDIRS) @{
