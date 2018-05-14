@@ -181,12 +181,10 @@ LPDIRS=\
  lib_graphics windows lib_gui \
  networking
 
-#TODO kernel 
-
 #TODO
 # editors
+# kernel 
 # browser
-# languages
 
 pdf lpclean:QV:
 	for (i in $LPDIRS) @{
