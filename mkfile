@@ -189,13 +189,14 @@ LPDIRS=\
 #LESS
 # s9, tiger, fork-ocaml, games
 
-pdf lpclean:QV:
+pdf lpclean lpinstall:QV:
 	for (i in $LPDIRS) @{
 		echo $i
 		cd $i
 		mk $MKFLAGS $target
 	}
 
+# need special :I:
 sync:QVI:
 	for (i in $LPDIRS) @{
 		echo $i
