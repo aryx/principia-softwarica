@@ -178,16 +178,15 @@ LPDIRS=\
  docs/principia \
  assemblers linkers compilers machine generators  \
  shells lib_core\
- builders debuggers profilers version_control \
+ editors builders debuggers profilers version_control \
  lib_graphics windows lib_gui \
  networking
 
 #TODO
-# editors
 # kernel 
 # browser
 #LESS
-# s9, tiger, fork-ocaml, games
+# s9, tiger, fork-ocaml, soldat
 
 pdf lpclean lpinstall:QV:
 	for (i in $LPDIRS) @{
