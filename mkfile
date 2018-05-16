@@ -176,17 +176,16 @@ doall:V:
 ###############################################################################
 LPDIRS=\
  docs/principia \
+ kernel shells lib_core\
  assemblers linkers compilers machine generators  \
- shells lib_core\
  editors builders debuggers profilers version_control \
  lib_graphics windows lib_gui \
  networking
 
 #TODO
-# kernel 
-# browser
+# browser utilities fork-ocaml
 #LESS
-# s9, tiger, fork-ocaml, soldat
+# s9, tiger, soldat
 
 pdf lpclean lpinstall:QV:
 	for (i in $LPDIRS) @{

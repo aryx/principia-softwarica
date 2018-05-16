@@ -32,7 +32,7 @@ extern int   arch_cmpswap(long*, long, long);
 /*e: macro [[arch_cycles]](arm) */
 /*s: macro [[arch_countpagerefs]](arm) */
 // same signatures but optimized away
-#define arch_countpagerefs(a, b)
+#define arch_countpagerefs(a, b) NOTHING
 /*e: macro [[arch_countpagerefs]](arm) */
 /*s: macro [[arch_intrenable]](arm) */
 #define arch_intrenable(i, f, a, b, n) irqenable((i), (f), (a))
