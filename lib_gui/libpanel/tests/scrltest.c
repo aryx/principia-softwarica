@@ -17,30 +17,35 @@ void hitgen(Panel *p, int buttons, int sel){
 	USED(p, buttons, sel);
 }
 
-void ereshaped(Rectangle r){
-	view.r=r;
-	r=inset(r, 4);
+void eresized(bool new){
+    Rectangle r;
+	if(new && getwindow(display, Refnone) == -1) {
+		fprint(STDERR, "getwindow: %r\n");
+		exits("getwindow");
+	}
+	r=view->r;
+	r=insetrect(r, 4);
 	plpack(root, r);
-	bitblt(&view, view.r.min, &view, view.r, Zero);
-	pldraw(root, &view);
+	pldraw(root, view);
 }
 
 void done(Panel *p, int buttons){
 	USED(p, buttons);
-	bitblt(&view, view.r.min, &view, view.r, Zero);
 	exits(0);
 }
 
 Panel *msg;
 void message(char *s, ...){
-	char buf[1024], *out;
+	char buf[1024];
+    int n;
 	va_list arg;
+
 	va_start(arg, s);
-	out = doprint(buf, buf+sizeof(buf), s, arg);
+	n = snprint(buf, sizeof(buf), s, arg);
 	va_end(arg);
-	*out='\0';
+	buf[n]='\0';
 	plinitlabel(msg, PACKN|FILLX, buf);
-	pldraw(msg, &view);
+	pldraw(msg, view);
 }
 
 Scroll s;
@@ -53,16 +58,18 @@ void save(Panel *p, int buttons){
 
 void revert(Panel *p, int buttons){
 	USED(p, buttons);
-	plsetscroll(list, s, &view);
+	plsetscroll(list, s);
 	message("revert %d %d %d %d", s);
 }
 
 void main(void){
+    Mouse m;
 	Panel *g;
 
-	binit(0,0,0);
+    if(initdraw(0, 0, "scrltest") < 0)
+      sysfatal("initdraw: %r");
 	einit(Emouse);
-	plinit(view.ldepth);
+	plinit(view->depth);
 
 	root=plgroup(0, 0);
 	g=plgroup(root, PACKN|EXPAND);
@@ -73,7 +80,10 @@ void main(void){
 	plbutton(root, PACKW, "revert", revert);
 	plbutton(root, PACKE, "done", done);
 
-	ereshaped(view.r);
-	for(;;) 
-      plmouse(root, emouse(), &view);
+    eresized(false);
+
+	for(;;) {
+      m = emouse();
+      plmouse(root, &m);
+    }
 }

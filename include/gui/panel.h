@@ -1,6 +1,8 @@
 /*s: windows/libpanel/panel.h */
-//#pragma	src	"/sys/src/libpanel"
-//#pragma	lib	"libpanel.a"
+
+#pragma	src	"/sys/src/libpanel"
+#pragma	lib	"libpanel.a"
+
 typedef struct Scroll Scroll;
 typedef struct Panel Panel;		/* a Graphical User Interface element */
 typedef struct Rtext Rtext;		/* formattable text */
