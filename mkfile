@@ -177,13 +177,13 @@ doall:V:
 LPDIRS=\
  docs/principia \
  kernel shells lib_core\
- assemblers linkers compilers machine generators  \
+ assemblers linkers compilers machine generators languages \
  editors builders debuggers profilers version_control \
  lib_graphics windows lib_gui \
  networking
 
 #TODO
-# browser utilities fork-ocaml
+# browser utilities
 #LESS
 # s9, tiger, soldat
 
