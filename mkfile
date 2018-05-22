@@ -10,6 +10,7 @@ LIBS=\
  lib_math\
  lib_networking\
  lib_graphics\
+ lib_gui\
  # used by plumb, iostats, snapfs, screenlock, etc\
  lib_security\
  lib_misc\
@@ -23,7 +24,6 @@ LIBS=\
 
 #TODO: 
 # lib_audio (empty)
-# lib_gui (need to adapt to new draw using view not screen)
 
 ###############################################################################
 # Programs
@@ -47,14 +47,14 @@ PROGRAMS=\
  editors\
  \
  networking\
+ browsers\
  \
  utilities\
  \
  applications\
- games
+ games\
 
 #missing:
-# browsers
 # interpreters/s9
 # security/auth/
 # typesetting (requires (slow) pcc, too slow so skipped for now)
@@ -138,10 +138,6 @@ clean nuke:QV:
 help:VQ:
 	echo mk all, install, uninstall, clean, nuke, release, cmds, kernels, or libs
 
-installall:V:
-	echo "installall not supported"
-
-
 libs:QV:
 	for (i in $LIBS) @{
 		cd $i
@@ -180,10 +176,10 @@ LPDIRS=\
  assemblers linkers compilers machine generators languages \
  editors builders debuggers profilers version_control \
  lib_graphics windows lib_gui \
- networking
+ networking browsers
 
 #TODO
-# browser utilities
+# utilities
 #LESS
 # s9, tiger, soldat
 
