@@ -5,13 +5,16 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 typedef struct Canvas Canvas;
+
 /*s: struct [[Canvas]] */
 struct Canvas{
     void (*draw)(Panel *);
     void (*hit)(Panel *, Mouse *);
 };
 /*e: struct [[Canvas]] */
+
 /*s: function [[pl_drawcanvas]] */
 void pl_drawcanvas(Panel *p){
     Canvas *c;

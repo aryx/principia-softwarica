@@ -10,6 +10,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 typedef struct Popup Popup;
 /*s: struct [[Popup]] */
 struct Popup{
@@ -17,6 +18,7 @@ struct Popup{
     Panel *pop[3];			/* what to pop up */
 };
 /*e: struct [[Popup]] */
+
 /*s: function [[pl_drawpopup]] */
 void pl_drawpopup(Panel *p){
     USED(p);

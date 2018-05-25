@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 /*s: function [[pl_drawframe]] */
 void pl_drawframe(Panel *p){
     pl_box(p->b, p->r, FRAME);

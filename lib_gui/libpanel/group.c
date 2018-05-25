@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 /*s: function [[pl_drawgroup]] */
 void pl_drawgroup(Panel *p){
     USED(p);

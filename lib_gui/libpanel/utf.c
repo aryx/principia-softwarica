@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 /*s: function [[pl_idchar]] */
 /*
  * This is the same definition that 8½ uses

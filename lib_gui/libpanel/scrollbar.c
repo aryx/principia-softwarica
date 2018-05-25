@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 typedef struct Scrollbar Scrollbar;
 /*s: struct [[Scrollbar]] */
 struct Scrollbar{
@@ -18,6 +19,7 @@ struct Scrollbar{
 /*s: constant [[SBWID]] */
 #define	SBWID	15	/* should come from draw.c? */
 /*e: constant [[SBWID]] */
+
 /*s: function [[pl_drawscrollbar]] */
 void pl_drawscrollbar(Panel *p){
     Scrollbar *sp;

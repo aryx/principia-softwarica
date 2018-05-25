@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 typedef struct Label Label;
 /*s: struct [[Label]] */
 struct Label{
@@ -12,6 +13,7 @@ struct Label{
     Icon *icon;
 };
 /*e: struct [[Label]] */
+
 /*s: function [[pl_drawlabel]] */
 void pl_drawlabel(Panel *p){
     Label *l;
@@ -45,11 +47,14 @@ void pl_childspacelabel(Panel *g, Point *ul, Point *size){
 void plinitlabel(Panel *v, int flags, Icon *icon){
     v->flags=flags|LEAF;
     ((Label *)(v->data))->icon=icon;
+
     v->draw=pl_drawlabel;
     v->hit=pl_hitlabel;
     v->type=pl_typelabel;
+
     v->getsize=pl_getsizelabel;
     v->childspace=pl_childspacelabel;
+
     v->kind="label";
 }
 /*e: function [[plinitlabel]] */

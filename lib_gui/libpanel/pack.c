@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 /*s: function [[pl_max]] */
 int pl_max(int a, int b){
     return a>b?a:b;

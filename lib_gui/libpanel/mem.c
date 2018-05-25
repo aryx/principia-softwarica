@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 /*s: function [[pl_emalloc]] */
 void *pl_emalloc(int n){
     void *v;
@@ -29,6 +30,7 @@ void *pl_erealloc(void *v, int n)
     return v;
 }
 /*e: function [[pl_erealloc]] */
+
 /*s: function [[pl_unexpected]] */
 void pl_unexpected(Panel *g, char *rou){
     fprint(2, "%s called unexpectedly (%s %lux)\n", rou, g->kind, (ulong)g);
@@ -77,11 +79,13 @@ void pl_setscrollbarerror(Panel *g, int top, int bot, int den){
     pl_unexpected(g, "setscrollbar");
 }
 /*e: function [[pl_setscrollbarerror]] */
+
 /*s: function [[pl_prinormal]] */
 int pl_prinormal(Panel *, Point){
     return PRI_NORMAL;
 }
 /*e: function [[pl_prinormal]] */
+
 /*s: function [[pl_newpanel]] */
 Panel *pl_newpanel(Panel *parent, int ndata){
     Panel *v;

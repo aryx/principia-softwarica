@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 typedef struct List List;
 /*s: struct [[List]] */
 struct List{
@@ -21,6 +22,7 @@ struct List{
 /*s: constant [[MAXHGT]] */
 #define	MAXHGT	12
 /*e: constant [[MAXHGT]] */
+
 /*s: function [[pl_listsel]] */
 void pl_listsel(Panel *p, int sel, int on){
     List *lp;

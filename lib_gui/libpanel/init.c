@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 /*s: function [[plinit]] */
 /*
  * Just a wrapper for all the initialization routines

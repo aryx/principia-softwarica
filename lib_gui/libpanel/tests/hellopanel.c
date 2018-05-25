@@ -15,13 +15,13 @@ void done(Panel *p, int buttons){
 }
 
 void eresized(bool new){
-	if(new && getwindow(display, Refnone) == -1) {
-		fprint(STDERR, "getwindow: %r\n");
-		exits("getwindow");
-	}
+ if(new && getwindow(display, Refnone) == -1) {
+  fprint(STDERR, "getwindow: %r\n");
+  exits("getwindow");
+ }
     plpack(root, view->r);
     pldraw(root, view);
-	flushimage(display, true);
+ flushimage(display, true);
 }
 
 

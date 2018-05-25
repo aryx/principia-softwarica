@@ -5,23 +5,29 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 typedef struct Button Button;
+
 /*s: struct [[Button]] */
 struct Button{
     int btype;			/* button type */
+
     Icon *icon;			/* what to write on the button */
     int check;			/* for check/radio buttons */
+
     void (*hit)(Panel *, int, int);	/* call back user code on check/radio hit */
     void (*menuhit)(int, int);	/* call back user code on menu item hit */
     void (*pl_buttonhit)(Panel *, int);	/* call back user code on button hit */
+
     int index;			/* arg to menuhit */
     int buttons;
 };
 /*e: struct [[Button]] */
-/*s: constant [[BUTTON]] */
+
 /*
  * Button types
  */
+/*s: constant [[BUTTON]] */
 #define	BUTTON	1
 /*e: constant [[BUTTON]] */
 /*s: constant [[CHECK]] */
@@ -30,6 +36,7 @@ struct Button{
 /*s: constant [[RADIO]] */
 #define	RADIO	3
 /*e: constant [[RADIO]] */
+
 /*s: function [[pl_drawbutton]] */
 void pl_drawbutton(Panel *p){
     Rectangle r;
@@ -140,6 +147,7 @@ void pl_initbtype(Panel *v, int flags, Icon *icon, void (*hit)(Panel *, int, int
     bp->check=0;
     bp->hit=hit;
     bp->icon=icon;
+
     switch(btype){
     case BUTTON: v->kind="button"; break;
     case CHECK:  v->kind="checkbutton"; break;
@@ -193,6 +201,7 @@ Panel *plradiobutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, 
     return p;
 }
 /*e: function [[plradiobutton]] */
+
 /*s: function [[pl_hitmenu]] */
 void pl_hitmenu(Panel *p, int buttons){
     void (*hit)(int, int);

@@ -20,6 +20,7 @@ struct Entry{
 /*s: constant [[SLACK]] */
 #define	SLACK	7	/* enough for one extra rune and ◀ and a nul */
 /*e: constant [[SLACK]] */
+
 /*s: function [[pl_snarfentry]] */
 char *pl_snarfentry(Panel *p){
     Entry *ep;

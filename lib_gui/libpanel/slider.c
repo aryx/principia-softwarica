@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 typedef struct Slider Slider;
 /*s: struct [[Slider]] */
 struct Slider{
@@ -15,6 +16,7 @@ struct Slider{
     int buttons;
 };
 /*e: struct [[Slider]] */
+
 /*s: function [[pl_drawslider]] */
 void pl_drawslider(Panel *p){
     Rectangle r;

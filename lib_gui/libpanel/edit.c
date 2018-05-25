@@ -264,6 +264,7 @@ void plinitedit(Panel *v, int flags, Point minsize, Rune *text, int ntext, void 
 /*s: function [[pledit]] */
 Panel *pledit(Panel *parent, int flags, Point minsize, Rune *text, int ntext, void (*hit)(Panel *)){
     Panel *v;
+
     v=pl_newpanel(parent, sizeof(Edit));
     ((Edit *)v->data)->t=0;
     plinitedit(v, flags, minsize, text, ntext, hit);

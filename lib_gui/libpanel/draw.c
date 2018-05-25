@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 /*s: constant [[PWID]] */
 #define	PWID	1	/* width of label border */
 /*e: constant [[PWID]] */
@@ -32,19 +33,28 @@
 /*s: constant [[CKBORDER]] */
 #define	CKBORDER 2	/* space around X inside frame */
 /*e: constant [[CKBORDER]] */
+
 /*s: global [[plldepth]] */
 static int plldepth;
 /*e: global [[plldepth]] */
+
+/*s: globals [[pl_xxx]] */
 static Image *pl_white, *pl_light, *pl_dark, *pl_black, *pl_hilit;
+/*e: globals [[pl_xxx]] */
+
 /*s: function [[pl_drawinit]] */
 int pl_drawinit(int ldepth){
+
     plldepth=ldepth;
+
     pl_white=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xFFFFFFFF);
     pl_light=allocimagemix(display, DPalebluegreen, DWhite);
     pl_dark =allocimage(display, Rect(0,0,1,1), view->chan, 1, DPurpleblue);
     pl_black=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x000000FF);
     pl_hilit=allocimage(display, Rect(0,0,1,1), CHAN1(CAlpha,8), 1, 0x80);
-    if(pl_white==0 || pl_light==0 || pl_black==0 || pl_dark==0) return 0;
+
+    if(pl_white==0 || pl_light==0 || pl_black==0 || pl_dark==0) 
+        return 0;
     return 1;
 }
 /*e: function [[pl_drawinit]] */
@@ -286,7 +296,9 @@ void pl_sliderupd(Image *b, Rectangle r1, int dir, int lo, int hi){
     draw(b, r3, pl_light, 0, ZP);
 }
 /*e: function [[pl_sliderupd]] */
+
 void pl_draw1(Panel *p, Image *b);
+
 /*s: function [[pl_drawall]] */
 void pl_drawall(Panel *p, Image *b){
     if(p->flags&INVIS) return;
