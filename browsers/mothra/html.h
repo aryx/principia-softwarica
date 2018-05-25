@@ -4,7 +4,7 @@
 #define	NSTACK	100	/* html grammar is not recursive, so 30 or so should do */
 #define	NHBUF	8192	/* Input buffer size */
 #define	NPEEKC	3	/* Maximum lookahead */
-#define	NTOKEN	4096	/* Maximum token length */
+#define	NTOKEN	65536	/* Maximum token length */
 #define	NATTR	512	/* Maximum number of attributes of a tag */
 typedef struct Pair Pair;
 typedef struct Tag Tag;
@@ -29,16 +29,18 @@ struct Stack{
 	int pre;		/* in preformatted text? */
 	int font;		/* typeface */
 	int size;		/* point size of text */
+	int sub;		/* < 0 superscript, > 0 subscript */
 	int margin;		/* left margin position */
 	int indent;		/* extra indent at paragraph start */
 	int number;		/* paragraph number */
 	int ismap;		/* flag of <img> */
 	int isscript;		/* inside <script> */
+	int strike;		/* flag of <strike> */
 	int width;		/* size of image */
 	int height;
-	char image[NNAME];	/* arg of <img> */
-	char link[NNAME];	/* arg of <a href=...> */
-	char name[NNAME];	/* arg of <a name=...> */
+	char *image;		/* arg of <img> */
+	char *link;		/* arg of <a href=...> */
+	char *name;		/* arg of <a name=...> */
 };
 
 /*
@@ -145,6 +147,7 @@ enum{
 	Tag_cite,
 	Tag_code,
 	Tag_dd,
+	Tag_del,
 	Tag_div,
 	Tag_dfn,
 	Tag_dir,
@@ -167,7 +170,9 @@ enum{
 	Tag_i,
 	Tag_iframe,
 	Tag_img,
+	Tag_image,
 	Tag_input,
+	Tag_ins,
 	Tag_isindex,
 	Tag_kbd,
 	Tag_key,
@@ -183,15 +188,20 @@ enum{
 	Tag_p,
 	Tag_plaintext,
 	Tag_pre,
+	Tag_s,
 	Tag_samp,
 	Tag_script,
 	Tag_select,
 	Tag_span,
+	Tag_strike,
 	Tag_strong,
 	Tag_style,
+	Tag_sub,
+	Tag_sup,
 	Tag_source,
 	Tag_table,	/* rm 3.8.00 */
 	Tag_td,
+	Tag_th,
 	Tag_textarea,
 	Tag_title,
 	Tag_tr,
@@ -200,6 +210,7 @@ enum{
 	Tag_ul,
 	Tag_var,
 	Tag_video,
+	Tag_wbr,
 	Tag_xmp,
 
 	Tag_end,	/* also used to indicate unrecognized start tag */
@@ -218,3 +229,7 @@ void endform(Hglob *);
 char *pl_getattr(Pair *, char *);
 int pl_hasattr(Pair *, char *);
 void pl_htmloutput(Hglob *, int, char *, Field *);
+
+#pragma incomplete Form
+#pragma incomplete Field
+

@@ -3,6 +3,7 @@
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
+#include "rtext.h"
 #include "mothra.h"
 #include "html.h"
 
@@ -129,7 +130,7 @@ void rdform(Hglob *g){
 			form->method = 0;
 			form->fields = 0;
 			form->efields = 0;
-			if(g->state->link[0])
+			if(g->state->link)
 				form->action = strdup(g->state->link);
 			form->next = g->dst->form;
 			g->dst->form = form;
@@ -172,8 +173,10 @@ void rdform(Hglob *g){
 		else if(cistrcmp(s, "image")==0){
 			f->type=SUBMIT;
 			s=pl_getattr(g->attr, "src");
-			if(s && *s)
-				nstrcpy(g->state->image, s, sizeof(g->state->image));
+			if(s && *s){
+				free(g->state->image);
+				g->state->image = strdup(s);
+			}
 			s=pl_getattr(g->attr, "width");
 			if(s && *s)
 				g->state->width=strtolength(g, HORIZ, s);
@@ -183,7 +186,8 @@ void rdform(Hglob *g){
 			s=pl_getattr(g->attr, "alt");
 			if(s==0 || *s == 0) s = f->value;
 			pl_htmloutput(g, g->nsp, s, f);
-			g->state->image[0] = 0;
+			free(g->state->image);
+			g->state->image = 0;
 			g->state->width=0;
 			g->state->height=0;
 			break;
@@ -355,7 +359,7 @@ char *seloption(Field *f){
 }
 void mkfieldpanel(Rtext *t){
 	Action *a;
-	Panel *win, *scrl, *menu, *pop, *button;
+	Panel *win, *scrl;
 	Field *f;
 
 	if((a = t->user) == nil)

@@ -15,6 +15,8 @@
 int debug=0;
 int verbose=0;		/* -v flag causes html errors to be written to file-descriptor 2 */
 int defdisplay=1;	/* is the default (initial) display visible? */
+int visxbar=0;	/* horizontal scrollbar visible? */
+int topxbar=0;	/* horizontal scrollbar at top? */
 Panel *root;	/* the whole display */
 Panel *alt;	/* the alternate display */
 Panel *alttext;	/* the alternate text window */
@@ -36,17 +38,17 @@ Cursor patientcurs={
 	0x10, 0x08, 0x14, 0x08, 0x14, 0x28, 0x12, 0x28,
 	0x0A, 0x50, 0x16, 0x68, 0x20, 0x04, 0x3F, 0xFC,
 };
-Cursor confirmcurs={
+Cursor confirmcursor={
 	0, 0,
-	0x0F, 0xBF, 0x0F, 0xBF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFE, 0xFF, 0xFE, 0xFF, 0xFE,
-	0xFF, 0xFE, 0xFF, 0xFF, 0x00, 0x03, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE, 0xFF, 0xFC,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 
 	0x00, 0x0E, 0x07, 0x1F, 0x03, 0x17, 0x73, 0x6F,
 	0xFB, 0xCE, 0xDB, 0x8C, 0xDB, 0xC0, 0xFB, 0x6C,
 	0x77, 0xFC, 0x00, 0x00, 0x00, 0x01, 0x00, 0x03,
-	0x94, 0xA6, 0x63, 0x3C, 0x63, 0x18, 0x94, 0x90
+	0x94, 0xA6, 0x63, 0x3C, 0x63, 0x18, 0x94, 0x90,
 };
 Cursor readingcurs={
 	-10, -3,
@@ -152,16 +154,46 @@ void scrolltext(int dy, int whence)
 		s.pos.y = s.size.y+dy;
 		break;
 	}
-	if(s.pos.y < 0)
-		s.pos.y = 0;
 	if(s.pos.y > s.size.y)
 		s.pos.y = s.size.y;
+	if(s.pos.y < 0)
+		s.pos.y = 0;
+	plsetscroll(text, s);
+}
+
+void sidescroll(int dx, int whence)
+{
+	Scroll s;
+
+	s = plgetscroll(text);
+	switch(whence){
+	case 0:
+		s.pos.x = dx;
+		break;
+	case 1:
+		s.pos.x += dx;
+		break;
+	case 2:
+		s.pos.x = s.size.x+dx;
+		break;
+	}
+	if(s.pos.x > s.size.x - text->size.x + 5)
+		s.pos.x = s.size.x - text->size.x + 5;
+	if(s.pos.x < 0)
+		s.pos.x = 0;
 	plsetscroll(text, s);
 }
 
 void mkpanels(void){
-	Panel *p, *bar, *swap;
+	Panel *p, *xbar, *ybar, *swap;
+	int xflags;
 
+	if(topxbar)
+		xflags=PACKN|USERFL;
+	else
+		xflags=PACKS|USERFL;
+	if(!visxbar)
+		xflags|=IGNORE;
 	menu3=plmenu(0, 0, buttons, PACKN|FILLX, hit3);
 	root=plpopup(root, EXPAND, 0, 0, menu3);
 		p=plgroup(root, PACKN|FILLX);
@@ -170,23 +202,24 @@ void mkpanels(void){
 			pllabel(p, PACKW, "Go:");
 			cmd=plentry(p, PACKN|FILLX, 0, "", docmd);
 		p=plgroup(root, PACKN|FILLX);
-			bar=plscrollbar(p, PACKW);
+			ybar=plscrollbar(p, PACKW);
 			list=pllist(p, PACKN|FILLX, genwww, 8, doprev);
-			plscroll(list, 0, bar);
+			plscroll(list, 0, ybar);
 		p=plgroup(root, PACKN|FILLX);
 			pllabel(p, PACKW, "Url:");
 			cururl=pllabel(p, PACKE|EXPAND, "---");
 			plplacelabel(cururl, PLACEW);
 		p=plgroup(root, PACKN|EXPAND);
-			bar=plscrollbar(p, PACKW|USERFL);
+			ybar=plscrollbar(p, PACKW|USERFL);
+			xbar=plscrollbar(p, xflags);
 			text=pltextview(p, PACKE|EXPAND, Pt(0, 0), 0, dolink);
-			plscroll(text, 0, bar);
+			plscroll(text, xbar, ybar);
 	plgrabkb(cmd);
 	alt=plpopup(0, PACKE|EXPAND, 0, 0, menu3);
-		bar=plscrollbar(alt, PACKW|USERFL);
+		ybar=plscrollbar(alt, PACKW|USERFL);
+		xbar=plscrollbar(alt, xflags);
 		alttext=pltextview(alt, PACKE|EXPAND, Pt(0, 0), 0, dolink);
-		plscroll(alttext, 0, bar);
-
+		plscroll(alttext, xbar, ybar);
 	if(!defdisplay){
 		swap=root;
 		root=alt;
@@ -264,8 +297,6 @@ void main(int argc, char *argv[]){
 	Event e;
 	enum { Eplumb = 128, Ekick = 256 };
 	Plumbmsg *pm;
-	Www *new;
-	Action *a;
 	char *url;
 	int i;
 
@@ -318,11 +349,11 @@ void main(int argc, char *argv[]){
 	plinit(screen->depth);
 	if(debug) notify(dienow);
 	getfonts();
-	hrule=allocimage(display, Rect(0, 0, 2048, 5), screen->chan, 0, DWhite);
+	hrule=allocimage(display, Rect(0, 0, 1, 5), screen->chan, 1, DWhite);
 	if(hrule==0)
 		sysfatal("can't allocimage!");
-	draw(hrule, Rect(0,1,1280,3), display->black, 0, ZP);
-	linespace=allocimage(display, Rect(0, 0, 2048, 5), screen->chan, 0, DWhite);
+	draw(hrule, Rect(0,1,1,3), display->black, 0, ZP);
+	linespace=allocimage(display, Rect(0, 0, 1, 5), screen->chan, 1, DWhite);
 	if(linespace==0)
 		sysfatal("can't allocimage!");
 	bullet=allocimage(display, Rect(0,0,25, 8), screen->chan, 0, DWhite);
@@ -350,7 +381,6 @@ void main(int argc, char *argv[]){
 			}
 		}
 
-		flushimage(display, 1);
 		drawlock(0);
 		i=event(&e);
 		drawlock(1);
@@ -390,6 +420,12 @@ void main(int argc, char *argv[]){
 			case Kack:
 				search();
 				break;
+			case Kright:
+				sidescroll(text->size.x/4, 1);
+				break;
+			case Kleft:
+				sidescroll(-text->size.x/4, 1);
+				break;
 			}
 			break;
 		case Emouse:
@@ -412,18 +448,6 @@ void main(int argc, char *argv[]){
 		}
 	}
 }
-Cursor confirmcursor={
-	0, 0,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-
-	0x00, 0x0E, 0x07, 0x1F, 0x03, 0x17, 0x73, 0x6F,
-	0xFB, 0xCE, 0xDB, 0x8C, 0xDB, 0xC0, 0xFB, 0x6C,
-	0x77, 0xFC, 0x00, 0x00, 0x00, 0x01, 0x00, 0x03,
-	0x94, 0xA6, 0x63, 0x3C, 0x63, 0x18, 0x94, 0x90,
-};
 int confirm(int b){
 	Mouse down, up;
 	esetcursor(&confirmcursor);
@@ -520,7 +544,6 @@ void scrollto(char *tag){
 		}
 	}
 	plsetpostextview(text, current->yoffs);
-	flushimage(display, 1);
 }
 
 /*
@@ -550,7 +573,7 @@ char *arg(char *s){
 }
 void save(int ifd, char *name){
 	char buf[NNAME+64];
-	int cfd, ofd;
+	int ofd;
 	if(ifd < 0){
 		message("save: %s: %r", name);
 		return;
@@ -609,9 +632,8 @@ char *urltofile(Url *url){
 	char *name, *slash;
 	if(url == nil)
 		return nil;
-	if(url->fullname[0] || url->reltext[0])
-		name = urlstr(url);
-	else
+	name = urlstr(url);
+	if(name == nil || name[0] == 0)
 		name = "/";
 	if(slash = strrchr(name, '/'))
 		name = slash+1;
@@ -699,6 +721,11 @@ void docmd(Panel *p, char *s){
 	pldraw(root, screen);
 }
 
+void regerror(char *msg)
+{
+	werrstr("regerror: %s", msg);
+}
+
 void search(void){
 	static char last[256];
 	char buf[256];
@@ -711,10 +738,12 @@ void search(void){
 		strncpy(buf, last, sizeof(buf)-1);
 		if(eenter("Search for", buf, sizeof(buf), &mouse) <= 0)
 			return;
-		re = regcompnl(buf);
-		if(re == nil)
-			return;
 		strncpy(last, buf, sizeof(buf)-1);
+		re = regcompnl(buf);
+		if(re == nil){
+			message("%r");
+			continue;
+		}
 		for(tp=current->text;tp;tp=tp->next)
 			if(tp->flags & PL_SEL)
 				break;
@@ -767,17 +796,7 @@ void doprev(Panel *p, int buttons, int index){
  * Follow an html link
  */
 void dolink(Panel *p, int buttons, Rtext *word){
-	char *file, mapurl[NNAME];
-	Point coord;
-	int yoffs;
 	Action *a;
-
-	/* really a button, hit it */
-	if(word->p != nil && word->p != p && strcmp(word->p->kind, "button") == 0){
-		extern void pl_buttonhit(Panel *p, int buttons, int check);
-		pl_buttonhit(word->p, buttons, 0);
-		return;
-	}
 
 	a=word->user;
 	if(a == nil || (a->link == nil && a->image == nil))
@@ -786,6 +805,10 @@ void dolink(Panel *p, int buttons, Rtext *word){
 		hiturl(buttons, a->image ? a->image : a->link, 0);
 	else if(a->link){
 		if(a->ismap){
+			char mapurl[NNAME];
+			Point coord;
+			int yoffs;
+
 			yoffs=plgetpostextview(p);
 			coord=subpt(subpt(mouse.xy, word->r.min), p->r.min);
 			snprint(mapurl, sizeof(mapurl), "%s?%d,%d", a->link, coord.x, coord.y+yoffs);
@@ -802,7 +825,7 @@ void filter(int fd, char *cmd){
 		break;
 	case 0:
 		dupfds(fd, 1, 2, -1);
-		execl("/bin/rc", "rc", "-c", cmd, 0);
+		execl("/bin/rc", "rc", "-c", cmd, nil);
 		_exits(0);
 	}
 	close(fd);
@@ -909,36 +932,43 @@ urlstr(Url *url){
 		return url->fullname;
 	return url->reltext;
 }
-Url* selurl(char *urlname){
-	static Url url;
-	seturl(&url, urlname, current ? current->url->fullname : "");
-	selection=&url;
-	message("selected: %s", urlstr(selection));
-	plgrabkb(cmd);		/* for snarf */
-	return selection;
-}
-void seturl(Url *url, char *urlname, char *base){
-	nstrcpy(url->reltext, urlname, sizeof(url->reltext));
-	nstrcpy(url->basename, base, sizeof(url->basename));
-	url->fullname[0] = 0;
-	url->tag[0] = 0;
-	url->map = 0;
-}
 Url *copyurl(Url *u){
 	Url *v;
 	v=emalloc(sizeof(Url));
 	*v=*u;
+	v->reltext = strdup(u->reltext);
+	v->basename = strdup(u->basename);
 	return v;
 }
 void freeurl(Url *u){
+	free(u->reltext);
+	free(u->basename);
 	free(u);
+}
+void seturl(Url *url, char *urlname, char *base){
+	url->reltext = strdup(urlname);
+	url->basename = strdup(base);
+	url->fullname[0] = 0;
+	url->tag[0] = 0;
+	url->map = 0;
+}
+Url* selurl(char *urlname){
+	Url *last;
+
+	last=selection;
+	selection=emalloc(sizeof(Url));
+	seturl(selection, urlname, current ? current->url->fullname : "");
+	if(last) freeurl(last);
+	message("selected: %s", urlstr(selection));
+	plgrabkb(cmd);		/* for snarf */
+	return selection;
 }
 
 /*
  * get the file at the given url
  */
 void geturl(char *urlname, int post, int plumb, int map){
-	int i, fd, typ, pfd[2];
+	int i, fd, typ;
 	char cmd[NNAME];
 	ulong n;
 	Www *w;
@@ -951,7 +981,7 @@ void geturl(char *urlname, int post, int plumb, int map){
 	selurl(urlname);
 	selection->map=map;
 
-	message("getting %s", selection->reltext);
+	message("getting %s", urlstr(selection));
 	esetcursor(&patientcurs);
 	for(;;){
 		if((fd=urlget(selection, post)) < 0){
@@ -1092,7 +1122,7 @@ mothon(Www *w, int on)
 			t->next = nil;
 			ap=emalloc(sizeof(Action));
 			ap->link = strdup(a->link);
-			plrtstr(&t->next, 0, 0, t->font, strdup("->"), PL_HOT, ap);
+			plrtstr(&t->next, 0, 0, 0, t->font, strdup("->"), PL_HOT, ap);
 			t->next->next = x;
 		} else {
 			if(x) {
@@ -1134,7 +1164,6 @@ void paste(Panel *p){
 }
 void hit3(int button, int item){
 	char name[NNAME];
-	char file[128];
 	Panel *swap;
 	int fd;
 	USED(button);

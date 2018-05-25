@@ -23,31 +23,31 @@ char *pixcmd[]={
 };
 
 void getimage(Rtext *t, Www *w){
-	int pfd[2];
 	Action *ap;
-	Url url;
+	Url *url;
 	Image *b;
 	int fd, typ;
 	char err[512], buf[80], *s;
 	Pix *p;
 
 	ap=t->user;
-	seturl(&url, ap->image, w->url->fullname);
+	url=emalloc(sizeof(Url));
+	seturl(url, ap->image, w->url->fullname);
 	for(p=w->pix;p!=nil; p=p->next)
 		if(strcmp(ap->image, p->name)==0 && ap->width==p->width && ap->height==p->height){
 			t->b = p->b;
 			w->changed=1;
 			return;
 		}
-	fd=urlget(&url, -1);
+	fd=urlget(url, -1);
 	if(fd==-1){
 	Err:
-		snprint(err, sizeof(err), "[img: %s: %r]", url.reltext);
+		snprint(err, sizeof(err), "[img: %s: %r]", urlstr(url));
 		free(t->text);
 		t->text=strdup(err);
 		w->changed=1;
 		close(fd);
-		return;
+		goto Out;
 	}
 	typ = snooptype(fd);
 	if(typ < 0 || typ >= nelem(pixcmd) || pixcmd[typ] == nil){
@@ -63,6 +63,7 @@ void getimage(Rtext *t, Www *w){
 			s += sprint(s, " -x %d", ap->width);
 		if(ap->height>0)
 			s += sprint(s, " -y %d", ap->height);
+		USED(s);
 		if((fd = pipeline(fd, buf)) < 0)
 			goto Err;
 	}
@@ -81,6 +82,8 @@ void getimage(Rtext *t, Www *w){
 	w->pix=p;
 	t->b=b;
 	w->changed=1;
+Out:
+	freeurl(url);
 }
 
 void getpix(Rtext *t, Www *w){
