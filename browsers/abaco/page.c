@@ -424,7 +424,7 @@ tmpresize(void)
 	if(tmp)
 		freeimage(tmp);
 
-	tmp = eallocimage(display, Rect(0,0,Dx(screen->r),Dy(screen->r)), screen->chan, 0, -1);
+	tmp = eallocimage(display, Rect(0,0,Dx(view->r),Dy(view->r)), view->chan, 0, -1);
 }
 
 static

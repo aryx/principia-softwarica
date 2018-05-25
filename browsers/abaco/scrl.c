@@ -20,8 +20,8 @@ scrlresize(void)
 {
 	freeimage(vscrtmp);
 	freeimage(hscrtmp);
-	vscrtmp = eallocimage(display, Rect(0, 0, 32, screen->r.max.y), screen->chan, 0, DNofill);
-	hscrtmp = eallocimage(display, Rect(0, 0, screen->r.max.x, 32), screen->chan, 0, DNofill);
+	vscrtmp = eallocimage(display, Rect(0, 0, 32, view->r.max.y), view->chan, 0, DNofill);
+	hscrtmp = eallocimage(display, Rect(0, 0, view->r.max.x, 32), view->chan, 0, DNofill);
 }
 
 static
@@ -195,8 +195,8 @@ pagescrldraw(Page *p)
 	r1.min.x += Scrbord;
 	draw(vscrtmp, r1, tagcols[BACK], nil, ZP);
 
-	draw(screen, p->vscrollr, vscrtmp, nil, vscrtmp->r.min);
-	draw(screen, p->hscrollr, hscrtmp, nil, hscrtmp->r.min);
+	draw(view, p->vscrollr, vscrtmp, nil, vscrtmp->r.min);
+	draw(view, p->hscrollr, hscrtmp, nil, hscrtmp->r.min);
 }
 
 void

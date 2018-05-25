@@ -25,31 +25,31 @@ wininit(Window *w, Window *, Rectangle r)
 	w->status.w = w;
 	r1 = r;
 	r1.max.y = r1.min.y + font->height;
-	textinit(&w->tag, screen, r1, font, tagcols);
+	textinit(&w->tag, view, r1, font, tagcols);
 	w->tag.what = Tag;
 	r1.min.y = r1.max.y++;
-	draw(screen, r1, tagcols[BORD], nil, ZP);
+	draw(view, r1, tagcols[BORD], nil, ZP);
 	br.min = w->tag.scrollr.min;
 	br.max.x = br.min.x + Dx(button->r);
 	br.max.y  = br.min.y + Dy(button->r);
-	draw(screen, br, button, nil, button->r.min);
+	draw(view, br, button, nil, button->r.min);
 	r1.min.y = r1.max.y;
 	r1.max.y += font->height;
-	textinit(&w->url, screen, r1, font, tagcols);
+	textinit(&w->url, view, r1, font, tagcols);
 	w->url.
 	w->url.what = Urltag;
 	r1.min.y = r1.max.y++;
-	draw(screen, r1, tagcols[BORD], nil, ZP);
+	draw(view, r1, tagcols[BORD], nil, ZP);
 	r1.min.y = r1.max.y;
 	r1.max.y = r.max.y - font->height - 1;
 	w->page.all = r1;
-	w->page.b = screen;
-	draw(screen, r1, display->white, nil, ZP);
+	w->page.b = view;
+	draw(view, r1, display->white, nil, ZP);
 	r1.min.y = r1.max.y++;
-	draw(screen, r1, tagcols[BORD], nil, ZP);
+	draw(view, r1, tagcols[BORD], nil, ZP);
 	r1.min.y = r1.max.y;
 	r1.max.y += font->height;
-	textinit(&w->status, screen, r1, font, tagcols);
+	textinit(&w->status, view, r1, font, tagcols);
 	w->status.what = Statustag;
 }
 
@@ -62,22 +62,22 @@ winresize(Window *w, Rectangle r, int safe)
 	r1 = r;
 	r1.max.y = r1.min.y + font->height;
 	if(!safe || !eqrect(w->tag.r, r1)){
-		textresize(&w->tag, screen, r1);
+		textresize(&w->tag, view, r1);
 		br.min = w->tag.scrollr.min;
 		br.max.x = r1.min.x + Dx(button->r);
 		br.max.y  = r1.min.y + Dy(button->r);
-		draw(screen, br, button, nil, button->r.min);
+		draw(view, br, button, nil, button->r.min);
 		r1.min.y = r1.max.y++;
-		draw(screen, r1, tagcols[BORD], nil, ZP);
+		draw(view, r1, tagcols[BORD], nil, ZP);
 		r1.min.y = r1.max.y;
 		r1.max.y += font->height;
-		textresize(&w->url, screen, r1);
+		textresize(&w->url, view, r1);
 		r1.min.y = r1.max.y++;
-		draw(screen, r1, tagcols[BORD], nil, ZP);
+		draw(view, r1, tagcols[BORD], nil, ZP);
 	}
 	r1.min.y = r1.max.y;
 	r1.max.y = r.max.y - font->height - 1;
-	w->page.b = screen;
+	w->page.b = view;
 	if(!safe || !eqrect(w->page.all, r1)){
 		if(Dy(r1) <= 0){
 			w->page.all = ZR;
@@ -86,14 +86,14 @@ winresize(Window *w, Rectangle r, int safe)
 			w->r.max.y = r1.min.y;
 			return w->r.max.y;
 		}
-		draw(screen, r1, display->white, nil, ZP);
+		draw(view, r1, display->white, nil, ZP);
 		w->page.all = r1;
 		pagerender(&w->page);
 		r1.min.y = r1.max.y++;
-		draw(screen, r1, tagcols[BORD], nil, ZP);
+		draw(view, r1, tagcols[BORD], nil, ZP);
 		r1.min.y = r1.max.y;
 		r1.max.y = r.max.y;
-		textresize(&w->status, screen, r1);
+		textresize(&w->status, view, r1);
 	}
 	return w->r.max.y;
 }
@@ -233,7 +233,7 @@ winsettag1(Window *w)
 	br.min = w->tag.scrollr.min;
 	br.max.x = br.min.x + Dx(b->r);
 	br.max.y = br.min.y + Dy(b->r);
-	draw(screen, br, b, nil, b->r.min);
+	draw(view, br, b, nil, b->r.min);
 }
 
 

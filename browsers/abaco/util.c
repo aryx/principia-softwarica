@@ -509,7 +509,7 @@ getcolor(int rgb)
 			return c->i;
 		}
 	c = emalloc(sizeof(Color));
-	c->i = eallocimage(display, Rect(0,0,1,1), screen->chan, 1, (rgb<<8)|0xFF);
+	c->i = eallocimage(display, Rect(0,0,1,1), view->chan, 1, (rgb<<8)|0xFF);
 	c->rgb = rgb;
 	c->next = colortab[h];
 	colortab[h] = c;

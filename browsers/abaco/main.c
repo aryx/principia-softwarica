@@ -104,7 +104,7 @@ threadmain(int argc, char *argv[])
 	if(cexit==nil || crefresh==nil)
 		sysfatal("can't create initial channels: %r");
 
-	mousectl = initmouse(nil, screen);
+	mousectl = initmouse(nil, view);
 	if(mousectl == nil)
 		sysfatal("can't initialize mouse: %r");
 	mouse = mousectl;
@@ -119,7 +119,7 @@ threadmain(int argc, char *argv[])
 	}
 	plumbsendfd = plumbopen("send", OWRITE|OCEXEC);
 
-	rowinit(&row, screen->clipr);
+	rowinit(&row, view->clipr);
 	for(i=0; i<ncol; i++){
 		c = rowadd(&row, nil, -1);
 		if(c==nil && i==0)
@@ -281,7 +281,7 @@ mousethread(void *)
 				error("resized");
 			scrlresize();
 			tmpresize();
-			rowresize(&row, screen->clipr);
+			rowresize(&row, view->clipr);
 			break;
 		case MPlumb:
 			plumblook(pm);
@@ -341,8 +341,8 @@ iconinit(void)
 	tagcols[BACK] = allocimagemix(display, DPalegreen, DWhite);
 	if(tagcols[BACK] == nil)
 		error("allocimagemix");
-	tagcols[HIGH] = eallocimage(display, Rect(0,0,1,1), screen->chan, 1, DDarkgreen);
-	tagcols[BORD] = eallocimage(display, Rect(0,0,1,1), screen->chan, 1, DMedgreen);
+	tagcols[HIGH] = eallocimage(display, Rect(0,0,1,1), view->chan, 1, DDarkgreen);
+	tagcols[BORD] = eallocimage(display, Rect(0,0,1,1), view->chan, 1, DMedgreen);
 	tagcols[TEXT] = display->black;
 	tagcols[HTEXT] = display->black;
 
@@ -354,16 +354,16 @@ iconinit(void)
 	textcols[HTEXT] = display->black;
 
 	r = Rect(0, 0, Scrollsize+2, font->height+1);
-	button = eallocimage(display, r, screen->chan, 0, DNofill);
+	button = eallocimage(display, r, view->chan, 0, DNofill);
 	draw(button, r, tagcols[BACK], nil, r.min);
 	r.max.x -= 2;
 	border(button, r, 2, tagcols[BORD], ZP);
 
 	r = button->r;
-	colbutton = eallocimage(display, r, screen->chan, 0, 0x00994CFF);
+	colbutton = eallocimage(display, r, view->chan, 0, 0x00994CFF);
 
-	but2col = eallocimage(display, Rect(0,0,1,2), screen->chan, 1, 0xAA0000FF);
-	but3col = eallocimage(display, Rect(0,0,1,2), screen->chan, 1, 0x444488FF);
+	but2col = eallocimage(display, Rect(0,0,1,2), view->chan, 1, 0xAA0000FF);
+	but3col = eallocimage(display, Rect(0,0,1,2), view->chan, 1, 0x444488FF);
 
 	passfont = openfont(display, fontnames[1]);
 	if(passfont == nil)

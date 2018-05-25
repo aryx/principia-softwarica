@@ -18,21 +18,21 @@ rowinit(Row *row, Rectangle r)
 	Rectangle r1;
 	Text *t;
 
-	draw(screen, r, display->white, nil, ZP);
+	draw(view, r, display->white, nil, ZP);
 	row->r = r;
 	row->col = nil;
 	row->ncol = 0;
 	r1 = r;
 	r1.max.y = r1.min.y + font->height;
 	t = &row->tag;
-	textinit(t, screen, r1, font, tagcols);
+	textinit(t, view, r1, font, tagcols);
 	t->what = Rowtag;
 	t->row = row;
 	t->w = nil;
 	t->col = nil;
 	r1.min.y = r1.max.y;
 	r1.max.y += Border;
-	draw(screen, r1, display->black, nil, ZP);
+	draw(view, r1, display->black, nil, ZP);
 	textinsert(t, 0, L"Newcol Google Exit ", 19);
 	textsetselect(t, t->rs.nr, t->rs.nr);
 }
@@ -63,7 +63,7 @@ rowadd(Row *row, Column *c, int x)
 		r = d->r;
 		if(Dx(r) < 100)
 			return nil;
-		draw(screen, r, display->white, nil, ZP);
+		draw(view, r, display->white, nil, ZP);
 		r1 = r;
 		r1.max.x = min(x, r.max.x-50);
 		if(Dx(r1) < 50)
@@ -71,7 +71,7 @@ rowadd(Row *row, Column *c, int x)
 		colresize(d, r1);
 		r1.min.x = r1.max.x;
 		r1.max.x = r1.min.x+Border;
-		draw(screen, r1, display->black, nil, ZP);
+		draw(view, r1, display->black, nil, ZP);
 		r.min.x = r1.max.x;
 	}
 	if(c == nil){
@@ -101,10 +101,10 @@ rowresize(Row *row, Rectangle r)
 	row->r = r;
 	r1 = r;
 	r1.max.y = r1.min.y + font->height;
-	textresize(&row->tag, screen, r1);
+	textresize(&row->tag, view, r1);
 	r1.min.y = r1.max.y;
 	r1.max.y += Border;
-	draw(screen, r1, display->black, nil, ZP);
+	draw(view, r1, display->black, nil, ZP);
 	r.min.y = r1.max.y;
 	r1 = r;
 	r1.max.x = r1.min.x;
@@ -118,7 +118,7 @@ rowresize(Row *row, Rectangle r)
 		if(i > 0){
 			r2 = r1;
 			r2.max.x = r2.min.x+Border;
-			draw(screen, r2, display->black, nil, ZP);
+			draw(view, r2, display->black, nil, ZP);
 			r1.min.x = r2.max.x;
 		}
 		colresize(c, r1);
@@ -177,14 +177,14 @@ rowdragcol(Row *row, Column *c, int)
 		p.x = c->r.max.x-80-Scrollsize;
 	r = d->r;
 	r.max.x = c->r.max.x;
-	draw(screen, r, display->white, nil, ZP);
+	draw(view, r, display->white, nil, ZP);
 	r.max.x = p.x;
 	colresize(d, r);
 	r = c->r;
 	r.min.x = p.x;
 	r.max.x = r.min.x;
 	r.max.x += Border;
-	draw(screen, r, display->black, nil, ZP);
+	draw(view, r, display->black, nil, ZP);
 	r.min.x = r.max.x;
 	r.max.x = c->r.max.x;
 	colresize(c, r);
@@ -209,7 +209,7 @@ rowclose(Row *row, Column *c, int dofree)
 	row->ncol--;
 	row->col = realloc(row->col, row->ncol*sizeof(Column*));
 	if(row->ncol == 0){
-		draw(screen, r, display->white, nil, ZP);
+		draw(view, r, display->white, nil, ZP);
 		return;
 	}
 	if(i == row->ncol){		/* extend last column right */
@@ -220,7 +220,7 @@ rowclose(Row *row, Column *c, int dofree)
 		c = row->col[i];
 		r.max.x = c->r.max.x;
 	}
-	draw(screen, r, display->white, nil, ZP);
+	draw(view, r, display->white, nil, ZP);
 	colresize(c, r);
 }
 
