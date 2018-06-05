@@ -54,6 +54,20 @@ enum {
     Kesc=	0x1b,
     Keof=	0x04, // C-d
     Kbs=	0x08, // C-h (backspace)
+
+    // from plan9front
+	Ksoh=	0x01,
+	Kstx=	0x02,
+	Ketx=	0x03,
+	//Keof=	0x04,
+	Kenq=	0x05,
+	Kack=	0x06,
+	//Kbs=	0x08,
+	Knack=	0x15,
+	Ketb=	0x17,
+	//Kdel=	0x7f,
+	//Kesc=	0x1b,
+
 };
 /*e: enum [[Kxxx]] */
 /*e: include/graphics/input/keyboard.h */

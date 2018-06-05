@@ -87,4 +87,8 @@ extern int		eatomouse(Mouse*, char*, int);
 
 extern Rectangle	getrect(int, Mouse*);
 extern Rectangle	egetrect(int, Mouse*);
+
+// from plan9front
+extern int		eenter(char*, char*, int, Mouse*);
+
 /*e: include/graphics/input/event.h */
