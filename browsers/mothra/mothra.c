@@ -118,7 +118,7 @@ int subpanel(Panel *obj, Panel *subj){
 	return 0;
 }
 /*
- * Make sure that the keyboard focus is on-screen, by adjusting it to
+ * Make sure that the keyboard focus is on-view, by adjusting it to
  * be the cmd entry if necessary.
  */
 int adjkb(void){
@@ -192,8 +192,8 @@ void mkpanels(void){
 		xflags=PACKN|USERFL;
 	else
 		xflags=PACKS|USERFL;
-	if(!visxbar)
-		xflags|=IGNORE;
+	//if(!visxbar)
+	//	xflags|=IGNORE;
 	menu3=plmenu(0, 0, buttons, PACKN|FILLX, hit3);
 	root=plpopup(root, EXPAND, 0, 0, menu3);
 		p=plgroup(root, PACKN|FILLX);
@@ -346,17 +346,17 @@ void main(int argc, char *argv[]){
 	if(pipe(kickpipe) < 0)
 		sysfatal("pipe: %r");
 	estart(Ekick, kickpipe[0], 256);
-	plinit(screen->depth);
+	plinit(view->depth);
 	if(debug) notify(dienow);
 	getfonts();
-	hrule=allocimage(display, Rect(0, 0, 1, 5), screen->chan, 1, DWhite);
+	hrule=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
 	if(hrule==0)
 		sysfatal("can't allocimage!");
 	draw(hrule, Rect(0,1,1,3), display->black, 0, ZP);
-	linespace=allocimage(display, Rect(0, 0, 1, 5), screen->chan, 1, DWhite);
+	linespace=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
 	if(linespace==0)
 		sysfatal("can't allocimage!");
-	bullet=allocimage(display, Rect(0,0,25, 8), screen->chan, 0, DWhite);
+	bullet=allocimage(display, Rect(0,0,25, 8), view->chan, 0, DWhite);
 	fillellipse(bullet, Pt(4,4), 3, 3, display->black, ZP);
 	mkpanels();
 	unlockdisplay(display);
@@ -417,9 +417,9 @@ void main(int argc, char *argv[]){
 			case Kend:
 				scrolltext(-text->size.y, 2);
 				break;
-			case Kack:
-				search();
-				break;
+			//case Kack:
+			//	search();
+			//	break;
 			case Kright:
 				sidescroll(text->size.x/4, 1);
 				break;
@@ -465,7 +465,7 @@ void message(char *s, ...){
 	va_end(args);
 	*out='\0';
 	plinitlabel(msg, PACKN|FILLX, buf);
-	if(defdisplay) pldraw(msg, screen);
+	if(defdisplay) pldraw(msg, view);
 }
 void htmlerror(char *name, int line, char *m, ...){
 	static char buf[1024];
@@ -488,11 +488,11 @@ void eresized(int new){
 		fprint(2, "getwindow: %r\n");
 		exits("getwindow");
 	}
-	r=screen->r;
+	r=view->r;
 	plpack(root, r);
 	plpack(alt, r);
-	pldraw(cmd, screen);	/* put cmd box on screen for alt display */
-	pldraw(root, screen);
+	pldraw(cmd, view);	/* put cmd box on view for alt display */
+	pldraw(root, view);
 	flushimage(display, 1);
 	drawlock(0);
 }
@@ -558,7 +558,7 @@ void setcurrent(int index, char *tag){
 		current->yoffs=plgetpostextview(text);
 	current=new;
 	plinitlabel(cururl, PACKE|EXPAND, current->url->fullname);
-	if(defdisplay) pldraw(cururl, screen);
+	if(defdisplay) pldraw(cururl, view);
 	plinittextview(text, PACKE|EXPAND, Pt(0, 0), current->text, dolink);
 	scrollto(tag);
 	if((i = open("/dev/label", OWRITE)) >= 0){
@@ -611,14 +611,14 @@ void screendump(char *name, int full){
 		return;
 	}
 	if(full){
-		writeimage(fd, screen, 0);
+		writeimage(fd, view, 0);
 	} else {
-		if((b=allocimage(display, text->r, screen->chan, 0, DNofill)) == nil){
+		if((b=allocimage(display, text->r, view->chan, 0, DNofill)) == nil){
 			message("can't allocate image");
 			close(fd);
 			return;
 		}
-		draw(b, b->r, screen, 0, b->r.min);
+		draw(b, b->r, view, 0, b->r.min);
 		writeimage(fd, b, 0);
 		freeimage(b);
 	}
@@ -718,7 +718,7 @@ void docmd(Panel *p, char *s){
 		exits(0);
 	}
 	plinitentry(cmd, EXPAND, 0, "", docmd);
-	pldraw(root, screen);
+	pldraw(root, view);
 }
 
 void regerror(char *msg)
@@ -1049,7 +1049,7 @@ void geturl(char *urlname, int post, int plumb, int map){
 				_exits(0);
 			}
 			plinitlist(list, PACKN|FILLX, genwww, 8, doprev);
-			if(defdisplay) pldraw(list, screen);
+			if(defdisplay) pldraw(list, view);
 			setcurrent(i, selection->tag);
 			break;
 		case GIF:
@@ -1068,7 +1068,7 @@ void updtext(Www *w){
 	Rtext *t;
 	Action *a;
 	if(defdisplay && w->gottitle==0 && w->title[0]!='\0')
-		pldraw(list, screen);
+		pldraw(list, view);
 	for(t=w->text;t;t=t->next){
 		a=t->user;
 		if(a){
@@ -1082,7 +1082,7 @@ void updtext(Www *w){
 	w->yoffs=plgetpostextview(text);
 	plinittextview(text, PACKE|EXPAND, Pt(0, 0), w->text, dolink);
 	plsetpostextview(text, w->yoffs);
-	pldraw(text, screen);
+	pldraw(text, view);
 }
 
 void finish(Www *w){
@@ -1122,7 +1122,7 @@ mothon(Www *w, int on)
 			t->next = nil;
 			ap=emalloc(sizeof(Action));
 			ap->link = strdup(a->link);
-			plrtstr(&t->next, 0, 0, 0, t->font, strdup("->"), PL_HOT, ap);
+			plrtstr(&t->next, 0, 0, /**0,*/ t->font, strdup("->"), PL_HOT, ap);
 			t->next->next = x;
 		} else {
 			if(x) {
@@ -1178,12 +1178,12 @@ void hit3(int button, int item){
 		text=alttext;
 		alttext=swap;
 		defdisplay=!defdisplay;
-		plpack(root, screen->r);
+		plpack(root, view->r);
 		if(current){
 			plinittextview(text, PACKE|EXPAND, Pt(0, 0), current->text, dolink);
 			plsetpostextview(text, current->yoffs);
 		}
-		pldraw(root, screen);
+		pldraw(root, view);
 		break;
 	case 1:
 		mothon(current, !mothmode);

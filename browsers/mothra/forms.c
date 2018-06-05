@@ -442,7 +442,7 @@ void h_radioinput(Panel *p, int, int v){
 			if(f->type==RADIO && f!=me && strcmp(f->name, me->name)==0){
 				plsetbutton(f->p, 0);
 				f->state=0;
-				pldraw(f->p, screen);
+				pldraw(f->p, view);
 			}
 	}
 }
@@ -456,7 +456,7 @@ void h_select(Panel *p, int, int index){
 	if(a==0) return;
 	a->selected=!a->selected;
 	plinitpulldown(f->p, FIXEDX, seloption(f), f->pulldown, PACKS);
-	pldraw(f->p, screen);
+	pldraw(f->p, view);
 }
 void h_resetinput(Panel *p, int){
 	Field *f;
@@ -473,7 +473,7 @@ void h_resetinput(Panel *p, int){
 		f->value=strdup("");
 		if(f->p==nil) break;
 		f->p->state=0;
-		pldraw(f->p, screen);
+		pldraw(f->p, view);
 		break;
 	case CHECK:
 	case RADIO:
@@ -485,7 +485,7 @@ void h_resetinput(Panel *p, int){
 			o->selected=o->def;
 		break;
 	}
-	pldraw(text, screen);
+	pldraw(text, view);
 }
 
 void h_buttoninput(Panel *p, int){
@@ -511,7 +511,7 @@ void h_fileinput(Panel *p, int){
 	free(f->value);
 	f->value = strdup(name);
 	p->state = name[0] != 0;
-	pldraw(f->p, screen);
+	pldraw(f->p, view);
 }
 
 /*

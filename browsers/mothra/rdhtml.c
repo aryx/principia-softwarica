@@ -83,7 +83,7 @@ void pl_popstate(Stack *state){
 }
 
 void pl_linespace(Hglob *g){
-	plrtbitmap(&g->dst->text, 1000000, 0, 0, linespace, 0, 0);
+	plrtbitmap(&g->dst->text, 1000000, 0, /**0,*/ linespace, 0, 0);
 	g->para=0;
 	g->linebrk=0;
 }
@@ -166,9 +166,9 @@ void pl_htmloutput(Hglob *g, int nsp, char *s, Field *field){
 	flags = 0;
 	if(g->state->link)
 		flags |= PL_HOT;
-	if(g->state->strike)
-		flags |= PL_STR;
-	plrtstr(&g->dst->text, space, indent, voff, f, strdup(s), flags, ap);
+	//if(g->state->strike)
+	//	flags |= PL_STR;
+	plrtstr(&g->dst->text, space, indent, /**voff,*/ f, strdup(s), flags, ap);
 	g->para=0;
 	g->linebrk=0;
 	g->dst->changed=1;
@@ -1050,7 +1050,7 @@ void plrdhtml(char *name, int fd, Www *dst){
 			break;
 		case Tag_hr:
 			g.spacc=0;
-			plrtbitmap(&g.dst->text, 1000000, g.state->margin, 0, hrule, 0, 0);
+			plrtbitmap(&g.dst->text, 1000000, g.state->margin, /**0,*/ hrule, 0, 0);
 			break;
 		case Tag_key:
 			htmlerror(g.name, g.lineno, "<key> deprecated");
@@ -1087,7 +1087,7 @@ void plrdhtml(char *name, int fd, Www *dst){
 				g.linebrk=0;
 				g.spacc=-1;
 				plrtbitmap(&g.dst->text, 100000,
-					g.state->margin+g.state->indent, 0, bullet, 0, 0);
+					g.state->margin+g.state->indent, /**0,*/ bullet, 0, 0);
 				break;
 			}
 			break;
