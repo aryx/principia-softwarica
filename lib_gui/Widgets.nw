@@ -14,7 +14,7 @@
 
 %thx to LP, I changed for the better a few things:
 
-%thx to this manual, better understand toolkits:
+%thx to this manual, I better understand toolkits:
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -22,9 +22,9 @@
 % - split in chunks (some done automatically)
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * [[xxx]] other fields, [[xxx]] extra fields
-% - TODO read Extra section, identify concepts, first TOC
-% - TODO distribute parts of the file before
-% - TODO typeify, scheckify
+% - read Extra section, identify concepts, first TOC
+% - SEMI distribute parts of the file before
+% - SEMI typeify, scheckify
 % - TODO aspectify advanced features!
 % - TODO add explanations
 % - TODO add figures
@@ -115,13 +115,15 @@ a {widget} library.
 Here are a few questions I hope this book will answer:
 \begin{itemize}
 
-\item How a mouse event gets dispatched to the appropriate widget?
+\item How does a mouse event get dispatched to the appropriate widget?
+
+\item How does scrolling work? How widgets communicate with each other?
 
 \end{itemize}
 
 \section{The \plan widget library: [[libpanel]]}
 
-% used by mothra web browsed (libpanel made for that purpose?)
+% used by mothra web browser (libpanel made for that purpose?)
 % and by usb userspace serial program (not sure why).
 
 % seen already in rio menuhit, frame, but limited.
@@ -144,11 +146,17 @@ which I ultimately discarded:
 % panel uses less code than lablgtk which is just a binding ...
 
 \item Qt
+% huge now
+% qt1 of kde1?
+
 \end{itemize}
 
 %history:
 % - Xerox Alto, smalltalk
 %industry:
+% - MFC, .NET?
+% - java Swing
+% - Apple?
 %mini:
 % - minimal GUI with one header file in C:
 %   https://github.com/vurtun/nuklear
@@ -186,11 +194,16 @@ who wrote in some sense most of this book.
 \section{GUI toolkit principles}
 
 \subsection{The widget}
+% window object
 
 \subsection{Event loop}
+% reactive programming
 
 \subsection{Packing}
 
+\subsection{Layout}
+
+\subsection{Scrolling}
 
 \section{[[hellopanel.c]]}
 
@@ -281,126 +294,237 @@ void main(void){
 
 <<struct [[Panel]]>>=
 struct Panel{
-    Point ipad, pad;				/* extra space inside and outside */
-    Point fixedsize;				/* size of Panel, if FIXED */
-
-    int user;					/* available for user */
-    void *userp;					/* available for user */
+    // public
 
     Rectangle r;					/* where the Panel goes */
 
-
-
+    <<[[Panel]] padding fields>>
+    <<[[Panel]] extra public fields>>
+    <<[[Panel]] user fields>>
 
     /* private below */
-    Panel *next;					/* It's a list! */
-    Panel *child, *echild, *parent;			/* No, it's a tree! */
 
     Image *b;					/* where we're drawn */
-    int flags;					/* position flags, see below */
-    char *kind;					/* what kind of panel? */
-    int state;					/* for hitting & drawing purposes */
-    Point size;					/* space for this Panel */
-    Point sizereq;					/* size requested by this Panel */
-    Point childreq;					/* total size needed by children */
-    Panel *lastmouse;				/* who got the last mouse event? */
-    Panel *scrollee;				/* pointer to scrolled window */
-    Panel *xscroller, *yscroller;			/* pointers to scroll bars */
-    Scroll scr;					/* scroll data */
+    <<[[Panel]] widget specific data>>
+    <<[[Panel]] other fields>>
+    <<[[Panel]] debugging fields>>
 
-    void *data;					/* kind-specific data */
+    // methods
+    <<[[Panel]] main methods>>
+    <<[[Panel]] other methods>>
 
-    void (*draw)(Panel *);				/* draw panel and children */
-
-    int (*hit)(Panel *, Mouse *);			/* process mouse event */
-    void (*type)(Panel *, Rune);			/* process keyboard event */
-
-    Point (*getsize)(Panel *, Point);		/* return size, given child size */
-    void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
-
-
-    int (*pri)(Panel *, Point);			/* priority for hitting */
-
-    void (*scroll)(Panel *, int, int, int, int);	/* scroll bar to scrollee */
-    void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
-    void (*free)(Panel *);				/* free fields of data when done */
-    char* (*snarf)(Panel *);			/* snarf text from panel */
-    void (*paste)(Panel *, char *);			/* paste text into panel */
+    // Extra
+    <<[[Panel]] extra fields>>
 };
 @
 
-
+%ctor
 <<function [[pl_newpanel]]>>=
 Panel *pl_newpanel(Panel *parent, int ndata){
     Panel *v;
-    if(parent && parent->flags&LEAF){
-        fprint(2, "newpanel: can't create child of %s %lux\n", parent->kind, (ulong)parent);
-        exits("bad newpanel");
-    }
+
+    <<[[pl_newpanel()]] sanity check if can create child on [[parent]]>>
     v=pl_emalloc(sizeof(Panel));
-    v->r=Rect(0,0,0,0);
-    v->flags=0;
-    v->ipad=Pt(0,0);
-    v->pad=Pt(0,0);
-    v->size=Pt(0,0);
-    v->sizereq=Pt(0,0);
-    v->lastmouse=0;
-    v->next=0;
-    v->child=0;
-    v->echild=0;
-    v->b=0;
-    v->pri=pl_prinormal;
-    v->scrollee=0;
-    v->xscroller=0;
-    v->yscroller=0;
-    v->parent=parent;
-    v->scr.pos=Pt(0,0);
-    v->scr.size=Pt(0,0);
-    if(parent){
-        if(parent->child==0)
-            parent->child=v;
-        else
-            parent->echild->next=v;
-        parent->echild=v;
-    }
-    v->draw=pl_drawerror;
-    v->hit=pl_hiterror;
-    v->type=pl_typeerror;
-    v->getsize=pl_getsizeerror;
-    v->childspace=pl_childspaceerror;
-    v->scroll=pl_scrollerror;
-    v->setscrollbar=pl_setscrollbarerror;
-    v->free=0;
-    v->snarf=0;
-    v->paste=0;
-    if(ndata)
-        v->data=pl_emalloc(ndata);
-    else
-        v->data=0;
+
+    <<[[pl_newpanel()]] set tree fields>>
+    <<[[pl_newpanel()]] set widget-specific data fields>>
+    <<[[pl_newpanel()]] set other fields>>
+    <<[[pl_newpanel()]] set default methods>>
+
     return v;
 }
 @
+%pad: I reordered the assignments
 
+<<[[Panel]] other fields>>=
+// LEAF | INVIS | ...
+int flags;					/* position flags, see below */
+@
+
+<<[[pl_newpanel()]] set other fields>>=
+v->flags=0;
+@
+
+
+%dtor
 <<function [[plfree]]>>=
 void plfree(Panel *p){
     Panel *cp, *ncp;
     if(p==0)
         return;
-    if(p==plkbfocus)
-        plkbfocus=0;
-    for(cp=p->child;cp;cp=ncp){
-        ncp=cp->next;
-        plfree(cp);
-    }
-    if(p->free) p->free(p);
-    if(p->data) free(p->data);
+    <<[[plfree()]] if [[plkbfocus]]>>
+    <<[[plfree()]] free the children>>
+    <<[[plfree()]] free the widget-specific data>>
     free(p);
 }
 @
 
+\subsection{A tree of widgets}
+
+<<[[Panel]] extra fields>>=
+// option<ref<Panel>>
+Panel *parent; 			/* No, it's a tree! */
+@
+<<[[Panel]] extra fields>>=
+// option<list<ref_own<Panel>>> (next = Panel.next, tail = Panel.echild)
+Panel *child;
+// option<ref<Panel>>
+Panel *echild;
+@
+
+<<[[Panel]] extra fields>>=
+// list<ref<Panel>> (head = Panel.child)
+Panel *next;					/* It's a list! */
+@
+
+
+
+
+<<[[pl_newpanel()]] set tree fields>>=
+v->next=0;
+v->child=0;
+v->echild=0;
+
+v->parent=parent;
+//add_list(v, parent->child)
+if(parent){
+    if(parent->child==0)
+        parent->child=v;
+    else
+        parent->echild->next=v;
+    parent->echild=v;
+}
+@
+
+<<[[plfree()]] free the children>>=
+for(cp=p->child;cp;cp=ncp){
+    ncp=cp->next;
+    plfree(cp);
+}
+@
+
+
+
 
 <<constant [[LEAF]]>>=
 #define	LEAF	0x10000		/* newpanel will refuse to attach children */
+@
+
+<<[[pl_newpanel()]] sanity check if can create child on [[parent]]>>=
+if(parent && parent->flags&LEAF){
+    fprint(2, "newpanel: can't create child of %s %lux\n", parent->kind, (ulong)parent);
+    exits("bad newpanel");
+}
+@
+
+
+\subsection{Widget-specific data}
+
+<<[[Panel]] widget specific data>>=
+// union<ref_own<Label|Entry|Button|...>
+void *data;					/* kind-specific data */
+@
+
+<<[[Panel]] other methods>>=
+void (*free)(Panel *);				/* free fields of data when done */
+@
+
+
+<<[[pl_newpanel()]] set widget-specific data fields>>=
+if(ndata)
+    v->data=pl_emalloc(ndata);
+else
+    v->data=0;
+v->free=nil;
+@
+
+<<[[plfree()]] free the widget-specific data>>=
+if(p->free) p->free(p);
+if(p->data) free(p->data);
+@
+
+
+\subsection{Main widget methods}
+
+<<[[Panel]] main methods>>=
+void (*draw)(Panel *);				/* draw panel and children */
+
+int (*hit)(Panel *, Mouse *);			/* process mouse event */
+void (*type)(Panel *, Rune);			/* process keyboard event */
+@
+
+
+<<[[pl_newpanel()]] set default methods>>=
+v->draw=pl_drawerror;
+v->hit=pl_hiterror;
+v->type=pl_typeerror;
+@
+% see error management appendix. raise error. widget specific constructor
+% should set those fields correctly!
+
+
+\subsection{Keyboard focus}
+
+<<global [[plkbfocus]]>>=
+Panel *plkbfocus;			/* the panel in keyboard focus */
+@
+
+
+
+\subsection{XXX}
+
+
+<<[[pl_newpanel()]] set other fields>>=
+v->r=Rect(0,0,0,0);
+v->ipad=Pt(0,0);
+v->pad=Pt(0,0);
+v->size=Pt(0,0);
+v->sizereq=Pt(0,0);
+v->lastmouse=0;
+v->b=0;
+v->pri=pl_prinormal;
+v->scrollee=0;
+v->xscroller=0;
+v->yscroller=0;
+v->scr.pos=Pt(0,0);
+v->scr.size=Pt(0,0);
+@
+
+%XXX
+<<[[Panel]] padding fields>>=
+Point ipad;				/* extra space inside and outside */
+Point pad;
+@
+<<[[Panel]] extra public fields>>=
+Point fixedsize;				/* size of Panel, if FIXED */
+@
+<<[[Panel]] other fields>>=
+int state;					/* for hitting & drawing purposes */
+Point size;					/* space for this Panel */
+Point sizereq;					/* size requested by this Panel */
+Point childreq;					/* total size needed by children */
+
+Panel *scrollee;				/* pointer to scrolled window */
+Panel *xscroller, *yscroller;			/* pointers to scroll bars */
+Scroll scr;					/* scroll data */
+@
+
+<<[[Panel]] other methods>>=
+Point (*getsize)(Panel *, Point);		/* return size, given child size */
+void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
+@
+
+<<[[Panel]] other methods>>=
+void (*scroll)(Panel *, int, int, int, int);	/* scroll bar to scrollee */
+void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
+@
+
+<<[[pl_newpanel()]] set default methods>>=
+v->getsize=pl_getsizeerror;
+v->childspace=pl_childspaceerror;
+
+v->scroll=pl_scrollerror;
+v->setscrollbar=pl_setscrollbarerror;
 @
 
 \section{[[Icon]]}
@@ -409,15 +533,19 @@ void plfree(Panel *p){
 typedef void Icon;			/* Always used as Icon * -- Image or char */
 @
 
+% see pl_drawicon
+
 \section{Placement}
 
 <<constant [[PLACE]]>>=
 #define	PLACE	0x01e0		/* which side of its space should the Panel adhere to? */
 @
+% bitmask?
 
 <<constant [[PLACECEN]]>>=
 #define		PLACECEN 0x0000
 @
+%Center
 
 <<constant [[PLACES]]>>=
 #define		PLACES	0x0020
@@ -449,6 +577,7 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 <<constant [[PACK]]>>=
 #define	PACK	0x0007		/* which side of the parent is the Panel attached to? */
 @
+% bitmask
 
 <<constant [[PACKN]]>>=
 #define		PACKN	0x0000
@@ -477,9 +606,9 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 /*
  * Just a wrapper for all the initialization routines
  */
-int plinit(int ldepth){
-    if(!pl_drawinit(ldepth)) return 0;
-    return 1;
+error0 plinit(int ldepth){
+    if(pl_drawinit(ldepth) == ERROR_0) return ERROR_0;
+    return OK_1;
 }
 @
 
@@ -494,7 +623,7 @@ static Image *pl_white, *pl_light, *pl_dark, *pl_black, *pl_hilit;
 
 %draw.c
 <<function [[pl_drawinit]]>>=
-int pl_drawinit(int ldepth){
+error0 pl_drawinit(int ldepth){
 
     plldepth=ldepth;
 
@@ -504,9 +633,9 @@ int pl_drawinit(int ldepth){
     pl_black=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x000000FF);
     pl_hilit=allocimage(display, Rect(0,0,1,1), CHAN1(CAlpha,8), 1, 0x80);
 
-    if(pl_white==0 || pl_light==0 || pl_black==0 || pl_dark==0) 
-        return 0;
-    return 1;
+    if(pl_white==nil || pl_light==nil || pl_black==nil || pl_dark==nil) 
+        return ERROR_0;
+    return OK_1;
 }
 @
 
@@ -515,6 +644,7 @@ int pl_drawinit(int ldepth){
 
 \section{[[pldraw()]]}
 
+% ??? -> <>
 <<function [[pldraw]]>>=
 void pldraw(Panel *p, Image *b){
     pl_draw1(p, b);
@@ -531,12 +661,14 @@ void pl_draw1(Panel *p, Image *b){
 
 <<function [[pl_drawall]]>>=
 void pl_drawall(Panel *p, Image *b){
-    if(p->flags&INVIS) return;
+    <<[[pl_drawall()]] if invisible widget>>
     p->b=b;
     p->draw(p);
-    for(p=p->child;p;p=p->next) pl_draw1(p, b);
+    for(p=p->child;p;p=p->next) 
+        pl_draw1(p, b);
 }
 @
+
 
 \section{Drawing helpers}
 
@@ -558,8 +690,10 @@ void pl_relief(Image *b, Image *ul, Image *lr, Rectangle r, int wid){
 void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
     Rectangle save;
     Point ul, offs;
+
     ul=r.min;
     offs=subpt(subpt(r.max, r.min), pl_iconsize(flags, s));
+
     switch(stick){
     case PLACENW:	                                break;
     case PLACEN:	ul.x+=offs.x/2;                 break;
@@ -571,12 +705,15 @@ void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
     case PLACES:	ul.x+=offs.x/2; ul.y+=offs.y;   break;
     case PLACESE:	ul.x+=offs.x;   ul.y+=offs.y;   break;
     }
+
     save=b->clipr;
     if(!rectclip(&r, save))
         return;
     replclipr(b, b->repl, r);
-    if(flags&BITMAP) draw(b, Rpt(ul, addpt(ul, pl_iconsize(flags, s))), s, 0, ZP);
-    else string(b, ul, pl_black, ZP, font, s);
+    if(flags&BITMAP) 
+        draw(b, Rpt(ul, addpt(ul, pl_iconsize(flags, s))), s, 0, ZP);
+    else 
+        string(b, ul, pl_black, ZP, font, s);
     replclipr(b, b->repl, save);
 }
 @
@@ -586,13 +723,19 @@ void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
 
 \section{Mouse events}
 
+% called in event loop, from root widget
+
+% event user loop -> <>
 <<function [[plmouse]]>>=
 void plmouse(Panel *g, Mouse *m){
     Panel *hit, *last;
+
     if(g->flags&REMOUSE)
         hit=g->lastmouse;
     else{
+
         hit=pl_ptinpanel(m->xy, g);
+
         last=g->lastmouse;
         if(last && last!=hit){
             m->buttons|=OUT;
@@ -611,32 +754,85 @@ void plmouse(Panel *g, Mouse *m){
 }
 @
 
+<<function [[pl_ptinpanel]]>>=
+/*
+ * Return the most leafward, highest priority panel containing p
+ */
+Panel *pl_ptinpanel(Point p, Panel *g){
+    Panel *v;
+    for(;g;g=g->next) 
+      if(ptinrect(p, g->r)){
+        //recurse
+        v=pl_ptinpanel(p, g->child);
+        if(v && v->pri(v, p) >= g->pri(g, p)) 
+            return v;
+        return g;
+      }
+    return 0;
+}
+@
+
+<<[[Panel]] other methods>>=
+int (*pri)(Panel *, Point);			/* priority for hitting */
+@
+
+
+<<[[Panel]] other fields>>=
+Panel *lastmouse;				/* who got the last mouse event? */
+@
+
+
+<<constant [[REMOUSE]]>>=
+#define	REMOUSE	0x40000		/* send next mouse event here, even if not inside */
+@
+
 \section{Keyboard events}
 
 <<function [[plkeyboard]]>>=
 void plkeyboard(Rune c){
     if(plkbfocus){
         plkbfocus->type(plkbfocus, c);
-        flushimage(display, 1);
+        flushimage(display, true);
     }
 }
 @
 
+<<[[plfree()]] if [[plkbfocus]]>>=
+if(p==plkbfocus)
+    plkbfocus=nil;
+@
+
+
 \chapter{Basic Widgets}
 % no children
+
+\subsection{Initializing}
+\subsection{Drawing}
+\subsection{Reacting}
+\subsection{Other methods}
+
+\subsubsection{Initializing}
+\subsubsection{Drawing}
+\subsubsection{Reacting}
+\subsubsection{Other methods}
 
 \section{Label}
 
 <<struct [[Label]]>>=
 struct Label{
+    // enum<Placement>
     int placement;
+    // ref_own<Icon>
     Icon *icon;
 };
 @
 
+\subsection{Initializing}
+
 <<function [[pllabel]]>>=
 Panel *pllabel(Panel *parent, int flags, Icon *icon){
     Panel *p;
+
     p=pl_newpanel(parent, sizeof(Label));
     plinitlabel(p, flags, icon);
     plplacelabel(p, PLACECEN);
@@ -660,9 +856,13 @@ void plinitlabel(Panel *v, int flags, Icon *icon){
 }
 @
 
+<<function [[plplacelabel]]>>=
+void plplacelabel(Panel *p, int placement){
+    ((Label *)(p->data))->placement=placement;
+}
+@
 
-
-
+\subsection{Drawing}
 
 <<function [[pl_drawlabel]]>>=
 void pl_drawlabel(Panel *p){
@@ -671,6 +871,10 @@ void pl_drawlabel(Panel *p){
     pl_drawicon(p->b, pl_box(p->b, p->r, PASSIVE), l->placement, p->flags, l->icon);
 }
 @
+
+\subsection{Reacting}
+
+% no reaction for labels
 
 <<function [[pl_hitlabel]]>>=
 int pl_hitlabel(Panel *p, Mouse *m){
@@ -685,6 +889,7 @@ void pl_typelabel(Panel *p, Rune c){
 }
 @
 
+\subsection{Other methods}
 
 <<function [[pl_getsizelabel]]>>=
 Point pl_getsizelabel(Panel *p, Point children){
@@ -702,13 +907,6 @@ void pl_childspacelabel(Panel *g, Point *ul, Point *size){
 
 
 
-
-<<function [[plplacelabel]]>>=
-void plplacelabel(Panel *p, int placement){
-    ((Label *)(p->data))->placement=placement;
-}
-@
-
 \section{Text entry}
 
 <<struct [[Entry]]>>=
@@ -721,9 +919,12 @@ struct Entry{
 };
 @
 
+\subsection{Initializing}
+
 <<function [[plentry]]>>=
 Panel *plentry(Panel *parent, int flags, int wid, char *str, void (*hit)(Panel *, char *)){
     Panel *v;
+
     v=pl_newpanel(parent, sizeof(Entry));
     plinitentry(v, flags, wid, str, hit);
     return v;
@@ -735,14 +936,17 @@ Panel *plentry(Panel *parent, int flags, int wid, char *str, void (*hit)(Panel *
 void plinitentry(Panel *v, int flags, int wid, char *str, void (*hit)(Panel *, char *)){
     int elen;
     Entry *ep;
+
     ep=v->data;
     v->flags=flags|LEAF;
     v->state=UP;
+
     v->draw=pl_drawentry;
     v->hit=pl_hitentry;
     v->type=pl_typeentry;
     v->getsize=pl_getsizeentry;
     v->childspace=pl_childspaceentry;
+
     ep->minsize=Pt(wid, font->height);
     v->free=pl_freeentry;
     v->snarf=pl_snarfentry;
@@ -760,7 +964,7 @@ void plinitentry(Panel *v, int flags, int wid, char *str, void (*hit)(Panel *, c
 
 
 
-
+\subsection{Drawing}
 
 <<function [[pl_drawentry]]>>=
 void pl_drawentry(Panel *p){
@@ -786,8 +990,7 @@ void pl_drawentry(Panel *p){
 }
 @
 
-
-
+\subsection{Reacting}
 
 <<function [[pl_hitentry]]>>=
 int pl_hitentry(Panel *p, Mouse *m){
@@ -870,7 +1073,7 @@ void pl_typeentry(Panel *p, Rune c){
 }
 @
 
-
+\subsection{Other methods}
 
 <<function [[pl_getsizeentry]]>>=
 Point pl_getsizeentry(Panel *p, Point children){
@@ -916,6 +1119,8 @@ struct Edit{
 };
 @
 
+\subsection{Initializing}
+
 <<function [[pledit]]>>=
 Panel *pledit(Panel *parent, int flags, Point minsize, Rune *text, int ntext, void (*hit)(Panel *)){
     Panel *v;
@@ -957,6 +1162,7 @@ void plinitedit(Panel *v, int flags, Point minsize, Rune *text, int ntext, void 
 }
 @
 
+\subsection{Drawing}
 
 <<function [[pl_drawedit]]>>=
 void pl_drawedit(Panel *p){
@@ -979,6 +1185,7 @@ void pl_drawedit(Panel *p){
 }
 @
 
+\subsection{Reacting}
 
 <<function [[pl_hitedit]]>>=
 /*
@@ -1081,6 +1288,7 @@ void pl_typeedit(Panel *p, Rune c){
 }
 @
 
+\subsection{Other methods}
 
 <<function [[pl_getsizeedit]]>>=
 Point pl_getsizeedit(Panel *p, Point children){
@@ -1136,7 +1344,7 @@ struct Button{
 
 \subsection{Basic button}
 
-\subsubsection{Initialization}
+\subsubsection{Initializing}
 
 <<function [[plbutton]]>>=
 Panel *plbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int)){
@@ -1198,7 +1406,7 @@ void pl_drawbutton(Panel *p){
 }
 @
 
-\subsubsection{Event callback}
+\subsubsection{Reacting}
 
 <<function [[pl_hitbutton]]>>=
 int pl_hitbutton(Panel *p, Mouse *m){
@@ -1256,7 +1464,7 @@ void pl_typebutton(Panel *g, Rune c){
 }
 @
 
-\subsubsection{XXX}
+\subsubsection{Other methods}
 
 
 <<function [[pl_getsizebutton]]>>=
@@ -1294,6 +1502,8 @@ void plsetbutton(Panel *p, int val){
 
 \subsection{Check button}
 
+\subsubsection{Initializing}
+
 <<function [[plcheckbutton]]>>=
 Panel *plcheckbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int, int)){
     Panel *p;
@@ -1308,6 +1518,8 @@ void plinitcheckbutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, int
     pl_initbtype(p, flags, icon, hit, CHECK);
 }
 @
+
+\subsubsection{Drawing}
 
 <<function [[pl_check]]>>=
 Rectangle pl_check(Image *b, Rectangle r, int val){
@@ -1338,12 +1550,17 @@ Rectangle pl_check(Image *b, Rectangle r, int val){
 }
 @
 
+\subsubsection{Reacting}
+\subsubsection{Other methods}
 
 \subsection{Radio button}
+
+\subsubsection{Initializing}
 
 <<function [[plradiobutton]]>>=
 Panel *plradiobutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int, int)){
     Panel *p;
+
     p=pl_newpanel(parent, sizeof(Button));
     plinitradiobutton(p, flags, icon, hit);
     return p;
@@ -1355,6 +1572,8 @@ void plinitradiobutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, int
     pl_initbtype(p, flags, icon, hit, RADIO);
 }
 @
+
+\subsubsection{Drawing}
 
 <<function [[pl_radio]]>>=
 /*
@@ -1381,6 +1600,9 @@ Rectangle pl_radio(Image *b, Rectangle r, int val){
 }
 @
 
+\subsubsection{Reacting}
+\subsubsection{Other methods}
+
 \section{Slider}
 
 <<struct [[Slider]]>>=
@@ -1392,6 +1614,8 @@ struct Slider{
     int buttons;
 };
 @
+
+\subsection{Initializing}
 
 <<function [[plslider]]>>=
 Panel *plslider(Panel *parent, int flags, Point size, void (*hit)(Panel *, int, int, int)){
@@ -1422,6 +1646,7 @@ void plinitslider(Panel *v, int flags, Point size, void (*hit)(Panel *, int, int
 @
 
 
+\subsection{Drawing}
 
 <<function [[pl_drawslider]]>>=
 void pl_drawslider(Panel *p){
@@ -1436,6 +1661,7 @@ void pl_drawslider(Panel *p){
 }
 @
 
+\subsection{Reacting}
 
 <<function [[pl_hitslider]]>>=
 int pl_hitslider(Panel *p, Mouse *m){
@@ -1480,6 +1706,8 @@ void pl_typeslider(Panel *p, Rune c){
 @
 
 
+\subsection{Other methods}
+
 <<function [[pl_getsizeslider]]>>=
 Point pl_getsizeslider(Panel *p, Point children){
     USED(children);
@@ -1511,6 +1739,8 @@ void plsetslider(Panel *p, int value, int range){
 
 \section{Basic menu}
 
+\subsection{Initializing}
+
 <<function [[plmenu]]>>=
 Panel *plmenu(Panel *parent, int flags, Icon **item, int cflags, void (*hit)(int, int)){
     Panel *v;
@@ -1538,6 +1768,10 @@ void plinitmenu(Panel *v, int flags, Icon **item, int cflags, void (*hit)(int, i
 }
 @
 
+\subsection{Drawing}
+
+\subsection{Reacting}
+
 <<function [[pl_hitmenu]]>>=
 void pl_hitmenu(Panel *p, int buttons){
     void (*hit)(int, int);
@@ -1545,6 +1779,8 @@ void pl_hitmenu(Panel *p, int buttons){
     if(hit) hit(buttons, ((Button *)p->data)->index);
 }
 @
+
+\subsection{Other methods}
 
 
 \section{Popup}
@@ -1556,6 +1792,7 @@ struct Popup{
 };
 @
 
+\subsection{Initializing}
 
 <<function [[plpopup]]>>=
 Panel *plpopup(Panel *parent, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
@@ -1587,10 +1824,18 @@ void plinitpopup(Panel *v, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
 }
 @
 
+\subsection{Drawing}
+
 <<function [[pl_drawpopup]]>>=
 void pl_drawpopup(Panel *p){
     USED(p);
 }
+@
+
+\subsection{Reacting}
+
+<<[[pl_drawall()]] if invisible widget>>=
+if(p->flags&INVIS) return;
 @
 
 <<function [[pl_hitpopup]]>>=
@@ -1664,6 +1909,8 @@ void pl_typepopup(Panel *g, Rune c){
 }
 @
 
+\subsection{Other methods}
+
 <<function [[pl_getsizepopup]]>>=
 Point pl_getsizepopup(Panel *g, Point children){
     USED(g);
@@ -1688,9 +1935,12 @@ struct Pulldown{
 };
 @
 
+\subsection{Initializing}
+
 <<function [[plpulldown]]>>=
 Panel *plpulldown(Panel *parent, int flags, Icon *icon, Panel *pullthis, int side){
     Panel *v;
+
     v=pl_newpanel(parent, sizeof(Pulldown));
     v->state=UP;
     ((Pulldown *)v->data)->save=0;
@@ -1698,39 +1948,6 @@ Panel *plpulldown(Panel *parent, int flags, Icon *icon, Panel *pullthis, int sid
     return v;
 }
 @
-
-
-<<function [[plmenubar]]>>=
-Panel *plmenubar(Panel *parent, int flags, int cflags, Icon *l1, Panel *m1, Icon *l2, ...){
-    Panel *v;
-    va_list arg;
-    Icon *s;
-    int pulldir;
-    switch(cflags&PACK){
-    default:
-        SET(pulldir);
-        break;
-    case PACKE:
-    case PACKW:
-        pulldir=PACKS;
-        break;
-    case PACKN:
-    case PACKS:
-        pulldir=PACKE;
-        break;
-    }
-    v=plgroup(parent, flags);
-    va_start(arg, cflags);
-    while((s=va_arg(arg, Icon *))!=0)
-        plpulldown(v, cflags, s, va_arg(arg, Panel *), pulldir);
-    va_end(arg);
-    USED(l1, m1, l2);
-    v->kind="menubar";
-    return v;
-}
-@
-
-
 
 <<function [[plinitpulldown]]>>=
 void plinitpulldown(Panel *v, int flags, Icon *icon, Panel *pullthis, int side){
@@ -1749,12 +1966,16 @@ void plinitpulldown(Panel *v, int flags, Icon *icon, Panel *pullthis, int side){
 }
 @
 
+\subsection{Drawing}
+
 <<function [[pl_drawpulldown]]>>=
 void pl_drawpulldown(Panel *p){
     pl_drawicon(p->b, pl_box(p->b, p->r, p->state), PLACECEN,
         p->flags, ((Pulldown *)p->data)->icon);
 }
 @
+
+\subsection{Reacting}
 
 <<function [[pl_hitpulldown]]>>=
 int pl_hitpulldown(Panel *g, Mouse *m){
@@ -1845,6 +2066,9 @@ void pl_typepulldown(Panel *p, Rune c){
 }
 @
 
+
+\subsection{Other methods}
+
 <<function [[pl_getsizepulldown]]>>=
 Point pl_getsizepulldown(Panel *p, Point children){
     USED(p, children);
@@ -1860,14 +2084,56 @@ void pl_childspacepulldown(Panel *p, Point *ul, Point *size){
 
 
 
+\section{Menubar}
+
+\subsection{Initializing}
+
+<<function [[plmenubar]]>>=
+Panel *plmenubar(Panel *parent, int flags, int cflags, Icon *l1, Panel *m1, Icon *l2, ...){
+    Panel *v;
+    va_list arg;
+    Icon *s;
+    int pulldir;
+
+    switch(cflags&PACK){
+    default:
+        SET(pulldir);
+        break;
+    case PACKE:
+    case PACKW:
+        pulldir=PACKS;
+        break;
+    case PACKN:
+    case PACKS:
+        pulldir=PACKE;
+        break;
+    }
+    v=plgroup(parent, flags);
+    va_start(arg, cflags);
+    while((s=va_arg(arg, Icon *))!=0)
+        plpulldown(v, cflags, s, va_arg(arg, Panel *), pulldir);
+    va_end(arg);
+    USED(l1, m1, l2);
+    v->kind="menubar";
+    return v;
+}
+@
+
+
+
+
+
+
 \chapter{Composite Widgets}
 
 \section{Frame}
 
+\subsection{Initializing}
 
 <<function [[plframe]]>>=
 Panel *plframe(Panel *parent, int flags){
     Panel *p;
+
     p=pl_newpanel(parent, 0);
     plinitframe(p, flags);
     return p;
@@ -1886,12 +2152,15 @@ void plinitframe(Panel *v, int flags){
 }
 @
 
+\subsection{Drawing}
 
 <<function [[pl_drawframe]]>>=
 void pl_drawframe(Panel *p){
     pl_box(p->b, p->r, FRAME);
 }
 @
+
+\subsection{Reacting}
 
 <<function [[pl_hitframe]]>>=
 int pl_hitframe(Panel *p, Mouse *m){
@@ -1906,6 +2175,7 @@ void pl_typeframe(Panel *p, Rune c){
 }
 @
 
+\subsection{Other methods}
 
 <<function [[pl_getsizeframe]]>>=
 Point pl_getsizeframe(Panel *p, Point children){
@@ -1922,6 +2192,8 @@ void pl_childspaceframe(Panel *p, Point *ul, Point *size){
 @
 
 \section{Group}
+
+\subsection{Initializing}
 
 <<function [[plgroup]]>>=
 Panel *plgroup(Panel *parent, int flags){
@@ -1945,11 +2217,15 @@ void plinitgroup(Panel *v, int flags){
 }
 @
 
+\subsection{Drawing}
+
 <<function [[pl_drawgroup]]>>=
 void pl_drawgroup(Panel *p){
     USED(p);
 }
 @
+
+\subsection{Reacting}
 
 <<function [[pl_hitgroup]]>>=
 int pl_hitgroup(Panel *p, Mouse *m){
@@ -1963,6 +2239,8 @@ void pl_typegroup(Panel *p, Rune c){
     USED(p, c);
 }
 @
+
+\subsection{Other methods}
 
 <<function [[pl_getsizegroup]]>>=
 Point pl_getsizegroup(Panel *p, Point children){
@@ -1981,13 +2259,7 @@ void pl_childspacegroup(Panel *p, Point *ul, Point *size){
 
 \section{Pack}
 
-<<function [[plpack]]>>=
-void plpack(Panel *p, Rectangle where){
-    pl_sizereq(p);
-    pl_setrect(p, where.min, subpt(where.max, where.min));
-}
-@
-
+%XXX
 <<function [[plmove]]>>=
 /*
  * move an already-packed panel so that p->r=raddp(p->r, d)
@@ -1997,6 +2269,15 @@ void plmove(Panel *p, Point d){
         plemove(p, d);
     p->r=rectaddpt(p->r, d);
     for(p=p->child;p;p=p->next) plmove(p, d);
+}
+@
+
+\subsection{Initializing}
+
+<<function [[plpack]]>>=
+void plpack(Panel *p, Rectangle where){
+    pl_sizereq(p);
+    pl_setrect(p, where.min, subpt(where.max, where.min));
 }
 @
 
@@ -2108,6 +2389,9 @@ void pl_setrect(Panel *p, Point ul, Point avail){
 }
 @
 
+\subsection{Drawing}
+\subsection{Reacting}
+\subsection{Other methods}
 
 
 \section{List}
@@ -2125,9 +2409,12 @@ struct List{
 };
 @
 
+\subsection{Initializing}
+
 <<function [[pllist]]>>=
 Panel *pllist(Panel *parent, int flags, char *(*gen)(Panel *, int), int nlist, void (*hit)(Panel *, int, int)){
     Panel *v;
+
     v=pl_newpanel(parent, sizeof(List));
     plinitlist(v, flags, gen, nlist, hit);
     return v;
@@ -2176,6 +2463,7 @@ void plinitlist(Panel *v, int flags, char *(*gen)(Panel *, int), int nlist, void
 @
 
 
+\subsection{Drawing}
 
 <<function [[pl_drawlist]]>>=
 void pl_drawlist(Panel *p){
@@ -2186,6 +2474,8 @@ void pl_drawlist(Panel *p){
         lp->listr);
 }
 @
+
+\subsection{Reacting}
 
 <<function [[pl_hitlist]]>>=
 int pl_hitlist(Panel *p, Mouse *m){
@@ -2230,6 +2520,8 @@ void pl_typelist(Panel *g, Rune c){
 }
 @
 
+\subsection{Other methods}
+
 <<function [[pl_getsizelist]]>>=
 Point pl_getsizelist(Panel *p, Point children){
     USED(children);
@@ -2251,6 +2543,8 @@ struct Message{
     Point minsize;
 };
 @
+
+\subsection{Initializing}
 
 <<function [[plmessage]]>>=
 Panel *plmessage(Panel *parent, int flags, int wid, char *msg){
@@ -2276,7 +2570,6 @@ void plinitmessage(Panel *v, int flags, int wid, char *msg){
     v->kind="message";
 }
 @
-
 
 <<function [[pl_textmsg]]>>=
 void pl_textmsg(Image *b, Rectangle r, Font *f, char *s){
@@ -2309,12 +2602,15 @@ void pl_textmsg(Image *b, Rectangle r, Font *f, char *s){
 @
 
 
+\subsection{Drawing}
 
 <<function [[pl_drawmessage]]>>=
 void pl_drawmessage(Panel *p){
     pl_textmsg(p->b, pl_box(p->b, p->r, PASSIVE), font, ((Message *)p->data)->text);
 }
 @
+
+\subsection{Reacting}
 
 <<function [[pl_hitmessage]]>>=
 int pl_hitmessage(Panel *g, Mouse *m){
@@ -2328,6 +2624,8 @@ void pl_typemessage(Panel *g, Rune c){
     USED(g, c);
 }
 @
+
+\subsection{Other methods}
 
 <<function [[pl_getsizemessage]]>>=
 Point pl_getsizemessage(Panel *p, Point children){
@@ -2362,6 +2660,8 @@ struct Scrollbar{
     Point minsize;
 };
 @
+
+\subsection{Initializing}
 
 <<function [[plscrollbar]]>>=
 Panel *plscrollbar(Panel *parent, int flags){
@@ -2407,6 +2707,8 @@ void plinitscrollbar(Panel *v, int flags){
 @
 
 
+\subsection{Drawing}
+
 <<function [[pl_drawscrollbar]]>>=
 void pl_drawscrollbar(Panel *p){
     Scrollbar *sp;
@@ -2415,6 +2717,8 @@ void pl_drawscrollbar(Panel *p){
     pl_sliderupd(p->b, sp->interior, sp->dir, sp->lo, sp->hi);
 }
 @
+
+\subsection{Reacting}
 
 <<function [[pl_hitscrollbar]]>>=
 int pl_hitscrollbar(Panel *g, Mouse *m){
@@ -2480,6 +2784,8 @@ void pl_typescrollbar(Panel *p, Rune c){
 }
 @
 
+\subsection{Other methods}
+
 <<function [[pl_getsizescrollbar]]>>=
 Point pl_getsizescrollbar(Panel *p, Point children){
     USED(children);
@@ -2527,6 +2833,8 @@ struct Canvas{
 };
 @
 
+\subsection{Initializing}
+
 <<function [[plcanvas]]>>=
 Panel *plcanvas(Panel *parent, int flags, void (*draw)(Panel *), void (*hit)(Panel *, Mouse *)){
     Panel *p;
@@ -2553,6 +2861,7 @@ void plinitcanvas(Panel *v, int flags, void (*draw)(Panel *), void (*hit)(Panel 
 }
 @
 
+\subsection{Drawing}
 
 <<function [[pl_drawcanvas]]>>=
 void pl_drawcanvas(Panel *p){
@@ -2561,6 +2870,8 @@ void pl_drawcanvas(Panel *p){
     if(c->draw) c->draw(p);
 }
 @
+
+\subsection{Reacting}
 
 <<function [[pl_hitcanvas]]>>=
 int pl_hitcanvas(Panel *p, Mouse *m){
@@ -2577,6 +2888,8 @@ void pl_typecanvas(Panel *p, Rune c){
 }
 @
 
+
+\subsection{Other methods}
 
 <<function [[pl_getsizecanvas]]>>=
 Point pl_getsizecanvas(Panel *p, Point children){
@@ -2610,6 +2923,8 @@ struct Textview{
     int buttons;
 };
 @
+
+\subsection{Initializing}
 
 <<function [[pltextview]]>>=
 Panel *pltextview(Panel *parent, int flags, Point minsize, Rtext *t, void (*hit)(Panel *, int, Rtext *)){
@@ -2647,6 +2962,8 @@ void plinittextview(Panel *v, int flags, Point minsize, Rtext *t, void (*hit)(Pa
 }
 @
 
+\subsection{Drawing}
+
 <<function [[pl_drawtextview]]>>=
 void pl_drawtextview(Panel *p){
     int twid;
@@ -2665,6 +2982,8 @@ void pl_drawtextview(Panel *p){
     pl_setscrpos(p, tp, r);
 }
 @
+
+\subsection{Reacting}
 
 <<function [[pl_hittextview]]>>=
 int pl_hittextview(Panel *p, Mouse *m){
@@ -2727,6 +3046,8 @@ void pl_typetextview(Panel *g, Rune c){
 }
 @
 
+\subsection{Other methods}
+
 <<function [[pl_getsizetextview]]>>=
 Point pl_getsizetextview(Panel *p, Point children){
     USED(children);
@@ -2767,9 +3088,32 @@ struct Rtext{
 \chapter{Advanced Topics TODO}
 \label{chap:advanced}
 
-\section{Snarf}
+\section{copy/paste}
+% called snarf/paste in plan9 terminology
+
+<<[[Panel]] other methods>>=
+char* (*snarf)(Panel *);			/* snarf text from panel */
+void (*paste)(Panel *, char *);			/* paste text into panel */
+@
+
+<<[[pl_newpanel()]] set default methods>>=
+v->snarf=nil;
+v->paste=nil;
+@
 
 \section{Rich text}
+
+\section{Hooks}
+
+<<[[Panel]] user fields>>=
+int user;					/* available for user */
+void *userp;					/* available for user */
+@
+% ex of use? adv topics?
+
+\chapter{Advanced Widgets TODO}
+
+
 
 \chapter{Conclusion}
 \label{chap:conclusion}
@@ -2778,6 +3122,11 @@ struct Rtext{
 
 \chapter{Debugging}
 \label{chap:debugging-appendix}
+
+<<[[Panel]] debugging fields>>=
+char *kind;					/* what kind of panel? */
+@
+
 
 <<function [[pl_print]]>>=
 void pl_print(Panel *p){
@@ -2789,6 +3138,7 @@ void pl_print(Panel *p){
 void pl_iprint(int indent, char *fmt, ...){
     char buf[8192];
     va_list arg;
+
     memset(buf, '\t', indent);
     va_start(arg, fmt);
     write(1, buf, vsnprint(buf+indent, sizeof(buf)-indent, fmt, arg));
@@ -2800,6 +3150,7 @@ void pl_iprint(int indent, char *fmt, ...){
 void pl_ipprint(Panel *p, int n){
     Panel *c;
     char *place, *stick;
+
     pl_iprint(n, "%s (0x%.8x)\n", p->kind, p);
     pl_iprint(n, "  r=(%d %d, %d %d)\n",
         p->r.min.x, p->r.min.y, p->r.max.x, p->r.max.y);
@@ -2906,6 +3257,7 @@ void pl_setscrollbarerror(Panel *g, int top, int bot, int den){
 <<function [[pl_emalloc]]>>=
 void *pl_emalloc(int n){
     void *v;
+
     v=mallocz(n, 1);
     if(v==0){
         fprint(2, "Can't malloc!\n");

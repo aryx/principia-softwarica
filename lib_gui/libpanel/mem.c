@@ -9,6 +9,7 @@
 /*s: function [[pl_emalloc]] */
 void *pl_emalloc(int n){
     void *v;
+
     v=mallocz(n, 1);
     if(v==0){
         fprint(2, "Can't malloc!\n");
@@ -89,29 +90,22 @@ int pl_prinormal(Panel *, Point){
 /*s: function [[pl_newpanel]] */
 Panel *pl_newpanel(Panel *parent, int ndata){
     Panel *v;
+
+    /*s: [[pl_newpanel()]] sanity check if can create child on [[parent]] */
     if(parent && parent->flags&LEAF){
         fprint(2, "newpanel: can't create child of %s %lux\n", parent->kind, (ulong)parent);
         exits("bad newpanel");
     }
+    /*e: [[pl_newpanel()]] sanity check if can create child on [[parent]] */
     v=pl_emalloc(sizeof(Panel));
-    v->r=Rect(0,0,0,0);
-    v->flags=0;
-    v->ipad=Pt(0,0);
-    v->pad=Pt(0,0);
-    v->size=Pt(0,0);
-    v->sizereq=Pt(0,0);
-    v->lastmouse=0;
+
+    /*s: [[pl_newpanel()]] set tree fields */
     v->next=0;
     v->child=0;
     v->echild=0;
-    v->b=0;
-    v->pri=pl_prinormal;
-    v->scrollee=0;
-    v->xscroller=0;
-    v->yscroller=0;
+
     v->parent=parent;
-    v->scr.pos=Pt(0,0);
-    v->scr.size=Pt(0,0);
+    //add_list(v, parent->child)
     if(parent){
         if(parent->child==0)
             parent->child=v;
@@ -119,20 +113,46 @@ Panel *pl_newpanel(Panel *parent, int ndata){
             parent->echild->next=v;
         parent->echild=v;
     }
-    v->draw=pl_drawerror;
-    v->hit=pl_hiterror;
-    v->type=pl_typeerror;
-    v->getsize=pl_getsizeerror;
-    v->childspace=pl_childspaceerror;
-    v->scroll=pl_scrollerror;
-    v->setscrollbar=pl_setscrollbarerror;
-    v->free=0;
-    v->snarf=0;
-    v->paste=0;
+    /*e: [[pl_newpanel()]] set tree fields */
+    /*s: [[pl_newpanel()]] set widget-specific data fields */
     if(ndata)
         v->data=pl_emalloc(ndata);
     else
         v->data=0;
+    v->free=nil;
+    /*e: [[pl_newpanel()]] set widget-specific data fields */
+    /*s: [[pl_newpanel()]] set other fields */
+    v->flags=0;
+    /*x: [[pl_newpanel()]] set other fields */
+    v->r=Rect(0,0,0,0);
+    v->ipad=Pt(0,0);
+    v->pad=Pt(0,0);
+    v->size=Pt(0,0);
+    v->sizereq=Pt(0,0);
+    v->lastmouse=0;
+    v->b=0;
+    v->pri=pl_prinormal;
+    v->scrollee=0;
+    v->xscroller=0;
+    v->yscroller=0;
+    v->scr.pos=Pt(0,0);
+    v->scr.size=Pt(0,0);
+    /*e: [[pl_newpanel()]] set other fields */
+    /*s: [[pl_newpanel()]] set default methods */
+    v->draw=pl_drawerror;
+    v->hit=pl_hiterror;
+    v->type=pl_typeerror;
+    /*x: [[pl_newpanel()]] set default methods */
+    v->getsize=pl_getsizeerror;
+    v->childspace=pl_childspaceerror;
+
+    v->scroll=pl_scrollerror;
+    v->setscrollbar=pl_setscrollbarerror;
+    /*x: [[pl_newpanel()]] set default methods */
+    v->snarf=nil;
+    v->paste=nil;
+    /*e: [[pl_newpanel()]] set default methods */
+
     return v;
 }
 /*e: function [[pl_newpanel]] */
@@ -141,14 +161,20 @@ void plfree(Panel *p){
     Panel *cp, *ncp;
     if(p==0)
         return;
+    /*s: [[plfree()]] if [[plkbfocus]] */
     if(p==plkbfocus)
-        plkbfocus=0;
+        plkbfocus=nil;
+    /*e: [[plfree()]] if [[plkbfocus]] */
+    /*s: [[plfree()]] free the children */
     for(cp=p->child;cp;cp=ncp){
         ncp=cp->next;
         plfree(cp);
     }
+    /*e: [[plfree()]] free the children */
+    /*s: [[plfree()]] free the widget-specific data */
     if(p->free) p->free(p);
     if(p->data) free(p->data);
+    /*e: [[plfree()]] free the widget-specific data */
     free(p);
 }
 /*e: function [[plfree]] */

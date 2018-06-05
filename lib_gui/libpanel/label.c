@@ -9,7 +9,9 @@
 typedef struct Label Label;
 /*s: struct [[Label]] */
 struct Label{
+    // enum<Placement>
     int placement;
+    // ref_own<Icon>
     Icon *icon;
 };
 /*e: struct [[Label]] */
@@ -61,6 +63,7 @@ void plinitlabel(Panel *v, int flags, Icon *icon){
 /*s: function [[pllabel]] */
 Panel *pllabel(Panel *parent, int flags, Icon *icon){
     Panel *p;
+
     p=pl_newpanel(parent, sizeof(Label));
     plinitlabel(p, flags, icon);
     plplacelabel(p, PLACECEN);

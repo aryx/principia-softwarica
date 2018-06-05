@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 /*s: function [[plscroll]] */
 void plscroll(Panel *scrollee, Panel *xscroller, Panel *yscroller){
     scrollee->xscroller=xscroller;

@@ -10,6 +10,7 @@
 void pl_iprint(int indent, char *fmt, ...){
     char buf[8192];
     va_list arg;
+
     memset(buf, '\t', indent);
     va_start(arg, fmt);
     write(1, buf, vsnprint(buf+indent, sizeof(buf)-indent, fmt, arg));
@@ -20,6 +21,7 @@ void pl_iprint(int indent, char *fmt, ...){
 void pl_ipprint(Panel *p, int n){
     Panel *c;
     char *place, *stick;
+
     pl_iprint(n, "%s (0x%.8x)\n", p->kind, p);
     pl_iprint(n, "  r=(%d %d, %d %d)\n",
         p->r.min.x, p->r.min.y, p->r.max.x, p->r.max.y);

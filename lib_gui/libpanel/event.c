@@ -15,7 +15,7 @@ void plgrabkb(Panel *g){
 void plkeyboard(Rune c){
     if(plkbfocus){
         plkbfocus->type(plkbfocus, c);
-        flushimage(display, 1);
+        flushimage(display, true);
     }
 }
 /*e: function [[plkeyboard]] */
@@ -26,21 +26,27 @@ void plkeyboard(Rune c){
  */
 Panel *pl_ptinpanel(Point p, Panel *g){
     Panel *v;
-    for(;g;g=g->next) if(ptinrect(p, g->r)){
+    for(;g;g=g->next) 
+      if(ptinrect(p, g->r)){
+        //recurse
         v=pl_ptinpanel(p, g->child);
-        if(v && v->pri(v, p)>=g->pri(g, p)) return v;
+        if(v && v->pri(v, p) >= g->pri(g, p)) 
+            return v;
         return g;
-    }
+      }
     return 0;
 }
 /*e: function [[pl_ptinpanel]] */
 /*s: function [[plmouse]] */
 void plmouse(Panel *g, Mouse *m){
     Panel *hit, *last;
+
     if(g->flags&REMOUSE)
         hit=g->lastmouse;
     else{
+
         hit=pl_ptinpanel(m->xy, g);
+
         last=g->lastmouse;
         if(last && last!=hit){
             m->buttons|=OUT;

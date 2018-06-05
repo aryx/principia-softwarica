@@ -43,7 +43,7 @@ static Image *pl_white, *pl_light, *pl_dark, *pl_black, *pl_hilit;
 /*e: globals [[pl_xxx]] */
 
 /*s: function [[pl_drawinit]] */
-int pl_drawinit(int ldepth){
+error0 pl_drawinit(int ldepth){
 
     plldepth=ldepth;
 
@@ -53,9 +53,9 @@ int pl_drawinit(int ldepth){
     pl_black=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x000000FF);
     pl_hilit=allocimage(display, Rect(0,0,1,1), CHAN1(CAlpha,8), 1, 0x80);
 
-    if(pl_white==0 || pl_light==0 || pl_black==0 || pl_dark==0) 
-        return 0;
-    return 1;
+    if(pl_white==nil || pl_light==nil || pl_black==nil || pl_dark==nil) 
+        return ERROR_0;
+    return OK_1;
 }
 /*e: function [[pl_drawinit]] */
 /*s: function [[pl_relief]] */
@@ -189,8 +189,10 @@ void pl_interior(int state, Point *ul, Point *size){
 void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
     Rectangle save;
     Point ul, offs;
+
     ul=r.min;
     offs=subpt(subpt(r.max, r.min), pl_iconsize(flags, s));
+
     switch(stick){
     case PLACENW:	                                break;
     case PLACEN:	ul.x+=offs.x/2;                 break;
@@ -202,12 +204,15 @@ void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
     case PLACES:	ul.x+=offs.x/2; ul.y+=offs.y;   break;
     case PLACESE:	ul.x+=offs.x;   ul.y+=offs.y;   break;
     }
+
     save=b->clipr;
     if(!rectclip(&r, save))
         return;
     replclipr(b, b->repl, r);
-    if(flags&BITMAP) draw(b, Rpt(ul, addpt(ul, pl_iconsize(flags, s))), s, 0, ZP);
-    else string(b, ul, pl_black, ZP, font, s);
+    if(flags&BITMAP) 
+        draw(b, Rpt(ul, addpt(ul, pl_iconsize(flags, s))), s, 0, ZP);
+    else 
+        string(b, ul, pl_black, ZP, font, s);
     replclipr(b, b->repl, save);
 }
 /*e: function [[pl_drawicon]] */
@@ -301,10 +306,13 @@ void pl_draw1(Panel *p, Image *b);
 
 /*s: function [[pl_drawall]] */
 void pl_drawall(Panel *p, Image *b){
+    /*s: [[pl_drawall()]] if invisible widget */
     if(p->flags&INVIS) return;
+    /*e: [[pl_drawall()]] if invisible widget */
     p->b=b;
     p->draw(p);
-    for(p=p->child;p;p=p->next) pl_draw1(p, b);
+    for(p=p->child;p;p=p->next) 
+        pl_draw1(p, b);
 }
 /*e: function [[pl_drawall]] */
 /*s: function [[pl_draw1]] */

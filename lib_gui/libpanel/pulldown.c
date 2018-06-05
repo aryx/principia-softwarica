@@ -9,7 +9,9 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
 typedef struct Pulldown Pulldown;
+
 /*s: struct [[Pulldown]] */
 struct Pulldown{
     Icon *icon;		/* button label */
@@ -18,6 +20,7 @@ struct Pulldown{
     Image *save;		/* where to save what we draw the panel on */
 };
 /*e: struct [[Pulldown]] */
+
 /*s: function [[pl_drawpulldown]] */
 void pl_drawpulldown(Panel *p){
     pl_drawicon(p->b, pl_box(p->b, p->r, p->state), PLACECEN,
@@ -141,6 +144,7 @@ void plinitpulldown(Panel *v, int flags, Icon *icon, Panel *pullthis, int side){
 /*s: function [[plpulldown]] */
 Panel *plpulldown(Panel *parent, int flags, Icon *icon, Panel *pullthis, int side){
     Panel *v;
+
     v=pl_newpanel(parent, sizeof(Pulldown));
     v->state=UP;
     ((Pulldown *)v->data)->save=0;
@@ -154,6 +158,7 @@ Panel *plmenubar(Panel *parent, int flags, int cflags, Icon *l1, Panel *m1, Icon
     va_list arg;
     Icon *s;
     int pulldir;
+
     switch(cflags&PACK){
     default:
         SET(pulldir);

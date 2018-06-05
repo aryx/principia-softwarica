@@ -196,6 +196,7 @@ Panel *plcheckbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, 
 /*s: function [[plradiobutton]] */
 Panel *plradiobutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int, int)){
     Panel *p;
+
     p=pl_newpanel(parent, sizeof(Button));
     plinitradiobutton(p, flags, icon, hit);
     return p;

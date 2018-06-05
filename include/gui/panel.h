@@ -38,51 +38,83 @@ struct Rtext{
 /*e: struct [[Rtext]] */
 /*s: struct [[Panel]] */
 struct Panel{
-    Point ipad, pad;				/* extra space inside and outside */
-    Point fixedsize;				/* size of Panel, if FIXED */
-
-    int user;					/* available for user */
-    void *userp;					/* available for user */
+    // public
 
     Rectangle r;					/* where the Panel goes */
 
-
-
+    /*s: [[Panel]] padding fields */
+    Point ipad;				/* extra space inside and outside */
+    Point pad;
+    /*e: [[Panel]] padding fields */
+    /*s: [[Panel]] extra public fields */
+    Point fixedsize;				/* size of Panel, if FIXED */
+    /*e: [[Panel]] extra public fields */
+    /*s: [[Panel]] user fields */
+    int user;					/* available for user */
+    void *userp;					/* available for user */
+    /*e: [[Panel]] user fields */
 
     /* private below */
-    Panel *next;					/* It's a list! */
-    Panel *child, *echild, *parent;			/* No, it's a tree! */
 
     Image *b;					/* where we're drawn */
+    /*s: [[Panel]] widget specific data */
+    // union<ref_own<Label|Entry|Button|...>
+    void *data;					/* kind-specific data */
+    /*e: [[Panel]] widget specific data */
+    /*s: [[Panel]] other fields */
+    // LEAF | INVIS | ...
     int flags;					/* position flags, see below */
-    char *kind;					/* what kind of panel? */
+    /*x: [[Panel]] other fields */
     int state;					/* for hitting & drawing purposes */
     Point size;					/* space for this Panel */
     Point sizereq;					/* size requested by this Panel */
     Point childreq;					/* total size needed by children */
-    Panel *lastmouse;				/* who got the last mouse event? */
+
     Panel *scrollee;				/* pointer to scrolled window */
     Panel *xscroller, *yscroller;			/* pointers to scroll bars */
     Scroll scr;					/* scroll data */
+    /*x: [[Panel]] other fields */
+    Panel *lastmouse;				/* who got the last mouse event? */
+    /*e: [[Panel]] other fields */
+    /*s: [[Panel]] debugging fields */
+    char *kind;					/* what kind of panel? */
+    /*e: [[Panel]] debugging fields */
 
-    void *data;					/* kind-specific data */
-
+    // methods
+    /*s: [[Panel]] main methods */
     void (*draw)(Panel *);				/* draw panel and children */
 
     int (*hit)(Panel *, Mouse *);			/* process mouse event */
     void (*type)(Panel *, Rune);			/* process keyboard event */
-
+    /*e: [[Panel]] main methods */
+    /*s: [[Panel]] other methods */
+    void (*free)(Panel *);				/* free fields of data when done */
+    /*x: [[Panel]] other methods */
     Point (*getsize)(Panel *, Point);		/* return size, given child size */
     void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
-
-
-    int (*pri)(Panel *, Point);			/* priority for hitting */
-
+    /*x: [[Panel]] other methods */
     void (*scroll)(Panel *, int, int, int, int);	/* scroll bar to scrollee */
     void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
-    void (*free)(Panel *);				/* free fields of data when done */
+    /*x: [[Panel]] other methods */
+    int (*pri)(Panel *, Point);			/* priority for hitting */
+    /*x: [[Panel]] other methods */
     char* (*snarf)(Panel *);			/* snarf text from panel */
     void (*paste)(Panel *, char *);			/* paste text into panel */
+    /*e: [[Panel]] other methods */
+
+    // Extra
+    /*s: [[Panel]] extra fields */
+    // option<ref<Panel>>
+    Panel *parent; 			/* No, it's a tree! */
+    /*x: [[Panel]] extra fields */
+    // option<list<ref_own<Panel>>> (next = Panel.next, tail = Panel.echild)
+    Panel *child;
+    // option<ref<Panel>>
+    Panel *echild;
+    /*x: [[Panel]] extra fields */
+    // list<ref<Panel>> (head = Panel.child)
+    Panel *next;					/* It's a list! */
+    /*e: [[Panel]] extra fields */
 };
 /*e: struct [[Panel]] */
 
@@ -276,6 +308,7 @@ Panel *pltextview(Panel *, int, Point, Rtext *, void (*)(Panel *, int, Rtext *))
 
 Panel *plmessage(Panel *pl, int, int, char *);
 
+// plinitxxx()
 void plinitlabel(Panel *, int, Icon *);
 
 void plinitbutton(Panel *, int, Icon *, void (*)(Panel *, int));

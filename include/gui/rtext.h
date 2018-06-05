@@ -1,4 +1,4 @@
-/*s: lib_gui/libpanel/rtext.h */
+/*s: include/gui/rtext.h */
 
 /*s: constant [[PL_NOPBIT]] */
 /*
@@ -26,4 +26,4 @@
 /*e: constant [[PL_TAB]] */
 
 void pltabsize(int, int);			/* set min tab and tab size */
-/*e: lib_gui/libpanel/rtext.h */
+/*e: include/gui/rtext.h */

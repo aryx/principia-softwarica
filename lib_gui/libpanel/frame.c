@@ -48,6 +48,7 @@ void plinitframe(Panel *v, int flags){
 /*s: function [[plframe]] */
 Panel *plframe(Panel *parent, int flags){
     Panel *p;
+
     p=pl_newpanel(parent, 0);
     plinitframe(p, flags);
     return p;

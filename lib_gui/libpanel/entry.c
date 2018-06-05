@@ -178,14 +178,17 @@ void pl_freeentry(Panel *p){
 void plinitentry(Panel *v, int flags, int wid, char *str, void (*hit)(Panel *, char *)){
     int elen;
     Entry *ep;
+
     ep=v->data;
     v->flags=flags|LEAF;
     v->state=UP;
+
     v->draw=pl_drawentry;
     v->hit=pl_hitentry;
     v->type=pl_typeentry;
     v->getsize=pl_getsizeentry;
     v->childspace=pl_childspaceentry;
+
     ep->minsize=Pt(wid, font->height);
     v->free=pl_freeentry;
     v->snarf=pl_snarfentry;
@@ -203,6 +206,7 @@ void plinitentry(Panel *v, int flags, int wid, char *str, void (*hit)(Panel *, c
 /*s: function [[plentry]] */
 Panel *plentry(Panel *parent, int flags, int wid, char *str, void (*hit)(Panel *, char *)){
     Panel *v;
+
     v=pl_newpanel(parent, sizeof(Entry));
     plinitentry(v, flags, wid, str, hit);
     return v;

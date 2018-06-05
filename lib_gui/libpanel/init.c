@@ -10,9 +10,9 @@
 /*
  * Just a wrapper for all the initialization routines
  */
-int plinit(int ldepth){
-    if(!pl_drawinit(ldepth)) return 0;
-    return 1;
+error0 plinit(int ldepth){
+    if(pl_drawinit(ldepth) == ERROR_0) return ERROR_0;
+    return OK_1;
 }
 /*e: function [[plinit]] */
 /*e: lib_gui/libpanel/init.c */

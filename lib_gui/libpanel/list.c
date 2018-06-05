@@ -210,6 +210,7 @@ void plinitlist(Panel *v, int flags, char *(*gen)(Panel *, int), int nlist, void
 /*s: function [[pllist]] */
 Panel *pllist(Panel *parent, int flags, char *(*gen)(Panel *, int), int nlist, void (*hit)(Panel *, int, int)){
     Panel *v;
+
     v=pl_newpanel(parent, sizeof(List));
     plinitlist(v, flags, gen, nlist, hit);
     return v;
