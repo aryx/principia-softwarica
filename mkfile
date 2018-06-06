@@ -6,11 +6,11 @@
 
 LIBS=\
  lib_core\
- lib_strings\
  lib_math\
- lib_networking\
+ lib_strings\
  lib_graphics\
  lib_gui\
+ lib_networking\
  # used by plumb, iostats, snapfs, screenlock, etc\
  lib_security\
  lib_misc\
@@ -29,7 +29,6 @@ LIBS=\
 # Programs
 ###############################################################################
 
-#todo: ugly but windows/ must be before editors/ because of the libs it contains
 PROGRAMS=\
  assemblers\
  linkers\
@@ -99,8 +98,6 @@ BOOTCMDS=\
 #TODO kernel/bus/user/usb for pi
 
 #TODO:
-# kernel/devices/storage/user
-# kernel/init/user
 # kernel/memory/user
 # kernel/syscalls/user
 
@@ -112,8 +109,6 @@ KERNELS=kernel/COMPILE/9/pc
 CMDS=$PROGRAMS $BOOTCMDS
 
 DIRS=$LIBS $CMDS
-
-# I assume you have done source env.sh, or have a good 'mk' wrapper
 
 all:QV:
 	for (i in $DIRS) @{
@@ -190,7 +185,7 @@ pdf lpclean lpinstall:QV:
 		mk $MKFLAGS $target
 	}
 
-# need special :I:
+# need special :I: supported currently only by mk-in-ocaml
 sync:QVI:
 	for (i in $LPDIRS) @{
 		echo $i
