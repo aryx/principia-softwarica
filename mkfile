@@ -119,12 +119,14 @@ all:QV:
 
 install uninstall:QV:
 	for (i in $DIRS) @{
+		echo $i
 		cd $i
 		mk $MKFLAGS $target
 	}
 
 clean nuke:QV:
 	for (i in $DIRS $TESTS) @{
+		echo $i
 		cd $i
 		mk $MKFLAGS $target
 	}
@@ -135,12 +137,14 @@ help:VQ:
 
 libs:QV:
 	for (i in $LIBS) @{
+		echo $i
 		cd $i
 		mk $MKFLAGS install
 	}
 
 cmds:QV:
 	for (i in $CMDS) @{
+		echo $i
         cd $i
 		mk $MKFLAGS install
     }
@@ -149,6 +153,7 @@ kernels:QV:
     # required to get the binaries for mkboot
 	mk $MKFLAGS install
 	for (i in $KERNELS) @{
+		echo $i
 		cd $i
 		mk $MKFLAGS install
 	}
