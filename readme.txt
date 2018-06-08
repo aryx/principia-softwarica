@@ -15,7 +15,7 @@ There are a few other forks of Plan9:
 or close descendants  of Plan9:
  - Inferno: http://www.vitanuova.com/inferno/
 
-The specificity of my fork is to see Plan9 as a great
+The specificity of my fork of Plan9 is to see Plan9 as a great
 educational platform to learn about programming and computer science.
 The code of Plan9 is so elegant and small that you
 can realistically understand the whole operating system.
@@ -25,7 +25,7 @@ book series (see https://principia-softwarica.org).
 This fork, because it is used to support my Principia Softwarica
 book series, contains only the essential programs used by a programmer
 (e.g., compiler, linker, assembler, kernel, windowing system).
-This fork does not contain all the programs of the original Plan9.
+This fork does not contain all the programs of the original Plan9;
 I've selected only what I consider to be the essence of an operating system.
 Moreover, this fork supports only the ARM and x86 architectures. Even though
 the original Plan9 supported more architectures, I think ARM and x86 are
