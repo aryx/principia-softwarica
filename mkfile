@@ -101,7 +101,8 @@ BOOTCMDS=\
 # kernel/memory/user
 # kernel/syscalls/user
 
-KERNELS=kernel/COMPILE/9/pc 
+#This is set in mkfile-target-xxx
+#KERNELDIR=kernel/COMPILE/9/pc 
 
 ###############################################################################
 # Targets
@@ -133,7 +134,7 @@ clean nuke:QV:
 
 
 help:VQ:
-	echo mk all, install, uninstall, clean, nuke, release, cmds, kernels, or libs
+	echo mk all, install, uninstall, clean, nuke, cmds, libs, or kernel
 
 libs:QV:
 	for (i in $LIBS) @{
@@ -149,10 +150,10 @@ cmds:QV:
 		mk $MKFLAGS install
     }
 
-kernels:QV:
+kernel:QV:
     # required to get the binaries for mkboot
 	mk $MKFLAGS install
-	for (i in $KERNELS) @{
+	for (i in $KERNELDIR) @{
 		echo $i
 		cd $i
 		mk $MKFLAGS install
