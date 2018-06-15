@@ -5,12 +5,14 @@
  * Should redo this to copy the already-visible parts on scrolling & only
  * update the newly appearing stuff -- then the offscreen assembly bitmap can go away.
  */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 
 typedef struct Textview Textview;
 /*s: struct [[Textview]] */

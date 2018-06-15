@@ -1,10 +1,12 @@
 /*s: lib_gui/libpanel/event.c */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 
 /*s: function [[plgrabkb]] */
 void plgrabkb(Panel *g){
@@ -14,6 +16,7 @@ void plgrabkb(Panel *g){
 /*s: function [[plkeyboard]] */
 void plkeyboard(Rune c){
     if(plkbfocus){
+        // widget-specific callback
         plkbfocus->type(plkbfocus, c);
         flushimage(display, true);
     }
@@ -61,7 +64,7 @@ void plmouse(Panel *g, Mouse *m){
             g->flags&=~REMOUSE;
         g->lastmouse=hit;
     }
-    flushimage(display, 1);
+    flushimage(display, true);
 }
 /*e: function [[plmouse]] */
 /*e: lib_gui/libpanel/event.c */

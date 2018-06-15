@@ -1,10 +1,12 @@
 /*s: lib_gui/libpanel/scrollbar.c */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 
 typedef struct Scrollbar Scrollbar;
 /*s: struct [[Scrollbar]] */

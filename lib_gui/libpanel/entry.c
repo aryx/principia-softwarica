@@ -1,10 +1,12 @@
 /*s: lib_gui/libpanel/entry.c */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 #include <keyboard.h>
 
 typedef struct Entry Entry;
@@ -191,8 +193,10 @@ void plinitentry(Panel *v, int flags, int wid, char *str, void (*hit)(Panel *, c
 
     ep->minsize=Pt(wid, font->height);
     v->free=pl_freeentry;
+
     v->snarf=pl_snarfentry;
     v->paste=pl_pasteentry;
+
     elen=100;
     if(str) elen+=strlen(str);
     ep->entry=pl_erealloc(ep->entry, elen+SLACK);

@@ -1,10 +1,12 @@
 /*s: lib_gui/libpanel/mem.c */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 
 /*s: function [[pl_emalloc]] */
 void *pl_emalloc(int n){
@@ -93,21 +95,22 @@ Panel *pl_newpanel(Panel *parent, int ndata){
 
     /*s: [[pl_newpanel()]] sanity check if can create child on [[parent]] */
     if(parent && parent->flags&LEAF){
-        fprint(2, "newpanel: can't create child of %s %lux\n", parent->kind, (ulong)parent);
+        fprint(STDERR, "newpanel: can't create child of %s %lux\n", 
+                 parent->kind, (ulong)parent);
         exits("bad newpanel");
     }
     /*e: [[pl_newpanel()]] sanity check if can create child on [[parent]] */
     v=pl_emalloc(sizeof(Panel));
 
     /*s: [[pl_newpanel()]] set tree fields */
-    v->next=0;
-    v->child=0;
-    v->echild=0;
+    v->next=nil;
+    v->child=nil;
+    v->echild=nil;
 
     v->parent=parent;
     //add_list(v, parent->child)
     if(parent){
-        if(parent->child==0)
+        if(parent->child==nil)
             parent->child=v;
         else
             parent->echild->next=v;
@@ -118,36 +121,38 @@ Panel *pl_newpanel(Panel *parent, int ndata){
     if(ndata)
         v->data=pl_emalloc(ndata);
     else
-        v->data=0;
+        v->data=nil;
     v->free=nil;
     /*e: [[pl_newpanel()]] set widget-specific data fields */
     /*s: [[pl_newpanel()]] set other fields */
     v->flags=0;
     /*x: [[pl_newpanel()]] set other fields */
     v->r=Rect(0,0,0,0);
+    v->b=nil;
     v->ipad=Pt(0,0);
     v->pad=Pt(0,0);
     v->size=Pt(0,0);
     v->sizereq=Pt(0,0);
-    v->lastmouse=0;
-    v->b=0;
-    v->pri=pl_prinormal;
+    v->lastmouse=nil;
     v->scrollee=0;
     v->xscroller=0;
     v->yscroller=0;
     v->scr.pos=Pt(0,0);
     v->scr.size=Pt(0,0);
+    /*x: [[pl_newpanel()]] set other fields */
+    v->pri=pl_prinormal;
     /*e: [[pl_newpanel()]] set other fields */
     /*s: [[pl_newpanel()]] set default methods */
     v->draw=pl_drawerror;
     v->hit=pl_hiterror;
     v->type=pl_typeerror;
     /*x: [[pl_newpanel()]] set default methods */
-    v->getsize=pl_getsizeerror;
-    v->childspace=pl_childspaceerror;
-
     v->scroll=pl_scrollerror;
     v->setscrollbar=pl_setscrollbarerror;
+    /*x: [[pl_newpanel()]] set default methods */
+    v->getsize=pl_getsizeerror;
+    /*x: [[pl_newpanel()]] set default methods */
+    v->childspace=pl_childspaceerror;
     /*x: [[pl_newpanel()]] set default methods */
     v->snarf=nil;
     v->paste=nil;
@@ -159,7 +164,8 @@ Panel *pl_newpanel(Panel *parent, int ndata){
 /*s: function [[plfree]] */
 void plfree(Panel *p){
     Panel *cp, *ncp;
-    if(p==0)
+
+    if(p==nil)
         return;
     /*s: [[plfree()]] if [[plkbfocus]] */
     if(p==plkbfocus)

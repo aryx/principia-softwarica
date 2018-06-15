@@ -3,12 +3,14 @@
  * Rich text with images.
  * Should there be an offset field, to do subscripts & kerning?
  */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 #include "rtext.h"
 
 /*s: constant [[LEAD]] */

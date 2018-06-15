@@ -1,10 +1,13 @@
 /*s: lib_gui/libpanel/message.c */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
+
 typedef struct Message Message;
 /*s: struct [[Message]] */
 struct Message{

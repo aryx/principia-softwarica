@@ -1,10 +1,12 @@
 /*s: lib_gui/libpanel/pack.c */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 
 /*s: function [[pl_max]] */
 int pl_max(int a, int b){
@@ -14,8 +16,12 @@ int pl_max(int a, int b){
 /*s: function [[pl_sizesibs]] */
 Point pl_sizesibs(Panel *p){
     Point s;
+
     if(p==0) return Pt(0,0);
+
+    // recurse
     s=pl_sizesibs(p->next);
+
     switch(p->flags&PACK){
     case PACKN:
     case PACKS:
@@ -38,20 +44,26 @@ Point pl_sizesibs(Panel *p){
 void pl_sizereq(Panel *p){
     Panel *cp;
     Point maxsize;
+
     maxsize=Pt(0,0);
     for(cp=p->child;cp;cp=cp->next){
+        // recurse
         pl_sizereq(cp);
         if(cp->sizereq.x>maxsize.x) maxsize.x=cp->sizereq.x;
         if(cp->sizereq.y>maxsize.y) maxsize.y=cp->sizereq.y;
     }
+    /*s: [[pl_sizereq()]] if [[MAXX]] or [[MAXY]] */
     for(cp=p->child;cp;cp=cp->next){
         if(cp->flags&MAXX) cp->sizereq.x=maxsize.x;
         if(cp->flags&MAXY) cp->sizereq.y=maxsize.y;
     }
+    /*e: [[pl_sizereq()]] if [[MAXX]] or [[MAXY]] */
     p->childreq=pl_sizesibs(p->child);
     p->sizereq=addpt(addpt(p->getsize(p, p->childreq), p->ipad), p->pad);
+    /*s: [[pl_sizereq()]] if [[FIXEDX]] or [[FIXEDY]] */
     if(p->flags&FIXEDX) p->sizereq.x=p->fixedsize.x;
     if(p->flags&FIXEDY) p->sizereq.y=p->fixedsize.y;
+    /*e: [[pl_sizereq()]] if [[FIXEDX]] or [[FIXEDY]] */
 }
 /*e: function [[pl_sizereq]] */
 /*s: function [[pl_getshare]] */
@@ -82,6 +94,7 @@ void pl_setrect(Panel *p, Point ul, Point avail){
     Point space, newul, newspace, slack, share;
     int l;
     Panel *c;
+
     p->size=subpt(p->sizereq, p->pad);
     ul=addpt(ul, divpt(p->pad, 2));
     avail=subpt(avail, p->pad);
@@ -91,6 +104,7 @@ void pl_setrect(Panel *p, Point ul, Point avail){
         p->size.y = avail.y;
     if(p->flags&(FILLX|EXPAND)) p->size.x=avail.x;
     if(p->flags&(FILLY|EXPAND)) p->size.y=avail.y;
+
     switch(p->flags&PLACE){
     case PLACECEN:	ul.x+=(avail.x-p->size.x)/2; ul.y+=(avail.y-p->size.y)/2; break;
     case PLACES:	ul.x+=(avail.x-p->size.x)/2; ul.y+= avail.y-p->size.y   ; break;

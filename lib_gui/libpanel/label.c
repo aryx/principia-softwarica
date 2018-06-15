@@ -1,10 +1,12 @@
 /*s: lib_gui/libpanel/label.c */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 
 typedef struct Label Label;
 /*s: struct [[Label]] */
@@ -18,8 +20,8 @@ struct Label{
 
 /*s: function [[pl_drawlabel]] */
 void pl_drawlabel(Panel *p){
-    Label *l;
-    l=p->data;
+    Label *l = p->data;
+
     pl_drawicon(p->b, pl_box(p->b, p->r, PASSIVE), l->placement, p->flags, l->icon);
 }
 /*e: function [[pl_drawlabel]] */

@@ -14,12 +14,14 @@
  *	void plepaste(Panel *p, Rune *text, int ntext);
  *		replace the selection with the given text
  */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 #include <keyboard.h>
 
 typedef struct Edit Edit;
@@ -245,8 +247,10 @@ void plinitedit(Panel *v, int flags, Point minsize, Rune *text, int ntext, void 
     v->getsize=pl_getsizeedit;
     v->childspace=pl_childspaceedit;
     v->free=pl_freeedit;
+
     v->snarf=pl_snarfedit;
     v->paste=pl_pasteedit;
+
     v->kind="edit";
     ep->hit=hit;
     ep->minsize=minsize;

@@ -4,12 +4,14 @@
  *	looks like a group, except diverts hits on certain buttons to
  *	panels that it temporarily pops up.
  */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 
 typedef struct Popup Popup;
 /*s: struct [[Popup]] */

@@ -1,10 +1,12 @@
 /*s: lib_gui/libpanel/draw.c */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 
 /*s: constant [[PWID]] */
 #define	PWID	1	/* width of label border */
@@ -47,10 +49,10 @@ error0 pl_drawinit(int ldepth){
 
     plldepth=ldepth;
 
-    pl_white=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xFFFFFFFF);
-    pl_light=allocimagemix(display, DPalebluegreen, DWhite);
-    pl_dark =allocimage(display, Rect(0,0,1,1), view->chan, 1, DPurpleblue);
     pl_black=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x000000FF);
+    pl_white=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xFFFFFFFF);
+    pl_dark =allocimage(display, Rect(0,0,1,1), view->chan, 1, DPurpleblue);
+    pl_light=allocimagemix(display, DPalebluegreen, DWhite);
     pl_hilit=allocimage(display, Rect(0,0,1,1), CHAN1(CAlpha,8), 1, 0x80);
 
     if(pl_white==nil || pl_light==nil || pl_black==nil || pl_dark==nil) 
@@ -61,6 +63,7 @@ error0 pl_drawinit(int ldepth){
 /*s: function [[pl_relief]] */
 void pl_relief(Image *b, Image *ul, Image *lr, Rectangle r, int wid){
     int x, y;
+
     draw(b, Rect(r.min.x, r.max.y-wid, r.max.x, r.max.y), lr, 0, ZP); /* bottom */
     draw(b, Rect(r.max.x-wid, r.min.y, r.max.x, r.max.y), lr, 0, ZP); /* right */
     draw(b, Rect(r.min.x, r.min.y, r.min.x+wid, r.max.y), ul, 0, ZP); /* left */
@@ -310,21 +313,23 @@ void pl_drawall(Panel *p, Image *b){
     if(p->flags&INVIS) return;
     /*e: [[pl_drawall()]] if invisible widget */
     p->b=b;
+    // widget-specific method
     p->draw(p);
     for(p=p->child;p;p=p->next) 
+        // recurse
         pl_draw1(p, b);
 }
 /*e: function [[pl_drawall]] */
 /*s: function [[pl_draw1]] */
 void pl_draw1(Panel *p, Image *b){
-    if(b!=0)
+    if(b!=nil)
         pl_drawall(p, b);
 }
 /*e: function [[pl_draw1]] */
 /*s: function [[pldraw]] */
 void pldraw(Panel *p, Image *b){
     pl_draw1(p, b);
-    flushimage(display, 1);
+    flushimage(display, true);
 }
 /*e: function [[pldraw]] */
 /*s: function [[pl_invis]] */

@@ -3,12 +3,14 @@
  * pulldown
  *	makes a button that pops up a panel when hit
  */
+/*s: [[libpanel]] includes */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+/*e: [[libpanel]] includes */
 
 typedef struct Pulldown Pulldown;
 
