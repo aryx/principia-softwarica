@@ -64,6 +64,18 @@ extern void (*i8237alloc)(void);
 //*****************************************************************************
 // See globals in portdat_globals.h
 
+//TODO should be in portdat.c at some point
+/*s: function [[getconf]] */
+char* getconf(char *name)
+{
+        int i;
+        for(i = 0; i < nconf; i++)
+                if(cistrcmp(confname[i], name) == 0)
+                        return confval[i];
+        return nil;
+}
+/*e: function [[getconf]] */
+
 //*****************************************************************************
 // Boot parameters (not used by pad)
 //*****************************************************************************

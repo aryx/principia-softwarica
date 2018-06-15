@@ -25,16 +25,8 @@ char *confval[MAXCONF];
 int nconf;
 /*e: global [[nconf]] */
 
-/*s: function [[getconf]] */
-char* getconf(char *name)
-{
-        int i;
-        for(i = 0; i < nconf; i++)
-                if(cistrcmp(confname[i], name) == 0)
-                        return confval[i];
-        return nil;
-}
-/*e: function [[getconf]] */
+//TODO: to factorize code between pc and pi
+//< <function [[getconf]]> >
 
 // was in dat.h
 /*s: global [[cpus]] */
