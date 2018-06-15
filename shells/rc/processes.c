@@ -9,7 +9,6 @@
 #include <string.h>
 
 // was in plan9.c
-
 /*s: global [[Fdprefix]] */
 char *Fdprefix = "/fd/";
 /*e: global [[Fdprefix]] */
@@ -27,9 +26,11 @@ int nwaitpids;
 void
 addwaitpid(int pid)
 {
+    /*s: [[addwaitpid()]] grow [[waitpids]] if needed */
     waitpids = realloc(waitpids, (nwaitpids+1)*sizeof waitpids[0]);
     if(waitpids == nil)
         panic("Can't realloc %d waitpids", nwaitpids+1);
+    /*e: [[addwaitpid()]] grow [[waitpids]] if needed */
     waitpids[nwaitpids++] = pid;
 }
 /*e: function [[addwaitpid]] */
