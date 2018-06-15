@@ -46,13 +46,13 @@ struct Panel{
     Point ipad;				/* extra space inside and outside */
     Point pad;
     /*e: [[Panel]] padding fields */
-    /*s: [[Panel]] extra public fields */
-    Point fixedsize;				/* size of Panel, if FIXED */
-    /*e: [[Panel]] extra public fields */
     /*s: [[Panel]] user fields */
     int user;					/* available for user */
     void *userp;					/* available for user */
     /*e: [[Panel]] user fields */
+    /*s: [[Panel]] extra public fields */
+    Point fixedsize;				/* size of Panel, if FIXED */
+    /*e: [[Panel]] extra public fields */
 
     /* private below */
 
@@ -61,24 +61,25 @@ struct Panel{
     // union<ref_own<Label|Entry|Button|...>
     void *data;					/* kind-specific data */
     /*e: [[Panel]] widget specific data */
+    /*s: [[Panel]] debugging fields */
+    char *kind;					/* what kind of panel? */
+    /*e: [[Panel]] debugging fields */
     /*s: [[Panel]] other fields */
     // LEAF | INVIS | ...
     int flags;					/* position flags, see below */
     /*x: [[Panel]] other fields */
     int state;					/* for hitting & drawing purposes */
+    /*x: [[Panel]] other fields */
     Point size;					/* space for this Panel */
     Point sizereq;					/* size requested by this Panel */
     Point childreq;					/* total size needed by children */
-
+    /*x: [[Panel]] other fields */
     Panel *scrollee;				/* pointer to scrolled window */
     Panel *xscroller, *yscroller;			/* pointers to scroll bars */
     Scroll scr;					/* scroll data */
     /*x: [[Panel]] other fields */
     Panel *lastmouse;				/* who got the last mouse event? */
     /*e: [[Panel]] other fields */
-    /*s: [[Panel]] debugging fields */
-    char *kind;					/* what kind of panel? */
-    /*e: [[Panel]] debugging fields */
 
     // methods
     /*s: [[Panel]] main methods */
@@ -87,11 +88,13 @@ struct Panel{
     int (*hit)(Panel *, Mouse *);			/* process mouse event */
     void (*type)(Panel *, Rune);			/* process keyboard event */
     /*e: [[Panel]] main methods */
+    /*s: [[Panel]] packing methods */
+    Point (*getsize)(Panel *, Point);		/* return size, given child size */
+    /*x: [[Panel]] packing methods */
+    void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
+    /*e: [[Panel]] packing methods */
     /*s: [[Panel]] other methods */
     void (*free)(Panel *);				/* free fields of data when done */
-    /*x: [[Panel]] other methods */
-    Point (*getsize)(Panel *, Point);		/* return size, given child size */
-    void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
     /*x: [[Panel]] other methods */
     void (*scroll)(Panel *, int, int, int, int);	/* scroll bar to scrollee */
     void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
@@ -109,11 +112,12 @@ struct Panel{
     /*x: [[Panel]] extra fields */
     // option<list<ref_own<Panel>>> (next = Panel.next, tail = Panel.echild)
     Panel *child;
-    // option<ref<Panel>>
-    Panel *echild;
     /*x: [[Panel]] extra fields */
     // list<ref<Panel>> (head = Panel.child)
     Panel *next;					/* It's a list! */
+    /*x: [[Panel]] extra fields */
+    // option<ref<Panel>>
+    Panel *echild;
     /*e: [[Panel]] extra fields */
 };
 /*e: struct [[Panel]] */
@@ -215,10 +219,10 @@ struct Panel{
 #define	OUT	8			/* Mouse.buttons bit, set when mouse leaves Panel */
 /*e: constant [[OUT]] */
 
-/*s: constant [[PRI_NORMAL]] */
 /*
  * Priorities
  */
+/*s: constant [[PRI_NORMAL]] */
 #define	PRI_NORMAL	0		/* ordinary panels */
 /*e: constant [[PRI_NORMAL]] */
 /*s: constant [[PRI_POPUP]] */
@@ -228,8 +232,8 @@ struct Panel{
 #define	PRI_SCROLLBAR	2		/* scroll bars */
 /*e: constant [[PRI_SCROLLBAR]] */
 
-/*s: constant [[PL_HOT]] */
 /* Rtext.flags */
+/*s: constant [[PL_HOT]] */
 #define PL_HOT		1
 /*e: constant [[PL_HOT]] */
 /*s: constant [[PL_SEL]] */

@@ -1,9 +1,9 @@
 /*s: include/gui/rtext.h */
 
-/*s: constant [[PL_NOPBIT]] */
 /*
  * Rtext definitions
  */
+/*s: constant [[PL_NOPBIT]] */
 #define	PL_NOPBIT	4
 /*e: constant [[PL_NOPBIT]] */
 /*s: constant [[PL_NARGBIT]] */
@@ -15,6 +15,7 @@
 /*s: function [[PL_SPECIAL]] */
 #define	PL_SPECIAL(op)	(((-1<<PL_NOPBIT)|op)<<PL_NARGBIT)
 /*e: function [[PL_SPECIAL]] */
+
 /*s: function [[PL_OP]] */
 #define	PL_OP(t)	((t)&~PL_ARGMASK)
 /*e: function [[PL_OP]] */
