@@ -94,8 +94,8 @@ BOOTCMDS=\
  kernel/filesystems/user/ramfs\
  # mntgen and ns\
  kernel/devices/sys/user\
-
-#TODO kernel/bus/user/usb for pi
+ # for pi\
+ kernel/buses/user/usb
 
 #TODO:
 # kernel/memory/user
