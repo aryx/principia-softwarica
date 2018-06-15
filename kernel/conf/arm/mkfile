@@ -1,9 +1,10 @@
-# CONF is the configuration file; it is processed by many mkxxx scripts
+TOP=../../../..
+objtype=arm
+<$TOP/mkfiles/$objtype/mkfile
+
+# $CONF is the configuration file which is processed by many mkxxx scripts
 CONF=pi
 CONFLIST=pi pi2
-
-objtype=arm
-</$objtype/mkfile
 p=9
 
 # The Raspberry Pi loads the kernel at 0x8000 Physical, but we link
@@ -12,7 +13,7 @@ p=9
 # (see also KTZERO in mem.h)
 loadaddr=0x80008000
 
-DEVS=`{rc ../port/mkdevlist $CONF}
+DEVS=`rc ../port/mkdevlist $CONF`
 
 PORT=\
      portfns.$O\
@@ -83,17 +84,17 @@ OBJ=\
 
 # the order matters!
 LIB=\
-	/$objtype/lib/libmemlayer.a\
-	/$objtype/lib/libmemdraw.a\
-	/$objtype/lib/libdraw.a\
-	/$objtype/lib/libip.a\
-	/$objtype/lib/libc.a\
+	$ROOT/$objtype/lib/libmemlayer.a\
+	$ROOT/$objtype/lib/libmemdraw.a\
+	$ROOT/$objtype/lib/libdraw.a\
+	$ROOT/$objtype/lib/libip.a\
+	$ROOT/$objtype/lib/libc.a\
 
 9:V: $p$CONF
 
-DATE=`{date -n}
+DATE=`date -n`
 
-# use of -l so no automagic lib and no _main
+#!!9pi target!! use of -l so no automagic lib and no _main
 $p$CONF: $CONF.c $OBJ $LIB mkfile
 	$CC $CFLAGS '-DKERNDATE='$DATE $CONF.c
 	echo '# linking raw kernel'	# H6: no headers, data segment aligned
@@ -101,17 +102,19 @@ $p$CONF: $CONF.c $OBJ $LIB mkfile
 
 
 install:V: $p$CONF
-	cp $p$CONF /$objtype/
+	cp $p$CONF $ROOT/$objtype/
+uninstall:V:
+	rm -f $ROOT/$objtype/$p$CONF
 
-
-<../boot/bootmkfile
+# specify the port/*.c, ip/*.c rules
 <../port/portmkfile
-<|../port/mkbootrules $CONF
+# inspect the 'bootdir' section of $CONF to generate $CONF.root.c target
+<|rc ../port/mkbootrules $CONF
 
 #TODO: should be done via 'mk depend'
 
 arch.$O clock.$O main.$O mmu.$O screen.$O syscall.$O trap.$O: \
-	/$objtype/include/ureg.h
+	$TOP/include/arch/$objtype/ureg.h
 archbcm.$O devether.$O: ../port/etherif.h ../port/netif.h
 archbcm.$O: ../port/flashif.h
 l.$O lexception.$O lproc.$O mmu.$O: arminstr.ha mem.h
@@ -124,7 +127,7 @@ devusb.$O: ../port/usb.h
 init.h:D:	../port/initcode.c init9.s
 	$CC $CFLAGS ../port/initcode.c
 	$AS init9.s
-	$LD -l -R1 -s -o init.out init9.$O initcode.$O /$objtype/lib/libc.a
+	$LD -l -R1 -s -o init.out init9.$O initcode.$O $ROOT/$objtype/lib/libc.a
 	{echo 'uchar initcode[]={'
 	 xd -1x <init.out |
 		sed -e 's/^[0-9a-f]+ //' -e 's/ ([0-9a-f][0-9a-f])/0x\1,/g'
@@ -132,8 +135,8 @@ init.h:D:	../port/initcode.c init9.s
 
 reboot.h:D:	rebootcode.s arminstr.ha arm.h mem.h
 	$AS rebootcode.s
-	# -lc is only for memmove.  -T arg is PADDR(REBOOTADDR)
-	$LD -l -s -T0x3400 -R4 -o reboot.out rebootcode.$O -lc
+	# -lc is only for memmove.  -Txxx is PADDR(REBOOTADDR)
+	$LD -l -s -T0x3400 -R4 -o reboot.out rebootcode.$O $ROOT/$objtype/lib/libc.a
 	{echo 'uchar rebootcode[]={'
 	 xd -1x reboot.out |
 		sed -e '1,2d' -e 's/^[0-9a-f]+ //' -e 's/ ([0-9a-f][0-9a-f])/0x\1,/g'
