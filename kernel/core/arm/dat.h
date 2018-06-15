@@ -19,6 +19,9 @@ typedef void* kern_vp;
 typedef ulong* user_wp;
 typedef void* user_vp;
 /*e: pad memory pointer types(arm) */
+//TODO: need to update port/ code to use the new pointer types
+typedef void* virt_addr3;
+typedef void* kern_addr3;
 
 #include "dat_forward.h"
 #include "../port/portdat_forward.h"
