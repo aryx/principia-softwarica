@@ -159,6 +159,8 @@ kernel:QV:
 		mk $MKFLAGS install
 	}
 
+disk:V: disk-$TARGET
+
 doall:V:
 	mk all
 	mk install
