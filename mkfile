@@ -163,11 +163,14 @@ disk:V: disk-$TARGET
 
 doall:V:
 	mk all
-	mk install
-	mk disksrc
+	mk kernel
+	mk disk
+    # mk disksrc
     mk run
 
+# this defines the disk-xxx targets
 <mkfile-host-$HOST
+# this defines the run target
 <mkfile-target-$TARGET
 
 ###############################################################################
