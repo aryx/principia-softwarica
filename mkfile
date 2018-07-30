@@ -189,7 +189,7 @@ LPDIRS=\
 #LESS
 # s9, tiger, soldat
 
-pdf lpclean lpinstall:QV:
+pdf lpclean pdfinstall:QV:
 	for (i in $LPDIRS) @{
 		echo $i
 		cd $i
