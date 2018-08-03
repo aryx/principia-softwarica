@@ -4,6 +4,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
@@ -64,18 +65,21 @@ error0 pl_drawinit(int ldepth){
 void pl_relief(Image *b, Image *ul, Image *lr, Rectangle r, int wid){
     int x, y;
 
-    draw(b, Rect(r.min.x, r.max.y-wid, r.max.x, r.max.y), lr, 0, ZP); /* bottom */
-    draw(b, Rect(r.max.x-wid, r.min.y, r.max.x, r.max.y), lr, 0, ZP); /* right */
-    draw(b, Rect(r.min.x, r.min.y, r.min.x+wid, r.max.y), ul, 0, ZP); /* left */
-    draw(b, Rect(r.min.x, r.min.y, r.max.x, r.min.y+wid), ul, 0, ZP); /* top */
-    for(x=0;x!=wid;x++) for(y=wid-1-x;y!=wid;y++){
+    draw(b, Rect(r.min.x, r.max.y-wid, r.max.x, r.max.y), lr, 0, ZP);/* bottom*/
+    draw(b, Rect(r.max.x-wid, r.min.y, r.max.x, r.max.y), lr, 0, ZP);/* right */
+    draw(b, Rect(r.min.x, r.min.y, r.min.x+wid, r.max.y), ul, 0, ZP);/* left */
+    draw(b, Rect(r.min.x, r.min.y, r.max.x, r.min.y+wid), ul, 0, ZP);/* top */
+
+    for(x=0;x!=wid;x++) 
+      for(y=wid-1-x;y!=wid;y++){
         draw(b, rectaddpt(Rect(0,0,1,1), Pt(x+r.max.x-wid, y+r.min.y)), lr, 0, ZP);
         draw(b, rectaddpt(Rect(0,0,1,1), Pt(x+r.min.x, y+r.max.y-wid)), lr, 0, ZP);
     }
 }
 /*e: function [[pl_relief]] */
 /*s: function [[pl_boxoutline]] */
-Rectangle pl_boxoutline(Image *b, Rectangle r, int style, int fill){
+Rectangle pl_boxoutline(Image *b, Rectangle r, int style, bool fill){
+    /*s: [[pl_boxoutline()]] if [[plldepth]] is zero */
     if(plldepth==0) switch(style){
     case UP:
         pl_relief(b, pl_black, pl_black, r, BWID);
@@ -106,13 +110,10 @@ Rectangle pl_boxoutline(Image *b, Rectangle r, int style, int fill){
         else border(b, r, SPACE, pl_white, ZP);
         break;
     }
-    else switch(style){
-    case UP:
-        pl_relief(b, pl_white, pl_black, r, BWID);
-        r=insetrect(r, BWID);
-        if(fill) draw(b, r, pl_light, 0, ZP);
-        else border(b, r, SPACE, pl_white, ZP);
-        break;
+    /*e: [[pl_boxoutline()]] if [[plldepth]] is zero */
+    else 
+    switch(style){
+    /*s: [[pl_boxoutline()]] switch style cases */
     case DOWN:
     case DOWN1:
     case DOWN2:
@@ -122,46 +123,62 @@ Rectangle pl_boxoutline(Image *b, Rectangle r, int style, int fill){
         if(fill) draw(b, r, pl_dark, 0, ZP);
         else border(b, r, SPACE, pl_black, ZP);
         break;
+    /*x: [[pl_boxoutline()]] switch style cases */
     case PASSIVE:
         if(fill) draw(b, r, pl_light, 0, ZP);
         r=insetrect(r, PWID);
         if(!fill) border(b, r, SPACE, pl_white, ZP);
         break;
+    /*x: [[pl_boxoutline()]] switch style cases */
+    case UP:
+        pl_relief(b, pl_white, pl_black, r, BWID);
+        r=insetrect(r, BWID);
+        if(fill) draw(b, r, pl_light, 0, ZP);
+        else border(b, r, SPACE, pl_white, ZP);
+        break;
+    /*x: [[pl_boxoutline()]] switch style cases */
     case FRAME:
         pl_relief(b, pl_white, pl_black, r, FWID);
         r=insetrect(r, FWID);
         pl_relief(b, pl_black, pl_white, r, FWID);
         r=insetrect(r, FWID);
-        if(fill) draw(b, r, pl_light, 0, ZP);
-        else border(b, r, SPACE, pl_white, ZP);
+        if(fill) 
+            draw(b, r, pl_light, nil, ZP);
+        else 
+            border(b, r, SPACE, pl_white, ZP);
         break;
+    /*e: [[pl_boxoutline()]] switch style cases */
     }
     return insetrect(r, SPACE);
 }
 /*e: function [[pl_boxoutline]] */
 /*s: function [[pl_outline]] */
 Rectangle pl_outline(Image *b, Rectangle r, int style){
-    return pl_boxoutline(b, r, style, 0);
+    return pl_boxoutline(b, r, style, false);
 }
 /*e: function [[pl_outline]] */
 /*s: function [[pl_box]] */
 Rectangle pl_box(Image *b, Rectangle r, int style){
-    return pl_boxoutline(b, r, style, 1);
+    return pl_boxoutline(b, r, style, true);
 }
 /*e: function [[pl_box]] */
 /*s: function [[pl_boxsize]] */
-Point pl_boxsize(Point interior, int state){
+Vector pl_boxsize(Vector interior, int state){
     switch(state){
+    /*s: [[pl_boxsize()]] switch state cases */
+    case PASSIVE:
+        return addpt(interior, Pt(2*(PWID+SPACE), 2*(PWID+SPACE)));
+    /*x: [[pl_boxsize()]] switch state cases */
     case UP:
     case DOWN:
     case DOWN1:
     case DOWN2:
     case DOWN3:
         return addpt(interior, Pt(2*(BWID+SPACE), 2*(BWID+SPACE)));
-    case PASSIVE:
-        return addpt(interior, Pt(2*(PWID+SPACE), 2*(PWID+SPACE)));
+    /*x: [[pl_boxsize()]] switch state cases */
     case FRAME:
         return addpt(interior, Pt(4*FWID+2*SPACE, 4*FWID+2*SPACE));
+    /*e: [[pl_boxsize()]] switch state cases */
     }
     return Pt(0, 0);
 }
@@ -169,6 +186,7 @@ Point pl_boxsize(Point interior, int state){
 /*s: function [[pl_interior]] */
 void pl_interior(int state, Point *ul, Point *size){
     switch(state){
+    /*s: [[pl_interior()]] switch state cases */
     case UP:
     case DOWN:
     case DOWN1:
@@ -177,26 +195,32 @@ void pl_interior(int state, Point *ul, Point *size){
         *ul=addpt(*ul, Pt(BWID+SPACE, BWID+SPACE));
         *size=subpt(*size, Pt(2*(BWID+SPACE), 2*(BWID+SPACE)));
         break;
+    /*x: [[pl_interior()]] switch state cases */
     case PASSIVE:
         *ul=addpt(*ul, Pt(PWID+SPACE, PWID+SPACE));
         *size=subpt(*size, Pt(2*(PWID+SPACE), 2*(PWID+SPACE)));
         break;
+    /*x: [[pl_interior()]] switch state cases */
     case FRAME:
         *ul=addpt(*ul, Pt(2*FWID+SPACE, 2*FWID+SPACE));
         *size=subpt(*size, Pt(4*FWID+2*SPACE, 4*FWID+2*SPACE));
+    /*e: [[pl_interior()]] switch state cases */
     }
 }
 /*e: function [[pl_interior]] */
 
 /*s: function [[pl_drawicon]] */
 void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
-    Rectangle save;
     Point ul, offs;
+    /*s: [[pl_drawicon()]] other locals */
+    Rectangle save;
+    /*e: [[pl_drawicon()]] other locals */
 
     ul=r.min;
     offs=subpt(subpt(r.max, r.min), pl_iconsize(flags, s));
 
     switch(stick){
+    /*s: [[pl_drawicon()]] switch placement cases, adjust [[ul]] */
     case PLACENW:	                                break;
     case PLACEN:	ul.x+=offs.x/2;                 break;
     case PLACENE:	ul.x+=offs.x;                   break;
@@ -206,17 +230,22 @@ void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
     case PLACESW:	                ul.y+=offs.y;   break;
     case PLACES:	ul.x+=offs.x/2; ul.y+=offs.y;   break;
     case PLACESE:	ul.x+=offs.x;   ul.y+=offs.y;   break;
+    /*e: [[pl_drawicon()]] switch placement cases, adjust [[ul]] */
     }
 
+    /*s: [[pl_drawicon()]] save and adjust clip rectangle */
     save=b->clipr;
     if(!rectclip(&r, save))
         return;
     replclipr(b, b->repl, r);
+    /*e: [[pl_drawicon()]] save and adjust clip rectangle */
     if(flags&BITMAP) 
         draw(b, Rpt(ul, addpt(ul, pl_iconsize(flags, s))), s, 0, ZP);
     else 
         string(b, ul, pl_black, ZP, font, s);
+    /*s: [[pl_drawicon()]] restore saved clip rectangle */
     replclipr(b, b->repl, save);
+    /*e: [[pl_drawicon()]] restore saved clip rectangle */
 }
 /*e: function [[pl_drawicon]] */
 /*s: function [[pl_radio]] */
@@ -335,15 +364,20 @@ void pldraw(Panel *p, Image *b){
 /*s: function [[pl_invis]] */
 void pl_invis(Panel *p, int v){
     for(;p;p=p->next){
-        if(v) p->flags|=INVIS; else p->flags&=~INVIS;
+        if(v) 
+            p->flags|=INVIS; 
+        else 
+            p->flags&=~INVIS;
         pl_invis(p->child, v);
     }
 }
 /*e: function [[pl_invis]] */
 /*s: function [[pl_iconsize]] */
-Point pl_iconsize(int flags, Icon *p){
-    if(flags&BITMAP) return subpt(((Image *)p)->r.max, ((Image *)p)->r.min);
-    return stringsize(font, (char *)p);
+Vector pl_iconsize(int flags, Icon *p){
+    if(flags&BITMAP) 
+        return subpt(((Image *)p)->r.max, ((Image *)p)->r.min);
+    else 
+        return stringsize(font, (char *)p);
 }
 /*e: function [[pl_iconsize]] */
 /*s: function [[pl_highlight]] */

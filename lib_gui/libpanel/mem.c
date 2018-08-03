@@ -4,6 +4,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
@@ -13,8 +14,8 @@ void *pl_emalloc(int n){
     void *v;
 
     v=mallocz(n, 1);
-    if(v==0){
-        fprint(2, "Can't malloc!\n");
+    if(v==nil){
+        fprint(STDERR, "Can't malloc!\n");
         exits("no mem");
     }
     setmalloctag(v, getcallerpc(&n));
@@ -25,8 +26,8 @@ void *pl_emalloc(int n){
 void *pl_erealloc(void *v, int n)
 {
     v=realloc(v, n);
-    if(v==0){
-        fprint(2, "Can't realloc!\n");
+    if(v==nil){
+        fprint(STDERR, "Can't realloc!\n");
         exits("no mem");
     }
     setrealloctag(v, getcallerpc(&v));
@@ -36,7 +37,8 @@ void *pl_erealloc(void *v, int n)
 
 /*s: function [[pl_unexpected]] */
 void pl_unexpected(Panel *g, char *rou){
-    fprint(2, "%s called unexpectedly (%s %lux)\n", rou, g->kind, (ulong)g);
+    fprint(STDERR, "%s called unexpectedly (%s %lux)\n", 
+           rou, g->kind, (ulong)g);
     abort();
 }
 /*e: function [[pl_unexpected]] */
@@ -125,38 +127,44 @@ Panel *pl_newpanel(Panel *parent, int ndata){
     v->free=nil;
     /*e: [[pl_newpanel()]] set widget-specific data fields */
     /*s: [[pl_newpanel()]] set other fields */
-    v->flags=0;
-    /*x: [[pl_newpanel()]] set other fields */
     v->r=Rect(0,0,0,0);
     v->b=nil;
-    v->ipad=Pt(0,0);
-    v->pad=Pt(0,0);
-    v->size=Pt(0,0);
-    v->sizereq=Pt(0,0);
-    v->lastmouse=nil;
+    /*x: [[pl_newpanel()]] set other fields */
+    v->flags=NOFLAG;
+    /*x: [[pl_newpanel()]] set other fields */
     v->scrollee=0;
     v->xscroller=0;
     v->yscroller=0;
     v->scr.pos=Pt(0,0);
     v->scr.size=Pt(0,0);
     /*x: [[pl_newpanel()]] set other fields */
+    v->ipad=Pt(0,0);
+    v->pad=Pt(0,0);
+    /*x: [[pl_newpanel()]] set other fields */
+    v->lastmouse=nil;
+    /*x: [[pl_newpanel()]] set other fields */
     v->pri=pl_prinormal;
+    /*x: [[pl_newpanel()]] set other fields */
+    v->size=Pt(0,0);
+    /*x: [[pl_newpanel()]] set other fields */
+    v->sizereq=Pt(0,0);
     /*e: [[pl_newpanel()]] set other fields */
-    /*s: [[pl_newpanel()]] set default methods */
-    v->draw=pl_drawerror;
-    v->hit=pl_hiterror;
-    v->type=pl_typeerror;
-    /*x: [[pl_newpanel()]] set default methods */
-    v->scroll=pl_scrollerror;
-    v->setscrollbar=pl_setscrollbarerror;
-    /*x: [[pl_newpanel()]] set default methods */
-    v->getsize=pl_getsizeerror;
-    /*x: [[pl_newpanel()]] set default methods */
-    v->childspace=pl_childspaceerror;
-    /*x: [[pl_newpanel()]] set default methods */
-    v->snarf=nil;
-    v->paste=nil;
-    /*e: [[pl_newpanel()]] set default methods */
+  
+  /*s: [[pl_newpanel()]] set default methods */
+  v->draw=pl_drawerror;
+  v->hit=pl_hiterror;
+  v->type=pl_typeerror;
+  /*x: [[pl_newpanel()]] set default methods */
+  v->scroll=pl_scrollerror;
+  v->setscrollbar=pl_setscrollbarerror;
+  /*x: [[pl_newpanel()]] set default methods */
+  v->getsize=pl_getsizeerror;
+  /*x: [[pl_newpanel()]] set default methods */
+  v->childspace=pl_childspaceerror;
+  /*x: [[pl_newpanel()]] set default methods */
+  v->snarf=nil;
+  v->paste=nil;
+  /*e: [[pl_newpanel()]] set default methods */
 
     return v;
 }
@@ -178,8 +186,10 @@ void plfree(Panel *p){
     }
     /*e: [[plfree()]] free the children */
     /*s: [[plfree()]] free the widget-specific data */
-    if(p->free) p->free(p);
-    if(p->data) free(p->data);
+    if(p->free) 
+        p->free(p);
+    if(p->data) 
+        free(p->data);
     /*e: [[plfree()]] free the widget-specific data */
     free(p);
 }

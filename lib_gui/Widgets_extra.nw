@@ -74,6 +74,9 @@ typedef struct Idol Idol;		/* A picture/text combo */
 
 <<global [[plkbfocus]]>>
 
+//pad's stuff
+<<constant [[NOFLAG]]>>
+
 // Initialization
 int plinit(int);			/* initialization */
 
@@ -92,21 +95,6 @@ void plpack(Panel *, Rectangle);	/* figure out where to put the Panel & children
 void plmove(Panel *, Point);		/* move an already-packed panel to a new location */
 
 
-// setters
-void plplacelabel(Panel *, int);	/* label placement */
-void plsetbutton(Panel *, int);		/* set or clear the mark on a button */
-void plsetslider(Panel *, int, int);	/* set the value of a slider */
-void plesel(Panel *, int, int);		/* set the selection in an edit window */
-void plescroll(Panel *, int);		/* scroll an edit window */
-void plsetscroll(Panel *, Scroll);	/* set scrolling information */
-
-// getters
-char *plentryval(Panel *);		/* entry delivers its value */
-Rune *pleget(Panel *);			/* get the text from an edit window */
-int plelen(Panel *);			/* get the length of the text from an edit window */
-void plegetsel(Panel *, int *, int *);	/* get the selection from an edit window */
-Scroll plgetscroll(Panel *);		/* get scrolling information from panel */
-
 //XXX
 void plgrabkb(Panel *);			/* this Panel should receive keyboard events */
 void plscroll(Panel *, Panel *, Panel *); /* link up scroll bars */
@@ -123,14 +111,16 @@ Panel *plradiobutton(Panel *pl, int, Icon *, void (*)(Panel *pl, int, int));
 
 Panel *plentry(Panel *pl, int, int, char *, void (*)(Panel *pl, char *));
 Panel *pledit(Panel *, int, Point, Rune *, int, void (*)(Panel *));
+Panel *plmessage(Panel *pl, int, int, char *);
 
 Panel *plslider(Panel *pl, int, Point, void(*)(Panel *pl, int, int, int));
 
-Panel *pllist(Panel *pl, int, char *(*)(Panel *, int), int, void(*)(Panel *pl, int, int));
-Panel *plidollist(Panel*, int, Point, Font*, Idol*, void (*)(Panel*, int, void*));
+Panel *plcanvas(Panel *pl, int, void (*)(Panel *), void (*)(Panel *pl, Mouse *));
+
 Panel *plgroup(Panel *pl, int);
 Panel *plframe(Panel *pl, int);
-Panel *plcanvas(Panel *pl, int, void (*)(Panel *), void (*)(Panel *pl, Mouse *));
+Panel *pllist(Panel *pl, int, char *(*)(Panel *, int), int, void(*)(Panel *pl, int, int));
+Panel *plidollist(Panel*, int, Point, Font*, Idol*, void (*)(Panel*, int, void*));
 
 Panel *plmenu(Panel *pl, int, Icon **, int, void (*)(int, int));
 Panel *plmenubar(Panel *pl, int, int, Icon *, Panel *pl, Icon *, ...);
@@ -140,7 +130,22 @@ Panel *plpulldown(Panel *pl, int, Icon *, Panel *pl, int);
 Panel *plscrollbar(Panel *plparent, int flags);
 Panel *pltextview(Panel *, int, Point, Rtext *, void (*)(Panel *, int, Rtext *));
 
-Panel *plmessage(Panel *pl, int, int, char *);
+
+// setters
+void plplacelabel(Panel *, int);	/* label placement */
+void plsetbutton(Panel *, int);		/* set or clear the mark on a button */
+void plsetslider(Panel *, int, int);	/* set the value of a slider */
+void plesel(Panel *, int, int);		/* set the selection in an edit window */
+void plescroll(Panel *, int);		/* scroll an edit window */
+void plsetscroll(Panel *, Scroll);	/* set scrolling information */
+
+// getters
+char *plentryval(Panel *);		/* entry delivers its value */
+Rune *pleget(Panel *);			/* get the text from an edit window */
+int plelen(Panel *);			/* get the length of the text from an edit window */
+void plegetsel(Panel *, int *, int *);	/* get the selection from an edit window */
+Scroll plgetscroll(Panel *);		/* get scrolling information from panel */
+
 
 // plinitxxx()
 void plinitlabel(Panel *, int, Icon *);
@@ -250,27 +255,14 @@ void pltabsize(int, int);			/* set min tab and tab size */
 
 \subsection{[[lib_gui/libpanel/pldefs.h]]}
 
-<<constant [[HITME]]>>=
-#define	HITME	0x08000		/* tells ptinpanel not to look at children */
-@
-%dead?
+%dead:
+%<<constant [[HITME]]>>=
+%#define	HITME	0x08000		/* tells ptinpanel not to look at children */
+%@
 
 
 
-<<enum [[_anon_]]([[(lib_gui/libpanel/pldefs.h)]])>>=
-/*
- * States, also styles
- */
-enum{
-    UP,
-    DOWN1,
-    DOWN2,
-    DOWN3,
-    DOWN,
-    PASSIVE,
-    FRAME
-};
-@
+
 
 <<enum [[_anon_ (lib_gui/libpanel/pldefs.h)2]]>>=
 /*
@@ -329,12 +321,11 @@ void pl_rtdraw(Image *, Rectangle, Rtext *, int);
 void pl_rtredraw(Image *, Rectangle, Rtext *, int, int);
 Rtext *pl_rthit(Rtext *, int, Point, Point);
 
-<<constant [[HITME]]>>
 <<constant [[LEAF]]>>
 <<constant [[INVIS]]>>
 <<constant [[REMOUSE]]>>
 
-<<enum [[_anon_]]([[(lib_gui/libpanel/pldefs.h)]])>>
+<<enum [[Style]]>>
 <<enum [[_anon_ (lib_gui/libpanel/pldefs.h)2]]>>
 <<enum [[_anon_ (lib_gui/libpanel/pldefs.h)3]]>>
 
@@ -446,9 +437,6 @@ void plemove(Panel *, Point);
 #define	FWID	2	/* width of frame relief */
 @
 
-<<constant [[SPACE]]>>=
-#define	SPACE	1	/* space inside relief of button or frame */
-@
 
 <<constant [[CKSIZE]]>>=
 #define	CKSIZE	3	/* size of check mark */
@@ -475,45 +463,7 @@ void plemove(Panel *, Point);
 
 
 
-<<function [[pl_boxsize]]>>=
-Point pl_boxsize(Point interior, int state){
-    switch(state){
-    case UP:
-    case DOWN:
-    case DOWN1:
-    case DOWN2:
-    case DOWN3:
-        return addpt(interior, Pt(2*(BWID+SPACE), 2*(BWID+SPACE)));
-    case PASSIVE:
-        return addpt(interior, Pt(2*(PWID+SPACE), 2*(PWID+SPACE)));
-    case FRAME:
-        return addpt(interior, Pt(4*FWID+2*SPACE, 4*FWID+2*SPACE));
-    }
-    return Pt(0, 0);
-}
-@
 
-<<function [[pl_interior]]>>=
-void pl_interior(int state, Point *ul, Point *size){
-    switch(state){
-    case UP:
-    case DOWN:
-    case DOWN1:
-    case DOWN2:
-    case DOWN3:
-        *ul=addpt(*ul, Pt(BWID+SPACE, BWID+SPACE));
-        *size=subpt(*size, Pt(2*(BWID+SPACE), 2*(BWID+SPACE)));
-        break;
-    case PASSIVE:
-        *ul=addpt(*ul, Pt(PWID+SPACE, PWID+SPACE));
-        *size=subpt(*size, Pt(2*(PWID+SPACE), 2*(PWID+SPACE)));
-        break;
-    case FRAME:
-        *ul=addpt(*ul, Pt(2*FWID+SPACE, 2*FWID+SPACE));
-        *size=subpt(*size, Pt(4*FWID+2*SPACE, 4*FWID+2*SPACE));
-    }
-}
-@
 
 
 
@@ -559,7 +509,10 @@ void pl_sliderupd(Image *b, Rectangle r1, int dir, int lo, int hi){
 <<function [[pl_invis]]>>=
 void pl_invis(Panel *p, int v){
     for(;p;p=p->next){
-        if(v) p->flags|=INVIS; else p->flags&=~INVIS;
+        if(v) 
+            p->flags|=INVIS; 
+        else 
+            p->flags&=~INVIS;
         pl_invis(p->child, v);
     }
 }
@@ -569,12 +522,6 @@ void pl_invis(Panel *p, int v){
 @
 
 
-<<function [[pl_iconsize]]>>=
-Point pl_iconsize(int flags, Icon *p){
-    if(flags&BITMAP) return subpt(((Image *)p)->r.max, ((Image *)p)->r.min);
-    return stringsize(font, (char *)p);
-}
-@
 
 <<function [[pl_highlight]]>>=
 void pl_highlight(Image *b, Rectangle r){
@@ -650,8 +597,6 @@ void pl_draw1(Panel *p, Image *b);
 
 \subsection{[[lib_gui/libpanel/event.c]]}
 
-
-
 %-------------------------------------------------------------
 
 <<lib_gui/libpanel/event.c>>=
@@ -688,6 +633,7 @@ void pl_draw1(Panel *p, Image *b);
 <<[[libpanel]] includes>>
 
 typedef struct Label Label;
+
 <<struct [[Label]]>>
 
 <<function [[pl_drawlabel]]>>
@@ -752,6 +698,7 @@ typedef struct Button Button;
 #include <keyboard.h>
 
 typedef struct Entry Entry;
+
 <<struct [[Entry]]>>
 <<constant [[SLACK]]>>
 
@@ -795,6 +742,7 @@ typedef struct Entry Entry;
 #include <keyboard.h>
 
 typedef struct Edit Edit;
+
 <<struct [[Edit]]>>
 <<function [[pl_drawedit]]>>
 
@@ -828,6 +776,7 @@ typedef struct Edit Edit;
 <<[[libpanel]] includes>>
 
 typedef struct Slider Slider;
+
 <<struct [[Slider]]>>
 
 <<function [[pl_drawslider]]>>
@@ -908,6 +857,7 @@ typedef struct Canvas Canvas;
 <<[[libpanel]] includes>>
 
 typedef struct List List;
+
 <<struct [[List]]>>
 <<constant [[MAXHGT]]>>
 
@@ -927,14 +877,15 @@ typedef struct List List;
 \subsection{[[lib_gui/libpanel/message.c]]}
 
 
-
 %-------------------------------------------------------------
 
 <<lib_gui/libpanel/message.c>>=
 <<[[libpanel]] includes>>
 
 typedef struct Message Message;
+
 <<struct [[Message]]>>
+
 <<function [[pl_textmsg]]>>
 <<function [[pl_foldsize]]>>
 <<function [[pl_drawmessage]]>>
@@ -979,6 +930,7 @@ typedef struct Message Message;
 <<[[libpanel]] includes>>
 
 typedef struct Popup Popup;
+
 <<struct [[Popup]]>>
 
 <<function [[pl_drawpopup]]>>
@@ -1220,7 +1172,8 @@ char *plrtsnarftext(Rtext *w){
 <<function [[plrtstr]]>>
 <<function [[plrtbitmap]]>>
 <<function [[plrtfree]]>>
-int pl_tabmin, pl_tabsize;
+int pl_tabmin;
+int pl_tabsize;
 <<function [[pltabsize]]>>
 <<function [[pl_space]]>>
 <<function [[pl_rtfmt]]>>
@@ -1292,6 +1245,7 @@ void plsetscroll(Panel *p, Scroll s){
 <<[[libpanel]] includes>>
 
 typedef struct Scrollbar Scrollbar;
+
 <<struct [[Scrollbar]]>>
 <<constant [[SBWID]]>>
 

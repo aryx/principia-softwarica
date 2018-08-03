@@ -8,6 +8,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
@@ -30,12 +31,12 @@ void pl_drawpulldown(Panel *p){
 }
 /*e: function [[pl_drawpulldown]] */
 /*s: function [[pl_hitpulldown]] */
-int pl_hitpulldown(Panel *g, Mouse *m){
+bool pl_hitpulldown(Panel *g, Mouse *m){
     int oldstate, passon;
     Rectangle r;
     Panel *p, *hitme;
-    Pulldown *pp;
-    pp=g->data;
+    Pulldown *pp = g->data;
+
     oldstate=g->state;
     p=pp->pull;
     hitme=0;
@@ -117,7 +118,7 @@ void pl_typepulldown(Panel *p, Rune c){
 }
 /*e: function [[pl_typepulldown]] */
 /*s: function [[pl_getsizepulldown]] */
-Point pl_getsizepulldown(Panel *p, Point children){
+Vector pl_getsizepulldown(Panel *p, Vector children){
     USED(p, children);
     return pl_boxsize(pl_iconsize(p->flags, ((Pulldown *)p->data)->icon), p->state);
 }
@@ -129,17 +130,21 @@ void pl_childspacepulldown(Panel *p, Point *ul, Point *size){
 /*e: function [[pl_childspacepulldown]] */
 /*s: function [[plinitpulldown]] */
 void plinitpulldown(Panel *v, int flags, Icon *icon, Panel *pullthis, int side){
-    Pulldown *pp;
-    pp=v->data;
+    Pulldown *pp = v->data;
+
     v->flags=flags|LEAF;
+
     v->draw=pl_drawpulldown;
     v->hit=pl_hitpulldown;
     v->type=pl_typepulldown;
+
     v->getsize=pl_getsizepulldown;
     v->childspace=pl_childspacepulldown;
+
     pp->pull=pullthis;
     pp->side=side;
     pp->icon=icon;
+
     v->kind="pulldown";
 }
 /*e: function [[plinitpulldown]] */

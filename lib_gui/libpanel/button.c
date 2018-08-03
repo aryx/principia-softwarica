@@ -4,6 +4,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
@@ -12,16 +13,20 @@ typedef struct Button Button;
 
 /*s: struct [[Button]] */
 struct Button{
+    // enum<ButtonType>
     int btype;			/* button type */
 
     Icon *icon;			/* what to write on the button */
-    int check;			/* for check/radio buttons */
 
+    void (*pl_buttonhit)(Panel *, int);	/* call back user code on button hit */
     void (*hit)(Panel *, int, int);	/* call back user code on check/radio hit */
     void (*menuhit)(int, int);	/* call back user code on menu item hit */
-    void (*pl_buttonhit)(Panel *, int);	/* call back user code on button hit */
 
+    /*s: [[Button]] button-specific fields */
     int index;			/* arg to menuhit */
+    /*x: [[Button]] button-specific fields */
+    bool check;			/* for check/radio buttons */
+    /*e: [[Button]] button-specific fields */
     int buttons;
 };
 /*e: struct [[Button]] */
@@ -57,18 +62,18 @@ void pl_drawbutton(Panel *p){
 }
 /*e: function [[pl_drawbutton]] */
 /*s: function [[pl_hitbutton]] */
-int pl_hitbutton(Panel *p, Mouse *m){
-    int oldstate, hitme;
+bool pl_hitbutton(Panel *p, Mouse *m){
+    int oldstate = p->state;
+    bool hitme;
     Panel *sib;
-    Button *bp;
-    bp=p->data;
-    oldstate=p->state;
+    Button *bp = p->data;
+
     if(m->buttons&OUT){
-        hitme=0;
+        hitme=false;
         p->state=UP;
     }
     else if(m->buttons&7){
-        hitme=0;
+        hitme=false;
         p->state=DOWN;
         bp->buttons=m->buttons;
     }
@@ -102,7 +107,7 @@ int pl_hitbutton(Panel *p, Mouse *m){
         bp->hit(p, bp->buttons, bp->check);
         p->state=UP;
     }
-    return 0;
+    return false;
 }
 /*e: function [[pl_hitbutton]] */
 /*s: function [[pl_typebutton]] */
@@ -111,7 +116,7 @@ void pl_typebutton(Panel *g, Rune c){
 }
 /*e: function [[pl_typebutton]] */
 /*s: function [[pl_getsizebutton]] */
-Point pl_getsizebutton(Panel *p, Point children){
+Vector pl_getsizebutton(Panel *p, Vector children){
     Point s;
     int ckw;
     Button *bp;
@@ -136,17 +141,20 @@ void pl_childspacebutton(Panel *g, Point *ul, Point *size){
 /*e: function [[pl_childspacebutton]] */
 /*s: function [[pl_initbtype]] */
 void pl_initbtype(Panel *v, int flags, Icon *icon, void (*hit)(Panel *, int, int), int btype){
-    Button *bp;
-    bp=v->data;
+    Button *bp = v->data;
+
     v->flags=flags|LEAF;
     v->state=UP;
+
     v->draw=pl_drawbutton;
     v->hit=pl_hitbutton;
     v->type=pl_typebutton;
+
     v->getsize=pl_getsizebutton;
     v->childspace=pl_childspacebutton;
+
     bp->btype=btype;
-    bp->check=0;
+    bp->check=false;
     bp->hit=hit;
     bp->icon=icon;
 
@@ -160,7 +168,8 @@ void pl_initbtype(Panel *v, int flags, Icon *icon, void (*hit)(Panel *, int, int
 /*s: function [[pl_buttonhit]] */
 void pl_buttonhit(Panel *p, int buttons, int check){
     USED(check);
-    if(((Button *)p->data)->pl_buttonhit) ((Button *)p->data)->pl_buttonhit(p, buttons);
+    if(((Button *)p->data)->pl_buttonhit) 
+        ((Button *)p->data)->pl_buttonhit(p, buttons);
 }
 /*e: function [[pl_buttonhit]] */
 /*s: function [[plinitbutton]] */
@@ -182,6 +191,7 @@ void plinitradiobutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, int
 /*s: function [[plbutton]] */
 Panel *plbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int)){
     Panel *p;
+
     p=pl_newpanel(parent, sizeof(Button));
     plinitbutton(p, flags, icon, hit);
     return p;

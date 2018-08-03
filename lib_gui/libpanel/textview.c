@@ -10,6 +10,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
@@ -201,8 +202,8 @@ char* pl_snarftextview(Panel *p){
 
 /*s: function [[plinittextview]] */
 void plinittextview(Panel *v, int flags, Point minsize, Rtext *t, void (*hit)(Panel *, int, Rtext *)){
-    Textview *tp;
-    tp=v->data;
+    Textview *tp = v->data;
+
     v->flags=flags|LEAF;
     v->state=UP;
     v->draw=pl_drawtextview;

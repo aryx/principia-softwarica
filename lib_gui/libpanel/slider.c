@@ -4,16 +4,18 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
 
 typedef struct Slider Slider;
+
 /*s: struct [[Slider]] */
 struct Slider{
     int dir;			/* HORIZ or VERT */
     int val;			/* setting, in screen coordinates */
-    Point minsize;
+    Vector minsize;
     void (*hit)(Panel *, int, int, int);	/* call back to user when slider changes */
     int buttons;
 };
@@ -32,17 +34,18 @@ void pl_drawslider(Panel *p){
 }
 /*e: function [[pl_drawslider]] */
 /*s: function [[pl_hitslider]] */
-int pl_hitslider(Panel *p, Mouse *m){
+bool pl_hitslider(Panel *p, Mouse *m){
     int oldstate, oldval, len;
     Point ul, size;
-    Slider *sp;
-    sp=p->data;
+    Slider *sp = p->data;
+
     ul=p->r.min;
     size=subpt(p->r.max, p->r.min);
     pl_interior(p->state, &ul, &size);
     oldstate=p->state;
     oldval=sp->val;
     SET(len);
+
     if(m->buttons&OUT)
         p->state=UP;
     else if(m->buttons&7){
@@ -72,7 +75,7 @@ void pl_typeslider(Panel *p, Rune c){
 }
 /*e: function [[pl_typeslider]] */
 /*s: function [[pl_getsizeslider]] */
-Point pl_getsizeslider(Panel *p, Point children){
+Vector pl_getsizeslider(Panel *p, Vector children){
     USED(children);
     return pl_boxsize(((Slider *)p->data)->minsize, p->state);
 }
@@ -83,25 +86,29 @@ void pl_childspaceslider(Panel *g, Point *ul, Point *size){
 }
 /*e: function [[pl_childspaceslider]] */
 /*s: function [[plinitslider]] */
-void plinitslider(Panel *v, int flags, Point size, void (*hit)(Panel *, int, int, int)){
-    Slider *sp;
-    sp=v->data;
+void plinitslider(Panel *v, int flags, Vector size, void (*hit)(Panel *, int, int, int)){
+    Slider *sp = v->data;
+
     v->r=Rect(0,0,size.x,size.y);
     v->flags=flags|LEAF;
     v->state=UP;
+
     v->draw=pl_drawslider;
     v->hit=pl_hitslider;
     v->type=pl_typeslider;
+
     v->getsize=pl_getsizeslider;
     v->childspace=pl_childspaceslider;
+
     sp->minsize=size;
     sp->dir=size.x>size.y?HORIZ:VERT;
     sp->hit=hit;
+
     v->kind="slider";
 }
 /*e: function [[plinitslider]] */
 /*s: function [[plslider]] */
-Panel *plslider(Panel *parent, int flags, Point size, void (*hit)(Panel *, int, int, int)){
+Panel *plslider(Panel *parent, int flags, Vector size, void (*hit)(Panel *, int, int, int)){
     Panel *p;
     p=pl_newpanel(parent, sizeof(Slider));
     plinitslider(p, flags, size, hit);

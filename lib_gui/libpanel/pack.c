@@ -4,6 +4,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
@@ -43,7 +44,7 @@ Point pl_sizesibs(Panel *p){
  */
 void pl_sizereq(Panel *p){
     Panel *cp;
-    Point maxsize;
+    Vector maxsize;
 
     maxsize=Pt(0,0);
     for(cp=p->child;cp;cp=cp->next){

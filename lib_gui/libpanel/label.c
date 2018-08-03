@@ -4,16 +4,18 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
 
 typedef struct Label Label;
+
 /*s: struct [[Label]] */
 struct Label{
-    // enum<Placement>
+    // enum<Placement> (default = PLACECEN)
     int placement;
-    // ref_own<Icon>
+    // ref_own<Icon> = ref_own<Image|string> depending on Panel.flags&BITMAP
     Icon *icon;
 };
 /*e: struct [[Label]] */
@@ -22,13 +24,14 @@ struct Label{
 void pl_drawlabel(Panel *p){
     Label *l = p->data;
 
-    pl_drawicon(p->b, pl_box(p->b, p->r, PASSIVE), l->placement, p->flags, l->icon);
+    pl_drawicon(p->b, pl_box(p->b, p->r, PASSIVE), 
+                l->placement, p->flags, l->icon);
 }
 /*e: function [[pl_drawlabel]] */
 /*s: function [[pl_hitlabel]] */
-int pl_hitlabel(Panel *p, Mouse *m){
+bool pl_hitlabel(Panel *p, Mouse *m){
     USED(p, m);
-    return 0;
+    return false;
 }
 /*e: function [[pl_hitlabel]] */
 /*s: function [[pl_typelabel]] */
@@ -37,7 +40,7 @@ void pl_typelabel(Panel *p, Rune c){
 }
 /*e: function [[pl_typelabel]] */
 /*s: function [[pl_getsizelabel]] */
-Point pl_getsizelabel(Panel *p, Point children){
+Vector pl_getsizelabel(Panel *p, Vector children){
     USED(children);		/* shouldn't have any children */
     return pl_boxsize(pl_iconsize(p->flags, ((Label *)p->data)->icon), PASSIVE);
 }

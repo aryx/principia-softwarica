@@ -8,6 +8,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
@@ -68,7 +69,8 @@ void plrtfree(Rtext *t){
     }
 }
 /*e: function [[plrtfree]] */
-int pl_tabmin, pl_tabsize;
+int pl_tabmin;
+int pl_tabsize;
 /*s: function [[pltabsize]] */
 void pltabsize(int min, int size){
     pl_tabmin=min;

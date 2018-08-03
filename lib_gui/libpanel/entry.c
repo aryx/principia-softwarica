@@ -4,19 +4,28 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
 #include <keyboard.h>
 
 typedef struct Entry Entry;
+
 /*s: struct [[Entry]] */
 struct Entry{
+    // ref_own<string>
     char *entry;
+    /*s: [[Entry]] pointer in [[entry]] fields */
+    // point to \0 in entry
     char *entp;
+    // point to end of entry
     char *eent;
+    /*e: [[Entry]] pointer in [[entry]] fields */
+
     void (*hit)(Panel *, char *);
-    Point minsize;
+
+    Vector minsize;
 };
 /*e: struct [[Entry]] */
 /*s: constant [[SLACK]] */
@@ -58,39 +67,45 @@ void pl_pasteentry(Panel *p, char *s){
 /*s: function [[pl_drawentry]] */
 void pl_drawentry(Panel *p){
     Rectangle r;
-    Entry *ep;
+    Entry *ep = p->data;
     char *s;
 
-    ep=p->data;
     r=pl_box(p->b, p->r, p->state);
+
     s=ep->entry;
+    /*s: [[pl_drawentry]] if [[USERFL]] */
     if(p->flags & USERFL){
         char *p;
         s=strdup(s);
         for(p=s; *p; p++)
             *p='*';
     }
-    if(stringwidth(font, s)<=r.max.x-r.min.x)
-        pl_drawicon(p->b, r, PLACEW, 0, s);
+    /*e: [[pl_drawentry]] if [[USERFL]] */
+    if(stringwidth(font, s) <= r.max.x-r.min.x)
+        pl_drawicon(p->b, r, PLACEW, NOFLAG, s);
     else
-        pl_drawicon(p->b, r, PLACEE, 0, s);
+        pl_drawicon(p->b, r, PLACEE, NOFLAG, s);
+    /*s: [[pl_drawentry]] when [[USERFL]] if [[s]] changed */
     if(s != ep->entry)
         free(s);
+    /*e: [[pl_drawentry]] when [[USERFL]] if [[s]] changed */
 }
 /*e: function [[pl_drawentry]] */
 /*s: function [[pl_hitentry]] */
-int pl_hitentry(Panel *p, Mouse *m){
-    if((m->buttons&7)==1){
+bool pl_hitentry(Panel *p, Mouse *m){
+    if((m->buttons&7)==CLICK_LEFT){
         plgrabkb(p);
 
         p->state=DOWN;
         pldraw(p, p->b);
-        while(m->buttons&1){
-            int old;
-            old=m->buttons;
+
+        while(m->buttons&CLICK_LEFT){
+            int old = m->buttons;
+            // next mouse event
             *m=emouse();
-            if((old&7)==1){
-                if((m->buttons&7)==3){
+            /*s: [[pl_hitentry()]] handle copy/paste when middle or right click */
+            if((old&7)==CLICK_LEFT){
+                if((m->buttons&7)==CLICK_LEFT|CLICK_MIDDLE){
                     Entry *ep;
 
                     plsnarf(p);
@@ -101,46 +116,32 @@ int pl_hitentry(Panel *p, Mouse *m){
                     *ep->entp='\0';
                     pldraw(p, p->b);
                 }
-                if((m->buttons&7)==5)
+                if((m->buttons&7)==CLICK_LEFT|CLICK_RIGHT)
                     plpaste(p);
             }
+            /*e: [[pl_hitentry()]] handle copy/paste when middle or right click */
         }
+
         p->state=UP;
         pldraw(p, p->b);
     }
-    return 0;
+    return false;
 }
 /*e: function [[pl_hitentry]] */
 /*s: function [[pl_typeentry]] */
 void pl_typeentry(Panel *p, Rune c){
+    Entry *ep = p->data;
     int n;
-    Entry *ep;
-    ep=p->data;
+
     switch(c){
+    /*s: [[pl_typeentry()]] switch rune cases */
     case '\n':
     case '\r':
         *ep->entp='\0';
-        if(ep->hit) ep->hit(p, ep->entry);
+        if(ep->hit) 
+            ep->hit(p, ep->entry);
         return;
-    case Kesc:
-        plsnarf(p);
-        /* no break */
-    case Kdel:	/* clear */
-//	case Knack:	/* ^U: erase line */
-//		ep->entp=ep->entry;
-//		*ep->entp='\0';
-//		break;
-    case Kbs:	/* ^H: erase character */
-        while(ep->entp!=ep->entry && !pl_rune1st(ep->entp[-1])) *--ep->entp='\0';
-        if(ep->entp!=ep->entry) *--ep->entp='\0';
-        break;
-//	case Ketb:	/* ^W: erase word */
-//		while(ep->entp!=ep->entry && !pl_idchar(ep->entp[-1]))
-//			--ep->entp;
-//		while(ep->entp!=ep->entry && pl_idchar(ep->entp[-1]))
-//			--ep->entp;
-//		*ep->entp='\0';
-//		break;
+    /*x: [[pl_typeentry()]] switch rune cases */
     default:
         if(c < 0x20 || (c & 0xFF00) == KF || (c & 0xFF00) == Spec)
             break;
@@ -153,12 +154,36 @@ void pl_typeentry(Panel *p, Rune c){
         }
         *ep->entp='\0';
         break;
+    /*x: [[pl_typeentry()]] switch rune cases */
+    case Kesc:
+        plsnarf(p);
+        /* no break */
+    case Kdel:	/* clear */
+    case Kbs:	/* ^H: erase character */
+        while(ep->entp!=ep->entry && !pl_rune1st(ep->entp[-1])) 
+            *--ep->entp='\0';
+        if(ep->entp!=ep->entry) 
+            *--ep->entp='\0';
+        break;
+    /*x: [[pl_typeentry()]] switch rune cases */
+    //	case Knack:	/* ^U: erase line */
+    //		ep->entp=ep->entry;
+    //		*ep->entp='\0';
+    //		break;
+    //	case Ketb:	/* ^W: erase word */
+    //		while(ep->entp!=ep->entry && !pl_idchar(ep->entp[-1]))
+    //			--ep->entp;
+    //		while(ep->entp!=ep->entry && pl_idchar(ep->entp[-1]))
+    //			--ep->entp;
+    //		*ep->entp='\0';
+    //		break;
+    /*e: [[pl_typeentry()]] switch rune cases */
     }
     pldraw(p, p->b);
 }
 /*e: function [[pl_typeentry]] */
 /*s: function [[pl_getsizeentry]] */
-Point pl_getsizeentry(Panel *p, Point children){
+Vector pl_getsizeentry(Panel *p, Vector children){
     USED(children);
     return pl_boxsize(((Entry *)p->data)->minsize, p->state);
 }
@@ -170,40 +195,50 @@ void pl_childspaceentry(Panel *p, Point *ul, Point *size){
 /*e: function [[pl_childspaceentry]] */
 /*s: function [[pl_freeentry]] */
 void pl_freeentry(Panel *p){
-    Entry *ep;
-    ep = p->data;
+    Entry *ep = p->data;
+
     free(ep->entry);
-    ep->entry = ep->eent = ep->entp = 0;
+    ep->entry = ep->eent = ep->entp = nil;
 }
 /*e: function [[pl_freeentry]] */
 /*s: function [[plinitentry]] */
 void plinitentry(Panel *v, int flags, int wid, char *str, void (*hit)(Panel *, char *)){
     int elen;
-    Entry *ep;
+    Entry *ep = v->data;
 
-    ep=v->data;
     v->flags=flags|LEAF;
-    v->state=UP;
 
     v->draw=pl_drawentry;
     v->hit=pl_hitentry;
     v->type=pl_typeentry;
+
     v->getsize=pl_getsizeentry;
     v->childspace=pl_childspaceentry;
 
-    ep->minsize=Pt(wid, font->height);
-    v->free=pl_freeentry;
-
+    /*s: [[plinitentry()]] set snarf methods */
     v->snarf=pl_snarfentry;
     v->paste=pl_pasteentry;
+    /*e: [[plinitentry()]] set snarf methods */
+    /*s: [[plinitentry()]] set extra fields */
+    v->state=UP;
+    /*e: [[plinitentry()]] set extra fields */
+    /*s: [[plinitentry()]] set fields in [[ep]] */
+    ep->minsize=Pt(wid, font->height);
 
     elen=100;
-    if(str) elen+=strlen(str);
+    if(str) 
+        elen+=strlen(str);
     ep->entry=pl_erealloc(ep->entry, elen+SLACK);
+
     ep->eent=ep->entry+elen;
     strecpy(ep->entry, ep->eent, str ? str : "");
     ep->entp=ep->entry+strlen(ep->entry);
+
     ep->hit=hit;
+    /*e: [[plinitentry()]] set fields in [[ep]] */
+
+    v->free=pl_freeentry;
+
     v->kind="entry";
 }
 /*e: function [[plinitentry]] */
@@ -218,8 +253,8 @@ Panel *plentry(Panel *parent, int flags, int wid, char *str, void (*hit)(Panel *
 /*e: function [[plentry]] */
 /*s: function [[plentryval]] */
 char *plentryval(Panel *p){
-    Entry *ep;
-    ep=p->data;
+    Entry *ep = p->data;
+
     *ep->entp='\0';
     return ep->entry;
 }

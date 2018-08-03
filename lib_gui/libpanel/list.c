@@ -4,11 +4,13 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
 
 typedef struct List List;
+
 /*s: struct [[List]] */
 struct List{
     void (*hit)(Panel *, int, int);	/* call user back on hit */
@@ -17,7 +19,7 @@ struct List{
     int sel;			/* index of hilited item */
     int len;			/* # of items in list */
     Rectangle listr;
-    Point minsize;
+    Vector minsize;
     int buttons;
 };
 /*e: struct [[List]] */
@@ -159,7 +161,7 @@ void pl_typelist(Panel *g, Rune c){
 }
 /*e: function [[pl_typelist]] */
 /*s: function [[pl_getsizelist]] */
-Point pl_getsizelist(Panel *p, Point children){
+Vector pl_getsizelist(Panel *p, Vector children){
     USED(children);
     return pl_boxsize(((List *)p->data)->minsize, p->state);
 }
@@ -171,10 +173,10 @@ void pl_childspacelist(Panel *g, Point *ul, Point *size){
 /*e: function [[pl_childspacelist]] */
 /*s: function [[plinitlist]] */
 void plinitlist(Panel *v, int flags, char *(*gen)(Panel *, int), int nlist, void (*hit)(Panel *, int, int)){
-    List *lp;
+    List *lp = v->data;
     int wid, max;
     char *str;
-    lp=v->data;
+
     v->flags=flags|LEAF;
     v->state=UP;
     v->draw=pl_drawlist;

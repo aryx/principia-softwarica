@@ -43,8 +43,8 @@ struct Panel{
     Rectangle r;					/* where the Panel goes */
 
     /*s: [[Panel]] padding fields */
-    Point ipad;				/* extra space inside and outside */
-    Point pad;
+    Vector ipad;				/* extra space inside and outside */
+    Vector pad;
     /*e: [[Panel]] padding fields */
     /*s: [[Panel]] user fields */
     int user;					/* available for user */
@@ -70,26 +70,27 @@ struct Panel{
     /*x: [[Panel]] other fields */
     int state;					/* for hitting & drawing purposes */
     /*x: [[Panel]] other fields */
-    Point size;					/* space for this Panel */
-    Point sizereq;					/* size requested by this Panel */
-    Point childreq;					/* total size needed by children */
-    /*x: [[Panel]] other fields */
     Panel *scrollee;				/* pointer to scrolled window */
     Panel *xscroller, *yscroller;			/* pointers to scroll bars */
     Scroll scr;					/* scroll data */
     /*x: [[Panel]] other fields */
     Panel *lastmouse;				/* who got the last mouse event? */
+    /*x: [[Panel]] other fields */
+    Vector size;					/* space for this Panel */
+    /*x: [[Panel]] other fields */
+    Vector sizereq;					/* size requested by this Panel */
+    Vector childreq;					/* total size needed by children */
     /*e: [[Panel]] other fields */
 
     // methods
     /*s: [[Panel]] main methods */
     void (*draw)(Panel *);				/* draw panel and children */
 
-    int (*hit)(Panel *, Mouse *);			/* process mouse event */
+    bool (*hit)(Panel *, Mouse *);			/* process mouse event */
     void (*type)(Panel *, Rune);			/* process keyboard event */
     /*e: [[Panel]] main methods */
     /*s: [[Panel]] packing methods */
-    Point (*getsize)(Panel *, Point);		/* return size, given child size */
+    Vector (*getsize)(Panel *, Vector);		/* return size, given child size */
     /*x: [[Panel]] packing methods */
     void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
     /*e: [[Panel]] packing methods */
@@ -107,9 +108,6 @@ struct Panel{
 
     // Extra
     /*s: [[Panel]] extra fields */
-    // option<ref<Panel>>
-    Panel *parent; 			/* No, it's a tree! */
-    /*x: [[Panel]] extra fields */
     // option<list<ref_own<Panel>>> (next = Panel.next, tail = Panel.echild)
     Panel *child;
     /*x: [[Panel]] extra fields */
@@ -118,6 +116,9 @@ struct Panel{
     /*x: [[Panel]] extra fields */
     // option<ref<Panel>>
     Panel *echild;
+    /*x: [[Panel]] extra fields */
+    // option<ref<Panel>>
+    Panel *parent; 			/* No, it's a tree! */
     /*e: [[Panel]] extra fields */
 };
 /*e: struct [[Panel]] */
@@ -244,6 +245,11 @@ struct Panel{
 Panel *plkbfocus;			/* the panel in keyboard focus */
 /*e: global [[plkbfocus]] */
 
+//pad's stuff
+/*s: constant [[NOFLAG]] */
+#define NOFLAG 0
+/*e: constant [[NOFLAG]] */
+
 // Initialization
 int plinit(int);			/* initialization */
 
@@ -262,21 +268,6 @@ void plpack(Panel *, Rectangle);	/* figure out where to put the Panel & children
 void plmove(Panel *, Point);		/* move an already-packed panel to a new location */
 
 
-// setters
-void plplacelabel(Panel *, int);	/* label placement */
-void plsetbutton(Panel *, int);		/* set or clear the mark on a button */
-void plsetslider(Panel *, int, int);	/* set the value of a slider */
-void plesel(Panel *, int, int);		/* set the selection in an edit window */
-void plescroll(Panel *, int);		/* scroll an edit window */
-void plsetscroll(Panel *, Scroll);	/* set scrolling information */
-
-// getters
-char *plentryval(Panel *);		/* entry delivers its value */
-Rune *pleget(Panel *);			/* get the text from an edit window */
-int plelen(Panel *);			/* get the length of the text from an edit window */
-void plegetsel(Panel *, int *, int *);	/* get the selection from an edit window */
-Scroll plgetscroll(Panel *);		/* get scrolling information from panel */
-
 //XXX
 void plgrabkb(Panel *);			/* this Panel should receive keyboard events */
 void plscroll(Panel *, Panel *, Panel *); /* link up scroll bars */
@@ -293,14 +284,16 @@ Panel *plradiobutton(Panel *pl, int, Icon *, void (*)(Panel *pl, int, int));
 
 Panel *plentry(Panel *pl, int, int, char *, void (*)(Panel *pl, char *));
 Panel *pledit(Panel *, int, Point, Rune *, int, void (*)(Panel *));
+Panel *plmessage(Panel *pl, int, int, char *);
 
 Panel *plslider(Panel *pl, int, Point, void(*)(Panel *pl, int, int, int));
 
-Panel *pllist(Panel *pl, int, char *(*)(Panel *, int), int, void(*)(Panel *pl, int, int));
-Panel *plidollist(Panel*, int, Point, Font*, Idol*, void (*)(Panel*, int, void*));
+Panel *plcanvas(Panel *pl, int, void (*)(Panel *), void (*)(Panel *pl, Mouse *));
+
 Panel *plgroup(Panel *pl, int);
 Panel *plframe(Panel *pl, int);
-Panel *plcanvas(Panel *pl, int, void (*)(Panel *), void (*)(Panel *pl, Mouse *));
+Panel *pllist(Panel *pl, int, char *(*)(Panel *, int), int, void(*)(Panel *pl, int, int));
+Panel *plidollist(Panel*, int, Point, Font*, Idol*, void (*)(Panel*, int, void*));
 
 Panel *plmenu(Panel *pl, int, Icon **, int, void (*)(int, int));
 Panel *plmenubar(Panel *pl, int, int, Icon *, Panel *pl, Icon *, ...);
@@ -310,7 +303,22 @@ Panel *plpulldown(Panel *pl, int, Icon *, Panel *pl, int);
 Panel *plscrollbar(Panel *plparent, int flags);
 Panel *pltextview(Panel *, int, Point, Rtext *, void (*)(Panel *, int, Rtext *));
 
-Panel *plmessage(Panel *pl, int, int, char *);
+
+// setters
+void plplacelabel(Panel *, int);	/* label placement */
+void plsetbutton(Panel *, int);		/* set or clear the mark on a button */
+void plsetslider(Panel *, int, int);	/* set the value of a slider */
+void plesel(Panel *, int, int);		/* set the selection in an edit window */
+void plescroll(Panel *, int);		/* scroll an edit window */
+void plsetscroll(Panel *, Scroll);	/* set scrolling information */
+
+// getters
+char *plentryval(Panel *);		/* entry delivers its value */
+Rune *pleget(Panel *);			/* get the text from an edit window */
+int plelen(Panel *);			/* get the length of the text from an edit window */
+void plegetsel(Panel *, int *, int *);	/* get the selection from an edit window */
+Scroll plgetscroll(Panel *);		/* get scrolling information from panel */
+
 
 // plinitxxx()
 void plinitlabel(Panel *, int, Icon *);

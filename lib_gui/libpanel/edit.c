@@ -19,12 +19,14 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
 #include <keyboard.h>
 
 typedef struct Edit Edit;
+
 /*s: struct [[Edit]] */
 struct Edit{
     Point minsize;
@@ -237,8 +239,8 @@ void pl_freeedit(Panel *p){
 /*e: function [[pl_freeedit]] */
 /*s: function [[plinitedit]] */
 void plinitedit(Panel *v, int flags, Point minsize, Rune *text, int ntext, void (*hit)(Panel *)){
-    Edit *ep;
-    ep=v->data;
+    Edit *ep = v->data;
+
     v->flags=flags|LEAF;
     v->state=UP;
     v->draw=pl_drawedit;

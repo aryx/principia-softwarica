@@ -4,11 +4,13 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
 
 typedef struct Scrollbar Scrollbar;
+
 /*s: struct [[Scrollbar]] */
 struct Scrollbar{
     int dir;		/* HORIZ or VERT */
@@ -133,8 +135,8 @@ int pl_priscrollbar(Panel *, Point){
 /*e: function [[pl_priscrollbar]] */
 /*s: function [[plinitscrollbar]] */
 void plinitscrollbar(Panel *v, int flags){
-    Scrollbar *sp;
-    sp=v->data;
+    Scrollbar *sp = v->data;
+
     v->flags=flags|LEAF;
     v->pri=pl_priscrollbar;
     v->state=UP;

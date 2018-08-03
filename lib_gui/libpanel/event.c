@@ -4,6 +4,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
@@ -29,39 +30,48 @@ void plkeyboard(Rune c){
  */
 Panel *pl_ptinpanel(Point p, Panel *g){
     Panel *v;
+
     for(;g;g=g->next) 
       if(ptinrect(p, g->r)){
         //recurse
         v=pl_ptinpanel(p, g->child);
         if(v && v->pri(v, p) >= g->pri(g, p)) 
             return v;
-        return g;
+        else
+            return g;
       }
-    return 0;
+    return nil;
 }
 /*e: function [[pl_ptinpanel]] */
 /*s: function [[plmouse]] */
 void plmouse(Panel *g, Mouse *m){
-    Panel *hit, *last;
+    Panel* hit;
+    Panel* last = g->lastmouse;
+    bool remouse;
 
+    /*s: [[plmouse()]] if [[REMOUSE]] set [[hit]] to [[last]] */
     if(g->flags&REMOUSE)
-        hit=g->lastmouse;
+        hit=last;
+    /*e: [[plmouse()]] if [[REMOUSE]] set [[hit]] to [[last]] */
     else{
-
         hit=pl_ptinpanel(m->xy, g);
-
-        last=g->lastmouse;
         if(last && last!=hit){
+            /*s: [[plmouse()]] when [[last!=hit]] send [[OUT]] mouse event */
             m->buttons|=OUT;
             last->hit(last, m);
             m->buttons&=~OUT;
+            /*e: [[plmouse()]] when [[last!=hit]] send [[OUT]] mouse event */
         }
     }
     if(hit){
-        if(hit->hit(hit, m))
+        // widget-specific method
+        remouse=hit->hit(hit, m);
+        /*s: [[plmouse()]] handle [[remouse]] */
+        if(remouse)
             g->flags|=REMOUSE;
         else
             g->flags&=~REMOUSE;
+        /*e: [[plmouse()]] handle [[remouse]] */
         g->lastmouse=hit;
     }
     flushimage(display, true);

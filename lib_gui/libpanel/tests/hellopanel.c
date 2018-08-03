@@ -3,6 +3,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 
 // source code from panel.pdf introduction
@@ -18,13 +19,14 @@ void done(Panel *p, int buttons){
 
 /*s: function [[eresized]] */
 void eresized(bool new){
+    /*s: [[eresized()]] if [[new]] get a new window */
     if(new && getwindow(display, Refnone) == ERROR_NEG1) {
         fprint(STDERR, "getwindow: %r\n");
         exits("getwindow");
     }
+    /*e: [[eresized()]] if [[new]] get a new window */
     plpack(root, view->r);
     pldraw(root, view);
-    flushimage(display, true);
 }
 /*e: function [[eresized]] */
 
@@ -41,9 +43,9 @@ void main(void){
     einit(Emouse);
     plinit(view->depth);
     
-    root=plframe(nil, 0);
-    pllabel(root, 0, "Hello, world!");
-    plbutton(root, 0, "done", done);
+    root=plframe(nil, NOFLAG);
+    pllabel(root, NOFLAG, "Hello, world!");
+    plbutton(root, NOFLAG, "done", done);
     
     eresized(false);
     

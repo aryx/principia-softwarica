@@ -4,6 +4,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
@@ -14,9 +15,9 @@ void pl_drawframe(Panel *p){
 }
 /*e: function [[pl_drawframe]] */
 /*s: function [[pl_hitframe]] */
-int pl_hitframe(Panel *p, Mouse *m){
+bool pl_hitframe(Panel *p, Mouse *m){
     USED(p, m);
-    return 0;
+    return false;
 }
 /*e: function [[pl_hitframe]] */
 /*s: function [[pl_typeframe]] */
@@ -25,7 +26,7 @@ void pl_typeframe(Panel *p, Rune c){
 }
 /*e: function [[pl_typeframe]] */
 /*s: function [[pl_getsizeframe]] */
-Point pl_getsizeframe(Panel *p, Point children){
+Vector pl_getsizeframe(Panel *p, Vector children){
     USED(p);
     return pl_boxsize(children, FRAME);
 }
@@ -39,11 +40,14 @@ void pl_childspaceframe(Panel *p, Point *ul, Point *size){
 /*s: function [[plinitframe]] */
 void plinitframe(Panel *v, int flags){
     v->flags=flags;
+
     v->draw=pl_drawframe;
     v->hit=pl_hitframe;
     v->type=pl_typeframe;
+
     v->getsize=pl_getsizeframe;
     v->childspace=pl_childspaceframe;
+
     v->kind="frame";
 }
 /*e: function [[plinitframe]] */

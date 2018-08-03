@@ -9,11 +9,13 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
+
 #include <panel.h>
 #include "pldefs.h"
 /*e: [[libpanel]] includes */
 
 typedef struct Popup Popup;
+
 /*s: struct [[Popup]] */
 struct Popup{
     Image *save;			/* where to save what the popup covers */
@@ -27,12 +29,11 @@ void pl_drawpopup(Panel *p){
 }
 /*e: function [[pl_drawpopup]] */
 /*s: function [[pl_hitpopup]] */
-int pl_hitpopup(Panel *g, Mouse *m){
+bool pl_hitpopup(Panel *g, Mouse *m){
     Panel *p;
     Point d;
-    Popup *pp;
+    Popup *pp = g->data;
 
-    pp=g->data;
     if(g->state==UP){
         switch(m->buttons&7){
         case 0: p=g->child; break;
@@ -96,7 +97,7 @@ void pl_typepopup(Panel *g, Rune c){
 }
 /*e: function [[pl_typepopup]] */
 /*s: function [[pl_getsizepopup]] */
-Point pl_getsizepopup(Panel *g, Point children){
+Vector pl_getsizepopup(Panel *g, Vector children){
     USED(g);
     return children;
 }
@@ -113,20 +114,24 @@ int pl_pripopup(Panel *, Point){
 /*e: function [[pl_pripopup]] */
 /*s: function [[plinitpopup]] */
 void plinitpopup(Panel *v, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
-    Popup *pp;
-    pp=v->data;
+    Popup *pp =v->data;
+
     v->flags=flags;
     v->pri=pl_pripopup;
     v->state=UP;
+
     v->draw=pl_drawpopup;
     v->hit=pl_hitpopup;
     v->type=pl_typepopup;
+
     v->getsize=pl_getsizepopup;
     v->childspace=pl_childspacepopup;
+
     pp->pop[0]=pop0;
     pp->pop[1]=pop1;
     pp->pop[2]=pop2;
     pp->save=0;
+
     v->kind="popup";
 }
 /*e: function [[plinitpopup]] */
