@@ -165,7 +165,7 @@ doall:V:
 	mk all
 	mk kernel
 	mk disk
-    # mk disksrc
+    mk disksrc
     mk run
 
 # this defines the disk-xxx targets
