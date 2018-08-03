@@ -42,6 +42,10 @@ struct	Point
 };
 /*e: struct [[Point]] */
 
+/*s: type [[Vector]] */
+typedef Point Vector;
+/*e: type [[Vector]] */
+
 /*s: struct [[Rectangle]] */
 struct Rectangle
 {

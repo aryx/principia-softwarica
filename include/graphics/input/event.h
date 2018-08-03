@@ -37,6 +37,14 @@ struct	Mouse
 };
 /*e: struct Mouse (include/event.h) */
 
+/*s: enum [[Click]] */
+enum Click {
+    CLICK_LEFT = 1,
+    CLICK_MIDDLE = 2,
+    CLICK_RIGHT = 4,
+};
+/*e: enum [[Click]] */
+
 /*s: struct [[Event]] */
 struct	Event
 {
