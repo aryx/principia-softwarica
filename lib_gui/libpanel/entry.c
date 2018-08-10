@@ -22,10 +22,9 @@ struct Entry{
     // point to end of entry
     char *eent;
     /*e: [[Entry]] pointer in [[entry]] fields */
+    Vector minsize;
 
     void (*hit)(Panel *, char *);
-
-    Vector minsize;
 };
 /*e: struct [[Entry]] */
 /*s: constant [[SLACK]] */
@@ -66,13 +65,12 @@ void pl_pasteentry(Panel *p, char *s){
 /*e: function [[pl_pasteentry]] */
 /*s: function [[pl_drawentry]] */
 void pl_drawentry(Panel *p){
-    Rectangle r;
     Entry *ep = p->data;
-    char *s;
+    char *s = ep->entry;
+    Rectangle r;
 
     r=pl_box(p->b, p->r, p->state);
 
-    s=ep->entry;
     /*s: [[pl_drawentry]] if [[USERFL]] */
     if(p->flags & USERFL){
         char *p;
@@ -94,9 +92,9 @@ void pl_drawentry(Panel *p){
 /*s: function [[pl_hitentry]] */
 bool pl_hitentry(Panel *p, Mouse *m){
     if((m->buttons&7)==CLICK_LEFT){
-        plgrabkb(p);
-
         p->state=DOWN;
+        plgrabkb(p);
+        // redraw with changed state
         pldraw(p, p->b);
 
         while(m->buttons&CLICK_LEFT){
@@ -121,7 +119,7 @@ bool pl_hitentry(Panel *p, Mouse *m){
             }
             /*e: [[pl_hitentry()]] handle copy/paste when middle or right click */
         }
-
+        // redraw with changed state
         p->state=UP;
         pldraw(p, p->b);
     }
@@ -143,15 +141,19 @@ void pl_typeentry(Panel *p, Rune c){
         return;
     /*x: [[pl_typeentry()]] switch rune cases */
     default:
+        /*s: [[pl_typeentry()]] handle special characters */
         if(c < 0x20 || (c & 0xFF00) == KF || (c & 0xFF00) == Spec)
             break;
+        /*e: [[pl_typeentry()]] handle special characters */
         ep->entp+=runetochar(ep->entp, &c);
+        /*s: [[pl_typeentry()]] realloc entry if necessary */
         if(ep->entp>ep->eent){
             n=ep->entp-ep->entry;
             ep->entry=pl_erealloc(ep->entry, n+100+SLACK);
             ep->entp=ep->entry+n;
             ep->eent=ep->entp+100;
         }
+        /*e: [[pl_typeentry()]] realloc entry if necessary */
         *ep->entp='\0';
         break;
     /*x: [[pl_typeentry()]] switch rune cases */
@@ -179,17 +181,20 @@ void pl_typeentry(Panel *p, Rune c){
     //		break;
     /*e: [[pl_typeentry()]] switch rune cases */
     }
+    // draw updated entry
     pldraw(p, p->b);
 }
 /*e: function [[pl_typeentry]] */
 /*s: function [[pl_getsizeentry]] */
 Vector pl_getsizeentry(Panel *p, Vector children){
+    Entry* e = p->data;
+
     USED(children);
-    return pl_boxsize(((Entry *)p->data)->minsize, p->state);
+    return pl_boxsize(e->minsize, p->state);
 }
 /*e: function [[pl_getsizeentry]] */
 /*s: function [[pl_childspaceentry]] */
-void pl_childspaceentry(Panel *p, Point *ul, Point *size){
+void pl_childspaceentry(Panel *p, Point *ul, Vector *size){
     USED(p, ul, size);
 }
 /*e: function [[pl_childspaceentry]] */
@@ -203,8 +208,8 @@ void pl_freeentry(Panel *p){
 /*e: function [[pl_freeentry]] */
 /*s: function [[plinitentry]] */
 void plinitentry(Panel *v, int flags, int wid, char *str, void (*hit)(Panel *, char *)){
-    int elen;
     Entry *ep = v->data;
+    int elen;
 
     v->flags=flags|LEAF;
 

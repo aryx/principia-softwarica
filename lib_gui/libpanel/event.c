@@ -35,6 +35,7 @@ Panel *pl_ptinpanel(Point p, Panel *g){
       if(ptinrect(p, g->r)){
         //recurse
         v=pl_ptinpanel(p, g->child);
+
         if(v && v->pri(v, p) >= g->pri(g, p)) 
             return v;
         else

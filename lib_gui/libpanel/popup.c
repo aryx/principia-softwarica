@@ -18,8 +18,10 @@ typedef struct Popup Popup;
 
 /*s: struct [[Popup]] */
 struct Popup{
-    Image *save;			/* where to save what the popup covers */
     Panel *pop[3];			/* what to pop up */
+
+    //option<ref_own<Image>>
+    Image *save;			/* where to save what the popup covers */
 };
 /*e: struct [[Popup]] */
 
@@ -31,23 +33,33 @@ void pl_drawpopup(Panel *p){
 /*s: function [[pl_hitpopup]] */
 bool pl_hitpopup(Panel *g, Mouse *m){
     Panel *p;
-    Point d;
     Popup *pp = g->data;
+    /*s: [[pl_hitpopup()]] other locals */
+    Vector d; // delta
+    /*e: [[pl_hitpopup()]] other locals */
 
     if(g->state==UP){
         switch(m->buttons&7){
+        case CLICK_LEFT:   p=pp->pop[0]; g->state=DOWN1; break;
+        case CLICK_MIDDLE: p=pp->pop[1]; g->state=DOWN2; break;
+        case CLICK_RIGHT:  p=pp->pop[2]; g->state=DOWN3; break;
+        /*s: [[pl_hitpopup()]] when [[UP]], switch buttons other cases */
+        // just a mouse motion
         case 0: p=g->child; break;
-        case 1:	p=pp->pop[0]; g->state=DOWN1; break;
-        case 2: p=pp->pop[1]; g->state=DOWN2; break;
-        case 4: p=pp->pop[2]; g->state=DOWN3; break;
-        default: p=0; break;
+        /*x: [[pl_hitpopup()]] when [[UP]], switch buttons other cases */
+        default: p=nil; break;
+        /*e: [[pl_hitpopup()]] when [[UP]], switch buttons other cases */
         }
-        if(p==0){
+        /*s: [[pl_hitpopup()]] when [[UP]], if no popup menu [[p]] */
+        if(p==nil){
             p=g->child;
             g->state=DOWN;
         }
+        /*e: [[pl_hitpopup()]] when [[UP]], if no popup menu [[p]] */
         else if(g->state!=UP){
+            /*s: [[pl_hitpopup()]] when from [[UP]] to [[DOWNX]] and valid [[p]] */
             plpack(p, view->clipr);
+            /*s: [[pl_hitpopup()]] when from [[UP]] to [[DOWNX]], compute [[d]] */
             if(p->lastmouse)
                 d=subpt(m->xy, divpt(addpt(p->lastmouse->r.min,
                              p->lastmouse->r.max), 2));
@@ -57,35 +69,42 @@ bool pl_hitpopup(Panel *g, Mouse *m){
             if(p->r.max.x+d.x>g->r.max.x) d.x=g->r.max.x-p->r.max.x;
             if(p->r.min.y+d.y<g->r.min.y) d.y=g->r.min.y-p->r.min.y;
             if(p->r.max.y+d.y>g->r.max.y) d.y=g->r.max.y-p->r.max.y;
+            /*e: [[pl_hitpopup()]] when from [[UP]] to [[DOWNX]], compute [[d]] */
             plmove(p, d);
-            pp->save=allocimage(display, p->r, g->b->chan, 0, DNofill);
-            if(pp->save!=0) draw(pp->save, p->r, g->b, 0, p->r.min);
-            pl_invis(p, 0);
+            pp->save=allocimage(display, p->r, g->b->chan, false, DNofill);
+            if(pp->save!=nil) 
+                draw(pp->save, p->r, g->b, nil, p->r.min);
+            pl_invis(p, false);
             pldraw(p, g->b);
+            /*e: [[pl_hitpopup()]] when from [[UP]] to [[DOWNX]] and valid [[p]] */
         }
-    }
-    else{
+    } else{ // a DOWNX state
         switch(g->state){
-        default: SET(p); break;			/* can't happen! */
         case DOWN1: p=pp->pop[0]; break;
         case DOWN2: p=pp->pop[1]; break;
         case DOWN3: p=pp->pop[2]; break;
         case DOWN:  p=g->child;  break;
+        default: SET(p); break;			/* can't happen! */
         }
+        /*s: [[pl_hitpopup()]] when [[DOWNX]] state, if no buttons */
         if((m->buttons&7)==0){
             if(g->state!=DOWN){
-                if(pp->save!=0){
-                    draw(g->b, p->r, pp->save, 0, p->r.min);
-                    flushimage(display, 1);
+                if(pp->save!=nil){
+                    // restore from saved image
+                    draw(g->b, p->r, pp->save, nil, p->r.min);
+                    flushimage(display, true);
                     freeimage(pp->save);
-                    pp->save=0;
+                    pp->save=nil;
                 }
-                pl_invis(p, 1);
+                pl_invis(p, true);
             }
             g->state=UP;
         }
+        /*e: [[pl_hitpopup()]] when [[DOWNX]] state, if no buttons */
     }
+    // redispatch mouse event to appropriate menu or child
     plmouse(p, m);
+
     if((m->buttons&7)==0)
         g->state=UP;
     return (m->buttons&7)!=0;
@@ -103,7 +122,7 @@ Vector pl_getsizepopup(Panel *g, Vector children){
 }
 /*e: function [[pl_getsizepopup]] */
 /*s: function [[pl_childspacepopup]] */
-void pl_childspacepopup(Panel *g, Point *ul, Point *size){
+void pl_childspacepopup(Panel *g, Point *ul, Vector *size){
     USED(g, ul, size);
 }
 /*e: function [[pl_childspacepopup]] */
@@ -117,7 +136,6 @@ void plinitpopup(Panel *v, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
     Popup *pp =v->data;
 
     v->flags=flags;
-    v->pri=pl_pripopup;
     v->state=UP;
 
     v->draw=pl_drawpopup;
@@ -127,10 +145,12 @@ void plinitpopup(Panel *v, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
     v->getsize=pl_getsizepopup;
     v->childspace=pl_childspacepopup;
 
+    v->pri=pl_pripopup;
+
     pp->pop[0]=pop0;
     pp->pop[1]=pop1;
     pp->pop[2]=pop2;
-    pp->save=0;
+    pp->save=nil;
 
     v->kind="popup";
 }
@@ -138,6 +158,7 @@ void plinitpopup(Panel *v, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
 /*s: function [[plpopup]] */
 Panel *plpopup(Panel *parent, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
     Panel *v;
+
     v=pl_newpanel(parent, sizeof(Popup));
     plinitpopup(v, flags, pop0, pop1, pop2);
     return v;

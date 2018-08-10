@@ -52,8 +52,10 @@ error0 pl_drawinit(int ldepth){
 
     pl_black=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x000000FF);
     pl_white=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xFFFFFFFF);
+
     pl_dark =allocimage(display, Rect(0,0,1,1), view->chan, 1, DPurpleblue);
     pl_light=allocimagemix(display, DPalebluegreen, DWhite);
+
     pl_hilit=allocimage(display, Rect(0,0,1,1), CHAN1(CAlpha,8), 1, 0x80);
 
     if(pl_white==nil || pl_light==nil || pl_black==nil || pl_dark==nil) 
@@ -114,27 +116,33 @@ Rectangle pl_boxoutline(Image *b, Rectangle r, int style, bool fill){
     else 
     switch(style){
     /*s: [[pl_boxoutline()]] switch style cases */
+    case PASSIVE:
+        if(fill) 
+            draw(b, r, pl_light, 0, ZP);
+        r=insetrect(r, PWID);
+        if(!fill) 
+            border(b, r, SPACE, pl_white, ZP);
+        break;
+    /*x: [[pl_boxoutline()]] switch style cases */
+    case UP:
+        pl_relief(b, pl_white, pl_black, r, BWID);
+        r=insetrect(r, BWID);
+        if(fill) 
+            draw(b, r, pl_light, nil, ZP);
+        else 
+            border(b, r, SPACE, pl_white, ZP);
+        break;
+    /*x: [[pl_boxoutline()]] switch style cases */
     case DOWN:
     case DOWN1:
     case DOWN2:
     case DOWN3:
         pl_relief(b, pl_black, pl_white, r, BWID);
         r=insetrect(r, BWID);
-        if(fill) draw(b, r, pl_dark, 0, ZP);
-        else border(b, r, SPACE, pl_black, ZP);
-        break;
-    /*x: [[pl_boxoutline()]] switch style cases */
-    case PASSIVE:
-        if(fill) draw(b, r, pl_light, 0, ZP);
-        r=insetrect(r, PWID);
-        if(!fill) border(b, r, SPACE, pl_white, ZP);
-        break;
-    /*x: [[pl_boxoutline()]] switch style cases */
-    case UP:
-        pl_relief(b, pl_white, pl_black, r, BWID);
-        r=insetrect(r, BWID);
-        if(fill) draw(b, r, pl_light, 0, ZP);
-        else border(b, r, SPACE, pl_white, ZP);
+        if(fill) 
+            draw(b, r, pl_dark, 0, ZP);
+        else 
+            border(b, r, SPACE, pl_black, ZP);
         break;
     /*x: [[pl_boxoutline()]] switch style cases */
     case FRAME:
@@ -180,11 +188,12 @@ Vector pl_boxsize(Vector interior, int state){
         return addpt(interior, Pt(4*FWID+2*SPACE, 4*FWID+2*SPACE));
     /*e: [[pl_boxsize()]] switch state cases */
     }
+    // else
     return Pt(0, 0);
 }
 /*e: function [[pl_boxsize]] */
 /*s: function [[pl_interior]] */
-void pl_interior(int state, Point *ul, Point *size){
+void pl_interior(int state, Point *ul, Vector *size){
     switch(state){
     /*s: [[pl_interior()]] switch state cases */
     case UP:
@@ -211,7 +220,8 @@ void pl_interior(int state, Point *ul, Point *size){
 
 /*s: function [[pl_drawicon]] */
 void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
-    Point ul, offs;
+    Point ul;
+    Vector offs;
     /*s: [[pl_drawicon()]] other locals */
     Rectangle save;
     /*e: [[pl_drawicon()]] other locals */
@@ -221,7 +231,7 @@ void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
 
     switch(stick){
     /*s: [[pl_drawicon()]] switch placement cases, adjust [[ul]] */
-    case PLACENW:	                                break;
+    case PLACENW:	/** Nothing **/                 break;
     case PLACEN:	ul.x+=offs.x/2;                 break;
     case PLACENE:	ul.x+=offs.x;                   break;
     case PLACEW:	                ul.y+=offs.y/2; break;
@@ -240,7 +250,7 @@ void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
     replclipr(b, b->repl, r);
     /*e: [[pl_drawicon()]] save and adjust clip rectangle */
     if(flags&BITMAP) 
-        draw(b, Rpt(ul, addpt(ul, pl_iconsize(flags, s))), s, 0, ZP);
+        draw(b, Rpt(ul, addpt(ul, pl_iconsize(flags, s))), s, nil, ZP);
     else 
         string(b, ul, pl_black, ZP, font, s);
     /*s: [[pl_drawicon()]] restore saved clip rectangle */
@@ -253,49 +263,60 @@ void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
  * Place a check mark at the left end of r.  Return the unused space.
  * Caller must guarantee that r.max.x-r.min.x>=r.max.y-r.min.y!
  */
-Rectangle pl_radio(Image *b, Rectangle r, int val){
-    Rectangle remainder;
-    remainder=r;
+Rectangle pl_radio(Image *b, Rectangle r, bool val){
+    Rectangle remainder = r;
+
     r.max.x=r.min.x+r.max.y-r.min.y;
     remainder.min.x=r.max.x;
     r=insetrect(r, CKINSET);
+    /*s: [[pl_radio()]] if null [[plldepth]] part1 */
     if(plldepth==0)
         pl_relief(b, pl_black, pl_black, r, CKWID);
+    /*e: [[pl_radio()]] if null [[plldepth]] part1 */
     else
         pl_relief(b, pl_black, pl_white, r, CKWID);
     r=insetrect(r, CKWID);
+    /*s: [[pl_radio()]] if null [[plldepth]] part2 */
     if(plldepth==0)
         draw(b, r, pl_white, 0, ZP);
+    /*e: [[pl_radio()]] if null [[plldepth]] part2 */
     else
         draw(b, r, pl_light, 0, ZP);
-    if(val) draw(b, insetrect(r, CKSPACE), pl_black, 0, ZP);
+    if(val) 
+        draw(b, insetrect(r, CKSPACE), pl_black, nil, ZP);
     return remainder;
 }
 /*e: function [[pl_radio]] */
 /*s: function [[pl_check]] */
-Rectangle pl_check(Image *b, Rectangle r, int val){
-    Rectangle remainder;
-    remainder=r;
+Rectangle pl_check(Image *b, Rectangle r, bool val){
+    Rectangle remainder = r;
+
     r.max.x=r.min.x+r.max.y-r.min.y;
     remainder.min.x=r.max.x;
     r=insetrect(r, CKINSET);
+    /*s: [[pl_check()]] if null [[plldepth]] part1 */
     if(plldepth==0)
         pl_relief(b, pl_black, pl_black, r, CKWID);
+    /*e: [[pl_check()]] if null [[plldepth]] part1 */
     else
         pl_relief(b, pl_black, pl_white, r, CKWID);
     r=insetrect(r, CKWID);
+    /*s: [[pl_check()]] if null [[plldepth]] part2 */
     if(plldepth==0)
         draw(b, r, pl_white, 0, ZP);
+    /*e: [[pl_check()]] if null [[plldepth]] part2 */
     else
-        draw(b, r, pl_light, 0, ZP);
+        draw(b, r, pl_light, nil, ZP);
     r=insetrect(r, CKBORDER);
     if(val){
+        /*s: [[pl_check()]] if checked button */
         line(b, Pt(r.min.x,   r.min.y+1), Pt(r.max.x-1, r.max.y  ), Endsquare, Endsquare, 0, pl_black, ZP);
         line(b, Pt(r.min.x,   r.min.y  ), Pt(r.max.x,   r.max.y  ), Endsquare, Endsquare, 0, pl_black, ZP);
         line(b, Pt(r.min.x+1, r.min.y  ), Pt(r.max.x,   r.max.y-1), Endsquare, Endsquare, 0, pl_black, ZP);
         line(b, Pt(r.min.x  , r.max.y-2), Pt(r.max.x-1, r.min.y-1), Endsquare, Endsquare, 0, pl_black, ZP);
         line(b, Pt(r.min.x,   r.max.y-1), Pt(r.max.x,   r.min.y-1), Endsquare, Endsquare, 0, pl_black, ZP);
         line(b, Pt(r.min.x+1, r.max.y-1), Pt(r.max.x,   r.min.y  ), Endsquare, Endsquare, 0, pl_black, ZP);
+        /*e: [[pl_check()]] if checked button */
     }
     return remainder;
 }
@@ -308,10 +329,15 @@ int pl_ckwid(void){
 /*s: function [[pl_sliderupd]] */
 void pl_sliderupd(Image *b, Rectangle r1, int dir, int lo, int hi){
     Rectangle r2, r3;
+
     r2=r1;
     r3=r1;
+
+    /*s: [[pl_sliderupd()]] sanitize [[lo]] and [[hi]] */
     if(lo<0) lo=0;
     if(hi<=lo) hi=lo+1;
+    /*e: [[pl_sliderupd()]] sanitize [[lo]] and [[hi]] */
+
     switch(dir){
     case HORIZ:
         r1.max.x=r1.min.x+lo;
@@ -328,9 +354,9 @@ void pl_sliderupd(Image *b, Rectangle r1, int dir, int lo, int hi){
         r3.min.y=r2.max.y;
         break;
     }
-    draw(b, r1, pl_light, 0, ZP);
-    draw(b, r2, pl_dark, 0, ZP);
-    draw(b, r3, pl_light, 0, ZP);
+    draw(b, r1, pl_light, nil, ZP);
+    draw(b, r2, pl_dark, nil, ZP);
+    draw(b, r3, pl_light, nil, ZP);
 }
 /*e: function [[pl_sliderupd]] */
 
@@ -362,7 +388,7 @@ void pldraw(Panel *p, Image *b){
 }
 /*e: function [[pldraw]] */
 /*s: function [[pl_invis]] */
-void pl_invis(Panel *p, int v){
+void pl_invis(Panel *p, bool v){
     for(;p;p=p->next){
         if(v) 
             p->flags|=INVIS; 
@@ -397,7 +423,7 @@ void pl_fill(Image *b, Rectangle r){
 /*e: function [[pl_fill]] */
 /*s: function [[pl_cpy]] */
 void pl_cpy(Image *b, Point dst, Rectangle src){
-    draw(b, Rpt(dst, addpt(dst, subpt(src.max, src.min))), b, 0, src.min);
+    draw(b, Rpt(dst, addpt(dst, subpt(src.max, src.min))), b, nil, src.min);
 }
 /*e: function [[pl_cpy]] */
 /*e: lib_gui/libpanel/draw.c */

@@ -119,7 +119,7 @@ int pl_hitedit(Panel *p, Mouse *m){
 }
 /*e: function [[pl_hitedit]] */
 /*s: function [[pl_scrolledit]] */
-void pl_scrolledit(Panel *p, int dir, int buttons, int num, int den){
+void pl_scrolledit(Panel *p, int dir, buttons buttons, int num, int den){
     Edit *ep;
     Textwin *t;
     Panel *sb;
@@ -225,7 +225,7 @@ Point pl_getsizeedit(Panel *p, Point children){
 }
 /*e: function [[pl_getsizeedit]] */
 /*s: function [[pl_childspaceedit]] */
-void pl_childspaceedit(Panel *g, Point *ul, Point *size){
+void pl_childspaceedit(Panel *g, Point *ul, Vector *size){
     USED(g, ul, size);
 }
 /*e: function [[pl_childspaceedit]] */

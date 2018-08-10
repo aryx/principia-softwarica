@@ -32,7 +32,7 @@ Vector pl_getsizegroup(Panel *p, Vector children){
 }
 /*e: function [[pl_getsizegroup]] */
 /*s: function [[pl_childspacegroup]] */
-void pl_childspacegroup(Panel *p, Point *ul, Point *size){
+void pl_childspacegroup(Panel *p, Point *ul, Vector *size){
     USED(p, ul, size);
 }
 /*e: function [[pl_childspacegroup]] */

@@ -106,7 +106,7 @@ Vector pl_getsizemessage(Panel *p, Vector children){
 }
 /*e: function [[pl_getsizemessage]] */
 /*s: function [[pl_childspacemessage]] */
-void pl_childspacemessage(Panel *p, Point *ul, Point *size){
+void pl_childspacemessage(Panel *p, Point *ul, Vector *size){
     USED(p, ul, size);
 }
 /*e: function [[pl_childspacemessage]] */

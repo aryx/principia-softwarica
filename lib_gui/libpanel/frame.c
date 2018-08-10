@@ -32,7 +32,7 @@ Vector pl_getsizeframe(Panel *p, Vector children){
 }
 /*e: function [[pl_getsizeframe]] */
 /*s: function [[pl_childspaceframe]] */
-void pl_childspaceframe(Panel *p, Point *ul, Point *size){
+void pl_childspaceframe(Panel *p, Point *ul, Vector *size){
     USED(p);
     pl_interior(FRAME, ul, size);
 }
@@ -55,7 +55,7 @@ void plinitframe(Panel *v, int flags){
 Panel *plframe(Panel *parent, int flags){
     Panel *p;
 
-    p=pl_newpanel(parent, 0);
+    p=pl_newpanel(parent, 0); // no widget-specific data
     plinitframe(p, flags);
     return p;
 }

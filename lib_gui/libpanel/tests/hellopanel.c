@@ -1,4 +1,5 @@
 /*s: lib_gui/libpanel/tests/hellopanel.c */
+// source code from panel.pdf introduction
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -6,12 +7,10 @@
 
 #include <panel.h>
 
-// source code from panel.pdf introduction
-
 Panel *root;
 
 /*s: function [[done]] */
-void done(Panel *p, int buttons){
+void done(Panel *p, buttons buttons){
     USED(p, buttons);
     exits(nil);
 }
@@ -31,9 +30,9 @@ void eresized(bool new){
 /*e: function [[eresized]] */
 
 void main(void){
-    int i;
-    Event e;
     errorneg1 err;
+    Event e;
+    int i;
     
     err = initdraw(nil, nil, "hellopanel");
     /*s: [[main()]] sanity check [[err]] */

@@ -67,13 +67,13 @@ Point pl_getsizeerror(Panel *g, Point childsize){
 }
 /*e: function [[pl_getsizeerror]] */
 /*s: function [[pl_childspaceerror]] */
-void pl_childspaceerror(Panel *g, Point *ul, Point *size){
+void pl_childspaceerror(Panel *g, Point *ul, Vector *size){
     USED(ul, size);
     pl_unexpected(g, "childspace");
 }
 /*e: function [[pl_childspaceerror]] */
 /*s: function [[pl_scrollerror]] */
-void pl_scrollerror(Panel *g, int dir, int button, int num, int den){
+void pl_scrollerror(Panel *g, int dir, buttons button, int num, int den){
     USED(dir, button, num, den);
     pl_unexpected(g, "scroll");
 }
@@ -132,12 +132,6 @@ Panel *pl_newpanel(Panel *parent, int ndata){
     /*x: [[pl_newpanel()]] set other fields */
     v->flags=NOFLAG;
     /*x: [[pl_newpanel()]] set other fields */
-    v->scrollee=0;
-    v->xscroller=0;
-    v->yscroller=0;
-    v->scr.pos=Pt(0,0);
-    v->scr.size=Pt(0,0);
-    /*x: [[pl_newpanel()]] set other fields */
     v->ipad=Pt(0,0);
     v->pad=Pt(0,0);
     /*x: [[pl_newpanel()]] set other fields */
@@ -145,33 +139,42 @@ Panel *pl_newpanel(Panel *parent, int ndata){
     /*x: [[pl_newpanel()]] set other fields */
     v->pri=pl_prinormal;
     /*x: [[pl_newpanel()]] set other fields */
+    v->sizereq=Pt(0,0);
+    /*x: [[pl_newpanel()]] set other fields */
     v->size=Pt(0,0);
     /*x: [[pl_newpanel()]] set other fields */
-    v->sizereq=Pt(0,0);
+    v->scrollee=nil;
+    v->xscroller=nil;
+    v->yscroller=nil;
+    /*x: [[pl_newpanel()]] set other fields */
+    v->scr.pos=Pt(0,0);
+    v->scr.size=Pt(0,0);
     /*e: [[pl_newpanel()]] set other fields */
   
-  /*s: [[pl_newpanel()]] set default methods */
-  v->draw=pl_drawerror;
-  v->hit=pl_hiterror;
-  v->type=pl_typeerror;
-  /*x: [[pl_newpanel()]] set default methods */
-  v->scroll=pl_scrollerror;
-  v->setscrollbar=pl_setscrollbarerror;
-  /*x: [[pl_newpanel()]] set default methods */
-  v->getsize=pl_getsizeerror;
-  /*x: [[pl_newpanel()]] set default methods */
-  v->childspace=pl_childspaceerror;
-  /*x: [[pl_newpanel()]] set default methods */
-  v->snarf=nil;
-  v->paste=nil;
-  /*e: [[pl_newpanel()]] set default methods */
+    /*s: [[pl_newpanel()]] set default methods */
+    v->draw=pl_drawerror;
+    v->hit=pl_hiterror;
+    v->type=pl_typeerror;
+    /*x: [[pl_newpanel()]] set default methods */
+    v->getsize=pl_getsizeerror;
+    /*x: [[pl_newpanel()]] set default methods */
+    v->childspace=pl_childspaceerror;
+    /*x: [[pl_newpanel()]] set default methods */
+    v->scroll=pl_scrollerror;
+    v->setscrollbar=pl_setscrollbarerror;
+    /*x: [[pl_newpanel()]] set default methods */
+    v->snarf=nil;
+    v->paste=nil;
+    /*e: [[pl_newpanel()]] set default methods */
 
     return v;
 }
 /*e: function [[pl_newpanel]] */
 /*s: function [[plfree]] */
 void plfree(Panel *p){
+    /*s: [[plfree]] locals */
     Panel *cp, *ncp;
+    /*e: [[plfree]] locals */
 
     if(p==nil)
         return;

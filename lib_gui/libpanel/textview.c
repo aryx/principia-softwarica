@@ -26,7 +26,7 @@ struct Textview{
     int twid;			/* text width */
     int thgt;			/* text height */
     Point minsize;			/* smallest acceptible window size */
-    int buttons;
+    buttons buttons;
 };
 /*e: struct [[Textview]] */
 
@@ -169,7 +169,7 @@ Point pl_getsizetextview(Panel *p, Point children){
 }
 /*e: function [[pl_getsizetextview]] */
 /*s: function [[pl_childspacetextview]] */
-void pl_childspacetextview(Panel *g, Point *ul, Point *size){
+void pl_childspacetextview(Panel *g, Point *ul, Vector *size){
     USED(g, ul, size);
 }
 /*e: function [[pl_childspacetextview]] */

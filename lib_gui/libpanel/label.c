@@ -42,18 +42,20 @@ void pl_typelabel(Panel *p, Rune c){
 /*s: function [[pl_getsizelabel]] */
 Vector pl_getsizelabel(Panel *p, Vector children){
     USED(children);		/* shouldn't have any children */
-    return pl_boxsize(pl_iconsize(p->flags, ((Label *)p->data)->icon), PASSIVE);
+    return pl_boxsize(pl_iconsize(p->flags, ((Label *)p->data)->icon), 
+                      PASSIVE);
 }
 /*e: function [[pl_getsizelabel]] */
 /*s: function [[pl_childspacelabel]] */
-void pl_childspacelabel(Panel *g, Point *ul, Point *size){
+void pl_childspacelabel(Panel *g, Point *ul, Vector *size){
     USED(g, ul, size);
 }
 /*e: function [[pl_childspacelabel]] */
 /*s: function [[plinitlabel]] */
 void plinitlabel(Panel *v, int flags, Icon *icon){
+    Label* l = v->data;
+
     v->flags=flags|LEAF;
-    ((Label *)(v->data))->icon=icon;
 
     v->draw=pl_drawlabel;
     v->hit=pl_hitlabel;
@@ -61,6 +63,9 @@ void plinitlabel(Panel *v, int flags, Icon *icon){
 
     v->getsize=pl_getsizelabel;
     v->childspace=pl_childspacelabel;
+
+    l->icon=icon;
+    //l->placement set in plplacelabel()
 
     v->kind="label";
 }
@@ -77,7 +82,9 @@ Panel *pllabel(Panel *parent, int flags, Icon *icon){
 /*e: function [[pllabel]] */
 /*s: function [[plplacelabel]] */
 void plplacelabel(Panel *p, int placement){
-    ((Label *)(p->data))->placement=placement;
+    Label* l = p->data;
+
+    l->placement=placement;
 }
 /*e: function [[plplacelabel]] */
 /*e: lib_gui/libpanel/label.c */

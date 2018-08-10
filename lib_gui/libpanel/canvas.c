@@ -21,16 +21,18 @@ struct Canvas{
 /*s: function [[pl_drawcanvas]] */
 void pl_drawcanvas(Panel *p){
     Canvas *c = p->data;
+
     if(c->draw) 
         c->draw(p);
 }
 /*e: function [[pl_drawcanvas]] */
 /*s: function [[pl_hitcanvas]] */
 int pl_hitcanvas(Panel *p, Mouse *m){
-    Canvas *c;
-    c=p->data;
-    if(c->hit) c->hit(p, m);
-    return 0;
+    Canvas *c =p->data;
+
+    if(c->hit) 
+        c->hit(p, m);
+    return false;
 }
 /*e: function [[pl_hitcanvas]] */
 /*s: function [[pl_typecanvas]] */
@@ -39,13 +41,13 @@ void pl_typecanvas(Panel *p, Rune c){
 }
 /*e: function [[pl_typecanvas]] */
 /*s: function [[pl_getsizecanvas]] */
-Point pl_getsizecanvas(Panel *p, Point children){
+Vector pl_getsizecanvas(Panel *p, Vector children){
     USED(p, children);
     return Pt(0,0);
 }
 /*e: function [[pl_getsizecanvas]] */
 /*s: function [[pl_childspacecanvas]] */
-void pl_childspacecanvas(Panel *p, Point *ul, Point *size){
+void pl_childspacecanvas(Panel *p, Point *ul, Vector *size){
     USED(p, ul, size);
 }
 /*e: function [[pl_childspacecanvas]] */
@@ -61,7 +63,6 @@ void plinitcanvas(Panel *v, int flags, void (*draw)(Panel *), void (*hit)(Panel 
 
     v->getsize=pl_getsizecanvas;
     v->childspace=pl_childspacecanvas;
-
 
     c->draw=draw;
     c->hit=hit;

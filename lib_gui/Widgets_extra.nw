@@ -279,15 +279,6 @@ enum{
 @
 %dead?
 
-<<enum [[_anon_ (lib_gui/libpanel/pldefs.h)3]]>>=
-/*
- * Scrollbar, slider orientations
- */
-enum{
-    HORIZ,
-    VERT
-};
-@
 
 <<struct [[Textwin]]>>=
 struct Textwin{
@@ -327,7 +318,7 @@ Rtext *pl_rthit(Rtext *, int, Point, Point);
 
 <<enum [[Style]]>>
 <<enum [[_anon_ (lib_gui/libpanel/pldefs.h)2]]>>
-<<enum [[_anon_ (lib_gui/libpanel/pldefs.h)3]]>>
+<<enum [[Direction]]>>
 
 Panel *pl_newpanel(Panel *, int);	/* make a new Panel, given parent & data size */
 void *pl_emalloc(int);			/* allocate some space, exit on error */
@@ -349,7 +340,7 @@ Rectangle pl_check(Image *, Rectangle, int);
 Rectangle pl_radio(Image *, Rectangle, int);
 int pl_ckwid(void);
 void pl_sliderupd(Image *, Rectangle, int, int, int);
-void pl_invis(Panel *, int);
+void pl_invis(Panel *, bool);
 Point pl_iconsize(int, Icon *);
 void pl_highlight(Image *, Rectangle);
 void pl_clr(Image *, Rectangle);
@@ -425,127 +416,6 @@ void plemove(Panel *, Point);
 
 \subsection{[[lib_gui/libpanel/draw.c]]}
 
-<<constant [[PWID]]>>=
-#define	PWID	1	/* width of label border */
-@
-
-<<constant [[BWID]]>>=
-#define	BWID	1	/* width of button relief */
-@
-
-<<constant [[FWID]]>>=
-#define	FWID	2	/* width of frame relief */
-@
-
-
-<<constant [[CKSIZE]]>>=
-#define	CKSIZE	3	/* size of check mark */
-@
-
-<<constant [[CKSPACE]]>>=
-#define	CKSPACE	2	/* space around check mark */
-@
-
-<<constant [[CKWID]]>>=
-#define	CKWID	1	/* width of frame around check mark */
-@
-
-<<constant [[CKINSET]]>>=
-#define	CKINSET	1	/* space around check mark frame */
-@
-
-<<constant [[CKBORDER]]>>=
-#define	CKBORDER 2	/* space around X inside frame */
-@
-
-
-
-
-
-
-
-
-
-
-
-<<function [[pl_ckwid]]>>=
-int pl_ckwid(void){
-    return 2*(CKINSET+CKSPACE+CKWID)+CKSIZE;
-}
-@
-
-<<function [[pl_sliderupd]]>>=
-void pl_sliderupd(Image *b, Rectangle r1, int dir, int lo, int hi){
-    Rectangle r2, r3;
-    r2=r1;
-    r3=r1;
-    if(lo<0) lo=0;
-    if(hi<=lo) hi=lo+1;
-    switch(dir){
-    case HORIZ:
-        r1.max.x=r1.min.x+lo;
-        r2.min.x=r1.max.x;
-        r2.max.x=r1.min.x+hi;
-        if(r2.max.x>r3.max.x) r2.max.x=r3.max.x;
-        r3.min.x=r2.max.x;
-        break;
-    case VERT:
-        r1.max.y=r1.min.y+lo;
-        r2.min.y=r1.max.y;
-        r2.max.y=r1.min.y+hi;
-        if(r2.max.y>r3.max.y) r2.max.y=r3.max.y;
-        r3.min.y=r2.max.y;
-        break;
-    }
-    draw(b, r1, pl_light, 0, ZP);
-    draw(b, r2, pl_dark, 0, ZP);
-    draw(b, r3, pl_light, 0, ZP);
-}
-@
-
-
-
-
-<<function [[pl_invis]]>>=
-void pl_invis(Panel *p, int v){
-    for(;p;p=p->next){
-        if(v) 
-            p->flags|=INVIS; 
-        else 
-            p->flags&=~INVIS;
-        pl_invis(p->child, v);
-    }
-}
-@
-<<constant [[INVIS]]>>=
-#define	INVIS	0x20000		/* don't draw this */
-@
-
-
-
-<<function [[pl_highlight]]>>=
-void pl_highlight(Image *b, Rectangle r){
-    draw(b, r, pl_dark, pl_hilit, ZP);
-}
-@
-
-<<function [[pl_clr]]>>=
-void pl_clr(Image *b, Rectangle r){
-    draw(b, r, display->white, 0, ZP);
-}
-@
-
-<<function [[pl_fill]]>>=
-void pl_fill(Image *b, Rectangle r){
-    draw(b, r, plldepth==0? pl_white : pl_light, 0, ZP);
-}
-@
-
-<<function [[pl_cpy]]>>=
-void pl_cpy(Image *b, Point dst, Rectangle src){
-    draw(b, Rpt(dst, addpt(dst, subpt(src.max, src.min))), b, 0, src.min);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -850,6 +720,10 @@ typedef struct Canvas Canvas;
 
 \subsection{[[lib_gui/libpanel/list.c]]}
 
+%dead:
+%<<constant [[MAXHGT]]>>=
+%#define	MAXHGT	12
+%@
 
 %-------------------------------------------------------------
 
@@ -859,7 +733,6 @@ typedef struct Canvas Canvas;
 typedef struct List List;
 
 <<struct [[List]]>>
-<<constant [[MAXHGT]]>>
 
 <<function [[pl_listsel]]>>
 <<function [[pl_liststrings]]>>
@@ -1193,14 +1066,6 @@ int pl_tabsize;
 
 \subsection{[[lib_gui/libpanel/scroll.c]]}
 
-<<function [[plscroll]]>>=
-void plscroll(Panel *scrollee, Panel *xscroller, Panel *yscroller){
-    scrollee->xscroller=xscroller;
-    scrollee->yscroller=yscroller;
-    if(xscroller) xscroller->scrollee=scrollee;
-    if(yscroller) yscroller->scrollee=scrollee;
-}
-@
 
 <<function [[plgetscroll]]>>=
 Scroll plgetscroll(Panel *p){
@@ -1232,9 +1097,6 @@ void plsetscroll(Panel *p, Scroll s){
 \subsection{[[lib_gui/libpanel/scrollbar.c]]}
 
 
-<<constant [[SBWID]]>>=
-#define	SBWID	15	/* should come from draw.c? */
-@
 
 
 
@@ -1419,9 +1281,6 @@ typedef struct Textview Textview;
 
 \subsection{[[lib_gui/libpanel/textwin.c]]}
 
-<<constant [[SLACK]]([[(lib_gui/libpanel/textwin.c)]])>>=
-#define SLACK 100
-@
 
 <<function [[tw_before]]>>=
 /*

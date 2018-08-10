@@ -14,7 +14,8 @@ typedef struct Idol Idol;		/* A picture/text combo */
 
 /*s: struct [[Scroll]] */
 struct Scroll{
-    Point pos, size;
+    Point pos;
+    Vector size;
 };
 /*e: struct [[Scroll]] */
 /*s: struct [[Rtext]] */
@@ -46,21 +47,27 @@ struct Panel{
     Vector ipad;				/* extra space inside and outside */
     Vector pad;
     /*e: [[Panel]] padding fields */
-    /*s: [[Panel]] user fields */
+    /*s: [[Panel]] fixed size field */
+    Point fixedsize;				/* size of Panel, if FIXED */
+    /*e: [[Panel]] fixed size field */
+    /*s: [[Panel]] user-specific fields */
     int user;					/* available for user */
     void *userp;					/* available for user */
-    /*e: [[Panel]] user fields */
-    /*s: [[Panel]] extra public fields */
-    Point fixedsize;				/* size of Panel, if FIXED */
-    /*e: [[Panel]] extra public fields */
+    /*e: [[Panel]] user-specific fields */
 
     /* private below */
 
     Image *b;					/* where we're drawn */
-    /*s: [[Panel]] widget specific data */
+    /*s: [[Panel]] widget-specific data */
     // union<ref_own<Label|Entry|Button|...>
     void *data;					/* kind-specific data */
-    /*e: [[Panel]] widget specific data */
+    /*e: [[Panel]] widget-specific data */
+    /*s: [[Panel]] layout fields */
+    Vector sizereq;					/* size requested by this Panel */
+    Vector childreq;					/* total size needed by children */
+    /*x: [[Panel]] layout fields */
+    Vector size;					/* space for this Panel */
+    /*e: [[Panel]] layout fields */
     /*s: [[Panel]] debugging fields */
     char *kind;					/* what kind of panel? */
     /*e: [[Panel]] debugging fields */
@@ -68,18 +75,17 @@ struct Panel{
     // LEAF | INVIS | ...
     int flags;					/* position flags, see below */
     /*x: [[Panel]] other fields */
+    // enum<Style>
     int state;					/* for hitting & drawing purposes */
-    /*x: [[Panel]] other fields */
-    Panel *scrollee;				/* pointer to scrolled window */
-    Panel *xscroller, *yscroller;			/* pointers to scroll bars */
-    Scroll scr;					/* scroll data */
     /*x: [[Panel]] other fields */
     Panel *lastmouse;				/* who got the last mouse event? */
     /*x: [[Panel]] other fields */
-    Vector size;					/* space for this Panel */
+    // option<ref<Panel>>
+    Panel *scrollee;				/* pointer to scrolled window */
+    // option<ref<Panel>>
+    Panel *xscroller, *yscroller;			/* pointers to scroll bars */
     /*x: [[Panel]] other fields */
-    Vector sizereq;					/* size requested by this Panel */
-    Vector childreq;					/* total size needed by children */
+    Scroll scr;					/* scroll data */
     /*e: [[Panel]] other fields */
 
     // methods
@@ -92,15 +98,16 @@ struct Panel{
     /*s: [[Panel]] packing methods */
     Vector (*getsize)(Panel *, Vector);		/* return size, given child size */
     /*x: [[Panel]] packing methods */
-    void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
+    /* child ul & size given our size */
+    void (*childspace)(Panel *, Point * /**INOUT**/, Vector * /**INOUT**/);	
     /*e: [[Panel]] packing methods */
     /*s: [[Panel]] other methods */
     void (*free)(Panel *);				/* free fields of data when done */
     /*x: [[Panel]] other methods */
-    void (*scroll)(Panel *, int, int, int, int);	/* scroll bar to scrollee */
-    void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
-    /*x: [[Panel]] other methods */
     int (*pri)(Panel *, Point);			/* priority for hitting */
+    /*x: [[Panel]] other methods */
+    void (*scroll)(Panel *, int, buttons, int, int);	/* scroll bar to scrollee */
+    void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
     /*x: [[Panel]] other methods */
     char* (*snarf)(Panel *);			/* snarf text from panel */
     void (*paste)(Panel *, char *);			/* paste text into panel */

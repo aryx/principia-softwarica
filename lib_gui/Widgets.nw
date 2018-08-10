@@ -11,11 +11,14 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, I changed for the better a few things:
-% -
+% - introduced Vector typedef, buttons
 
-%thx to this manual, I better understand toolkits:
-% - TODO scrolling
-% - TODO event loop and dispatch
+%thx to this manual, I better understand widget libraries:
+% - layout algorithm
+% - scrolling
+% - menu
+% - SEMI event loop and dispatch (overlapping menu and priority trick)
+% - click/release/moving-away event dispatch
 
 %history: LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -24,9 +27,9 @@
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * [[xxx]] other fields, [[xxx]] extra fields
 % - read Extra section, identify concepts, first TOC
-% - SEMI distribute parts of the file before
-% - SEMI typeify, scheckify
-% - TODO aspectify advanced features!
+% - distribute parts of the file before
+% - typeify, scheckify
+% - SEMI aspectify advanced features!
 % - TODO add explanations
 % - TODO add figures
 
@@ -74,7 +77,7 @@
 
 \title{
 {\Huge 
-Principia Softwarica: The GUI toolkit [[libpanel]]
+Principia Softwarica: The Widget Library [[libpanel]]
 }\\
 {version 0.1}
 }
@@ -113,6 +116,9 @@ a {widget} library.
 
 \section{Motivations}
 
+%GUI library vs user interface library vs widget library
+%toolkit vs library vs framework 
+
 Here are a few questions I hope this book will answer:
 \begin{itemize}
 
@@ -130,13 +136,16 @@ Here are a few questions I hope this book will answer:
 
 % seen already in rio menuhit, frame, but limited.
 
-\section{Other graphical user interface toolkits}
+% Widget called a "panel" element.
 
-Here are a few GUI toolkits that I considered for this book, but
+\section{Other widget libraries}
+
+Here are a few widget libraries that I considered for this book, but
 which I ultimately discarded:
 \begin{itemize}
 
 \item Xlib
+% not really widget. 
 % or X athena widget?
 % helloworld in xlib is terrible, \cite{}
 
@@ -163,6 +172,7 @@ which I ultimately discarded:
 %mini:
 % - minimal GUI with one header file in C:
 %   https://github.com/vurtun/nuklear
+% - wxlib, part of efuns, 8700 LOC (use OO)
 %other:
 % - tk reimplementation for inferno (and limbo)
 %   28000 LOC
@@ -202,7 +212,7 @@ who wrote in some sense most of this book.
 
 \chapter{Overview}
 
-\section{GUI toolkit principles}
+\section{Widget library principles}
 
 \subsection{The widget}
 % widget is a contraption of window object
@@ -211,21 +221,22 @@ who wrote in some sense most of this book.
 \subsection{The event loop}
 % reactive programming
 
-\subsection{Packing and layout}
+\subsection{Layout}
+
+% Packing and placement.
 
 \subsection{Scrolling}
 
 \section{[[hellopanel.c]]}
 
 <<lib_gui/libpanel/tests/hellopanel.c>>=
+// source code from panel.pdf introduction
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
 
 #include <panel.h>
-
-// source code from panel.pdf introduction
 
 Panel *root;
 
@@ -234,9 +245,9 @@ Panel *root;
 <<function [[eresized]]>>
 
 void main(void){
-    int i;
-    Event e;
     errorneg1 err;
+    Event e;
+    int i;
     
     err = initdraw(nil, nil, "hellopanel");
     <<[[main()]] sanity check [[err]]>>
@@ -256,15 +267,17 @@ void main(void){
 }
 @
 %ocaml: no need root global when use closure for callback
-% and no eresize event??
+% (and no eresize event??)
+
+% No packing specification? so default is PACKN which is top to bottom?
 
 <<function [[done]]>>=
-void done(Panel *p, int buttons){
+void done(Panel *p, buttons buttons){
     USED(p, buttons);
     exits(nil);
 }
 @
-
+% {Callback}.
 
 
 <<[[main()]] sanity check [[err]]>>=
@@ -272,6 +285,10 @@ if(err < 0)
     sysfatal("initdraw: %r");
 @
 
+% eresized() is called by main() but also by draw (initdraw sets it up?)
+% see \book{Windows} ?
+
+% main | draw?? -> <>
 <<function [[eresized]]>>=
 void eresized(bool new){
     <<[[eresized()]] if [[new]] get a new window>>
@@ -281,6 +298,7 @@ void eresized(bool new){
 @
 %old:    flushimage(display, true);
 % but already done in pldraw()
+
 
 %plpack!
 %pldraw!
@@ -348,13 +366,14 @@ struct Panel{
     Rectangle r;					/* where the Panel goes */
 
     <<[[Panel]] padding fields>>
-    <<[[Panel]] user fields>>
-    <<[[Panel]] extra public fields>>
+    <<[[Panel]] fixed size field>>
+    <<[[Panel]] user-specific fields>>
 
     /* private below */
 
     Image *b;					/* where we're drawn */
-    <<[[Panel]] widget specific data>>
+    <<[[Panel]] widget-specific data>>
+    <<[[Panel]] layout fields>>
     <<[[Panel]] debugging fields>>
     <<[[Panel]] other fields>>
 
@@ -367,6 +386,8 @@ struct Panel{
     <<[[Panel]] extra fields>>
 };
 @
+
+% In the rest I will use the term widget instead of panel.
 
 %Panel.r is set by plpack() and Panel.b is set by pldraw()
 
@@ -382,7 +403,7 @@ Panel *pl_newpanel(Panel *parent, int ndata){
     <<[[pl_newpanel()]] set widget-specific data fields>>
     <<[[pl_newpanel()]] set other fields>>
   
-  <<[[pl_newpanel()]] set default methods>>
+    <<[[pl_newpanel()]] set default methods>>
 
     return v;
 }
@@ -400,7 +421,7 @@ v->b=nil;
 %dtor
 <<function [[plfree]]>>=
 void plfree(Panel *p){
-    Panel *cp, *ncp;
+    <<[[plfree]] locals>>
 
     if(p==nil)
         return;
@@ -411,7 +432,7 @@ void plfree(Panel *p){
 }
 @
 
-\subsection{Flags}
+\subsection{Widget flags}
 
 <<[[Panel]] other fields>>=
 // LEAF | INVIS | ...
@@ -453,6 +474,8 @@ Panel *parent; 			/* No, it's a tree! */
 
 
 
+% parent is parameter. Most widgets constructors take the parent
+% as a parameter to "pack" it inside.
 <<[[pl_newpanel()]] set tree fields>>=
 v->next=nil;
 v->child=nil;
@@ -469,6 +492,9 @@ if(parent){
 }
 @
 
+<<[[plfree]] locals>>=
+Panel *cp, *ncp;
+@
 <<[[plfree()]] free the children>>=
 for(cp=p->child;cp;cp=ncp){
     ncp=cp->next;
@@ -494,7 +520,7 @@ if(parent && parent->flags&LEAF){
 
 \subsection{Widget-specific data}
 
-<<[[Panel]] widget specific data>>=
+<<[[Panel]] widget-specific data>>=
 // union<ref_own<Label|Entry|Button|...>
 void *data;					/* kind-specific data */
 @
@@ -521,6 +547,32 @@ if(p->data)
 @
 % order important here!
 
+\subsection{Widget display state}
+
+% The widgets is displayed differently if it's clicked on or not.
+% For example text entry, or button.
+% Moreover the reaction is different depending on the previous state
+% of the widget.
+
+<<[[Panel]] other fields>>=
+// enum<Style>
+int state;					/* for hitting & drawing purposes */
+@
+
+% internal DS. Defined in pldefs.h not panel.h
+<<enum [[Style]]>>=
+/*
+ * States, also styles
+ */
+enum{
+    // for text entries, buttons
+    UP,
+    DOWN,
+    <<[[Style]] other cases>>
+};
+@
+
+
 \subsection{Main widget methods}
 
 <<[[Panel]] main methods>>=
@@ -542,41 +594,11 @@ v->type=pl_typeerror;
 % The widget specific constructor should set those fields correctly!
 
 
-\subsection{XXX}
-
-
-<<[[pl_newpanel()]] set other fields>>=
-v->scrollee=0;
-v->xscroller=0;
-v->yscroller=0;
-v->scr.pos=Pt(0,0);
-v->scr.size=Pt(0,0);
-@
-
-%XXX
-<<[[Panel]] other fields>>=
-int state;					/* for hitting & drawing purposes */
-@
-
-
-<<[[Panel]] other fields>>=
-Panel *scrollee;				/* pointer to scrolled window */
-Panel *xscroller, *yscroller;			/* pointers to scroll bars */
-Scroll scr;					/* scroll data */
-@
-
-<<[[Panel]] other methods>>=
-void (*scroll)(Panel *, int, int, int, int);	/* scroll bar to scrollee */
-void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
-@
-
-<<[[pl_newpanel()]] set default methods>>=
-v->scroll=pl_scrollerror;
-v->setscrollbar=pl_setscrollbarerror;
-@
+%\subsection{Scrolling fields}
+% later
 
 %\section{Keyboard focus}
-%later
+%later the [[plkbfocus]] global
 
 
 \section{[[Icon]]}
@@ -587,7 +609,9 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 
 % see pl_drawicon()
 
-\section{Placement}
+\section{Layout styles}
+
+\subsection{Placement}
 
 <<constant [[PLACE]]>>=
 #define	PLACE	0x01e0		/* which side of its space should the Panel adhere to? */
@@ -597,7 +621,7 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 <<constant [[PLACECEN]]>>=
 #define		PLACECEN 0x0000
 @
-%Center
+%Center, default if nothing set.
 
 <<constant [[PLACES]]>>=
 #define		PLACES	0x0020
@@ -625,9 +649,10 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 @
 \l why skip one letter each time?
 
-\section{Packing}
+\subsection{Packing}
 
-% difference with place?
+% Difference with place? This is to say how multiple children widgets
+% relate to each other.
 
 <<constant [[PACK]]>>=
 #define	PACK	0x0007		/* which side of the parent is the Panel attached to? */
@@ -637,6 +662,7 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 <<constant [[PACKN]]>>=
 #define		PACKN	0x0000
 @
+%Default
 
 <<constant [[PACKE]]>>=
 #define		PACKE	0x0001
@@ -656,6 +682,8 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 @
 
 
+\subsection{Filling}
+
 <<constant [[FILLX]]>>=
 #define	FILLX	0x0008		/* grow horizontally to fill the available space */
 @
@@ -669,6 +697,7 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 #define	EXPAND	0x0200		/* use up all extra space in the parent */
 @
 
+\subsection{Padding}
 
 % user settable
 <<[[Panel]] padding fields>>=
@@ -682,28 +711,24 @@ v->ipad=Pt(0,0);
 v->pad=Pt(0,0);
 @
 
-\section{Box style}
-% internal DS. Defined in pldefs.h not panel.h
+%\section{Box styles}
+% meh
 
-<<enum [[Style]]>>=
+\section{[[Direction]]}
+
+<<enum [[Direction]]>>=
 /*
- * States, also styles
+ * Scrollbar, slider orientations
  */
-enum{
-    // for text entries
-    UP,
-    DOWN1,
-    DOWN2,
-    DOWN3,
-    DOWN,
-    // for labels
-    PASSIVE,
-    // for frames
-    FRAME
+enum Direction {
+    HORIZ,
+    VERT
 };
 @
+%pad: I named it
 
-\chapter{Initializations}
+
+\chapter{Initialization}
 \label{chap:main}
 
 \section{[[plinit()]]}
@@ -736,8 +761,10 @@ error0 pl_drawinit(int ldepth){
 
     pl_black=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x000000FF);
     pl_white=allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xFFFFFFFF);
+
     pl_dark =allocimage(display, Rect(0,0,1,1), view->chan, 1, DPurpleblue);
     pl_light=allocimagemix(display, DPalebluegreen, DWhite);
+
     pl_hilit=allocimage(display, Rect(0,0,1,1), CHAN1(CAlpha,8), 1, 0x80);
 
     if(pl_white==nil || pl_light==nil || pl_black==nil || pl_dark==nil) 
@@ -746,6 +773,9 @@ error0 pl_drawinit(int ldepth){
 }
 @
 
+% nice allocimagemix! (See \book{Graphics}).
+
+% pl_hilit: it's a mask. used to draw highlight on selected item in lists
 
 \chapter{Drawing}
 
@@ -762,6 +792,11 @@ void pldraw(Panel *p, Image *b){
     flushimage(display, true);
 }
 @
+
+% can also be called in some hit callback to draw related widgets
+% for example if have a slider and label, when you move the slider
+% you want to update and then redraw the label (you could also
+% simply decide to redraw all from the root).
 
 <<function [[pl_draw1]]>>=
 void pl_draw1(Panel *p, Image *b){
@@ -785,6 +820,9 @@ void pl_drawall(Panel *p, Image *b){
 
 \section{Drawing helpers}
 
+%ul = upper left
+%lr = lower right
+
 <<function [[pl_relief]]>>=
 void pl_relief(Image *b, Image *ul, Image *lr, Rectangle r, int wid){
     int x, y;
@@ -802,8 +840,11 @@ void pl_relief(Image *b, Image *ul, Image *lr, Rectangle r, int wid){
 }
 @
 %SCREENSHOT where see relief effect thanks to just 2 colors.
+% often white is ul and black is lr (for shadow effect)
 
 \section{Drawing boxes}
+
+
 
 <<function [[pl_outline]]>>=
 Rectangle pl_outline(Image *b, Rectangle r, int style){
@@ -827,27 +868,58 @@ Rectangle pl_boxoutline(Image *b, Rectangle r, int style, bool fill){
     return insetrect(r, SPACE);
 }
 @
+% extra SPACE!
+\l rename pl_boxgen?
 
 <<constant [[SPACE]]>>=
 #define	SPACE	1	/* space inside relief of button or frame */
 @
+% note that the cases above will also modify and reduce r.
 
+
+
+
+
+
+<<function [[pl_boxsize]]>>=
+Vector pl_boxsize(Vector interior, int state){
+    switch(state){
+    <<[[pl_boxsize()]] switch state cases>>
+    }
+    // else
+    return Pt(0, 0);
+}
+@
+
+% ul = upper left point (the r.min)
+<<function [[pl_interior]]>>=
+void pl_interior(int state, Point *ul, Vector *size){
+    switch(state){
+    <<[[pl_interior()]] switch state cases>>
+    }
+}
+@
 
 %XXX
-<<[[pl_boxoutline()]] switch style cases>>=
+<<[[pl_interior()]] switch state cases>>=
+case UP:
 case DOWN:
 case DOWN1:
 case DOWN2:
 case DOWN3:
-    pl_relief(b, pl_black, pl_white, r, BWID);
-    r=insetrect(r, BWID);
-    if(fill) draw(b, r, pl_dark, 0, ZP);
-    else border(b, r, SPACE, pl_black, ZP);
+    *ul=addpt(*ul, Pt(BWID+SPACE, BWID+SPACE));
+    *size=subpt(*size, Pt(2*(BWID+SPACE), 2*(BWID+SPACE)));
+    break;
+@
+<<[[pl_interior()]] switch state cases>>=
+case PASSIVE:
+    *ul=addpt(*ul, Pt(PWID+SPACE, PWID+SPACE));
+    *size=subpt(*size, Pt(2*(PWID+SPACE), 2*(PWID+SPACE)));
     break;
 @
 
-
-\l useful code? when plldepth can be 0?
+\ifallcode
+% useful code? when plldepth can be 0?
 <<[[pl_boxoutline()]] if [[plldepth]] is zero>>=
 if(plldepth==0) switch(style){
 case UP:
@@ -881,42 +953,7 @@ case FRAME:
 }
 @
 % need that? diff with other?
-
-
-
-<<function [[pl_boxsize]]>>=
-Vector pl_boxsize(Vector interior, int state){
-    switch(state){
-    <<[[pl_boxsize()]] switch state cases>>
-    }
-    return Pt(0, 0);
-}
-@
-
-<<function [[pl_interior]]>>=
-void pl_interior(int state, Point *ul, Point *size){
-    switch(state){
-    <<[[pl_interior()]] switch state cases>>
-    }
-}
-@
-
-<<[[pl_interior()]] switch state cases>>=
-case UP:
-case DOWN:
-case DOWN1:
-case DOWN2:
-case DOWN3:
-    *ul=addpt(*ul, Pt(BWID+SPACE, BWID+SPACE));
-    *size=subpt(*size, Pt(2*(BWID+SPACE), 2*(BWID+SPACE)));
-    break;
-@
-<<[[pl_interior()]] switch state cases>>=
-case PASSIVE:
-    *ul=addpt(*ul, Pt(PWID+SPACE, PWID+SPACE));
-    *size=subpt(*size, Pt(2*(PWID+SPACE), 2*(PWID+SPACE)));
-    break;
-@
+\fi
 
 \chapter{Events}
 
@@ -949,6 +986,7 @@ void plmouse(Panel *g, Mouse *m){
 }
 @
 %pad: I introduced remouse local and set last earlier
+\l why panel called g?
 
 <<[[Panel]] other fields>>=
 Panel *lastmouse;				/* who got the last mouse event? */
@@ -969,6 +1007,7 @@ Panel *pl_ptinpanel(Point p, Panel *g){
       if(ptinrect(p, g->r)){
         //recurse
         v=pl_ptinpanel(p, g->child);
+
         if(v && v->pri(v, p) >= g->pri(g, p)) 
             return v;
         else
@@ -978,8 +1017,14 @@ Panel *pl_ptinpanel(Point p, Panel *g){
 }
 @
 
-% how handle popup menu that goes beyond parent widget? the rectangle
+% How handle popup menu that goes beyond parent widget? the rectangle
 %  of parent widget is extended?
+% No, see example in libpanel manual; the popup is a parent of the text area,
+% but the parent has higher priority of the child, so even if point inside
+%  child, then it's the parent that will get the event (and it can redispatch
+%  the event to one of its children).
+
+%dup: g->r is set by plpack()
 
 \subsection{Mouse leaving the widget}
 
@@ -990,6 +1035,7 @@ Panel *pl_ptinpanel(Point p, Panel *g){
  */
 #define	OUT	8			/* Mouse.buttons bit, set when mouse leaves Panel */
 @
+% m->buttons is a bitsets with 3 bits (LMR) so bit 4 is free
 
 <<[[plmouse()]] when [[last!=hit]] send [[OUT]] mouse event>>=
 m->buttons|=OUT;
@@ -1031,10 +1077,14 @@ int (*pri)(Panel *, Point);			/* priority for hitting */
 <<constant [[PRI_POPUP]]>>=
 #define	PRI_POPUP	1		/* popup menus */
 @
+%dup: Actually how do when really popup over far away? can go over your
+% your parent? No, you are the parent of the text area.
+\t but why need that anyway? remouse not enough?
+
 <<constant [[PRI_SCROLLBAR]]>>=
 #define	PRI_SCROLLBAR	2		/* scroll bars */
 @
-
+% why need priority for that?
 
 
 <<[[pl_newpanel()]] set other fields>>=
@@ -1046,7 +1096,6 @@ int pl_prinormal(Panel *, Point){
     return PRI_NORMAL;
 }
 @
-
 <<function [[pl_pripopup]]>>=
 int pl_pripopup(Panel *, Point){
     return PRI_POPUP;
@@ -1066,7 +1115,8 @@ int pl_priscrollbar(Panel *, Point){
 Panel *plkbfocus;			/* the panel in keyboard focus */
 @
 
-% remember that the hitting function will set plkbfocus to hit.
+% some mouse hitting function will set plkbfocus so the next keyboard
+% event are sent to the same widget.
 
 % pl_hitentry | pl_hitedit -> <>
 <<function [[plgrabkb]]>>=
@@ -1091,14 +1141,14 @@ void plkeyboard(Rune c){
 }
 @
 
+% A rune! See \book{Libcore}
+
 <<[[plfree()]] if [[plkbfocus]]>>=
 if(p==plkbfocus)
     plkbfocus=nil;
 @
 
-\chapter{Packing}
-
-% can be after basic widgets?
+\chapter{Layout}
 
 % eresized -> <>
 <<function [[plpack]]>>=
@@ -1107,26 +1157,53 @@ void plpack(Panel *p, Rectangle where){
     pl_setrect(p, where.min, subpt(where.max, where.min));
 }
 @
+% called with [[view->r]] for [[where]] in hellopanel.c
 
-<<[[Panel]] other fields>>=
-Vector size;					/* space for this Panel */
-@
-<<[[pl_newpanel()]] set other fields>>=
-v->size=Pt(0,0);
-@
+% called plpack() but it is not just for packing, it's really
+% for the whole layout.
+
+% Two steps: estimate size, and then set actual rectangles for everybody. 
+\l Need two steps?
 
 
-<<[[Panel]] other fields>>=
+\section{Layout fields}
+
+% Saw layout DS (flags) before.
+
+<<[[Panel]] layout fields>>=
 Vector sizereq;					/* size requested by this Panel */
 Vector childreq;					/* total size needed by children */
 @
+% sizereq is childreq + extra size for enclosing widget + inside and outside
+%  padding
+% req for requested.
 
 <<[[pl_newpanel()]] set other fields>>=
 v->sizereq=Pt(0,0);
 @
 % forgot to set childreq too?
 
-\section{[[pl_sizereq()]]}
+
+
+<<[[Panel]] layout fields>>=
+Vector size;					/* space for this Panel */
+@
+% size is 
+%  - smaller than sizereq by pad (external pad)
+%  - smaller if no available space compared to what was requested.
+%  - bigger if set EXPAND
+
+<<[[pl_newpanel()]] set other fields>>=
+v->size=Pt(0,0);
+@
+
+% will see packing methods soon.
+
+% FIGURE relating those fields.
+
+\section{Computing sizes: [[pl_sizereq()]]}
+
+% Step 1.
 
 <<function [[pl_sizereq]]>>=
 /*
@@ -1134,21 +1211,24 @@ v->sizereq=Pt(0,0);
  */
 void pl_sizereq(Panel *p){
     Panel *cp;
-    Vector maxsize;
+    <<[[pl_sizeref()]] other locals>>
 
-    maxsize=Pt(0,0);
     for(cp=p->child;cp;cp=cp->next){
         // recurse
         pl_sizereq(cp);
-        if(cp->sizereq.x>maxsize.x) maxsize.x=cp->sizereq.x;
-        if(cp->sizereq.y>maxsize.y) maxsize.y=cp->sizereq.y;
+        <<[[pl_sizeref()]] when looping over children, adjust [[maxsize]]>>
     }
     <<[[pl_sizereq()]] if [[MAXX]] or [[MAXY]]>>
     p->childreq=pl_sizesibs(p->child);
-    p->sizereq=addpt(addpt(p->getsize(p, p->childreq), p->ipad), p->pad);
+    // widget-specific method
+    p->sizereq=p->getsize(p, p->childreq);
+    <<[[pl_sizereq()]] adjust size with padding>>
     <<[[pl_sizereq()]] if [[FIXEDX]] or [[FIXEDY]]>>
 }
 @
+%pad: I added p->sizereq=p->getsize(p, p->childreq); that was
+% done with the padding adjustment before in one instruction
+
 
 <<[[Panel]] packing methods>>=
 Vector (*getsize)(Panel *, Vector);		/* return size, given child size */
@@ -1158,164 +1238,300 @@ v->getsize=pl_getsizeerror;
 @
 
 
+\subsection{Packing}
+
 <<function [[pl_sizesibs]]>>=
-Point pl_sizesibs(Panel *p){
-    Point s;
+Vector pl_sizesibs(Panel *p){
+    Vector s;
 
-    if(p==0) return Pt(0,0);
-
+    <<[[pl_sizesibs()]] if no panel>>
     // recurse
     s=pl_sizesibs(p->next);
 
     switch(p->flags&PACK){
-    case PACKN:
-    case PACKS:
-        s.x=pl_max(s.x, p->sizereq.x);
-        s.y+=p->sizereq.y;
-        break;
-    case PACKE:
-    case PACKW:
-        s.x+=p->sizereq.x;
-        s.y=pl_max(s.y, p->sizereq.y);
-        break;
+    <<[[pl_sizesibs()]] switch packing flags cases>>
     }
     return s;
 }
 @
 
+
+<<[[pl_sizesibs()]] if no panel>>=
+if(p==nil) 
+    return Pt(0,0);
+@
+% pl_sizesibs() is called with p->child and most widgets do not have children so
+% this is not a sanity check but a base case.
+
+
+<<[[pl_sizesibs()]] switch packing flags cases>>=
+case PACKN:
+case PACKS:
+    s.x=pl_max(s.x, p->sizereq.x);
+    s.y+=p->sizereq.y;
+    break;
+@
+%FIGURE
+% when pack on top of each other, width is max and height must be added.
+%dup: Note that PACKN is 0 so this is the default case if the user
+% did not specify any packing flags when adding multiple widgets in a parent.
+
+% We do not care about placement flags here. Just the packing flags
+% are useful.
+
+<<[[pl_sizesibs()]] switch packing flags cases>>=
+case PACKE:
+case PACKW:
+    s.x+=p->sizereq.x;
+    s.y=pl_max(s.y, p->sizereq.y);
+    break;
+@
+%FIGURE
+
 <<function [[pl_max]]>>=
 int pl_max(int a, int b){
-    return a>b?a:b;
+    return a>b ? a : b;
 }
 @
+\l replace by MAX macro?
 
+\subsection{Padding}
 
-\section{[[pl_setrect()]]}
+%ipad and pad are user-defined hooks.
+
+<<[[pl_sizereq()]] adjust size with padding>>=
+p->sizereq=addpt(addpt(p->sizereq, p->ipad), p->pad);
+@
+
+\section{Computing rectangles: [[pl_setrect()]]}
+
+% Step 2.
+
+%    pl_setrect(p, where.min, subpt(where.max, where.min));
 
 <<function [[pl_setrect]]>>=
 /*
  * Set the sizes and rectangles of p and its descendants, given their requested sizes.
  */
-void pl_setrect(Panel *p, Point ul, Point avail){
-    Point space, newul, newspace, slack, share;
-    int l;
-    Panel *c;
+void pl_setrect(Panel *p, Point ul, Vector avail){
+    <<[[pl_setrect()]] locals>>
 
-    p->size=subpt(p->sizereq, p->pad);
-    ul=addpt(ul, divpt(p->pad, 2));
-    avail=subpt(avail, p->pad);
-    if(p->size.x>avail.x)
-        p->size.x = avail.x;
-    if(p->size.y>avail.y)
-        p->size.y = avail.y;
-    if(p->flags&(FILLX|EXPAND)) p->size.x=avail.x;
-    if(p->flags&(FILLY|EXPAND)) p->size.y=avail.y;
+    // setting p->size
+    p->size=p->sizereq;
+    <<[[pl_setrect()]] reduce size for external padding>>
+    <<[[pl_setrect()]] reduce size if bigger than available>>
+    <<[[pl_setrect()]] expand size if fill or expand flags>>
 
-    switch(p->flags&PLACE){
-    case PLACECEN:	ul.x+=(avail.x-p->size.x)/2; ul.y+=(avail.y-p->size.y)/2; break;
-    case PLACES:	ul.x+=(avail.x-p->size.x)/2; ul.y+= avail.y-p->size.y   ; break;
-    case PLACEE:	ul.x+= avail.x-p->size.x   ; ul.y+=(avail.y-p->size.y)/2; break;
-    case PLACEW:	                             ul.y+=(avail.y-p->size.y)/2; break;
-    case PLACEN:	ul.x+=(avail.x-p->size.x)/2;                              break;
-    case PLACENE:	ul.x+= avail.x-p->size.x   ;                              break;
-    case PLACENW:                                                             break;
-    case PLACESE:	ul.x+= avail.x-p->size.x   ; ul.y+= avail.y-p->size.y   ; break;
-    case PLACESW:                                ul.y+= avail.y-p->size.y   ; break;
-    }
+    // setting ul
+    <<[[pl_setrect()]] adjust origin with placement>>
+
+    // setting p->r
     p->r=Rpt(ul, addpt(ul, p->size));
-    space=p->size;
-    p->childspace(p, &ul, &space);
-    slack=subpt(space, p->childreq);
-    share=pl_getshare(p->child);
-    for(c=p->child;c;c=c->next){
-        if(c->flags&EXPAND){
-            switch(c->flags&PACK){
-            case PACKN:
-            case PACKS:
-                c->sizereq.x+=slack.x;
-                l=slack.y/share.y;
-                c->sizereq.y+=l;
-                slack.y-=l;
-                --share.y;
-                break;
-            case PACKE:
-            case PACKW:
-                l=slack.x/share.x;
-                c->sizereq.x+=l;
-                slack.x-=l;
-                --share.x;
-                c->sizereq.y+=slack.y;
-                break;
-            }
-        }
-        switch(c->flags&PACK){
-        case PACKN:
-            newul=Pt(ul.x, ul.y+c->sizereq.y);
-            newspace=Pt(space.x, space.y-c->sizereq.y);
-            pl_setrect(c, ul, Pt(space.x, c->sizereq.y));
-            break;
-        case PACKW:
-            newul=Pt(ul.x+c->sizereq.x, ul.y);
-            newspace=Pt(space.x-c->sizereq.x, space.y);
-            pl_setrect(c, ul, Pt(c->sizereq.x, space.y));
-            break;
-        case PACKS:
-            newul=ul;
-            newspace=Pt(space.x, space.y-c->sizereq.y);
-            pl_setrect(c, Pt(ul.x, ul.y+space.y-c->sizereq.y),
-                Pt(space.x, c->sizereq.y));
-            break;
-        case PACKE:
-            newul=ul;
-            newspace=Pt(space.x-c->sizereq.x, space.y);
-            pl_setrect(c, Pt(ul.x+space.x-c->sizereq.x, ul.y),
-                Pt(c->sizereq.x, space.y));
-            break;
-        }
-        ul=newul;
-        space=newspace;
-    }
+
+    // recurse
+    <<[[pl_setrect()]] setting the rectangle of the children>>
+}
+@
+%pad: I added the p->size=p->sizereq instead of doing it
+% also while padding
+
+%Finally set [[p->r]]!!
+
+% Note that this time we recurse after setting the property of
+% the parent (before we were recursing before) because the parent here
+% will decide where to place the children (but the children were
+% specifying their size independently)
+
+\subsection{Padding}
+
+<<[[pl_setrect()]] reduce size for external padding>>=
+p->size=subpt(p->sizereq, p->pad);
+ul=addpt(ul, divpt(p->pad, 2));
+avail=subpt(avail, p->pad);
+@
+
+\subsection{Filling}
+
+<<[[pl_setrect()]] reduce size if bigger than available>>=
+if(p->size.x>avail.x)
+    p->size.x = avail.x;
+if(p->size.y>avail.y)
+    p->size.y = avail.y;
+@
+
+<<[[pl_setrect()]] expand size if fill or expand flags>>=
+if(p->flags&(FILLX|EXPAND)) 
+    p->size.x=avail.x;
+if(p->flags&(FILLY|EXPAND)) 
+    p->size.y=avail.y;
+@
+
+\subsection{Placing}
+
+<<[[pl_setrect()]] adjust origin with placement>>=
+switch(p->flags&PLACE){
+case PLACECEN:	ul.x+=(avail.x-p->size.x)/2; ul.y+=(avail.y-p->size.y)/2; break;
+case PLACES:	ul.x+=(avail.x-p->size.x)/2; ul.y+= avail.y-p->size.y   ; break;
+case PLACEE:	ul.x+= avail.x-p->size.x   ; ul.y+=(avail.y-p->size.y)/2; break;
+case PLACEW:	                             ul.y+=(avail.y-p->size.y)/2; break;
+case PLACEN:	ul.x+=(avail.x-p->size.x)/2;                              break;
+case PLACENE:	ul.x+= avail.x-p->size.x   ;                              break;
+case PLACENW:   /** Nothing **/                                           break;
+case PLACESE:	ul.x+= avail.x-p->size.x   ; ul.y+= avail.y-p->size.y   ; break;
+case PLACESW:                                ul.y+= avail.y-p->size.y   ; break;
 }
 @
 
-<<[[Panel]] packing methods>>=
-void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
+\subsection{Packing the children}
+
+<<[[pl_setrect()]] locals>>=
+Panel *c;
+Vector space;
+Point newul;
+Vector newspace;
 @
+
+
+<<[[pl_setrect()]] setting the rectangle of the children>>=
+space=p->size;
+// widget-specific adjustment method
+p->childspace(p, &ul, &space);
+
+<<[[pl_setrect()]] before looping over children, set locals>>
+for(c=p->child;c;c=c->next){
+    <<[[pl_setrect()]] when looping over children, if [[EXPAND]] flag>>
+    switch(c->flags&PACK){
+    <<[[pl_setrect()]] when looping over children, switch packing cases>>
+    }
+    ul=newul;
+    space=newspace;
+}
+@
+
+
+<<[[Panel]] packing methods>>=
+/* child ul & size given our size */
+void (*childspace)(Panel *, Point * /**INOUT**/, Vector * /**INOUT**/);	
+@
+% Most of the time empty an empty method doing nothing.
+% Defined just once for the frame to adjust ul and space used for the frame
+% so children have actually less space than enclosing widget (for
+% space used by the frame)
+
 <<[[pl_newpanel()]] set default methods>>=
 v->childspace=pl_childspaceerror;
 @
 
 
+% recurse!
+<<[[pl_setrect()]] when looping over children, switch packing cases>>=
+case PACKN:
+    newul=Pt(ul.x, ul.y+c->sizereq.y);
+    newspace=Pt(space.x, space.y-c->sizereq.y);
+    pl_setrect(c, ul, Pt(space.x, c->sizereq.y));
+    break;
+case PACKS:
+    newul=ul;
+    newspace=Pt(space.x, space.y-c->sizereq.y);
+    pl_setrect(c, Pt(ul.x, ul.y+space.y-c->sizereq.y),
+        Pt(space.x, c->sizereq.y));
+    break;
+@
+
+<<[[pl_setrect()]] when looping over children, switch packing cases>>=
+case PACKW:
+    newul=Pt(ul.x+c->sizereq.x, ul.y);
+    newspace=Pt(space.x-c->sizereq.x, space.y);
+    pl_setrect(c, ul, Pt(c->sizereq.x, space.y));
+    break;
+case PACKE:
+    newul=ul;
+    newspace=Pt(space.x-c->sizereq.x, space.y);
+    pl_setrect(c, Pt(ul.x+space.x-c->sizereq.x, ul.y),
+        Pt(c->sizereq.x, space.y));
+    break;
+@
+
+
+\subsubsection{Expanding child}
+
+%XXX
+
+<<[[pl_setrect()]] locals>>=
+Vector slack, share;
+int l;
+@
+
+<<[[pl_setrect()]] before looping over children, set locals>>=
+slack=subpt(space, p->childreq);
+share=pl_getshare(p->child);
+@
+
+<<[[pl_setrect()]] when looping over children, if [[EXPAND]] flag>>=
+if(c->flags&EXPAND){
+    switch(c->flags&PACK){
+    case PACKN:
+    case PACKS:
+        c->sizereq.x+=slack.x;
+        l=slack.y/share.y;
+        c->sizereq.y+=l;
+        slack.y-=l;
+        --share.y;
+        break;
+    case PACKE:
+    case PACKW:
+        l=slack.x/share.x;
+        c->sizereq.x+=l;
+        slack.x-=l;
+        --share.x;
+        c->sizereq.y+=slack.y;
+        break;
+    }
+}
+@
 
 <<function [[pl_getshare]]>>=
 Point pl_getshare(Panel *p){
     Point share;
-    if(p==0) return Pt(0,0);
+
+    if(p==nil) 
+        return Pt(0,0);
+
+    // recurse
     share=pl_getshare(p->next);
-    if(p->flags&EXPAND) switch(p->flags&PACK){
-    case PACKN:
-    case PACKS:
-        if(share.x==0) share.x=1;
-        share.y++;
-        break;
-    case PACKE:
-    case PACKW:
-        share.x++;
-        if(share.y==0) share.y=1;
-        break;
+
+    if(p->flags&EXPAND) {
+        switch(p->flags&PACK){
+        case PACKN:
+        case PACKS:
+            if(share.x==0) share.x=1;
+            share.y++;
+            break;
+        case PACKE:
+        case PACKW:
+            share.x++;
+            if(share.y==0) share.y=1;
+            break;
+        }
     }
     return share;
 }
 @
 
 \chapter{Basic Widgets}
+
+%trans: seen main functions. draw and pack used in hellopanel.c
+% now go through all widgets in more details.
+%toc:
+% Each time init/draw/react/pack/ methods.
+
 % No children, always have LEAF set.
 % There are other LEAF widgets in other sections, but those are really
 % the basic one.
 
 \section{Label}
 
-%example: ?
+%example: see hellopanel.c
 
 <<struct [[Label]]>>=
 struct Label{
@@ -1347,8 +1563,9 @@ Panel *pllabel(Panel *parent, int flags, Icon *icon){
 
 <<function [[plinitlabel]]>>=
 void plinitlabel(Panel *v, int flags, Icon *icon){
+    Label* l = v->data;
+
     v->flags=flags|LEAF;
-    ((Label *)(v->data))->icon=icon;
 
     v->draw=pl_drawlabel;
     v->hit=pl_hitlabel;
@@ -1357,6 +1574,9 @@ void plinitlabel(Panel *v, int flags, Icon *icon){
     v->getsize=pl_getsizelabel;
     v->childspace=pl_childspacelabel;
 
+    l->icon=icon;
+    //l->placement set in plplacelabel()
+
     v->kind="label";
 }
 @
@@ -1364,7 +1584,9 @@ void plinitlabel(Panel *v, int flags, Icon *icon){
 % pllabel | <user code> -> <>
 <<function [[plplacelabel]]>>=
 void plplacelabel(Panel *p, int placement){
-    ((Label *)(p->data))->placement=placement;
+    Label* l = p->data;
+
+    l->placement=placement;
 }
 @
 
@@ -1379,18 +1601,34 @@ void pl_drawlabel(Panel *p){
 }
 @
 
+<<[[Style]] other cases>>=
+// for labels
+PASSIVE,
+@
+% abused by pl_box() but not really set in Panel.state
+
+%dup: can now use [[p->r]]! packing has been done, and
+% p->b has been set in caller in pl_draw() (actually in pl_drawall())
+
 <<[[pl_boxoutline()]] switch style cases>>=
 case PASSIVE:
-    if(fill) draw(b, r, pl_light, 0, ZP);
+    if(fill) 
+        draw(b, r, pl_light, 0, ZP);
     r=insetrect(r, PWID);
-    if(!fill) border(b, r, SPACE, pl_white, ZP);
+    if(!fill) 
+        border(b, r, SPACE, pl_white, ZP);
     break;
+@
+
+<<constant [[PWID]]>>=
+#define	PWID	1	/* width of label border */
 @
 
 
 <<function [[pl_drawicon]]>>=
 void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
-    Point ul, offs;
+    Point ul;
+    Vector offs;
     <<[[pl_drawicon()]] other locals>>
 
     ul=r.min;
@@ -1402,13 +1640,15 @@ void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
 
     <<[[pl_drawicon()]] save and adjust clip rectangle>>
     if(flags&BITMAP) 
-        draw(b, Rpt(ul, addpt(ul, pl_iconsize(flags, s))), s, 0, ZP);
+        draw(b, Rpt(ul, addpt(ul, pl_iconsize(flags, s))), s, nil, ZP);
     else 
         string(b, ul, pl_black, ZP, font, s);
     <<[[pl_drawicon()]] restore saved clip rectangle>>
 }
 @
+% flags just passed down for the BITMAP thing I think
 
+% text is black
 
 <<function [[pl_iconsize]]>>=
 Vector pl_iconsize(int flags, Icon *p){
@@ -1421,7 +1661,7 @@ Vector pl_iconsize(int flags, Icon *p){
 
 
 <<[[pl_drawicon()]] switch placement cases, adjust [[ul]]>>=
-case PLACENW:	                                break;
+case PLACENW:	/** Nothing **/                 break;
 case PLACEN:	ul.x+=offs.x/2;                 break;
 case PLACENE:	ul.x+=offs.x;                   break;
 case PLACEW:	                ul.y+=offs.y/2; break;
@@ -1469,7 +1709,8 @@ void pl_typelabel(Panel *p, Rune c){
 <<function [[pl_getsizelabel]]>>=
 Vector pl_getsizelabel(Panel *p, Vector children){
     USED(children);		/* shouldn't have any children */
-    return pl_boxsize(pl_iconsize(p->flags, ((Label *)p->data)->icon), PASSIVE);
+    return pl_boxsize(pl_iconsize(p->flags, ((Label *)p->data)->icon), 
+                      PASSIVE);
 }
 @
 
@@ -1477,14 +1718,17 @@ Vector pl_getsizelabel(Panel *p, Vector children){
 case PASSIVE:
     return addpt(interior, Pt(2*(PWID+SPACE), 2*(PWID+SPACE)));
 @
-
+% [[2*]] because there is on the left and right (and top and bottom)
+%  and we use insetrect in many places
+% then for PWID see pl_boxoutline for PASSIVE and 
+% then for SPACE because done for all pl_box() (see end of pl_boxoutline).
 
 <<function [[pl_childspacelabel]]>>=
-void pl_childspacelabel(Panel *g, Point *ul, Point *size){
+void pl_childspacelabel(Panel *g, Point *ul, Vector *size){
     USED(g, ul, size);
 }
 @
-
+% no adjustments
 
 
 
@@ -1497,10 +1741,9 @@ struct Entry{
     // ref_own<string>
     char *entry;
     <<[[Entry]] pointer in [[entry]] fields>>
+    Vector minsize;
 
     void (*hit)(Panel *, char *);
-
-    Vector minsize;
 };
 @
 
@@ -1526,8 +1769,8 @@ Panel *plentry(Panel *parent, int flags, int wid, char *str, void (*hit)(Panel *
 
 <<function [[plinitentry]]>>=
 void plinitentry(Panel *v, int flags, int wid, char *str, void (*hit)(Panel *, char *)){
-    int elen;
     Entry *ep = v->data;
+    int elen;
 
     v->flags=flags|LEAF;
 
@@ -1572,26 +1815,33 @@ ep->entp=ep->entry+strlen(ep->entry);
 
 ep->hit=hit;
 @
+% note that eent is not using SLACK
 
 % why pl_erealloc? because can recall plinitentry later?
 
+<<constant [[SLACK]]([[(lib_gui/libpanel/textwin.c)]])>>=
+#define SLACK 100
+@
+% you just need 4 I think, that is the maxsize of a rune in
+% number of bytes
 
 \subsection{Drawing}
+
 
 <<[[plinitentry()]] set extra fields>>=
 v->state=UP;
 @
 % UP and then DOWN
+% box of entry changes depending if has focus
 
 <<function [[pl_drawentry]]>>=
 void pl_drawentry(Panel *p){
-    Rectangle r;
     Entry *ep = p->data;
-    char *s;
+    char *s = ep->entry;
+    Rectangle r;
 
     r=pl_box(p->b, p->r, p->state);
 
-    s=ep->entry;
     <<[[pl_drawentry]] if [[USERFL]]>>
     if(stringwidth(font, s) <= r.max.x-r.min.x)
         pl_drawicon(p->b, r, PLACEW, NOFLAG, s);
@@ -1600,29 +1850,49 @@ void pl_drawentry(Panel *p){
     <<[[pl_drawentry]] when [[USERFL]] if [[s]] changed>>
 }
 @
+% aligned on the right, unless too big in which case displays
+% the beginning of the text.
 
 <<[[pl_boxoutline()]] switch style cases>>=
 case UP:
     pl_relief(b, pl_white, pl_black, r, BWID);
     r=insetrect(r, BWID);
-    if(fill) draw(b, r, pl_light, 0, ZP);
-    else border(b, r, SPACE, pl_white, ZP);
+    if(fill) 
+        draw(b, r, pl_light, nil, ZP);
+    else 
+        border(b, r, SPACE, pl_white, ZP);
     break;
 @
-<<[[pl_boxsize()]] switch state cases>>=
-case UP:
+
+<<constant [[BWID]]>>=
+#define	BWID	1	/* width of button relief */
+@
+
+
+% will see soon than displayed differently if entry is clicked on
+% in which case the state of the widget becomes DOWN.
+<<[[pl_boxoutline()]] switch style cases>>=
 case DOWN:
 case DOWN1:
 case DOWN2:
 case DOWN3:
-    return addpt(interior, Pt(2*(BWID+SPACE), 2*(BWID+SPACE)));
+    pl_relief(b, pl_black, pl_white, r, BWID);
+    r=insetrect(r, BWID);
+    if(fill) 
+        draw(b, r, pl_dark, 0, ZP);
+    else 
+        border(b, r, SPACE, pl_black, ZP);
+    break;
 @
+% reverse relief effect, shadow is now at the top
 
+% black on pl_dark this time.
+
+\subsubsection{Drawing secret text}
 
 <<constant [[USERFL]]>>=
 #define USERFL	0x100000	/* start of user flag */
 @
-\t ???
 
 <<[[pl_drawentry]] if [[USERFL]]>>=
 if(p->flags & USERFL){
@@ -1636,14 +1906,18 @@ if(p->flags & USERFL){
 if(s != ep->entry)
     free(s);
 @
+% replace text entry content with stars, just for displaying
+
 \subsection{Reacting}
+
+% changes [[Panel.state]]!
 
 <<function [[pl_hitentry]]>>=
 bool pl_hitentry(Panel *p, Mouse *m){
     if((m->buttons&7)==CLICK_LEFT){
-        plgrabkb(p);
-
         p->state=DOWN;
+        plgrabkb(p);
+        // redraw with changed state
         pldraw(p, p->b);
 
         while(m->buttons&CLICK_LEFT){
@@ -1652,7 +1926,7 @@ bool pl_hitentry(Panel *p, Mouse *m){
             *m=emouse();
             <<[[pl_hitentry()]] handle copy/paste when middle or right click>>
         }
-
+        // redraw with changed state
         p->state=UP;
         pldraw(p, p->b);
     }
@@ -1660,6 +1934,12 @@ bool pl_hitentry(Panel *p, Mouse *m){
 }
 @
 
+%plgrabkb()!
+
+% wait until release left click
+
+% Once widget has focus, every key will go there if user event loop
+% calls plkeyboard().
 <<function [[pl_typeentry]]>>=
 void pl_typeentry(Panel *p, Rune c){
     Entry *ep = p->data;
@@ -1668,6 +1948,7 @@ void pl_typeentry(Panel *p, Rune c){
     switch(c){
     <<[[pl_typeentry()]] switch rune cases>>
     }
+    // draw updated entry
     pldraw(p, p->b);
 }
 @
@@ -1681,22 +1962,38 @@ case '\r':
         ep->hit(p, ep->entry);
     return;
 @
+% useful to set again ep->entp? is should already be [[\0]]
 
 <<[[pl_typeentry()]] switch rune cases>>=
 default:
-    if(c < 0x20 || (c & 0xFF00) == KF || (c & 0xFF00) == Spec)
-        break;
+    <<[[pl_typeentry()]] handle special characters>>
     ep->entp+=runetochar(ep->entp, &c);
-    if(ep->entp>ep->eent){
-        n=ep->entp-ep->entry;
-        ep->entry=pl_erealloc(ep->entry, n+100+SLACK);
-        ep->entp=ep->entry+n;
-        ep->eent=ep->entp+100;
-    }
+    <<[[pl_typeentry()]] realloc entry if necessary>>
     *ep->entp='\0';
     break;
 @
 
+
+<<[[pl_typeentry()]] realloc entry if necessary>>=
+if(ep->entp>ep->eent){
+    n=ep->entp-ep->entry;
+    ep->entry=pl_erealloc(ep->entry, n+100+SLACK);
+    ep->entp=ep->entry+n;
+    ep->eent=ep->entp+100;
+}
+@
+%dup: Note that safe runetochar because eent has always
+% a SLACK after
+
+
+\subsubsection{Special keys}
+
+%adv topics?
+
+<<[[pl_typeentry()]] handle special characters>>=
+if(c < 0x20 || (c & 0xFF00) == KF || (c & 0xFF00) == Spec)
+    break;
+@
 
 
 <<[[pl_typeentry()]] switch rune cases>>=
@@ -1730,13 +2027,25 @@ case Kbs:	/* ^H: erase character */
 
 <<function [[pl_getsizeentry]]>>=
 Vector pl_getsizeentry(Panel *p, Vector children){
+    Entry* e = p->data;
+
     USED(children);
-    return pl_boxsize(((Entry *)p->data)->minsize, p->state);
+    return pl_boxsize(e->minsize, p->state);
 }
 @
 
+<<[[pl_boxsize()]] switch state cases>>=
+case UP:
+case DOWN:
+case DOWN1:
+case DOWN2:
+case DOWN3:
+    return addpt(interior, Pt(2*(BWID+SPACE), 2*(BWID+SPACE)));
+@
+
+
 <<function [[pl_childspaceentry]]>>=
-void pl_childspaceentry(Panel *p, Point *ul, Point *size){
+void pl_childspaceentry(Panel *p, Point *ul, Vector *size){
     USED(p, ul, size);
 }
 @
@@ -1751,6 +2060,8 @@ char *plentryval(Panel *p){
     return ep->entry;
 }
 @
+% useful again to set entp? it is done everytime in the keyboard
+%  callback anyway
 
 \section{Button}
 
@@ -1763,19 +2074,14 @@ struct Button{
 
     Icon *icon;			/* what to write on the button */
 
-    void (*pl_buttonhit)(Panel *, int);	/* call back user code on button hit */
-    void (*hit)(Panel *, int, int);	/* call back user code on check/radio hit */
-    void (*menuhit)(int, int);	/* call back user code on menu item hit */
+    <<[[Button]] other fields>>
 
-    <<[[Button]] button-specific fields>>
-    int buttons;
+    void (*pl_buttonhit)(Panel *, buttons);	/* call back user code on button hit */
+    void (*hit)(Panel *, buttons, bool);	/* call back user code on check/radio hit */
+    <<[[Button]] other methods>>
 };
 @
 
-%XXX
-<<[[Button]] button-specific fields>>=
-int index;			/* arg to menuhit */
-@
 
 <<constant [[BUTTON]]>>=
 #define	BUTTON	1
@@ -1788,8 +2094,27 @@ int index;			/* arg to menuhit */
 @
 
 
+<<[[Button]] other fields>>=
+// state of buttons when hit
+buttons buttons;
+@
+% Why do we need that as the state is passed to the user callback?
+% Because we call the user hit callback of a widget on the release
+% action, but at that time we do not remember what was the button that
+% was clicked, so on the click event we store it and so we can use it
+% at the release event.
+
+
+<<[[Button]] other fields>>=
+bool check;			/* for check/radio buttons */
+@
+
+
+
+
+
 <<function [[pl_initbtype]]>>=
-void pl_initbtype(Panel *v, int flags, Icon *icon, void (*hit)(Panel *, int, int), int btype){
+void pl_initbtype(Panel *v, int flags, Icon *icon, void (*hit)(Panel *, buttons, bool), int btype){
     Button *bp = v->data;
 
     v->flags=flags|LEAF;
@@ -1815,12 +2140,14 @@ void pl_initbtype(Panel *v, int flags, Icon *icon, void (*hit)(Panel *, int, int
 }
 @
 
+
+
 \subsection{Basic button}
 
 \subsubsection{Initializing}
 
 <<function [[plbutton]]>>=
-Panel *plbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int)){
+Panel *plbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, buttons)){
     Panel *p;
 
     p=pl_newpanel(parent, sizeof(Button));
@@ -1830,21 +2157,25 @@ Panel *plbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int))
 @
 
 <<function [[plinitbutton]]>>=
-void plinitbutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, int)){
-    ((Button *)p->data)->pl_buttonhit=hit;
+void plinitbutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, buttons)){
+    Button* b = p->data;
+
+    b->pl_buttonhit=hit;
     pl_initbtype(p, flags, icon, pl_buttonhit, BUTTON);
 }
 @
 
-% small wrapper
+% small wrapper that ignores the check to call the right callback
 <<function [[pl_buttonhit]]>>=
-void pl_buttonhit(Panel *p, int buttons, int check){
+void pl_buttonhit(Panel *p, buttons buttons, bool check){
+    Button* b = p->data;
+
     USED(check);
-    if(((Button *)p->data)->pl_buttonhit) 
-        ((Button *)p->data)->pl_buttonhit(p, buttons);
+    if(b->pl_buttonhit) 
+        b->pl_buttonhit(p, buttons);
 }
 @
-
+% just a safe wrapper
 
 
 \subsubsection{Drawing}
@@ -1852,66 +2183,61 @@ void pl_buttonhit(Panel *p, int buttons, int check){
 <<function [[pl_drawbutton]]>>=
 void pl_drawbutton(Panel *p){
     Rectangle r;
-    Button *bp;
-    bp=p->data;
+    Button *bp = p->data;
+
     r=pl_box(p->b, p->r, p->state);
     switch(bp->btype){
-    case CHECK:
-        r=pl_check(p->b, r, bp->check);
-        break;
-    case RADIO:
-        r=pl_radio(p->b, r, bp->check);
-        break;
+    <<[[pl_drawbutton()]] switch button type cases>>
     }
     pl_drawicon(p->b, r, PLACECEN, p->flags, bp->icon);
 }
 @
+% same pl_box than for Text entry with UP or DOWN state
+
+<<[[pl_drawbutton()]] switch button type cases>>=
+case BUTTON:
+    break;
+@
+%pad: I added that
+
 
 \subsubsection{Reacting}
 
+%repetetive pattern:
+%    if(m->buttons&OUT){ // mouse leaving the widget
+%    else if(m->buttons&7){ // mouse click inside
+%    else{	/* mouse inside, but no buttons down */ // possibly release
+
 <<function [[pl_hitbutton]]>>=
 bool pl_hitbutton(Panel *p, Mouse *m){
+    Button *bp = p->data;
     int oldstate = p->state;
     bool hitme;
-    Panel *sib;
-    Button *bp = p->data;
+    <<[[pl_hitbutton()]] other locals>>
 
-    if(m->buttons&OUT){
-        hitme=false;
+    if(m->buttons&OUT){ // mouse leaving the widget
         p->state=UP;
-    }
-    else if(m->buttons&7){
         hitme=false;
-        p->state=DOWN;
-        bp->buttons=m->buttons;
     }
-    else{	/* mouse inside, but no buttons down */
+    else if(m->buttons&7){ // mouse click inside
+        p->state=DOWN;
+        hitme=false;
+        bp->buttons=m->buttons; // remember for the release event
+    }
+    else{	/* mouse inside, but no buttons down */ // possibly a release
         hitme=p->state==DOWN;
         p->state=UP;
     }
-    if(hitme) switch(bp->btype){
-    case CHECK:
-        if(hitme) bp->check=!bp->check;
-        break;
-    case RADIO:
-        if(bp->check) bp->check=0;
-        else{
-            if(p->parent){
-                for(sib=p->parent->child;sib;sib=sib->next){
-                    if(sib->hit==pl_hitbutton
-                    && ((Button *)sib->data)->btype==RADIO
-                    && ((Button *)sib->data)->check){
-                        ((Button *)sib->data)->check=0;
-                        pldraw(sib, p->b);
-                    }
-                }
-            }
-            bp->check=1;
+
+    if(hitme) {
+        switch(bp->btype){
+        <<[[pl_hitbutton()]] switch button type cases>>
         }
-        break;
     }
-    if(hitme || oldstate!=p->state) pldraw(p, p->b);
+    if(hitme || oldstate!=p->state) 
+        pldraw(p, p->b);
     if(hitme && bp->hit){
+        // user callback
         bp->hit(p, bp->buttons, bp->check);
         p->state=UP;
     }
@@ -1919,59 +2245,48 @@ bool pl_hitbutton(Panel *p, Mouse *m){
 }
 @
 
+% So going OUT of the widget while clicking it is a way to cancel
+% the click action.
+
 <<function [[pl_typebutton]]>>=
 void pl_typebutton(Panel *g, Rune c){
     USED(g, c);
 }
 @
 
-\subsubsection{Other methods}
 
+\subsubsection{Packing methods}
 
 <<function [[pl_getsizebutton]]>>=
 Vector pl_getsizebutton(Panel *p, Vector children){
-    Point s;
-    int ckw;
-    Button *bp;
+    Button *bp = p->data;
+    Vector s;
+    <<[[pl_getsizebutton()]] other locals>>
+
     USED(children);		/* shouldn't have any children */
-    bp=p->data;
     s=pl_iconsize(p->flags, bp->icon);
-    if(bp->btype!=BUTTON){
-        ckw=pl_ckwid();
-        if(s.y<ckw){
-            s.x+=ckw;
-            s.y=ckw;
-        }
-        else s.x+=s.y;
-    }
+    <<[[pl_getsizebutton()]] if not a [[BUTTON]]>>
     return pl_boxsize(s, p->state);
 }
 @
 
 <<function [[pl_childspacebutton]]>>=
-void pl_childspacebutton(Panel *g, Point *ul, Point *size){
+void pl_childspacebutton(Panel *g, Point *ul, Vector *size){
     USED(g, ul, size);
 }
 @
 
 
-<<function [[plsetbutton]]>>=
-void plsetbutton(Panel *p, int val){
-    ((Button *)p->data)->check=val;
-}
-@
 
 \subsection{Check button}
 
-<<[[Button]] button-specific fields>>=
-bool check;			/* for check/radio buttons */
-@
 
 \subsubsection{Initializing}
 
 <<function [[plcheckbutton]]>>=
-Panel *plcheckbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int, int)){
+Panel *plcheckbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, buttons, bool)){
     Panel *p;
+
     p=pl_newpanel(parent, sizeof(Button));
     plinitcheckbutton(p, flags, icon, hit);
     return p;
@@ -1979,51 +2294,125 @@ Panel *plcheckbutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, 
 @
 
 <<function [[plinitcheckbutton]]>>=
-void plinitcheckbutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, int, int)){
+void plinitcheckbutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, buttons, bool)){
     pl_initbtype(p, flags, icon, hit, CHECK);
 }
 @
 
 \subsubsection{Drawing}
 
+<<[[pl_drawbutton()]] switch button type cases>>=
+case CHECK:
+    r=pl_check(p->b, r, bp->check);
+    break;
+@
+
 <<function [[pl_check]]>>=
-Rectangle pl_check(Image *b, Rectangle r, int val){
-    Rectangle remainder;
-    remainder=r;
+Rectangle pl_check(Image *b, Rectangle r, bool val){
+    Rectangle remainder = r;
+
     r.max.x=r.min.x+r.max.y-r.min.y;
     remainder.min.x=r.max.x;
     r=insetrect(r, CKINSET);
-    if(plldepth==0)
-        pl_relief(b, pl_black, pl_black, r, CKWID);
+    <<[[pl_check()]] if null [[plldepth]] part1>>
     else
         pl_relief(b, pl_black, pl_white, r, CKWID);
     r=insetrect(r, CKWID);
-    if(plldepth==0)
-        draw(b, r, pl_white, 0, ZP);
+    <<[[pl_check()]] if null [[plldepth]] part2>>
     else
-        draw(b, r, pl_light, 0, ZP);
+        draw(b, r, pl_light, nil, ZP);
     r=insetrect(r, CKBORDER);
     if(val){
-        line(b, Pt(r.min.x,   r.min.y+1), Pt(r.max.x-1, r.max.y  ), Endsquare, Endsquare, 0, pl_black, ZP);
-        line(b, Pt(r.min.x,   r.min.y  ), Pt(r.max.x,   r.max.y  ), Endsquare, Endsquare, 0, pl_black, ZP);
-        line(b, Pt(r.min.x+1, r.min.y  ), Pt(r.max.x,   r.max.y-1), Endsquare, Endsquare, 0, pl_black, ZP);
-        line(b, Pt(r.min.x  , r.max.y-2), Pt(r.max.x-1, r.min.y-1), Endsquare, Endsquare, 0, pl_black, ZP);
-        line(b, Pt(r.min.x,   r.max.y-1), Pt(r.max.x,   r.min.y-1), Endsquare, Endsquare, 0, pl_black, ZP);
-        line(b, Pt(r.min.x+1, r.max.y-1), Pt(r.max.x,   r.min.y  ), Endsquare, Endsquare, 0, pl_black, ZP);
+        <<[[pl_check()]] if checked button>>
     }
     return remainder;
 }
 @
 
+<<constant [[CKINSET]]>>=
+#define	CKINSET	1	/* space around check mark frame */
+@
+<<constant [[CKWID]]>>=
+#define	CKWID	1	/* width of frame around check mark */
+@
+<<constant [[CKBORDER]]>>=
+#define	CKBORDER 2	/* space around X inside frame */
+@
+
+<<[[pl_check()]] if checked button>>=
+line(b, Pt(r.min.x,   r.min.y+1), Pt(r.max.x-1, r.max.y  ), Endsquare, Endsquare, 0, pl_black, ZP);
+line(b, Pt(r.min.x,   r.min.y  ), Pt(r.max.x,   r.max.y  ), Endsquare, Endsquare, 0, pl_black, ZP);
+line(b, Pt(r.min.x+1, r.min.y  ), Pt(r.max.x,   r.max.y-1), Endsquare, Endsquare, 0, pl_black, ZP);
+line(b, Pt(r.min.x  , r.max.y-2), Pt(r.max.x-1, r.min.y-1), Endsquare, Endsquare, 0, pl_black, ZP);
+line(b, Pt(r.min.x,   r.max.y-1), Pt(r.max.x,   r.min.y-1), Endsquare, Endsquare, 0, pl_black, ZP);
+line(b, Pt(r.min.x+1, r.max.y-1), Pt(r.max.x,   r.min.y  ), Endsquare, Endsquare, 0, pl_black, ZP);
+@
+
+\ifallcode
+<<[[pl_check()]] if null [[plldepth]] part1>>=
+if(plldepth==0)
+    pl_relief(b, pl_black, pl_black, r, CKWID);
+@
+<<[[pl_check()]] if null [[plldepth]] part2>>=
+if(plldepth==0)
+    draw(b, r, pl_white, 0, ZP);
+@
 \subsubsection{Reacting}
+
+<<[[pl_hitbutton()]] switch button type cases>>=
+case CHECK:
+    if(hitme) 
+        bp->check=!bp->check;
+    break;
+@
+
+\subsubsection{Packing methods}
+
+%XXX
+<<[[pl_getsizebutton()]] other locals>>=
+int ckw;
+@
+
+<<[[pl_getsizebutton()]] if not a [[BUTTON]]>>=
+if(bp->btype!=BUTTON){
+    ckw=pl_ckwid();
+    if(s.y<ckw){
+        s.x+=ckw;
+        s.y=ckw;
+    }
+    else s.x+=s.y;
+}
+@
+
+<<function [[pl_ckwid]]>>=
+int pl_ckwid(void){
+    return 2*(CKINSET+CKSPACE+CKWID)+CKSIZE;
+}
+@
+
+<<constant [[CKSIZE]]>>=
+#define	CKSIZE	3	/* size of check mark */
+@
+
+
 \subsubsection{Other methods}
 
+<<function [[plsetbutton]]>>=
+void plsetbutton(Panel *p, int val){
+    Button* b = p->data;
+
+    b->check=val;
+}
+@
+
 \subsection{Radio button}
+
+% part of a series of buttons. so already a kinda composite widget.
 
 \subsubsection{Initializing}
 
 <<function [[plradiobutton]]>>=
-Panel *plradiobutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, int, int)){
+Panel *plradiobutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, buttons, bool)){
     Panel *p;
 
     p=pl_newpanel(parent, sizeof(Button));
@@ -2033,58 +2422,116 @@ Panel *plradiobutton(Panel *parent, int flags, Icon *icon, void (*hit)(Panel *, 
 @
 
 <<function [[plinitradiobutton]]>>=
-void plinitradiobutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, int, int)){
+void plinitradiobutton(Panel *p, int flags, Icon *icon, void (*hit)(Panel *, buttons, bool)){
     pl_initbtype(p, flags, icon, hit, RADIO);
 }
 @
 
 \subsubsection{Drawing}
 
+<<[[pl_drawbutton()]] switch button type cases>>=
+case RADIO:
+    r=pl_radio(p->b, r, bp->check);
+    break;
+@
+
 <<function [[pl_radio]]>>=
 /*
  * Place a check mark at the left end of r.  Return the unused space.
  * Caller must guarantee that r.max.x-r.min.x>=r.max.y-r.min.y!
  */
-Rectangle pl_radio(Image *b, Rectangle r, int val){
-    Rectangle remainder;
-    remainder=r;
+Rectangle pl_radio(Image *b, Rectangle r, bool val){
+    Rectangle remainder = r;
+
     r.max.x=r.min.x+r.max.y-r.min.y;
     remainder.min.x=r.max.x;
     r=insetrect(r, CKINSET);
-    if(plldepth==0)
-        pl_relief(b, pl_black, pl_black, r, CKWID);
+    <<[[pl_radio()]] if null [[plldepth]] part1>>
     else
         pl_relief(b, pl_black, pl_white, r, CKWID);
     r=insetrect(r, CKWID);
-    if(plldepth==0)
-        draw(b, r, pl_white, 0, ZP);
+    <<[[pl_radio()]] if null [[plldepth]] part2>>
     else
         draw(b, r, pl_light, 0, ZP);
-    if(val) draw(b, insetrect(r, CKSPACE), pl_black, 0, ZP);
+    if(val) 
+        draw(b, insetrect(r, CKSPACE), pl_black, nil, ZP);
     return remainder;
 }
 @
 
+<<constant [[CKSPACE]]>>=
+#define	CKSPACE	2	/* space around check mark */
+@
+
+\ifallcode
+<<[[pl_radio()]] if null [[plldepth]] part1>>=
+if(plldepth==0)
+    pl_relief(b, pl_black, pl_black, r, CKWID);
+@
+<<[[pl_radio()]] if null [[plldepth]] part2>>=
+if(plldepth==0)
+    draw(b, r, pl_white, 0, ZP);
+@
+
 \subsubsection{Reacting}
-\subsubsection{Other methods}
+
+<<[[pl_hitbutton()]] other locals>>=
+Panel *sib;
+@
+% siblings
+
+<<[[pl_hitbutton()]] switch button type cases>>=
+case RADIO:
+    if(bp->check) 
+        bp->check=false;
+    else{
+        if(p->parent){
+            for(sib=p->parent->child;sib;sib=sib->next){
+                if(sib->hit==pl_hitbutton
+                && ((Button *)sib->data)->btype==RADIO
+                && ((Button *)sib->data)->check){
+                    ((Button *)sib->data)->check=false;
+                    pldraw(sib, p->b);
+                }
+            }
+        }
+        bp->check=true;
+    }
+    break;
+@
+% a radio button is exclusive with siblings.
+
+%\subsection{Series of buttons}
+% see plmenu() later
+
 
 \section{Slider}
 
 <<struct [[Slider]]>>=
 struct Slider{
+    // enum<Direction>
     int dir;			/* HORIZ or VERT */
+    Vector minsize; // range
+
     int val;			/* setting, in screen coordinates */
-    Vector minsize;
-    void (*hit)(Panel *, int, int, int);	/* call back to user when slider changes */
-    int buttons;
+    <<[[Slider]] other fields>>
+
+    void (*hit)(Panel *, buttons, int, int);	/* call back to user when slider changes */
 };
 @
+
+<<[[Slider]] other fields>>=
+buttons buttons;
+@
+% this one is less needed I think as we call the callback at clicking
+% time, not release time
 
 \subsection{Initializing}
 
 <<function [[plslider]]>>=
-Panel *plslider(Panel *parent, int flags, Vector size, void (*hit)(Panel *, int, int, int)){
+Panel *plslider(Panel *parent, int flags, Vector size, void (*hit)(Panel *, buttons, int, int)){
     Panel *p;
+
     p=pl_newpanel(parent, sizeof(Slider));
     plinitslider(p, flags, size, hit);
     return p;
@@ -2092,10 +2539,9 @@ Panel *plslider(Panel *parent, int flags, Vector size, void (*hit)(Panel *, int,
 @
 
 <<function [[plinitslider]]>>=
-void plinitslider(Panel *v, int flags, Vector size, void (*hit)(Panel *, int, int, int)){
+void plinitslider(Panel *v, int flags, Vector size, void (*hit)(Panel *, buttons, int, int)){
     Slider *sp = v->data;
 
-    v->r=Rect(0,0,size.x,size.y);
     v->flags=flags|LEAF;
     v->state=UP;
 
@@ -2105,6 +2551,8 @@ void plinitslider(Panel *v, int flags, Vector size, void (*hit)(Panel *, int, in
 
     v->getsize=pl_getsizeslider;
     v->childspace=pl_childspaceslider;
+
+    v->r=Rect(0,0,size.x,size.y);
 
     sp->minsize=size;
     sp->dir=size.x>size.y?HORIZ:VERT;
@@ -2120,8 +2568,8 @@ void plinitslider(Panel *v, int flags, Vector size, void (*hit)(Panel *, int, in
 <<function [[pl_drawslider]]>>=
 void pl_drawslider(Panel *p){
     Rectangle r;
-    Slider *sp;
-    sp=p->data;
+    Slider *sp = p->data;
+
     r=pl_box(p->b, p->r, UP);
     switch(sp->dir){
     case HORIZ: pl_sliderupd(p->b, r, sp->dir, 0, sp->val); break;
@@ -2130,43 +2578,99 @@ void pl_drawslider(Panel *p){
 }
 @
 
+<<function [[pl_sliderupd]]>>=
+void pl_sliderupd(Image *b, Rectangle r1, int dir, int lo, int hi){
+    Rectangle r2, r3;
+
+    r2=r1;
+    r3=r1;
+
+    <<[[pl_sliderupd()]] sanitize [[lo]] and [[hi]]>>
+
+    switch(dir){
+    case HORIZ:
+        r1.max.x=r1.min.x+lo;
+        r2.min.x=r1.max.x;
+        r2.max.x=r1.min.x+hi;
+        if(r2.max.x>r3.max.x) r2.max.x=r3.max.x;
+        r3.min.x=r2.max.x;
+        break;
+    case VERT:
+        r1.max.y=r1.min.y+lo;
+        r2.min.y=r1.max.y;
+        r2.max.y=r1.min.y+hi;
+        if(r2.max.y>r3.max.y) r2.max.y=r3.max.y;
+        r3.min.y=r2.max.y;
+        break;
+    }
+    draw(b, r1, pl_light, nil, ZP);
+    draw(b, r2, pl_dark, nil, ZP);
+    draw(b, r3, pl_light, nil, ZP);
+}
+@
+% r1 = left/top, r2 = slider, r3 = right/bottom
+
+<<[[pl_sliderupd()]] sanitize [[lo]] and [[hi]]>>=
+if(lo<0) lo=0;
+if(hi<=lo) hi=lo+1;
+@
+
 \subsection{Reacting}
 
 <<function [[pl_hitslider]]>>=
 bool pl_hitslider(Panel *p, Mouse *m){
-    int oldstate, oldval, len;
-    Point ul, size;
     Slider *sp = p->data;
+    int oldstate, oldval;
+    int len;
+    Point ul;
+    Vector size;
+    SET(len);
 
     ul=p->r.min;
     size=subpt(p->r.max, p->r.min);
     pl_interior(p->state, &ul, &size);
+
     oldstate=p->state;
     oldval=sp->val;
-    SET(len);
 
     if(m->buttons&OUT)
         p->state=UP;
     else if(m->buttons&7){
         p->state=DOWN;
         sp->buttons=m->buttons;
-        if(sp->dir==HORIZ){
-            sp->val=m->xy.x-ul.x;
-            len=size.x;
-        }
-        else{
-            sp->val=ul.y+size.y-m->xy.y;
-            len=size.y;
-        }
-        if(sp->val<0) sp->val=0;
-        else if(sp->val>len) sp->val=len;
+        <<[[pl_hitslider()]] when button, set [[sp->val]] and [[len]]>>
+        <<[[pl_hitslider()]] sanitize [[sp->val]]>>
     }
     else	/* mouse inside, but no buttons down */
         p->state=UP;
-    if(oldval!=sp->val || oldstate!=p->state) pldraw(p, p->b);
-    if(oldval!=sp->val && sp->hit) sp->hit(p, sp->buttons, sp->val, len);
-    return 0;
+
+    if(oldval!=sp->val || oldstate!=p->state) 
+        pldraw(p, p->b);
+    if(oldval!=sp->val && sp->hit) 
+        // user callback
+        sp->hit(p, sp->buttons, sp->val, len);
+    return false;
 }
+@
+% for slider we do not wait for the release event, we pass it directly
+
+
+<<[[pl_hitslider()]] when button, set [[sp->val]] and [[len]]>>=
+if(sp->dir==HORIZ){
+    sp->val=m->xy.x-ul.x;
+    len=size.x;
+}else{
+    sp->val=ul.y+size.y-m->xy.y;
+    len=size.y;
+}
+@
+
+<<[[pl_hitslider()]] sanitize [[sp->val]]>>=
+if(sp->val<0) 
+    sp->val=0;
+else 
+    if(sp->val>len) 
+        sp->val=len;
 @
 
 <<function [[pl_typeslider]]>>=
@@ -2186,22 +2690,28 @@ Vector pl_getsizeslider(Panel *p, Vector children){
 @
 
 <<function [[pl_childspaceslider]]>>=
-void pl_childspaceslider(Panel *g, Point *ul, Point *size){
+void pl_childspaceslider(Panel *g, Point *ul, Vector *size){
     USED(g, ul, size);
 }
 @
 
-
+\subsection{Other methods}
 
 <<function [[plsetslider]]>>=
 void plsetslider(Panel *p, int value, int range){
-    Slider *sp;
-    sp=p->data;
-    if(value<0) value=0;
-    else if(value>range) value=range;
-    if(sp->dir==HORIZ) sp->val=value*(p->r.max.x-p->r.min.x)/range;
-    else sp->val=value*(p->r.max.y-p->r.min.y)/range;
+    Slider *sp = p->data;
+
+    <<[[plsetslider()]] sanitize [[value]]>>
+    if(sp->dir==HORIZ) 
+        sp->val=value*(p->r.max.x-p->r.min.x)/range;
+    else
+        sp->val=value*(p->r.max.y-p->r.min.y)/range;
 }
+@
+
+<<[[plsetslider()]] sanitize [[value]]>>=
+if(value<0) value=0;
+else if(value>range) value=range;
 @
 
 \section{Canvas}
@@ -2242,7 +2752,6 @@ void plinitcanvas(Panel *v, int flags, void (*draw)(Panel *), void (*hit)(Panel 
     v->getsize=pl_getsizecanvas;
     v->childspace=pl_childspacecanvas;
 
-
     c->draw=draw;
     c->hit=hit;
 
@@ -2256,6 +2765,7 @@ void plinitcanvas(Panel *v, int flags, void (*draw)(Panel *), void (*hit)(Panel 
 <<function [[pl_drawcanvas]]>>=
 void pl_drawcanvas(Panel *p){
     Canvas *c = p->data;
+
     if(c->draw) 
         c->draw(p);
 }
@@ -2265,10 +2775,11 @@ void pl_drawcanvas(Panel *p){
 
 <<function [[pl_hitcanvas]]>>=
 int pl_hitcanvas(Panel *p, Mouse *m){
-    Canvas *c;
-    c=p->data;
-    if(c->hit) c->hit(p, m);
-    return 0;
+    Canvas *c =p->data;
+
+    if(c->hit) 
+        c->hit(p, m);
+    return false;
 }
 @
 
@@ -2282,433 +2793,31 @@ void pl_typecanvas(Panel *p, Rune c){
 \subsection{Packing methods}
 
 <<function [[pl_getsizecanvas]]>>=
-Point pl_getsizecanvas(Panel *p, Point children){
+Vector pl_getsizecanvas(Panel *p, Vector children){
     USED(p, children);
     return Pt(0,0);
 }
 @
+% so empty? by default yes, so need to use EXPAND or FIXED
+% or non-zero ipad to get a non-empty canvas
 
 <<function [[pl_childspacecanvas]]>>=
-void pl_childspacecanvas(Panel *p, Point *ul, Point *size){
+void pl_childspacecanvas(Panel *p, Point *ul, Vector *size){
     USED(p, ul, size);
 }
 @
-
-
-\chapter{Menu}
-
-\section{Basic menu}
-
-\subsection{Initializing}
-
-<<function [[plmenu]]>>=
-Panel *plmenu(Panel *parent, int flags, Icon **item, int cflags, void (*hit)(int, int)){
-    Panel *v;
-    v=plgroup(parent, flags);
-    plinitmenu(v, flags, item, cflags, hit);
-    return v;
-}
-@
-
-<<function [[plinitmenu]]>>=
-void plinitmenu(Panel *v, int flags, Icon **item, int cflags, void (*hit)(int, int)){
-    Panel *b;
-    int i;
-    v->flags=flags;
-    v->kind="menu";
-    if(v->child){
-        plfree(v->child);
-        v->child=0;
-    }
-    for(i=0;item[i];i++){
-        b=plbutton(v, cflags, item[i], pl_hitmenu);
-        ((Button *)b->data)->menuhit=hit;
-        ((Button *)b->data)->index=i;
-    }
-}
-@
-
-\subsection{Drawing}
-
-\subsection{Reacting}
-
-<<function [[pl_hitmenu]]>>=
-void pl_hitmenu(Panel *p, int buttons){
-    void (*hit)(int, int);
-    hit=((Button *)p->data)->menuhit;
-    if(hit) hit(buttons, ((Button *)p->data)->index);
-}
-@
-
-\subsection{Packing methods}
-
-
-\section{Popup}
-
-<<struct [[Popup]]>>=
-struct Popup{
-    Image *save;			/* where to save what the popup covers */
-    Panel *pop[3];			/* what to pop up */
-};
-@
-
-\subsection{Initializing}
-
-<<function [[plpopup]]>>=
-Panel *plpopup(Panel *parent, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
-    Panel *v;
-    v=pl_newpanel(parent, sizeof(Popup));
-    plinitpopup(v, flags, pop0, pop1, pop2);
-    return v;
-}
-@
-
-
-<<function [[plinitpopup]]>>=
-void plinitpopup(Panel *v, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
-    Popup *pp =v->data;
-
-    v->flags=flags;
-    v->pri=pl_pripopup;
-    v->state=UP;
-
-    v->draw=pl_drawpopup;
-    v->hit=pl_hitpopup;
-    v->type=pl_typepopup;
-
-    v->getsize=pl_getsizepopup;
-    v->childspace=pl_childspacepopup;
-
-    pp->pop[0]=pop0;
-    pp->pop[1]=pop1;
-    pp->pop[2]=pop2;
-    pp->save=0;
-
-    v->kind="popup";
-}
-@
-
-\subsection{Drawing}
-
-<<function [[pl_drawpopup]]>>=
-void pl_drawpopup(Panel *p){
-    USED(p);
-}
-@
-
-\subsection{Reacting}
-
-<<[[pl_drawall()]] if invisible widget>>=
-if(p->flags&INVIS) return;
-@
-
-<<function [[pl_hitpopup]]>>=
-bool pl_hitpopup(Panel *g, Mouse *m){
-    Panel *p;
-    Point d;
-    Popup *pp = g->data;
-
-    if(g->state==UP){
-        switch(m->buttons&7){
-        case 0: p=g->child; break;
-        case 1:	p=pp->pop[0]; g->state=DOWN1; break;
-        case 2: p=pp->pop[1]; g->state=DOWN2; break;
-        case 4: p=pp->pop[2]; g->state=DOWN3; break;
-        default: p=0; break;
-        }
-        if(p==0){
-            p=g->child;
-            g->state=DOWN;
-        }
-        else if(g->state!=UP){
-            plpack(p, view->clipr);
-            if(p->lastmouse)
-                d=subpt(m->xy, divpt(addpt(p->lastmouse->r.min,
-                             p->lastmouse->r.max), 2));
-            else
-                d=subpt(m->xy, divpt(addpt(p->r.min, p->r.max), 2));
-            if(p->r.min.x+d.x<g->r.min.x) d.x=g->r.min.x-p->r.min.x;
-            if(p->r.max.x+d.x>g->r.max.x) d.x=g->r.max.x-p->r.max.x;
-            if(p->r.min.y+d.y<g->r.min.y) d.y=g->r.min.y-p->r.min.y;
-            if(p->r.max.y+d.y>g->r.max.y) d.y=g->r.max.y-p->r.max.y;
-            plmove(p, d);
-            pp->save=allocimage(display, p->r, g->b->chan, 0, DNofill);
-            if(pp->save!=0) draw(pp->save, p->r, g->b, 0, p->r.min);
-            pl_invis(p, 0);
-            pldraw(p, g->b);
-        }
-    }
-    else{
-        switch(g->state){
-        default: SET(p); break;			/* can't happen! */
-        case DOWN1: p=pp->pop[0]; break;
-        case DOWN2: p=pp->pop[1]; break;
-        case DOWN3: p=pp->pop[2]; break;
-        case DOWN:  p=g->child;  break;
-        }
-        if((m->buttons&7)==0){
-            if(g->state!=DOWN){
-                if(pp->save!=0){
-                    draw(g->b, p->r, pp->save, 0, p->r.min);
-                    flushimage(display, 1);
-                    freeimage(pp->save);
-                    pp->save=0;
-                }
-                pl_invis(p, 1);
-            }
-            g->state=UP;
-        }
-    }
-    plmouse(p, m);
-    if((m->buttons&7)==0)
-        g->state=UP;
-    return (m->buttons&7)!=0;
-}
-@
-
-<<function [[pl_typepopup]]>>=
-void pl_typepopup(Panel *g, Rune c){
-    USED(g, c);
-}
-@
-
-
-<<function [[plmove]]>>=
-/*
- * move an already-packed panel so that p->r=raddp(p->r, d)
- */
-void plmove(Panel *p, Point d){
-    if(strcmp(p->kind, "edit") == 0)	/* sorry */
-        plemove(p, d);
-    p->r=rectaddpt(p->r, d);
-    for(p=p->child;p;p=p->next) plmove(p, d);
-}
-@
-
-\subsection{Packing methods}
-
-<<function [[pl_getsizepopup]]>>=
-Vector pl_getsizepopup(Panel *g, Vector children){
-    USED(g);
-    return children;
-}
-@
-
-<<function [[pl_childspacepopup]]>>=
-void pl_childspacepopup(Panel *g, Point *ul, Point *size){
-    USED(g, ul, size);
-}
-@
-
-\section{Pull-down}
-
-<<struct [[Pulldown]]>>=
-struct Pulldown{
-    Icon *icon;		/* button label */
-    Panel *pull;		/* Panel to pull down */
-    int side;		/* which side of the button to put the panel on */
-    Image *save;		/* where to save what we draw the panel on */
-};
-@
-
-\subsection{Initializing}
-
-<<function [[plpulldown]]>>=
-Panel *plpulldown(Panel *parent, int flags, Icon *icon, Panel *pullthis, int side){
-    Panel *v;
-
-    v=pl_newpanel(parent, sizeof(Pulldown));
-    v->state=UP;
-    ((Pulldown *)v->data)->save=0;
-    plinitpulldown(v, flags, icon, pullthis, side);
-    return v;
-}
-@
-
-<<function [[plinitpulldown]]>>=
-void plinitpulldown(Panel *v, int flags, Icon *icon, Panel *pullthis, int side){
-    Pulldown *pp = v->data;
-
-    v->flags=flags|LEAF;
-
-    v->draw=pl_drawpulldown;
-    v->hit=pl_hitpulldown;
-    v->type=pl_typepulldown;
-
-    v->getsize=pl_getsizepulldown;
-    v->childspace=pl_childspacepulldown;
-
-    pp->pull=pullthis;
-    pp->side=side;
-    pp->icon=icon;
-
-    v->kind="pulldown";
-}
-@
-
-\subsection{Drawing}
-
-<<function [[pl_drawpulldown]]>>=
-void pl_drawpulldown(Panel *p){
-    pl_drawicon(p->b, pl_box(p->b, p->r, p->state), PLACECEN,
-        p->flags, ((Pulldown *)p->data)->icon);
-}
-@
-
-\subsection{Reacting}
-
-<<function [[pl_hitpulldown]]>>=
-bool pl_hitpulldown(Panel *g, Mouse *m){
-    int oldstate, passon;
-    Rectangle r;
-    Panel *p, *hitme;
-    Pulldown *pp = g->data;
-
-    oldstate=g->state;
-    p=pp->pull;
-    hitme=0;
-    switch(g->state){
-    case UP:
-        if(!ptinrect(m->xy, g->r))
-            g->state=UP;
-        else if(m->buttons&7){
-            r=g->b->r;
-            p->flags&=~PLACE;
-            switch(pp->side){
-            case PACKN:
-                r.min.x=g->r.min.x;
-                r.max.y=g->r.min.y;
-                p->flags|=PLACESW;
-                break;
-            case PACKS:
-                r.min.x=g->r.min.x;
-                r.min.y=g->r.max.y;
-                p->flags|=PLACENW;
-                break;
-            case PACKE:
-                r.min.x=g->r.max.x;
-                r.min.y=g->r.min.y;
-                p->flags|=PLACENW;
-                break;
-            case PACKW:
-                r.max.x=g->r.min.x;
-                r.min.y=g->r.min.y;
-                p->flags|=PLACENE;
-                break;
-            case PACKCEN:
-                r.min=g->r.min;
-                p->flags|=PLACENW;
-                break;
-            }
-            plpack(p, r);
-            pp->save=allocimage(display, p->r, g->b->chan, 0, DNofill);
-            if(pp->save!=0) draw(pp->save, p->r, g->b, 0, p->r.min);
-            pl_invis(p, 0);
-            pldraw(p, g->b);
-            g->state=DOWN;
-        }
-        break;
-    case DOWN:
-        if(!ptinrect(m->xy, g->r)){
-            switch(pp->side){
-            default: SET(passon); break;		/* doesn't happen */
-            case PACKN: passon=m->xy.y<g->r.min.y; break;
-            case PACKS: passon=m->xy.y>=g->r.max.y; break;
-            case PACKE: passon=m->xy.x>=g->r.max.x; break;
-            case PACKW: passon=m->xy.x<g->r.min.x; break;
-            case PACKCEN: passon=1; break;
-            }
-            if(passon){
-                hitme=p;
-                if((m->buttons&7)==0) g->state=UP;
-            }
-            else	g->state=UP;
-        }
-        else if((m->buttons&7)==0) g->state=UP;
-        else hitme=p;
-        if(g->state!=DOWN && pp->save){
-            draw(g->b, p->r, pp->save, 0, p->r.min);
-            freeimage(pp->save);
-            pp->save=0;
-            pl_invis(p, 1);
-            hitme=p;
-        }
-    }
-    if(g->state!=oldstate) pldraw(g, g->b);
-    if(hitme) plmouse(hitme, m);
-    return g->state==DOWN;
-}
-@
-
-<<function [[pl_typepulldown]]>>=
-void pl_typepulldown(Panel *p, Rune c){
-    USED(p, c);
-}
-@
-
-
-\subsection{Packing methods}
-
-<<function [[pl_getsizepulldown]]>>=
-Vector pl_getsizepulldown(Panel *p, Vector children){
-    USED(p, children);
-    return pl_boxsize(pl_iconsize(p->flags, ((Pulldown *)p->data)->icon), p->state);
-}
-@
-
-<<function [[pl_childspacepulldown]]>>=
-void pl_childspacepulldown(Panel *p, Point *ul, Point *size){
-    USED(p, ul, size);
-}
-@
-
-
-
-\section{Menubar}
-
-\subsection{Initializing}
-
-<<function [[plmenubar]]>>=
-Panel *plmenubar(Panel *parent, int flags, int cflags, Icon *l1, Panel *m1, Icon *l2, ...){
-    Panel *v;
-    va_list arg;
-    Icon *s;
-    int pulldir;
-
-    switch(cflags&PACK){
-    default:
-        SET(pulldir);
-        break;
-    case PACKE:
-    case PACKW:
-        pulldir=PACKS;
-        break;
-    case PACKN:
-    case PACKS:
-        pulldir=PACKE;
-        break;
-    }
-    v=plgroup(parent, flags);
-    va_start(arg, cflags);
-    while((s=va_arg(arg, Icon *))!=0)
-        plpulldown(v, cflags, s, va_arg(arg, Panel *), pulldir);
-    va_end(arg);
-    USED(l1, m1, l2);
-    v->kind="menubar";
-    return v;
-}
-@
-
-
-
-
 
 
 \chapter{Composite Widgets}
 
+% radiobutton is already a widget that must be part of a series of widgets.
+
 \section{Frame}
 
 % no widget-specific DS for Frame.
+
+%gtk: no hbox and vbox; use the packing argument when packing instead
+% to determine the direction.
 
 \subsection{Initializing}
 
@@ -2716,7 +2825,7 @@ Panel *plmenubar(Panel *parent, int flags, int cflags, Icon *l1, Panel *m1, Icon
 Panel *plframe(Panel *parent, int flags){
     Panel *p;
 
-    p=pl_newpanel(parent, 0);
+    p=pl_newpanel(parent, 0); // no widget-specific data
     plinitframe(p, flags);
     return p;
 }
@@ -2745,6 +2854,12 @@ void pl_drawframe(Panel *p){
 }
 @
 
+<<[[Style]] other cases>>=
+// for frames
+FRAME
+@
+% like PASSIVE, not really set in Panel.state; just abused by pl_box()
+
 <<[[pl_boxoutline()]] switch style cases>>=
 case FRAME:
     pl_relief(b, pl_white, pl_black, r, FWID);
@@ -2758,6 +2873,10 @@ case FRAME:
     break;
 @
 % case where fill is not true? call pl_boxoutline with FRAME somewhere?
+
+<<constant [[FWID]]>>=
+#define	FWID	2	/* width of frame relief */
+@
 
 \subsection{Reacting}
 
@@ -2788,7 +2907,7 @@ case FRAME:
 @
 
 <<function [[pl_childspaceframe]]>>=
-void pl_childspaceframe(Panel *p, Point *ul, Point *size){
+void pl_childspaceframe(Panel *p, Point *ul, Vector *size){
     USED(p);
     pl_interior(FRAME, ul, size);
 }
@@ -2802,7 +2921,7 @@ case FRAME:
 
 \section{Group}
 
-% Diff with Frame? Not even Frame around the group.
+% Diff with Frame? Not even a frame around the group.
 
 \subsection{Initializing}
 
@@ -2865,27 +2984,107 @@ Vector pl_getsizegroup(Panel *p, Vector children){
 @
 
 <<function [[pl_childspacegroup]]>>=
-void pl_childspacegroup(Panel *p, Point *ul, Point *size){
+void pl_childspacegroup(Panel *p, Point *ul, Vector *size){
     USED(p, ul, size);
 }
 @
 
 
 
-\section{List}
+\chapter{Scrollable Widgets}
+
+% In libpanel only a few widgets can be scrolled:
+% - list (of text items)
+% - text
+%gtk: seems more flexible where can make anything scrollable?
+
+\section{Scrolling fields}
+
+<<[[Panel]] other fields>>=
+// option<ref<Panel>>
+Panel *scrollee;				/* pointer to scrolled window */
+// option<ref<Panel>>
+Panel *xscroller, *yscroller;			/* pointers to scroll bars */
+@
+
+<<[[pl_newpanel()]] set other fields>>=
+v->scrollee=nil;
+v->xscroller=nil;
+v->yscroller=nil;
+@
+
+<<function [[plscroll]]>>=
+void plscroll(Panel *scrollee, Panel *xscroller, Panel *yscroller){
+    scrollee->xscroller=xscroller;
+    scrollee->yscroller=yscroller;
+    if(xscroller) xscroller->scrollee=scrollee;
+    if(yscroller) yscroller->scrollee=scrollee;
+}
+@
+% make the connection!
+
+
+
+<<[[Panel]] other fields>>=
+Scroll scr;					/* scroll data */
+@
+% why need that? can not be a local?
+
+<<struct [[Scroll]]>>=
+struct Scroll{
+    Point pos;
+    Vector size;
+};
+@
+
+<<[[pl_newpanel()]] set other fields>>=
+v->scr.pos=Pt(0,0);
+v->scr.size=Pt(0,0);
+@
+
+
+
+\section{Scrolling methods}
+
+<<[[Panel]] other methods>>=
+void (*scroll)(Panel *, int, buttons, int, int);	/* scroll bar to scrollee */
+void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
+@
+
+<<[[pl_newpanel()]] set default methods>>=
+v->scroll=pl_scrollerror;
+v->setscrollbar=pl_setscrollbarerror;
+@
+
+% So will do some  scrollist->yscroller->setscrollbar() and inversely
+% some scrollbar->scrollee->scroll()
+
+\section{Scrollable list}
+
+% Not really a composite widget
 
 <<struct [[List]]>>=
 struct List{
-    void (*hit)(Panel *, int, int);	/* call user back on hit */
-    char *(*gen)(Panel *, int);	/* return text given index or 0 if out of range */
-    int lo;				/* indices of first, last items displayed */
-    int sel;			/* index of hilited item */
     int len;			/* # of items in list */
-    Rectangle listr;
     Vector minsize;
-    int buttons;
+
+    int lo;				/* indices of first, last items displayed */
+    // option<int> (NONE = -1)
+    int sel;			/* index of hilited item */
+    <<[[List]] other fields>>
+
+    char* (*gen)(Panel *, int);	/* return text given index or 0 if out of range */
+    void (*hit)(Panel *, int, int);	/* call user back on hit */
+
 };
 @
+
+
+<<[[List]] other fields>>=
+buttons buttons;
+@
+% needed?
+
 
 \subsection{Initializing}
 
@@ -2902,70 +3101,184 @@ Panel *pllist(Panel *parent, int flags, char *(*gen)(Panel *, int), int nlist, v
 <<function [[plinitlist]]>>=
 void plinitlist(Panel *v, int flags, char *(*gen)(Panel *, int), int nlist, void (*hit)(Panel *, int, int)){
     List *lp = v->data;
-    int wid, max;
-    char *str;
+    <<[[plinitlist()]] other locals>>
 
     v->flags=flags|LEAF;
     v->state=UP;
+
     v->draw=pl_drawlist;
     v->hit=pl_hitlist;
     v->type=pl_typelist;
+
     v->getsize=pl_getsizelist;
     v->childspace=pl_childspacelist;
-    lp->gen=gen;
-    lp->hit=hit;
+
+    <<[[plinitlist()]] set fields in [[lp]]>>
+    <<[[plinitlist()]] set scrolling fields>>
+
+    v->kind="list";
+}
+@
+% LEAF but really kinda composite widget. Just hardcoded to have
+% text elements instead of general widgets.
+
+<<[[plinitlist()]] set fields in [[lp]]>>=
+lp->gen=gen;
+lp->hit=hit;
+@
+
+<<[[plinitlist()]] other locals>>=
+int wid, max;
+char *str;
+@
+<<[[plinitlist()]] set fields in [[lp]]>>=
+<<[[plinitlist()]] if [[FILLX]] or [[EXPAND]]>>
+else{
     max=0;
     for(lp->len=0;str=gen(v, lp->len);lp->len++){
         wid=stringwidth(font, str);
         if(wid>max) max=wid;
     }
-    if(flags&(FILLX|EXPAND)){
-        for(lp->len=0;gen(v, lp->len);lp->len++);
-        lp->minsize=Pt(0, nlist*font->height);
-    }
-    else{
-        max=0;
-        for(lp->len=0;str=gen(v, lp->len);lp->len++){
-            wid=stringwidth(font, str);
-            if(wid>max) max=wid;
-        }
-        lp->minsize=Pt(max, nlist*font->height);
-    }
-    lp->sel=-1;
-    lp->lo=0;
-    v->scroll=pl_scrolllist;
-    v->scr.pos=Pt(0,0);
-    v->scr.size=Pt(0,lp->len);
-    v->kind="list";
+    lp->minsize=Pt(max, nlist*font->height);
 }
 @
+% note that this set also [[lp->len]]
+
+%dead?
+% max=0;
+% for(lp->len=0;str=gen(v, lp->len);lp->len++){
+%     wid=stringwidth(font, str);
+%     if(wid>max) max=wid;
+% }
+%was before if(FILLX...) but seems dead as either not used in FILLX case
+% or redone otherwise.
+
+
+<<[[plinitlist()]] if [[FILLX]] or [[EXPAND]]>>=
+if(flags&(FILLX|EXPAND)){
+    for(lp->len=0;gen(v, lp->len);lp->len++)
+       ;
+    lp->minsize=Pt(0, nlist*font->height);
+}
+@
+
+<<[[plinitlist()]] set fields in [[lp]]>>=
+lp->lo=0;
+lp->sel=-1;
+@
+
 
 
 \subsection{Drawing}
 
+<<[[List]] other fields>>=
+Rectangle listr;
+@
+%needed? just because modify r parameter in some methods
+% and want sometimes to get original, but could introduce
+% a listr local that saves the old content of the paramter.
+
 <<function [[pl_drawlist]]>>=
 void pl_drawlist(Panel *p){
-    List *lp;
-    lp=p->data;
+    List *lp = p->data;
+
     lp->listr=pl_box(p->b, p->r, UP);
     pl_liststrings(p, lp->lo, lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height,
         lp->listr);
 }
 @
+% could use Dy here
+
+<<function [[pl_liststrings]]>>=
+void pl_liststrings(Panel *p, int lo, int hi, Rectangle r){
+    List *lp = p->data;
+    char *s;
+    int i;
+    <<[[pl_liststrings()]] other locals>>
+
+    for(i=lo;i!=hi && (s=lp->gen(p, i));i++){
+        r.max.y=r.min.y+font->height;
+        pl_drawicon(p->b, r, PLACEW, NOFLAG, s);
+        r.min.y+=font->height;
+    }
+    <<[[pl_liststrings()]] draw the selection>>
+    <<[[pl_liststrings()]] set the scrollbar>>
+}
+@
+
+<<[[pl_liststrings()]] draw the selection>>=
+if(lo<=lp->sel && lp->sel<hi) 
+    pl_listsel(p, lp->sel, true);
+@
+% draw selection only if visible
+
+<<function [[pl_listsel]]>>=
+void pl_listsel(Panel *p, int sel, bool on){
+    List *lp = p->data;
+    int hi;
+    Rectangle r;
+
+    hi=lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height;
+    if(lp->lo>=0 && lp->lo<=sel && sel<hi && sel<lp->len){
+        r=lp->listr;
+        r.min.y+=(sel-lp->lo)*font->height;
+        r.max.y=r.min.y+font->height;
+        if(on)
+            pl_highlight(p->b, r);
+        else{
+            pl_fill(p->b, r);
+            pl_drawicon(p->b, r, PLACEW, NOFLAG, lp->gen(p, sel));
+        }
+    }
+}
+@
+% use Dy
+
+<<function [[pl_highlight]]>>=
+void pl_highlight(Image *b, Rectangle r){
+    draw(b, r, pl_dark, pl_hilit, ZP);
+}
+@
+% this will use a mask! so save what was under!
+
+<<function [[pl_fill]]>>=
+void pl_fill(Image *b, Rectangle r){
+    draw(b, r, plldepth==0? pl_white : pl_light, 0, ZP);
+}
+@
+
+
+\subsubsection{Scrollee to scrollbar}
+
+<<[[pl_liststrings()]] other locals>>=
+Panel *sb = p->yscroller;
+@
+
+% set scrollbar to visible drawn area if someone set a scrollbar for
+%  this list
+<<[[pl_liststrings()]] set the scrollbar>>=
+if(sb && sb->setscrollbar)
+    sb->setscrollbar(sb, lp->lo,
+        lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height, lp->len);
+@
+% use Dy
 
 \subsection{Reacting}
 
 <<function [[pl_hitlist]]>>=
 int pl_hitlist(Panel *p, Mouse *m){
-    int oldsel, hitme;
-    Point ul, size;
-    List *lp;
-    lp=p->data;
-    hitme=0;
+    int oldsel;
+    bool hitme;
+    Point ul;
+    Vector size;
+    List *lp = p->data;
+
+    hitme=false;
     ul=p->r.min;
     size=subpt(p->r.max, p->r.min);
     pl_interior(p->state, &ul, &size);
     oldsel=lp->sel;
+
     if(m->buttons&OUT){
         p->state=UP;
         if(m->buttons&~OUT) lp->sel=-1;
@@ -2976,18 +3289,20 @@ int pl_hitlist(Panel *p, Mouse *m){
             lp->buttons=m->buttons;
             p->state=DOWN;
         }
-        else{
-            hitme=1;
+        else{ // release
+            hitme=true;
             p->state=UP;
         }
     }
+
     if(oldsel!=lp->sel){
-        pl_listsel(p, oldsel, 0);
-        pl_listsel(p, lp->sel, 1);
+        pl_listsel(p, oldsel, false);
+        pl_listsel(p, lp->sel, true);
     }
     if(hitme && 0<=lp->sel && lp->sel<lp->len && lp->hit)
+        // user callback
         lp->hit(p, lp->buttons, lp->sel);
-    return 0;
+    return false;
 }
 @
 
@@ -3008,199 +3323,230 @@ Vector pl_getsizelist(Panel *p, Vector children){
 @
 
 <<function [[pl_childspacelist]]>>=
-void pl_childspacelist(Panel *g, Point *ul, Point *size){
+void pl_childspacelist(Panel *g, Point *ul, Vector *size){
     USED(g, ul, size);
 }
 @
 
-\subsection{Other methods}
+\subsection{Scrollbar to scrollee}
+% redrawing after scroll
 
-<<constant [[MAXHGT]]>>=
-#define	MAXHGT	12
+<<[[plinitlist()]] set scrolling fields>>=
+v->scroll=pl_scrolllist;
+v->scr.pos=Pt(0,0);
+v->scr.size=Pt(0,lp->len);
 @
 
-<<function [[pl_listsel]]>>=
-void pl_listsel(Panel *p, int sel, int on){
-    List *lp;
-    int hi;
-    Rectangle r;
-    lp=p->data;
-    hi=lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height;
-    if(lp->lo>=0 && lp->lo<=sel && sel<hi && sel<lp->len){
-        r=lp->listr;
-        r.min.y+=(sel-lp->lo)*font->height;
-        r.max.y=r.min.y+font->height;
-        if(on)
-            pl_highlight(p->b, r);
-        else{
-            pl_fill(p->b, r);
-            pl_drawicon(p->b, r, PLACEW, 0, lp->gen(p, sel));
-        }
-    }
-}
-@
+% Scrollbar to scrollee this time
 
-<<function [[pl_liststrings]]>>=
-void pl_liststrings(Panel *p, int lo, int hi, Rectangle r){
-    Panel *sb;
-    List *lp;
-    char *s;
-    int i;
-    lp=p->data;
-    for(i=lo;i!=hi && (s=lp->gen(p, i));i++){
-        r.max.y=r.min.y+font->height;
-        pl_drawicon(p->b, r, PLACEW, 0, s);
-        r.min.y+=font->height;
-    }
-    if(lo<=lp->sel && lp->sel<hi) pl_listsel(p, lp->sel, 1);
-    sb=p->yscroller;
-    if(sb && sb->setscrollbar)
-        sb->setscrollbar(sb, lp->lo,
-            lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height, lp->len);
-}
-@
-
+% this will be called by the scrollbar via scrollbar->scrollee->scroll()
+%  when user click on the bar
 
 <<function [[pl_scrolllist]]>>=
-void pl_scrolllist(Panel *p, int dir, int buttons, int val, int len){
-    Point ul, size;
-    int nlist, oldlo, hi, nline, y;
-    List *lp;
+void pl_scrolllist(Panel *p, int dir, buttons buttons, int val, int len){
+    List *lp = p->data;
+    Point ul;
+    Vector size;
+    int nlist, nline;
+    int oldlo, hi;
     Rectangle r;
-    lp=p->data;
+    int y;
+
+    oldlo=lp->lo;
+
     ul=p->r.min;
     size=subpt(p->r.max, p->r.min);
     pl_interior(p->state, &ul, &size);
+
     nlist=size.y/font->height;
-    oldlo=lp->lo;
+
     if(dir==VERT) switch(buttons){
-    case 1: lp->lo-=nlist*val/len; break;
-    case 2: lp->lo=lp->len*val/len; break;
-    case 4:	lp->lo+=nlist*val/len; break;
+    case CLICK_LEFT:    lp->lo-=nlist*val/len; break;
+    case CLICK_MIDDLE:  lp->lo=lp->len*val/len; break;
+    case CLICK_RIGHT:	lp->lo+=nlist*val/len; break;
     }
-    if(lp->lo<0) lp->lo=0;
-    if(lp->lo>=lp->len) lp->lo=lp->len-1;
-    if(lp->lo==oldlo) return;
+    <<[[pl_scrolllist()]] sanitize [[lp->lo]]>>
+    if(lp->lo==oldlo) 
+        return;
+    // else
+
     p->scr.pos.y=lp->lo;
     r=lp->listr;
     nline=(r.max.y-r.min.y)/font->height;
     hi=lp->lo+nline;
+
     if(hi<=oldlo || lp->lo>=oldlo+nline){
-        pl_box(p->b, r, PASSIVE);
+        // =~ pl_drawlist(), complete redraw
+        pl_box(p->b, r, PASSIVE); //BUG? forgot r=pl_box(...)
         pl_liststrings(p, lp->lo, hi, r);
     }
-    else if(lp->lo<oldlo){
-        y=r.min.y+(oldlo-lp->lo)*font->height;
-        pl_cpy(p->b, Pt(r.min.x, y), 
-            Rect(r.min.x, r.min.y, r.max.x, r.min.y+(hi-oldlo)*font->height));
-        r.max.y=y;
-        pl_box(p->b, r, PASSIVE);
-        pl_liststrings(p, lp->lo, oldlo, r);
-    }
-    else{
-        pl_cpy(p->b, r.min, Rect(r.min.x, r.min.y+(lp->lo-oldlo)*font->height,
-            r.max.x, r.max.y));
-        r.min.y=r.min.y+(oldlo+nline-lp->lo)*font->height;
-        pl_box(p->b, r, PASSIVE);
-        pl_liststrings(p, oldlo+nline, hi, r);
-    }
+    else 
+        <<[[pl_scrolllist()]] optimized drawing by copying>>
 }
 @
 
 
-
-\section{Scrollbar}
-
-<<struct [[Scroll]]>>=
-struct Scroll{
-    Point pos, size;
-};
+<<[[pl_scrolllist()]] sanitize [[lp->lo]]>>=
+if(lp->lo<0) lp->lo=0;
+if(lp->lo>=lp->len) lp->lo=lp->len-1;
 @
+
+
+<<[[pl_scrolllist()]] optimized drawing by copying>>=
+if(lp->lo<oldlo){
+    y=r.min.y+(oldlo-lp->lo)*font->height;
+    pl_cpy(p->b, Pt(r.min.x, y), 
+        Rect(r.min.x, r.min.y, r.max.x, r.min.y+(hi-oldlo)*font->height));
+    r.max.y=y;
+    pl_box(p->b, r, PASSIVE);
+    pl_liststrings(p, lp->lo, oldlo, r);
+}
+else{
+    pl_cpy(p->b, r.min, Rect(r.min.x, r.min.y+(lp->lo-oldlo)*font->height,
+        r.max.x, r.max.y));
+    r.min.y=r.min.y+(oldlo+nline-lp->lo)*font->height;
+    pl_box(p->b, r, PASSIVE);
+    pl_liststrings(p, oldlo+nline, hi, r);
+}
+@
+
+<<function [[pl_cpy]]>>=
+void pl_cpy(Image *b, Point dst, Rectangle src){
+    draw(b, Rpt(dst, addpt(dst, subpt(src.max, src.min))), b, nil, src.min);
+}
+@
+% bitblt
+
+\section{Scroll bar}
+
 
 <<struct [[Scrollbar]]>>=
 struct Scrollbar{
+    // enum<Direction>
     int dir;		/* HORIZ or VERT */
-    int lo, hi;		/* setting, in screen coordinates */
-    int buttons;		/* saved mouse buttons for transmittal to scrollee */
-    Rectangle interior;
     Point minsize;
+
+    int lo, hi;		/* setting, in screen coordinates */
+
+    <<[[Scrollbar]] other fields>>
 };
 @
+
+<<[[Scrollbar]] other fields>>=
+buttons buttons;		/* saved mouse buttons for transmittal to scrollee */
+@
+%needed?
 
 \subsection{Initializing}
 
 <<function [[plscrollbar]]>>=
 Panel *plscrollbar(Panel *parent, int flags){
     Panel *v;
+
     v=pl_newpanel(parent, sizeof(Scrollbar));
     plinitscrollbar(v, flags);
     return v;
 }
 @
 
+% the direction is inferred from the packing flags direction.
 
 <<function [[plinitscrollbar]]>>=
 void plinitscrollbar(Panel *v, int flags){
     Scrollbar *sp = v->data;
 
     v->flags=flags|LEAF;
-    v->pri=pl_priscrollbar;
     v->state=UP;
+
     v->draw=pl_drawscrollbar;
     v->hit=pl_hitscrollbar;
     v->type=pl_typescrollbar;
+
     v->getsize=pl_getsizescrollbar;
     v->childspace=pl_childspacescrollbar;
-    v->setscrollbar=pl_setscrollbarscrollbar;
-    switch(flags&PACK){
-    case PACKN:
-    case PACKS:
-        sp->dir=HORIZ;
-        sp->minsize=Pt(0, SBWID);
-        v->flags|=FILLX;
-        break;
-    case PACKE:
-    case PACKW:
-        sp->dir=VERT;
-        sp->minsize=Pt(SBWID, 0);
-        v->flags|=FILLY;
-        break;
-    }
-    sp->lo=0;
-    sp->hi=0;
+
+
+    <<[[plinitscrollbar()]] set extra fields>>
+
     v->kind="scrollbar";
 }
 @
 
 
+
+<<[[plinitscrollbar()]] set extra fields>>=
+v->pri=pl_priscrollbar; // !!
+@
+\t why important?
+
+
+<<[[plinitscrollbar()]] set extra fields>>=
+switch(flags&PACK){
+case PACKN:
+case PACKS:
+    sp->dir=HORIZ;
+    sp->minsize=Pt(0, SBWID);
+    v->flags|=FILLX;
+    break;
+case PACKE:
+case PACKW:
+    sp->dir=VERT;
+    sp->minsize=Pt(SBWID, 0);
+    v->flags|=FILLY;
+    break;
+}
+@
+
+<<constant [[SBWID]]>>=
+#define	SBWID	15	/* should come from draw.c? */
+@
+
+
+<<[[plinitscrollbar()]] set extra fields>>=
+sp->lo=0;
+sp->hi=0;
+@
+
+
 \subsection{Drawing}
+
+<<[[Scrollbar]] other fields>>=
+Rectangle interior;
+@
+% needed?
 
 <<function [[pl_drawscrollbar]]>>=
 void pl_drawscrollbar(Panel *p){
-    Scrollbar *sp;
-    sp=p->data;
+    Scrollbar *sp = p->data;
+
     sp->interior=pl_outline(p->b, p->r, p->state);
     pl_sliderupd(p->b, sp->interior, sp->dir, sp->lo, sp->hi);
 }
 @
 
+% like a slider!
+
 \subsection{Reacting}
 
 <<function [[pl_hitscrollbar]]>>=
 int pl_hitscrollbar(Panel *g, Mouse *m){
-    int oldstate, pos, len, dy;
-    Point ul, size;
-    Scrollbar *sp;
-    sp=g->data;
+    int oldstate;
+    int pos, len, dy;
+    Point ul;
+    Vector size;
+    Scrollbar *sp = g->data;
+
     ul=g->r.min;
     size=subpt(g->r.max, g->r.min);
     pl_interior(g->state, &ul, &size);
     oldstate=g->state;
+
     if(!(g->flags & USERFL) && (m->buttons&OUT || !ptinrect(m->xy, g->r))){
         m->buttons&=~OUT;
         g->state=UP;
         goto out;
     }
+
     if(sp->dir==HORIZ){
         pos=m->xy.x-ul.x;
         len=size.x;
@@ -3209,31 +3555,19 @@ int pl_hitscrollbar(Panel *g, Mouse *m){
         pos=m->xy.y-ul.y;
         len=size.y;
     }
-    if(pos<0) pos=0;
-    else if(pos>len) pos=len;
+    <<[[pl_hitscrollbar()]] sanitize [[pos]]>>
+
     if(m->buttons&7){
         g->state=DOWN;
         sp->buttons=m->buttons;
         switch(m->buttons){
-        case 1:
-            dy=pos*(sp->hi-sp->lo)/len;
-            pl_sliderupd(g->b, sp->interior, sp->dir, sp->lo-dy,
-                sp->hi-dy);
-            break;
-        case 2:
-            if(g->scrollee && g->scrollee->scroll)
-                g->scrollee->scroll(g->scrollee, sp->dir,
-                    m->buttons, pos, len);
-            break;
-        case 4:
-            dy=pos*(sp->hi-sp->lo)/len;
-            pl_sliderupd(g->b, sp->interior, sp->dir, sp->lo+dy,
-                sp->hi+dy);
-            break;
+        <<[[pl_hitscrollbar()]] switch buttons cases>>
         }
     }
     else{
-        if(!(sp->buttons&2) && g->state==DOWN && g->scrollee && g->scrollee->scroll)
+        if(!(sp->buttons&CLICK_MIDDLE) && g->state==DOWN && 
+           g->scrollee && g->scrollee->scroll)
+            // scroll hook
             g->scrollee->scroll(g->scrollee, sp->dir, sp->buttons,
                 pos, len);
         g->state=UP;
@@ -3242,6 +3576,33 @@ out:
     if(oldstate!=g->state) pldraw(g, g->b);
     return g->state==DOWN;
 }
+@
+% so if state is DOWN then means click in which case we want receive
+% next mouse event (remouse) even if not under the cursor!! because
+% usually you grab and scroll and sometimes go away of the widget.
+
+
+<<[[pl_hitscrollbar()]] sanitize [[pos]]>>=
+if(pos<0) pos=0;
+else if(pos>len) pos=len;
+@
+
+<<[[pl_hitscrollbar()]] switch buttons cases>>=
+case CLICK_LEFT:
+    dy=pos*(sp->hi-sp->lo)/len;
+    pl_sliderupd(g->b, sp->interior, sp->dir, sp->lo-dy,
+        sp->hi-dy);
+    break;
+case CLICK_MIDDLE:
+    if(g->scrollee && g->scrollee->scroll)
+        g->scrollee->scroll(g->scrollee, sp->dir,
+            m->buttons, pos, len);
+    break;
+case CLICK_RIGHT:
+    dy=pos*(sp->hi-sp->lo)/len;
+    pl_sliderupd(g->b, sp->interior, sp->dir, sp->lo+dy,
+        sp->hi+dy);
+    break;
 @
 
 <<function [[pl_typescrollbar]]>>=
@@ -3260,39 +3621,797 @@ Point pl_getsizescrollbar(Panel *p, Point children){
 @
 
 <<function [[pl_childspacescrollbar]]>>=
-void pl_childspacescrollbar(Panel *p, Point *ul, Point *size){
+void pl_childspacescrollbar(Panel *p, Point *ul, Vector *size){
     USED(p, ul, size);
 }
 @
 
+\subsection{Scrollee to scrollbar}
+
+<<[[plinitscrollbar()]] set extra fields>>=
+v->setscrollbar=pl_setscrollbarscrollbar;
+@
+
+% called from scrollee
 <<function [[pl_setscrollbarscrollbar]]>>=
 /*
  * Arguments lo, hi and len are in the scrollee's natural coordinates
  */
 void pl_setscrollbarscrollbar(Panel *p, int lo, int hi, int len){
-    Point ul, size;
+    Point ul;
+    Vector size;
     int mylen;
-    Scrollbar *sp;
-    sp=p->data;
+    Scrollbar *sp = p->data;
+
     ul=p->r.min;
     size=subpt(p->r.max, p->r.min);
     pl_interior(p->state, &ul, &size);
+
     mylen=sp->dir==HORIZ?size.x:size.y;
+
     if(len==0) len=1;
     sp->lo=lo*mylen/len;
     sp->hi=hi*mylen/len;
-    if(sp->lo<0) sp->lo=0;
-    if(sp->lo>=mylen) sp->hi=mylen-1;
-    if(sp->hi<=sp->lo) sp->hi=sp->lo+1;
-    if(sp->hi>mylen) sp->hi=mylen;
+
+    <<[[pl_setscrollbarscrollbar()]] sanitize [[sp->lo]]>>
+    <<[[pl_setscrollbarscrollbar()]] sanitize [[sp->hi]]>>
     pldraw(p, p->b);
 }
 @
+
+<<[[pl_setscrollbarscrollbar()]] sanitize [[sp->lo]]>>=
+if(sp->lo<0) sp->lo=0;
+if(sp->lo>=mylen) sp->hi=mylen-1;
+@
+
+<<[[pl_setscrollbarscrollbar()]] sanitize [[sp->hi]]>>=
+if(sp->hi<=sp->lo) sp->hi=sp->lo+1;
+if(sp->hi>mylen) sp->hi=mylen;
+@
+
+%\section{Pane}
+% Gtk has a "panes" which allows to divide an area in two that
+% you can adjust manually.
+
+%\section{Scrollable text}
+% later
+
+\chapter{Menu widgets}
+
+\section{Menu items}
+
+% Menu as a series of basic buttons.
+
+<<[[Button]] other fields>>=
+int index;			/* arg to menuhit */
+@
+% We need to remember it in the item/button for the callback
+% to know which item it is.
+
+<<[[Button]] other methods>>=
+void (*menuhit)(buttons, int);	/* call back user code on menu item hit */
+@
+
+\subsection{Initializing}
+
+% flags vs c(hildren)flags
+
+<<function [[plmenu]]>>=
+Panel *plmenu(Panel *parent, int flags, Icon **item, int cflags, void (*hit)(buttons, int)){
+    Panel *v;
+
+    v=plgroup(parent, flags);
+    plinitmenu(v, flags, item, cflags, hit);
+    return v;
+}
+@
+% plgroup! So the widget is a group (of buttons).
+
+<<function [[plinitmenu]]>>=
+void plinitmenu(Panel *v, int flags, Icon **item, int cflags, void (*hit)(buttons, int)){
+    Panel *p;
+    Button* b;
+    int i;
+
+    v->flags=flags;
+
+    <<[[plinitmenu()]] free child widget if any>>
+
+    for(i=0;item[i];i++){
+        p=plbutton(v, cflags, item[i], pl_hitmenu);
+        b = p->data;
+
+        b->menuhit=hit;
+        b->index=i;
+    }
+    v->kind="menu";
+}
+@
+% pl_hitmenu later
+\l memory leak when free menu? not supposed to free them.
+
+% Note that does not set the widget methods here. We keep them from
+% the group, which does nothing. drawall will take care of calling
+% draw on its children (the buttons). and plpack will set their location.
+
+
+<<[[plinitmenu()]] free child widget if any>>=
+if(v->child){
+    plfree(v->child);
+    v->child=nil;
+}
+@
+% or raise error?
+
+\subsection{Drawing}
+
+% Saw before, it's a classic button.
+%dup: Actually it's a group of buttons, so the drawing code
+% is pl_drawgroup which does nothing.
+
+\subsection{Reacting}
+
+<<function [[pl_hitmenu]]>>=
+void pl_hitmenu(Panel *p, buttons buttons){
+    Button* b = p->data;
+    void (*hit)(int, int) = b->menuhit;
+
+    if(hit) 
+        hit(buttons, b->index);
+}
+@
+
+
+\section{Popup menu}
+
+<<struct [[Popup]]>>=
+struct Popup{
+    Panel *pop[3];			/* what to pop up */
+
+    //option<ref_own<Image>>
+    Image *save;			/* where to save what the popup covers */
+};
+@
+
+% Usually the panels in pop[] are menus created by plmenu() 
+% (a group of menu items).
+% They just appear only when a certain mouse button is clicked.
+
+% Note that if you want a popup over a text area, then the popup is actually
+% the parent of the text area! hence the priority trick, because pt_inpanel
+% will go through first the parent popup widget and then the text area widget.
+
+\subsection{Initializing}
+
+<<function [[plpopup]]>>=
+Panel *plpopup(Panel *parent, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
+    Panel *v;
+
+    v=pl_newpanel(parent, sizeof(Popup));
+    plinitpopup(v, flags, pop0, pop1, pop2);
+    return v;
+}
+@
+
+
+<<function [[plinitpopup]]>>=
+void plinitpopup(Panel *v, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
+    Popup *pp =v->data;
+
+    v->flags=flags;
+    v->state=UP;
+
+    v->draw=pl_drawpopup;
+    v->hit=pl_hitpopup;
+    v->type=pl_typepopup;
+
+    v->getsize=pl_getsizepopup;
+    v->childspace=pl_childspacepopup;
+
+    v->pri=pl_pripopup;
+
+    pp->pop[0]=pop0;
+    pp->pop[1]=pop1;
+    pp->pop[2]=pop2;
+    pp->save=nil;
+
+    v->kind="popup";
+}
+@
+
+% pl_pripopup!
+
+\subsection{Reacting}
+% before drawing, because draw only after a mouse click
+
+
+<<[[Style]] other cases>>=
+DOWN1,
+DOWN2,
+DOWN3,
+@
+% which button the user pressed
+
+%dup: remember that popup is parent of another widget like text area,
+% so g->child is the regular visible widget.
+
+<<function [[pl_hitpopup]]>>=
+bool pl_hitpopup(Panel *g, Mouse *m){
+    Panel *p;
+    Popup *pp = g->data;
+    <<[[pl_hitpopup()]] other locals>>
+
+    if(g->state==UP){
+        switch(m->buttons&7){
+        case CLICK_LEFT:   p=pp->pop[0]; g->state=DOWN1; break;
+        case CLICK_MIDDLE: p=pp->pop[1]; g->state=DOWN2; break;
+        case CLICK_RIGHT:  p=pp->pop[2]; g->state=DOWN3; break;
+        <<[[pl_hitpopup()]] when [[UP]], switch buttons other cases>>
+        }
+        <<[[pl_hitpopup()]] when [[UP]], if no popup menu [[p]]>>
+        else if(g->state!=UP){
+            <<[[pl_hitpopup()]] when from [[UP]] to [[DOWNX]] and valid [[p]]>>
+        }
+    } else{ // a DOWNX state
+        switch(g->state){
+        case DOWN1: p=pp->pop[0]; break;
+        case DOWN2: p=pp->pop[1]; break;
+        case DOWN3: p=pp->pop[2]; break;
+        case DOWN:  p=g->child;  break;
+        default: SET(p); break;			/* can't happen! */
+        }
+        <<[[pl_hitpopup()]] when [[DOWNX]] state, if no buttons>>
+    }
+    // redispatch mouse event to appropriate menu or child
+    plmouse(p, m);
+
+    if((m->buttons&7)==0)
+        g->state=UP;
+    return (m->buttons&7)!=0;
+}
+@
+% if clicked then need to remouse next mouse event to the popup
+% even if mouse over outside the menu
+
+
+
+<<[[pl_hitpopup()]] when [[UP]], switch buttons other cases>>=
+// just a mouse motion
+case 0: p=g->child; break;
+@
+
+<<[[pl_hitpopup()]] when [[UP]], switch buttons other cases>>=
+default: p=nil; break;
+@
+% when can this happen?? when multiple click?
+
+
+<<[[pl_hitpopup()]] when [[UP]], if no popup menu [[p]]>>=
+if(p==nil){
+    p=g->child;
+    g->state=DOWN;
+}
+@
+
+
+<<function [[pl_typepopup]]>>=
+void pl_typepopup(Panel *g, Rune c){
+    USED(g, c);
+}
+@
+
+\subsection{Drawing}
+
+<<function [[pl_drawpopup]]>>=
+void pl_drawpopup(Panel *p){
+    USED(p);
+}
+@
+% nothing to draw before a mouse button has been pressed.
+
+
+<<[[pl_hitpopup()]] other locals>>=
+Vector d; // delta
+@
+
+<<[[pl_hitpopup()]] when from [[UP]] to [[DOWNX]] and valid [[p]]>>=
+plpack(p, view->clipr);
+<<[[pl_hitpopup()]] when from [[UP]] to [[DOWNX]], compute [[d]]>>
+plmove(p, d);
+pp->save=allocimage(display, p->r, g->b->chan, false, DNofill);
+if(pp->save!=nil) 
+    draw(pp->save, p->r, g->b, nil, p->r.min);
+pl_invis(p, false);
+pldraw(p, g->b);
+@
+\l why clipr? why not view->r ? so popup will not go beyond
+\l  any clipping? but who would do some clipping?
+\l could use view instead of g->b?
+
+<<function [[plmove]]>>=
+/*
+ * move an already-packed panel so that p->r=raddp(p->r, d)
+ */
+void plmove(Panel *p, Point d){
+    <<[[plmove()]] if edit widget special case>>
+    p->r=rectaddpt(p->r, d);
+    for(p=p->child;p;p=p->next) 
+        plmove(p, d);
+}
+@
+
+<<[[pl_hitpopup()]] when from [[UP]] to [[DOWNX]], compute [[d]]>>=
+if(p->lastmouse)
+    d=subpt(m->xy, divpt(addpt(p->lastmouse->r.min,
+                 p->lastmouse->r.max), 2));
+else
+    d=subpt(m->xy, divpt(addpt(p->r.min, p->r.max), 2));
+if(p->r.min.x+d.x<g->r.min.x) d.x=g->r.min.x-p->r.min.x;
+if(p->r.max.x+d.x>g->r.max.x) d.x=g->r.max.x-p->r.max.x;
+if(p->r.min.y+d.y<g->r.min.y) d.y=g->r.min.y-p->r.min.y;
+if(p->r.max.y+d.y>g->r.max.y) d.y=g->r.max.y-p->r.max.y;
+@
+
+%XXX
+<<[[plmove()]] if edit widget special case>>=
+if(strcmp(p->kind, "edit") == 0)	/* sorry */
+    plemove(p, d);
+@
+
+\subsubsection{Hiding}
+
+% when release?
+<<[[pl_hitpopup()]] when [[DOWNX]] state, if no buttons>>=
+if((m->buttons&7)==0){
+    if(g->state!=DOWN){
+        if(pp->save!=nil){
+            // restore from saved image
+            draw(g->b, p->r, pp->save, nil, p->r.min);
+            flushimage(display, true);
+            freeimage(pp->save);
+            pp->save=nil;
+        }
+        pl_invis(p, true);
+    }
+    g->state=UP;
+}
+@
+\l why need invis? anyway the popup menu are not children of the popup
+\l  so drawall will not go through them
+
+
+
+
+<<function [[pl_invis]]>>=
+void pl_invis(Panel *p, bool v){
+    for(;p;p=p->next){
+        if(v) 
+            p->flags|=INVIS; 
+        else 
+            p->flags&=~INVIS;
+        pl_invis(p->child, v);
+    }
+}
+@
+<<constant [[INVIS]]>>=
+#define	INVIS	0x20000		/* don't draw this */
+@
+
+<<[[pl_drawall()]] if invisible widget>>=
+if(p->flags&INVIS) return;
+@
+
+\subsection{Packing methods}
+
+<<function [[pl_getsizepopup]]>>=
+Vector pl_getsizepopup(Panel *g, Vector children){
+    USED(g);
+    return children;
+}
+@
+<<function [[pl_childspacepopup]]>>=
+void pl_childspacepopup(Panel *g, Point *ul, Vector *size){
+    USED(g, ul, size);
+}
+@
+
+\section{Pull-down}
+
+<<struct [[Pulldown]]>>=
+struct Pulldown{
+    Icon *icon;		/* button label */
+    Panel *pull;		/* Panel to pull down */
+
+    // enum<PackingDirection>
+    int side;		/* which side of the button to put the panel on */
+    //option<ref_own<Image>>
+    Image *save;		/* where to save what we draw the panel on */
+};
+@
+
+% like popup, but popup from a visible button, and can popup in many
+% direction (side), so not necessarily pull-down.
+
+\subsection{Initializing}
+
+<<function [[plpulldown]]>>=
+Panel *plpulldown(Panel *parent, int flags, Icon *icon, Panel *pullthis, int side){
+    Panel *v;
+
+    v=pl_newpanel(parent, sizeof(Pulldown));
+    plinitpulldown(v, flags, icon, pullthis, side);
+    return v;
+}
+@
+%old:
+%    v->state=UP;
+%    ((Pulldown *)v->data)->save=nil;
+% why do not everything in plinitpulldown like for the other stuff?
+
+<<function [[plinitpulldown]]>>=
+void plinitpulldown(Panel *v, int flags, Icon *icon, Panel *pullthis, int side){
+    Pulldown *pp = v->data;
+
+    v->flags=flags|LEAF;
+    v->state=UP;
+
+    v->draw=pl_drawpulldown;
+    v->hit=pl_hitpulldown;
+    v->type=pl_typepulldown;
+
+    v->getsize=pl_getsizepulldown;
+    v->childspace=pl_childspacepulldown;
+
+    pp->icon=icon;
+    pp->pull=pullthis;
+    pp->side=side;
+    pp->save=nil;
+
+    v->kind="pulldown";
+}
+@
+%pad: I added stuff that was done in plpulldown() before
+
+\subsection{Drawing}
+
+<<function [[pl_drawpulldown]]>>=
+void pl_drawpulldown(Panel *p){
+    Pulldown* pd = p->data;
+
+    pl_drawicon(p->b, pl_box(p->b, p->r, p->state), PLACECEN,
+        p->flags, pd->icon);
+}
+@
+% when not clicked
+
+\subsection{Reacting}
+
+<<function [[pl_hitpulldown]]>>=
+bool pl_hitpulldown(Panel *g, Mouse *m){
+    Pulldown *pp = g->data;
+    Panel *p = pp->pull;
+    Panel *hitme = nil;
+    int oldstate;
+    Rectangle r;
+    bool passon;
+
+    oldstate=g->state;
+
+    switch(g->state){
+    case UP:
+        <<[[pl_hitpulldown()]] when [[UP]], if mouse outside widget>>
+        else 
+            if(m->buttons&7){
+                r=g->b->r;
+                p->flags&=~PLACE;
+                switch(pp->side){
+                <<[[pl_hitpulldown()]] when [[UP]] and buttons, switch side cases>>
+                }
+                plpack(p, r);
+                pp->save=allocimage(display, p->r, g->b->chan, false, DNofill);
+                if(pp->save!=nil) 
+                    draw(pp->save, p->r, g->b, nil, p->r.min);
+                pl_invis(p, false);
+                pldraw(p, g->b);
+                g->state=DOWN;
+             }
+        break;
+    case DOWN:
+        if(!ptinrect(m->xy, g->r)){
+            switch(pp->side){
+            case PACKN: passon=m->xy.y<g->r.min.y; break;
+            case PACKS: passon=m->xy.y>=g->r.max.y; break;
+            case PACKE: passon=m->xy.x>=g->r.max.x; break;
+            case PACKW: passon=m->xy.x<g->r.min.x; break;
+            case PACKCEN: passon=true; break;
+            default: SET(passon); break;		/* doesn't happen */
+            }
+            if(passon){
+                hitme=p;
+                if((m->buttons&7)==0) 
+                    g->state=UP;
+            }
+            else	g->state=UP;
+        }
+        else if((m->buttons&7)==0) g->state=UP;
+        else hitme=p;
+
+        if(g->state!=DOWN && pp->save){
+            draw(g->b, p->r, pp->save, nil, p->r.min);
+            freeimage(pp->save);
+            pp->save=nil;
+            pl_invis(p, true);
+            hitme=p;
+        }
+    }
+    if(g->state!=oldstate) 
+        pldraw(g, g->b);
+    if(hitme) 
+        plmouse(hitme, m);
+
+    return g->state==DOWN;
+}
+@
+
+
+<<[[pl_hitpulldown()]] when [[UP]] and buttons, switch side cases>>=
+case PACKN:
+    r.min.x=g->r.min.x;
+    r.max.y=g->r.min.y;
+    p->flags|=PLACESW;
+    break;
+case PACKS:
+    r.min.x=g->r.min.x;
+    r.min.y=g->r.max.y;
+    p->flags|=PLACENW;
+    break;
+case PACKE:
+    r.min.x=g->r.max.x;
+    r.min.y=g->r.min.y;
+    p->flags|=PLACENW;
+    break;
+case PACKW:
+    r.max.x=g->r.min.x;
+    r.min.y=g->r.min.y;
+    p->flags|=PLACENE;
+    break;
+case PACKCEN:
+    r.min=g->r.min;
+    p->flags|=PLACENW;
+    break;
+@
+
+<<[[pl_hitpulldown()]] when [[UP]], if mouse outside widget>>=
+if(!ptinrect(m->xy, g->r))
+    g->state=UP;
+@
+
+
+<<function [[pl_typepulldown]]>>=
+void pl_typepulldown(Panel *p, Rune c){
+    USED(p, c);
+}
+@
+
+
+\subsection{Packing methods}
+
+<<function [[pl_getsizepulldown]]>>=
+Vector pl_getsizepulldown(Panel *p, Vector children){
+    USED(p, children);
+    return pl_boxsize(pl_iconsize(p->flags, ((Pulldown *)p->data)->icon), p->state);
+}
+@
+
+<<function [[pl_childspacepulldown]]>>=
+void pl_childspacepulldown(Panel *p, Point *ul, Vector *size){
+    USED(p, ul, size);
+}
+@
+
+
+
+\section{Menu bar}
+
+\subsection{Initializing}
+
+%dup: flags vs c(hildren) flags
+
+<<function [[plmenubar]]>>=
+Panel *plmenubar(Panel *parent, int flags, int cflags, Icon *l1, Panel *m1, Icon *l2, ...){
+    Panel *v;
+    va_list arg;
+    Icon *s;
+    int pulldir;
+
+    <<[[plmenubar()]] set [[pulldir]] based on [[cflags]]>>
+    v=plgroup(parent, flags);
+
+    va_start(arg, cflags);
+    while((s=va_arg(arg, Icon *))!=nil)
+        plpulldown(v, cflags, s, va_arg(arg, Panel *), pulldir);
+    va_end(arg);
+
+    USED(l1, m1, l2); // used for type checking at least the first arg
+    v->kind="menubar";
+    return v;
+}
+@
+
+
+<<[[plmenubar()]] set [[pulldir]] based on [[cflags]]>>=
+switch(cflags&PACK){
+case PACKE:
+case PACKW:
+    pulldir=PACKS;
+    break;
+case PACKN:
+case PACKS:
+    pulldir=PACKE;
+    break;
+default:
+    SET(pulldir);
+    break;
+}
+@
+
+
+
 
 
 \chapter{Text Widgets}
 
 % seen already Label and Text entry before.
+
+\section{Message}
+% Label are on a single line.
+% Messages are on multiple lines with line-wrapping!
+
+<<struct [[Message]]>>=
+struct Message{
+    // ref_own<string>
+    char *text;
+
+    Vector minsize;
+};
+@
+
+\subsection{Initializing}
+
+<<function [[plmessage]]>>=
+Panel *plmessage(Panel *parent, int flags, int wid, char *msg){
+    Panel *v;
+
+    v=pl_newpanel(parent, sizeof(Message));
+    plinitmessage(v, flags, wid, msg);
+    return v;
+}
+@
+
+<<function [[plinitmessage]]>>=
+void plinitmessage(Panel *v, int flags, int wid, char *msg){
+    Message *mp = v->data;
+
+    v->flags=flags|LEAF;
+
+    v->draw=pl_drawmessage;
+    v->hit=pl_hitmessage;
+    v->type=pl_typemessage;
+
+    v->getsize=pl_getsizemessage;
+    v->childspace=pl_childspacemessage;
+
+    mp->text=msg;
+    mp->minsize=Pt(wid, font->height);
+
+    v->kind="message";
+}
+@
+
+\subsection{Drawing}
+
+<<function [[pl_drawmessage]]>>=
+void pl_drawmessage(Panel *p){
+    pl_textmsg(p->b, pl_box(p->b, p->r, PASSIVE), font, 
+               ((Message *)p->data)->text);
+}
+@
+
+<<function [[pl_textmsg]]>>=
+void pl_textmsg(Image *b, Rectangle r, Font *f, char *s){
+    char *start, *end;	/* of line */
+    Point where;
+    int lwid, c, wid;
+
+    where=r.min;
+    wid=r.max.x-r.min.x;
+    do{
+        start=s;
+        lwid=0;
+        end=s;
+        do{
+            for(;*s!=' ' && *s!='\0';s=pl_nextrune(s)) lwid+=pl_runewidth(f, s);
+            if(lwid>wid) break;
+            end=s;
+            for(;*s==' ';s=pl_nextrune(s)) lwid+=pl_runewidth(f, s);
+        }while(*s!='\0');
+        if(end==start)	/* can't even fit one word on line! */
+            end=s;
+        c=*end;
+        *end='\0';
+        string(b, where, display->black, ZP, f, start);
+        *end=c;
+        where.y+=font->height;
+        s=end;
+        while(*s==' ') s=pl_nextrune(s);
+    }while(*s!='\0');
+}
+@
+
+
+\subsection{Reacting}
+
+<<function [[pl_hitmessage]]>>=
+bool pl_hitmessage(Panel *g, Mouse *m){
+    USED(g, m);
+    return false;
+}
+@
+
+<<function [[pl_typemessage]]>>=
+void pl_typemessage(Panel *g, Rune c){
+    USED(g, c);
+}
+@
+
+\subsection{Packing methods}
+
+<<function [[pl_getsizemessage]]>>=
+Vector pl_getsizemessage(Panel *p, Vector children){
+    Message *mp = p->data;
+
+    USED(children);
+    return pl_boxsize(pl_foldsize(font, mp->text, mp->minsize.x), PASSIVE);
+}
+@
+
+<<function [[pl_foldsize]]>>=
+Point pl_foldsize(Font *f, char *s, int wid){
+    char *start, *end;	/* of line */
+    Point size;
+    int lwid, ewid;
+    size=Pt(0,0);
+    do{
+        start=s;
+        lwid=0;
+        end=s;
+        ewid=lwid;
+        do{
+            for(;*s!=' ' && *s!='\0';s=pl_nextrune(s)) lwid+=pl_runewidth(f, s);
+            if(lwid>wid) break;
+            end=s;
+            ewid=lwid;
+            for(;*s==' ';s=pl_nextrune(s)) lwid+=pl_runewidth(f, s);
+        }while(*s!='\0');
+        if(end==start){	/* can't even fit one word on line! */
+            ewid=lwid;
+            end=s;
+        }
+        if(ewid>size.x) size.x=ewid;
+        size.y+=font->height;
+        s=end;
+        while(*s==' ') s=pl_nextrune(s);
+    }while(*s!='\0');
+    return size;
+}
+@
+
+<<function [[pl_childspacemessage]]>>=
+void pl_childspacemessage(Panel *p, Point *ul, Vector *size){
+    USED(p, ul, size);
+}
+@
+
 
 \section{Edit}
 \l adv topics?
@@ -3499,7 +4618,7 @@ Point pl_getsizeedit(Panel *p, Point children){
 @
 
 <<function [[pl_childspaceedit]]>>=
-void pl_childspaceedit(Panel *g, Point *ul, Point *size){
+void pl_childspaceedit(Panel *g, Point *ul, Vector *size){
     USED(g, ul, size);
 }
 @
@@ -3523,7 +4642,7 @@ void pl_childspaceedit(Panel *g, Point *ul, Point *size){
 
 
 <<function [[pl_scrolledit]]>>=
-void pl_scrolledit(Panel *p, int dir, int buttons, int num, int den){
+void pl_scrolledit(Panel *p, int dir, buttons buttons, int num, int den){
     Edit *ep;
     Textwin *t;
     Panel *sb;
@@ -3639,154 +4758,6 @@ void plemove(Panel *p, Point d){
 @
 
 
-\section{Dialog message}
-
-<<struct [[Message]]>>=
-struct Message{
-    // ref_own<string>
-    char *text;
-
-    Vector minsize;
-};
-@
-
-\subsection{Initializing}
-
-<<function [[plmessage]]>>=
-Panel *plmessage(Panel *parent, int flags, int wid, char *msg){
-    Panel *v;
-
-    v=pl_newpanel(parent, sizeof(Message));
-    plinitmessage(v, flags, wid, msg);
-    return v;
-}
-@
-
-<<function [[plinitmessage]]>>=
-void plinitmessage(Panel *v, int flags, int wid, char *msg){
-    Message *mp = v->data;
-
-    v->flags=flags|LEAF;
-
-    v->draw=pl_drawmessage;
-    v->hit=pl_hitmessage;
-    v->type=pl_typemessage;
-
-    v->getsize=pl_getsizemessage;
-    v->childspace=pl_childspacemessage;
-
-    mp->text=msg;
-    mp->minsize=Pt(wid, font->height);
-
-    v->kind="message";
-}
-@
-
-\subsection{Drawing}
-
-<<function [[pl_drawmessage]]>>=
-void pl_drawmessage(Panel *p){
-    pl_textmsg(p->b, pl_box(p->b, p->r, PASSIVE), font, 
-               ((Message *)p->data)->text);
-}
-@
-
-<<function [[pl_textmsg]]>>=
-void pl_textmsg(Image *b, Rectangle r, Font *f, char *s){
-    char *start, *end;	/* of line */
-    Point where;
-    int lwid, c, wid;
-
-    where=r.min;
-    wid=r.max.x-r.min.x;
-    do{
-        start=s;
-        lwid=0;
-        end=s;
-        do{
-            for(;*s!=' ' && *s!='\0';s=pl_nextrune(s)) lwid+=pl_runewidth(f, s);
-            if(lwid>wid) break;
-            end=s;
-            for(;*s==' ';s=pl_nextrune(s)) lwid+=pl_runewidth(f, s);
-        }while(*s!='\0');
-        if(end==start)	/* can't even fit one word on line! */
-            end=s;
-        c=*end;
-        *end='\0';
-        string(b, where, display->black, ZP, f, start);
-        *end=c;
-        where.y+=font->height;
-        s=end;
-        while(*s==' ') s=pl_nextrune(s);
-    }while(*s!='\0');
-}
-@
-
-
-\subsection{Reacting}
-
-<<function [[pl_hitmessage]]>>=
-bool pl_hitmessage(Panel *g, Mouse *m){
-    USED(g, m);
-    return false;
-}
-@
-
-<<function [[pl_typemessage]]>>=
-void pl_typemessage(Panel *g, Rune c){
-    USED(g, c);
-}
-@
-
-\subsection{Packing methods}
-
-<<function [[pl_getsizemessage]]>>=
-Vector pl_getsizemessage(Panel *p, Vector children){
-    Message *mp = p->data;
-
-    USED(children);
-    return pl_boxsize(pl_foldsize(font, mp->text, mp->minsize.x), PASSIVE);
-}
-@
-
-<<function [[pl_foldsize]]>>=
-Point pl_foldsize(Font *f, char *s, int wid){
-    char *start, *end;	/* of line */
-    Point size;
-    int lwid, ewid;
-    size=Pt(0,0);
-    do{
-        start=s;
-        lwid=0;
-        end=s;
-        ewid=lwid;
-        do{
-            for(;*s!=' ' && *s!='\0';s=pl_nextrune(s)) lwid+=pl_runewidth(f, s);
-            if(lwid>wid) break;
-            end=s;
-            ewid=lwid;
-            for(;*s==' ';s=pl_nextrune(s)) lwid+=pl_runewidth(f, s);
-        }while(*s!='\0');
-        if(end==start){	/* can't even fit one word on line! */
-            ewid=lwid;
-            end=s;
-        }
-        if(ewid>size.x) size.x=ewid;
-        size.y+=font->height;
-        s=end;
-        while(*s==' ') s=pl_nextrune(s);
-    }while(*s!='\0');
-    return size;
-}
-@
-
-<<function [[pl_childspacemessage]]>>=
-void pl_childspacemessage(Panel *p, Point *ul, Point *size){
-    USED(p, ul, size);
-}
-@
-
-
 \section{Text view}
 
 <<struct [[Textview]]>>=
@@ -3799,7 +4770,7 @@ struct Textview{
     int twid;			/* text width */
     int thgt;			/* text height */
     Point minsize;			/* smallest acceptible window size */
-    int buttons;
+    buttons buttons;
 };
 @
 
@@ -3935,7 +4906,7 @@ Point pl_getsizetextview(Panel *p, Point children){
 @
 
 <<function [[pl_childspacetextview]]>>=
-void pl_childspacetextview(Panel *g, Point *ul, Point *size){
+void pl_childspacetextview(Panel *g, Point *ul, Vector *size){
     USED(g, ul, size);
 }
 @
@@ -4080,6 +5051,12 @@ void pl_rtdraw(Image *b, Rectangle r, Rtext *t, int yoffs){
     }
     if(b!=bb)
         draw(bb, r, b, 0, r.min);
+}
+@
+
+<<function [[pl_clr]]>>=
+void pl_clr(Image *b, Rectangle r){
+    draw(b, r, display->white, 0, ZP);
 }
 @
 
@@ -4337,23 +5314,27 @@ void pl_pasteedit(Panel *p, char *s){
 
 \section{Hooks}
 
-<<[[Panel]] user fields>>=
+<<[[Panel]] user-specific fields>>=
 int user;					/* available for user */
 void *userp;					/* available for user */
 @
 % ex of use? adv topics?
 
-\section{Advanced flags}
+\section{Advanced layout}
+% advanced packing?
 
 \subsection{[[FIXEDX]], [[FIXEDY]]}
-\t seems dead
 
 <<constant [[FIXEDX]]>>=
 #define	FIXEDX	0x0400
 @
-
 <<constant [[FIXEDY]]>>=
 #define	FIXEDY	0x0800
+@
+% used in mothra?
+
+<<[[Panel]] fixed size field>>=
+Point fixedsize;				/* size of Panel, if FIXED */
 @
 
 <<[[pl_sizereq()]] if [[FIXEDX]] or [[FIXEDY]]>>=
@@ -4361,9 +5342,6 @@ if(p->flags&FIXEDX) p->sizereq.x=p->fixedsize.x;
 if(p->flags&FIXEDY) p->sizereq.y=p->fixedsize.y;
 @
 
-<<[[Panel]] extra public fields>>=
-Point fixedsize;				/* size of Panel, if FIXED */
-@
 
 <<constant [[FIXED]]>>=
 #define	FIXED	0x0c00		/* don't pass children's size requests through to parent */
@@ -4377,6 +5355,15 @@ Point fixedsize;				/* size of Panel, if FIXED */
 @
 <<constant [[MAXY]]>>=
 #define	MAXY	0x2000		/* make y size as big as biggest sibling's */
+@
+
+<<[[pl_sizeref()]] other locals>>=
+Vector maxsize = Pt(0,0);
+@
+
+<<[[pl_sizeref()]] when looping over children, adjust [[maxsize]]>>=
+if(cp->sizereq.x>maxsize.x) maxsize.x=cp->sizereq.x;
+if(cp->sizereq.y>maxsize.y) maxsize.y=cp->sizereq.y;
 @
 
 <<[[pl_sizereq()]] if [[MAXX]] or [[MAXY]]>>=
@@ -4504,14 +5491,14 @@ Point pl_getsizeerror(Panel *g, Point childsize){
 @
 
 <<function [[pl_childspaceerror]]>>=
-void pl_childspaceerror(Panel *g, Point *ul, Point *size){
+void pl_childspaceerror(Panel *g, Point *ul, Vector *size){
     USED(ul, size);
     pl_unexpected(g, "childspace");
 }
 @
 
 <<function [[pl_scrollerror]]>>=
-void pl_scrollerror(Panel *g, int dir, int button, int num, int den){
+void pl_scrollerror(Panel *g, int dir, buttons button, int num, int den){
     USED(dir, button, num, den);
     pl_unexpected(g, "scroll");
 }
