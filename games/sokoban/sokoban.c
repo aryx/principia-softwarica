@@ -22,7 +22,7 @@ char	*GoalCargoImage= SOKOIMG "goalcargo.bit";
 char	*GoalImage =	SOKOIMG "goal.bit";
 char	*WinImage =	SOKOIMG "win.bit";
 
-char *buttons[] = 
+char *menubuttons[] = 
 {
 	"restart",
 	"easy",
@@ -36,7 +36,7 @@ char **levelnames;
 
 Menu menu = 
 {
-	buttons,
+	menubuttons,
 };
 
 Menu lmenu =
@@ -235,7 +235,7 @@ main(int argc, char **argv)
 	buildmenu();
 
 	animate = 0;
-	buttons[3] = animate ? "noanimate" : "animate";
+	menubuttons[3] = animate ? "noanimate" : "animate";
 
 	if(initdraw(nil, nil, "sokoban") < 0)
 		sysfatal("initdraw failed: %r");
@@ -300,7 +300,7 @@ main(int argc, char **argv)
 					break;
 				case 3:
 					animate = !animate;
-					buttons[3] = animate ? "noanimate" : "animate";
+					menubuttons[3] = animate ? "noanimate" : "animate";
 					break;
 				case 4:
 					exits(nil);

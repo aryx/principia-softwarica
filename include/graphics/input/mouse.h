@@ -14,12 +14,17 @@ enum Click {
 };
 /*e: enum [[Click]] */
 
+/*s: type [[buttons]] */
+// bitset<enum<Click>>
+typedef int buttons;
+/*e: type [[buttons]] */
+
 /*s: struct [[Mouse]] */
 struct	Mouse
 {
     Point	xy;
     // bitset<enum<Click>>
-    int	buttons;	/* bit array: LMR=124 */
+    buttons	buttons;	/* bit array: LMR=124 */
 
     ulong	msec;
 };

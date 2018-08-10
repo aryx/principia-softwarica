@@ -112,7 +112,7 @@ void	paste(Text*, int);
 void	snarf(Text*, int);
 int	center(Flayer*, long);
 int	xmenuhit(int, Menu*);
-void	buttons(int);
+void	xbuttons(int);
 int	getr(Rectangle*);
 void	current(Flayer*);
 void	duplicate(Flayer*, Rectangle, Font*, int);

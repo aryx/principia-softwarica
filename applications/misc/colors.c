@@ -57,7 +57,7 @@ eresized(bool new)
 /*e: function eresized (windows/apps/colors.c) */
 
 /*s: global [[buttons]] */
-static char *buttons[] =
+static char *menubuttons[] =
 {
     "exit",
     0
@@ -79,7 +79,7 @@ grey(int i)
 /*s: global [[menu]] */
 static Menu menu =
 {
-    buttons
+    menubuttons
 };
 /*e: global [[menu]] */
 

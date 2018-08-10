@@ -28,6 +28,11 @@ enum
 };
 /*e: enum [[_anon_ (include/event.h)2]] */
 
+/*s: type [[buttons]] */
+// bitset<enum<Click>>
+typedef int buttons;
+/*e: type [[buttons]] */
+
 /*s: struct Mouse (include/event.h) */
 struct	Mouse
 {

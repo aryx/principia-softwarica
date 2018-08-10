@@ -129,7 +129,7 @@ current(Flayer *nw)
 		flushtyping(1);
 		flupfront(nw);
 		flborder(nw, 1);
-		buttons(Up);
+		xbuttons(Up);
 		t = (Text *)nw->user1;
 		t->front = nw-&t->l[0];
 		if(t != &cmd)
@@ -206,7 +206,7 @@ duplicate(Flayer *l, Rectangle r, Font *f, int close)
 }
 
 void
-buttons(int updown)
+xbuttons(int updown)
 {
 	while(((mousep->buttons&7)!=0) != updown)
 		getmouse();
