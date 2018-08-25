@@ -1845,6 +1845,12 @@ let init_global_map () =
 % actually have polymorphic variables! trick using phantom types.
 % See appendix (or put more of local.ml here?)
 
+% The trick is that you need to have an intermediate type that
+% designed a variable symbolically which can refer to a global store,
+% or buffer local store, or major mode store. So you need an 
+% intermediate! They use indeed a "string" to store the name of
+% the variable symbolically.
+
 % why need variables in emacs? to configure things! e.g. level
 % of indentation for this major mode. You can overwrite also
 % global settings. Configurable editor! Easy way to add
@@ -1859,7 +1865,7 @@ mutable buf_vars : Local.vars;
 <<[[Efuns.location]] other fields>>=
 loc_vars : Local.vars;
 @
-%todo: does not read good, looks like local variables when really
+\t todo: does not read good, looks like local variables when really
 % it's global variables here, loc = location, and Local = ???
 
 % different scopes again:
@@ -1868,39 +1874,39 @@ loc_vars : Local.vars;
 % - major mode
 % - minor mode
 
-<<function [[Efuns.set_global]]>>=
+<<function [[Var.set_global]]>>=
 let set_global var value = 
   Local.set (Globals.location()).loc_vars var value
 @
-<<function [[Efuns.set_local]]>>=
+<<function [[Var.set_local]]>>=
 let set_local buf var value = 
   Local.set buf.buf_vars var value
 @
 
-<<function [[Efuns.get_global]]>>=
+<<function [[Var.get_global]]>>=
 let get_global var = 
   Local.get (location()).loc_vars var
 @
 %todo: put the type of the .mli here? subtle signature. polymorphic vars!
-% why want to use get_global? get_var should be the way to go always no?
+\t why want to use get_global? get_var should be the way to go always no?
 
-<<function [[Efuns.get_local]]>>=
+<<function [[Var.get_local]]>>=
 let get_local buf var = 
   Local.get buf.buf_vars var
 @
 % why want that? get_var should be the way to go
 
 % buffer -> major -> minors -> global
-<<function [[Efuns.get_var]]>>=
+<<function [[Var.get_var]]>>=
 let get_var buf var = 
   try 
     Local.get buf.buf_vars var 
   with Not_found ->
     try 
-      <<[[Efuns.get_var()]] try with major mode variables>>
+      <<[[Var.get_var()]] try with major mode variables>>
     with Not_found ->
       try 
-        <<[[Efuns.get_var()]] try with minor mode variables>>
+        <<[[Var.get_var()]] try with minor mode variables>>
       with Not_found ->
         Local.get (location()).loc_vars var
 @
@@ -1937,6 +1943,9 @@ define_action "describe_variable"  Complexe.describe_variable;
 let variable_hist = ref []
 @
 
+\section{Options}
+
+% This is used when you want something to be set in a config file.
 
 \section{Hooks}
 % essentially a set of list refs
@@ -1947,7 +1956,8 @@ let variable_hist = ref []
 %    will see in main chapter.
 % - named hooks, for frame a buffer actions, so take a string (action name)
 %   for parameter. why not does not take the action function directly?
-%   because want to possibly save such hooks configuration in a file
+%   because want to possibly save such hooks configuration in a file 
+%   (meh?)
 
 % again, configurable editor spirit so hooks to customize things,
 % place where you can plug a customization at certain code points
@@ -1967,6 +1977,7 @@ let add_hook hook_var hook =
   let tail = try Var.get_global hook_var with _ -> [] in
   Var.set_global hook_var (hook :: tail)
 @
+\t why get_global? why not get_var so it can be altered
 
 
 % example:
@@ -2039,13 +2050,11 @@ let exec_named_buf_hooks_with_abort hooks frame =
 
 % example:
 <<constant [[Ebuffer.save_buffer_hooks]]>>=
-(*
 let save_buffer_hooks = define_option ["save_buffer_hooks"] "" 
     (list_option string_option)
   [ ]
-*)
 @
-% use
+
 
 \subsection{Startup hooks}
 
@@ -4577,7 +4586,7 @@ mutable buf_last_saved : Text.version;
 
 <<function [[Ebuffer.save]]>>=
 let save buf =
-  Hook.exec_named_buf_hooks_with_abort !!saved_buffer_hooks buf;
+  Hook.exec_named_buf_hooks_with_abort !!save_buffer_hooks buf;
 
   let filename =
     match buf.buf_filename with
@@ -4591,6 +4600,7 @@ let save buf =
 
   Hook.exec_named_buf_hooks !!saved_buffer_hooks buf
 @
+%bug: was saved_xxx two times before
 
 <<function [[Text.save]]>>=
 let save text outc =
@@ -4609,7 +4619,7 @@ let save text outc =
 % see also in core DS chapter
 % - create_buf_hook  (check_file)
 % - change_buffer_hooks
-% - save_buffer_hooks (dead??)
+% - save_buffer_hooks
 % - saved_buffer_hooks
 
 
@@ -9293,6 +9303,9 @@ let fondamental_mode frame =
 let fondamental_mode = new_major_mode "Fondamental" [] (* no hooks *)
 @
 
+% always same pattern and flow:
+% "xxx_mode" action -> xxx_mode func -> xxx_mode variable -> hooks (install)
+
 \section{Auto detection}
 
 <<constant [[Ebuffer.modes_alist]]>>=
@@ -9401,7 +9414,7 @@ let status_major_mode frame  =
 
 \section{Major mode variables and keys}
 
-<<function [[Efuns.set_major_var]]>>=
+<<function [[Var.set_major_var]]>>=
 let set_major_var maj var value = 
   Local.set maj.maj_vars var value
 @
@@ -9420,7 +9433,7 @@ let add_major_key major =
   | Unbound -> ());
 @
 
-<<[[Efuns.get_var()]] try with major mode variables>>=
+<<[[Var.get_var()]] try with major mode variables>>=
 Local.get buf.buf_major_mode.maj_vars var
 @
 
@@ -9654,7 +9667,7 @@ let modep buf minor =
 
 \section{Minor mode variables and keys}
 
-<<function [[Efuns.set_minor_var]]>>=
+<<function [[Var.set_minor_var]]>>=
 let set_minor_var min var value = 
   Local.set min.min_vars var value
 @
@@ -9676,7 +9689,7 @@ buf.buf_minor_modes |> List.iter (fun minor ->
 ); 
 @
 
-<<[[Efuns.get_var()]] try with minor mode variables>>=
+<<[[Var.get_var()]] try with minor mode variables>>=
 let rec iter list =
   match list with
   | [] -> raise Not_found
