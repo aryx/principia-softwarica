@@ -22,7 +22,8 @@
 % - removed some redundant functions (Top_window.dummy_action)
 % - cleaner conventions and field names between point and position, no more
 %   let point = point.point uglyness
-% - use global for editor instead of all those fields
+% - use global for editor instead of all those fields and renamed it from
+%   confusing 'location' name
 % - removed useless opti around representation, and renamed line_repr,
 %   repr_line; use boxes instead. 'repr' was used for too many things.
 % - more cohesion, e.g. Select and Simple buffer stuff in 
@@ -88,7 +89,7 @@ Principia Softwarica: The Text Editor [[efuns]]
 }\\
 {version 0.1}
 }
-\l actually it should be The Screen Text Editor
+\l The Screen Text Editor
 
 \author{
 Yoann Padioleau\\
@@ -1148,6 +1149,7 @@ top_window.top_active_frame <- frame;
 let rec top window = 
   match window.win_up with
   | TopWindow top_window -> top_window
+  (* recurse *)
   | Window window -> top window
 @
 %old: was used to access the editor, but
@@ -1266,7 +1268,7 @@ Hashtbl.add (Globals.editor()).edt_buffers name buf;
 % sometimes have the buffer and want to find the frame
 % (opposite of frame.frm_buffer)
 
-% ??? -> <>
+% next_error | ??? -> <>
 <<function [[Frame.find_buffer_frame]]>>=
 let find_buffer_frame buf =
   try
@@ -1296,7 +1298,7 @@ exception FoundFrame of frame
 
 \section{[[Action.t]]}
 
-% have seen the data mostly, loc, frame, buffer, text.
+% have seen the data mostly: editor, frame, buffer, text.
 % now how modify all of that? the control?
 
 <<type [[Efuns.action]]>>=
@@ -1338,6 +1340,7 @@ and generic_action =
 <<type [[Efuns.action_name]]>>=
 and action_name = string
 @
+%pad: I introduced this type
 
 <<global [[Efuns.actions]]>>=
 let (actions : (action_name, generic_action) Hashtbl.t) = 
@@ -1376,18 +1379,20 @@ let define_buffer_action action_name action_fun =
 %let no_action = BufferAction (fun _ -> ())
 %@
 <<function [[Efuns.get_action]]>>=
-let get_action action =
-  try Hashtbl.find actions action 
+let get_action action_name =
+  try Hashtbl.find actions action_name
   with Not_found ->
-    Globals.error "Could not find action %s. Forgot define_action()?" action;
+    Globals.error "Could not find action %s. Forgot define_action()?" 
+        action_name;
     BufferAction (fun _ -> ())
 @
+%pad: action -> action_name for the parameter
 
 % ?? -> <> who will dispatch and know which frame?
 % string -> ocaml code
 <<function [[Efuns.execute_action]]>>=
-let execute_action action = 
-  match (get_action action) with
+let execute_action action_name = 
+  match (get_action action_name) with
   | FrameAction f -> f 
   | BufferAction f -> (fun frame -> f frame.frm_buffer)
 @
@@ -1399,11 +1404,11 @@ let execute_action action =
 \ifallcode
 % exec_named_buf_hooks -> <>
 <<function [[Efuns.execute_buffer_action]]>>=
-let execute_buffer_action action buf =
-  match (get_action action) with
+let execute_buffer_action action_name buf =
+  match (get_action action_name) with
     BufferAction f -> f buf
   | FrameAction _f -> 
-      Globals.error "Can't apply action %s on buffer" action
+      Globals.error "Can't apply action %s on buffer" action_name
 @
 \fi
 
@@ -1594,6 +1599,9 @@ let create () =
   } 
 @
 % will see interactives later
+% but not sure it's useful to have different interactives, one global,
+% one for the buffer, and one for the major and minor. Those interactives
+% could be set in a global.
 
 <<[[Efuns.buffer]] other fields>>=
 buf_map : map;
@@ -1665,13 +1673,13 @@ let interactive map =
   <<[[Keymap.interactive()]] add keylist and name to interactives list>>
   add_binding map keylist f
 @
-%less: rename? add_key_binding_and_interactive_name?
+\t rename add_key_binding_and_interactive_name?
 % see Keymap.add_binding later *)
 
 
 
 
-
+% see option later
 <<constant [[Std_efunsrc.global_map]]>>=
 let global_map = define_option ["global_map"] "" 
   (list_option Simple.binding_option) []
@@ -1837,14 +1845,15 @@ let init_global_map () =
 
 \section{[[Var.t]]}
 
-% actually have polymorphic variables! trick using phantom types.
-% See appendix (or put more of local.ml here?)
+% polymorphic typed variables in the same store!
+% trick using phantom types. See appendix (or put more of store.ml here?)
 
+% Moreover the same variable can be looked in different stores.
 % The trick is that you need to have an intermediate type that
-% designed a variable symbolically which can refer to a global store,
+% designs a variable symbolically which can refer to a global store,
 % or buffer local store, or major mode store. So you need an 
 % intermediate! They use indeed a "string" to store the name of
-% the variable symbolically.
+% the variable symbolically. Could be also a gensym.
 
 % why need variables in emacs? to configure things! e.g. level
 % of indentation for this major mode. You can overwrite also
@@ -1859,7 +1868,8 @@ type 'a t = 'a Store.var
 <<[[Efuns.buffer]] other fields>>=
 mutable buf_vars : Store.t;
 @
-% less: rename Local? why Local?
+% Note that no 'a here! And can contain variables with different type!
+% And can still be typesafe! Magic!
 
 <<[[Efuns.editor]] other fields>>=
 edt_vars : Store.t;
@@ -1943,6 +1953,7 @@ let variable_hist = ref []
 \section{[[Option.t]]}
 
 % This is used when you want something to be set in a config file.
+% Use of !!. See the code to manage global_map before.
 
 \section{Hooks}
 % essentially a set of list refs
@@ -1974,7 +1985,8 @@ let add_hook hook_var hook =
   let tail = try Var.get_global hook_var with _ -> [] in
   Var.set_global hook_var (hook :: tail)
 @
-\t why get_global? why not get_var so it can be altered
+\t why get_global? why not get_var so it can be altered? but then
+\t  alter which store?
 
 
 % example:
@@ -2052,7 +2064,7 @@ let save_buffer_hooks = define_option ["save_buffer_hooks"] ""
     (list_option string_option)
   [ ]
 @
-
+% Here an Option.t, but it's better to use a Var.t for that
 
 \subsection{Startup hooks}
 
@@ -2064,7 +2076,7 @@ let save_buffer_hooks = define_option ["save_buffer_hooks"] ""
 
 \chapter{[[main()]]}
 
-% there is actually no really main() in ocaml, instead
+% there are actually no really main() in ocaml, instead
 % a list of toplevels doing stuff (in the order of the linking)
 %update: but I reorganizeded the code to gather stuff in a main(), 
 % more readable.
@@ -2179,6 +2191,7 @@ let font = define_option ["font"] "" string_option "Monospace 20"
 %pad: was fixed
 %macos specific?
 
+%\section{Command-line style parameters}
 
 <<constants [[Main.xxx_opt]]>>=
 let width_opt = ref None
@@ -2356,18 +2369,15 @@ let backend top_window =
 % main -> Graphics_efuns.init -> <>
 <<function [[Top_window.create]]>>=
 let create () =
-  let loc = Globals.editor() in
-  let buf = 
-    Ebuffer.default "*help*" in
+  let edt = Globals.editor() in
+  let buf = Ebuffer.default "*help*" in
   (* keep one line for the minibuffer, hence the -1 *)
-  let window = 
-    Window.create_at_top  0 0 loc.edt_width (loc.edt_height - 1) in
-  let frame = 
-    Frame.create_without_top window None buf in
+  let window = Window.create_at_top  0 0 edt.edt_width (edt.edt_height - 1) in
+  let frame = Frame.create_without_top window None buf in
   let top_window =
     { 
-      top_width = loc.edt_width;
-      top_height = loc.edt_height;
+      top_width = edt.edt_width;
+      top_height = edt.edt_height;
       window = window;
       top_active_frame = frame;
 
@@ -2382,7 +2392,7 @@ let create () =
 
   (* adjust what Window.create_at_top could not do *)
   frame.frm_window.win_up <- TopWindow top_window;
-  loc.top_windows <- top_window :: loc.top_windows;
+  edt.top_windows <- top_window :: edt.top_windows;
 
   top_window
 @
@@ -2676,6 +2686,10 @@ match () with
 
 
 %less: put here the binding for the very basic keys? 'a', 'b', etc?
+
+
+
+
 
 \chapter{Text Management}
 
