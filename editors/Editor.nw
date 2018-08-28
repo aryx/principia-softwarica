@@ -22,7 +22,7 @@
 % - removed some redundant functions (Top_window.dummy_action)
 % - cleaner conventions and field names between point and position, no more
 %   let point = point.point uglyness
-% - use global for location instead of all those fields
+% - use global for editor instead of all those fields
 % - removed useless opti around representation, and renamed line_repr,
 %   repr_line; use boxes instead. 'repr' was used for too many things.
 % - more cohesion, e.g. Select and Simple buffer stuff in 
@@ -731,7 +731,7 @@ and buffer =
   { 
     mutable buf_text : Text.t;
 
-    (* should be unique; can be used as a primary key in location.loc_buffers*)
+    (* should be unique; can be used as a primary key in editor.edt_buffers *)
     mutable buf_name : string;
     mutable buf_filename : string option;
 
@@ -742,7 +742,7 @@ and buffer =
 @
 % string option because buffers like *Messages* are not connected to a file
 % buf_name should be unique, because it's used as a key to
-% the location.loc_buffers hashtbl (see also get_unique_name())
+% the editor.edt_buffers hashtbl (see also get_unique_name())
 
 % diff with Text? 
 % - have a name, Text is really just the content. 
@@ -844,7 +844,7 @@ let create name filename text local_map =
       <<[[Ebuffer.create()]] buffer other fields setup>>
 
     } in
-  <<[[Ebuffer.create()]] adjust location global fields>>
+  <<[[Ebuffer.create()]] adjust editor global fields>>
   <<[[Ebuffer.create()]] adjust charreprs>>
   <<[[Ebuffer.create()]] run hooks>>
   buf
@@ -1150,10 +1150,10 @@ let rec top window =
   | TopWindow top_window -> top_window
   | Window window -> top window
 @
-%old: was used to access the location, but
-% not sure why you need that since the location
+%old: was used to access the editor, but
+% not sure why you need that since the editor
 % is also accessible in the frame and buffer
-% Anyway now location is a global, so you need this function a bit less
+% Anyway now editor is a global, so you need this function a bit less
 %note: since an action takes a frame and many actions have effect
 % on the top window, you need this function.
 
@@ -1167,8 +1167,7 @@ let rec top window =
 %is done to easily save the editor state after a session (or to move it
 %from one editor to another)."
 %history: called location in LeFessant's terminology. Why? jocaml ancestry 
-% I think.
-% There is a "loc" keyword in jocaml, and efuns was originally a demo
+% I think. There is a "loc" keyword in jocaml, and efuns was originally a demo
 % for jocaml.
 
 
@@ -1211,15 +1210,16 @@ type editor =
 % head of list is current?
 
 
-<<global [[Efuns.global_location]]>>=
-let global_location = ref None
+<<global [[Efuns.global_editor]]>>=
+let global_editor = ref None
 @
-<<function [[Efuns.location]]>>=
-let location () =
-  match !global_location with
-  | None -> failwith "no global location defined"
+<<function [[Efuns.editor]]>>=
+let editor () =
+  match !global_editor with
+  | None -> failwith "no global editor defined"
   | Some x -> x
 @
+%old: was called locations (), in reference to jocaml history
 
 %<<[[Efuns.buffer]] other fields>>=
 %(*buf_location : location;*)
@@ -1237,8 +1237,8 @@ let location () =
 % with migration idea of data, so he could not use
 % globals so much, but I don't need jocaml or this feature.
 
-<<[[Ebuffer.create()]] adjust location global fields>>=
-Hashtbl.add (Globals.location()).loc_buffers name buf;
+<<[[Ebuffer.create()]] adjust editor global fields>>=
+Hashtbl.add (Globals.editor()).loc_buffers name buf;
 @
 %less: what about loc_files? Ebuffer.create can be passed
 % a Some file, in which case we should perhaps modify
@@ -1270,7 +1270,7 @@ Hashtbl.add (Globals.location()).loc_buffers name buf;
 <<function [[Frame.find_buffer_frame]]>>=
 let find_buffer_frame buf =
   try
-    (Globals.location()).top_windows |> List.iter (fun top_window ->
+    (Globals.editor()).top_windows |> List.iter (fun top_window ->
       top_window.window |> Window.iter (fun frame -> 
         if frame.frm_buffer == buf 
         then raise (FoundFrame frame)
@@ -1319,11 +1319,11 @@ type t = Efuns.action
 % the only thing passed is the frame/window where the event
 % occured (the active frame with the cursor), but sometimes an action
 % then need to have global
-% effects (in which case it can use location()), or the upper
+% effects (in which case it can use editor()), or the upper
 % frames/windows, which means we need from the frame to be able
 % to access lots of information, hence the introduction of
 % certain fields in the frame data structure.
-% update: actually can now use location global.
+% update: actually can now use editor global.
 
 <<type [[Efuns.generic_action]]>>=
 and generic_action =
@@ -1631,7 +1631,7 @@ mutable buf_map_partial : bool;
 % but always true no?
 <<[[Ebuffer.get_binding()]] if partial map>>=
 if buf.buf_map_partial then
-  (let b = Keymap.get_binding (Globals.location()).loc_map keylist in
+  (let b = Keymap.get_binding (Globals.editor()).loc_map keylist in
     match b with
     | Prefix map -> binding := b;
     | Function f -> binding := b; raise Exit
@@ -1646,7 +1646,7 @@ if buf.buf_map_partial then
 
 <<function [[Keymap.add_global_key]]>>=
 let add_global_key = fun prefix string action ->
-  interactive (Globals.location()).loc_map prefix string action
+  interactive (Globals.editor()).loc_map prefix string action
 @
 <<function [[Keymap.add_local_key]]>>=
 let add_local_key buf = 
@@ -1830,9 +1830,9 @@ let init_global_map () =
   ()
 @
 
-%  Keymap.add_global_key location [NormalMap, XK.xk_dead_circumflex]
+%  Keymap.add_global_key editor [NormalMap, XK.xk_dead_circumflex]
 %    "circumflex" (char_insert_command '^');
-%dead:  let gmap = location.loc_map in 
+%dead:  let gmap = editor.loc_map in 
 
 
 \section{[[Var.t]]}
@@ -1864,8 +1864,6 @@ mutable buf_vars : Store.t;
 <<[[Efuns.editor]] other fields>>=
 loc_vars : Store.t;
 @
-\t todo: does not read good, looks like local variables when really
-% it's global variables here, loc = location, and Local = ???
 
 % different scopes again:
 % - global
@@ -1875,7 +1873,7 @@ loc_vars : Store.t;
 
 <<function [[Var.set_global]]>>=
 let set_global var value = 
-  Store.set (Globals.location()).loc_vars var value
+  Store.set (Globals.editor()).loc_vars var value
 @
 <<function [[Var.set_local]]>>=
 let set_local buf var value = 
@@ -1884,7 +1882,7 @@ let set_local buf var value =
 
 <<function [[Var.get_global]]>>=
 let get_global var = 
-  Store.get (location()).loc_vars var
+  Store.get (editor()).loc_vars var
 @
 %todo: put the type of the .mli here? subtle signature. polymorphic vars!
 \t why want to use get_global? get_var should be the way to go always no?
@@ -1907,7 +1905,7 @@ let get_var buf var =
       try 
         <<[[Var.get_var()]] try with minor mode variables>>
       with Not_found ->
-        Store.get (location()).loc_vars var
+        Store.get (editor()).loc_vars var
 @
 
 % was not there originally
@@ -1929,7 +1927,7 @@ let describe_variable frame =
           try
             Store.print buf.buf_vars variable
           with _ ->
-            Store.print (Globals.location()).loc_vars variable)))
+            Store.print (Globals.editor()).loc_vars variable)))
 @
 <<misc actions>>=
 define_action "describe_variable"  Complexe.describe_variable;
@@ -1993,7 +1991,8 @@ Hook.exec_hooks hooks buf;
 % will be set to set_buffer_mode, which use the alist to automatically
 % set the major mode!
 
-
+% Why duplicate varname in string? It's for error message
+% when try to retrieve the content of a variable? 
 
 \subsection{Named action hooks}
 % named so can be put in configuration file
@@ -2105,7 +2104,7 @@ let main () =
    usage_str;
   <<[[main()]] set options>>
 
-  <<[[main()]] initial location>>
+  <<[[main()]] initial editor>>
   <<[[main()]] initialize the world>>
   <<[[main()]] misc initializations>>
 
@@ -2235,10 +2234,10 @@ let check = ref false
 
 
 
-\section{The default world: [[location]]}
+\section{The default [[editor]]}
 
-<<[[main()]] initial location>>=
-let location = {
+<<[[main()]] initial editor>>=
+let editor = {
     loc_buffers = Hashtbl.create 13;
     loc_files = Hashtbl.create 13;
 
@@ -2270,10 +2269,10 @@ let location = {
 %256 because of make_attr() that uses 8 bits for the colors or the fonts.
 
 \section{Startup hooks}
-% hooks on location creation, hence they they a location in parameter
+% hooks on editor creation, hence they take an editor in parameter
 
 <<[[main()]] initialize the world>>=
-init_efuns location (* launch first hooks *);
+init_efuns editor (* launch first hooks *);
 @
 
 % not that this function reset also the start_hooks global!
@@ -2281,8 +2280,8 @@ init_efuns location (* launch first hooks *);
 %  (e.g. in the .efunsrc loading)
 % main -> <>
 <<function [[Efuns.init]]>>=
-let init_efuns location =
-  Globals.global_location := Some location;
+let init_efuns editor =
+  Globals.global_editor := Some editor;
   let hooks = List.rev !Hook.start_hooks in
   Hook.start_hooks := [];
   hooks |> List.iter (fun f -> f ())
@@ -2357,7 +2356,7 @@ let backend top_window =
 % main -> Graphics_efuns.init -> <>
 <<function [[Top_window.create]]>>=
 let create () =
-  let loc = Globals.location() in
+  let loc = Globals.editor() in
   let buf = 
     Ebuffer.default "*help*" in
   (* keep one line for the minibuffer, hence the -1 *)
@@ -2416,7 +2415,7 @@ let create () =
 <<function [[Ebuffer.default]]>>=
 let default name =
   try
-    Hashtbl.find (Globals.location()).loc_buffers name
+    Hashtbl.find (Globals.editor()).loc_buffers name
   with Not_found ->
     let str = 
       if name = "*help*" 
@@ -2447,7 +2446,7 @@ let default name =
 % right now used by shell.ml only
 <<function [[Ebuffer.find_buffer_opt]]>>=
 let find_buffer_opt name =
-  try Some (Hashtbl.find (Globals.location()).loc_buffers name)
+  try Some (Hashtbl.find (Globals.editor()).loc_buffers name)
   with Not_found -> None
 @
 
@@ -2497,8 +2496,8 @@ let create_at_top xpos ypos width height =
 %top#container_add hbar#contained;
 %let xterm = new WX_xterm.t 
 %    hbar#container display
-%    location.loc_width
-%    location.loc_height in
+%    editor.loc_width
+%    editor.loc_height in
 %let ady = new WX_adjust.t () in
 %let scrollbar = new WX_scrollbar.v hbar#container ady [] in
 %hbar#container_add_s [xterm#contained; scrollbar#contained];
@@ -2522,7 +2521,7 @@ let create_at_top xpos ypos width height =
 % Graphics_xxx.init | (event loop -> handle_key) -> <>
 <<function [[Top_window.update_display]]>>=
 let update_display () =
-  (Globals.location()).top_windows |> List.iter (fun top_window ->
+  (Globals.editor()).top_windows |> List.iter (fun top_window ->
      top_window.window |> Window.iter (fun frm -> 
        Frame.display top_window frm
      );
@@ -2587,9 +2586,9 @@ let handler top_window event =
 
 <<function [[Efuns.with_lock]]>>=
 let with_lock f =
-  let loc = location () in
-  Mutex.lock loc.loc_mutex;
-  Common.finalize f (fun () -> Mutex.unlock loc.loc_mutex)
+  let edt = editor () in
+  Mutex.lock edt.loc_mutex;
+  Common.finalize f (fun () -> Mutex.unlock edt.loc_mutex)
 @  
 
 
@@ -3577,17 +3576,17 @@ mutable loc_colors_n : int;
 % have side effect of setting the color if it's not there before!
 <<function [[Window.get_color]]>>=
 let get_color color_name =
-  let location = Globals.location() in
+  let edt = Globals.editor() in
   try
-    Hashtbl.find location.loc_colors color_name
+    Hashtbl.find edt.loc_colors color_name
   with Not_found ->
-    if location.loc_colors_n = 256 
+    if edt.loc_colors_n = 256 
     then raise Not_found
     else begin
-      let n = location.loc_colors_n in
-      location.loc_colors_n <- n + 1;
-      location.loc_colors_names.(n) <- color_name;
-      Hashtbl.add location.loc_colors color_name n;
+      let n = edt.loc_colors_n in
+      edt.loc_colors_n <- n + 1;
+      edt.loc_colors_names.(n) <- color_name;
+      Hashtbl.add edt.loc_colors color_name n;
       n
     end
 @
@@ -3926,17 +3925,17 @@ mutable loc_fonts_n : int;
 % similar to get_color, have the side effect of "allocating" a new font
 <<function [[Window.get_font]]>>=
 let get_font font_name =
-  let location = Globals.location() in
+  let edt = Globals.editor() in
   try
-    Hashtbl.find location.loc_fonts font_name
+    Hashtbl.find edt.loc_fonts font_name
   with Not_found ->
-    if location.loc_fonts_n = 256 
+    if edt.loc_fonts_n = 256 
     then raise Not_found
     else begin
-      let n = location.loc_fonts_n in
-      location.loc_fonts_n <- n + 1;
-      location.loc_fonts_names.(n) <- font_name;
-      Hashtbl.add location.loc_fonts font_name n;
+      let n = edt.loc_fonts_n in
+      edt.loc_fonts_n <- n + 1;
+      edt.loc_fonts_names.(n) <- font_name;
+      Hashtbl.add edt.loc_fonts font_name n;
       n
     end
 @
@@ -4457,10 +4456,10 @@ let load_file window filename =
 % what if file already opened
 <<function [[Ebuffer.read]]>>=
 let read filename local_map =
-  let loc = Globals.location() in
-  let filename = Utils.normal_name loc.loc_dirname filename in
+  let edt = Globals.editor() in
+  let filename = Utils.normal_name edt.loc_dirname filename in
   try
-    Hashtbl.find loc.loc_files filename
+    Hashtbl.find edt.loc_files filename
   with Not_found ->
     let text =
       try
@@ -4473,7 +4472,7 @@ let read filename local_map =
         Text.create ""
     in
     let buf = create filename (Some filename) text local_map in
-    Hashtbl.add loc.loc_files filename buf;
+    Hashtbl.add edt.loc_files filename buf;
     buf
 @
 %todo: use realpath? normal_name?
@@ -4697,7 +4696,7 @@ define_action "write_file"  Complexe.write_buffer;
 
 <<function [[Complex.save_some_buffers]]>>=
 let save_some_buffers frame =
-  let buffers = Utils.list_of_hash (Globals.location()).loc_buffers in
+  let buffers = Utils.list_of_hash (Globals.editor()).loc_buffers in
   save_buffers_and_action frame buffers (fun _ -> ())
 @
 %less: save_buffers_and_action here?
@@ -4727,22 +4726,22 @@ exception BufferAlreadyOpened
 % like for Ebuffer.read, ensure some unicity for filename
 <<function [[Ebuffer.change_name]]>>=
 let change_name buf filename =
-  let loc = Globals.location() in
-  Hashtbl.remove loc.loc_buffers buf.buf_name;
+  let edt = Globals.editor() in
+  Hashtbl.remove edt.loc_buffers buf.buf_name;
   buf.buf_filename |> Common.do_option (fun filename ->
-    Hashtbl.remove loc.loc_files filename
+    Hashtbl.remove edt.loc_files filename
   );
   let filename = 
     if Filename.is_relative filename 
-    then Filename.concat loc.loc_dirname filename
+    then Filename.concat edt.loc_dirname filename
     else filename
   in
-  if Utils.hashtbl_mem loc.loc_files filename
+  if Utils.hashtbl_mem edt.loc_files filename
   then raise BufferAlreadyOpened;
-  let filename = Utils.normal_name loc.loc_dirname filename in
+  let filename = Utils.normal_name edt.loc_dirname filename in
   let name = get_unique_name filename in
-  Hashtbl.add loc.loc_buffers name buf;
-  Hashtbl.add loc.loc_files filename buf;
+  Hashtbl.add edt.loc_buffers name buf;
+  Hashtbl.add edt.loc_files filename buf;
   buf.buf_filename <- Some filename;
   buf.buf_name <- name
 @
@@ -4763,7 +4762,7 @@ define_action "exit"  Complexe.exit_efuns;
 
 <<function [[Complex.exit_efuns]]>>=
 let exit_efuns frame =
-  let buffers = Utils.list_of_hash (Globals.location()).loc_buffers in
+  let buffers = Utils.list_of_hash (Globals.editor()).loc_buffers in
   save_buffers_and_action frame buffers (fun _ -> 
     (* todo: have some exit hooks? *)
     raise (Common.UnixExit 0)
@@ -5473,7 +5472,7 @@ let point_to_x_when_no_cutline buf point =
 % event loop -> ... -> handle_key -> ...; <>; Top_window.update_display()
 <<function [[Top_window.clean_display]]>>=
 let clean_display () =
-  (Globals.location()).top_windows |> List.iter (fun top_window ->
+  (Globals.editor()).top_windows |> List.iter (fun top_window ->
      cursor_off top_window;
      <<[[clean_display()]] sanity check second cursor and minibuffer>>
    )
@@ -6326,7 +6325,7 @@ let create_bindings () =
 <<function [[Keymap.all_bindings]]>>=
 let all_bindings () =
   let s = ref "Default bindings:" in
-  (Globals.location()).loc_map.interactives |> List.iter(fun (name,(_,binding)) ->
+  (Globals.editor()).loc_map.interactives |> List.iter(fun (name,(_,binding)) ->
     match binding with
     | None -> ()
     | Some key_list ->
@@ -6739,7 +6738,7 @@ let meta_hist = ref []
 let buf_interactives buf =
   let interactives = 
     buf.buf_major_mode.maj_map.interactives @
-    (Globals.location()).loc_map.interactives 
+    (Globals.editor()).loc_map.interactives 
   in
   List.fold_left (fun list minor -> minor.min_map.interactives @ list) 
    interactives buf.buf_minor_modes 
@@ -6821,7 +6820,7 @@ if !!interactives_map = [] then begin
 <<[[Std_efunsrc.init_global_map()]] add interactives from [[interactives_map]]>>=
 !!interactives_map |> List.iter (fun (name, action) ->
   try
-    Keymap.add_interactive (Globals.location()).loc_map name 
+    Keymap.add_interactive (Globals.editor()).loc_map name 
       (execute_action action)
   with e ->
     Log.printf "Error for action %s" action;
@@ -6847,7 +6846,7 @@ map.interactives <- (name, (f, Some keylist)) :: map.interactives;
 <<function [[Keymap.define_interactive_action]]>>=
 let define_interactive_action action_name action_fun =
   Action.define_action action_name action_fun;
-  let map = (Globals.location()).loc_map in
+  let map = (Globals.editor()).loc_map in
   add_interactive map action_name action_fun
 @
 %less: rename add_interactive_action?
@@ -8680,7 +8679,7 @@ let replace flag frame query str repl =
 
 <<function [[Simple.buffer_list]]>>=
 let buffer_list frame =
-  (Globals.location()).loc_buffers |> Common.hash_to_list |> List.map fst
+  (Globals.editor()).loc_buffers |> Common.hash_to_list |> List.map fst
 @
 
 
@@ -8708,7 +8707,7 @@ let get_unique_name filename =
   in
   try
     while true do
-      let _ = Hashtbl.find (Globals.location()).loc_buffers (compute_name ()) 
+      let _ = Hashtbl.find (Globals.editor()).loc_buffers (compute_name ()) 
       in 
       incr i
     done; 
@@ -8725,8 +8724,8 @@ let get_unique_name filename =
 <<[[Std_efunsrc]] buffers menu setup>>=
 Top_window.buffers_menu := (fun top_window button () ->
     let buffers = ref [] in
-    let loc = Globals.location() in
-    Hashtbl.iter (fun name _buf -> buffers := name :: !buffers) loc.loc_buffers;
+    let edt = Globals.editor() in
+    Hashtbl.iter (fun name _buf -> buffers := name :: !buffers) edt.loc_buffers;
     let _desc = Array.map (fun name -> 
           (name, Top_window.wrap top_window (fun top_window ->
                 let frame = top_window.top_active_frame in
@@ -8788,7 +8787,7 @@ let change_buffer frame =
 <<function [[Frame.change_buffer]]>>=
 let change_buffer window name = 
   try
-    let buf = Hashtbl.find (Globals.location()).loc_buffers name in
+    let buf = Hashtbl.find (Globals.editor()).loc_buffers name in
     let frame = create window None buf in
     Hook.exec_named_hooks !!change_buffer_hooks frame;
     status_name frame buf.buf_name
@@ -8825,7 +8824,7 @@ let kill_buffer frame =
     | x::xs when x <> buf.buf_name -> 
         prev_buffers := xs;
         (try 
-          Hashtbl.find (Globals.location()).loc_buffers x
+          Hashtbl.find (Globals.editor()).loc_buffers x
         with Not_found -> 
           next_buffer buf
         )
@@ -8849,10 +8848,10 @@ let kill_buffer frame =
 
 <<function [[Ebuffer.kill]]>>=
 let kill buf =
-  let location = Globals.location() in
-  Hashtbl.remove location.loc_buffers buf.buf_name;
+  let edt = Globals.editor() in
+  Hashtbl.remove edt.loc_buffers buf.buf_name;
   buf.buf_filename |> Common.do_option (fun filename ->
-    Hashtbl.remove location.loc_files filename
+    Hashtbl.remove edt.loc_files filename
   );
   List.iter (fun f -> f () ) buf.buf_finalizers;
 (* TODO Gc.compact (); this cause some segfault under plan9 with ocaml light *)
@@ -8988,7 +8987,7 @@ let active frame =
   let top_window = Window.top frame.frm_window in
   top_window.top_active_frame <- frame;
   frame.frm_buffer.buf_filename |> Common.do_option (fun filename ->
-    (Globals.location()).loc_dirname <- Filename.dirname filename
+    (Globals.editor()).loc_dirname <- Filename.dirname filename
   )
 @
 % so loc_dirname is dirname of active frame!
@@ -9729,7 +9728,7 @@ let shell_hist = ref []
 <<function [[System.shell_command]]>>=
 let shell_command frame =
   Select.select_string frame "Run command:" shell_hist "" (fun cmd -> 
-    let pwd = (Globals.location()).loc_dirname in
+    let pwd = (Globals.editor()).loc_dirname in
     start_command pwd "*Command*" (Multi_frames.cut_frame frame) cmd |> ignore)
 @
 
@@ -9760,12 +9759,12 @@ let system pwd buf_name cmd end_action =
   let ins = Unix.descr_of_in_channel inc in
   let tampon = String.create 1000 in
   let active = ref true in
-  let loc = Globals.location () in
+  let edt = Globals.editor () in
   Concur.Thread.add_reader ins (fun () ->
     let pos,str = Text.delete_res text curseur
                     (Text.point_to_eof text curseur) in
     let len = input inc tampon 0 1000 in
-    Mutex.lock loc.loc_mutex;
+    Mutex.lock edt.loc_mutex;
     if len = 0 then begin
       let pid,status = waitpid [WNOHANG] pid in
       (match status with 
@@ -9780,7 +9779,7 @@ let system pwd buf_name cmd end_action =
       (* redraw screen *)
       Top_window.update_display ();
 
-      Mutex.unlock loc.loc_mutex;
+      Mutex.unlock edt.loc_mutex;
       Concur.Thread.remove_reader ins; (* Kill self *)
     end
     else
@@ -9792,7 +9791,7 @@ let system pwd buf_name cmd end_action =
 
     (* redraw screen *)
     Top_window.update_display ();
-    Mutex.unlock loc.loc_mutex
+    Mutex.unlock edt.loc_mutex
   );
 
   let lmap = buf.buf_map in
@@ -9951,7 +9950,7 @@ let current_dir frame =
   let buf = frame.frm_buffer in
   match buf.buf_filename with
   | Some filename -> Filename.dirname filename ^ "/"
-  | None -> (Globals.location()).loc_dirname ^ "/"
+  | None -> (Globals.editor()).loc_dirname ^ "/"
 @
 % note that loc_dirname is actually the dirname of the file of the
 %  active frame (or the cwd of efuns when it was started)
@@ -10459,7 +10458,7 @@ let dabbrev_expand frame =
 <<function [[Simple.next_buffer]]>>=
 (* useful when want to iterate over all buffers, e.g. in dabbrev_expand *)
 let next_buffer buf =
-  let buf_list = Utils.list_of_hash (Globals.location()).loc_buffers in
+  let buf_list = Utils.list_of_hash (Globals.editor()).loc_buffers in
   let rec iter list =
     match list with
       [] -> raise Not_found 
@@ -11118,7 +11117,7 @@ let error f x =
 let message buf m =
   let name = "*Messages*" in
   try
-    let buf = Hashtbl.find (Globals.location()).loc_buffers name in
+    let buf = Hashtbl.find (Globals.editor()).loc_buffers name in
     Text.insert_at_end buf.buf_text (m^"\n");
   with Not_found ->
     create name None (Text.create (m^"\n")) (Keymap.create ()) |> ignore
@@ -11289,6 +11288,7 @@ type 'a var = string
 @
 % phantom type!
 
+% could be a gensym, but string is better for error messages?
 
 <<function [[Store.create_int]]>>=
 let create_int name = 
@@ -11312,7 +11312,8 @@ let (vars_table :
   = Hashtbl.create 203
 @
 % global to all vars! can't have the same key in different
-% table but with different type!
+%   table but with different type!
+% could be a gensym with int for the key.
 
 <<signature function [[Store.create]]>>=
 val create : string -> ('a -> string) -> (string -> 'a) -> 'a var
@@ -11346,6 +11347,7 @@ let no_print x =
 <<function [[Store.no_input]]>>=
 let no_input (s : string) = failwith "This variable can not be set"
 @
+% ???
 
 \subsection{Getter/setter}
 
