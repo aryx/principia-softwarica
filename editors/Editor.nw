@@ -4610,9 +4610,13 @@ let save buf =
   close_out outc;
   buf.buf_last_saved <- Text.version buf.buf_text;
 
-  Hook.exec_named_buf_hooks !!saved_buffer_hooks buf
+  let hooks = try Var.get_var buf saved_buffer_hooks with Not_found -> [] in
+  Hook.exec_hooks hooks buf
 @
 %bug: was saved_xxx two times before
+%old: was using Option.t (!!) for saved_buffer_hooks, but more useful
+% to use a Var.t
+%  Hook.exec_named_buf_hooks !!saved_buffer_hooks buf
 
 <<function [[Text.save]]>>=
 let save text outc =
@@ -4636,10 +4640,13 @@ let save text outc =
 
 
 <<constant [[Ebuffer.saved_buffer_hooks]]>>=
-let saved_buffer_hooks = define_option ["saved_buffer_hooks"] "" 
-    (list_option string_option)
-  ["update_time" ]
+let saved_buffer_hooks = Store.create_abstr "saved_buffer_hooks"
 @
+%old:
+% let saved_buffer_hooks = define_option ["saved_buffer_hooks"] "" 
+%    (list_option string_option)
+%  ["update_time" ]
+% but more flexible to use a Var (so can customize it in major mode)
 
 <<misc actions>>=
 define_buffer_action "update_time" Complexe.update_time;
@@ -5781,7 +5788,7 @@ String.blit editname 0 status.status_string 5 (String.length editname);
 @
 
 <<constant [[Frame.dummy_mode]]>>=
-let dummy_mode = Ebuffer.new_major_mode "" []
+let dummy_mode = Ebuffer.new_major_mode "" None
 @
 
 <<constant [[Frame.editname]]>>=
@@ -9267,13 +9274,14 @@ and major_mode = {
 
 % toplevel fondamental_mode | every major modes  -> <>
 <<function [[Ebuffer.new_major_mode]]>>=
-let new_major_mode name hooks = {
+let new_major_mode name hook_opt = {
     maj_name = name;
     maj_map = Keymap.create ();
-    maj_hooks = hooks;
+    maj_hooks = (match hook_opt with None -> [] | Some hook -> [hook]);
     maj_vars = Store.new_store ();
   }
 @
+%old: was passing hooks as parameter, but always 0 or 1 elt
 
 
 % set_buffer_mode -> <>
@@ -9312,7 +9320,7 @@ let fondamental_mode frame =
 @
 
 <<constant [[Ebuffer.fondamental_mode]]>>=
-let fondamental_mode = new_major_mode "Fondamental" [] (* no hooks *)
+let fondamental_mode = new_major_mode "Fondamental" None (* no hooks *)
 @
 
 % always same pattern and flow:
@@ -11430,6 +11438,8 @@ let input = set_input
 
 % options.ml
 % quite important again, you want the editor to be customizable!
+
+% define_option
 
 \section{Adding options}
 
