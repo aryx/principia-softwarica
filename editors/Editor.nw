@@ -1742,6 +1742,7 @@ let c_h = (ControlMap, Char.code 'h')
 (* ------------- *)
 (* Inserting *)
 (* ------------- *)
+(* see also the start_hook in simple.ml setting many self_insert_cmd *)
 <<inserting keys>>
 (* ------------- *)
 (* Deleting *)
@@ -1810,6 +1811,8 @@ let c_h = (ControlMap, Char.code 'h')
 (* Misc *)
 (* -------------------------------------------------------- *)
 <<misc keys>>
+[c_x; NormalMap, Char.code '='], "cursor_position";
+
 @
 
 %XXX
@@ -2323,7 +2326,8 @@ let add_start_hook hook =
 let _ =
   Hook.add_start_hook (fun () ->
     <<[[Std_efunsrc._5]] start hooks options>>
-    init_global_map ()
+    init_global_map ();
+    Hook.add_hook Top_window.handle_key_start_hook Complexe.check_file;      
   )
 @
 
@@ -2812,6 +2816,7 @@ let get_char text point =
 
 <<misc actions>>=
 define_action "describe_position" Complexe.describe_position;
+define_action "cursor_position" Complexe.cursor_position;
 @
 <<[[interactives_map]] initial entries>>=
 "describe_position";
@@ -6823,6 +6828,9 @@ let interactives_map = define_option ["interactives_map"] ""
 @
 
 <<[[Std_efunsrc.toplevel]] set [[interactives_map]]>>=
+(* todo: we should consider all actions as interactives; 
+ * useless repetition here.
+ *)
 if !!interactives_map = [] then begin
     interactives_map =:= List.map (fun x -> x, x ) [
       <<[[interactives_map]] initial entries>>
@@ -7762,7 +7770,12 @@ let kill_end_of_line frame =
   let buf = frame.frm_buffer in
   let text = buf.buf_text in
   let eol = point_to_end frame in
-  let len = if eol = 0 then 1 else eol in
+  let len = 
+    (* if already at eol then kill the newline *)
+    if eol = 0 
+    then 1 
+    else eol 
+  in
   kill_text text frame.frm_point len
 @
 
@@ -7865,6 +7878,8 @@ let kill_region frame =
     if mark > point then (point,mark) else (mark,point)
   in
   let _,region = Text.delete_res text start (Text.distance text start term) in
+  (* less: would be better to do that in kill_string *)
+  add_clipboard frame region;
   kill_string region
 @
 
@@ -7908,8 +7923,10 @@ let copy_region frame =
     if mark > point then (point,mark) else (mark,point)
   in
   let region = Text.sub text start (Text.distance text start term) in
+  add_clipboard frame region;
   kill_string region;
   let top_window = Window.top frame.frm_window in
+  (* need a message because as opposed to a cut this is not directly visible *)
   Top_window.message top_window "Region saved"
 @
 
@@ -7956,7 +7973,21 @@ let insert_killed frame =
   let buf = frame.frm_buffer in
   let text = buf.buf_text in
   let point = frame.frm_point in
-  let pos, len =  Text.insert_res text point kill_ring.(0) in
+
+(*
+  let top_window = Window.top frame.frm_window in
+  let graphic = Efuns.backend top_window in
+  let str =
+    match graphic.Xdraw.get_clipboard () with
+    | None | Some "" -> kill_ring.(0)
+    | Some s -> 
+      graphic.Xdraw.set_clipboard None;
+      s
+  in
+*)
+  let str = kill_ring.(0) in
+
+  let pos, len =  Text.insert_res text point str in
   Text.fmove text point len; 
   last_insert := Some(frame,pos,0,len)
 @
@@ -8014,6 +8045,11 @@ let point_at_mark frame =
   Text.goto_point text point mark;
   Text.set_position text mark pos
 @
+
+\subsection{Clipboard}
+\l could be in advanced topics
+
+% clipboard is a simple idea for inter-process communication!
 
 \section{Undo}
 % Undo history?
@@ -9670,13 +9706,8 @@ let _ =
 
 <<toplevel [[Minor_mode_sample._2]]>>=
 let _ = 
-  Action.define_action (minor_mode_name ^ "_mode")
-    (fun frame -> 
-      let buf = frame.frm_buffer in
-      if Ebuffer.has_minor_mode buf mode 
-      then Ebuffer.del_minor_mode buf mode
-      else Ebuffer.set_minor_mode buf mode
-    )
+  Action.define_action (minor_mode_name ^ "_mode") 
+    (Minor_modes.toggle_minor mode)
 @
 % could be define_buffer_action too as don't use any info from the frame
 %todo: could factorize this idiom
@@ -11592,6 +11623,7 @@ let lexing text curseur end_point =
 "tab_mode";
 (*"accents_mode";*)
 "ocaml_minor_mode";
+"merlin_mode";
 (*"ocaml_compiler_mode";*)
 @
 %todo: should be in their start_hook instead of here
@@ -11626,12 +11658,7 @@ let _ =
 
 <<toplevel [[Paren_mode._2]]>>=
 let _ = 
-  Action.define_buffer_action "paren_mode" 
-    (fun buf -> 
-      if Ebuffer.has_minor_mode buf mode 
-      then Ebuffer.del_minor_mode buf mode
-      else Ebuffer.set_minor_mode buf mode
-    )
+  Action.define_action "paren_mode" (Minor_modes.toggle_minor mode)
 @
 
 

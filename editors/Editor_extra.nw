@@ -22,6 +22,8 @@
 
 <<features/dircolors.ml>>=
 @
+<<minor_modes/minor_modes.ml>>=
+@
 
 <<text_modes/tex_mode.ml>>=
 @
@@ -37,6 +39,8 @@
 <<prog_modes/lisp_mode.ml>>=
 @
 <<prog_modes/c_mode.ml>>=
+@
+<<prog_modes/ocaml_merlin.ml>>=
 @
 
 <<major_modes/shell.ml>>=
@@ -1424,8 +1428,7 @@ let last_kill = ref None
 let kill_text text point len =
   let point,str = Text.delete_res text point len in
   match !last_kill with
-  | Some (oldtext,oldpoint) when
-    oldpoint = point && oldtext == text ->
+  | Some (oldtext,oldpoint) when oldpoint = point && oldtext == text ->
       kill_ring.(0) <- kill_ring.(0)^str
   | _ ->
       last_kill := Some (text,point);
@@ -1593,6 +1596,18 @@ open Xtypes
 <<constant [[Simple.kill_ring]]>>
 <<constant [[Simple.last_kill]]>>
 <<constant [[Simple.last_insert]]>>
+
+(* alt: 
+ * - have a mutable clipboard here in simple.ml
+ *   pro: does not require a frame so can be done in lowlevel API (kill_string)
+ * - have the clipboard be part of the backend
+ *   pro: clearer that backends in graphics/ need to setup this
+ *)
+let add_clipboard frame str =
+  let top_window = Window.top frame.frm_window in
+  let graphic = Efuns.backend top_window in
+  graphic.Xdraw.set_clipboard (Some str)
+
 
 <<function [[Simple.kill_string]]>>
 
@@ -2531,6 +2546,22 @@ open Unix
 
 <<function [[Complex.get_pos]]>>
 
+let cursor_position frm =
+  let text = frm.frm_buffer.buf_text in
+  let point = frm.frm_point in
+  let char = Text.get_char text point in
+  let coord = Text.point_coord text point in
+  Top_window.message 
+    (Window.top frm.frm_window)
+    (Printf.sprintf "Char: '%c' (%d, #o%o, #x%x) point=%d line=%d column=%d" 
+       char 
+       (Char.code char) (Char.code char) (Char.code char)
+       (Text.get_position text point)
+       (coord.Text.c_line + 1) 
+       coord.Text.c_col
+    )
+  
+
 <<function [[Complex.mark_at_point]]>>
 
 <<constant [[Complex.umask]]>>
@@ -3177,6 +3208,7 @@ open Action
 <<function [[Std_efunsrc.save_options]]>>
 <<function [[Std_efunsrc.fondamental_mode]]>>
 
+(* less: I could put those define_action() in their respective files *)
 <<toplevel [[Std_efunsrc._1]]>>
   
 
@@ -3615,13 +3647,7 @@ let _ =
 
 <<toplevel [[Abbrevs_mode._3]]>>=
 let _ = 
-  Action.define_action "abbrevs_mode" 
-    (fun frame -> 
-      let buf = frame.frm_buffer in
-      if Ebuffer.has_minor_mode buf mode 
-      then Ebuffer.del_minor_mode buf mode
-      else Ebuffer.set_minor_mode buf mode
-    )
+  Action.define_action "abbrevs_mode" (Minor_modes.toggle_minor mode)
 @
 
 
@@ -3856,12 +3882,7 @@ let _ =
 
 <<toplevel [[Accents_mode._2]]>>=
 let _ = 
-  define_buffer_action "accents_mode" 
-    (fun buf -> 
-      if Ebuffer.has_minor_mode buf mode then begin
-          Ebuffer.del_minor_mode buf mode
-        end else
-        Ebuffer.set_minor_mode buf mode)
+  define_action "accents_mode" (Minor_modes.toggle_minor mode)
 @
 
 
@@ -3921,12 +3942,8 @@ let _ =
 
 <<toplevel [[Fill_mode._2]]>>=
 let _ = 
-  Action.define_buffer_action (minor_mode_name ^ "_mode")
-    (fun buf -> 
-      if Ebuffer.has_minor_mode buf mode 
-      then Ebuffer.del_minor_mode buf mode
-      else Ebuffer.set_minor_mode buf mode
-     );
+  Action.define_action (minor_mode_name ^ "_mode") 
+    (Minor_modes.toggle_minor mode)
 @
 
 
@@ -4005,12 +4022,7 @@ let _ =
 
 <<toplevel [[Tab_mode._2]]>>=
 let _ = 
-  Action.define_buffer_action "tab_mode" 
-    (fun buf -> 
-      if Ebuffer.has_minor_mode buf mode 
-      then Ebuffer.del_minor_mode buf mode
-      else Ebuffer.set_minor_mode buf mode
-  );
+  Action.define_action "tab_mode" (Minor_modes.toggle_minor mode);
   Action.define_action "insert_tab" insert_tab
 @
 
@@ -4447,12 +4459,7 @@ let _ =
 
 <<toplevel [[Ocaml_toplevel._2]]>>=
 let _ = 
-  define_buffer_action "ocaml_compiler_mode" 
-    (fun buf -> 
-      if Ebuffer.has_minor_mode buf mode then begin
-          Ebuffer.del_minor_mode buf mode
-        end else
-        Ebuffer.set_minor_mode buf mode);
+  define_buffer_action "ocaml_compiler_mode" (Minor_modes.toggle_minor mode);
   define_action "ocaml_compiler_mode.find_implementation" find_implementation;
   define_action "ocaml_compiler_mode.backward_implementation" backward_implementation;
   define_action "ocaml_compiler_mode.print_type" print_type;
