@@ -1947,7 +1947,7 @@ let get_var buf var =
 
 % was not there originally
 <<misc keys>>=
-[c_h; NormalMap, Char.code 'v'], Misc.describe_variable;
+[c_h; NormalMap, Char.code 'v'], Interactive.describe_variable;
 @
 
 % can't understand yet everything (so move it later??)
@@ -4008,22 +4008,21 @@ Attr.get_font !!Globals.font |> ignore;
 
 
 
-\ifallcode
-<<misc keys>>=
-[c_x; NormalMap, Char.code 'F'], Misc.change_font;
-@
+% <<misc keys>>=
+% [c_x; NormalMap, Char.code 'F'], Misc.change_font;
+% @
+% 
+% <<function [[Complex.change_font]]>>=
+% let change_font frame =
+%   Minibuffer.create_return frame (Keymap.create ()) "Find font: " "fixed"
+%     (fun old_frame name ->
+%       let window = frame.frm_window in
+%       let _top_window = Window.top window in
+%       (*WX_xterm.change_font xterm name*)
+%       failwith "Complex.change_font: TODO"
+%   ) |> ignore
+% @
 
-<<function [[Complex.change_font]]>>=
-let change_font frame =
-  Minibuffer.create_return frame (Keymap.create ()) "Find font: " "fixed"
-    (fun old_frame name ->
-      let window = frame.frm_window in
-      let _top_window = Window.top window in
-      (*WX_xterm.change_font xterm name*)
-      failwith "Complex.change_font: TODO"
-  ) |> ignore
-@
-\fi
 
 
 \section{Line representation}
@@ -7093,6 +7092,48 @@ top_window.top_second_cursor |> Common.do_option (fun frame ->
 )
 @
 
+
+\subsection{Interactive variables}
+
+<<constant [[Complex.value_hist]]>>=
+let value_hist = ref []
+@
+
+<<constant [[Complex.all_vars]]>>=
+let all_vars = ref None
+@
+
+<<function [[Complex.all_variables]]>>=
+let all_variables frame _ =
+  let buf = frame.frm_buffer in
+  match !all_vars with
+    Some (f,l) when f == frame -> l
+  | _ ->
+      let list = 
+        (Store.list buf.buf_vars) @ 
+        (Store.list (Globals.editor()).edt_vars) 
+      in
+      all_vars := Some (frame, list);
+      list
+@
+
+<<function [[Complex.set_local_variable]]>>=
+let set_local_variable frame = 
+  Select.select frame "set_local_variable : " variable_hist
+    "" (all_variables frame) (fun s -> s) (fun variable ->
+      Select.select_string frame (Printf.sprintf "%s : " variable)
+      value_hist "" (fun value ->
+          Store.input frame.frm_buffer.buf_vars variable value))
+@
+
+<<function [[Complex.set_global_variable]]>>=
+let set_global_variable frame =
+  Select.select frame "set_global_variable : " variable_hist
+    "" (all_variables frame) (fun s -> s) (fun variable ->
+      Select.select_string frame (Printf.sprintf "%s : " variable)
+      value_hist "" (fun value ->
+          Store.input (Globals.editor()).edt_vars variable value))
+@
 
 
 \chapter{Basic Features}
@@ -10423,23 +10464,23 @@ let _ =
 % "eval";  
 % @
 
-<<constant [[Complex.eval_history]]>>=
-let eval_history = ref []
-@
-
-<<function [[Complex.eval]]>>=
-let eval frame =
-  Select.select_string frame "Eval:" eval_history "" (fun str ->
-    let top_window = Window.top frame.frm_window in
-    (* This is not enough: the paths also may have changed. *)
-    Top_window.message top_window 
-      (*(Dyneval.eval 
-        (let len = String.length str in
-        if str.[len - 1] = ';' && str.[len -2 ] = ';' then str else
-        str ^ " ;;"))
-      *)(failwith "Complex.eval: TODO")
-    )
-@
+% <<constant [[Complex.eval_history]]>>=
+% let eval_history = ref []
+% @
+% 
+% <<function [[Complex.eval]]>>=
+% let eval frame =
+%   Select.select_string frame "Eval:" eval_history "" (fun str ->
+%     let top_window = Window.top frame.frm_window in
+%     (* This is not enough: the paths also may have changed. *)
+%     Top_window.message top_window 
+%       (*(Dyneval.eval 
+%         (let len = String.length str in
+%         if str.[len - 1] = ';' && str.[len -2 ] = ';' then str else
+%         str ^ " ;;"))
+%       *)(failwith "Complex.eval: TODO")
+%     )
+% @
 
 
 \section{Completion}
@@ -11617,7 +11658,7 @@ let set_parameter frame =
   Select.select frame "set-parameter : " parameters_hist
     "" (Parameter.all_parameters frame) (fun s -> s) (fun variable ->
       Select.select_string frame (Printf.sprintf "%s : " variable)
-      value_hist "" (fun value ->
+      Interactive.value_hist "" (fun value ->
           let (input,print,param) = List.assoc variable parameters
           in
           param =:= input value))
