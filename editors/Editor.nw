@@ -404,7 +404,8 @@ who wrote in some sense most of this book.
 % customizable => configuration file
 % self-documenting => not really yet? M-x a bit. Have Efuns.nw though :)
 
-% interactive! (useful for .e.g C-h v)
+% interactive! M-x! C-h v!
+% self discovery (when you type M-x foo, it can tell you which key does that)
 
 % see <actions definitions>, pretty good overview of functionalities
 
@@ -1365,15 +1366,15 @@ let (actions : (action_name, generic_action) Hashtbl.t) =
   Hashtbl.create 63
 @
 % global!!
-% for M-x! and also so can use string in keybinding or mouse
-% (but could maybe use dirrectly the ocaml action code)
+% for M-x! and also so can use string in menus/keybinding in config file/mouse
 %less: rename generic_actions then?
 
-% a bit annoying, but ocaml is not a dynamic language with
-% eval string, so have to do that. Maybe recent ocaml
-% attribute could help.
-%less: add a @@interactive@@ but need to learn ppx and this might make
-% the porting to plan9 more difficult
+% A bit annoying, but ocaml is not a dynamic language with
+% eval string, so we have to do that. Fortunately recent OCaml have
+% attributes that allows some easy metaprogramming forms.
+%note: adding a @@interactive@@ requires to teach about ppx
+% and this might make the porting to plan9 more difficult, but I can
+% just remove them too; Most things would still work (just not M-x).
 
 
 <<function [[Efuns.define_action]]>>=
@@ -1444,8 +1445,7 @@ let execute_buffer_action action_name buf =
 % let _ =
 %  <<actions definitions>>
 %  ()
-%@
-%old:
+% @
 % <<actions definitions>>=
 % (* ----------------------------------------------------------- *)
 % (* Loading *)
@@ -1569,10 +1569,10 @@ type map =
     char_map : binding array;
     (* complex key, possible sub maps *)
     mutable complex_bindings : (key * binding) list;
-
-    <<[[Efuns.map]] other fields>>
   } 
 @
+%old: <<[[Efuns.map]] other fields>>
+
 % char_map is essentially an optimisation, so that simple key
 % dispatching goes quickly
 
@@ -1619,14 +1619,12 @@ and binding =
 let create () =
   { char_map = Array.create 256 Unbound;
     complex_bindings = [];
-    interactives = [];
   } 
 @
-%crossref:
-% will see interactives later
-%todo: not sure it's useful to have different interactives, one global,
-% one for the buffer, and one for the major and minor. Those interactives
-% could be set in a global.
+%old:    interactives = [];
+% not sure it's useful to have different interactives, one global,
+% one for the buffer, and one for the major and minor. Simpler to have
+% them just in a global (which we already have: actions hashtbl)
 
 <<[[Efuns.buffer]] other fields>>=
 buf_map : map;
@@ -1673,33 +1671,35 @@ if buf.buf_map_partial then
 @
 
 
-%less: maybe there are too many ways to define key,
-% add_binding, add_global_key, interactive, etc.
-
-
 <<function [[Keymap.add_global_key]]>>=
-let add_global_key = fun prefix string action ->
-  interactive (Globals.editor()).edt_map prefix string action
+let add_global_key prefix _string action =
+  add_binding (Globals.editor()).edt_map prefix action
 @
+%old:  interactive (Globals.editor()).edt_map prefix string action
+
+%crossref: see Keymap.add_binding later *)
+
 <<function [[Keymap.add_local_key]]>>=
-let add_local_key buf = 
-  interactive buf.buf_map 
+let add_local_key buf prefix _string action = 
+  add_binding buf.buf_map prefix action
 @
+%old: interactive buf.buf_map 
+
 % each major mode can also use that to offer a specialized experience!
 % (or use add_major_key).
-
 % what about add_major_key? add_minor_key? will see later.
 
 
+%old:
 % add_local_key | add_global_key | add_major_key | add_minor_key -> <>?
-<<function [[Keymap.interactive]]>>=
-let interactive map =
- fun keylist name f ->
-  <<[[Keymap.interactive()]] add keylist and name to interactives list>>
-  add_binding map keylist f
-@
-\t rename add_key_binding_and_interactive_name?
-% see Keymap.add_binding later *)
+% <<function [[Keymap.interactive]]>>=
+% let interactive map =
+%  fun keylist name f ->
+%   <<[[Keymap.interactive()]] add keylist and name to interactives list>>
+%   add_binding map keylist f
+% @
+%pad: there was too many ways to define key:
+% add_binding, add_global_key, interactive, etc. I simplified.
 
 
 
@@ -1755,14 +1755,10 @@ let init_global_map () =
         Log.exn "%s\n" e;
   );
 
-  <<[[Config.init_global_map()]] add interactives from [[interactives_map]]>>
-    
-
   (* Mouse *)
   <<[[Config.init_global_map()]] mouse keys setup>>
   ()
 @
-
 
 \subsection{Standard Emacs/Efuns keymap}
 
@@ -1967,7 +1963,6 @@ let describe_variable frame =
             Store.print (Globals.editor()).edt_vars variable)))
 [@@interactive]
 @
-
 %old:
 % <<misc actions>>=
 % define_action "describe_variable"  Complexe.describe_variable;
@@ -2858,14 +2853,6 @@ let get_char text point =
 <<misc keys>>=
 [c_x; NormalMap, Char.code '='], Misc.cursor_position;
 @
-%old:
-% <<misc actions>>=
-% define_action "describe_position" Complexe.describe_position;
-% define_action "cursor_position" Complexe.cursor_position;
-% @
-% <<[[interactives_map]] initial entries>>=
-% "describe_position";
-% @
 
 
 <<function [[Complex.get_pos]]>>=
@@ -2876,6 +2863,14 @@ let describe_position frame =
        (Text.get_position frame.frm_buffer.buf_text frame.frm_point))
 [@@interactive]
 @
+%old:
+% <<misc actions>>=
+% define_action "describe_position" Complexe.describe_position;
+% define_action "cursor_position" Complexe.cursor_position;
+% @
+% <<[[interactives_map]] initial entries>>=
+% "describe_position";
+% @
 
 % seen Point type in core DS chapter with Buffer type.
 
@@ -4488,11 +4483,6 @@ if !!Top_window.file_menu = [] then begin
 <<loading keys>>=
 [c_x; ControlMap, Char.code 'f'], Misc.load_buffer;
 @
-%old:
-% <<loading actions>>=
-% (* C-x map *)
-% define_action "load_buffer"  Complexe.load_buffer;
-% @
 
 
 % in Complex because requires select and minibuffer
@@ -4504,6 +4494,12 @@ let load_buffer frame =
   )
 [@@interactive]
 @
+%old:
+% <<loading actions>>=
+% (* C-x map *)
+% define_action "load_buffer"  Complexe.load_buffer;
+% @
+
 % see later select_filename, quite complicated, use minibuffer
 % and completion buffer. But nice that can use the buffer
 % machinery for more complex interactions :)
@@ -4602,11 +4598,6 @@ let read inc =
 <<loading keys>>=
 [c_x; NormalMap, Char.code 'i'], Misc.insert_file;
 @
-%old:
-% <<loading actions>>=
-% (* C-x map *)
-% define_action "insert_file"  Complexe.insert_file;
-% @
 
 <<function [[Complex.insert_file]]>>=
 let insert_file frame =
@@ -4617,6 +4608,11 @@ let insert_file frame =
   )
 [@@interactive]
 @
+%old:
+% <<loading actions>>=
+% (* C-x map *)
+% define_action "insert_file"  Complexe.insert_file;
+% @
 
 <<function [[Simple.insert_string]]>>=
 let insert_string frame str =
@@ -4634,11 +4630,6 @@ let insert_string frame str =
 <<saving keys>>=
 [c_x; ControlMap, Char.code 's'], Misc.save_buffer; 
 @
-%old:
-% <<saving actions>>=
-% (* C-x map *)
-% define_action "save_buffer"  Complexe.save_buffer; 
-% @
 
 <<function [[Complex.save_buffer]]>>=
 let save_buffer frame =
@@ -4648,6 +4639,11 @@ let save_buffer frame =
   | None -> write_buffer frame
 [@@interactive]
 @
+%old:
+% <<saving actions>>=
+% (* C-x map *)
+% define_action "save_buffer"  Complexe.save_buffer; 
+% @
 
 
 <<[[Efuns.buffer]] history fields>>=
@@ -4766,13 +4762,6 @@ let check_file frame =
 [c_x; NormalMap,  Char.code 's'], Misc.save_some_buffers;
 [c_x; ControlMap, Char.code 'w'], Misc.write_buffer; 
 @
-%old:
-% <<saving actions>>=
-% (* C-x map *)
-% define_action "save_some_buffers"  Complexe.save_some_buffers;
-% (* C-x map *)
-% define_action "write_file"  Complexe.write_buffer; 
-% @
 
 
 <<function [[Complex.save_some_buffers]]>>=
@@ -4782,6 +4771,13 @@ let save_some_buffers frame =
 [@@interactive]
 @
 %less: save_buffers_and_action here?
+%old:
+% <<saving actions>>=
+% (* C-x map *)
+% define_action "save_some_buffers"  Complexe.save_some_buffers;
+% (* C-x map *)
+% define_action "write_file"  Complexe.write_buffer; 
+% @
 
 <<function [[Complex.write_buffer]]>>=
 let write_buffer frame = 
@@ -4836,16 +4832,11 @@ let change_name buf filename =
 \subsubsection{Exit}
 
 <<misc keys>>=
-[c_x; ControlMap, Char.code 'c'], Misc.exit_efuns; 
+[c_x; ControlMap, Char.code 'c'], Misc.exit; 
 @
-%old:
-% <<misc actions>>=
-% (* C-x map *)
-% define_action "exit"  Complexe.exit_efuns; 
-% @
 
 <<function [[Complex.exit_efuns]]>>=
-let exit_efuns frame =
+let exit frame =
   let buffers = Utils.list_of_hash (Globals.editor()).edt_buffers in
   save_buffers_and_action frame buffers (fun _ -> 
     (* todo: have some exit hooks? *)
@@ -4853,7 +4844,14 @@ let exit_efuns frame =
   )
 [@@interactive]
 @
-%    (*Graphics.close_graph ();*)
+%old:
+% <<misc actions>>=
+% (* C-x map *)
+% define_action "exit"  Complexe.exit_efuns; 
+% @
+
+
+%(*Graphics.close_graph ();*)
 
 %todo: save_buffers_and_action?
 
@@ -5680,10 +5678,6 @@ end;
 <<misc keys>>=
 [ControlMap, Char.code 'l'], Scroll.recenter;
 @
-%old:
-% <<misc actions>>=
-% define_action "recenter"  Simple.recenter;
-% @
 
 <<function [[Simple.recenter]]>>=
 let recenter frame =
@@ -5695,6 +5689,10 @@ let recenter frame =
   frame.frm_y_offset <- - frame.frm_height/2
 [@@interactive]
 @
+%old:
+% <<misc actions>>=
+% define_action "recenter"  Simple.recenter;
+% @
 
 <<[[Efuns.frame]] other fields>>=
 mutable frm_force_start : bool;
@@ -6383,7 +6381,14 @@ let insert_special_char frame =
 \subsection{Bindings display}
 
 <<misc keys>>=
-[c_h; NormalMap, Char.code 'K'], Frame.bindings_help;
+[c_h; NormalMap, Char.code 'K'], Frame.help_bindings;
+@
+
+<<function [[Frame.bindings_help]]>>=
+let help_bindings frame =
+  let window = frame.frm_window in
+  change_buffer window "*bindings*"
+[@@interactive]
 @
 %old:
 % <<misc actions>>=
@@ -6391,12 +6396,6 @@ let insert_special_char frame =
 % define_action "help_bindings"  Frame.bindings_help;
 % @
 
-<<function [[Frame.bindings_help]]>>=
-let bindings_help frame =
-  let window = frame.frm_window in
-  change_buffer window "*bindings*"
-[@@interactive]
-@
 % how can change_buffer with just window info? don't pass the frame?
 % no need because can go back to top_window and active_frame?
 
@@ -6404,7 +6403,7 @@ let bindings_help frame =
 
 % Graphics_efun.init -> <>
 <<function [[Interactive.create_bindings]]>>=
-let create_bindings () =
+let create_bindings_help_buffer () =
   let s = Keymap.all_bindings () in
   let text = Text.create s in
   Ebuffer.create "*bindings*" None text (Keymap.create ())
@@ -6414,15 +6413,19 @@ let create_bindings () =
 <<function [[Keymap.all_bindings]]>>=
 let all_bindings () =
   let s = ref "Default bindings:" in
-  (Globals.editor()).edt_map.interactives |> List.iter(fun (name,(_,binding)) ->
-    match binding with
-    | None -> ()
-    | Some key_list ->
-        s := Printf.sprintf "%s\n%20s : %s" !s 
-              (print_key_list key_list) name
-  );
+  (* TODO *)
   !s
 @
+%old: 
+%todo:
+%  (Globals.editor()).edt_map.interactives |> List.iter(fun (name,(_,binding)) ->
+%    match binding with
+%    | None -> ()
+%    | Some key_list ->
+%        s := Printf.sprintf "%s\n%20s : %s" !s 
+%              (print_key_list key_list) name
+%  );
+
 % used to be copy pasted in create_bindings, with only diff was
 % the %s\n%20s : %s" and the use of List.rev.
 
@@ -6452,8 +6455,6 @@ let rec print_key_list key_list =
   | key :: tail ->
       Printf.sprintf "%s %s" (print_key key) (print_key_list tail)
 @
-
-
 
 
 % ?? -> <>
@@ -6794,7 +6795,7 @@ let rec resize_window window xpos ypos width height =
 @
 
 \section{Interactive select}
-% here?
+\l here?
 
 
 \subsection{[[M-x foo]] and [[call_interactive()]]}
@@ -6803,10 +6804,6 @@ let rec resize_window window xpos ypos width height =
 <<meta keys>>=
 [MetaMap, Char.code 'x'], Interactive.call_interactive;
 @
-%old:
-% <<meta actions>>=
-% define_action "call_interactive"  Interactive.call_interactive;
-% @
 
 
 <<function [[Interactive.call_interactive]]>>=
@@ -6819,6 +6816,10 @@ let call_interactive frame =
     (fun s -> exec_interactive interactives frame s)
 [@@interactive]
 @
+%old:
+% <<meta actions>>=
+% define_action "call_interactive"  Interactive.call_interactive;
+% @
 
 <<constant [[Interactive.meta_hist]]>>=
 let meta_hist = ref []
@@ -6827,21 +6828,31 @@ let meta_hist = ref []
 % call_interactive -> <>
 <<function [[Interactive.buf_interactives]]>>=
 let buf_interactives buf =
-  let interactives = 
-    buf.buf_major_mode.maj_map.interactives @
-    (Globals.editor()).edt_map.interactives 
-  in
-  List.fold_left (fun list minor -> minor.min_map.interactives @ list) 
-   interactives buf.buf_minor_modes 
+  failwith "TODO"
 @
-%less: not sure it's that useful to allow to customize the interactive
-% mapping in the major, minors, or buffer. A single global
-% interactive seems simpler. To have a consistent M-x compile
-% that always bind to the same action (and have this action then
-% possibly use buffer/major/minor variables).
-%less: what could have been nice is a way to change
-% an action_name e.g. in eshell to have begin_of_line means something
-% slightly different (to just go after the prompt)
+%old: 
+%todo:
+%  let interactives = 
+%    buf.buf_major_mode.maj_map.interactives @
+%    (Globals.editor()).edt_map.interactives 
+%  in
+%  List.fold_left (fun list minor -> minor.min_map.interactives @ list) 
+%   interactives buf.buf_minor_modes 
+
+%alt:
+% - interactive global/major/minor/buffer, but
+%   not sure it's that useful to allow to customize the interactive
+%   mapping in the major, minors, or buffer. A single global
+%   interactive seems simpler. To have a consistent M-x compile
+%   that always bind to the same action (and have this action then
+%   possibly use buffer/major/minor variables).
+% pro: it can be nice way to change an action_name e.g. color_buffer
+%  to ocaml_color_buffer in the ocaml major mode, or 
+%  in eshell to have begin_of_line means something
+%  slightly different (to just go after the prompt), but this can
+%  be done by using variables instead (e.g., color_buffer can use
+%  a variable defining what is the coloring function per major mode)
+% - just global interactive (where we reuse simple the actions hashtbl)
 
 
 <<function [[Interactive.exec_interactive]]>>=
@@ -6870,44 +6881,43 @@ key |> Common.do_option (fun key_list ->
 
 \subsection{Adding interactive functions}
 
-%subsubsection{[[Map.interactives]]}
+% just put [@@interactive] in code! 
+% PPX magic that translates in simple toplevel side effect to actions hashtbl.
 
-% in addition to char_map and complex_binding
+%alt: 
+% - Map.interactive, interactive_map, per-mode interactives, interactive
+%   in config file, etc.
+%   more powerful maybe, but uselessly complicated and not worth it I think
+% - manual define_action in config.ml, or spread
+% - [@@interactive] close to entity
 
-<<[[Efuns.map]] other fields>>=
-mutable interactives : (action_name * (action * prefix option)) list;
-@
-% record key so useful so can display the list of bindings?
-
-<<type [[Efuns.prefix]]>>=
-and prefix = key list
-@
-
-%\subsection{[[interactives_map]]}
-
-<<constant [[Config.interactives_map]]>>=
-let interactives_map = define_option ["interactives_map"] ""
-    (list_option string2_option) 
-  []
-@
-
-<<[[Config.toplevel]] set [[interactives_map]]>>=
-(* todo: we should consider all actions as interactives; 
- * useless repetition here.
- *)
-if !!interactives_map = [] then begin
-    interactives_map =:= List.map (fun x -> x, x ) [
-      <<[[interactives_map]] initial entries>>
-    ]
-  end    
-@
-% When not bound to a key you need to extend initial entries.
-% a bit ugly I think. Could just iterate over all define_action
-% hashtbl.
-
-<<[[interactives_map]] initial entries>>=
-@
 %old:
+%\subsubsection{[[Map.interactives]]}
+% in addition to char_map and complex_binding
+% <<[[Efuns.map]] other fields>>=
+% mutable interactives : (action_name * (action * prefix option)) list;
+% @
+%% record key so useful so can display the list of bindings?
+% <<type [[Efuns.prefix]]>>=
+% and prefix = key list
+% @
+
+%old:
+%\subsection{[[interactives_map]]}
+% <<constant [[Config.interactives_map]]>>=
+% let interactives_map = define_option ["interactives_map"] ""
+%     (list_option string2_option) 
+%   []
+% @
+% <<[[Config.toplevel]] set [[interactives_map]]>>=
+% if !!interactives_map = [] then begin
+%     interactives_map =:= List.map (fun x -> x, x ) [
+%       <<[[interactives_map]] initial entries>>
+%     ]
+%   end    
+% @
+%<<[[interactives_map]] initial entries>>=
+%@
 % <<[[interactives_map]] initial entries>>=
 % "save_options";
 % "open_display";
@@ -6921,41 +6931,30 @@ if !!interactives_map = [] then begin
 %   and not other? every actions should be interactive.
 % - @@interactive@@
 
-
-<<[[Config.init_global_map()]] add interactives from [[interactives_map]]>>=
-!!interactives_map |> List.iter (fun (name, action) ->
-  try
-    Keymap.add_interactive (Globals.editor()).edt_map name 
-      (Action.execute_action action)
-  with e ->
-    Log.printf "Error for action %s" action;
-    Log.exn "%s\n" e;
-);
-@
-
-<<function [[Keymap.add_interactive]]>>=
-let add_interactive map name f =
-    map.interactives <- (name, (f, None)) :: map.interactives
-@
-%less: should look for duplicates
-
-% so each global key and their associated func is accessible!
-<<[[Keymap.interactive()]] add keylist and name to interactives list>>=
-map.interactives <- (name, (f, Some keylist)) :: map.interactives;
-@
-%less: should look for duplicates
-
-
-% used only in pad's modes right now, but I should
-% use more
-<<function [[Keymap.define_interactive_action]]>>=
-let define_interactive_action action_name action_fun =
-  Action.define_action action_name action_fun;
-  let map = (Globals.editor()).edt_map in
-  add_interactive map action_name action_fun
-@
-%less: rename add_interactive_action?
-%todo: remove!
+%old:
+% <<[[Config.init_global_map()]] add interactives from [[interactives_map]]>>=
+% !!interactives_map |> List.iter (fun (name, action) ->
+%   try
+%     Keymap.add_interactive (Globals.editor()).edt_map name 
+%       (Action.execute_action action)
+%   with e ->
+%     Log.printf "Error for action %s" action;
+%     Log.exn "%s\n" e;
+% );
+% @
+% <<function [[Keymap.add_interactive]]>>=
+% let add_interactive map name f =
+%     map.interactives <- (name, (f, None)) :: map.interactives
+% @
+% <<[[Keymap.interactive()]] add keylist and name to interactives list>>=
+% map.interactives <- (name, (f, Some keylist)) :: map.interactives;
+% @
+% <<function [[Keymap.define_interactive_action]]>>=
+% let define_interactive_action action_name action_fun =
+%   Action.define_action action_name action_fun;
+%   let map = (Globals.editor()).edt_map in
+%   add_interactive map action_name action_fun
+% @
 
 \subsection{[[Select.select()]]}
 
@@ -7525,6 +7524,13 @@ let scroll_line frame n =
 
 \ifallcode
 
+% pad stuff
+<<function [[Simple.scroll_down]]>>=
+let scroll_down frame =
+  scroll_line frame 1;
+  forward_line frame
+[@@interactive]
+@
 %old:
 % <<navigating actions>>=
 % (* pad: *)
@@ -7534,13 +7540,6 @@ let scroll_line frame n =
 % define_action "scroll_other_down" Simple.scroll_other_down; 
 % @
 
-% pad stuff
-<<function [[Simple.scroll_down]]>>=
-let scroll_down frame =
-  scroll_line frame 1;
-  forward_line frame
-[@@interactive]
-@
 
 <<function [[Simple.scroll_up]]>>=
 let scroll_up frame =
@@ -7756,16 +7755,16 @@ let goto_last_saved_pos frame =
 <<inserting keys>>=
 [NormalMap, XK.xk_Return], Edit.insert_return; 
 @
-%old:
-% <<inserting actions>>=
-% define_action "insert_return"  Simple.insert_return;
-% @
 
 <<function [[Simple.insert_return]]>>=
 let insert_return frame =
   insert_char frame '\n'
 [@@interactive]
 @
+%old:
+% <<inserting actions>>=
+% define_action "insert_return"  Simple.insert_return;
+% @
 
 
 <<constant [[Simple.single_char]]>>=
@@ -8152,11 +8151,6 @@ let insert_next_killed frame =
 @
 % I use C-u C-space for that? but I have a history of mark no?
 % it's different, see 'Position history' section.
-%old:
-% <<misc actions>>=
-% (* C-x map *)
-% define_action "point_at_mark"  Simple.point_at_mark;
-% @
 
 <<function [[Simple.point_at_mark]]>>=
 let point_at_mark frame =
@@ -8170,6 +8164,11 @@ let point_at_mark frame =
   Text.set_position text mark pos
 [@@interactive]
 @
+%old:
+% <<misc actions>>=
+% (* C-x map *)
+% define_action "point_at_mark"  Simple.point_at_mark;
+% @
 
 \subsection{Highlight}
 %less: mv in colors section?
@@ -8193,10 +8192,6 @@ let point_at_mark frame =
 <<undoing keys>>=
 [ControlMap, Char.code '_'], Edit.undo;
 @
-%old:
-% <<undoing actions>>=
-% define_action "undo"  Simple.undo;
-% @
 
 
 
@@ -8212,6 +8207,10 @@ let undo frame =
   Text.fmove text point len
 [@@interactive]
 @
+%old:
+% <<undoing actions>>=
+% define_action "undo"  Simple.undo;
+% @
 
 
 %\subsection{Helpers}
@@ -8665,20 +8664,6 @@ let search_backward_groups text regexp point groups =
 <<replacing keys>>=
 [MetaMap, Char.code '%'], Search.query_replace_string;
 @
-%old:
-% <<replacing actions>>=
-% define_action "replace_string" Search.replace_string;
-% define_action "replace_regexp" Search.replace_regexp;
-% define_action "query_replace_string" Search.query_replace_string;
-% define_action "query_replace_regexp" Search.query_replace_regexp;
-% @
-%old:
-% <<[[interactives_map]] initial entries>>=
-% "replace_string";
-% "replace_regexp";
-% "query_replace_string";
-% "query_replace_regexp";
-% @
 
 
 %\section{Regexps}
@@ -8713,6 +8698,20 @@ let replace_string frame =
   ))
 [@@interactive]
 @
+%old:
+% <<replacing actions>>=
+% define_action "replace_string" Search.replace_string;
+% define_action "replace_regexp" Search.replace_regexp;
+% define_action "query_replace_string" Search.query_replace_string;
+% define_action "query_replace_regexp" Search.query_replace_regexp;
+% @
+%old:
+% <<[[interactives_map]] initial entries>>=
+% "replace_string";
+% "replace_regexp";
+% "query_replace_string";
+% "query_replace_regexp";
+% @
 
 <<function [[Search.query_replace_string]]>>=
 let query_replace_string frame =
@@ -8773,7 +8772,7 @@ let replace flag frame query str repl =
     let last_pos = ref (Text.get_position text point) in
     match flag,query with
       Regexp, NoQuery ->
-        while not (Top_window.check_abort frame) do
+        while not (* (Top_window.check_abort frame) *) false do
           let len = Text.search_forward text regexp point in
           let pos = Text.get_position text point in
           if pos = !last_pos then 
@@ -8789,7 +8788,7 @@ let replace flag frame query str repl =
         done
     | RegexpString, NoQuery ->
         let delta = String.length repl in
-        while not (Top_window.check_abort frame) do
+        while not (* (Top_window.check_abort frame) *) false do
           let len = Text.search_forward text regexp point in
           let pos = Text.get_position text point in
           if pos = !last_pos then 
@@ -8958,14 +8957,6 @@ Top_window.buffers_menu := (fun top_window button () ->
 <<buffer management keys>>=
 [c_x; NormalMap, Char.code 'b'], Multi_buffers.change_buffer;
 @
-%old:
-% <<buffer management actions>>=
-% (* C-x map *)
-% define_action "change_buffer"  Multi_buffers.change_buffer;
-% @
-% <<buffer management actions>>=
-% define_action "switch_to_other_buffer"  Multi_buffers.switch_to_other_buffer;
-% @
 
 <<function [[Complex.change_buffer]]>>=
 let change_buffer frame =
@@ -8976,6 +8967,15 @@ let change_buffer frame =
   )
 [@@interactive]
 @
+%old:
+% <<buffer management actions>>=
+% (* C-x map *)
+% define_action "change_buffer"  Multi_buffers.change_buffer;
+% @
+% <<buffer management actions>>=
+% define_action "switch_to_other_buffer"  Multi_buffers.switch_to_other_buffer;
+% @
+
 % set_previous_frame is also used in load_buffer, each time
 % is close to switch to another buffer in the current frame.
 
@@ -9127,13 +9127,6 @@ let set_previous_frame frame =
 [ControlMetaMap, XK.xk_Down], Multi_buffers.down_buffer;
 [ControlMetaMap, XK.xk_Up], Multi_buffers.up_buffer;
 @
-%old:
-% <<buffer navigating actions>>=
-% (* C-M map *)
-% define_action "down_buffer"  Multi_buffers.down_buffer;
-% (* C-M map *)
-% define_action "up_buffer"  Multi_buffers.up_buffer;
-% @
 
 
 <<constant [[Complex.up_buffer]]>>=
@@ -9154,6 +9147,13 @@ let up_buffer frame =
   Frame.change_buffer frame.frm_window !up_buffer
 [@@interactive]
 @
+%old:
+% <<buffer navigating actions>>=
+% (* C-M map *)
+% define_action "down_buffer"  Multi_buffers.down_buffer;
+% (* C-M map *)
+% define_action "up_buffer"  Multi_buffers.up_buffer;
+% @
 
 \chapter{Multiple Windows}
 % frames?
@@ -9195,10 +9195,17 @@ let active frame =
 @
 
 <<frame management keys>>=
-[c_x; NormalMap, Char.code '2'], Multi_frames.v_cut_frame;    
-[c_x; NormalMap, Char.code '3'], Multi_frames.h_cut_frame;    
+[c_x; NormalMap, Char.code '2'], Multi_frames.vertical_cut_frame;    
+[c_x; NormalMap, Char.code '3'], Multi_frames.horizontal_cut_frame;    
 @
 % a bit like fork! and then can use C-x b to exec :)
+
+<<function [[Multi_frames.v_cut_frame]]>>=
+let vertical_cut_frame frame =
+  if frame.frm_mini_buffer = None 
+  then Frame.create (cut_frame frame) None frame.frm_buffer |> ignore
+[@@interactive]
+@
 %old: 
 % <<frame management actions>>=
 % (* C-x map *)
@@ -9207,15 +9214,9 @@ let active frame =
 % define_action "horizontal_cut_frame"  Multi_frames.h_cut_frame;    
 % @
 
-<<function [[Multi_frames.v_cut_frame]]>>=
-let v_cut_frame frame =
-  if frame.frm_mini_buffer = None 
-  then Frame.create (cut_frame frame) None frame.frm_buffer |> ignore
-[@@interactive]
-@
 
 <<function [[Multi_frames.h_cut_frame]]>>=
-let h_cut_frame frame =
+let horizontal_cut_frame frame =
   if frame.frm_mini_buffer = None 
   then
     let window = frame.frm_window in
@@ -9269,13 +9270,6 @@ let cut_frame frame =
 [c_x; NormalMap, Char.code '1'], Multi_frames.one_frame;
 [c_x; NormalMap, Char.code '0'], Multi_frames.delete_frame;
 @
-%old:
-% <<frame management actions>>=
-% (* C-x map *)
-% define_action "one_frame"  Multi_frames.one_frame;
-% (* C-x map *)
-% define_action "delete_frame"  Multi_frames.delete_frame;
-% @
 
 <<function [[Multi_frames.one_frame]]>>=
 let one_frame frame =
@@ -9304,6 +9298,14 @@ let delete_frame frame =
         Frame.active frame
 [@@interactive]
 @
+%old:
+% <<frame management actions>>=
+% (* C-x map *)
+% define_action "one_frame"  Multi_frames.one_frame;
+% (* C-x map *)
+% define_action "delete_frame"  Multi_frames.delete_frame;
+% @
+
 % upper window gets active
 
 
@@ -9342,11 +9344,6 @@ let remove_frame frame =
 <<frame navigation keys>>=
 [c_x; NormalMap, Char.code 'o'], Multi_frames.next_frame;
 @
-%old:
-% <<frame navigation actions>>=
-% (* C-x map *)
-% define_action "next_frame"  Multi_frames.next_frame;
-% @
 
 <<function [[Multi_frames.next_frame]]>>=
 let next_frame frame =
@@ -9354,6 +9351,11 @@ let next_frame frame =
   Window.next Frame.active window
 [@@interactive]
 @
+%old:
+% <<frame navigation actions>>=
+% (* C-x map *)
+% define_action "next_frame"  Multi_frames.next_frame;
+% @
 
 
 <<function [[Window.next]]>>=
@@ -9485,6 +9487,11 @@ mutable stat_mode : major_mode;
 
 \section{Fundamental mode}
 
+<<function [[Config.fondamental_mode]]>>=
+let fondamental_mode frame =
+  Ebuffer.set_major_mode frame.frm_buffer Ebuffer.fondamental_mode
+[@@interactive]
+@
 %old:
 % <<major mode actions>>=
 % define_action "fondamental_mode" fondamental_mode;
@@ -9493,11 +9500,7 @@ mutable stat_mode : major_mode;
 % "fondamental_mode";
 % @
 
-<<function [[Config.fondamental_mode]]>>=
-let fondamental_mode frame =
-  Ebuffer.set_major_mode frame.frm_buffer Ebuffer.fondamental_mode
-[@@interactive]
-@
+
 % it's fundamental-mode normally :) french :)
 
 <<constant [[Ebuffer.fondamental_mode]]>>=
@@ -9621,9 +9624,10 @@ let set_major_var maj var value =
 @
 
 <<function [[Keymap.add_major_key]]>>=
-let add_major_key major = 
-  interactive major.maj_map 
+let add_major_key major prefix _string action = 
+  add_binding major.maj_map prefix action
 @
+%old:  interactive major.maj_map 
 
 
 <<[[Ebuffer.get_binding()]] major mode key search>>=
@@ -9684,11 +9688,6 @@ Store.get buf.buf_major_mode.maj_vars var
 <<misc keys>>=
 [ c_c; NormalMap, Char.code '-'], Structure.next_hole;
 @
-%old:
-% <<misc actions>>=
-% (* C-M map *)
-% define_action "next_hole" Structure.next_hole;
-% @
 
 % Simple.insert_structure -> <>
 <<function [[Simple.next_hole]]>>=
@@ -9708,6 +9707,11 @@ let next_hole frame =
   )
 [@@interactive]
 @
+%old:
+% <<misc actions>>=
+% (* C-M map *)
+% define_action "next_hole" Structure.next_hole;
+% @
 
 % install_structures -> <>
 <<function [[Simple.insert_structure]]>>=
@@ -9872,9 +9876,10 @@ let set_minor_var min var value =
 @
 
 <<function [[Keymap.add_minor_key]]>>=
-let add_minor_key minor = 
-  interactive minor.min_map 
+let add_minor_key minor prefix _string action = 
+  add_binding minor.min_map prefix action
 @
+%old:  interactive minor.min_map 
 
 
 
@@ -9919,10 +9924,6 @@ iter buf.buf_minor_modes
 <<external commands keys>>=
 [MetaMap, Char.code '!'], System.shell_command;
 @
-%old:
-% <<external command actions>>=
-% define_action "shell_command"  System.shell_command;
-% @
 
 <<constant [[System.shell_hist]]>>=
 let shell_hist = ref []
@@ -9934,6 +9935,10 @@ let shell_command frame =
     start_command pwd "*Command*" (Multi_frames.cut_frame frame) cmd |> ignore)
 [@@interactive]
 @
+%old:
+% <<external command actions>>=
+% define_action "shell_command"  System.shell_command;
+% @
 
 
 <<function [[System.start_command]]>>=
@@ -10103,16 +10108,6 @@ then Text.set_position text point (Text.size text);
 "Compile", "compile";
 @
 
-%old:
-% <<external command actions>>=
-% define_action "grep" Compil.grep;
-% define_action "compile" Compil.compile;
-% @
-% <<[[interactives_map]] initial entries>>=
-% "compile";
-% "grep";
-% @
-
 
 \subsection{[[M-x grep]]}
 
@@ -10149,6 +10144,16 @@ let grep frame =
   )
 [@@interactive]
 @
+%old:
+% <<external command actions>>=
+% define_action "grep" Compil.grep;
+% define_action "compile" Compil.compile;
+% @
+% <<[[interactives_map]] initial entries>>=
+% "compile";
+% "grep";
+% @
+
 
 <<function [[Frame.current_dir]]>>=
 let current_dir frame =
@@ -10162,9 +10167,6 @@ let current_dir frame =
 
 \subsection{[[M-x compile]]}
 
-%<<misc actions>>=
-%(*define_action "compile" compile;*)
-%@
 %<<function Config.compile>>=
 %(*
 %let compile frame =
@@ -10233,6 +10235,10 @@ let compile frame =
   )
 [@@interactive]
 @
+%<<misc actions>>=
+%(*define_action "compile" compile;*)
+%@
+
 
 <<constant [[Compil.compilation_frame]]>>=
 let compilation_frame = ref None
@@ -10352,14 +10358,6 @@ let next_error top_frame =
 
 \subsection{The server}
 
-%old:
-% <<misc actions>>=
-% define_action "start_server" Server.start;
-% @
-% <<[[interactives_map]] initial entries>>=
-% "start_server";
-% @
-
 <<constant [[Server.user]]>>=
 let user = 
   try Sys.getenv "USER" 
@@ -10439,8 +10437,20 @@ let start frame =
         PropModeReplace atom XA.xa_string 1 socket_name;
       *)
   )  
-[@@interactive]
+[@@interactive "start_server"]
 @
+%old:
+% <<misc actions>>=
+% define_action "start_server" Server.start;
+% @
+% <<[[interactives_map]] initial entries>>=
+% "start_server";
+% @
+
+%alt: we could put a @@interactive "start_server" here, or rename
+% the function. This shows one pro for having an explicit 
+% interactive call separate from the action (but very very small pro)
+
 % todo: no M-x server-start?
 
 \subsection{The client: [[efuns_client]]}
@@ -10519,14 +10529,6 @@ let _ =
 
 \section{[[M-x eval]]}
 
-%old:
-% <<meta actions>>=
-% define_action "eval" Complexe.eval;  
-% @
-% <<[[interactives_map]] initial entries>>=
-% "eval";  
-% @
-
 % <<constant [[Complex.eval_history]]>>=
 % let eval_history = ref []
 % @
@@ -10543,6 +10545,13 @@ let _ =
 %         str ^ " ;;"))
 %       *)(failwith "Complex.eval: TODO")
 %     )
+% @
+%old:
+% <<meta actions>>=
+% define_action "eval" Complexe.eval;  
+% @
+% <<[[interactives_map]] initial entries>>=
+% "eval";  
 % @
 
 
@@ -11939,6 +11948,17 @@ Action.define_buffer_action "overwrite_mode" (fun buf ->
 <<misc keys>>=
 [NormalMap, XK.xk_Insert], Edit.toggle_overwrite_mode;
 @
+
+
+<<function [[Edit.toggle_overwrite_mode]]>>=
+let toggle_overwrite_mode frm =
+  let buf = frm.frm_buffer in
+  let mode = overwrite_mode in
+  if Ebuffer.has_minor_mode buf mode 
+  then Ebuffer.del_minor_mode buf mode
+  else Ebuffer.set_minor_mode buf mode
+[@@interactive "overwrite_mode"]
+@
 %old:
 % <<[[interactives_map]] initial entries>>=
 % "overwrite_mode";
@@ -11966,6 +11986,8 @@ let insert_at_place frame char =
   end
 @
 %old:  let _sessionTODOBUG = Text.start_session text in
+
+
 
 \chapter{Extra Code}
 
