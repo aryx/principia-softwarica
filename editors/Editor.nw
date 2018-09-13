@@ -3637,8 +3637,7 @@ let unset_attrs text =
 %dead:
 % <<function [[Simple.unset_attr]]>>=
 % let unset_attr frame =
-%   let buf = frame.frm_buffer in
-%   let text = buf.buf_text in
+%   let (buf, text, _) = Frame.buf_text_point frame in
 %   Text.unset_attrs text
 % @
 
@@ -3803,9 +3802,7 @@ let highlight frame =
     | None -> frame
     | Some (frame, _d, _f) -> frame
   in    
-  let buf = frame.frm_buffer in
-  let point = frame.frm_point in
-  let text = buf.buf_text in
+  let (buf, text, point) = Frame.buf_text_point frame in
   let mark = Ebuffer.get_mark buf point in
   let pt_debut, pt_fin =
     if point < mark 
@@ -3836,6 +3833,15 @@ let highlight frame =
 %less: useful this opti? can't just unhighlight the min/max and then rehighlight
 % the new part?
 
+<<function [[Frame.buf_text_point]]>>=
+let buf_text_point frame =
+  let buf = frame.frm_buffer in
+  let text = buf.buf_text in
+  let point = frame.frm_point in
+  (buf, text, point)
+@
+%pad: I introduced this; it factorizes code and makes it more readable IMHO
+
 % Top_window.handle_key -> <> 
 % (as hook <- Top_window.handle_key_start_hook <- Highlight._)
 <<function [[Simple.unhightlight]]>>=
@@ -3846,8 +3852,7 @@ let unhightlight _frame =
   | Some (frame,debut,fin) -> 
      (*   if !keypressed <> XK.xk_Pointer_Drag1 then *)
      highlighted := None;
-     let buf = frame.frm_buffer in
-     let text = buf.buf_text in
+     let (buf, text, _) = Frame.buf_text_point frame in
 
      Text.with_new_point text (fun curseur ->
      Text.with_new_point text (fun final ->
@@ -5043,10 +5048,7 @@ let install window frame =
 % called for each frame (including the minibuffer's frame when in use)
 <<function [[Frame.display]]>>=
 let display top_window frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-
-  let point = frame.frm_point in
+  let (buf, text, point) = buf_text_point frame in
 
   let width = frame.frm_width - frame.frm_has_scrollbar in
   let height = frame.frm_height - frame.frm_has_status_line in
@@ -5303,8 +5305,7 @@ frame.frm_table <- (Array.init window.win_height (fun i ->
 % Top_window.update_display -> Frame.display -> <>
 <<function [[Frame.update_table]]>>=
 let update_table frame =
-  let buf =  frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, _) = buf_text_point frame in
 
   let start = frame.frm_start in
   let height = frame.frm_height - frame.frm_has_status_line in
@@ -5515,10 +5516,8 @@ let set_cursor_on top_window frame =
 
 <<function [[Frame.set_cursor]]>>=
 let set_cursor frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, point) = buf_text_point frame in
 
-  let point = frame.frm_point in
   match point_to_xy_opt frame point with
   | None ->
       (* insert cursor is not on frame *)
@@ -5554,8 +5553,7 @@ let set_cursor frame =
 
 <<function [[Frame.point_to_xy_opt]]>>=
 let point_to_xy_opt frame point =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, _) = buf_text_point frame in
 
   let x_nocut = point_to_x_when_no_cutline buf point in
   let line = Ebuffer.compute_representation buf (point_line text point) in
@@ -5750,11 +5748,11 @@ end;
 
 <<function [[Simple.recenter]]>>=
 let recenter frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, point) = Frame.buf_text_point frame in
+
   frame.frm_force_start <- true;
   frame.frm_redraw <- true;
-  Text.goto_point text frame.frm_start frame.frm_point;
+  Text.goto_point text frame.frm_start point;
   frame.frm_y_offset <- - frame.frm_height/2
 [@@interactive]
 @
@@ -5812,8 +5810,7 @@ end
 (*
 let scroll_to_frame ady top_window =
   let frame = top_window.top_active_frame in
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, _) = Frame.buf_text_point frame in
   let pos_start = Text.get_position text frame.frm_start in
   let _size = Text.size text in
   Common.pr2 "ady#get_pos size";
@@ -6207,10 +6204,9 @@ exception BufferKilled
 
 <<function [[Frame.unkill]]>>=
 let unkill window frame =
-  let buf = frame.frm_buffer in
+  let (buf, text, _) = buf_text_point frame in
   if buf.buf_shared < 0 
   then raise BufferKilled;
-  let text = buf.buf_text in
   install window frame;
   frame.frm_start <- Text.dup_point text buf.buf_start;
   frame.frm_end <- Text.dup_point text buf.buf_start;
@@ -6586,9 +6582,7 @@ Keymap.add_global_key [NormalMap, XK.xk_Pointer_Button1] Mouse.mouse_set_frame;
 let mouse_set_frame frame =
   let top_window = Window.top frame.frm_window in
   let frame = Top_window.mouse_set_active top_window in
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   let mark = Ebuffer.get_mark buf point in
   Text.goto_point text mark point;
   ()
@@ -6657,8 +6651,7 @@ let rec find_frame window x y =
 % mouse_save_then_kill -> <>
 <<function [[Frame.move_point]]>>=
 let move_point frame point x y =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, _) = buf_text_point frame in
   let coord = cursor_to_coord frame (x - frame.frm_xpos) (y - frame.frm_ypos) in
   Text.goto_line text point coord.Text.c_line;
   Text.fmove text point coord.Text.c_col
@@ -6730,8 +6723,7 @@ let mouse_drag_region frame =
       move_point frame point !mouse_x !mouse_y
     with
       Not_found ->
-        let buf = frame.frm_buffer in
-        let text = buf.buf_text in
+        let (buf, text, _) = Frame.buf_text_point frame in
         let y = !mouse_y - frame.frm_ypos in
         if y < 0 then
           ( scroll_line frame (y-1);
@@ -6753,8 +6745,7 @@ let mouse_drag_region frame =
         match !highlighted with
           None -> raise Not_found
         | Some (frame,debut,fin) -> 
-            let buf = frame.frm_buffer in
-            let text = buf.buf_text in
+            let (buf, text, _) = Frame.buf_text_point frame in
             let curseur = new_point text in
             let final = new_point text in
             set_position text curseur debut;
@@ -6788,9 +6779,7 @@ failwith "Simple.mouse_yank_at_click: TODO"
 (*
   let top_window = Window.top frame.frm_window in
   let frame = mouse_set_active top_window in
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   let xterm = Window.xterm top_window in
   let str = WX_xterm.get_cutbuffer xterm in
   Text.insert text point str;
@@ -6806,9 +6795,7 @@ let mouse_save_then_kill frame =
 (*
   let top_window = Window.top frame.frm_window in
   let frame = Top_window.find_selected_frame top_window in
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   let mark = Ebuffer.get_mark buf point in
   Text.with_new_point text (fun new_point ->
     Frame.move_point frame new_point !mouse_x !mouse_y;
@@ -7649,19 +7636,17 @@ let scroll_other_down frame =
 
 <<function [[Simple.begin_of_file]]>>=
 let begin_of_file frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, point) = Frame.buf_text_point frame in
   <<save current pos from frame for position history navigation (in simple.ml)>>
-  Text.set_position text frame.frm_point 0
+  Text.set_position text point 0
 [@@interactive]
 @
 
 <<function [[Simple.end_of_file]]>>=
 let end_of_file frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, point) = Frame.buf_text_point frame in
   <<save current pos from frame for position history navigation (in simple.ml)>>
-  Text.set_position text frame.frm_point (Text.size text)
+  Text.set_position text point (Text.size text)
 [@@interactive]
 @
 
@@ -7785,9 +7770,7 @@ save_current_pos frame;
 
 <<function [[Simple.save_current_pos]]>>=
 let save_current_pos frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   if Array.length buf.buf_history_pos < history_pos_max
   then buf.buf_history_pos <- Array.create history_pos_max None;
   let arr = buf.buf_history_pos in
@@ -7813,8 +7796,7 @@ let save_current_pos frame =
 
 <<function [[Simple.goto_last_saved_pos]]>>=
 let goto_last_saved_pos frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, point) = Frame.buf_text_point frame in
   if Array.length buf.buf_history_pos < history_pos_max
   then buf.buf_history_pos <- Array.create history_pos_max None;
   let arr = buf.buf_history_pos in
@@ -7822,7 +7804,7 @@ let goto_last_saved_pos frame =
   Array.blit arr 1 arr 0 (history_pos_max - 1);
   arr.(history_pos_max - 1) <- None;
   match head with
-  | Some pt -> Text.goto_point text frame.frm_point pt
+  | Some pt -> Text.goto_point text point pt
   | None -> failwith "No position history"
 [@@interactive]
 @
@@ -7975,8 +7957,7 @@ let delete_forward_word buf point =
 
 <<function [[Simple.kill_end_of_line]]>>=
 let kill_end_of_line frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, _) = Frame.buf_text_point frame in
   let eol = point_to_end frame in
   let len = 
     (* if already at eol then kill the newline *)
@@ -8067,9 +8048,7 @@ let remove_mark buf =
 
 <<function [[Simple.kill_region]]>>=
 let kill_region frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   let mark =
     match buf.buf_mark with
     | None -> failwith "No mark set"
@@ -8111,9 +8090,7 @@ let kill_string str =
 <<function [[Simple.copy_region]]>>=
 (* copy-region-as-kill-nomark in emacs *)
 let copy_region frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   let mark =
     match buf.buf_mark with
       None -> failwith "No mark set"
@@ -8173,10 +8150,7 @@ let rec region text p1 p2 =
 % c-y
 <<function [[Simple.insert_killed]]>>=
 let insert_killed frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
-
+  let (buf, text, point) = Frame.buf_text_point frame in
 (*
   let top_window = Window.top frame.frm_window in
   let graphic = Efuns.backend top_window in
@@ -8204,9 +8178,7 @@ let last_insert = ref None
 % M-y
 <<function [[Simple.insert_next_killed]]>>=
 let insert_next_killed frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   match !last_insert with
   |  Some (oldframe,oldpoint,n,len) when 
         oldframe == frame && oldpoint + len = Text.get_position text point ->
@@ -8237,10 +8209,7 @@ let insert_next_killed frame =
 
 <<function [[Simple.point_at_mark]]>>=
 let point_at_mark frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
-
+  let (buf, text, point) = Frame.buf_text_point frame in
   let mark = Ebuffer.get_mark buf point in
   let pos = Text.get_position text point in
   Text.goto_point text point mark;
@@ -8280,9 +8249,7 @@ let point_at_mark frame =
 
 <<function [[Simple.undo]]>>=
 let undo frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in  
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   let action, at_point, len = Text.undo text in
   frame.frm_last_text_updated <- Text.version text - 1;
   <<save current pos from frame for position history navigation (in simple.ml)>>
@@ -8505,11 +8472,9 @@ let case_fold = ref false
 
 <<function [[Search.isearch]]>>=
 let isearch to_regexp sens frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let ismap = Keymap.create () in
+  let (buf, text, point) = Frame.buf_text_point frame in
 
-  let point = frame.frm_point in
+  let ismap = Keymap.create () in
   let spoint = Text.dup_point text point in
   let orig = Text.get_position text point in
   <<save current pos from frame for position history navigation>>
@@ -8550,9 +8515,7 @@ let isearch to_regexp sens frame =
   in
   let set_last mini_frame =
     if !string = "" then begin
-      let buf = mini_frame.frm_buffer in
-      let text = buf.buf_text in
-      let point = mini_frame.frm_point in
+      let (buf, text, point) = Frame.buf_text_point mini_frame in
       Text.insert text point !last_search;
       Text.fmove text point (String.length !last_search);
       string := !last_search
@@ -8844,9 +8807,7 @@ let select_replace frame request action =
 <<function [[Search.replace]]>>=
 let replace flag frame query str repl =
   let top_window = Window.top frame.frm_window in
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   <<save current pos from frame for position history navigation>>
   let regexp = to_regexp flag str in
   let session = Text.start_session text in
@@ -9397,13 +9358,12 @@ let delete_frame frame =
 % (Frame.create -> Frame.install) | Minibuffer.kill  -> <>
 <<function [[Frame.kill]]>>=
 let kill frame = 
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, point) = buf_text_point frame in
   <<[[Frame.kill()]] setting [[frm_killed]] field>>
   buf.buf_shared <- buf.buf_shared - 1;
   Text.remove_point text buf.buf_point;
   Text.remove_point text buf.buf_start;
-  buf.buf_point <- frame.frm_point;
+  buf.buf_point <- point;
   buf.buf_start <- frame.frm_start
 @
 % this will be called when you create a new frame for an existing
@@ -9776,9 +9736,7 @@ Store.get buf.buf_major_mode.maj_vars var
 <<function [[Simple.next_hole]]>>=
 (* a hole is two consecutive '^' chars *)
 let next_hole frame = 
-  let buf = frame.frm_buffer in
-  let point = frame.frm_point in
-  let text = buf.buf_text in
+  let (buf, text, point) = Frame.buf_text_point frame in
   Text.with_dup_point text point (fun curseur ->
     while 
       not ((Text.get_char text curseur = '^') && (Text.fmove_res text curseur 1 = 1) &&
@@ -9799,9 +9757,7 @@ let next_hole frame =
 % install_structures -> <>
 <<function [[Simple.insert_structure]]>>=
 let insert_structure s frame =
-  let buf = frame.frm_buffer in
-  let point = frame.frm_point in
-  let text = buf.buf_text in
+  let (buf, text, point) = Frame.buf_text_point frame in
   Text.insert text point s;
   next_hole frame
 @
@@ -10393,7 +10349,7 @@ let next_error top_frame =
       if frame.frm_killed 
       then Frame.unkill (Multi_frames.cut_frame top_frame) frame;
 
-      let buf = frame.frm_buffer in
+      let (buf, text, point) = Frame.buf_text_point frame in
       let find_error = 
         try Var.get_var buf find_error
         with Not_found | Failure _ -> 
@@ -10404,8 +10360,6 @@ let next_error top_frame =
           in
           find_error_gen re
       in
-      let text = buf.buf_text in
-      let point = frame.frm_point in
       try
         let error = find_error text error_point in
         Text.set_position text frame.frm_start error.err_msg;
@@ -10481,9 +10435,7 @@ let read_command fd frame =
         (*wrap*) top_window |> (fun top_window ->
             let frame = Frame.load_file window name in
             if pos <> 0 then begin
-              let buf = frame.frm_buffer in
-              let text = buf.buf_text in
-              let point = frame.frm_point in
+              let (buf, text, point) = Frame.buf_text_point frame in
               try
                 if str = "" 
                 then raise Not_found 
@@ -10675,9 +10627,7 @@ let _ =
 <<function [[Abbrevs.expand_sabbrev]]>>=
 let expand_sabbrev frame =
   try
-    let point = frame.frm_point in
-    let buf = frame.frm_buffer in
-    let text = buf.buf_text in
+    let (buf, text, point) = Frame.buf_text_point frame in
     let abbrevs = Var.get_local buf abbrev_table in
     let str =
       Text.with_dup_point text point (fun mark ->
@@ -10698,10 +10648,8 @@ let expand_sabbrev frame =
 
 <<function [[Abbrevs.dabbrev_expand]]>>=
 let dabbrev_expand frame = 
-  let buf = frame.frm_buffer in
+  let (buf, text, point) = Frame.buf_text_point frame in
   let syntax = buf.buf_syntax_table in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
   let loop = ref false in
   let s, buf, pos, history =
     match !dabbrev_buf with
@@ -10944,9 +10892,7 @@ let line_comment = Store.create_abstr "Fill_mode.line_comment"
 <<function [[Simple.fill_paragraph]]>>=
 (* We will have to modify this to handle line_comment soon !! *)
 let fill_paragraph frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   text |> Text.with_session (fun () ->
     Text.with_dup_point text point (fun start ->
     backward_paragraph buf start;
@@ -11010,9 +10956,7 @@ let simplify text start point =
 <<function [[Simple.electric_insert_space]]>>=
 let electric_insert_space frame =
   Edit.self_insert_command frame;
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   let line_len = Text.point_to_bol text point in
   if line_len > 75 then
     Text.with_dup_point text point (fun mark ->
@@ -11049,8 +10993,7 @@ let hungry_char c =
 % C-backspace
 <<function [[Simple.hungry_electric_delete]]>>=
 let hungry_electric_delete frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, _) = Frame.buf_text_point frame in
   text |> Text.with_session (fun () ->
    let c1 = previous_char frame in
    Edit.delete_backspace_char frame;
@@ -11073,9 +11016,7 @@ let hungry_electric_delete frame =
 
 <<function [[Simple.previous_char]]>>=
 let previous_char frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   if Text.bmove_res text point 1 = 0 then raise Not_found;
   let c = Text.get_char text point in
   Text.fmove text point 1;
@@ -11984,9 +11925,7 @@ let is_paren_begin c = (c == '{') || (c == '[') || (c == '(')
 % Paren_mode.find_matching | Abbrevs_mode.find_matching -> <>
 <<function [[Simple.highlight_paren]]>>=
 let highlight_paren frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
 
   <<[[Simple.highlight_paren()]] special code for HTML modes>>
 
@@ -12078,9 +12017,7 @@ then insert_at_place frame char
 
 <<function [[Simple.insert_at_place]]>>=
 let insert_at_place frame char =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   let c = Text.get_char text point in
   if c = '\n' 
   then insert_char frame char

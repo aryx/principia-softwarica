@@ -1159,6 +1159,12 @@ open Text (* for the line fields *)
 <<type [[Frame.t]]>>
 
 (*****************************************************************************)
+(* Helpers *)
+(*****************************************************************************)
+
+<<function [[Frame.buf_text_point]]>>
+
+(*****************************************************************************)
 (* Status line *)
 (*****************************************************************************)
 
@@ -1259,7 +1265,6 @@ let display a = Common.profile_code "Frame.display"
 <<function [[Frame.bindings_help]]>>
 
 <<function [[Simple.to_frame]]>>
-  
 @
 
 
@@ -1984,17 +1989,13 @@ let select_file frame request history start action =
     Scroll.forward_screen frame
   );
   Keymap.add_binding map [NormalMap, Char.code '~'] (fun frame ->
-    let buf = frame.frm_buffer in
-    let text = buf.buf_text in
-    let point = frame.frm_point in
+    let (buf, text, point) = Frame.buf_text_point frame in
     Copy_paste.kill_bol buf point;
     Edit.self_insert_command frame;      
     string := Text.to_string text
   );
   Keymap.add_binding map [NormalMap, Char.code '/'] (fun frame ->
-    let buf = frame.frm_buffer in
-    let text = buf.buf_text in
-    let point = frame.frm_point in
+    let (buf, text, point) = Frame.buf_text_point frame in
     if Text.bmove_res text point 1 = 1 then
       ( let c = Text.get_char text point in
         Text.fmove text point 1;
@@ -2587,7 +2588,6 @@ let mode = Ebuffer.new_major_mode "Compilation"
 
 <<features/electric.ml>>=
 <<copyright header2>>
-open Efuns
 
 <<function [[Simple.previous_char]]>>
 
@@ -2850,9 +2850,7 @@ open Unix
 
 %<<function Simple.format_to>>=
 %let format_to frame =
-%  let point = frame.frm_point in
-%  let buf = frame.frm_buffer in
-%  let text = buf.buf_text in
+%  let (buf, text, point) = Frame.buf_text_point frame in
 %  Format.set_formatter_output_functions 
 %    (fun str pos len ->
 %      let s = String.sub str pos len in
@@ -2902,8 +2900,7 @@ open Unix
 
 <<function [[Complex.reload]]>>=
 let reload frame = 
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, _) = Frame.buf_text_point frame in
   match buf.buf_filename with
     None -> ()
   | Some file ->
@@ -3310,9 +3307,7 @@ let get_file_line frame =
   frame.frm_buffer.buf_filename |> Common.do_option (fun filename ->
     (Globals.editor()).edt_dirname <- Filename.dirname filename;
   );
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   Text.with_dup_point text point (fun start_point ->
     let before = Text.point_to_bol text point in
     let after = Text.point_to_eol text point in
@@ -4342,9 +4337,7 @@ let back_list = ref []
 
 <<function [[Ocaml_toplevel.find_implementation]]>>=
 let find_implementation frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
+  let (buf, text, point) = Frame.buf_text_point frame in
   let word = find_long_word buf point in
   let ids = all_idents buf in
   let pos = get_position text point in
@@ -4971,8 +4964,7 @@ let load_library frame =
 let eval_buffer frame =
   let top_window = Window.top frame.frm_window in
   let location = top_window.top_location in
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
+  let (buf, text, _) = Frame.buf_text_point frame in
   let filename = Filename.temp_file "buffer" ".ml" in
   let outc = open_out filename in
   Text.save buf.buf_text outc;
