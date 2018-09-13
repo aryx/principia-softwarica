@@ -4492,14 +4492,14 @@ if !!Top_window.file_menu = [] then begin
 
 % C-x C-f!
 <<loading keys>>=
-[c_x; ControlMap, Char.code 'f'], Misc.load_buffer;
+[c_x; ControlMap, Char.code 'f'], Multi_buffers.load_buffer;
 @
 
 
 % in Complex because requires select and minibuffer
 <<function [[Complex.load_buffer]]>>=
 let load_buffer frame = 
-  Multi_buffers.set_previous_frame frame;
+  set_previous_frame frame;
   Select.select_filename frame "Find file: " (fun str -> 
     Frame.load_file frame.frm_window str |> ignore
   )
@@ -4607,7 +4607,7 @@ let read inc =
 % not in the menu, but related
 
 <<loading keys>>=
-[c_x; NormalMap, Char.code 'i'], Misc.insert_file;
+[c_x; NormalMap, Char.code 'i'], Multi_buffers.insert_file;
 @
 
 <<function [[Complex.insert_file]]>>=
@@ -4639,7 +4639,7 @@ let insert_string frame str =
 \subsubsection{Saving the buffer}
 
 <<saving keys>>=
-[c_x; ControlMap, Char.code 's'], Misc.save_buffer; 
+[c_x; ControlMap, Char.code 's'], Multi_buffers.save_buffer; 
 @
 
 <<function [[Complex.save_buffer]]>>=
@@ -4771,8 +4771,8 @@ let check_file frame =
 \subsubsection{More saving operations}
 
 <<saving keys>>=
-[c_x; NormalMap,  Char.code 's'], Misc.save_some_buffers;
-[c_x; ControlMap, Char.code 'w'], Misc.write_buffer; 
+[c_x; NormalMap,  Char.code 's'], Multi_buffers.save_some_buffers;
+[c_x; ControlMap, Char.code 'w'], Multi_buffers.write_buffer; 
 @
 
 
@@ -4782,7 +4782,6 @@ let save_some_buffers frame =
   save_buffers_and_action frame buffers (fun _ -> ())
 [@@interactive]
 @
-%less: save_buffers_and_action here?
 %old:
 % <<saving actions>>=
 % (* C-x map *)
@@ -4840,6 +4839,47 @@ let change_name buf filename =
 % but why do the test on the hashtbl before??
 
 
+<<function [[Complex.save_buffers_and_action]]>>=
+let rec save_buffers_and_action frame buffers action =
+  match buffers with
+    [] -> let () = action frame in ()
+  | (_,buf) :: buffers ->
+      let text = buf.buf_text in
+      if buf.buf_last_saved = Text.version text  ||
+        buf.buf_name.[0] = '*'
+      then
+        save_buffers_and_action frame buffers action
+      else
+      let map = Keymap.create () in
+      let request = Printf.sprintf "Save buffer %s ? (y,n,!,a)" buf.buf_name
+      in
+      let yes mini_frame =
+        Minibuffer.kill mini_frame frame;
+        Ebuffer.save buf;
+        save_buffers_and_action frame buffers action
+      in
+      let no mini_frame =
+        Minibuffer.kill mini_frame frame;
+        save_buffers_and_action frame buffers action; ()
+      in
+      let action_immediately mini_frame = 
+        Minibuffer.kill mini_frame frame;
+        let () = action mini_frame in ()
+      in
+      let abort mini_frame =
+        Minibuffer.kill mini_frame frame
+      in
+      Keymap.add_binding map [NormalMap, Char.code 'y'] yes;
+      Keymap.add_binding map [NormalMap, Char.code 'Y'] yes;
+      Keymap.add_binding map [NormalMap, Char.code 'n'] no;
+      Keymap.add_binding map [NormalMap, Char.code 'N'] no;
+      Keymap.add_binding map [NormalMap, Char.code '!'] action_immediately;
+      Keymap.add_binding map [NormalMap, Char.code 'a'] abort;
+      Keymap.add_binding map [NormalMap, Char.code 'A'] abort;
+      Keymap.add_binding map [ControlMap, Char.code 'g'] abort;
+      Minibuffer.create frame map request |> ignore
+@
+\l move later? too early? use too many concepts
 
 \subsubsection{Exit}
 
@@ -4850,7 +4890,7 @@ let change_name buf filename =
 <<function [[Complex.exit_efuns]]>>=
 let exit frame =
   let buffers = Utils.list_of_hash (Globals.editor()).edt_buffers in
-  save_buffers_and_action frame buffers (fun _ -> 
+  Multi_buffers.save_buffers_and_action frame buffers (fun _ -> 
     (* todo: have some exit hooks? *)
     raise (Common.UnixExit 0)
   )
@@ -4864,8 +4904,6 @@ let exit frame =
 
 
 %(*Graphics.close_graph ();*)
-
-%todo: save_buffers_and_action?
 
 \subsection{Edit menu}
 
