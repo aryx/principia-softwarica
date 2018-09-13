@@ -1743,7 +1743,7 @@ let key_option = Options.define_option_class "Key" value_to_key key_to_value
 let init_global_map () = 
   if !!global_map = [] 
   then 
-    standard_map |> List.iter (fun (keys, action) ->
+    (core_map @ standard_map) |> List.iter (fun (keys, action) ->
         Keymap.add_global_key keys "" action
     )
   else 
@@ -1806,7 +1806,7 @@ let standard_map = [
 (* ------------- *)
 (* Inserting *)
 (* ------------- *)
-(* see also the many self_insert_cmd in core_map *)
+(* see also the many self_insert_xxx in core_map *)
 <<inserting keys>>
 (* ------------- *)
 (* Deleting *)
@@ -6357,11 +6357,17 @@ let set_binding map key binding =
 \subsection{Basic key bindings}
 % how get the basic keys!
 
-<<[[Simple._]] start hook>>=
+<<constant [[core_map]]>>=
+let core_map = 
+ <<[[core_map]] entries>>
+ []
+@
+
+<<[[core_map]] entries>>=
 (* standard chars *)
-for key = 32 to 127 do
-  Keymap.add_binding gmap [NormalMap, key] self_insert_command
-done;
+(Common2.enum 32 127 |> List.map (fun key ->
+  [NormalMap, key], Edit.self_insert_command
+)) @
 @
 
 <<function [[Simple.self_insert_command]]>>=
@@ -6375,16 +6381,17 @@ let self_insert_command frame =
 \subsection{Entering special chars: [[^M]]}
 
 % seen how to display them, but how to enter them?
+% C-q C-m => you will see a ^m in the buffer (which is considered
+% really as one character because the arrow will move 2 chars when on it)
 
-<<[[Simple._]] start hook>>=
-let c_q = (ControlMap, Char.code 'q') in
-(* Keymap.add_prefix gmap [c_q]; *)
-for key = 65 to 65+25 do
-  Keymap.add_binding gmap [c_q;ControlMap, key] insert_special_char;
-done;
-for key = 97 to 97+25 do
-  Keymap.add_binding gmap [c_q;ControlMap, key] insert_special_char;
-done;
+<<[[core_map]] entries>>=
+(let c_q = (ControlMap, Char.code 'q') in
+(Common2.enum 65 (65+25) |> List.map (fun key ->
+  [c_q;ControlMap, key], Misc.insert_special_char
+)) @
+(Common2.enum 97 (97+25) |> List.map (fun key ->
+  [c_q;ControlMap, key], Misc.insert_special_char
+))) @
 @
 
 <<function [[Simple.insert_special_char]]>>=
@@ -11118,11 +11125,8 @@ let char_insert_command char frame =
   else insert_char frame char
 @
 
-<<[[Simple._]] start hook>>=
-    (* special for AZERTY keyboards *)
-    Array.iter (fun (key, char) ->
-        Keymap.add_binding gmap [NormalMap, key] (char_insert_command char)
-    ) [| 
+<<[[core_map]] entries>>=
+([
 (*
         (XK.xk_eacute, 'é');
         (XK.xk_egrave, 'è');
@@ -11134,7 +11138,11 @@ let char_insert_command char frame =
         (XK.xk_section, '§');
         (XK.xk_degree,  '°');
 *)
-        |];
+] |> List.map (fun (key, char) ->
+    (* special for AZERTY keyboards *)
+        [NormalMap, key], (Edit.char_insert_command char)
+    )
+) @
 @
 
 \section{Signals}
@@ -11957,15 +11965,6 @@ htmlp := (!Top_window.keypressed = Char.code '>');
 let overwrite_mode = Ebuffer.new_minor_mode "Over" []
 @
 
-<<Simple toplevel setup>>=
-Action.define_buffer_action "overwrite_mode" (fun buf -> 
-    let mode = overwrite_mode in
-    if Ebuffer.has_minor_mode buf mode 
-    then Ebuffer.del_minor_mode buf mode
-    else Ebuffer.set_minor_mode buf mode
-);
-@
-% should be in start_hook?
 <<misc keys>>=
 [NormalMap, XK.xk_Insert], Edit.toggle_overwrite_mode;
 @
