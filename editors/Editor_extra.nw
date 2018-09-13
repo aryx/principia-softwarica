@@ -2708,7 +2708,13 @@ let set_indent text point offset =
 <<toplevel [[Simple._1]]>>=
 let _ =
   Hook.add_start_hook (fun () ->
-    Var.set_global line_comment ""
+    Var.set_global line_comment "";
+    (* this needs to be done early, not in config.ml, because some
+     * major modes may want to access it to add stuff in their
+     * own local version (e.g., in caml_mode.ml to recolorize the buffer
+     *)
+    Var.set_global Ebuffer.saved_buffer_hooks [update_time];
+
   )
 @
 
@@ -2777,9 +2783,6 @@ open Unix
 <<function [[Complex.get_pos]]>>
 
 <<function [[Misc.cursor_position]]>>
-
- 
-<<toplevel [[Complex._1]]>>
 
 (*****************************************************************************)
 (* Toplevel *)
@@ -3005,28 +3008,8 @@ let reload frame =
 %   old
 % @
 
-
-
-
 %dead:
 %      Keymap.add_interactive edt.edt_map "make_directory" mkdir;
-
-<<toplevel [[Complex._1]]>>=
-let _ =
-  Hook.add_start_hook (fun () ->
-(* TODO
-    let edt = Globals.editor() in
-      Keymap.add_interactive edt.edt_map "set_local_variable" 
-        Interactive.set_local_variable;
-      Keymap.add_interactive edt.edt_map "set_global_variable" 
-        Interactive.set_global_variable;
-      Keymap.add_interactive edt.edt_map "set_parameter" set_parameter;
-      Keymap.add_interactive edt.edt_map "get_parameter" get_parameter;
-*)
-    Var.set_global Ebuffer.saved_buffer_hooks [update_time];
-  )
-@
-
 
 %-------------------------------------------------------------
 
@@ -3507,10 +3490,6 @@ let install buf =
 let mode = Ebuffer.new_major_mode "Dired" (Some install)
 @
 
-<<constant [[Dired.map]]>>=
-(* TODO let map = mode.maj_map *)
-@
-
 <<function [[Dired.viewer]]>>=
 let viewer commande frame filename =
   Sys.command (Printf.sprintf "(%s %s) &" commande filename) |> ignore
@@ -3556,15 +3535,22 @@ let _ =
     ];
   
   Hook.add_start_hook (fun () ->
-(* TODO
-    Keymap.add_interactive ((Globals.editor()).edt_map) "dired_mode" 
-        (fun frame -> 
-          Ebuffer.set_major_mode frame.frm_buffer mode);
-*)
     Var.add_global Ebuffer.modes_alist [".*/$",mode];
   )   
 @
 %$
+
+<<function [[Dired.dired_mode]]>>=
+let dired_mode =
+  Major_modes.enable_major_mode mode
+[@@interactive]
+@
+
+%old:
+%    Keymap.add_interactive ((Globals.editor()).edt_map) "dired_mode" 
+%        (fun frame -> 
+%          Ebuffer.set_major_mode frame.frm_buffer mode);
+
 
 
 %-------------------------------------------------------------
@@ -3603,8 +3589,8 @@ open Efuns
       
 <<constant [[Dired.mode]]>>
 
-<<constant [[Dired.map]]>>
-  
+<<function [[Dired.dired_mode]]>>
+
 
 <<function [[Dired.viewer]]>>
 
@@ -4149,21 +4135,20 @@ let mode = Ebuffer.new_major_mode "Makefile" (Some install)
 let local_map = define_option ["makefile_mode"; "local_map"] ""
     (list_option Keymap.binding_option) []
 @
-<<constant [[Makefile_mode.interactives_map]]>>=
-(* TODO
-let interactives_map = define_option ["makefile_mode"; "interactives_map"] ""
-    (list_option string2_option) 
-  []
-*)
-@
-% useful? redundant this interactives_map no?
+
+%old:
+% <<constant [[Makefile_mode.interactives_map]]>>=
+% let interactives_map = define_option ["makefile_mode"; "interactives_map"] ""
+%     (list_option string2_option) 
+%   []
+% @
+
 
 
 <<toplevel [[Makefile_mode._2]]>>=
 let _ = 
   Action.define_action "makefile_mode.color_buffer" 
     (fun frame -> makefile_color frame.frm_buffer);
-  Action.define_action "makefile_mode" makefile_mode;
   ()
 @
 %(*  define_action "insert_tab" insert_tab; *)
@@ -4192,9 +4177,12 @@ let _ =
 \subsubsection{Major mode}
 
 <<function [[Makefile_mode.makefile_mode]]>>=
-let makefile_mode frame = 
-  Ebuffer.set_major_mode frame.frm_buffer mode
+let makefile_mode = 
+  Major_modes.enable_major_mode mode
+[@@interactive]
 @
+%old:  Action.define_action "makefile_mode" makefile_mode;
+
 
 
 <<toplevel [[Makefile_mode._3]]>>=
@@ -4208,16 +4196,6 @@ let setup_maps () =
           Log.exn "%s\n" e;
   
   );
-(* TODO
-  !!interactives_map |> List.iter (fun (name, action) ->
-      try
-        Keymap.add_interactive map name (Action.execute_action action)
-      with e ->
-          Log.printf "Error for action %s" action;
-          Log.exn "%s\n" e;
-          
-  );
-*)
   ()
 @
 
@@ -4226,8 +4204,7 @@ let _ =
   (* Keymap.add_prefix mode.maj_map [c_c];   *)
   Hook.add_start_hook (fun () ->
     setup_maps();
-    let alist = Var.get_global Ebuffer.modes_alist in
-    Var.set_global Ebuffer.modes_alist ((".*/[Mm]akefile.*",mode):: alist);
+    Var.add_global Ebuffer.modes_alist [".*/[Mm]akefile.*", mode];
     
     Parameter.add_option_parameter target_color;
     Parameter.add_option_parameter rules_color;
@@ -4258,8 +4235,6 @@ let mkfile_comments= Str.regexp "^#.*$"
   
 
 <<constant [[Makefile_mode.local_map]]>>
-
-<<constant [[Makefile_mode.interactives_map]]>>
 
 (* let insert_tab frame = ignore (insert_string frame "\t") *)
  
