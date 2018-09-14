@@ -1859,6 +1859,14 @@ let standard_map = [
 <<saving keys>>
 
 (* -------------------------------------------------------- *)
+(* Rectangles *)
+(* -------------------------------------------------------- *)
+[c_x; NormalMap, Char.code 'r'; NormalMap, Char.code 't'],
+  Rectangle.rectangle_insert;
+[c_x; NormalMap, Char.code 'r'; NormalMap, Char.code 'k'],
+  Rectangle.rectangle_kill;
+
+(* -------------------------------------------------------- *)
 (* Misc *)
 (* -------------------------------------------------------- *)
 <<misc keys>>
@@ -4668,7 +4676,7 @@ let insert_string frame str =
 let save_buffer frame =
   let buf = frame.frm_buffer in
   match buf.buf_filename with
-    Some _ -> Ebuffer.save buf
+  | Some _ -> Ebuffer.save buf
   | None -> write_buffer frame
 [@@interactive]
 @
@@ -7295,12 +7303,14 @@ let set_global_variable frame =
 
 <<function [[Simple.move_backward]]>>=
 let move_backward frame delta =
-  Text.bmove frame.frm_buffer.buf_text frame.frm_point delta
+  let (_buf, text, point) = Frame.buf_text_point frame in
+  Text.bmove text point delta
 @
 
 <<function [[Simple.move_forward]]>>=
 let move_forward frame delta =
-  Text.fmove frame.frm_buffer.buf_text frame.frm_point delta
+  let (_buf, text, point) = Frame.buf_text_point frame in
+  Text.fmove text point delta
 @
 % Note that there is no mention of redisplay, or of adjusting
 % the cursor. This is done automatically each time, based on
@@ -7428,7 +7438,8 @@ let beginning_of_line frame =
 @
 <<function [[Simple.begin_to_point]]>>=
 let begin_to_point frame =
-  Text.point_to_bol frame.frm_buffer.buf_text frame.frm_point
+  let (_, text, point) = Frame.buf_text_point frame in
+  Text.point_to_bol text point
 @
 
 
@@ -7439,7 +7450,8 @@ let end_of_line frame =
 @
 <<function [[Simple.point_to_end]]>>=
 let point_to_end frame =
-  Text.point_to_eol frame.frm_buffer.buf_text frame.frm_point
+  let (_, text, point) = Frame.buf_text_point frame in
+  Text.point_to_eol text point
 @
 
 
@@ -7695,6 +7707,7 @@ let point_to_eol text point =
 @
 
 <<function [[Text.point_to_bol]]>>=
+(* less: kinda bol_to_point really *)
 let point_to_bol text point =
   low_distance text 
     text.text_newlines.(point.line).position
@@ -8921,7 +8934,7 @@ let replace flag frame query str repl =
 
 
 <<function [[Simple.buffer_list]]>>=
-let buffer_list frame =
+let buffer_list () =
   (Globals.editor()).edt_buffers |> Common.hash_to_list |> List.map fst
 @
 
@@ -11155,6 +11168,10 @@ let char_insert_command char frame =
 %  Keymap.add_global_key editor [NormalMap, XK.xk_dead_circumflex]
 %    "circumflex" (char_insert_command '^');
 
+\section{Mini maps}
+
+% Yeah!
+
 \section{Signals}
 
 <<exception [[Main.SigInt]]>>=
@@ -11217,7 +11234,9 @@ let _ =
   option_hook load_path (fun _ -> path := !!load_path @ efuns_path)
 @
 
-\section{X11}
+\section{Misc}
+
+%\section{X11}
 
 %<<constant [[Efuns.xdefaults]]>>=
 %let xdefaults = try Sys.getenv "XUSERFILESEARCHPATH" with
@@ -11225,7 +11244,6 @@ let _ =
 %@
 
 % <<toplevel [[Efuns._2]]>>=
-% (*
 % let _ =
 %   begin    
 %     try
@@ -11242,52 +11260,46 @@ let _ =
 %     with _ -> ()
 %   end;
 %   Xrm.safe_load x_res xdefaults
-% *)
 % @
 
 % <<constant [[Efuns.x_res]]>>=
-% (*let x_res = Xrm.create ()*)
+% let x_res = Xrm.create ()
 % @
 % 
 % <<constant [[Efuns.t]]>>=
-% (*let t = x_res*)
+% let t = x_res
 % @
 
 
 
 
-\section{Multiple top windows}
+%\section{Multiple top windows}
 % called actually frame in emacs terminology, but confusing I think.
 % I don't think this feature is very useful.
 
 % this used to require also the display parameter passed around,
 % but I've removed it for now.
 
-%todo: this is why have list top_window in location.top_windows?
+% this is why have list top_window in location.top_windows?
 
-<<misc keys>>=
-<<window management keys>>
-@
-
+%<<misc keys>>=
+%<<window management keys>>
+%@
 %old:
 % <<misc actions>>=
 % <<window management actions>>
 % @
 
-<<constant [[Config.n_5]]>>=
-let n_5 = (NormalMap, Char.code '5') 
-@
-
-<<constant [[Keymap.n_5]]>>=
-let n_5 = (NormalMap, Char.code '5')
-@
-
-<<window management keys>>=
-(* less: delete *)
-[c_x; n_5; NormalMap, Char.code 'f'], Misc.window_load_buffer;
-[c_x; n_5; NormalMap, Char.code 'b'], Misc.window_change_buffer;
-[c_x; n_5; NormalMap, Char.code '0'], Top_window.delete_window;
-@
+%<<constant [[Keymap.n_5]]>>=
+%let n_5 = (NormalMap, Char.code '5')
+%@
+%
+%<<window management keys>>=
+%(* less: delete *)
+%[c_x; n_5; NormalMap, Char.code 'f'], Misc.window_load_buffer;
+%[c_x; n_5; NormalMap, Char.code 'b'], Misc.window_change_buffer;
+%[c_x; n_5; NormalMap, Char.code '0'], Top_window.delete_window;
+%@
 %old:
 % <<window management actions>>=
 % (* C-x 5 map *)
@@ -11299,70 +11311,60 @@ let n_5 = (NormalMap, Char.code '5')
 % @
 
 
-<<function [[Complex.window_load_buffer]]>>=
-let window_load_buffer frame = 
-  Select.select_file_from_pwd frame "Find file: " 
-    (fun str -> 
-      let top_window = Top_window.create ()
-          (*(Window.display top_window)*)
-      in
-      Frame.load_file top_window.window str |> ignore
-    )
-[@@interactive]
-@
-
-<<function [[Complex.window_change_buffer]]>>=
-let window_change_buffer frame =
-  Multi_buffers.select_buffer frame "Switch to buffer in new frame: " 
-    (Multi_buffers.get_previous_frame ())
-    (fun name ->
-      let top_window = Top_window.create ()
-           (*"TODO_Display"*) 
-      in
-      Frame.change_buffer top_window.window name
-  )
-[@@interactive]
-@
-
-<<function [[Top_window.delete_window]]>>=
-let delete_window frame =
-  failwith "Top_window:delete_window: TODO"
-(*
-  let top_window = Window.top frame.frm_window in
-  let loc = Efuns.loc() in
-  if List.length loc.top_windows > 1 then
-    let xterm = Window.xterm top_window in
-    top_window.top_appli#destroy;
-    WX_xterm.destroy_window xterm;
-    Frame.kill_all top_window.window;
-    loc.top_windows <- Utils.list_remove loc.top_windows
-      top_window
-*)
-[@@interactive]
-@
-
-<<function [[Frame.kill_all]]>>=
-let kill_all window =
-  Window.iter kill window
-@
-
-
-<<constant [[Efuns.init_frames]]>>=
-let init_frames = ref []
-@
-<<[[main()]] command line options>>=
-  "-frame", Arg.String (fun s -> init_frames := s:: !init_frames), "<file>: open a frame with <file>";
-@
-%todo: remove? seems related to original notion of emacs frames
-% that is independent emacs windows
+%<<function [[Complex.window_load_buffer]]>>=
+%let window_load_buffer frame = 
+%  Select.select_file_from_pwd frame "Find file: " 
+%    (fun str -> 
+%      let top_window = Top_window.create ()
+%          (Window.display top_window)
+%      in
+%      Frame.load_file top_window.window str |> ignore
+%    )
+%[@@interactive]
+%@
+%
+%<<function [[Complex.window_change_buffer]]>>=
+%let window_change_buffer frame =
+%  Multi_buffers.select_buffer frame "Switch to buffer in new frame: " 
+%    (Multi_buffers.get_previous_frame ())
+%    (fun name ->
+%      let top_window = Top_window.create ()
+%      in
+%      Frame.change_buffer top_window.window name
+%  )
+%[@@interactive]
+%@
+%
+%<<function [[Top_window.delete_window]]>>=
+%let delete_window frame =
+%  let top_window = Window.top frame.frm_window in
+%  let loc = Efuns.loc() in
+%  if List.length loc.top_windows > 1 then
+%    let xterm = Window.xterm top_window in
+%    top_window.top_appli#destroy;
+%    WX_xterm.destroy_window xterm;
+%    Frame.kill_all top_window.window;
+%    loc.top_windows <- Utils.list_remove loc.top_windows
+%      top_window
+%[@@interactive]
+%@
+%
+%<<function [[Frame.kill_all]]>>=
+%let kill_all window =
+%  Window.iter kill window
+%@
+%
+%
+%<<constant [[Efuns.init_frames]]>>=
+%let init_frames = ref []
+%@
+%<<[[main()]] command line options>>=
+%  "-frame", Arg.String (fun s -> init_frames := s:: !init_frames), "<file>: open a frame with <file>";
+%@
 
 
 
 
-
-\section{Mini maps}
-
-% Yeah!
 
 \chapter{Conclusion}
 
