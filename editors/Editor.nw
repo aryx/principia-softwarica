@@ -847,7 +847,7 @@ let create name filename text local_map =
       buf_syntax_table = default_syntax_table;
       buf_map_partial = true;
       buf_vars = Store.new_store ();
-      buf_major_mode = fondamental_mode;
+      buf_major_mode = fondamental__mode;
       buf_minor_modes = [];
 
       buf_sync = false;
@@ -2205,10 +2205,10 @@ let save_options frame =
 %\section{General style parameters}
  
 <<constants Main options>>=
-let width = define_option ["width"] "" int_option 80
-let height = define_option ["height"] "" int_option 44 (* 44, 27 *)
-let foreground= define_option ["foreground"] "" string_option "wheat"
-let background= define_option ["background"] "" string_option "DarkSlateGray"
+let width      = define_option ["width"] "" int_option 80
+let height     = define_option ["height"] "" int_option 44 (* 44, 27 *)
+let foreground = define_option ["foreground"] "" string_option "wheat"
+let background = define_option ["background"] "" string_option "DarkSlateGray"
 @
 %pad: was 25 for height, white, and black
 %<<constant Efuns.height>>=
@@ -2232,11 +2232,11 @@ let font = define_option ["font"] "" string_option "Monospace 20"
 %\section{Command-line style parameters}
 
 <<constants [[Main.xxx_opt]]>>=
-let width_opt = ref None
+let width_opt   = ref None
 let height_opt  = ref None
-let fg_opt = ref None
-let bg_opt = ref None
-let font_opt = ref None
+let fg_opt      = ref None
+let bg_opt      = ref None
+let font_opt    = ref None
 @
 
 <<[[main()]] command line options>>=
@@ -4754,8 +4754,8 @@ let update_time buf =
   try
     buf.buf_filename |> Common.do_option (fun file ->
       let st = Unix.lstat file in
-      if st.st_kind = S_REG 
-      then Var.set_local buf buf_mtime st.st_mtime;
+      if st.Unix.st_kind = Unix.S_REG 
+      then Var.set_local buf buf_mtime st.Unix.st_mtime;
     )
   with _ -> ()
 @
@@ -4768,11 +4768,11 @@ let check_file frame =
     let buf = frame.frm_buffer in
     buf.buf_filename |> Common.do_option (fun file ->
       let st = Unix.lstat file in
-      if st.st_kind = S_REG then
+      if st.Unix.st_kind = Unix.S_REG then
         try
           let time = Var.get_local buf buf_mtime in
-          Var.set_local buf buf_mtime st.st_mtime;
-          if time <> st.st_mtime then
+          Var.set_local buf buf_mtime st.Unix.st_mtime;
+          if time <> st.Unix.st_mtime then
             (Select.select_yes_or_no frame 
                (Printf.sprintf "%s changed on disk; reload (y/n) ?" 
                     buf.buf_name) 
@@ -4781,7 +4781,7 @@ let check_file frame =
                    then reload frame 
                    else Frame.status_modified frame true
                  )) |> ignore
-       with _ -> Var.set_local buf buf_mtime st.st_mtime
+       with _ -> Var.set_local buf buf_mtime st.Unix.st_mtime
     )
   with _ -> ()
 [@@interactive]
@@ -6162,7 +6162,7 @@ let buf_create text local_map =
     buf_charreprs = charreprs;
     buf_syntax_table = Ebuffer.default_syntax_table;
     buf_vars = Store.new_store ();
-    buf_major_mode = Ebuffer.fondamental_mode;
+    buf_major_mode = Ebuffer.fondamental__mode;
     buf_minor_modes = [];
 
     buf_sync = false;
@@ -6446,8 +6446,8 @@ let insert_special_char frame =
   let key = !Top_window.keypressed in
   let char = Char.chr key in
   if char >= 'a' && char <= 'z' 
-  then insert_char frame (Char.chr (key - 97))
-  else insert_char frame (Char.chr (key - 65))
+  then Edit.insert_char frame (Char.chr (key - 97))
+  else Edit.insert_char frame (Char.chr (key - 65))
 @
 % should also set attribute to blue, so can not confuse ControlM with ^M 
 
@@ -7114,7 +7114,7 @@ let create_return frame local_map request default action =
 % if exn?
 
 <<function [[Minibuffer.return]]>>=
-let return action old_frame mini_frame =
+let return action old_frame = fun mini_frame ->
   let repstr = Text.to_string mini_frame.frm_buffer.buf_text in
   kill mini_frame old_frame;
   action old_frame repstr
@@ -7223,6 +7223,7 @@ let set_global_variable frame =
 % Generic features?
 
 \section{Navigating}
+\l moving around
 
 % see also mouse navigation earlier
 
@@ -7970,7 +7971,8 @@ let kill_end_of_line frame =
 @
 
 
-\section{Moving}
+\section{Copying and pasting}
+\n was Moving, but can be confused as moving as in navigating
 
 <<moving keys>>=
 [ControlMap, Char.code ' '], Copy_paste.mark_at_point;
@@ -8093,7 +8095,7 @@ let copy_region frame =
   let (buf, text, point) = Frame.buf_text_point frame in
   let mark =
     match buf.buf_mark with
-      None -> failwith "No mark set"
+    | None -> failwith "No mark set"
     | Some mark -> 
         buf.buf_mark <- None;
         mark
@@ -8104,12 +8106,11 @@ let copy_region frame =
   let region = Text.sub text start (Text.distance text start term) in
   add_clipboard frame region;
   kill_string region;
-  let top_window = Window.top frame.frm_window in
   (* need a message because as opposed to a cut this is not directly visible *)
-  Top_window.message top_window "Region saved"
+  Top_window.message (Window.top frame.frm_window) "Region saved"
 [@@interactive]
 @
-
+\t use remove_mark? leak?
 
 
 <<function [[Text.sub]]>>=
@@ -8222,11 +8223,11 @@ let point_at_mark frame =
 % define_action "point_at_mark"  Simple.point_at_mark;
 % @
 
-\subsection{Highlight}
+\subsection{Highlighting the selection}
 %less: mv in colors section?
 
 %less: when done via mouse?
-%todo: could be done also in cua mode (aka pc-select mode)
+%todo: could be done also in CUA mode (aka pc-select mode)
 
 %todo: use also for C-s?
 
@@ -9530,9 +9531,9 @@ mutable stat_mode : major_mode;
 
 \section{Fundamental mode}
 
-<<function [[Misc.fondamental_mode]]>>=
+<<function [[Ebuffer.fondamental_mode]]>>=
 let fondamental_mode frame =
-  Ebuffer.set_major_mode frame.frm_buffer Ebuffer.fondamental_mode
+  set_major_mode frame.frm_buffer fondamental__mode
 [@@interactive]
 @
 %old:
@@ -9547,7 +9548,7 @@ let fondamental_mode frame =
 % it's fundamental-mode normally :) french :)
 
 <<constant [[Ebuffer.fondamental_mode]]>>=
-let fondamental_mode = new_major_mode "Fondamental" None (* no hooks *)
+let fondamental__mode = new_major_mode "Fondamental" None (* no hooks *)
 @
 
 % always same pattern and flow:
@@ -10802,7 +10803,7 @@ let escaped s =
 [MetaMap, Char.code 'c'], (fun frm ->
   Edit.on_word frm.frm_buffer frm.frm_point String.capitalize
 );
-[MetaMap, XK.xk_q], Misc.fill_paragraph;
+[MetaMap, XK.xk_q], Transform.fill_paragraph;
 @
 
 %old:
@@ -10895,9 +10896,9 @@ let fill_paragraph frame =
   let (buf, text, point) = Frame.buf_text_point frame in
   text |> Text.with_session (fun () ->
     Text.with_dup_point text point (fun start ->
-    backward_paragraph buf start;
+    Move.backward_paragraph buf start;
     Text.with_dup_point text start (fun fin ->
-      forward_paragraph buf fin;
+      Move.forward_paragraph buf fin;
 
       simplify text start fin;
       Text.insert text start "\n";

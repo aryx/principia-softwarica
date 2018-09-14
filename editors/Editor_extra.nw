@@ -24,6 +24,8 @@
 
 <<features/dircolors.ml>>=
 @
+<<features/rectangle.ml>>=
+@
 <<minor_modes/minor_modes.ml>>=
 @
 
@@ -967,6 +969,8 @@ open Efuns
 <<function [[Ebuffer.new_major_mode]]>>
 
 <<constant [[Ebuffer.fondamental_mode]]>>
+
+
   
 <<constant [[Ebuffer.tab_size]]>>
 
@@ -1020,6 +1024,10 @@ open Options
 <<function [[Ebuffer.get_binding]]>>
 
 <<function [[Ebuffer.message]]>>
+
+
+<<function [[Ebuffer.fondamental_mode]]>>
+
       
 <<toplevel [[Ebuffer]] starting hook>>
 @
@@ -1452,6 +1460,93 @@ open Move
 (*****************************************************************************)
 
 <<function [[Simple.undo]]>>
+
+@
+
+\subsection{[[features/transform.ml]]}
+%pad: I created this file; not a great filename, a bit vague
+
+<<features/transform.ml>>=
+<<copyright header2>>
+open Efuns
+open Common
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+
+(*****************************************************************************)
+(* Helpers *)
+(*****************************************************************************)
+
+let lines str =
+  let xs = Str.full_split (Str.regexp "\n") str in
+  let rec aux xs =
+    match xs with
+    | [] -> []
+    | Str.Text s1::Str.Delim s2::xs -> (s1 ^ s2)::aux xs
+    | Str.Delim s1::xs -> s1::aux xs
+    | [Str.Text s1] -> [s1]
+    | _ -> failwith (spf "Impossible: wrong Delim/Text sequence for '%s'" str)
+  in
+  aux xs
+
+let transform_marked_region frame f =
+  let (buf, text, point) = Frame.buf_text_point frame in
+  let mark =
+    match buf.buf_mark with
+      | None -> failwith "No mark set"
+      | Some mark -> 
+        buf.buf_mark <- None;
+        mark
+  in
+  let (a,b) = if mark > point then (point,mark) else (mark,point) in
+  let delta = Text.distance text a b in
+  let region = Text.sub text a delta in
+  let region' = f region in
+  
+  text |> Text.with_session (fun () ->
+    Text.delete text a delta;
+    Text.insert text a region';
+  )
+
+(*****************************************************************************)
+(* Filling *)
+(*****************************************************************************)
+
+<<function [[Simple.simplify]]>>
+
+<<function [[Simple.fill_paragraph]]>>
+
+(*****************************************************************************)
+(* Aligning *)
+(*****************************************************************************)
+
+let align_char_string char str =
+  let xs = lines str in
+  let ys = xs |> List.map (fun s -> 
+    try 
+      s, String.index s char
+    with Not_found -> 
+      failwith (spf "Character '%c' not found in line %s" char s)
+  ) in
+  let max = ys |> List.map snd |> Common2.maximum in
+  ys |> List.map (fun (s, idx) -> 
+    String.sub s 0 idx ^
+    String.make (max - idx) ' ' ^
+    String.sub s idx (String.length s - idx)
+  ) |> String.concat ""
+
+let align_char frame =
+  Select.simple_select frame "character to align: " (fun s ->
+    let c = 
+      if String.length s <> 1
+      then failwith "align_char expects a single character"
+      else String.get s 0
+    in
+    transform_marked_region frame (align_char_string c);
+  )
+[@@interactive]
 
 @
 
@@ -2721,7 +2816,7 @@ let _ =
     Var.set_global line_comment "";
     (* this needs to be done early, not in config.ml, because some
      * major modes may want to access it to add stuff in their
-     * own local version (e.g., in caml_mode.ml to recolorize the buffer
+     * own local versions (e.g., in caml_mode.ml to recolorize the buffer
      *)
     Var.set_global Ebuffer.saved_buffer_hooks [update_time];
 
@@ -2736,28 +2831,18 @@ let _ =
 <<features/misc.ml>>=
 <<copyright header2>>
 open Efuns
-open Edit
-open Move
-
-<<function [[Misc.fondamental_mode]]>>
 
 (*****************************************************************************)
 (* Misc *)
 (*****************************************************************************)
 
-<<function [[Simple.simplify]]>>
-
 <<constant [[Simple.line_comment]]>>
 
-<<function [[Simple.fill_paragraph]]>>
-  
 <<function [[Simple.insert_special_char]]>>
 
 (*****************************************************************************)
 (* Complexe *)
 (*****************************************************************************)
-
-open Unix
 
 <<constant [[Complex.buf_mtime]]>>
 
@@ -2784,6 +2869,7 @@ open Unix
 <<function [[Complex.get_pos]]>>
 
 <<function [[Misc.cursor_position]]>>
+
 
 (*****************************************************************************)
 (* Toplevel *)
