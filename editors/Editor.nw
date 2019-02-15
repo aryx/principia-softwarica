@@ -587,8 +587,8 @@ Options:
 
 <<type [[Text.t]]>>=
 type t = {
-    mutable text_string : string;
-    mutable text_size : int; (* String.length text.text_string *)
+    mutable text_string : bytes;
+    mutable text_size : int; (* Bytes.length text.text_string *)
 
     mutable text_newlines : line array;
     mutable text_nlines : int; (* Array.length text.text_newlines *)
@@ -667,10 +667,10 @@ let version text =
 <<function [[Text.create]]>>=
 let create str =
   let newlines = compute_newlines str in
-  let attrs = (Array.create (String.length str) direct_attr) in
+  let attrs = (Array.make (String.length str) direct_attr) in
 
     {
-      text_string = str;
+      text_string = (Bytes.of_string str);
       text_size = String.length str;
 
       text_newlines = newlines;
@@ -695,7 +695,7 @@ let create str =
 <<function [[Text.compute_newlines]]>>=
 let compute_newlines string =
   let (nbr_newlines,_) = Utils.count_char string '\n' in
-  let newlines = Array.create (nbr_newlines + 2) (mk_line_with_pos 0) in
+  let newlines = Array.make (nbr_newlines + 2) (mk_line_with_pos 0) in
   let curs = ref 0 in
   (* newlines.(0) is already set with 0 position for its bol *)
   for i = 1 to nbr_newlines do
@@ -728,7 +728,7 @@ let mk_line_with_pos pos =
    position = pos; 
 
    boxes = []; 
-   repr_string = ""; 
+   repr_string = Bytes.of_string ""; 
    repr_len = 0; 
    line_modified = true; 
   }
@@ -982,7 +982,7 @@ let create_without_top window mini buf =
       (* this will be set later in set_cursor called from update_display *)
       frm_cursor_x = 0;
       frm_cursor_y = 0;
-      frm_cursor = String.make 1 ' ';
+      frm_cursor = Bytes.make 1 ' ';
       frm_cursor_attr = Text.direct_attr;
 
       frm_last_text_updated = 0;
@@ -1364,7 +1364,7 @@ and generic_action =
 % A frame is more temporary.
 
 <<function [[Keymap.dummy_action]]>>=
-let dummy_action frame = () 
+let dummy_action _frame = () 
 @
 
 \subsection{Action name}
@@ -1634,7 +1634,7 @@ and binding =
 
 <<function [[Keymap.create]]>>=
 let create () =
-  { char_map = Array.create 256 Unbound;
+  { char_map = Array.make 256 Unbound;
     complex_bindings = [];
   } 
 @
@@ -1681,8 +1681,8 @@ mutable buf_map_partial : bool;
 if buf.buf_map_partial then
   (let b = Keymap.get_binding (Globals.editor()).edt_map keylist in
     match b with
-    | Prefix map -> binding := b;
-    | Function f -> binding := b; raise Exit
+    | Prefix _map -> binding := b;
+    | Function _f -> binding := b; raise Exit
     | Unbound -> ()
   );
 @
@@ -1881,6 +1881,13 @@ let standard_map = [
 (* -------------------------------------------------------- *)
 
 (* -------------------------------------------------------- *)
+(* Macros *)
+(* -------------------------------------------------------- *)
+[c_x; NormalMap, Char.code '('], Macros.start_macro;
+[c_x; NormalMap, Char.code ')'], Macros.end_macro;
+[c_x; NormalMap, Char.code 'e'], Macros.call_macro;
+
+(* -------------------------------------------------------- *)
 (* Misc *)
 (* -------------------------------------------------------- *)
 <<misc keys>>
@@ -2023,7 +2030,10 @@ let variable_hist = ref []
 let exec_hooks hooks arg =
   hooks |> List.iter (fun f ->
     try f arg 
-    with exn -> Globals.error "exn in hook: %s" (Common.exn_to_s exn)
+    with exn -> 
+       let bt = Printexc.get_backtrace () in
+       Common.pr2 bt;
+       Globals.error "exn in hook: %s" (Common.exn_to_s exn)
   )
 @
 
@@ -2200,7 +2210,7 @@ Options.filename :=
 
 
 <<function [[Config.save_options]]>>=
-let save_options frame = 
+let save_options _frame = 
   Options.save ()
 [@@interactive]
 @
@@ -2329,11 +2339,11 @@ let editor = { Efuns.
 
     edt_vars = Store.new_store ();
     
-    edt_colors_names = Array.create 256 "";
+    edt_colors_names = Array.make 256 "";
     edt_colors = Hashtbl.create 37;
     edt_colors_n = 0;
 
-    edt_fonts_names = Array.create 256 "";
+    edt_fonts_names = Array.make 256 "";
     edt_fonts = Hashtbl.create 37;
     edt_fonts_n = 0;
 
@@ -2674,7 +2684,7 @@ let with_lock f =
 
 <<[[Top_window.handler()]] match event cases>>=
 | Xtypes.XTKeyPress (modifiers, _s, keysym) ->
-    handle_key top_window modifiers keysym
+    handle_key_and_macro top_window modifiers keysym
 @
 %dead:?
 %  (*
@@ -2867,7 +2877,7 @@ let get_char text point =
     else pos
   in
   if pos < text.text_size 
-  then text.text_string.[pos]
+  then Bytes.get text.text_string pos
   else '\000'
 @
 
@@ -2889,10 +2899,9 @@ let get_char text point =
 
 <<function [[Complex.get_pos]]>>=
 let describe_position frame =
-  Top_window.message 
-    (Window.top frame.frm_window)
-    (Printf.sprintf "Char position %d" 
-       (Text.get_position frame.frm_buffer.buf_text frame.frm_point))
+  let (_, text, point) = Frame.buf_text_point frame in
+  Message.message frame
+    (Printf.sprintf "Char position %d" (Text.get_position text point))
 [@@interactive]
 @
 %old:
@@ -2906,12 +2915,10 @@ let describe_position frame =
 
 <<function [[Misc.cursor_position]]>>=
 let cursor_position frm =
-  let text = frm.frm_buffer.buf_text in
-  let point = frm.frm_point in
+  let (_, text, point) = Frame.buf_text_point frm in
   let char = Text.get_char text point in
   let coord = Text.point_coord text point in
-  Top_window.message 
-    (Window.top frm.frm_window)
+  Message.message frm
     (Printf.sprintf "Char: '%c' (%d, #o%o, #x%x) point=%d line=%d column=%d" 
        char 
        (Char.code char) (Char.code char) (Char.code char)
@@ -3027,7 +3034,7 @@ let goto_point _text p1 p2 =
 
 \ifallcode
 <<function [[Text.compare]]>>=
-let compare text p1 p2 = 
+let compare _text p1 p2 = 
   compare p1.pos p2.pos
 @
 \fi
@@ -3349,9 +3356,10 @@ let move_gpoint_to text pos =
 <<[[Text.move_gpoint_to()]] when pos is before gpos>>=
 let delta = gpos - pos in
 let (delta_line,_) = 
-  Utils.count_char_sub text.text_string pos delta '\n' in
-String.blit  text.text_string pos   text.text_string (pos + gsize)   delta;
-Array.blit   text.text_attrs  pos   text.text_attrs  (pos + gsize)   delta;
+  Utils.count_char_sub (Bytes.to_string text.text_string) pos delta '\n'
+in
+Bytes.blit text.text_string pos   text.text_string (pos + gsize)   delta;
+Array.blit text.text_attrs  pos   text.text_attrs  (pos + gsize)   delta;
 for i = gline - delta_line + 1 to gline do
   text.text_newlines.(i).position <- text.text_newlines.(i).position + gsize 
 done;
@@ -3367,9 +3375,9 @@ text.gpoint <- { pos = pos; line = gline - delta_line };
 <<[[Text.move_gpoint_to()]] when pos is after gpos>>=
 let delta = pos - gap_end in
 let (delta_line,_) = 
-  Utils.count_char_sub text.text_string gap_end delta '\n' in
-String.blit  text.text_string gap_end   text.text_string gpos   delta;
-Array.blit   text.text_attrs  gap_end   text.text_attrs  gpos   delta;
+  Utils.count_char_sub (Bytes.to_string text.text_string) gap_end delta '\n' in
+Bytes.blit text.text_string gap_end   text.text_string gpos   delta;
+Array.blit text.text_attrs  gap_end   text.text_attrs  gpos   delta;
 for i = gline + 1 to gline + delta_line do
   text.text_newlines.(i).position <- text.text_newlines.(i).position - gsize
 done;
@@ -3413,13 +3421,13 @@ let extend_gap text amount =
   let gpos = text.gpoint.pos in
   let gap_end = gpos + gsize in
 
-  let new_text = String.create (old_size + add_size) in
-  String.blit  text.text_string 0   new_text 0    gpos; 
-  String.blit  text.text_string gap_end   new_text (gap_end + add_size) 
+  let new_text = Bytes.create (old_size + add_size) in
+  Bytes.blit  text.text_string 0   new_text 0    gpos; 
+  Bytes.blit  text.text_string gap_end   new_text (gap_end + add_size) 
     (old_size - gap_end);
   text.text_string <- new_text;
 
-  let new_attrs = Array.create (old_size + add_size) direct_attr in
+  let new_attrs = Array.make (old_size + add_size) direct_attr in
   Array.blit   text.text_attrs 0   new_attrs 0   gpos; 
   Array.blit   text.text_attrs gap_end    new_attrs (gap_end + add_size) 
     (old_size - gap_end);
@@ -3455,7 +3463,8 @@ text.text_nlines <- text.text_nlines + nbr_newlines;
 
 (* similar to compute_newlines() but just for lines after gpos *)
 let rec iter n pos =
-  let new_pos = String.index_from text.text_string pos '\n' in
+  let new_pos = 
+   Bytes.index_from text.text_string pos '\n' in
   text.text_newlines.(gline+n) <- mk_line_with_pos (new_pos + 1);
   if n < nbr_newlines 
   then iter (n+1) (new_pos + 1)
@@ -3470,7 +3479,7 @@ iter 1 gpos;
 
 <<[[Text.low_insert()]] grow newlines>>=
 let old_size = text.text_nlines in
-let new_cache = Array.create (old_size + (max 20 nbr_newlines)) 
+let new_cache = Array.make (old_size + (max 20 nbr_newlines)) 
   { (mk_line_with_pos (-1)) with line_modified = false }
 in
 Array.blit 
@@ -3502,7 +3511,7 @@ let low_delete text pos len =
   let gap_end = gpos + text.gsize in
   let len = min (text.text_size - gap_end) len in
 
-  let str = String.sub text.text_string gap_end len in
+  let str = Bytes.sub_string text.text_string gap_end len in
 
   let (nbr_newlines, _nbr_chars) = Utils.count_char str '\n' in
   if nbr_newlines > 0 then begin
@@ -3841,7 +3850,7 @@ let highlight frame =
   let pos_debut_to_hl, pos_fin_to_hl =
     match !highlighted with
     | None -> pos1, pos2
-    | Some (frame, d, f) ->
+    | Some (_frame, d, f) ->
         if pos1 > d
         then unhightlight_region buf d pos1; 
         if pos2 < f
@@ -4168,9 +4177,9 @@ buf_charreprs = Array.init 256 (fun i -> String.make 1 (Char.chr i));
 % 26 letters of the alphabet, but for special chars!
 <<[[Ebuffer.create()]] adjust charreprs>>=
 for i=0 to 25 do
-  let s = String.make 2 '^' in
-  s.[1] <- Char.chr (97+i);    
-  buf.buf_charreprs.(i) <- s
+  let s = Bytes.make 2 '^' in
+  Bytes.set s 1 (Char.chr (97+i));    
+  buf.buf_charreprs.(i) <- (Bytes.to_string s);
 done;
 @
 % ^M, ^R, etc
@@ -4187,7 +4196,7 @@ let compute_representation buf n =
 % really "representation" this time.
 
 <<[[Text.line]] representation fields>>=
-mutable repr_string : string;
+mutable repr_string : bytes;
 mutable repr_len : int;
 @
 % this is how the line will be represented as a string, which
@@ -4230,7 +4239,7 @@ let compute_representation text charreprs n =
     if line.line_modified then begin
 
       repr_string := line.repr_string;
-      repr_len    := String.length line.repr_string;
+      repr_len    := Bytes.length line.repr_string;
       let boxes = ref [] in
 
       let text_cursor = ref line.position in
@@ -4264,7 +4273,7 @@ mutable line_modified : bool;
 
 
 <<[[Text.compute_representation()]] loop [[text_cursor]] to [[end_pos]]>>=
-let charcode = Char.code text.text_string.[!text_cursor] in
+let charcode = Char.code (Bytes.get text.text_string !text_cursor) in
 let charattr = text.text_attrs.(!text_cursor) in
 let charrepr =
   <<[[Text.compute_representation()]] compute charrepr, special char>>
@@ -4276,7 +4285,8 @@ let box_len = ref 0 in
 
 while !text_cursor < end_pos && 
   begin
-    let char_code = Char.code text.text_string.[!text_cursor] in
+    let char_code = Char.code (Bytes.get text.text_string !text_cursor)
+    in
     let char_attr = text.text_attrs.(!text_cursor) in
     char_repr := 
        <<[[Text.compute_representation()]] compute [[char_repr]], special char>>
@@ -4322,7 +4332,7 @@ let char_size = ref 0 in
 
 
 <<constant [[Text.repr_string]]>>=
-let repr_string = ref ""
+let repr_string = ref (Bytes.of_string "")
 @
 <<constant [[Text.repr_size]]>>=
 let repr_len = ref 0
@@ -4335,8 +4345,8 @@ if !repr_cursor + charsize >= !repr_len then begin
     let new_len = !repr_len + 
         (low_distance text end_pos !text_cursor) + charsize * 2 
     in
-    let new_repr = String.create new_len in
-    String.blit !repr_string 0 new_repr 0 !repr_cursor;
+    let new_repr = Bytes.create new_len in
+    Bytes.blit !repr_string 0 new_repr 0 !repr_cursor;
     repr_string := new_repr;
     repr_len := new_len;
 end;
@@ -4380,7 +4390,7 @@ let (dummy_line : line) =
     position = max_int;
     boxes = [];
     repr_len = 0;
-    repr_string = "";
+    repr_string = Bytes.of_string "";
     line_modified = true;
   } 
 @
@@ -4769,7 +4779,7 @@ let saved_buffer_hooks = Store.create_abstr "saved_buffer_hooks"
 %\subsubsection{Vars}
 
 <<constant [[Complex.buf_mtime]]>>=
-let buf_mtime = Store.create "buf_mtime" string_of_float float_of_string
+let buf_mtime = Store.create_float "buf_mtime"
 @
 % why not create_float then?
 % who uses this local var? update_time below sets it, but who uses it?
@@ -4993,7 +5003,7 @@ Top_window.help_menu := [|
   "About Efuns", (fun frame ->
     Frame.change_buffer frame.frm_window "*help*"
   );
-  "Changes", (fun frame ->
+  "Changes", (fun _frame ->
     (*
       let _ = Frame.load_file frame.frm_window (
           Version.efuns_lib ^"/Changes") in ()
@@ -5308,7 +5318,7 @@ mutable lineidx_in_text : int;
 
 
 <<[[Frame.install()]] set [[frm_table]]>>=
-frame.frm_table <- (Array.init window.win_height (fun i -> 
+frame.frm_table <- (Array.init window.win_height (fun _i -> 
    {
      frm_text_line = Text.dummy_line;
      frmline_boxes = [];
@@ -5398,7 +5408,9 @@ then
     frm_line.prev_frmline_boxes <- frm_line.frmline_boxes;
     frm_line.repr_prev_offset <- frm_line.first_box_extra_offset;
 
-    display_line graphic frame frm_line.frm_text_line.repr_string y;
+    display_line graphic frame 
+        (Bytes.to_string frm_line.frm_text_line.repr_string)
+        y;
   end;
 @
 %todo: old: was line.repr_line.repr_string, ugly
@@ -5515,7 +5527,7 @@ mutable frm_cursor_x : int;
 (* frame coordinates, so y is between 0 and frm_height - 1 *)
 mutable frm_cursor_y : int;
 
-mutable frm_cursor : string;
+mutable frm_cursor : bytes;
 mutable frm_cursor_attr : Text.attribute;
 @
 % a frame has a cursor!
@@ -5530,12 +5542,12 @@ mutable frm_cursor_attr : Text.attribute;
 let set_cursor_on top_window frame = 
   Frame.set_cursor frame;
 
-  if frame.frm_cursor.[0] <> '\000' then
+  if (Bytes.get frame.frm_cursor 0) <> '\000' then
     let graphic = Efuns.backend top_window in
     graphic.Xdraw.draw_string
       (frame.frm_xpos + frame.frm_cursor_x-frame.frm_x_offset)
       (frame.frm_ypos + frame.frm_cursor_y) 
-      frame.frm_cursor 0 1 Text.inverse_attr
+      (Bytes.to_string frame.frm_cursor) 0 1 Text.inverse_attr
 @
 % ugly \000 special trick.
 
@@ -5547,7 +5559,7 @@ let set_cursor frame =
   match point_to_xy_opt frame point with
   | None ->
       (* insert cursor is not on frame *)
-      frame.frm_cursor.[0] <- '\000'
+      Bytes.set frame.frm_cursor 0 '\000'
   | Some (x, y) ->
       frame.frm_cursor_x <- x;
       frame.frm_cursor_y <- y;
@@ -5558,7 +5570,7 @@ let set_cursor frame =
       let rec iter boxes =
         match boxes with
         | [] -> 
-            frame.frm_cursor.[0] <- ' '
+            Bytes.set frame.frm_cursor 0 ' '
         | box :: tail ->
             if box.box_col <= col && box.box_col + box.box_len > col
             then begin
@@ -5566,7 +5578,8 @@ let set_cursor frame =
                 box.box_pos_repr + box.box_charsize * 
                 (col - box.box_col)
               in
-              frame.frm_cursor.[0] <- line.repr_string.[pos_repr];
+              Bytes.set frame.frm_cursor 0 
+                  (Bytes.get line.repr_string pos_repr);
               frame.frm_cursor_attr <- box.box_attr;
             end else
               iter tail
@@ -5664,12 +5677,12 @@ let cursor_off top_window =
 
 <<function [[Top_window.set_cursor_off]]>>=
 let set_cursor_off top_window frame =
-  if frame.frm_cursor.[0] <> '\000' then
+  if (Bytes.get frame.frm_cursor 0) <> '\000' then
     let graphic = Efuns.backend top_window in
     graphic.Xdraw.draw_string
       (frame.frm_xpos + frame.frm_cursor_x) 
       (frame.frm_ypos + frame.frm_cursor_y) 
-      frame.frm_cursor 0 1 frame.frm_cursor_attr
+      (Bytes.to_string frame.frm_cursor) 0 1 frame.frm_cursor_attr
 @
 
 \subsection{Frame offsets}
@@ -5774,7 +5787,7 @@ end;
 
 <<function [[Simple.recenter]]>>=
 let recenter frame =
-  let (buf, text, point) = Frame.buf_text_point frame in
+  let (_, text, point) = Frame.buf_text_point frame in
 
   frame.frm_force_start <- true;
   frame.frm_redraw <- true;
@@ -5938,7 +5951,7 @@ let status = {
 
     status_format = !status_format;
 
-    status_string = String.make 256 '-';
+    status_string = Bytes.make 256 '-';
   } in
 String.blit editname 0 status.status_string 5 (String.length editname);
 @
@@ -6003,14 +6016,14 @@ let status_print status str stat_type =
   try
     let (pos,maxlen) = List.assoc stat_type status.status_format in
     let len = min (String.length str) maxlen in
-    String.blit str 0 status.status_string pos len;
-    String.fill status.status_string (pos + len) (maxlen - len) ' '
+    Bytes.blit_string str 0 status.status_string pos len;
+    Bytes.fill status.status_string (pos + len) (maxlen - len) ' '
   with Not_found -> ()
 @
 
 <<[[Efuns.status]] other fields>>=
 (* the string! --- ... --- *)
-mutable status_string : string;
+mutable status_string : bytes;
 @
 % this will then be the only thing used in the rendering
 
@@ -6279,6 +6292,12 @@ let clear_message top_window =
 % it's just located at the same place than the minibuffer)
 
 <<function [[Top_window.message]]>>=
+(* note: I could get rid of the top_window parameter and compute top_window
+ * by getting List.hd (Globals.editors()).top_windows, but maybe
+ * one day I will add back the possibility to have multiple top_windows,
+ * in which case we will need to know to which top_window to display
+ * a message.
+ *)
 let message top_window msg =
   let graphic = Efuns.backend top_window in
   let len = String.length msg in
@@ -6330,7 +6349,7 @@ let try_map frame key =
       <<[[Top_window.try_map()]] if debug, print action name>>
       f frame; 
       <<[[Top_window.try_map()]] set last action>>
-  | Prefix map ->
+  | Prefix _map ->
       frame.frm_prefix <- keylist;
       let top_window = Window.top frame.frm_window in
       message top_window (Keymap.print_key_list frame.frm_prefix);
@@ -6375,7 +6394,23 @@ let rec get_binding map keylist =
       (Printf.sprintf "Unbound key %s"
         (Keymap.print_key_list (frame.frm_prefix @ [key])));
     frame.frm_prefix <- [];
-| Failure str -> message top_window str
+(* bugfix: it is nice for Failure to have a simpler error message
+ *  than for the general 'e' case below; it allows efuns plugins to
+ *  give nice error messages to the user. However, in the end you want
+ *  also a backtrace because non-efuns code sometimes also
+ *  uses failwith (e.g., Common2.foldl1).
+ * less: maybe have a Efuns.Error instead of using failwith?
+ *)
+ | Failure str ->
+    let bt = Printexc.get_backtrace () in
+    message top_window str;
+    let buf = Ebuffer.default "*backtrace*" in
+    let text = buf.buf_text in
+    Text.insert_at_end text str;
+    Text.insert_at_end text "\n";
+    Text.insert_at_end text bt;
+    Text.insert_at_end text "\n"
+
 | (Common.UnixExit _) as x -> raise x
 @
 
@@ -6412,7 +6447,7 @@ let rec add_binding map key_list binding =
           let newmap = create () in
           set_binding map key (Prefix newmap);
           add_binding newmap tail binding;
-      | e -> 
+      | _e -> 
           failwith "ERROR add_complex_binding: Unable to add prefix"
 @
 
@@ -6677,7 +6712,7 @@ let rec find_frame window x y =
 % mouse_save_then_kill -> <>
 <<function [[Frame.move_point]]>>=
 let move_point frame point x y =
-  let (buf, text, _) = buf_text_point frame in
+  let (_, text, _) = buf_text_point frame in
   let coord = cursor_to_coord frame (x - frame.frm_xpos) (y - frame.frm_ypos) in
   Text.goto_line text point coord.Text.c_line;
   Text.fmove text point coord.Text.c_col
@@ -6738,7 +6773,7 @@ correcte. On peut utiliser la position de la souris pour trouver la
 nouvelle position du curseur dans la frame. Si on en sort, on peut
 ou prendre la derniere position, ou la premiere.
 *)
-let mouse_drag_region frame =
+let mouse_drag_region _frame =
   failwith "Simple.mouse_drag_region: TODO"
 [@@interactive]
 (*
@@ -6799,7 +6834,7 @@ Keymap.add_global_key [NormalMap, XK.xk_Pointer_Button2]
 
 
 <<function [[Simple.mouse_yank_at_click]]>>=
-let  mouse_yank_at_click frame =
+let  mouse_yank_at_click _frame =
 failwith "Simple.mouse_yank_at_click: TODO"
 [@@interactive "insert_at_point"]
 (*
@@ -6815,7 +6850,7 @@ failwith "Simple.mouse_yank_at_click: TODO"
 % normally should get the Xwindow clipboard string
 
 <<function [[Simple.mouse_save_then_kill]]>>=
-let mouse_save_then_kill frame =
+let mouse_save_then_kill _frame =
   failwith "Simple.mouse_save_then_kill: TODO"
 [@@interactive]
 (*
@@ -6958,18 +6993,15 @@ let exec_interactive interactives frame name =
     (* run it ! *)
     f frame
   with Not_found -> 
-    let top_window = Window.top frame.frm_window in
-    Top_window.message top_window ("No interactive command "^name)
+    Message.message frame ("No interactive command "^name)
 @
 %less: I think it should just use the actions, no need for this intermediate
 % interactive thing.
 
 <<[[Interactive.exec_interactive()]] display if has a keybinding>>=
 key |> Common.do_option (fun key_list ->
-  let top_window = Window.top frame.frm_window in
-  Top_window.message top_window
-    ("you can run "^name^" by typing "^
-      (Keymap.print_key_list key_list))
+  Message.message frame
+    ("you can run "^name^" by typing "^(Keymap.print_key_list key_list))
 );
 @
 
@@ -7083,8 +7115,8 @@ let select frame request history start completion_fun prefix_fun action =
   set_history map string history;
 
   incremental_mini_buffer frame map request start
-    (fun frame str -> string := str;)
-    (fun old_frame str -> 
+    (fun _frame str -> string := str;)
+    (fun _old_frame str -> 
        (match !history with
         | hd :: _ when hd = str -> ()
         | _ ->
@@ -7156,12 +7188,12 @@ let to_string text =
   if len = 0 
   then "" 
   else begin
-    let str = String.create len in
+    let str = Bytes.create len in
     let gpos = text.gpoint.pos in
     let gap_end = gpos + text.gsize in
-    String.blit text.text_string 0 str 0 gpos;
-    String.blit text.text_string gap_end str gpos (len- gpos);
-    str
+    Bytes.blit text.text_string 0 str 0 gpos;
+    Bytes.blit text.text_string gap_end str gpos (len- gpos);
+    Bytes.to_string str
   end
 @
 
@@ -7348,7 +7380,7 @@ mutable buf_syntax_table : bool array;
 
 <<function [[Ebuffer.create_syntax_table]]>>=
 let create_syntax_table ()  =
-  let table = Array.create 256 false 
+  let table = Array.make 256 false 
   in  
   for i = Char.code 'a' to Char.code 'z' do
     table.(i) <- true;
@@ -7669,7 +7701,7 @@ let scroll_other_down frame =
 
 <<function [[Simple.begin_of_file]]>>=
 let begin_of_file frame =
-  let (buf, text, point) = Frame.buf_text_point frame in
+  let (_, text, point) = Frame.buf_text_point frame in
   <<save current pos from frame for position history navigation (in simple.ml)>>
   Text.set_position text point 0
 [@@interactive]
@@ -7677,7 +7709,7 @@ let begin_of_file frame =
 
 <<function [[Simple.end_of_file]]>>=
 let end_of_file frame =
-  let (buf, text, point) = Frame.buf_text_point frame in
+  let (_, text, point) = Frame.buf_text_point frame in
   <<save current pos from frame for position history navigation (in simple.ml)>>
   Text.set_position text point (Text.size text)
 [@@interactive]
@@ -7806,7 +7838,7 @@ save_current_pos frame;
 let save_current_pos frame =
   let (buf, text, point) = Frame.buf_text_point frame in
   if Array.length buf.buf_history_pos < history_pos_max
-  then buf.buf_history_pos <- Array.create history_pos_max None;
+  then buf.buf_history_pos <- Array.make history_pos_max None;
   let arr = buf.buf_history_pos in
   arr.(history_pos_max -1) |> Common.do_option (fun pt ->
      Text.remove_point text pt
@@ -7832,7 +7864,7 @@ let save_current_pos frame =
 let goto_last_saved_pos frame =
   let (buf, text, point) = Frame.buf_text_point frame in
   if Array.length buf.buf_history_pos < history_pos_max
-  then buf.buf_history_pos <- Array.create history_pos_max None;
+  then buf.buf_history_pos <- Array.make history_pos_max None;
   let arr = buf.buf_history_pos in
   let head = arr.(0) in
   Array.blit arr 1 arr 0 (history_pos_max - 1);
@@ -7867,7 +7899,7 @@ let insert_return frame =
 
 
 <<constant [[Simple.single_char]]>>=
-let single_char = String.make 1 ' '
+let single_char = Bytes.make 1 ' '
 @
 % thread-safe?
 
@@ -7876,8 +7908,8 @@ let single_char = String.make 1 ' '
 (* could factorize and just call insert_string? *)
 let insert_char frame char =
   let (_, text, point) = Frame.buf_text_point frame in
-  single_char.[0] <- char;
-  Text.insert text point single_char;
+  Bytes.set single_char 0 char;
+  Text.insert text point (Bytes.to_string single_char);
   Text.fmove text point 1
 @
 
@@ -7990,7 +8022,7 @@ let delete_forward_word buf point =
 
 <<function [[Simple.kill_end_of_line]]>>=
 let kill_end_of_line frame =
-  let (buf, text, _) = Frame.buf_text_point frame in
+  let (_, text, _) = Frame.buf_text_point frame in
   let eol = point_to_end frame in
   let len = 
     (* if already at eol then kill the newline *)
@@ -8034,8 +8066,7 @@ mutable buf_mark : Text.point option;
 let mark_at_point frame =
   Ebuffer.set_mark frame.frm_buffer frame.frm_point;
   <<save current pos from frame for position history navigation>>
-  let top_window = Window.top frame.frm_window in
-  Top_window.message top_window "Mark set";
+  Message.message frame "Mark set";
   ()
 [@@interactive]
 @
@@ -8100,7 +8131,7 @@ let kill_region frame =
 
 
 <<constant [[Simple.kill_ring]]>>=
-let kill_ring = Array.create kill_max ""
+let kill_ring = Array.make kill_max ""
 @
 <<constant [[Simple.kill_max]]>>=
 let kill_max = 10
@@ -8139,7 +8170,7 @@ let copy_region frame =
   add_clipboard frame region;
   kill_string region;
   (* need a message because as opposed to a cut this is not directly visible *)
-  Top_window.message (Window.top frame.frm_window) "Region saved"
+  Message.message frame "Region saved"
 [@@interactive]
 @
 \t use remove_mark? leak?
@@ -8147,9 +8178,9 @@ let copy_region frame =
 
 <<function [[Text.sub]]>>=
 let sub text point len =
-  let str = String.create len in
+  let str = Bytes.create len in
   blit str text point len |> ignore;
-  str
+  Bytes.to_string str
 @
 
 <<function [[Text.blit]]>>=
@@ -8161,7 +8192,7 @@ let blit str text point len =
   if pos+len >= gpos && pos < gap_end 
   then clean_text text;
   (try
-     String.blit text.text_string pos str 0 len
+     Bytes.blit text.text_string pos str 0 len
    with e -> raise e
    );
   len
@@ -8183,7 +8214,7 @@ let rec region text p1 p2 =
 % c-y
 <<function [[Simple.insert_killed]]>>=
 let insert_killed frame =
-  let (buf, text, point) = Frame.buf_text_point frame in
+  let (_, text, point) = Frame.buf_text_point frame in
 (*
   let top_window = Window.top frame.frm_window in
   let graphic = Efuns.backend top_window in
@@ -8211,7 +8242,7 @@ let last_insert = ref None
 % M-y
 <<function [[Simple.insert_next_killed]]>>=
 let insert_next_killed frame =
-  let (buf, text, point) = Frame.buf_text_point frame in
+  let (_, text, point) = Frame.buf_text_point frame in
   match !last_insert with
   |  Some (oldframe,oldpoint,n,len) when 
         oldframe == frame && oldpoint + len = Text.get_position text point ->
@@ -8282,8 +8313,8 @@ let point_at_mark frame =
 
 <<function [[Simple.undo]]>>=
 let undo frame =
-  let (buf, text, point) = Frame.buf_text_point frame in
-  let action, at_point, len = Text.undo text in
+  let (_, text, point) = Frame.buf_text_point frame in
+  let _action, at_point, len = Text.undo text in
   frame.frm_last_text_updated <- Text.version text - 1;
   <<save current pos from frame for position history navigation (in simple.ml)>>
   Text.set_position text point at_point;
@@ -8478,7 +8509,7 @@ let clean_text text =
     let gsize = text.gsize in
     let string = text.text_string in
     move_gpoint_to text size;
-    String.fill string (size - gsize) gsize '\000';
+    Bytes.fill string (size - gsize) gsize '\000';
     text.text_clean <- true
   end
 @
@@ -8530,7 +8561,7 @@ let isearch to_regexp sens frame =
   let string = ref "" in
   let isearch_s () =
     last_search := !string;
-    let regexp, delta =
+    let regexp, _deltaTOREMOVE =
       match !to_regexp, !case_fold with
       | Regexp, true  -> Str.regexp_case_fold !string, 0
       | Regexp, false -> Str.regexp !string, 0
@@ -8548,7 +8579,7 @@ let isearch to_regexp sens frame =
   in
   let set_last mini_frame =
     if !string = "" then begin
-      let (buf, text, point) = Frame.buf_text_point mini_frame in
+      let (_, text, point) = Frame.buf_text_point mini_frame in
       Text.insert text point !last_search;
       Text.fmove text point (String.length !last_search);
       string := !last_search
@@ -8591,11 +8622,11 @@ Keymap.add_binding ismap [ControlMap, Char.code 'w']
 
 let _mini_frame =
   Select.incremental_mini_buffer frame ismap (request ()) !string
-    (fun frame str -> 
+    (fun _frame str -> 
       string := str;
       isearch_s ()
   )
-  (fun frame str -> 
+  (fun _frame str -> 
       last_search := str;
       Text.remove_point text spoint
   )
@@ -8656,7 +8687,7 @@ let search_forward text regexp point =
   then clean_text text;
 
   let gap_end = text.gpoint.pos + gsize in  
-  let string = text.text_string in
+  let string = Bytes.to_string text.text_string in
   let pos = Str.search_forward regexp string point.pos in
   let pos = if pos >= gap_end then pos - gsize else pos in
   set_position text point pos;
@@ -8674,7 +8705,7 @@ let search_forward_matched text regexp point =
   if point.pos < gap_end 
   then clean_text text;
 
-  let string = text.text_string in
+  let string = Bytes.to_string text.text_string in
   let pos = Str.search_forward regexp string point.pos in
   let pos = 
     if pos >= text.gpoint.pos + gsize 
@@ -8696,7 +8727,7 @@ let search_forward_groups text regexp point groups =
   then clean_text text;
 
   let gap_end = text.gpoint.pos + gsize in  
-  let string = text.text_string in
+  let string = Bytes.to_string text.text_string in
   let pos = Str.search_forward regexp string point.pos in
   let pos = if pos >= gap_end then pos - gsize else pos in
   let array = Array.init groups (fun i -> Str.matched_group (i+1) string) in
@@ -8708,7 +8739,7 @@ let search_forward_groups text regexp point groups =
 let search_backward text regexp point =
   if point.pos > text.gpoint.pos 
   then clean_text text;
-  let string = text.text_string in
+  let string = Bytes.to_string text.text_string in
   let start_pos =     
     if point.pos > 0 
     then point.pos - 1 
@@ -8723,7 +8754,7 @@ let search_backward text regexp point =
 let search_backward_groups text regexp point groups =  
   if point.pos > text.gpoint.pos 
   then clean_text text;
-  let string = text.text_string in
+  let string = Bytes.to_string text.text_string in
   let start_pos =     
     if point.pos > 0 
     then point.pos - 1 
@@ -8839,8 +8870,7 @@ let select_replace frame request action =
 
 <<function [[Search.replace]]>>=
 let replace flag frame query str repl =
-  let top_window = Window.top frame.frm_window in
-  let (buf, text, point) = Frame.buf_text_point frame in
+  let (_, text, point) = Frame.buf_text_point frame in
   <<save current pos from frame for position history navigation>>
   let regexp = to_regexp flag str in
   let session = Text.start_session text in
@@ -8936,8 +8966,7 @@ let replace flag frame query str repl =
   with 
   | Not_found ->
       Text.commit_session text session;
-      Top_window.message top_window
-        ("Replace "^(string_of_int !n)^" occurences")
+      Message.message frame ("Replace "^(string_of_int !n)^" occurences")
   | _ ->
       Text.commit_session text session
 @
@@ -8997,7 +9026,7 @@ let get_unique_name filename =
 %\subsection{Graphical popup menu}
 
 <<[[Config]] buffers menu setup>>=
-Top_window.buffers_menu := (fun top_window button () ->
+Top_window.buffers_menu := (fun top_window _button () ->
     let buffers = ref [] in
     let edt = Globals.editor() in
     Hashtbl.iter (fun name _buf -> buffers := name :: !buffers) edt.edt_buffers;
@@ -9440,11 +9469,11 @@ let rec next f window =
   | TopWindow top_window -> first f top_window.window
   | Window win ->
       match win.win_down with
-        HComb (w1,w2) ->
+        HComb (_w1,w2) ->
           if w2 == window 
           then next f win
           else first f w2
-      | VComb (w1,w2) ->
+      | VComb (_w1,w2) ->
           if w2 == window 
           then next f win
           else first f w2
@@ -9460,8 +9489,8 @@ let rec next f window =
 let rec first f window =
   match window.win_down with
     WFrame frame -> f frame
-  | HComb (w1,w2) -> first f w1
-  | VComb (w1,w2) -> first f w1
+  | HComb (w1,_w2) -> first f w1
+  | VComb (w1,_w2) -> first f w1
   | NoFrame -> ()
 @
 
@@ -9470,8 +9499,8 @@ let rec first f window =
 let rec last f window =
   match window.win_down with
     WFrame frame -> f frame
-  | HComb (w1,w2) -> last f w2
-  | VComb (w1,w2) -> last f w2
+  | HComb (_w1,w2) -> last f w2
+  | VComb (_w1,w2) -> last f w2
   | NoFrame -> ()
 @
 
@@ -9486,11 +9515,11 @@ let rec prev f window =
         last f top_window.window
   | Window win ->
       match win.win_down with
-        HComb (w1,w2) ->
+        HComb (w1,_w2) ->
           if w1 == window 
           then prev f win
           else last f w1
-      | VComb (w1,w2) ->
+      | VComb (w1,_w2) ->
           if w1 == window 
           then prev f win
           else last f w1
@@ -9709,8 +9738,8 @@ let add_major_key major prefix action =
 <<[[Ebuffer.get_binding()]] major mode key search>>=
 (let b = Keymap.get_binding buf.buf_major_mode.maj_map keylist in
   match b with
-    Prefix map -> binding := b
-  | Function f -> binding := b; raise Exit
+    Prefix _map -> binding := b
+  | Function _f -> binding := b; raise Exit
   | Unbound -> ());
 @
 
@@ -9769,7 +9798,7 @@ Store.get buf.buf_major_mode.maj_vars var
 <<function [[Simple.next_hole]]>>=
 (* a hole is two consecutive '^' chars *)
 let next_hole frame = 
-  let (buf, text, point) = Frame.buf_text_point frame in
+  let (_, text, point) = Frame.buf_text_point frame in
   Text.with_dup_point text point (fun curseur ->
     while 
       not ((Text.get_char text curseur = '^') && (Text.fmove_res text curseur 1 = 1) &&
@@ -9790,7 +9819,7 @@ let next_hole frame =
 % install_structures -> <>
 <<function [[Simple.insert_structure]]>>=
 let insert_structure s frame =
-  let (buf, text, point) = Frame.buf_text_point frame in
+  let (_, text, point) = Frame.buf_text_point frame in
   Text.insert text point s;
   next_hole frame
 @
@@ -9892,7 +9921,7 @@ let minor_mode_name = "my_minor"
 
 % empty install hook
 <<function [[Minor_mode_sample.install]]>>=
-let install buf = 
+let install _buf = 
   ()
 @
 
@@ -9903,7 +9932,7 @@ let mode = Ebuffer.new_minor_mode  minor_mode_name [install]
 
 
 <<function [[Minor_mode_sample.minor_mode_fun]]>>=
-let minor_mode_fun frame = ()
+let minor_mode_fun _frame = ()
 @
 
 
@@ -9960,8 +9989,8 @@ let add_minor_key minor prefix action =
 buf.buf_minor_modes |> List.iter (fun minor ->
   let b = Keymap.get_binding minor.min_map keylist in
   match b with
-    Prefix map -> binding := b
-  | Function f -> binding := b; raise Exit
+    Prefix _map -> binding := b
+  | Function _f -> binding := b; raise Exit
   | Unbound -> ()
 ); 
 @
@@ -10039,16 +10068,16 @@ let system pwd buf_name cmd end_action =
   buf.buf_sync <- true;
 
   let ins = Unix.descr_of_in_channel inc in
-  let tampon = String.create 1000 in
+  let tampon = Bytes.create 1000 in
   let active = ref true in
   let edt = Globals.editor () in
-  Concur.Thread.add_reader ins (fun () ->
-    let pos,str = Text.delete_res text curseur
+  Concur.add_reader ins (fun () ->
+    let _pos,str = Text.delete_res text curseur
                     (Text.point_to_eof text curseur) in
     let len = input inc tampon 0 1000 in
     Mutex.lock edt.edt_mutex;
     if len = 0 then begin
-      let pid,status = waitpid [WNOHANG] pid in
+      let _pid,status = waitpid [WNOHANG] pid in
       (match status with 
       | WEXITED s -> Text.insert_at_end text (spf "Exited with status %d\n" s); 
           close_in inc;
@@ -10062,10 +10091,10 @@ let system pwd buf_name cmd end_action =
       Top_window.update_display ();
 
       Mutex.unlock edt.edt_mutex;
-      Concur.Thread.remove_reader ins; (* Kill self *)
+      Concur.remove_reader ins; (* Kill self *)
     end
     else
-      Text.insert_at_end text (String.sub tampon 0 len);
+      Text.insert_at_end text (Bytes.sub_string tampon 0 len);
 
     Text.set_position text curseur (Text.size text);
     Text.insert text curseur str;
@@ -10086,7 +10115,7 @@ let system pwd buf_name cmd end_action =
           (Text.point_to_eof text curseur) in
       Text.set_position text curseur (Text.size text);
       (* synchronize viewpoint *)
-      output outc str 0 (String.length str);
+      output_substring outc str 0 (String.length str);
       flush outc
     end
   );
@@ -10103,22 +10132,23 @@ let open_process pwd cmd =
   let outchan = out_channel_of_descr out_write in
   match fork() with
   | 0 ->
-      if out_read <> stdin then begin
-        dup2 out_read stdin; 
+      if out_read <> Unix.stdin then begin
+        dup2 out_read Unix.stdin; 
         close out_read 
       end;
       if in_write <> Unix.stdout ||  in_write <> Unix.stderr then begin
         if in_write <> Unix.stdout 
-        then dup2 in_write stdout;
+        then dup2 in_write Unix.stdout;
         if in_write <> Unix.stderr 
-        then dup2 in_write stderr; 
+        then dup2 in_write Unix.stderr; 
         close in_write 
       end;
       List.iter close [in_read;out_write];
       (* I prefer to do it here than in the caller *)
       Sys.chdir pwd;
-      execv "/bin/sh" [| "/bin/sh"; "-c"; cmd |];
-      exit 127 (* for ocaml light *)
+      execv "/bin/sh" [| "/bin/sh"; "-c"; cmd |]
+      (* never here! *)
+      (* exit 127 (* for ocaml light *) *)
   | pid -> 
       Unix.close out_read;
       Unix.close in_write;
@@ -10156,7 +10186,7 @@ buf.buf_finalizers <- (fun () ->
      waitpid [] pid |> ignore;
    with _ -> ()
   );
-  Concur.Thread.remove_reader ins
+  Concur.remove_reader ins
 ) :: buf.buf_finalizers;
 @
 
@@ -10259,8 +10289,9 @@ let current_dir frame =
 let make_hist = ref [!!make_command]
 @
 <<constant [[Compil.make_command]]>>=
+(* old: was "make -k" to keep going after first error, but I prefer without*)
 let make_command = define_option ["compil";"make_command"] ""
-    string_option "make -k"
+    string_option "make"
 @
 
 <<function [[Compil.compile]]>>=
@@ -10335,7 +10366,8 @@ let compile_find_makefile = define_option ["compil";"find_makefile"] ""
 <<[[Compil.compile()]] find possibly cdir with a makefile>>=
 let cdir = 
   if !!compile_find_makefile then
-    if String.sub cmd 0 4 = "make" || String.sub cmd 1 4 = "make" then
+    if cmd =~ "^make"
+    then
     (* try to find a Makefile in the directory *)
       let rec iter dir =
         if Sys.file_exists (Filename.concat dir "Makefile") ||
@@ -10375,9 +10407,8 @@ let find_error = Store.create_abstr "find_error"
 
 <<function [[Compil.next_error]]>>=
 let next_error top_frame =
-  let top_window = Window.top top_frame.frm_window in
   match !compilation_frame with
-  | None -> Top_window.message top_window "No compilation started"
+  | None -> Message.message top_frame "No compilation started"
   | Some (frame, error_point, cdir) ->      
       if frame.frm_killed 
       then Frame.unkill (Multi_frames.cut_frame top_frame) frame;
@@ -10424,7 +10455,7 @@ let next_error top_frame =
           Text.fmove text point error.err_begin;
           Frame.active frame
       with Not_found ->
-        Top_window.message top_window "No more errors"
+        Message.message top_frame "No more errors"
 [@@interactive]
 @
 
@@ -10452,36 +10483,41 @@ let started = ref false
 @
 
 <<type [[Server.proto]]>>=
-type proto =
-  LoadFile of string * int * string
+type command =
+  | LoadFile of Common.filename * int (* pos *) * int (* line *) * string
 @
 
 <<function [[Server.read_command]]>>=
-let read_command fd frame =
+let read_command fd frame_opt =
   let inc = in_channel_of_descr fd in
   try
     let cmd = input_value inc in
     match cmd with
-    | LoadFile (name,pos,str) ->
-        let window = frame.frm_window in
-        let top_window = Window.top window in
-        (*wrap*) top_window |> (fun top_window ->
-            let frame = Frame.load_file window name in
-            if pos <> 0 then begin
-              let (buf, text, point) = Frame.buf_text_point frame in
-              try
-                if str = "" 
-                then raise Not_found 
-                else                  
-                  let regexp = Str.regexp_string str in
-                  Text.search_forward text regexp point |> ignore
-              with Not_found -> 
-                Text.set_position text point pos
-            end;
-            Top_window.update_display () 
-        ) (*()*)
+    | LoadFile (name, pos, line, str) ->
+        let window = 
+          match frame_opt with
+          | Some frame -> frame.frm_window
+          | None -> 
+            let edt = Globals.editor () in
+            match edt.top_windows with
+            | [] -> failwith "no top windows"
+            | x::_ -> x.top_active_frame.frm_window
+        in
+        let frame = Frame.load_file window name in
+        let (_, text, point) = Frame.buf_text_point frame in
+        if pos <> 0 
+        then Text.set_position text point pos;
+        if line <> 0 
+        then Text.goto_line text point line;
+        if str <> ""
+        (* bugfix: need the begin/end here, otherwise update below in then *)
+        then begin                 
+          let regexp = Str.regexp_string str in
+          Text.search_forward text regexp point |> ignore;
+        end;
+        Top_window.update_display () 
   with
-    _ -> Concur.Thread.remove_reader fd 
+    _ -> Concur.remove_reader fd 
 @
 %pad: I pass now a frame_opt, so can also pass None and get top_window
 % from Globals.editors, which allow then to call Server.start from pad.ml
@@ -10489,35 +10525,31 @@ let read_command fd frame =
 %old: wrap top_window ...
 
 <<function [[Server.module_accept]]>>=
-let module_accept s frame = 
+let module_accept s frame_opt = 
   let fd,_ = accept s in
   Unix.set_close_on_exec fd;
-  Concur.Thread.add_reader fd (fun _ -> read_command fd frame)
+  Concur.add_reader fd (fun _ -> read_command fd frame_opt)
 @
 
 <<function [[Server.start]]>>=
-let start frame =
+let start frame_opt =
   if not !started then
-  (*let top_window = Window.top frame.frm_window in*)
   Utils.catchexn "Efuns server:" (fun _ ->
       let s = Unix.socket PF_UNIX SOCK_STREAM 0 in
-      if Sys.file_exists socket_name then Unix.unlink socket_name;
+
+      if Sys.file_exists socket_name 
+      then Unix.unlink socket_name;
+
       Unix.bind s (ADDR_UNIX socket_name);
       Unix.listen s 254;
       Unix.set_nonblock s;
       Unix.set_close_on_exec s;
-      (*let display = top_window.top_root#display  in *)
-      Concur.Thread.add_reader s (fun _ -> 
+
+      Concur.add_reader s (fun _ -> 
         started := true;
-        module_accept s frame
+        module_accept s frame_opt
       );
-      (*
-      let atom = X.internAtom display efuns_property false in
-      X.changeProperty display top_window.top_root#window 
-        PropModeReplace atom XA.xa_string 1 socket_name;
-      *)
   )  
-[@@interactive "start_server"]
 @
 %old:
 % <<misc actions>>=
@@ -10557,6 +10589,7 @@ let filename = ref None
 <<toplevel [[Efuns_client._1]]>>=
 let _ = Arg.parse [
     "-pos", Arg.Int (fun i -> pos := i)," <int>: set position";
+    "-line", Arg.Int (fun i -> line := i)," <int>: set line";
     "-str", Arg.String (fun s -> string := s)," <string>: search string";
   ] (fun name -> filename := Some name)
   "efuns_server: connect to efuns"
@@ -10608,7 +10641,7 @@ let _ =  if not (Sys.file_exists socket_name) then raise Not_found
 <<toplevel [[Efuns_client._3]]>>=
 let (inc,outc) = Unix.open_connection (Unix.ADDR_UNIX socket_name)
 let _ =  
-  output_value outc (Server.LoadFile (filename,pos,string)); 
+  output_value outc (Server.LoadFile (filename,pos,!line, string)); 
   flush outc
 @
 
@@ -10770,7 +10803,7 @@ let next_buffer buf =
   let rec iter list =
     match list with
       [] -> raise Not_found 
-    | (name,b) :: tail ->
+    | (_name,b) :: tail ->
         if b == buf 
         then 
           match tail with
@@ -10804,25 +10837,25 @@ let escaped s =
   let n = ref 0 in
   let len = String.length s in
   for i = 0 to len - 1 do
-    let c = String.unsafe_get s i in
+    let c = String.get s i in
     match c with
       '\\' | '[' | ']' | '^' -> incr n
     | _ -> ()
   done;
   if !n = 0 then s else
-  let ss = String.create (len + !n) in
+  let ss = Bytes.create (len + !n) in
   let p = ref 0 in
   for i = 0 to len - 1 do
-    let c = String.unsafe_get s i in
+    let c = String.get s i in
     (match c with
         '\\' | '[' | ']' | '^' -> 
-          String.unsafe_set ss !p '\\';
+          Bytes.set ss !p '\\';
           incr p
       | _ -> ());
-    String.unsafe_set ss !p c;
+    Bytes.set ss !p c;
     incr p    
   done;
-  ss
+  Bytes.to_string ss
 @
 
 \section{Colored filenames}
@@ -10837,13 +10870,13 @@ let escaped s =
 [MetaMap, Char.code 't'], (Frame.to_frame Edit.transpose_words);
 
 [MetaMap, Char.code 'l'], (fun frm ->
-  Edit.on_word frm.frm_buffer frm.frm_point String.lowercase
+  Edit.on_word frm.frm_buffer frm.frm_point String.lowercase_ascii
 );
 [MetaMap, Char.code 'u'], (fun frm ->
-  Edit.on_word frm.frm_buffer frm.frm_point String.uppercase
+  Edit.on_word frm.frm_buffer frm.frm_point String.uppercase_ascii
 );
 [MetaMap, Char.code 'c'], (fun frm ->
-  Edit.on_word frm.frm_buffer frm.frm_point String.capitalize
+  Edit.on_word frm.frm_buffer frm.frm_point String.capitalize_ascii
 );
 [MetaMap, XK.xk_q], Transform.fill_paragraph;
 @
@@ -10874,7 +10907,7 @@ let transpose_chars buf point =
   let text = buf.buf_text in
   text |> Text.with_session (fun () ->
     Text.bmove text point 1;
-    let pos,c1 = Text.delete_res text point 1 in
+    let _pos, c1 = Text.delete_res text point 1 in
     Text.fmove text point 1;
     Text.insert text point c1;
   );
@@ -11036,7 +11069,7 @@ let hungry_char c =
 % C-backspace
 <<function [[Simple.hungry_electric_delete]]>>=
 let hungry_electric_delete frame =
-  let (buf, text, _) = Frame.buf_text_point frame in
+  let (_, text, _) = Frame.buf_text_point frame in
   text |> Text.with_session (fun () ->
    let c1 = previous_char frame in
    Edit.delete_backspace_char frame;
@@ -11059,7 +11092,7 @@ let hungry_electric_delete frame =
 
 <<function [[Simple.previous_char]]>>=
 let previous_char frame =
-  let (buf, text, point) = Frame.buf_text_point frame in
+  let (_, text, point) = Frame.buf_text_point frame in
   if Text.bmove_res text point 1 = 0 then raise Not_found;
   let c = Text.get_char text point in
   Text.fmove text point 1;
@@ -11214,6 +11247,7 @@ Utils.register_exn (fun e ->
       Printf.sprintf "Unix error %s: %s %s" f (Unix.error_message error) arg
   | _ -> raise e
 );
+Printexc.record_backtrace true;
 
 Sys.signal Sys.sigint (Sys.Signal_handle (fun _ ->  
   (* Should auto-save all buffers, and then exit ... *)
@@ -11411,9 +11445,9 @@ let _ =
 \section{Logging}
 
 <<function [[Efuns.error]]>>=
-let error f x =
+let error fmt x =
   Printf.printf "error: ";
-  Printf.printf f x;
+  Printf.printf fmt x;
   Printf.printf "\n"
 @
 % this is actually now Globals.error
@@ -11424,7 +11458,8 @@ let error f x =
 
 % ??? -> <>
 <<function [[Ebuffer.message]]>>=
-let message buf m =
+(* todo: vs Message.message? *)
+let message _buf m =
   let name = "*Messages*" in
   try
     let buf = Hashtbl.find (Globals.editor()).edt_buffers name in
@@ -11443,8 +11478,11 @@ let message buf m =
 
 <<[[Top_window.handle_key()]] handle exception of [[try_map]]>>=
 | e -> 
-    let str = spf "Uncaught exception %s" (Utils.printexn e) in
+    (* bugfix: call get_backtrace() first! otherwise the code above
+     * may throw exn, which can be catched, which modifies the backtrace
+     *)
     let bt = Printexc.get_backtrace () in
+    let str = spf "Uncaught exception %s" (Utils.printexn e) in
     if !Globals.debug
     then pr2 str;
     message top_window  str;
@@ -11656,7 +11694,7 @@ let no_print x =
   "<abstr>:" ^ (Common.dump x)
 @
 <<function [[Store.no_input]]>>=
-let no_input (s : string) = failwith "This variable can not be set"
+let no_input (_s : string) = failwith "This variable can not be set"
 @
 % ???
 
@@ -11695,20 +11733,20 @@ val input : t -> string -> string -> unit
 <<function [[Store.get_print]]>>=
 let get_print vars var =
   let value = get vars var in
-  let (p,i) = Hashtbl.find vars_table var in
+  let (p, _i) = Hashtbl.find vars_table var in
   p value  
 @
 
 <<function [[Store.set_input]]>>=
 let set_input vars var value =
-  let (p,i) = Hashtbl.find vars_table var in
+  let (_p, i) = Hashtbl.find vars_table var in
   set vars var (i value)
 @
 
 <<function [[Store.list]]>>=
 let list vars =
   let list = ref [] in
-  Vars.iter (fun var value ->
+  Vars.iter (fun var _value ->
       list := var :: !list;
   ) !vars;
   !list
@@ -11784,7 +11822,7 @@ let all_params = ref None
 @
 
 <<function [[Simple.all_parameters]]>>=
-let all_parameters frame _ =
+let all_parameters _frame _ =
   let parameters = 
     try Var.get_global parameters_var with _ -> []
   in
@@ -11808,7 +11846,7 @@ let set_parameter frame =
     "" (Parameter.all_parameters frame) (fun s -> s) (fun variable ->
       Select.select_string frame (Printf.sprintf "%s : " variable)
       value_hist "" (fun value ->
-          let (input,print,param) = List.assoc variable parameters
+          let (input,_print,param) = List.assoc variable parameters
           in
           param =:= input value))
 [@@interactive]
@@ -11834,7 +11872,7 @@ let get_parameter frame =
     "" (Parameter.all_parameters frame) (fun s -> s) (fun variable ->
       Top_window.mini_message frame 
         (Printf.sprintf "%s : %s" variable (
-          let (input,print,param) = List.assoc variable parameters
+          let (_input,print,param) = List.assoc variable parameters
           in
           print !!param)))
 [@@interactive]
@@ -11926,9 +11964,13 @@ let find_matching frame =
 
 <<toplevel [[Paren_mode._1]]>>=
 let _ = 
-  [ ')'; '}'; ']' ] |> List.iter (fun key -> 
+  (* alt: we could use a major mode var that specifies what is a
+   * parenthesis.
+   *)
+  (* TODO disabled for now because lead to buggy display and exns *)
+  [(* ')'; '}'; ']' *)] |> List.iter (fun key -> 
     Keymap.add_binding mode.min_map [NormalMap, Char.code key] find_matching
-  ) 
+  )
 @
 
 %todo: do also a show_paren mode? so when hover paren it highlights the
@@ -11956,6 +11998,10 @@ let is_paren_begin c = (c == '{') || (c == '[') || (c == '(')
 
 % Paren_mode.find_matching | Abbrevs_mode.find_matching -> <>
 <<function [[Simple.highlight_paren]]>>=
+(* TODO: this is buggy! it leads to some out_of_bound exn in
+ * the unhiglight hook run after every key; highlighted_chars
+ * is wrong.
+ *)
 let highlight_paren frame =
   let (buf, text, point) = Frame.buf_text_point frame in
 
@@ -12049,14 +12095,14 @@ then insert_at_place frame char
 
 <<function [[Simple.insert_at_place]]>>=
 let insert_at_place frame char =
-  let (buf, text, point) = Frame.buf_text_point frame in
+  let (_, text, point) = Frame.buf_text_point frame in
   let c = Text.get_char text point in
   if c = '\n' 
   then insert_char frame char
   else begin
     Text.delete text point 1;
-    single_char.[0] <- char;    
-    Text.insert text point single_char;
+    Bytes.set single_char 0 char;    
+    Text.insert text point (Bytes.to_string single_char);
     Text.fmove text point 1
   end
 @

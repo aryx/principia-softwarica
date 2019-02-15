@@ -299,10 +299,6 @@ open Options
 (* for ipc/server too *)
 <<global [[Efuns.displayname]]>>
 
-(*
-  let _ = Printf.printf "%d %d %s %s %s" !width !height !font !fg !bg; 
-  print_newline () 
-*)
 @
 
 
@@ -1626,6 +1622,22 @@ let add_clipboard frame str =
   let graphic = Efuns.backend top_window in
   graphic.Xdraw.set_clipboard (Some str)
 
+let paste_clipboard frame =
+  let (_, text, point) = Frame.buf_text_point frame in
+  let top_window = Window.top frame.frm_window in
+  let graphic = Efuns.backend top_window in
+  let str =
+    match graphic.Xdraw.get_clipboard () with
+    | None | Some "" -> Message.message frame "Nothing in the clipboard"; ""
+    | Some s -> 
+      graphic.Xdraw.set_clipboard None;
+      s
+  in
+  let pos, len =  Text.insert_res text point str in
+  Text.fmove text point len; 
+  last_insert := Some(frame,pos,0,len)
+[@@interactive]
+
 
 <<function [[Simple.kill_string]]>>
 
@@ -1831,19 +1843,21 @@ open Efuns
 
 <<features/indent.ml>>=
 <<copyright header efuns>>
-open Efuns
-open Common
 
 (*****************************************************************************)
 (* Prelude *)
 (*****************************************************************************)
-(* Mostly helpers functions to build programming language indenters.
+(* Main indent actions.
  *
- * pad: I factorized code between all the prog_modes/xxx_mode.ml
+ * See also prog_modes/common_indenter.ml for the functions to
+ * help build indenters. Those indenters will then probably
+ * be assigned to indent_func below, which will then allow to
+ * use M-x indent_xxx functions to indent files.
+ *
  *)
 
 (*****************************************************************************)
-(* Indent actions *)
+(* Variable *)
 (*****************************************************************************)
 
 (* pad: I factorized some indent code by using a variable *)
@@ -1852,7 +1866,10 @@ let indent_func = Store.create_abstr "Indent.indent_func"
 let get_indent_func buf =
   Var.get_var buf indent_func
 
-(* indent all lines of the current block *)
+(*****************************************************************************)
+(* Indent actions *)
+(*****************************************************************************)
+
 let indent_phrase frame =
   let (buf, _, point) = Frame.buf_text_point frame in
   (get_indent_func buf) buf point point
@@ -1872,222 +1889,19 @@ let indent_buffer frame =
   let (buf, text, _) = Frame.buf_text_point frame in
   Text.with_new_point text (fun start_point ->
   Text.with_new_point text (fun end_point ->
-  Text.set_position text end_point (Text.size text);
-  (get_indent_func buf) buf start_point end_point;
+    Text.set_position text end_point (Text.size text);
+    (get_indent_func buf) buf start_point end_point;
   ))
 [@@interactive]
 
 (*****************************************************************************)
-(* get_indentations (defined by each major mode) helpers *)
+(* Indent helpers *)
 (*****************************************************************************)
-
-(* Indent level and list of eols (in reverse order).
- *
- * For example on the file content:
-void foo() {
-  if(true) {
-    bar();
-    return 1+2;
-  }
-  fooba();
-}
- * you will get this indentations (when reversed, see print_indentations()):
-indent: 2, eols at [12]
-indent: 4, eols at [25, 36]
-indent: 2, eols at [52, 56]
-indent: 0, eols at [67, 69, 70]
- *
- * remember that position at 0-indexed based (see text.mli).
- * So each time you have an indentation level and the set of futur
- * lines that must be at this level (the futur lines are represented
- * by the eol ('\n') preceding the line).
+(* This could go in prog_modes/common_indenter.ml, but this is also
+ * used by other indenting strategies like ocaml_ocp_indent.ml
  *)
-type indentations = (int * (Text.position list (* eols *))) list
-
-type 'tok indentation_stack = ('tok * int) list
-
-let debug_indent = ref true
-
-(* to be used by programming-language-specific get_indentations() *)
-let pop_to_top stack =
-  ([],0)
-
-let rec pop_to kwd stack =
-  match stack with
-  | [] -> ([],0)
-  | (kwd',indent) :: stack when kwd' = kwd -> stack, indent
-  | _ :: stack -> pop_to kwd stack
-
-let rec pop_to_kwds kwd_end_recursion = fun kwds stack ->
-  match stack with
-  | [] -> ([], (kwd_end_recursion, 0))
-  | (kwd,indent) :: stack when List.memq kwd kwds -> stack, (kwd, indent)
-  | _ :: stack -> pop_to_kwds kwd_end_recursion kwds stack
-
-(* agglomerate eols when have already an (indent, _) in indents *)
-let fix indent eols indents =
-  match eols with
-  | [] -> indents
-  | _ -> 
-      match indents with
-      | (pindent,peols) :: tail when pindent = indent -> 
-          (indent, eols @ peols) :: tail
-      | _ ->  (indent,eols) :: indents
-
-(*****************************************************************************)
-(* Debugging *)
-(*****************************************************************************)
-
-(* alt: use Common.dump, it should do a pretty good work *)
-let print_indentations list =
-  pr "Indentations :"; 
-  list |> List.rev |> List.iter (fun (indent, list) ->
-    pr (spf "indent: %d, eols at [%s]" indent
-          (list |> List.rev |> List.map string_of_int |> String.concat ", "))
-  )
-
-
-let _print_stack tokens stack =
-  print_string "Indentation stack:"; 
-  print_newline ();
-  let rec iter stack =
-    match stack with
-      [] -> ()
-    | (token, indent) :: stack ->
-        Printf.printf "Token %s indent %d" 
-          (List.assoc token tokens) indent;
-        print_newline ();
-        iter stack
-  in
-  iter stack
-
-(*
-let print_exc e s =
-  Printf.printf "Caught exception %s in %s" (Printexc.to_string e) s;
-  print_newline ()
-*)
-
-(*****************************************************************************)
-(* Helpers of helper *)
-(*****************************************************************************)
-
-let rec pop_indentations indents =
-  match indents with
-  | [] -> raise Not_found
-  | (indent, eols) :: indents ->
-      match eols with
-      | [] -> pop_indentations indents
-      | eol :: eols -> (indent, eol, (indent,eols) :: indents)
-
-let find_phrase_start start_regexp = fun buf curseur ->
-  let text = buf.buf_text in
-  try
-    let _ = Text.search_backward text start_regexp curseur in ()
-  with
-    Not_found -> Text.set_position text curseur 0
 
 <<function [[Simple.set_indent]]>>
-
-(*****************************************************************************)
-(* Indent between points (for indent_func) helpers using get_indentations *)
-(*****************************************************************************)
-
-let indent_between_points get_indentations start_regexp = 
- (* returns an "indent_func" compatible function *)
- fun buf start_point end_point ->
-  let text = buf.buf_text in
-  text |> Text.with_session (fun session ->
-  Text.with_dup_point text start_point (fun curseur ->
-   try
-    find_phrase_start start_regexp buf curseur;
-    let indentations = get_indentations buf curseur end_point in
-    if !debug_indent
-    then print_indentations indentations;                
-    (* remove the Eof indentation *)
-    let _,_,indentations = pop_indentations indentations in
-    (* indent other lines *)
-    let rec iter indents =
-      let (current,pos,indents) = pop_indentations indents in
-      (* go just after the eol *)                
-      Text.set_position text curseur (pos+1);
-      set_indent text curseur current;
-      iter indents
-    in
-    iter indentations
-  with Not_found -> ()
- ))
-
-(*****************************************************************************)
-(* Indent current line (Tab) helper *)
-(*****************************************************************************)
-let indent_current_line get_indentations start_regexp color_region = 
- fun frame ->
-  let (buf, text, point) = Frame.buf_text_point frame in
-
-  (* colorize line *)
-  Text.with_dup_point text point (fun start_point ->
-  Text.with_dup_point text point (fun end_point ->
-    Text.bmove text start_point (Text.point_to_bol text start_point);
-    Text.fmove text end_point (Text.point_to_eol text end_point);
-    color_region buf start_point end_point;
-  ));
-
-  (* indentation *)
-  Text.with_dup_point text point (fun curseur ->
-    find_phrase_start start_regexp buf curseur;
-    let indentations = get_indentations buf curseur point in
-    if !debug_indent
-    then print_indentations indentations;                
-    let (_next,pos,tail) = pop_indentations indentations in
-    let current =
-      try
-        let (current, _, _ ) = pop_indentations tail in 
-        current
-      with Not_found  -> 0
-    in
-    set_indent text point current
-  )
-
-(*****************************************************************************)
-(* Electric return to indent? *)
-(*****************************************************************************)
-
-(* Interactive: indent the current line, insert newline and indent next line *)
-(*
-let insert_and_return frame =
-  let buf = frame.frm_buffer in
-  let text = buf.buf_text in
-  let point = frame.frm_point in
-(* colors *)
-  let start_point = Text.dup_point text point in
-  Text.bmove text start_point (Text.point_to_bol text start_point);
-  color_region buf start_point point;
-  Text.remove_point text start_point;
-(* indentations *)
-  let curseur = Text.dup_point text point in
-  try
-    find_phrase_start buf curseur;
-    let indentations = compute_indentations buf curseur point in
-    Text.remove_point text curseur;
-    let (next,pos,tail) = pop_indentations indentations in
-    let current =
-      try
-        let (current, _, _ ) = pop_indentations tail in current
-      with
-        Not_found  -> 0
-    in
-    let session = Text.start_session text in
-    set_indent text point current;
-    Edit.insert_char frame '\n';
-    set_indent text point next;
-    Text.commit_session text session;
-    Text.fmove text point next; 
-    ()
-  with
-    e -> 
-      Text.remove_point text curseur;
-      Edit.insert_char frame '\n'
-*)
 
 @
 
@@ -2136,16 +1950,15 @@ let select_yes_or_no frame request action =
 @
 
 <<function [[Select.find_completion_frame]]>>=
-let find_completion_frame frame =
+let find_completion_frame _frame =
   let buf = Ebuffer.default "*Completions*" in
   Frame.find_buffer_frame buf
 @
 
 <<function [[Select.display_completions]]>>=
 let display_completions frame list =
-  let top_window = Window.top frame.frm_window in
   if list = [] 
-  then Top_window.message top_window "No Completions"
+  then Message.message frame "No Completions"
   else
     let rec iter list s =
       match list with
@@ -2173,8 +1986,8 @@ let update text str =
   text.text_points |> List.iter (fun point -> 
     point.pos <- get_position text point
   );
-  text.text_string <- str;
-  text.text_attrs <- (Array.create len direct_attr);
+  text.text_string <- Bytes.of_string str;
+  text.text_attrs <- (Array.make len direct_attr);
   text.text_size <- len;
   text.gpoint <- { pos = 0; line = 0 };
   text.gsize <- 0;
@@ -2308,7 +2121,7 @@ let complete_filename frame good_file filename =
   in
 
   match file_list with
-  | a::b::_ -> 
+  | _a::_b::_ -> 
       begin
         match 
           List.fold_left (fun list ele ->
@@ -2379,8 +2192,8 @@ let select_file frame request history start action =
   );
   set_history map string history;
   incremental_mini_buffer frame map request start
-    (fun frame str -> string := str)
-    (fun old_frame str -> 
+    (fun _frame str -> string := str)
+    (fun _old_frame str -> 
       history := str :: !history;
       remove_completions frame;
       let str = Utils.string_to_filename str in
@@ -2426,7 +2239,7 @@ let select_file_from_pwd frame request action =
 let get_previous_frame () = 
   match !prev_buffers with
   | [] -> ""
-  | x::xs -> x
+  | x::_xs -> x
 @
 
 <<constant [[Select.buf_hist]]>>=
@@ -3096,29 +2909,33 @@ let to_frame f frame =
 
 
 <<function [[Simple.set_indent]]>>=
-(* modify the indentation of (point) line. Does not modify point *)
-let set_indent text point offset = 
-  Text.with_dup_point text point (fun curseur ->
+(* Modify the indentation of line of point,
+ * untabify the line, and move the point to the indented level.
+ *)
+let set_indent text curseur offset = 
     Text.bmove text curseur (Text.point_to_bol text curseur);
 
     let rec iter offset =
       let c = Text.get_char text curseur in
       if offset > 0 then
-        if c = ' ' then
-          (Text.fmove text curseur 1; iter (offset - 1))
-        else
-        if c = '\t' then
-          (Text.delete text curseur 1;
-           iter offset)
-        else
-          (Text.insert text curseur (String.make offset ' '))
+        (match c with
+        | ' ' ->
+          Text.fmove text curseur 1; 
+          iter (offset - 1)
+        | '\t' ->
+          Text.delete text curseur 1;
+          iter offset
+        | _ ->
+          Text.insert text curseur (String.make offset ' ');
+          Text.fmove text curseur offset
+        )
       else
-      if c = ' ' || c='\t' then
-        (Text.delete text curseur 1;
-          iter 0)
+      if c = ' ' || c='\t' then begin
+        Text.delete text curseur 1;
+        iter 0;
+      end            
     in
     iter offset
-  )
 @
 
 <<toplevel [[Simple._1]]>>=
@@ -3144,16 +2961,16 @@ let _ =
 open Efuns
 
 (*****************************************************************************)
-(* Misc *)
+(* Vars *)
 (*****************************************************************************)
 
 <<constant [[Simple.line_comment]]>>
 
-<<function [[Simple.insert_special_char]]>>
+(*****************************************************************************)
+(* Misc *)
+(*****************************************************************************)
 
-(*****************************************************************************)
-(* Complexe *)
-(*****************************************************************************)
+<<function [[Simple.insert_special_char]]>>
 
 <<constant [[Complex.buf_mtime]]>>
 
@@ -3423,7 +3240,7 @@ let wrap top_window f () =
 
 <<constant [[Top_window.buffers_menu]]>>=
 let buffers_menu = ref 
-  (fun (top_window : top_window) (button : (*WX_button.t*) unit) ()
+  (fun (_top_window : top_window) (_button : (*WX_button.t*) unit) ()
   -> ())
 @
 
@@ -3527,6 +3344,31 @@ let update_display () = Common.profile_code "Top_window.update_display"
   
 <<function [[Top_window.handle_key]]>>
 
+let in_start_macro = ref false
+let in_call_macro = ref false
+
+(* in reverse order *)
+let recorded_keys = ref []
+
+let handle_key_and_macro top_window modifiers keysym =
+  if !in_start_macro
+  then Common.push (modifiers, keysym) recorded_keys;
+
+  let before = !in_start_macro in
+  handle_key top_window modifiers keysym;
+  let after = !in_start_macro in
+
+  if not before && after
+  then recorded_keys := [];
+
+  if !in_call_macro
+  then begin
+   Common.finalize (fun () ->
+   !recorded_keys |> List.rev |> List.iter (fun (modifiers, keysym) ->
+     handle_key top_window modifiers keysym
+   )) (fun () -> in_call_macro := false)
+  end
+
   (* We can receive events from different sources. In particular, some of
   them can be received during the painting (scrollbar ...)
   *)
@@ -3575,7 +3417,7 @@ let update_display () = Common.profile_code "Top_window.update_display"
 <<copyright header2>>
 open Efuns
 
-open Keymap (* c_xxx *)
+open Keymap (* for the c_xxx *)
 <<constant [[standard_map]]>>
 
 <<constant [[core_map]]>>
@@ -3696,7 +3538,7 @@ let get_file_line frame =
   frame.frm_buffer.buf_filename |> Common.do_option (fun filename ->
     (Globals.editor()).edt_dirname <- Filename.dirname filename;
   );
-  let (buf, text, point) = Frame.buf_text_point frame in
+  let (_, text, point) = Frame.buf_text_point frame in
   Text.with_dup_point text point (fun start_point ->
     let before = Text.point_to_bol text point in
     let after = Text.point_to_eol text point in
@@ -3805,7 +3647,7 @@ let open_view frame =
 % create_int?
 
 <<function [[Dired.mkdir]]>>=
-let mkdir frame =
+let mkdir _frame =
   failwith "Dired.mkdir: TODO"
 [@@interactive "dired_mkdir"]
 (*
@@ -3834,12 +3676,12 @@ let mode = Ebuffer.new_major_mode "Dired" (Some install)
 @
 
 <<function [[Dired.viewer]]>>=
-let viewer commande frame filename =
+let viewer commande _frame filename =
   Sys.command (Printf.sprintf "(%s %s) &" commande filename) |> ignore
 @
 
 <<function [[Dired.commande]]>>=
-let commande commande frame filename =
+let commande commande _frame filename =
   Sys.command (Printf.sprintf commande filename) |> ignore;
   failwith  (Printf.sprintf commande filename)
 @
@@ -4286,7 +4128,7 @@ let minor_mode_name = "fill"
 @
 
 <<function [[Fill_mode.install]]>>=
-let install buf = ()
+let install _buf = ()
 @
 
 <<constant [[Fill_mode.fill_line_len]]>>=
@@ -4908,6 +4750,10 @@ open Unix
 <<function [[Server.module_accept]]>>
   
 <<function [[Server.start]]>>
+
+let server_start frame =
+  start (Some frame)
+[@@interactive]
   
 @
 
@@ -4932,6 +4778,7 @@ let efuns_property = "_EFUNS_SERVER"
 <<ipc/efuns_client.ml>>=
   
 <<constant [[Efuns_client.pos]]>>
+let line = ref 0
 <<constant [[Efuns_client.string]]>>
 <<constant [[Efuns_client.filename]]>>
   
