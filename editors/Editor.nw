@@ -996,7 +996,6 @@ let create_without_top window mini buf =
       frm_y_offset = 0;
       frm_table = [||];
 
-      frm_has_scrollbar = 0;
       frm_has_status_line = 1;
       frm_status = status;
       frm_mini_buffer = mini;
@@ -1016,6 +1015,7 @@ let create_without_top window mini buf =
 % we will see install later, which prepares the frame for display
 % by setting frm_table, adjusting frm_cutline if needed.
 % less: should rename this install to prepare_for_display
+%old:       frm_has_scrollbar = 0;
 
 <<[[Efuns.buffer]] other fields>>=
 mutable buf_shared : int; (* number of frames for that buffer *)
@@ -1109,7 +1109,7 @@ let create mini up_window xpos ypos width height =
 %todo: will see mini later (but seems redundant with frame.frm_mini_buffer?)
 
 
-\section{The [[Top_window.t]]}
+\section{[[Top_window.t]]}
 %todo: LPize Topwindow in window_up and put it here
 
 %"The top_window structure corresponds to an Xterm widget (one X window).
@@ -1187,7 +1187,7 @@ let rec top window =
 
 
 
-\section{The [[Editor.t]]}
+\section{[[Editor.t]]}
 % full state
 
 %"All the editor information is organised inside one structure: the location.
@@ -1412,7 +1412,7 @@ let define_buffer_action action_name action_fun =
 <<sanity check action defined twice>>=
 (try 
     Hashtbl.find actions action_name |> ignore;
-    Globals.error "action \"%s\" defined twice" action_name;
+    Error.error (spf "action \"%s\" defined twice" action_name);
  with _ -> ()
 );
 @
@@ -1425,8 +1425,8 @@ let define_buffer_action action_name action_fun =
 let get_action action_name =
   try Hashtbl.find actions action_name
   with Not_found ->
-    Globals.error "Could not find action %s. Forgot define_action()?" 
-        action_name;
+    Error.error_exn (spf "Could not find action %s. Forgot define_action()?" 
+        action_name) Not_found;
     BufferAction (fun _ -> ())
 @
 %pad: action -> action_name for the parameter
@@ -1451,7 +1451,7 @@ let execute_buffer_action action_name buf =
   match (get_action action_name) with
     BufferAction f -> f buf
   | FrameAction _f -> 
-      Globals.error "Can't apply action %s on buffer" action_name
+      Error.error (spf "Can't apply action %s on buffer" action_name)
 @
 \fi
 
@@ -1468,7 +1468,7 @@ let execute_buffer_action action_name buf =
 % (* ----------------------------------------------------------- *)
 % (* Loading *)
 % (* ----------------------------------------------------------- *)
-% <<loading actions>>
+% <loading actions>
 % (* ----------------------------------------------------------- *)
 % (* Navigating (in the file) *)
 % (* ----------------------------------------------------------- *)
@@ -1483,7 +1483,7 @@ let execute_buffer_action action_name buf =
 % (* ------------------------- *)
 % (* Deleting *)
 % (* ------------------------- *)
-% <<deleting actions>>
+% <deleting actions>
 % (* ------------------------- *)
 % (* Moving (Cut, copy, paste) *)
 % (* ------------------------- *)
@@ -1495,7 +1495,7 @@ let execute_buffer_action action_name buf =
 % (* ------------------------- *)
 % (* Replacing *)
 % (* ------------------------- *)
-% <<replacing actions>>
+% <replacing actions>
 % (* ----------------------------------------------------------- *)
 % (* Searching *)
 % (* ----------------------------------------------------------- *)
@@ -1507,7 +1507,7 @@ let execute_buffer_action action_name buf =
 % (* ----------------------------------------------------------- *)
 % (* External commands *)
 % (* ----------------------------------------------------------- *)
-% <<external command actions>>
+% <external command actions>
 % (* ----------------------------------------------------------- *)
 % (* Buffers/windows/frames *)
 % (* ----------------------------------------------------------- *)
@@ -1522,7 +1522,7 @@ let execute_buffer_action action_name buf =
 % (* ----------------------------------------------------------- *)
 % (* Saving *)
 % (* ----------------------------------------------------------- *)
-% <<saving actions>>
+% <saving actions>
 % (* ----------------------------------------------------------- *)
 % (* Major mode *)
 % (* ----------------------------------------------------------- *)
@@ -1734,7 +1734,7 @@ let binding_option =
                          Options.string_option)
 @
 <<constant [[Simple.key_option]]>>=
-let key_option = Options.define_option_class "Key" value_to_key key_to_value
+let key_option = Options.define_type "Key" value_to_key key_to_value
 @
 % see configuration file library in appendix
 
@@ -1920,7 +1920,8 @@ type 'a t = 'a Store.var
 mutable buf_vars : Store.t;
 @
 % Note that no 'a here! And can contain variables with different type!
-% And can still be typesafe! Magic!
+% And can still be typesafe! Magic! (in fact there is some use of 
+% Obj.magic)
 
 <<[[Efuns.editor]] other fields>>=
 edt_vars : Store.t;
@@ -2031,9 +2032,8 @@ let exec_hooks hooks arg =
   hooks |> List.iter (fun f ->
     try f arg 
     with exn -> 
-       let bt = Printexc.get_backtrace () in
-       Common.pr2 bt;
-       Globals.error "exn in hook: %s" (Common.exn_to_s exn)
+     (* less: could be nice to give names to hooks *)
+     Error.error_exn  "exn in hook" exn
   )
 @
 
@@ -2104,8 +2104,7 @@ let change_buffer_hooks = define_option ["change_buffer_hooks"] ""
 let exec_named_buf_hooks hooks frame =
   hooks |> List.rev |> List.iter (fun action_name ->
     try Action.execute_buffer_action action_name frame 
-    with exn -> 
-      Globals.error "exec_named_buf_hooks: exn = %s" (Common.exn_to_s exn)
+    with exn -> Error.error_exn "exec_named_buf_hooks" exn
   )
 @
 
@@ -2151,7 +2150,8 @@ let _ =
     main () 
   )
 @
-\l remove Common.main_boilerplate for explanation?
+\l remove Common.main_boilerplate for explanation? 
+% provides good services? -profile at least.
 
 
 % init files are not the .efunsrc, but the first set of files to open
@@ -2202,7 +2202,7 @@ Options.filename :=
    with _ -> Filename.concat Utils.homedir ".efunsrc"
   );
 (try Options.init () 
- with exn -> Globals.error "init error, exn = %s" (Common.exn_to_s exn)
+ with exn -> Error.error_exn "init error" exn
 );
 @
 %todo: Right now Options.init is a todo; it should call load() which
@@ -2230,8 +2230,6 @@ let save_options _frame =
 %@
 % can be useful; I use that with Emacs, but because my .emacs
 %  is huge
-
-\section{Arguments processing}
 
 
 %\section{General style parameters}
@@ -2261,7 +2259,7 @@ let font = define_option ["font"] "" string_option "Monospace 20"
 @
 %pad: was fixed; I've found different good fonts for Linux, macOS, and Windows
 
-%\section{Command-line style parameters}
+\section{Arguments processing}
 
 <<constants [[Main.xxx_opt]]>>=
 let width_opt   = ref None
@@ -2290,7 +2288,7 @@ let font_opt    = ref None
 (match !bg_opt     with None -> () | Some color -> background =:= color);
 (match !font_opt   with None -> () | Some color -> Globals.font =:= color);
 @
-
+% could use Common.do_option
 
 
 <<global [[Efuns.displayname]]>>=
@@ -3053,7 +3051,7 @@ let with_new_point text f =
   let p = new_point text in
   Common.finalize (fun () -> f p) (fun () -> remove_point text p)
 @
-
+%pad: I introduced that; it factorizes code and remove some bugs I think
 
 \section{Delta}
 
@@ -3580,6 +3578,11 @@ let make_attr fg bg font highlighted =
 % 8 bits fg, 8 bigs bg, 8 bits font, 1 bit highlight
 % color map = 0 -> black, 1 -> white?
 
+<<constant [[Text.highlight_bit]]>>=
+let highlight_bit = 1 lsl 24
+@
+
+
 <<constant [[Text.direct_attr]]>>=
 let direct_attr =  make_attr 0 1 0 false
 @
@@ -3588,12 +3591,12 @@ let inverse_attr =  make_attr 1 0 0 false
 @
 % let no_attr = 0?
 
+% remember that colors have index and 0 correspond to foreground color
+% and 1 the background color.
+
 % highlight bit dead? just use inverse_attr? could, but different
 % purpose and actually we will use a different color (cyan).
 
-<<constant [[Text.highlight_bit]]>>=
-let highlight_bit = 1 lsl 24
-@
 
 
 <<function [[Text.get_attr]]>>=
@@ -3776,7 +3779,7 @@ let color buf regexp strict attr =
 <<constant [[Main.highlight_color]]>>=
 let highlight_color = define_option ["highlight_color"] "" color_option "cyan"
 @
-% color 2 by convention, see main misc initializations
+% color 2 by convention, see main misc initializations above.
 
 <<constant [[Simple.highlight_bit]]>>=
 @
@@ -4602,8 +4605,8 @@ let read filename local_map =
         let text = Text.read inc in         
         close_in inc; 
         text
-      with _ -> 
-        Globals.error "error reading file %s" filename;
+      with exn -> 
+        Error.error_exn (spf "error reading file %s" filename) exn;
         Text.create ""
     in
     let buf = create filename (Some filename) text local_map in
@@ -4948,8 +4951,10 @@ let rec save_buffers_and_action frame buffers action =
 <<function [[Complex.exit_efuns]]>>=
 let exit frame =
   let buffers = Utils.list_of_hash (Globals.editor()).edt_buffers in
+  let hooks = Var.get_global exit_hooks in
+  Common.pr2_gen hooks;
+  Hook.exec_hooks hooks ();
   Multi_buffers.save_buffers_and_action frame buffers (fun _ -> 
-    (* todo: have some exit hooks? *)
     raise (Common.UnixExit 0)
   )
 [@@interactive]
@@ -5086,7 +5091,7 @@ let install window frame =
 let display top_window frame =
   let (buf, text, point) = buf_text_point frame in
 
-  let width = frame.frm_width - frame.frm_has_scrollbar in
+  let width = frame.frm_width in
   let height = frame.frm_height - frame.frm_has_status_line in
 
   let graphic = Efuns.backend top_window in
@@ -5102,13 +5107,16 @@ let display top_window frame =
 % was called Frame.update, but I prefer Frame.display,
 % to avoid all those update_xxx that are not in the same category
 % (e.g.  update_line, update_table, etc)
+%old:   let width = frame.frm_width - frame.frm_has_scrollbar in
+
 
 \subsubsection{Frame decorations display}
 
-<<[[Efuns.frame]] decoration fields>>=
-(* 0 for no scrollbar, 2 for scrollbar *)
-mutable frm_has_scrollbar : int;
-@
+%old:
+%<<[[Efuns.frame]] decoration fields>>=
+%(* 0 for no scrollbar, 2 for scrollbar *)
+%mutable frm_has_scrollbar : int;
+%@
 
 <<[[Efuns.frame]] decoration fields>>=
 (* 0 for minibuffer, 1 for normal frame *)
@@ -5215,7 +5223,7 @@ if (point > frame.frm_end) || (point < start) then begin
    end
 end;
 
-<<[[Frame.display()]] redraw, scrollbar adjustments>>
+frame.frm_force_start <- false;
 
 frame.frm_last_text_updated <- version text;
 frame.frm_last_buf_updated <- buf.buf_modified;
@@ -5229,6 +5237,8 @@ frame.frm_redraw <- false
 % so then when going back it was not redisplaying!
 % it's because of some past (wrong) refactoring,
 % because before it was 'if (frame.frm_end < point)  || (start > point)'
+%old:
+% <<[[Frame.display()]] redraw, scrollbar adjustments>>
 
 % need to do the first update_table when point outside <frm_start,frm_end>?
 % seems unecessary. Then we could have a proper if then else with
@@ -5824,7 +5834,10 @@ end
 % a bit ugly, could do that instead in the mouse handler?
 
 
-\subsection{Scrollbar}
+%\subsection{Scrollbar}
+
+% minimap is better than scrollbar?
+% not worth the porting effort from original efuns to modern efuns
 
 %semi: have sublime style scrollbar!
 %later: or firefox style with search highlight? or disappearing animation?
@@ -5876,20 +5889,19 @@ let scroll_to_frame ady top_window =
 
 
 
-
-<<[[Frame.display()]] redraw, scrollbar adjustments>>=
-if frame == top_window.top_active_frame then begin
-  frame.frm_force_start <- true; (* AVOID CYCLING IN SCROLLBAR *)
-  let _pos_start = get_position text frame.frm_start in
-  let _pos_end   = get_position text frame.frm_end in
-
-  Common.pr2_once "Frame.display: TODO scrollbar";
-  (*top_window.top_scrollbar#set_params pos_start (pos_end - pos_start) 
-     (size text);
-   *)
-end;
-frame.frm_force_start <- false;
-@
+%old:
+%<<[[Frame.display()]] redraw, scrollbar adjustments>>=
+%if frame == top_window.top_active_frame then begin
+%  frame.frm_force_start <- true; (* AVOID CYCLING IN SCROLLBAR *)
+%  let _pos_start = get_position text frame.frm_start in
+%  let _pos_end   = get_position text frame.frm_end in
+%
+%  Common.pr2_once "Frame.display: TODO scrollbar";
+%  (*top_window.top_scrollbar#set_params pos_start (pos_end - pos_start) 
+%     (size text);
+%   *)
+%end;
+%@
 %todo: how frm_force_start can ever be true? it's true only temporarily
 % so I don't get how the flow can go two times in Frame.display?
 
@@ -7227,8 +7239,9 @@ top_window.top_second_cursor |> Common.do_option (fun frame ->
  | _, None -> ()
  | _::_, Some _ -> ()
  | [], Some frame ->
-     Globals.error "weird, second cursor for %s but no minibuffer"
-       (frame.frm_buffer.buf_name);
+     Error.error 
+      (spf "clean_display: weird, second cursor for %s but no minibuffer"
+       (frame.frm_buffer.buf_name));
      top_window.top_second_cursor <- None
 )
 @
@@ -7519,7 +7532,6 @@ and backward_line frame =
     move_backward frame 1 |> ignore;
     move_to_goal_column frame goal_col;
   end
-[@@interactive]
 @
 %old: was doing also some beginning_of_line when going up,
 % end end_of_line when going down! I prefer
@@ -7541,7 +7553,6 @@ and forward_line frame =
     move_forward frame 1 |> ignore;
     move_to_goal_column frame goal_col;
   end
-[@@interactive]
 @
 %old:
 %    if point_to_end frame = 0 then begin
@@ -7902,6 +7913,7 @@ let insert_return frame =
 let single_char = Bytes.make 1 ' '
 @
 % thread-safe?
+\l probably useless opti now that we use Bytes.to_string anyway?
 
 % basic key bindings -> self_insert_command -> <>
 <<function [[Simple.insert_char]]>>=
@@ -8044,6 +8056,7 @@ let kill_end_of_line frame =
 [ControlMap, Char.code 'y'], Copy_paste.insert_killed;
 [MetaMap, Char.code 'y'], Copy_paste.insert_next_killed;
 [MetaMap, Char.code 'w'], Copy_paste.copy_region;
+[c_x; NormalMap, Char.code 'h'], Copy_paste.mark_whole_buffer;
 @
 %old:
 % <<moving actions>>=
@@ -8436,7 +8449,7 @@ let with_session f text =
 
 \section{Searching}
 
-%later: do like in firefox, display in scrollbar
+%later: do like in firefox, display in a scrollbar or minimap
 % the matched places
 
 <<searching keys>>=
@@ -8792,7 +8805,7 @@ let string_to_regex s = s, Str.regexp s
 
 
 <<constant [[Efuns.regexp_option]]>>=
-let regexp_option = define_option_class "Regexp" 
+let regexp_option = Options.define_type "Regexp" 
     (fun v -> match v with
         Value s ->  string_to_regex s | _ -> raise Not_found)
   (fun (s,_r) -> Value s)
@@ -9579,7 +9592,7 @@ let set_major_mode buf mode =
   buf.buf_major_mode <- mode;
   mode.maj_hooks |> List.iter (fun f -> 
     try f buf 
-    with exn -> Globals.error "set_major_mode: exn = %s" (Common.exn_to_s exn)
+    with exn -> Error.error_exn "set_major_mode" exn
   )
 @
 
@@ -9639,7 +9652,7 @@ let set_buffer_mode buf =
            then Str.matched_group 1 buf.buf_name 
            else buf.buf_name 
          with exn -> 
-           Globals.error "set_buffer_mode: exn = %s" (Common.exn_to_s exn);
+           Error.error_exn "set_buffer_mode" exn;
            buf.buf_name
          )
     | Some file_name -> file_name 
@@ -9662,8 +9675,8 @@ let set_buffer_mode buf =
         with 
         | Exit -> raise Exit
         | exn -> 
-            Globals.error "set_buffer_mode: exn = %s" (Common.exn_to_s exn);
-            raise Exit
+          Error.error_exn "set_buffer_mode" exn;
+          raise Exit
     ) 
   with Exit -> ()
 @
@@ -9890,7 +9903,7 @@ let set_minor_mode buf mode =
   buf.buf_modified <- buf.buf_modified + 1;
   mode.min_hooks |> List.iter (fun f -> 
     try f buf 
-    with exn -> Globals.error "set_minor_mode: exn = %s" (Common.exn_to_s exn)
+    with exn -> Error.error_exn "set_minor_mode" exn
   ) 
 @
 
@@ -10538,17 +10551,21 @@ let start frame_opt =
       let s = Unix.socket PF_UNIX SOCK_STREAM 0 in
 
       if Sys.file_exists socket_name 
-      then Unix.unlink socket_name;
-
-      Unix.bind s (ADDR_UNIX socket_name);
-      Unix.listen s 254;
-      Unix.set_nonblock s;
-      Unix.set_close_on_exec s;
-
-      Concur.add_reader s (fun _ -> 
-        started := true;
-        module_accept s frame_opt
-      );
+      then begin 
+        pr2 (spf "socket file %s already exists; cancelling the server"
+              socket_name);
+        (* alt: unlink here, so if you run multiple efuns, the last one wins*)
+      end else begin
+        Unix.bind s (ADDR_UNIX socket_name);
+        Unix.listen s 254;
+        Unix.set_nonblock s;
+        Unix.set_close_on_exec s;
+        Concur.add_reader s (fun _ -> 
+          started := true;
+          module_accept s frame_opt
+        );
+       Hook.add_hook Misc.exit_hooks (fun () -> Unix.unlink socket_name);
+      end
   )  
 @
 %old:
@@ -11445,13 +11462,14 @@ let _ =
 \section{Logging}
 
 <<function [[Efuns.error]]>>=
-let error fmt x =
-  Printf.printf "error: ";
-  Printf.printf fmt x;
-  Printf.printf "\n"
+let error_exn s exn =
+  let bt = Printexc.get_backtrace () in
+  pr2 (spf "error: %s (exn = %s). backtrace:\n%s" 
+        s (Common.exn_to_s exn) bt);
+  flush stderr
 @
-% this is actually now Globals.error
 % better to not mix print_xxx with printf, so let's use printf everywhere
+%pad: this is actually now Globals.error
 
 
 \section{[[*Messages*]]}
@@ -11765,6 +11783,10 @@ let input = set_input
 
 % options.ml
 % quite important again, you want the editor to be customizable!
+% Could be a chapter before? Configurability?
+% And again it's typed configuration options!
+% The schema/types are defined in the .ml, the config file stores
+% the values.
 
 \section{[[Options]]}
 
@@ -11782,7 +11804,7 @@ Parameter.add_option_parameter Text.add_amount;
 
 <<type [[Simple.parameter]]>>=
 type t = 
- string * ((string -> Obj.t) * (Obj.t -> string) * Obj.t option_record)
+ string * ((string -> Obj.t) * (Obj.t -> string) * Obj.t Options.t)
 @
 
 <<constant [[Simple.parameters_var]]>>=
@@ -11795,9 +11817,9 @@ let parameters_var = Store.create_abstr "parameters"
 <<function [[Simple.add_option_parameter]]>>=
 let add_option_parameter option =
   add_parameter (shortname option)
-   (fun s -> from_value (get_class option) (Value s))
+   (fun s -> from_value (get_type option) (Value s))
    (fun v -> 
-      match to_value (get_class option) v with
+      match to_value (get_type option) v with
         Value s -> s
       | _ -> failwith "Unable to print option"
     ) 
@@ -11806,10 +11828,10 @@ let add_option_parameter option =
 
 <<function [[Simple.add_parameter]]>>=
 let add_parameter (name : string) (input : string -> 'a) 
-  (print : 'a -> string) (param : 'a option_record) =
+  (print : 'a -> string) (param : 'a Options.t) =
   let (input : string -> Obj.t) = Obj.magic input in
   let (print : Obj.t -> string) = Obj.magic print in
-  let (param : Obj.t option_record) = Obj.magic param in
+  let (param : Obj.t Options.t) = Obj.magic param in
   Var.set_global parameters_var (
     (name, (input, print, param)) :: 
     (try Var.get_global parameters_var with _ -> []))
