@@ -298,6 +298,7 @@ but which I ultimately discarded:
 
 %other:
 % - jed (Pixel and then I were using that one at first on Linux)
+% - Rust port of Emacs C part: https://github.com/remacs/remacs
 
 %http://www.jwz.org/doc/emacs-timeline.html
 %multics emacs, history and design:
@@ -2201,7 +2202,7 @@ Options.filename :=
   (try Utils.find_in_path (Utils.homedir :: !!Globals.load_path) ".efunsrc" 
    with _ -> Filename.concat Utils.homedir ".efunsrc"
   );
-(try Options.init () 
+(try Options.load () 
  with exn -> Error.error_exn "init error" exn
 );
 @
@@ -3004,6 +3005,8 @@ let dup_point text point =
   text.text_points <- p :: text.text_points;
   p
 @
+% note that can't do let p = point; we need to allocate a new
+% record because later we use == to remove it.
 
 <<function [[Text.remove_point]]>>=
 let remove_point text p =
@@ -3020,7 +3023,7 @@ let remove_point text p =
 @
 %note: use of == not =
 %note: you should use with_dup_point() if you can, instead of manually using
-% dup_point ; remove_point
+% dup_point ... remove_point
 
 <<function [[Text.goto_point]]>>=
 let goto_point _text p1 p2 =
@@ -3781,8 +3784,9 @@ let highlight_color = define_option ["highlight_color"] "" color_option "cyan"
 @
 % color 2 by convention, see main misc initializations above.
 
-<<constant [[Simple.highlight_bit]]>>=
-@
+%old: See Text.highlight_bit
+%<<constant [[Simple.highlight_bit]]>>=
+%@
 % see also make_attr
 
 % highlight | ??? -> <>
@@ -3835,6 +3839,7 @@ let highlighted = ref None
 
 % Simple.mouse_save_then_kill -> <>
 <<function [[Simple.highlight]]>>=
+(* todo: could move that in mouse.ml? *)
 let highlight frame =
   let frame =
     match !highlighted with
@@ -3884,25 +3889,26 @@ let buf_text_point frame =
 % Top_window.handle_key -> <> 
 % (as hook <- Top_window.handle_key_start_hook <- Highlight._)
 <<function [[Simple.unhightlight]]>>=
-let unhightlight _frame =
+let unhighlight _frame =
   <<[[Simple.unhightlight()]] handle highlighted chars>>
   match !highlighted with
   | None -> ()
   | Some (frame,debut,fin) -> 
      (*   if !keypressed <> XK.xk_Pointer_Drag1 then *)
      highlighted := None;
-     let (buf, text, _) = Frame.buf_text_point frame in
-
+     let (buf, _text, _) = Frame.buf_text_point frame in
+     
+     (* ?? because highlighting code coupled with mouse selection?
+      * todo: move as a unhighlight hook in mouse.ml then?
      Text.with_new_point text (fun curseur ->
      Text.with_new_point text (fun final ->
        Text.set_position text curseur debut;
        Text.set_position text final fin;
-
        let str = Text.region text curseur final in
        Copy_paste.kill_string str;
-       (* ??? WX_xterm.set_cutbuffer xterm str; for interop? *)
-
+       WX_xterm.set_cutbuffer xterm str; for interop? 
      ));
+     *)
      unhightlight_region buf debut fin
 @
 
@@ -3910,7 +3916,7 @@ let unhightlight _frame =
 let _ =
   Hook.add_start_hook (fun () ->
     (* unhighlight region *)
-    Hook.add_hook Top_window.handle_key_start_hook unhightlight;      
+    Hook.add_hook Top_window.handle_key_start_hook unhighlight;      
   )
 @
 
@@ -3920,7 +3926,7 @@ let _ =
 
 
 <<[[Simple.highlight_paren()]] remember highlighted chars>>=
-H.highlighted_chars := (buf,curseur,attr) :: !H.highlighted_chars;
+H.highlighted_chars := (buf,cursor,attr) :: !H.highlighted_chars;
 @
 
 %val highlighted_chars : (Efuns.buffer * Text.point * Text.attribute) list ref
@@ -3930,9 +3936,10 @@ let highlighted_chars = ref []
 % who sets that? highlight_paren!
 
 <<[[Simple.unhightlight()]] handle highlighted chars>>=
-!highlighted_chars |> List.iter (fun (buf,curseur,attr) ->
+!highlighted_chars |> List.iter (fun (buf,curseur,old_attr) ->
   let text = buf.buf_text in
-  Text.set_attr text curseur attr;
+  (* less: could reset highlight bit instead of having to store old_attr *)
+  Text.set_attr text curseur old_attr;
   buf.buf_modified <- buf.buf_modified + 1;
   Text.remove_point text curseur
 );
@@ -4952,7 +4959,6 @@ let rec save_buffers_and_action frame buffers action =
 let exit frame =
   let buffers = Utils.list_of_hash (Globals.editor()).edt_buffers in
   let hooks = Var.get_global exit_hooks in
-  Common.pr2_gen hooks;
   Hook.exec_hooks hooks ();
   Multi_buffers.save_buffers_and_action frame buffers (fun _ -> 
     raise (Common.UnixExit 0)
@@ -10501,16 +10507,13 @@ type command =
 @
 
 <<function [[Server.read_command]]>>=
-let read_command fd frame_opt =
+let read_command fd =
   let inc = in_channel_of_descr fd in
   try
     let cmd = input_value inc in
     match cmd with
     | LoadFile (name, pos, line, str) ->
         let window = 
-          match frame_opt with
-          | Some frame -> frame.frm_window
-          | None -> 
             let edt = Globals.editor () in
             match edt.top_windows with
             | [] -> failwith "no top windows"
@@ -10538,14 +10541,15 @@ let read_command fd frame_opt =
 %old: wrap top_window ...
 
 <<function [[Server.module_accept]]>>=
-let module_accept s frame_opt = 
+let module_accept s = 
   let fd,_ = accept s in
   Unix.set_close_on_exec fd;
-  Concur.add_reader fd (fun _ -> read_command fd frame_opt)
+  Concur.add_reader fd (fun _ -> read_command fd)
 @
 
 <<function [[Server.start]]>>=
-let start frame_opt =
+(* old: this used to take an optional frame but was useless I think *)
+let start () =
   if not !started then
   Utils.catchexn "Efuns server:" (fun _ ->
       let s = Unix.socket PF_UNIX SOCK_STREAM 0 in
@@ -10562,7 +10566,7 @@ let start frame_opt =
         Unix.set_close_on_exec s;
         Concur.add_reader s (fun _ -> 
           started := true;
-          module_accept s frame_opt
+          module_accept s
         );
        Hook.add_hook Misc.exit_hooks (fun () -> Unix.unlink socket_name);
       end
@@ -11986,21 +11990,19 @@ let find_matching frame =
 
 <<toplevel [[Paren_mode._1]]>>=
 let _ = 
-  (* alt: we could use a major mode var that specifies what is a
-   * parenthesis.
-   *)
-  (* TODO disabled for now because lead to buggy display and exns *)
-  [(* ')'; '}'; ']' *)] |> List.iter (fun key -> 
-    Keymap.add_binding mode.min_map [NormalMap, Char.code key] find_matching
+  (* alt: we could use a major mode var that specifies what is a parenthesis *)
+  [')'; '}'; ']'] |> List.iter (fun key -> 
+    Keymap.add_minor_key mode [NormalMap, Char.code key] find_matching
   )
 @
 
 %todo: do also a show_paren mode? so when hover paren it highlights the
 % matching one
 
-<<toplevel [[Paren_mode._2]]>>=
-let _ = 
-  Action.define_action "paren_mode" (Minor_modes.toggle_minor mode)
+<<function [[Paren_mode.paren_mode]]>>=
+let paren_mode = 
+  Minor_modes.toggle_minor mode
+[@@interactive]
 @
 
 
@@ -12020,46 +12022,55 @@ let is_paren_begin c = (c == '{') || (c == '[') || (c == '(')
 
 % Paren_mode.find_matching | Abbrevs_mode.find_matching -> <>
 <<function [[Simple.highlight_paren]]>>=
-(* TODO: this is buggy! it leads to some out_of_bound exn in
- * the unhiglight hook run after every key; highlighted_chars
- * is wrong.
- *)
 let highlight_paren frame =
   let (buf, text, point) = Frame.buf_text_point frame in
 
   <<[[Simple.highlight_paren()]] special code for HTML modes>>
 
-  Text.with_dup_point text point (fun curseur ->
-  if Text.bmove_res text curseur 1 = 0 
-  then ()
-  else
-  let c = Text.get_char text curseur in
-  (* right now highlighting only when type a closing paren *)
-  if not (is_paren_end c) 
-  then ()
-  else
-  let rec iter stack =
-    if Text.bmove_res text curseur 1 = 0 
-    then Top_window.mini_message frame "No matching parenthesis"
-    else
-    let d = Text.get_char text curseur in
-    if is_paren_end d 
-    then iter (d :: stack)
-    else
-    if is_paren_begin d 
-    then
-      match stack with
-      | [] -> (* found matching par *)
-          let attr = Text.get_attr text curseur in
-          <<[[Simple.highlight_paren()]] remember highlighted chars>>
-          Text.set_attr text curseur (attr lor Text.highlight_bit);
-          buf.buf_modified <- buf.buf_modified + 1
-      | _ :: stack -> (* don't try to match *)
-          iter stack
-    else iter stack
-  in
-  iter []
-  )
+  (* bugfix: I was using Text.with_dup_point but we must store cursor
+   * in highlighted_chars, which then was causing some out_of_bound exn
+   * when exciting efuns, and also some weird display bugs,
+   * because remove_point was putting some -1 in cursor!
+   *)
+  let cursor = Text.dup_point text point in
+  try
+    (* no previous char (this should never happen when called from
+     * find_matching) *)
+    if Text.bmove_res text cursor 1 = 0 
+    then raise Exit;
+  
+    let c = Text.get_char text cursor in
+    (* right now we highlight only when you type a closing paren *)
+    if not (is_paren_end c) 
+    then raise Exit;
+  
+    let rec iter stack =
+      if Text.bmove_res text cursor 1 = 0 
+      then begin 
+        Top_window.mini_message frame "No matching parenthesis";
+        raise Exit
+      end;
+  
+      let d = Text.get_char text cursor in
+      if is_paren_end d 
+      then iter (d :: stack)
+      else
+        if is_paren_begin d 
+        then
+          match stack with
+          | [] -> (* found matching par *)
+            let attr = Text.get_attr text cursor in
+            <<[[Simple.highlight_paren()]] remember highlighted chars>>
+            Text.set_attr text cursor (attr lor Text.highlight_bit);
+            buf.buf_modified <- buf.buf_modified + 1
+          | _c :: stack -> (* don't try to match *)
+            (* we could check they are matching chars (like '{' with '}') *)
+            iter stack
+        else iter stack
+    in
+    iter []
+  with Exit ->
+   Text.remove_point text cursor
 @
 
 
