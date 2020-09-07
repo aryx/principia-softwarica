@@ -132,7 +132,7 @@ you fully understand how things work under the hood, and
 %
 the editor is probably the tool a programmer uses the most.
 
-Even if kernels and compilers are essential to run and produce programs,
+Even if the kernel and compiler are essential to run and produce programs,
 and are the subjects of many textbooks, 
 the text editor is also an essential program. Indeed,
 The source code of almost all programs, including kernels and compilers,
@@ -270,7 +270,7 @@ Which data structure is used?
 %Design and implementation of a win32 text editor:
 % http://www.catch22.net/tuts/neatpad
 
-%\subsection{Other Emacs-like editors}
+\section{Other Emacs-like editors}
 
 Here are a few Emacs clones that I considered for this book,
 but which I ultimately discarded:
@@ -633,7 +633,8 @@ type line = {
 % position2! see Text.set_position! many apis are taking position!
 %  but internally Text manipulates position2
 %  but need to delay explanation when will explain the gap
-%less: position_user vs position_with_gap? positiong? position_intern?
+%less: position_user vs position_with_gap? positiong? position_intern? 
+% raw_position?
 %less: rename position here to bol (because now confusing anyway to
 % have position: position2)
 
@@ -1556,6 +1557,7 @@ let execute_buffer_action action_name buf =
 
 \section{[[Keymap.t]]}
 
+%trans:
 % have seen ocaml code corresponding to actions
 % but how trigger those actions? via keyboard! binding!
 
@@ -1574,6 +1576,7 @@ let execute_buffer_action action_name buf =
 % - major mode
 % - minor mode
 % - buffer itself (useful for dynamic setting of keys e.g. C-g in minibuffer)
+%
 % good so that each mode can redefine bindings! specialized mode!
 % specialized keys! For instance when TAB to offer completion
 % in minibuffer mode, or semantic completion in C buffer, or just
@@ -1602,10 +1605,6 @@ type t = Efuns.map
 and key = mod_ident * keySym
 @
 
-<<type [[Efuns.keys]]>>=
-and keys = key list
-@
-
 <<type [[Efuns.mod_ident]]>>=
 and mod_ident = 
   NormalMap
@@ -1622,6 +1621,12 @@ and keySym = int
 % keySym = int (could be a Rune in plan9!)
 
 
+
+<<type [[Efuns.keys]]>>=
+and keys = key list
+@
+
+
 <<type [[Efuns.binding]]>>=
 and binding = 
   Function of action
@@ -1629,6 +1634,7 @@ and binding =
 | Unbound
 @
 % mutually recursive type! find map again
+
 %less: need Prefix? could just each time gives the full list?
 % or it's convenient if want to rebind a big set of keys to another
 % prefix?
@@ -3556,7 +3562,7 @@ type attribute = int
 @
 % int, because need to be efficient!
 % attribute is an encoded int, 
-% direct_attr = black fg, white bg, no highlight regular font. 
+% direct_attr (below) = black fg, white bg, no highlight regular font. 
 % Want efficient representation here because each
 % character will have this attribute.
 %old: was used only in .mli before, but now I used it
@@ -3790,8 +3796,8 @@ let highlight_color = define_option ["highlight_color"] "" color_option "cyan"
 % see also make_attr
 
 % highlight | ??? -> <>
-<<function [[Simple.hightlight_region]]>>=
-let hightlight_region buf debut fin =
+<<function [[Simple.highlight_region]]>>=
+let highlight_region buf debut fin =
   let text = buf.buf_text in
   Text.with_new_point text (fun curseur ->
   Text.with_new_point text (fun final ->
@@ -3808,8 +3814,8 @@ let hightlight_region buf debut fin =
 %todo: have Text.iter_range_pos ?
 
 % unhighlight -> <>
-<<function [[Simple.unhightlight_region]]>>=
-let unhightlight_region buf debut fin =
+<<function [[Simple.unhighlight_region]]>>=
+let unhighlight_region buf debut fin =
   let text = buf.buf_text in
   Text.with_new_point text (fun curseur ->
   Text.with_new_point text (fun final ->
@@ -3833,16 +3839,15 @@ let unhightlight_region buf debut fin =
 
 %val highlighted : (Efuns.frame * Text.position * Text.position) option ref
 <<constant [[Simple.highlighted]]>>=
-(* hightlighting of regions *)  
+(* hightlighting of a region *)  
 let highlighted = ref None
 @
 
 % Simple.mouse_save_then_kill -> <>
 <<function [[Simple.highlight]]>>=
-(* todo: could move that in mouse.ml? *)
 let highlight frame =
   let frame =
-    match !highlighted with
+    match !H.highlighted with
     | None -> frame
     | Some (frame, _d, _f) -> frame
   in    
@@ -3856,13 +3861,13 @@ let highlight frame =
   let pos1 = Text.get_position text pt_debut in
   let pos2 = Text.get_position text pt_fin in
   let pos_debut_to_hl, pos_fin_to_hl =
-    match !highlighted with
+    match !H.highlighted with
     | None -> pos1, pos2
     | Some (_frame, d, f) ->
         if pos1 > d
-        then unhightlight_region buf d pos1; 
+        then H.unhighlight_region buf d pos1; 
         if pos2 < f
-        then unhightlight_region buf pos2 f;
+        then H.unhighlight_region buf pos2 f;
         if pos1 < d 
         then pos1, d
         else
@@ -3870,8 +3875,8 @@ let highlight frame =
           then f, pos2
           else pos1, pos1
   in
-  highlighted := Some (frame, pos1, pos2);
-  hightlight_region buf pos_debut_to_hl pos_fin_to_hl
+  H.highlighted := Some (frame, pos1, pos2);
+  H.highlight_region buf pos_debut_to_hl pos_fin_to_hl
 @
 % was using debut/fin for some position and some position2, so confusing
 %less: useful this opti? can't just unhighlight the min/max and then rehighlight
@@ -3888,34 +3893,22 @@ let buf_text_point frame =
 
 % Top_window.handle_key -> <> 
 % (as hook <- Top_window.handle_key_start_hook <- Highlight._)
-<<function [[Simple.unhightlight]]>>=
+<<function [[Simple.unhighlight]]>>=
 let unhighlight _frame =
-  <<[[Simple.unhightlight()]] handle highlighted chars>>
+  <<[[Simple.unhighlight()]] handle highlighted chars>>
   match !highlighted with
   | None -> ()
   | Some (frame,debut,fin) -> 
      (*   if !keypressed <> XK.xk_Pointer_Drag1 then *)
      highlighted := None;
-     let (buf, _text, _) = Frame.buf_text_point frame in
-     
-     (* ?? because highlighting code coupled with mouse selection?
-      * todo: move as a unhighlight hook in mouse.ml then?
-     Text.with_new_point text (fun curseur ->
-     Text.with_new_point text (fun final ->
-       Text.set_position text curseur debut;
-       Text.set_position text final fin;
-       let str = Text.region text curseur final in
-       Copy_paste.kill_string str;
-       WX_xterm.set_cutbuffer xterm str; for interop? 
-     ));
-     *)
-     unhightlight_region buf debut fin
+     let (buf, text, _) = Frame.buf_text_point frame in
+     Hook.exec_hooks (Var.get_global unhighlight_hook) (text, debut, fin);
+     unhighlight_region buf debut fin
 @
 
 <<toplevel [[Highlight]] starting hook>>=
 let _ =
   Hook.add_start_hook (fun () ->
-    (* unhighlight region *)
     Hook.add_hook Top_window.handle_key_start_hook unhighlight;      
   )
 @
@@ -3935,7 +3928,7 @@ let highlighted_chars = ref []
 @
 % who sets that? highlight_paren!
 
-<<[[Simple.unhightlight()]] handle highlighted chars>>=
+<<[[Simple.unhighlight()]] handle highlighted chars>>=
 !highlighted_chars |> List.iter (fun (buf,curseur,old_attr) ->
   let text = buf.buf_text in
   (* less: could reset highlight bit instead of having to store old_attr *)
@@ -6015,11 +6008,11 @@ and status_info =
 
 <<constant [[Frame.status_format]]>>=
 let status_format = ref [
-    StatModified , (1, 2);
+    StatModified, (1, 2);
     StatName, (5, 20);
     StatMode, (30,30);
     StatLine, (65, 5);
-    StatCol, (70 , 5);
+    StatCol, (70, 5);
     StatFile, (35,15);
   ]
 @
@@ -6123,7 +6116,7 @@ let str = spf "-%s- %s  %s L%-6d (%s) --"
   (Text.point_line text point + 1)
   (let xs = buf.buf_minor_modes |> List.map (fun m -> m.min_name) in
    let xs = buf.buf_major_mode.maj_name :: xs in
-   xs +> Common.join " "
+   xs |> Common.join " "
   )
 in
 let minuses = String.make 256 '-' in
@@ -6779,6 +6772,7 @@ then raise Not_found;
 let _ =
   Hook.add_start_hook (fun () ->
     Keymap.add_global_key [NormalMap, XK.xk_Pointer_Drag1] mouse_drag_region;
+    Hook.add_hook Highlight.unhighlight_hook unhighlight_hook;
   )
 @
 % why not put instead in this chunk?
@@ -10263,12 +10257,14 @@ let grep frame =
             then Multi_frames.cut_frame frame
             else new_frame.frm_window 
       in
-      let comp_frame = System.start_command cdir "*Grep*" comp_window cmd None
+      let comp_frame = System.start_command cdir "*Grep*" comp_window cmd 
+         (Some (fun buf _status -> color_buffer buf))
       in
-      Frame.active frame;
+      Frame.active frame; 
       let buf = comp_frame.frm_buffer in
       let error_point = Text.new_point buf.buf_text in
       compilation_frame := Some (comp_frame, error_point, cdir)
+      (* todo? no set major mode? *)
   )
 [@@interactive]
 @
@@ -10333,10 +10329,12 @@ let compile frame =
             then Multi_frames.cut_frame frame
             else new_frame.frm_window 
       in
+      (* this makes also comp_frame the active frame *)
       let comp_frame = 
         System.start_command cdir "*Compile*" comp_window cmd 
         (Some (fun buf _status -> color_buffer buf))
       in
+      (* switch back cursor to original frame *)
       Frame.active frame;
       let buf = comp_frame.frm_buffer in
       let error_point = Text.new_point buf.buf_text in
@@ -10359,6 +10357,7 @@ let compile frame =
          Var.set_local buf find_error_error_regexp x
        with Not_found | Failure _ -> ()
       );
+      (* set major mode *)
       Ebuffer.set_major_mode buf mode
 
   )
@@ -10383,10 +10382,13 @@ let compile_find_makefile = define_option ["compil";"find_makefile"] ""
 @
 
 <<[[Compil.compile()]] find possibly cdir with a makefile>>=
-let cdir = 
-  if !!compile_find_makefile then
-    if cmd =~ "^make"
-    then
+let cdir, cmd = 
+  match () with
+  | _ when cmd =~ "^cd +\\([^;]+\\);\\(.*\\)$" ->
+      let (dir, cmd) = Common.matched2 cmd in
+      let finaldir = expand_tilde dir in
+      finaldir, cmd
+  | _ when !!compile_find_makefile && cmd =~ "^make" ->
     (* try to find a Makefile in the directory *)
       let rec iter dir =
         if Sys.file_exists (Filename.concat dir "Makefile") ||
@@ -10399,9 +10401,8 @@ let cdir =
           then cdir 
           else iter newdir
       in
-      iter cdir
-    else cdir
-  else cdir
+      iter cdir, cmd
+  | _ -> cdir, cmd
 in
 @
 
@@ -10433,16 +10434,7 @@ let next_error top_frame =
       then Frame.unkill (Multi_frames.cut_frame top_frame) frame;
 
       let (buf, text, point) = Frame.buf_text_point frame in
-      let find_error = 
-        try Var.get_var buf find_error
-        with Not_found | Failure _ -> 
-          let re = 
-            try Var.get_var buf find_error_location_regexp
-            with Not_found | Failure _ ->
-              snd !!c_error_regexp
-          in
-          find_error_gen re
-      in
+      let find_error = find_error_of_buf buf in
       try
         let error = find_error text error_point in
         Text.set_position text frame.frm_start error.err_msg;

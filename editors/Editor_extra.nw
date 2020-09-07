@@ -1,6 +1,7 @@
 \section{TODO}
 
-%TODO: to lpize
+%TODO: to lpize 
+% (make pdf complains about those files if they are not listed here)
 <<graphics/xtypes.ml>>=
 @
 <<graphics/xdraw.ml>>=
@@ -183,7 +184,7 @@ open Options
 (* A parameter is an option that can be interactively get or set.
  * See Interactive.get_parameter and set_parameter.
  *
- * alt: use Options.options global and make all options parameters?
+ * alt: use the Options.options global and make all options parameters?
  * no need then for parameters_var below and the redundant Parameter.t
  *)
 
@@ -1760,7 +1761,8 @@ let color a b c d = Common.profile_code "Simple.color"
 let color_func = Store.create_abstr "Color.color_func"
 
 (* alt: 
- *  - recolorize after save automatically
+ *  - recolorize after save automatically (which I do for 
+ *    most pfff modes via Ebuffer.saved_buffer_hooks)
  *  - per-major-mode interactive M-x color_buffer (but I removed support
  *    for this)
  *)
@@ -1837,17 +1839,16 @@ open Efuns
 <<copyright header efuns>>
 open Efuns
 
-<<function [[Simple.unhightlight_region]]>>
+<<function [[Simple.unhighlight_region]]>>
 
-<<function [[Simple.hightlight_region]]>>
+<<function [[Simple.highlight_region]]>>
 
 <<constant [[Simple.highlighted]]>>
 <<constant [[Simple.highlighted_chars]]>>
+let unhighlight_hook = Store.create_abstr "unhighlight_hook"
 
-<<function [[Simple.unhightlight]]>>
+<<function [[Simple.unhighlight]]>>
   
-<<function [[Simple.highlight]]>>
-
 <<toplevel [[Highlight]] starting hook>>
 @
 
@@ -1860,6 +1861,20 @@ open Efuns
 <<features/mouse.ml>>=
 <<copyright header efuns>>
 open Efuns
+module H = Highlight
+
+<<function [[Simple.highlight]]>>
+
+let unhighlight_hook (text, debut, fin) =
+  Text.with_new_point text (fun curseur ->
+  Text.with_new_point text (fun final ->
+    Text.set_position text curseur debut;
+    Text.set_position text final fin;
+    let str = Text.region text curseur final in
+    Copy_paste.kill_string str;
+    (* TODO WX_xterm.set_cutbuffer xterm str; for interop?  *)
+  ))
+
 
 <<function [[Simple.mouse_drag_region]]>>
 
@@ -2776,27 +2791,77 @@ open Common
 open Options
 open Efuns
 
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(*
+ * todo:
+ *  - handle return on an error!
+ *  - factorize code between compil and grep
+ *)
+
+(*****************************************************************************)
+(* Types and globals *)
+(*****************************************************************************)
+
 <<constant [[Compil.compilation_frame]]>>
 
 <<type [[Compil.error]]>>
 
 type find_error_fun = Text.t -> Text.point -> error
 
+(*****************************************************************************)
+(* Helpers *)
+(*****************************************************************************)
+
 <<constant [[Compil.c_error_regexp]]>>
 
 <<function [[Compil.c_find_error]]>>
+
+(* apparently the Core Filename module has an expand function doing that *)
+let expand_tilde s =
+  if s =~ "^~/\\(.*\\)$"
+  then
+    let rest = Common.matched1 s in
+    Filename.concat (Sys.getenv "HOME") rest
+  else s
+
+(*****************************************************************************)
+(* More vars *)
+(*****************************************************************************)
 
 <<constant [[Compil.find_error]]>>
 
 let find_error_location_regexp = Store.create_abstr "find_error_loc_regexp"
 
-let find_error_error_regexp = Store.create_abstr "find_error_err_regexp"
+let find_error_of_buf buf = 
+  try Var.get_var buf find_error
+  with Not_found | Failure _ -> 
+     let re = 
+        try Var.get_var buf find_error_location_regexp
+        with Not_found | Failure _ -> snd !!c_error_regexp
+     in
+     find_error_gen re
+
+(*****************************************************************************)
+(* M-x next_error *)
+(*****************************************************************************)
   
 <<function [[Compil.next_error]]>>
+
+(*****************************************************************************)
+(* Options *)
+(*****************************************************************************)
 
 <<constant [[Compil.compile_find_makefile]]>>
   
 <<constant [[Compil.make_command]]>>
+
+(*****************************************************************************)
+(* Colors *)
+(*****************************************************************************)
+
+let find_error_error_regexp = Store.create_abstr "find_error_err_regexp"
 
 let color_buffer buf =
   Dircolors.colorize_buffer buf;
@@ -2816,14 +2881,22 @@ let color_buffer buf =
     (Text.make_attr (Attr.get_color "red") 1 0 false);
   ()
 
+(*****************************************************************************)
+(* The mode *)
+(*****************************************************************************)
   
-let mode = Ebuffer.new_major_mode "Compilation" 
-  (Some (fun buf ->
-    color_buffer buf
-   ))
+let mode = Ebuffer.new_major_mode "Compilation"  None
+
+(*****************************************************************************)
+(* M-x compile *)
+(*****************************************************************************)
   
 <<constant [[Compil.make_hist]]>>
 <<function [[Compil.compile]]>>
+
+(*****************************************************************************)
+(* M-x grep *)
+(*****************************************************************************)
 
 <<constant [[Compil.grep_command]]>>
   
