@@ -1,14 +1,10 @@
-TOP=..
-
-DIRS=misc samterm sam acme
-
-<$TOP/mkfiles/mkdirs
-
-#-----------------------------------------------------------------------------
+# Mostly a copy of mkfile
+# I use a Makefile for efuns because my mk/rc is currently broken
+# because kencc/bin/rc is compiled for 32 bits and I have no time to fix it
 
 SYNCFLAGS=-md5sum_in_auxfile -less_marks -lang ocaml
 
-VERSION=4
+VERSION=5
 DOC=Editor
 
 SRC_ORIG=Editor.nw Editor_extra.nw
@@ -83,20 +79,7 @@ SRC= \
   todo/misc/efuns_filebrowser.ml\
   todo/misc/efuns_texbrowser.ml\
 
-SRC_VIEWS=${SRC:%=$EFUNS/%}
+SRC_VIEWS=$(SRC:%=$(EFUNS)/%)
 
-<$TOP/docs/latex/mkcommon
+include ~/semgrep-internals/Makefile.common
 
-#TODO: lpize the .ml and modules mentioned below in the grep -v
-index:V:
-	$INDEXER -lang cmt $EFUNS \
-    | sed -e 's#main.cmt#Main#' \
-    | grep -v 'Common.=~' \
-    | grep -v 'Options.=:=' \
-    | grep -v 'Xtypes|Xdraw|Str2|xK.ml|graphics_efuns.ml' \
-    | grep -v 'utils.ml|options.ml|log.ml|concur.ml' \
-    | grep -v 'tex_mode.ml|org_mode.ml|html_mode.ml' \
-    | grep -v 'pl_colors.ml|ocaml_mode.ml|lisp_mode.ml|c_mode.ml' \
-    | grep -v 'shell.ml|outline_mode.ml|buffer_menu.ml|dircolors.ml' \
-    | grep -v 'pad.ml' \
-    > defs_and_uses.list
