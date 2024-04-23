@@ -530,7 +530,7 @@ and automata_move =
 type lexbuf =
   { refill_buff : lexbuf -> unit;
 
-    mutable lex_buffer : string;
+    mutable lex_buffer : bytes;
     mutable lex_buffer_len : int;
 
     mutable lex_abs_pos : int;
@@ -649,6 +649,7 @@ val output_lexdef:
 (* The lexical analyzer for lexer definitions. Bootstrapped! *)
 
 {
+open Stdcompat (* for Bytes *)
 open Ast
 open Parser
 
@@ -846,7 +847,7 @@ and comment = parse
 % actually that's what they do in recent ocamllex
 
 <<Lexer helper functions and globals>>=
-let initial_string_buffer = String.create 256
+let initial_string_buffer = Bytes.create 256
 let string_buff = ref initial_string_buffer
 let string_index = ref 0
 @
@@ -859,7 +860,7 @@ let reset_string_buffer () =
 
 <<Lexer helper functions and globals>>=
 let get_stored_string () =
-  String.sub !string_buff 0 !string_index
+  Bytes.sub_string !string_buff 0 !string_index
 @
 
 
@@ -888,12 +889,12 @@ and string = parse
 
 <<Lexer helper functions and globals>>=
 let store_string_char c =
-  if !string_index >= String.length !string_buff then begin
-    let new_buff = String.create (String.length !string_buff * 2) in
-    String.blit !string_buff 0 new_buff 0 (String.length !string_buff);
+  if !string_index >= Bytes.length !string_buff then begin
+    let new_buff = Bytes.create (Bytes.length !string_buff * 2) in
+    Bytes.blit !string_buff 0 new_buff 0 (Bytes.length !string_buff);
     string_buff := new_buff
   end;
-  !string_buff.[!string_index] <- c;
+  Bytes.set !string_buff !string_index c;
   incr string_index
 @
 
@@ -1476,7 +1477,7 @@ let encode_lexentries charsets lexentries =
   let states = 
     map_on_all_states (fun st -> translate_state charsets follow st) 
   in
-  let transitions = Array.create !next_state_num (Perform 0) in
+  let transitions = Array.make !next_state_num (Perform 0) in
   states |> List.iter (fun (act, i) -> transitions.(i) <- act);
   (automata_entries, transitions)
 @
@@ -1582,14 +1583,14 @@ let no_action = (max_int: action_id)
 % why 257? 0-255 for chars, then 256 for eof! so length = 257.
 <<function [[Lexgen.transition_from]]>>=
 let transition_from charsets follow pos_set = 
-  let tr    = Array.create (Ast.charset_size + 1) Set.empty in
+  let tr    = Array.make (Ast.charset_size + 1) Set.empty in
   pos_set |> List.iter (fun pos ->
      charsets.(pos) |> List.iter (fun c ->
            tr.(c) <- Set.union tr.(c) follow.(pos)
       )
   );
 
-  let shift = Array.create (Ast.charset_size + 1) Backtrack in
+  let shift = Array.make (Ast.charset_size + 1) Backtrack in
   for i = 0 to Ast.charset_size do
     shift.(i) <- goto_state tr.(i)
   done;
@@ -1607,7 +1608,7 @@ let goto_state st =
 
 <<function [[Lexgen.followpos]]>>=
 let followpos size_charsets entries =
-  let v = Array.create size_charsets Set.empty in
+  let v = Array.make size_charsets Set.empty in
   let fill_pos first = function
       OnChars pos -> v.(pos) <- Set.union first v.(pos)
     | ToAction _  -> () 
@@ -1769,7 +1770,7 @@ let copy_chunk ic oc (Location(start,stop)) =
 <<constant [[Output.copy_buffer]]>>=
 (* To copy the ML code fragments *)
 
-let copy_buffer = String.create 1024
+let copy_buffer = Bytes.create 1024
 @
 
 
@@ -3228,7 +3229,7 @@ let output_parser def env lrtables ic oc =
 
 \subsection{Text extraction}
 <<constant [[Output.copy_buffer]](yacc)>>=
-let copy_buffer = String.create 1024
+let copy_buffer = Bytes.create 1024
 @
 
 <<function [[Output.get_chunk]](yacc)>>=
@@ -3239,7 +3240,7 @@ let get_chunk ic (Location(start,stop)) =
   let n = ref (stop - start) in
   while !n > 0 do
     let m = input ic copy_buffer 0 (min !n 1024) in
-    Buffer.add_string buf (String.sub copy_buffer 0 m);
+    Buffer.add_string buf (Bytes.sub_string copy_buffer 0 m);
     n := !n - m
   done;
   Buffer.contents buf
@@ -3259,20 +3260,20 @@ let copy_chunk ic oc (Location(start,stop)) =
 \subsection{Dollar substitutions}
 
 <<function [[Output.replace_dollar_underscore]](yacc)>>=
-(* actually does the replacment in place 
- * less: we could use Str instead, but this adds a dependency.
+(* less: we could use Str instead, but this adds a dependency.
  *  Str.global_replace (Str.regexp_string "$") "_" s
  *)
 let replace_dollar_underscore s =
+  let buf = Bytes.of_string s in
   let rec aux startpos =
     try
-      let idx = String.index_from s startpos '$' in
-      String.set s idx '_';
+      let idx = Bytes.index_from buf startpos '$' in
+      Bytes.set buf idx '_';
       aux (idx+1)
     with Not_found -> ()
   in
   aux 0;
-  s
+  Bytes.to_string buf
 @
 
 
@@ -3507,9 +3508,9 @@ val compact_tables: Lexgen.automata_matrix -> lex_tables
 let compact_tables state_v =
   let n = Array.length state_v in
 
-  let base = Array.create n 0 in
-  let backtrk = Array.create n (-1) in
-  let default = Array.create n 0 in
+  let base = Array.make n 0 in
+  let backtrk = Array.make n (-1) in
+  let default = Array.make n 0 in
 
 
   for i = 0 to n - 1 do
@@ -3534,10 +3535,10 @@ let compact_tables state_v =
 @
 
 <<global [[Compact.trans]]>>=
-let trans = ref(Array.create 1024 0)
+let trans = ref(Array.make 1024 0)
 @
 <<global [[Compact.check]]>>=
-let check = ref(Array.create 1024 (-1))
+let check = ref(Array.make 1024 (-1))
 @
 <<global [[Compact.last_used]]>>=
 let last_used = ref 0
@@ -3548,7 +3549,7 @@ let last_used = ref 0
 
 <<function [[Compact.pack_moves]]>>=
 let pack_moves state_num move_t =
-  let move_v = Array.create 257 0 in
+  let move_v = Array.make 257 0 in
   for i = 0 to 256 do
     move_v.(i) <-
       (match move_t.(i) with
@@ -3629,9 +3630,9 @@ let grow_transitions () =
   let old_trans = !trans
   and old_check = !check in
   let n = Array.length old_trans in
-  trans := Array.create (2*n) 0;
+  trans := Array.make (2*n) 0;
   Array.blit old_trans 0 !trans 0 !last_used;
-  check := Array.create (2*n) (-1);
+  check := Array.make (2*n) (-1);
   Array.blit old_check 0 !check 0 !last_used
 @
 
@@ -3733,7 +3734,7 @@ let string_of_symbol s =
    * way so it's easier to compare what we generate with what
    * the dragon book says we should generate
    *)
-  | Nonterm (NT s) -> String.uppercase s
+  | Nonterm (NT s) -> String.uppercase_ascii s
   | Term (T s) ->
     (match s with
     (* special cases for arith.mly and tests.ml grammar toy examples *)
@@ -3742,7 +3743,7 @@ let string_of_symbol s =
     | "TOPAR" -> "("
     | "TCPAR" -> ")"
 
-    | _ -> String.lowercase s
+    | _ -> String.lowercase_ascii s
     )
 @
 
