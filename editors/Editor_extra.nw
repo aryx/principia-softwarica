@@ -299,12 +299,11 @@ type name = Efuns.action_name
 
 <<core/error.ml>>=
 open Common
-module PI = Parse_info
 
 <<function [[Efuns.error]]>>
 
 let error s =
-  pr2 (spf "error: %s" s);
+  UCommon.pr2 (spf "error: %s" s);
   flush stderr
 @
 
@@ -531,8 +530,6 @@ open Options
 <<function [[Text.point_col]]>>
 
 <<function [[Text.find_line_of_pos]]>>
-let find_line_of_pos a b =
-  Common.profile_code "Text.find_line_of_pos" (fun () -> find_line_of_pos a b)
 
 <<function [[Text.point_line]]>>
 
@@ -568,13 +565,9 @@ let find_line_of_pos a b =
 (*****************************************************************************)
 
 <<function [[Text.move_gpoint_to]]>>
-let move_gpoint_to a b = Common.profile_code "Text.move_gpoint_to"
-  (fun () -> move_gpoint_to a b)
 
 <<constant [[Text.add_amount]]>>
 <<function [[Text.extend_gap]]>>
-let extend_gap a b = Common.profile_code "Text.extend_gap"
-  (fun () -> extend_gap a b)
 
 (*****************************************************************************)
 (* Low level insert/delete *)
@@ -758,8 +751,6 @@ let iter buf debut fin =
 <<type [[Text.charreprs]]>>
 
 <<function [[Text.compute_representation]]>>
-let compute_representation a b c = Common.profile_code "Text.compute_repr"
-  (fun () -> compute_representation a b c)
 
 (*****************************************************************************)
 (* Point_to_xxx  *)
@@ -1308,12 +1299,8 @@ open Text (* for the line fields *)
 <<function [[Frame.set_cursor]]>>
 
 <<function [[Frame.update_table]]>>
-let update_table a = Common.profile_code "Frame.update_table"
-  (fun () -> update_table a)
 
 <<function [[Frame.display]]>>
-let display a = Common.profile_code "Frame.display"
-  (fun () -> display a)
 
 (*****************************************************************************)
 (* Misc  *)
@@ -1785,8 +1772,6 @@ open Efuns
 (*****************************************************************************)
 
 <<function [[Simple.color]]>>
-let color a b c d = Common.profile_code "Simple.color" 
-  (fun () -> color a b c d)
 
 (*****************************************************************************)
 (* Per-mode colorization  *)
@@ -2044,7 +2029,7 @@ let find_completion_frame _frame =
 
 <<function [[Select.display_completions]]>>=
 let display_completions frame list =
-  if list = [] 
+  if list =*= [] 
   then Message.message frame "No Completions"
   else
     let rec iter list s =
@@ -2104,7 +2089,7 @@ let remove_completions frame =
 let set_history map string history =
   let current = ref 0 in
   Keymap.add_binding map [NormalMap, XK.xk_Up] (fun mini_frame ->
-    if !current = List.length !history 
+    if !current =|= List.length !history 
     then Top_window.mini_message mini_frame "No previous line in history"
     else begin
       let ele = Utils.list_nth !current !history in
@@ -2161,7 +2146,7 @@ let dont_complete_regexps = ref ([],Str.regexp "")
 <<function [[Select.dont_complete_regexp]]>>=
 let dont_complete_regexp () =
   let (old,reg) = !dont_complete_regexps in
-  if old == !!dont_complete 
+  if Common.phys_equal old !!dont_complete 
   then reg
   else
     let reg = Str2.regexp_from_list !!dont_complete in
@@ -2178,7 +2163,7 @@ let avoid_completion s =
 <<function [[Select.is_userdir]]>>=
 let is_userdir string =
   let n = String.length string in
-  (n > 1) && (string.[0] = '~') &&
+  (n > 1) && (string.[0] =$= '~') &&
   (try
       String.rindex string '/' |> ignore;
       false
@@ -2202,7 +2187,7 @@ let complete_filename frame good_file filename =
       | Unix.S_DIR -> file ^ "/"
       | _ -> file
     with exn -> 
-      pr2 (spf "complete_filename: exn = %s" (Common.exn_to_s exn));
+      UCommon.pr2 (spf "complete_filename: exn = %s" (Common.exn_to_s exn));
       file
   )
   in
@@ -2228,7 +2213,7 @@ let select_file frame request history start action =
   let map = Keymap.create () in
   let string = ref "" in
   Keymap.add_binding map [ControlMap, Char.code 'g'] (fun mini_frame ->
-    pr2 "HERE";
+    UCommon.pr2 "HERE";
     remove_completions mini_frame;
     Minibuffer.kill mini_frame frame
   );
@@ -2302,10 +2287,10 @@ let select_file frame request history start action =
   );
   Keymap.add_binding map [NormalMap, Char.code '/'] (fun frame ->
     let (buf, text, point) = Frame.buf_text_point frame in
-    if Text.bmove_res text point 1 = 1 then
+    if Text.bmove_res text point 1 =|= 1 then
       ( let c = Text.get_char text point in
         Text.fmove text point 1;
-        if c = '/' then
+        if c =$= '/' then
           Copy_paste.kill_bol buf point);
     Edit.self_insert_command frame;
     string := Text.to_string text            
@@ -3463,8 +3448,6 @@ open Efuns
 
 
 <<function [[Top_window.update_display]]>>
-let update_display () = Common.profile_code "Top_window.update_display" 
-  (fun () -> update_display () )
 
 <<function [[Top_window.clean_display]]>>
 
@@ -3499,7 +3482,7 @@ let recorded_keys = ref []
 
 let handle_key_and_macro top_window modifiers keysym =
   if !in_start_macro
-  then Common.push (modifiers, keysym) recorded_keys;
+  then Stack_.push (modifiers, keysym) recorded_keys;
 
   let before = !in_start_macro in
   handle_key top_window modifiers keysym;
@@ -3686,7 +3669,7 @@ let file_reg = Str.regexp ".* \\([^ ]+\\)$"
 
 <<function [[Dired.get_file_line]]>>=
 let get_file_line frame =
-  frame.frm_buffer.buf_filename |> Common.do_option (fun filename ->
+  frame.frm_buffer.buf_filename |> Option.iter (fun filename ->
     (Globals.editor()).edt_dirname <- Filename.dirname filename;
   );
   let (_, text, point) = Frame.buf_text_point frame in
@@ -4945,7 +4928,7 @@ let server_start _frame =
 \subsection{[[efuns_client.ml]]}
 
 <<constant [[Efuns_client.efuns_property]]>>=
-let efuns_property = "_EFUNS_SERVER"  
+let _efuns_property = "_EFUNS_SERVER"  
 @
 
 <<constant [[Efuns_client.root]]>>=

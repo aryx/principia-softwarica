@@ -1208,7 +1208,7 @@ type editor =
     (* key is buffer name (made unique via get_unique_name()) *)
     mutable edt_buffers : (string, buffer) Hashtbl.t;
     (* key is filename (should be unique? todo: use realpath?) *)
-    mutable edt_files : (Common.filename, buffer) Hashtbl.t;
+    mutable edt_files : (string (* filename *), buffer) Hashtbl.t;
 
     (* list when have one efuns running multiple top windows *)
     mutable top_windows : top_window list;
@@ -1301,7 +1301,7 @@ let find_buffer_frame buf =
   try
     (Globals.editor()).top_windows |> List.iter (fun top_window ->
       top_window.window |> Window.iter (fun frame -> 
-        if frame.frm_buffer == buf 
+        if Common.phys_equal frame.frm_buffer buf 
         then raise (FoundFrame frame)
       )
     );
@@ -2148,7 +2148,7 @@ let save_buffer_hooks = define_option ["save_buffer_hooks"] ""
 
 <<toplevel [[Main]] call [[main()]]>>=
 let _ =
-  Common.main_boilerplate (fun () ->
+  UCommon.main_boilerplate (fun () ->
 (*
     let r = Gc.get () in
     r.Gc.verbose <- true;
@@ -2180,6 +2180,9 @@ let main () =
 
    (fun name -> initial_files := name :: !initial_files) 
    usage_str;
+
+  Logs.info (fun m -> m "logging enabled");
+
   <<[[main()]] set options>>
 
   <<[[main()]] initial editor>>
@@ -2242,7 +2245,10 @@ let save_options _frame =
 %\section{General style parameters}
  
 <<constants Main options>>=
-let width      = define_option ["width"] "" int_option 80
+(* old: I used to enforce 80, but many people sometimes write in col 80
+ * so simpler go a little bit above
+ *)
+let width      = define_option ["width"] "" int_option 82
 let height     = define_option ["height"] "" int_option 44
 let foreground = define_option ["foreground"] "" string_option "wheat"
 let background = define_option ["background"] "" string_option "DarkSlateGray"
@@ -2623,6 +2629,7 @@ let update_display () =
      let graphic = Efuns.backend top_window in
      graphic.Xdraw.update_display();
   ) 
+[@@profiling]
 @
 
 % Why have a list of top_windows? Because of Emacs "Frames" which 
@@ -2758,9 +2765,9 @@ let meta = ref Xtypes.mod1Mask
 let mask = Xtypes.controlMask lor !meta in
 let diff = modifiers land mask in
 match () with
-| _ when diff = 0 -> NormalMap 
-| _ when diff = Xtypes.controlMask -> ControlMap
-| _ when diff = !meta -> MetaMap
+| _ when diff =|= 0 -> NormalMap 
+| _ when diff =|= Xtypes.controlMask -> ControlMap
+| _ when diff =|= !meta -> MetaMap
 | _ -> ControlMetaMap
 @
 % I don't handle Esc-x for now.
@@ -3117,7 +3124,7 @@ type coord = {
 let point_line text point = 
   (* defensive: *)
   if (point.line <> find_line_of_pos text point.pos)
-  then Common.pr2 (Common.spf "TODO: point.line = %d != find_line ... = %d"
+  then UCommon.pr2 (Common.spf "TODO: point.line = %d != find_line ... = %d"
                      point.line (find_line_of_pos text point.pos));
   point.line
 @
@@ -3186,6 +3193,7 @@ let find_line_of_pos text pos =
       else 0
      in
      iter gline
+[@@profiling]
 @
 %opti: could use binary search instead of linear iteration
 
@@ -3355,7 +3363,8 @@ let move_gpoint_to text pos =
       <<[[Text.move_gpoint_to()]] when pos is before gpos>>
     end else begin
       <<[[Text.move_gpoint_to()]] when pos is after gpos>>
-    end
+      end
+[@@profiling]
 @
 %text_clean? see clean_text()
 
@@ -3451,6 +3460,7 @@ let extend_gap text amount =
   text.gsize <- gsize + add_size;
   text.text_size <- old_size + add_size;
   ()
+[@@profiling]
 @
 %FIGURE:
 
@@ -3776,6 +3786,7 @@ let color buf regexp strict attr =
   with Not_found -> 
     buf.buf_modified <- buf.buf_modified + 1
   )
+[@@profiling]
 @
 % not really incremental as font-lock-mode.
 % but can be a simple starting point!
@@ -4259,6 +4270,7 @@ let compute_representation text charreprs n =
       <<[[Text.compute_representation()]] adjust line fields after loop>>
     end;
     line
+[@@profiling]
 @
 %FIGURE: where see the different kind of pos. it's too complicated.
 % cursor on text_string, and cursor on repr_string.
@@ -4791,7 +4803,7 @@ let buf_mtime = Store.create_float "buf_mtime"
 <<function [[Complex.update_time]]>>=
 let update_time buf =
   try
-    buf.buf_filename |> Common.do_option (fun file ->
+    buf.buf_filename |> Option.iter (fun file ->
       let st = Unix.lstat file in
       if st.Unix.st_kind = Unix.S_REG 
       then Var.set_local buf buf_mtime st.Unix.st_mtime;
@@ -4805,7 +4817,7 @@ let update_time buf =
 let check_file frame =
   try
     let buf = frame.frm_buffer in
-    buf.buf_filename |> Common.do_option (fun file ->
+    buf.buf_filename |> Option.iter (fun file ->
       let st = Unix.lstat file in
       if st.Unix.st_kind = Unix.S_REG then
         try
@@ -4879,7 +4891,7 @@ exception BufferAlreadyOpened
 let change_name buf filename =
   let edt = Globals.editor() in
   Hashtbl.remove edt.edt_buffers buf.buf_name;
-  buf.buf_filename |> Common.do_option (fun filename ->
+  buf.buf_filename |> Option.iter (fun filename ->
     Hashtbl.remove edt.edt_files filename
   );
   let filename = 
@@ -5048,7 +5060,8 @@ let install window frame =
   <<[[Frame.install()]] sanity check frame is not a minibuffer>>
 
   window |> Window.iter (fun f -> 
-     if (f != frame) 
+     (* TODO? != or <> ? *)
+     if (Common.phys_not_equal f frame) 
      then kill f
   );
   window.win_down <- WFrame frame;
@@ -5102,6 +5115,7 @@ let display top_window frame =
     <<[[Frame.display()]] redraw>>
   end;
   <<[[Frame.display()]] draw status line or minibuffer>>
+[@@profiling]
 @
 % was called Frame.update, but I prefer Frame.display,
 % to avoid all those update_xxx that are not in the same category
@@ -5204,7 +5218,7 @@ frame.frm_redraw
 
 <<[[Frame.display()]] redraw>>=
 if !Globals.debug_display
-then pr2 "redraw";
+then UCommon.pr2 "redraw";
 <<[[Frame.display()]] redraw, possibly update [[frm_y_offset]]>>
 <<[[Frame.display()]] redraw, possibly update [[frm_x_offset]]>>
 (* invariant: now frm_start is at a bol *)
@@ -5369,6 +5383,7 @@ let update_table frame =
   <<function [[Frame.update_table.iter_repr]]>>
 
   iter_line (- frame.frm_y_offset) !current_n !current_line
+[@@profiling]
 @
 
 
@@ -5409,8 +5424,8 @@ in
 <<[[Frame.display()]] redraw, draw line y if line changed>>=
 let frm_line = frame.frm_table.(y) in
 
-if not ((frm_line.prev_frmline_boxes == frm_line.frmline_boxes) &&
-        (frm_line.repr_prev_offset == frm_line.first_box_extra_offset)) 
+if not ((Common.phys_equal frm_line.prev_frmline_boxes frm_line.frmline_boxes) &&
+        (Common.phys_equal frm_line.repr_prev_offset frm_line.first_box_extra_offset)) 
    || frame.frm_redraw
 then
   begin
@@ -5468,7 +5483,7 @@ if line.repr_len > xcutline then
       if box.box_pos_repr <= xcutline && 
          box.box_pos_repr + box.box_size > xcutline
       then
-        if y = height 
+        if y =|= height 
         then Text.goto_line text frame.frm_end n 
         else begin
             if y>= 0 then begin
@@ -5612,9 +5627,9 @@ let point_to_xy_opt frame point =
   try
     for i = 0 to frame.frm_height - 1 do
       let line_repr = frame.frm_table.(i) in
-      if line_repr.frm_text_line == line then
+      if Common.phys_equal line_repr.frm_text_line line then
         let x,y =
-          if x_nocut = 0 
+          if x_nocut =|= 0 
           then 0,i
           else
             <<[[Frame.point_to_xy_opt()]] x y value handling overflow lines>>
@@ -5755,7 +5770,7 @@ do
   current_line := Ebuffer.compute_representation buf !current_n;
 done;
 
-if !current_n = nbr_lines text && 
+if !current_n =|= nbr_lines text && 
    frame.frm_y_offset > !current_line.repr_len / frame.frm_cutline
 then frame.frm_y_offset <- !current_line.repr_len / frame.frm_cutline;
 @
@@ -5769,7 +5784,7 @@ while frame.frm_y_offset < 0 && !current_n > 0 do
   let lines = !current_line.repr_len / frame.frm_cutline in
   frame.frm_y_offset <- frame.frm_y_offset + lines + 1;
 done;
-if !current_n = 0 && frame.frm_y_offset <0 
+if !current_n =|= 0 && frame.frm_y_offset <0 
 then frame.frm_y_offset <- 0;
 @
 
@@ -5780,7 +5795,7 @@ let point_c = point_to_x_when_no_cutline buf point in
 if point_c < frame.frm_x_offset then begin
     frame.frm_x_offset <- max (point_c - width / 2) 0;
     frame.frm_redraw <- true;
-end else if frame.frm_cutline = max_int && 
+end else if frame.frm_cutline =|= max_int && 
             (point_c mod frame.frm_cutline >= frame.frm_x_offset + width - 3)  
   then begin
     frame.frm_x_offset <- point_c - (width / 2);
@@ -5864,7 +5879,7 @@ let scroll_to_frame ady top_window =
   let (buf, text, _) = Frame.buf_text_point frame in
   let pos_start = Text.get_position text frame.frm_start in
   let _size = Text.size text in
-  Common.pr2 "ady#get_pos size";
+  UCommon.pr2 "ady#get_pos size";
   let y = 1
 (*    ady#get_pos size  *)
   in
@@ -5955,7 +5970,7 @@ let status = {
     stat_line = -1;
     stat_col = -1;
     status_modified = true;
-    stat_modified = (buf.buf_last_saved = Text.version buf.buf_text);
+    stat_modified = (buf.buf_last_saved =|= Text.version buf.buf_text);
 
     stat_modes = [];
     stat_mode = dummy_mode;
@@ -6108,15 +6123,15 @@ let str = spf "-%s- %s  %s L%-6d (%s) --"
   (buf.buf_name ^ 
    String.make (max 1 ((width / 3) - String.length buf.buf_name)) ' ')
   (match () with
-  | _ when Text.get_position text point = 0 -> "Top"
-  | _ when Text.get_position text point = Text.size text -> "Bot"
+  | _ when Text.get_position text point =|= 0 -> "Top"
+  | _ when Text.get_position text point =|= Text.size text -> "Bot"
   | _ -> spf "%2d%%" 
     (Text.point_line text point * 100 / Text.nbr_lines text)
   )
   (Text.point_line text point + 1)
   (let xs = buf.buf_minor_modes |> List.map (fun m -> m.min_name) in
    let xs = buf.buf_major_mode.maj_name :: xs in
-   xs |> Common.join " "
+   xs |> String.concat " "
   )
 in
 let minuses = String.make 256 '-' in
@@ -6227,7 +6242,8 @@ let buf_create text local_map =
 
 
 <<[[Frame.install()]] sanity check frame is not a minibuffer>>=
-if window.win_mini = (frame.frm_mini_buffer = None) then begin 
+(* TODO: dunno why but can't use =:= for bool *)
+if window.win_mini =*= (frame.frm_mini_buffer =*= None) then begin 
   kill frame; 
   failwith "Cannot install in minibuffer"
 end;
@@ -6483,7 +6499,7 @@ let core_map =
 
 <<[[core_map]] entries>>=
 (* standard chars *)
-(Common2.enum 32 127 |> List.map (fun key ->
+(List_.enum 32 127 |> List.map (fun key ->
   [NormalMap, key], Edit.self_insert_command
 )) @
 @
@@ -6504,11 +6520,11 @@ let self_insert_command frame =
 
 <<[[core_map]] entries>>=
 (let c_q = (ControlMap, Char.code 'q') in
-(Common2.enum 65 (65+25) |> List.map (fun key ->
+(List_.enum 65 (65+25) |> List.map (fun key ->
   [c_q;ControlMap, key], Misc_features.insert_special_char
 )) @
 (* needed? *)
-(Common2.enum 97 (97+25) |> List.map (fun key ->
+(List_.enum 97 (97+25) |> List.map (fun key ->
   [c_q;ControlMap, key], Misc_features.insert_special_char
 ))) @
 @
@@ -6966,7 +6982,7 @@ let meta_hist = ref []
 % call_interactive -> <>
 <<function [[Interactive.buf_interactives]]>>=
 let compute_interactives () =
-  Action.actions |> Common.hash_to_list |> List.map (fun (s, _) ->
+  Action.actions |> Hashtbl_.hash_to_list |> List.map (fun (s, _) ->
     s, (Action.execute_action s, None)
   )
 @
@@ -7011,7 +7027,7 @@ let exec_interactive interactives frame name =
 % interactive thing.
 
 <<[[Interactive.exec_interactive()]] display if has a keybinding>>=
-key |> Common.do_option (fun key_list ->
+key |> Option.iter (fun key_list ->
   Message.message frame
     ("you can run "^name^" by typing "^(Keymap.print_key_list key_list))
 );
@@ -7108,7 +7124,8 @@ let select frame request history start completion_fun prefix_fun action =
   let completion = ref "_*NoCompletion*_" in
   let completions = ref [] in
   Keymap.add_binding map [NormalMap, XK.xk_Tab] (fun mini_frame ->
-      if (!completion != !string) then begin
+      (* TODO? was != but I think it should be <> *)
+      if (Common.phys_not_equal !completion !string) then begin
         let text = mini_frame.frm_buffer.buf_text in
         completions := completion_fun !string;
         let suffix, n  = Utils.common_suffix !completions (prefix_fun !string)in
@@ -7220,13 +7237,13 @@ mutable top_second_cursor : frame option;
 
 
 <<[[Top_window.cursor_on()]] display secondary cursor>>=
-top_window.top_second_cursor |> Common.do_option (fun frame ->
+top_window.top_second_cursor |> Option.iter (fun frame ->
   set_cursor_on top_window frame
 )
 @
 
 <<[[Top_window.cursor_off()]] hide secondary cursor>>=
-top_window.top_second_cursor |> Common.do_option (fun frame ->
+top_window.top_second_cursor |> Option.iter (fun frame ->
   set_cursor_off top_window frame
 )
 @
@@ -7851,7 +7868,7 @@ let save_current_pos frame =
   if Array.length buf.buf_history_pos < history_pos_max
   then buf.buf_history_pos <- Array.make history_pos_max None;
   let arr = buf.buf_history_pos in
-  arr.(history_pos_max -1) |> Common.do_option (fun pt ->
+  arr.(history_pos_max -1) |> Option.iter (fun pt ->
      Text.remove_point text pt
   );
   Array.blit arr 0 arr 1 (history_pos_max - 1);
@@ -8111,7 +8128,7 @@ let rec get_mark buf point =
 
 <<function [[Ebuffer.remove_mark]]>>=
 let remove_mark buf =
-  buf.buf_mark |> Common.do_option (fun mark ->
+  buf.buf_mark |> Option.iter (fun mark ->
     buf.buf_mark <- None;
     Text.remove_point buf.buf_text mark;
     buf.buf_modified <- buf.buf_modified + 1
@@ -8996,7 +9013,7 @@ let replace flag frame query str repl =
 
 <<function [[Simple.buffer_list]]>>=
 let buffer_list () =
-  (Globals.editor()).edt_buffers |> Common.hash_to_list |> List.map fst
+  (Globals.editor()).edt_buffers |> Hashtbl_.hash_to_list |> List.map fst
 @
 
 
@@ -9018,7 +9035,7 @@ let get_unique_name filename =
   in
   let i = ref 0 in
   let compute_name () =
-    if !i = 0 
+    if !i =|= 0 
     then name 
     else Printf.sprintf "%s<%d>" name !i
   in
@@ -9167,7 +9184,7 @@ let kill_buffer frame =
 let kill buf =
   let edt = Globals.editor() in
   Hashtbl.remove edt.edt_buffers buf.buf_name;
-  buf.buf_filename |> Common.do_option (fun filename ->
+  buf.buf_filename |> Option.iter (fun filename ->
     Hashtbl.remove edt.edt_files filename
   );
   List.iter (fun f -> f () ) buf.buf_finalizers;
@@ -9301,7 +9318,7 @@ let iter f window =
 let active frame =
   let top_window = Window.top frame.frm_window in
   top_window.top_active_frame <- frame;
-  frame.frm_buffer.buf_filename |> Common.do_option (fun filename ->
+  frame.frm_buffer.buf_filename |> Option.iter (fun filename ->
     (Globals.editor()).edt_dirname <- Filename.dirname filename
   )
 @
@@ -9587,7 +9604,7 @@ let new_major_mode name hook_opt = {
 <<function [[Ebuffer.set_major_mode]]>>=
 let set_major_mode buf mode =
   if !Globals.debug
-  then pr2 (spf "setting %s major mode" mode.maj_name);
+  then UCommon.pr2 (spf "setting %s major mode" mode.maj_name);
   buf.buf_modified <- buf.buf_modified + 1;
   buf.buf_major_mode <- mode;
   mode.maj_hooks |> List.iter (fun f -> 
@@ -9659,7 +9676,7 @@ let set_buffer_mode buf =
   in 
   let modes_alist = Var.get_var buf modes_alist in
   (* must use != here, because modes_alist contain functional values *)
-  if (!modes_old != modes_alist) then begin
+  if (Common.phys_not_equal !modes_old modes_alist) then begin
     regexp_alist := modes_alist |> List.map (fun (file_reg, major) ->
       Str.regexp file_reg, major
     );
@@ -9710,8 +9727,8 @@ status_major_mode frame;
 let status_major_mode frame  =
   let buf = frame.frm_buffer in
   let status = frame.frm_status in
-  if not (status.stat_modes == buf.buf_minor_modes &&
-           status.stat_mode == buf.buf_major_mode
+  if not (Common.phys_equal status.stat_modes buf.buf_minor_modes &&
+           Common.phys_equal status.stat_mode buf.buf_major_mode
     ) then
     begin
       status.stat_modes <- buf.buf_minor_modes;
@@ -9911,7 +9928,7 @@ let set_minor_mode buf mode =
 let del_minor_mode buf minor =
   buf.buf_minor_modes <- 
     List.fold_right (fun mode list -> 
-      if mode == minor then begin
+      if Common.phys_equal mode minor then begin
         buf.buf_modified <- buf.buf_modified + 1;
         list
       end else (mode :: list)
@@ -10047,7 +10064,7 @@ let shell_hist = ref []
 let shell_command frame =
   Select.select_string frame "Run command:" shell_hist "" (fun cmd -> 
     let pwd = (Globals.editor()).edt_dirname in
-    start_command pwd "*Command*" (Multi_frames.cut_frame frame) cmd |> ignore)
+    start_command pwd "*Command*" (Multi_frames.cut_frame frame) cmd None |> ignore)
 [@@interactive]
 @
 %old:
@@ -10089,7 +10106,7 @@ let system pwd buf_name cmd end_action =
                     (Text.point_to_eof text curseur) in
     let len = input inc tampon 0 1000 in
     Mutex.lock edt.edt_mutex;
-    if len = 0 then begin
+    if len =|= 0 then begin
       let _pid,status = waitpid [WNOHANG] pid in
       (match status with 
       | WEXITED s -> Text.insert_at_end text (spf "Exited with status %d\n" s); 
@@ -10452,7 +10469,7 @@ let next_error top_frame =
           let frame = 
             try Frame.find_buffer_frame buf 
             with Not_found ->
-                if frame == top_frame then
+                if Common.phys_equal frame top_frame then
                   let new_window = Top_window.create ()
                       (*Window.display top_window*) 
                   in
@@ -10495,7 +10512,7 @@ let started = ref false
 
 <<type [[Server.proto]]>>=
 type command =
-  | LoadFile of Common.filename * int (* pos *) * int (* line *) * string
+  | LoadFile of string (* filename *) * int (* pos *) * int (* line *) * string
 @
 
 <<function [[Server.read_command]]>>=
@@ -10548,7 +10565,7 @@ let start () =
 
       if Sys.file_exists socket_name 
       then begin 
-        pr2 (spf "socket file %s already exists; cancelling the server"
+        UCommon.pr2 (spf "socket file %s already exists; cancelling the server"
               socket_name);
         (* alt: unlink here, so if you run multiple efuns, the last one wins*)
       end else begin
@@ -10652,7 +10669,7 @@ let _ =  if not (Sys.file_exists socket_name) then raise Not_found
 
 
 <<toplevel [[Efuns_client._3]]>>=
-let (inc,outc) = Unix.open_connection (Unix.ADDR_UNIX socket_name)
+let (_inc,outc) = Unix.open_connection (Unix.ADDR_UNIX socket_name)
 let _ =  
   output_value outc (Server.LoadFile (filename,pos,!line, string)); 
   flush outc
@@ -10992,9 +11009,9 @@ let fill_paragraph frame =
       Text.insert text start "\n";
       let rec iter count last_space =
         if Text.compare text start fin < 0 then
-        if Text.fmove_res text start 1 = 1 then 
+        if Text.fmove_res text start 1 =|= 1 then 
           let c = Text.get_char text start in  
-            if c = ' ' then (* good, a new space *)
+            if c =$= ' ' then (* good, a new space *)
               iter (count+1) 0
           else
           if count > 75 && count <> last_space then 
@@ -11020,11 +11037,11 @@ let simplify text start point =
     let rec iter last_c =
       if start < point then
         let c = Text.get_char text start in
-        if c = ' ' || c = '\n' || c = '\t' then
+        if c =$= ' ' || c =$= '\n' || c =$= '\t' then
           ( Text.delete text start 1;
             iter ' ')
         else
-        if last_c = ' ' then
+        if last_c =$= ' ' then
           ( Text.insert text start " ";
             Text.fmove text start 2;
             iter 'a')
@@ -11456,12 +11473,16 @@ let error_exn s exn =
    * exn handlers/formatters
    *)
   (match exn with 
-  | PI.Lexical_error _ | PI.Parsing_error _ ->
-     let err = Error_code.exn_to_error "XXX" exn in
+  | Parsing_error.Lexical_error _ | Parsing_error.Syntax_error _ ->
+     let ex = Exception.catch exn in
+     (* TODO
+     let err = Error_code.exception_to_error "XXX" ex in
      pr2 (Error_code.string_of_error err)
+      *)
+     UCommon.pr2 (Dumper.dump ex)
   | _ -> ()
   );
-  pr2 (spf "error: %s (exn = %s). backtrace:\n%s" 
+  UCommon.pr2 (spf "error: %s (exn = %s). backtrace:\n%s" 
         s (Common.exn_to_s exn) bt);
   flush stderr
 @
@@ -11499,7 +11520,7 @@ let message _buf m =
     let bt = Printexc.get_backtrace () in
     let str = spf "Uncaught exception %s" (Utils.printexn e) in
     if !Globals.debug
-    then pr2 str;
+    then UCommon.pr2 str;
     message top_window  str;
     let buf = Ebuffer.default "*backtrace*" in
     let text = buf.buf_text in
@@ -11553,13 +11574,13 @@ then begin
   Action.actions |> Hashtbl.iter  (fun k v ->
     match v with
     (* subtle: this will work only if f2 was not a closure *)
-    | FrameAction f2 when f == f2 ->
+    | FrameAction f2 when Common.phys_equal f f2 ->
         found := true;
-        pr2 (spf "action: %s" k)
+        UCommon.pr2 (spf "action: %s" k)
     | _ -> ()
   );
   if not !found
-  then pr2 ("action not found");
+  then UCommon.pr2 ("action not found");
 end;
 @
 %alt: store the function name in FrameAction
@@ -11706,7 +11727,7 @@ let create_abstr name =
 
 <<function [[Store.no_print]]>>=
 let no_print x = 
-  "<abstr>:" ^ (Common.dump x)
+  "<abstr>:" ^ (Dumper.dump x)
 @
 <<function [[Store.no_input]]>>=
 let no_input (_s : string) = failwith "This variable can not be set"

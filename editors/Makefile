@@ -81,5 +81,5 @@ SRC= \
 
 SRC_VIEWS=$(SRC:%=$(EFUNS)/%)
 
-include ~/semgrep-internals/Makefile.common
+include ~/github/semgrep-internals/Makefile.common
 
