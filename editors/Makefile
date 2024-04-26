@@ -4,7 +4,7 @@
 
 SYNCFLAGS=-md5sum_in_auxfile -less_marks -lang ocaml
 
-VERSION=5
+VERSION=6
 DOC=Editor
 
 SRC_ORIG=Editor.nw Editor_extra.nw
