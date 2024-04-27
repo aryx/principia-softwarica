@@ -2574,7 +2574,7 @@ is a 160 bits number. Such a number can be encoded as a sequence of 20 bytes.
 
 <<type [[Sha1.t]]>>=
 (* a 20 bytes number (really a string of length 20) *)
-type t = bytes
+type t = string
 @
 
 The [[sha1()]] function returns a 20 bytes number for any content
@@ -2582,7 +2582,7 @@ of arbitrary length.
 
 <<signature [[Sha1.sha1]]>>=
 (* computes SHA1 of a series of bytes *) 
-val sha1: bytes -> t
+val sha1: string -> t
 @
 \n bytes to bytes in the end
 
@@ -2599,8 +2599,8 @@ The function below expresses this additional constraint:
 val is_sha: t -> bool
 @
 <<function [[Sha1.is_sha]]>>=
-let is_sha x =
-  Bytes.length x = 20
+let is_sha (x : t) : bool =
+  String.length x = 20
 @
 \n extra checks? forbidden bytes? I dont think so.
 
@@ -2664,7 +2664,7 @@ let to_sha s =
   let n = String.length s in
   let buf = Bytes.create (n/2) in
   <<[[Hexsha.to_sha()]] fill [[buf]]>>
-  buf
+  Bytes.to_string buf
 @
 \t useful for?
 
@@ -2727,7 +2727,7 @@ let to_byte hex1 hex2 =
 
 <<[[hexsha.to_sha()]] double sanity check range i>>=
 if i+1 >= n 
-then raise (Invalid_argument "hex conversion: invalid hex string")
+then raise (Invalid_argument "hex conversion: invalid hex string");
 @
 \l useless, double, because already is_hexsha assert so odd length
 
@@ -2747,7 +2747,7 @@ let of_sha s =
   let n = String.length s in
   let buf = Bytes.create (n * 2) in
   <<[[Hexsha.of_sha()]] fill [[buf]]>>
-  buf
+  Bytes.to_string buf
 @
 %pad: use let n, not let len, so more consistent with other function
 \l FIGURE? reverse of other one with boxes again?
@@ -2767,8 +2767,8 @@ This time, each byte from [[s]] generates two characters:
 
 <<[[Hexsha.of_sha()]] fill [[buf]]>>=
 for i = 0 to n - 1 do
-  buf.[i * 2]       <- hexa1.[Char.code (s.[i])];
-  buf.[(i * 2) + 1] <- hexa2.[Char.code (s.[i])];
+  Bytes.set buf (i * 2) hexa1.[Char.code (s.[i])];
+  Bytes.set buf ((i * 2) + 1) hexa2.[Char.code (s.[i])];
 done;
 @
 
@@ -2915,7 +2915,7 @@ on the disk.
 A blob is simply a sequence of bytes. 
 
 <<type [[Blob.t]]>>=
-type t = bytes
+type t = string
 @
 
 In the following data structures, some fields will contain SHA1 hashes
@@ -3605,7 +3605,7 @@ val read: IO.input -> t
 @
 <<function [[Sha1.read]]>>=
 let read ch =
-  let s = IO.really_nread ch 20 in
+  let s = IO.really_nread_string ch 20 in
   assert (is_sha s);
   s
 @
@@ -3690,7 +3690,7 @@ val read: IO.input -> t
 @
 <<function [[Hexsha.read]]>>=
 let read ch =
-  let s = IO.really_nread ch 40 in
+  let s = IO.really_nread_string ch 40 in
   assert (is_hexsha s);
   s
 @
@@ -3726,7 +3726,7 @@ let read ch =
 
 <<function [[User.sign_of_char]]>>=
 let sign_of_char = function
-  | '+' -> (fun x -> +x )
+  | '+' -> (fun x -> x)
   | '-' -> (fun x -> - x)
   | c -> failwith (spf "User.sign_of_string: not a sign, got %c" c)
 @
@@ -3905,7 +3905,7 @@ let read_entry ch =
   in
   let _zeros = IO.really_nread ch pad in
   (* less: assert zeros *)
-  { stats; id; path }
+  { stats = stats; id = id; path = path }
 @
 %old: was using stage
 
@@ -3920,7 +3920,7 @@ let read_stat_info ch =
   let uid = IO.BigEndian.read_real_i32 ch in
   let gid = IO.BigEndian.read_real_i32 ch in
   let size = IO.BigEndian.read_real_i32 ch in
-  { mtime; ctime; dev; inode; mode; uid; gid; size }
+  { mtime = mtime; ctime = ctime; dev = dev; inode = inode; mode = mode; uid = uid; gid = gid; size = size }
 @
 
 
@@ -3929,7 +3929,7 @@ let read_time ch =
   (* less: unsigned actually *)
   let lsb32 = IO.BigEndian.read_real_i32 ch in
   let nsec = IO.BigEndian.read_real_i32 ch in
-  { lsb32; nsec }
+  { lsb32 = lsb32; nsec = nsec }
 @
 
 <<function [[Index.read_mode]]>>=
@@ -3972,7 +3972,7 @@ val add_obj: t -> Objects.t -> Sha1.t
 let add_obj r obj =
   let bytes = 
     IO.output_bytes () |> IO_.with_close_out (Objects.write obj) in
-  let sha = Sha1.sha1 bytes in
+  let sha = Sha1.sha1 (Bytes.to_string bytes) in
   let hexsha = Hexsha.of_sha sha in
   let file = hexsha_to_filename r hexsha in
   <<[[Repository.add_obj()]] create directory if it does not exist>>
@@ -4030,7 +4030,7 @@ let write obj ch =
       ) 
       (Bytes.length body)
   in
-  IO.nwrite ch header;
+  IO.nwrite_string ch header;
   IO.nwrite ch body
 @
 
@@ -4085,7 +4085,7 @@ val write: t -> bytes IO.output -> unit
 @
 <<function [[Blob.write]]>>=
 let write blob ch =
-  IO.nwrite ch blob
+  IO.nwrite_string ch blob
 @
 
 
@@ -4103,10 +4103,10 @@ let write t ch =
 
 <<function [[Tree.write_entry]]>>=
 let write_entry ch e =
-  IO.nwrite ch (string_of_perm e.perm);
+  IO.nwrite_string ch (string_of_perm e.perm);
   IO.write ch ' ';
   (* todo: handle escape char in filenames? encode/decode *)
-  IO.nwrite ch e.name;
+  IO.nwrite_string ch e.name;
   IO.write ch '\000';
   Sha1.write ch e.id
 @
@@ -4116,7 +4116,7 @@ val write: 'a IO.output -> t -> unit
 @
 <<function [[Sha1.write]]>>=
 let write ch x =
-  IO.nwrite ch x
+  IO.nwrite_string ch x
 @
 
 <<function [[Tree.string_of_perm]]>>=
@@ -4138,23 +4138,23 @@ val write: t -> 'a IO.output -> unit
 @
 <<function [[Commit.write]]>>=
 let write commit ch =
-  IO.nwrite ch "tree ";
+  IO.nwrite_string ch "tree ";
   Hexsha.write ch (Hexsha.of_sha commit.tree);
   IO.write ch '\n';
   commit.parents |> List.iter (fun parent ->
-    IO.nwrite ch "parent ";
+    IO.nwrite_string ch "parent ";
     Hexsha.write ch (Hexsha.of_sha parent);
     IO.write ch '\n';
   );
-  IO.nwrite ch "author ";
+  IO.nwrite_string ch "author ";
   User.write ch commit.author;
   IO.write ch '\n';
-  IO.nwrite ch "committer ";
+  IO.nwrite_string ch "committer ";
   User.write ch commit.committer;
   IO.write ch '\n';
 
   IO.write ch '\n';
-  IO.nwrite ch commit.message
+  IO.nwrite_string ch commit.message
 @
 %crossref: Hexsha.write, Hexsha.of_sha
 
@@ -4163,7 +4163,7 @@ val write: 'a IO.output -> t -> unit
 @
 <<function [[Hexsha.write]]>>=
 let write ch x =
-  IO.nwrite ch x
+  IO.nwrite_string ch x
 @
 
 <<signature [[User.write]]>>=
@@ -4171,15 +4171,15 @@ val write: 'a IO.output -> t -> unit
 @
 <<function [[User.write]]>>=
 let write ch user =
-  IO.nwrite ch (spf "%s <%s> " user.name user.email);
+  IO.nwrite_string ch (spf "%s <%s> " user.name user.email);
   write_date ch user.date
 @
 
 <<function [[User.write_date]]>>=
 let write_date ch (date, tz) =
-  IO.nwrite ch (Int64.to_string date);
+  IO.nwrite_string ch (Int64.to_string date);
   IO.write ch ' ';
-  IO.nwrite ch (spf "%c%02d%02d" (char_of_sign tz) (abs tz) 0)
+  IO.nwrite_string ch (spf "%c%02d%02d" (char_of_sign tz) (abs tz) 0)
 @
 
 \section{References}
@@ -4238,13 +4238,13 @@ let write idx ch =
   let n = List.length idx in
   let body =
     IO.output_bytes () |> IO_.with_close_out (fun ch ->
-      IO.nwrite ch "DIRC";
+      IO.nwrite_string ch "DIRC";
       IO.BigEndian.write_i32 ch 2;
       IO.BigEndian.write_i32 ch n;
       idx |> List.iter (write_entry ch)
     )
   in
-  let sha = Sha1.sha1 body in
+  let sha = Sha1.sha1 (Bytes.to_string body) in
   IO.nwrite ch body;
   Sha1.write ch sha
 @
@@ -4255,7 +4255,7 @@ let write_entry ch e =
   Sha1.write ch e.id;
   let flags = (0 lsl 12 + String.length e.path) land 0x3FFF in
   IO.BigEndian.write_ui16 ch flags;
-  IO.nwrite ch e.path;
+  IO.nwrite_string ch e.path;
   let len = 63 + String.length e.path in
   let pad = 
     match len mod 8 with
@@ -5244,7 +5244,7 @@ let commit_index r author committer message =
   <<[[Repository.commit_index()]] read merge message if needed>>
   (* todo: execute commit-msg hook *)
   let commit = { Commit. parents = []; tree = root_tree; 
-                 author; committer; message } in
+                 author = author; committer = committer; message = message } in
 
   let ok =
     match follow_ref r aref |> snd with
@@ -6058,14 +6058,14 @@ let build_file_from_blob fullpath blob perm =
   | Tree.Normal | Tree.Exec ->
     (match oldstat with
     (* opti: if same content, no need to write anything *)
-    | Some { Unix.st_size = x } when x = Bytes.length blob && 
+    | Some { Unix.st_size = x } when x = String.length blob && 
       (fullpath |> Common.with_file_in (fun ch -> 
         (ch |> IO.input_channel |> IO.read_all ) = blob
        )) ->
       ()
     | _ ->
       fullpath |> Common.with_file_out (fun ch ->
-        output_bytes ch blob
+        output_bytes ch (Bytes.of_string blob)
       );
       (* less: honor filemode? *)
       Unix.chmod fullpath 
@@ -6110,6 +6110,7 @@ let cmd = { Cmd.
     | [] -> 
       (match () with
       <<[[Cmd_reset.cmd.f()]] when no args, cases>>
+      | _ -> raise Cmd.ShowUsage
       )
     | _ -> raise Cmd.ShowUsage
   );
@@ -6444,7 +6445,7 @@ type entry = {
 % slow.
 
 <<type [[Change.content]]>>=
-type content = bytes
+type content = string
 @
 
 % Note that changes used only for inspecting. Not part of core DS.
