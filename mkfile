@@ -197,9 +197,9 @@ pdf lpclean pdfinstall:QV:
 	}
 
 # need special :I: supported currently only by mk-in-ocaml
-sync:QVI:
-	for (i in $LPDIRS) @{
-		echo $i
-		cd $i
-		mk $MKFLAGS $target
-	}
+#sync:QVI:
+#	for (i in $LPDIRS) @{
+#		echo $i
+#		cd $i
+#		mk $MKFLAGS $target
+#	}
