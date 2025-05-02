@@ -4467,7 +4467,7 @@ end
 % git cmd xxx so at least 2.
 
 <<[[Main.main()]] print usage and exit>>=
-pr (usage ());
+UConsole.print (usage ());
 exit 1
 @
 \l split because used from 2 places
@@ -4558,9 +4558,9 @@ let rec cmd = { Cmd.
       then Cmds.main_commands @ Cmds.extra_commands @ [cmd]
       else Cmds.main_commands
     in
-    pr ("Available commands: ");
+    UConsole.print ("Available commands: ");
     xs |> List.iter (fun cmd ->
-      pr (spf "  %s" cmd.Cmd.name);
+      UConsole.print (spf "  %s" cmd.Cmd.name);
     );
   );
 }
@@ -4674,7 +4674,7 @@ let init root =
   (* less: config file, description, hooks, etc *)
   Sys.chdir root;
   let absolute = Sys.getcwd () in
-  pr (spf "Initialized empty Git repository in %s" (absolute / ".git/"))
+  UConsole.print (spf "Initialized empty Git repository in %s" (absolute / ".git/"))
 @
 
 
@@ -4911,7 +4911,7 @@ let cmd = { Cmd.
   ];
   f = (fun args ->
     match args with
-    | [] -> pr2 "Nothing specified, nothing added."
+    | [] -> Logs.app (fun m -> m "Nothing specified, nothing added.")
     | xs ->
       let r, relpaths = Repository.find_root_open_and_adjust_paths xs in
       (* less: support directories *)
@@ -5723,7 +5723,7 @@ let list_branches r =
         then "* "
         else "  "
       in
-      pr (spf "%s%s" prefix short)
+      UConsole.print (spf "%s%s" prefix short)
   )
 @
 %crossref: Regexp_.matched1 in appendix
@@ -5846,7 +5846,7 @@ let delete_branch r name force =
   let sha = Repository.follow_ref_some r aref in
   <<[[Cmd_branch.delete_branch()]] sanity check if branch merged unless force>>
   Repository.del_ref r aref;
-  pr (spf "Deleted branch %s (was %s)" name (Hexsha.of_sha sha))
+  UConsole.print (spf "Deleted branch %s (was %s)" name (Hexsha.of_sha sha))
 @
 
 Deleting a branch consists simply in deleting a reference file
@@ -5934,7 +5934,7 @@ let checkout r str =
     (* todo: order of operation? set ref before index? reverse? *)
     Repository.write_ref r (Refs.Head) (Refs.OtherRef refname);
     Repository.set_worktree_and_index_to_tree r tree;
-    pr (spf "Switched to branch '%s'" str);
+    UConsole.print (spf "Switched to branch '%s'" str);
     (* less: if master, then check if up-to-date with origin/master *)
 
   <<[[Cmd_checkout.checkout()]] cases>>
@@ -6161,7 +6161,7 @@ let reset_hard r =
   let tree = Repository.read_tree r commit.Commit.tree in
 
   Repository.set_worktree_and_index_to_tree r tree;
-  pr (spf "HEAD is now at %s %s" 
+  UConsole.print (spf "HEAD is now at %s %s" 
         (String.sub (Hexsha.of_sha commitid) 0 6)
         (String.sub commit.Commit.message 0 40))
 @
@@ -6329,7 +6329,7 @@ let show x =
 <<[[Cmd_show.show()]] match obj cases>>=
 | Objects.Tree x ->
   (* =~ git ls-tree --names-only *)
-  pr (spf "tree %s\n" (Hexsha.of_sha sha));
+  UConsole.print (spf "tree %s\n" (Hexsha.of_sha sha));
   Tree.show x
 @
 
@@ -6339,7 +6339,7 @@ val show: t -> unit
 <<function [[Tree.show]]>>=
 let show xs =
   xs |> List.iter (fun entry ->
-    pr (spf "%s%s" entry.name
+    UConsole.print (spf "%s%s" entry.name
           (match entry.perm with
           | Dir -> "/"
           | _ -> ""
@@ -6355,7 +6355,7 @@ let show xs =
 
 <<[[Cmd_show.show()]] match obj cases>>=
 | Objects.Commit x -> 
-  pr (spf "commit %s" (Hexsha.of_sha sha));
+  UConsole.print (spf "commit %s" (Hexsha.of_sha sha));
   Commit.show x;
   let tree2 = Repository.read_tree r x.Commit.tree in
   let tree1 = 
@@ -6381,12 +6381,12 @@ val show: t -> unit
 @
 <<function [[Commit.show]]>>=
 let show x =
-  pr (spf "Author: %s <%s>" x.author.User.name x.author.User.email);
+  UConsole.print (spf "Author: %s <%s>" x.author.User.name x.author.User.email);
   (* less: date of author or committer? *)
   let date = x.author.User.date in
-  pr (spf "Date:   %s" (User.string_of_date date));
-  pr "";
-  pr ("    " ^ x.message)
+  UConsole.print (spf "Date:   %s" (User.string_of_date date));
+  UConsole.print "";
+  UConsole.print ("    " ^ x.message)
   (* showing diff done in caller in Cmd_show.show *)        
 @
 
@@ -6613,7 +6613,7 @@ let show_change change =
   let diffs = Diffs.diff (Lazy.force old_content) (Lazy.force new_content) in
   if not (diffs |> List.for_all (function Diff.Equal _ -> true | _ -> false))
   then begin
-    pr (spf "diff --git %s %s" old_path new_path);
+    UConsole.print (spf "diff --git %s %s" old_path new_path);
     (* less: display change of modes *)
     show_unified_diff diffs
   end
@@ -6787,22 +6787,22 @@ let log r =
 
 <<function [[Cmd_log.print_commit]]>>=
 let print_commit sha commit =
-  pr (spf "commit: %s" (Hexsha.of_sha sha));
+  UConsole.print (spf "commit: %s" (Hexsha.of_sha sha));
   (match commit.Commit.parents with
   | [] | [_] -> ()
   | _x::xs ->
-    pr (spf "merge: %s" 
+    UConsole.print (spf "merge: %s" 
           (xs |> List.map Hexsha.of_sha |> String.concat "..."));
   );
   let author = commit.Commit.author in
-  pr (spf "Author: %s <%s>" author.User.name author.User.email);
+  UConsole.print (spf "Author: %s <%s>" author.User.name author.User.email);
   let committer = commit.Commit.committer in
   if author <> committer
   then 
-    pr (spf "Committer: %s <%s>" committer.User.name committer.User.email);
-  pr (spf "Date:   %s" (User.string_of_date author.User.date));
-  pr "";
-  pr ("    " ^ commit.Commit.message);
+    UConsole.print (spf "Committer: %s <%s>" committer.User.name committer.User.email);
+  UConsole.print (spf "Date:   %s" (User.string_of_date author.User.date));
+  UConsole.print "";
+  UConsole.print ("    " ^ commit.Commit.message);
   ()
 @
 
@@ -6831,7 +6831,7 @@ then begin
     tree1
   in
   changes |> List.iter print_change;
-  pr "";
+  UConsole.print "";
 @
 
 
@@ -6839,11 +6839,11 @@ then begin
 let print_change change =
   match change with
   | Change.Add entry ->
-    pr (spf "A       %s" entry.Change.path)
+    UConsole.print (spf "A       %s" entry.Change.path)
   | Change.Del entry ->
-    pr (spf "D       %s" entry.Change.path)
+    UConsole.print (spf "D       %s" entry.Change.path)
   | Change.Modify (entry1, _entry2) ->
-    pr (spf "M       %s" entry1.Change.path)
+    UConsole.print (spf "M       %s" entry1.Change.path)
 @
 
 \subsection{Comparing trees}
@@ -7015,33 +7015,33 @@ let print_status_short _st =
 let print_status_long st =
   if st.staged <> []
   then begin
-    pr "Changes to be committed:";
+    UConsole.print "Changes to be committed:";
 (*  (use "git reset HEAD <file>..." to unstage) *)
-    pr "";
+    UConsole.print "";
     st.staged |> List.iter print_change_long;
-    pr "";
+    UConsole.print "";
   end;
   if st.unstaged <> []
   then begin
-    pr "Changes not staged for commit:";
-    pr "";
+    UConsole.print "Changes not staged for commit:";
+    UConsole.print "";
 (*
   (use "git add/rm <file>..." to update what will be committed)
   (use "git checkout -- <file>..." to discard changes in working directory)
 *)
 
     st.unstaged |> List.iter print_change_long;
-    pr "";
+    UConsole.print "";
   end;
   if st.untracked <> []
   then begin
-    pr "Untracked files:";
+    UConsole.print "Untracked files:";
 (*  (use "git add <file>..." to include in what will be committed) *)
-    pr "";
+    UConsole.print "";
     st.untracked |> List.iter (fun file ->
-      pr (spf "	%s" file)
+      UConsole.print (spf "	%s" file)
     );
-    pr "";
+    UConsole.print "";
   end
 @
 
@@ -7062,11 +7062,11 @@ type status = {
 let print_change_long change =
   match change with
   | Change.Add entry ->
-    pr (spf "	new file:	%s" entry.Change.path)
+    UConsole.print (spf "	new file:	%s" entry.Change.path)
   | Change.Del entry ->
-    pr (spf "	deleted:	%s" entry.Change.path)
+    UConsole.print (spf "	deleted:	%s" entry.Change.path)
   | Change.Modify (entry1, _entry2) ->
-    pr (spf "	modified:	%s" entry1.Change.path)
+    UConsole.print (spf "	modified:	%s" entry1.Change.path)
 @
 
 
@@ -7206,8 +7206,8 @@ let untracked r =
   (* todo: order of operation? set ref before index? reverse? *)
   Repository.write_ref r (Refs.Head) (Refs.Hash commitid);
   Repository.set_worktree_and_index_to_tree r tree;
-  pr (spf "Note: checking out '%s'." str);
-  pr ("You are in 'detached HEAD' state");
+  UConsole.print (spf "Note: checking out '%s'." str);
+  UConsole.print ("You are in 'detached HEAD' state");
 @
 
 % convenient to go back! but then can not modify that! 
@@ -7436,7 +7436,7 @@ let pull dst url =
   | _ when remote_HEAD_sha = current_HEAD_sha -> ()
   | _ when Hashtbl.mem ancestors_remote_HEAD current_HEAD_sha ->
     (* easy case *)
-    pr (spf "fast forward to %s" (Hexsha.of_sha remote_HEAD_sha));
+    UConsole.print (spf "fast forward to %s" (Hexsha.of_sha remote_HEAD_sha));
     Repository.set_ref dst (Refs.Head) remote_HEAD_sha;
     let commit = Repository.read_commit dst remote_HEAD_sha in
     let tree = Repository.read_tree dst (commit.Commit.tree) in
@@ -7835,7 +7835,7 @@ let push src_repo url_dst =
   | _ when current_HEAD_sha = remote_HEAD_sha -> ()
   | _ when Hashtbl.mem ancestors_remote_HEAD current_HEAD_sha ->
     (* easy case *)
-    pr (spf "fast forward to %s" (Hexsha.of_sha remote_HEAD_sha));
+    UConsole.print (spf "fast forward to %s" (Hexsha.of_sha remote_HEAD_sha));
     Repository.set_ref dst (Refs.Head) remote_HEAD_sha;
     let commit = Repository.read_commit dst remote_HEAD_sha in
     let tree = Repository.read_tree dst (commit.Commit.tree) in
@@ -10069,7 +10069,7 @@ let dump_index file =
   let input = IO.input_channel chan in
   let index = Index.read input in
   let v = Dump.vof_index index in
-  pr (OCaml.string_of_v v)
+  UConsole.print (OCaml.string_of_v v)
 @
 
 <<signature [[Dump.vof_index]]>>=
@@ -10092,11 +10092,11 @@ let dump_object file =
     if !raw
     then 
       let str = IO.read_all unzipped in 
-      pr2 str
+      Logs.app (fun m -> m "%s" str)
     else begin
       let obj = Objects.read unzipped in
       let v = Dump.vof_obj obj in
-      pr (OCaml.string_of_v v)
+      UConsole.print (OCaml.string_of_v v)
     end
   with Unzip.Error _err ->
     failwith "unzip error"
@@ -10150,9 +10150,9 @@ let test_sha1 content =
   let store = header ^ content in
 
   let sha = Sha1.sha1 store in
-  pr (spf "len = %d, raw = %s" (String.length sha) sha);
+  UConsole.print (spf "len = %d, raw = %s" (String.length sha) sha);
   let hexsha = Hexsha.of_sha sha in
-  pr (spf "len = %d, str = %s" (String.length hexsha) hexsha);
+  UConsole.print (spf "len = %d, str = %s" (String.length hexsha) hexsha);
   ()
 @
 
