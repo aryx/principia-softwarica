@@ -3491,10 +3491,11 @@ val read_obj: t -> Sha1.t -> Objects.t
 let read_obj r h =
   (* todo: look for packed obj *)
   let path = h |> Hexsha.of_sha |> hexsha_to_filename r in
-  path |> Common.with_file_in (fun ch ->
+  let path = Fpath.v path in
+  path |> UChan.with_open_in (fun (ch : Chan.i) ->
     (* less: check read everything from channel? *)
     (* todo: check if sha consistent? *)
-    ch |> IO.input_channel |> Compression.decompress |> Objects.read
+    ch.ic |> IO.input_channel |> Compression.decompress |> Objects.read
   )
 @
 \l loose vs pack objects
@@ -3756,8 +3757,9 @@ val read_ref: t -> Refs.t -> Refs.ref_content
 let read_ref r aref =
   (* less: packed refs *)
   let file = ref_to_filename r aref in
-  file |> Common.with_file_in (fun ch ->
-    ch |> IO.input_channel |> Refs.read
+  let file = Fpath.v file in
+  file |> UChan.with_open_in (fun (ch : Chan.i) ->
+    ch.ic |> IO.input_channel |> Refs.read
   )
 @
 \l loose vs pack refs
@@ -4072,7 +4074,8 @@ let compress ic oc =
 (* todo: see code of _Gitfile.__init__ O_EXCL ... *)
 let with_file_out_with_lock f file =
   (* todo: create .lock file and then rename *)
-  Common.with_file_out f file
+  let file = Fpath.v file in
+  UChan.with_open_out (fun (chan : Chan.o) -> f chan.oc) file
 @
 % but really need that for objects?
 
@@ -4549,7 +4552,7 @@ let rec cmd = { Cmd.
   name = "help";
   usage = "";
   options = ["-a", Arg.Set list_extra, " see all commands"];
-  f = (fun args ->
+  f = (fun _args ->
     let xs = 
       if !list_extra
       then Cmds.main_commands @ Cmds.extra_commands @ [cmd]
@@ -4804,8 +4807,8 @@ so opening a repository also reads its index:
 index = 
   (if Sys.file_exists (path / "index")
    then 
-    (path / "index") |> Common.with_file_in (fun ch ->
-      ch |> IO.input_channel |> Index.read)
+    (Fpath.v (path / "index")) |> UChan.with_open_in (fun (ch : Chan.i) ->
+      ch.ic |> IO.input_channel |> Index.read)
    else Index.empty
   );
 @
@@ -5046,9 +5049,10 @@ I show the code of [[<=>]] in Appendix~\ref{chap:utilities}.
 let content_from_path_and_unix_stat full_path stat =
   match stat.Unix.st_kind with
   <<[[Repository.content_from_path_and_unix_stat()]] match kind cases>>
-  | Unix.S_REG -> 
-    full_path |> Common.with_file_in (fun ch ->
-      ch |> IO.input_channel |> IO.read_all
+  | Unix.S_REG ->
+    let full_path = Fpath.v full_path in
+    full_path |> UChan.with_open_in (fun (ch : Chan.i) ->
+      ch.ic |> IO.input_channel |> IO.read_all
     )
   | _ -> failwith (spf "Repository.add_in_index: %s kind not handled" 
                      full_path)
@@ -5184,7 +5188,7 @@ let cmd = { Cmd.
       <<[[Cmd_commit.cmd]] compute [[author]] user>>
       <<[[Cmd_commit.cmd]] compute [[committer]] user>>
       commit r author committer !message
-    | xs -> raise Cmd.ShowUsage
+    | _xs -> raise Cmd.ShowUsage
   );
 }
 @
@@ -5589,7 +5593,7 @@ I described the code of [<Refs.write()>] before.
 val set_ref_if_same_old: t -> Refs.t -> Sha1.t -> Sha1.t -> bool
 @
 <<function [[Repository.set_ref_if_same_old]]>>=
-let set_ref_if_same_old r aref oldh newh =
+let set_ref_if_same_old r aref _oldh newh =
   let (refs, _) = follow_ref r aref in
   let lastref = List.hd (List.rev refs) in
   let file = ref_to_filename r lastref in
@@ -5669,7 +5673,7 @@ let cmd = { Cmd.
 
 \ifallcode
 <<[[Cmd_branch.cmd]] match args cases>>=
-| [name;objectish] ->
+| [_name;_objectish] ->
   raise Todo
 @
 \fi
@@ -5960,7 +5964,7 @@ in the next section.
 @
 <<function [[Cmd_checkout.update]]>>=
 (* Your branch is up-to-date with 'origin/master'. *)
-let update r =
+let update _r =
   raise Todo
 @
 
@@ -6058,14 +6062,14 @@ let build_file_from_blob fullpath blob perm =
   | Tree.Normal | Tree.Exec ->
     (match oldstat with
     (* opti: if same content, no need to write anything *)
-    | Some { Unix.st_size = x } when x = String.length blob && 
-      (fullpath |> Common.with_file_in (fun ch -> 
-        (ch |> IO.input_channel |> IO.read_all ) = blob
+    | Some { Unix.st_size = x; _ } when x = String.length blob && 
+      ((Fpath.v fullpath) |> UChan.with_open_in (fun (ch : Chan.i) -> 
+        (ch.ic |> IO.input_channel |> IO.read_all ) = blob
        )) ->
       ()
     | _ ->
-      fullpath |> Common.with_file_out (fun ch ->
-        output_bytes ch (Bytes.of_string blob)
+      (Fpath.v fullpath) |> UChan.with_open_out (fun (ch : Chan.o) ->
+        output_bytes ch.oc (Bytes.of_string blob)
       );
       (* less: honor filemode? *)
       Unix.chmod fullpath 
@@ -6486,7 +6490,7 @@ let cmd = { Cmd.
     let r, _ = Repository.find_root_open_and_adjust_paths [] in
     match args with
     | [] -> diff_worktree_vs_index r
-    | xs -> raise Cmd.ShowUsage
+    | _xs -> raise Cmd.ShowUsage
   );
 }
 @
@@ -6568,8 +6572,9 @@ let content_from_path_and_stat_index path stat_info =
   | Index.Link ->
     Unix.readlink path
   | Index.Normal | Index.Exec ->
-      path |> Common.with_file_in (fun ch ->
-        ch |> IO.input_channel |> IO.read_all
+      let path = Fpath.v path in
+      path |> UChan.with_open_in (fun (ch : Chan.i) ->
+        ch.ic |> IO.input_channel |> IO.read_all
       )
   <<[[Changes.content_from_path_and_stat_index()]] match mode cases>>
 @
@@ -6624,7 +6629,7 @@ let show_unified_diff diffs =
     | [] -> ()
     | x::xs ->
       (match x with
-      | Diff.Equal s ->
+      | Diff.Equal _s ->
         (match () with
         | _ when nctx_after > 0 ->
           print x;
@@ -6636,13 +6641,13 @@ let show_unified_diff diffs =
           aux new_context_lines nContext 0 (nold + 1) (nnew + 1) xs
         | _ -> raise (Impossible "")
         )
-      | Diff.Deleted s  ->
+      | Diff.Deleted _s  ->
         let prevs = List_.take nctx_before context_lines |> List.rev in
         if prevs <> [] then print_header nctx_before nold nnew;
         prevs |> List.iter print;
         print x;
         aux [] 0 nContext (nold + 1) (nnew) xs
-      | Diff.Added s ->
+      | Diff.Added _s ->
         let prevs = List_.take nctx_before context_lines |> List.rev in
         if prevs <> [] then print_header nctx_before nold nnew;
         prevs |> List.iter print;
@@ -6759,7 +6764,7 @@ let cmd = { Cmd.
     | [] -> log r
     (* todo: git log path *)
     (* less: revision range *)
-    | xs -> raise Cmd.ShowUsage
+    | _xs -> raise Cmd.ShowUsage
   );
 }
 @
@@ -6785,7 +6790,7 @@ let print_commit sha commit =
   pr (spf "commit: %s" (Hexsha.of_sha sha));
   (match commit.Commit.parents with
   | [] | [_] -> ()
-  | x::xs ->
+  | _x::xs ->
     pr (spf "merge: %s" 
           (xs |> List.map Hexsha.of_sha |> String.concat "..."));
   );
@@ -6816,7 +6821,7 @@ then begin
     | [sha] -> 
       let commit2 = Repository.read_commit r sha in
       Repository.read_tree r commit2.Commit.tree
-    | x::y::xs ->
+    | _x::_y::_xs ->
       failwith "TODO: log: handle merge"
   in
   let changes = Changes.changes_tree_vs_tree
@@ -6837,7 +6842,7 @@ let print_change change =
     pr (spf "A       %s" entry.Change.path)
   | Change.Del entry ->
     pr (spf "D       %s" entry.Change.path)
-  | Change.Modify (entry1, entry2) ->
+  | Change.Modify (entry1, _entry2) ->
     pr (spf "M       %s" entry1.Change.path)
 @
 
@@ -6940,8 +6945,8 @@ let rec walk_trees read_tree dirpath f xs ys =
 <<function [[Changes.skip_tree_and_adjust_path]]>>=
 let skip_tree_and_adjust_path read_blob dirpath entry_opt =
   match entry_opt with
-  | Some { Tree.perm = Tree.Dir } -> None
-  | Some { Tree.perm = Tree.Commit } -> failwith "submodule not supported"
+  | Some { Tree.perm = Tree.Dir; _ } -> None
+  | Some { Tree.perm = Tree.Commit; _ } -> failwith "submodule not supported"
   | Some x -> Some ({ Change.
     path = Filename.concat dirpath x.Tree.name;
     mode = Index.mode_of_perm x.Tree.perm;
@@ -6983,7 +6988,7 @@ let cmd = { Cmd.
     let r, relpaths = Repository.find_root_open_and_adjust_paths args in
     match relpaths with
     | [] -> status r
-    | xs -> raise Cmd.ShowUsage
+    | _xs -> raise Cmd.ShowUsage
   );
 }
 @
@@ -7001,7 +7006,7 @@ let short_format = ref false
 @
 
 <<function [[Cmd_status.print_status_short]]>>=
-let print_status_short st =
+let print_status_short _st =
   raise Todo
 @
 
@@ -7060,7 +7065,7 @@ let print_change_long change =
     pr (spf "	new file:	%s" entry.Change.path)
   | Change.Del entry ->
     pr (spf "	deleted:	%s" entry.Change.path)
-  | Change.Modify (entry1, entry2) ->
+  | Change.Modify (entry1, _entry2) ->
     pr (spf "	modified:	%s" entry1.Change.path)
 @
 
@@ -7166,7 +7171,7 @@ let untracked r =
       |> Hashtbl_.of_list 
   in
   let res = ref [] in
-  r.Repository.worktree |> Repository.walk_dir (fun dir dirs files ->
+  r.Repository.worktree |> Repository.walk_dir (fun dir _dirs files ->
     files |> List.iter (fun file ->
       let path = Filename.concat dir file in
       let path = 
@@ -7729,7 +7734,7 @@ type graph_walker = {
 let (mk_graph_walker: Repository.t -> graph_walker) = fun r ->
   (* less: start just from HEAD? *)
   let heads = 
-    Repository.all_refs r |> Common.map_filter (fun aref ->
+    Repository.all_refs r |> List.filter_map (fun aref ->
       if aref =~ "refs/heads/"
       then Some (Repository.follow_ref_some r (Refs.Ref aref))
       else None
@@ -7954,7 +7959,7 @@ let clone url path_dst =
 val mk_client: Common.filename -> Client.t
 @
 <<function [[Client_git.mk_client]]>>=
-let mk_client url =
+let mk_client _url =
   raise Todo
 @
 
@@ -8070,7 +8075,7 @@ let sha1 s =
   let m = sha_1_pad s in
   let w = Array.make 16 0l in
 
-  (** components of the 20 bytes SHA1 (5 * 4 bytes (Int32 with 'l' suffix)) **)
+  (* components of the 20 bytes SHA1 (5 * 4 bytes (Int32 with 'l' suffix)) *)
   let h0 = ref 0x67452301l in
   let h1 = ref 0xEFCDAB89l in
   let h2 = ref 0x98BADCFEl in
@@ -8098,7 +8103,7 @@ let sha1 s =
     h4 := !h4 ++ !e
   done;
 
-  (** the result hash number of 20 bytes *)
+  (* the result hash number of 20 bytes *)
   let h = Bytes.create 20 in
   <<function [[i2s]]>>
   i2s h 0 !h0;
@@ -8248,11 +8253,12 @@ val inflate : ?header:bool -> IO.input -> IO.input
 % huffman encoding
 <<type [[Unzip.huffman]]>>=
 type huffman =
-  (** Leaf *)
+  (* Leaf *)
   | Found of int (** 0..288 *)
-  (** Node *)
+  (* Node *)
   | NeedBit of huffman * huffman
   <<[[Unzip.huffman]] cases>>
+[@@warning "-37"]
 @
 
 % Alphabet is 0-288 (0-255 + 256 for end of block + 257..288 for lz77 backref)
@@ -8302,6 +8308,7 @@ type state =
 
   | Done
   <<[[Unzip.state]] other cases>>
+[@@warning "-37"]
 @
 
 % zlib stream
@@ -8312,10 +8319,10 @@ type t = {
   mutable zhuffman  : huffman;
   zwindow  : window;
 
-  (** input *)
+  (* input *)
   zinput   : IO.input;
 
-  (** output *)
+  (* output *)
   mutable zoutput   : bytes;
   mutable zoutpos   : int;
   mutable zneeded   : int;
@@ -8593,7 +8600,7 @@ let inflate ?(header=true) ch =
     ~close:(fun () ->
       IO.close_in ch
     )
-    (** special case of ~input for 1 byte *)
+    (* special case of ~input for 1 byte *)
     ~read:(fun() ->
       let l = inflate_data z tmp 0 1 in
       if l = 1 
@@ -8928,7 +8935,7 @@ adler32_update w.wcrc w.wbuffer 0 window_size;
 <<function [[Unzip.adler32_update]]>>=
 let adler32_update a s p l =
   let p = ref p in
-  for i = 0 to l - 1 do
+  for _i = 0 to l - 1 do
     let c = int_of_char (Bytes.unsafe_get s !p) in
     a.a1 <- (a.a1 + c) mod 65521;
     a.a2 <- (a.a2 + a.a1) mod 65521;
@@ -9065,7 +9072,7 @@ let inflate_lengths z a max =
     | 16 ->
       let n = 3 + get_bits z 2 in
       if !i + n > max then error Invalid_data;
-      for k = 0 to n - 1 do
+      for _k = 0 to n - 1 do
         Array.unsafe_set a !i !prev;
         incr i;
       done;
@@ -9087,7 +9094,7 @@ let inflate_lengths z a max =
 \subsubsection{[[NeedBits]]}
 
 <<[[Unzip.huffman]] cases>>=
-(** Opti *)
+(* Opti *)
 | NeedBits of int * huffman array
 @
 <<[[Unzip.apply_huffman()]] other cases>>=
@@ -9095,7 +9102,8 @@ let inflate_lengths z a max =
 @
 
 <<function [[Unzip.tree_compress]]>>=
-let rec tree_compress t =
+(*
+let rec _tree_compress t =
   match tree_depth t with
   | 0 -> t
   | 1 ->
@@ -9108,20 +9116,23 @@ let rec tree_compress t =
     tree_walk tbl 0 0 d t;
     NeedBits (d,tbl)
 
-and tree_walk tbl p cd d = function
+and _tree_walk tbl p cd d = function
   | NeedBit (a,b) when d > 0 ->
     tree_walk tbl p (cd + 1) (d-1) a;
     tree_walk tbl (p lor (1 lsl cd)) (cd + 1) (d-1) b;
   | t ->
     Array.set tbl p (tree_compress t)
+*)
 @
 
 <<function [[Unzip.tree_depth]]>>=
+(*
 let rec tree_depth = function
   | Found _ -> 0
   | NeedBit (a,b) ->
     1 + min (tree_depth a) (tree_depth b)
   | NeedBits _ -> assert false
+*)
 @
 % so NeedBits used only after tree_compress pass
 
@@ -10058,11 +10069,11 @@ let dump_index file =
   let input = IO.input_channel chan in
   let index = Index.read input in
   let v = Dump.vof_index index in
-  pr (Ocaml.string_of_v v)
+  pr (OCaml.string_of_v v)
 @
 
 <<signature [[Dump.vof_index]]>>=
-val vof_index: Index.t -> Ocaml.v
+val vof_index: Index.t -> OCaml.v
 @
 <<constant [[Dump.vof_index]]>>=
 let vof_index = Index.vof_t
@@ -10085,7 +10096,7 @@ let dump_object file =
     else begin
       let obj = Objects.read unzipped in
       let v = Dump.vof_obj obj in
-      pr (Ocaml.string_of_v v)
+      pr (OCaml.string_of_v v)
     end
   with Unzip.Error _err ->
     failwith "unzip error"
@@ -10094,7 +10105,7 @@ let dump_object file =
 
 
 <<signature [[Dump.vof_obj]]>>=
-val vof_obj: Objects.t -> Ocaml.v
+val vof_obj: Objects.t -> OCaml.v
 @
 <<constant [[Dump.vof_obj]]>>=
 let vof_obj = Objects.vof_t
