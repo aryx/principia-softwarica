@@ -2804,8 +2804,8 @@ files on the disk:
 
 <<type [[Repository.t]]>>=
 type t = {
-  worktree: Common.dirname;
-  dotgit: Common.dirname; (* usually <worktree>/.git *)
+  worktree: Common.filename;
+  dotgit: Common.filename; (* usually <worktree>/.git *)
 
   <<[[Repository.t]] index field>>
 }
@@ -3916,12 +3916,12 @@ let read_stat_info ch =
   let ctime = read_time ch in
   let mtime = read_time ch in
   (* less: unsigned again *)
-  let dev = IO.BigEndian.read_real_i32 ch in
-  let inode = IO.BigEndian.read_real_i32 ch in
+  let dev = (*IO.BigEndian.*)read_real_i32 ch in
+  let inode = (*IO.BigEndian.*)read_real_i32 ch in
   let mode = read_mode ch in
-  let uid = IO.BigEndian.read_real_i32 ch in
-  let gid = IO.BigEndian.read_real_i32 ch in
-  let size = IO.BigEndian.read_real_i32 ch in
+  let uid = (*IO.BigEndian.*)read_real_i32 ch in
+  let gid = (*IO.BigEndian.*)read_real_i32 ch in
+  let size = (*IO.BigEndian.*)read_real_i32 ch in
   { mtime = mtime; ctime = ctime; dev = dev; inode = inode; mode = mode; uid = uid; gid = gid; size = size }
 @
 
@@ -3929,8 +3929,8 @@ let read_stat_info ch =
 <<function [[Index.read_time]]>>=
 let read_time ch =
   (* less: unsigned actually *)
-  let lsb32 = IO.BigEndian.read_real_i32 ch in
-  let nsec = IO.BigEndian.read_real_i32 ch in
+  let lsb32 = (*IO.BigEndian.*)read_real_i32 ch in
+  let nsec = (*IO.BigEndian.*)read_real_i32 ch in
   { lsb32 = lsb32; nsec = nsec }
 @
 
@@ -4274,12 +4274,12 @@ let write_entry ch e =
 let write_stat_info ch stats =
   write_time ch stats.ctime;
   write_time ch stats.mtime;
-  IO.BigEndian.write_real_i32 ch stats.dev;
-  IO.BigEndian.write_real_i32 ch stats.inode;
+  (*IO.BigEndian.*)write_real_i32 ch stats.dev;
+  (*IO.BigEndian.*)write_real_i32 ch stats.inode;
   write_mode ch stats.mode;
-  IO.BigEndian.write_real_i32 ch stats.uid;
-  IO.BigEndian.write_real_i32 ch stats.gid;
-  IO.BigEndian.write_real_i32 ch stats.size;
+  (*IO.BigEndian.*)write_real_i32 ch stats.uid;
+  (*IO.BigEndian.*)write_real_i32 ch stats.gid;
+  (*IO.BigEndian.*)write_real_i32 ch stats.size;
   ()
 @
 
@@ -4300,8 +4300,8 @@ let write_mode ch mode =
 
 <<function [[Index.write_time]]>>=
 let write_time ch time =
-  IO.BigEndian.write_real_i32 ch time.lsb32;
-  IO.BigEndian.write_real_i32 ch time.nsec
+  (*IO.BigEndian.*)write_real_i32 ch time.lsb32;
+  (*IO.BigEndian.*)write_real_i32 ch time.nsec
 @
 
 
@@ -4646,7 +4646,7 @@ a fresh repository consists mainly in creating a directory
 structure under [[.git/]], without any objects in it.
 
 <<signature [[Repository.init]]>>=
-val init: Common.dirname -> unit
+val init: Common.filename -> unit
 @
 <<function [[Repository.init]]>>=
 let init root =
@@ -4781,7 +4781,7 @@ Here is the function to open a repository and get a
 [<Repository.t>] record:
 
 <<signature [[Repository.open_]]>>=
-val open_: Common.dirname -> t
+val open_: Common.filename -> t
 @
 % not open cos conflict with ocaml keyword
 <<function [[Repository.open_]]>>=
@@ -7539,7 +7539,7 @@ let find_top_common_commits src dst =
   let walker = mk_graph_walker dst in
 
   let rec loop_while_sha commit_sha_opt =
-    commit_sha_opt |> Common.if_some (fun commit_sha ->
+    commit_sha_opt |> Option.iter (fun commit_sha ->
       if Repository.has_obj src commit_sha
       then begin
         Hashtbl.add top_commons commit_sha true;
@@ -7665,8 +7665,8 @@ let rec collect_filetree read_tree treeid have_sha =
 
 <<signature [[Commit.collect_ancestors]]>>=
 val collect_ancestors: 
-  (hash -> t) ->  hash list -> (hash, bool) Hashtbl.t -> 
-  (hash, bool) Hashtbl.t
+  (hash -> t) ->  hash list -> hash Hashtbl_.set -> 
+  hash Hashtbl_.set
 @
 <<function [[Commit.collect_ancestors]]>>=
 (* similar to walk_history but with exposed hdone hash *)
@@ -8590,22 +8590,23 @@ let window_available w =
 let inflate ?(header=true) ch =
   let z = inflate_init ~header ch in
   let tmp = Bytes.create 1 in
+  (* read input close *)
   IO.create_in
-    ~input:(fun buf_dst pos_in_buf len ->
+    (* special case of ~input for 1 byte *)
+    (*~read:*)(fun() ->
+      let l = inflate_data z tmp 0 1 in
+      if l = 1 
+      then Bytes.unsafe_get tmp 0 
+      else raise IO.No_more_input
+    )
+    (*~input:*)(fun buf_dst pos_in_buf len ->
       let n = inflate_data z buf_dst pos_in_buf len in
       if n = 0 
       then raise IO.No_more_input;
       n
     )
-    ~close:(fun () ->
+    (*~close:*)(fun () ->
       IO.close_in ch
-    )
-    (* special case of ~input for 1 byte *)
-    ~read:(fun() ->
-      let l = inflate_data z tmp 0 1 in
-      if l = 1 
-      then Bytes.unsafe_get tmp 0 
-      else raise IO.No_more_input
     )
 @
 % IO.create_in use a growing byte buffer!
@@ -10189,7 +10190,7 @@ Gc.set {(Gc.get ()) with Gc.stack_limit = 1000 * 1024 * 1024};
 % all_refs | ?? -> <>
 <<signature [[Repository.walk_dir]]>>=
 val walk_dir: 
-  (Common.dirname -> Common.dirname list -> Common.filename list -> unit) ->
+  (Common.filename -> Common.filename list -> Common.filename list -> unit) ->
   Common.filename ->
   unit
 @
