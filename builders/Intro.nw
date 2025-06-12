@@ -1,0 +1,2134 @@
+%\chapter{Introduction}
+
+The goal of this book is to explain with full details the source code of
+a {build system}.
+
+\section{Motivations}
+
+Why a build system? 
+Because I think you are a better programmer if
+you fully understand how things work under the hood,
+and a build system is one of the tools a programmer uses the most.
+%
+Indeed, it allows programmers to 
+assemble, 
+compile, 
+link,
+test,
+package, and 
+distribute 
+software with one simple command (``the one command that rules them all''),
+from very simple programs to entire operating systems.
+\n check, deploy
+
+
+\n def so I can use dependency/rule/Makefile/make/... in questions below
+A {build system} allows to {describe} and {maintain} {dependencies} 
+between files.
+\n could have better definition (said later)
+%
+Those dependencies are usually represented by {rules}, which are
+stored in a special {configuration file},
+for instance, a [[Makefile]] with the build system Make~\cite{make}
+(one of the most popular build systems).
+
+
+
+Even though a build system is not as interesting as 
+a kernel or 
+a compiler,
+it is a necessary piece in the programmer's toolbox.
+Indeed, all programs, including kernels and compilers, rely on a 
+build system to be built.
+%bootstrap:
+In fact, a build system usually also relies on itself to be built, leading to
+bootstrapping issues similar to the ones found in compilers.
+%
+Moreover, build systems contain components that are useful in many contexts,
+for example a job scheduler.
+\l even if may seem boring at first
+\l contain only simple algorithms? no deep concept?
+\l like kernel, paralellize tasks, one of the first program to do (after kernel)
+\l parallelization is even more important now
+%companies:
+\t spend lots of time in front of terminal running mk. Important program.
+\t in the end Google and Facebook spend quite some time making build systems.
+%
+Finally, build systems such as Make use an original approach 
+to solve problems.
+Indeed, to describe dependencies, Make provides a 
+{domain-specific language} (DSL).
+\n not a XML/JSON/... configuration file (said later)
+%
+The author of Make designed this DSL to require
+as few syntax as possible, in order to remove as much overhead as possible
+for the programmer when writing rules.
+\n actually some bad design with TAB, but not with mk (said later)
+Moreover, this specific language, because it is restricted, 
+because it is not as powerful as a general-purpose programming language, 
+allows in counterpart special checks that would be impossible in a 
+general language.
+\n actually not make, but with mk (said later)
+
+Here are a few questions I hope this book will answer:
+
+\begin{itemize}
+
+\item What are the fundamental concepts of a build system?
+What is the core algorithm behind a build system?
+\n graph of dependencies, DAG, target, prereq, rules, cycle, ambiguous, job
+
+\item What are the kinds of dependencies a build system needs to represent
+in order to cover all the use-cases?
+Can a file depend only on one other file (one-to-one dependency),
+or on many files (one-to-many)? 
+Can many files depend on the same single file (many-to-one), 
+or on many files (many-to-many)?
+\l all dependencies concerning a file can be described by a single rule?
+\l  or more convenient to have multiple rules describing dependency of same file?
+\n Do you need multiple rules for same target? what about ambiguities?
+\l can have mutual dependencies? self dependency? tree? graph? DAG?
+
+%dup: above
+\item What is the minimal syntax you need to describe dependencies,
+and to describe the {commands} to maintain those dependencies?
+\n :',',  <space>, <newline>
+If this syntax uses special symbols, how do you reference
+filenames containing those symbols?
+\n escaping mechanism, quoting
+
+\item What are the mistakes a build system can detect?
+Can it detect ambiguous rules? 
+Infinite rules? 
+Can it detect cycles in dependencies?
+
+\item What kind of help can a build system offer to help debug a [[Makefile]]?
+How can you visualize the dependencies? 
+\n mk -dump_graph with mk.byte
+
+\item How does a build system maintain dependencies efficiently?
+Can it compile projects incrementally? Can different parts of
+a project be compiled in parallel?
+
+\item How does the build system run different tasks in parallel, and 
+how does it coordinate them? How do you write a simple job scheduler?
+
+\end{itemize}
+
+\t put in conclusion non-trivial adv algo and data structures seen? see comment
+%data-structures (beyond list/hashtbl): (use list of words, symbol hash table)
+% - queue (jobs)
+% - graph (via pointers, thanks to an hashtbl with node references first)
+
+%algorithms (beyond search/sort): (actually use neither search nor sort)
+% - graph DFS and visited flag, cycle detection
+% - matching and substituting (poor's man regexp)
+
+
+%tags used in this file for different recurring themes:
+ %compiler: similar techno found in compiler (or assembler, or cpp)
+ %shell? similar techno in shell?
+ %bootstrap:
+ %
+ %real-world: to relate to other build systems
+ %ocaml: to give a hint on how rewriting C in OCaml could improve things
+ %ocaml-found: found subtle behavior of mk because I ported it to ocaml
+ %alt: alternative technique
+ %old: for original code I changed to be clearer
+ %pad: for code I introduced to be clearer
+ %dead: dead code removed
+ %toc: %trans: %dup: %example: %chunks:
+
+
+\section{The \plan build system: [[mk]]}
+
+I will explain in this book the code of the \plan build system
+[[mk]]~\cite{mk-successor}\footnote{See
+\url{http://plan9.bell-labs.com/magic/man2html/1/mk} for the manual page
+of [[mk]].},
+which contains about 5500 lines of code (LOC).
+%
+[[mk]] is written entirely in C.
+\l used also outside plan9 by a few open source software. Portable.
+\n I use ocamlyacc for mk-in-ocaml, but you need some lexing (state) tricks
+
+
+%dup: from Assembler.nw
+Like for most books in \principia, I chose a \plan program because
+those programs are simple, small, elegant, open source, and they form together
+a coherent set.
+%history:
+Moreover, [[mk]] is the ``spiritual successor''~\cite{mk-successor} 
+to Make. % ~\cite{make}.
+\l not as popular as make, but better variant
+\n even shorter to type (said later)
+Indeed, it was designed in the same lab (Bell Labs), 
+and even Stuart Feldman, the original author of Make,
+recommends [[mk]] as a better system.
+\t cite?
+\l mk is to plan9 what make was to unix, and plan9 successor to unix
+
+[[mk]] is modeled after Make, like many other build systems,
+but [[mk]] is both simpler and more powerful than Make.
+%
+For instance, [[mk]] does not suffer from 
+the infamous [[TAB]] requirement in the first column
+from Make\footnote{
+See \url{http://www.catb.org/esr/writings/taoup/html/ch15s04.html}
+for the story behind the [[TAB]] requirement.
+\l also http://stackoverflow.com/questions/1755550/what-is-the-reasoning-behind-the-makefile-whitespace-syntax 
+\n GNU make has .RECIPEPREFIX to allow spaces too
+};
+with [[mk]], the programmer can use spaces and tabs interchangeably.
+%
+Moreover, [[mk]] executes shell commands in {\em parallel},
+an important improvement over the original Make as
+this speeds up greatly the building process on machines
+with multiple processors.
+
+
+With one single command ([[mk]]) executed from the top
+directory of the \plan fork used in \principia, 
+you can build all 
+the \plan libraries, 
+the \plan programs,
+the \plan kernel,
+and build a disk image containing a \plan distribution
+that can be installed on a 
+Raspberry Pi\furl{https://www.raspberrypi.org/}
+or booted through QEMU\furl{https://www.qemu.org/};
+all of this with one single command.
+\n actually I use make right now :)
+
+\section{Other build systems}
+
+Here are a few build systems that I considered for this book,
+but which I ultimately discarded:
+\l which -> that?
+
+\begin{itemize}
+
+%history:
+\item Make~\cite{make},
+which from now on I will call \unix Make,
+to differentiate it from its other variants, 
+was the original Make part of early versions of \unix.
+%
+Stuart Feldman, its author, won the ACM System Software Award in 2003 for it: 
+``there is probably no large software system in the world today that
+has not been processed by a version or offspring of MAKE.''
+\furl{http://awards.acm.org/award_winners/feldman_1240498.cfm}.
+\l some interview about old time here (very long, anecdote about make origin)
+\l   https://www.princeton.edu/~hos/mike/transcripts/feldman.htm
+%
+Indeed, \unix Make has many variants, which 
+are often confusingly called also Make (e.g., BSD Make, GNU Make), 
+and which often use the same command-line program name: [[make]].
+\n actually there is pmake, bmake, gmake, but often aliased as make
+
+
+One of the latest versions of \unix Make,
+\n can even look for [[ident.c]] for precise version number
+for \unix V7 in 1979\footnote{See 
+\url{http://minnie.tuhs.org/cgi-bin/utree.pl?file=V7/usr/src/cmd/make/}.},
+contains less than 2500 LOC.
+\n also in ape/cmd/make/ (V8 2.78 3000 LOC) and in unix-history-repo
+\n maybe good candidate in the end. even use yacc! but ugly yacc.
+%
+This is smaller than [[mk]], but this version contains also 
+far less features than [[mk]]. For instance, it lacks the 
+ability to execute shell commands in parallel.
+\l need for parallel probably because was done for plan9 (said later?)
+%
+This ability requires more than just a few lines of code.
+In fact, it led in [[mk]] to the complete redesign of the 
+approach used by Make to compute dependencies.
+%
+Indeed, [[mk]] computes a graph of dependencies statically when it starts,
+and then uses this graph to guide the building process.
+\t this allows many more things? really? 
+\t  can run in // from very different parts of the tree? make cant?
+\t make does not have a graph? no transitive closure so what?
+%dup:
+\l Stuart himself considers mk a better solution 
+
+
+
+
+\item GNU Make~\cite{managing-make}\furl{https://www.gnu.org/software/make/} 
+is probably
+the most popular variant of Make.
+%
+It is used by almost every open source applications under Linux.
+\n Linux requires gmake; it uses many GNU make extensions and has a 
+\n  very fancy Makefile (make V=1 ...)
+\n I think even FreeBSD switched to GNU Make
+%
+GNU Make contains many extensions to the original \unix Make, 
+including the ability to run shell commands in parallel as 
+in [[mk]] with [[make -j]] ([['j']] for jobs).
+\l also conditional, but can be emulated in mk
+\t but as good as mk for the parallel? since mk has full graph? can do more?
+\l also FILES_arm and FILES=FILES_$(GOOS) is nice? can do in mk?
+It supports also many platforms, including old platforms
+such as DOS, VMS, or Amiga.
+%
+However, its codebase is significantly larger: 37~000 LOC, which
+is almost one order of magnitude more code than [[mk]].
+\l main.c 3200 LOC, almost as big as whole codebase of mk
+
+
+GNU Make follows closely the design of \unix Make, and so
+inherits also its major flaws, for instance, the requirement
+to use [[TAB]] in the first column for shell commands.
+%
+Where [[mk]] tries to generalize, unify, and reuse the services
+and syntax of other tools, GNU Make specializes, uses its own syntax,
+and adds an extra layer of complexity.
+%
+For example, use of variables in GNU Make (and \unix Make) requires
+parenthesis (e.g., [[$(OBJS)]]), %$
+\n except if single character or number
+which are not required when using variables in a shell (e.g., [[$OBJS]]). %$
+Moreover, the use of shell variables inside a [[Makefile]] requires an
+extra dollar (e.g., [[$$i]]).
+%
+In [[mk]], the syntax for variables is the same than in
+the shell (e.g., [[$OBJS]], [[$i]]). %$
+\n actually there is the subst variable, and leaky abstraction
+%
+Finally, [[mk]] replaces cryptic Make variables such as [[$@]] or [[$^]]
+(which do not require parenthesis for once)
+with clearer variables such as [[$target]] or [[$prereq]].
+\l for more comparisons, see comments in .tex
+% - regexp rules and no suffix rules (but meta % rules were already in
+%   unix make, not an invention of mk) (said later)
+% - mk better written, nice use of assert!
+% - more complex escaping rules? if use " in recipe in GNU Make?
+% see mk.ps section 4
+% see also https://github.com/dcjones/mk for list of improvements
+
+
+\item Ant~\cite{ant}\furl{http://ant.apache.org/} (for Another Neat Tool) 
+is a build system used by many Java projects.
+\l ex? everyone switched to Maven and now Gradle? Android uses Gradle?
+Instead of using a DSL to express dependencies, and of relying on a
+shell and command-line programs to maintain those dependencies, 
+an Ant user writes dependency rules in XML in a [[build.xml]] 
+configuration file.
+%
+For instance, here is a rule to clean files in Ant:
+\begin{verbatim}
+<target name="clean" <delete dir="classes"></target>
+\end{verbatim}
+\l could put equivalent make? clean: rm -rf classes and footnote
+\l  on .PHONY and virtual target?
+
+To contrast, here is the same rule with Make:
+
+\begin{verbatim}
+clean:
+    rm -rf classes/
+\end{verbatim}
+\l cheating :Q
+
+Ant supports many XML tags to perform various tasks such as
+deleting files ([[<delete>]]), creating directories
+([[<mkdir>]]), or calling the Java compiler ([[<javac>]]).
+
+
+The main advantage of Ant over Make is {\em portability}.
+%
+Indeed, with Make, the command-line programs used
+in a [[Makefile]] may be specific to an operating system.
+%
+For instance, the default C compiler, linker, and file utilities
+under Microsoft Windows are not the same than in Linux or macOS.
+\n but now cygwin, mac port, brew, portable GNU utilities (said later)
+%
+In fact, even the shell and [[make]] programs are different
+under Linux, macOS, and Microsoft Windows.
+\n actually Microsoft put also Bash as standard now
+\n https://blogs.msdn.microsoft.com/powershell/2016/04/01/bash-for-windows-why-its-awesome-and-what-it-means-for-powershell/
+%
+However, the portability of Ant comes at a price; its
+codebase is very large with more than 200~000 LOC (without
+the tests), which is almost 40 times more code than [[mk]].
+\n every utility needs its own wrapper
+
+
+The main advantage of Make (and [[mk]]) over Ant is {\em generality}.
+Indeed, you can call any command-line programs from the [[Makefile]].
+Moreover, the shell, which is the language used to write commands in
+a [[Makefile]], is an expressive language.
+\l does not need to look at API of Ant either, can reuse past knowledge
+%
+With Ant, if there is no XML tags for a certain task,
+you need to extend Ant itself.
+%
+Finally, XML is an extremely verbose language; writing
+XML dependency rules by hand is tedious.
+\l ok if generated by IDE.
+\l also Ant has Ivy (dependency manager, equivalent of Cargo?)
+
+
+\item CMake\furl{https://cmake.org/} is a cross-platform build system
+used in many large open source projects (e.g., LLVM).
+\l for Cross-platform Make?
+\l cite LLVM?
+%
+It was designed, like Ant, to overcome the lack of portability of [[Makefile]]s.
+%
+Unlike Ant, CMake acts as a frontend to Make (and other build systems).
+Indeed, CMake is a {\em meta build system}.
+%
+Instead of writing [[Makefile]]s, the user of CMake 
+creates [[CMakeLists.txt]] files containing builtin (portable) commands 
+to compile source code.
+%
+CMake then generates from those configuration files regular
+[[Makefile]]s that can be processed by Make.
+%
+CMake can also generate files for IDEs such as Apple's Xcode or
+Microsoft's Visual Studio.
+\n also can generate files for ninja
+\l like automake, gyp, etc. mix actually configure/automate feature I think.
+
+CMake contains thousands of builtin commands,
+\l really?
+offers a graphical user interface, and supports many IDEs.
+However, its codebase contains more than 250~000 LOC (not including the tests). 
+\n also without Utilities which is used but seems to contained forked libs
+This is extremely large, especially
+considering the fact that CMake is just a frontend to other build systems.
+\l   has an article in OASA book 1 or 2
+
+\n timeline as in VCS.nw? meh, no real innovations after Make
+
+
+% one using python, EDSL, but more syntax boilerplate "", [;], etc
+
+\end{itemize}
+\t there are tons more build systems; Many language specific, many meta.
+\t  but ask yourself do I really need it? make/mk not enough?
+
+Note that the lack of portability of [[Makefile]]s has been 
+partially fixed in the last ten years.
+%
+Indeed, with the availability of GNU utilities 
+for operating systems other than Linux (e.g., 
+through cygwin\furl{https://www.cygwin.com/} for Microsoft Windows, 
+and macports\furl{https://www.macports.org/} or 
+Homebrew\furl{http://brew.sh/} for macOS),
+[[Makefile]]s are now more portable because the same command-line
+programs are available on more platforms.
+\n actually for macOS file utilities are based on BSD
+
+
+\begin{figure}[]\centering
+\includegraphics[height=0.45\textheight]{lineage}
+\caption{Build systems timeline}
+\label{fig:lineage}
+\end{figure}
+
+%dup: Shell.nw
+Figure~\ref{fig:lineage} presents a timeline of major build systems.
+%
+I think [[mk]] represents the best compromise for this book: 
+it implements the essential features of a build system while still having
+%dup: intro/mk
+a small and understandable codebase (5500 LOC).
+
+
+\l a few other, see the comment in this file:
+%make-clones:
+% - pmake, freebsd https://www.freebsd.org/doc/en_US.ISO8859-1/books/pmake/
+%   parallel make
+% - nmake (replaced by msbuild later)
+% - dmake
+% - omake, apparently has listen-to-fs features too, so daemon
+%   and rerun when save in editor?
+%   http://blog.camlcity.org/blog/omake1.html
+% - https://github.com/dcjones/mk is mk port in Go! 2285 LOC but some files
+%   looks almost like an automatic C->Go translation (identical logic)
+% - https://github.com/sourcegraph/makex another clone in Go
+%other:
+% - ninja, seems interesting, the assembler of build system, 19~000 LOC
+%   has an article in OASA book 3
+% - tup, 31 000 LOC (just src/tup/), does not look that much better than mk
+%   but looks pretty nice: *.c |> gcc %f -p %o |> %B.o
+%   http://gittup.org/tup/make_vs_tup.html benchmark
+%   http://gittup.org/tup/build_system_rules_and_algorithms.pdf
+%   But the coolest thing is that it automatically handle dependencies!
+%   and it uses fuses and inotify probably so it's automatic!
+% - bazel?? latest from google:
+%   http://google-opensource.blogspot.com/2015/09/building-build-system-bazel-reaches-beta.html
+% - buck, huge, python-based like many other google-inspired build systems.
+%   the ocaml-specific stuff is already 4000 LOC, hmmm
+% - cons/scons, Perl-based and python-based build systems???
+% - redo, from dan bernstein, seems minimalist, not sure it's better.
+%   maybe better for autodeps.
+% - msbuild, 452 000 LOC, wow, XML-based too, recently open sourced
+%meta build systems:
+% - imake (for X, but then superseded by autotools)
+% - automake and autotools (for GNU)
+% - gyp, from Google, python-inspired, simple, 28~000 LOC
+%   support many backends (make, cmake, ninja, eclipse, xcode, ...),
+% - fbmake, very similar to gyp
+% - pants (from square), seems similar to fbmake
+%wrappers:
+% - qake, just a big makefile, so relies on GNU make
+% - OCamlMakefile
+% - premake?
+%language specific:
+% - java: 
+%    * maven, first to provide ability to download dependency over the network?
+%    * ant+ivy (to catchup with maven)
+%    * gradle seems best one, use of DSL based on Groovy. huge codebase.
+%    comparison: https://technologyconversations.com/2014/06/18/build-tools/
+%    but all 3 are bad in my opinion.
+% - javascript: gulp, grunt
+% - ruby: rake, can write rules in Ruby. EDSL again. more verbose than make,
+%   need of do, end, need '' around filenames, need of many builtins.
+%   maybe inspiration for brew
+% - haskell: shake, EDSL in haskell, seems too verbose, 
+%   cabal
+% - scala: sbt (scala build tool), even a book about this
+% - rust: cargo, integrate in build system a dependency manager
+% - ocaml: omake, opam (just dependency manager though),
+%   jbuilder, jenga (advanced jbuilder) from jane street, 
+% - lisp: asdf
+% - clojure: leiningen
+% - go: realize (with watchers?)
+
+
+% see https://en.wikipedia.org/wiki/List_of_build_automation_software
+
+%http://www.catb.org/esr/writings/taoup/html/ch15s04.html
+% discussions of a few meta build systems, and nice history of make
+%http://www.lihaoyi.com/post/WhatsinaBuildTool.html
+% nice comparisons of a few tools
+%http://hadihariri.com/2014/04/21/build-make-no-more/
+% nice bashing of all make competitors, a la "evolution of a programmer"
+%the essence of make, not too bad, nice relation between ninja and make
+% http://bentnib.org/posts/2015-04-17-propositions-as-filenames-essence-of-make.html
+%make advocacy :)
+% http://bost.ocks.org/mike/make/
+%http://aosabook.org/en/500L/contingent-a-fully-dynamic-build-system.html
+% meh, EDSL
+%make theory and practice
+% http://www.ploxiln.net/make.html  meh
+%how we use make:
+% https://segment.com/blog/how-we-use-make/ list of targets
+%make for javascript people:
+% http://www.olioapps.com/blog/the-lost-art-of-the-makefile/
+
+% concurrent programming in ML contain the description of a build system
+
+% complimentary tool: 
+%  - https://github.com/cespare/reflex to rebuild automatically after a
+%    file changed
+%  - the one from facebook? 
+
+\t used not only under plan9. Was ported to Unix (not just plan9port)
+\t A few projects use it. Not as popular as Make though.
+
+\section{Getting started}
+\label{sec:getting-started}
+
+%dup: Assembler.mw
+To play with [[mk]], you will first need to install
+the \plan fork used in \principia (see \urlinstall).
+Once installed you can test [[mk]] under \plan with the
+following commands:
+\l also under unix with plan9port
+
+\begin{verbatim}
+1   $ cd /tests/mk
+2   $ mk -f hello.mk
+3   5c -c hello.c
+4   5c -c world.c
+5   5l -o hello hello.5 world.5
+6   $ mk -f hello.mk
+7   mk: 'hello' is up to date
+8   $ touch world.c
+9   $ mk -f hello.mk
+10  5c -c world.c
+11  5l -o hello hello.5 world.5
+12  $
+\end{verbatim}
+\n could get one from kencc or plan9port. issues though with rc vs sh ...
+
+Line~2 runs [[mk]] with the [[-f hello.mk]] argument
+to tell [[mk]] to use the rules in the [[hello.mk]] file
+instead of the default [[mkfile]] 
+([[mk]]'s equivalent of a [[Makefile]]).
+%
+Line~3 through 5 are the shell commands ran by
+[[mk]] given the rules contained in [[hello.mk]]. 
+%
+Those commands compile and link a simple program called [[hello]]
+using the ARM C Compiler [[5c]] (see the \book{Compiler})
+and ARM linker [[5l]] (see the \book{Linker}).
+%
+Remember that [['.5']] is the filename extension of ARM object files
+under \plan, hence the use of [[hello.5]] and [[world.5]] in the
+linking command Line~5.
+
+
+Line~6 re-runs [[mk]], which should not recompile 
+or relink anything because nothing has changed. Instead,
+[[mk]] should indicate that [[hello]] is already up to date.
+\n I added the already in mk-ocaml
+%
+Line~8 modifies the date of [[world.c]]. 
+\l need to explain touch? modification time?
+This time, re-running [[mk]] at Line~9 should trigger the recompilation
+of [[world.c]] and relinking of [[hello]]. Note that
+[[mk]] should not recompile [[hello.c]] because
+[[hello.5]] depends only on [[hello.c]], not [[world.c]].
+\l incremental (said later)
+
+%dup:
+With those commands, you can see the main purpose of a build system:
+to maintain dependencies between files 
+(here source files, objects, and binaries) automatically, 
+and efficiently by running only the minimum number of commands.
+
+
+\section{Requirements}
+
+%dup: from Assembler.nw
+Because most of this book is made of C source code, 
+you will need a good knowledge of 
+the C programming language~\cite{k-r} to understand it.
+%
+I also assume you are already familiar with at least 
+one build system, for instance, a variant of Make,
+\l also a shell
+%
+and so are familiar with concepts such as
+a [[Makefile]],
+a {rule},
+a {target}, 
+a {prerequisite}, or
+a {shell command}.
+\n called recipe in mk, by shell command easier (said later)
+%
+If not, I suggest you to read one of the books about
+GNU Make~\cite{managing-make, programming-with-gnu-software, gnu-make-manual}.
+\l or unix/gnu development environment? cite?
+
+%dup: Windows.nw
+If, while reading this book,
+you have specific questions on the interface of [[mk]],
+I suggest you to consult the man page of [[mk]]
+at [[docs/man/1/mk]] in my \plan repository.
+
+Note that the [[builders/docs/]] directory in my \plan repository
+contains documents describing either [[mk]]~\cite{mk-successor},
+or the [[mkfile]]s used in \plan~\cite{mk-plan9}.
+%
+Those documents are useful to understand some of the 
+design decisions presented in this book, especially how and why
+[[mk]] differs from Make.
+
+
+
+
+\section{About this document}
+%old: was #include "../docs/latex/About.nw"
+% but syncweb -web_to_tex does not process #include inside included file
+% for now, so can use #include just in top Make.nw
+\input{../docs/latex/About}
+
+\section{Copyright}
+\input{../docs/latex/CopyrightPlan9Text}
+
+\section{Acknowledgments}
+
+I would like to acknowledge of course the author of [[mk]],
+Andrew Hume,
+who wrote in some sense most of this book.
+\n and Bob Flandera? more for plan9 mkfiles than mk itself, 
+\n apparently Hume did stuff also on optimizing Boyer Moore,
+\n  cited by author of GNU grep https://lists.freebsd.org/pipermail/freebsd-current/2010-August/019310.html
+
+
+
+
+\chapter{Overview}
+\label{chap:overview}
+
+%trans: %dup: Assembler.nw
+Before showing the source code of [[mk]] in the following chapters, 
+%toc:
+I first give an overview in this chapter
+of the general principles of a build system.
+%
+I also quickly describe the command-line interface of [[mk]]
+and show a simple [[mkfile]] for a toy application.
+\n actually hello.mk
+%dup: from Assembler.nw
+Finally, I define terms, explain how the code is organized, 
+and more generally give the background necessary
+to understand the code I will show later.
+
+\section{Build system principles}
+\n I try to not use too much [[mk]] here, and use "build system", to generalize
+
+%trans:
+To understand the goal of a build system, it is useful to remember
+how programmers were compiling projects before Make was invented.
+\l remember -> imagine? compiling -> maintaining? building?
+%without: %history:
+Before Make, programmers were using {shell scripts} to {record} the
+compiling and linking commands for a project. For instance, here
+is one such script called [[make.rc]]\footnote{This script
+is using the \plan shell, which is called [[rc]] (see the \book{Shell}), 
+hence the use of the [['.rc']] filename extension.
+\l not sh or bash
+}
+\l history: apparently those scripts were called 'make' or 'install'
+to build the toy program mentioned in Section~\ref{sec:getting-started}:
+\l can be used to build {from scratch}, or after modified
+
+<<tests/mk/make.rc>>=
+#!/bin/rc
+
+5c -c hello.c
+5c -c world.c
+5l -o hello hello.5 world.5
+@
+
+As a program grows larger, and the number of files grows,
+the shell-script approach becomes too {inefficient}\footnote{
+%bootstrap:
+This approach can still be useful to bootstrap the build system itself.
+}.
+\l or use https://notabug.org/akkartik/basic-build (minimal build system in sh)
+\l inefficient, and also a bit long, but could factorize with shell variables
+Indeed, in the previous example, if only
+[[hello.c]] is modified, there is no need to recompile also [[world.c]],
+but that is what the script would do if it was run again to rebuild
+the program.
+\l not incremental. rebuild from scratch. (said later)
+%without:
+An alternative is to keep track in your head of
+all the modifications, and to recompile manually only what is necessary.
+%
+However, again, as programs grow larger, and dependencies between files
+become more complex, 
+\l make depend, gcc -MM (said later?)
+it becomes difficult to remember
+which files need to be recompiled and what are the precise flags 
+used to recompile or link those files. 
+\n actually as programs become really really big, ninja is better
+
+
+%dup: intro/motiv (but longer version)
+Thus, the goal of a build system is to 
+describe {\em concisely} and 
+maintain {\em efficiently}
+{dependencies} between files.
+\l shell is concise but inefficient
+\l could write special programs to check date (including in a shell lang)
+\l  which would be efficient, but not concise so tedious
+%
+For a programmer, those files are C or Assembly source files, object files, 
+and executables.
+For a writer, those files are Troff or TeX documents, pictures, and
+PDFs. 
+A build system can be used in many contexts, not just for programming.
+
+%toc:
+Note that every words in the first sentence of the previous paragraph 
+are important.
+The word ``concisely'' led in [[mk]] to the creation of a 
+domain-specific language.
+The word ``dependencies'' led to the use of a {graph} to represent 
+the relationships between files. Finally,
+the word ``efficiently'' led to the use of a job scheduler to run in
+parallel multiple tasks. All of this will be 
+explained in the following sections.
+\n there are different kinds of deps actually many-to-many
+
+Note that even if in the next sections I will use examples using the 
+syntax of [[mk]], which is very close to the syntax of Make,
+the principles apply to most build systems.
+
+\subsection{A domain-specific language}
+\label{sec:dsl}
+
+A {\em domain-specific language} (DSL), as its name suggests, is a language
+specialized for one particular task. 
+%dup: intro/motivations overview/principle
+In the case of a build system, the task is 
+(1) to describe file dependencies, and 
+(2) to describe the commands to maintain those dependencies.
+%
+A DSL uses a special syntax to describe more concisely than
+with a {general-purpose language} the solution to a particular problem.
+%dup: intro/motivations
+\l Usually not as expressive as full PL, but trade expressivity for compactness
+\l and also special checks (will see later)
+%trans:
+The shell script [[make.rc]] above is already a good solution for (2).
+Indeed, a shell can almost be considered a DSL for running commands:
+\l before grew as full language
+it uses a special syntax for launching programs (by just typing
+the name of a command, without the need to call [[fork()]] or [[exec()]]),
+for creating pipes (with [['|']]), and for file redirection 
+(with [['>']] or [['<']]).
+%
+Thus, the main idea behind the DSL of [[mk]] (and Make before) 
+\l give a name to this DSL? Mk-lang?
+was to extend slightly the shell syntax to accommodate also (1), 
+with special constructs to express dependencies between files.
+\l small superset actually. very small language.
+%toc:
+Those constructs are 
+the rule, 
+the pattern,
+the variable,
+and the file inclusion,
+as explained in the next sections.
+
+\subsubsection{The rule}
+\label{sec:rule-simple-mkfile}
+
+%trans:
+The most important construct in 
+\n [[mk]]'s DSL 
+the DSL of a build system
+is the rule.
+%
+A {\em rule} describes a {relation} between two or more files,
+for instance, the relation between an object file [[hello.5]]
+and its source [[hello.c]].
+\l essence is state dependencies/graph between files and how to achieve it.
+%
+In [[mk]]'s terminology, the object file is called the {\em target},
+and the source the {\em prerequisite}. A rule describes also the
+command to maintain the dependency between those two files,
+that is the shell command to generate the target from the prerequisite.
+In mk's terminology, this command is called the {\em recipe}.
+\l recipe also called body and start of rule called head (said later?)
+%\paragraph{Syntax}
+
+Here is the syntax of a rule in [[mk]]'s DSL:
+
+\begin{verbatim}
+<target> : <prerequisite 1>...<prerequisite n>
+    <recipe>
+\end{verbatim}
+\l syntax of mk and Make, except TAB vs space
+\l in fact target_s_: prerequisites
+% {target}: {prerequisites}
+%     {recipe}
+
+
+Here are the rules corresponding to the script [[make.rc]] shown above
+for the toy program mentioned in Section~\ref{sec:getting-started}:
+\l ported to mk, ``program''
+
+<<tests/mk/mkfile version 1>>=
+# rule 1
+hello.5: hello.c
+    5c -c hello.c
+# rule 2
+world.5: world.c
+    5c -c world.c
+# rule 3
+hello: hello.5 world.5
+    5l -o hello hello.5 world.5
+@
+\n would be better to have hello first rule so that default rule but ok.
+\l use of comment here
+
+Note that a rule can have multiple prerequisites, like in the third
+rule above with the multiple object files.
+%
+In fact, a rule can also have multiple targets, as you will see 
+in Section~\ref{sec:graph-many-to-one}.
+\l footnote instead?
+%
+Moreover, the same file can be a target in one rule
+and a prerequisite in another rule,
+for instance, [[hello.5]] in respectively the first and third rules above.
+
+The rules are usually stored in a special {\em configuration file}:
+an [[mkfile]] for [[mk]] (and a [[Makefile]] for Make).
+\l ``program''
+%reuse:
+The syntax of an [[mkfile]] is very similar to the syntax of a shell script.
+%reuse:
+[[mk]] even uses the same syntax for comments, 
+which are prefixed with a [['#']].
+\l could be extracted automatically ... except hello.5 not visible from 
+\l  5c command, would need -o hello.5 then.
+The only syntactical addition is the use of [[':']] to separate the target from
+the prerequisites, and the newline and indentation
+\l any indentation is fine, tab, space
+to separate the prerequisites from the recipe.
+\l x : y \n z1 \n z2. could also x : y ; z1; z2
+%
+This syntax is {\em minimalist}. Indeed, there is no
+quotes around filenames or around commands. Moreover, the different
+elements in the list of prerequisites are simply separated by spaces.
+\l no keyword, no braces, nothing!
+\l same spirit than shell actually. no need () for calling
+\l no need remember order of options (but then lead to -xxx named arguments)
+\l actually sometimes need quote, for escaping (said later)
+
+%\paragraph{Semantic}
+%trans: syntax, now semantic. just like syntax rule is simple, semantic trivial
+The semantic of a rule is also very simple. [[mk]] will check
+\t recursive: mk will check if target up-to-date with prereqs
+\t  by first checking recursively if prereqs up-to-date with their own prereqs
+\t  and then check the modif time of target is more recent than ...
+if the {\em modification time} of a target is more recent than {all} its
+prerequisites.
+\n actually more recent or equal in mk-in-ocaml, cos second not precise enough
+\n actually DFS first, so semantic more subtle than what it looks (said later)
+\n  check if prerequires are up to date, recursively, and then check if tgt ...
+If not, it will run the recipe, which hopefully will update the 
+modification time of the target.
+\l or :Q:, footnote?
+\l can do the check? mk does? mk-in-ocaml does!
+
+%\paragraph{Recipe}
+As I said before, the recipe is simply a shell command.
+Even though the commands in the [[mkfile]] above are simple, 
+[[mk]] allows to use the full language of the \plan shell [[rc]]
+(see the \book{Shell}), with loops, conditionals, functions, etc.
+%
+Indeed, one of the design principles of [[mk]] was to leverage existing tools.
+\n and syntax (said later)
+\t MKSHELL can use another shell too
+
+The shell language is {\em embedded} inside [[mk]]'s DSL.
+\l Not even interpreted. As is. simpler than in make (said later?)
+%
+This is similar to other \unix DSLs, for example Lex~\cite{lex} and
+Yacc~\cite{yacc}.
+The programmer can use some special syntax to define respectively
+{regexps} and {grammar rules}. He can also use the full C language 
+for the {actions} triggered when a regexp or grammar rule is recognized
+(See the \book{CompilerGenerator}).
+\n actually in Make weird mix for vars, but not unlike Yacc with dollar1
+\n Similar to PHP too, with HTML and where embed dynamic ocde
+%
+\label{sec:mk-is-a-graph}
+In [[mk]], the actions are not written in C but in the shell language 
+of [[rc]], 
+\t or sh when MKSHELL
+and those actions are embedded not inside the definition of 
+a regexp or of a grammar but inside the definition of a {\em graph}.
+%
+Indeed, the targets and prerequisites are similar to the sources and
+destinations of {\em arcs} in a graph. The recipe corresponds to the 
+{\em label} on an arc.
+%
+In fact, as you will see in Section~\ref{sec:graph-principles}, 
+[[mk]] internally uses a graph to represent the dependencies between files.
+
+
+
+%\paragraph{Dependency arities}
+%What types of dependencies we need? can have multiple targets:
+%    x.ml x.mly: x.mly
+%  (but then can be confusing when making graph of deps. dont want
+%  run recipe twice, so tricky, so need mark multiple nodes from one job done)
+\n  also can be used to factorize simple rules like a.o b.o: x.h
+
+% can have same target and multiple rules (but only if one recipe)
+%    x.o: x.c  recipe     x.o: y.h
+% (also with metarules below, when instantiate can add more rules??)
+%  but maybe this one is really sugar, could put all prerequisites at once!
+
+% lead to optional recipe. space/tab first char cos support multiline 
+% for shell command (otherwise would need escaped newline there too, ugly).
+
+
+
+\subsubsection{The pattern}
+\label{sec:pattern}
+
+%trans:
+The [[mkfile]] in the previous section allows to maintain
+efficiently dependencies between files:
+if only [[hello.c]] is modified, then [[world.c]] will not be 
+recompiled by [[mk]].
+However, the [[mkfile]] is not very concise.
+%
+Fortunately, the first two rules are very similar:
+they differ only by the name of the file.
+\t in make.rc, if long list, then can define in a var and loop at least!
+\t but how in mk DSL? how loop? how generalize?
+%
+This is why to factorize rules, 
+most build systems provide a way 
+\n [[mk]] allows 
+to use {patterns} inside a rule. 
+
+In [[mk]],
+a {\em pattern} is a sequence of characters where
+the special character [['%']]
+can match any sequence of characters.
+\l separated by space? but then can also have quote.
+\l longest match?
+Here is an example of a pattern that matches any C source files:
+
+\begin{verbatim}
+%.c
+\end{verbatim}
+
+A rule using a pattern in his target
+is called a {\em meta rule} in [[mk]]'s terminology.
+\l one of the target
+\n can also be in prerequisite
+\l rule generating rules
+\l describe a set of arcs in a graph in a generic way.
+%
+Here is a better version of the [[mkfile]] for the same
+toy program:
+
+
+<<tests/mk/mkfile version 2>>=
+# simple rule
+hello: hello.5 world.5
+    5l -o hello hello.5 world.5
+
+# meta rule
+%.5: %.c
+    5c -c $stem.c
+@
+%$
+\t order does not matter, declaratif
+
+During the processing of the first rule above, [[mk]] will
+recognize that [[hello.5]] and [[world.5]],
+which are the prerequisites,
+{\em match} the target in the {second rule} if the percent is 
+set to [[hello]] or [[world]].
+\l first rule called simple rule, second meta rule.
+%
+[[mk]] will then {\em instantiate} the meta rule to generate
+a specific rule for [[hello.5]], and another one for [[world.5]].
+\l actually done on the fly while building the graph
+\n but sometimes instantiate too many, possibly ambiguous, (see vacuous remove)
+%
+The percent in the prerequisite is then {\em substituted} by
+the matched string in the target ([[hello]] or [[world]]), and the 
+%reuse:
+{special variable} [[$stem]] %$
+can be used from the shell command to access the matched string.
+\t footnote could use percent in recipe, but then not shell recipe
+\t  goal is be as less intrusive as possible (as opposed to Make,
+\t  which does processing on recipe such as variable expansion)
+\t maybe just footonote that sas explain later why different mechanism
+\t  (if choose percent, then need process string, need escape mechanism
+\t  complicated).
+\l special variable good name?
+
+The use of [['%']] to match any sequence of characters
+is similar to the use of [['.*']] in a {\em regular expression},
+or the use of [['*']] in shell globbing (see the \book{Shell}).
+\l cite book on regexps?
+\l why not reuse more then?
+%
+In fact, [[mk]] supports also meta rules using 
+regular expressions, as explained in Section~\ref{sec:regexp}.
+%
+However, in most cases, patterns using [['%']] are expressive enough
+and simpler to write.
+\l regexp notoriously difficult, and . is very common in filename but
+\l  needs to be escaped in regexp
+
+%real-world: %make:
+GNU Make supports meta rules with percents, but not 
+with regular expressions.
+UNIX Make and GNU Make
+support also {\em suffix rules} (e.g., [[.5.o: ...]]).
+However, suffix rules are less intuitive to write and less expressive 
+than meta rules. This is why they are not supported by [[mk]].
+\l .SUFFIXES also why do we need to declare the suffixes? ugly. simpler to not have them
+\l generalize, simplify
+\n can also use pattern in variable (said later)
+
+\subsubsection{The variable}
+\label{sec:variable}
+
+\t mk simpler than make with = vs :=, I never understood
+\t can override previous value, but that means can put default
+\t  values in core mkfiles and then <core/mkfile and then adjust
+\t  after the variable (can even do [[XXX=$XXX and other stuff]]) 
+%$
+
+%trans:
+In the previous section, I have shown the use of a variable 
+in a recipe ([[$stem]]).
+This variable was set by [[mk]].
+\l special var, internal var
+%
+Most build systems offer a way 
+to define and use your own variables to factorize things.
+\n  in an [[mkfile]]
+\l more uses than factorizing? readability?
+\l actually also on the command line, and even override
+%
+In [[mk]],
+those variables can contain a list of {\em words}, which
+can correspond to anything: filenames, compiler flags, etc.
+Here is an example of a variable containing two filenames:
+
+\begin{verbatim}
+OBJS=hello.5 world.5
+\end{verbatim}
+
+Here is a slightly different version 
+% shorter (in numbers of characters) % actually not shorter
+of the previous [[mkfile]] using a variable:
+
+<<tests/mk/mkfile version 3>>=
+OBJS=hello.5 world.5
+
+hello: $OBJS
+    5l -o $target $OBJS
+
+%.5: %.c
+    5c -c $stem.c
+@
+%$
+\l CFLAGS=-g -x -...and then can use in many rules CFLAGS. easier to modify too.
+\l but if use metarule then less useful
+
+%reuse:
+One of the design principles of [[mk]] was to leverage existing tools,
+but also existing syntax.
+Thus, the syntax to define and use variables in [[mk]] is
+exactly the same than in the shell.
+\n define and use! Make sucks here.
+\l but not same exactly! handled by mk itself this time!
+\l reuse syntax and some machinery (but not all machinery)
+This syntax is again minimalist:
+to {define} a variable, type a variable name, followed by an equal sign, 
+followed by a list of words simply separated by space.
+There is no braces, brackets, quotes, commas, types, or semicolons
+like in other languages 
+(e.g., \verb+char* OBJS[] = {"hello.5", "world.5"};+ in C).
+%
+The next {newline} marks the end of the variable definition\footnote{
+You can also escape newlines, to spread variable definitions over multiple
+lines, as explained in Section~\ref{sec:escaped-newline}.
+}.
+\l  (unless it is {escaped} to scale to larger list, as explained in Section X)
+To {use} a variable, prefix the variable name with the dollar sign
+(e.g., [[$OBJS]] in the rule for [[hello]] above).
+\n also {} for special cases (said later)
+\l history of this dollar sign? give an example?
+
+
+Note that [[mk]], like the shell [[rc]], treats the content
+of a variable as a list.
+\t leads to less ugly stuff later like dollar@ vs dollar*
+\l even if contains only one element
+[[mk]] offers also a special syntax to concatenate lists
+by simply juxtaposing a variable with other elements or other
+variables, as in the following example:
+
+\begin{verbatim}
+X= b c d
+# Y will contain a b c d e f
+Y=a $X d e f
+\end{verbatim}
+%ocaml-found: scalar vs list context! can be stricter actually
+
+[[mk]] offers also a special syntax to transform lists,
+as explained in Section~\ref{sec:transform-list}
+\l use pattern! orthogonal power
+
+
+Once a variable is defined, you can use it in other variable
+definitions, or in a rule (in the target, in the prerequisites, 
+or even in the recipe). 
+\l order matters here in mk
+You can also use variables in patterns in meta rules.
+\t can use before defined? empty then? and when define the can see new value?
+\n also in file inclusion (said later)
+%
+Moreover, [[mk]] imports most variables from the environment,
+so you can also use variables such as [[$HOME]] in your [[mkfile]]. %$
+\l like the shell, also import and prefix with dollar
+\n or objtype (said later)
+
+
+Note that the term ``variable'' in the context of [[mk]] is slightly 
+misleading.
+Indeed, in [[mk]], variables are constants.
+\n actually mk-in-ocaml check if override
+\n even though can be overriden on commandline
+%declaratif:
+Variable definitions are more {binding definitions}.
+\t expanded in target and prerequisite and def as parse the file
+\t  (but not in recipe, cos use different mechanism, export env, 
+\t   again to not be intrusive on recipe, embeded DSL, so no extra escaping)
+Indeed, [[mk]] needs to know statically the value of a variable to be
+able to compute the graph of dependencies.
+\t why? need explain more, at least footnote and ref to later
+%real-world:
+\t actually in Make vars are different and binding and scope is complex
+\l Also clearer then diff between variables like OBJS=..
+% and variables generated by mk such as target, stem etc.
+\l also leaky abstraction, use of var in target/prereqs is diff than in recipe
+
+%trans:
+% more generic stuff when use modularity/inclusion
+
+\subsubsection{File inclusion}
+
+%trans:
+The last construct 
+\n of [[mk]]'s DSL 
+found in most build systems
+is the file inclusion. 
+\l better term? the include?
+%
+In [[mk]],
+a {\em file inclusion} is an {instruction} in the [[mkfile]],
+starting with [['<']]. You can include files to load the rules 
+and variables defined in those files files.
+%
+Those files can themselves include other files, recursively.
+Here is an example of a file inclusion:
+
+\begin{verbatim}
+</$objtype/mkfile
+\end{verbatim}
+
+The effect is similar to a [[#include]] in C.
+%
+Note that the filename can contain variables defined
+previously in the [[mkfile]] or in the environment.
+\l use variable! orthogonal power, can use variables everywhere
+%
+Here, [[$objtype]] %$
+is a special \plan environment variable containing the
+type of architecture of the current machine (e.g., [[arm]], [[386]]).
+\t cite? plan9 article? one of my books?
+%
+You can then define for each architecture a specific [[mkfile]] with
+variables such as [[$CC]] or [[$LD]]
+containing the name of the native compiler and linker.
+%
+Appendix~\ref{sec:mkfile-objtype} presents such an [[mkfile]]
+for the ARM architecture.
+%portability:
+It is good practice to include [[/$objtype/mkfile]] %$
+at the beginning of an [[mkfile]] for better portability.
+%reuse:
+Note that again [[mk]] reuses the syntax of other tools by
+using the [['<']] symbol used for input redirection in the shell. 
+\n not so convincing this one
+
+
+Just like the rule, the pattern, and the variable,
+a file inclusion allows to factorize things.
+%
+Indeed, you can store a library of meta rules
+in a separate file (e.g., [[/shared/mkgeneric]]) and reuse this
+file in multiple projects.
+\t link to Appendix?
+\l [['<']] so modularity and can factorize in different files
+In fact, by combining variables and file inclusion, you can
+also have a library of simple rules shared by multiple projects,
+as shown by the example below:
+
+<<tests/mk/mkfile version 4>>=
+OBJS=hello.5 world.5
+PROG=hello
+
+</shared/mkone
+@
+%$
+\n actually /sys/src/cmd/mkone, and it is OFILES and TARG not OBJS and PROG
+
+<</shared/mkone>>=
+$PROG: $OBJS
+    5l -o $PROG $OBJS
+%.5: %.c
+    5c -c $stem.c
+@
+%$
+%real-world: include (or -include)
+
+% with variables above, offers already some kind of genericity!
+% in fact many mkfiles are just  < /sys/src/cmd/mkone !
+% (but still need metarules for that)
+
+%\subsection{Generating some dependencies automatically}
+
+% another use for file inclusion is include dependencies information generated
+% automatically by other tools.
+% Can do manually, but can be tedious.
+% Many dependencies are implicit in files. if foo.c include
+% foo.h, should recompile. Can declare deps in mkfile, but
+% redundant, hard to maintain. 
+% So can be good to auto generate some dependencies. But 
+% different for each programming language.
+
+% enter .depend 
+% (and so also need for multiple rules for same targets (but with empty recipe))
+
+% related is library of variables and rules for different languages.
+
+% object level deps. libs.
+% But also semantic level.
+
+% question is can we generate every dependencies automatically?
+% IDE tries to do that. But requires helps, AddFile, AddDir.
+% what about when have multiple binaries in one distrib?
+% hh_server nice, but works because generate a giant PHP library.
+
+% in the end, could be job of compiler? like javac does? but then
+% impose constrain on how to organize classes in files and path
+% (or use hh_server, but again, impose constraint of one giant
+% single binary/library)
+
+%\subsubsection{Generality}
+
+% works for all PLs. not adhoc to one PL like IDEs
+
+%related: generate from mkfile .project, like Buck does.
+
+%\subsection{Different types of dependencies}
+% before? after?
+
+\bigskip
+[[mk]] offers a few more constructs,
+%beyond 
+%the rule, 
+%the pattern,
+%the variable, and 
+%the file inclusion, 
+but those I just presented are the main constructs of a build system.
+%
+See Chapter~\ref{chap:advanced} for the list of advanced
+constructs supported by [[mk]].
+
+
+\subsection{A graph of dependencies}
+\label{sec:graph-principles}
+\label{sec:rule-essence}
+
+
+%trans: 
+The pattern, the variable, and the file inclusion are nice features,
+but they are not the essence of a build system;
+%
+rules are the essence of a build system.
+\l rest is sugar
+%
+Indeed, once the build system has 
+loaded included files,
+expanded variables, and 
+substituted patterns,
+what remains is a set of rules with {concrete} filenames 
+as targets and prerequisites.
+%
+Moreover, as I mentioned briefly in Section~\ref{sec:mk-is-a-graph},
+the rules in a build system define essentially the 
+{nodes} and {arcs} of a {graph}.
+Thus, the essence of a build system is also this {\em graph of dependencies}.
+\l or use dependency graph? then need to rename everywhere
+
+
+%toc:
+In the next sections, I will present different examples of graph
+of dependencies, with increasing complexity.
+\l Each example, each graph, different shapes, see subtelities.
+\l Also easier explain algo on this graph than on rules. core DS.
+
+\subsubsection{A simple tree}
+% | and /\  one-to-one and one-to-many
+
+\begin{figure}[!tbp]\centering
+\begin{verbatim}
+           +-------+
+           | hello |
+           +-------+
+               X
+              / \
+       /-----/   \-----\
+      /                 \
+     v                   v
++--------+          +--------+
+|hello.5 |          |world.5 |
++--------+          +--------+
+     |                   |
+     |                   |
+     v                   v
++--------+          +--------+
+|hello.c |          |world.c |
++--------+          +--------+
+\end{verbatim}
+\caption{Graph of dependencies for [[hello]].}\label{fig:graph-hello}
+\end{figure}
+\n maybe good step to explain later // scheduler
+
+Figure~\ref{fig:graph-hello} presents the graph of dependencies
+for the [[hello]] program of Section~\ref{sec:getting-started}.
+\n when target is hello for mk
+\l when x : y then arc. when x : y z then two arcs. too simple? (said later)
+%
+In this example, the graph is simply a {tree}.
+%
+The {\em nodes} in the graph of dependencies correspond to concrete filenames.
+\l pattern and vars has been substituted (said before a bit)
+%
+The {\em arcs} represent dependencies between files.
+For instance, [[world.5]] depends on [[world.c]], hence the arc between
+the two nodes in Figure~\ref{fig:graph-hello}.
+\l arc and direction
+%
+Note that a rule with two prerequisites leads to the creation
+of two arcs in the graph of dependencies.
+\l same for two targets (said later?)
+\l one-to-one, one-to-many
+
+\l target vs prerequisites, parent vs child, src vs dest.
+
+Given the [[mkfile]] in Section~\ref{sec:dsl}, [[mk]] will
+internally build the graph of dependencies of Figure~\ref{fig:graph-hello}.
+%
+The use of either simple rules or meta rules to describe the dependencies
+(or both) will result in the same graph.
+%
+Once [[mk]] matched and substituted patterns, what remains will
+be a set of nodes with concrete filenanes.
+\l if mkfile use ver1 or ver2 of tests/mkfile
+\l (see Section for algo to build graph)
+
+
+%trans: nice graph, but not enough to explain algo.
+
+\subsubsection{A labeled tree}
+\label{sec:labeled-tree}
+
+\begin{figure}[!tbp]\centering
+\begin{verbatim}
+                     +-------+
+                     | hello | 08:00:13
+                     +-------+
+         5l -o hello     X     5l -o hello
+       hello.5 world.5  / \  hello.5 world.5
+                 /-----/   \-----\
+                /                 \
+               v                   v
+          +--------+          +--------+
+ 08:00:10 |hello.5 |          |world.5 | 08:00:11
+          +--------+          +--------+
+               |                   |
+          5c -c hello.c        5c -c world.c
+               v                   v
+          +--------+          +--------+
+ 08:00:00 |hello.c |          |world.c | 11:30:00
+          +--------+          +--------+
+\end{verbatim}
+\caption{Graph of dependencies for [[hello]], with labels.}
+\label{fig:graph-hello-labels}
+\end{figure}
+\n better with labels on arcs, see duplicated recipe on multiple arcs.
+\n better with labels for time. see core algorithm.
+\l could put same time for the objects cos in //
+%alt: graph, but with set of files in nodes? so no pb ambiguous arcs?
+\t why not put recipe on the node itself? anyway there will be
+\t  a master rule no? could, but could also be more flexible and
+\t  have different recipe on different arcs. But then if
+\t  two dependent are modified, which command to run? ...
+
+
+Figure~\ref{fig:graph-hello-labels} presents also the graph of
+dependencies for the [[hello]] program where nodes
+ands arcs are annotated also with {\em labels}.
+%
+Arcs are {labeled} with a {recipe} whereas
+nodes are labeled with the {modification time} of the file they represent.
+%
+If the file does not exist, the modification time is set to zero.
+\t footnote 1970 unix time
+\l zero, so idea is similar to very very old, so will need to be updated.
+%
+In Figure~\ref{fig:graph-hello-labels}, the day, month, and year
+of the modification time of the files are omitted for simplification purpose;
+only the hours, minutes, and seconds are shown.
+I assume all the files were modified in the same day.
+
+
+The scenario that led to the modification times
+in Figure~\ref{fig:graph-hello-labels} is as follows: 
+The programmer of the [[hello]] program finished modifying 
+[[hello.c]] and [[world.c]] at 8am.
+He then ran [[mk]] to build the program. [[mk]] finished compiling
+[[hello.5]] at 8am and 10 seconds, and 
+[[world.5]] at 8am and 11 seconds.
+[[mk]] finished linking 
+[[hello]] at 8am and 13 seconds.
+\n actually seconds granularity not good enough (said later?), need nanosecond
+Finally, the programmer modified [[world.c]] at 11:30am
+and stopped.
+%
+At this point, running [[mk]] should recompile [[world.c]]
+(and relink [[hello]]), but should not recompile [[hello.c]]. 
+
+%trans: Thx to labels, ready to talk about algo.
+
+\subsubsection{Depth-first search}
+\label{sec:algo-dfs}
+
+\begin{figure}[!tbp]\centering
+\begin{verbatim}
+               +-------+
+           (1) | hello | (8)
+               +--X--^-+
+                   X  \
+                / / \  \
+          / - -  /   \  \----\
+           /----/     \----\  \
+        / /                 \  \
+       v v                   v  \
+    +--------+          +--------+
+(2) |hello.5 + - - - - >|world.5 | (7)
+    +--+-----+(4)    (5)+--+-----+
+         | ^                 | ^
+       | | |               | | |
+       v v                 v v
+    +------+-+          +------+-+
+(3) |hello.c |      (6) |world.c |
+    +--------+          +--------+
+\end{verbatim}
+\caption{Depth-first search traversal of the graph dependencies for [[hello]].}
+\label{fig:graph-hello-dfs}
+\end{figure}
+
+
+Once the graph of dependencies is built,
+\l and not so trivial
+the main algorithm behind [[mk]] is to perform a 
+\l and other build systems?
+{\em depth-first search} (DFS) traversal on this graph.
+\l cite cormen?
+%
+Figure~\ref{fig:graph-hello-dfs} presents the order in which 
+the DFS visits the nodes on the previous graph.
+%
+The DFS starts from the {\em root} 
+(step 1 at the top of Figure~\ref{fig:graph-hello-dfs})
+and goes as deep as possible along a {\em branch} (steps 2 and 3).
+\n would not work if not deep
+%
+When it reaches a {\em leaf}, for instance [[hello.c]] (step 3),
+the algorithm just checks whether the file exists.
+If the file does not exist, then [[mk]] should report an error
+because there is no instruction on how to generate this file
+(there is no prerequisite connected to the node and so no recipe).
+%
+If the file exists, then the algorithm can continue and the
+DFS can {backtrack} by going back up in the tree (step 4).
+%
+At this point, the algorithm checks whether the modification time 
+of the node is more recent than {all} its prerequisites,
+which have all been already visited by the DFS by now. 
+\t this is important. need recurse first on children. Indeed
+\t  in example hello is more recent than both objet files, but
+\t  still need to relink it at some point cos very deep there is a 
+\t  a modified file
+%
+If the node is more recent, for instance, [[hello.5]]
+is more recent than [[hello.c]] in Figure~\ref{fig:graph-hello-labels},
+then there is nothing to do but to continue the DFS 
+(steps 5 and 6).
+%
+If the node is older than one or more of its prerequisites,
+for instance, [[world.5]] is older than [[world.c]] 
+in Figure~\ref{fig:graph-hello-labels},
+then the algorithm should run the associated recipe
+\l which recipe? recipe of arc?
+in a separate shell process.
+\l more on this later
+Hopefully, running this process will modify the time of the node.
+\l need to wait finish
+%
+This will in turn trigger the recompilation of all the
+ancestors of the node while going back up to the root of
+the graph (step 8 in Figure~\ref{fig:graph-hello-dfs}), because
+the ancestors should now be older than this newly-generated file.
+
+
+% But subtle, if modify hello.c and world.c, then 
+% recompile both, but then dont want to run 2 times the 
+% linking program. 2 arcs, but one command!
+% ambiguous? no, same command here (see Section X for ambiguous check).
+% (but maybe should really put recipe in node)
+
+\subsubsection{A direct acyclic graph}
+\label{sec:dag}
+% /\  many-to-many
+% \/
+
+%trans:
+In the previous examples, the graph was simply a tree. However,
+%
+most build systems support a more general form of graphs: 
+{\em direct acyclic graphs} (DAGs), where
+the same node can be referenced multiple times from different branches.
+%
+Figure~\ref{fig:graph-hello-dag} presents such as graph
+for the same [[hello]] program, but where an additional
+header file, [[common.h]], is shared and included by the 
+two source files.
+
+
+\begin{figure}[!tbp]\centering
+\begin{verbatim}
+           +-------+
+           | hello |
+           +-------+
+               X
+              / \
+       /-----/   \-------\
+      /                   \
+     v                     v
++--------+            +--------+
+|hello.5 |            |world.5 |
++--------+            +--------+
+     |                     |
+     | \                  /|
+     |  \------\ /-------/ |
+     |          v          |
+     v     +--------+      v
++--------+ |common.h| +--------+
+|hello.c | +--------+ |world.c |
++--------+            +--------+
+\end{verbatim}
+\caption{Graph of dependencies for [[hello]] with [[common.h]].}
+\label{fig:graph-hello-dag}
+\end{figure}
+
+Note that even though [[common.h]] is included by
+[[hello.c]] and [[world.c]], there is no arc between those files
+in the graph of dependencies.
+%
+Indeed, modifying [[common.h]] should not
+cause the regeneration of [[hello.c]] or [[world.c]].
+%
+However, the modification of [[common.h]] should cause
+the regeneration of the object files [[hello.5]] and [[world.5]],
+hence the arcs from those files to [[common.h]] 
+in Figure~\ref{fig:graph-hello-dag}.
+Indeed, the header
+file may define data structures that have an impact
+on the object code generation, hence the two arcs
+from the object files to the header file.
+\t will talk later on how to automatically generate those dependencies
+
+There are multiple situations where the same file can be
+referenced multiple times in the graph of dependencies:
+multiple executables may depend on and reuse the same library, 
+multiple libraries may use the same object file,
+multiple object files may depend on the same header file, etc.
+\l Figure present a few of those examples.
+Those shared files add arcs in the graph. However,
+the graph must remain acyclic.
+Indeed, a file can not depend on itself, directly or indirectly\footnote{
+\l would make no sense.
+Section~\ref{sec:cycle-check} presents the code to check for
+{cycles} in the graph of dependencies.}.
+\t Moreover, because DAG, DFS needs record if visited already a node
+\t  to not update multiple times the same file
+\l even though here cannot see that cos common.h is a leaf
+
+
+%\subsubsection{Multiple rules with the same target}
+\label{sec:master-rule} 
+
+There are multiple ways to add the dependency
+to [[common.h]] from [[hello.5]] (and [[world.5]]) in the
+[[mkfile]]s of Section~\ref{sec:dsl}:
+
+\begin{enumerate}
+\item You can add [[common.h]] in the list of prerequisites
+in the rule for [[hello.5]]:
+
+\begin{verbatim}
+hello.5: hello.c   common.h
+    5c -c hello.c
+\end{verbatim}
+
+However, this approach does not work well when the rule
+to compile [[hello.c]] is a meta-rule such as [[%.5: %.c]].
+%
+Indeed, each source file has its own header file dependencies,
+which are impossible to factorize in a single meta-rule.
+
+
+\item You can add a separate rule using the same target
+and the same recipe:
+
+\begin{verbatim}
+hello.5: common.h
+    5c -c hello.c
+\end{verbatim}
+
+It is important to impose to have the same recipe. 
+If the recipe was different, [[mk]] would be confronted with an 
+{\em ambiguity}
+when both the source file [[hello.c]] and the header [[common.h]] are modified:
+which recipe to choose to update the target [[hello.5]]?\footnote{
+Section~\ref{sec:ambiguous-checks} presents the code to check
+for the presence of ambiguities.}
+%
+However, it is difficult for [[mk]] to check whether
+the recipe of a meta-rule such as [[5c -c $stem.c]] is %$
+equivalent to the recipe of a simple rule such as [[5c -c hello.c]].
+\t really? difficult? for stem it is known at compile time
+\t ambiguity is sometimes good though see \ref{sec:specialize-vs-generic}
+
+\item You can add a separate rule using the same target but
+without any recipe:
+
+\begin{verbatim}
+hello.5: common.h
+\end{verbatim}
+
+This works if the build system
+imposes that there must be another {single} rule,
+called the {\em master rule}, with the same target but including
+a recipe. In that case, there is no ambiguity and no need
+to check if two recipes are equivalent.
+
+\end{enumerate}
+
+[[mk]] supports (1) and (3) but not (2).
+\l I dont think mk supports 2. it is using pointer equality, not string equal
+(3) is more convenient for the programmer because it works well with meta-rules.
+%\subsubsection{Automatic dependencies}
+Moreover, when combined with file inclusion, (3) allows
+to leverage programs that automatically extract header
+dependencies from source files 
+(e.g., [[gcc -MM]] for C files, [[ocamldep]] for OCaml files).
+\l other? makedepend? furl?
+%
+Indeed, the output of such programs can simply be redirected
+in a [[.depend]] file that can be included from the [[mkfile]].
+\l would be hard to give recipe, cos flags, but gcc -MM
+\l   could generate a template using metavariable though
+\l So then need to find master recipe again.
+\l example of .depend? .depend for mk ?
+\n in \plan they dont use tools like gcc -MM because they hate header files
+\n  they use very few header files
+
+%\subsubsection{Depth-first search on a DAG}
+
+% So have to take care when go through graph.
+\l Because DAG, in code we will see a few times to set a flag on a node marked 
+\l as done, to avoid repeat multiple times the same thing.
+\n actually not that much
+% but here DAG too simple, nothing after common.h, so a leaf is simple
+% implications for graph update?
+
+\subsubsection{Many-to-one dependencies}
+\label{sec:graph-many-to-one}
+%\/ many-to-one
+
+\begin{figure}[!tbp]\centering
+\begin{verbatim}
+                   +-------+
+                   | prog  |
+                   +-------+
+      5l -o prog       X      5l -o prog
+   lexer.5 parser.5   / \  lexer.5 parser.5
+               /-----/   \-----\
+              /                 \
+             v                   v
+        +--------+          +--------+
+        |lexer.5 |          |parser.5|
+        +--------+          +--------+
+   5c -c   | \                   /  |   5c -c
+  lexer.c  |  \--------\ /------/   | parser.c
+           v            v           v
+        +--------+ +--------+  +--------+
+        |lexer.c | |parser.h|  |parser.c|
+        +--------+ +--------+  +--------+
+      lex    |    yacc  \           /   yacc
+    lexer.l  |  parser.y \---\ /---/  parser.y
+             v                v
+        +--------+       +--------+
+        |lexer.l |       |parser.y|
+        +--------+       +--------+
+\end{verbatim}
+\caption{Graph with many-to-one dependencies.}\label{fig:graph-many-to-one}
+\end{figure}
+
+\l have shown one-to-one, one-to-many, and some kind of many-to-one.
+%trans:
+In Figure~\ref{fig:graph-many-to-one}, two object files,
+[[lexer.5]] and [[parser.5]],
+depend on the same file: [[parser.h]]. 
+They also depend on other files ([[lexer.c]] and [[parser.c]])
+and have different recipes ([[5c -c lexer.c]] and [[5c -c parser.c]]).
+This is similar to the situation depicted by Figure~\ref{fig:graph-hello-dag}
+with the shared file [[common.h]].
+%
+However, in Figure~\ref{fig:graph-many-to-one}, 
+two files, [[parser.h]] and [[parser.c]], depend also {exclusively}
+on the same file, [[parser.y]], with the same recipe ([[yacc parser.y]]).
+%
+This last file is a Yacc~\cite{yacc} grammar file.
+The [[yacc]] program generates
+both a header file ([[.h]]) and a source file ([[.c]]) from a
+single grammar file ([[.y]]).
+%Those are real many-to-one dependencies.
+%
+There are multiple ways to express this {\em many-to-one} dependency:
+
+\begin{enumerate}
+\item You could create two separate rules for each target:
+
+\begin{verbatim}
+parser.h: parser.y
+    yacc parser.y
+parser.c: parser.y
+    yacc parser.y
+\end{verbatim}
+
+\item You could create a single rule with {\em multiple targets}:
+
+\begin{verbatim}
+parser.h parser.c: parser.y
+    yacc parser.y
+\end{verbatim}
+\end{enumerate}
+
+However, the semantics for (1) and (2) are different. Indeed,
+with (1), if you modify [[parser.y]], then [[mk]] will
+create two shell processes and execute two times the
+[[yacc]] command, which is useless (and could even be incorrect
+if the two commands are run in parallel and the writes on
+the same file are intertwined).
+%
+With (2), it will create a single process 
+and execute only one time the [[yacc]] command.
+
+
+The use of multiple targets in one rule has implications on the
+DFS traversal of the graph of dependencies.
+%
+Indeed, in Figure~\ref{fig:graph-many-to-one}, once the DFS has processed
+[[parser.y]], backtracked on [[parser.h]], and ran the recipe
+to update [[parser.h]], 
+\n actually done later and indirectly through job queue
+it is important that the algorithm adjusts the 
+modification time of both the [[parser.h]] and [[parser.c]] nodes.
+%
+If only the [[parser.h]] node is updated, [[mk]]
+would run another time the [[yacc]] command when the DFS
+reaches the [[parser.c]] node with an obsolete modification time.
+\l could also each time reread mtime during DFS
+This is why, as you will see later in Section~\ref{sec:multi-targets},
+the arc from [[parser.h]] to [[parser.y]] contains also
+a reference to the [[parser.c]] node.
+\t so mk put as BEINGMADE alltargets ?
+
+%trans: this conclude examples of graphs? 
+
+
+\subsection{A job scheduler}
+\label{sec:job-scheduler-principles}
+
+%trans: 
+In the previous sections,
+I have described the main features of the DSL of a build system,
+the underlying representation of dependencies in a build system,
+as well as the basic algorithm behind a build system (the DFS).
+I will now focus on the efficiency of a build system.
+
+%trans:
+A build system maintains dependencies between files efficiently firstly
+by being an {\em incremental} program. Indeed, if you modify
+only one source file, the build system will recompile and 
+relink only what is necessary.
+%
+This is made possible by comparing the modification times of nodes 
+in the graph of dependencies.
+%
+In fact, this graph enables also the build system 
+to be more efficient by running recipes in {\em parallel}.
+%
+Indeed, with a graph, it is easy to detect whether two commands
+can be run in parallel when they belong to two independent branches 
+in the graph.
+\l independent is too informal?
+\l In fact if 2 separate successors, can, even if at different level.
+\l but algo does not do those branch-check? it uses the BEINGMADE thing
+%
+For instance, in Figure~\ref{fig:graph-many-to-one}, 
+the recipes with the [[lex]] and [[yacc]] commands can be run in parallel.
+%
+However, if only the [[lex]] recipe finished, it is not possible
+to run [[5c -c lexer.c]] in parallel with [[yacc]] because
+there is an arc between [[lexer.5]] and [[parser.h]] in the graph;
+you must also wait for the [[yacc]] recipe to finish.
+
+
+To run recipes in parallel, a build system should not 
+wait during the DFS that a shell process finishes executing a recipe.
+%
+This is why, during the DFS, [[mk]] adds instead the recipe in a {\em queue}
+and continues the DFS.
+%
+Each element of this queue contains, in addition to the recipe,
+a pointer to the target node (or target nodes) associated with
+the recipe.
+%
+[[mk]] can add multiple recipes in the queue during the DFS, 
+and can then execute in parallel those recipes once the DFS finished.
+\n actually done during DFS via sched() (see later)
+%alt: do DFS in parallel? but then concurrency issue? if DAG?
+The recipe and associated target node(s) stored in the queue is called a
+{\em job} in [[mk]]'s terminology. The queue is also called
+the {\em job queue}. Thus, [[mk]] is also a {\em job scheduler}.
+
+
+The use of a job queue has implications on the graph and the DFS.
+%
+Indeed, in Figure~\ref{fig:graph-hello-dfs}, 
+%as well as in Figure~\ref{fig:graph-being-made}, 
+if the job to regenerate
+[[world.5]] from [[world.c]] is enqueued at step~7 (instead of being
+executed {synchronously}), the modification time of 
+the [[world.5]] node will not be updated directly. 
+%
+Then, when the DFS backtracks on the root node at step~8, 
+the modification time of the root node may still be more
+recent than all its prerequisites 
+(as shown in Figure~\ref{fig:graph-hello-labels}),
+so [[mk]] will not detect that it needs to re-link too [[hello]].
+%
+However, [[mk]] should not stop there and should declare
+that [[hello]] is up-to-date. Once the job to
+generate [[world.5]] has finished, [[hello]] will not be up-to-date.
+\l but can detect that situation so, as job queue not empty
+This is why the modification time of nodes associated with a job
+should be marked specially in the graph.
+
+%coupling: same figure in chapter on findint outdated files
+\begin{figure}[!tbp]\centering
+\begin{verbatim}
+                +-------+ NotMade
+            (1) | hello | (8)
+                +--X--^-+
+                    X  \
+                 / / \  \
+           / - -  /   \  \----\
+            /----/     \----\  \
+         / /                 \  \
+        v v                   v  \
+     +--------+          +--------+ BeingMade
+ (2) |hello.5 + - - - - >|world.5 | (7)
+     +--+-----+(4)    (5)+--+-----+
+          | ^ Made            | ^
+        | | |               | | |
+        v v                 v v
+Made +------+-+     Made +------+-+
+ (3) |hello.c |      (6) |world.c |
+     +--------+          +--------+
+\end{verbatim}
+\caption{Graph of dependencies with building-status labels.}
+\label{fig:graph-being-made}
+\end{figure}
+
+
+\label{sec:build-status}
+To keep track of the nodes involved in a job, [[mk]] uses
+an extra label on each node to indicate the building status
+of the node: [[NotMade]], [[Made]], and [[BeingMade]],
+as shown in Figure~\ref{fig:graph-being-made}.
+%
+The algorithm behind [[mk]], exposed previously in Section~\ref{sec:algo-dfs},
+is modified as follows. After the graph is built, every status labels in 
+every nodes is set to [[NotMade]].
+%
+During the DFS, if the algorithm reaches a leaf containing an existing
+file, the node is marked as [[Made]] (e.g., [[hello.c]] at step 3, and
+[[world.c]] at step 6 in Figure~\ref{fig:graph-being-made}).
+%
+During backtracking, the algorithm will use different marks
+depending on the situation:
+
+\begin{itemize}
+\item If the node is more recent than all its prerequisite nodes,
+and all those nodes are marked as [[Made]], then this node is also
+marked as [[Made]] 
+(e.g., [[hello.5]] at step 4 in Figure~\ref{fig:graph-being-made}).
+
+\item If the node is older than one or more of its prerequisites,
+and all the prerequisites are marked as [[Made]], then a new
+job will be enqueued and this node is marked as [[BeingMade]]
+(e.g., [[world.5]] at step 7 in Figure~\ref{fig:graph-being-made}).
+
+\item If the node is older or more recent, but one of its prerequisites
+is marked as [[BeingMade]], then the status should be kept as [[NotMade]].
+\l or BeingMade? then status should be unchanged (NotMade or BeingMade)
+
+\end{itemize}
+
+[[mk]] will run the DFS in a loop multiple times until
+the root node is marked as [[Made]]. 
+During each of those loops, the DFS will find new jobs 
+to run in parallel.
+\l mk needs also to wait for process to finish in this loop.
+\l can have multiple waves before first wait if lots of processors!
+\l FIGURE with waves?
+
+% need just made vs notmade? why need also beingmade if have 
+% also generic visited? and check on empty queue? because of the DAG?
+%real-world: Make has the need for BeingMade? it kinda wait
+% that all child are done still? 
+\t then less opportunity for //ization? Example?
+
+% mk is actually kind of a scheduler because run independent jobs in //, 
+% and need to manage dependencies between those jobs
+% then need coordinate. wait for finish, etc.
+% Master/Workers?
+
+% Note that in Figure with yacc, if BeingMade on parser.h,
+% should also mark BeingMade for parser.c!
+
+% Note that in second wave, can have more efficient DFS as no need
+% go down in branch marked as Made
+\l mk does that? does not because bottleneck is not there?
+\t does DFS leverage the Made? Should have no need to go down on a node
+\t  with Made!
+
+%trans: ?
+
+\section{[[mk]] command-line interface}
+\label{sec:mk-interface}
+
+The command-line interface of [[mk]] is very simple: just go
+in a directory and type [[mk]]\footnote{
+%real-world:
+This interface is similar to the one in Make, 
+except [[mk]] is even shorter to type than [[make]],
+which is useful as [[mk]] is a command you will type a lot
+(the two letters are even next to each other on a QWERTY keyboard).
+}.
+%dup: intro/getting-started
+However, this assumes the directory contains a file named [[mkfile]].
+%
+Moreover, it assumes the first target in this [[mkfile]] is the file 
+you want to build.
+%
+To change the default behavior, you can use the [[-f]] flag, as shown in
+Section~\ref{sec:getting-started}, to specify another configuration file.
+%
+Finally, you can change the default target by specifying a target
+from the command line (e.g., [[mk hello.5]]). 
+In fact, you can even give a list of targets on the command line.
+\l great way to use mk is have list of one-liner (said later?)
+
+
+[[mk]] supports also a few extra options 
+to provide advanced features or
+to help debug [[mk]] itself.
+%chunks:
+I will present gradually those options in this book.
+%
+Here is the full command-line interface of [[mk]]:
+\begin{verbatim}
+$ mk -help
+Usage: mk [-f file] [-n] [-a] [-e] [-t] [-k] [-i] [-d[egp]] [targets ...]
+\end{verbatim}
+
+
+
+\section{[[hello.mk]]}
+\n [[hello.mk]] so consistent with my other books.
+\l A simple [[mkfile]]
+
+%trans:
+Here is finally the content of the [[hello.mk]] file
+mentioned in Section~\ref{sec:getting-started}:
+
+<<tests/mk/hello.mk>>=
+OBJS=hello.5 world.5
+CFLAGS=
+LDFLAGS=
+
+hello: $OBJS
+ 5l $LDFLAGS -o $target $prereq
+
+%.5: %.c
+ 5c $CFLAGS -c $stem.c
+@
+%$
+\n minimum spirit, no <objfile, no factorize with mkone
+\n  no objtype/mkfile, cos then cant use hello.5, should use hello.dollarO
+\n simple var, simple rule, metarule, special vars; the essence of mk is there.
+
+This file is named [[hello.mk]] to illustrate the [[-f]]
+command-line flag of [[mk]], but a common practice is to name
+[[mk]]'s configuration file [[mkfile]] instead.
+
+
+I have described most of the features used in [[hello.mk]]
+in Section~\ref{sec:dsl}, so I will not repeat the explanations here.
+%
+The only new feature is the use of the {\em special variables}
+[[$target]] and [[$prereq]]. Those variables are set by
+[[mk]] in the environment of the shell process executing the recipe.
+\l that way recipe can access them
+%
+As their names suggest, they contain respectively the name of 
+the target and the list of prerequisites of the rule in which
+they occur.
+\l note that prereq not always work, for instance for meta rule better use stem
+\l  cos prereq will also match the .h in the .depend
+
+\n show also simple output of running mk on a toy project (said before)
+% VERBATIM 5c ...
+% if modify hello.c
+% VERBATIM 5c hello.c; 5l ...
+% if nothing
+% VERBATIM already done
+\l maybe even include mk -e output?
+
+The compilation and linking flags ([[$CFLAGS]] and [[$LDFLAGS]])
+are set to an empty list in the example above, 
+but those flags can be {\em overriden} from the command-line. 
+%
+Indeed, [[mk]] can take a list of variable definitions
+as arguments (e.g., [[mk CFLAGS=-g]]). 
+Those definitions override any definition contained in the [[mkfile]]
+(or in files included from the [[mkfile]]).
+\l not needed in plan9? by default compile info? or -a for acid
+This is convenient because you can simply cross-compile
+a project under \plan by overriding the definition of [[$objtype]]
+from the command line (e.g., [[mk objtype=arm]] on a machine
+where [[$objtype]] is by default set to [[386]]).
+
+For more examples of [[mkfile]]s, 
+%bootstrap:
+notably the [[mkfile]] of the [[mk]] project itself,
+see Appendix~\ref{chap:examples}.
+The examples in this chapter were used just to illustrate
+the main features of [[mk]]. 
+
+
+
+%\section{Input [[mkfile]] language}
+
+% precise syntax? can have OBJ = xxx or need OBJ=xxx ?
+% need space before recipe? can have comments?
