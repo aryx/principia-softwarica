@@ -131,7 +131,7 @@ installbuiltin(void)
 void
 dosysr1(Node *r, Node*)
 {
-    extern int sysnop(void);
+    extern int nop(void);
     
     r->op = OCONST;
     r->type = TINT;
