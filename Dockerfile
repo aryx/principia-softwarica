@@ -1,6 +1,8 @@
+# Build principia on Ubuntu Linux for 386 (pc) and arm (pi)
+
 FROM padator/kencc
 
-# 9base for rc (TODO: delete once we can bootstrap a working bin/rc)
+# 9base for rc (TODO: delete once we can have a working rc in kencc)
 RUN apt-get install -y 9base
 
 WORKDIR /src
@@ -10,10 +12,8 @@ COPY . .
 
 # 386
 RUN cp mkconfig.pc mkconfig
-RUN mkdir -p ROOT/386/lib
 RUN . ./env.sh && mk && mk kernel
 
 # arm
 RUN cp mkconfig.pi mkconfig
-RUN mkdir -p ROOT/arm/lib
 RUN . ./env.sh && mk && mk kernel
