@@ -9,6 +9,7 @@ WORKDIR /src
 COPY . .
 
 # 386
+RUN cp mkconfig.pc mkconfig
 RUN mkdir -p ROOT/386/lib
 RUN . ./env.sh && mk && mk kernel
 

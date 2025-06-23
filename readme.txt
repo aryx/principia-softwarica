@@ -7,13 +7,13 @@ The code of the original Plan9 is available at https://9p.io/plan9/
 There are a few other forks of Plan9:
  - 9front: http://9front.org/
  - 9legacy: http://9legacy.org/
- - 9atom: http://www.9atom.org/
- - Harvey: https://harvey-os.org/
  - Nix: https://code.google.com/archive/p/nix-os/
- - Jehanne: http://jehanne.io/
+ - 9atom: http://www.9atom.org/ (DEAD in 2025)
+ - Harvey: https://harvey-os.org/ (DEAD in 2025)
+ - Jehanne: http://jehanne.io/ (DEAD in 2025)
 
 or close descendants  of Plan9:
- - Inferno: http://www.vitanuova.com/inferno/
+ - Inferno: https://github.com/inferno-os/inferno-os
 
 The specificity of my fork of Plan9 is to see Plan9 as a great
 educational platform to learn about programming and computer science.
@@ -33,3 +33,5 @@ enough for the educational purpose of Principia Softwarica.
 Finally, as opposed to the original Plan9, this fork can also be
 cross-compiled from Linux, MacOS, or Windows, which makes it easy
 to experiment with.
+
+Enjoy.
