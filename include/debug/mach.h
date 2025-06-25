@@ -11,7 +11,8 @@
 /*
  *	Supported architectures:
  *		i386,
- *		arm
+ *		arm,
+ *              mips
  */
 
 /*s: enum [[executable_type]] */
@@ -24,6 +25,9 @@ enum executable_type
     FI386B,			/* I386 bootable */
     FARM,			/* 5.out */
     FARMB,			/* ARM bootable */
+    FMIPS,			/* v.out */
+    FMIPSB,			/* mips bootable */
+    FMIPS2BE,		        /* 4.out */
 };
 /*e: enum [[executable_type]] */
 /*s: enum [[machine_type]] */
@@ -32,6 +36,7 @@ enum machine_type
 {
     MI386,
     MARM,
+    MMIPS,
 };
 /*e: enum [[machine_type]] */
 /*s: enum [[dissembler_type]] */
@@ -43,6 +48,8 @@ enum dissembler_type
     AI386,
     AI8086,			/* oh god */
     AARM,
+    AMIPS,
+    AMIPSCO,		/* native mips */
 };
 /*e: enum [[dissembler_type]] */
 /*s: enum [[object_file_type]] */
@@ -51,6 +58,7 @@ enum object_file_type
 {
     Obj386 = 0,			/* .8 */
     ObjArm,			/* .5 */
+    ObjMips,		/* .v */
 
     Maxobjtype,
 };

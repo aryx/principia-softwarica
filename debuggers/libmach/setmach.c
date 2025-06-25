@@ -19,8 +19,8 @@ struct machtab
 };
 /*e: struct [[machtab]] */
 
-extern	Mach		mi386, marm;
-extern	Machdata	i386mach, armmach;
+extern	Mach		mi386, marm, mmips;
+extern	Machdata	i386mach, armmach, mipsmach;
 
 /*s: global [[machines]] */
 /*
@@ -42,6 +42,12 @@ Machtab	machines[] =
         AARM,
         &marm,
         &armmach,	},
+    {	"mips",				/*plan 9 mips*/
+	FMIPS,
+	FMIPSB,
+	AMIPS,
+	&mmips,
+	&mipsmach, 	},
     {	0		},		/*the terminator*/
 };
 /*e: global [[machines]] */
@@ -73,6 +79,7 @@ machbyname(char *name)
 {
     Machtab *mp;
 
+    // choose a default if no name given
     if (!name) {
         asstype = AARM;
         machdata = &armmach;

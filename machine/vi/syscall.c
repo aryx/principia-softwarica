@@ -14,60 +14,49 @@
 char 	errbuf[ERRMAX];
 ulong	nofunc;
 
-#include "/sys/src/libc/9syscall/sys.h"
+#include "../../lib_core/libc/9syscall/sys.h"
 
 char *sysctab[]={
-	[SYSR1]		"SYSR1",
-	[_ERRSTR]	"_errstr",
-	[BIND]		"Bind",
-	[CHDIR]		"Chdir",
-	[CLOSE]		"Close",
-	[DUP]		"Dup",
-	[ALARM]		"Alarm",
-	[EXEC]		"Exec",
-	[EXITS]		"Exits",
-	[_FSESSION]	"_Fsession",
-	[FAUTH]		"Fauth",
-	[_FSTAT]	"_fstat",
-	[SEGBRK]	"Segbrk",
-	[_MOUNT]	"_Mount",
-	[OPEN]		"Open",
-	[_READ]		"_Read",
-	[OSEEK]		"Oseek",
-	[SLEEP]		"Sleep",
-	[_STAT]		"_Stat",
-	[RFORK]		"Rfork",
-	[_WRITE]	"_Write",
-	[PIPE]		"Pipe",
-	[CREATE]	"Create",
-	[FD2PATH]	"Fd2path",
-	[BRK_]		"Brk_",
-	[REMOVE]	"Remove",
-	[_WSTAT]	"_Wstat",
-	[_FWSTAT]	"_Fwstat",
-	[NOTIFY]	"Notify",
-	[NOTED]		"Noted",
-	[SEGATTACH]	"Segattach",
-	[SEGDETACH]	"Segdetach",
-	[SEGFREE]	"Segfree",
-	[SEGFLUSH]	"Segflush",
-	[RENDEZVOUS]	"Rendezvous",
-	[UNMOUNT]	"Unmount",
-	[_WAIT]		"Wait",
-	[SEEK]		"Seek",
-	[FVERSION]	"Fversion",
-	[ERRSTR]	"Errstr",
-	[STAT]		"Stat",
-	[FSTAT]		"Fstat",
-	[WSTAT]		"Wstat",
-	[FWSTAT]	"Fwstat",
-	[MOUNT]		"Mount",
-	[AWAIT]		"Await",
-	[PREAD]		"Pread",
-	[PWRITE]	"Pwrite",
+    [NOP]		"Nop",
+    [BIND]		"Bind",
+    [CHDIR]		"Chdir",
+    [CLOSE]		"Close",
+    [DUP]		"Dup",
+    [ALARM]		"Alarm",
+    [EXEC]		"Exec",
+    [EXITS]		"Exits",
+    [FAUTH]		"Fauth",
+    [SEGBRK]	"Segbrk",
+    [MOUNT]		"Mount",
+    [OPEN]		"Open",
+    [SLEEP]		"Sleep",
+    [RFORK]		"Rfork",
+    [PIPE]		"Pipe",
+    [CREATE]	"Create",
+    [FD2PATH]	"Fd2path",
+    [BRK]		"Brk",
+    [REMOVE]	"Remove",
+    [NOTIFY]	"Notify",
+    [NOTED]		"Noted",
+    [SEGATTACH]		"Segattach",
+    [SEGDETACH]		"Segdetach",
+    [SEGFREE]		"Segfree",
+    [SEGFLUSH]		"Segflush",
+    [RENDEZVOUS]	"Rendezvous",
+    [UNMOUNT]		"Unmount",
+    [SEEK]		"Seek",
+    [FVERSION]	"Fversion",
+    [ERRSTR]	"Errstr",
+    [STAT]		"Stat",
+    [FSTAT]		"Fstat",
+    [WSTAT]		"Wstat",
+    [FWSTAT]	"Fwstat",
+    [PREAD]		"Pread",
+    [PWRITE]	"Pwrite",
+    [AWAIT]		"Await",
 };
 
-void sys1(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0); }
+void sysnop(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0); }
 
 void
 sys_errstr(void)
@@ -383,29 +372,29 @@ syssleep(void)
 	reg.r[REGRET] = n;
 }
 
-void
-sys_stat(void)
-{
-	char nambuf[1024];
-	char buf[ODIRLEN];
-	ulong edir, name;
-	extern int _stat(char*, char*);	/* old system call */
-	int n;
-
-	name = getmem_w(reg.r[REGSP]+4);
-	edir = getmem_w(reg.r[REGSP]+8);
-	memio(nambuf, name, sizeof(nambuf), MemReadstring);
-	if(sysdbg)
-		itrace("stat(0x%lux='%s', 0x%lux)", name, nambuf, edir);
-
-	n = _stat(nambuf, buf);
-	if(n < 0)
-		errstr(errbuf, sizeof errbuf);
-	else
-		memio(buf, edir, ODIRLEN, MemWrite);
-
-	reg.r[REGRET] = n;
-}
+//void
+//sys_stat(void)
+//{
+//	char nambuf[1024];
+//	char buf[ODIRLEN];
+//	ulong edir, name;
+//	extern int _stat(char*, char*);	/* old system call */
+//	int n;
+//
+//	name = getmem_w(reg.r[REGSP]+4);
+//	edir = getmem_w(reg.r[REGSP]+8);
+//	memio(nambuf, name, sizeof(nambuf), MemReadstring);
+//	if(sysdbg)
+//		itrace("stat(0x%lux='%s', 0x%lux)", name, nambuf, edir);
+//
+//	n = _stat(nambuf, buf);
+//	if(n < 0)
+//		errstr(errbuf, sizeof errbuf);
+//	else
+//		memio(buf, edir, ODIRLEN, MemWrite);
+//
+//	reg.r[REGRET] = n;
+//}
 
 void
 sysstat(void)
@@ -433,27 +422,28 @@ sysstat(void)
 	reg.r[REGRET] = n;
 }
 
-void
-sys_fstat(void)
-{
-	char buf[ODIRLEN];
-	ulong edir;
-	extern int _fstat(int, char*);	/* old system call */
-	int n, fd;
 
-	fd = getmem_w(reg.r[REGSP]+4);
-	edir = getmem_w(reg.r[REGSP]+8);
-	if(sysdbg)
-		itrace("fstat(%d, 0x%lux)", fd, edir);
-
-	n = _fstat(fd, buf);
-	if(n < 0)
-		errstr(errbuf, sizeof errbuf);
-	else
-		memio(buf, edir, ODIRLEN, MemWrite);
-
-	reg.r[REGRET] = n;
-}
+//void
+//sys_fstat(void)
+//{
+//	char buf[ODIRLEN];
+//	ulong edir;
+//	extern int _fstat(int, char*);	/* old system call */
+//	int n, fd;
+//
+//	fd = getmem_w(reg.r[REGSP]+4);
+//	edir = getmem_w(reg.r[REGSP]+8);
+//	if(sysdbg)
+//		itrace("fstat(%d, 0x%lux)", fd, edir);
+//
+//	n = _fstat(fd, buf);
+//	if(n < 0)
+//		errstr(errbuf, sizeof errbuf);
+//	else
+//		memio(buf, edir, ODIRLEN, MemWrite);
+//
+//	reg.r[REGRET] = n;
+//}
 
 void
 sysfstat(void)
@@ -662,54 +652,54 @@ void sysmount(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET
 void sysawait(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
 
 void (*systab[])(void)	={
-	[SYSR1]		sys1,
-	[_ERRSTR]	sys_errstr,
-	[BIND]		sysbind,
-	[CHDIR]		syschdir,
-	[CLOSE]		sysclose,
-	[DUP]		sysdup,
-	[ALARM]		sysalarm,
-	[EXEC]		sysexec,
-	[EXITS]		sysexits,
-	[_FSESSION]	sysfsession,
-	[FAUTH]		sysfauth,
-	[_FSTAT]	sys_fstat,
-	[SEGBRK]	syssegbrk,
-	[_MOUNT]	_sysmount,
-	[OPEN]		sysopen,
-	[_READ]		sys_read,
-	[OSEEK]		sysoseek,
-	[SLEEP]		syssleep,
-	[_STAT]		sys_stat,
-	[RFORK]		sysrfork,
-	[_WRITE]	sys_write,
-	[PIPE]		syspipe,
-	[CREATE]	syscreate,
-	[FD2PATH]	sysfd2path,
-	[BRK_]		sysbrk_,
-	[REMOVE]	sysremove,
-	[_WSTAT]	sys_wstat,
-	[_FWSTAT]	sys_fwstat,
-	[NOTIFY]	sysnotify,
-	[NOTED]		sysnoted,
-	[SEGATTACH]	syssegattach,
-	[SEGDETACH]	syssegdetach,
-	[SEGFREE]	syssegfree,
-	[SEGFLUSH]	syssegflush,
-	[RENDEZVOUS]	sysrendezvous,
-	[UNMOUNT]	sysunmount,
-	[_WAIT]		syswait,
-	[SEEK]		sysseek,
-	[FVERSION]	sysfversion,
-	[ERRSTR]	syserrstr,
-	[STAT]		sysstat,
-	[FSTAT]		sysfstat,
-	[WSTAT]		syswstat,
-	[FWSTAT]	sysfwstat,
-	[MOUNT]		sysmount,
-	[AWAIT]		sysawait,
-	[PREAD]		syspread,
-	[PWRITE]	syspwrite,
+    [NOP]		sysnop,
+
+    [RFORK]		sysrfork,
+    [EXEC]		sysexec,
+    [EXITS]		sysexits,
+    [AWAIT]		sysawait,
+
+    [BRK]		sysbrk_,
+
+    [OPEN]		sysopen,
+    [CLOSE]		sysclose,
+    [PREAD]		syspread,
+    [PWRITE]	syspwrite,
+    [SEEK]		sysseek,
+
+    [CREATE]	syscreate,
+    [REMOVE]	sysremove,
+    [CHDIR]		syschdir,
+    [FD2PATH]	sysfd2path,
+    [STAT]		sysstat,
+    [FSTAT]		sysfstat,
+    [WSTAT]		syswstat,
+    [FWSTAT]	sysfwstat,
+
+    [BIND]		sysbind,
+    [MOUNT]		sysmount,
+    [UNMOUNT]	sysunmount,
+
+    [SLEEP]		syssleep,
+    [ALARM]		sysalarm,
+
+    [PIPE]		syspipe,
+    [NOTIFY]	sysnotify,
+    [NOTED]		sysnoted,
+
+    [SEGATTACH]	syssegattach,
+    [SEGDETACH]	syssegdetach,
+    [SEGFREE]	syssegfree,
+    [SEGFLUSH]	syssegflush,
+    [SEGBRK]	syssegbrk,
+
+    [RENDEZVOUS]	sysrendezvous,
+
+    [DUP]		sysdup,
+    [FVERSION]	sysfversion,
+    [FAUTH]		sysfauth,
+
+    [ERRSTR]	syserrstr,
 };
 
 void

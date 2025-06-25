@@ -20,6 +20,7 @@ typedef struct {
             uvlong hdr[1];
         };
         Ehdr;			/* elf.h */
+        struct mipsexec;       /* bootexec.h */
     } e;
     long dummy;			/* padding to ensure extra long */
 } ExecHdr;
@@ -56,6 +57,7 @@ typedef struct Exectable{
 //PAD: removed many archi
 extern	Mach	mi386;
 extern	Mach	marm;
+extern	Mach	mmips;
 
 /*s: global [[exectab]] */
 ExecTable exectab[] =
@@ -87,6 +89,15 @@ ExecTable exectab[] =
         sizeof(Exec),
         beswal,
         common },
+    { V_MAGIC,                 /* Mips v.out */
+        "mips plan 9 executable BE",
+        "mips plan 9 dlm BE",
+        FMIPS,
+        1,
+        &mmips,
+        sizeof(Exec),
+        beswal,
+        adotout },
 
     { 0 },
 };
@@ -297,6 +308,11 @@ elf32dotout(int fd, Fhdr *fp, ExecHdr *hp)
         mach = &marm;
         fp->type = FARM;
         fp->name = "arm ELF32 executable";
+        break;
+    case MIPS:
+        mach = &mmips;
+        fp->type = FMIPS;
+        fp->name = "mips ELF32 executable";
         break;
     default:
         return 0;
