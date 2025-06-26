@@ -68,12 +68,13 @@ TESTS=\
  ROOT/tests\
  lib_graphics/libdraw/tests\
  lib_graphics/libmemdraw/tests\
- assemblers/5a/tests\
- # need a arm/lib/libc.a\
- compilers/5c/tests\
  compilers/8c/tests\
  linkers/8l/tests\
  lib_gui/libpanel/tests\
+
+# assemblers/5a/tests\
+# need a arm/lib/libc.a\
+# compilers/5c/tests\
 
 ###############################################################################
 # Kernel
