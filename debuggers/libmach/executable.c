@@ -20,7 +20,7 @@ typedef struct {
             uvlong hdr[1];
         };
         Ehdr;			/* elf.h */
-        struct mipsexec;       /* bootexec.h */
+        //TODO: struct mipsexec;       /* bootexec.h */
     } e;
     long dummy;			/* padding to ensure extra long */
 } ExecHdr;
