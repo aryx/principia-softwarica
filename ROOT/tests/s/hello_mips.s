@@ -1,4 +1,8 @@
 TEXT _main(SB), $20
+	// very important instruction! vl assumes R30 is set correctly so that
+        // $hello(SB) below is translated in using R30 and some offset.
+        // see also libc/mips/main9.s
+	MOVW	$setR30(SB), R30
         /* prepare the system call PWRITE(1,&hello,12, 00) */
 	MOVW	$1,R1
 	MOVW    R1, 4(R29)
@@ -16,9 +20,9 @@ TEXT _main(SB), $20
         JAL exit(SB)
 
 TEXT exit(SB), $4
-        /* prepare the system call EXITS("hello world") */
-        MOVW $hello(SB), R1
-        MOVW R1, 4(R13)
+        /* prepare the system call EXITS(0) */
+        MOVW $0, R1
+        MOVW R1, 4(R29)
         MOVW $3 /*EXITS*/, R1
         /* system call */
         SYSCALL
