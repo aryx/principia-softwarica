@@ -1,6 +1,7 @@
 TEXT _main(SB), $20
         /* prepare the system call PWRITE(1,&hello,12, 00) */
 	MOVW	$1,R1
+	MOVW    R1, 4(R29)
 	MOVW	$hello(SB),R2
 	MOVW	R2,8(R29)
 	MOVW	$12,R4
@@ -9,7 +10,6 @@ TEXT _main(SB), $20
 	MOVW	$0,0(R6)
 	MOVW	$0,4(R6)
 
-	MOVW R1, 0(FP)
         /* system call */
 	MOVW $9 /*PWRITE*/, R1
 	SYSCALL
