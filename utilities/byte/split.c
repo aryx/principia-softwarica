@@ -133,10 +133,10 @@ nextfile(void)
 int
 matchfile(Resub *match)
 {
-	if(match[1].sp) {
-		int len = match[1].ep - match[1].sp;
+	if(match[1].s.sp) {
+		int len = match[1].e.ep - match[1].s.sp;
 
-		strncpy(name, match[1].sp, len);
+		strncpy(name, match[1].s.sp, len);
 		strcpy(name+len, suffix);
 		openf();
 		return 1;

@@ -996,11 +996,11 @@ match(Reprog *pattern, Rune *buf)
 {
 	if (!pattern)
 		return 0;
-	subexp[0].rsp = buf;
-	subexp[0].ep = 0;
+	subexp[0].s.rsp = buf;
+	subexp[0].e.ep = 0;
 	if (rregexec(pattern, linebuf, subexp, MAXSUB) > 0) {
-		loc1 = subexp[0].rsp;
-		loc2 = subexp[0].rep;
+		loc1 = subexp[0].s.rsp;
+		loc2 = subexp[0].e.rep;
 		return 1;
 	}
 	loc1 = loc2 = 0;
@@ -1055,8 +1055,8 @@ dosub(Rune *rhsbuf)
 		}
 		if (c == Runemax && (c = *rp++) >= '1' && c < MAXSUB + '0') {
 			n = c-'0';
-			if (subexp[n].rsp && subexp[n].rep) {
-				sp = place(sp, subexp[n].rsp, subexp[n].rep);
+			if (subexp[n].s.rsp && subexp[n].e.rep) {
+				sp = place(sp, subexp[n].s.rsp, subexp[n].e.rep);
 				continue;
 			}
 			else {

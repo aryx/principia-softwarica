@@ -840,16 +840,19 @@ typedef struct Reprog       Reprog;
  *  Sub expression matches
  */
 struct Resub{
+    // old: kencc-ext: this used to be anon unions but gcc don't accept it
+    // and for goken we need mk to be compatible with a libregexp gcc can compile
+    // hence the }s; and }e; below
     union
     {
         char *sp;
         Rune *rsp;
-    };
+    }s;
     union
     {
         char *ep;
         Rune *rep;
-    };
+    }e;
 };
 
 /*
@@ -13519,12 +13522,12 @@ _renewmatch(Resub *mp, int ms, Resublist *sp)
 
     if(mp==0 || ms<=0)
         return;
-    if(mp[0].sp==0 || sp->m[0].sp<mp[0].sp ||
-       (sp->m[0].sp==mp[0].sp && sp->m[0].ep>mp[0].ep)){
+    if(mp[0].s.sp==0 || sp->m[0].s.sp<mp[0].s.sp ||
+       (sp->m[0].s.sp==mp[0].s.sp && sp->m[0].e.ep>mp[0].e.ep)){
         for(i=0; i<ms && i<NSUBEXP; i++)
             mp[i] = sp->m[i];
         for(; i<ms; i++)
-            mp[i].sp = mp[i].ep = 0;
+            mp[i].s.sp = mp[i].e.ep = 0;
     }
 }
 @
@@ -13545,7 +13548,7 @@ _renewthread(Relist *lp,	/* _relist to add to */
 
     for(p=lp; p->inst; p++){
         if(p->inst == ip){
-            if(sep->m[0].sp < p->se.m[0].sp){
+            if(sep->m[0].s.sp < p->se.m[0].s.sp){
                 if(ms > 1)
                     p->se = *sep;
                 else
@@ -13579,10 +13582,10 @@ _renewemptythread(Relist *lp,	/* _relist to add to */
 
     for(p=lp; p->inst; p++){
         if(p->inst == ip){
-            if(sp < p->se.m[0].sp) {
+            if(sp < p->se.m[0].s.sp) {
                 if(ms > 1)
                     memset(&p->se, 0, sizeof(p->se));
-                p->se.m[0].sp = sp;
+                p->se.m[0].s.sp = sp;
             }
             return 0;
         }
@@ -13590,7 +13593,7 @@ _renewemptythread(Relist *lp,	/* _relist to add to */
     p->inst = ip;
     if(ms > 1)
         memset(&p->se, 0, sizeof(p->se));
-    p->se.m[0].sp = sp;
+    p->se.m[0].s.sp = sp;
     (++p)->inst = 0;
     return p;
 }
@@ -13607,10 +13610,10 @@ _rrenewemptythread(Relist *lp,	/* _relist to add to */
 
     for(p=lp; p->inst; p++){
         if(p->inst == ip){
-            if(rsp < p->se.m[0].rsp) {
+            if(rsp < p->se.m[0].s.rsp) {
                 if(ms > 1)
                     memset(&p->se, 0, sizeof(p->se));
-                p->se.m[0].rsp = rsp;
+                p->se.m[0].s.rsp = rsp;
             }
             return 0;
         }
@@ -13618,7 +13621,7 @@ _rrenewemptythread(Relist *lp,	/* _relist to add to */
     p->inst = ip;
     if(ms > 1)
         memset(&p->se, 0, sizeof(p->se));
-    p->se.m[0].rsp = rsp;
+    p->se.m[0].s.rsp = rsp;
     (++p)->inst = 0;
     return p;
 }
@@ -14715,9 +14718,9 @@ regsub(char *sp,	/* source string */
             case '8':
             case '9':
                 i = *sp-'0';
-                if(mp!=0 && mp[i].sp != 0 && ms>i)
-                    for(ssp = mp[i].sp;
-                         ssp < mp[i].ep;
+                if(mp!=0 && mp[i].s.sp != 0 && ms>i)
+                    for(ssp = mp[i].s.sp;
+                         ssp < mp[i].e.ep;
                          ssp++)
                         if(dp < ep)
                             *dp++ = *ssp;
@@ -14735,9 +14738,9 @@ regsub(char *sp,	/* source string */
                 break;
             }
         }else if(*sp == '&'){
-            if(mp!=0 && mp[0].sp != 0 && ms>0)
-                for(ssp = mp[0].sp;
-                     ssp < mp[0].ep; ssp++)
+            if(mp!=0 && mp[0].s.sp != 0 && ms>0)
+                for(ssp = mp[0].s.sp;
+                     ssp < mp[0].e.ep; ssp++)
                     if(dp < ep)
                         *dp++ = *ssp;
         }else{
@@ -14794,8 +14797,8 @@ rregexec1(Reprog *progp,	/* program to run */
     checkstart = j->startchar;
     if(mp)
         for(i=0; i<ms; i++) {
-            mp[i].rsp = 0;
-            mp[i].rep = 0;
+            mp[i].s.rsp = 0;
+            mp[i].e.rep = 0;
         }
     j->relist[0][0].inst = 0;
     j->relist[1][0].inst = 0;
@@ -14845,10 +14848,10 @@ rregexec1(Reprog *progp,	/* program to run */
                             return -1;
                     break;
                 case LBRA:
-                    tlp->se.m[inst->subid].rsp = s;
+                    tlp->se.m[inst->subid].s.rsp = s;
                     continue;
                 case RBRA:
-                    tlp->se.m[inst->subid].rep = s;
+                    tlp->se.m[inst->subid].e.rep = s;
                     continue;
                 case ANY:
                     if(r != '\n')
@@ -14893,7 +14896,7 @@ rregexec1(Reprog *progp,	/* program to run */
                     continue;
                 case END:	/* Match! */
                     match = 1;
-                    tlp->se.m[0].rep = s;
+                    tlp->se.m[0].e.rep = s;
                     if(mp != 0)
                         _renewmatch(mp, ms, &tlp->se);
                     break;
@@ -14948,10 +14951,10 @@ rregexec(Reprog *progp,	/* program to run */
     j.rstarts = bol;
     j.reol = 0;
     if(mp && ms>0){
-        if(mp->sp)
-            j.rstarts = mp->rsp;
-        if(mp->ep)
-            j.reol = mp->rep;
+        if(mp->s.sp)
+            j.rstarts = mp->s.rsp;
+        if(mp->e.ep)
+            j.reol = mp->e.rep;
     }
     j.starttype = 0;
     j.startchar = 0;
@@ -15024,9 +15027,9 @@ rregsub(Rune *sp,	/* source string */
             case '8':
             case '9':
                 i = *sp-'0';
-                if(mp[i].rsp != 0 && mp!=0 && ms>i)
-                    for(ssp = mp[i].rsp;
-                         ssp < mp[i].rep;
+                if(mp[i].s.rsp != 0 && mp!=0 && ms>i)
+                    for(ssp = mp[i].s.rsp;
+                         ssp < mp[i].e.rep;
                          ssp++)
                         if(dp < ep)
                             *dp++ = *ssp;
@@ -15044,10 +15047,10 @@ rregsub(Rune *sp,	/* source string */
                 break;
             }
         }else if(*sp == '&'){				
-            if(mp[0].rsp != 0 && mp!=0 && ms>0)
-            if(mp[0].rsp != 0)
-                for(ssp = mp[0].rsp;
-                     ssp < mp[0].rep; ssp++)
+            if(mp[0].s.rsp != 0 && mp!=0 && ms>0)
+            if(mp[0].s.rsp != 0)
+                for(ssp = mp[0].s.rsp;
+                     ssp < mp[0].e.rep; ssp++)
                     if(dp < ep)
                         *dp++ = *ssp;
         }else{

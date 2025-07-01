@@ -493,13 +493,13 @@ regx(Reprog *prog, char *s, Resub *m, int nm)
 	int i;
 
 	if(s == nil)
-		s = m[0].sp;	/* why is this necessary? */
+		s = m[0].s.sp;	/* why is this necessary? */
 
 	i = regexec(prog, s, m, nm);
 /*
 	if(i >= 0)
 		for(j=0; j<nm; j++)
-			fprint(2, "match%d: %.*s\n", j, utfnlen(m[j].sp, m[j].ep-m[j].sp), m[j].sp);
+			fprint(2, "match%d: %.*s\n", j, utfnlen(m[j].s.sp, m[j].e.ep-m[j].s.sp), m[j].s.sp);
 */
 	return i;
 }
@@ -509,7 +509,7 @@ ismatch(int i, char *s, char *desc)
 {
 	Resub m[1];
 
-	m[0].sp = m[0].ep = nil;
+	m[0].s.sp = m[0].e.ep = nil;
 	if(!regx(retab[i].prog, s, m, 1)){
 		werrstr("malformed %s: %q", desc, s);
 		return 0;
@@ -546,25 +546,25 @@ spliturl(char *url, SplitUrl *su)
 		return -1;
 	}
 
-	m[0].sp = m[0].ep = nil;
+	m[0].s.sp = m[0].e.ep = nil;
 	t = &retab[REsplit];
 	if(!regx(t->prog, url, m, t->size)){
 		werrstr("malformed URI: %q", url);
 		return -1;
 	}
 
-	su->url.s = m[0].sp;
-	su->url.e = m[0].ep;
-	su->scheme.s = m[t->ind[0]].sp;
-	su->scheme.e = m[t->ind[0]].ep;
-	su->authority.s = m[t->ind[1]].sp;
-	su->authority.e = m[t->ind[1]].ep;
-	su->path.s = m[t->ind[2]].sp;
-	su->path.e = m[t->ind[2]].ep;
-	su->query.s = m[t->ind[3]].sp;
-	su->query.e = m[t->ind[3]].ep;
-	su->fragment.s = m[t->ind[4]].sp;
-	su->fragment.e = m[t->ind[4]].ep;
+	su->url.s = m[0].s.sp;
+	su->url.e = m[0].e.ep;
+	su->scheme.s = m[t->ind[0]].s.sp;
+	su->scheme.e = m[t->ind[0]].e.ep;
+	su->authority.s = m[t->ind[1]].s.sp;
+	su->authority.e = m[t->ind[1]].e.ep;
+	su->path.s = m[t->ind[2]].s.sp;
+	su->path.e = m[t->ind[2]].e.ep;
+	su->query.s = m[t->ind[3]].s.sp;
+	su->query.e = m[t->ind[3]].e.ep;
+	su->fragment.s = m[t->ind[4]].s.sp;
+	su->fragment.e = m[t->ind[4]].e.ep;
 
 	if(urldebug)
 		fprint(2, "split url %s into %.*q %.*q %.*q %.*q %.*q %.*q\n",
@@ -625,17 +625,17 @@ parse_userinfo(char *s, char *e, Url *u)
 	Resub m[MaxResub];
 	Retab *t;
 
-	m[0].sp = s;
-	m[0].ep = e;
+	m[0].s.sp = s;
+	m[0].e.ep = e;
 	t = &retab[REuserinfo];
 	if(!regx(t->prog, nil, m, t->size)){
 		werrstr("malformed userinfo: %.*q", utfnlen(s, e-s), s);
 		return -1;
 	}
-	if(m[t->ind[0]].sp)
-		u->user = estredup(m[t->ind[0]].sp, m[t->ind[0]].ep);
-	if(m[t->ind[1]].sp)
-		u->user = estredup(m[t->ind[1]].sp, m[t->ind[1]].ep);
+	if(m[t->ind[0]].s.sp)
+		u->user = estredup(m[t->ind[0]].s.sp, m[t->ind[0]].e.ep);
+	if(m[t->ind[1]].s.sp)
+		u->user = estredup(m[t->ind[1]].s.sp, m[t->ind[1]].e.ep);
 	return 0;
 }
 
@@ -645,20 +645,20 @@ parse_host(char *s, char *e, Url *u)
 	Resub m[MaxResub];
 	Retab *t;
 
-	m[0].sp = s;
-	m[0].ep = e;
+	m[0].s.sp = s;
+	m[0].e.ep = e;
 	t = &retab[REhost];
 	if(!regx(t->prog, nil, m, t->size)){
 		werrstr("malformed host: %.*q", utfnlen(s, e-s), s);
 		return -1;
 	}
 
-	assert(m[t->ind[0]].sp || m[t->ind[1]].sp);
+	assert(m[t->ind[0]].s.sp || m[t->ind[1]].s.sp);
 
-	if(m[t->ind[0]].sp)	/* regular */
-		u->host = estredup(m[t->ind[0]].sp, m[t->ind[0]].ep);
+	if(m[t->ind[0]].s.sp)	/* regular */
+		u->host = estredup(m[t->ind[0]].s.sp, m[t->ind[0]].e.ep);
 	else
-		u->host = estredup(m[t->ind[1]].sp, m[t->ind[1]].ep);
+		u->host = estredup(m[t->ind[1]].s.sp, m[t->ind[1]].e.ep);
 	return 0;
 }
 
@@ -674,26 +674,26 @@ parse_authority(SplitUrl *su, Url *u)
 		return 0;
 
 	u->authority = estredup(su->authority.s, su->authority.e);
-	m[0].sp = m[0].ep = nil;
+	m[0].s.sp = m[0].e.ep = nil;
 	t = &retab[REauthority];
 	if(!regx(t->prog, u->authority, m, t->size)){
 		werrstr("malformed authority: %q", u->authority);
 		return -1;
 	}
 
-	if(m[t->ind[0]].sp)
-		if(parse_userinfo(m[t->ind[0]].sp, m[t->ind[0]].ep, u) < 0)
+	if(m[t->ind[0]].s.sp)
+		if(parse_userinfo(m[t->ind[0]].s.sp, m[t->ind[0]].e.ep, u) < 0)
 			return -1;
-	if(m[t->ind[1]].sp)
-		if(parse_host(m[t->ind[1]].sp, m[t->ind[1]].ep, u) < 0)
+	if(m[t->ind[1]].s.sp)
+		if(parse_host(m[t->ind[1]].s.sp, m[t->ind[1]].e.ep, u) < 0)
 			return -1;
-	if(m[t->ind[2]].sp)
-		u->port = estredup(m[t->ind[2]].sp, m[t->ind[2]].ep);
+	if(m[t->ind[2]].s.sp)
+		u->port = estredup(m[t->ind[2]].s.sp, m[t->ind[2]].e.ep);
 
 
 	if(urldebug > 0){
-		userinfo = estredup(m[t->ind[0]].sp, m[t->ind[0]].ep); 
-		host = estredup(m[t->ind[1]].sp, m[t->ind[1]].ep);
+		userinfo = estredup(m[t->ind[0]].s.sp, m[t->ind[0]].e.ep); 
+		host = estredup(m[t->ind[1]].s.sp, m[t->ind[1]].e.ep);
 		fprint(2, "port: %q, authority %q\n", u->port, u->authority);
 		fprint(2, "host %q, userinfo %q\n", host, userinfo);
 		free(host);
@@ -793,15 +793,15 @@ postparse_ftp(Url *u)
 		return 0;
 	}
 
-	m[0].sp = m[0].ep = nil;
+	m[0].s.sp = m[0].e.ep = nil;
 	t = &retab[REftppath];
 	if(!regx(t->prog, u->path, m, t->size)){
 		werrstr("malformed ftp path: %q", u->path);
 		return -1;
 	}
 
-	if(m[t->ind[0]].sp){
-		u->ftp.path_spec = estredup(m[t->ind[0]].sp, m[t->ind[0]].ep);
+	if(m[t->ind[0]].s.sp){
+		u->ftp.path_spec = estredup(m[t->ind[0]].s.sp, m[t->ind[0]].e.ep);
 		if(strchr(u->ftp.path_spec, ';')){
 			werrstr("unexpected \";param\" in ftp path");
 			return -1;
@@ -809,8 +809,8 @@ postparse_ftp(Url *u)
 	}else
 		u->ftp.path_spec = estrdup("/");
 
-	if(m[t->ind[1]].sp){
-		u->ftp.type = estredup(m[t->ind[1]].sp, m[t->ind[1]].ep);
+	if(m[t->ind[1]].s.sp){
+		u->ftp.type = estredup(m[t->ind[1]].s.sp, m[t->ind[1]].e.ep);
 		strlower(u->ftp.type);
 	}
 	return 0;

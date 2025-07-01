@@ -11,16 +11,19 @@ typedef struct Reprog       Reprog;
  *  Sub expression matches
  */
 struct Resub{
+    // old: kencc-ext: this used to be anon unions but gcc don't accept it
+    // and for goken we need mk to be compatible with a libregexp gcc can compile
+    // hence the }s; and }e; below
     union
     {
         char *sp;
         Rune *rsp;
-    };
+    }s;
     union
     {
         char *ep;
         Rune *rep;
-    };
+    }e;
 };
 
 /*

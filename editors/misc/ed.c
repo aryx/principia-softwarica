@@ -1297,8 +1297,8 @@ dosub(void)
 		}
 		if(c == ESCFLG && (c = *rp++) >= '1' && c < MAXSUB+'0') {
 			n = c-'0';
-			if(subexp[n].rsp && subexp[n].rep) {
-				sp = place(sp, subexp[n].rsp, subexp[n].rep);
+			if(subexp[n].s.rsp && subexp[n].e.rep) {
+				sp = place(sp, subexp[n].s.rsp, subexp[n].e.rep);
 				continue;
 			}
 			error(Q);
@@ -1449,13 +1449,13 @@ match(int *addr)
 	if(addr){
 		if(addr == zero)
 			return 0;
-		subexp[0].rsp = getline(*addr);
+		subexp[0].s.rsp = getline(*addr);
 	} else
-		subexp[0].rsp = loc2;
-	subexp[0].rep = 0;
+		subexp[0].s.rsp = loc2;
+	subexp[0].e.rep = 0;
 	if(rregexec(pattern, linebuf, subexp, MAXSUB)) {
-		loc1 = subexp[0].rsp;
-		loc2 = subexp[0].rep;
+		loc1 = subexp[0].s.rsp;
+		loc2 = subexp[0].e.rep;
 		return 1;
 	}
 	loc1 = loc2 = 0;

@@ -44,10 +44,10 @@ setvar(Resub rs[10], char *match[10])
 		free(match[i]);
 		match[i] = nil;
 	}
-	for(i=0; i<10 && rs[i].sp!=nil; i++){
-		n = rs[i].ep-rs[i].sp;
+	for(i=0; i<10 && rs[i].s.sp!=nil; i++){
+		n = rs[i].e.ep-rs[i].s.sp;
 		match[i] = emalloc(n+1);
-		memmove(match[i], rs[i].sp, n);
+		memmove(match[i], rs[i].s.sp, n);
 		match[i][n] = '\0';
 	}
 }
@@ -66,7 +66,7 @@ clickmatch(Reprog *re, char *text, Resub rs[10], int click)
 	for(i=0; i<=click; i++){
 		memset(rs, 0, 10*sizeof(Resub));
 		if(regexec(re, text+i, rs, 10))
-			if(rs[0].sp<=clickp && clickp<=rs[0].ep)
+			if(rs[0].s.sp<=clickp && clickp<=rs[0].e.ep)
 				return 1;
 	}
 	return 0;
@@ -94,8 +94,8 @@ verbmatches(int obj, Plumbmsg *m, Rule *r, Exec *e)
 		}
 		if(!clickmatch(r->regex, m->data, rs, atoi(clickval)))
 			break;
-		p0 = rs[0].sp - m->data;
-		p1 = rs[0].ep - m->data;
+		p0 = rs[0].s.sp - m->data;
+		p1 = rs[0].e.ep - m->data;
 		if(e->p0 >=0 && !(p0==e->p0 && p1==e->p1))
 			break;
 		e->clearclick = 1;
@@ -120,7 +120,7 @@ verbmatches(int obj, Plumbmsg *m, Rule *r, Exec *e)
 		/* must match full text */
 		if(ntext < 0)
 			ntext = strlen(alltext);
-		if(!regexec(r->regex, alltext, rs, 10) || rs[0].sp!=alltext || rs[0].ep!=alltext+ntext)
+		if(!regexec(r->regex, alltext, rs, 10) || rs[0].s.sp!=alltext || rs[0].e.ep!=alltext+ntext)
 			break;
 		setvar(rs, e->match);
 		return 1;

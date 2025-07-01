@@ -30,9 +30,9 @@ rregsub(Rune *sp,	/* source string */
             case '8':
             case '9':
                 i = *sp-'0';
-                if(mp[i].rsp != 0 && mp!=0 && ms>i)
-                    for(ssp = mp[i].rsp;
-                         ssp < mp[i].rep;
+                if(mp[i].s.rsp != 0 && mp!=0 && ms>i)
+                    for(ssp = mp[i].s.rsp;
+                         ssp < mp[i].e.rep;
                          ssp++)
                         if(dp < ep)
                             *dp++ = *ssp;
@@ -50,10 +50,10 @@ rregsub(Rune *sp,	/* source string */
                 break;
             }
         }else if(*sp == '&'){				
-            if(mp[0].rsp != 0 && mp!=0 && ms>0)
-            if(mp[0].rsp != 0)
-                for(ssp = mp[0].rsp;
-                     ssp < mp[0].rep; ssp++)
+            if(mp[0].s.rsp != 0 && mp!=0 && ms>0)
+            if(mp[0].s.rsp != 0)
+                for(ssp = mp[0].s.rsp;
+                     ssp < mp[0].e.rep; ssp++)
                     if(dp < ep)
                         *dp++ = *ssp;
         }else{

@@ -317,13 +317,13 @@ rcopy(char **to, Resub *match, int n)
     int c;
     char *p;
 
-    *to = match->sp;		/* stem0 matches complete target */
+    *to = match->s.sp;		/* stem0 matches complete target */
     for(to++, match++; --n > 0; to++, match++){
-        if(match->sp && match->ep){
-            p = match->ep;
+        if(match->s.sp && match->e.ep){
+            p = match->e.ep;
             c = *p;
             *p = 0;
-            *to = strdup(match->sp);
+            *to = strdup(match->s.sp);
             *p = c;
         }
         else
