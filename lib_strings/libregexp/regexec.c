@@ -37,8 +37,8 @@ regexec1(Reprog *progp,	/* program to run */
     checkstart = j->starttype;
     if(mp)
         for(i=0; i<ms; i++) {
-            mp[i].sp = 0;
-            mp[i].ep = 0;
+            mp[i].s.sp = 0;
+            mp[i].e.ep = 0;
         }
     j->relist[0][0].inst = 0;
     j->relist[1][0].inst = 0;
@@ -93,10 +93,10 @@ regexec1(Reprog *progp,	/* program to run */
                     }
                     break;
                 case LBRA:
-                    tlp->se.m[inst->subid].sp = s;
+                    tlp->se.m[inst->subid].s.sp = s;
                     continue;
                 case RBRA:
-                    tlp->se.m[inst->subid].ep = s;
+                    tlp->se.m[inst->subid].e.ep = s;
                     continue;
                 case ANY:
                     if(r != '\n')
@@ -141,7 +141,7 @@ regexec1(Reprog *progp,	/* program to run */
                     continue;
                 case END:	/* Match! */
                     match = 1;
-                    tlp->se.m[0].ep = s;
+                    tlp->se.m[0].e.ep = s;
                     if(mp != 0)
                         _renewmatch(mp, ms, &tlp->se);
                     break;
@@ -208,10 +208,10 @@ regexec(Reprog *progp,	/* program to run */
     j.starts = bol;
     j.eol = 0;
     if(mp && ms>0){
-        if(mp->sp)
-            j.starts = mp->sp;
-        if(mp->ep)
-            j.eol = mp->ep;
+        if(mp->s.sp)
+            j.starts = mp->s.sp;
+        if(mp->e.ep)
+            j.eol = mp->e.ep;
     }
     j.starttype = 0;
     j.startchar = 0;
