@@ -50,11 +50,11 @@ void exportenv(ShellEnvVar *e);
 
 
 // lex.c
-int		assline(Biobuf *, Bufblock *);
-int		nextrune(Biobuf*, int);
+bool		assline(Biobuf *, Bufblock *);
+int		nextrune(Biobuf*, bool);
 
 // parse.c
-void	parse(char*, int, int);
+void	parse(char*, fdt, bool);
 
 // varsub.c
 Word*	stow(char*);
@@ -66,21 +66,21 @@ Node*	graph(char*);
 void	nrep(void);
 
 // file.c
-ulong	timeof(char*, int);
+ulong	timeof(char*, bool);
 void	timeinit(char*);
 void	touch(char*);
 ulong	mkmtime(char*, bool);
 void	delete(char*);
 
 // match.c
-int		match(char*, char*, char*);
+bool		match(char*, char*, char*);
 void	subst(char*, char*, char*, int);
 
 
 
 // mk.c
 void	mk(char*);
-int		outofdate(Node*, Arc*, int);
+bool    outofdate(Node*, Arc*, bool);
 void	update(Node*, bool);
 
 // recipe.c
@@ -108,7 +108,7 @@ void	front(char*);
 // rc.c
 char* 	charin(char *, char *);
 char*	copyq(char*, Rune, Bufblock*);
-int		escapetoken(Biobuf*, Bufblock*, int, int);
+error0		escapetoken(Biobuf*, Bufblock*, bool, int);
 char*	expandquote(char*, Rune, Bufblock*);
 
 

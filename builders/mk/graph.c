@@ -3,7 +3,7 @@
 
 static Node *applyrules(char *, char *);
 static void togo(Node *);
-static int vacuous(Node *);
+static bool vacuous(Node *);
 Arc* newarc(Node *n, Rule *r, char *stem, Resub *match);
 
 static Node *newnode(char *);

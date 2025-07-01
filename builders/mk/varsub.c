@@ -5,7 +5,7 @@ static	Word		*subsub(Word*, char*, char*);
 static	Word		*expandvar(char**);
 static	Bufblock	*varname(char**);
 static	Word		*extractpat(char*, char**, char*, char*);
-static	int		submatch(char*, Word*, Word*, int*, char**);
+static	bool		submatch(char*, Word*, Word*, int*, char**);
 static	Word		*varmatch(char *);
 
 /*s: function [[varsub]] */
