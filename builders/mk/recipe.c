@@ -92,6 +92,8 @@ dorecipe(Node *node, bool *did)
                     Bprint(&bout, "no touch of virtual '%s'\n", node->name);
             }
             /*e: [[dorecipe()]] when no recipe found, if tflag */
+            //bugfix:
+            return;
         }
         /*e: [[dorecipe()]] when no recipe found, if virtual or norecipe node */
         else {

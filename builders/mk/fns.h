@@ -108,7 +108,7 @@ void	front(char*);
 // rc.c
 char* 	charin(char *, char *);
 char*	copyq(char*, Rune, Bufblock*);
-error0		escapetoken(Biobuf*, Bufblock*, bool, int);
+error0	escapetoken(Biobuf*, Bufblock*, bool, int);
 char*	expandquote(char*, Rune, Bufblock*);
 
 

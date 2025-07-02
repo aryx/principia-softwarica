@@ -32,16 +32,5 @@ Realloc(void *s, int n)
 }
 /*e: function [[Realloc]] */
 
-// was in plan9.c
-/*s: function [[maketmp]] */
-char*
-maketmp(void)
-{
-    static char temp[] = "/tmp/mkargXXXXXX";
-
-    mktemp(temp);
-    return temp;
-}
-/*e: function [[maketmp]] */
-
+// maketmp() is back in Plan9.c
 /*e: mk/utils.c */
