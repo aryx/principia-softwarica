@@ -216,6 +216,8 @@ Xbackq(void)
         return;
     default: // parent
         Exit("TODO", __LOC__);
+        //pad: commented because use the string.h s_xxx library
+        // that I didn't want to port to goken
         //addwaitpid(pid);
         //close(pfd[PWR]);
         //f = openfd(pfd[PRD]);

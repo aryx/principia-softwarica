@@ -1,9 +1,8 @@
 /*s: rc/unix.c */
-
 /*
  * Unix versions of system-specific functions
- *	By convention, exported routines herein have names beginning with an
- *	upper case letter.
+ * By convention, exported routines herein have names beginning with an
+ * upper case letter.
  */
 // to avoid conflict for wait(), waitpid() signatures
 #define NOPLAN9DEFINES
@@ -11,36 +10,19 @@
 #include "io.h"
 #include "exec.h"
 #include "getflags.h"
+
+//TODO? use plan9port errstr instead?
 #include <errno.h>
 
+// system-specific globals defined here but used in other files
 char *Rcmain = "/usr/lib/rcmain";
 char *Fdprefix = "/dev/fd/";
 
-// defined in trap.c
-extern int trap[NSIG];
-
-//void execfinit(void);
-//
-//struct builtin Builtin[] = {
-//	"cd",		execcd,
-//	"whatis",	execwhatis,
-//	"eval",		execeval,
-//	"exec",		execexec,	/* but with popword first */
-//	"exit",		execexit,
-//	"shift",	execshift,
-//	"wait",		execwait,
-//	"umask",	execumask,
-//	".",		execdot,
-//	"finit",	execfinit,
-//	"flag",		execflag,
-//	0
-//};
-
+//******************************************************************************
+// Environment
+//******************************************************************************
 
 #define	SEP	'\1'
-
-// set in Vinit()
-char **environp;
 
 word*
 enval(char *s)
@@ -54,6 +36,9 @@ enval(char *s)
   *t = c;
   return v;
 }
+
+// set in Vinit()
+char **environp;
 
 void
 Vinit(void)
@@ -201,6 +186,15 @@ Xrdfn(void)
 //	return env;	
 //}
 
+void
+Updenv(void)
+{
+}
+
+//******************************************************************************
+// Signals/notes and Waitfor()
+//******************************************************************************
+
 char *sigmsg[] = {
 /*  0 normal  */ 0,
 /*  1 SIGHUP  */ "Hangup",
@@ -228,7 +222,7 @@ char *sigmsg[] = {
 //pad: Note that plan9 Waitfor(), that was in processes.c (now in plan9.c), was
 // compiling correctly also under Unix and I originally used it and rc
 // was partially working. However, when called from mk (via MKSHELL), I had
-// weird bugs like the status was containing weird strings and so
+// weird bugs like the $status was containing weird strings and so
 // failing mk even if the command was run correctly.
 // Anyway, simpler to uncomment and use the Waitfor() below.
 void
@@ -277,73 +271,77 @@ Waitfor(int pid, bool persist)
   }
  }
 }
-//
-//char **
-//mkargv(a)
-//register struct word *a;
-//{
-//	char **argv = (char **)emalloc((count(a)+2)*sizeof(char *));
-//	char **argp = argv+1;	/* leave one at front for runcoms */
-//
-//	for(;a;a = a->next)
-//		*argp++=a->word;
-//	*argp = 0;
-//	return argv;
-//}
-//
+
+char *signame[] = {
+  "sigexit",	"sighup",	"sigint",	"sigquit",
+  "sigill",	"sigtrap",	"sigiot",	"sigemt",
+  "sigfpe",	"sigkill",	"sigbus",	"sigsegv",
+  "sigsys",	"sigpipe",	"sigalrm",	"sigterm",
+  "sig16",	"sigstop",	"sigtstp",	"sigcont",
+  "sigchld",	"sigttin",	"sigttou",	"sigtint",
+  "sigxcpu",	"sigxfsz",	"sig26",	"sig27",
+  "sig28",	"sig29",	"sig30",	"sig31",
+  0,
+};
+
+// defined in trap.c
+extern int trap[NSIG];
+
 void
-Updenv(void)
+gettrap(int sig)
 {
+  signal(sig, gettrap);
+  trap[sig]++;
+  ntrap++;
+  if(ntrap>=NSIG){
+    pfmt(err, "rc: Too many traps (trap %d), dumping core\n", sig);
+    signal(SIGABRT, (void (*)())0);
+    kill(getpid(), SIGABRT);
+  }
 }
 
-//void
-//Execute(struct word *args, struct word *path)
-//{
-//	char *msg="not found";
-//	int txtbusy = 0;
-//	char **env = mkenv();
-//	char **argv = mkargv(args);
-//	char file[512];
-//
-//	for(;path;path = path->next){
-//		strcpy(file, path->word);
-//		if(file[0])
-//			strcat(file, "/");
-//		strcat(file, argv[1]);
-//ReExec:
-//		execve(file, argv+1, env);
-//		switch(errno){
-//		case ENOEXEC:
-//			pfmt(err, "%s: Bourne again\n", argv[1]);
-//			argv[0]="sh";
-//			argv[1] = strdup(file);
-//			execve("/bin/sh", argv, env);
-//			goto Bad;
-//		case ETXTBSY:
-//			if(++txtbusy!=5){
-//				sleep(txtbusy);
-//				goto ReExec;
-//			}
-//			msg="text busy"; goto Bad;
-//		case EACCES:
-//			msg="no access";
-//			break;
-//		case ENOMEM:
-//			msg="not enough memory"; goto Bad;
-//		case E2BIG:
-//			msg="too big"; goto Bad;
-//		}
-//	}
-//Bad:
-//	pfmt(err, "%s: %s\n", argv[1], msg);
-//	efree((char *)env);
-//	efree((char *)argv);
-//}
+void
+Trapinit(void)
+{
+  int i;
+  void (*sig)();
+
+  if(1 || flag['d']){	/* wrong!!! */
+    sig = signal(SIGINT, gettrap);
+    if(sig==SIG_IGN)
+      signal(SIGINT, SIG_IGN);
+  }
+  else{
+    for(i = 1;i<=NSIG;i++) if(i!=SIGCHLD){
+ sig = signal(i, gettrap);
+ if(sig==SIG_IGN)
+   signal(i, SIG_IGN);
+      }
+  }
+}
+
+//******************************************************************************
+// Errno
+//******************************************************************************
+
+bool
+Eintr(void){
+  return errno==EINTR;
+}
+
+void
+Noerror(void)
+{
+  errno = 0;
+}
+
+//******************************************************************************
+// Directories
+//******************************************************************************
 
 #define	NDIR	14		/* should get this from param.h */
-
-Globsize(p)
-     register char *p;
+int
+Globsize(char *p)
 {
   int isglob = 0, globlen = NDIR+1;
   for(;*p;p++){
@@ -396,77 +394,69 @@ Closedir(int f)
   dirlist[f] = 0;
 }
 
-char *signame[] = {
-  "sigexit",	"sighup",	"sigint",	"sigquit",
-  "sigill",	"sigtrap",	"sigiot",	"sigemt",
-  "sigfpe",	"sigkill",	"sigbus",	"sigsegv",
-  "sigsys",	"sigpipe",	"sigalrm",	"sigterm",
-  "sig16",	"sigstop",	"sigtstp",	"sigcont",
-  "sigchld",	"sigttin",	"sigttou",	"sigtint",
-  "sigxcpu",	"sigxfsz",	"sig26",	"sig27",
-  "sig28",	"sig29",	"sig30",	"sig31",
-  0,
-};
+//******************************************************************************
+// Misc
+//******************************************************************************
 
-void
-gettrap(int sig)
-{
-  signal(sig, gettrap);
-  trap[sig]++;
-  ntrap++;
-  if(ntrap>=NSIG){
-    pfmt(err, "rc: Too many traps (trap %d), dumping core\n", sig);
-    signal(SIGABRT, (void (*)())0);
-    kill(getpid(), SIGABRT);
-  }
-}
-
-void
-Trapinit(void)
-{
-  int i;
-  void (*sig)();
-
-  if(1 || flag['d']){	/* wrong!!! */
-    sig = signal(SIGINT, gettrap);
-    if(sig==SIG_IGN)
-      signal(SIGINT, SIG_IGN);
-  }
-  else{
-    for(i = 1;i<=NSIG;i++) if(i!=SIGCHLD){
- sig = signal(i, gettrap);
- if(sig==SIG_IGN)
-   signal(i, SIG_IGN);
-      }
-  }
-}
+//char **
+//mkargv(a)
+//register struct word *a;
+//{
+//	char **argv = (char **)emalloc((count(a)+2)*sizeof(char *));
+//	char **argp = argv+1;	/* leave one at front for runcoms */
 //
-//Unlink(name)
-//char *name;
+//	for(;a;a = a->next)
+//		*argp++=a->word;
+//	*argp = 0;
+//	return argv;
+//}
+//
+
+//void
+//Execute(struct word *args, struct word *path)
 //{
-//	return unlink(name);
+//	char *msg="not found";
+//	int txtbusy = 0;
+//	char **env = mkenv();
+//	char **argv = mkargv(args);
+//	char file[512];
+//
+//	for(;path;path = path->next){
+//		strcpy(file, path->word);
+//		if(file[0])
+//			strcat(file, "/");
+//		strcat(file, argv[1]);
+//ReExec:
+//		execve(file, argv+1, env);
+//		switch(errno){
+//		case ENOEXEC:
+//			pfmt(err, "%s: Bourne again\n", argv[1]);
+//			argv[0]="sh";
+//			argv[1] = strdup(file);
+//			execve("/bin/sh", argv, env);
+//			goto Bad;
+//		case ETXTBSY:
+//			if(++txtbusy!=5){
+//				sleep(txtbusy);
+//				goto ReExec;
+//			}
+//			msg="text busy"; goto Bad;
+//		case EACCES:
+//			msg="no access";
+//			break;
+//		case ENOMEM:
+//			msg="not enough memory"; goto Bad;
+//		case E2BIG:
+//			msg="too big"; goto Bad;
+//		}
+//	}
+//Bad:
+//	pfmt(err, "%s: %s\n", argv[1], msg);
+//	efree((char *)env);
+//	efree((char *)argv);
 //}
-//Seek(fd, cnt, whence)
-//long cnt;
-//{
-//	return lseek(fd, cnt, whence);
-//}
-//Executable(file)
-//char *file;
-//{
-//	return(access(file, 01)==0);
-//}
-//Creat(file)
-//char *file;
-//{
-//	return creat(file, 0666);
-//}
-//Dup(a, b){
-//	return dup2(a, b);
-//}
-//Dup1(a){
-//	return dup(a);
-//}
+
+
 /*
  * Wrong:  should go through components of a|b|c and return the maximum.
  */
@@ -488,16 +478,8 @@ Exit(char *stat, char* loc)
   }
   exit(n);
 }
-Eintr(){
-  return errno==EINTR;
-}
 
-void
-Noerror()
-{
-  errno = 0;
-}
-Isatty(fd){
+bool Isatty(fdt fd){
   return isatty(fd);
 }
 
@@ -527,26 +509,14 @@ Isatty(fd){
 //	setstatus("");
 //	poplist();
 //}
-//
-//void
-//Memcpy(a, b, n)
-//char *a, *b;
-//{
-//	memmove(a, b, n);
-//}
-//
+
+
 void*
 Malloc(unsigned long n)
 {
   return (void *)malloc(n);
 }
-//
-//void
-//errstr(char *buf, int len)
-//{
-//	strncpy(buf, strerror(errno), len);
-//}
-//
+
 int
 needsrcquote(int c)
 {
@@ -556,25 +526,7 @@ needsrcquote(int c)
     return 1;
   return 0;
 }
-//
-//int
-//rfork(int bits)
-//{
-//	return fork();
-//}
-//
-//int *waitpids;
-//int nwaitpids;
-//
-//void
-//addwaitpid(int pid)
-//{
-//	waitpids = realloc(waitpids, (nwaitpids+1)*sizeof waitpids[0]);
-//	if(waitpids == 0)
-//		panic("Can't realloc %d waitpids", nwaitpids+1);
-//	waitpids[nwaitpids++] = pid;
-//}
-//
+
 //void
 //delwaitpid(int pid)
 //{
@@ -585,13 +537,7 @@ needsrcquote(int c)
 //			waitpids[w++] = waitpids[r];
 //	nwaitpids = w;
 //}
-//
-//void
-//clearwaitpids(void)
-//{
-//	nwaitpids = 0;
-//}
-//
+
 //int
 //havewaitpid(int pid)
 //{
