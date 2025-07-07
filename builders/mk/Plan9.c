@@ -303,11 +303,18 @@ mkmtime(char *name, bool force)
 /*e: function [[mkmtime]] */
 
 // could be in run.c
+Shell rc = {
+  .shellname = "rc",
+  .shell = "/bin/rc",
+};
+
+Shell* shell = &rc;
+
 /*s: global [[shell]] */
-char 	*shell =	"/bin/rc";
+//char 	*shell =	"/bin/rc";
 /*e: global [[shell]] */
 /*s: global [[shellname]] */
-char 	*shellname =	"rc";
+//char 	*shellname =	"rc";
 /*e: global [[shellname]] */
 
 // could be in run.c
@@ -378,11 +385,11 @@ execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
                 exportenv(e);
             /*e: [[execsh()]] in child, export environment before exec */
             if(shflags)
-                execl(shell, shellname, shflags, shargs, nil);
+                execl(shell->shell, shell->shellname, shflags, shargs, nil);
             else
-                execl(shell, shellname, shargs, nil);
+                execl(shell->shell, shell->shellname, shargs, nil);
             // should not be reached
-            perror(shell);
+            perror(shell->shell);
             _exits("exec");
         }
         // else, grandchild, feeding the shell with recipe, through a pipe
@@ -523,10 +530,10 @@ pipecmd(char *cmd, ShellEnvVar *e, int *fd)
         if(e)
             exportenv(e);
         if(shflags)
-            execl(shell, shellname, shflags, "-c", cmd, nil);
+            execl(shell->shell, shell->shellname, shflags, "-c", cmd, nil);
         else
-            execl(shell, shellname, "-c", cmd, nil);
-        perror(shell);
+            execl(shell->shell, shell->shellname, "-c", cmd, nil);
+        perror(shell->shell);
         _exits("exec");
     }
     if(fd){

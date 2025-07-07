@@ -14,6 +14,7 @@ typedef struct Arc Arc;
 typedef struct ShellEnvVar ShellEnvVar;
 typedef struct Job Job;
 typedef struct Bufblock Bufblock;
+typedef struct Shell Shell;
 
 /*s: struct [[Bufblock]] */
 struct Bufblock
@@ -333,8 +334,6 @@ extern	bool	nflag, tflag, iflag, kflag, aflag;
 extern	int	mkinline;
 extern	char	*infile;
 extern	bool explain;
-extern	char	*termchars;
-extern	char 	*shflags;
 extern int runerrs;
 
 /*s: function [[SYNERR]] */
@@ -378,6 +377,44 @@ enum Dxxx {
 /*s: function [[PERCENT]] */
 #define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
 /*e: function [[PERCENT]] */
+
+//pad: Shell below allows to change the shell used by mk at runtime.
+// Thus, mk of goken can be used to compile goken itself and fork-plan9,
+// which have different requirements. I did that in xix/mk first
+// and apparently 9-cc-colombier did something similar but only
+// with MKSHELL defined in the mkfile itself (with some pushshell()/popshell())
+typedef struct Shell {
+    char* shell;
+    char* shellname;
+//TODO: later
+//    char *shflags;
+//
+//    int IWS;
+//    char* termchars;
+//
+//    // methods
+//    char* (*charin)(char *cp, char *pat);
+//    char* (*expandquote)(char *s, Rune r, Bufblock *b);
+//    int (*escapetoken)(Biobuf *bp, Bufblock *buf, int preserve, int esc);
+//    char* (*copyq)(char *s, Rune q, Bufblock *buf);
+} Shell;
+//old:
+//extern	char	*termchars;
+//extern	int	IWS;
+//extern	char 	*shell;
+//extern	char 	*shellname;
+//extern	char 	*shflags;
+//extern Shell sh;
+//extern Shell rc;
+// either sh or rc
+//extern Shell *shell;
+
+// right now always rc, but can be configured with MKSHELL to use a different
+// path than /bin/rc (e.g., /opt/plan9/bin/rc when under Linux or even goken/bin/rc/)
+extern Shell *shell;
+
+extern	char	*termchars;
+extern	char 	*shflags;
 
 #include	"fns.h"
 /*e: mk/mk.h */

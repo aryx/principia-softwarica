@@ -45,6 +45,7 @@ main(int argc, char **argv)
     /*x: [[main()]] locals */
     char *s;
     /*e: [[main()]] locals */
+    Symtab* sym;
 
     // Initializing
 
@@ -254,6 +255,17 @@ main(int argc, char **argv)
         freebuf(whatif);
     }
     /*e: [[main()]] initializations before building */
+
+    //pad-ext: MKSHELL environment var to specify the path to rc
+    //LATER: allow also to change the shell from rc to sh (or something else)
+    sym = symlook("MKSHELL", S_VAR, 0);
+    if(sym != nil) {
+      w = (Word*) sym->u.value;
+      if(w != nil && w->s != nil) {
+        shell->shell = w->s;
+      }
+    }
+
     /*s: [[main()]] setting the targets, call [[mk()]] */
     if(*argv == nil){
         /*s: [[main()]] when no target arguments */

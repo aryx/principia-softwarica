@@ -1,8 +1,8 @@
 /*s: mk/parse.c */
-#include	"mk.h"
+#include        "mk.h"
 
-void	ipop(void);
-void	ipush(void);
+void    ipop(void);
+void    ipush(void);
 static int   rhead(char *, Word **, Word **, int *, char **);
 static char* rbody(Biobuf*);
 
@@ -216,7 +216,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     // variable attributes
     /*s: [[rhead()]] if sep is [[=]] */
     if(sep == '='){
-        pp = charin(p, termchars);	/* termchars is shell-dependent */
+        pp = charin(p, termchars);      /* termchars is shell-dependent */
         if (pp && *pp == '=') {
             while (p != pp) {
                 n = chartorune(&r, p);
@@ -234,7 +234,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
                 }
                 p += n;
             }
-            p++;		/* skip trailing '=' */
+            p++;                /* skip trailing '=' */
         }
     }
     /*e: [[rhead()]] if sep is [[=]] */
@@ -287,6 +287,9 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
                 p = pp;
                 break;
             /*e: [[rhead()]] when parsing rule attributes, switch rune cases */
+            //PAD: this is an extension in mk-in-ocaml that I ignore here
+            case 'I':
+                break;
             default:
                 SYNERR(-1);
                 fprint(STDERR, "unknown attribute '%c'\n", p[-1]);
