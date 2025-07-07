@@ -7,6 +7,8 @@
 #include "io.h"
 /*e: includes */
 
+// Opendir, Closedir and so on are back in plan9.c
+
 /*s: function [[Unlink]] */
 void
 Unlink(char *name)
@@ -56,113 +58,6 @@ Dup(int a, int b)
 /*e: function [[Dup]] */
 
 
-/*s: constant [[NFD]] */
-#define	NFD	50
-/*e: constant [[NFD]] */
-
-/*s: struct [[DirEntryWrapper]] */
-struct DirEntryWrapper {
-    Dir	*dbuf;
-    int	i;
-    int	n;
-};
-/*e: struct [[DirEntryWrapper]] */
-/*s: global [[dir]] */
-struct DirEntryWrapper dir[NFD];
-/*e: global [[dir]] */
-
-/*s: function [[Opendir]] */
-int
-Opendir(char *name)
-{
-    Dir *db;
-    int f;
-    f = open(name, 0);
-    if(f==-1)
-        return f;
-    db = dirfstat(f);
-    if(db!=nil && (db->mode&DMDIR)){
-        if(f<NFD){
-            dir[f].i = 0;
-            dir[f].n = 0;
-        }
-        free(db);
-        return f;
-    }
-    free(db);
-    close(f);
-    return -1;
-}
-/*e: function [[Opendir]] */
-
-/*s: function [[trimdirs]] */
-static int
-trimdirs(Dir *d, int nd)
-{
-    int r, w;
-
-    for(r=w=0; r<nd; r++)
-        if(d[r].mode&DMDIR)
-            d[w++] = d[r];
-    return w;
-}
-/*e: function [[trimdirs]] */
-
-/*s: function [[Readdir]] */
-/*
- * onlydirs is advisory -- it means you only
- * need to return the directories.  it's okay to
- * return files too (e.g., on unix where you can't
- * tell during the readdir), but that just makes 
- * the globber work harder.
- */
-int
-Readdir(int f, void *p, int onlydirs)
-{
-    int n;
-
-    if(f<0 || f>=NFD)
-        return 0;
-Again:
-    if(dir[f].i==dir[f].n){	/* read */
-        free(dir[f].dbuf);
-        dir[f].dbuf = 0;
-        n = dirread(f, &dir[f].dbuf);
-        if(n>0){
-            if(onlydirs){
-                n = trimdirs(dir[f].dbuf, n);
-                if(n == 0)
-                    goto Again;
-            }	
-            dir[f].n = n;
-        }else
-            dir[f].n = 0;
-        dir[f].i = 0;
-    }
-    if(dir[f].i == dir[f].n)
-        return 0;
-    strcpy(p, dir[f].dbuf[dir[f].i].name);
-    dir[f].i++;
-    return 1;
-}
-/*e: function [[Readdir]] */
-
-/*s: function [[Closedir]] */
-void
-Closedir(int f)
-{
-    if(f>=0 && f<NFD){
-        free(dir[f].dbuf);
-        dir[f].i = 0;
-        dir[f].n = 0;
-        dir[f].dbuf = 0;
-    }
-    close(f);
-}
-/*e: function [[Closedir]] */
-
-
-
 /*s: function [[Memcpy]] */
 void
 Memcpy(void *a, void *b, long n)
@@ -171,15 +66,8 @@ Memcpy(void *a, void *b, long n)
 }
 /*e: function [[Memcpy]] */
 
-/*s: function [[Malloc]] */
-void*
-Malloc(ulong n)
-{
-    return mallocz(n, 1);
-}
-/*e: function [[Malloc]] */
-
-
+// back in plan9.c
+extern void* Malloc(ulong n);
 /*s: function [[emalloc]] */
 void *
 emalloc(long n)

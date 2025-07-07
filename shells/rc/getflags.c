@@ -1,7 +1,7 @@
 /*s: rc/getflags.c */
 #include "getflags.h"
 
-extern void	Exit(char*);
+extern void	Exit(char*, char*);
 extern long	Write(int, void*, long);
 
 static void reverse(char**, char**);
@@ -239,7 +239,7 @@ usage(char *tail)
         errs(tail);
     }
     errs("\n");
-    Exit("bad flags");
+    Exit("bad flags", "getflags.c");
 }
 /*e: function [[usage]] */
 

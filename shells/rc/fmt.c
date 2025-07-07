@@ -193,14 +193,5 @@ pval(io *f, word *a)
 }
 /*e: function [[pval]] */
 
-// was in plan9.c
-/*s: function [[_efgfmt]] */
-/* avoid loading any floating-point library code */
-//@Scheck: weird, probably linker trick
-int _efgfmt(Fmt *)
-{
-    return -1;
-}
-/*e: function [[_efgfmt]] */
-
+// _efgfmt is back in plan9.c
 /*e: rc/fmt.c */

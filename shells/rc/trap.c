@@ -7,16 +7,7 @@
 #include "io.h"
 /*e: includes */
 
-// was in rc.h (under an ifdef for plan9)
-/*s: constant [[NSIG]] */
-#define	NSIG	32
-/*e: constant [[NSIG]] */
-/*s: constant [[SIGINT]] */
-#define	SIGINT	2
-/*e: constant [[SIGINT]] */
-/*s: constant [[SIGQUIT]] */
-#define	SIGQUIT	3
-/*e: constant [[SIGQUIT]] */
+// NSIG, SIGINT, SIGQUIT are back in rc.h (under an ifdef for plan9)
 
 // was in exec.h
 /*s: global [[ntrap]] */
@@ -26,88 +17,9 @@ int ntrap;				/* number of outstanding traps */
 int trap[NSIG];				/* number of outstanding traps per type */
 /*e: global [[trap]] */
 
-// was in plan9.c
-/*s: global [[signame]] */
-char *signame[] = {
-    "sigexit",	
-    "sighup",	
-    "sigint",	
-    "sigquit",
-    "sigalrm",	
-    "sigkill",	
-    "sigfpe",	
-    "sigterm",
-    0
-};
-/*e: global [[signame]] */
-/*s: global [[syssigname]] */
-char *syssigname[] = {
-    "exit",		/* can't happen */
-    "hangup",
-    "interrupt",
-    "quit",		/* can't happen */
-    "alarm",
-    "kill",
-    "sys: fp: ",
-    "term",
-    0
-};
-/*e: global [[syssigname]] */
-
-/*s: global [[interrupted]] */
-bool interrupted = false;
-/*e: global [[interrupted]] */
-
-/*s: function [[notifyf]] */
-void
-notifyf(void*, char *s)
-{
-    int i;
-    for(i = 0;syssigname[i];i++) 
-     if(strncmp(s, syssigname[i], strlen(syssigname[i]))==0){
-        if(strncmp(s, "sys: ", 5)!=0) 
-            interrupted = true;
-        goto Out;
-    }
-    pfmt(err, "rc: note: %s\n", s);
-    noted(NDFLT);
-    return;
-Out:
-    if(strcmp(s, "interrupt")!=0 || trap[i]==0){
-        trap[i]++;
-        ntrap++;
-    }
-    if(ntrap>=32){	/* rc is probably in a trap loop */
-        pfmt(err, "rc: Too many traps (trap %s), aborting\n", s);
-        abort();
-    }
-    noted(NCONT);
-}
-/*e: function [[notifyf]] */
-
-/*s: function [[Trapinit]] */
-void
-Trapinit(void)
-{
-    notify(notifyf);
-}
-/*e: function [[Trapinit]] */
-
-/*s: function [[Eintr]] */
-bool
-Eintr(void)
-{
-    return interrupted;
-}
-/*e: function [[Eintr]] */
-
-/*s: function [[Noerror]] */
-void
-Noerror(void)
-{
-    interrupted = false;
-}
-/*e: function [[Noerror]] */
+// signame, syssigname, interrputed are back in plan9.c
+// notifyf(), Trapinit(), Eintr(), Noerror() are back in plan9.c
+extern char *signame[];
 
 // generic part independent of plan9
 /*s: function [[dotrap]] */
@@ -125,7 +37,7 @@ dotrap(void)
         --trap[i];
         --ntrap;
         if(getpid()!=mypid) 
-            Exit(getstatus());
+            Exit(getstatus(), __LOC__);
         trapreq = vlook(signame[i]);
         if(trapreq->fn){
             start(trapreq->fn, trapreq->pc, (struct Var *)nil);
@@ -145,7 +57,7 @@ dotrap(void)
                 Xreturn();
         }
         else 
-            Exit(getstatus());
+            Exit(getstatus(), __LOC__);
     }
 }
 /*e: function [[dotrap]] */

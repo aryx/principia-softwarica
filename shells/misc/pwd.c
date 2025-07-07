@@ -1,11 +1,11 @@
 /*s: misc/pwd.c */
 #include <u.h>
 #include <libc.h>
+
 /*s: function main (misc/pwd.c) */
 /*
  * Print working (current) directory
  */
-
 void
 main(int argc, char *argv[])
 {

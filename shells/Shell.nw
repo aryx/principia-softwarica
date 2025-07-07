@@ -204,6 +204,7 @@ Total                          &                               &                
 % vs havenfork.c to support only OS that have fork.
 %old: havenfork.c (and havefork.c): removed, no need to handle such OS
 %old: unix.c, win32.c (and plan9.c): removed, we need to handle only one OS
+%update: for goken I restored plan9.c and unix.c actually
 
 <<includes>>=
 #include "rc.h"
@@ -3727,7 +3728,7 @@ Xsimple(void)
 
             /* interrupts don't get us out */
             poplist();
-            while(Waitfor(pid, 1) < 0)
+            while(Waitfor(pid, true) < 0)
                 ;
         }
     }
@@ -3817,7 +3818,7 @@ execforkexec(void)
         strcpy(buf, "can't exec: ");
         n = strlen(buf);
         errstr(buf+n, ERRMAX-n);
-        Exit(buf);
+        Exit(buf, __LOC__);
     }
     // parent
     addwaitpid(pid);
@@ -3978,7 +3979,7 @@ mkargv(word *a)
 % Xsimple -> <>
 <<function [[Waitfor]]>>=
 int
-Waitfor(int pid, int)
+Waitfor(int pid, bool _persist)
 {
     thread *p;
     Waitmsg *w;
@@ -4601,7 +4602,7 @@ Xreturn(void)
     efree((char *)p);
 
     if(runq==nil)
-        Exit(getstatus());
+        Exit(getstatus(), __LOC__);
 }
 @
 %ocaml: no need poplist, codefree, just use Gc
@@ -4710,7 +4711,7 @@ Xpipewait(void)
     else{
         strncpy(status, getstatus(), NSTATUS);
         status[NSTATUS]='\0';
-        Waitfor(runq->pid, 1);
+        Waitfor(runq->pid, true);
         runq->pid=-1;
         setstatus(concstatus(getstatus(), status));
     }
@@ -4836,7 +4837,7 @@ Xexit(void)
             return;
         }
     }
-    Exit(getstatus());
+    Exit(getstatus(), __LOC__);
 }
 @
 
@@ -5850,7 +5851,7 @@ static fdt wdirfd = -2;
 <<[[dochdir()]] adjust [[/dev/wdir]] if run under [[rio]]>>=
 if(flag['i']!=nil){
     if(wdirfd==-2)  /* try only once */
-        wdirfd = open("/dev/wdir", OWRITE|OCEXEC);
+        wdirfd = open("/dev/wdir", OWRITE); // TODO: |OCEXEC but plan9 specific?
     if(wdirfd>=0) {
         //fcntl(wdirfd, F_SETFD, FD_CLOEXEC);
         write(wdirfd, word, strlen(word));
@@ -6091,10 +6092,10 @@ execwait(void)
         Xerror1("Usage: wait [pid]");
         return;
     case 2:
-        Waitfor(atoi(runq->argv->words->next->word), 0);
+        Waitfor(atoi(runq->argv->words->next->word), false);
         break;
     case 1:
-        Waitfor(-1, 0);
+        Waitfor(-1, false);
         break;
     }
     poplist();
@@ -6376,7 +6377,7 @@ dotrap(void)
         --trap[i];
         --ntrap;
         if(getpid()!=mypid) 
-            Exit(getstatus());
+            Exit(getstatus(), __LOC__);
         trapreq = vlook(signame[i]);
         if(trapreq->fn){
             start(trapreq->fn, trapreq->pc, (struct Var *)nil);
@@ -6396,7 +6397,7 @@ dotrap(void)
                 Xreturn();
         }
         else 
-            Exit(getstatus());
+            Exit(getstatus(), __LOC__);
     }
 }
 @
@@ -7072,6 +7073,12 @@ Closedir(int f)
 setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
 @
 
+%TODO: this looks like dead code because cflag is not used in this file
+% and not used either in rcmain.unix via 'flag' so what is it??
+% because we pass -c
+% Make.nw for example pass -c in pipecmd() to the shell and it seems
+% it it used to read the command from a string instead of stdin
+
 \section{Failing fast: [[rc -e]]}
 
 % not 'set -e' though so can't set it from the script itself :(
@@ -7209,7 +7216,7 @@ Xsubshell(void)
         break;
     default: // parent
         addwaitpid(pid);
-        Waitfor(pid, 1);
+        Waitfor(pid, true);
         runq->pc = runq->code[runq->pc].i;
         break;
     }
@@ -7800,7 +7807,7 @@ Xbackq(void)
     var *ifs = vlook("ifs");
     word *v, *nextv;
     Rune r;
-    String *word;
+    //String *word;
 
     stop = ifs->val? ifs->val->word: "";
     if(pipe(pfd)<0){
@@ -7820,40 +7827,43 @@ Xbackq(void)
         pushredir(ROPEN, pfd[PWR], 1);
         return;
     default: // parent
-        addwaitpid(pid);
-        close(pfd[PWR]);
-        f = openfd(pfd[PRD]);
-        word = s_new();
-        v = nil;
-        /* rutf requires at least UTFmax+1 bytes in utf */
-        while((n = rutf(f, utf, &r)) != EOF){
-            utf[n] = '\0';
-            if(utfutf(stop, utf) == nil)
-                s_nappend(word, utf, n);
-            else
-                /*
-                 * utf/r is an ifs rune (e.g., \t, \n), thus
-                 * ends the current word, if any.
-                 */
-                if(s_len(word) > 0){
-                    v = newword(s_to_c(word), v);
-                    s_reset(word);
-                }
-        }
-        if(s_len(word) > 0)
-            v = newword(s_to_c(word), v);
-        s_free(word);
-        closeio(f);
-        Waitfor(pid, 0);
-        /* v points to reversed arglist -- reverse it onto argv */
-        while(v){
-            nextv = v->next;
-            v->next = runq->argv->words;
-            runq->argv->words = v;
-            v = nextv;
-        }
-        runq->pc = runq->code[runq->pc].i;
-        return;
+        Exit("TODO", __LOC__);
+        //pad: commented because use the string.h s_xxx library
+        // that I didn't want to port to goken
+        //addwaitpid(pid);
+        //close(pfd[PWR]);
+        //f = openfd(pfd[PRD]);
+        //word = s_new();
+        //v = nil;
+        ///* rutf requires at least UTFmax+1 bytes in utf */
+        //while((n = rutf(f, utf, &r)) != EOF){
+        //    utf[n] = '\0';
+        //    if(utfutf(stop, utf) == nil)
+        //        s_nappend(word, utf, n);
+        //    else
+        //        /*
+        //         * utf/r is an ifs rune (e.g., \t, \n), thus
+        //         * ends the current word, if any.
+        //         */
+        //        if(s_len(word) > 0){
+        //            v = newword(s_to_c(word), v);
+        //            s_reset(word);
+        //        }
+        //}
+        //if(s_len(word) > 0)
+        //    v = newword(s_to_c(word), v);
+        //s_free(word);
+        //closeio(f);
+        //Waitfor(pid, false);
+        ///* v points to reversed arglist -- reverse it onto argv */
+        //while(v){
+        //    nextv = v->next;
+        //    v->next = runq->argv->words;
+        //    runq->argv->words = v;
+        //    v = nextv;
+        //}
+        //runq->pc = runq->code[runq->pc].i;
+        //return;
     }
 }
 @
@@ -8072,8 +8082,9 @@ execnewpgrp(void)
         case 'N':
             arg|=RFCNAMEG;
             break;
-        case 'm':
-            arg|=RFNOMNT;  break;
+        //pad: commented for goken
+        //case 'm':
+        //    arg|=RFNOMNT;  break;
         case 'e':
             arg|=RFENVG;   break;
         case 'E':
@@ -8186,21 +8197,23 @@ union Code rdfns[4];
 void
 execfinit(void)
 {
-    static bool first = true;
-    if(first){
-        rdfns[0].i = 1;
-        rdfns[1].f = Xrdfn;
-        rdfns[2].f = Xjump;
-        rdfns[3].i = 1;
-        first = false;
-    }
-    Xpopm(); // pop_list()
-    envdir = open("/env", 0);
-    if(envdir<0){
-        pfmt(err, "rc: can't open /env: %r\n");
-        return;
-    }
-    start(rdfns, 1, runq->local);
+    //TODO: commented for goken for now because Linux does not have a /env
+    // probably need to move to Plan9.c
+    //static bool first = true;
+    //if(first){
+    //    rdfns[0].i = 1;
+    //    rdfns[1].f = Xrdfn;
+    //    rdfns[2].f = Xjump;
+    //    rdfns[3].i = 1;
+    //    first = false;
+    //}
+    //Xpopm(); // pop_list()
+    //envdir = open("/env", 0);
+    //if(envdir<0){
+    //    pfmt(err, "rc: can't open /env: %r\n");
+    //    return;
+    //}
+    //start(rdfns, 1, runq->local);
 }
 @
 \l should call pop_list(), not Xpopm
@@ -8654,15 +8667,16 @@ Abort(void)
 {
     pfmt(err, "aborting\n");
     flush(err);
-    Exit("aborting");
+    Exit("aborting", __LOC__);
 }
 @
 
 % called from a few places, including Xexit
 <<function [[Exit]]>>=
 void
-Exit(char *stat)
+Exit(char *stat, char* _LOC)
 {
+    USED(_LOC);
     Updenv();
     setstatus(stat);
     exits(truestatus() ? "" : getstatus());
@@ -8960,7 +8974,7 @@ usage(char *tail)
         errs(tail);
     }
     errs("\n");
-    Exit("bad flags");
+    Exit("bad flags", "getflags.c");
 }
 @
 

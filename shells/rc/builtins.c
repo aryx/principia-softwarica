@@ -23,7 +23,7 @@ dochdir(char *word)
     /*s: [[dochdir()]] adjust [[/dev/wdir]] if run under [[rio]] */
     if(flag['i']!=nil){
         if(wdirfd==-2)  /* try only once */
-            wdirfd = open("/dev/wdir", OWRITE|OCEXEC);
+            wdirfd = open("/dev/wdir", OWRITE); // TODO: |OCEXEC but plan9 specific?
         if(wdirfd>=0) {
             //fcntl(wdirfd, F_SETFD, FD_CLOEXEC);
             write(wdirfd, word, strlen(word));
@@ -449,10 +449,10 @@ execwait(void)
         Xerror1("Usage: wait [pid]");
         return;
     case 2:
-        Waitfor(atoi(runq->argv->words->next->word), 0);
+        Waitfor(atoi(runq->argv->words->next->word), false);
         break;
     case 1:
-        Waitfor(-1, 0);
+        Waitfor(-1, false);
         break;
     }
     poplist();
@@ -480,8 +480,8 @@ execnewpgrp(void)
         case 'N':
             arg|=RFCNAMEG;
             break;
-        case 'm':
-            arg|=RFNOMNT;  break;
+        //case 'm':
+        //    arg|=RFNOMNT;  break;
         case 'e':
             arg|=RFENVG;   break;
         case 'E':
@@ -522,21 +522,21 @@ extern fdt envdir;
 void
 execfinit(void)
 {
-    static bool first = true;
-    if(first){
-        rdfns[0].i = 1;
-        rdfns[1].f = Xrdfn;
-        rdfns[2].f = Xjump;
-        rdfns[3].i = 1;
-        first = false;
-    }
-    Xpopm(); // pop_list()
-    envdir = open("/env", 0);
-    if(envdir<0){
-        pfmt(err, "rc: can't open /env: %r\n");
-        return;
-    }
-    start(rdfns, 1, runq->local);
+    //static bool first = true;
+    //if(first){
+    //    rdfns[0].i = 1;
+    //    rdfns[1].f = Xrdfn;
+    //    rdfns[2].f = Xjump;
+    //    rdfns[3].i = 1;
+    //    first = false;
+    //}
+    //Xpopm(); // pop_list()
+    //envdir = open("/env", 0);
+    //if(envdir<0){
+    //    pfmt(err, "rc: can't open /env: %r\n");
+    //    return;
+    //}
+    //start(rdfns, 1, runq->local);
 }
 /*e: function [[execfinit]] */
 

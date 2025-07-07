@@ -195,7 +195,7 @@ Xreturn(void)
     efree((char *)p);
 
     if(runq==nil)
-        Exit(getstatus());
+        Exit(getstatus(), __LOC__);
 }
 /*e: function [[Xreturn]] */
 

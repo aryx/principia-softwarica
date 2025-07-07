@@ -7,32 +7,10 @@
 #include "io.h"
 /*e: includes */
 
-int	matchfn(void*, void*);
+bool	matchfn(void*, void*);
 
-// was in plan9.c
-/*s: constant [[NDIR]] */
-#define	NDIR	256		/* shoud be a better way */
-/*e: constant [[NDIR]] */
-/*s: function [[Globsize]] */
-int
-Globsize(char *p)
-{
-    int isglob = 0, globlen = NDIR+1;
-    for(;*p;p++){
-        if(*p==GLOB){
-            p++;
-            if(*p!=GLOB)
-                isglob++;
-            globlen+=*p=='*'?NDIR:1;
-        }
-        else
-            globlen++;
-    }
-    return isglob?globlen:0;
-}
-/*e: function [[Globsize]] */
-
-
+// NDIR and Globsize are back in plan9.c
+extern int Globsize(char *p);
 
 /*s: global [[globname]] */
 char *globname;

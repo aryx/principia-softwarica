@@ -36,9 +36,9 @@ int ncode;
 
 
 // forward decls
-void outcode(tree*, int);
-void codeswitch(tree*, int);
-int iscase(tree*);
+void outcode(tree*, bool);
+void codeswitch(tree*, bool);
+bool iscase(tree*);
 
 /*s: function [[morecode]] */
 //@Scheck: used by the macros above (why marked as dead then??? TODO)

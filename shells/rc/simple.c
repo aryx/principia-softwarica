@@ -99,7 +99,7 @@ Xsimple(void)
 
             /* interrupts don't get us out */
             poplist();
-            while(Waitfor(pid, 1) < 0)
+            while(Waitfor(pid, true) < 0)
                 ;
         }
     }
