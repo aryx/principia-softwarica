@@ -1,0 +1,1280 @@
+\chapter{Extra Code}
+
+\section{[[files/]]}
+
+\subsection{[[files/cat.c]]}
+
+%-------------------------------------------------------------
+
+<<files/cat.c>>=
+#include <u.h>
+#include <libc.h>
+
+void
+cat(int f, char *s)
+{
+    char buf[8192];
+    long n;
+
+    while((n=read(f, buf, (long)sizeof buf))>0)
+        if(write(1, buf, n)!=n)
+            sysfatal("write error copying %s: %r", s);
+    if(n < 0)
+        sysfatal("error reading %s: %r", s);
+}
+
+void
+main(int argc, char *argv[])
+{
+    int f, i;
+
+    argv0 = "cat";
+    if(argc == 1)
+        cat(0, "<stdin>");
+    else for(i=1; i<argc; i++){
+        f = open(argv[i], OREAD);
+        if(f < 0)
+            sysfatal("can't open %s: %r", argv[i]);
+        else{
+            cat(f, argv[i]);
+            close(f);
+        }
+    }
+    exits(0);
+}
+@
+
+\subsection{[[files/ls.c]]}
+
+%-------------------------------------------------------------
+
+<<files/ls.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <fcall.h>
+
+typedef struct NDir NDir;
+struct NDir
+{
+    Dir *d;
+    char    *prefix;
+};
+
+int errs = 0;
+int dflag;
+int lflag;
+static int  mflag;
+int nflag;
+int pflag;
+int qflag;
+int Qflag;
+int rflag;
+int sflag;
+int tflag;
+int Tflag;
+int uflag;
+int Fflag;
+int ndirbuf;
+int ndir;
+NDir*   dirbuf;
+int ls(char*, int);
+int compar(NDir*, NDir*);
+char*   asciitime(long);
+char*   darwx(long);
+void    rwx(long, char*);
+void    growto(long);
+void    dowidths(Dir*);
+void    format(Dir*, char*);
+void    output(void);
+char*   xcleanname(char*);
+ulong   clk;
+int swidth;         /* max width of -s size */
+int qwidth;         /* max width of -q version */
+int vwidth;         /* max width of dev */
+int uwidth;         /* max width of userid */
+int mwidth;         /* max width of muid */
+int lwidth;         /* max width of length */
+int gwidth;         /* max width of groupid */
+Biobuf  bin;
+
+void
+main(int argc, char *argv[])
+{
+    int i;
+
+    Binit(&bin, 1, OWRITE);
+    ARGBEGIN{
+    case 'F':   Fflag++; break;
+    case 'd':   dflag++; break;
+    case 'l':   lflag++; break;
+    case 'm':   mflag++; break;
+    case 'n':   nflag++; break;
+    case 'p':   pflag++; break;
+    case 'q':   qflag++; break;
+    case 'Q':   Qflag++; break;
+    case 'r':   rflag++; break;
+    case 's':   sflag++; break;
+    case 't':   tflag++; break;
+    case 'T':   Tflag++; break;
+    case 'u':   uflag++; break;
+    default:    fprint(2, "usage: ls [-dlmnpqrstuFQT] [file ...]\n");
+            exits("usage");
+    }ARGEND
+
+    doquote = needsrcquote;
+    quotefmtinstall();
+    fmtinstall('M', dirmodefmt);
+
+    if(lflag)
+        clk = time(0);
+    if(argc == 0)
+        errs = ls(".", 0);
+    else for(i=0; i<argc; i++)
+        errs |= ls(argv[i], 1);
+    output();
+    exits(errs? "errors" : 0);
+}
+
+int
+ls(char *s, int multi)
+{
+    int fd;
+    long i, n;
+    char *p;
+    Dir *db;
+
+    db = dirstat(s);
+    if(db == nil){
+    error:
+        fprint(2, "ls: %s: %r\n", s);
+        return 1;
+    }
+    if((db->qid.type&QTDIR) && dflag==0){
+        free(db);
+        output();
+        fd = open(s, OREAD);
+        if(fd == -1)
+            goto error;
+        n = dirreadall(fd, &db);
+        if(n < 0)
+            goto error;
+        xcleanname(s);
+        growto(ndir+n);
+        for(i=0; i<n; i++){
+            dirbuf[ndir+i].d = db+i;
+            dirbuf[ndir+i].prefix = multi? s : 0;
+        }
+        ndir += n;
+        close(fd);
+        output();
+    }else{
+        growto(ndir+1);
+        dirbuf[ndir].d = db;
+        dirbuf[ndir].prefix = 0;
+        xcleanname(s);
+        p = utfrrune(s, '/');
+        if(p){
+            dirbuf[ndir].prefix = s;
+            *p = 0;
+        }
+        ndir++;
+    }
+    return 0;
+}
+
+void
+output(void)
+{
+    int i;
+    char buf[4096];
+    char *s;
+
+    if(!nflag)
+        qsort(dirbuf, ndir, sizeof dirbuf[0], (int (*)(void*, void*))compar);
+    for(i=0; i<ndir; i++)
+        dowidths(dirbuf[i].d);
+    for(i=0; i<ndir; i++) {
+        if(!pflag && (s = dirbuf[i].prefix)) {
+            if(strcmp(s, "/") ==0)  /* / is a special case */
+                s = "";
+            sprint(buf, "%s/%s", s, dirbuf[i].d->name);
+            format(dirbuf[i].d, buf);
+        } else
+            format(dirbuf[i].d, dirbuf[i].d->name);
+    }
+    ndir = 0;
+    Bflush(&bin);
+}
+
+void
+dowidths(Dir *db)
+{
+    char buf[256];
+    int n;
+
+    if(sflag) {
+        n = sprint(buf, "%llud", (db->length+1023)/1024);
+        if(n > swidth)
+            swidth = n;
+    }
+    if(qflag) {
+        n = sprint(buf, "%lud", db->qid.vers);
+        if(n > qwidth)
+            qwidth = n;
+    }
+    if(mflag) {
+        n = snprint(buf, sizeof buf, "[%q]", db->muid);
+        if(n > mwidth)
+            mwidth = n;
+    }
+    if(lflag) {
+        n = sprint(buf, "%ud", db->dev);
+        if(n > vwidth)
+            vwidth = n;
+        n = sprint(buf, "%q", db->uid);
+        if(n > uwidth)
+            uwidth = n;
+        n = sprint(buf, "%q", db->gid);
+        if(n > gwidth)
+            gwidth = n;
+        n = sprint(buf, "%llud", db->length);
+        if(n > lwidth)
+            lwidth = n;
+    }
+}
+
+char*
+fileflag(Dir *db)
+{
+    if(Fflag == 0)
+        return "";
+    if(QTDIR & db->qid.type)
+        return "/";
+    if(0111 & db->mode)
+        return "*";
+    return "";
+}
+
+void
+format(Dir *db, char *name)
+{
+    int i;
+
+    if(sflag)
+        Bprint(&bin, "%*llud ",
+            swidth, (db->length+1023)/1024);
+    if(mflag){
+        Bprint(&bin, "[%q] ", db->muid);
+        for(i=2+strlen(db->muid); i<mwidth; i++)
+            Bprint(&bin, " ");
+    }
+    if(qflag)
+        Bprint(&bin, "(%.16llux %*lud %.2ux) ",
+            db->qid.path,
+            qwidth, db->qid.vers,
+            db->qid.type);
+    if(Tflag)
+        Bprint(&bin, "%c ", (db->mode&DMTMP)? 't': '-');
+
+    if(lflag)
+        Bprint(&bin, "%M %C %*ud %*q %*q %*llud %s ",
+            db->mode, db->type,
+            vwidth, db->dev,
+            -uwidth, db->uid,
+            -gwidth, db->gid,
+            lwidth, db->length,
+            asciitime(uflag? db->atime: db->mtime));
+    Bprint(&bin, Qflag? "%s%s\n": "%q%s\n", name, fileflag(db));
+}
+
+void
+growto(long n)
+{
+    if(n <= ndirbuf)
+        return;
+    ndirbuf = n;
+    dirbuf=(NDir *)realloc(dirbuf, ndirbuf*sizeof(NDir));
+    if(dirbuf == 0){
+        fprint(2, "ls: malloc fail\n");
+        exits("malloc fail");
+    }
+}
+
+int
+compar(NDir *a, NDir *b)
+{
+    long i;
+    Dir *ad, *bd;
+
+    ad = a->d;
+    bd = b->d;
+
+    if(tflag){
+        if(uflag)
+            i = bd->atime-ad->atime;
+        else
+            i = bd->mtime-ad->mtime;
+    }else{
+        if(a->prefix && b->prefix){
+            i = strcmp(a->prefix, b->prefix);
+            if(i == 0)
+                i = strcmp(ad->name, bd->name);
+        }else if(a->prefix){
+            i = strcmp(a->prefix, bd->name);
+            if(i == 0)
+                i = 1;  /* a is longer than b */
+        }else if(b->prefix){
+            i = strcmp(ad->name, b->prefix);
+            if(i == 0)
+                i = -1; /* b is longer than a */
+        }else
+            i = strcmp(ad->name, bd->name);
+    }
+    if(i == 0)
+        i = (a<b? -1 : 1);
+    if(rflag)
+        i = -i;
+    return i;
+}
+
+char*
+asciitime(long l)
+{
+    static char buf[32];
+    char *t;
+
+    t = ctime(l);
+    /* 6 months in the past or a day in the future */
+    if(l<clk-180L*24*60*60 || clk+24L*60*60<l){
+        memmove(buf, t+4, 7);       /* month and day */
+        memmove(buf+7, t+23, 5);        /* year */
+    }else
+        memmove(buf, t+4, 12);      /* skip day of week */
+    buf[12] = 0;
+    return buf;
+}
+
+/*
+ * Compress slashes, remove trailing slash.  Don't worry about . and ..
+ */
+char*
+xcleanname(char *name)
+{
+    char *r, *w;
+
+    for(r=w=name; *r; r++){
+        if(*r=='/' && r>name && *(r-1)=='/')
+            continue;
+        if(w != r)
+            *w = *r;
+        w++;
+    }
+    *w = 0;
+    while(w-1>name && *(w-1)=='/')
+        *--w = 0;
+    return name;
+}
+@
+
+\subsection{[[files/touch.c]]}
+
+%-------------------------------------------------------------
+
+<<files/touch.c>>=
+#include <u.h>
+#include <libc.h>
+
+int touch(int, char *);
+ulong now;
+
+void
+usage(void)
+{
+    fprint(2, "usage: touch [-c] [-t time] files\n");
+    exits("usage");
+}
+
+void
+main(int argc, char **argv)
+{
+    char *t, *s;
+    int nocreate = 0;
+    int status = 0;
+
+    now = time(0);
+    ARGBEGIN{
+    case 't':
+        t = EARGF(usage());
+        now = strtoul(t, &s, 0);
+        if(s == t || *s != '\0')
+            usage();
+        break;
+    case 'c':
+        nocreate = 1;
+        break;
+    default:    
+        usage();
+    }ARGEND
+
+    if(!*argv)
+        usage();
+    while(*argv)
+        status += touch(nocreate, *argv++);
+    if(status)
+        exits("touch");
+    exits(0);
+}
+
+int touch(int nocreate, char *name)
+{
+    Dir stbuff;
+    int fd;
+
+    nulldir(&stbuff);
+    stbuff.mtime = now;
+    if(dirwstat(name, &stbuff) >= 0)
+        return 0;
+    if(nocreate){
+        fprint(2, "touch: %s: cannot wstat: %r\n", name);
+        return 1;
+    }
+    if((fd = create(name, OREAD|OEXCL, 0666)) < 0){
+        fprint(2, "touch: %s: cannot create: %r\n", name);
+        return 1;
+    }
+    dirfwstat(fd, &stbuff);
+    close(fd);
+    return 0;
+}
+@
+
+\subsection{[[files/mkdir.c]]}
+
+%-------------------------------------------------------------
+
+<<files/mkdir.c>>=
+#include <u.h>
+#include <libc.h>
+
+char *e;
+ulong mode = 0777L;
+
+void
+usage(void)
+{
+    fprint(2, "usage: mkdir [-p] [-m mode] dir...\n");
+    exits("usage");
+}
+
+int
+makedir(char *s)
+{
+    int f;
+
+    if(access(s, AEXIST) == 0){
+        fprint(2, "mkdir: %s already exists\n", s);
+        e = "error";
+        return -1;
+    }
+    f = create(s, OREAD, DMDIR | mode);
+    if(f < 0){
+        fprint(2, "mkdir: can't create %s: %r\n", s);
+        e = "error";
+        return -1;
+    }
+    close(f);
+    return 0;
+}
+
+void
+mkdirp(char *s)
+{
+    char *p;
+
+    for(p=strchr(s+1, '/'); p; p=strchr(p+1, '/')){
+        *p = 0;
+        if(access(s, AEXIST) != 0 && makedir(s) < 0)
+            return;
+        *p = '/';
+    }
+    if(access(s, AEXIST) != 0)
+        makedir(s);
+}
+
+
+void
+main(int argc, char *argv[])
+{
+    int i, pflag;
+    char *m;
+
+    pflag = 0;
+    ARGBEGIN{
+    default:
+        usage();
+    case 'm':
+        m = ARGF();
+        if(m == nil)
+            usage();
+        mode = strtoul(m, &m, 8);
+        if(mode > 0777)
+            usage();
+        break;
+    case 'p':
+        pflag = 1;
+        break;
+    }ARGEND
+
+    for(i=0; i<argc; i++){
+        if(pflag)
+            mkdirp(argv[i]);
+        else
+            makedir(argv[i]);
+    }
+    exits(e);
+}
+@
+
+\subsection{[[files/rm.c]]}
+
+%-------------------------------------------------------------
+
+<<files/rm.c>>=
+#include <u.h>
+#include <libc.h>
+
+char errbuf[ERRMAX];
+int ignerr = 0;
+
+void
+err(char *f)
+{
+    if(!ignerr){
+        errbuf[0] = '\0';
+        errstr(errbuf, sizeof errbuf);
+        fprint(2, "rm: %s: %s\n", f, errbuf);
+    }
+}
+
+/*
+ * f is a non-empty directory. Remove its contents and then it.
+ */
+void
+rmdir(char *f)
+{
+    char *name;
+    int fd, i, j, n, ndir, nname;
+    Dir *dirbuf;
+
+    fd = open(f, OREAD);
+    if(fd < 0){
+        err(f);
+        return;
+    }
+    n = dirreadall(fd, &dirbuf);
+    close(fd);
+    if(n < 0){
+        err("dirreadall");
+        return;
+    }
+
+    nname = strlen(f)+1+STATMAX+1;  /* plenty! */
+    name = malloc(nname);
+    if(name == 0){
+        err("memory allocation");
+        return;
+    }
+
+    ndir = 0;
+    for(i=0; i<n; i++){
+        snprint(name, nname, "%s/%s", f, dirbuf[i].name);
+        if(remove(name) != -1)
+            dirbuf[i].qid.type = QTFILE;    /* so we won't recurse */
+        else{
+            if(dirbuf[i].qid.type & QTDIR)
+                ndir++;
+            else
+                err(name);
+        }
+    }
+    if(ndir)
+        for(j=0; j<n; j++)
+            if(dirbuf[j].qid.type & QTDIR){
+                snprint(name, nname, "%s/%s", f, dirbuf[j].name);
+                rmdir(name);
+            }
+    if(remove(f) == -1)
+        err(f);
+    free(name);
+    free(dirbuf);
+}
+void
+main(int argc, char *argv[])
+{
+    int i;
+    int recurse;
+    char *f;
+    Dir *db;
+
+    ignerr = 0;
+    recurse = 0;
+    ARGBEGIN{
+    case 'r':
+        recurse = 1;
+        break;
+    case 'f':
+        ignerr = 1;
+        break;
+    default:
+        fprint(2, "usage: rm [-fr] file ...\n");
+        exits("usage");
+    }ARGEND
+    for(i=0; i<argc; i++){
+        f = argv[i];
+        if(remove(f) != -1)
+            continue;
+        db = nil;
+        if(recurse && (db=dirstat(f))!=nil && (db->qid.type&QTDIR))
+            rmdir(f);
+        else
+            err(f);
+        free(db);
+    }
+    exits(errbuf);
+}
+@
+
+\subsection{[[files/cp.c]]}
+
+%-------------------------------------------------------------
+
+<<files/cp.c>>=
+#include <u.h>
+#include <libc.h>
+
+#define DEFB    (8*1024)
+
+int failed;
+int gflag;
+int uflag;
+int xflag;
+void    copy(char *from, char *to, int todir);
+int copy1(int fdf, int fdt, char *from, char *to);
+
+void
+main(int argc, char *argv[])
+{
+    Dir *dirb;
+    int todir, i;
+
+    ARGBEGIN {
+    case 'g':
+        gflag++;
+        break;
+    case 'u':
+        uflag++;
+        gflag++;
+        break;
+    case 'x':
+        xflag++;
+        break;
+    default:
+        goto usage;
+    } ARGEND
+
+    todir=0;
+    if(argc < 2)
+        goto usage;
+    dirb = dirstat(argv[argc-1]);
+    if(dirb!=nil && (dirb->mode&DMDIR))
+        todir=1;
+    if(argc>2 && !todir){
+        fprint(2, "cp: %s not a directory\n", argv[argc-1]);
+        exits("bad usage");
+    }
+    for(i=0; i<argc-1; i++)
+        copy(argv[i], argv[argc-1], todir);
+    if(failed)
+        exits("errors");
+    exits(0);
+
+usage:
+    fprint(2, "usage:\tcp [-gux] fromfile tofile\n");
+    fprint(2, "\tcp [-x] fromfile ... todir\n");
+    exits("usage");
+}
+
+int
+samefile(Dir *a, char *an, char *bn)
+{
+    Dir *b;
+    int ret;
+
+    ret = 0;
+    b=dirstat(bn);
+    if(b != nil)
+    if(b->qid.type==a->qid.type)
+    if(b->qid.path==a->qid.path)
+    if(b->qid.vers==a->qid.vers)
+    if(b->dev==a->dev)
+    if(b->type==a->type){
+        fprint(2, "cp: %s and %s are the same file\n", an, bn);
+        ret = 1;
+    }
+    free(b);
+    return ret;
+}
+
+void
+copy(char *from, char *to, int todir)
+{
+    Dir *dirb, dirt;
+    char name[256];
+    int fdf, fdt, mode;
+
+    if(todir){
+        char *s, *elem;
+        elem=s=from;
+        while(*s++)
+            if(s[-1]=='/')
+                elem=s;
+        sprint(name, "%s/%s", to, elem);
+        to=name;
+    }
+
+    if((dirb=dirstat(from))==nil){
+        fprint(2,"cp: can't stat %s: %r\n", from);
+        failed = 1;
+        return;
+    }
+    mode = dirb->mode;
+    if(mode&DMDIR){
+        fprint(2, "cp: %s is a directory\n", from);
+        free(dirb);
+        failed = 1;
+        return;
+    }
+    if(samefile(dirb, from, to)){
+        free(dirb);
+        failed = 1;
+        return;
+    }
+    mode &= 0777;
+    fdf=open(from, OREAD);
+    if(fdf<0){
+        fprint(2, "cp: can't open %s: %r\n", from);
+        free(dirb);
+        failed = 1;
+        return;
+    }
+    fdt=create(to, OWRITE, mode);
+    if(fdt<0){
+        fprint(2, "cp: can't create %s: %r\n", to);
+        close(fdf);
+        free(dirb);
+        failed = 1;
+        return;
+    }
+    if(copy1(fdf, fdt, from, to)==0 && (xflag || gflag || uflag)){
+        nulldir(&dirt);
+        if(xflag){
+            dirt.mtime = dirb->mtime;
+            dirt.mode = dirb->mode;
+        }
+        if(uflag)
+            dirt.uid = dirb->uid;
+        if(gflag)
+            dirt.gid = dirb->gid;
+        if(dirfwstat(fdt, &dirt) < 0)
+            fprint(2, "cp: warning: can't wstat %s: %r\n", to);
+    }           
+    free(dirb);
+    close(fdf);
+    close(fdt);
+}
+
+int
+copy1(int fdf, int fdt, char *from, char *to)
+{
+    char *buf;
+    long n, n1, rcount;
+    int rv;
+    char err[ERRMAX];
+
+    buf = malloc(DEFB);
+    /* clear any residual error */
+    err[0] = '\0';
+    errstr(err, ERRMAX);
+    rv = 0;
+    for(rcount=0;; rcount++) {
+        n = read(fdf, buf, DEFB);
+        if(n <= 0)
+            break;
+        n1 = write(fdt, buf, n);
+        if(n1 != n) {
+            fprint(2, "cp: error writing %s: %r\n", to);
+            failed = 1;
+            rv = -1;
+            break;
+        }
+    }
+    if(n < 0) {
+        fprint(2, "cp: error reading %s: %r\n", from);
+        failed = 1;
+        rv = -1;
+    }
+    free(buf);
+    return rv;
+}
+@
+
+\subsection{[[files/mv.c]]}
+
+%-------------------------------------------------------------
+
+<<files/mv.c>>=
+#include <u.h>
+#include <libc.h>
+
+int copy1(int fdf, int fdt, char *from, char *to);
+void    hardremove(char *);
+int mv(char *from, char *todir, char *toelem);
+int mv1(char *from, Dir *dirb, char *todir, char *toelem);
+int samefile(char *, char *);
+void    split(char *, char **, char **);
+
+void
+main(int argc, char *argv[])
+{
+    int i, failed;
+    Dir *dirto, *dirfrom;
+    char *todir, *toelem;
+
+    if(argc<3){
+        fprint(2, "usage: mv fromfile tofile\n");
+        fprint(2, "   mv fromfile ... todir\n");
+        exits("bad usage");
+    }
+
+    /* prepass to canonicalise names before splitting, etc. */
+    for(i=1; i < argc; i++)
+        cleanname(argv[i]);
+
+    if((dirto = dirstat(argv[argc-1])) != nil && (dirto->mode&DMDIR)){
+        dirfrom = nil;
+        if(argc == 3
+        && (dirfrom = dirstat(argv[1])) != nil
+        && (dirfrom->mode & DMDIR)) 
+            split(argv[argc-1], &todir, &toelem); /* mv dir1 dir2 */
+        else{               /* mv file... dir */
+            todir = argv[argc-1];
+            toelem = nil;       /* toelem will be fromelem */
+        }
+        free(dirfrom);
+    }else
+        split(argv[argc-1], &todir, &toelem);   /* mv file1 file2 */
+    free(dirto);
+    if(argc>3 && toelem != nil){
+        fprint(2, "mv: %s not a directory\n", argv[argc-1]);
+        exits("bad usage");
+    }
+
+    failed = 0;
+    for(i=1; i < argc-1; i++)
+        if(mv(argv[i], todir, toelem) < 0)
+            failed++;
+    if(failed)
+        exits("failure");
+    exits(0);
+}
+
+int
+mv(char *from, char *todir, char *toelem)
+{
+    int stat;
+    Dir *dirb;
+
+    dirb = dirstat(from);
+    if(dirb == nil){
+        fprint(2, "mv: can't stat %s: %r\n", from);
+        return -1;
+    }
+    stat = mv1(from, dirb, todir, toelem);
+    free(dirb);
+    return stat;
+}
+
+int
+mv1(char *from, Dir *dirb, char *todir, char *toelem)
+{
+    int fdf, fdt, i, j, stat;
+    char toname[4096], fromname[4096];
+    char *fromdir, *fromelem;
+    Dir *dirt, null;
+
+    strncpy(fromname, from, sizeof fromname);
+    split(from, &fromdir, &fromelem);
+    if(toelem == 0)
+        toelem = fromelem;
+    i = strlen(toelem);
+    if(i==0){
+        fprint(2, "mv: null last name element moving %s\n", fromname);
+        return -1;
+    }
+    j = strlen(todir);
+    if(i + j + 2 > sizeof toname){
+        fprint(2, "mv: path too big (max %d): %s/%s\n",
+            sizeof toname, todir, toelem);
+        return -1;
+    }
+    memmove(toname, todir, j);
+    toname[j] = '/';
+    memmove(toname+j+1, toelem, i);
+    toname[i+j+1] = 0;
+
+    if(samefile(fromdir, todir)){
+        if(samefile(fromname, toname)){
+            fprint(2, "mv: %s and %s are the same\n",
+                fromname, toname);
+            return -1;
+        }
+
+        /* remove target if present */
+        dirt = dirstat(toname);
+        if(dirt != nil) {
+            hardremove(toname);
+            free(dirt);
+        }
+
+        /* try wstat */
+        nulldir(&null);
+        null.name = toelem;
+        if(dirwstat(fromname, &null) >= 0)
+            return 0;
+        if(dirb->mode & DMDIR){
+            fprint(2, "mv: can't rename directory %s: %r\n",
+                fromname);
+            return -1;
+        }
+    }
+    /*
+     * Renaming won't work --- must copy
+     */
+    if(dirb->mode & DMDIR){
+        fprint(2, "mv: %s is a directory, not copied to %s\n",
+            fromname, toname);
+        return -1;
+    }
+    fdf = open(fromname, OREAD);
+    if(fdf < 0){
+        fprint(2, "mv: can't open %s: %r\n", fromname);
+        return -1;
+    }
+
+    dirt = dirstat(toname);
+    if(dirt != nil && (dirt->mode & DMAPPEND))
+        hardremove(toname);  /* because create() won't truncate file */
+    free(dirt);
+
+    fdt = create(toname, OWRITE, dirb->mode);
+    if(fdt < 0){
+        fprint(2, "mv: can't create %s: %r\n", toname);
+        close(fdf);
+        return -1;
+    }
+    stat = copy1(fdf, fdt, fromname, toname);
+    close(fdf);
+
+    if(stat >= 0){
+        nulldir(&null);
+        null.mtime = dirb->mtime;
+        null.mode = dirb->mode;
+        dirfwstat(fdt, &null);  /* ignore errors; e.g. user none always fails */
+        if(remove(fromname) < 0){
+            fprint(2, "mv: can't remove %s: %r\n", fromname);
+            stat = -1;
+        }
+    }
+    close(fdt);
+    return stat;
+}
+
+int
+copy1(int fdf, int fdt, char *from, char *to)
+{
+    char buf[8192];
+    long n, n1;
+
+    while ((n = read(fdf, buf, sizeof buf)) > 0) {
+        n1 = write(fdt, buf, n);
+        if(n1 != n){
+            fprint(2, "mv: error writing %s: %r\n", to);
+            return -1;
+        }
+    }
+    if(n < 0){
+        fprint(2, "mv: error reading %s: %r\n", from);
+        return -1;
+    }
+    return 0;
+}
+
+void
+split(char *name, char **pdir, char **pelem)
+{
+    char *s;
+
+    s = utfrrune(name, '/');
+    if(s){
+        *s = 0;
+        *pelem = s+1;
+        *pdir = name;
+    }else if(strcmp(name, "..") == 0){
+        *pdir = "..";
+        *pelem = ".";
+    }else{
+        *pdir = ".";
+        *pelem = name;
+    }
+}
+
+int
+samefile(char *a, char *b)
+{
+    Dir *da, *db;
+    int ret;
+
+    if(strcmp(a, b) == 0)
+        return 1;
+    da = dirstat(a);
+    db = dirstat(b);
+    ret = (da != nil && db != nil &&
+        da->qid.type==db->qid.type &&
+        da->qid.path==db->qid.path &&
+        da->qid.vers==db->qid.vers &&
+        da->dev==db->dev &&
+        da->type==db->type);
+    free(da);
+    free(db);
+    return ret;
+}
+
+void
+hardremove(char *a)
+{
+    if(remove(a) == -1){
+        fprint(2, "mv: can't remove %s: %r\n", a);
+        exits("mv");
+    }
+    while(remove(a) != -1)
+        ;
+}
+@
+
+\subsection{[[files/chmod.c]]}
+
+%-------------------------------------------------------------
+
+<<files/chmod.c>>=
+#include <u.h>
+#include <libc.h>
+
+#define U(x) (x<<6)
+#define G(x) (x<<3)
+#define O(x) (x)
+#define A(x) (U(x)|G(x)|O(x))
+
+#define DMRWE (DMREAD|DMWRITE|DMEXEC)
+
+int parsemode(char *, ulong *, ulong *);
+
+void
+main(int argc, char *argv[])
+{
+    int i;
+    Dir *dir, ndir;
+    ulong mode, mask;
+    char *p;
+
+    if(argc < 3){
+        fprint(2, "usage: chmod 0777 file ... or chmod [who]op[rwxalt] file ...\n");
+        exits("usage");
+    }
+    mode = strtol(argv[1], &p, 8);
+    if(*p == 0)
+        mask = A(DMRWE);
+    else if(!parsemode(argv[1], &mask, &mode)){
+        fprint(2, "chmod: bad mode: %s\n", argv[1]);
+        exits("mode");
+    }
+    nulldir(&ndir);
+    for(i=2; i<argc; i++){
+        dir = dirstat(argv[i]);
+        if(dir == nil){
+            fprint(2, "chmod: can't stat %s: %r\n", argv[i]);
+            continue;
+        }
+        ndir.mode = (dir->mode & ~mask) | (mode & mask);
+        free(dir);
+        if(dirwstat(argv[i], &ndir)==-1){
+            fprint(2, "chmod: can't wstat %s: %r\n", argv[i]);
+            continue;
+        }
+    }
+    exits(0);
+}
+
+int
+parsemode(char *spec, ulong *pmask, ulong *pmode)
+{
+    ulong mode, mask;
+    int done, op;
+    char *s;
+
+    s = spec;
+    mask = DMAPPEND | DMEXCL | DMTMP;
+    for(done=0; !done; ){
+        switch(*s){
+        case 'u':
+            mask |= U(DMRWE); break;
+        case 'g':
+            mask |= G(DMRWE); break;
+        case 'o':
+            mask |= O(DMRWE); break;
+        case 'a':
+            mask |= A(DMRWE); break;
+        case 0:
+            return 0;
+        default:
+            done = 1;
+        }
+        if(!done)
+            s++;
+    }
+    if(s == spec)
+        mask |= A(DMRWE);
+    op = *s++;
+    if(op != '+' && op != '-' && op != '=')
+        return 0;
+    mode = 0;
+    for(; *s ; s++){
+        switch(*s){
+        case 'r':
+            mode |= A(DMREAD); break;
+        case 'w':
+            mode |= A(DMWRITE); break;
+        case 'x':
+            mode |= A(DMEXEC); break;
+        case 'a':
+            mode |= DMAPPEND; break;
+        case 'l':
+            mode |= DMEXCL; break;
+        case 't':
+            mode |= DMTMP; break;
+        default:
+            return 0;
+        }
+    }
+    if(*s != 0)
+        return 0;
+    if(op == '+' || op == '-')
+        mask &= mode;
+    if(op == '-')
+        mode = ~mode;
+    *pmask = mask;
+    *pmode = mode;
+    return 1;
+}
+@
+
+\subsection{[[files/chgrp.c]]}
+
+%-------------------------------------------------------------
+
+<<files/chgrp.c>>=
+#include <u.h>
+#include <libc.h>
+
+int readgid(char*);
+int uflag;
+
+void
+main(int argc, char *argv[])
+{
+    int i;
+    Dir dir;
+    char *group;
+    char *errs;
+
+    ARGBEGIN {
+    default:
+    usage:
+        fprint(2, "usage: chgrp [ -uo ] group file ....\n");
+        exits("usage");
+        return;
+    case 'u':
+    case 'o':
+        uflag++;
+        break;
+    } ARGEND
+    if(argc < 1)
+        goto usage;
+
+    group = argv[0];
+    errs = 0;
+    for(i=1; i<argc; i++){
+        nulldir(&dir);
+        if(uflag)
+            dir.uid = group;
+        else
+            dir.gid = group;
+        if(dirwstat(argv[i], &dir) == -1) {
+            fprint(2, "chgrp: can't wstat %s: %r\n", argv[i]);
+            errs = "can't wstat";
+            continue;
+        }
+    }
+    exits(errs);
+}
+@
+
+\subsection{[[files/mtime.c]]}
+
+%-------------------------------------------------------------
+
+<<files/mtime.c>>=
+#include <u.h>
+#include <libc.h>
+
+void
+usage(void)
+{
+    fprint(2, "usage: mtime file...\n");
+    exits("usage");
+}
+
+void
+main(int argc, char **argv)
+{
+    int errors, i;
+    Dir *d;
+
+    ARGBEGIN{
+    default:
+        usage();
+    }ARGEND
+
+    errors = 0;
+    for(i=0; i<argc; i++){
+        if((d = dirstat(argv[i])) == nil){
+            fprint(2, "stat %s: %r\n", argv[i]);
+            errors = 1;
+        }else{
+            print("%11lud %s\n", d->mtime, argv[i]);
+            free(d);
+        }
+    }
+    exits(errors ? "errors" : nil);
+}
+@
