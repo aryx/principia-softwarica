@@ -175,20 +175,20 @@ struct IOchunk {
 // syscalls (and small wrappers around syscalls)
 
 // process
-extern	int		rfork(int);
+extern	int	rfork(int);
 extern	void	_exits(char*);
-extern	int		exec(char*, char*[]);
-extern	int		await(char*, int);
+extern	int	exec(char*, char*[]);
+extern	int	await(char*, int);
 
-extern	int		fork(void);
+extern	int	fork(void);
 extern  void    exits(char*);
-extern	int		execl(char*, ...);
+extern	int	execl(char*, ...);
 extern	void	abort(void);
-extern	Waitmsg*	wait(void);
-extern	int		waitpid(void);
+extern	Waitmsg*wait(void);
+extern	int	waitpid(void);
 
-extern	int		getpid(void);
-extern	int		getppid(void);
+extern	int	getpid(void);
+extern	int	getppid(void);
 extern  char*   getenv(char*);
 extern  int     putenv(char*, char*);
 
@@ -196,8 +196,8 @@ extern  int     putenv(char*, char*);
 extern	void*	sbrk(ulong);
 
 // file
-extern	fdt		open(char*, int);
-extern	int		close(fdt);
+extern	fdt	open(char*, int);
+extern	int	close(fdt);
 extern	long	pread(fdt, void*, long, vlong);
 extern	long	pwrite(fdt, void*, long, vlong);
 
@@ -213,64 +213,64 @@ extern	vlong	seek(fdt, vlong, int);
 extern	long	readn(fdt, void*, long);
 
 // directory
-extern	int		create(char*, int, ulong);
-extern	int		remove(char*);
-extern	int		chdir(char*);
-extern	int		fd2path(fdt, char*, int);
-extern	int		fstat(int, uchar*, int);
-extern	int		stat(char*, uchar*, int);
-extern	int		fwstat(int, uchar*, int);
-extern	int		wstat(char*, uchar*, int);
+extern	int	create(char*, int, ulong);
+extern	int	remove(char*);
+extern	int	chdir(char*);
+extern	int	fd2path(fdt, char*, int);
+extern	int	fstat(int, uchar*, int);
+extern	int	stat(char*, uchar*, int);
+extern	int	fwstat(int, uchar*, int);
+extern	int	wstat(char*, uchar*, int);
 
 extern  char*   getwd(char*, int);
 extern  char*   mktemp(char*);
 
 extern	Dir*	dirfstat(fdt);
 extern	Dir*	dirstat(char*);
-extern	int		dirfwstat(int, Dir*);
-extern	int		dirwstat(char*, Dir*);
+extern	int	dirfwstat(int, Dir*);
+extern	int	dirwstat(char*, Dir*);
 //
 extern	long	dirread(int, Dir**);
 extern	void	nulldir(Dir*);
 extern	long	dirreadall(int, Dir**);
-extern	int		access(char*, int); // ???
+extern	int	access(char*, int); // ???
 
 // namespace
-extern	int		bind(char*, char*, int/*Mxxx*/);
-extern	int		mount(fdt, int, char*, int/*Mxxx*/, char*);
-extern	int		unmount(char*, char*);
+extern	int	bind(char*, char*, int/*Mxxx*/);
+extern	int	mount(fdt, int, char*, int/*Mxxx*/, char*);
+extern	int	unmount(char*, char*);
 
 // time
 extern	long	alarm(ulong);
-extern	int		sleep(long); //less: could be void (ulong). 0 means yield.
+extern	int	sleep(long); //less: could be void (ulong). 0 means yield.
 
 // IPC
-extern	int		pipe(int*);
-extern	int		noted(int);
-extern	int		notify(void(*)(void*, char*));
+extern	int	pipe(int*);
+extern	int	noted(int);
+extern	int	notify(void(*)(void*, char*));
 extern	void*	segattach(int, char*, void*, ulong);
 extern	void*	segbrk(void*, void*);
-extern	int		segdetach(void*);
-extern	int		segflush(void*, ulong);
-extern	int		segfree(void*, ulong);
+extern	int	segdetach(void*);
+extern	int	segflush(void*, ulong);
+extern	int	segfree(void*, ulong);
 
 // concurrency
 extern	void*	rendezvous(void*, void*);
-extern	int		semacquire(long*, int);
+extern	int	semacquire(long*, int);
 extern	long	semrelease(long*, long);
-extern	int		tsemacquire(long*, ulong);
+extern	int	tsemacquire(long*, ulong);
 
 // special files
-extern	int		dup(int, int);
+extern	int	dup(int, int);
 
 // security
-extern	int		fauth(int, char*);
-extern	int		fversion(int, int, char*, int);
+extern	int	fauth(int, char*);
+extern	int	fversion(int, int, char*, int);
 
 extern  char*   getuser(void);
 
 // error management
-extern	int		errstr(char*, uint);
+extern	int	errstr(char*, uint);
 
 extern	void	werrstr(char*, ...);
 extern	void	rerrstr(char*, uint);
