@@ -1278,3 +1278,6938 @@ main(int argc, char **argv)
     exits(errors ? "errors" : nil);
 }
 @
+
+\section{[[byte/]]}
+
+\subsection{[[byte/xd.c]]}
+
+%-------------------------------------------------------------
+
+<<byte/xd.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+
+uchar       odata[16];
+uchar       data[32];
+int     ndata;
+int     nread;
+ulong       addr;
+int     repeats;
+int     swizzle;
+int     flush;
+int     abase=2;
+int     xd(char *, int);
+void        xprint(char *, ...);
+void        initarg(void), swizz(void);
+enum{
+    Narg=10,
+
+    TNone=0,
+    TAscii,
+    TRune,
+};
+typedef struct Arg Arg;
+typedef void fmtfn(char *);
+struct Arg
+{
+    int chartype;       /* TNone, TAscii, TRunes */
+    int loglen;     /* 0==1, 1==2, 2==4, 3==8 */
+    int base;       /* 0==8, 1==10, 2==16 */
+    fmtfn   *fn;        /* function to call with data */
+    char    *afmt;      /* format to use to print address */
+    char    *fmt;       /* format to use to print data */
+}arg[Narg];
+int narg;
+
+fmtfn   fmt0, fmt1, fmt2, fmt3, fmtc, fmtr;
+fmtfn *fmt[4] = {
+    fmt0,
+    fmt1,
+    fmt2,
+    fmt3
+};
+
+char *dfmt[4][3] = {
+    " %.3uo",   " %.3ud",   " %.2ux",
+    " %.6uo",   " %.5ud",   " %.4ux",
+    " %.11luo", " %.10lud", " %.8lux",
+    " %.22lluo",    " %.20llud",    " %.16llux",
+};
+
+char *cfmt[3][3] = {
+    "   %c",    "   %c",    "  %c",
+    " %.3s",    " %.3s",    " %.2s",
+    " %.3uo",   " %.3ud",   " %.2ux",
+};
+
+char *rfmt[1][1] = {
+    " %2.2C",
+};
+
+char *afmt[2][3] = {
+    "%.7luo ",  "%.7lud ",  "%.7lux ",
+    "%7luo ",   "%7lud ",   "%7lux ",
+};
+
+Biobuf  bin;
+Biobuf  bout;
+
+void
+main(int argc, char *argv[])
+{
+    int i, err;
+    Arg *ap;
+
+    Binit(&bout, 1, OWRITE);
+    err = 0;
+    ap = 0;
+    while(argc>1 && argv[1][0]=='-' && argv[1][1]){
+        --argc;
+        argv++;
+        argv[0]++;
+        if(argv[0][0] == 'r'){
+            repeats = 1;
+            if(argv[0][1])
+                goto Usage;
+            continue;
+        }
+        if(argv[0][0] == 's'){
+            swizzle = 1;
+            if(argv[0][1])
+                goto Usage;
+            continue;
+        }
+        if(argv[0][0] == 'u'){
+            flush = 1;
+            if(argv[0][1])
+                goto Usage;
+            continue;
+        }
+        if(argv[0][0] == 'a'){
+            argv[0]++;
+            switch(argv[0][0]){
+            case 'o':
+                abase = 0;
+                break;
+            case 'd':
+                abase = 1;
+                break;
+            case 'x':
+                abase = 2;
+                break;
+            default:
+                goto Usage;
+            }
+            if(argv[0][1])
+                goto Usage;
+            continue;
+        }
+        ap = &arg[narg];
+        initarg();
+        while(argv[0][0]){
+            switch(argv[0][0]){
+            case 'c':
+                ap->chartype = TAscii;
+                ap->loglen = 0;
+                if(argv[0][1] || argv[0][-1]!='-')
+                    goto Usage;
+                break;
+            case 'R':
+                ap->chartype = TRune;
+                ap->loglen = 0;
+                if(argv[0][1] || argv[0][-1]!='-')
+                    goto Usage;
+                break;
+            case 'o':
+                ap->base = 0;
+                break;
+            case 'd':
+                ap->base = 1;
+                break;
+            case 'x':
+                ap->base = 2;
+                break;
+            case 'b':
+            case '1':
+                ap->loglen = 0;
+                break;
+            case 'w':
+            case '2':
+                ap->loglen = 1;
+                break;
+            case 'l':
+            case '4':
+                ap->loglen = 2;
+                break;
+            case 'v':
+            case '8':
+                ap->loglen = 3;
+                break;
+            default:
+            Usage:
+   fprint(2, "usage: xd [-u] [-r] [-s] [-a{odx}] [-c|{b1w2l4v8}{odx}] ... file ...\n");
+                exits("usage");
+            }
+            argv[0]++;
+        }
+        if(ap->chartype == TRune)
+            ap->fn = fmtr;
+        else if(ap->chartype == TAscii)
+            ap->fn = fmtc;
+        else
+            ap->fn = fmt[ap->loglen];
+        ap->fmt = dfmt[ap->loglen][ap->base];
+        ap->afmt = afmt[ap>arg][abase];
+    }
+    if(narg == 0)
+        initarg();
+    if(argc == 1)
+        err = xd(0, 0);
+    else if(argc == 2)
+        err = xd(argv[1], 0);
+    else for(i=1; i<argc; i++)
+        err |= xd(argv[i], 1);
+    exits(err? "error" : 0);
+}
+
+void
+initarg(void)
+{
+    Arg *ap;
+
+    ap = &arg[narg++];
+    if(narg >= Narg){
+        fprint(2, "xd: too many formats (max %d)\n", Narg);
+        exits("usage");
+    }
+    ap->chartype = TNone;
+    ap->loglen = 2;
+    ap->base = 2;
+    ap->fn = fmt2;
+    ap->fmt = dfmt[ap->loglen][ap->base];
+    ap->afmt = afmt[narg>1][abase];
+}
+
+int
+xd(char *name, int title)
+{
+    int fd;
+    int i, star, nsee, nleft;
+    Arg *ap;
+    Biobuf *bp;
+
+    fd = 0;
+    if(name){
+        bp = Bopen(name, OREAD);
+        if(bp == 0){
+            fprint(2, "xd: can't open %s\n", name);
+            return 1;
+        }
+    }else{
+        bp = &bin;
+        Binit(bp, fd, OREAD);
+    }
+    if(title)
+        xprint("%s\n", name);
+    addr = 0;
+    star = 0;
+    nsee = 16;
+    nleft = 0;
+    /* read 32 but see only 16 so that runes are happy */
+    while((ndata=Bread(bp, data + nleft, 32 - nleft)) >= 0){
+        ndata += nleft;
+        nleft = 0;
+        nread = ndata;
+        if(ndata>nsee)
+            ndata = nsee;
+        else if(ndata<nsee)
+            for(i=ndata; i<nsee; i++)
+                data[i] = 0;
+        if(swizzle)
+            swizz();
+        if(ndata==nsee && repeats){
+            if(addr>0 && data[0]==odata[0]){
+                for(i=1; i<nsee; i++)
+                    if(data[i] != odata[i])
+                        break;
+                if(i == nsee){
+                    addr += nsee;
+                    if(star == 0){
+                        star++;
+                        xprint("*\n", 0);
+                    }
+                    continue;
+                }
+            }
+            for(i=0; i<nsee; i++)
+                odata[i] = data[i];
+            star = 0;
+        }
+        for(ap=arg; ap<&arg[narg]; ap++){
+            xprint(ap->afmt, addr);
+            (*ap->fn)(ap->fmt);
+            xprint("\n", 0);
+            if(flush)
+                Bflush(&bout);
+        }
+        addr += ndata;
+        if(ndata<nsee){
+            xprint(afmt[0][abase], addr);
+            xprint("\n", 0);
+            if(flush)
+                Bflush(&bout);
+            break;
+        }
+        if(nread>nsee){
+            nleft = nread - nsee;
+            memmove(data, data + nsee, nleft);
+        }
+    }
+    Bterm(bp);
+    return 0;
+}
+
+void
+swizz(void)
+{
+    uchar *p, *q;
+    int i;
+    uchar swdata[16];
+
+    p = data;
+    q = swdata;
+    for(i=0; i<16; i++)
+        *q++ = *p++;
+    p = data;
+    q = swdata;
+    for(i=0; i<4; i++){
+        p[0] = q[3];
+        p[1] = q[2];
+        p[2] = q[1];
+        p[3] = q[0];
+        p += 4;
+        q += 4;
+    }
+}
+
+void
+fmt0(char *f)
+{
+    int i;
+    for(i=0; i<ndata; i++)
+        xprint(f, data[i]);
+}
+
+void
+fmt1(char *f)
+{
+    int i;
+    for(i=0; i<ndata; i+=sizeof(ushort))
+        xprint(f, (data[i]<<8)|data[i+1]);
+}
+
+void
+fmt2(char *f)
+{
+    int i;
+    for(i=0; i<ndata; i+=sizeof(ulong))
+        xprint(f, (data[i]<<24)|(data[i+1]<<16)|(data[i+2]<<8)|data[i+3]);
+}
+
+void
+fmt3(char *f)
+{
+    int i;
+    uvlong v;
+
+    for(i=0; i<ndata; i+=sizeof(uvlong)){
+        v = (data[i]<<24)|(data[i+1]<<16)|(data[i+2]<<8)|data[i+3];
+        v <<= 32;
+        v |= (data[i+4]<<24)|(data[i+1+4]<<16)|(data[i+2+4]<<8)|data[i+3+4];
+        if(Bprint(&bout, f, v)<0){
+            fprint(2, "xd: i/o error\n");
+            exits("i/o error");
+        }
+    }
+}
+
+void
+onefmtc(uchar c)
+{
+    switch(c){
+    case '\t':
+        xprint(cfmt[1][2], "\\t");
+        break;
+    case '\r':
+        xprint(cfmt[1][2], "\\r");
+        break;
+    case '\n':
+        xprint(cfmt[1][2], "\\n");
+        break;
+    case '\b':
+        xprint(cfmt[1][2], "\\b");
+        break;
+    default:
+        if(c>=0x7F || ' '>c)
+            xprint(cfmt[2][2], c);
+        else
+            xprint(cfmt[0][2], c);
+        break;
+    }
+}
+
+void
+fmtc(char *f)
+{
+    int i;
+
+    USED(f);
+    for(i=0; i<ndata; i++)
+        onefmtc(data[i]);
+}
+
+void
+fmtr(char *f)
+{
+    int i, w, cw;
+    Rune r;
+    static int nstart;
+
+    USED(f);
+    if(nstart)  
+        xprint("%*c", 3*nstart, ' ');
+    for(i=nstart; i<ndata; )
+        if(data[i] < Runeself)
+            onefmtc(data[i++]);
+        else{
+            w = chartorune(&r, (char *)data+i);
+            if(w == 1 || i + w>nread)
+                onefmtc(data[i++]);
+            else{
+                cw = w;
+                if(i + w>ndata)
+                    cw = ndata - i;
+                xprint(rfmt[0][0], r);  
+                xprint("%*c", 3*cw-3, ' ');
+                i += w;
+            }
+        }
+    if(i > ndata)
+        nstart = i - ndata;
+    else
+        nstart = 0;
+}
+
+void
+xprint(char *fmt, ...)
+{
+    va_list arglist;
+
+    va_start(arglist, fmt);
+    if(Bvprint(&bout, fmt, arglist)<0){
+        fprint(2, "xd: i/o error\n");
+        exits("i/o error");
+    }
+    va_end(arglist);
+}
+@
+
+\subsection{[[byte/split.c]]}
+
+%-------------------------------------------------------------
+
+<<byte/split.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <regexp.h>
+
+char    digit[] = "0123456789";
+char    *suffix = "";
+char    *stem = "x";
+char    suff[] = "aa";
+char    name[200];
+Biobuf  bout;
+Biobuf  *output = &bout;
+
+extern int nextfile(void);
+extern int matchfile(Resub*);
+extern void openf(void);
+extern char *fold(char*,int);
+extern void usage(void);
+extern void badexp(void);
+
+void
+main(int argc, char *argv[])
+{
+    Reprog *exp;
+    char *pattern = 0;
+    int n = 1000;
+    char *line;
+    int xflag = 0;
+    int iflag = 0;
+    Biobuf bin;
+    Biobuf *b = &bin;
+    char buf[256];
+
+    ARGBEGIN {
+    case 'l':
+    case 'n':
+        n=atoi(EARGF(usage()));
+        break;
+    case 'e':
+        pattern = strdup(EARGF(usage()));
+        break;
+    case 'f':
+        stem = strdup(EARGF(usage()));
+        break;
+    case 's':
+        suffix = strdup(EARGF(usage()));
+        break;
+    case 'x':
+        xflag++;
+        break;
+    case 'i':
+        iflag++;
+        break;
+    default:
+        usage();
+        break;
+
+    } ARGEND;
+
+    if(argc < 0 || argc > 1)
+        usage();
+
+    if(argc != 0) {
+        b = Bopen(argv[0], OREAD);
+        if(b == nil) {
+            fprint(2, "split: can't open %s: %r\n", argv[0]);
+            exits("open");
+        }
+    } else
+        Binit(b, 0, OREAD);
+
+    if(pattern) {
+        Resub match[2];
+
+        if(!(exp = regcomp(iflag? fold(pattern, strlen(pattern)):
+            pattern)))
+            badexp();
+        memset(match, 0, sizeof match);
+        matchfile(match);
+        while((line=Brdline(b,'\n')) != 0) {
+            memset(match, 0, sizeof match);
+            line[Blinelen(b)-1] = 0;
+            if(regexec(exp, iflag? fold(line, Blinelen(b)-1): line,
+                match, 2)) {
+                if(matchfile(match) && xflag)
+                    continue;
+            } else if(output == 0)
+                nextfile(); /* at most once */
+            Bwrite(output, line, Blinelen(b)-1);
+            Bputc(output, '\n');
+        }
+    } else {
+        int linecnt = n;
+
+        while((line=Brdline(b,'\n')) != 0) {
+            if(++linecnt > n) {
+                nextfile();
+                linecnt = 1;
+            }
+            Bwrite(output, line, Blinelen(b));
+        }
+
+        /*
+         * in case we didn't end with a newline, tack whatever's 
+         * left onto the last file
+         */
+        while((n = Bread(b, buf, sizeof(buf))) > 0)
+            Bwrite(output, buf, n);
+    }
+    if(b != nil)
+        Bterm(b);
+    exits(0);
+}
+
+int
+nextfile(void)
+{
+    static int canopen = 1;
+
+    if(suff[0] > 'z') {
+        if(canopen)
+            fprint(2, "split: file %szz not split\n",stem);
+        canopen = 0;
+    } else {
+        snprint(name, sizeof name, "%s%s", stem, suff);
+        if(++suff[1] > 'z') 
+            suff[1] = 'a', ++suff[0];
+        openf();
+    }
+    return canopen;
+}
+
+int
+matchfile(Resub *match)
+{
+    if(match[1].s.sp) {
+        int len = match[1].e.ep - match[1].s.sp;
+
+        strncpy(name, match[1].s.sp, len);
+        strcpy(name+len, suffix);
+        openf();
+        return 1;
+    } 
+    return nextfile();
+}
+
+void
+openf(void)
+{
+    static int fd = 0;
+
+    Bflush(output);
+    Bterm(output);
+    if(fd > 0)
+        close(fd);
+    fd = create(name,OWRITE,0666);
+    if(fd < 0) {
+        fprint(2, "grep: can't create %s: %r\n", name);
+        exits("create");
+    }
+    Binit(output, fd, OWRITE);
+}
+
+char *
+fold(char *s, int n)
+{
+    static char *fline;
+    static int linesize = 0;
+    char *t;
+
+    if(linesize < n+1){
+        fline = realloc(fline,n+1);
+        linesize = n+1;
+    }
+    for(t=fline; *t++ = tolower(*s++); )
+        continue;
+        /* we assume the 'A'-'Z' only appear as themselves
+         * in a utf encoding.
+         */
+    return fline;
+}
+
+void
+usage(void)
+{
+    fprint(2, "usage: split [-n num] [-e exp] [-f stem] [-s suff] [-x] [-i] [file]\n");
+    exits("usage");
+}
+
+void
+badexp(void)
+{
+    fprint(2, "split: bad regular expression\n");
+    exits("bad regular expression");
+}
+@
+
+\subsection{[[byte/dd.c]]}
+
+%-------------------------------------------------------------
+
+<<byte/dd.c>>=
+#include <u.h>
+#include <libc.h>
+
+#define BIG ((1UL<<31)-1)
+#define VBIG    ((1ULL<<63)-1)
+#define LCASE   (1<<0)
+#define UCASE   (1<<1)
+#define SWAB    (1<<2)
+#define NERR    (1<<3)
+#define SYNC    (1<<4)
+
+int cflag;
+int fflag;
+
+char    *string;
+char    *ifile;
+char    *ofile;
+char    *ibuf;
+char    *obuf;
+
+vlong   skip;
+vlong   oseekn;
+vlong   iseekn;
+vlong   oseekb;
+vlong   iseekb;
+vlong   count;
+
+long    files   = 1;
+long    ibs = 512;
+long    obs = 512;
+long    bs;
+long    cbs;
+long    ibc;
+long    obc;
+long    cbc;
+long    nifr;
+long    nipr;
+long    nofr;
+long    nopr;
+long    ntrunc;
+
+int dotrunc = 1;
+int ibf;
+int obf;
+
+char    *op;
+int nspace;
+
+uchar   etoa[256];
+uchar   atoe[256];
+uchar   atoibm[256];
+
+int quiet;
+
+void    flsh(void);
+int match(char *s);
+vlong   number(vlong big);
+void    cnull(int cc);
+void    null(int c);
+void    ascii(int cc);
+void    unblock(int cc);
+void    ebcdic(int cc);
+void    ibm(int cc);
+void    block(int cc);
+void    term(char*);
+void    stats(void);
+
+#define iskey(s)    ((key[0] == '-') && (strcmp(key+1, s) == 0))
+
+int
+main(int argc, char *argv[])
+{
+    void (*conv)(int);
+    char *ip;
+    char *key;
+    int a, c;
+
+    conv = null;
+    for(c=1; c<argc; c++) {
+        key = argv[c++];
+        if(c >= argc){
+            fprint(2, "dd: arg %s needs a value\n", key);
+            exits("arg");
+        }
+        string = argv[c];
+        if(iskey("ibs")) {
+            ibs = number(BIG);
+            continue;
+        }
+        if(iskey("obs")) {
+            obs = number(BIG);
+            continue;
+        }
+        if(iskey("cbs")) {
+            cbs = number(BIG);
+            continue;
+        }
+        if(iskey("bs")) {
+            bs = number(BIG);
+            continue;
+        }
+        if(iskey("if")) {
+            ifile = string;
+            continue;
+        }
+        if(iskey("of")) {
+            ofile = string;
+            continue;
+        }
+        if(iskey("trunc")) {
+            dotrunc = number(BIG);
+            continue;
+        }
+        if(iskey("quiet")) {
+            quiet = number(BIG);
+            continue;
+        }
+        if(iskey("skip")) {
+            skip = number(VBIG);
+            continue;
+        }
+        if(iskey("seek") || iskey("oseek")) {
+            oseekn = number(VBIG);
+            continue;
+        }
+        if(iskey("iseek")) {
+            iseekn = number(VBIG);
+            continue;
+        }
+        if(iskey("iseekb")) {
+            iseekb = number(VBIG);
+            continue;
+        }
+        if(iskey("oseekb")) {
+            oseekb = number(VBIG);
+            continue;
+        }
+        if(iskey("count")) {
+            count = number(VBIG);
+            continue;
+        }
+        if(iskey("files")) {
+            files = number(BIG);
+            continue;
+        }
+        if(iskey("conv")) {
+        cloop:
+            if(match(","))
+                goto cloop;
+            if(*string == '\0')
+                continue;
+            if(match("ebcdic")) {
+                conv = ebcdic;
+                goto cloop;
+            }
+            if(match("ibm")) {
+                conv = ibm;
+                goto cloop;
+            }
+            if(match("ascii")) {
+                conv = ascii;
+                goto cloop;
+            }
+            if(match("block")) {
+                conv = block;
+                goto cloop;
+            }
+            if(match("unblock")) {
+                conv = unblock;
+                goto cloop;
+            }
+            if(match("lcase")) {
+                cflag |= LCASE;
+                goto cloop;
+            }
+            if(match("ucase")) {
+                cflag |= UCASE;
+                goto cloop;
+            }
+            if(match("swab")) {
+                cflag |= SWAB;
+                goto cloop;
+            }
+            if(match("noerror")) {
+                cflag |= NERR;
+                goto cloop;
+            }
+            if(match("sync")) {
+                cflag |= SYNC;
+                goto cloop;
+            }
+            fprint(2, "dd: bad conv %s\n", argv[c]);
+            exits("arg");
+        }
+        fprint(2, "dd: bad arg: %s\n", key);
+        exits("arg");
+    }
+    if(conv == null && cflag&(LCASE|UCASE))
+        conv = cnull;
+    if(ifile)
+        ibf = open(ifile, 0);
+    else
+        ibf = dup(0, -1);
+    if(ibf < 0) {
+        fprint(2, "dd: open %s: %r\n", ifile);
+        exits("open");
+    }
+    if(ofile){
+        if(dotrunc)
+            obf = create(ofile, 1, 0664);
+        else
+            obf = open(ofile, 1);
+        if(obf < 0) {
+            fprint(2, "dd: create %s: %r\n", ofile);
+            exits("create");
+        }
+    }else{
+        obf = dup(1, -1);
+        if(obf < 0) {
+            fprint(2, "dd: can't dup file descriptor: %s: %r\n", ofile);
+            exits("dup");
+        }
+    }
+    if(bs)
+        ibs = obs = bs;
+    if(ibs == obs && conv == null)
+        fflag++;
+    if(ibs == 0 || obs == 0) {
+        fprint(2, "dd: counts: cannot be zero\n");
+        exits("counts");
+    }
+    ibuf = sbrk(ibs);
+    if(fflag)
+        obuf = ibuf;
+    else
+        obuf = sbrk(obs);
+    sbrk(64);   /* For good measure */
+    if(ibuf == (char *)-1 || obuf == (char *)-1) {
+        fprint(2, "dd: not enough memory: %r\n");
+        exits("memory");
+    }
+    ibc = 0;
+    obc = 0;
+    cbc = 0;
+    op = obuf;
+
+/*
+    if(signal(SIGINT, SIG_IGN) != SIG_IGN)
+        signal(SIGINT, term);
+*/
+    seek(obf, obs*oseekn, 1);
+    seek(ibf, ibs*iseekn, 1);
+    if(iseekb)
+        seek(ibf, iseekb, 0);
+    if(oseekb)
+        seek(obf, oseekb, 0);
+    while(skip) {
+        read(ibf, ibuf, ibs);
+        skip--;
+    }
+
+    ip = 0;
+loop:
+    if(ibc-- == 0) {
+        ibc = 0;
+        if(count==0 || nifr+nipr!=count) {
+            if(cflag&(NERR|SYNC))
+            for(ip=ibuf+ibs; ip>ibuf;)
+                *--ip = 0;
+            ibc = read(ibf, ibuf, ibs);
+        }
+        if(ibc == -1) {
+            perror("read");
+            if((cflag&NERR) == 0) {
+                flsh();
+                term("errors");
+            }
+            ibc = 0;
+            for(c=0; c<ibs; c++)
+                if(ibuf[c] != 0)
+                    ibc = c+1;
+            seek(ibf, ibs, 1);
+            stats();
+        }else if(ibc == 0 && --files<=0) {
+            flsh();
+            term(nil);
+        }
+        if(ibc != ibs) {
+            nipr++;
+            if(cflag&SYNC)
+                ibc = ibs;
+        } else
+            nifr++;
+        ip = ibuf;
+        c = (ibc>>1) & ~1;
+        if(cflag&SWAB && c)
+        do {
+            a = *ip++;
+            ip[-1] = *ip;
+            *ip++ = a;
+        } while(--c);
+        ip = ibuf;
+        if(fflag) {
+            obc = ibc;
+            flsh();
+            ibc = 0;
+        }
+        goto loop;
+    }
+    c = 0;
+    c |= *ip++;
+    c &= 0377;
+    (*conv)(c);
+    goto loop;
+}
+
+void
+flsh(void)
+{
+    int c;
+
+    if(obc) {
+        /* don't perror dregs of previous errors on a short write */
+        werrstr("");
+        c = write(obf, obuf, obc);
+        if(c != obc) {
+            if(c > 0)
+                ++nopr;
+            perror("write");
+            term("errors");
+        }
+        if(obc == obs)
+            nofr++;
+        else
+            nopr++;
+        obc = 0;
+    }
+}
+
+int
+match(char *s)
+{
+    char *cs;
+
+    cs = string;
+    while(*cs++ == *s)
+        if(*s++ == '\0')
+            goto true;
+    if(*s != '\0')
+        return 0;
+
+true:
+    cs--;
+    string = cs;
+    return 1;
+}
+
+vlong
+number(vlong big)
+{
+    char *cs;
+    uvlong n;
+
+    cs = string;
+    n = 0;
+    while(*cs >= '0' && *cs <= '9')
+        n = n*10 + *cs++ - '0';
+    for(;;)
+    switch(*cs++) {
+
+    case 'k':
+        n *= 1024;
+        continue;
+
+    case 'b':
+        n *= 512;
+        continue;
+
+/*  case '*':*/
+    case 'x':
+        string = cs;
+        n *= number(VBIG);
+
+    case '\0':
+        if(n > big) {
+            fprint(2, "dd: argument %llud out of range\n", n);
+            exits("range");
+        }
+        return n;
+    }
+    /* never gets here */
+}
+
+void
+cnull(int cc)
+{
+    int c;
+
+    c = cc;
+    if((cflag&UCASE) && c>='a' && c<='z')
+        c += 'A'-'a';
+    if((cflag&LCASE) && c>='A' && c<='Z')
+        c += 'a'-'A';
+    null(c);
+}
+
+void
+null(int c)
+{
+
+    *op = c;
+    op++;
+    if(++obc >= obs) {
+        flsh();
+        op = obuf;
+    }
+}
+
+void
+ascii(int cc)
+{
+    int c;
+
+    c = etoa[cc];
+    if(cbs == 0) {
+        cnull(c);
+        return;
+    }
+    if(c == ' ') {
+        nspace++;
+        goto out;
+    }
+    while(nspace > 0) {
+        null(' ');
+        nspace--;
+    }
+    cnull(c);
+
+out:
+    if(++cbc >= cbs) {
+        null('\n');
+        cbc = 0;
+        nspace = 0;
+    }
+}
+
+void
+unblock(int cc)
+{
+    int c;
+
+    c = cc & 0377;
+    if(cbs == 0) {
+        cnull(c);
+        return;
+    }
+    if(c == ' ') {
+        nspace++;
+        goto out;
+    }
+    while(nspace > 0) {
+        null(' ');
+        nspace--;
+    }
+    cnull(c);
+
+out:
+    if(++cbc >= cbs) {
+        null('\n');
+        cbc = 0;
+        nspace = 0;
+    }
+}
+
+void
+ebcdic(int cc)
+{
+    int c;
+
+    c = cc;
+    if(cflag&UCASE && c>='a' && c<='z')
+        c += 'A'-'a';
+    if(cflag&LCASE && c>='A' && c<='Z')
+        c += 'a'-'A';
+    c = atoe[c];
+    if(cbs == 0) {
+        null(c);
+        return;
+    }
+    if(cc == '\n') {
+        while(cbc < cbs) {
+            null(atoe[' ']);
+            cbc++;
+        }
+        cbc = 0;
+        return;
+    }
+    if(cbc == cbs)
+        ntrunc++;
+    cbc++;
+    if(cbc <= cbs)
+        null(c);
+}
+
+void
+ibm(int cc)
+{
+    int c;
+
+    c = cc;
+    if(cflag&UCASE && c>='a' && c<='z')
+        c += 'A'-'a';
+    if(cflag&LCASE && c>='A' && c<='Z')
+        c += 'a'-'A';
+    c = atoibm[c] & 0377;
+    if(cbs == 0) {
+        null(c);
+        return;
+    }
+    if(cc == '\n') {
+        while(cbc < cbs) {
+            null(atoibm[' ']);
+            cbc++;
+        }
+        cbc = 0;
+        return;
+    }
+    if(cbc == cbs)
+        ntrunc++;
+    cbc++;
+    if(cbc <= cbs)
+        null(c);
+}
+
+void
+block(int cc)
+{
+    int c;
+
+    c = cc;
+    if(cflag&UCASE && c>='a' && c<='z')
+        c += 'A'-'a';
+    if(cflag&LCASE && c>='A' && c<='Z')
+        c += 'a'-'A';
+    c &= 0377;
+    if(cbs == 0) {
+        null(c);
+        return;
+    }
+    if(cc == '\n') {
+        while(cbc < cbs) {
+            null(' ');
+            cbc++;
+        }
+        cbc = 0;
+        return;
+    }
+    if(cbc == cbs)
+        ntrunc++;
+    cbc++;
+    if(cbc <= cbs)
+        null(c);
+}
+
+void
+term(char *status)
+{
+    stats();
+    exits(status);
+}
+
+void
+stats(void)
+{
+    if(quiet)
+        return;
+    fprint(2, "%lud+%lud records in\n", nifr, nipr);
+    fprint(2, "%lud+%lud records out\n", nofr, nopr);
+    if(ntrunc)
+        fprint(2, "%lud truncated records\n", ntrunc);
+}
+
+uchar   etoa[] =
+{
+    0000,0001,0002,0003,0234,0011,0206,0177,
+    0227,0215,0216,0013,0014,0015,0016,0017,
+    0020,0021,0022,0023,0235,0205,0010,0207,
+    0030,0031,0222,0217,0034,0035,0036,0037,
+    0200,0201,0202,0203,0204,0012,0027,0033,
+    0210,0211,0212,0213,0214,0005,0006,0007,
+    0220,0221,0026,0223,0224,0225,0226,0004,
+    0230,0231,0232,0233,0024,0025,0236,0032,
+    0040,0240,0241,0242,0243,0244,0245,0246,
+    0247,0250,0133,0056,0074,0050,0053,0041,
+    0046,0251,0252,0253,0254,0255,0256,0257,
+    0260,0261,0135,0044,0052,0051,0073,0136,
+    0055,0057,0262,0263,0264,0265,0266,0267,
+    0270,0271,0174,0054,0045,0137,0076,0077,
+    0272,0273,0274,0275,0276,0277,0300,0301,
+    0302,0140,0072,0043,0100,0047,0075,0042,
+    0303,0141,0142,0143,0144,0145,0146,0147,
+    0150,0151,0304,0305,0306,0307,0310,0311,
+    0312,0152,0153,0154,0155,0156,0157,0160,
+    0161,0162,0313,0314,0315,0316,0317,0320,
+    0321,0176,0163,0164,0165,0166,0167,0170,
+    0171,0172,0322,0323,0324,0325,0326,0327,
+    0330,0331,0332,0333,0334,0335,0336,0337,
+    0340,0341,0342,0343,0344,0345,0346,0347,
+    0173,0101,0102,0103,0104,0105,0106,0107,
+    0110,0111,0350,0351,0352,0353,0354,0355,
+    0175,0112,0113,0114,0115,0116,0117,0120,
+    0121,0122,0356,0357,0360,0361,0362,0363,
+    0134,0237,0123,0124,0125,0126,0127,0130,
+    0131,0132,0364,0365,0366,0367,0370,0371,
+    0060,0061,0062,0063,0064,0065,0066,0067,
+    0070,0071,0372,0373,0374,0375,0376,0377,
+};
+uchar   atoe[] =
+{
+    0000,0001,0002,0003,0067,0055,0056,0057,
+    0026,0005,0045,0013,0014,0015,0016,0017,
+    0020,0021,0022,0023,0074,0075,0062,0046,
+    0030,0031,0077,0047,0034,0035,0036,0037,
+    0100,0117,0177,0173,0133,0154,0120,0175,
+    0115,0135,0134,0116,0153,0140,0113,0141,
+    0360,0361,0362,0363,0364,0365,0366,0367,
+    0370,0371,0172,0136,0114,0176,0156,0157,
+    0174,0301,0302,0303,0304,0305,0306,0307,
+    0310,0311,0321,0322,0323,0324,0325,0326,
+    0327,0330,0331,0342,0343,0344,0345,0346,
+    0347,0350,0351,0112,0340,0132,0137,0155,
+    0171,0201,0202,0203,0204,0205,0206,0207,
+    0210,0211,0221,0222,0223,0224,0225,0226,
+    0227,0230,0231,0242,0243,0244,0245,0246,
+    0247,0250,0251,0300,0152,0320,0241,0007,
+    0040,0041,0042,0043,0044,0025,0006,0027,
+    0050,0051,0052,0053,0054,0011,0012,0033,
+    0060,0061,0032,0063,0064,0065,0066,0010,
+    0070,0071,0072,0073,0004,0024,0076,0341,
+    0101,0102,0103,0104,0105,0106,0107,0110,
+    0111,0121,0122,0123,0124,0125,0126,0127,
+    0130,0131,0142,0143,0144,0145,0146,0147,
+    0150,0151,0160,0161,0162,0163,0164,0165,
+    0166,0167,0170,0200,0212,0213,0214,0215,
+    0216,0217,0220,0232,0233,0234,0235,0236,
+    0237,0240,0252,0253,0254,0255,0256,0257,
+    0260,0261,0262,0263,0264,0265,0266,0267,
+    0270,0271,0272,0273,0274,0275,0276,0277,
+    0312,0313,0314,0315,0316,0317,0332,0333,
+    0334,0335,0336,0337,0352,0353,0354,0355,
+    0356,0357,0372,0373,0374,0375,0376,0377,
+};
+uchar   atoibm[] =
+{
+    0000,0001,0002,0003,0067,0055,0056,0057,
+    0026,0005,0045,0013,0014,0015,0016,0017,
+    0020,0021,0022,0023,0074,0075,0062,0046,
+    0030,0031,0077,0047,0034,0035,0036,0037,
+    0100,0132,0177,0173,0133,0154,0120,0175,
+    0115,0135,0134,0116,0153,0140,0113,0141,
+    0360,0361,0362,0363,0364,0365,0366,0367,
+    0370,0371,0172,0136,0114,0176,0156,0157,
+    0174,0301,0302,0303,0304,0305,0306,0307,
+    0310,0311,0321,0322,0323,0324,0325,0326,
+    0327,0330,0331,0342,0343,0344,0345,0346,
+    0347,0350,0351,0255,0340,0275,0137,0155,
+    0171,0201,0202,0203,0204,0205,0206,0207,
+    0210,0211,0221,0222,0223,0224,0225,0226,
+    0227,0230,0231,0242,0243,0244,0245,0246,
+    0247,0250,0251,0300,0117,0320,0241,0007,
+    0040,0041,0042,0043,0044,0025,0006,0027,
+    0050,0051,0052,0053,0054,0011,0012,0033,
+    0060,0061,0032,0063,0064,0065,0066,0010,
+    0070,0071,0072,0073,0004,0024,0076,0341,
+    0101,0102,0103,0104,0105,0106,0107,0110,
+    0111,0121,0122,0123,0124,0125,0126,0127,
+    0130,0131,0142,0143,0144,0145,0146,0147,
+    0150,0151,0160,0161,0162,0163,0164,0165,
+    0166,0167,0170,0200,0212,0213,0214,0215,
+    0216,0217,0220,0232,0233,0234,0235,0236,
+    0237,0240,0252,0253,0254,0255,0256,0257,
+    0260,0261,0262,0263,0264,0265,0266,0267,
+    0270,0271,0272,0273,0274,0275,0276,0277,
+    0312,0313,0314,0315,0316,0317,0332,0333,
+    0334,0335,0336,0337,0352,0353,0354,0355,
+    0356,0357,0372,0373,0374,0375,0376,0377,
+};
+@
+
+\section{[[pipe/]]}
+
+\subsection{[[pipe/mc.c]]}
+
+%-------------------------------------------------------------
+
+<<pipe/mc.c>>=
+/*
+ * mc - columnate
+ *
+ * mc[-][-LINEWIDTH][-t][file...]
+ *  - causes break on colon
+ *  -LINEWIDTH sets width of line in which to columnate(default 80)
+ *  -t suppresses expanding multiple blanks into tabs
+ *
+ */
+#include    <u.h>
+#include    <libc.h>
+#include    <draw.h>
+#include    <bio.h>
+
+#define WIDTH           80
+#define TAB 4
+#define WORD_ALLOC_QUANTA   1024
+#define ALLOC_QUANTA        4096
+
+int linewidth=WIDTH;
+int mintab=1;
+int colonflag=0;
+int tabflag=0;  /* -t flag turned off forever */
+Rune *cbuf, *cbufp;
+Rune **word;
+int maxwidth=0;
+int nalloc=ALLOC_QUANTA;
+int nwalloc=WORD_ALLOC_QUANTA;
+int nchars=0;
+int nwords=0;
+int tabwidth=0;
+Font *font;
+Biobuf  bin;
+Biobuf  bout;
+
+void getwidth(void), readbuf(int), error(char *);
+void scanwords(void), columnate(void), morechars(void);
+int wordwidth(Rune*, int);
+int nexttab(int);
+
+void
+main(int argc, char *argv[])
+{
+    int i;
+    int lineset;
+    int ifd;
+
+    lineset = 0;
+    Binit(&bout, 1, OWRITE);
+    while(argc > 1 && argv[1][0] == '-'){
+        --argc; argv++;
+        switch(argv[0][1]){
+        case '\0':
+            colonflag = 1;
+            break;
+        case 't':
+            tabflag = 0;
+            break;
+        default:
+            linewidth = atoi(&argv[0][1]);
+            if(linewidth <= 1)
+                linewidth = WIDTH;
+            lineset = 1;
+            break;
+        }
+    }
+    if(lineset == 0){
+        getwidth();
+        if(linewidth <= 1){
+            linewidth = WIDTH;
+            font = nil;
+        }
+    }
+
+    cbuf = cbufp = malloc(ALLOC_QUANTA*(sizeof *cbuf));
+    word = malloc(WORD_ALLOC_QUANTA*(sizeof *word));
+    if(word == 0 || cbuf == 0)
+        error("out of memory");
+    if(argc == 1)
+        readbuf(0);
+    else{
+        for(i = 1; i < argc; i++){
+            if((ifd = open(*++argv, OREAD)) == -1)
+                fprint(2, "mc: can't open %s (%r)\n", *argv);
+            else{
+                readbuf(ifd);
+                Bflush(&bin);
+                close(ifd);
+            }
+        }
+    }
+    columnate();
+    exits(0);
+}
+void
+error(char *s)
+{
+    fprint(2, "mc: %s\n", s);
+    exits(s);
+}
+void
+readbuf(int fd)
+{
+    int lastwascolon = 0;
+    long c;
+    int linesiz = 0;
+
+    Binit(&bin, fd, OREAD);
+    do{
+        if(nchars++ >= nalloc)
+            morechars();
+        *cbufp++ = c = Bgetrune(&bin);
+        linesiz++;
+        if(c == '\t') {
+            cbufp[-1] = L' ';
+            while(linesiz%TAB != 0) {
+                if(nchars++ >= nalloc)
+                    morechars();
+                *cbufp++ = L' ';
+                linesiz++;
+            }
+        }
+        if(colonflag && c == ':')
+            lastwascolon++;
+        else if(lastwascolon){
+            if(c == '\n'){
+                --nchars;   /* skip newline */
+                *cbufp = L'\0';
+                while(nchars > 0 && cbuf[--nchars] != '\n')
+                    ;
+                if(nchars)
+                    nchars++;
+                columnate();
+                if (nchars)
+                    Bputc(&bout, '\n');
+                Bprint(&bout, "%S", cbuf+nchars);
+                nchars = 0;
+                cbufp = cbuf;
+            }
+            lastwascolon = 0;
+        }
+        if(c == '\n')
+            linesiz = 0;
+    }while(c >= 0);
+}
+void
+scanwords(void)
+{
+    Rune *p, *q;
+    int i, w;
+
+    nwords=0;
+    maxwidth=0;
+    for(p = q = cbuf, i = 0; i < nchars; i++){
+        if(*p++ == L'\n'){
+            if(nwords >= nwalloc){
+                nwalloc += WORD_ALLOC_QUANTA;
+                if((word = realloc(word, nwalloc*sizeof(*word)))==0)
+                    error("out of memory");
+            }
+            word[nwords++] = q;
+            p[-1] = L'\0';
+            w = wordwidth(q, p-q-1);
+            if(w > maxwidth)
+                maxwidth = w;
+            q = p;
+        }
+    }
+}
+
+void
+columnate(void)
+{
+    int i, j;
+    int words_per_line;
+    int nlines;
+    int col;
+    int endcol;
+
+
+    scanwords();
+    if(nwords==0)
+        return;
+    maxwidth = nexttab(maxwidth+mintab-1);
+    words_per_line = linewidth/maxwidth;
+    if(words_per_line <= 0)
+        words_per_line = 1;
+    nlines=(nwords+words_per_line-1)/words_per_line;
+    for(i = 0; i < nlines; i++){
+        col = endcol = 0;
+        for(j = i; j < nwords; j += nlines){
+            endcol += maxwidth;
+            Bprint(&bout, "%S", word[j]);
+            col += wordwidth(word[j], runestrlen(word[j]));
+            if(j+nlines < nwords){
+                if(tabflag) {
+                    while(col < endcol){
+                        Bputc(&bout, '\t');
+                        col = nexttab(col);
+                    }
+                }else{
+                    while(col < endcol){
+                        Bputc(&bout, ' ');
+                        col++;
+                    }
+                }
+            }
+        }
+        Bputc(&bout, '\n');
+    }
+}
+
+int
+wordwidth(Rune *w, int nw)
+{
+    if(font)
+        return runestringnwidth(font, w, nw);
+    return nw;
+}
+
+int
+nexttab(int col)
+{
+    if(tabwidth){
+        col += tabwidth;
+        col -= col%tabwidth;
+        return col;
+    }
+    return col+1;
+}
+
+void
+morechars(void)
+{
+    nalloc += ALLOC_QUANTA;
+    if((cbuf = realloc(cbuf, nalloc*sizeof(*cbuf))) == 0)
+        error("out of memory");
+    cbufp = cbuf+nchars-1;
+}
+
+/*
+ * These routines discover the width of the display.
+ * It takes some work.  If we do the easy calls to the
+ * draw library, the screen flashes due to repainting
+ * when mc exits.
+ */
+
+jmp_buf drawjmp;
+
+void
+terror(Display*, char*)
+{
+    longjmp(drawjmp, 1);
+}
+
+void
+getwidth(void)
+{
+    int n, fd;
+    char buf[128], *f[10], *p;
+
+    if(access("/dev/acme", OREAD) >= 0){
+        if((fd = open("/dev/acme/ctl", OREAD)) < 0)
+            return;
+        n = read(fd, buf, sizeof buf-1);
+        close(fd);
+        if(n <= 0)
+            return;
+        buf[n] = 0;
+        n = tokenize(buf, f, nelem(f));
+        if(n < 7)
+            return;
+        if((font = openfont(nil, f[6])) == nil)
+            return;
+        if(n >= 8)
+            tabwidth = atoi(f[7]);
+        else
+            tabwidth = 4*stringwidth(font, "0");
+        mintab = stringwidth(font, "0");
+        linewidth = atoi(f[5]);
+        tabflag = 1;
+        return;
+    }
+
+    if((p = getenv("font")) == nil)
+        return;
+    if((font = openfont(nil, p)) == nil)
+        return;
+    if((fd = open("/dev/window", OREAD)) < 0){
+        font = nil;
+        return;
+    }
+    n = read(fd, buf, 5*12);
+    close(fd);
+    if(n < 5*12){
+        font = nil;
+        return;
+    }
+    buf[n] = 0;
+    
+    /* window stucture:
+        4 bit left edge
+        1 bit gap
+        12 bit scrollbar
+        4 bit gap
+        text
+        4 bit right edge
+    */
+    linewidth = atoi(buf+3*12) - atoi(buf+1*12) - (4+1+12+4+4);
+    mintab = stringwidth(font, "0");
+    if((p = getenv("tabstop")) != nil)
+        tabwidth = atoi(p)*stringwidth(font, "0");
+    if(tabwidth == 0)
+        tabwidth = 4*stringwidth(font, "0");
+    tabflag = 1;
+}
+@
+
+\subsection{[[pipe/p.c]]}
+
+%-------------------------------------------------------------
+
+<<pipe/p.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+
+#define DEF 22  /* lines in chunk: 3*DEF == 66, #lines per nroff page */
+
+Biobuf *cons;
+Biobuf bout;
+
+int pglen = DEF;
+
+void printfile(int);
+
+void
+main(int argc, char *argv[])
+{
+    int n;
+    int f;
+
+    if((cons = Bopen("/dev/cons", OREAD)) == 0) {
+        fprint(2, "p: can't open /dev/cons\n");
+        exits("missing /dev/cons");
+    }
+    Binit(&bout, 1, OWRITE);
+    n = 0;
+    while(argc > 1) {
+        --argc; argv++;
+        if(*argv[0] == '-'){
+            pglen = atoi(&argv[0][1]);
+            if(pglen <= 0)
+                pglen = DEF;
+        } else {
+            n++;
+            f = open(argv[0], OREAD);
+            if(f < 0){
+                fprint(2, "p: can't open %s - %r\n", argv[0]);
+                continue;
+            }
+            printfile(f);
+            close(f);
+        }
+    }
+    if(n == 0)
+        printfile(0);
+    exits(0);
+}
+
+void
+printfile(int f)
+{
+    int i, j, n;
+    char *s, *cmd;
+    Biobuf *b;
+
+    b = malloc(sizeof(Biobuf));
+    Binit(b, f, OREAD);
+    for(;;){
+        for(i=1; i <= pglen; i++) {
+            s = Brdline(b, '\n');
+            if(s == 0){
+                n = Blinelen(b);
+                if(n > 0)   /* line too long for Brdline */
+                    for(j=0; j<n; j++)
+                        Bputc(&bout, Bgetc(b));
+                else{       /* true EOF */
+                    free(b);
+                    return;
+                }
+            }else{
+                Bwrite(&bout, s, Blinelen(b)-1);
+                if(i < pglen)
+                    Bwrite(&bout, "\n", 1);
+            }
+        }
+        Bflush(&bout);
+        getcmd:
+        cmd = Brdline(cons, '\n');
+        if(cmd == 0 || *cmd == 'q')
+            exits(0);
+        cmd[Blinelen(cons)-1] = 0;
+        if(*cmd == '!'){
+            if(fork() == 0){
+                dup(Bfildes(cons), 0);
+                execl("/bin/rc", "rc", "-c", cmd+1, nil);
+            }
+            waitpid();
+            goto getcmd;
+        }
+    }
+}
+@
+
+\subsection{[[pipe/sort.c]]}
+
+%-------------------------------------------------------------
+
+<<pipe/sort.c>>=
+#include    <u.h>
+#include    <libc.h>
+#include    <bio.h>
+
+/*
+bugs:
+    00/ff for end of file can conflict with 00/ff characters
+*/
+
+enum
+{
+    Nline   = 100000,       /* default max number of lines saved in memory */
+    Nmerge  = 10,           /* max number of temporary files merged */
+    Nfield  = 20,           /* max number of argument fields */
+
+    Bflag   = 1<<0,         /* flags per field */
+    B1flag  = 1<<1,
+
+    Dflag   = 1<<2,
+    Fflag   = 1<<3,
+    Gflag   = 1<<4,
+    Iflag   = 1<<5,
+    Mflag   = 1<<6,
+    Nflag   = 1<<7,
+    Rflag   = 1<<8,
+    Wflag   = 1<<9,
+
+    NSstart = 0,            /* states for number to key decoding */
+    NSsign,
+    NSzero,
+    NSdigit,
+    NSpoint,
+    NSfract,
+    NSzerofract,
+    NSexp,
+    NSexpsign,
+    NSexpdigit,
+};
+
+typedef struct  Line    Line;
+typedef struct  Key Key;
+typedef struct  Merge   Merge;
+typedef struct  Field   Field;
+
+struct  Line
+{
+    Key*    key;
+    int llen;       /* always >= 1 */
+    uchar   line[1];    /* always ends in '\n' */
+};
+
+struct  Merge
+{
+    Key*    key;        /* copy of line->key so (Line*) looks like (Merge*) */
+    Line*   line;       /* line at the head of a merged temp file */
+    int fd;     /* file descriptor */
+    Biobuf  b;      /* iobuf for reading a temp file */
+};
+
+struct  Key
+{
+    int klen;
+    uchar   key[1];
+};
+
+struct  Field
+{
+    int beg1;
+    int beg2;
+    int end1;
+    int end2;
+
+    long    flags;
+    uchar   mapto[1+255];
+
+    void    (*dokey)(Key*, uchar*, uchar*, Field*);
+};
+
+struct args
+{
+    char*   ofile;
+    char*   tname;
+    Rune    tabchar;
+    char    cflag;
+    char    uflag;
+    char    vflag;
+    int nfield;
+    int nfile;
+    Field   field[Nfield];
+
+    Line**  linep;
+    long    nline;          /* number of lines in this temp file */
+    long    lineno;         /* overall ordinal for -s option */
+    int ntemp;
+    long    mline;          /* max lines per file */
+} args;
+
+extern  Rune*   month[12];
+
+void    buildkey(Line*);
+void    doargs(int, char*[]);
+void    dofield(char*, int*, int*, int, int);
+void    dofile(Biobuf*);
+void    dokey_(Key*, uchar*, uchar*, Field*);
+void    dokey_dfi(Key*, uchar*, uchar*, Field*);
+void    dokey_gn(Key*, uchar*, uchar*, Field*);
+void    dokey_m(Key*, uchar*, uchar*, Field*);
+void    dokey_r(Key*, uchar*, uchar*, Field*);
+void    done(char*);
+int kcmp(Key*, Key*);
+void    makemapd(Field*);
+void    makemapm(Field*);
+void    mergefiles(int, int, Biobuf*);
+void    mergeout(Biobuf*);
+void    newfield(void);
+Line*   newline(Biobuf*);
+void    nomem(void);
+void    notifyf(void*, char*);
+void    printargs(void);
+void    printout(Biobuf*);
+void    setfield(int, int);
+uchar*  skip(uchar*, int, int, int, int);
+void    sort4(void*, ulong);
+char*   tempfile(int);
+void    tempout(void);
+void    lineout(Biobuf*, Line*);
+
+void
+main(int argc, char *argv[])
+{
+    int i, f;
+    char *s;
+    Biobuf bbuf;
+
+    notify(notifyf);    /**/
+    doargs(argc, argv);
+    if(args.vflag)
+        printargs();
+
+    for(i=1; i<argc; i++) {
+        s = argv[i];
+        if(s == 0)
+            continue;
+        if(strcmp(s, "-") == 0) {
+            Binit(&bbuf, 0, OREAD);
+            dofile(&bbuf);
+            Bterm(&bbuf);
+            continue;
+        }
+        f = open(s, OREAD);
+        if(f < 0) {
+            fprint(2, "sort: open %s: %r\n", s);
+            done("open");
+        }
+        Binit(&bbuf, f, OREAD);
+        dofile(&bbuf);
+        Bterm(&bbuf);
+        close(f);
+    }
+    if(args.nfile == 0) {
+        Binit(&bbuf, 0, OREAD);
+        dofile(&bbuf);
+        Bterm(&bbuf);
+    }
+    if(args.cflag)
+        done(0);
+    if(args.vflag)
+        fprint(2, "=========\n");
+
+    f = 1;
+    if(args.ofile) {
+        f = create(args.ofile, OWRITE, 0666);
+        if(f < 0) {
+            fprint(2, "sort: create %s: %r\n", args.ofile);
+            done("create");
+        }
+    }
+
+    Binit(&bbuf, f, OWRITE);
+    if(args.ntemp) {
+        tempout();
+        mergeout(&bbuf);
+    } else {
+        printout(&bbuf);
+    }
+    Bterm(&bbuf);
+    done(0);
+}
+
+void
+dofile(Biobuf *b)
+{
+    Line *l, *ol;
+    int n;
+
+    if(args.cflag) {
+        ol = newline(b);
+        if(ol == 0)
+            return;
+        for(;;) {
+            l = newline(b);
+            if(l == 0)
+                break;
+            n = kcmp(ol->key, l->key);
+            if(n > 0 || (n == 0 && args.uflag)) {
+                fprint(2, "sort: -c file not in sort\n"); /**/
+                done("order");
+            }
+            free(ol->key);
+            free(ol);
+            ol = l;
+        }
+        return;
+    }
+
+    if(args.linep == 0) {
+        args.linep = malloc(args.mline * sizeof(args.linep));
+        if(args.linep == 0)
+            nomem();
+    }
+    for(;;) {
+        l = newline(b);
+        if(l == 0)
+            break;
+        if(args.nline >= args.mline)
+            tempout();
+        args.linep[args.nline] = l;
+        args.nline++;
+        args.lineno++;
+    }
+}
+
+void
+notifyf(void*, char *s)
+{
+
+    if(strcmp(s, "interrupt") == 0)
+        done(0);
+    if(strcmp(s, "hangup") == 0)
+        done(0);
+    if(strcmp(s, "kill") == 0)
+        done(0);
+    if(strncmp(s, "sys: write on closed pipe", 25) == 0)
+        done(0);
+    fprint(2, "sort: note: %s\n", s);
+    abort();
+}
+
+Line*
+newline(Biobuf *b)
+{
+    Line *l;
+    char *p;
+    int n, c;
+
+    p = Brdline(b, '\n');
+    n = Blinelen(b);
+    if(p == 0) {
+        if(n == 0)
+            return 0;
+        l = 0;
+        for(n=0;;) {
+            if((n & 31) == 0) {
+                l = realloc(l, sizeof(Line) +
+                    (n+31)*sizeof(l->line[0]));
+                if(l == 0)
+                    nomem();
+            }
+            c = Bgetc(b);
+            if(c < 0) {
+                fprint(2, "sort: newline added\n");
+                c = '\n';
+            }
+            l->line[n++] = c;
+            if(c == '\n')
+                break;
+        }
+        l->llen = n;
+        buildkey(l);
+        return l;
+    }
+    l = malloc(sizeof(Line) +
+        (n-1)*sizeof(l->line[0]));
+    if(l == 0)
+        nomem();
+    l->llen = n;
+    memmove(l->line, p, n);
+    buildkey(l);
+    return l;
+}
+
+void
+lineout(Biobuf *b, Line *l)
+{
+    int n, m;
+
+    n = l->llen;
+    m = Bwrite(b, l->line, n);
+    if(n != m)
+        exits("write");
+}
+
+void
+tempout(void)
+{
+    long n;
+    Line **lp, *l;
+    char *tf;
+    int f;
+    Biobuf tb;
+
+    sort4(args.linep, args.nline);
+    tf = tempfile(args.ntemp);
+    args.ntemp++;
+    f = create(tf, OWRITE, 0666);
+    if(f < 0) {
+        fprint(2, "sort: create %s: %r\n", tf);
+        done("create");
+    }
+
+    Binit(&tb, f, OWRITE);
+    lp = args.linep;
+    for(n=args.nline; n>0; n--) {
+        l = *lp++;
+        lineout(&tb, l);
+        free(l->key);
+        free(l);
+    }
+    args.nline = 0;
+    Bterm(&tb);
+    close(f);
+}
+
+void
+done(char *xs)
+{
+    int i;
+
+    for(i=0; i<args.ntemp; i++)
+        remove(tempfile(i));
+    exits(xs);
+}
+
+void
+nomem(void)
+{
+    fprint(2, "sort: out of memory\n");
+    done("mem");
+}
+
+char*
+tempfile(int n)
+{
+    static char file[100];
+    static uint pid;
+    char *dir;
+
+    dir = "/tmp";
+    if(args.tname)
+        dir = args.tname;
+    if(strlen(dir) >= nelem(file)-20) {
+        fprint(2, "temp file directory name is too long: %s\n", dir);
+        done("tdir");
+    }
+
+    if(pid == 0) {
+        pid = getpid();
+        if(pid == 0) {
+            pid = time(0);
+            if(pid == 0)
+                pid = 1;
+        }
+    }
+
+    sprint(file, "%s/sort.%.4d.%.4d", dir, pid%10000, n);
+    return file;
+}
+
+void
+mergeout(Biobuf *b)
+{
+    int n, i, f;
+    char *tf;
+    Biobuf tb;
+
+    for(i=0; i<args.ntemp; i+=n) {
+        n = args.ntemp - i;
+        if(n > Nmerge) {
+            tf = tempfile(args.ntemp);
+            args.ntemp++;
+            f = create(tf, OWRITE, 0666);
+            if(f < 0) {
+                fprint(2, "sort: create %s: %r\n", tf);
+                done("create");
+            }
+            Binit(&tb, f, OWRITE);
+
+            n = Nmerge;
+            mergefiles(i, n, &tb);
+
+            Bterm(&tb);
+            close(f);
+        } else
+            mergefiles(i, n, b);
+    }
+}
+
+void
+mergefiles(int t, int n, Biobuf *b)
+{
+    Merge *m, *mp, **mmp;
+    Key *ok;
+    Line *l;
+    char *tf;
+    int i, f, nn;
+
+    mmp = malloc(n*sizeof(*mmp));
+    mp = malloc(n*sizeof(*mp));
+    if(mmp == 0 || mp == 0)
+        nomem();
+
+    nn = 0;
+    m = mp;
+    for(i=0; i<n; i++,m++) {
+        tf = tempfile(t+i);
+        f = open(tf, OREAD);
+        if(f < 0) {
+            fprint(2, "sort: reopen %s: %r\n", tf);
+            done("open");
+        }
+        m->fd = f;
+        Binit(&m->b, f, OREAD);
+        mmp[nn] = m;
+
+        l = newline(&m->b);
+        if(l == 0)
+            continue;
+        nn++;
+        m->line = l;
+        m->key = l->key;
+    }
+
+    ok = 0;
+    for(;;) {
+        sort4(mmp, nn);
+        m = *mmp;
+        if(nn == 0)
+            break;
+        for(;;) {
+            l = m->line;
+            if(args.uflag && ok && kcmp(ok, l->key) == 0) {
+                free(l->key);
+                free(l);
+            } else {
+                lineout(b, l);
+                if(ok)
+                    free(ok);
+                ok = l->key;
+                free(l);
+            }
+
+            l = newline(&m->b);
+            if(l == 0) {
+                nn--;
+                mmp[0] = mmp[nn];
+                break;
+            }
+            m->line = l;
+            m->key = l->key;
+            if(nn > 1 && kcmp(mmp[0]->key, mmp[1]->key) > 0)
+                break;
+        }
+    }
+    if(ok)
+        free(ok);
+
+    m = mp;
+    for(i=0; i<n; i++,m++) {
+        Bterm(&m->b);
+        close(m->fd);
+    }
+
+    free(mp);
+    free(mmp);
+}
+
+int
+kcmp(Key *ka, Key *kb)
+{
+    int n, m;
+
+    /*
+     * set n to length of smaller key
+     */
+    n = ka->klen;
+    m = kb->klen;
+    if(n > m)
+        n = m;
+    return memcmp(ka->key, kb->key, n);
+}
+
+void
+printout(Biobuf *b)
+{
+    long n;
+    Line **lp, *l;
+    Key *ok;
+
+    sort4(args.linep, args.nline);
+    lp = args.linep;
+    ok = 0;
+    for(n=args.nline; n>0; n--) {
+        l = *lp++;
+        if(args.uflag && ok && kcmp(ok, l->key) == 0)
+            continue;
+        lineout(b, l);
+        ok = l->key;
+    }
+}
+
+void
+setfield(int n, int c)
+{
+    Field *f;
+
+    f = &args.field[n];
+    switch(c) {
+    default:
+        fprint(2, "sort: unknown option: field.%C\n", c);
+        done("option");
+    case 'b':   /* skip blanks */
+        f->flags |= Bflag;
+        break;
+    case 'd':   /* directory order */
+        f->flags |= Dflag;
+        break;
+    case 'f':   /* fold case */
+        f->flags |= Fflag;
+        break;
+    case 'g':   /* floating point -n case */
+        f->flags |= Gflag;
+        break;
+    case 'i':   /* ignore non-ascii */
+        f->flags |= Iflag;
+        break;
+    case 'M':   /* month */
+        f->flags |= Mflag;
+        break;
+    case 'n':   /* numbers */
+        f->flags |= Nflag;
+        break;
+    case 'r':   /* reverse */
+        f->flags |= Rflag;
+        break;
+    case 'w':   /* ignore white */
+        f->flags |= Wflag;
+        break;
+    }
+}
+
+void
+dofield(char *s, int *n1, int *n2, int off1, int off2)
+{
+    int c, n;
+
+    c = *s++;
+    if(c >= '0' && c <= '9') {
+        n = 0;
+        while(c >= '0' && c <= '9') {
+            n = n*10 + (c-'0');
+            c = *s++;
+        }
+        n -= off1;  /* posix committee: rot in hell */
+        if(n < 0) {
+            fprint(2, "sort: field offset must be positive\n");
+            done("option");
+        }
+        *n1 = n;
+    }
+    if(c == '.') {
+        c = *s++;
+        if(c >= '0' && c <= '9') {
+            n = 0;
+            while(c >= '0' && c <= '9') {
+                n = n*10 + (c-'0');
+                c = *s++;
+            }
+            n -= off2;
+            if(n < 0) {
+                fprint(2, "sort: character offset must be positive\n");
+                done("option");
+            }
+            *n2 = n;
+        }
+    }
+    while(c != 0) {
+        setfield(args.nfield, c);
+        c = *s++;
+    }
+}
+
+void
+printargs(void)
+{
+    int i, n;
+    Field *f;
+    char *prefix;
+
+    fprint(2, "sort");
+    for(i=0; i<=args.nfield; i++) {
+        f = &args.field[i];
+        prefix = " -";
+        if(i) {
+            n = f->beg1;
+            if(n >= 0)
+                fprint(2, " +%d", n);
+            else
+                fprint(2, " +*");
+            n = f->beg2;
+            if(n >= 0)
+                fprint(2, ".%d", n);
+            else
+                fprint(2, ".*");
+
+            if(f->flags & B1flag)
+                fprint(2, "b");
+
+            n = f->end1;
+            if(n >= 0)
+                fprint(2, " -%d", n);
+            else
+                fprint(2, " -*");
+            n = f->end2;
+            if(n >= 0)
+                fprint(2, ".%d", n);
+            else
+                fprint(2, ".*");
+            prefix = "";
+        }
+        if(f->flags & Bflag)
+            fprint(2, "%sb", prefix);
+        if(f->flags & Dflag)
+            fprint(2, "%sd", prefix);
+        if(f->flags & Fflag)
+            fprint(2, "%sf", prefix);
+        if(f->flags & Gflag)
+            fprint(2, "%sg", prefix);
+        if(f->flags & Iflag)
+            fprint(2, "%si", prefix);
+        if(f->flags & Mflag)
+            fprint(2, "%sM", prefix);
+        if(f->flags & Nflag)
+            fprint(2, "%sn", prefix);
+        if(f->flags & Rflag)
+            fprint(2, "%sr", prefix);
+        if(f->flags & Wflag)
+            fprint(2, "%sw", prefix);
+    }
+    if(args.cflag)
+        fprint(2, " -c");
+    if(args.uflag)
+        fprint(2, " -u");
+    if(args.ofile)
+        fprint(2, " -o %s", args.ofile);
+    if(args.mline != Nline)
+        fprint(2, " -l %ld", args.mline);
+    fprint(2, "\n");
+}
+
+void
+newfield(void)
+{
+    int n;
+    Field *f;
+
+    n = args.nfield + 1;
+    if(n >= Nfield) {
+        fprint(2, "sort: too many fields specified\n");
+        done("option");
+    }
+    args.nfield = n;
+    f = &args.field[n];
+    f->beg1 = -1;
+    f->beg2 = -1;
+    f->end1 = -1;
+    f->end2 = -1;
+}
+
+void
+doargs(int argc, char *argv[])
+{
+    int i, c, hadplus;
+    char *s, *p, *q;
+    Field *f;
+
+    hadplus = 0;
+    args.mline = Nline;
+    for(i=1; i<argc; i++) {
+        s = argv[i];
+        c = *s++;
+        if(c == '-') {
+            c = *s;
+            if(c == 0)      /* forced end of arg marker */
+                break;
+            argv[i] = 0;        /* clobber args processed */
+            if(c == '.' || (c >= '0' && c <= '9')) {
+                if(!hadplus)
+                    newfield();
+                f = &args.field[args.nfield];
+                dofield(s, &f->end1, &f->end2, 0, 0);
+                hadplus = 0;
+                continue;
+            }
+
+            while(c = *s++)
+            switch(c) {
+            case '-':   /* end of options */
+                i = argc;
+                continue;
+            case 'T':   /* temp directory */
+                if(*s == 0) {
+                    i++;
+                    if(i < argc) {
+                        args.tname = argv[i];
+                        argv[i] = 0;
+                    }
+                } else
+                    args.tname = s;
+                s = strchr(s, 0);
+                break;
+            case 'o':   /* output file */
+                if(*s == 0) {
+                    i++;
+                    if(i < argc) {
+                        args.ofile = argv[i];
+                        argv[i] = 0;
+                    }
+                } else
+                    args.ofile = s;
+                s = strchr(s, 0);
+                break;
+            case 'k':   /* posix key (what were they thinking?) */
+                p = 0;
+                if(*s == 0) {
+                    i++;
+                    if(i < argc) {
+                        p = argv[i];
+                        argv[i] = 0;
+                    }
+                } else
+                    p = s;
+                s = strchr(s, 0);
+                if(p == 0)
+                    break;
+
+                newfield();
+                q = strchr(p, ',');
+                if(q)
+                    *q++ = 0;
+                f = &args.field[args.nfield];
+                dofield(p, &f->beg1, &f->beg2, 1, 1);
+                if(f->flags & Bflag) {
+                    f->flags |= B1flag;
+                    f->flags &= ~Bflag;
+                }
+                if(q) {
+                    dofield(q, &f->end1, &f->end2, 1, 0);
+                    if(f->end2 <= 0)
+                        f->end1++;
+                }
+                hadplus = 0;
+                break;
+            case 't':   /* tab character */
+                if(*s == 0) {
+                    i++;
+                    if(i < argc) {
+                        chartorune(&args.tabchar, argv[i]);
+                        argv[i] = 0;
+                    }
+                } else
+                    s += chartorune(&args.tabchar, s);
+                if(args.tabchar == '\n') {
+                    fprint(2, "aw come on, rob\n");
+                    done("rob");
+                }
+                break;
+            case 'c':   /* check order */
+                args.cflag = 1;
+                break;
+            case 'u':   /* unique */
+                args.uflag = 1;
+                break;
+            case 'v':   /* debugging noise */
+                args.vflag = 1;
+                break;
+            case 'l':
+                if(*s == 0) {
+                    i++;
+                    if(i < argc) {
+                        args.mline = atol(argv[i]);
+                        argv[i] = 0;
+                    }
+                } else
+                    args.mline = atol(s);
+                s = strchr(s, 0);
+                break;
+
+            case 'M':   /* month */
+            case 'b':   /* skip blanks */
+            case 'd':   /* directory order */
+            case 'f':   /* fold case */
+            case 'g':   /* floating numbers */
+            case 'i':   /* ignore non-ascii */
+            case 'n':   /* numbers */
+            case 'r':   /* reverse */
+            case 'w':   /* ignore white */
+                if(args.nfield > 0)
+                    fprint(2, "sort: global field set after -k\n");
+                setfield(0, c);
+                break;
+            case 'm':
+                /* option m silently ignored but required by posix */
+                break;
+            default:
+                fprint(2, "sort: unknown option: -%C\n", c);
+                done("option");
+            }
+            continue;
+        }
+        if(c == '+') {
+            argv[i] = 0;        /* clobber args processed */
+            c = *s;
+            if(c == '.' || (c >= '0' && c <= '9')) {
+                newfield();
+                f = &args.field[args.nfield];
+                dofield(s, &f->beg1, &f->beg2, 0, 0);
+                if(f->flags & Bflag) {
+                    f->flags |= B1flag;
+                    f->flags &= ~Bflag;
+                }
+                hadplus = 1;
+                continue;
+            }
+            fprint(2, "sort: unknown option: +%C\n", c);
+            done("option");
+        }
+        args.nfile++;
+    }
+
+    for(i=0; i<=args.nfield; i++) {
+        f = &args.field[i];
+
+        /*
+         * global options apply to fields that
+         * specify no options
+         */
+        if(f->flags == 0) {
+            f->flags = args.field[0].flags;
+            if(args.field[0].flags & Bflag)
+                f->flags |= B1flag;
+        }
+
+
+        /*
+         * build buildkey specification
+         */
+        switch(f->flags & ~(Bflag|B1flag)) {
+        default:
+            fprint(2, "sort: illegal combination of flags: %lx\n", f->flags);
+            done("option");
+        case 0:
+            f->dokey = dokey_;
+            break;
+        case Rflag:
+            f->dokey = dokey_r;
+            break;
+        case Gflag:
+        case Nflag:
+        case Gflag|Nflag:
+        case Gflag|Rflag:
+        case Nflag|Rflag:
+        case Gflag|Nflag|Rflag:
+            f->dokey = dokey_gn;
+            break;
+        case Mflag:
+        case Mflag|Rflag:
+            f->dokey = dokey_m;
+            makemapm(f);
+            break;
+        case Dflag:
+        case Dflag|Fflag:
+        case Dflag|Fflag|Iflag:
+        case Dflag|Fflag|Iflag|Rflag:
+        case Dflag|Fflag|Iflag|Rflag|Wflag:
+        case Dflag|Fflag|Iflag|Wflag:
+        case Dflag|Fflag|Rflag:
+        case Dflag|Fflag|Rflag|Wflag:
+        case Dflag|Fflag|Wflag:
+        case Dflag|Iflag:
+        case Dflag|Iflag|Rflag:
+        case Dflag|Iflag|Rflag|Wflag:
+        case Dflag|Iflag|Wflag:
+        case Dflag|Rflag:
+        case Dflag|Rflag|Wflag:
+        case Dflag|Wflag:
+        case Fflag:
+        case Fflag|Iflag:
+        case Fflag|Iflag|Rflag:
+        case Fflag|Iflag|Rflag|Wflag:
+        case Fflag|Iflag|Wflag:
+        case Fflag|Rflag:
+        case Fflag|Rflag|Wflag:
+        case Fflag|Wflag:
+        case Iflag:
+        case Iflag|Rflag:
+        case Iflag|Rflag|Wflag:
+        case Iflag|Wflag:
+        case Wflag:
+            f->dokey = dokey_dfi;
+            makemapd(f);
+            break;
+        }
+    }
+
+    /*
+     * random spot checks
+     */
+    if(args.nfile > 1 && args.cflag) {
+        fprint(2, "sort: -c can have at most one input file\n");
+        done("option");
+    }
+    return;
+}
+
+uchar*
+skip(uchar *l, int n1, int n2, int bflag, int endfield)
+{
+    int i, c, tc;
+    Rune r;
+
+    if(endfield && n1 < 0)
+        return 0;
+
+    c = *l++;
+    tc = args.tabchar;
+    if(tc) {
+        if(tc < Runeself) {
+            for(i=n1; i>0; i--) {
+                while(c != tc) {
+                    if(c == '\n')
+                        return 0;
+                    c = *l++;
+                }
+                if(!(endfield && i == 1))
+                    c = *l++;
+            }
+        } else {
+            l--;
+            l += chartorune(&r, (char*)l);
+            for(i=n1; i>0; i--) {
+                while(r != tc) {
+                    if(r == '\n')
+                        return 0;
+                    l += chartorune(&r, (char*)l);
+                }
+                if(!(endfield && i == 1))
+                    l += chartorune(&r, (char*)l);
+            }
+            c = r;
+        }
+    } else {
+        for(i=n1; i>0; i--) {
+            while(c == ' ' || c == '\t')
+                c = *l++;
+            while(c != ' ' && c != '\t') {
+                if(c == '\n')
+                    return 0;
+                c = *l++;
+            }
+        }
+    }
+
+    if(bflag)
+        while(c == ' ' || c == '\t')
+            c = *l++;
+
+    l--;
+    for(i=n2; i>0; i--) {
+        c = *l;
+        if(c < Runeself) {
+            if(c == '\n')
+                return 0;
+            l++;
+            continue;
+        }
+        l += chartorune(&r, (char*)l);
+    }
+    return l;
+}
+
+void
+dokey_gn(Key *k, uchar *lp, uchar *lpe, Field *f)
+{
+    uchar *kp;
+    int c, cl, dp;
+    int state, nzero, exp, expsign, rflag;
+
+    cl = k->klen + 3;
+    kp = k->key + cl;   /* skip place for sign, exponent[2] */
+
+    nzero = 0;      /* number of trailing zeros */
+    exp = 0;        /* value of the exponent */
+    expsign = 0;        /* sign of the exponent */
+    dp = 0x4040;        /* location of decimal point */
+    rflag = f->flags&Rflag; /* xor of rflag and - sign */
+    state = NSstart;
+
+    for(;; lp++) {
+        if(lp >= lpe)
+            break;
+        c = *lp;
+
+        if(c == ' ' || c == '\t') {
+            switch(state) {
+            case NSstart:
+            case NSsign:
+                continue;
+            }
+            break;
+        }
+        if(c == '+' || c == '-') {
+            switch(state) {
+            case NSstart:
+                state = NSsign;
+                if(c == '-')
+                    rflag = !rflag;
+                continue;
+            case NSexp:
+                state = NSexpsign;
+                if(c == '-')
+                    expsign = 1;
+                continue;
+            }
+            break;
+        }
+        if(c == '0') {
+            switch(state) {
+            case NSdigit:
+                if(rflag)
+                    c = ~c;
+                *kp++ = c;
+                cl++;
+                nzero++;
+                dp++;
+                state = NSdigit;
+                continue;
+            case NSfract:
+                if(rflag)
+                    c = ~c;
+                *kp++ = c;
+                cl++;
+                nzero++;
+                state = NSfract;
+                continue;
+            case NSstart:
+            case NSsign:
+            case NSzero:
+                state = NSzero;
+                continue;
+            case NSzerofract:
+            case NSpoint:
+                dp--;
+                state = NSzerofract;
+                continue;
+            case NSexpsign:
+            case NSexp:
+            case NSexpdigit:
+                exp = exp*10 + (c - '0');
+                state = NSexpdigit;
+                continue;
+            }
+            break;
+        }
+        if(c >= '1' && c <= '9') {
+            switch(state) {
+            case NSzero:
+            case NSstart:
+            case NSsign:
+            case NSdigit:
+                if(rflag)
+                    c = ~c;
+                *kp++ = c;
+                cl++;
+                nzero = 0;
+                dp++;
+                state = NSdigit;
+                continue;
+            case NSzerofract:
+            case NSpoint:
+            case NSfract:
+                if(rflag)
+                    c = ~c;
+                *kp++ = c;
+                cl++;
+                nzero = 0;
+                state = NSfract;
+                continue;
+            case NSexpsign:
+            case NSexp:
+            case NSexpdigit:
+                exp = exp*10 + (c - '0');
+                state = NSexpdigit;
+                continue;
+            }
+            break;
+        }
+        if(c == '.') {
+            switch(state) {
+            case NSstart:
+            case NSsign:
+                state = NSpoint;
+                continue;
+            case NSzero:
+                state = NSzerofract;
+                continue;
+            case NSdigit:
+                state = NSfract;
+                continue;
+            }
+            break;
+        }
+        if((f->flags & Gflag) && (c == 'e' || c == 'E')) {
+            switch(state) {
+            case NSdigit:
+            case NSfract:
+                state = NSexp;
+                continue;
+            }
+            break;
+        }
+        break;
+    }
+
+    switch(state) {
+    /*
+     * result is zero
+     */
+    case NSstart:
+    case NSsign:
+    case NSzero:
+    case NSzerofract:
+    case NSpoint:
+        kp = k->key + k->klen;
+        k->klen += 2;
+        kp[0] = 0x20;   /* between + and - */
+        kp[1] = 0;
+        return;
+    /*
+     * result has exponent
+     */
+    case NSexpsign:
+    case NSexp:
+    case NSexpdigit:
+        if(expsign)
+            exp = -exp;
+        dp += exp;
+
+    /*
+     * result is fixed point number
+     */
+    case NSdigit:
+    case NSfract:
+        kp -= nzero;
+        cl -= nzero;
+        break;
+    }
+
+    /*
+     * end of number
+     */
+    c = 0;
+    if(rflag)
+        c = ~c;
+    *kp = c;
+
+    /*
+     * sign and exponent
+     */
+    c = 0x30;
+    if(rflag) {
+        c = 0x10;
+        dp = ~dp;
+    }
+    kp = k->key + k->klen;
+    kp[0] = c;
+    kp[1] = (dp >> 8);
+    kp[2] = dp;
+    k->klen = cl+1;
+}
+
+void
+dokey_m(Key *k, uchar *lp, uchar *lpe, Field *f)
+{
+    uchar *kp;
+    Rune r, place[3];
+    int c, cl, pc;
+    int rflag;
+
+    rflag = f->flags&Rflag;
+    pc = 0;
+
+    cl = k->klen;
+    kp = k->key + cl;
+
+    for(;;) {
+        /*
+         * get the character
+         */
+        if(lp >= lpe)
+            break;
+        c = *lp;
+        if(c >= Runeself) {
+            lp += chartorune(&r, (char*)lp);
+            c = r;
+        } else
+            lp++;
+
+        if(c < nelem(f->mapto)) {
+            c = f->mapto[c];
+            if(c == 0)
+                continue;
+        }
+        place[pc++] = c;
+        if(pc < 3)
+            continue;
+        for(c=11; c>=0; c--)
+            if(memcmp(month[c], place, sizeof(place)) == 0)
+                break;
+        c += 10;
+        if(rflag)
+            c = ~c;
+        *kp++ = c;
+        cl++;
+        break;
+    }
+
+    c = 0;
+    if(rflag)
+        c = ~c;
+    *kp = c;
+    k->klen = cl+1;
+}
+
+void
+dokey_dfi(Key *k, uchar *lp, uchar *lpe, Field *f)
+{
+    uchar *kp;
+    Rune r;
+    int c, cl, n, rflag;
+
+    cl = k->klen;
+    kp = k->key + cl;
+    rflag = f->flags & Rflag;
+
+    for(;;) {
+        /*
+         * get the character
+         */
+        if(lp >= lpe)
+            break;
+        c = *lp;
+        if(c >= Runeself) {
+            lp += chartorune(&r, (char*)lp);
+            c = r;
+        } else
+            lp++;
+
+        /*
+         * do the various mappings.
+         * the common case is handled
+         * completely by the table.
+         */
+        if(c != 0 && c < Runeself) {
+            c = f->mapto[c];
+            if(c) {
+                *kp++ = c;
+                cl++;
+            }
+            continue;
+        }
+
+        /*
+         * for characters out of range,
+         * the table does not do Rflag.
+         * ignore is based on mapto[nelem(f->mapto)-1]
+         */
+        if(c != 0 && c < nelem(f->mapto)) {
+            c = f->mapto[c];
+            if(c == 0)
+                continue;
+        } else {
+            if(f->mapto[nelem(f->mapto)-1] == 0)
+                continue;
+            /*
+             * consider building maps as necessary
+             */
+            if(f->flags & Fflag)
+                c = tolowerrune(tobaserune(c));
+            if(f->flags & Dflag && !isalpharune(c) &&
+                !isdigitrune(c) && !isspacerune(c))
+                continue;
+            if((f->flags & Wflag) && isspacerune(c))
+                continue;
+        }
+
+        /*
+         * put it in the key
+         */
+        r = c;
+        n = runetochar((char*)kp, &r);
+        kp += n;
+        cl += n;
+        if(rflag)
+            while(n > 0) {
+                kp[-n] = ~kp[-n];
+                n--;
+            }
+    }
+
+    /*
+     * end of key
+     */
+    k->klen = cl+1;
+    if(rflag) {
+        *kp = ~0;
+        return;
+    }
+    *kp = 0;
+}
+
+void
+dokey_r(Key *k, uchar *lp, uchar *lpe, Field*)
+{
+    int cl, n;
+    uchar *kp;
+
+    n = lpe - lp;
+    if(n < 0)
+        n = 0;
+    cl = k->klen;
+    kp = k->key + cl;
+    k->klen = cl+n+1;
+
+    lpe -= 3;
+    while(lp < lpe) {
+        kp[0] = ~lp[0];
+        kp[1] = ~lp[1];
+        kp[2] = ~lp[2];
+        kp[3] = ~lp[3];
+        kp += 4;
+        lp += 4;
+    }
+
+    lpe += 3;
+    while(lp < lpe)
+        *kp++ = ~*lp++;
+    *kp = ~0;
+}
+
+void
+dokey_(Key *k, uchar *lp, uchar *lpe, Field*)
+{
+    int n, cl;
+    uchar *kp;
+
+    n = lpe - lp;
+    if(n < 0)
+        n = 0;
+    cl = k->klen;
+    kp = k->key + cl;
+    k->klen = cl+n+1;
+    memmove(kp, lp, n);
+    kp[n] = 0;
+}
+
+void
+buildkey(Line *l)
+{
+    Key *k;
+    uchar *lp, *lpe;
+    int ll, kl, cl, i, n;
+    Field *f;
+
+    ll = l->llen - 1;
+    kl = 0;         /* allocated length */
+    cl = 0;         /* current length */
+    k = 0;
+
+    for(i=1; i<=args.nfield; i++) {
+        f = &args.field[i];
+        lp = skip(l->line, f->beg1, f->beg2, f->flags&B1flag, 0);
+        if(lp == 0)
+            lp = l->line + ll;
+        lpe = skip(l->line, f->end1, f->end2, f->flags&Bflag, 1);
+        if(lpe == 0)
+            lpe = l->line + ll;
+        n = (lpe - lp) + 1;
+        if(n <= 0)
+            n = 1;
+        if(cl+(n+4) > kl) {
+            kl = cl+(n+4);
+            k = realloc(k, sizeof(Key) +
+                (kl-1)*sizeof(k->key[0]));
+            if(k == 0)
+                nomem();
+        }
+        k->klen = cl;
+        (*f->dokey)(k, lp, lpe, f);
+        cl = k->klen;
+    }
+
+    /*
+     * global comparisons
+     */
+    if(!(args.uflag && cl > 0)) {
+        f = &args.field[0];
+        if(cl+(ll+4) > kl) {
+            kl = cl+(ll+4);
+            k = realloc(k, sizeof(Key) +
+                (kl-1)*sizeof(k->key[0]));
+            if(k == 0)
+                nomem();
+        }
+        k->klen = cl;
+        (*f->dokey)(k, l->line, l->line+ll, f);
+        cl = k->klen;
+    }
+
+    l->key = k;
+    k->klen = cl;
+
+    if(args.vflag) {
+        if(write(2, l->line, l->llen) != l->llen)
+            exits("write");
+        for(i=0; i<k->klen; i++) {
+            fprint(2, " %.2x", k->key[i]);
+            if(k->key[i] == 0x00 || k->key[i] == 0xff)
+                fprint(2, "\n");
+        }
+    }
+}
+
+void
+makemapm(Field *f)
+{
+    int i, c;
+
+    for(i=0; i<nelem(f->mapto); i++) {
+        c = 1;
+        if(i == ' ' || i == '\t')
+            c = 0;
+        if(i >= 'a' && i <= 'z')
+            c = i + ('A' - 'a');
+        if(i >= 'A' && i <= 'Z')
+            c = i;
+        f->mapto[i] = c;
+        if(args.vflag) {
+            if((i & 15) == 0)
+                fprint(2, " ");
+            fprint(2, " %.2x", c);
+            if((i & 15) == 15)
+                fprint(2, "\n");
+        }
+    }
+}
+
+void
+makemapd(Field *f)
+{
+    int i, c;
+
+    for(i=0; i<nelem(f->mapto); i++) {
+        c = i;
+        if(f->flags & Iflag)
+            if(c < 040 || c > 0176)
+                c = -1;
+        if((f->flags & Wflag) && c >= 0)
+            if(c == ' ' || c == '\t')
+                c = -1;
+        if((f->flags & Dflag) && c >= 0)
+            if(!(c == ' ' || c == '\t' ||
+                (c >= 'a' && c <= 'z') ||
+                (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9'))){
+                if(!isupperrune(c = toupperrune(c)))
+                    c = -1;
+            }
+        if((f->flags & Fflag) && c >= 0)
+            c = toupperrune(tobaserune(c));
+        if((f->flags & Rflag) && c >= 0 && i > 0 && i < Runeself)
+            c = ~c & 0xff;
+        if(c < 0)
+            c = 0;
+        f->mapto[i] = c;
+        if(args.vflag) {
+            if((i & 15) == 0)
+                fprint(2, " ");
+            fprint(2, " %.2x", c);
+            if((i & 15) == 15)
+                fprint(2, "\n");
+        }
+    }
+}
+
+Rune*   month[12] =
+{
+    L"JAN",
+    L"FEB",
+    L"MAR",
+    L"APR",
+    L"MAY",
+    L"JUN",
+    L"JUL",
+    L"AUG",
+    L"SEP",
+    L"OCT",
+    L"NOV",
+    L"DEC",
+};
+
+/************** radix sort ***********/
+
+enum
+{
+    Threshold   = 14,
+};
+
+void    rsort4(Key***, ulong, int);
+void    bsort4(Key***, ulong, int);
+
+void
+sort4(void *a, ulong n)
+{
+    if(n > Threshold)
+        rsort4((Key***)a, n, 0);
+    else
+        bsort4((Key***)a, n, 0);
+}
+
+void
+rsort4(Key ***a, ulong n, int b)
+{
+    Key ***ea, ***t, ***u, **t1, **u1, *k;
+    Key ***part[257];
+    static long count[257];
+    long clist[257+257], *cp, *cp1;
+    int c, lowc, higc;
+
+    /*
+     * pass 1 over all keys,
+     * count the number of each key[b].
+     * find low count and high count.
+     */
+    lowc = 256;
+    higc = 0;
+    ea = a+n;
+    for(t=a; t<ea; t++) {
+        k = **t;
+        n = k->klen;
+        if(b >= n) {
+            count[256]++;
+            continue;
+        }
+        c = k->key[b];
+        n = count[c]++;
+        if(n == 0) {
+            if(c < lowc)
+                lowc = c;
+            if(c > higc)
+                higc = c;
+        }
+    }
+
+    /*
+     * pass 2 over all counts,
+     * put partition pointers in part[c].
+     * save compacted indexes and counts
+     * in clist[].
+     */
+    t = a;
+    n = count[256];
+    clist[0] = n;
+    part[256] = t;
+    t += n;
+
+    cp1 = clist+1;
+    cp = count+lowc;
+    for(c=lowc; c<=higc; c++,cp++) {
+        n = *cp;
+        if(n) {
+            cp1[0] = n;
+            cp1[1] = c;
+            cp1 += 2;
+            part[c] = t;
+            t += n;
+        }
+    }
+    *cp1 = 0;
+
+    /*
+     * pass 3 over all counts.
+     * chase lowest pointer in each partition
+     * around a permutation until it comes
+     * back and is stored where it started.
+     * static array, count[], should be
+     * reduced to zero entries except maybe
+     * count[256].
+     */
+    for(cp1=clist+1; cp1[0]; cp1+=2) {
+        c = cp1[1];
+        cp = count+c;
+        while(*cp) {
+            t1 = *part[c];
+            for(;;) {
+                k = *t1;
+                n = 256;
+                if(b < k->klen)
+                    n = k->key[b];
+                u = part[n]++;
+                count[n]--;
+                u1 = *u;
+                *u = t1;
+                if(n == c)
+                    break;
+                t1 = u1;
+            }
+        }
+    }
+
+    /*
+     * pass 4 over all partitions.
+     * call recursively.
+     */
+    b++;
+    t = a + clist[0];
+    count[256] = 0;
+    for(cp1=clist+1; n=cp1[0]; cp1+=2) {
+        if(n > Threshold)
+            rsort4(t, n, b);
+        else
+        if(n > 1)
+            bsort4(t, n, b);
+        t += n;
+    }
+}
+
+/*
+ * bubble sort to pick up
+ * the pieces.
+ */
+void
+bsort4(Key ***a, ulong n, int b)
+{
+    Key ***i, ***j, ***k, ***l, **t;
+    Key *ka, *kb;
+    int n1, n2;
+
+    l = a+n;
+    j = a;
+
+loop:
+    i = j;
+    j++;
+    if(j >= l)
+        return;
+
+    ka = **i;
+    kb = **j;
+    n1 = ka->klen - b;
+    n2 = kb->klen - b;
+    if(n1 > n2)
+        n1 = n2;
+    if(n1 <= 0)
+        goto loop;
+    n2 = ka->key[b] - kb->key[b];
+    if(n2 == 0)
+        n2 = memcmp(ka->key+b, kb->key+b, n1);
+    if(n2 <= 0)
+        goto loop;
+
+    for(;;) {
+        k = i+1;
+
+        t = *k;
+        *k = *i;
+        *i = t;
+
+        if(i <= a)
+            goto loop;
+
+        i--;
+        ka = **i;
+        kb = *t;
+        n1 = ka->klen - b;
+        n2 = kb->klen - b;
+        if(n1 > n2)
+            n1 = n2;
+        if(n1 <= 0)
+            goto loop;
+        n2 = ka->key[b] - kb->key[b];
+        if(n2 == 0)
+            n2 = memcmp(ka->key+b, kb->key+b, n1);
+        if(n2 <= 0)
+            goto loop;
+    }
+}
+@
+
+\subsection{[[pipe/tail.c]]}
+
+%-------------------------------------------------------------
+
+<<pipe/tail.c>>=
+#include    <u.h>
+#include    <libc.h>
+#include    <ctype.h>
+#include    <bio.h>
+
+/*
+ * tail command, posix plus v10 option -r.
+ * the simple command tail -c, legal in v10, is illegal
+ */
+
+long    count;
+int anycount;
+static int  follow;
+int file    = 0;
+char*   umsg    = "usage: tail [-n N] [-c N] [-f] [-r] [+-N[bc][fr]] [file]";
+
+Biobuf  bout;
+enum
+{
+    BEG,
+    END
+} origin = END;
+enum
+{
+    CHARS,
+    LINES
+} units = LINES;
+enum
+{
+    FWD,
+    REV
+} dir = FWD;
+
+extern  void    copy(void);
+extern  void    fatal(char*);
+extern  int getnumber(char*);
+extern  void    keep(void);
+extern  void    reverse(void);
+extern  void    skip(void);
+extern  void    suffix(char*);
+extern  long    tread(char*, long);
+extern  void    trunc(Dir*, Dir**);
+extern  vlong   tseek(vlong, int);
+extern  void    twrite(char*, long);
+extern  void    usage(void);
+static  int isseekable(int fd);
+
+#define JUMP(o,p) tseek(o,p), copy()
+
+void
+main(int argc, char **argv)
+{
+    int seekable, c;
+
+    Binit(&bout, 1, OWRITE);
+    for(; argc > 1 && ((c=*argv[1])=='-'||c=='+'); argc--,argv++ ) {
+        if(getnumber(argv[1])) {
+            suffix(argv[1]);
+            continue;
+        } else
+        if(c == '-')
+            switch(argv[1][1]) {
+            case 'c':
+                units = CHARS;
+            case 'n':
+                if(getnumber(argv[1]+2))
+                    continue;
+                else
+                if(argc > 2 && getnumber(argv[2])) {
+                    argc--, argv++;
+                    continue;
+                } else
+                    usage();
+            case 'r':
+                dir = REV;
+                continue;
+            case 'f':
+                follow++;
+                continue;
+            case '-':
+                argc--, argv++;
+            }
+        break;
+    }
+    if(dir==REV && (units==CHARS || follow || origin==BEG))
+        fatal("incompatible options");
+    if(!anycount)
+        count = dir==REV? ~0UL>>1: 10;
+    if(origin==BEG && units==LINES && count>0)
+        count--;
+    if(argc > 2)
+        usage();
+    if(argc > 1 && (file=open(argv[1],0)) < 0)
+        fatal(argv[1]);
+    seekable = isseekable(file);
+
+    if(!seekable && origin==END)
+        keep();
+    else
+    if(!seekable && origin==BEG)
+        skip();
+    else
+    if(units==CHARS && origin==END)
+        JUMP(-count, 2);
+    else
+    if(units==CHARS && origin==BEG)
+        JUMP(count, 0);
+    else
+    if(units==LINES && origin==END)
+        reverse();
+    else
+    if(units==LINES && origin==BEG)
+        skip();
+    if(follow && seekable)
+        for(;;) {
+            static Dir *sb0, *sb1;
+            trunc(sb1, &sb0);
+            copy();
+            trunc(sb0, &sb1);
+            sleep(5000);
+        }
+    exits(0);
+}
+
+void
+trunc(Dir *old, Dir **new)
+{
+    Dir *d;
+    vlong olength;
+
+    d = dirfstat(file);
+    if(d == nil)
+        return;
+    olength = 0;
+    if(old)
+        olength = old->length;
+    if(d->length < olength)
+        d->length = tseek(0LL, 0);
+    free(*new);
+    *new = d;
+}
+
+void
+suffix(char *s)
+{
+    while(*s && strchr("0123456789+-", *s))
+        s++;
+    switch(*s) {
+    case 'b':
+        if((count *= 1024) < 0)
+            fatal("too big");
+    case 'c':
+        units = CHARS;
+    case 'l':
+        s++;
+    }
+    switch(*s) {
+    case 'r':
+        dir = REV;
+        return;
+    case 'f':
+        follow++;
+        return;
+    case 0:
+        return;
+    }
+    usage();
+}
+
+/*
+ * read past head of the file to find tail
+ */
+void
+skip(void)
+{
+    int i;
+    long n;
+    char buf[Bsize];
+    if(units == CHARS) {
+        for( ; count>0; count -=n) {
+            n = count<Bsize? count: Bsize;
+            if(!(n = tread(buf, n)))
+                return;
+        }
+    } else /*units == LINES*/ {
+        n = i = 0;
+        while(count > 0) {
+            if(!(n = tread(buf, Bsize)))
+                return;
+            for(i=0; i<n && count>0; i++)
+                if(buf[i]=='\n')
+                    count--;
+        }
+        twrite(buf+i, n-i);
+    }
+    copy();
+}
+
+void
+copy(void)
+{
+    long n;
+    char buf[Bsize];
+    while((n=tread(buf, Bsize)) > 0) {
+        twrite(buf, n);
+        Bflush(&bout);  /* for FWD on pipe; else harmless */
+    }
+}
+
+/*
+ * read whole file, keeping the tail
+ *  complexity is length(file)*length(tail).
+ *  could be linear.
+ */
+void
+keep(void)
+{
+    int len = 0;
+    long bufsiz = 0;
+    char *buf = 0;
+    int j, k, n;
+
+    for(n=1; n;) {
+        if(len+Bsize > bufsiz) {
+            bufsiz += 2*Bsize;
+            if(!(buf = realloc(buf, bufsiz+1)))
+                fatal("out of space");
+        }
+        for(; n && len<bufsiz; len+=n)
+            n = tread(buf+len, bufsiz-len);
+        if(count >= len)
+            continue;
+        if(units == CHARS)
+            j = len - count;
+        else {
+            /* units == LINES */
+            j = buf[len-1]=='\n'? len-1: len;
+            for(k=0; j>0; j--)
+                if(buf[j-1] == '\n')
+                    if(++k >= count)
+                        break;
+        }
+        memmove(buf, buf+j, len-=j);
+    }
+    if(dir == REV) {
+        if(len>0 && buf[len-1]!='\n')
+            buf[len++] = '\n';
+        for(j=len-1 ; j>0; j--)
+            if(buf[j-1] == '\n') {
+                twrite(buf+j, len-j);
+                if(--count <= 0)
+                    return;
+                len = j;
+            }
+    }
+    if(count > 0)
+        twrite(buf, len);
+}
+
+/*
+ * count backward and print tail of file
+ */
+void
+reverse(void)
+{
+    int first;
+    long len = 0;
+    long n = 0;
+    long bufsiz = 0;
+    char *buf = 0;
+    vlong pos = tseek(0LL, 2);
+
+    for(first=1; pos>0 && count>0; first=0) {
+        n = pos>Bsize? Bsize: (long)pos;
+        pos -= n;
+        if(len+n > bufsiz) {
+            bufsiz += 2*Bsize;
+            if(!(buf = realloc(buf, bufsiz+1)))
+                fatal("out of space");
+        }
+        memmove(buf+n, buf, len);
+        len += n;
+        tseek(pos, 0);
+        if(tread(buf, n) != n)
+            fatal("length error");
+        if(first && buf[len-1]!='\n')
+            buf[len++] = '\n';
+        for(n=len-1 ; n>0 && count>0; n--)
+            if(buf[n-1] == '\n') {
+                count--;
+                if(dir == REV)
+                    twrite(buf+n, len-n);
+                len = n;
+            }
+    }
+    if(dir == FWD) {
+        if(n)
+            tseek(pos+n+1, 0);
+        else
+            tseek(0, 0);
+        copy();
+    } else
+    if(count > 0)
+        twrite(buf, len);
+}
+
+vlong
+tseek(vlong o, int p)
+{
+    o = seek(file, o, p);
+    if(o == -1)
+        fatal("");
+    return o;
+}
+
+long
+tread(char *buf, long n)
+{
+    int r = read(file, buf, n);
+    if(r == -1)
+        fatal("");
+    return r;
+}
+
+void
+twrite(char *s, long n)
+{
+    if(Bwrite(&bout, s, n) != n)
+        fatal("");
+}
+
+int
+getnumber(char *s)
+{
+    if(*s=='-' || *s=='+')
+        s++;
+    if(!isdigit(*s))
+        return 0;
+    if(s[-1] == '+')
+        origin = BEG;
+    if(anycount++)
+        fatal("excess option");
+    count = atol(s);
+
+    /* check range of count */
+    if(count < 0 || (int)count != count)
+        fatal("too big");
+    return 1;
+}   
+
+void        
+fatal(char *s)
+{
+    char buf[ERRMAX];
+
+    errstr(buf, sizeof buf);
+    fprint(2, "tail: %s: %s\n", s, buf);
+    exits(s);
+}
+
+void
+usage(void)
+{
+    fprint(2, "%s\n", umsg);
+    exits("usage");
+}
+
+/* return true if seeks work and if the file is > 0 length.
+ * this will eventually bite me in the ass if seeking a file
+ * is not conservative. - presotto
+ */
+static int
+isseekable(int fd)
+{   
+    vlong m;
+
+    m = seek(fd, 0, 1);
+    if(m < 0)
+        return 0;
+    return 1;
+}
+@
+
+\subsection{[[pipe/tee.c]]}
+
+%-------------------------------------------------------------
+
+<<pipe/tee.c>>=
+/*
+ * tee-- pipe fitting
+ */
+
+#include <u.h>
+#include <libc.h>
+
+int uflag;
+int aflag;
+int *openf;
+
+char in[8192];
+
+int intignore(void*, char*);
+
+void
+main(int argc, char **argv)
+{
+    int i;
+    int r, n;
+
+    ARGBEGIN {
+    case 'a':
+        aflag++;
+        break;
+
+    case 'i':
+        atnotify(intignore, 1);
+        break;
+
+    case 'u':
+        uflag++;
+        /* uflag is ignored and undocumented; it's a relic from Unix */
+        break;
+
+    default:
+        fprint(2, "usage: tee [-ai] [file ...]\n");
+        exits("usage");
+    } ARGEND
+
+    openf = malloc((1+argc)*sizeof(int));
+    if(openf == nil)
+        sysfatal("out of memory: %r");
+
+    n = 0;
+    while(*argv) {
+        if(aflag) {
+            openf[n] = open(argv[0], OWRITE);
+            if(openf[n] < 0)
+                openf[n] = create(argv[0], OWRITE, 0666);
+            seek(openf[n], 0L, 2);
+        } else
+            openf[n] = create(argv[0], OWRITE, 0666);
+        if(openf[n] < 0) {
+            fprint(2, "tee: cannot open %s: %r\n", argv[0]);
+        } else
+            n++;
+        argv++;
+    }
+    openf[n++] = 1;
+
+    for(;;) {
+        r = read(0, in, sizeof in);
+        if(r <= 0)
+            exits(nil);
+        for(i=0; i<n; i++)
+            write(openf[i], in, r);
+    }
+}
+
+int
+intignore(void *a, char *msg)
+{
+    USED(a);
+    if(strcmp(msg, "interrupt") == 0)
+        return 1;
+    return 0;
+}
+@
+
+\subsection{[[pipe/uniq.c]]}
+
+%-------------------------------------------------------------
+
+<<pipe/uniq.c>>=
+/*
+ * Deal with duplicated lines in a file
+ */
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <ctype.h>
+
+#define SIZE    8000
+
+int fields  = 0;
+int letters = 0;
+int linec   = 0;
+char    mode;
+int uniq;
+char    *b1, *b2;
+long    bsize;
+Biobuf  fin;
+Biobuf  fout;
+
+int gline(char *buf);
+void    pline(char *buf);
+int equal(char *b1, char *b2);
+char*   skip(char *s);
+
+void
+main(int argc, char *argv[])
+{
+    int f;
+
+    argv0 = argv[0];
+    bsize = SIZE;
+    b1 = malloc(bsize);
+    b2 = malloc(bsize);
+    f = 0;
+    while(argc > 1) {
+        if(*argv[1] == '-') {
+            if(isdigit(argv[1][1]))
+                fields = atoi(&argv[1][1]);
+            else
+                mode = argv[1][1];
+            argc--;
+            argv++;
+            continue;
+        }
+        if(*argv[1] == '+') {
+            letters = atoi(&argv[1][1]);
+            argc--;
+            argv++;
+            continue;
+        }
+        f = open(argv[1], 0);
+        if(f < 0)
+            sysfatal("cannot open %s", argv[1]);
+        break;
+    }
+    if(argc > 2)
+        sysfatal("unexpected argument %s", argv[2]);
+    Binit(&fin, f, OREAD);
+    Binit(&fout, 1, OWRITE);
+
+    if(gline(b1))
+        exits(0);
+    for(;;) {
+        linec++;
+        if(gline(b2)) {
+            pline(b1);
+            exits(0);
+        }
+        if(!equal(b1, b2)) {
+            pline(b1);
+            linec = 0;
+            do {
+                linec++;
+                if(gline(b1)) {
+                    pline(b2);
+                    exits(0);
+                }
+            } while(equal(b2, b1));
+            pline(b2);
+            linec = 0;
+        }
+    }
+}
+
+int
+gline(char *buf)
+{
+    int len;
+    char *p;
+
+    p = Brdline(&fin, '\n');
+    if(p == 0)
+        return 1;
+    len = Blinelen(&fin);
+    if(len >= bsize-1)
+        sysfatal("line too long");
+    memmove(buf, p, len);
+    buf[len-1] = 0;
+    return 0;
+}
+
+void
+pline(char *buf)
+{
+    switch(mode) {
+
+    case 'u':
+        if(uniq) {
+            uniq = 0;
+            return;
+        }
+        break;
+
+    case 'd':
+        if(uniq)
+            break;
+        return;
+
+    case 'c':
+        Bprint(&fout, "%4d ", linec);
+    }
+    uniq = 0;
+    Bprint(&fout, "%s\n", buf);
+}
+
+int
+equal(char *b1, char *b2)
+{
+    char c;
+
+    if(fields || letters) {
+        b1 = skip(b1);
+        b2 = skip(b2);
+    }
+    for(;;) {
+        c = *b1++;
+        if(c != *b2++) {
+            if(c == 0 && mode == 's')
+                return 1;
+            return 0;
+        }
+        if(c == 0) {
+            uniq++;
+            return 1;
+        }
+    }
+}
+
+char*
+skip(char *s)
+{
+    int nf, nl;
+
+    nf = nl = 0;
+    while(nf++ < fields) {
+        while(*s == ' ' || *s == '\t')
+            s++;
+        while(!(*s == ' ' || *s == '\t' || *s == 0) ) 
+            s++;
+    }
+    while(nl++ < letters && *s != 0) 
+            s++;
+    return s;
+}
+@
+
+\subsection{[[pipe/xargs.c]]}
+
+%-------------------------------------------------------------
+
+<<pipe/xargs.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+
+void
+usage(void)
+{
+    fprint(2, "usage: xargs [ -n lines ] [ -p procs ] args ...\n");
+    exits("usage");
+}
+
+void
+dowait(void)
+{
+    while(waitpid() != -1)
+        ;
+}
+
+void
+main(int argc, char **argv)
+{
+    int lines, procs, i, j, run;
+    char **nargv, **args, **p;
+    static Biobuf bp;
+    
+    lines = 10;
+    procs = 1;
+    ARGBEGIN {
+    case 'n': lines = atoi(EARGF(usage())); break;
+    case 'p': procs = atoi(EARGF(usage())); break;
+    default: usage();
+    } ARGEND;
+    if(argc < 1)
+        usage();
+    
+    nargv = malloc(sizeof(char *) * (argc + lines + 1));
+    if(nargv == nil)
+        sysfatal("malloc: %r");
+    memcpy(nargv, argv, sizeof(char *) * argc);
+    args = nargv + argc;
+    if(Binit(&bp, 0, OREAD) < 0)
+        sysfatal("Binit: %r");
+    //PAD: Blethal(&bp, nil); only in 9front
+    atexit(dowait);
+    for(j = 0, run = 1; run; j++){
+        if(j >= procs)
+            waitpid();
+        memset(args, 0, sizeof(char *) * (lines + 1));
+        for(i = 0; i < lines; i++)
+            if((args[i] = Brdstr(&bp, '\n', 1)) == nil){
+                if(i == 0)
+                    exits(nil);
+                run = 0;
+                break;
+            }
+        switch(fork()){
+        case -1:
+            sysfatal("fork: %r");
+        case 0:
+            exec(*nargv, nargv);
+            if(**nargv != '/' && strncmp(*nargv, "./", 2) != 0 &&
+                    strncmp(*nargv, "../", 3) != 0){
+                *nargv = smprint("/bin/%s", *nargv);
+                exec(*nargv, nargv);
+            }
+            sysfatal("exec: %r");
+        }
+        for(p = args; *p; p++)
+            free(*p);
+    }
+    exits(nil);
+}
+@
+
+
+\section{[[time/]]}
+
+\subsection{[[time/date.c]]}
+
+%-------------------------------------------------------------
+
+<<time/date.c>>=
+#include <u.h>
+#include <libc.h>
+
+int uflg, nflg;
+
+void
+main(int argc, char *argv[])
+{
+    ulong now;
+
+    ARGBEGIN{
+    case 'n':   nflg = 1; break;
+    case 'u':   uflg = 1; break;
+    default:    fprint(2, "usage: date [-un] [seconds]\n"); exits("usage");
+    }ARGEND
+
+    if(argc == 1)
+        now = strtoul(*argv, 0, 0);
+    else
+        now = time(0);
+
+    if(nflg)
+        print("%ld\n", now);
+    else if(uflg)
+        print("%s", asctime(gmtime(now)));
+    else
+        print("%s", ctime(now));
+    
+    exits(0);
+}
+@
+
+\subsection{[[time/cal.c]]}
+
+%-------------------------------------------------------------
+
+<<time/cal.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+
+char    dayw[] =
+{
+    " S  M Tu  W Th  F  S"
+};
+char    *smon[] =
+{
+    "January", "February", "March", "April",
+    "May", "June", "July", "August",
+    "September", "October", "November", "December",
+};
+char    mon[] =
+{
+    0,
+    31, 29, 31, 30,
+    31, 30, 31, 31,
+    30, 31, 30, 31,
+};
+char    string[432];
+Biobuf  bout;
+
+void    main(int argc, char *argv[]);
+int number(char *str);
+void    pstr(char *str, int n);
+void    cal(int m, int y, char *p, int w);
+int jan1(int yr);
+int curmo(void);
+int curyr(void);
+
+void
+main(int argc, char *argv[])
+{
+    int y, i, j, m;
+
+    if(argc > 3) {
+        fprint(2, "usage: cal [month] [year]\n");
+        exits("usage");
+    }
+    Binit(&bout, 1, OWRITE);
+
+/*
+ * no arg, print current month
+ */
+    if(argc == 1) {
+        m = curmo();
+        y = curyr();
+        goto xshort;
+    }
+
+/*
+ * one arg
+ *  if looks like a month, print month
+ *  else print year
+ */
+    if(argc == 2) {
+        y = number(argv[1]);
+        if(y < 0)
+            y = -y;
+        if(y >= 1 && y <= 12) {
+            m = y;
+            y = curyr();
+            goto xshort;
+        }
+        goto xlong;
+    }
+
+/*
+ * two arg, month and year
+ */
+    m = number(argv[1]);
+    if(m < 0)
+        m = -m;
+    y = number(argv[2]);
+    goto xshort;
+
+/*
+ *  print out just month
+ */
+xshort:
+    if(m < 1 || m > 12)
+        goto badarg;
+    if(y < 1 || y > 9999)
+        goto badarg;
+    Bprint(&bout, "   %s %ud\n", smon[m-1], y);
+    Bprint(&bout, "%s\n", dayw);
+    cal(m, y, string, 24);
+    for(i=0; i<6*24; i+=24)
+        pstr(string+i, 24);
+    exits(0);
+
+/*
+ *  print out complete year
+ */
+xlong:
+    y = number(argv[1]);
+    if(y<1 || y>9999)
+        goto badarg;
+    Bprint(&bout, "\n\n\n");
+    Bprint(&bout, "                                %ud\n", y);
+    Bprint(&bout, "\n");
+    for(i=0; i<12; i+=3) {
+        for(j=0; j<6*72; j++)
+            string[j] = '\0';
+        Bprint(&bout, "         %.3s", smon[i]);
+        Bprint(&bout, "                    %.3s", smon[i+1]);
+        Bprint(&bout, "                    %.3s\n", smon[i+2]);
+        Bprint(&bout, "%s   %s   %s\n", dayw, dayw, dayw);
+        cal(i+1, y, string, 72);
+        cal(i+2, y, string+23, 72);
+        cal(i+3, y, string+46, 72);
+        for(j=0; j<6*72; j+=72)
+            pstr(string+j, 72);
+    }
+    Bprint(&bout, "\n\n\n");
+    exits(0);
+
+badarg:
+    Bprint(&bout, "cal: bad argument\n");
+}
+
+struct
+{
+    char*   word;
+    int val;
+} dict[] =
+{
+    "jan",      1,
+    "january",  1,
+    "feb",      2,
+    "february", 2,
+    "mar",      3,
+    "march",    3,
+    "apr",      4,
+    "april",    4,
+    "may",      5,
+    "jun",      6,
+    "june",     6,
+    "jul",      7,
+    "july",     7,
+    "aug",      8,
+    "august",   8,
+    "sep",      9,
+    "sept",     9,
+    "september",    9,
+    "oct",      10,
+    "october",  10,
+    "nov",      11,
+    "november", 11,
+    "dec",      12,
+    "december", 12,
+    0
+};
+
+/*
+ * convert to a number.
+ * if its a dictionary word,
+ * return negative  number
+ */
+int
+number(char *str)
+{
+    int n, c;
+    char *s;
+
+    for(n=0; s=dict[n].word; n++)
+        if(strcmp(s, str) == 0)
+            return -dict[n].val;
+    n = 0;
+    s = str;
+    while(c = *s++) {
+        if(c<'0' || c>'9')
+            return 0;
+        n = n*10 + c-'0';
+    }
+    return n;
+}
+
+void
+pstr(char *str, int n)
+{
+    int i;
+    char *s;
+
+    s = str;
+    i = n;
+    while(i--)
+        if(*s++ == '\0')
+            s[-1] = ' ';
+    i = n+1;
+    while(i--)
+        if(*--s != ' ')
+            break;
+    s[1] = '\0';
+    Bprint(&bout, "%s\n", str);
+}
+
+void
+cal(int m, int y, char *p, int w)
+{
+    int d, i;
+    char *s;
+
+    s = p;
+    d = jan1(y);
+    mon[2] = 29;
+    mon[9] = 30;
+
+    switch((jan1(y+1)+7-d)%7) {
+
+    /*
+     *  non-leap year
+     */
+    case 1:
+        mon[2] = 28;
+        break;
+
+    /*
+     *  1752
+     */
+    default:
+        mon[9] = 19;
+        break;
+
+    /*
+     *  leap year
+     */
+    case 2:
+        ;
+    }
+    for(i=1; i<m; i++)
+        d += mon[i];
+    d %= 7;
+    s += 3*d;
+    for(i=1; i<=mon[m]; i++) {
+        if(i==3 && mon[m]==19) {
+            i += 11;
+            mon[m] += 11;
+        }
+        if(i > 9)
+            *s = i/10+'0';
+        s++;
+        *s++ = i%10+'0';
+        s++;
+        if(++d == 7) {
+            d = 0;
+            s = p+w;
+            p = s;
+        }
+    }
+}
+
+/*
+ *  return day of the week
+ *  of jan 1 of given year
+ */
+int
+jan1(int yr)
+{
+    int y, d;
+
+/*
+ *  normal gregorian calendar
+ *  one extra day per four years
+ */
+
+    y = yr;
+    d = 4+y+(y+3)/4;
+
+/*
+ *  julian calendar
+ *  regular gregorian
+ *  less three days per 400
+ */
+
+    if(y > 1800) {
+        d -= (y-1701)/100;
+        d += (y-1601)/400;
+    }
+
+/*
+ *  great calendar changeover instant
+ */
+
+    if(y > 1752)
+        d += 3;
+
+    return d%7;
+}
+
+/*
+ * system dependent
+ * get current month and year
+ */
+int
+curmo(void)
+{
+    Tm *tm;
+
+    tm = localtime(time(0));
+    return tm->mon+1;
+}
+
+int
+curyr(void)
+{
+    Tm *tm;
+
+    tm = localtime(time(0));
+    return tm->year+1900;
+}
+@
+
+\section{[[misc/]]}
+
+\subsection{[[misc/basename.c]]}
+
+%-------------------------------------------------------------
+
+<<misc/basename.c>>=
+#include <u.h>
+#include <libc.h>
+
+void
+main(int argc, char *argv[])
+{
+    char *pr;
+    int n, dflag;
+
+    dflag = 0;
+    if(argc>1 && strcmp(argv[1], "-d") == 0){
+        --argc;
+        ++argv;
+        dflag = 1;
+    }
+    if(argc < 2 || argc > 3){
+        fprint(2, "usage: basename [-d] string [suffix]\n");
+        exits("usage");
+    }
+    pr = utfrrune(argv[1], '/');
+    if(dflag){
+        if(pr){
+            *pr = 0;
+            print("%s\n", argv[1]);
+            exits(0);
+        }
+        print(".\n");
+        exits(0);
+    }
+    if(pr)
+        pr++;
+    else
+        pr = argv[1];
+    if(argc==3){
+        n = strlen(pr)-strlen(argv[2]);
+        if(n >= 0 && !strcmp(pr+n, argv[2]))
+            pr[n] = 0;
+    }
+    print("%s\n", pr);
+    exits(0);
+}
+@
+
+\subsection{[[misc/du.c]]}
+
+%-------------------------------------------------------------
+
+<<misc/du.c>>=
+/*
+ * du - print disk usage
+ */
+#include <u.h>
+#include <libc.h>
+#include <string.h>
+
+extern  vlong   du(char*, Dir*);
+extern  void    err(char*);
+extern  vlong   blkmultiple(vlong);
+extern  int seen(Dir*);
+extern  int warn(char*);
+
+enum {
+    Vkilo = 1024LL,
+};
+
+/* rounding up, how many units does amt occupy? */
+#define HOWMANY(amt, unit)  (((amt)+(unit)-1) / (unit))
+#define ROUNDUP(amt, unit)  (HOWMANY(amt, unit) * (unit))
+
+int aflag;
+int autoscale;
+int fflag;
+int fltflag;
+int qflag;
+int readflg;
+int sflag;
+int tflag;
+int uflag;
+
+char    *fmt = "%llud\t%q\n";
+char    *readbuf;
+vlong   blocksize = Vkilo;  /* actually more likely to be 4K or 8K */
+vlong   unit;           /* scale factor for output */
+
+static char *pfxes[] = {    /* SI prefixes for units > 1 */
+    "",
+    "k", "M", "G",
+    "T", "P", "E",
+    "Z", "Y",
+    nil,
+};
+
+void
+usage(void)
+{
+    fprint(2, "usage: du [-aefhnqstu] [-b size] [-p si-pfx] [file ...]\n");
+    exits("usage");
+}
+
+void
+printamt(vlong amt, char *name)
+{
+    if (readflg)
+        return;
+    if (autoscale) {
+        int scale = 0;
+        double val = (double)amt/unit;
+
+        while (fabs(val) >= 1024 && scale < nelem(pfxes)-1) {
+            scale++;
+            val /= 1024;
+        }
+        print("%.6g%s\t%q\n", val, pfxes[scale], name);
+    } else if (fltflag)
+        print("%.6g\t%q\n", (double)amt/unit, name);
+    else
+        print(fmt, HOWMANY(amt, unit), name);
+}
+
+void
+main(int argc, char *argv[])
+{
+    int i, scale;
+    char *s, *ss, *name;
+
+    doquote = needsrcquote;
+    quotefmtinstall();
+
+    ARGBEGIN {
+    case 'a':   /* all files */
+        aflag = 1;
+        break;
+    case 'b':   /* block size */
+        s = ARGF();
+        if(s) {
+            blocksize = strtoul(s, &ss, 0);
+            if(s == ss)
+                blocksize = 1;
+            while(*ss++ == 'k')
+                blocksize *= 1024;
+        }
+        break;
+    case 'e':   /* print in %g notation */
+        fltflag = 1;
+        break;
+    case 'f':   /* don't print warnings */
+        fflag = 1;
+        break;
+    case 'h':   /* similar to -h in bsd but more precise */
+        autoscale = 1;
+        break;
+    case 'n':   /* all files, number of bytes */
+        aflag = 1;
+        blocksize = 1;
+        unit = 1;
+        break;
+    case 'p':
+        s = ARGF();
+        if(s) {
+            for (scale = 0; pfxes[scale] != nil; scale++)
+                if (cistrcmp(s, pfxes[scale]) == 0)
+                    break;
+            if (pfxes[scale] == nil)
+                sysfatal("unknown suffix %s", s);
+            unit = 1;
+            while (scale-- > 0)
+                unit *= Vkilo;
+        }
+        break;
+    case 'q':   /* qid */
+        fmt = "%.16llux\t%q\n";
+        qflag = 1;
+        break;
+    case 'r':
+        /* undocumented: just read & ignore every block of every file */
+        readflg = 1;
+        break;
+    case 's':   /* only top level */
+        sflag = 1;
+        break;
+    case 't':   /* return modified/accessed time */
+        tflag = 1;
+        break;
+    case 'u':   /* accessed time */
+        uflag = 1;
+        break;
+    default:
+        usage();
+    } ARGEND
+
+    if (unit == 0)
+        if (qflag || tflag || uflag || autoscale)
+            unit = 1;
+        else
+            unit = Vkilo;
+    if (blocksize < 1)
+        blocksize = 1;
+
+    if (readflg) {
+        readbuf = malloc(blocksize);
+        if (readbuf == nil)
+            sysfatal("out of memory");
+    }
+    if(argc==0)
+        printamt(du(".", dirstat(".")), ".");
+    else
+        for(i=0; i<argc; i++) {
+            name = argv[i];
+            printamt(du(name, dirstat(name)), name);
+        }
+    exits(0);
+}
+
+vlong
+dirval(Dir *d, vlong size)
+{
+    if(qflag)
+        return d->qid.path;
+    else if(tflag) {
+        if(uflag)
+            return d->atime;
+        return d->mtime;
+    } else
+        return size;
+}
+
+void
+readfile(char *name)
+{
+    int n, fd = open(name, OREAD);
+
+    if(fd < 0) {
+        warn(name);
+        return;
+    }
+    while ((n = read(fd, readbuf, blocksize)) > 0)
+        continue;
+    if (n < 0)
+        warn(name);
+    close(fd);
+}
+
+vlong
+dufile(char *name, Dir *d)
+{
+    vlong t = blkmultiple(d->length);
+
+    if(aflag || readflg) {
+        String *file = s_copy(name);
+
+        s_append(file, "/");
+        s_append(file, d->name);
+        if (readflg)
+            readfile(s_to_c(file));
+        t = dirval(d, t);
+        printamt(t, s_to_c(file));
+        s_free(file);
+    }
+    return t;
+}
+
+vlong
+du(char *name, Dir *dir)
+{
+    int fd, i, n;
+    Dir *buf, *d;
+    String *file;
+    vlong nk, t;
+
+    if(dir == nil)
+        return warn(name);
+
+    if((dir->qid.type&QTDIR) == 0)
+        return dirval(dir, blkmultiple(dir->length));
+
+    fd = open(name, OREAD);
+    if(fd < 0)
+        return warn(name);
+    nk = 0;
+    while((n=dirread(fd, &buf)) > 0) {
+        d = buf;
+        for(i = n; i > 0; i--, d++) {
+            if((d->qid.type&QTDIR) == 0) {
+                nk += dufile(name, d);
+                continue;
+            }
+
+            if(strcmp(d->name, ".") == 0 ||
+               strcmp(d->name, "..") == 0 ||
+               /* !readflg && */ seen(d))
+                continue;   /* don't get stuck */
+
+            file = s_copy(name);
+            s_append(file, "/");
+            s_append(file, d->name);
+
+            t = du(s_to_c(file), d);
+
+            nk += t;
+            t = dirval(d, t);
+            if(!sflag)
+                printamt(t, s_to_c(file));
+            s_free(file);
+        }
+        free(buf);
+    }
+    if(n < 0)
+        warn(name);
+    close(fd);
+    return dirval(dir, nk);
+}
+
+#define NCACHE  256 /* must be power of two */
+
+typedef struct
+{
+    Dir*    cache;
+    int n;
+    int max;
+} Cache;
+Cache cache[NCACHE];
+
+int
+seen(Dir *dir)
+{
+    Dir *dp;
+    int i;
+    Cache *c;
+
+    c = &cache[dir->qid.path&(NCACHE-1)];
+    dp = c->cache;
+    for(i=0; i<c->n; i++, dp++)
+        if(dir->qid.path == dp->qid.path &&
+           dir->type == dp->type &&
+           dir->dev == dp->dev)
+            return 1;
+    if(c->n == c->max){
+        if (c->max == 0)
+            c->max = 8;
+        else
+            c->max += c->max/2;
+        c->cache = realloc(c->cache, c->max*sizeof(Dir));
+        if(c->cache == nil)
+            err("malloc failure");
+    }
+    c->cache[c->n++] = *dir;
+    return 0;
+}
+
+void
+err(char *s)
+{
+    fprint(2, "du: %s: %r\n", s);
+    exits(s);
+}
+
+int
+warn(char *s)
+{
+    if(fflag == 0)
+        fprint(2, "du: %s: %r\n", s);
+    return 0;
+}
+
+/* round up n to nearest block */
+vlong
+blkmultiple(vlong n)
+{
+    if(blocksize == 1)      /* no quantization */
+        return n;
+    return ROUNDUP(n, blocksize);
+}
+@
+
+\subsection{[[misc/file.c]]}
+
+%-------------------------------------------------------------
+
+<<misc/file.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <ctype.h>
+#include <mach.h>
+
+/*
+ * file - determine type of file
+ */
+#define LENDIAN(p)  ((p)[0] | ((p)[1]<<8) | ((p)[2]<<16) | ((p)[3]<<24))
+
+uchar   buf[6001];
+short   cfreq[140];
+short   wfreq[50];
+int nbuf;
+Dir*    mbuf;
+int fd;
+char    *fname;
+char    *slash;
+
+enum
+{
+    Cword,
+    Fword,
+    Aword,
+    Alword,
+    Lword,
+    I1,
+    I2,
+    I3,
+    Clatin  = 128,
+    Cbinary,
+    Cnull,
+    Ceascii,
+    Cutf,
+};
+struct
+{
+    char*   word;
+    int class;
+} dict[] =
+{
+    "PATH",     Lword,
+    "TEXT",     Aword,
+    "adt",      Alword,
+    "aggr",     Alword,
+    "alef",     Alword,
+    "array",    Lword,
+    "block",    Fword,
+    "char",     Cword,
+    "common",   Fword,
+    "con",      Lword,
+    "data",     Fword,
+    "dimension",    Fword,
+    "double",   Cword,
+    "extern",   Cword,
+    "bio",      I2,
+    "float",    Cword,
+    "fn",       Lword,
+    "function", Fword,
+    "h",        I3,
+    "implement",    Lword,
+    "import",   Lword,
+    "include",  I1,
+    "int",      Cword,
+    "integer",  Fword,
+    "iota",     Lword,
+    "libc",     I2,
+    "long",     Cword,
+    "module",   Lword,
+    "real",     Fword,
+    "ref",      Lword,
+    "register", Cword,
+    "self",     Lword,
+    "short",    Cword,
+    "static",   Cword,
+    "stdio",    I2,
+    "struct",   Cword,
+    "subroutine",   Fword,
+    "u",        I2,
+    "void",     Cword,
+};
+
+/* codes for 'mode' field in language structure */
+enum    {
+        Normal  = 0,
+        First,      /* first entry for language spanning several ranges */
+        Multi,      /* later entries "   "       "  ... */
+        Shared,     /* codes used in several languages */
+    };
+
+struct
+{
+    int mode;       /* see enum above */
+    int     count;
+    int low;
+    int high;
+    char    *name;
+
+} language[] =
+{
+    Normal, 0,  0x0100, 0x01FF, "Extended Latin",
+    Normal, 0,  0x0370, 0x03FF, "Greek",
+    Normal, 0,  0x0400, 0x04FF, "Cyrillic",
+    Normal, 0,  0x0530, 0x058F, "Armenian",
+    Normal, 0,  0x0590, 0x05FF, "Hebrew",
+    Normal, 0,  0x0600, 0x06FF, "Arabic",
+    Normal, 0,  0x0900, 0x097F, "Devanagari",
+    Normal, 0,  0x0980, 0x09FF, "Bengali",
+    Normal, 0,  0x0A00, 0x0A7F, "Gurmukhi",
+    Normal, 0,  0x0A80, 0x0AFF, "Gujarati",
+    Normal, 0,  0x0B00, 0x0B7F, "Oriya",
+    Normal, 0,  0x0B80, 0x0BFF, "Tamil",
+    Normal, 0,  0x0C00, 0x0C7F, "Telugu",
+    Normal, 0,  0x0C80, 0x0CFF, "Kannada",
+    Normal, 0,  0x0D00, 0x0D7F, "Malayalam",
+    Normal, 0,  0x0E00, 0x0E7F, "Thai",
+    Normal, 0,  0x0E80, 0x0EFF, "Lao",
+    Normal, 0,  0x1000, 0x105F, "Tibetan",
+    Normal, 0,  0x10A0, 0x10FF, "Georgian",
+    Normal, 0,  0x3040, 0x30FF, "Japanese",
+    Normal, 0,  0x3100, 0x312F, "Chinese",
+    First,  0,  0x3130, 0x318F, "Korean",
+    Multi,  0,  0x3400, 0x3D2F, "Korean",
+    Shared, 0,  0x4e00, 0x9fff, "CJK",
+    Normal, 0,  0,  0,  0,      /* terminal entry */
+};
+
+
+enum
+{
+    Fascii,     /* printable ascii */
+    Flatin,     /* latin 1*/
+    Futf,       /* UTF character set */
+    Fbinary,    /* binary */
+    Feascii,    /* ASCII with control chars */
+    Fnull,      /* NULL in file */
+} guess;
+
+void    bump_utf_count(Rune);
+int cistrncmp(char*, char*, int);
+void    filetype(int);
+int getfontnum(uchar*, uchar**);
+int isas(void);
+int isc(void);
+int iscint(void);
+int isenglish(void);
+int ishp(void);
+int ishtml(void);
+int isrfc822(void);
+int ismbox(void);
+int islimbo(void);
+int ismung(void);
+int isp9bit(void);
+int isp9font(void);
+int isrtf(void);
+int ismsdos(void);
+int iself(void);
+int istring(void);
+int isoffstr(void);
+int iff(void);
+int long0(void);
+int longoff(void);
+int istar(void);
+int isface(void);
+int isexec(void);
+int p9bitnum(uchar*);
+int p9subfont(uchar*);
+void    print_utf(void);
+void    type(char*, int);
+int utf_count(void);
+void    wordfreq(void);
+
+int (*call[])(void) =
+{
+    long0,      /* recognizable by first 4 bytes */
+    istring,    /* recognizable by first string */
+    iself,      /* ELF (foreign) executable */
+    isexec,     /* native executables */
+    iff,        /* interchange file format (strings) */
+    longoff,    /* recognizable by 4 bytes at some offset */
+    isoffstr,   /* recognizable by string at some offset */
+    isrfc822,   /* email file */
+    ismbox,     /* mail box */
+    istar,      /* recognizable by tar checksum */
+    ishtml,     /* html keywords */
+    iscint,     /* compiler/assembler intermediate */
+    islimbo,    /* limbo source */
+    isc,        /* c & alef compiler key words */
+    isas,       /* assembler key words */
+    isp9font,   /* plan 9 font */
+    isp9bit,    /* plan 9 image (as from /dev/window) */
+    isrtf,      /* rich text format */
+    ismsdos,    /* msdos exe (virus file attachement) */
+    isface,     /* ascii face file */
+
+    /* last resorts */
+    ismung,     /* entropy compressed/encrypted */
+    isenglish,  /* char frequency English */
+    0
+};
+
+int mime;
+
+char OCTET[] =  "application/octet-stream\n";
+char PLAIN[] =  "text/plain\n";
+
+void
+main(int argc, char *argv[])
+{
+    int i, j, maxlen;
+    char *cp;
+    Rune r;
+
+    ARGBEGIN{
+    case 'm':
+        mime = 1;
+        break;
+    default:
+        fprint(2, "usage: file [-m] [file...]\n");
+        exits("usage");
+    }ARGEND;
+
+    maxlen = 0;
+    if(mime == 0 || argc > 1){
+        for(i = 0; i < argc; i++) {
+            for (j = 0, cp = argv[i]; *cp; j++, cp += chartorune(&r, cp))
+                    ;
+            if(j > maxlen)
+                maxlen = j;
+        }
+    }
+    if (argc <= 0) {
+        if(!mime)
+            print ("stdin: ");
+        filetype(0);
+    }
+    else {
+        for(i = 0; i < argc; i++)
+            type(argv[i], maxlen);
+    }
+    exits(0);
+}
+
+void
+type(char *file, int nlen)
+{
+    Rune r;
+    int i;
+    char *p;
+
+    if(nlen > 0){
+        slash = 0;
+        for (i = 0, p = file; *p; i++) {
+            if (*p == '/')          /* find rightmost slash */
+                slash = p;
+            p += chartorune(&r, p);     /* count runes */
+        }
+        print("%s:%*s",file, nlen-i+1, "");
+    }
+    fname = file;
+    if ((fd = open(file, OREAD)) < 0) {
+        print("cannot open: %r\n");
+        return;
+    }
+    filetype(fd);
+    close(fd);
+}
+
+void
+filetype(int fd)
+{
+    Rune r;
+    int i, f, n;
+    char *p, *eob;
+
+    free(mbuf);
+    mbuf = dirfstat(fd);
+    if(mbuf == nil){
+        print("cannot stat: %r\n");
+        return;
+    }
+    if(mbuf->mode & DMDIR) {
+        print(mime ? OCTET : "directory\n");
+        return;
+    }
+    if(mbuf->type != 'M' && mbuf->type != '|') {
+        print(mime ? OCTET : "special file #%C/%s\n",
+            mbuf->type, mbuf->name);
+        return;
+    }
+    /* may be reading a pipe on standard input */
+    nbuf = readn(fd, buf, sizeof(buf)-1);
+    if(nbuf < 0) {
+        print("cannot read: %r\n");
+        return;
+    }
+    if(nbuf == 0) {
+        print(mime ? PLAIN : "empty file\n");
+        return;
+    }
+    buf[nbuf] = 0;
+
+    /*
+     * build histogram table
+     */
+    memset(cfreq, 0, sizeof(cfreq));
+    for (i = 0; language[i].name; i++)
+        language[i].count = 0;
+    eob = (char *)buf+nbuf;
+    for(n = 0, p = (char *)buf; p < eob; n++) {
+        if (!fullrune(p, eob-p) && eob-p < UTFmax)
+            break;
+        p += chartorune(&r, p);
+        if (r == 0)
+            f = Cnull;
+        else if (r <= 0x7f) {
+            if (!isprint(r) && !isspace(r))
+                f = Ceascii;    /* ASCII control char */
+            else f = r;
+        } else if (r == 0x80) {
+            bump_utf_count(r);
+            f = Cutf;
+        } else if (r < 0xA0)
+            f = Cbinary;    /* Invalid Runes */
+        else if (r <= 0xff)
+            f = Clatin; /* Latin 1 */
+        else {
+            bump_utf_count(r);
+            f = Cutf;       /* UTF extension */
+        }
+        cfreq[f]++;         /* ASCII chars peg directly */
+    }
+    /*
+     * gross classify
+     */
+    if (cfreq[Cbinary])
+        guess = Fbinary;
+    else if (cfreq[Cutf])
+        guess = Futf;
+    else if (cfreq[Clatin])
+        guess = Flatin;
+    else if (cfreq[Ceascii])
+        guess = Feascii;
+    else if (cfreq[Cnull])
+        guess = Fbinary;
+    else
+        guess = Fascii;
+    /*
+     * lookup dictionary words
+     */
+    memset(wfreq, 0, sizeof(wfreq));
+    if(guess == Fascii || guess == Flatin || guess == Futf)
+        wordfreq();
+    /*
+     * call individual classify routines
+     */
+    for(i=0; call[i]; i++)
+        if((*call[i])())
+            return;
+
+    /*
+     * if all else fails,
+     * print out gross classification
+     */
+    if (nbuf < 100 && !mime)
+        print(mime ? PLAIN : "short ");
+    if (guess == Fascii)
+        print(mime ? PLAIN : "Ascii\n");
+    else if (guess == Feascii)
+        print(mime ? PLAIN : "extended ascii\n");
+    else if (guess == Flatin)
+        print(mime ? PLAIN : "latin ascii\n");
+    else if (guess == Futf && utf_count() < 4)
+        print_utf();
+    else print(mime ? OCTET : "binary\n");
+}
+
+void
+bump_utf_count(Rune r)
+{
+    int low, high, mid;
+
+    high = sizeof(language)/sizeof(language[0])-1;
+    for (low = 0; low < high;) {
+        mid = (low+high)/2;
+        if (r >= language[mid].low) {
+            if (r <= language[mid].high) {
+                language[mid].count++;
+                break;
+            } else low = mid+1;
+        } else high = mid;
+    }
+}
+
+int
+utf_count(void)
+{
+    int i, count;
+
+    count = 0;
+    for (i = 0; language[i].name; i++)
+        if (language[i].count > 0)
+            switch (language[i].mode) {
+            case Normal:
+            case First:
+                count++;
+                break;
+            default:
+                break;
+            }
+    return count;
+}
+
+int
+chkascii(void)
+{
+    int i;
+
+    for (i = 'a'; i < 'z'; i++)
+        if (cfreq[i])
+            return 1;
+    for (i = 'A'; i < 'Z'; i++)
+        if (cfreq[i])
+            return 1;
+    return 0;
+}
+
+int
+find_first(char *name)
+{
+    int i;
+
+    for (i = 0; language[i].name != 0; i++)
+        if (language[i].mode == First
+            && strcmp(language[i].name, name) == 0)
+            return i;
+    return -1;
+}
+
+void
+print_utf(void)
+{
+    int i, printed, j;
+
+    if(mime){
+        print(PLAIN);
+        return;
+    }
+    if (chkascii()) {
+        printed = 1;
+        print("Ascii");
+    } else
+        printed = 0;
+    for (i = 0; language[i].name; i++)
+        if (language[i].count) {
+            switch(language[i].mode) {
+            case Multi:
+                j = find_first(language[i].name);
+                if (j < 0)
+                    break;
+                if (language[j].count > 0)
+                    break;
+                /* Fall through */
+            case Normal:
+            case First:
+                if (printed)
+                    print(" & ");
+                else printed = 1;
+                print("%s", language[i].name);
+                break;
+            case Shared:
+            default:
+                break;
+            }
+        }
+    if(!printed)
+        print("UTF");
+    print(" text\n");
+}
+
+void
+wordfreq(void)
+{
+    int low, high, mid, r;
+    uchar *p, *p2, c;
+
+    p = buf;
+    for(;;) {
+        while (p < buf+nbuf && !isalpha(*p))
+            p++;
+        if (p >= buf+nbuf)
+            return;
+        p2 = p;
+        while(p < buf+nbuf && isalpha(*p))
+            p++;
+        c = *p;
+        *p = 0;
+        high = sizeof(dict)/sizeof(dict[0]);
+        for(low = 0;low < high;) {
+            mid = (low+high)/2;
+            r = strcmp(dict[mid].word, (char*)p2);
+            if(r == 0) {
+                wfreq[dict[mid].class]++;
+                break;
+            }
+            if(r < 0)
+                low = mid+1;
+            else
+                high = mid;
+        }
+        *p++ = c;
+    }
+}
+
+typedef struct Filemagic Filemagic;
+struct Filemagic {
+    ulong x;
+    ulong mask;
+    char *desc;
+    char *mime;
+};
+
+/*
+ * integers in this table must be as seen on a little-endian machine
+ * when read from a file.
+ */
+Filemagic long0tab[] = {
+    0xF16DF16D, 0xFFFFFFFF, "pac1 audio file\n",    OCTET,
+    /* "pac1" */
+    0x31636170, 0xFFFFFFFF, "pac3 audio file\n",    OCTET,
+    /* "pXc2 */
+    0x32630070, 0xFFFF00FF, "pac4 audio file\n",    OCTET,
+    0xBA010000, 0xFFFFFFFF, "mpeg system stream\n", OCTET,
+    0x43614c66, 0xFFFFFFFF, "FLAC audio file\n",    OCTET,
+    0x30800CC0, 0xFFFFFFFF, "inferno .dis executable\n", OCTET,
+    0x04034B50, 0xFFFFFFFF, "zip archive\n", "application/zip",
+    070707,     0xFFFF,     "cpio archive\n", OCTET,
+    0x2F7,      0xFFFF,     "tex dvi\n", "application/dvi",
+    0xfaff,     0xfeff,     "mp3 audio\n",  "audio/mpeg",
+    0xf0ff,     0xf6ff,     "aac audio\n",  "audio/mpeg",
+    0xfeff0000, 0xffffffff, "utf-32be\n",   "text/plain charset=utf-32be",
+    0xfffe,     0xffffffff, "utf-32le\n",   "text/plain charset=utf-32le",
+    0xfeff,     0xffff,     "utf-16be\n",   "text/plain charset=utf-16be",
+    0xfffe,     0xffff,     "utf-16le\n",   "text/plain charset=utf-16le",
+    /* 0xfeedface: this could alternately be a Next Plan 9 boot image */
+    0xcefaedfe, 0xFFFFFFFF, "32-bit power Mach-O executable\n", OCTET,
+    /* 0xfeedfacf */
+    0xcffaedfe, 0xFFFFFFFF, "64-bit power Mach-O executable\n", OCTET,
+    /* 0xcefaedfe */
+    0xfeedface, 0xFFFFFFFF, "386 Mach-O executable\n", OCTET,
+    /* 0xcffaedfe */
+    0xfeedfacf, 0xFFFFFFFF, "amd64 Mach-O executable\n", OCTET,
+    /* 0xcafebabe */
+    0xbebafeca, 0xFFFFFFFF, "Mach-O universal executable\n", OCTET,
+    /*
+     * these magic numbers are stored big-endian on disk,
+     * thus the numbers appear reversed in this table.
+     */
+    0xad4e5cd1, 0xFFFFFFFF, "venti arena\n", OCTET,
+    0x2bb19a52, 0xFFFFFFFF, "paq archive\n", OCTET,
+};
+
+int
+filemagic(Filemagic *tab, int ntab, ulong x)
+{
+    int i;
+
+    for(i=0; i<ntab; i++)
+        if((x&tab[i].mask) == tab[i].x){
+            print(mime ? tab[i].mime : tab[i].desc);
+            return 1;
+        }
+    return 0;
+}
+
+int
+long0(void)
+{
+    return filemagic(long0tab, nelem(long0tab), LENDIAN(buf));
+}
+
+typedef struct Fileoffmag Fileoffmag;
+struct Fileoffmag {
+    ulong   off;
+    Filemagic;
+};
+
+/*
+ * integers in this table must be as seen on a little-endian machine
+ * when read from a file.
+ */
+Fileoffmag longofftab[] = {
+    /*
+     * these magic numbers are stored big-endian on disk,
+     * thus the numbers appear reversed in this table.
+     */
+    256*1024, 0xe7a5e4a9, 0xFFFFFFFF, "venti arenas partition\n", OCTET,
+    256*1024, 0xc75e5cd1, 0xFFFFFFFF, "venti index section\n", OCTET,
+    128*1024, 0x89ae7637, 0xFFFFFFFF, "fossil write buffer\n", OCTET,
+    4,    0x31647542, 0xFFFFFFFF, "OS X finder properties\n", OCTET,
+};
+
+int
+fileoffmagic(Fileoffmag *tab, int ntab)
+{
+    int i;
+    ulong x;
+    Fileoffmag *tp;
+    uchar buf[sizeof(long)];
+
+    for(i=0; i<ntab; i++) {
+        tp = tab + i;
+        seek(fd, tp->off, 0);
+        if (readn(fd, buf, sizeof buf) != sizeof buf)
+            continue;
+        x = LENDIAN(buf);
+        if((x&tp->mask) == tp->x){
+            print(mime? tp->mime: tp->desc);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int
+longoff(void)
+{
+    return fileoffmagic(longofftab, nelem(longofftab));
+}
+
+int
+isexec(void)
+{
+    Fhdr f;
+
+    seek(fd, 0, 0);     /* reposition to start of file */
+    if(crackhdr(fd, &f)) {
+        print(mime ? OCTET : "%s\n", f.name);
+        return 1;
+    }
+    return 0;
+}
+
+
+/* from tar.c */
+enum { NAMSIZ = 100, TBLOCK = 512 };
+
+union   hblock
+{
+    char    dummy[TBLOCK];
+    struct  header
+    {
+        char    name[NAMSIZ];
+        char    mode[8];
+        char    uid[8];
+        char    gid[8];
+        char    size[12];
+        char    mtime[12];
+        char    chksum[8];
+        char    linkflag;
+        char    linkname[NAMSIZ];
+        /* rest are defined by POSIX's ustar format; see p1003.2b */
+        char    magic[6];   /* "ustar" */
+        char    version[2];
+        char    uname[32];
+        char    gname[32];
+        char    devmajor[8];
+        char    devminor[8];
+        char    prefix[155];  /* if non-null, path = prefix "/" name */
+    } dbuf;
+};
+
+int
+checksum(union hblock *hp)
+{
+    int i;
+    char *cp;
+    struct header *hdr = &hp->dbuf;
+
+    for (cp = hdr->chksum; cp < &hdr->chksum[sizeof hdr->chksum]; cp++)
+        *cp = ' ';
+    i = 0;
+    for (cp = hp->dummy; cp < &hp->dummy[TBLOCK]; cp++)
+        i += *cp & 0xff;
+    return i;
+}
+
+int
+istar(void)
+{
+    int chksum;
+    char tblock[TBLOCK];
+    union hblock *hp = (union hblock *)tblock;
+    struct header *hdr = &hp->dbuf;
+
+    seek(fd, 0, 0);     /* reposition to start of file */
+    if (readn(fd, tblock, sizeof tblock) != sizeof tblock)
+        return 0;
+    chksum = strtol(hdr->chksum, 0, 8);
+    if (hdr->name[0] != '\0' && checksum(hp) == chksum) {
+        if (strcmp(hdr->magic, "ustar") == 0)
+            print(mime? "application/x-ustar\n":
+                "posix tar archive\n");
+        else
+            print(mime? "application/x-tar\n": "tar archive\n");
+        return 1;
+    }
+    return 0;
+}
+
+/*
+ * initial words to classify file
+ */
+struct  FILE_STRING
+{
+    char    *key;
+    char    *filetype;
+    int length;
+    char    *mime;
+} file_string[] =
+{
+    "!<arch>\n__.SYMDEF",   "archive random library",   16, "application/octet-stream",
+    "!<arch>\n",        "archive",          8,  "application/octet-stream",
+    "070707",       "cpio archive - ascii header",  6,  "application/octet-stream",
+    "#!/bin/rc",        "rc executable file",       9,  "text/plain",
+    "#!/bin/sh",        "sh executable file",       9,  "text/plain",
+    "%!",           "postscript",           2,  "application/postscript",
+    "\004%!",       "postscript",           3,  "application/postscript",
+    "x T post",     "troff output for post",    8,  "application/troff",
+    "x T Latin1",       "troff output for Latin1",  10, "application/troff",
+    "x T utf",      "troff output for UTF",     7,  "application/troff",
+    "x T 202",      "troff output for 202",     7,  "application/troff",
+    "x T aps",      "troff output for aps",     7,  "application/troff",
+    "x T ",         "troff output",         4,  "application/troff",
+    "GIF",          "GIF image",            3,  "image/gif",
+    "\0PC Research, Inc\0", "ghostscript fax file",     18, "application/ghostscript",
+    "%PDF",         "PDF",              4,  "application/pdf",
+    "<html>\n",     "HTML file",            7,  "text/html",
+    "<HTML>\n",     "HTML file",            7,  "text/html",
+    "\111\111\052\000", "tiff",             4,  "image/tiff",
+    "\115\115\000\052", "tiff",             4,  "image/tiff",
+    "\377\330\377\340", "jpeg",             4,  "image/jpeg",
+    "\377\330\377\341", "jpeg",             4,  "image/jpeg",
+    "\377\330\377\333", "jpeg",             4,  "image/jpeg",
+    "BM",           "bmp",              2,  "image/bmp",
+    "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1", "microsoft office document",    8,  "application/octet-stream",
+    "<MakerFile ",      "FrameMaker file",      11, "application/framemaker",
+    "\033E\033",    "HP PCL printer data",      3,  OCTET,
+    "\033&",    "HP PCL printer data",      2,  OCTET,
+    "\033%-12345X", "HPJCL file",       9,  "application/hpjcl",
+    "\033Lua",      "Lua bytecode",     4,  OCTET,
+    "ID3",          "mp3 audio with id3",   3,  "audio/mpeg",
+    "\211PNG",      "PNG image",        4,  "image/png",
+    "P3\n",         "ppm",              3,  "image/ppm",
+    "P6\n",         "ppm",              3,  "image/ppm",
+    "/* XPM */\n",  "xbm",              10, "image/xbm",
+    ".HTML ",       "troff -ms input",  6,  "text/troff",
+    ".LP",          "troff -ms input",  3,  "text/troff",
+    ".ND",          "troff -ms input",  3,  "text/troff",
+    ".PP",          "troff -ms input",  3,  "text/troff",
+    ".TL",          "troff -ms input",  3,  "text/troff",
+    ".TR",          "troff -ms input",  3,  "text/troff",
+    ".TH",          "manual page",      3,  "text/troff",
+    ".\\\"",        "troff input",      3,  "text/troff",
+    ".de",          "troff input",      3,  "text/troff",
+    ".if",          "troff input",      3,  "text/troff",
+    ".nr",          "troff input",      3,  "text/troff",
+    ".tr",          "troff input",      3,  "text/troff",
+    "vac:",         "venti score",      4,  "text/plain",
+    "-----BEGIN CERTIFICATE-----\n",
+                "pem certificate",  -1, "text/plain",
+    "-----BEGIN TRUSTED CERTIFICATE-----\n",
+                "pem trusted certificate", -1,  "text/plain",
+    "-----BEGIN X509 CERTIFICATE-----\n",
+                "pem x.509 certificate", -1,    "text/plain",
+    "subject=/C=",      "pem certificate with header", -1, "text/plain",
+    "process snapshot ",    "process snapshot", -1, "application/snapfs",
+    "BEGIN:VCARD\r\n",  "vCard",        13, "text/directory;profile=vcard",
+    "BEGIN:VCARD\n",    "vCard",        12, "text/directory;profile=vcard",
+    0,0,0,0
+};
+
+int
+istring(void)
+{
+    int i, l;
+    struct FILE_STRING *p;
+
+    for(p = file_string; p->key; p++) {
+        l = p->length;
+        if(l == -1)
+            l = strlen(p->key);
+        if(nbuf >= l && memcmp(buf, p->key, l) == 0) {
+            if(mime)
+                print("%s\n", p->mime);
+            else
+                print("%s\n", p->filetype);
+            return 1;
+        }
+    }
+    if(strncmp((char*)buf, "TYPE=", 5) == 0) {  /* td */
+        for(i = 5; i < nbuf; i++)
+            if(buf[i] == '\n')
+                break;
+        if(mime)
+            print(OCTET);
+        else
+            print("%.*s picture\n", utfnlen((char*)buf+5, i-5), (char*)buf+5);
+        return 1;
+    }
+    return 0;
+}
+
+struct offstr
+{
+    ulong   off;
+    struct FILE_STRING;
+} offstrs[] = {
+    32*1024, "\001CD001\001",   "ISO9660 CD image", 7,  OCTET,
+    0, 0, 0, 0, 0
+};
+
+int
+isoffstr(void)
+{
+    int n;
+    char buf[256];
+    struct offstr *p;
+
+    for(p = offstrs; p->key; p++) {
+        seek(fd, p->off, 0);
+        n = p->length;
+        if (n > sizeof buf)
+            n = sizeof buf;
+        if (readn(fd, buf, n) != n)
+            continue;
+        if(memcmp(buf, p->key, n) == 0) {
+            if(mime)
+                print("%s\n", p->mime);
+            else
+                print("%s\n", p->filetype);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int
+iff(void)
+{
+    if (strncmp((char*)buf, "FORM", 4) == 0 &&
+        strncmp((char*)buf+8, "AIFF", 4) == 0) {
+        print("%s\n", mime? "audio/x-aiff": "aiff audio");
+        return 1;
+    }
+    if (strncmp((char*)buf, "RIFF", 4) == 0) {
+        if (strncmp((char*)buf+8, "WAVE", 4) == 0)
+            print("%s\n", mime? "audio/wave": "wave audio");
+        else if (strncmp((char*)buf+8, "AVI ", 4) == 0)
+            print("%s\n", mime? "video/avi": "avi video");
+        else
+            print("%s\n", mime? "application/octet-stream":
+                "riff file");
+        return 1;
+    }
+    return 0;
+}
+
+char*   html_string[] =
+{
+    "title",
+    "body",
+    "head",
+    "strong",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "ul",
+    "li",
+    "dl",
+    "br",
+    "em",
+    0,
+};
+
+int
+ishtml(void)
+{
+    uchar *p, *q;
+    int i, count;
+
+        /* compare strings between '<' and '>' to html table */
+    count = 0;
+    p = buf;
+    for(;;) {
+        while (p < buf+nbuf && *p != '<')
+            p++;
+        p++;
+        if (p >= buf+nbuf)
+            break;
+        if(*p == '/')
+            p++;
+        q = p;
+        while(p < buf+nbuf && *p != '>')
+            p++;
+        if (p >= buf+nbuf)
+            break;
+        for(i = 0; html_string[i]; i++) {
+            if(cistrncmp(html_string[i], (char*)q, p-q) == 0) {
+                if(count++ > 4) {
+                    print(mime ? "text/html\n" : "HTML file\n");
+                    return 1;
+                }
+                break;
+            }
+        }
+        p++;
+    }
+    return 0;
+}
+
+char*   rfc822_string[] =
+{
+    "from:",
+    "date:",
+    "to:",
+    "subject:",
+    "received:",
+    "reply to:",
+    "sender:",
+    0,
+};
+
+int
+isrfc822(void)
+{
+
+    char *p, *q, *r;
+    int i, count;
+
+    count = 0;
+    p = (char*)buf;
+    for(;;) {
+        q = strchr(p, '\n');
+        if(q == nil)
+            break;
+        *q = 0;
+        if(p == (char*)buf && strncmp(p, "From ", 5) == 0 && strstr(p, " remote from ")){
+            count++;
+            *q = '\n';
+            p = q+1;
+            continue;
+        }
+        *q = '\n';
+        if(*p != '\t' && *p != ' '){
+            r = strchr(p, ':');
+            if(r == 0 || r > q)
+                break;
+            for(i = 0; rfc822_string[i]; i++) {
+                if(cistrncmp(p, rfc822_string[i], strlen(rfc822_string[i])) == 0){
+                    count++;
+                    break;
+                }
+            }
+        }
+        p = q+1;
+    }
+    if(count >= 3){
+        print(mime ? "message/rfc822\n" : "email file\n");
+        return 1;
+    }
+    return 0;
+}
+
+int
+ismbox(void)
+{
+    char *p, *q;
+
+    p = (char*)buf;
+    q = strchr(p, '\n');
+    if(q == nil)
+        return 0;
+    *q = 0;
+    if(strncmp(p, "From ", 5) == 0 && strstr(p, " remote from ") == nil){
+        print(mime ? "text/plain\n" : "mail box\n");
+        return 1;
+    }
+    *q = '\n';
+    return 0;
+}
+
+int
+iscint(void)
+{
+    int type;
+    char *name;
+    Biobuf b;
+
+    if(Binit(&b, fd, OREAD) == Beof)
+        return 0;
+    seek(fd, 0, 0);
+    type = objtype(&b, &name);
+    if(type < 0)
+        return 0;
+    if(mime)
+        print(OCTET);
+    else
+        print("%s intermediate\n", name);
+    return 1;
+}
+
+int
+isc(void)
+{
+    int n;
+
+    n = wfreq[I1];
+    /*
+     * includes
+     */
+    if(n >= 2 && wfreq[I2] >= n && wfreq[I3] >= n && cfreq['.'] >= n)
+        goto yes;
+    if(n >= 1 && wfreq[Alword] >= n && wfreq[I3] >= n && cfreq['.'] >= n)
+        goto yes;
+    /*
+     * declarations
+     */
+    if(wfreq[Cword] >= 5 && cfreq[';'] >= 5)
+        goto yes;
+    /*
+     * assignments
+     */
+    if(cfreq[';'] >= 10 && cfreq['='] >= 10 && wfreq[Cword] >= 1)
+        goto yes;
+    return 0;
+
+yes:
+    if(mime){
+        print(PLAIN);
+        return 1;
+    }
+    if(wfreq[Alword] > 0)
+        print("alef program\n");
+    else
+        print("c program\n");
+    return 1;
+}
+
+int
+islimbo(void)
+{
+
+    /*
+     * includes
+     */
+    if(wfreq[Lword] < 4)
+        return 0;
+    print(mime ? PLAIN : "limbo program\n");
+    return 1;
+}
+
+int
+isas(void)
+{
+
+    /*
+     * includes
+     */
+    if(wfreq[Aword] < 2)
+        return 0;
+    print(mime ? PLAIN : "as program\n");
+    return 1;
+}
+
+/*
+ * low entropy means encrypted
+ */
+int
+ismung(void)
+{
+    int i, bucket[8];
+    float cs;
+
+    if(nbuf < 64)
+        return 0;
+    memset(bucket, 0, sizeof(bucket));
+    for(i=nbuf-64; i<nbuf; i++)
+        bucket[(buf[i]>>5)&07] += 1;
+
+    cs = 0.;
+    for(i=0; i<8; i++)
+        cs += (bucket[i]-8)*(bucket[i]-8);
+    cs /= 8.;
+    if(cs <= 24.322) {
+        if(buf[0]==0x1f && buf[1]==0x9d)
+            print(mime ? OCTET : "compressed\n");
+        else
+        if(buf[0]==0x1f && buf[1]==0x8b)
+            print(mime ? OCTET : "gzip compressed\n");
+        else
+        if(buf[0]=='B' && buf[1]=='Z' && buf[2]=='h')
+            print(mime ? OCTET : "bzip2 compressed\n");
+        else
+            print(mime ? OCTET : "encrypted\n");
+        return 1;
+    }
+    return 0;
+}
+
+/*
+ * english by punctuation and frequencies
+ */
+int
+isenglish(void)
+{
+    int vow, comm, rare, badpun, punct;
+    char *p;
+
+    if(guess != Fascii && guess != Feascii)
+        return 0;
+    badpun = 0;
+    punct = 0;
+    for(p = (char *)buf; p < (char *)buf+nbuf-1; p++)
+        switch(*p) {
+        case '.':
+        case ',':
+        case ')':
+        case '%':
+        case ';':
+        case ':':
+        case '?':
+            punct++;
+            if(p[1] != ' ' && p[1] != '\n')
+                badpun++;
+        }
+    if(badpun*5 > punct)
+        return 0;
+    if(cfreq['>']+cfreq['<']+cfreq['/'] > cfreq['e'])   /* shell file test */
+        return 0;
+    if(2*cfreq[';'] > cfreq['e'])
+        return 0;
+
+    vow = 0;
+    for(p="AEIOU"; *p; p++) {
+        vow += cfreq[*p];
+        vow += cfreq[tolower(*p)];
+    }
+    comm = 0;
+    for(p="ETAION"; *p; p++) {
+        comm += cfreq[*p];
+        comm += cfreq[tolower(*p)];
+    }
+    rare = 0;
+    for(p="VJKQXZ"; *p; p++) {
+        rare += cfreq[*p];
+        rare += cfreq[tolower(*p)];
+    }
+    if(vow*5 >= nbuf-cfreq[' '] && comm >= 10*rare) {
+        print(mime ? PLAIN : "English text\n");
+        return 1;
+    }
+    return 0;
+}
+
+/*
+ * pick up a number with
+ * syntax _*[0-9]+_
+ */
+#define P9BITLEN    12
+int
+p9bitnum(uchar *bp)
+{
+    int n, c, len;
+
+    len = P9BITLEN;
+    while(*bp == ' ') {
+        bp++;
+        len--;
+        if(len <= 0)
+            return -1;
+    }
+    n = 0;
+    while(len > 1) {
+        c = *bp++;
+        if(!isdigit(c))
+            return -1;
+        n = n*10 + c-'0';
+        len--;
+    }
+    if(*bp != ' ')
+        return -1;
+    return n;
+}
+
+int
+depthof(char *s, int *newp)
+{
+    char *es;
+    int d;
+
+    *newp = 0;
+    es = s+12;
+    while(s<es && *s==' ')
+        s++;
+    if(s == es)
+        return -1;
+    if('0'<=*s && *s<='9')
+        return 1<<strtol(s, 0, 0);
+
+    *newp = 1;
+    d = 0;
+    while(s<es && *s!=' '){
+        s++;            /* skip letter */
+        d += strtoul(s, &s, 10);
+    }
+
+    if(d % 8 == 0 || 8 % d == 0)
+        return d;
+    else
+        return -1;
+}
+
+int
+isp9bit(void)
+{
+    int dep, lox, loy, hix, hiy, px, new, cmpr;
+    ulong t;
+    long len;
+    char *newlabel;
+    uchar *cp;
+
+    cp = buf;
+    cmpr = 0;
+    newlabel = "old ";
+
+    if(memcmp(cp, "compressed\n", 11) == 0) {
+        cmpr = 1;
+        cp = buf + 11;
+    }
+
+    dep = depthof((char*)cp + 0*P9BITLEN, &new);
+    if(new)
+        newlabel = "";
+    lox = p9bitnum(cp + 1*P9BITLEN);
+    loy = p9bitnum(cp + 2*P9BITLEN);
+    hix = p9bitnum(cp + 3*P9BITLEN);
+    hiy = p9bitnum(cp + 4*P9BITLEN);
+    if(dep < 0 || lox < 0 || loy < 0 || hix < 0 || hiy < 0)
+        return 0;
+
+    if(dep < 8){
+        px = 8/dep;     /* pixels per byte */
+        /* set l to number of bytes of data per scan line */
+        if(lox >= 0)
+            len = (hix+px-1)/px - lox/px;
+        else{           /* make positive before divide */
+            t = (-lox)+px-1;
+            t = (t/px)*px;
+            len = (t+hix+px-1)/px;
+        }
+    }else
+        len = (hix-lox)*dep/8;
+    len *= hiy - loy;       /* col length */
+    len += 5 * P9BITLEN;        /* size of initial ascii */
+
+    /*
+     * for compressed images, don't look any further. otherwise:
+     * for image file, length is non-zero and must match calculation above.
+     * for /dev/window and /dev/screen the length is always zero.
+     * for subfont, the subfont header should follow immediately.
+     */
+    if (cmpr) {
+        print(mime ? OCTET : "Compressed %splan 9 image or subfont, depth %d\n",
+            newlabel, dep);
+        return 1;
+    }
+    /*
+     * mbuf->length == 0 probably indicates reading a pipe.
+     * Ghostscript sometimes produces a little extra on the end.
+     */
+    if (len != 0 && (mbuf->length == 0 || mbuf->length == len ||
+        mbuf->length > len && mbuf->length < len+P9BITLEN)) {
+        print(mime ? OCTET : "%splan 9 image, depth %d\n", newlabel, dep);
+        return 1;
+    }
+    if (p9subfont(buf+len)) {
+        print(mime ? OCTET : "%ssubfont file, depth %d\n", newlabel, dep);
+        return 1;
+    }
+    return 0;
+}
+
+int
+p9subfont(uchar *p)
+{
+    int n, h, a;
+
+    /* if image too big, assume it's a subfont */
+    if (p+3*P9BITLEN > buf+sizeof(buf))
+        return 1;
+
+    n = p9bitnum(p + 0*P9BITLEN);   /* char count */
+    if (n < 0)
+        return 0;
+    h = p9bitnum(p + 1*P9BITLEN);   /* height */
+    if (h < 0)
+        return 0;
+    a = p9bitnum(p + 2*P9BITLEN);   /* ascent */
+    if (a < 0)
+        return 0;
+    return 1;
+}
+
+#define WHITESPACE(c)       ((c) == ' ' || (c) == '\t' || (c) == '\n')
+
+int
+isp9font(void)
+{
+    uchar *cp, *p;
+    int i, n;
+    char pathname[1024];
+
+    cp = buf;
+    if (!getfontnum(cp, &cp))   /* height */
+        return 0;
+    if (!getfontnum(cp, &cp))   /* ascent */
+        return 0;
+    for (i = 0; cp=(uchar*)strchr((char*)cp, '\n'); i++) {
+        if (!getfontnum(cp, &cp))   /* min */
+            break;
+        if (!getfontnum(cp, &cp))   /* max */
+            return 0;
+        getfontnum(cp, &cp);    /* optional offset */
+        while (WHITESPACE(*cp))
+            cp++;
+        for (p = cp; *cp && !WHITESPACE(*cp); cp++)
+                ;
+            /* construct a path name, if needed */
+        n = 0;
+        if (*p != '/' && slash) {
+            n = slash-fname+1;
+            if (n < sizeof(pathname))
+                memcpy(pathname, fname, n);
+            else n = 0;
+        }
+        if (n+cp-p+4 < sizeof(pathname)) {
+            memcpy(pathname+n, p, cp-p);
+            n += cp-p;
+            pathname[n] = 0;
+            if (access(pathname, AEXIST) < 0) {
+                strcpy(pathname+n, ".0");
+                if (access(pathname, AEXIST) < 0)
+                    return 0;
+            }
+        }
+    }
+    if (i) {
+        print(mime ? "text/plain\n" : "font file\n");
+        return 1;
+    }
+    return 0;
+}
+
+int
+getfontnum(uchar *cp, uchar **rp)
+{
+    while (WHITESPACE(*cp))     /* extract ulong delimited by whitespace */
+        cp++;
+    if (*cp < '0' || *cp > '9')
+        return 0;
+    strtoul((char *)cp, (char **)rp, 0);
+    if (!WHITESPACE(**rp)) {
+        *rp = cp;
+        return 0;
+    }
+    return 1;
+}
+
+int
+isrtf(void)
+{
+    if(strstr((char *)buf, "\\rtf1")){
+        print(mime ? "application/rtf\n" : "rich text format\n");
+        return 1;
+    }
+    return 0;
+}
+
+int
+ismsdos(void)
+{
+    if (buf[0] == 0x4d && buf[1] == 0x5a){
+        print(mime ? "application/x-msdownload\n" : "MSDOS executable\n");
+        return 1;
+    }
+    return 0;
+}
+
+int
+iself(void)
+{
+    static char *cpu[] = {      /* NB: incomplete and arbitary list */
+    [1] "WE32100",
+    [2] "SPARC",
+    [3] "i386",
+    [4] "M68000",
+    [5] "M88000",
+    [6] "i486",
+    [7] "i860",
+    [8] "R3000",
+    [9] "S370",
+    [10]    "R4000",
+    [15]    "HP-PA",
+    [18]    "sparc v8+",
+    [19]    "i960",
+    [20]    "PPC-32",
+    [21]    "PPC-64",
+    [40]    "ARM",
+    [41]    "Alpha",
+    [43]    "sparc v9",
+    [50]    "IA-64",
+    [62]    "AMD64",
+    [75]    "VAX",
+    };
+    static char *type[] = {
+    [1] "relocatable object",
+    [2] "executable",
+    [3] "shared library",
+    [4] "core dump",
+    };
+
+    if (memcmp(buf, "\x7fELF", 4) == 0){
+        if (!mime){
+            int isdifend = 0;
+            int n = (buf[19] << 8) | buf[18];
+            char *p = "unknown";
+            char *t = "unknown";
+
+            if (n > 0 && n < nelem(cpu) && cpu[n])
+                p = cpu[n];
+            else {
+                /* try the other byte order */
+                isdifend = 1;
+                n = (buf[18] << 8) | buf[19];
+                if (n > 0 && n < nelem(cpu) && cpu[n])
+                    p = cpu[n];
+            }
+            if(isdifend)
+                n = (buf[16]<< 8) | buf[17];
+            else
+                n = (buf[17]<< 8) | buf[16];
+
+            if(n>0 && n < nelem(type) && type[n])
+                t = type[n];
+            print("%s ELF%s %s\n", p, (buf[4] == 2? "64": "32"), t);
+        }
+        else
+            print("application/x-elf-executable");
+        return 1;
+    }
+
+    return 0;
+}
+
+int
+isface(void)
+{
+    int i, j, ldepth, l;
+    char *p;
+
+    ldepth = -1;
+    for(j = 0; j < 3; j++){
+        for(p = (char*)buf, i=0; i<3; i++){
+            if(p[0] != '0' || p[1] != 'x')
+                return 0;
+            if(buf[2+8] == ',')
+                l = 2;
+            else if(buf[2+4] == ',')
+                l = 1;
+            else
+                return 0;
+            if(ldepth == -1)
+                ldepth = l;
+            if(l != ldepth)
+                return 0;
+            strtoul(p, &p, 16);
+            if(*p++ != ',')
+                return 0;
+            while(*p == ' ' || *p == '\t')
+                p++;
+        }
+        if (*p++ != '\n')
+            return 0;
+    }
+
+    if(mime)
+        print("application/x-face\n");
+    else
+        print("face image depth %d\n", ldepth);
+    return 1;
+}
+
+@
+
+\subsection{[[misc/iconv.c]]}
+
+%-------------------------------------------------------------
+
+<<misc/iconv.c>>=
+#include <u.h>
+#include <libc.h>
+#include <draw.h>
+#include <memdraw.h>
+
+void
+usage(void)
+{
+    fprint(2, "usage: iconv [-u] [-c chanstr] [file]\n");
+    exits("usage");
+}
+
+void
+writeuncompressed(int fd, Memimage *m)
+{
+    char chanstr[32];
+    int bpl, y, j;
+    uchar *buf;
+
+    if(chantostr(chanstr, m->chan) == nil)
+        sysfatal("can't convert channel descriptor: %r");
+    fprint(fd, "%11s %11d %11d %11d %11d ",
+        chanstr, m->r.min.x, m->r.min.y, m->r.max.x, m->r.max.y);
+
+    bpl = bytesperline(m->r, m->depth);
+    buf = malloc(bpl);
+    if(buf == nil)
+        sysfatal("malloc failed: %r");
+    for(y=m->r.min.y; y<m->r.max.y; y++){
+        j = unloadmemimage(m, Rect(m->r.min.x, y, m->r.max.x, y+1), buf, bpl);
+        if(j != bpl)
+            sysfatal("image unload failed: %r");
+        if(write(fd, buf, bpl) != bpl)
+            sysfatal("write failed: %r");
+    }
+    free(buf);
+}
+
+void
+main(int argc, char *argv[])
+{
+    char *tostr, *file;
+    int fd, uncompressed;
+    ulong tochan;
+    Memimage *m, *n;
+
+    tostr = nil;
+    uncompressed = 0;
+    ARGBEGIN{
+    case 'c':
+        tostr = EARGF(usage());
+        break;
+    case 'u':
+        uncompressed = 1;
+        break;
+    default:
+        usage();
+    }ARGEND
+
+    memimageinit();
+
+    file = "<stdin>";
+    m = nil;
+
+    switch(argc){
+    case 0:
+        m = readmemimage(0);
+        break;
+    case 1:
+        file = argv[0];
+        fd = open(file, OREAD);
+        if(fd < 0)
+            sysfatal("can't open %s: %r", file);
+        m = readmemimage(fd);
+        close(fd);
+        break;
+    default:
+        usage();
+    }
+
+    if(m == nil)
+        sysfatal("can't read %s: %r", file);
+
+    if(tostr == nil)
+        tochan = m->chan;
+    else{
+        tochan = strtochan(tostr);
+        if(tochan == 0)
+            sysfatal("bad channel descriptor '%s'", tostr);
+    }
+
+    n = allocmemimage(m->r, tochan);
+    if(n == nil)
+        sysfatal("can't allocate new image: %r");
+
+    memimagedraw(n, n->r, m, m->r.min, nil, ZP, S);
+    if(uncompressed)
+        writeuncompressed(1, n);
+    else
+        writememimage(1, n);
+    exits(nil);
+}
+@
+
+\subsection{[[misc/strings.c]]}
+
+%-------------------------------------------------------------
+
+<<misc/strings.c>>=
+#include    <u.h>
+#include    <libc.h>
+#include    <bio.h>
+
+Biobuf  *fin;
+Biobuf  fout;
+
+#define MINSPAN     6       /* Min characters in string (default) */
+#define BUFSIZE     70
+
+void stringit(char *);
+int isprint(Rune);
+
+static int minspan = MINSPAN;
+
+static void
+usage(void)
+{
+    fprint(2, "usage: %s [-m min] [file...]\n", argv0);
+    exits("usage");
+}
+
+void
+main(int argc, char **argv)
+{
+    int i;
+
+    ARGBEGIN{
+    case 'm':
+        minspan = atoi(EARGF(usage()));
+        break;
+    default:
+        usage();
+        break;
+    }ARGEND
+    Binit(&fout, 1, OWRITE);
+    if(argc < 1) {
+        stringit("/fd/0");
+        exits(0);
+    }
+
+    for(i = 0; i < argc; i++) {
+        if(argc > 2)
+            print("%s:\n", argv[i]);
+
+        stringit(argv[i]);
+    }
+
+    exits(0);
+}
+
+void
+stringit(char *str)
+{
+    long posn, start;
+    int cnt = 0;
+    long c;
+
+    Rune buf[BUFSIZE];
+
+    if ((fin = Bopen(str, OREAD)) == 0) {
+        perror("open");
+        return;
+    }
+
+    start = 0;
+    posn = Boffset(fin);
+    while((c = Bgetrune(fin)) >= 0) {
+        if(isprint(c)) {
+            if(start == 0)
+                start = posn;
+            buf[cnt++] = c;
+            if(cnt == BUFSIZE-1) {
+                buf[cnt] = 0;
+                Bprint(&fout, "%8ld: %S ...\n", start, buf);
+                start = 0;
+                cnt = 0;
+            }
+        } else {
+             if(cnt >= minspan) {
+                buf[cnt] = 0;
+                Bprint(&fout, "%8ld: %S\n", start, buf);
+            }
+            start = 0;
+            cnt = 0;
+        }   
+        posn = Boffset(fin);
+    }
+
+    if(cnt >= minspan){
+        buf[cnt] = 0;
+        Bprint(&fout, "%8ld: %S\n", start, buf);
+    }
+    Bterm(fin);
+}
+
+int
+isprint(Rune r)
+{
+    if (r != Runeerror)
+    if ((r >= ' ' && r < 0x7F) || r > 0xA0)
+        return 1;
+    return 0;
+}
+@
+
+\subsection{[[misc/unicode.c]]}
+
+%-------------------------------------------------------------
+
+<<misc/unicode.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+
+char    usage[] = "unicode { [-t] hex hex ... | hexmin-hexmax ... | [-n] char ... }";
+char    hex[] = "0123456789abcdefABCDEF";
+int numout = 0;
+int text = 0;
+char    *err;
+Biobuf  bout;
+
+char    *range(char*[]);
+char    *nums(char*[]);
+char    *chars(char*[]);
+
+void
+main(int argc, char *argv[])
+{
+    ARGBEGIN{
+    case 'n':
+        numout = 1;
+        break;
+    case 't':
+        text = 1;
+        break;
+    }ARGEND
+    Binit(&bout, 1, OWRITE);
+    if(argc == 0){
+        fprint(2, "usage: %s\n", usage);
+        exits("usage");
+    }
+    if(!numout && utfrune(argv[0], '-'))
+        exits(range(argv));
+    if(numout || strchr(hex, argv[0][0])==0)
+        exits(nums(argv));
+    exits(chars(argv));
+}
+
+char*
+range(char *argv[])
+{
+    char *q;
+    int min, max;
+    int i;
+
+    while(*argv){
+        q = *argv;
+        if(strchr(hex, q[0]) == 0){
+    err:
+            fprint(2, "unicode: bad range %s\n", *argv);
+            return "bad range";
+        }
+        min = strtoul(q, &q, 16);
+        if(min<0 || min>Runemax || *q!='-')
+            goto err;
+        q++;
+        if(strchr(hex, *q) == 0)
+            goto err;
+        max = strtoul(q, &q, 16);
+        if(max<0 || max>Runemax || max<min || *q!=0)
+            goto err;
+        i = 0;
+        do{
+            Bprint(&bout, "%.6x %C", min, min);
+            i++;
+            if(min==max || (i&7)==0)
+                Bprint(&bout, "\n");
+            else
+                Bprint(&bout, "\t");
+            min++;
+        }while(min<=max);
+        argv++;
+    }
+    return 0;
+}
+
+char*
+nums(char *argv[])
+{
+    char *q;
+    Rune r;
+    int w, rsz;
+    char utferr[UTFmax];
+
+    r = Runeerror;
+    rsz = runetochar(utferr, &r);
+    while(*argv){
+        q = *argv;
+        while(*q){
+            w = chartorune(&r, q);
+            if(r==Runeerror){
+                if(strlen(q) != rsz || memcmp(q, utferr, rsz) != 0){
+                    fprint(2, "unicode: invalid utf string %s\n", *argv);
+                    return "bad utf";
+                }
+            }
+            Bprint(&bout, "%.6x\n", r);
+            q += w;
+        }
+        argv++;
+    }
+    return 0;
+}
+
+char*
+chars(char *argv[])
+{
+    char *q;
+    int m;
+
+    while(*argv){
+        q = *argv;
+        if(strchr(hex, q[0]) == 0){
+    err:
+            fprint(2, "unicode: bad unicode value %s\n", *argv);
+            return "bad char";
+        }
+        m = strtoul(q, &q, 16);
+        if(m<0 || m>Runemax || *q!=0)
+            goto err;
+        Bprint(&bout, "%C", m);
+        if(!text)
+            Bprint(&bout, "\n");
+        argv++;
+    }
+    return 0;
+}
+@
+
+\subsection{[[misc/wc.c]]}
+
+%-------------------------------------------------------------
+
+<<misc/wc.c>>=
+/*
+ * Count bytes within runes, if it fits in a uvlong, and other things.
+ */
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+
+/* flags, per-file counts, and total counts */
+static int pline, pword, prune, pbadr, pchar;
+static uvlong nline, nword, nrune, nbadr, nchar;
+static uvlong tnline, tnword, tnrune, tnbadr, tnchar;
+
+enum{Space, Word};
+
+static void
+wc(Biobuf *bin)
+{
+    int where;
+    long r;
+
+    nline = 0;
+    nword = 0;
+    nrune = 0;
+    nbadr = 0;
+    where = Space;
+    while ((long)(r = Bgetrune(bin)) >= 0) {
+        nrune++;
+        if(r == Runeerror) {
+            nbadr++;
+            continue;
+        }
+        if(r == '\n')
+            nline++;
+        if(where == Word){
+            if(isspacerune(r))
+                where = Space;
+        }else
+            if(isspacerune(r) == 0){
+                where = Word;
+                nword++;
+            }
+    }
+    nchar = Boffset(bin);
+    tnline += nline;
+    tnword += nword;
+    tnrune += nrune;
+    tnbadr += nbadr;
+    tnchar += nchar;
+}
+
+static void
+report(uvlong nline, uvlong nword, uvlong nrune, uvlong nbadr, uvlong nchar, char *fname)
+{
+    char line[1024], *s, *e;
+
+    s = line;
+    e = line + sizeof line;
+    line[0] = 0;
+    if(pline)
+        s = seprint(s, e, " %7llud", nline);
+    if(pword)
+        s = seprint(s, e, " %7llud", nword);
+    if(prune)
+        s = seprint(s, e, " %7llud", nrune);
+    if(pbadr)
+        s = seprint(s, e, " %7llud", nbadr);
+    if(pchar)
+        s = seprint(s, e, " %7llud", nchar);
+    if(fname != nil)
+        seprint(s, e, " %s",   fname);
+    print("%s\n", line+1);
+}
+
+void
+main(int argc, char *argv[])
+{
+    char *sts;
+    Biobuf sin, *bin;
+    int i;
+
+    sts = nil;
+    ARGBEGIN {
+    case 'l': pline++; break;
+    case 'w': pword++; break;
+    case 'r': prune++; break;
+    case 'b': pbadr++; break;
+    case 'c': pchar++; break;
+    default:
+        fprint(2, "Usage: %s [-lwrbc] [file ...]\n", argv0);
+        exits("usage");
+    } ARGEND
+    if(pline+pword+prune+pbadr+pchar == 0){
+        pline = 1;
+        pword = 1;
+        pchar = 1;
+    }
+    if(argc == 0){
+        Binit(&sin, 0, OREAD);
+        wc(&sin);
+        report(nline, nword, nrune, nbadr, nchar, nil);
+        Bterm(&sin);
+    }else{
+        for(i = 0; i < argc; i++){
+            bin = Bopen(argv[i], OREAD);
+            if(bin == nil){
+                perror(argv[i]);
+                sts = "can't open";
+                continue;
+            }
+            wc(bin);
+            report(nline, nword, nrune, nbadr, nchar, argv[i]);
+            Bterm(bin);
+        }
+        if(argc>1)
+            report(tnline, tnword, tnrune, tnbadr, tnchar, "total");
+    }
+    exits(sts);
+}
+@
