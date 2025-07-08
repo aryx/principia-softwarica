@@ -24,7 +24,7 @@ extern int	gengetwindow(Display*, char*, Image**, Screen**, int);
 // Base layer
 //
 extern Screen*	allocscreen(Image*, Image*, int);
-extern int		freescreen(Screen*);
+extern int	freescreen(Screen*);
 extern Screen*	publicscreen(Display*, int, ulong);
 
 /*

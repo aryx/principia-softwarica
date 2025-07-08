@@ -249,26 +249,26 @@ struct Display
 /*s: struct [[Image]] */
 struct Image
 {
-    int			id;		/* id of system-held Image */
+    int		id;		/* id of system-held Image */
 
     Rectangle	r;		/* rectangle in data area, local coords */
 
-    channels		chan; // image format
+    channels	chan; // image format
     // derives from Image.chan
-    int			depth;		/* number of bits per pixel */
+    int		depth;		/* number of bits per pixel */
 
     Rectangle 	clipr;	/* clipping region */
-    bool		repl;	/* flag: data replicates to tile clipr */
+    bool	repl;	/* flag: data replicates to tile clipr */
 
-    Display		*display;	/* display holding data */
+    Display	*display;	/* display holding data */
 
     /*s: [[Image]] layer fields */
-    Screen		*screen;	/* nil if not a window */
+    Screen	*screen;	/* nil if not a window */
     /*e: [[Image]] layer fields */
 
     // Extra
     /*s: [[Image]] extra fields */
-    Image		*next;	/* next in list of windows */
+    Image	*next;	/* next in list of windows */
     /*e: [[Image]] extra fields */
 };
 /*e: struct [[Image]] */
@@ -277,17 +277,17 @@ struct Image
 struct Font
 {
     // ref_own<filename>, // e.g., /lib/font/bit/lucm/latin1.9.font
-    char		*name;
+    char	*name;
     // ref<Display>
-    Display		*display;
+    Display	*display;
 
-    short		height;	/* max height of image, interline spacing */
-    short		ascent;	/* top of image to baseline */
+    short	height;	/* max height of image, interline spacing */
+    short	ascent;	/* top of image to baseline */
 
     /*s: [[Font]] subfont spec fields */
     // array<ref_own<Cachefont>> (length = Font.nsub)
     Cachefont	**sub;	/* as read from file */
-    short		nsub;	/* number of subfonts */
+    short	nsub;	/* number of subfonts */
     /*e: [[Font]] subfont spec fields */
     /*s: [[Font]] subfont cache fields */
     // growing_array<Cachesubf> (size = Font.nsubf, init = NFSUBF, max = MAXSUBF)
@@ -296,16 +296,16 @@ struct Font
     /*e: [[Font]] subfont cache fields */
     /*s: [[Font]] character cache fields */
     // ref_own<Image>, growing image
-    Image		*cacheimage;
+    Image	*cacheimage;
     /*x: [[Font]] character cache fields */
-    ulong		age;	/* increasing counter; used for LRU */
+    ulong	age;	/* increasing counter; used for LRU */
     /*x: [[Font]] character cache fields */
     // growing_hash<Rune, Cacheinfo> (size = Font.ncache, bucketsize = NFLOOK)
     Cacheinfo	*cache;
     int		ncache;	/* size of cache */
     /*e: [[Font]] character cache fields */
     /*s: [[Font]] other fields */
-    short		width;	/* widest so far; used in caching only */	
+    short	width;	/* widest so far; used in caching only */	
     int		maxdepth;	/* maximum depth of all loaded subfonts */
     /*e: [[Font]] other fields */
 };
@@ -410,9 +410,9 @@ extern int	geninitdraw(char*, Errorfn, char*, char*, char*, int);
 extern int	getwindow(Display*, int);
 
 extern Display*	initdisplay(char*, char*, Errorfn);
-extern void		closedisplay(Display*);
+extern void	closedisplay(Display*);
 
-extern int		flushimage(Display*, bool);
+extern int	flushimage(Display*, bool);
 
 extern void	drawerror(Display*, char*);
 
@@ -421,25 +421,25 @@ extern void	drawerror(Display*, char*);
  */
 extern Image*	allocimage(Display*, Rectangle, channels, bool, rgba);
 extern Image* 	allocimagemix(Display*, rgba, rgba);
-extern int		freeimage(Image*);
+extern int	freeimage(Image*);
 
-extern int		loadimage(Image*, Rectangle, byte*, int);
-extern int		unloadimage(Image*, Rectangle, byte*, int);
+extern int	loadimage(Image*, Rectangle, byte*, int);
+extern int	unloadimage(Image*, Rectangle, byte*, int);
 extern Image* 	readimage(Display*, fdt, bool);
-extern int		writeimage(fdt, Image*, bool);
+extern int	writeimage(fdt, Image*, bool);
 // compressed variants
-extern int		cloadimage(Image*, Rectangle, byte*, int);
+extern int	cloadimage(Image*, Rectangle, byte*, int);
 extern Image* 	creadimage(Display*, int, int);
 
 extern Image*	namedimage(Display*, char*);
-extern int		nameimage(Image*, char*, bool);
+extern int	nameimage(Image*, char*, bool);
 
 //
 // Channels
 //
-extern	int		chantodepth(channels);
-extern	char*	    chantostr(char*, channels);
-extern	channels	strtochan(char*);
+extern	int	chantodepth(channels);
+extern	char*   chantostr(char*, channels);
+extern	channels strtochan(char*);
 
 /*
  * Colors
@@ -447,15 +447,15 @@ extern	channels	strtochan(char*);
 extern	void	readcolmap(Display*, RGB*);
 extern	void	writecolmap(Display*, RGB*);
 
-extern int		rgb2cmap(int, int, int);
-extern int		cmap2rgb(int);
-extern int		cmap2rgba(int);
+extern int	rgb2cmap(int, int, int);
+extern int	cmap2rgb(int);
+extern int	cmap2rgba(int);
 
 /*
  * Geometry
  */
 extern Point	Pt(int, int);
-extern int		eqpt(Point, Point);
+extern int	eqpt(Point, Point);
 
 extern Point	addpt(Point, Point);
 extern Point	subpt(Point, Point);
@@ -464,7 +464,7 @@ extern Point	mulpt(Point, int);
 
 extern Rectangle	Rect(int, int, int, int);
 extern Rectangle	Rpt(Point, Point);
-extern int			eqrect(Rectangle, Rectangle);
+extern int		eqrect(Rectangle, Rectangle);
 
 /*s: function [[Dx]] */
 #define	Dx(r)	((r).max.x - (r).min.x)
@@ -477,18 +477,18 @@ extern Rectangle	rectaddpt(Rectangle, Point);
 extern Rectangle	rectsubpt(Rectangle, Point);
 extern Rectangle	insetrect(Rectangle, int);
 extern Rectangle	canonrect(Rectangle);
-extern int		rectXrect(Rectangle, Rectangle);
-extern int		rectinrect(Rectangle, Rectangle);
-extern void		combinerect(Rectangle*, Rectangle);
-extern int		ptinrect(Point, Rectangle);
+extern int	rectXrect(Rectangle, Rectangle);
+extern int	rectinrect(Rectangle, Rectangle);
+extern void	combinerect(Rectangle*, Rectangle);
+extern int	ptinrect(Point, Rectangle);
 
-extern void		icossin(int, int*, int*);
-extern void		icossin2(int, int, int*, int*);
+extern void	icossin(int, int*, int*);
+extern void	icossin2(int, int, int*, int*);
 
 // Clipping and replication
-extern void		replclipr(Image*, int, Rectangle);
-extern int		rectclip(Rectangle*, Rectangle);
-extern int		drawreplxy(int, int, int);	/* used to be drawsetxy */
+extern void	replclipr(Image*, int, Rectangle);
+extern int	rectclip(Rectangle*, Rectangle);
+extern int	drawreplxy(int, int, int);	/* used to be drawsetxy */
 extern Point	drawrepl(Rectangle, Point);
 
 /*
@@ -551,12 +551,12 @@ extern Point	runestringnbgop(Image*, Point, Image*, Point, Font*, Rune*, int, Im
 
 
 extern Point	stringsize(Font*, char*);
-extern int		stringwidth(Font*, char*);
-extern int		stringnwidth(Font*, char*, int);
+extern int	stringwidth(Font*, char*);
+extern int	stringnwidth(Font*, char*, int);
 
 extern Point	runestringsize(Font*, Rune*);
-extern int		runestringwidth(Font*, Rune*);
-extern int		runestringnwidth(Font*, Rune*, int);
+extern int	runestringwidth(Font*, Rune*);
+extern int	runestringnwidth(Font*, Rune*, int);
 
 
 /*
@@ -564,19 +564,19 @@ extern int		runestringnwidth(Font*, Rune*, int);
  */
 extern Font*	buildfont(Display*, char*, char*);
 extern Font*	openfont(Display*, char*);
-extern void		freefont(Font*);
+extern void	freefont(Font*);
 
 /*
  * One of a kind
  */
-extern int		mousescrollsize(int);
+extern int	mousescrollsize(int);
 
 extern int	bytesperline(Rectangle, int);
 extern int	wordsperline(Rectangle, int);
 
 // seems related to font
-extern void		lockdisplay(Display*);
-extern void		unlockdisplay(Display*);
+extern void	lockdisplay(Display*);
+extern void	unlockdisplay(Display*);
 
 //
 // Dumpers
