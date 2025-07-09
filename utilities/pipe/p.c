@@ -1,6 +1,8 @@
 /*s: pipe/p.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <bio.h>
 
 #define DEF 22  /* lines in chunk: 3*DEF == 66, #lines per nroff page */

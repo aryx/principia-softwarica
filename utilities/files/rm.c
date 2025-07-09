@@ -1,10 +1,13 @@
 /*s: files/rm.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
 char errbuf[ERRMAX];
 int ignerr = 0;
 
+/*s: function [[err]](rm.c) */
 void
 err(char *f)
 {
@@ -14,7 +17,8 @@ err(char *f)
         fprint(2, "rm: %s: %s\n", f, errbuf);
     }
 }
-
+/*e: function [[err]](rm.c) */
+/*s: function [[rmdir]] */
 /*
  * f is a non-empty directory. Remove its contents and then it.
  */
@@ -67,6 +71,8 @@ rmdir(char *f)
     free(name);
     free(dirbuf);
 }
+/*e: function [[rmdir]] */
+/*s: function [[main]](rm.c) */
 void
 main(int argc, char *argv[])
 {
@@ -101,4 +107,5 @@ main(int argc, char *argv[])
     }
     exits(errbuf);
 }
+/*e: function [[main]](rm.c) */
 /*e: files/rm.c */

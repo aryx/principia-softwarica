@@ -1,6 +1,8 @@
 /*s: misc/iconv.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <draw.h>
 #include <memdraw.h>
 

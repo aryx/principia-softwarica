@@ -1,6 +1,8 @@
 /*s: misc/file.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <bio.h>
 #include <ctype.h>
 #include <mach.h>

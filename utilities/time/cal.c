@@ -1,6 +1,8 @@
 /*s: time/cal.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <bio.h>
 
 char    dayw[] =

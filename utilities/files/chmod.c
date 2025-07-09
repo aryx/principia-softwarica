@@ -1,6 +1,8 @@
 /*s: files/chmod.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
 #define U(x) (x<<6)
 #define G(x) (x<<3)
@@ -11,6 +13,7 @@
 
 int parsemode(char *, ulong *, ulong *);
 
+/*s: function [[main]](chmod.c) */
 void
 main(int argc, char *argv[])
 {
@@ -46,7 +49,8 @@ main(int argc, char *argv[])
     }
     exits(0);
 }
-
+/*e: function [[main]](chmod.c) */
+/*s: function [[parsemode]](chmod.c) */
 int
 parsemode(char *spec, ulong *pmask, ulong *pmode)
 {
@@ -108,4 +112,5 @@ parsemode(char *spec, ulong *pmask, ulong *pmode)
     *pmode = mode;
     return 1;
 }
+/*e: function [[parsemode]](chmod.c) */
 /*e: files/chmod.c */

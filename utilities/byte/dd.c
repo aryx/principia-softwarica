@@ -1,6 +1,8 @@
 /*s: byte/dd.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
 #define BIG ((1UL<<31)-1)
 #define VBIG    ((1ULL<<63)-1)

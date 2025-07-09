@@ -1,14 +1,18 @@
 /*s: files/mtime.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
+/*s: function [[usage]](mtime.c) */
 void
 usage(void)
 {
     fprint(2, "usage: mtime file...\n");
     exits("usage");
 }
-
+/*e: function [[usage]](mtime.c) */
+/*s: function [[main]](mtime.c) */
 void
 main(int argc, char **argv)
 {
@@ -32,4 +36,5 @@ main(int argc, char **argv)
     }
     exits(errors ? "errors" : nil);
 }
+/*e: function [[main]](mtime.c) */
 /*e: files/mtime.c */

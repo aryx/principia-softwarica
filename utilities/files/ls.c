@@ -1,6 +1,8 @@
 /*s: files/ls.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <bio.h>
 #include <fcall.h>
 
@@ -28,6 +30,7 @@ int Fflag;
 int ndirbuf;
 int ndir;
 NDir*   dirbuf;
+
 int ls(char*, int);
 int compar(NDir*, NDir*);
 char*   asciitime(long);
@@ -38,6 +41,7 @@ void    dowidths(Dir*);
 void    format(Dir*, char*);
 void    output(void);
 char*   xcleanname(char*);
+
 ulong   clk;
 int swidth;         /* max width of -s size */
 int qwidth;         /* max width of -q version */

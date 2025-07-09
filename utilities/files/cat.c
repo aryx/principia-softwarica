@@ -1,7 +1,10 @@
 /*s: files/cat.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
+/*s: function [[cat]] */
 void
 cat(int f, char *s)
 {
@@ -14,7 +17,8 @@ cat(int f, char *s)
     if(n < 0)
         sysfatal("error reading %s: %r", s);
 }
-
+/*e: function [[cat]] */
+/*s: function [[main]](cat.c) */
 void
 main(int argc, char *argv[])
 {
@@ -34,4 +38,5 @@ main(int argc, char *argv[])
     }
     exits(0);
 }
+/*e: function [[main]](cat.c) */
 /*e: files/cat.c */

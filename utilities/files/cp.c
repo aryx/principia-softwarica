@@ -1,6 +1,8 @@
 /*s: files/cp.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
 #define DEFB    (8*1024)
 
@@ -8,9 +10,11 @@ int failed;
 int gflag;
 int uflag;
 int xflag;
-void    copy(char *from, char *to, int todir);
+
+void copy(char *from, char *to, int todir);
 int copy1(int fdf, int fdt, char *from, char *to);
 
+/*s: function [[main]](cp.c) */
 void
 main(int argc, char *argv[])
 {
@@ -53,7 +57,8 @@ usage:
     fprint(2, "\tcp [-x] fromfile ... todir\n");
     exits("usage");
 }
-
+/*e: function [[main]](cp.c) */
+/*s: function [[samefile]](cp.c) */
 int
 samefile(Dir *a, char *an, char *bn)
 {
@@ -74,7 +79,8 @@ samefile(Dir *a, char *an, char *bn)
     free(b);
     return ret;
 }
-
+/*e: function [[samefile]](cp.c) */
+/*s: function [[copy]] */
 void
 copy(char *from, char *to, int todir)
 {
@@ -142,7 +148,8 @@ copy(char *from, char *to, int todir)
     close(fdf);
     close(fdt);
 }
-
+/*e: function [[copy]] */
+/*s: function [[copy1]] */
 int
 copy1(int fdf, int fdt, char *from, char *to)
 {
@@ -176,4 +183,5 @@ copy1(int fdf, int fdt, char *from, char *to)
     free(buf);
     return rv;
 }
+/*e: function [[copy1]] */
 /*e: files/cp.c */

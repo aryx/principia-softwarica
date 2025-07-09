@@ -1,17 +1,21 @@
 /*s: files/touch.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
 int touch(int, char *);
 ulong now;
 
+/*s: function [[usage]](touch.c) */
 void
 usage(void)
 {
     fprint(2, "usage: touch [-c] [-t time] files\n");
     exits("usage");
 }
-
+/*e: function [[usage]](touch.c) */
+/*s: function [[main]](touch.c) */
 void
 main(int argc, char **argv)
 {
@@ -42,7 +46,8 @@ main(int argc, char **argv)
         exits("touch");
     exits(0);
 }
-
+/*e: function [[main]](touch.c) */
+/*s: function [[touch]] */
 int touch(int nocreate, char *name)
 {
     Dir stbuff;
@@ -64,4 +69,5 @@ int touch(int nocreate, char *name)
     close(fd);
     return 0;
 }
+/*e: function [[touch]] */
 /*e: files/touch.c */

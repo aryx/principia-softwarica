@@ -1,6 +1,8 @@
 /*s: misc/basename.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
 void
 main(int argc, char *argv[])

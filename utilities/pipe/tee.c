@@ -3,8 +3,10 @@
  * tee-- pipe fitting
  */
 
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
 int uflag;
 int aflag;

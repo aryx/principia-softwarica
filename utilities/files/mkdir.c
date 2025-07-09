@@ -1,17 +1,21 @@
 /*s: files/mkdir.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
 char *e;
 ulong mode = 0777L;
 
+/*s: function [[usage]](mkdir.c) */
 void
 usage(void)
 {
     fprint(2, "usage: mkdir [-p] [-m mode] dir...\n");
     exits("usage");
 }
-
+/*e: function [[usage]](mkdir.c) */
+/*s: function [[makedir]] */
 int
 makedir(char *s)
 {
@@ -31,7 +35,8 @@ makedir(char *s)
     close(f);
     return 0;
 }
-
+/*e: function [[makedir]] */
+/*s: function [[mkdirp]] */
 void
 mkdirp(char *s)
 {
@@ -46,8 +51,8 @@ mkdirp(char *s)
     if(access(s, AEXIST) != 0)
         makedir(s);
 }
-
-
+/*e: function [[mkdirp]] */
+/*s: function [[main]](mkdir.c) */
 void
 main(int argc, char *argv[])
 {
@@ -79,4 +84,5 @@ main(int argc, char *argv[])
     }
     exits(e);
 }
+/*e: function [[main]](mkdir.c) */
 /*e: files/mkdir.c */

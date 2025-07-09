@@ -1,10 +1,13 @@
 /*s: files/chgrp.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
-int readgid(char*);
+//pad: ???? int readgid(char*);
 int uflag;
 
+/*s: function [[main]](chgrp.c) */
 void
 main(int argc, char *argv[])
 {
@@ -43,4 +46,5 @@ main(int argc, char *argv[])
     }
     exits(errs);
 }
+/*e: function [[main]](chgrp.c) */
 /*e: files/chgrp.c */

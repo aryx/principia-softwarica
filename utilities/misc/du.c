@@ -2,8 +2,10 @@
 /*
  * du - print disk usage
  */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <string.h>
 
 extern  vlong   du(char*, Dir*);

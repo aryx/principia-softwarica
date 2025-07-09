@@ -2,8 +2,10 @@
 /*
  * Deal with duplicated lines in a file
  */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <bio.h>
 #include <ctype.h>
 

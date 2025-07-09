@@ -1,6 +1,8 @@
 /*s: time/date.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
 int uflg, nflg;
 

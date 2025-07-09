@@ -1,6 +1,8 @@
 /*s: files/mv.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 
 int copy1(int fdf, int fdt, char *from, char *to);
 void    hardremove(char *);
@@ -9,6 +11,7 @@ int mv1(char *from, Dir *dirb, char *todir, char *toelem);
 int samefile(char *, char *);
 void    split(char *, char **, char **);
 
+/*s: function [[main]](mv.c) */
 void
 main(int argc, char *argv[])
 {
@@ -53,7 +56,8 @@ main(int argc, char *argv[])
         exits("failure");
     exits(0);
 }
-
+/*e: function [[main]](mv.c) */
+/*s: function [[mv]] */
 int
 mv(char *from, char *todir, char *toelem)
 {
@@ -69,7 +73,8 @@ mv(char *from, char *todir, char *toelem)
     free(dirb);
     return stat;
 }
-
+/*e: function [[mv]] */
+/*s: function [[mv1]] */
 int
 mv1(char *from, Dir *dirb, char *todir, char *toelem)
 {
@@ -164,7 +169,8 @@ mv1(char *from, Dir *dirb, char *todir, char *toelem)
     close(fdt);
     return stat;
 }
-
+/*e: function [[mv1]] */
+/*s: function [[copy1]](mv.c) */
 int
 copy1(int fdf, int fdt, char *from, char *to)
 {
@@ -184,7 +190,8 @@ copy1(int fdf, int fdt, char *from, char *to)
     }
     return 0;
 }
-
+/*e: function [[copy1]](mv.c) */
+/*s: function [[split]](mv.c) */
 void
 split(char *name, char **pdir, char **pelem)
 {
@@ -203,7 +210,8 @@ split(char *name, char **pdir, char **pelem)
         *pelem = name;
     }
 }
-
+/*e: function [[split]](mv.c) */
+/*s: function [[samefile]](mv.c) */
 int
 samefile(char *a, char *b)
 {
@@ -224,7 +232,8 @@ samefile(char *a, char *b)
     free(db);
     return ret;
 }
-
+/*e: function [[samefile]](mv.c) */
+/*s: function [[hardremove]](mv.c) */
 void
 hardremove(char *a)
 {
@@ -235,4 +244,5 @@ hardremove(char *a)
     while(remove(a) != -1)
         ;
 }
+/*e: function [[hardremove]](mv.c) */
 /*e: files/mv.c */

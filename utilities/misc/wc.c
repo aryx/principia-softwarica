@@ -2,8 +2,10 @@
 /*
  * Count bytes within runes, if it fits in a uvlong, and other things.
  */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <bio.h>
 
 /* flags, per-file counts, and total counts */
