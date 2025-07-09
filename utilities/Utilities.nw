@@ -23,6 +23,8 @@
 %thx to utilities in ocaml: (see also the %ocaml-found: tag in this file)
 
 %thx to this manual, I better understand utilities:
+% - tee for seeing and logging to a file a command output
+% - xargs accept -p so can run jobs in parallel! easy parallelism
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -184,6 +186,8 @@ cat(fdt f, char *origin)
 
 \section{[[ls]]}
 
+% pretty big. > 1000 LOC
+
 \section{[[touch]]}
 
 % -c for nocreate if file not exist in the first place
@@ -234,7 +238,8 @@ main(int argc, char **argv)
 @
 
 <<function [[touch]]>>=
-error1 touch(bool nocreate, char *name)
+error1
+touch(bool nocreate, char *name)
 {
     Dir stbuff;
     fdt fd;
@@ -1115,6 +1120,14 @@ main(int argc, char **argv)
 @
 
 %******************************************************************************
+\chapter{Stats}
+%******************************************************************************
+
+\section{[[du]]}
+
+\section{[[wc]]}
+
+%******************************************************************************
 \chapter{String Processing}
 %******************************************************************************
 
@@ -1124,6 +1137,7 @@ main(int argc, char **argv)
 \chapter{Bytes}
 %******************************************************************************
 
+\section{[[split]]}
 
 
 %******************************************************************************
@@ -1147,8 +1161,382 @@ main(int argc, char **argv)
 \section{[[cal]]}
 
 %******************************************************************************
+\chapter{Pipes}
+%******************************************************************************
+
+\section{[[tee]]}
+
+% Read from stdin and write on stdout AND on a file (or files).
+% Useful for logging a command while also seeing its output
+% as  in     <cmd> | tee log.txt
+
+<<global flags(tee.c)>>=
+// append mode
+bool aflag;
+// deprecated
+bool uflag;
+@
+
+% usually just one file
+<<global [[openf]](tee.c)>>=
+fdt *openf;
+@
+
+<<global [[in]](tee.c)>>=
+// read buffer
+char in[8192];
+@
+
+<<function [[main]](tee.c)>>=
+void
+main(int argc, char **argv)
+{
+    int i;
+    int r, n;
+
+    ARGBEGIN {
+    case 'a':
+        aflag = true;
+        break;
+
+    case 'i':
+        atnotify(intignore, true); // register
+        break;
+
+    case 'u':
+        uflag = true;
+        /* uflag is ignored and undocumented; it's a relic from Unix */
+        break;
+
+    default:
+        fprint(STDERR, "usage: tee [-ai] [file ...]\n");
+        exits("usage");
+    } ARGEND
+
+    openf = malloc((1+argc)*sizeof(int));
+    if(openf == nil)
+        sysfatal("out of memory: %r");
+
+    n = 0;
+    while(*argv) {
+        if(aflag) {
+            openf[n] = open(argv[0], OWRITE);
+            if(openf[n] < 0)
+                openf[n] = create(argv[0], OWRITE, 0666);
+            seek(openf[n], 0L, SEEK__END);
+        } else
+            openf[n] = create(argv[0], OWRITE, 0666);
+        if(openf[n] < 0) {
+            fprint(STDERR, "tee: cannot open %s: %r\n", argv[0]);
+        } else
+            n++;
+        argv++;
+    }
+    openf[n++] = STDOUT;
+
+    for(;;) {
+        r = read(STDIN, in, sizeof in);
+        if(r <= 0)
+            exits(nil);
+        for(i=0; i<n; i++)
+            write(openf[i], in, r);
+    }
+}
+@
+
+<<function [[intignore]](tee.c)>>=
+bool
+intignore(void *a, char *msg)
+{
+    USED(a);
+    if(strcmp(msg, "interrupt") == 0)
+        return true;
+    return false;
+}
+@
+
+\section{[[uniq]]}
+
+% remove duplicate. Usually preceded by | sort | uniq in a pipe chain
+
+<<globals uniq.c>>=
+int fields  = 0;
+int letters = 0;
+// 'u' or 'd' or 'c' or 's' (meaning??)
+char    mode;
+@
+
+<<globals uniq.c>>=
+int linec   = 0;
+@
+<<globals uniq.c>>=
+bool uniq;
+@
+
+<<globals uniq.c>>=
+char    *b1, *b2;
+long    bsize = SIZE;
+@
+<<globals uniq.c>>=
+Biobuf  fin;
+Biobuf  fout;
+@
+
+<<constant [[SIZE]](uniq.c)>>=
+#define SIZE    8000
+@
+
+% No ARGBEGIN/ARGEND here because ?? non-standard flag management?
+% which is why need set argv0 manually because ARGBEGIN is doing it
+% and some error function probably rely on this global?
+<<function [[main]](uniq.c)>>=
+void
+main(int argc, char *argv[])
+{
+    fdt f = STDIN;
+
+    argv0 = argv[0]; // use??
+    b1 = malloc(bsize);
+    b2 = malloc(bsize);
+    while(argc > 1) {
+        if(*argv[1] == '-') {
+            if(isdigit(argv[1][1]))
+                fields = atoi(&argv[1][1]);
+            else
+                mode = argv[1][1];
+            argc--;
+            argv++;
+            continue;
+        }
+        if(*argv[1] == '+') {
+            letters = atoi(&argv[1][1]);
+            argc--;
+            argv++;
+            continue;
+        }
+        f = open(argv[1], OREAD);
+        if(f < 0)
+            sysfatal("cannot open %s", argv[1]);
+        break;
+    }
+    if(argc > 2)
+        sysfatal("unexpected argument %s", argv[2]);
+    Binit(&fin, f, OREAD);
+    Binit(&fout, STDOUT, OWRITE);
+
+    if(gline(b1))
+        exits(nil);
+
+    for(;;) {
+        linec++;
+        if(gline(b2)) {
+            pline(b1);
+            exits(nil);
+        }
+        if(!equal(b1, b2)) {
+            pline(b1);
+            linec = 0;
+            do {
+                linec++;
+                if(gline(b1)) {
+                    pline(b2);
+                    exits(nil);
+                }
+            } while(equal(b2, b1));
+            pline(b2);
+            linec = 0;
+        }
+    }
+}
+@
+
+% 'g' for ?? grab?
+% return whether was EOF
+<<function [[gline]](uniq.c)>>=
+bool
+gline(char *buf)
+{
+    int len;
+    char *p;
+
+    p = Brdline(&fin, '\n');
+    if(p == nil)
+        return true;
+    len = Blinelen(&fin);
+    if(len >= bsize-1)
+        sysfatal("line too long");
+    memmove(buf, p, len);
+    buf[len-1] = '\0';
+    return false;
+}
+@
+
+% 'p' for print line?
+<<function [[pline]](uniq.c)>>=
+void
+pline(char *buf)
+{
+    switch(mode) {
+
+    case 'u':
+        if(uniq) {
+            uniq = false;
+            return;
+        }
+        break;
+
+    case 'd':
+        if(uniq)
+            break;
+        return;
+
+    case 'c':
+        Bprint(&fout, "%4d ", linec);
+    }
+    uniq = false;
+    Bprint(&fout, "%s\n", buf);
+}
+@
+
+<<function [[equal]](uniq.c)>>=
+bool
+equal(char *b1, char *b2)
+{
+    char c;
+
+    if(fields || letters) {
+        b1 = skip(b1);
+        b2 = skip(b2);
+    }
+    for(;;) {
+        c = *b1++;
+        if(c != *b2++) {
+            if(c == '\0' && mode == 's')
+                return true;
+            return false;
+        }
+        if(c == '\0') {
+            uniq = true;
+            return true;
+        }
+    }
+}
+@
+
+<<function [[skip]](uniq.c)>>=
+char*
+skip(char *s)
+{
+    int nf, nl;
+
+    nf = nl = 0;
+    while(nf++ < fields) {
+        while(*s == ' ' || *s == '\t')
+            s++;
+        while(!(*s == ' ' || *s == '\t' || *s == '\0') ) 
+            s++;
+    }
+    while(nl++ < letters && *s != '\0') 
+            s++;
+    return s;
+}
+@
+
+\section{[[xargs]]}
+
+% find | grep .c | xargs ls -l
+% power of xargs!
+% also can do stuff in parallel!! xargs -p 20  grep foo
+
+<<function [[usage]](xargs.c)>>=
+void
+usage(void)
+{
+    fprint(STDERR, "usage: xargs [ -n lines ] [ -p procs ] args ...\n");
+    exits("usage");
+}
+@
+
+<<function [[main]](xargs.c)>>=
+void
+main(int argc, char **argv)
+{
+    int lines = 10;
+    int procs = 1;
+    int i, j, run;
+    char **nargv, **args, **p;
+    static Biobuf bp;
+    
+    ARGBEGIN {
+    case 'n': lines = atoi(EARGF(usage())); break;
+    case 'p': procs = atoi(EARGF(usage())); break;
+    default: usage();
+    } ARGEND;
+    if(argc < 1)
+        usage();
+    
+    nargv = malloc(sizeof(char *) * (argc + lines + 1));
+    if(nargv == nil)
+        sysfatal("malloc: %r");
+    memcpy(nargv, argv, sizeof(char *) * argc);
+    args = nargv + argc;
+
+    if(Binit(&bp, STDIN, OREAD) < 0)
+        sysfatal("Binit: %r");
+
+    //PAD: Blethal(&bp, nil); only in 9front
+    atexit(dowait);
+
+    for(j = 0, run = 1; run; j++){
+        if(j >= procs)
+            waitpid();
+        memset(args, 0, sizeof(char *) * (lines + 1));
+        for(i = 0; i < lines; i++)
+            if((args[i] = Brdstr(&bp, '\n', 1)) == nil){
+                if(i == 0)
+                    exits(nil);
+                run = 0;
+                break;
+            }
+
+        switch(fork()){
+        case ERROR_NEG1:
+            sysfatal("fork: %r");
+        // child case
+        case 0:
+            exec(*nargv, nargv);
+            // here if ??
+            if(**nargv != '/' && strncmp(*nargv, "./", 2) != 0 &&
+                    strncmp(*nargv, "../", 3) != 0){
+                *nargv = smprint("/bin/%s", *nargv);
+                // try again
+                exec(*nargv, nargv);
+            }
+            sysfatal("exec: %r");
+        }
+        // else, parent
+        for(p = args; *p; p++)
+            free(*p);
+    }
+    exits(nil);
+}
+@
+
+<<function [[dowait]](xargs.c)>>=
+void
+dowait(void)
+{
+    while(waitpid() != ERROR_NEG1)
+        ;
+}
+@
+
+
+%******************************************************************************
 \chapter{Misc}
 %******************************************************************************
+
+\section{[[basename]]}
 
 %******************************************************************************
 \chapter{Conclusion}

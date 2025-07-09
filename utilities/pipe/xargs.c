@@ -5,20 +5,23 @@
 /*e: plan9 includes */
 #include <bio.h>
 
+/*s: function [[usage]](xargs.c) */
 void
 usage(void)
 {
     fprint(2, "usage: xargs [ -n lines ] [ -p procs ] args ...\n");
     exits("usage");
 }
-
+/*e: function [[usage]](xargs.c) */
+/*s: function [[dowait]](xargs.c) */
 void
 dowait(void)
 {
     while(waitpid() != -1)
         ;
 }
-
+/*e: function [[dowait]](xargs.c) */
+/*s: function [[main]](xargs.c) */
 void
 main(int argc, char **argv)
 {
@@ -73,4 +76,5 @@ main(int argc, char **argv)
     }
     exits(nil);
 }
+/*e: function [[main]](xargs.c) */
 /*e: pipe/xargs.c */

@@ -50,7 +50,8 @@ main(int argc, char **argv)
 }
 /*e: function [[main]](touch.c) */
 /*s: function [[touch]] */
-error1 touch(bool nocreate, char *name)
+error1
+touch(bool nocreate, char *name)
 {
     Dir stbuff;
     fdt fd;

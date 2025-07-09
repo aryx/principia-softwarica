@@ -9,33 +9,41 @@
 #include <bio.h>
 #include <ctype.h>
 
+/*s: constant [[SIZE]](uniq.c) */
 #define SIZE    8000
+/*e: constant [[SIZE]](uniq.c) */
 
+/*s: globals uniq.c */
 int fields  = 0;
 int letters = 0;
-int linec   = 0;
+// 'u' or 'd' or 'c' or 's' (meaning??)
 char    mode;
-int uniq;
+/*x: globals uniq.c */
+int linec   = 0;
+/*x: globals uniq.c */
+bool uniq;
+/*x: globals uniq.c */
 char    *b1, *b2;
-long    bsize;
+long    bsize = SIZE;
+/*x: globals uniq.c */
 Biobuf  fin;
 Biobuf  fout;
+/*e: globals uniq.c */
 
-int gline(char *buf);
-void    pline(char *buf);
-int equal(char *b1, char *b2);
-char*   skip(char *s);
+int   gline(char *buf);
+void  pline(char *buf);
+int   equal(char *b1, char *b2);
+char* skip(char *s);
 
+/*s: function [[main]](uniq.c) */
 void
 main(int argc, char *argv[])
 {
-    int f;
+    fdt f = STDIN;
 
-    argv0 = argv[0];
-    bsize = SIZE;
+    argv0 = argv[0]; // use??
     b1 = malloc(bsize);
     b2 = malloc(bsize);
-    f = 0;
     while(argc > 1) {
         if(*argv[1] == '-') {
             if(isdigit(argv[1][1]))
@@ -52,7 +60,7 @@ main(int argc, char *argv[])
             argv++;
             continue;
         }
-        f = open(argv[1], 0);
+        f = open(argv[1], OREAD);
         if(f < 0)
             sysfatal("cannot open %s", argv[1]);
         break;
@@ -60,15 +68,16 @@ main(int argc, char *argv[])
     if(argc > 2)
         sysfatal("unexpected argument %s", argv[2]);
     Binit(&fin, f, OREAD);
-    Binit(&fout, 1, OWRITE);
+    Binit(&fout, STDOUT, OWRITE);
 
     if(gline(b1))
-        exits(0);
+        exits(nil);
+
     for(;;) {
         linec++;
         if(gline(b2)) {
             pline(b1);
-            exits(0);
+            exits(nil);
         }
         if(!equal(b1, b2)) {
             pline(b1);
@@ -77,7 +86,7 @@ main(int argc, char *argv[])
                 linec++;
                 if(gline(b1)) {
                     pline(b2);
-                    exits(0);
+                    exits(nil);
                 }
             } while(equal(b2, b1));
             pline(b2);
@@ -85,24 +94,26 @@ main(int argc, char *argv[])
         }
     }
 }
-
-int
+/*e: function [[main]](uniq.c) */
+/*s: function [[gline]](uniq.c) */
+bool
 gline(char *buf)
 {
     int len;
     char *p;
 
     p = Brdline(&fin, '\n');
-    if(p == 0)
-        return 1;
+    if(p == nil)
+        return true;
     len = Blinelen(&fin);
     if(len >= bsize-1)
         sysfatal("line too long");
     memmove(buf, p, len);
-    buf[len-1] = 0;
-    return 0;
+    buf[len-1] = '\0';
+    return false;
 }
-
+/*e: function [[gline]](uniq.c) */
+/*s: function [[pline]](uniq.c) */
 void
 pline(char *buf)
 {
@@ -110,7 +121,7 @@ pline(char *buf)
 
     case 'u':
         if(uniq) {
-            uniq = 0;
+            uniq = false;
             return;
         }
         break;
@@ -123,11 +134,12 @@ pline(char *buf)
     case 'c':
         Bprint(&fout, "%4d ", linec);
     }
-    uniq = 0;
+    uniq = false;
     Bprint(&fout, "%s\n", buf);
 }
-
-int
+/*e: function [[pline]](uniq.c) */
+/*s: function [[equal]](uniq.c) */
+bool
 equal(char *b1, char *b2)
 {
     char c;
@@ -139,17 +151,18 @@ equal(char *b1, char *b2)
     for(;;) {
         c = *b1++;
         if(c != *b2++) {
-            if(c == 0 && mode == 's')
-                return 1;
-            return 0;
+            if(c == '\0' && mode == 's')
+                return true;
+            return false;
         }
-        if(c == 0) {
-            uniq++;
-            return 1;
+        if(c == '\0') {
+            uniq = true;
+            return true;
         }
     }
 }
-
+/*e: function [[equal]](uniq.c) */
+/*s: function [[skip]](uniq.c) */
 char*
 skip(char *s)
 {
@@ -159,11 +172,12 @@ skip(char *s)
     while(nf++ < fields) {
         while(*s == ' ' || *s == '\t')
             s++;
-        while(!(*s == ' ' || *s == '\t' || *s == 0) ) 
+        while(!(*s == ' ' || *s == '\t' || *s == '\0') ) 
             s++;
     }
-    while(nl++ < letters && *s != 0) 
+    while(nl++ < letters && *s != '\0') 
             s++;
     return s;
 }
+/*e: function [[skip]](uniq.c) */
 /*e: pipe/uniq.c */

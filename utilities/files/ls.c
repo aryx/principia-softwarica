@@ -16,7 +16,7 @@ struct NDir
 int errs = 0;
 int dflag;
 int lflag;
-static int  mflag;
+int mflag;
 int nflag;
 int pflag;
 int qflag;
@@ -31,8 +31,8 @@ int ndirbuf;
 int ndir;
 NDir*   dirbuf;
 
-int ls(char*, int);
-int compar(NDir*, NDir*);
+int     ls(char*, int);
+int     compar(NDir*, NDir*);
 char*   asciitime(long);
 char*   darwx(long);
 void    rwx(long, char*);

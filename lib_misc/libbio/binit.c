@@ -51,7 +51,7 @@ install(Biobufhdr *bp)
 }
 
 int
-Binits(Biobufhdr *bp, int f, int mode, uchar *p, int size)
+Binits(Biobufhdr *bp, fdt f, int mode, uchar *p, int size)
 {
 
 	p += Bungetsize;	/* make room for Bungets */
@@ -88,7 +88,7 @@ Binits(Biobufhdr *bp, int f, int mode, uchar *p, int size)
 
 
 int
-Binit(Biobuf *bp, int f, int mode)
+Binit(Biobuf *bp, fdt f, int mode)
 {
 	return Binits(bp, f, mode, bp->b, sizeof(bp->b));
 }

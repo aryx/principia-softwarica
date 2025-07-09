@@ -52,8 +52,8 @@ struct	Biobuf
 
 Biobuf*	Bopen(char*, int);
 
-int	Binit(Biobuf*, int, int);
-int	Binits(Biobufhdr*, int, int, uchar*, int);
+int	Binit(Biobuf*, fdt, int);
+int	Binits(Biobufhdr*, fdt, int, uchar*, int);
 
 int	Bflush(BiobufGen*);
 

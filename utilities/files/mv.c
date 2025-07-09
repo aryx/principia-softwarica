@@ -5,11 +5,11 @@
 /*e: plan9 includes */
 
 errorneg1 copy1(fdt fdf, fdt fdt, char *from, char *to);
-void    hardremove(char *);
+void      hardremove(char *);
 errorneg1 mv(char *from, char *todir, char *toelem);
 errorneg1 mv1(char *from, Dir *dirb, char *todir, char *toelem);
-bool samefile(char *, char *);
-void    split(char *, char **, char **);
+bool      samefile(char *, char *);
+void      split(char *, char **, char **);
 
 /*s: function [[main]](mv.c) */
 void
