@@ -139,15 +139,21 @@ This is \cite{syncweb}.
 
 \section{[[cat]]}
 
+%trans: let's start with simplest one (LOC).
+
+% 'cat' for concatenate but can be used also with single file to see its content
+% and also without for copy stdin to stdout (usecase?)
+
 <<function [[main]](cat.c)>>=
 void
 main(int argc, char *argv[])
 {
-    int f, i;
+    int i;
+    fdt f;
 
     argv0 = "cat";
     if(argc == 1)
-        cat(0, "<stdin>");
+        cat(STDIN, "<stdin>");
     else for(i=1; i<argc; i++){
         f = open(argv[i], OREAD);
         if(f < 0)
@@ -157,22 +163,22 @@ main(int argc, char *argv[])
             close(f);
         }
     }
-    exits(0);
+    exits(nil);
 }
 @
 
 <<function [[cat]]>>=
 void
-cat(int f, char *s)
+cat(fdt f, char *origin)
 {
     char buf[8192];
     long n;
 
     while((n=read(f, buf, (long)sizeof buf))>0)
-        if(write(1, buf, n)!=n)
-            sysfatal("write error copying %s: %r", s);
+        if(write(STDOUT, buf, n)!=n)
+            sysfatal("write error copying %s: %r", origin);
     if(n < 0)
-        sysfatal("error reading %s: %r", s);
+        sysfatal("error reading %s: %r", origin);
 }
 @
 
@@ -180,13 +186,18 @@ cat(int f, char *s)
 
 \section{[[touch]]}
 
+% -c for nocreate if file not exist in the first place
 <<function [[usage]](touch.c)>>=
 void
 usage(void)
 {
-    fprint(2, "usage: touch [-c] [-t time] files\n");
+    fprint(STDERR, "usage: touch [-c] [-t time] files\n");
     exits("usage");
 }
+@
+
+<<global [[now]](touch.c)>>=
+ulong now;
 @
 
 <<function [[main]](touch.c)>>=
@@ -194,8 +205,8 @@ void
 main(int argc, char **argv)
 {
     char *t, *s;
-    int nocreate = 0;
-    int status = 0;
+    bool nocreate = false;
+    errorn status = OK_0;
 
     now = time(0);
     ARGBEGIN{
@@ -206,7 +217,7 @@ main(int argc, char **argv)
             usage();
         break;
     case 'c':
-        nocreate = 1;
+        nocreate = true;
         break;
     default:    
         usage();
@@ -218,56 +229,65 @@ main(int argc, char **argv)
         status += touch(nocreate, *argv++);
     if(status)
         exits("touch");
-    exits(0);
+    exits(nil);
 }
 @
 
 <<function [[touch]]>>=
-int touch(int nocreate, char *name)
+error1 touch(bool nocreate, char *name)
 {
     Dir stbuff;
-    int fd;
+    fdt fd;
 
     nulldir(&stbuff);
     stbuff.mtime = now;
     if(dirwstat(name, &stbuff) >= 0)
-        return 0;
+        return OK_0;
+    //else
     if(nocreate){
-        fprint(2, "touch: %s: cannot wstat: %r\n", name);
-        return 1;
+        fprint(STDERR, "touch: %s: cannot wstat: %r\n", name);
+        return ERROR_1;
     }
     if((fd = create(name, OREAD|OEXCL, 0666)) < 0){
-        fprint(2, "touch: %s: cannot create: %r\n", name);
-        return 1;
+        fprint(STDERR, "touch: %s: cannot create: %r\n", name);
+        return ERROR_1;
     }
     dirfwstat(fd, &stbuff);
     close(fd);
-    return 0;
+    return OK_0;
 }
 @
 
 \section{[[mkdir]]}
 
+% -p for creating intermediate dirs (p for parent dirs)
 <<function [[usage]](mkdir.c)>>=
 void
 usage(void)
 {
-    fprint(2, "usage: mkdir [-p] [-m mode] dir...\n");
+    fprint(STDERR, "usage: mkdir [-p] [-m mode] dir...\n");
     exits("usage");
 }
+@
+
+<<global [[mode]](mkdir.c)>>=
+ulong mode = 0777L;
+@
+
+<<global [[e]](mkdir.c)>>=
+// error
+char *e;
 @
 
 <<function [[main]](mkdir.c)>>=
 void
 main(int argc, char *argv[])
 {
-    int i, pflag;
+    int i;
+    bool pflag = false;
     char *m;
 
-    pflag = 0;
     ARGBEGIN{
-    default:
-        usage();
     case 'm':
         m = ARGF();
         if(m == nil)
@@ -277,8 +297,10 @@ main(int argc, char *argv[])
             usage();
         break;
     case 'p':
-        pflag = 1;
+        pflag = true;
         break;
+    default:
+        usage();
     }ARGEND
 
     for(i=0; i<argc; i++){
@@ -291,25 +313,26 @@ main(int argc, char *argv[])
 }
 @
 
+% return value used from mkdirp but not from main
 <<function [[makedir]]>>=
-int
+errorneg1
 makedir(char *s)
 {
-    int f;
+    fdt f;
 
     if(access(s, AEXIST) == 0){
-        fprint(2, "mkdir: %s already exists\n", s);
+        fprint(STDERR, "mkdir: %s already exists\n", s);
         e = "error";
-        return -1;
+        return ERROR_NEG1;
     }
     f = create(s, OREAD, DMDIR | mode);
     if(f < 0){
-        fprint(2, "mkdir: can't create %s: %r\n", s);
+        fprint(STDERR, "mkdir: can't create %s: %r\n", s);
         e = "error";
-        return -1;
+        return ERROR_NEG1;
     }
     close(f);
-    return 0;
+    return OK_0;
 }
 @
 
@@ -320,8 +343,8 @@ mkdirp(char *s)
     char *p;
 
     for(p=strchr(s+1, '/'); p; p=strchr(p+1, '/')){
-        *p = 0;
-        if(access(s, AEXIST) != 0 && makedir(s) < 0)
+        *p = '\0';
+        if(access(s, AEXIST) != 0 && makedir(s) == ERROR_NEG1)
             return;
         *p = '/';
     }
@@ -332,32 +355,43 @@ mkdirp(char *s)
 
 \section{[[rm]]}
 
+<<global [[ignerr]](rm.c)>>=
+// for 'rm -f'
+bool ignerr = false;
+@
+% default value?? nil?
+<<global [[errbuf]](rm.c)>>=
+char errbuf[ERRMAX];
+@
+
+% remove() below is syscall
 <<function [[main]](rm.c)>>=
 void
 main(int argc, char *argv[])
 {
     int i;
-    int recurse;
+    // rm -r
+    bool recurse = false;
     char *f;
     Dir *db;
 
-    ignerr = 0;
-    recurse = 0;
     ARGBEGIN{
     case 'r':
-        recurse = 1;
+        recurse = true;
         break;
     case 'f':
-        ignerr = 1;
+        ignerr = true;
         break;
     default:
-        fprint(2, "usage: rm [-fr] file ...\n");
+        fprint(STDERR, "usage: rm [-fr] file ...\n");
         exits("usage");
     }ARGEND
+
     for(i=0; i<argc; i++){
         f = argv[i];
-        if(remove(f) != -1)
+        if(remove(f) != ERROR_NEG1)
             continue;
+        //else
         db = nil;
         if(recurse && (db=dirstat(f))!=nil && (db->qid.type&QTDIR))
             rmdir(f);
@@ -377,7 +411,8 @@ void
 rmdir(char *f)
 {
     char *name;
-    int fd, i, j, n, ndir, nname;
+    int i, j, n, ndir, nname;
+    fdt fd;
     Dir *dirbuf;
 
     fd = open(f, OREAD);
@@ -385,6 +420,7 @@ rmdir(char *f)
         err(f);
         return;
     }
+    //else
     n = dirreadall(fd, &dirbuf);
     close(fd);
     if(n < 0){
@@ -394,7 +430,7 @@ rmdir(char *f)
 
     nname = strlen(f)+1+STATMAX+1;  /* plenty! */
     name = malloc(nname);
-    if(name == 0){
+    if(name == nil){
         err("memory allocation");
         return;
     }
@@ -402,7 +438,7 @@ rmdir(char *f)
     ndir = 0;
     for(i=0; i<n; i++){
         snprint(name, nname, "%s/%s", f, dirbuf[i].name);
-        if(remove(name) != -1)
+        if(remove(name) != ERROR_NEG1)
             dirbuf[i].qid.type = QTFILE;    /* so we won't recurse */
         else{
             if(dirbuf[i].qid.type & QTDIR)
@@ -415,9 +451,10 @@ rmdir(char *f)
         for(j=0; j<n; j++)
             if(dirbuf[j].qid.type & QTDIR){
                 snprint(name, nname, "%s/%s", f, dirbuf[j].name);
+                // recurse
                 rmdir(name);
             }
-    if(remove(f) == -1)
+    if(remove(f) == ERROR_NEG1)
         err(f);
     free(name);
     free(dirbuf);
@@ -431,65 +468,86 @@ err(char *f)
     if(!ignerr){
         errbuf[0] = '\0';
         errstr(errbuf, sizeof errbuf);
-        fprint(2, "rm: %s: %s\n", f, errbuf);
+        fprint(STDERR, "rm: %s: %s\n", f, errbuf);
     }
 }
 @
 
 \section{[[cp]]}
 
+<<global [[failed]](cp.c)>>=
+bool failed;
+@
+
+<<global flags(cp.c)>>=
+// keep gid
+bool gflag = false;
+// keep uid (-u implies -g)
+bool uflag = false;
+// keep time and mode
+bool xflag = false;
+@
+
+<<label [[usage]] in [[main]](cp.c)>>=
+usage:
+    fprint(STDERR, "usage:\tcp [-gux] fromfile tofile\n");
+    fprint(STDERR, "\tcp [-x] fromfile ... todir\n");
+    exits("usage");
+@
+
 <<function [[main]](cp.c)>>=
 void
 main(int argc, char *argv[])
 {
     Dir *dirb;
-    int todir, i;
+    int i;
+    bool todir = false;
 
     ARGBEGIN {
     case 'g':
-        gflag++;
+        gflag = true;
         break;
     case 'u':
-        uflag++;
-        gflag++;
+        uflag = true;
+        gflag = true;
         break;
     case 'x':
-        xflag++;
+        xflag = true;
         break;
     default:
         goto usage;
     } ARGEND
 
-    todir=0;
     if(argc < 2)
         goto usage;
+
     dirb = dirstat(argv[argc-1]);
     if(dirb!=nil && (dirb->mode&DMDIR))
-        todir=1;
+        todir=true;
     if(argc>2 && !todir){
-        fprint(2, "cp: %s not a directory\n", argv[argc-1]);
+        fprint(STDERR, "cp: %s not a directory\n", argv[argc-1]);
         exits("bad usage");
     }
+
     for(i=0; i<argc-1; i++)
         copy(argv[i], argv[argc-1], todir);
+
     if(failed)
         exits("errors");
-    exits(0);
-
-usage:
-    fprint(2, "usage:\tcp [-gux] fromfile tofile\n");
-    fprint(2, "\tcp [-x] fromfile ... todir\n");
-    exits("usage");
+    exits(nil);
+<<label [[usage]] in [[main]](cp.c)>>
 }
 @
 
 <<function [[copy]]>>=
 void
-copy(char *from, char *to, int todir)
+copy(char *from, char *to, bool todir)
 {
     Dir *dirb, dirt;
     char name[256];
-    int fdf, fdt, mode;
+    // fd from, fd to
+    fdt fdf, fdt;
+    int mode;
 
     if(todir){
         char *s, *elem;
@@ -502,39 +560,39 @@ copy(char *from, char *to, int todir)
     }
 
     if((dirb=dirstat(from))==nil){
-        fprint(2,"cp: can't stat %s: %r\n", from);
-        failed = 1;
+        fprint(STDERR,"cp: can't stat %s: %r\n", from);
+        failed = true;
         return;
     }
     mode = dirb->mode;
     if(mode&DMDIR){
-        fprint(2, "cp: %s is a directory\n", from);
+        fprint(STDERR, "cp: %s is a directory\n", from);
         free(dirb);
-        failed = 1;
+        failed = true;
         return;
     }
     if(samefile(dirb, from, to)){
         free(dirb);
-        failed = 1;
+        failed = true;
         return;
     }
     mode &= 0777;
     fdf=open(from, OREAD);
     if(fdf<0){
-        fprint(2, "cp: can't open %s: %r\n", from);
+        fprint(STDERR, "cp: can't open %s: %r\n", from);
         free(dirb);
-        failed = 1;
+        failed = true;
         return;
     }
     fdt=create(to, OWRITE, mode);
     if(fdt<0){
-        fprint(2, "cp: can't create %s: %r\n", to);
+        fprint(STDERR, "cp: can't create %s: %r\n", to);
         close(fdf);
         free(dirb);
-        failed = 1;
+        failed = true;
         return;
     }
-    if(copy1(fdf, fdt, from, to)==0 && (xflag || gflag || uflag)){
+    if(copy1(fdf, fdt, from, to)==OK_0 && (xflag || gflag || uflag)){
         nulldir(&dirt);
         if(xflag){
             dirt.mtime = dirb->mtime;
@@ -545,7 +603,7 @@ copy(char *from, char *to, int todir)
         if(gflag)
             dirt.gid = dirb->gid;
         if(dirfwstat(fdt, &dirt) < 0)
-            fprint(2, "cp: warning: can't wstat %s: %r\n", to);
+            fprint(STDERR, "cp: warning: can't wstat %s: %r\n", to);
     }           
     free(dirb);
     close(fdf);
@@ -553,36 +611,41 @@ copy(char *from, char *to, int todir)
 }
 @
 
+<<constant [[DEFB]](cp.c)>>=
+#define DEFB    (8*1024)
+@
+
 <<function [[copy1]]>>=
-int
-copy1(int fdf, int fdt, char *from, char *to)
+errorneg1
+copy1(fdt fdf, fdt fdt, char *from, char *to)
 {
     char *buf;
     long n, n1, rcount;
-    int rv;
+    errorneg1 rv = OK_0;
     char err[ERRMAX];
 
     buf = malloc(DEFB);
     /* clear any residual error */
     err[0] = '\0';
     errstr(err, ERRMAX);
-    rv = 0;
+
+    // copy (read and write) as long as n read <= 0
     for(rcount=0;; rcount++) {
         n = read(fdf, buf, DEFB);
         if(n <= 0)
             break;
         n1 = write(fdt, buf, n);
         if(n1 != n) {
-            fprint(2, "cp: error writing %s: %r\n", to);
-            failed = 1;
-            rv = -1;
+            fprint(STDERR, "cp: error writing %s: %r\n", to);
+            failed = true;
+            rv = ERROR_NEG1;
             break;
         }
     }
     if(n < 0) {
         fprint(2, "cp: error reading %s: %r\n", from);
-        failed = 1;
-        rv = -1;
+        failed = true;
+        rv = ERROR_NEG1;
     }
     free(buf);
     return rv;
@@ -590,13 +653,12 @@ copy1(int fdf, int fdt, char *from, char *to)
 @
 
 <<function [[samefile]](cp.c)>>=
-int
+bool
 samefile(Dir *a, char *an, char *bn)
 {
     Dir *b;
-    int ret;
+    bool ret = false;
 
-    ret = 0;
     b=dirstat(bn);
     if(b != nil)
     if(b->qid.type==a->qid.type)
@@ -604,8 +666,8 @@ samefile(Dir *a, char *an, char *bn)
     if(b->qid.vers==a->qid.vers)
     if(b->dev==a->dev)
     if(b->type==a->type){
-        fprint(2, "cp: %s and %s are the same file\n", an, bn);
-        ret = 1;
+        fprint(STDERR, "cp: %s and %s are the same file\n", an, bn);
+        ret = true;
     }
     free(b);
     return ret;
@@ -618,13 +680,14 @@ samefile(Dir *a, char *an, char *bn)
 void
 main(int argc, char *argv[])
 {
-    int i, failed;
+    int i;
+    errorn failed = OK_0;
     Dir *dirto, *dirfrom;
     char *todir, *toelem;
 
     if(argc<3){
-        fprint(2, "usage: mv fromfile tofile\n");
-        fprint(2, "   mv fromfile ... todir\n");
+        fprint(STDERR, "usage: mv fromfile tofile\n");
+        fprint(STDERR, "   mv fromfile ... todir\n");
         exits("bad usage");
     }
 
@@ -647,31 +710,30 @@ main(int argc, char *argv[])
         split(argv[argc-1], &todir, &toelem);   /* mv file1 file2 */
     free(dirto);
     if(argc>3 && toelem != nil){
-        fprint(2, "mv: %s not a directory\n", argv[argc-1]);
+        fprint(STDERR, "mv: %s not a directory\n", argv[argc-1]);
         exits("bad usage");
     }
 
-    failed = 0;
     for(i=1; i < argc-1; i++)
-        if(mv(argv[i], todir, toelem) < 0)
+        if(mv(argv[i], todir, toelem) == ERROR_NEG1)
             failed++;
     if(failed)
         exits("failure");
-    exits(0);
+    exits(nil);
 }
 @
 
 <<function [[mv]]>>=
-int
+errorneg1
 mv(char *from, char *todir, char *toelem)
 {
-    int stat;
+    errorneg1 stat;
     Dir *dirb;
 
     dirb = dirstat(from);
     if(dirb == nil){
-        fprint(2, "mv: can't stat %s: %r\n", from);
-        return -1;
+        fprint(STDERR, "mv: can't stat %s: %r\n", from);
+        return ERROR_NEG1;
     }
     stat = mv1(from, dirb, todir, toelem);
     free(dirb);
@@ -680,39 +742,42 @@ mv(char *from, char *todir, char *toelem)
 @
 
 <<function [[mv1]]>>=
-int
+errorneg1
 mv1(char *from, Dir *dirb, char *todir, char *toelem)
 {
-    int fdf, fdt, i, j, stat;
+    // fd from, fd to
+    fdt fdf, fdt;
+    int i, j;
+    errorneg1 stat;
     char toname[4096], fromname[4096];
     char *fromdir, *fromelem;
     Dir *dirt, null;
 
     strncpy(fromname, from, sizeof fromname);
     split(from, &fromdir, &fromelem);
-    if(toelem == 0)
+    if(toelem == nil)
         toelem = fromelem;
     i = strlen(toelem);
     if(i==0){
-        fprint(2, "mv: null last name element moving %s\n", fromname);
-        return -1;
+        fprint(STDERR, "mv: null last name element moving %s\n", fromname);
+        return ERROR_NEG1;
     }
     j = strlen(todir);
     if(i + j + 2 > sizeof toname){
-        fprint(2, "mv: path too big (max %d): %s/%s\n",
+        fprint(STDERR, "mv: path too big (max %d): %s/%s\n",
             sizeof toname, todir, toelem);
-        return -1;
+        return ERROR_NEG1;
     }
     memmove(toname, todir, j);
     toname[j] = '/';
     memmove(toname+j+1, toelem, i);
-    toname[i+j+1] = 0;
+    toname[i+j+1] = '\0';
 
     if(samefile(fromdir, todir)){
         if(samefile(fromname, toname)){
-            fprint(2, "mv: %s and %s are the same\n",
+            fprint(STDERR, "mv: %s and %s are the same\n",
                 fromname, toname);
-            return -1;
+            return ERROR_NEG1;
         }
 
         /* remove target if present */
@@ -726,25 +791,25 @@ mv1(char *from, Dir *dirb, char *todir, char *toelem)
         nulldir(&null);
         null.name = toelem;
         if(dirwstat(fromname, &null) >= 0)
-            return 0;
+            return OK_0;
         if(dirb->mode & DMDIR){
-            fprint(2, "mv: can't rename directory %s: %r\n",
+            fprint(STDERR, "mv: can't rename directory %s: %r\n",
                 fromname);
-            return -1;
+            return ERROR_NEG1;
         }
     }
     /*
      * Renaming won't work --- must copy
      */
     if(dirb->mode & DMDIR){
-        fprint(2, "mv: %s is a directory, not copied to %s\n",
+        fprint(STDERR, "mv: %s is a directory, not copied to %s\n",
             fromname, toname);
-        return -1;
+        return ERROR_NEG1;
     }
     fdf = open(fromname, OREAD);
     if(fdf < 0){
-        fprint(2, "mv: can't open %s: %r\n", fromname);
-        return -1;
+        fprint(STDERR, "mv: can't open %s: %r\n", fromname);
+        return ERROR_NEG1;
     }
 
     dirt = dirstat(toname);
@@ -754,9 +819,9 @@ mv1(char *from, Dir *dirb, char *todir, char *toelem)
 
     fdt = create(toname, OWRITE, dirb->mode);
     if(fdt < 0){
-        fprint(2, "mv: can't create %s: %r\n", toname);
+        fprint(STDERR, "mv: can't create %s: %r\n", toname);
         close(fdf);
-        return -1;
+        return ERROR_NEG1;
     }
     stat = copy1(fdf, fdt, fromname, toname);
     close(fdf);
@@ -767,8 +832,8 @@ mv1(char *from, Dir *dirb, char *todir, char *toelem)
         null.mode = dirb->mode;
         dirfwstat(fdt, &null);  /* ignore errors; e.g. user none always fails */
         if(remove(fromname) < 0){
-            fprint(2, "mv: can't remove %s: %r\n", fromname);
-            stat = -1;
+            fprint(STDERR, "mv: can't remove %s: %r\n", fromname);
+            stat = ERROR_NEG1;
         }
     }
     close(fdt);
@@ -776,9 +841,10 @@ mv1(char *from, Dir *dirb, char *todir, char *toelem)
 }
 @
 
+% could factorize with cp copy1
 <<function [[copy1]](mv.c)>>=
-int
-copy1(int fdf, int fdt, char *from, char *to)
+errorneg1
+copy1(fdt fdf, fdt fdt, char *from, char *to)
 {
     char buf[8192];
     long n, n1;
@@ -786,15 +852,15 @@ copy1(int fdf, int fdt, char *from, char *to)
     while ((n = read(fdf, buf, sizeof buf)) > 0) {
         n1 = write(fdt, buf, n);
         if(n1 != n){
-            fprint(2, "mv: error writing %s: %r\n", to);
-            return -1;
+            fprint(STDERR, "mv: error writing %s: %r\n", to);
+            return ERROR_NEG1;
         }
     }
     if(n < 0){
-        fprint(2, "mv: error reading %s: %r\n", from);
-        return -1;
+        fprint(STDERR, "mv: error reading %s: %r\n", from);
+        return ERROR_NEG1;
     }
-    return 0;
+    return OK_0;
 }
 @
 
@@ -806,7 +872,7 @@ split(char *name, char **pdir, char **pelem)
 
     s = utfrrune(name, '/');
     if(s){
-        *s = 0;
+        *s = '\0';
         *pelem = s+1;
         *pdir = name;
     }else if(strcmp(name, "..") == 0){
@@ -820,14 +886,14 @@ split(char *name, char **pdir, char **pelem)
 @
 
 <<function [[samefile]](mv.c)>>=
-int
+bool
 samefile(char *a, char *b)
 {
     Dir *da, *db;
-    int ret;
+    bool ret;
 
     if(strcmp(a, b) == 0)
-        return 1;
+        return true;
     da = dirstat(a);
     db = dirstat(b);
     ret = (da != nil && db != nil &&
@@ -846,11 +912,12 @@ samefile(char *a, char *b)
 void
 hardremove(char *a)
 {
-    if(remove(a) == -1){
-        fprint(2, "mv: can't remove %s: %r\n", a);
+    if(remove(a) == ERROR_NEG1){
+        fprint(STDERR, "mv: can't remove %s: %r\n", a);
         exits("mv");
     }
-    while(remove(a) != -1)
+    //????
+    while(remove(a) != ERROR_NEG1)
         ;
 }
 @
@@ -867,45 +934,46 @@ main(int argc, char *argv[])
     char *p;
 
     if(argc < 3){
-        fprint(2, "usage: chmod 0777 file ... or chmod [who]op[rwxalt] file ...\n");
+        fprint(STDERR, "usage: chmod 0777 file ... or chmod [who]op[rwxalt] file ...\n");
         exits("usage");
     }
     mode = strtol(argv[1], &p, 8);
-    if(*p == 0)
+    if(*p == '\0')
         mask = A(DMRWE);
-    else if(!parsemode(argv[1], &mask, &mode)){
-        fprint(2, "chmod: bad mode: %s\n", argv[1]);
+    else if(parsemode(argv[1], &mask, &mode) == ERROR_0){
+        fprint(STDERR, "chmod: bad mode: %s\n", argv[1]);
         exits("mode");
     }
     nulldir(&ndir);
     for(i=2; i<argc; i++){
         dir = dirstat(argv[i]);
         if(dir == nil){
-            fprint(2, "chmod: can't stat %s: %r\n", argv[i]);
+            fprint(STDERR, "chmod: can't stat %s: %r\n", argv[i]);
             continue;
         }
         ndir.mode = (dir->mode & ~mask) | (mode & mask);
         free(dir);
         if(dirwstat(argv[i], &ndir)==-1){
-            fprint(2, "chmod: can't wstat %s: %r\n", argv[i]);
+            fprint(STDERR, "chmod: can't wstat %s: %r\n", argv[i]);
             continue;
         }
     }
-    exits(0);
+    exits(nil);
 }
 @
 
 <<function [[parsemode]](chmod.c)>>=
-int
+error0
 parsemode(char *spec, ulong *pmask, ulong *pmode)
 {
     ulong mode, mask;
-    int done, op;
+    bool done;
+    int op;
     char *s;
 
     s = spec;
     mask = DMAPPEND | DMEXCL | DMTMP;
-    for(done=0; !done; ){
+    for(done=false; !done; ){
         switch(*s){
         case 'u':
             mask |= U(DMRWE); break;
@@ -916,9 +984,9 @@ parsemode(char *spec, ulong *pmask, ulong *pmode)
         case 'a':
             mask |= A(DMRWE); break;
         case 0:
-            return 0;
+            return ERROR_0;
         default:
-            done = 1;
+            done = true;
         }
         if(!done)
             s++;
@@ -927,7 +995,7 @@ parsemode(char *spec, ulong *pmask, ulong *pmode)
         mask |= A(DMRWE);
     op = *s++;
     if(op != '+' && op != '-' && op != '=')
-        return 0;
+        return ERROR_0;
     mode = 0;
     for(; *s ; s++){
         switch(*s){
@@ -944,22 +1012,27 @@ parsemode(char *spec, ulong *pmask, ulong *pmode)
         case 't':
             mode |= DMTMP; break;
         default:
-            return 0;
+            return ERROR_0;
         }
     }
     if(*s != 0)
-        return 0;
+        return ERROR_0;
     if(op == '+' || op == '-')
         mask &= mode;
     if(op == '-')
         mode = ~mode;
     *pmask = mask;
     *pmode = mode;
-    return 1;
+    return OK_1;
 }
 @
 
 \section{[[chgrp]]}
+
+<<global [[uflag]](chgrp.c)>>=
+// change uid of file (instead of gid)
+bool uflag;
+@
 
 <<function [[main]](chgrp.c)>>=
 void
@@ -968,32 +1041,31 @@ main(int argc, char *argv[])
     int i;
     Dir dir;
     char *group;
-    char *errs;
+    char *errs = nil;
 
     ARGBEGIN {
     default:
     usage:
-        fprint(2, "usage: chgrp [ -uo ] group file ....\n");
+        fprint(STDERR, "usage: chgrp [ -uo ] group file ....\n");
         exits("usage");
         return;
     case 'u':
     case 'o':
-        uflag++;
+        uflag = true;
         break;
     } ARGEND
     if(argc < 1)
         goto usage;
 
     group = argv[0];
-    errs = 0;
     for(i=1; i<argc; i++){
         nulldir(&dir);
         if(uflag)
             dir.uid = group;
         else
             dir.gid = group;
-        if(dirwstat(argv[i], &dir) == -1) {
-            fprint(2, "chgrp: can't wstat %s: %r\n", argv[i]);
+        if(dirwstat(argv[i], &dir) == ERROR_NEG1) {
+            fprint(STDERR, "chgrp: can't wstat %s: %r\n", argv[i]);
             errs = "can't wstat";
             continue;
         }
@@ -1003,12 +1075,15 @@ main(int argc, char *argv[])
 @
 
 \section{[[mtime]]}
+% print the mtime of a file or set of files
+% seems useless given ls -l give the same info.
+% in fact Linux does not have an mtime command
 
 <<function [[usage]](mtime.c)>>=
 void
 usage(void)
 {
-    fprint(2, "usage: mtime file...\n");
+    fprint(STDERR, "usage: mtime file...\n");
     exits("usage");
 }
 @
@@ -1017,7 +1092,8 @@ usage(void)
 void
 main(int argc, char **argv)
 {
-    int errors, i;
+    bool errors = false;
+    int i;
     Dir *d;
 
     ARGBEGIN{
@@ -1025,11 +1101,10 @@ main(int argc, char **argv)
         usage();
     }ARGEND
 
-    errors = 0;
     for(i=0; i<argc; i++){
         if((d = dirstat(argv[i])) == nil){
-            fprint(2, "stat %s: %r\n", argv[i]);
-            errors = 1;
+            fprint(STDERR, "stat %s: %r\n", argv[i]);
+            errors = true;
         }else{
             print("%11lud %s\n", d->mtime, argv[i]);
             free(d);

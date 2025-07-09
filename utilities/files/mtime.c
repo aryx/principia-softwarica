@@ -8,7 +8,7 @@
 void
 usage(void)
 {
-    fprint(2, "usage: mtime file...\n");
+    fprint(STDERR, "usage: mtime file...\n");
     exits("usage");
 }
 /*e: function [[usage]](mtime.c) */
@@ -16,7 +16,8 @@ usage(void)
 void
 main(int argc, char **argv)
 {
-    int errors, i;
+    bool errors = false;
+    int i;
     Dir *d;
 
     ARGBEGIN{
@@ -24,11 +25,10 @@ main(int argc, char **argv)
         usage();
     }ARGEND
 
-    errors = 0;
     for(i=0; i<argc; i++){
         if((d = dirstat(argv[i])) == nil){
-            fprint(2, "stat %s: %r\n", argv[i]);
-            errors = 1;
+            fprint(STDERR, "stat %s: %r\n", argv[i]);
+            errors = true;
         }else{
             print("%11lud %s\n", d->mtime, argv[i]);
             free(d);

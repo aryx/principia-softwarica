@@ -4,8 +4,13 @@
 #include <libc.h>
 /*e: plan9 includes */
 
+/*s: global [[errbuf]](rm.c) */
 char errbuf[ERRMAX];
-int ignerr = 0;
+/*e: global [[errbuf]](rm.c) */
+/*s: global [[ignerr]](rm.c) */
+// for 'rm -f'
+bool ignerr = false;
+/*e: global [[ignerr]](rm.c) */
 
 /*s: function [[err]](rm.c) */
 void
@@ -14,7 +19,7 @@ err(char *f)
     if(!ignerr){
         errbuf[0] = '\0';
         errstr(errbuf, sizeof errbuf);
-        fprint(2, "rm: %s: %s\n", f, errbuf);
+        fprint(STDERR, "rm: %s: %s\n", f, errbuf);
     }
 }
 /*e: function [[err]](rm.c) */
@@ -26,7 +31,8 @@ void
 rmdir(char *f)
 {
     char *name;
-    int fd, i, j, n, ndir, nname;
+    int i, j, n, ndir, nname;
+    fdt fd;
     Dir *dirbuf;
 
     fd = open(f, OREAD);
@@ -34,6 +40,7 @@ rmdir(char *f)
         err(f);
         return;
     }
+    //else
     n = dirreadall(fd, &dirbuf);
     close(fd);
     if(n < 0){
@@ -43,7 +50,7 @@ rmdir(char *f)
 
     nname = strlen(f)+1+STATMAX+1;  /* plenty! */
     name = malloc(nname);
-    if(name == 0){
+    if(name == nil){
         err("memory allocation");
         return;
     }
@@ -51,7 +58,7 @@ rmdir(char *f)
     ndir = 0;
     for(i=0; i<n; i++){
         snprint(name, nname, "%s/%s", f, dirbuf[i].name);
-        if(remove(name) != -1)
+        if(remove(name) != ERROR_NEG1)
             dirbuf[i].qid.type = QTFILE;    /* so we won't recurse */
         else{
             if(dirbuf[i].qid.type & QTDIR)
@@ -64,9 +71,10 @@ rmdir(char *f)
         for(j=0; j<n; j++)
             if(dirbuf[j].qid.type & QTDIR){
                 snprint(name, nname, "%s/%s", f, dirbuf[j].name);
+                // recurse
                 rmdir(name);
             }
-    if(remove(f) == -1)
+    if(remove(f) == ERROR_NEG1)
         err(f);
     free(name);
     free(dirbuf);
@@ -77,27 +85,28 @@ void
 main(int argc, char *argv[])
 {
     int i;
-    int recurse;
+    // rm -r
+    bool recurse = false;
     char *f;
     Dir *db;
 
-    ignerr = 0;
-    recurse = 0;
     ARGBEGIN{
     case 'r':
-        recurse = 1;
+        recurse = true;
         break;
     case 'f':
-        ignerr = 1;
+        ignerr = true;
         break;
     default:
-        fprint(2, "usage: rm [-fr] file ...\n");
+        fprint(STDERR, "usage: rm [-fr] file ...\n");
         exits("usage");
     }ARGEND
+
     for(i=0; i<argc; i++){
         f = argv[i];
-        if(remove(f) != -1)
+        if(remove(f) != ERROR_NEG1)
             continue;
+        //else
         db = nil;
         if(recurse && (db=dirstat(f))!=nil && (db->qid.type&QTDIR))
             rmdir(f);

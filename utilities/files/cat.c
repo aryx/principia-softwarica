@@ -6,27 +6,28 @@
 
 /*s: function [[cat]] */
 void
-cat(int f, char *s)
+cat(fdt f, char *origin)
 {
     char buf[8192];
     long n;
 
     while((n=read(f, buf, (long)sizeof buf))>0)
-        if(write(1, buf, n)!=n)
-            sysfatal("write error copying %s: %r", s);
+        if(write(STDOUT, buf, n)!=n)
+            sysfatal("write error copying %s: %r", origin);
     if(n < 0)
-        sysfatal("error reading %s: %r", s);
+        sysfatal("error reading %s: %r", origin);
 }
 /*e: function [[cat]] */
 /*s: function [[main]](cat.c) */
 void
 main(int argc, char *argv[])
 {
-    int f, i;
+    int i;
+    fdt f;
 
     argv0 = "cat";
     if(argc == 1)
-        cat(0, "<stdin>");
+        cat(STDIN, "<stdin>");
     else for(i=1; i<argc; i++){
         f = open(argv[i], OREAD);
         if(f < 0)
@@ -36,7 +37,7 @@ main(int argc, char *argv[])
             close(f);
         }
     }
-    exits(0);
+    exits(nil);
 }
 /*e: function [[main]](cat.c) */
 /*e: files/cat.c */

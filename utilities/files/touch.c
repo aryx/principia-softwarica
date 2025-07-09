@@ -4,14 +4,16 @@
 #include <libc.h>
 /*e: plan9 includes */
 
-int touch(int, char *);
+error1 touch(bool, char *);
+/*s: global [[now]](touch.c) */
 ulong now;
+/*e: global [[now]](touch.c) */
 
 /*s: function [[usage]](touch.c) */
 void
 usage(void)
 {
-    fprint(2, "usage: touch [-c] [-t time] files\n");
+    fprint(STDERR, "usage: touch [-c] [-t time] files\n");
     exits("usage");
 }
 /*e: function [[usage]](touch.c) */
@@ -20,8 +22,8 @@ void
 main(int argc, char **argv)
 {
     char *t, *s;
-    int nocreate = 0;
-    int status = 0;
+    bool nocreate = false;
+    errorn status = OK_0;
 
     now = time(0);
     ARGBEGIN{
@@ -32,7 +34,7 @@ main(int argc, char **argv)
             usage();
         break;
     case 'c':
-        nocreate = 1;
+        nocreate = true;
         break;
     default:    
         usage();
@@ -44,30 +46,31 @@ main(int argc, char **argv)
         status += touch(nocreate, *argv++);
     if(status)
         exits("touch");
-    exits(0);
+    exits(nil);
 }
 /*e: function [[main]](touch.c) */
 /*s: function [[touch]] */
-int touch(int nocreate, char *name)
+error1 touch(bool nocreate, char *name)
 {
     Dir stbuff;
-    int fd;
+    fdt fd;
 
     nulldir(&stbuff);
     stbuff.mtime = now;
     if(dirwstat(name, &stbuff) >= 0)
-        return 0;
+        return OK_0;
+    //else
     if(nocreate){
-        fprint(2, "touch: %s: cannot wstat: %r\n", name);
-        return 1;
+        fprint(STDERR, "touch: %s: cannot wstat: %r\n", name);
+        return ERROR_1;
     }
     if((fd = create(name, OREAD|OEXCL, 0666)) < 0){
-        fprint(2, "touch: %s: cannot create: %r\n", name);
-        return 1;
+        fprint(STDERR, "touch: %s: cannot create: %r\n", name);
+        return ERROR_1;
     }
     dirfwstat(fd, &stbuff);
     close(fd);
-    return 0;
+    return OK_0;
 }
 /*e: function [[touch]] */
 /*e: files/touch.c */

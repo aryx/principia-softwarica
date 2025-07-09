@@ -4,36 +4,41 @@
 #include <libc.h>
 /*e: plan9 includes */
 
+/*s: global [[e]](mkdir.c) */
+// error
 char *e;
+/*e: global [[e]](mkdir.c) */
+/*s: global [[mode]](mkdir.c) */
 ulong mode = 0777L;
+/*e: global [[mode]](mkdir.c) */
 
 /*s: function [[usage]](mkdir.c) */
 void
 usage(void)
 {
-    fprint(2, "usage: mkdir [-p] [-m mode] dir...\n");
+    fprint(STDERR, "usage: mkdir [-p] [-m mode] dir...\n");
     exits("usage");
 }
 /*e: function [[usage]](mkdir.c) */
 /*s: function [[makedir]] */
-int
+errorneg1
 makedir(char *s)
 {
-    int f;
+    fdt f;
 
     if(access(s, AEXIST) == 0){
-        fprint(2, "mkdir: %s already exists\n", s);
+        fprint(STDERR, "mkdir: %s already exists\n", s);
         e = "error";
-        return -1;
+        return ERROR_NEG1;
     }
     f = create(s, OREAD, DMDIR | mode);
     if(f < 0){
-        fprint(2, "mkdir: can't create %s: %r\n", s);
+        fprint(STDERR, "mkdir: can't create %s: %r\n", s);
         e = "error";
-        return -1;
+        return ERROR_NEG1;
     }
     close(f);
-    return 0;
+    return OK_0;
 }
 /*e: function [[makedir]] */
 /*s: function [[mkdirp]] */
@@ -43,8 +48,8 @@ mkdirp(char *s)
     char *p;
 
     for(p=strchr(s+1, '/'); p; p=strchr(p+1, '/')){
-        *p = 0;
-        if(access(s, AEXIST) != 0 && makedir(s) < 0)
+        *p = '\0';
+        if(access(s, AEXIST) != 0 && makedir(s) == ERROR_NEG1)
             return;
         *p = '/';
     }
@@ -56,13 +61,11 @@ mkdirp(char *s)
 void
 main(int argc, char *argv[])
 {
-    int i, pflag;
+    int i;
+    bool pflag = false;
     char *m;
 
-    pflag = 0;
     ARGBEGIN{
-    default:
-        usage();
     case 'm':
         m = ARGF();
         if(m == nil)
@@ -72,8 +75,10 @@ main(int argc, char *argv[])
             usage();
         break;
     case 'p':
-        pflag = 1;
+        pflag = true;
         break;
+    default:
+        usage();
     }ARGEND
 
     for(i=0; i<argc; i++){

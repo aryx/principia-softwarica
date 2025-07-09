@@ -11,7 +11,7 @@
 
 #define DMRWE (DMREAD|DMWRITE|DMEXEC)
 
-int parsemode(char *, ulong *, ulong *);
+error0 parsemode(char *, ulong *, ulong *);
 
 /*s: function [[main]](chmod.c) */
 void
@@ -23,44 +23,45 @@ main(int argc, char *argv[])
     char *p;
 
     if(argc < 3){
-        fprint(2, "usage: chmod 0777 file ... or chmod [who]op[rwxalt] file ...\n");
+        fprint(STDERR, "usage: chmod 0777 file ... or chmod [who]op[rwxalt] file ...\n");
         exits("usage");
     }
     mode = strtol(argv[1], &p, 8);
-    if(*p == 0)
+    if(*p == '\0')
         mask = A(DMRWE);
-    else if(!parsemode(argv[1], &mask, &mode)){
-        fprint(2, "chmod: bad mode: %s\n", argv[1]);
+    else if(parsemode(argv[1], &mask, &mode) == ERROR_0){
+        fprint(STDERR, "chmod: bad mode: %s\n", argv[1]);
         exits("mode");
     }
     nulldir(&ndir);
     for(i=2; i<argc; i++){
         dir = dirstat(argv[i]);
         if(dir == nil){
-            fprint(2, "chmod: can't stat %s: %r\n", argv[i]);
+            fprint(STDERR, "chmod: can't stat %s: %r\n", argv[i]);
             continue;
         }
         ndir.mode = (dir->mode & ~mask) | (mode & mask);
         free(dir);
         if(dirwstat(argv[i], &ndir)==-1){
-            fprint(2, "chmod: can't wstat %s: %r\n", argv[i]);
+            fprint(STDERR, "chmod: can't wstat %s: %r\n", argv[i]);
             continue;
         }
     }
-    exits(0);
+    exits(nil);
 }
 /*e: function [[main]](chmod.c) */
 /*s: function [[parsemode]](chmod.c) */
-int
+error0
 parsemode(char *spec, ulong *pmask, ulong *pmode)
 {
     ulong mode, mask;
-    int done, op;
+    bool done;
+    int op;
     char *s;
 
     s = spec;
     mask = DMAPPEND | DMEXCL | DMTMP;
-    for(done=0; !done; ){
+    for(done=false; !done; ){
         switch(*s){
         case 'u':
             mask |= U(DMRWE); break;
@@ -71,9 +72,9 @@ parsemode(char *spec, ulong *pmask, ulong *pmode)
         case 'a':
             mask |= A(DMRWE); break;
         case 0:
-            return 0;
+            return ERROR_0;
         default:
-            done = 1;
+            done = true;
         }
         if(!done)
             s++;
@@ -82,7 +83,7 @@ parsemode(char *spec, ulong *pmask, ulong *pmode)
         mask |= A(DMRWE);
     op = *s++;
     if(op != '+' && op != '-' && op != '=')
-        return 0;
+        return ERROR_0;
     mode = 0;
     for(; *s ; s++){
         switch(*s){
@@ -99,18 +100,18 @@ parsemode(char *spec, ulong *pmask, ulong *pmode)
         case 't':
             mode |= DMTMP; break;
         default:
-            return 0;
+            return ERROR_0;
         }
     }
     if(*s != 0)
-        return 0;
+        return ERROR_0;
     if(op == '+' || op == '-')
         mask &= mode;
     if(op == '-')
         mode = ~mode;
     *pmask = mask;
     *pmode = mode;
-    return 1;
+    return OK_1;
 }
 /*e: function [[parsemode]](chmod.c) */
 /*e: files/chmod.c */
