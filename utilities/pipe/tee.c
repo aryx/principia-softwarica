@@ -21,7 +21,7 @@ fdt *openf;
 char in[8192];
 /*e: global [[in]](tee.c) */
 
-int intignore(void*, char*);
+bool intignore(void*, char*);
 
 /*s: function [[main]](tee.c) */
 void

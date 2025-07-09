@@ -4,7 +4,6 @@
 #include <libc.h>
 /*e: plan9 includes */
 
-//pad: ???? int readgid(char*);
 /*s: global [[uflag]](chgrp.c) */
 // change uid of file (instead of gid)
 bool uflag;

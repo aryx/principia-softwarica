@@ -40,7 +40,7 @@ extern  void    reverse(void);
 extern  void    skip(void);
 extern  void    suffix(char*);
 extern  long    tread(char*, long);
-extern  void    trunc(Dir*, Dir**);
+extern  void    trunc_(Dir*, Dir**);
 extern  vlong   tseek(vlong, int);
 extern  void    twrite(char*, long);
 extern  void    usage(void);
@@ -115,16 +115,16 @@ main(int argc, char **argv)
     if(follow && seekable)
         for(;;) {
             static Dir *sb0, *sb1;
-            trunc(sb1, &sb0);
+            trunc_(sb1, &sb0);
             copy();
-            trunc(sb0, &sb1);
+            trunc_(sb0, &sb1);
             sleep(5000);
         }
     exits(0);
 }
 
 void
-trunc(Dir *old, Dir **new)
+trunc_(Dir *old, Dir **new)
 {
     Dir *d;
     vlong olength;

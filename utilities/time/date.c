@@ -4,17 +4,23 @@
 #include <libc.h>
 /*e: plan9 includes */
 
-int uflg, nflg;
+/*s: global flags(date.c) */
+// UTC time, which is mostly the same than GMT
+bool uflg;
+// number of seconds since the (UNIX) epoch, 1/1/1970:00:00
+bool nflg;
+/*e: global flags(date.c) */
 
+/*s: function [[main]](date.c) */
 void
 main(int argc, char *argv[])
 {
     ulong now;
 
     ARGBEGIN{
-    case 'n':   nflg = 1; break;
-    case 'u':   uflg = 1; break;
-    default:    fprint(2, "usage: date [-un] [seconds]\n"); exits("usage");
+    case 'n':   nflg = true; break;
+    case 'u':   uflg = true; break;
+    default:    fprint(STDERR, "usage: date [-un] [seconds]\n"); exits("usage");
     }ARGEND
 
     if(argc == 1)
@@ -31,4 +37,5 @@ main(int argc, char *argv[])
     
     exits(0);
 }
+/*e: function [[main]](date.c) */
 /*e: time/date.c */

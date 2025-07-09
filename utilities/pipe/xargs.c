@@ -9,7 +9,7 @@
 void
 usage(void)
 {
-    fprint(2, "usage: xargs [ -n lines ] [ -p procs ] args ...\n");
+    fprint(STDERR, "usage: xargs [ -n lines ] [ -p procs ] args ...\n");
     exits("usage");
 }
 /*e: function [[usage]](xargs.c) */
@@ -17,7 +17,7 @@ usage(void)
 void
 dowait(void)
 {
-    while(waitpid() != -1)
+    while(waitpid() != ERROR_NEG1)
         ;
 }
 /*e: function [[dowait]](xargs.c) */
@@ -25,12 +25,12 @@ dowait(void)
 void
 main(int argc, char **argv)
 {
-    int lines, procs, i, j, run;
+    int lines = 10;
+    int procs = 1;
+    int i, j, run;
     char **nargv, **args, **p;
     static Biobuf bp;
     
-    lines = 10;
-    procs = 1;
     ARGBEGIN {
     case 'n': lines = atoi(EARGF(usage())); break;
     case 'p': procs = atoi(EARGF(usage())); break;
@@ -44,10 +44,13 @@ main(int argc, char **argv)
         sysfatal("malloc: %r");
     memcpy(nargv, argv, sizeof(char *) * argc);
     args = nargv + argc;
-    if(Binit(&bp, 0, OREAD) < 0)
+
+    if(Binit(&bp, STDIN, OREAD) < 0)
         sysfatal("Binit: %r");
+
     //PAD: Blethal(&bp, nil); only in 9front
     atexit(dowait);
+
     for(j = 0, run = 1; run; j++){
         if(j >= procs)
             waitpid();
@@ -59,18 +62,23 @@ main(int argc, char **argv)
                 run = 0;
                 break;
             }
+
         switch(fork()){
-        case -1:
+        case ERROR_NEG1:
             sysfatal("fork: %r");
+        // child case
         case 0:
             exec(*nargv, nargv);
+            // here if ??
             if(**nargv != '/' && strncmp(*nargv, "./", 2) != 0 &&
                     strncmp(*nargv, "../", 3) != 0){
                 *nargv = smprint("/bin/%s", *nargv);
+                // try again
                 exec(*nargv, nargv);
             }
             sysfatal("exec: %r");
         }
+        // else, parent
         for(p = args; *p; p++)
             free(*p);
     }

@@ -28,7 +28,7 @@ err(char *f)
  * f is a non-empty directory. Remove its contents and then it.
  */
 void
-rmdir(char *f)
+rmdir_(char *f)
 {
     char *name;
     int i, j, n, ndir, nname;
@@ -72,7 +72,7 @@ rmdir(char *f)
             if(dirbuf[j].qid.type & QTDIR){
                 snprint(name, nname, "%s/%s", f, dirbuf[j].name);
                 // recurse
-                rmdir(name);
+                rmdir_(name);
             }
     if(remove(f) == ERROR_NEG1)
         err(f);
@@ -109,7 +109,7 @@ main(int argc, char *argv[])
         //else
         db = nil;
         if(recurse && (db=dirstat(f))!=nil && (db->qid.type&QTDIR))
-            rmdir(f);
+            rmdir_(f);
         else
             err(f);
         free(db);

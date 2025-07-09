@@ -20,7 +20,7 @@ bool uflag = false;
 bool xflag = false;
 /*e: global flags(cp.c) */
 
-void copy(char *from, char *to, int todir);
+void copy(char *from, char *to, bool todir);
 errorneg1 copy1(fdt fdf, fdt fdt, char *from, char *to);
 
 /*s: function [[main]](cp.c) */

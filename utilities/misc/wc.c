@@ -8,13 +8,18 @@
 /*e: plan9 includes */
 #include <bio.h>
 
+/*s: globals wc.c */
 /* flags, per-file counts, and total counts */
-static int pline, pword, prune, pbadr, pchar;
+static bool pline, pword, prune, pbadr, pchar;
 static uvlong nline, nword, nrune, nbadr, nchar;
 static uvlong tnline, tnword, tnrune, tnbadr, tnchar;
+/*e: globals wc.c */
 
+/*s: enum wc.c */
 enum{Space, Word};
+/*e: enum wc.c */
 
+/*s: function [[wc]] */
 static void
 wc(Biobuf *bin)
 {
@@ -50,7 +55,8 @@ wc(Biobuf *bin)
     tnbadr += nbadr;
     tnchar += nchar;
 }
-
+/*e: function [[wc]] */
+/*s: function [[report]](wc.c) */
 static void
 report(uvlong nline, uvlong nword, uvlong nrune, uvlong nbadr, uvlong nchar, char *fname)
 {
@@ -58,7 +64,7 @@ report(uvlong nline, uvlong nword, uvlong nrune, uvlong nbadr, uvlong nchar, cha
 
     s = line;
     e = line + sizeof line;
-    line[0] = 0;
+    line[0] = '\0';
     if(pline)
         s = seprint(s, e, " %7llud", nline);
     if(pword)
@@ -73,32 +79,35 @@ report(uvlong nline, uvlong nword, uvlong nrune, uvlong nbadr, uvlong nchar, cha
         seprint(s, e, " %s",   fname);
     print("%s\n", line+1);
 }
-
+/*e: function [[report]](wc.c) */
+/*s: function [[main]](wc.c) */
 void
 main(int argc, char *argv[])
 {
-    char *sts;
+    char *sts = nil;
     Biobuf sin, *bin;
     int i;
 
-    sts = nil;
     ARGBEGIN {
-    case 'l': pline++; break;
-    case 'w': pword++; break;
-    case 'r': prune++; break;
-    case 'b': pbadr++; break;
-    case 'c': pchar++; break;
+    case 'l': pline = true; break;
+    case 'w': pword = true; break;
+    case 'c': pchar = true; break;
+    // plan9 new: -r for runes
+    case 'r': prune = true; break;
+    // ??
+    case 'b': pbadr = true; break;
     default:
-        fprint(2, "Usage: %s [-lwrbc] [file ...]\n", argv0);
+        fprint(STDERR, "Usage: %s [-lwrbc] [file ...]\n", argv0);
         exits("usage");
     } ARGEND
-    if(pline+pword+prune+pbadr+pchar == 0){
-        pline = 1;
-        pword = 1;
-        pchar = 1;
+    if(pline || pword || prune || pbadr || pchar == false){
+        // defaults
+        pline = true;
+        pword = true;
+        pchar = true;
     }
     if(argc == 0){
-        Binit(&sin, 0, OREAD);
+        Binit(&sin, STDIN, OREAD);
         wc(&sin);
         report(nline, nword, nrune, nbadr, nchar, nil);
         Bterm(&sin);
@@ -119,4 +128,5 @@ main(int argc, char *argv[])
     }
     exits(sts);
 }
+/*e: function [[main]](wc.c) */
 /*e: misc/wc.c */
