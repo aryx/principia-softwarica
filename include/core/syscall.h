@@ -172,7 +172,7 @@ struct IOchunk {
 // Functions
 //----------------------------------------------------------------------------
 
-// syscalls (and small wrappers around syscalls)
+// syscalls (and small wrappers around syscalls after in each category)
 
 // process
 extern	int	rfork(int);

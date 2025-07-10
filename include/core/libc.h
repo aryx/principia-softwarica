@@ -736,7 +736,6 @@ extern  int enc16(char*, int, uchar*, int);
 #include <syscall.h>
 
 
-
 // getopt like macros
 /*s: signature global argv0 */
 extern char *argv0;
