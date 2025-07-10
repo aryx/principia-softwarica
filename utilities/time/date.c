@@ -35,7 +35,7 @@ main(int argc, char *argv[])
     else
         print("%s", ctime(now));
     
-    exits(0);
+    exits(nil);
 }
 /*e: function [[main]](date.c) */
 /*e: time/date.c */

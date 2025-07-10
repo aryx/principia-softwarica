@@ -5,26 +5,30 @@
 /*e: plan9 includes */
 #include <bio.h>
 
+/*s: constant [[DEF]](p.c) */
 #define DEF 22  /* lines in chunk: 3*DEF == 66, #lines per nroff page */
-
+/*e: constant [[DEF]](p.c) */
+/*s: globals p.c */
 Biobuf *cons;
 Biobuf bout;
 
 int pglen = DEF;
+/*e: globals p.c */
 
-void printfile(int);
+void printfile(fdt);
 
+/*s: function [[main]](p.c) */
 void
 main(int argc, char *argv[])
 {
     int n;
-    int f;
+    fdt f;
 
     if((cons = Bopen("/dev/cons", OREAD)) == 0) {
-        fprint(2, "p: can't open /dev/cons\n");
+        fprint(STDERR, "p: can't open /dev/cons\n");
         exits("missing /dev/cons");
     }
-    Binit(&bout, 1, OWRITE);
+    Binit(&bout, STDOUT, OWRITE);
     n = 0;
     while(argc > 1) {
         --argc; argv++;
@@ -36,7 +40,7 @@ main(int argc, char *argv[])
             n++;
             f = open(argv[0], OREAD);
             if(f < 0){
-                fprint(2, "p: can't open %s - %r\n", argv[0]);
+                fprint(STDERR, "p: can't open %s - %r\n", argv[0]);
                 continue;
             }
             printfile(f);
@@ -44,12 +48,13 @@ main(int argc, char *argv[])
         }
     }
     if(n == 0)
-        printfile(0);
-    exits(0);
+        printfile(STDIN);
+    exits(nil);
 }
-
+/*e: function [[main]](p.c) */
+/*s: function [[printfile]](p.c) */
 void
-printfile(int f)
+printfile(fdt f)
 {
     int i, j, n;
     char *s, *cmd;
@@ -78,8 +83,8 @@ printfile(int f)
         Bflush(&bout);
         getcmd:
         cmd = Brdline(cons, '\n');
-        if(cmd == 0 || *cmd == 'q')
-            exits(0);
+        if(cmd == nil || *cmd == 'q')
+            exits(nil);
         cmd[Blinelen(cons)-1] = 0;
         if(*cmd == '!'){
             if(fork() == 0){
@@ -91,4 +96,5 @@ printfile(int f)
         }
     }
 }
+/*e: function [[printfile]](p.c) */
 /*e: pipe/p.c */

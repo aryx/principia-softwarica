@@ -100,7 +100,7 @@ main(int argc, char *argv[])
         fprint(STDERR, "Usage: %s [-lwrbc] [file ...]\n", argv0);
         exits("usage");
     } ARGEND
-    if(pline || pword || prune || pbadr || pchar == false){
+    if(!pline && !pword && !prune && !pbadr && !pchar){
         // defaults
         pline = true;
         pword = true;

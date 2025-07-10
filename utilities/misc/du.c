@@ -6,7 +6,7 @@
 #include <u.h>
 #include <libc.h>
 /*e: plan9 includes */
-#include <string.h>
+#include <str.h>
 
 extern  vlong   du(char*, Dir*);
 extern  void    err(char*);
@@ -78,7 +78,7 @@ main(int argc, char *argv[])
     int i, scale;
     char *s, *ss, *name;
 
-    doquote = needsrcquote;
+    //XXX: doquote = needsrcquote;
     quotefmtinstall();
 
     ARGBEGIN {
