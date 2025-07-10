@@ -1,3 +1,4 @@
+/*s: editors/misc/ed.c */
 /*
  * Editor
  */
@@ -1586,3 +1587,4 @@ regerror(char *s)
     USED(s);
     error(Q);
 }
+/*e: editors/misc/ed.c */
