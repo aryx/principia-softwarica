@@ -117,6 +117,8 @@ char    T[] = "TMP";
 char    WRERR[] = "WRITE ERROR";
 int bpagesize = 20;
 char    hex[]   = "0123456789abcdef";
+// in Linux pid can be very long, so better to have at least 7 X (was 5 before)
+char template[] = "/tmp/eXXXXXXX";
 /*e: globals ed.c */
 
 // forward declarations
@@ -202,7 +204,7 @@ main(int argc, char *argv[])
         globp = L"r";
     }
     zero = malloc((nlall+5)*sizeof(int*));
-    tfname = mktemp("/tmp/eXXXXX");
+    tfname = mktemp(template);
 
     init();
     setjmp(savej);
