@@ -1,3 +1,4 @@
+/*s: compare/comm.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -175,3 +176,4 @@ openfil(char *s)
     exits("open");
     return 0;   /* shut up ken */
 }
+/*e: compare/comm.c */

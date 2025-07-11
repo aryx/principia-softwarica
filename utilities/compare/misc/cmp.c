@@ -1,3 +1,4 @@
+/*s: compare/cmp.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -130,3 +131,4 @@ usage(void)
     print("usage: cmp [-lLs] file1 file2 [offset1 [offset2] ]\n");
     exits("usage");
 }
+/*e: compare/cmp.c */
