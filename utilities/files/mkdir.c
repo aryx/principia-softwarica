@@ -57,6 +57,7 @@ mkdirp(char *s)
         makedir(s);
 }
 /*e: function [[mkdirp]] */
+
 /*s: function [[main]](mkdir.c) */
 void
 main(int argc, char *argv[])

@@ -30,6 +30,7 @@ Biobuf  fin;
 Biobuf  fout;
 /*e: globals uniq.c */
 
+// forward decls
 bool   gline(char *buf);
 void  pline(char *buf);
 bool   equal(char *b1, char *b2);
@@ -95,6 +96,7 @@ main(int argc, char *argv[])
     }
 }
 /*e: function [[main]](uniq.c) */
+
 /*s: function [[gline]](uniq.c) */
 bool
 gline(char *buf)

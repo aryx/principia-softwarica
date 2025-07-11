@@ -4,7 +4,9 @@
 #include <libc.h>
 /*e: plan9 includes */
 
+// forward decls
 error1 touch(bool, char *);
+
 /*s: global [[now]](touch.c) */
 ulong now;
 /*e: global [[now]](touch.c) */
@@ -49,6 +51,7 @@ main(int argc, char **argv)
     exits(nil);
 }
 /*e: function [[main]](touch.c) */
+
 /*s: function [[touch]] */
 error1
 touch(bool nocreate, char *name)

@@ -15,6 +15,7 @@ Biobuf bout;
 int pglen = DEF;
 /*e: globals p.c */
 
+// forward decls
 void printfile(fdt);
 
 /*s: function [[main]](p.c) */
@@ -24,9 +25,12 @@ main(int argc, char *argv[])
     int n;
     fdt f;
 
-    if((cons = Bopen("/dev/cons", OREAD)) == 0) {
-        fprint(STDERR, "p: can't open /dev/cons\n");
-        exits("missing /dev/cons");
+    // plan9 uses /dev/cons and Linux /dev/tty (both virtual devices)
+    if((cons = Bopen("/dev/cons", OREAD)) == nil) {
+        if((cons = Bopen("/dev/tty", OREAD)) == nil) {
+            fprint(STDERR, "p: can't open /dev/cons or /dev/tty\n");
+            exits("missing /dev/cons or /dev/tty");
+        }
     }
     Binit(&bout, STDOUT, OWRITE);
     n = 0;
@@ -52,6 +56,7 @@ main(int argc, char *argv[])
     exits(nil);
 }
 /*e: function [[main]](p.c) */
+
 /*s: function [[printfile]](p.c) */
 void
 printfile(fdt f)

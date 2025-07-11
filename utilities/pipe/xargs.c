@@ -21,6 +21,7 @@ dowait(void)
         ;
 }
 /*e: function [[dowait]](xargs.c) */
+
 /*s: function [[main]](xargs.c) */
 void
 main(int argc, char **argv)

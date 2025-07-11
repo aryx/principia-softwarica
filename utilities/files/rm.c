@@ -80,6 +80,7 @@ rmdir_(char *f)
     free(dirbuf);
 }
 /*e: function [[rmdir]] */
+
 /*s: function [[main]](rm.c) */
 void
 main(int argc, char *argv[])

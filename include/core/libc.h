@@ -23,6 +23,13 @@ typedef uchar bool_byte;
 //typedef char* string; // conflict
 //typedef char* filename; // conflict in sam with function filename
 
+enum _ord {
+  ORD__EQ = 0,
+  ORD__INF = -1,
+  ORD__SUP = 1,
+};
+typedef int ord;
+
 /*s: constant [[STDxxx]] */
 #define STDIN 0
 #define STDOUT 1

@@ -24,7 +24,7 @@ main(int argc, char *argv[])
     }ARGEND
 
     if(argc == 1)
-        now = strtoul(*argv, 0, 0);
+        now = strtoul(*argv, nil, 0);
     else
         now = time(0);
 

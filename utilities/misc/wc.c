@@ -80,6 +80,7 @@ report(uvlong nline, uvlong nword, uvlong nrune, uvlong nbadr, uvlong nchar, cha
     print("%s\n", line+1);
 }
 /*e: function [[report]](wc.c) */
+
 /*s: function [[main]](wc.c) */
 void
 main(int argc, char *argv[])

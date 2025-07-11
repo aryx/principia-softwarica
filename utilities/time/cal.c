@@ -5,6 +5,7 @@
 /*e: plan9 includes */
 #include <bio.h>
 
+/*s: constants cal.c */
 char    dayw[] =
 {
     " S  M Tu  W Th  F  S"
@@ -22,27 +23,32 @@ char    mon[] =
     31, 30, 31, 31,
     30, 31, 30, 31,
 };
+/*e: constants cal.c */
+/*s: globals cal.c */
 char    string[432];
 Biobuf  bout;
+/*e: globals cal.c */
 
-void    main(int argc, char *argv[]);
+// forward decls
 int number(char *str);
-void    pstr(char *str, int n);
-void    cal(int m, int y, char *p, int w);
+void pstr(char *str, int n);
+void cal(int m, int y, char *p, int w);
 int jan1(int yr);
 int curmo(void);
 int curyr(void);
 
+/*s: function [[main]](cal.c) */
 void
 main(int argc, char *argv[])
 {
-    int y, i, j, m;
+    int y, m;
+    int i, j;
 
     if(argc > 3) {
-        fprint(2, "usage: cal [month] [year]\n");
+        fprint(STDERR, "usage: cal [month] [year]\n");
         exits("usage");
     }
-    Binit(&bout, 1, OWRITE);
+    Binit(&bout, STDOUT, OWRITE);
 
 /*
  * no arg, print current month
@@ -92,7 +98,7 @@ xshort:
     cal(m, y, string, 24);
     for(i=0; i<6*24; i+=24)
         pstr(string+i, 24);
-    exits(0);
+    exits(nil);
 
 /*
  *  print out complete year
@@ -118,12 +124,14 @@ xlong:
             pstr(string+j, 72);
     }
     Bprint(&bout, "\n\n\n");
-    exits(0);
+    exits(nil);
 
 badarg:
     Bprint(&bout, "cal: bad argument\n");
 }
+/*e: function [[main]](cal.c) */
 
+/*s: struct [[dict]](cal.c) */
 struct
 {
     char*   word;
@@ -156,7 +164,8 @@ struct
     "december", 12,
     0
 };
-
+/*e: struct [[dict]](cal.c) */
+/*s: function [[number]](cal.c) */
 /*
  * convert to a number.
  * if its a dictionary word,
@@ -180,7 +189,8 @@ number(char *str)
     }
     return n;
 }
-
+/*e: function [[number]](cal.c) */
+/*s: function [[pstr]](cal.c) */
 void
 pstr(char *str, int n)
 {
@@ -199,7 +209,9 @@ pstr(char *str, int n)
     s[1] = '\0';
     Bprint(&bout, "%s\n", str);
 }
+/*e: function [[pstr]](cal.c) */
 
+/*s: function [[cal]] */
 void
 cal(int m, int y, char *p, int w)
 {
@@ -254,7 +266,9 @@ cal(int m, int y, char *p, int w)
         }
     }
 }
+/*e: function [[cal]] */
 
+/*s: function [[jan1]](cal.c) */
 /*
  *  return day of the week
  *  of jan 1 of given year
@@ -292,7 +306,9 @@ jan1(int yr)
 
     return d%7;
 }
+/*e: function [[jan1]](cal.c) */
 
+/*s: function [[curmo]](cal.c) */
 /*
  * system dependent
  * get current month and year
@@ -305,7 +321,8 @@ curmo(void)
     tm = localtime(time(0));
     return tm->mon+1;
 }
-
+/*e: function [[curmo]](cal.c) */
+/*s: function [[curyr]](cal.c) */
 int
 curyr(void)
 {
@@ -314,4 +331,5 @@ curyr(void)
     tm = localtime(time(0));
     return tm->year+1900;
 }
+/*e: function [[curyr]](cal.c) */
 /*e: time/cal.c */

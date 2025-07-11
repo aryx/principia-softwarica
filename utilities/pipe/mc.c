@@ -8,64 +8,91 @@
  *  -t suppresses expanding multiple blanks into tabs
  *
  */
-#include    <u.h>
-#include    <libc.h>
-#include    <draw.h>
+/*s: plan9 includes */
+#include <u.h>
+#include <libc.h>
+/*e: plan9 includes */
 #include    <bio.h>
 
+#ifdef Unix
+char* font;
+#else
+#include    <draw.h>
+Font *font;
+#endif
+
+/*s: constants mc.c */
 #define WIDTH           80
 #define TAB 4
-#define WORD_ALLOC_QUANTA   1024
+/*x: constants mc.c */
 #define ALLOC_QUANTA        4096
-
+#define WORD_ALLOC_QUANTA   1024
+/*e: constants mc.c */
+/*s: global flags mc.c */
+// ??
+bool colonflag = false;
+/*x: global flags mc.c */
+// set to true in acme
+bool tabflag = false;  /* -t flag turned off forever */
+/*e: global flags mc.c */
+/*s: globals mc.c */
 int linewidth=WIDTH;
-int mintab=1;
-int colonflag=0;
-int tabflag=0;  /* -t flag turned off forever */
-Rune *cbuf, *cbufp;
-Rune **word;
-int maxwidth=0;
-int nalloc=ALLOC_QUANTA;
-int nwalloc=WORD_ALLOC_QUANTA;
-int nchars=0;
-int nwords=0;
-int tabwidth=0;
-Font *font;
+/*x: globals mc.c */
 Biobuf  bin;
 Biobuf  bout;
+/*x: globals mc.c */
+Rune *cbuf, *cbufp;
+Rune **word;
+/*x: globals mc.c */
+int nalloc=ALLOC_QUANTA;
+int nchars=0;
+/*x: globals mc.c */
+int nwords=0;
+int mintab=1;
+int maxwidth=0;
+/*x: globals mc.c */
+int nwalloc=WORD_ALLOC_QUANTA;
+/*x: globals mc.c */
+int tabwidth=0;
+/*e: globals mc.c */
 
+// forward decls
 void getwidth(void), readbuf(int), error(char *);
 void scanwords(void), columnate(void), morechars(void);
 int wordwidth(Rune*, int);
 int nexttab(int);
 
+/*s: function [[main]](mc.c) */
 void
 main(int argc, char *argv[])
 {
     int i;
-    int lineset;
-    int ifd;
+    bool lineset = false;
+    fdt ifd;
 
-    lineset = 0;
-    Binit(&bout, 1, OWRITE);
+    Binit(&bout, STDOUT, OWRITE);
+
+    // Why no ARGBEGIN/ARGEND?
     while(argc > 1 && argv[1][0] == '-'){
         --argc; argv++;
         switch(argv[0][1]){
         case '\0':
-            colonflag = 1;
+            colonflag = true;
             break;
+        // useful only for acme
         case 't':
-            tabflag = 0;
+            tabflag = false;
             break;
         default:
             linewidth = atoi(&argv[0][1]);
             if(linewidth <= 1)
                 linewidth = WIDTH;
-            lineset = 1;
+            lineset = true;
             break;
         }
     }
-    if(lineset == 0){
+
+    if(!lineset){
         getwidth();
         if(linewidth <= 1){
             linewidth = WIDTH;
@@ -75,14 +102,15 @@ main(int argc, char *argv[])
 
     cbuf = cbufp = malloc(ALLOC_QUANTA*(sizeof *cbuf));
     word = malloc(WORD_ALLOC_QUANTA*(sizeof *word));
-    if(word == 0 || cbuf == 0)
+    if(word == nil || cbuf == nil)
         error("out of memory");
+
     if(argc == 1)
-        readbuf(0);
+        readbuf(STDIN);
     else{
         for(i = 1; i < argc; i++){
             if((ifd = open(*++argv, OREAD)) == -1)
-                fprint(2, "mc: can't open %s (%r)\n", *argv);
+                fprint(STDERR, "mc: can't open %s (%r)\n", *argv);
             else{
                 readbuf(ifd);
                 Bflush(&bin);
@@ -91,20 +119,25 @@ main(int argc, char *argv[])
         }
     }
     columnate();
-    exits(0);
+    exits(nil);
 }
+/*e: function [[main]](mc.c) */
+
+/*s: function [[error]](mc.c) */
 void
 error(char *s)
 {
-    fprint(2, "mc: %s\n", s);
+    fprint(STDERR, "mc: %s\n", s);
     exits(s);
 }
+/*e: function [[error]](mc.c) */
+/*s: function [[readbuf]](mc.c) */
 void
-readbuf(int fd)
+readbuf(fdt fd)
 {
     int lastwascolon = 0;
-    long c;
     int linesiz = 0;
+    long c;
 
     Binit(&bin, fd, OREAD);
     do{
@@ -144,6 +177,8 @@ readbuf(int fd)
             linesiz = 0;
     }while(c >= 0);
 }
+/*e: function [[readbuf]](mc.c) */
+/*s: function [[scanwords]](mc.c) */
 void
 scanwords(void)
 {
@@ -168,7 +203,8 @@ scanwords(void)
         }
     }
 }
-
+/*e: function [[scanwords]](mc.c) */
+/*s: function [[columnate]](mc.c) */
 void
 columnate(void)
 {
@@ -210,15 +246,8 @@ columnate(void)
         Bputc(&bout, '\n');
     }
 }
-
-int
-wordwidth(Rune *w, int nw)
-{
-    if(font)
-        return runestringnwidth(font, w, nw);
-    return nw;
-}
-
+/*e: function [[columnate]](mc.c) */
+/*s: function [[nexttab]](mc.c) */
 int
 nexttab(int col)
 {
@@ -229,14 +258,38 @@ nexttab(int col)
     }
     return col+1;
 }
-
+/*e: function [[nexttab]](mc.c) */
+/*s: function [[morechars]](mc.c) */
 void
 morechars(void)
 {
     nalloc += ALLOC_QUANTA;
-    if((cbuf = realloc(cbuf, nalloc*sizeof(*cbuf))) == 0)
+    if((cbuf = realloc(cbuf, nalloc*sizeof(*cbuf))) == nil)
         error("out of memory");
     cbufp = cbuf+nchars-1;
+}
+/*e: function [[morechars]](mc.c) */
+
+#ifdef Unix
+/*s: function [[getwidth]](mc.c)(unix) */
+void getwidth(void)
+{
+}
+/*e: function [[getwidth]](mc.c)(unix) */
+/*s: function [[wordwidth]](mc.c)(unix) */
+int
+wordwidth(Rune *w, int nw)
+{
+    return nw;
+}
+/*e: function [[wordwidth]](mc.c)(unix) */
+#else
+int
+wordwidth(Rune *w, int nw)
+{
+    if(font)
+        return runestringnwidth(font, w, nw);
+    return nw;
 }
 
 /*
@@ -315,4 +368,5 @@ getwidth(void)
         tabwidth = 4*stringwidth(font, "0");
     tabflag = 1;
 }
+#endif
 /*e: pipe/mc.c */

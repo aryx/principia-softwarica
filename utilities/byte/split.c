@@ -6,14 +6,22 @@
 #include <bio.h>
 #include <regexp.h>
 
-char    digit[] = "0123456789";
-char    *suffix = "";
+/*s: globals split.c */
 char    *stem = "x";
+/*x: globals split.c */
+char    *suffix = "";
+/*x: globals split.c */
+char    digit[] = "0123456789";
 char    suff[] = "aa";
 char    name[200];
+/*x: globals split.c */
 Biobuf  bout;
 Biobuf  *output = &bout;
+/*x: globals split.c */
+char *pattern = nil;
+/*e: globals split.c */
 
+// forward decls
 extern int nextfile(void);
 extern int matchfile(Resub*);
 extern void openf(void);
@@ -21,20 +29,30 @@ extern char *fold(char*,int);
 extern void usage(void);
 extern void badexp(void);
 
+/*s: function [[main]](split.c) */
 void
 main(int argc, char *argv[])
 {
-    Reprog *exp;
-    char *pattern = 0;
+    /*s: [[main]](split.c) locals */
     int n = 1000;
-    char *line;
-    int xflag = 0;
-    int iflag = 0;
+    /*x: [[main]](split.c) locals */
+    // ??
+    bool xflag = false;
+    // ??
+    bool iflag = false;
+    /*x: [[main]](split.c) locals */
     Biobuf bin;
     Biobuf *b = &bin;
+    /*x: [[main]](split.c) locals */
+    char *line;
+    /*x: [[main]](split.c) locals */
     char buf[256];
+    /*x: [[main]](split.c) locals */
+    Reprog *exp;
+    /*e: [[main]](split.c) locals */
 
     ARGBEGIN {
+    /*s: [[main]](split.c) switch flag character cases */
     case 'l':
     case 'n':
         n=atoi(EARGF(usage()));
@@ -49,11 +67,12 @@ main(int argc, char *argv[])
         suffix = strdup(EARGF(usage()));
         break;
     case 'x':
-        xflag++;
+        xflag = true;
         break;
     case 'i':
-        iflag++;
+        iflag = true;
         break;
+    /*e: [[main]](split.c) switch flag character cases */
     default:
         usage();
         break;
@@ -66,12 +85,13 @@ main(int argc, char *argv[])
     if(argc != 0) {
         b = Bopen(argv[0], OREAD);
         if(b == nil) {
-            fprint(2, "split: can't open %s: %r\n", argv[0]);
+            fprint(STDERR, "split: can't open %s: %r\n", argv[0]);
             exits("open");
         }
     } else
-        Binit(b, 0, OREAD);
+        Binit(b, STDIN, OREAD);
 
+    /*s: [[main()]](split.c) if [[pattern]] */
     if(pattern) {
         Resub match[2];
 
@@ -92,7 +112,9 @@ main(int argc, char *argv[])
             Bwrite(output, line, Blinelen(b)-1);
             Bputc(output, '\n');
         }
-    } else {
+    }
+    /*e: [[main()]](split.c) if [[pattern]] */
+    else {
         int linecnt = n;
 
         while((line=Brdline(b,'\n')) != 0) {
@@ -112,18 +134,20 @@ main(int argc, char *argv[])
     }
     if(b != nil)
         Bterm(b);
-    exits(0);
+    exits(nil);
 }
+/*e: function [[main]](split.c) */
 
-int
+/*s: function [[nextfile]](split.c) */
+bool
 nextfile(void)
 {
-    static int canopen = 1;
+    static bool canopen = true;
 
     if(suff[0] > 'z') {
         if(canopen)
-            fprint(2, "split: file %szz not split\n",stem);
-        canopen = 0;
+            fprint(STDERR, "split: file %szz not split\n",stem);
+        canopen = false;
     } else {
         snprint(name, sizeof name, "%s%s", stem, suff);
         if(++suff[1] > 'z') 
@@ -132,7 +156,8 @@ nextfile(void)
     }
     return canopen;
 }
-
+/*e: function [[nextfile]](split.c) */
+/*s: function [[matchfile]](split.c) */
 int
 matchfile(Resub *match)
 {
@@ -146,11 +171,12 @@ matchfile(Resub *match)
     } 
     return nextfile();
 }
-
+/*e: function [[matchfile]](split.c) */
+/*s: function [[openf]](split.c) */
 void
 openf(void)
 {
-    static int fd = 0;
+    static fdt fd = 0;
 
     Bflush(output);
     Bterm(output);
@@ -158,12 +184,13 @@ openf(void)
         close(fd);
     fd = create(name,OWRITE,0666);
     if(fd < 0) {
-        fprint(2, "grep: can't create %s: %r\n", name);
+        fprint(STDERR, "grep: can't create %s: %r\n", name);
         exits("create");
     }
     Binit(output, fd, OWRITE);
 }
-
+/*e: function [[openf]](split.c) */
+/*s: function [[fold]](split.c) */
 char *
 fold(char *s, int n)
 {
@@ -182,18 +209,21 @@ fold(char *s, int n)
          */
     return fline;
 }
-
+/*e: function [[fold]](split.c) */
+/*s: function [[usage]](split.c) */
 void
 usage(void)
 {
-    fprint(2, "usage: split [-n num] [-e exp] [-f stem] [-s suff] [-x] [-i] [file]\n");
+    fprint(STDERR, "usage: split [-n num] [-e exp] [-f stem] [-s suff] [-x] [-i] [file]\n");
     exits("usage");
 }
-
+/*e: function [[usage]](split.c) */
+/*s: function [[badexp]](split.c) */
 void
 badexp(void)
 {
-    fprint(2, "split: bad regular expression\n");
+    fprint(STDERR, "split: bad regular expression\n");
     exits("bad regular expression");
 }
+/*e: function [[badexp]](split.c) */
 /*e: byte/split.c */

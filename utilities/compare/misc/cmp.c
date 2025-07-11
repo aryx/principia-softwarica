@@ -1,53 +1,76 @@
 /*s: compare/cmp.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <ctype.h>
 
+/*s: constant [[BUF]](cmp.c) */
 #define     BUF     65536
+/*e: constant [[BUF]](cmp.c) */
 
-int sflag = 0;
-int lflag = 0;
-int Lflag = 0;
+/*s: global flags (cmp.c) */
+// print nothing for differing files (shutup) but set exit status
+bool sflag = false;
+// print byte number (decimal) and differing bytes (hexa)
+bool lflag = false;
+// print the line number of the first differing bytes
+bool Lflag = false;
+/*e: global flags (cmp.c) */
 
+// forward decl
 static void usage(void);
 
+/*s: function [[seekoff]](cmp.c) */
 char **
-seekoff(int fd, char *name, char **argv)
+seekoff(fdt fd, char *name, char **argv)
 {
     vlong o;
 
     if(*argv){
         if (!isascii(**argv) || !isdigit(**argv))
             usage();
-        o = strtoll(*argv++, 0, 0);
-        if(seek(fd, o, 0) < 0){
-            if(!sflag) fprint(2, "cmp: %s: seek by %lld: %r\n",
+        o = strtoll(*argv++, nil, 0);
+        if(seek(fd, o, SEEK__START) < 0){
+            if(!sflag) fprint(STDERR, "cmp: %s: seek by %lld: %r\n",
                 name, o);
             exits("seek");
         }
     }
     return argv;
 }
+/*e: function [[seekoff]](cmp.c) */
 
+/*s: function [[main]](cmp.c) */
 void
 main(int argc, char *argv[])
 {
-    int n, i;
-    uchar *p, *q;
-    uchar buf1[BUF], buf2[BUF];
-    int f1, f2;
-    vlong nc = 1, l = 1;
+    /*s: [[main]] locals (cmp.c) */
     char *name1, *name2;
+    fdt f1, f2;
+    uchar buf1[BUF], buf2[BUF];
     uchar *b1s, *b1e, *b2s, *b2e;
+    /*x: [[main]] locals (cmp.c) */
+    int n, i;
+    /*x: [[main]] locals (cmp.c) */
+    uchar *p, *q;
+    /*x: [[main]] locals (cmp.c) */
+    // ??
+    vlong nc = 1;
+    // line
+    vlong l = 1;
+    /*e: [[main]] locals (cmp.c) */
 
     ARGBEGIN{
-    case 's':   sflag = 1; break;
-    case 'l':   lflag = 1; break;
-    case 'L':   Lflag = 1; break;
+    case 's':   sflag = true; break;
+    case 'l':   lflag = true; break;
+    case 'L':   Lflag = true; break;
     default:    usage();
     }ARGEND
+
     if(argc < 2 || argc > 4)
         usage();
+
     if((f1 = open(name1 = *argv++, OREAD)) == -1){
         if(!sflag) perror(name1);
         exits("open");
@@ -63,6 +86,7 @@ main(int argc, char *argv[])
 
     b1s = b1e = buf1;
     b2s = b2e = buf2;
+
     for(;;){
         if(b1s >= b1e){
             if(b1s >= &buf1[BUF])
@@ -81,6 +105,7 @@ main(int argc, char *argv[])
             n = b1e - b1s;
         if(n <= 0)
             break;
+
         if(memcmp((void *)b1s, (void *)b2s, n) != 0){
             if(sflag)
                 exits("differ");
@@ -105,7 +130,8 @@ main(int argc, char *argv[])
         nc += n;
         b1s += n;
         b2s += n;
-    }
+    } // end for (;;)
+
     if (b1e - b1s < 0 || b2e - b2s < 0) {
         if (!sflag) {
             if (b1e - b1s < 0)
@@ -117,18 +143,24 @@ main(int argc, char *argv[])
         }
         exits("read error");
     }
+
+    // files are the same, exit 0
     if(b1e - b1s == b2e - b2s)
-        exits((char *)0);
+        exits(nil);
+
     if(!sflag)
         print("EOF on %s after %lld bytes\n",
             (b1e - b1s > b2e - b2s)? name2 : name1, nc-1);
     exits("EOF");
 }
+/*e: function [[main]](cmp.c) */
 
+/*s: function [[usage]](cmp.c) */
 static void
 usage(void)
 {
     print("usage: cmp [-lLs] file1 file2 [offset1 [offset2] ]\n");
     exits("usage");
 }
+/*e: function [[usage]](cmp.c) */
 /*e: compare/cmp.c */

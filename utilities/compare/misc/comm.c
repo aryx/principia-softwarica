@@ -1,23 +1,33 @@
 /*s: compare/comm.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <bio.h>
 
+/*s: constant [[LB]](comm.c) */
 #define LB 2048
-int one;
-int two;
-int three;
-
+/*e: constant [[LB]](comm.c) */
+/*s: global flags comm.c */
+bool one;
+bool two;
+bool three;
+/*e: global flags comm.c */
+/*s: globals comm.c */
 char    *ldr[3];
-
+/*x: globals comm.c */
 Biobuf *ib1;
 Biobuf *ib2;
-Biobuf *openfil(char*);
-int rd(Biobuf*, char*);
+/*e: globals comm.c */
+
+// forward decls
+Biobuf* openfil(char*);
+int     rd(Biobuf*, char*);
 void    wr(char*, int);
 void    copy(Biobuf*, char*, int);
-int compare(char*, char*);
+int     compare(char*, char*);
 
+/*s: function [[main]](comm.c) */
 void
 main(int argc, char *argv[])
 {
@@ -28,24 +38,25 @@ main(int argc, char *argv[])
     ldr[1] = "\t";
     ldr[2] = "\t\t";
     l = 1;
+
     ARGBEGIN{
     case '1':
         if(!one) {
-            one = 1;
-            ldr[1][0] =
+            one = true;
+            ldr[1][0] = '\0';
             ldr[2][l--] = '\0';
         }
         break;
 
     case '2':
         if(!two) {
-            two = 1;
+            two = true;
             ldr[2][l--] = '\0';
         }
         break;
 
     case '3':
-        three = 1;
+        three = true;
         break;
 
     default:
@@ -54,18 +65,19 @@ main(int argc, char *argv[])
     }ARGEND
 
     if(argc < 2) {
+    /*s: [[main]] label [[usage]] (comm.c) */
     Usage:
-        fprint(2, "usage: comm [-123] file1 file2\n");
+        fprint(STDERR, "usage: comm [-123] file1 file2\n");
         exits("usage");
+    /*e: [[main]] label [[usage]] (comm.c) */
     }
 
     ib1 = openfil(argv[0]);
     ib2 = openfil(argv[1]);
 
-
     if(rd(ib1,lb1) < 0){
         if(rd(ib2,lb2) < 0)
-            exits(0);
+            exits(nil);
         copy(ib2,lb2,2);
     }
     if(rd(ib2,lb2) < 0)
@@ -77,7 +89,7 @@ main(int argc, char *argv[])
             wr(lb1,3);
             if(rd(ib1,lb1) < 0) {
                 if(rd(ib2,lb2) < 0)
-                    exits(0);
+                    exits(nil);
                 copy(ib2,lb2,2);
             }
             if(rd(ib2,lb2) < 0)
@@ -98,7 +110,9 @@ main(int argc, char *argv[])
         }
     }
 }
+/*e: function [[main]](comm.c) */
 
+/*s: function [[rd]](comm.c) */
 int
 rd(Biobuf *file, char *buf)
 {
@@ -116,7 +130,8 @@ rd(Biobuf *file, char *buf)
     }
     return -1;
 }
-
+/*e: function [[rd]](comm.c) */
+/*s: function [[wr]](comm.c) */
 void
 wr(char *str, int n)
 {
@@ -138,16 +153,18 @@ wr(char *str, int n)
     }
     print("%s%s\n", ldr[n-1],str);
 }
-
+/*e: function [[wr]](comm.c) */
+/*s: function [[copy]](comm.c) */
 void
 copy(Biobuf *ibuf, char *lbuf, int n)
 {
     do
         wr(lbuf,n);
     while(rd(ibuf,lbuf) >= 0);
-    exits(0);
+    exits(nil);
 }
-
+/*e: function [[copy]](comm.c) */
+/*s: function [[compare]](comm.c) */
 int
 compare(char *a, char *b)
 {
@@ -161,19 +178,22 @@ compare(char *a, char *b)
         return 1;
     return 2;
 }
-
+/*e: function [[compare]](comm.c) */
+/*s: function [[openfil]](comm.c) */
 Biobuf*
 openfil(char *s)
 {
     Biobuf *b;
 
-    if(s[0]=='-' && s[1]==0)
+    if(s[0]=='-' && s[1]=='\0')
         s = "/fd/0";
     b = Bopen(s, OREAD);
     if(b)
         return b;
-    fprint(2,"comm: cannot open %s: %r\n",s);
+    fprint(STDERR, "comm: cannot open %s: %r\n",s);
     exits("open");
-    return 0;   /* shut up ken */
+    // never reached
+    return nil;   /* shut up ken */
 }
+/*e: function [[openfil]](comm.c) */
 /*e: compare/comm.c */

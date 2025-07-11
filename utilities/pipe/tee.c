@@ -21,6 +21,7 @@ fdt *openf;
 char in[8192];
 /*e: global [[in]](tee.c) */
 
+// forward decls
 bool intignore(void*, char*);
 
 /*s: function [[main]](tee.c) */
@@ -79,12 +80,13 @@ main(int argc, char **argv)
     }
 }
 /*e: function [[main]](tee.c) */
+
 /*s: function [[intignore]](tee.c) */
 bool
 intignore(void *a, char *msg)
 {
     USED(a);
-    if(strcmp(msg, "interrupt") == 0)
+    if(strcmp(msg, "interrupt") == ORD__EQ)
         return true;
     return false;
 }

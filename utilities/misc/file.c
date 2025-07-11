@@ -700,7 +700,7 @@ istar(void)
     seek(fd, 0, 0);     /* reposition to start of file */
     if (readn(fd, tblock, sizeof tblock) != sizeof tblock)
         return 0;
-    chksum = strtol(hdr->chksum, 0, 8);
+    chksum = strtol(hdr->chksum, nil, 8);
     if (hdr->name[0] != '\0' && checksum(hp) == chksum) {
         if (strcmp(hdr->magic, "ustar") == 0)
             print(mime? "application/x-ustar\n":
@@ -1213,7 +1213,7 @@ depthof(char *s, int *newp)
     if(s == es)
         return -1;
     if('0'<=*s && *s<='9')
-        return 1<<strtol(s, 0, 0);
+        return 1<<strtol(s, nil, 0);
 
     *newp = 1;
     d = 0;

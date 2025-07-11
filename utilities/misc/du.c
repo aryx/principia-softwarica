@@ -8,6 +8,7 @@
 /*e: plan9 includes */
 #include <str.h>
 
+// forward decls
 extern  vlong   du(char*, Dir*);
 extern  void    err(char*);
 extern  vlong   blkmultiple(vlong);

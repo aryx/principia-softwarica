@@ -4,13 +4,16 @@
 #include <libc.h>
 /*e: plan9 includes */
 
+/*s: macros chmod.c */
 #define U(x) (x<<6)
 #define G(x) (x<<3)
 #define O(x) (x)
 #define A(x) (U(x)|G(x)|O(x))
 
 #define DMRWE (DMREAD|DMWRITE|DMEXEC)
+/*e: macros chmod.c */
 
+// forward decls
 error0 parsemode(char *, ulong *, ulong *);
 
 /*s: function [[main]](chmod.c) */
@@ -50,6 +53,7 @@ main(int argc, char *argv[])
     exits(nil);
 }
 /*e: function [[main]](chmod.c) */
+
 /*s: function [[parsemode]](chmod.c) */
 error0
 parsemode(char *spec, ulong *pmask, ulong *pmode)

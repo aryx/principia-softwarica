@@ -20,6 +20,7 @@ bool uflag = false;
 bool xflag = false;
 /*e: global flags(cp.c) */
 
+// forward decls
 void copy(char *from, char *to, bool todir);
 errorneg1 copy1(fdt fdf, fdt fdt, char *from, char *to);
 
@@ -71,6 +72,7 @@ usage:
 /*e: label [[usage]] in [[main]](cp.c) */
 }
 /*e: function [[main]](cp.c) */
+
 /*s: function [[samefile]](cp.c) */
 bool
 samefile(Dir *a, char *an, char *bn)

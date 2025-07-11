@@ -184,7 +184,7 @@ main(int argc, char *argv[])
     } ARGEND
 
     USED(argc);
-    if(*argv && (strcmp(*argv, "-") == 0)) {
+    if(*argv && (strcmp(*argv, "-") == ORD__EQ)) {
         argv++;
         vflag = false;
     }
@@ -767,7 +767,7 @@ rescue(void)
 void
 notifyf(void *a, char *s)
 {
-    if(strcmp(s, "interrupt") == 0){
+    if(strcmp(s, "interrupt") == ORD__EQ){
         if(rescuing || waiting)
             noted(NCONT);
         putchr(L'\n');
@@ -775,7 +775,7 @@ notifyf(void *a, char *s)
         error_1(Q);
         notejmp(a, savej, 0);
     }
-    if(strcmp(s, "hangup") == 0){
+    if(strcmp(s, "hangup") == ORD__EQ){
         if(rescuing)
             noted(NDFLT);
         rescue();

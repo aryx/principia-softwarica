@@ -12,7 +12,7 @@ main(int argc, char *argv[])
     int n;
     bool dflag = false;
 
-    if(argc>1 && strcmp(argv[1], "-d") == 0){
+    if(argc>1 && strcmp(argv[1], "-d") == ORD__EQ){
         --argc;
         ++argv;
         dflag = true;

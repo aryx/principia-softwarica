@@ -4,6 +4,7 @@
 #include <libc.h>
 /*e: plan9 includes */
 
+// forward decls
 errorneg1 copy1(fdt fdf, fdt fdt, char *from, char *to);
 void      hardremove(char *);
 errorneg1 mv(char *from, char *todir, char *toelem);
@@ -57,6 +58,7 @@ main(int argc, char *argv[])
     exits(nil);
 }
 /*e: function [[main]](mv.c) */
+
 /*s: function [[mv]] */
 errorneg1
 mv(char *from, char *todir, char *toelem)
@@ -205,7 +207,7 @@ split(char *name, char **pdir, char **pelem)
         *s = '\0';
         *pelem = s+1;
         *pdir = name;
-    }else if(strcmp(name, "..") == 0){
+    }else if(strcmp(name, "..") == ORD__EQ){
         *pdir = "..";
         *pelem = ".";
     }else{
@@ -221,7 +223,7 @@ samefile(char *a, char *b)
     Dir *da, *db;
     bool ret;
 
-    if(strcmp(a, b) == 0)
+    if(strcmp(a, b) == ORD__EQ)
         return true;
     da = dirstat(a);
     db = dirstat(b);
