@@ -6204,12 +6204,1289 @@ void    substitute(int);
 
 \section{[[string/grep/]]}
 
-\subsection{[[grep/ls.c]]}
 
-\subsection{[[grep/ls.c]]}
+\subsection{[[grep/main.c]]}
 
-\subsection{[[grep/ls.c]]}
+%-------------------------------------------------------------
 
-\subsection{[[grep/ls.c]]}
+<<grep/main.c>>=
+#include    "grep.h"
 
-\subsection{[[grep/ls.c]]}
+char *validflags = "bchiLlnsv";
+void
+usage(void)
+{
+    fprint(2, "usage: grep [-%s] [-e pattern] [-f patternfile] [file ...]\n", validflags);
+    exits("usage");
+}
+
+void
+main(int argc, char *argv[])
+{
+    int i, status;
+
+    ARGBEGIN {
+    default:
+        if(utfrune(validflags, ARGC()) == nil)
+            usage();
+        flags[ARGC()]++;
+        break;
+
+    case 'e':
+        flags['e']++;
+        lineno = 0;
+        str2top(EARGF(usage()));
+        break;
+
+    case 'f':
+        flags['f']++;
+        filename = EARGF(usage());
+        rein = Bopen(filename, OREAD);
+        if(rein == 0) {
+            fprint(2, "grep: can't open %s: %r\n", filename);
+            exits("open");
+        }
+        lineno = 1;
+        str2top(filename);
+        break;
+    } ARGEND
+
+    if(flags['f'] == 0 && flags['e'] == 0) {
+        if(argc <= 0)
+            usage();
+        str2top(argv[0]);
+        argc--;
+        argv++;
+    }
+
+    follow = mal(maxfollow*sizeof(*follow));
+    state0 = initstate(topre.beg);
+
+    Binit(&bout, 1, OWRITE);
+    switch(argc) {
+    case 0:
+        status = search(0, 0);
+        break;
+    case 1:
+        status = search(argv[0], 0);
+        break;
+    default:
+        status = 0;
+        for(i=0; i<argc; i++)
+            status |= search(argv[i], Hflag);
+        break;
+    }
+    if(status)
+        exits(0);
+    exits("no matches");
+}
+
+int
+search(char *file, int flag)
+{
+    State *s, *ns;
+    int c, fid, eof, nl, empty;
+    long count, lineno, n;
+    uchar *elp, *lp, *bol;
+
+    if(file == 0) {
+        file = "stdin";
+        fid = 0;
+        flag |= Bflag;
+    } else
+        fid = open(file, OREAD);
+
+    if(fid < 0) {
+        fprint(2, "grep: can't open %s: %r\n", file);
+        return 0;
+    }
+
+    if(flags['b'])
+        flag ^= Bflag;      /* dont buffer output */
+    if(flags['c'])
+        flag |= Cflag;      /* count */
+    if(flags['h'])
+        flag &= ~Hflag;     /* do not print file name in output */
+    if(flags['i'])
+        flag |= Iflag;      /* fold upper-lower */
+    if(flags['l'])
+        flag |= Llflag;     /* print only name of file if any match */
+    if(flags['L'])
+        flag |= LLflag;     /* print only name of file if any non match */
+    if(flags['n'])
+        flag |= Nflag;      /* count only */
+    if(flags['s'])
+        flag |= Sflag;      /* status only */
+    if(flags['v'])
+        flag |= Vflag;      /* inverse match */
+
+    s = state0;
+    lineno = 0;
+    count = 0;
+    eof = 0;
+    empty = 1;
+    nl = 0;
+    lp = u.buf;
+    bol = lp;
+
+loop0:
+    n = lp-bol;
+    if(n > sizeof(u.pre))
+        n = sizeof(u.pre);
+    memmove(u.buf-n, bol, n);
+    bol = u.buf-n;
+    n = read(fid, u.buf, sizeof(u.buf));
+    /* if file has no final newline, simulate one to emit matches to last line */
+    if(n > 0) {
+        empty = 0;
+        nl = u.buf[n-1]=='\n';
+    } else {
+        if(n < 0){
+            fprint(2, "grep: read error on %s: %r\n", file);
+            return count != 0;
+        }
+        if(!eof && !nl && !empty) {
+            u.buf[0] = '\n';
+            n = 1;
+            eof = 1;
+        }
+    }
+    if(n <= 0) {
+        close(fid);
+        if(flag & Cflag) {
+            if(flag & Hflag)
+                Bprint(&bout, "%s:", file);
+            Bprint(&bout, "%ld\n", count);
+        }
+        if(((flag&Llflag) && count != 0) || ((flag&LLflag) && count == 0))
+            Bprint(&bout, "%s\n", file);
+        Bflush(&bout);
+        return count != 0;
+    }
+    lp = u.buf;
+    elp = lp+n;
+    if(flag & Iflag)
+        goto loopi;
+
+/*
+ * normal character loop
+ */
+loop:
+    c = *lp;
+    ns = s->next[c];
+    if(ns == 0) {
+        increment(s, c);
+        goto loop;
+    }
+//  if(flags['2'])
+//      if(s->match)
+//          print("%d: %.2x**\n", s, c);
+//      else
+//          print("%d: %.2x\n", s, c);
+    lp++;
+    s = ns;
+    if(c == '\n') {
+        lineno++;
+        if(!!s->match == !(flag&Vflag)) {
+            count++;
+            if(flag & (Cflag|Sflag|Llflag|LLflag))
+                goto cont;
+            if(flag & Hflag)
+                Bprint(&bout, "%s:", file);
+            if(flag & Nflag)
+                Bprint(&bout, "%ld: ", lineno);
+            /* suppress extra newline at EOF unless we are labeling matches with file name */
+            Bwrite(&bout, bol, lp-bol-(eof && !(flag&Hflag)));
+            if(flag & Bflag)
+                Bflush(&bout);
+        }
+        if((lineno & Flshcnt) == 0)
+            Bflush(&bout);
+    cont:
+        bol = lp;
+    }
+    if(lp != elp)
+        goto loop;
+    goto loop0;
+
+/*
+ * character loop for -i flag
+ * for speed
+ */
+loopi:
+    c = *lp;
+    if(c >= 'A' && c <= 'Z')
+        c += 'a'-'A';
+    ns = s->next[c];
+    if(ns == 0) {
+        increment(s, c);
+        goto loopi;
+    }
+    lp++;
+    s = ns;
+    if(c == '\n') {
+        lineno++;
+        if(!!s->match == !(flag&Vflag)) {
+            count++;
+            if(flag & (Cflag|Sflag|Llflag|LLflag))
+                goto conti;
+            if(flag & Hflag)
+                Bprint(&bout, "%s:", file);
+            if(flag & Nflag)
+                Bprint(&bout, "%ld: ", lineno);
+            /* suppress extra newline at EOF unless we are labeling matches with file name */
+            Bwrite(&bout, bol, lp-bol-(eof && !(flag&Hflag)));
+            if(flag & Bflag)
+                Bflush(&bout);
+        }
+        if((lineno & Flshcnt) == 0)
+            Bflush(&bout);
+    conti:
+        bol = lp;
+    }
+    if(lp != elp)
+        goto loopi;
+    goto loop0;
+}
+
+State*
+initstate(Re *r)
+{
+    State *s;
+    int i;
+
+    addcase(r);
+    if(flags['1'])
+        reprint("r", r);
+    nfollow = 0;
+    gen++;
+    fol1(r, Cbegin);
+    follow[nfollow++] = r;
+    qsort(follow, nfollow, sizeof(*follow), fcmp);
+
+    s = sal(nfollow);
+    for(i=0; i<nfollow; i++)
+        s->re[i] = follow[i];
+    return s;
+}
+@
+
+\subsection{[[grep/grep.h]]}
+
+%-------------------------------------------------------------
+
+<<grep/grep.h>>=
+#include    <u.h>
+#include    <libc.h>
+#include    <bio.h>
+
+typedef struct  Re  Re;
+typedef struct  Re2 Re2;
+typedef struct  State   State;
+
+struct  State
+{
+    int count;
+    int match;
+    Re**    re;
+    State*  linkleft;
+    State*  linkright;
+    State*  next[256];
+};
+struct  Re2
+{
+    Re* beg;
+    Re* end;
+};
+struct  Re
+{
+    uchar   type;
+    ushort  gen;
+    union
+    {
+        Re* alt;    /* Talt */
+        Re**    cases;  /* case */
+        struct      /* class */
+        {
+            Rune    lo;
+            Rune    hi;
+        };  
+        Rune    val;    /* char */
+    };
+    Re* next;
+};
+
+enum
+{
+    Talt        = 1,
+    Tbegin,
+    Tcase,
+    Tclass,
+    Tend,
+    Tor,
+
+    Caselim     = 7,
+    Nhunk       = 1<<16,
+    Cbegin      = Runemax+1,
+    Flshcnt     = (1<<9)-1,
+
+    Cflag       = 1<<0,
+    Hflag       = 1<<1,
+    Iflag       = 1<<2,
+    Llflag      = 1<<3,
+    LLflag      = 1<<4,
+    Nflag       = 1<<5,
+    Sflag       = 1<<6,
+    Vflag       = 1<<7,
+    Bflag       = 1<<8
+};
+
+union U
+{
+    char    string[16*1024];
+    struct
+    {
+        /*
+         * if a line requires multiple reads, we keep shifting
+         * buf down into pre and then do another read into
+         * buf.  so you'll get the last 16-32k of the matching line.
+         * if pre were smaller than buf you'd get a suffix of the
+         * line with a hole cut out.
+         */
+        uchar   pre[16*1024];   /* to save to previous '\n' */
+        uchar   buf[16*1024];   /* input buffer */
+    };
+};
+extern union U u;
+
+extern  char    *filename;
+extern  char    *pattern;
+extern  Biobuf  bout;
+extern  char    flags[256];
+extern  Re**    follow;
+extern  ushort  gen;
+extern  char*   input;
+extern  long    lineno;
+extern  int literal;
+extern  int matched;
+extern  long    maxfollow;
+extern  long    nfollow;
+extern  int peekc;
+extern  Biobuf* rein;
+extern  State*  state0;
+extern  Re2 topre;
+
+extern  Re* addcase(Re*);
+extern  void    appendnext(Re*, Re*);
+extern  void    error(char*);
+extern  int fcmp(void*, void*);     /* (Re**, Re**) */
+extern  void    fol1(Re*, int);
+extern  int getrec(void);
+extern  void    increment(State*, int);
+extern  State*  initstate(Re*);
+extern  void*   mal(int);
+extern  void    patchnext(Re*, Re*);
+extern  Re* ral(int);
+extern  Re2 re2cat(Re2, Re2);
+extern  Re2 re2class(char*);
+extern  Re2 re2or(Re2, Re2);
+extern  Re2 re2char(int, int);
+extern  Re2 re2star(Re2);
+extern  State*  sal(int);
+extern  int search(char*, int);
+extern  void    str2top(char*);
+extern  int yyparse(void);
+extern  void    reprint(char*, Re*);
+extern  void    yyerror(char*, ...);
+@
+
+\subsection{[[grep/grep.y]]}
+
+%-------------------------------------------------------------
+
+<<grep/grep.y>>=
+%{
+#include    "grep.h"
+%}
+
+%union
+{
+    int val;
+    char*   str;
+    Re2 re;
+}
+
+%type   <re>    expr prog
+%type   <re>    expr0 expr1 expr2 expr3 expr4
+%token  <str>   LCLASS
+%token  <val>   LCHAR
+%token      LLPAREN LRPAREN LALT LSTAR LPLUS LQUES
+%token      LBEGIN LEND LDOT LBAD LNEWLINE
+%%
+
+prog:   /* empty */
+    {
+        yyerror("empty pattern");
+    }
+|   expr newlines
+    {
+        $$.beg = ral(Tend);
+        $$.end = $$.beg;
+        $$ = re2cat(re2star(re2or(re2char(0x00, '\n'-1), re2char('\n'+1, 0xff))), $$);
+        $$ = re2cat($1, $$);
+        $$ = re2cat(re2star(re2char(0x00, 0xff)), $$);
+        topre = $$;
+    }
+
+expr:
+    expr0
+|   expr newlines expr0
+    {
+        $$ = re2or($1, $3);
+    }
+
+expr0:
+    expr1
+|   LSTAR { literal = 1; } expr1
+    {
+        $$ = $3;
+    }
+
+expr1:
+    expr2
+|   expr1 LALT expr2
+    {
+        $$ = re2or($1, $3);
+    }
+
+expr2:
+    expr3
+|   expr2 expr3
+    {
+        $$ = re2cat($1, $2);
+    }
+
+expr3:
+    expr4
+|   expr3 LSTAR
+    {
+        $$ = re2star($1);
+    }
+|   expr3 LPLUS
+    {
+        $$.beg = ral(Talt);
+        patchnext($1.end, $$.beg);
+        $$.beg->alt = $1.beg;
+        $$.end = $$.beg;
+        $$.beg = $1.beg;
+    }
+|   expr3 LQUES
+    {
+        $$.beg = ral(Talt);
+        $$.beg->alt = $1.beg;
+        $$.end = $1.end;
+        appendnext($$.end,  $$.beg);
+    }
+
+expr4:
+    LCHAR
+    {
+        $$.beg = ral(Tclass);
+        $$.beg->lo = $1;
+        $$.beg->hi = $1;
+        $$.end = $$.beg;
+    }
+|   LBEGIN
+    {
+        $$.beg = ral(Tbegin);
+        $$.end = $$.beg;
+    }
+|   LEND
+    {
+        $$.beg = ral(Tend);
+        $$.end = $$.beg;
+    }
+|   LDOT
+    {
+        $$ = re2class("^\n");
+    }
+|   LCLASS
+    {
+        $$ = re2class($1);
+    }
+|   LLPAREN expr1 LRPAREN
+    {
+        $$ = $2;
+    }
+
+newlines:
+    LNEWLINE
+|   newlines LNEWLINE
+%%
+
+void
+yyerror(char *e, ...)
+{
+    va_list args;
+
+    fprint(2, "grep: ");
+    if(filename)
+        fprint(2, "%s:%ld: ", filename, lineno);
+    else if (pattern)
+        fprint(2, "%s: ", pattern);
+    va_start(args, e);
+    vfprint(2, e, args);
+    va_end(args);
+    fprint(2, "\n");
+    exits("syntax");
+}
+
+long
+yylex(void)
+{
+    char *q, *eq;
+    int c, s;
+
+    if(peekc) {
+        s = peekc;
+        peekc = 0;
+        return s;
+    }
+    c = getrec();
+    if(literal) {
+        if(c != 0 && c != '\n') {
+            yylval.val = c;
+            return LCHAR;
+        }
+        literal = 0;
+    }
+    switch(c) {
+    default:
+        yylval.val = c;
+        s = LCHAR;
+        break;
+    case '\\':
+        c = getrec();
+        yylval.val = c;
+        s = LCHAR;
+        if(c == '\n')
+            s = LNEWLINE;
+        break;
+    case '[':
+        goto getclass;
+    case '(':
+        s = LLPAREN;
+        break;
+    case ')':
+        s = LRPAREN;
+        break;
+    case '|':
+        s = LALT;
+        break;
+    case '*':
+        s = LSTAR;
+        break;
+    case '+':
+        s = LPLUS;
+        break;
+    case '?':
+        s = LQUES;
+        break;
+    case '^':
+        s = LBEGIN;
+        break;
+    case '$':
+        s = LEND;
+        break;
+    case '.':
+        s = LDOT;
+        break;
+    case 0:
+        peekc = -1;
+    case '\n':
+        s = LNEWLINE;
+        break;
+    }
+    return s;
+
+getclass:
+    q = u.string;
+    eq = q + nelem(u.string) - 5;
+    c = getrec();
+    if(c == '^') {
+        q[0] = '^';
+        q[1] = '\n';
+        q[2] = '-';
+        q[3] = '\n';
+        q += 4;
+        c = getrec();
+    }
+    for(;;) {
+        if(q >= eq)
+            error("class too long");
+        if(c == ']' || c == 0)
+            break;
+        if(c == '\\') {
+            *q++ = c;
+            c = getrec();
+            if(c == 0)
+                break;
+        }
+        *q++ = c;
+        c = getrec();
+    }
+    *q = 0;
+    if(c == 0)
+        return LBAD;
+    yylval.str = u.string;
+    return LCLASS;
+}
+@
+
+\subsection{[[grep/globals.c]]}
+
+%-------------------------------------------------------------
+
+% I created this file
+<<grep/globals.c>>=
+#include "grep.h"
+
+union U u;
+
+char    *filename;
+char    *pattern;
+Biobuf  bout;
+char    flags[256];
+Re**    follow;
+ushort  gen;
+char*   input;
+long    lineno;
+int literal;
+int matched;
+long    maxfollow;
+long    nfollow;
+int peekc;
+Biobuf* rein;
+State*  state0;
+Re2 topre;
+@
+
+\subsection{[[grep/sub.c]]}
+
+%-------------------------------------------------------------
+
+<<grep/sub.c>>=
+#include    "grep.h"
+
+void*
+mal(int n)
+{
+    static char *s;
+    static int m = 0;
+    void *v;
+
+    n = (n+3) & ~3;
+    if(m < n) {
+        if(n > Nhunk) {
+            v = sbrk(n);
+            memset(v, 0, n);
+            return v;
+        }
+        s = sbrk(Nhunk);
+        m = Nhunk;
+    }
+    v = s;
+    s += n;
+    m -= n;
+    memset(v, 0, n);
+    return v;
+}
+
+State*
+sal(int n)
+{
+    State *s;
+
+    s = mal(sizeof(*s));
+//  s->next = mal(256*sizeof(*s->next));
+    s->count = n;
+    s->re = mal(n*sizeof(*state0->re));
+    return s;
+}
+
+Re*
+ral(int type)
+{
+    Re *r;
+
+    r = mal(sizeof(*r));
+    r->type = type;
+    maxfollow++;
+    return r;
+}
+
+void
+error(char *s)
+{
+    fprint(2, "grep: internal error: %s\n", s);
+    exits(s);
+}
+
+int
+countor(Re *r)
+{
+    int n;
+
+    n = 0;
+loop:
+    switch(r->type) {
+    case Tor:
+        n += countor(r->alt);
+        r = r->next;
+        goto loop;
+    case Tclass:
+        return n + r->hi - r->lo + 1;
+    }
+    return n;
+}
+
+Re*
+oralloc(int t, Re *r, Re *b)
+{
+    Re *a;
+
+    if(b == 0)
+        return r;
+    a = ral(t);
+    a->alt = r;
+    a->next = b;
+    return a;
+}
+
+void
+case1(Re *c, Re *r)
+{
+    int n;
+
+loop:
+    switch(r->type) {
+    case Tor:
+        case1(c, r->alt);
+        r = r->next;
+        goto loop;
+
+    case Tclass:    /* add to character */
+        for(n=r->lo; n<=r->hi; n++)
+            c->cases[n] = oralloc(Tor, r->next, c->cases[n]);
+        break;
+
+    default:    /* add everything unknown to next */
+        c->next = oralloc(Talt, r, c->next);
+        break;
+    }
+}
+
+Re*
+addcase(Re *r)
+{
+    int i, n;
+    Re *a;
+
+    if(r->gen == gen)
+        return r;
+    r->gen = gen;
+    switch(r->type) {
+    default:
+        error("addcase");
+
+    case Tor:
+        n = countor(r);
+        if(n >= Caselim) {
+            a = ral(Tcase);
+            a->cases = mal(256*sizeof(*a->cases));
+            case1(a, r);
+            for(i=0; i<256; i++)
+                if(a->cases[i]) {
+                    r = a->cases[i];
+                    if(countor(r) < n)
+                        a->cases[i] = addcase(r);
+                }
+            return a;
+        }
+        return r;
+
+    case Talt:
+        r->next = addcase(r->next);
+        r->alt = addcase(r->alt);
+        return r;
+
+    case Tbegin:
+    case Tend:
+    case Tclass:
+        return r;
+    }
+}
+
+void
+str2top(char *p)
+{
+    Re2 oldtop;
+
+    oldtop = topre;
+    input = p;
+    if (*p == '\0')
+        yyerror("empty pattern");   /* can't be a file name here */
+    if (!flags['f'])
+        pattern = p;
+    topre.beg = 0;
+    topre.end = 0;
+    yyparse();
+    gen++;
+    if(topre.beg == 0)
+        yyerror("syntax");
+    if(oldtop.beg)
+        topre = re2or(oldtop, topre);
+}
+
+void
+appendnext(Re *a, Re *b)
+{
+    Re *n;
+
+    while(n = a->next)
+        a = n;
+    a->next = b;
+}
+
+void
+patchnext(Re *a, Re *b)
+{
+    Re *n;
+
+    while(a) {
+        n = a->next;
+        a->next = b;
+        a = n;
+    }
+}
+
+int
+getrec(void)
+{
+    int c;
+
+    if(flags['f']) {
+        c = Bgetc(rein);
+        if(c <= 0)
+            return 0;
+    } else
+        c = *input++ & 0xff;
+    if(flags['i'] && c >= 'A' && c <= 'Z')
+        c += 'a'-'A';
+    if(c == '\n')
+        lineno++;
+    return c;
+}
+
+Re2
+re2cat(Re2 a, Re2 b)
+{
+    Re2 c;
+
+    c.beg = a.beg;
+    c.end = b.end;
+    patchnext(a.end, b.beg);
+    return c;
+}
+
+Re2
+re2star(Re2 a)
+{
+    Re2 c;
+
+    c.beg = ral(Talt);
+    c.beg->alt = a.beg;
+    patchnext(a.end, c.beg);
+    c.end = c.beg;
+    return c;
+}
+
+Re2
+re2or(Re2 a, Re2 b)
+{
+    Re2 c;
+
+    c.beg = ral(Tor);
+    c.beg->alt = b.beg;
+    c.beg->next = a.beg;
+    c.end = b.end;
+    appendnext(c.end,  a.end);
+    return c;
+}
+
+Re2
+re2char(int c0, int c1)
+{
+    Re2 c;
+
+    c.beg = ral(Tclass);
+    c.beg->lo = c0 & 0xff;
+    c.beg->hi = c1 & 0xff;
+    c.end = c.beg;
+    return c;
+}
+
+void
+reprint1(Re *a)
+{
+    int i, j;
+
+loop:
+    if(a == 0)
+        return;
+    if(a->gen == gen)
+        return;
+    a->gen = gen;
+    print("%p: ", a);
+    switch(a->type) {
+    default:
+        print("type %d\n", a->type);
+        error("print1 type");
+
+    case Tcase:
+        print("case ->%p\n", a->next);
+        for(i=0; i<256; i++)
+            if(a->cases[i]) {
+                for(j=i+1; j<256; j++)
+                    if(a->cases[i] != a->cases[j])
+                        break;
+                print(" [%.2x-%.2x] ->%p\n", i, j-1, a->cases[i]);
+                i = j-1;
+            }
+        for(i=0; i<256; i++)
+            reprint1(a->cases[i]);
+        break;
+
+    case Tbegin:
+        print("^ ->%p\n", a->next);
+        break;
+
+    case Tend:
+        print("$ ->%p\n", a->next);
+        break;
+
+    case Tclass:
+        print("[%.2x-%.2x] ->%p\n", a->lo, a->hi, a->next);
+        break;
+
+    case Tor:
+    case Talt:
+        print("| %p ->%p\n", a->alt, a->next);
+        reprint1(a->alt);
+        break;
+    }
+    a = a->next;
+    goto loop;
+}
+
+void
+reprint(char *s, Re *r)
+{
+    print("%s:\n", s);
+    gen++;
+    reprint1(r);
+    print("\n\n");
+}
+@
+
+\subsection{[[grep/comp.c]]}
+
+%-------------------------------------------------------------
+
+<<grep/comp.c>>=
+#include    "grep.h"
+
+/*
+ * incremental compiler.
+ * add the branch c to the
+ * state s.
+ */
+void
+increment(State *s, int c)
+{
+    int i;
+    State *t, **tt;
+    Re *re1, *re2;
+
+    nfollow = 0;
+    gen++;
+    matched = 0;
+    for(i=0; i<s->count; i++)
+        fol1(s->re[i], c);
+    qsort(follow, nfollow, sizeof(*follow), fcmp);
+    for(tt=&state0; t = *tt;) {
+        if(t->count > nfollow) {
+            tt = &t->linkleft;
+            goto cont;
+        }
+        if(t->count < nfollow) {
+            tt = &t->linkright;
+            goto cont;
+        }
+        for(i=0; i<nfollow; i++) {
+            re1 = t->re[i];
+            re2 = follow[i];
+            if(re1 > re2) {
+                tt = &t->linkleft;
+                goto cont;
+            }
+            if(re1 < re2) {
+                tt = &t->linkright;
+                goto cont;
+            }
+        }
+        if(!!matched && !t->match) {
+            tt = &t->linkleft;
+            goto cont;
+        }
+        if(!matched && !!t->match) {
+            tt = &t->linkright;
+            goto cont;
+        }
+        s->next[c] = t;
+        return;
+    cont:;
+    }
+
+    t = sal(nfollow);
+    *tt = t;
+    for(i=0; i<nfollow; i++) {
+        re1 = follow[i];
+        t->re[i] = re1;
+    }
+    s->next[c] = t;
+    t->match = matched;
+}
+
+int
+fcmp(void *va, void *vb)
+{
+    Re **aa, **bb;
+    Re *a, *b;
+
+    aa = va;
+    bb = vb;
+    a = *aa;
+    b = *bb;
+    if(a > b)
+        return 1;
+    if(a < b)
+        return -1;
+    return 0;
+}
+
+void
+fol1(Re *r, int c)
+{
+    Re *r1;
+
+loop:
+    if(r->gen == gen)
+        return;
+    if(nfollow >= maxfollow)
+        error("nfollow");
+    r->gen = gen;
+    switch(r->type) {
+    default:
+        error("fol1");
+
+    case Tcase:
+        if(c >= 0 && c < 256)
+        if(r1 = r->cases[c])
+            follow[nfollow++] = r1;
+        if(r = r->next)
+            goto loop;
+        break;
+
+    case Talt:
+    case Tor:
+        fol1(r->alt, c);
+        r = r->next;
+        goto loop;
+
+    case Tbegin:
+        if(c == '\n' || c == Cbegin)
+            follow[nfollow++] = r->next;
+        break;
+
+    case Tend:
+        if(c == '\n') {
+            if(r->next == 0) {
+                matched = 1;
+                break;
+            }
+            r = r->next;
+            goto loop;
+        }
+        break;
+
+    case Tclass:
+        if(c >= r->lo && c <= r->hi)
+            follow[nfollow++] = r->next;
+        break;
+    }
+}
+
+Rune    tab1[] =
+{
+    0x007f,
+    0x07ff,
+};
+Rune    tab2[] =
+{
+    0x003f,
+    0x0fff,
+};
+
+Re2
+rclass(Rune p0, Rune p1)
+{
+    char xc0[6], xc1[6];
+    int i, n, m;
+    Re2 x;
+
+    if(p0 > p1)
+        return re2char(0xff, 0xff); // no match
+
+    /*
+     * bust range into same length
+     * character sequences
+     */
+    for(i=0; i<nelem(tab1); i++) {
+        m = tab1[i];
+        if(p0 <= m && p1 > m)
+            return re2or(rclass(p0, m), rclass(m+1, p1));
+    }
+
+    /*
+     * bust range into part of a single page
+     * or into full pages
+     */
+    for(i=0; i<nelem(tab2); i++) {
+        m = tab2[i];
+        if((p0 & ~m) != (p1 & ~m)) {
+            if((p0 & m) != 0)
+                return re2or(rclass(p0, p0|m), rclass((p0|m)+1, p1));
+            if((p1 & m) != m)
+                return re2or(rclass(p0, (p1&~m)-1), rclass(p1&~m, p1));
+        }
+    }
+
+    n = runetochar(xc0, &p0);
+    i = runetochar(xc1, &p1);
+    if(i != n)
+        error("length");
+
+    x = re2char(xc0[0], xc1[0]);
+    for(i=1; i<n; i++)
+        x = re2cat(x, re2char(xc0[i], xc1[i]));
+    return x;
+}
+
+int
+pcmp(void *va, void *vb)
+{
+    int n;
+    Rune *a, *b;
+
+    a = va;
+    b = vb;
+
+    n = a[0] - b[0];
+    if(n)
+        return n;
+    return a[1] - b[1];
+}
+
+/*
+ * convert character chass into
+ * run-pair ranges of matches.
+ * this is 10646/utf specific and
+ * needs to be changed for some
+ * other input character set.
+ * this is the key to a fast
+ * regular search of characters
+ * by looking at sequential bytes.
+ */
+Re2
+re2class(char *s)
+{
+    Rune pairs[200+2], *p, *q, ov;
+    int nc;
+    Re2 x;
+
+    nc = 0;
+    if(*s == '^') {
+        nc = 1;
+        s++;
+    }
+
+    p = pairs;
+    s += chartorune(p, s);
+    for(;;) {
+        if(*p == '\\')
+            s += chartorune(p, s);
+        if(*p == 0)
+            break;
+        p[1] = *p;
+        p += 2;
+        if(p >= pairs + nelem(pairs) - 2)
+            error("class too big");
+        s += chartorune(p, s);
+        if(*p != '-')
+            continue;
+        s += chartorune(p, s);
+        if(*p == '\\')
+            s += chartorune(p, s);
+        if(*p == 0)
+            break;
+        p[-1] = *p;
+        s += chartorune(p, s);
+    }
+    *p = 0;
+    qsort(pairs, (p-pairs)/2, 2*sizeof(*pairs), pcmp);
+
+    q = pairs;
+    for(p=pairs+2; *p; p+=2) {
+        if(p[0] > p[1])
+            continue;
+        if(p[0] > q[1] || p[1] < q[0]) {
+            q[2] = p[0];
+            q[3] = p[1];
+            q += 2;
+            continue;
+        }
+        if(p[0] < q[0])
+            q[0] = p[0];
+        if(p[1] > q[1])
+            q[1] = p[1];
+    }
+    q[2] = 0;
+
+    p = pairs;
+    if(nc) {
+        x = rclass(0, p[0]-1);
+        ov = p[1]+1;
+        for(p+=2; *p; p+=2) {
+            x = re2or(x, rclass(ov, p[0]-1));
+            ov = p[1]+1;
+        }
+        x = re2or(x, rclass(ov, Runemask));
+    } else {
+        x = rclass(p[0], p[1]);
+        for(p+=2; *p; p+=2)
+            x = re2or(x, rclass(p[0], p[1]));
+    }
+    return x;
+}
+@

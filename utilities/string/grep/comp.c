@@ -1,3 +1,4 @@
+/*s: grep/comp.c */
 #include    "grep.h"
 
 /*
@@ -283,3 +284,4 @@ re2class(char *s)
     }
     return x;
 }
+/*e: grep/comp.c */

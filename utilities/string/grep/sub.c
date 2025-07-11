@@ -1,3 +1,4 @@
+/*s: grep/sub.c */
 #include    "grep.h"
 
 void*
@@ -319,3 +320,4 @@ reprint(char *s, Re *r)
     reprint1(r);
     print("\n\n");
 }
+/*e: grep/sub.c */

@@ -1,3 +1,4 @@
+/*s: grep/grep.y */
 %{
 #include    "grep.h"
 %}
@@ -234,3 +235,4 @@ getclass:
     yylval.str = u.string;
     return LCLASS;
 }
+/*e: grep/grep.y */

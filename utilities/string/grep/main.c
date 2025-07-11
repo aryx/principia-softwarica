@@ -1,3 +1,4 @@
+/*s: grep/main.c */
 #include    "grep.h"
 
 char *validflags = "bchiLlnsv";
@@ -257,3 +258,4 @@ initstate(Re *r)
         s->re[i] = follow[i];
     return s;
 }
+/*e: grep/main.c */

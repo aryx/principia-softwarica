@@ -1,3 +1,4 @@
+/*s: grep/grep.h */
 #include    <u.h>
 #include    <libc.h>
 #include    <bio.h>
@@ -120,3 +121,4 @@ extern  void    str2top(char*);
 extern  int yyparse(void);
 extern  void    reprint(char*, Re*);
 extern  void    yyerror(char*, ...);
+/*e: grep/grep.h */

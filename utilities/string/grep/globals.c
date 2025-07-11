@@ -1,3 +1,4 @@
+/*s: grep/globals.c */
 #include "grep.h"
 
 union U u;
@@ -18,3 +19,4 @@ int peekc;
 Biobuf* rein;
 State*  state0;
 Re2 topre;
+/*e: grep/globals.c */
