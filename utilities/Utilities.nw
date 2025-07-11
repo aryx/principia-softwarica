@@ -1379,6 +1379,15 @@ hardremove(char *a)
 
 \section{[[chmod]]}
 
+<<macros chmod.c>>=
+#define U(x) (x<<6)
+#define G(x) (x<<3)
+#define O(x) (x)
+#define A(x) (U(x)|G(x)|O(x))
+
+#define DMRWE (DMREAD|DMWRITE|DMEXEC)
+@
+
 <<function [[main]](chmod.c)>>=
 void
 main(int argc, char *argv[])
@@ -4937,6 +4946,258 @@ nexttab(int col)
 % dd = ? disk dump?
 
 \section{[[split]]}
+
+<<function [[usage]](split.c)>>=
+void
+usage(void)
+{
+    fprint(STDERR, "usage: split [-n num] [-e exp] [-f stem] [-s suff] [-x] [-i] [file]\n");
+    exits("usage");
+}
+@
+
+<<[[main]](split.c) locals>>=
+int n = 1000;
+@
+
+<<[[main]](split.c) locals>>=
+// ??
+bool xflag = false;
+// ??
+bool iflag = false;
+@
+
+
+<<globals split.c>>=
+char    *stem = "x";
+@
+
+<<globals split.c>>=
+char    *suffix = "";
+@
+
+<<[[main]](split.c) switch flag character cases>>=
+case 'l':
+case 'n':
+    n=atoi(EARGF(usage()));
+    break;
+case 'e':
+    pattern = strdup(EARGF(usage()));
+    break;
+case 'f':
+    stem = strdup(EARGF(usage()));
+    break;
+case 's':
+    suffix = strdup(EARGF(usage()));
+    break;
+case 'x':
+    xflag = true;
+    break;
+case 'i':
+    iflag = true;
+    break;
+@
+
+
+
+<<globals split.c>>=
+char    digit[] = "0123456789";
+char    suff[] = "aa";
+char    name[200];
+@
+
+<<globals split.c>>=
+Biobuf  bout;
+Biobuf  *output = &bout;
+@
+
+<<[[main]](split.c) locals>>=
+Biobuf bin;
+Biobuf *b = &bin;
+@
+
+
+<<[[main]](split.c) locals>>=
+char *line;
+@
+
+<<[[main]](split.c) locals>>=
+char buf[256];
+@
+
+<<function [[main]](split.c)>>=
+void
+main(int argc, char *argv[])
+{
+    <<[[main]](split.c) locals>>
+
+    ARGBEGIN {
+    <<[[main]](split.c) switch flag character cases>>
+    default:
+        usage();
+        break;
+
+    } ARGEND;
+
+    if(argc < 0 || argc > 1)
+        usage();
+
+    if(argc != 0) {
+        b = Bopen(argv[0], OREAD);
+        if(b == nil) {
+            fprint(STDERR, "split: can't open %s: %r\n", argv[0]);
+            exits("open");
+        }
+    } else
+        Binit(b, STDIN, OREAD);
+
+    <<[[main()]](split.c) if [[pattern]]>>
+    else {
+        int linecnt = n;
+
+        while((line=Brdline(b,'\n')) != 0) {
+            if(++linecnt > n) {
+                nextfile();
+                linecnt = 1;
+            }
+            Bwrite(output, line, Blinelen(b));
+        }
+
+        /*
+         * in case we didn't end with a newline, tack whatever's 
+         * left onto the last file
+         */
+        while((n = Bread(b, buf, sizeof(buf))) > 0)
+            Bwrite(output, buf, n);
+    }
+    if(b != nil)
+        Bterm(b);
+    exits(nil);
+}
+@
+
+
+\subsection*{Basic usage}
+
+<<function [[nextfile]](split.c)>>=
+bool
+nextfile(void)
+{
+    static bool canopen = true;
+
+    if(suff[0] > 'z') {
+        if(canopen)
+            fprint(STDERR, "split: file %szz not split\n",stem);
+        canopen = false;
+    } else {
+        snprint(name, sizeof name, "%s%s", stem, suff);
+        if(++suff[1] > 'z') 
+            suff[1] = 'a', ++suff[0];
+        openf();
+    }
+    return canopen;
+}
+@
+
+<<function [[openf]](split.c)>>=
+void
+openf(void)
+{
+    static fdt fd = 0;
+
+    Bflush(output);
+    Bterm(output);
+    if(fd > 0)
+        close(fd);
+    fd = create(name,OWRITE,0666);
+    if(fd < 0) {
+        fprint(STDERR, "grep: can't create %s: %r\n", name);
+        exits("create");
+    }
+    Binit(output, fd, OWRITE);
+}
+@
+% grep: ??? it's split!! in the error message :)
+
+\subsection*{Advanced usage}
+
+<<globals split.c>>=
+char *pattern = nil;
+@
+
+<<[[main]](split.c) locals>>=
+Reprog *exp;
+@
+
+<<[[main()]](split.c) if [[pattern]]>>=
+if(pattern) {
+    Resub match[2];
+
+    if(!(exp = regcomp(iflag? fold(pattern, strlen(pattern)):
+        pattern)))
+        badexp();
+    memset(match, 0, sizeof match);
+    matchfile(match);
+    while((line=Brdline(b,'\n')) != 0) {
+        memset(match, 0, sizeof match);
+        line[Blinelen(b)-1] = 0;
+        if(regexec(exp, iflag? fold(line, Blinelen(b)-1): line,
+            match, 2)) {
+            if(matchfile(match) && xflag)
+                continue;
+        } else if(output == 0)
+            nextfile(); /* at most once */
+        Bwrite(output, line, Blinelen(b)-1);
+        Bputc(output, '\n');
+    }
+}
+@
+
+<<function [[badexp]](split.c)>>=
+void
+badexp(void)
+{
+    fprint(STDERR, "split: bad regular expression\n");
+    exits("bad regular expression");
+}
+@
+
+<<function [[fold]](split.c)>>=
+char *
+fold(char *s, int n)
+{
+    static char *fline;
+    static int linesize = 0;
+    char *t;
+
+    if(linesize < n+1){
+        fline = realloc(fline,n+1);
+        linesize = n+1;
+    }
+    for(t=fline; *t++ = tolower(*s++); )
+        continue;
+        /* we assume the 'A'-'Z' only appear as themselves
+         * in a utf encoding.
+         */
+    return fline;
+}
+@
+
+<<function [[matchfile]](split.c)>>=
+int
+matchfile(Resub *match)
+{
+    if(match[1].s.sp) {
+        int len = match[1].e.ep - match[1].s.sp;
+
+        strncpy(name, match[1].s.sp, len);
+        strcpy(name+len, suffix);
+        openf();
+        return 1;
+    } 
+    return nextfile();
+}
+@
 
 %******************************************************************************
 \chapter{Misc}

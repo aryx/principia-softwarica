@@ -66,11 +66,14 @@ char*   xcleanname(char*);
 <<files/touch.c>>=
 <<plan9 includes>>
 
+// forward decls
 error1 touch(bool, char *);
+
 <<global [[now]](touch.c)>>
 
 <<function [[usage]](touch.c)>>
 <<function [[main]](touch.c)>>
+
 <<function [[touch]]>>
 @
 
@@ -87,6 +90,7 @@ error1 touch(bool, char *);
 <<function [[usage]](mkdir.c)>>
 <<function [[makedir]]>>
 <<function [[mkdirp]]>>
+
 <<function [[main]](mkdir.c)>>
 @
 
@@ -102,6 +106,7 @@ error1 touch(bool, char *);
 
 <<function [[err]](rm.c)>>
 <<function [[rmdir]]>>
+
 <<function [[main]](rm.c)>>
 @
 
@@ -117,10 +122,12 @@ error1 touch(bool, char *);
 <<global [[failed]](cp.c)>>
 <<global flags(cp.c)>>
 
+// forward decls
 void copy(char *from, char *to, bool todir);
 errorneg1 copy1(fdt fdf, fdt fdt, char *from, char *to);
 
 <<function [[main]](cp.c)>>
+
 <<function [[samefile]](cp.c)>>
 <<function [[copy]]>>
 <<function [[copy1]]>>
@@ -133,6 +140,7 @@ errorneg1 copy1(fdt fdf, fdt fdt, char *from, char *to);
 <<files/mv.c>>=
 <<plan9 includes>>
 
+// forward decls
 errorneg1 copy1(fdt fdf, fdt fdt, char *from, char *to);
 void      hardremove(char *);
 errorneg1 mv(char *from, char *todir, char *toelem);
@@ -141,6 +149,7 @@ bool      samefile(char *, char *);
 void      split(char *, char **, char **);
 
 <<function [[main]](mv.c)>>
+
 <<function [[mv]]>>
 <<function [[mv1]]>>
 <<function [[copy1]](mv.c)>>
@@ -156,16 +165,13 @@ void      split(char *, char **, char **);
 <<files/chmod.c>>=
 <<plan9 includes>>
 
-#define U(x) (x<<6)
-#define G(x) (x<<3)
-#define O(x) (x)
-#define A(x) (U(x)|G(x)|O(x))
+<<macros chmod.c>>
 
-#define DMRWE (DMREAD|DMWRITE|DMEXEC)
-
+// forward decls
 error0 parsemode(char *, ulong *, ulong *);
 
 <<function [[main]](chmod.c)>>
+
 <<function [[parsemode]](chmod.c)>>
 @
 
@@ -209,6 +215,7 @@ error0 parsemode(char *, ulong *, ulong *);
 
 <<function [[wc]]>>
 <<function [[report]](wc.c)>>
+
 <<function [[main]](wc.c)>>
 @
 
@@ -224,6 +231,7 @@ error0 parsemode(char *, ulong *, ulong *);
 <<plan9 includes>>
 #include <str.h>
 
+// forward decls
 extern  vlong   du(char*, Dir*);
 extern  void    err(char*);
 extern  vlong   blkmultiple(vlong);
@@ -987,14 +995,9 @@ xprint(char *fmt, ...)
 #include <bio.h>
 #include <regexp.h>
 
-char    digit[] = "0123456789";
-char    *suffix = "";
-char    *stem = "x";
-char    suff[] = "aa";
-char    name[200];
-Biobuf  bout;
-Biobuf  *output = &bout;
+<<globals split.c>>
 
+// forward decls
 extern int nextfile(void);
 extern int matchfile(Resub*);
 extern void openf(void);
@@ -1002,181 +1005,14 @@ extern char *fold(char*,int);
 extern void usage(void);
 extern void badexp(void);
 
-void
-main(int argc, char *argv[])
-{
-    Reprog *exp;
-    char *pattern = 0;
-    int n = 1000;
-    char *line;
-    int xflag = 0;
-    int iflag = 0;
-    Biobuf bin;
-    Biobuf *b = &bin;
-    char buf[256];
+<<function [[main]](split.c)>>
 
-    ARGBEGIN {
-    case 'l':
-    case 'n':
-        n=atoi(EARGF(usage()));
-        break;
-    case 'e':
-        pattern = strdup(EARGF(usage()));
-        break;
-    case 'f':
-        stem = strdup(EARGF(usage()));
-        break;
-    case 's':
-        suffix = strdup(EARGF(usage()));
-        break;
-    case 'x':
-        xflag++;
-        break;
-    case 'i':
-        iflag++;
-        break;
-    default:
-        usage();
-        break;
-
-    } ARGEND;
-
-    if(argc < 0 || argc > 1)
-        usage();
-
-    if(argc != 0) {
-        b = Bopen(argv[0], OREAD);
-        if(b == nil) {
-            fprint(2, "split: can't open %s: %r\n", argv[0]);
-            exits("open");
-        }
-    } else
-        Binit(b, 0, OREAD);
-
-    if(pattern) {
-        Resub match[2];
-
-        if(!(exp = regcomp(iflag? fold(pattern, strlen(pattern)):
-            pattern)))
-            badexp();
-        memset(match, 0, sizeof match);
-        matchfile(match);
-        while((line=Brdline(b,'\n')) != 0) {
-            memset(match, 0, sizeof match);
-            line[Blinelen(b)-1] = 0;
-            if(regexec(exp, iflag? fold(line, Blinelen(b)-1): line,
-                match, 2)) {
-                if(matchfile(match) && xflag)
-                    continue;
-            } else if(output == 0)
-                nextfile(); /* at most once */
-            Bwrite(output, line, Blinelen(b)-1);
-            Bputc(output, '\n');
-        }
-    } else {
-        int linecnt = n;
-
-        while((line=Brdline(b,'\n')) != 0) {
-            if(++linecnt > n) {
-                nextfile();
-                linecnt = 1;
-            }
-            Bwrite(output, line, Blinelen(b));
-        }
-
-        /*
-         * in case we didn't end with a newline, tack whatever's 
-         * left onto the last file
-         */
-        while((n = Bread(b, buf, sizeof(buf))) > 0)
-            Bwrite(output, buf, n);
-    }
-    if(b != nil)
-        Bterm(b);
-    exits(0);
-}
-
-int
-nextfile(void)
-{
-    static int canopen = 1;
-
-    if(suff[0] > 'z') {
-        if(canopen)
-            fprint(2, "split: file %szz not split\n",stem);
-        canopen = 0;
-    } else {
-        snprint(name, sizeof name, "%s%s", stem, suff);
-        if(++suff[1] > 'z') 
-            suff[1] = 'a', ++suff[0];
-        openf();
-    }
-    return canopen;
-}
-
-int
-matchfile(Resub *match)
-{
-    if(match[1].s.sp) {
-        int len = match[1].e.ep - match[1].s.sp;
-
-        strncpy(name, match[1].s.sp, len);
-        strcpy(name+len, suffix);
-        openf();
-        return 1;
-    } 
-    return nextfile();
-}
-
-void
-openf(void)
-{
-    static int fd = 0;
-
-    Bflush(output);
-    Bterm(output);
-    if(fd > 0)
-        close(fd);
-    fd = create(name,OWRITE,0666);
-    if(fd < 0) {
-        fprint(2, "grep: can't create %s: %r\n", name);
-        exits("create");
-    }
-    Binit(output, fd, OWRITE);
-}
-
-char *
-fold(char *s, int n)
-{
-    static char *fline;
-    static int linesize = 0;
-    char *t;
-
-    if(linesize < n+1){
-        fline = realloc(fline,n+1);
-        linesize = n+1;
-    }
-    for(t=fline; *t++ = tolower(*s++); )
-        continue;
-        /* we assume the 'A'-'Z' only appear as themselves
-         * in a utf encoding.
-         */
-    return fline;
-}
-
-void
-usage(void)
-{
-    fprint(2, "usage: split [-n num] [-e exp] [-f stem] [-s suff] [-x] [-i] [file]\n");
-    exits("usage");
-}
-
-void
-badexp(void)
-{
-    fprint(2, "split: bad regular expression\n");
-    exits("bad regular expression");
-}
+<<function [[nextfile]](split.c)>>
+<<function [[matchfile]](split.c)>>
+<<function [[openf]](split.c)>>
+<<function [[fold]](split.c)>>
+<<function [[usage]](split.c)>>
+<<function [[badexp]](split.c)>>
 @
 
 \subsection{[[byte/dd.c]]}
