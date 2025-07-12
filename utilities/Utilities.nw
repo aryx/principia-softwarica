@@ -1740,16 +1740,22 @@ report(uvlong nline, uvlong nword, uvlong nrune, uvlong nbadr, uvlong nchar, cha
 % head tail?
 
 %******************************************************************************
-\chapter{[[ed]]}
+\chapter{The Line Editor [[ed]]}
 %******************************************************************************
+
+% Line editor, as opposed to screen editor (or stream editor later).
+% Not emacs, not vi (not sam nor acme neither).
+% See also \book{Editor}
 
 \section{Introduction}
 
 % ed for editor.
 % originally written by Ken Thompson in the 1970's
 
-% see appendix 1 of "Unix programming environment"
+% see appendix 1 of "Unix programming environment" 
+\cite{unix-pike}
 % for tutorial and motivations for the study of ed!
+
 % screen editors nowaday, but still useful to know ed! especially good
 % for scripting (in fact see mkenam in plan9 code)
 % also if need quick and dirty write a file with a few lines => ed!
@@ -1760,7 +1766,6 @@ report(uvlong nline, uvlong nword, uvlong nrune, uvlong nbadr, uvlong nchar, cha
 % s/re/g
 % g/re/p comes from ed!
 
-% See also \book{Editor}
 
 % ex of powerful ed command used in goken mkenam:
 \begin{verbatim}
@@ -1782,6 +1787,9 @@ Q
 \end{verbatim}
 
 % by end of chapter you will understand this script :)
+
+% Note that use <<'!' Here doc feature from shell
+% but could store ed script in separate file
 
 % Note that unicode-ready editor!
 
@@ -3724,6 +3732,7 @@ enum
 
 \subsection{Data structures}
 
+% =~ AST
 <<struct [[Re]](grep)>>=
 struct  Re
 {
@@ -3787,6 +3796,7 @@ struct  Re2
 
 <<globals grep>>=
 State*  state0;
+// Top regexp?
 Re2 topre;
 @
 
@@ -3825,9 +3835,16 @@ char    flags[256];
 Biobuf  bout;
 @
 
-% for -f
 <<globals grep>>=
+// option<ref_own<Biobuf>> for -f
 Biobuf* rein;
+@
+
+% 0 for -e, start at 1 for -f; used for error report?
+<<globals grep>>=
+// option<string>, for -f
+char    *filename;
+long    lineno;
 @
 
 <<function [[main]](grep)>>=
@@ -3894,6 +3911,13 @@ main(int argc, char *argv[])
 }
 @
 
+<<globals grep>>=
+char*   input;
+char    *pattern;
+ushort  gen;
+@
+
+% str to pattern
 <<function [[str2top]](grep)>>=
 void
 str2top(char *p)
@@ -3906,16 +3930,50 @@ str2top(char *p)
         yyerror("empty pattern");   /* can't be a file name here */
     if (!flags['f'])
         pattern = p;
-    topre.beg = 0;
-    topre.end = 0;
+
+    topre.beg = nil;
+    topre.end = nil;
+
     yyparse();
+
     gen++;
-    if(topre.beg == 0)
+    if(topre.beg == nil)
         yyerror("syntax");
     if(oldtop.beg)
         topre = re2or(oldtop, topre);
 }
 @
+% call yyparse!!!
+
+<<function [[error]](grep)>>=
+void
+error(char *s)
+{
+    fprint(STDERR, "grep: internal error: %s\n", s);
+    exits(s);
+}
+@
+
+<<function [[yyerror]](grep)>>=
+void
+yyerror(char *e, ...)
+{
+    va_list args;
+
+    fprint(STDERR, "grep: ");
+    if(filename)
+        fprint(STDERR, "%s:%ld: ", filename, lineno);
+    else if (pattern)
+        fprint(STDERR, "%s: ", pattern);
+    va_start(args, e);
+    vfprint(STDERR, e, args);
+    va_end(args);
+    fprint(STDERR, "\n");
+    exits("syntax");
+}
+@
+
+
 
 <<function [[mal]](grep)>>=
 void*
@@ -3970,12 +4028,418 @@ ral(int type)
 }
 @
 
-<<function [[error]](grep)>>=
-void
-error(char *s)
+\subsection{Regexp lexer}
+
+% how does [[ed]] parse a regexp?? does not need yacc?
+
+
+% main -> str2top -> yyparse -> yylex
+
+% see \book{Generators} or yacc book
+<<grep/grep.y>>=
+%{
+#include    "grep.h"
+%}
+
+<<grep grammar union decl>>
+<<grep grammar type decl>>
+<<grep grammar [[token]] decl>>
+%%
+<<grep grammar>>
+%%
+
+<<function [[yyerror]](grep)>>
+<<function [[yylex]](grep)>>
+@
+
+
+<<grep grammar union decl>>=
+%union
 {
-    fprint(STDERR, "grep: internal error: %s\n", s);
-    exits(s);
+    int   val;
+    char* str;
+    Re2   re;
+}
+@
+
+<<grep grammar [[token]] decl>>=
+%token  <str>   LCLASS
+%token  <val>   LCHAR
+%token      LLPAREN LRPAREN LALT LSTAR LPLUS LQUES
+%token      LBEGIN LEND LDOT
+%token      LBAD LNEWLINE
+@
+
+<<globals grep>>=
+// option<int> | EOF (-1)? (None = 0)
+int peekc;
+@
+
+<<globals grep>>=
+bool literal;
+@
+
+<<function [[yylex]](grep)>>=
+long
+yylex(void)
+{
+    char *q, *eq;
+    int c, s;
+
+    if(peekc) {
+        s = peekc;
+        peekc = 0;
+        return s;
+    }
+    c = getrec();
+    if(literal) {
+        if(c != 0 && c != '\n') {
+            yylval.val = c;
+            return LCHAR;
+        }
+        literal = false;
+    }
+    switch(c) {
+    default:
+        yylval.val = c;
+        s = LCHAR;
+        break;
+    case '\\':
+        c = getrec();
+        yylval.val = c;
+        s = LCHAR;
+        if(c == '\n')
+            s = LNEWLINE;
+        break;
+    case '[':
+        goto getclass;
+    case '(':
+        s = LLPAREN;
+        break;
+    case ')':
+        s = LRPAREN;
+        break;
+    case '|':
+        s = LALT;
+        break;
+    case '*':
+        s = LSTAR;
+        break;
+    case '+':
+        s = LPLUS;
+        break;
+    case '?':
+        s = LQUES;
+        break;
+    case '^':
+        s = LBEGIN;
+        break;
+    case '$':
+        s = LEND;
+        break;
+    case '.':
+        s = LDOT;
+        break;
+    case 0:
+        peekc = -1;
+    case '\n':
+        s = LNEWLINE;
+        break;
+    }
+    return s;
+
+getclass:
+    q = u.string;
+    eq = q + nelem(u.string) - 5;
+    c = getrec();
+    if(c == '^') {
+        q[0] = '^';
+        q[1] = '\n';
+        q[2] = '-';
+        q[3] = '\n';
+        q += 4;
+        c = getrec();
+    }
+    for(;;) {
+        if(q >= eq)
+            error("class too long");
+        if(c == ']' || c == 0)
+            break;
+        if(c == '\\') {
+            *q++ = c;
+            c = getrec();
+            if(c == 0)
+                break;
+        }
+        *q++ = c;
+        c = getrec();
+    }
+    *q = 0;
+    if(c == 0)
+        return LBAD;
+    yylval.str = u.string;
+    return LCLASS;
+}
+@
+
+
+<<function [[getrec]](grep)>>=
+int
+getrec(void)
+{
+    int c;
+
+    if(flags['f']) {
+        c = Bgetc(rein);
+        if(c <= 0)
+            return 0;
+    } else
+        c = *input++ & 0xff;
+    if(flags['i'] && c >= 'A' && c <= 'Z')
+        c += 'a'-'A';
+    if(c == '\n')
+        lineno++;
+    return c;
+}
+@
+
+
+\subsection{Regexp grammar}
+
+<<grep grammar type decl>>=
+%type   <re>    expr prog
+%type   <re>    expr0 expr1 expr2 expr3 expr4
+@
+
+<<grep grammar>>=
+prog:   /* empty */
+    {
+        yyerror("empty pattern");
+    }
+|   expr newlines
+    {
+        $$.beg = ral(Tend);
+        $$.end = $$.beg;
+        $$ = re2cat(re2star(re2or(re2char(0x00, '\n'-1), re2char('\n'+1, 0xff))), $$);
+        $$ = re2cat($1, $$);
+        $$ = re2cat(re2star(re2char(0x00, 0xff)), $$);
+        topre = $$;
+    }
+
+expr:
+    expr0
+|   expr newlines expr0 { $$ = re2or($1, $3); }
+
+expr0:
+    expr1
+|   LSTAR { literal = true; } expr1 { $$ = $3; }
+
+expr1:
+    expr2
+|   expr1 LALT expr2     { $$ = re2or($1, $3); }
+
+expr2:
+    expr3
+|   expr2 expr3  { $$ = re2cat($1, $2); }
+
+expr3:
+    expr4
+|   expr3 LSTAR { $$ = re2star($1); }
+|   expr3 LPLUS
+    {
+        $$.beg = ral(Talt);
+        patchnext($1.end, $$.beg);
+        $$.beg->alt = $1.beg;
+        $$.end = $$.beg;
+        $$.beg = $1.beg;
+    }
+|   expr3 LQUES
+    {
+        $$.beg = ral(Talt);
+        $$.beg->alt = $1.beg;
+        $$.end = $1.end;
+        appendnext($$.end,  $$.beg);
+    }
+
+expr4:
+    LCHAR
+    {
+        $$.beg = ral(Tclass);
+        $$.beg->lo = $1;
+        $$.beg->hi = $1;
+        $$.end = $$.beg;
+    }
+|   LBEGIN
+    {
+        $$.beg = ral(Tbegin);
+        $$.end = $$.beg;
+    }
+|   LEND
+    {
+        $$.beg = ral(Tend);
+        $$.end = $$.beg;
+    }
+|   LDOT   { $$ = re2class("^\n"); }
+|   LCLASS { $$ = re2class($1); }
+|   LLPAREN expr1 LRPAREN { $$ = $2; }
+
+newlines:
+    LNEWLINE
+|   newlines LNEWLINE
+@
+
+
+<<function [[re2cat]](grep)>>=
+Re2
+re2cat(Re2 a, Re2 b)
+{
+    Re2 c;
+
+    c.beg = a.beg;
+    c.end = b.end;
+    patchnext(a.end, b.beg);
+    return c;
+}
+@
+
+<<function [[patchnext]](grep)>>=
+void
+patchnext(Re *a, Re *b)
+{
+    Re *n;
+
+    while(a) {
+        n = a->next;
+        a->next = b;
+        a = n;
+    }
+}
+@
+
+
+<<function [[re2star]](grep)>>=
+Re2
+re2star(Re2 a)
+{
+    Re2 c;
+
+    c.beg = ral(Talt);
+    c.beg->alt = a.beg;
+    patchnext(a.end, c.beg);
+    c.end = c.beg;
+    return c;
+}
+@
+
+<<function [[re2or]](grep)>>=
+Re2
+re2or(Re2 a, Re2 b)
+{
+    Re2 c;
+
+    c.beg = ral(Tor);
+    c.beg->alt = b.beg;
+    c.beg->next = a.beg;
+    c.end = b.end;
+    appendnext(c.end,  a.end);
+    return c;
+}
+@
+
+<<function [[appendnext]](grep)>>=
+void
+appendnext(Re *a, Re *b)
+{
+    Re *n;
+
+    while(n = a->next)
+        a = n;
+    a->next = b;
+}
+@
+
+<<function [[re2char]](grep)>>=
+Re2
+re2char(int c0, int c1)
+{
+    Re2 c;
+
+    c.beg = ral(Tclass);
+    c.beg->lo = c0 & 0xff;
+    c.beg->hi = c1 & 0xff;
+    c.end = c.beg;
+    return c;
+}
+@
+
+
+
+
+\subsection{[[initstate_()]]}
+
+<<function [[initstate]](grep)>>=
+State*
+initstate_(Re *r)
+{
+    State *s;
+    int i;
+
+    addcase(r);
+    if(flags['1'])
+        reprint("r", r);
+    nfollow = 0;
+    gen++;
+    fol1(r, Cbegin);
+    follow[nfollow++] = r;
+    qsort(follow, nfollow, sizeof(*follow), fcmp);
+
+    s = sal(nfollow);
+    for(i=0; i<nfollow; i++)
+        s->re[i] = follow[i];
+    return s;
+}
+@
+
+<<function [[addcase]](grep)>>=
+Re*
+addcase(Re *r)
+{
+    int i, n;
+    Re *a;
+
+    if(r->gen == gen)
+        return r;
+    r->gen = gen;
+    switch(r->type) {
+    default:
+        error("addcase");
+
+    case Tor:
+        n = countor(r);
+        if(n >= Caselim) {
+            a = ral(Tcase);
+            a->cases = mal(256*sizeof(*a->cases));
+            case1(a, r);
+            for(i=0; i<256; i++)
+                if(a->cases[i]) {
+                    r = a->cases[i];
+                    if(countor(r) < n)
+                        a->cases[i] = addcase(r);
+                }
+            return a;
+        }
+        return r;
+
+    case Talt:
+        r->next = addcase(r->next);
+        r->alt = addcase(r->alt);
+        return r;
+
+    case Tbegin:
+    case Tend:
+    case Tclass:
+        return r;
+    }
 }
 @
 
@@ -4152,71 +4616,6 @@ loopi:
 }
 @
 
-<<function [[initstate]](grep)>>=
-State*
-initstate_(Re *r)
-{
-    State *s;
-    int i;
-
-    addcase(r);
-    if(flags['1'])
-        reprint("r", r);
-    nfollow = 0;
-    gen++;
-    fol1(r, Cbegin);
-    follow[nfollow++] = r;
-    qsort(follow, nfollow, sizeof(*follow), fcmp);
-
-    s = sal(nfollow);
-    for(i=0; i<nfollow; i++)
-        s->re[i] = follow[i];
-    return s;
-}
-@
-
-<<function [[addcase]](grep)>>=
-Re*
-addcase(Re *r)
-{
-    int i, n;
-    Re *a;
-
-    if(r->gen == gen)
-        return r;
-    r->gen = gen;
-    switch(r->type) {
-    default:
-        error("addcase");
-
-    case Tor:
-        n = countor(r);
-        if(n >= Caselim) {
-            a = ral(Tcase);
-            a->cases = mal(256*sizeof(*a->cases));
-            case1(a, r);
-            for(i=0; i<256; i++)
-                if(a->cases[i]) {
-                    r = a->cases[i];
-                    if(countor(r) < n)
-                        a->cases[i] = addcase(r);
-                }
-            return a;
-        }
-        return r;
-
-    case Talt:
-        r->next = addcase(r->next);
-        r->alt = addcase(r->alt);
-        return r;
-
-    case Tbegin:
-    case Tend:
-    case Tclass:
-        return r;
-    }
-}
-@
 
 <<function [[countor]](grep)>>=
 int
@@ -4280,6 +4679,12 @@ loop:
 @
 
 
+
+\subsection{Advanced features}
+
+% debugging with -1
+
+\subsubsection{Debugging with [[-1]]}
 <<function [[reprint]](grep)>>=
 void
 reprint(char *s, Re *r)
@@ -4346,386 +4751,7 @@ loop:
 }
 @
 
-\subsection{Lexer}
 
-% how does [[ed]] parse a regexp?? does not need yacc?
-
-% see \book{Generators} or yacc book
-<<grep/grep.y>>=
-%{
-#include    "grep.h"
-%}
-
-<<grep grammar union decl>>
-<<grep grammar type decl>>
-<<grep grammar [[token]] decl>>
-%%
-<<grep grammar>>
-%%
-
-<<function [[yyerror]](grep)>>
-<<function [[yylex]](grep)>>
-@
-
-
-<<grep grammar union decl>>=
-
-%union
-{
-    int val;
-    char*   str;
-    Re2 re;
-}
-@
-
-<<grep grammar [[token]] decl>>=
-%token  <str>   LCLASS
-%token  <val>   LCHAR
-%token      LLPAREN LRPAREN LALT LSTAR LPLUS LQUES
-%token      LBEGIN LEND LDOT LBAD LNEWLINE
-@
-
-<<globals grep>>=
-// option<int> (None = 0)
-int peekc;
-@
-
-<<function [[yylex]](grep)>>=
-long
-yylex(void)
-{
-    char *q, *eq;
-    int c, s;
-
-    if(peekc) {
-        s = peekc;
-        peekc = 0;
-        return s;
-    }
-    c = getrec();
-    if(literal) {
-        if(c != 0 && c != '\n') {
-            yylval.val = c;
-            return LCHAR;
-        }
-        literal = 0;
-    }
-    switch(c) {
-    default:
-        yylval.val = c;
-        s = LCHAR;
-        break;
-    case '\\':
-        c = getrec();
-        yylval.val = c;
-        s = LCHAR;
-        if(c == '\n')
-            s = LNEWLINE;
-        break;
-    case '[':
-        goto getclass;
-    case '(':
-        s = LLPAREN;
-        break;
-    case ')':
-        s = LRPAREN;
-        break;
-    case '|':
-        s = LALT;
-        break;
-    case '*':
-        s = LSTAR;
-        break;
-    case '+':
-        s = LPLUS;
-        break;
-    case '?':
-        s = LQUES;
-        break;
-    case '^':
-        s = LBEGIN;
-        break;
-    case '$':
-        s = LEND;
-        break;
-    case '.':
-        s = LDOT;
-        break;
-    case 0:
-        peekc = -1;
-    case '\n':
-        s = LNEWLINE;
-        break;
-    }
-    return s;
-
-getclass:
-    q = u.string;
-    eq = q + nelem(u.string) - 5;
-    c = getrec();
-    if(c == '^') {
-        q[0] = '^';
-        q[1] = '\n';
-        q[2] = '-';
-        q[3] = '\n';
-        q += 4;
-        c = getrec();
-    }
-    for(;;) {
-        if(q >= eq)
-            error("class too long");
-        if(c == ']' || c == 0)
-            break;
-        if(c == '\\') {
-            *q++ = c;
-            c = getrec();
-            if(c == 0)
-                break;
-        }
-        *q++ = c;
-        c = getrec();
-    }
-    *q = 0;
-    if(c == 0)
-        return LBAD;
-    yylval.str = u.string;
-    return LCLASS;
-}
-@
-
-
-<<function [[getrec]](grep)>>=
-int
-getrec(void)
-{
-    int c;
-
-    if(flags['f']) {
-        c = Bgetc(rein);
-        if(c <= 0)
-            return 0;
-    } else
-        c = *input++ & 0xff;
-    if(flags['i'] && c >= 'A' && c <= 'Z')
-        c += 'a'-'A';
-    if(c == '\n')
-        lineno++;
-    return c;
-}
-@
-
-
-\subsection{Grammar}
-
-<<grep grammar type decl>>=
-%type   <re>    expr prog
-%type   <re>    expr0 expr1 expr2 expr3 expr4
-@
-
-<<grep grammar>>=
-prog:   /* empty */
-    {
-        yyerror("empty pattern");
-    }
-|   expr newlines
-    {
-        $$.beg = ral(Tend);
-        $$.end = $$.beg;
-        $$ = re2cat(re2star(re2or(re2char(0x00, '\n'-1), re2char('\n'+1, 0xff))), $$);
-        $$ = re2cat($1, $$);
-        $$ = re2cat(re2star(re2char(0x00, 0xff)), $$);
-        topre = $$;
-    }
-
-expr:
-    expr0
-|   expr newlines expr0
-    {
-        $$ = re2or($1, $3);
-    }
-
-expr0:
-    expr1
-|   LSTAR { literal = 1; } expr1
-    {
-        $$ = $3;
-    }
-
-expr1:
-    expr2
-|   expr1 LALT expr2
-    {
-        $$ = re2or($1, $3);
-    }
-
-expr2:
-    expr3
-|   expr2 expr3
-    {
-        $$ = re2cat($1, $2);
-    }
-
-expr3:
-    expr4
-|   expr3 LSTAR
-    {
-        $$ = re2star($1);
-    }
-|   expr3 LPLUS
-    {
-        $$.beg = ral(Talt);
-        patchnext($1.end, $$.beg);
-        $$.beg->alt = $1.beg;
-        $$.end = $$.beg;
-        $$.beg = $1.beg;
-    }
-|   expr3 LQUES
-    {
-        $$.beg = ral(Talt);
-        $$.beg->alt = $1.beg;
-        $$.end = $1.end;
-        appendnext($$.end,  $$.beg);
-    }
-
-expr4:
-    LCHAR
-    {
-        $$.beg = ral(Tclass);
-        $$.beg->lo = $1;
-        $$.beg->hi = $1;
-        $$.end = $$.beg;
-    }
-|   LBEGIN
-    {
-        $$.beg = ral(Tbegin);
-        $$.end = $$.beg;
-    }
-|   LEND
-    {
-        $$.beg = ral(Tend);
-        $$.end = $$.beg;
-    }
-|   LDOT
-    {
-        $$ = re2class("^\n");
-    }
-|   LCLASS
-    {
-        $$ = re2class($1);
-    }
-|   LLPAREN expr1 LRPAREN
-    {
-        $$ = $2;
-    }
-
-newlines:
-    LNEWLINE
-|   newlines LNEWLINE
-@
-
-
-<<function [[re2cat]](grep)>>=
-Re2
-re2cat(Re2 a, Re2 b)
-{
-    Re2 c;
-
-    c.beg = a.beg;
-    c.end = b.end;
-    patchnext(a.end, b.beg);
-    return c;
-}
-@
-
-<<function [[patchnext]](grep)>>=
-void
-patchnext(Re *a, Re *b)
-{
-    Re *n;
-
-    while(a) {
-        n = a->next;
-        a->next = b;
-        a = n;
-    }
-}
-@
-
-
-<<function [[re2star]](grep)>>=
-Re2
-re2star(Re2 a)
-{
-    Re2 c;
-
-    c.beg = ral(Talt);
-    c.beg->alt = a.beg;
-    patchnext(a.end, c.beg);
-    c.end = c.beg;
-    return c;
-}
-@
-
-<<function [[re2or]](grep)>>=
-Re2
-re2or(Re2 a, Re2 b)
-{
-    Re2 c;
-
-    c.beg = ral(Tor);
-    c.beg->alt = b.beg;
-    c.beg->next = a.beg;
-    c.end = b.end;
-    appendnext(c.end,  a.end);
-    return c;
-}
-@
-
-<<function [[appendnext]](grep)>>=
-void
-appendnext(Re *a, Re *b)
-{
-    Re *n;
-
-    while(n = a->next)
-        a = n;
-    a->next = b;
-}
-@
-
-<<function [[re2char]](grep)>>=
-Re2
-re2char(int c0, int c1)
-{
-    Re2 c;
-
-    c.beg = ral(Tclass);
-    c.beg->lo = c0 & 0xff;
-    c.beg->hi = c1 & 0xff;
-    c.end = c.beg;
-    return c;
-}
-@
-
-
-<<function [[yyerror]](grep)>>=
-void
-yyerror(char *e, ...)
-{
-    va_list args;
-
-    fprint(STDERR, "grep: ");
-    if(filename)
-        fprint(STDERR, "%s:%ld: ", filename, lineno);
-    else if (pattern)
-        fprint(STDERR, "%s: ", pattern);
-    va_start(args, e);
-    vfprint(STDERR, e, args);
-    va_end(args);
-    fprint(STDERR, "\n");
-    exits("syntax");
-}
-@
 
 
 \section{[[sed]]}
