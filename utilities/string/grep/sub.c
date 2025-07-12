@@ -1,6 +1,7 @@
 /*s: grep/sub.c */
 #include    "grep.h"
 
+/*s: function [[mal]](grep) */
 void*
 mal(int n)
 {
@@ -24,7 +25,8 @@ mal(int n)
     memset(v, 0, n);
     return v;
 }
-
+/*e: function [[mal]](grep) */
+/*s: function [[sal]](grep) */
 State*
 sal(int n)
 {
@@ -36,7 +38,8 @@ sal(int n)
     s->re = mal(n*sizeof(*state0->re));
     return s;
 }
-
+/*e: function [[sal]](grep) */
+/*s: function [[ral]](grep) */
 Re*
 ral(int type)
 {
@@ -47,14 +50,19 @@ ral(int type)
     maxfollow++;
     return r;
 }
+/*e: function [[ral]](grep) */
 
+/*s: function [[error]](grep) */
 void
 error(char *s)
 {
-    fprint(2, "grep: internal error: %s\n", s);
+    fprint(STDERR, "grep: internal error: %s\n", s);
     exits(s);
 }
+/*e: function [[error]](grep) */
 
+// addcase() helpers
+/*s: function [[countor]](grep) */
 int
 countor(Re *r)
 {
@@ -72,7 +80,8 @@ loop:
     }
     return n;
 }
-
+/*e: function [[countor]](grep) */
+/*s: function [[oralloc]](grep) */
 Re*
 oralloc(int t, Re *r, Re *b)
 {
@@ -85,7 +94,8 @@ oralloc(int t, Re *r, Re *b)
     a->next = b;
     return a;
 }
-
+/*e: function [[oralloc]](grep) */
+/*s: function [[case1]](grep) */
 void
 case1(Re *c, Re *r)
 {
@@ -108,7 +118,9 @@ loop:
         break;
     }
 }
+/*e: function [[case1]](grep) */
 
+/*s: function [[addcase]](grep) */
 Re*
 addcase(Re *r)
 {
@@ -149,7 +161,9 @@ addcase(Re *r)
         return r;
     }
 }
+/*e: function [[addcase]](grep) */
 
+/*s: function [[str2top]](grep) */
 void
 str2top(char *p)
 {
@@ -161,16 +175,21 @@ str2top(char *p)
         yyerror("empty pattern");   /* can't be a file name here */
     if (!flags['f'])
         pattern = p;
-    topre.beg = 0;
-    topre.end = 0;
+
+    topre.beg = nil;
+    topre.end = nil;
+
     yyparse();
+
     gen++;
-    if(topre.beg == 0)
+    if(topre.beg == nil)
         yyerror("syntax");
     if(oldtop.beg)
         topre = re2or(oldtop, topre);
 }
+/*e: function [[str2top]](grep) */
 
+/*s: function [[appendnext]](grep) */
 void
 appendnext(Re *a, Re *b)
 {
@@ -180,7 +199,8 @@ appendnext(Re *a, Re *b)
         a = n;
     a->next = b;
 }
-
+/*e: function [[appendnext]](grep) */
+/*s: function [[patchnext]](grep) */
 void
 patchnext(Re *a, Re *b)
 {
@@ -192,7 +212,9 @@ patchnext(Re *a, Re *b)
         a = n;
     }
 }
+/*e: function [[patchnext]](grep) */
 
+/*s: function [[getrec]](grep) */
 int
 getrec(void)
 {
@@ -210,7 +232,9 @@ getrec(void)
         lineno++;
     return c;
 }
+/*e: function [[getrec]](grep) */
 
+/*s: function [[re2cat]](grep) */
 Re2
 re2cat(Re2 a, Re2 b)
 {
@@ -221,7 +245,8 @@ re2cat(Re2 a, Re2 b)
     patchnext(a.end, b.beg);
     return c;
 }
-
+/*e: function [[re2cat]](grep) */
+/*s: function [[re2star]](grep) */
 Re2
 re2star(Re2 a)
 {
@@ -233,7 +258,8 @@ re2star(Re2 a)
     c.end = c.beg;
     return c;
 }
-
+/*e: function [[re2star]](grep) */
+/*s: function [[re2or]](grep) */
 Re2
 re2or(Re2 a, Re2 b)
 {
@@ -246,7 +272,8 @@ re2or(Re2 a, Re2 b)
     appendnext(c.end,  a.end);
     return c;
 }
-
+/*e: function [[re2or]](grep) */
+/*s: function [[re2char]](grep) */
 Re2
 re2char(int c0, int c1)
 {
@@ -258,7 +285,9 @@ re2char(int c0, int c1)
     c.end = c.beg;
     return c;
 }
+/*e: function [[re2char]](grep) */
 
+/*s: function [[reprint1]](grep) */
 void
 reprint1(Re *a)
 {
@@ -311,7 +340,8 @@ loop:
     a = a->next;
     goto loop;
 }
-
+/*e: function [[reprint1]](grep) */
+/*s: function [[reprint]](grep) */
 void
 reprint(char *s, Re *r)
 {
@@ -320,4 +350,5 @@ reprint(char *s, Re *r)
     reprint1(r);
     print("\n\n");
 }
+/*e: function [[reprint]](grep) */
 /*e: grep/sub.c */

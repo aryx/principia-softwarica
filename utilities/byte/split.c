@@ -22,7 +22,7 @@ char *pattern = nil;
 /*e: globals split.c */
 
 // forward decls
-extern int nextfile(void);
+extern bool nextfile(void);
 extern int matchfile(Resub*);
 extern void openf(void);
 extern char *fold(char*,int);

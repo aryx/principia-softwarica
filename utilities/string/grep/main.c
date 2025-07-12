@@ -1,18 +1,24 @@
 /*s: grep/main.c */
 #include    "grep.h"
 
+/*s: constant [[validflags]](grep) */
 char *validflags = "bchiLlnsv";
+/*e: constant [[validflags]](grep) */
+/*s: function [[usage]](grep) */
 void
 usage(void)
 {
-    fprint(2, "usage: grep [-%s] [-e pattern] [-f patternfile] [file ...]\n", validflags);
+    fprint(STDERR, "usage: grep [-%s] [-e pattern] [-f patternfile] [file ...]\n", validflags);
     exits("usage");
 }
+/*e: function [[usage]](grep) */
 
+/*s: function [[main]](grep) */
 void
 main(int argc, char *argv[])
 {
-    int i, status;
+    int i;
+    int status;
 
     ARGBEGIN {
     default:
@@ -31,8 +37,8 @@ main(int argc, char *argv[])
         flags['f']++;
         filename = EARGF(usage());
         rein = Bopen(filename, OREAD);
-        if(rein == 0) {
-            fprint(2, "grep: can't open %s: %r\n", filename);
+        if(rein == nil) {
+            fprint(STDERR, "grep: can't open %s: %r\n", filename);
             exits("open");
         }
         lineno = 1;
@@ -49,12 +55,12 @@ main(int argc, char *argv[])
     }
 
     follow = mal(maxfollow*sizeof(*follow));
-    state0 = initstate(topre.beg);
+    state0 = initstate_(topre.beg);
 
-    Binit(&bout, 1, OWRITE);
+    Binit(&bout, STDOUT, OWRITE);
     switch(argc) {
     case 0:
-        status = search(0, 0);
+        status = search(nil, 0);
         break;
     case 1:
         status = search(argv[0], 0);
@@ -66,27 +72,30 @@ main(int argc, char *argv[])
         break;
     }
     if(status)
-        exits(0);
+        exits(nil);
     exits("no matches");
 }
+/*e: function [[main]](grep) */
 
+/*s: function [[search]](grep) */
 int
 search(char *file, int flag)
 {
     State *s, *ns;
-    int c, fid, eof, nl, empty;
+    fdt fid;
+    int c, eof, nl, empty;
     long count, lineno, n;
     uchar *elp, *lp, *bol;
 
-    if(file == 0) {
+    if(file == nil) {
         file = "stdin";
-        fid = 0;
+        fid = STDIN;
         flag |= Bflag;
     } else
         fid = open(file, OREAD);
 
     if(fid < 0) {
-        fprint(2, "grep: can't open %s: %r\n", file);
+        fprint(STDERR, "grep: can't open %s: %r\n", file);
         return 0;
     }
 
@@ -131,7 +140,7 @@ loop0:
         nl = u.buf[n-1]=='\n';
     } else {
         if(n < 0){
-            fprint(2, "grep: read error on %s: %r\n", file);
+            fprint(STDERR, "grep: read error on %s: %r\n", file);
             return count != 0;
         }
         if(!eof && !nl && !empty) {
@@ -237,9 +246,10 @@ loopi:
         goto loopi;
     goto loop0;
 }
-
+/*e: function [[search]](grep) */
+/*s: function [[initstate]](grep) */
 State*
-initstate(Re *r)
+initstate_(Re *r)
 {
     State *s;
     int i;
@@ -258,4 +268,5 @@ initstate(Re *r)
         s->re[i] = follow[i];
     return s;
 }
+/*e: function [[initstate]](grep) */
 /*e: grep/main.c */

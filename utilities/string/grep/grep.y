@@ -3,21 +3,27 @@
 #include    "grep.h"
 %}
 
+/*s: grep grammar union decl */
 %union
 {
-    int val;
-    char*   str;
-    Re2 re;
+    int   val;
+    char* str;
+    Re2   re;
 }
-
+/*e: grep grammar union decl */
+/*s: grep grammar type decl */
 %type   <re>    expr prog
 %type   <re>    expr0 expr1 expr2 expr3 expr4
+/*e: grep grammar type decl */
+/*s: grep grammar [[token]] decl */
 %token  <str>   LCLASS
 %token  <val>   LCHAR
 %token      LLPAREN LRPAREN LALT LSTAR LPLUS LQUES
-%token      LBEGIN LEND LDOT LBAD LNEWLINE
+%token      LBEGIN LEND LDOT
+%token      LBAD LNEWLINE
+/*e: grep grammar [[token]] decl */
 %%
-
+/*s: grep grammar */
 prog:   /* empty */
     {
         yyerror("empty pattern");
@@ -34,38 +40,23 @@ prog:   /* empty */
 
 expr:
     expr0
-|   expr newlines expr0
-    {
-        $$ = re2or($1, $3);
-    }
+|   expr newlines expr0 { $$ = re2or($1, $3); }
 
 expr0:
     expr1
-|   LSTAR { literal = 1; } expr1
-    {
-        $$ = $3;
-    }
+|   LSTAR { literal = true; } expr1 { $$ = $3; }
 
 expr1:
     expr2
-|   expr1 LALT expr2
-    {
-        $$ = re2or($1, $3);
-    }
+|   expr1 LALT expr2     { $$ = re2or($1, $3); }
 
 expr2:
     expr3
-|   expr2 expr3
-    {
-        $$ = re2cat($1, $2);
-    }
+|   expr2 expr3  { $$ = re2cat($1, $2); }
 
 expr3:
     expr4
-|   expr3 LSTAR
-    {
-        $$ = re2star($1);
-    }
+|   expr3 LSTAR { $$ = re2star($1); }
 |   expr3 LPLUS
     {
         $$.beg = ral(Talt);
@@ -100,41 +91,35 @@ expr4:
         $$.beg = ral(Tend);
         $$.end = $$.beg;
     }
-|   LDOT
-    {
-        $$ = re2class("^\n");
-    }
-|   LCLASS
-    {
-        $$ = re2class($1);
-    }
-|   LLPAREN expr1 LRPAREN
-    {
-        $$ = $2;
-    }
+|   LDOT   { $$ = re2class("^\n"); }
+|   LCLASS { $$ = re2class($1); }
+|   LLPAREN expr1 LRPAREN { $$ = $2; }
 
 newlines:
     LNEWLINE
 |   newlines LNEWLINE
+/*e: grep grammar */
 %%
 
+/*s: function [[yyerror]](grep) */
 void
 yyerror(char *e, ...)
 {
     va_list args;
 
-    fprint(2, "grep: ");
+    fprint(STDERR, "grep: ");
     if(filename)
-        fprint(2, "%s:%ld: ", filename, lineno);
+        fprint(STDERR, "%s:%ld: ", filename, lineno);
     else if (pattern)
-        fprint(2, "%s: ", pattern);
+        fprint(STDERR, "%s: ", pattern);
     va_start(args, e);
-    vfprint(2, e, args);
+    vfprint(STDERR, e, args);
     va_end(args);
-    fprint(2, "\n");
+    fprint(STDERR, "\n");
     exits("syntax");
 }
-
+/*e: function [[yyerror]](grep) */
+/*s: function [[yylex]](grep) */
 long
 yylex(void)
 {
@@ -152,7 +137,7 @@ yylex(void)
             yylval.val = c;
             return LCHAR;
         }
-        literal = 0;
+        literal = false;
     }
     switch(c) {
     default:
@@ -235,4 +220,5 @@ getclass:
     yylval.str = u.string;
     return LCLASS;
 }
+/*e: function [[yylex]](grep) */
 /*e: grep/grep.y */
