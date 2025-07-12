@@ -6649,6 +6649,11 @@ re2class(char *s)
 
 \subsection{[[archive/tar.c]]}
 
+<<globals tar.c>>=
+<<global [[verb]](tar.c)>>
+@
+
+%-----------------------------------------------------------------
 <<archive/tar.c>>=
 /*
  * tar - `tape archiver', actually usable on any medium.
@@ -6657,30 +6662,12 @@ re2class(char *s)
  *  at once to and from the filesystem, and does not copy blocks
  *  around internally.
  */
-
-#include <u.h>
-#include <libc.h>
+<<plan9 includes>>
 #include <ctype.h>
 //#include <fcall.h>      /* for %M */
 #include <str.h>
 
-/*
- * modified versions of those in libc.h; scans only the first arg for
- * keyletters and options.
- */
-#define TARGBEGIN {\
-    (argv0 || (argv0 = *argv)), argv++, argc--;\
-    if (argv[0]) {\
-        char *_args, *_argt;\
-        Rune _argc;\
-        _args = &argv[0][0];\
-        _argc = 0;\
-        while(*_args && (_args += chartorune(&_argc, _args)))\
-            switch(_argc)
-#define TARGEND SET(_argt); USED(_argt);USED(_argc);USED(_args); \
-    argc--, argv++; } \
-    USED(argv); USED(argc); }
-#define TARGC() (_argc)
+<<macros [[TARGxxx]](tar.c)>>
 
 #define HOWMANY(a, size)    (((a) + (size) - 1) / (size))
 #define BYTES2TBLKS(bytes)  HOWMANY(bytes, Tblock)
@@ -6694,120 +6681,41 @@ re2class(char *s)
 typedef vlong Off;
 typedef char *(*Refill)(int ar, char *bufs, int justhdr);
 
-enum { Stdin, Stdout, Stderr };
+// nice enums! tar is modern! types!
 enum { Rd, Wr };            /* pipe fd-array indices */
 enum { Output, Input };
-enum { None, Toc, Xtract, Replace };
+<<enum [[Verb]]>>
 enum { Alldata, Justnxthdr };
 enum {
-    Tblock = 512,
-    Namsiz = 100,
-    Maxpfx = 155,       /* from POSIX */
-    Maxname = Namsiz + 1 + Maxpfx,
-    Binsize = 0x80,     /* flag in size[0], from gnu: positive binary size */
-    Binnegsz = 0xff,    /* flag in size[0]: negative binary size */
-
-    Nblock = 40,        /* maximum blocksize */
-    Dblock = 20,        /* default blocksize */
-    Debug = 0,
+    <<constants tar.c>>
 };
 
 /* POSIX link flags */
-enum {
-    LF_PLAIN1 = '\0',
-    LF_PLAIN2 = '0',
-    LF_LINK =   '1',
-    LF_SYMLINK1 =   '2',
-    LF_SYMLINK2 =   's',        /* 4BSD used this */
-    LF_CHR =    '3',
-    LF_BLK =    '4',
-    LF_DIR =    '5',
-    LF_FIFO =   '6',
-    LF_CONTIG = '7',
-    /* 'A' - 'Z' are reserved for custom implementations */
-};
+<<enum [[LinkFlag]](tar.c)>>
+<<macros [[islinkxxx]](tar.c)>>
 
-#define islink(lf)  (isreallink(lf) || issymlink(lf))
-#define isreallink(lf)  ((lf) == LF_LINK)
-#define issymlink(lf)   ((lf) == LF_SYMLINK1 || (lf) == LF_SYMLINK2)
+<<union [[Hdr]](tar.c)>>
 
-typedef union {
-    uchar   data[Tblock];
-    struct {
-        char    name[Namsiz];
-        char    mode[8];
-        char    uid[8];
-        char    gid[8];
-        char    size[12];
-        char    mtime[12];
-        char    chksum[8];
-        char    linkflag;
-        char    linkname[Namsiz];
+<<struct [[Compress]](tar.c)>>
+<<constant [[comps]](tar.c)>>
 
-        /* rest are defined by POSIX's ustar format; see p1003.2b */
-        char    magic[6];   /* "ustar" */
-        char    version[2];
-        char    uname[32];
-        char    gname[32];
-        char    devmajor[8];
-        char    devminor[8];
-        char    prefix[Maxpfx]; /* if non-null, path= prefix "/" name */
-    };
-} Hdr;
-
-typedef struct {
-    char    *comp;
-    char    *decomp;
-    char    *sfx[4];
-} Compress;
-
-static Compress comps[] = {
-    "gzip",     "gunzip",   { ".tar.gz", ".tgz" },  /* default */
-    "compress", "uncompress",   { ".tar.Z",  ".tz" },
-    "bzip2",    "bunzip2",  { ".tar.bz", ".tbz",
-                      ".tar.bz2",".tbz2" },
-};
-
-typedef struct {
-    int kid;
-    int fd; /* original fd */
-    int rfd;    /* replacement fd */
-    int input;
-    int open;
-} Pushstate;
+<<struct [[Pushstate]](tar.c)>>
 
 #define OTHER(rdwr) ((rdwr) == Rd? Wr: Rd)
 
+<<globals tar.c>>
+<<global flags tar.c>>
 static int debug;
 static int fixednblock;
-static int verb;
-static int posix = 1;
-static int docreate;
-static int aruid;
-static int argid;
-static int relative = 1;
-static int settime;
-static int verbose;
-static int docompress;
 static int keepexisting;
-static int ignerrs;     /* flag: ignore i/o errors if possible */
 static Off blkoff;      /* offset of the current archive block (not Tblock) */
 static Off nexthdr;
 
-static int nblock = Dblock;
-static int resync;
-static char *usefile, *arname = "archive";
+static char *arname = "archive";
 static char origdir[Maxname*2];
-static Hdr *tpblk, *endblk;
 static Hdr *curblk;
 
-static void
-usage(void)
-{
-    fprint(2, "usage: %s {crtx}[PRTfgikmpsuvz] [archive] [file1 file2...]\n",
-        argv0);
-    exits("usage");
-}
+<<function [[usage]](tar.c)>>
 
 /* I/O, with error retry or exit */
 
@@ -6866,24 +6774,7 @@ ewrite(char *name, int fd, void *buf, long len)
 
 /* compression */
 
-static Compress *
-compmethod(char *name)
-{
-    int i, nmlen, sfxlen;
-    Compress *cp;
-
-    if (name != nil) {
-        nmlen = strlen(name);
-        for (cp = comps; cp < comps + nelem(comps); cp++)
-            for (i = 0; i < nelem(cp->sfx) && cp->sfx[i]; i++) {
-                sfxlen = strlen(cp->sfx[i]);
-                if (nmlen > sfxlen &&
-                    strcmp(cp->sfx[i], name+nmlen-sfxlen) == 0)
-                    return cp;
-            }
-    }
-    return docompress? comps: nil;
-}
+<<function [[compmethod]](tar.c)>>
 
 /*
  * push a filter, cmd, onto fd.  if input, it's an input descriptor.
@@ -6906,11 +6797,11 @@ push(int fd, char *cmd, int input, Pushstate *ps)
         return -1;
     case 0:
         if (input)
-            dup(pifds[Wr], Stdout);
+            dup(pifds[Wr], STDOUT);
         else
-            dup(pifds[Rd], Stdin);
+            dup(pifds[Rd], STDIN);
         close(pifds[input? Rd: Wr]);
-        dup(fd, (input? Stdin: Stdout));
+        dup(fd, (input? STDIN: STDOUT));
         s = s_new();
         if (cmd[0] != '/')
             s_append(s, "/bin/");
@@ -6946,14 +6837,7 @@ pushclose(Pushstate *ps)
  * block-buffer management
  */
 
-static void
-initblks(void)
-{
-    free(tpblk);
-    tpblk = malloc(Tblock * nblock);
-    assert(tpblk != nil);
-    endblk = tpblk + nblock;
-}
+<<function [[initblks]](tar.c)>>
 
 /*
  * (re)fill block buffers from archive.  `justhdr' means we don't care
@@ -7120,11 +7004,7 @@ chksum(Hdr *hp)
     return i;
 }
 
-static int
-isustar(Hdr *hp)
-{
-    return strcmp(hp->magic, "ustar") == 0;
-}
+<<function [[isustar]](tar.c)>>
 
 /*
  * s is at most n bytes long, but need not be NUL-terminated.
@@ -7132,7 +7012,7 @@ isustar(Hdr *hp)
  * be NUL.
  */
 static int
-strnlen(char *s, int n)
+strnlen_(char *s, int n)
 {
     return s[n - 1] != '\0'? n: strlen(s);
 }
@@ -7146,7 +7026,7 @@ name(Hdr *hp)
     static char fullnamebuf[2+Maxname+1];  /* 2+ for ./ on relative names */
 
     fullname = fullnamebuf+2;
-    namlen = strnlen(hp->name, sizeof hp->name);
+    namlen = strnlen_(hp->name, sizeof hp->name);
     if (hp->prefix[0] == '\0' || !isustar(hp)) {    /* old-style name? */
         memmove(fullname, hp->name, namlen);
         fullname[namlen] = '\0';
@@ -7154,7 +7034,7 @@ name(Hdr *hp)
     }
 
     /* name is in two pieces */
-    pfxlen = strnlen(hp->prefix, sizeof hp->prefix);
+    pfxlen = strnlen_(hp->prefix, sizeof hp->prefix);
     memmove(fullname, hp->prefix, pfxlen);
     fullname[pfxlen] = '/';
     memmove(fullname + pfxlen + 1, hp->name, namlen);
@@ -7268,39 +7148,7 @@ parsecksum(char *cksum, char *name)
         name, "checksum");
 }
 
-static Hdr *
-readhdr(int ar)
-{
-    long hdrcksum;
-    Hdr *hp;
-
-    hp = getblkrd(ar, Alldata);
-    if (hp == nil)
-        sysfatal("unexpected EOF instead of archive header in %s",
-            arname);
-    if (eotar(hp))          /* end-of-archive block? */
-        return nil;
-
-    hdrcksum = parsecksum(hp->chksum, name(hp));
-    if (hdrcksum == -1 || chksum(hp) != hdrcksum) {
-        if (!resync)
-            sysfatal("bad archive header checksum in %s: "
-                "name %.100s...; expected %#luo got %#luo",
-                arname, hp->name, hdrcksum, chksum(hp));
-        fprint(2, "%s: skipping past archive header with bad checksum in %s...",
-            argv0, arname);
-        do {
-            hp = getblkrd(ar, Alldata);
-            if (hp == nil)
-                sysfatal("unexpected EOF looking for archive header in %s",
-                    arname);
-            hdrcksum = parsecksum(hp->chksum, name(hp));
-        } while (hdrcksum == -1 || chksum(hp) != hdrcksum);
-        fprint(2, "found %s\n", name(hp));
-    }
-    nexthdr += Tblock*(1 + BYTES2TBLKS(arsize(hp)));
-    return hp;
-}
+<<function [[readhdr]](tar.c)>>
 
 /*
  * tar r[c]
@@ -7366,43 +7214,7 @@ putfullname(Hdr *hp, char *name)
     return 0;
 }
 
-static int
-mkhdr(Hdr *hp, Dir *dir, char *file)
-{
-    int r;
-
-    /*
-     * some of these fields run together, so we format them left-to-right
-     * and don't use snprint.
-     */
-    sprint(hp->mode, "%6lo ", dir->mode & 0777);
-    sprint(hp->uid, "%6o ", aruid);
-    sprint(hp->gid, "%6o ", argid);
-    if (dir->length >= (Off)1<<32) {
-        static int printed;
-
-        if (!printed) {
-            printed = 1;
-            fprint(2, "%s: storing large sizes in \"base 256\"\n", argv0);
-        }
-        hp->size[0] = Binsize;
-        /* emit so-called `base 256' representation of size */
-        putbe((uchar *)hp->size+1, dir->length, sizeof hp->size - 2);
-        hp->size[sizeof hp->size - 1] = ' ';
-    } else
-        sprint(hp->size, "%11lluo ", dir->length);
-    sprint(hp->mtime, "%11luo ", dir->mtime);
-    hp->linkflag = (dir->mode&DMDIR? LF_DIR: LF_PLAIN1);
-    r = putfullname(hp, file);
-    if (posix) {
-        strncpy(hp->magic, "ustar", sizeof hp->magic);
-        strncpy(hp->version, "00", sizeof hp->version);
-        strncpy(hp->uname, dir->uid, sizeof hp->uname);
-        strncpy(hp->gname, dir->gid, sizeof hp->gname);
-    }
-    sprint(hp->chksum, "%6luo", chksum(hp));
-    return r;
-}
+<<function [[mkhdr]](tar.c)>>
 
 static void addtoar(int ar, char *file, char *shortf);
 
@@ -7551,58 +7363,7 @@ skiptoend(int ar)
     curblk--;
 }
 
-static char *
-replace(char **argv)
-{
-    int i, ar;
-    char *arg;
-    Compress *comp = nil;
-    Pushstate ps;
-
-    /* open archive to be updated */
-    if (usefile && docreate)
-        ar = create(usefile, OWRITE, 0666);
-    else if (usefile) {
-        if (docompress)
-            sysfatal("cannot update compressed archive");
-        ar = open(usefile, ORDWR);
-    } else
-        ar = Stdout;
-
-    /* push compression filter, if requested */
-    if (docompress) {
-        comp = compmethod(usefile);
-        if (comp)
-            ar = push(ar, comp->comp, Output, &ps);
-    }
-    if (ar < 0)
-        sysfatal("can't open archive %s: %r", usefile);
-
-    if (usefile && !docreate)
-        skiptoend(ar);
-
-    for (i = 0; argv[i] != nil; i++) {
-        arg = argv[i];
-        cleanname(arg);
-        if (strcmp(arg, "..") == 0 || strncmp(arg, "../", 3) == 0)
-            fprint(2, "%s: name starting with .. is a bad idea\n",
-                argv0);
-        addtoar(ar, arg, arg);
-        chdir(origdir);     /* for correctness & profiling */
-    }
-
-    /* write end-of-archive marker */
-    getblkz(ar);
-    putblk(ar);
-    getblkz(ar);
-    putlastblk(ar);
-
-    if (comp)
-        return pushclose(&ps);
-    if (ar > Stderr)
-        close(ar);
-    return nil;
-}
+<<function [[replace]](tar.c)>>
 
 /*
  * tar [xt]
@@ -7862,133 +7623,7 @@ extract1(int ar, Hdr *hp, char *fname)
     }
 }
 
-static char *
-extract(char **argv)
-{
-    int ar;
-    char *longname;
-    char msg[Maxname + 40];
-    Compress *comp;
-    Hdr *hp;
-    Pushstate ps;
+<<function [[extract]](tar.c)>>
 
-    /* open archive to be read */
-    if (usefile)
-        ar = open(usefile, OREAD);
-    else
-        ar = Stdin;
-
-    /* push decompression filter if requested or extension is known */
-    comp = compmethod(usefile);
-    if (comp)
-        ar = push(ar, comp->decomp, Input, &ps);
-    if (ar < 0)
-        sysfatal("can't open archive %s: %r", usefile);
-
-    while ((hp = readhdr(ar)) != nil) {
-        longname = name(hp);
-        if (match(longname, argv))
-            extract1(ar, hp, longname);
-        else {
-            snprint(msg, sizeof msg, "extracting %s", longname);
-            skip(ar, hp, msg);
-        }
-    }
-
-    if (comp)
-        return pushclose(&ps);
-    if (ar > Stderr)
-        close(ar);
-    return nil;
-}
-
-void
-main(int argc, char *argv[])
-{
-    int errflg = 0;
-    char *ret = nil;
-
-    //XXX: fmtinstall('M', dirmodefmt);
-
-    TARGBEGIN {
-    case 'c':
-        docreate++;
-        verb = Replace;
-        break;
-    case 'f':
-        usefile = arname = EARGF(usage());
-        break;
-    case 'g':
-        argid = strtoul(EARGF(usage()), 0, 0);
-        break;
-    case 'i':
-        ignerrs = 1;
-        break;
-    case 'k':
-        keepexisting++;
-        break;
-    case 'm':   /* compatibility */
-        settime = 0;
-        break;
-    case 'p':
-        posix++;
-        break;
-    case 'P':
-        posix = 0;
-        break;
-    case 'r':
-        verb = Replace;
-        break;
-    case 'R':
-        relative = 0;
-        break;
-    case 's':
-        resync++;
-        break;
-    case 't':
-        verb = Toc;
-        break;
-    case 'T':
-        settime++;
-        break;
-    case 'u':
-        aruid = strtoul(EARGF(usage()), 0, 0);
-        break;
-    case 'v':
-        verbose++;
-        break;
-    case 'x':
-        verb = Xtract;
-        break;
-    case 'z':
-        docompress++;
-        break;
-    case '-':
-        break;
-    default:
-        fprint(2, "tar: unknown letter %C\n", TARGC());
-        errflg++;
-        break;
-    } TARGEND
-
-    if (argc < 0 || errflg)
-        usage();
-
-    initblks();
-    switch (verb) {
-    case Toc:
-    case Xtract:
-        ret = extract(argv);
-        break;
-    case Replace:
-        if (getwd(origdir, sizeof origdir) == nil)
-            strcpy(origdir, "/tmp");
-        ret = replace(argv);
-        break;
-    default:
-        usage();
-        break;
-    }
-    exits(ret);
-}
+<<function [[main]](tar.c)>>
 @

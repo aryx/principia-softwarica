@@ -27,6 +27,7 @@
 % - xargs: accept -p so can run jobs in parallel! easy parallelism
 % - more/less/p: use of /dev/tty for interactive and stdin reading
 % - ed: I learned to use ed! pretty cool tool and fun to understand g/re/p origin
+% - tar: meaning of tvfz flags (f is file actually)
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -5166,12 +5167,581 @@ copy(Biobuf *ibuf, char *lbuf, int n)
 \chapter{Archiving}
 %******************************************************************************
 
-% also useful for the programmer
+% Also super useful for the programmer. A bit less now with git and
+% github but back in the day open source software distributed via .tar.gz
+
 
 \section{[[tar]]}
 
+% tape archiver. tape because back in the days that's where you backup things.
+% slow device but big device.
+
 %for tar:
 % ocaml-tar in mirage
+
+<<function [[usage]](tar.c)>>=
+static void
+usage(void)
+{
+    fprint(STDERR, "usage: %s {crtx}[PRTfgikmpsuvz] [archive] [file1 file2...]\n",
+        argv0);
+    exits("usage");
+}
+@
+
+% tar tvfz
+% tar cvfz
+% tar xvfz
+
+% r?? Replace?
+
+\subsection{Data structures}
+
+\subsubsection{[[Verb]] and flags}
+
+<<enum [[Verb]]>>=
+enum _Verb { None, Toc, Xtract, Replace };
+@
+<<global [[verb]](tar.c)>>=
+// enum<Verb>
+static int verb;
+@
+
+<<global flags tar.c>>=
+static bool docreate;
+static bool verbose;
+static bool docompress;
+@
+
+% usually argv[2], tar tvfz foo.tar.gz => foo.tar.gz
+<<globals tar.c>>=
+static char *usefile;
+@
+
+%XXXX
+<<constants tar.c>>=
+Binsize = 0x80,     /* flag in size[0], from gnu: positive binary size */
+Binnegsz = 0xff,    /* flag in size[0]: negative binary size */
+
+Nblock = 40,        /* maximum blocksize */
+Debug = 0,
+@
+
+\subsubsection{[[Hdr]]}
+
+<<constants tar.c>>=
+Tblock = 512,
+Namsiz = 100,
+Maxpfx = 155,       /* from POSIX */
+@
+
+<<union [[Hdr]](tar.c)>>=
+typedef union {
+    uchar   data[Tblock];
+    struct {
+        char    name[Namsiz];
+        char    mode[8];
+        char    uid[8];
+        char    gid[8];
+        char    size[12];
+        char    mtime[12];
+        char    chksum[8];
+        // enum<LinkFlag>
+        char    linkflag;
+        char    linkname[Namsiz];
+
+        /* rest are defined by POSIX's ustar format; see p1003.2b */
+        char    magic[6];   /* "ustar" */
+        char    version[2];
+        char    uname[32];
+        char    gname[32];
+        char    devmajor[8];
+        char    devminor[8];
+        char    prefix[Maxpfx]; /* if non-null, path= prefix "/" name */
+    };
+} Hdr;
+@
+
+<<function [[isustar]](tar.c)>>=
+static bool
+isustar(Hdr *hp)
+{
+    return strcmp(hp->magic, "ustar") == ORD__EQ;
+}
+@
+
+<<enum [[LinkFlag]](tar.c)>>=
+enum {
+    LF_PLAIN1 = '\0',
+    LF_PLAIN2 = '0',
+    LF_LINK =   '1',
+    LF_SYMLINK1 =   '2',
+    LF_SYMLINK2 =   's',        /* 4BSD used this */
+    LF_CHR =    '3',
+    LF_BLK =    '4',
+    LF_DIR =    '5',
+    LF_FIFO =   '6',
+    LF_CONTIG = '7',
+    /* 'A' - 'Z' are reserved for custom implementations */
+};
+@
+
+<<macros [[islinkxxx]](tar.c)>>=
+#define islink(lf)  (isreallink(lf) || issymlink(lf))
+#define isreallink(lf)  ((lf) == LF_LINK)
+#define issymlink(lf)   ((lf) == LF_SYMLINK1 || (lf) == LF_SYMLINK2)
+@
+
+<<function [[mkhdr]](tar.c)>>=
+static int
+mkhdr(Hdr *hp, Dir *dir, char *file)
+{
+    int r;
+
+    /*
+     * some of these fields run together, so we format them left-to-right
+     * and don't use snprint.
+     */
+    sprint(hp->mode, "%6lo ", dir->mode & 0777);
+    sprint(hp->uid, "%6o ", aruid);
+    sprint(hp->gid, "%6o ", argid);
+    if (dir->length >= (Off)1<<32) {
+        static bool printed;
+
+        if (!printed) {
+            printed = true;
+            fprint(STDERR, "%s: storing large sizes in \"base 256\"\n", argv0);
+        }
+        hp->size[0] = Binsize;
+        /* emit so-called `base 256' representation of size */
+        putbe((uchar *)hp->size+1, dir->length, sizeof hp->size - 2);
+        hp->size[sizeof hp->size - 1] = ' ';
+    } else
+        sprint(hp->size, "%11lluo ", dir->length);
+    sprint(hp->mtime, "%11luo ", dir->mtime);
+    hp->linkflag = (dir->mode&DMDIR? LF_DIR: LF_PLAIN1);
+    r = putfullname(hp, file);
+    if (posix) {
+        strncpy(hp->magic, "ustar", sizeof hp->magic);
+        strncpy(hp->version, "00", sizeof hp->version);
+        strncpy(hp->uname, dir->uid, sizeof hp->uname);
+        strncpy(hp->gname, dir->gid, sizeof hp->gname);
+    }
+    sprint(hp->chksum, "%6luo", chksum(hp));
+    return r;
+}
+@
+
+<<function [[readhdr]](tar.c)>>=
+static Hdr *
+readhdr(int ar)
+{
+    long hdrcksum;
+    Hdr *hp;
+
+    hp = getblkrd(ar, Alldata);
+    if (hp == nil)
+        sysfatal("unexpected EOF instead of archive header in %s",
+            arname);
+    if (eotar(hp))          /* end-of-archive block? */
+        return nil;
+
+    hdrcksum = parsecksum(hp->chksum, name(hp));
+    if (hdrcksum == -1 || chksum(hp) != hdrcksum) {
+        if (!resync)
+            sysfatal("bad archive header checksum in %s: "
+                "name %.100s...; expected %#luo got %#luo",
+                arname, hp->name, hdrcksum, chksum(hp));
+        fprint(STDERR, "%s: skipping past archive header with bad checksum in %s...",
+            argv0, arname);
+        do {
+            hp = getblkrd(ar, Alldata);
+            if (hp == nil)
+                sysfatal("unexpected EOF looking for archive header in %s",
+                    arname);
+            hdrcksum = parsecksum(hp->chksum, name(hp));
+        } while (hdrcksum == -1 || chksum(hp) != hdrcksum);
+        fprint(STDERR, "found %s\n", name(hp));
+    }
+    nexthdr += Tblock*(1 + BYTES2TBLKS(arsize(hp)));
+    return hp;
+}
+@
+
+\subsubsection{[[Compress]]}
+
+<<struct [[Compress]](tar.c)>>=
+typedef struct {
+    char    *comp;
+    char    *decomp;
+    char    *sfx[4];
+} Compress;
+@
+
+<<constant [[comps]](tar.c)>>=
+static Compress comps[] = {
+    "gzip",     "gunzip",       { ".tar.gz", ".tgz" },  /* default */
+    "compress", "uncompress",   { ".tar.Z",  ".tz" },
+    "bzip2",    "bunzip2",      { ".tar.bz", ".tbz", ".tar.bz2",".tbz2" },
+};
+@
+
+<<function [[compmethod]](tar.c)>>=
+static Compress *
+compmethod(char *name)
+{
+    int i, nmlen, sfxlen;
+    Compress *cp;
+
+    if (name != nil) {
+        nmlen = strlen(name);
+        for (cp = comps; cp < comps + nelem(comps); cp++)
+            for (i = 0; i < nelem(cp->sfx) && cp->sfx[i]; i++) {
+                sfxlen = strlen(cp->sfx[i]);
+                if (nmlen > sfxlen &&
+                    strcmp(cp->sfx[i], name+nmlen-sfxlen) == ORD__EQ)
+                    return cp;
+            }
+    }
+    // suffix not found, then return first entry (default)
+    return docompress? comps: nil;
+}
+@
+
+\subsubsection{[[Pushstate]]}
+
+% ???
+<<struct [[Pushstate]](tar.c)>>=
+typedef struct {
+    int kid;
+    fdt fd; /* original fd */
+    fdt rfd;    /* replacement fd */
+    int input;
+    int open;
+} Pushstate;
+@
+
+\subsection{[[main()]]}
+
+<<function [[main]](tar.c)>>=
+void
+main(int argc, char *argv[])
+{
+    bool errflg = false;
+    char *ret = nil;
+
+    //XXX: fmtinstall('M', dirmodefmt);
+
+    TARGBEGIN {
+    <<[[main()]] switch character cases (tar.c)>>
+    default:
+        fprint(STDERR, "tar: unknown letter %C\n", TARGC());
+        errflg = true;
+        break;
+    } TARGEND
+
+    if (argc < 0 || errflg)
+        usage();
+
+    initblks();
+
+    switch (verb) {
+    case Toc:
+    case Xtract:
+        ret = extract(argv);
+        break;
+    case Replace:
+        if (getwd(origdir, sizeof origdir) == nil)
+            strcpy(origdir, "/tmp");
+        ret = replace(argv);
+        break;
+    default:
+        usage();
+        break;
+    }
+    exits(ret);
+}
+@
+
+<<[[main()]] switch character cases (tar.c)>>=
+case 'c':
+    docreate = true;
+    verb = Replace;
+    break;
+@
+<<[[main()]] switch character cases (tar.c)>>=
+case 't':
+    verb = Toc;
+    break;
+@
+<<[[main()]] switch character cases (tar.c)>>=
+case 'x':
+    verb = Xtract;
+    break;
+@
+<<[[main()]] switch character cases (tar.c)>>=
+case 'r':
+    verb = Replace;
+    break;
+@
+
+
+<<[[main()]] switch character cases (tar.c)>>=
+case 'v':
+    verbose = true;
+    break;
+@
+
+<<[[main()]] switch character cases (tar.c)>>=
+case 'f':
+    usefile = arname = EARGF(usage());
+    break;
+@
+
+<<[[main()]] switch character cases (tar.c)>>=
+case 'z':
+    docompress = true;
+    break;
+@
+
+<<constants tar.c>>=
+Dblock = 20,        /* default blocksize */
+@
+
+<<globals tar.c>>=
+// array<ref_own<Hdr>> (size = nblock)
+static Hdr *tpblk;
+static int nblock = Dblock;
+static Hdr *endblk;
+@
+
+<<function [[initblks]](tar.c)>>=
+static void
+initblks(void)
+{
+    free(tpblk);
+    tpblk = malloc(Tblock * nblock);
+    assert(tpblk != nil);
+    endblk = tpblk + nblock;
+}
+@
+
+
+<<macros [[TARGxxx]](tar.c)>>=
+/*
+ * modified versions of those in libc.h; scans only the first arg for
+ * keyletters and options.
+ */
+#define TARGBEGIN {\
+    (argv0 || (argv0 = *argv)), argv++, argc--;\
+    if (argv[0]) {\
+        char *_args, *_argt;\
+        Rune _argc;\
+        _args = &argv[0][0];\
+        _argc = 0;\
+        while(*_args && (_args += chartorune(&_argc, _args)))\
+            switch(_argc)
+#define TARGEND SET(_argt); USED(_argt);USED(_argc);USED(_args); \
+    argc--, argv++; } \
+    USED(argv); USED(argc); }
+#define TARGC() (_argc)
+@
+
+\subsection{[[extract()]]}
+
+<<constants tar.c>>=
+Maxname = Namsiz + 1 + Maxpfx,
+@
+
+<<function [[extract]](tar.c)>>=
+static char *
+extract(char **argv)
+{
+    fdt ar;
+    char *longname;
+    char msg[Maxname + 40];
+    Compress *comp;
+    Hdr *hp;
+    Pushstate ps;
+
+    /* open archive to be read */
+    if (usefile)
+        ar = open(usefile, OREAD);
+    else
+        ar = STDIN;
+
+    /* push decompression filter if requested or extension is known */
+    comp = compmethod(usefile);
+    if (comp)
+        ar = push(ar, comp->decomp, Input, &ps);
+    if (ar < 0)
+        sysfatal("can't open archive %s: %r", usefile);
+
+    while ((hp = readhdr(ar)) != nil) {
+        longname = name(hp);
+        if (match(longname, argv))
+            extract1(ar, hp, longname);
+        else {
+            snprint(msg, sizeof msg, "extracting %s", longname);
+            skip(ar, hp, msg);
+        }
+    }
+
+    if (comp)
+        return pushclose(&ps);
+    if (ar > STDERR)
+        close(ar);
+    return nil;
+}
+@
+
+\subsection{[[replace()]]}
+
+<<function [[replace]](tar.c)>>=
+static char *
+replace(char **argv)
+{
+    int i, ar;
+    char *arg;
+    Compress *comp = nil;
+    Pushstate ps;
+
+    /* open archive to be updated */
+    if (usefile && docreate)
+        ar = create(usefile, OWRITE, 0666);
+    else if (usefile) {
+        if (docompress)
+            sysfatal("cannot update compressed archive");
+        ar = open(usefile, ORDWR);
+    } else
+        ar = STDOUT;
+
+    /* push compression filter, if requested */
+    if (docompress) {
+        comp = compmethod(usefile);
+        if (comp)
+            ar = push(ar, comp->comp, Output, &ps);
+    }
+    if (ar < 0)
+        sysfatal("can't open archive %s: %r", usefile);
+
+    if (usefile && !docreate)
+        skiptoend(ar);
+
+    for (i = 0; argv[i] != nil; i++) {
+        arg = argv[i];
+        cleanname(arg);
+        if (strcmp(arg, "..") == 0 || strncmp(arg, "../", 3) == 0)
+            fprint(2, "%s: name starting with .. is a bad idea\n",
+                argv0);
+        addtoar(ar, arg, arg);
+        chdir(origdir);     /* for correctness & profiling */
+    }
+
+    /* write end-of-archive marker */
+    getblkz(ar);
+    putblk(ar);
+    getblkz(ar);
+    putlastblk(ar);
+
+    if (comp)
+        return pushclose(&ps);
+    if (ar > STDERR)
+        close(ar);
+    return nil;
+}
+@
+
+\subsection{Advanced features}
+
+<<global flags tar.c>>=
+static bool ignerrs;     /* flag: ignore i/o errors if possible */
+@
+<<[[main()]] switch character cases (tar.c)>>=
+case 'i':
+    ignerrs = true;
+    break;
+@
+
+
+<<[[main()]] switch character cases (tar.c)>>=
+case 'k':
+    keepexisting++;
+    break;
+@
+
+<<global flags tar.c>>=
+static bool settime;
+@
+
+<<[[main()]] switch character cases (tar.c)>>=
+case 'm':   /* compatibility */
+    settime = false;
+    break;
+@
+<<[[main()]] switch character cases (tar.c)>>=
+case 'T':
+    settime = true;
+    break;
+@
+
+<<global flags tar.c>>=
+static bool posix = true;
+@
+<<[[main()]] switch character cases (tar.c)>>=
+case 'p':
+    posix = true;
+    break;
+@
+<<[[main()]] switch character cases (tar.c)>>=
+case 'P':
+    posix = false;
+    break;
+@
+
+
+<<global flags tar.c>>=
+static bool relative = true;
+@
+<<[[main()]] switch character cases (tar.c)>>=
+case 'R':
+    relative = false;
+    break;
+@
+
+<<global flags tar.c>>=
+static bool resync;
+@
+
+<<[[main()]] switch character cases (tar.c)>>=
+case 's':
+    resync = true;
+    break;
+@
+
+<<globals tar.c>>=
+static int aruid;
+@
+
+<<[[main()]] switch character cases (tar.c)>>=
+case 'u':
+    aruid = strtoul(EARGF(usage()), nil, 0);
+    break;
+@
+<<globals tar.c>>=
+static int argid;
+@
+<<[[main()]] switch character cases (tar.c)>>=
+case 'g':
+    argid = strtoul(EARGF(usage()), nil, 0);
+    break;
+@
+
+<<[[main()]] switch character cases (tar.c)>>=
+case '-':
+    break;
+@
+% ??
 
 \section{[[gzip]]}
 % http://jvns.ca/blog/2013/10/16/day-11-how-does-gzip-work/
