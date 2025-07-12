@@ -1,3 +1,4 @@
+/*s: archive/tar.c */
 /*
  * tar - `tape archiver', actually usable on any medium.
  *  POSIX "ustar" compliant when extracting, and by default when creating.
@@ -1339,3 +1340,4 @@ main(int argc, char *argv[])
     }
     exits(ret);
 }
+/*e: archive/tar.c */
