@@ -7627,3 +7627,630 @@ extract1(int ar, Hdr *hp, char *fname)
 
 <<function [[main]](tar.c)>>
 @
+
+\subsection{[[archive/gzip/gzip.h]]}
+
+<<archive/gzip/gzip.h>>=
+/*
+ * gzip header fields
+ */
+enum
+{
+    GZMAGIC1    = 0x1f,
+    GZMAGIC2    = 0x8b,
+
+    GZDEFLATE   = 8,
+
+    GZFTEXT     = 1 << 0,       /* file is text */
+    GZFHCRC     = 1 << 1,       /* crc of header included */
+    GZFEXTRA    = 1 << 2,       /* extra header included */
+    GZFNAME     = 1 << 3,       /* name of file included */
+    GZFCOMMENT  = 1 << 4,       /* header comment included */
+    GZFMASK     = (1 << 5) -1,      /* mask of specified bits */
+
+    GZXFAST     = 2,            /* used fast algorithm, little compression */
+    GZXBEST     = 4,            /* used maximum compression algorithm */
+
+    GZOSFAT     = 0,            /* FAT file system */
+    GZOSAMIGA   = 1,            /* Amiga */
+    GZOSVMS     = 2,            /* VMS or OpenVMS */
+    GZOSUNIX    = 3,            /* Unix */
+    GZOSVMCMS   = 4,            /* VM/CMS */
+    GZOSATARI   = 5,            /* Atari TOS */
+    GZOSHPFS    = 6,            /* HPFS file system */
+    GZOSMAC     = 7,            /* Macintosh */
+    GZOSZSYS    = 8,            /* Z-System */
+    GZOSCPM     = 9,            /* CP/M */
+    GZOSTOPS20  = 10,           /* TOPS-20 */
+    GZOSNTFS    = 11,           /* NTFS file system */
+    GZOSQDOS    = 12,           /* QDOS */
+    GZOSACORN   = 13,           /* Acorn RISCOS */
+    GZOSUNK     = 255,
+
+    GZCRCPOLY   = 0xedb88320UL,
+
+    GZOSINFERNO = GZOSUNIX,
+};
+@
+
+\subsection{[[archive/gzip/gunzip.c]]}
+
+<<archive/gzip/gunzip.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <flate.h>
+#include "gzip.h"
+
+typedef struct  GZHead  GZHead;
+
+struct GZHead
+{
+    ulong   mtime;
+    char    *file;
+};
+
+static  int crcwrite(void *bout, void *buf, int n);
+static  int get1(Biobuf *b);
+static  ulong   get4(Biobuf *b);
+static  int gunzipf(char *file, int stdout);
+static  int gunzip(int ofd, char *ofile, Biobuf *bin);
+static  void    header(Biobuf *bin, GZHead *h);
+static  void    trailer(Biobuf *bin, long wlen);
+static  void    error(char*, ...);
+#pragma varargck    argpos  error   1
+
+static  Biobuf  bin;
+static  ulong   crc;
+static  ulong   *crctab;
+static  int debug;
+static  char    *delfile;
+static  vlong   gzok;
+static  char    *infile;
+static  int settimes;
+static  int table;
+static  int verbose;
+static  int wbad;
+static  ulong   wlen;
+static  jmp_buf zjmp;
+
+void
+usage(void)
+{
+    fprint(2, "usage: gunzip [-ctvTD] [file ....]\n");
+    exits("usage");
+}
+
+void
+main(int argc, char *argv[])
+{
+    int i, ok, stdout;
+
+    stdout = 0;
+    ARGBEGIN{
+    case 'D':
+        debug++;
+        break;
+    case 'c':
+        stdout++;
+        break;
+    case 't':
+        table++;
+        break;
+    case 'T':
+        settimes++;
+        break;
+    case 'v':
+        verbose++;
+        break;
+    default:
+        usage();
+        break;
+    }ARGEND
+
+    crctab = mkcrctab(GZCRCPOLY);
+    ok = inflateinit();
+    if(ok != FlateOk)
+        sysfatal("inflateinit failed: %s", flateerr(ok));
+
+    if(argc == 0){
+        Binit(&bin, 0, OREAD);
+        settimes = 0;
+        infile = "<stdin>";
+        ok = gunzip(1, "<stdout>", &bin);
+    }else{
+        ok = 1;
+        if(stdout)
+            settimes = 0;
+        for(i = 0; i < argc; i++)
+            ok &= gunzipf(argv[i], stdout);
+    }
+
+    exits(ok ? nil: "errors");
+}
+
+static int
+gunzipf(char *file, int stdout)
+{
+    char ofile[256], *s;
+    int ofd, ifd, ok;
+
+    infile = file;
+    ifd = open(file, OREAD);
+    if(ifd < 0){
+        fprint(2, "gunzip: can't open %s: %r\n", file);
+        return 0;
+    }
+
+    Binit(&bin, ifd, OREAD);
+    if(Bgetc(&bin) != GZMAGIC1 || Bgetc(&bin) != GZMAGIC2 || Bgetc(&bin) != GZDEFLATE){
+        fprint(2, "gunzip: %s is not a gzip deflate file\n", file);
+        Bterm(&bin);
+        close(ifd);
+        return 0;
+    }
+    Bungetc(&bin);
+    Bungetc(&bin);
+    Bungetc(&bin);
+
+    if(table)
+        ofd = -1;
+    else if(stdout){
+        ofd = 1;
+        strcpy(ofile, "<stdout>");
+    }else{
+        s = strrchr(file, '/');
+        if(s != nil)
+            s++;
+        else
+            s = file;
+        strecpy(ofile, ofile+sizeof ofile, s);
+        s = strrchr(ofile, '.');
+        if(s != nil && s != ofile && strcmp(s, ".gz") == 0)
+            *s = '\0';
+        else if(s != nil && strcmp(s, ".tgz") == 0)
+            strcpy(s, ".tar");
+        else if(strcmp(file, ofile) == 0){
+            fprint(2, "gunzip: can't overwrite %s\n", file);
+            Bterm(&bin);
+            close(ifd);
+            return 0;
+        }
+
+        ofd = create(ofile, OWRITE, 0666);
+        if(ofd < 0){
+            fprint(2, "gunzip: can't create %s: %r\n", ofile);
+            Bterm(&bin);
+            close(ifd);
+            return 0;
+        }
+        delfile = ofile;
+    }
+
+    wbad = 0;
+    ok = gunzip(ofd, ofile, &bin);
+    Bterm(&bin);
+    close(ifd);
+    if(wbad){
+        fprint(2, "gunzip: can't write %s: %r\n", ofile);
+        if(delfile)
+            remove(delfile);
+    }
+    delfile = nil;
+    if(!stdout && ofd >= 0)
+        close(ofd);
+    return ok;
+}
+
+static int
+gunzip(int ofd, char *ofile, Biobuf *bin)
+{
+    Dir *d;
+    GZHead h;
+    int err;
+
+    h.file = nil;
+    gzok = 0;
+    for(;;){
+        if(Bgetc(bin) < 0)
+            return 1;
+        Bungetc(bin);
+
+        if(setjmp(zjmp))
+            return 0;
+        header(bin, &h);
+        gzok = 0;
+
+        wlen = 0;
+        crc = 0;
+
+        if(!table && verbose)
+            fprint(2, "extracting %s to %s\n", h.file, ofile);
+
+        err = inflate((void*)ofd, crcwrite, bin, (int(*)(void*))Bgetc);
+        if(err != FlateOk)
+            error("inflate failed: %s", flateerr(err));
+
+        trailer(bin, wlen);
+
+        if(table){
+            if(verbose)
+                print("%-32s %10ld %s", h.file, wlen, ctime(h.mtime));
+            else
+                print("%s\n", h.file);
+        }else if(settimes && h.mtime && (d=dirfstat(ofd)) != nil){
+            d->mtime = h.mtime;
+            dirfwstat(ofd, d);
+            free(d);
+        }
+
+        free(h.file);
+        h.file = nil;
+        gzok = Boffset(bin);
+    }
+}
+
+static void
+header(Biobuf *bin, GZHead *h)
+{
+    char *s;
+    int i, c, flag, ns, nsa;
+
+    if(get1(bin) != GZMAGIC1 || get1(bin) != GZMAGIC2)
+        error("bad gzip file magic");
+    if(get1(bin) != GZDEFLATE)
+        error("unknown compression type");
+
+    flag = get1(bin);
+    if(flag & ~(GZFTEXT|GZFEXTRA|GZFNAME|GZFCOMMENT|GZFHCRC))
+        fprint(2, "gunzip: reserved flags set, data may not be decompressed correctly\n");
+
+    /* mod time */
+    h->mtime = get4(bin);
+
+    /* extra flags */
+    get1(bin);
+
+    /* OS type */
+    get1(bin);
+
+    if(flag & GZFEXTRA)
+        for(i=get1(bin); i>0; i--)
+            get1(bin);
+
+    /* name */
+    if(flag & GZFNAME){
+        nsa = 32;
+        ns = 0;
+        s = malloc(nsa);
+        if(s == nil)
+            error("out of memory");
+        while((c = get1(bin)) != 0){
+            s[ns++] = c;
+            if(ns >= nsa){
+                nsa += 32;
+                s = realloc(s, nsa);
+                if(s == nil)
+                    error("out of memory");
+            }
+        }
+        s[ns] = '\0';
+        h->file = s;
+    }else
+        h->file = strdup("<unnamed file>");
+
+    /* comment */
+    if(flag & GZFCOMMENT)
+        while(get1(bin) != 0)
+            ;
+
+    /* crc16 */
+    if(flag & GZFHCRC){
+        get1(bin);
+        get1(bin);
+    }
+}
+
+static void
+trailer(Biobuf *bin, long wlen)
+{
+    ulong tcrc;
+    long len;
+
+    tcrc = get4(bin);
+    if(tcrc != crc)
+        error("crc mismatch");
+
+    len = get4(bin);
+
+    if(len != wlen)
+        error("bad output length: expected %lud got %lud", wlen, len);
+}
+
+static ulong
+get4(Biobuf *b)
+{
+    ulong v;
+    int i, c;
+
+    v = 0;
+    for(i = 0; i < 4; i++){
+        c = Bgetc(b);
+        if(c < 0)
+            error("unexpected eof reading file information");
+        v |= c << (i * 8);
+    }
+    return v;
+}
+
+static int
+get1(Biobuf *b)
+{
+    int c;
+
+    c = Bgetc(b);
+    if(c < 0)
+        error("unexpected eof reading file information");
+    return c;
+}
+
+static int
+crcwrite(void *out, void *buf, int n)
+{
+    int fd, nw;
+
+    wlen += n;
+    crc = blockcrc(crctab, crc, buf, n);
+    fd = (int)(uintptr)out;
+    if(fd < 0)
+        return n;
+    nw = write(fd, buf, n);
+    if(nw != n)
+        wbad = 1;
+    return nw;
+}
+
+static void
+error(char *fmt, ...)
+{
+    va_list arg;
+
+    if(gzok)
+        fprint(2, "gunzip: %s: corrupted data after byte %lld ignored\n", infile, gzok);
+    else{
+        fprint(2, "gunzip: ");
+        if(infile)
+            fprint(2, "%s: ", infile);
+        va_start(arg, fmt);
+        vfprint(2, fmt, arg);
+        va_end(arg);
+        fprint(2, "\n");
+    
+        if(delfile != nil){
+            fprint(2, "gunzip: removing output file %s\n", delfile);
+            remove(delfile);
+            delfile = nil;
+        }
+    }
+
+    longjmp(zjmp, 1);
+}
+@
+
+\subsection{[[archive/gzip.c]]}
+
+<<archive/gzip/gzip.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <flate.h>
+#include "gzip.h"
+
+static  int gzipf(char*, int);
+static  int gzip(char*, long, int, Biobuf*);
+static  int crcread(void *fd, void *buf, int n);
+static  int gzwrite(void *bout, void *buf, int n);
+
+static  Biobuf  bout;
+static  ulong   crc;
+static  ulong   *crctab;
+static  int debug;
+static  int eof;
+static  int level;
+static  ulong   totr;
+static  int verbose;
+
+void
+usage(void)
+{
+    fprint(2, "usage: gzip [-vcD] [-1-9] [file ...]\n");
+    exits("usage");
+}
+
+void
+main(int argc, char *argv[])
+{
+    int i, ok, stdout;
+
+    level = 6;
+    stdout = 0;
+    ARGBEGIN{
+    case 'D':
+        debug++;
+        break;
+    case 'v':
+        verbose++;
+        break;
+    case 'c':
+        stdout = 1;
+        break;
+    case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+        level = ARGC() - '0';
+        break;
+    default:
+        usage();
+        break;
+    }ARGEND
+
+    crctab = mkcrctab(GZCRCPOLY);
+    ok = deflateinit();
+    if(ok != FlateOk)
+        sysfatal("deflateinit failed: %s", flateerr(ok));
+
+    if(argc == 0){
+        Binit(&bout, 1, OWRITE);
+        ok = gzip(nil, time(0), 0, &bout);
+        Bterm(&bout);
+    }else{
+        ok = 1;
+        for(i = 0; i < argc; i++)
+            ok &= gzipf(argv[i], stdout);
+    }
+    exits(ok ? nil: "errors");
+}
+
+static int
+gzipf(char *file, int stdout)
+{
+    Dir *dir;
+    char ofile[256], *f, *s;
+    int ifd, ofd, ok;
+
+    ifd = open(file, OREAD);
+    if(ifd < 0){
+        fprint(2, "gzip: can't open %s: %r\n", file);
+        return 0;
+    }
+    dir = dirfstat(ifd);
+    if(dir == nil){
+        fprint(2, "gzip: can't stat %s: %r\n", file);
+        close(ifd);
+        return 0;
+    }
+    if(dir->mode & DMDIR){
+        fprint(2, "gzip: can't compress a directory\n");
+        close(ifd);
+        free(dir);
+        return 0;
+    }
+
+    if(stdout){
+        ofd = 1;
+        strcpy(ofile, "<stdout>");
+    }else{
+        f = strrchr(file, '/');
+        if(f != nil)
+            f++;
+        else
+            f = file;
+        s = strrchr(f, '.');
+        if(s != nil && s != ofile && strcmp(s, ".tar") == 0){
+            *s = '\0';
+            snprint(ofile, sizeof(ofile), "%s.tgz", f);
+        }else
+            snprint(ofile, sizeof(ofile), "%s.gz", f);
+        ofd = create(ofile, OWRITE, 0666);
+        if(ofd < 0){
+            fprint(2, "gzip: can't open %s: %r\n", ofile);
+            close(ifd);
+            return 0;
+        }
+    }
+
+    if(verbose)
+        fprint(2, "compressing %s to %s\n", file, ofile);
+
+    Binit(&bout, ofd, OWRITE);
+    ok = gzip(file, dir->mtime, ifd, &bout);
+    if(!ok || Bflush(&bout) < 0){
+        fprint(2, "gzip: error writing %s: %r\n", ofile);
+        if(!stdout)
+            remove(ofile);
+    }
+    Bterm(&bout);
+    free(dir);
+    close(ifd);
+    close(ofd);
+    return ok;
+}
+
+static int
+gzip(char *file, long mtime, int ifd, Biobuf *bout)
+{
+    int flags, err;
+
+    flags = 0;
+    Bputc(bout, GZMAGIC1);
+    Bputc(bout, GZMAGIC2);
+    Bputc(bout, GZDEFLATE);
+
+    if(file != nil)
+        flags |= GZFNAME;
+    Bputc(bout, flags);
+
+    Bputc(bout, mtime);
+    Bputc(bout, mtime>>8);
+    Bputc(bout, mtime>>16);
+    Bputc(bout, mtime>>24);
+
+    Bputc(bout, 0);
+    Bputc(bout, GZOSINFERNO);
+
+    if(flags & GZFNAME)
+        Bwrite(bout, file, strlen(file)+1);
+
+    crc = 0;
+    eof = 0;
+    totr = 0;
+    err = deflate(bout, gzwrite, (void*)ifd, crcread, level, debug);
+    if(err != FlateOk){
+        fprint(2, "gzip: deflate failed: %s\n", flateerr(err));
+        return 0;
+    }
+
+    Bputc(bout, crc);
+    Bputc(bout, crc>>8);
+    Bputc(bout, crc>>16);
+    Bputc(bout, crc>>24);
+
+    Bputc(bout, totr);
+    Bputc(bout, totr>>8);
+    Bputc(bout, totr>>16);
+    Bputc(bout, totr>>24);
+
+    return 1;
+}
+
+static int
+crcread(void *fd, void *buf, int n)
+{
+    int nr, m;
+
+    nr = 0;
+    for(; !eof && n > 0; n -= m){
+        m = read((int)(uintptr)fd, (char*)buf+nr, n);
+        if(m <= 0){
+            eof = 1;
+            if(m < 0)
+                return -1;
+            break;
+        }
+        nr += m;
+    }
+    crc = blockcrc(crctab, crc, buf, nr);
+    totr += nr;
+    return nr;
+}
+
+static int
+gzwrite(void *bout, void *buf, int n)
+{
+    if(n != Bwrite(bout, buf, n)){
+        eof = 1;
+        return -1;
+    }
+    return n;
+}
+@
+
