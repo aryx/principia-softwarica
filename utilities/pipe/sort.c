@@ -1,6 +1,8 @@
 /*s: pipe/sort.c */
-#include    <u.h>
-#include    <libc.h>
+/*s: plan9 includes */
+#include <u.h>
+#include <libc.h>
+/*e: plan9 includes */
 #include    <bio.h>
 
 /*

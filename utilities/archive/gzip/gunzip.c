@@ -1,70 +1,94 @@
 /*s: archive/gzip/gunzip.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <bio.h>
 #include <flate.h>
 #include "gzip.h"
 
 typedef struct  GZHead  GZHead;
-
+/*s: struct [[GZHead]] */
 struct GZHead
 {
     ulong   mtime;
     char    *file;
 };
+/*e: struct [[GZHead]] */
 
+// forward decls
 static  int crcwrite(void *bout, void *buf, int n);
-static  int get1(Biobuf *b);
+static  int     get1(Biobuf *b);
 static  ulong   get4(Biobuf *b);
-static  int gunzipf(char *file, int stdout);
-static  int gunzip(int ofd, char *ofile, Biobuf *bin);
+static  int gunzipf(char *file, bool stdout);
+static  int gunzip(fdt ofd, char *ofile, Biobuf *bin);
 static  void    header(Biobuf *bin, GZHead *h);
 static  void    trailer(Biobuf *bin, long wlen);
 static  void    error(char*, ...);
+
 #pragma varargck    argpos  error   1
 
-static  Biobuf  bin;
-static  ulong   crc;
-static  ulong   *crctab;
-static  int debug;
-static  char    *delfile;
-static  vlong   gzok;
+/*s: globals flags gunzip.c */
+// -v
+static  bool verbose;
+// -D
+static  bool debug;
+// -t ??
+static  bool table;
+// -T ??
+static  bool settimes;
+/*e: globals flags gunzip.c */
+/*s: globals gunzip.c */
 static  char    *infile;
-static  int settimes;
-static  int table;
-static  int verbose;
-static  int wbad;
-static  ulong   wlen;
+static  Biobuf  bin;
+/*x: globals gunzip.c */
+static  ulong   *crctab;
+/*x: globals gunzip.c */
+static  vlong   gzok;
 static  jmp_buf zjmp;
+static  char    *delfile;
+/*x: globals gunzip.c */
+static  ulong   crc;
+static  ulong   wlen;
+/*x: globals gunzip.c */
+// error in writing (write is bad)
+static  bool wbad;
+/*e: globals gunzip.c */
 
+/*s: function [[usage]](gunzip.c) */
 void
 usage(void)
 {
-    fprint(2, "usage: gunzip [-ctvTD] [file ....]\n");
+    fprint(STDERR, "usage: gunzip [-ctvTD] [file ....]\n");
     exits("usage");
 }
-
+/*e: function [[usage]](gunzip.c) */
+/*s: function [[main]](gunzip.c) */
 void
 main(int argc, char *argv[])
 {
-    int i, ok, stdout;
+    int i;
+    // enum<FlateError> (OK = 0) and then error0 (OK = 1, hmmm)
+    int ok;
+    // -c
+    bool stdout;
 
-    stdout = 0;
+    stdout = false;
     ARGBEGIN{
     case 'D':
-        debug++;
+        debug = true;
         break;
     case 'c':
-        stdout++;
+        stdout = true;
         break;
     case 't':
-        table++;
+        table = true;
         break;
     case 'T':
-        settimes++;
+        settimes = true;
         break;
     case 'v':
-        verbose++;
+        verbose = true;
         break;
     default:
         usage();
@@ -77,40 +101,43 @@ main(int argc, char *argv[])
         sysfatal("inflateinit failed: %s", flateerr(ok));
 
     if(argc == 0){
-        Binit(&bin, 0, OREAD);
-        settimes = 0;
+        Binit(&bin, STDIN, OREAD);
+        settimes = false;
         infile = "<stdin>";
-        ok = gunzip(1, "<stdout>", &bin);
+        ok = gunzip(STDOUT, "<stdout>", &bin);
     }else{
-        ok = 1;
+        ok = OK_1;
         if(stdout)
-            settimes = 0;
+            settimes = false;
         for(i = 0; i < argc; i++)
             ok &= gunzipf(argv[i], stdout);
     }
 
     exits(ok ? nil: "errors");
 }
+/*e: function [[main]](gunzip.c) */
 
-static int
-gunzipf(char *file, int stdout)
+/*s: function [[gunzipf]] */
+static error0
+gunzipf(char *file, bool stdout)
 {
     char ofile[256], *s;
-    int ofd, ifd, ok;
+    fdt ofd, ifd;
+    int ok;
 
     infile = file;
     ifd = open(file, OREAD);
     if(ifd < 0){
-        fprint(2, "gunzip: can't open %s: %r\n", file);
-        return 0;
+        fprint(STDERR, "gunzip: can't open %s: %r\n", file);
+        return ERROR_0;
     }
 
     Binit(&bin, ifd, OREAD);
     if(Bgetc(&bin) != GZMAGIC1 || Bgetc(&bin) != GZMAGIC2 || Bgetc(&bin) != GZDEFLATE){
-        fprint(2, "gunzip: %s is not a gzip deflate file\n", file);
+        fprint(STDERR, "gunzip: %s is not a gzip deflate file\n", file);
         Bterm(&bin);
         close(ifd);
-        return 0;
+        return ERROR_0;
     }
     Bungetc(&bin);
     Bungetc(&bin);
@@ -119,7 +146,7 @@ gunzipf(char *file, int stdout)
     if(table)
         ofd = -1;
     else if(stdout){
-        ofd = 1;
+        ofd = STDOUT;
         strcpy(ofile, "<stdout>");
     }else{
         s = strrchr(file, '/');
@@ -129,33 +156,34 @@ gunzipf(char *file, int stdout)
             s = file;
         strecpy(ofile, ofile+sizeof ofile, s);
         s = strrchr(ofile, '.');
-        if(s != nil && s != ofile && strcmp(s, ".gz") == 0)
+        if(s != nil && s != ofile && strcmp(s, ".gz") == ORD__EQ)
             *s = '\0';
-        else if(s != nil && strcmp(s, ".tgz") == 0)
+        else if(s != nil && strcmp(s, ".tgz") == ORD__EQ)
             strcpy(s, ".tar");
-        else if(strcmp(file, ofile) == 0){
-            fprint(2, "gunzip: can't overwrite %s\n", file);
+        else if(strcmp(file, ofile) == ORD__EQ){
+            fprint(STDERR, "gunzip: can't overwrite %s\n", file);
             Bterm(&bin);
             close(ifd);
-            return 0;
+            return ERROR_0;
         }
 
         ofd = create(ofile, OWRITE, 0666);
         if(ofd < 0){
-            fprint(2, "gunzip: can't create %s: %r\n", ofile);
+            fprint(STDERR, "gunzip: can't create %s: %r\n", ofile);
             Bterm(&bin);
             close(ifd);
-            return 0;
+            return ERROR_0;
         }
         delfile = ofile;
     }
 
-    wbad = 0;
+    wbad = false;
+    // back go gunzip
     ok = gunzip(ofd, ofile, &bin);
     Bterm(&bin);
     close(ifd);
     if(wbad){
-        fprint(2, "gunzip: can't write %s: %r\n", ofile);
+        fprint(STDERR, "gunzip: can't write %s: %r\n", ofile);
         if(delfile)
             remove(delfile);
     }
@@ -164,9 +192,10 @@ gunzipf(char *file, int stdout)
         close(ofd);
     return ok;
 }
-
-static int
-gunzip(int ofd, char *ofile, Biobuf *bin)
+/*e: function [[gunzipf]] */
+/*s: function [[gunzip]] */
+static error0
+gunzip(fdt ofd, char *ofile, Biobuf *bin)
 {
     Dir *d;
     GZHead h;
@@ -176,11 +205,12 @@ gunzip(int ofd, char *ofile, Biobuf *bin)
     gzok = 0;
     for(;;){
         if(Bgetc(bin) < 0)
-            return 1;
+            return OK_1;
+        // else
         Bungetc(bin);
 
         if(setjmp(zjmp))
-            return 0;
+            return ERROR_0;
         header(bin, &h);
         gzok = 0;
 
@@ -188,8 +218,9 @@ gunzip(int ofd, char *ofile, Biobuf *bin)
         crc = 0;
 
         if(!table && verbose)
-            fprint(2, "extracting %s to %s\n", h.file, ofile);
+            fprint(STDERR, "extracting %s to %s\n", h.file, ofile);
 
+        // call to libflate library
         err = inflate((void*)ofd, crcwrite, bin, (int(*)(void*))Bgetc);
         if(err != FlateOk)
             error("inflate failed: %s", flateerr(err));
@@ -212,7 +243,9 @@ gunzip(int ofd, char *ofile, Biobuf *bin)
         gzok = Boffset(bin);
     }
 }
+/*e: function [[gunzip]] */
 
+/*s: function [[header]](gunzip.c) */
 static void
 header(Biobuf *bin, GZHead *h)
 {
@@ -226,7 +259,7 @@ header(Biobuf *bin, GZHead *h)
 
     flag = get1(bin);
     if(flag & ~(GZFTEXT|GZFEXTRA|GZFNAME|GZFCOMMENT|GZFHCRC))
-        fprint(2, "gunzip: reserved flags set, data may not be decompressed correctly\n");
+        fprint(STDERR, "gunzip: reserved flags set, data may not be decompressed correctly\n");
 
     /* mod time */
     h->mtime = get4(bin);
@@ -273,7 +306,8 @@ header(Biobuf *bin, GZHead *h)
         get1(bin);
     }
 }
-
+/*e: function [[header]](gunzip.c) */
+/*s: function [[trailer]](gunzip.c) */
 static void
 trailer(Biobuf *bin, long wlen)
 {
@@ -289,7 +323,9 @@ trailer(Biobuf *bin, long wlen)
     if(len != wlen)
         error("bad output length: expected %lud got %lud", wlen, len);
 }
+/*e: function [[trailer]](gunzip.c) */
 
+/*s: function [[get4]](gunzip.c) */
 static ulong
 get4(Biobuf *b)
 {
@@ -305,7 +341,8 @@ get4(Biobuf *b)
     }
     return v;
 }
-
+/*e: function [[get4]](gunzip.c) */
+/*s: function [[get1]](gunzip.c) */
 static int
 get1(Biobuf *b)
 {
@@ -316,41 +353,46 @@ get1(Biobuf *b)
         error("unexpected eof reading file information");
     return c;
 }
-
+/*e: function [[get1]](gunzip.c) */
+/*s: function [[crcwrite]](gunzip.c) */
 static int
 crcwrite(void *out, void *buf, int n)
 {
-    int fd, nw;
+    fdt fd;
+    int nw;
 
     wlen += n;
+    // blockcrc in libflate
     crc = blockcrc(crctab, crc, buf, n);
     fd = (int)(uintptr)out;
     if(fd < 0)
         return n;
     nw = write(fd, buf, n);
     if(nw != n)
-        wbad = 1;
+        wbad = true;
     return nw;
 }
+/*e: function [[crcwrite]](gunzip.c) */
 
+/*s: function [[error]](gunzip.c) */
 static void
 error(char *fmt, ...)
 {
     va_list arg;
 
     if(gzok)
-        fprint(2, "gunzip: %s: corrupted data after byte %lld ignored\n", infile, gzok);
+        fprint(STDERR, "gunzip: %s: corrupted data after byte %lld ignored\n", infile, gzok);
     else{
-        fprint(2, "gunzip: ");
+        fprint(STDERR, "gunzip: ");
         if(infile)
-            fprint(2, "%s: ", infile);
+            fprint(STDERR, "%s: ", infile);
         va_start(arg, fmt);
-        vfprint(2, fmt, arg);
+        vfprint(STDERR, fmt, arg);
         va_end(arg);
-        fprint(2, "\n");
+        fprint(STDERR, "\n");
     
         if(delfile != nil){
-            fprint(2, "gunzip: removing output file %s\n", delfile);
+            fprint(STDERR, "gunzip: removing output file %s\n", delfile);
             remove(delfile);
             delfile = nil;
         }
@@ -358,4 +400,5 @@ error(char *fmt, ...)
 
     longjmp(zjmp, 1);
 }
+/*e: function [[error]](gunzip.c) */
 /*e: archive/gzip/gunzip.c */

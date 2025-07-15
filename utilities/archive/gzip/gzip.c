@@ -1,47 +1,64 @@
 /*s: archive/gzip/gzip.c */
+/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
+/*e: plan9 includes */
 #include <bio.h>
 #include <flate.h>
 #include "gzip.h"
 
-static  int gzipf(char*, int);
+// forward decls
+static  error0 gzipf(char*, bool);
 static  int gzip(char*, long, int, Biobuf*);
 static  int crcread(void *fd, void *buf, int n);
 static  int gzwrite(void *bout, void *buf, int n);
 
+/*s: global flags gzip.c */
+// -v
+static  bool verbose;
+// -D
+static  bool debug;
+/*e: global flags gzip.c */
+/*s: globals gzip.c */
 static  Biobuf  bout;
-static  ulong   crc;
-static  ulong   *crctab;
-static  int debug;
-static  int eof;
+// compression level, default = -6
 static  int level;
+/*x: globals gzip.c */
+static  ulong   *crctab;
+/*x: globals gzip.c */
+static  ulong   crc;
+static  bool    eof;
 static  ulong   totr;
-static  int verbose;
+/*e: globals gzip.c */
 
+/*s: function [[usage]](gzip.c) */
 void
 usage(void)
 {
-    fprint(2, "usage: gzip [-vcD] [-1-9] [file ...]\n");
+    fprint(STDERR, "usage: gzip [-vcD] [-1-9] [file ...]\n");
     exits("usage");
 }
-
+/*e: function [[usage]](gzip.c) */
+/*s: function [[main]](gzip.c) */
 void
 main(int argc, char *argv[])
 {
-    int i, ok, stdout;
+    int i;
+    // enum<FlateError> (OK = 0) and then error0 (OK = 1)
+    int ok; 
+    // -c
+    bool stdout = false;
 
     level = 6;
-    stdout = 0;
     ARGBEGIN{
-    case 'D':
-        debug++;
-        break;
     case 'v':
-        verbose++;
+        verbose = true;
+        break;
+    case 'D':
+        debug = true;
         break;
     case 'c':
-        stdout = 1;
+        stdout = true;
         break;
     case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
@@ -58,44 +75,47 @@ main(int argc, char *argv[])
         sysfatal("deflateinit failed: %s", flateerr(ok));
 
     if(argc == 0){
-        Binit(&bout, 1, OWRITE);
-        ok = gzip(nil, time(0), 0, &bout);
+        Binit(&bout, STDOUT, OWRITE);
+        ok = gzip(nil, time(0), STDIN, &bout);
         Bterm(&bout);
     }else{
-        ok = 1;
+        ok = OK_1;
         for(i = 0; i < argc; i++)
             ok &= gzipf(argv[i], stdout);
     }
     exits(ok ? nil: "errors");
 }
+/*e: function [[main]](gzip.c) */
 
-static int
-gzipf(char *file, int stdout)
+/*s: function [[gzipf]] */
+static error0
+gzipf(char *file, bool stdout)
 {
     Dir *dir;
     char ofile[256], *f, *s;
-    int ifd, ofd, ok;
+    fdt ifd, ofd;
+    int ok;
 
     ifd = open(file, OREAD);
     if(ifd < 0){
-        fprint(2, "gzip: can't open %s: %r\n", file);
-        return 0;
+        fprint(STDERR, "gzip: can't open %s: %r\n", file);
+        return ERROR_0;
     }
     dir = dirfstat(ifd);
     if(dir == nil){
-        fprint(2, "gzip: can't stat %s: %r\n", file);
+        fprint(STDERR, "gzip: can't stat %s: %r\n", file);
         close(ifd);
-        return 0;
+        return ERROR_0;
     }
     if(dir->mode & DMDIR){
-        fprint(2, "gzip: can't compress a directory\n");
+        fprint(STDERR, "gzip: can't compress a directory\n");
         close(ifd);
         free(dir);
-        return 0;
+        return ERROR_0;
     }
 
     if(stdout){
-        ofd = 1;
+        ofd = STDOUT;
         strcpy(ofile, "<stdout>");
     }else{
         f = strrchr(file, '/');
@@ -104,26 +124,26 @@ gzipf(char *file, int stdout)
         else
             f = file;
         s = strrchr(f, '.');
-        if(s != nil && s != ofile && strcmp(s, ".tar") == 0){
+        if(s != nil && s != ofile && strcmp(s, ".tar") == ORD__EQ){
             *s = '\0';
             snprint(ofile, sizeof(ofile), "%s.tgz", f);
         }else
             snprint(ofile, sizeof(ofile), "%s.gz", f);
         ofd = create(ofile, OWRITE, 0666);
         if(ofd < 0){
-            fprint(2, "gzip: can't open %s: %r\n", ofile);
+            fprint(STDERR, "gzip: can't open %s: %r\n", ofile);
             close(ifd);
-            return 0;
+            return ERROR_0;
         }
     }
 
     if(verbose)
-        fprint(2, "compressing %s to %s\n", file, ofile);
+        fprint(STDERR, "compressing %s to %s\n", file, ofile);
 
     Binit(&bout, ofd, OWRITE);
     ok = gzip(file, dir->mtime, ifd, &bout);
     if(!ok || Bflush(&bout) < 0){
-        fprint(2, "gzip: error writing %s: %r\n", ofile);
+        fprint(STDERR, "gzip: error writing %s: %r\n", ofile);
         if(!stdout)
             remove(ofile);
     }
@@ -133,9 +153,10 @@ gzipf(char *file, int stdout)
     close(ofd);
     return ok;
 }
-
+/*e: function [[gzipf]] */
+/*s: function [[gzip]] */
 static int
-gzip(char *file, long mtime, int ifd, Biobuf *bout)
+gzip(char *file, long mtime, fdt ifd, Biobuf *bout)
 {
     int flags, err;
 
@@ -164,8 +185,8 @@ gzip(char *file, long mtime, int ifd, Biobuf *bout)
     totr = 0;
     err = deflate(bout, gzwrite, (void*)ifd, crcread, level, debug);
     if(err != FlateOk){
-        fprint(2, "gzip: deflate failed: %s\n", flateerr(err));
-        return 0;
+        fprint(STDERR, "gzip: deflate failed: %s\n", flateerr(err));
+        return ERROR_0;
     }
 
     Bputc(bout, crc);
@@ -178,9 +199,11 @@ gzip(char *file, long mtime, int ifd, Biobuf *bout)
     Bputc(bout, totr>>16);
     Bputc(bout, totr>>24);
 
-    return 1;
+    return OK_1;
 }
+/*e: function [[gzip]] */
 
+/*s: function [[crcread]](gzip.c) */
 static int
 crcread(void *fd, void *buf, int n)
 {
@@ -190,7 +213,7 @@ crcread(void *fd, void *buf, int n)
     for(; !eof && n > 0; n -= m){
         m = read((int)(uintptr)fd, (char*)buf+nr, n);
         if(m <= 0){
-            eof = 1;
+            eof = true;
             if(m < 0)
                 return -1;
             break;
@@ -201,14 +224,16 @@ crcread(void *fd, void *buf, int n)
     totr += nr;
     return nr;
 }
-
+/*e: function [[crcread]](gzip.c) */
+/*s: function [[gzwrite]](gzip.c) */
 static int
 gzwrite(void *bout, void *buf, int n)
 {
     if(n != Bwrite(bout, buf, n)){
-        eof = 1;
+        eof = true;
         return -1;
     }
     return n;
 }
+/*e: function [[gzwrite]](gzip.c) */
 /*e: archive/gzip/gzip.c */
