@@ -1,3 +1,4 @@
+/*s: calc/dc.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -2292,3 +2293,4 @@ getstk(void)
     }
     return n;
 }
+/*e: calc/dc.c */
