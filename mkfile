@@ -183,10 +183,9 @@ LPDIRS=\
  assemblers linkers compilers machine generators languages \
  editors builders debuggers profilers version_control \
  lib_graphics windows lib_gui \
- networking browsers
+ networking browsers \
+ utilities
 
-#TODO
-# utilities
 #LESS
 # s9, tiger, soldat
 
