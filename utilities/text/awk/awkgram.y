@@ -1,3 +1,4 @@
+/*s: awk/awkgram.y */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -486,3 +487,4 @@ void checkdup(Node *vl, Cell *cp)   /* check if name already in list */
         }
     }
 }
+/*e: awk/awkgram.y */

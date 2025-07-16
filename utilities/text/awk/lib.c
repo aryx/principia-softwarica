@@ -1,3 +1,4 @@
+/*s: awk/lib.c */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -710,3 +711,4 @@ int is_number(char *s)
     else
         return 0;
 }
+/*e: awk/lib.c */

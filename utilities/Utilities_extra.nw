@@ -6652,6 +6652,5298 @@ re2class(char *s)
 \subsection{[[awk/awk.h]]}
 
 <<awk/awk.h>>=
+/*
+Copyright (c) Lucent Technologies 1997
+    All Rights Reserved
+
+*/
+
+typedef double  Awkfloat;
+
+/* unsigned char is more trouble than it's worth */
+
+typedef unsigned char uschar;
+
+#define xfree(a)    { if ((a) != NULL) { free((char *) a); a = NULL; } }
+
+#define DEBUG
+#ifdef  DEBUG
+            /* uses have to be doubly parenthesized */
+#   define  dprintf(x)  if (dbg) printf x
+#else
+#   define  dprintf(x)
+#endif
+
+extern  char    errbuf[];
+
+extern int  compile_time;   /* 1 if compiling, 0 if running */
+extern int  safe;       /* 0 => unsafe, 1 => safe */
+
+#define RECSIZE (8 * 1024)  /* sets limit on records, fields, etc., etc. */
+extern int  recsize;    /* size of current record, orig RECSIZE */
+
+extern char **FS;
+extern char **RS;
+extern char **ORS;
+extern char **OFS;
+extern char **OFMT;
+extern Awkfloat *NR;
+extern Awkfloat *FNR;
+extern Awkfloat *NF;
+extern char **FILENAME;
+extern char **SUBSEP;
+extern Awkfloat *RSTART;
+extern Awkfloat *RLENGTH;
+
+extern char *record;    /* points to $0 */
+extern int  lineno;     /* line number in awk program */
+extern int  errorflag;  /* 1 if error has occurred */
+extern int  donefld;    /* 1 if record broken into fields */
+extern int  donerec;    /* 1 if record is valid (no fld has changed */
+extern char inputFS[];  /* FS at time of input, for field splitting */
+
+extern int  dbg;
+
+extern  char    *patbeg;    /* beginning of pattern matched */
+extern  int patlen;     /* length of pattern matched.  set in b.c */
+
+/* Cell:  all information about a variable or constant */
+
+typedef struct Cell {
+    uschar  ctype;      /* OCELL, OBOOL, OJUMP, etc. */
+    uschar  csub;       /* CCON, CTEMP, CFLD, etc. */
+    char    *nval;      /* name, for variables only */
+    char    *sval;      /* string value */
+    Awkfloat fval;      /* value as number */
+    int  tval;      /* type info: STR|NUM|ARR|FCN|FLD|CON|DONTFREE */
+    struct Cell *cnext; /* ptr to next if chained */
+} Cell;
+
+typedef struct Array {      /* symbol table array */
+    int nelem;      /* elements in table right now */
+    int size;       /* size of tab */
+    Cell    **tab;      /* hash table pointers */
+} Array;
+
+#define NSYMTAB 50  /* initial size of a symbol table */
+extern Array    *symtab;
+
+extern Cell *nrloc;     /* NR */
+extern Cell *fnrloc;    /* FNR */
+extern Cell *nfloc;     /* NF */
+extern Cell *rstartloc; /* RSTART */
+extern Cell *rlengthloc;    /* RLENGTH */
+
+/* Cell.tval values: */
+#define NUM 01  /* number value is valid */
+#define STR 02  /* string value is valid */
+#define DONTFREE 04 /* string space is not freeable */
+#define CON 010 /* this is a constant */
+#define ARR 020 /* this is an array */
+#define FCN 040 /* this is a function name */
+#define FLD 0100    /* this is a field $1, $2, ... */
+#define REC 0200    /* this is $0 */
+
+
+/* function types */
+#define FLENGTH 1
+#define FSQRT   2
+#define FEXP    3
+#define FLOG    4
+#define FINT    5
+#define FSYSTEM 6
+#define FRAND   7
+#define FSRAND  8
+#define FSIN    9
+#define FCOS    10
+#define FATAN   11
+#define FTOUPPER 12
+#define FTOLOWER 13
+#define FFLUSH  14
+#define FUTF    15
+
+/* Node:  parse tree is made of nodes, with Cell's at bottom */
+
+typedef struct Node {
+    int ntype;
+    struct  Node *nnext;
+    int lineno;
+    int nobj;
+    struct  Node *narg[1];  /* variable: actual size set by calling malloc */
+} Node;
+
+#define NIL ((Node *) 0)
+
+extern Node *winner;
+extern Node *nullstat;
+extern Node *nullnode;
+
+/* ctypes */
+#define OCELL   1
+#define OBOOL   2
+#define OJUMP   3
+
+/* Cell subtypes: csub */
+#define CFREE   7
+#define CCOPY   6
+#define CCON    5
+#define CTEMP   4
+#define CNAME   3 
+#define CVAR    2
+#define CFLD    1
+#define CUNK    0
+
+/* bool subtypes */
+#define BTRUE   11
+#define BFALSE  12
+
+/* jump subtypes */
+#define JEXIT   21
+#define JNEXT   22
+#define JBREAK  23
+#define JCONT   24
+#define JRET    25
+#define JNEXTFILE   26
+
+/* node types */
+#define NVALUE  1
+#define NSTAT   2
+#define NEXPR   3
+
+
+extern  int pairstack[], paircnt;
+
+#define notlegal(n) (n <= FIRSTTOKEN || n >= LASTTOKEN || proctab[n-FIRSTTOKEN] == nullproc)
+#define isvalue(n)  ((n)->ntype == NVALUE)
+#define isexpr(n)   ((n)->ntype == NEXPR)
+#define isjump(n)   ((n)->ctype == OJUMP)
+#define isexit(n)   ((n)->csub == JEXIT)
+#define isbreak(n)  ((n)->csub == JBREAK)
+#define iscont(n)   ((n)->csub == JCONT)
+#define isnext(n)   ((n)->csub == JNEXT)
+#define isnextfile(n)   ((n)->csub == JNEXTFILE)
+#define isret(n)    ((n)->csub == JRET)
+#define isrec(n)    ((n)->tval & REC)
+#define isfld(n)    ((n)->tval & FLD)
+#define isstr(n)    ((n)->tval & STR)
+#define isnum(n)    ((n)->tval & NUM)
+#define isarr(n)    ((n)->tval & ARR)
+#define isfcn(n)    ((n)->tval & FCN)
+#define istrue(n)   ((n)->csub == BTRUE)
+#define istemp(n)   ((n)->csub == CTEMP)
+#define isargument(n)   ((n)->nobj == ARG)
+/* #define freeable(p)  (!((p)->tval & DONTFREE)) */
+#define freeable(p) ( ((p)->tval & (STR|DONTFREE)) == STR )
+
+#include "proto.h"
+@
+
+\subsection{[[awk/awkgram.y]]}
+
+<<awk/awkgram.y>>=
+/****************************************************************
+Copyright (C) Lucent Technologies 1997
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name Lucent Technologies or any of
+its entities not be used in advertising or publicity pertaining
+to distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+****************************************************************/
+
+%{
+#include <stdio.h>
+#include <string.h>
+#include "awk.h"
+
+#define makedfa(a,b)    compre(a)
+
+void checkdup(Node *list, Cell *item);
+int yywrap(void) { return(1); }
+
+Node    *beginloc = 0;
+Node    *endloc = 0;
+int infunc  = 0;    /* = 1 if in arglist or body of func */
+int inloop  = 0;    /* = 1 if in while, for, do */
+char    *curfname = 0;  /* current function name */
+Node    *arglist = 0;   /* list of args for current function */
+%}
+
+%union {
+    Node    *p;
+    Cell    *cp;
+    int i;
+    char    *s;
+}
+
+%token  <i> FIRSTTOKEN  /* must be first */
+%token  <p> PROGRAM PASTAT PASTAT2 XBEGIN XEND
+%token  <i> NL ',' '{' '(' '|' ';' '/' ')' '}' '[' ']'
+%token  <i> ARRAY
+%token  <i> MATCH NOTMATCH MATCHOP
+%token  <i> FINAL DOT ALL CCL NCCL CHAR OR STAR QUEST PLUS
+%token  <i> AND BOR APPEND EQ GE GT LE LT NE IN
+%token  <i> ARG BLTIN BREAK CLOSE CONTINUE DELETE DO EXIT FOR FUNC 
+%token  <i> SUB GSUB IF INDEX LSUBSTR MATCHFCN NEXT NEXTFILE
+%token  <i> ADD MINUS MULT DIVIDE MOD
+%token  <i> ASSIGN ASGNOP ADDEQ SUBEQ MULTEQ DIVEQ MODEQ POWEQ
+%token  <i> PRINT PRINTF SPRINTF
+%token  <p> ELSE INTEST CONDEXPR
+%token  <i> POSTINCR PREINCR POSTDECR PREDECR
+%token  <cp>    VAR IVAR VARNF CALL NUMBER STRING
+%token  <s> REGEXPR
+
+%type   <p> pas pattern ppattern plist pplist patlist prarg term re
+%type   <p> pa_pat pa_stat pa_stats
+%type   <s> reg_expr
+%type   <p> simple_stmt opt_simple_stmt stmt stmtlist
+%type   <p> var varname funcname varlist
+%type   <p> for if else while
+%type   <i> do st
+%type   <i> pst opt_pst lbrace rbrace rparen comma nl opt_nl and bor
+%type   <i> subop print
+
+%right  ASGNOP
+%right  '?'
+%right  ':'
+%left   BOR
+%left   AND
+%left   GETLINE
+%nonassoc APPEND EQ GE GT LE LT NE MATCHOP IN '|'
+%left   ARG BLTIN BREAK CALL CLOSE CONTINUE DELETE DO EXIT FOR FUNC 
+%left   GSUB IF INDEX LSUBSTR MATCHFCN NEXT NUMBER
+%left   PRINT PRINTF RETURN SPLIT SPRINTF STRING SUB SUBSTR
+%left   REGEXPR VAR VARNF IVAR WHILE '('
+%left   CAT
+%left   '+' '-'
+%left   '*' '/' '%'
+%left   NOT UMINUS
+%right  POWER
+%right  DECR INCR
+%left   INDIRECT
+%token  LASTTOKEN   /* must be last */
+
+%%
+
+program:
+      pas   { if (errorflag==0)
+            winner = (Node *)stat3(PROGRAM, beginloc, $1, endloc); }
+    | error { yyclearin; bracecheck(); SYNTAX("bailing out"); }
+    ;
+
+and:
+      AND | and NL
+    ;
+
+bor:
+      BOR | bor NL
+    ;
+
+comma:
+      ',' | comma NL
+    ;
+
+do:
+      DO | do NL
+    ;
+
+else:
+      ELSE | else NL
+    ;
+
+for:
+      FOR '(' opt_simple_stmt ';' opt_nl pattern ';' opt_nl opt_simple_stmt rparen {inloop++;} stmt
+        { --inloop; $$ = stat4(FOR, $3, notnull($6), $9, $12); }
+    | FOR '(' opt_simple_stmt ';'  ';' opt_nl opt_simple_stmt rparen {inloop++;} stmt
+        { --inloop; $$ = stat4(FOR, $3, NIL, $7, $10); }
+    | FOR '(' varname IN varname rparen {inloop++;} stmt
+        { --inloop; $$ = stat3(IN, $3, makearr($5), $8); }
+    ;
+
+funcname:
+      VAR   { setfname($1); }
+    | CALL  { setfname($1); }
+    ;
+
+if:
+      IF '(' pattern rparen     { $$ = notnull($3); }
+    ;
+
+lbrace:
+      '{' | lbrace NL
+    ;
+
+nl:
+      NL | nl NL
+    ;
+
+opt_nl:
+      /* empty */   { $$ = 0; }
+    | nl
+    ;
+
+opt_pst:
+      /* empty */   { $$ = 0; }
+    | pst
+    ;
+
+
+opt_simple_stmt:
+      /* empty */           { $$ = 0; }
+    | simple_stmt
+    ;
+
+pas:
+      opt_pst           { $$ = 0; }
+    | opt_pst pa_stats opt_pst  { $$ = $2; }
+    ;
+
+pa_pat:
+      pattern   { $$ = notnull($1); }
+    ;
+
+pa_stat:
+      pa_pat            { $$ = stat2(PASTAT, $1, stat2(PRINT, rectonode(), NIL)); }
+    | pa_pat lbrace stmtlist '}'    { $$ = stat2(PASTAT, $1, $3); }
+    | pa_pat ',' pa_pat     { $$ = pa2stat($1, $3, stat2(PRINT, rectonode(), NIL)); }
+    | pa_pat ',' pa_pat lbrace stmtlist '}' { $$ = pa2stat($1, $3, $5); }
+    | lbrace stmtlist '}'       { $$ = stat2(PASTAT, NIL, $2); }
+    | XBEGIN lbrace stmtlist '}'
+        { beginloc = linkum(beginloc, $3); $$ = 0; }
+    | XEND lbrace stmtlist '}'
+        { endloc = linkum(endloc, $3); $$ = 0; }
+    | FUNC funcname '(' varlist rparen {infunc++;} lbrace stmtlist '}'
+        { infunc--; curfname=0; defn((Cell *)$2, $4, $8); $$ = 0; }
+    ;
+
+pa_stats:
+      pa_stat
+    | pa_stats opt_pst pa_stat  { $$ = linkum($1, $3); }
+    ;
+
+patlist:
+      pattern
+    | patlist comma pattern     { $$ = linkum($1, $3); }
+    ;
+
+ppattern:
+      var ASGNOP ppattern       { $$ = op2($2, $1, $3); }
+    | ppattern '?' ppattern ':' ppattern %prec '?'
+        { $$ = op3(CONDEXPR, notnull($1), $3, $5); }
+    | ppattern bor ppattern %prec BOR
+        { $$ = op2(BOR, notnull($1), notnull($3)); }
+    | ppattern and ppattern %prec AND
+        { $$ = op2(AND, notnull($1), notnull($3)); }
+    | ppattern MATCHOP reg_expr { $$ = op3($2, NIL, $1, (Node*)makedfa($3, 0)); }
+    | ppattern MATCHOP ppattern
+        { if (constnode($3))
+            $$ = op3($2, NIL, $1, (Node*)makedfa(strnode($3), 0));
+          else
+            $$ = op3($2, (Node *)1, $1, $3); }
+    | ppattern IN varname       { $$ = op2(INTEST, $1, makearr($3)); }
+    | '(' plist ')' IN varname  { $$ = op2(INTEST, $2, makearr($5)); }
+    | ppattern term %prec CAT   { $$ = op2(CAT, $1, $2); }
+    | re
+    | term
+    ;
+
+pattern:
+      var ASGNOP pattern        { $$ = op2($2, $1, $3); }
+    | pattern '?' pattern ':' pattern %prec '?'
+        { $$ = op3(CONDEXPR, notnull($1), $3, $5); }
+    | pattern bor pattern %prec BOR
+        { $$ = op2(BOR, notnull($1), notnull($3)); }
+    | pattern and pattern %prec AND
+        { $$ = op2(AND, notnull($1), notnull($3)); }
+    | pattern EQ pattern        { $$ = op2($2, $1, $3); }
+    | pattern GE pattern        { $$ = op2($2, $1, $3); }
+    | pattern GT pattern        { $$ = op2($2, $1, $3); }
+    | pattern LE pattern        { $$ = op2($2, $1, $3); }
+    | pattern LT pattern        { $$ = op2($2, $1, $3); }
+    | pattern NE pattern        { $$ = op2($2, $1, $3); }
+    | pattern MATCHOP reg_expr  { $$ = op3($2, NIL, $1, (Node*)makedfa($3, 0)); }
+    | pattern MATCHOP pattern
+        { if (constnode($3))
+            $$ = op3($2, NIL, $1, (Node*)makedfa(strnode($3), 0));
+          else
+            $$ = op3($2, (Node *)1, $1, $3); }
+    | pattern IN varname        { $$ = op2(INTEST, $1, makearr($3)); }
+    | '(' plist ')' IN varname  { $$ = op2(INTEST, $2, makearr($5)); }
+    | pattern '|' GETLINE var   { 
+            if (safe) SYNTAX("cmd | getline is unsafe");
+            else $$ = op3(GETLINE, $4, itonp($2), $1); }
+    | pattern '|' GETLINE       { 
+            if (safe) SYNTAX("cmd | getline is unsafe");
+            else $$ = op3(GETLINE, (Node*)0, itonp($2), $1); }
+    | pattern term %prec CAT    { $$ = op2(CAT, $1, $2); }
+    | re
+    | term
+    ;
+
+plist:
+      pattern comma pattern     { $$ = linkum($1, $3); }
+    | plist comma pattern       { $$ = linkum($1, $3); }
+    ;
+
+pplist:
+      ppattern
+    | pplist comma ppattern     { $$ = linkum($1, $3); }
+    ;
+
+prarg:
+      /* empty */           { $$ = rectonode(); }
+    | pplist
+    | '(' plist ')'         { $$ = $2; }
+    ;
+
+print:
+      PRINT | PRINTF
+    ;
+
+pst:
+      NL | ';' | pst NL | pst ';'
+    ;
+
+rbrace:
+      '}' | rbrace NL
+    ;
+
+re:
+       reg_expr
+        { $$ = op3(MATCH, NIL, rectonode(), (Node*)makedfa($1, 0)); }
+    | NOT re    { $$ = op1(NOT, notnull($2)); }
+    ;
+
+reg_expr:
+      '/' {startreg();} REGEXPR '/'     { $$ = $3; }
+    ;
+
+rparen:
+      ')' | rparen NL
+    ;
+
+simple_stmt:
+      print prarg '|' term      { 
+            if (safe) SYNTAX("print | is unsafe");
+            else $$ = stat3($1, $2, itonp($3), $4); }
+    | print prarg APPEND term   {
+            if (safe) SYNTAX("print >> is unsafe");
+            else $$ = stat3($1, $2, itonp($3), $4); }
+    | print prarg GT term       {
+            if (safe) SYNTAX("print > is unsafe");
+            else $$ = stat3($1, $2, itonp($3), $4); }
+    | print prarg           { $$ = stat3($1, $2, NIL, NIL); }
+    | DELETE varname '[' patlist ']' { $$ = stat2(DELETE, makearr($2), $4); }
+    | DELETE varname         { $$ = stat2(DELETE, makearr($2), 0); }
+    | pattern           { $$ = exptostat($1); }
+    | error             { yyclearin; SYNTAX("illegal statement"); }
+    ;
+
+st:
+      nl
+    | ';' opt_nl
+    ;
+
+stmt:
+      BREAK st      { if (!inloop) SYNTAX("break illegal outside of loops");
+                  $$ = stat1(BREAK, NIL); }
+    | CLOSE pattern st  { $$ = stat1(CLOSE, $2); }
+    | CONTINUE st       {  if (!inloop) SYNTAX("continue illegal outside of loops");
+                  $$ = stat1(CONTINUE, NIL); }
+    | do {inloop++;} stmt {--inloop;} WHILE '(' pattern ')' st
+        { $$ = stat2(DO, $3, notnull($7)); }
+    | EXIT pattern st   { $$ = stat1(EXIT, $2); }
+    | EXIT st       { $$ = stat1(EXIT, NIL); }
+    | for
+    | if stmt else stmt { $$ = stat3(IF, $1, $2, $4); }
+    | if stmt       { $$ = stat3(IF, $1, $2, NIL); }
+    | lbrace stmtlist rbrace { $$ = $2; }
+    | NEXT st   { if (infunc)
+                SYNTAX("next is illegal inside a function");
+              $$ = stat1(NEXT, NIL); }
+    | NEXTFILE st   { if (infunc)
+                SYNTAX("nextfile is illegal inside a function");
+              $$ = stat1(NEXTFILE, NIL); }
+    | RETURN pattern st { $$ = stat1(RETURN, $2); }
+    | RETURN st     { $$ = stat1(RETURN, NIL); }
+    | simple_stmt st
+    | while {inloop++;} stmt    { --inloop; $$ = stat2(WHILE, $1, $3); }
+    | ';' opt_nl        { $$ = 0; }
+    ;
+
+stmtlist:
+      stmt
+    | stmtlist stmt     { $$ = linkum($1, $2); }
+    ;
+
+subop:
+      SUB | GSUB
+    ;
+
+term:
+      term '/' ASGNOP term      { $$ = op2(DIVEQ, $1, $4); }
+    | term '+' term         { $$ = op2(ADD, $1, $3); }
+    | term '-' term         { $$ = op2(MINUS, $1, $3); }
+    | term '*' term         { $$ = op2(MULT, $1, $3); }
+    | term '/' term         { $$ = op2(DIVIDE, $1, $3); }
+    | term '%' term         { $$ = op2(MOD, $1, $3); }
+    | term POWER term       { $$ = op2(POWER, $1, $3); }
+    | '-' term %prec UMINUS     { $$ = op1(UMINUS, $2); }
+    | '+' term %prec UMINUS     { $$ = $2; }
+    | NOT term %prec UMINUS     { $$ = op1(NOT, notnull($2)); }
+    | BLTIN '(' ')'         { $$ = op2(BLTIN, itonp($1), rectonode()); }
+    | BLTIN '(' patlist ')'     { $$ = op2(BLTIN, itonp($1), $3); }
+    | BLTIN             { $$ = op2(BLTIN, itonp($1), rectonode()); }
+    | CALL '(' ')'          { $$ = op2(CALL, celltonode($1,CVAR), NIL); }
+    | CALL '(' patlist ')'      { $$ = op2(CALL, celltonode($1,CVAR), $3); }
+    | DECR var          { $$ = op1(PREDECR, $2); }
+    | INCR var          { $$ = op1(PREINCR, $2); }
+    | var DECR          { $$ = op1(POSTDECR, $1); }
+    | var INCR          { $$ = op1(POSTINCR, $1); }
+    | GETLINE var LT term       { $$ = op3(GETLINE, $2, itonp($3), $4); }
+    | GETLINE LT term       { $$ = op3(GETLINE, NIL, itonp($2), $3); }
+    | GETLINE var           { $$ = op3(GETLINE, $2, NIL, NIL); }
+    | GETLINE           { $$ = op3(GETLINE, NIL, NIL, NIL); }
+    | INDEX '(' pattern comma pattern ')'
+        { $$ = op2(INDEX, $3, $5); }
+    | INDEX '(' pattern comma reg_expr ')'
+        { SYNTAX("index() doesn't permit regular expressions");
+          $$ = op2(INDEX, $3, (Node*)$5); }
+    | '(' pattern ')'       { $$ = $2; }
+    | MATCHFCN '(' pattern comma reg_expr ')'
+        { $$ = op3(MATCHFCN, NIL, $3, (Node*)makedfa($5, 1)); }
+    | MATCHFCN '(' pattern comma pattern ')'
+        { if (constnode($5))
+            $$ = op3(MATCHFCN, NIL, $3, (Node*)makedfa(strnode($5), 1));
+          else
+            $$ = op3(MATCHFCN, (Node *)1, $3, $5); }
+    | NUMBER            { $$ = celltonode($1, CCON); }
+    | SPLIT '(' pattern comma varname comma pattern ')'     /* string */
+        { $$ = op4(SPLIT, $3, makearr($5), $7, (Node*)STRING); }
+    | SPLIT '(' pattern comma varname comma reg_expr ')'    /* const /regexp/ */
+        { $$ = op4(SPLIT, $3, makearr($5), (Node*)makedfa($7, 1), (Node *)REGEXPR); }
+    | SPLIT '(' pattern comma varname ')'
+        { $$ = op4(SPLIT, $3, makearr($5), NIL, (Node*)STRING); }  /* default */
+    | SPRINTF '(' patlist ')'   { $$ = op1($1, $3); }
+    | STRING            { $$ = celltonode($1, CCON); }
+    | subop '(' reg_expr comma pattern ')'
+        { $$ = op4($1, NIL, (Node*)makedfa($3, 1), $5, rectonode()); }
+    | subop '(' pattern comma pattern ')'
+        { if (constnode($3))
+            $$ = op4($1, NIL, (Node*)makedfa(strnode($3), 1), $5, rectonode());
+          else
+            $$ = op4($1, (Node *)1, $3, $5, rectonode()); }
+    | subop '(' reg_expr comma pattern comma var ')'
+        { $$ = op4($1, NIL, (Node*)makedfa($3, 1), $5, $7); }
+    | subop '(' pattern comma pattern comma var ')'
+        { if (constnode($3))
+            $$ = op4($1, NIL, (Node*)makedfa(strnode($3), 1), $5, $7);
+          else
+            $$ = op4($1, (Node *)1, $3, $5, $7); }
+    | SUBSTR '(' pattern comma pattern comma pattern ')'
+        { $$ = op3(SUBSTR, $3, $5, $7); }
+    | SUBSTR '(' pattern comma pattern ')'
+        { $$ = op3(SUBSTR, $3, $5, NIL); }
+    | var
+    ;
+
+var:
+      varname
+    | varname '[' patlist ']'   { $$ = op2(ARRAY, makearr($1), $3); }
+    | IVAR              { $$ = op1(INDIRECT, celltonode($1, CVAR)); }
+    | INDIRECT term         { $$ = op1(INDIRECT, $2); }
+    ;   
+
+varlist:
+      /* nothing */     { arglist = $$ = 0; }
+    | VAR           { arglist = $$ = celltonode($1,CVAR); }
+    | varlist comma VAR {
+            checkdup($1, $3);
+            arglist = $$ = linkum($1,celltonode($3,CVAR)); }
+    ;
+
+varname:
+      VAR           { $$ = celltonode($1, CVAR); }
+    | ARG           { $$ = op1(ARG, itonp($1)); }
+    | VARNF         { $$ = op1(VARNF, (Node *) $1); }
+    ;
+
+
+while:
+      WHILE '(' pattern rparen  { $$ = notnull($3); }
+    ;
+
+%%
+
+void setfname(Cell *p)
+{
+    if (isarr(p))
+        SYNTAX("%s is an array, not a function", p->nval);
+    else if (isfcn(p))
+        SYNTAX("you can't define function %s more than once", p->nval);
+    curfname = p->nval;
+}
+
+int constnode(Node *p)
+{
+    return isvalue(p) && ((Cell *) (p->narg[0]))->csub == CCON;
+}
+
+char *strnode(Node *p)
+{
+    return ((Cell *)(p->narg[0]))->sval;
+}
+
+Node *notnull(Node *n)
+{
+    switch (n->nobj) {
+    case LE: case LT: case EQ: case NE: case GT: case GE:
+    case BOR: case AND: case NOT:
+        return n;
+    default:
+        return op2(NE, n, nullnode);
+    }
+}
+
+void checkdup(Node *vl, Cell *cp)   /* check if name already in list */
+{
+    char *s = cp->nval;
+    for ( ; vl; vl = vl->nnext) {
+        if (strcmp(s, ((Cell *)(vl->narg[0]))->nval) == 0) {
+            SYNTAX("duplicate argument %s", s);
+            break;
+        }
+    }
+}
+@
+
+\subsection{[[awk/lex.c]]}
+
+<<awk/lex.c>>=
+/****************************************************************
+Copyright (C) Lucent Technologies 1997
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name Lucent Technologies or any of
+its entities not be used in advertising or publicity pertaining
+to distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+****************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include "awk.h"
+#include "y.tab.h"
+
+extern YYSTYPE  yylval;
+extern int  infunc;
+
+int lineno  = 1;
+int bracecnt = 0;
+int brackcnt  = 0;
+int parencnt = 0;
+
+typedef struct Keyword {
+    char    *word;
+    int sub;
+    int type;
+} Keyword;
+
+Keyword keywords[] ={   /* keep sorted: binary searched */
+    { "BEGIN",  XBEGIN,     XBEGIN },
+    { "END",    XEND,       XEND },
+    { "NF",     VARNF,      VARNF },
+    { "atan2",  FATAN,      BLTIN },
+    { "break",  BREAK,      BREAK },
+    { "close",  CLOSE,      CLOSE },
+    { "continue",   CONTINUE,   CONTINUE },
+    { "cos",    FCOS,       BLTIN },
+    { "delete", DELETE,     DELETE },
+    { "do",     DO,     DO },
+    { "else",   ELSE,       ELSE },
+    { "exit",   EXIT,       EXIT },
+    { "exp",    FEXP,       BLTIN },
+    { "fflush", FFLUSH,     BLTIN },
+    { "for",    FOR,        FOR },
+    { "func",   FUNC,       FUNC },
+    { "function",   FUNC,       FUNC },
+    { "getline",    GETLINE,    GETLINE },
+    { "gsub",   GSUB,       GSUB },
+    { "if",     IF,     IF },
+    { "in",     IN,     IN },
+    { "index",  INDEX,      INDEX },
+    { "int",    FINT,       BLTIN },
+    { "length", FLENGTH,    BLTIN },
+    { "log",    FLOG,       BLTIN },
+    { "match",  MATCHFCN,   MATCHFCN },
+    { "next",   NEXT,       NEXT },
+    { "nextfile",   NEXTFILE,   NEXTFILE },
+    { "print",  PRINT,      PRINT },
+    { "printf", PRINTF,     PRINTF },
+    { "rand",   FRAND,      BLTIN },
+    { "return", RETURN,     RETURN },
+    { "sin",    FSIN,       BLTIN },
+    { "split",  SPLIT,      SPLIT },
+    { "sprintf",    SPRINTF,    SPRINTF },
+    { "sqrt",   FSQRT,      BLTIN },
+    { "srand",  FSRAND,     BLTIN },
+    { "sub",    SUB,        SUB },
+    { "substr", SUBSTR,     SUBSTR },
+    { "system", FSYSTEM,    BLTIN },
+    { "tolower",    FTOLOWER,   BLTIN },
+    { "toupper",    FTOUPPER,   BLTIN },
+    { "utf",    FUTF,       BLTIN },
+    { "while",  WHILE,      WHILE },
+};
+
+#define DEBUG
+#ifdef  DEBUG
+#define RET(x)  { if(dbg)printf("lex %s\n", tokname(x)); return(x); }
+#else
+#define RET(x)  return(x)
+#endif
+
+int peek(void)
+{
+    int c = input();
+    unput(c);
+    return c;
+}
+
+int gettok(char **pbuf, int *psz)   /* get next input token */
+{
+    int c;
+    char *buf = *pbuf;
+    int sz = *psz;
+    char *bp = buf;
+
+    c = input();
+    if (c == 0)
+        return 0;
+    buf[0] = c;
+    buf[1] = 0;
+    if (!isalnum(c) && c != '.' && c != '_')
+        return c;
+
+    *bp++ = c;
+    if (isalpha(c) || c == '_') {   /* it's a varname */
+        for ( ; (c = input()) != 0; ) {
+            if (bp-buf >= sz)
+                if (!adjbuf(&buf, &sz, bp-buf+2, 100, &bp, 0))
+                    FATAL( "out of space for name %.10s...", buf );
+            if (isalnum(c) || c == '_')
+                *bp++ = c;
+            else {
+                *bp = 0;
+                unput(c);
+                break;
+            }
+        }
+    } else {    /* it's a number */
+        char *rem;
+        /* read input until can't be a number */
+        for ( ; (c = input()) != 0; ) {
+            if (bp-buf >= sz)
+                if (!adjbuf(&buf, &sz, bp-buf+2, 100, &bp, 0))
+                    FATAL( "out of space for number %.10s...", buf );
+            if (isdigit(c) || c == 'e' || c == 'E' 
+              || c == '.' || c == '+' || c == '-')
+                *bp++ = c;
+            else {
+                unput(c);
+                break;
+            }
+        }
+        *bp = 0;
+        strtod(buf, &rem);  /* parse the number */
+        unputstr(rem);      /* put rest back for later */
+        rem[0] = 0;
+    }
+    *pbuf = buf;
+    *psz = sz;
+    return buf[0];
+}
+
+int word(char *);
+int string(void);
+int regexpr(void);
+int sc  = 0;    /* 1 => return a } right now */
+int reg = 0;    /* 1 => return a REGEXPR now */
+
+int yylex(void)
+{
+    int c;
+    static char *buf = 0;
+    static int bufsize = 500;
+
+    if (buf == 0 && (buf = (char *) malloc(bufsize)) == NULL)
+        FATAL( "out of space in yylex" );
+    if (sc) {
+        sc = 0;
+        RET('}');
+    }
+    if (reg) {
+        reg = 0;
+        return regexpr();
+    }
+    for (;;) {
+        c = gettok(&buf, &bufsize);
+        if (c == 0)
+            return 0;
+        if (isalpha(c) || c == '_')
+            return word(buf);
+        if (isdigit(c) || c == '.') {
+            yylval.cp = setsymtab(buf, tostring(buf), atof(buf), CON|NUM, symtab);
+            /* should this also have STR set? */
+            RET(NUMBER);
+        }
+    
+        yylval.i = c;
+        switch (c) {
+        case '\n':  /* {EOL} */
+            RET(NL);
+        case '\r':  /* assume \n is coming */
+        case ' ':   /* {WS}+ */
+        case '\t':
+            break;
+        case '#':   /* #.* strip comments */
+            while ((c = input()) != '\n' && c != 0)
+                ;
+            unput(c);
+            break;
+        case ';':
+            RET(';');
+        case '\\':
+            if (peek() == '\n') {
+                input();
+            } else if (peek() == '\r') {
+                input(); input();   /* \n */
+                lineno++;
+            } else {
+                RET(c);
+            }
+            break;
+        case '&':
+            if (peek() == '&') {
+                input(); RET(AND);
+            } else 
+                RET('&');
+        case '|':
+            if (peek() == '|') {
+                input(); RET(BOR);
+            } else
+                RET('|');
+        case '!':
+            if (peek() == '=') {
+                input(); yylval.i = NE; RET(NE);
+            } else if (peek() == '~') {
+                input(); yylval.i = NOTMATCH; RET(MATCHOP);
+            } else
+                RET(NOT);
+        case '~':
+            yylval.i = MATCH;
+            RET(MATCHOP);
+        case '<':
+            if (peek() == '=') {
+                input(); yylval.i = LE; RET(LE);
+            } else {
+                yylval.i = LT; RET(LT);
+            }
+        case '=':
+            if (peek() == '=') {
+                input(); yylval.i = EQ; RET(EQ);
+            } else {
+                yylval.i = ASSIGN; RET(ASGNOP);
+            }
+        case '>':
+            if (peek() == '=') {
+                input(); yylval.i = GE; RET(GE);
+            } else if (peek() == '>') {
+                input(); yylval.i = APPEND; RET(APPEND);
+            } else {
+                yylval.i = GT; RET(GT);
+            }
+        case '+':
+            if (peek() == '+') {
+                input(); yylval.i = INCR; RET(INCR);
+            } else if (peek() == '=') {
+                input(); yylval.i = ADDEQ; RET(ASGNOP);
+            } else
+                RET('+');
+        case '-':
+            if (peek() == '-') {
+                input(); yylval.i = DECR; RET(DECR);
+            } else if (peek() == '=') {
+                input(); yylval.i = SUBEQ; RET(ASGNOP);
+            } else
+                RET('-');
+        case '*':
+            if (peek() == '=') {    /* *= */
+                input(); yylval.i = MULTEQ; RET(ASGNOP);
+            } else if (peek() == '*') { /* ** or **= */
+                input();    /* eat 2nd * */
+                if (peek() == '=') {
+                    input(); yylval.i = POWEQ; RET(ASGNOP);
+                } else {
+                    RET(POWER);
+                }
+            } else
+                RET('*');
+        case '/':
+            RET('/');
+        case '%':
+            if (peek() == '=') {
+                input(); yylval.i = MODEQ; RET(ASGNOP);
+            } else
+                RET('%');
+        case '^':
+            if (peek() == '=') {
+                input(); yylval.i = POWEQ; RET(ASGNOP);
+            } else
+                RET(POWER);
+    
+        case '$':
+            /* BUG: awkward, if not wrong */
+            c = gettok(&buf, &bufsize);
+            if (c == '(' || c == '[' || (infunc && isarg(buf) >= 0)) {
+                unputstr(buf);
+                RET(INDIRECT);
+            } else if (isalpha(c)) {
+                if (strcmp(buf, "NF") == 0) {   /* very special */
+                    unputstr("(NF)");
+                    RET(INDIRECT);
+                }
+                yylval.cp = setsymtab(buf, "", 0.0, STR|NUM, symtab);
+                RET(IVAR);
+            } else {
+                unputstr(buf);
+                RET(INDIRECT);
+            }
+    
+        case '}':
+            if (--bracecnt < 0)
+                SYNTAX( "extra }" );
+            sc = 1;
+            RET(';');
+        case ']':
+            if (--brackcnt < 0)
+                SYNTAX( "extra ]" );
+            RET(']');
+        case ')':
+            if (--parencnt < 0)
+                SYNTAX( "extra )" );
+            RET(')');
+        case '{':
+            bracecnt++;
+            RET('{');
+        case '[':
+            brackcnt++;
+            RET('[');
+        case '(':
+            parencnt++;
+            RET('(');
+    
+        case '"':
+            return string();    /* BUG: should be like tran.c ? */
+    
+        default:
+            RET(c);
+        }
+    }
+}
+
+int string(void)
+{
+    int c, n;
+    char *s, *bp;
+    static char *buf = 0;
+    static int bufsz = 500;
+
+    if (buf == 0 && (buf = (char *) malloc(bufsz)) == NULL)
+        FATAL("out of space for strings");
+    for (bp = buf; (c = input()) != '"'; ) {
+        if (!adjbuf(&buf, &bufsz, bp-buf+2, 500, &bp, 0))
+            FATAL("out of space for string %.10s...", buf);
+        switch (c) {
+        case '\n':
+        case '\r':
+        case 0:
+            SYNTAX( "non-terminated string %.10s...", buf );
+            lineno++;
+            break;
+        case '\\':
+            c = input();
+            switch (c) {
+            case '"': *bp++ = '"'; break;
+            case 'n': *bp++ = '\n'; break;  
+            case 't': *bp++ = '\t'; break;
+            case 'f': *bp++ = '\f'; break;
+            case 'r': *bp++ = '\r'; break;
+            case 'b': *bp++ = '\b'; break;
+            case 'v': *bp++ = '\v'; break;
+            case 'a': *bp++ = '\007'; break;
+            case '\\': *bp++ = '\\'; break;
+
+            case '0': case '1': case '2': /* octal: \d \dd \ddd */
+            case '3': case '4': case '5': case '6': case '7':
+                n = c - '0';
+                if ((c = peek()) >= '0' && c < '8') {
+                    n = 8 * n + input() - '0';
+                    if ((c = peek()) >= '0' && c < '8')
+                        n = 8 * n + input() - '0';
+                }
+                *bp++ = n;
+                break;
+
+            case 'x':   /* hex  \x0-9a-fA-F + */
+                {   char xbuf[100], *px;
+                for (px = xbuf; (c = input()) != 0 && px-xbuf < 100-2; ) {
+                    if (isdigit(c)
+                     || (c >= 'a' && c <= 'f')
+                     || (c >= 'A' && c <= 'F'))
+                        *px++ = c;
+                    else
+                        break;
+                }
+                *px = 0;
+                unput(c);
+                sscanf(xbuf, "%x", &n);
+                *bp++ = n;
+                break;
+                }
+
+            default: 
+                *bp++ = c;
+                break;
+            }
+            break;
+        default:
+            *bp++ = c;
+            break;
+        }
+    }
+    *bp = 0; 
+    s = tostring(buf);
+    *bp++ = ' '; *bp++ = 0;
+    yylval.cp = setsymtab(buf, s, 0.0, CON|STR|DONTFREE, symtab);
+    RET(STRING);
+}
+
+
+int binsearch(char *w, Keyword *kp, int n)
+{
+    int cond, low, mid, high;
+
+    low = 0;
+    high = n - 1;
+    while (low <= high) {
+        mid = (low + high) / 2;
+        if ((cond = strcmp(w, kp[mid].word)) < 0)
+            high = mid - 1;
+        else if (cond > 0)
+            low = mid + 1;
+        else
+            return mid;
+    }
+    return -1;
+}
+
+int word(char *w) 
+{
+    Keyword *kp;
+    int c, n;
+
+    n = binsearch(w, keywords, sizeof(keywords)/sizeof(keywords[0]));
+    kp = keywords + n;
+    if (n != -1) {  /* found in table */
+        yylval.i = kp->sub;
+        switch (kp->type) { /* special handling */
+        case FSYSTEM:
+            if (safe)
+                SYNTAX( "system is unsafe" );
+            RET(kp->type);
+        case FUNC:
+            if (infunc)
+                SYNTAX( "illegal nested function" );
+            RET(kp->type);
+        case RETURN:
+            if (!infunc)
+                SYNTAX( "return not in function" );
+            RET(kp->type);
+        case VARNF:
+            yylval.cp = setsymtab("NF", "", 0.0, NUM, symtab);
+            RET(VARNF);
+        default:
+            RET(kp->type);
+        }
+    }
+    c = peek(); /* look for '(' */
+    if (c != '(' && infunc && (n=isarg(w)) >= 0) {
+        yylval.i = n;
+        RET(ARG);
+    } else {
+        yylval.cp = setsymtab(w, "", 0.0, STR|NUM|DONTFREE, symtab);
+        if (c == '(') {
+            RET(CALL);
+        } else {
+            RET(VAR);
+        }
+    }
+}
+
+void startreg(void) /* next call to yyles will return a regular expression */
+{
+    reg = 1;
+}
+
+int regexpr(void)
+{
+    int c;
+    static char *buf = 0;
+    static int bufsz = 500;
+    char *bp;
+
+    if (buf == 0 && (buf = (char *) malloc(bufsz)) == NULL)
+        FATAL("out of space for rex expr");
+    bp = buf;
+    for ( ; (c = input()) != '/' && c != 0; ) {
+        if (!adjbuf(&buf, &bufsz, bp-buf+3, 500, &bp, 0))
+            FATAL("out of space for reg expr %.10s...", buf);
+        if (c == '\n') {
+            SYNTAX( "newline in regular expression %.10s...", buf ); 
+            unput('\n');
+            break;
+        } else if (c == '\\') {
+            *bp++ = '\\'; 
+            *bp++ = input();
+        } else {
+            *bp++ = c;
+        }
+    }
+    *bp = 0;
+    yylval.s = tostring(buf);
+    unput('/');
+    RET(REGEXPR);
+}
+
+/* low-level lexical stuff, sort of inherited from lex */
+
+char    ebuf[300];
+char    *ep = ebuf;
+char    yysbuf[100];    /* pushback buffer */
+char    *yysptr = yysbuf;
+FILE    *yyin = 0;
+
+int input(void) /* get next lexical input character */
+{
+    int c;
+    extern char *lexprog;
+
+    if (yysptr > yysbuf)
+        c = *--yysptr;
+    else if (lexprog != NULL) { /* awk '...' */
+        if ((c = *lexprog) != 0)
+            lexprog++;
+    } else              /* awk -f ... */
+        c = pgetc();
+    if (c == '\n')
+        lineno++;
+    else if (c == EOF)
+        c = 0;
+    if (ep >= ebuf + sizeof ebuf)
+        ep = ebuf;
+    return *ep++ = c;
+}
+
+void unput(int c)   /* put lexical character back on input */
+{
+    if (c == '\n')
+        lineno--;
+    if (yysptr >= yysbuf + sizeof(yysbuf))
+        FATAL("pushed back too much: %.20s...", yysbuf);
+    *yysptr++ = c;
+    if (--ep < ebuf)
+        ep = ebuf + sizeof(ebuf) - 1;
+}
+
+void unputstr(char *s)  /* put a string back on input */
+{
+    int i;
+
+    for (i = strlen(s)-1; i >= 0; i--)
+        unput(s[i]);
+}
+@
+
+\subsection{[[awk/lib.c]]}
+
+<<awk/lib.c>>=
+/****************************************************************
+Copyright (C) Lucent Technologies 1997
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name Lucent Technologies or any of
+its entities not be used in advertising or publicity pertaining
+to distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+****************************************************************/
+
+#define DEBUG
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include "awk.h"
+#include "y.tab.h"
+
+FILE    *infile = NULL;
+char    *file   = "";
+char    *record;
+int recsize = RECSIZE;
+char    *fields;
+int fieldssize = RECSIZE;
+
+Cell    **fldtab;   /* pointers to Cells */
+char    inputFS[100] = " ";
+
+#define MAXFLD  200
+int nfields = MAXFLD;   /* last allocated slot for $i */
+
+int donefld;    /* 1 = implies rec broken into fields */
+int donerec;    /* 1 = record is valid (no flds have changed) */
+
+int lastfld = 0;    /* last used field */
+int argno   = 1;    /* current input argument number */
+extern  Awkfloat *ARGC;
+
+static Cell dollar0 = { OCELL, CFLD, NULL, "", 0.0, REC|STR|DONTFREE };
+static Cell dollar1 = { OCELL, CFLD, NULL, "", 0.0, FLD|STR|DONTFREE };
+
+void recinit(unsigned int n)
+{
+    record = (char *) malloc(n);
+    fields = (char *) malloc(n);
+    fldtab = (Cell **) malloc((nfields+1) * sizeof(Cell *));
+    if (record == NULL || fields == NULL || fldtab == NULL)
+        FATAL("out of space for $0 and fields");
+    fldtab[0] = (Cell *) malloc(sizeof (Cell));
+    *fldtab[0] = dollar0;
+    fldtab[0]->sval = record;
+    fldtab[0]->nval = tostring("0");
+    makefields(1, nfields);
+}
+
+void makefields(int n1, int n2)     /* create $n1..$n2 inclusive */
+{
+    char temp[50];
+    int i;
+
+    for (i = n1; i <= n2; i++) {
+        fldtab[i] = (Cell *) malloc(sizeof (struct Cell));
+        if (fldtab[i] == NULL)
+            FATAL("out of space in makefields %d", i);
+        *fldtab[i] = dollar1;
+        sprintf(temp, "%d", i);
+        fldtab[i]->nval = tostring(temp);
+    }
+}
+
+void initgetrec(void)
+{
+    int i;
+    char *p;
+
+    for (i = 1; i < *ARGC; i++) {
+        if (!isclvar(p = getargv(i))) { /* find 1st real filename */
+            setsval(lookup("FILENAME", symtab), getargv(i));
+            return;
+        }
+        setclvar(p);    /* a commandline assignment before filename */
+        argno++;
+    }
+    infile = stdin;     /* no filenames, so use stdin */
+}
+
+int getrec(char **pbuf, int *pbufsize, int isrecord)    /* get next input record */
+{           /* note: cares whether buf == record */
+    int c;
+    static int firsttime = 1;
+    char *buf = *pbuf;
+    int bufsize = *pbufsize;
+
+    if (firsttime) {
+        firsttime = 0;
+        initgetrec();
+    }
+       dprintf( ("RS=<%s>, FS=<%s>, ARGC=%g, FILENAME=%s\n",
+        *RS, *FS, *ARGC, *FILENAME) );
+    if (isrecord) {
+        donefld = 0;
+        donerec = 1;
+    }
+    buf[0] = 0;
+    while (argno < *ARGC || infile == stdin) {
+           dprintf( ("argno=%d, file=|%s|\n", argno, file) );
+        if (infile == NULL) {   /* have to open a new file */
+            file = getargv(argno);
+            if (*file == '\0') {    /* it's been zapped */
+                argno++;
+                continue;
+            }
+            if (isclvar(file)) {    /* a var=value arg */
+                setclvar(file);
+                argno++;
+                continue;
+            }
+            *FILENAME = file;
+               dprintf( ("opening file %s\n", file) );
+            if (*file == '-' && *(file+1) == '\0')
+                infile = stdin;
+            else if ((infile = fopen(file, "r")) == NULL)
+                FATAL("can't open file %s", file);
+            setfval(fnrloc, 0.0);
+        }
+        c = readrec(&buf, &bufsize, infile);
+        if (c != 0 || buf[0] != '\0') { /* normal record */
+            if (isrecord) {
+                if (freeable(fldtab[0]))
+                    xfree(fldtab[0]->sval);
+                fldtab[0]->sval = buf;  /* buf == record */
+                fldtab[0]->tval = REC | STR | DONTFREE;
+                if (is_number(fldtab[0]->sval)) {
+                    fldtab[0]->fval = atof(fldtab[0]->sval);
+                    fldtab[0]->tval |= NUM;
+                }
+            }
+            setfval(nrloc, nrloc->fval+1);
+            setfval(fnrloc, fnrloc->fval+1);
+            *pbuf = buf;
+            *pbufsize = bufsize;
+            return 1;
+        }
+        /* EOF arrived on this file; set up next */
+        if (infile != stdin)
+            fclose(infile);
+        infile = NULL;
+        argno++;
+    }
+    *pbuf = buf;
+    *pbufsize = bufsize;
+    return 0;   /* true end of file */
+}
+
+void nextfile(void)
+{
+    if (infile != stdin)
+        fclose(infile);
+    infile = NULL;
+    argno++;
+}
+
+int readrec(char **pbuf, int *pbufsize, FILE *inf)  /* read one record into buf */
+{
+    int sep, c;
+    char *rr, *buf = *pbuf;
+    int bufsize = *pbufsize;
+
+    if (strlen(*FS) >= sizeof(inputFS))
+        FATAL("field separator %.10s... is too long", *FS);
+    strcpy(inputFS, *FS);   /* for subsequent field splitting */
+    if ((sep = **RS) == 0) {
+        sep = '\n';
+        while ((c=getc(inf)) == '\n' && c != EOF)   /* skip leading \n's */
+            ;
+        if (c != EOF)
+            ungetc(c, inf);
+    }
+    for (rr = buf; ; ) {
+        for (; (c=getc(inf)) != sep && c != EOF; ) {
+            if (rr-buf+1 > bufsize)
+                if (!adjbuf(&buf, &bufsize, 1+rr-buf, recsize, &rr, "readrec 1"))
+                    FATAL("input record `%.30s...' too long", buf);
+            *rr++ = c;
+        }
+        if (**RS == sep || c == EOF)
+            break;
+        if ((c = getc(inf)) == '\n' || c == EOF) /* 2 in a row */
+            break;
+        if (!adjbuf(&buf, &bufsize, 2+rr-buf, recsize, &rr, "readrec 2"))
+            FATAL("input record `%.30s...' too long", buf);
+        *rr++ = '\n';
+        *rr++ = c;
+    }
+    if (!adjbuf(&buf, &bufsize, 1+rr-buf, recsize, &rr, "readrec 3"))
+        FATAL("input record `%.30s...' too long", buf);
+    *rr = 0;
+       dprintf( ("readrec saw <%s>, returns %d\n", buf, c == EOF && rr == buf ? 0 : 1) );
+    *pbuf = buf;
+    *pbufsize = bufsize;
+    return c == EOF && rr == buf ? 0 : 1;
+}
+
+char *getargv(int n)    /* get ARGV[n] */
+{
+    Cell *x;
+    char *s, temp[50];
+    extern Array *ARGVtab;
+
+    sprintf(temp, "%d", n);
+    x = setsymtab(temp, "", 0.0, STR, ARGVtab);
+    s = getsval(x);
+       dprintf( ("getargv(%d) returns |%s|\n", n, s) );
+    return s;
+}
+
+void setclvar(char *s)  /* set var=value from s */
+{
+    char *p;
+    Cell *q;
+
+    for (p=s; *p != '='; p++)
+        ;
+    *p++ = 0;
+    p = qstring(p, '\0');
+    q = setsymtab(s, p, 0.0, STR, symtab);
+    setsval(q, p);
+    if (is_number(q->sval)) {
+        q->fval = atof(q->sval);
+        q->tval |= NUM;
+    }
+       dprintf( ("command line set %s to |%s|\n", s, p) );
+}
+
+
+void fldbld(void)   /* create fields from current record */
+{
+    /* this relies on having fields[] the same length as $0 */
+    /* the fields are all stored in this one array with \0's */
+    char *r, *fr, sep;
+    Cell *p;
+    int i, j, n;
+
+    if (donefld)
+        return;
+    if (!isstr(fldtab[0]))
+        getsval(fldtab[0]);
+    r = fldtab[0]->sval;
+    n = strlen(r);
+    if (n > fieldssize) {
+        xfree(fields);
+        if ((fields = (char *) malloc(n+1)) == NULL)
+            FATAL("out of space for fields in fldbld %d", n);
+        fieldssize = n;
+    }
+    fr = fields;
+    i = 0;  /* number of fields accumulated here */
+    if (strlen(inputFS) > 1) {  /* it's a regular expression */
+        i = refldbld(r, inputFS);
+    } else if ((sep = *inputFS) == ' ') {   /* default whitespace */
+        for (i = 0; ; ) {
+            while (*r == ' ' || *r == '\t' || *r == '\n')
+                r++;
+            if (*r == 0)
+                break;
+            i++;
+            if (i > nfields)
+                growfldtab(i);
+            if (freeable(fldtab[i]))
+                xfree(fldtab[i]->sval);
+            fldtab[i]->sval = fr;
+            fldtab[i]->tval = FLD | STR | DONTFREE;
+            do
+                *fr++ = *r++;
+            while (*r != ' ' && *r != '\t' && *r != '\n' && *r != '\0');
+            *fr++ = 0;
+        }
+        *fr = 0;
+    } else if ((sep = *inputFS) == 0) {     /* new: FS="" => 1 char/field */
+        for (i = 0; *r != 0; r++) {
+            char buf[2];
+            i++;
+            if (i > nfields)
+                growfldtab(i);
+            if (freeable(fldtab[i]))
+                xfree(fldtab[i]->sval);
+            buf[0] = *r;
+            buf[1] = 0;
+            fldtab[i]->sval = tostring(buf);
+            fldtab[i]->tval = FLD | STR;
+        }
+        *fr = 0;
+    } else if (*r != 0) {   /* if 0, it's a null field */
+        for (;;) {
+            i++;
+            if (i > nfields)
+                growfldtab(i);
+            if (freeable(fldtab[i]))
+                xfree(fldtab[i]->sval);
+            fldtab[i]->sval = fr;
+            fldtab[i]->tval = FLD | STR | DONTFREE;
+            while (*r != sep && *r != '\n' && *r != '\0')   /* \n is always a separator */
+                *fr++ = *r++;
+            *fr++ = 0;
+            if (*r++ == 0)
+                break;
+        }
+        *fr = 0;
+    }
+    if (i > nfields)
+        FATAL("record `%.30s...' has too many fields; can't happen", r);
+    cleanfld(i+1, lastfld); /* clean out junk from previous record */
+    lastfld = i;
+    donefld = 1;
+    for (j = 1; j <= lastfld; j++) {
+        p = fldtab[j];
+        if(is_number(p->sval)) {
+            p->fval = atof(p->sval);
+            p->tval |= NUM;
+        }
+    }
+    setfval(nfloc, (Awkfloat) lastfld);
+    if (dbg) {
+        for (j = 0; j <= lastfld; j++) {
+            p = fldtab[j];
+            printf("field %d (%s): |%s|\n", j, p->nval, p->sval);
+        }
+    }
+}
+
+void cleanfld(int n1, int n2)   /* clean out fields n1 .. n2 inclusive */
+{               /* nvals remain intact */
+    Cell *p;
+    int i;
+
+    for (i = n1; i <= n2; i++) {
+        p = fldtab[i];
+        if (freeable(p))
+            xfree(p->sval);
+        p->sval = "";
+        p->tval = FLD | STR | DONTFREE;
+    }
+}
+
+void newfld(int n)  /* add field n after end of existing lastfld */
+{
+    if (n > nfields)
+        growfldtab(n);
+    cleanfld(lastfld+1, n);
+    lastfld = n;
+    setfval(nfloc, (Awkfloat) n);
+}
+
+Cell *fieldadr(int n)   /* get nth field */
+{
+    if (n < 0)
+        FATAL("trying to access field %d", n);
+    if (n > nfields)    /* fields after NF are empty */
+        growfldtab(n);  /* but does not increase NF */
+    return(fldtab[n]);
+}
+
+void growfldtab(int n)  /* make new fields up to at least $n */
+{
+    int nf = 2 * nfields;
+
+    if (n > nf)
+        nf = n;
+    fldtab = (Cell **) realloc(fldtab, (nf+1) * (sizeof (struct Cell *)));
+    if (fldtab == NULL)
+        FATAL("out of space creating %d fields", nf);
+    makefields(nfields+1, nf);
+    nfields = nf;
+}
+
+int refldbld(char *rec, char *fs)   /* build fields from reg expr in FS */
+{
+    /* this relies on having fields[] the same length as $0 */
+    /* the fields are all stored in this one array with \0's */
+    char *fr;
+    void *p;
+    int i, tempstat, n;
+
+    n = strlen(rec);
+    if (n > fieldssize) {
+        xfree(fields);
+        if ((fields = (char *) malloc(n+1)) == NULL)
+            FATAL("out of space for fields in refldbld %d", n);
+        fieldssize = n;
+    }
+    fr = fields;
+    *fr = '\0';
+    if (*rec == '\0')
+        return 0;
+    p = compre(fs);
+       dprintf( ("into refldbld, rec = <%s>, pat = <%s>\n", rec, fs) );
+    for (i = 1; ; i++) {
+        if (i > nfields)
+            growfldtab(i);
+        if (freeable(fldtab[i]))
+            xfree(fldtab[i]->sval);
+        fldtab[i]->tval = FLD | STR | DONTFREE;
+        fldtab[i]->sval = fr;
+           dprintf( ("refldbld: i=%d\n", i) );
+        if (nematch(p, rec, rec)) {
+               dprintf( ("match %s (%d chars)\n", patbeg, patlen) );
+            strncpy(fr, rec, patbeg-rec);
+            fr += patbeg - rec + 1;
+            *(fr-1) = '\0';
+            rec = patbeg + patlen;
+        } else {
+               dprintf( ("no match %s\n", rec) );
+            strcpy(fr, rec);
+            break;
+        }
+    }
+    return i;       
+}
+
+void recbld(void)   /* create $0 from $1..$NF if necessary */
+{
+    int i;
+    char *r, *p;
+
+    if (donerec == 1)
+        return;
+    r = record;
+    for (i = 1; i <= *NF; i++) {
+        p = getsval(fldtab[i]);
+        if (!adjbuf(&record, &recsize, 1+strlen(p)+r-record, recsize, &r, "recbld 1"))
+            FATAL("created $0 `%.30s...' too long", record);
+        while ((*r = *p++) != 0)
+            r++;
+        if (i < *NF) {
+            if (!adjbuf(&record, &recsize, 2+strlen(*OFS)+r-record, recsize, &r, "recbld 2"))
+                FATAL("created $0 `%.30s...' too long", record);
+            for (p = *OFS; (*r = *p++) != 0; )
+                r++;
+        }
+    }
+    if (!adjbuf(&record, &recsize, 2+r-record, recsize, &r, "recbld 3"))
+        FATAL("built giant record `%.30s...'", record);
+    *r = '\0';
+       dprintf( ("in recbld inputFS=%s, fldtab[0]=%p\n", inputFS, fldtab[0]) );
+
+    if (freeable(fldtab[0]))
+        xfree(fldtab[0]->sval);
+    fldtab[0]->tval = REC | STR | DONTFREE;
+    fldtab[0]->sval = record;
+
+       dprintf( ("in recbld inputFS=%s, fldtab[0]=%p\n", inputFS, fldtab[0]) );
+       dprintf( ("recbld = |%s|\n", record) );
+    donerec = 1;
+}
+
+int errorflag   = 0;
+
+void yyerror(char *s)
+{
+    SYNTAX(s);
+}
+
+void SYNTAX(char *fmt, ...)
+{
+    extern char *cmdname, *curfname;
+    static int been_here = 0;
+    va_list varg;
+
+    if (been_here++ > 2)
+        return;
+    fprintf(stderr, "%s: ", cmdname);
+    va_start(varg, fmt);
+    vfprintf(stderr, fmt, varg);
+    va_end(varg);
+    if(compile_time == 1 && cursource() != NULL)
+        fprintf(stderr, " at %s:%d", cursource(), lineno);
+    else
+        fprintf(stderr, " at line %d", lineno);
+    if (curfname != NULL)
+        fprintf(stderr, " in function %s", curfname);
+    fprintf(stderr, "\n");
+    errorflag = 2;
+    eprint();
+}
+
+void fpecatch(int n)
+{
+    FATAL("floating point exception %d", n);
+}
+
+extern int bracecnt, brackcnt, parencnt;
+
+void bracecheck(void)
+{
+    int c;
+    static int beenhere = 0;
+
+    if (beenhere++)
+        return;
+    while ((c = input()) != EOF && c != '\0')
+        bclass(c);
+    bcheck2(bracecnt, '{', '}');
+    bcheck2(brackcnt, '[', ']');
+    bcheck2(parencnt, '(', ')');
+}
+
+void bcheck2(int n, int c1, int c2)
+{
+    if (n == 1)
+        fprintf(stderr, "\tmissing %c\n", c2);
+    else if (n > 1)
+        fprintf(stderr, "\t%d missing %c's\n", n, c2);
+    else if (n == -1)
+        fprintf(stderr, "\textra %c\n", c2);
+    else if (n < -1)
+        fprintf(stderr, "\t%d extra %c's\n", -n, c2);
+}
+
+void FATAL(char *fmt, ...)
+{
+    extern char *cmdname;
+    va_list varg;
+
+    fflush(stdout);
+    fprintf(stderr, "%s: ", cmdname);
+    va_start(varg, fmt);
+    vfprintf(stderr, fmt, varg);
+    va_end(varg);
+    error();
+    if (dbg > 1)        /* core dump if serious debugging on */
+        abort();
+    exit(2);
+}
+
+void WARNING(char *fmt, ...)
+{
+    extern char *cmdname;
+    va_list varg;
+
+    fflush(stdout);
+    fprintf(stderr, "%s: ", cmdname);
+    va_start(varg, fmt);
+    vfprintf(stderr, fmt, varg);
+    va_end(varg);
+    error();
+}
+
+void error()
+{
+    extern Node *curnode;
+    int line;
+
+    fprintf(stderr, "\n");
+    if (compile_time != 2 && NR && *NR > 0) {
+        if (strcmp(*FILENAME, "-") != 0)
+            fprintf(stderr, " input record %s:%d", *FILENAME, (int) (*FNR));
+        else
+            fprintf(stderr, " input record number %d", (int) (*FNR));
+        fprintf(stderr, "\n");
+    }
+    if (compile_time != 2 && curnode)
+        line = curnode->lineno;
+    else if (compile_time != 2 && lineno)
+        line = lineno;
+    else
+        line = -1;
+    if (compile_time == 1 && cursource() != NULL){
+        if(line >= 0)
+            fprintf(stderr, " source %s:%d", cursource(), line);
+        else
+            fprintf(stderr, " source file %s", cursource());
+    }else if(line >= 0)
+        fprintf(stderr, " source line %d", line);
+    fprintf(stderr, "\n");
+    eprint();
+}
+
+void eprint(void)   /* try to print context around error */
+{
+    char *p, *q;
+    int c;
+    static int been_here = 0;
+    extern char ebuf[], *ep;
+
+    if (compile_time == 2 || compile_time == 0 || been_here++ > 0)
+        return;
+    p = ep - 1;
+    if (p > ebuf && *p == '\n')
+        p--;
+    for ( ; p > ebuf && *p != '\n' && *p != '\0'; p--)
+        ;
+    while (*p == '\n')
+        p++;
+    fprintf(stderr, " context is\n\t");
+    for (q=ep-1; q>=p && *q!=' ' && *q!='\t' && *q!='\n'; q--)
+        ;
+    for ( ; p < q; p++)
+        if (*p)
+            putc(*p, stderr);
+    fprintf(stderr, " >>> ");
+    for ( ; p < ep; p++)
+        if (*p)
+            putc(*p, stderr);
+    fprintf(stderr, " <<< ");
+    if (*ep)
+        while ((c = input()) != '\n' && c != '\0' && c != EOF) {
+            putc(c, stderr);
+            bclass(c);
+        }
+    putc('\n', stderr);
+    ep = ebuf;
+}
+
+void bclass(int c)
+{
+    switch (c) {
+    case '{': bracecnt++; break;
+    case '}': bracecnt--; break;
+    case '[': brackcnt++; break;
+    case ']': brackcnt--; break;
+    case '(': parencnt++; break;
+    case ')': parencnt--; break;
+    }
+}
+
+double errcheck(double x, char *s)
+{
+
+    if (errno == EDOM) {
+        errno = 0;
+        WARNING("%s argument out of domain", s);
+        x = 1;
+    } else if (errno == ERANGE) {
+        errno = 0;
+        WARNING("%s result out of range", s);
+        x = 1;
+    }
+    return x;
+}
+
+int isclvar(char *s)    /* is s of form var=something ? */
+{
+    char *os = s;
+
+    if (!isalpha(*s) && *s != '_')
+        return 0;
+    for ( ; *s; s++)
+        if (!(isalnum(*s) || *s == '_'))
+            break;
+    return *s == '=' && s > os && *(s+1) != '=';
+}
+
+/* strtod is supposed to be a proper test of what's a valid number */
+
+#include <math.h>
+int is_number(char *s)
+{
+    double r;
+    char *ep;
+
+    /*
+     * fast could-it-be-a-number check before calling strtod,
+     * which takes a surprisingly long time to reject non-numbers.
+     */
+    switch (*s) {
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+    case '\t':
+    case '\n':
+    case '\v':
+    case '\f':
+    case '\r':
+    case ' ':
+    case '-':
+    case '+':
+    case '.':
+    case 'n':       /* nans */
+    case 'N':
+    case 'i':       /* infs */
+    case 'I':
+        break;
+    default:
+        return 0;   /* can't be a number */
+    }
+
+    errno = 0;
+    r = strtod(s, &ep);
+    if (ep == s || r == HUGE_VAL || errno == ERANGE)
+        return 0;
+    while (*ep == ' ' || *ep == '\t' || *ep == '\n')
+        ep++;
+    if (*ep == '\0')
+        return 1;
+    else
+        return 0;
+}
+@
+
+\subsection{[[awk/maketab.c]]}
+
+<<awk/maketab.c>>=
+/****************************************************************
+Copyright (C) Lucent Technologies 1997
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name Lucent Technologies or any of
+its entities not be used in advertising or publicity pertaining
+to distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+****************************************************************/
+
+/*
+ * this program makes the table to link function names
+ * and type indices that is used by execute() in run.c.
+ * it finds the indices in y.tab.h, produced by yacc.
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "awk.h"
+#include "y.tab.h"
+
+struct xx
+{   int token;
+    char *name;
+    char *pname;
+} proc[] = {
+    { PROGRAM, "program", NULL },
+    { BOR, "boolop", " || " },
+    { AND, "boolop", " && " },
+    { NOT, "boolop", " !" },
+    { NE, "relop", " != " },
+    { EQ, "relop", " == " },
+    { LE, "relop", " <= " },
+    { LT, "relop", " < " },
+    { GE, "relop", " >= " },
+    { GT, "relop", " > " },
+    { ARRAY, "array", NULL },
+    { INDIRECT, "indirect", "$(" },
+    { SUBSTR, "substr", "substr" },
+    { SUB, "sub", "sub" },
+    { GSUB, "gsub", "gsub" },
+    { INDEX, "sindex", "sindex" },
+    { SPRINTF, "awksprintf", "sprintf " },
+    { ADD, "arith", " + " },
+    { MINUS, "arith", " - " },
+    { MULT, "arith", " * " },
+    { DIVIDE, "arith", " / " },
+    { MOD, "arith", " % " },
+    { UMINUS, "arith", " -" },
+    { POWER, "arith", " **" },
+    { PREINCR, "incrdecr", "++" },
+    { POSTINCR, "incrdecr", "++" },
+    { PREDECR, "incrdecr", "--" },
+    { POSTDECR, "incrdecr", "--" },
+    { CAT, "cat", " " },
+    { PASTAT, "pastat", NULL },
+    { PASTAT2, "dopa2", NULL },
+    { MATCH, "matchop", " ~ " },
+    { NOTMATCH, "matchop", " !~ " },
+    { MATCHFCN, "matchop", "matchop" },
+    { INTEST, "intest", "intest" },
+    { PRINTF, "awkprintf", "printf" },
+    { PRINT, "printstat", "print" },
+    { CLOSE, "closefile", "closefile" },
+    { DELETE, "awkdelete", "awkdelete" },
+    { SPLIT, "split", "split" },
+    { ASSIGN, "assign", " = " },
+    { ADDEQ, "assign", " += " },
+    { SUBEQ, "assign", " -= " },
+    { MULTEQ, "assign", " *= " },
+    { DIVEQ, "assign", " /= " },
+    { MODEQ, "assign", " %= " },
+    { POWEQ, "assign", " ^= " },
+    { CONDEXPR, "condexpr", " ?: " },
+    { IF, "ifstat", "if(" },
+    { WHILE, "whilestat", "while(" },
+    { FOR, "forstat", "for(" },
+    { DO, "dostat", "do" },
+    { IN, "instat", "instat" },
+    { NEXT, "jump", "next" },
+    { NEXTFILE, "jump", "nextfile" },
+    { EXIT, "jump", "exit" },
+    { BREAK, "jump", "break" },
+    { CONTINUE, "jump", "continue" },
+    { RETURN, "jump", "ret" },
+    { BLTIN, "bltin", "bltin" },
+    { CALL, "call", "call" },
+    { ARG, "arg", "arg" },
+    { VARNF, "getnf", "NF" },
+    { GETLINE, "getline", "getline" },
+    { 0, "", "" },
+};
+
+#define SIZE    (LASTTOKEN - FIRSTTOKEN + 1)
+char *table[SIZE];
+char *names[SIZE];
+
+int main(int argc, char *argv[])
+{
+    struct xx *p;
+    int i, n, tok;
+    char c;
+    FILE *fp;
+    char buf[200], name[200], def[200];
+
+    printf("#include <stdio.h>\n");
+    printf("#include \"awk.h\"\n");
+    printf("#include \"y.tab.h\"\n\n");
+    for (i = SIZE; --i >= 0; )
+        names[i] = "";
+
+    if ((fp = fopen("y.tab.h", "r")) == NULL) {
+        fprintf(stderr, "maketab can't open y.tab.h!\n");
+        exit(1);
+    }
+    printf("static char *printname[%d] = {\n", SIZE);
+    i = 0;
+    while (fgets(buf, sizeof buf, fp) != NULL) {
+        n = sscanf(buf, "%1c %s %s %d", &c, def, name, &tok);
+        if (c != '#' || (n != 4 && strcmp(def,"define") != 0))  /* not a valid #define */
+            continue;
+        if (tok < FIRSTTOKEN || tok > LASTTOKEN) {
+            fprintf(stderr, "maketab funny token %d %s\n", tok, buf);
+            exit(1);
+        }
+        names[tok-FIRSTTOKEN] = (char *) malloc(strlen(name)+1);
+        strcpy(names[tok-FIRSTTOKEN], name);
+        printf("\t(char *) \"%s\",\t/* %d */\n", name, tok);
+        i++;
+    }
+    printf("};\n\n");
+
+    for (p=proc; p->token!=0; p++)
+        table[p->token-FIRSTTOKEN] = p->name;
+    printf("\nCell *(*proctab[%d])(Node **, int) = {\n", SIZE);
+    for (i=0; i<SIZE; i++)
+        if (table[i]==0)
+            printf("\tnullproc,\t/* %s */\n", names[i]);
+        else
+            printf("\t%s,\t/* %s */\n", table[i], names[i]);
+    printf("};\n\n");
+
+    printf("char *tokname(int n)\n");   /* print a tokname() function */
+    printf("{\n");
+    printf("    static char buf[100];\n\n");
+    printf("    if (n < FIRSTTOKEN || n > LASTTOKEN) {\n");
+    printf("        sprintf(buf, \"token %%d\", n);\n");
+    printf("        return buf;\n");
+    printf("    }\n");
+    printf("    return printname[n-FIRSTTOKEN];\n");
+    printf("}\n");
+    return 0;
+}
+@
+
+\subsection{[[awk/parse.c]]}
+
+<<awk/parse.c>>=
+/****************************************************************
+Copyright (C) Lucent Technologies 1997
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name Lucent Technologies or any of
+its entities not be used in advertising or publicity pertaining
+to distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+****************************************************************/
+
+#define DEBUG
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "awk.h"
+#include "y.tab.h"
+
+Node *nodealloc(int n)
+{
+    Node *x;
+
+    x = (Node *) malloc(sizeof(Node) + (n-1)*sizeof(Node *));
+    if (x == NULL)
+        FATAL("out of space in nodealloc");
+    x->nnext = NULL;
+    x->lineno = lineno;
+    return(x);
+}
+
+Node *exptostat(Node *a)
+{
+    a->ntype = NSTAT;
+    return(a);
+}
+
+Node *node1(int a, Node *b)
+{
+    Node *x;
+
+    x = nodealloc(1);
+    x->nobj = a;
+    x->narg[0]=b;
+    return(x);
+}
+
+Node *node2(int a, Node *b, Node *c)
+{
+    Node *x;
+
+    x = nodealloc(2);
+    x->nobj = a;
+    x->narg[0] = b;
+    x->narg[1] = c;
+    return(x);
+}
+
+Node *node3(int a, Node *b, Node *c, Node *d)
+{
+    Node *x;
+
+    x = nodealloc(3);
+    x->nobj = a;
+    x->narg[0] = b;
+    x->narg[1] = c;
+    x->narg[2] = d;
+    return(x);
+}
+
+Node *node4(int a, Node *b, Node *c, Node *d, Node *e)
+{
+    Node *x;
+
+    x = nodealloc(4);
+    x->nobj = a;
+    x->narg[0] = b;
+    x->narg[1] = c;
+    x->narg[2] = d;
+    x->narg[3] = e;
+    return(x);
+}
+
+Node *stat1(int a, Node *b)
+{
+    Node *x;
+
+    x = node1(a,b);
+    x->ntype = NSTAT;
+    return(x);
+}
+
+Node *stat2(int a, Node *b, Node *c)
+{
+    Node *x;
+
+    x = node2(a,b,c);
+    x->ntype = NSTAT;
+    return(x);
+}
+
+Node *stat3(int a, Node *b, Node *c, Node *d)
+{
+    Node *x;
+
+    x = node3(a,b,c,d);
+    x->ntype = NSTAT;
+    return(x);
+}
+
+Node *stat4(int a, Node *b, Node *c, Node *d, Node *e)
+{
+    Node *x;
+
+    x = node4(a,b,c,d,e);
+    x->ntype = NSTAT;
+    return(x);
+}
+
+Node *op1(int a, Node *b)
+{
+    Node *x;
+
+    x = node1(a,b);
+    x->ntype = NEXPR;
+    return(x);
+}
+
+Node *op2(int a, Node *b, Node *c)
+{
+    Node *x;
+
+    x = node2(a,b,c);
+    x->ntype = NEXPR;
+    return(x);
+}
+
+Node *op3(int a, Node *b, Node *c, Node *d)
+{
+    Node *x;
+
+    x = node3(a,b,c,d);
+    x->ntype = NEXPR;
+    return(x);
+}
+
+Node *op4(int a, Node *b, Node *c, Node *d, Node *e)
+{
+    Node *x;
+
+    x = node4(a,b,c,d,e);
+    x->ntype = NEXPR;
+    return(x);
+}
+
+Node *celltonode(Cell *a, int b)
+{
+    Node *x;
+
+    a->ctype = OCELL;
+    a->csub = b;
+    x = node1(0, (Node *) a);
+    x->ntype = NVALUE;
+    return(x);
+}
+
+Node *rectonode(void)   /* make $0 into a Node */
+{
+    extern Cell *literal0;
+    return op1(INDIRECT, celltonode(literal0, CUNK));
+}
+
+Node *makearr(Node *p)
+{
+    Cell *cp;
+
+    if (isvalue(p)) {
+        cp = (Cell *) (p->narg[0]);
+        if (isfcn(cp))
+            SYNTAX( "%s is a function, not an array", cp->nval );
+        else if (!isarr(cp)) {
+            xfree(cp->sval);
+            cp->sval = (char *) makesymtab(NSYMTAB);
+            cp->tval = ARR;
+        }
+    }
+    return p;
+}
+
+#define PA2NUM  50  /* max number of pat,pat patterns allowed */
+int paircnt;        /* number of them in use */
+int pairstack[PA2NUM];  /* state of each pat,pat */
+
+Node *pa2stat(Node *a, Node *b, Node *c)    /* pat, pat {...} */
+{
+    Node *x;
+
+    x = node4(PASTAT2, a, b, c, itonp(paircnt));
+    if (paircnt++ >= PA2NUM)
+        SYNTAX( "limited to %d pat,pat statements", PA2NUM );
+    x->ntype = NSTAT;
+    return(x);
+}
+
+Node *linkum(Node *a, Node *b)
+{
+    Node *c;
+
+    if (errorflag)  /* don't link things that are wrong */
+        return a;
+    if (a == NULL)
+        return(b);
+    else if (b == NULL)
+        return(a);
+    for (c = a; c->nnext != NULL; c = c->nnext)
+        ;
+    c->nnext = b;
+    return(a);
+}
+
+void defn(Cell *v, Node *vl, Node *st)  /* turn on FCN bit in definition, */
+{                   /*   body of function, arglist */
+    Node *p;
+    int n;
+
+    if (isarr(v)) {
+        SYNTAX( "`%s' is an array name and a function name", v->nval );
+        return;
+    }
+    v->tval = FCN;
+    v->sval = (char *) st;
+    n = 0;  /* count arguments */
+    for (p = vl; p; p = p->nnext)
+        n++;
+    v->fval = n;
+    dprintf( ("defining func %s (%d args)\n", v->nval, n) );
+}
+
+int isarg(char *s)      /* is s in argument list for current function? */
+{           /* return -1 if not, otherwise arg # */
+    extern Node *arglist;
+    Node *p = arglist;
+    int n;
+
+    for (n = 0; p != 0; p = p->nnext, n++)
+        if (strcmp(((Cell *)(p->narg[0]))->nval, s) == 0)
+            return n;
+    return -1;
+}
+
+int ptoi(void *p)   /* convert pointer to integer */
+{
+    return (int) (long) p;  /* swearing that p fits, of course */
+}
+
+Node *itonp(int i)  /* and vice versa */
+{
+    return (Node *) (long) i;
+}
+@
+
+\subsection{[[awk/proto.h]]}
+
+<<awk/proto.h>>=
+/****************************************************************
+Copyright (C) Lucent Technologies 1997
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name Lucent Technologies or any of
+its entities not be used in advertising or publicity pertaining
+to distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+****************************************************************/
+
+extern  int yywrap(void);
+extern  void    setfname(Cell *);
+extern  int constnode(Node *);
+extern  char    *strnode(Node *);
+extern  Node    *notnull(Node *);
+extern  int yyparse(void);
+
+extern  int yylex(void);
+extern  void    startreg(void);
+extern  int input(void);
+extern  void    unput(int);
+extern  void    unputstr(char *);
+extern  int yylook(void);
+extern  int yyback(int *, int);
+extern  int yyinput(void);
+
+extern  void    *compre(char *);
+extern  int hexstr(char **);
+extern  void    quoted(char **, char **, char *);
+extern  int match(void *, char *, char *);
+extern  int pmatch(void *, char *, char *);
+extern  int nematch(void *, char *, char *);
+extern  int countposn(char *, int);
+extern  void    overflow(void);
+
+extern  int pgetc(void);
+extern  char    *cursource(void);
+
+extern  Node    *nodealloc(int);
+extern  Node    *exptostat(Node *);
+extern  Node    *node1(int, Node *);
+extern  Node    *node2(int, Node *, Node *);
+extern  Node    *node3(int, Node *, Node *, Node *);
+extern  Node    *node4(int, Node *, Node *, Node *, Node *);
+extern  Node    *stat3(int, Node *, Node *, Node *);
+extern  Node    *op2(int, Node *, Node *);
+extern  Node    *op1(int, Node *);
+extern  Node    *stat1(int, Node *);
+extern  Node    *op3(int, Node *, Node *, Node *);
+extern  Node    *op4(int, Node *, Node *, Node *, Node *);
+extern  Node    *stat2(int, Node *, Node *);
+extern  Node    *stat4(int, Node *, Node *, Node *, Node *);
+extern  Node    *celltonode(Cell *, int);
+extern  Node    *rectonode(void);
+extern  Node    *makearr(Node *);
+extern  Node    *pa2stat(Node *, Node *, Node *);
+extern  Node    *linkum(Node *, Node *);
+extern  void    defn(Cell *, Node *, Node *);
+extern  int isarg(char *);
+extern  char    *tokname(int);
+extern  Cell    *(*proctab[])(Node **, int);
+extern  int ptoi(void *);
+extern  Node    *itonp(int);
+
+extern  void    syminit(void);
+extern  void    arginit(int, char **);
+extern  void    envinit(char **);
+extern  Array   *makesymtab(int);
+extern  void    freesymtab(Cell *);
+extern  void    freeelem(Cell *, char *);
+extern  Cell    *setsymtab(char *, char *, double, unsigned int, Array *);
+extern  int hash(char *, int);
+extern  void    rehash(Array *);
+extern  Cell    *lookup(char *, Array *);
+extern  double  setfval(Cell *, double);
+extern  void    funnyvar(Cell *, char *);
+extern  char    *setsval(Cell *, char *);
+extern  double  getfval(Cell *);
+extern  char    *getsval(Cell *);
+extern  char    *tostring(char *);
+extern  char    *qstring(char *, int);
+
+extern  void    recinit(unsigned int);
+extern  void    initgetrec(void);
+extern  void    makefields(int, int);
+extern  void    growfldtab(int n);
+extern  int getrec(char **, int *, int);
+extern  void    nextfile(void);
+extern  int readrec(char **buf, int *bufsize, FILE *inf);
+extern  char    *getargv(int);
+extern  void    setclvar(char *);
+extern  void    fldbld(void);
+extern  void    cleanfld(int, int);
+extern  void    newfld(int);
+extern  int refldbld(char *, char *);
+extern  void    recbld(void);
+extern  Cell    *fieldadr(int);
+extern  void    yyerror(char *);
+extern  void    fpecatch(int);
+extern  void    bracecheck(void);
+extern  void    bcheck2(int, int, int);
+extern  void    SYNTAX(char *, ...);
+extern  void    FATAL(char *, ...);
+extern  void    WARNING(char *, ...);
+extern  void    error(void);
+extern  void    eprint(void);
+extern  void    bclass(int);
+extern  double  errcheck(double, char *);
+extern  int isclvar(char *);
+extern  int is_number(char *);
+
+extern  int adjbuf(char **pb, int *sz, int min, int q, char **pbp, char *what);
+extern  void    run(Node *);
+extern  Cell    *execute(Node *);
+extern  Cell    *program(Node **, int);
+extern  Cell    *call(Node **, int);
+extern  Cell    *copycell(Cell *);
+extern  Cell    *arg(Node **, int);
+extern  Cell    *jump(Node **, int);
+extern  Cell    *getline(Node **, int);
+extern  Cell    *getnf(Node **, int);
+extern  Cell    *array(Node **, int);
+extern  Cell    *awkdelete(Node **, int);
+extern  Cell    *intest(Node **, int);
+extern  Cell    *matchop(Node **, int);
+extern  Cell    *boolop(Node **, int);
+extern  Cell    *relop(Node **, int);
+extern  void    tfree(Cell *);
+extern  Cell    *gettemp(void);
+extern  Cell    *field(Node **, int);
+extern  Cell    *indirect(Node **, int);
+extern  Cell    *substr(Node **, int);
+extern  Cell    *sindex(Node **, int);
+extern  int format(char **, int *, char *, Node *);
+extern  Cell    *awksprintf(Node **, int);
+extern  Cell    *awkprintf(Node **, int);
+extern  Cell    *arith(Node **, int);
+extern  double  ipow(double, int);
+extern  Cell    *incrdecr(Node **, int);
+extern  Cell    *assign(Node **, int);
+extern  Cell    *cat(Node **, int);
+extern  Cell    *pastat(Node **, int);
+extern  Cell    *dopa2(Node **, int);
+extern  Cell    *split(Node **, int);
+extern  Cell    *condexpr(Node **, int);
+extern  Cell    *ifstat(Node **, int);
+extern  Cell    *whilestat(Node **, int);
+extern  Cell    *dostat(Node **, int);
+extern  Cell    *forstat(Node **, int);
+extern  Cell    *instat(Node **, int);
+extern  Cell    *bltin(Node **, int);
+extern  Cell    *printstat(Node **, int);
+extern  Cell    *nullproc(Node **, int);
+extern  FILE    *redirect(int, Node *);
+extern  FILE    *openfile(int, char *);
+extern  char    *filename(FILE *);
+extern  Cell    *closefile(Node **, int);
+extern  void    closeall(void);
+extern  Cell    *sub(Node **, int);
+extern  Cell    *gsub(Node **, int);
+
+extern  FILE    *popen(const char *, const char *);
+extern  int pclose(FILE *);
+@
+
+\subsection{[[awk/re.c]]}
+
+<<awk/re.c>>=
+/****************************************************************
+Copyright (C) Lucent Technologies 1997
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name Lucent Technologies or any of
+its entities not be used in advertising or publicity pertaining
+to distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+****************************************************************/
+
+
+#define DEBUG
+#include <stdio.h>
+#include <ctype.h>
+#include <setjmp.h>
+#include <math.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include "awk.h"
+#include "y.tab.h"
+#include "regexp.h"
+
+    /* This file provides the interface between the main body of
+     * awk and the pattern matching package.  It preprocesses
+     * patterns prior to compilation to provide awk-like semantics
+     * to character sequences not supported by the pattern package.
+     * The following conversions are performed:
+     *
+     *  "()"        ->  "[]"
+     *  "[-"        ->  "[\-"
+     *  "[^-"       ->  "[^\-"
+     *  "-]"        ->  "\-]"
+     *  "[]"        ->  "[]*"
+     *  "\xdddd"    ->  "\z" where 'z' is the UTF sequence
+     *                  for the hex value
+     *  "\ddd"      ->  "\o" where 'o' is a char octal value
+     *  "\b"        ->  "\B"    where 'B' is backspace
+     *  "\t"        ->  "\T"    where 'T' is tab
+     *  "\f"        ->  "\F"    where 'F' is form feed
+     *  "\n"        ->  "\N"    where 'N' is newline
+     *  "\r"        ->  "\r"    where 'C' is cr
+     */
+
+#define MAXRE   512
+
+static char re[MAXRE];  /* copy buffer */
+
+char    *patbeg;
+int patlen;         /* number of chars in pattern */
+
+#define NPATS   20      /* number of slots in pattern cache */
+
+static struct pat_list      /* dynamic pattern cache */
+{
+    char    *re;
+    int use;
+    Reprog  *program;
+} pattern[NPATS];
+
+static int npats;       /* cache fill level */
+
+    /* Compile a pattern */
+void
+*compre(char *pat)
+{
+    int i, j, inclass;
+    char c, *p, *s;
+    Reprog *program;
+
+    if (!compile_time) {    /* search cache for dynamic pattern */
+        for (i = 0; i < npats; i++)
+            if (!strcmp(pat, pattern[i].re)) {
+                pattern[i].use++;
+                return((void *) pattern[i].program);
+            }
+    }
+        /* Preprocess Pattern for compilation */
+    p = re;
+    s = pat;
+    inclass = 0;
+    while (c = *s++) {
+        if (c == '\\') {
+            quoted(&s, &p, re+MAXRE);
+            continue;
+        }
+        else if (!inclass && c == '(' && *s == ')') {
+            if (p < re+MAXRE-2) {   /* '()' -> '[]*' */
+                *p++ = '[';
+                *p++ = ']';
+                c = '*';
+                s++;
+            }
+            else overflow();
+        }
+        else if (c == '['){         /* '[-' -> '[\-' */
+            inclass = 1;
+            if (*s == '-') {
+                if (p < re+MAXRE-2) {
+                    *p++ = '[';
+                    *p++ = '\\';
+                    c = *s++;
+                }
+                else overflow();
+            }               /* '[^-' -> '[^\-'*/
+            else if (*s == '^' && s[1] == '-'){
+                if (p < re+MAXRE-3) {
+                    *p++ = '[';
+                    *p++ = *s++;
+                    *p++ = '\\';
+                    c = *s++;
+                }
+                else overflow();
+            }
+            else if (*s == '['){        /* skip '[[' */
+                if (p < re+MAXRE-1)
+                    *p++ = c;
+                else overflow();
+                c = *s++;
+            }
+            else if (*s == '^' && s[1] == '[') {    /* skip '[^['*/
+                if (p < re+MAXRE-2) {
+                    *p++ = c;
+                    *p++ = *s++;
+                    c = *s++;
+                }
+                else overflow();
+            }
+            else if (*s == ']') {       /* '[]' -> '[]*' */
+                if (p < re+MAXRE-2) {
+                    *p++ = c;
+                    *p++ = *s++;
+                    c = '*';
+                    inclass = 0;
+                }
+                else overflow();
+            }
+        }
+        else if (c == '-' && *s == ']') {   /* '-]' -> '\-]' */
+            if (p < re+MAXRE-1)
+                *p++ = '\\';
+            else overflow();
+        }
+        else if (c == ']')
+            inclass = 0;
+        if (p < re+MAXRE-1)
+            *p++ = c;
+        else overflow();
+    }
+    *p = 0;
+    program = regcomp(re);      /* compile pattern */
+    if (!compile_time) {
+        if (npats < NPATS)  /* Room in cache */
+            i = npats++;
+        else {          /* Throw out least used */
+            int use = pattern[0].use;
+            i = 0;
+            for (j = 1; j < NPATS; j++) {
+                if (pattern[j].use < use) {
+                    use = pattern[j].use;
+                    i = j;
+                }
+            }
+            xfree(pattern[i].program);
+            xfree(pattern[i].re);
+        }
+        pattern[i].re = tostring(pat);
+        pattern[i].program = program;
+        pattern[i].use = 1;
+    }
+    return((void *) program);
+}
+
+    /* T/F match indication - matched string not exported */
+int
+match(void *p, char *s, char *)
+{
+    return regexec((Reprog *) p, (char *) s, 0, 0);
+}
+
+    /* match and delimit the matched string */
+int
+pmatch(void *p, char *s, char *start)
+{
+    Resub m;
+
+    m.s.sp = start;
+    m.e.ep = 0;
+    if (regexec((Reprog *) p, (char *) s, &m, 1)) {
+        patbeg = m.s.sp;
+        patlen = m.e.ep-m.s.sp;
+        return 1;
+    }
+    patlen = -1;
+    patbeg = start;
+    return 0;
+}
+
+    /* perform a non-empty match */
+int
+nematch(void *p, char *s, char *start)
+{
+    if (pmatch(p, s, start) == 1 && patlen > 0)
+        return 1;
+    patlen = -1;
+    patbeg = start; 
+    return 0;
+}
+/* in the parsing of regular expressions, metacharacters like . have */
+/* to be seen literally;  \056 is not a metacharacter. */
+
+hexstr(char **pp)   /* find and eval hex string at pp, return new p */
+{
+    char c;
+    int n = 0;
+    int i;
+
+    for (i = 0, c = (*pp)[i]; i < 4 && isxdigit(c); i++, c = (*pp)[i]) {
+        if (isdigit(c))
+            n = 16 * n + c - '0';
+        else if ('a' <= c && c <= 'f')
+            n = 16 * n + c - 'a' + 10;
+        else if ('A' <= c && c <= 'F')
+            n = 16 * n + c - 'A' + 10;
+    }
+    *pp += i;
+    return n;
+}
+
+    /* look for awk-specific escape sequences */
+
+#define isoctdigit(c) ((c) >= '0' && (c) <= '7') /* multiple use of arg */
+
+void
+quoted(char **s, char **to, char *end)  /* handle escaped sequence */
+{
+    char *p = *s;
+    char *t = *to;
+    wchar_t c;
+
+    switch(c = *p++) {
+    case 't':
+        c = '\t';
+        break;
+    case 'n':
+        c = '\n';
+        break;
+    case 'f':
+        c = '\f';
+        break;
+    case 'r':
+        c = '\r';
+        break;
+    case 'b':
+        c = '\b';
+        break;
+    default:
+        if (t < end-1)      /* all else must be escaped */
+            *t++ = '\\';
+        if (c == 'x') {     /* hexadecimal goo follows */
+            c = hexstr(&p);
+            if (t < end-MB_CUR_MAX)
+                t += wctomb(t, c);
+            else overflow();
+            *to = t;
+            *s = p;
+            return;
+        } else if (isoctdigit(c)) { /* \d \dd \ddd */
+            c -= '0';
+            if (isoctdigit(*p)) {
+                c = 8 * c + *p++ - '0';
+                if (isoctdigit(*p))
+                    c = 8 * c + *p++ - '0';
+            }
+        }
+        break;
+    }
+    if (t < end-1)
+        *t++ = c;
+    *s = p;
+    *to = t;
+}
+    /* count rune positions */
+int
+countposn(char *s, int n)
+{
+    int i, j;
+    char *end;
+
+    for (i = 0, end = s+n; *s && s < end; i++){
+        j = mblen(s, n);
+        if(j <= 0)
+            j = 1;
+        s += j;
+    }
+    return(i);
+}
+
+    /* pattern package error handler */
+
+void
+regerror(char *s)
+{
+    FATAL("%s", s);
+}
+
+void
+overflow(void)
+{
+    FATAL("%s", "regular expression too big");
+}
+@
+
+\subsection{[[awk/run.c]]}
+
+<<awk/run.c>>=
+/****************************************************************
+Copyright (C) Lucent Technologies 1997
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name Lucent Technologies or any of
+its entities not be used in advertising or publicity pertaining
+to distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+****************************************************************/
+
+#define DEBUG
+#include <stdio.h>
+#include <ctype.h>
+#include <setjmp.h>
+#include <math.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <utf.h>
+#include "awk.h"
+#include "y.tab.h"
+
+#define tempfree(x) if (istemp(x)) tfree(x); else
+
+/*
+#undef tempfree
+
+void tempfree(Cell *p) {
+    if (p->ctype == OCELL && (p->csub < CUNK || p->csub > CFREE)) {
+        WARNING("bad csub %d in Cell %d %s",
+            p->csub, p->ctype, p->sval);
+    }
+    if (istemp(p))
+        tfree(p);
+}
+*/
+
+#ifdef _NFILE
+#ifndef FOPEN_MAX
+#define FOPEN_MAX _NFILE
+#endif
+#endif
+
+#ifndef FOPEN_MAX
+#define FOPEN_MAX   40  /* max number of open files */
+#endif
+
+#ifndef RAND_MAX
+#define RAND_MAX    32767   /* all that ansi guarantees */
+#endif
+
+jmp_buf env;
+extern  int pairstack[];
+
+Node    *winner = NULL; /* root of parse tree */
+Cell    *tmps;      /* free temporary cells for execution */
+
+static Cell truecell    ={ OBOOL, BTRUE, 0, 0, 1.0, NUM };
+Cell    *True   = &truecell;
+static Cell falsecell   ={ OBOOL, BFALSE, 0, 0, 0.0, NUM };
+Cell    *False  = &falsecell;
+static Cell breakcell   ={ OJUMP, JBREAK, 0, 0, 0.0, NUM };
+Cell    *jbreak = &breakcell;
+static Cell contcell    ={ OJUMP, JCONT, 0, 0, 0.0, NUM };
+Cell    *jcont  = &contcell;
+static Cell nextcell    ={ OJUMP, JNEXT, 0, 0, 0.0, NUM };
+Cell    *jnext  = &nextcell;
+static Cell nextfilecell    ={ OJUMP, JNEXTFILE, 0, 0, 0.0, NUM };
+Cell    *jnextfile  = &nextfilecell;
+static Cell exitcell    ={ OJUMP, JEXIT, 0, 0, 0.0, NUM };
+Cell    *jexit  = &exitcell;
+static Cell retcell     ={ OJUMP, JRET, 0, 0, 0.0, NUM };
+Cell    *jret   = &retcell;
+static Cell tempcell    ={ OCELL, CTEMP, 0, "", 0.0, NUM|STR|DONTFREE };
+
+Node    *curnode = NULL;    /* the node being executed, for debugging */
+
+/* buffer memory management */
+int adjbuf(char **pbuf, int *psiz, int minlen, int quantum, char **pbptr,
+    char *whatrtn)
+/* pbuf:    address of pointer to buffer being managed
+ * psiz:    address of buffer size variable
+ * minlen:  minimum length of buffer needed
+ * quantum: buffer size quantum
+ * pbptr:   address of movable pointer into buffer, or 0 if none
+ * whatrtn: name of the calling routine if failure should cause fatal error
+ *
+ * return   0 for realloc failure, !=0 for success
+ */
+{
+    if (minlen > *psiz) {
+        char *tbuf;
+        int rminlen = quantum ? minlen % quantum : 0;
+        int boff = pbptr ? *pbptr - *pbuf : 0;
+        /* round up to next multiple of quantum */
+        if (rminlen)
+            minlen += quantum - rminlen;
+        tbuf = (char *) realloc(*pbuf, minlen);
+        if (tbuf == NULL) {
+            if (whatrtn)
+                FATAL("out of memory in %s", whatrtn);
+            return 0;
+        }
+        *pbuf = tbuf;
+        *psiz = minlen;
+        if (pbptr)
+            *pbptr = tbuf + boff;
+    }
+    return 1;
+}
+
+void run(Node *a)   /* execution of parse tree starts here */
+{
+    extern void stdinit(void);
+
+    stdinit();
+    execute(a);
+    closeall();
+}
+
+Cell *execute(Node *u)  /* execute a node of the parse tree */
+{
+    int nobj;
+    Cell *(*proc)(Node **, int);
+    Cell *x;
+    Node *a;
+
+    if (u == NULL)
+        return(True);
+    for (a = u; ; a = a->nnext) {
+        curnode = a;
+        if (isvalue(a)) {
+            x = (Cell *) (a->narg[0]);
+            if (isfld(x) && !donefld)
+                fldbld();
+            else if (isrec(x) && !donerec)
+                recbld();
+            return(x);
+        }
+        nobj = a->nobj;
+        if (notlegal(nobj)) /* probably a Cell* but too risky to print */
+            FATAL("illegal statement");
+        proc = proctab[nobj-FIRSTTOKEN];
+        x = (*proc)(a->narg, nobj);
+        if (isfld(x) && !donefld)
+            fldbld();
+        else if (isrec(x) && !donerec)
+            recbld();
+        if (isexpr(a))
+            return(x);
+        if (isjump(x))
+            return(x);
+        if (a->nnext == NULL)
+            return(x);
+        tempfree(x);
+    }
+}
+
+
+Cell *program(Node **a, int n)  /* execute an awk program */
+{               /* a[0] = BEGIN, a[1] = body, a[2] = END */
+    Cell *x;
+
+    if (setjmp(env) != 0)
+        goto ex;
+    if (a[0]) {     /* BEGIN */
+        x = execute(a[0]);
+        if (isexit(x))
+            return(True);
+        if (isjump(x))
+            FATAL("illegal break, continue, next or nextfile from BEGIN");
+        tempfree(x);
+    }
+    if (a[1] || a[2])
+        while (getrec(&record, &recsize, 1) > 0) {
+            x = execute(a[1]);
+            if (isexit(x))
+                break;
+            tempfree(x);
+        }
+  ex:
+    if (setjmp(env) != 0)   /* handles exit within END */
+        goto ex1;
+    if (a[2]) {     /* END */
+        x = execute(a[2]);
+        if (isbreak(x) || isnext(x) || iscont(x))
+            FATAL("illegal break, continue, next or nextfile from END");
+        tempfree(x);
+    }
+  ex1:
+    return(True);
+}
+
+struct Frame {  /* stack frame for awk function calls */
+    int nargs;  /* number of arguments in this call */
+    Cell *fcncell;  /* pointer to Cell for function */
+    Cell **args;    /* pointer to array of arguments after execute */
+    Cell *retval;   /* return value */
+};
+
+#define NARGS   50  /* max args in a call */
+
+struct Frame *frame = NULL; /* base of stack frames; dynamically allocated */
+int nframe = 0;     /* number of frames allocated */
+struct Frame *fp = NULL;    /* frame pointer. bottom level unused */
+
+Cell *call(Node **a, int n) /* function call.  very kludgy and fragile */
+{
+    static Cell newcopycell = { OCELL, CCOPY, 0, "", 0.0, NUM|STR|DONTFREE };
+    int i, ncall, ndef;
+    Node *x;
+    Cell *args[NARGS], *oargs[NARGS];   /* BUG: fixed size arrays */
+    Cell *y, *z, *fcn;
+    char *s;
+
+    fcn = execute(a[0]);    /* the function itself */
+    s = fcn->nval;
+    if (!isfcn(fcn))
+        FATAL("calling undefined function %s", s);
+    if (frame == NULL) {
+        fp = frame = (struct Frame *) calloc(nframe += 100, sizeof(struct Frame));
+        if (frame == NULL)
+            FATAL("out of space for stack frames calling %s", s);
+    }
+    for (ncall = 0, x = a[1]; x != NULL; x = x->nnext)  /* args in call */
+        ncall++;
+    ndef = (int) fcn->fval;         /* args in defn */
+       dprintf( ("calling %s, %d args (%d in defn), fp=%d\n", s, ncall, ndef, (int) (fp-frame)) );
+    if (ncall > ndef)
+        WARNING("function %s called with %d args, uses only %d",
+            s, ncall, ndef);
+    if (ncall + ndef > NARGS)
+        FATAL("function %s has %d arguments, limit %d", s, ncall+ndef, NARGS);
+    for (i = 0, x = a[1]; x != NULL; i++, x = x->nnext) {   /* get call args */
+           dprintf( ("evaluate args[%d], fp=%d:\n", i, (int) (fp-frame)) );
+        y = execute(x);
+        oargs[i] = y;
+           dprintf( ("args[%d]: %s %f <%s>, t=%o\n",
+               i, y->nval, y->fval, isarr(y) ? "(array)" : y->sval, y->tval) );
+        if (isfcn(y))
+            FATAL("can't use function %s as argument in %s", y->nval, s);
+        if (isarr(y))
+            args[i] = y;    /* arrays by ref */
+        else
+            args[i] = copycell(y);
+        tempfree(y);
+    }
+    for ( ; i < ndef; i++) {    /* add null args for ones not provided */
+        args[i] = gettemp();
+        *args[i] = newcopycell;
+    }
+    fp++;   /* now ok to up frame */
+    if (fp >= frame + nframe) {
+        int dfp = fp - frame;   /* old index */
+        frame = (struct Frame *)
+            realloc((char *) frame, (nframe += 100) * sizeof(struct Frame));
+        if (frame == NULL)
+            FATAL("out of space for stack frames in %s", s);
+        fp = frame + dfp;
+    }
+    fp->fcncell = fcn;
+    fp->args = args;
+    fp->nargs = ndef;   /* number defined with (excess are locals) */
+    fp->retval = gettemp();
+
+       dprintf( ("start exec of %s, fp=%d\n", s, (int) (fp-frame)) );
+    y = execute((Node *)(fcn->sval));   /* execute body */
+       dprintf( ("finished exec of %s, fp=%d\n", s, (int) (fp-frame)) );
+
+    for (i = 0; i < ndef; i++) {
+        Cell *t = fp->args[i];
+        if (isarr(t)) {
+            if (t->csub == CCOPY) {
+                if (i >= ncall) {
+                    freesymtab(t);
+                    t->csub = CTEMP;
+                    tempfree(t);
+                } else {
+                    oargs[i]->tval = t->tval;
+                    oargs[i]->tval &= ~(STR|NUM|DONTFREE);
+                    oargs[i]->sval = t->sval;
+                    tempfree(t);
+                }
+            }
+        } else if (t != y) {    /* kludge to prevent freeing twice */
+            t->csub = CTEMP;
+            tempfree(t);
+        }
+    }
+    tempfree(fcn);
+    if (isexit(y) || isnext(y) || isnextfile(y))
+        return y;
+    tempfree(y);        /* this can free twice! */
+    z = fp->retval;         /* return value */
+       dprintf( ("%s returns %g |%s| %o\n", s, getfval(z), getsval(z), z->tval) );
+    fp--;
+    return(z);
+}
+
+Cell *copycell(Cell *x) /* make a copy of a cell in a temp */
+{
+    Cell *y;
+
+    y = gettemp();
+    y->csub = CCOPY;    /* prevents freeing until call is over */
+    y->nval = x->nval;  /* BUG? */
+    y->sval = x->sval ? tostring(x->sval) : NULL;
+    y->fval = x->fval;
+    y->tval = x->tval & ~(CON|FLD|REC|DONTFREE);    /* copy is not constant or field */
+                            /* is DONTFREE right? */
+    return y;
+}
+
+Cell *arg(Node **a, int n)  /* nth argument of a function */
+{
+
+    n = ptoi(a[0]); /* argument number, counting from 0 */
+       dprintf( ("arg(%d), fp->nargs=%d\n", n, fp->nargs) );
+    if (n+1 > fp->nargs)
+        FATAL("argument #%d of function %s was not supplied",
+            n+1, fp->fcncell->nval);
+    return fp->args[n];
+}
+
+Cell *jump(Node **a, int n) /* break, continue, next, nextfile, return */
+{
+    Cell *y;
+
+    switch (n) {
+    case EXIT:
+        if (a[0] != NULL) {
+            y = execute(a[0]);
+            errorflag = (int) getfval(y);
+            tempfree(y);
+        }
+        longjmp(env, 1);
+    case RETURN:
+        if (a[0] != NULL) {
+            y = execute(a[0]);
+            if ((y->tval & (STR|NUM)) == (STR|NUM)) {
+                setsval(fp->retval, getsval(y));
+                fp->retval->fval = getfval(y);
+                fp->retval->tval |= NUM;
+            }
+            else if (y->tval & STR)
+                setsval(fp->retval, getsval(y));
+            else if (y->tval & NUM)
+                setfval(fp->retval, getfval(y));
+            else        /* can't happen */
+                FATAL("bad type variable %d", y->tval);
+            tempfree(y);
+        }
+        return(jret);
+    case NEXT:
+        return(jnext);
+    case NEXTFILE:
+        nextfile();
+        return(jnextfile);
+    case BREAK:
+        return(jbreak);
+    case CONTINUE:
+        return(jcont);
+    default:    /* can't happen */
+        FATAL("illegal jump type %d", n);
+    }
+    return 0;   /* not reached */
+}
+
+Cell *getline(Node **a, int n)  /* get next line from specific input */
+{       /* a[0] is variable, a[1] is operator, a[2] is filename */
+    Cell *r, *x;
+    extern Cell **fldtab;
+    FILE *fp;
+    char *buf;
+    int bufsize = recsize;
+    int mode;
+
+    if ((buf = (char *) malloc(bufsize)) == NULL)
+        FATAL("out of memory in getline");
+
+    fflush(stdout); /* in case someone is waiting for a prompt */
+    r = gettemp();
+    if (a[1] != NULL) {     /* getline < file */
+        x = execute(a[2]);      /* filename */
+        mode = ptoi(a[1]);
+        if (mode == '|')        /* input pipe */
+            mode = LE;  /* arbitrary flag */
+        fp = openfile(mode, getsval(x));
+        tempfree(x);
+        if (fp == NULL)
+            n = -1;
+        else
+            n = readrec(&buf, &bufsize, fp);
+        if (n <= 0) {
+            ;
+        } else if (a[0] != NULL) {  /* getline var <file */
+            x = execute(a[0]);
+            setsval(x, buf);
+            tempfree(x);
+        } else {            /* getline <file */
+            setsval(fldtab[0], buf);
+            if (is_number(fldtab[0]->sval)) {
+                fldtab[0]->fval = atof(fldtab[0]->sval);
+                fldtab[0]->tval |= NUM;
+            }
+        }
+    } else {            /* bare getline; use current input */
+        if (a[0] == NULL)   /* getline */
+            n = getrec(&record, &recsize, 1);
+        else {          /* getline var */
+            n = getrec(&buf, &bufsize, 0);
+            x = execute(a[0]);
+            setsval(x, buf);
+            tempfree(x);
+        }
+    }
+    setfval(r, (Awkfloat) n);
+    free(buf);
+    return r;
+}
+
+Cell *getnf(Node **a, int n)    /* get NF */
+{
+    if (donefld == 0)
+        fldbld();
+    return (Cell *) a[0];
+}
+
+Cell *array(Node **a, int n)    /* a[0] is symtab, a[1] is list of subscripts */
+{
+    Cell *x, *y, *z;
+    char *s;
+    Node *np;
+    char *buf;
+    int bufsz = recsize;
+    int nsub = strlen(*SUBSEP);
+
+    if ((buf = (char *) malloc(bufsz)) == NULL)
+        FATAL("out of memory in array");
+
+    x = execute(a[0]);  /* Cell* for symbol table */
+    buf[0] = 0;
+    for (np = a[1]; np; np = np->nnext) {
+        y = execute(np);    /* subscript */
+        s = getsval(y);
+        if (!adjbuf(&buf, &bufsz, strlen(buf)+strlen(s)+nsub+1, recsize, 0, 0))
+            FATAL("out of memory for %s[%s...]", x->nval, buf);
+        strcat(buf, s);
+        if (np->nnext)
+            strcat(buf, *SUBSEP);
+        tempfree(y);
+    }
+    if (!isarr(x)) {
+           dprintf( ("making %s into an array\n", x->nval) );
+        if (freeable(x))
+            xfree(x->sval);
+        x->tval &= ~(STR|NUM|DONTFREE);
+        x->tval |= ARR;
+        x->sval = (char *) makesymtab(NSYMTAB);
+    }
+    z = setsymtab(buf, "", 0.0, STR|NUM, (Array *) x->sval);
+    z->ctype = OCELL;
+    z->csub = CVAR;
+    tempfree(x);
+    free(buf);
+    return(z);
+}
+
+Cell *awkdelete(Node **a, int n)    /* a[0] is symtab, a[1] is list of subscripts */
+{
+    Cell *x, *y;
+    Node *np;
+    char *s;
+    int nsub = strlen(*SUBSEP);
+
+    x = execute(a[0]);  /* Cell* for symbol table */
+    if (!isarr(x))
+        return True;
+    if (a[1] == 0) {    /* delete the elements, not the table */
+        freesymtab(x);
+        x->tval &= ~STR;
+        x->tval |= ARR;
+        x->sval = (char *) makesymtab(NSYMTAB);
+    } else {
+        int bufsz = recsize;
+        char *buf;
+        if ((buf = (char *) malloc(bufsz)) == NULL)
+            FATAL("out of memory in adelete");
+        buf[0] = 0;
+        for (np = a[1]; np; np = np->nnext) {
+            y = execute(np);    /* subscript */
+            s = getsval(y);
+            if (!adjbuf(&buf, &bufsz, strlen(buf)+strlen(s)+nsub+1, recsize, 0, 0))
+                FATAL("out of memory deleting %s[%s...]", x->nval, buf);
+            strcat(buf, s); 
+            if (np->nnext)
+                strcat(buf, *SUBSEP);
+            tempfree(y);
+        }
+        freeelem(x, buf);
+        free(buf);
+    }
+    tempfree(x);
+    return True;
+}
+
+Cell *intest(Node **a, int n)   /* a[0] is index (list), a[1] is symtab */
+{
+    Cell *x, *ap, *k;
+    Node *p;
+    char *buf;
+    char *s;
+    int bufsz = recsize;
+    int nsub = strlen(*SUBSEP);
+
+    ap = execute(a[1]); /* array name */
+    if (!isarr(ap)) {
+           dprintf( ("making %s into an array\n", ap->nval) );
+        if (freeable(ap))
+            xfree(ap->sval);
+        ap->tval &= ~(STR|NUM|DONTFREE);
+        ap->tval |= ARR;
+        ap->sval = (char *) makesymtab(NSYMTAB);
+    }
+    if ((buf = (char *) malloc(bufsz)) == NULL) {
+        FATAL("out of memory in intest");
+    }
+    buf[0] = 0;
+    for (p = a[0]; p; p = p->nnext) {
+        x = execute(p); /* expr */
+        s = getsval(x);
+        if (!adjbuf(&buf, &bufsz, strlen(buf)+strlen(s)+nsub+1, recsize, 0, 0))
+            FATAL("out of memory deleting %s[%s...]", x->nval, buf);
+        strcat(buf, s);
+        tempfree(x);
+        if (p->nnext)
+            strcat(buf, *SUBSEP);
+    }
+    k = lookup(buf, (Array *) ap->sval);
+    tempfree(ap);
+    free(buf);
+    if (k == NULL)
+        return(False);
+    else
+        return(True);
+}
+
+
+Cell *matchop(Node **a, int n)  /* ~ and match() */
+{
+    Cell *x, *y;
+    char *s, *t;
+    int i;
+    void *p;
+
+    x = execute(a[1]);  /* a[1] = target text */
+    s = getsval(x);
+    if (a[0] == 0)      /* a[1] == 0: already-compiled reg expr */
+        p = (void *) a[2];
+    else {
+        y = execute(a[2]);  /* a[2] = regular expr */
+        t = getsval(y);
+        p = compre(t);
+        tempfree(y);
+    }
+    if (n == MATCHFCN)
+        i = pmatch(p, s, s);
+    else
+        i = match(p, s, s);
+    tempfree(x);
+    if (n == MATCHFCN) {
+        int start = countposn(s, patbeg-s)+1;
+        if (patlen < 0)
+            start = 0;
+        setfval(rstartloc, (Awkfloat) start);
+        setfval(rlengthloc, (Awkfloat) countposn(patbeg, patlen));
+        x = gettemp();
+        x->tval = NUM;
+        x->fval = start;
+        return x;
+    } else if ((n == MATCH && i == 1) || (n == NOTMATCH && i == 0))
+        return(True);
+    else
+        return(False);
+}
+
+
+Cell *boolop(Node **a, int n)   /* a[0] || a[1], a[0] && a[1], !a[0] */
+{
+    Cell *x, *y;
+    int i;
+
+    x = execute(a[0]);
+    i = istrue(x);
+    tempfree(x);
+    switch (n) {
+    case BOR:
+        if (i) return(True);
+        y = execute(a[1]);
+        i = istrue(y);
+        tempfree(y);
+        if (i) return(True);
+        else return(False);
+    case AND:
+        if ( !i ) return(False);
+        y = execute(a[1]);
+        i = istrue(y);
+        tempfree(y);
+        if (i) return(True);
+        else return(False);
+    case NOT:
+        if (i) return(False);
+        else return(True);
+    default:    /* can't happen */
+        FATAL("unknown boolean operator %d", n);
+    }
+    return 0;   /*NOTREACHED*/
+}
+
+Cell *relop(Node **a, int n)    /* a[0 < a[1], etc. */
+{
+    int i;
+    Cell *x, *y;
+    Awkfloat j;
+
+    x = execute(a[0]);
+    y = execute(a[1]);
+    if (x->tval&NUM && y->tval&NUM) {
+        j = x->fval - y->fval;
+        i = j<0? -1: (j>0? 1: 0);
+    } else {
+        i = strcmp(getsval(x), getsval(y));
+    }
+    tempfree(x);
+    tempfree(y);
+    switch (n) {
+    case LT:    if (i<0) return(True);
+            else return(False);
+    case LE:    if (i<=0) return(True);
+            else return(False);
+    case NE:    if (i!=0) return(True);
+            else return(False);
+    case EQ:    if (i == 0) return(True);
+            else return(False);
+    case GE:    if (i>=0) return(True);
+            else return(False);
+    case GT:    if (i>0) return(True);
+            else return(False);
+    default:    /* can't happen */
+        FATAL("unknown relational operator %d", n);
+    }
+    return 0;   /*NOTREACHED*/
+}
+
+void tfree(Cell *a) /* free a tempcell */
+{
+    if (freeable(a)) {
+           dprintf( ("freeing %s %s %o\n", a->nval, a->sval, a->tval) );
+        xfree(a->sval);
+    }
+    if (a == tmps)
+        FATAL("tempcell list is curdled");
+    a->cnext = tmps;
+    tmps = a;
+}
+
+Cell *gettemp(void) /* get a tempcell */
+{   int i;
+    Cell *x;
+
+    if (!tmps) {
+        tmps = (Cell *) calloc(100, sizeof(Cell));
+        if (!tmps)
+            FATAL("out of space for temporaries");
+        for(i = 1; i < 100; i++)
+            tmps[i-1].cnext = &tmps[i];
+        tmps[i-1].cnext = 0;
+    }
+    x = tmps;
+    tmps = x->cnext;
+    *x = tempcell;
+    return(x);
+}
+
+Cell *indirect(Node **a, int n) /* $( a[0] ) */
+{
+    Cell *x;
+    int m;
+    char *s;
+
+    x = execute(a[0]);
+    m = (int) getfval(x);
+    if (m == 0 && !is_number(s = getsval(x)))   /* suspicion! */
+        FATAL("illegal field $(%s), name \"%s\"", s, x->nval);
+        /* BUG: can x->nval ever be null??? */
+    tempfree(x);
+    x = fieldadr(m);
+    x->ctype = OCELL;   /* BUG?  why are these needed? */
+    x->csub = CFLD;
+    return(x);
+}
+
+Cell *substr(Node **a, int nnn)     /* substr(a[0], a[1], a[2]) */
+{
+    int k, m, n;
+    char *s, *p;
+    int temp;
+    Cell *x, *y, *z = 0;
+
+    x = execute(a[0]);
+    y = execute(a[1]);
+    if (a[2] != 0)
+        z = execute(a[2]);
+    s = getsval(x);
+    k = countposn(s, strlen(s)) + 1;
+    if (k <= 1) {
+        tempfree(x);
+        tempfree(y);
+        if (a[2] != 0)
+            tempfree(z);
+        x = gettemp();
+        setsval(x, "");
+        return(x);
+    }
+    m = (int) getfval(y);
+    if (m <= 0)
+        m = 1;
+    else if (m > k)
+        m = k;
+    tempfree(y);
+    if (a[2] != 0) {
+        n = (int) getfval(z);
+        tempfree(z);
+    } else
+        n = k - 1;
+    if (n < 0)
+        n = 0;
+    else if (n > k - m)
+        n = k - m;
+       dprintf( ("substr: m=%d, n=%d, s=%s\n", m, n, s) );
+    y = gettemp();
+    while (*s && --m)
+         s += mblen(s, k);
+    for (p = s; *p && n--; p += mblen(p, k))
+            ;
+    temp = *p;  /* with thanks to John Linderman */
+    *p = '\0';
+    setsval(y, s);
+    *p = temp;
+    tempfree(x);
+    return(y);
+}
+
+Cell *sindex(Node **a, int nnn)     /* index(a[0], a[1]) */
+{
+    Cell *x, *y, *z;
+    char *s1, *s2, *p1, *p2, *q;
+    Awkfloat v = 0.0;
+
+    x = execute(a[0]);
+    s1 = getsval(x);
+    y = execute(a[1]);
+    s2 = getsval(y);
+
+    z = gettemp();
+    for (p1 = s1; *p1 != '\0'; p1++) {
+        for (q=p1, p2=s2; *p2 != '\0' && *q == *p2; q++, p2++)
+            ;
+        if (*p2 == '\0') {
+            v = (Awkfloat) countposn(s1, p1-s1) + 1;    /* origin 1 */
+            break;
+        }
+    }
+    tempfree(x);
+    tempfree(y);
+    setfval(z, v);
+    return(z);
+}
+
+#define MAXNUMSIZE  50
+
+int format(char **pbuf, int *pbufsize, char *s, Node *a)    /* printf-like conversions */
+{
+    char *fmt;
+    char *p, *t, *os;
+    Cell *x;
+    int flag = 0, n;
+    int fmtwd; /* format width */
+    int fmtsz = recsize;
+    char *buf = *pbuf;
+    int bufsize = *pbufsize;
+
+    os = s;
+    p = buf;
+    if ((fmt = (char *) malloc(fmtsz)) == NULL)
+        FATAL("out of memory in format()");
+    while (*s) {
+        adjbuf(&buf, &bufsize, MAXNUMSIZE+1+p-buf, recsize, &p, "format");
+        if (*s != '%') {
+            *p++ = *s++;
+            continue;
+        }
+        if (*(s+1) == '%') {
+            *p++ = '%';
+            s += 2;
+            continue;
+        }
+        /* have to be real careful in case this is a huge number, eg, %100000d */
+        fmtwd = atoi(s+1);
+        if (fmtwd < 0)
+            fmtwd = -fmtwd;
+        adjbuf(&buf, &bufsize, fmtwd+1+p-buf, recsize, &p, "format");
+        for (t = fmt; (*t++ = *s) != '\0'; s++) {
+            if (!adjbuf(&fmt, &fmtsz, MAXNUMSIZE+1+t-fmt, recsize, &t, 0))
+                FATAL("format item %.30s... ran format() out of memory", os);
+            if (isalpha(*s) && *s != 'l' && *s != 'h' && *s != 'L')
+                break;  /* the ansi panoply */
+            if (*s == '*') {
+                x = execute(a);
+                a = a->nnext;
+                sprintf(t-1, "%d", fmtwd=(int) getfval(x));
+                if (fmtwd < 0)
+                    fmtwd = -fmtwd;
+                adjbuf(&buf, &bufsize, fmtwd+1+p-buf, recsize, &p, "format");
+                t = fmt + strlen(fmt);
+                tempfree(x);
+            }
+        }
+        *t = '\0';
+        if (fmtwd < 0)
+            fmtwd = -fmtwd;
+        adjbuf(&buf, &bufsize, fmtwd+1+p-buf, recsize, &p, "format");
+
+        switch (*s) {
+        case 'f': case 'e': case 'g': case 'E': case 'G':
+            flag = 1;
+            break;
+        case 'd': case 'i':
+            flag = 2;
+            if(*(s-1) == 'l') break;
+            *(t-1) = 'l';
+            *t = 'd';
+            *++t = '\0';
+            break;
+        case 'o': case 'x': case 'X': case 'u':
+            flag = *(s-1) == 'l' ? 2 : 3;
+            break;
+        case 's':
+            flag = 4;
+            break;
+        case 'c':
+            flag = 5;
+            break;
+        default:
+            WARNING("weird printf conversion %s", fmt);
+            flag = 0;
+            break;
+        }
+        if (a == NULL)
+            FATAL("not enough args in printf(%s)", os);
+        x = execute(a);
+        a = a->nnext;
+        n = MAXNUMSIZE;
+        if (fmtwd > n)
+            n = fmtwd;
+        adjbuf(&buf, &bufsize, 1+n+p-buf, recsize, &p, "format");
+        switch (flag) {
+        case 0: sprintf(p, "%s", fmt);  /* unknown, so dump it too */
+            t = getsval(x);
+            n = strlen(t);
+            if (fmtwd > n)
+                n = fmtwd;
+            adjbuf(&buf, &bufsize, 1+strlen(p)+n+p-buf, recsize, &p, "format");
+            p += strlen(p);
+            sprintf(p, "%s", t);
+            break;
+        case 1: sprintf(p, fmt, getfval(x)); break;
+        case 2: sprintf(p, fmt, (long) getfval(x)); break;
+        case 3: sprintf(p, fmt, (int) getfval(x)); break;
+        case 4:
+            t = getsval(x);
+            n = strlen(t);
+            if (fmtwd > n)
+                n = fmtwd;
+            if (!adjbuf(&buf, &bufsize, 1+n+p-buf, recsize, &p, 0))
+                FATAL("huge string/format (%d chars) in printf %.30s... ran format() out of memory", n, t);
+            sprintf(p, fmt, t);
+            break;
+        case 5:
+            if (isnum(x)) {
+                if (getfval(x))
+                    sprintf(p, fmt, (int) getfval(x));
+                else{
+                    *p++ = '\0';
+                    *p = '\0';
+                }
+            } else
+                sprintf(p, fmt, getsval(x)[0]);
+            break;
+        }
+        tempfree(x);
+        p += strlen(p);
+        s++;
+    }
+    *p = '\0';
+    free(fmt);
+    for ( ; a; a = a->nnext)        /* evaluate any remaining args */
+        execute(a);
+    *pbuf = buf;
+    *pbufsize = bufsize;
+    return p - buf;
+}
+
+Cell *awksprintf(Node **a, int n)       /* sprintf(a[0]) */
+{
+    Cell *x;
+    Node *y;
+    char *buf;
+    int bufsz=3*recsize;
+
+    if ((buf = (char *) malloc(bufsz)) == NULL)
+        FATAL("out of memory in awksprintf");
+    y = a[0]->nnext;
+    x = execute(a[0]);
+    if (format(&buf, &bufsz, getsval(x), y) == -1)
+        FATAL("sprintf string %.30s... too long.  can't happen.", buf);
+    tempfree(x);
+    x = gettemp();
+    x->sval = buf;
+    x->tval = STR;
+    return(x);
+}
+
+Cell *awkprintf(Node **a, int n)        /* printf */
+{   /* a[0] is list of args, starting with format string */
+    /* a[1] is redirection operator, a[2] is redirection file */
+    FILE *fp;
+    Cell *x;
+    Node *y;
+    char *buf;
+    int len;
+    int bufsz=3*recsize;
+
+    if ((buf = (char *) malloc(bufsz)) == NULL)
+        FATAL("out of memory in awkprintf");
+    y = a[0]->nnext;
+    x = execute(a[0]);
+    if ((len = format(&buf, &bufsz, getsval(x), y)) == -1)
+        FATAL("printf string %.30s... too long.  can't happen.", buf);
+    tempfree(x);
+    if (a[1] == NULL) {
+        /* fputs(buf, stdout); */
+        fwrite(buf, len, 1, stdout);
+        if (ferror(stdout))
+            FATAL("write error on stdout");
+    } else {
+        fp = redirect(ptoi(a[1]), a[2]);
+        /* fputs(buf, fp); */
+        fwrite(buf, len, 1, fp);
+        fflush(fp);
+        if (ferror(fp))
+            FATAL("write error on %s", filename(fp));
+    }
+    free(buf);
+    return(True);
+}
+
+Cell *arith(Node **a, int n)    /* a[0] + a[1], etc.  also -a[0] */
+{
+    Awkfloat i, j = 0;
+    double v;
+    Cell *x, *y, *z;
+
+    x = execute(a[0]);
+    i = getfval(x);
+    tempfree(x);
+    if (n != UMINUS) {
+        y = execute(a[1]);
+        j = getfval(y);
+        tempfree(y);
+    }
+    z = gettemp();
+    switch (n) {
+    case ADD:
+        i += j;
+        break;
+    case MINUS:
+        i -= j;
+        break;
+    case MULT:
+        i *= j;
+        break;
+    case DIVIDE:
+        if (j == 0)
+            FATAL("division by zero");
+        i /= j;
+        break;
+    case MOD:
+        if (j == 0)
+            FATAL("division by zero in mod");
+        modf(i/j, &v);
+        i = i - j * v;
+        break;
+    case UMINUS:
+        i = -i;
+        break;
+    case POWER:
+        if (j >= 0 && modf(j, &v) == 0.0)   /* pos integer exponent */
+            i = ipow(i, (int) j);
+        else
+            i = errcheck(pow(i, j), "pow");
+        break;
+    default:    /* can't happen */
+        FATAL("illegal arithmetic operator %d", n);
+    }
+    setfval(z, i);
+    return(z);
+}
+
+double ipow(double x, int n)    /* x**n.  ought to be done by pow, but isn't always */
+{
+    double v;
+
+    if (n <= 0)
+        return 1;
+    v = ipow(x, n/2);
+    if (n % 2 == 0)
+        return v * v;
+    else
+        return x * v * v;
+}
+
+Cell *incrdecr(Node **a, int n)     /* a[0]++, etc. */
+{
+    Cell *x, *z;
+    int k;
+    Awkfloat xf;
+
+    x = execute(a[0]);
+    xf = getfval(x);
+    k = (n == PREINCR || n == POSTINCR) ? 1 : -1;
+    if (n == PREINCR || n == PREDECR) {
+        setfval(x, xf + k);
+        return(x);
+    }
+    z = gettemp();
+    setfval(z, xf);
+    setfval(x, xf + k);
+    tempfree(x);
+    return(z);
+}
+
+Cell *assign(Node **a, int n)   /* a[0] = a[1], a[0] += a[1], etc. */
+{       /* this is subtle; don't muck with it. */
+    Cell *x, *y;
+    Awkfloat xf, yf;
+    double v;
+
+    y = execute(a[1]);
+    x = execute(a[0]);
+    if (n == ASSIGN) {  /* ordinary assignment */
+        if (x == y && !(x->tval & (FLD|REC)))   /* self-assignment: */
+            ;       /* leave alone unless it's a field */
+        else if ((y->tval & (STR|NUM)) == (STR|NUM)) {
+            setsval(x, getsval(y));
+            x->fval = getfval(y);
+            x->tval |= NUM;
+        }
+        else if (isstr(y))
+            setsval(x, getsval(y));
+        else if (isnum(y))
+            setfval(x, getfval(y));
+        else
+            funnyvar(y, "read value of");
+        tempfree(y);
+        return(x);
+    }
+    xf = getfval(x);
+    yf = getfval(y);
+    switch (n) {
+    case ADDEQ:
+        xf += yf;
+        break;
+    case SUBEQ:
+        xf -= yf;
+        break;
+    case MULTEQ:
+        xf *= yf;
+        break;
+    case DIVEQ:
+        if (yf == 0)
+            FATAL("division by zero in /=");
+        xf /= yf;
+        break;
+    case MODEQ:
+        if (yf == 0)
+            FATAL("division by zero in %%=");
+        modf(xf/yf, &v);
+        xf = xf - yf * v;
+        break;
+    case POWEQ:
+        if (yf >= 0 && modf(yf, &v) == 0.0) /* pos integer exponent */
+            xf = ipow(xf, (int) yf);
+        else
+            xf = errcheck(pow(xf, yf), "pow");
+        break;
+    default:
+        FATAL("illegal assignment operator %d", n);
+        break;
+    }
+    tempfree(y);
+    setfval(x, xf);
+    return(x);
+}
+
+Cell *cat(Node **a, int q)  /* a[0] cat a[1] */
+{
+    Cell *x, *y, *z;
+    int n1, n2;
+    char *s;
+
+    x = execute(a[0]);
+    y = execute(a[1]);
+    getsval(x);
+    getsval(y);
+    n1 = strlen(x->sval);
+    n2 = strlen(y->sval);
+    s = (char *) malloc(n1 + n2 + 1);
+    if (s == NULL)
+        FATAL("out of space concatenating %.15s... and %.15s...",
+            x->sval, y->sval);
+    strcpy(s, x->sval);
+    strcpy(s+n1, y->sval);
+    tempfree(y);
+    z = gettemp();
+    z->sval = s;
+    z->tval = STR;
+    tempfree(x);
+    return(z);
+}
+
+Cell *pastat(Node **a, int n)   /* a[0] { a[1] } */
+{
+    Cell *x;
+
+    if (a[0] == 0)
+        x = execute(a[1]);
+    else {
+        x = execute(a[0]);
+        if (istrue(x)) {
+            tempfree(x);
+            x = execute(a[1]);
+        }
+    }
+    return x;
+}
+
+Cell *dopa2(Node **a, int n)    /* a[0], a[1] { a[2] } */
+{
+    Cell *x;
+    int pair;
+
+    pair = ptoi(a[3]);
+    if (pairstack[pair] == 0) {
+        x = execute(a[0]);
+        if (istrue(x))
+            pairstack[pair] = 1;
+        tempfree(x);
+    }
+    if (pairstack[pair] == 1) {
+        x = execute(a[1]);
+        if (istrue(x))
+            pairstack[pair] = 0;
+        tempfree(x);
+        x = execute(a[2]);
+        return(x);
+    }
+    return(False);
+}
+
+Cell *split(Node **a, int nnn)  /* split(a[0], a[1], a[2]); a[3] is type */
+{
+    Cell *x = 0, *y, *ap;
+    char *s, *t, *fs = 0;
+    char temp, num[50];
+    int n, nb, sep, tempstat, arg3type;
+
+    y = execute(a[0]);  /* source string */
+    s = getsval(y);
+    arg3type = ptoi(a[3]);
+    if (a[2] == 0)      /* fs string */
+        fs = *FS;
+    else if (arg3type == STRING) {  /* split(str,arr,"string") */
+        x = execute(a[2]);
+        fs = getsval(x);
+    } else if (arg3type == REGEXPR)
+        fs = "(regexpr)";   /* split(str,arr,/regexpr/) */
+    else
+        FATAL("illegal type of split");
+    sep = *fs;
+    ap = execute(a[1]); /* array name */
+    freesymtab(ap);
+       dprintf( ("split: s=|%s|, a=%s, sep=|%s|\n", s, ap->nval, fs) );
+    ap->tval &= ~STR;
+    ap->tval |= ARR;
+    ap->sval = (char *) makesymtab(NSYMTAB);
+
+    n = 0;
+    if ((*s != '\0' && strlen(fs) > 1) || arg3type == REGEXPR) {    /* reg expr */
+        void *p;
+        if (arg3type == REGEXPR) {  /* it's ready already */
+            p = (void *) a[2];
+        } else {
+            p = compre(fs);
+        }
+        t = s;
+        if (nematch(p,s,t)) {
+            do {
+                n++;
+                sprintf(num, "%d", n);
+                temp = *patbeg;
+                *patbeg = '\0';
+                if (is_number(t))
+                    setsymtab(num, t, atof(t), STR|NUM, (Array *) ap->sval);
+                else
+                    setsymtab(num, t, 0.0, STR, (Array *) ap->sval);
+                *patbeg = temp;
+                t = patbeg + patlen;
+                if (t[-1] == 0 || *t == 0) {
+                    n++;
+                    sprintf(num, "%d", n);
+                    setsymtab(num, "", 0.0, STR, (Array *) ap->sval);
+                    goto spdone;
+                }
+            } while (nematch(p,s,t));
+        }
+        n++;
+        sprintf(num, "%d", n);
+        if (is_number(t))
+            setsymtab(num, t, atof(t), STR|NUM, (Array *) ap->sval);
+        else
+            setsymtab(num, t, 0.0, STR, (Array *) ap->sval);
+  spdone:
+        p = NULL;
+    } else if (sep == ' ') {
+        for (n = 0; ; ) {
+            while (*s == ' ' || *s == '\t' || *s == '\n')
+                s++;
+            if (*s == 0)
+                break;
+            n++;
+            t = s;
+            do
+                s++;
+            while (*s!=' ' && *s!='\t' && *s!='\n' && *s!='\0');
+            temp = *s;
+            *s = '\0';
+            sprintf(num, "%d", n);
+            if (is_number(t))
+                setsymtab(num, t, atof(t), STR|NUM, (Array *) ap->sval);
+            else
+                setsymtab(num, t, 0.0, STR, (Array *) ap->sval);
+            *s = temp;
+            if (*s != 0)
+                s++;
+        }
+    } else if (sep == 0) {  /* new: split(s, a, "") => 1 char/elem */
+        for (n = 0; *s != 0; s += nb) {
+            Rune r;
+            char buf[UTFmax+1];
+
+            n++;
+            snprintf(num, sizeof num, "%d", n);
+            nb = chartorune(&r, s);
+            memmove(buf, s, nb);
+            buf[nb] = '\0';
+            if (isdigit(buf[0]))
+                setsymtab(num, buf, atof(buf), STR|NUM, (Array *) ap->sval);
+            else
+                setsymtab(num, buf, 0.0, STR, (Array *) ap->sval);
+        }
+    } else if (*s != 0) {
+        for (;;) {
+            n++;
+            t = s;
+            while (*s != sep && *s != '\n' && *s != '\0')
+                s++;
+            temp = *s;
+            *s = '\0';
+            sprintf(num, "%d", n);
+            if (is_number(t))
+                setsymtab(num, t, atof(t), STR|NUM, (Array *) ap->sval);
+            else
+                setsymtab(num, t, 0.0, STR, (Array *) ap->sval);
+            *s = temp;
+            if (*s++ == 0)
+                break;
+        }
+    }
+    tempfree(ap);
+    tempfree(y);
+    if (a[2] != 0 && arg3type == STRING)
+        tempfree(x);
+    x = gettemp();
+    x->tval = NUM;
+    x->fval = n;
+    return(x);
+}
+
+Cell *condexpr(Node **a, int n) /* a[0] ? a[1] : a[2] */
+{
+    Cell *x;
+
+    x = execute(a[0]);
+    if (istrue(x)) {
+        tempfree(x);
+        x = execute(a[1]);
+    } else {
+        tempfree(x);
+        x = execute(a[2]);
+    }
+    return(x);
+}
+
+Cell *ifstat(Node **a, int n)   /* if (a[0]) a[1]; else a[2] */
+{
+    Cell *x;
+
+    x = execute(a[0]);
+    if (istrue(x)) {
+        tempfree(x);
+        x = execute(a[1]);
+    } else if (a[2] != 0) {
+        tempfree(x);
+        x = execute(a[2]);
+    }
+    return(x);
+}
+
+Cell *whilestat(Node **a, int n)    /* while (a[0]) a[1] */
+{
+    Cell *x;
+
+    for (;;) {
+        x = execute(a[0]);
+        if (!istrue(x))
+            return(x);
+        tempfree(x);
+        x = execute(a[1]);
+        if (isbreak(x)) {
+            x = True;
+            return(x);
+        }
+        if (isnext(x) || isexit(x) || isret(x))
+            return(x);
+        tempfree(x);
+    }
+}
+
+Cell *dostat(Node **a, int n)   /* do a[0]; while(a[1]) */
+{
+    Cell *x;
+
+    for (;;) {
+        x = execute(a[0]);
+        if (isbreak(x))
+            return True;
+        if (isnext(x) || isnextfile(x) || isexit(x) || isret(x))
+            return(x);
+        tempfree(x);
+        x = execute(a[1]);
+        if (!istrue(x))
+            return(x);
+        tempfree(x);
+    }
+}
+
+Cell *forstat(Node **a, int n)  /* for (a[0]; a[1]; a[2]) a[3] */
+{
+    Cell *x;
+
+    x = execute(a[0]);
+    tempfree(x);
+    for (;;) {
+        if (a[1]!=0) {
+            x = execute(a[1]);
+            if (!istrue(x)) return(x);
+            else tempfree(x);
+        }
+        x = execute(a[3]);
+        if (isbreak(x))     /* turn off break */
+            return True;
+        if (isnext(x) || isexit(x) || isret(x))
+            return(x);
+        tempfree(x);
+        x = execute(a[2]);
+        tempfree(x);
+    }
+}
+
+Cell *instat(Node **a, int n)   /* for (a[0] in a[1]) a[2] */
+{
+    Cell *x, *vp, *arrayp, *cp, *ncp;
+    Array *tp;
+    int i;
+
+    vp = execute(a[0]);
+    arrayp = execute(a[1]);
+    if (!isarr(arrayp)) {
+        return True;
+    }
+    tp = (Array *) arrayp->sval;
+    tempfree(arrayp);
+    for (i = 0; i < tp->size; i++) {    /* this routine knows too much */
+        for (cp = tp->tab[i]; cp != NULL; cp = ncp) {
+            setsval(vp, cp->nval);
+            ncp = cp->cnext;
+            x = execute(a[2]);
+            if (isbreak(x)) {
+                tempfree(vp);
+                return True;
+            }
+            if (isnext(x) || isexit(x) || isret(x)) {
+                tempfree(vp);
+                return(x);
+            }
+            tempfree(x);
+        }
+    }
+    return True;
+}
+
+Cell *bltin(Node **a, int n)    /* builtin functions. a[0] is type, a[1] is arg list */
+{
+    Cell *x, *y;
+    Awkfloat u;
+    int t;
+    wchar_t wc;
+    char *p, *buf;
+    char mbc[50];
+    Node *nextarg;
+    FILE *fp;
+    void flush_all(void);
+
+    t = ptoi(a[0]);
+    x = execute(a[1]);
+    nextarg = a[1]->nnext;
+    switch (t) {
+    case FLENGTH:
+        if (isarr(x))
+            u = ((Array *) x->sval)->nelem; /* GROT. should be function*/
+        else {
+            p = getsval(x);
+            u = (Awkfloat) countposn(p, strlen(p));
+        }
+        break;
+    case FLOG:
+        u = errcheck(log(getfval(x)), "log"); break;
+    case FINT:
+        modf(getfval(x), &u); break;
+    case FEXP:
+        u = errcheck(exp(getfval(x)), "exp"); break;
+    case FSQRT:
+        u = errcheck(sqrt(getfval(x)), "sqrt"); break;
+    case FSIN:
+        u = sin(getfval(x)); break;
+    case FCOS:
+        u = cos(getfval(x)); break;
+    case FATAN:
+        if (nextarg == 0) {
+            WARNING("atan2 requires two arguments; returning 1.0");
+            u = 1.0;
+        } else {
+            y = execute(a[1]->nnext);
+            u = atan2(getfval(x), getfval(y));
+            tempfree(y);
+            nextarg = nextarg->nnext;
+        }
+        break;
+    case FSYSTEM:
+        fflush(stdout);     /* in case something is buffered already */
+        u = (Awkfloat) system(getsval(x)) / 256;   /* 256 is unix-dep */
+        break;
+    case FRAND:
+        /* in principle, rand() returns something in 0..RAND_MAX */
+        u = (Awkfloat) (rand() % RAND_MAX) / RAND_MAX;
+        break;
+    case FSRAND:
+        if (isrec(x))   /* no argument provided */
+            u = time((time_t *)0);
+        else
+            u = getfval(x);
+        srand((unsigned int) u);
+        break;
+    case FTOUPPER:
+    case FTOLOWER:
+        buf = tostring(getsval(x));
+        if (t == FTOUPPER) {
+            for (p = buf; *p; p++)
+                if (islower(*p))
+                    *p = toupper(*p);
+        } else {
+            for (p = buf; *p; p++)
+                if (isupper(*p))
+                    *p = tolower(*p);
+        }
+        tempfree(x);
+        x = gettemp();
+        setsval(x, buf);
+        free(buf);
+        return x;
+    case FFLUSH:
+        if (isrec(x) || strlen(getsval(x)) == 0) {
+            flush_all();    /* fflush() or fflush("") -> all */
+            u = 0;
+        } else if ((fp = openfile(FFLUSH, getsval(x))) == NULL)
+            u = EOF;
+        else
+            u = fflush(fp);
+        break;
+    case FUTF:
+        wc = (int)getfval(x);
+        mbc[wctomb(mbc, wc)] = 0;
+        tempfree(x);
+        x = gettemp();
+        setsval(x, mbc);
+        return x;
+    default:    /* can't happen */
+        FATAL("illegal function type %d", t);
+        break;
+    }
+    tempfree(x);
+    x = gettemp();
+    setfval(x, u);
+    if (nextarg != 0) {
+        WARNING("warning: function has too many arguments");
+        for ( ; nextarg; nextarg = nextarg->nnext)
+            execute(nextarg);
+    }
+    return(x);
+}
+
+Cell *printstat(Node **a, int n)    /* print a[0] */
+{
+    int r;
+    Node *x;
+    Cell *y;
+    FILE *fp;
+
+    if (a[1] == 0)  /* a[1] is redirection operator, a[2] is file */
+        fp = stdout;
+    else
+        fp = redirect(ptoi(a[1]), a[2]);
+    for (x = a[0]; x != NULL; x = x->nnext) {
+        y = execute(x);
+        fputs(getsval(y), fp);
+        tempfree(y);
+        if (x->nnext == NULL)
+            r = fputs(*ORS, fp);
+        else
+            r = fputs(*OFS, fp);
+        if (r == EOF)
+            FATAL("write error on %s", filename(fp));
+    }
+    if (a[1] != 0)
+        if (fflush(fp) == EOF)
+            FATAL("write error on %s", filename(fp));
+    return(True);
+}
+
+Cell *nullproc(Node **a, int n)
+{
+    n = n;
+    a = a;
+    return 0;
+}
+
+
+FILE *redirect(int a, Node *b)  /* set up all i/o redirections */
+{
+    FILE *fp;
+    Cell *x;
+    char *fname;
+
+    x = execute(b);
+    fname = getsval(x);
+    fp = openfile(a, fname);
+    if (fp == NULL)
+        FATAL("can't open file %s", fname);
+    tempfree(x);
+    return fp;
+}
+
+struct files {
+    FILE    *fp;
+    char    *fname;
+    int mode;   /* '|', 'a', 'w' => LE/LT, GT */
+} files[FOPEN_MAX] ={
+    { NULL,  "/dev/stdin",  LT },   /* watch out: don't free this! */
+    { NULL, "/dev/stdout", GT },
+    { NULL, "/dev/stderr", GT }
+};
+
+void stdinit(void)  /* in case stdin, etc., are not constants */
+{
+    files[0].fp = stdin;
+    files[1].fp = stdout;
+    files[2].fp = stderr;
+}
+
+FILE *openfile(int a, char *us)
+{
+    char *s = us;
+    int i, m;
+    FILE *fp = 0;
+
+    if (*s == '\0')
+        FATAL("null file name in print or getline");
+    for (i=0; i < FOPEN_MAX; i++)
+        if (files[i].fname && strcmp(s, files[i].fname) == 0) {
+            if (a == files[i].mode || (a==APPEND && files[i].mode==GT))
+                return files[i].fp;
+            if (a == FFLUSH)
+                return files[i].fp;
+        }
+    if (a == FFLUSH)    /* didn't find it, so don't create it! */
+        return NULL;
+
+    for (i=0; i < FOPEN_MAX; i++)
+        if (files[i].fp == 0)
+            break;
+    if (i >= FOPEN_MAX)
+        FATAL("%s makes too many open files", s);
+    fflush(stdout); /* force a semblance of order */
+    m = a;
+    if (a == GT) {
+        fp = fopen(s, "w");
+    } else if (a == APPEND) {
+        fp = fopen(s, "a");
+        m = GT; /* so can mix > and >> */
+    } else if (a == '|') {  /* output pipe */
+        fp = popen(s, "w");
+    } else if (a == LE) {   /* input pipe */
+        fp = popen(s, "r");
+    } else if (a == LT) {   /* getline <file */
+        fp = strcmp(s, "-") == 0 ? stdin : fopen(s, "r");   /* "-" is stdin */
+    } else  /* can't happen */
+        FATAL("illegal redirection %d", a);
+    if (fp != NULL) {
+        files[i].fname = tostring(s);
+        files[i].fp = fp;
+        files[i].mode = m;
+    }
+    return fp;
+}
+
+char *filename(FILE *fp)
+{
+    int i;
+
+    for (i = 0; i < FOPEN_MAX; i++)
+        if (fp == files[i].fp)
+            return files[i].fname;
+    return "???";
+}
+
+Cell *closefile(Node **a, int n)
+{
+    Cell *x;
+    int i, stat;
+
+    n = n;
+    x = execute(a[0]);
+    getsval(x);
+    for (i = 0; i < FOPEN_MAX; i++)
+        if (files[i].fname && strcmp(x->sval, files[i].fname) == 0) {
+            if (ferror(files[i].fp))
+                WARNING( "i/o error occurred on %s", files[i].fname );
+            if (files[i].mode == '|' || files[i].mode == LE)
+                stat = pclose(files[i].fp);
+            else
+                stat = fclose(files[i].fp);
+            if (stat == EOF)
+                WARNING( "i/o error occurred closing %s", files[i].fname );
+            if (i > 2)  /* don't do /dev/std... */
+                xfree(files[i].fname);
+            files[i].fname = NULL;  /* watch out for ref thru this */
+            files[i].fp = NULL;
+        }
+    tempfree(x);
+    return(True);
+}
+
+void closeall(void)
+{
+    int i, stat;
+
+    for (i = 0; i < FOPEN_MAX; i++)
+        if (files[i].fp) {
+            if (ferror(files[i].fp))
+                WARNING( "i/o error occurred on %s", files[i].fname );
+            if (files[i].mode == '|' || files[i].mode == LE)
+                stat = pclose(files[i].fp);
+            else
+                stat = fclose(files[i].fp);
+            if (stat == EOF)
+                WARNING( "i/o error occurred while closing %s", files[i].fname );
+        }
+}
+
+void flush_all(void)
+{
+    int i;
+
+    for (i = 0; i < FOPEN_MAX; i++)
+        if (files[i].fp)
+            fflush(files[i].fp);
+}
+
+void backsub(char **pb_ptr, char **sptr_ptr);
+
+Cell *sub(Node **a, int nnn)    /* substitute command */
+{
+    char *sptr, *pb, *q;
+    Cell *x, *y, *result;
+    char *t, *buf;
+    void *p;
+    int bufsz = recsize;
+
+    if ((buf = (char *) malloc(bufsz)) == NULL)
+        FATAL("out of memory in sub");
+    x = execute(a[3]);  /* target string */
+    t = getsval(x);
+    if (a[0] == 0)      /* 0 => a[1] is already-compiled regexpr */
+        p = (void *) a[1];  /* regular expression */
+    else {
+        y = execute(a[1]);
+        p = compre(getsval(y));
+        tempfree(y);
+    }
+    y = execute(a[2]);  /* replacement string */
+    result = False;
+    if (pmatch(p, t, t)) {
+        sptr = t;
+        adjbuf(&buf, &bufsz, 1+patbeg-sptr, recsize, 0, "sub");
+        pb = buf;
+        while (sptr < patbeg)
+            *pb++ = *sptr++;
+        sptr = getsval(y);
+        while (*sptr != 0) {
+            adjbuf(&buf, &bufsz, 5+pb-buf, recsize, &pb, "sub");
+            if (*sptr == '\\') {
+                backsub(&pb, &sptr);
+            } else if (*sptr == '&') {
+                sptr++;
+                adjbuf(&buf, &bufsz, 1+patlen+pb-buf, recsize, &pb, "sub");
+                for (q = patbeg; q < patbeg+patlen; )
+                    *pb++ = *q++;
+            } else
+                *pb++ = *sptr++;
+        }
+        *pb = '\0';
+        if (pb > buf + bufsz)
+            FATAL("sub result1 %.30s too big; can't happen", buf);
+        sptr = patbeg + patlen;
+        if ((patlen == 0 && *patbeg) || (patlen && *(sptr-1))) {
+            adjbuf(&buf, &bufsz, 1+strlen(sptr)+pb-buf, 0, &pb, "sub");
+            while ((*pb++ = *sptr++) != 0)
+                ;
+        }
+        if (pb > buf + bufsz)
+            FATAL("sub result2 %.30s too big; can't happen", buf);
+        setsval(x, buf);    /* BUG: should be able to avoid copy */
+        result = True;;
+    }
+    tempfree(x);
+    tempfree(y);
+    free(buf);
+    return result;
+}
+
+Cell *gsub(Node **a, int nnn)   /* global substitute */
+{
+    Cell *x, *y;
+    char *rptr, *sptr, *t, *pb, *c;
+    char *buf;
+    void *p;
+    int mflag, num;
+    int bufsz = recsize;
+
+    if ((buf = (char *)malloc(bufsz)) == NULL)
+        FATAL("out of memory in gsub");
+    mflag = 0;  /* if mflag == 0, can replace empty string */
+    num = 0;
+    x = execute(a[3]);  /* target string */
+    c = t = getsval(x);
+    if (a[0] == 0)      /* 0 => a[1] is already-compiled regexpr */
+        p = (void *) a[1];  /* regular expression */
+    else {
+        y = execute(a[1]);
+        p = compre(getsval(y));
+        tempfree(y);
+    }
+    y = execute(a[2]);  /* replacement string */
+    if (pmatch(p, t, c)) {
+        pb = buf;
+        rptr = getsval(y);
+        do {
+            if (patlen == 0 && *patbeg != 0) {  /* matched empty string */
+                if (mflag == 0) {   /* can replace empty */
+                    num++;
+                    sptr = rptr;
+                    while (*sptr != 0) {
+                        adjbuf(&buf, &bufsz, 5+pb-buf, recsize, &pb, "gsub");
+                        if (*sptr == '\\') {
+                            backsub(&pb, &sptr);
+                        } else if (*sptr == '&') {
+                            char *q;
+                            sptr++;
+                            adjbuf(&buf, &bufsz, 1+patlen+pb-buf, recsize, &pb, "gsub");
+                            for (q = patbeg; q < patbeg+patlen; )
+                                *pb++ = *q++;
+                        } else
+                            *pb++ = *sptr++;
+                    }
+                }
+                if (*c == 0)    /* at end */
+                    goto done;
+                adjbuf(&buf, &bufsz, 2+pb-buf, recsize, &pb, "gsub");
+                *pb++ = *c++;
+                if (pb > buf + bufsz)   /* BUG: not sure of this test */
+                    FATAL("gsub result0 %.30s too big; can't happen", buf);
+                mflag = 0;
+            }
+            else {  /* matched nonempty string */
+                num++;
+                sptr = c;
+                adjbuf(&buf, &bufsz, 1+(patbeg-sptr)+pb-buf, recsize, &pb, "gsub");
+                while (sptr < patbeg)
+                    *pb++ = *sptr++;
+                sptr = rptr;
+                while (*sptr != 0) {
+                    adjbuf(&buf, &bufsz, 5+pb-buf, recsize, &pb, "gsub");
+                    if (*sptr == '\\') {
+                        backsub(&pb, &sptr);
+                    } else if (*sptr == '&') {
+                        char *q;
+                        sptr++;
+                        adjbuf(&buf, &bufsz, 1+patlen+pb-buf, recsize, &pb, "gsub");
+                        for (q = patbeg; q < patbeg+patlen; )
+                            *pb++ = *q++;
+                    } else
+                        *pb++ = *sptr++;
+                }
+                c = patbeg + patlen;
+                if ((c[-1] == 0) || (*c == 0))
+                    goto done;
+                if (pb > buf + bufsz)
+                    FATAL("gsub result1 %.30s too big; can't happen", buf);
+                mflag = 1;
+            }
+        } while (pmatch(p, t, c));
+        sptr = c;
+        adjbuf(&buf, &bufsz, 1+strlen(sptr)+pb-buf, 0, &pb, "gsub");
+        while ((*pb++ = *sptr++) != 0)
+            ;
+    done:   if (pb > buf + bufsz)
+            FATAL("gsub result2 %.30s too big; can't happen", buf);
+        *pb = '\0';
+        setsval(x, buf);    /* BUG: should be able to avoid copy + free */
+    }
+    tempfree(x);
+    tempfree(y);
+    x = gettemp();
+    x->tval = NUM;
+    x->fval = num;
+    free(buf);
+    return(x);
+}
+
+void backsub(char **pb_ptr, char **sptr_ptr)    /* handle \\& variations */
+{                       /* sptr[0] == '\\' */
+    char *pb = *pb_ptr, *sptr = *sptr_ptr;
+
+    if (sptr[1] == '\\') {
+        if (sptr[2] == '\\' && sptr[3] == '&') { /* \\\& -> \& */
+            *pb++ = '\\';
+            *pb++ = '&';
+            sptr += 4;
+        } else if (sptr[2] == '&') {    /* \\& -> \ + matched */
+            *pb++ = '\\';
+            sptr += 2;
+        } else {            /* \\x -> \\x */
+            *pb++ = *sptr++;
+            *pb++ = *sptr++;
+        }
+    } else if (sptr[1] == '&') {    /* literal & */
+        sptr++;
+        *pb++ = *sptr++;
+    } else              /* literal \ */
+        *pb++ = *sptr++;
+
+    *pb_ptr = pb;
+    *sptr_ptr = sptr;
+}
+@
+
+\subsection{[[awk/tran.c]]}
+
+<<awk/tran.c>>=
+/****************************************************************
+Copyright (C) Lucent Technologies 1997
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name Lucent Technologies or any of
+its entities not be used in advertising or publicity pertaining
+to distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+****************************************************************/
+
+#define DEBUG
+#include <stdio.h>
+#include <math.h>
+#include <ctype.h>
+#include <string.h>
+#include <stdlib.h>
+#include "awk.h"
+#include "y.tab.h"
+
+#define FULLTAB 2   /* rehash when table gets this x full */
+#define GROWTAB 4   /* grow table by this factor */
+
+Array   *symtab;    /* main symbol table */
+
+char    **FS;       /* initial field sep */
+char    **RS;       /* initial record sep */
+char    **OFS;      /* output field sep */
+char    **ORS;      /* output record sep */
+char    **OFMT;     /* output format for numbers */
+char    **CONVFMT;  /* format for conversions in getsval */
+Awkfloat *NF;       /* number of fields in current record */
+Awkfloat *NR;       /* number of current record */
+Awkfloat *FNR;      /* number of current record in current file */
+char    **FILENAME; /* current filename argument */
+Awkfloat *ARGC;     /* number of arguments from command line */
+char    **SUBSEP;   /* subscript separator for a[i,j,k]; default \034 */
+Awkfloat *RSTART;   /* start of re matched with ~; origin 1 (!) */
+Awkfloat *RLENGTH;  /* length of same */
+
+Cell    *nrloc;     /* NR */
+Cell    *nfloc;     /* NF */
+Cell    *fnrloc;    /* FNR */
+Array   *ARGVtab;   /* symbol table containing ARGV[...] */
+Array   *ENVtab;    /* symbol table containing ENVIRON[...] */
+Cell    *rstartloc; /* RSTART */
+Cell    *rlengthloc;    /* RLENGTH */
+Cell    *symtabloc; /* SYMTAB */
+
+Cell    *nullloc;   /* a guaranteed empty cell */
+Node    *nullnode;  /* zero&null, converted into a node for comparisons */
+Cell    *literal0;
+
+extern Cell **fldtab;
+
+void syminit(void)  /* initialize symbol table with builtin vars */
+{
+    literal0 = setsymtab("0", "0", 0.0, NUM|STR|CON|DONTFREE, symtab);
+    /* this is used for if(x)... tests: */
+    nullloc = setsymtab("$zero&null", "", 0.0, NUM|STR|CON|DONTFREE, symtab);
+    nullnode = celltonode(nullloc, CCON);
+
+    FS = &setsymtab("FS", " ", 0.0, STR|DONTFREE, symtab)->sval;
+    RS = &setsymtab("RS", "\n", 0.0, STR|DONTFREE, symtab)->sval;
+    OFS = &setsymtab("OFS", " ", 0.0, STR|DONTFREE, symtab)->sval;
+    ORS = &setsymtab("ORS", "\n", 0.0, STR|DONTFREE, symtab)->sval;
+    OFMT = &setsymtab("OFMT", "%.6g", 0.0, STR|DONTFREE, symtab)->sval;
+    CONVFMT = &setsymtab("CONVFMT", "%.6g", 0.0, STR|DONTFREE, symtab)->sval;
+    FILENAME = &setsymtab("FILENAME", "", 0.0, STR|DONTFREE, symtab)->sval;
+    nfloc = setsymtab("NF", "", 0.0, NUM, symtab);
+    NF = &nfloc->fval;
+    nrloc = setsymtab("NR", "", 0.0, NUM, symtab);
+    NR = &nrloc->fval;
+    fnrloc = setsymtab("FNR", "", 0.0, NUM, symtab);
+    FNR = &fnrloc->fval;
+    SUBSEP = &setsymtab("SUBSEP", "\034", 0.0, STR|DONTFREE, symtab)->sval;
+    rstartloc = setsymtab("RSTART", "", 0.0, NUM, symtab);
+    RSTART = &rstartloc->fval;
+    rlengthloc = setsymtab("RLENGTH", "", 0.0, NUM, symtab);
+    RLENGTH = &rlengthloc->fval;
+    symtabloc = setsymtab("SYMTAB", "", 0.0, ARR, symtab);
+    symtabloc->sval = (char *) symtab;
+}
+
+void arginit(int ac, char **av) /* set up ARGV and ARGC */
+{
+    Cell *cp;
+    int i;
+    char temp[50];
+
+    ARGC = &setsymtab("ARGC", "", (Awkfloat) ac, NUM, symtab)->fval;
+    cp = setsymtab("ARGV", "", 0.0, ARR, symtab);
+    ARGVtab = makesymtab(NSYMTAB);  /* could be (int) ARGC as well */
+    cp->sval = (char *) ARGVtab;
+    for (i = 0; i < ac; i++) {
+        sprintf(temp, "%d", i);
+        if (is_number(*av))
+            setsymtab(temp, *av, atof(*av), STR|NUM, ARGVtab);
+        else
+            setsymtab(temp, *av, 0.0, STR, ARGVtab);
+        av++;
+    }
+}
+
+void envinit(char **envp)   /* set up ENVIRON variable */
+{
+    Cell *cp;
+    char *p;
+
+    cp = setsymtab("ENVIRON", "", 0.0, ARR, symtab);
+    ENVtab = makesymtab(NSYMTAB);
+    cp->sval = (char *) ENVtab;
+    for ( ; *envp; envp++) {
+        if ((p = strchr(*envp, '=')) == NULL)
+            continue;
+        *p++ = 0;   /* split into two strings at = */
+        if (is_number(p))
+            setsymtab(*envp, p, atof(p), STR|NUM, ENVtab);
+        else
+            setsymtab(*envp, p, 0.0, STR, ENVtab);
+        p[-1] = '=';    /* restore in case env is passed down to a shell */
+    }
+}
+
+Array *makesymtab(int n)    /* make a new symbol table */
+{
+    Array *ap;
+    Cell **tp;
+
+    ap = (Array *) malloc(sizeof(Array));
+    tp = (Cell **) calloc(n, sizeof(Cell *));
+    if (ap == NULL || tp == NULL)
+        FATAL("out of space in makesymtab");
+    ap->nelem = 0;
+    ap->size = n;
+    ap->tab = tp;
+    return(ap);
+}
+
+void freesymtab(Cell *ap)   /* free a symbol table */
+{
+    Cell *cp, *temp;
+    Array *tp;
+    int i;
+
+    if (!isarr(ap))
+        return;
+    tp = (Array *) ap->sval;
+    if (tp == NULL)
+        return;
+    for (i = 0; i < tp->size; i++) {
+        for (cp = tp->tab[i]; cp != NULL; cp = temp) {
+            xfree(cp->nval);
+            if (freeable(cp))
+                xfree(cp->sval);
+            temp = cp->cnext;   /* avoids freeing then using */
+            free(cp); 
+        }
+        tp->tab[i] = 0;
+    }
+    free(tp->tab);
+    free(tp);
+}
+
+void freeelem(Cell *ap, char *s)    /* free elem s from ap (i.e., ap["s"] */
+{
+    Array *tp;
+    Cell *p, *prev = NULL;
+    int h;
+    
+    tp = (Array *) ap->sval;
+    h = hash(s, tp->size);
+    for (p = tp->tab[h]; p != NULL; prev = p, p = p->cnext)
+        if (strcmp(s, p->nval) == 0) {
+            if (prev == NULL)   /* 1st one */
+                tp->tab[h] = p->cnext;
+            else            /* middle somewhere */
+                prev->cnext = p->cnext;
+            if (freeable(p))
+                xfree(p->sval);
+            free(p->nval);
+            free(p);
+            tp->nelem--;
+            return;
+        }
+}
+
+Cell *setsymtab(char *n, char *s, Awkfloat f, unsigned t, Array *tp)
+{
+    int h;
+    Cell *p;
+
+    if (n != NULL && (p = lookup(n, tp)) != NULL) {
+           dprintf( ("setsymtab found %p: n=%s s=\"%s\" f=%g t=%o\n",
+            p, p->nval, p->sval, p->fval, p->tval) );
+        return(p);
+    }
+    p = (Cell *) malloc(sizeof(Cell));
+    if (p == NULL)
+        FATAL("out of space for symbol table at %s", n);
+    p->nval = tostring(n);
+    p->sval = s ? tostring(s) : tostring("");
+    p->fval = f;
+    p->tval = t;
+    p->csub = CUNK;
+    p->ctype = OCELL;
+    tp->nelem++;
+    if (tp->nelem > FULLTAB * tp->size)
+        rehash(tp);
+    h = hash(n, tp->size);
+    p->cnext = tp->tab[h];
+    tp->tab[h] = p;
+       dprintf( ("setsymtab set %p: n=%s s=\"%s\" f=%g t=%o\n",
+        p, p->nval, p->sval, p->fval, p->tval) );
+    return(p);
+}
+
+int hash(char *s, int n)    /* form hash value for string s */
+{
+    unsigned hashval;
+
+    for (hashval = 0; *s != '\0'; s++)
+        hashval = (*s + 31 * hashval);
+    return hashval % n;
+}
+
+void rehash(Array *tp)  /* rehash items in small table into big one */
+{
+    int i, nh, nsz;
+    Cell *cp, *op, **np;
+
+    nsz = GROWTAB * tp->size;
+    np = (Cell **) calloc(nsz, sizeof(Cell *));
+    if (np == NULL)     /* can't do it, but can keep running. */
+        return;     /* someone else will run out later. */
+    for (i = 0; i < tp->size; i++) {
+        for (cp = tp->tab[i]; cp; cp = op) {
+            op = cp->cnext;
+            nh = hash(cp->nval, nsz);
+            cp->cnext = np[nh];
+            np[nh] = cp;
+        }
+    }
+    free(tp->tab);
+    tp->tab = np;
+    tp->size = nsz;
+}
+
+Cell *lookup(char *s, Array *tp)    /* look for s in tp */
+{
+    Cell *p;
+    int h;
+
+    h = hash(s, tp->size);
+    for (p = tp->tab[h]; p != NULL; p = p->cnext)
+        if (strcmp(s, p->nval) == 0)
+            return(p);  /* found it */
+    return(NULL);           /* not found */
+}
+
+Awkfloat setfval(Cell *vp, Awkfloat f)  /* set float val of a Cell */
+{
+    int fldno;
+
+    if ((vp->tval & (NUM | STR)) == 0) 
+        funnyvar(vp, "assign to");
+    if (isfld(vp)) {
+        donerec = 0;    /* mark $0 invalid */
+        fldno = atoi(vp->nval);
+        if (fldno > *NF)
+            newfld(fldno);
+           dprintf( ("setting field %d to %g\n", fldno, f) );
+    } else if (isrec(vp)) {
+        donefld = 0;    /* mark $1... invalid */
+        donerec = 1;
+    }
+    if (freeable(vp))
+        xfree(vp->sval); /* free any previous string */
+    vp->tval &= ~STR;   /* mark string invalid */
+    vp->tval |= NUM;    /* mark number ok */
+       dprintf( ("setfval %p: %s = %g, t=%o\n", vp, vp->nval, f, vp->tval) );
+    return vp->fval = f;
+}
+
+void funnyvar(Cell *vp, char *rw)
+{
+    if (isarr(vp))
+        FATAL("can't %s %s; it's an array name.", rw, vp->nval);
+    if (vp->tval & FCN)
+        FATAL("can't %s %s; it's a function.", rw, vp->nval);
+    WARNING("funny variable %p: n=%s s=\"%s\" f=%g t=%o",
+        vp, vp->nval, vp->sval, vp->fval, vp->tval);
+}
+
+char *setsval(Cell *vp, char *s)    /* set string val of a Cell */
+{
+    char *t;
+    int fldno;
+
+       dprintf( ("starting setsval %p: %s = \"%s\", t=%o\n", vp, vp->nval, s, vp->tval) );
+    if ((vp->tval & (NUM | STR)) == 0)
+        funnyvar(vp, "assign to");
+    if (isfld(vp)) {
+        donerec = 0;    /* mark $0 invalid */
+        fldno = atoi(vp->nval);
+        if (fldno > *NF)
+            newfld(fldno);
+           dprintf( ("setting field %d to %s (%p)\n", fldno, s, s) );
+    } else if (isrec(vp)) {
+        donefld = 0;    /* mark $1... invalid */
+        donerec = 1;
+    }
+    t = tostring(s);    /* in case it's self-assign */
+    vp->tval &= ~NUM;
+    vp->tval |= STR;
+    if (freeable(vp))
+        xfree(vp->sval);
+    vp->tval &= ~DONTFREE;
+       dprintf( ("setsval %p: %s = \"%s (%p)\", t=%o\n", vp, vp->nval, t,t, vp->tval) );
+    return(vp->sval = t);
+}
+
+Awkfloat getfval(Cell *vp)  /* get float val of a Cell */
+{
+    if ((vp->tval & (NUM | STR)) == 0)
+        funnyvar(vp, "read value of");
+    if (isfld(vp) && donefld == 0)
+        fldbld();
+    else if (isrec(vp) && donerec == 0)
+        recbld();
+    if (!isnum(vp)) {   /* not a number */
+        vp->fval = atof(vp->sval);  /* best guess */
+        if (is_number(vp->sval) && !(vp->tval&CON))
+            vp->tval |= NUM;    /* make NUM only sparingly */
+    }
+       dprintf( ("getfval %p: %s = %g, t=%o\n", vp, vp->nval, vp->fval, vp->tval) );
+    return(vp->fval);
+}
+
+char *getsval(Cell *vp) /* get string val of a Cell */
+{
+    char s[100];    /* BUG: unchecked */
+    double dtemp;
+
+    if ((vp->tval & (NUM | STR)) == 0)
+        funnyvar(vp, "read value of");
+    if (isfld(vp) && donefld == 0)
+        fldbld();
+    else if (isrec(vp) && donerec == 0)
+        recbld();
+    if (isstr(vp) == 0) {
+        if (freeable(vp))
+            xfree(vp->sval);
+        if (modf(vp->fval, &dtemp) == 0)    /* it's integral */
+            sprintf(s, "%.30g", vp->fval);
+        else
+            sprintf(s, *CONVFMT, vp->fval);
+        vp->sval = tostring(s);
+        vp->tval &= ~DONTFREE;
+        vp->tval |= STR;
+    }
+       dprintf( ("getsval %p: %s = \"%s (%p)\", t=%o\n", vp, vp->nval, vp->sval, vp->sval, vp->tval) );
+    return(vp->sval);
+}
+
+char *tostring(char *s) /* make a copy of string s */
+{
+    char *p;
+
+    p = (char *) malloc(strlen(s)+1);
+    if (p == NULL)
+        FATAL("out of space in tostring on %s", s);
+    strcpy(p, s);
+    return(p);
+}
+
+char *qstring(char *s, int delim)   /* collect string up to next delim */
+{
+    char *os = s;
+    int c, n;
+    char *buf, *bp;
+
+    if ((buf = (char *) malloc(strlen(s)+3)) == NULL)
+        FATAL( "out of space in qstring(%s)", s);
+    for (bp = buf; (c = *s) != delim; s++) {
+        if (c == '\n')
+            SYNTAX( "newline in string %.20s...", os );
+        else if (c != '\\')
+            *bp++ = c;
+        else {  /* \something */
+            c = *++s;
+            if (c == 0) {   /* \ at end */
+                *bp++ = '\\';
+                break;  /* for loop */
+            }   
+            switch (c) {
+            case '\\':  *bp++ = '\\'; break;
+            case 'n':   *bp++ = '\n'; break;
+            case 't':   *bp++ = '\t'; break;
+            case 'b':   *bp++ = '\b'; break;
+            case 'f':   *bp++ = '\f'; break;
+            case 'r':   *bp++ = '\r'; break;
+            default:
+                if (!isdigit(c)) {
+                    *bp++ = c;
+                    break;
+                }
+                n = c - '0';
+                if (isdigit(s[1])) {
+                    n = 8 * n + *++s - '0';
+                    if (isdigit(s[1]))
+                        n = 8 * n + *++s - '0';
+                }
+                *bp++ = n;
+                break;
+            }
+        }
+    }
+    *bp++ = 0;
+    return buf;
+}
 @
 
 

@@ -1,3 +1,4 @@
+/*s: awk/re.c */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -323,3 +324,4 @@ overflow(void)
 {
     FATAL("%s", "regular expression too big");
 }
+/*e: awk/re.c */

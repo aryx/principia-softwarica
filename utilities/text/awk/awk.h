@@ -1,3 +1,4 @@
+/*s: awk/awk.h */
 /*
 Copyright (c) Lucent Technologies 1997
     All Rights Reserved
@@ -182,3 +183,4 @@ extern  int pairstack[], paircnt;
 #define freeable(p) ( ((p)->tval & (STR|DONTFREE)) == STR )
 
 #include "proto.h"
+/*e: awk/awk.h */

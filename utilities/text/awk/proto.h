@@ -1,3 +1,4 @@
+/*s: awk/proto.h */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -175,3 +176,4 @@ extern  Cell    *gsub(Node **, int);
 
 extern  FILE    *popen(const char *, const char *);
 extern  int pclose(FILE *);
+/*e: awk/proto.h */

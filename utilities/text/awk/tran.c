@@ -1,3 +1,4 @@
+/*s: awk/tran.c */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -432,3 +433,4 @@ char *qstring(char *s, int delim)   /* collect string up to next delim */
     *bp++ = 0;
     return buf;
 }
+/*e: awk/tran.c */

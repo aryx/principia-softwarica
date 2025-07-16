@@ -1,3 +1,4 @@
+/*s: awk/maketab.c */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -166,3 +167,4 @@ int main(int argc, char *argv[])
     printf("}\n");
     return 0;
 }
+/*e: awk/maketab.c */

@@ -1,3 +1,4 @@
+/*s: awk/parse.c */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -269,3 +270,4 @@ Node *itonp(int i)  /* and vice versa */
 {
     return (Node *) (long) i;
 }
+/*e: awk/parse.c */

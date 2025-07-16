@@ -1,3 +1,4 @@
+/*s: awk/run.c */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -1917,3 +1918,4 @@ void backsub(char **pb_ptr, char **sptr_ptr)    /* handle \\& variations */
     *pb_ptr = pb;
     *sptr_ptr = sptr;
 }
+/*e: awk/run.c */

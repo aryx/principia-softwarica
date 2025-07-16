@@ -1,3 +1,4 @@
+/*s: awk/lex.c */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -567,3 +568,4 @@ void unputstr(char *s)  /* put a string back on input */
     for (i = strlen(s)-1; i >= 0; i--)
         unput(s[i]);
 }
+/*e: awk/lex.c */
