@@ -15,6 +15,7 @@ long    count;
 int anycount;
 static int  follow;
 int file    = 0;
+
 char*   umsg    = "usage: tail [-n N] [-c N] [-f] [-r] [+-N[bc][fr]] [file]";
 
 Biobuf  bout;
