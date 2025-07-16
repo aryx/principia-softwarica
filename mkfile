@@ -13,7 +13,6 @@ LIBS=\
  lib_networking\
  # used by plumb, iostats, snapfs, screenlock, etc\
  lib_security\
- lib_misc\
  \
  generators/lex/liblex\
  debuggers/libmach\
