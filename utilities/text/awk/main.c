@@ -1,272 +1,199 @@
-/*s: grep/main.c */
-#include    "grep.h"
+/*s: awk/main.c */
+/****************************************************************
+Copyright (C) Lucent Technologies 1997
+All Rights Reserved
 
-/*s: constant [[validflags]](grep) */
-char *validflags = "bchiLlnsv";
-/*e: constant [[validflags]](grep) */
-/*s: function [[usage]](grep) */
-void
-usage(void)
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name Lucent Technologies or any of
+its entities not be used in advertising or publicity pertaining
+to distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+****************************************************************/
+
+char    *version = "version 19990602";
+
+#define DEBUG
+#include <stdio.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+#include <signal.h>
+#include "awk.h"
+#include "y.tab.h"
+
+extern  char    **environ;
+extern  int nfields;
+
+int dbg = 0;
+char    *cmdname;   /* gets argv[0] for error messages */
+extern  FILE    *yyin;  /* lex input file */
+char    *lexprog;   /* points to program argument if it exists */
+extern  int errorflag;  /* non-zero if any syntax errors; set by yyerror */
+int compile_time = 2;   /* for error printing: */
+                /* 2 = cmdline, 1 = compile, 0 = running */
+
+char    *pfile[20]; /* program filenames from -f's */
+int npfile = 0; /* number of filenames */
+int curpfile = 0;   /* current filename */
+
+int safe    = 0;    /* 1 => "safe" mode */
+
+int main(int argc, char *argv[])
 {
-    fprint(STDERR, "usage: grep [-%s] [-e pattern] [-f patternfile] [file ...]\n", validflags);
-    exits("usage");
-}
-/*e: function [[usage]](grep) */
+    char *fs = NULL, *marg;
+    int temp;
 
-/*s: function [[main]](grep) */
-void
-main(int argc, char *argv[])
-{
-    int i;
-    int status;
-
-    ARGBEGIN {
-    default:
-        if(utfrune(validflags, ARGC()) == nil)
-            usage();
-        flags[ARGC()]++;
-        break;
-
-    case 'e':
-        flags['e']++;
-        lineno = 0;
-        str2top(EARGF(usage()));
-        break;
-
-    case 'f':
-        flags['f']++;
-        filename = EARGF(usage());
-        rein = Bopen(filename, OREAD);
-        if(rein == nil) {
-            fprint(STDERR, "grep: can't open %s: %r\n", filename);
-            exits("open");
+    cmdname = argv[0];
+    if (argc == 1) {
+        fprintf(stderr, "Usage: %s [-F fieldsep] [-mf n] [-mr n] [-v var=value] [-f programfile | 'program'] [file ...]\n", cmdname);
+        exit(1);
+    }
+    signal(SIGFPE, fpecatch);
+    yyin = NULL;
+    symtab = makesymtab(NSYMTAB);
+    while (argc > 1 && argv[1][0] == '-' && argv[1][1] != '\0') {
+        if (strcmp(argv[1], "--") == 0) {   /* explicit end of args */
+            argc--;
+            argv++;
+            break;
         }
-        lineno = 1;
-        str2top(filename);
-        break;
-    } ARGEND
-
-    if(flags['f'] == 0 && flags['e'] == 0) {
-        if(argc <= 0)
-            usage();
-        str2top(argv[0]);
+        switch (argv[1][1]) {
+        case 's':
+            if (strcmp(argv[1], "-safe") == 0)
+                safe = 1;
+            break;
+        case 'f':   /* next argument is program filename */
+            argc--;
+            argv++;
+            if (argc <= 1)
+                FATAL("no program filename");
+            pfile[npfile++] = argv[1];
+            break;
+        case 'F':   /* set field separator */
+            if (argv[1][2] != 0) {  /* arg is -Fsomething */
+                if (argv[1][2] == 't' && argv[1][3] == 0)   /* wart: t=>\t */
+                    fs = "\t";
+                else if (argv[1][2] != 0)
+                    fs = &argv[1][2];
+            } else {        /* arg is -F something */
+                argc--; argv++;
+                if (argc > 1 && argv[1][0] == 't' && argv[1][1] == 0)   /* wart: t=>\t */
+                    fs = "\t";
+                else if (argc > 1 && argv[1][0] != 0)
+                    fs = &argv[1][0];
+            }
+            if (fs == NULL || *fs == '\0')
+                WARNING("field separator FS is empty");
+            break;
+        case 'v':   /* -v a=1 to be done NOW.  one -v for each */
+            if (argv[1][2] == '\0' && --argc > 1 && isclvar((++argv)[1]))
+                setclvar(argv[1]);
+            break;
+        case 'm':   /* more memory: -mr=record, -mf=fields */
+                /* no longer needed */
+            marg = argv[1];
+            if (argv[1][3])
+                temp = atoi(&argv[1][3]);
+            else {
+                argv++; argc--;
+                temp = atoi(&argv[1][0]);
+            }
+            switch (marg[2]) {
+            case 'r':   recsize = temp; break;
+            case 'f':   nfields = temp; break;
+            default: FATAL("unknown option %s\n", marg);
+            }
+            break;
+        case 'd':
+            dbg = atoi(&argv[1][2]);
+            if (dbg == 0)
+                dbg = 1;
+            printf("awk %s\n", version);
+            break;
+        case 'V':   /* added for exptools "standard" */
+            printf("awk %s\n", version);
+            exit(0);
+            break;
+        default:
+            WARNING("unknown option %s ignored", argv[1]);
+            break;
+        }
         argc--;
         argv++;
     }
-
-    follow = mal(maxfollow*sizeof(*follow));
-    state0 = initstate_(topre.beg);
-
-    Binit(&bout, STDOUT, OWRITE);
-    switch(argc) {
-    case 0:
-        status = search(nil, 0);
-        break;
-    case 1:
-        status = search(argv[0], 0);
-        break;
-    default:
-        status = 0;
-        for(i=0; i<argc; i++)
-            status |= search(argv[i], Hflag);
-        break;
+    /* argv[1] is now the first argument */
+    if (npfile == 0) {  /* no -f; first argument is program */
+        if (argc <= 1) {
+            if (dbg)
+                exit(0);
+            FATAL("no program given");
+        }
+           dprintf( ("program = |%s|\n", argv[1]) );
+        lexprog = argv[1];
+        argc--;
+        argv++;
     }
-    if(status)
-        exits(nil);
-    exits("no matches");
-}
-/*e: function [[main]](grep) */
-
-/*s: function [[search]](grep) */
-int
-search(char *file, int flag)
-{
-    State *s, *ns;
-    fdt fid;
-    int c, eof, nl, empty;
-    long count, lineno, n;
-    uchar *elp, *lp, *bol;
-
-    if(file == nil) {
-        file = "stdin";
-        fid = STDIN;
-        flag |= Bflag;
+    recinit(recsize);
+    syminit();
+    compile_time = 1;
+    argv[0] = cmdname;  /* put prog name at front of arglist */
+       dprintf( ("argc=%d, argv[0]=%s\n", argc, argv[0]) );
+    arginit(argc, argv);
+    if (!safe)
+        envinit(environ);
+    yyparse();
+    if (fs)
+        *FS = qstring(fs, '\0');
+       dprintf( ("errorflag=%d\n", errorflag) );
+    if (errorflag == 0) {
+        compile_time = 0;
+        run(winner);
     } else
-        fid = open(file, OREAD);
-
-    if(fid < 0) {
-        fprint(STDERR, "grep: can't open %s: %r\n", file);
-        return 0;
-    }
-
-    if(flags['b'])
-        flag ^= Bflag;      /* dont buffer output */
-    if(flags['c'])
-        flag |= Cflag;      /* count */
-    if(flags['h'])
-        flag &= ~Hflag;     /* do not print file name in output */
-    if(flags['i'])
-        flag |= Iflag;      /* fold upper-lower */
-    if(flags['l'])
-        flag |= Llflag;     /* print only name of file if any match */
-    if(flags['L'])
-        flag |= LLflag;     /* print only name of file if any non match */
-    if(flags['n'])
-        flag |= Nflag;      /* count only */
-    if(flags['s'])
-        flag |= Sflag;      /* status only */
-    if(flags['v'])
-        flag |= Vflag;      /* inverse match */
-
-    s = state0;
-    lineno = 0;
-    count = 0;
-    eof = 0;
-    empty = 1;
-    nl = 0;
-    lp = u.buf;
-    bol = lp;
-
-loop0:
-    n = lp-bol;
-    if(n > sizeof(u.pre))
-        n = sizeof(u.pre);
-    memmove(u.buf-n, bol, n);
-    bol = u.buf-n;
-    n = read(fid, u.buf, sizeof(u.buf));
-    /* if file has no final newline, simulate one to emit matches to last line */
-    if(n > 0) {
-        empty = 0;
-        nl = u.buf[n-1]=='\n';
-    } else {
-        if(n < 0){
-            fprint(STDERR, "grep: read error on %s: %r\n", file);
-            return count != 0;
-        }
-        if(!eof && !nl && !empty) {
-            u.buf[0] = '\n';
-            n = 1;
-            eof = 1;
-        }
-    }
-    if(n <= 0) {
-        close(fid);
-        if(flag & Cflag) {
-            if(flag & Hflag)
-                Bprint(&bout, "%s:", file);
-            Bprint(&bout, "%ld\n", count);
-        }
-        if(((flag&Llflag) && count != 0) || ((flag&LLflag) && count == 0))
-            Bprint(&bout, "%s\n", file);
-        Bflush(&bout);
-        return count != 0;
-    }
-    lp = u.buf;
-    elp = lp+n;
-    if(flag & Iflag)
-        goto loopi;
-
-/*
- * normal character loop
- */
-loop:
-    c = *lp;
-    ns = s->next[c];
-    if(ns == 0) {
-        increment(s, c);
-        goto loop;
-    }
-//  if(flags['2'])
-//      if(s->match)
-//          print("%d: %.2x**\n", s, c);
-//      else
-//          print("%d: %.2x\n", s, c);
-    lp++;
-    s = ns;
-    if(c == '\n') {
-        lineno++;
-        if(!!s->match == !(flag&Vflag)) {
-            count++;
-            if(flag & (Cflag|Sflag|Llflag|LLflag))
-                goto cont;
-            if(flag & Hflag)
-                Bprint(&bout, "%s:", file);
-            if(flag & Nflag)
-                Bprint(&bout, "%ld: ", lineno);
-            /* suppress extra newline at EOF unless we are labeling matches with file name */
-            Bwrite(&bout, bol, lp-bol-(eof && !(flag&Hflag)));
-            if(flag & Bflag)
-                Bflush(&bout);
-        }
-        if((lineno & Flshcnt) == 0)
-            Bflush(&bout);
-    cont:
-        bol = lp;
-    }
-    if(lp != elp)
-        goto loop;
-    goto loop0;
-
-/*
- * character loop for -i flag
- * for speed
- */
-loopi:
-    c = *lp;
-    if(c >= 'A' && c <= 'Z')
-        c += 'a'-'A';
-    ns = s->next[c];
-    if(ns == 0) {
-        increment(s, c);
-        goto loopi;
-    }
-    lp++;
-    s = ns;
-    if(c == '\n') {
-        lineno++;
-        if(!!s->match == !(flag&Vflag)) {
-            count++;
-            if(flag & (Cflag|Sflag|Llflag|LLflag))
-                goto conti;
-            if(flag & Hflag)
-                Bprint(&bout, "%s:", file);
-            if(flag & Nflag)
-                Bprint(&bout, "%ld: ", lineno);
-            /* suppress extra newline at EOF unless we are labeling matches with file name */
-            Bwrite(&bout, bol, lp-bol-(eof && !(flag&Hflag)));
-            if(flag & Bflag)
-                Bflush(&bout);
-        }
-        if((lineno & Flshcnt) == 0)
-            Bflush(&bout);
-    conti:
-        bol = lp;
-    }
-    if(lp != elp)
-        goto loopi;
-    goto loop0;
+        bracecheck();
+    return(errorflag);
 }
-/*e: function [[search]](grep) */
-/*s: function [[initstate]](grep) */
-State*
-initstate_(Re *r)
+
+int pgetc(void)     /* get 1 character from awk program */
 {
-    State *s;
-    int i;
+    int c;
 
-    addcase(r);
-    if(flags['1'])
-        reprint("r", r);
-    nfollow = 0;
-    gen++;
-    fol1(r, Cbegin);
-    follow[nfollow++] = r;
-    qsort(follow, nfollow, sizeof(*follow), fcmp);
-
-    s = sal(nfollow);
-    for(i=0; i<nfollow; i++)
-        s->re[i] = follow[i];
-    return s;
+    for (;;) {
+        if (yyin == NULL) {
+            if (curpfile >= npfile)
+                return EOF;
+            if (strcmp(pfile[curpfile], "-") == 0)
+                yyin = stdin;
+            else if ((yyin = fopen(pfile[curpfile], "r")) == NULL)
+                FATAL("can't open file %s", pfile[curpfile]);
+            lineno = 1;
+        }
+        if ((c = getc(yyin)) != EOF)
+            return c;
+        if (yyin != stdin)
+            fclose(yyin);
+        yyin = NULL;
+        curpfile++;
+    }
 }
-/*e: function [[initstate]](grep) */
-/*e: grep/main.c */
+
+char *cursource(void)   /* current source file name */
+{
+    if (npfile > 0)
+        return pfile[curpfile];
+    else
+        return NULL;
+}
+/*e: awk/main.c */
