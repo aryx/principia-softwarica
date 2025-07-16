@@ -155,72 +155,72 @@ stat:
 |       nase
         {
                 if(sflag)
-                        bundle(2, $1, "s.");
+                        $$ = bundle(2, $1, "s.");
         }
 
 pstat:
         stat1
         {
                 if(sflag)
-                        bundle(2, $1, "0");
+                        $$ = bundle(2, $1, "0");
         }
 |       nase
         {
                 if(!sflag)
-                        bundle(2, $1, "ps.");
+                        $$ = bundle(2, $1, "ps.");
         }
 
 stat1:
         {
-                bundle(1, "");
+                $$ = bundle(1, "");
         }
 |       ase
         {
-                bundle(2, $1, "s.");
+                $$ = bundle(2, $1, "s.");
         }
 |       SCALE '=' e
         {
-                bundle(2, $3, "k");
+                $$ = bundle(2, $3, "k");
         }
 |       SCALE EQOP e
         {
-                bundle(4, "K", $3, $2, "k");
+                $$ = bundle(4, "K", $3, $2, "k");
         }
 |       BASE '=' e
         {
-                bundle(2, $3, "i");
+                $$ = bundle(2, $3, "i");
         }
 |       BASE EQOP e
         {
-                bundle(4, "I", $3, $2, "i");
+                $$ = bundle(4, "I", $3, $2, "i");
         }
 |       OBASE '=' e
         {
-                bundle(2, $3, "o");
+                $$ = bundle(2, $3, "o");
         }
 |       OBASE EQOP e
         {
-                bundle(4, "O", $3, $2, "o");
+                $$ = bundle(4, "O", $3, $2, "o");
         }
 |       QSTR
         {
-                bundle(3, "[", $1, "]P");
+                $$ = bundle(3, "[", $1, "]P");
         }
 |       _BREAK
         {
-                bundle(2, numb[lev-bstack[bindx-1]], "Q");
+                $$ = bundle(2, numb[lev-bstack[bindx-1]], "Q");
         }
 |       _PRINT e
         {
-                bundle(2, $2, "ps.");
+                $$ = bundle(2, $2, "ps.");
         }
 |       _RETURN e
         {
-                bundle(4, $2, post, numb[lev], "Q");
+                $$ = bundle(4, $2, post, numb[lev], "Q");
         }
 |       _RETURN
         {
-                bundle(4, "0", post, numb[lev], "Q");
+                $$ = bundle(4, "0", post, numb[lev], "Q");
         }
 |       '{' slist '}'
         {
@@ -228,28 +228,30 @@ stat1:
         }
 |       FFF
         {
-                bundle(1, "fY");
+                $$ = bundle(1, "fY");
         }
 |       _IF crs BLEV '(' re ')' stat
         {
                 conout($7, $2);
-                bundle(3, $5, $2, " ");
+                $$ = bundle(3, $5, $2, " ");
         }
 |       _WHILE crs '(' re ')' stat BLEV
         {
-                bundle(3, $6, $4, $2);
+                $$ = bundle(3, $6, $4, $2);
                 conout($$, $2);
-                bundle(3, $4, $2, " ");
+                $$ = bundle(3, $4, $2, " ");
         }
 |       fprefix crs re ';' e ')' stat BLEV
         {
-                bundle(5, $7, $5, "s.", $3, $2);
-                conout($$, $2);
-                bundle(5, $1, "s.", $3, $2, " ");
+                //XXX: pad: using $$ = strategy fails with
+                // yacc error so commented for now
+                //bundle(5, $7, $5, "s.", $3, $2);
+                //conout($$, $2);
+                //bundle(5, $1, "s.", $3, $2, " ");
         }
 |       '~' LETTER '=' e
         {
-                bundle(3, $4, "S", $2);
+                $$ = bundle(3, $4, "S", $2);
         }
 
 fprefix:
@@ -268,7 +270,7 @@ slist:
         stat
 |       slist tail stat
         {
-                bundle(2, $1, $3);
+                $$ = bundle(2, $1, $3);
         }
 
 tail:
@@ -285,27 +287,27 @@ re:
         }
 |       e '<' e
         {
-                bundle(3, $1, $3, ">");
+                $$ = bundle(3, $1, $3, ">");
         }
 |       e '>' e
         {
-                bundle(3, $1, $3, "<");
+                $$ = bundle(3, $1, $3, "<");
         }
 |       e NE e
         {
-                bundle(3, $1, $3, "!=");
+                $$ = bundle(3, $1, $3, "!=");
         }
 |       e GE e
         {
-                bundle(3, $1, $3, "!>");
+                $$ = bundle(3, $1, $3, "!>");
         }
 |       e LE e
         {
-                bundle(3, $1, $3, "!<");
+                $$ = bundle(3, $1, $3, "!<");
         }
 |       e
         {
-                bundle(2, $1, " 0!=");
+                $$ = bundle(2, $1, " 0!=");
         }
 
 nase:
@@ -315,19 +317,19 @@ nase:
         }
 |       cons
         {
-                bundle(3, " ", $1, " ");
+                $$ = bundle(3, " ", $1, " ");
         }
 |       DOT cons
         {
-                bundle(3, " .", $2, " ");
+                $$ = bundle(3, " .", $2, " ");
         }
 |       cons DOT cons
         {
-                bundle(5, " ", $1, ".", $3, " ");
+                $$ = bundle(5, " ", $1, ".", $3, " ");
         }
 |       cons DOT
         {
-                bundle(4, " ", $1, ".", " ");
+                $$ = bundle(4, " ", $1, ".", " ");
         }
 |       DOT
         {
@@ -335,176 +337,176 @@ nase:
         }
 |       LETTER '[' e ']'
         {
-                bundle(3, $3, ";", geta($1));
+                $$ = bundle(3, $3, ";", geta($1));
         }
 |       LETTER INCR
         {
-                bundle(4, "l", $1, "d1+s", $1);
+                $$ = bundle(4, "l", $1, "d1+s", $1);
         }
 |       INCR LETTER
         {
-                bundle(4, "l", $2, "1+ds", $2);
+                $$ = bundle(4, "l", $2, "1+ds", $2);
         }
 |       DECR LETTER
         {
-                bundle(4, "l", $2, "1-ds", $2);
+                $$ = bundle(4, "l", $2, "1-ds", $2);
         }
 |       LETTER DECR
         {
-                bundle(4, "l", $1, "d1-s", $1);
+                $$ = bundle(4, "l", $1, "d1-s", $1);
         }
 |       LETTER '[' e ']' INCR
         {
-                bundle(7, $3, ";", geta($1), "d1+" ,$3, ":" ,geta($1));
+                $$ = bundle(7, $3, ";", geta($1), "d1+" ,$3, ":" ,geta($1));
         }
 |       INCR LETTER '[' e ']'
         {
-                bundle(7, $4, ";", geta($2), "1+d", $4, ":", geta($2));
+                $$ = bundle(7, $4, ";", geta($2), "1+d", $4, ":", geta($2));
         }
 |       LETTER '[' e ']' DECR
         {
-                bundle(7, $3, ";", geta($1), "d1-", $3, ":", geta($1));
+                $$ = bundle(7, $3, ";", geta($1), "d1-", $3, ":", geta($1));
         }
 |       DECR LETTER '[' e ']'
         {
-                bundle(7, $4, ";", geta($2), "1-d", $4, ":" ,geta($2));
+                $$ = bundle(7, $4, ";", geta($2), "1-d", $4, ":" ,geta($2));
         }
 |       SCALE INCR
         {
-                bundle(1, "Kd1+k");
+                $$ = bundle(1, "Kd1+k");
         }
 |       INCR SCALE
         {
-                bundle(1, "K1+dk");
+                $$ = bundle(1, "K1+dk");
         }
 |       SCALE DECR
         {
-                bundle(1, "Kd1-k");
+                $$ = bundle(1, "Kd1-k");
         }
 |       DECR SCALE
         {
-                bundle(1, "K1-dk");
+                $$ = bundle(1, "K1-dk");
         }
 |       BASE INCR
         {
-                bundle(1, "Id1+i");
+                $$ = bundle(1, "Id1+i");
         }
 |       INCR BASE
         {
-                bundle(1, "I1+di");
+                $$ = bundle(1, "I1+di");
         }
 |       BASE DECR
         {
-                bundle(1, "Id1-i");
+                $$ = bundle(1, "Id1-i");
         }
 |       DECR BASE
         {
-                bundle(1, "I1-di");
+                $$ = bundle(1, "I1-di");
         }
 |       OBASE INCR
         {
-                bundle(1, "Od1+o");
+                $$ = bundle(1, "Od1+o");
         }
 |       INCR OBASE
         {
-                bundle(1, "O1+do");
+                $$ = bundle(1, "O1+do");
         }
 |       OBASE DECR
         {
-                bundle(1, "Od1-o");
+                $$ = bundle(1, "Od1-o");
         }
 |       DECR OBASE
         {
-                bundle(1, "O1-do");
+                $$ = bundle(1, "O1-do");
         }
 |       LETTER '(' cargs ')'
         {
-                bundle(4, $3, "l", getf($1), "x");
+                $$ = bundle(4, $3, "l", getf($1), "x");
         }
 |       LETTER '(' ')'
         {
-                bundle(3, "l", getf($1), "x");
+                $$ = bundle(3, "l", getf($1), "x");
         }
 |       LETTER '=' {
-                bundle(2, "l", $1);
+                $$ = bundle(2, "l", $1);
         }
 |       LENGTH '(' e ')'
         {
-                bundle(2, $3, "Z");
+                $$ = bundle(2, $3, "Z");
         }
 |       SCALE '(' e ')'
         {
-                bundle(2, $3, "X");
+                $$ = bundle(2, $3, "X");
         }
 |       '?'
         {
-                bundle(1, "?");
+                $$ = bundle(1, "?");
         }
 |       SQRT '(' e ')'
         {
-                bundle(2, $3, "v");
+                $$ = bundle(2, $3, "v");
         }
 |       '~' LETTER
         {
-                bundle(2, "L", $2);
+                $$ = bundle(2, "L", $2);
         }
 |       SCALE
         {
-                bundle(1, "K");
+                $$ = bundle(1, "K");
         }
 |       BASE
         {
-                bundle(1, "I");
+                $$ = bundle(1, "I");
         }
 |       OBASE
         {
-                bundle(1, "O");
+                $$ = bundle(1, "O");
         }
 |       '-' e
         {
-                bundle(3, " 0", $2, "-");
+                $$ = bundle(3, " 0", $2, "-");
         }
 |       e '+' e
         {
-                bundle(3, $1, $3, "+");
+                $$ = bundle(3, $1, $3, "+");
         }
 |       e '-' e
         {
-                bundle(3, $1, $3, "-");
+                $$ = bundle(3, $1, $3, "-");
         }
 |       e '*' e
         {
-                bundle(3, $1, $3, "*");
+                $$ = bundle(3, $1, $3, "*");
         }
 |       e '/' e
         {
-                bundle(3, $1, $3, "/");
+                $$ = bundle(3, $1, $3, "/");
         }
 |       e '%' e
         {
-                bundle(3, $1, $3, "%%");
+                $$ = bundle(3, $1, $3, "%%");
         }
 |       e '^' e
         {
-                bundle(3, $1, $3, "^");
+                $$ = bundle(3, $1, $3, "^");
         }
 
 ase:
         LETTER '=' e
         {
-                bundle(3, $3, "ds", $1);
+                $$ = bundle(3, $3, "ds", $1);
         }
 |       LETTER '[' e ']' '=' e
         {
-                bundle(5, $6, "d", $3, ":", geta($1));
+                $$ = bundle(5, $6, "d", $3, ":", geta($1));
         }
 |       LETTER EQOP e
         {
-                bundle(6, "l", $1, $3, $2, "ds", $1);
+                $$ = bundle(6, "l", $1, $3, $2, "ds", $1);
         }
 |       LETTER '[' e ']' EQOP e
         {
-                bundle(9, $3, ";", geta($1), $6, $5, "d", $3, ":", geta($1));
+                $$ = bundle(9, $3, ";", geta($1), $6, $5, "d", $3, ":", geta($1));
         }
 
 e:
@@ -515,14 +517,14 @@ cargs:
         eora
 |       cargs ',' eora
         {
-                bundle(2, $1, $3);
+                $$ = bundle(2, $1, $3);
         }
 
 eora:
         e
 |       LETTER '[' ']'
         {
-                bundle(2, "l", geta($1));
+                $$ = bundle(2, "l", geta($1));
         }
 
 cons:
@@ -849,7 +851,8 @@ bundle(int a, ...)
         }
         *bsp_nxt++ = 0;
         va_end(arg);
-        yyval.cptr = (char*)q;
+        //old: does not work with bison, need to use $$ in caller
+        //yyval.cptr = (char*)q;
         return (char*)q;
 }
 
@@ -910,20 +913,16 @@ void
 pp(char *s)
 {
         /* puts the relevant stuff on pre and post for the letter s */
-        bundle(3, "S", s, pre);
-        pre = yyval.cptr;
-        bundle(4, post, "L", s, "s.");
-        post = yyval.cptr;
+        pre = bundle(3, "S", s, pre);
+        post = bundle(4, post, "L", s, "s.");
 }
 
 void
 tp(char *s)
 {
         /* same as pp, but for temps */
-        bundle(3, "0S", s, pre);
-        pre = yyval.cptr;
-        bundle(4, post, "L", s, "s.");
-        post = yyval.cptr;
+        pre = bundle(3, "0S", s, pre);
+        post = bundle(4, post, "L", s, "s.");
 }
 
 /*s: function [[yyinit]](bc.y) */
