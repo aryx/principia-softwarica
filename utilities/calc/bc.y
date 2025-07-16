@@ -109,7 +109,7 @@
 
 /*s: type directives bc.y */
 %type   <cptr>  pstat stat stat1 def slist dlets e ase nase
-%type   <cptr>  slist re fprefix cargs eora cons constant lora
+%type   <cptr>  re fprefix cargs eora cons constant lora
 %type   <cptr>  crs
 /*e: type directives bc.y */
 /*s: token directives bc.y */
@@ -259,7 +259,7 @@ fprefix:
         }
 
 BLEV:
-        =
+        '='
         {
                 --bindx;
         }
@@ -425,7 +425,7 @@ nase:
         {
                 bundle(3, "l", getf($1), "x");
         }
-|       LETTER = {
+|       LETTER '=' {
                 bundle(2, "l", $1);
         }
 |       LENGTH '(' e ')'
@@ -548,7 +548,7 @@ constant:
         }
 
 crs:
-        =
+        '='
         {
                 $$ = cp;
                 *cp++ = '<';
