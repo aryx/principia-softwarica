@@ -1,3 +1,4 @@
+/*s: zip/zip.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -396,3 +397,4 @@ error(char *fmt, ...)
 
     longjmp(zjmp, 1);
 }
+/*e: zip/zip.c */

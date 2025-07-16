@@ -1,3 +1,4 @@
+/*s: zip/zip.h */
 typedef struct ZipHead  ZipHead;
 
 enum
@@ -81,3 +82,4 @@ struct ZipHead
     ulong   off;
     char    *file;
 };
+/*e: zip/zip.h */
