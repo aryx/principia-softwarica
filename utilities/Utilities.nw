@@ -4804,8 +4804,9 @@ loop:
 % awk '{ sub(/foo/, "bar"); print }' file
 %(vs perl -p -i -e s/foo/bar/ file)
 
-% big problem is rely on APE, but maybe can compile more easily
-% actually from goken?
+%TODO: a problem is awk relies on APE so we should "modernize" the code
+% and using plan9 libs instead
+% (it compiles fine from goken as we use gcc there and can use standard libc)
 
 % awk -F: '{print $1, $2}' /etc/passwd
 
@@ -4813,11 +4814,753 @@ loop:
 
 \section{Data structures}
 
+\subsection{[[Cell]]}
+
+\subsection{Symbol table}
+
 \section{[[main()]]}
+
+<<function [[main]](awk)>>=
+int main(int argc, char *argv[])
+{
+    char *fs = NULL, *marg;
+    int temp;
+
+    cmdname = argv[0];
+    if (argc == 1) {
+        fprintf(stderr, "Usage: %s [-F fieldsep] [-mf n] [-mr n] [-v var=value] [-f programfile | 'program'] [file ...]\n", cmdname);
+        exit(1);
+    }
+    signal(SIGFPE, fpecatch);
+    yyin = NULL;
+    symtab = makesymtab(NSYMTAB);
+    while (argc > 1 && argv[1][0] == '-' && argv[1][1] != '\0') {
+        if (strcmp(argv[1], "--") == 0) {   /* explicit end of args */
+            argc--;
+            argv++;
+            break;
+        }
+        switch (argv[1][1]) {
+        case 's':
+            if (strcmp(argv[1], "-safe") == 0)
+                safe = 1;
+            break;
+        case 'f':   /* next argument is program filename */
+            argc--;
+            argv++;
+            if (argc <= 1)
+                FATAL("no program filename");
+            pfile[npfile++] = argv[1];
+            break;
+        case 'F':   /* set field separator */
+            if (argv[1][2] != 0) {  /* arg is -Fsomething */
+                if (argv[1][2] == 't' && argv[1][3] == 0)   /* wart: t=>\t */
+                    fs = "\t";
+                else if (argv[1][2] != 0)
+                    fs = &argv[1][2];
+            } else {        /* arg is -F something */
+                argc--; argv++;
+                if (argc > 1 && argv[1][0] == 't' && argv[1][1] == 0)   /* wart: t=>\t */
+                    fs = "\t";
+                else if (argc > 1 && argv[1][0] != 0)
+                    fs = &argv[1][0];
+            }
+            if (fs == NULL || *fs == '\0')
+                WARNING("field separator FS is empty");
+            break;
+        case 'v':   /* -v a=1 to be done NOW.  one -v for each */
+            if (argv[1][2] == '\0' && --argc > 1 && isclvar((++argv)[1]))
+                setclvar(argv[1]);
+            break;
+        case 'm':   /* more memory: -mr=record, -mf=fields */
+                /* no longer needed */
+            marg = argv[1];
+            if (argv[1][3])
+                temp = atoi(&argv[1][3]);
+            else {
+                argv++; argc--;
+                temp = atoi(&argv[1][0]);
+            }
+            switch (marg[2]) {
+            case 'r':   recsize = temp; break;
+            case 'f':   nfields = temp; break;
+            default: FATAL("unknown option %s\n", marg);
+            }
+            break;
+        case 'd':
+            dbg = atoi(&argv[1][2]);
+            if (dbg == 0)
+                dbg = 1;
+            printf("awk %s\n", version);
+            break;
+        case 'V':   /* added for exptools "standard" */
+            printf("awk %s\n", version);
+            exit(0);
+            break;
+        default:
+            WARNING("unknown option %s ignored", argv[1]);
+            break;
+        }
+        argc--;
+        argv++;
+    }
+    /* argv[1] is now the first argument */
+    if (npfile == 0) {  /* no -f; first argument is program */
+        if (argc <= 1) {
+            if (dbg)
+                exit(0);
+            FATAL("no program given");
+        }
+           dprintf( ("program = |%s|\n", argv[1]) );
+        lexprog = argv[1];
+        argc--;
+        argv++;
+    }
+
+    recinit(recsize);
+    syminit();
+    compile_time = 1;
+    argv[0] = cmdname;  /* put prog name at front of arglist */
+       dprintf( ("argc=%d, argv[0]=%s\n", argc, argv[0]) );
+    arginit(argc, argv);
+    if (!safe)
+        envinit(environ);
+    yyparse();
+    if (fs)
+        *FS = qstring(fs, '\0');
+       dprintf( ("errorflag=%d\n", errorflag) );
+    if (errorflag == 0) {
+        compile_time = 0;
+        run(winner);
+    } else
+        bracecheck();
+    return(errorflag);
+}
+@
+
+
+<<awkgram.y prelude>>=
+#include <stdio.h>
+#include <string.h>
+#include "awk.h"
+
+#define makedfa(a,b)    compre(a)
+
+void checkdup(Node *list, Cell *item);
+int yywrap(void) { return(1); }
+
+Node    *beginloc = 0;
+Node    *endloc = 0;
+int infunc  = 0;    /* = 1 if in arglist or body of func */
+int inloop  = 0;    /* = 1 if in while, for, do */
+char    *curfname = 0;  /* current function name */
+Node    *arglist = 0;   /* list of args for current function */
+@
 
 \section{Lexer}
 
+<<union directive awkgram.y>>=
+%union {
+    Node    *p;
+    Cell    *cp;
+    int i;
+    char    *s;
+}
+@
+
+<<token directives awkgram.y>>=
+%token  <i> FIRSTTOKEN  /* must be first */
+%token  <p> PROGRAM PASTAT PASTAT2 XBEGIN XEND
+%token  <i> NL ',' '{' '(' '|' ';' '/' ')' '}' '[' ']'
+%token  <i> ARRAY
+%token  <i> MATCH NOTMATCH MATCHOP
+%token  <i> FINAL DOT ALL CCL NCCL CHAR OR STAR QUEST PLUS
+%token  <i> AND BOR APPEND EQ GE GT LE LT NE IN
+%token  <i> ARG BLTIN BREAK CLOSE CONTINUE DELETE DO EXIT FOR FUNC 
+%token  <i> SUB GSUB IF INDEX LSUBSTR MATCHFCN NEXT NEXTFILE
+%token  <i> ADD MINUS MULT DIVIDE MOD
+%token  <i> ASSIGN ASGNOP ADDEQ SUBEQ MULTEQ DIVEQ MODEQ POWEQ
+%token  <i> PRINT PRINTF SPRINTF
+%token  <p> ELSE INTEST CONDEXPR
+%token  <i> POSTINCR PREINCR POSTDECR PREDECR
+%token  <cp>    VAR IVAR VARNF CALL NUMBER STRING
+%token  <s> REGEXPR
+@
+
+
+<<function [[yylex]](awk)>>=
+int yylex(void)
+{
+    int c;
+    static char *buf = 0;
+    static int bufsize = 500;
+
+    if (buf == 0 && (buf = (char *) malloc(bufsize)) == NULL)
+        FATAL( "out of space in yylex" );
+    if (sc) {
+        sc = 0;
+        RET('}');
+    }
+    if (reg) {
+        reg = 0;
+        return regexpr();
+    }
+    for (;;) {
+        c = gettok(&buf, &bufsize);
+        if (c == 0)
+            return 0;
+        if (isalpha(c) || c == '_')
+            return word(buf);
+        if (isdigit(c) || c == '.') {
+            yylval.cp = setsymtab(buf, tostring(buf), atof(buf), CON|NUM, symtab);
+            /* should this also have STR set? */
+            RET(NUMBER);
+        }
+    
+        yylval.i = c;
+        switch (c) {
+        case '\n':  /* {EOL} */
+            RET(NL);
+        case '\r':  /* assume \n is coming */
+        case ' ':   /* {WS}+ */
+        case '\t':
+            break;
+        case '#':   /* #.* strip comments */
+            while ((c = input()) != '\n' && c != 0)
+                ;
+            unput(c);
+            break;
+        case ';':
+            RET(';');
+        case '\\':
+            if (peek() == '\n') {
+                input();
+            } else if (peek() == '\r') {
+                input(); input();   /* \n */
+                lineno++;
+            } else {
+                RET(c);
+            }
+            break;
+        case '&':
+            if (peek() == '&') {
+                input(); RET(AND);
+            } else 
+                RET('&');
+        case '|':
+            if (peek() == '|') {
+                input(); RET(BOR);
+            } else
+                RET('|');
+        case '!':
+            if (peek() == '=') {
+                input(); yylval.i = NE; RET(NE);
+            } else if (peek() == '~') {
+                input(); yylval.i = NOTMATCH; RET(MATCHOP);
+            } else
+                RET(NOT);
+        case '~':
+            yylval.i = MATCH;
+            RET(MATCHOP);
+        case '<':
+            if (peek() == '=') {
+                input(); yylval.i = LE; RET(LE);
+            } else {
+                yylval.i = LT; RET(LT);
+            }
+        case '=':
+            if (peek() == '=') {
+                input(); yylval.i = EQ; RET(EQ);
+            } else {
+                yylval.i = ASSIGN; RET(ASGNOP);
+            }
+        case '>':
+            if (peek() == '=') {
+                input(); yylval.i = GE; RET(GE);
+            } else if (peek() == '>') {
+                input(); yylval.i = APPEND; RET(APPEND);
+            } else {
+                yylval.i = GT; RET(GT);
+            }
+        case '+':
+            if (peek() == '+') {
+                input(); yylval.i = INCR; RET(INCR);
+            } else if (peek() == '=') {
+                input(); yylval.i = ADDEQ; RET(ASGNOP);
+            } else
+                RET('+');
+        case '-':
+            if (peek() == '-') {
+                input(); yylval.i = DECR; RET(DECR);
+            } else if (peek() == '=') {
+                input(); yylval.i = SUBEQ; RET(ASGNOP);
+            } else
+                RET('-');
+        case '*':
+            if (peek() == '=') {    /* *= */
+                input(); yylval.i = MULTEQ; RET(ASGNOP);
+            } else if (peek() == '*') { /* ** or **= */
+                input();    /* eat 2nd * */
+                if (peek() == '=') {
+                    input(); yylval.i = POWEQ; RET(ASGNOP);
+                } else {
+                    RET(POWER);
+                }
+            } else
+                RET('*');
+        case '/':
+            RET('/');
+        case '%':
+            if (peek() == '=') {
+                input(); yylval.i = MODEQ; RET(ASGNOP);
+            } else
+                RET('%');
+        case '^':
+            if (peek() == '=') {
+                input(); yylval.i = POWEQ; RET(ASGNOP);
+            } else
+                RET(POWER);
+    
+        case '$':
+            /* BUG: awkward, if not wrong */
+            c = gettok(&buf, &bufsize);
+            if (c == '(' || c == '[' || (infunc && isarg(buf) >= 0)) {
+                unputstr(buf);
+                RET(INDIRECT);
+            } else if (isalpha(c)) {
+                if (strcmp(buf, "NF") == 0) {   /* very special */
+                    unputstr("(NF)");
+                    RET(INDIRECT);
+                }
+                yylval.cp = setsymtab(buf, "", 0.0, STR|NUM, symtab);
+                RET(IVAR);
+            } else {
+                unputstr(buf);
+                RET(INDIRECT);
+            }
+    
+        case '}':
+            if (--bracecnt < 0)
+                SYNTAX( "extra }" );
+            sc = 1;
+            RET(';');
+        case ']':
+            if (--brackcnt < 0)
+                SYNTAX( "extra ]" );
+            RET(']');
+        case ')':
+            if (--parencnt < 0)
+                SYNTAX( "extra )" );
+            RET(')');
+        case '{':
+            bracecnt++;
+            RET('{');
+        case '[':
+            brackcnt++;
+            RET('[');
+        case '(':
+            parencnt++;
+            RET('(');
+    
+        case '"':
+            return string();    /* BUG: should be like tran.c ? */
+    
+        default:
+            RET(c);
+        }
+    }
+}
+@
+
 \section{Grammar}
+
+<<type directives awkgram.y>>=
+%type   <p> pas pattern ppattern plist pplist patlist prarg term re
+%type   <p> pa_pat pa_stat pa_stats
+%type   <s> reg_expr
+%type   <p> simple_stmt opt_simple_stmt stmt stmtlist
+%type   <p> var varname funcname varlist
+%type   <p> for if else while
+%type   <i> do st
+%type   <i> pst opt_pst lbrace rbrace rparen comma nl opt_nl and bor
+%type   <i> subop print
+@
+
+<<priority directives awkgram.y>>=
+%right  ASGNOP
+%right  '?'
+%right  ':'
+%left   BOR
+%left   AND
+%left   GETLINE
+%nonassoc APPEND EQ GE GT LE LT NE MATCHOP IN '|'
+%left   ARG BLTIN BREAK CALL CLOSE CONTINUE DELETE DO EXIT FOR FUNC 
+%left   GSUB IF INDEX LSUBSTR MATCHFCN NEXT NUMBER
+%left   PRINT PRINTF RETURN SPLIT SPRINTF STRING SUB SUBSTR
+%left   REGEXPR VAR VARNF IVAR WHILE '('
+%left   CAT
+%left   '+' '-'
+%left   '*' '/' '%'
+%left   NOT UMINUS
+%right  POWER
+%right  DECR INCR
+%left   INDIRECT
+%token  LASTTOKEN   /* must be last */
+@
+
+<<grammar awkgram.y>>=
+program:
+      pas   { if (errorflag==0)
+            winner = (Node *)stat3(PROGRAM, beginloc, $1, endloc); }
+    | error { yyclearin; bracecheck(); SYNTAX("bailing out"); }
+    ;
+
+and:
+      AND | and NL
+    ;
+
+bor:
+      BOR | bor NL
+    ;
+
+comma:
+      ',' | comma NL
+    ;
+
+do:
+      DO | do NL
+    ;
+
+else:
+      ELSE | else NL
+    ;
+
+for:
+      FOR '(' opt_simple_stmt ';' opt_nl pattern ';' opt_nl opt_simple_stmt rparen {inloop++;} stmt
+        { --inloop; $$ = stat4(FOR, $3, notnull($6), $9, $12); }
+    | FOR '(' opt_simple_stmt ';'  ';' opt_nl opt_simple_stmt rparen {inloop++;} stmt
+        { --inloop; $$ = stat4(FOR, $3, NIL, $7, $10); }
+    | FOR '(' varname IN varname rparen {inloop++;} stmt
+        { --inloop; $$ = stat3(IN, $3, makearr($5), $8); }
+    ;
+
+funcname:
+      VAR   { setfname($1); }
+    | CALL  { setfname($1); }
+    ;
+
+if:
+      IF '(' pattern rparen     { $$ = notnull($3); }
+    ;
+
+lbrace:
+      '{' | lbrace NL
+    ;
+
+nl:
+      NL | nl NL
+    ;
+
+opt_nl:
+      /* empty */   { $$ = 0; }
+    | nl
+    ;
+
+opt_pst:
+      /* empty */   { $$ = 0; }
+    | pst
+    ;
+
+
+opt_simple_stmt:
+      /* empty */           { $$ = 0; }
+    | simple_stmt
+    ;
+
+pas:
+      opt_pst           { $$ = 0; }
+    | opt_pst pa_stats opt_pst  { $$ = $2; }
+    ;
+
+pa_pat:
+      pattern   { $$ = notnull($1); }
+    ;
+
+pa_stat:
+      pa_pat            { $$ = stat2(PASTAT, $1, stat2(PRINT, rectonode(), NIL)); }
+    | pa_pat lbrace stmtlist '}'    { $$ = stat2(PASTAT, $1, $3); }
+    | pa_pat ',' pa_pat     { $$ = pa2stat($1, $3, stat2(PRINT, rectonode(), NIL)); }
+    | pa_pat ',' pa_pat lbrace stmtlist '}' { $$ = pa2stat($1, $3, $5); }
+    | lbrace stmtlist '}'       { $$ = stat2(PASTAT, NIL, $2); }
+    | XBEGIN lbrace stmtlist '}'
+        { beginloc = linkum(beginloc, $3); $$ = 0; }
+    | XEND lbrace stmtlist '}'
+        { endloc = linkum(endloc, $3); $$ = 0; }
+    | FUNC funcname '(' varlist rparen {infunc++;} lbrace stmtlist '}'
+        { infunc--; curfname=0; defn((Cell *)$2, $4, $8); $$ = 0; }
+    ;
+
+pa_stats:
+      pa_stat
+    | pa_stats opt_pst pa_stat  { $$ = linkum($1, $3); }
+    ;
+
+patlist:
+      pattern
+    | patlist comma pattern     { $$ = linkum($1, $3); }
+    ;
+
+ppattern:
+      var ASGNOP ppattern       { $$ = op2($2, $1, $3); }
+    | ppattern '?' ppattern ':' ppattern %prec '?'
+        { $$ = op3(CONDEXPR, notnull($1), $3, $5); }
+    | ppattern bor ppattern %prec BOR
+        { $$ = op2(BOR, notnull($1), notnull($3)); }
+    | ppattern and ppattern %prec AND
+        { $$ = op2(AND, notnull($1), notnull($3)); }
+    | ppattern MATCHOP reg_expr { $$ = op3($2, NIL, $1, (Node*)makedfa($3, 0)); }
+    | ppattern MATCHOP ppattern
+        { if (constnode($3))
+            $$ = op3($2, NIL, $1, (Node*)makedfa(strnode($3), 0));
+          else
+            $$ = op3($2, (Node *)1, $1, $3); }
+    | ppattern IN varname       { $$ = op2(INTEST, $1, makearr($3)); }
+    | '(' plist ')' IN varname  { $$ = op2(INTEST, $2, makearr($5)); }
+    | ppattern term %prec CAT   { $$ = op2(CAT, $1, $2); }
+    | re
+    | term
+    ;
+
+pattern:
+      var ASGNOP pattern        { $$ = op2($2, $1, $3); }
+    | pattern '?' pattern ':' pattern %prec '?'
+        { $$ = op3(CONDEXPR, notnull($1), $3, $5); }
+    | pattern bor pattern %prec BOR
+        { $$ = op2(BOR, notnull($1), notnull($3)); }
+    | pattern and pattern %prec AND
+        { $$ = op2(AND, notnull($1), notnull($3)); }
+    | pattern EQ pattern        { $$ = op2($2, $1, $3); }
+    | pattern GE pattern        { $$ = op2($2, $1, $3); }
+    | pattern GT pattern        { $$ = op2($2, $1, $3); }
+    | pattern LE pattern        { $$ = op2($2, $1, $3); }
+    | pattern LT pattern        { $$ = op2($2, $1, $3); }
+    | pattern NE pattern        { $$ = op2($2, $1, $3); }
+    | pattern MATCHOP reg_expr  { $$ = op3($2, NIL, $1, (Node*)makedfa($3, 0)); }
+    | pattern MATCHOP pattern
+        { if (constnode($3))
+            $$ = op3($2, NIL, $1, (Node*)makedfa(strnode($3), 0));
+          else
+            $$ = op3($2, (Node *)1, $1, $3); }
+    | pattern IN varname        { $$ = op2(INTEST, $1, makearr($3)); }
+    | '(' plist ')' IN varname  { $$ = op2(INTEST, $2, makearr($5)); }
+    | pattern '|' GETLINE var   { 
+            if (safe) SYNTAX("cmd | getline is unsafe");
+            else $$ = op3(GETLINE, $4, itonp($2), $1); }
+    | pattern '|' GETLINE       { 
+            if (safe) SYNTAX("cmd | getline is unsafe");
+            else $$ = op3(GETLINE, (Node*)0, itonp($2), $1); }
+    | pattern term %prec CAT    { $$ = op2(CAT, $1, $2); }
+    | re
+    | term
+    ;
+
+plist:
+      pattern comma pattern     { $$ = linkum($1, $3); }
+    | plist comma pattern       { $$ = linkum($1, $3); }
+    ;
+
+pplist:
+      ppattern
+    | pplist comma ppattern     { $$ = linkum($1, $3); }
+    ;
+
+prarg:
+      /* empty */           { $$ = rectonode(); }
+    | pplist
+    | '(' plist ')'         { $$ = $2; }
+    ;
+
+print:
+      PRINT | PRINTF
+    ;
+
+pst:
+      NL | ';' | pst NL | pst ';'
+    ;
+
+rbrace:
+      '}' | rbrace NL
+    ;
+
+re:
+       reg_expr
+        { $$ = op3(MATCH, NIL, rectonode(), (Node*)makedfa($1, 0)); }
+    | NOT re    { $$ = op1(NOT, notnull($2)); }
+    ;
+
+reg_expr:
+      '/' {startreg();} REGEXPR '/'     { $$ = $3; }
+    ;
+
+rparen:
+      ')' | rparen NL
+    ;
+
+simple_stmt:
+      print prarg '|' term      { 
+            if (safe) SYNTAX("print | is unsafe");
+            else $$ = stat3($1, $2, itonp($3), $4); }
+    | print prarg APPEND term   {
+            if (safe) SYNTAX("print >> is unsafe");
+            else $$ = stat3($1, $2, itonp($3), $4); }
+    | print prarg GT term       {
+            if (safe) SYNTAX("print > is unsafe");
+            else $$ = stat3($1, $2, itonp($3), $4); }
+    | print prarg           { $$ = stat3($1, $2, NIL, NIL); }
+    | DELETE varname '[' patlist ']' { $$ = stat2(DELETE, makearr($2), $4); }
+    | DELETE varname         { $$ = stat2(DELETE, makearr($2), 0); }
+    | pattern           { $$ = exptostat($1); }
+    | error             { yyclearin; SYNTAX("illegal statement"); }
+    ;
+
+st:
+      nl
+    | ';' opt_nl
+    ;
+
+stmt:
+      BREAK st      { if (!inloop) SYNTAX("break illegal outside of loops");
+                  $$ = stat1(BREAK, NIL); }
+    | CLOSE pattern st  { $$ = stat1(CLOSE, $2); }
+    | CONTINUE st       {  if (!inloop) SYNTAX("continue illegal outside of loops");
+                  $$ = stat1(CONTINUE, NIL); }
+    | do {inloop++;} stmt {--inloop;} WHILE '(' pattern ')' st
+        { $$ = stat2(DO, $3, notnull($7)); }
+    | EXIT pattern st   { $$ = stat1(EXIT, $2); }
+    | EXIT st       { $$ = stat1(EXIT, NIL); }
+    | for
+    | if stmt else stmt { $$ = stat3(IF, $1, $2, $4); }
+    | if stmt       { $$ = stat3(IF, $1, $2, NIL); }
+    | lbrace stmtlist rbrace { $$ = $2; }
+    | NEXT st   { if (infunc)
+                SYNTAX("next is illegal inside a function");
+              $$ = stat1(NEXT, NIL); }
+    | NEXTFILE st   { if (infunc)
+                SYNTAX("nextfile is illegal inside a function");
+              $$ = stat1(NEXTFILE, NIL); }
+    | RETURN pattern st { $$ = stat1(RETURN, $2); }
+    | RETURN st     { $$ = stat1(RETURN, NIL); }
+    | simple_stmt st
+    | while {inloop++;} stmt    { --inloop; $$ = stat2(WHILE, $1, $3); }
+    | ';' opt_nl        { $$ = 0; }
+    ;
+
+stmtlist:
+      stmt
+    | stmtlist stmt     { $$ = linkum($1, $2); }
+    ;
+
+subop:
+      SUB | GSUB
+    ;
+
+term:
+      term '/' ASGNOP term      { $$ = op2(DIVEQ, $1, $4); }
+    | term '+' term         { $$ = op2(ADD, $1, $3); }
+    | term '-' term         { $$ = op2(MINUS, $1, $3); }
+    | term '*' term         { $$ = op2(MULT, $1, $3); }
+    | term '/' term         { $$ = op2(DIVIDE, $1, $3); }
+    | term '%' term         { $$ = op2(MOD, $1, $3); }
+    | term POWER term       { $$ = op2(POWER, $1, $3); }
+    | '-' term %prec UMINUS     { $$ = op1(UMINUS, $2); }
+    | '+' term %prec UMINUS     { $$ = $2; }
+    | NOT term %prec UMINUS     { $$ = op1(NOT, notnull($2)); }
+    | BLTIN '(' ')'         { $$ = op2(BLTIN, itonp($1), rectonode()); }
+    | BLTIN '(' patlist ')'     { $$ = op2(BLTIN, itonp($1), $3); }
+    | BLTIN             { $$ = op2(BLTIN, itonp($1), rectonode()); }
+    | CALL '(' ')'          { $$ = op2(CALL, celltonode($1,CVAR), NIL); }
+    | CALL '(' patlist ')'      { $$ = op2(CALL, celltonode($1,CVAR), $3); }
+    | DECR var          { $$ = op1(PREDECR, $2); }
+    | INCR var          { $$ = op1(PREINCR, $2); }
+    | var DECR          { $$ = op1(POSTDECR, $1); }
+    | var INCR          { $$ = op1(POSTINCR, $1); }
+    | GETLINE var LT term       { $$ = op3(GETLINE, $2, itonp($3), $4); }
+    | GETLINE LT term       { $$ = op3(GETLINE, NIL, itonp($2), $3); }
+    | GETLINE var           { $$ = op3(GETLINE, $2, NIL, NIL); }
+    | GETLINE           { $$ = op3(GETLINE, NIL, NIL, NIL); }
+    | INDEX '(' pattern comma pattern ')'
+        { $$ = op2(INDEX, $3, $5); }
+    | INDEX '(' pattern comma reg_expr ')'
+        { SYNTAX("index() doesn't permit regular expressions");
+          $$ = op2(INDEX, $3, (Node*)$5); }
+    | '(' pattern ')'       { $$ = $2; }
+    | MATCHFCN '(' pattern comma reg_expr ')'
+        { $$ = op3(MATCHFCN, NIL, $3, (Node*)makedfa($5, 1)); }
+    | MATCHFCN '(' pattern comma pattern ')'
+        { if (constnode($5))
+            $$ = op3(MATCHFCN, NIL, $3, (Node*)makedfa(strnode($5), 1));
+          else
+            $$ = op3(MATCHFCN, (Node *)1, $3, $5); }
+    | NUMBER            { $$ = celltonode($1, CCON); }
+    | SPLIT '(' pattern comma varname comma pattern ')'     /* string */
+        { $$ = op4(SPLIT, $3, makearr($5), $7, (Node*)STRING); }
+    | SPLIT '(' pattern comma varname comma reg_expr ')'    /* const /regexp/ */
+        { $$ = op4(SPLIT, $3, makearr($5), (Node*)makedfa($7, 1), (Node *)REGEXPR); }
+    | SPLIT '(' pattern comma varname ')'
+        { $$ = op4(SPLIT, $3, makearr($5), NIL, (Node*)STRING); }  /* default */
+    | SPRINTF '(' patlist ')'   { $$ = op1($1, $3); }
+    | STRING            { $$ = celltonode($1, CCON); }
+    | subop '(' reg_expr comma pattern ')'
+        { $$ = op4($1, NIL, (Node*)makedfa($3, 1), $5, rectonode()); }
+    | subop '(' pattern comma pattern ')'
+        { if (constnode($3))
+            $$ = op4($1, NIL, (Node*)makedfa(strnode($3), 1), $5, rectonode());
+          else
+            $$ = op4($1, (Node *)1, $3, $5, rectonode()); }
+    | subop '(' reg_expr comma pattern comma var ')'
+        { $$ = op4($1, NIL, (Node*)makedfa($3, 1), $5, $7); }
+    | subop '(' pattern comma pattern comma var ')'
+        { if (constnode($3))
+            $$ = op4($1, NIL, (Node*)makedfa(strnode($3), 1), $5, $7);
+          else
+            $$ = op4($1, (Node *)1, $3, $5, $7); }
+    | SUBSTR '(' pattern comma pattern comma pattern ')'
+        { $$ = op3(SUBSTR, $3, $5, $7); }
+    | SUBSTR '(' pattern comma pattern ')'
+        { $$ = op3(SUBSTR, $3, $5, NIL); }
+    | var
+    ;
+
+var:
+      varname
+    | varname '[' patlist ']'   { $$ = op2(ARRAY, makearr($1), $3); }
+    | IVAR              { $$ = op1(INDIRECT, celltonode($1, CVAR)); }
+    | INDIRECT term         { $$ = op1(INDIRECT, $2); }
+    ;   
+
+varlist:
+      /* nothing */     { arglist = $$ = 0; }
+    | VAR           { arglist = $$ = celltonode($1,CVAR); }
+    | varlist comma VAR {
+            checkdup($1, $3);
+            arglist = $$ = linkum($1,celltonode($3,CVAR)); }
+    ;
+
+varname:
+      VAR           { $$ = celltonode($1, CVAR); }
+    | ARG           { $$ = op1(ARG, itonp($1)); }
+    | VARNF         { $$ = op1(VARNF, (Node *) $1); }
+    ;
+
+
+while:
+      WHILE '(' pattern rparen  { $$ = notnull($3); }
+    ;
+@
+
+\section{Interpreter}
+
+\section{[[awk]] builtins}
 
 %******************************************************************************
 \chapter{Compare}
