@@ -1,3 +1,4 @@
+/*s: text/sed.c */
 /*
  * sed -- stream editor
  */
@@ -1458,3 +1459,4 @@ opendata(void)
     fhead = fhead->next;
     return 1;
 }
+/*e: text/sed.c */

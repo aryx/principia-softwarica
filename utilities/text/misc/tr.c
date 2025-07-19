@@ -1,3 +1,4 @@
+/*s: text/tr.c */
 #include    <u.h>
 #include    <libc.h>
 
@@ -352,3 +353,4 @@ Prewind(Pcb *p)
     p->current = p->base;
     p->last = p->final = -1;
 }
+/*e: text/tr.c */
