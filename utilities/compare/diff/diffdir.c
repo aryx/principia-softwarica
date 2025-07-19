@@ -1,3 +1,4 @@
+/*s: diff/diffdir.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -111,3 +112,4 @@ diffdir(char *f, char *t, int level)
     FREE(dirf);
     FREE(dirt);
 }
+/*e: diff/diffdir.c */

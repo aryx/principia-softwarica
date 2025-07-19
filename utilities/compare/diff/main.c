@@ -1,3 +1,4 @@
+/*s: diff/main.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -262,3 +263,4 @@ erealloc(void *p, unsigned n)
         panic(2, noroom);
     return rp;
 }
+/*e: diff/main.c */

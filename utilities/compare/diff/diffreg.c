@@ -1,3 +1,4 @@
+/*s: diff/diffreg.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -417,3 +418,4 @@ diffreg(char *f, char *t)
     FREE(J); FREE(ixold); FREE(ixnew);
     Bterm(b0); Bterm(b1);           /* ++++ */
 }
+/*e: diff/diffreg.c */

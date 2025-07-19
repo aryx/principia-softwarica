@@ -1,3 +1,4 @@
+/*s: diff/diffio.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -385,3 +386,4 @@ flushchanges(void)
     }
     nchanges = 0;
 }
+/*e: diff/diffio.c */

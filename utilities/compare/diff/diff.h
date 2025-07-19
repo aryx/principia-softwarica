@@ -1,3 +1,4 @@
+/*s: diff/diff.h */
 char mode;          /* '\0', 'e', 'f', 'h' */
 char bflag;         /* ignore multiple and trailing blanks */
 char rflag;         /* recurse down directory trees */
@@ -24,3 +25,4 @@ void check(Biobuf *, Biobuf *);
 void change(int, int, int, int);
 void flushchanges(void);
 
+/*e: diff/diff.h */
