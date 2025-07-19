@@ -1,4 +1,5 @@
 /*s: awk/main.c */
+/*s: awk copyright lucent */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -22,7 +23,7 @@ IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ****************************************************************/
-
+/*e: awk copyright lucent */
 char    *version = "version 19990602";
 
 #define DEBUG
@@ -51,6 +52,7 @@ int curpfile = 0;   /* current filename */
 
 int safe    = 0;    /* 1 => "safe" mode */
 
+/*s: function [[main]](awk) */
 int main(int argc, char *argv[])
 {
     char *fs = NULL, *marg;
@@ -146,6 +148,7 @@ int main(int argc, char *argv[])
         argc--;
         argv++;
     }
+
     recinit(recsize);
     syminit();
     compile_time = 1;
@@ -165,6 +168,7 @@ int main(int argc, char *argv[])
         bracecheck();
     return(errorflag);
 }
+/*e: function [[main]](awk) */
 
 int pgetc(void)     /* get 1 character from awk program */
 {

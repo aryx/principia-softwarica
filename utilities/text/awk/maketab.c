@@ -1,4 +1,5 @@
 /*s: awk/maketab.c */
+/*s: awk copyright lucent */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -22,7 +23,7 @@ IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ****************************************************************/
-
+/*e: awk copyright lucent */
 /*
  * this program makes the table to link function names
  * and type indices that is used by execute() in run.c.
@@ -137,7 +138,10 @@ int main(int argc, char *argv[])
             continue;
         if (tok < FIRSTTOKEN || tok > LASTTOKEN) {
             fprintf(stderr, "maketab funny token %d %s\n", tok, buf);
-            exit(1);
+            // switched to 'continue' because bison generates mant YYxx
+            // macros that we just want to ignore
+            //exit(1);
+            continue;
         }
         names[tok-FIRSTTOKEN] = (char *) malloc(strlen(name)+1);
         strcpy(names[tok-FIRSTTOKEN], name);

@@ -1,4 +1,5 @@
 /*s: awk/lex.c */
+/*s: awk copyright lucent */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -22,7 +23,7 @@ IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ****************************************************************/
-
+/*e: awk copyright lucent */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -165,6 +166,7 @@ int regexpr(void);
 int sc  = 0;    /* 1 => return a } right now */
 int reg = 0;    /* 1 => return a REGEXPR now */
 
+/*s: function [[yylex]](awk) */
 int yylex(void)
 {
     int c;
@@ -346,6 +348,7 @@ int yylex(void)
         }
     }
 }
+/*e: function [[yylex]](awk) */
 
 int string(void)
 {

@@ -1,4 +1,5 @@
 /*s: awk/parse.c */
+/*s: awk copyright lucent */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -22,7 +23,7 @@ IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ****************************************************************/
-
+/*e: awk copyright lucent */
 #define DEBUG
 #include <stdio.h>
 #include <string.h>

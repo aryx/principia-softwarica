@@ -1,4 +1,5 @@
 /*s: awk/proto.h */
+/*s: awk copyright lucent */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -22,33 +23,37 @@ IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ****************************************************************/
+/*e: awk copyright lucent */
+// for goken
+#define getline p9getline
 
+// forward decls
 extern  int yywrap(void);
 extern  void    setfname(Cell *);
-extern  int constnode(Node *);
+extern  int     constnode(Node *);
 extern  char    *strnode(Node *);
 extern  Node    *notnull(Node *);
-extern  int yyparse(void);
+extern  int     yyparse(void);
 
-extern  int yylex(void);
+extern  int     yylex(void);
 extern  void    startreg(void);
-extern  int input(void);
+extern  int     input(void);
 extern  void    unput(int);
 extern  void    unputstr(char *);
-extern  int yylook(void);
-extern  int yyback(int *, int);
-extern  int yyinput(void);
+extern  int     yylook(void);
+extern  int     yyback(int *, int);
+extern  int     yyinput(void);
 
 extern  void    *compre(char *);
-extern  int hexstr(char **);
+extern  int     hexstr(char **);
 extern  void    quoted(char **, char **, char *);
-extern  int match(void *, char *, char *);
-extern  int pmatch(void *, char *, char *);
-extern  int nematch(void *, char *, char *);
-extern  int countposn(char *, int);
+extern  int     match(void *, char *, char *);
+extern  int     pmatch(void *, char *, char *);
+extern  int     nematch(void *, char *, char *);
+extern  int     countposn(char *, int);
 extern  void    overflow(void);
 
-extern  int pgetc(void);
+extern  int     pgetc(void);
 extern  char    *cursource(void);
 
 extern  Node    *nodealloc(int);
@@ -71,10 +76,10 @@ extern  Node    *makearr(Node *);
 extern  Node    *pa2stat(Node *, Node *, Node *);
 extern  Node    *linkum(Node *, Node *);
 extern  void    defn(Cell *, Node *, Node *);
-extern  int isarg(char *);
+extern  int     isarg(char *);
 extern  char    *tokname(int);
 extern  Cell    *(*proctab[])(Node **, int);
-extern  int ptoi(void *);
+extern  int     ptoi(void *);
 extern  Node    *itonp(int);
 
 extern  void    syminit(void);
@@ -84,7 +89,7 @@ extern  Array   *makesymtab(int);
 extern  void    freesymtab(Cell *);
 extern  void    freeelem(Cell *, char *);
 extern  Cell    *setsymtab(char *, char *, double, unsigned int, Array *);
-extern  int hash(char *, int);
+extern  int     hash(char *, int);
 extern  void    rehash(Array *);
 extern  Cell    *lookup(char *, Array *);
 extern  double  setfval(Cell *, double);
@@ -99,15 +104,15 @@ extern  void    recinit(unsigned int);
 extern  void    initgetrec(void);
 extern  void    makefields(int, int);
 extern  void    growfldtab(int n);
-extern  int getrec(char **, int *, int);
+extern  int     getrec(char **, int *, int);
 extern  void    nextfile(void);
-extern  int readrec(char **buf, int *bufsize, FILE *inf);
+extern  int     readrec(char **buf, int *bufsize, FILE *inf);
 extern  char    *getargv(int);
 extern  void    setclvar(char *);
 extern  void    fldbld(void);
 extern  void    cleanfld(int, int);
 extern  void    newfld(int);
-extern  int refldbld(char *, char *);
+extern  int     refldbld(char *, char *);
 extern  void    recbld(void);
 extern  Cell    *fieldadr(int);
 extern  void    yyerror(char *);
@@ -121,10 +126,10 @@ extern  void    error(void);
 extern  void    eprint(void);
 extern  void    bclass(int);
 extern  double  errcheck(double, char *);
-extern  int isclvar(char *);
-extern  int is_number(char *);
+extern  int     isclvar(char *);
+extern  int     is_number(char *);
 
-extern  int adjbuf(char **pb, int *sz, int min, int q, char **pbp, char *what);
+extern  int     adjbuf(char **pb, int *sz, int min, int q, char **pbp, char *what);
 extern  void    run(Node *);
 extern  Cell    *execute(Node *);
 extern  Cell    *program(Node **, int);
@@ -146,7 +151,7 @@ extern  Cell    *field(Node **, int);
 extern  Cell    *indirect(Node **, int);
 extern  Cell    *substr(Node **, int);
 extern  Cell    *sindex(Node **, int);
-extern  int format(char **, int *, char *, Node *);
+extern  int     format(char **, int *, char *, Node *);
 extern  Cell    *awksprintf(Node **, int);
 extern  Cell    *awkprintf(Node **, int);
 extern  Cell    *arith(Node **, int);

@@ -1,4 +1,5 @@
 /*s: awk/re.c */
+/*s: awk copyright lucent */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -22,19 +23,26 @@ IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ****************************************************************/
-
-
+/*e: awk copyright lucent */
 #define DEBUG
 #include <stdio.h>
+
+#include <u.h>
+#include <libc.h>
+
 #include <ctype.h>
-#include <setjmp.h>
-#include <math.h>
-#include <string.h>
-#include <stdlib.h>
-#include <time.h>
+
+//#include <setjmp.h>
+//#include <math.h>
+//#include <string.h>
+//#include <stdlib.h>
+//#include <time.h>
+#include <bio.h>
+#include <regexp.h>
+
 #include "awk.h"
 #include "y.tab.h"
-#include "regexp.h"
+//#include "regexp.h"
 
     /* This file provides the interface between the main body of
      * awk and the pattern matching package.  It preprocesses
@@ -188,7 +196,7 @@ void
 
     /* T/F match indication - matched string not exported */
 int
-match(void *p, char *s, char *)
+match(void *p, char *s, char *start)
 {
     return regexec((Reprog *) p, (char *) s, 0, 0);
 }
@@ -223,7 +231,7 @@ nematch(void *p, char *s, char *start)
 }
 /* in the parsing of regular expressions, metacharacters like . have */
 /* to be seen literally;  \056 is not a metacharacter. */
-
+int
 hexstr(char **pp)   /* find and eval hex string at pp, return new p */
 {
     char c;

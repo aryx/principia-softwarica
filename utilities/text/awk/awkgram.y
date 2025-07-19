@@ -1,4 +1,5 @@
 /*s: awk/awkgram.y */
+/*s: awk copyright lucent */
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -22,8 +23,9 @@ IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ****************************************************************/
-
+/*e: awk copyright lucent */
 %{
+/*s: awkgram.y prelude */
 #include <stdio.h>
 #include <string.h>
 #include "awk.h"
@@ -39,15 +41,18 @@ int infunc  = 0;    /* = 1 if in arglist or body of func */
 int inloop  = 0;    /* = 1 if in while, for, do */
 char    *curfname = 0;  /* current function name */
 Node    *arglist = 0;   /* list of args for current function */
+/*e: awkgram.y prelude */
 %}
 
+/*s: union directive awkgram.y */
 %union {
     Node    *p;
     Cell    *cp;
     int i;
     char    *s;
 }
-
+/*e: union directive awkgram.y */
+/*s: token directives awkgram.y */
 %token  <i> FIRSTTOKEN  /* must be first */
 %token  <p> PROGRAM PASTAT PASTAT2 XBEGIN XEND
 %token  <i> NL ',' '{' '(' '|' ';' '/' ')' '}' '[' ']'
@@ -64,7 +69,8 @@ Node    *arglist = 0;   /* list of args for current function */
 %token  <i> POSTINCR PREINCR POSTDECR PREDECR
 %token  <cp>    VAR IVAR VARNF CALL NUMBER STRING
 %token  <s> REGEXPR
-
+/*e: token directives awkgram.y */
+/*s: type directives awkgram.y */
 %type   <p> pas pattern ppattern plist pplist patlist prarg term re
 %type   <p> pa_pat pa_stat pa_stats
 %type   <s> reg_expr
@@ -74,7 +80,8 @@ Node    *arglist = 0;   /* list of args for current function */
 %type   <i> do st
 %type   <i> pst opt_pst lbrace rbrace rparen comma nl opt_nl and bor
 %type   <i> subop print
-
+/*e: type directives awkgram.y */
+/*s: priority directives awkgram.y */
 %right  ASGNOP
 %right  '?'
 %right  ':'
@@ -94,9 +101,10 @@ Node    *arglist = 0;   /* list of args for current function */
 %right  DECR INCR
 %left   INDIRECT
 %token  LASTTOKEN   /* must be last */
+/*e: priority directives awkgram.y */
 
 %%
-
+/*s: grammar awkgram.y */
 program:
       pas   { if (errorflag==0)
             winner = (Node *)stat3(PROGRAM, beginloc, $1, endloc); }
@@ -444,7 +452,7 @@ varname:
 while:
       WHILE '(' pattern rparen  { $$ = notnull($3); }
     ;
-
+/*e: grammar awkgram.y */
 %%
 
 void setfname(Cell *p)
