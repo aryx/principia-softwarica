@@ -144,11 +144,11 @@ showpage(int page, Menu *m)
 
 	esetcursor(nil);
 	if(showbottom){
-		ul.y = screen->r.max.y - Dy(im->r);
+		ul.y = view->r.max.y - Dy(im->r);
 		showbottom = 0;
 	}
 
-	redraw(screen);
+	redraw(view);
 	flushimage(display, 1);
 }
 
@@ -285,7 +285,7 @@ viewer(Document *dd)
 	Plumbmsg *pm;
 
 	doc = dd;    /* save global for menuhit */
-	ul = screen->r.min;
+	ul = view->r.min;
 	einit(Emouse|Ekeyboard);
 	if(doc->addpage != nil)
 		eplumb(Eplumb, "image");
@@ -362,7 +362,7 @@ viewer(Document *dd)
 				esetcursor(&reading);
 				s = writebitmap();
 				if(s)
-					string(screen, addpt(screen->r.min, Pt(5,5)), display->black, ZP,
+					string(view, addpt(view->r.min, Pt(5,5)), display->black, ZP,
 						display->defaultfont, s);
 				esetcursor(nil);
 				flushimage(display, 1);
@@ -418,18 +418,18 @@ viewer(Document *dd)
 			 * upper left corner is currently visible, we need to go back a page.
 			 */
 			case Kup:
-				if(screen->r.min.y <= ul.y && ul.y < screen->r.max.y){
+				if(view->r.min.y <= ul.y && ul.y < view->r.max.y){
 					if(page > 0 && !doc->fwdonly){
 						--page;
 						showbottom = 1;
 						showpage(page, &menu);
 					}
 				} else {
-					i = Dy(screen->r)/2;
+					i = Dy(view->r)/2;
 					if(i > 10)
 						i -= 10;
-					if(i+ul.y > screen->r.min.y)
-						i = screen->r.min.y - ul.y;
+					if(i+ul.y > view->r.min.y)
+						i = view->r.min.y - ul.y;
 					translate(Pt(0, i));
 				}
 				break;
@@ -440,15 +440,15 @@ viewer(Document *dd)
 			 */
 			case Kdown:
 				i = ul.y + Dy(im->r);
-				if(screen->r.min.y <= i && i <= screen->r.max.y){
-					ul.y = screen->r.min.y;
+				if(view->r.min.y <= i && i <= view->r.max.y){
+					ul.y = view->r.min.y;
 					goto Gotonext;
 				} else {
-					i = -Dy(screen->r)/2;
+					i = -Dy(view->r)/2;
 					if(i < -10)
 						i += 10;
-					if(i+ul.y+Dy(im->r) <= screen->r.max.y)
-						i = screen->r.max.y - Dy(im->r) - ul.y - 1;
+					if(i+ul.y+Dy(im->r) <= view->r.max.y)
+						i = view->r.max.y - Dy(im->r) - ul.y - 1;
 					translate(Pt(0, i));
 				}
 				break;
@@ -552,8 +552,8 @@ viewer(Document *dd)
 						im = tmp;
 						delayfreeimage(tmp);
 						esetcursor(nil);
-						ul = screen->r.min;
-						redraw(screen);
+						ul = view->r.min;
+						redraw(view);
 						flushimage(display, 1);
 						break;
 					}
@@ -562,9 +562,9 @@ viewer(Document *dd)
 						double delta;
 						Rectangle r;
 						
-						delta = (double)Dx(screen->r)/(double)Dx(im->r);
-						if((double)Dy(im->r)*delta > Dy(screen->r))
-							delta = (double)Dy(screen->r)/(double)Dy(im->r);
+						delta = (double)Dx(view->r)/(double)Dx(im->r);
+						if((double)Dy(im->r)*delta > Dy(view->r))
+							delta = (double)Dy(view->r)/(double)Dy(im->r);
 
 						r = Rect(0, 0, (int)((double)Dx(im->r)*delta), (int)((double)Dy(im->r)*delta));
 						esetcursor(&reading);
@@ -577,8 +577,8 @@ viewer(Document *dd)
 						im = tmp;
 						delayfreeimage(tmp);
 						esetcursor(nil);
-						ul = screen->r.min;
-						redraw(screen);
+						ul = view->r.min;
+						redraw(view);
 						flushimage(display, 1);
 						break;
 					}
@@ -608,7 +608,7 @@ viewer(Document *dd)
 					esetcursor(&reading);
 					s = writebitmap();
 					if(s)
-						string(screen, addpt(screen->r.min, Pt(5,5)), display->black, ZP,
+						string(view, addpt(view->r.min, Pt(5,5)), display->black, ZP,
 							display->defaultfont, s);
 					esetcursor(nil);
 					flushimage(display, 1);
@@ -797,20 +797,20 @@ translate(Point delta)
 	or = rectaddpt(Rpt(ZP, Pt(Dx(im->r), Dy(im->r))), ul);
 	r = rectaddpt(or, delta);
 
-	drawop(screen, r, screen, nil, ul, S);
+	drawop(view, r, view, nil, ul, S);
 	ul = u;
 
 	/* fill in gray where image used to be but isn't. */
-	drawdiff(screen, insetrect(or, -2), insetrect(r, -2), gray, nil, ZP, S);
+	drawdiff(view, insetrect(or, -2), insetrect(r, -2), gray, nil, ZP, S);
 
 	/* fill in black border */
-	drawdiff(screen, insetrect(r, -2), r, display->black, nil, ZP, S);
+	drawdiff(view, insetrect(r, -2), r, display->black, nil, ZP, S);
 
 	/* fill in image where it used to be off the screen. */
-	if(rectclip(&or, screen->r))
-		drawdiff(screen, r, rectaddpt(or, delta), im, nil, im->r.min, S);
+	if(rectclip(&or, view->r))
+		drawdiff(view, r, rectaddpt(or, delta), im, nil, im->r.min, S);
 	else
-		drawop(screen, r, im, nil, im->r.min, S);
+		drawop(view, r, im, nil, im->r.min, S);
 	flushimage(display, 1);
 }
 
@@ -854,11 +854,11 @@ void
 eresized(int new)
 {
 	Rectangle r;
-	r = screen->r;
+	r = view->r;
 	if(new && getwindow(display, Refnone) < 0)
 		fprint(2,"can't reattach to window");
-	ul = addpt(ul, subpt(screen->r.min, r.min));
-	redraw(screen);
+	ul = addpt(ul, subpt(view->r.min, r.min));
+	redraw(view);
 }
 
 /* clip p to be in r */
@@ -898,7 +898,7 @@ resize(int dx, int dy)
 			return;
 	}
 
-	r = insetrect(screen->r, -Borderwidth);
+	r = insetrect(view->r, -Borderwidth);
 	if(Dx(r) >= dx && Dy(r) >= dy)
 		return;
 

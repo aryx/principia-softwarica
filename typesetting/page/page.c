@@ -223,7 +223,7 @@ main(int argc, char **argv)
 	}
 	display->locking = 1;
 
-	truecolor = screen->depth > 8;
+	truecolor = view->depth > 8;
 	viewer(doc);
 	wexits(0);
 }
