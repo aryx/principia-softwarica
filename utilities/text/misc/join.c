@@ -1,3 +1,4 @@
+/*s: text/join.c */
 /*  join F1 F2 on stuff */
 #include <u.h>
 #include <libc.h>
@@ -374,3 +375,4 @@ oparse(char *s)
             s++;
     }
 }
+/*e: text/join.c */
