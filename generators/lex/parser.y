@@ -1,3 +1,4 @@
+/*s: lex/parser.y */
 %token CHAR CCL NCCL STR DELIM SCON ITER NEWE NULLS
 %left SCON '/' NEWE
 %left '|'
@@ -651,3 +652,4 @@ freturn(int i)
     return(i);
 }
 # endif
+/*e: lex/parser.y */
