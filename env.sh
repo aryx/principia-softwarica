@@ -1,4 +1,4 @@
-# can use mk from xix or kencc but should not use
+# can use mk from xix or kencc or goken but should not use
 # rc from xix nor kencc!!!
 
 # VARIABLE TO ADJUST

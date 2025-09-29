@@ -1,4 +1,7 @@
 /*s: libc/arm/vlrt.c */
+
+// very long runtime support (vlrt)
+
 typedef unsigned long   ulong;
 typedef unsigned int    uint;
 typedef unsigned short  ushort;

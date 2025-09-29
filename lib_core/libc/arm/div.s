@@ -1,4 +1,8 @@
 /*s: lib_core/libc/arm/div.s */
+
+// div and mod operations in software (ARM has no such instruction
+// builtin)
+
 Q	= 0
 N	= 1
 D	= 2

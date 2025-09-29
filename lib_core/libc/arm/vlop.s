@@ -1,3 +1,5 @@
+// vlong operations (vlop)
+
 TEXT	_mulv(SB), 1, $0
 	MOVW	4(FP),R8	/* l0 */
 	MOVW	8(FP),R11	/* h0 */
