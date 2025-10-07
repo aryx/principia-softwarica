@@ -259,7 +259,7 @@ struct Fhdr
 extern	int	asstype;	/* dissembler type - machdata.c */
 extern	Machdata *machdata;	/* jump vector - machdata.c */
 
-Map*		attachproc(int, int, int, Fhdr*);
+Map*		attachproc(pidt, int, int, Fhdr*);
 int		beieee80ftos(char*, int, void*);
 int		beieeesftos(char*, int, void*);
 int		beieeedftos(char*, int, void*);
