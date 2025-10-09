@@ -609,6 +609,10 @@ See the \book{Emulator} for more information on [[5i]].
 \l actually cool cos can be used as an assembly debugger too
 
 
+% For goken similar. with qemu-user-binfmt on Linux can even 
+% do ./hello! and on arm32 (e.g., Raspberry pi1/2) arm64 Linux machine
+% (e.g, Raspberry 3/4, thelio astra) it's native!
+
 \section{Requirements}
 
 %dup: from Assembler.nw
@@ -920,8 +924,13 @@ header which uses 32 bytes.
 \l again can have fixpoint issue, and relaxation hints (cf wikipedia linker)
 
 
-\subsection{Architecture constraints TODO}
+%alt: \subsection{Architecture constraints TODO} ?
+% commented because maybe too specific to plan9 linker
+% which has a different archi than other linkers because
+% the plan9 linker is doing code gen; Here we want
+% general principles applying to all linkers.
 
+%old:
 % There are general principles in linker, as we have seen,
 % but also a lot specific to an architecture!
 % Input and output first, object files, executable. specific. 
@@ -1617,7 +1626,8 @@ Its role and its relationship with the {pseudo-register}
 % how better view of objects and executables? will refine below?
 
 
-\section{The ARM architecture TODO}
+%old:\section{The ARM architecture TODO}
+%alt: skip and do it in chap:arm-codegen instead?
 % constraints
 
 % little endian
@@ -1634,7 +1644,7 @@ Its role and its relationship with the {pseudo-register}
 % Could cite also ARM Assembly Language: Fundamentals techniques,
 %  which talks about literal pools, rotation scheme, etc.
 
-\subsection{Immediate constant range}
+%old: \subsection{Immediate constant range}
 
 % ADD I, R1, R2
 
@@ -1647,7 +1657,7 @@ Its role and its relationship with the {pseudo-register}
 %alt: can also use WORD in text, not far. called pooling, but talk below
 
 
-\subsection{Offset range}
+%old: \subsection{Offset range}
 
 % different addressing mode in Assembler, indirect, ...
 % but in the end can be reduced to indirect with offset.
@@ -1671,7 +1681,7 @@ Its role and its relationship with the {pseudo-register}
 %  MOVW hello(SB), R2     ==>   LDR offset(R12), R2  or LDR offset3(R15),RTMP;
 %   LDR RTMP, R2
 
-\subsection{Jump range}
+%old: \subsection{Jump range}
 
 %  BL foo(SB)
 
@@ -1924,9 +1934,12 @@ laying out the code and data sections    & \ref{chap:resolving}          & [[lay
 
 \midrule
 
-ARM code-generation data structures      & \ref{chap:arm-codegen}        & [[m.h]]         & [<Optab>] [<Oprange>] [<Operand_class>]                                   & 159 \\ %pad: I created this file
-ARM opcodes lookup table                 & \ref{chap:arm-codegen}        & [[optab.c]]     & [<optab>]                                                                 & 293 \\
-ARM opcodes lookup function              & \ref{chap:arm-codegen}        & [[span.c]]      & [<oplook()>] [<buildop()>]                                                & 670 \\    %pad: span.c -> oplook.c?
+ARM code-generation data structures      & \ref{chap:codegen-prepare}        & [[m.h]]         & [<Optab>] [<Oprange>] [<Operand_class>]                                   & 159 \\ %pad: I created this file
+ARM opcodes lookup table                 & \ref{chap:codegen-prepare}        & [[optab.c]]     & [<optab>]                                                                 & 293 \\
+ARM opcodes lookup function              & \ref{chap:codegen-prepare}        & [[span.c]]      & [<oplook()>] [<buildop()>]                                                & 670 \\    %pad: span.c -> oplook.c?
+
+\midrule
+
 ARM instructions generation              & \ref{chap:arm-codegen}        & [[codegen.c]]   & [<asmout()>]                                                              & 1344 \\ %pad: I created this file
 
 \midrule
@@ -2208,6 +2221,7 @@ Chapter~\ref{chap:loading-objects} will present the code to
 load object files,
 Chapter~\ref{chap:loading-libraries} the code to load libraries,
 Chapter~\ref{chap:resolving} the code to resolve symbols,
+Chapter~\ref{chap:codegen-prepare} the code generation preparation,
 and finally Chapter~\ref{chap:arm-codegen} the ARM machine code
 generator.
 %
@@ -3900,7 +3914,7 @@ of the core C library.
 \t actually noops has rewritten DIV already
 \l same for MOVW, also constraints on immediate constant in ARM but not Asm5
 \l  but maybe can delay later
-See Chapter~\ref{chap:arm-codegen} for more information about
+See Chapter~\ref{chap:codegen-prepare} for more information about
 [<Optab>] and [<oplook()>].
 \l and \book{Assembler} for more information about virtual instruction?
 
@@ -8364,16 +8378,14 @@ which will actually change its value.
 
 
 
-\chapter{Machine Code Generation}
-\label{chap:arm-codegen}
-
-\t could put schematic of instruction format?
+\chapter{Code Generation Preparation}
+\label{chap:codegen-prepare}
 
 %trans:
 The final step in the linking pipeline is the machine code generation.
 %dup: The code generation is done by 5l, not 5a, surprisingly!
 %trans:
-You saw already [<asmb()>], in Section~\ref{sec:gen-executable},
+You saw already [<asmb()>] in Section~\ref{sec:gen-executable},
 which generates the [[a.out]] header and contains some of the
 logic to generate the code and data sections.
 The only missing pieces were the functions 
@@ -8387,48 +8399,14 @@ The only missing pieces were the functions
 %toc:
 Those two functions work together 
 to generate the ARM instructions and will be covered in this chapter.
-But before, I will describe the binary format of the
-ARM instructions and present additional data structures
+But before, I will
+%alt: describe the binary format of the ARM instructions and
+present additional data structures
 used by [<oplook()>] and [<asmout()>], especially [<Optab>].
 
 %real-world: what do they do at this stage in ld? just patching?
 
-\l principles: try leverage to the maximum the archi! => NCON because of MVN
-\l  ROREG because of ADD, 0xff and MOVB opti. Specialize when can!
-
-\section{ARM instruction format}
-
-% 4 bytes:
-\t typedef long instr; ?  so clearer oprrr, olr, immrot or partialinstr?
-
-%dup: intro/requirements
-% as said in X, great .
-% excellent ARM reference card\url{http://re-eject.gbadev.org/files/armref.pdf}.
-% colorful. Great to understand bit manip in code starting from Section X.
-\n note about intel syntax and naming conventions explained later
-
-% Also \book{Emulator} to fully understand semantics.
-
-% general shape:  cond, class, rest.
-% FIGURE
-
-% mainly 4 categories, 6 formats: arith, arith with immediate,
-%  memory with offsets, branch immediate, branch
-% FIGURE FIGURE FIGURE FIGURE
-% arith have its own set of sub-opcodes (4 bits)
-
-% register 0 to 15 so 4 bits enough. rf, rt, r.
-
-% immediate value, 8+4 bits
-
-% memory address and offsets, register + 12 bits (1 page)
-
-% => constraints on size of things so need find tricks.
-% first Class will say if satisfy constraint.
-% If not then pool. 
-% Other?
-
-% 1 bit of LDR vs STR, 1 bit for Sign, 1 bit for U, 1 bit for B vs Word, etc
+%alt: \section{ARM instruction format}
 
 \section{Additional data structures}
 \l rules, patterns, ranges, classes
@@ -9514,7 +9492,16 @@ imposes a big-endian order for the numbers in the header.
 \l  stored in memory and dump as 12 34 56 78 on a big-endian machine
 
 
-\bigskip
+
+\chapter{ARM Machine Code Generation}
+\label{chap:arm-codegen}
+
+\t could put schematic of instruction format?
+
+%trans: ??
+% seen most of preparation, optable, now concrete optab entries
+% and asmout cases.
+% optab, o1, o2, o3, ... 
 The cases of the first [[switch]] in [<asmout()>] will rely
 on a set of temporary variables to store registers
 and symbols:
@@ -9527,10 +9514,7 @@ Sym *s;
 @
 
 
-
-
-\bigskip
-%trans: %chunks:
+%toc: %chunks:
 The rest of this chapter will present gradually the different cases
 of the first [[switch]] of [<asmout()>].
 %
@@ -9548,6 +9532,47 @@ All those elements work together to express the ARM code generation rules
 of [[5l]].
 %ocaml: pattern and final action would be together, no need split
 % in one function oplook() and another asmout()
+
+
+\section{ARM instruction format}
+
+%trans: before actual opcode, helpful understand ARM instr format
+
+% 4 bytes:
+\t typedef long instr; ?  so clearer oprrr, olr, immrot or partialinstr?
+
+%dup: intro/requirements
+% as said in X, great .
+% excellent ARM reference card\url{http://re-eject.gbadev.org/files/armref.pdf}.
+% colorful. Great to understand bit manip in code starting from Section X.
+\n note about intel syntax and naming conventions explained later
+
+% Also \book{Emulator} to fully understand semantics.
+
+% general shape:  cond, class, rest.
+% FIGURE
+
+% mainly 4 categories, 6 formats: arith, arith with immediate,
+%  memory with offsets, branch immediate, branch
+% FIGURE FIGURE FIGURE FIGURE
+% arith have its own set of sub-opcodes (4 bits)
+
+% register 0 to 15 so 4 bits enough. rf, rt, r.
+
+% immediate value, 8+4 bits
+
+% memory address and offsets, register + 12 bits (1 page)
+
+% => constraints on size of things so need find tricks.
+% first Class will say if satisfy constraint.
+% If not then pool. 
+% Other?
+
+% 1 bit of LDR vs STR, 1 bit for Sign, 1 bit for U, 1 bit for B vs Word, etc
+
+\l principles: try leverage to the maximum the archi! => NCON because of MVN
+\l  ROREG because of ADD, 0xff and MOVB opti. Specialize when can!
+
 
 \section{Pseudo opcodes}
 
