@@ -1,0 +1,501 @@
+%\chapter{Introduction}
+
+The goal of this book is to explain with full details the source code of
+a C {compiler}.
+
+\section{Motivations}
+
+Why a C compiler?
+Because I think you are a better programmer if
+you fully understand how things work under the hood, and
+understanding how a compiler translates high-level C code in low-level
+assembly, and ultimately machine code, is essential.
+
+\l all our books contain C code :) machine does not understand C :)
+
+%companies:
+\t in the end Google, Microsoft, Apple, Facebook spend quite 
+\t  some time making compilers 
+
+% other languages? yes could be nice, but really you need to
+% show asm and C first. That's the basis. 
+% why C?
+% http://damienkatz.net/2013/01/the_unreasonable_effectiveness_of_c.html ?
+% even ocaml needs C :) for ocamlrun and its runtime library
+
+
+Here are a few questions I hope this book will answer:
+\begin{itemize}
+
+\item How does a compiler parse a complex programming language?
+\n Lexing, (preprocessing), parsing
+
+\item How does a compiler manage the scope of variables,
+structures, enumerations, or typedefs?
+\l forward declaration, implicit declaration, nested scopes and shadowing, 
+\n symbol table
+
+\item How does a typechecker work?
+
+\item How does a compiler translate 
+conditionals, loops, and other control-flow constructs
+in basic assembly jumps?
+%codegen: labelize
+
+\item How does a compiler translate a switch?
+
+\item How does a compiler convert arbitrary complex expressions 
+into simpler assembly instructions using a small set of registers?
+%codegen: linearize
+
+\item How does a function pass arguments to another function?
+Are registers used? Is the stack used? How does a function communicate 
+its return value to the caller?
+%codegen: frameize
+
+% what are common useful optimizations
+
+% aligns, offsets, structs, size
+
+\end{itemize}
+
+\t put in conclusion non-trivial adv algo and data structures seen? see comment
+%data-structures (beyond list/hashtbl):
+% - bitsets see the Bxxx (ab) used for many things (parsing, typechecking)
+% - pattern matching via bitsets (see tadd and taddinit)
+% - list of lists with special mark (DMARK) and undo list.
+
+
+%tags used for recurring themes:
+ %ocaml: to give a hint on how rewriting C in OCaml could improve things
+ %assembler: similar code in the assembler and how they relate
+ %linker: similar code in the linker and how they relate
+ %codegen: to give a preview of how a C construct is translated to ASM
+ %corner: corner cases of C that even C expert may not know about
+
+\section{The ARM \plan C compiler: [[5c]]}
+
+% gonna present 5c (aka kencc), from Ken Thompson! simple (well not so simple).
+% a nice bonus also is that it has some very nice lint checks
+% e.g. dataflow 'variable set but not used'.
+
+% some cons though to use 5c: no CFG, no IL ... very imperative ... harder case
+% to defend than for the other software (5a, 5l, kernel, rio)
+% but has good linting at least :) used/set warnings :)
+
+% has integrated assembler in some sense. But actually
+% LLVM does that too, see http://blog.llvm.org/2010/04/intro-to-llvm-mc-project.html
+
+% now use for RISC-V too! richard miller's slides?
+
+\section{Other compilers}
+
+Here are a few compilers that I considered for this book, but
+which I ultimately discarded:
+
+\begin{itemize}
+
+\item gcc
+%big. Lots of input languages. Lots of output targets.
+
+\item clang
+%cleaner but still very big
+% nice to have single binary that can cross compile for multiple targets, nice
+% interface (cleaner than 5c/vc/...; interfaces are better!)
+%good error messages.
+% "A tourist guide to LLVM":
+%http://blog.regehr.org/archives/1453
+
+\item lcc 
+%maybe better actually, but already a book on it, 
+% 20 000 LOC according to wikipedia
+% but seems to not use yacc (or lex), and copyright seems restrictive
+
+\item compcert
+% harder to understand coq :), but definitly better IL and CFG I think.
+
+\item bcc
+% bruce evans, code used by linus at the beginning?
+
+\item fbcc and tcc
+% cool maybe
+
+\end{itemize}
+
+%\item cminusminus
+% maybe a good idea to also present c--
+% just for backend.
+
+%\item rust
+% Maybe rust could replace C one day, but we are not there yet
+% and Rust is more complicated than C. Actually rust uses C :)
+% use SSA and MIR now (middleend intermediate IR)
+
+%\item Tiger
+% not real, not C, but more educatif and better written for teaching purpose
+% (actually can maybe refer to govereau book?)
+
+%history:
+% - dennis ritchie, using recursive descent parser
+% - PCC, blessed by Dennis Ritchie
+%other C 
+% - http://www.compilers.de/vbcc.html also vasm and vlink
+%   76 000 LOC, multi archi
+% - http://sdcc.sourceforge.net/ for microcontrollers
+%   also includes assembler, debugger, simulator, ...
+% - http://nwcc.sourceforge.net/
+% - PCC
+% - small interpreter: https://github.com/zsaleeba/picoc
+% - https://github.com/rui314/8cc
+%   http://www.sigbus.info/how-i-wrote-a-self-hosting-c-compiler-in-40-days.html
+%   but no yacc
+% - https://github.com/andrewchambers/cc, seeking collaborators, inspired
+%   by tcc and 8cc apparently, written in Go
+% - Small-C compiler book
+%   http://www.drdobbs.com/developer-network-small-c-compiler-book/184415519
+% - nqcc
+%   https://norasandler.com/2017/11/29/Write-a-Compiler.html
+%mini:
+% - C in 4 functions: https://github.com/rswier/c4/blob/master/c4.c
+% - mini C compiler generating code for ARM (use C4)
+%   https://github.com/jserv/amacc
+%other teaching pl:
+% - pl/0, Wirth
+% - Cool, Aiken?
+% - Tiger, Appel
+%modern:
+% - .NET? mono? roslyn?
+%    great guide to soft archi:
+% http://mattwarren.org/2017/03/23/Hitchhikers-Guide-to-the-CoreCLR-Source-Code/
+%optimisations:
+% - tiny in haskell, SSA, dataflow, etc.
+%   https://bollu.github.io/tiny-optimising-compiler/
+
+% TODO bench 5c vs gcc and clang and compcert on benchmarks (compcert's one)
+
+%https://github.com/melling/ComputerLanguages/blob/master/compilers.org
+% (small for now)
+
+% SSA based compiler design
+%http://ssabook.gforge.inria.fr/latest/book.pdf
+
+% On frontend used in compiler vs frontend used in IDE (very good)
+%https://channel9.msdn.com/Blogs/Seth-Juarez/Anders-Hejlsberg-on-Modern-Compiler-Construction
+
+%with flex/bison/llvm
+%http://gnuu.org/2009/09/18/writing-your-own-toy-compiler/all/1/
+
+% more recently:
+% - JIT
+
+% some hand-made diagrams and illustation of front/back with llvm intermediates
+% https://nicoleorchard.com/blog/compilers
+
+\section{Getting started}
+
+% need to use 5l? not like gcc where can create executable directly
+% because it calls ld under the hood. But here Unix spirit! one thing only!
+
+\section{Requirements}
+
+% actually the code presented below is written in C so you
+% need to understand C :) hmmm
+
+% You need to have a vague idea of how works a compiler. 
+% Have read Dragon book. Appel. Or other books.
+% Many compiler books. Dragon, Engineering a compiler, modern compiler, ...
+% so know what is an 
+% Abstract syntax tree (AST), 
+% lexer, 
+% parser, 
+% type system, 
+% ...
+
+%``the compiler assumes you've know your Aho and Ullman either by'
+%reading them or by working with them.''
+% - charles forsith on 9fans
+
+% comp.ps, [8]5c man pages, etc
+
+% Also assumes Assembler.nw or Machine.nw for ARM. Helps to understand
+% the target (especially since there is no RTL so the code
+% generation part directly generates concrete ASM code)
+
+%Let's build a compiler:
+%http://compilers.iecc.com/crenshaw/
+
+% Incremental compiler in 22 steps in scheme
+% http://scheme2006.cs.uchicago.edu/11-ghuloum.pdf
+
+\section{About this document}
+\input{../docs/latex/About}
+
+\section{Copyright}
+\input{../docs/latex/CopyrightPlan9Text}
+
+\section{Acknowledgments}
+
+I would like to acknowledge of course the author of
+[[5c]], Ken Thompson, 
+who wrote in some sense most of this book.
+
+% Mireille Ducasse, Marie Jo Pedrono
+% Aho, Appel
+
+
+
+
+
+
+
+%******************************************************************************
+\chapter{Overview}
+%******************************************************************************
+
+\section{Compiler principles}
+
+% from high level to low level (asm). 
+
+% Many books on compiler. I will be short here.
+
+% FIGURE with different steps.
+% and group some boxes in frontend vs backend
+
+% principles of frontend and backend.
+% (We will focus mostly on the backend)
+
+\subsection{Frontend}
+
+% Frontend is classic and present in other books like Assembler, 
+% or Make, or Shell.
+% Lexing (regexps), (preprocessing), parsing (grammar), AST.
+% (even though 5c does a lot in parsing; does not separate concern so well).
+% Tracking position for good error reports.
+
+\subsection{Scope resolution}
+% Resolving, naming.
+
+% C has nested blocks, and can shadow variables.
+% Can also forward decls.
+% C has also type aliases (typedefs). Lots of names.
+% Have even ambiguity between typedef and var.
+% When see an identifier, hard to know to what it refers too
+% (a typedef? defined in which scope? a variable? in which scope? an enum?
+% in which scope?)
+% Goal of naming is to associate to the use of an entity the right
+% definition.
+
+\subsection{Use/def checking}
+
+% For many things! related to naming.
+% 3 important checks: use-of-undefined, redefined, unused. 
+
+% for many entities: 
+%  - labels
+%  - locals
+% could also for: 
+%  - globals
+%  - function defs
+%  - typedefs
+%  - struct defs
+%  - enums.
+
+\subsection{Type checking}
+
+% A more unusual part of frontend is typechecking! and annotate AST
+% with types. C not a dynamic language.
+
+% - types! typechecking! (5c even adds some simple dataflow checks!)
+%   so can type check arguments vs parameters, their numbers, array access,
+%   field access, more restricted register indexing (xxx) -> *xxx but only 
+%   if makes sense.
+%   (still have lots of room to improve even more, C could be more typed!
+%    see rust, and ocaml).
+
+% type annotating also.
+
+% lvalue/rvalue annotating here?
+
+\subsection{Backend}
+
+% Assembly is essentially:
+%  - simple arith with registers and memory instructions 
+%  - labels and jmps
+%  - simple stack (when you have to manually handle locals, params, and calls)
+%  - simple data structure, bytes
+% The goal of the C compiler is to translate in this simpler language
+% the more complex construct of C.
+
+%interactively see the asm generated by gcc
+%https://godbolt.org/
+
+%https://kristerw.blogspot.com/2017/08/the-structure-of-gcc-back-end.html
+
+\subsection{Labelization}
+
+% - statements, more structured forms than jmp.
+
+\subsection{Linearization}
+% registerization
+
+% - expression like x+y*z decomposed into multi mov, add, etc. Fortran!
+% - same for data, complex decomposed into smaller bytes, with symbolic names
+%   for subparts, e.g. fields.
+
+\subsection{Frameization}
+
+% - parameters, arguments, locals, more structured forms than just plain stack
+% => see codegen: tag
+
+\subsection{Optimizations}
+
+
+\section{[[5c]] command-line interface}
+
+% see all the flags, put here main flags
+
+% source language: C
+% implementation language: C
+% target language: assembly ARM
+
+% not put here originally: 
+% -g (in genxxx()) print lhs and rhs in many contexts
+%  and also print instruction generated by gins and gopcode
+% -G (in gen()) 
+% -Z, -f ??
+% -N -R -P in regopt()
+%   -N disable regopt
+%   -R enable it back, print debugging info, disable peep()
+%   -P reenable peep() and print debugging info
+% -T in zname to generate ASIGNAME (can be disabled by some pragma apparently)
+%   so can have safe linking
+% -x,   pad: dump AST
+% -c, if(constant) warning
+
+
+%OUTOUT
+% *	-o file		output file
+% *	-S		print assembly
+% *	-l		generate little-endian code (mips only)
+
+
+%WARNINGS
+% *	-w		print warnings
+% *	-V		enable void* conversion warnings
+% *	-X		abort on error
+% *	-F		format specification check
+
+%LANGUAGE
+% *	-A		!B
+% *	-B		non ANSI
+
+%PREPROCESSOR
+% *	-p		use standard cpp ANSI preprocessor (not on windows)
+% *	-D name		define
+% *	-I path		include
+% *	-.		Inhibit search for includes in source directory
+
+%DEBUGGER
+% *	-a		acid declaration output
+% *	-n		print acid to file (%.c=%.acid) (with -a or -aa)
+% *	-Z		pickle output (pad: was not mentioned originally)
+% *	-s		print structure offsets (with -a or -aa)
+
+%DEBUGGING
+% *	-v		verbose printing
+% *	-d		print declarations
+% *	-L		print every NAME symbol
+% *	-m		print add/sub/mul trees
+%            pad: also macro debugging??
+% *	-f		line information debugging (pad: was not mentioned originally)
+% *	-r		print registerization
+% *	-t		print type trees
+%    pad: debug the many phases in bcomplex()
+% *	-i		print initialization
+% * -g -G      print stuff for code gen (pad: was not mentioned originally)
+
+% *	-M		constant multiplication
+
+%in mkfile.proto:
+%8c -FTVw -I/home/pad/plan9/include/386 -I/home/pad/plan9/include globals.c
+% -F format check, -T safe linking, -V enable void* warnings, -w print warnings
+
+\section{[[helloworld.c]]}
+
+% show ARM assembly output for a simple program.
+
+% (at least put an arithmetic expression? "hello world, 42 is the answer!")
+
+\section{Input C language}
+
+% mostly ANSI C. a few extensions.
+% see K&R book.
+
+% show tricky stuff? like scope and blockid?
+% struct x; forward decl? (actually 5c does not honor this I think).
+% Still can declare things before things are defined. ex:
+% struct Foo x; .... struct Foo { ... };
+
+% TODO add __LINE__? 
+% TODO add check for code not using return value (e.g.
+%  in xdecl rule where call dodecl() which returns a node).
+
+% "who says C is simple"
+%http://www.eecs.berkeley.edu/~necula/cil/cil016.html
+% ugly C syntax
+%http://blog.robertelder.org/weird-c-syntax/
+
+%http://icube-icps.unistra.fr/img_auth.php/d/db/ModernC.pdf
+
+
+% lvalue, rvalue (lvalue = location value? expression resulting into a location
+% where something can be stored?)
+% Stratchey introduced those terms?
+
+% system programming language. Pointer, number to pointer,
+% memory allocator in itself.
+% Still, need some ASM for essential stuff like system calls :) (SWI).
+
+\subsection{C innovations}
+
+% innovation of C vs fortran/pascal/algol? 
+%  - pointer arithmetic? (but also a bad thing to have such wild pointers)
+%    in some sense compilers such as Tiger are using pointers, but internally,
+%    and C exposed them to the language while also providing some form
+%    of algrebra around them (pointer arithmetic)
+%  - simpler?
+%  - bitfields? so can match more directly hardware specifics?
+%  - in the end pretty good DSL for bit manipulations, &, |, ^, &=, <<, etc
+%    are quite nice. See Linker.nw, Machine.nw, Assembler.nw.
+%  - overloaded arithmetic for int/float/... ? (compared to OCaml)
+
+
+% Also lots of dark corners:
+% https://people.eecs.berkeley.edu/~necula/cil/
+% http://blog.robertelder.org/weird-c-syntax/
+
+\section{Output object format}
+
+% assembly ARM object code. Very close to ARM machine code.
+% (can get asm generated via 5c -S)
+
+% put code for helloworld.c generated code?
+
+\section{The ARM architecture}
+
+% does not really need to understand much.
+% Assembler of 5a abstracts a few things which is
+% convenient (FP/SP, SB, generic MOVW, full integer constant, etc)
+
+% Maybe a few instructions so can see how some simple C can be
+% translated directly into ARM.
+% x=1;
+% MOVW $1, R0
+% MOVW R0, x(SB)
+% or
+% MOVW R0, x+4(FP) or x-4(SP)
+
+% y = &x
+% MOVW $x(SB), R0
+% MOVW R0, y(SB)
+
