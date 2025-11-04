@@ -1,0 +1,2138 @@
+%\chapter{Introduction}
+
+The goal of this book is to explain with full details the source code of
+an {assembler}.
+
+\section{Motivations}
+
+Why an assembler? 
+Because I think you are a better programmer 
+if you fully understand how things work under the hood, and 
+an assembler is an essential part of any {development toolchain}.
+\l which itself is essential
+%
+Indeed, compilers for higher level languages such as C usually
+do not generate directly {machine code} but instead rely
+on an assembler (and linker) for their final code-generation step.
+\n 5c actually does not really rely on the external assembler 5a
+\n but gcc/ocamlopt do generate assembly and call external assembler gas
+
+Even if most programmers very rarely write {assembly} code,
+understanding an assembly language, and so also what an assembler does,
+is essential to understand low-level fundamental concepts such as 
+{binary logic and arithmetic}, 
+{signed and unsigned integers} representation,
+{memory operations}, {pointers}, 
+{stack processing}, {frames}, or
+{software interrupts}.
+%
+Understanding assembly is also necessary to understand 
+what a compiler generates.
+%
+Moreover, most programmers will need at some point
+to look at generated assembly code (or disassembled code)
+to optimize code or fix bugs.
+\l performance issue (alok), crack software :)
+%
+Finally, some code, especially in the kernel, can not be written in C
+and has to be written in assembly.
+\n actually MenuetOS is full OS with GUI, network, all in assembly! hmm.
+\t assembly enables to use all machine functions! How you talk to the machine!
+%src: design of go assembler https://www.youtube.com/watch?v=KINIAgRpkDA
+
+% why learning assembly still good idea:
+%  - http://wilsonminesco.com/AssyDefense/
+%  - http://www.onlamp.com/pub/a/onlamp/2004/05/06/writegreatcode.html
+
+
+
+Here are a few questions I hope this book will answer:
+\begin{itemize}
+
+\item What is the list of all assembly instructions?
+What can a typical computer do?
+
+\item What are the essential features of an assembler? How do those features
+help compared to writing directly machine code?
+
+\item What are the most important assembly constructs? How
+can they be used to implement high-level constructs in languages
+such as C?
+\n labels is here, and it's assembly only, it's not in Machine.nw
+%compiler:
+\t show more output of 5c -S on toy programs
+
+\item How are function calls implemented? What is a ``frame''?
+What is a ``frame pointer''? How are recursive functions implemented?
+What are ``calling conventions''?
+%SEMI except frame pointer
+\l subroutine concept was discovered by David Wheeler; not that simple!
+\t actually not yet explained ! I need more figures on that in tutorial
+
+\item What does an object file contain? What are the differences
+between an object file and an executable?
+%SEMI
+
+\item How do the assembler and linker work together?
+
+\end{itemize}
+\n try questions more specific to asm; put the rest in Machine.nw (and Linker)
+\n binary format? no, in linker book because of \plan approach
+\n what is position independent code? not here, it is a linker issue
+\l endianess? need to talk a bit when talk about vlong (jarod)
+
+%tags used in this file for different recurring themes:
+ %turing: fundamental opcodes
+ %arm: ARM specifics not present in other architectures
+ %self-ref: opcodes to implement the assembler itself!
+ %style: Asm5 conventions (e.g., indentation)
+ %compiler: give idea of what 5c does, what 5c needs
+ %kernel: for features essential to implement a kernel
+
+%general tags used also in other books: See principia.nw and %tags:
+
+\t put in conclusion non-trivial adv algo and data structures seen? see comment
+%data-structures (beyond list/hashtbl): (actually use hashtbl but not list)
+% - AST using enums and tag/union structure (not recursive and a bit chaotic)
+%   with "sentinel" for defensive programming (AXXX), 
+%   and end marker enum trick (ALAST)
+% - symbol table (really hash table)
+% - circular/spreaded symbol table with small symbol index (1 byte)
+% - stack/tree with flat list and special pop marker (hist)
+% - buffer
+% - bitsets and lots of bit tricks (abuse though), abuse int also for NONE
+% - automata (kinda, by abusing labels and gotos to parse regexps in yylex)
+
+%algorithms (beyond search/sort): (actually use neither search nor sort)
+% - lexing with automata (using labels and gotos and switch)
+%   and lookahead/peek, and escape management, and EOF
+% - preprocessing: macro expansion, and tracing of line origin
+% - parsing with grammar and actions.
+%   Lexing/parsing is useful in many contexts! There are so many programs
+%   requiring some forms of lexing/parsing of data.
+%   actually have code for basic arithmetic evaluator, useful Yacc tutorial.
+% - def/use link with two-pass classic algorithm (alt: lazy lookup? )
+% - serialization/marshalling portable! with fixed encoding, variable-length
+%   operands with tag, shared enum and dispatch, so not trivial.
+
+
+\section{The \plan ARM assembler: [[5a]]}
+\label{sec:plan9-assembler}
+
+I will explain in this book the code of the \plan ARM assembler
+[[5a]]~\cite{plan9-assemblers}\footnote{See 
+\url{http://plan9.bell-labs.com/magic/man2html/1/8a} for the manual page 
+of [[5a]]. Despite its name, this page covers also [[5a]].},
+which contains about 4200 lines of code (LOC).
+\n see mk loc (or codemap -test_loc)
+[[5a]] is written in C for the most part.
+%%%\footnote{
+%%%An OCaml partial port is also shown in Appendix~\ref{chap:5a-ocaml}.
+%%%}
+The parser of [[5a]] is using also Yacc~\cite{yacc}.
+
+
+Like for most books in \principia, I chose a \plan program because
+those programs are simple, small, elegant, open source, and 
+they form together a coherent set.
+%
+The [['5']] in [[5a]] comes from the \plan's convention to name architectures
+with a single character
+([['0']] is MIPS, [['5']] is ARM, [['8']] is x86, etc.)
+and the [['a']] means assembler.
+\n they like single characters, see also kernel and the #c, #i, etc
+\l put in this section the discussions about Asm5 and Asm9?
+
+Like for the other \principia books covering the
+{development toolchain}, I chose the ARM architecture~\cite{arm-refman}
+variant, in this case of the \plan assembler [[5a]],
+and not for instance the x86 variant [[8a]], for
+reasons of simplicity. 
+Indeed, RISC machines are far simpler than CISC machines. 
+Moreover, the availability
+under \plan of an ARM emulator (called [[5i]]) helps to understand
+the semantics of the assembly instructions used in [[5a]].
+\n Using x86 also make it more error prone when want to change things
+\n because we would have also to change kencc (e.g., error prone to change
+\n the order of asm instructions).
+
+Note that the \plan assembler's output differs slightly from
+other traditional assemblers. The {files} generated by [[5a]],
+called the {\em object files},
+are ARM-specific but they do not contain machine code. Instead,
+an object file is essentially the {serialized form} of the 
+{abstract syntax tree} of an assembly source. 
+\l Ref to later? maybe hard to understand. 
+The actual machine code generation is performed by the linker [[5l]]\footnote{
+Readers interested in this topic should read instead the \book{Linker}.
+}.
+%alt: generate machine code
+I think this design leads to less code in total 
+(when combining the code of [[5a]] and [[5l]]), and to simpler code.
+\l where explain why better? later? or in Linker.nw?
+\l  indeed linker anyway need resolve symbol too and gen code too
+\l  so lets keep assembler as simple as possible so avoid code duplication
+\n a critique of go/plan9 toolchain though, see comment in .tex:
+% - http://dtrace.org/blogs/wesolows/2014/12/29/golang-is-trash/
+%   with https://news.ycombinator.com/item?id=8815778
+%   and http://www.reddit.com/r/programming/comments/2riayd/golang_is_trash/
+\l say here Asm5 is not _direct_ representation of underlying ARM machine?
+
+%the design of the Go assembler (sucessor to plan9 assembler)
+% https://www.youtube.com/watch?v=KINIAgRpkDA&feature=youtu.be
+
+% Go assembly by example:
+% http://davidwong.fr/goasm/
+
+
+\section{Other assemblers}
+
+Here are a few assemblers that I considered for this book, but
+which I ultimately discarded:
+\begin{itemize}
+
+%history:
+\item The original \unix assembler~\cite{unix-assembler}, 
+called [[as]]\furl{http://minnie.tuhs.org/cgi-bin/utree.pl?file=V7/usr/src/cmd/as},
+was targetting the DEC PDP11 architecture.
+%
+It was modeled after a proprietary assembler provided by DEC called PAL11R.
+\n Program Assembly Loader 11 Relocatable
+\l maybe not proprietary? DEC used to release on DECUS some source code
+[[as]] contains 3600 LOC, which is smaller than [[5a]], but
+it is written in assembly, which makes its codebase significantly 
+harder to understand.
+\l nice though, meta, bootstrapping, assembler in assembly
+Moreover, it targets an obsolete architecture (the PDP11).
+\l a.out?
+
+\item The GNU Assembler [[gas]]~\cite{gnu-using-as}, part of the [[binutils]] 
+package\furl{https://www.gnu.org/software/binutils/},
+is probably the most used open source assembler.
+\n everything moved from as86 to gas?
+It supports many architectures (ARM, x86, etc.)
+and can generate object files using different formats (ELF, COFF, etc.).
+\n PE, Mach-O
+\l syntax of gas? 'Standard MIT'? (according to some vasm doc)
+It is called internally by [[gcc]] 
+\l gcc -verbose show call to gas?
+and so is indirectly used to assemble most open source programs.
+\n maybe llvm competes a bit now
+However, the code of [[gas]] is very big:
+350~000 LOC, which is almost two orders of magnitude
+more code than [[5a]].
+%
+The whole [[binutils]] package contains
+3.4 million LOC (not including the code in the testsuite).
+Even the ARM-specific file [[gas/config/tc-arm.c]] has already 25~000 LOC.
+\l why so much bigger? (alok)
+
+\item LLVM 
+Machine Code\furl{http://blog.llvm.org/2010/04/intro-to-llvm-mc-project.html}
+(MC) is a library part of the LLVM infrastructure
+that translates assembly into machine code. When used by
+the [[llvm-mc]] program, the library acts as a regular assembler.
+\n llvm-mc foo.s -o foo.o,    also llvm-mc --disassemble
+The library is fairly small, 25~000 LOC, but is part of a fairly
+large infrastructure, LLVM, with 1.3 million LOC.
+\t also LLVM itself as an intermediate language that looks like assembly
+
+\item NASM~\cite{assembly-step-by-step}\furl{http://www.nasm.us/} 
+is a popular x86 assembler using the Intel
+syntax as opposed to [[gas]] (and [[5a]]) which uses the \att syntax.
+\t footnote ? boils down to mov src dst vs  mov dst src  (alok)
+\l also say each tool have its own minor variations (alok), .text vs TEXT, etc
+\l  no standard, arch specific anyway
+It is also fairly large with 50~000 LOC.
+\n popular on linux especially, but also works on windows and mac
+
+\item AS86\furl{http://v3.sk/~lkundrak/dev86/} 
+is an historical assembler used to compile old 
+versions of Minix and Linux.
+%
+It is an x86 16-bit and 32-bit assembler part of
+Bruce Evans's C compiler (BCC).
+\l hmm really? see dev86/bin86/README-04 and the note by torvalds from 1994
+\l maybe it was used just for the real-mode 16bits boot stuff for linux?
+AS86 is also using the Intel syntax. 
+Because it can generate 16-bit ``real-mode'' machine code, it is 
+still used to compile programs such as boot loaders.
+%
+It is fairly small: 12~500 LOC. 
+This includes the machine code generation, a part that is not done by [[5a]]
+(but done by [[5l]]). 
+\l to be fair LOC of 5l is big, but 5a/5l LOC < as86/ld86 (said in Linker)
+However, because x86 is a rather
+complicated architecture --- the 16-bit/32-bit as well as
+the different CPU modes (real-mode, protected-mode, virtual-mode) 
+being just a testimony of this complexity ---
+I prefer to present instead an ARM assembler.
+\l a bit dead, used only by elks project now
+
+\item MMIXAL~\cite{mmixware}\furl{https://www-cs-faculty.stanford.edu/~knuth/mmixware.html} 
+is an assembler for the MMIX virtual machine. Both MMIXAL and MMIX were
+designed by Donald Knuth.
+%
+MMIXAL is a small and very well documented program.
+\n actually not that well, I dont like his style, no structure, no TOC
+Its (literate) source is about 3200 LOC, including
+the machine-code generation part.
+%
+However, in \principia I want to restrict myself to programs that can run
+on real machines, not on virtual machines such as the MMIX.
+
+\end{itemize}
+
+
+\begin{figure}[]\centering
+\includegraphics[height=0.45\textheight]{lineage}
+\caption{Assemblers timeline}
+\label{fig:lineage}
+\end{figure}
+\l big hole because switched to higher-level languages anyway, no need
+\l  big innovations in assembler space
+
+%dup: Shell.nw
+Figure~\ref{fig:lineage} presents a timeline of the major assemblers.
+%
+I think [[5a]] represents the best compromise for this book: 
+\l for \principia
+it implements the essential features of an assembler,
+for an architecture that is still relevant today (the ARM), 
+\l actually more relevant than ever with mobile phone
+%dup: intro/5a
+while still having a small and understandable codebase (4200 LOC).
+
+%pro:
+[[5a]] is obviously not as used as [[gas]], but it is still
+a production-quality assembler. It was used to assemble
+all \plan programs at Bell Labs and it is still used in the toolchain
+of the Go programming language\furl{https://golang.org/doc/asm}.
+\l actually assembler rewritten in Go in 2016?, but still lineage
+\l also used in Inferno (less because use Dis), but at least to compile 'emu'
+%
+This is partly because one of the main designer of Go, Rob Pike, 
+was also the author of [[5a]] (and \plan).
+Because Go was originally conceived and used at Google,
+some of Google's services are currently assembled by a \plan assembler.
+\l but probably more 8a
+
+% now use for RISC-V too! richard miller again? I have slides on that.
+
+
+\l lots of other assemblers, see the comment in the .tex
+%industry:
+% - MASM (Microsoft)
+% - TASM (Borland, Turbo assembler)
+% - MPW? (Apple)
+%history:
+% - before Unix and DEC one? very first assembler? source kept?
+% - DEC pal11R assembler for PDP11
+% - original PDP assembler in Unix V1..V7: in assembly with bad code orga
+%   (as11.s, as12.s, as21.s...) where first digit correspond to the pass
+%   (see my unix-history-repo/)
+%   was already in programmer's manual 1st ed (as(1))
+%other:
+% - yasm: a rewrite of NASM with BSD license
+% - sdcc's assembler sdas, based on ASXXXX
+% - ASXXXX cross assemblers, pretty well commented 12000 LOC for generic part
+%   but for microcontrollers
+% - http://www.compilers.de/vasm.html (also vbcc and vlink)
+%   recent fork: http://sun.hasenbraten.de/vasm/, used in amiga tutorial,
+%   by Volker something, 47 000 LOC, many archi, some code by Frank Wille
+% - ack assembler, em_ass
+% - Pelle's Macro assembler
+% - http://metasm.cr0.org/ 
+%   cross-archi assembler/dissassembler/compiler/linker/debugger
+% - https://github.com/StanfordPL/x64asm contain also linker and
+%   can be used as a library
+% - goasm (not related to Golang) for Windows
+%mini:
+% - fbas, use lex and yacc, 720 LOC, but looks really simplified
+% - https://github.com/trillek-team/computer-toolkit (for space game)
+%   a toy asm, linker, and even a toy C compiler, for TR3200 machine
+% - see also hex2c? 
+% - mine for hack? but my assemblers/ocaml/ is maybe better, 
+%   hack machine language was a bit obscure too
+%education:
+% - subc-2014 s86, 1400 LOC?
+% - pep/8 assembler?
+% - High Level Assembly (HLA), by randall hyde, for this book
+%   the art of assembly programming
+% - ADK assembler developer toolkit: write your own assembler from scratch! 
+%   http://www.plantation-productions.com/Webster/RollYourOwn/index.html
+%   but 75 000 LOC hmmm, and written in assembly? (HLA, high-level assembly)
+% - racket-based asm: http://pinksquirrellabs.com/blog/2017/05/30/asi64/
+%with ide:
+% - YASP: web based assembler+debugger, teaching purpose: http://yasp.me/
+%   1300 LOC for just assembler
+% - fasm, flat assembler (written in assembly, hmmm)
+%   https://flatassembler.net/ with even an IDE https://fresh.flatassembler.net/
+%mix/mmix:
+% - first mixal, in C  https://github.com/darius/mixal
+%   http://esr.ibiblio.org/?p=4852
+%   superseded by GNU mdk
+% - GNU mdk
+% - mixal in haskell
+%   https://github.com/jtdaugherty/mix-assembler
+% - mmixare (by Knuth this time, mmixal for MMIX new machine)
+%disassembler:
+% - udis86 http://udis86.sourceforge.net/
+%research:
+% - piton, a proven assembler in Boyer Moore
+% - TAL typed assembly language, 
+% - Coq macro assembler
+% - https://github.com/yrp604/rappel a REPL for x86 and ARM
+%modern:
+% - .NET CIL has ilasm and ildasm (assembler and deassembler) with labels?
+%   (JVM has no official asembler format)
+% - LLVM has one? well the IR of LLVM is a kind of assembler, but portable
+%   MC layer mentioned http://lld.llvm.org/ to compete with assemblers
+% - WebAssembly  http://webassembly.org/docs/semantics/
+%   https://hacks.mozilla.org/2016/03/a-webassembly-milestone/
+%   (reference implem in ocaml :) )
+%   https://github.com/WebAssembly/design/blob/master/AstSemantics.md
+%   http://v8project.blogspot.com/2016/10/webassembly-browser-preview.html
+%   inspired by asm.js (but this was js subset, WebAssembly is assembly-like
+%   textual format (and also binary format))
+
+%see also http://www.tldp.org/HOWTO/Assembly-HOWTO/other.html
+
+%comparison of assemblers:
+% - http://staff.mmcs.sfedu.ru/~ulysses/Edu/MP/WhichAsm.html
+%related: IDE for nasm, masm, gas, fasm
+% https://dman95.github.io/SASM/english.html
+%emulator teaching assembly by using a game:
+% http://spectrum.ieee.org/geek-life/reviews/three-computer-games-that-make-assembly-language-fun
+%misc:
+% http://embed.rs/articles/2016/arm-inline-assembly-rust/
+% http://savannah.spinellicreations.com//pgubook/ProgrammingGroundUp-1-0-booksize.pdf
+% http://patshaughnessy.net/2016/11/26/learning-to-read-x86-assembly-language
+% https://sensepost.com/blogstatic/2014/01/SensePost_crash_course_in_x86_assembly-.pdf
+% http://www.cs.virginia.edu/~evans/cs216/guides/x86.html
+% - assembly language for beginners:
+%   https://yurichev.com/writings/AL4B-EN.pdf
+
+\section{Getting started}
+\label{sec:getting-started}
+
+To play with [[5a]], you will first need to install
+the \plan fork used in \principia (see \urlinstall).
+Once installed, you can test [[5a]] under \plan with
+the following commands:
+\l also under UNIX/Linux/macOS with kencc
+
+\begin{verbatim}
+1   $ cd /tests/5a
+2   $ 5a helloworld.s
+3   $ 5l helloworld.5 -o hello
+4   $ ./hello
+5   hello world
+6   $
+\end{verbatim}
+\l actually it is a percent, not a dollar for the prompt, but ok
+
+The command in Line~2 {assembles} the very simple [[helloworld.s]]
+ARM assembly program and generates the [[helloworld.5]] ARM {object file}.
+%
+Note that in \plan object files do not use the [[.o]] filename extension.
+Instead, an object file for the ARM architecture uses the [[.5]]
+filename extension, hence the use of [[helloworld.5]] above.
+\n this allows to generate in same dir object for different archi, making it
+\n easy to cross compile binaries for different architectures (said later)
+\n define object file? partly defined before in motivations. .5? (explained later)
+Line~3 then {links} the object file (see the \book{Linker})
+and generates the final ARM binary {executable} [[hello]].
+Line~4 {launches} the program, assuming you are under 
+an ARM machine 
+(e.g., a Raspberry Pi\furl{https://www.raspberrypi.org/}).
+
+
+Note that it is easy under \plan to {cross compile} from another architecture;
+you can use exactly the same commands ([[5a]], [[5l]], etc.).
+\l because magic /bin, and also because special .5 convention
+To play with [[5a]] under an x86 machine you just need
+after the linking step Line~3 to use instead the ARM emulator [[5i]]:
+
+\begin{verbatim}
+1   $ cd /tests/5a
+2   $ 5a helloworld.s
+3   $ 5l helloworld.5 -o hello
+4   $ 5i hello
+...
+\end{verbatim}
+
+See the \book{Emulator} for more information on [[5i]].
+\l actually cool cos can be used as an assembly debugger too
+
+\section{Requirements}
+
+Because most of this book is made of C source code, 
+you will need a good knowledge of 
+the C programming language~\cite{k-r} to understand it.
+\l actually quite a view bit manipulation, and C idioms used
+To understand Chapter~\ref{chap:parsing}, you will also
+need to know Yacc~\cite{lexyacc}.
+\l Can read Compiler :) and Generators :) but a bit self reference.
+
+Note that this book is not an introduction to assembly programming.
+%
+I assume you already know one assembly language,
+not necessarily the one used by [[5a]] though
+(e.g., NASM~\cite{assembly-step-by-step}),
+and that you have a basic understanding of computer architecture 
+(see \cite{tannenbaum-archi, patterson} for good books on the subject).
+%
+I assume you are already familiar 
+with concepts such as
+a {register}, a {stack pointer}, a {program counter},
+{memory move}, {jumps},
+{labels},
+\n {frame pointer}, hmmm maybe not, we can explain in this doc.
+etc.
+\t if not good reference to learn Assembler? one mention by asl book?
+\t recent Hennessy and Patterson!
+\l MIPS assembly tutorial, might give some ideas (use spim)?
+%  http://programmedlessons.org/AssemblyTutorial/index.html
+\l Assembly Programming classic book? once cited by Assembler and Loaders?
+% the Art of Assembly Programming
+% http://oopweb.com/Assembly/Documents/ArtOfAssembly/Volume/toc.html
+% Also "The Art of Assembly Language 
+%
+However, I do not assume that you know how an assembler works.
+Even if in a few \principia books such as the
+\book{Compiler} or \book{Kernel} I assume a knowledge of the concepts
+and theory underlying those programs, this is not the case here.
+%
+Indeed, there are very few books explaining how an assembler works
+(I can cite almost only {\em Assemblers and Loaders}~\cite{asl}),
+as opposed to a myriad of books on compilers and kernels.
+\l csapp explain assemblers?
+\l get inspiration from TOC? read intro?
+\t and none to the best of our knowledge showing code (except mmixware)
+%We assume you already know most of the theory; this book is here to
+%cover the practice.
+\n maybe not for this one actually
+
+
+It is not necessary to know the ARM architecture to
+understand this book,
+but I recommend to read the \book{Emulator} if you want to fully understand
+the semantics of the assembly instructions presented in this book.
+%
+An alternative is to read the ARM edition~\cite{patterson-arm} of the classic
+computer architecture book by Patterson and Hennessy~\cite{patterson}.
+\l but ARM64, so different probably
+
+%dup: Windows.nw
+If, while reading this book, you have specific questions
+on the assembly syntax used in this book or on the interface
+of [[5a]],
+I suggest you to consult the man page of [[5a]] at [[docs/man/1/8a]]\footnote{
+Despite its name, this document covers also [[5a]].
+}
+in my \plan repository.
+%
+You can also consult the documentation of
+the \plan assemblers~\cite{plan9-assemblers} (available also in 
+[[assemblers/docs/asm.pdf]]).
+\n 'as' article in unix programmer's manual? meh, seems unrelated to 5a.
+\l There are also some extra notes about assemblers related to [[5a]]
+\n at \url{https://golang.org/doc/asm} which can be useful (mentioned before)
+
+
+
+\section{About this document}
+%old: was #include "../docs/latex/About.nw"
+% but syncweb -web_to_tex does not process #include inside included file
+% for now, so can use #include just in top Make.nw
+\input{../docs/latex/About}
+
+\section{Copyright}
+\input{../docs/latex/CopyrightPlan9Text}
+
+
+\section{Acknowledgments}
+
+I would like to acknowledge of course the author of
+[[5a]], Rob Pike, 
+who wrote in some sense most of this book.
+\n I think it's Rob pike because he wrote the doc and he also rewrote
+\n the Go Assembler so he was probably the original author
+%
+Thanks also to Pascal Garcia for his comments on earlier
+versions of this book.
+
+\t I rewrote the code a bit (maybe quite a bit), e.g., symidx_of_symopt is big
+\t  maybe should say it
+
+
+
+
+
+%******************************************************************************
+\chapter{Overview}
+%******************************************************************************
+
+%trans:
+Before showing the source code of [[5a]] in the following chapters, 
+%toc:
+I first give an overview in this chapter
+of the general principles of an assembler, 
+of the assembly language supported by [[5a]],
+and of the format of the object files generated by [[5a]].
+%
+I also define terms, explain how the code is organized, 
+and more generally give the background necessary
+to understand the code I will show later.
+
+\section{Assembler principles}
+
+An {\em assembler} is a program that translates source code
+written in an {assembly} programming language into
+{machine code}, or into an {object code} close to machine code.
+\l figure? just box with foo.s -> foo.5 and source file and object file subtitle
+\l well 5a does not satisfy this definition then ...
+%
+An {\em assembly language} is a low-level programming language mimicking
+closely the {instructions} of a machine,
+but using a {textual} format rather than the
+{binary} format used internally by computers.
+This textual format is far more convenient for the programmer.
+\n as close as possible but not closer
+%
+Note that each assembly language is specific to a computer architecture.
+\l and in fact even different assembler for same arch use different syntax
+\n so it is not portable; C is a portable assembler! Or need meta-assembler.
+\t etymology of assembler/assembly? why call that way?
+
+Assembly languages use {\em mnemonics} to denote low-level {instructions}.
+%without:
+For instance, an assembly programmer can simply use the mnemonic
+[[ADD]] in his code instead of having to remember that [[0000100]]
+is the binary code to perform an addition in an ARM processor.
+\t programmer -> you? also in the following paragraph?
+
+
+Typical instructions are made of an {\em opcode} and 
+one or more {\em operands}.
+%
+For instance, [[ADD 15, R1, R4]] is a complete assembly instruction 
+telling the computer to add fifteen to the first register
+and to put the result in the fourth register.
+\l again mnemonic too for register names, and actually it's \$15
+\n note that cant have ADD R1, 15, R4 because ARM restrictions on ADD
+\n also note att syntax, left to right
+\t footnote if use left-to-right assignment syntax, known as ATT syntax
+
+A key feature of assemblers is to allow the use of {\em symbolic addresses}
+as operands, freeing the programmer from tedious manual calculations.
+%
+Indeed, in assembly a programmer can {{define}} {\em symbols} designating
+certain memory areas (code area or data area)
+\n use 'symbols' not 'labels', more general; they are in symbol table of binary
+\n put globals or functions, hmm but label make things more general
+and he can then {{use}} those symbols as operands.
+For instance, the instruction [[B foobar]] allows to {branch} (jump) 
+to the code following the [[foobar]] symbol. 
+\n actually it is B foobar(SB) in 5a if foobar is a symbol and not a label
+%without:
+Without symbolic addresses, a programmer
+would have instead to write something like [[B 1562]] and make sure
+that he calculated correctly that 1562 was the address corresponding
+to the thing he wanted to jump to. This would require to know
+the size of each instruction, and each further modification of the program
+could entail the recalculation of all those addresses.
+\n actually jumps are relative in the ARM
+
+To summarize, the main functions of an assembler are typically the following:
+\n function almost in a literal way; those phases correspond almost to 5a funcs
+\begin{enumerate}
+
+\item {\em Parse} an input textual file
+
+\item {\em Check} that the combinations of opcodes and operands form 
+valid machine instructions
+\n in 5a actually a few checks are delayed until linking
+
+\item {\em Compute} the concrete values of symbolic addresses
+(this usually requires a two-pass algorithm as one can reference symbols
+defined later in the file)
+\n in 5a actually only labels are resolved, symbols are delayed until linking
+
+\item {\em Generate} the binary machine code
+\n again 5a is special here
+
+\end{enumerate}
+
+In fact, most assemblers do not generate the final machine code but instead
+generate an {\em object code}, which is mostly machine code but
+with extra information about {\em unresolved symbols}.
+\n local labels disappear? Yes, they are resolved, but kept for debugging.
+%
+Indeed, even if for small programs the definitions and uses of symbolic
+addresses could be in the same single file, as programs
+grow larger, it becomes useful to separate the source in different files.
+\l for separation of concern, modularity, libs, reuse, separate compilation, ..
+\l but now I do everything in one big file, so maybe can revisit that idea
+In this case, you could want to reference in one assembly file
+a symbol defined in another file. 
+%
+This is why the object file
+must contain, in addition to machine code, enough information
+about the {external} symbols this assembly file is using
+(as well as the symbols it defines) so that another tool, the {\em linker},
+can later fully {\em resolve} all the symbol references used in 
+all the files.
+\l So assembler must output symbol table information in the object
+\l for the linker to know what to do and where to patch things.
+\n asm.pdf use external a lot, but often he means global
+%
+In essence, an object file is really the simplest form
+of a {\em module}; it packs code, data, and information
+about {exported} and {imported} entities.
+\n but no properties for those entities, so not a real interface
+
+A linker then essentially 
+{concatenates} the code (and data) of the multiple object files together,
+{resolves} all the symbolic addresses (now that all 
+the code and data is available and has been assigned a fixed memory area),
+\n in fact can be tricky for variable-sized instructions like in x86,
+\n has to make pessimistic guess and it complicates a lot things
+{patches} all the incomplete instructions that were using unresolved symbols,
+\n actually 5l does not patch machine code really
+and finally {generates} the binary executable.
+\n Put two assembly file with symbols defined and used, and how resolved
+\n and how relocate? No, let that to the linker book.
+
+\t normally big concept in assembler is relocation, but job done
+\t by linker in case of plan9 so will not talk much about it
+\t WIKIPEDIA relocation?
+\t When objects are concatenated together so the branch/jmp addresses
+\t need also to be "relocated"; same for references to external symbols
+
+\section{[[5a]] command-line interface}
+
+The command-line interface of the assembler [[5a]] is pretty simple:
+\begin{verbatim}
+$ 5a
+usage: 5a [-options] file.s
+$ 5a foo.s
+$ 5l foo.5 bar.5 ...
+\end{verbatim}
+
+Given an input {assembly file} [[foo.s]], 
+[[5a]] outputs an {object file} [[foo.5]].
+You can change this default behaviour by using the [[-o <outfile>]] option.
+Other options are related to macroprocessing and debugging and will 
+be described later.
+
+%real-world:
+Object files in other operating systems (e.g., Linux) usually end
+with the [[.o]] filename extension. 
+%in-plan9:
+However, because \plan supports multiple architectures
+and makes it very easy to cross-assemble or cross-compile programs,
+it is more convenient to use the code of the architecture (here [[5]]
+for ARM) as the filename extension of object files.
+\l see mkfile and trick with dollarO, that's nice, mk everything!
+That way, you can have in the same directory the ARM
+object file [[foo.5]] and the x86 object file [[foo.8]] without any 
+name conflict. 
+%
+For assembly programs, the need for different object filename
+extensions may not be obvious. Indeed, assembly files are 
+architecture specific anyway. However, for C programs, which can be compiled
+by [[5c]] or [[8c]], generating different object files
+from the same source is very useful.
+
+
+\l -D -I (cpp),  -f -m for debug
+\l env: INCLUDE (for cpp, similar to -I), NPROC (when multi files?)
+
+
+\section{[[helloworld.s]]}
+\label{sec:helloworld}
+
+From now on, I call {\em Asm5} the ARM assembly language supported by [[5a]]. 
+%
+Because the different \plan assemblers (e.g., [[5a]], [[8a]])
+are variations of a single program, the
+assembly languages they support are also variations of a single language
+I call {\em Asm9}. 
+\t meh, maybe AsmPlan9?
+You can see Asm5 as a specialized version of Asm9
+for the ARM processor.
+By understanding Asm5, you will understand also fairly well the assembly
+languages supported by the other \plan assemblers (e.g., [[8a]]),
+because they have a lot in common.
+\n asm is not portable, but cos they have a lot in common, easier a bit to port
+\n even more easier thx to the virtual instructions such as MOVW or RET
+
+%toc:
+In this section, I will show a simple Asm5 program, [[helloworld.s]],
+which prints [[Hello World]] when executed. I will use this
+program as a tutorial for Asm5 (and more generally for Asm9).
+\n I'd rather not write this tutorial but all existing docs on Asm5 are bad
+
+%http://weeb.ddns.net/0/programming/c_without_standard_library_linux.txt
+
+\subsection{Background}
+
+%trans:
+To understand [[helloworld.s]], I must first show
+the equivalent program written in C to introduce some background
+on how to perform {\em system calls} in \plan.
+\l system call em? link to Kernel book?
+\n could have a hello.s that you link with libc so easier
+\n but I like the idea of really raw simple hello world in assembly!
+\n for Linux: http://sysdigcloud.com/fascinating-world-linux-system-calls/
+
+Here is the simplest \plan{} [[hello world]] program written in C:
+
+<<helloworld1.c>>=
+#include <u.h>
+#include <libc.h>
+
+void main() {
+  print("hello world\n");
+}
+@
+
+This code is using the [[print()]] function from the core C library
+(see the \book{Libcore}).
+If I expand the code of this function, and simplify things,
+I will get this C program:
+
+<<helloworld2.c>>=
+#include <u.h>
+#include <libc.h>
+
+void main() {
+  pwrite(1, "hello world\n", 12, 0);
+}
+@
+\t why pass size to kernel of string? kernel can not use strlen?
+\t No! because kernel does not depend on format of string and fact
+\t that they are null-character terminated. The kernel manage an abstract
+\t series of bytes in files. Not just text files (or text devices).
+
+The [[pwrite()]] function is also defined in the C library,
+but it is written in assembly in [[lib_core/libc/9syscall/pwrite.s]].
+\n actually it's auto generated by mk from sys.h for different architecture
+\t See Appendix!
+\l Why p?
+[[pwrite()]] is a small wrapper around the ARM instruction 
+[[SWI]] (for ``software interrupt''),
+which performs a system call (also known as a {\em syscall}).
+\l more on this SWI later
+%
+Here is the prototype of [[pwrite()]] defined in [[include/core/libc.h]]:
+
+<<prototype pwrite in libc.h>>=
+extern	long	pwrite(fdt, void*, long, vlong);
+@
+%old: I introduced fdt typedef
+
+The [[pwrite()]] interface is documented in 
+[[docs/man/2/read]]\footnote{
+Again, despite its name, this document covers also [[pwrite]].
+}.
+The parameters are
+a {file descriptor} (e.g., [[1]] for the standard output), 
+a string pointer, 
+the number of bytes to write,
+and finally a [[vlong]] seeking offset. 
+%
+Most of the parameters use 4 bytes on the ARM,
+except the [[vlong]] which uses 8 bytes on the ARM.
+\l will be important, see later
+\l pwrite is the syscall, not write, vlong seek is for protocol atomicity, 2in1
+
+\subsection{The program}
+\label{sec:hello-program}
+
+%trans:
+You now have enough background to understand partially
+the [[helloworld.s]] program below:
+
+<<assemblers/5a/tests/helloworld.s>>=
+1 	TEXT _main(SB), $20
+2 	        B later
+3 	        B loop /* not reached */
+4 	later:
+5 	        /* fill missing characters for hello */
+6 	        MOVW $hello(SB), R2
+7 	        MOVW $'W', R1        
+8 	        MOVB R1, 6(R2)
+9 	        MOVW $'o', R1        
+10	        MOVB R1, 7(R2)
+11	        MOVW $'r', R1        
+12	        MOVB R1, 8(R2)
+13	        MOVW $'l', R1        
+14	        MOVB R1, 9(R2)
+15	        MOVW $'d', R1        
+16	        MOVB R1, 10(R2)
+17	        MOVW $'\n', R1
+18	        MOVB R1, 11(R2)
+19	        /* prepare the system call PWRITE(1,&hello,12,0LL) */
+20	        MOVW $1, R1
+21	        MOVW R1, 4(R13)
+22	        MOVW $hello(SB), R1
+23	        MOVW R1, 8(R13)
+24	        MOVW $12, R1
+25	        MOVW R1, 12(R13)
+26	        MOVW $0, R1
+27	        MOVW R1, 16(R13)
+28	        MOVW R1, 20(R13)
+29	        MOVW $9 /*PWRITE*/, R0
+30	        /* system call */
+31	        SWI $0
+32	        BL exit(SB)
+33	        RET /* not reached */
+34	loop:
+35	        B loop
+36	        
+37	
+38	TEXT exit(SB), $4
+39	        /* prepare the system call EXITS(0) */
+40	        MOVW $0, R1
+41	        MOVW R1, 4(R13)
+42	        MOVW $3 /*EXITS*/, R0
+43	        /* system call */
+44	        SWI $0
+45	        RET /* not reached */
+46	        
+47	                        
+48	GLOBL   hello(SB), $12
+49	DATA    hello+0(SB)/6, $"Hello "
+50	
+@
+%$
+%coupling: I repeat the last two lines later in DataLayout section!!
+\n No libc! Using a simple _main. As simple as possible.
+\n But this works only because luck! See bugneedr12.s. We should initialize R12!\n It just happens that dollar.hello(SB) in this file is not immrot() and so
+\n  leads to a LCON not a RECON (see 5l) and so is loaded through
+\n  a WORD, not via  'ADD offset, R12, R2'. Subtle. Very subtle.
+\n _main and exit are normally part of core C library
+\l can also maybe show one that use libc, use 5c -S hello.c
+\t can do with SP instead of R13 so less leaky abstraction 4(R13)?
+\l note that we call PWRITE syscall directly, not pwrite(), subtle
+
+
+%dup: from intro/getting-started
+To assemble, link, and execute this program, simply do
+like in Section~\ref{sec:getting-started}:
+\begin{verbatim}
+$ 5a helloworld.s
+$ 5l helloworld.5 -o hello
+$ ./hello
+hello world
+\end{verbatim}
+\l if under ARM machine
+\l show actual code? echo '$t :c' | 5i hello 
+%$
+\l show binary format? hexdump? (actually not bin instruction format! see below)
+\t instruction to disassemble foo.5? db foo.5? 
+\t 5l -v -W so dumper of object file? nm?
+%real-world: objdump --disassemble ?
+
+Appendix~\ref{chap:examples} contains more examples of assembly programs.
+
+\subsection{Pseudo instructions}
+\label{sec:pseudo-instructions}
+
+The [[helloworld.s]] program above defines three {\em symbols}:
+two {procedures}, [[_main()]] and [[exit()]], and one {global}, [[hello]].
+%
+The two procedures are introduced via the [[TEXT]] 
+{\em pseudo instruction} Line~1 and Line~38,
+\l why TEXT? why not PROC?
+and the global via [[GLOBL]] Line~48.
+I say ``pseudo'' (or sometimes ``virtual'') because those
+instructions do not match directly a machine instruction.
+They are assembly-only constructs, also known as
+{\em assembly directives}. Indeed, the ARM processor
+has no notion of procedure names; it just manages numbers
+and concrete addresses.
+\l GLOBL allocate mem, and TEXT actually does magic stuff, so almost virtual
+
+The operands of the pseudo instructions [[TEXT]] and [[GLOBL]]
+\n was arguments, but better operands, for uniformity, because they are really
+are the name of the {symbol} it defines followed by [[(SB)]],
+which I will explain later, and a {\em constant} value prefixed by a dollar.
+In Asm9, {\em all constants are prefixed by a dollar}.
+\t why? ambiguities? I think it's stupid because easy to make mistake then
+\l actually in DATA the size is specified without dollar in .../6, offsets too
+\l and MRC also have a few int without dollars
+% I was doing MOVW 0, R1 which translates to MOVW 0(R0), R1 (not sure why)
+% instead of MOVW $0, R1 and so had some segfaults at 0xc because
+% R0 was return value from syscall which was lenght printed = 0xc
+%
+For [[GLOBL]], the constant value represents the size, in number of
+bytes, this global will use. For [[hello]] Line~48 it is [[12]] (enough
+to hold the [["hello world\n"]] string).
+%
+For [[TEXT]], the constant value represents the size, in number of bytes,
+this procedure will need for its {\em locals} in the {stack}. 
+For [[_main()]] Line~1 it is [[20]] (the
+number of bytes needed to hold all the {arguments} in the stack
+to the [[PWRITE]] system call: 
+\l more on this later, locals and arguments are the same
+4 for the file descriptor integer, plus 4 for the string pointer,
+plus 4 for the size, plus 8 for the [[vlong]] offset).
+\n actually there is an implicit plus 4 as we will see later
+\t so arguments are held in the "stack frame" of the caller
+
+As you will see in the \book{Linker}, the linker [[5l]] is looking 
+for a procedure named [[_main]] for the entry point of the executable
+it generates,
+even though the entry point of C programs is [[main]], not [[_main]].
+%
+This is because the core C library defines a [[_main()]] procedure,
+written in assembly, which does some core initializations
+and then calls [[main()]] (see the \book{Libcore}).
+\t can change entry point, -E, see 5l.
+%
+In [[helloworld.s]], I do not use and so do not link the C library, 
+to simplify the code and the explanations,
+\l but in the end meh?
+so I must define a [[_main()]] at Line~1.
+%, the entry-point procedure 
+
+%real-world: use .text, .data
+
+\subsection{Labels}
+
+The first instruction of [[_main()]], Line 2,
+\n actually there is an hidden instruction generated dealing with R14/R13
+is a jump, known as a {\em branch} in ARM (hence the [[B]]).
+It is a jump to [[later]], a {\em label} defined Line~4.
+In Asm9, {\em all label definitions are suffixed by a colon}. 
+%
+Labels are similar to symbols: They allow to give
+a symbolic name to a memory area. However, labels are restricted to code area
+and are locals to an assembly file. They are used for
+intra-procedural jumps.
+\t locals -> private?
+\l also not suffixed by SB
+\n how actually translated? in absolute (virtual) code address.
+
+Note that the syntax for {comments} Line~3 and Line~5
+is the same than in C.
+
+
+\subsection{Assignments}
+
+Line~6 places the {\em address} of the [[hello]] global
+(suffixed again by [[(SB)]], which I will explain later)
+in the {register} [[R2]]. 
+
+\n How this works without having set R12? What code is generated
+\n  for those instructions? we are lucky and the address is loaded
+\n  from a Pool, it is not computed via ADD Offset, R12, R2.
+\n  but too complex to explain here.
+There are 16 ARM registers named [[R0]] to [[R15]].
+\l last 3 have special meaning and used specially by ARM
+Note that Asm9 uses a {\em left-to-right} assignment syntax\footnote{
+This syntax is called the
+\att syntax, as opposed to the Intel syntax which is right-to-left.}.
+%alt: intel syntax, right to left
+Moreover, in Asm9 [[MOV]] instructions are suffixed with a letter
+corresponding to a size: [[W]] for word, [[B]] for byte, etc.
+%alt: intel syntax, no prefix
+\l hmm also sometimes MOVBU, gas does that too
+\n also MOV is virtual instr, see later
+
+Line 7 places the character constant [['W']], 
+converted by the assembler in its integer ASCII value (87), into the
+register [[R1]].
+\l it is a word
+\l also unicode?
+
+\subsection{Addressing modes}
+\n https://en.wikipedia.org/wiki/Addressing_mode
+
+Line~8 introduces a new {\em memory addressing mode}.
+It is the first instruction that writes into memory. Indeed, until now
+the code in [[helloworld.s]] was only modifying the content of registers.
+%
+[[MOVB R1, 6(R2)]] at Line~8 {stores} the first byte (because of the [[B]] suffix)
+of register [[R1]] (which should contain 87)
+at the address {denoted} by [[R2]] plus [[6]].
+%
+The assembly instruction [[MOVB N, O(B)]] roughly corresponds
+to the following C statement [[B[O] = N]], if [[B]] is a byte pointer.
+This instruction is also equivalent to this C statement [[*(B+O) = N]].
+\l what a strange syntax ... not sure where comes from, apparently not unix as
+\n apparently vasm uses similar syntax, so maybe 68k motorola assembly syntax
+\n which would make sense since 2a was the first assembler written by Pike
+[[O]] is called the {\em offset}, and it is applied to 
+a pointer [[B]] called the {\em base}.
+This addressing mode is called {\em indirect with offset}.
+The parenthesis around the register corresponds roughly to the 
+C {dereferencing} operator [[*]].
+\n why not MOVB 'W', 6(R2)? linker limitations and RISC LDR/STR (talked later)
+
+In fact, Line 6 introduced also an addressing mode.
+The syntax [[hello(SB)]] is reminiscent of the base
+and offset addressing mode we have just seen.
+[[SB]] stands for {\em static base} register.
+It refers to the beginning of the address space of the program.
+\n more on this later, it's a pseudo, it's not needed, it's weird
+\n  because for TEXT reference, SB is actually not, but for GLOBL it is
+\n  and it is actually not start of address space but INITDAT plus BIG (see 5l)
+\n  when used as hello(SB) (but not when used as dollar.hello(SB), hmm)
+In Asm9, all references to globals and procedures
+are written as offsets to [[SB]] 
+\t offset cos in the end symbols will have static address and so static offset?
+(for definition references see Lines 1, 38, 48, and 49;
+for use references see Lines 6, 22, and 32).
+%
+The instruction [[MOVW foo(SB), R1]] will store the {\em content}
+at the address denoted by the symbol [[foo]] into [[R1]].
+The instruction [[MOVW $foo(SB), R1]] %$
+will store the {\em address} denoted by the symbol [[foo]] in [[R1]].
+The \$ in that case corresponds roughly to the 
+C {address} operator [[&]].
+\l ugly to overload dollar which is already used for constants? or because
+\l  in the end it will be a constant, it will be really an offset
+\l It is the first instr that read memory?? it's static?
+\l  but why the generated code for Line 6 is MOVW #84(R15), R2 ? #10a8=#2000 ???
+\l  this SB is weird
+
+\subsection{Pseudo registers}
+\label{sec:pseudo-registers}
+
+[[SB]] is one of the few {\em pseudo registers} of Asm9.
+[[PC]] is another one. It corresponds to the
+{\em virtual program counter}. 
+Similar to pseudo instructions, pseudo registers
+do not correspond exactly to machine registers.
+Indeed, the ARM has already an hardware register called [[R15]] 
+representing the program counter. 
+Because the ARM has fixed-length instructions of 4 bytes,
+the value of [[R15]] is always a multiple of 4. The pseudo register
+[[PC]] instead counts instructions, not bytes of data. Thus,
+to branch to the second following instruction (to skip
+one instruction), you could use the following instruction: [[B 2(PC)]].
+\n which is really *(PC _plus_ 2)
+This instruction is equivalent to [[B 8(R15)]].
+\t actually no! because ARM when R15 is involved it does a plus 8
+\t  see Linker so B 0(R15) is in fact equivalent to B 2(PC), subtle
+\t but then even more an argument for pseudo register :) hide
+\t  complexity/tricks of ARM
+\l I think it is equivalent
+\n branch are absolute, PC plus 2 is absolute
+
+Why should you use pseudo registers? The advantage of using [[2(PC)]]
+instead of [[8(R15)]] in Asm5 may look small. However, on some
+architectures the size of instructions is variable.
+\l actually how do in other assembler? allow B with PC?
+\n actually also variable with Asm5 as 1 instr may lead to multiple instr
+For instance, it is not trivial on x86 to compute the number
+of bytes two arbitrary instructions are using.
+%
+Just like with symbolic addresses, using pseudo registers
+allows the programmer to think in slightly higher-level terms
+(for [[PC]] in terms of instructions instead of bytes of data),
+and to delegate tedious tasks such as counting
+the size of instructions to the computer.
+\t for FP and SP it actually helps a lot for debugging format!
+
+Asm9 defines four pseudo registers:
+\begin{itemize}
+\item [[PC]], the (virtual) {\em program counter}, counts the
+number of instructions.
+For the ARM, [[PC]] is related to the (real) program counter register [[R15]].
+
+\item [[SB]], the {\em static base} register,
+refers to the beginning of the address space of the program.
+For the ARM, [[SB]] is related to the machine register [[R12]].
+\t For SB it's more tricky to understand why we need that. See Linker.nw?
+\l R12 is reserved by assembler, it's not reserved by machine
+
+\item [[SP]], the (virtual) {\em stack pointer}, can be used to access local
+variables in the stack.
+\l also called auto, but local maybe bad name; it is also for callee args
+For the ARM, [[SP]] is related to the machine register [[R13]].
+\n note that it is not an ARM stack pointer register, ARM imposes nothing
+\l apparently it points to the top of the local stack frame! so offset
+\l must be negative
+
+\item [[FP]], the {\em frame pointer}, can be used to access the arguments
+of the procedure in the stack. [[FP]] is also related
+to [[R13]] for the ARM.
+\l set by caller
+\t related to SP? more on this later. ref to section in grammar?
+
+\end{itemize}
+
+
+
+In this tutorial, I will avoid using those pseudo registers (except
+[[SB]] because it is mandatory).
+Indeed, they may simplify things in the long term but they
+add some extra complexities at the beginning.
+\l generic, hide normally peculiarities, complexities, but add some complexity
+\n indeed N_xxx not used that much in Assembler.nw but used more in Linker.nw
+
+\bigskip
+Line 6 through 18 set characters in the [[hello]] global array of characters. 
+
+\subsection{Call stack}
+\label{sec:call-stack}
+
+I can now go through Line~20 to Line~29. Those instructions
+build the {arguments} for the
+system call performed Line 31 with the software interrupt instruction
+[[SWI]]. {\em Arguments}, in function calls or system calls, 
+are by {convention}
+in \plan hold primarily in the {\em stack}. You will see later that
+[[R0]] plays also a special role regarding arguments because of 
+some C and kernel {calling conventions}.
+\l convention to be in stack, but convenient, for recursive
+As I mentioned in the previous section, [[R13]] is by convention used
+to represent the stack pointer.
+\n I use R13 and not SP because SP is a pseudo which get played with
+\n in the linker, so simpler use directly R13 to minimize explanations
+\t and also because I dont understand how to use SP properly ... hmmm
+Figure~\ref{fig:stack-start} contains a
+representation of the stack when the [[hello]] program
+is loaded in memory by the kernel.
+The stack grows downward, so high addresses are at the top in the diagram.
+\n OSTEP book uses stack growing upward
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+        |       |
+        |       |
+R13 +-> +-------+
+\end{verbatim}
+\caption{Stack content when [[hello]] started.}\label{fig:stack-start}
+\end{figure}
+
+[[R13]] is initialized by the kernel before the kernel gives
+control to the entry point of the binary program.
+Its value is very high in the virtual memory address space.
+Here is a dump of the registers before the program starts
+by using the emulator/debugger [[5i]]
+\footnote{
+To fully understand the values of those registers,
+see the \book{Kernel} or the \book{Emulator},
+especially the code of [[initmemory()]] in [[5i]].
+}:
+\t why R0 value? R1? also talk about R15 and _main
+
+\begin{verbatim}
+$ 5i hello
+5i> $r
+...
+R0  #7fffff70 R1  #7ffffffc R2  #0        R3  #0
+R4  #0        R5  #0        R6  #0        R7  #0
+R8  #0        R9  #0        R10 #0        R11 #0
+R12 #0        R13 #7fffff58 R14 #0        R15 #1020
+\end{verbatim}
+\n first output line is: PC  #1020     SP  #7fffff58 but confusing I think
+\n  because SP here is the machine SP, not assembler SP
+\n why R0 weird value? and R1? TOS?
+% in 5i see initmemory():
+%    STACKTOP	= 0x80000000, 
+%    ...
+%    reg.r[0] = tos;
+%    reg.r[REGSP] = sp;
+%    reg.r[1] = STACKTOP-4;	/* Plan 9 profiling clock (why & why in R1?) */
+
+Figure~\ref{fig:stack-line2} contains a representation of the stack 
+after Line~1,
+when the processor starts to execute the instruction Line~2.
+%
+Remember that the second operand of the [[TEXT]] pseudo instruction
+is the number of bytes this procedure will need for its {locals} in the {stack}.
+\l locals, arguments
+Thus, when assembled, the [[TEXT]] pseudo instruction for [[_main]] Line~1
+should generate a machine instruction that decrements [[R13]] by 20. 
+In fact, the actual generated instruction decrements [[R13]] by 24;
+\n in fact it also does also some magic with R14
+you will see later in Section~\ref{sec:extra-word-stack}
+why [[_main]] uses an extra word in the stack before the arguments.
+
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+        |       |
+        |       |
+    +24 +-------+ <-+ old value of R13
+        |       |
+    +20 +-------+
+        |       |
+    +16 +-------+
+        |       |
+    +12 +-------+
+        |       |
+     +8 +-------+
+        |       |
+     +4 +-------+ <- start of "locals"
+        |       |
+R13 +-> +-------+
+\end{verbatim}
+\caption{Stack content before Line 2.}\label{fig:stack-line2}
+\end{figure}
+\t and content of R14 in bottom cell? should be 0 as no caller actually
+
+Figure~\ref{fig:stack-line31} contains the same stack before Line~31,
+after the arguments to the system call have been set by Lines~20 through 28.
+\l note that arguments are in the ``stack space'' of the caller
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+        |       |
+        |       |
+    +24 +-------+ <-+ old value of R13
+        |  0    |
+    +20 +-------+
+        |  0    |
+    +16 +-------+
+        |  12   |
+    +12 +-------+
+        |&hello |
+     +8 +-------+
+        |  1    |
+     +4 +-------+ <- start of PWRITE arguments
+        |       |
+R13 +-> +-------+
+\end{verbatim}
+\caption{Stack content before Line 31.}\label{fig:stack-line31}
+\end{figure}
+\l remember 0 0 because vlong offset
+\l need talk endianess if it was not 0 but 1. Which order then? (jarod)
+\t and content of R14 in bottom cell? note that return address of hello
+\t  in OS, not return address in hello!
+
+%real-world:
+\t no need to save old value of R13 in the stack! RET does it.
+\t no bad DWARD of frame-pointer thing -fomit-frame-pointer
+\t (hmm but if want to have exn in your lang, you need to save
+\t somewhere information about the size of the frame)
+
+
+\subsection{System calls}
+
+The \plan{} {\em kernel calling conventions} impose to have all
+the arguments in the stack ``above'' [[R13+4]]
+and to use [[R0]] to hold
+the syscall ``code''. The magic constant value [[9]]
+at Line~29 is the code corresponding to the [[PWRITE]]
+system call (see the file [[lib_core/libc/9syscall/sys.h]],
+which defines all those syscall codes).
+\n could actually #include this file and use PWRITE but 
+\n  but better to have less feature to explain in tutorial (here cpp)
+\n R0 is not the first argument anymore!
+The [[SWI]] instruction Line~31 then performs the system call
+and jumps in the kernel.
+%
+[[SWI]] has one operand in the ARM. This operand
+is normally used to specify which entry
+in the {\em interrupt table} to go to. However, the \plan kernel
+uses [[R0]] instead for that purpose. Thus, the operand of [[SWI]] is
+not used under \plan. This is why I pass zero
+to [[SWI]] in [[helloworld.s]] Line~31.
+\l need extra words before arguments for syscall too? because C convention?
+
+\subsection{Function calls}
+\label{sec:bl}
+\l branch and link
+
+In Asm5, regular function calls (e.g., the call to [[exit]] Line~32),
+use the [[BL]] instruction. You should use [[SWI]] only for system calls.
+[[BL]] stands for {\em branch and link}, which I will explain below.
+
+Some processors such as the x86 have a [[CALL]] instruction,
+which when executed pushes on the stack the value of the program counter
+for the next instruction. This value corresponds to a {\em return address}.
+[[CALL]] then jumps (branches) to the code of the {\em callee}.
+\l put diagram of recursive call here? how the magic works!
+A corresponding [[RET]] instruction in the callee
+will pop back in the program counter 
+the value pushed by [[CALL]] to return back to the {\em caller}.
+\t and add 4? or it's done before? see code of BL in Machine.nw
+\l classic use of stack, can do recursive functions like that
+
+There is no [[CALL]] or [[RET]] instruction in the ARM.
+Instead, the [[BL]] instruction just saves the current value of the program
+counter ([[R15]]) plus 4 (the next instruction)
+in the special register [[R14]],
+called the {\em link register}, and then jumps to the callee. 
+
+
+The use of a special register to hold a {return address}
+is an ARM optimization that avoids for certain calls
+to use the stack, and so the memory (which is slow).
+%
+Indeed, when a function does not call other functions, 
+in which case it is called a {\em leaf} function, the value
+of [[R14]] does not need to be saved. Returning
+to the caller from the leaf function
+can be done simply by setting the program
+counter to the value in the link register with [[B (R14)]].
+\l or MOVW R14, R15 but apparently 5l does the B above.
+%
+However, if the function is not a leaf then the value in [[R14]]
+must be saved somewhere, in the stack, before the function calls
+another function via [[BL]] (which would overwrite [[R14]]).
+%\footnote{See the \book{Emulator} for more information on the ARM and [[BL]].}.
+
+
+\label{sec:extra-word-stack}
+Non-leaf functions are the reason the [[TEXT]] pseudo instruction
+allocates one more word than its second operand, for instance, 24
+instead of 20 for [[_main]] Line~1. This extra
+word in Figure~\ref{fig:stack-line2} can be used
+by functions called from [[_main]] to save
+the return address stored in [[R14]].
+\t FIGURE!! where see multiple function calls, and frames (Linker.pdf has one?)
+\t  and stored addresses!!
+\t !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+\subsection{Virtual instructions}
+\label{sec:ret}
+
+The leaf detection is done ({statically}) by the linker [[5l]].
+Indeed, [[5l]] is the program generating the machine code in \plan,
+and so the program that needs this information to optimize machine code.
+%
+A leaf is simply any procedure that does not contain a [[BL]] instruction,
+for instance, [[exit]] in [[helloworld.s]]\footnote{[[SWI]] does not count 
+as a function call; [[R14]] is not overwritten by a [[SWI]].
+}.
+\l In any case the kernel saves all the registers of the calling process?
+\l actually only when context switch no?
+[[_main]] in [[helloworld.s]] on the opposite is not a leaf function 
+because it is using [[BL]] Line~32.
+
+
+The machine instructions generated by [[5l]]
+for the [[TEXT]] pseudo instruction
+depends on whether the function is a leaf. 
+The same is true for the [[RET]] instruction, Line~33 and Line~45.
+[[RET]] is called a {\em virtual instruction}.
+\l we call it that way? or asm.pdf does?
+Indeed, as I mentioned before, the ARM does not have any [[RET]] instruction.
+However, it is convenient for the programmer to use a [[RET]]
+assembly instruction in his program to return to the caller, whether
+the caller is a leaf or a non-leaf function.
+
+
+Figure~\ref{fig:virtual-text-ret}
+describes roughly the machine code generated by [[5l]]
+for the pseudo and virtual instructions [[TEXT]] and [[RET]]
+for a simple procedure [[foo]], depending on whether this
+procedure is a leaf or not.
+For more information, see the \book{Linker}.
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+TEXT foo(SB), $0   MOVW R14, (R13)          
+                   SUB $4, R13, R13
+ ...               ...                      ...
+                   ADD $4, R13, R13           
+ RET               B -4(R13)                B (R14)
+----------------  -----------------------  ------------------
+  assembly code    machine code non-leaf    machine code leaf
+\end{verbatim}
+\caption{Machine code for the pseudo/virtual instructions [[TEXT]] and [[RET]].}
+\label{fig:virtual-text-ret}
+\end{figure}
+\t it is -4(R13) or (R13)? it's in 
+\t need to have dollar0 ? but then already means does not call anything no?
+\n actually it is a single MOVW.W R14, #-4(R13), ref to later section? 
+\n  and for RET it is MOVW.P #4(R13), R15
+\l and actually it's ADD 0, R14, R15 instead of B (R14) (5l opti?)
+\l not also that leaf opti is applied only if no locals (autosize = 0)
+\l  so a bit less interesting. See leaf.s
+
+\t speak about frame? and responsibility. like return address
+\t  is stored in frame of caller for instance! not callee.
+\t  and the callee itself allocate space for its own return address
+\t  if he calls other functions.
+
+%real world: -fomit-frame-pointer see later in grammar chapter.
+
+The virtual instruction [[RET]], just like the 
+pseudo instruction [[TEXT]], or the pseudo registers, allows the programmer
+to think in slightly higher-level terms and let the computer
+do the appropriate optimizations.
+\l TEXT is almost a virtual too. maybe say pseudo cos not just serie of instr
+\l  but also introduce a label (jarod)
+%
+In fact, [[MOVW]] used in Figure~\ref{fig:virtual-text-ret} 
+is also a virtual instruction. It hides some 
+architecture restrictions and peculiarities regarding memory accesses.
+in Asm5, you can use the very general [[MOVW]]
+even though the ARM processor supports only the
+more basic and separate [[LDR]] (load) and [[STR]] (store) instructions.
+\n actually there is a MOV and it's LDR and STR but same basic idea
+\n and also MOVW generalizes MSR and MRS that mov StatusRegister
+\l but a bit leaky abstraction because the linker puts later some restrictions
+\t so fig:virtual-text-ret is actually not correct
+
+\t say TEXT is pseudo and virtual at the same time. because introduce
+\t  name, which is assembly only constructs that eventually disappear,
+\t  but also specify size locals which ultimately becomes an ARM instruction
+
+\bigskip
+Instructions Line~40 though 44 are similar to the instructions
+we have seen before; they perform the system call [[exits(0)]],
+which terminates the program. This is why I marked a few instructions
+with a comment indicating the instruction
+could not be reached. Indeed, the program will have exited already
+(and so will not perform the [[RET]]).
+
+\subsection{C calling conventions}
+
+Note that the way arguments are laid out in the stack in
+Figure~\ref{fig:stack-line31}, as well as the extra word before the
+arguments (to save the return address to the caller stored temporarily in
+[[R14]]), or the fact that all those elements are ``above'' the stack
+pointer ([[R13]]) at the entry of the function callee (or syscall
+interrupt handler), are just {\em conventions}. 
+% official conventions?
+% http://infocenter.arm.com/help/topic/com.arm.doc.ihi0042f/IHI0042F_aapcs.pdf
+%
+The ARM processor does not dictate any specific way to call procedures.
+In fact, it does not even have a notion of procedure;
+the ARM provides only the [[BL]] machine instruction, which just saves 
+[[R15]] in [[R14]] and jumps to an address.
+The rest is a design choice.
+
+The calling conventions I use in this tutorial come from the
+{\em C calling conventions} used by the C compiler [[5c]].
+Indeed, the assembly code generated by [[5c]] assumes
+arguments are passed in a certain way and the stack
+pointer [[R13]] has a certain value. 
+In fact, the use of [[R13]] for the stack pointer is also a 
+convention; ARM has no notion of stack, it just manipulates memory.
+\n because you need that! you need at least a convention, see later.
+
+I use conventions similar to the C calling conventions
+in this tutorial because the code I present
+performs a system call and the \plan{} {kernel calling conventions}
+are derived from the C calling conventions. Indeed, the kernel
+is mostly written in C.
+
+The C calling conventions are slightly different from
+the kernel calling conventions. In the C calling conventions,
+instead of using [[R0]] to
+store the syscall code, [[R0]] is used to store the first argument.
+In fact, [[R0]] is also used to store the return value of C
+functions.
+\l except for vlong? and float?
+Using [[R0]] is an optimization similar to the one you have seen previously
+with the link register. 
+\l but compiler opti, not hardware opti
+For certain simple and small functions,
+everything can be done using just registers, without having to use
+the stack and so the (slow) memory.
+\t Example of code generation for abs()!
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+        |       |
+        |       |
+    +24 +-------+ <-+ old value of R13
+        |  0    |
+    +20 +-------+
+        |  0    |
+    +16 +-------+
+        |  12   |
+    +12 +-------+
+        |&hello |
+     +8 +-------+
+        |       |
+     +4 +-------+ <- start of pwrite() arguments
+        |       |
+R13 +-> +-------+
+
+R0 = 1
+\end{verbatim}
+\caption{Stack and [[R0]] value for a C call to [[pwrite()]].}\label{fig:stack-c-pwrite}
+\end{figure}
+\t add content of R14 in bottom cell?
+
+Figure~\ref{fig:stack-c-pwrite} shows how the stack would
+look like if we were calling a C function [[pwrite()]]
+instead of doing directly the system call to [[PWRITE]].
+\t link to appendix pwrite.s? where see translation from C convention to kernel
+%
+Note that because the first argument is stored in [[R0]], 
+the code generated by [[5c]] for a function call does not
+bother to store it also in the stack. However, similar to the
+link register optimization, an extra word in the stack is still allocated
+for the first argument in case the callee need to overwrite [[R0]]
+(in which case it can save its value in the stack).
+\l hmm it will overwrite R0 is return something, so it is more if
+\l  want to use R0 for something else temporarily
+
+The calling conventions used by [[5c]] could be completely different:
+the order of the arguments in the stack could be reversed, 
+\n but C variable number of arguments '...' would be harder
+more registers could be used to store the first $n$ arguments,
+the arguments to a function could be ``below'' the stack pointer,
+the return address to a function could be ``below'' the stack pointer,
+the responsibility to save the return address in the stack
+could be done by the caller instead of the callee, etc.
+%
+The {\em C calling conventions} implemented by [[5c]]
+are a nice compromise between simplicity and speed.
+
+\t who saves what? explained later? callee save?
+
+Because most assembly code interoperates with C code,
+the C calling conventions are also the {\em assembly calling conventions}
+in \plan.
+\l really?
+Note that the only constraint imposed by Asm5
+on the calling convention 
+is the extra word in the stack above [[R13]] to store
+the return address to the caller (because of the
+code generated for [[TEXT]] and [[RET]] by [[5l]]).
+
+\subsection{Data layout}
+\label{sec:data}
+
+The last piece of assembly code I need to explain is Line~49, which initializes
+(partially) the content of the [[hello]] global:
+
+<<assemblers/5a/tests/helloworld.s repeat>>=
+...
+48	GLOBL   hello(SB), $12
+49	DATA    hello+0(SB)/6, $"Hello "
+@
+
+Even if Line~48 {\em declares} the [[hello]] global (with the [[GLOBL]] 
+pseudo instruction), it is the [[DATA]] pseudo instruction Line~49 that {\em defines}
+the content of the global.
+%
+The operands of [[DATA]] are in order:
+\begin{enumerate}
+\item the symbol of the global,
+possibly with an offset ([[+0]] at Line~49), and as always 
+for references to globals the [[(SB)]] suffix,
+
+\item a slash followed
+by an integer between 1 and 8 representing the size in
+number of bytes this [[DATA]] pseudo instruction is defining (here [[/6]]),
+\l but no dollar here, hmmm
+ 
+\item a constant, which can be an integer, a character, or a string of
+less than 8 bytes.
+\l ximm so can also be float, or address of symbol
+\end{enumerate}
+\l a bit weird those constraints and conventions
+
+To define data that takes more than 8 bytes, you need
+to use multiple [[DATA]] pseudo instructions.
+%
+For instance, to define completely [[hello]], which would remove the need
+for Lines~6 to 18 in [[helloworld.s]]
+(added for educational purposes in this tutorial),
+you could write instead:
+
+<<full definition of [[hello]] content>>=
+GLOBL   hello(SB), $12
+DATA    hello+0(SB)/8, $"hello wo"
+DATA    hello+8(SB)/4, $"rld\n"
+@
+%$
+\l see data2s also
+
+\l need the antislash z?
+%The [[\z]] are the equivalent of [[\0]] in C and represents
+%the zero value. They are not 
+%        MOVW $'\z', R1
+%        MOVB R1, 12(R2)
+
+\bigskip
+%trans:
+This concludes the tutorial of Asm5. I tried to present
+the main instructions and main assembly constructs of Asm5.
+%chunk:
+I will present more instructions gradually in the rest of the book.
+
+
+\section{The ARM architecture}
+
+The three letters ARM represent different things: 
+a family of RISC machines (Acorn RISC Machines), 
+\n Advanced Risc Machine now?
+a family of {\em instruction set architectures} (ISAs), and 
+finally a family of processors. 
+%
+Up until now, and for the rest of this document, 
+when I use the term ARM I mean the {\em ARMv6} instruction set architecture.
+\t cite ARMv6?
+%
+Confusingly, ARMv6 is the instruction set
+used in the {\em ARM11} 32-bits processor 
+family\furl{http://www.arm.com/products/processors/classic/arm11/?tab=Specifications}.
+%
+This family powers most smartphones,
+as well as the Raspberry Pi\furl{https://www.raspberrypi.org/} 
+(an extremely cheap machine popular among electronic hobbyists).
+\l ARM1136
+\l 15 billions according to Hennessy
+
+
+Because an assembly language mimics closely the instructions
+of a machine, most of the instructions in Asm5
+are instructions of the ARM.
+The opcodes [[B]], [[BL]], [[SWI]], or [[ADD]]
+you have seen in the Asm5 tutorial correspond to ARM opcodes.
+%
+The same is true for the registers [[R0]] to [[R15]].
+%
+To fully understand those assembly instructions, I refer you
+to either the \book{Emulator}, which describes the semantics of 
+the corresponding ARM machine instructions, or
+the ARM reference manual~\cite{arm-refman}.
+
+Asm5 introduces also some pseudo instructions, pseudo registers,
+and virtual instructions, as you have seen in section~\ref{sec:helloworld}.
+Those instructions will be fully explained in this document;
+they do not correspond directly to ARM machine instructions.
+
+%dup: from intro/5a
+As I said briefly in Section~\ref{sec:plan9-assembler}, [[5a]] does not
+generate machine code; the linker [[5l]] does.
+%
+Thus, there is no need to know the binary format of ARM instructions
+to understand this document.
+\l opcode format, see 5i/ it's more the job of 5l and optab to do that.
+
+\section{Input assembly language}
+
+%trans:
+I have covered already in Section~\ref{sec:helloworld} 
+most of features of the assembly language Asm5,
+the language used by the input files of the assembler [[5a]].
+%toc:
+In this section, I summarize those features and
+give a more systematic description of Asm5. This should
+help solidify your understanding of Asm5.
+\l this is not a reference manual, but it is enough to help implement.
+%
+\n I refer you to the \plan assembler manual~\cite{plan9-assemblers}
+%for more information.
+\n but not really more complete information, my tutorial is better
+%note: was useful to write this summary, see better now the whole lang/picture
+% almost look like a refcard
+
+%model is Ken's National 32000 assembler
+%src: https://www.youtube.com/watch?v=KINIAgRpkDA&feature=youtu.be at 13min21
+
+
+\subsection{Lexical elements}
+\label{sec:asm5-lexical}
+
+The main lexical elements of Asm5 (and also of Asm9) are:
+\n implementer POV
+\begin{itemize}
+
+\item {\em integers}, e.g., 
+[[42]] (decimal), 
+[[0x12]] (hexadecimal), 
+or [[0666]] (octal)
+\n hexa/octal is new, not in tutorial
+
+\item {\em characters}, e.g., [['W']], [['\n']], or [['\007']]
+\n octal is new, not in tutorial
+
+\item {\em strings}, e.g., [["hello wo"]]. Strings are limited
+to 8 characters or less.
+\l why? meh
+
+\item {\em floats}, e.g., [[4.2]], [[10e43]]
+\n this is new, not in tutorial
+
+
+\item {\em predefined identifiers} in uppercase. Asm5 uses those predefined
+identifiers for the mnemonics of
+opcodes (e.g., [[ADD]]), 
+registers (e.g., [[R0]]), 
+pseudo instructions (e.g., [[TEXT]]), and finally
+pseudo registers (e.g., [[PC]]).
+\l keywords
+
+%\begin{quote}
+%  ``Instructions, registers, and assembler directives are always in
+%  UPPER CASE to remind you that assembly programming is a fraught
+%  endeavor.'' - Rob Pike
+%\end{quote}
+\n https://golang.org/doc/asm (cited also from golang is trash article)
+
+\item {\em identifiers} in lowercase, used for 
+symbols (e.g., [[_main]]) and 
+labels (e.g., [[later]])
+%style:
+\l have to be lowercase?
+\l cant have DOT in it except at start, annoying, which is why in go code they
+\l use a special unicode that looks like dot
+
+\item {\em comments}, e.g., [[/* not reached */]] or [[// comment]].
+Comments in Asm5 use the same syntax than C comments.
+They are ignored by [[5a]].
+
+\item {\em spaces} and {\em TABs}, which are also ignored by [[5a]].
+%style:
+By convention, it is common to indent with a TAB most
+instructions, except pseudo instructions such as [[TEXT]] 
+or [[GLOBL]] that are kept in the first column.
+
+\item {\em newlines}, which are internally transformed in semicolons.
+Indeed,
+the semicolon is an {\em instruction terminator} in Asm9. 
+By transforming newlines in semicolons, you
+you can then either 
+\n yep terminator, not separator, see inst grammar rule
+write multiple instructions on different lines,
+or multiple instructions on the same line but separated by an explicit [[;]].
+
+\item {\em operators} (e.g., \$, [[()]], [[/]], [[+]], [[;]], [[<>]]).
+Operators can have different meanings depending on the context.
+\l also extended C operators for asm9 constant expressions
+
+\end{itemize}
+\l also cpp lexical elements
+
+\subsection{Syntactical elements}
+
+The main syntactical element of Asm5 is the {\em instruction}.
+An Asm5 file is made essentially of a list of instructions, usually
+one per line. 
+An instruction is composed of an {\em opcode}
+followed possibly by 1, 2, or 3 {\em operands}. 
+A line can also contain a {\em label} definition, which is an identifier
+followed by a colon (e.g., [[later:]]).
+\n actually can have list of labels, but convention is label alone on its line
+
+\subsection{Opcodes}
+
+Asm5 opcodes can correspond to different kinds of instructions:
+\begin{itemize}
+\item {\em machine instructions}, e.g., [[B]], [[SWI]], or [[ADD]].
+
+\item {\em pseudo instructions}, e.g., [[TEXT]], [[GLOBL]],
+also known as assembly directives.
+\l note TEXT has actually an operand and it is a memory reference :)
+
+\item {\em virtual instructions}, e.g., [[RET]], [[MOVW]], or [[NOP]].
+%
+Virtual instructions are instructions without a
+one-to-one mapping to an ARM machine code instruction. 
+%
+They are convenient for the programmer (or compiler writer)
+because they hide some architecture restrictions or peculiarities,
+or relieve the programmer from tedious tasks such as checking
+whether a function is a leaf.
+\l makes asm a bit more portable
+\end{itemize}
+
+\subsection{Operands}
+
+Depending on the opcode, Asm5 supports different kinds of operands:
+\begin{itemize}
+
+\item {\em constants}, which in Asm9 are always prefixed with a dollar,
+e.g., \$42, \$[['W']]
+\l why? to avoid ambiguity with what? otherwise offset like 32(SP) have no dol
+
+\item {\em registers}, named [[R0]] to [[R15]] in Asm5
+
+\item {\em shifted registers}, which I will explain in
+Section~\ref{sec:shift-register}
+
+\item {\em pseudo registers}, named [[PC]], [[SP]], [[FP]], and [[SB]]
+in Asm9
+\l actually cant anymore have them as operands directly
+
+
+\item {\em label references}, e.g., [[later]]
+\l B xx vs B(SB)
+
+\item {\em memory references}, which I describe below
+
+\end{itemize}
+
+\subsection{Addressing modes}
+\label{sec:ref-addressing-modes}
+
+Memory references appear mainly in 
+memory moves (e.g., [[MOVW]]),
+branching instructions (e.g., [[BL]]), 
+as well as in entity definitions (e.g., [[TEXT]]).
+%
+There are 5 different ways to reference memory in Asm5,
+called {\em memory addressing modes}:
+
+
+\begin{enumerate}
+
+\item In {\em indirect} mode, you use parenthesis around a register or
+pseudo register (e.g., [[(R1)]]) to access
+the content at the address {denoted} by the register (here [[R1]])
+\n Can have just pseudo register? not anymore
+
+\item In {\em indirect with offset} mode, you 
+combine an offset with a register (e.g., [[4(R1)]]),
+or pseudo register (e.g., [[4(FP)]]),
+to access the content at the address denoted by the sum of the register
+(here [[R1]] and [[FP]]) and the offset (here [[4]]).
+Note that you do not prefix offsets with a dollar.
+\l can have pseudo here, specially PC and FP and SP. But not SB.
+
+\item In {\em symbol reference} mode, 
+you combine a symbol with a pseudo register 
+(e.g., [[hello(SB)]]) to access the content at the address
+denoted by the symbol.
+%which is always written as ``an offset''
+%to a pseudo register, ,
+%[[hello]],
+\t offset cos at some point symbol become static address and so number/offset
+\t actually here can have only SB I think. or 0(FP), 0(SP)
+
+\item In {\em symbol reference with offset} mode, 
+you combine a symbol, an offset, and a pseudo register
+(e.g., [[hello+4(SB)]]),
+to access the content at the address denoted by the symbol
+plus the value in the offset.
+%
+With [[SB]], the symbol denotes a global or procedure,
+with [[SP]] a local variable, and 
+with [[FP]] an argument.
+\n and PC? no.
+\l for Text, data, param, locals
+
+\t mv this later? outside of the enumerate?
+For locals and arguments, it is common
+to use a symbol as in [[x+4(SP)]] or [[length+4(FP)]]. In those
+cases, the symbol is really just a comment to give a name to
+the local or argument. However, this comment is kept in the
+symbol table of the object file, 
+as you will see in Chapter~\ref{chap:generation},
+and can be used by debuggers, as you will see in Chapter~\ref{chap:debugging}.
+\t plus offset for SB has a meaning?
+
+\item In {\em symbol address} mode, you use a dollar sign
+before a symbol (e.g., \$[[hello(SB)]]) to access the address of the symbol
+(here [[hello]]).
+
+\l and weird stuff with slash   hello _plus_ 0(SB)/6
+
+\end{enumerate}
+
+Note that Asm9 uses a left-to-right assignment syntax. For moves,
+\l AT&T syntax, normal
+the instruction
+[[MOVW (R1), R2]] means moving the content at
+the address denoted by [[R1]] into [[R2]]. The same
+is true for other instructions such as [[ADD]] where the
+destination register is the last operand and the sources the first two
+operands (as in [[ADD R1, R2, R3]]).
+%alt: intel syntax
+
+Note also that the ARM processor supports only the first two addressing modes.
+The remaining addressing modes, which involve symbols, are assembly-only
+constructs.
+%
+Ultimately, an assembly instruction using a symbol reference
+(e.g., [[hello(SB)]]) will be converted by the linker in
+a machine instruction using a register and an offset (e.g., [[4100(R12)]]).
+%
+Indeed, as you will see in the \book{Linker}, [[5l]]
+reserves the register [[R12]] to represent the pseudo register [[SB]]
+and converts symbol references in offsets to [[R12]].
+\t explain gen for SP and FP too here?
+\n except reference to setR12 itself (tricky)
+
+\l take some examples, e.g., start-KZERO(SB), and explain? see comment in .tex
+\l will see later also private symbol, with angle operator
+%concepts: 
+% - external symbols = fully unresolved! will be resolved at linking time
+%   but needs to keep the name in the symbol table and the place where it
+%   was referenced
+%   (note that external entities are not even declared, any use of a symbol
+%    not defined in the file is an external reference)
+%    less: maybe this should be fixed, easy to make a typo)
+%
+% (LONG is a macro?)
+%        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
+%vs
+%        LONG    $_start-KZERO(SB)          /* load_addr */
+%
+%why need SB in second case? because it refers to symbol in certain section?
+% it's to take the address of _start symbol in SB and adjust
+% by removing KZERO to it. tricky. It's really $  _start(SB) - KZERO
+%
+% it does not have extern declaration, but any ref is implicitely
+% an extern.
+
+\l section{Runtime conventions}? hmm more compiler specific
+
+\subsection{Advanced features}
+\label{sec:mcrr-macro}
+\n this is new, not in tutorial
+
+Asm9 has a few more features beyond mnemonics and symbolic addresses:
+\begin{itemize}
+\item {\em constant  expressions} as operands, e.g., \$[[(1<<6|3)]],
+which are evaluated at {assembling-time}
+\t see Appendix for example of use?
+
+\item an embedded {\em macro-processor} similar to
+the C preprocessor [[cpp]], with
+features such as [[#include]] and [[#define]]. [[5a]] is thus
+what people calls a {\em macro-assembler}.
+%
+This, combined with the previous feature, allows to overcome
+some of the original limitations of [[5a]]. Indeed, even if [[5a]]
+does not support the mnemonics corresponding to the advanced
+{coprocessor} ARM instructions, 
+\l actually has MCR and MRC
+you can simply define and use the macro [[MCRR]] below
+to encode the binary format of the instruction directly.
+\t see Appendix for example of use?
+
+%We will not explain though in this book the code related
+%to this embedded macro processor as we will explain
+%similar code in the \book{Compiler}.
+\l compiler book is already big, maybe better do it here?
+
+\item {\em symbolic constants} definitions (e.g., [[TMP = 11]]),
+and uses (e.g.. [[MOV R1, R(TMP)]]).
+Those constants were called originally (and ironically) {\em variables}.
+They are redundant with the [[#define]] of the macro-processor;
+they were probably added before [[5a]] became a macro-assembler.
+%this feature has been removed from our version of [[5a]].
+\l use LVAR for lexeme name, hmmm
+\t see Appendix for example of use?
+
+\end{itemize}
+
+\l those are the most common features, we describe more advanced later as needed
+
+% put outside itemize because weird layout otherwise
+<<macro [[MCRR]]>>=
+#define MCRR(coproc, op, rd, rn, crm) \
+   WORD $(0xec400000|(rn)<<16|(rd)<<12|(coproc)<<8| \
+          (op)<<4|(crm))
+
+@
+%$
+The [[WORD]] pseudo instruction used above
+will be described in Section~\ref{sec:WORD}.
+
+\section{Output object format}
+\label{sec:object-format-part1}
+
+%dup: from intro/5a
+As I said in Section~\ref{sec:plan9-assembler}, 
+the {object files} generated by [[5a]]
+are ARM-specific but they do not contain machine code. Instead,
+an object file contains the {serialized form} of the 
+{abstract syntax tree} of the assembly source. 
+%dup: too many dup I think the sentence below so I commented it
+%The actual machine code generation is performed by the linker [[5l]].
+\t why better? because anyway cant resolve everything, and patch is complicated
+\t so simpler work on the original abstract syntax tree
+\n ocamlc does that too!
+%
+Because an Asm5 file is essentially a list of instructions,
+its serialized form is simply a concatenation of serialized instructions.
+%
+The complete format of an object file
+is described precisely in Chapter~\ref{chap:generation}
+but Figure~\ref{fig:object-format} describes roughly the content 
+of an object file
+(remember that object files generated by [[5a]] use 
+the~[[.5]] filename extension).
+
+
+A serialized instruction has also a pretty simple format
+because all instructions, including the pseudo instructions,
+have the same syntax: an opcode followed by 0 to 3 operands.
+%
+One byte is enough to encode an Asm5 opcode
+because the ARM is a RISC machine with far less than 256 ARM opcodes 
+(and Asm5 introduces very few pseudo opcodes)
+\footnote{
+[[8a]], the \plan assembler for x86,
+needs two bytes to represent an x86 opcode. Indeed, x86
+is a CISC machine with more than 400 opcodes.
+}.
+
+After the opcode, [[5a]] uses a few bytes to store metadata
+about the instruction.
+After this metadata,
+another byte is used to encode the {\em kind} of the first operand
+(e.g., an integer constant, a register, a memory address, or nothing) 
+followed by
+a series of bytes encoding the actual operand value
+(e.g., 4 bytes for an integer constant, 1 byte for the register number, etc.)
+as shown in Figure~\ref{fig:object-format}.
+
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+|                  |
++------------------+
+|    Opcode        |
+|                  |
++------------------+  <--- start of second instruction
+|        .         |
+|        .         |  <--- operand 2 encoded value
++------------------+
+|  Operand 2 kind  |
+|     (1 Byte)     |
++------------------+
+|        .         |  <--- operand 1 encoded value
+|        .         | 
++------------------+
+|  Operand 1 kind  |
+|     (1 Byte)     |
++------------------+
+|        .         |
+|        .         |  <--- instruction metadata 
+|        .         |       (e.g., line number) 
++------------------+
+|     Opcode       |  
+|    (1 Byte)      |
++------------------+  <--- start of the .5 file 
+\end{verbatim}
+\caption{File format of a [[.5]] object file.}\label{fig:object-format}
+\end{figure}
+\t symbol table about unresolved? imported and exported? at the end of file
+\t actually use a very special encoding scheme, see sectionXX
+\l same for history at the beginnning of file, but it actually abuse
+%   instruction format with AHISTORY (but there are also lots of ANAME)
+
+%ocaml: just marshall the AST, and unmarshall in linker => shorter code!
+%update: hmm but the format is actually not that complicated, so we may win
+% but not that big probably. Also nice to have a format that other programs
+% coded in different languages can read.
+%update: actually with the abuse of AHISTORY and ANAME, it would be shorter!
+
+%real-world: ELF is executable format _and_ object file format. Same for other.
+% looks like in ELF object file has also notion of Section or Segment
+% with Text and Data. 5a and .5 are simpler I think. Better.
+
+
+[[5a]] resolves the use of label addresses
+so [[5a]] does not need to serialize label definitions.
+\l actually it still saves mention of labels
+Label references in branching code are transformed in
+absolute addresses.
+\l but still keep mention of label for debugging purpose via ref to an ANAME
+\l absolute but in terms of virtual program counter scale, and starts a 0
+\l  so will need to be relocated
+\n NO concrete offsets to the [[PC]] pseudo register.
+\t but still need be relocated when concatenated
