@@ -1,0 +1,1696 @@
+%\chapter{Introduction}
+
+The goal of this book is to explain with full details the source code of
+a {linker}.
+
+\section{Motivations}
+
+Why a linker?
+Because I think you are a better programmer if 
+you fully understand how things work under the hood, and
+the linker is the final piece of any {development toolchain},
+the one generating finally the {executable}.
+
+There are very few books about linkers,
+as opposed to a myriad of books on compilers or kernels.
+\n the linker/loader book though (said later)
+Linkers are usually not even studied during the computer science curriculum. 
+%
+This is a pity because they are central.
+Indeed, they make the link (no pun intended) between the compiler
+and the kernel: 
+the linker generates from {object files} {executables} that 
+the kernel will {load}. 
+Without a linker there is no program to execute.
+\l linker/loader relation
+\l Many blog posts, show interest from people
+\l compiler rely a lot on linker, to link together modules!
+\l often get errors from linker. never explained, maybe boring but important!
+\n even to understand ocamlc, ocamlrun, -custom, important understand linker
+%companies:
+\t Google made their own linker! because critical. At Facebook, hours
+\t  lost because extremely slow linker. Nobody dared there to make a new
+\t  one. Google did because hired original author. But linker not that
+\t  complicated!
+
+Here are a few questions I hope this book will answer:
+\begin{itemize}
+\item What is the format of object files?
+
+\item What is the format of executables?
+What is the format of machine instructions?
+
+%\item What is the difference between the ELF and [[a.out]] formats?
+% what means a.out? ELF?
+
+\item What is the format of libraries?
+
+\item How are object files and libraries combined together and patched
+to form the final executable?
+
+\item What is the difference between a linker and a loader?
+\l still use LD instead of LK in Makefile, sad
+
+\item What is the memory image of a program? 
+How does it relate to the executable file? How does it relate to
+the original source code?
+
+\item What debugging information contains executables? How
+source-level debuggers can find which C source code corresponds 
+to a specific binary instruction?
+\l actually 5l does also some profiling, but more unexpected
+
+\end{itemize}
+\l what is position independent code? 
+\l how dynamic linking works? 
+\l how shared libraries works? 
+\l endianess? see the inuxi stuff? also lput vs lputl
+\l how handle architecture constraints
+
+%tags used in this file for different recurring themes:
+ %assembler: relates code in the linker to similar (or absent) code in 5a
+ %emulator: relates code in the linker to similar (or absent) code in 5i
+ %sanity: I use "sanity check" in chunknames, to aspectize a bit error checking
+ %
+ %real-world: to relate to other linkers
+ %ocaml: to give a hint on how rewriting C in OCaml could improve things
+ %alt: alternative techniques
+ %old: for original code I changed to be clearer
+ %pad: for code (or files) I introduced to be clearer
+ %dead: dead code removed
+ %toc: %trans: %dup: %example: %chunks:
+
+\t put in conclusion non-trivial adv algo and data structures seen? see comment
+%data-structures (beyond list/hashtbl): (use list, queue, hashtbl)
+% - AST again with enums, tag/union structure
+% - Buffer with reading sliding window
+% - growing array (for filename and incompatible signature report)
+% - graph and pointers (from implicit graph in array with ref via pc integer)
+% - forward overlay link indexation (and associated faster search)
+%   aka skip lists
+% - pattern matching array dispatch table (with subtype notions)
+%   and associated indexation (range and cmp and caching), quite nice
+%   way to overcome limitations of C; get close to ocaml in the end.
+% - compression filenames with path elements indexing, and list of integers
+%   with delta
+% - reflection via special symbols
+% - bitsets, lots of bit manipulations
+
+
+%algorithms (beyond search/sort): (use binary search and use qsort)
+% - unserialization/unmarshalling with shared enum and tags so simple dispatch
+%   or with header specifying sizes, and sliding input buffer window
+% - signature checking (header I_MAGIC, archive ARMAG, names ASIGNAME)
+% - binary search (with overlay)
+% - compression/indexing for list of filenames and list of integers
+% - versioning for disambiguation (but gensym would be better term)
+% - DFS? (follow?)
+
+%other?
+% - program instrumentation for profiling
+% - smaller:
+%   * def/use link again via symbol table and special marks (SXREF)
+%   * AST rewriting and optimisations
+%   * caching/memoizing and precomputation for optimisations
+%   * dumpers
+%   * endianess via inuxi or lput/lputl
+% - =~ concatenation, resolution, relocation
+% - poolization?
+% - special algos for dynamic linking?
+
+% many remaining questions in Assembler.nw are tied to Linker.nw
+% (and also some to Machine.nw) so good to study linker.
+
+
+\section{The \plan ARM linker: [[5l]]}
+
+I will explain in this book the code of the \plan ARM linker
+[[5l]]\footnote{See \url{http://plan9.bell-labs.com/magic/man2html/1/8l},
+which despite its name covers also [[5l]].},
+which is about 8150 lines of code (LOC).
+\n mk loc, counting only 5l, not ar.c, size.c, etc
+\t say appendix also code of ar and say LOC too?
+[[5l]] is written entirely in C.
+
+
+%dup: Assembler.nw
+Like for most books in \principia, I chose a \plan program because
+those programs are simple, small, elegant, open source, and they form together
+a coherent set.
+The [['5']] comes from the \plan convention to name architectures
+with a single character
+([['0']] is MIPS, [['5']] is ARM, [['8']] is x86, etc),
+and the [['l']] means linker.
+
+%dup: Assembler.nw
+Like for the other \principia books covering the
+{development toolchain}, I chose the ARM architecture~\cite{arm-refman}
+variant, in this case of the \plan linker [[5l]],
+and not for instance the x86 variant [[8l]], for
+reasons of simplicity. Indeed RISC machines
+are far simpler than CISC machines. Moreover, the availability
+under \plan of an ARM emulator, [[5i]], helps to understand
+the semantics of the machine instructions generated by [[5l]].
+
+The \plan approach to linking is a bit different than in other
+operating systems. The \plan linker is responsible
+for generating executables, but also for generating the machine code 
+from the object files. Indeed, the object files generated
+by [[5a]] and [[5c]] 
+%dup: Assembler.nw
+are ARM-specific, but they do not contain machine code. 
+Instead, under \plan an object file is essentially the {serialized form} of the 
+{abstract syntax tree} of an assembly source.
+%
+The linker [[5l]] generates the actual machine code.
+% instruction selection too
+%
+I think though that it is actually a better design because it leads to
+less code in total and also to simpler code.
+\t why? because anyway linker need deep knowledge of machine code format
+\l  because need patch it here and there, so why not put everything in it
+\l  so assembler then is simpler 
+\t Better for opti too. Things can be done only when know actual size, such as
+\l  length of offset. Compiler has not the knowledge for that.
+\n probably cos there was only 5c/5l before and responsabilities were shifted
+%
+The \plan linker does also some dead code elimination
+\l well just for libraries, and it is not really dead code
+\l and apparently it's pretty common for a linker to do that
+\l also instruction selection? more opti?
+\l inter-lib linking-time optimisations!?
+which reduces the size of the binaries. 
+This is partly to compensate for the lack of
+dynamic shared libraries in \plan.
+\l but shared libraries are evil! dynamic shared libraries?
+\l Also there is no dynamic linking by default. Simpler approach again.
+\t does also instruction selection? asmout, brloop are opti?
+
+\n critique of go/plan9 toolchain,
+%  -  http://dtrace.org/blogs/wesolows/2014/12/29/golang-is-trash/
+%tutorial:
+% http://blog.altoros.com/golang-internals-part-3-the-linker-and-object-files.html
+%the design of the Go assembler (sucessor to plan9 assembler) talks about
+% design decision behind compiler/assembler/linker
+% https://www.youtube.com/watch?v=KINIAgRpkDA&feature=youtu.be
+
+
+\section{Other linkers}
+
+Here are a few linkers that I considered for this book, but
+which I ultimately discarded:
+\begin{itemize}
+
+%history:
+\item The original \unix linker, called [[ld]],
+was creating executables for the DEC PDP11 architecture.
+%
+[[ld]] started as an assembly program in 
+\unix V2\furl{http://minnie.tuhs.org/cgi-bin/utree.pl?file=V2/cmd/ld1.s}
+and finished as a C program in 
+\unix V7\furl{http://minnie.tuhs.org/cgi-bin/utree.pl?file=V7/usr/src/cmd/ld.c}.
+%
+[[ld]] contains 1300 LOC, which is smaller than [[5l]].
+This is partly because [[5l]] contains also the code to generate
+machine code (a job usually done in the assembler).
+%
+However, [[ld]] targets an obsolete architecture (the PDP11).
+
+
+\item The GNU Linker (also called [[ld]]), part of the [[binutils]] 
+package\furl{https://www.gnu.org/software/binutils/},
+is probably the most used open source linker.
+%
+It is using the Binary File Descriptor (BFD) library 
+\n actually BFD originally stand for BigFuckingDeal :) see wikipedia page BFD
+to read and write object files using different formats.
+It supports many architectures (ARM, x86, etc)
+as well as many executable and object file formats (ELF, [[a.out]], etc).
+\l also dynamic libraries, ELF
+\n BFD =~ libmach
+It is fairly big though: 30~000 LOC for [[ld/]]
+and 500~000 LOC for [[bfd/]].
+Even the ARM-specific file [[bfd/elf32-arm.c]] has already 17~000 LOC.
+\n appeared in 1991, so long after gas in 1986
+
+\item Gold~\cite{gold-linker} is a faster multi-threaded ELF linker
+originally developed at Google.
+%
+It is now part of the [[binutils]] package.
+It supports also many architectures (ARM, x86, etc).
+\l not using BFD?
+It is unfortunately also fairly big: 153~000 LOC.
+Again, even the ARM-specific file [[gold/arm.cc]] has already 13~000 LOC.
+\n cplusplus
+\l show that useful to see how linker works! cf FB, so much time lost in ld
+\l and engineers didnt even think to rewrite it, though impossible. barriers!
+
+\item The LLVM Linker [[lld]]\furl{https://lld.llvm.org/}
+aims to remove the current dependency to
+the host linker (e.g., the GNU linker under Linux) in the LLVM infrastructure.
+%
+Its goal is also to be more modular and extensible than [[ld]].
+It supports also many architectures and executable formats.
+\n (ARM, x86, etc) (ELF, COFF, etc).
+It is smaller than [[ld]] and Gold, but still fairly large: 71~000 LOC.
+\n cplusplus
+\l lld seems to do advanced opti or going towards advanced opti with notion
+\l    of Atoms vs Section (see lld/docs/design.rst)
+% http://lld.llvm.org/NewLLD.html
+
+%dup: Assembler.nw
+\item LD86\furl{http://v3.sk/~lkundrak/dev86/} 
+is an x86 16-bit and 32-bit linker, part of
+Bruce Evans' C compiler (BCC). It is an historical linker
+used to compile old versions of Minix and Linux.
+%
+It is fairly small: 6100 LOC, which is smaller than [[5l]].
+\l was actually 3100 LOC in bin86-0.1
+But, to be fair, [[5l]] does also machine code generation,
+which is done instead by AS86 for LD86. [[5a]]+[[5l]] is made of 12~000 LOC,
+which is smaller than AS86+LD86 at 18~600 LOC.
+Moreover, the instruction format in the ARM is far simpler to
+understand than the one in the x86, which makes it 
+a better candidate for \principia.
+\l (even for linker-related issues?)
+
+
+\end{itemize}
+
+\begin{figure}[]\centering
+\includegraphics[height=0.45\textheight]{lineage}
+\caption{Linkers timeline}
+\label{fig:lineage}
+\end{figure}
+\l big hole in middle because switch to classloader and JIT for Java/.Net
+
+%dup: Shell.nw
+Figure~\ref{fig:lineage} presents a timeline of major linkers.
+%dup: Assembler.nw
+I think [[5l]] represents the best compromise for this book: 
+it implements the essential features of a linker,
+for an architecture that is still relevant today (the ARM), 
+%dup: intro/5l
+while still having a small and understandable codebase (8150 LOC).
+
+%pro: %dup: Assembler.nw
+[[5l]] is obviously not as used as the GNU linker, but it is still
+a production-quality linker. It was used to link
+all \plan programs at Bell Labs and it is still used in the toolchain
+of the Go programming language\furl{https://golang.org/cmd/link}.
+\l actually linker rewritten in Go in 2016?, but still lineage
+%pro: %dup: Assembler.nw
+Because Go was originally conceived and used at Google,
+some of Google's services are linked by
+a \plan linker.
+\l but probably more 8l
+
+% now use for RISC-V too!
+
+
+\l a few other linkers, see the comment in the .nw
+%industry:
+% - Microsoft Linker
+% - Turbo Linker
+% - optlink, digital mars, very fast, written in assembly though
+%   http://www.digitalmars.com/ctg/optlink.html
+%   https://wiki.dlang.org/OPTLINK
+%history:
+% - before Unix and DEC and IBM? source kept?
+% - Linkage editor in IBM OS/360 1967
+% - Link-11 for PDP11 by DEC
+% - ld.c in UNIX v7, written in C: link editor. 1300 LOC
+%   called link editor because was linking together multiple objects
+%   and then editing them to patch things to get the right address.
+%   but PDP11 again.
+%other:
+% - http://www.compilers.de/vlink.html, part of vbcc and vasm
+%   by Frank Wille, 25 000 LOC but many formats, but not completly OSS I think
+% - sdcc's linker sdld (based on ASLINK)
+% - ASLINK pretty well commented, 14810 LOC
+%   but for microcontrollers
+% - ACK linker led
+% - elfutils https://sourceware.org/elfutils/ competition to BFD that
+%   handles just ELF
+% - golink (not related to Golang)
+% - 
+%mini:
+% - http://recc.robertelder.org/ has a integerated linker in the compiler
+% - linker and loaders book mention linker project in Perl, 
+%   http://linker.iecc.com/code.html but contains helper code, not final code
+%education:
+% - https://github.com/trillek-team/computer-toolkit (for space game)
+%   a toy asm, linker, and even a toy C compiler, for TR3200 machine
+% - subc-2014, sld, 700LOC?
+%modern:
+% - lld, see above
+% - Java has a linker? not really, it has a ClassLoader instead (and jar)
+%   and a JIT, so JIT made linker a bit obsolete.
+%   since Java 9 in 2017 though there is a jlink, but it's too optimize things
+% - .NET has one?
+
+%misc stuff:
+% - article by fraser about machine independing linker
+% - http://www.cl.cam.ac.uk/~pes20/rems/papers/oopsla-elf-linking-2016.pdf
+% - http://www.cs.cornell.edu/courses/cs3410/2012sp/lecture/15-linkers-i.pdf
+% - http://www.cs.cornell.edu/courses/cs3410/2010sp/lecture/topic16-linkers-w-g.pdf
+% - "assemblers, linkers, and loaders"
+%   https://cs.gmu.edu/~setia/cs365-S02/assembler.pdf
+% - inside apple linker
+%   https://opensource.apple.com/source/ld64/ld64-136/doc/design/linker.html
+
+
+\section{Getting started}
+\label{sec:getting-started}
+
+%dup: Assembler.nw
+To play with [[5l]], you will first need to install
+the \plan fork used in \principia (see \urlinstall).
+Once installed, you can test [[5l]] under \plan with
+the following commands:
+\l also under unix with kencc
+
+\begin{verbatim}
+1   $ cd /tests/5l
+2   $ 5a hello.s && 5a world.s
+3   $ 5l hello.5 world.5 -o hello
+4   $ ./hello
+5   hello world
+6   $
+\end{verbatim}
+\n minimal example here! no libc.a, just to make sure the minimal stuff works
+
+The command in Line 2 {assembles} the simple [[hello.s]]
+and [[world.s]] ARM assembly programs and generates the 
+[[hello.5]] and [[world.5]] ARM {object files}.
+\l define object file? .5? explained later.
+Line 3 then {links} the object files together and generates the final 
+ARM binary executable [[hello]].
+Line 4, which assumes you are under an ARM machine 
+(e.g., a Raspberry Pi\furl{https://www.raspberrypi.org/}),
+{launchs} the program.
+
+Note that it is easy under \plan to {cross compile} from another architecture:
+you can use the same commands, [[5a]], [[5l]], etc.
+\l because magic /bin, and also because special 5 convention
+To play with [[5l]] under an x86 machine you just need
+after the linking step to use the ARM emulator [[5i]] instead:
+
+\begin{verbatim}
+...
+4   $ 5i hello
+...
+\end{verbatim}
+
+See the \book{Emulator} for more information on [[5i]].
+\l actually cool cos can be used as an assembly debugger too
+
+
+% For goken similar. with qemu-user-binfmt on Linux can even 
+% do ./hello! and on arm32 (e.g., Raspberry pi1/2) arm64 Linux machine
+% (e.g, Raspberry 3/4, thelio astra) it's native!
+
+\section{Requirements}
+
+%dup: from Assembler.nw
+Because most of this book is made of C source code, 
+you will need a good knowledge of 
+the C programming language~\cite{k-r} to understand it.
+%
+In fact, for Chapter~\ref{chap:arm-codegen}, where you will
+see the code that generates ARM instructions, 
+you will need a very good knowledge of C.
+Indeed, the code does lots of bit manipulations and uses many C idioms.
+
+There are very few books explaining how a linker works.
+I can cite {\em Linkers and Loaders}~\cite{ll}
+and one chapter of 
+{\em Computer Systems: A Programmer's Perspective}~\cite{cs-bryant}.
+Thus, I assume most programmers do not really know how a linker works,
+which is why, in addition to explaining the code of [[5l]],
+I will also explain most of the concepts related to linking
+in this book.
+\n Scott's PL Pragmatics mention also linking, but chapter now on CD only.
+%
+This is a bit unusual in our \principia series.
+Indeed, I usually assume the reader has read books introducing at least
+the concepts and theories underlying the programs I present.
+\l hmm actually might not be true anymore, except for Kernel and Compiler
+
+Reading the \book{Assembler} is a requirement to understand
+this book. Indeed, many data structures introduced
+(and fully explained) in the \book{Assembler} are similar
+to data structures used by [[5l]]. This is normal because
+the assembler generates what the linker consumes.
+Those data structures will be presented only quickly in this book.
+The same is true for the object file format described at length
+in the \book{Assembler}.
+
+
+It is not necessary to know the ARM architecture to understand 
+most of this book. 
+\t maybe need know computer archi. sign, 2-complement, bitshift, arith shift
+\t  byte/half-word and signs
+For the machine code generation part though, in Chapter~\ref{chap:arm-codegen},
+%dup: Machine.nw
+I highly recommend to print the excellent colorful ARM reference card
+\url{http://re-eject.gbadev.org/files/armref.pdf}.
+\l note that Intel syntax!!
+It will help you to visually understand the binary format of the
+instructions. This card is very helpful
+to understand the code which does many bit manipulations to generate
+different parts of an ARM instruction.
+%I recommend to read the \book{Emulator} to fully understand
+%the semantics of some instructions.
+
+\l man page? meh
+
+\section{About this document}
+\input{../docs/latex/About}
+
+\section{Copyright}
+\input{../docs/latex/CopyrightPlan9Text}
+
+\section{Acknowledgments}
+
+I would like to acknowledge of course the author of
+[[5l]], Rob Pike, 
+who wrote in some sense most of this book.
+\t really Pike?
+
+
+
+
+
+
+
+%******************************************************************************
+\chapter{Overview}
+%******************************************************************************
+
+%trans: %dup: Assembler.nw
+Before showing the source code of [[5l]] in the following chapters, 
+%toc:
+I first give an overview in this chapter
+of the general principles of a linker.
+I also describe quickly the format of the object files 
+generated by [[5a]] and [[5c]] 
+and used as inputs by [[5l]], as
+well as the format of the executables generated by [[5l]].
+%dup: from Assembler.nw
+I also define terms, explain how the code is organized, 
+and more generally give the background necessary
+to understand the code I will show later.
+
+\section{Linker principles}
+
+\n what
+A {\em linker} is a program which takes as input multiple
+{object files} and {combine} them to form an {executable}
+as shown in Figure~\ref{fig:linker-overview}.
+\n combine will be explained later
+\t etymology of linker? why call that way? combine/concatenate/def-use =~ link
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+         +-----------+
+         | assembler |
+foo.s -->|   (5a)    |--> foo.5 --+
+         +-----------+            |   +-----------+
+                                  |   |  linker   |
+         +-----------+            +-->|   (5l)    |--> 5.out
+         | compiler  |            |   +-----------+
+bar.c -->|   (5c)    |--> bar.5 --+
+         +-----------+
+
+Source files           Object files               Executable
+\end{verbatim}
+\caption{Linker inputs and output.}\label{fig:linker-overview}
+\end{figure}
+\n note that 5c generates directly obj files, does not need 5a, unusual
+
+
+%dup: from Assembler.nw principles
+An {\em object file} is really the simplest form of
+a {\em module}. It packs code, data, and information
+about {exported} and {imported} entities.
+Object files are generated by {assemblers} and {compilers}.
+\n explain here why need objects? separate compilation mentioned later.
+
+An {\em executable} is a file containing machine instructions
+as well as data. The code and data are stored in different
+parts of the file called {\em sections} as shown in 
+Figure~\ref{fig:linker-process}.
+The size and location
+of those sections are stored at the beginning of the file
+in a part called the {\em header}. 
+%
+There are different kinds of headers
+corresponding to different kinds of {\em executable formats}. In this
+book I will focus on the [[a.out]] format 
+which is very simple.
+\l footnote (for assembler output) but misleading, because
+\l  was format generated by assembler which was also a linker by Ken Thompson PDP7
+\l cite?
+Section~\ref{sec:other-executable-formats} will present other
+formats (including the popular ELF format used in Linux).
+
+Thanks to the header, a part of the kernel called the {\em loader}
+can know where the code and data are stored in the executable
+file as well as its entry point. The loader, 
+triggered by the [[exec()]] system call (see the \book{Kernel}),
+can then load (copy) in memory the different sections of 
+the executable file and start executing its code.
+\l actually man/1/8l uses term loader for 5l itself, hmm
+
+\n how
+Figure~\ref{fig:linker-process} gives an overview of the linking
+process.
+%
+The linker first {\em concatenates} the code parts of the 
+different object files together 
+\l hence linker term?
+to form the {\em code section} (the code parts [[C1]] to [[C4]]),
+also known as the {\em text section}.
+\n for 5l it actually transform them too, in machine instruction
+It does the same for the data 
+to form the {\em data section} ([[D1]] and [[D2]]).
+\n for 5l this is the same
+%
+Then, it {links} the {\em uses} of {symbols} in those code (or data) parts,
+e.g., the call to [[fbar]] in [[C1]],
+to their {\em definitions} in possibly other code (or data) parts,
+here the definition of [[fbar]] in [[C2]].
+\l hence linker term again
+
+%alt: multics segmentation? where each object can be in own space?
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+  lib.a------------+
+  |                |
+  |y.5------------+|
+  |+--------------+|
+  ||      D3      ||
+  |+--------------+|                      +------------+
+  ||      C5      ||                      |            |
+  |+--------------+|--+                   |  Metadata  |
+  |x.5------------+|  |                   |            |
+  |+--------------+|  |                   X------------+260
+  ||      C4      ||  |                  /|     D2     |
+  ||TEXT util     ||  |     Data section| +------------+240
+  |+--------------+|  |                  \|     D1     |
+  +----------------+  |                   X------------+220
+                      |                  /|     C4     |
+   bar.5----------+   |   +-----------+ / |            |
+   +--------------+   |   |  linker   | | +------------+200
+   |      C3      |   +-->|    (5l)   |-+>|     C3     |
+   |... CALL util |   |   +-----------+ | |.. CALL 200 |
+   +--------------+   |                 | +------------+150
+   |      D2      |---+                 / |     C2     |
+   +--------------+   |    Code section|  |            |
+   |      C2      |   |                 \ +------------+100
+   |TEXT fbar     |   |                 | |.. CALL 100 |
+   +--------------+   |                 \ |     C1     |
+                      |                  \|... JMP 62  |
+   foo.5----------+   |                   X------------+32
+   +--------------+   |                   |   header   |
+   |      D1      |   |                   |  (a.out)   |
+   +--------------+   |                   +------------+0
+   |... CALL fbar |---+
+   |      C1      |
+   |... JMP 30    |
+   +--------------+
+
+Input object files and                  Output executable
+       library
+\end{verbatim}
+\caption{Linking process overview.}\label{fig:linker-process}
+\end{figure}
+\l actually in ARM it is BL not CALL and B not JMP
+\l could be nice in final one to have arrow from CALL fbar to CALL 100
+
+\subsection{Separate compilation}
+\l and concatenation, separate and concatenate
+
+One of the main operation of a linker is to concatenate parts
+of different files together. 
+\l actually in 5l less because generate also machine code
+%without:
+In fact, the program [[cat]] can be seen as a very primitive linker.
+Instead of using a linker, you could use [[cat]] to concatenate
+multiple source programs together and compile/assemble the resulting single
+(big) file\footnote{
+Assuming the compiler/assembler could from one source file
+generate directly an executable.
+\t actually Ken Thompson PDP7 assembler was doing that, hence a.out
+\l  as was taking multiple assembly programs on command-line, was concatenating
+\l  them and producing one executable
+}.
+\l see bootstrapping from scratch, I mentioned that
+\l MMIXAL actually neglect linker and assume linker = cat :) Same for fbas. 
+\l Now that memory is cheap, can do it
+%
+As programs grow larger, this approach becomes inconvenient though.
+Linkers and object files enable {\em separate compilation}
+which in the long term saves lots of compilation time.
+\l well for 5l/5a maybe less cos heavy part is machine codegen done in 5l
+\l  other advantages? more language independent? cat foo.c foo.ml would not work
+\l  but could also use assembly as the common format, cat foo_c.s foo_ml.s
+\l modular analysis has same goal: does as much work as possible
+\l  and cache this result
+
+
+\subsection{Symbol resolution}
+\n I didn't have subsections in Assembler.nw for its principles but I had a
+\n tutorial later with many subsections. Here no tut so subsec in Principles.
+
+Linking the uses of symbols to their definitions
+is also called {\em resolving} the references to external symbols.
+\n well for 5l/5a it is external and internal actually
+%
+The linker can do so because it has access to all the code (and data).
+Once all the code (and data) parts are concatenated together, 
+the final {addresses} of the different {entities} can be known. 
+\l actually can need fixpoint on some archi, and in the end it is tricky
+\l actually dynamic linking mean sometimes have still unresolved symbols
+So, in Figure~\ref{fig:linker-process} the call to [[fbar]] in [[C1]]
+can be transformed in a machine instruction to go to the
+address 100 where the code of [[fbar]] resides (assuming [[fbar]]
+was the first procedure in [[bar.5]] and so [[C2]]).
+\n will see below that actually not 100 but 4196
+
+% called link editor originally.
+
+\subsection{Relocation}
+
+Another important operation done by the linker is called {\em relocation}.
+%
+Remember from the \book{Assembler} that [[5a]] can resolve
+the use of {labels} in jump instructions as both the definitions and uses of
+those labels must be in the same file. 
+\l in regular linker  same for calls to internal symbols? resolved but need
+\l  to be relocated?
+\n actually relocation is a kinda special case symbol resolution, could
+\n  change 5a to not resolve labels and use fake private symbols for labels.
+The instructions generated
+for those jumps {assume} though that the code of the program was
+loaded at the memory address 0. 
+\t unless relative jump instruction, but ARM has that? yes but not Asm5?
+\l for the rest of the doc when I say memory address I mean virtual mem address
+\l unless relative jump, but ARM can't do that
+%alt: multics segmentation? or PIC.
+For instance, to jump to
+a label [[foo]] which happens to be defined just before the 30th instruction 
+in a program [[foo.s]], 
+the instruction [[JMP 30]] will be generated in the object file
+\l because 5a use virtual PC
+as shown in Figure~\ref{fig:linker-process} (see [[foo.5]]).
+%
+Once the code of object files are concatenated together and put
+after the header, the linker must {\em relocate} 
+the jump instructions
+\l unless position independent code PIC in which case no need relocation
+\l  ref to adv topic section?
+to take into account the new {\em memory address origin}
+where the object code containing the jump will be loaded.
+For our previous example, the linker generated
+the relocated instruction [[JMP 62]] in 
+Figure~\ref{fig:linker-process} as [[C1]] is after the executable
+header which uses 32 bytes.
+\n will see below that actually not 62 but
+\t if jmp relatif then no need, kinda PIC, but still actually need
+\l again can have fixpoint issue, and relaxation hints (cf wikipedia linker)
+
+
+%alt: \subsection{Architecture constraints TODO} ?
+% commented because maybe too specific to plan9 linker
+% which has a different archi than other linkers because
+% the plan9 linker is doing code gen; Here we want
+% general principles applying to all linkers.
+
+%old:
+% There are general principles in linker, as we have seen,
+% but also a lot specific to an architecture!
+% Input and output first, object files, executable. specific. 
+% Also constraints have implication on symbol resolution!
+
+% resolving and relocating changes things! change addresses!
+% this in turns change other things on some archi.
+
+% CALL 100 whatif very far away? (well have 24 bits for offsets in
+% ARM jmp, so not issue really)
+
+% on x86 have small jump and far jump, and one faster than other
+% but can work only if dest is not far.
+
+% ARM has constraints on size of immediate, offsets, etc.
+% when resolve and find out address of things, maybe can not use
+% regular instr. Have to adapt! find tricks! intermediate instrs.
+% but then change size of code section, so shift data, so 
+% need reresolve!
+\t generic term used in Levine book for that?
+
+% which is why better do codegen in linker anyway no? linker need
+% knowledge of architecture constraints!
+
+% works for 5l because: 
+% - offset for jmps is really big, so stable size of instr, and can use
+%   that for pooling
+% - address for globals are offsets to R12 and so stable
+% - special case for setR12 where use absolute, possibly via pooling
+
+\l other linkers do pooling? role of linker? who else can do that anyway?
+
+%\subsection{Mutual dependency, fixpoint}
+
+
+\subsection{Disk image versus memory image}
+\label{sec:disk-image-vs-memory-image}
+\l linker versus loader
+
+Linkers and loaders are strongly connected, just like assemblers and linkers.
+Indeed, one produces what the other consumes.
+In fact, early linkers were also called loaders as they
+were responsible for linking and loading in memory a program.
+\l also dynamic linking dynamically link/load objects
+\l really? read Levine book introduction.
+\l also linkage editor, etc.
+\n actually man/1/8l uses the term loader, but I think they are confused.
+\n  Linkers and Loaders says the same thing than me. 5l is not a loader.
+It is important to note though, that
+the {\em disk image} of an executable generated by the linker
+does not necessarily match exactly the {\em memory image}
+of the program when loaded in memory by the loader.
+\l for instance BSS is not in disk image (but BSS explained later)
+An offset in the file does not necessarily correspond to the same
+offset in memory, even though I assumed this was the case
+in Figure~\ref{fig:linker-process}.
+
+Under \plan, the header and code section are actually not loaded
+at the memory address 0 but instead after
+the first {page} at 4096 (4K). Indeed, the first page
+in the {virtual address space} of a program
+is reserved by the kernel and marked specially to generate
+{faults} when accessed. This helps for instance to
+track {null pointer bugs}.
+\t same way data section starts at page boundary because will have different
+\t  protection (text might be read-only?) or because text shared but not
+\t  data when have multiple time the same process instance (KImage in Kernel.nw)
+\t but in file, the text and data follow each other. The linker though
+\t  when resolving address assume the data will be loaded at a page boundary.
+%
+So, the instructions [[CALL fbar]] and [[JMP 30]]
+in Figure~\ref{fig:linker-process}
+would be actually transformed respectively
+in the resolved [[CALL 4196]] and relocated [[JMP 4158]] 
+instructions with [[5l]] under \plan.
+\n 4128 because header
+\l while still refering to machine code stored at offset X in the executable
+\l say that could actually remove header when loaded in mem and so CALL 4164
+\t notion of Text origin? actually header is 4096
+\t notion of disk address vs (virtual) memory address
+
+\l FIGURE? where see disk image vs memory image? file offset vs memory offset?
+\l  and shift lines? see also INITRND, 
+\l talk about pages, because different properties for code and data 
+\l  (the case with 9?)
+
+\subsection{Libraries}
+\n talked here about [[cat]] and separate compil but better in different section
+
+Object files can be concatenated together to form
+{\em libraries} using a tool called [[ar]] (for archive).
+\l which really is kinda cat, and also really kinda tar (tape archive)
+The linker can also take as input a set of libraries as shown
+in Figure~\ref{fig:linker-process} with [[lib.a]].
+%
+Those libraries are convenient for programmers because they
+just have to remember the name of one file, e.g., [[libc.a]], instead
+of a possible long list of object files.
+\l other advantages?
+
+Moreover, the linker can also take care of including only
+the object files in the library that matters, that is the object files
+containing code or data referenced by the other object files
+passed on the command line.
+For instance, in Figure~\ref{fig:linker-process} the linker
+decided to include in the executable the code of [[x.5]] ([[C4]]), which
+is part of [[lib.a]], 
+because it contains the definition of a procedure [[util()]] which
+is mentioned in the object file [[bar.5]]. 
+\l well need fixpoint though, need take care
+It did not include the code from [[y.5]] though because such code 
+would be anyway {\em dead code} in the executable. 
+Such code would waste disk and memory space.
+\l well lazy code loading so maybe ok
+\l other optimisations? fine grained dead code?
+\l static detection! false positive? dynamic code? relation to -linkall ocaml?
+
+\subsection{Static and dynamic linking}
+
+The linking I described until now is completely {\em static}.
+All the symbol references must be known at {\em link-time}
+in which case they can be fully resolved to generate an executable.
+This requires that all the object files (or libraries)
+containing those symbols get passed to the linker on the command line.
+
+Another popular form of linking is called {\em dynamic linking}.
+\l actually more popular, but bad
+Dynamic linking blurs the line between the responsibilities 
+of the linker and loader.
+\l dynamic linking vs dynamic loading? do both? or maybe not.
+Indeed, with dynamic linking an executable can still contain
+unresolved references to external symbols; the loader
+at {\em load-time} must, before loading the program in memory,
+link additional objects.
+\t also can be in the hand of the programmer, dynlink()
+\t  can link after being loaded. at {\em run-time}
+\t dynamic linking vs dynamic loading? relink and load, or load and reload?
+\t dynamic code is important? like living cell organism, self modifiable!
+\l  (well but can still modify own source code, call 5a/5c/5l and exec())
+
+\plan opted mainly for static linking and so [[5l]] is mainly
+\l mainly is vague, ADYN enough for dynamic linking?
+a static linker. 
+Static linking is far simpler than dynamic linking and is arguably 
+also better in many respects.
+\l refs? static linking reloated? dll hell
+I will delay the discussions on dynamic linking to 
+Section~\ref{sec:dynamic-linking}.
+\l can separate. Loader is in kernel.
+\l Linker setups things for loader, code section, data section, etc
+\l and loader is pretty simple, just load/copy (or actually lazy load/copy).
+\l Also compute textsize, datasize, etc and adjust addresses.
+
+\t dynamic linking and shared libraries are different? I think so.
+
+\bigskip
+For more information on the principles of linkers and loaders 
+\l and dynamic linking?
+I recommend to read {\em Linkers and Loaders}~\cite{ll} which
+is entirely dedicated to the topic.
+
+
+
+\l many post on linkers or executables, show it is a missing part of curriculum:
+% - http://eli.thegreenplace.net/2012/08/13/how-statically-linked-programs-run-on-linux/
+% - http://dbp-consulting.com/tutorials/debugging/linuxProgramStartup.html
+% - http://www.lurklurk.org/linkers/linkers.html (for C++ programmers)
+% - ian taylor posts http://www.airs.com/blog/archives/38
+%   TOC here: http://lwn.net/Articles/276782/
+% - https://github.com/0xAX/linux-insides/blob/master/Misc/linkers.md
+%   and http://0xax.gitbooks.io/linux-insides/content/Misc/linkers.html
+%   pretty good use of nm, objdump, readelf, etc
+% - many on format of ELF header (referenced in Adv Topics section)
+
+%\subsection{Summary}
+\l put back essential steps? read object and lib, concatenate, 
+%   resolve and relocate, and finally generate. but explained in soft archi?
+\l which roughly correspond to different chapters
+
+\section{[[5l]] command-line interface}
+
+The command line interface of [[5l]] is pretty simple:
+\begin{verbatim}
+$ 5l
+usage: 5l [-options] objects
+$ 5l foo.5 bar.5 lib.a
+$ ./5.out
+\end{verbatim}
+
+Given the set of {object files} [[foo.5]] and [[bar.5]],
+and a {library} [[lib.a]], 
+[[5l]] outputs an executable file called [[5.out]].
+\n look for _main. But explained later.
+%
+You can change this default behaviour by using the [[-o <outfile>]] option.
+
+The default {executable format} is [[a.out]], a classic \unix format,
+\t cite? RFC? assembler (and linker) output.
+but this can be changed with the [[-H<num>]] option ([[H]] for header)
+as explained in Section~\ref{sec:choice-exec-format}.
+\l see adv topic for more e.g., ELF.
+You can also change the entry point of the program with [[-E<funcname>]] 
+which by default is [[_main]] 
+as explained in Section~\ref{sec:choice-entry-point}.
+\l also have -l which suppress entry point?
+Other options related to debugging will be described later
+in Appendix~\ref{chap:debugging-appendix}.
+\n actually next section introduces a few
+
+%real-world: %dup: (and changed a lot) Assembler.nw
+Executables generated by C compilers in \unix-like operating systems, 
+e.g., [[gcc]] under Linux, are usually called by default [[a.out]].
+\l same name than format. confusing?
+\l even if ELF format actually
+\l why a.out? a? assembler output?
+However, under \plan, for the same reason ARM object files use the [[.5]] filename
+extension and not [[.o]], ARM executables are called [[5.out]] not [[a.out]].
+This is more convenient in an operating system supporting 
+multiple architectures at the same time.
+That way, you can have in the same directory an ARM executable
+[[5.out]] and an x86 executable [[8.out]] without any name conflict.
+\l why not lib.5a then? solve conflict via /arm/lib/... /x86/lib/...
+
+
+Another important linker option, [[-T<num>]], allows to change the
+{memory address origin} of the code section ([[T]] for text section).
+%dup: from overview/principles
+\label{sec:kernel-load-4096}
+In \plan the default value for this address is 4128.
+Indeed, the loader in the kernel
+loads executables after the first page (4096), and includes
+the header which is using 32 bytes, so the text section
+will start at the memory address 4128. 
+The machine code generated for the jumps and calls
+must then assume the code will be loaded at 4128.
+%
+You can also change the memory address origin of the data section
+as explained in Section~\ref{sec:choice-exec-format}.
+%
+Those options are almost never used by programmers, but they
+are necessary for producing special executables such as
+kernels or boot loaders as you will see in the \book{Kernel}.
+Indeed, those binaries will be loaded (by the bootstrapping process
+or firmware) at special memory addresses
+(e.g., 0x80000000 for the ARM \plan kernel, or 0x7c00 for an x86 bootloader).
+
+Another set of options are used to manage libraries,
+which are really files encapsulating a set of object files,
+\l like tar, actually ar means archive
+and will be introduced later in Chapter~\ref{chap:loading-libraries}.
+
+\l also dynamic related options, -x -u
+
+\l env: $ccroot
+%$
+
+
+\section{[[hello.5]] and [[world.5]]}
+\label{sec:hello-world}
+
+%trans:
+In this section, I adapt the [[helloworld.s]] example of the \book{Assembler}
+%toc:
+to illustrate the linking process with a concrete example. 
+The goal is also to learn how to use the debugging options of [[5l]] as well
+as tools such as [[nm]].
+\l why? because useful to debug issues, to find where symbols are defined
+\l and indeed to better understand indeed linking process
+
+\subsection{The source files}
+\label{sec:hello-world-source}
+
+I split the original source file [[helloworld.s]] 
+in two files [[hello2.s]] and [[world.s]].
+I also use the C library functions [[fprint()]]
+and [[exits()]] instead of using directly the [[PWRITE]] and [[EXITS]] 
+system calls:
+
+<<linkers/5l/tests/hello2.s>>=
+TEXT main(SB), $8
+        /* fprint(1,&hello) */
+        MOVW $1, R0
+        MOVW $hello(SB), R1
+        MOVW R1, 8(R13)
+        BL fprint(SB)
+        /* exit(0) */
+        MOVW $0, R0
+        BL exits(SB)
+@
+%$
+\n call libc via fprint/exits so != Assembler.nw, and use main not _main
+\n (cant call print cos pointer func so more complex) 
+\l use SP instead of R13? 
+\l weird but using only stack and not R0 at all also works
+
+
+<<linkers/5l/tests/world.s>>=
+GLOBL   hello(SB), $12
+DATA    hello+0(SB)/8, $"hello wo"
+DATA    hello+8(SB)/4, $"rld\n"
+@
+%$
+
+If you do not understand the code, or the calling
+conventions, read the \book{Assembler}.
+\l plus 8 cos 4 for saved R14, then 4 for first arg but R0, so 8 for 2nd arg
+%
+Symbol definitions and uses are now spread over different files:
+the [[hello]] global is defined in [[world.s]] but used in [[hello2.s]].
+Moreover, the [[fprint()]] and [[exits()]] functions are defined in 
+source files of the C library but used in [[hello2.s]].
+
+\subsection{The linking command}
+
+To compile the previous program do:
+\begin{verbatim}
+$ cd /tests/5l
+$ 5a hello2.s -o hello.5
+$ 5a world.s
+$ 5l hello.5 world.5 /arm/lib/libc.a -o hello
+$ ./hello
+hello world
+\end{verbatim}
+
+The main difference with the commands shown in 
+Section~\ref{sec:getting-started} is the use of the C library,
+compiled here for the ARM architecture: [[/arm/lib/libc.a]].
+You will see in chapter~\ref{chap:loading-libraries} other
+ways to link libraries.
+
+\subsection{Inspecting objects with [[nm]]}
+
+You can use the tool [[nm]] to get the set of symbols defined or
+referenced in object files (this set is also called the [[n]]a[[m]]e list):
+
+\begin{verbatim}
+$ nm hello.5
+ U exits
+ U fprint
+ U hello
+ T main
+
+$ nm world.5
+D hello
+\end{verbatim}
+\n note that if call main in hello2.5, you will not get a U main
+\n even though in practice intra-file calls are not resolved by 5a
+
+[[nm]] can also be used on libraries:
+
+\begin{verbatim}
+$ nm /arm/lib/libc.a | grep fprint
+...
+fprint.5: T fprint
+...
+$ nm /arm/lib/libc.a | grep exits
+...
+atexit.5:         T exits
+...
+\end{verbatim}
+
+[[U]] stands for undefined,
+[[T]] for text (a defined procedure), and
+[[D]] for data (a defined global).
+%
+From the previous commands you can see that [[hello.5]] has three
+{undefined symbol} references, including [[hello]] which
+is a global data defined in [[world.5]]. 
+%
+The job of the linker is then to link those definitions to their uses.
+
+There are other kinds of symbols and so other single letter codes
+used by [[nm]]. Those codes as well as the source of
+[[nm]] will be described fully later in Appendix~\ref{sec:nm-code}.
+
+\l nm is actually using libmach, crachhdr, etc, generic API for object manip
+\t put libmach/5obj.c in this book?
+\l nm is actually pretty useful in general, to solve linker issues, nm | grep!
+
+\subsection{Dumping objects with [[5l -W]]}
+\label{sec:dump-objects}
+
+Another way, more complete, to inspect the content of object files is to use
+the debugging option [[-W]] of [[5l]]. The effect of the option
+is to ``dump''
+the instructions of the object files passed on the command line:
+\l close to disassembler, but actually easier
+\l disassembler is actually in libmach and used by db
+
+\begin{verbatim}
+1   $ 5l -W hello.5 world.5 /arm/lib/libc.a
+2   ...
+3   	ANAME	main                        
+4   (1)	TEXT	{main}00000+0(SB),$8        
+5   (4)	MOVW	$1,R0                       
+6   	ANAME	hello                       
+7   (5)	MOVW	${hello}00000+0(SB),R1      
+8   (5)	MOVW	R1,8(R13)                   
+9   	ANAME	fprint                      
+10  (6)	BL	,{fprint}00000+0(SB)            
+11  (9)	MOVW	$0,R0                       
+12  	ANAME	exits                       
+13  (9)	BL	,{exits}00000+0(SB)             
+14  (10)	END	,                           
+15  ...
+16  	ANAME	hello
+17  (1)	GLOBL	{hello}00000+0(SB),$12
+18  (2)	DATA	{hello}0000c+0(SB)/8,$"hell"
+19  (3)	DATA	{hello}0000c+8(SB)/4,$"rld\n"
+20  (4)	END	,
+21  ...
+22      ANAME	_main
+23  (8)	TEXT	{_main}00000+0(SB),R1,$802
+4      ANAME	setR12
+25  (10)MOVW	${setR12}00000+0(SB),R12
+26      ANAME	_tos
+27  (11)MOVW	R0,{_tos}00000+0(SB)
+28  ...
+29  (21)BL	,{main}00000+0(SB)
+\end{verbatim}
+\n output was copy pasted from the running of kencc/5l, not our 5l
+\n for dollar hello I should remove the (SB)? NO! it can use R12!
+\n  but it will do R12 plus 00014 no? yes because offset is small.
+\l a bit weird just have "hell"
+\t why those lineno? seems wrong line number. BUG?
+\l remove those comma? 
+\l very close to assembler, indeed object file is just serialized asm source
+%pad: I changed the format to use {} and to show the value (here 00000) of syms
+
+The first two fragments show the instructions of [[hello.5]],
+from Line 3 to Line 14,
+and [[world.5]], from Line 16 to Line 20.
+The output is very similar to the assembly sources of
+Section~\ref{sec:hello-world-source}. 
+%dup: from intro/5l (itself dup from Assembler.nw)
+This is normal since under \plan an object file is essentially
+the serialized form of the abstract syntax tree of an assembly source.
+%
+See the \book{Assembler} if you do not
+understand the {opcodes} or {pseudo-opcodes} such as [[ANAME]].
+
+Symbol references are enclosed in braces, e.g., [[{main}]] Line 4,
+followed by the {\em symbol value} in hexadecimal, e.g., [[00000]] Line 4.
+The symbol value corresponds normally to the 
+resolved memory address of the symbol.
+But, almost all those values and addresses are null 
+when using [[-W]] because the option dumps instructions
+while the object files are read into memory, at the beginning, and so
+when the linker has not yet resolved any of those symbols.
+
+Once a global has been declared, e.g., [[hello]] Line 17,
+the value of its symbol is then (ab)used to store its size,
+here [[0000c]] (12) Line 18.
+%
+Later you will see that the symbol value will contain the resolved address
+of the global.
+% as an offset to the start of the Data section       but too many
+
+\label{sec:explain-_main}
+The last fragment, starting at Line 22,
+shows the instructions of a procedure called [[_main]].
+%dup: Assembler.nw
+The linker [[5l]] is looking by default for such a procedure
+for the {entry point} of the executables it generates
+(unless the [[-E]] option is used), which is why it is included.
+\t hmm but dumping option could dump everything of libc.a no? maybe
+\t  delay discussion about _main to next section with -a?
+\t  just do 5l -W hello.5 world.5 here? anyway can see error msg
+\t  with _main which I can link to next section
+%
+The reason for a default called [[_main]], and not [[main]],
+even though the entry point of C programs is [[main]],
+is because [[_main()]] is normally a procedure defined in the C library.
+This procedure, written in assembly, does some core initializations
+and then calls [[main()]], as shown by the last dumped
+instruction Line 29.
+%
+[[5l]] is usually called to link C programs, and
+the C compiler [[5c]] assumes a few core initializations has
+been done before the call to [[main()]], hence the choice
+of [[_main]] as the default entry point.
+%real-world: 
+% actually gcc transforms main in _main, so startup in Linux is ?? 
+
+For more information on [[5l -W]] see Appendix~\ref{sec:debugging-loading}.
+
+%real-world:
+\t readelf? objdump? 
+
+\subsection{Debugging machine code generation with [[5l -a]]}
+\label{sec:_main-set-r12}
+
+You can also display the generated machine code by using
+the debugging option [[-a]] of [[5l]]:
+
+\begin{verbatim}
+1   $ 5l -a hello.5 world.5 /arm/lib/libc.a
+2 
+3  00001020:          (1) TEXT {main}01020+0(SB),$8
+4  00001020: e52de00c (1) MOVW.W R14,-12(R13)
+5  00001024: e3a00001 (4) MOVW $1,R0
+6  00001028: e59f1884 (5) MOVW ${hello}00014+0(SB),R1
+7  0000102c: e58d1008 (5) MOVW R1,8(R13)
+8  00001030: eb0000bb (6) BL ,{fprint}01324(BRANCH)
+9  00001034: e3a00000 (9) MOVW $0,R0
+10 00001038: eb00009a (9) BL ,{exits}012a8(BRANCH)       
+11
+12 0000103c:          (8) TEXT {_main}0103c+0(SB),R1,$80
+13 0000103c: e52de054 (8) MOVW.W R14,-84(R13)
+14 00001040: e59fc870 (10) MOVW ${setR12}00ffc+0(SB),R12
+15 00001044: e50c0fd0 (11) MOVW R0,{_tos}0002c+0(SB)
+16 ...
+17 00001068: ebffffec (21) BL ,{main}01020(BRANCH)
+18 ...
+19
+20 000012a8:          (915) TEXT {exits}012a8+0(SB),R1,$16
+21 000012a8: e52de014 (915) MOVW.W R14,-20(R13)
+22 ...
+23
+24 00001324:          (874) TEXT {fprint}01324+0(SB),R0,$20
+25 00001324: e52de018 (874) MOVW.W R14,-24(R13)
+26 ...
+27
+28 00006b50: e49df03c (890) MOVW.P 60(R13),R15
+\end{verbatim}
+\n this was also done via kencc/5l
+\t .P and .W later
+
+
+The first column contains the memory address
+in hexadecimal where the code will be loaded (e.g., [[01020]] Line 4).
+%
+Then comes the 4 bytes in hexadecimal of the generated ARM instruction
+(e.g., [[e52de00c]]). 
+Indeed ARM uses fixed-length instructions of 4 bytes.
+%
+The third column contains the (global) line number
+in parenthesis of the instruction in the original 
+source file (assembly or C)\footnote{
+See Section~\ref{sec:line-number} for more information about line numbers.
+}.
+%
+Finally, the last column displays the disassembled instruction.
+\l actually not really disassembled
+As opposed to the previous section, the symbol values 
+are not null anymore and contain now the resolved memory address
+of the symbol, e.g., [[01324]] Line 8 for the [[fprint]] symbol.
+%
+The output contains also the [[TEXT]] {pseudo-instructions} to better
+see the procedure boundaries, e.g., Line 3 and Line 12. 
+
+
+
+The first instruction Line 4 starts at [[01020]] which is equal to 4128.
+%dup: from overview/principles and overview/command-line
+Indeed, as said previously in Section~\ref{sec:kernel-load-4096},
+the kernel loads executables after the first page (4096)
+and includes the [[a.out]] header which is using 32 bytes. Thus,
+the code starts at the memory address 4128.
+
+\l Note also code concatenated in section, no middle DATA of hello here
+
+Note that even though it looks like there are two instructions
+at [[01020]], with Line 3 and Line 4, the first instruction ([[TEXT ...]])
+is a pseudo-instruction which got transformed by the linker
+in the ARM instruction Line 4 ([[MOVW.M ...]]).
+\t lots to explain here, 8 vs 12, MOVW.M which does multiple things.
+Indeed, [[TEXT]] is an assembly directive introducing a symbol,
+here [[main]], and symbols are {resolved} in 
+{concrete addresses} by the linker. The generated machine code
+contains only concrete addresses, no symbols (except for
+debugging purposes as explained in Chapter~\ref{chap:debugging}).
+%
+So, the reference to [[main]] Line 17 is resolved to the concrete
+address [[01020]].
+In the same way, the calls to [[fprint]] and [[exits]]
+Line 8 and 10 are fully resolved in respectively
+the memory addresses [[01324]] (Line 25)  and [[012a8]] (Line 21).
+
+\t discussion about _main? why included? 
+\t  say that 5l includes only code in libc.a that are needed. so
+\t  make sense exits and fprint, but _main?
+
+The symbol value of [[hello]] Line~6 is [[00014]] which
+seems incorrect. Indeed, data should be stored after
+the code section and so the resolved address of [[hello]] should
+be beyond [[06b50]] (the address of the last instruction Line 28).
+%dup: section just before
+But, the symbol value for data symbols contains the resolved address
+of the symbol as {\em an offset to the start of the data section}.
+The rational for this decision will be explained later
+in Chapter~\ref{chap:resolving}.
+Thus, the final address of [[hello]] is [[014 + INITDAT]]
+where [[INITDAT]] is the address where starts the data section.
+\t so if really disassemble e59f1884? get what? 7014? or BIG-7014?
+\l actually see also initialisation of R12 with  very tricky
+% MOVW	${setR12}00ffc+0(SB),R12
+% which really is   MOVW    0xffc(R12=0), R12
+\t put actual machine code! cos what is shown is not really machine code.
+\t  the disassembly is original object instruction.
+\t  real machine instruction is  
+\t     ADD 14, R12, R1        (Well actually because of BIG it's not that)
+\t  or
+\t     LDR xxx(R15), R1  with Pool.
+
+
+\l 6000 = ? just for including fprint and exits, hmmm
+
+For more information on [[5l -a]] see
+Appendix~\ref{sec:debugging-generated-code}.
+
+\subsection{Inspecting executables with [[nm]]}
+\label{sec:nm-executable}
+
+[[nm]] can also be used on executables. In that case [[nm]] not only displays
+the list of symbols, it also displays their addresses (in hexadecimal)
+when loaded in memory. 
+Here it is used with the [[-n]] option to sort by addresses:
+
+\begin{verbatim}
+1 $ nm -n 5.out
+2     1020 T main
+3     103c T _main
+4     ...
+5     110c T _div
+6     1168 T _mod
+7     ...
+8     12a8 T exits
+9     ...
+10    1324 T fprint
+11    ...
+12    6b58 T etext
+13    7000 d onexlock 
+14    7000 D bdata    
+15    7010 D argv0    
+16    7014 D hello    
+17    7020 d _exitstr 
+18    ...             
+19    7940 D edata    
+20    7b44 B onex     
+21    7c50 B end      
+22    7ffc D setR12   
+\end{verbatim}
+\n this was also done via kencc/nm (actually inm)
+\l why etext not 6b54?
+
+You find the same resolved memory addresses we saw in the previous
+section with [[5l -a]], e.g., [[12a8]] for [[exits]] Line 8,
+or [[1324]] for [[fprint]] Line 10.
+
+You can also now see the addresses of the data symbols.
+[[hello]] Line 16 is at the address [[7014]]. The data
+section starts at [[7000]] as indicated by the 
+{\em special symbol} [[bdata]] (begin data) Line 14. 
+So, [[INITDAT]] is [[7000]]
+which confirms that the address of [[hello]] is indeed
+[[14 + INITDAT]] ([[7014]]) as mentioned in the previous section.
+\l but still a lot to explain because generated code is not that too,see setR12
+
+The symbol after [[hello]] is [[_exitstr]] Line 17
+at address [[7020]]. This confirms that [[hello]] is using 
+12 bytes ([[0x7020]] - [[0x7014]] = [[0xc]] = 12) 
+as said in the source of [[world.s]]
+in Section~\ref{sec:hello-world-source}.
+
+\t talk about _div, _mod,  because called by fprint
+\t  to linker include more functions recursively. 
+
+The linker defines a set of special symbols:
+[[etext]] (end text) Line 12,
+[[bdata]] (begin data) Line 14,
+[[edata]] (end data) Line 19, and finally
+[[end]] Line 21.
+Those symbols are used only for their addresses and
+allow a form of {\em reflection} on the structure
+of the executable and its sections as explained
+in Section~\ref{sec:special-symbols}.
+
+Another special symbol, [[setR12]] Line 22
+plays a complex role in [[5l]]. This symbol is notably
+used by [[_main]] as indicated by the output of [[5l -W]]
+and [[5l -a]] you saw in the previous sections.
+Its role and its relationship with the {pseudo-register}
+[[SB]] will be explained later in Chapter~\ref{chap:resolving}.
+%~\ref{sec:sb-r12}.
+
+\l _existstr 
+\l small d means private symbol B means unitialized (BSS)
+
+\l can also use db (or 5i) to inspect executable.
+
+%trans:?
+% how better view of objects and executables? will refine below?
+
+
+%old:\section{The ARM architecture TODO}
+%alt: skip and do it in chap:arm-codegen instead?
+% constraints
+
+% little endian
+
+\t maybe can do this section after understand better code generation
+
+% Object instruction do not match exactly ARM instruction.
+% Virtual, pseudo, etc but also:
+% constraints on immediate constants, offsets
+
+% register R0 to R15, 4 bits.
+
+% cite ARM ref manual.
+% Could cite also ARM Assembly Language: Fundamentals techniques,
+%  which talks about literal pools, rotation scheme, etc.
+
+%old: \subsection{Immediate constant range}
+
+% ADD I, R1, R2
+
+% 12 bits. Clever trick for encoding, but still limited.
+
+% so how do? 
+% can use DATA. (but then can have issue as you will see next section)
+% REGTMP
+%alt: could use MUL :) 
+%alt: can also use WORD in text, not far. called pooling, but talk below
+
+
+%old: \subsection{Offset range}
+
+% different addressing mode in Assembler, indirect, ...
+% but in the end can be reduced to indirect with offset.
+% xxx(R1)
+
+% 12 bits (a page), and sign.
+% But again if big offset how do?
+% - reduce offset, and add base, but if big number base too? :) 
+%   in fact for ADD before, use DATA, but $bigcst(SB) can be far away too.
+% => WORD!
+% called pooling.
+
+
+% special case SB, hello+whatever(SB), $hello+whatever(SB).
+% here? or mv later? at least need give idea on how translate $xxx(SB)
+%  and xxx(SB)
+% show actual code of 
+%  MOVW $hello(SB), R2    ==>   ADD offset1, R12, R2    or LDR offset2(R15),R2
+%   (and ADD itself can use REGTMP)
+% and
+%  MOVW hello(SB), R2     ==>   LDR offset(R12), R2  or LDR offset3(R15),RTMP;
+%   LDR RTMP, R2
+
+%old: \subsection{Jump range}
+
+%  BL foo(SB)
+
+% 24 bits, and actually implict +8 (hence later -8 in code).
+% because useless loop over yourself and useless jump next (+4)
+% so B_arm 0  = jmp + 8
+
+
+%\subsection{Code pooling}
+% big number bootstrap?
+% so if address of DATA too far too? :) can boostrap  with PC and WORD!
+%alt: could also use ADD, MUL, whatever to produce big number?
+
+\section{Input object format}
+
+The object file is now the input, as opposed
+to the \book{Assembler} where it was the output.
+%
+The format of ARM object files is actually fully described
+in the \book{Assembler} so I will not repeat
+those explanations here.
+%
+Section~\ref{sec:object-format} contains a figure
+summarizing this format though, which will be useful
+to understand the code of Chapter~\ref{chap:loading-objects}
+which loads object files.
+
+Section~\ref{sec:dump-objects} contains the {dump}
+of a few object files and shows, as I said previously, that
+%dup: from intro/5l, overview, etc, maybe too much?
+an object file is essentially
+the serialized form of the abstract syntax tree of an assembly source.
+
+
+\l could take figure in Assembler.nw and add the ANAME and AHISTORY?
+\l or put concrete values everywhere?
+\l 5l -W also show format a bit
+
+\section{Output executable format: [[a.out]]}
+\label{sec:exec-format}
+
+\plan is using the very simple [[a.out]] executable format.
+\t ref? rfc?
+\l history? why called a.out? ok name of executable but why a? assembler output?
+So, [[5l]] by default generates executables in this format.
+This can be changed with the [[-H]] option. Other formats
+will be described in Section~\ref{sec:other-executable-formats}
+
+The file [[include/exec/a.out.h]] contains a formal
+description of the [[a.out]] header:
+
+<<struct [[Exec]]>>=
+// a.out header
+struct	Exec
+{
+    long	magic;		/* magic number */
+
+    long	text;	 	/* size of text segment */
+    long	data;	 	/* size of initialized data */
+    long	bss;	  	/* size of uninitialized data */
+
+    long	syms;	 	/* size of symbol table */
+
+    // virtual address in [UTZERO+sizeof(Exec)..UTZERO+sizeof(Exec)+text]
+    long	entry;	 	/* entry point */ 
+
+    long	_unused;
+    // see a.out.h man page explaining how to compute the line of a PC
+    long	pcsz;		/* size of pc/line number table */
+};
+@
+\t big-endian encoding!? check in Debugger?
+%dead: _unused was actually:
+%  // used only by 68020, spsize set to 0 for 8l TODO remove at some point!
+%  long	spsz;		/* size of pc/sp offset table */
+
+Figure~\ref{fig:executable-format} illustrates the format of
+[[a.out]] executables.
+%
+An [[a.out]] header is made of 8 [[long]]s (32 bytes) used
+as follows:
+\begin{itemize}
+\item The first four bytes in [[Exec.magic]] contains a 
+{\em magic number} identifying the file
+as an [[a.out]] executable as well as an ARM executable.
+This magic number is recognized
+by tools such as [[file]] and by the kernel loader
+which will load only files having this magic number {\em signature}.
+
+\item Then comes the size of the text and data sections. The format
+of the ARM machine instructions in the text section will be
+described in Chapter~\ref{chap:arm-codegen}.
+
+\item [[Exec.bss]] contains the size of the BSS section which
+corresponds to {uninitialized data}. 
+\t BSS means?
+The actual values for those data is not defined in the executable, 
+as opposed to the data section, but the loader must
+still reserve space in memory for those data.
+The following C code shows which section will be used
+depending on the declaration style of a variable:
+
+\begin{verbatim}
+int global = 1; // Data section
+int another;    // BSS section
+\end{verbatim}
+
+\t but in \plan BSS is zeroed!! more deterministic programs. See Kernel
+\t  or Emulator
+
+\item [[Exec.syms]] and the {executable symbol table} will be discussed in 
+Chapter~\ref{chap:debugging}.
+
+\item [[Exec.entry]] contains the memory address of the entry point
+of the program. This address is used by the kernel
+loader to start the program. It is usually the address
+of the [[_main]] procedure of the C library (unless
+the [[-E]] option is used). 
+%
+So, for the [[hello]] executable of the previous section,
+the value of the entry point is [[0x103c]].
+%
+The entry point can also be the
+address of the [[_mainp]] procedure if profiling
+is enabled as explained in Chapter~\ref{chap:profiling}.
+
+\item Finally [[Exec.pcsz]] and the line table will be discussed in 
+Chapter~\ref{chap:debugging}.
+
+\end{itemize}
+
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+     +--------------+
+     |     Line     | ^
+     |    table     | |<-------+
+     |              | v        |
+     +--------------+          |
+     |    Symbol    | ^        |
+     |    table     | |<------+|
+     |              | v       ||   +--------------+ +32
+     +--------------+         |+---|  line size   |
+     |              | ^       |    +--------------+ +28
+     |     Data     | |<-----+|    |              |
+     |              | v      ||    +--------------+ +24
+     +--------------+        ||    | entry point  |------+
+     |              | ^      ||    +--------------+ +20  |
+     |     Code     | |      |+----| symbol size  |      |
+     |    (Text)    | |      |     +--------------+ +16  |
+     |              | |<----+|     |   bss size   |      |
++---->              | |     ||     +--------------+ +12  |
+|    |              | v     |+-----|  data size   |      |
+|+32 +--------------+       |      +--------------+  +8  |
+|    |    Header    |       +------|  text size   |      |
+|    |   (a.out)    |              +--------------+  +4  |
+|    |              |              |    magic     |      |
+|  0 +--------------+              +--------------+   0  |
+|                                                        |
++--------------------------------------------------------+
+     a.out executable                a.out Header
+\end{verbatim}
+\caption{[[a.out]] executable format.}\label{fig:executable-format}
+\end{figure}
+
+\l data just after code, but when loaded in mem, at round?
+\l and then from lineno you can get file/line thx to Hist?
+
+Note that the [[Exec]] structure is actually not used by
+the code of [[5l]] for {\em writing} the header.
+Instead, the function [[asmb()]], which
+you will see in Section~\ref{sec:gen-executable}, outputs
+directly the bytes of the header with a series
+of calls to the [[lput()]] (for out[[put]] [[long]])
+utility function.
+\t actually portable format because lput is long put big-endian
+%
+The [[Exec]] structure is used though in programs 
+which are {\em reading} the header of executables.
+There are many programs which need to understand the
+format of executables, e.g., the debugger [[db]], the
+profiler, and small utilities like [[nm]]. Under \plan, all those
+programs use a common library called [[libmach]] which
+defines [[Exec]] as well as many other data structures and functions.
+Appendix~\ref{chap:linker-related-programs} discusses the
+[[libmach]] interface and the code of utilities such as [[nm]],
+but the code of [[libmach]] itself will be shown in the
+\book{Debugger}.
+
+\t no dynlink notion in a.out? need ELF for that?
+
+
+
+
+
+%\section{Calling conventions}
+
+% memory model when loaded in memory? need that? seems more cc material
+% frame format?
+%  parameters (including space for first arg even if put in R0)
+%  saved PC (from REGLINK when not a leaf procedure)
+%  locals
+% saved SP? assumer caller saves/restores registers including SP?
+
+% When want to call a procedure, need to save current place,
+% so do BL for branch and link where a special register
+% holds a value. Then need to save this value in a stack
+% (if it's not a leaf procedure).
+
+% autosize = p->to.offset + 4; // locals
+% + 4 = saved PC (REGLINK from BL)
+
+% FP vs SP? SP seems not equal directly to R13!
