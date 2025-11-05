@@ -35,20 +35,20 @@ void    (*oldquit)(int);
 
 /*s: globals ed.c */
 ulong   nlall = 128;
-int*    zero; // size: (nlall+5)*sizeof(int*)
+// array<int>, size = (nlall+ 2+margin)*sizeof(int)
+int*    zero; 
 char*   tfname; // temporary filename (/tmp/eXXXX)
 /*x: globals ed.c */
+// ref<int> in zero array, current line pointer
 int*    dot;
+// ref<int> in zero array, last line pointer
 int*    dol;
 /*x: globals ed.c */
 char    line[70];
+// ref<char> in line
 char*   linp    = line;
-int col;
 /*x: globals ed.c */
-// ??
-bool vflag   = true;
-// ??
-bool oflag;
+int col;
 /*x: globals ed.c */
 // console buffered input
 Biobuf  bcons;
@@ -56,7 +56,20 @@ Biobuf  bcons;
 // for w, r, f
 char    savedfile[FNSIZE];
 /*x: globals ed.c */
+// in Linux pid can be very long, so better to have at least 7 X (was 5 before)
+char template[] = "/tmp/eXXXXXXX";
+/*x: globals ed.c */
+// verbose (a.k.a. interactive) mode
+bool vflag   = true;
+/*x: globals ed.c */
+// output to standard output (instead of editing a file). Useful
+// when ed is used as a filter
+bool oflag;
+/*x: globals ed.c */
 fdt tfile   = -1;
+/*x: globals ed.c */
+char    T[] = "TMP";
+/*x: globals ed.c */
 int tline;
 int names[26];
 int subnewa;
@@ -71,14 +84,10 @@ char    Q[] = "";
 /*x: globals ed.c */
 jmp_buf savej;
 /*x: globals ed.c */
-int listn;
 bool pflag;
 /*x: globals ed.c */
 bool rescuing;
 bool waiting;
-/*x: globals ed.c */
-// ??
-int listf;
 /*x: globals ed.c */
 int lastc;
 int peekc;
@@ -87,7 +96,9 @@ Rune*   globp;
 /*x: globals ed.c */
 Rune    linebuf[LBSIZE];
 /*x: globals ed.c */
+// option<int>
 int*    addr1;
+// option<int>
 int*    addr2;
 /*x: globals ed.c */
 bool given;
@@ -101,6 +112,11 @@ bool wrapp;
 /*x: globals ed.c */
 long count;
 /*x: globals ed.c */
+// ??
+int listf;
+/*x: globals ed.c */
+int listn;
+/*x: globals ed.c */
 Reprog  *pattern;
 /*x: globals ed.c */
 Rune    genbuf[LBSIZE];
@@ -113,12 +129,9 @@ int subolda;
 Resub   subexp[MAXSUB];
 
 
-char    T[] = "TMP";
 char    WRERR[] = "WRITE ERROR";
 int bpagesize = 20;
 char    hex[]   = "0123456789abcdef";
-// in Linux pid can be very long, so better to have at least 7 X (was 5 before)
-char template[] = "/tmp/eXXXXXXX";
 /*e: globals ed.c */
 
 // forward declarations
@@ -177,25 +190,31 @@ main(int argc, char *argv[])
     notify(notifyf);
 
     ARGBEGIN {
+    /*s: [[main()]](ed.c) flags processing cases */
     case 'o':
         oflag = true;
         vflag = false;
         break;
+    /*e: [[main()]](ed.c) flags processing cases */
     } ARGEND
 
     USED(argc);
+    /*s: [[main()]](ed.c) if [[-]] flag */
     if(*argv && (strcmp(*argv, "-") == ORD__EQ)) {
         argv++;
         vflag = false;
     }
+    /*e: [[main()]](ed.c) if [[-]] flag */
+    /*s: [[main()]](ed.c) if [[oflag]] */
     if(oflag) {
         p1 = "/fd/1";
         p2 = savedfile;
         while(*p2++ = *p1++)
             ;
         globp = L"a";
-    } else
-    if(*argv) {
+    }
+    /*e: [[main()]](ed.c) if [[oflag]] */
+    else if(*argv) {
         p1 = *argv;
         p2 = savedfile;
         while(*p2++ = *p1++)
@@ -203,11 +222,13 @@ main(int argc, char *argv[])
                 p2--;
         globp = L"r";
     }
-    zero = malloc((nlall+5)*sizeof(int*));
+    zero = malloc((nlall+5)*sizeof(int*)); // BUG sizeof(int)
     tfname = mktemp(template);
 
     init();
+    /*s: [[main()]](ed.c) before [[commands()]] */
     setjmp(savej);
+    /*e: [[main()]](ed.c) before [[commands()]] */
     commands();
     quit();
 }
@@ -217,29 +238,38 @@ main(int argc, char *argv[])
 void
 commands(void)
 {
-    int *a1, c;
-    int temp;
+    int c;
+    /*s: [[commands()]] other locals */
+    int *a1;
     char lastsep;
+    /*x: [[commands()]] other locals */
     Dir *d;
+    /*x: [[commands()]] other locals */
+    int temp;
+    /*e: [[commands()]] other locals */
 
     for(;;) {
+        /*s: [[commands()]] in for loop, if [[pflag]] */
         if(pflag) {
             pflag = false;
             addr1 = addr2 = dot;
             printcom();
         }
+        /*e: [[commands()]] in for loop, if [[pflag]] */
+        /*s: [[commands()]] read [[addr1]] and [[c]] via [[getchr]] */
         c = '\n';
-        for(addr1 = nil;;) {
+        addr1 = nil;
+        for(;;) {
             lastsep = c;
             a1 = address();
             c = getchr();
             if(c != ',' && c != ';')
                 break;
-
+            // else
             if(lastsep == ',')
                 error(Q);
             if(a1 == nil) {
-                a1 = zero+1;
+                a1 = zero+1; // line 1
                 if(a1 > dol)
                     a1--;
             }
@@ -256,7 +286,7 @@ commands(void)
             given = true;
         if(addr1 == nil)
             addr1 = addr2;
-
+        /*e: [[commands()]] read [[addr1]] and [[c]] via [[getchr]] */
         switch(c) {
         /*s: [[commands()]] switch [[c]] cases (ed.c) */
         case EOF:
@@ -285,7 +315,7 @@ commands(void)
 
             if(!wrapp ||
               ((io = open(file, OWRITE)) == -1) ||
-              ((seek(io, 0L, 2)) == -1))
+              ((seek(io, 0L, SEEK__END)) == -1))
                 if((io = create(file, OWRITE, 0666)) < 0)
                     error(file);
 
@@ -625,6 +655,7 @@ newline(void)
     c = getchr();
     if(c == '\n' || c == EOF)
         return;
+    /*s: [[newline()]] if special chars [[pln]] */
     if(c == 'p' || c == 'l' || c == 'n') {
         pflag++;
         if(c == 'l')
@@ -636,6 +667,8 @@ newline(void)
         if(c == '\n')
             return;
     }
+    /*e: [[newline()]] if special chars [[pln]] */
+    // else
     error(Q);
 }
 /*e: function [[newline]](ed.c) */
@@ -706,6 +739,7 @@ error_1(char *s)
 {
     int c;
 
+    /*s: [[error_1()]](ed.c)) reset globals */
     wrapp = false;
     listf = 0;
     listn = 0;
@@ -730,7 +764,7 @@ error_1(char *s)
         close(io);
         io = -1;
     }
-
+    /*e: [[error_1()]](ed.c)) reset globals */
     putchr(L'?');
     putst(s);
 }
@@ -794,12 +828,15 @@ getchr(void)
         peekc = 0;
         return lastc;
     }
+    // else
     if(globp) {
         if((lastc=*globp++) != 0)
             return lastc;
+        // else
         globp = nil;
         return EOF;
     }
+    // else
     lastc = Bgetrune(&bcons);
     return lastc;
 }
@@ -833,6 +870,7 @@ gety(void)
 }
 /*e: function [[gety]](ed.c) */
 /*s: function [[gettty]](ed.c) */
+/// add | ... -> <>
 int
 gettty(void)
 {
@@ -841,7 +879,8 @@ gettty(void)
     rc = gety();
     if(rc)
         return rc;
-    if(linebuf[0] == '.' && linebuf[1] == 0)
+    // else
+    if(linebuf[0] == '.' && linebuf[1] == '\0')
         return EOF;
     return 0;
 }
@@ -913,10 +952,11 @@ append(int (*f)(void), int *a)
     nline = 0;
     dot = a;
     while((*f)() == 0) {
+        /*s: [[append()]] if zero too small */
         if((dol-zero) >= nlall) {
 
             nlall += 512;
-            a1 = realloc(zero, (nlall+5)*sizeof(int*));
+            a1 = realloc(zero, (nlall+5)*sizeof(int*)); // BUG: sizeof(int)
             if(a1 == nil) {
                 error("MEM?");
                 rescue();
@@ -928,6 +968,7 @@ append(int (*f)(void), int *a)
             dol += tl;
             dot += tl;
         }
+        /*e: [[append()]] if zero too small */
         tl = putline();
         nline++;
         a1 = ++dol;
@@ -1012,14 +1053,16 @@ callunix(void)
             rune = c;
             p += runetochar(p, &rune);
         }
-    *p = 0;
+    *p = '\0';
 
     pid = fork();
     if(pid == 0) {
+        // child
         execl("/bin/rc", "rc", "-c", buf, nil);
         // should not be reached
         exits("execl failed");
     }
+    // else, parent
     waiting = true;
     while(waitpid() != pid)
         ;
@@ -1097,6 +1140,7 @@ gdelete(void)
 
 // Get/Put lines
 /*s: function [[getline]](ed.c) */
+/// putfile -> <>
 Rune*
 getline(int tl)
 {
@@ -1203,6 +1247,7 @@ init(void)
 {
     int *markp;
 
+    /*s: [[init()]](ed.c) initializing globals */
     close(tfile);
     tline = 2;
     for(markp = names; markp < &names[26]; )
@@ -1212,6 +1257,7 @@ init(void)
     iblock = -1;
     oblock = -1;
     ichanged = 0;
+    /*e: [[init()]](ed.c) initializing globals */
     if((tfile = create(tfname, ORDWR, 0600)) < 0){
         error_1(T);
         exits(nil);
@@ -1624,6 +1670,7 @@ putd(void)
 }
 /*e: function [[putd]](ex.c) */
 /*s: function [[putstr]](ed.c) */
+/// error_1 | ... -> <> 
 void
 putst(char *sp)
 {
@@ -1650,6 +1697,7 @@ putshst(Rune *sp)
 }
 /*e: function [[putshst]](ed.c) */
 /*s: function [[putchr]](ed.c) */
+/// error | putst | ... -> <>
 void
 putchr(int ac)
 {
@@ -1659,6 +1707,7 @@ putchr(int ac)
 
     lp = linp;
     c = ac;
+    /*s: [[putchr()]] if [[listf]] */
     if(listf) {
         if(c == '\n') {
             if(linp != line && linp[-1] == ' ') {
@@ -1693,6 +1742,7 @@ putchr(int ac)
             }
         }
     }
+    /*e: [[putchr()]] if [[listf]] */
 
     rune = c;
     lp += runetochar(lp, &rune);
