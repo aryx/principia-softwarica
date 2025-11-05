@@ -1,21 +1,20 @@
 \section{Introduction}
 
-% Line editor, as opposed to screen editor (or stream editor later).
-% Not emacs, not vi (not sam nor acme neither).
-% See also \book{Editor}
-
 % ed for editor.
 % originally written by Ken Thompson in the 1970's
 
-% see appendix 1 of "Unix programming environment" 
-\cite{unix-pike}
-% for tutorial and motivations for the study of ed!
-
-% see also its man page for documentation.
+% Line editor, as opposed to screen editor (or stream editor like sed).
+% Not emacs, not vi (not sam nor acme neither).
+% See also \book{Editor}
 
 % screen editors nowaday, but still useful to know ed! especially good
 % for scripting (in fact see mkenam in plan9 code)
 % also if need quick and dirty write a file with a few lines => ed!
+
+% see appendix 1 of "Unix programming environment" 
+\cite{unix-pike}
+% for tutorial and motivations for the study of ed!
+% see also its man page for documentation.
 
 % Can already create file content with echo and shell redirection
 % (>, >> for append); can do a lot, but still not as power as ed.
@@ -45,6 +44,7 @@ Q
 % by end of chapter you will understand this script :)
 
 % '-' suppress the printing of character counts by e/r/w
+%  remove verbose/interactive mode (default)
 
 % Note that use <<'!' Here doc feature from shell
 % but could store ed script in separate file
@@ -55,43 +55,50 @@ Q
 
 \section{Data structures}
 
+% main data structure, an array of file offset in temp file for lines
 <<globals ed.c>>=
 ulong   nlall = 128;
-int*    zero; // size: (nlall+5)*sizeof(int*)
+// array<int>, size = (nlall+ 2+margin)*sizeof(int)
+int*    zero; 
 char*   tfname; // temporary filename (/tmp/eXXXX)
 @
 % see chatGPT explanation of full ed.nw.
 % zero is an array of line offsets.
-% The +5 is just for sentinel and safe margin; it should really be +1 at max.
+% The +5 is just for sentinel and safe margin; it should really be +2 at max.
 % The lines are not stored in memory; ed just stores lines offsets
 % in the temporary file corresponding to the file being edited.
 
+% note that line is 1-indexed, so zero[0] is unused
+% (maybe why it's called zero?)
+
+% was '... * sizeof(int*)' ?? should be sizeof(int) no?
+% yes! BUG!
+
 <<globals ed.c>>=
+// ref<int> in zero array, current line pointer
 int*    dot;
+// ref<int> in zero array, last line pointer
 int*    dol;
 @
-% dot = current line
-% dol = ?
 
+% line input from user
 <<globals ed.c>>=
 char    line[70];
+// ref<char> in line
 char*   linp    = line;
-int col;
 @
 
+
 %TODO: Figure!
+
+<<globals ed.c>>=
+int col;
+@
+%??
 
 \section{[[main()]]}
 % main, init, quit
 
-<<globals ed.c>>=
-// ??
-bool vflag   = true;
-// ??
-bool oflag;
-@
-% vflag =~ verbose flag, to print char numbers in operations (e.g., in write)
-% oflag =~ open flag? mean create if not exist?
 
 <<globals ed.c>>=
 // console buffered input
@@ -118,25 +125,13 @@ main(int argc, char *argv[])
     notify(notifyf);
 
     ARGBEGIN {
-    case 'o':
-        oflag = true;
-        vflag = false;
-        break;
+    <<[[main()]](ed.c) flags processing cases>>
     } ARGEND
 
     USED(argc);
-    if(*argv && (strcmp(*argv, "-") == ORD__EQ)) {
-        argv++;
-        vflag = false;
-    }
-    if(oflag) {
-        p1 = "/fd/1";
-        p2 = savedfile;
-        while(*p2++ = *p1++)
-            ;
-        globp = L"a";
-    } else
-    if(*argv) {
+    <<[[main()]](ed.c) if [[-]] flag>>
+    <<[[main()]](ed.c) if [[oflag]]>>
+    else if(*argv) {
         p1 = *argv;
         p2 = savedfile;
         while(*p2++ = *p1++)
@@ -144,21 +139,23 @@ main(int argc, char *argv[])
                 p2--;
         globp = L"r";
     }
-    zero = malloc((nlall+5)*sizeof(int*));
+    zero = malloc((nlall+5)*sizeof(int*)); // BUG sizeof(int)
     tfname = mktemp(template);
 
     init();
-    setjmp(savej);
+    <<[[main()]](ed.c) before [[commands()]]>>
     commands();
     quit();
 }
 @
+% init(), commands(), quit()
+
+% glob = "r" = automatic command to do first = ??
 
 <<globals ed.c>>=
 // in Linux pid can be very long, so better to have at least 7 X (was 5 before)
 char template[] = "/tmp/eXXXXXXX";
 @
-
 
 %ex: mktemp("/tmp/eXXXXX") -> ??
 <<function [[mktemp]](ed.c)>>=
@@ -189,8 +186,82 @@ mktemp(char *as)
 }
 @
 
+\subsection{[[ed -]] and [[vflag]]}
+
+<<globals ed.c>>=
+// verbose (a.k.a. interactive) mode
+bool vflag   = true;
+@
+% vflag =~ verbose flag, to print char numbers in operations (e.g., in write)
+%  when passing '-' means disable verbose and be quiet, like I did above
+% in the intro
+
+<<[[main()]](ed.c) if [[-]] flag>>=
+if(*argv && (strcmp(*argv, "-") == ORD__EQ)) {
+    argv++;
+    vflag = false;
+}
+@
+
+\subsection{[[ed -o]] and [[oflag]]}
+
+<<globals ed.c>>=
+// output to standard output (instead of editing a file). Useful
+// when ed is used as a filter
+bool oflag;
+@
+% oflag =~ open flag? mean create if not exist?
+
+<<[[main()]](ed.c) flags processing cases>>=
+case 'o':
+    oflag = true;
+    vflag = false;
+    break;
+@
+
+<<[[main()]](ed.c) if [[oflag]]>>=
+if(oflag) {
+    p1 = "/fd/1";
+    p2 = savedfile;
+    while(*p2++ = *p1++)
+        ;
+    globp = L"a";
+}
+@
+% globp = ? automatic command to do first. append mode?
+
+% remove verbose/interactive when using -o automatically
+% since we plan to save the temporary file content to stdout! so
+% definitely don't want to pass with stdout
+
+\subsection{[[init()]]}
+
 <<globals ed.c>>=
 fdt tfile   = -1;
+@
+
+<<function [[init]](ed.c)>>=
+void
+init(void)
+{
+    int *markp;
+
+    <<[[init()]](ed.c) initializing globals>>
+    if((tfile = create(tfname, ORDWR, 0600)) < 0){
+        error_1(T);
+        exits(nil);
+    }
+    dot = dol = zero;
+}
+@
+
+
+<<globals ed.c>>=
+char    T[] = "TMP";
+@
+
+
+<<globals ed.c>>=
 int tline;
 int names[26];
 int subnewa;
@@ -200,29 +271,19 @@ int oblock;
 int ichanged;
 @
 
-
-<<function [[init]](ed.c)>>=
-void
-init(void)
-{
-    int *markp;
-
-    close(tfile);
-    tline = 2;
-    for(markp = names; markp < &names[26]; )
-        *markp++ = 0;
-    subnewa = 0;
-    anymarks = 0;
-    iblock = -1;
-    oblock = -1;
-    ichanged = 0;
-    if((tfile = create(tfname, ORDWR, 0600)) < 0){
-        error_1(T);
-        exits(nil);
-    }
-    dot = dol = zero;
-}
+<<[[init()]](ed.c) initializing globals>>=
+close(tfile);
+tline = 2;
+for(markp = names; markp < &names[26]; )
+    *markp++ = 0;
+subnewa = 0;
+anymarks = 0;
+iblock = -1;
+oblock = -1;
+ichanged = 0;
 @
+
+\subsection{[[quit()]]}
 
 <<globals ed.c>>=
 bool fchange;
@@ -243,18 +304,14 @@ quit(void)
     exits(nil);
 }
 @
+% why error? because forgot to save and so tell it to the user?
 
-% ?? seems dead, called by? like regerror weird
-<<function [[onquit]](ed.c)>>=
-void
-onquit(int sig)
-{
-    USED(sig);
-    quit();
-}
-@
 
 \section{Error management}
+
+<<[[main()]](ed.c) before [[commands()]]>>=
+setjmp(savej);
+@
 
 <<globals ed.c>>=
 jmp_buf savej;
@@ -269,17 +326,8 @@ error(char *s)
     longjmp(savej, 1);
 }
 @
-% longtmp =~ exn to jump just after commands() to reread commands!
+% longtmp =~ exn to jump just before commands() to reread commands!
 
-
-<<globals ed.c>>=
-int listn;
-bool pflag;
-@
-
-<<constants ed.c>>=
-EOF = -1,
-@
 
 <<function [[error_1]](ed.c)>>=
 void
@@ -287,36 +335,53 @@ error_1(char *s)
 {
     int c;
 
-    wrapp = false;
-    listf = 0;
-    listn = 0;
-    count = 0;
-
-    seek(STDIN, 0, SEEK__END);
-    pflag = false;
-
-    if(globp)
-        lastc = '\n';
-    globp = nil;
-
-    peekc = lastc;
-    if(lastc)
-        for(;;) {
-            c = getchr();
-            if(c == '\n' || c == EOF)
-                break;
-        }
-
-    if(io > 0) {
-        close(io);
-        io = -1;
-    }
-
+    <<[[error_1()]](ed.c)) reset globals>>
     putchr(L'?');
     putst(s);
 }
 @
 % show '?' to display problem and then possible error message
+
+
+<<globals ed.c>>=
+bool pflag;
+@
+% ????
+
+
+<<constants ed.c>>=
+EOF = -1,
+@
+
+
+<<[[error_1()]](ed.c)) reset globals>>=
+wrapp = false;
+listf = 0;
+listn = 0;
+count = 0;
+
+seek(STDIN, 0, SEEK__END);
+pflag = false;
+
+if(globp)
+    lastc = '\n';
+globp = nil;
+
+peekc = lastc;
+if(lastc)
+    for(;;) {
+        c = getchr();
+        if(c == '\n' || c == EOF)
+            break;
+    }
+
+if(io > 0) {
+    close(io);
+    io = -1;
+}
+@
+
+\subsection{Notes/Signals management}
 
 <<globals ed.c>>=
 bool rescuing;
@@ -375,72 +440,22 @@ regerror(char *s)
 }
 @
 
-\section{Displaying text}
-
-<<globals ed.c>>=
-// ??
-int listf;
-@
-
-% error | ... -> <>
-<<function [[putchr]](ed.c)>>=
+% ?? seems dead, called by? like regerror weird
+<<function [[onquit]](ed.c)>>=
 void
-putchr(int ac)
+onquit(int sig)
 {
-    char *lp;
-    int c;
-    Rune rune;
-
-    lp = linp;
-    c = ac;
-    if(listf) {
-        if(c == '\n') {
-            if(linp != line && linp[-1] == ' ') {
-                *lp++ = '\\';
-                *lp++ = 'n';
-            }
-        } else {
-            if(col > (72-6-2)) {
-                col = 8;
-                *lp++ = '\\';
-                *lp++ = '\n';
-                *lp++ = '\t';
-            }
-            col++;
-            if(c=='\b' || c=='\t' || c=='\\') {
-                *lp++ = '\\';
-                if(c == '\b')
-                    c = 'b';
-                else
-                if(c == '\t')
-                    c = 't';
-                col++;
-            } else
-            if(c<' ' || c>='\177') {
-                *lp++ = '\\';
-                *lp++ = 'x';
-                *lp++ =  hex[c>>12];
-                *lp++ =  hex[c>>8&0xF];
-                *lp++ =  hex[c>>4&0xF];
-                c     =  hex[c&0xF];
-                col += 5;
-            }
-        }
-    }
-
-    rune = c;
-    lp += runetochar(lp, &rune);
-
-    if(c == '\n' || lp >= &line[sizeof(line)-5]) {
-        linp = line;
-        write(oflag? STDERR: STDOUT, line, lp-line);
-        return;
-    }
-    linp = lp;
+    USED(sig);
+    quit();
 }
 @
 
+
+
+\section{Displaying text}
+
 <<function [[putstr]](ed.c)>>=
+/// error_1 | ... -> <> 
 void
 putst(char *sp)
 {
@@ -454,6 +469,71 @@ putst(char *sp)
         putchr(r);
     }
     putchr(L'\n');
+}
+@
+
+
+
+<<function [[putchr]](ed.c)>>=
+/// error | putst | ... -> <>
+void
+putchr(int ac)
+{
+    char *lp;
+    int c;
+    Rune rune;
+
+    lp = linp;
+    c = ac;
+    <<[[putchr()]] if [[listf]]>>
+
+    rune = c;
+    lp += runetochar(lp, &rune);
+
+    if(c == '\n' || lp >= &line[sizeof(line)-5]) {
+        linp = line;
+        write(oflag? STDERR: STDOUT, line, lp-line);
+        return;
+    }
+    linp = lp;
+}
+@
+
+
+<<[[putchr()]] if [[listf]]>>=
+if(listf) {
+    if(c == '\n') {
+        if(linp != line && linp[-1] == ' ') {
+            *lp++ = '\\';
+            *lp++ = 'n';
+        }
+    } else {
+        if(col > (72-6-2)) {
+            col = 8;
+            *lp++ = '\\';
+            *lp++ = '\n';
+            *lp++ = '\t';
+        }
+        col++;
+        if(c=='\b' || c=='\t' || c=='\\') {
+            *lp++ = '\\';
+            if(c == '\b')
+                c = 'b';
+            else
+            if(c == '\t')
+                c = 't';
+            col++;
+        } else
+        if(c<' ' || c>='\177') {
+            *lp++ = '\\';
+            *lp++ = 'x';
+            *lp++ =  hex[c>>12];
+            *lp++ =  hex[c>>8&0xF];
+            *lp++ =  hex[c>>4&0xF];
+            c     =  hex[c&0xF];
+            col += 5;
+        }
+    }
 }
 @
 
@@ -474,12 +554,15 @@ getchr(void)
         peekc = 0;
         return lastc;
     }
+    // else
     if(globp) {
         if((lastc=*globp++) != 0)
             return lastc;
+        // else
         globp = nil;
         return EOF;
     }
+    // else
     lastc = Bgetrune(&bcons);
     return lastc;
 }
@@ -493,6 +576,24 @@ LBSIZE  = 4096,     /* max line size */
 Rune    linebuf[LBSIZE];
 @
 
+<<function [[gettty]](ed.c)>>=
+/// add | ... -> <>
+int
+gettty(void)
+{
+    int rc;
+
+    rc = gety();
+    if(rc)
+        return rc;
+    // else
+    if(linebuf[0] == '.' && linebuf[1] == '\0')
+        return EOF;
+    return 0;
+}
+@
+
+% gety and gettty
 <<function [[gety]](ed.c)>>=
 int
 gety(void)
@@ -522,76 +623,28 @@ gety(void)
 }
 @
 
-<<function [[gettty]](ed.c)>>=
-int
-gettty(void)
-{
-    int rc;
-
-    rc = gety();
-    if(rc)
-        return rc;
-    if(linebuf[0] == '.' && linebuf[1] == 0)
-        return EOF;
-    return 0;
-}
-@
 
 \section{[[commands()]]}
 
 <<globals ed.c>>=
+// option<int>
 int*    addr1;
+// option<int>
 int*    addr2;
 @
-
-<<globals ed.c>>=
-bool given;
-@
+% optional line numbers for start/end of command 1,3p
+% 
 
 <<function [[commands]](ed.c)>>=
 void
 commands(void)
 {
-    int *a1, c;
-    int temp;
-    char lastsep;
-    Dir *d;
+    int c;
+    <<[[commands()]] other locals>>
 
     for(;;) {
-        if(pflag) {
-            pflag = false;
-            addr1 = addr2 = dot;
-            printcom();
-        }
-        c = '\n';
-        for(addr1 = nil;;) {
-            lastsep = c;
-            a1 = address();
-            c = getchr();
-            if(c != ',' && c != ';')
-                break;
-
-            if(lastsep == ',')
-                error(Q);
-            if(a1 == nil) {
-                a1 = zero+1;
-                if(a1 > dol)
-                    a1--;
-            }
-            addr1 = a1;
-            if(c == ';')
-                dot = a1;
-        }
-        if(lastsep != '\n' && a1 == nil)
-            a1 = dol;
-        if((addr2=a1) == nil) {
-            given = false;
-            addr2 = dot;    
-        } else
-            given = true;
-        if(addr1 == nil)
-            addr1 = addr2;
-
+        <<[[commands()]] in for loop, if [[pflag]]>>
+        <<[[commands()]] read [[addr1]] and [[c]] via [[getchr]]>>
         switch(c) {
         <<[[commands()]] switch [[c]] cases (ed.c)>>
         }
@@ -601,6 +654,65 @@ commands(void)
 @
 % error(Q) ? so just jump to before commands() ?
 
+
+<<[[commands()]] switch [[c]] cases (ed.c)>>=
+case EOF:
+    return;
+@
+
+
+<<[[commands()]] in for loop, if [[pflag]]>>=
+if(pflag) {
+    pflag = false;
+    addr1 = addr2 = dot;
+    printcom();
+}
+@
+
+\subsection{[[address()]]}
+
+<<globals ed.c>>=
+bool given;
+@
+% ???
+
+
+<<[[commands()]] other locals>>=
+int *a1;
+char lastsep;
+@
+
+<<[[commands()]] read [[addr1]] and [[c]] via [[getchr]]>>=
+c = '\n';
+addr1 = nil;
+for(;;) {
+    lastsep = c;
+    a1 = address();
+    c = getchr();
+    if(c != ',' && c != ';')
+        break;
+    // else
+    if(lastsep == ',')
+        error(Q);
+    if(a1 == nil) {
+        a1 = zero+1; // line 1
+        if(a1 > dol)
+            a1--;
+    }
+    addr1 = a1;
+    if(c == ';')
+        dot = a1;
+}
+if(lastsep != '\n' && a1 == nil)
+    a1 = dol;
+if((addr2=a1) == nil) {
+    given = false;
+    addr2 = dot;    
+} else
+    given = true;
+if(addr1 == nil)
+    addr1 = addr2;
+@
 
 % "each command can be preceded by one or two line numbers ..."
 <<function [[address]](ed.c)>>=
@@ -701,10 +813,11 @@ getnum(void)
 }
 @
 
-<<[[commands()]] switch [[c]] cases (ed.c)>>=
-case EOF:
-    return;
+
+<<[[commands()]] other locals>>=
+Dir *d;
 @
+
 
 \section{Main commands}
 
@@ -725,6 +838,7 @@ case 'i':
     add(-1);
     continue;
 @
+% ?? why -1 ? seems used like a bool so why not pass 1 simply?
 
 
 <<function [[add]](ed.c)>>=
@@ -759,20 +873,13 @@ newline(void)
     c = getchr();
     if(c == '\n' || c == EOF)
         return;
-    if(c == 'p' || c == 'l' || c == 'n') {
-        pflag++;
-        if(c == 'l')
-            listf++;
-        else
-        if(c == 'n')
-            listn++;
-        c = getchr();
-        if(c == '\n')
-            return;
-    }
+    <<[[newline()]] if special chars [[pln]]>>
+    // else
     error(Q);
 }
 @
+
+% f can be gettty(), a can be addr2
 
 <<function [[append]](ed.c)>>=
 int
@@ -783,21 +890,7 @@ append(int (*f)(void), int *a)
     nline = 0;
     dot = a;
     while((*f)() == 0) {
-        if((dol-zero) >= nlall) {
-
-            nlall += 512;
-            a1 = realloc(zero, (nlall+5)*sizeof(int*));
-            if(a1 == nil) {
-                error("MEM?");
-                rescue();
-            }
-            tl = a1 - zero; /* relocate pointers */
-            zero += tl;
-            addr1 += tl;
-            addr2 += tl;
-            dol += tl;
-            dot += tl;
-        }
+        <<[[append()]] if zero too small>>
         tl = putline();
         nline++;
         a1 = ++dol;
@@ -810,6 +903,26 @@ append(int (*f)(void), int *a)
     return nline;
 }
 @
+
+<<[[append()]] if zero too small>>=
+if((dol-zero) >= nlall) {
+
+    nlall += 512;
+    a1 = realloc(zero, (nlall+5)*sizeof(int*)); // BUG: sizeof(int)
+    if(a1 == nil) {
+        error("MEM?");
+        rescue();
+    }
+    tl = a1 - zero; /* relocate pointers */
+    zero += tl;
+    addr1 += tl;
+    addr2 += tl;
+    dol += tl;
+    dot += tl;
+}
+@
+
+\subsection{[[putline()]] and [[getblock()]]}
 
 % move in separate section with getline?
 <<function [[putline]](ed.c)>>=
@@ -906,6 +1019,10 @@ Biobuf  iobuf;
 bool wrapp;
 @
 
+<<[[commands()]] other locals>>=
+int temp;
+@
+
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'W':
     wrapp = true;
@@ -922,7 +1039,7 @@ case 'w':
 
     if(!wrapp ||
       ((io = open(file, OWRITE)) == -1) ||
-      ((seek(io, 0L, 2)) == -1))
+      ((seek(io, 0L, SEEK__END)) == -1))
         if((io = create(file, OWRITE, 0666)) < 0)
             error(file);
 
@@ -975,6 +1092,7 @@ putfile(void)
 @
 
 <<function [[getline]](ed.c)>>=
+/// putfile -> <>
 Rune*
 getline(int tl)
 {
@@ -1127,14 +1245,16 @@ callunix(void)
             rune = c;
             p += runetochar(p, &rune);
         }
-    *p = 0;
+    *p = '\0';
 
     pid = fork();
     if(pid == 0) {
+        // child
         execl("/bin/rc", "rc", "-c", buf, nil);
         // should not be reached
         exits("execl failed");
     }
+    // else, parent
     waiting = true;
     while(waitpid() != pid)
         ;
@@ -1182,6 +1302,31 @@ printcom(void)
     pflag = false;
 }
 @
+
+<<globals ed.c>>=
+// ??
+int listf;
+@
+
+<<globals ed.c>>=
+int listn;
+@
+
+<<[[newline()]] if special chars [[pln]]>>=
+if(c == 'p' || c == 'l' || c == 'n') {
+    pflag++;
+    if(c == 'l')
+        listf++;
+    else
+    if(c == 'n')
+        listn++;
+    c = getchr();
+    if(c == '\n')
+        return;
+}
+@
+
+
 
 % put sh st ??
 <<function [[putshst]](ed.c)>>=
@@ -1944,8 +2089,9 @@ case 'n':
 @
 % ??
 
+\section{Advanced features}
 
-\section{Extra}
+\section{Extra code}
 
 <<plan9 includes>>=
 #include <u.h>
@@ -1971,7 +2117,6 @@ int subolda;
 Resub   subexp[MAXSUB];
 
 
-char    T[] = "TMP";
 char    WRERR[] = "WRITE ERROR";
 int bpagesize = 20;
 char    hex[]   = "0123456789abcdef";
