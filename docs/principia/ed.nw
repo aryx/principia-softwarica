@@ -10,19 +10,23 @@
 % also if need quick and dirty write a file with a few lines => ed!
 % See also \book{Editor}
 
+% Can already create file content with echo and shell redirection
+% (>, >> for append); can do a lot, but still not as power as ed.
+
+% For tutorial and motivations for the study of ed!
 % see appendix 1 of "Unix programming environment" 
 \cite{unix-pike}
-% for tutorial and motivations for the study of ed!
 % see also its man page for documentation.
 % see also vol72a with 2 tutorials on ed by Brian Kernighan.
 % Quite complex command ...
 
-% Can already create file content with echo and shell redirection
-% (>, >> for append); can do a lot, but still not as power as ed.
-
 % s/re/g
 % g/re/p comes from ed!
 %later: g global re regexp p print
+
+\l cite "Formalizing text editors in Coq" 2020 :) but meh actually
+
+\section{Motivations: [[mkenam]]}
 
 % ex of powerful ed command used in goken mkenam:
 \begin{verbatim}
@@ -44,6 +48,10 @@ Q
 \end{verbatim}
 
 % by end of chapter you will understand this script :)
+% show part of 5.out.h and part of enam.c so can understand goal
+% also how to do that with other tools? can do with sed? can do with vi/emacs?
+% via a script that can run each time you modify 5.out.h and can be called
+% from a mkfile (show mkfile part of 5c/)
 
 % '-' suppress the printing of character counts by e/r/w
 %  remove verbose/interactive mode (default)
@@ -53,7 +61,6 @@ Q
 
 % Note that unicode-ready editor!
 
-\l cite "Formalizing text editors in Coq" 2020 :) but meh actually
 
 
 \section{Core data structures}
@@ -100,6 +107,7 @@ char    line[70];
 char*   linp    = line;
 @
 
+% why 70? 80 seems better to match number of columns in classic editors/terminals.
 
 %TODO: Figure with all those data structures?
 
@@ -221,7 +229,7 @@ if(oflag) {
     globp = L"a";
 }
 @
-% globp = ? automatic command to do first. so here append mode by default?
+% globp = automatic command to do first. so here append mode by default.
 
 % saved file is fd/1 = stdout
 
@@ -274,6 +282,7 @@ init(void)
 {
     int *markp;
 
+    close(tfile);
     <<[[init()]](ed.c) initializing globals>>
     if((tfile = create(tfname, ORDWR, 0600)) < 0){
         error_1(T);
@@ -299,7 +308,6 @@ int ichanged;
 @
 
 <<[[init()]](ed.c) initializing globals>>=
-close(tfile);
 tline = 2;
 for(markp = names; markp < &names[26]; )
     *markp++ = 0;
@@ -357,6 +365,7 @@ putst(char *sp)
 }
 @
 
+% col?
 
 
 <<function [[putchr]](ed.c)>>=
@@ -445,6 +454,8 @@ gettty(void)
     return 0;
 }
 @
+
+% special ".\n" here to finish the text entry
 
 % gety and gettty
 <<function [[gety]](ed.c)>>=
@@ -571,7 +582,12 @@ caseread:
 
 % fchange = c ?
 % ugly: abuse c, instead of using bool. and why not set fchange
-% just after setting 'c' ?
+% just after setting 'c' ? because reading a file actually does
+% not trigger fchange = true; in fact fchange = false when read first file.
+% but if read a file after having inserted a few things in the buffer, then
+% still marked as changed? (but in that case means fchange was already
+% at false so why changing it again to false?)
+
 
 <<[[commands()]] other locals>>=
 Dir *d;
@@ -583,7 +599,7 @@ if((d = dirfstat(io)) != nil){
     free(d);
 }
 @
-
+% bug? not guarded by vflag?
 
 \subsection{Reading a [[filename()]]}
 
@@ -599,19 +615,21 @@ filename(int comm)
     c = getchr();
     if(c == '\n' || c == EOF) {
         p1 = savedfile;
-        if(*p1 == 0 && comm != 'f')
+        if(*p1 == '\0' && comm != 'f')
             error(Q);
         p2 = file;
         while(*p2++ = *p1++)
             ;
         return;
     }
+    // else
     if(c != ' ')
         error(Q);
     while((c=getchr()) == ' ')
         ;
     if(c == '\n')
         error(Q);
+    // else
     p1 = file;
     do {
         if(p1 >= &file[sizeof(file)-6] || c == ' ' || c == EOF)
@@ -619,8 +637,8 @@ filename(int comm)
         rune = c;
         p1 += runetochar(p1, &rune);
     } while((c=getchr()) != '\n');
-    *p1 = 0;
-    if(savedfile[0] == 0 || comm == 'e' || comm == 'f') {
+    *p1 = '\0';
+    if(savedfile[0] == '\0' || comm == 'e' || comm == 'f') {
         p1 = savedfile;
         p2 = file;
         while(*p1++ = *p2++)
@@ -651,7 +669,9 @@ squeeze(int i)
         error(Q);
 }
 @
-
+% called with squeeze(0) and squeeze(1)
+% squeeze(1) when want at least one line in the buffer, otherwise
+% commands like 'p' will fail that assumes at least one line
 
 
 \subsection{[[append()]] and [[getfile()]]}
