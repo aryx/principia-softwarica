@@ -1,6 +1,8 @@
 /*s: linkers/5l/utils.c */
 #include "l.h"
 
+// Utilities.
+
 /*s: function [[log]] */
 void mylog(char *fmt, ...) {
 

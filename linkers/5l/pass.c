@@ -1,6 +1,8 @@
 /*s: linkers/5l/pass.c */
 #include	"l.h"
 
+// Code and data passes.
+
 // forward decls
 void    xfol(Prog*);
 

@@ -2,6 +2,8 @@
 #include	"l.h"
 #include	"m.h"
 
+// Data layout and relocation.
+
 /*s: global [[pool]](arm) */
 static struct {
     // PC of first instruction referencing the pool

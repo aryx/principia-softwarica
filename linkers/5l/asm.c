@@ -2,6 +2,8 @@
 #include	"l.h"
 #include	"m.h"
 
+// Writing object files.
+
 /*s: function [[entryvalue]](arm) */
 long
 entryvalue(void)

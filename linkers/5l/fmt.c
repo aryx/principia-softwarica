@@ -1,6 +1,8 @@
 /*s: linkers/5l/fmt.c */
 #include "l.h"
 
+// Printing.
+
 /*s: function [[Pconv]](arm) */
 // Prog -> string
 int

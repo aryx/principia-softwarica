@@ -1,6 +1,8 @@
 /*s: linkers/5l/profile.c */
 #include	"l.h"
 
+// Profiling.
+
 /*s: function [[doprof1]](arm) */
 void
 doprof1(void)

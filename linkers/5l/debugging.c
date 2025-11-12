@@ -1,6 +1,8 @@
 /*s: linkers/5l/debugging.c */
 #include	"l.h"
 
+// Symbol table.
+
 /*s: function [[putsymb]] */
 void
 putsymb(char *s, int t, long v, int ver)

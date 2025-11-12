@@ -1,6 +1,8 @@
 /*s: linkers/5l/noop.c */
 #include	"l.h"
 
+// Code transformations.
+
 /*s: global [[sym_div]](arm) */
 static	Sym*	sym_div;
 /*e: global [[sym_div]](arm) */

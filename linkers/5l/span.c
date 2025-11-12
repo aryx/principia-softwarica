@@ -2,6 +2,8 @@
 #include	"l.h"
 #include	"m.h"
 
+// Instruction layout.
+
 /*s: global [[oprange]](arm) */
 // map<enum<Opcode>, Oprange>
 Oprange	oprange[ALAST];

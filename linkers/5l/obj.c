@@ -2,6 +2,8 @@
 #include	"l.h"
 #include	<ar.h>
 
+// Reading object files.
+
 /*s: global noname linker */
 char	*noname		= "<none>";
 /*e: global noname linker */
