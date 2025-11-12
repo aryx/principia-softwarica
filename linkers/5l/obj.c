@@ -108,6 +108,7 @@ inopd(byte *p, Adr *a, Sym *h[])
 
     // 4 bytes
     case D_CONST:
+    // ??? D_ADDR is 4 bytes?? what about symbol?
     case D_ADDR:
     case D_SHIFT:
     case D_OREG:

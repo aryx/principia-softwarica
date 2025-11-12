@@ -125,6 +125,7 @@ Dconv(Fmt *fp)
         sprint(str, "$%N", a);
         break;
 
+    // ???? this is wrong with my D_ADDR; should look at a->sym
     case D_ADDR:
         if(a->reg == R_NONE)
             sprint(str, "$%N", a);
