@@ -572,7 +572,19 @@ programs such as [[nm]] and [[ar]] which are related to the linker.
 %
 %%%Finally, Appendix~\ref{chap:5l-ocaml} contains
 %%%the code of an OCaml port of [[5l]].
-%%%\t what for? :)
+
+%%%\chapter{[[5l]] in OCaml}
+%%%\label{chap:5l-ocaml}
+% yeah!!
+% design decisions (dup partially with Assembler): 
+% - no optimisations, space or speed, which guides many of the
+%   other decisions below.
+% - object file is marshalled form of ocaml AST. Far simpler!
+%   (but less open to other languages; could use JSON but no ADT in JSON)
+% - TODO symbol table and file/line table in executable are also
+%   marshalled data? not efficient enough? bench speed/size?
+% This decrements size of code, but also size of needed explanations!
+
 
 
 
@@ -6667,6 +6679,7 @@ which I mentioned before:
 <<[[dodata()]] define special symbols setR12 IF unoptimized>>=
 xdefine("setR12", SDATA, 0L);
 @
+% IF unoptimized, see in Optimisation chapter the final real code
 
 It is the last piece of the process I outlined in
 Section~\ref{sec:dodata-big-picture} to solve the
@@ -12329,7 +12342,8 @@ TEXT bar(SB), $0 -> TEXT bar(SB), $0
 RET              -> RET
                      
 
-DATA __mcount+0(SB)/4, $5 // number of words used by mcount
+// first entry contain #words (32 bits) used by mcount: 4 + 1
+DATA __mcount+0(SB)/4, $5 
 // start of info about foo
 DATA __mcount+4(SB)/4,  $foo(SB)
 // start of info about bar
@@ -16363,11 +16377,10 @@ Biobuf	bso;
 
 
 <<[[main()]] debug initialization(arm)>>=
-Binit(&bso, 1, OWRITE);
+Binit(&bso, STDOUT, OWRITE);
 listinit(); // fmtinstall()
 @
 %x86: memset(debug, false, sizeof(debug));
-\l use STDOUT?
 
 
 \section{Dumpers}
@@ -17104,6 +17117,7 @@ diag(char *fmt, ...)
 
 % 5l -v
 % had lots of cputime() too in calls to DBG, so a form of profiling
+%TODO: aspectize the main calls to cputime() and print() before
 
 <<[[main()]] profile report>>=
 if(debug['v']) {
@@ -17557,188 +17571,6 @@ main(int argc, char *argv[])
     exits(err);
 }
 @
-
-\section{[[strip]]}
-\label{sec:strip}
-
-% see also 5a -s and relevant code in chapter Debugger.
-
-
-
-<<function error (linkers/misc/strip.c)>>=
-void
-error(char* fmt, ...)
-{
-    va_list arg;
-    char *e, s[256];
-
-    va_start(arg, fmt);
-    e = seprint(s, s+sizeof(s), "%s: ", argv0);
-    e = vseprint(e, s+sizeof(s), fmt, arg);
-    e = seprint(e, s+sizeof(s), "\n");
-    va_end(arg);
-
-    write(2, s, e-s);
-}
-@
-
-<<function usage (linkers/misc/strip.c)>>=
-static void
-usage(void)
-{
-    error("usage: %s -o ofile file\n\t%s file ...\n", argv0, argv0);
-    exits("usage");
-}
-@
-
-<<function [[strip]]>>=
-static int
-strip(char* file, char* out)
-{
-    Dir *dir;
-    int fd, i;
-    Fhdr fhdr;
-    Exec *exec;
-    ulong mode;
-    void *data;
-    vlong length;
-
-    if((fd = open(file, OREAD)) < 0){
-        error("%s: open: %r", file);
-        return 1;
-    }
-
-    if(!crackhdr(fd, &fhdr)){
-        error("%s: %r", file);
-        close(fd);
-        return 1;
-    }
-    for(i = MIN_MAGIC; i <= MAX_MAGIC; i++){
-        if(fhdr.magic == _MAGIC(0, i) || fhdr.magic == _MAGIC(HDR_MAGIC, i))
-            break;
-    }
-    if(i > MAX_MAGIC){
-        error("%s: not a recognizeable binary", file);
-        close(fd);
-        return 1;
-    }
-
-    if((dir = dirfstat(fd)) == nil){
-        error("%s: stat: %r", file);
-        close(fd);
-        return 1;
-    }
-
-    length = fhdr.datoff+fhdr.datsz;
-    if(length == dir->length){
-        if(out == nil){	/* nothing to do */
-            error("%s: already stripped", file);
-            free(dir);
-            close(fd);
-            return 0;
-        }
-    }
-    if(length > dir->length){
-        error("%s: strange length", file);
-        close(fd);
-        free(dir);
-        return 1;
-    }
-
-    mode = dir->mode;
-    free(dir);
-
-    if((data = malloc(length)) == nil){
-        error("%s: malloc failure", file);
-        close(fd);
-        return 1;
-    }
-    seek(fd, 0LL, 0);
-    if(read(fd, data, length) != length){
-        error("%s: read: %r", file);
-        close(fd);
-        free(data);
-        return 1;
-    }
-    close(fd);
-
-    exec = data;
-    exec->syms = 0;
-    exec->_unused = 0;
-    exec->pcsz = 0;
-
-    if(out == nil){
-        if(remove(file) < 0) {
-            error("%s: remove: %r", file);
-            free(data);
-            return 1;
-        }
-        out = file;
-    }
-    if((fd = create(out, OWRITE, mode)) < 0){
-        error("%s: create: %r", out);
-        free(data);
-        return 1;
-    }
-    if(write(fd, data, length) != length){
-        error("%s: write: %r", out);
-        close(fd);
-        free(data);
-        return 1;
-    }
-    close(fd);
-    free(data);
-
-    return 0;
-}
-@
-
-<<function main (linkers/misc/strip.c)>>=
-void
-main(int argc, char* argv[])
-{
-    int r;
-    char *p;
-
-    p = nil;
-
-    ARGBEGIN{
-    default:
-        usage();
-        break;
-    case 'o':
-        p = ARGF();
-        if(p == nil)
-            usage();
-        break;
-    }ARGEND;
-
-    switch(argc){
-    case 0:
-        usage();
-        return;
-    case 1:
-        if(p != nil){
-            r = strip(*argv, p);
-            break;
-        }
-        /*FALLTHROUGH*/
-    default:
-        r = 0;
-        while(argc > 0){
-            r |= strip(*argv, nil);
-            argc--;
-            argv++;
-        }
-        break;
-    }
-
-    if(r)
-        exits("error");
-    exits(0);
-}
-@
-
 
 \section{[[nm]]}
 \label{sec:nm-code}
@@ -19516,26 +19348,186 @@ armalloc(int n)
 @
 
 
-%%%\chapter{[[5l]] in OCaml}
-%%%\label{chap:5l-ocaml}
+\section{[[strip]]}
+\label{sec:strip}
 
-% yeah!!
-
-% design decisions (dup partially with Assembler): 
-% - no optimisations, space or speed, which guides many of the
-%   other decisions below.
-% - object file is marshalled form of ocaml AST. Far simpler!
-%   (but less open to other languages; could use JSON but no ADT in JSON)
-% - TODO symbol table and file/line table in executable are also
-%   marshalled data? not efficient enough? bench speed/size?
-% This decrements size of code, but also size of needed explanations!
+% see also 5a -s and relevant code in chapter Debugger.
 
 
 
+<<function error (linkers/misc/strip.c)>>=
+void
+error(char* fmt, ...)
+{
+    va_list arg;
+    char *e, s[256];
 
+    va_start(arg, fmt);
+    e = seprint(s, s+sizeof(s), "%s: ", argv0);
+    e = vseprint(e, s+sizeof(s), fmt, arg);
+    e = seprint(e, s+sizeof(s), "\n");
+    va_end(arg);
 
+    write(2, s, e-s);
+}
+@
 
+<<function usage (linkers/misc/strip.c)>>=
+static void
+usage(void)
+{
+    error("usage: %s -o ofile file\n\t%s file ...\n", argv0, argv0);
+    exits("usage");
+}
+@
 
+<<function [[strip]]>>=
+static int
+strip(char* file, char* out)
+{
+    Dir *dir;
+    int fd, i;
+    Fhdr fhdr;
+    Exec *exec;
+    ulong mode;
+    void *data;
+    vlong length;
+
+    if((fd = open(file, OREAD)) < 0){
+        error("%s: open: %r", file);
+        return 1;
+    }
+
+    if(!crackhdr(fd, &fhdr)){
+        error("%s: %r", file);
+        close(fd);
+        return 1;
+    }
+    for(i = MIN_MAGIC; i <= MAX_MAGIC; i++){
+        if(fhdr.magic == _MAGIC(0, i) || fhdr.magic == _MAGIC(HDR_MAGIC, i))
+            break;
+    }
+    if(i > MAX_MAGIC){
+        error("%s: not a recognizeable binary", file);
+        close(fd);
+        return 1;
+    }
+
+    if((dir = dirfstat(fd)) == nil){
+        error("%s: stat: %r", file);
+        close(fd);
+        return 1;
+    }
+
+    length = fhdr.datoff+fhdr.datsz;
+    if(length == dir->length){
+        if(out == nil){	/* nothing to do */
+            error("%s: already stripped", file);
+            free(dir);
+            close(fd);
+            return 0;
+        }
+    }
+    if(length > dir->length){
+        error("%s: strange length", file);
+        close(fd);
+        free(dir);
+        return 1;
+    }
+
+    mode = dir->mode;
+    free(dir);
+
+    if((data = malloc(length)) == nil){
+        error("%s: malloc failure", file);
+        close(fd);
+        return 1;
+    }
+    seek(fd, 0LL, 0);
+    if(read(fd, data, length) != length){
+        error("%s: read: %r", file);
+        close(fd);
+        free(data);
+        return 1;
+    }
+    close(fd);
+
+    exec = data;
+    exec->syms = 0;
+    exec->_unused = 0;
+    exec->pcsz = 0;
+
+    if(out == nil){
+        if(remove(file) < 0) {
+            error("%s: remove: %r", file);
+            free(data);
+            return 1;
+        }
+        out = file;
+    }
+    if((fd = create(out, OWRITE, mode)) < 0){
+        error("%s: create: %r", out);
+        free(data);
+        return 1;
+    }
+    if(write(fd, data, length) != length){
+        error("%s: write: %r", out);
+        close(fd);
+        free(data);
+        return 1;
+    }
+    close(fd);
+    free(data);
+
+    return 0;
+}
+@
+
+<<function main (linkers/misc/strip.c)>>=
+void
+main(int argc, char* argv[])
+{
+    int r;
+    char *p;
+
+    p = nil;
+
+    ARGBEGIN{
+    default:
+        usage();
+        break;
+    case 'o':
+        p = ARGF();
+        if(p == nil)
+            usage();
+        break;
+    }ARGEND;
+
+    switch(argc){
+    case 0:
+        usage();
+        return;
+    case 1:
+        if(p != nil){
+            r = strip(*argv, p);
+            break;
+        }
+        /*FALLTHROUGH*/
+    default:
+        r = 0;
+        while(argc > 0){
+            r |= strip(*argv, nil);
+            argc--;
+            argv++;
+        }
+        break;
+    }
+
+    if(r)
+        exits("error");
+    exits(0);
+}
+@
 
 %******************************************************************************
 \chapter{Extra Code}
