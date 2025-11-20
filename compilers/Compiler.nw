@@ -12170,6 +12170,7 @@ gpseudo(int a, Sym *s, Node *n)
 \subsection{[[gbranch()]]}
 
 <<function [[gbranch]](arm)>>=
+/// codgen | ... -> <>
 void
 gbranch(int o)
 {
@@ -12217,6 +12218,9 @@ patch(Prog *op, long pc)
 
 % stkoff, autoffset, Node.xoffset, lots of stuff done
 % at parsing time.
+
+% stkoff = stack offset for SP
+% autoffset = param offset for FP
 
 <<global [[stkoff]]>>=
 long	stkoff;
@@ -12413,7 +12417,7 @@ if(!canreach)
 % c = context that is code possibly conditioned to run depending
 % on the value of this boolean expression (e.g. then/else part of an if)
 <<function [[bcomplex]]>>=
-bool
+bool//TODO error_1
 bcomplex(Node *n, Node *c)
 {
 
@@ -12425,7 +12429,7 @@ bcomplex(Node *n, Node *c)
     <<[[bcomplex()]] possibly convert node to funcall if unsupported 64 bit op>>
     boolgen(n, true, Z);
 
-    return false; // no error
+    return false; // no error //TODO: OK_0
 }
 @
 %//    Node *b, nod;
@@ -12987,6 +12991,7 @@ uncomma(Node *n)
 }
 @
 %ocaml: need that? cgen handle OCOMMA already.
+%pass Z null node to cgen because no dstination operand to store expression in
 
 % cgen() again
 % not sure we need that.
@@ -13013,10 +13018,6 @@ regret(Node *n/*OUT*/, Node *nn/*IN*/)
 
 % nodreg() makes the node n a OREGISTER node with register number
 % r and type and line information coming from nn.
-
-% nodreg() ???
-% regfree?
-
 
 \section{Register allocation}
 
@@ -13296,6 +13297,9 @@ xcom(Node *n)
 
 \subsection{Addressability: [[addable]]}
 
+% abuse addable that was used to mark lvalue during typechecking
+% to now be used for "addressability" ?
+
 <<[[xcom()]] switch op cases to set addable>>=
 case OCONST:
     n->addable = 20;
@@ -13351,6 +13355,7 @@ case OADDR:
     break;
 
 @
+
 <<[[xcom()]] switch op cases to set addable>>=
 case OIND:
     xcom(l);
@@ -13363,7 +13368,8 @@ case OIND:
         n->addable = 12;
     break;
 @
-%ocaml: do deep pattern matching so no need for this contorsion
+%ocaml: do deep pattern matching so no need for this contorsion?
+% TODO: or do &(*(name)) -~> name rewriting before?
 
 % what is the point of that? because often code like
 % *(&x + 42) for arrays and this can be converted back in 
@@ -13574,7 +13580,7 @@ if(f->op == ONAME || f->op == OIND || f->op == OINDREG) {
     else
         regalloc(&nod, f, t);
     gins(a, f, &nod);
-    gmove(&nod, t);
+    gmove(&nod, t); // recurse!
     regfree(&nod);
     return;
 }
@@ -13643,7 +13649,7 @@ if(t->op == ONAME || t->op == OIND || t->op == OINDREG) {
     <<[[gmove()]] when indirect to, if ft equal tt>>
     else
         regalloc(&nod, t, Z);
-    gmove(f, &nod);
+    gmove(f, &nod); // recurse!
     gins(a, &nod, t);
     regfree(&nod);
     return;
@@ -13663,6 +13669,7 @@ if(ft == tt)
 \t why important same types? because no conversion so will be really a NOP
 
 \subsubsection{A set}
+% ??
 
 <<[[gmove()]] locals>>=
 Node nod1;
@@ -14045,6 +14052,7 @@ void
 regalloc(Node *n, Node *tn, Node *o)
 {
     int i, j;
+    // opti to remember last one allocated
     static int lasti;
 
     switch(tn->type->etype) {
@@ -14100,10 +14108,10 @@ goto err;
 \t  analysis and algorithm to favor less complex first?
 
 <<[[regalloc()]] if reach here, unknown type>>=
-
 diag(tn, "unknown type in regalloc: %T", tn->type);
 // fallthrough
 @
+
 <<[[regalloc()]] error management>>=
 err:
     nodreg(n, tn, 0);
@@ -14131,6 +14139,7 @@ default:
     cgen(n, Z);
     break;
 @
+% this is for ExprSt?
 
 % second param of cgen is node to store result of expression into.
 % for ExprSt, we dont care about result so we pass Z.
@@ -14490,7 +14499,7 @@ outlstring(TRune *s, long n)
 
 \subsection{Arithmetic expressions}
 
-% see also acom() rewriting
+% see also acom() rewriting, later?
 
 % see also pointer arithmetic adjustments during typechecking
 
@@ -14555,6 +14564,8 @@ if(l->complex >= r->complex) {
 }
 @
 \t why Z here? ugly? could not pass &nod? clearer?
+% weird order no? shouldn't be gopcode(o, &not, Z, &nod1) ?
+% given nod1 is for right and nod for left stuff
 
 % Note that not symetric with other case.
 % In both case we store the result in nod (which one time refers to
@@ -15065,6 +15076,8 @@ case OCOND:
     break;
 @
 %ocaml: stricter? forbid? anyway how can be considered an lvalue?
+%TODO: move this case later with other OCOND can do (x ? a : b) = 1;
+% argh :)
 
 \t when can have this? can not do return & (z? x: y) 
 \t  because forbidden by tlvalue() check in tcomo.
@@ -15379,6 +15392,7 @@ case OFUNC:
         gopcode(OFUNC, Z, Z, l);
     <<[[cgenrel()]] OFUNC case, if use REGARG, part two>>
     if(nn != Z) {
+        // store result of function call (in REGRET) to dest nn
         regret(&nod, n);
         gopcode(OAS, &nod, Z, nn);
         regfree(&nod);
@@ -15571,9 +15585,43 @@ if(l->complex >= FNX) {
 }
 @
 
+\subsubsection{Complex calls}
+
+% saw already function calls before, so diff here?
+
+<<[[cgenrel()]] if all complex fields more than FNX>>=
+if(n->complex >= FNX)
+ if(l->complex >= FNX)
+  if(r != Z && r->complex >= FNX)
+    switch(o) {
+    case OFUNC:
+    case OCOMMA:
+    case OANDAND:
+    case OOROR:
+    case OCOND:
+    case ODOT:
+        break;
+    
+    default:
+        regret(&nod, r);
+        cgen(r, &nod);
+    
+        regsalloc(&nod1, r);
+        gopcode(OAS, &nod, Z, &nod1);
+    
+        regfree(&nod);
+        nod = *n;
+        nod.right = &nod1;
+        cgen(&nod, nn);
+        return;
+    
+    }
+@
+
+
 \subsection{Array accesses}
 
-% because unsugared to pointer arithmetic?
+% empty section because unsugared to pointer arithmetic?
 
 \subsection{Field accesses}
 
@@ -15786,6 +15834,7 @@ sugen(Node *n, Node *nn, long w)
         cgen(n, Z);
         break;
 
+    //TODO: lpsplit and move with other OCOND stuff later
     case OCOND:
         bcgen(n->left, 1);
         p1 = p;
@@ -16125,9 +16174,12 @@ case OCOND:
     patch(p1, pc);
     break;
 @
+%p1 used to keep last instr of bcgen(), which should be
+% Bxxx
 
+% bcgen? cgen for boolean context?
 
-
+% TODO: code explanation? figure with goto and patch?
 
 \subsection{Prefix/postfix}
 
@@ -16238,6 +16290,9 @@ case OOROR:
         patch(p, pc);
     break;
 @
+% same code for OANDAND and OOROR?
+
+% boolgen vs bcgen vs bcomplex vs other bxxx ?
 
 <<[[cgenrel()]] switch node kind cases>>=
 case ONOT:
@@ -16571,6 +16626,8 @@ case OHI:
 
 
 
+
+
 \section{Other topics}
 
 \subsection{Sizes}
@@ -16630,6 +16687,7 @@ schar	ewidth[NTYPE] =
 <<constant [[SZ_LONG]](arm)>>=
 #define	SZ_LONG		4
 @
+% subtle! can be 8 on arch64 machines like arm64!
 
 <<constant [[SZ_IND]](arm)>>=
 #define	SZ_IND		4
@@ -16660,6 +16718,8 @@ if(autoffset == 0) {
 <<global [[firstarg]]>>=
 Sym*	firstarg;
 @
+% use ?? 
+%TODO: move code using firstarg here?
 
 <<xdecl rule, initializations before processing a function>>=
 firstarg = S; // can mv after call to dodecl? No I think.
@@ -17456,38 +17516,7 @@ gextern(Sym *s, Node *a, long o, long w)
 
 \section{Advanced assembly generation}
 
-\subsection{Function calls}
-
-
-<<[[cgenrel()]] if all complex fields more than FNX>>=
-if(n->complex >= FNX)
- if(l->complex >= FNX)
-  if(r != Z && r->complex >= FNX)
-    switch(o) {
-    case OFUNC:
-    case OCOMMA:
-    case OANDAND:
-    case OOROR:
-    case OCOND:
-    case ODOT:
-        break;
-    
-    default:
-        regret(&nod, r);
-        cgen(r, &nod);
-    
-        regsalloc(&nod1, r);
-        gopcode(OAS, &nod, Z, &nod1);
-    
-        regfree(&nod);
-        nod = *n;
-        nod.right = &nod1;
-        cgen(&nod, nn);
-        return;
-    
-    }
-@
-
+%\subsection{Function calls}
 
 \subsection{Switch}
 
@@ -18880,7 +18909,6 @@ case OCOND:
 % Still, not really an optimization, more like a feature.
 % Still also used for optimization? a bit like partial evaluation?
 
-% gen | ... -> complex -> ccom -> <>
 % evaluate constants statically.
 %pre: can expect evconst() has been called already on the leaves, see
 % ccom(), and except node to satisfy
@@ -18888,7 +18916,7 @@ case OCOND:
 % ccom() again.
 
 <<function [[evconst]]>>=
-/// (complex -> ccom) | ?? -> <>
+/// gen | ... -> complex -> ccom -> <>
 void
 evconst(Node *n)
 {
@@ -20297,7 +20325,7 @@ int	hintabsize;
 % for factorable terms c1*i + c1*c2*j -> c1*(i + c2*j) suggest what
 % it's doing). essentially it flattens levels of an expression tree
 % using associative and commutative operators into an array and
-% rearranges them." - fortsith
+% rearranges them." - forsith
 
 \subsection{[[Term]]}
 
@@ -20866,6 +20894,10 @@ regaalloc1(Node *n, Node *nn)
 if(!debug['N'] || debug['R'] || debug['P'])
     regopt(sp);
 @
+% N = no opti
+% R = force registerization and dump info on register
+%     but disable peephole
+% P = ??
 
 % register optimization?
 <<function [[regopt]](arm)>>=
@@ -21389,6 +21421,8 @@ for(i=0; i<nregion; i++) {
 if(!debug['R'] || debug['P'])
     peep();
 @
+
+% if R then regopti but not peephole
 
 \subsection{pass 8}
 
