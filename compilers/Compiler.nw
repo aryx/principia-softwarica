@@ -9162,7 +9162,7 @@ for(p=trelinit; p->code >= 0; p++) {
 %ocaml: use exn
 
 <<function [[tcom]]>>=
-/// complex | tcomo | tcoma | tcomx  -> <>
+/// complex -> <> -> tcomo|tcoma|tcomx -> <>
 /*
  * evaluate types
  * evaluate lvalues (addable == 1)
@@ -11867,7 +11867,7 @@ constas(n, n->type, l->type);
 %******************************************************************************
 \chapter{Assembly Generation}
 %******************************************************************************
-% Code Generation?
+%alt: Code Generation?
 
 \section{Overview}
 
@@ -12032,7 +12032,7 @@ p->as = AEND;
 %  (nn = name node, sp = saved p)
 % cc2/pgen.c  
 <<function [[codgen]]>>=
-// main -> compile -> yyparse -> <>
+// main -> compile -> yyparse -> xdecl -> <>
 //@Scheck: used by cc.y
 void codgen(Node *n, Node *nn)
 {
@@ -12074,6 +12074,7 @@ void codgen(Node *n, Node *nn)
 %        maxargsafe = round(maxargsafe, 8);
 %% seems dead
 
+% will see maxargsafe later in section{sec:codegen-call}
 
 % += this time because set with stkoff at first.
 % but why offset can change? because introduce new hidden locals?
@@ -13475,8 +13476,10 @@ case OFUNC:
 
 
 
-\section{Basic expressions}
+\section{Memory moves}
+%alt: Basic expressions
 
+%trans:
 % at some point, 5c will generate simpler expressions
 % that can be converted directly into 
 % assembly instructions like MOVW $42, R1
@@ -14154,7 +14157,7 @@ default:
 % if do expr; then nn will be Z (like above in gen()).
 %pre: has called complex() on the node n before (and nn if not null?)
 <<function [[cgen]](arm)>>=
-/// codgen -> gen -> <>    for expression stuff
+/// codgen -> gen -> <>
 void
 cgen(Node *n, Node *nn)
 {
@@ -14167,6 +14170,7 @@ cgen(Node *n, Node *nn)
 
 % nn = optional lhs?, n = rhs
 <<function [[cgenrel]](arm)>>=
+/// codgen -> gen -> cgen -> <>
 void
 cgenrel(Node *n, Node *nn, bool inrel)
 {
@@ -14208,6 +14212,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
     return;
 }
 @
+% cursafe later when deal with function calls
 
 <<[[cgenrel()]] switch node kind cases>>=
 case OCOMMA:
@@ -14268,6 +14273,8 @@ case CPARAM:
     break;
 @
 % not always a s.
+
+% why 2 align?
 
 % params are accessed as positive offset to SP
 
@@ -15379,246 +15386,6 @@ if(r->op == OCONST)
 @
 % mv in AST optim? with other immediate operands opti?
 
-\subsection{Function calls}
-
-<<[[cgenrel()]] switch node kind cases>>=
-case OFUNC:
-    <<[[cgenrel()]] when OFUNC, if indirect function call>>
-    // else
-    <<[[cgenrel()]] OFUNC case, if use REGARG, part one>>
-    gargs(r, &nod, &nod1);
-    <<[[cgenrel()]] OFUNC case, if l not addressable>>
-    else
-        gopcode(OFUNC, Z, Z, l);
-    <<[[cgenrel()]] OFUNC case, if use REGARG, part two>>
-    if(nn != Z) {
-        // store result of function call (in REGRET) to dest nn
-        regret(&nod, n);
-        gopcode(OAS, &nod, Z, nn);
-        regfree(&nod);
-    }
-    break;
-@
-
-<<[[gopcode()]] switch opcode cases>>=
-case OFUNC:
-    a = ABL;
-    break;
-@
-
-
-\subsubsection{[[gargs()]]}
-%????????
-
-<<global [[cursafe]]>>=
-long	cursafe;
-@
-% ???
-
-<<global [[curarg]]>>=
-long	curarg;
-@
-
-<<global [[maxargsafe]]>>=
-long	maxargsafe;
-@
-
-
-
-<<[[codgen()]] initialisation>>=
-cursafe = 0;
-curarg = 0;
-maxargsafe = 0;
-@
-
-
-
-<<function [[gargs]]>>=
-void
-gargs(Node *n, Node *tn1, Node *tn2)
-{
-    long regs;
-    Node fnxargs[20], *fnxp;
-
-    regs = cursafe;
-
-    fnxp = fnxargs;
-    garg1(n, tn1, tn2, 0, &fnxp);	/* compile fns to temps */
-
-    curarg = 0;
-    fnxp = fnxargs;
-    garg1(n, tn1, tn2, 1, &fnxp);	/* compile normal args and temps */
-
-    cursafe = regs;
-}
-@
-
-
-
-<<function [[garg1]](arm)>>=
-void
-garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
-{
-    Node nod;
-
-    if(n == Z)
-        return;
-    if(n->op == OLIST) {
-        garg1(n->left, tn1, tn2, f, fnxp);
-        garg1(n->right, tn1, tn2, f, fnxp);
-        return;
-    } 
-
-    if(f == 0) {
-        if(n->complex >= FNX) {
-            regsalloc(*fnxp, n);
-            nod = znode;
-            nod.op = OAS;
-            nod.left = *fnxp;
-            nod.right = n;
-            nod.type = n->type;
-            cgen(&nod, Z);
-            (*fnxp)++;
-        }
-    } 
-    else
-    <<[[garg1()]] if complex argument type>>
-    else
-    <<[[garg1()]] if use REGARG and curarg is zero and simple type>>
-    else {
-        regalloc(tn1, n, Z);
-        if(n->complex >= FNX) {
-            cgen(*fnxp, tn1);
-            (*fnxp)++;
-        } else
-            cgen(n, tn1);
-        regaalloc(tn2, n);
-        gopcode(OAS, tn1, Z, tn2);
-        regfree(tn1);
-    }
-}
-@
-% rewrite as serie of if else instead of return?
-
-\subsubsection{Caller-save vs Callee-save}
-
-<<global [[nodsafe]]>>=
-Node*	nodsafe;
-@
-
-<<[[ginit()]] special nodes initialisation>>=
-nodsafe = new(ONAME, Z, Z);
-nodsafe->sym = slookup(".safe");
-nodsafe->type = types[TINT];
-nodsafe->etype = types[TINT]->etype; // TINT
-nodsafe->class = CAUTO;
-complex(nodsafe);
-@
-
-<<function [[regsalloc]]>>=
-void
-regsalloc(Node *n, Node *nn)
-{
-    cursafe = align(cursafe, nn->type, Aaut3);
-    maxargsafe = maxround(maxargsafe, cursafe+curarg);
-    *n = *nodsafe;
-    n->xoffset = -(stkoff + cursafe);
-    n->type = nn->type;
-    n->etype = nn->type->etype;
-    n->lineno = nn->lineno;
-}
-@
-
-
-
-
-<<function [[regaalloc]](arm)>>=
-void
-regaalloc(Node *n, Node *nn)
-{
-    curarg = align(curarg, nn->type, Aarg1);
-    *n = *nn;
-    n->op = OINDREG;
-    n->reg = REGSP;
-    n->xoffset = curarg + SZ_LONG;
-    n->complex = 0;
-    n->addable = 20;
-    curarg = align(curarg, nn->type, Aarg2);
-    maxargsafe = maxround(maxargsafe, cursafe+curarg);
-}
-@
-% 386 is just    n->xoffset = curarg;
-
-
-
-
-\subsubsection{Indirect function calls}
-
-<<[[cgenrel()]] OFUNC case, if l not addressable>>=
-if(l->addable < INDEXED) {
-    reglcgen(&nod, l, Z);
-    gopcode(OFUNC, Z, Z, &nod);
-    regfree(&nod);
-}
-@
-
-
-<<[[cgenrel()]] when OFUNC, if indirect function call>>=
-if(l->complex >= FNX) {
-    if(l->op != OIND)
-        diag(n, "bad function call");
-
-    regret(&nod, l->left);
-    cgen(l->left, &nod);
-    regsalloc(&nod1, l->left);
-    gopcode(OAS, &nod, Z, &nod1);
-    regfree(&nod);
-
-    nod = *n;
-    nod.left = &nod2;
-    nod2 = *l;
-    nod2.left = &nod1;
-    nod2.complex = 1;
-    cgen(&nod, nn);
-
-    return;
-}
-@
-
-\subsubsection{Complex calls}
-
-% saw already function calls before, so diff here?
-
-<<[[cgenrel()]] if all complex fields more than FNX>>=
-if(n->complex >= FNX)
- if(l->complex >= FNX)
-  if(r != Z && r->complex >= FNX)
-    switch(o) {
-    case OFUNC:
-    case OCOMMA:
-    case OANDAND:
-    case OOROR:
-    case OCOND:
-    case ODOT:
-        break;
-    
-    default:
-        regret(&nod, r);
-        cgen(r, &nod);
-    
-        regsalloc(&nod1, r);
-        gopcode(OAS, &nod, Z, &nod1);
-    
-        regfree(&nod);
-        nod = *n;
-        nod.right = &nod1;
-        cgen(&nod, nn);
-        return;
-    
-    }
-@
-
-
 \subsection{Array accesses}
 
 % empty section because unsugared to pointer arithmetic?
@@ -16625,6 +16392,255 @@ case OHI:
 @
 
 
+\section{Function calls}
+
+<<[[cgenrel()]] switch node kind cases>>=
+case OFUNC:
+    <<[[cgenrel()]] when OFUNC, if indirect function call>>
+    // else
+    <<[[cgenrel()]] OFUNC case, if use REGARG, part one>>
+    gargs(r, &nod, &nod1);
+    <<[[cgenrel()]] OFUNC case, if l not addressable>>
+    else
+        gopcode(OFUNC, Z, Z, l);
+    <<[[cgenrel()]] OFUNC case, if use REGARG, part two>>
+    if(nn != Z) {
+        // store result of function call (in REGRET) to dest nn
+        regret(&nod, n);
+        gopcode(OAS, &nod, Z, nn);
+        regfree(&nod);
+    }
+    break;
+@
+
+<<[[gopcode()]] switch opcode cases>>=
+case OFUNC:
+    a = ABL;
+    break;
+@
+
+
+\subsection{[[gargs()]]}
+%????????
+
+<<global [[cursafe]]>>=
+long	cursafe;
+@
+% ??? need that in addition to maxargsafe?
+
+<<global [[curarg]]>>=
+long	curarg;
+@
+% diff ?
+
+<<global [[maxargsafe]]>>=
+long	maxargsafe;
+@
+% ok this one I understand, needed for TEXT when deciding
+%  final autosize for the procedure
+
+
+
+<<[[codgen()]] initialisation>>=
+cursafe = 0;
+curarg = 0;
+maxargsafe = 0;
+@
+
+
+% 2 steps, process, why?
+<<function [[gargs]]>>=
+/// cgenrel -> <>
+void
+gargs(Node *n, Node *tn1, Node *tn2)
+{
+    long regs;
+    Node fnxargs[20], *fnxp;
+
+    // save
+    regs = cursafe;
+
+    fnxp = fnxargs;
+    // step1
+    garg1(n, tn1, tn2, 0, &fnxp);	/* compile fns to temps */
+
+    curarg = 0;
+    fnxp = fnxargs;
+    // step2
+    garg1(n, tn1, tn2, 1, &fnxp);	/* compile normal args and temps */
+
+    // restore
+    cursafe = regs;
+}
+@
+
+
+
+<<function [[garg1]](arm)>>=
+/// gargs -> <>
+void
+garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
+{
+    Node nod;
+
+    if(n == Z)
+        return;
+    if(n->op == OLIST) {
+        garg1(n->left, tn1, tn2, f, fnxp);
+        garg1(n->right, tn1, tn2, f, fnxp);
+        return;
+    } 
+
+    if(f == 0) {
+        if(n->complex >= FNX) {
+            regsalloc(*fnxp, n);
+            nod = znode;
+            nod.op = OAS;
+            nod.left = *fnxp;
+            nod.right = n;
+            nod.type = n->type;
+            cgen(&nod, Z);
+            (*fnxp)++;
+        }
+    } 
+    else
+    <<[[garg1()]] if complex argument type>>
+    else
+    <<[[garg1()]] if use REGARG and curarg is zero and simple type>>
+    else {
+        regalloc(tn1, n, Z);
+        if(n->complex >= FNX) {
+            cgen(*fnxp, tn1);
+            (*fnxp)++;
+        } else
+            cgen(n, tn1);
+        regaalloc(tn2, n);
+        gopcode(OAS, tn1, Z, tn2);
+        regfree(tn1);
+    }
+}
+@
+% rewrite as serie of if else instead of return?
+
+\subsection{Caller-save vs Callee-save}
+
+<<global [[nodsafe]]>>=
+Node*	nodsafe;
+@
+
+<<[[ginit()]] special nodes initialisation>>=
+nodsafe = new(ONAME, Z, Z);
+nodsafe->sym = slookup(".safe");
+nodsafe->type = types[TINT];
+nodsafe->etype = types[TINT]->etype; // TINT
+nodsafe->class = CAUTO;
+complex(nodsafe);
+@
+% goal of complex(nodsafe)? effect on the node? set addable and so on?
+
+<<function [[regsalloc]]>>=
+/// garg1 -> <>
+void
+regsalloc(Node *n, Node *nn)
+{
+    cursafe = align(cursafe, nn->type, Aaut3);
+    maxargsafe = maxround(maxargsafe, cursafe+curarg);
+    *n = *nodsafe;
+    n->xoffset = -(stkoff + cursafe);
+    n->type = nn->type;
+    n->etype = nn->type->etype;
+    n->lineno = nn->lineno;
+}
+@
+
+
+
+
+<<function [[regaalloc]](arm)>>=
+void
+regaalloc(Node *n, Node *nn)
+{
+    curarg = align(curarg, nn->type, Aarg1);
+    *n = *nn;
+    n->op = OINDREG;
+    n->reg = REGSP;
+    n->xoffset = curarg + SZ_LONG;
+    n->complex = 0;
+    n->addable = 20;
+    curarg = align(curarg, nn->type, Aarg2);
+    maxargsafe = maxround(maxargsafe, cursafe+curarg);
+}
+@
+% 386 is just    n->xoffset = curarg;
+
+
+
+
+\subsection{Indirect function calls}
+
+<<[[cgenrel()]] OFUNC case, if l not addressable>>=
+if(l->addable < INDEXED) {
+    reglcgen(&nod, l, Z);
+    gopcode(OFUNC, Z, Z, &nod);
+    regfree(&nod);
+}
+@
+
+
+<<[[cgenrel()]] when OFUNC, if indirect function call>>=
+if(l->complex >= FNX) {
+    if(l->op != OIND)
+        diag(n, "bad function call");
+
+    regret(&nod, l->left);
+    cgen(l->left, &nod);
+    regsalloc(&nod1, l->left);
+    gopcode(OAS, &nod, Z, &nod1);
+    regfree(&nod);
+
+    nod = *n;
+    nod.left = &nod2;
+    nod2 = *l;
+    nod2.left = &nod1;
+    nod2.complex = 1;
+    cgen(&nod, nn);
+
+    return;
+}
+@
+
+\subsection{Complex calls}
+
+% saw already function calls before, so diff here?
+
+<<[[cgenrel()]] if all complex fields more than FNX>>=
+if(n->complex >= FNX)
+ if(l->complex >= FNX)
+  if(r != Z && r->complex >= FNX)
+    switch(o) {
+    case OFUNC:
+    case OCOMMA:
+    case OANDAND:
+    case OOROR:
+    case OCOND:
+    case ODOT:
+        break;
+    
+    default:
+        regret(&nod, r);
+        cgen(r, &nod);
+    
+        regsalloc(&nod1, r);
+        gopcode(OAS, &nod, Z, &nod1);
+    
+        regfree(&nod);
+        nod = *n;
+        nod.right = &nod1;
+        cgen(&nod, nn);
+        return;
+    
+    }
+@
 
 
 
@@ -16982,7 +16998,8 @@ if(s->type == types[TENUM])
 % if put the test on CGLOBL and CSTATIC earlier.
 
 \subsection{Initializers}
-\t mv in advanced topics? advanced features?
+\t could mv complex initializers like designators in advanced features
+\t and at least explain here (of even before closer to Assign) int x = 1;
 
 % could be made a static local of init1?
 <<global [[nodcast]]>>=
@@ -17514,9 +17531,10 @@ gextern(Sym *s, Node *a, long o, long w)
 
 
 
+
 \section{Advanced assembly generation}
 
-%\subsection{Function calls}
+%alt: \subsection{Function calls}
 
 \subsection{Switch}
 
