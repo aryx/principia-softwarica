@@ -13464,6 +13464,8 @@ case OFUNC:
 <<constant [[FNX]](arm)>>=
 #define	FNX		100
 @
+% complex is supposed to estimate number of registers needed
+% to evaluate the expression, so 100 is just a big number
 
 <<constant [[FNX]]>>=
 /*
@@ -14044,13 +14046,13 @@ char	etype;
 % Sometimes, we just want a register, any register.
 
 
-% | ... -> <>
 % o is the optional node target in which the allocated register
 % will go into (via a mov), so if the target is a register, then
 % his value will be overwritten, so we can use the same register
 % (because can do ADD R1, 10, R1 in ARM!)
 % n is OUT, tn is IN, o is option<IN>
 <<function [[regalloc]](arm)>>=
+/// gmove |  -> <>
 void
 regalloc(Node *n, Node *tn, Node *o)
 {
@@ -14179,7 +14181,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
     Node *l, *r;
     // enum<Type_kind>
     int t;
-    long curs;
+    long curs; // to save cursafe
     <<[[cgenrel()]] locals>>
 
     <<[[cgenrel()]] debug>>
@@ -14196,8 +14198,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
         <<[[cgenrel()]] if node addressable>>
         // else
 
-        // save
-        curs = cursafe;
+        curs = cursafe; // save
         <<[[cgenrel()]] if all complex fields more than FNX>>
         
         switch(o) {
@@ -14206,8 +14207,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
             diag(n, "unknown op in cgen: %O", o);
             break;
         }
-        // restore
-        cursafe = curs;
+        cursafe = curs; // restore
     }
     return;
 }
@@ -16113,10 +16113,10 @@ boolgen(Node *n, int btrue, Node *nn)
     int o;
     Prog *p1, *p2;
     Node *l, *r, nod, nod1;
-    long curs;
+    long curs; // to save cursafe
 
     <<[[boolgen()]] debug>>
-    curs = cursafe;
+    curs = cursafe; // save
 
     l = n->left;
     r = n->right;
@@ -16268,7 +16268,7 @@ boolgen(Node *n, int btrue, Node *nn)
         goto com;
 
     }
-    cursafe = curs;
+    cursafe = curs; // restore
 }
 @
 % >> >>
@@ -16427,6 +16427,7 @@ case OFUNC:
 long	cursafe;
 @
 % ??? need that in addition to maxargsafe?
+% seen before saved/restore in cgenrel(), boolgen()
 
 <<global [[curarg]]>>=
 long	curarg;
@@ -16454,11 +16455,10 @@ maxargsafe = 0;
 void
 gargs(Node *n, Node *tn1, Node *tn2)
 {
-    long regs;
     Node fnxargs[20], *fnxp;
+    long regs; // to save cursafe
 
-    // save
-    regs = cursafe;
+    regs = cursafe; // save
 
     fnxp = fnxargs;
     // step1
@@ -16469,15 +16469,14 @@ gargs(Node *n, Node *tn1, Node *tn2)
     // step2
     garg1(n, tn1, tn2, 1, &fnxp);	/* compile normal args and temps */
 
-    // restore
-    cursafe = regs;
+    cursafe = regs; // restore
 }
 @
 
 
 
 <<function [[garg1]](arm)>>=
-/// gargs -> <>
+/// cgenrel -> gargs -> <>
 void
 garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
 {
@@ -16490,6 +16489,7 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
         garg1(n->right, tn1, tn2, f, fnxp);
         return;
     } 
+    // else, an argument
 
     if(f == 0) {
         if(n->complex >= FNX) {
