@@ -13334,10 +13334,11 @@ case OINDREG:
     n->addable = 12;
     return;
 @
-%OINDREG is new kind of node! 
+%OINDREG is new kind of node! used in regaalloc to store in 0(R13) for instance
+% a function call argument.x
 % when can have this so early? 
 %  - because deref an 'extern register'? 
-%  - other?
+%  - other? function call arguments to store in the stack!
 \t mv later? can then simplify xcom by aspectizing those numbers
 \t  for OADDR, OIND, and OADD
 
@@ -15155,6 +15156,7 @@ regind(Node *n, Node *nn)
 <<after parsing nodes>>=
 OINDREG,
 @
+% used also for function calls, for 0(R13) with REGSP
 
 <<[[naddr()]] switch node kind cases>>=
 case OINDREG:
@@ -16394,10 +16396,13 @@ case OHI:
 
 \section{Function calls}
 
+% skeleton to handle function calls
+
 <<[[cgenrel()]] switch node kind cases>>=
 case OFUNC:
     <<[[cgenrel()]] when OFUNC, if indirect function call>>
     // else
+
     <<[[cgenrel()]] OFUNC case, if use REGARG, part one>>
     gargs(r, &nod, &nod1);
     <<[[cgenrel()]] OFUNC case, if l not addressable>>
@@ -16421,35 +16426,40 @@ case OFUNC:
 
 
 \subsection{[[gargs()]]}
-%????????
+% arguments, g = ?
+
+<<global [[curarg]]>>=
+long	curarg;
+@
+% is incremented for each call argument, to compute right offset
+% to REGSP
+
+<<global [[maxargsafe]]>>=
+long	maxargsafe;
+@
+% ok this one I understand, needed for TEXT when deciding
+%  final stack size for the procedure (size local and size for max
+%  number of arguments in a call)
+
+<<[[codgen()]] initialisation>>=
+curarg = 0;
+maxargsafe = 0;
+@
+
+
 
 <<global [[cursafe]]>>=
 long	cursafe;
 @
 % ??? need that in addition to maxargsafe?
 % seen before saved/restore in cgenrel(), boolgen()
-
-<<global [[curarg]]>>=
-long	curarg;
-@
-% diff ?
-
-<<global [[maxargsafe]]>>=
-long	maxargsafe;
-@
-% ok this one I understand, needed for TEXT when deciding
-%  final autosize for the procedure
-
-
-
 <<[[codgen()]] initialisation>>=
 cursafe = 0;
-curarg = 0;
-maxargsafe = 0;
 @
 
 
-% 2 steps, process, why?
+
+% 2 steps, process, why? tn1 = temporary node1, tn2 = temporary node 2
 <<function [[gargs]]>>=
 /// cgenrel -> <>
 void
@@ -16473,6 +16483,8 @@ gargs(Node *n, Node *tn1, Node *tn2)
 }
 @
 
+% complex, but for now, essentially equivalent to just
+% gargs(n, tn1, tn2)
 
 
 <<function [[garg1]](arm)>>=
@@ -16492,27 +16504,17 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
     // else, an argument
 
     if(f == 0) {
-        if(n->complex >= FNX) {
-            regsalloc(*fnxp, n);
-            nod = znode;
-            nod.op = OAS;
-            nod.left = *fnxp;
-            nod.right = n;
-            nod.type = n->type;
-            cgen(&nod, Z);
-            (*fnxp)++;
-        }
+        <<[[garg()]] when [[f == 0]], if [[n]] is complex part1>>
     } 
     else
+
     <<[[garg1()]] if complex argument type>>
     else
     <<[[garg1()]] if use REGARG and curarg is zero and simple type>>
     else {
         regalloc(tn1, n, Z);
-        if(n->complex >= FNX) {
-            cgen(*fnxp, tn1);
-            (*fnxp)++;
-        } else
+        <<[[garg()]] when [[f != 0]], if [[n]] is complex part2>>
+        else
             cgen(n, tn1);
         regaalloc(tn2, n);
         gopcode(OAS, tn1, Z, tn2);
@@ -16522,7 +16524,37 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
 @
 % rewrite as serie of if else instead of return?
 
+% who will regfree tn2? no need! regaaloc does not allocate
+% a register, it uses REGSP to store the argument in the stack for the callee
+
+%BAD name, does not allocate a register ...
+<<function [[regaalloc]](arm)>>=
+void
+regaalloc(Node *n, Node *nn)
+{
+    curarg = align(curarg, nn->type, Aarg1);
+    *n = *nn;
+    n->op = OINDREG;
+    n->reg = REGSP;
+    n->xoffset = curarg + SZ_LONG;
+    n->complex = 0;
+    n->addable = 20;
+    curarg = align(curarg, nn->type, Aarg2);
+    maxargsafe = maxround(maxargsafe, cursafe+curarg);
+}
+@
+% 386 is just    n->xoffset = curarg;
+% REGSP but will not get the autosize stuff here adjutment; this is not
+% N_PARAM or N_LOCAL; it is dirrectly 4(R13)
+
+% SZ_LONG is for extra space for saving REGLINK?
+
+% maxargsafe adjust.
+% curarg adjust
+% but cursafe???
+
 \subsection{Caller-save vs Callee-save}
+% ?? need this section? related to .safe below?
 
 <<global [[nodsafe]]>>=
 Node*	nodsafe;
@@ -16553,25 +16585,6 @@ regsalloc(Node *n, Node *nn)
 }
 @
 
-
-
-
-<<function [[regaalloc]](arm)>>=
-void
-regaalloc(Node *n, Node *nn)
-{
-    curarg = align(curarg, nn->type, Aarg1);
-    *n = *nn;
-    n->op = OINDREG;
-    n->reg = REGSP;
-    n->xoffset = curarg + SZ_LONG;
-    n->complex = 0;
-    n->addable = 20;
-    curarg = align(curarg, nn->type, Aarg2);
-    maxargsafe = maxround(maxargsafe, cursafe+curarg);
-}
-@
-% 386 is just    n->xoffset = curarg;
 
 
 
@@ -16643,8 +16656,31 @@ if(n->complex >= FNX)
 @
 
 
+<<[[garg()]] when [[f == 0]], if [[n]] is complex part1>>=
+if(n->complex >= FNX) {
+    regsalloc(*fnxp, n);
+    nod = znode;
+    nod.op = OAS;
+    nod.left = *fnxp;
+    nod.right = n;
+    nod.type = n->type;
+    cgen(&nod, Z);
+    (*fnxp)++;
+}
+@
+
+<<[[garg()]] when [[f != 0]], if [[n]] is complex part2>>=
+if(n->complex >= FNX) {
+    cgen(*fnxp, tn1);
+    (*fnxp)++;
+} 
+@
+
+
+
 
 \section{Other topics}
+
 
 \subsection{Sizes}
 
