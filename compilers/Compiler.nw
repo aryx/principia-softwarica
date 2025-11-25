@@ -8102,6 +8102,7 @@ CTYPEDEF,
 
 % pass is 0 for ANSI proto, 1 for old style proto
 <<function [[argmark]]>>=
+/// yyparse -> xdecl -> <>
 //@Scheck: not dead, used by cc.y
 void argmark(Node *n, int pass)
 {
@@ -11877,7 +11878,7 @@ constas(n, n->type, l->type);
 % But they have kinda factorized a few things behind some
 % common interface: gpseudo(), gins(), gmove(), gbranch(), as well
 % as some REGRET, REGARG.
-% So at least some of the statement code generator is portable.
+% So at least some of the statement code generator is portable (see cc2/)
 % (but probably lcc backend part is cleaner)
 % Moreover, ARM assembly is quite simple and regular (even more
 % with the few abstractions 5a provides like MOVW, big constants, etc),
@@ -11895,6 +11896,7 @@ constas(n, n->type, l->type);
 
 % use 5c -N -S to disable opti and to show the simple assembly output
 % for a C file (can even compare with gcc -S).
+% update: see also -X to produce Xix-compliant assembly output without opti
 % See also http://godbolt.org/
 
 % remember in cc.y for function definition case:
@@ -12433,6 +12435,7 @@ bcomplex(Node *n, Node *c)
     return false; // no error //TODO: OK_0
 }
 @
+\t what is the use of Node *c ?
 %//    Node *b, nod;
 %    /* this is not quite right yet, so ignore it for now */
 %    if(0 && newvlongcode && typev[n->type->etype] && machcap(Z)) {
@@ -12466,8 +12469,7 @@ if(n->type == T) {
 % later
 
 
-\subsection{Switch}
-
+%alt: \subsection{Switch}
 % later
 
 
@@ -12542,10 +12544,11 @@ case OGOTO:
     return;
 @
 % pc -1, so jump just before this goto, so chain the goto.
+%ocaml: use forward_gotos so need to chain them
 
 % what if 2 goto to same label before the label itself is defined?
 % will patch first goto to jump to second one :) ugly. unoptimal
-% (but optimized later I think)
+% (but optimized later I think in linker to reduce chain of jmps)
 
 <<[[gen()]] when OGOTO/ORETURN/OBREAK/OCONTINUE, set canreach>>=
 canreach = false;
@@ -13094,11 +13097,10 @@ int		reg; // for OREGISTER
 
 \subsection{[[nodreg()]]}
 
-% n is OUT, nn is IN
 <<function [[nodreg]](arm)>>=
 /// regret | ... -> <>
 void
-nodreg(Node *n, Node *nn, int reg)
+nodreg(Node *n/*OUT*/, Node *nn/*IN*/, int reg)
 {
     *n = regnode;
     n->reg = reg;
@@ -13886,10 +13888,9 @@ gins(int a, Node *f, Node *t)
 
 % node addressable? node to Adr ?
 
-% IN n, OUT a
 <<function [[naddr]](arm)>>=
 void
-naddr(Node *n, Adr *a)
+naddr(Node *n/*IN*/, Adr *a/*OUT*/)
 {
     <<[[naddr()]] locals>>
 
@@ -14040,6 +14041,7 @@ char	etype;
 % seems used only so that can generate back a Var from an Adr.
 
 \subsection{[[regalloc()]]}
+%alt: move earlier? before regfree?
 
 % for regret we called nodreg with REGRET, we know the
 % register we want to store the return expression because
@@ -14055,7 +14057,7 @@ char	etype;
 <<function [[regalloc]](arm)>>=
 /// gmove |  -> <>
 void
-regalloc(Node *n, Node *tn, Node *o)
+regalloc(Node *n/*OUT*/, Node *tn/*IN*/, Node *o/*option<IN>*/)
 {
     int i, j;
     // opti to remember last one allocated
@@ -14072,7 +14074,7 @@ regalloc(Node *n, Node *tn, Node *o)
     case TULONG:
 
     case TIND:
-        <<[[regalloc()]] if integer type tn and OREGISTER o>>
+        <<[[regalloc()]] when integer type tn and if OREGISTER o>>
 
         j = lasti + REGRET+1;
         for(i=REGRET+1; i<NREG; i++) {
@@ -14103,6 +14105,7 @@ out:
 @
 % lasti is some kind of optimisations, 
 % maybe can aspectize it?
+\t put the naive version currently in goken 5c_ and vc that does not use lasti, simpler to see first
 
 \t why need check also resvreg? code will regfree reserved registers??
 
@@ -14126,7 +14129,7 @@ err:
 
 
 
-<<[[regalloc()]] if integer type tn and OREGISTER o>>=
+<<[[regalloc()]] when integer type tn and if OREGISTER o>>=
 if(o != Z && o->op == OREGISTER) {
     i = o->reg;
     if(i >= 0 && i < NREG)
@@ -14134,6 +14137,7 @@ if(o != Z && o->op == OREGISTER) {
 }
 @
 % reuse same register, no need to allocate a new one
+% important opti
 
 
 \section{Expressions: [[cgen()]]}
@@ -14274,6 +14278,7 @@ case CPARAM:
     break;
 @
 % not always a s.
+% what is [[s]] ?
 
 % why 2 align?
 
@@ -14337,6 +14342,10 @@ n->xoffset = outstring(n->cstring, n->type->width);
 n->addable = true;
 @
 %ocaml: do that in separate phase. Not typechecking related.
+
+% not sure setting addable is correct; on Linux some strings
+% are put in read-only area that can not be assigned
+%TODO: write C code where do "foo" = 1 and see if typecheck with 5c?
 
 % note that the TARRAY will be transformed in TIND later by
 % tcomo()
@@ -15169,7 +15178,7 @@ case OINDREG:
 
 
 
-% opti?
+% opti? move later?
 <<[[cgenrel()]] when OIND, if indirect of OADD constants>>=
 r = l;
 while(r->op == OADD)
@@ -20817,6 +20826,7 @@ if(a == AMOVW || a == AMOVF || a == AMOVD)
  if(samaddr(f, t))
     return;
 @
+\t move before, quite important in the end and not disabled by -X
 %When need that? if do
 % foo(int x) { return x } then would generate a MOVW R0, R0
 % which is useless.
