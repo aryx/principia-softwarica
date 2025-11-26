@@ -16687,6 +16687,203 @@ if(n->complex >= FNX) {
 
 
 
+\section{Complex values}
+\n called complex below, but not a mathematic concept
+\n it is a compiler concept meaning a big value.
+%alt: Big values
+
+
+% 5c allows vlong, big structure. Can return such thing, but does not
+% fit in R0! more than 32 bits. So How?
+
+\subsection{Complex types}
+
+% set of complex types
+<<global [[typecmplx]]>>=
+// set<type_kind>
+char*	typecmplx;
+@
+% alias. typesuv used in another context?
+
+<<[[tinit()]] initialise 32 bits defaults type sets>>=
+typecmplx = typesuv;
+@
+
+% struct, union, vlong
+
+<<global [[typesuv]]>>=
+char	typesuv[NTYPE];
+@
+
+<<global [[typesuvinit]]>>=
+int	typesuvinit[] =
+{
+    TVLONG, TUVLONG, TSTRUCT, TUNION, -1,
+};
+@
+% suv is for arguments or return values that are too big to
+% reside in REGRET in which case it needs some special handling
+%suv = structure, union, and vlong
+
+% things that can not be stored in REGRET! things that takes more
+% than 32 bits, for instance a big structure (not a pointer to a struct,
+% the struct itself).
+
+\subsection{Complex return value}
+
+% set in codegen
+<<global [[nodret]]>>=
+Node*	nodret;
+@
+
+<<[[ginit()]] special nodes initialisation>>=
+nodret = new(ONAME, Z, Z);
+nodret->sym = slookup(".ret");
+nodret->type = types[TIND];
+nodret->etype = TIND;
+nodret->class = CPARAM;
+nodret = new(OIND, nodret, Z);
+complex(nodret);
+@
+% *<.ret>
+% CPARAM? rewrite function to have an extra OUT param! :)
+% hmm but added somewhere in the list of parameters? just
+% CPARAM is enough?
+
+
+
+%codgen is for function body code generation
+<<[[codgen()]] if complex return type>>=
+if(typecmplx[thisfntype->link->etype]) {
+    n1 = nodret->left;
+    if(n1->type == T || n1->type->link != thisfntype->link) {
+        n1->type = typ(TIND, thisfntype->link);
+        n1->etype = n1->type->etype; // TIND, dead instruction
+        nodret = new(OIND, n1, Z); // useful? to force retyping?
+        complex(nodret);
+    }
+}
+@
+%old: this is done in ginit() no? redundant? nodret can never be null no?
+%    if(nodret == nil) {
+%        nodret = new(ONAME, Z, Z);
+%        nodret->sym = slookup(".ret");
+%        nodret->class = CPARAM;
+%        nodret->type = types[TIND];
+%        nodret->etype = TIND;
+%        nodret = new(OIND, nodret, Z);
+%    }
+
+
+
+
+
+% // *ret = X; RET
+<<[[gen()]] case ORETURN, if complex type>>=
+if(typecmplx[n->type->etype]) {
+    nod = znode;
+    nod.op = OAS;
+    nod.left = nodret;
+    nod.right = l;
+    nod.type = n->type;
+    nod.complex = l->complex;
+    cgen(&nod, Z);
+    noretval(1 | 2);
+    gbranch(ORETURN);
+    break;
+}
+@
+
+
+% why talk about return type when it's REGARG?
+<<[[codegen()]] if use REGARG, if complex return type>>=
+if(typecmplx[thisfntype->link->etype]) {
+    nod1 = *nodret->left;
+    nodreg(&nod, &nod1, REGARG);
+    gmove(&nod, &nod1);
+}
+@
+
+\subsection{Complex argument}
+
+% why not use typecmplx here?
+
+<<[[garg1()]] if complex argument type>>=
+if(typesuv[n->type->etype]) {
+    regaalloc(tn2, n);
+    if(n->complex >= FNX) {
+        sugen(*fnxp, tn2, n->type->width);
+        (*fnxp)++;
+    } else
+        sugen(n, tn2, n->type->width);
+}
+@
+\l why not use typecmplx here??
+
+
+\subsection{Complex expression}
+
+% why not use typecmplx here?
+
+<<[[cgenrel()]] if complex type node>>=
+if(typesuv[n->type->etype]) {
+    sugen(n, nn, n->type->width);
+}
+@
+
+\subsection{[[vlong]] constant}
+
+%\subsection{[[vlong]] management}
+
+%<<global newvlongcode>>=
+%bool	newvlongcode;
+%@
+%seems dead, never set to true or valid in other archi?
+% in Gen for RETURN case:
+%    if(newvlongcode && !typefd[n->type->etype]){
+%        regret(&rn, n);
+%        regfree(&rn);
+%        nod = znode;
+%        nod.op = OAS;
+%        nod.left = &rn;
+%        nod.right = l;
+%        nod.type = n->type;
+%        nod.complex = l->complex;
+%        cgen(&nod, Z);
+%        noretval(2);
+%        gbranch(ORETURN);
+%        break;
+%    }
+
+
+%aspectize?
+<<[[gextern()]] if OCONST and a vlong type>>=
+if(a->op == OCONST && typev[a->type->etype]) {
+    if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
+        gpseudo(ADATA, s, nod32const(a->vconst>>32));
+    else
+        gpseudo(ADATA, s, nod32const(a->vconst));
+    p->from.offset += o;
+    p->reg = 4;
+    if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
+        gpseudo(ADATA, s, nod32const(a->vconst));
+    else
+        gpseudo(ADATA, s, nod32const(a->vconst>>32));
+    p->from.offset += o + 4;
+    p->reg = 4;
+}
+@
+% 4 -> ??
+
+<<function [[nod32const]](arm)>>=
+Node*
+nod32const(vlong v)
+{
+    constnode.vconst = v & MASK(32);
+    return &constnode;
+}
+@
+
 
 \section{Other topics}
 
@@ -28033,203 +28230,6 @@ case TVLONG:
     diag(tn, "out of float registers");
     goto err;
 @
-
-\section{Big values}
-\n called complex below, but not a mathematic concept
-\n it is a compiler concept meaning a big value.
-
-
-% 5c allows vlong, big structure. Can return such thing, but does not
-% fit in R0! more than 32 bits. So How?
-
-\subsection{Complex types}
-
-% set of complex types
-<<global [[typecmplx]]>>=
-// set<type_kind>
-char*	typecmplx;
-@
-% alias. typesuv used in another context?
-
-<<[[tinit()]] initialise 32 bits defaults type sets>>=
-typecmplx = typesuv;
-@
-
-% struct, union, vlong
-
-<<global [[typesuv]]>>=
-char	typesuv[NTYPE];
-@
-
-<<global [[typesuvinit]]>>=
-int	typesuvinit[] =
-{
-    TVLONG, TUVLONG, TSTRUCT, TUNION, -1,
-};
-@
-% suv is for arguments or return values that are too big to
-% reside in REGRET in which case it needs some special handling
-%suv = structure, union, and vlong
-
-% things that can not be stored in REGRET! things that takes more
-% than 32 bits, for instance a big structure (not a pointer to a struct,
-% the struct itself).
-
-\subsection{Complex return value}
-
-% set in codegen
-<<global [[nodret]]>>=
-Node*	nodret;
-@
-
-<<[[ginit()]] special nodes initialisation>>=
-nodret = new(ONAME, Z, Z);
-nodret->sym = slookup(".ret");
-nodret->type = types[TIND];
-nodret->etype = TIND;
-nodret->class = CPARAM;
-nodret = new(OIND, nodret, Z);
-complex(nodret);
-@
-% *<.ret>
-% CPARAM? rewrite function to have an extra OUT param! :)
-% hmm but added somewhere in the list of parameters? just
-% CPARAM is enough?
-
-
-
-%codgen is for function body code generation
-<<[[codgen()]] if complex return type>>=
-if(typecmplx[thisfntype->link->etype]) {
-    n1 = nodret->left;
-    if(n1->type == T || n1->type->link != thisfntype->link) {
-        n1->type = typ(TIND, thisfntype->link);
-        n1->etype = n1->type->etype; // TIND, dead instruction
-        nodret = new(OIND, n1, Z); // useful? to force retyping?
-        complex(nodret);
-    }
-}
-@
-%old: this is done in ginit() no? redundant? nodret can never be null no?
-%    if(nodret == nil) {
-%        nodret = new(ONAME, Z, Z);
-%        nodret->sym = slookup(".ret");
-%        nodret->class = CPARAM;
-%        nodret->type = types[TIND];
-%        nodret->etype = TIND;
-%        nodret = new(OIND, nodret, Z);
-%    }
-
-
-
-
-
-% // *ret = X; RET
-<<[[gen()]] case ORETURN, if complex type>>=
-if(typecmplx[n->type->etype]) {
-    nod = znode;
-    nod.op = OAS;
-    nod.left = nodret;
-    nod.right = l;
-    nod.type = n->type;
-    nod.complex = l->complex;
-    cgen(&nod, Z);
-    noretval(1 | 2);
-    gbranch(ORETURN);
-    break;
-}
-@
-
-
-% why talk about return type when it's REGARG?
-<<[[codegen()]] if use REGARG, if complex return type>>=
-if(typecmplx[thisfntype->link->etype]) {
-    nod1 = *nodret->left;
-    nodreg(&nod, &nod1, REGARG);
-    gmove(&nod, &nod1);
-}
-@
-
-\subsection{Complex argument}
-
-% why not use typecmplx here?
-
-<<[[garg1()]] if complex argument type>>=
-if(typesuv[n->type->etype]) {
-    regaalloc(tn2, n);
-    if(n->complex >= FNX) {
-        sugen(*fnxp, tn2, n->type->width);
-        (*fnxp)++;
-    } else
-        sugen(n, tn2, n->type->width);
-}
-@
-\l why not use typecmplx here??
-
-
-\subsection{Complex expression}
-
-% why not use typecmplx here?
-
-<<[[cgenrel()]] if complex type node>>=
-if(typesuv[n->type->etype]) {
-    sugen(n, nn, n->type->width);
-}
-@
-
-\subsection{[[vlong]] constant}
-
-%\subsection{[[vlong]] management}
-
-%<<global newvlongcode>>=
-%bool	newvlongcode;
-%@
-%seems dead, never set to true or valid in other archi?
-% in Gen for RETURN case:
-%    if(newvlongcode && !typefd[n->type->etype]){
-%        regret(&rn, n);
-%        regfree(&rn);
-%        nod = znode;
-%        nod.op = OAS;
-%        nod.left = &rn;
-%        nod.right = l;
-%        nod.type = n->type;
-%        nod.complex = l->complex;
-%        cgen(&nod, Z);
-%        noretval(2);
-%        gbranch(ORETURN);
-%        break;
-%    }
-
-
-%aspectize?
-<<[[gextern()]] if OCONST and a vlong type>>=
-if(a->op == OCONST && typev[a->type->etype]) {
-    if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-        gpseudo(ADATA, s, nod32const(a->vconst>>32));
-    else
-        gpseudo(ADATA, s, nod32const(a->vconst));
-    p->from.offset += o;
-    p->reg = 4;
-    if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-        gpseudo(ADATA, s, nod32const(a->vconst));
-    else
-        gpseudo(ADATA, s, nod32const(a->vconst>>32));
-    p->from.offset += o + 4;
-    p->reg = 4;
-}
-@
-% 4 -> ??
-
-<<function [[nod32const]](arm)>>=
-Node*
-nod32const(vlong v)
-{
-    constnode.vconst = v & MASK(32);
-    return &constnode;
-}
-@
-
 
 
 \section{64 bits operations}
