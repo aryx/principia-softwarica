@@ -6711,6 +6711,7 @@ Node*	initlist;
 @
 
 <<function [[doinit]]>>=
+/// yyparse -> xdlist -> <>
 Node*
 doinit(Sym *s, Type *t, long o, Node *a)
 {
@@ -6724,7 +6725,7 @@ doinit(Sym *s, Type *t, long o, Node *a)
         a = a->left;
     initlist = a;
 
-    a = init1(s, t, o, 0);
+    a = init1(s, t, o, false);
     <<[[doinit()]] sanity check initlist after init1>>
     initlist = n;
 
@@ -10205,7 +10206,7 @@ if(ttab == tasign)
 
 <<[[tcomo()]] switch node kind cases>>=
 case OASI:	/* same as as, but no test for const */
-    n->op = OAS;
+    n->op = OAS; // converted in regular assign!
     o = tcom(l);
     if(o | tcom(r))
         goto bad;
@@ -14149,7 +14150,7 @@ default:
     cgen(n, Z);
     break;
 @
-% this is for ExprSt?
+% this is for ExprSt? used also for OASI (initializer)
 
 % second param of cgen is node to store result of expression into.
 % for ExprSt, we dont care about result so we pass Z.
@@ -14456,7 +14457,7 @@ if(n->type->link != types[TCHAR]) {
     }
 }
 @
-\t When can this happen?
+\t When can this happen? what does it do ??
 
 \subsubsection{Unicode strings}
 
@@ -16686,6 +16687,570 @@ if(n->complex >= FNX) {
 @
 
 
+\section{Initializers}
+\t could mv complex initializers like designators in advanced features
+\t and at least explain here (of even before closer to Assign) int x = 1;
+
+% could be made a static local of init1?
+<<global [[nodcast]]>>=
+Node*	nodcast;
+@
+
+% declaration and expression actually
+<<expression nodes>>=
+OASI, // appears during parsing
+@
+% assign initializer
+
+
+
+<<[[doinit()]] sanity check initlist after init1>>=
+if(initlist != Z)
+    diag(initlist, "more initializers than structure: %s",
+        s->name);
+@
+\t when can this happen?
+
+
+<<function [[init1]]>>=
+/// yyparse -> xdlist -> doinit -> <>
+Node*
+init1(Sym *s, Type *t, long o, bool exflag)
+{
+    Node *a, *l, *r, nod;
+    Type *t1;
+    long e, w, so, mw;
+
+    a = peekinit();
+    if(a == Z)
+        return Z;
+
+    <<[[init1()]] debug initialization>>
+
+    if(exflag && a->op == OINIT)
+        return doinit(s, t, o, nextinit());
+
+    switch(t->etype) {
+    case TCHAR:
+    case TUCHAR:
+    case TINT:
+    case TUINT:
+    case TSHORT:
+    case TUSHORT:
+    case TLONG:
+    case TULONG:
+    case TVLONG:
+    case TUVLONG:
+    case TFLOAT:
+    case TDOUBLE:
+
+    case TIND:
+    single:
+        if(a->op == OARRAY || a->op == OELEM)
+            return Z;
+
+        a = nextinit();
+        if(a == Z)
+            return Z;
+
+        <<[[init1()]] sanity check t has no bitfields>>
+        if(s->class == CAUTO) {
+            l = new(ONAME, Z, Z);
+            l->sym = s;
+            l->type = t;
+            l->etype = s->type ? s->type->etype : TVOID;
+            l->xoffset = s->offset + o;
+            l->class = s->class;
+
+            l = new(OASI, l, a);
+            return l;
+        }
+
+        complex(a);
+        if(a->type == T)
+            return Z;
+
+        if(a->op == OCONST) {
+            if(vconst(a) && t->etype == TIND && a->type && a->type->etype != TIND){
+                diag(a, "initialize pointer to an integer: %s", s->name);
+                return Z;
+            }
+            if(!sametype(a->type, t)) {
+                /* hoop jumping to save malloc */
+                if(nodcast == Z)
+                    nodcast = new(OCAST, Z, Z);
+                nod = *nodcast;
+                nod.left = a;
+                nod.type = t;
+                nod.lineno = a->lineno;
+                complex(&nod);
+                if(nod.type)
+                    *a = nod;
+            }
+            if(a->op != OCONST) {
+                diag(a, "initializer is not a constant: %s",
+                    s->name);
+                return Z;
+            }
+            if(vconst(a) == 0)
+                return Z;
+            goto gext;
+        }
+        if(t->etype == TIND) {
+            while(a->op == OCAST) {
+                warn(a, "CAST in initialization ignored");
+                a = a->left;
+            }
+            if(!sametype(t, a->type)) {
+                diag(a, "initialization of incompatible pointers: %s\n%T and %T",
+                    s->name, t, a->type);
+            }
+            if(a->op == OADDR)
+                a = a->left;
+            goto gext;
+        }
+
+        while(a->op == OCAST)
+            a = a->left;
+        if(a->op == OADDR) {
+            warn(a, "initialize pointer to an integer: %s", s->name);
+            a = a->left;
+            goto gext;
+        }
+        diag(a, "initializer is not a constant: %s", s->name);
+        return Z;
+
+    gext:
+        gextern(s, a, o, t->width);
+
+        return Z;
+
+    case TARRAY:
+        w = t->link->width;
+        if(a->op == OSTRING || a->op == OLSTRING)
+        if(typei[t->link->etype]) {
+            /*
+             * get rid of null if sizes match exactly
+             */
+            a = nextinit();
+            mw = t->width/w;
+            so = a->type->width/a->type->link->width;
+            if(mw && so > mw) {
+                if(so != mw+1)
+                    diag(a, "string initialization larger than array");
+                a->type->width -= a->type->link->width;
+            }
+
+            /*
+             * arrange strings to be expanded
+             * inside OINIT braces.
+             */
+            a = new(OUSED, a, Z);
+            return doinit(s, t, o, a);
+        }
+
+        mw = -w;
+        l = Z;
+        for(e=0;;) {
+            /*
+             * peek ahead for element initializer
+             */
+            a = peekinit();
+            if(a == Z)
+                break;
+            if(a->op == OELEM && t->link->etype != TSTRUCT)
+                break;
+            if(a->op == OARRAY) {
+                if(e && exflag)
+                    break;
+                a = nextinit();
+                r = a->left;
+                complex(r);
+                if(r->op != OCONST) {
+                    diag(r, "initializer subscript must be constant");
+                    return Z;
+                }
+                e = r->vconst;
+                if(t->width != 0)
+                    if(e < 0 || e*w >= t->width) {
+                        diag(a, "initialization index out of range: %ld", e);
+                        continue;
+                    }
+            }
+
+            so = e*w;
+            if(so > mw)
+                mw = so;
+            if(t->width != 0)
+                if(mw >= t->width)
+                    break;
+            r = init1(s, t->link, o+so, true);
+            l = newlist(l, r);
+            e++;
+        }
+        if(t->width == 0)
+            t->width = mw+w;
+        return l;
+
+    case TUNION:
+    case TSTRUCT:
+        /*
+         * peek ahead to find type of rhs.
+         * if its a structure, then treat
+         * this element as a variable
+         * rather than an aggregate.
+         */
+        if(isstruct(a, t))
+            goto single;
+
+        if(t->width <= 0) {
+            diag(Z, "incomplete structure: %s", s->name);
+            return Z;
+        }
+        l = Z;
+
+    again:
+        for(t1 = t->link; t1 != T; t1 = t1->down) {
+            if(a->op == OARRAY && t1->etype != TARRAY)
+                break;
+            if(a->op == OELEM) {
+                if(t1->sym != a->sym)
+                    continue;
+                nextinit();
+            }
+            r = init1(s, t1, o+t1->offset, true);
+            l = newlist(l, r);
+            a = peekinit();
+            if(a == Z)
+                break;
+            if(a->op == OELEM)
+                goto again;
+        }
+        if(a && a->op == OELEM)
+            diag(a, "structure element not found %F", a);
+        return l;
+
+    default:
+        diag(Z, "unknown type in initialization: %T to: %s", t, s->name);
+        return Z;
+    }
+}
+@
+%TODO: lp split, big func
+%ocaml: "unknown type in initialization" is where 5c detects 
+% illegal things like void foo() = 0; I detect that earlier.
+
+
+
+
+
+
+<<function [[newlist]]>>=
+Node*
+newlist(Node *l, Node *r)
+{
+    if(r == Z)
+        return l;
+    if(l == Z)
+        return r;
+    return new(OLIST, l, r);
+}
+@
+
+<<function [[isstruct]]>>=
+bool
+isstruct(Node *a, Type *t)
+{
+    Node *n;
+
+    switch(a->op) {
+    case ODOTDOT:
+        n = a->left;
+        if(n && n->type && sametype(n->type, t))
+            return true;
+    case OSTRING: case OLSTRING:
+    case OCONST:
+    case OINIT:
+    case OELEM:
+        return false;
+    }
+
+    n = new(ODOTDOT, Z, Z);
+    *n = *a;
+
+    /*
+     * ODOTDOT is a flag for tcom
+     * a second tcom will not be performed
+     */
+    a->op = ODOTDOT;
+    a->left = n;
+    a->right = Z;
+
+    if(tcom(n))
+        return false;
+
+    if(sametype(n->type, t))
+        return true;
+    return false;
+}
+@
+
+<<function [[peekinit]]>>=
+/*
+ * get next major operator,
+ * dont advance initlist.
+ */
+Node*
+peekinit(void)
+{
+    Node *a;
+
+    a = initlist;
+
+loop:
+    if(a == Z)
+        return a;
+    if(a->op == OLIST) {
+        a = a->left;
+        goto loop;
+    }
+    return a;
+}
+@
+
+<<function [[nextinit]]>>=
+/*
+ * consume and return next element on
+ * initlist. expand strings.
+ */
+Node*
+nextinit(void)
+{
+    Node *a, *b, *n;
+
+    a = initlist;
+    n = Z;
+
+    if(a == Z)
+        return a;
+    if(a->op == OLIST) {
+        n = a->right;
+        a = a->left;
+    }
+    if(a->op == OUSED) {
+        a = a->left;
+        b = new(OCONST, Z, Z);
+        b->type = a->type->link;
+        if(a->op == OSTRING) {
+            b->vconst = convvtox(*a->cstring, TCHAR);
+            a->cstring++;
+        }
+        if(a->op == OLSTRING) {
+            b->vconst = convvtox(*a->rstring, TRUNE);
+            a->rstring++;
+        }
+        a->type->width -= b->type->width;
+        if(a->type->width <= 0)
+            initlist = n;
+        return b;
+    }
+    initlist = n;
+    return a;
+}
+@
+
+%codegen: AMOV and more complex ADATA with more complex
+% layout than just array of bytes.
+
+
+
+<<adlist rule, after doinit>>=
+$$ = contig($1->sym, $$, w);
+@
+%$
+
+%TODO: LP split
+<<function [[contig]]>>=
+//@Scheck: used by cc.y
+Node* contig(Sym *s, Node *n, long v)
+{
+    Node *p, *r, *q, *m;
+    long w;
+    Type *zt;
+
+    <<[[contig()]] debug initialization>>
+
+    if(n == Z)
+        goto no;
+    w = s->type->width;
+
+    /*
+     * nightmare: an automatic array whose size
+     * increases when it is initialized
+     */
+    if(v != w) {
+        if(v != 0)
+            diag(n, "automatic adjustable array: %s", s->name);
+        v = s->offset;
+        autoffset = align(autoffset, s->type, Aaut3);
+        s->offset = -autoffset;
+        stkoff = maxround(stkoff, autoffset);
+        symadjust(s, n, v - s->offset);
+    }
+    if(w <= ewidth[TIND])
+        goto no;
+    if(n->op == OAS)
+        diag(Z, "oops in contig");
+/*ZZZ this appears incorrect
+need to check if the list completely covers the data.
+if not, bail
+ */
+    if(n->op == OLIST)
+        goto no;
+    if(n->op == OASI)
+        if(n->left->type)
+        if(n->left->type->width == w)
+            goto no;
+    while(w & (ewidth[TIND]-1))
+        w++;
+/*
+ * insert the following code, where long becomes vlong if pointers are fat
+ *
+    *(long**)&X = (long*)((char*)X + sizeof(X));
+    do {
+        *(long**)&X -= 1;
+        **(long**)&X = 0;
+    } while(*(long**)&X);
+ */
+
+    for(q=n; q->op != ONAME; q=q->left)
+        ;
+
+    zt = ewidth[TIND] > ewidth[TLONG]? types[TVLONG]: types[TLONG];
+
+    p = new(ONAME, Z, Z);
+    *p = *q;
+    p->type = typ(TIND, zt);
+    p->xoffset = s->offset;
+
+    r = new(ONAME, Z, Z);
+    *r = *p;
+    r = new(OPOSTDEC, r, Z);
+
+    q = new(ONAME, Z, Z);
+    *q = *p;
+    q = new(OIND, q, Z);
+
+    m = new(OCONST, Z, Z);
+    m->vconst = 0;
+    m->type = zt;
+
+    q = new(OAS, q, m);
+
+    r = new(OLIST, r, q);
+
+    q = new(ONAME, Z, Z);
+    *q = *p;
+    r = new(ODWHILE, q, r);
+
+    q = new(ONAME, Z, Z);
+    *q = *p;
+    q->type = q->type->link;
+    q->xoffset += w;
+    q = new(OADDR, q, 0);
+
+    q = new(OASI, p, q);
+    r = new(OLIST, q, r);
+
+    n = new(OLIST, r, n);
+
+no:
+    return n;
+}
+@
+
+
+<<function [[symadjust]]>>=
+void
+symadjust(Sym *s, Node *n, long del)
+{
+
+    switch(n->op) {
+    case ONAME:
+        if(n->sym == s)
+            n->xoffset -= del;
+        return;
+
+    case OCONST:
+    case OSTRING: case OLSTRING:
+    case OREGISTER: case OINDREG:
+        return;
+
+    default:
+        if(n->left)
+            symadjust(s, n->left, del);
+        if(n->right)
+            symadjust(s, n->right, del);
+        return;
+
+    }
+}
+@
+
+
+\section{Toplevel globals}
+
+<<[[gclean()]] locals>>=
+Sym *s;
+@
+<<[[gclean()]] generate all AGLOBL pseudo opcodes>>=
+for(i=0; i<NHASH; i++)
+ for(s = hash[i]; s != S; s = s->link) {
+    <<[[gclean()]] when generate all AGLOBL, filter and sanity check symbol>>
+    // else
+    gpseudo(AGLOBL, s, nodconst(s->type->width));
+}
+@
+
+% the ADATA is done when process initializer.
+
+<<[[gclean()]] when generate all AGLOBL, filter and sanity check symbol>>=
+if(s->type == T)
+    continue;
+if(s->type->width == 0)
+    continue;
+if(s->class != CGLOBL && s->class != CSTATIC)
+    continue;
+if(s->type == types[TENUM])
+    continue;
+@
+% can have null type? can have null width? this should not happen
+% if put the test on CGLOBL and CSTATIC earlier.
+
+
+\subsection{[[gextern()]]}
+
+%todo: be consistent, don't use 'a' for opcode (above) and for Node (below)
+<<function [[gextern]](arm)>>=
+void
+gextern(Sym *s, Node *a, long o, long w)
+{
+    <<[[gextern()]] if OCONST and a vlong type>>
+    else {
+        gpseudo(ADATA, s, a);
+        p->from.offset += o;
+        p->reg = w; // attributes
+        if(p->to.type == D_OREG)
+            p->to.type = D_CONST; // D_ADDR?
+    }
+}
+@
+%less: += o? why not just = o?
+%pad: was D_CONST
+\t what is this D_OREG special code?
+
+
+
 
 \section{Complex values}
 \n called complex below, but not a mathematic concept
@@ -16728,6 +17293,33 @@ int	typesuvinit[] =
 % things that can not be stored in REGRET! things that takes more
 % than 32 bits, for instance a big structure (not a pointer to a struct,
 % the struct itself).
+
+\subsection{Complex expression}
+
+% why not use typecmplx here?
+
+<<[[cgenrel()]] if complex type node>>=
+if(typesuv[n->type->etype]) {
+    sugen(n, nn, n->type->width);
+}
+@
+
+\subsection{Complex argument}
+
+% why not use typecmplx here?
+
+<<[[garg1()]] if complex argument type>>=
+if(typesuv[n->type->etype]) {
+    regaalloc(tn2, n);
+    if(n->complex >= FNX) {
+        sugen(*fnxp, tn2, n->type->width);
+        (*fnxp)++;
+    } else
+        sugen(n, tn2, n->type->width);
+}
+@
+\l why not use typecmplx here??
+
 
 \subsection{Complex return value}
 
@@ -16801,33 +17393,6 @@ if(typecmplx[thisfntype->link->etype]) {
     nod1 = *nodret->left;
     nodreg(&nod, &nod1, REGARG);
     gmove(&nod, &nod1);
-}
-@
-
-\subsection{Complex argument}
-
-% why not use typecmplx here?
-
-<<[[garg1()]] if complex argument type>>=
-if(typesuv[n->type->etype]) {
-    regaalloc(tn2, n);
-    if(n->complex >= FNX) {
-        sugen(*fnxp, tn2, n->type->width);
-        (*fnxp)++;
-    } else
-        sugen(n, tn2, n->type->width);
-}
-@
-\l why not use typecmplx here??
-
-
-\subsection{Complex expression}
-
-% why not use typecmplx here?
-
-<<[[cgenrel()]] if complex type node>>=
-if(typesuv[n->type->etype]) {
-    sugen(n, nn, n->type->width);
 }
 @
 
@@ -17207,569 +17772,6 @@ void sualign(Type *t)
 
 
 
-
-
-
-\subsection{Toplevel globals}
-
-<<[[gclean()]] locals>>=
-Sym *s;
-@
-<<[[gclean()]] generate all AGLOBL pseudo opcodes>>=
-for(i=0; i<NHASH; i++)
- for(s = hash[i]; s != S; s = s->link) {
-    <<[[gclean()]] when generate all AGLOBL, filter and sanity check symbol>>
-    // else
-    gpseudo(AGLOBL, s, nodconst(s->type->width));
-}
-@
-
-% the ADATA is done when process initializer.
-
-<<[[gclean()]] when generate all AGLOBL, filter and sanity check symbol>>=
-if(s->type == T)
-    continue;
-if(s->type->width == 0)
-    continue;
-if(s->class != CGLOBL && s->class != CSTATIC)
-    continue;
-if(s->type == types[TENUM])
-    continue;
-@
-% can have null type? can have null width? this should not happen
-% if put the test on CGLOBL and CSTATIC earlier.
-
-\subsection{Initializers}
-\t could mv complex initializers like designators in advanced features
-\t and at least explain here (of even before closer to Assign) int x = 1;
-
-% could be made a static local of init1?
-<<global [[nodcast]]>>=
-Node*	nodcast;
-@
-
-% declaration and expression actually
-<<expression nodes>>=
-OASI, // appears during parsing
-@
-% assign initializer?
-
-
-
-<<[[doinit()]] sanity check initlist after init1>>=
-if(initlist != Z)
-    diag(initlist, "more initializers than structure: %s",
-        s->name);
-@
-\t when can this happen?
-
-
-<<function [[init1]]>>=
-/// doinit -> <>
-Node*
-init1(Sym *s, Type *t, long o, int exflag)
-{
-    Node *a, *l, *r, nod;
-    Type *t1;
-    long e, w, so, mw;
-
-    a = peekinit();
-    if(a == Z)
-        return Z;
-
-    <<[[init1()]] debug initialization>>
-
-    if(exflag && a->op == OINIT)
-        return doinit(s, t, o, nextinit());
-
-    switch(t->etype) {
-    case TCHAR:
-    case TUCHAR:
-    case TINT:
-    case TUINT:
-    case TSHORT:
-    case TUSHORT:
-    case TLONG:
-    case TULONG:
-    case TVLONG:
-    case TUVLONG:
-    case TFLOAT:
-    case TDOUBLE:
-
-    case TIND:
-    single:
-        if(a->op == OARRAY || a->op == OELEM)
-            return Z;
-
-        a = nextinit();
-        if(a == Z)
-            return Z;
-
-        <<[[init1()]] sanity check t has no bitfields>>
-        if(s->class == CAUTO) {
-            l = new(ONAME, Z, Z);
-            l->sym = s;
-            l->type = t;
-            l->etype = s->type ? s->type->etype : TVOID;
-            l->xoffset = s->offset + o;
-            l->class = s->class;
-
-            l = new(OASI, l, a);
-            return l;
-        }
-
-        complex(a);
-        if(a->type == T)
-            return Z;
-
-        if(a->op == OCONST) {
-            if(vconst(a) && t->etype == TIND && a->type && a->type->etype != TIND){
-                diag(a, "initialize pointer to an integer: %s", s->name);
-                return Z;
-            }
-            if(!sametype(a->type, t)) {
-                /* hoop jumping to save malloc */
-                if(nodcast == Z)
-                    nodcast = new(OCAST, Z, Z);
-                nod = *nodcast;
-                nod.left = a;
-                nod.type = t;
-                nod.lineno = a->lineno;
-                complex(&nod);
-                if(nod.type)
-                    *a = nod;
-            }
-            if(a->op != OCONST) {
-                diag(a, "initializer is not a constant: %s",
-                    s->name);
-                return Z;
-            }
-            if(vconst(a) == 0)
-                return Z;
-            goto gext;
-        }
-        if(t->etype == TIND) {
-            while(a->op == OCAST) {
-                warn(a, "CAST in initialization ignored");
-                a = a->left;
-            }
-            if(!sametype(t, a->type)) {
-                diag(a, "initialization of incompatible pointers: %s\n%T and %T",
-                    s->name, t, a->type);
-            }
-            if(a->op == OADDR)
-                a = a->left;
-            goto gext;
-        }
-
-        while(a->op == OCAST)
-            a = a->left;
-        if(a->op == OADDR) {
-            warn(a, "initialize pointer to an integer: %s", s->name);
-            a = a->left;
-            goto gext;
-        }
-        diag(a, "initializer is not a constant: %s", s->name);
-        return Z;
-
-    gext:
-        gextern(s, a, o, t->width);
-
-        return Z;
-
-    case TARRAY:
-        w = t->link->width;
-        if(a->op == OSTRING || a->op == OLSTRING)
-        if(typei[t->link->etype]) {
-            /*
-             * get rid of null if sizes match exactly
-             */
-            a = nextinit();
-            mw = t->width/w;
-            so = a->type->width/a->type->link->width;
-            if(mw && so > mw) {
-                if(so != mw+1)
-                    diag(a, "string initialization larger than array");
-                a->type->width -= a->type->link->width;
-            }
-
-            /*
-             * arrange strings to be expanded
-             * inside OINIT braces.
-             */
-            a = new(OUSED, a, Z);
-            return doinit(s, t, o, a);
-        }
-
-        mw = -w;
-        l = Z;
-        for(e=0;;) {
-            /*
-             * peek ahead for element initializer
-             */
-            a = peekinit();
-            if(a == Z)
-                break;
-            if(a->op == OELEM && t->link->etype != TSTRUCT)
-                break;
-            if(a->op == OARRAY) {
-                if(e && exflag)
-                    break;
-                a = nextinit();
-                r = a->left;
-                complex(r);
-                if(r->op != OCONST) {
-                    diag(r, "initializer subscript must be constant");
-                    return Z;
-                }
-                e = r->vconst;
-                if(t->width != 0)
-                    if(e < 0 || e*w >= t->width) {
-                        diag(a, "initialization index out of range: %ld", e);
-                        continue;
-                    }
-            }
-
-            so = e*w;
-            if(so > mw)
-                mw = so;
-            if(t->width != 0)
-                if(mw >= t->width)
-                    break;
-            r = init1(s, t->link, o+so, 1);
-            l = newlist(l, r);
-            e++;
-        }
-        if(t->width == 0)
-            t->width = mw+w;
-        return l;
-
-    case TUNION:
-    case TSTRUCT:
-        /*
-         * peek ahead to find type of rhs.
-         * if its a structure, then treat
-         * this element as a variable
-         * rather than an aggregate.
-         */
-        if(isstruct(a, t))
-            goto single;
-
-        if(t->width <= 0) {
-            diag(Z, "incomplete structure: %s", s->name);
-            return Z;
-        }
-        l = Z;
-
-    again:
-        for(t1 = t->link; t1 != T; t1 = t1->down) {
-            if(a->op == OARRAY && t1->etype != TARRAY)
-                break;
-            if(a->op == OELEM) {
-                if(t1->sym != a->sym)
-                    continue;
-                nextinit();
-            }
-            r = init1(s, t1, o+t1->offset, 1);
-            l = newlist(l, r);
-            a = peekinit();
-            if(a == Z)
-                break;
-            if(a->op == OELEM)
-                goto again;
-        }
-        if(a && a->op == OELEM)
-            diag(a, "structure element not found %F", a);
-        return l;
-
-    default:
-        diag(Z, "unknown type in initialization: %T to: %s", t, s->name);
-        return Z;
-    }
-}
-@
-%TODO: lp split, big func
-%ocaml: "unknown type in initialization" is where 5c detects 
-% illegal things like void foo() = 0; I detect that earlier.
-
-
-
-
-
-
-<<function [[newlist]]>>=
-Node*
-newlist(Node *l, Node *r)
-{
-    if(r == Z)
-        return l;
-    if(l == Z)
-        return r;
-    return new(OLIST, l, r);
-}
-@
-
-<<function [[isstruct]]>>=
-bool
-isstruct(Node *a, Type *t)
-{
-    Node *n;
-
-    switch(a->op) {
-    case ODOTDOT:
-        n = a->left;
-        if(n && n->type && sametype(n->type, t))
-            return true;
-    case OSTRING: case OLSTRING:
-    case OCONST:
-    case OINIT:
-    case OELEM:
-        return false;
-    }
-
-    n = new(ODOTDOT, Z, Z);
-    *n = *a;
-
-    /*
-     * ODOTDOT is a flag for tcom
-     * a second tcom will not be performed
-     */
-    a->op = ODOTDOT;
-    a->left = n;
-    a->right = Z;
-
-    if(tcom(n))
-        return false;
-
-    if(sametype(n->type, t))
-        return true;
-    return false;
-}
-@
-
-<<function [[peekinit]]>>=
-/*
- * get next major operator,
- * dont advance initlist.
- */
-Node*
-peekinit(void)
-{
-    Node *a;
-
-    a = initlist;
-
-loop:
-    if(a == Z)
-        return a;
-    if(a->op == OLIST) {
-        a = a->left;
-        goto loop;
-    }
-    return a;
-}
-@
-
-<<function [[nextinit]]>>=
-/*
- * consume and return next element on
- * initlist. expand strings.
- */
-Node*
-nextinit(void)
-{
-    Node *a, *b, *n;
-
-    a = initlist;
-    n = Z;
-
-    if(a == Z)
-        return a;
-    if(a->op == OLIST) {
-        n = a->right;
-        a = a->left;
-    }
-    if(a->op == OUSED) {
-        a = a->left;
-        b = new(OCONST, Z, Z);
-        b->type = a->type->link;
-        if(a->op == OSTRING) {
-            b->vconst = convvtox(*a->cstring, TCHAR);
-            a->cstring++;
-        }
-        if(a->op == OLSTRING) {
-            b->vconst = convvtox(*a->rstring, TRUNE);
-            a->rstring++;
-        }
-        a->type->width -= b->type->width;
-        if(a->type->width <= 0)
-            initlist = n;
-        return b;
-    }
-    initlist = n;
-    return a;
-}
-@
-
-%codegen: AMOV and more complex ADATA with more complex
-% layout than just array of bytes.
-
-
-
-<<adlist rule, after doinit>>=
-$$ = contig($1->sym, $$, w);
-@
-%$
-
-%TODO: LP split
-<<function [[contig]]>>=
-//@Scheck: used by cc.y
-Node* contig(Sym *s, Node *n, long v)
-{
-    Node *p, *r, *q, *m;
-    long w;
-    Type *zt;
-
-    <<[[contig()]] debug initialization>>
-
-    if(n == Z)
-        goto no;
-    w = s->type->width;
-
-    /*
-     * nightmare: an automatic array whose size
-     * increases when it is initialized
-     */
-    if(v != w) {
-        if(v != 0)
-            diag(n, "automatic adjustable array: %s", s->name);
-        v = s->offset;
-        autoffset = align(autoffset, s->type, Aaut3);
-        s->offset = -autoffset;
-        stkoff = maxround(stkoff, autoffset);
-        symadjust(s, n, v - s->offset);
-    }
-    if(w <= ewidth[TIND])
-        goto no;
-    if(n->op == OAS)
-        diag(Z, "oops in contig");
-/*ZZZ this appears incorrect
-need to check if the list completely covers the data.
-if not, bail
- */
-    if(n->op == OLIST)
-        goto no;
-    if(n->op == OASI)
-        if(n->left->type)
-        if(n->left->type->width == w)
-            goto no;
-    while(w & (ewidth[TIND]-1))
-        w++;
-/*
- * insert the following code, where long becomes vlong if pointers are fat
- *
-    *(long**)&X = (long*)((char*)X + sizeof(X));
-    do {
-        *(long**)&X -= 1;
-        **(long**)&X = 0;
-    } while(*(long**)&X);
- */
-
-    for(q=n; q->op != ONAME; q=q->left)
-        ;
-
-    zt = ewidth[TIND] > ewidth[TLONG]? types[TVLONG]: types[TLONG];
-
-    p = new(ONAME, Z, Z);
-    *p = *q;
-    p->type = typ(TIND, zt);
-    p->xoffset = s->offset;
-
-    r = new(ONAME, Z, Z);
-    *r = *p;
-    r = new(OPOSTDEC, r, Z);
-
-    q = new(ONAME, Z, Z);
-    *q = *p;
-    q = new(OIND, q, Z);
-
-    m = new(OCONST, Z, Z);
-    m->vconst = 0;
-    m->type = zt;
-
-    q = new(OAS, q, m);
-
-    r = new(OLIST, r, q);
-
-    q = new(ONAME, Z, Z);
-    *q = *p;
-    r = new(ODWHILE, q, r);
-
-    q = new(ONAME, Z, Z);
-    *q = *p;
-    q->type = q->type->link;
-    q->xoffset += w;
-    q = new(OADDR, q, 0);
-
-    q = new(OASI, p, q);
-    r = new(OLIST, q, r);
-
-    n = new(OLIST, r, n);
-
-no:
-    return n;
-}
-@
-
-
-<<function [[symadjust]]>>=
-void
-symadjust(Sym *s, Node *n, long del)
-{
-
-    switch(n->op) {
-    case ONAME:
-        if(n->sym == s)
-            n->xoffset -= del;
-        return;
-
-    case OCONST:
-    case OSTRING: case OLSTRING:
-    case OREGISTER: case OINDREG:
-        return;
-
-    default:
-        if(n->left)
-            symadjust(s, n->left, del);
-        if(n->right)
-            symadjust(s, n->right, del);
-        return;
-
-    }
-}
-@
-
-
-\subsection{[[gextern()]]}
-
-%todo: be consistent, don't use 'a' for opcode (above) and for Node (below)
-<<function [[gextern]](arm)>>=
-void
-gextern(Sym *s, Node *a, long o, long w)
-{
-    <<[[gextern()]] if OCONST and a vlong type>>
-    else {
-        gpseudo(ADATA, s, a);
-        p->from.offset += o;
-        p->reg = w; // attributes
-        if(p->to.type == D_OREG)
-            p->to.type = D_CONST; // D_ADDR?
-    }
-}
-@
-%less: += o? why not just = o?
-%pad: was D_CONST
-\t what is this D_OREG special code?
 
 
 
