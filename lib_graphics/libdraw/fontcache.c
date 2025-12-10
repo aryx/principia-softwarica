@@ -39,8 +39,9 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
     /*s: [[cachechars()]] non unicode string handling part1 */
     if(ss){
         sp = *ss;
-        //TODO:XXXX rp = L"";
-        rp = nil;
+        //PAD: this caused some pbs with goken at some point so I had
+        // to replace the line with 'rp = nil;'
+        rp = L"";
     }
     /*e: [[cachechars()]] non unicode string handling part1 */
     else{
