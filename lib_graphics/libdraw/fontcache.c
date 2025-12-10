@@ -39,7 +39,8 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
     /*s: [[cachechars()]] non unicode string handling part1 */
     if(ss){
         sp = *ss;
-        rp = L"";
+        //TODO:XXXX rp = L"";
+        rp = nil;
     }
     /*e: [[cachechars()]] non unicode string handling part1 */
     else{
