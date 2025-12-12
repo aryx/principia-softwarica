@@ -126,7 +126,7 @@ install uninstall:QV:
 	}
 
 clean nuke:QV:
-	for (i in $DIRS $TESTS) @{
+	for (i in $DIRS $TESTS $KERNELDIR) @{
 		echo $i
 		cd $i
 		mk $MKFLAGS $target
