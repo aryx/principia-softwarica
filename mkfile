@@ -150,9 +150,9 @@ cmds:QV:
 		mk $MKFLAGS install
     }
 
+# assumed you ran 'mk $MKFLAGS install' before
+# because the kernel target requires to get the binaries for mkboot
 kernel:QV:
-    # required to get the binaries for mkboot
-	mk $MKFLAGS install
 	for (i in $KERNELDIR) @{
 		echo $i
 		cd $i
