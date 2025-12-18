@@ -169,6 +169,7 @@ How is implemented [[alt()]] without [[select()]] in the kernel?
 \l sinus, cosinus, how when no hardware support?
 
 \section{The \plan core libraries: [[libc]], [[libregexp]], [[libflate]], and [[libthread]]}
+%TODO? add libbio?
 %TODO: add libcii ? so have collections at least?
 
 % gonna present core libs of plan9, its libc of course, 
@@ -194,6 +195,7 @@ which I ultimately discarded:
 % musl
 
 \item dietlibc
+%dead?
 
 \item microlibc
 
@@ -335,6 +337,7 @@ typedef unsigned long   ulong;
 typedef unsigned int    uint;
 @
 
+% TODO: like in Rust/Zig use u8/u32/u64, s8/s32/s64
 <<type [[uxxxint]]>>=
 typedef unsigned char u8int;
 typedef unsigned short u16int;
@@ -344,6 +347,10 @@ typedef unsigned long long u64int;
 % ok this deserves to be in arm/u.h
 
 
+% vlong for very long
+% Note that 'long' is misleading because 32bits on 32bits arch
+% but 64bits on 64bits arch, which leads to lots of issues when porting
+% C code to 64bits arch (see goken many tricky long->int32)
 <<type [[xxxvlong]]>>=
 typedef long long   vlong;
 typedef unsigned long long uvlong;
@@ -370,6 +377,9 @@ union FPdbleword
     };
 };
 @
+
+% also useful is union { double d; uint64 x}
+% to display internal representation in hex of a double.
 
 \subsection{Strings and characters}
 
@@ -526,6 +536,7 @@ Runeerror   = 0xFFFD,   /* decoding error in UTF */
 <<type [[uintptr]]>>=
 typedef unsigned long   uintptr;
 @
+% tricky again when porting code! ptr size is different!
 
 <<type [[byte]]>>=
 typedef uchar byte;
@@ -725,6 +736,8 @@ typedef char*   va_list;
 typedef int fdt; // file descriptor type
 @
 %pad: I added that. More explicit, better signatures. abusing int is bad.
+
+% Will see also later Dir data structure and Biobuf further later.
 
 <<constant [[STDxxx]]>>=
 #define STDIN 0
@@ -2254,6 +2267,7 @@ struct Dir {
 };
 @
 \t TODO should be renamed DirEntry really
+%TODO: added double mtime_; in goken lib9 for mk nanosecond precision
 
 <<type [[Dir_mode]]>>=
 /* bits in Dir.mode */
@@ -2432,7 +2446,10 @@ getwd(char *buf, int nbuf)
 @
 % how can be nil?
 
-\section{[[mktemp()]]}
+\section{The deprecated [[mktemp()]]}
+
+%TODO: unsafe!
+%time-of-check vs time-of-use (TOCTOU) race condition use mkstemp() instead!
 
 <<function [[mktemp]]>>=
 char*
@@ -2464,7 +2481,9 @@ mktemp(char *as)
     return as;
 }
 @
+% access defined 2 sections below. Posix?
 
+\section{The safe [[mkstemp()]]}
 
 \section{Normalizing a filename: [[cleanname()]]}
 
@@ -2897,6 +2916,9 @@ execl(char *f, ...)
 }
 @
 
+\section{[[wait()]]}
+% see later? for parent-child IPC?
+
 \section{[[getpid()]]}
 
 <<function [[getpid]]>>=
@@ -2915,6 +2937,7 @@ getpid(void)
     return atol(b);
 }
 @
+% #c = ?
 
 <<function [[getppid]]>>=
 int
@@ -2952,6 +2975,8 @@ getppid(void)
 
 
 \section{Locks}
+
+% diff with kernel's lock data structures? dupes?
 
 <<type [[Lock]]>>=
 struct Lock {
@@ -3008,6 +3033,8 @@ canlock(Lock *l)
 \section{Waiting queues}
 % But Lock is already a waiting lock no? with semacquire?
 % But at least here let access/manipulate the queue?
+
+% diff with kernel's lock data structures? dupes?
 
 <<type [[QLock]]>>=
 struct QLock {
@@ -3531,6 +3558,7 @@ waitpid(void)
 
 \subsection{Environment}
 
+% /env/xxx plan9 magic namespace
 <<function [[getenv]]>>=
 char*
 getenv(char *name)
@@ -8372,6 +8400,9 @@ struct NetConnInfo {
 };
 @
 
+\section{Example: an echo server}
+% classic, the hello world of network programming? See Stevens book?
+
 \section{[[netmkaddr()]]}
 
 <<function [[netmkaddr]]>>=
@@ -8696,6 +8727,8 @@ fabs(double arg)
     return arg;
 }
 @
+% very different generated assembly than for abs even though code
+% the same, because type different!
 
 %dead:
 %<<function labs>>=
@@ -8730,6 +8763,7 @@ floor(double d)
     return d;
 }
 @
+% modf?
 
 <<function [[ceil]]>>=
 double
@@ -8758,6 +8792,7 @@ atoi(char *s)
     return atol(s);
 }
 @
+% atol and then automatic C compiler cast to int
 
 % support hexa, octal, decimal notations! handle whitespace,
 % handle signs!
@@ -8936,6 +8971,8 @@ NaN(void)
     return a.x;
 }
 @
+
+% FPdbleword defined in core DS chapter.
 
 <<constant [[NANEXP]]>>=
 #define NANEXP  (2047<<20)
@@ -9636,7 +9673,8 @@ sqrt(double arg)
 \subsection{[[modf()]]}
 
 
-% used by floor, ceil
+% used by floor(), ceil() in basics sections
+% (not so basics in the end).
 
 <<function [[modf]]>>=
 double
@@ -10248,6 +10286,7 @@ frexp(double d, int *ep)
     return x.x;
 }
 @
+%$
 
 \subsection{[[log()]]}
 
@@ -10347,7 +10386,8 @@ rand(void)
     return lrand() & 0x7fff;
 }
 @
-
+% magic number 0x7fff? to force a positive number on 32 bits arch?
+% what about 64bits arch?
 
 <<function [[lrand]]>>=
 long
@@ -10463,15 +10503,22 @@ muldiv(long a, long b, long c)
 %******************************************************************************
 % libflate
 
-%******************************************************************************
-\chapter{Encryption}
-%******************************************************************************
+% BIG!
 
+%******************************************************************************
+%\chapter{Encryption}
+%******************************************************************************
+%alt: Crypto
 % and chksum ? or move to security?
 
 %******************************************************************************
 \chapter{Error Management}
 %******************************************************************************
+
+% Unix use errno, an error number, an integer, but ugly cos hardcoded
+% list of fixed errors. Then perror() to display string for it.
+% Plan9 rethinked that, like for exits(char*s) insead  of exit(int)
+% and introduced not error number but per-process error string!
 
 %TODO: errno
 %    if(getwd(pathname, sizeof(pathname)) == 0) {
@@ -10488,7 +10535,7 @@ muldiv(long a, long b, long c)
 
 \section{Syscall: [[errstr()]]}
 
-% error code of last system call.
+% error of last system call.
 % but why not return error information from system call directly?
 % because can not use pairs in C ... and return value sometimes already
 % used? not always ...
@@ -10534,7 +10581,7 @@ werrstr(char *fmt, ...)
 
 % to print last error code of last system call
 
-% perror? errno
+% perror() is for unix compatibility.
 
 <<function [[perror]]>>=
 void
@@ -10552,6 +10599,7 @@ perror(char *s)
 @
 
 \section{Error return values}
+% move earlier in core DS chapter?
 
 <<type [[errorxxx]]>>=
 // later: unify all of that to be more consistent!
@@ -11063,6 +11111,7 @@ getuser(void)
 
 \section{Cryptography}
 
+%TODO: put md5sum, sha1sum here
 
 <<function [[encrypt]]>>=
 /*
@@ -11260,6 +11309,8 @@ error:
 % in their respective chapters.
 
 \section{Arbitrary precision arithmetics}
+
+% int means 32 bits. but what if list of int, then infinite!
 
 <<type [[mpdigit]]>>=
 typedef unsigned int    mpdigit;    /* for /sys/include/mp.h */
