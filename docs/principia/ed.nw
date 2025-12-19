@@ -84,7 +84,7 @@ Q
 % and in memory just have line offsets in temp file.
 
 \subsection{[[tfname]] and [[savedfile]]}
-%alt: put tfile also here?
+%alt: put [[tfile]] also here? but less symetric with savedfile?
 
 <<globals ed.c>>=
 char*   tfname; // temporary filename (/tmp/eXXXX)
@@ -281,6 +281,7 @@ if(oflag) {
 
 \subsection{[[mktemp()]]}
 
+%mktemp(template)
 <<globals ed.c>>=
 // in Linux pid can be very long, so better to have at least 6 X (was 5 before)
 // the mkstemp man page recommends 6 X
@@ -362,7 +363,6 @@ char    T[] = "TMP";
 
 %XXX
 <<globals ed.c>>=
-int tline;
 int names[26];
 int anymarks;
 int iblock;
@@ -370,9 +370,9 @@ int oblock;
 int ichanged;
 @
 
+
 %XXX
 <<[[init()]](ed.c) initializing globals>>=
-tline = 2;
 for(markp = names; markp < &names[26]; )
     *markp++ = 0;
 subnewa = 0;
@@ -393,7 +393,7 @@ char    Q[] = "";
 % I introduced this? because rodata pb?
 
 <<function [[quit]](ed.c)>>=
-/// main -> <>
+/// main | commands('q') | ... -> <>
 void
 quit(void)
 {
@@ -809,7 +809,7 @@ append(int (*f)(void), int *a)
     //ref<int> in zero[]
     int *a1, *a2, *rdot;
     int nline = 0;
-    // tail?
+    // tail? temporary line?
     int tl;
 
     dot = a;
@@ -855,6 +855,7 @@ if((dol-zero) >= nlall) {
 
 %    append(getfile, addr2);
 
+% read a line from iobuf and set linebuf
 <<function [[getfile]](ed.c)>>=
 /// main -> commands(c = 'r') -> append(<>, ...) -> <>
 int
@@ -898,6 +899,26 @@ if(lp >= &linebuf[LBSIZE]) {
 
 \subsection{[[putline()]]}
 
+<<globals ed.c>>=
+// ??
+int tline;
+@
+<<[[init()]](ed.c) initializing globals>>=
+tline = 2;
+@
+
+<<globals ed.c>>=
+int nleft;
+@
+<<globals ed.c>>=
+Rune*   linebp;
+@
+
+<<constants ed.c>>=
+BLKSIZE = 4096,     /* block size in temp file */
+@
+
+% put a line in tfile using linebuf (set by getfile above)
 <<function [[putline]](ed.c)>>=
 /// main -> commands('r') -> append -> <>
 int
@@ -926,21 +947,30 @@ putline(void)
             nl = nleft;
         }
     }
+
     nl = tline;
     tline += ((lp-linebuf) + 03) & 077776;
     return nl;
 }
 @
-
+% wtf is this func?
 
 
 \subsection{[[getblock()]]}
 
+<<constants ed.c>>=
+NBLK    = 8191,     /* max size of temp file */
+@
+
+% read/write per block, probably because faster granularity for IO?
+
 <<function [[getblock]](ed.c)>>=
+/// putline | getline -> <>
 Rune*
 getblock(int atl, int iof)
 {
-    int bno, off;
+    int bno; // block number
+    int off; // offset
     
     static uchar ibuff[BLKSIZE];
     static uchar obuff[BLKSIZE];
@@ -1011,6 +1041,9 @@ exfile(int om)
 
 %putd = put dots = print info derived from dot
 % = current line number
+
+% but actually putd() really just print the count global, which
+% can be different things.
 
 \section{Main commands}
 
@@ -1150,7 +1183,7 @@ case 'f':
     continue;
 @
 
-
+% can also change savedfile with 'f newfile.txt' I think.
 
 
 \subsection{printing line number: [[=]]}
@@ -1166,6 +1199,7 @@ case '=':
     continue;
 @
 
+% 
 <<function [[putd]](ex.c)>>=
 void
 putd(void)
@@ -1210,6 +1244,7 @@ add(int i)
     append(gettty, addr2);
 }
 @
+%given?
 
 % f can be gettty(), a can be addr2
 
@@ -1320,6 +1355,7 @@ setnoaddr(void)
         error(Q);
 }
 @
+%given?
 
 
 \subsection{running a shell command: [[!]]}
@@ -1378,7 +1414,7 @@ case 'd':
     continue;
 @
 
-% r ? vs gdelete? global delete, right delete?
+% r ? vs gdelete? global delete, right delete? range delete?
 <<function [[rdelete]](ed.c)>>=
 void
 rdelete(int *ad1, int *ad2)
@@ -1399,6 +1435,7 @@ rdelete(int *ad1, int *ad2)
     fchange = true;
 }
 @
+% note that it does not change tfile! just indices are modified
 
 \subsection{[[c]]hanging lines: [[c]]}
 % change
@@ -1676,6 +1713,11 @@ case 's':
     continue;
 @
 
+<<globals ed.c>>=
+Rune*   loc1;
+Rune*   loc2;
+@
+
 <<function [[substitute]](ed.c)>>=
 void
 substitute(int inglob)
@@ -1727,6 +1769,18 @@ substitute(int inglob)
 }
 @
 
+<<constants ed.c>>=
+MAXSUB  = 9,        /* max number of sub reg exp */
+@
+<<constants ed.c>>=
+ESCFLG  = Runemax,  /* escape Rune - user defined code */
+@
+
+<<globals ed.c>>=
+Rune    genbuf[LBSIZE];
+Rune    rhsbuf[LBSIZE/sizeof(Rune)];
+Resub   subexp[MAXSUB];
+@
 
 <<function [[dosub]](ed.c)>>=
 void
@@ -2086,6 +2140,9 @@ if(listf) {
 }
 @
 
+<<globals ed.c>>=
+char    hex[]   = "0123456789abcdef";
+@
 
 <<[[newline()]] if special chars [[pln]]>>=
 if(c == 'p' || c == 'l' || c == 'n') {
@@ -2182,6 +2239,12 @@ case 'b':
 @
 % ???
 
+% seems used only by browse, "browse pagesize", useful in global?
+% could be a static local
+<<globals ed.c>>=
+int bpagesize = 20;
+@
+
 <<function [[browse]](ed.c)>>=
 void
 browse(void)
@@ -2225,11 +2288,12 @@ browse(void)
 
 \subsection{[[e]]dit remembered file: [[e]]}
 
-% edit, reset savedfile or something
+% edit, reset savedfile and reset tmpfile and reread
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'E':
     fchange = false;
     c = 'e';
+    // Fallthrough
 case 'e':
     setnoaddr();
     if(vflag && fchange) {
@@ -2414,27 +2478,8 @@ onquit(int sig)
 @
 
 
-<<constants ed.c>>=
-BLKSIZE = 4096,     /* block size in temp file */
-NBLK    = 8191,     /* max size of temp file */
-MAXSUB  = 9,        /* max number of sub reg exp */
-ESCFLG  = Runemax,  /* escape Rune - user defined code */
-@
-
-
 <<globals ed.c>>=
-Rune    genbuf[LBSIZE];
-Rune*   linebp;
-Rune*   loc1;
-Rune*   loc2;
-int nleft;
-Rune    rhsbuf[LBSIZE/sizeof(Rune)];
-Resub   subexp[MAXSUB];
-
-
-char    WRERR[] = "WRITE ERROR";
-int bpagesize = 20;
-char    hex[]   = "0123456789abcdef";
+char    WRERR[] = "WRITE ERROR"; // dead?
 @
 
 
