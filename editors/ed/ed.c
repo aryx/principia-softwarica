@@ -14,13 +14,13 @@ enum
     /*s: constants ed.c */
     FNSIZE  = 128,      /* file name */
     /*x: constants ed.c */
-    EOF = -1,
-    /*x: constants ed.c */
     LBSIZE  = 4096,     /* max line size */
     /*x: constants ed.c */
     GBSIZE  = 256,      /* max size of global command */
     /*x: constants ed.c */
     ESIZE   = 256,      /* max size of reg exp */
+    /*x: constants ed.c */
+    EOF = -1,
     /*x: constants ed.c */
     BLKSIZE = 4096,     /* block size in temp file */
     NBLK    = 8191,     /* max size of temp file */
@@ -37,7 +37,6 @@ void    (*oldquit)(int);
 ulong   nlall = 128;
 // array<int>, size = (nlall+ 2+margin)*sizeof(int)
 int*    zero; 
-char*   tfname; // temporary filename (/tmp/eXXXX)
 /*x: globals ed.c */
 // ref<int> in zero array, current line pointer
 int*    dot;
@@ -50,14 +49,13 @@ char*   linp    = line;
 /*x: globals ed.c */
 int col;
 /*x: globals ed.c */
-// console buffered input
-Biobuf  bcons;
+char*   tfname; // temporary filename (/tmp/eXXXX)
 /*x: globals ed.c */
 // for w, r, f
 char    savedfile[FNSIZE];
 /*x: globals ed.c */
-// in Linux pid can be very long, so better to have at least 7 X (was 5 before)
-char template[] = "/tmp/eXXXXXXX";
+// console buffered input
+Biobuf  bcons;
 /*x: globals ed.c */
 // verbose (a.k.a. interactive) mode
 bool vflag   = true;
@@ -66,13 +64,16 @@ bool vflag   = true;
 // when ed is used as a filter
 bool oflag;
 /*x: globals ed.c */
+// in Linux pid can be very long, so better to have at least 7 X (was 5 before)
+// the mkstemp man page recommends 6 X
+char template[] = "/tmp/eXXXXXXX";
+/*x: globals ed.c */
 fdt tfile   = -1;
 /*x: globals ed.c */
 char    T[] = "TMP";
 /*x: globals ed.c */
 int tline;
 int names[26];
-int subnewa;
 int anymarks;
 int iblock;
 int oblock;
@@ -82,16 +83,10 @@ bool fchange;
 /*x: globals ed.c */
 char    Q[] = "";
 /*x: globals ed.c */
-jmp_buf savej;
-/*x: globals ed.c */
-bool pflag;
-/*x: globals ed.c */
-bool rescuing;
-bool waiting;
-/*x: globals ed.c */
 int lastc;
 int peekc;
-// ??
+/*x: globals ed.c */
+// optional programmed command (e.g., "r", "a")
 Rune*   globp;
 /*x: globals ed.c */
 Rune    linebuf[LBSIZE];
@@ -101,9 +96,10 @@ int*    addr1;
 // option<int>
 int*    addr2;
 /*x: globals ed.c */
-bool given;
+bool pflag;
 /*x: globals ed.c */
 char    file[FNSIZE];
+/*x: globals ed.c */
 fdt io;
 Biobuf  iobuf;
 /*x: globals ed.c */
@@ -112,12 +108,23 @@ bool wrapp;
 /*x: globals ed.c */
 long count;
 /*x: globals ed.c */
-// ??
-int listf;
-/*x: globals ed.c */
-int listn;
-/*x: globals ed.c */
 Reprog  *pattern;
+/*x: globals ed.c */
+int subnewa;
+int subolda;
+/*x: globals ed.c */
+bool given;
+/*x: globals ed.c */
+// for displaying special chars, 'l' list flag
+bool listf;
+/*x: globals ed.c */
+// 'n' flag
+bool listn;
+/*x: globals ed.c */
+jmp_buf savej;
+/*x: globals ed.c */
+bool rescuing;
+bool waiting;
 /*x: globals ed.c */
 Rune    genbuf[LBSIZE];
 Rune*   linebp;
@@ -125,7 +132,6 @@ Rune*   loc1;
 Rune*   loc2;
 int nleft;
 Rune    rhsbuf[LBSIZE/sizeof(Rune)];
-int subolda;
 Resub   subexp[MAXSUB];
 
 
@@ -240,12 +246,12 @@ commands(void)
 {
     int c;
     /*s: [[commands()]] other locals */
-    int *a1;
-    char lastsep;
-    /*x: [[commands()]] other locals */
     Dir *d;
     /*x: [[commands()]] other locals */
     int temp;
+    /*x: [[commands()]] other locals */
+    int *a1;
+    char lastsep;
     /*e: [[commands()]] other locals */
 
     for(;;) {
@@ -292,6 +298,67 @@ commands(void)
         case EOF:
             return;
         /*x: [[commands()]] switch [[c]] cases (ed.c) */
+        case 'r':
+            filename(c);
+        caseread:
+            if((io=open(file, OREAD)) < 0) {
+                lastc = '\n';
+                error(file);
+            }
+            /*s: [[commands()]] in [[r]] case if append only file */
+            if((d = dirfstat(io)) != nil){
+                if(d->mode & DMAPPEND)
+                    print("warning: %s is append only\n", file);
+                free(d);
+            }
+            /*e: [[commands()]] in [[r]] case if append only file */
+            Binit(&iobuf, io, OREAD);
+            setwide();
+            squeeze(0);
+            c = zero != dol;
+            append(getfile, addr2);
+            exfile(OREAD);
+
+            fchange = c;
+            continue;
+        /*x: [[commands()]] switch [[c]] cases (ed.c) */
+        /*s: [[commands]] before [['p']] case */
+        case 'l':
+            listf = true;
+            // fallthrough:
+        /*e: [[commands]] before [['p']] case */
+        case 'p':
+        case 'P':
+            newline();
+            printcom();
+            continue;
+        /*x: [[commands()]] switch [[c]] cases (ed.c) */
+        case '\n':
+            if(a1==0) {
+                a1 = dot+1;
+                addr2 = a1;
+                addr1 = a1;
+            }
+            if(lastsep==';')
+                addr1 = a1;
+            printcom();
+            continue;
+        /*x: [[commands()]] switch [[c]] cases (ed.c) */
+        case 'f':
+            setnoaddr();
+            filename(c);
+            putst(savedfile);
+            continue;
+        /*x: [[commands()]] switch [[c]] cases (ed.c) */
+        case '=':
+            setwide();
+            squeeze(0);
+            newline();
+            count = addr2 - zero;
+            putd();
+            putchr(L'\n');
+            continue;
+        /*x: [[commands()]] switch [[c]] cases (ed.c) */
         case 'a':
             add(0);
             continue;
@@ -336,6 +403,7 @@ commands(void)
         /*x: [[commands()]] switch [[c]] cases (ed.c) */
         case 'Q':
             fchange = false;
+            // fallthrough:
         case 'q':
             setnoaddr();
             newline();
@@ -343,34 +411,6 @@ commands(void)
         /*x: [[commands()]] switch [[c]] cases (ed.c) */
         case '!':
             callunix();
-            continue;
-        /*x: [[commands()]] switch [[c]] cases (ed.c) */
-        case 'l':
-            listf++;
-        case 'p':
-        case 'P':
-            newline();
-            printcom();
-            continue;
-        /*x: [[commands()]] switch [[c]] cases (ed.c) */
-        case '\n':
-            if(a1==0) {
-                a1 = dot+1;
-                addr2 = a1;
-                addr1 = a1;
-            }
-            if(lastsep==';')
-                addr1 = a1;
-            printcom();
-            continue;
-        /*x: [[commands()]] switch [[c]] cases (ed.c) */
-        case '=':
-            setwide();
-            squeeze(0);
-            newline();
-            count = addr2 - zero;
-            putd();
-            putchr(L'\n');
             continue;
         /*x: [[commands()]] switch [[c]] cases (ed.c) */
         case 'd':
@@ -416,39 +456,17 @@ commands(void)
             dot = addr2;
             continue;
         /*x: [[commands()]] switch [[c]] cases (ed.c) */
+        case 'n':
+            listn = true;
+            newline();
+            printcom();
+            continue;
+        /*x: [[commands()]] switch [[c]] cases (ed.c) */
         case 'j':
             if(!given)
                 addr2++;
             newline();
             join();
-            continue;
-        /*x: [[commands()]] switch [[c]] cases (ed.c) */
-        case 'r':
-            filename(c);
-        caseread:
-            if((io=open(file, OREAD)) < 0) {
-                lastc = '\n';
-                error(file);
-            }
-            if((d = dirfstat(io)) != nil){
-                if(d->mode & DMAPPEND)
-                    print("warning: %s is append only\n", file);
-                free(d);
-            }
-            Binit(&iobuf, io, OREAD);
-            setwide();
-            squeeze(0);
-            c = zero != dol;
-            append(getfile, addr2);
-            exfile(OREAD);
-
-            fchange = c;
-            continue;
-        /*x: [[commands()]] switch [[c]] cases (ed.c) */
-        case 'f':
-            setnoaddr();
-            filename(c);
-            putst(savedfile);
             continue;
         /*x: [[commands()]] switch [[c]] cases (ed.c) */
         case 'b':
@@ -479,12 +497,6 @@ commands(void)
             names[c-'a'] = *addr2 & ~01;
             anymarks |= 01;
             continue;
-        /*x: [[commands()]] switch [[c]] cases (ed.c) */
-        case 'n':
-            listn++;
-            newline();
-            printcom();
-            continue;
         /*e: [[commands()]] switch [[c]] cases (ed.c) */
         }
         error(Q);
@@ -502,17 +514,21 @@ printcom(void)
     nonzero();
     a1 = addr1;
     do {
+        /*s: [[printcom()]] if [[listn]] */
         if(listn) {
             count = a1-zero;
             putd();
             putchr(L'\t');
         }
+        /*e: [[printcom()]] if [[listn]] */
         putshst(getline(*a1++));
     } while(a1 <= addr2);
     dot = addr2;
-    listf = 0;
-    listn = 0;
+    /*s: [[printcom()]] reset flags */
+    listf = false;
+    listn = false;
     pflag = false;
+    /*e: [[printcom()]] reset flags */
 }
 /*e: function [[printcom]](ed.c) */
 
@@ -657,12 +673,12 @@ newline(void)
         return;
     /*s: [[newline()]] if special chars [[pln]] */
     if(c == 'p' || c == 'l' || c == 'n') {
-        pflag++;
+        pflag = true;
         if(c == 'l')
-            listf++;
+            listf = true;
         else
         if(c == 'n')
-            listn++;
+            listn = true;
         c = getchr();
         if(c == '\n')
             return;
@@ -684,19 +700,21 @@ filename(int comm)
     c = getchr();
     if(c == '\n' || c == EOF) {
         p1 = savedfile;
-        if(*p1 == 0 && comm != 'f')
+        if(*p1 == '\0' && comm != 'f')
             error(Q);
         p2 = file;
         while(*p2++ = *p1++)
             ;
         return;
     }
+    // else
     if(c != ' ')
         error(Q);
     while((c=getchr()) == ' ')
         ;
     if(c == '\n')
         error(Q);
+    // else
     p1 = file;
     do {
         if(p1 >= &file[sizeof(file)-6] || c == ' ' || c == EOF)
@@ -704,8 +722,8 @@ filename(int comm)
         rune = c;
         p1 += runetochar(p1, &rune);
     } while((c=getchr()) != '\n');
-    *p1 = 0;
-    if(savedfile[0] == 0 || comm == 'e' || comm == 'f') {
+    *p1 = '\0';
+    if(savedfile[0] == '\0' || comm == 'e' || comm == 'f') {
         p1 = savedfile;
         p2 = file;
         while(*p1++ = *p2++)
@@ -741,8 +759,8 @@ error_1(char *s)
 
     /*s: [[error_1()]](ed.c)) reset globals */
     wrapp = false;
-    listf = 0;
-    listn = 0;
+    listf = false;
+    listn = false;
     count = 0;
 
     seek(STDIN, 0, SEEK__END);
@@ -888,6 +906,7 @@ gettty(void)
 
 // Reading and writing files
 /*s: function [[getfile]](ed.c) */
+/// commands(c = 'r') -> append(F) -> <>
 int
 getfile(void)
 {
@@ -1140,7 +1159,7 @@ gdelete(void)
 
 // Get/Put lines
 /*s: function [[getline]](ed.c) */
-/// putfile -> <>
+/// printcom | putfile -> <>
 Rune*
 getline(int tl)
 {
@@ -1247,8 +1266,8 @@ init(void)
 {
     int *markp;
 
-    /*s: [[init()]](ed.c) initializing globals */
     close(tfile);
+    /*s: [[init()]](ed.c) initializing globals */
     tline = 2;
     for(markp = names; markp < &names[26]; )
         *markp++ = 0;
