@@ -1,7 +1,7 @@
 \section{Introduction}
 
 % 'ed' for editor (they do like 2 letters acronyms).
-% originally written by Ken Thompson in the 1970's
+% originally written by Ken Thompson in the 1970's.
 
 % Line editor, as opposed to screen editor (or stream editor like sed).
 % Not emacs, not vi (not sam nor acme neither).
@@ -11,7 +11,7 @@
 % See also \book{Editor}
 
 % Can already create file content with echo and shell redirection
-% (>, >> for append); can do a lot, but still not as power as ed.
+% (>, >> for append); can do a lot, but still not as powerful as ed.
 
 % For tutorial and motivations for the study of ed!
 % see appendix 1 of "Unix programming environment" 
@@ -24,7 +24,7 @@
 % g/re/p comes from ed!
 %later: g global re regexp p print
 
-\l cite "Formalizing text editors in Coq" 2020 :) but meh actually
+\n could cite "Formalizing text editors in Coq" 2020 :) but meh actually
 
 \section{Motivations: [[mkenam]]}
 
@@ -48,10 +48,17 @@ Q
 \end{verbatim}
 
 % by end of chapter you will understand this script :)
+
 % show part of 5.out.h and part of enam.c so can understand goal
+
 % also how to do that with other tools? can do with sed? can do with vi/emacs?
 % via a script that can run each time you modify 5.out.h and can be called
 % from a mkfile (show mkfile part of 5c/)
+% try this in vim/emacs? no need to learn lisp
+% to program this "edit script", just need to know the
+% key command (actually with emacs you could program macro but
+% how to specify it in script with M-x and other special key combinations!)
+% power of text and of script!
 
 % '-' suppress the printing of character counts by e/r/w
 %  remove verbose/interactive mode (default)
@@ -61,11 +68,6 @@ Q
 
 % Note that unicode-ready editor!
 
-% try this in vim/emacs? no need to learn lisp
-% to program this "edit script", just need to know the
-% key command (actually with emacs you could program macro but
-% how to specify it in script with M-x and other special key combinations!)
-% power of text and of script!
 
 %\section{[[ed]] clones}
 
@@ -76,12 +78,38 @@ Q
 
 \section{Core data structures}
 
+% ed unlike other editors with Line, Text, Buffer, ...
+% instead the content of the file read is not in memory!
+% no list of lines! instead everything saved in temp file
+% and in memory just have line offsets in temp file.
+
+\subsection{[[tfname]] and [[savedfile]]}
+%alt: put tfile also here?
+
+<<globals ed.c>>=
+char*   tfname; // temporary filename (/tmp/eXXXX)
+@
+% fundamental! all operations will modify the content of this temporary
+% file (and adjust zero line indices)
+
+<<constants ed.c>>=
+FNSIZE  = 128,      /* file name */
+@
+<<globals ed.c>>=
+// for w, r, f
+char    savedfile[FNSIZE];
+@
+% at some point the temporary file will be copied in a specific file
+
+
 \subsection{[[zero]]}
+%$
 
 % main data structure, an array of file offset in temp file for lines
 <<globals ed.c>>=
 ulong   nlall = 128;
-// array<int>, size = (nlall+ 2+margin)*sizeof(int)
+// growing_array<int>, initial size = (nlall+ 2+margin)*sizeof(int)
+// where ints are line offsets in tfname
 int*    zero; 
 @
 
@@ -89,13 +117,26 @@ int*    zero;
 % zero is an array of line offsets.
 % The +5 is just for sentinel and safe margin; it should really be +2 at max.
 % The lines are not stored in memory; ed just stores lines offsets
-% in the temporary file corresponding to the file being edited.
+% in the temporary file corresponding to "the buffer" with possibly the
+% content of the file being edited.
+
+% so when you do 'ed foo.txt', it will actually read the content of foo.txt,
+% store its content in temporary file, and zero will have indices as
+% cursor in temporary file. if do 'r foo.txt' again to read again,
+% it will add another copy of foo.txt in this temporary file and further
+% modify zero.
 
 % note that line is 1-indexed, so zero[0] is unused
-% (maybe why it's called zero?)
+% (maybe why it's called zero?) and actually the code rely on zero
+% as special value.
+
+% lots of pointer idioms then
 
 % was '... * sizeof(int*)' ?? should be sizeof(int) no?
-% yes! BUG!
+% yes! BUG! even Ken Thompson wrote buggy C code :)
+
+% called zero because zero itself points to zero[0] which
+% is not line1, it's 0.
 
 \subsection{[[dot]] and [[dol]]}
 
@@ -108,10 +149,19 @@ int*    dol;
 % those are called dot and dol, which seems cryptic, but
 % they match the symbol used to describe those entities in the editor
 % itself with $ (dollar) marking end of file and dot the current line.
+% The user will enter '$' and '.' in commands.
+
+%Classic ed addresses include:
+%- 0 (before first line)
+%- 1
+%- .
+%- $
 
 \subsection{[[line]] and [[linp]]}
+% and linebuf too? which is with Rune ... confusing
 
 % line input from user? or line output buffer for user?
+% used in putchr() so definitely used for output
 <<globals ed.c>>=
 char    line[70];
 // ref<char> in line
@@ -126,22 +176,6 @@ char*   linp    = line;
 int col;
 @
 %??
-
-\subsection{[[tfname]] and [[savedfile]]}
-% and tfile?
-
-<<globals ed.c>>=
-char*   tfname; // temporary filename (/tmp/eXXXX)
-@
-
-<<constants ed.c>>=
-FNSIZE  = 128,      /* file name */
-@
-<<globals ed.c>>=
-// for w, r, f
-char    savedfile[FNSIZE];
-@
-
 
 \section{[[main()]]}
 % main, init, quit
@@ -177,7 +211,7 @@ main(int argc, char *argv[])
                 p2--;
         globp = L"r";
     }
-    zero = malloc((nlall+5)*sizeof(int*)); // BUG sizeof(int)
+    zero = malloc((nlall+5)*sizeof(int*)); // BUG should be sizeof(int)
     tfname = mktemp(template);
 
     init();
@@ -202,7 +236,7 @@ bool vflag   = true;
 @
 % vflag =~ verbose flag, to print char numbers in operations (e.g., in write)
 %  when passing '-' means disable verbose and be quiet, like I did above
-% in the intro
+% in the motivations section for mkenam
 
 <<[[main()]](ed.c) if [[-]] flag>>=
 if(*argv && (strcmp(*argv, "-") == ORD__EQ)) {
@@ -240,20 +274,22 @@ if(oflag) {
     globp = L"a";
 }
 @
-% globp = automatic command to do first. so here append mode by default.
+% globp = automatic command to do first. so here 'a'ppend mode by default.
+% because will append to stdout
 
 % saved file is fd/1 = stdout
 
 \subsection{[[mktemp()]]}
 
 <<globals ed.c>>=
-// in Linux pid can be very long, so better to have at least 7 X (was 5 before)
+// in Linux pid can be very long, so better to have at least 6 X (was 5 before)
 // the mkstemp man page recommends 6 X
-char template[] = "/tmp/eXXXXXXX";
+char template[] = "/tmp/eXXXXXX";
 @
 
-%ex: mktemp("/tmp/eXXXXX") -> "/tmp/e00343" pid number
+%ex: mktemp("/tmp/eXXXXXX") -> "/tmp/e000042" pid number
 <<function [[mktemp]](ed.c)>>=
+/// main -> <>
 char*
 mktemp(char *as)
 {
@@ -266,11 +302,13 @@ mktemp(char *as)
     while(*s++)
         ;
     s--;
+
     while(*--s == 'X') {
         *s = pid % 10 + '0';
         pid /= 10;
     }
     s++;
+
     i = 'a';
     while(access(as, 0) != -1) {
         if(i == 'z')
@@ -280,19 +318,27 @@ mktemp(char *as)
     return as;
 }
 @
+
+% so /tmp/e000042 then /tmp/ek0042
+% so can have max 26 tmp files per process?
+
 % note that we could delete as part of libc, and also
 % we should delete because unsafe because race condition
 % for code using it. See goken/include/libc.h note about mkstemp()
 % for more info.
 
-\subsection{[[init()]]}
+\subsection{[[init()]] and [[tfile]]}
+%alt: just [[init()]] ?
+
+% continue init work done in main around zero and tfname
 
 <<globals ed.c>>=
 fdt tfile   = -1;
 @
-% tfile for temporary file
+% tfile for temporary file, again fundamental!
 
 <<function [[init]](ed.c)>>=
+/// main -> <>
 void
 init(void)
 {
@@ -307,7 +353,8 @@ init(void)
     dot = dol = zero;
 }
 @
-
+% use tfname set just before in main()
+% dot = dol = zero! important too. zero malloced just before in main()
 
 <<globals ed.c>>=
 char    T[] = "TMP";
@@ -323,6 +370,7 @@ int oblock;
 int ichanged;
 @
 
+%XXX
 <<[[init()]](ed.c) initializing globals>>=
 tline = 2;
 for(markp = names; markp < &names[26]; )
@@ -345,6 +393,7 @@ char    Q[] = "";
 % I introduced this? because rodata pb?
 
 <<function [[quit]](ed.c)>>=
+/// main -> <>
 void
 quit(void)
 {
@@ -363,8 +412,9 @@ quit(void)
 
 \section{Displaying text}
 
+% sp =?
 <<function [[putstr]](ed.c)>>=
-/// error_1 | ... -> <> 
+/// commands | getfile | error_1 | ... -> <> 
 void
 putst(char *sp)
 {
@@ -381,9 +431,11 @@ putst(char *sp)
 }
 @
 
-% col?
+% col? could reset it at the end instead? more logical
+% after putchr the \n
 
 
+% grrr int vs Rune. ac means?
 <<function [[putchr]](ed.c)>>=
 /// error | putst | ... -> <>
 void
@@ -405,9 +457,13 @@ putchr(int ac)
         write(oflag? STDERR: STDOUT, line, lp-line);
         return;
     }
+    // else
     linp = lp;
 }
 @
+% why int ac -> int c -> Rune r ... grrrr
+
+% buffered output, display only when newline
 
 % oflag here because if -o then save on STDOUT edited data, but
 % putchr is really used for display, not for editing
@@ -415,15 +471,19 @@ putchr(int ac)
 \section{Reading characters}
 
 <<globals ed.c>>=
+//option<char> (0 = None)
 int lastc;
+//option<char> (0 = None)
 int peekc;
 @
 
 <<globals ed.c>>=
 // optional programmed command (e.g., "r", "a")
+//option<Rune>
 Rune*   globp;
 @
 
+% int vs char vs rune, grrr
 <<function [[getchr]](ed.c)>>=
 int
 getchr(void)
@@ -454,8 +514,10 @@ LBSIZE  = 4096,     /* max line size */
 Rune    linebuf[LBSIZE];
 @
 
+% called when can enter text until '.\n'
+
 <<function [[gettty]](ed.c)>>=
-/// add | ... -> <>
+/// main -> commands('a') -> add -> <>
 int
 gettty(void)
 {
@@ -475,6 +537,7 @@ gettty(void)
 
 % gety and gettty
 <<function [[gety]](ed.c)>>=
+/// gettty -> <>
 int
 gety(void)
 {
@@ -517,6 +580,8 @@ int*    addr2;
 @
 % optional line numbers for start/end of command 1,3p
 % but let's ignore for now and see basis commands like p, a, etc.
+% note that some commands like 'r' (and setwide) will set those too,
+% not just interactive.
 
 <<function [[commands]](ed.c)>>=
 void
@@ -535,8 +600,12 @@ commands(void)
     }
 }
 @
-% error(Q) ? so just jump to before commands() ?
+% error(Q) show later, but essentially just jump to before commands() ?
 
+% int c, but char really.
+
+% will see read [[addr1]] and more important [[c]] later, but
+% essentially getchr() call
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case EOF:
@@ -560,10 +629,7 @@ if(pflag) {
 \section{Reading files}
 %alt:\section{[[r]]ead files: [[r]]}
 
-% globp = "r" = automatic command to do first = read file! important command
-%  rarely called explicitely, but important nonetheless
-
-% can also call 'ed', then 'r env.sh'
+% quite tricky, quite long, lots of sections here.
 
 <<globals ed.c>>=
 char    file[FNSIZE];
@@ -575,9 +641,15 @@ fdt io;
 Biobuf  iobuf;
 @
 
+% globp = "r" = automatic command to do first = read file! important command
+%  rarely called explicitely, but important nonetheless
+
+% can also call 'ed', then 'r env.sh'
+% in which case add (append) content of env.sh to current "buffer"
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'r':
+    // will set file[]
     filename(c);
 caseread:
     if((io=open(file, OREAD)) < 0) {
@@ -588,13 +660,17 @@ caseread:
     Binit(&iobuf, io, OREAD);
     setwide();
     squeeze(0);
-    c = zero != dol;
+    c = (zero != dol);
     append(getfile, addr2);
-    exfile(OREAD);
+    exfile(OREAD); // will close io
 
     fchange = c;
     continue;
 @
+% setwide() set addr1/addr2 to full start/end so operation on whole file
+% squeeze(0) ??
+% append(getfile, addr2) ??
+% exfile() finalize access to the file, will close io, "exit file"
 
 % fchange = c ?
 % ugly: abuse c, instead of using bool. and why not set fchange
@@ -615,11 +691,19 @@ if((d = dirfstat(io)) != nil){
     free(d);
 }
 @
+% what are append-only files? a plan9 thing?
+
 % bug? not guarded by vflag?
 
 \subsection{Reading a [[filename()]]}
 
+% 'int comm' but really char actually, grrrr
+
+% will modify file[FNSIZE], that can then be further used
+% in commands('r')
+
 <<function [[filename]](ed.c)>>=
+/// main -> commands('r') -> <>
 void
 filename(int comm)
 {
@@ -629,22 +713,9 @@ filename(int comm)
 
     count = 0;
     c = getchr();
-    if(c == '\n' || c == EOF) {
-        p1 = savedfile;
-        if(*p1 == '\0' && comm != 'f')
-            error(Q);
-        p2 = file;
-        while(*p2++ = *p1++)
-            ;
-        return;
-    }
+    <<[[filename()]] if [[c]] is newline or EOF>>
     // else
-    if(c != ' ')
-        error(Q);
-    while((c=getchr()) == ' ')
-        ;
-    if(c == '\n')
-        error(Q);
+    <<[[filename()]] read a space and skip extra spaces>>
     // else
     p1 = file;
     do {
@@ -654,18 +725,47 @@ filename(int comm)
         p1 += runetochar(p1, &rune);
     } while((c=getchr()) != '\n');
     *p1 = '\0';
-    if(savedfile[0] == '\0' || comm == 'e' || comm == 'f') {
-        p1 = savedfile;
-        p2 = file;
-        while(*p1++ = *p2++)
-            ;
-    }
+    
+    <<[[filename()]] set [[savedfile]] depending on commands>>
+}
+@
+
+<<[[filename()]] read a space and skip extra spaces>>=
+if(c != ' ')
+    error(Q);
+while((c=getchr()) == ' ')
+    ;
+if(c == '\n')
+    error(Q);
+@
+
+% this happens when do 'ed foo.c' with globl="r"
+% then the file to read is actually in savedfile set in main() from argv
+<<[[filename()]] if [[c]] is newline or EOF>>=
+if(c == '\n' || c == EOF) {
+    p1 = savedfile;
+    if(*p1 == '\0' && comm != 'f')
+        error(Q);
+    p2 = file;
+    while(*p2++ = *p1++)
+        ;
+    return;
+}
+@
+
+<<[[filename()]] set [[savedfile]] depending on commands>>=
+if(savedfile[0] == '\0' || comm == 'e' || comm == 'f') {
+    p1 = savedfile;
+    p2 = file;
+    while(*p1++ = *p2++)
+        ;
 }
 @
 
 \subsection{[[setwide()]] and [[squeeze()]]}
 
 <<function [[setwide]](ed.c)>>=
+/// main -> commands('r') -> <>
 void
 setwide(void)
 {
@@ -675,9 +775,15 @@ setwide(void)
     }
 }
 @
+% given?
 
+% setwide mean set addr1/addr2 to start/end of the fil
+% so that commands operate on the whole file (wide)
+
+% + (dol>zero) means zero + 1  when non empty file, so line 1.
 
 <<function [[squeeze]](ed.c)>>=
+/// main -> commands('r') -> <>
 void
 squeeze(int i)
 {
@@ -692,18 +798,29 @@ squeeze(int i)
 
 \subsection{[[append()]] and [[getfile()]]}
 
+% append(getfile, addr2)
+% and addr2 set to dol
+
 <<function [[append]](ed.c)>>=
+/// main -> commands('r') -> <>
 int
 append(int (*f)(void), int *a)
 {
-    int *a1, *a2, *rdot, nline, tl;
+    //ref<int> in zero[]
+    int *a1, *a2, *rdot;
+    int nline = 0;
+    // tail?
+    int tl;
 
-    nline = 0;
     dot = a;
+    // f() (e.g., getfile()) will modify linebuf
     while((*f)() == 0) {
-        <<[[append()]] if zero too small>>
+        <<[[append()]] grow [[zero]] if [[zero]] too small>>
+        // putline() will use linebuf
         tl = putline();
         nline++;
+
+        // set zero[] indices
         a1 = ++dol;
         a2 = a1+1;
         rdot = ++dot;
@@ -715,7 +832,7 @@ append(int (*f)(void), int *a)
 }
 @
 
-<<[[append()]] if zero too small>>=
+<<[[append()]] grow [[zero]] if [[zero]] too small>>=
 if((dol-zero) >= nlall) {
 
     nlall += 512;
@@ -725,6 +842,7 @@ if((dol-zero) >= nlall) {
         rescue();
     }
     tl = a1 - zero; /* relocate pointers */
+
     zero += tl;
     addr1 += tl;
     addr2 += tl;
@@ -738,7 +856,7 @@ if((dol-zero) >= nlall) {
 %    append(getfile, addr2);
 
 <<function [[getfile]](ed.c)>>=
-/// commands(c = 'r') -> append(F) -> <>
+/// main -> commands(c = 'r') -> append(<>, ...) -> <>
 int
 getfile(void)
 {
@@ -748,22 +866,32 @@ getfile(void)
     lp = linebuf;
     do {
         c = Bgetrune(&iobuf);
-        if(c < 0) {
-            if(lp > linebuf) {
-                putst("'\\n' appended");
-                c = '\n';
-            } else
-                return EOF;
-        }
-        if(lp >= &linebuf[LBSIZE]) {
-            lastc = '\n';
-            error(Q);
-        }
+        <<[[getfile()]] if [[c]] negative, possibly return [[EOF]]>>
+        // else
+        <<[[getfile()]] if overflow [[linebuf]]>>
+        // else
         *lp++ = c;
         count++;
     } while(c != '\n');
     lp[-1] = 0;
-    return 0;
+    return 0; // OK_0
+}
+@
+
+<<[[getfile()]] if [[c]] negative, possibly return [[EOF]]>>=
+if(c < 0) {
+    if(lp > linebuf) {
+        putst("'\\n' appended");
+        c = '\n';
+    } else
+        return EOF;
+}
+@
+
+<<[[getfile()]] if overflow [[linebuf]]>>=
+if(lp >= &linebuf[LBSIZE]) {
+    lastc = '\n';
+    error(Q);
 }
 @
 
@@ -771,6 +899,7 @@ getfile(void)
 \subsection{[[putline()]]}
 
 <<function [[putline]](ed.c)>>=
+/// main -> commands('r') -> append -> <>
 int
 putline(void)
 {
@@ -780,6 +909,7 @@ putline(void)
     fchange = true;
     lp = linebuf;
     tl = tline;
+
     bp = getblock(tl, OWRITE);
     nl = nleft;
     tl &= ~((BLKSIZE/sizeof(Rune))-1);
@@ -801,6 +931,8 @@ putline(void)
     return nl;
 }
 @
+
+
 
 \subsection{[[getblock()]]}
 
@@ -842,6 +974,7 @@ getblock(int atl, int iof)
 }
 @
 
+% finally tfile!
 <<function [[blkio]](ed.c)>>=
 void
 blkio(int b, uchar *buf, long (*iofcn)(int, void *, long))
@@ -855,7 +988,11 @@ blkio(int b, uchar *buf, long (*iofcn)(int, void *, long))
 
 \subsection{[[exfile()]]}
 
+% "exit" file
+% om = open mode
+
 <<function [[exfile]](ed.c)>>=
+/// main -> commands('r') -> <>
 void
 exfile(int om)
 {
@@ -872,6 +1009,8 @@ exfile(int om)
 }
 @
 
+%putd = put dots = print info derived from dot
+% = current line number
 
 \section{Main commands}
 
