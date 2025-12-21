@@ -2,9 +2,10 @@
 
 % 'ed' for editor (they do like 2 letters acronyms).
 % originally written by Ken Thompson in the 1970's.
+%% (part of the 3 weeks where editor, assembler, kernel?)
 
 % Line editor, as opposed to screen editor (or stream editor like sed).
-% Not emacs, not vi (not sam nor acme neither).
+% Very different from emacs, or vi (or sam or acme).
 % screen editors nowaday, but still useful to know ed! especially good
 % for scripting (in fact see mkenam in plan9 code)
 % also if need quick and dirty write a file with a few lines => ed!
@@ -50,6 +51,7 @@ Q
 % by end of chapter you will understand this script :)
 
 % show part of 5.out.h and part of enam.c so can understand goal
+% FIGURE
 
 % also how to do that with other tools? can do with sed? can do with vi/emacs?
 % via a script that can run each time you modify 5.out.h and can be called
@@ -67,6 +69,7 @@ Q
 % but could store ed script in separate file
 
 % Note that unicode-ready editor!
+% (but complexify quite a lot the code unfortunately).
 
 
 %\section{[[ed]] clones}
@@ -74,27 +77,53 @@ Q
 %clones:
 % - go: https://github.com/thimc/ed and https://git.mills.io/prologic/ed
 % - rust: https://github.com/sidju/add-ed
-% in OCaml? yes mine! see next appendix :)
+% - in OCaml? yes mine! see next appendix :)
 
 \section{Core data structures}
 
-% ed unlike other editors with Line, Text, Buffer, ...
-% instead the content of the file read is not in memory!
-% no list of lines! instead everything saved in temp file
-% and in memory just have line offsets in temp file. So when
-% do operating like deleting lines, actually you adjust 
-% line offsets but not actually deleting lines?
+% ed core DS is very different from other editors: no Line, Text, Buffer, ...
+% instead the content of the file edited is not in memory!
+% no list of lines! instead everything stored in temp file
+% and in memory just have line offsets in temp file. 
+% so 2 main DS are temp file and array of file offsets.
+% Temp file and array of line file offset representing current state of buffer
+% (called zero as said later).
+% FIGURE.
 
-\subsection{[[tfname]] and [[savedfile]]}
-%alt: put [[tfile]] also here? but less symetric with savedfile?
+\subsection{[[tfname]], [[tfile]], and [[tline]]}
+
+% So when
+% do operating like deleting or moving lines, actually you modify
+% line offsets entries but not actually deleting lines.
+% The temp file only grows. it contains lines, but when you
+% use 'd' to delete line in the editor, it does not delete it
+% in the temp file, only in zero. 
+% temp file just grows during an ed session.
+
+% It is a line editor! actually more line file offset editor :)
+% line is string with ending \n! that's what ed manipulates, set of lines.
 
 <<globals ed.c>>=
 char*   tfname; // temporary filename (/tmp/eXXXX)
 @
-% fundamental! most operations will modify the content of this temporary
-% file (and adjust zero line indices)
+% fundamental! many operations will append to this temporary
+% file (and adjust zero line indices).
+% tfile is kinda of ed's backing store.
 
-%trans: at some point the temporary file will be copied in a specific file
+<<globals ed.c>>=
+fdt tfile   = -1;
+@
+% tfile for temporary file, again fundamental!
+
+<<globals ed.c>>=
+// current write file offset in tfile; 
+int tline;
+@
+
+\subsection{[[savedfile]]}
+
+%trans: at some point some lines from the temporary file will be copied
+% in a specific file.
 <<constants ed.c>>=
 FNSIZE  = 128,      /* file name */
 @
@@ -103,7 +132,7 @@ FNSIZE  = 128,      /* file name */
 char    savedfile[FNSIZE];
 @
 
-% will see also file[FNSIZE] later
+%said-later: will see also file[FNSIZE] later
 
 \subsection{[[zero]]}
 %$
@@ -112,7 +141,7 @@ char    savedfile[FNSIZE];
 <<globals ed.c>>=
 ulong   nlall = 128;
 // growing_array<int>, initial size = (nlall+ 2+margin)*sizeof(int)
-// where the ints are line offsets in tfname
+// where the ints are file offsets in tfname corresponding to different lines
 int*    zero; 
 @
 
@@ -124,9 +153,9 @@ int*    zero;
 % content of the file being edited.
 
 % so when you do 'ed foo.txt', it will actually read the content of foo.txt,
-% store its content in temporary file, and zero will have indices as
+% append its content in temporary file, and zero will have indices as
 % cursor in temporary file. if do 'r foo.txt' again to read again,
-% it will add another copy of foo.txt in this temporary file and further
+% it will append another copy of foo.txt in this temporary file and further
 % modify zero.
 
 % note that line is 1-indexed, so zero[0] is unused
@@ -160,6 +189,8 @@ int*    dol;
 %- .
 %- $
 
+%TODO: Figure with all those data structures?
+
 \subsection{[[line]], [[linp]], and [[linebuf]]}
 %alt: move linebuf later? which is with Rune ... confusing
 
@@ -167,10 +198,9 @@ int*    dol;
 % used in putchr() so definitely used for output
 <<globals ed.c>>=
 char    line[70];
-// ref<char> in line
+// ref<char> in line (mark end of line usually)
 char*   linp    = line;
 @
-
 % why 70? 80 seems better to match number of columns in classic editors/terminals.
 
 <<constants ed.c>>=
@@ -188,6 +218,8 @@ Rune    linebuf[LBSIZE];
 int col;
 @
 %??
+
+
 
 \section{[[main()]]}
 % main, init, quit
@@ -347,11 +379,6 @@ mktemp(char *as)
 
 % continue init work done in main around zero and tfname
 
-<<globals ed.c>>=
-fdt tfile   = -1;
-@
-% tfile for temporary file, again fundamental!
-
 <<function [[init]](ed.c)>>=
 /// main | commands('e') -> <>
 void
@@ -377,6 +404,13 @@ init(void)
 <<globals ed.c>>=
 char    T[] = "TMP";
 @
+
+
+<<[[init()]](ed.c) initializing globals>>=
+tline = 2;
+@
+% sentinel ... so never line offset in zero have the 0 or 1 value, hmmm
+
 
 %XXX
 <<globals ed.c>>=
@@ -500,6 +534,7 @@ int lastc;
 //option<char> (0 = None)
 int peekc;
 @
+% classic lexer vars you need when not using lex
 
 <<globals ed.c>>=
 // optional programmed command (e.g., "r", "a")
@@ -535,6 +570,7 @@ getchr(void)
 
 % called when can enter text until '.\n'
 
+% get line from tty (terminal). small wrapper over the raw gety
 <<function [[gettty]](ed.c)>>=
 /// main -> commands('a') -> add -> <>
 int
@@ -548,11 +584,13 @@ gettty(void)
     // else
     if(linebuf[0] == '.' && linebuf[1] == '\0')
         return EOF;
-    return 0;
+    return 0; // OK_0 ?
 }
 @
 
-% special ".\n" here to finish the text entry
+% special ".\n" here to finish the text entry.
+% OK_0 means you can read more lines
+% positive means error
 
 % gety and gettty, will modify linebuf for the caller
 <<function [[gety]](ed.c)>>=
@@ -586,6 +624,9 @@ gety(void)
 @
 % sometimes need to under a line, or multiple for certain commands,
 % like 'a' or 'i'
+
+% How return line read to caller? Via global linebuf? but how end of line?
+% via 0 marker rune in it?
 
 % globp?? aspectize and move later?
 <<[[gety()]] other locals>>=
@@ -643,6 +684,8 @@ commands(void)
 case EOF:
     return;
 @
+% return so will leave commands() leading to the execution of quit()
+% in main()
 
 
 <<globals ed.c>>=
@@ -836,6 +879,9 @@ squeeze(int i)
 % append(getfile, addr2)
 % and addr2 set to dol
 
+% f can be getfile but also gettty as we will see later.
+% this will add the content of the file after address a
+
 <<function [[append]](ed.c)>>=
 /// main -> commands('r') -> <>
 int
@@ -844,7 +890,7 @@ append(int (*f)(void), int *a)
     //ref<int> in zero[]
     int *a1, *a2, *rdot;
     int nline = 0;
-    // tail? temporary line?
+    // file offset in tfile for temporary line just added by putline()
     int tl;
 
     dot = a;
@@ -859,8 +905,10 @@ append(int (*f)(void), int *a)
         a1 = ++dol;
         a2 = a1+1;
         rdot = ++dot;
+        // shift existing line references down by one
         while(a1 > rdot)
             *--a2 = *--a1;
+        // insert the new line reference in zero
         *rdot = tl;
     }
     return nline;
@@ -936,13 +984,28 @@ if(lp >= &linebuf[LBSIZE]) {
 
 \subsection{[[putline()]]}
 
-<<globals ed.c>>=
-// ??
-int tline;
-@
-<<[[init()]](ed.c) initializing globals>>=
-tline = 2;
-@
+
+% put first simpler version without blocks? the one from chatGPT?
+%   int
+%   putline(void)
+%   {
+%       int n;
+%       long tl;
+%   
+%       tl = tline;                 // current temp-file write offset
+%       n = strlen(linebuf) + 1;    // include terminating '\0'
+%   
+%       if(tline + n >= ENDCORE)
+%           error("temp file overflow");
+%   
+%       seek(tfile, tline, 0);
+%       write(tfile, linebuf, n);
+%   
+%       tline += n;
+%       return tl;
+%   }
+
+
 
 <<globals ed.c>>=
 int nleft;
@@ -957,6 +1020,7 @@ BLKSIZE = 4096,     /* block size in temp file */
 
 % put a line in tfile using linebuf (set by getfile above)
 % quite complicated because do block IO instead of simply seek and write
+% returns ?? tline ??
 <<function [[putline]](ed.c)>>=
 /// main -> commands('r') -> append -> <>
 int
@@ -991,7 +1055,6 @@ putline(void)
     return nl;
 }
 @
-% wtf is this func?
 
 
 \subsection{[[getblock()]]}
@@ -1080,11 +1143,29 @@ exfile(int om)
 }
 @
 
+<<function [[putd]](ex.c)>>=
+void
+putd(void)
+{
+    int r;
+
+    r = count%10;
+    count /= 10;
+    if(count)
+        putd();
+    putchr(r + L'0');
+}
+@
+
 %putd = put dots = print info derived from dot
 % = current line number
 
 % but actually putd() really just print the count global, which
 % can be different things.
+
+
+
+
 
 \section{Main commands}
 
@@ -1243,19 +1324,6 @@ case '=':
 @
 
 % 
-<<function [[putd]](ex.c)>>=
-void
-putd(void)
-{
-    int r;
-
-    r = count%10;
-    count /= 10;
-    if(count)
-        putd();
-    putchr(r + L'0');
-}
-@
 
 
 \subsection{[[a]]ppend and [[i]]nsert: [[a]], [[i]]}
