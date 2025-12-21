@@ -2,14 +2,14 @@
 
 % 'ed' for editor (they do like 2 letters acronyms).
 % originally written by Ken Thompson in the 1970's.
-%% (part of the 3 weeks where editor, assembler, kernel?)
+%% (part of the special "3 weeks" where he wrote editor, assembler, kernel?)
 
 % Line editor, as opposed to screen editor (or stream editor like sed).
 % Very different from emacs, or vi (or sam or acme).
 % screen editors nowaday, but still useful to know ed! especially good
-% for scripting (in fact see mkenam in plan9 code)
-% also if need quick and dirty write a file with a few lines => ed!
-% See also \book{Editor}
+% for scripting (in fact see mkenam in plan9 code).
+% Also if need quick and dirty write a file with a few lines => ed!
+% See also \book{Editor} for screen editor.
 
 % Can already create file content with echo and shell redirection
 % (>, >> for append); can do a lot, but still not as powerful as ed.
@@ -82,26 +82,14 @@ Q
 \section{Core data structures}
 
 % ed core DS is very different from other editors: no Line, Text, Buffer, ...
-% instead the content of the file edited is not in memory!
+% The content of the file edited is not even in memory!
 % no list of lines! instead everything stored in temp file
 % and in memory just have line offsets in temp file. 
-% so 2 main DS are temp file and array of file offsets.
-% Temp file and array of line file offset representing current state of buffer
-% (called zero as said later).
+% So 2 main DS are temp file and array of file offsets
+% representing current state of buffer.
 % FIGURE.
 
-\subsection{[[tfname]], [[tfile]], and [[tline]]}
-
-% So when
-% do operating like deleting or moving lines, actually you modify
-% line offsets entries but not actually deleting lines.
-% The temp file only grows. it contains lines, but when you
-% use 'd' to delete line in the editor, it does not delete it
-% in the temp file, only in zero. 
-% temp file just grows during an ed session.
-
-% It is a line editor! actually more line file offset editor :)
-% line is string with ending \n! that's what ed manipulates, set of lines.
+\subsection{The backing store: [[tfname]], [[tfile]], and [[tline]]}
 
 <<globals ed.c>>=
 char*   tfname; // temporary filename (/tmp/eXXXX)
@@ -120,7 +108,7 @@ fdt tfile   = -1;
 int tline;
 @
 
-\subsection{[[savedfile]]}
+\subsection{The target file: [[savedfile]]}
 
 %trans: at some point some lines from the temporary file will be copied
 % in a specific file.
@@ -134,7 +122,7 @@ char    savedfile[FNSIZE];
 
 %said-later: will see also file[FNSIZE] later
 
-\subsection{[[zero]]}
+\subsection{The lines as file offsets: [[zero]]}
 %$
 
 % main data structure, an array of file offset in temp file for lines
@@ -158,6 +146,19 @@ int*    zero;
 % it will append another copy of foo.txt in this temporary file and further
 % modify zero.
 
+% So when
+% do operating like deleting or moving lines, actually you modify
+% line offsets entries but not actually deleting lines.
+% The temp file only grows. it contains lines, but when you
+% use 'd' to delete line in the editor, it does not delete it
+% in the temp file, only in zero. 
+% temp file just grows during an ed session.
+
+% It is a line editor! actually more line file offset editor :)
+% line is string with ending \n! that's what ed manipulates, set of lines.
+
+
+
 % note that line is 1-indexed, so zero[0] is unused
 % (maybe why it's called zero?) and actually the code rely on zero
 % as special value.
@@ -170,7 +171,7 @@ int*    zero;
 % called zero because zero itself points to zero[0] which
 % is not line1, it's 0.
 
-\subsection{[[dot]] and [[dol]]}
+\subsection{Cursors: [[dot]] and [[dol]]}
 
 <<globals ed.c>>=
 // ref<int> in zero array, current line pointer
@@ -191,7 +192,7 @@ int*    dol;
 
 %TODO: Figure with all those data structures?
 
-\subsection{[[line]], [[linp]], and [[linebuf]]}
+\subsection{Line input and output buffers: [[line]], [[linp]], and [[linebuf]]}
 %alt: move linebuf later? which is with Rune ... confusing
 
 % line input from user? or line output buffer for user?
@@ -374,8 +375,8 @@ mktemp(char *as)
 % for code using it. See goken/include/libc.h note about mkstemp()
 % for more info.
 
-\subsection{[[init()]] and [[tfile]]}
-%alt: just [[init()]] ?
+\subsection{[[init()]]}
+%alt: and [[tfile]] ? or just [[init()]] ?
 
 % continue init work done in main around zero and tfname
 
@@ -401,15 +402,15 @@ init(void)
 % close tfile because init can be called not only from main in which
 % case it must closed the previous tmp file and create new one
 
-<<globals ed.c>>=
-char    T[] = "TMP";
-@
-
-
 <<[[init()]](ed.c) initializing globals>>=
 tline = 2;
 @
 % sentinel ... so never line offset in zero have the 0 or 1 value, hmmm
+
+
+<<globals ed.c>>=
+char    T[] = "TMP";
+@
 
 
 %XXX
@@ -420,7 +421,6 @@ int iblock;
 int oblock;
 int ichanged;
 @
-
 
 %XXX
 <<[[init()]](ed.c) locals>>=
@@ -444,7 +444,8 @@ bool fchange;
 <<globals ed.c>>=
 char    Q[] = "";
 @
-% I introduced this? because rodata pb?
+% I introduced this []? because rodata pb otherwise?
+% but why need to modify the string?
 
 <<function [[quit]](ed.c)>>=
 /// main | commands('q') | ... -> <>
@@ -467,6 +468,7 @@ quit(void)
 \section{Displaying text}
 % buffered output
 
+% put string
 % sp =? string pointer?
 <<function [[putstr]](ed.c)>>=
 /// commands | getfile | error_1 | ... -> <> 
@@ -1225,6 +1227,9 @@ printcom(void)
     <<[[printcom()]] reset flags>>
 }
 @
+% but until now nothing really set addr1 and addr2, so it will be 0 0 ?
+% I think no because commands() parsing will set addr1/addr2 to better
+% defaults
 
 <<function [[nonzero]](ed.c)>>=
 void
@@ -1234,7 +1239,7 @@ nonzero(void)
 }
 @
 
-% put sh st ??
+% put sh st ?? similar to putst, but not char, Rune this time
 <<function [[putshst]](ed.c)>>=
 void
 putshst(Rune *sp)
@@ -1246,7 +1251,26 @@ putshst(Rune *sp)
 }
 @
 
+% again, simpler version (thx chatGPT again):
+%
+%  char *
+%  getline(int tl)
+%  {
+%      int n;
+%  
+%      // seek to the line's offset in the temp file
+%      seek(tfile, tl, 0);
+%  
+%      // read bytes up to the next NUL
+%      n = 0;
+%      while (read(tfile, &linebuf[n], 1) == 1 && linebuf[n] != '\0')
+%          n++;
+%  
+%      linebuf[n] = '\0';
+%      return linebuf;
+%  }
 
+% tl for temporary line (file offset in tfile)
 <<function [[getline]](ed.c)>>=
 /// printcom | putfile -> <>
 Rune*
@@ -1283,17 +1307,19 @@ getline(int tl)
 % print also when no command specified? like 1\n ? default to print?
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case '\n':
-    if(a1==0) {
+    if(a1==nil) {
         a1 = dot+1;
         addr2 = a1;
         addr1 = a1;
     }
     if(lastsep==';')
         addr1 = a1;
+
     printcom();
     continue;
 @
-
+% where this a1 comes from? set in commands() for advanced
+% commands
 
 
 \subsection{printing remembered [[f]]ile: [[f]]}
