@@ -81,7 +81,9 @@ Q
 % ed unlike other editors with Line, Text, Buffer, ...
 % instead the content of the file read is not in memory!
 % no list of lines! instead everything saved in temp file
-% and in memory just have line offsets in temp file.
+% and in memory just have line offsets in temp file. So when
+% do operating like deleting lines, actually you adjust 
+% line offsets but not actually deleting lines?
 
 \subsection{[[tfname]] and [[savedfile]]}
 %alt: put [[tfile]] also here? but less symetric with savedfile?
@@ -89,9 +91,10 @@ Q
 <<globals ed.c>>=
 char*   tfname; // temporary filename (/tmp/eXXXX)
 @
-% fundamental! all operations will modify the content of this temporary
+% fundamental! most operations will modify the content of this temporary
 % file (and adjust zero line indices)
 
+%trans: at some point the temporary file will be copied in a specific file
 <<constants ed.c>>=
 FNSIZE  = 128,      /* file name */
 @
@@ -99,8 +102,8 @@ FNSIZE  = 128,      /* file name */
 // for w, r, f
 char    savedfile[FNSIZE];
 @
-% at some point the temporary file will be copied in a specific file
 
+% will see also file[FNSIZE] later
 
 \subsection{[[zero]]}
 %$
@@ -109,7 +112,7 @@ char    savedfile[FNSIZE];
 <<globals ed.c>>=
 ulong   nlall = 128;
 // growing_array<int>, initial size = (nlall+ 2+margin)*sizeof(int)
-// where ints are line offsets in tfname
+// where the ints are line offsets in tfname
 int*    zero; 
 @
 
@@ -157,8 +160,8 @@ int*    dol;
 %- .
 %- $
 
-\subsection{[[line]] and [[linp]]}
-% and linebuf too? which is with Rune ... confusing
+\subsection{[[line]], [[linp]], and [[linebuf]]}
+%alt: move linebuf later? which is with Rune ... confusing
 
 % line input from user? or line output buffer for user?
 % used in putchr() so definitely used for output
@@ -169,6 +172,15 @@ char*   linp    = line;
 @
 
 % why 70? 80 seems better to match number of columns in classic editors/terminals.
+
+<<constants ed.c>>=
+LBSIZE  = 4096,     /* max line size */
+@
+<<globals ed.c>>=
+Rune    linebuf[LBSIZE];
+@
+% different from line[], here we have Rune[] not char[]
+
 
 %TODO: Figure with all those data structures?
 
@@ -278,6 +290,8 @@ if(oflag) {
 % because will append to stdout
 
 % saved file is fd/1 = stdout
+% so 'w' for writing file will have for effect to write on /fd/1 so
+% output on stdout
 
 \subsection{[[mktemp()]]}
 
@@ -339,11 +353,11 @@ fdt tfile   = -1;
 % tfile for temporary file, again fundamental!
 
 <<function [[init]](ed.c)>>=
-/// main -> <>
+/// main | commands('e') -> <>
 void
 init(void)
 {
-    int *markp;
+    <<[[init()]](ed.c) locals>>
 
     close(tfile);
     <<[[init()]](ed.c) initializing globals>>
@@ -356,6 +370,9 @@ init(void)
 @
 % use tfname set just before in main()
 % dot = dol = zero! important too. zero malloced just before in main()
+
+% close tfile because init can be called not only from main in which
+% case it must closed the previous tmp file and create new one
 
 <<globals ed.c>>=
 char    T[] = "TMP";
@@ -372,6 +389,9 @@ int ichanged;
 
 
 %XXX
+<<[[init()]](ed.c) locals>>=
+int *markp;
+@
 <<[[init()]](ed.c) initializing globals>>=
 for(markp = names; markp < &names[26]; )
     *markp++ = 0;
@@ -411,8 +431,9 @@ quit(void)
 
 
 \section{Displaying text}
+% buffered output
 
-% sp =?
+% sp =? string pointer?
 <<function [[putstr]](ed.c)>>=
 /// commands | getfile | error_1 | ... -> <> 
 void
@@ -430,6 +451,7 @@ putst(char *sp)
     putchr(L'\n');
 }
 @
+% chartorune
 
 % col? could reset it at the end instead? more logical
 % after putchr the \n
@@ -461,9 +483,11 @@ putchr(int ac)
     linp = lp;
 }
 @
+% and this time runetochar, argh
 % why int ac -> int c -> Rune r ... grrrr
 
-% buffered output, display only when newline
+% buffered output, display only when newline (or when > 65 and close
+% to reach line[] limit) -5 because rune can be 4 chars
 
 % oflag here because if -o then save on STDOUT edited data, but
 % putchr is really used for display, not for editing
@@ -479,7 +503,7 @@ int peekc;
 
 <<globals ed.c>>=
 // optional programmed command (e.g., "r", "a")
-//option<Rune>
+//option<Rune> or list<Rune> when used from global() ?
 Rune*   globp;
 @
 
@@ -505,14 +529,9 @@ getchr(void)
     return lastc;
 }
 @
+% EOF once finished globp?
 
-<<constants ed.c>>=
-LBSIZE  = 4096,     /* max line size */
-@
-
-<<globals ed.c>>=
-Rune    linebuf[LBSIZE];
-@
+%alt: move linebuf[] here as it's first time used?
 
 % called when can enter text until '.\n'
 
@@ -535,30 +554,30 @@ gettty(void)
 
 % special ".\n" here to finish the text entry
 
-% gety and gettty
+% gety and gettty, will modify linebuf for the caller
 <<function [[gety]](ed.c)>>=
 /// gettty -> <>
 int
 gety(void)
 {
     int c;
-    Rune *gf, *p;
-
-    p = linebuf;
-    gf = globp;
+    Rune *p = linebuf;
+    <<[[gety()]] other locals>>
     for(;;) {
         c = getchr();
         if(c == '\n') {
             *p = 0;
             return 0;
         }
+        // else
         if(c == EOF) {
-            if(gf)
-                peekc = c;
+            <<[[<<get()]] if [[gf]]>>
             return c;
         }
+        // else
         if(c == 0)
             continue;
+        // else
         *p++ = c;
         if(p >= &linebuf[LBSIZE-sizeof(Rune)])
             error(Q);
@@ -568,14 +587,24 @@ gety(void)
 % sometimes need to under a line, or multiple for certain commands,
 % like 'a' or 'i'
 
+% globp?? aspectize and move later?
+<<[[gety()]] other locals>>=
+Rune *gf = globp;
+@
+
+<<[[<<get()]] if [[gf]]>>=
+if(gf)
+    peekc = c;
+@
+
 \section{[[commands()]] interpreter loop}
 
 %trans: ok, finally commands!
 
 <<globals ed.c>>=
-// option<int>
+// ref<int>
 int*    addr1;
-// option<int>
+// ref<int>
 int*    addr2;
 @
 % optional line numbers for start/end of command 1,3p
@@ -601,6 +630,9 @@ commands(void)
 }
 @
 % error(Q) show later, but essentially just jump to before commands() ?
+% but why we need error? for(;;) not enough? because the commands
+% are using 'continue' so the error is the default when not continue
+% (but bad I think)
 
 % int c, but char really.
 
@@ -635,6 +667,8 @@ if(pflag) {
 char    file[FNSIZE];
 @
 % seen savedfile[] before, initialized when running ed foo.txt
+% but here it's not really a global; it's something returned really
+% by filename() and then used in getfile()
 
 <<globals ed.c>>=
 fdt io;
@@ -661,6 +695,7 @@ caseread:
     setwide();
     squeeze(0);
     c = (zero != dol);
+    // getfile() will use iobuf
     append(getfile, addr2);
     exfile(OREAD); // will close io
 
@@ -850,6 +885,7 @@ if((dol-zero) >= nlall) {
     dot += tl;
 }
 @
+% so append() is the only func growing zero?
 
 %alt: \subsection{[[getfile()]]}
 
@@ -888,6 +924,7 @@ if(c < 0) {
         return EOF;
 }
 @
+% bad file with missing \n, grrr so ed adds it :)
 
 <<[[getfile()]] if overflow [[linebuf]]>>=
 if(lp >= &linebuf[LBSIZE]) {
@@ -919,6 +956,7 @@ BLKSIZE = 4096,     /* block size in temp file */
 @
 
 % put a line in tfile using linebuf (set by getfile above)
+% quite complicated because do block IO instead of simply seek and write
 <<function [[putline]](ed.c)>>=
 /// main -> commands('r') -> append -> <>
 int
@@ -963,6 +1001,9 @@ NBLK    = 8191,     /* max size of temp file */
 @
 
 % read/write per block, probably because faster granularity for IO?
+
+% static ibuff/obuff to avoid some IO sometimes? do batched IO
+% for lines when we needed instead of each time?
 
 <<function [[getblock]](ed.c)>>=
 /// putline | getline -> <>
@@ -1068,6 +1109,8 @@ case 'P':
     printcom();
     continue;
 @
+% 'continue' to get to next for(;;) because otherwise fallthrough error(Q)
+% but could be simpler and just break out of switch
 
 <<function [[newline]](ed.c)>>=
 void
@@ -1709,7 +1752,7 @@ compile(int eof)
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 's':
     nonzero();
-    substitute(globp != 0);
+    substitute(globp != nil);
     continue;
 @
 
@@ -2336,6 +2379,7 @@ setjmp(savej);
 <<globals ed.c>>=
 jmp_buf savej;
 @
+% kinda like poor's man exception mechanism. Simple but effective.
 
 <<function [[error]](ed.c)>>=
 void
