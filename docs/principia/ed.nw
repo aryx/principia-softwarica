@@ -1,15 +1,22 @@
 \section{Introduction}
 
-% 'ed' for editor (they do like 2 letters acronyms).
-% originally written by Ken Thompson in the 1970's.
+% 'ed', for editor (they do like 2 letters acronyms), is an old editor
+% originally written by Ken Thompson in the 1970's for Unix.
 %% (part of the special "3 weeks" where he wrote editor, assembler, kernel?)
 
-% Line editor, as opposed to screen editor (or stream editor like sed).
-% Very different from emacs, or vi (or sam or acme).
-% screen editors nowaday, but still useful to know ed! especially good
-% for scripting (in fact see mkenam in plan9 code).
+% It is a *line editor*, as opposed to *screen editor*
+% (or stream editor like sed).
+% ed is very different from emacs, or vi (or sam or acme).
+% Most editors nowaday are screen editors, but still useful to know ed!
+% especially good for scripting
+%said-later:see mkenam in plan9 code.
 % Also if need quick and dirty write a file with a few lines => ed!
 % See also \book{Editor} for screen editor.
+
+% s/re/g
+% g/re/p comes from ed!
+% 'wq', 'a', 'i', modes, lots of things in vim coming from ed
+%later: g global re regexp p print
 
 % Can already create file content with echo and shell redirection
 % (>, >> for append); can do a lot, but still not as powerful as ed.
@@ -21,16 +28,11 @@
 % see also vol72a with 2 tutorials on ed by Brian Kernighan.
 % Quite complex command ...
 
-% s/re/g
-% g/re/p comes from ed!
-% 'wq', 'a', 'i', modes, lots of things in vim coming from ed
-%later: g global re regexp p print
-
 \n could cite "Formalizing text editors in Coq" 2020 :) but meh actually
 
 \section{Motivations: [[mkenam]]}
 
-% ex of powerful ed command used in goken mkenam:
+% ex of powerful ed command used in principia/goken mkenam:
 \begin{verbatim}
 ed - ../5l/5.out.h <<'!'
 v/^	A/d
@@ -83,6 +85,7 @@ Q
 \section{Core data structures}
 
 % ed core DS is very different from other editors: no Line, Text, Buffer, ...
+% no rope, gap buffer, or other fancy structure to represent set of lines.
 % The content of the file edited is not even in memory!
 % no list of lines! instead everything stored in temp file
 % and in memory just have line offsets in temp file. 
@@ -191,6 +194,8 @@ int*    dol;
 %- .
 %- $
 
+% note that dol is zero when empty file (not even a single line)
+
 %TODO: Figure with all those data structures?
 
 \subsection{Line input and output buffers: [[line]], [[linp]], and [[linebuf]]}
@@ -221,7 +226,12 @@ int col;
 @
 %??
 
+\subsection{Other globals: [[count]]}
 
+<<globals ed.c>>=
+long count;
+@
+% used by putd to display #chars read for instance
 
 \section{[[main()]]}
 % main, init, quit
@@ -377,7 +387,7 @@ mktemp(char *as)
 % for more info.
 
 \subsection{[[init()]]}
-%alt: and [[tfile]] ? or just [[init()]] ?
+%alt: and [[tfile]]? or just [[init()]]?
 
 % continue init work done in main around zero and tfname
 
@@ -407,7 +417,7 @@ init(void)
 tline = 2;
 @
 % sentinel ... so never line offset in zero have the 0 or 1 value, hmmm
-
+% but means first 2 bytes of tfile are 0 (first seek will do that)
 
 <<globals ed.c>>=
 char    T[] = "TMP";
@@ -418,6 +428,8 @@ char    T[] = "TMP";
 <<globals ed.c>>=
 int names[26];
 int anymarks;
+@
+<<globals ed.c>>=
 int iblock;
 int oblock;
 int ichanged;
@@ -432,6 +444,8 @@ for(markp = names; markp < &names[26]; )
     *markp++ = 0;
 subnewa = 0;
 anymarks = 0;
+@
+<<[[init()]](ed.c) initializing globals>>=
 iblock = -1;
 oblock = -1;
 ichanged = 0;
@@ -907,7 +921,7 @@ append(int (*f)(void), int *a)
         a1 = ++dol;
         a2 = a1+1;
         rdot = ++dot;
-        // shift existing line references down by one
+        // shift existing line references up by one
         while(a1 > rdot)
             *--a2 = *--a1;
         // insert the new line reference in zero
@@ -1394,10 +1408,6 @@ add(int i)
 bool wrapp;
 @
 
-<<[[commands()]] other locals>>=
-int temp;
-@
-
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'W':
     wrapp = true;
@@ -1406,11 +1416,7 @@ case 'w':
     setwide();
     squeeze(dol>zero);
 
-    temp = getchr();
-    if(temp != 'q' && temp != 'Q') {
-        peekc = temp;
-        temp = 0;
-    }
+    <<[[commands()]] when [['w']] check for [['q']] part1>>
     filename(c);
 
     if(!wrapp ||
@@ -1428,17 +1434,32 @@ case 'w':
 
     if(addr1<=zero+1 && addr2==dol)
         fchange = false;
-    if(temp == 'Q')
-        fchange = false;
-    if(temp)
-        quit();
+    <<[[commands()]] when [['w']] check for [['q']] part2>>
     continue;
 @
 
-<<globals ed.c>>=
-long count;
+
+
+
+<<[[commands()]] other locals>>=
+int temp;
+@
+<<[[commands()]] when [['w']] check for [['q']] part1>>=
+temp = getchr();
+if(temp != 'q' && temp != 'Q') {
+    peekc = temp;
+    temp = 0;
+}
+@
+<<[[commands()]] when [['w']] check for [['q']] part2>>=
+if(temp == 'Q')
+    fchange = false;
+if(temp)
+    quit();
 @
 
+
+% dual of getfile, write in iobuf
 <<function [[putfile]](ex.c)>>=
 void
 putfile(void)
