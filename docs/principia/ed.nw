@@ -424,33 +424,6 @@ char    T[] = "TMP";
 @
 
 
-%XXX
-<<globals ed.c>>=
-int names[26];
-int anymarks;
-@
-<<globals ed.c>>=
-int iblock;
-int oblock;
-int ichanged;
-@
-
-%XXX
-<<[[init()]](ed.c) locals>>=
-int *markp;
-@
-<<[[init()]](ed.c) initializing globals>>=
-for(markp = names; markp < &names[26]; )
-    *markp++ = 0;
-subnewa = 0;
-anymarks = 0;
-@
-<<[[init()]](ed.c) initializing globals>>=
-iblock = -1;
-oblock = -1;
-ichanged = 0;
-@
-
 \subsection{[[quit()]]}
 
 <<globals ed.c>>=
@@ -718,7 +691,7 @@ if(pflag) {
 @
 % some commands trigger automatic implicit 'p' to print the current line
 
-\section{Reading files}
+\section{Reading a file}
 %alt:\section{[[r]]ead files: [[r]]}
 
 % quite tricky, quite long, lots of sections here.
@@ -998,8 +971,7 @@ if(lp >= &linebuf[LBSIZE]) {
 @
 
 
-\subsection{[[putline()]]}
-
+\subsection{[[putline()]] (simplified)}
 
 % put first simpler version without blocks? the one from chatGPT?
 %   int
@@ -1023,118 +995,6 @@ if(lp >= &linebuf[LBSIZE]) {
 
 
 
-<<globals ed.c>>=
-int nleft;
-@
-<<globals ed.c>>=
-Rune*   linebp;
-@
-
-<<constants ed.c>>=
-BLKSIZE = 4096,     /* block size in temp file */
-@
-
-% put a line in tfile using linebuf (set by getfile above)
-% quite complicated because do block IO instead of simply seek and write
-% returns ?? tline ??
-<<function [[putline]](ed.c)>>=
-/// main -> commands('r') -> append -> <>
-int
-putline(void)
-{
-    Rune *lp, *bp;
-    int nl, tl;
-
-    fchange = true;
-    lp = linebuf;
-    tl = tline;
-
-    bp = getblock(tl, OWRITE);
-    nl = nleft;
-    tl &= ~((BLKSIZE/sizeof(Rune))-1);
-    while(*bp = *lp++) {
-        if(*bp++ == '\n') {
-            bp[-1] = 0;
-            linebp = lp;
-            break;
-        }
-        nl -= sizeof(Rune);
-        if(nl == 0) {
-            tl += BLKSIZE/sizeof(Rune);
-            bp = getblock(tl, OWRITE);
-            nl = nleft;
-        }
-    }
-
-    nl = tline;
-    tline += ((lp-linebuf) + 03) & 077776;
-    return nl;
-}
-@
-
-
-\subsection{[[getblock()]]}
-
-<<constants ed.c>>=
-NBLK    = 8191,     /* max size of temp file */
-@
-
-% read/write per block, probably because faster granularity for IO?
-
-% static ibuff/obuff to avoid some IO sometimes? do batched IO
-% for lines when we needed instead of each time?
-
-<<function [[getblock]](ed.c)>>=
-/// putline | getline -> <>
-Rune*
-getblock(int atl, int iof)
-{
-    int bno; // block number
-    int off; // offset
-    
-    static uchar ibuff[BLKSIZE];
-    static uchar obuff[BLKSIZE];
-
-    bno = atl / (BLKSIZE/sizeof(Rune));
-    /* &~3 so the ptr is aligned to 4 (?) */
-    off = (atl*sizeof(Rune)) & (BLKSIZE-1) & ~3;
-    if(bno >= NBLK) {
-        lastc = '\n';
-        error(T);
-    }
-    nleft = BLKSIZE - off;
-    if(bno == iblock) {
-        ichanged |= iof;
-        return (Rune*)(ibuff+off);
-    }
-    if(bno == oblock)
-        return (Rune*)(obuff+off);
-    if(iof == OREAD) {
-        if(ichanged)
-            blkio(iblock, ibuff, write);
-        ichanged = 0;
-        iblock = bno;
-        blkio(bno, ibuff, read);
-        return (Rune*)(ibuff+off);
-    }
-    if(oblock >= 0)
-        blkio(oblock, obuff, write);
-    oblock = bno;
-    return (Rune*)(obuff+off);
-}
-@
-
-% finally tfile!
-<<function [[blkio]](ed.c)>>=
-void
-blkio(int b, uchar *buf, long (*iofcn)(int, void *, long))
-{
-    seek(tfile, b*BLKSIZE, SEEK__START);
-    if((*iofcn)(tfile, buf, BLKSIZE) != BLKSIZE) {
-        error(T);
-    }
-}
-@
 
 \subsection{[[exfile()]]}
 
@@ -1284,33 +1144,6 @@ putshst(Rune *sp)
 %      return linebuf;
 %  }
 
-% tl for temporary line (file offset in tfile)
-<<function [[getline]](ed.c)>>=
-/// printcom | putfile -> <>
-Rune*
-getline(int tl)
-{
-    Rune *lp, *bp;
-    int nl;
-
-    lp = linebuf;
-    bp = getblock(tl, OREAD);
-    nl = nleft;
-    tl &= ~((BLKSIZE/sizeof(Rune)) - 1);
-    while(*lp++ = *bp++) {
-        nl -= sizeof(Rune);
-        if(nl == 0) {
-            tl += BLKSIZE/sizeof(Rune);
-            bp = getblock(tl, OREAD);
-            nl = nleft;
-        }
-    }
-    return linebuf;
-}
-@
-
-
-
 
 
 
@@ -1459,7 +1292,8 @@ if(temp)
 @
 
 
-% dual of getfile, write in iobuf
+% dual of getfile, write in iobuf, but all the lines, not just one
+% like in getfile()
 <<function [[putfile]](ex.c)>>=
 void
 putfile(void)
@@ -1695,6 +1529,9 @@ reverse(int *a1, int *a2)
 }
 @
 
+
+
+
 \section{Search and replace}
 % regexp, regular expressions
 
@@ -1710,7 +1547,7 @@ case 'g':
     continue;
 @
 
-% negative of pattern
+% negative of pattern (hence grep -v)
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'v':
     global(0);
@@ -1775,6 +1612,7 @@ global(int k)
             *a1 &= ~01;
             dot = a1;
             globp = globuf;
+            // recurse!
             commands();
             a1 = zero;
         }
@@ -1815,6 +1653,7 @@ Reprog  *pattern;
 @
 
 <<function [[compile]](ed.c)>>=
+/// commands('g') -> global -> <>
 void
 compile(int eof)
 {
@@ -1857,6 +1696,8 @@ compile(int eof)
     if(c == '\n')
         peekc = c;
     *ep = 0;
+
+    // lib_regexp call
     pattern = regcomp(expbuf);
 }
 @
@@ -1876,6 +1717,32 @@ case 's':
 Rune*   loc1;
 Rune*   loc2;
 @
+
+<<globals ed.c>>=
+int anymarks;
+@
+<<globals ed.c>>=
+int subnewa;
+int subolda;
+@
+
+<<[[init()]](ed.c) initializing globals>>=
+subnewa = 0;
+anymarks = 0;
+@
+
+<<globals ed.c>>=
+int names[26];
+@
+<<[[init()]](ed.c) locals>>=
+int *markp;
+@
+<<[[init()]](ed.c) initializing globals>>=
+for(markp = names; markp < &names[26]; )
+    *markp++ = 0;
+@
+
+
 
 <<function [[substitute]](ed.c)>>=
 void
@@ -2081,11 +1948,6 @@ compsub(void)
 
 \subsection{[[u]]ndo substitution: [[u]]}
 
-<<globals ed.c>>=
-int subnewa;
-int subolda;
-@
-
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'u':
     nonzero();
@@ -2096,6 +1958,8 @@ case 'u':
     dot = addr2;
     continue;
 @
+
+
 
 \section{Advanced features}
 
@@ -2481,6 +2345,160 @@ case 'k':
 @
 
 
+\section{Optimizations: Block IO}
+
+\subsection{Optimized [[putline()]]}
+
+<<globals ed.c>>=
+int nleft;
+@
+<<globals ed.c>>=
+Rune*   linebp;
+@
+
+<<constants ed.c>>=
+BLKSIZE = 4096,     /* block size in temp file */
+@
+
+% put a line in tfile using linebuf (set by getfile above)
+% quite complicated because do block IO instead of simply seek and write
+% returns ?? tline ??
+<<function [[putline]](ed.c)>>=
+/// main -> commands('r') -> append -> <>
+int
+putline(void)
+{
+    Rune *lp, *bp;
+    int nl, tl;
+
+    fchange = true;
+    lp = linebuf;
+    tl = tline;
+
+    bp = getblock(tl, OWRITE);
+    nl = nleft;
+    tl &= ~((BLKSIZE/sizeof(Rune))-1);
+    while(*bp = *lp++) {
+        if(*bp++ == '\n') {
+            bp[-1] = 0;
+            linebp = lp;
+            break;
+        }
+        nl -= sizeof(Rune);
+        if(nl == 0) {
+            tl += BLKSIZE/sizeof(Rune);
+            bp = getblock(tl, OWRITE);
+            nl = nleft;
+        }
+    }
+
+    nl = tline;
+    tline += ((lp-linebuf) + 03) & 077776;
+    return nl;
+}
+@
+
+
+\subsection{[[getblock()]]}
+
+<<constants ed.c>>=
+NBLK    = 8191,     /* max size of temp file */
+@
+
+% read/write per block, probably because faster granularity for IO?
+
+% static ibuff/obuff to avoid some IO sometimes? do batched IO
+% for lines when we needed instead of each time?
+
+<<globals ed.c>>=
+int iblock;
+int oblock;
+int ichanged;
+@
+<<[[init()]](ed.c) initializing globals>>=
+iblock = -1;
+oblock = -1;
+ichanged = 0;
+@
+
+<<function [[getblock]](ed.c)>>=
+/// putline | getline -> <>
+Rune*
+getblock(int atl, int iof)
+{
+    int bno; // block number
+    int off; // offset
+    
+    static uchar ibuff[BLKSIZE];
+    static uchar obuff[BLKSIZE];
+
+    bno = atl / (BLKSIZE/sizeof(Rune));
+    /* &~3 so the ptr is aligned to 4 (?) */
+    off = (atl*sizeof(Rune)) & (BLKSIZE-1) & ~3;
+    if(bno >= NBLK) {
+        lastc = '\n';
+        error(T);
+    }
+    nleft = BLKSIZE - off;
+    if(bno == iblock) {
+        ichanged |= iof;
+        return (Rune*)(ibuff+off);
+    }
+    if(bno == oblock)
+        return (Rune*)(obuff+off);
+    if(iof == OREAD) {
+        if(ichanged)
+            blkio(iblock, ibuff, write);
+        ichanged = 0;
+        iblock = bno;
+        blkio(bno, ibuff, read);
+        return (Rune*)(ibuff+off);
+    }
+    if(oblock >= 0)
+        blkio(oblock, obuff, write);
+    oblock = bno;
+    return (Rune*)(obuff+off);
+}
+@
+
+% finally tfile!
+<<function [[blkio]](ed.c)>>=
+void
+blkio(int b, uchar *buf, long (*iofcn)(int, void *, long))
+{
+    seek(tfile, b*BLKSIZE, SEEK__START);
+    if((*iofcn)(tfile, buf, BLKSIZE) != BLKSIZE) {
+        error(T);
+    }
+}
+@
+
+
+\subsection{Optimized [[getline()]]}
+% tl for temporary line (file offset in tfile)
+<<function [[getline]](ed.c)>>=
+/// printcom | putfile -> <>
+Rune*
+getline(int tl)
+{
+    Rune *lp, *bp;
+    int nl;
+
+    lp = linebuf;
+    bp = getblock(tl, OREAD);
+    nl = nleft;
+    tl &= ~((BLKSIZE/sizeof(Rune)) - 1);
+    while(*lp++ = *bp++) {
+        nl -= sizeof(Rune);
+        if(nl == 0) {
+            tl += BLKSIZE/sizeof(Rune);
+            bp = getblock(tl, OREAD);
+            nl = nleft;
+        }
+    }
+    return linebuf;
+}
+@
 
 
 
