@@ -7,6 +7,7 @@
 % It is a *line editor*, as opposed to *screen editor*
 % (or stream editor like sed).
 % ed is very different from emacs, or vi (or sam or acme).
+% edit just one file.
 % Most editors nowaday are screen editors, but still useful to know ed!
 % especially good for scripting
 %said-later:see mkenam in plan9 code.
@@ -36,7 +37,7 @@
 \begin{verbatim}
 ed - ../5l/5.out.h <<'!'
 v/^	A/d
-,s/^	A/	"/
+1,$s/^	A/	"/
 g/ .*$/s///
 ,s/,*$/",/
 1i
@@ -233,6 +234,8 @@ long count;
 @
 % used by putd to display #chars read for instance
 
+
+
 \section{[[main()]]}
 % main, init, quit
 
@@ -418,7 +421,8 @@ tline = 2;
 @
 % sentinel ... so never line offset in zero have the 0 or 1 value, hmmm
 % but means first 2 bytes of tfile are 0 (first seek will do that)
-% also 2 because 1 is used to represent a mark!
+% also 2 because 1 is used to represent a mark! Too clever! Too smart
+% for its own good.
 
 <<globals ed.c>>=
 char    T[] = "TMP";
@@ -454,8 +458,10 @@ quit(void)
 % reset fchange to false so second quit will actually quit.
 
 
-\section{Displaying text}
+\section{Displaying and reading text}
 % buffered output
+
+\subsection{Displaying text}
 
 % put string
 % sp =? string pointer?
@@ -517,7 +523,8 @@ putchr(int ac)
 % oflag here because if -o then save on STDOUT edited data, but
 % putchr is really used for display, not for editing
 
-\section{Reading characters}
+\subsection{Reading text}
+%alt: Readinc characters
 
 <<globals ed.c>>=
 //option<char> (0 = None)
@@ -692,10 +699,9 @@ if(pflag) {
 @
 % some commands trigger automatic implicit 'p' to print the current line
 
-\section{Reading a file}
-%alt:\section{[[r]]ead files: [[r]]}
+\section{[[r]]eading a file: [[r]]}
 
-% quite tricky, quite long, lots of sections here.
+% quite tricky, quite long, lots of subsections here.
 
 <<globals ed.c>>=
 char    file[FNSIZE];
@@ -1042,6 +1048,128 @@ putd(void)
 
 
 
+\section{[[w]]riting a file: [[w]]}
+
+
+<<globals ed.c>>=
+// write append
+bool wrapp;
+@
+
+<<[[commands()]] switch [[c]] cases (ed.c)>>=
+case 'W':
+    wrapp = true;
+    // Fallthrough
+case 'w':
+    setwide();
+    squeeze(dol>zero);
+
+    <<[[commands()]] when [['w']] check for [['q']] part1>>
+    filename(c);
+
+    if(!wrapp ||
+      ((io = open(file, OWRITE)) == -1) ||
+      ((seek(io, 0L, SEEK__END)) == -1))
+
+        if((io = create(file, OWRITE, 0666)) < 0)
+            error(file);
+
+    Binit(&iobuf, io, OWRITE);
+    wrapp = false;
+    if(dol > zero)
+        putfile();
+
+    exfile(OWRITE);
+
+    if(addr1<=zero+1 && addr2==dol)
+        fchange = false;
+    <<[[commands()]] when [['w']] check for [['q']] part2>>
+    continue;
+@
+
+
+
+\subsection{[[putfile()]]}
+
+% dual of getfile, write in iobuf, but all the lines, not just one
+% like in getfile().
+% Key to understand tfile! very simple code actually once understand
+%  what getline() is doing
+<<function [[putfile]](ed.c)>>=
+void
+putfile(void)
+{
+    int *a1;
+    Rune *lp;
+    long c;
+
+    a1 = addr1;
+    do {
+        lp = getline(*a1++);
+        for(;;) {
+            count++;
+            c = *lp++;
+            if(c == 0) {
+                if(Bputrune(&iobuf, '\n') < 0)
+                    error(Q);
+                break;
+            }
+            if(Bputrune(&iobuf, c) < 0)
+                error(Q);
+        }
+    } while(a1 <= addr2);
+    if(Bflush(&iobuf) < 0)
+        error(Q);
+}
+@
+
+
+
+\subsection{[[getline()]] (simplified)}
+
+% again, simpler version (thx chatGPT again):
+%
+%  char *
+%  getline(int tl)
+%  {
+%      int n;
+%  
+%      // seek to the line's offset in the temp file
+%      seek(tfile, tl, 0);
+%  
+%      // read bytes up to the next NUL
+%      n = 0;
+%      while (read(tfile, &linebuf[n], 1) == 1 && linebuf[n] != '\0')
+%          n++;
+%  
+%      linebuf[n] = '\0';
+%      return linebuf;
+%  }
+
+
+
+\subsection{Write and quit: [[wq]]}
+
+<<[[commands()]] other locals>>=
+int temp;
+@
+<<[[commands()]] when [['w']] check for [['q']] part1>>=
+temp = getchr();
+if(temp != 'q' && temp != 'Q') {
+    peekc = temp;
+    temp = 0;
+}
+@
+<<[[commands()]] when [['w']] check for [['q']] part2>>=
+if(temp == 'Q')
+    fchange = false;
+if(temp)
+    quit();
+@
+
+
+
+
 
 
 \section{Main commands}
@@ -1125,29 +1253,6 @@ putshst(Rune *sp)
     putchr(L'\n');
 }
 @
-
-% again, simpler version (thx chatGPT again):
-%
-%  char *
-%  getline(int tl)
-%  {
-%      int n;
-%  
-%      // seek to the line's offset in the temp file
-%      seek(tfile, tl, 0);
-%  
-%      // read bytes up to the next NUL
-%      n = 0;
-%      while (read(tfile, &linebuf[n], 1) == 1 && linebuf[n] != '\0')
-%          n++;
-%  
-%      linebuf[n] = '\0';
-%      return linebuf;
-%  }
-
-
-
-
 
 
 
@@ -1233,103 +1338,6 @@ add(int i)
 % f can be gettty(), a can be addr2
 
 
-\subsection{[[w]]riting to a file: [[w]]}
-
-
-<<globals ed.c>>=
-// write append
-bool wrapp;
-@
-
-<<[[commands()]] switch [[c]] cases (ed.c)>>=
-case 'W':
-    wrapp = true;
-    // Fallthrough
-case 'w':
-    setwide();
-    squeeze(dol>zero);
-
-    <<[[commands()]] when [['w']] check for [['q']] part1>>
-    filename(c);
-
-    if(!wrapp ||
-      ((io = open(file, OWRITE)) == -1) ||
-      ((seek(io, 0L, SEEK__END)) == -1))
-
-        if((io = create(file, OWRITE, 0666)) < 0)
-            error(file);
-
-    Binit(&iobuf, io, OWRITE);
-    wrapp = false;
-    if(dol > zero)
-        putfile();
-
-    exfile(OWRITE);
-
-    if(addr1<=zero+1 && addr2==dol)
-        fchange = false;
-    <<[[commands()]] when [['w']] check for [['q']] part2>>
-    continue;
-@
-
-
-
-
-<<[[commands()]] other locals>>=
-int temp;
-@
-<<[[commands()]] when [['w']] check for [['q']] part1>>=
-temp = getchr();
-if(temp != 'q' && temp != 'Q') {
-    peekc = temp;
-    temp = 0;
-}
-@
-<<[[commands()]] when [['w']] check for [['q']] part2>>=
-if(temp == 'Q')
-    fchange = false;
-if(temp)
-    quit();
-@
-
-
-% dual of getfile, write in iobuf, but all the lines, not just one
-% like in getfile().
-% Key to understand tfile! very simple code actually once understand
-%  what getline() is doing
-<<function [[putfile]](ed.c)>>=
-void
-putfile(void)
-{
-    int *a1;
-    Rune *lp;
-    long c;
-
-    a1 = addr1;
-    do {
-        lp = getline(*a1++);
-        for(;;) {
-            count++;
-            c = *lp++;
-            if(c == 0) {
-                if(Bputrune(&iobuf, '\n') < 0)
-                    error(Q);
-                break;
-            }
-            if(Bputrune(&iobuf, c) < 0)
-                error(Q);
-        }
-    } while(a1 <= addr2);
-    if(Bflush(&iobuf) < 0)
-        error(Q);
-}
-@
-
-
-
-
-
-
 \subsection{[[q]]uitting: [[q]]}
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
@@ -1353,52 +1361,6 @@ setnoaddr(void)
 @
 % command that does not accept addresses!
 
-\subsection{running a shell command: [[!]]}
-% still M-! on Emacs? 
-
-% not so needed when have multiple windows
-
-<<[[commands()]] switch [[c]] cases (ed.c)>>=
-case '!':
-    callunix();
-    continue;
-@
-
-<<function [[callunix]](ed.c)>>=
-void
-callunix(void)
-{
-    int c, pid;
-    Rune rune;
-    char buf[512];
-    char *p;
-
-    setnoaddr();
-
-    p = buf;
-    while((c=getchr()) != EOF && c != '\n')
-        if(p < &buf[sizeof(buf) - 6]) {
-            rune = c;
-            p += runetochar(p, &rune);
-        }
-    *p = '\0';
-
-    pid = fork();
-    if(pid == 0) {
-        // child
-        execl("/bin/rc", "rc", "-c", buf, nil);
-        // should not be reached
-        exits("execl failed");
-    }
-    // else, parent
-    waiting = true;
-    while(waitpid() != pid)
-        ;
-    waiting = false;
-    if(vflag)
-        putst("!");
-}
-@
 
 \subsection{[[d]]eleting lines: [[d]]}
 % delete
@@ -1535,110 +1497,186 @@ reverse(int *a1, int *a2)
 
 
 
+\section{Advanced command addresses}
+%alt: [[address()]]
+
+%alt? move later? assume addr1, addr2 set correctly by complex parsing
+% code?
+
+<<globals ed.c>>=
+bool given;
+@
+% whether the user explicitly typed an address or not.
+
+<<[[commands()]] other locals>>=
+int *a1;
+char lastsep;
+@
+
+<<[[commands()]] read [[addr1]] and [[c]] via [[getchr]]>>=
+c = '\n';
+addr1 = nil;
+
+for(;;) {
+    lastsep = c;
+    a1 = address();
+    c = getchr();
+ 
+   if(c != ',' && c != ';')
+        break;
+
+    // else
+    if(lastsep == ',')
+        error(Q);
+    if(a1 == nil) {
+        a1 = zero+1; // line 1
+        if(a1 > dol)
+            a1--;
+    }
+    addr1 = a1;
+    <<[[commands()]] in address parsing, if separator is [[';']]>>
+}
+if(lastsep != '\n' && a1 == nil)
+    a1 = dol;
+
+if((addr2=a1) == nil) {
+    given = false;
+    addr2 = dot;    
+} else
+    given = true;
+
+if(addr1 == nil)
+    addr1 = addr2;
+@
+
+<<[[commands()]] in address parsing, if separator is [[';']]>>=
+if(c == ';')
+    dot = a1;
+@
+% so allow to set dot as part of the address,  like 3;5p
+% means after this command dot will be 3.
+
+
+
+\subsection{[[address()]]}
+
+% "each command can be preceded by one or two line numbers ..."
+<<function [[address]](ed.c)>>=
+int*
+address(void)
+{
+    int sign, *a, opcnt, nextopand, *b, c;
+
+    nextopand = -1;
+    sign = 1;
+    opcnt = 0;
+    a = dot;
+    do {
+        do {
+            c = getchr();
+        } while(c == ' ' || c == '\t');
+        if(c >= '0' && c <= '9') {
+            peekc = c;
+            if(!opcnt)
+                a = zero;
+            a += sign*getnum();
+        } else
+
+        switch(c) {
+        case '$':
+            a = dol;
+        case '.':
+            if(opcnt)
+                error(Q);
+            break;
+        case '\'':
+            c = getchr();
+            if(opcnt || c < 'a' || c > 'z')
+                error(Q);
+            a = zero;
+            do {
+                a++;
+            } while(a <= dol && names[c-'a'] != (*a & ~01));
+            break;
+        case '?':
+            sign = -sign;
+
+        case '/':
+            compile(c);
+            b = a;
+            for(;;) {
+                a += sign;
+                if(a <= zero)
+                    a = dol;
+                if(a > dol)
+                    a = zero;
+                if(match(a))
+                    break;
+                if(a == b)
+                    error(Q);
+            }
+            break;
+
+        default:
+            if(nextopand == opcnt) {
+                a += sign;
+                if(a < zero || dol < a)
+                    continue;       /* error(Q); */
+            }
+            if(c != '+' && c != '-' && c != '^') {
+                peekc = c;
+                if(opcnt == 0)
+                    a = 0;
+                return a;
+            }
+            sign = 1;
+            if(c != '+')
+                sign = -sign;
+            nextopand = ++opcnt;
+            continue;
+        }
+        sign = 1;
+        opcnt++;
+    } while(zero <= a && a <= dol);
+
+    error(Q);
+    return 0;
+}
+@
+
+
+<<function [[getnum]](ed.c)>>=
+int
+getnum(void)
+{
+    int r, c;
+
+    r = 0;
+    for(;;) {
+        c = getchr();
+        if(c < '0' || c > '9')
+            break;
+        r = r*10 + (c-'0');
+    }
+    peekc = c;
+    return r;
+}
+@
+
+
+
 
 \section{Search and replace}
 % regexp, regular expressions
 
-\subsection{[[g]]lobal commands: [[g/re/cmd]] and [[v/re/cmd]]}
-
-%g/re/cmd
-% => g/re/p => grep :)
-
-
-<<[[commands()]] switch [[c]] cases (ed.c)>>=
-case 'g':
-    global(1);
-    continue;
-@
-
-% negative of pattern (hence grep -v)
-<<[[commands()]] switch [[c]] cases (ed.c)>>=
-case 'v':
-    global(0);
-    continue;
-@
-
-<<constants ed.c>>=
-GBSIZE  = 256,      /* max size of global command */
-@
-
-<<function [[global]](ed.c)>>=
-void
-global(int k)
-{
-    Rune *gp, globuf[GBSIZE];
-    int c, *a1;
-
-    if(globp)
-        error(Q);
-
-    setwide();
-    squeeze(dol > zero);
-
-    // readding a '/' or '?'
-    c = getchr();
-    if(c == '\n')
-        error(Q);
-
-    // reading the whole pattern until corresponding ending '/' or '?'
-    compile(c);
-
-    gp = globuf;
-    while((c=getchr()) != '\n') {
-        if(c == EOF)
-            error(Q);
-        if(c == '\\') {
-            c = getchr();
-            if(c != '\n')
-                *gp++ = '\\';
-        }
-        *gp++ = c;
-        if(gp >= &globuf[GBSIZE-2])
-            error(Q);
-    }
-    if(gp == globuf)
-        *gp++ = 'p';
-    *gp++ = '\n';
-    *gp = 0;
-
-    for(a1=zero; a1<=dol; a1++) {
-        *a1 &= ~01;
-        if(a1 >= addr1 && a1 <= addr2 && match(a1) == k)
-            *a1 |= 01;
-    }
-
-    <<[[global()]](ed.c) if [[g/.../d]] command, call optimized [[gdelete()]]>>
-
-    for(a1=zero; a1<=dol; a1++) {
-        if(*a1 & 01) {
-            *a1 &= ~01;
-            dot = a1;
-            globp = globuf;
-            // recurse!
-            commands();
-            a1 = zero; // zero may have grown and move, need update a1
-        }
-    }
-}
-@
-
-% note that commands () will modify addr1, addr2, zero, etc.
-% so that's also why we use the mark and do the matching in phase1
-% separate from phase2.
-% Can't just store list of lineno in phase1, because they will be invalid
-% if the command is g/re/d, to delete, hence the use of marks attached
-% to line offset in zero itself. So that delete and move keep the mark
-
-% Same way see the subtle a1 = zero, so we restart from the start
-% after each commands() because zero may have changed so we must
-% restart from zero but hopefully with one less marked line this time.
-
-<<constants ed.c>>=
-ESIZE   = 256,      /* max size of reg exp */
-@
+\subsection{Search as addresses: [[/re/]] and [[?re?]]}
 
 <<globals ed.c>>=
 Reprog  *pattern;
+@
+
+<<constants ed.c>>=
+ESIZE   = 256,      /* max size of reg exp */
 @
 
 % will set pattern
@@ -1696,6 +1734,31 @@ compile(int eof)
 }
 @
 % see libregexp book
+
+
+<<function [[match]](ed.c)>>=
+int
+match(int *addr)
+{
+    if(!pattern)
+        return 0;
+    if(addr){
+        if(addr == zero)
+            return 0;
+        subexp[0].s.rsp = getline(*addr);
+    } else
+        subexp[0].s.rsp = loc2;
+    subexp[0].e.rep = 0;
+    if(rregexec(pattern, linebuf, subexp, MAXSUB)) {
+        loc1 = subexp[0].s.rsp;
+        loc2 = subexp[0].e.rep;
+        return 1;
+    }
+    loc1 = loc2 = 0;
+    return 0;
+    
+}
+@
 
 \subsection{[[s]]ubstitute: [[s]]}
 % s//g like sed!
@@ -1873,29 +1936,6 @@ getsub(void)
 }
 @
 
-<<function [[match]](ed.c)>>=
-int
-match(int *addr)
-{
-    if(!pattern)
-        return 0;
-    if(addr){
-        if(addr == zero)
-            return 0;
-        subexp[0].s.rsp = getline(*addr);
-    } else
-        subexp[0].s.rsp = loc2;
-    subexp[0].e.rep = 0;
-    if(rregexec(pattern, linebuf, subexp, MAXSUB)) {
-        loc1 = subexp[0].s.rsp;
-        loc2 = subexp[0].e.rep;
-        return 1;
-    }
-    loc1 = loc2 = 0;
-    return 0;
-    
-}
-@
 
 <<function [[compsub]](ed.c)>>=
 int
@@ -1955,172 +1995,150 @@ case 'u':
 
 
 
+\subsection{[[g]]lobal commands: [[g/re/cmd]] and [[v/re/cmd]]}
+
+%g/re/cmd
+% => g/re/p => grep :)
+
+
+<<[[commands()]] switch [[c]] cases (ed.c)>>=
+case 'g':
+    global(1);
+    continue;
+@
+
+% negative of pattern (hence grep -v)
+<<[[commands()]] switch [[c]] cases (ed.c)>>=
+case 'v':
+    global(0);
+    continue;
+@
+
+<<constants ed.c>>=
+GBSIZE  = 256,      /* max size of global command */
+@
+
+<<function [[global]](ed.c)>>=
+void
+global(int k)
+{
+    Rune *gp, globuf[GBSIZE];
+    int c, *a1;
+
+    if(globp)
+        error(Q);
+
+    setwide();
+    squeeze(dol > zero);
+
+    // readding a '/' or '?'
+    c = getchr();
+    if(c == '\n')
+        error(Q);
+
+    // reading the whole pattern until corresponding ending '/' or '?'
+    compile(c);
+
+    gp = globuf;
+    while((c=getchr()) != '\n') {
+        if(c == EOF)
+            error(Q);
+        if(c == '\\') {
+            c = getchr();
+            if(c != '\n')
+                *gp++ = '\\';
+        }
+        *gp++ = c;
+        if(gp >= &globuf[GBSIZE-2])
+            error(Q);
+    }
+    if(gp == globuf)
+        *gp++ = 'p';
+    *gp++ = '\n';
+    *gp = 0;
+
+    for(a1=zero; a1<=dol; a1++) {
+        *a1 &= ~01;
+        if(a1 >= addr1 && a1 <= addr2 && match(a1) == k)
+            *a1 |= 01;
+    }
+
+    <<[[global()]](ed.c) if [[g/.../d]] command, call optimized [[gdelete()]]>>
+
+    for(a1=zero; a1<=dol; a1++) {
+        if(*a1 & 01) {
+            *a1 &= ~01;
+            dot = a1;
+            globp = globuf;
+            // recurse!
+            commands();
+            a1 = zero; // zero may have grown and move, need update a1
+        }
+    }
+}
+@
+
+% note that commands () will modify addr1, addr2, zero, etc.
+% so that's also why we use the mark and do the matching in phase1
+% separate from phase2.
+% Can't just store list of lineno in phase1, because they will be invalid
+% if the command is g/re/d, to delete, hence the use of marks attached
+% to line offset in zero itself. So that delete and move keep the mark
+
+% Same way see the subtle a1 = zero, so we restart from the start
+% after each commands() because zero may have changed so we must
+% restart from zero but hopefully with one less marked line this time.
+
+
+
 \section{Advanced features}
 
-\subsection{[[address()]] and advanced command ranges}
+\subsection{running a shell command: [[!]]}
+% still M-! on Emacs? 
 
-%alt? move later? assume addr1, addr2 set correctly by complex parsing
-% code?
+% not so needed when have multiple windows
 
-<<globals ed.c>>=
-bool given;
-@
-% whether the user explicitly typed an address or not.
-
-<<[[commands()]] other locals>>=
-int *a1;
-char lastsep;
+<<[[commands()]] switch [[c]] cases (ed.c)>>=
+case '!':
+    callunix();
+    continue;
 @
 
-<<[[commands()]] read [[addr1]] and [[c]] via [[getchr]]>>=
-c = '\n';
-addr1 = nil;
-
-for(;;) {
-    lastsep = c;
-    a1 = address();
-    c = getchr();
- 
-   if(c != ',' && c != ';')
-        break;
-
-    // else
-    if(lastsep == ',')
-        error(Q);
-    if(a1 == nil) {
-        a1 = zero+1; // line 1
-        if(a1 > dol)
-            a1--;
-    }
-    addr1 = a1;
-    <<[[commands()]] in address parsing, if separator is [[';']]>>
-}
-if(lastsep != '\n' && a1 == nil)
-    a1 = dol;
-
-if((addr2=a1) == nil) {
-    given = false;
-    addr2 = dot;    
-} else
-    given = true;
-
-if(addr1 == nil)
-    addr1 = addr2;
-@
-
-<<[[commands()]] in address parsing, if separator is [[';']]>>=
-if(c == ';')
-    dot = a1;
-@
-% so allow to set dot as part of the address,  like 3;5p
-% means after this command dot will be 3.
-
-
-
-
-% "each command can be preceded by one or two line numbers ..."
-<<function [[address]](ed.c)>>=
-int*
-address(void)
+<<function [[callunix]](ed.c)>>=
+void
+callunix(void)
 {
-    int sign, *a, opcnt, nextopand, *b, c;
+    int c, pid;
+    Rune rune;
+    char buf[512];
+    char *p;
 
-    nextopand = -1;
-    sign = 1;
-    opcnt = 0;
-    a = dot;
-    do {
-        do {
-            c = getchr();
-        } while(c == ' ' || c == '\t');
-        if(c >= '0' && c <= '9') {
-            peekc = c;
-            if(!opcnt)
-                a = zero;
-            a += sign*getnum();
-        } else
+    setnoaddr();
 
-        switch(c) {
-        case '$':
-            a = dol;
-        case '.':
-            if(opcnt)
-                error(Q);
-            break;
-        case '\'':
-            c = getchr();
-            if(opcnt || c < 'a' || c > 'z')
-                error(Q);
-            a = zero;
-            do {
-                a++;
-            } while(a <= dol && names[c-'a'] != (*a & ~01));
-            break;
-        case '?':
-            sign = -sign;
-
-        case '/':
-            compile(c);
-            b = a;
-            for(;;) {
-                a += sign;
-                if(a <= zero)
-                    a = dol;
-                if(a > dol)
-                    a = zero;
-                if(match(a))
-                    break;
-                if(a == b)
-                    error(Q);
-            }
-            break;
-
-        default:
-            if(nextopand == opcnt) {
-                a += sign;
-                if(a < zero || dol < a)
-                    continue;       /* error(Q); */
-            }
-            if(c != '+' && c != '-' && c != '^') {
-                peekc = c;
-                if(opcnt == 0)
-                    a = 0;
-                return a;
-            }
-            sign = 1;
-            if(c != '+')
-                sign = -sign;
-            nextopand = ++opcnt;
-            continue;
+    p = buf;
+    while((c=getchr()) != EOF && c != '\n')
+        if(p < &buf[sizeof(buf) - 6]) {
+            rune = c;
+            p += runetochar(p, &rune);
         }
-        sign = 1;
-        opcnt++;
-    } while(zero <= a && a <= dol);
+    *p = '\0';
 
-    error(Q);
-    return 0;
-}
-@
-
-
-<<function [[getnum]](ed.c)>>=
-int
-getnum(void)
-{
-    int r, c;
-
-    r = 0;
-    for(;;) {
-        c = getchr();
-        if(c < '0' || c > '9')
-            break;
-        r = r*10 + (c-'0');
+    pid = fork();
+    if(pid == 0) {
+        // child
+        execl("/bin/rc", "rc", "-c", buf, nil);
+        // should not be reached
+        exits("execl failed");
     }
-    peekc = c;
-    return r;
+    // else, parent
+    waiting = true;
+    while(waitpid() != pid)
+        ;
+    waiting = false;
+    if(vflag)
+        putst("!");
 }
 @
-
 
 \subsection{Advanced [[l]]isting: [[l]]}
 
