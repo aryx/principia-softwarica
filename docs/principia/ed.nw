@@ -4,7 +4,7 @@
 % originally written by Ken Thompson in the 1970's for Unix.
 %% (part of the special "3 weeks" where he wrote editor, assembler, kernel?)
 
-% It is a *line editor*, as opposed to *screen editor*
+% It is a *line editor*, as opposed to *screen editor* like vi or emacs
 % (or stream editor like sed).
 % ed is very different from emacs, or vi (or sam or acme).
 % edit just one file.
@@ -177,6 +177,7 @@ int*    zero;
 % is not line1, it's 0.
 
 \subsection{Cursors: [[dot]] and [[dol]]}
+%alt: Addresses?
 
 <<globals ed.c>>=
 // ref<int> in zero array, current line pointer
@@ -539,6 +540,8 @@ int peekc;
 //option<Rune> or list<Rune> when used from global() ?
 Rune*   globp;
 @
+%alt: move to later and aspectize it below? but
+% need to understand it early for the globp = "r" ?
 
 % int vs char vs rune, grrr
 <<function [[getchr]](ed.c)>>=
@@ -981,25 +984,28 @@ if(lp >= &linebuf[LBSIZE]) {
 \subsection{[[putline()]] (simplified)}
 
 % put first simpler version without blocks? the one from chatGPT?
-%   int
-%   putline(void)
-%   {
-%       int n;
-%       long tl;
-%   
-%       tl = tline;                 // current temp-file write offset
-%       n = strlen(linebuf) + 1;    // include terminating '\0'
-%   
-%       if(tline + n >= ENDCORE)
-%           error("temp file overflow");
-%   
-%       seek(tfile, tline, 0);
-%       write(tfile, linebuf, n);
-%   
-%       tline += n;
-%       return tl;
-%   }
 
+%NOT IN ed.c
+<<[[putline()]] simplified>>=
+int
+putline(void)
+{
+    int n;
+    long tl;
+
+    tl = tline;                 // current temp-file write offset
+    n = strlen(linebuf) + 1;    // include terminating '\0'
+
+    if(tline + n >= ENDCORE)
+        error("temp file overflow");
+
+    seek(tfile, tline, 0);
+    write(tfile, linebuf, n);
+
+    tline += n;
+    return tl;
+}
+@
 
 
 
@@ -1129,23 +1135,26 @@ putfile(void)
 
 % again, simpler version (thx chatGPT again):
 %
-%  char *
-%  getline(int tl)
-%  {
-%      int n;
-%  
-%      // seek to the line's offset in the temp file
-%      seek(tfile, tl, 0);
-%  
-%      // read bytes up to the next NUL
-%      n = 0;
-%      while (read(tfile, &linebuf[n], 1) == 1 && linebuf[n] != '\0')
-%          n++;
-%  
-%      linebuf[n] = '\0';
-%      return linebuf;
-%  }
 
+%NOT in ed.c
+<<[[getline()]] simplified>>=
+char *
+getline(int tl)
+{
+    int n;
+
+    // seek to the line's offset in the temp file
+    seek(tfile, tl, 0);
+
+    // read bytes up to the next NUL
+    n = 0;
+    while (read(tfile, &linebuf[n], 1) == 1 && linebuf[n] != '\0')
+        n++;
+
+    linebuf[n] = '\0';
+    return linebuf;
+}
+@
 
 
 \subsection{Write and quit: [[wq]]}
@@ -1180,7 +1189,6 @@ if(temp)
 % update: first 'p' which helps to understand
 
 \subsection{[[p]]rinting lines: [[p]]}
-% and getline()
 
 % printing 3p   1,$p
 % maybe can show address() powerful args for [[p]]
@@ -1273,7 +1281,7 @@ case '\n':
 @
 % where this a1 comes from? set in commands() for advanced
 % commands
-
+%ocaml: I use [[not given]] instead of [[a1==nil]]
 
 \subsection{printing remembered [[f]]ile: [[f]]}
 % "remembered" either by [[r]] or [[w]]
@@ -1396,6 +1404,8 @@ rdelete(int *ad1, int *ad2)
 @
 % note that it does not change tfile! just indices are modified
 
+% a bit like append(), shift zero entries but in other direction
+
 \subsection{[[c]]hanging lines: [[c]]}
 % change
 
@@ -1500,9 +1510,6 @@ reverse(int *a1, int *a2)
 \section{Advanced command addresses}
 %alt: [[address()]]
 
-%alt? move later? assume addr1, addr2 set correctly by complex parsing
-% code?
-
 <<globals ed.c>>=
 bool given;
 @
@@ -1560,6 +1567,7 @@ if(c == ';')
 
 \subsection{[[address()]]}
 
+%TODO: LP split
 % "each command can be preceded by one or two line numbers ..."
 <<function [[address]](ed.c)>>=
 int*
@@ -1575,6 +1583,7 @@ address(void)
         do {
             c = getchr();
         } while(c == ' ' || c == '\t');
+
         if(c >= '0' && c <= '9') {
             peekc = c;
             if(!opcnt)
@@ -1585,6 +1594,7 @@ address(void)
         switch(c) {
         case '$':
             a = dol;
+            // Fallthrough
         case '.':
             if(opcnt)
                 error(Q);
@@ -1598,18 +1608,21 @@ address(void)
                 a++;
             } while(a <= dol && names[c-'a'] != (*a & ~01));
             break;
+
         case '?':
             sign = -sign;
-
+            // Fallthrough
         case '/':
             compile(c);
             b = a;
             for(;;) {
                 a += sign;
+                // wrap around ?
                 if(a <= zero)
                     a = dol;
                 if(a > dol)
                     a = zero;
+
                 if(match(a))
                     break;
                 if(a == b)
@@ -1626,7 +1639,7 @@ address(void)
             if(c != '+' && c != '-' && c != '^') {
                 peekc = c;
                 if(opcnt == 0)
-                    a = 0;
+                    a = nil;
                 return a;
             }
             sign = 1;
@@ -1640,7 +1653,7 @@ address(void)
     } while(zero <= a && a <= dol);
 
     error(Q);
-    return 0;
+    return nil;
 }
 @
 
@@ -1670,6 +1683,8 @@ getnum(void)
 % regexp, regular expressions
 
 \subsection{Search as addresses: [[/re/]] and [[?re?]]}
+
+\subsection{Reading and compiling a regexp: [[compile()]]}
 
 <<globals ed.c>>=
 Reprog  *pattern;
@@ -1735,16 +1750,31 @@ compile(int eof)
 @
 % see libregexp book
 
+\subsection{[[match()]]}
+
+<<globals ed.c>>=
+Rune*   loc1;
+Rune*   loc2;
+@
+
+<<constants ed.c>>=
+MAXSUB  = 9,        /* max number of sub reg exp */
+@
+<<globals ed.c>>=
+Resub   subexp[MAXSUB];
+@
 
 <<function [[match]](ed.c)>>=
-int
+bool
 match(int *addr)
 {
     if(!pattern)
-        return 0;
+        return false;
+    // else
     if(addr){
         if(addr == zero)
-            return 0;
+            return false;
+        // else
         subexp[0].s.rsp = getline(*addr);
     } else
         subexp[0].s.rsp = loc2;
@@ -1752,11 +1782,11 @@ match(int *addr)
     if(rregexec(pattern, linebuf, subexp, MAXSUB)) {
         loc1 = subexp[0].s.rsp;
         loc2 = subexp[0].e.rep;
-        return 1;
+        return true;
     }
+    // else
     loc1 = loc2 = 0;
-    return 0;
-    
+    return false;
 }
 @
 
@@ -1770,10 +1800,6 @@ case 's':
     continue;
 @
 
-<<globals ed.c>>=
-Rune*   loc1;
-Rune*   loc2;
-@
 
 <<globals ed.c>>=
 int anymarks;
@@ -1852,9 +1878,10 @@ substitute(int inglob)
 }
 @
 
-<<constants ed.c>>=
-MAXSUB  = 9,        /* max number of sub reg exp */
-@
+\subsection{Advanced substitute}
+% move later
+
+
 <<constants ed.c>>=
 ESCFLG  = Runemax,  /* escape Rune - user defined code */
 @
@@ -1862,7 +1889,6 @@ ESCFLG  = Runemax,  /* escape Rune - user defined code */
 <<globals ed.c>>=
 Rune    genbuf[LBSIZE];
 Rune    rhsbuf[LBSIZE/sizeof(Rune)];
-Resub   subexp[MAXSUB];
 @
 
 <<function [[dosub]](ed.c)>>=
@@ -2093,7 +2119,7 @@ global(int k)
 
 \section{Advanced features}
 
-\subsection{running a shell command: [[!]]}
+\subsection{Running a shell command: [[!]]}
 % still M-! on Emacs? 
 
 % not so needed when have multiple windows
