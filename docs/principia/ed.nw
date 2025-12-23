@@ -418,6 +418,7 @@ tline = 2;
 @
 % sentinel ... so never line offset in zero have the 0 or 1 value, hmmm
 % but means first 2 bytes of tfile are 0 (first seek will do that)
+% also 2 because 1 is used to represent a mark!
 
 <<globals ed.c>>=
 char    T[] = "TMP";
@@ -748,7 +749,7 @@ caseread:
 % still marked as changed? (but in that case means fchange was already
 % at false so why changing it again to false?)
 
-
+% move to advanced topics? seems very plan9 specific feature
 <<[[commands()]] other locals>>=
 Dir *d;
 @
@@ -842,7 +843,7 @@ setwide(void)
     }
 }
 @
-% given?
+% given = whether the user explicitly typed an address or not.
 
 % setwide mean set addr1/addr2 to start/end of the fil
 % so that commands operate on the whole file (wide)
@@ -1103,7 +1104,7 @@ printcom(void)
 @
 % but until now nothing really set addr1 and addr2, so it will be 0 0 ?
 % I think no because commands() parsing will set addr1/addr2 to better
-% defaults
+% defaults, often addr1 = addr2 = dot = dol, that is end of buffer
 
 <<function [[nonzero]](ed.c)>>=
 void
@@ -1228,7 +1229,6 @@ add(int i)
     append(gettty, addr2);
 }
 @
-%given?
 
 % f can be gettty(), a can be addr2
 
@@ -1294,7 +1294,9 @@ if(temp)
 
 
 % dual of getfile, write in iobuf, but all the lines, not just one
-% like in getfile()
+% like in getfile().
+% Key to understand tfile! very simple code actually once understand
+%  what getline() is doing
 <<function [[putfile]](ed.c)>>=
 void
 putfile(void)
@@ -1349,11 +1351,12 @@ setnoaddr(void)
         error(Q);
 }
 @
-%given?
-
+% command that does not accept addresses!
 
 \subsection{running a shell command: [[!]]}
 % still M-! on Emacs? 
+
+% not so needed when have multiple windows
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case '!':
@@ -1572,10 +1575,12 @@ global(int k)
     setwide();
     squeeze(dol > zero);
 
+    // readding a '/' or '?'
     c = getchr();
     if(c == '\n')
         error(Q);
 
+    // reading the whole pattern until corresponding ending '/' or '?'
     compile(c);
 
     gp = globuf;
@@ -1595,19 +1600,15 @@ global(int k)
         *gp++ = 'p';
     *gp++ = '\n';
     *gp = 0;
+
     for(a1=zero; a1<=dol; a1++) {
         *a1 &= ~01;
         if(a1 >= addr1 && a1 <= addr2 && match(a1) == k)
             *a1 |= 01;
     }
 
-    /*
-     * Special case: g/.../d (avoid n^2 algorithm)
-     */
-    if(globuf[0] == 'd' && globuf[1] == '\n' && globuf[2] == 0) {
-        gdelete();
-        return;
-    }
+    <<[[global()]](ed.c) if [[g/.../d]] command, call optimized [[gdelete()]]>>
+
     for(a1=zero; a1<=dol; a1++) {
         if(*a1 & 01) {
             *a1 &= ~01;
@@ -1615,35 +1616,22 @@ global(int k)
             globp = globuf;
             // recurse!
             commands();
-            a1 = zero;
+            a1 = zero; // zero may have grown and move, need update a1
         }
     }
 }
 @
 
-<<function [[gdelete]](ed.c)>>=
-void
-gdelete(void)
-{
-    int *a1, *a2, *a3;
+% note that commands () will modify addr1, addr2, zero, etc.
+% so that's also why we use the mark and do the matching in phase1
+% separate from phase2.
+% Can't just store list of lineno in phase1, because they will be invalid
+% if the command is g/re/d, to delete, hence the use of marks attached
+% to line offset in zero itself. So that delete and move keep the mark
 
-    a3 = dol;
-    for(a1=zero; (*a1&01)==0; a1++)
-        if(a1>=a3)
-            return;
-    for(a2=a1+1; a2<=a3;) {
-        if(*a2 & 01) {
-            a2++;
-            dot = a1;
-        } else
-            *a1++ = *a2++;
-    }
-    dol = a1-1;
-    if(dot > dol)
-        dot = dol;
-    fchange = true;
-}
-@
+% Same way see the subtle a1 = zero, so we restart from the start
+% after each commands() because zero may have changed so we must
+% restart from zero but hopefully with one less marked line this time.
 
 <<constants ed.c>>=
 ESIZE   = 256,      /* max size of reg exp */
@@ -1653,8 +1641,10 @@ ESIZE   = 256,      /* max size of reg exp */
 Reprog  *pattern;
 @
 
+% will set pattern
+% eof should be '/' or '?'
 <<function [[compile]](ed.c)>>=
-/// commands('g') -> global -> <>
+/// commands('g' | 'v') -> global -> <>
 void
 compile(int eof)
 {
@@ -1671,6 +1661,7 @@ compile(int eof)
             error(Q);
         return;
     }
+    // else
     if(pattern) {
         free(pattern);
         pattern = nil;
@@ -1682,6 +1673,7 @@ compile(int eof)
                 error(Q);
                 return;
             }
+            // else
             ep += runetochar(ep, &c);
             if((c = getchr()) == '\n') {
                 error(Q);
@@ -1692,11 +1684,12 @@ compile(int eof)
             error(Q);
             return;
         }
+        // else
         ep += runetochar(ep, &c);
     } while((c = getchr()) != eof && c != '\n');
     if(c == '\n')
         peekc = c;
-    *ep = 0;
+    *ep = '\0';
 
     // lib_regexp call
     pattern = regcomp(expbuf);
@@ -1972,8 +1965,7 @@ case 'u':
 <<globals ed.c>>=
 bool given;
 @
-% ???
-
+% whether the user explicitly typed an address or not.
 
 <<[[commands()]] other locals>>=
 int *a1;
@@ -2001,10 +1993,8 @@ for(;;) {
             a1--;
     }
     addr1 = a1;
-    if(c == ';')
-        dot = a1;
+    <<[[commands()]] in address parsing, if separator is [[';']]>>
 }
-
 if(lastsep != '\n' && a1 == nil)
     a1 = dol;
 
@@ -2017,6 +2007,16 @@ if((addr2=a1) == nil) {
 if(addr1 == nil)
     addr1 = addr2;
 @
+
+<<[[commands()]] in address parsing, if separator is [[';']]>>=
+if(c == ';')
+    dot = a1;
+@
+% so allow to set dot as part of the address,  like 3;5p
+% means after this command dot will be 3.
+
+
+
 
 % "each command can be preceded by one or two line numbers ..."
 <<function [[address]](ed.c)>>=
@@ -2356,7 +2356,7 @@ case 'k':
 @
 
 
-\section{Optimizations: Block IO}
+\section{Optimizations}
 
 % needed? because when ken thompson wrote it there was no buffer cache in
 % the kernel? So he kinda reimplement one in userland for ed?
@@ -2516,7 +2516,41 @@ getline(int tl)
 }
 @
 
+\subsection{[[gdelete()]]}
 
+<<[[global()]](ed.c) if [[g/.../d]] command, call optimized [[gdelete()]]>>=
+/*
+ * Special case: g/.../d (avoid n^2 algorithm)
+ */
+if(globuf[0] == 'd' && globuf[1] == '\n' && globuf[2] == 0) {
+    gdelete();
+    return;
+}
+@
+
+<<function [[gdelete]](ed.c)>>=
+void
+gdelete(void)
+{
+    int *a1, *a2, *a3;
+
+    a3 = dol;
+    for(a1=zero; (*a1&01)==0; a1++)
+        if(a1>=a3)
+            return;
+    for(a2=a1+1; a2<=a3;) {
+        if(*a2 & 01) {
+            a2++;
+            dot = a1;
+        } else
+            *a1++ = *a2++;
+    }
+    dol = a1-1;
+    if(dot > dol)
+        dot = dol;
+    fchange = true;
+}
+@
 
 \section{Error management}
 
