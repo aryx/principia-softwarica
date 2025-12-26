@@ -1,0 +1,1823 @@
+\section{Introduction}
+
+\section{Core data structures}
+
+\subsection{The environment}
+%alt: globals
+
+<<constant [[Env.tfname]]>>=
+let tfname = Fpath.v "/tmp/oed.scratch"
+@
+
+<<type [[Env.tfile_offset]]>>=
+(* offset in tfname file content *)
+type tfile_offset = Tfile_offset of int
+@
+
+<<type [[Env.offset_and_mark]]>>=
+type offset_and_mark = {
+  (* offset in tfile *)
+  offset: tfile_offset;
+  (* used by the 'g' or 'v' commands to mark matched lines *)
+  mutable mark: bool;
+}
+@
+
+<<constant [[Env.no_line]]>>=
+let no_line = { offset = Tfile_offset 0; mark = false }
+@
+
+<<type [[Env.lineno]]>>=
+type lineno = int
+@
+
+<<type [[Env.regex]]>>=
+type regex = Str.regexp
+@
+
+<<type [[Env.t]]>>=
+type t = {
+  (* to read the user commands from (and also line input in 'a'/'i' modes) *)
+  in_: Parser.state;
+  (* stdout unless oflag is set in which case it's stderr *)
+  out: Out_channel_.t;
+
+  (* This is the temporary tfname file, ed backing store!
+   * Note that we can't use the OCaml usual {in/out}_channel type because we
+   * need to both read and write in the temporary file, hence the use of the
+   * more general Unix.file_descr.
+   *)
+  tfile : Unix_.file_descr;
+  (* current write file offset in tfile to append new lines *)
+  mutable tline : tfile_offset;
+
+  (* growing array of line offsets in tfile. 1-indexed array but the 0
+   * entry is used as a sentinel. map lineno -> file_offset.
+   * The bool is a mark used to remember a matching line in g/re/x
+   * operations.
+   *)
+  mutable zero : offset_and_mark array;
+  (* index entried in zero *)
+  (* current line *)
+  mutable dot: lineno;
+  (* last line (dollar) *)
+  mutable dol: lineno;
+
+  (* for 1,3p commands. See also Address.range, but here we have
+   * concrete line number, not symbolic "addresses".
+   *)
+  mutable addr1: lineno;
+  mutable addr2: lineno;
+  mutable given: bool;
+
+  (* for 'w', 'r', 'f' *)
+  mutable savedfile: Fpath.t option;
+  (* write append, for 'W' *)
+  mutable wrapp : bool;
+  (* did the buffer changed (mostly tested with dol > 0) *)
+  mutable fchange: bool;
+
+  (* count #chars read, or number of lines; displayed by Out.putd() *)
+  mutable count: int;
+  (* set by ?? effect is to Out.printcom() in commands () before the next cmd *)
+  mutable pflag: bool;
+  (* ?? what functions rely on column number set? *)
+  mutable col: int;
+
+  (* verbose (a.k.a. interactive) flag, cleared by 'ed -' *)
+  vflag: bool;
+  (* output flag, set by 'ed -o'.
+   * used just in Out.putchr() so could be removed almost.
+   *)
+  oflag: bool;
+}
+@
+
+<<function [[Env.init]]>>=
+let init (caps : < Cap.stdin; Cap.stdout; Cap.stderr; ..>) 
+     (vflag : bool) (oflag : bool) : t =
+  let out = if oflag then Console.stderr caps else Console.stdout caps in
+  (* will be overwritten possibly in the caller by argv[1] 
+   * TODO: works on Linux? /fd/1 exists?
+   *)
+  let savedfile = if oflag then Some (Fpath.v "/fd/1") else None in
+  { 
+    in_ = Parser.init caps;
+    out;
+
+    tfile =
+      (try
+        Unix.openfile !!tfname [ Unix.O_RDWR; Unix.O_CREAT ] 0o600
+      with Unix.Unix_error (err, s1, s2) ->
+        Logs.err (fun m -> m "%s %s %s" (Unix.error_message err) s1 s2);
+        (* alt: just no try and rely on default exn and backtrace *)
+        (* alt: call Out.putxxx funcs but mutual recursion *)
+        output_string out "?TMP\n";
+        (* ed was doing exits(nil) = exit 0 so we do the same *)
+        raise (Exit.ExitCode 0)
+       );
+    (* sentinel value so that file offsets 0 and 1 are reserved and no
+     * real line offsets in zero[] can have those values
+     *)
+    tline = Tfile_offset 2;
+
+    zero = Array.make 10 no_line;
+    dot = 0;
+    dol = 0;
+    addr1 = 0;
+    addr2 = 0;
+    given = false;
+
+    savedfile;
+    fchange = false;
+    wrapp = false;
+    count = 0;
+    pflag = false;
+    col = 0;
+
+    vflag = if oflag then false else vflag;
+    oflag;
+  }
+@
+
+
+\subsection{Line addresses}
+
+<<type [[Address.t]]>>=
+(* An "address" is a way to specify a line number symbolically or literally *)
+type t =
+  | Current (* '.' *)
+  | Last    (* '$' *)
+  | Line of int (* <n> *)
+  | Mark of char (* \a *)
+  | SearchFwd of string (* /.../ *)
+  | SearchBwd of string (* ?...? *)
+  | Relative of t * int (* -, +, ^ *)
+[@@deriving show]
+@
+%$
+
+<<type [[Address.range]]>>=
+(* What is parsed before a command. For instance 1,3p will be parsed as
+ * { addr1 = Some (Line 1); addr2 = Line 3; given = true; set_dot = false}.
+ *)
+type range = {
+  addr1 : t option;
+  addr2 : t;
+  given : bool;
+  set_dot : bool;
+}
+[@@deriving show]
+@
+
+
+
+\section{[[CLI.main()]]}
+
+<<type [[CLI.caps]]>>=
+type caps = < 
+    Cap.stdin; Cap.stdout; Cap.stderr;
+    Cap.open_in; Cap.open_out;
+  >
+@
+
+<<signature [[CLI.main]]>>=
+val main: <caps; ..> ->
+  string array -> Exit.t
+@
+
+
+<<function [[CLI.main]]>>=
+let main (caps : <caps; ..>) (argv : string array) : Exit.t =
+
+  let args = ref [] in
+  (* "verbose(interactive)" mode is set by default *)
+  let vflag = ref true in
+  let oflag = ref false in
+
+  let level = ref (Some Logs.Warning) in
+
+  let options = [
+     "-", Arg.Clear vflag,
+     " non-interactive mode (opposite of verbose)";
+    (* when '-o', command 'w' will write to stdout (useful for filters) *)
+     "-o", Arg.Set oflag,
+     " write output to standard output instead of modifying the file";
+
+     (* new: this is verbose *logging*, different from interactive mode *)
+     "-verbose", Arg.Unit (fun () -> level := Some Logs.Info),
+     " verbose logging mode";
+     "-debug", Arg.Unit (fun () -> level := Some Logs.Debug),
+     " debug logging mode";
+     "-quiet", Arg.Unit (fun () -> level := None),
+     " quite logging mode";
+  ] |> Arg.align
+  in
+  (try 
+    Arg.parse_argv argv options (fun t -> args := t::!args) 
+      (spf "usage: %s [-lwc] [file ...]" argv.(0));
+  with
+  | Arg.Bad msg -> UConsole.eprint msg; raise (Exit.ExitCode 2)
+  | Arg.Help msg -> UConsole.print msg; raise (Exit.ExitCode 0)
+  );
+  Logs_.setup !level ();
+
+  let env : Env.t = Env.init caps !vflag !oflag in
+
+  (match !args with
+  | [] -> ()
+  | [file] -> 
+      env.savedfile <- Some (Fpath.v file);
+      env.in_.globp <- Some (Lexing.from_string "r")
+  | _::_::_ -> 
+      (* stricter: *)
+      failwith "too many arguments" 
+  );
+  if !oflag then env.in_.globp <- Some (Lexing.from_string "a");
+  Logs.debug (fun m -> m "env = %s" (Env.show env));
+
+  while true do
+    (* when neither commands() nor quit() raise Error, then
+     * quit() will proceed and raise Exit.ExitCode which
+     * will exit this loop (and be caught in Main._)
+     *)
+    try (
+        commands caps env;
+        Commands.quit caps env;
+    )
+    with Error.Error s -> 
+        (* ed: was in a separate error_1 function *)
+        (* TODO: reset globals too? *)
+        Out.putchr env '?';
+        Out.putst env s;
+  done;
+  Exit.OK
+@
+
+
+
+\section{[[CLI.commands()]] interpreter loop}
+
+<<function [[CLI.commands]]>>
+let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
+  Logs.debug (fun m -> m "commands ->");
+  let done_ = ref false in
+
+  while not !done_ do
+
+    if e.pflag then begin
+        e.pflag <- false;
+        e.addr1 <- e.dot;
+        e.addr2 <- e.dot;
+        Commands.printcom e;
+    end;
+
+    let range : Address.range = Parser.parse_address_range e.in_ in
+    let (addr1, addr2) = eval_range e range in
+    (* TODO: use range.set_dot! *)
+    e.addr1 <- addr1;
+    e.addr2 <- addr2;
+    e.given <- range.given;
+
+    (match Parser.consume e.in_ with
+
+    | T.Char c ->
+      (match c with
+      (* inspecting *)
+
+      | 'p' | 'P' ->
+         In.newline e;
+         Commands.printcom e;
+      | 'f' ->
+         (* alt: move in Commands.file() *)
+         Commands.setnoaddr e;
+         let file : Fpath.t = In.filename e c in
+         assert (e.savedfile = Some file);
+         Out.putst e !!file;
+      | '=' ->
+         (* alt: move in Commands.print_dot_line_number() *)
+         Commands.setwide e;
+         Commands.squeeze e 0;
+         In.newline e;
+         e.count <- e.addr2;
+         Out.putd e;
+         Out.putchr e '\n';
+      (* new: *)
+      | 'X' -> 
+         In.newline e;
+         Unix.fsync e.tfile;
+         Logs.app (fun m -> m "env = %s\ntfile content =\n%s"
+                    (Env.show e)
+                    (FS.cat caps Env.tfname |> String.concat "\n"));
+
+      (* reading *)
+
+      | 'r' -> 
+          let file : Fpath.t = In.filename e c in
+          Commands.read caps e file      
+
+      (* writing *)
+      | 'w' | 'W' ->
+         if c = 'W' then e.wrapp <- true;
+         (* TODO: if [wW][qQ] *)
+         let file : Fpath.t = In.filename e c in
+         Commands.write caps e file;
+
+      (* modifying *)
+
+      | 'a' -> 
+         Logs.info (fun m -> m "append mode");
+         Commands.add e 0
+      | 'i' -> 
+         Logs.info (fun m -> m "insert mode");
+         Commands.add e (-1)
+      | 'd' ->
+         Commands.nonzero e;
+         In.newline e;
+         Commands.rdelete e e.addr1 e.addr2;
+      | 'c' ->
+         Commands.nonzero e;
+         In.newline e;
+         Commands.rdelete e e.addr1 e.addr2;
+         Commands.append e (In.gettty e) (e.addr1 - 1) |> ignore;
+
+      (* globals *)
+      | 'g' -> global caps e true
+      | 'v' -> global caps e false
+
+      (* other *)
+      | 'q' | 'Q' ->
+         if c = 'Q' then e.fchange <- false;
+         Commands.setnoaddr e;
+         In.newline e;
+         Commands.quit caps e;
+
+      | c -> failwith (spf "unsupported command '%c'" c)
+      )
+      (* ed: was doing error(Q) here but because ed relied on the commands
+       * doing some 'continue' which we can't in OCaml so
+       * better not use Error.e here
+       *)
+
+    | T.Newline ->
+        (* print when no command specified, as in 1\n *)
+
+        (* ed: was a1 == nil but simpler to look at given *)
+        if not range.given then begin
+          (* so any subsequent newline will display a successive line *)
+          let a1 = e.dot + 1 in
+          e.addr2 <- a1;
+          e.addr1 <- a1;
+        end;
+        (* TODO: if lastsep = ';' *)
+        Commands.printcom e;
+
+    | T.EOF ->
+       (* old: raise (Exit.ExitCode 0) but bad because we need to get to quit()
+        * or to return to global() caller when nested call to commands().
+        *)
+       done_ := true
+    | t -> Parser.was_expecting_but_got "a letter" t
+    )
+  done;
+  Logs.debug (fun m -> m "commands <-");
+@
+
+<<function [[CLI.global]]>>=
+(* g/re/cmd, v/re/cmd *)
+and global caps (e : Env.t) (pos_or_neg : bool) : unit =
+
+  e.in_.globp |> Option.iter (fun _ ->
+      Logs.err (fun m -> m "global command already in");
+      Error.e ""
+  );
+  Commands.setwide e;
+  Commands.squeeze e (if e.dol > 0 then 1 else 0);
+
+  match Parser.consume e.in_ with
+  | Slash str ->
+      let re = Str.regexp str in
+      (* TODO: Lexer.line_or_escaped_lines *)
+      let line = Lexer.line e.in_.stdin in
+      let line = if line = "" then "p" else line in
+
+      (* step1: marking the matching lines *)
+      (* ed: was starting at 0, but then special case later in match()
+       * so simpler to start at 1 
+       * old: I was recording in a local xs the list of matched lineno, but
+       * it does not work because commands() in step2 below may modify 
+       * zero which would invalidate the matched lineno of step1
+       *)
+      for a1 = 1 to e.dol do
+        if a1 >= e.addr1 && a1 <= e.addr2 && match_ e re a1 = pos_or_neg then
+          e.zero.(a1).mark <- true
+      done;
+
+      (* step2: processing the matching lines
+       * old: for a1 = 1 to e.dol, but can't work because
+       * commands() below might modify zero and delete lines in which case
+       * dol will change dynamicaly.
+       *)
+      let a1 = ref 1 in
+      while !a1 <= e.dol do
+        if e.zero.(!a1).mark then begin
+            e.zero.(!a1).mark <- false;
+            e.dot <- !a1;
+            (* ugly: need trailing \n otherwise T.EOF would be consumed
+             * too early by In.Newline().
+             *)
+            e.in_.globp <- Some (Lexing.from_string (line ^ "\n"));
+            (* recurse!! *)
+            commands caps e;
+            (* need to restart from scratch, but with one less marked line *)
+            a1 := 0
+        end;
+        incr a1
+      done
+  
+  | t -> Parser.was_expecting_but_got "a regexp" t
+@
+
+\section{[[r]]eading a file: [[r]]}
+
+\section{[[w]]riting a file: [[w]]}
+
+\section{Main commands}
+
+\section{Advanced command addresses}
+
+\section{Search and replace}
+
+\section{Advanced features}
+
+\section{Error management}
+
+
+
+
+
+\section{Extra code}
+
+\subsection*{[[Address.ml]]}
+
+%-------------------------------------------------------------
+
+<<Address.ml>>=
+<<type [[Address.t]]>>
+<<type [[Address.range]]>>
+@
+
+\subsection*{[[CLI.ml]]}
+
+<<function [[CLI.match_]]>>=
+let match_ (e : Env.t) (re : Env.regex) (addr : lineno) : bool =
+  let line = Disk.getline e addr in
+  (* old: Str.string_match re line 0
+   * but we need unanchored search *)
+  try
+    Str.search_forward re line 0 |> ignore;
+    true
+   with Not_found -> false
+@
+
+<<function [[CLI.eval_address]]>>=
+(* TODO? need to pass [[a]] like in C with e.dot and adjust [[a]] as we go
+ * like in C? so that /.../ and ?...? start from the right place?
+ *)
+let rec eval_address (e : Env.t) (a : Address.t) : Env.lineno =
+  match a with
+  | A.Current -> e.dot
+  | A.Last -> e.dol
+  | A.Line n -> n
+  | A.Mark _ -> failwith "TODO: Mark"
+  | A.SearchFwd _ | A.SearchBwd _ -> 
+      let dir, re_str = 
+        match a with 
+        | A.SearchFwd re -> 1, re
+        | A.SearchBwd re -> -1, re
+        | _ -> raise (Impossible "cases matched above")
+      in
+      (* TODO: use A.SearchFwd of regex instead of str? compile earlier? *)
+      let re = Str.regexp re_str in
+      (* starting point *)
+      let b = e.dot (* TODO: need to be `a` instead like in C? *) in
+      let rec aux (a : Env.lineno) : Env.lineno =
+        let a = a + dir in
+        let a =
+          match () with
+          (* wrap around start/end of buffer *)
+          | _ when a <= 0 -> e.dol
+          | _ when a > e.dol -> 1
+          | _ -> a
+        in
+        match () with
+        | _ when match_ e re a -> a
+        (* back to starting point and nothing was found *)
+        | _ when a = b ->
+            Logs.warn (fun m -> m "search for %s had no match" re_str);
+            Error.e ""
+        | _ ->
+            aux a
+      in
+      aux e.dot
+
+  | A.Relative (x, n) -> eval_address e x + n
+@
+
+<<function [[CLI.eval_range]]>>=
+let eval_range (e : Env.t) (r : Address.range) : Env.lineno * Env.lineno =
+  Logs.debug (fun m -> m "range = %s" (Address.show_range r));
+
+  let addr2 = eval_address e r.addr2 in
+  let addr1 =
+    match r.addr1 with
+    | None -> addr2
+    | Some a -> eval_address e a
+  in
+  addr1, addr2
+@
+
+%-------------------------------------------------------------
+
+<<CLI.ml>>=
+(* Copyright 2025 Yoann Padioleau, see copyright.txt *)
+open Common
+open Fpath_.Operators
+
+open Env
+module T = Token
+module A = Address
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* An OCaml port of ed of Unix and Plan 9.
+ *
+ * Limitations compared to Plan9 version:
+ *  - no unicode (runes) support
+ *
+ * Improvements over Plan 9 C version:
+ *  - far less globals!
+ *  - no fixed-size array for saved file, buffers, lines, etc.
+ *  - no hard limits on max line size, max size of temp file, 
+ *  - clearer error messages (via logging)
+*)
+
+<<type [[CLI.caps]]>>
+(*****************************************************************************)
+(* Helpers *)
+(*****************************************************************************)
+<<function [[CLI.match_]]>>
+  
+<<function [[CLI.eval_address]]>>
+<<function [[CLI.eval_range]]>>
+
+(*****************************************************************************)
+(* Main algorithm *)
+(*****************************************************************************)
+<<function [[CLI.commands]]>>
+<<function [[CLI.global]]>>
+
+(*****************************************************************************)
+(* Entry point *)
+(*****************************************************************************)
+<<function [[CLI.main]]>>
+@
+
+\subsection*{[[CLI.mli]]}
+
+%-------------------------------------------------------------
+
+<<CLI.mli>>=
+<<type [[CLI.caps]]>>
+<<signature [[CLI.main]]>>
+@
+
+
+\subsection*{[[Commands.ml]]}
+
+<<function [[Commands.setwide]]>>=
+let setwide (e : Env.t) : unit =
+  if not e.given then begin
+    e.addr1 <- if e.dol > 0 then 1 else 0;
+    e.addr2 <- e.dol;
+  end;
+  ()
+@
+
+<<function [[Commands.squeeze]]>>=
+let squeeze (e : Env.t) (i : lineno) : unit =
+  if e.addr1 < i || e.addr2 > e.dol || e.addr1 > e.addr2 then begin
+      Logs.warn (fun m -> m "can't squeeze");
+      Error.e "";
+  end
+@
+
+<<function [[Commands.nonzero]]>>=
+let nonzero (e : Env.t) =
+  squeeze e 1
+@
+
+<<function [[Commands.setnoaddr]]>>=
+let setnoaddr (e : Env.t) =
+  if e.given then begin
+      Logs.err (fun m -> m "setnoaddr ??");
+      Error.e "";
+  end
+@
+
+<<type [[Commands.mode]]>>=
+type mode = READ | WRITE
+@
+
+<<function [[Commands.exfile]]>>=
+(* ed: "exit" file =~ close file *)
+let exfile (e : Env.t) (_m : mode) : unit =
+  (* ed: is using passed mode to flush if WRITE but no need in ocaml
+   * because closing the channel will flush any remaining IO.
+   *)
+  if e.vflag then begin
+      Out.putd e;
+      Out.putchr e '\n';
+  end
+@
+
+<<function [[Commands.append]]>>=
+(* f can be getfile() above or In.gettty() *)
+let append (e : Env.t) (f : unit -> string option) (addr : lineno) : int =
+  e.dot <- addr;
+  let nline = ref 0 in
+
+  let rec aux () =
+    match f () with
+    | None -> (* EOF *) !nline
+    | Some str ->
+        if e.dol + 2 >= Array.length e.zero 
+        then begin
+            let oldz = e.zero in
+            let len = Array.length oldz in
+            let newz  = Array.make (len + 512) Env.no_line in
+            Array.blit oldz 0 newz 0 len;
+            e.zero <- newz;
+        end;
+
+        let tl = Disk.putline e str in
+        incr nline;
+
+        e.dol <- e.dol + 1;
+        let a1 = ref e.dol in
+        let a2 = ref (!a1 + 1) in
+        e.dot <- e.dot + 1;
+        let rdot = e.dot in
+        while !a1 > rdot do
+          e.zero.(!a2) <- e.zero.(!a1);
+          decr a2; decr a1;
+        done;
+        e.zero.(rdot) <- {offset = tl; mark = false};
+        (* TODO: update zero *)
+        aux ()
+  in
+  aux ()
+@
+
+<<function [[Commands.printcom]]>>=
+(* 'p' *)
+let printcom (e : Env.t) : unit =
+  nonzero e;
+  for a1 = e.addr1 to e.addr2 do
+    (* TODO: if listn *)
+    Out.putshst e (Disk.getline e a1);
+  done;
+  e.dot <- e.addr2;
+  (* TODO: reset flags *)
+  ()
+@
+
+<<function [[Commands.read]]>>=
+(* 'r' *)
+let read (caps : < Cap.open_in; .. >) (e : Env.t) (file : Fpath.t) : unit =
+  try 
+    file |> FS.with_open_in caps (fun chan ->
+        setwide e;
+        squeeze e 0;
+        let change = (e.dol != 0) in
+        append e (Disk.getfile e chan) e.addr2 |> ignore;
+        exfile e READ;
+        e.fchange <- change;
+    )
+  with Sys_error str ->
+    Logs.err (fun m -> m "Sys_error: %s" str);
+    Error.e !!file
+@
+
+<<function [[Commands.write]]>>=
+(* 'w' *)
+let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
+  try 
+    file |> FS.with_open_out caps (fun chan ->
+        (* TODO: when wq (or do in caller in CLI.ml) *)
+        setwide e;
+        squeeze e (if e.dol > 0 then 1 else 0);
+
+        (* TODO: e.wrapp open without create mode? *)
+        e.wrapp <- false;
+        if e.dol > 0
+        then Disk.putfile e chan;
+
+        exfile e WRITE;
+        if e.addr1 <= 1 && e.addr2 = e.dol
+        then e.fchange <- false;
+        (* TODO: when wq *)
+    )
+  with Sys_error str ->
+    Logs.err (fun m -> m "Sys_error: %s" str);
+    Error.e !!file
+@
+
+<<function [[Commands.add]]>>=
+(* used for 'a' and 'i' *)
+let add (e : Env.t) (i : int) =
+  if i <> 0 && (e.given || e.dol > 0) then begin
+     e.addr1 <- e.addr1 - 1;
+     e.addr2 <- e.addr2 - 1;
+  end;
+  squeeze e 0;
+  In.newline e;
+  append e (In.gettty e) e.addr2 |> ignore
+@
+
+<<function [[Commands.rdelete]]>>=
+(* used for 'r' and 'c' *)
+let rdelete (e : Env.t) (ad1 : lineno) (ad2 : lineno) =
+  let a1 = ref ad1 in
+  let a2 = ref (ad2 + 1) in
+  let a3 = e.dol in
+  e.dol <- e.dol - (!a2 - !a1);
+  let rec aux () =
+    e.zero.(!a1) <- e.zero.(!a2);
+    incr a1;
+    incr a2;
+    if !a2 <= a3
+    then aux ()
+  in
+  aux ();
+  a1 := ad1;
+  if !a1 > e.dol then a1 := e.dol;
+  e.dot <- !a1;
+  e.fchange <- true
+@
+
+<<function [[Commands.quit]]>>=
+(* 'q' *)
+let quit (caps : <Cap.open_out; ..>) (e : Env.t) : unit =
+  if e.vflag && e.fchange && e.dol != 0 then begin
+      (* so a second quit will actually quit *)
+      e.fchange <- false;
+      Logs.warn (fun m -> m "trying to quit with modified buffer");
+      Error.e ""
+  end;
+  (* alt: could also Unix.close e.tfile *)
+  FS.remove caps Env.tfname;
+  raise (Exit.ExitCode 0)
+@
+
+
+%-------------------------------------------------------------
+
+<<Commands.ml>>=
+(* Copyright 2025 Yoann Padioleau, see copyright.txt *)
+open Common
+open Fpath_.Operators
+
+open Env
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* The main commands *)
+
+(*****************************************************************************)
+(* Helpers *)
+(*****************************************************************************)
+
+<<function [[Commands.setwide]]>>
+<<function [[Commands.squeeze]]>>
+<<function [[Commands.nonzero]]>>
+<<function [[Commands.setnoaddr]]>>
+
+<<type [[Commands.mode]]>>
+<<function [[Commands.exfile]]>>
+
+(*****************************************************************************)
+(* append in tfile and adjust e.zero *)
+(*****************************************************************************)
+<<function [[Commands.append]]>>
+
+(*****************************************************************************)
+(* Commands *)
+(*****************************************************************************)
+
+(* ------------------------------------------------------------------------- *)
+(* Inspecting *)
+(* ------------------------------------------------------------------------- *)
+<<function [[Commands.printcom]]>>
+
+(* ------------------------------------------------------------------------- *)
+(* Reading *)
+(* ------------------------------------------------------------------------- *)
+<<function [[Commands.read]]>>
+
+(* ------------------------------------------------------------------------- *)
+(* Writing *)
+(* ------------------------------------------------------------------------- *)
+<<function [[Commands.write]]>>
+
+(* ------------------------------------------------------------------------- *)
+(* Modifying *)
+(* ------------------------------------------------------------------------- *)
+<<function [[Commands.add]]>>
+
+<<function [[Commands.rdelete]]>>
+
+(* ------------------------------------------------------------------------- *)
+(* Other *)
+(* ------------------------------------------------------------------------- *)
+<<function [[Commands.quit]]>>
+@
+
+
+\subsection*{[[Commands.mli]]}
+
+<<signature [[Commands.read]]>>=
+(* 'r' *)
+val read: <Cap.open_in; ..> -> Env.t -> Fpath.t -> unit
+@
+
+<<signature [[Commands.write]]>>=
+(* 'w'*)
+val write: <Cap.open_out; ..> -> Env.t -> Fpath.t -> unit
+@
+
+<<signature [[Commands.add]]>>=
+(* 'a' and 'i' *)
+val add: Env.t -> int -> unit
+@
+
+<<signature [[Commands.printcom]]>>=
+(* 'p' *)
+val printcom : Env.t -> unit
+@
+
+<<signature [[Commands.rdelete]]>>=
+(* 'd' and 'c' *)
+val rdelete: Env.t -> Env.lineno -> Env.lineno -> unit
+@
+
+<<signature [[Commands.quit]]>>=
+(* 'q' (need open_out to remove Env.tfname from the filesystem) *)
+val quit: < Cap.open_out; ..> -> Env.t -> unit
+@
+
+<<signature [[Commands.setwide]]>>=
+(* helpers *)
+val setwide: Env.t -> unit
+@
+
+<<signature [[Commands.squeeze]]>>=
+val squeeze: Env.t -> int -> unit
+@
+
+<<signature [[Commands.nonzero]]>>=
+val nonzero: Env.t -> unit
+@
+
+<<signature [[Commands.setnoaddr]]>>=
+val setnoaddr: Env.t -> unit
+@
+
+<<signature [[Commands.append]]>>=
+(* return nubber of lines added, but usually ignored by caller *)
+val append: Env.t -> (unit -> string option) -> Env.lineno -> int
+@
+
+%-------------------------------------------------------------
+
+<<Commands.mli>>=
+
+<<signature [[Commands.read]]>>
+<<signature [[Commands.write]]>>
+<<signature [[Commands.add]]>>
+<<signature [[Commands.printcom]]>>
+<<signature [[Commands.rdelete]]>>
+<<signature [[Commands.quit]]>>
+
+<<signature [[Commands.setwide]]>>
+<<signature [[Commands.squeeze]]>>
+<<signature [[Commands.nonzero]]>>
+<<signature [[Commands.setnoaddr]]>>
+
+<<signature [[Commands.append]]>>
+@
+
+
+\subsection*{[[Disk.ml]]}
+
+<<function [[Disk.putline]]>>=
+(* store line in tfile and return its offset *)
+let putline (e : Env.t) (line : string) : Env.tfile_offset =
+  e.fchange <- true;
+  let Tfile_offset old_tline = e.tline in
+  Unix.lseek e.tfile old_tline Unix.SEEK_SET |> ignore;
+  (* alt: could use a different terminator like '\0' in C but simpler to
+   * use \n *)
+  let line = line ^ "\n" in
+  let len = String.length line in
+  Unix.write e.tfile (Bytes.of_string line) 0 len |> ignore;
+  e.tline <- Tfile_offset (old_tline + len);
+  Tfile_offset old_tline
+@
+
+<<function [[Disk.getline]]>>=
+(* dual of putline(), retrieve line in tfile (without trailing '\n') 
+ * ed: was taking an Env.tfile_offset but cleaner to take addr
+ *)
+let getline (e : Env.t) (addr : Env.lineno)  : string =
+  let tl = e.zero.(addr).offset in
+  let Tfile_offset offset = tl in
+  Unix.lseek e.tfile offset Unix.SEEK_SET |> ignore;
+  (* alt: Stdlib.input_line (Unix.in_channel_of_descr ...) but then
+   * need to close it which unfortunately also close the file_descr so
+   * we do our own adhoc input_line below.
+   *)
+  let bytes = Bytes.of_string " " in
+  let rec aux acc =
+    let n = Unix.read e.tfile bytes 0 1 in
+    let c : char = Bytes.get bytes 0 in
+    if n = 1 && c <> '\n'
+    then aux (c::acc)
+    (* no need to add the \n, putshst will add it *)
+    else String_.of_chars (List.rev acc)
+  in
+  aux []
+@
+
+<<function [[Disk.getfile]]>>=
+(* will return one line (without trailing '\n') or None when reached EOF *)
+let getfile (e : Env.t) (chan : Chan.i) () : string option =
+  (* alt: use Stdlib.input_line which does some extra magic around newlines
+   * and EOF we want, because ed also uniformize the lack of newline before EOF
+   * (see the "\\n appended" message below),but we want to to match exactly what
+   * ed does and display the same error message so we need to go lower level
+   * than input_line and use input_char directly.
+   *)
+  try 
+    (* 's' will not have the trailing '\n' *)
+    let s = input_line chan.ic in
+    e.count <- e.count + String.length s + 1 (* to count the new line *);
+    Some s
+  with End_of_file -> None
+@
+
+<<function [[Disk.putfile]]>>=
+(* dual of getfile() but this time writing all the lines, not just one *)
+let putfile (e : Env.t) (chan : Chan.o) : unit =
+  for a1 = e.addr1 to e.addr2 do
+    let l = getline e a1 ^ "\n" in
+    e.count <- e.count + String.length l;
+    output_string chan.oc l;
+  done
+@
+
+%-------------------------------------------------------------
+
+<<Disk.ml>>=
+(* Copyright 2025 Yoann Padioleau, see copyright.txt *)
+open Common
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* Helpers to read/write in temporary file (Env.tfile) or specified
+ * user file (Env.savedfile).
+ *)
+
+(*****************************************************************************)
+(* getline/putline (from/to tfile) *)
+(*****************************************************************************)
+<<function [[Disk.putline]]>>
+<<function [[Disk.getline]]>>
+
+(*****************************************************************************)
+(* getfile/putfile (from/to savedfile) *)
+(*****************************************************************************)
+<<function [[Disk.getfile]]>>
+  
+(* TODO:
+  let string_of_chars xs =
+    (* alt: do that in caller, again cleaner than in filename *)
+    e.count <- e.count + List.length xs;
+    failwith "TODO"
+  in
+  let rec aux acc
+    let copt : char option =
+      try Some (input_char chan.i)
+      with End_of_file -> None
+    in
+    (match copt with
+    | None -> 
+        if acc = []
+        then None
+        else begin 
+           Out.putstr e "\\n appended";
+           Some (('\n'::acc) |> List.rev |> string_of_chars)
+        end
+     | Some c -> aux (c::acc)
+    ...
+*)
+<<function [[Disk.putfile]]>>
+@
+
+
+\subsection*{[[Disk.mli]]}
+
+<<signature [[Disk.putline]]>>=
+val putline : Env.t -> string -> Env.tfile_offset
+@
+
+<<signature [[Disk.getline]]>>=
+val getline: Env.t -> Env.lineno -> string
+@
+
+<<signature [[Disk.getfile]]>>=
+val getfile: Env.t -> Chan.i -> (unit -> string option)
+@
+
+<<signature [[Disk.putfile]]>>=
+val putfile: Env.t -> Chan.o -> unit
+@
+
+%-------------------------------------------------------------
+
+<<Disk.mli>>=
+
+<<signature [[Disk.putline]]>>
+<<signature [[Disk.getline]]>>
+
+<<signature [[Disk.getfile]]>>
+<<signature [[Disk.putfile]]>>
+@
+
+
+\subsection*{[[Env.ml]]}
+
+%-------------------------------------------------------------
+
+<<Env.ml>>=
+(* Copyright 2025 Yoann Padioleau, see copyright.txt *)
+open Common
+open Fpath_.Operators
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* A set of globals used by many functions.
+ *
+ *)
+
+(*****************************************************************************)
+(* Types and constants *)
+(*****************************************************************************)
+
+(* LATER: use Tmp.with_new_file *)
+<<constant [[Env.tfname]]>>
+
+<<type [[Env.tfile_offset]]>>
+[@@deriving show]
+
+<<type [[Env.offset_and_mark]]>>
+[@@deriving show]
+(* alt: use None *)
+<<constant [[Env.no_line]]>>
+
+(* ed uses 1-indexed line numbers, but 0 is also used as a special value.
+ * alt: call it cursor?
+*)
+<<type [[Env.lineno]]>>
+[@@deriving show]
+
+(* alt: Re.t *)
+<<type [[Env.regex]]>>
+
+(* The globals *)
+<<type [[Env.t]]>>
+[@@deriving show]
+
+(*****************************************************************************)
+(* init() *)
+(*****************************************************************************)
+
+<<function [[Env.init]]>>
+@
+
+
+\subsection*{[[Error.ml]]}
+
+<<exception [[Error.Error]]>>=
+exception Error of string
+@
+
+<<function [[Error.e]]>>=
+(* the raise will effectively jump on the exn handler in CLI.main()
+ * (emulating the longjmp done in C).
+ *)
+let e s =
+  raise (Error s)
+@
+
+
+%-------------------------------------------------------------
+
+<<Error.ml>>=
+
+<<exception [[Error.Error]]>>
+
+<<function [[Error.e]]>>
+@
+
+
+\subsection*{[[In.ml]]}
+
+<<function [[In.newline]]>>=
+let newline (e : Env.t) : unit =
+  match Parser.consume e.in_ with
+  | T.Newline -> ()
+  (* tricky but is useful to treat EOF as a newline sometimes
+   * like for globp "r" but sometimes not in g/re/x globp context so that
+   * it is consumed by commands() leading to returning from commands().
+   *)
+  | T.EOF -> ()
+  (* TODO: if special chars pln ? *)
+  | t -> Parser.was_expecting_but_got "newline" t
+@
+
+<<function [[In.filename]]>>=
+let filename (e : Env.t) (cmd : char) : Fpath.t =
+  (* alt: do it in the caller, clearer; will be incremented
+   * when reading the file in getfile
+   *)
+  e.count <- 0;
+
+  match Parser.consume e.in_ with
+  | T.Newline | T.EOF ->
+      (* no file specified, use maybe e.savedfile then *)
+      (match e.savedfile with
+      | None when cmd <> 'f' -> 
+            Logs.err (fun m -> m "no savedfile and no filename given");
+            Error.e ""
+      | None -> failwith "TODO?? what does ed in that case?"
+      | Some file -> file
+      )
+  | T.Spaces ->
+      let str = Lexer.filename e.in_.stdin in
+      if str = ""
+      then Parser.was_expecting "a non empty filename";
+      (match Parser.consume e.in_ with
+      | T.Newline -> 
+            let file = Fpath.v str in
+            if e.savedfile = None || cmd = 'e' || cmd = 'f'
+            then e.savedfile <- Some file;
+            file
+      | t -> Parser.was_expecting_but_got "a newline" t
+      )
+  | t -> Parser.was_expecting_but_got "a newline or space and filename" t
+@
+
+<<function [[In.gety]]>>=
+(* return a line (without trailing '\n') *)
+let gety (e : Env.t) : string =
+  Lexer.line e.in_.stdin
+@
+
+<<function [[In.gettty]]>>=
+(* Read a line from stdin. Return None when the user entered "." on a single
+ * line meaning the end of interactive input.
+ * This has a similar interface to getfile() so it can be passed to
+ * append().
+ *)
+let gettty (e : Env.t) () : string option =
+  let s = gety e in
+  if s = "."
+  then begin
+    Logs.info (fun m -> m "end of input, back to ed");
+    None
+  end
+  else Some s
+@
+
+
+%-------------------------------------------------------------
+
+<<In.ml>>=
+(* Copyright 2025 Yoann Padioleau, see copyright.txt *)
+open Common
+module T = Token
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* Additional helpers to read from stdin.
+ *
+ * alt: could be merged with Parser.ml
+ *)
+
+(*****************************************************************************)
+(* API *)
+(*****************************************************************************)
+
+<<function [[In.newline]]>>
+
+<<function [[In.filename]]>>
+
+<<function [[In.gety]]>>
+  
+
+<<function [[In.gettty]]>>
+@
+
+
+\subsection*{[[In.mli]]}
+
+<<signature [[In.newline]]>>=
+(* check the next token is a newline (or EOF) and consume it *)
+val newline: Env.t -> unit
+@
+
+<<signature [[In.filename]]>>=
+(* read a filename from stdin or from Env.savedfile otherwise *)
+val filename: Env.t -> char (* 'f' or 'e' or ? *) -> Fpath.t
+@
+
+<<signature [[In.gettty]]>>=
+(* Used to read a set of lines from stdin until a single "." on a line
+ * is entered marking the end of user text input.
+ *)
+val gettty : Env.t -> (unit -> string option)
+@
+
+
+%-------------------------------------------------------------
+
+<<In.mli>>=
+
+<<signature [[In.newline]]>>
+
+<<signature [[In.filename]]>>
+
+<<signature [[In.gettty]]>>
+@
+
+
+\subsection*{[[Lexer.mll]]}
+
+<<constant [[Lexer.buf]]>>=
+let buf = Buffer.create 32
+}
+@
+
+<<constant [[Lexer.space]]>>=
+let space = [' ''\t']
+@
+
+<<constant [[Lexer.letter]]>>=
+let letter = ['a'-'z''A'-'Z''_']
+@
+
+<<constant [[Lexer.digit]]>>=
+let digit = ['0'-'9']
+
+(*****************************************************************************)
+(* Main rule *)
+(*****************************************************************************)
+rule token = parse
+  | space+        { Spaces }
+  | '\n'          { Newline }
+
+  (* for the command *)
+  | (letter | '=') as c   { Char c }
+
+  (* for the addresses *)
+  | digit+        { Int (int_of_string (Lexing.lexeme lexbuf)) }
+  | '.' { Dot } | '$' { Dollar }
+@
+%$
+
+
+%-------------------------------------------------------------
+
+<<Lexer.mll>>=
+{
+open Common
+open Token
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* Splitting the user input in tokens which are then assembled in
+ * addresses or commands by Parser.ml
+ *)
+
+<<constant [[Lexer.buf]]>>
+(*****************************************************************************)
+(* Regexps aliases *)
+(*****************************************************************************)
+<<constant [[Lexer.space]]>>
+<<constant [[Lexer.letter]]>>
+<<constant [[Lexer.digit]]>>
+  | ',' { Comma } | ';' { Semicolon }
+  | '+' { Plus } | '-' { Minus } | '^' { Caret }
+  | '\'' ['a'-'z'] as s { Mark s.[1] }
+  | '/'              { Buffer.clear buf; regexp '/' lexbuf }
+  | '?'              { Buffer.clear buf; regexp '?' lexbuf }
+
+  | eof { EOF }
+
+and regexp delim = parse
+  | '\\' (_ as c) {
+      Buffer.add_char buf '\\'; Buffer.add_char buf c;
+      regexp delim lexbuf
+    }
+  | '/' {
+      if delim = '/'
+      then Slash (Buffer.contents buf)
+      else begin
+        Buffer.add_char buf '/';
+        regexp delim lexbuf
+      end
+     }
+  | '?' {
+      if delim = '?'
+      then Question (Buffer.contents buf)
+      else begin
+        Buffer.add_char buf '?';
+        regexp delim lexbuf
+      end
+    }
+  | '\n' | eof {
+      failwith "Unterminated regular expression"
+    }
+  | _ as c {
+      Buffer.add_char buf c;
+      regexp delim lexbuf
+    }
+
+(*****************************************************************************)
+(* Other rules *)
+(*****************************************************************************)
+and line = parse
+  | ([^ '\n' ]* as s) '\n' { s }
+  | eof { failwith "eof" (* alt: None? *) }
+
+and filename = parse
+  | [^ '\n' ' ']* { Lexing.lexeme lexbuf }
+  | eof { failwith "eof" }
+@
+
+
+\subsection*{[[Main.ml]]}
+
+<<toplevel [[Main._1]]>>=
+let _ = 
+  Cap.main (fun (caps : Cap.all_caps) ->
+     let argv = CapSys.argv caps in
+     Exit.exit caps (Exit.catch (fun () -> CLI.main caps argv))
+@
+
+
+%-------------------------------------------------------------
+
+<<Main.ml>>=
+<<toplevel [[Main._1]]>>
+  )
+@
+
+
+\subsection*{[[Out.ml]]}
+
+<<function [[Out.putchr]]>>=
+let putchr (e : Env.t) (c : char) =
+  (* TODO: if listf *)
+  output_char e.out c;
+  if c = '\n' then flush e.out
+@
+
+<<function [[Out.putst]]>>=
+(* pre: str should not contain '\n' ? *)
+let putst (e : Env.t) (str : string) : unit =
+  (* ugly? should set after putchr \n? also who uses col? *)
+  e.col <- 0;
+  (* iterate over str and call putchr to get a chance
+   * for the listf code above
+   *)
+  String.iter (putchr e) str;
+  putchr e '\n';
+  ()
+@
+
+<<function [[Out.putshst]]>>=
+(* origin: put shell string? *)
+let putshst (e : Env.t) (str : string) : unit =
+  (* no diff between rune and chars in oed *)
+  putst e str
+@
+
+<<function [[Out.putd]]>>=
+(* display e.count *)
+let rec putd (e : Env.t) : unit =
+  let r = e.count mod 10 in
+  e.count <- e.count / 10;
+  if e.count > 0
+  then putd e;
+  putchr e (Char.chr (Char.code '0' + r))
+@
+
+
+%-------------------------------------------------------------
+
+<<Out.ml>>=
+(* Copyright 2025 Yoann Padioleau, see copyright.txt *)
+open Common
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* Displaying text *)
+
+(*****************************************************************************)
+(* API *)
+(*****************************************************************************)
+
+<<function [[Out.putchr]]>>
+
+<<function [[Out.putst]]>>
+
+<<function [[Out.putshst]]>>
+
+<<function [[Out.putd]]>>
+@
+
+
+\subsection*{[[Out.mli]]}
+
+<<signature [[Out.putchr]]>>=
+val putchr: Env.t -> char -> unit
+@
+
+<<signature [[Out.putst]]>>=
+val putst: Env.t -> string -> unit
+@
+
+<<signature [[Out.putshst]]>>=
+(* ed: put "shell" string, legacy name, identical to putst for oed *)
+val putshst : Env.t -> string -> unit 
+@
+
+<<signature [[Out.putd]]>>=
+(* will print Env.count *)
+val putd: Env.t -> unit
+@
+
+
+%-------------------------------------------------------------
+
+<<Out.mli>>=
+
+<<signature [[Out.putchr]]>>
+
+<<signature [[Out.putst]]>>
+
+<<signature [[Out.putshst]]>>
+
+
+<<signature [[Out.putd]]>>
+@
+
+
+\subsection*{[[Parser.ml]]}
+
+<<type [[Parser.state]]>>=
+type state = {
+  stdin: Lexing_.lexbuf;
+  (* for inserting "virtual" commands to process before stdin *)
+  mutable globp: Lexing_.lexbuf option;
+  mutable lookahead : Token.t option;
+}
+@
+
+<<function [[Parser.init]]>>=
+let init (caps : < Cap.stdin; ..>) : state =
+  { stdin = Lexing.from_channel (Console.stdin caps);
+    globp = None;
+    lookahead = None;
+  }
+@
+
+<<function [[Parser.was_expecting]]>>=
+let was_expecting (expect : string) =
+  Logs.err (fun m -> m "was expecting %s" expect);
+  Error.e ""
+@
+
+<<function [[Parser.was_expecting_but_got]]>>=
+let was_expecting_but_got (expect : string) (tok : Token.t) =
+  was_expecting (spf "%s, but got %s" expect (Token.show tok))
+@
+
+<<function [[Parser.next_token]]>>=
+(* Do not use! this is internal! You should use peek() or consume() instead. *)
+let next_token (st : state) : Token.t =
+  let t = 
+    match st.globp with
+    | Some lexbuf ->
+        let t = Lexer.token lexbuf in
+        if t = T.EOF
+        then st.globp <- None;
+        t
+    | None ->
+        Lexer.token st.stdin
+  in
+  Logs.debug (fun m -> m "tok = %s" (Token.show t));
+  t
+@
+
+<<function [[Parser.peek]]>>=
+let peek (st : state) : Token.t =
+  match st.lookahead with
+  | Some t -> t
+  | None ->
+      let t = next_token st in
+      st.lookahead <- Some t;
+      t
+@
+
+<<function [[Parser.consume]]>>=
+let consume (st : state) : Token.t =
+  match st.lookahead with
+  | Some t -> st.lookahead <- None; t
+  | None -> next_token st
+@
+
+<<function [[Parser.parse_delta]]>>=
+let parse_delta (st : state) : int =
+  match consume st with
+  | T.Plus ->
+      (match peek st with
+       | T.Int n -> ignore (consume st); n
+       | _ -> 1)
+  | T.Minus ->
+      (match peek st with
+       | T.Int n -> ignore (consume st); -n
+       | _ -> -1)
+  | T.Caret -> -1
+  | _ ->
+      was_expecting "relative operator"
+@
+
+<<function [[Parser.parse_relatives]]>>=
+let rec parse_relatives (base : A.t) (st : state) : A.t =
+  match peek st with
+  | T.Plus | T.Minus | T.Caret ->
+      let d = parse_delta st in
+      parse_relatives (A.Relative (base, d)) st
+  | _ ->
+      base
+@
+
+<<function [[Parser.parse_address]]>>=
+let parse_address (st : state) : A.t =
+  let base =
+    match peek st with
+    | T.Plus | T.Minus | T.Caret ->
+      (* implicit '.' for leading + - ^ *)
+      A.Current
+    | _ ->
+        (match consume st with
+        | T.Dot -> A.Current
+        | T.Dollar -> A.Last
+        | T.Int n -> A.Line n
+        | T.Mark c -> A.Mark c
+        | T.Slash r -> A.SearchFwd r
+        | T.Question r -> A.SearchBwd r
+        | _ -> was_expecting "valid address"
+        )
+  in
+  parse_relatives base st
+@
+
+<<function [[Parser.parse_address_range]]>>=
+let parse_address_range (st : state) : A.range =
+  let t1 = peek st in
+  (* optional first address *)
+  let first : A.t option =
+    match t1 with
+    | T.Plus | T.Minus | T.Caret
+    | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
+      ->
+        (* this will consume some tokens in st *)
+        Some (parse_address st)
+    | T.Comma | T.Semicolon ->
+        None
+    | T.EOF | T.Spaces | T.Newline | T.Char _ ->
+        None
+  in
+
+  let t2 = peek st in
+  match t2 with
+  | T.Comma | T.Semicolon ->
+      consume st |> ignore;
+      let second = 
+        match peek st with
+        | T.Plus | T.Minus | T.Caret
+          | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
+          -> parse_address st 
+        (* a missing second address default to '$' *)
+        | T.EOF | T.Spaces | T.Newline | T.Char _ | T.Comma | T.Semicolon 
+          -> A.Last
+      in
+      A.{
+         (* a missing first address in a range default to '1' so
+          * a range like "," will be parsed as "1,$"
+          *)
+          addr1 = (match first with Some _ -> first | None -> Some (A.Line 1)); 
+          addr2 = second;
+          given = true; 
+          set_dot = (t2 = T.Semicolon);
+         }
+  | _ ->
+      (* single address or none *)
+      (match first with
+      | Some a ->
+          A.{ addr1 = None; addr2 = a; given = true; set_dot = false; }
+      | None ->
+          A.{ addr1 = None; addr2 = Current; given = false; set_dot = false; }
+      )
+@
+
+
+%-------------------------------------------------------------
+
+<<Parser.ml>>=
+(* Copyright 2025 Yoann Padioleau, see copyright.txt *)
+open Common
+
+module A = Address
+module T = Token
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* Parsing user input using the lexer.
+ *
+ * alt: yacc, but overkill; peek/consume tokens seems simpler for ed use case.
+ *)
+
+(*****************************************************************************)
+(* Types *)
+(*****************************************************************************)
+
+<<type [[Parser.state]]>>
+[@@deriving show]
+
+<<function [[Parser.init]]>>
+
+(*****************************************************************************)
+(* Error management *)
+(*****************************************************************************)
+<<function [[Parser.was_expecting]]>>
+
+<<function [[Parser.was_expecting_but_got]]>>
+
+(*****************************************************************************)
+(* Helpers *)
+(*****************************************************************************)
+
+<<function [[Parser.next_token]]>>
+
+(*****************************************************************************)
+(* peek/consume *)
+(*****************************************************************************)
+         
+<<function [[Parser.peek]]>>
+
+<<function [[Parser.consume]]>>
+
+(*****************************************************************************)
+(* Parsing addresses *)
+(*****************************************************************************)
+
+<<function [[Parser.parse_delta]]>>
+
+<<function [[Parser.parse_relatives]]>>
+
+<<function [[Parser.parse_address]]>>
+
+
+<<function [[Parser.parse_address_range]]>>
+
+(*****************************************************************************)
+(* Parsing Commands *)
+(*****************************************************************************)
+(* Done in CLI.ml instead *)
+
+(*****************************************************************************)
+(* Parsing Filenames and user text *)
+(*****************************************************************************)
+(* Done in In.ml instead *)
+@
+
+
+\subsection*{[[Parser.mli]]}
+
+<<type [[Parser.state (Parser.mli)]]>>=
+type state = {
+  stdin: Lexing_.lexbuf;
+  (* for inserting "virtual" commands to process before stdin *)
+  mutable globp: Lexing_.lexbuf option;
+  mutable lookahead : Token.t option;
+}
+@
+
+<<signature [[Parser.init]]>>=
+val init: <Cap.stdin; ..> -> state
+@
+
+<<signature [[Parser.peek]]>>=
+val peek : state -> Token.t
+@
+
+<<signature [[Parser.consume]]>>=
+val consume: state -> Token.t
+@
+
+<<signature [[Parser.parse_address_range]]>>=
+val parse_address_range: state -> Address.range
+@
+
+<<signature [[Parser.was_expecting]]>>=
+(* internals that are used outside for now *)
+val was_expecting: string -> 'a
+@
+
+<<signature [[Parser.was_expecting_but_got]]>>=
+val was_expecting_but_got: string -> Token.t -> 'a
+@
+
+
+%-------------------------------------------------------------
+
+<<Parser.mli>>=
+open Common
+
+<<type [[Parser.state (Parser.mli)]]>>
+[@@deriving show]
+
+<<signature [[Parser.init]]>>
+
+<<signature [[Parser.peek]]>>
+<<signature [[Parser.consume]]>>
+
+<<signature [[Parser.parse_address_range]]>>
+
+<<signature [[Parser.was_expecting]]>>
+<<signature [[Parser.was_expecting_but_got]]>>
+@
+
+
+\subsection*{[[Token.ml]]}
+
+<<type [[Token.t]]>>=
+type t =
+  | Spaces | Newline | EOF
+
+  (* letter or '=' *)
+  | Char of char
+
+  (* start of address tokens *)
+  | Int of int
+  | Dot | Dollar
+  | Comma | Semicolon
+  | Plus | Minus | Caret
+  | Slash of string | Question of string
+  | Mark of char
+[@@deriving show]
+@
+
+
+%-------------------------------------------------------------
+
+<<Token.ml>>=
+(* The tokens *)
+
+<<type [[Token.t]]>>
+@
+
+
