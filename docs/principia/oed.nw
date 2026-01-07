@@ -83,7 +83,6 @@ type lineno = int
 @
 
 <<type [[Env.regex]]>>=
-type regex = Str.regexp
 @
 
 <<type [[Env.t]]>>=
@@ -213,7 +212,9 @@ val main: <caps; ..> ->
 <<type [[CLI.caps]]>>=
 type caps = < 
     Cap.stdin; Cap.stdout; Cap.stderr;
-    Cap.open_in; Cap.open_out;
+    Cap.open_in; (* for 'r' *)
+    Cap.open_out; (* for 'w' *)
+    Cap.fork; (* for '!' *)
   >
 @
 
@@ -223,8 +224,10 @@ type caps = <
 let main (caps : <caps; ..>) (argv : string array) : Exit.t =
 
   let args = ref [] in
+
   (* "verbose(interactive)" mode is set by default *)
   let vflag = ref true in
+  (* when '-o', the command 'w' will write to stdout (useful for filters) *)
   let oflag = ref false in
 
   let level = ref (Some Logs.Warning) in
@@ -232,7 +235,6 @@ let main (caps : <caps; ..>) (argv : string array) : Exit.t =
   let options = [
      "-", Arg.Clear vflag,
      " non-interactive mode (opposite of verbose)";
-    (* when '-o', command 'w' will write to stdout (useful for filters) *)
      "-o", Arg.Set oflag,
      " write output to standard output instead of modifying the file";
 
@@ -295,7 +297,7 @@ rule token = parse
   | '\n'          { Newline }
 
   (* for the command *)
-  | (letter | '=') as c   { Char c }
+  | (letter | '=' | '!') as c   { Char c }
 
   (* for the addresses *)
   | digit+        { Int (int_of_string (Lexing.lexeme lexbuf)) }
@@ -329,8 +331,8 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
         Commands.printcom e;
     end;
 
-    let range : Address.range = Parser.parse_address_range e.in_ in
-    let (addr1, addr2) = eval_range e range in
+    let range : Address.range = Address.parse_range e.in_ in
+    let (addr1, addr2) = Address.eval_range e range in
     (* TODO: use range.set_dot! *)
     e.addr1 <- addr1;
     e.addr2 <- addr2;
@@ -407,6 +409,9 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
       | 'v' -> global caps e false
 
       (* other *)
+      | '!' -> 
+         Commands.callunix caps e
+
       | 'q' | 'Q' ->
          if c = 'Q' then e.fchange <- false;
          Commands.setnoaddr e;
@@ -544,63 +549,9 @@ let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
 \section{Command addresses}
 
 <<function [[CLI.eval_address]]>>=
-(* TODO? need to pass [[a]] like in C with e.dot and adjust [[a]] as we go
- * like in C? so that /.../ and ?...? start from the right place?
- * alt: could be moved in Address.ml
- *)
-let rec eval_address (e : Env.t) (adr : Address.t) : Env.lineno =
-  match adr with
-  | A.Current -> e.dot
-  | A.Last -> e.dol
-  | A.Line n -> n
-  | A.Mark _ -> failwith "TODO: Mark"
-  | A.SearchFwd _ | A.SearchBwd _ -> 
-      let dir, re_str = 
-        match adr with 
-        | A.SearchFwd re -> 1, re
-        | A.SearchBwd re -> -1, re
-        | _ -> raise (Impossible "cases matched above")
-      in
-      (* less: opti: use A.SearchFwd of regex instead of str *)
-      let re = Str.regexp re_str in
-      (* starting point *)
-      (* TODO: ed: need to be `a` instead like in C ? *)
-      let a = e.dot in
-      let b = a  in
-      let rec aux (a : Env.lineno) : Env.lineno =
-        let a = a + dir in
-        let a =
-          match () with
-          (* wrap around start/end of buffer *)
-          | _ when a <= 0 -> e.dol
-          | _ when a > e.dol -> 1
-          | _ -> a
-        in
-        match () with
-        | _ when Commands.match_ e re a -> a
-        (* back to starting point and nothing was found *)
-        | _ when a = b ->
-            Logs.warn (fun m -> m "search for %s had no match" re_str);
-            Error.e ""
-        | _ ->
-            aux a
-      in
-      aux a
-
-  | A.Relative (x, n) -> eval_address e x + n
 @
 
 <<function [[CLI.eval_range]]>>=
-let eval_range (e : Env.t) (r : Address.range) : Env.lineno * Env.lineno =
-  Logs.debug (fun m -> m "range = %s" (Address.show_range r));
-
-  let addr2 = eval_address e r.addr2 in
-  let addr1 =
-    match r.addr1 with
-    | None -> addr2
-    | Some a -> eval_address e a
-  in
-  addr1, addr2
 @
 
 \section{Search and replace}
@@ -734,10 +685,180 @@ let e s =
 %-------------------------------------------------------------
 
 <<Address.ml>>=
+(* Copyright 2025, 2026 Yoann Padioleau, see copyright.txt *)
+open Common
+
+module P = Parser
+module T = Token
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+
+(*****************************************************************************)
+(* Types *)
+(*****************************************************************************)
+
 <<type [[Address.t]]>>
 [@@deriving show]
 <<type [[Address.range]]>>
 [@@deriving show]
+
+(*****************************************************************************)
+(* Parsing *)
+(*****************************************************************************)
+
+(*
+val parse_range: state -> Address.range
+*)
+
+let parse_delta (st : Parser.state) : int =
+  match P.consume st with
+  | T.Plus ->
+      (match P.peek st with
+       | T.Int n -> ignore (P.consume st); n
+       | _ -> 1)
+  | T.Minus ->
+      (match P.peek st with
+       | T.Int n -> ignore (P.consume st); -n
+       | _ -> -1)
+  | T.Caret -> -1
+  | _ ->
+      P.was_expecting "relative operator"
+
+let rec parse_relatives (base : t) (st : Parser.state) : t =
+  match P.peek st with
+  | T.Plus | T.Minus | T.Caret ->
+      let d = parse_delta st in
+      parse_relatives (Relative (base, d)) st
+  | _ ->
+      base
+
+let parse_address (st : Parser.state) : t =
+  let base =
+    match P.peek st with
+    | T.Plus | T.Minus | T.Caret ->
+      (* implicit '.' for leading + - ^ *)
+      Current
+    | _ ->
+        (match P.consume st with
+        | T.Dot -> Current
+        | T.Dollar -> Last
+        | T.Int n -> Line n
+        | T.Mark c -> Mark c
+        | T.Slash r -> SearchFwd r
+        | T.Question r -> SearchBwd r
+        | _ -> P.was_expecting "valid address"
+        )
+  in
+  parse_relatives base st
+
+let parse_range (st : Parser.state) : range =
+  let t1 = P.peek st in
+  (* optional first address *)
+  let first : t option =
+    match t1 with
+    | T.Plus | T.Minus | T.Caret
+    | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
+      ->
+        (* this will consume some tokens in st *)
+        Some (parse_address st)
+    | T.Comma | T.Semicolon ->
+        None
+    | T.EOF | T.Spaces | T.Newline | T.Char _ ->
+        None
+  in
+
+  let t2 = P.peek st in
+  match t2 with
+  | T.Comma | T.Semicolon ->
+      P.consume st |> ignore;
+      let second = 
+        match P.peek st with
+        | T.Plus | T.Minus | T.Caret
+          | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
+          -> parse_address st 
+        (* a missing second address default to '$' *)
+        | T.EOF | T.Spaces | T.Newline | T.Char _ | T.Comma | T.Semicolon 
+          -> Last
+      in
+      {
+         (* a missing first address in a range default to '1' so
+          * a range like "," will be parsed as "1,$"
+          *)
+          addr1 = (match first with Some _ -> first | None -> Some (Line 1)); 
+          addr2 = second;
+          given = true; 
+          set_dot = (t2 = T.Semicolon);
+         }
+  | _ ->
+      (* single address or none *)
+      (match first with
+      | Some a ->
+          { addr1 = None; addr2 = a; given = true; set_dot = false; }
+      | None ->
+          { addr1 = None; addr2 = Current; given = false; set_dot = false; }
+      )
+
+(*****************************************************************************)
+(* Evaluating *)
+(*****************************************************************************)
+
+(* TODO? need to pass [[a]] like in C with e.dot and adjust [[a]] as we go
+ * like in C? so that /.../ and ?...? start from the right place?
+ * alt: could be moved in Address.ml
+ *)
+let rec eval_address (e : Env.t) (adr : t) : Env.lineno =
+  match adr with
+  | Current -> e.dot
+  | Last -> e.dol
+  | Line n -> n
+  | Mark _ -> failwith "TODO: Mark"
+  | SearchFwd _ | SearchBwd _ -> 
+      let dir, re_str = 
+        match adr with 
+        | SearchFwd re -> 1, re
+        | SearchBwd re -> -1, re
+        | _ -> raise (Impossible "cases matched above")
+      in
+      (* less: opti: use SearchFwd of regex instead of str *)
+      let re = Str.regexp re_str in
+      (* starting point *)
+      (* TODO: ed: need to be `a` instead like in C ? *)
+      let a = e.dot in
+      let b = a  in
+      let rec aux (a : Env.lineno) : Env.lineno =
+        let a = a + dir in
+        let a =
+          match () with
+          (* wrap around start/end of buffer *)
+          | _ when a <= 0 -> e.dol
+          | _ when a > e.dol -> 1
+          | _ -> a
+        in
+        match () with
+        | _ when Commands.match_ e re a -> a
+        (* back to starting point and nothing was found *)
+        | _ when a = b ->
+            Logs.warn (fun m -> m "search for %s had no match" re_str);
+            Error.e ""
+        | _ ->
+            aux a
+      in
+      aux a
+
+  | Relative (x, n) -> eval_address e x + n
+
+let eval_range (e : Env.t) (r : range) : Env.lineno * Env.lineno =
+  Logs.debug (fun m -> m "range = %s" (show_range r));
+
+  let addr2 = eval_address e r.addr2 in
+  let addr1 =
+    match r.addr1 with
+    | None -> addr2
+    | Some a -> eval_address e a
+  in
+  addr1, addr2
 @
 
 \subsection*{[[CLI.ml]]}
@@ -756,7 +877,7 @@ module A = Address
 (*****************************************************************************)
 (* Prelude *)
 (*****************************************************************************)
-(* An OCaml port of ed from Plan 9 (and before from Unix).
+(* An OCaml port of ed from Plan 9 (and Unix).
  *
  * Limitations compared to Plan 9 version:
  *  - no unicode (runes) support
@@ -976,16 +1097,9 @@ open Env
 <<type [[Commands.mode]]>>
 <<function [[Commands.exfile]]>>
 
-let match_str (re : Env.regex) (str: string) : bool =
-  (* old: Str.string_match re line 0, but we need unanchored search *)
-  try
-    Str.search_forward re str 0 |> ignore;
-    true
-   with Not_found -> false
-
-let match_ (e : Env.t) (re : Env.regex) (addr : Env.lineno) : bool =
+let match_ (e : Env.t) (re : Regex.t) (addr : Env.lineno) : bool =
   let line = Disk.getline e addr in
-  match_str re line
+  Regex.match_str re line
 
 (*****************************************************************************)
 (* append in tfile and adjust e.zero *)
@@ -1034,7 +1148,7 @@ let substitute (e : Env.t) (_inglob: bool) : unit =
       for a1 = e.addr1 to e.addr2 do
         let line = Disk.getline e a1 in
         (* TODO: handle 's/.../.../g' *)
-        if match_str re line
+        if Regex.match_str re line
         then begin
            let loc1 = Str.match_beginning () in
            let loc2 = Str.match_end () in
@@ -1057,6 +1171,11 @@ let substitute (e : Env.t) (_inglob: bool) : unit =
 (* Other *)
 (* ------------------------------------------------------------------------- *)
 <<function [[Commands.quit]]>>
+
+(* '! *)
+let callunix (caps : <Cap.fork; ..>) (e: Env.t) : unit =
+  setnoaddr e;
+  failwith "TODO"
 @
 
 \subsection*{[[Commands.mli]]}
@@ -1116,13 +1235,14 @@ val append: Env.t -> (unit -> string option) -> Env.lineno -> int
 <<signature [[Commands.quit]]>>
 (* 's' *)
 val substitute: Env.t -> bool (* inglob *) -> unit
+(* '!' *)
+val callunix: <Cap.fork; ..> -> Env.t -> unit
 
 <<signature [[Commands.setwide]]>>
 <<signature [[Commands.squeeze]]>>
 <<signature [[Commands.nonzero]]>>
 <<signature [[Commands.setnoaddr]]>>
-val match_str: Env.regex -> string -> bool
-val match_: Env.t -> Env.regex -> Env.lineno -> bool
+val match_: Env.t -> Regex.t -> Env.lineno -> bool
 
 <<signature [[Commands.append]]>>
 @
@@ -1265,16 +1385,14 @@ open Common
 %-------------------------------------------------------------
 
 <<Env.ml>>=
-(* Copyright 2025 Yoann Padioleau, see copyright.txt *)
+(* Copyright 2025, 2026 Yoann Padioleau, see copyright.txt *)
 open Common
 open Fpath_.Operators
 
 (*****************************************************************************)
 (* Prelude *)
 (*****************************************************************************)
-(* A set of globals used by many functions.
- *
- *)
+(* A set of globals used by many functions packed in an "environment" record *)
 
 (*****************************************************************************)
 (* Types and constants *)
@@ -1698,109 +1816,24 @@ let consume (st : state) : Token.t =
 @
 
 <<function [[Parser.parse_delta]]>>=
-let parse_delta (st : state) : int =
-  match consume st with
-  | T.Plus ->
-      (match peek st with
-       | T.Int n -> ignore (consume st); n
-       | _ -> 1)
-  | T.Minus ->
-      (match peek st with
-       | T.Int n -> ignore (consume st); -n
-       | _ -> -1)
-  | T.Caret -> -1
-  | _ ->
-      was_expecting "relative operator"
 @
 
 <<function [[Parser.parse_relatives]]>>=
-let rec parse_relatives (base : A.t) (st : state) : A.t =
-  match peek st with
-  | T.Plus | T.Minus | T.Caret ->
-      let d = parse_delta st in
-      parse_relatives (A.Relative (base, d)) st
-  | _ ->
-      base
 @
 
 <<function [[Parser.parse_address]]>>=
-let parse_address (st : state) : A.t =
-  let base =
-    match peek st with
-    | T.Plus | T.Minus | T.Caret ->
-      (* implicit '.' for leading + - ^ *)
-      A.Current
-    | _ ->
-        (match consume st with
-        | T.Dot -> A.Current
-        | T.Dollar -> A.Last
-        | T.Int n -> A.Line n
-        | T.Mark c -> A.Mark c
-        | T.Slash r -> A.SearchFwd r
-        | T.Question r -> A.SearchBwd r
-        | _ -> was_expecting "valid address"
-        )
-  in
-  parse_relatives base st
 @
 
 <<function [[Parser.parse_address_range]]>>=
-let parse_address_range (st : state) : A.range =
-  let t1 = peek st in
-  (* optional first address *)
-  let first : A.t option =
-    match t1 with
-    | T.Plus | T.Minus | T.Caret
-    | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
-      ->
-        (* this will consume some tokens in st *)
-        Some (parse_address st)
-    | T.Comma | T.Semicolon ->
-        None
-    | T.EOF | T.Spaces | T.Newline | T.Char _ ->
-        None
-  in
-
-  let t2 = peek st in
-  match t2 with
-  | T.Comma | T.Semicolon ->
-      consume st |> ignore;
-      let second = 
-        match peek st with
-        | T.Plus | T.Minus | T.Caret
-          | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
-          -> parse_address st 
-        (* a missing second address default to '$' *)
-        | T.EOF | T.Spaces | T.Newline | T.Char _ | T.Comma | T.Semicolon 
-          -> A.Last
-      in
-      A.{
-         (* a missing first address in a range default to '1' so
-          * a range like "," will be parsed as "1,$"
-          *)
-          addr1 = (match first with Some _ -> first | None -> Some (A.Line 1)); 
-          addr2 = second;
-          given = true; 
-          set_dot = (t2 = T.Semicolon);
-         }
-  | _ ->
-      (* single address or none *)
-      (match first with
-      | Some a ->
-          A.{ addr1 = None; addr2 = a; given = true; set_dot = false; }
-      | None ->
-          A.{ addr1 = None; addr2 = Current; given = false; set_dot = false; }
-      )
 @
 
 
 %-------------------------------------------------------------
 
 <<Parser.ml>>=
-(* Copyright 2025 Yoann Padioleau, see copyright.txt *)
+(* Copyright 2025, 2026 Yoann Padioleau, see copyright.txt *)
 open Common
 
-module A = Address
 module T = Token
 
 (*****************************************************************************)
@@ -1844,6 +1877,7 @@ module T = Token
 (*****************************************************************************)
 (* Parsing addresses *)
 (*****************************************************************************)
+(* Done in Address.ml *)
 
 <<function [[Parser.parse_delta]]>>
 
@@ -1863,6 +1897,7 @@ module T = Token
 (* Parsing Filenames and user text *)
 (*****************************************************************************)
 (* Done in In.ml instead *)
+
 @
 
 
@@ -1881,7 +1916,6 @@ val consume: state -> Token.t
 @
 
 <<signature [[Parser.parse_address_range]]>>=
-val parse_address_range: state -> Address.range
 @
 
 <<signature [[Parser.was_expecting]]>>=
