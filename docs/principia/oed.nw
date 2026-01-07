@@ -305,8 +305,8 @@ rule token = parse
   | ',' { Comma } | ';' { Semicolon }
   | '+' { Plus } | '-' { Minus } | '^' { Caret }
   | '\'' ['a'-'z'] as s { Mark s.[1] }
-  | '/'              { Buffer.clear buf; regexp '/' lexbuf }
-  | '?'              { Buffer.clear buf; regexp '?' lexbuf }
+  | '/'              { Buffer.clear buf; Slash (regexp '/' lexbuf) }
+  | '?'              { Buffer.clear buf; Question (regexp '?' lexbuf) }
 
   | eof { EOF }
 @
@@ -398,6 +398,10 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
          Commands.rdelete e e.addr1 e.addr2;
          Commands.append e (In.gettty e) (e.addr1 - 1) |> ignore;
 
+      | 's' ->
+          Commands.nonzero e;
+          Commands.substitute e (e.in_.globp <> None);
+
       (* globals *)
       | 'g' -> global caps e true
       | 'v' -> global caps e false
@@ -441,69 +445,16 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
   Logs.debug (fun m -> m "commands <-");
 @
 
-<<function [[CLI.global]]>>=
-(* g/re/cmd, v/re/cmd *)
-and global caps (e : Env.t) (pos_or_neg : bool) : unit =
-
-  e.in_.globp |> Option.iter (fun _ ->
-      Logs.err (fun m -> m "global command already in");
-      Error.e ""
-  );
-  Commands.setwide e;
-  Commands.squeeze e (if e.dol > 0 then 1 else 0);
-
-  match Parser.consume e.in_ with
-  | Slash str ->
-      let re = Str.regexp str in
-      (* TODO: Lexer.line_or_escaped_lines *)
-      let line = Lexer.line e.in_.stdin in
-      let line = if line = "" then "p" else line in
-
-      (* step1: marking the matching lines *)
-      (* ed: was starting at 0, but then special case later in match()
-       * so simpler to start at 1 
-       * old: I was recording in a local xs the list of matched lineno, but
-       * it does not work because commands() in step2 below may modify 
-       * zero which would invalidate the matched lineno of step1
-       *)
-      for a1 = 1 to e.dol do
-        if a1 >= e.addr1 && a1 <= e.addr2 && match_ e re a1 = pos_or_neg then
-          e.zero.(a1).mark <- true
-      done;
-
-      (* step2: processing the matching lines
-       * old: for a1 = 1 to e.dol, but can't work because
-       * commands() below might modify zero and delete lines in which case
-       * dol will change dynamicaly.
-       *)
-      let a1 = ref 1 in
-      while !a1 <= e.dol do
-        if e.zero.(!a1).mark then begin
-            e.zero.(!a1).mark <- false;
-            e.dot <- !a1;
-            (* ugly: need trailing \n otherwise T.EOF would be consumed
-             * too early by In.Newline().
-             *)
-            e.in_.globp <- Some (Lexing.from_string (line ^ "\n"));
-            (* recurse!! *)
-            commands caps e;
-            (* need to restart from scratch, but with one less marked line *)
-            a1 := 0
-        end;
-        incr a1
-      done
-  
-  | t -> Parser.was_expecting_but_got "a regexp" t
-@
-
 \section{[[r]]eading a file: [[r]]}
 
 
 <<signature [[Disk.getline]]>>=
+(* retrieve line in tfile (without trailing '\n') *)
 val getline: Env.t -> Env.lineno -> string
 @
 
 <<signature [[Disk.getfile]]>>=
+(* will return one line (without trailing '\n') or None when reached EOF *)
 val getfile: Env.t -> Chan.i -> (unit -> string option)
 @
 
@@ -537,9 +488,11 @@ val write: <Cap.open_out; ..> -> Env.t -> Fpath.t -> unit
 @
 
 <<signature [[Disk.putline]]>>=
+(* store line (with added trailing '\n') in tfile and return its offset *)
 val putline : Env.t -> string -> Env.tfile_offset
 @
 <<signature [[Disk.putfile]]>>=
+(* dual of getfile() but this time writing all the lines, not just one *)
 val putfile: Env.t -> Chan.o -> unit
 @
 
@@ -570,29 +523,50 @@ let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
 
 \section{Main commands}
 
-\section{Advanced command addresses}
+\subsection{[[p]]rinting lines: [[p]]}
+
+\subsection{printing remembered [[f]]ile: [[f]]}
+
+\subsection{printing line number: [[=]]}
+
+\subsection{[[a]]ppend and [[i]]nsert: [[a]], [[i]]}
+
+\subsection{[[q]]uitting: [[q]]}
+
+\subsection{[[d]]eleting lines: [[d]]}
+
+\subsection{[[c]]hanging lines: [[c]]}
+
+\subsection{[[m]]oving and copying lines: [[m]] and [[t]]}
+
+
+
+\section{Command addresses}
 
 <<function [[CLI.eval_address]]>>=
 (* TODO? need to pass [[a]] like in C with e.dot and adjust [[a]] as we go
  * like in C? so that /.../ and ?...? start from the right place?
+ * alt: could be moved in Address.ml
  *)
-let rec eval_address (e : Env.t) (a : Address.t) : Env.lineno =
-  match a with
+let rec eval_address (e : Env.t) (adr : Address.t) : Env.lineno =
+  match adr with
   | A.Current -> e.dot
   | A.Last -> e.dol
   | A.Line n -> n
   | A.Mark _ -> failwith "TODO: Mark"
   | A.SearchFwd _ | A.SearchBwd _ -> 
       let dir, re_str = 
-        match a with 
+        match adr with 
         | A.SearchFwd re -> 1, re
         | A.SearchBwd re -> -1, re
         | _ -> raise (Impossible "cases matched above")
       in
-      (* TODO: use A.SearchFwd of regex instead of str? compile earlier? *)
+      (* less: opti: use A.SearchFwd of regex instead of str *)
       let re = Str.regexp re_str in
       (* starting point *)
-      let b = e.dot (* TODO: need to be `a` instead like in C? *) in
+      (* TODO: ed: need to be `a` instead like in C ? *)
+      let a = e.dot in
+      let b = a  in
       let rec aux (a : Env.lineno) : Env.lineno =
         let a = a + dir in
         let a =
@@ -603,7 +577,7 @@ let rec eval_address (e : Env.t) (a : Address.t) : Env.lineno =
           | _ -> a
         in
         match () with
-        | _ when match_ e re a -> a
+        | _ when Commands.match_ e re a -> a
         (* back to starting point and nothing was found *)
         | _ when a = b ->
             Logs.warn (fun m -> m "search for %s had no match" re_str);
@@ -611,7 +585,7 @@ let rec eval_address (e : Env.t) (a : Address.t) : Env.lineno =
         | _ ->
             aux a
       in
-      aux e.dot
+      aux a
 
   | A.Relative (x, n) -> eval_address e x + n
 @
@@ -631,6 +605,9 @@ let eval_range (e : Env.t) (r : Address.range) : Env.lineno * Env.lineno =
 
 \section{Search and replace}
 
+
+\subsection{Search as addresses: [[/re/]] and [[?re?]]}
+
 <<function [[Lexer.regexp]]>>=
 and regexp delim = parse
   | '\\' (_ as c) {
@@ -639,7 +616,7 @@ and regexp delim = parse
     }
   | '/' {
       if delim = '/'
-      then Slash (Buffer.contents buf)
+      then Buffer.contents buf
       else begin
         Buffer.add_char buf '/';
         regexp delim lexbuf
@@ -647,7 +624,7 @@ and regexp delim = parse
      }
   | '?' {
       if delim = '?'
-      then Question (Buffer.contents buf)
+      then Buffer.contents buf
       else begin
         Buffer.add_char buf '?';
         regexp delim lexbuf
@@ -662,16 +639,73 @@ and regexp delim = parse
     }
 @
 
+\subsection{[[match()]]}
+
 <<function [[CLI.match_]]>>=
-let match_ (e : Env.t) (re : Env.regex) (addr : Env.lineno) : bool =
-  let line = Disk.getline e addr in
-  (* old: Str.string_match re line 0
-   * but we need unanchored search *)
-  try
-    Str.search_forward re line 0 |> ignore;
-    true
-   with Not_found -> false
 @
+
+\subsection{[[s]]ubstitute: [[s]]}
+
+\subsection{Advanced substitutions}
+
+\subsection{[[g]]lobal commands: [[g/re/cmd]] and [[v/re/cmd]]}
+
+<<function [[CLI.global]]>>=
+(* g/re/cmd, v/re/cmd *)
+and global caps (e : Env.t) (pos_or_neg : bool) : unit =
+
+  e.in_.globp |> Option.iter (fun _ ->
+      Logs.err (fun m -> m "global command already in");
+      Error.e ""
+  );
+  Commands.setwide e;
+  Commands.squeeze e (if e.dol > 0 then 1 else 0);
+
+  match Parser.consume e.in_ with
+  | Slash str ->
+      let re = Str.regexp str in
+      (* TODO: Lexer.line_or_escaped_lines *)
+      let line = Lexer.line e.in_.stdin in
+      let line = if line = "" then "p" else line in
+
+      (* step1: marking the matching lines *)
+      (* ed: was starting at 0, but then special case later in match()
+       * so simpler to start at 1 
+       * old: I was recording in a local xs the list of matched lineno, but
+       * it does not work because commands() in step2 below may modify 
+       * zero which would invalidate the matched lineno of step1
+       *)
+      for a1 = 1 to e.dol do
+        if a1 >= e.addr1 && a1 <= e.addr2 &&
+            Commands.match_ e re a1 = pos_or_neg then
+          e.zero.(a1).mark <- true
+      done;
+
+      (* step2: processing the matching lines
+       * old: for a1 = 1 to e.dol, but can't work because
+       * commands() below might modify zero and delete lines in which case
+       * dol will change dynamicaly.
+       *)
+      let a1 = ref 1 in
+      while !a1 <= e.dol do
+        if e.zero.(!a1).mark then begin
+            e.zero.(!a1).mark <- false;
+            e.dot <- !a1;
+            (* ugly: need trailing \n otherwise T.EOF would be consumed
+             * too early by In.Newline().
+             *)
+            e.in_.globp <- Some (Lexing.from_string (line ^ "\n"));
+            (* recurse!! *)
+            commands caps e;
+            (* need to restart from scratch, but with one less marked line *)
+            a1 := 0
+        end;
+        incr a1
+      done
+  
+  | t -> Parser.was_expecting_but_got "a regexp" t
+@
+
 
 \section{Advanced features}
 
@@ -722,10 +756,11 @@ module A = Address
 (*****************************************************************************)
 (* Prelude *)
 (*****************************************************************************)
-(* An OCaml port of ed of Unix and Plan 9.
+(* An OCaml port of ed from Plan 9 (and before from Unix).
  *
- * Limitations compared to Plan9 version:
+ * Limitations compared to Plan 9 version:
  *  - no unicode (runes) support
+ *  - lots of missing features (&, \1, marks, etc.)
  *
  * Improvements over Plan 9 C version:
  *  - far less globals!
@@ -738,6 +773,7 @@ module A = Address
 (*****************************************************************************)
 (* Helpers *)
 (*****************************************************************************)
+
 <<function [[CLI.match_]]>>
   
 <<function [[CLI.eval_address]]>>
@@ -940,6 +976,17 @@ open Env
 <<type [[Commands.mode]]>>
 <<function [[Commands.exfile]]>>
 
+let match_str (re : Env.regex) (str: string) : bool =
+  (* old: Str.string_match re line 0, but we need unanchored search *)
+  try
+    Str.search_forward re str 0 |> ignore;
+    true
+   with Not_found -> false
+
+let match_ (e : Env.t) (re : Env.regex) (addr : Env.lineno) : bool =
+  let line = Disk.getline e addr in
+  match_str re line
+
 (*****************************************************************************)
 (* append in tfile and adjust e.zero *)
 (*****************************************************************************)
@@ -970,6 +1017,41 @@ open Env
 <<function [[Commands.add]]>>
 
 <<function [[Commands.rdelete]]>>
+
+(* used for 's' *)
+let substitute (e : Env.t) (_inglob: bool) : unit =
+  (* TODO: handle inglob *)
+  match Parser.consume e.in_ with
+  (* handle | Question re_str? does not really make sense. *)
+  | Slash re_str ->
+      let re = Str.regexp re_str in
+      (* ugly: *) 
+      Buffer.clear Lexer.buf;
+      let subst_str = Lexer.regexp '/' e.in_.stdin in
+      (* TODO: parse 's/.../.../g' *)
+      In.newline e;
+
+      for a1 = e.addr1 to e.addr2 do
+        let line = Disk.getline e a1 in
+        (* TODO: handle 's/.../.../g' *)
+        if match_str re line
+        then begin
+           let loc1 = Str.match_beginning () in
+           let loc2 = Str.match_end () in
+           let len = String.length line in
+           
+           let before = String.sub line 0 loc1 in
+           let _matched = String.sub line loc1 (loc2 - loc1) in
+           let after = String.sub line loc2 (len - loc2) in
+           (* TODO: handle & and \1 in subst_str *)
+           let newline = before ^ subst_str ^ after in
+           let tl = Disk.putline e newline in
+           (* TODO: mark? *)
+           e.zero.(a1) <- { offset = tl; mark = false }
+        end
+      done
+
+  | t -> Parser.was_expecting_but_got "a regexp" t
 
 (* ------------------------------------------------------------------------- *)
 (* Other *)
@@ -1032,11 +1114,15 @@ val append: Env.t -> (unit -> string option) -> Env.lineno -> int
 <<signature [[Commands.printcom]]>>
 <<signature [[Commands.rdelete]]>>
 <<signature [[Commands.quit]]>>
+(* 's' *)
+val substitute: Env.t -> bool (* inglob *) -> unit
 
 <<signature [[Commands.setwide]]>>
 <<signature [[Commands.squeeze]]>>
 <<signature [[Commands.nonzero]]>>
 <<signature [[Commands.setnoaddr]]>>
+val match_str: Env.regex -> string -> bool
+val match_: Env.t -> Env.regex -> Env.lineno -> bool
 
 <<signature [[Commands.append]]>>
 @
@@ -1388,13 +1474,13 @@ let digit = ['0'-'9']
 <<function [[Lexer.line]]>>=
 and line = parse
   | ([^ '\n' ]* as s) '\n' { s }
-  | eof { failwith "eof" (* alt: None? *) }
+  | eof { failwith "eof in Lexer.line()" (* alt: None? *) }
 @
 
 <<function [[Lexer.filename]]>>=
 and filename = parse
   | [^ '\n' ' ']* { Lexing.lexeme lexbuf }
-  | eof { failwith "eof" }
+  | eof { failwith "eof in Lexer.filename()" }
 @
 
 
@@ -1424,6 +1510,9 @@ open Token
 (* Main rule *)
 (*****************************************************************************)
 <<function [[Lexer.token]]>>
+(*****************************************************************************)
+(* Regexp rule *)
+(*****************************************************************************)
 <<function [[Lexer.regexp]]>>
 
 (*****************************************************************************)
