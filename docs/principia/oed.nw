@@ -18,7 +18,6 @@ type t =
   | Plus | Minus | Caret
   | Slash of string | Question of string
   | Mark of char
-[@@deriving show]
 @
 
 \subsection{Line addresses}
@@ -33,7 +32,6 @@ type t =
   | SearchFwd of string (* /.../ *)
   | SearchBwd of string (* ?...? *)
   | Relative of t * int (* -, +, ^ *)
-[@@deriving show]
 @
 %$
 
@@ -47,7 +45,6 @@ type range = {
   given : bool;
   set_dot : bool;
 }
-[@@deriving show]
 @
 
 
@@ -76,9 +73,12 @@ type offset_and_mark = {
 <<constant [[Env.no_line]]>>=
 let no_line = { offset = Tfile_offset 0; mark = false }
 @
-%TODO? use None
+%TODO? alt: use None
 
 <<type [[Env.lineno]]>>=
+(* ed uses 1-indexed line numbers, but 0 is also used as a special value.
+ * alt: call it cursor?
+*)
 type lineno = int
 @
 
@@ -197,6 +197,19 @@ let init (caps : < Cap.stdin; Cap.stdout; Cap.stderr; ..>)
 
 \section{[[CLI.main()]]}
 
+<<toplevel [[Main._1]]>>=
+let _ = 
+  Cap.main (fun (caps : Cap.all_caps) ->
+     let argv = CapSys.argv caps in
+     Exit.exit caps (Exit.catch (fun () -> CLI.main caps argv))
+  )
+@
+
+<<signature [[CLI.main]]>>=
+val main: <caps; ..> ->
+  string array -> Exit.t
+@
+
 <<type [[CLI.caps]]>>=
 type caps = < 
     Cap.stdin; Cap.stdout; Cap.stderr;
@@ -204,10 +217,6 @@ type caps = <
   >
 @
 
-<<signature [[CLI.main]]>>=
-val main: <caps; ..> ->
-  string array -> Exit.t
-@
 
 
 <<function [[CLI.main]]>>=
@@ -278,8 +287,33 @@ let main (caps : <caps; ..>) (argv : string array) : Exit.t =
 @
 
 
+\section{Parsing commands}
+
+<<function [[Lexer.token]]>>=
+rule token = parse
+  | space+        { Spaces }
+  | '\n'          { Newline }
+
+  (* for the command *)
+  | (letter | '=') as c   { Char c }
+
+  (* for the addresses *)
+  | digit+        { Int (int_of_string (Lexing.lexeme lexbuf)) }
+  | '.' { Dot } | '$' { Dollar }
+
+
+  | ',' { Comma } | ';' { Semicolon }
+  | '+' { Plus } | '-' { Minus } | '^' { Caret }
+  | '\'' ['a'-'z'] as s { Mark s.[1] }
+  | '/'              { Buffer.clear buf; regexp '/' lexbuf }
+  | '?'              { Buffer.clear buf; regexp '?' lexbuf }
+
+  | eof { EOF }
+@
 
 \section{[[CLI.commands()]] interpreter loop}
+
+
 
 <<function [[CLI.commands]]>>=
 let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
@@ -464,45 +498,79 @@ and global caps (e : Env.t) (pos_or_neg : bool) : unit =
 
 \section{[[r]]eading a file: [[r]]}
 
+
+<<signature [[Disk.getline]]>>=
+val getline: Env.t -> Env.lineno -> string
+@
+
+<<signature [[Disk.getfile]]>>=
+val getfile: Env.t -> Chan.i -> (unit -> string option)
+@
+
+<<signature [[Commands.read]]>>=
+(* 'r' *)
+val read: <Cap.open_in; ..> -> Env.t -> Fpath.t -> unit
+@
+
+<<function [[Commands.read]]>>=
+(* 'r' *)
+let read (caps : < Cap.open_in; .. >) (e : Env.t) (file : Fpath.t) : unit =
+  try 
+    file |> FS.with_open_in caps (fun chan ->
+        setwide e;
+        squeeze e 0;
+        let change = (e.dol != 0) in
+        append e (Disk.getfile e chan) e.addr2 |> ignore;
+        exfile e READ;
+        e.fchange <- change;
+    )
+  with Sys_error str ->
+    Logs.err (fun m -> m "Sys_error: %s" str);
+    Error.e !!file
+@
+
 \section{[[w]]riting a file: [[w]]}
+
+<<signature [[Commands.write]]>>=
+(* 'w'*)
+val write: <Cap.open_out; ..> -> Env.t -> Fpath.t -> unit
+@
+
+<<signature [[Disk.putline]]>>=
+val putline : Env.t -> string -> Env.tfile_offset
+@
+<<signature [[Disk.putfile]]>>=
+val putfile: Env.t -> Chan.o -> unit
+@
+
+
+<<function [[Commands.write]]>>=
+(* 'w' *)
+let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
+  try 
+    file |> FS.with_open_out caps (fun chan ->
+        (* TODO: when wq (or do in caller in CLI.ml) *)
+        setwide e;
+        squeeze e (if e.dol > 0 then 1 else 0);
+
+        (* TODO: e.wrapp open without create mode? *)
+        e.wrapp <- false;
+        if e.dol > 0
+        then Disk.putfile e chan;
+
+        exfile e WRITE;
+        if e.addr1 <= 1 && e.addr2 = e.dol
+        then e.fchange <- false;
+        (* TODO: when wq *)
+    )
+  with Sys_error str ->
+    Logs.err (fun m -> m "Sys_error: %s" str);
+    Error.e !!file
+@
 
 \section{Main commands}
 
 \section{Advanced command addresses}
-
-\section{Search and replace}
-
-\section{Advanced features}
-
-\section{Error management}
-
-
-
-
-
-\section{Extra code}
-
-\subsection*{[[Address.ml]]}
-
-%-------------------------------------------------------------
-
-<<Address.ml>>=
-<<type [[Address.t]]>>
-<<type [[Address.range]]>>
-@
-
-\subsection*{[[CLI.ml]]}
-
-<<function [[CLI.match_]]>>=
-let match_ (e : Env.t) (re : Env.regex) (addr : Env.lineno) : bool =
-  let line = Disk.getline e addr in
-  (* old: Str.string_match re line 0
-   * but we need unanchored search *)
-  try
-    Str.search_forward re line 0 |> ignore;
-    true
-   with Not_found -> false
-@
 
 <<function [[CLI.eval_address]]>>=
 (* TODO? need to pass [[a]] like in C with e.dot and adjust [[a]] as we go
@@ -560,6 +628,85 @@ let eval_range (e : Env.t) (r : Address.range) : Env.lineno * Env.lineno =
   in
   addr1, addr2
 @
+
+\section{Search and replace}
+
+<<function [[Lexer.regexp]]>>=
+and regexp delim = parse
+  | '\\' (_ as c) {
+      Buffer.add_char buf '\\'; Buffer.add_char buf c;
+      regexp delim lexbuf
+    }
+  | '/' {
+      if delim = '/'
+      then Slash (Buffer.contents buf)
+      else begin
+        Buffer.add_char buf '/';
+        regexp delim lexbuf
+      end
+     }
+  | '?' {
+      if delim = '?'
+      then Question (Buffer.contents buf)
+      else begin
+        Buffer.add_char buf '?';
+        regexp delim lexbuf
+      end
+    }
+  | '\n' | eof {
+      failwith "Unterminated regular expression"
+    }
+  | _ as c {
+      Buffer.add_char buf c;
+      regexp delim lexbuf
+    }
+@
+
+<<function [[CLI.match_]]>>=
+let match_ (e : Env.t) (re : Env.regex) (addr : Env.lineno) : bool =
+  let line = Disk.getline e addr in
+  (* old: Str.string_match re line 0
+   * but we need unanchored search *)
+  try
+    Str.search_forward re line 0 |> ignore;
+    true
+   with Not_found -> false
+@
+
+\section{Advanced features}
+
+\section{Error management}
+
+<<exception [[Error.Error]]>>=
+exception Error of string
+@
+
+<<function [[Error.e]]>>=
+(* the raise will effectively jump on the exn handler in CLI.main()
+ * (emulating the longjmp done in C).
+ *)
+let e s =
+  raise (Error s)
+@
+
+
+
+
+
+\section{Extra code}
+
+\subsection*{[[Address.ml]]}
+
+%-------------------------------------------------------------
+
+<<Address.ml>>=
+<<type [[Address.t]]>>
+[@@deriving show]
+<<type [[Address.range]]>>
+[@@deriving show]
+@
+
+\subsection*{[[CLI.ml]]}
 
 %-------------------------------------------------------------
 
@@ -717,46 +864,7 @@ let printcom (e : Env.t) : unit =
   ()
 @
 
-<<function [[Commands.read]]>>=
-(* 'r' *)
-let read (caps : < Cap.open_in; .. >) (e : Env.t) (file : Fpath.t) : unit =
-  try 
-    file |> FS.with_open_in caps (fun chan ->
-        setwide e;
-        squeeze e 0;
-        let change = (e.dol != 0) in
-        append e (Disk.getfile e chan) e.addr2 |> ignore;
-        exfile e READ;
-        e.fchange <- change;
-    )
-  with Sys_error str ->
-    Logs.err (fun m -> m "Sys_error: %s" str);
-    Error.e !!file
-@
 
-<<function [[Commands.write]]>>=
-(* 'w' *)
-let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
-  try 
-    file |> FS.with_open_out caps (fun chan ->
-        (* TODO: when wq (or do in caller in CLI.ml) *)
-        setwide e;
-        squeeze e (if e.dol > 0 then 1 else 0);
-
-        (* TODO: e.wrapp open without create mode? *)
-        e.wrapp <- false;
-        if e.dol > 0
-        then Disk.putfile e chan;
-
-        exfile e WRITE;
-        if e.addr1 <= 1 && e.addr2 = e.dol
-        then e.fchange <- false;
-        (* TODO: when wq *)
-    )
-  with Sys_error str ->
-    Logs.err (fun m -> m "Sys_error: %s" str);
-    Error.e !!file
-@
 
 <<function [[Commands.add]]>>=
 (* used for 'a' and 'i' *)
@@ -869,18 +977,8 @@ open Env
 <<function [[Commands.quit]]>>
 @
 
-
 \subsection*{[[Commands.mli]]}
 
-<<signature [[Commands.read]]>>=
-(* 'r' *)
-val read: <Cap.open_in; ..> -> Env.t -> Fpath.t -> unit
-@
-
-<<signature [[Commands.write]]>>=
-(* 'w'*)
-val write: <Cap.open_out; ..> -> Env.t -> Fpath.t -> unit
-@
 
 <<signature [[Commands.add]]>>=
 (* 'a' and 'i' *)
@@ -1064,22 +1162,6 @@ open Common
 
 \subsection*{[[Disk.mli]]}
 
-<<signature [[Disk.putline]]>>=
-val putline : Env.t -> string -> Env.tfile_offset
-@
-
-<<signature [[Disk.getline]]>>=
-val getline: Env.t -> Env.lineno -> string
-@
-
-<<signature [[Disk.getfile]]>>=
-val getfile: Env.t -> Chan.i -> (unit -> string option)
-@
-
-<<signature [[Disk.putfile]]>>=
-val putfile: Env.t -> Chan.o -> unit
-@
-
 %-------------------------------------------------------------
 
 <<Disk.mli>>=
@@ -1123,9 +1205,6 @@ open Fpath_.Operators
 (* alt: use None *)
 <<constant [[Env.no_line]]>>
 
-(* ed uses 1-indexed line numbers, but 0 is also used as a special value.
- * alt: call it cursor?
-*)
 <<type [[Env.lineno]]>>
 [@@deriving show]
 
@@ -1138,25 +1217,11 @@ open Fpath_.Operators
 (*****************************************************************************)
 (* init() *)
 (*****************************************************************************)
-
 <<function [[Env.init]]>>
 @
 
 
 \subsection*{[[Error.ml]]}
-
-<<exception [[Error.Error]]>>=
-exception Error of string
-@
-
-<<function [[Error.e]]>>=
-(* the raise will effectively jump on the exn handler in CLI.main()
- * (emulating the longjmp done in C).
- *)
-let e s =
-  raise (Error s)
-@
-
 
 %-------------------------------------------------------------
 
@@ -1317,22 +1382,20 @@ let letter = ['a'-'z''A'-'Z''_']
 
 <<constant [[Lexer.digit]]>>=
 let digit = ['0'-'9']
-
-(*****************************************************************************)
-(* Main rule *)
-(*****************************************************************************)
-rule token = parse
-  | space+        { Spaces }
-  | '\n'          { Newline }
-
-  (* for the command *)
-  | (letter | '=') as c   { Char c }
-
-  (* for the addresses *)
-  | digit+        { Int (int_of_string (Lexing.lexeme lexbuf)) }
-  | '.' { Dot } | '$' { Dollar }
 @
 %$
+
+<<function [[Lexer.line]]>>=
+and line = parse
+  | ([^ '\n' ]* as s) '\n' { s }
+  | eof { failwith "eof" (* alt: None? *) }
+@
+
+<<function [[Lexer.filename]]>>=
+and filename = parse
+  | [^ '\n' ' ']* { Lexing.lexeme lexbuf }
+  | eof { failwith "eof" }
+@
 
 
 %-------------------------------------------------------------
@@ -1356,66 +1419,22 @@ open Token
 <<constant [[Lexer.space]]>>
 <<constant [[Lexer.letter]]>>
 <<constant [[Lexer.digit]]>>
-  | ',' { Comma } | ';' { Semicolon }
-  | '+' { Plus } | '-' { Minus } | '^' { Caret }
-  | '\'' ['a'-'z'] as s { Mark s.[1] }
-  | '/'              { Buffer.clear buf; regexp '/' lexbuf }
-  | '?'              { Buffer.clear buf; regexp '?' lexbuf }
 
-  | eof { EOF }
-
-and regexp delim = parse
-  | '\\' (_ as c) {
-      Buffer.add_char buf '\\'; Buffer.add_char buf c;
-      regexp delim lexbuf
-    }
-  | '/' {
-      if delim = '/'
-      then Slash (Buffer.contents buf)
-      else begin
-        Buffer.add_char buf '/';
-        regexp delim lexbuf
-      end
-     }
-  | '?' {
-      if delim = '?'
-      then Question (Buffer.contents buf)
-      else begin
-        Buffer.add_char buf '?';
-        regexp delim lexbuf
-      end
-    }
-  | '\n' | eof {
-      failwith "Unterminated regular expression"
-    }
-  | _ as c {
-      Buffer.add_char buf c;
-      regexp delim lexbuf
-    }
+(*****************************************************************************)
+(* Main rule *)
+(*****************************************************************************)
+<<function [[Lexer.token]]>>
+<<function [[Lexer.regexp]]>>
 
 (*****************************************************************************)
 (* Other rules *)
 (*****************************************************************************)
-and line = parse
-  | ([^ '\n' ]* as s) '\n' { s }
-  | eof { failwith "eof" (* alt: None? *) }
-
-and filename = parse
-  | [^ '\n' ' ']* { Lexing.lexeme lexbuf }
-  | eof { failwith "eof" }
+<<function [[Lexer.line]]>>
+<<function [[Lexer.filename]]>>
 @
 
 
 \subsection*{[[Main.ml]]}
-
-<<toplevel [[Main._1]]>>=
-let _ = 
-  Cap.main (fun (caps : Cap.all_caps) ->
-     let argv = CapSys.argv caps in
-     Exit.exit caps (Exit.catch (fun () -> CLI.main caps argv))
-  )
-@
-
 
 %-------------------------------------------------------------
 
@@ -1760,15 +1779,6 @@ module T = Token
 
 \subsection*{[[Parser.mli]]}
 
-<<type [[Parser.state (Parser.mli)]]>>=
-type state = {
-  stdin: Lexing_.lexbuf;
-  (* for inserting "virtual" commands to process before stdin *)
-  mutable globp: Lexing_.lexbuf option;
-  mutable lookahead : Token.t option;
-}
-@
-
 <<signature [[Parser.init]]>>=
 val init: <Cap.stdin; ..> -> state
 @
@@ -1800,7 +1810,7 @@ val was_expecting_but_got: string -> Token.t -> 'a
 <<Parser.mli>>=
 open Common
 
-<<type [[Parser.state (Parser.mli)]]>>
+<<type [[Parser.state]]>>
 [@@deriving show]
 
 <<signature [[Parser.init]]>>
@@ -1823,6 +1833,5 @@ open Common
 (* The tokens *)
 
 <<type [[Token.t]]>>
+[@@deriving show]
 @
-
-
