@@ -4,19 +4,19 @@
 % originally written by Ken Thompson in the 1970's for Unix.
 %% (part of the special "3 weeks" where he wrote editor, assembler, kernel?)
 
-% It is a *line editor*, as opposed to *screen editor* like vi or emacs
-% (or stream editor like sed).
+% It is a *line editor*, as opposed to *screen editor* like vi or emacs,
+% or stream editor like sed.
 % ed is very different from emacs, or vi (or sam or acme).
-% edit just one file.
+% edit just one file at a time.
 % Most editors nowaday are screen editors, but still useful to know ed!
 % especially good for scripting
-%said-later:see mkenam in plan9 code.
+%said-later: see mkenam in plan9 code.
 % Also if need quick and dirty write a file with a few lines => ed!
 % See also \book{Editor} for screen editor.
 
 % s/re/g
 % g/re/p comes from ed!
-% 'wq', 'a', 'i', modes, lots of things in vim coming from ed
+% 'wq', 'a', 'i', modes, lots of things in vi coming from ed
 %later: g global re regexp p print
 
 % Can already create file content with echo and shell redirection
@@ -30,6 +30,7 @@
 % Quite complex command ...
 
 \n could cite "Formalizing text editors in Coq" 2020 :) but meh actually
+
 
 \section{Motivations: [[mkenam]]}
 
@@ -51,6 +52,9 @@ w enam.c
 Q
 !
 \end{verbatim}
+%alt: could be simplified, see my simpler xix/tests/ed/mkenam.sh
+% no need 'g/ .*$/s///',   I replaced some  ',s/.../' by clearer '1,$s/.../',
+% the last 'Q' could be a 'q'
 
 % by end of chapter you will understand this script :)
 
@@ -82,6 +86,7 @@ Q
 % - go: https://github.com/thimc/ed and https://git.mills.io/prologic/ed
 % - rust: https://github.com/sidju/add-ed
 % - in OCaml? yes mine! see next appendix :)
+
 
 \section{Core data structures}
 
@@ -177,7 +182,7 @@ int*    zero;
 % is not line1, it's 0.
 
 \subsection{Cursors: [[dot]] and [[dol]]}
-%alt: Addresses?
+%alt: Addresses? Line Pointers?
 
 <<globals ed.c>>=
 // ref<int> in zero array, current line pointer
@@ -200,7 +205,7 @@ int*    dol;
 
 %TODO: Figure with all those data structures?
 
-\subsection{Line input and output buffers: [[line]], [[linp]], and [[linebuf]]}
+\subsection{Line input and output buffers: [[line]] and [[linebuf]]}
 %alt: move linebuf later? which is with Rune ... confusing
 
 % line input from user? or line output buffer for user?
@@ -223,17 +228,17 @@ Rune    linebuf[LBSIZE];
 
 %TODO: Figure with all those data structures?
 
-<<globals ed.c>>=
-int col;
-@
-%??
-
-\subsection{Other globals: [[count]]}
+\subsection{Other globals: [[count]], [[col]], etc.}
 
 <<globals ed.c>>=
 long count;
 @
 % used by putd to display #chars read for instance
+
+<<globals ed.c>>=
+int col;
+@
+%??
 
 
 
@@ -689,19 +694,6 @@ case EOF:
 % in main()
 
 
-<<globals ed.c>>=
-bool pflag;
-@
-% ????
-<<[[commands()]] in for loop, if [[pflag]]>>=
-if(pflag) {
-    pflag = false;
-    addr1 = addr2 = dot;
-    printcom();
-}
-@
-% some commands trigger automatic implicit 'p' to print the current line
-
 \section{[[r]]eading a file: [[r]]}
 
 % quite tricky, quite long, lots of subsections here.
@@ -757,21 +749,6 @@ caseread:
 % but if read a file after having inserted a few things in the buffer, then
 % still marked as changed? (but in that case means fchange was already
 % at false so why changing it again to false?)
-
-% move to advanced topics? seems very plan9 specific feature
-<<[[commands()]] other locals>>=
-Dir *d;
-@
-<<[[commands()]] in [[r]] case if append only file>>=
-if((d = dirfstat(io)) != nil){
-    if(d->mode & DMAPPEND)
-        print("warning: %s is append only\n", file);
-    free(d);
-}
-@
-% what are append-only files? a plan9 thing?
-
-% bug? not guarded by vflag?
 
 \subsection{Reading a [[filename()]]}
 
@@ -1310,8 +1287,6 @@ case '=':
     continue;
 @
 
-% 
-
 
 \subsection{[[a]]ppend and [[i]]nsert: [[a]], [[i]]}
 
@@ -1443,6 +1418,7 @@ move(int cflag)
     if((adt = address())==0)    /* address() guarantees addr is in range */
         error(Q);
     newline();
+
     if(cflag) {
         int *ozero, delta;
         ad1 = dol;
@@ -1507,7 +1483,14 @@ reverse(int *a1, int *a2)
 
 
 
-\section{Advanced command addresses}
+\section{Command addresses}
+
+%trans: until now assume simple commands like a, i, q, etc.
+% but ed actually quite powerful and can give addresses before
+% the command as 1i or $a (see mkenam.sh) or even 1,3p
+% "each command can be preceded by one or two line numbers ..."
+
+\subsection{Reading [[addr1]] and [[addr2]]}
 
 <<globals ed.c>>=
 bool given;
@@ -1516,10 +1499,13 @@ bool given;
 
 <<[[commands()]] other locals>>=
 int *a1;
-char lastsep;
 @
 
-% "each command can be preceded by one or two line numbers ..."
+<<[[commands()]] other locals>>=
+char lastsep; // '\n' or ',' or ';'
+@
+
+% let's go
 <<[[commands()]] read [[addr1]] and [[c]] via [[getchr]]>>=
 c = '\n';
 addr1 = nil;
@@ -1543,6 +1529,18 @@ for(;;) {
     addr1 = a1;
     <<[[commands()]] in address parsing, if separator is [[';']]>>
 }
+<<[[commands()]] after address parsing, use defaults if missing addresses>>
+@
+
+<<[[commands()]] in address parsing, if separator is [[';']]>>=
+if(c == ';')
+    dot = a1;
+@
+% so allow to set dot as part of the address,  like 3;5p
+% means after this command dot will be 3.
+
+
+<<[[commands()]] after address parsing, use defaults if missing addresses>>=
 if(lastsep != '\n' && a1 == nil)
     a1 = dol;
 
@@ -1555,14 +1553,6 @@ if((addr2=a1) == nil) {
 if(addr1 == nil)
     addr1 = addr2;
 @
-
-<<[[commands()]] in address parsing, if separator is [[';']]>>=
-if(c == ';')
-    dot = a1;
-@
-% so allow to set dot as part of the address,  like 3;5p
-% means after this command dot will be 3.
-
 
 
 \subsection{[[address()]]}
@@ -1590,6 +1580,7 @@ address(void)
         } else
 
         switch(c) {
+        // will return in default: case
         <<[[address()]](ed.c) switch [[c]] cases>>
         }
 
@@ -1601,17 +1592,6 @@ address(void)
     return nil;
 }
 @
-
-<<[[address()]](ed.c) switch [[c]] cases>>=
-case '$':
-    a = dol;
-    // Fallthrough
-case '.':
-    if(opcnt)
-        error(Q);
-    break;
-@
-
 
 <<[[address()]](ed.c) switch [[c]] cases>>=
 default:
@@ -1636,14 +1616,14 @@ default:
     continue;
 @
 
-
+% get number
 <<function [[getnum]](ed.c)>>=
 int
 getnum(void)
 {
-    int r, c;
+    int r = 0;
+    int c;
 
-    r = 0;
     for(;;) {
         c = getchr();
         if(c < '0' || c > '9')
@@ -1657,9 +1637,24 @@ getnum(void)
 
 
 
+\subsection{Basic addresses: [[.]] and [[$]]}
+
+<<[[address()]](ed.c) switch [[c]] cases>>=
+case '$':
+    a = dol;
+    // Fallthrough
+case '.':
+    if(opcnt)
+        error(Q);
+    break;
+@
+
+
+
 
 \section{Search and replace}
 % regexp, regular expressions
+
 
 \subsection{Search as addresses: [[/re/]] and [[?re?]]}
 
@@ -1727,10 +1722,7 @@ compile(int eof)
     ep = expbuf;
     do {
         if(c == '\\') {
-            if(ep >= expbuf+sizeof(expbuf)) {
-                error(Q);
-                return;
-            }
+            <<[[compile()]](ed.c) sanity check [[ep]] inside [[expbuf]]>>
             // else
             ep += runetochar(ep, &c);
             if((c = getchr()) == '\n') {
@@ -1738,10 +1730,7 @@ compile(int eof)
                 return;
             }
         }
-        if(ep >= expbuf+sizeof(expbuf)) {
-            error(Q);
-            return;
-        }
+        <<[[compile()]](ed.c) sanity check [[ep]] inside [[expbuf]]>>
         // else
         ep += runetochar(ep, &c);
     } while((c = getchr()) != eof && c != '\n');
@@ -1755,12 +1744,14 @@ compile(int eof)
 @
 % see libregexp book
 
-\subsection{[[match()]]}
-
-<<globals ed.c>>=
-Rune*   loc1;
-Rune*   loc2;
+<<[[compile()]](ed.c) sanity check [[ep]] inside [[expbuf]]>>=
+if(ep >= expbuf+sizeof(expbuf)) {
+    error(Q);
+    return;
+}
 @
+
+\subsection{[[match()]]}
 
 <<constants ed.c>>=
 MAXSUB  = 9,        /* max number of sub reg exp */
@@ -1768,30 +1759,122 @@ MAXSUB  = 9,        /* max number of sub reg exp */
 <<globals ed.c>>=
 Resub   subexp[MAXSUB];
 @
+% see \book{Libcore}
 
 <<function [[match]](ed.c)>>=
 bool
 match(int *addr)
 {
-    if(!pattern)
-        return false;
-    // else
+    <<[[match()]](ed.c) return if no [[pattern]]>>
     if(addr){
-        if(addr == zero)
-            return false;
-        // else
+        <<[[match()]](ed.c) return if [[addr]] is [[zero]]>>
         subexp[0].s.rsp = getline(*addr);
     } else
-        subexp[0].s.rsp = loc2;
-    subexp[0].e.rep = 0;
+        <<[[match()]](ed.c) when null [[addr]] use [[loc2]] not [[getline]]>>
+    subexp[0].e.rep = nil;
+
     if(rregexec(pattern, linebuf, subexp, MAXSUB)) {
-        loc1 = subexp[0].s.rsp;
-        loc2 = subexp[0].e.rep;
+        <<[[match()]](ed.c) set [[loc1]] and [[loc2]] with matched string>>
         return true;
     }
     // else
-    loc1 = loc2 = 0;
+    <<[[match()]](ed.c) reset [[loc1]] and [[loc2]]>>
     return false;
+}
+@
+% getline() will also modify linebuf!
+
+<<[[match()]](ed.c) return if no [[pattern]]>>=
+if(!pattern)
+    return false;
+@
+<<[[match()]](ed.c) return if [[addr]] is [[zero]]>>=
+if(addr == zero)
+    return false;
+@
+
+
+
+<<globals ed.c>>=
+Rune*   loc1;
+Rune*   loc2;
+@
+<<[[match()]](ed.c) set [[loc1]] and [[loc2]] with matched string>>=
+loc1 = subexp[0].s.rsp;
+loc2 = subexp[0].e.rep;
+@
+<<[[match()]](ed.c) reset [[loc1]] and [[loc2]]>>=
+loc1 = loc2 = nil;
+@
+
+<<[[match()]](ed.c) when null [[addr]] use [[loc2]] not [[getline]]>>=
+subexp[0].s.rsp = loc2;
+@
+% see soon match(nil) to redo search on same line from end of last match
+
+
+
+\subsection{Reading and compiling a substitution: [[compsub()]]}
+
+% will be called after 's' as in s/foo/bar/
+
+<<globals ed.c>>=
+Rune    rhsbuf[LBSIZE/sizeof(Rune)];
+@
+
+<<constants ed.c>>=
+ESCFLG  = Runemax,  /* escape Rune - user defined code */
+@
+
+% return true if s/.../.../g global subst
+<<function [[compsub]](ed.c)>>=
+bool
+compsub(void)
+{
+    int seof, c;
+    Rune *p;
+
+    seof = getchr();
+    if(seof == '\n' || seof == ' ')
+        error(Q);
+
+    // read (and compile) the regexp (left hand side)
+    compile(seof);
+
+    // read the subst (right hand side)
+    p = rhsbuf;
+    for(;;) {
+        c = getchr();
+        <<[[compsub()]](ed.c) if match group>>
+        else
+        <<[[compsub()]](ed.c) if newline and no [[globp]]>>
+        else
+          if(c == seof)
+              break;
+        // else
+        *p++ = c;
+        <<[[compsub()]](ed.c) sanity check [[p]] inside [[rhsbuf]]>>=
+    }
+    *p = 0;
+    <<[[compsub()]](ed.c) peek to check for [['g']]>>
+    // else
+    newline();
+    return false;
+}
+@
+
+
+<<[[compsub()]](ed.c) sanity check [[p]] inside [[rhsbuf]]>>=
+if(p >= &rhsbuf[LBSIZE/sizeof(Rune)])
+    error(Q);
+@
+
+% ?? pflag??
+<<[[compsub()]](ed.c) if newline and no [[globp]]>>=
+if(c == '\n' && (!globp || !globp[0])) {
+    peekc = c;
+    pflag = true;
+    break;
 }
 @
 
@@ -1805,43 +1888,24 @@ case 's':
     continue;
 @
 
-
-<<globals ed.c>>=
-int anymarks;
-@
-<<globals ed.c>>=
-int subnewa;
-int subolda;
-@
-
-<<[[init()]](ed.c) initializing globals>>=
-subnewa = 0;
-anymarks = 0;
-@
-
-<<globals ed.c>>=
-int names[26];
-@
-<<[[init()]](ed.c) locals>>=
-int *markp;
-@
-<<[[init()]](ed.c) initializing globals>>=
-for(markp = names; markp < &names[26]; )
-    *markp++ = 0;
-@
-
-
-
+% compsub(); match(); dosub()
 <<function [[substitute]](ed.c)>>=
 void
 substitute(int inglob)
 {
-    int *mp, *a1, nl, gsubf, n;
+    int *a1;
+    bool gsubf; // s/.../.../g  global subst
+    int n = 0;
+    <<[[substitute()]](ed.c) other locals>>
 
-    n = getnum();   /* OK even if n==0 */
+    <<[[substitute()]](ed.c) read optional [[n]]>>
+
     gsubf = compsub();
+
     for(a1 = addr1; a1 <= addr2; a1++) {
+        // will internally set linebuf[]
         if(match(a1)){
+
             int *ozero;
             int m = n;
 
@@ -1849,32 +1913,30 @@ substitute(int inglob)
                 int span = loc2-loc1;
 
                 if(--m <= 0) {
+                    // will modify linebuf[]
                     dosub();
+
                     if(!gsubf)
                         break;
+                    // else
                     if(span == 0) { /* null RE match */
                         if(*loc2 == 0)
                             break;
                         loc2++;
                     }
                 }
-            } while(match(0));
+            } while(match(nil));
+
             if(m <= 0) {
                 inglob |= 01;
+                // will use linebuf[]
                 subnewa = putline();
                 *a1 &= ~01;
-                if(anymarks) {
-                    for(mp=names; mp<&names[26]; mp++)
-                        if(*mp == *a1)
-                            *mp = subnewa;
-                }
-                subolda = *a1;
+                <<[[substitute()]](ed.c) after [[putline()]] if [[anymarks]]>>
+                <<[[substitute()]](ed.c) after [[putline()]] set [[subolda]]>>
                 *a1 = subnewa;
-                ozero = zero;
-                nl = append(getsub, a1);
-                addr2 += nl;
-                nl += zero-ozero;
-                a1 += nl;
+
+                <<[[substitute()]](ed.c) after [[putline()]] call [[append()]]>>
             }
         }
     }
@@ -1883,31 +1945,16 @@ substitute(int inglob)
 }
 @
 
-% marks address ??? move in advanced?
-<<[[address()]](ed.c) switch [[c]] cases>>=
-case '\'':
-    c = getchr();
-    if(opcnt || c < 'a' || c > 'z')
-        error(Q);
-    a = zero;
-    do {
-        a++;
-    } while(a <= dol && names[c-'a'] != (*a & ~01));
-    break;
-
+<<globals ed.c>>=
+int subnewa;
+@
+<<[[init()]](ed.c) initializing globals>>=
+subnewa = 0;
 @
 
-\subsection{Advanced substitute}
-% move later
-
-
-<<constants ed.c>>=
-ESCFLG  = Runemax,  /* escape Rune - user defined code */
-@
 
 <<globals ed.c>>=
 Rune    genbuf[LBSIZE];
-Rune    rhsbuf[LBSIZE/sizeof(Rune)];
 @
 
 <<function [[dosub]](ed.c)>>=
@@ -1923,18 +1970,9 @@ dosub(void)
     while(lp < loc1)
         *sp++ = *lp++;
     while(c = *rp++) {
-        if(c == '&'){
-            sp = place(sp, loc1, loc2);
-            continue;
-        }
-        if(c == ESCFLG && (c = *rp++) >= '1' && c < MAXSUB+'0') {
-            n = c-'0';
-            if(subexp[n].s.rsp && subexp[n].e.rep) {
-                sp = place(sp, subexp[n].s.rsp, subexp[n].e.rep);
-                continue;
-            }
-            error(Q);
-        }
+        <<[[dosub()]](ed.c) if [[c == '&']]>>
+        <<[[dosub()]](ed.c) if match group>>
+        // else
         *sp++ = c;
         if(sp >= &genbuf[LBSIZE])
             error(Q);
@@ -1951,6 +1989,20 @@ dosub(void)
 }
 @
 
+
+
+
+\subsection{Advanced substitutions}
+
+\subsubsection{Matched string reference: [[s/.../...&.../]]}
+
+<<[[dosub()]](ed.c) if [[c == '&']]>>=
+if(c == '&'){
+    sp = place(sp, loc1, loc2);
+    continue;
+}
+@
+
 <<function [[place]](ed.c)>>=
 Rune*
 place(Rune *sp, Rune *l1, Rune *l2)
@@ -1964,6 +2016,98 @@ place(Rune *sp, Rune *l1, Rune *l2)
     return sp;
 }
 @
+
+
+\subsubsection{Matched groups: [[s/.../...\1.../]]}
+
+<<[[compsub()]](ed.c) if match group>>=
+if(c == '\\') {
+    c = getchr();
+    *p++ = ESCFLG;
+    <<[[compsub()]](ed.c) sanity check [[p]] inside [[rhsbuf]]>>
+} 
+@
+
+<<[[dosub()]](ed.c) if match group>>=
+if(c == ESCFLG && (c = *rp++) >= '1' && c < MAXSUB+'0') {
+    n = c-'0';
+    if(subexp[n].s.rsp && subexp[n].e.rep) {
+        sp = place(sp, subexp[n].s.rsp, subexp[n].e.rep);
+        continue;
+    }
+    error(Q);
+}
+@
+
+
+
+\subsubsection{[[u]]ndo substitution: [[u]]}
+
+<<globals ed.c>>=
+int subolda;
+@
+
+<<[[substitute()]](ed.c) after [[putline()]] set [[subolda]]>>=
+subolda = *a1;
+@
+
+
+<<[[commands()]] switch [[c]] cases (ed.c)>>=
+case 'u':
+    nonzero();
+    newline();
+    if((*addr2&~01) != subnewa)
+        error(Q);
+    *addr2 = subolda;
+    dot = addr2;
+    continue;
+@
+% but will just undo the last one?
+
+
+\subsubsection{[[g]]lobal subst: [[s/.../.../g]]}
+% different (but related) to [[g/re/cmd]] we will see later
+
+
+<<[[compsub()]](ed.c) peek to check for [['g']]>>=
+peekc = getchr();
+if(peekc == 'g') {
+    peekc = 0;
+    newline();
+    return true;
+}
+@
+
+% then more complicated code for substitute() with do { ... } while(match(nil))
+
+\subsubsection{Skipped matches: [[s3/.../.../]]}
+
+<<[[substitute()]](ed.c) read optional [[n]]>>=
+n = getnum();   /* OK even if n==0 */
+@
+
+% again more complicated code for substitute()
+
+\subsubsection{Append and subst}
+
+<<[[substitute()]](ed.c) other locals>>=
+int *mp, nl;
+@
+%TODO: dead? int *mp;
+
+<<[[substitute()]](ed.c) after [[putline()]] call [[append()]]>>=
+ozero = zero;
+nl = append(getsub, a1);
+addr2 += nl;
+nl += zero-ozero;
+a1 += nl;
+@
+%TODO: dosub() and getsub() ?? when the subst contain multiple lines?
+% in which case need to append them?
+
+% need ozero because append may modify zero and realloc
+
+% linebp is set by putline()
 
 <<function [[getsub]](ed.c)>>=
 int
@@ -1982,60 +2126,60 @@ getsub(void)
 @
 
 
-<<function [[compsub]](ed.c)>>=
-int
-compsub(void)
-{
-    int seof, c;
-    Rune *p;
+\subsubsection{mar[[k]]: [[k]]}
 
-    seof = getchr();
-    if(seof == '\n' || seof == ' ')
+% mark something
+<<[[commands()]] switch [[c]] cases (ed.c)>>=
+case 'k':
+    nonzero();
+    c = getchr();
+    if(c < 'a' || c > 'z')
         error(Q);
-    compile(seof);
-    p = rhsbuf;
-    for(;;) {
-        c = getchr();
-        if(c == '\\') {
-            c = getchr();
-            *p++ = ESCFLG;
-            if(p >= &rhsbuf[LBSIZE/sizeof(Rune)])
-                error(Q);
-        } else
-        if(c == '\n' && (!globp || !globp[0])) {
-            peekc = c;
-            pflag++;
-            break;
-        } else
-        if(c == seof)
-            break;
-        *p++ = c;
-        if(p >= &rhsbuf[LBSIZE/sizeof(Rune)])
-            error(Q);
-    }
-    *p = 0;
-    peekc = getchr();
-    if(peekc == 'g') {
-        peekc = 0;
-        newline();
-        return 1;
-    }
     newline();
-    return 0;
+    names[c-'a'] = *addr2 & ~01;
+    anymarks |= 01;
+    continue;
+@
+
+<<globals ed.c>>=
+int names[26];
+@
+
+<<globals ed.c>>=
+int anymarks;
+@
+<<[[init()]](ed.c) initializing globals>>=
+anymarks = 0;
+@
+
+% marks address ??? move in advanced?
+<<[[address()]](ed.c) switch [[c]] cases>>=
+case '\'':
+    c = getchr();
+    if(opcnt || c < 'a' || c > 'z')
+        error(Q);
+    a = zero;
+    do {
+        a++;
+    } while(a <= dol && names[c-'a'] != (*a & ~01));
+    break;
+
+@
+
+<<[[substitute()]](ed.c) after [[putline()]] if [[anymarks]]>>=
+if(anymarks) {
+    for(mp=names; mp<&names[26]; mp++)
+        if(*mp == *a1)
+            *mp = subnewa;
 }
 @
 
-\subsection{[[u]]ndo substitution: [[u]]}
-
-<<[[commands()]] switch [[c]] cases (ed.c)>>=
-case 'u':
-    nonzero();
-    newline();
-    if((*addr2&~01) != subnewa)
-        error(Q);
-    *addr2 = subolda;
-    dot = addr2;
-    continue;
+<<[[init()]](ed.c) locals>>=
+int *markp;
+@
+<<[[init()]](ed.c) initializing globals>>=
+for(markp = names; markp < &names[26]; )
+    *markp++ = 0;
 @
 
 
@@ -2142,6 +2286,8 @@ global(int k)
 
 \subsection{Running a shell command: [[!]]}
 % still M-! on Emacs? 
+% not that GNU ed has a 'red' variant restricted to not support !
+% (and read files only in current dir)
 
 % not so needed when have multiple windows
 
@@ -2242,6 +2388,22 @@ if(listf) {
 <<globals ed.c>>=
 char    hex[]   = "0123456789abcdef";
 @
+
+
+<<globals ed.c>>=
+bool pflag;
+@
+% ????
+<<[[commands()]] in for loop, if [[pflag]]>>=
+if(pflag) {
+    pflag = false;
+    addr1 = addr2 = dot;
+    printcom();
+}
+@
+% some commands trigger automatic implicit 'p' to print the current line
+
+
 
 <<[[newline()]] if special chars [[pln]]>>=
 if(c == 'p' || c == 'l' || c == 'n') {
@@ -2405,21 +2567,23 @@ case 'e':
     goto caseread;
 @
 
-\subsection{mar[[k]]: [[k]]}
 
-% mark something
-<<[[commands()]] switch [[c]] cases (ed.c)>>=
-case 'k':
-    nonzero();
-    c = getchr();
-    if(c < 'a' || c > 'z')
-        error(Q);
-    newline();
-    names[c-'a'] = *addr2 & ~01;
-    anymarks |= 01;
-    continue;
+\subsection{Append-only files}
+
+% move to advanced topics. seems very plan9 specific feature
+<<[[commands()]] other locals>>=
+Dir *d;
 @
+<<[[commands()]] in [[r]] case if append only file>>=
+if((d = dirfstat(io)) != nil){
+    if(d->mode & DMAPPEND)
+        print("warning: %s is append only\n", file);
+    free(d);
+}
+@
+% what are append-only files? a plan9 thing?
 
+% bug? not guarded by vflag?
 
 \section{Optimizations}
 
